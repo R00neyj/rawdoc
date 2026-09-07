@@ -11,6 +11,18 @@ const SEED = [
   '아래 빈 줄에 커서를 두면 위 네 줄의 기호가 화면에서 사라집니다.',
   '한글 조합 테스트는 여기서: ',
   '',
+  '```js',
+  'const a = 1',
+  'console.log(a)',
+  '```',
+  '',
+  '| 이름 | 값 |',
+  '| --- | --- |',
+  '| 가 | 1 |',
+  '| 나 | 2 |',
+  '',
+  '위 두 블록은 커서가 밖에 있으면 위젯으로 바뀝니다. 클릭하거나 방향키로 들어가면 원문이 나옵니다.',
+  '',
 ].join('\n')
 
 const LOG_LIMIT = 50
@@ -26,6 +38,7 @@ export default function App() {
   const handleRef = useRef(null)
   const [count, setCount] = useState(0)
   const [suspend, setSuspend] = useState(true)
+  const [blocks, setBlocks] = useState(true)
   const [log, setLog] = useState([])
 
   // setLog 만 쓰는 순수 갱신이라 useEffect 밖에서도 안전하다.
@@ -50,6 +63,10 @@ export default function App() {
     handleRef.current?.setSuspendOnComposition(suspend)
   }, [suspend])
 
+  useEffect(() => {
+    handleRef.current?.setBlockPreview(blocks)
+  }, [blocks])
+
   return (
     <main style={styles.page}>
       <h1 style={styles.title}>Rawdoc spike — 인라인 라이브 프리뷰 / IME 가설</h1>
@@ -71,6 +88,20 @@ export default function App() {
         />
         조합 중 재계산 보류 (<code>view.composing</code>)
         <strong style={styles.state}>{suspend ? ' ON' : ' OFF'}</strong>
+      </label>
+
+      <label style={styles.toggle}>
+        <input
+          type="checkbox"
+          checked={blocks}
+          onChange={(e) => {
+            const on = e.target.checked
+            setBlocks(on)
+            pushLog(makeEntry(on ? 'blocks:on' : 'blocks:off', handleRef.current?.view))
+          }}
+        />
+        블록 위젯 (표·코드블록)
+        <strong style={styles.state}>{blocks ? ' ON' : ' OFF'}</strong>
       </label>
 
       <div ref={hostRef} style={styles.host} />
@@ -140,9 +171,9 @@ const styles = {
     fontWeight: 'bold',
     color: kind === 'skip'
       ? '#b45309'
-      : kind === 'recalc'
+      : kind.startsWith('recalc')
         ? '#0f766e'
-        : kind.startsWith('suspend:')
+        : kind.startsWith('suspend:') || kind.startsWith('blocks:')
           ? '#be123c'
           : '#7c3aed',
   }),

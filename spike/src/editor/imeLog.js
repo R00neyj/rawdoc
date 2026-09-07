@@ -4,7 +4,9 @@ import { EditorView } from '@codemirror/view'
  * @typedef {object} LogEntry
  * @property {number} t                     performance.now()
  * @property {string} kind                  'compositionstart' | 'compositionend' | 'recalc' | 'skip'
- *                                          | 'suspend:on' | 'suspend:off'  (화면 토글 조작)
+ *                                          | 'recalc:end'  (조합 종료 후 강제 재계산)
+ *                                          | 'suspend:on' | 'suspend:off'  (보류 토글)
+ *                                          | 'blocks:on'  | 'blocks:off'   (블록 위젯 토글)
  * @property {boolean} composing            EditorView.composing 값
  * @property {boolean} compositionStarted   EditorView.compositionStarted 값
  * @property {number} docLength
