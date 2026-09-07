@@ -5,11 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:spike": "vite --config spike/vite.config.js",
     "build": "vite build",
+    "build:spike": "vite build --config spike/vite.config.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.0",
+    "@codemirror/state": "^6.7.4",
+    "@codemirror/view": "^6.43.11",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

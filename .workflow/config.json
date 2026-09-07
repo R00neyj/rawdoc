@@ -6,7 +6,7 @@
     },
     "build": {
       "enabled": true,
-      "command": "npm run build --silent"
+      "command": "npm run build --silent && npm run build:spike --silent"
     },
     "lint": {
       "enabled": true,

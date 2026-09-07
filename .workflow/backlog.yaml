@@ -13,8 +13,8 @@ items:
       - "현재 파일 전체가 초기 커밋 하나로 기록돼 있다"
       - "git log 에 커밋이 1개 이상 보인다"
     blocked_by: []
-    status: todo
-    task: null
+    status: done
+    task: T-002
 
   - id: B-001
     title: "spike 골격 — CM6 빈 에디터가 데스크톱 Chrome 에서 뜬다"
@@ -25,7 +25,7 @@ items:
       - "spike/ 안의 어떤 파일도 src/ 를 import 하지 않는다"
       - "npm run build 와 npm run lint 가 통과한다"
     blocked_by: [B-000]
-    status: planned
+    status: done
     task: T-001
 
   - id: B-002
