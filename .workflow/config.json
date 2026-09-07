@@ -1,0 +1,40 @@
+{
+  "checks": {
+    "test": {
+      "enabled": false,
+      "command": "npm run test:e2e --silent"
+    },
+    "build": {
+      "enabled": true,
+      "command": "npm run build --silent"
+    },
+    "lint": {
+      "enabled": true,
+      "command": "npm run lint --silent"
+    },
+    "typecheck": {
+      "enabled": false,
+      "command": ""
+    }
+  },
+  "humanChecklist": true,
+  "agentReview": true,
+  "restrictToPlannedFiles": false,
+  "sourceGlobs": [
+    "src/**",
+    "spike/src/**",
+    "spike/e2e/**",
+    "spike/*.js",
+    "spike/*.html",
+    "spike/*.json",
+    "*.config.js",
+    "package.json"
+  ],
+  "docGlobs": [
+    ".workflow/**",
+    "docs/**",
+    "**/*.md",
+    ".claude/**",
+    ".gitignore"
+  ]
+}

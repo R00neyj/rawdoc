@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rawdoc. 경쟁사 · 시장조사 (2026-08-29)</title>
+ 
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+ 
+<style>
+:root{
+  --paper:#FBFBFA;
+  --panel:#FFFFFF;
+  --ink:#16171A;
+  --ink-2:#40434D;
+  --muted:#8B8F9A;
+  --rule:#E6E5E1;
+  --rule-2:#F0EFEC;
+  --syntax:#D6337E;
+  --people:#0F766E;
+  --link:#2952CC;
+  --warn:#B45309;
+  --ff:"Pretendard Variable",Pretendard,-apple-system,system-ui,"Apple SD Gothic Neo",sans-serif;
+  --ff-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0;background:var(--paper);color:var(--ink-2);
+  font-family:var(--ff);font-size:15px;line-height:1.8;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:860px;margin:0 auto;padding:34px 20px 90px}
+ 
+/* ── 헤더 ───────────────────────────── */
+.head{border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:34px}
+.brand{font-weight:800;letter-spacing:-.03em;font-size:17px;color:var(--ink)}
+.brand em{font-style:normal;color:var(--syntax)}
+.kicker{
+  font-family:var(--ff-mono);font-size:10.5px;letter-spacing:.12em;
+  color:var(--muted);margin:14px 0 10px
+}
+h1{
+  color:var(--ink);font-size:28px;line-height:1.3;letter-spacing:-.03em;
+  font-weight:800;margin:0 0 12px
+}
+h1 .sy{font-family:var(--ff-mono);color:var(--syntax);font-weight:500;font-size:.72em}
+.meta{font-family:var(--ff-mono);font-size:11px;color:var(--muted);line-height:2}
+ 
+/* ── 본문 구조 ───────────────────────── */
+h2{
+  color:var(--ink);font-size:20px;letter-spacing:-.025em;font-weight:800;
+  margin:48px 0 6px;padding-top:22px;border-top:1px solid var(--rule);line-height:1.4
+}
+h3{color:var(--ink);font-size:15.5px;font-weight:700;margin:26px 0 8px;letter-spacing:-.015em}
+h2 .sy,h3 .sy{font-family:var(--ff-mono);color:var(--syntax);font-weight:500;font-size:.78em;margin-right:.35em}
+p{margin:0 0 13px}
+ul{margin:0 0 14px;padding-left:20px}
+li{margin:5px 0}
+li::marker{color:var(--syntax)}
+strong{color:var(--ink);font-weight:700}
+code{font-family:var(--ff-mono);font-size:.85em;background:var(--rule-2);padding:2px 5px;border-radius:4px;color:var(--ink)}
+a{color:var(--link);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.lead{font-size:15.5px;color:var(--ink-2)}
+ 
+/* ── 카드 ───────────────────────────── */
+.box{
+  background:var(--panel);border:1px solid var(--rule);border-radius:10px;
+  padding:16px 18px;margin:18px 0
+}
+.box.key{border-left:3px solid var(--syntax)}
+.box.warnbox{border-left:3px solid var(--warn);background:#FFFCF6}
+.box.note{border-left:3px solid var(--people);background:rgba(15,118,110,.04)}
+.box h4{
+  margin:0 0 8px;font-size:12px;font-family:var(--ff-mono);letter-spacing:.08em;
+  color:var(--muted);font-weight:500;text-transform:uppercase
+}
+.box p:last-child,.box ul:last-child{margin-bottom:0}
+ 
+/* ── 표 ─────────────────────────────── */
+.scroller{overflow-x:auto;margin:16px 0;border:1px solid var(--rule);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:13px}
+th,td{border-bottom:1px solid var(--rule);padding:10px 12px;text-align:left;vertical-align:top;line-height:1.65}
+th{background:#F7F7F5;font-weight:700;color:var(--ink);white-space:nowrap;font-size:12px}
+tr:last-child td{border-bottom:0}
+td.name{font-weight:700;color:var(--ink);white-space:nowrap}
+td.price{font-family:var(--ff-mono);font-size:11.5px;color:var(--ink)}
+.pipe{color:var(--rule);font-family:var(--ff-mono);padding:0 2px}
+.yes{color:var(--people);font-weight:700}
+.no{color:var(--muted)}
+.part{color:var(--warn)}
+ 
+/* ── 사분면 ─────────────────────────── */
+.quad{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule);
+  border:1px solid var(--rule);border-radius:10px;overflow:hidden;margin:18px 0
+}
+.quad div{background:var(--panel);padding:14px 15px;min-height:112px}
+.quad b{display:block;font-family:var(--ff-mono);font-size:10px;letter-spacing:.08em;color:var(--muted);margin-bottom:7px;font-weight:500}
+.quad span{font-size:12.5px;line-height:1.75;display:block;color:var(--ink-2)}
+.quad .hit{background:rgba(214,51,126,.05)}
+.quad .hit span{color:var(--ink)}
+ 
+/* ── 출처(마크다운 참조링크 형식) ────── */
+.refs{
+  font-family:var(--ff-mono);font-size:11.5px;line-height:2.1;
+  background:var(--panel);border:1px solid var(--rule);border-radius:10px;
+  padding:16px 18px;overflow-x:auto;margin:16px 0
+}
+.refs div{white-space:nowrap}
+.refs .n{color:var(--syntax)}
+.refs .t{color:var(--muted)}
+.tag{
+  font-family:var(--ff-mono);font-size:10px;padding:2px 6px;border-radius:4px;
+  border:1px solid var(--rule);color:var(--muted);white-space:nowrap
+}
+.tag.p1{border-color:var(--people);color:var(--people)}
+ 
+.foot{
+  margin-top:44px;padding-top:18px;border-top:1px solid var(--rule);
+  font-family:var(--ff-mono);font-size:10.5px;color:var(--muted);line-height:2
+}
+ 
+@media (max-width:620px){
+  body{font-size:14.5px}
+  h1{font-size:23px}
+  h2{font-size:18px}
+  .quad{grid-template-columns:1fr}
+  .refs div{white-space:normal;word-break:break-all}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+ 
+<header class="head">
+  <div class="brand">Rawdoc<em>.</em></div>
+  <div class="kicker">COMPETITIVE &amp; MARKET RESEARCH</div>
+  <h1><span class="sy">#</span> 원문 보존형 마크다운 협업 도구<br>경쟁 지형과 시장 검증</h1>
+  <div class="meta">
+    작성일 2026-08-29 · rev.2 기술 구성·원가·가격 설계 추가<br>
+    검증 기준 각 서비스 공식 가격 페이지 직접 확인<br>
+    가격은 모두 USD, 별도 표기 없으면 연간 결제 기준 · 환산은 1,400원/USD 가정
+  </div>
+</header>
+ 
+<div class="box key">
+  <h4>요약</h4>
+  <ul>
+    <li><strong>"마크다운 원문을 변환하지 않고 남긴다"는 컨셉은 신규가 아님.</strong> HackMD가 상용으로, HedgeDoc(구 CodiMD)이 오픈소스로 2016년부터 같은 방식을 제공 중임</li>
+    <li>줄 단위 인라인 댓글도 HackMD 전 요금제에 이미 포함돼 있어 단독 차별점이 되기 어려움</li>
+    <li>실제로 비어 있는 지점은 <strong>한국어</strong>임. HackMD 공식 사이트는 영어·중국어·일본어만 지원하고, 트래픽의 절반 이상이 대만에서 발생함</li>
+    <li>가격 하한선이 이미 매우 낮음. HackMD 무료 3인, 유료 $5/석. 프리미엄 가격 책정은 어려움</li>
+    <li>시장 규모 추정치는 리서치사별로 15배 이상 벌어져 있어 TAM 근거로 쓰기 부적절함</li>
+  </ul>
+</div>
+ 
+<h2><span class="sy">##</span> 1. 카테고리 정의</h2>
+<p class="lead">
+Rawdoc이 속한 칸은 "문서 협업 도구" 전체가 아니라, 그 안의 좁은 교집합임.
+두 축으로 자르면 위치가 분명해짐.
+</p>
+ 
+<div class="quad">
+  <div>
+    <b>원문 변환 · 협업 O</b>
+    <span>Notion, Confluence, Outline, Docmost, AFFiNE<br><br>가장 크고 가장 붐비는 칸. 입력한 <code>##</code>는 블록으로 바뀌고 기호는 사라짐</span>
+  </div>
+  <div class="hit">
+    <b>원문 보존 · 협업 O</b>
+    <span><strong>HackMD, HedgeDoc</strong> — 그리고 Rawdoc이 노리는 자리<br><br>이미 선점돼 있음. 빈 칸이 아님</span>
+  </div>
+  <div>
+    <b>원문 변환 · 협업 X</b>
+    <span>Typora, Bear 등 로컬 WYSIWYG 계열</span>
+  </div>
+  <div>
+    <b>원문 보존 · 협업 X</b>
+    <span>Obsidian(소스 모드), StackEdit, VS Code<br><br>파일은 <code>.md</code> 그대로지만 동시 편집은 없음</span>
+  </div>
+</div>
+ 
+<div class="box warnbox">
+  <h4>확인된 전제 오류</h4>
+  <p>
+  프로토타입의 시드 문서와 툴바 문구는 "원문이 남는 것"을 핵심 주장으로 내세우고 있음.
+  이 주장 자체는 Notion 대비로는 사실임 — Notion 공식 도움말은 <code>##</code> 뒤에 스페이스를 치면 H2로 변환된다고 명시함.
+  다만 이건 <strong>Notion과의 차이</strong>이지 <strong>시장의 빈틈</strong>은 아님. 같은 방식의 서비스가 이미 상용·오픈소스 양쪽에 있음
+  </p>
+</div>
+ 
+<h2><span class="sy">##</span> 2. 경쟁사 비교</h2>
+<p>
+아래 가격은 2026-08-29에 각 사 공식 가격 페이지를 직접 열어 확인한 값임.
+집계 사이트(G2, Capterra 등)의 수치는 갱신이 늦어 사용하지 않음.
+</p>
+ 
+<div class="scroller">
+<table>
+<thead>
+<tr>
+  <th>제품</th><th>원문 보존</th><th>실시간 협업</th><th>인라인 댓글</th><th>가격</th><th>비고</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td class="name">HackMD</td>
+  <td class="yes">O</td><td class="yes">O</td><td class="yes">O (전 요금제)</td>
+  <td class="price">Free $0 (3인)<br>Prime $5/석·월<br>Enterprise 문의</td>
+  <td>가장 직접적인 경쟁자. SOC 2 인증. 한국어 미지원</td>
+</tr>
+<tr>
+  <td class="name">HedgeDoc</td>
+  <td class="yes">O</td><td class="yes">O</td><td class="part">△</td>
+  <td class="price">$0 (자체 호스팅)</td>
+  <td>구 CodiMD. 오픈소스, SaaS 없음. 서버 운영 부담이 진입장벽</td>
+</tr>
+<tr>
+  <td class="name">Notion</td>
+  <td class="no">X</td><td class="yes">O</td><td class="yes">O</td>
+  <td class="price">Free $0<br>Plus $10/인·월<br>Business $20/인·월</td>
+  <td>입력 즉시 블록 변환. 마크다운 내보내기는 지원</td>
+</tr>
+<tr>
+  <td class="name">Obsidian</td>
+  <td class="yes">O</td><td class="no">X</td><td class="no">X</td>
+  <td class="price">앱 $0<br>Sync $4/인·월<br>Publish $8/사이트·월</td>
+  <td>로컬 <code>.md</code> 파일. 동시 편집 없음. 상용 라이선스 $50/인·년은 선택</td>
+</tr>
+<tr>
+  <td class="name">Outline</td>
+  <td class="no">X</td><td class="yes">O</td><td class="yes">O</td>
+  <td class="price">$10/월 (1–10인)<br>$79/월 (11–100인)<br>$249/월 (101–200인)</td>
+  <td>인원 구간 정액제. 오픈소스, 온프레미스 가능</td>
+</tr>
+<tr>
+  <td class="name">Docmost</td>
+  <td class="no">X</td><td class="yes">O</td><td class="yes">O</td>
+  <td class="price">자체 호스팅 $0<br>SaaS $5/월~</td>
+  <td>AGPL-3.0. SaaS 가격은 2차 출처 기준이라 신뢰도 낮음</td>
+</tr>
+</tbody>
+</table>
+</div>
+ 
+<h3><span class="sy">###</span> HackMD를 자세히 봐야 하는 이유</h3>
+<p>
+기능·가격·포지셔닝이 Rawdoc과 사실상 겹침. 공식 가격 페이지에서 확인된 내용:
+</p>
+<ul>
+  <li>무료 요금제에 <strong>실시간 협업과 인라인/페이지 댓글이 모두 포함</strong>됨. 유료로 잠기는 건 전문 검색, PDF 내보내기, 버전 무제한, 이미지 20MB, API 20,000회 같은 부가 기능임</li>
+  <li>무료 제한은 팀원 3명, 초대 3명, 최근 10개 버전, 휴지통 3일, 이미지 1MB, GitHub 푸시 월 20회, API 월 400회</li>
+  <li>Prime은 연간 결제 시 좌석당 $5, 3석 기준 월 $15부터. 페이지에 "37.5% 절약"으로 표기돼 있어 월간 결제는 좌석당 $8로 추정됨</li>
+  <li>"1,000,000+ people"은 자사 홍보 문구이며 검증된 수치가 아님</li>
+</ul>
+ 
+<div class="box note">
+  <h4>틈이 보이는 지점</h4>
+  <p>
+  HackMD 공식 사이트의 언어 선택은 <strong>English / 中文 / 日本語</strong> 세 개뿐임 — 한국어가 없음.
+  Ahrefs의 2025년 6월 트래픽 추정치도 hackmd.io 방문의 57.5%가 대만에서 발생한다고 봄
+  (검색 트래픽 기반 추정이라 실제 사용자 분포와는 다를 수 있음).
+  카테고리 자체가 아시아권에서도 지역 편중이 큰 상태이고, 한국어 UI를 갖춘 원문 보존형 협업 에디터는 확인되지 않음
+  </p>
+</div>
+ 
+<h2><span class="sy">##</span> 3. 시장 규모 — 인용 주의</h2>
+<p>
+"지식 관리 소프트웨어(Knowledge Management Software)" 시장 추정치를 여러 리서치사에서 확인했는데,
+같은 해 같은 시장에 대한 값이 심하게 엇갈림.
+</p>
+ 
+<div class="scroller">
+<table>
+<thead><tr><th>리서치사</th><th>2026년 규모</th><th>전망</th><th>CAGR</th></tr></thead>
+<tbody>
+<tr><td class="name">SkyQuest</td><td class="price">$38.98B (2025)</td><td class="price">$92.45B / 2033</td><td class="price">11.4%</td></tr>
+<tr><td class="name">Fortune BI</td><td class="price">$26.4B</td><td class="price">$74.22B / 2034</td><td class="price">13.8%</td></tr>
+<tr><td class="name">Grand View</td><td class="price">$25.0B</td><td class="price">$62.2B / 2033</td><td class="price">13.6%</td></tr>
+<tr><td class="name">MRFR</td><td class="price">$17.15B</td><td class="price">$70.01B / 2035</td><td class="price">16.92%</td></tr>
+<tr><td class="name">Mordor</td><td class="price">$16.22B</td><td class="price">$37.64B / 2031</td><td class="price">18.34%</td></tr>
+<tr><td class="name">Straits</td><td class="price">$15.92B</td><td class="price">$62.02B / 2034</td><td class="price">18.53%</td></tr>
+<tr><td class="name">Business Research Insights</td><td class="price">$2.6B</td><td class="price">$4.7B / 2035</td><td class="price">6.8%</td></tr>
+</tbody>
+</table>
+</div>
+ 
+<div class="box warnbox">
+  <h4>이 숫자들을 쓰지 말아야 하는 이유</h4>
+  <p>
+  최저 $2.6B와 최고 $38.98B의 차이가 15배임. 시장 정의(문서관리·챗봇·검색·엔터프라이즈 검색을 어디까지 넣느냐)가 제각각이고,
+  대부분 유료 보고서의 미리보기 문구라 산출 근거를 확인할 수 없음.
+  <strong>투자 자료나 사업계획서에 단일 수치로 인용하면 검증 시 문제가 됨.</strong>
+  쓸 거라면 "리서치사별 $2.6B–$39B로 편차가 큼"이라고 범위와 함께 적는 편이 안전함
+  </p>
+  <p>
+  더 방어 가능한 접근은 상향식 추정임. 예: HackMD Prime $5/석 × 국내 개발팀 규모로 SOM을 직접 계산하는 방식.
+  다만 국내 개발자 수·팀 수 통계는 이번 조사에서 검증하지 못했음
+  </p>
+</div>
+ 
+<h2><span class="sy">##</span> 4. 현재 프로토타입과 경쟁사 사이의 실제 격차</h2>
+<p>첨부된 <code>rawdoc.html</code> 코드를 기준으로 확인한 내용임.</p>
+ 
+<h3><span class="sy">###</span> 아직 없는 것</h3>
+<ul>
+  <li><strong>실시간 동기화</strong> — 상단 "3명 접속 중"과 아바타는 <code>USERS</code> 배열에서 그린 고정 UI임. 서버·CRDT·OT 어느 것도 붙어 있지 않음. 시드 문서의 할 일 목록에도 미완으로 적혀 있음</li>
+  <li><strong>저장소</strong> — <code>window.storage</code> 단일 키에 전체 상태를 넣고, 없으면 메모리로 떨어짐. 새로고침 시 초기화된다고 상태바에 직접 표시됨</li>
+  <li><strong>렌더링 범위</strong> — 정규식 기반 자체 파서라 중첩 목록, 각주, 수식, 다이어그램이 없음. HackMD는 수식·Mermaid·PlantUML·발표 모드까지 지원함</li>
+  <li><strong>댓글 앵커</strong> — 줄 번호(<code>line</code> 인덱스)로 고정돼 있어, 위쪽에 줄을 추가하면 댓글이 엉뚱한 줄을 가리키게 됨. 시드 문서의 "문장 단위 댓글 앵커 고도화"가 이 문제임</li>
+  <li><strong>내보내기</strong> — 현재 문서 1개만 <code>.md</code>로 저장됨. 워크스페이스 단위 내보내기, Git 연동 없음</li>
+</ul>
+ 
+<h3><span class="sy">###</span> 이미 괜찮은 것</h3>
+<ul>
+  <li>기호를 죽이지 않고 색으로만 강조하는 오버레이 방식은 의도대로 동작함. HackMD의 분할 뷰와 같은 접근이면서 시각적으로는 더 정돈돼 있음</li>
+  <li>툴바가 "서식 적용"이 아니라 "문법 삽입"으로 설계된 점은 컨셉과 일관됨</li>
+  <li>줄 번호 거터에 댓글 표시를 찍는 처리는 코드 리뷰 도구의 관습을 따라 학습 비용이 낮음</li>
+</ul>
+ 
+<h2><span class="sy">##</span> 5. 판단</h2>
+ 
+<div class="box key">
+  <h4>포지셔닝</h4>
+  <p>
+  "Notion 대신 원문이 남는 도구"로 홍보하면 HackMD와 정면으로 부딪힘.
+  같은 기능을 무료 3인·유료 $5/석으로 이미 제공하는 상대라 가격으로 이기기 어렵고, 기능 수로도 밀림
+  </p>
+  <p>
+  차별화가 가능한 축은 세 개로 좁혀짐:<br>
+  <strong>(1) 한국어</strong> — UI, 문서, 지원, 결제. HackMD·HedgeDoc 모두 비어 있음<br>
+  <strong>(2) 데이터 위치</strong> — 국내 리전 또는 자체 호스팅. 공공·금융 대응 시 필수 조건이 되는 경우가 있음<br>
+  <strong>(3) 댓글 앵커 정확도</strong> — 줄 번호가 아니라 텍스트 내용에 붙는 앵커. 현재 프로토타입의 미완 항목이지만, 제대로 만들면 실사용 차이가 큰 부분임
+  </p>
+</div>
+ 
+<h3><span class="sy">###</span> 가격 설계</h3>
+<ul>
+  <li>좌석당 $5(약 7,000원) 안팎이 이 카테고리의 사실상 상한선임. Notion Plus $10과 비교해서 저렴하다고 말하는 건 의미가 없고, HackMD $5와 비교당하게 됨</li>
+  <li>Outline식 인원 구간 정액제($10/월 1–10인)는 소규모 팀에 심리적 장벽이 낮음. 좌석당 과금 대신 검토해볼 만함</li>
+  <li>무료 구간에 실시간 협업을 넣지 않으면 HackMD 무료(3인 협업 포함)에 밀림</li>
+</ul>
+ 
+<div class="box key">
+  <h4>과금 레버 정리</h4>
+  <ul>
+    <li><strong>좌석 수</strong> — 주 수익원</li>
+    <li><strong>이미지 장당 크기</strong> — 전환 트리거. HackMD가 무료 1MB / 유료 20MB로 거는 방식임. 총량 한도는 3년이 지나도 안 걸리지만 장당 1MB는 첫날 걸림</li>
+    <li><strong>워크스페이스 총량</strong> — 무료 플랜에만. 수익 목적이 아니라 남용 차단용</li>
+    <li><strong>버전 히스토리 보관 기간</strong> — HackMD 무료는 최근 10개, 휴지통 3일</li>
+  </ul>
+</div>
+ 
+<div class="box warnbox">
+  <h4>내보내기는 유료로 막으면 안 됨</h4>
+  <p>
+  "원문이 남아서 잠기지 않는다"가 제품의 핵심 주장인데 <code>.md</code> 내보내기를 과금하면 자기모순이 됨.
+  HackMD도 이 선을 지켜서 <code>.md</code>는 무료고 <strong>렌더링된 PDF만</strong> Prime 전용임. 같은 구분을 쓰는 게 맞음
+  </p>
+</div>
+ 
+<div class="box note">
+  <h4>용량 과금에 대한 정정</h4>
+  <p>
+  텍스트만으로는 한도를 못 채우지만 이미지는 다름. 다만 계산해보면 유료 사용자는 이미지를 아무리 넣어도 적자가 안 남 —
+  R2 GB당 월 약 21원 기준, 좌석 5,000원이 스토리지로 전부 소진되는 지점이 <strong>약 250GB</strong>임.
+  무압축 3MB 사진으로도 8만 장 수준임
+  </p>
+  <p>
+  진짜 위험은 매출이 0원인 무료 계정임. R2는 이그레스가 무제한 무료라 방치하면 외부 사이트의 이미지 CDN으로 소비될 수 있음.
+  <strong>핫링크 차단(서명 URL 또는 Referer 제한)</strong>이 없으면 크기 상한을 걸어도 우회됨
+  </p>
+</div>
+ 
+<h3><span class="sy">###</span> 다음에 확인해야 할 것</h3>
+<ul>
+  <li>국내 개발팀·기술문서 작성 인구 규모 (상향식 SOM 계산용, 이번 조사에서 미검증)</li>
+  <li>HackMD의 실제 국내 사용 여부 — 자사 홍보 문구 외에 검증 가능한 데이터 없음</li>
+  <li>Confluence 가격 (엔터프라이즈 앵커로 필요, 이번 조사에서 공식 확인 안 함)</li>
+  <li>국내 경쟁 후보(콜라비, 플로우 등)의 마크다운 처리 방식 — 미조사</li>
+</ul>
+ 
+<h2><span class="sy">##</span> 6. 기술 구성 (확정)</h2>
+<p class="lead">백엔드는 Cloudflare 단일 스택으로 확정함. 프론트는 React 유지에 에디터 코어만 교체함.</p>
+ 
+<div class="scroller">
+<table>
+<thead><tr><th>계층</th><th>선택</th><th>이유</th></tr></thead>
+<tbody>
+<tr><td class="name">정적 + API</td><td>Workers (static assets)</td><td>Pages가 아님. 2024년 9월부터 Workers가 정적 자산을 직접 서빙하고, Cloudflare가 신규 프로젝트에 Workers를 권장함. 정적 자산 요청은 무료·무제한</td></tr>
+<tr><td class="name">실시간 동기화</td><td>Durable Object + y-partyserver</td><td>문서당 DO 1개. Cloudflare가 직접 유지보수하는 라이브러리라 서버 코드가 사실상 한 줄</td></tr>
+<tr><td class="name">메타 DB</td><td>D1</td><td>SQLite라 MariaDB에서 쓰던 SQL이 거의 그대로 통함</td></tr>
+<tr><td class="name">이미지·스냅샷</td><td>R2</td><td>이그레스 무료</td></tr>
+<tr><td class="name">에디터</td><td>CodeMirror 6</td><td>현재 textarea+오버레이로는 라이브 프리뷰가 원리적으로 불가능함</td></tr>
+<tr><td class="name">인증</td><td class="part">미정</td><td>Cloudflare에 소비자용 로그인 제품이 없음. Worker에서 OAuth+JWT 직접 구현하거나 이 부분만 외부 사용</td></tr>
+</tbody>
+</table>
+</div>
+ 
+<h3><span class="sy">###</span> 왜 Yjs를 SaaS로 사지 않는가</h3>
+<p>
+검토 결과 Yjs 동기화를 외부 SaaS로 빼는 게 전체에서 가장 비싼 선택이었음.
+</p>
+<ul>
+  <li><strong>Liveblocks</strong> — Pro $25/월(연간)에 협업 분당 $0.002가 별도로 붙음. 사용자가 하루 2시간 × 월 20일 쓰면 1인당 월 $4.8. 좌석당 5,000원을 받으면 원가가 판매가를 넘김</li>
+  <li><strong>Tiptap Cloud</strong> — Start $49/월, 무료 티어는 2025년 6월 폐지 (2차 출처 기준)</li>
+  <li><strong>Cloudflare DO</strong> — SQLite 백엔드 DO는 Workers Free 플랜에서 사용 가능하고, Free 플랜은 스토리지 과금 대상이 아님. 유료로 올라가도 계정당 최소 $5/월에 포함됨</li>
+</ul>
+ 
+<h2><span class="sy">##</span> 7. 운영 원가와 손익분기</h2>
+ 
+<div class="scroller">
+<table>
+<thead><tr><th>항목</th><th>무료 플랜</th><th>유료 플랜</th></tr></thead>
+<tbody>
+<tr><td class="name">Workers 구독</td><td class="price">$0</td><td class="price">$5/월 (계정 최소)</td></tr>
+<tr><td class="name">DO 요청</td><td class="price">10만/일</td><td class="price">월 100만 포함, 이후 $0.15/100만</td></tr>
+<tr><td class="name">DO duration</td><td class="price">13,000 GB-s/일</td><td class="price">월 40만 GB-s 포함, 이후 $12.50/100만 GB-s</td></tr>
+<tr><td class="name">D1 저장</td><td class="price">5GB</td><td class="price">5GB 포함, 이후 $0.75/GB-월</td></tr>
+<tr><td class="name">R2 저장</td><td class="price">10GB</td><td class="price">$0.015/GB-월, 이그레스 무료</td></tr>
+</tbody>
+</table>
+</div>
+ 
+<div class="scroller">
+<table>
+<thead><tr><th>시나리오</th><th>규모</th><th>월 비용</th></tr></thead>
+<tbody>
+<tr><td class="name">비공개 베타</td><td>사용자 10명, 활성 문서 20</td><td class="price">0원 (Free 플랜 내)</td></tr>
+<tr><td class="name">초기 유료</td><td>사용자 25–50명, 문서 50, 이미지 5GB</td><td class="price">약 7,000원 ($5)</td></tr>
+<tr><td class="name">성장</td><td>사용자 200명, 문서 300, 이미지 40GB</td><td class="price">약 8,500–14,000원 ($6–10)</td></tr>
+</tbody>
+</table>
+</div>
+ 
+<p>
+도메인 연 1.5–2만원, Google Play 등록 $25(1회)가 별도로 붙음.
+<strong>실질 월 유지비 1만원 안팎이고, 좌석 5,000원 기준 2–3석이면 본전임.</strong>
+</p>
+ 
+<div class="box warnbox">
+  <h4>비용이 튀는 지점 3개</h4>
+  <ul>
+    <li><strong>Hibernation 실패</strong> — <code>accept()</code>를 호출하면 WebSocket이 연결된 전 시간이 duration으로 과금됨. Hibernation API를 쓰지 않으면 사용자가 탭을 열어둔 시간 전체가 요금이 됨. y-partyserver도 2.1.0에서 hibernation 지원을 고치는 릴리스가 있었을 만큼 까다로운 부분임</li>
+    <li><strong>반올림</strong> — 초과분은 다음 청구 단위로 올림됨. 공식 문서 예시가 "50만 GB-s는 100만으로 올려 청구". 조금만 넘겨도 $12.50이 통째로 붙어서 요금이 계단식으로 점프함</li>
+    <li><strong>R2 Class A(쓰기) $4.50/100만</strong> — 이미지 업로드는 양이 적지만 Yjs 스냅샷을 초 단위로 R2에 쓰면 여기가 늘어남</li>
+  </ul>
+  <p>배포 직후 대시보드에서 <strong>DO duration(GB-s) 지표</strong>만 며칠 지켜보면 됨. 이 숫자가 예상대로면 나머지는 무료 티어 안에서 돌아감</p>
+</div>
+ 
+<h2><span class="sy">##</span> 8. 프론트엔드와 배포</h2>
+ 
+<h3><span class="sy">###</span> 에디터 코어 교체가 최우선</h3>
+<p>
+옵시디언식 라이브 프리뷰(커서가 있는 줄만 원문, 나머지는 렌더링)는 현재 <code>textarea</code> + 오버레이 구조로 만들 수 없음.
+textarea는 내부 텍스트를 부분적으로 다르게 그릴 수 없기 때문임
+</p>
+<p>CodeMirror 6로 교체하면 세 가지가 한꺼번에 해결됨:</p>
+<ul>
+  <li>Decoration으로 라이브 프리뷰 구현</li>
+  <li><code>y-codemirror.next</code>로 Yjs 연동</li>
+  <li>줄 번호 기반이던 댓글 앵커를 CM6 위치 매핑 + Yjs RelativePosition으로 대체</li>
+</ul>
+<p>
+1차에서는 인라인 요소(굵게·기울임·링크·인라인코드)만 라이브 프리뷰하고, 표·코드블록은 원문 그대로 두는 게 안전함.
+블록을 위젯으로 치환하면 커서 진입·이탈 처리가 까다로워짐
+</p>
+ 
+<h3><span class="sy">###</span> 플랫폼</h3>
+<ul>
+  <li><strong>웹·PC</strong> — PWA로 커버됨. Tauri/Electron 같은 데스크톱 래퍼는 로컬 파일시스템 직접 접근이 필요해질 때만</li>
+  <li><strong>Android</strong> — Capacitor 또는 TWA로 기존 React 코드를 감쌈. Play 등록비는 1회 $25로 연간 갱신이 없지만, 개인 계정은 테스터 12명 비공개 테스트를 거쳐야 프로덕션 출시가 가능함 (2–4주 일정 확보 필요)</li>
+  <li><strong>Flutter / React Native 신규 개발은 권하지 않음</strong> — 이 제품의 핵심인 에디터가 하필 이식이 가장 어려운 부분이라 텍스트 렌더링·캐럿·선택 영역을 전부 0부터 다시 만들어야 함</li>
+</ul>
+ 
+<h3><span class="sy">###</span> 배포</h3>
+<p>
+Vercel·Netlify를 쓰면 프론트와 백엔드가 갈라져서 CORS와 배포 순서를 따로 관리해야 함.
+Workers로 통일하면 <code>wrangler deploy</code> 한 번에 프론트·API·동기화 서버가 같이 나감.
+GitHub Actions는 CI 담당으로 그대로 쓰되 배포는 그 안에서 <code>wrangler deploy</code>를 호출하면 됨
+</p>
+<ul>
+  <li>시작: <code>npm create cloudflare@latest -- rawdoc --framework=react</code></li>
+  <li><code>compatibility_date</code>는 프로젝트 생성일로 고정할 것</li>
+  <li>Pages와 달리 Workers는 <code>node_modules</code>·<code>.git</code>을 자동 제외하지 않음 → <code>.assetsignore</code> 필요</li>
+</ul>
+ 
+<div class="box key">
+  <h4>착수 전 반드시 검증할 것</h4>
+  <p>
+  <strong>Capacitor WebView에서 CodeMirror 6 + 한글 IME가 정상 동작하는지</strong>를 가장 먼저 확인해야 함.
+  CM6 decoration으로 기호를 감췄다 보였다 하는 동작과 한글 조합 중 상태가 겹치면 커서가 튀거나 글자가 중복 입력되기 쉬움
+  </p>
+  <p>
+  나중에 발견하면 아키텍처를 되돌려야 하는 종류임. 로그인도 DB도 없이 에디터 화면 하나만 띄운 앱을 실기기에 올려보는 게 가장 싼 검증임.
+  안드로이드 WebView의 Blob 다운로드 동작도 같이 확인하면 됨
+  </p>
+</div>
+ 
+<h2><span class="sy">##</span> 출처</h2>
+<p style="font-size:13px">
+<span class="tag p1">1차</span> 각 사 공식 페이지 직접 확인 &nbsp;
+<span class="tag">2차</span> 언론·집계·분석 사이트
+</p>
+ 
+<div class="refs">
+<div><span class="n">[1]</span>: https://hackmd.io/pricing <span class="t">— HackMD 공식 가격 (1차, 2026-08-29 확인)</span></div>
+<div><span class="n">[2]</span>: https://www.notion.com/pricing <span class="t">— Notion 공식 가격 (1차, 2026-08-29 확인)</span></div>
+<div><span class="n">[3]</span>: https://www.notion.com/help/writing-and-editing-basics <span class="t">— 마크다운 즉시 변환 명시 (1차)</span></div>
+<div><span class="n">[4]</span>: https://obsidian.md/pricing <span class="t">— Obsidian 공식 가격 (1차, 2026-08-29 확인)</span></div>
+<div><span class="n">[5]</span>: https://www.getoutline.com/pricing <span class="t">— Outline 공식 가격 (1차, 2026-08-29 확인)</span></div>
+<div><span class="n">[6]</span>: https://hedgedoc.org/ <span class="t">— HedgeDoc 공식 소개 (1차)</span></div>
+<div><span class="n">[7]</span>: https://docmost.com/docs/ <span class="t">— Docmost 공식 문서 (1차)</span></div>
+<div><span class="n">[8]</span>: https://ahrefs.com/websites/hackmd.io <span class="t">— 트래픽 추정, 2025-06 (2차)</span></div>
+<div><span class="n">[9]</span>: https://alternativeto.net/software/docmost/about <span class="t">— Docmost SaaS 가격 (2차)</span></div>
+<div><span class="n">[10]</span>: https://www.mordorintelligence.com/industry-reports/knowledge-management-software-market <span class="t">(2차)</span></div>
+<div><span class="n">[11]</span>: https://www.grandviewresearch.com/industry-analysis/knowledge-management-software-market-report <span class="t">(2차)</span></div>
+<div><span class="n">[12]</span>: https://www.fortunebusinessinsights.com/knowledge-management-software-market-110376 <span class="t">(2차)</span></div>
+<div><span class="n">[13]</span>: https://straitsresearch.com/report/knowledge-management-software-market <span class="t">(2차)</span></div>
+<div><span class="n">[14]</span>: https://www.marketresearchfuture.com/reports/knowledge-management-software-market-4193 <span class="t">(2차)</span></div>
+<div><span class="n">[15]</span>: https://www.skyquestt.com/report/knowledge-management-software-market <span class="t">(2차)</span></div>
+<div><span class="n">[16]</span>: https://www.businessresearchinsights.com/market-reports/knowledge-management-software-market-101253 <span class="t">(2차)</span></div>
+<div><span class="n">[17]</span>: https://developers.cloudflare.com/workers/platform/pricing/ <span class="t">— Workers·DO·D1·R2 단가 (1차, 문서 최종수정 2026-08-28)</span></div>
+<div><span class="n">[18]</span>: https://developers.cloudflare.com/changelog/2025-12-12-durable-objects-sqlite-storage-billing/ <span class="t">— DO SQLite 스토리지 과금 개시 (1차)</span></div>
+<div><span class="n">[19]</span>: https://developers.cloudflare.com/workers/static-assets/ <span class="t">— Workers 정적 자산 서빙 (1차)</span></div>
+<div><span class="n">[20]</span>: https://developers.cloudflare.com/workers/static-assets/migration-guides/migrate-from-pages/ <span class="t">— Pages→Workers 이전 가이드 (1차)</span></div>
+<div><span class="n">[21]</span>: https://github.com/cloudflare/partykit <span class="t">— y-partyserver, 영속화 훅·hibernation 릴리스 (1차)</span></div>
+<div><span class="n">[22]</span>: https://liveblocks.io/pricing <span class="t">— 협업 분당 $0.002 (1차, 2026-08-29 확인)</span></div>
+<div><span class="n">[23]</span>: https://eddyter.com/blogs/tiptap-pricing-explained-2026 <span class="t">— Tiptap Cloud 가격 (2차)</span></div>
+<div><span class="n">[24]</span>: https://www.iconikai.com/blog/google-play-developer-account-fee-2026 <span class="t">— Play 등록비·12인 테스트 요건 (2차)</span></div>
+</div>
+ 
+<div class="box warnbox">
+  <h4>이 문서의 한계</h4>
+  <ul>
+    <li>가격은 2026-08-29 기준이며 수시로 바뀜. 인용 전 재확인 필요</li>
+    <li>시장 규모 항목은 모두 유료 보고서의 공개 요약문에서 가져온 것이라 산출 근거를 검증하지 못했음</li>
+    <li>국내 시장 데이터, 국내 경쟁사 분석은 이번 조사 범위에 포함되지 않았음</li>
+    <li>Docmost SaaS 가격, HackMD 월간 결제 단가($8 추정)는 공식 확인이 아닌 추정치임</li>
+    <li>7장의 시나리오별 월 비용은 공식 단가에 가정(사용자 수, 문서 활성 시간, 이미지 용량)을 넣어 직접 계산한 값임. 실사용과 다를 수 있음</li>
+    <li>안드로이드 WebView의 Blob 다운로드 제약, Play의 웹 결제 허용 범위는 확인하지 못했음</li>
+    <li>Tiptap Cloud 가격은 2차 출처 기준임</li>
+  </ul>
+</div>
+ 
+<div class="foot">
+  Rawdoc. 경쟁사 · 시장조사<br>
+  2026-08-29 · 원문 보존 · 변환 없음
+</div>
+ 
+</div>
+</body>
+</html>
+ 

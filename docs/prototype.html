@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rawdoc. — 원문이 남는 마크다운 협업 도구</title>
+
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --paper:#FBFBFA;
+  --panel:#FFFFFF;
+  --ink:#16171A;
+  --ink-2:#40434D;
+  --muted:#8B8F9A;
+  --rule:#E6E5E1;
+  --rule-2:#F0EFEC;
+  --syntax:#D6337E;      /* 마크다운 기호 = 이 제품의 주인공 */
+  --people:#0F766E;      /* 협업(댓글/접속자) */
+  --link:#2952CC;
+  --sel:rgba(214,51,126,.10);
+
+  --ff:"Pretendard Variable",Pretendard,-apple-system,system-ui,"Apple SD Gothic Neo",sans-serif;
+  --ff-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  --ed-size:14px;
+  --ed-lh:1.75;
+  --top:52px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--ff);font-size:14px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;overflow:hidden;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--syntax);outline-offset:2px;border-radius:4px}
+
+/* ================= TOPBAR ================= */
+.top{
+  height:var(--top);display:flex;align-items:center;gap:14px;
+  padding:0 14px;border-bottom:1px solid var(--rule);background:var(--panel);
+}
+.brand{font-weight:800;letter-spacing:-.03em;font-size:16px;white-space:nowrap}
+.brand em{font-style:normal;color:var(--syntax)}
+.badge{
+  font-family:var(--ff-mono);font-size:10px;letter-spacing:.08em;
+  border:1px solid var(--rule);border-radius:5px;padding:3px 7px;color:var(--muted)
+}
+.doc-title{
+  flex:1;min-width:0;font-weight:600;font-size:14.5px;letter-spacing:-.01em;
+  border:1px solid transparent;border-radius:6px;padding:5px 8px;background:transparent;
+  font-family:inherit;color:inherit;
+}
+.doc-title:hover{background:var(--rule-2)}
+.doc-title:focus{background:#fff;border-color:var(--rule);outline:none}
+
+.presence{display:flex;align-items:center;gap:8px}
+.avatars{display:flex}
+.avatars i{
+  width:26px;height:26px;border-radius:50%;margin-left:-7px;
+  border:2px solid var(--panel);display:grid;place-items:center;
+  font-family:var(--ff-mono);font-size:10px;font-weight:700;color:#fff;font-style:normal;
+}
+.live{
+  font-family:var(--ff-mono);font-size:10.5px;color:var(--people);
+  display:flex;align-items:center;gap:5px;white-space:nowrap
+}
+.live b{width:6px;height:6px;border-radius:50%;background:var(--people);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+.seg{display:flex;border:1px solid var(--rule);border-radius:7px;overflow:hidden}
+.seg button{padding:6px 11px;font-size:12px;color:var(--muted);white-space:nowrap}
+.seg button+button{border-left:1px solid var(--rule)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff;font-weight:600}
+
+.icon-btn{
+  border:1px solid var(--rule);border-radius:7px;padding:6px 10px;
+  font-size:12px;color:var(--ink-2);white-space:nowrap
+}
+.icon-btn:hover{background:var(--rule-2)}
+.icon-btn[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* ================= LAYOUT ================= */
+.app{display:flex;height:calc(100% - var(--top))}
+
+.side{
+  width:224px;flex:none;border-right:1px solid var(--rule);
+  background:var(--paper);padding:12px 10px;overflow-y:auto
+}
+.side h2{
+  font-family:var(--ff-mono);font-size:10px;letter-spacing:.14em;color:var(--muted);
+  margin:6px 6px 10px;font-weight:500
+}
+.page-item{
+  display:flex;align-items:center;gap:8px;width:100%;text-align:left;
+  padding:7px 9px;border-radius:7px;font-size:13.5px;color:var(--ink-2);
+}
+.page-item:hover{background:var(--rule-2)}
+.page-item[aria-current="true"]{background:#fff;border:1px solid var(--rule);color:var(--ink);font-weight:600}
+.page-item span.h{font-family:var(--ff-mono);color:var(--syntax);font-size:12px}
+.page-item small{margin-left:auto;font-family:var(--ff-mono);font-size:10px;color:var(--people)}
+.add-page{
+  margin-top:8px;width:100%;text-align:left;padding:7px 9px;border-radius:7px;
+  font-size:13px;color:var(--muted)
+}
+.add-page:hover{background:var(--rule-2);color:var(--ink)}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+
+/* 툴바 */
+.tools{
+  display:flex;flex-wrap:wrap;gap:4px;align-items:center;
+  padding:7px 12px;border-bottom:1px solid var(--rule);background:var(--panel)
+}
+.tools button{
+  font-family:var(--ff-mono);font-size:11.5px;color:var(--ink-2);
+  padding:5px 9px;border-radius:6px;border:1px solid transparent
+}
+.tools button:hover{background:var(--rule-2);border-color:var(--rule)}
+.tools .sep{width:1px;height:16px;background:var(--rule);margin:0 5px}
+.tools .cmt{color:var(--people);font-weight:700}
+.tools .hint{
+  margin-left:auto;font-family:var(--ff-mono);font-size:10.5px;color:var(--muted)
+}
+
+.panes{flex:1;display:flex;min-height:0}
+
+/* ================= EDITOR ================= */
+.pane-ed{
+  flex:1;min-width:0;display:flex;background:var(--panel);position:relative;overflow:hidden
+}
+.gutter{
+  flex:none;width:46px;padding:18px 0;overflow:hidden;
+  border-right:1px solid var(--rule-2);background:#FCFCFB;
+  font-family:var(--ff-mono);font-size:11.5px;line-height:var(--ed-lh);
+  color:#C4C4BE;text-align:right;user-select:none
+}
+.gutter div{padding-right:8px;position:relative;height:calc(var(--ed-size) * var(--ed-lh))}
+.gutter div.has{color:var(--people);font-weight:700}
+.gutter div.has::after{
+  content:"";position:absolute;right:2px;top:50%;transform:translateY(-50%);
+  width:4px;height:4px;border-radius:50%;background:var(--people)
+}
+
+.ed-wrap{flex:1;min-width:0;position:relative;overflow:hidden}
+.ed-hl,.ed-ta{
+  margin:0;position:absolute;inset:0;
+  padding:18px 20px;
+  font-family:var(--ff-mono);font-size:var(--ed-size);line-height:var(--ed-lh);
+  white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;
+  border:0;tab-size:2;
+}
+.ed-hl{pointer-events:none;overflow:hidden;color:var(--ink)}
+.ed-ta{
+  background:transparent;color:transparent;caret-color:var(--syntax);
+  resize:none;overflow-y:auto;outline:none;display:block;width:100%;height:100%
+}
+.ed-ta::selection{background:var(--sel)}
+
+/* 로우 문법 토큰 */
+.sy{color:var(--syntax);font-weight:500}
+.t-h{font-weight:700}
+.t-b{font-weight:700}
+.t-i{font-style:italic}
+.t-s{text-decoration:line-through;color:var(--muted)}
+.t-code{background:var(--rule-2);border-radius:3px}
+.t-url{color:var(--link)}
+.t-q{color:var(--ink-2)}
+.t-fence{color:var(--muted)}
+.ln-cmt{background:rgba(15,118,110,.09);box-shadow:-3px 0 0 var(--people)}
+
+/* ================= PREVIEW ================= */
+.pane-pv{
+  flex:1;min-width:0;overflow-y:auto;background:var(--paper);
+  border-left:1px solid var(--rule);padding:34px 40px 90px
+}
+.pv{max-width:70ch;margin:0 auto;font-size:15px;line-height:1.85;color:var(--ink-2)}
+.pv h1,.pv h2,.pv h3,.pv h4{color:var(--ink);letter-spacing:-.025em;line-height:1.35;font-weight:800}
+.pv h1{font-size:29px;margin:0 0 16px}
+.pv h2{font-size:22px;margin:34px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--rule)}
+.pv h3{font-size:17px;margin:26px 0 10px}
+.pv h4{font-size:15px;margin:20px 0 8px}
+.pv p{margin:0 0 14px}
+.pv ul,.pv ol{margin:0 0 14px;padding-left:22px}
+.pv li{margin:4px 0}
+.pv li.task{list-style:none;margin-left:-20px}
+.pv li.task input{margin-right:8px;accent-color:var(--syntax)}
+.pv blockquote{
+  margin:0 0 14px;padding:2px 0 2px 16px;border-left:3px solid var(--syntax);color:var(--muted)
+}
+.pv code{font-family:var(--ff-mono);font-size:.87em;background:var(--rule-2);padding:2px 5px;border-radius:4px}
+.pv pre{
+  background:#F7F7F5;border:1px solid var(--rule);border-radius:9px;
+  padding:14px 16px;overflow-x:auto;margin:0 0 16px
+}
+.pv pre code{background:none;padding:0;font-size:12.5px;line-height:1.7}
+.pv a{color:var(--link);text-decoration:underline;text-underline-offset:2px}
+.pv hr{border:0;border-top:1px solid var(--rule);margin:26px 0}
+.pv table{border-collapse:collapse;width:100%;margin:0 0 16px;font-size:13.5px}
+.pv th,.pv td{border:1px solid var(--rule);padding:8px 11px;text-align:left}
+.pv th{background:#F7F7F5;font-weight:700;color:var(--ink)}
+.pv img{max-width:100%;border-radius:8px}
+
+/* ================= COMMENTS ================= */
+.rail{
+  width:288px;flex:none;border-left:1px solid var(--rule);background:var(--panel);
+  display:flex;flex-direction:column;overflow:hidden
+}
+.rail-head{
+  padding:11px 14px;border-bottom:1px solid var(--rule);
+  display:flex;align-items:center;gap:8px
+}
+.rail-head b{font-size:13px}
+.rail-head span{font-family:var(--ff-mono);font-size:10px;color:var(--muted);margin-left:auto}
+.rail-body{flex:1;overflow-y:auto;padding:12px}
+
+.composer{border:1px solid var(--people);border-radius:9px;padding:10px;margin-bottom:12px;background:rgba(15,118,110,.04)}
+.composer .anchor{
+  font-family:var(--ff-mono);font-size:10.5px;color:var(--people);margin-bottom:7px;
+  display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.composer textarea{
+  width:100%;min-height:58px;resize:vertical;font:inherit;font-size:13px;
+  border:1px solid var(--rule);border-radius:6px;padding:8px;outline:none
+}
+.composer textarea:focus{border-color:var(--people)}
+.composer .row{display:flex;gap:6px;margin-top:8px}
+.btn{
+  border-radius:6px;padding:6px 12px;font-size:12.5px;font-weight:600;
+  background:var(--people);color:#fff
+}
+.btn.ghost{background:none;color:var(--muted);border:1px solid var(--rule)}
+
+.cmt-card{
+  border:1px solid var(--rule);border-radius:9px;padding:11px;margin-bottom:9px;background:#fff
+}
+.cmt-card.done{opacity:.5}
+.cmt-top{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.cmt-top i{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;
+  font-family:var(--ff-mono);font-size:9px;font-weight:700;color:#fff;font-style:normal}
+.cmt-top b{font-size:12px}
+.cmt-top time{font-family:var(--ff-mono);font-size:10px;color:var(--muted);margin-left:auto}
+.cmt-quote{
+  font-family:var(--ff-mono);font-size:11px;color:var(--people);
+  background:rgba(15,118,110,.07);border-radius:5px;padding:5px 7px;margin-bottom:7px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer
+}
+.cmt-card p{margin:0;font-size:13px;color:var(--ink-2)}
+.cmt-acts{display:flex;gap:10px;margin-top:8px}
+.cmt-acts button{font-size:11.5px;color:var(--muted)}
+.cmt-acts button:hover{color:var(--ink)}
+.empty{
+  text-align:center;color:var(--muted);font-size:12.5px;padding:34px 12px;line-height:1.8
+}
+.empty code{font-family:var(--ff-mono);font-size:11px;background:var(--rule-2);padding:2px 5px;border-radius:4px}
+
+/* ================= STATUS ================= */
+.status{
+  height:26px;flex:none;border-top:1px solid var(--rule);background:var(--panel);
+  display:flex;align-items:center;gap:14px;padding:0 12px;
+  font-family:var(--ff-mono);font-size:10.5px;color:var(--muted)
+}
+.status .ok{color:var(--people)}
+
+/* ================= VIEW MODE ================= */
+body[data-view="raw"] .pane-pv{display:none}
+body[data-view="preview"] .pane-ed{display:none}
+body[data-rail="off"] .rail{display:none}
+
+@media (max-width:1080px){ .side{display:none} }
+@media (max-width:860px){
+  body[data-view="split"] .pane-pv{display:none}
+  .rail{position:fixed;right:0;top:var(--top);bottom:0;z-index:20;box-shadow:-8px 0 30px rgba(0,0,0,.08)}
+  .tools .hint{display:none}
+}
+</style>
+</head>
+<body data-view="split" data-rail="on">
+
+<header class="top">
+  <div class="brand">Rawdoc<em>.</em></div>
+  <span class="badge">RAW MARKDOWN</span>
+  <input class="doc-title" id="title" value="문서 제목" aria-label="문서 제목">
+
+  <div class="presence">
+    <div class="live"><b></b>3명 접속 중</div>
+    <div class="avatars" id="avatars" aria-label="접속자"></div>
+  </div>
+
+  <div class="seg" role="group" aria-label="보기 방식">
+    <button data-view="raw"     aria-pressed="false">원문</button>
+    <button data-view="split"   aria-pressed="true">분할</button>
+    <button data-view="preview" aria-pressed="false">미리보기</button>
+  </div>
+  <button class="icon-btn" id="railBtn" aria-pressed="true">댓글</button>
+  <button class="icon-btn" id="dlBtn">.md 저장</button>
+</header>
+
+<div class="app">
+  <!-- 사이드바 -->
+  <aside class="side">
+    <h2>WORKSPACE</h2>
+    <div id="pageList"></div>
+    <button class="add-page" id="addPage">＋ 새 문서</button>
+  </aside>
+
+  <div class="main">
+    <!-- 툴바: 변환이 아니라 '문법을 삽입'함 -->
+    <div class="tools">
+      <button data-ins="h">## </button>
+      <button data-ins="b">**B**</button>
+      <button data-ins="i">*i*</button>
+      <button data-ins="s">~~S~~</button>
+      <button data-ins="code">`code`</button>
+      <span class="sep"></span>
+      <button data-ins="ul">- 목록</button>
+      <button data-ins="task">- [ ]</button>
+      <button data-ins="quote">&gt; 인용</button>
+      <button data-ins="link">[링크]()</button>
+      <button data-ins="table">표</button>
+      <button data-ins="fence">```</button>
+      <span class="sep"></span>
+      <button class="cmt" id="cmtBtn">💬 댓글 달기</button>
+      <span class="hint">삽입된 기호는 변환되지 않고 원문에 그대로 남습니다</span>
+    </div>
+
+    <div class="panes">
+      <!-- 로우 마크다운 에디터 -->
+      <section class="pane-ed" aria-label="마크다운 원문 편집기">
+        <div class="gutter" id="gutter" aria-hidden="true"></div>
+        <div class="ed-wrap">
+          <pre class="ed-hl" id="hl" aria-hidden="true"><code></code></pre>
+          <textarea class="ed-ta" id="ta" spellcheck="false" aria-label="마크다운 원문"></textarea>
+        </div>
+      </section>
+
+      <!-- 미리보기 -->
+      <section class="pane-pv" aria-label="미리보기">
+        <article class="pv" id="pv"></article>
+      </section>
+
+      <!-- 댓글 레일 -->
+      <aside class="rail" aria-label="댓글">
+        <div class="rail-head">
+          <b>댓글</b><span id="cmtCount">0</span>
+        </div>
+        <div class="rail-body" id="rail"></div>
+      </aside>
+    </div>
+
+    <div class="status">
+      <span id="stCursor">Ln 1, Col 1</span>
+      <span id="stCount">0자 · 0단어</span>
+      <span class="ok" id="stSave">저장됨</span>
+      <span style="margin-left:auto">원문 보존 · 변환 없음</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   상태
+   ============================================================ */
+var USERS = [
+  {id:'me',   name:'나',    init:'ME', color:'#16171A'},
+  {id:'yuna', name:'유나',  init:'YU', color:'#0F766E'},
+  {id:'do',   name:'도현',  init:'DO', color:'#D6337E'}
+];
+
+var SEED = "# 협업 문서 작성 규칙\n\n" +
+"이 에디터는 마크다운을 **변환하지 않습니다**. `##` 를 입력해도 기호가 사라지지 않고\n" +
+"원문 그대로 남습니다. 변환은 오른쪽 미리보기에서만 일어납니다.\n\n" +
+"## 왜 원문을 남기나\n\n" +
+"- 복사하면 마크다운 그대로 붙습니다\n" +
+"- git 에 커밋하면 diff 가 사람이 읽을 수 있는 형태로 나옵니다\n" +
+"- 다른 도구로 옮겨도 깨지지 않습니다\n\n" +
+"## 할 일\n\n" +
+"- [x] 에디터 원문 보존\n" +
+"- [ ] 실시간 동기화 붙이기\n" +
+"- [ ] 문장 단위 댓글 앵커 고도화\n\n" +
+"> 문장을 드래그한 뒤 상단의 `댓글 달기` 를 누르면 그 줄에 댓글이 붙습니다.\n\n" +
+"## 비교\n\n" +
+"| 항목 | 노션 | Rawdoc. |\n" +
+"| --- | --- | --- |\n" +
+"| 입력한 마크다운 | 블록으로 변환됨 | 원문 유지 |\n" +
+"| 복사 결과 | 서식 텍스트 | 마크다운 |\n" +
+"| 버전 관리 | 어려움 | diff 가능 |\n\n" +
+"```js\n" +
+"// 저장 포맷이 곧 화면에 보이는 것\n" +
+"const doc = editor.value; // 그대로 .md\n" +
+"```\n";
+
+var state = {
+  pages: [
+    {id:'p1', title:'협업 문서 작성 규칙', md:SEED, comments:[
+      {id:'c1', line:12, quote:'- [ ] 실시간 동기화 붙이기', user:'yuna', text:'CRDT 로 갈지 OT 로 갈지 먼저 정해야 할 것 같아요.', ts:'2시간 전', done:false}
+    ]},
+    {id:'p2', title:'스프린트 회고', md:"# 스프린트 회고\n\n## Keep\n- 데일리 15분 유지\n\n## Problem\n- 리뷰 대기 시간이 김\n\n## Try\n- [ ] 리뷰 SLA 24시간 설정\n", comments:[]},
+    {id:'p3', title:'API 규격 초안', md:"# API 규격 초안\n\n## POST /documents\n\n요청 본문은 마크다운 원문을 그대로 받습니다.\n\n```json\n{ \"title\": \"제목\", \"body\": \"# 원문\" }\n```\n", comments:[]}
+  ],
+  current: 'p1',
+  pending: null   // 작성 중인 댓글 앵커
+};
+
+/* ============================================================
+   저장 (있으면 사용, 없으면 메모리)
+   ============================================================ */
+var storeOK = false;
+async function save(){
+  try{
+    if(window.storage && window.storage.set){
+      await window.storage.set('rawdoc:v1', JSON.stringify({pages:state.pages, current:state.current}));
+      storeOK = true;
+    }
+  }catch(e){ storeOK = false; }
+  flash('저장됨');
+}
+async function load(){
+  try{
+    if(window.storage && window.storage.get){
+      var r = await window.storage.get('rawdoc:v1');
+      if(r && r.value){
+        var d = JSON.parse(r.value);
+        if(d.pages && d.pages.length){ state.pages = d.pages; state.current = d.current || d.pages[0].id; }
+        storeOK = true;
+      }
+    }
+  }catch(e){ /* 최초 실행이거나 스토리지 없음 */ }
+}
+var saveTimer=null;
+function queueSave(){
+  flash('입력 중…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(save, 600);
+}
+function flash(t){ document.getElementById('stSave').textContent = t; }
+
+/* ============================================================
+   유틸
+   ============================================================ */
+function cur(){ return state.pages.find(function(p){return p.id===state.current}) || state.pages[0]; }
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function userOf(id){ return USERS.find(function(u){return u.id===id}) || USERS[0]; }
+
+/* ============================================================
+   1) 에디터 신택스 오버레이 — 기호를 '보이게' 하는 게 핵심
+   ============================================================ */
+function inline(s){
+  // 코드 스팬 먼저 (내부 문법 무시)
+  s = s.replace(/`([^`]+)`/g, function(_,a){ return '<span class="sy">`</span><span class="t-code">'+a+'</span><span class="sy">`</span>'; });
+  s = s.replace(/!?\[([^\]]*)\]\(([^)]*)\)/g, function(m,a,b){
+    var bang = m.charAt(0)==='!' ? '<span class="sy">!</span>' : '';
+    return bang+'<span class="sy">[</span>'+a+'<span class="sy">](</span><span class="t-url">'+b+'</span><span class="sy">)</span>';
+  });
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<span class="sy">**</span><span class="t-b">$1</span><span class="sy">**</span>');
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<span class="sy">*</span><span class="t-i">$2</span><span class="sy">*</span>');
+  s = s.replace(/~~([^~]+)~~/g, '<span class="sy">~~</span><span class="t-s">$1</span><span class="sy">~~</span>');
+  return s;
+}
+
+function highlight(src, cmtLines){
+  var lines = src.split('\n'), out = [], fence = false;
+  for(var i=0;i<lines.length;i++){
+    var raw = lines[i], t = esc(raw), cls = [];
+    if(cmtLines.indexOf(i) > -1) cls.push('ln-cmt');
+
+    if(/^```/.test(raw)){
+      fence = !fence;
+      out.push(wrap('<span class="sy t-fence">'+t+'</span>', cls));
+      continue;
+    }
+    if(fence){ out.push(wrap('<span class="t-fence">'+t+'</span>', cls)); continue; }
+
+    var m;
+    if(m = raw.match(/^(#{1,6})(\s+)(.*)$/)){
+      out.push(wrap('<span class="sy">'+m[1]+'</span>'+m[2]+'<span class="t-h">'+inline(esc(m[3]))+'</span>', cls));
+    } else if(m = raw.match(/^(\s*>\s?)(.*)$/)){
+      out.push(wrap('<span class="sy">'+esc(m[1])+'</span><span class="t-q">'+inline(esc(m[2]))+'</span>', cls));
+    } else if(m = raw.match(/^(\s*(?:[-*+]|\d+\.)\s+)(\[[ xX]\]\s+)?(.*)$/)){
+      out.push(wrap('<span class="sy">'+esc(m[1])+'</span>'+(m[2]?'<span class="sy">'+esc(m[2])+'</span>':'')+inline(esc(m[3])), cls));
+    } else if(/^\s*(-{3,}|\*{3,})\s*$/.test(raw)){
+      out.push(wrap('<span class="sy">'+t+'</span>', cls));
+    } else if(/^\s*\|/.test(raw)){
+      out.push(wrap(t.replace(/\|/g,'<span class="sy">|</span>'), cls));
+    } else {
+      out.push(wrap(inline(t) || '&nbsp;', cls));
+    }
+  }
+  return out.join('\n');
+}
+function wrap(html, cls){
+  return cls.length ? '<span class="'+cls.join(' ')+'" style="display:inline-block;width:100%">'+html+'</span>' : html;
+}
+
+/* ============================================================
+   2) 미리보기 렌더러
+   ============================================================ */
+function mdInline(s){
+  s = esc(s);
+  s = s.replace(/`([^`]+)`/g,'<code>$1</code>');
+  s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,'<img alt="$1" src="$2">');
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*([^*]+)\*/g,'$1<em>$2</em>');
+  s = s.replace(/~~([^~]+)~~/g,'<del>$1</del>');
+  return s;
+}
+function renderMD(src){
+  var lines = src.split('\n'), out = [], i = 0;
+  function flushP(buf){ if(buf.length) out.push('<p>'+mdInline(buf.join(' '))+'</p>'); }
+
+  while(i < lines.length){
+    var L = lines[i];
+
+    if(/^```/.test(L)){
+      var lang = L.slice(3).trim(), body = [];
+      i++;
+      while(i < lines.length && !/^```/.test(lines[i])){ body.push(lines[i]); i++; }
+      i++;
+      out.push('<pre><code data-lang="'+esc(lang)+'">'+esc(body.join('\n'))+'</code></pre>');
+      continue;
+    }
+    var h = L.match(/^(#{1,6})\s+(.*)$/);
+    if(h){ var lv = Math.min(h[1].length,4); out.push('<h'+lv+'>'+mdInline(h[2])+'</h'+lv+'>'); i++; continue; }
+
+    if(/^\s*(-{3,}|\*{3,})\s*$/.test(L)){ out.push('<hr>'); i++; continue; }
+
+    if(/^\s*\|/.test(L) && /^\s*\|?[\s:-]+\|/.test(lines[i+1]||'')){
+      var head = L.split('|').slice(1,-1).map(function(c){return c.trim()});
+      i += 2;
+      var rows = [];
+      while(i < lines.length && /^\s*\|/.test(lines[i])){
+        rows.push(lines[i].split('|').slice(1,-1).map(function(c){return c.trim()})); i++;
+      }
+      out.push('<table><thead><tr>'+head.map(function(c){return '<th>'+mdInline(c)+'</th>'}).join('')+'</tr></thead><tbody>'+
+        rows.map(function(r){return '<tr>'+r.map(function(c){return '<td>'+mdInline(c)+'</td>'}).join('')+'</tr>'}).join('')+
+        '</tbody></table>');
+      continue;
+    }
+
+    if(/^\s*>/.test(L)){
+      var q = [];
+      while(i < lines.length && /^\s*>/.test(lines[i])){ q.push(lines[i].replace(/^\s*>\s?/,'')); i++; }
+      out.push('<blockquote>'+renderMD(q.join('\n'))+'</blockquote>');
+      continue;
+    }
+
+    if(/^\s*(?:[-*+]|\d+\.)\s+/.test(L)){
+      var ordered = /^\s*\d+\./.test(L), items = [];
+      while(i < lines.length && /^\s*(?:[-*+]|\d+\.)\s+/.test(lines[i])){
+        var txt = lines[i].replace(/^\s*(?:[-*+]|\d+\.)\s+/,'');
+        var task = txt.match(/^\[([ xX])\]\s+(.*)$/);
+        if(task){
+          items.push('<li class="task"><input type="checkbox" disabled'+(task[1]!==' '?' checked':'')+'>'+mdInline(task[2])+'</li>');
+        } else {
+          items.push('<li>'+mdInline(txt)+'</li>');
+        }
+        i++;
+      }
+      out.push((ordered?'<ol>':'<ul>')+items.join('')+(ordered?'</ol>':'</ul>'));
+      continue;
+    }
+
+    if(L.trim()===''){ i++; continue; }
+
+    var buf = [];
+    while(i < lines.length && lines[i].trim()!=='' &&
+          !/^(#{1,6})\s/.test(lines[i]) && !/^```/.test(lines[i]) &&
+          !/^\s*>/.test(lines[i]) && !/^\s*(?:[-*+]|\d+\.)\s+/.test(lines[i]) &&
+          !/^\s*\|/.test(lines[i]) && !/^\s*(-{3,})\s*$/.test(lines[i])){
+      buf.push(lines[i]); i++;
+    }
+    flushP(buf);
+  }
+  return out.join('\n');
+}
+
+/* ============================================================
+   3) 렌더
+   ============================================================ */
+var ta = document.getElementById('ta');
+var hl = document.getElementById('hl').firstChild;
+var gutter = document.getElementById('gutter');
+var pv = document.getElementById('pv');
+
+function renderEditor(){
+  var p = cur();
+  var cl = p.comments.filter(function(c){return !c.done}).map(function(c){return c.line});
+  hl.innerHTML = highlight(p.md, cl) + '\n';
+  var n = p.md.split('\n').length, g = '';
+  for(var i=0;i<n;i++){ g += '<div class="'+(cl.indexOf(i)>-1?'has':'')+'">'+(i+1)+'</div>'; }
+  gutter.innerHTML = g;
+  syncScroll();
+  var chars = p.md.length;
+  var words = p.md.trim() ? p.md.trim().split(/\s+/).length : 0;
+  document.getElementById('stCount').textContent = chars+'자 · '+words+'단어';
+}
+function renderPreview(){ pv.innerHTML = renderMD(cur().md); }
+function syncScroll(){
+  document.getElementById('hl').scrollTop = ta.scrollTop;
+  gutter.scrollTop = ta.scrollTop;
+}
+
+function renderPages(){
+  var host = document.getElementById('pageList');
+  host.innerHTML = state.pages.map(function(p){
+    var open = p.comments.filter(function(c){return !c.done}).length;
+    return '<button class="page-item" data-id="'+p.id+'" aria-current="'+(p.id===state.current)+'">'+
+      '<span class="h">#</span>'+esc(p.title)+(open?'<small>'+open+'</small>':'')+'</button>';
+  }).join('');
+}
+
+function renderRail(){
+  var p = cur(), host = document.getElementById('rail'), html = '';
+  if(state.pending){
+    html += '<div class="composer">'+
+      '<span class="anchor">L'+(state.pending.line+1)+' · '+esc(state.pending.quote||'(빈 줄)')+'</span>'+
+      '<textarea id="cmtInput" placeholder="이 줄에 대한 의견을 남기세요"></textarea>'+
+      '<div class="row"><button class="btn" id="cmtSave">등록</button>'+
+      '<button class="btn ghost" id="cmtCancel">취소</button></div></div>';
+  }
+  var list = p.comments.slice().sort(function(a,b){return a.line-b.line});
+  if(!list.length && !state.pending){
+    html += '<div class="empty">아직 댓글이 없습니다.<br>본문에서 문장을 선택하고<br><code>댓글 달기</code> 를 누르세요.</div>';
+  }
+  html += list.map(function(c){
+    var u = userOf(c.user);
+    return '<div class="cmt-card'+(c.done?' done':'')+'" data-id="'+c.id+'">'+
+      '<div class="cmt-top"><i style="background:'+u.color+'">'+u.init+'</i><b>'+u.name+'</b><time>'+c.ts+'</time></div>'+
+      '<div class="cmt-quote" data-line="'+c.line+'">L'+(c.line+1)+' · '+esc(c.quote||'(빈 줄)')+'</div>'+
+      '<p>'+esc(c.text)+'</p>'+
+      '<div class="cmt-acts"><button data-act="done">'+(c.done?'다시 열기':'해결')+'</button>'+
+      '<button data-act="del">삭제</button></div></div>';
+  }).join('');
+  host.innerHTML = html;
+  document.getElementById('cmtCount').textContent = p.comments.filter(function(c){return !c.done}).length;
+  var inp = document.getElementById('cmtInput'); if(inp) inp.focus();
+}
+
+function renderAll(){ renderEditor(); renderPreview(); renderPages(); renderRail(); }
+
+/* ============================================================
+   4) 이벤트
+   ============================================================ */
+ta.addEventListener('input', function(){
+  cur().md = ta.value;
+  renderEditor(); renderPreview(); queueSave();
+});
+ta.addEventListener('scroll', syncScroll);
+ta.addEventListener('keyup', updateCursor);
+ta.addEventListener('click', updateCursor);
+ta.addEventListener('keydown', function(e){
+  if(e.key === 'Tab'){ e.preventDefault(); insertRaw('  ',''); return; }
+  if(e.metaKey || e.ctrlKey){
+    var k = e.key.toLowerCase();
+    if(k==='b'){ e.preventDefault(); ins('b'); }
+    if(k==='i'){ e.preventDefault(); ins('i'); }
+    if(k==='k'){ e.preventDefault(); ins('link'); }
+    if(k==='/'){ e.preventDefault(); startComment(); }
+  }
+});
+
+function lineOf(pos){ return ta.value.slice(0,pos).split('\n').length - 1; }
+function updateCursor(){
+  var pos = ta.selectionStart;
+  var before = ta.value.slice(0,pos).split('\n');
+  document.getElementById('stCursor').textContent = 'Ln '+before.length+', Col '+(before[before.length-1].length+1);
+}
+
+/* 문법 삽입 — 변환이 아니라 텍스트 삽입 */
+var SNIP = {
+  h:['## ',''], b:['**','**'], i:['*','*'], s:['~~','~~'], code:['`','`'],
+  ul:['- ',''], task:['- [ ] ',''], quote:['> ',''], link:['[',']()'],
+  table:['\n| 항목 | 값 |\n| --- | --- |\n| A | 1 |\n',''],
+  fence:['\n```js\n','\n```\n']
+};
+function ins(k){ var s = SNIP[k]; if(s) insertRaw(s[0], s[1]); }
+function insertRaw(pre, post){
+  var a = ta.selectionStart, b = ta.selectionEnd, v = ta.value;
+  var sel = v.slice(a,b);
+  ta.value = v.slice(0,a) + pre + sel + post + v.slice(b);
+  ta.focus();
+  ta.selectionStart = a + pre.length;
+  ta.selectionEnd = a + pre.length + sel.length;
+  cur().md = ta.value;
+  renderEditor(); renderPreview(); updateCursor(); queueSave();
+}
+document.querySelectorAll('[data-ins]').forEach(function(btn){
+  btn.addEventListener('click', function(){ ins(btn.dataset.ins); });
+});
+
+/* 댓글 */
+function startComment(){
+  var line = lineOf(ta.selectionStart);
+  var text = ta.value.split('\n')[line] || '';
+  var sel = ta.value.slice(ta.selectionStart, ta.selectionEnd).trim();
+  state.pending = { line:line, quote:(sel || text.trim()).slice(0,60) };
+  document.body.dataset.rail = 'on';
+  document.getElementById('railBtn').setAttribute('aria-pressed','true');
+  renderRail();
+}
+document.getElementById('cmtBtn').addEventListener('click', startComment);
+
+document.getElementById('rail').addEventListener('click', function(e){
+  var card = e.target.closest('.cmt-card');
+  var p = cur();
+
+  if(e.target.id === 'cmtSave'){
+    var v = document.getElementById('cmtInput').value.trim();
+    if(v){
+      p.comments.push({id:'c'+Date.now(), line:state.pending.line, quote:state.pending.quote,
+        user:'me', text:v, ts:'방금', done:false});
+    }
+    state.pending = null; renderAll(); save(); return;
+  }
+  if(e.target.id === 'cmtCancel'){ state.pending = null; renderRail(); return; }
+
+  if(e.target.classList.contains('cmt-quote')){
+    var ln = +e.target.dataset.line;
+    var pos = ta.value.split('\n').slice(0,ln).join('\n').length + (ln?1:0);
+    ta.focus(); ta.selectionStart = ta.selectionEnd = pos;
+    ta.scrollTop = ln * parseFloat(getComputedStyle(ta).lineHeight) - 80;
+    syncScroll(); updateCursor(); return;
+  }
+  if(card && e.target.dataset.act){
+    var c = p.comments.find(function(x){return x.id===card.dataset.id});
+    if(!c) return;
+    if(e.target.dataset.act === 'done'){ c.done = !c.done; }
+    if(e.target.dataset.act === 'del'){ p.comments = p.comments.filter(function(x){return x.id!==c.id}); }
+    renderAll(); save();
+  }
+});
+
+/* 페이지 */
+document.getElementById('pageList').addEventListener('click', function(e){
+  var b = e.target.closest('.page-item'); if(!b) return;
+  state.current = b.dataset.id; state.pending = null;
+  ta.value = cur().md;
+  document.getElementById('title').value = cur().title;
+  renderAll(); save();
+});
+document.getElementById('addPage').addEventListener('click', function(){
+  var id = 'p'+Date.now();
+  state.pages.push({id:id, title:'제목 없는 문서', md:'# 제목 없는 문서\n\n', comments:[]});
+  state.current = id; state.pending = null;
+  ta.value = cur().md;
+  document.getElementById('title').value = cur().title;
+  renderAll(); save(); document.getElementById('title').select();
+});
+document.getElementById('title').addEventListener('input', function(e){
+  cur().title = e.target.value || '제목 없는 문서';
+  renderPages(); queueSave();
+});
+
+/* 보기 전환 / 레일 / 다운로드 */
+document.querySelectorAll('.seg button').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.body.dataset.view = b.dataset.view;
+    document.querySelectorAll('.seg button').forEach(function(x){
+      x.setAttribute('aria-pressed', String(x===b));
+    });
+  });
+});
+document.getElementById('railBtn').addEventListener('click', function(){
+  var on = document.body.dataset.rail === 'on';
+  document.body.dataset.rail = on ? 'off' : 'on';
+  this.setAttribute('aria-pressed', String(!on));
+});
+document.getElementById('dlBtn').addEventListener('click', function(){
+  var p = cur();
+  var blob = new Blob([p.md], {type:'text/markdown;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = p.title.replace(/[\\/:*?"<>|]/g,'_') + '.md';
+  a.click(); URL.revokeObjectURL(a.href);
+});
+
+/* 접속자 */
+document.getElementById('avatars').innerHTML = USERS.map(function(u){
+  return '<i style="background:'+u.color+'" title="'+u.name+'">'+u.init+'</i>';
+}).join('');
+
+/* 부팅 */
+(async function(){
+  await load();
+  ta.value = cur().md;
+  document.getElementById('title').value = cur().title;
+  renderAll(); updateCursor();
+  flash(storeOK ? '저장됨' : '메모리 저장(새로고침 시 초기화)');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+# 백로그 — Rawdoc 에디터 코어 기술 검증
+# 각 항목은 독립적으로 검증 가능한 크기여야 한다.
+# 이번 사이클은 제품 기능이 아니라 기술 리스크 검증이다. B-006 이 끝나면 사이클 종료.
+
+version: 1
+items:
+  - id: B-000
+    title: "git 저장소 초기화 — 되돌릴 수단 확보"
+    why: "지금 이 프로젝트는 git 저장소가 아니다. 모든 task 의 롤백이 수동 파일 삭제와 설정 되돌리기로만 가능하다. B-002 이후로 갈수록 이 방식은 감당이 안 된다. T-001 검토(rev.2)에서 분리 결정됨"
+    done_when:
+      - "git status 가 오류 없이 동작한다"
+      - "node_modules, dist, dist-spike 가 추적되지 않는다"
+      - "현재 파일 전체가 초기 커밋 하나로 기록돼 있다"
+      - "git log 에 커밋이 1개 이상 보인다"
+    blocked_by: []
+    status: todo
+    task: null
+
+  - id: B-001
+    title: "spike 골격 — CM6 빈 에디터가 데스크톱 Chrome 에서 뜬다"
+    why: "검증 대상을 올릴 바닥이 없다. src/ 를 건드리지 않는 별도 엔트리가 먼저 있어야 이후 전부가 가능하다"
+    done_when:
+      - "spike/ 에 루트와 분리된 Vite 엔트리가 있고 dev 서버가 뜬다"
+      - "CodeMirror 6 EditorView 가 화면에 렌더되고 영문·한글이 입력된다"
+      - "spike/ 안의 어떤 파일도 src/ 를 import 하지 않는다"
+      - "npm run build 와 npm run lint 가 통과한다"
+    blocked_by: [B-000]
+    status: planned
+    task: T-001
+
+  - id: B-002
+    title: "인라인 라이브 프리뷰 + IME 조합 보류 가설 확인"
+    why: "아키텍처 3장의 '조합 중 decoration 재계산 보류' 가 실제로 필요한지, 그것으로 충분한지가 이번 검증의 핵심 가설이다"
+    done_when:
+      - "굵게·기울임·링크·인라인코드 4종이 커서 없는 줄에서 기호가 숨겨지고 커서 줄에서는 원문이 드러난다"
+      - "compositionstart~compositionend 사이 decoration 재계산을 보류하는 처리가 들어가 있다"
+      - "데스크톱 Chrome 에서 한글 연속 입력 시 커서 튐·글자 중복이 관찰되지 않는다"
+      - "가설이 틀렸으면 architecture.md 3장을 고치고 그 근거를 기록했다"
+    blocked_by: [B-001]
+    status: todo
+    task: null
+
+  - id: B-003
+    title: "표·코드블록 위젯 치환과 커서 진입/이탈"
+    why: "research.html 이 1차 제외를 권한 가장 어려운 부분이다. 여기서 깨지면 라이브 프리뷰 범위를 인라인으로 줄이는 판단이 필요하다"
+    done_when:
+      - "위젯 진입 방식(방향키/클릭)이 결정되어 문서에 적혀 있다"
+      - "표와 코드블록이 위젯으로 치환되고, 진입하면 원문이 정확히 복원된다"
+      - "위젯 안팎에서 한글 입력이 동작하고 이탈 시 문서 원문 바이트가 변하지 않는다"
+    blocked_by: [B-002]
+    status: todo
+    task: null
+
+  - id: B-004
+    title: "Playwright 환경 구축과 IME 재현 한계 확인"
+    why: "3개 환경 회귀 확인에 필요하다. 동시에 '자동 테스트로 IME 를 어디까지 덮을 수 있는가' 자체가 미해결 질문이다"
+    done_when:
+      - "npm run test:e2e 로 Playwright 가 실행되고 데스크톱 Chrome 시나리오가 통과한다"
+      - "CDP 로 한글 composition 이벤트를 어디까지 재현 가능한지 확인 결과가 기록돼 있다"
+      - "재현 불가 범위는 사람 확인 항목으로 옮겨 적혀 있다"
+      - ".workflow/config.json 의 checks.test.enabled 가 true 로 켜졌다"
+    blocked_by: [B-002]
+    status: todo
+    task: null
+
+  - id: B-005
+    title: "Capacitor 안드로이드 래핑과 기기 설치"
+    why: "research.html 이 가장 위험하다고 지목한 환경이다. 여기서만 깨질 가능성이 실재한다"
+    done_when:
+      - "검증 수단(실기기 또는 에뮬레이터)이 확정되어 문서에 적혀 있다"
+      - "spike 빌드가 Capacitor 로 감싸져 안드로이드에서 실행된다"
+      - "확인에 사용한 안드로이드 버전과 WebView 버전이 기록돼 있다"
+    blocked_by: [B-003]
+    status: todo
+    task: null
+
+  - id: B-006
+    title: "3개 환경 IME 수동 검증과 결과 기록"
+    why: "이 사이클의 산출물은 코드가 아니라 판정이다. 판정이 문서로 남지 않으면 검증한 적이 없는 것과 같다"
+    done_when:
+      - "데스크톱 Chrome / 안드로이드 Chrome / Capacitor WebView 각각에 대해 성공 기준 3개 조건의 결과가 따로 기록됐다"
+      - ".workflow/findings/ 에 환경별 결과와 재현 절차가 남아 있다"
+      - "실패 항목이 있으면 대안(오버레이 유지 / 인라인만 프리뷰 / 다른 라이브러리)과 그 근거가 적혀 있다"
+      - "다음 사이클 착수 여부에 대한 권고가 한 문단으로 적혀 있다"
+    blocked_by: [B-004, B-005]
+    status: todo
+    task: null
