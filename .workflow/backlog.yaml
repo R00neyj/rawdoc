@@ -37,8 +37,8 @@ items:
       - "데스크톱 Chrome 에서 한글 연속 입력 시 커서 튐·글자 중복이 관찰되지 않는다"
       - "가설이 틀렸으면 architecture.md 3장을 고치고 그 근거를 기록했다"
     blocked_by: [B-001]
-    status: todo
-    task: null
+    status: done
+    task: T-003
 
   - id: B-003
     title: "표·코드블록 위젯 치환과 커서 진입/이탈"
@@ -82,6 +82,8 @@ items:
       - ".workflow/findings/ 에 환경별 결과와 재현 절차가 남아 있다"
       - "실패 항목이 있으면 대안(오버레이 유지 / 인라인만 프리뷰 / 다른 라이브러리)과 그 근거가 적혀 있다"
       - "다음 사이클 착수 여부에 대한 권고가 한 문단으로 적혀 있다"
+      - "데스크톱 Chrome 의 보류 OFF 기준선이 로그로 남아 있다 (T-003 에서 사용자 관찰만 있고 로그 근거가 없었다)"
+      - "spike 번들 694kB 와 타이핑 1회당 재계산 빈도에 대한 판단이 적혀 있다 (T-003 verify 5장)"
     blocked_by: [B-004, B-005]
     status: todo
     task: null
