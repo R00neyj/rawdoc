@@ -28,6 +28,16 @@
   --md-code-bg: color-mix(in srgb, var(--muted) 12%, transparent);
   --md-link: var(--link);
 
+  /* 콜아웃 색 묶음 (F-128 3장). 전부 --panel 대비 4.5:1 이상(design.md 3.3) */
+  --callout-note: var(--link);
+  --callout-tip: #0b7285;
+  --callout-success: #177a33;
+  --callout-question: #855a00;
+  --callout-warning: #a84400;
+  --callout-danger: #c4212c;
+  --callout-example: #7644d0;
+  --callout-quote: var(--ink-2);
+
   /* 서체 (design.md 2.4) */
   --font-sans: 'Pretendard Variable', system-ui, sans-serif;
   --font-serif: 'Noto Serif KR', serif;

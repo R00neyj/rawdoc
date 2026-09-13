@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { createMemoryStore } from '../storage/memoryStore.js'
 import { openStore } from '../storage/openStore.js'
+import { ancestorsOfDoc } from '../lib/folderTree.js'
 import { getPref, setPref } from './prefs.js'
 import { parseHash, formatHash } from './hashRoute.js'
 import { pushNotice } from './notice.js'
@@ -25,6 +26,7 @@ import Sidebar from './Sidebar.jsx'
 import NoticeBar from './NoticeBar.jsx'
 import EmptyState from './EmptyState.jsx'
 import ConfirmDeleteDialog from './ConfirmDeleteDialog.jsx'
+import MoveDocDialog from './MoveDocDialog.jsx'
 import SettingsDialog from './SettingsDialog.jsx'
 import StatusBar from './StatusBar.jsx'
 
@@ -33,11 +35,25 @@ const STATS_DEBOUNCE_MS = 150
 const NARROW_QUERY = '(max-width: 1023px)'
 
 function stripContent(doc) {
-  return { id: doc.id, title: doc.title, updatedAt: doc.updatedAt }
+  return { id: doc.id, title: doc.title, updatedAt: doc.updatedAt, folderId: doc.folderId ?? null }
 }
 
 function sortByUpdatedAtDesc(list) {
   return [...list].sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+// md.openFolders 는 폴더 id JSON 배열이다 (specs/architecture.md 4장, F-126.md 5.1)
+function loadOpenFolders() {
+  try {
+    const parsed = JSON.parse(getPref('md.openFolders', '[]'))
+    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function persistOpenFolders(ids) {
+  setPref('md.openFolders', JSON.stringify(ids))
 }
 
 function replaceHashUrl(docId) {
@@ -60,11 +76,16 @@ export default function App() {
 
   const [bootPhase, setBootPhase] = useState('booting') // 'booting' | 'ready'
   const [docs, setDocs] = useState([])
+  const [folders, setFolders] = useState([]) // F-126
+  const [openFolders, setOpenFolders] = useState(() => loadOpenFolders()) // F-126, md.openFolders
   const [currentDocId, setCurrentDocId] = useState(null)
   const [notice, setNotice] = useState(null)
   const [headingFont, setHeadingFont] = useState(() => getPref('md.headingFont', 'serif'))
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [deleteTargetId, setDeleteTargetId] = useState(null)
+  // { type:'doc', id, name } | { type:'folder', id, name } | null (F-126.md 5.3)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  // 폴더로 이동 대화상자(D-3) 대상 문서: { id, title, folderId } | null (F-126.md 5.3)
+  const [moveDocTarget, setMoveDocTarget] = useState(null)
   const [narrow, setNarrow] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia(NARROW_QUERY).matches : false,
   )
@@ -95,6 +116,7 @@ export default function App() {
   // (0단계 버그 수정)
   const docsRef = useRef(docs)
   const currentDocIdRef = useRef(currentDocId)
+  const foldersRef = useRef(folders)
   // OS 파일 열기 연동(F-119)이 최신 store·beforeLeaveDoc 을 쓰도록 매 렌더 후 갱신한다
   const runImportFilesRef = useRef(async () => {})
 
@@ -126,6 +148,29 @@ export default function App() {
 
   const closeSidebarIfNarrow = useCallback(() => {
     setSidebarOpen(false)
+  }, [])
+
+  // ----- 폴더 펼침 상태 (specs/architecture.md 4장 md.openFolders, F-126.md 5.1) -----
+  // 이미 펼쳐진 폴더는 그대로 두고 목록에 없는 id 만 더한다(닫혀 있던 다른 폴더를 건드리지 않는다)
+  const addOpenFolders = useCallback((ids) => {
+    if (!ids || ids.length === 0) return
+    setOpenFolders((prev) => {
+      const merged = [...prev]
+      for (const id of ids) {
+        if (!merged.includes(id)) merged.push(id)
+      }
+      if (merged.length === prev.length) return prev
+      persistOpenFolders(merged)
+      return merged
+    })
+  }, [])
+
+  const toggleFolderOpen = useCallback((id) => {
+    setOpenFolders((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      persistOpenFolders(next)
+      return next
+    })
   }, [])
 
   // ----- 새 버전 알림 (specs/features/F-117.md, ia.md 3.13) -----
@@ -177,6 +222,9 @@ export default function App() {
       const metaList = sortByUpdatedAtDesc(list.map(stripContent))
       setDocs(metaList)
 
+      const folderList = await resolvedStore.listFolders()
+      setFolders(folderList)
+
       const { docId: hashDocId } = parseHash(location.hash)
       const lastDocId = getPref('md.lastDocId', null)
       const resolved = resolveInitialDoc({ hashDocId, lastDocId, docs: metaList })
@@ -188,6 +236,8 @@ export default function App() {
         if (resolved.notFound) {
           showNotice({ type: 'info', message: '문서를 찾을 수 없습니다.' })
         }
+        const openedDoc = metaList.find((d) => d.id === resolved.docId)
+        addOpenFolders(ancestorsOfDoc({ folders: folderList, doc: openedDoc }))
       } else {
         replaceHashUrl(null)
       }
@@ -217,6 +267,8 @@ export default function App() {
         if (docId && latestDocs.some((d) => d.id === docId)) {
           setCurrentDocId(docId)
           setPref('md.lastDocId', docId)
+          const openedDoc = latestDocs.find((d) => d.id === docId)
+          addOpenFolders(ancestorsOfDoc({ folders: foldersRef.current, doc: openedDoc }))
         } else {
           const fallbackId = latestDocs[0]?.id ?? null
           setCurrentDocId(fallbackId)
@@ -229,7 +281,7 @@ export default function App() {
 
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
-  }, [bootPhase, beforeLeaveDoc, showNotice])
+  }, [bootPhase, beforeLeaveDoc, showNotice, addOpenFolders])
 
   // ----- 저장소 영속화 요청 (specs/features/F-118.md) -----
   useEffect(() => {
@@ -292,7 +344,7 @@ export default function App() {
       setSidebarOpen(false)
     }
     function handleKeyDown(e) {
-      if (e.key === 'Escape' && !settingsOpen && !deleteTargetId) {
+      if (e.key === 'Escape' && !settingsOpen && !deleteTarget && !moveDocTarget) {
         setSidebarOpen(false)
       }
     }
@@ -303,7 +355,7 @@ export default function App() {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [narrow, sidebarOpen, settingsOpen, deleteTargetId])
+  }, [narrow, sidebarOpen, settingsOpen, deleteTarget, moveDocTarget])
 
   // ----- 새 문서 제목 입력 포커스 + 전체 선택 (ia.md 3.3) -----
   useEffect(() => {
@@ -400,6 +452,7 @@ export default function App() {
   useEffect(() => {
     docsRef.current = docs
     currentDocIdRef.current = currentDocId
+    foldersRef.current = folders
   })
 
   // runImportFiles 는 store·showNotice 등을 클로저로 담으므로, 매 커밋 후 최신 참조로
@@ -439,14 +492,23 @@ export default function App() {
     setStats((prev) => ({ ...prev, ...cursorInfo(state) }))
   }, [])
 
-  async function createNewDoc() {
+  // folderId 를 생략하면 현재 문서가 속한 폴더 안에 만든다(없으면 최상위). 사이드바
+  // 폴더 메뉴의 `새 문서` 는 그 폴더 id 를 명시로 넘긴다 (F-126.md 5.3)
+  async function createNewDoc(folderId) {
     // 보기 모드에서 새 문서 를 누르면 먼저 편집 모드로 바꾼다 — 제목 입력 포커스가
     // 필요하기 때문이다 (ia.md 3.3, F-123.md 3.3)
     if (viewMode === 'view') changeViewMode('live')
     await beforeLeaveDoc()
-    const doc = await store.create({ title: '제목 없는 문서', content: '', lineEnding: 'crlf' })
+    const targetFolderId = folderId !== undefined ? folderId : (currentDoc?.folderId ?? null)
+    const doc = await store.create({
+      title: '제목 없는 문서',
+      content: '',
+      lineEnding: 'crlf',
+      folderId: targetFolderId,
+    })
     const meta = stripContent(doc)
     setDocs((prev) => sortByUpdatedAtDesc([...prev, meta]))
+    addOpenFolders(ancestorsOfDoc({ folders, doc: meta }))
     focusTitleRef.current = true
     // 새 문서는 에디터가 아니라 제목 입력에 포커스한다 (ia.md 3.3, F-103 3.4) — 이전
     // 문서 전환 요청이 아직 소비되지 않았을 가능성에 대비해 명시적으로 내려둔다
@@ -464,6 +526,7 @@ export default function App() {
     setCurrentDocId(id)
     setPref('md.lastDocId', id)
     pushHashUrl(id)
+    addOpenFolders(ancestorsOfDoc({ folders, doc: docs.find((d) => d.id === id) }))
     closeSidebarIfNarrow()
   }
 
@@ -485,17 +548,24 @@ export default function App() {
   }
 
   // 가져오기 실행 (specs/features/F-114.md 2.2). 파일 선택 input 과 OS 파일 열기 연동
-  // (F-119) 이 함께 쓴다
+  // (F-119) 이 함께 쓴다. 현재 문서가 속한 폴더 안에 만든다 (F-126.md 5.3) — importFiles.js
+  // 는 F-126 수정 범위 밖이라 store.create 를 감싸 folderId 를 주입한다
   async function runImportFiles(files) {
     if (files.length === 0) return
 
     await beforeLeaveDoc()
 
+    const targetFolderId = currentDoc?.folderId ?? null
+    const scopedStore = {
+      ...store,
+      create: (args) => store.create({ ...args, folderId: targetFolderId }),
+    }
+
     const createdMetas = []
     let lastCreatedDoc = null
 
     await importFiles(files, {
-      store,
+      store: scopedStore,
       onCreated: (doc, { isLast }) => {
         createdMetas.push(stripContent(doc))
         if (isLast) lastCreatedDoc = doc
@@ -514,6 +584,7 @@ export default function App() {
       setCurrentDocId(lastCreatedDoc.id)
       setPref('md.lastDocId', lastCreatedDoc.id)
       pushHashUrl(lastCreatedDoc.id) // 추가 (ia.md 3.10)
+      addOpenFolders(ancestorsOfDoc({ folders, doc: stripContent(lastCreatedDoc) }))
     }
   }
 
@@ -559,27 +630,100 @@ export default function App() {
     }
   }
 
-  function requestDelete(id) {
-    setDeleteTargetId(id)
+  // ----- 삭제 D-1: 문서·폴더 공용 (specs/ia.md 3.6, F-126.md 5.3) -----
+  function requestDeleteDoc(doc) {
+    setDeleteTarget({ type: 'doc', id: doc.id, name: doc.title })
+    closeSidebarIfNarrow()
+  }
+
+  function requestDeleteFolder(folder) {
+    setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name })
     closeSidebarIfNarrow()
   }
 
   function cancelDelete() {
-    setDeleteTargetId(null)
+    setDeleteTarget(null)
   }
 
-  async function confirmDelete(id) {
-    await store.remove(id)
-    const remaining = docs.filter((d) => d.id !== id)
-    setDocs(remaining)
-    setDeleteTargetId(null)
+  async function confirmDelete(target) {
+    if (!target) return
 
-    if (id === currentDocId) {
+    if (target.type === 'folder') {
+      await store.removeFolder(target.id)
+      const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
+      setFolders(newFolders)
+      setDocs(sortByUpdatedAtDesc(newDocs.map(stripContent)))
+      setDeleteTarget(null)
+      return
+    }
+
+    await store.remove(target.id)
+    const remaining = docs.filter((d) => d.id !== target.id)
+    setDocs(remaining)
+    setDeleteTarget(null)
+
+    if (target.id === currentDocId) {
       const nextId = remaining[0]?.id ?? null
       setCurrentDocId(nextId)
       if (nextId) setPref('md.lastDocId', nextId)
       replaceHashUrl(nextId)
     }
+  }
+
+  // ----- 폴더 CRUD (specs/features/F-126.md 3장) -----
+  async function handleCreateFolder(parentId) {
+    try {
+      const folder = await store.createFolder({ name: '새 폴더', parentId })
+      setFolders((prev) => [...prev, folder])
+      addOpenFolders([folder.id]) // 새로 만든 폴더는 열린 상태 (F-126.md 5.1)
+      return folder
+    } catch {
+      return null
+    }
+  }
+
+  async function handleRenameFolder(id, name) {
+    try {
+      const updated = await store.renameFolder(id, name)
+      setFolders((prev) => prev.map((f) => (f.id === id ? updated : f)))
+    } catch {
+      // 조용히 무시 — 폴더가 그 사이 삭제된 경우 등 (다른 탭 동시 조작)
+    }
+  }
+
+  async function handleMoveFolder(id, parentId) {
+    try {
+      const updated = await store.moveFolder(id, parentId)
+      setFolders((prev) => prev.map((f) => (f.id === id ? updated : f)))
+    } catch {
+      // 깊이 초과·자기 자신 등은 Sidebar 가 드롭 전에 걸러내지만, 방어적으로 무시한다
+    }
+  }
+
+  // moveDoc 은 folderId 만 바꾼다. updatedAt 은 그대로라 목록 순서를 흔들지 않는다
+  // (F-126.md 3장, I6)
+  async function handleMoveDoc(id, folderId) {
+    try {
+      const updated = await store.moveDoc(id, folderId)
+      setDocs((prev) => prev.map((d) => (d.id === id ? { ...d, folderId: updated.folderId } : d)))
+    } catch {
+      // 문서가 그 사이 삭제된 경우 등은 조용히 무시한다
+    }
+  }
+
+  // ----- D-3 폴더로 이동 대화상자 (specs/features/F-126.md 5.3) -----
+  function requestMoveDoc(doc) {
+    setMoveDocTarget(doc)
+    closeSidebarIfNarrow()
+  }
+
+  function cancelMoveDoc() {
+    setMoveDocTarget(null)
+  }
+
+  async function confirmMoveDoc(id, folderId) {
+    setMoveDocTarget(null)
+    await handleMoveDoc(id, folderId)
   }
 
   function openSettings() {
@@ -608,7 +752,6 @@ export default function App() {
   }
 
   const currentDoc = docs.find((d) => d.id === currentDocId) ?? null
-  const deleteTargetDoc = docs.find((d) => d.id === deleteTargetId) ?? null
   const isEmpty = bootPhase === 'ready' && docs.length === 0
   const showEditor = bootPhase === 'ready' && !isEmpty
 
@@ -645,11 +788,20 @@ export default function App() {
           narrow={narrow}
           open={sidebarOpen}
           docs={docs}
+          folders={folders}
           currentDocId={currentDocId}
+          openFolderIds={openFolders}
+          onToggleFolder={toggleFolderOpen}
           onSelectDoc={selectDoc}
           onCreateDoc={createNewDoc}
           onImportDoc={requestImport}
-          onDeleteDoc={requestDelete}
+          onCreateFolder={handleCreateFolder}
+          onRenameFolder={handleRenameFolder}
+          onMoveFolder={handleMoveFolder}
+          onMoveDoc={handleMoveDoc}
+          onRequestDeleteDoc={requestDeleteDoc}
+          onRequestDeleteFolder={requestDeleteFolder}
+          onRequestMoveDoc={requestMoveDoc}
           onOpenSettings={openSettings}
           canInstall={canInstall}
           onInstall={install}
@@ -700,7 +852,13 @@ export default function App() {
         </div>
       </div>
 
-      <ConfirmDeleteDialog doc={deleteTargetDoc} onCancel={cancelDelete} onConfirm={confirmDelete} />
+      <ConfirmDeleteDialog target={deleteTarget} onCancel={cancelDelete} onConfirm={confirmDelete} />
+      <MoveDocDialog
+        doc={moveDocTarget}
+        folders={folders}
+        onCancel={cancelMoveDoc}
+        onConfirm={confirmMoveDoc}
+      />
       <SettingsDialog
         open={settingsOpen}
         headingFont={headingFont}

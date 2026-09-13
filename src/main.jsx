@@ -9,6 +9,7 @@ import '@fontsource/jetbrains-mono/latin-700.css'
 import './styles/tokens.css'
 import './styles/app.css'
 import './styles/markdown.css'
+import './styles/callout.css'
 
 import { getPref } from './app/prefs.js'
 import App from './app/App.jsx'

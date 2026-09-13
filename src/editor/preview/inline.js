@@ -7,6 +7,7 @@ import { Decoration, ViewPlugin } from '@codemirror/view'
 
 import { activeLines, selectionTouches } from './active.js'
 import { isComposing, isForced } from '../composition.js'
+import { parseCalloutHeader } from '../../lib/callout.js'
 
 /** 마커를 화면에서만 지운다 */
 const HIDE = Decoration.replace({})
@@ -64,6 +65,30 @@ function linkMarks(linkNode) {
 }
 
 /**
+ * 콜아웃 머리(`[!type]`)의 Link 노드인가 (F-128 4.1).
+ * lezer 는 `> [!note] 제목` 의 "[!note]" 를 URL 없는 Link(참조 없는 shortcut 후보)로
+ * 읽는다 — 그대로 두면 이 파일의 일반 규칙이 `[` `]` 를 숨긴다. lines.js 의 콜아웃
+ * 판정(부모가 Blockquote 가 아닌 인용만 후보 — F-128 2장 "중첩은 바깥만")과 같은
+ * 규칙을 여기서도 적용한다
+ */
+function isCalloutHeaderLink(state, linkNode) {
+  const paragraph = linkNode.parent
+  if (paragraph?.name !== 'Paragraph' || linkNode.from !== paragraph.from) return false
+
+  const blockquote = paragraph.parent
+  if (blockquote?.name !== 'Blockquote') return false
+  if (blockquote.parent?.name === 'Blockquote') return false // 중첩 인용은 후보 아님
+
+  let headFrom = blockquote.from + 1
+  if (state.doc.sliceString(headFrom, headFrom + 1) === ' ') headFrom += 1
+  if (linkNode.from !== headFrom) return false // 머리 줄 맨 앞이 아니면 대상 아님
+
+  const line = state.doc.lineAt(blockquote.from)
+  const headText = state.doc.sliceString(headFrom, line.to)
+  return parseCalloutHeader(headText) !== null
+}
+
+/**
  * @param {import('@codemirror/state').EditorState} state
  * @param {{from:number, to:number}[]} ranges 보통 view.visibleRanges
  * @returns {import('@codemirror/state').Range<import('@codemirror/view').Decoration>[]}
@@ -98,6 +123,9 @@ export function buildInline(state, ranges) {
         if (LINK_CHILD_MARK.has(node.name)) {
           const parent = node.node.parent
           if (parent?.name === 'Link') {
+            // F-128 4.1: 콜아웃 머리의 [!type] 은 숨김 대상에서 뺀다(기호 그대로 두고
+            // lines.js 가 md-callout-type mark 로 색만 준다)
+            if (isCalloutHeaderLink(state, parent)) return
             // F-129 3.2: 줄이 아니라 선택이 이 Link [from, to] 에 닿는지로 판정한다
             if (!selectionTouches(state, parent.from, parent.to)) pushHide(out, state, node.from, node.to)
             return

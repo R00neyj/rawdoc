@@ -169,6 +169,79 @@ describe('buildLines — 구분선', () => {
   })
 })
 
+describe('buildLines — 콜아웃 (F-128 5장 A2)', () => {
+  function classesOf(decos, lineNumber, doc) {
+    const line = doc.line(lineNumber)
+    return decos
+      .filter((r) => r.value.spec.class && r.from === line.from)
+      .map((r) => r.value.spec.class)
+      .join(' ')
+  }
+
+  function typeMarks(decos) {
+    return decos.filter((r) => r.value.spec.class === 'md-callout-type')
+  }
+
+  it('> [!tip] 제목\\n> 본문 — 두 줄 모두 md-callout md-callout--tip, 첫 줄 md-callout-title, 마지막 줄 md-callout-last', () => {
+    const doc = '> [!tip] 제목\n> 본문'
+    const state = makeState(doc, doc.length) // 커서: 문서 끝(활성 줄과 무관하게 판정)
+    const decos = build(state)
+
+    expect(classesOf(decos, 1, state.doc)).toContain('md-callout')
+    expect(classesOf(decos, 1, state.doc)).toContain('md-callout--tip')
+    expect(classesOf(decos, 1, state.doc)).toContain('md-callout-title')
+    expect(classesOf(decos, 1, state.doc)).not.toContain('md-callout-last')
+    expect(classesOf(decos, 2, state.doc)).toContain('md-callout--tip')
+    expect(classesOf(decos, 2, state.doc)).toContain('md-callout-last')
+    expect(lineClasses(decos)).not.toContain('md-quote')
+  })
+
+  it('공백 없는 >[!tip] 도 같다', () => {
+    const doc = '>[!tip] 제목\n> 본문'
+    const state = makeState(doc, doc.length)
+    const decos = build(state)
+    expect(classesOf(decos, 1, state.doc)).toContain('md-callout-title')
+    expect(classesOf(decos, 2, state.doc)).toContain('md-callout-last')
+    expect(lineClasses(decos)).not.toContain('md-quote')
+  })
+
+  it('[!type] 자리에 md-callout-type mark 가 붙는다', () => {
+    const doc = '> [!tip] 제목'
+    const state = makeState(doc, doc.length)
+    const decos = build(state)
+    const marks = typeMarks(decos)
+    expect(marks).toHaveLength(1)
+    expect([marks[0].from, marks[0].to]).toEqual([2, 8]) // "[!tip]"
+  })
+
+  it('보통 인용은 기존 md-quote 그대로', () => {
+    const doc = '> 보통 인용'
+    const state = makeState(doc, doc.length)
+    const decos = build(state)
+    expect(lineClasses(decos)).toContain('md-quote')
+    expect(lineClasses(decos)).not.toContain('md-callout')
+  })
+
+  it('중첩 인용(> > [!tip])은 편집 모드에서 바깥만 판정한다 (가장 바깥 인용만 콜아웃)', () => {
+    const doc = '> > [!tip] 중첩'
+    const state = makeState(doc, doc.length)
+    const decos = build(state)
+    // 바깥(outer) 자신의 머리 텍스트는 "> [!tip] 중첩" 이라 [ 로 시작하지 않아 콜아웃이 아니다.
+    // "가장 바깥 인용만 콜아웃 판정 대상" 규칙이라 안쪽도 독립적으로 콜아웃이 되지 않는다
+    expect(lineClasses(decos)).not.toContain('md-callout')
+    expect(lineClasses(decos)).toContain('md-quote')
+  })
+
+  it('활성 줄이 아니면 QuoteMark 를 숨긴다 (기존 F-105 규칙 그대로, F-128 4.1)', () => {
+    const doc = '> [!tip] 제목\n> 본문\nx'
+    const state = makeState(doc, doc.length - 1) // 커서: 3번째 줄('x')
+    const decos = build(state)
+    // replaced() 는 class 없는(=replace) decoration 만 남긴다 — md-callout-type mark 는
+    // class 가 있어 여기서 자동으로 빠진다. 두 줄의 QuoteMark(+공백) 숨김만 남아야 한다
+    expect(replaced(decos)).toHaveLength(2)
+  })
+})
+
 describe('mapDecorationsOnHold — F-134 3.1: 조합 중 보류 + 문서 변경', () => {
   it('맵 결과는 새 문서 범위 안이고(HIDE) 줄바꿈을 덮지 않는다', () => {
     const state = makeState('# Title\nx', 8) // 커서: 두 번째 줄 — HeaderMark 숨김

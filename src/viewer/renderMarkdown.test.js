@@ -96,6 +96,66 @@ describe('renderMarkdown — 줄바꿈', () => {
   })
 })
 
+describe('renderMarkdown — 콜아웃 (specs/features/F-128.md 5장 A3)', () => {
+  it('콜아웃을 div.markdown-callout + 제목 p + 본문으로 바꾼다', () => {
+    const html = renderMarkdown('> [!tip] 제목\n> 본문')
+    expect(html).toContain('class="markdown-callout md-callout--tip"')
+    expect(html).toContain('data-callout="tip"')
+    expect(html).toContain('<p class="markdown-callout-title">제목</p>')
+    expect(html).toContain('<p>본문</p>')
+    expect(html).not.toContain('<blockquote>')
+    expect(html).not.toContain('[!tip]')
+  })
+
+  it('제목 없는 [!note] 는 기본 제목 Note', () => {
+    const html = renderMarkdown('> [!note]\n> 본문')
+    expect(html).toContain('<p class="markdown-callout-title">Note</p>')
+  })
+
+  it('본문이 없어도 된다', () => {
+    const html = renderMarkdown('> [!note] 제목만')
+    expect(html).toContain('<p class="markdown-callout-title">제목만</p>')
+    expect(html).toContain('</div>')
+  })
+
+  it('공백 없는 >[!tip] 도 콜아웃이 된다', () => {
+    const html = renderMarkdown('>[!tip] 제목')
+    expect(html).toContain('md-callout--tip')
+  })
+
+  it('제목의 인라인 마크다운을 렌더한다 (<b> 는 이스케이프)', () => {
+    const html = renderMarkdown('> [!x] <b>강조</b>')
+    // 지원하지 않는 종류는 note 묶음, html:false 라 <b> 는 이스케이프된다
+    expect(html).toContain('md-callout--note')
+    expect(html).toContain('&lt;b&gt;강조&lt;/b&gt;')
+  })
+
+  it('제목에 굵게 등 실제 마크다운 문법은 인라인 렌더된다', () => {
+    const html = renderMarkdown('> [!tip] **굵게** 제목')
+    expect(html).toContain('<strong>굵게</strong> 제목')
+  })
+
+  it('중첩 콜아웃도 안쪽까지 변환한다', () => {
+    const html = renderMarkdown('> [!note] 바깥\n> > [!tip] 안쪽')
+    expect(html).toContain('md-callout--note')
+    expect(html).toContain('md-callout--tip')
+    expect(html).toContain('<p class="markdown-callout-title">바깥</p>')
+    expect(html).toContain('<p class="markdown-callout-title">안쪽</p>')
+    expect(html).not.toContain('<blockquote>')
+  })
+
+  it('보통 인용은 blockquote 그대로', () => {
+    const html = renderMarkdown('> 그냥 인용\n> 계속')
+    expect(html).toContain('<blockquote>')
+    expect(html).not.toContain('markdown-callout')
+  })
+
+  it('GitHub 별칭 [!IMPORTANT]는 tip, [!CAUTION]은 warning 묶음이 된다', () => {
+    expect(renderMarkdown('> [!IMPORTANT] x')).toContain('md-callout--tip')
+    expect(renderMarkdown('> [!CAUTION] x')).toContain('md-callout--warning')
+  })
+})
+
 describe('renderMarkdown — 성능 기록 (A2, 통과 기준 없음)', () => {
   it('약 5,000줄(표 50·코드블록 50 섞음) 변환 1회 시간을 기록한다', () => {
     const lines = []

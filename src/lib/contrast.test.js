@@ -47,3 +47,18 @@ describe('contrastRatio', () => {
     expect(paperRatio).toBeGreaterThan(1)
   })
 })
+
+// 콜아웃 색 토큰 대비 검사 (specs/features/F-128.md 3장·5장 A4).
+// 메인 컬러와 달리 콜아웃은 임시값이 아니라 확정된 색이므로 4.5 미만이면 테스트를
+// 실패시킨다("경고가 아니라 실패다", F-128 3장). hex 가 아닌 토큰(--callout-note ·
+// --callout-quote 는 var() 참조)은 여기서 검사하지 않는다 — 대비 계산에 필요한 hex 값이
+// 없고, 참조 대상(--link · --ink-2)은 F-102 가 이미 검산했다
+const CALLOUT_HEX_TOKENS = ['--callout-tip', '--callout-success', '--callout-question', '--callout-warning', '--callout-danger', '--callout-example']
+
+describe('콜아웃 색 토큰 대비 (F-128 3장)', () => {
+  it.each(CALLOUT_HEX_TOKENS)('%s 는 --panel 과 4.5:1 이상', (token) => {
+    const panel = readToken('--panel')
+    const hex = readToken(token)
+    expect(contrastRatio(hex, panel)).toBeGreaterThanOrEqual(4.5)
+  })
+})

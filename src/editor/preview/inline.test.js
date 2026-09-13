@@ -196,6 +196,40 @@ describe('buildInline — F-134 3.7: 줄바꿈을 덮는 숨김 방지', () => {
   })
 })
 
+describe('buildInline — F-128 4.1: 콜아웃 머리는 링크 기호 숨김에서 뺀다', () => {
+  it('> [!tip] 제목 의 [ ] 를 숨기지 않는다', () => {
+    const doc = '> [!tip] 제목\nx'
+    const state = makeState(doc, doc.length) // 커서: 다음 줄 — 보통 Link 라면 숨겨질 상태
+    expect(hiddenCount(state)).toBe(0)
+  })
+
+  it('공백 없는 >[!tip] 도 숨기지 않는다', () => {
+    const doc = '>[!tip] 제목\nx'
+    const state = makeState(doc, doc.length)
+    expect(hiddenCount(state)).toBe(0)
+  })
+
+  it('md-link mark 도 붙지 않는다 (URL 없음)', () => {
+    const doc = '> [!tip] 제목\nx'
+    const state = makeState(doc, doc.length)
+    expect(linkMarksOf(state)).toEqual([])
+  })
+
+  it('중첩 인용(> > [!tip])은 바깥 판정이라 숨김 대상에서 빠지지 않는다', () => {
+    const doc = '> > [!tip] 중첩\nx'
+    const state = makeState(doc, doc.length)
+    // 바깥은 콜아웃이 아니고(머리 텍스트가 [ 로 시작하지 않음), 이 파일은 lines.js 와
+    // 같은 "가장 바깥만" 규칙을 쓰므로 안쪽 Link 의 [ ] 는 일반 규칙대로 숨는다
+    expect(hiddenCount(state)).toBeGreaterThan(0)
+  })
+
+  it('보통 인용의 일반 [텍스트](url) 링크는 여전히 숨긴다', () => {
+    const doc = '> [글](https://a.com)\nx'
+    const state = makeState(doc, doc.length)
+    expect(hiddenCount(state)).toBeGreaterThan(0)
+  })
+})
+
 describe('mapDecorationsOnHold — F-134 3.1: 조합 중 보류 + 문서 변경', () => {
   it('맵 결과는 새 문서 범위 안이고 줄바꿈을 덮지 않는다', () => {
     const state = makeState('**bold**\nx', 9) // 커서: 두 번째 줄 — **bold** 기호 숨김

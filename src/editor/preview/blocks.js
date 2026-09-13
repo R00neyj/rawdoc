@@ -9,6 +9,7 @@ import { syntaxTree } from '@codemirror/language'
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap } from '@codemirror/view'
 
 import { isComposing, isForced } from '../composition.js'
+import { TableWidget, enterTableFromKeyboard, isCellComposing } from './tableWidget.js'
 
 /**
  * 커서나 선택 영역이 [from, to] 와 겹치는가.
@@ -170,67 +171,6 @@ class CodeWidget extends WidgetType {
   }
 }
 
-/** GFM 표 위젯. 셀 내용은 원문 문자열 그대로 — 셀 안 인라인 프리뷰는 하지 않는다 */
-class TableWidget extends WidgetType {
-  /** @param {{header:boolean, cells:{text:string, offset:number}[]}[]} rows */
-  constructor(rows) {
-    super()
-    this.rows = rows
-    // 비교 키에 offset 도 넣는다 (F-134 3.3) — 칸 글자가 같아도 공백만 달라 offset 이
-    // 다르면 클릭 위치 계산(data-offset)이 어긋난다. 예전엔 위치를 뺐었다(F-106 2.1
-    // 원래 의도는 "블록 앞에 글자가 늘어 블록 자체의 절대 위치가 달라지는 것"까지
-    // eq 를 깨뜨리지 않으려던 것이었는데, offset 은 블록 시작 기준 상대값이라 그
-    // 경우엔 어차피 그대로다 — 실제로 깨야 하는 경우(칸 안 공백만 다름)만 깨진다
-    this.key = JSON.stringify(
-      rows.map((r) => ({ header: r.header, cells: r.cells.map((c) => ({ text: c.text, offset: c.offset })) })),
-    )
-  }
-
-  eq(other) {
-    return other.key === this.key
-  }
-
-  toDOM(view) {
-    // CodeWidget 과 같은 이유로 wrap 에 세로 margin 을 쓰지 않는다 (F-124 3.4 12번
-    // 요청) — 간격은 wrap 의 padding 으로 준다. 표는 배경을 새로 칠하지 않아
-    // (테두리·행 배경은 table 자체가 가진다) 코드블록과 달리 안쪽 요소를 더
-    // 나누지 않아도 된다
-    const wrap = document.createElement('div')
-    wrap.className = 'md-block md-table'
-    const table = document.createElement('table')
-    for (const row of this.rows) {
-      const tr = document.createElement('tr')
-      for (const cell of row.cells) {
-        const td = document.createElement(row.header ? 'th' : 'td')
-        td.textContent = cell.text
-        td.dataset.offset = String(cell.offset)
-        tr.appendChild(td)
-      }
-      table.appendChild(tr)
-    }
-
-    // 표도 코드블록과 같은 이유(F-124 3.4)로 스크롤 전용 래퍼로 감싼다.
-    // td/th 의 data-offset 클릭 위치 계산(F-106)은 영향받지 않는다
-    const scroll = document.createElement('div')
-    scroll.className = 'md-table-scroll'
-    scroll.appendChild(table)
-    wrap.appendChild(scroll)
-
-    observeHeight(wrap, view)
-
-    enterOnClick(wrap, view)
-    return wrap
-  }
-
-  ignoreEvent() {
-    return true
-  }
-
-  destroy(dom) {
-    stopObservingHeight(dom)
-  }
-}
-
 /**
  * @param {number} blockFrom 위젯이 치환할 범위의 시작(줄 경계로 확장한 값)
  *
@@ -269,31 +209,15 @@ function codeWidget(state, node, blockFrom) {
 }
 
 /**
+ * 표는 tableModel.js 가 텍스트를 직접 다시 해석하므로(lezer TableCell 노드를 쓰지
+ * 않는다 — tableModel.js 상단 주석 참고), 여기서는 블록 전체 원문을 그대로 잘라
+ * 새 TableWidget 에 넘기기만 한다. `node`(lezer Table 노드)는 쓰지 않지만 TARGET
+ * 맵의 다른 항목(codeWidget)과 시그니처를 맞추려고 인자로 받는다.
  * @param {number} blockFrom 위젯이 치환할 범위의 시작(줄 경계로 확장한 값)
- *
- * 빈 셀(공백만 있거나 길이 0)은 파서가 `TableCell` 노드 자체를 만들지 않는다
- * (실측: `| a ||`, `| a |  |` 모두 두 번째 칸에 TableCell 이 없다). 그래서
- * `TableDelimiter`(`|`) 사이에 `TableCell` 이 없으면 그 자리를 빈 셀로 채운다 —
- * 열 수가 어긋나지 않게 하기 위해서다. 오프셋은 직전 델리미터 끝 위치(from===to)다.
+ * @param {number} blockTo 위젯이 치환할 범위의 끝(줄 경계로 확장한 값)
  */
-function tableWidget(state, node, blockFrom) {
-  const rows = []
-  for (let row = node.firstChild; row; row = row.nextSibling) {
-    if (row.name !== 'TableHeader' && row.name !== 'TableRow') continue
-    const cells = []
-    let pendingDelimEnd = null
-    for (let child = row.firstChild; child; child = child.nextSibling) {
-      if (child.name === 'TableDelimiter') {
-        if (pendingDelimEnd !== null) cells.push({ text: '', offset: pendingDelimEnd - blockFrom })
-        pendingDelimEnd = child.to
-      } else if (child.name === 'TableCell') {
-        cells.push({ text: state.doc.sliceString(child.from, child.to), offset: child.from - blockFrom })
-        pendingDelimEnd = null
-      }
-    }
-    rows.push({ header: row.name === 'TableHeader', cells })
-  }
-  return new TableWidget(rows)
+function tableWidget(state, node, blockFrom, blockTo) {
+  return new TableWidget(state.doc.sliceString(blockFrom, blockTo))
 }
 
 const TARGET = { Table: tableWidget, FencedCode: codeWidget }
@@ -315,15 +239,33 @@ export function buildBlocks(state) {
       const from = state.doc.lineAt(node.from).from
       const to = state.doc.lineAt(node.to).to
 
-      // 커서나 선택이 걸쳐 있으면 위젯을 씌우지 않는다 = 원문이 그대로 보인다.
-      if (!overlaps(state, from, to)) {
-        out.push(Decoration.replace({ widget: make(state, node.node, from), block: true }).range(from, to))
+      // 표는 커서·선택이 걸쳐 있어도 항상 위젯이다(F-125 2.1) — 칸 편집은 위젯
+      // 안 하위 에디터로 하므로 원문을 노출할 필요가 없다(코드블록은 그대로
+      // "겹치면 원문" 규칙을 유지한다).
+      const alwaysWidget = node.name === 'Table'
+      if (alwaysWidget || !overlaps(state, from, to)) {
+        out.push(Decoration.replace({ widget: make(state, node.node, from, to), block: true }).range(from, to))
       }
       // 어느 쪽이든 블록 내부는 더 볼 것이 없다. 표 안 인라인·코드블록 강조는 하지 않는다.
       return false
     },
   })
   return out
+}
+
+/** pos 를 포함하는 Table 노드(있으면)를 찾는다. 표는 항상 위젯이라(F-125 2.1) 그
+ * 줄에 커서가 닿아도 화면엔 원문이 보이지 않는다 — 원문 자리로 커서를 두는 대신
+ * 칸 편집을 시작해야 한다(2.3) */
+function findTableAt(state, pos) {
+  let found = null
+  syntaxTree(state).iterate({
+    from: pos,
+    to: pos,
+    enter: (node) => {
+      if (node.name === 'Table') found = node.node
+    },
+  })
+  return found
 }
 
 /**
@@ -342,6 +284,9 @@ export function buildBlocks(state) {
  * 옆 줄 이동(차이 1)에는 이 판정이 개입하지 않는다 — "두 줄 이상 뛰는" 경우만
  * 블록을 건너뛴 것이므로 판정이 깨지지 않는다 (F-106 2.2. 실측: 3장 A3).
  *
+ * 표는 그 자체가 항상 위젯이라(F-125 2.1) 옆 줄로 돌려보내는 대신 칸 편집을
+ * 시작한다(2.3) — findTableAt·enterTableFromKeyboard 참고.
+ *
  * @param {boolean} down 아래로 이동이면 true
  */
 function stepIntoBlock(down) {
@@ -357,9 +302,19 @@ function stepIntoBlock(down) {
 
     const target = down ? cur + 1 : cur - 1
     if (target < 1 || target > state.doc.lines) return false
+    const targetPos = state.doc.line(target).from
+
+    // 표로 들어가는 경우: 아래 화살표는 머리 행 첫 칸, 위 화살표는 마지막 행
+    // 첫 칸에서 편집을 시작한다(F-125 2.3) — enterTableFromKeyboard 의 fromAbove 는
+    // "위에서 내려오며 들어왔다(=아래로 이동해 들어왔다)"는 뜻이라 down 과 같다.
+    const tableNode = findTableAt(state, targetPos)
+    if (tableNode) {
+      const tableFrom = state.doc.lineAt(tableNode.from).from
+      if (enterTableFromKeyboard(view, tableFrom, down)) return true
+    }
 
     view.dispatch({
-      selection: { anchor: state.doc.line(target).from },
+      selection: { anchor: targetPos },
       scrollIntoView: true,
     })
     return true
@@ -386,6 +341,12 @@ const blockKeymap = Prec.highest(
  * IME 규칙(F-106 2.1)은 F-104 2.3 과 같다: 조합 종료 신호(forceRecalc)는 무조건
  * 재계산, 아니면 문서·선택 변화가 없으면 건너뛰고, 조합 중이면 건너뛰되 문서가
  * 바뀌었으면 `value.map(tr.changes)` 로 위치만 따라간다.
+ *
+ * 표 칸 조합(F-125 2.2)은 주 view 가 아니라 칸의 하위 EditorView 자기 DOM 에서
+ * 일어난다 — 주 view 의 `composing` 은 그동안 계속 false 라 `isComposing(view)` 만으로는
+ * 못 잡는다. `isCellComposing` 으로 "지금 편집 중인 칸이 조합 중인가" 도 같이 본다.
+ * 이걸 안 보면 조합 중 표 재계산이 그대로 일어나 편집 중인 하위 EditorView 의 DOM 을
+ * 파괴해 조합이 깨진다(updateDOM 의 "구조 바뀜" 분기 → endEdit → cellView.destroy()).
  */
 export function blockPreview() {
   const viewRef = { current: null }
@@ -406,7 +367,9 @@ export function blockPreview() {
         // 변화가 올 때까지 늦게 생긴다
         const treeChanged = syntaxTree(tr.startState) !== syntaxTree(tr.state)
         if (!tr.docChanged && !tr.selection && !treeChanged) return value
-        if (isComposing(viewRef.current)) return tr.docChanged ? value.map(tr.changes) : value
+        if (isComposing(viewRef.current) || isCellComposing(viewRef.current)) {
+          return tr.docChanged ? value.map(tr.changes) : value
+        }
       }
       return Decoration.set(buildBlocks(tr.state), true)
     },

@@ -39,15 +39,16 @@ describe('buildBlocks — 생성 여부', () => {
     for (const r of ranges) expect(r.value.spec.block).toBe(true)
 
     const widgets = widgetsOf(state)
-    expect(widgets.some((w) => w.rows)).toBe(true)
+    expect(widgets.some((w) => w.table)).toBe(true)
     expect(widgets.some((w) => w.lines !== undefined)).toBe(true)
   })
 
-  it('커서가 표 안이면 표는 만들지 않고 코드블록은 그대로 만든다', () => {
+  it('커서가 표 안이어도 표 위젯은 사라지지 않는다(F-125 2.1) — 코드블록은 그대로 만든다', () => {
     const cursor = TABLE_DOC.indexOf('1') // 표 본문 행
     const state = makeState(MIXED_DOC, cursor)
     const widgets = widgetsOf(state)
-    expect(widgets.some((w) => w.rows)).toBe(false)
+    // 표는 칸 편집을 위젯 안 하위 에디터로 하므로 커서가 안에 있어도 항상 위젯이다
+    expect(widgets.some((w) => w.table)).toBe(true)
     expect(widgets.some((w) => w.lines !== undefined)).toBe(true)
   })
 
@@ -55,17 +56,17 @@ describe('buildBlocks — 생성 여부', () => {
     const cursor = MIXED_DOC.indexOf('console.log')
     const state = makeState(MIXED_DOC, cursor)
     const widgets = widgetsOf(state)
-    expect(widgets.some((w) => w.rows)).toBe(true)
+    expect(widgets.some((w) => w.table)).toBe(true)
     expect(widgets.some((w) => w.lines !== undefined)).toBe(false)
   })
 
-  it('선택 영역이 블록과 걸치면(경계만 포함해도) 위젯을 만들지 않는다', () => {
+  it('선택 영역이 코드블록과 걸치면(경계만 포함해도) 코드블록 위젯을 만들지 않는다 — 표는 걸쳐도 유지된다(F-125 2.1)', () => {
     // 표 안의 한 지점부터 코드블록 안의 한 지점까지 걸치는 선택 — 두 블록 모두 겹친다
     const from = TABLE_DOC.indexOf('1')
     const to = MIXED_DOC.indexOf('const') + 3
     const state = makeState(MIXED_DOC, from, to)
     const widgets = widgetsOf(state)
-    expect(widgets.some((w) => w.rows)).toBe(false)
+    expect(widgets.some((w) => w.table)).toBe(true)
     expect(widgets.some((w) => w.lines !== undefined)).toBe(false)
   })
 
@@ -77,26 +78,24 @@ describe('buildBlocks — 생성 여부', () => {
 })
 
 describe('buildBlocks — 셀·줄 상대 오프셋', () => {
-  it('표 셀의 data 는 블록 시작 기준 상대 오프셋이고, 그 위치에 그 셀 원문이 있다', () => {
+  it('표 셀의 from/to 는 블록 시작 기준 상대 오프셋이고, 그 위치에 그 셀 원문이 있다', () => {
     // 표 바로 뒤에 줄바꿈 없이 텍스트가 오면 GFM 파서가 그 줄을 표의 추가 행으로
     // 흡수한다(단일 셀 행). 표를 확실히 끝내려면 빈 줄이 필요하다
     const doc = TABLE_DOC + '\nx'
     const state = makeState(doc, doc.length)
-    const range = buildBlocks(state).find((r) => r.value.spec.widget.rows)
+    const range = buildBlocks(state).find((r) => r.value.spec.widget.table)
     const blockFrom = range.from
     const widget = range.value.spec.widget
 
-    expect(widget.rows).toHaveLength(2) // 헤더 1 + 데이터 1
-    for (const row of widget.rows) {
+    // rows[0] 이 머리 행이다(tableModel.js 는 별도 header 플래그 없이 인덱스로 구분한다)
+    expect(widget.table.rows).toHaveLength(2) // 헤더 1 + 데이터 1
+    for (const row of widget.table.rows) {
       for (const cell of row.cells) {
-        const sliced = state.doc.sliceString(blockFrom + cell.offset, blockFrom + cell.offset + cell.text.length)
+        const sliced = state.doc.sliceString(blockFrom + cell.from, blockFrom + cell.to)
         expect(sliced).toBe(cell.text)
       }
     }
-    // 헤더 행 구분도 확인
-    expect(widget.rows[0].header).toBe(true)
-    expect(widget.rows[1].header).toBe(false)
-    expect(widget.rows.map((r) => r.cells.map((c) => c.text))).toEqual([
+    expect(widget.table.rows.map((r) => r.cells.map((c) => c.text))).toEqual([
       ['a', 'b'],
       ['1', '2'],
     ])
@@ -121,17 +120,18 @@ describe('buildBlocks — 셀·줄 상대 오프셋', () => {
   it('빈 셀(TableCell 노드 자체가 없는 칸)도 빈 문자열 칸으로 채워지고 오프셋이 유효하다(from===to)', () => {
     const doc = '| a |  |\n| - | - |\n| 1 |  |\n\nx'
     const state = makeState(doc, doc.length)
-    const range = buildBlocks(state).find((r) => r.value.spec.widget.rows)
+    const range = buildBlocks(state).find((r) => r.value.spec.widget.table)
     const blockFrom = range.from
     const widget = range.value.spec.widget
 
-    expect(widget.rows).toHaveLength(2)
-    expect(widget.rows.map((r) => r.cells.map((c) => c.text))).toEqual([
+    expect(widget.table.rows).toHaveLength(2)
+    expect(widget.table.rows.map((r) => r.cells.map((c) => c.text))).toEqual([
       ['a', ''],
       ['1', ''],
     ])
-    const emptyCell = widget.rows[0].cells[1]
-    expect(state.doc.sliceString(blockFrom + emptyCell.offset, blockFrom + emptyCell.offset)).toBe('')
+    const emptyCell = widget.table.rows[0].cells[1]
+    expect(emptyCell.from).toBe(emptyCell.to)
+    expect(state.doc.sliceString(blockFrom + emptyCell.from, blockFrom + emptyCell.to)).toBe('')
   })
 })
 
@@ -141,8 +141,8 @@ describe('buildBlocks — widget.eq (F-106 2.1: 위치를 넣지 않는다)', ()
     const docB = 'xx\n' + TABLE_DOC + '\ny'
     const a = makeState(docA, docA.length)
     const b = makeState(docB, docB.length)
-    const wa = buildBlocks(a).find((r) => r.value.spec.widget.rows).value.spec.widget
-    const wb = buildBlocks(b).find((r) => r.value.spec.widget.rows).value.spec.widget
+    const wa = buildBlocks(a).find((r) => r.value.spec.widget.table).value.spec.widget
+    const wb = buildBlocks(b).find((r) => r.value.spec.widget.table).value.spec.widget
     expect(wa.eq(wb)).toBe(true)
   })
 
@@ -201,13 +201,19 @@ describe('buildBlocks — widget.eq 는 클릭 위치 계산에 쓰는 offset �
     const docB = '|  a | b |\n| - | - |\n| 1 | 2 |\n\nx' // 첫 칸 앞 공백 1개 더
     const a = makeState(docA, docA.length)
     const b = makeState(docB, docB.length)
-    const wa = buildBlocks(a).find((r) => r.value.spec.widget.rows).value.spec.widget
-    const wb = buildBlocks(b).find((r) => r.value.spec.widget.rows).value.spec.widget
+    const wa = buildBlocks(a).find((r) => r.value.spec.widget.table).value.spec.widget
+    const wb = buildBlocks(b).find((r) => r.value.spec.widget.table).value.spec.widget
 
     // 칸 글자는 완전히 같다 — 이전 eq() 는 이 경우를 참으로 오판했다
-    expect(wa.rows.map((r) => r.cells.map((c) => c.text))).toEqual(wb.rows.map((r) => r.cells.map((c) => c.text)))
-    // 하지만 offset 은 다르다(파싱 확인: probe 로 미리 확인함)
-    expect(wa.rows.map((r) => r.cells.map((c) => c.offset))).not.toEqual(wb.rows.map((r) => r.cells.map((c) => c.offset)))
+    expect(wa.table.rows.map((r) => r.cells.map((c) => c.text))).toEqual(
+      wb.table.rows.map((r) => r.cells.map((c) => c.text)),
+    )
+    // 하지만 offset(from) 은 다르다(파싱 확인: probe 로 미리 확인함). 새 TableWidget.eq
+    // 는 칸 단위가 아니라 블록 원문(text) 전체를 비교한다 — 공백 하나만 달라도
+    // text 자체가 달라지므로 이 경우를 자동으로 거짓 처리한다
+    expect(wa.table.rows.map((r) => r.cells.map((c) => c.from))).not.toEqual(
+      wb.table.rows.map((r) => r.cells.map((c) => c.from)),
+    )
     expect(wa.eq(wb)).toBe(false)
   })
 

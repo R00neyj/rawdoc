@@ -1,0 +1,87 @@
+/* 콜아웃 모양 — 편집·보기 모드 공용 (specs/features/F-128.md 4장)
+   hex 는 여기 두지 않는다. 색은 tokens.css 의 --callout-* 토큰만 참조한다 (A8) */
+
+/* ===== 공용: 색 묶음 → --callout-color (F-128 4장 "공용 규칙") ===== */
+.md-callout--note {
+  --callout-color: var(--callout-note);
+}
+.md-callout--tip {
+  --callout-color: var(--callout-tip);
+}
+.md-callout--success {
+  --callout-color: var(--callout-success);
+}
+.md-callout--question {
+  --callout-color: var(--callout-question);
+}
+.md-callout--warning {
+  --callout-color: var(--callout-warning);
+}
+.md-callout--danger {
+  --callout-color: var(--callout-danger);
+}
+.md-callout--example {
+  --callout-color: var(--callout-example);
+}
+.md-callout--quote {
+  --callout-color: var(--callout-quote);
+}
+
+/* ===== 편집 모드 (F-128 4.1) =====
+   모서리·안쪽 여백은 F-124 3.2 이유(CM6 는 줄 높이를 DOM 에서 재는데 margin 이
+   반영되지 않는다)로 세로는 padding 만 쓴다. 왼쪽 선·바탕은 줄마다 같은 값을 줘서
+   fenceLinePreview()(F-124 3.4 11번)와 같은 방식으로 이어진 박스처럼 보이게 한다 */
+.cm-host .cm-editor .cm-line.md-callout {
+  background: color-mix(in srgb, var(--callout-color) 8%, var(--panel));
+  border-left: 4px solid var(--callout-color);
+  padding-left: 16px;
+  color: var(--ink);
+}
+
+.cm-host .cm-editor .cm-line.md-callout-title {
+  padding-top: 8px;
+  border-top-right-radius: 6px;
+  font-weight: 600;
+  color: var(--callout-color);
+}
+
+.cm-host .cm-editor .cm-line.md-callout-last {
+  padding-bottom: 8px;
+  border-bottom-right-radius: 6px;
+}
+
+/* "[!type]" 자리 (F-128 4.1) — 기호는 숨기지 않고 색 묶음 색·굵기 600·0.85em 로 보인다.
+   같은 범위에 highlight.js 의 tags.link → .md-link(색 --md-link, cursor:pointer)가
+   같이 붙는다(lezer 가 이 자리를 URL 없는 Link 로 읽는다, F-128 4.1) — 어느 쪽 span 이
+   더 안쪽에 오든 이기도록 두 방향 선택자에 모두 적용한다. 콜아웃 머리는 열 수 있는
+   링크가 아니므로(URL 없음) cursor 도 되돌린다 */
+.md-callout-type,
+.md-callout-type.md-link,
+.md-callout-type .md-link,
+.md-link .md-callout-type {
+  color: var(--callout-color) !important;
+  font-weight: 600;
+  font-size: 0.85em;
+  cursor: text;
+}
+
+/* ===== 보기 모드 (F-128 4.2) ===== */
+.app-shell .markdown-callout {
+  background: color-mix(in srgb, var(--callout-color) 8%, var(--panel));
+  border-left: 4px solid var(--callout-color);
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+  padding: 8px 16px;
+  color: var(--ink);
+  margin: 0 0 1rem;
+}
+
+.app-shell .markdown-callout > :last-child {
+  margin-bottom: 0;
+}
+
+.app-shell .markdown-callout-title {
+  font-weight: 600;
+  color: var(--callout-color);
+  margin: 0 0 4px;
+}

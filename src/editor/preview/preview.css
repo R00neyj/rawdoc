@@ -248,3 +248,110 @@
 .md-table tr:nth-child(n + 2):nth-child(odd) {
   background: var(--md-bg-muted);
 }
+
+/* ===== 표 칸 편집 (F-125 2.2) =====
+   +버튼을 표 가장자리에 절대 위치로 놓으려고 위젯 최상위 요소를 기준점으로 삼는다 */
+.md-table-widget {
+  position: relative;
+}
+
+/* 편집 중인 칸: 하위 EditorView(tableWidget.js 의 startEdit) 가 이 td/th 를 채운다.
+   칸 자체 padding 을 지우고 하위 에디터의 cm-content/cm-line 쪽에서 같은 여백을
+   다시 줘서, 편집 시작·종료로 글자 위치가 튀지 않게 한다 */
+.md-table-cell-editing {
+  padding: 0;
+}
+
+.md-table-cell-editing .cm-editor {
+  outline: none;
+}
+
+.md-table-cell-editing .cm-content,
+.md-table-cell-editing .cm-line {
+  padding: 6px 13px;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* ===== 표 행·열 추가 버튼 (F-125 2.4) =====
+   평소엔 숨겨 두고 표에 마우스가 올라오거나(hover) 버튼 자체가 키보드 포커스를
+   받으면("키보드 포커스로도 보인다") 나타난다 */
+.md-table-add {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--md-border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--md-fg-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.md-table-widget:hover .md-table-add,
+.md-table-add:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.md-table-add:hover,
+.md-table-add:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 아래 가장자리 가운데 — 행 추가 */
+.md-table-add-row {
+  left: 50%;
+  bottom: -10px;
+  transform: translateX(-50%);
+}
+
+/* 오른쪽 가장자리 가운데 — 열 추가 */
+.md-table-add-col {
+  top: 50%;
+  right: -10px;
+  transform: translateY(-50%);
+}
+
+/* 툴팁은 앱이 그린다(F-125 2.4): 배경 --ink, 글자 --panel, 12px, 모서리 6px.
+   버튼의 aria-label 을 그대로 문구로 쓴다 — 접근성 이름과 화면에 보이는 문구가
+   어긋나지 않는다. 행 추가 버튼은 아래, 열 추가 버튼은 오른쪽에 뜬다 */
+.md-table-add::after {
+  content: attr(aria-label);
+  position: absolute;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--panel);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+}
+
+.md-table-add-row::after {
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.md-table-add-col::after {
+  left: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.md-table-add:hover::after,
+.md-table-add:focus-visible::after {
+  opacity: 1;
+}

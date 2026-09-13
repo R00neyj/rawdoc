@@ -6,6 +6,7 @@ const ALLOWED_KEYS = new Set([
   'md.lastDocId',
   'md.firstRunDone',
   'md.persistNoticeShown',
+  'md.openFolders',
 ])
 
 function assertAllowed(key) {

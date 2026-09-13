@@ -7,6 +7,7 @@ import { Decoration, ViewPlugin, WidgetType } from '@codemirror/view'
 
 import { activeLines } from './active.js'
 import { isComposing, isForced } from '../composition.js'
+import { parseCalloutHeader } from '../../lib/callout.js'
 
 const HIDE = Decoration.replace({})
 
@@ -33,6 +34,34 @@ function hideMarkAndSpace(state, node) {
 
 function lineClassRange(line, className) {
   return Decoration.line({ class: className }).range(line.from)
+}
+
+/**
+ * Blockquote 의 "머리 텍스트" — `>` 와 그 뒤 공백 0~1개를 뗀 첫 줄 나머지, 그리고
+ * 그 텍스트가 시작하는 문서 위치. parseCalloutHeader(F-128 2장)에 그대로 적용한다
+ */
+function calloutHeadOf(state, blockquoteNode) {
+  let headFrom = blockquoteNode.from + 1
+  if (state.doc.sliceString(headFrom, headFrom + 1) === ' ') headFrom += 1
+  const line = state.doc.lineAt(blockquoteNode.from)
+  return { headFrom, headText: state.doc.sliceString(headFrom, line.to) }
+}
+
+/**
+ * 이 Blockquote 가 콜아웃 후보인가 — 중첩된 인용(부모가 Blockquote)은 후보가 아니다.
+ * 편집 모드는 "가장 바깥 인용만 콜아웃 모양" (F-128 2장) — 인용 안에 인용을 넣어
+ * 만든 콜아웃(`> > [!tip]`)은 편집 모드에서 안쪽 그대로 판정하지 않는다
+ */
+function isCalloutCandidate(blockquoteNode) {
+  return blockquoteNode.parent?.name !== 'Blockquote'
+}
+
+/** 콜아웃 색 묶음 → 줄 클래스 문자열 (F-128 4.1) */
+function calloutLineClass(kind, { isFirst, isLast }) {
+  let cls = `md-callout md-callout--${kind}`
+  if (isFirst) cls += ' md-callout-title'
+  if (isLast) cls += ' md-callout-last'
+  return cls
 }
 
 /** 글머리 목록 마커 → • */
@@ -101,6 +130,11 @@ class CheckboxWidget extends WidgetType {
 export function buildLines(state, ranges) {
   const active = activeLines(state)
   const out = []
+  // 콜아웃으로 판정된 줄 번호 — 중첩된 인용(부모 Blockquote 가 콜아웃)이 같은 줄에
+  // md-quote 를 겹쳐 붙이지 않게 막는 데 쓴다 (F-128 4.1 "이 줄들에는 md-quote 를
+  // 붙이지 않는다"). Blockquote 는 바깥에서 안쪽 순서로 방문되므로(tree.iterate),
+  // 바깥이 콜아웃이면 안쪽을 처리할 때 이미 이 집합에 그 줄들이 들어 있다
+  const calloutLines = new Set()
 
   for (const { from, to } of ranges) {
     syntaxTree(state).iterate({
@@ -138,7 +172,33 @@ export function buildLines(state, ranges) {
           case 'Blockquote': {
             const firstLine = state.doc.lineAt(node.from).number
             const lastLine = state.doc.lineAt(Math.max(node.from, node.to - 1)).number
+
+            if (isCalloutCandidate(node.node)) {
+              const { headFrom, headText } = calloutHeadOf(state, node.node)
+              const header = parseCalloutHeader(headText)
+              if (header) {
+                for (let n = firstLine; n <= lastLine; n++) {
+                  calloutLines.add(n)
+                  out.push(
+                    lineClassRange(
+                      state.doc.line(n),
+                      calloutLineClass(header.kind, { isFirst: n === firstLine, isLast: n === lastLine }),
+                    ),
+                  )
+                }
+                // "[!type]" 자리 색 묶음 표시 (F-128 4.1). 기호는 숨기지 않고 항상 보인다
+                out.push(
+                  Decoration.mark({ class: 'md-callout-type' }).range(
+                    headFrom + header.typeFrom,
+                    headFrom + header.typeTo,
+                  ),
+                )
+                return
+              }
+            }
+
             for (let n = firstLine; n <= lastLine; n++) {
+              if (calloutLines.has(n)) continue // 바깥 콜아웃이 이미 차지한 줄 (F-128 4.1)
               out.push(lineClassRange(state.doc.line(n), 'md-quote'))
             }
             return
