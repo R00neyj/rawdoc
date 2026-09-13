@@ -1,0 +1,91 @@
+/* 보기 모드 `.markdown-body` 덮어쓰기 (specs/features/F-124.md 4장)
+   github-markdown-css/github-markdown-light.css 는 크기·굵기·여백·테두리 두께·모서리·
+   줄 간격을 가져오는 기준일 뿐, 그 파일이 규칙마다 직접 적어 둔 hex 색은 쓰지 않는다.
+   같은 선택자에 `.app-shell` 을 앞에 붙여 우선순위를 한 단계 높이고 토큰으로 다시 적는다
+   (CLAUDE.md 불변조건 — hex 를 직접 쓰지 않는다) */
+
+.app-shell .markdown-body {
+  color: var(--ink);
+  background-color: var(--panel);
+  font-family: var(--font-sans);
+}
+
+.app-shell .markdown-body a {
+  color: var(--md-link);
+}
+
+.app-shell .markdown-body h1 {
+  border-bottom: 1px solid var(--md-border-muted);
+}
+
+.app-shell .markdown-body h1,
+.app-shell .markdown-body h2 {
+  font-family: var(--font-display);
+}
+
+.app-shell .markdown-body h2 {
+  border-bottom: 1px solid var(--md-border-muted);
+}
+
+.app-shell .markdown-body h3,
+.app-shell .markdown-body h4,
+.app-shell .markdown-body h5,
+.app-shell .markdown-body h6 {
+  font-family: var(--font-sans);
+}
+
+.app-shell .markdown-body h6 {
+  color: var(--md-fg-muted);
+}
+
+.app-shell .markdown-body hr {
+  background: transparent;
+  background-color: var(--md-border);
+  border-bottom: 1px solid var(--md-border-muted);
+}
+
+.app-shell .markdown-body blockquote {
+  color: var(--md-fg-muted);
+  border-left: 0.25em solid var(--md-border);
+}
+
+/* 인라인코드·코드블록 (F-124 3.3·3.4) */
+.app-shell .markdown-body tt,
+.app-shell .markdown-body code,
+.app-shell .markdown-body samp,
+.app-shell .markdown-body pre {
+  font-family: var(--font-mono);
+}
+
+.app-shell .markdown-body code,
+.app-shell .markdown-body tt {
+  background-color: var(--md-code-bg);
+}
+
+.app-shell .markdown-body pre {
+  color: var(--ink);
+  background-color: var(--md-bg-muted);
+}
+
+/* 표 (F-124 3.4) — GitHub 은 thead/tbody 없이 tr 을 그대로 두므로 nth-child 기준이
+   github-markdown-css 원본과 같다(별도 표 구조를 만들지 않는다) */
+.app-shell .markdown-body table th,
+.app-shell .markdown-body table td {
+  border: 1px solid var(--md-border);
+}
+
+.app-shell .markdown-body table tr {
+  background-color: var(--panel);
+  border-top: 1px solid var(--md-border-muted);
+}
+
+.app-shell .markdown-body table tr:nth-child(2n) {
+  background-color: var(--md-bg-muted);
+}
+
+/* 작업 목록 체크박스 (F-124 3.4). F-123 의 렌더러는 markdown-it-task-lists 를 쓰지 않고
+   `<input type="checkbox" disabled>` 를 직접 넣으므로(renderMarkdown.js) 클래스가 아니라
+   .task-list-item 안 체크박스로 고른다 */
+.app-shell .markdown-body .task-list-item input[type='checkbox'] {
+  accent-color: var(--accent);
+}

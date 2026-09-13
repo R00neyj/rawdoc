@@ -1,0 +1,250 @@
+/* 라이브 프리뷰 전용 스타일 (specs/features/F-105.md 2장 "제목 크기", specs/features/F-124.md —
+   GitHub 마크다운 스타일(크기·굵기·여백·테두리·모서리·줄 간격), CLAUDE.md 불변조건 —
+   제품명·색 hex 를 직접 쓰지 않는다. 토큰만 참조한다) */
+
+/* ===== 제목 (F-124 3.2) =====
+   CM6 는 줄 높이를 DOM 에서 재는데 margin 은 반영되지 않는다고 알려져 있어(F-124 3.2),
+   세로 여백은 margin 대신 padding 으로 준다. em 단위는 .cm-editor 에 설정된
+   --md-font-size(16px) 를 상속해 계산된다(2em = 32px 등, F-124 A1) */
+.cm-host .cm-editor .cm-line.md-h1,
+.cm-host .cm-editor .cm-line.md-h2,
+.cm-host .cm-editor .cm-line.md-h3,
+.cm-host .cm-editor .cm-line.md-h4,
+.cm-host .cm-editor .cm-line.md-h5,
+.cm-host .cm-editor .cm-line.md-h6 {
+  font-weight: 600;
+  line-height: 1.25;
+  padding-top: 1.5rem;
+  padding-bottom: 1rem;
+}
+
+.cm-host .cm-editor .cm-line.md-h1 {
+  font-size: 2em;
+  font-family: var(--font-display);
+  /* GitHub 은 padding-bottom(.3em) 뒤에 테두리, 그 다음 margin-bottom 이 이어진다.
+     margin 을 쓸 수 없어 두 여백을 padding 하나로 합친다 — 테두리는 합친 padding
+     끝에 그려진다(디자인 명세에 없는 최소 합리적 선택, 보고 참고) */
+  padding-bottom: calc(1rem + 0.3em);
+  border-bottom: 1px solid var(--md-border-muted);
+}
+
+.cm-host .cm-editor .cm-line.md-h2 {
+  font-size: 1.5em;
+  font-family: var(--font-display);
+  padding-bottom: calc(1rem + 0.3em);
+  border-bottom: 1px solid var(--md-border-muted);
+}
+
+.cm-host .cm-editor .cm-line.md-h3 {
+  font-size: 1.25em;
+  font-family: var(--font-sans);
+}
+
+.cm-host .cm-editor .cm-line.md-h4 {
+  font-size: 1em;
+  font-family: var(--font-sans);
+}
+
+.cm-host .cm-editor .cm-line.md-h5 {
+  font-size: 0.875em;
+  font-family: var(--font-sans);
+}
+
+.cm-host .cm-editor .cm-line.md-h6 {
+  font-size: 0.85em;
+  font-family: var(--font-sans);
+  color: var(--md-fg-muted);
+}
+
+/* ===== 인용 (F-124 3.4) ===== */
+.cm-host .cm-editor .cm-line.md-quote {
+  border-left: 0.25em solid var(--md-border);
+  padding: 0 1em;
+  color: var(--md-fg-muted);
+}
+
+/* ===== 글머리 목록 ===== */
+.md-bullet {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ===== 체크박스 ===== */
+.md-checkbox {
+  accent-color: var(--accent);
+  vertical-align: middle;
+  margin: 0 2px 0 0;
+}
+
+/* ===== 인라인코드·링크 (F-124 3.3) ===== */
+.md-code {
+  font-family: var(--font-mono);
+  font-size: 85%;
+  padding: 0.2em 0.4em;
+  border-radius: 6px;
+  background: var(--md-code-bg);
+}
+
+/* 펼친 코드블록 줄 (F-124 3.4 11번). lines.js 의 fenceLinePreview() 가 편집·원문
+   모드 공통으로 md-fence-line 을 붙인다 — @lezer/markdown 기본 규칙이 코드블록
+   본문(CodeText)에 인라인코드와 같은 태그(tags.monospace → md-code)를 줘서
+   생기는 "인라인코드 조각처럼 보이는" 문제를, 태그를 나누는 대신(실측 결과 안 먹힘
+   — highlight.js 주석 참고) 이 줄 클래스 아래에서 .md-code 모양만 지워 고친다.
+   모드와 무관하게 적용 — 인라인코드(`x`) 는 이 클래스 밖이라 모양이 그대로다 */
+.cm-host .cm-editor .cm-line.md-fence-line .md-code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* 이어진 배경(--md-bg-muted)은 편집(라이브) 모드에서만 — 원문 모드는 서체·크기만
+   따르고 요소 모양은 바꾸지 않는다(F-124 1장 원칙) */
+.cm-host .cm-editor[data-view='live'] .cm-line.md-fence-line {
+  font-family: var(--font-mono);
+  font-size: 85%;
+  background: var(--md-bg-muted);
+}
+
+.md-link,
+.md-url {
+  color: var(--md-link);
+}
+
+/* F-129 가 마크다운 링크에 .md-link 를 붙인다. 클릭 가능함을 알린다 (F-124 3.4) */
+.md-link {
+  cursor: pointer;
+}
+
+.md-link:hover {
+  text-decoration: underline;
+}
+
+.md-strong {
+  font-weight: 600;
+}
+
+.md-em {
+  font-style: italic;
+}
+
+.md-strike {
+  text-decoration: line-through;
+}
+
+/* ===== 구분선 (F-124 3.4. 기호 글자는 decoration 이 숨기고, 선은 여기서 그린다) =====
+   높이·색은 ::before 로 그린다 — .cm-line 자체의 세로 간격은 padding 으로 준다
+   (margin 은 CM6 줄 높이 계산에 반영되지 않는다) */
+.cm-host .cm-editor .cm-line.md-hr {
+  position: relative;
+  min-height: 1em;
+  padding-top: 24px;
+  padding-bottom: 24px;
+}
+
+.cm-host .cm-editor .cm-line.md-hr::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 0.25em;
+  margin-top: -0.125em;
+  background: var(--md-border);
+}
+
+/* ===== 블록 위젯 — 코드블록 (F-106 2.4, F-124 3.4) =====
+   테두리는 두지 않는다. 배경은 --md-bg-muted.
+   위아래 간격은 wrap 의 margin 이 아니라 padding 으로 준다 (F-124 3.4 12번 요청) —
+   CM6 는 위젯 높이를 DOM 에서 잴 때 margin 을 포함하지 않아, margin 을 쓰면 그
+   아래 줄의 클릭 위치가 실제보다 아래로 어긋난다(실측: F-124 보고 참고). padding 은
+   wrap 자신의 높이(getBoundingClientRect)에 들어가 CM6 가 올바르게 잰다.
+   배경·모서리는 안쪽 요소(.md-codeblock-inner)에 줘서 간격 자리(padding)가
+   배경색으로 칠해지지 않게 한다 */
+.md-block.md-codeblock {
+  padding: 4px 0;
+  cursor: text;
+}
+
+.md-codeblock-inner {
+  position: relative;
+  background: var(--md-bg-muted);
+  border-radius: 6px;
+}
+
+.md-codeblock-lang {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: var(--font-sans);
+}
+
+/* 긴 코드 줄은 코드블록 안에서만 가로 스크롤한다 (F-124 3.4 사용자 요청).
+   .cm-content 는 CM6 의 flex 항목이고 flex-shrink 가 0 이라, 안에 줄바꿈 없는(white-space:pre)
+   내용이 있으면 flex-basis(=content 의 max-content 폭)가 그 내용 폭까지 커지고,
+   줄어들 수 없어 .cm-scroller 전체가 가로로 밀린다(실측: F-124 보고 참고).
+   pre 자체의 overflow-x:auto 만으로는 이 문제를 못 막는다 — overflow 는 이미 정해진
+   폭보다 내용이 넓을 때만 작동하고, 폭 자체(=max-content 계산)에는 영향을 주지 않는다.
+   grid 컬럼(minmax(0, 1fr))으로 감싸면 이 래퍼의 폭 계산이 내용이 아니라 "가진 공간"
+   기준으로 바뀌어, .cm-content 가 더 이상 코드 내용 폭을 물려받지 않는다 */
+.md-codeblock-scroll {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  overflow-x: auto;
+}
+
+.md-codeblock pre {
+  margin: 0;
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 85%;
+  line-height: 1.45;
+  white-space: pre;
+}
+
+/* ===== 블록 위젯 — 표 (F-106 2.4, F-124 3.4) =====
+   표만 가로 스크롤 — 코드블록과 같은 이유로 grid 래퍼를 쓴다.
+   위아래 간격은 margin 대신 padding — 코드블록과 같은 이유(F-124 3.4 12번 요청) */
+.md-block.md-table {
+  padding: 4px 0;
+  cursor: text;
+}
+
+.md-table-scroll {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  overflow-x: auto;
+}
+
+/* max-width:100% 를 주지 않는다(GitHub 원래 값과 다름, 최소 합리적 선택) — 실측 결과
+   .md-table-scroll(grid minmax(0,1fr)) 로 감싼 상태에서 table 에 퍼센트 max-width 를 주면
+   래퍼가 이미 정해진 폭에 맞춰 표가 압축되어(칸이 줄어들 뿐 스크롤이 생기지 않음) "넘치면
+   가로 스크롤"이 되지 않는다. max-width 를 빼면 표는 내용만큼 커지고, 래퍼가 넘친 만큼만
+   스크롤한다 — 코드블록과 같은 방식(F-124 3.4 보고 참고) */
+.md-table table {
+  border-collapse: collapse;
+  width: max-content;
+}
+
+.md-table th,
+.md-table td {
+  border: 1px solid var(--md-border);
+  padding: 6px 13px;
+  text-align: left;
+}
+
+.md-table th {
+  font-weight: 600;
+}
+
+.md-table tr {
+  background: var(--panel);
+}
+
+/* 짝수 행(본문 기준). 위젯이 만드는 table 은 thead/tbody 없이 tr 을 한 부모에 평평하게
+   두므로(TableWidget.toDOM), 머리 행(1번째)을 뺀 본문 행 중 짝수 번째 = 표 전체 기준
+   3, 5, 7... 번째 행이다 */
+.md-table tr:nth-child(n + 2):nth-child(odd) {
+  background: var(--md-bg-muted);
+}

@@ -1,0 +1,6 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "md-editor-web",
+  "compatibility_date": "2026-09-14",
+  "assets": { "directory": "./dist" }
+}

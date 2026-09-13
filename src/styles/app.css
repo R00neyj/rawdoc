@@ -1,0 +1,545 @@
+/* 레이아웃·컴포넌트 스타일 (specs/ia.md 2·3.11·7장, specs/design.md 4장) */
+
+/* 브라우저 기본 `[hidden]{display:none}` 보다 구체성이 높은 `.sidebar{display:flex}` 같은
+   규칙이 있으면 hidden 속성이 무시된다. 항상 최우선으로 적용되게 한다 (F-122 2.3) */
+[hidden] {
+  display: none !important;
+}
+
+.app-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== 상단바 ===== */
+.topbar {
+  flex: none;
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel);
+}
+
+.sidebar-toggle {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 6px 10px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.sidebar-toggle:hover {
+  background: var(--rule-2);
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.doc-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 14.5px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  padding: 6px 9px;
+  background: transparent;
+}
+
+.doc-title:hover:not(:disabled) {
+  background: var(--rule-2);
+}
+
+.doc-title:focus {
+  background: var(--panel);
+  border-color: var(--rule);
+  outline: none;
+}
+
+.doc-title:disabled {
+  color: var(--muted);
+}
+
+/* ===== 본문 영역 (사이드바 + 메인 열) ===== */
+.app-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative;
+}
+
+.sidebar {
+  width: var(--sidebar-w);
+  flex: none;
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.sidebar--overlay {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 20;
+  box-shadow: 8px 0 30px rgba(0, 0, 0, 0.12);
+  transition: transform var(--transition-fast);
+}
+
+.sidebar-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: transparent;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar h2 {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin: 6px 6px 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.add-doc,
+.import-doc {
+  width: 100%;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.add-doc:hover,
+.import-doc:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+.doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.doc-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.doc-item-btn {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: var(--radius-control);
+  font-size: 13.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-item-btn:hover {
+  background: var(--rule-2);
+}
+
+.doc-item-btn[aria-current='page'] {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.doc-delete {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  opacity: 0;
+  position: absolute;
+  right: 4px;
+}
+
+.doc-item:hover .doc-delete,
+.doc-item:focus-within .doc-delete,
+.doc-delete:focus-visible {
+  opacity: 1;
+}
+
+.doc-delete:hover {
+  background: var(--rule-2);
+  color: var(--danger);
+}
+
+.settings-btn {
+  flex: none;
+  width: 100%;
+  text-align: left;
+  padding: 8px 9px;
+  border-radius: var(--radius-control);
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.settings-btn:hover {
+  background: var(--rule-2);
+}
+
+/* ===== 메인 열 ===== */
+.main-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.content-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  overflow: auto;
+  background: var(--paper);
+}
+
+.empty-state {
+  width: 100%;
+  max-width: var(--content-max);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty-state p {
+  font-size: 18px;
+  color: var(--ink-2);
+}
+
+.empty-state-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.empty-state button {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 8px 16px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.empty-state button:hover {
+  background: var(--rule-2);
+}
+
+/* ===== 알림 띠 ===== */
+.notice {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 13px;
+  background: var(--rule-2);
+  color: var(--ink-2);
+}
+
+.notice--error {
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
+  color: var(--danger);
+}
+
+.notice--update {
+  background: var(--accent-soft);
+}
+
+.notice span {
+  flex: 1;
+}
+
+.notice button {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 4px 9px;
+  font-size: 12px;
+}
+
+.notice button:hover {
+  background: var(--panel);
+}
+
+/* ===== 대화상자 ===== */
+.dialog {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-dialog);
+  padding: 18px;
+  background: var(--panel);
+  color: var(--ink);
+  min-width: 280px;
+  max-width: min(90vw, 420px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
+}
+
+.dialog::backdrop {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+.dialog h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.dialog p {
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.dialog-field {
+  margin-bottom: 16px;
+}
+
+.dialog-field > span {
+  display: block;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog-actions button {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 7px 14px;
+  font-size: 13px;
+}
+
+.dialog-actions button:hover {
+  background: var(--rule-2);
+}
+
+.dialog-actions button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--panel);
+}
+
+.dialog-actions button.danger:hover {
+  filter: brightness(0.95);
+}
+
+/* ===== 세그먼트(2버튼) 컨트롤 ===== */
+.seg {
+  display: flex;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  overflow: hidden;
+  width: fit-content;
+}
+
+.seg button {
+  padding: 7px 14px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.seg button + button {
+  border-left: 1px solid var(--rule);
+}
+
+.seg button[aria-checked='true'],
+.seg button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--panel);
+  font-weight: 600;
+}
+
+.seg button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.view-mode-seg {
+  flex: none;
+}
+
+.export-btn {
+  flex: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 7px 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.export-btn:hover:not(:disabled) {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+.export-btn:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+/* ===== 편집 영역 (specs/features/F-103.md 3.5, F-107.md) ===== */
+.editor-slot {
+  width: 100%;
+  max-width: var(--content-max);
+  background: var(--panel);
+  height: 100%;
+}
+
+.cm-host {
+  height: 100%;
+}
+
+/* 본문 크기·줄 간격은 GitHub 마크다운 스타일 값을 따른다 (F-124 3.1) */
+.cm-host .cm-editor {
+  height: 100%;
+  font-size: var(--md-font-size);
+}
+
+.cm-host .cm-editor .cm-scroller {
+  line-height: var(--md-line-height);
+}
+
+/* data-view 는 createEditor.js 가 EditorView.editorAttributes 로 붙인다 */
+.cm-host .cm-editor[data-view='live'] .cm-scroller {
+  font-family: var(--font-sans);
+}
+
+/* 원문 모드: --font-mono 14px, 줄 간격 1.5 (F-124 3.1). 줄 간격은 위 --md-line-height(1.5)
+   와 값이 같아 물려받는다 */
+.cm-host .cm-editor[data-view='raw'] .cm-scroller {
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+.cm-host .cm-editor .cm-gutters {
+  background: var(--panel);
+  border: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* 줄 번호 오른쪽 끝 ~ 본문 첫 글자 왼쪽 끝 거리를 --gutter-gap 으로 맞춘다 (F-122 2.2).
+   CM6 기본값: `.cm-lineNumbers .cm-gutterElement` 오른쪽 패딩 3px, `.cm-line` 왼쪽 패딩 6px.
+   여기서 오른쪽 패딩을 --gutter-gap 에서 `.cm-line` 왼쪽 패딩(6px)을 뺀 값으로 바꿔
+   두 패딩의 합이 --gutter-gap 이 되게 한다. 제목 줄도 폰트 크기와 무관한 패딩 값이라 같다 */
+.cm-host .cm-editor .cm-lineNumbers .cm-gutterElement {
+  padding-right: calc(var(--gutter-gap) - 6px);
+}
+
+.cm-host .cm-editor .cm-content {
+  caret-color: var(--accent);
+  padding: 12px 0;
+}
+
+.cm-host .cm-editor .cm-selectionBackground {
+  background: var(--accent-soft) !important;
+}
+
+/* 편집면 자체가 포커스 대상이라 바깥 기본 점선 외곽선은 끈다 */
+.cm-host .cm-editor.cm-focused {
+  outline: none;
+}
+
+/* ===== 마크다운 기호 강조 (specs/features/F-107.md 2.1) ===== */
+.md-mark {
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
+.md-heading {
+  font-weight: 700;
+}
+
+.md-strong {
+  font-weight: 700;
+}
+
+.md-em {
+  font-style: italic;
+}
+
+.md-strike {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.md-code {
+  font-family: var(--font-mono);
+  background: var(--rule-2);
+  border-radius: 3px;
+}
+
+.md-link,
+.md-url {
+  color: var(--link);
+}
+
+.md-quote-text {
+  color: var(--ink-2);
+}
+
+/* ===== 상태바 E (specs/ia.md 2장 E, specs/features/F-113.md) ===== */
+.statusbar {
+  flex: none;
+  height: var(--statusbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  border-top: 1px solid var(--rule);
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.statusbar-info,
+.statusbar-save {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statusbar-save--danger {
+  color: var(--danger);
+}

@@ -1,0 +1,289 @@
+// 줄 단위 요소 표시 (specs/features/F-105.md)
+// 구조·IME 처리·활성 줄 판정은 F-104 2.1·2.3 과 같다. 계산(buildLines)은 DOM 없이 동작한다.
+// decoration 은 문서를 바꾸지 않는다 — 체크박스 클릭도 위젯이 트랜잭션을 하나 내보낼 뿐,
+// decoration 자체는 표시만 바꾼다 (CLAUDE.md 불변조건)
+import { syntaxTree } from '@codemirror/language'
+import { Decoration, ViewPlugin, WidgetType } from '@codemirror/view'
+
+import { activeLines } from './active.js'
+import { isComposing, isForced } from '../composition.js'
+
+const HIDE = Decoration.replace({})
+
+const HEADING_CLASS = {
+  ATXHeading1: 'md-h1',
+  ATXHeading2: 'md-h2',
+  ATXHeading3: 'md-h3',
+  ATXHeading4: 'md-h4',
+  ATXHeading5: 'md-h5',
+  ATXHeading6: 'md-h6',
+}
+
+const SETEXT_CLASS = {
+  SetextHeading1: 'md-h1',
+  SetextHeading2: 'md-h2',
+}
+
+/** ListMark(또는 HeaderMark·QuoteMark) 뒤에 오는 공백 1칸까지 포함한 숨김 범위 */
+function hideMarkAndSpace(state, node) {
+  let to = node.to
+  if (state.doc.sliceString(to, to + 1) === ' ') to += 1
+  return HIDE.range(node.from, to)
+}
+
+function lineClassRange(line, className) {
+  return Decoration.line({ class: className }).range(line.from)
+}
+
+/** 글머리 목록 마커 → • */
+class BulletWidget extends WidgetType {
+  eq(other) {
+    return other instanceof BulletWidget
+  }
+
+  toDOM() {
+    const span = document.createElement('span')
+    span.className = 'md-bullet'
+    span.textContent = '•'
+    return span
+  }
+
+  ignoreEvent() {
+    return true
+  }
+}
+
+/**
+ * 체크박스 위젯 (F-105 "체크박스 위젯" 절)
+ * eq() 는 checked 값만 비교한다. 클릭하면 대괄호 안 한 글자를 x ↔ 공백으로
+ * 바꾸는 트랜잭션 1개만 내보낸다 — 선택은 바꾸지 않는다
+ */
+class CheckboxWidget extends WidgetType {
+  constructor(checked) {
+    super()
+    this.checked = checked
+  }
+
+  eq(other) {
+    return other.checked === this.checked
+  }
+
+  toDOM(view) {
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    input.tabIndex = -1
+    input.className = 'md-checkbox'
+    input.checked = this.checked
+
+    input.addEventListener('mousedown', (event) => {
+      event.preventDefault()
+      const pos = view.posAtDOM(input)
+      // TaskMarker 범위는 항상 "[ ]" 또는 "[x]"(3글자) 이고, 위젯은 그 범위 전체를
+      // 치환한다. 가운데 글자(대괄호 안)의 위치는 pos + 1 이다
+      view.dispatch({
+        changes: { from: pos + 1, to: pos + 2, insert: this.checked ? ' ' : 'x' },
+      })
+    })
+
+    return input
+  }
+
+  ignoreEvent(event) {
+    return event.type !== 'mousedown' && event.type !== 'click'
+  }
+}
+
+/**
+ * @param {import('@codemirror/state').EditorState} state
+ * @param {{from:number, to:number}[]} ranges 보통 view.visibleRanges
+ * @returns {import('@codemirror/state').Range<import('@codemirror/view').Decoration>[]}
+ */
+export function buildLines(state, ranges) {
+  const active = activeLines(state)
+  const out = []
+
+  for (const { from, to } of ranges) {
+    syntaxTree(state).iterate({
+      from,
+      to,
+      enter: (node) => {
+        switch (node.name) {
+          case 'ATXHeading1':
+          case 'ATXHeading2':
+          case 'ATXHeading3':
+          case 'ATXHeading4':
+          case 'ATXHeading5':
+          case 'ATXHeading6': {
+            const line = state.doc.lineAt(node.from)
+            out.push(lineClassRange(line, HEADING_CLASS[node.name]))
+            if (!active.has(line.number)) {
+              const mark = node.node.getChild('HeaderMark')
+              if (mark) out.push(hideMarkAndSpace(state, mark))
+            }
+            return
+          }
+
+          case 'SetextHeading1':
+          case 'SetextHeading2': {
+            const mark = node.node.getChild('HeaderMark')
+            const lastContentLine = mark ? state.doc.lineAt(mark.from).number - 1 : state.doc.lineAt(node.to).number
+            const firstLine = state.doc.lineAt(node.from).number
+            for (let n = firstLine; n <= lastContentLine; n++) {
+              out.push(lineClassRange(state.doc.line(n), SETEXT_CLASS[node.name]))
+            }
+            // HeaderMark(밑줄)는 숨기지 않는다
+            return
+          }
+
+          case 'Blockquote': {
+            const firstLine = state.doc.lineAt(node.from).number
+            const lastLine = state.doc.lineAt(Math.max(node.from, node.to - 1)).number
+            for (let n = firstLine; n <= lastLine; n++) {
+              out.push(lineClassRange(state.doc.line(n), 'md-quote'))
+            }
+            return
+          }
+
+          case 'QuoteMark': {
+            const line = state.doc.lineAt(node.from).number
+            if (!active.has(line)) out.push(hideMarkAndSpace(state, node.node))
+            return
+          }
+
+          case 'ListMark': {
+            const listItem = node.node.parent
+            const list = listItem?.parent
+            const line = state.doc.lineAt(node.from).number
+            if (active.has(line)) return
+            const nextIsTask = node.node.nextSibling?.name === 'Task'
+            if (nextIsTask) {
+              out.push(hideMarkAndSpace(state, node.node))
+            } else if (list?.name === 'BulletList') {
+              out.push(Decoration.replace({ widget: new BulletWidget() }).range(node.from, node.to))
+            }
+            // OrderedList 는 그대로 둔다 (기호 색만 — highlight.js)
+            return
+          }
+
+          case 'TaskMarker': {
+            const line = state.doc.lineAt(node.from).number
+            if (active.has(line)) return
+            const mid = state.doc.sliceString(node.from + 1, node.to - 1)
+            const checked = mid === 'x' || mid === 'X'
+            out.push(Decoration.replace({ widget: new CheckboxWidget(checked) }).range(node.from, node.to))
+            return
+          }
+
+          case 'HorizontalRule': {
+            const line = state.doc.lineAt(node.from)
+            if (!active.has(line.number)) {
+              out.push(lineClassRange(line, 'md-hr'))
+              out.push(HIDE.range(node.from, node.to))
+            }
+            return
+          }
+
+          default:
+            return
+        }
+      },
+    })
+  }
+
+  return out
+}
+
+/**
+ * 조합 중 보류할 때 문서가 바뀌었으면 decoration 위치를 따라간다 (F-134 3.1).
+ * inline.js 의 같은 이름 함수와 이유가 같다 — 옛 decoration 을 옛 위치 그대로 두면
+ * 새 문서에서 다른 글자(줄바꿈 포함)를 가리킬 수 있어 CM 이 RangeError 를 던진다.
+ * @param {import('@codemirror/state').DecorationSet} decorations
+ * @param {import('@codemirror/state').ChangeDesc} changes
+ */
+export function mapDecorationsOnHold(decorations, changes) {
+  return decorations.map(changes)
+}
+
+/** F-104 2.3 과 같은 IME 규칙. 조합 중 보류 시 문서 변경분은 따라간다(F-134 3.1).
+ * 구문 트리만 바뀐 갱신도 재계산 조건에 넣는다(F-134 3.8) */
+export function linePreview() {
+  return ViewPlugin.fromClass(
+    class {
+      constructor(view) {
+        this.decorations = Decoration.set(buildLines(view.state, view.visibleRanges), true)
+      }
+
+      update(update) {
+        if (!isForced(update)) {
+          const treeChanged = syntaxTree(update.startState) !== syntaxTree(update.state)
+          if (!update.docChanged && !update.selectionSet && !update.viewportChanged && !treeChanged) return
+          if (isComposing(update.view)) {
+            if (update.docChanged) this.decorations = mapDecorationsOnHold(this.decorations, update.changes)
+            return
+          }
+        }
+        this.decorations = Decoration.set(buildLines(update.state, update.view.visibleRanges), true)
+      }
+    },
+    { decorations: (v) => v.decorations },
+  )
+}
+
+/**
+ * 펜스 코드블록(```)이 걸친 모든 줄에 md-fence-line 을 붙인다 (F-124 3.4 11번 요청).
+ * linePreview()/buildLines() 와 달리 활성(커서) 여부를 보지 않고 항상 켠다 — 편집 모드
+ * 위젯이 접혀 있을 때(blocks.js 의 block:true replace 로 줄 자체가 안 그려질 때)는 이
+ * decoration 이 있어도 그릴 줄이 없어 아무 효과가 없고, 원문 모드는 애초에 위젯이 없어
+ * 코드블록 줄이 늘 이 클래스를 받는다.
+ *
+ * 배경(--md-bg-muted)을 잇는 모양은 CSS 에서 편집 모드(`[data-view='live']`)로만
+ * 준다 — 원문 모드는 "요소 모양은 바꾸지 않는다"(F-124 1장)는 원칙대로 서체·크기만
+ * 따르고, 이 클래스는 `.md-code` 인라인코드 모양만 지우는 데 쓴다(코드블록 본문이
+ * 인라인코드와 같은 태그(tags.monospace)를 받아 생기는 문제 — highlight.js 주석 참고)
+ */
+export function fenceLineRanges(state, ranges) {
+  const out = []
+
+  for (const { from, to } of ranges) {
+    syntaxTree(state).iterate({
+      from,
+      to,
+      enter: (node) => {
+        if (node.name !== 'FencedCode') return
+        const firstLine = state.doc.lineAt(node.from).number
+        const lastLine = state.doc.lineAt(node.to).number
+        for (let n = firstLine; n <= lastLine; n++) {
+          out.push(lineClassRange(state.doc.line(n), 'md-fence-line'))
+        }
+        return false // 안은 더 볼 것이 없다 (CodeMark·CodeInfo·CodeText)
+      },
+    })
+  }
+
+  return out
+}
+
+/** createEditor.js 확장 목록에 직접(previewCompartment 밖) 넣는다 — 편집·원문 모드 공통.
+ * 조합 중 보류·구문 트리 변경 재계산은 linePreview 와 같다(F-134 3.1·3.8) */
+export function fenceLinePreview() {
+  return ViewPlugin.fromClass(
+    class {
+      constructor(view) {
+        this.decorations = Decoration.set(fenceLineRanges(view.state, view.visibleRanges), true)
+      }
+
+      update(update) {
+        if (!isForced(update)) {
+          const treeChanged = syntaxTree(update.startState) !== syntaxTree(update.state)
+          if (!update.docChanged && !update.viewportChanged && !treeChanged) return
+          if (isComposing(update.view)) {
+            if (update.docChanged) this.decorations = mapDecorationsOnHold(this.decorations, update.changes)
+            return
+          }
+        }
+        this.decorations = Decoration.set(fenceLineRanges(update.state, update.view.visibleRanges), true)
+      }
+    },
+    { decorations: (v) => v.decorations },
+  )
+}

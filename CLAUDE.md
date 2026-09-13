@@ -1,0 +1,79 @@
+# Rawdoc (가칭)
+
+원문 보존형 마크다운 협업 도구. `##` 를 쳐도 기호가 사라지지 않고, `.md` 로 뽑으면 사용자가 친 원문과 바이트가 같다
+
+- 제품 배경·경쟁·기술 선택 근거: `docs/research.html`
+- 화면·기능 원형: `docs/prototype.html` (textarea + 오버레이 방식. 동작 참고용이고 구조는 따르지 않는다)
+
+## 진행 방침
+
+1. **웹앱 먼저.** 데스크톱 브라우저 기준으로 완성한다. PWA(설치·오프라인)까지 웹앱 완성에 포함한다
+2. 안드로이드(Capacitor)는 웹앱이 끝나고 여유가 있을 때. 그 전까지 안드로이드 전용 작업은 하지 않는다
+3. 명세 → 작은 명세 → 구현 순서. **명세에 없는 것은 만들지 않는다**
+
+## 문서 구조
+
+| 위치 | 내용 | 수정 |
+| --- | --- | --- |
+| `docs/` | 조사·프로토타입 원본 | 하지 않음 |
+| `specs/product.md` | 전체 기능명세 (범위, 단계, 제외 항목) | 사람 승인 후 |
+| `specs/ia.md` | 화면 구조, 사용자 흐름, 상태, UI 문구 | 사람 승인 후 |
+| `specs/design.md` | 서체, 색 토큰, 형태·움직임 | 사람 승인 후 |
+| `specs/architecture.md` | `src/` 디렉터리, 저장소 인터페이스, 상태 흐름, 설정 키 | 사람 승인 후 |
+| `specs/features/F-xxx.md` | 작은 명세. 하나가 구현 단위 1개 | 사람 승인 후 |
+| `.workflow/` | 종료된 CM6 스파이크 기록 (2026-09-07~08). 새 작업에 쓰지 않는다 | 하지 않음 |
+| `spike/` | 스파이크 코드. 에디터 이식 시 참고만 한다 | 하지 않음 |
+| `src/` | 웹앱 본 코드 | 명세에 따라 |
+
+작업 전 읽는 순서: 이 파일 → `specs/product.md` → `specs/ia.md` → `specs/design.md` → 해당 `specs/features/F-xxx.md`
+
+## 기술 스택
+
+| 계층 | 선택 | 상태 |
+| --- | --- | --- |
+| 프론트 | React 19, Vite 7, JavaScript(JSX) | 사용 중. M2 착수 전 TypeScript 로 이전 (`specs/product.md` Q27) |
+| 에디터 | CodeMirror 6 + `@codemirror/lang-markdown` | 스파이크로 데스크톱 Chrome 검증 |
+| PWA | `vite-plugin-pwa` (Workbox) — M1 포함 | 미도입 |
+| 정적 + API | Cloudflare Workers (static assets) — M1 은 정적 배포만 | 미도입 |
+| 실시간 동기화 | Durable Object + y-partyserver, `y-codemirror.next` | 미도입 |
+| 메타 DB / 파일 | D1 / R2 | 미도입 |
+| 인증 | 미정 | — |
+
+"미도입" 항목은 해당 명세가 생기기 전까지 의존성을 추가하지 않는다
+
+## 명령어
+
+```
+npm run dev          # 웹앱 dev 서버
+npm run build        # 웹앱 빌드
+npm run lint         # ESLint (루트 전체)
+npm test             # Vitest 1회 실행 (src/**/*.test.{js,jsx})
+npm run test:watch   # Vitest 감시 모드
+npm run dev:spike    # 스파이크 확인용
+```
+
+테스트는 대상 파일 옆에 `{이름}.test.js` 로 두고, `vitest` 에서 명시적으로 import 한다 (`specs/features/F-101.md` 5.3)
+
+## 불변조건
+
+깨지면 버그가 아니라 설계 위반이다. 바꿔야 하면 명세를 먼저 고치고 사람 승인을 받는다
+
+- **decoration 은 문서 내용을 바꾸지 않는다.** 표시만 바꾼다
+- **문서 상태의 원본은 CM6 `EditorState` 하나다.** 별도 문자열 사본을 두고 동기화하지 않는다
+- **`src/` 는 `spike/` 를 import 하지 않는다.** 필요한 코드는 옮겨 적고, `imeLog` 같은 검증 장치는 가져오지 않는다
+- **IME 조합 중 재계산을 보류하면, 조합 종료 시 밀린 재계산을 반드시 따라잡는다.** 근거: `.workflow/tasks/T-004/verify.md` 6.5·7장
+- **제품명과 메인 컬러는 미정이다.** 루트 `brand.config.js` 에서만 정의하고, 코드·CSS·HTML·UI 문구·매니페스트에 이름 문자열이나 색 hex 를 직접 쓰지 않는다. 파생 색은 `color-mix()` 로 계산한다 (`specs/design.md` 3.2)
+- **저장소 식별자는 제품명과 무관하게 고정한다.** IndexedDB DB 이름, localStorage 키, 서비스 워커 캐시 이름에 제품명을 쓰지 않는다. 이름을 바꿔도 사용자 문서가 남아야 한다
+
+에디터 이식 시 알려진 함정은 `.workflow/architecture.md` 3장, `.workflow/tasks/T-004/verify.md` 4·5장에 있다 (`view.composing` 타이밍, 블록 위젯 방향키 보조와 `lineWrapping` 충돌 등)
+
+## 구현 담당 서브에이전트 규칙
+
+구현은 Sonnet 서브에이전트가 작은 명세 1개 단위로 한다
+
+- 받은 `F-xxx.md` 의 수용 기준과 수정 파일 목록 안에서만 작업한다
+- 명세 파일(`specs/**`)과 이 파일은 수정하지 않는다. 명세가 틀렸거나 모자라면 멈추고 보고한다
+- 새 의존성은 명세에 적힌 것만 설치한다
+- 끝나면 `npm run build` 와 `npm run lint` 를 돌리고 결과를 그대로 보고한다
+- 보고에 포함: 바꾼 파일, 수용 기준별 충족 여부, 확인하지 못한 항목. 실행하지 않은 확인을 통과로 적지 않는다
+- 커밋은 하지 않는다

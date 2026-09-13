@@ -1,0 +1,9 @@
+/* 보기 모드 배치 (specs/features/F-123.md 3.4). 배치만 — 색·크기는 F-124 markdown.css */
+.viewer {
+  width: 100%;
+  max-width: var(--content-max);
+  height: 100%;
+  overflow-y: auto;
+  padding: 24px 32px;
+  background: var(--panel);
+}
