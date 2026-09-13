@@ -11,7 +11,7 @@ import { EditorSelection, EditorState } from '@codemirror/state'
 import { EditorView, WidgetType } from '@codemirror/view'
 import { redo, undo } from '@codemirror/commands'
 
-import { addColumn, addRow, cellEdit, parseTable } from './tableModel.js'
+import { addColumn, addRow, advanceCellRange, cellEdit, escapeCell, mapCellRange, parseTable, unescapeCell } from './tableModel.js'
 import { observeHeight, stopObservingHeight } from './blocks.js'
 import { insertLink, toggleEmphasis, toggleStrong } from '../commands.js'
 import { forceRecalc, isComposing } from '../composition.js'
@@ -62,45 +62,117 @@ function guardComposing(command) {
   return (view) => (isComposing(view) ? false : command(view))
 }
 
-/** 현재 위젯 데이터 기준으로 칸 값을 계산해 주 문서 트랜잭션을 보낸다 */
+/**
+ * 지금 이 주 view 의 활성 칸을 편집 중인 모든 주 문서 트랜잭션(칸 자신의 입력 포함)
+ * 마다 세션이 든 칸 범위를 옮긴다 (F-135 3.2). `blocks.js` 의 `StateField.update` 가
+ * 모든 트랜잭션마다 이 함수를 부른다 — 실행 취소는 `cellKeydown` 이 그 전에 이미
+ * `endEdit` 로 세션을 지우므로 여기 들어오지 않는다("실행 취소 제외").
+ * @param {import('@codemirror/view').EditorView} mainView
+ * @param {import('@codemirror/state').Transaction} tr
+ */
+export function trackActiveEditRange(mainView, tr) {
+  const entry = activeEdit.get(mainView)
+  if (!entry) return
+  if (entry.range) entry.range = mapCellRange(entry.range, tr.changes)
+  entry.lineStart = tr.changes.mapPos(entry.lineStart, -1)
+}
+
+/** 세션이 든 칸 범위(entry.range)를 써서 값을 주 문서 트랜잭션으로 보낸다. 위젯
+ * 인스턴스(entry.widget)의 칸 위치는 조합 중 재계산이 보류되어 낡을 수 있어 쓰지
+ * 않는다(F-135 3.2) — 세션 자신이 든 범위만 신뢰한다. */
 function pushCellEdit(mainView, row, col, value) {
   const entry = activeEdit.get(mainView)
   if (!entry) return
-  const blockFrom = mainView.posAtDOM(entry.wrap)
-  const changes = cellEdit(entry.widget.table, row, col, value)
-  if (changes.length === 0) return
-  mainView.dispatch({
-    changes: changes.map((c) => ({ ...c, from: c.from + blockFrom, to: c.to != null ? c.to + blockFrom : undefined })),
-    userEvent: 'input.table',
-  })
+  const escaped = escapeCell(value)
+
+  if (entry.range) {
+    const { from, to } = entry.range
+    if (mainView.state.doc.sliceString(from, to) !== escaped) {
+      mainView.dispatch({ changes: { from, to, insert: escaped }, userEvent: 'input.table' })
+      entry.range = advanceCellRange(entry.range, escaped)
+    }
+  } else {
+    // 칸이 아직 실제로 존재하지 않는다(F-106 채움 칸, F-125 2.4 마지막 항목) — 모자란
+    // 칸을 채우는 구조적 삽입은 위젯 데이터(entry.widget.table)로 딱 한 번만 계산한다.
+    // 삽입 직후 그 줄을 다시 파싱해 얻은 진짜 칸 범위를 세션에 저장해, 다음 입력부터는
+    // 위 분기(entry.range)로 처리한다
+    const blockFrom = mainView.posAtDOM(entry.wrap)
+    const changes = cellEdit(entry.widget.table, row, col, value)
+    if (changes.length === 0) return
+    mainView.dispatch({
+      changes: changes.map((c) => ({ ...c, from: c.from + blockFrom, to: c.to != null ? c.to + blockFrom : undefined })),
+      userEvent: 'input.table',
+    })
+    const line = mainView.state.doc.lineAt(entry.lineStart)
+    const reparsed = parseTable(line.text, line.from)
+    const newCell = reparsed.rows[0]?.cells[col]
+    if (newCell) entry.range = { from: newCell.from, to: newCell.to }
+  }
+
+  // 조합 중 여러 트랜잭션에 걸쳐 값이 바뀌면, 편집이 어떤 경로로 끝나든(F-135 3.4)
+  // 끝낼 때 밀린 재계산을 따라잡아야 한다는 것을 기록해 둔다
+  if (isComposing(entry.cellView)) entry.pendingRecalc = true
 }
 
-/** 지금 편집 중인 칸을 끝낸다. DOM 을 그 칸의 현재(주 문서 기준) 글자로 되돌린다 */
+/** 지금 편집 중인 칸을 끝낸다. DOM 을 그 칸의 현재(주 문서 기준) 글자로 되돌린다.
+ * 조합 때문에 보류된 재계산이 있으면(F-135 3.4) 편집이 어떤 경로로 끝나든(클릭,
+ * 포커스 이탈, Esc, 다른 위젯의 destroy) 여기서 반드시 forceRecalc 를 보낸다 —
+ * `compositionend` 핸들러의 setTimeout 은 그사이 활성 칸이 바뀌면 스스로 건너뛴다. */
 function endEdit(mainView) {
   const entry = activeEdit.get(mainView)
   if (!entry) return
+
+  if (isComposing(entry.cellView)) {
+    // 편집기를 없애기 전에 조합 중이던 값을 먼저 주 문서에 반영한다(F-135 3.4) —
+    // 그러지 않으면 조합 중이던 글자가 원문에 반영되지 않고 사라진다
+    pushCellEdit(mainView, entry.row, entry.col, entry.cellView.state.doc.toString())
+    entry.pendingRecalc = true
+  }
+
   activeEdit.delete(mainView)
   entry.cellView.destroy()
   const cell = entry.widget.table.rows[entry.row]?.cells[entry.col]
   entry.td.textContent = cell ? cell.text : ''
   entry.td.classList.remove('md-table-cell-editing')
+
+  if (entry.pendingRecalc) {
+    mainView.dispatch({ effects: forceRecalc.of(null) })
+  }
 }
 
-/** entry.wrap 기준 표 앞 줄 끝(위) / 표 다음 줄 시작(아래) 위치로 주 에디터 커서를 옮긴다 */
+/** entry.wrap 기준 표 앞 줄 끝(위) / 표 다음 줄 시작(아래) 위치로 주 에디터 커서를 옮긴다.
+ * 표 앞뒤에 줄이 없으면(문서 맨 앞·맨 끝이 표) F-125 2.3 의 위치(0, blockTo)가 위젯이
+ * 가린 범위 경계라 이어서 친 글자가 표 원문에 들어간다 — F-135 3.5 로 고친다:
+ * 위는 나갈 곳이 없으니 편집을 유지하고, 아래는 문서 끝에 줄바꿈 1개를 넣어 진짜
+ * "다음 줄"을 만든 뒤 그 줄로 커서를 옮긴다. */
 function exitToMain(mainView, above) {
   const entry = activeEdit.get(mainView)
   if (!entry) return false
   const blockFrom = mainView.posAtDOM(entry.wrap)
   const blockTo = blockFrom + entry.widget.text.length
   const doc = mainView.state.doc
-  let target
+
   if (above) {
-    target = blockFrom > 0 ? doc.lineAt(blockFrom - 1).to : 0
-  } else {
-    target = blockTo < doc.length ? blockTo + 1 : blockTo
+    if (blockFrom === 0) return false // 표 앞에 줄이 없다 — 아무것도 안 함(편집 유지)
+    endEdit(mainView)
+    mainView.dispatch({ selection: { anchor: doc.lineAt(blockFrom - 1).to } })
+    mainView.focus()
+    return true
   }
+
   endEdit(mainView)
-  mainView.dispatch({ selection: { anchor: Math.min(target, doc.length) } })
+  if (blockTo >= doc.length) {
+    // 표 뒤에 줄이 없다 — 문서 끝에 줄바꿈 1개를 넣고 그 새 줄 시작으로 커서를 옮긴다.
+    // CM6 트랜잭션은 항상 '\n' 을 쓴다(tableModel.js addRow 와 같은 관례) — 실제
+    // 줄바꿈 형식(CRLF/LF)은 저장·내보내기 시점에만 적용된다(specs/product.md 5장)
+    mainView.dispatch({
+      changes: { from: doc.length, insert: '\n' },
+      selection: { anchor: doc.length + 1 },
+      userEvent: 'input.table',
+    })
+  } else {
+    mainView.dispatch({ selection: { anchor: blockTo + 1 } })
+  }
   mainView.focus()
   return true
 }
@@ -127,8 +199,16 @@ function startEdit(mainView, wrap, widget, row, col) {
   const table = wrap.querySelector('table')
   const tr = table.rows[row]
   const td = tr.cells[col]
-  const cell = widget.table.rows[row].cells[col]
-  const text = cell ? cell.text : ''
+  const rowInfo = widget.table.rows[row]
+  const cell = rowInfo.cells[col]
+  // 칸 편집기는 unescapeCell 값으로 시작한다(F-135 3.1) — 원문의 `\|` 를 `|` 로
+  // 되돌려 보여준다. 주 문서에는 escapeCell 결과를 넣는다(pushCellEdit)
+  const text = cell ? unescapeCell(cell.text) : ''
+  const blockFrom = mainView.posAtDOM(wrap)
+  // 세션이 직접 보관하는 칸 원문 범위(F-135 3.2). 칸이 아직 없으면(F-106 채움 칸)
+  // null — pushCellEdit 가 첫 입력에서 구조적으로 채운 뒤 다시 파싱해 채운다
+  const range = cell ? { from: blockFrom + cell.from, to: blockFrom + cell.to } : null
+  const lineStart = blockFrom + rowInfo.line
 
   td.textContent = ''
   td.classList.add('md-table-cell-editing')
@@ -159,7 +239,9 @@ function startEdit(mainView, wrap, widget, row, col) {
           // 하위 EditorView 의 DOM 은 조합이 끝날 때까지 파괴되지 않는다
           compositionend: () => {
             setTimeout(() => {
-              if (activeEdit.get(mainView)?.cellView !== cellView) return
+              const cur = activeEdit.get(mainView)
+              if (cur?.cellView !== cellView) return
+              cur.pendingRecalc = false
               mainView.dispatch({ effects: forceRecalc.of(null) })
             }, 0)
             return false
@@ -169,7 +251,7 @@ function startEdit(mainView, wrap, widget, row, col) {
     }),
   })
 
-  activeEdit.set(mainView, { wrap, td, row, col, cellView, widget })
+  activeEdit.set(mainView, { wrap, td, row, col, cellView, widget, range, lineStart, pendingRecalc: false })
   cellView.focus()
 }
 
@@ -452,10 +534,16 @@ export class TableWidget extends WidgetType {
     return true
   }
 
+  /** 편집 세션의 표 DOM 이 이 dom 과 같을 때만 편집을 끝낸다(F-135 3.3) — 표 B 를
+   * 편집하는 중 표 A 의 DOM 이 화면 밖으로 나가 destroy 되어도(가상화 등) B 편집이
+   * 끝나지 않아야 한다. `dom` 은 destroy 를 부른 위젯 인스턴스가 만든 DOM 이 아니라
+   * "지금 실제로 제거되는" DOM 이므로, 그 DOM 이 활성 세션의 wrap 인지로 판정한다. */
   destroy(dom) {
     stopObservingHeight(dom)
     const view = wrapView.get(dom)
-    if (view) endEdit(view)
+    if (!view) return
+    const entry = activeEdit.get(view)
+    if (entry && entry.wrap === dom) endEdit(view)
   }
 }
 

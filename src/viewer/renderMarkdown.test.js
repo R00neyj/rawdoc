@@ -156,6 +156,99 @@ describe('renderMarkdown — 콜아웃 (specs/features/F-128.md 5장 A3)', () =>
   })
 })
 
+describe('renderMarkdown — 프론트매터 (specs/features/F-133.md 4장 A6)', () => {
+  it('속성을 표로 만들고 본문 첫 요소는 hr 이 아니다', () => {
+    const html = renderMarkdown('---\ntitle: 문서\ntags:\n  - a\n  - b\n---\n# 제목')
+    expect(html).toContain('<table class="markdown-frontmatter">')
+    expect(html).toContain('<th>title</th><td>문서</td>')
+    expect(html).toContain('<th>tags</th><td>a, b</td>')
+    expect(html.indexOf('<table')).toBeLessThan(html.indexOf('<h1'))
+    expect(html).not.toContain('<hr>')
+  })
+
+  it('구조를 알아볼 수 없으면 원문 그대로 pre 로 보여준다', () => {
+    const html = renderMarkdown('---\nparent:\n  child: 1\n---\n본문')
+    expect(html).toContain('<pre class="markdown-frontmatter-raw"><code>')
+    expect(html).toContain('parent:')
+  })
+
+  it('값의 < 를 이스케이프한다', () => {
+    const html = renderMarkdown('---\ntitle: <b>x</b>\n---\n본문')
+    expect(html).toContain('&lt;b&gt;x&lt;/b&gt;')
+    expect(html).not.toContain('<b>x</b>')
+  })
+
+  it('빈 프론트매터는 아무것도 출력하지 않는다', () => {
+    const html = renderMarkdown('---\n---\n본문')
+    expect(html).not.toContain('markdown-frontmatter')
+    expect(html).toContain('본문')
+  })
+
+  it('프론트매터가 없는 문서는 지금과 같다', () => {
+    expect(renderMarkdown('# 제목')).toBe('<h1>제목</h1>\n')
+  })
+})
+
+describe('renderMarkdown — 위키링크 (specs/features/F-131.md 7장 A3)', () => {
+  it('resolveWikiLink 가 id 를 돌려주면 #/d/{id} 링크가 된다 (새 탭 속성 없음)', () => {
+    const html = renderMarkdown('[[회의록]]', { resolveWikiLink: (t) => (t === '회의록' ? 'abc' : null) })
+    expect(html).toContain('<a ')
+    expect(html).toContain('class="wikilink"')
+    expect(html).toContain('href="#/d/abc"')
+    expect(html).toContain('data-wikilink="회의록"')
+    expect(html).toContain('>회의록</a>')
+    expect(html).not.toContain('target="_blank"')
+  })
+
+  it('resolveWikiLink 가 null 이면 wikilink--missing', () => {
+    const html = renderMarkdown('[[없는 문서]]', { resolveWikiLink: () => null })
+    expect(html).toContain('class="wikilink wikilink--missing"')
+    expect(html).toContain('href="#"')
+    expect(html).toContain('data-wikilink="없는 문서"')
+    expect(html).toContain('>없는 문서</a>')
+  })
+
+  it('별칭은 보이는 글자만 바뀐다', () => {
+    const html = renderMarkdown('[[회의록|9월 회의]]', { resolveWikiLink: () => 'abc' })
+    expect(html).toContain('data-wikilink="회의록"')
+    expect(html).toContain('>9월 회의</a>')
+  })
+
+  it('옵션이 없으면 클릭 불가능한 span 이 된다 (F-130 공유 화면)', () => {
+    const html = renderMarkdown('[[회의록]]')
+    expect(html).toContain('<span class="wikilink wikilink--plain">회의록</span>')
+    expect(html).not.toContain('<a')
+  })
+
+  it('대상·별칭의 < 를 이스케이프한다', () => {
+    const html = renderMarkdown('[[<script>|<b>]]', { resolveWikiLink: () => null })
+    expect(html).toContain('data-wikilink="&lt;script&gt;"')
+    expect(html).toContain('>&lt;b&gt;</a>')
+    expect(html).not.toContain('<script>')
+    expect(html).not.toContain('<b>')
+  })
+
+  it('표 칸 안은 위키링크로 바꾸지 않는다', () => {
+    const html = renderMarkdown('| a | [[b]] |\n| --- | --- |\n| x | y |\n', {
+      resolveWikiLink: () => 'id',
+    })
+    expect(html).not.toContain('wikilink')
+    expect(html).toContain('[[b]]')
+  })
+
+  it('인라인코드·펜스 코드블록 안은 위키링크로 바꾸지 않는다', () => {
+    const html = renderMarkdown('`[[a]]`\n\n```\n[[b]]\n```\n', { resolveWikiLink: () => 'id' })
+    expect(html).not.toContain('wikilink')
+    expect(html).toContain('[[a]]')
+    expect(html).toContain('[[b]]')
+  })
+
+  it('이미지식 ![[a]] 는 위키링크로 바꾸지 않는다', () => {
+    const html = renderMarkdown('![[a]]', { resolveWikiLink: () => 'id' })
+    expect(html).not.toContain('wikilink')
+  })
+})
+
 describe('renderMarkdown — 성능 기록 (A2, 통과 기준 없음)', () => {
   it('약 5,000줄(표 50·코드블록 50 섞음) 변환 1회 시간을 기록한다', () => {
     const lines = []

@@ -4,9 +4,9 @@
 
 /**
  * @typedef {{ id:string, name:string, parentId:string|null }} FolderLike
- * @typedef {{ id:string, title:string, updatedAt:number, folderId:string|null }} DocLike
+ * @typedef {{ id:string, title:string, updatedAt:number, folderId:string|null, pinnedAt?:number|null }} DocLike
  * @typedef {{ type:'folder', id:string, name:string, parentId:string|null, children:Node[] }
- *         | { type:'doc', id:string, title:string, updatedAt:number, folderId:string|null }} Node
+ *         | { type:'doc', id:string, title:string, updatedAt:number, folderId:string|null, pinnedAt:number|null }} Node
  */
 
 /**
@@ -38,7 +38,14 @@ export function buildTree({ folders, docs }) {
     const childDocs = docs
       .filter((d) => resolvedFolderId(d.folderId) === parentId)
       .sort((a, b) => b.updatedAt - a.updatedAt)
-      .map((d) => ({ type: 'doc', id: d.id, title: d.title, updatedAt: d.updatedAt, folderId: d.folderId }))
+      .map((d) => ({
+        type: 'doc',
+        id: d.id,
+        title: d.title,
+        updatedAt: d.updatedAt,
+        folderId: d.folderId,
+        pinnedAt: d.pinnedAt ?? null, // F-132: 없으면 null 로 본다
+      }))
 
     return [...childFolders, ...childDocs]
   }
@@ -95,4 +102,13 @@ export function ancestorsOfDoc({ folders, doc }) {
   }
 
   return result
+}
+
+/**
+ * @param {DocLike[]} docs
+ * @returns {DocLike[]} `pinnedAt` 이 있는 문서를 고정한 순서(오름차순)로. `pinnedAt` 이
+ *   없거나 null 이면 제외한다 (specs/features/F-132.md 2장)
+ */
+export function pinnedDocs(docs) {
+  return docs.filter((d) => d.pinnedAt != null).sort((a, b) => a.pinnedAt - b.pinnedAt)
 }

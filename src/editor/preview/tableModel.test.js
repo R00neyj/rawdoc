@@ -1,7 +1,7 @@
 // tableModel 단위 테스트 (specs/features/F-125.md 3장 A1)
 import { describe, expect, it } from 'vitest'
 import { EditorState } from '@codemirror/state'
-import { addColumn, addRow, cellEdit, escapeCell, parseTable } from './tableModel.js'
+import { addColumn, addRow, advanceCellRange, cellEdit, escapeCell, mapCellRange, parseTable, unescapeCell } from './tableModel.js'
 
 /** ChangeSpec[] 를 실제 문서에 적용해 결과 문자열을 얻는다 */
 function apply(doc, changes) {
@@ -132,6 +132,92 @@ describe('cellEdit — 값 바꾸기', () => {
     const changes = cellEdit(table, 1, 1, 'X')
     const result = apply(doc, changes)
     expect(result).toBe('a | b\n- | -\n1 | X')
+  })
+})
+
+describe('unescapeCell/escapeCell — 파이프 이스케이프 왕복 (F-135 3.1)', () => {
+  it.each([
+    ['a\\|b', 'a|b'],
+    ['a\\\\', 'a\\'],
+    ['\\|', '|'],
+    ['', ''],
+    ['한글', '한글'],
+  ])('unescapeCell(%j) → %j, escapeCell(unescapeCell(raw)) === raw', (raw, expectedValue) => {
+    expect(unescapeCell(raw)).toBe(expectedValue)
+    expect(escapeCell(unescapeCell(raw))).toBe(raw)
+  })
+
+  it('parseTable 로 읽은 모든 칸 원문에 대해 escapeCell(unescapeCell(raw)) === raw', () => {
+    const doc = '| a\\|b | \\| | 한글 |\n| - | - | - |\n| a\\\\ | x | y |'
+    const table = parseTable(doc, 0)
+    for (const row of table.rows) {
+      for (const cell of row.cells) {
+        expect(escapeCell(unescapeCell(cell.text))).toBe(cell.text)
+      }
+    }
+  })
+
+  it('`a\\|b` 편집기 값은 `a|b` 이고, 끝에 c 를 입력하면 원문은 `a\\|bc`(열 수 그대로)', () => {
+    // 이전 버그: 편집기가 원문 `a\|b` 를 그대로 받아 끝에 c 를 입력하면 전체 값
+    // "a\|bc" 에 escapeCell 을 한 번 더 적용해 "a\\|bc" 가 되어(파이프가 다시
+    // 이스케이프되지 않고 살아나) 칸이 나뉘었다
+    const doc = '| a\\|b | c |\n| - | - |\n| 1 | 2 |'
+    const table = parseTable(doc, 0)
+    const raw = table.rows[0].cells[0].text
+    expect(raw).toBe('a\\|b')
+    const editorValue = unescapeCell(raw)
+    expect(editorValue).toBe('a|b')
+
+    const changes = cellEdit(table, 0, 0, `${editorValue}c`)
+    const result = apply(doc, changes)
+    expect(result).toBe('| a\\|bc | c |\n| - | - |\n| 1 | 2 |')
+    expect(parseTable(result, 0).columnCount).toBe(2)
+  })
+
+  it('공백 패딩 없는 표 `|a|b|` 첫 칸에 `a\\` 를 입력해도 열 수는 그대로 2다', () => {
+    // 이전 버그: 값 끝의 홀수 개 `\` 를 보정하지 않아 뒤 파이프(칸 구분자)가
+    // 이스케이프돼 칸이 합쳐졌다
+    const doc = '|a|b|'
+    const table = parseTable(doc, 0)
+    const changes = cellEdit(table, 0, 0, 'a\\')
+    const result = apply(doc, changes)
+    expect(parseTable(result, 0).columnCount).toBe(2)
+  })
+})
+
+describe('mapCellRange/advanceCellRange — 편집 세션이 든 칸 범위 갱신 (F-135 3.2)', () => {
+  it('같은 칸에 길이가 다른 값을 연속 3번 쓰면(조합 중 흉내) 최종 원문에 마지막 값만 반영된다', () => {
+    // 이전 버그: 위젯 인스턴스(widget.table)의 옛 칸 위치를 계속 써서, 조합 중
+    // 글자 수가 바뀌면(예: abc → abczho) 원문이 abczhoh 처럼 깨졌다. 세션이 직접
+    // 든 범위를 트랜잭션마다 옮기고(mapCellRange) 자신의 쓰기 뒤 길이로 다시
+    // 잡으면(advanceCellRange) 매번 정확한 범위에 새 값만 반영된다
+    let doc = '| abc | y |\n| - | - |\n| 1 | 2 |'
+    let range = { from: 2, to: 5 } // "abc" 위치
+    expect(doc.slice(range.from, range.to)).toBe('abc')
+
+    for (const value of ['abcz', 'abczh', 'abczho']) {
+      const escaped = escapeCell(value)
+      const state = EditorState.create({ doc })
+      const tr = state.update({ changes: { from: range.from, to: range.to, insert: escaped } })
+      doc = tr.state.doc.toString()
+      range = mapCellRange(range, tr.changes)
+      range = advanceCellRange(range, escaped)
+    }
+
+    expect(doc).toBe('| abczho | y |\n| - | - |\n| 1 | 2 |')
+    expect(parseTable(doc, 0).rows[0].cells[0].text).toBe('abczho')
+  })
+
+  it('mapCellRange 는 범위 뒤에서 일어난 변경에는 위치를 그대로 둔다', () => {
+    const state = EditorState.create({ doc: 'abcdef' })
+    const tr = state.update({ changes: { from: 6, insert: 'XYZ' } })
+    expect(mapCellRange({ from: 1, to: 3 }, tr.changes)).toEqual({ from: 1, to: 3 })
+  })
+
+  it('mapCellRange 는 범위 앞에서 글자가 늘면 범위를 그만큼 뒤로 옮긴다', () => {
+    const state = EditorState.create({ doc: 'abcdef' })
+    const tr = state.update({ changes: { from: 0, insert: 'XY' } })
+    expect(mapCellRange({ from: 2, to: 4 }, tr.changes)).toEqual({ from: 4, to: 6 })
   })
 })
 

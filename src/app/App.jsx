@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createMemoryStore } from '../storage/memoryStore.js'
 import { openStore } from '../storage/openStore.js'
 import { ancestorsOfDoc } from '../lib/folderTree.js'
+import { resolveWikiTarget } from '../lib/wikiLink.js'
 import { getPref, setPref } from './prefs.js'
 import { parseHash, formatHash } from './hashRoute.js'
 import { pushNotice } from './notice.js'
@@ -15,6 +16,7 @@ import Editor from '../editor/Editor.jsx'
 import { countChars, countWords, cursorInfo } from '../editor/stats.js'
 import Viewer from '../viewer/Viewer.jsx'
 import { renderMarkdown } from '../viewer/renderMarkdown.js'
+import { decodeShare } from '../lib/shareCodec.js'
 
 import { useInstallPrompt } from '../pwa/useInstallPrompt.js'
 import { useAppUpdate } from '../pwa/useAppUpdate.js'
@@ -29,13 +31,20 @@ import ConfirmDeleteDialog from './ConfirmDeleteDialog.jsx'
 import MoveDocDialog from './MoveDocDialog.jsx'
 import SettingsDialog from './SettingsDialog.jsx'
 import StatusBar from './StatusBar.jsx'
+import SharedView from './SharedView.jsx'
 
 const STATS_DEBOUNCE_MS = 150
 
 const NARROW_QUERY = '(max-width: 1023px)'
 
 function stripContent(doc) {
-  return { id: doc.id, title: doc.title, updatedAt: doc.updatedAt, folderId: doc.folderId ?? null }
+  return {
+    id: doc.id,
+    title: doc.title,
+    updatedAt: doc.updatedAt,
+    folderId: doc.folderId ?? null,
+    pinnedAt: doc.pinnedAt ?? null, // F-132
+  }
 }
 
 function sortByUpdatedAtDesc(list) {
@@ -75,6 +84,9 @@ export default function App() {
   const [store, setStore] = useState(() => createMemoryStore())
 
   const [bootPhase, setBootPhase] = useState('booting') // 'booting' | 'ready'
+  // 다른 창이 옛 버전 IndexedDB 연결을 쥐고 있어 이 창의 열기가 막혔을 때 부팅 화면에
+  // 보일 문구. 막힘이 풀려 열리면 null 로 되돌린다 (F-136.md 3.3)
+  const [dbBlockedMessage, setDbBlockedMessage] = useState(null)
   const [docs, setDocs] = useState([])
   const [folders, setFolders] = useState([]) // F-126
   const [openFolders, setOpenFolders] = useState(() => loadOpenFolders()) // F-126, md.openFolders
@@ -98,6 +110,9 @@ export default function App() {
   // 보기 모드 변환 결과 HTML (specs/features/F-123.md 3.3). 편집 중 계속 동기화하는
   // 본문 사본이 아니라, 변환 시점(전환 시·문서를 열 때)에만 1회 만드는 파생값이다
   const [viewerHtml, setViewerHtml] = useState('')
+  // 공유받은 문서 화면 S-4 (specs/features/F-130.md 4장). decodeShare 결과 그대로 —
+  // 저장소 문서가 아니므로 currentDocId 와 무관하게 독립적으로 둔다
+  const [sharedDoc, setSharedDoc] = useState(null) // { title, content, lineEnding } | null
 
   const titleInputRef = useRef(null)
   const sidebarRef = useRef(null)
@@ -119,6 +134,9 @@ export default function App() {
   const foldersRef = useRef(folders)
   // OS 파일 열기 연동(F-119)이 최신 store·beforeLeaveDoc 을 쓰도록 매 렌더 후 갱신한다
   const runImportFilesRef = useRef(async () => {})
+  // Editor 는 마운트 시점의 onOpenWikiLink 클로저만 계속 쓰므로(F-131 3·5장), 여기서도
+  // ref 로 우회해 항상 최신 docs·currentDocId·viewMode 를 보게 한다
+  const openWikiLinkRef = useRef(async () => {})
 
   // 문서 전환·삭제·해시 변경 전에 반드시 끝내는 훅 자리. 대기 중인 자동 저장을 끝낸다
   // (F-110.md 3.4). ref 를 거쳐 항상 최신 flush 를 부르므로 의존성 없이 안정된 참조를 유지한다
@@ -149,6 +167,30 @@ export default function App() {
   const closeSidebarIfNarrow = useCallback(() => {
     setSidebarOpen(false)
   }, [])
+
+  // ----- 공유 링크 조각 해석 (specs/features/F-130.md 4장) -----
+  // 성공하면 S-4 를 보여준다. 실패하면 알림을 띄우고 일반 첫 화면(3.2 규칙)으로 대신
+  // 연다. docsForFallback 은 boot() 의 지역 변수(metaList) 또는 docsRef.current 를
+  // 그대로 받는다 — 이 함수 자신은 store 를 다시 읽지 않는다
+  const openSharedFragment = useCallback(
+    async (fragment, docsForFallback) => {
+      try {
+        const decoded = await decodeShare(fragment)
+        setSharedDoc(decoded)
+      } catch {
+        setSharedDoc(null)
+        showNotice({
+          type: 'error',
+          message: '공유 링크를 읽을 수 없습니다. 주소가 잘렸는지 확인하세요.',
+        })
+        const lastDocId = getPref('md.lastDocId', null)
+        const resolved = resolveInitialDoc({ hashDocId: null, lastDocId, docs: docsForFallback })
+        setCurrentDocId(resolved.docId)
+        replaceHashUrl(resolved.docId)
+      }
+    },
+    [showNotice],
+  )
 
   // ----- 폴더 펼침 상태 (specs/architecture.md 4장 md.openFolders, F-126.md 5.1) -----
   // 이미 펼쳐진 폴더는 그대로 두고 목록에 없는 id 만 더한다(닫혀 있던 다른 폴더를 건드리지 않는다)
@@ -197,7 +239,28 @@ export default function App() {
     bootedRef.current = true
 
     async function boot() {
-      const resolvedStore = await openStore()
+      const resolvedStore = await openStore({
+        // 새 버전 창: 다른 창이 옛 버전 연결을 쥐고 있어 열기가 막혔다. 부팅 화면에 문구를
+        // 보이고 계속 기다린다 (F-136.md 3.3)
+        onBlocked: () => {
+          setDbBlockedMessage(
+            '다른 창에서 이 앱이 열려 있습니다. 그 창을 닫거나 새로 고치면 계속됩니다.',
+          )
+        },
+        // 옛 버전 창: 이 창의 연결이 새 버전 열기를 막고 있다. 저장 대기 중인 내용을 먼저
+        // 저장 시도한다(F-110.md 3.4 beforeLeaveDoc) — 연결은 idbStore 가 그 뒤 닫는다
+        onBlocking: () => beforeLeaveDoc(),
+        // 위 정리가 끝나고 연결이 닫힌 뒤. 연결을 닫은 뒤의 저장 시도는 기존 저장 실패
+        // 처리를 따른다(F-136.md 3.3)
+        onClosed: () => {
+          showNotice({
+            type: 'error',
+            message: '새 버전이 다른 창에서 열렸습니다. 이 창을 새로 고쳐 주세요.',
+            action: { label: '새로 고침', onClick: () => location.reload() },
+          })
+        },
+      })
+      setDbBlockedMessage(null)
       setStore(resolvedStore)
 
       if (resolvedStore.kind === 'memory') {
@@ -225,7 +288,17 @@ export default function App() {
       const folderList = await resolvedStore.listFolders()
       setFolders(folderList)
 
-      const { docId: hashDocId } = parseHash(location.hash)
+      const parsedHash = parseHash(location.hash)
+
+      // 공유 링크(#/s/{조각})는 저장소에서 문서를 찾지 않고 곧바로 S-4 를 보여준다
+      // (specs/features/F-130.md 4장)
+      if (parsedHash.type === 'share') {
+        await openSharedFragment(parsedHash.fragment, metaList)
+        setBootPhase('ready')
+        return
+      }
+
+      const hashDocId = parsedHash.type === 'doc' ? parsedHash.docId : null
       const lastDocId = getPref('md.lastDocId', null)
       const resolved = resolveInitialDoc({ hashDocId, lastDocId, docs: metaList })
 
@@ -257,11 +330,24 @@ export default function App() {
     if (bootPhase !== 'ready') return
 
     function handleHashChange() {
-      const { docId } = parseHash(location.hash)
+      const parsedHash = parseHash(location.hash)
+
+      // 공유 링크(F-130.md 4장)는 currentDocId 와 비교하지 않고 매번 새로 연다 —
+      // currentDocId 는 공유 화면 동안 건드리지 않으므로 같은 값일 수 있다
+      if (parsedHash.type === 'share') {
+        ;(async () => {
+          await beforeLeaveDoc()
+          await openSharedFragment(parsedHash.fragment, docsRef.current)
+        })()
+        return
+      }
+
+      const docId = parsedHash.type === 'doc' ? parsedHash.docId : null
       if (docId === currentDocIdRef.current) return
 
       ;(async () => {
         await beforeLeaveDoc()
+        setSharedDoc(null) // 공유 화면을 보고 있었으면 떠난다 (F-130.md 4장)
         focusEditorRef.current = true
         const latestDocs = docsRef.current
         if (docId && latestDocs.some((d) => d.id === docId)) {
@@ -281,7 +367,7 @@ export default function App() {
 
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
-  }, [bootPhase, beforeLeaveDoc, showNotice, addOpenFolders])
+  }, [bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment])
 
   // ----- 저장소 영속화 요청 (specs/features/F-118.md) -----
   useEffect(() => {
@@ -393,15 +479,33 @@ export default function App() {
     return () => clearTimeout(statsTimerRef.current)
   }, [currentDocId])
 
+  // 위키링크 대상 판정용 문서 제목 목록 (F-131 3·5장). docs 가 바뀔 때만 새로 만든다 —
+  // Editor(자동완성·표시)와 renderMarkdown(보기 모드) 둘 다 이 값을 쓴다
+  const wikiTitles = useMemo(() => docs.map((d) => d.title), [docs])
+
   // ----- 보기 모드 변환 (specs/features/F-123.md 3.3) -----
   // 변환 시점: 보기 모드로 전환할 때(viewMode 변화), 보기 모드에서 문서를 열 때
   // (openDoc 변화, Editor 마운트 직후 — 이 effect 는 자식의 layout effect 뒤에 돈다).
-  // 입력은 editorRef.current.getText('lf') 하나뿐이고 별도 본문 사본을 두지 않는다
+  // 입력은 editorRef.current.getText('lf') 하나뿐이고 별도 본문 사본을 두지 않는다.
+  // resolveWikiLink 는 F-131 4장 위키링크 렌더링에 쓴다 — docs 가 바뀌면(문서 생성·삭제·
+  // 제목 변경) 다시 계산해야 있음/없음 표시가 최신을 반영한다
   useEffect(() => {
     if (viewMode !== 'view') return
     if (!editorRef.current || openDoc?.id !== currentDocId) return
-    setViewerHtml(renderMarkdown(editorRef.current.getText('lf')))
-  }, [viewMode, openDoc, currentDocId])
+    setViewerHtml(
+      renderMarkdown(editorRef.current.getText('lf'), {
+        resolveWikiLink: (target) => resolveWikiTarget(target, docs)?.id ?? null,
+      }),
+    )
+  }, [viewMode, openDoc, currentDocId, docs])
+
+  // 편집 모드 위키링크 표시·자동완성용 제목 목록 갱신 (F-131 3장) — 문서 생성·삭제·제목
+  // 변경 때마다 에디터에 최신 목록을 반영한다. openDoc.id !== currentDocId 인 동안은(문서
+  // 전환 중 옛 에디터가 아직 붙어 있는 짧은 순간) 건드리지 않는다
+  useEffect(() => {
+    if (openDoc?.id !== currentDocId) return
+    editorRef.current?.setWikiTitles(wikiTitles)
+  }, [wikiTitles, openDoc, currentDocId])
 
   // ----- 문서 전환 후 포커스 요청 플래그 정리 (ia.md 3.4, F-103 3.4) -----
   // 실제 포커스 + 커서 맨 앞 이동은 Editor 가 뷰를 만드는 layout effect 안에서
@@ -499,6 +603,7 @@ export default function App() {
     // 필요하기 때문이다 (ia.md 3.3, F-123.md 3.3)
     if (viewMode === 'view') changeViewMode('live')
     await beforeLeaveDoc()
+    setSharedDoc(null) // 공유 화면에서 새 문서 를 눌러도 화면을 떠난다 (F-130.md 4장, 자체 결정)
     const targetFolderId = folderId !== undefined ? folderId : (currentDoc?.folderId ?? null)
     const doc = await store.create({
       title: '제목 없는 문서',
@@ -520,8 +625,11 @@ export default function App() {
   }
 
   async function selectDoc(id) {
-    if (id === currentDocId) return
+    // sharedDoc 이 있으면 currentDocId 가 우연히 같아도 화면을 떠나야 한다
+    // (ia.md 3.19 "사이드바에서 다른 문서를 누르면 공유 화면을 떠난다")
+    if (id === currentDocId && !sharedDoc) return
     await beforeLeaveDoc()
+    setSharedDoc(null)
     focusEditorRef.current = true
     setCurrentDocId(id)
     setPref('md.lastDocId', id)
@@ -529,6 +637,45 @@ export default function App() {
     addOpenFolders(ancestorsOfDoc({ folders, doc: docs.find((d) => d.id === id) }))
     closeSidebarIfNarrow()
   }
+
+  // ----- 위키링크 열기 (specs/features/F-131.md 5장) -----
+  // 있는 문서면 selectDoc 과 같은 흐름(저장 대기 입력 flush 뒤 전환)을 탄다. 없으면 그
+  // 자리에서 빈 문서를 새로 만들어 연다 — 새 문서 는 현재 문서와 같은 폴더에 만든다
+  // (F-126.md 5.3 의 folderId 생략 규칙과 같다)
+  async function openWikiLinkTarget(target) {
+    const match = resolveWikiTarget(target, docs)
+    if (match) {
+      await selectDoc(match.id)
+      return
+    }
+
+    if (viewMode === 'view') changeViewMode('live') // 제목 입력 포커스가 필요하다 (ia.md 3.3)
+    await beforeLeaveDoc()
+    setSharedDoc(null)
+    const doc = await store.create({
+      title: target,
+      content: '',
+      lineEnding: 'crlf',
+      folderId: currentDoc?.folderId ?? null,
+    })
+    const meta = stripContent(doc)
+    setDocs((prev) => sortByUpdatedAtDesc([...prev, meta]))
+    addOpenFolders(ancestorsOfDoc({ folders, doc: meta }))
+    focusTitleRef.current = true
+    focusEditorRef.current = false
+    setCurrentDocId(doc.id)
+    setPref('md.lastDocId', doc.id)
+    pushHashUrl(doc.id)
+    closeSidebarIfNarrow()
+  }
+
+  useEffect(() => {
+    openWikiLinkRef.current = openWikiLinkTarget
+  })
+
+  const handleOpenWikiLink = useCallback((target) => {
+    openWikiLinkRef.current(target)
+  }, [])
 
   // ----- .md 내보내기 (specs/features/F-112.md 2.2) -----
   function handleExportDoc() {
@@ -554,6 +701,7 @@ export default function App() {
     if (files.length === 0) return
 
     await beforeLeaveDoc()
+    setSharedDoc(null) // 공유 화면에서 가져와도 화면을 떠난다 (F-130.md 4장, 자체 결정)
 
     const targetFolderId = currentDoc?.folderId ?? null
     const scopedStore = {
@@ -592,6 +740,47 @@ export default function App() {
     const files = Array.from(e.target.files ?? [])
     e.target.value = '' // 같은 파일을 연달아 고를 수 있게 (F-114.md 2.3)
     await runImportFiles(files)
+  }
+
+  // ----- 공유 (specs/features/F-130.md 2·4장) -----
+  // 저장 대기 중인 입력이 있어도 현재 에디터 원문을 그대로 쓴다. 저장소를 다시 읽지 않는다
+  function getShareDoc() {
+    const lineEnding = openDoc?.lineEnding ?? 'crlf'
+    return {
+      title: currentDoc?.title ?? '',
+      lineEnding,
+      content: editorRef.current?.getText(lineEnding) ?? '',
+    }
+  }
+
+  // S-4 `내 문서로 가져오기`: 새 문서로 만들고 편집 모드로 연다. 해시는 교체
+  // (히스토리에 남기지 않는다, F-130.md 4장)
+  async function importSharedDoc() {
+    if (!sharedDoc) return
+    const doc = await store.create({
+      title: sharedDoc.title,
+      content: sharedDoc.content,
+      lineEnding: sharedDoc.lineEnding,
+      folderId: null,
+    })
+    const meta = stripContent(doc)
+    setDocs((prev) => sortByUpdatedAtDesc([...prev, meta]))
+    setSharedDoc(null)
+    if (viewMode !== 'live') changeViewMode('live')
+    focusEditorRef.current = true
+    setCurrentDocId(doc.id)
+    setPref('md.lastDocId', doc.id)
+    replaceHashUrl(doc.id)
+    showNotice({ type: 'info', message: '내 문서로 가져왔습니다.' })
+  }
+
+  // S-4 `닫기`: 마지막으로 연 문서 또는 빈 상태로 (F-130.md 4장)
+  function closeSharedDoc() {
+    setSharedDoc(null)
+    const lastDocId = getPref('md.lastDocId', null)
+    const resolved = resolveInitialDoc({ hashDocId: null, lastDocId, docs })
+    setCurrentDocId(resolved.docId)
+    replaceHashUrl(resolved.docId)
   }
 
   function commitTitle(value) {
@@ -711,6 +900,17 @@ export default function App() {
     }
   }
 
+  // ----- 상단 고정 (specs/features/F-132.md 2·4장) -----
+  // updatedAt 은 바꾸지 않으므로 최근 수정순 목록 위치는 흔들리지 않는다
+  async function handleTogglePin(id, pinned) {
+    try {
+      const updated = await store.setPinned(id, pinned)
+      setDocs((prev) => prev.map((d) => (d.id === id ? { ...d, pinnedAt: updated.pinnedAt } : d)))
+    } catch {
+      // 문서가 그 사이 삭제된 경우 등은 조용히 무시한다
+    }
+  }
+
   // ----- D-3 폴더로 이동 대화상자 (specs/features/F-126.md 5.3) -----
   function requestMoveDoc(doc) {
     setMoveDocTarget(doc)
@@ -763,16 +963,26 @@ export default function App() {
         onToggleSidebar={toggleSidebar}
         toggleButtonRef={toggleButtonRef}
         title={currentDoc?.title ?? ''}
-        titleDisabled={bootPhase !== 'ready' || isEmpty}
-        titleReadOnly={viewMode === 'view'}
+        titleDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
+        titleReadOnly={viewMode === 'view' || Boolean(sharedDoc)}
         titleInputRef={titleInputRef}
         onTitleChange={handleTitleChange}
         onTitleBlur={handleTitleBlur}
         onTitleKeyDown={handleTitleKeyDown}
         viewMode={viewMode}
-        viewModeDisabled={bootPhase !== 'ready' || isEmpty}
+        viewModeDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
         onChangeViewMode={changeViewMode}
-        exportDisabled={bootPhase !== 'ready' || isEmpty}
+        shareDisabled={
+          bootPhase !== 'ready' ||
+          isEmpty ||
+          Boolean(sharedDoc) ||
+          !currentDoc ||
+          !openDoc ||
+          openDoc.id !== currentDocId
+        }
+        getShareDoc={getShareDoc}
+        onShareNotice={showNotice}
+        exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
         onExportDoc={handleExportDoc}
       />
       <input
@@ -802,6 +1012,7 @@ export default function App() {
           onRequestDeleteDoc={requestDeleteDoc}
           onRequestDeleteFolder={requestDeleteFolder}
           onRequestMoveDoc={requestMoveDoc}
+          onTogglePin={handleTogglePin}
           onOpenSettings={openSettings}
           canInstall={canInstall}
           onInstall={install}
@@ -811,13 +1022,24 @@ export default function App() {
         )}
         <div className="main-column">
           <NoticeBar notice={notice} onDismiss={() => setNotice(null)} />
-          {bootPhase === 'booting' && <div className="content-area" data-editor-slot />}
-          {isEmpty && (
+          {bootPhase === 'booting' && (
+            <div className="content-area" data-editor-slot>
+              {/* 평소엔 순간적으로 지나가 로딩 표시를 두지 않지만(ia.md 4.4), 다른 창이
+                  옛 버전 연결을 쥐고 있어 막힌 동안은 예외로 문구를 보인다 (F-136.md 3.3) */}
+              {dbBlockedMessage && <p className="boot-blocked-notice">{dbBlockedMessage}</p>}
+            </div>
+          )}
+          {sharedDoc && (
+            <div className="content-area">
+              <SharedView sharedDoc={sharedDoc} onImport={importSharedDoc} onClose={closeSharedDoc} />
+            </div>
+          )}
+          {!sharedDoc && isEmpty && (
             <div className="content-area">
               <EmptyState onCreateDoc={createNewDoc} onImportDoc={requestImport} />
             </div>
           )}
-          {showEditor && (
+          {!sharedDoc && showEditor && (
             <div className="content-area">
               <div className="editor-slot" hidden={viewMode === 'view'}>
                 {openDoc?.id === currentDocId && (
@@ -831,15 +1053,17 @@ export default function App() {
                     autoFocus={focusEditorRef.current}
                     onDocChange={handleDocChange}
                     onSelectionChange={handleSelectionChange}
+                    wikiTitles={wikiTitles}
+                    onOpenWikiLink={handleOpenWikiLink}
                   />
                 )}
               </div>
               {viewMode === 'view' && openDoc?.id === currentDocId && (
-                <Viewer key={currentDocId} html={viewerHtml} />
+                <Viewer key={currentDocId} html={viewerHtml} onOpenWikiLink={handleOpenWikiLink} />
               )}
             </div>
           )}
-          {showEditor && (
+          {!sharedDoc && showEditor && (
             <StatusBar
               line={stats.line}
               col={stats.col}

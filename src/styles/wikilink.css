@@ -1,0 +1,58 @@
+/* 위키링크 (specs/features/F-131.md 6장). hex 는 두지 않는다 — 토큰만 참조한다 */
+
+/* ===== 편집 모드·보기 모드 공용 표시 ===== */
+.md-wikilink,
+.wikilink {
+  color: var(--md-link);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.md-wikilink:hover,
+.wikilink:hover {
+  text-decoration: underline;
+}
+
+.md-wikilink--missing,
+.wikilink--missing {
+  color: var(--muted);
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+}
+
+/* 옵션 없는 보기 화면(F-130 공유) — 글자색 그대로, 클릭 가능해 보이지 않는다 */
+.wikilink--plain {
+  color: inherit;
+  cursor: text;
+  text-decoration: none;
+}
+
+/* 편집 모드에서 위키링크에 커서가 닿아 원문이 드러났을 때 — 기호(`[[` `]]` `대상|`)만
+   강조색으로 보인다 (F-131 3장 "닿으면 원문 전체 표시, 기호 색만") */
+.md-wikilink-mark {
+  color: var(--accent);
+}
+
+/* ===== [[ 뒤 제목 자동완성 팝업 (F-131 3.1) =====
+   그림자·모서리는 기존 ⋯ 메뉴(app.css .item-menu-list)와 같게 맞춘다 */
+.cm-tooltip.cm-tooltip-autocomplete {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+.cm-tooltip.cm-tooltip-autocomplete > ul {
+  max-height: 260px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.cm-tooltip-autocomplete ul li {
+  padding: 4px 8px;
+}
+
+.cm-tooltip-autocomplete ul li[aria-selected] {
+  background: var(--accent-soft);
+  color: var(--ink);
+}

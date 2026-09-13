@@ -1,11 +1,23 @@
-// 사이드바 (specs/ia.md 2장 B, 3.11, specs/features/F-111.md·F-114.md·F-121.md·F-115.md·F-126.md)
+// 사이드바 (specs/ia.md 2장 B, 3.11, specs/features/F-111.md·F-114.md·F-121.md·F-115.md·F-126.md·F-132.md)
 // 폴더 2단계 트리, 항목 `⋯` 메뉴, 마우스 끌어놓기로 문서·폴더 이동 (F-126.md 4·5장)
+// 맨 위 `고정됨` 묶음 (F-132.md 3장)
 import { useEffect, useRef, useState } from 'react'
-import { buildTree, canMoveFolder } from '../lib/folderTree.js'
+import { buildTree, canMoveFolder, pinnedDocs } from '../lib/folderTree.js'
 import FolderMenu from './FolderMenu.jsx'
 
 function dropKeyOf(target) {
   return target.type === 'root' ? 'root' : `${target.type}:${target.id}`
+}
+
+// 문서 `⋯` 메뉴 맨 위 `상단 고정`/`고정 해제` 항목 — 트리·묶음 모두 같은 규칙
+// (F-132.md 4장)
+function pinMenuItem(doc, onTogglePin) {
+  const isPinned = doc.pinnedAt != null
+  return {
+    key: 'pin',
+    label: isPinned ? '고정 해제' : '상단 고정',
+    onSelect: () => onTogglePin(doc.id, !isPinned),
+  }
 }
 
 // 트리 한 항목(폴더 또는 문서) — 재귀 렌더링. 실제 콜백은 전부 ctx 를 거쳐 Sidebar 의 함수를
@@ -95,6 +107,7 @@ function DocRow({ node, depth, ctx }) {
   const isDropTarget = ctx.dropTargetKey === dropKeyOf(target)
 
   const items = [
+    pinMenuItem(node, ctx.onTogglePin),
     {
       key: 'move',
       label: '폴더로 이동…',
@@ -134,6 +147,41 @@ function DocRow({ node, depth, ctx }) {
   )
 }
 
+// 사이드바 맨 위 `고정됨` 묶음의 항목 — 트리와 별도로 `role="list"`/`listitem` 이고
+// 들여쓰기가 없다. 문서 삭제 시 목록에서 빠지므로 별도 처리가 필요 없다 (F-132.md 3·4장)
+function PinnedRow({ doc, ctx }) {
+  const items = [
+    pinMenuItem(doc, ctx.onTogglePin),
+    {
+      key: 'move',
+      label: '폴더로 이동…',
+      onSelect: () => ctx.onRequestMoveDoc({ id: doc.id, title: doc.title, folderId: doc.folderId }),
+    },
+    {
+      key: 'delete',
+      label: '삭제',
+      danger: true,
+      onSelect: () => ctx.onRequestDeleteDoc({ id: doc.id, title: doc.title }),
+    },
+  ]
+
+  return (
+    <li role="listitem" className="tree-item">
+      <div className="tree-row">
+        <button
+          type="button"
+          className="tree-label doc-item-btn"
+          aria-current={doc.id === ctx.currentDocId ? 'page' : undefined}
+          onClick={() => ctx.onSelectDoc(doc.id)}
+        >
+          {doc.title}
+        </button>
+        <FolderMenu label={doc.title} items={items} />
+      </div>
+    </li>
+  )
+}
+
 export default function Sidebar({
   sidebarRef,
   narrow,
@@ -153,6 +201,7 @@ export default function Sidebar({
   onRequestDeleteDoc,
   onRequestDeleteFolder,
   onRequestMoveDoc,
+  onTogglePin,
   onOpenSettings,
   canInstall,
   onInstall,
@@ -174,6 +223,7 @@ export default function Sidebar({
   }, [editingId])
 
   const tree = buildTree({ folders, docs })
+  const pinned = pinnedDocs(docs) // F-132.md 2장, 3장
 
   function startRename(id, name) {
     skipBlurCommitRef.current = false
@@ -223,7 +273,11 @@ export default function Sidebar({
 
   function canDropOn(target) {
     if (!dragged) return false
-    if (dragged.type === 'doc') return true
+    if (dragged.type === 'doc') {
+      // 문서는 폴더 행이나 최상위 빈 영역에만 놓을 수 있다. 다른 문서 행에는 놓을 수 없다
+      // — 놓으면 폴더 id 자리에 문서 id 가 저장되던 버그 수정 (F-136.md 3.2)
+      return target.type === 'folder' || target.type === 'root'
+    }
     // 폴더를 끄는 중: 대상이 최상위 폴더 행이거나 최상위 빈 영역일 때만 유효할 수 있다
     const targetParentId = target.type === 'root' ? null : target.id
     return canMoveFolder({ folders, id: dragged.id, parentId: targetParentId })
@@ -267,6 +321,7 @@ export default function Sidebar({
     onRequestDeleteDoc,
     onRequestDeleteFolder,
     onRequestMoveDoc,
+    onTogglePin,
     onDragStart: handleDragStart,
     onDragEnd: handleDragEnd,
     onDragOver: handleDragOver,
@@ -294,6 +349,16 @@ export default function Sidebar({
         <button type="button" className="import-doc" onClick={onImportDoc}>
           ↥ 가져오기
         </button>
+        {pinned.length > 0 && (
+          <>
+            <h2>고정됨</h2>
+            <ul className="pinned-list" role="list" aria-label="고정된 문서">
+              {pinned.map((doc) => (
+                <PinnedRow key={doc.id} doc={doc} ctx={ctx} />
+              ))}
+            </ul>
+          </>
+        )}
         <ul className="doc-list" role="tree" aria-label="문서와 폴더">
           {tree.map((node) => (
             <TreeNode key={node.id} node={node} depth={0} ctx={ctx} editingInputRef={editingInputRef} />

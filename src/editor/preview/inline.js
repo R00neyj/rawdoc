@@ -8,6 +8,7 @@ import { Decoration, ViewPlugin } from '@codemirror/view'
 import { activeLines, selectionTouches } from './active.js'
 import { isComposing, isForced } from '../composition.js'
 import { parseCalloutHeader } from '../../lib/callout.js'
+import { findWikiLinks } from '../../lib/wikiLink.js'
 
 /** 마커를 화면에서만 지운다 */
 const HIDE = Decoration.replace({})
@@ -89,6 +90,21 @@ function isCalloutHeaderLink(state, linkNode) {
 }
 
 /**
+ * `[[제목]]`(위키링크, F-131) 은 lezer 가 안쪽 `[제목]` 을 URL 없는 Link 로 읽는다
+ * (@lezer/markdown 은 참조 정의가 없어도 shortcut 후보를 구조적으로 Link 노드로 만든다).
+ * 이 파일의 일반 규칙대로 그 Link 의 LinkMark(`[` `]`)를 숨기면 wikiLinks.js(F-131)가
+ * 그리는 바깥 `[[` `]]` 숨김·표시와 겹친다 — 이 Link 노드가 실제 위키링크 범위 안이면
+ * (findWikiLinks 로 판정) 이 파일은 손대지 않는다(F-131 1장 "필요할 때만")
+ */
+function isInsideWikiLink(state, linkNode) {
+  const line = state.doc.lineAt(linkNode.from)
+  const lineText = state.doc.sliceString(line.from, line.to)
+  return findWikiLinks(lineText).some(
+    (m) => line.from + m.from <= linkNode.from && linkNode.to <= line.from + m.to,
+  )
+}
+
+/**
  * @param {import('@codemirror/state').EditorState} state
  * @param {{from:number, to:number}[]} ranges 보통 view.visibleRanges
  * @returns {import('@codemirror/state').Range<import('@codemirror/view').Decoration>[]}
@@ -126,6 +142,8 @@ export function buildInline(state, ranges) {
             // F-128 4.1: 콜아웃 머리의 [!type] 은 숨김 대상에서 뺀다(기호 그대로 두고
             // lines.js 가 md-callout-type mark 로 색만 준다)
             if (isCalloutHeaderLink(state, parent)) return
+            // F-131: 위키링크 범위는 wikiLinks.js 가 그린다 — 이 파일은 손대지 않는다
+            if (isInsideWikiLink(state, parent)) return
             // F-129 3.2: 줄이 아니라 선택이 이 Link [from, to] 에 닿는지로 판정한다
             if (!selectionTouches(state, parent.from, parent.to)) pushHide(out, state, node.from, node.to)
             return

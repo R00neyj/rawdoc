@@ -3,6 +3,8 @@
 import MarkdownIt from 'markdown-it'
 
 import { parseCalloutHeader, defaultCalloutTitle } from '../lib/callout.js'
+import { findWikiLinks } from '../lib/wikiLink.js'
+import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from '../lib/frontmatter.js'
 
 // html:false — 원문 HTML 태그는 파싱하지 않고 글자 그대로(이스케이프되어) 보인다.
 // 링크·이미지 주소 검사는 markdown-it 기본 validateLink 를 그대로 쓴다
@@ -163,11 +165,129 @@ md.renderer.rules.image = function (tokens, idx, options, env, self) {
 // 코드블록(fence)의 language-{info 첫 단어} 클래스, 제목 앵커 없음은 markdown-it 기본
 // 동작 그대로다 (options.highlight 를 주지 않아 구문 강조 없음)
 
+// ----- 위키링크 (F-131.md 4장) -----
+// 'inline' 규칙(코드 span·기존 링크 등을 이미 처리해 각각 code_inline·link_open 등의
+// 토큰으로 나눈 뒤) 다음에 실행해, 남은 'text' 자식 토큰(순수 글자)만 훑는다 — 이렇게
+// 하면 인라인코드·fence(펜스는 애초에 'inline' 토큰이 아니다)는 자연히 대상에서 빠진다.
+// 표 칸은 'inline' 토큰이 따로 생기므로 table_open/close 로 깊이를 세어 건너뛴다
+function wikiLinkTokens(state, target, alias, resolveWikiLink) {
+  const label = alias ?? target
+  const text = new state.Token('text', '', 0)
+  text.content = label
+
+  if (resolveWikiLink === undefined) {
+    // 옵션이 없으면(F-130 공유 화면) 클릭 불가능한 글자만 (F-131 4장)
+    const spanOpen = new state.Token('wikilink_span_open', 'span', 1)
+    spanOpen.attrSet('class', 'wikilink wikilink--plain')
+    const spanClose = new state.Token('wikilink_span_close', 'span', -1)
+    return [spanOpen, text, spanClose]
+  }
+
+  // 'link_open'/'link_close' 를 그대로 쓰지 않는다 — 그 타입은 위 F-123 규칙이
+  // target="_blank" rel="noopener noreferrer" 를 붙인다(F-131 4장: 새 탭 속성 없음).
+  // 다른 타입 이름으로 만들어 그 규칙을 타지 않고 기본 renderToken 으로 렌더한다
+  const id = resolveWikiLink(target)
+  const open = new state.Token('wikilink_open', 'a', 1)
+  const close = new state.Token('wikilink_close', 'a', -1)
+  open.attrSet('data-wikilink', target)
+  if (id) {
+    open.attrSet('class', 'wikilink')
+    open.attrSet('href', `#/d/${id}`)
+  } else {
+    open.attrSet('class', 'wikilink wikilink--missing')
+    open.attrSet('href', '#')
+  }
+
+  return [open, text, close]
+}
+
+function wikiLinkRule(state, resolveWikiLink) {
+  const tokens = state.tokens
+  let tableDepth = 0
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+    if (token.type === 'table_open') tableDepth++
+    else if (token.type === 'table_close') tableDepth--
+    if (token.type !== 'inline' || tableDepth > 0 || !token.children) continue
+
+    let changed = false
+    const nextChildren = []
+
+    for (const child of token.children) {
+      if (child.type !== 'text') {
+        nextChildren.push(child)
+        continue
+      }
+
+      const matches = findWikiLinks(child.content)
+      if (matches.length === 0) {
+        nextChildren.push(child)
+        continue
+      }
+
+      changed = true
+      let cursor = 0
+      for (const m of matches) {
+        if (m.from > cursor) {
+          const before = new state.Token('text', '', 0)
+          before.content = child.content.slice(cursor, m.from)
+          nextChildren.push(before)
+        }
+        nextChildren.push(...wikiLinkTokens(state, m.target, m.alias, resolveWikiLink))
+        cursor = m.to
+      }
+      if (cursor < child.content.length) {
+        const after = new state.Token('text', '', 0)
+        after.content = child.content.slice(cursor)
+        nextChildren.push(after)
+      }
+    }
+
+    if (changed) token.children = nextChildren
+  }
+}
+
+// wikilink_open/close·wikilink_span_open/close 는 renderer 규칙이 따로 없어 markdown-it
+// 기본 renderToken(tag·attrs·nesting 기준)으로 렌더된다 — <a class=… href=…>…</a> 또는
+// <span class=…>…</span>. F-123 의 link_open 규칙(target·rel 추가)은 타입이 달라 타지 않는다
+md.core.ruler.after('inline', 'wikilink', (state) => wikiLinkRule(state, state.env?.resolveWikiLink))
+
+// ----- 프론트매터 (F-133.md 3.3) -----
+// 변환 전에 findFrontmatter 로 떼어 내고 나머지 본문만 markdown-it 에 넣는다.
+// 성공(속성 있음): 표. 구조를 알아볼 수 없음(null): 원문 그대로 <pre>. 빈 프론트매터
+// (속성 없음): 아무것도 출력하지 않는다
+function renderFrontmatter(text, frontmatter) {
+  const content = text.slice(frontmatter.contentFrom, frontmatter.contentTo)
+  const props = parseSimpleProperties(content)
+
+  if (props === null) {
+    return `<pre class="markdown-frontmatter-raw"><code>${md.utils.escapeHtml(content)}</code></pre>`
+  }
+  if (props.length === 0) return ''
+
+  const rows = props
+    .map(({ key, value }) => {
+      const shown = Array.isArray(value) ? value.join(', ') : value
+      return `<tr><th>${md.utils.escapeHtml(key)}</th><td>${md.utils.escapeHtml(shown)}</td></tr>`
+    })
+    .join('')
+  return `<table class="markdown-frontmatter"><tbody>${rows}</tbody></table>`
+}
+
 /**
  * @param {string} text 저장소·에디터 원문 그대로 (CRLF 도 그대로 넘길 수 있다 —
  *   markdown-it 이 파싱 전 줄바꿈을 정규화한다)
+ * @param {object} [options]
+ * @param {(target:string) => string|null} [options.resolveWikiLink] 위키링크 대상 제목 →
+ *   문서 id. 생략하면(F-130 공유 화면) 위키링크를 클릭 불가능한 글자로만 렌더한다 (F-131 4장)
  * @returns {string} HTML 문자열
  */
-export function renderMarkdown(text) {
-  return md.render(text)
+export function renderMarkdown(text, options = {}) {
+  const env = { resolveWikiLink: options.resolveWikiLink }
+  const frontmatter = findFrontmatter(text)
+  if (!frontmatter) return md.render(text, env)
+
+  const body = textAfterFrontmatter(text, frontmatter)
+  return renderFrontmatter(text, frontmatter) + md.render(body, env)
 }

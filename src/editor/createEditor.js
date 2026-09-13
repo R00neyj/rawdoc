@@ -9,13 +9,16 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 
 import { autoPair } from './autoPair.js'
 import { compositionCatchup } from './composition.js'
+import { frontmatterExtension } from './frontmatter.js'
 import { highlightExtension } from './highlight.js'
 import { shortcutKeymap } from './commands.js'
 import { livePreview } from './preview/index.js'
 import { fenceLinePreview } from './preview/lines.js'
+import { setWikiTitlesEffect, wikiTitlesField } from './preview/wikiLinks.js'
+import { wikiComplete } from './wikiComplete.js'
 
-function previewExtensionFor(mode) {
-  return mode === 'live' ? livePreview() : []
+function previewExtensionFor(mode, { onOpenWikiLink } = {}) {
+  return mode === 'live' ? livePreview({ onOpenWikiLink }) : []
 }
 
 function attributesExtensionFor(mode) {
@@ -29,9 +32,12 @@ function attributesExtensionFor(mode) {
  * @param {'live'|'raw'} [options.viewMode]
  * @param {(state:import('@codemirror/state').EditorState)=>void} [options.onDocChange]
  * @param {(state:import('@codemirror/state').EditorState)=>void} [options.onSelectionChange]
+ * @param {string[]} [options.wikiTitles] 위키링크 대상 판정용 문서 제목 목록(F-131). 이후
+ *   갱신은 handle.setWikiTitles() 로 한다 — 이 값은 최초 생성에만 쓴다
+ * @param {(target:string)=>void} [options.onOpenWikiLink] 위키링크 클릭·자동완성 흐름 (F-131 3·5장)
  */
 export function createEditor(parent, options = {}) {
-  const { text = '', viewMode = 'live', onDocChange, onSelectionChange } = options
+  const { text = '', viewMode = 'live', onDocChange, onSelectionChange, wikiTitles = [], onOpenWikiLink } = options
 
   let destroyed = false
 
@@ -47,7 +53,10 @@ export function createEditor(parent, options = {}) {
     // (@codemirror/view keymap 문서: "specified early... get checked first")
     autoPair(),
     // base 기본값(commonmarkLanguage)은 GFM 표를 파싱하지 않는다 (spike index.js 86~88행)
-    markdown({ base: markdownLanguage }),
+    // extensions: 문서 첫 줄 YAML 프론트매터를 Frontmatter 노드로 만든다 (F-133 3.2) —
+    // 모드(편집·원문) 공통. 이게 없으면 lezer 는 첫 `---` 를 HorizontalRule, 그 다음
+    // 줄을 SetextHeading2 로 잘못 읽는다
+    markdown({ base: markdownLanguage, extensions: [frontmatterExtension()] }),
     indentUnit.of('  '),
     EditorState.tabSize.of(2),
     highlightExtension(),
@@ -55,7 +64,11 @@ export function createEditor(parent, options = {}) {
     // highlight.js 의 주석 참고: 태그 자체를 나누는 방법은 실측으로 안 먹히는 것을
     // 확인해 줄 decoration 으로 바꿨다
     fenceLinePreview(),
-    previewCompartment.of(previewExtensionFor(viewMode)),
+    // 위키링크 대상 문서 제목(F-131). 모드와 무관하게 항상 켠다 — wikiComplete() 도
+    // 같은 필드를 읽고, 모드 전환으로 previewCompartment 가 바뀌어도 값을 잃지 않는다
+    wikiTitlesField.init(() => wikiTitles),
+    wikiComplete(),
+    previewCompartment.of(previewExtensionFor(viewMode, { onOpenWikiLink })),
     attributesCompartment.of(attributesExtensionFor(viewMode)),
     // F-109 단축키가 defaultKeymap 보다 먼저 키를 받도록 Prec.high
     Prec.high(keymap.of(shortcutKeymap)),
@@ -92,11 +105,16 @@ export function createEditor(parent, options = {}) {
       const scroll = view.scrollSnapshot()
       view.dispatch({
         effects: [
-          previewCompartment.reconfigure(previewExtensionFor(mode)),
+          previewCompartment.reconfigure(previewExtensionFor(mode, { onOpenWikiLink })),
           attributesCompartment.reconfigure(attributesExtensionFor(mode)),
           scroll,
         ],
       })
+    },
+
+    /** 문서 제목 목록 갱신 (F-131 3장) — 문서 생성·삭제·제목 변경 시 App 이 부른다 */
+    setWikiTitles(titles) {
+      view.dispatch({ effects: setWikiTitlesEffect.of(titles) })
     },
 
     /** 두 번째 호출은 무시한다 */

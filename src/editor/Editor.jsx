@@ -6,7 +6,16 @@ import { useImperativeHandle, useLayoutEffect, useRef } from 'react'
 
 import { createEditor } from './createEditor.js'
 
-export default function Editor({ text, viewMode, autoFocus, onDocChange, onSelectionChange, ref }) {
+export default function Editor({
+  text,
+  viewMode,
+  autoFocus,
+  onDocChange,
+  onSelectionChange,
+  wikiTitles,
+  onOpenWikiLink,
+  ref,
+}) {
   const containerRef = useRef(null)
   const handleRef = useRef(null)
 
@@ -22,6 +31,8 @@ export default function Editor({ text, viewMode, autoFocus, onDocChange, onSelec
       viewMode,
       onDocChange,
       onSelectionChange,
+      wikiTitles,
+      onOpenWikiLink,
     })
     handleRef.current = handle
     // 문서 전환 후 포커스 + 커서 맨 앞 (ia.md 3.4, F-103 3.4). App 의 passive effect 에서

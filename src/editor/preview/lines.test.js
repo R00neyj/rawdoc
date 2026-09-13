@@ -5,12 +5,23 @@ import { Decoration } from '@codemirror/view'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
 import { buildLines, fenceLineRanges, mapDecorationsOnHold } from './lines.js'
+import { frontmatterExtension } from '../frontmatter.js'
 
 function makeState(doc, anchor = 0, head = anchor) {
   const state = EditorState.create({
     doc,
     selection: { anchor, head },
     extensions: [markdown({ base: markdownLanguage })],
+  })
+  ensureSyntaxTree(state, doc.length, 5000)
+  return state
+}
+
+function makeStateWithFrontmatter(doc, anchor = 0, head = anchor) {
+  const state = EditorState.create({
+    doc,
+    selection: { anchor, head },
+    extensions: [markdown({ base: markdownLanguage, extensions: [frontmatterExtension()] })],
   })
   ensureSyntaxTree(state, doc.length, 5000)
   return state
@@ -259,5 +270,34 @@ describe('mapDecorationsOnHold — F-134 3.1: 조합 중 보류 + 문서 변경'
       expect(newDoc.sliceString(from, to)).not.toContain('\n')
     })
     expect(replaceCount).toBeGreaterThan(0)
+  })
+})
+
+describe('buildLines — 프론트매터 (F-133 3.2, A3)', () => {
+  it('모든 줄에 md-frontmatter, 첫 줄에 md-frontmatter-first, 마지막 줄에 md-frontmatter-last', () => {
+    const state = makeStateWithFrontmatter('---\na: 1\n---\n본문')
+    const classes = lineClasses(build(state))
+    expect(classes.filter((c) => c.includes('md-frontmatter'))).toHaveLength(3)
+    expect(classes).toContain('md-frontmatter md-frontmatter-first')
+    expect(classes).toContain('md-frontmatter')
+    expect(classes).toContain('md-frontmatter md-frontmatter-last')
+  })
+
+  it('원문(기호)을 숨기지 않는다 — replace decoration 없음', () => {
+    const state = makeStateWithFrontmatter('---\na: 1\n---\n본문')
+    expect(replaced(build(state))).toHaveLength(0)
+  })
+
+  it('커서가 프론트매터 안에 있어도 모양이 그대로다(활성 줄 판정 없음)', () => {
+    const state = makeStateWithFrontmatter('---\na: 1\n---\n본문', 5) // 커서: 2번째 줄
+    const classes = lineClasses(build(state))
+    expect(classes.filter((c) => c.includes('md-frontmatter'))).toHaveLength(3)
+  })
+
+  it('프론트매터 없는 문서는 회귀 없음(md-frontmatter 없음, --- 는 기존처럼 md-hr)', () => {
+    const state = makeState('# 제목\n\n---\n\n본문', 0)
+    const classes = lineClasses(build(state))
+    expect(classes.some((c) => c.includes('md-frontmatter'))).toBe(false)
+    expect(classes).toContain('md-hr')
   })
 })

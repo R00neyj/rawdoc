@@ -87,10 +87,55 @@ export function parseTable(text, from) {
   return { rows, delimiterRow, columnCount }
 }
 
-/** 사용자가 칸에 입력한 값을 원문에 넣을 형태로 바꾼다 (F-125 2.2)
- * — 붙여넣기의 줄바꿈은 공백 1개로, `|` 는 `\|` 로(표 구조 유지) */
+/** 사용자가 칸에 입력한 값을 원문에 넣을 형태로 바꾼다 (F-125 2.2, F-135 3.1)
+ * — 붙여넣기의 줄바꿈은 공백 1개로, `|` 는 `\|` 로(표 구조 유지).
+ * 값 끝에 남는 연속 `\` 개수가 홀수면 `\` 를 하나 더 붙인다 — 그러지 않으면 이 칸
+ * 뒤(범위 밖)에 있는 다음 파이프(칸 구분자)가 이스케이프돼 칸이 합쳐진다.
+ * `unescapeCell` 의 역함수다: `escapeCell(unescapeCell(raw)) === raw`. */
 export function escapeCell(value) {
-  return value.replace(/\r\n|\r|\n/g, ' ').replace(/\|/g, '\\|')
+  const flat = value.replace(/\r\n|\r|\n/g, ' ').replace(/\|/g, '\\|')
+  const trailingBackslashes = flat.match(/\\+$/)?.[0].length ?? 0
+  return trailingBackslashes % 2 === 1 ? `${flat}\\` : flat
+}
+
+/** `escapeCell` 의 역함수 (F-135 3.1) — 칸 원문(파이프 이스케이프 포함)을 칸 편집기에
+ * 보여줄 값으로 되돌린다. `parseTable`(`unescapedPipePositions`)이 칸 구분자를 찾을 때와
+ * 같은 규칙으로 읽는다: `\` 다음 글자는 무엇이든(백슬래시 자신 포함) 그 글자 자체로
+ * 되돌리고 두 글자를 함께 소비한다. 짝을 이루지 못하고 글자 끝에 남은 `\` 는 그대로 둔다. */
+export function unescapeCell(raw) {
+  let out = ''
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] === '\\' && i + 1 < raw.length) {
+      out += raw[i + 1]
+      i++
+      continue
+    }
+    out += raw[i]
+  }
+  return out
+}
+
+/**
+ * 편집 세션이 직접 보관하는 칸 원문 범위를 주 문서 트랜잭션에 맞춰 옮긴다 (F-135 3.2).
+ * 위젯 인스턴스(`widget.table`)의 칸 위치는 조합 중 재계산이 보류되어 낡을 수 있어
+ * 편집 중인 칸의 쓰기에 쓰지 않는다 — 세션이 든 이 범위를 대신 쓰고, 모든 주 문서
+ * 트랜잭션마다(칸 자신의 입력 포함) 이 함수로 옮긴다.
+ * @param {{from:number, to:number}} range
+ * @param {import('@codemirror/state').ChangeDesc} changes
+ */
+export function mapCellRange(range, changes) {
+  return { from: changes.mapPos(range.from, -1), to: changes.mapPos(range.to, 1) }
+}
+
+/**
+ * 칸 자신의 입력이 `mapCellRange` 로 옮긴 범위의 시작을 그대로 두고 그 자리에 새
+ * 원문(`escapeCell` 결과)을 써넣었을 때, 세션 범위의 끝을 그 길이에 맞춰 다시 잡는다
+ * (F-135 3.2 "to = from + 새 원문 길이"). `mapCellRange` 뒤에 이어 부른다.
+ * @param {{from:number}} range
+ * @param {string} escapedValue
+ */
+export function advanceCellRange(range, escapedValue) {
+  return { from: range.from, to: range.from + escapedValue.length }
 }
 
 /**

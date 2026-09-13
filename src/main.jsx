@@ -10,6 +10,8 @@ import './styles/tokens.css'
 import './styles/app.css'
 import './styles/markdown.css'
 import './styles/callout.css'
+import './styles/frontmatter.css'
+import './styles/wikilink.css'
 
 import { getPref } from './app/prefs.js'
 import App from './app/App.jsx'

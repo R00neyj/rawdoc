@@ -1,6 +1,7 @@
 // 상단바 (specs/ia.md 2장 A, specs/features/F-102.md 5.3)
-// 보기 모드 토글은 F-107·F-123. .md 내보내기는 F-112
+// 보기 모드 토글은 F-107·F-123. .md 내보내기는 F-112. 공유는 F-130
 import brand from '../brand.js'
+import ShareMenu from './ShareMenu.jsx'
 
 const VIEW_MODES = [
   { value: 'live', label: '편집' },
@@ -23,6 +24,9 @@ export default function TopBar({
   viewMode,
   viewModeDisabled,
   onChangeViewMode,
+  shareDisabled,
+  getShareDoc,
+  onShareNotice,
   exportDisabled,
   onExportDoc,
 }) {
@@ -65,6 +69,7 @@ export default function TopBar({
           </button>
         ))}
       </div>
+      <ShareMenu disabled={shareDisabled} getShareDoc={getShareDoc} onNotice={onShareNotice} />
       <button type="button" className="export-btn" disabled={exportDisabled} onClick={onExportDoc}>
         .md 내보내기
       </button>

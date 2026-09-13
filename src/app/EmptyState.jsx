@@ -4,7 +4,9 @@ export default function EmptyState({ onCreateDoc, onImportDoc }) {
     <div className="empty-state">
       <p style={{ fontFamily: 'var(--font-display)' }}>문서가 없습니다.</p>
       <div className="empty-state-actions">
-        <button type="button" onClick={onCreateDoc}>
+        {/* onCreateDoc(folderId?) 는 인자를 받으므로 onClick 에 직접 연결하면 클릭 이벤트
+            객체가 folderId 로 넘어가 IndexedDB DataCloneError 가 난다 (F-136.md 3.1) */}
+        <button type="button" onClick={() => onCreateDoc()}>
           새 문서
         </button>
         <button type="button" onClick={onImportDoc}>

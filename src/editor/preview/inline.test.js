@@ -230,6 +230,32 @@ describe('buildInline — F-128 4.1: 콜아웃 머리는 링크 기호 숨김에
   })
 })
 
+describe('buildInline — F-131: 위키링크 범위는 손대지 않는다', () => {
+  it('[[a]] 는 lezer 가 안쪽을 Link 로 읽지만 [ ] 를 숨기지 않는다', () => {
+    const doc = '[[a]]\nx'
+    const state = makeState(doc, doc.length) // 커서: 다음 줄 — 보통 Link 라면 숨겨질 상태
+    expect(hiddenCount(state)).toBe(0)
+  })
+
+  it('[[a]] 에는 md-link mark 도 붙지 않는다 (wikiLinks.js 가 별도로 그린다)', () => {
+    const doc = '[[a]]\nx'
+    const state = makeState(doc, doc.length)
+    expect(linkMarksOf(state)).toEqual([])
+  })
+
+  it('별칭 [[a|b]] 도 숨기지 않는다', () => {
+    const doc = '[[a|b]]\nx'
+    const state = makeState(doc, doc.length)
+    expect(hiddenCount(state)).toBe(0)
+  })
+
+  it('일반 [텍스트](url) 링크는 위키링크가 아니므로 여전히 숨긴다', () => {
+    const doc = '[t](https://a.com)\nx'
+    const state = makeState(doc, doc.length)
+    expect(hiddenCount(state)).toBeGreaterThan(0)
+  })
+})
+
 describe('mapDecorationsOnHold — F-134 3.1: 조합 중 보류 + 문서 변경', () => {
   it('맵 결과는 새 문서 범위 안이고 줄바꿈을 덮지 않는다', () => {
     const state = makeState('**bold**\nx', 9) // 커서: 두 번째 줄 — **bold** 기호 숨김

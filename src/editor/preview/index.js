@@ -6,7 +6,16 @@ import { blockPreview } from './blocks.js'
 import { inlinePreview } from './inline.js'
 import { linePreview } from './lines.js'
 import { linkClicks } from './links.js'
+import { wikiLinkClicks, wikiLinksPreview } from './wikiLinks.js'
 
-export function livePreview() {
-  return [inlinePreview(), linePreview(), blockPreview(), linkClicks()]
+/** @param {{onOpenWikiLink?: (target:string)=>void}} [options] */
+export function livePreview({ onOpenWikiLink } = {}) {
+  return [
+    inlinePreview(),
+    linePreview(),
+    blockPreview(),
+    linkClicks(),
+    wikiLinksPreview(),
+    wikiLinkClicks(onOpenWikiLink),
+  ]
 }

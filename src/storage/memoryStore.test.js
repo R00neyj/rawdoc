@@ -55,6 +55,34 @@ describe('memoryStore', () => {
     expect(doc.folderId).toBeNull()
   })
 
+  it('생성한 문서는 pinnedAt 이 null 이다', async () => {
+    const doc = await store.create({ title: 'A', content: '', lineEnding: 'crlf' })
+    expect(doc.pinnedAt).toBeNull()
+  })
+
+  describe('상단 고정 (F-132)', () => {
+    it('setPinned(id, true) 는 pinnedAt 을 지금 시각으로, updatedAt 은 그대로 둔다', async () => {
+      const doc = await store.create({ title: 'A', content: '', lineEnding: 'crlf' })
+      vi.spyOn(Date, 'now').mockReturnValue(doc.updatedAt + 1000)
+      const pinned = await store.setPinned(doc.id, true)
+      vi.restoreAllMocks()
+
+      expect(pinned.pinnedAt).not.toBeNull()
+      expect(pinned.updatedAt).toBe(doc.updatedAt)
+    })
+
+    it('setPinned(id, false) 는 pinnedAt 을 null 로 되돌린다', async () => {
+      const doc = await store.create({ title: 'A', content: '', lineEnding: 'crlf' })
+      await store.setPinned(doc.id, true)
+      const unpinned = await store.setPinned(doc.id, false)
+      expect(unpinned.pinnedAt).toBeNull()
+    })
+
+    it('없는 id 를 setPinned 하면 reject 한다', async () => {
+      await expect(store.setPinned('없는-id', true)).rejects.toThrow()
+    })
+  })
+
   describe('폴더 (F-126)', () => {
     it('createFolder 로 만들고 listFolders 로 읽는다', async () => {
       const folder = await store.createFolder({ name: '기획', parentId: null })
@@ -123,6 +151,34 @@ describe('memoryStore', () => {
 
       const updatedDoc = await store.get(doc.id)
       expect(updatedDoc.folderId).toBeNull()
+    })
+  })
+
+  describe('folderId 검사 (F-136.md 3.1·3.2)', () => {
+    it('create 는 folderId 가 문자열이 아니면(예: 클릭 이벤트 객체) reject 하고 문서를 만들지 않는다', async () => {
+      await expect(
+        store.create({ title: 'A', content: '', lineEnding: 'crlf', folderId: { type: 'click' } }),
+      ).rejects.toThrow()
+      expect(await store.list()).toEqual([])
+    })
+
+    it('create 는 존재하지 않는 폴더 id 면 reject 하고 문서를 만들지 않는다', async () => {
+      await expect(
+        store.create({ title: 'A', content: '', lineEnding: 'crlf', folderId: '없는-폴더' }),
+      ).rejects.toThrow()
+      expect(await store.list()).toEqual([])
+    })
+
+    it('moveDoc 은 존재하지 않는 폴더 id 면 reject 하고 문서를 그대로 둔다(다른 문서 위에 놓는 경우 포함)', async () => {
+      const other = await store.create({ title: 'B', content: '', lineEnding: 'crlf' })
+      const doc = await store.create({ title: 'A', content: '', lineEnding: 'crlf' })
+
+      // 다른 문서 행에 놓으면 그 문서 id 가 folderId 자리로 들어오는데, 문서 id 는 폴더가
+      // 아니므로 거부해야 한다 (F-136.md 3.2)
+      await expect(store.moveDoc(doc.id, other.id)).rejects.toThrow()
+
+      const unchanged = await store.get(doc.id)
+      expect(unchanged.folderId).toBeNull()
     })
   })
 })

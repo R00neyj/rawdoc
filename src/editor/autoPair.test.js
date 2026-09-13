@@ -3,6 +3,7 @@ import { EditorSelection, EditorState } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 
 import { autoPair, autoPairBackspace, autoPairInput } from './autoPair.js'
+import { frontmatterExtension } from './frontmatter.js'
 
 function makeState(doc, pos, extensions = []) {
   return EditorState.create({ doc, selection: EditorSelection.cursor(pos), extensions })
@@ -226,6 +227,18 @@ describe('3.3 강조 기호 * ~ `', () => {
     expect(autoPairInput(state, pos, pos, '*')).toBeNull()
   })
 
+  it('프론트매터 안에서는 괄호·강조 기호 모두 짝을 넣지 않는다 (F-133 3.2)', () => {
+    const doc = '---\ntags: [ 1\n---\n본문'
+    const pos = doc.indexOf('[') + 1
+    const state = EditorState.create({
+      doc,
+      selection: EditorSelection.cursor(pos),
+      extensions: [markdown({ base: markdownLanguage, extensions: [frontmatterExtension()] })],
+    })
+    expect(autoPairInput(state, pos, pos, '(')).toBeNull()
+    expect(autoPairInput(state, pos, pos, '*')).toBeNull()
+  })
+
   it('빈 짝 Backspace: *|* → |, **|** → *|* → |', () => {
     expect(backspace(makeState('**', 1)).doc.toString()).toBe('')
     let state = makeState('****', 2)
@@ -329,6 +342,17 @@ describe('3.4 공통', () => {
       extensions: [EditorState.readOnly.of(true)],
     })
     expect(autoPairInput(state, 0, 0, '(')).toBeNull()
+    expect(autoPairBackspace(state)).toBeNull()
+  })
+
+  it('프론트매터 안에서는 Backspace 짝 지움도 적용하지 않는다 (F-133 3.2)', () => {
+    const doc = '---\na: (1)\n---\n본문'
+    const pos = doc.indexOf('(1)') + 1
+    const state = EditorState.create({
+      doc,
+      selection: EditorSelection.cursor(pos),
+      extensions: [markdown({ base: markdownLanguage, extensions: [frontmatterExtension()] })],
+    })
     expect(autoPairBackspace(state)).toBeNull()
   })
 })

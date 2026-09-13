@@ -12,6 +12,25 @@ function withFolderId(doc) {
   return doc.folderId === undefined ? { ...doc, folderId: null } : doc
 }
 
+// pinnedAt 이 없는 옛 문서(F-132 이전)는 null 로 취급한다
+function withPinnedAt(doc) {
+  if (!doc) return doc
+  return doc.pinnedAt === undefined ? { ...doc, pinnedAt: null } : doc
+}
+
+function normalizeDoc(doc) {
+  return withPinnedAt(withFolderId(doc))
+}
+
+// folderId 가 null 이거나 존재하는 폴더를 가리키는 문자열이면 유효하다. 그 외(문자열이
+// 아니거나 없는 폴더)는 무효 — create·moveDoc 이 이 검사를 통과 못 하면 아무것도 바꾸지
+// 않고 오류를 던진다 (F-136.md 3.1·3.2)
+function isValidFolderId(folders, folderId) {
+  if (folderId === null) return true
+  if (typeof folderId !== 'string') return false
+  return folders.some((f) => f.id === folderId)
+}
+
 /** @returns {import('../../specs/architecture.md') 2장 인터페이스를 따르는 저장소 인스턴스} */
 export function createMemoryStore() {
   const docs = new Map()
@@ -21,15 +40,19 @@ export function createMemoryStore() {
     kind: 'memory',
 
     async list() {
-      return [...docs.values()].map(withFolderId).sort((a, b) => b.updatedAt - a.updatedAt).map(clone)
+      return [...docs.values()].map(normalizeDoc).sort((a, b) => b.updatedAt - a.updatedAt).map(clone)
     },
 
     async get(id) {
       const doc = docs.get(id)
-      return doc ? clone(withFolderId(doc)) : null
+      return doc ? clone(normalizeDoc(doc)) : null
     },
 
     async create({ title, content, lineEnding, folderId = null }) {
+      // folderId 가 null 또는 존재하는 폴더가 아니면 문서를 만들지 않는다 (F-136.md 3.1·3.2)
+      if (!isValidFolderId([...folders.values()], folderId)) {
+        throw new Error(`유효하지 않은 folderId: ${String(folderId)}`)
+      }
       const now = Date.now()
       const doc = {
         id: crypto.randomUUID(),
@@ -39,6 +62,7 @@ export function createMemoryStore() {
         createdAt: now,
         updatedAt: now,
         folderId,
+        pinnedAt: null,
       }
       docs.set(doc.id, doc)
       return clone(doc)
@@ -50,7 +74,7 @@ export function createMemoryStore() {
         throw new Error(`문서를 찾을 수 없음: ${id}`)
       }
       const updated = {
-        ...withFolderId(existing),
+        ...normalizeDoc(existing),
         ...('title' in patch ? { title: patch.title } : {}),
         ...('content' in patch ? { content: patch.content } : {}),
         updatedAt: Date.now(),
@@ -69,7 +93,25 @@ export function createMemoryStore() {
       if (!existing) {
         throw new Error(`문서를 찾을 수 없음: ${id}`)
       }
-      const updated = { ...withFolderId(existing), folderId: folderId ?? null }
+      // folderId 가 null 이 아니고 존재하는 폴더가 아니면 오류를 던지고 아무것도 바꾸지
+      // 않는다 (F-136.md 3.2)
+      const resolvedFolderId = folderId ?? null
+      if (!isValidFolderId([...folders.values()], resolvedFolderId)) {
+        throw new Error(`유효하지 않은 folderId: ${resolvedFolderId}`)
+      }
+      const updated = { ...normalizeDoc(existing), folderId: resolvedFolderId }
+      docs.set(id, updated)
+      return clone(updated)
+    },
+
+    // pinned 가 true 면 pinnedAt = 지금 시각, false 면 null. updatedAt 은 바꾸지 않는다
+    // (F-132.md 2장)
+    async setPinned(id, pinned) {
+      const existing = docs.get(id)
+      if (!existing) {
+        throw new Error(`문서를 찾을 수 없음: ${id}`)
+      }
+      const updated = { ...normalizeDoc(existing), pinnedAt: pinned ? Date.now() : null }
       docs.set(id, updated)
       return clone(updated)
     },
@@ -131,7 +173,7 @@ export function createMemoryStore() {
       const parentId = existing.parentId
 
       for (const doc of docs.values()) {
-        const normalized = withFolderId(doc)
+        const normalized = normalizeDoc(doc)
         if (normalized.folderId === id) {
           docs.set(doc.id, { ...normalized, folderId: parentId })
         }

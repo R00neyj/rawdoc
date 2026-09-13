@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildTree, canCreateFolder, canMoveFolder, ancestorsOfDoc } from './folderTree.js'
+import { buildTree, canCreateFolder, canMoveFolder, ancestorsOfDoc, pinnedDocs } from './folderTree.js'
 
 function folder(id, name, parentId = null) {
   return { id, name, parentId }
@@ -121,5 +121,30 @@ describe('ancestorsOfDoc', () => {
   it('가리키는 폴더가 없으면 빈 배열', () => {
     const folders = [folder('top', '위')]
     expect(ancestorsOfDoc({ folders, doc: doc('d1', '문서', '없는-폴더') })).toEqual([])
+  })
+})
+
+describe('pinnedDocs (F-132)', () => {
+  function pinnedDoc(id, title, pinnedAt) {
+    return { id, title, folderId: null, updatedAt: 0, pinnedAt }
+  }
+
+  it('고정한 문서가 없으면 빈 배열', () => {
+    expect(pinnedDocs([pinnedDoc('d1', '문서', null)])).toEqual([])
+    expect(pinnedDocs([])).toEqual([])
+  })
+
+  it('pinnedAt 이 있는 문서만, 고정한 순서(오름차순)로 반환한다', () => {
+    const docs = [
+      pinnedDoc('d1', '나중에 고정', 200),
+      pinnedDoc('d2', '고정 안 함', null),
+      pinnedDoc('d3', '먼저 고정', 100),
+    ]
+    expect(pinnedDocs(docs).map((d) => d.id)).toEqual(['d3', 'd1'])
+  })
+
+  it('pinnedAt 필드가 없는 문서(undefined)는 제외한다', () => {
+    const docs = [{ id: 'd1', title: '옛 문서', folderId: null, updatedAt: 0 }]
+    expect(pinnedDocs(docs)).toEqual([])
   })
 })

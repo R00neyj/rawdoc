@@ -1,0 +1,67 @@
+/* YAML 프론트매터 (specs/features/F-133.md 3.2·3.3)
+   CLAUDE.md 불변조건 — 제품명·색 hex 를 직접 쓰지 않는다. 토큰만 참조한다 */
+
+/* ===== 편집 모드 (F-133 3.2) =====
+   세로 여백은 margin 이 아니라 padding 으로 준다 — CM6 는 줄 높이를 DOM 에서 잴 때
+   margin 을 포함하지 않는다(F-124 3.4 12번 요청과 같은 이유). 원문을 숨기지 않으므로
+   위젯·decoration 치환은 없고, 줄 클래스만으로 이어진 상자 모양을 낸다 */
+.cm-host .cm-editor .cm-line.md-frontmatter {
+  background: var(--md-bg-muted);
+  font-family: var(--font-mono);
+  font-size: 85%;
+  color: var(--ink-2);
+}
+
+.cm-host .cm-editor .cm-line.md-frontmatter-first {
+  padding-top: 8px;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+}
+
+.cm-host .cm-editor .cm-line.md-frontmatter-last {
+  padding-bottom: 8px;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+/* --- 줄(여는·닫는 마커) 글자색만 --muted (F-133 3.2). 뒤에 와서 위 규칙의 색을 이긴다 */
+.cm-host .cm-editor .cm-line.md-frontmatter-first,
+.cm-host .cm-editor .cm-line.md-frontmatter-last {
+  color: var(--muted);
+}
+
+/* ===== 보기 모드 (F-133 3.3) =====
+   github-markdown-css 의 `.markdown-body table` 은 가로 스크롤용 display:block·
+   width:max-content 를 준다(F-124 3.4) — 프론트매터 표는 스크롤 대상이 아니므로
+   되돌린다. 클래스를 더한 선택자라 F-124 의 markdown.css 규칙보다 우선한다 */
+.app-shell .markdown-body table.markdown-frontmatter {
+  display: table;
+  width: 100%;
+  max-width: 100%;
+  overflow: visible;
+  border-collapse: collapse;
+  font-size: 85%;
+  margin-bottom: 1rem;
+}
+
+.app-shell .markdown-body table.markdown-frontmatter th,
+.app-shell .markdown-body table.markdown-frontmatter td {
+  border: 1px solid var(--md-border);
+  padding: 6px 13px;
+}
+
+.app-shell .markdown-body table.markdown-frontmatter th {
+  width: 30%;
+  color: var(--ink-2);
+  font-weight: 600;
+  text-align: left;
+}
+
+/* F-124 표의 짝수 행 바탕(--md-bg-muted)을 프론트매터 표에는 적용하지 않는다 (F-133 3.3) */
+.app-shell .markdown-body table.markdown-frontmatter tr:nth-child(2n) {
+  background-color: var(--panel);
+}
+
+.app-shell .markdown-body pre.markdown-frontmatter-raw {
+  margin-bottom: 1rem;
+}

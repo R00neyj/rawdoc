@@ -9,7 +9,7 @@ import { syntaxTree } from '@codemirror/language'
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap } from '@codemirror/view'
 
 import { isComposing, isForced } from '../composition.js'
-import { TableWidget, enterTableFromKeyboard, isCellComposing } from './tableWidget.js'
+import { TableWidget, enterTableFromKeyboard, isCellComposing, trackActiveEditRange } from './tableWidget.js'
 
 /**
  * 커서나 선택 영역이 [from, to] 와 겹치는가.
@@ -361,6 +361,10 @@ export function blockPreview() {
   const field = StateField.define({
     create: (state) => Decoration.set(buildBlocks(state), true),
     update(value, tr) {
+      // F-135 3.2: 편집 중인 칸이 있으면 모든 주 문서 트랜잭션마다(칸 자신의 입력
+      // 포함) 세션이 든 칸 범위를 옮긴다. 이 재계산 함수 자체와 무관하게, 아래에서
+      // 조합 중이라 위젯을 다시 그리지 않고 건너뛰는 경우에도 범위는 계속 옮겨야 한다
+      if (tr.docChanged) trackActiveEditRange(viewRef.current, tr)
       if (!isForced(tr)) {
         // F-134 3.8: 배경 구문 분석이 끝나 트리만 바뀐 갱신도 재계산 조건에 넣는다.
         // 안 넣으면 긴 문서 뒷부분(첫 파싱이 못 미친 곳)의 위젯이 다음 문서·선택

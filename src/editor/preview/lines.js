@@ -234,6 +234,21 @@ export function buildLines(state, ranges) {
             return
           }
 
+          case 'Frontmatter': {
+            // 원문을 숨기지 않는다(위젯 없음) — 줄 클래스만 준다 (F-133 3.2).
+            // 활성(커서) 여부와 무관하게 항상 이 모양이다 — 펜스 코드블록 본문처럼
+            // "펼쳐진 채 고정된" 영역이라 F-104 식 활성 줄 판정을 적용하지 않는다
+            const firstLine = state.doc.lineAt(node.from).number
+            const lastLine = state.doc.lineAt(Math.max(node.from, node.to - 1)).number
+            for (let n = firstLine; n <= lastLine; n++) {
+              let cls = 'md-frontmatter'
+              if (n === firstLine) cls += ' md-frontmatter-first'
+              if (n === lastLine) cls += ' md-frontmatter-last'
+              out.push(lineClassRange(state.doc.line(n), cls))
+            }
+            return false // 안은 FrontmatterMark 뿐 — 더 볼 것이 없다
+          }
+
           case 'HorizontalRule': {
             const line = state.doc.lineAt(node.from)
             if (!active.has(line.number)) {

@@ -70,6 +70,15 @@ function insideOpaqueNode(state, pos) {
   return false
 }
 
+/** pos 가 Frontmatter 안인가 — 이 확장은 프론트매터 안에서 동작하지 않는다 (F-133 3.2) */
+function insideFrontmatter(state, pos) {
+  let node = syntaxTree(state).resolveInner(pos, -1)
+  for (let n = node; n; n = n.parent) {
+    if (n.name === 'Frontmatter') return true
+  }
+  return false
+}
+
 /**
  * "빈 짝" 판정 (F-134 3.5) — 커서 앞뒤 같은 기호(sym) 묶음의 길이가 같고, 그 묶음보다
  * 더 앞의 글자가 3.3 짝 조건의 "앞 글자" 조건(공백·줄 시작·`(`·`[`)을 만족할 때만 참이다.
@@ -204,6 +213,7 @@ export function autoPairInput(state, from, to, text) {
   if (state.readOnly) return null
   if (state.selection.ranges.length !== 1) return null // 3.4 여러 커서 → 기본 입력
   if (text.length !== 1) return null
+  if (insideFrontmatter(state, from)) return null // F-133 3.2: 프론트매터 안에서는 동작하지 않는다
 
   const isOpen = Object.prototype.hasOwnProperty.call(OPEN_TO_CLOSE, text)
   const isClose = text === ')' || text === ']'
@@ -246,6 +256,7 @@ export function autoPairBackspace(state) {
 
   const pos = range.from
   if (pos <= 0 || pos >= state.doc.length) return null
+  if (insideFrontmatter(state, pos)) return null // F-133 3.2
   const before = state.doc.sliceString(pos - 1, pos)
   const after = state.doc.sliceString(pos, pos + 1)
 
