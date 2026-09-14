@@ -15,6 +15,19 @@ const FONT_OPTIONS = [
   { value: 'sans', label: '산세리프', fontVar: '--font-sans' },
 ]
 
+// 글자 크기 (F-154 2.2)
+const FONT_SIZE_OPTIONS = [
+  { value: 'small', label: '작게' },
+  { value: 'medium', label: '보통' },
+  { value: 'large', label: '크게' },
+]
+
+// 들여쓰기 칸 수 (F-154 2.3)
+const INDENT_OPTIONS = [
+  { value: '2', label: '2칸' },
+  { value: '4', label: '4칸' },
+]
+
 // 줄 번호(거터) 켜기·끄기 (F-147 2장)
 const LINE_NUMBERS_OPTIONS = [
   { value: 'on', label: '표시' },
@@ -55,6 +68,10 @@ export default function SettingsDialog({
   onChangeHeadingFont,
   bodyFont,
   onChangeBodyFont,
+  fontSize,
+  onChangeFontSize,
+  indent,
+  onChangeIndent,
   lineNumbers,
   onChangeLineNumbers,
   onClose,
@@ -88,6 +105,20 @@ export default function SettingsDialog({
         options={FONT_OPTIONS}
         onChange={onChangeBodyFont}
         useFontPreview
+      />
+      <Segment
+        labelId="font-size-label"
+        label="글자 크기"
+        value={fontSize}
+        options={FONT_SIZE_OPTIONS}
+        onChange={onChangeFontSize}
+      />
+      <Segment
+        labelId="indent-label"
+        label="들여쓰기"
+        value={indent}
+        options={INDENT_OPTIONS}
+        onChange={onChangeIndent}
       />
       <Segment
         labelId="line-numbers-label"

@@ -8,6 +8,7 @@ export function isExternalFileDrag(dataTransfer) {
 }
 
 const MD_EXT_RE = /\.md$/i
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp)$/i
 
 // @returns {{mdFiles: File[], allNonMd: boolean}} allNonMd: 파일이 1개 이상이고 전부 .md 가 아님
 export function pickMarkdownFiles(fileList) {
@@ -17,4 +18,17 @@ export function pickMarkdownFiles(fileList) {
     mdFiles,
     allNonMd: files.length > 0 && mdFiles.length === 0,
   }
+}
+
+// 확장자로 고른다(바이트 판정은 attachImages.js 가 시그니처로 한다, F-156.md 2.2) — 여기는 창 전체 드롭의 라우팅만 판단
+export function pickImageFiles(fileList) {
+  const files = Array.from(fileList ?? [])
+  return { imageFiles: files.filter((f) => IMAGE_EXT_RE.test(f.name ?? '')) }
+}
+
+// dragenter·dragover 시점(File 접근 불가) 끌기 항목이 전부 이미지 MIME 인가 — 맞으면 F-145 덮개를 띄우지 않는다 (F-156.md 2.5)
+export function isImageOnlyDrag(dataTransfer) {
+  const items = dataTransfer?.items
+  if (!items || items.length === 0) return false
+  return Array.from(items).every((item) => item.kind === 'file' && (item.type ?? '').startsWith('image/'))
 }

@@ -10,6 +10,8 @@
   /* 문단·목록·인용·표 칸의 기본 서체 (design.md 2.4, F-141 3.3). 제목(h1·h2)·코드는
      아래에서 각자 자리(--font-display·--font-mono)로 다시 덮는다 */
   font-family: var(--font-body);
+  /* 글자 크기 설정을 따른다 — github-markdown-css 원본의 고정 16px 을 덮는다 (F-154 2.2) */
+  font-size: var(--md-font-size);
   line-height: var(--md-line-height);
 }
 
@@ -73,6 +75,8 @@
 .app-shell .markdown-body pre {
   color: var(--ink);
   background-color: var(--md-bg-muted);
+  /* 탭 문자 표시 폭 — 들여쓰기 설정을 따른다 (F-154 2.3) */
+  tab-size: var(--tab-size);
 }
 
 /* 표 (F-124 3.4) — GitHub 은 thead/tbody 없이 tr 을 그대로 두므로 nth-child 기준이
@@ -97,4 +101,9 @@
    .task-list-item 안 체크박스로 고른다 */
 .app-shell .markdown-body .task-list-item input[type='checkbox'] {
   accent-color: var(--accent);
+}
+
+/* 원문 모드 글자 크기도 설정을 따른다 (F-154 2.2) — app.css 의 고정 14px(F-124 3.1)을 import 순서로 덮는다 */
+.cm-host .cm-editor[data-view='raw'] .cm-scroller {
+  font-size: var(--md-font-size);
 }

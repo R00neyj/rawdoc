@@ -1,0 +1,157 @@
+import { describe, it, expect } from 'vitest'
+import { buildImageBlock, parseImageBlock, extractAttachmentRefs, setImageBlockAttrs } from './imageBlock.js'
+
+const ID = '0f3a9c2e7b1d4a58'
+
+describe('buildImageBlock', () => {
+  it('명세 2.1 의 3줄 형식을 만든다', () => {
+    const text = buildImageBlock({ id: ID, ext: 'png', alt: '다이어그램', width: 480 })
+    expect(text).toBe(
+      ['<div align="center">', `  <img src="attachments/${ID}.png" alt="다이어그램" width="480">`, '</div>'].join(
+        '\n',
+      ),
+    )
+  })
+
+  it('alt 의 & " < > 를 이스케이프한다', () => {
+    const text = buildImageBlock({ id: ID, ext: 'png', alt: 'A & "B" <C>', width: 10 })
+    expect(text).toContain('alt="A &amp; &quot;B&quot; &lt;C&gt;"')
+  })
+
+  it('alt 줄바꿈은 공백으로 바꾸고 100자에서 자른다', () => {
+    const long = 'a'.repeat(120)
+    const text = buildImageBlock({ id: ID, ext: 'png', alt: `한\n줄\r\n바꿈 ${long}`, width: 10 })
+    const altMatch = /alt="([^"]*)"/.exec(text)
+    expect(altMatch[1].startsWith('한 줄 바꿈 ')).toBe(true)
+    expect(altMatch[1].length).toBe(100)
+  })
+
+  it('align 을 지정할 수 있다. 기본은 center', () => {
+    expect(buildImageBlock({ id: ID, ext: 'jpg', alt: 'x', width: 1 })).toContain('align="center"')
+    expect(buildImageBlock({ id: ID, ext: 'jpg', alt: 'x', width: 1, align: 'left' })).toContain('align="left"')
+  })
+})
+
+describe('parseImageBlock — buildImageBlock 왕복', () => {
+  it('만들기→해석 왕복이 원래 값과 같다', () => {
+    const built = buildImageBlock({ id: ID, ext: 'webp', alt: 'A & "B" <C>', width: 480, align: 'right' })
+    const parsed = parseImageBlock(built)
+    expect(parsed).toEqual({ align: 'right', id: ID, ext: 'webp', src: `attachments/${ID}.webp`, alt: 'A & "B" <C>', width: 480 })
+  })
+
+  it('속성 순서가 달라도 해석된다', () => {
+    const text = [
+      '<div align="left">',
+      `  <img width="20" alt="x" src="attachments/${ID}.gif">`,
+      '</div>',
+    ].join('\n')
+    expect(parseImageBlock(text)).toEqual({ align: 'left', id: ID, ext: 'gif', src: `attachments/${ID}.gif`, alt: 'x', width: 20 })
+  })
+
+  it('alt 없이도 해석된다(빈 문자열)', () => {
+    const text = ['<div align="center">', `  <img src="attachments/${ID}.png">`, '</div>'].join('\n')
+    expect(parseImageBlock(text)).toEqual({ align: 'center', id: ID, ext: 'png', src: `attachments/${ID}.png`, alt: '', width: null })
+  })
+
+  it('self-closing(<img … />)도 해석된다', () => {
+    const text = ['<div align="center">', `  <img src="attachments/${ID}.png" />`, '</div>'].join('\n')
+    expect(parseImageBlock(text)?.id).toBe(ID)
+  })
+})
+
+describe('parseImageBlock — 아니면 null', () => {
+  it('외부 src 는 null', () => {
+    const text = ['<div align="center">', '  <img src="https://example.com/a.png">', '</div>'].join('\n')
+    expect(parseImageBlock(text)).toBeNull()
+  })
+
+  it('허용하지 않는 align 값은 null', () => {
+    const text = ['<div align="top">', `  <img src="attachments/${ID}.png">`, '</div>'].join('\n')
+    expect(parseImageBlock(text)).toBeNull()
+  })
+
+  it('허용하지 않는 속성이 추가되면 null', () => {
+    const text = [
+      '<div align="center">',
+      `  <img src="attachments/${ID}.png" title="x">`,
+      '</div>',
+    ].join('\n')
+    expect(parseImageBlock(text)).toBeNull()
+  })
+
+  it('div 에 다른 속성이 추가되면 null', () => {
+    const text = [
+      '<div align="center" class="x">',
+      `  <img src="attachments/${ID}.png">`,
+      '</div>',
+    ].join('\n')
+    expect(parseImageBlock(text)).toBeNull()
+  })
+
+  it('4줄이면 null', () => {
+    const text = ['<div align="center">', `  <img src="attachments/${ID}.png">`, '', '</div>'].join('\n')
+    expect(parseImageBlock(text)).toBeNull()
+  })
+
+  it('2줄이면 null', () => {
+    const text = ['<div align="center">', '</div>'].join('\n')
+    expect(parseImageBlock(text)).toBeNull()
+  })
+
+  it('src 가 없으면 null', () => {
+    const text = ['<div align="center">', '  <img alt="x">', '</div>'].join('\n')
+    expect(parseImageBlock(text)).toBeNull()
+  })
+
+  it('width 가 숫자가 아니면 null', () => {
+    const text = ['<div align="center">', `  <img src="attachments/${ID}.png" width="abc">`, '</div>'].join('\n')
+    expect(parseImageBlock(text)).toBeNull()
+  })
+
+  it('같은 속성이 두 번 있으면 null', () => {
+    const text = [
+      '<div align="center">',
+      `  <img src="attachments/${ID}.png" alt="a" alt="b">`,
+      '</div>',
+    ].join('\n')
+    expect(parseImageBlock(text)).toBeNull()
+  })
+
+  it('문자열이 아니면 null', () => {
+    expect(parseImageBlock(null)).toBeNull()
+    expect(parseImageBlock(undefined)).toBeNull()
+  })
+})
+
+describe('extractAttachmentRefs', () => {
+  it('본문 안 모든 attachments 참조 id 집합을 돌려준다', () => {
+    const content = `앞 글자\nattachments/${ID}.png 그리고 attachments/aaaaaaaaaaaaaaaa.gif\n뒤 글자`
+    const ids = extractAttachmentRefs(content)
+    expect(ids).toEqual(new Set([ID, 'aaaaaaaaaaaaaaaa']))
+  })
+
+  it('블록 형식이 깨져도(태그가 없어도) 문자열만 있으면 잡는다', () => {
+    const content = `그냥 글자 attachments/${ID}.jpg 섞인 글`
+    expect(extractAttachmentRefs(content)).toEqual(new Set([ID]))
+  })
+
+  it('없으면 빈 집합', () => {
+    expect(extractAttachmentRefs('그냥 문서')).toEqual(new Set())
+  })
+
+  it('문자열이 아니면 빈 집합', () => {
+    expect(extractAttachmentRefs(null)).toEqual(new Set())
+  })
+})
+
+describe('setImageBlockAttrs', () => {
+  it('align·width·alt 를 바꾼 새 원문을 만든다', () => {
+    const built = buildImageBlock({ id: ID, ext: 'png', alt: '원래', width: 100, align: 'center' })
+    const changed = setImageBlockAttrs(built, { align: 'left', width: 200 })
+    expect(parseImageBlock(changed)).toEqual({ align: 'left', id: ID, ext: 'png', src: `attachments/${ID}.png`, alt: '원래', width: 200 })
+  })
+
+  it('해석할 수 없는 원문이면 null', () => {
+    expect(setImageBlockAttrs('그냥 글자', { width: 10 })).toBeNull()
+  })
+})

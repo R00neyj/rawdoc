@@ -14,6 +14,7 @@ export default function Editor({
   onSelectionChange,
   wikiTitles,
   onOpenWikiLink,
+  onImageFiles,
   ref,
 }) {
   const containerRef = useRef(null)
@@ -33,6 +34,7 @@ export default function Editor({
       onSelectionChange,
       wikiTitles,
       onOpenWikiLink,
+      onImageFiles,
     })
     handleRef.current = handle
     // 문서 전환 후 포커스 + 커서 맨 앞 (ia.md 3.4, F-103 3.4). App 의 passive effect 에서

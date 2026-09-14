@@ -29,6 +29,7 @@
     "@codemirror/view": "^6.43.11",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@fontsource/noto-serif-kr": "^5.3.0",
+    "@kfonts/d2coding": "^0.2.0",
     "@lezer/highlight": "^1.2.3",
     "@lezer/markdown": "^1.7.2",
     "@material-symbols/svg-400": "^0.47.2",

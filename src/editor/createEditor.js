@@ -2,7 +2,7 @@
 // basicSetup 을 쓰지 않는다 — 자동완성·검색 패널을 넣지 않는다. 괄호·강조 기호 자동
 // 짝은 `@codemirror/autocomplete` 의 closeBrackets() 가 아니라 F-127 의 autoPair() 다
 import { Compartment, EditorState, Prec } from '@codemirror/state'
-import { EditorView, keymap, lineNumbers } from '@codemirror/view'
+import { dropCursor, EditorView, keymap, lineNumbers } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { indentUnit } from '@codemirror/language'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
@@ -13,6 +13,7 @@ import { frontmatterExtension } from './frontmatter.js'
 import { highlightExtension } from './highlight.js'
 import { shortcutKeymap } from './commands.js'
 import { extractHeadings } from './outline.js'
+import { imageInsert } from './imageInsert.js'
 import { livePreview } from './preview/index.js'
 import { fenceLinePreview } from './preview/lines.js'
 import { setWikiTitlesEffect, wikiTitlesField } from './preview/wikiLinks.js'
@@ -36,6 +37,11 @@ function lineNumbersExtensionFor(on) {
 
 function gutterAttributesExtensionFor(on) {
   return EditorView.editorAttributes.of({ 'data-gutters': on ? 'on' : 'off' })
+}
+
+// 들여쓰기 칸 수 — indentUnit(공백 N칸)·tabSize 를 함께 바꾼다 (F-154 2.3)
+function indentExtensionsFor(size) {
+  return [indentUnit.of(' '.repeat(size)), EditorState.tabSize.of(size)]
 }
 
 // src/app/fileDrop.js 의 isExternalFileDrag() 와 같은 판정 — src/editor 는 src/app 을 import 하지 않아(단방향 계층) 옮겨 적는다
@@ -97,21 +103,27 @@ function focusRelay() {
  * @param {'live'|'raw'} [options.viewMode]
  * @param {boolean} [options.lineNumbers] 줄 번호(거터) 표시 여부, 기본 true (F-147 2장). 이후
  *   전환은 handle.setLineNumbers(on) 으로 한다 — 이 값은 최초 생성에만 쓴다
+ * @param {2|4} [options.indent] 들여쓰기 칸 수, 기본 4 (F-154 2.3). 이후 전환은
+ *   handle.setIndent(n) 으로 한다 — 이 값은 최초 생성에만 쓴다
  * @param {(state:import('@codemirror/state').EditorState)=>void} [options.onDocChange]
  * @param {(state:import('@codemirror/state').EditorState)=>void} [options.onSelectionChange]
  * @param {string[]} [options.wikiTitles] 위키링크 대상 판정용 문서 제목 목록(F-131). 이후
  *   갱신은 handle.setWikiTitles() 로 한다 — 이 값은 최초 생성에만 쓴다
  * @param {(target:string)=>void} [options.onOpenWikiLink] 위키링크 클릭·자동완성 흐름 (F-131 3·5장)
+ * @param {(files:File[], meta:{source:'paste'|'drop', blocked?:boolean})=>Promise<Array<object>>} [options.onImageFiles]
+ *   붙여넣기·끌어놓기 이미지 받기 (F-156.md 2.4·2.5). App 이 저장·알림을 하고 첨부 메타를 돌려준다
  */
 export function createEditor(parent, options = {}) {
   const {
     text = '',
     viewMode = 'live',
     lineNumbers: showLineNumbers = true,
+    indent: indentSize = 4,
     onDocChange,
     onSelectionChange,
     wikiTitles = [],
     onOpenWikiLink,
+    onImageFiles,
   } = options
 
   let destroyed = false
@@ -129,12 +141,16 @@ export function createEditor(parent, options = {}) {
   const attributesCompartment = new Compartment()
   const lineNumbersCompartment = new Compartment()
   const gutterAttributesCompartment = new Compartment()
+  const indentCompartment = new Compartment()
 
   const extensions = [
     lineNumbersCompartment.of(lineNumbersExtensionFor(showLineNumbers)),
     gutterAttributesCompartment.of(gutterAttributesExtensionFor(showLineNumbers)),
     history(),
     EditorView.lineWrapping,
+    // 놓을 자리 표시(F-156.md 2.5) — imageInsert() 는 dropFileGuard 보다 먼저 등록해 같은 'drop' 이벤트를 먼저 가로채야 한다(CM6 는 등록 순서로 호출)
+    dropCursor(),
+    imageInsert({ onImageFiles }),
     dropFileGuard,
     focusRelay(),
     // autoPair() 의 Backspace 키맵(Prec.high)이 markdown()의 deleteMarkupBackward
@@ -146,8 +162,7 @@ export function createEditor(parent, options = {}) {
     // 모드(편집·원문) 공통. 이게 없으면 lezer 는 첫 `---` 를 HorizontalRule, 그 다음
     // 줄을 SetextHeading2 로 잘못 읽는다
     markdown({ base: markdownLanguage, extensions: [frontmatterExtension()] }),
-    indentUnit.of('  '),
-    EditorState.tabSize.of(2),
+    indentCompartment.of(indentExtensionsFor(indentSize)),
     highlightExtension(),
     // 펼친 코드블록 줄 표시 (F-124 3.4 11번) — 모드(편집·원문)와 무관하게 항상 켠다.
     // highlight.js 의 주석 참고: 태그 자체를 나누는 방법은 실측으로 안 먹히는 것을
@@ -222,6 +237,14 @@ export function createEditor(parent, options = {}) {
           gutterAttributesCompartment.reconfigure(gutterAttributesExtensionFor(on)),
           scroll,
         ],
+      })
+    },
+
+    // 2|4 — 재마운트하지 않는다. 이미 쓴 문서 원문은 바꾸지 않는다 (F-154 2.3)
+    setIndent(size) {
+      const scroll = view.scrollSnapshot()
+      view.dispatch({
+        effects: [indentCompartment.reconfigure(indentExtensionsFor(size)), scroll],
       })
     },
 

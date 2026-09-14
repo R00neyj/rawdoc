@@ -3,6 +3,17 @@
    --brand-accent 는 hex 로 여기 정의하지 않는다. vite.config.js 의 브랜드 주입 플러그인이
    index.html <head> 에 <style>:root{--brand-accent:...}</style> 로 넣는다.
    테마별 --accent 는 --brand-accent 에서 이 파일이 만든다 */
+
+/* 고정폭 한글 보완 — D2Coding Regular 한글만 unicode-range 로, size-adjust 120% 로 JetBrains Mono 영문 2자 폭에 맞춘다 (design.md D5, F-154 2.1, 실측: scripts/measure.mjs A2) */
+@font-face {
+  font-family: 'D2Coding Hangul';
+  src: url('../../node_modules/@kfonts/d2coding/D2Coding.woff2') format('woff2');
+  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
+  size-adjust: 120%;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   /* 색 — 화이트 테마 (design.md 3.1 초안 값, F-141 3.1 첫 :root 블록) */
   --paper: #faf8f4;
@@ -49,7 +60,7 @@
   /* 서체 (design.md 2.4) */
   --font-sans: 'Pretendard Variable', system-ui, sans-serif;
   --font-serif: 'Noto Serif KR', serif;
-  --font-mono: 'JetBrains Mono', 'Pretendard Variable', monospace;
+  --font-mono: 'JetBrains Mono', 'D2Coding Hangul', 'Pretendard Variable', monospace;
 
   /* 제목 강조 자리는 반드시 --font-display 로 참조한다 (D6) */
   --font-display: var(--font-serif);
@@ -74,6 +85,9 @@
   --doc-pad-top: 48px;
   --doc-pad-bottom: 50dvh;
 
+  /* 들여쓰기 칸 수 — CM6 indentUnit·tabSize, 코드블록 tab-size 가 함께 참조한다 (F-154 2.3, 기본·모르는 값 4) */
+  --tab-size: 4;
+
   /* 형태 (design.md 4장) */
   --radius-control: 6px;
   --radius-dialog: 10px;
@@ -93,6 +107,20 @@
 
 :root[data-body-font='serif'] {
   --font-body: var(--font-serif);
+}
+
+/* 글자 크기 (specs/features/F-154.md 2.2). 기본(medium, 데이터 속성 없음·모르는 값) 16px */
+:root[data-font-size='small'] {
+  --md-font-size: 14px;
+}
+
+:root[data-font-size='large'] {
+  --md-font-size: 18px;
+}
+
+/* 들여쓰기 (specs/features/F-154.md 2.3). 기본(4, 데이터 속성 없음·모르는 값) --tab-size:4 */
+:root[data-indent='2'] {
+  --tab-size: 2;
 }
 
 /* 테마 3종 (design.md 3.4, F-141 3.1). :root[data-theme] 는 위 화이트 값 중 필요한

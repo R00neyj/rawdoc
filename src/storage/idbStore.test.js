@@ -310,6 +310,92 @@ describe('idbStore', () => {
     })
   })
 
+  describe('첨부 이미지 (F-156, 버전 3)', () => {
+    function blob(bytes = [1, 2, 3]) {
+      return new Blob([new Uint8Array(bytes)])
+    }
+
+    it('putAttachment 은 16진수 16자 id 를 뽑고 getAttachment 으로 읽힌다', async () => {
+      const store = await freshStore()
+      const { id, ext } = await store.putAttachment({ blob: blob(), mime: 'image/png', ext: 'png', width: 10, height: 20 })
+      expect(id).toMatch(/^[0-9a-f]{16}$/)
+      expect(ext).toBe('png')
+
+      const record = await store.getAttachment(id)
+      expect(record.mime).toBe('image/png')
+      expect(record.width).toBe(10)
+      expect(record.height).toBe(20)
+      expect(record.size).toBe(3)
+    })
+
+    it('없는 id 는 null', async () => {
+      const store = await freshStore()
+      expect(await store.getAttachment('없는-id')).toBeNull()
+    })
+
+    it('listAttachments 는 blob 을 뺀 메타만 돌려준다', async () => {
+      const store = await freshStore()
+      const { id } = await store.putAttachment({ blob: blob(), mime: 'image/png', ext: 'png', width: 1, height: 1 })
+      const list = await store.listAttachments()
+      expect(list).toEqual([{ id, ext: 'png', size: 3, createdAt: expect.any(Number) }])
+    })
+
+    it('removeAttachment 으로 지운다', async () => {
+      const store = await freshStore()
+      const { id } = await store.putAttachment({ blob: blob(), mime: 'image/png', ext: 'png', width: 1, height: 1 })
+      await store.removeAttachment(id)
+      expect(await store.getAttachment(id)).toBeNull()
+    })
+  })
+
+  describe('버전 2 → 3 마이그레이션 (F-156)', () => {
+    it('버전 2 DB 에 넣은 문서·폴더가 버전 3 으로 열어도 그대로 남고, attachments 스토어가 새로 생긴다', async () => {
+      const dbName = freshDbName()
+
+      const v2db = await openDB(dbName, 2, {
+        upgrade(database) {
+          database.createObjectStore('docs', { keyPath: 'id' })
+          database.createObjectStore('meta', { keyPath: 'key' })
+          database.createObjectStore('folders', { keyPath: 'id' })
+        },
+      })
+      await v2db.put('docs', {
+        id: 'legacy-doc',
+        title: '옛 문서',
+        content: '내용',
+        lineEnding: 'crlf',
+        createdAt: 1,
+        updatedAt: 1,
+        folderId: null,
+        pinnedAt: null,
+      })
+      await v2db.put('folders', { id: 'legacy-folder', name: '옛 폴더', parentId: null, createdAt: 1, updatedAt: 1 })
+      await v2db.put('meta', { key: 'schema', version: 2 })
+      v2db.close()
+
+      const store = await createIdbStore(dbName)
+
+      expect(store.kind).toBe('idb')
+      const list = await store.list()
+      expect(list).toHaveLength(1)
+      expect(list[0].id).toBe('legacy-doc')
+
+      const folders = await store.listFolders()
+      expect(folders).toHaveLength(1)
+      expect(folders[0].id).toBe('legacy-folder')
+
+      expect(await store.listAttachments()).toEqual([])
+      const { id } = await store.putAttachment({
+        blob: new Blob([new Uint8Array([1])]),
+        mime: 'image/png',
+        ext: 'png',
+        width: 1,
+        height: 1,
+      })
+      expect(await store.getAttachment(id)).not.toBeNull()
+    })
+  })
+
   describe('IndexedDB 업그레이드가 다른 창에 막힐 때 (F-136.md 3.3)', () => {
     it('v1 연결이 열려 있는 채로 v2 를 열면 새 연결의 onBlocked 가 불린다', async () => {
       const dbName = freshDbName()
@@ -330,7 +416,7 @@ describe('idbStore', () => {
       const onBlocked = vi.fn(() => {
         v1db.close()
       })
-      // createIdbStore 는 항상 DB_VERSION(2)으로 연다 — v1 이 열려 있으므로 이 열기는
+      // createIdbStore 는 항상 DB_VERSION(3)으로 연다 — v1 이 열려 있으므로 이 열기는
       // v1 이 닫힐 때까지 막힌다(blocked)
       const store = await createIdbStore(dbName, { onBlocked })
 
@@ -348,11 +434,11 @@ describe('idbStore', () => {
         order.push('closed')
       })
 
-      // 이 창의 연결(F-136 코드 기준 버전 2)
+      // 이 창의 연결(F-156 코드 기준 버전 3)
       await createIdbStore(dbName, { onBlocking, onClosed })
 
-      // "새 버전 창" 이 더 높은 버전(3)을 열려고 하면 위 연결의 blocking 이 불린다
-      const v3db = await openDB(dbName, 3, {
+      // "새 버전 창" 이 더 높은 버전(4)을 열려고 하면 위 연결의 blocking 이 불린다
+      const v4db = await openDB(dbName, 4, {
         upgrade(database, oldVersion) {
           if (oldVersion < 1) {
             database.createObjectStore('docs', { keyPath: 'id' })
@@ -360,6 +446,9 @@ describe('idbStore', () => {
           }
           if (oldVersion < 2) {
             database.createObjectStore('folders', { keyPath: 'id' })
+          }
+          if (oldVersion < 3) {
+            database.createObjectStore('attachments', { keyPath: 'id' })
           }
         },
       })
@@ -369,7 +458,7 @@ describe('idbStore', () => {
       // 정리(flush 시늉)가 끝난 뒤에 닫힘 콜백이 불려야 한다 (F-136.md 3.3 순서)
       expect(order).toEqual(['blocking', 'closed'])
 
-      v3db.close()
+      v4db.close()
     })
   })
 })

@@ -231,6 +231,8 @@
   line-height: 1.45;
   white-space: pre;
   --tracking: 0; /* F-141 3.6 */
+  /* 탭 문자 표시 폭 — 들여쓰기 설정을 따른다 (F-154 2.3) */
+  tab-size: var(--tab-size);
 }
 
 /* ===== 블록 위젯 — 표 (F-106 2.4, F-124 3.4) =====

@@ -30,6 +30,18 @@ describe('prefs', () => {
     expect(getPref('md.sidebarWidth', '224')).toBe('300')
   })
 
+  it('md.fontSize 읽기·쓰기, 저장값 없으면 기본값(medium)', () => {
+    expect(getPref('md.fontSize', 'medium')).toBe('medium')
+    expect(() => setPref('md.fontSize', 'large')).not.toThrow()
+    expect(getPref('md.fontSize', 'medium')).toBe('large')
+  })
+
+  it('md.indent 읽기·쓰기, 저장값 없으면 기본값(4)', () => {
+    expect(getPref('md.indent', '4')).toBe('4')
+    expect(() => setPref('md.indent', '2')).not.toThrow()
+    expect(getPref('md.indent', '4')).toBe('2')
+  })
+
   it('허용되지 않은 키는 getPref 에서 예외', () => {
     expect(() => getPref('md.unknown', 'x')).toThrow()
   })

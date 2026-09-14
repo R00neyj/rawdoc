@@ -4,10 +4,18 @@ import { openDB } from 'idb'
 import { canCreateFolder, canMoveFolder } from '../lib/folderTree.js'
 
 const DEFAULT_DB_NAME = 'md-docs'
-const DB_VERSION = 2
+const DB_VERSION = 3
 const DOCS_STORE = 'docs'
 const META_STORE = 'meta'
 const FOLDERS_STORE = 'folders'
+const ATTACHMENTS_STORE = 'attachments' // F-156.md 2.3, 버전 3
+
+// 소문자 16진수 16자 (crypto.getRandomValues 8바이트, F-156.md 2.1)
+function randomAttachmentId() {
+  const bytes = new Uint8Array(8)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
 
 function applyPatch(existing, patch) {
   return {
@@ -66,6 +74,9 @@ export async function createIdbStore(dbName = DEFAULT_DB_NAME, { onBlocked, onBl
       }
       if (oldVersion < 2) {
         database.createObjectStore(FOLDERS_STORE, { keyPath: 'id' })
+      }
+      if (oldVersion < 3) {
+        database.createObjectStore(ATTACHMENTS_STORE, { keyPath: 'id' })
       }
       transaction.objectStore(META_STORE).put({ key: 'schema', version: DB_VERSION })
     },
@@ -265,6 +276,31 @@ export async function createIdbStore(dbName = DEFAULT_DB_NAME, { onBlocked, onBl
 
       await folderStore.delete(id)
       await tx.done
+    },
+
+    // 첨부는 문서와 연결 필드가 없다 — id 만으로 찾는다. id 가 이미 있으면 다시 뽑는다 (F-156.md 2.1·2.3)
+    async putAttachment({ blob, mime, ext, width, height }) {
+      let id = randomAttachmentId()
+      while (await db.get(ATTACHMENTS_STORE, id)) {
+        id = randomAttachmentId()
+      }
+      const record = { id, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob }
+      await db.put(ATTACHMENTS_STORE, record)
+      return { id, ext }
+    },
+
+    async getAttachment(id) {
+      const record = await db.get(ATTACHMENTS_STORE, id)
+      return record ?? null
+    },
+
+    async listAttachments() {
+      const all = await db.getAll(ATTACHMENTS_STORE)
+      return all.map(({ id, ext, size, createdAt }) => ({ id, ext, size, createdAt }))
+    },
+
+    async removeAttachment(id) {
+      await db.delete(ATTACHMENTS_STORE, id)
     },
   }
 }

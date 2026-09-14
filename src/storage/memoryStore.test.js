@@ -181,4 +181,39 @@ describe('memoryStore', () => {
       expect(unchanged.folderId).toBeNull()
     })
   })
+
+  describe('첨부 이미지 (F-156)', () => {
+    function blob(bytes = [1, 2, 3]) {
+      return new Blob([new Uint8Array(bytes)])
+    }
+
+    it('putAttachment 은 16진수 16자 id 를 뽑고 getAttachment 으로 읽힌다', async () => {
+      const { id, ext } = await store.putAttachment({ blob: blob(), mime: 'image/png', ext: 'png', width: 10, height: 20 })
+      expect(id).toMatch(/^[0-9a-f]{16}$/)
+      expect(ext).toBe('png')
+
+      const record = await store.getAttachment(id)
+      expect(record.mime).toBe('image/png')
+      expect(record.width).toBe(10)
+      expect(record.height).toBe(20)
+      expect(record.size).toBe(3)
+      expect(record.blob).toBeInstanceOf(Blob)
+    })
+
+    it('없는 id 는 null', async () => {
+      expect(await store.getAttachment('없는-id')).toBeNull()
+    })
+
+    it('listAttachments 는 blob 을 뺀 메타만 돌려준다', async () => {
+      const { id } = await store.putAttachment({ blob: blob(), mime: 'image/png', ext: 'png', width: 1, height: 1 })
+      const list = await store.listAttachments()
+      expect(list).toEqual([{ id, ext: 'png', size: 3, createdAt: expect.any(Number) }])
+    })
+
+    it('removeAttachment 으로 지운다', async () => {
+      const { id } = await store.putAttachment({ blob: blob(), mime: 'image/png', ext: 'png', width: 1, height: 1 })
+      await store.removeAttachment(id)
+      expect(await store.getAttachment(id)).toBeNull()
+    })
+  })
 })

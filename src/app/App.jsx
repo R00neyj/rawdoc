@@ -15,7 +15,9 @@ import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc.js'
 import { useDocSaver } from './useDocSaver.js'
 import { exportDoc } from './exportDoc.js'
 import { importFiles } from './importFiles.js'
-import { isExternalFileDrag, pickMarkdownFiles } from './fileDrop.js'
+import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag } from './fileDrop.js'
+import { attachImages } from './attachImages.js'
+import { cleanupUnusedAttachments, scheduleAttachmentGc } from './attachmentGc.js'
 import DropOverlay from './DropOverlay.jsx'
 import Editor from '../editor/Editor.jsx'
 import { countChars, countWords, cursorInfo } from '../editor/stats.js'
@@ -102,6 +104,8 @@ export default function App() {
   const [bodyFont, setBodyFont] = useState(() => getPref('md.bodyFont', 'sans')) // F-141 3.3
   const [themePref, setThemePref] = useState(() => getPref('md.theme', 'system')) // F-141 3.1
   const [lineNumbersPref, setLineNumbersPref] = useState(() => getPref('md.lineNumbers', 'on')) // F-147 2장
+  const [fontSizePref, setFontSizePref] = useState(() => getPref('md.fontSize', 'medium')) // F-154 2.2
+  const [indentPref, setIndentPref] = useState(() => getPref('md.indent', '4')) // F-154 2.3
   const [settingsOpen, setSettingsOpen] = useState(false)
   // { type:'doc', id, name } | { type:'folder', id, name } | null (F-126.md 5.3)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -159,6 +163,8 @@ export default function App() {
   const runImportFilesRef = useRef(async () => {})
   // 창 전체 끌어놓기(F-145.md 2.1)가 매 렌더 후 최신 "받지 않는 때" 여부를 보도록 갱신한다
   const dropBlockedRef = useRef(false)
+  // 이미지 끌어놓기(F-156.md 2.5) — 대화상자·공유 화면에서는 md 와 같이 막지만, 메모리 저장소에서는 받는다
+  const imageDropBlockedRef = useRef(false)
   // Editor 는 마운트 시점의 onOpenWikiLink 클로저만 계속 쓰므로(F-131 3·5장), 여기서도
   // ref 로 우회해 항상 최신 docs·currentDocId·viewMode 를 보게 한다
   const openWikiLinkRef = useRef(async () => {})
@@ -312,6 +318,9 @@ export default function App() {
 
       const folderList = await resolvedStore.listFolders()
       setFolders(folderList)
+
+      // 안 쓰는 첨부 정리 — 문서 목록을 읽은 뒤 1회 (F-156.md 2.7)
+      scheduleAttachmentGc(() => cleanupUnusedAttachments({ store: resolvedStore }))
 
       const parsedHash = parseHash(location.hash)
 
@@ -562,6 +571,12 @@ export default function App() {
     editorRef.current?.setLineNumbers(lineNumbersPref === 'on')
   }, [openDoc, currentDocId, lineNumbersPref])
 
+  // 문서 전환·최초 마운트로 에디터가 새로 생기면 들여쓰기 값을 맞춘다 (F-154 2.3, 모르는 값은 4칸)
+  useLayoutEffect(() => {
+    if (openDoc?.id !== currentDocId) return
+    editorRef.current?.setIndent(indentPref === '2' ? 2 : 4)
+  }, [openDoc, currentDocId, indentPref])
+
   // ----- 문서 전환 후 포커스 요청 플래그 정리 (ia.md 3.4, F-103 3.4) -----
   // 실제 포커스 + 커서 맨 앞 이동은 Editor 가 뷰를 만드는 layout effect 안에서
   // autoFocus prop 으로 직접 적용한다 (Editor.jsx). StrictMode 의 마운트→해제→재마운트
@@ -617,6 +632,8 @@ export default function App() {
     dropBlockedRef.current = Boolean(
       settingsOpen || deleteTarget || moveDocTarget || sharedDoc || store.kind === 'memory',
     )
+    // 이미지는 저장소를 못 쓸 때(메모리 저장소)는 막지 않는다 (F-156.md 2.5)
+    imageDropBlockedRef.current = Boolean(settingsOpen || deleteTarget || moveDocTarget || sharedDoc)
   })
 
   // runImportFiles 는 store·showNotice 등을 클로저로 담으므로, 매 커밋 후 최신 참조로
@@ -633,7 +650,8 @@ export default function App() {
       if (!isExternalFileDrag(e.dataTransfer)) return
       e.preventDefault()
       depth++
-      if (!dropBlockedRef.current) setDropActive(true)
+      // 이미지 파일만 끌 때는 F-145 덮개를 띄우지 않는다 — 에디터 위 CM6 dropCursor 가 놓을 자리를 보인다 (F-156.md 2.5)
+      if (!dropBlockedRef.current && !isImageOnlyDrag(e.dataTransfer)) setDropActive(true)
     }
 
     function handleDragOver(e) {
@@ -654,12 +672,34 @@ export default function App() {
       e.preventDefault()
       depth = 0
       setDropActive(false)
-      if (dropBlockedRef.current) return
+      // 대화상자·공유 화면에서는 이미지도 md 도 다 막는다 (F-145.md 2.1, F-156.md 2.5)
+      if (imageDropBlockedRef.current) return
 
-      const { mdFiles, allNonMd } = pickMarkdownFiles(e.dataTransfer.files)
+      const files = Array.from(e.dataTransfer.files)
+      const { mdFiles, allNonMd } = pickMarkdownFiles(files)
+      // 여기선 대화상자·공유 화면은 이미 걸러졌으니 dropBlockedRef 가 true 면 store.kind==='memory' 뿐 — md 는 막고 이미지는 예외로 받는다(F-156.md 2.5)
+      const memoryBlocked = dropBlockedRef.current
+
       if (mdFiles.length > 0) {
-        runImportFilesRef.current(mdFiles)
-      } else if (allNonMd) {
+        if (memoryBlocked) return
+        // md 와 이미지가 섞이면 md 만 가져오고 알린다(F-156.md 2.5) — 가져오기 성공 알림(F-145)이 먼저 뜨므로 그 뒤에 띄워야 마지막에 보인다
+        const showMixedNotice = mdFiles.length < files.length && pickImageFiles(files).imageFiles.length > 0
+        Promise.resolve(runImportFilesRef.current(mdFiles)).then(() => {
+          if (showMixedNotice) {
+            showNotice({ type: 'info', message: '.md 파일만 가져왔습니다. 이미지는 따로 놓아 주세요.' })
+          }
+        })
+        return
+      }
+
+      if (allNonMd) {
+        // 편집 영역 위 순수 이미지 드롭은 imageInsert.js 가 stopPropagation 으로 먼저 처리하므로, 여기 닿는 건 항상 편집 영역 밖이다(F-156.md 2.5)
+        const { imageFiles } = pickImageFiles(files)
+        if (imageFiles.length > 0) {
+          showNotice({ type: 'info', message: '이미지는 편집 영역에 놓아 넣을 수 있습니다.' })
+          return
+        }
+        if (memoryBlocked) return
         showNotice({ type: 'info', message: '마크다운(.md) 파일만 가져올 수 있습니다.' })
       }
     }
@@ -885,6 +925,20 @@ export default function App() {
     await runImportFiles(files)
   }
 
+  // 이미지 붙여넣기·끌어놓기(F-156.md 2.2·2.4·2.5·2.6) — 위치 계산·삽입은 imageInsert.js 가 하고, 여기는 검사·저장·알림만. blocked:true 면 저장을 시도하지 않는다
+  const handleImageFiles = useCallback(
+    async (files, { source, blocked } = {}) => {
+      if (blocked) {
+        showNotice({ type: 'info', message: '이 위치에는 이미지를 넣을 수 없습니다.' })
+        return []
+      }
+      const { inserted, notice } = await attachImages(files, { store, source })
+      if (notice) showNotice(notice)
+      return inserted
+    },
+    [store, showNotice],
+  )
+
   // ----- 공유 (specs/features/F-130.md 2·4장) -----
   // 저장 대기 중인 입력이 있어도 현재 에디터 원문을 그대로 쓴다. 저장소를 다시 읽지 않는다
   function getShareDoc() {
@@ -1103,6 +1157,19 @@ export default function App() {
     setPref('md.lineNumbers', value)
   }
 
+  // 글자 크기 — <html data-font-size> 로 즉시 반영 (F-154 2.2)
+  function changeFontSize(value) {
+    setFontSizePref(value)
+    document.documentElement.dataset.fontSize = value
+    setPref('md.fontSize', value)
+  }
+
+  // 들여쓰기 — 실제 에디터 반영은 아래 useLayoutEffect 가 한다 (F-154 2.3)
+  function changeIndent(value) {
+    setIndentPref(value)
+    setPref('md.indent', value)
+  }
+
   function changeViewMode(mode) {
     setViewMode(mode)
     setPref('md.viewMode', mode)
@@ -1258,6 +1325,7 @@ export default function App() {
                     onSelectionChange={handleSelectionChange}
                     wikiTitles={wikiTitles}
                     onOpenWikiLink={handleOpenWikiLink}
+                    onImageFiles={handleImageFiles}
                   />
                 )}
               </div>
@@ -1303,6 +1371,10 @@ export default function App() {
         onChangeHeadingFont={changeHeadingFont}
         bodyFont={bodyFont}
         onChangeBodyFont={changeBodyFont}
+        fontSize={fontSizePref}
+        onChangeFontSize={changeFontSize}
+        indent={indentPref}
+        onChangeIndent={changeIndent}
         lineNumbers={lineNumbersPref}
         onChangeLineNumbers={changeLineNumbers}
         onClose={closeSettings}

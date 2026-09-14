@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isExternalFileDrag, pickMarkdownFiles } from './fileDrop.js'
+import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag } from './fileDrop.js'
 
 function file(name) {
   return { name }
@@ -58,5 +58,42 @@ describe('pickMarkdownFiles', () => {
   it('null·undefined 는 빈 목록으로 처리', () => {
     expect(pickMarkdownFiles(null).mdFiles).toEqual([])
     expect(pickMarkdownFiles(undefined).mdFiles).toEqual([])
+  })
+})
+
+describe('pickImageFiles (F-156.md 2.5)', () => {
+  it('png·jpg·jpeg·gif·webp 확장자를 고른다', () => {
+    const names = ['a.png', 'b.jpg', 'c.jpeg', 'd.gif', 'e.webp', 'f.txt', 'g.md']
+    const result = pickImageFiles(names.map(file))
+    expect(result.imageFiles.map((f) => f.name)).toEqual(['a.png', 'b.jpg', 'c.jpeg', 'd.gif', 'e.webp'])
+  })
+
+  it('대문자 확장자도 고른다', () => {
+    expect(pickImageFiles([file('A.PNG')]).imageFiles.map((f) => f.name)).toEqual(['A.PNG'])
+  })
+
+  it('null·undefined 는 빈 목록', () => {
+    expect(pickImageFiles(null).imageFiles).toEqual([])
+    expect(pickImageFiles(undefined).imageFiles).toEqual([])
+  })
+})
+
+describe('isImageOnlyDrag (F-156.md 2.5)', () => {
+  it('items 가 전부 kind=file, type=image/* 면 true', () => {
+    expect(isImageOnlyDrag({ items: [{ kind: 'file', type: 'image/png' }, { kind: 'file', type: 'image/jpeg' }] })).toBe(
+      true,
+    )
+  })
+
+  it('하나라도 이미지가 아니면 false', () => {
+    expect(
+      isImageOnlyDrag({ items: [{ kind: 'file', type: 'image/png' }, { kind: 'file', type: 'text/markdown' }] }),
+    ).toBe(false)
+  })
+
+  it('items 가 없거나 비어 있으면 false', () => {
+    expect(isImageOnlyDrag({ items: [] })).toBe(false)
+    expect(isImageOnlyDrag({})).toBe(false)
+    expect(isImageOnlyDrag(null)).toBe(false)
   })
 })

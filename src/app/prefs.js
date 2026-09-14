@@ -12,6 +12,8 @@ const ALLOWED_KEYS = new Set([
   'md.sidebar',
   'md.sidebarWidth',
   'md.lineNumbers',
+  'md.fontSize',
+  'md.indent',
 ])
 
 function assertAllowed(key) {

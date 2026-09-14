@@ -31,10 +31,18 @@ function isValidFolderId(folders, folderId) {
   return folders.some((f) => f.id === folderId)
 }
 
+// 소문자 16진수 16자 (crypto.getRandomValues 8바이트, F-156.md 2.1) — idbStore.js 와 같은 규칙
+function randomAttachmentId() {
+  const bytes = new Uint8Array(8)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 /** @returns {import('../../specs/architecture.md') 2장 인터페이스를 따르는 저장소 인스턴스} */
 export function createMemoryStore() {
   const docs = new Map()
   const folders = new Map()
+  const attachments = new Map() // F-156.md 2.3 — 새로고침하면 사라진다(메모리 저장소 특성 그대로)
 
   return {
     kind: 'memory',
@@ -186,6 +194,30 @@ export function createMemoryStore() {
       }
 
       folders.delete(id)
+    },
+
+    // F-156.md 2.3 — idbStore 와 같은 모양. 새로고침하면 사라진다
+    async putAttachment({ blob, mime, ext, width, height }) {
+      let id = randomAttachmentId()
+      while (attachments.has(id)) {
+        id = randomAttachmentId()
+      }
+      const record = { id, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob }
+      attachments.set(id, record)
+      return { id, ext }
+    },
+
+    async getAttachment(id) {
+      const record = attachments.get(id)
+      return record ? clone(record) : null
+    },
+
+    async listAttachments() {
+      return [...attachments.values()].map(({ id, ext, size, createdAt }) => ({ id, ext, size, createdAt }))
+    },
+
+    async removeAttachment(id) {
+      attachments.delete(id)
     },
   }
 }
