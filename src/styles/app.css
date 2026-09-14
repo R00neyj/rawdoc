@@ -142,7 +142,7 @@ svg {
   opacity: 1;
   visibility: visible;
   transform: translateX(0);
-  transition: transform var(--transition-fast), opacity var(--transition-fast), visibility var(--transition-fast);
+  transition: transform var(--transition-move), opacity var(--transition-fast), visibility var(--transition-fast);
   transition-behavior: allow-discrete;
 }
 
@@ -538,7 +538,7 @@ body.sidebar-resizing {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
-  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  transition: opacity var(--transition-fast), transform var(--transition-move), visibility var(--transition-fast);
   transition-behavior: allow-discrete;
 }
 
@@ -742,7 +742,7 @@ body.sidebar-resizing {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
-  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  transition: opacity var(--transition-fast), transform var(--transition-move), visibility var(--transition-fast);
   transition-behavior: allow-discrete;
 }
 
@@ -802,7 +802,7 @@ body.sidebar-resizing {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
   opacity: 0;
   transform: scale(0.98);
-  transition: opacity var(--transition-fast), transform var(--transition-fast),
+  transition: opacity var(--transition-fast), transform var(--transition-move),
     display var(--transition-fast), overlay var(--transition-fast);
   transition-behavior: allow-discrete;
 }
@@ -1210,7 +1210,7 @@ body.sidebar-resizing {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
-  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  transition: opacity var(--transition-fast), transform var(--transition-move), visibility var(--transition-fast);
   transition-behavior: allow-discrete;
 }
 

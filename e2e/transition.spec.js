@@ -3,7 +3,10 @@
 import { test, expect } from '@playwright/test'
 import { openApp, importMarkdown, resizeWindow, waitTransitionEnd, setPrefBeforeLoad } from './helpers.js'
 
-const EASE = 'cubic-bezier(0.51, 0.08, 0.5, 1.23)'
+// 색·바탕·테두리·그림자·투명도 전환 곡선 — --transition-fast(F-173) (cubic-bezier(0, 0, 0.2, 1)) 가 튕기지 않는다
+const EASE_OUT = 'cubic-bezier(0, 0, 0.2, 1)'
+// 크기·위치(transform) 전환 곡선 — --transition-move(F-173), 끝에서 살짝 넘쳤다 돌아온다
+const EASE_SPRING = 'cubic-bezier(0.51, 0.08, 0.5, 1.23)'
 const DURATION = '0.18s'
 
 // cubic-bezier(...) 값은 괄호 안에도 콤마가 있어 단순 split(',') 로 못 나눈다 — 괄호 깊이를 세어 최상위 콤마에서만 자른다
@@ -25,8 +28,8 @@ function splitTopLevel(value) {
   return parts
 }
 
-// transition-property 목록에서 prop 을 찾아 duration·timing 이 공용 토큰과 같은지 잰다
-async function expectColorTransition(locator, props) {
+// transition-property 목록에서 prop 을 찾아 duration·timing 이 기대 곡선과 같은지 잰다
+async function expectTransition(locator, props, ease = EASE_OUT) {
   const info = await locator.evaluate((el) => {
     const cs = getComputedStyle(el)
     return {
@@ -42,8 +45,18 @@ async function expectColorTransition(locator, props) {
     const idx = properties.indexOf(prop)
     expect(idx, `${prop} 전환 없음 (가진 속성: ${properties.join(', ')})`).toBeGreaterThanOrEqual(0)
     expect(durations[idx], `${prop} duration`).toBe(DURATION)
-    expect(timings[idx], `${prop} timing`).toBe(EASE)
+    expect(timings[idx], `${prop} timing`).toBe(ease)
   }
+}
+
+// 색·바탕·테두리·그림자·투명도 전환 — --transition-fast(EASE_OUT) 기대
+async function expectColorTransition(locator, props) {
+  return expectTransition(locator, props, EASE_OUT)
+}
+
+// 크기·위치(transform) 전환 — --transition-move(EASE_SPRING) 기대 (F-173 A2)
+async function expectMoveTransition(locator, props) {
+  return expectTransition(locator, props, EASE_SPRING)
 }
 
 test.describe('F-149 A2 계산값 — 상단바·제목·설정', () => {
@@ -377,6 +390,38 @@ test.describe('F-172 A2 계산값 — 열린 상태 opacity 전환', () => {
   })
 })
 
+test.describe('F-173 A2 계산값 — 열린 상태 transform 전환 곡선', () => {
+  test('공유 메뉴·⋯ 메뉴·알림 띠·대화상자·겹침 사이드바의 transform 전환이 튕기는 곡선이다', async ({ page }) => {
+    await skipPersistNotice(page)
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    await expectMoveTransition(page.locator('.share-menu-list'), ['transform'])
+    await page.keyboard.press('Escape')
+
+    const row = page.locator('.tree-row').first()
+    await row.hover()
+    await row.locator('.item-menu-btn').click()
+    await expectMoveTransition(page.locator('.item-menu-list'), ['transform'])
+    await page.keyboard.press('Escape')
+
+    await dropMarkdownFile(page, '.sidebar', { name: 'a.md', content: '내용\n' })
+    await expect(page.locator('.notice')).toBeVisible()
+    await expectMoveTransition(page.locator('.notice'), ['transform'])
+
+    await openDeleteDialog(page)
+    const dialog = page.locator('dialog.dialog[open]')
+    await expect(dialog).toBeVisible()
+    await expectMoveTransition(dialog, ['transform'])
+    await page.keyboard.press('Escape')
+
+    await resizeWindow(page, 900)
+    await page.locator('.sidebar-toggle').click()
+    await expectMoveTransition(page.locator('.sidebar'), ['transform'])
+  })
+})
+
 test.describe('F-172 A3 중간 상태 — 열린 직후 0 과 1 사이 프레임', () => {
   test('공유 메뉴가 열리는 동안 중간 opacity 프레임이 있다', async ({ page }) => {
     await openApp(page)
@@ -508,5 +553,23 @@ test.describe('F-172 A6 움직임 줄이기', () => {
     await expect(notice).toBeVisible()
     await notice.locator('.icon-btn-wrap .icon-btn').click()
     await expect(notice).toHaveCount(0)
+  })
+})
+
+test.describe('F-173 A3 움직임 줄이기 — 두 곡선 토큰 모두 0', () => {
+  test('reducedMotion: reduce 면 --transition-fast·--transition-move 둘 다 0ms', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+
+    const tokens = await page.evaluate(() => {
+      const cs = getComputedStyle(document.documentElement)
+      return {
+        fast: cs.getPropertyValue('--transition-fast').trim(),
+        move: cs.getPropertyValue('--transition-move').trim(),
+      }
+    })
+    expect(tokens.fast).toBe('0ms')
+    expect(tokens.move).toBe('0ms')
   })
 })

@@ -91,9 +91,13 @@
   /* 형태 (design.md 4장) */
   --radius-control: 6px;
   --radius-dialog: 10px;
-  /* 탄성 곡선 — 끝에서 살짝 넘쳤다 돌아온다 (design.md 4장, 2026-09-14) */
+  --radius-image: 6px; /* 이미지 블록 모서리 (F-157 2.2) */
+  /* 탄성 곡선 — 끝에서 살짝 넘쳤다 돌아온다. transform(크기·위치) 전환에만 쓴다 (design.md 4장, F-173) */
   --ease-spring: cubic-bezier(0.51, 0.08, 0.5, 1.23);
-  --transition-fast: 180ms var(--ease-spring);
+  /* 끝으로 갈수록 느려지는 곡선, 1 을 넘지 않는다 — 색·바탕·테두리·그림자·투명도 전환 (F-173) */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --transition-fast: 180ms var(--ease-out);
+  --transition-move: 180ms var(--ease-spring);
   /* 색이 바뀌는 모든 조작 요소·툴팁이 참조하는 공용 전환 (design.md 4장, F-149 2.1·2.2) */
   --transition-colors: background-color var(--transition-fast),
     color var(--transition-fast), border-color var(--transition-fast),
@@ -191,6 +195,7 @@
 @media (prefers-reduced-motion: reduce) {
   :root {
     --transition-fast: 0ms;
+    --transition-move: 0ms;
   }
 }
 
