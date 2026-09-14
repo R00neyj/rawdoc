@@ -307,7 +307,11 @@
   background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px var(--accent-ring);
   pointer-events: none;
-  transition: left 100ms ease, top 100ms ease, width 100ms ease, height 100ms ease;
+  transition:
+    left 100ms var(--ease-spring),
+    top 100ms var(--ease-spring),
+    width 100ms var(--ease-spring),
+    height 100ms var(--ease-spring);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -369,7 +373,7 @@
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.1s ease;
+  transition: opacity 0.1s var(--ease-spring);
   transform: translateX(-50%);
 }
 

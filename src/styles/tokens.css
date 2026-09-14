@@ -75,7 +75,9 @@
   /* 형태 (design.md 4장) */
   --radius-control: 6px;
   --radius-dialog: 10px;
-  --transition-fast: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* 탄성 곡선 — 끝에서 살짝 넘쳤다 돌아온다 (design.md 4장, 2026-09-14) */
+  --ease-spring: cubic-bezier(0.51, 0.08, 0.5, 1.23);
+  --transition-fast: 180ms var(--ease-spring);
 }
 
 :root[data-heading-font='sans'] {
