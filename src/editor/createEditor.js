@@ -151,13 +151,7 @@ export function createEditor(parent, options = {}) {
       return () => headingsListeners.delete(callback)
     },
 
-    // 줄 윗변을 스크롤 영역 위 16px 에 맞춤, 선택은 그대로 (F-144 3.3)
-    // 대상이 화면 밖(아직 실제로 그려지지 않은 영역)이면 CM6 는 그 구간 줄 높이를
-    // 추정해 한 번에 스크롤하는데, 제목·구분선처럼 기본 줄과 높이가 많이 다른
-    // 줄이 많으면 추정이 실측과 어긋나 최대 70px 이상 밀린다(F-152 2.5 실측:
-    // scrollIntoView 직후엔 대상이 아직 화면 밖이라 coordsAtPos 도 같은 추정치를
-    // 돌려줘 즉시 보정할 수 없다). 스크롤이 정착해 그 영역이 실제로 그려진 뒤
-    // (rAF 2회) 실측 위치로 한 번 더 보정한다
+    // 화면 밖 줄 높이 추정 오차를 그려진 뒤(rAF 2회) 실측으로 보정 (F-144 3.3, F-152 2.5)
     scrollToHeading(pos) {
       const clamped = Math.max(0, Math.min(pos, view.state.doc.length))
       view.dispatch({ effects: EditorView.scrollIntoView(clamped, { y: 'start', yMargin: 16 }) })
