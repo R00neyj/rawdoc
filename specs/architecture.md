@@ -103,6 +103,8 @@ store.setPinned(id, pinned)   // F-132. updatedAt 유지
 | `md.theme` | `system` \| `white` \| `sepia` \| `dark` | `system` | F-141 |
 | `md.sidebar` | `expanded` \| `collapsed` | `expanded` | F-143 |
 | `md.lineNumbers` | `on` \| `off` | `on` | F-147 |
+| `md.fontSize` | `small` \| `medium` \| `large` | `medium` | F-154 |
+| `md.indent` | `2` \| `4` | `4` | F-154 |
 | `md.lastDocId` | 문서 id | 없음 | F-111 |
 | `md.firstRunDone` | `1` | 없음 | F-111 |
 | `md.persistNoticeShown` | `1` | 없음 | F-118 |
