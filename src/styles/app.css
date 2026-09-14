@@ -133,12 +133,30 @@ svg {
   transition: none;
 }
 
+/* 좁은 창 겹침 사이드바 — usePresence 의 [data-state] 로 여닫힘 전환을 몬다 (F-172.md 2.1·2.2) */
 .sidebar--overlay {
   position: absolute;
   inset: 0 auto 0 0;
   z-index: 20;
   box-shadow: 8px 0 30px rgba(0, 0, 0, 0.12);
-  transition: transform var(--transition-fast);
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition: transform var(--transition-fast), opacity var(--transition-fast), visibility var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.sidebar--overlay[data-state='closed'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-100%);
+}
+
+@starting-style {
+  .sidebar--overlay[data-state='open'] {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
 }
 
 /* 머리 줄 아래 스크롤 영역 — 안쪽 여백·잘림은 여기서 맡는다 (F-159 2.2) */
@@ -268,8 +286,7 @@ body.sidebar-resizing {
   gap: 6px;
   font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.14em;
-  --tracking: 0; /* F-141 3.6 — 위 자간(0.14em)이 자체 값이라 자손에도 0 을 물려준다 */
+  --tracking: 0; /* F-141 3.6 — 고정폭 글자라 자간 0 (2026-09-15 사용자 요청으로 0.14em 제거) */
   color: var(--muted);
   margin: 6px 6px 10px;
   font-weight: 500;
@@ -410,8 +427,17 @@ body.sidebar-resizing {
 
 /* 폴더 가이드 선 — 폴더 행 아래부터 마지막 하위 행 아래 끝까지, 토글 아이콘 가로
    가운데에 맞춘다. 절대 위치라 레이아웃을 밀지 않고, pointer-events 없음 (F-142 3.5) */
+/* 펼칠 때만 투명→불투명(@starting-style), 접을 때는 React 가 즉시 떼어낸다 — 높이는 전환하지 않는다 (F-172.md 2.2) */
 .tree-group {
   position: relative;
+  opacity: 1;
+  transition: opacity var(--transition-fast);
+}
+
+@starting-style {
+  .tree-group {
+    opacity: 0;
+  }
 }
 
 /* 폴더 가이드 선 — 행 배경 위에 보이도록 z-index 를 준다(F-143 3.6·3.9, F-142 3.5).
@@ -495,6 +521,7 @@ body.sidebar-resizing {
   color: var(--ink);
 }
 
+/* 나타나고 사라지는 전환 — usePresence 의 [data-state] 로 몬다, visibility 는 allow-discrete 로 늦춘다 (F-172.md 2.1·2.2) */
 .item-menu-list {
   position: absolute;
   right: 4px;
@@ -508,6 +535,24 @@ body.sidebar-resizing {
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.item-menu-list[data-state='closed'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+}
+
+@starting-style {
+  .item-menu-list[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
 .item-menu-list button {
@@ -683,6 +728,7 @@ body.sidebar-resizing {
 }
 
 /* ===== 알림 띠 ===== */
+/* 나타나고 사라지는 전환 — usePresence 의 [data-state] 로 몬다 (F-172.md 2.1·2.2) */
 .notice {
   flex: none;
   display: flex;
@@ -693,6 +739,24 @@ body.sidebar-resizing {
   font-size: 13px;
   background: var(--rule-2);
   color: var(--ink-2);
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.notice[data-state='closed'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+}
+
+@starting-style {
+  .notice[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
 .notice--error {
@@ -726,6 +790,7 @@ body.sidebar-resizing {
 }
 
 /* ===== 대화상자 ===== */
+/* 나타나고 사라지는 전환 — 네이티브 <dialog> [open]·::backdrop 그대로, Dialog.jsx 는 JS 변경 없이 CSS 의 allow-discrete 로 닫기를 늦춘다 (F-172.md 2.1·2.2) */
 .dialog {
   border: 1px solid var(--rule);
   border-radius: var(--radius-dialog);
@@ -735,10 +800,40 @@ body.sidebar-resizing {
   min-width: 280px;
   max-width: min(90vw, 420px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
+  opacity: 0;
+  transform: scale(0.98);
+  transition: opacity var(--transition-fast), transform var(--transition-fast),
+    display var(--transition-fast), overlay var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.dialog[open] {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@starting-style {
+  .dialog[open] {
+    opacity: 0;
+    transform: scale(0.98);
+  }
 }
 
 .dialog::backdrop {
   background: rgba(0, 0, 0, 0.32);
+  opacity: 0;
+  transition: opacity var(--transition-fast), display var(--transition-fast), overlay var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.dialog[open]::backdrop {
+  opacity: 1;
+}
+
+@starting-style {
+  .dialog[open]::backdrop {
+    opacity: 0;
+  }
 }
 
 .dialog h2 {
@@ -1097,6 +1192,7 @@ body.sidebar-resizing {
   color: var(--ink);
 }
 
+/* 나타나고 사라지는 전환 — usePresence 의 [data-state] 로 몬다 (F-172.md 2.1·2.2) */
 .share-menu-list {
   position: absolute;
   right: 0;
@@ -1111,6 +1207,24 @@ body.sidebar-resizing {
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.share-menu-list[data-state='closed'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+}
+
+@starting-style {
+  .share-menu-list[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
 .share-menu-list button {

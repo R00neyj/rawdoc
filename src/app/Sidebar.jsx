@@ -478,12 +478,16 @@ export default function Sidebar({
 
   const isRail = collapsed && !narrow
 
+  // 좁은 창 겹침 사이드바만 data-state + inert 전환 대상 (F-172.md 2.2), 데스크톱 폭은 대상이 아니다
+  const overlayState = narrow ? (open ? 'open' : 'closed') : undefined
+
   return (
     <nav
       ref={sidebarRef}
       id={SIDEBAR_ID}
       className={`sidebar${narrow ? ' sidebar--overlay' : ''}${isRail ? ' sidebar--collapsed' : ''}`}
-      hidden={narrow && !open}
+      data-state={overlayState}
+      inert={overlayState === 'closed'}
       aria-label="문서 목록"
     >
       {/* 사이드바 전체 높이 머리 줄 — 좁은 창 겹침 사이드바에는 없다 (F-159 2.1·2.4) */}

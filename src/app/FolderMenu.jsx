@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { IconMore } from './icons.jsx'
+import usePresence from './usePresence.js'
 
 // 사이드바 항목 `⋯` 메뉴 — 라이브러리 없이 앱이 그린다 (specs/features/F-126.md 5.2)
 // 마우스 오버·키보드 포커스 시 트리거가 보인다(app.css). 방향키로 항목 이동, Enter 실행,
 // Esc·바깥 클릭으로 닫고 포커스를 트리거(⋯)로 되돌린다
 export default function FolderMenu({ label, items }) {
   const [open, setOpen] = useState(false)
+  const { mounted, state } = usePresence(open) // 나타나고 사라지는 전환 (F-172.md 2.2)
   const buttonRef = useRef(null)
   const menuRef = useRef(null)
   const itemRefs = useRef([])
@@ -66,8 +68,15 @@ export default function FolderMenu({ label, items }) {
       >
         <IconMore size={16} />
       </button>
-      {open && (
-        <ul className="item-menu-list" role="menu" ref={menuRef} onKeyDown={handleKeyDown}>
+      {mounted && (
+        <ul
+          className="item-menu-list"
+          data-state={state}
+          inert={state === 'closed'}
+          role="menu"
+          ref={menuRef}
+          onKeyDown={handleKeyDown}
+        >
           {items.map((item, i) => (
             <li key={item.key} role="none">
               <button

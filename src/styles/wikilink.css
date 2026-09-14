@@ -34,11 +34,20 @@
 }
 
 /* [[ 뒤 제목 자동완성 팝업(F-131 3.1, F-141 3.5, F-146 3.4) — 사이드바 ⋯ 메뉴(.item-menu-list)와 같은 모양. CM6 기본 테마의 `.cm-tooltip-autocomplete ul`·`li` 가 이미 구체성 있는 값(monospace, padding 1px 3px)을 줘 클래스를 반복해 구체성을 높인다(!important 는 쓰지 않는다) */
+/* 나타남 전환만 준다 — 투명→불투명(@starting-style). CM6 가 닫힐 때 DOM 을 바로 떼 사라짐 전환은 없다(F-172.md 2.2) */
 .cm-tooltip.cm-tooltip-autocomplete.cm-tooltip-autocomplete {
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  opacity: 1;
+  transition: opacity var(--transition-fast);
+}
+
+@starting-style {
+  .cm-tooltip.cm-tooltip-autocomplete.cm-tooltip-autocomplete {
+    opacity: 0;
+  }
 }
 
 .cm-tooltip.cm-tooltip-autocomplete.cm-tooltip-autocomplete > ul {

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { encodeShare } from '../lib/shareCodec.js'
 import { formatShareHash } from './hashRoute.js'
 import { IconShare, IconTooltip, IconLink, IconCopy } from './icons.jsx'
+import usePresence from './usePresence.js'
 
 // 상단바 `공유` 메뉴 (specs/ia.md 2장 A·3.19, specs/features/F-130.md 2장)
 // FolderMenu(F-126.md 5.2)와 같은 패턴 — 라이브러리 없이 방향키·Enter·Esc·바깥 클릭을 직접 구현
@@ -19,6 +20,7 @@ const WARN_LINK_LENGTH = 8_000 // 보수적으로 잡은 경고 기준 (F-130.md
  */
 export default function ShareMenu({ disabled, getShareDoc, onNotice }) {
   const [open, setOpen] = useState(false)
+  const { mounted, state } = usePresence(open) // 나타나고 사라지는 전환 (F-172.md 2.2)
   const buttonRef = useRef(null)
   const menuRef = useRef(null)
   const itemRefs = useRef([])
@@ -139,8 +141,15 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice }) {
         {/* 공유 메뉴가 열려 있으면 공유 툴팁은 숨긴다 (F-142 3.2) */}
         {!open && <IconTooltip text={shareLabel} />}
       </span>
-      {open && (
-        <ul className="share-menu-list" role="menu" ref={menuRef} onKeyDown={handleKeyDown}>
+      {mounted && (
+        <ul
+          className="share-menu-list"
+          data-state={state}
+          inert={state === 'closed'}
+          role="menu"
+          ref={menuRef}
+          onKeyDown={handleKeyDown}
+        >
           {items.map((item, i) => (
             <li key={item.key} role="none">
               <button

@@ -1,6 +1,7 @@
 // 호버·툴팁 전환 전부 적용 (specs/features/F-149.md 3장)
+// 나타나고 사라지는 요소 전환 (specs/features/F-172.md 3장)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, resizeWindow, waitTransitionEnd } from './helpers.js'
+import { openApp, importMarkdown, resizeWindow, waitTransitionEnd, setPrefBeforeLoad } from './helpers.js'
 
 const EASE = 'cubic-bezier(0.51, 0.08, 0.5, 1.23)'
 const DURATION = '0.18s'
@@ -256,5 +257,256 @@ test.describe('F-149 A6 움직임 줄이기', () => {
       .locator('.icon-tooltip')
       .evaluate((el) => getComputedStyle(el).transitionDuration)
     expect(tooltipDuration).toBe('0s')
+  })
+})
+
+// ===== F-172 나타나고 사라지는 요소 전환 =====
+
+// 합성 드래그로 .md 파일을 사이드바에 놓아 알림 띠를 띄운다(e2e/fileDrop.spec.js 와 같은 방식)
+async function dropMarkdownFile(page, targetSelector, file) {
+  await page.evaluate(
+    ({ targetSelector, file }) => {
+      const dt = new DataTransfer()
+      dt.items.add(new File([file.content], file.name, { type: 'text/markdown' }))
+      const el = document.querySelector(targetSelector)
+      const init = { bubbles: true, cancelable: true, dataTransfer: dt }
+      el.dispatchEvent(new DragEvent('dragenter', init))
+      el.dispatchEvent(new DragEvent('drop', init))
+    },
+    { targetSelector, file },
+  )
+}
+
+// 저장 공간 보호 경고(F-118)가 알림을 선점하지 않게 미리 본 것으로 표시해 둔다(e2e/fileDrop.spec.js 와 같은 이유)
+async function skipPersistNotice(page) {
+  await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+}
+
+async function openDeleteDialog(page) {
+  const row = page.locator('.tree-row').first()
+  await row.hover()
+  await row.locator('.item-menu-btn').click()
+  // 닫히는 중(mounted+inert)인 다른 행 메뉴와 role 이 겹칠 수 있어 first() 로 지금 연 메뉴를 명시한다
+  await page.getByRole('menuitem', { name: /삭제/ }).first().click()
+}
+
+// 여는 조작과 opacity 표본을 한 evaluate 안에서 같이 한다 — IPC 왕복 시간이 들쭉날쭉해 180ms 전환을 놓치는 것을 막는다 (F-172.md 3장 A3)
+async function sampleOpacityFrames(page, { kind, selector, frames = 15 }) {
+  return page.evaluate(
+    ({ kind, selector, frames }) =>
+      new Promise((resolve) => {
+        const values = []
+        function waitForTarget() {
+          const el = document.querySelector(selector)
+          if (!el) {
+            requestAnimationFrame(waitForTarget)
+            return
+          }
+          function tick() {
+            values.push(parseFloat(getComputedStyle(el).opacity))
+            if (values.length < frames) requestAnimationFrame(tick)
+            else resolve(values)
+          }
+          requestAnimationFrame(tick)
+        }
+
+        if (kind === 'share-menu') {
+          document.querySelector('.share-menu-btn').click()
+        } else if (kind === 'item-menu') {
+          document.querySelector('.item-menu-btn').click()
+        } else if (kind === 'dialog') {
+          document.querySelector('.item-menu-btn').click()
+          // 메뉴 열림 커밋 완료를 보장할 수 없어 삭제 항목이 나타날 때까지 기다렸다가 누른다
+          function clickDelete() {
+            const del = [...document.querySelectorAll('[role="menuitem"]')].find((b) =>
+              b.textContent.includes('삭제'),
+            )
+            if (del) {
+              del.click()
+              return
+            }
+            requestAnimationFrame(clickDelete)
+          }
+          clickDelete()
+        } else if (kind === 'notice') {
+          const dt = new DataTransfer()
+          dt.items.add(new File(['내용\n'], 'a.md', { type: 'text/markdown' }))
+          const el = document.querySelector('.sidebar')
+          const init = { bubbles: true, cancelable: true, dataTransfer: dt }
+          el.dispatchEvent(new DragEvent('dragenter', init))
+          el.dispatchEvent(new DragEvent('drop', init))
+        } else if (kind === 'sidebar') {
+          document.querySelector('.sidebar-toggle').click()
+        }
+
+        requestAnimationFrame(waitForTarget)
+      }),
+    { kind, selector, frames },
+  )
+}
+
+test.describe('F-172 A2 계산값 — 열린 상태 opacity 전환', () => {
+  test('공유 메뉴·⋯ 메뉴·알림 띠·대화상자·겹침 사이드바에 opacity 전환(0.18s)이 있다', async ({ page }) => {
+    await skipPersistNotice(page)
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    await expectColorTransition(page.locator('.share-menu-list'), ['opacity'])
+    await page.keyboard.press('Escape')
+
+    const row = page.locator('.tree-row').first()
+    await row.hover()
+    await row.locator('.item-menu-btn').click()
+    await expectColorTransition(page.locator('.item-menu-list'), ['opacity'])
+    await page.keyboard.press('Escape')
+
+    await dropMarkdownFile(page, '.sidebar', { name: 'a.md', content: '내용\n' })
+    await expect(page.locator('.notice')).toBeVisible()
+    await expectColorTransition(page.locator('.notice'), ['opacity'])
+
+    await openDeleteDialog(page)
+    const dialog = page.locator('dialog.dialog[open]')
+    await expect(dialog).toBeVisible()
+    await expectColorTransition(dialog, ['opacity'])
+    await page.keyboard.press('Escape')
+
+    await resizeWindow(page, 900)
+    await page.locator('.sidebar-toggle').click()
+    await expectColorTransition(page.locator('.sidebar'), ['opacity'])
+  })
+})
+
+test.describe('F-172 A3 중간 상태 — 열린 직후 0 과 1 사이 프레임', () => {
+  test('공유 메뉴가 열리는 동안 중간 opacity 프레임이 있다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+    const values = await sampleOpacityFrames(page, { kind: 'share-menu', selector: '.share-menu-list' })
+    expect(values.some((v) => v > 0 && v < 1), `표본: ${values.join(', ')}`).toBe(true)
+  })
+
+  test('⋯ 메뉴가 열리는 동안 중간 opacity 프레임이 있다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { name: '문서.md', content: '내용\n' })
+    const values = await sampleOpacityFrames(page, { kind: 'item-menu', selector: '.item-menu-list' })
+    expect(values.some((v) => v > 0 && v < 1), `표본: ${values.join(', ')}`).toBe(true)
+  })
+
+  test('알림 띠가 열리는 동안 중간 opacity 프레임이 있다', async ({ page }) => {
+    await skipPersistNotice(page)
+    await openApp(page)
+    const values = await sampleOpacityFrames(page, { kind: 'notice', selector: '.notice' })
+    expect(values.some((v) => v > 0 && v < 1), `표본: ${values.join(', ')}`).toBe(true)
+  })
+
+  test('대화상자가 열리는 동안 중간 opacity 프레임이 있다', async ({ page }) => {
+    await openApp(page)
+    const values = await sampleOpacityFrames(page, { kind: 'dialog', selector: 'dialog.dialog[open]' })
+    expect(values.some((v) => v > 0 && v < 1), `표본: ${values.join(', ')}`).toBe(true)
+  })
+
+  test('좁은 창 겹침 사이드바가 열리는 동안 중간 opacity 프레임이 있다', async ({ page }) => {
+    await openApp(page)
+    await resizeWindow(page, 900)
+    // 넓은→좁은 리사이즈로 걸린 닫힘 전환이 끝나길 기다린다 — 안 그러면 여는 전환이 그걸 가로채 중간값이 안 보인다
+    await waitTransitionEnd(page.locator('.sidebar'))
+    const values = await sampleOpacityFrames(page, { kind: 'sidebar', selector: '.sidebar' })
+    expect(values.some((v) => v > 0 && v < 1), `표본: ${values.join(', ')}`).toBe(true)
+  })
+})
+
+test.describe('F-172 A4 닫힌 뒤 300ms', () => {
+  test('공유 메뉴·⋯ 메뉴·알림 띠는 DOM 에서 없어진다', async ({ page }) => {
+    await skipPersistNotice(page)
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    await expect(page.locator('.share-menu-list')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(300)
+    await expect(page.locator('.share-menu-list')).toHaveCount(0)
+
+    const row = page.locator('.tree-row').first()
+    await row.hover()
+    await row.locator('.item-menu-btn').click()
+    await expect(page.locator('.item-menu-list')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(300)
+    await expect(page.locator('.item-menu-list')).toHaveCount(0)
+
+    await dropMarkdownFile(page, '.sidebar', { name: 'a.md', content: '내용\n' })
+    const notice = page.locator('.notice')
+    await expect(notice).toBeVisible()
+    await notice.locator('.icon-btn-wrap .icon-btn').click()
+    await page.waitForTimeout(300)
+    await expect(notice).toHaveCount(0)
+  })
+
+  test('겹침 사이드바는 inert·visibility:hidden 으로 남고, 대화상자는 open 속성이 없어진다', async ({ page }) => {
+    await openApp(page)
+
+    await resizeWindow(page, 900)
+    const sidebar = page.locator('.sidebar')
+    await waitTransitionEnd(sidebar) // 넓은 창 → 좁은 창 진입 때 함께 걸리는 닫힘 전환이 끝나길 기다린다
+    await page.locator('.sidebar-toggle').click()
+    await expect(sidebar).toBeVisible()
+    await page.mouse.click(700, 400) // 바깥 클릭으로 닫기
+    await page.waitForTimeout(300)
+    await expect(sidebar).toHaveCount(1) // DOM 에는 남아있다
+    expect(await sidebar.evaluate((el) => el.inert)).toBe(true)
+    expect(await sidebar.evaluate((el) => getComputedStyle(el).visibility)).toBe('hidden')
+
+    await resizeWindow(page, 1600)
+    await openDeleteDialog(page)
+    await expect(page.locator('dialog.dialog[open]')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(300)
+    await expect(page.locator('dialog.dialog[open]')).toHaveCount(0)
+  })
+})
+
+test.describe('F-172 A5 키보드 회귀', () => {
+  test('공유 메뉴 열기 → 첫 항목 포커스, Esc 로 닫기 → 버튼 포커스로 복귀한다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+    const shareBtn = page.getByRole('button', { name: '공유 — 링크·마크다운 복사' })
+    await shareBtn.click()
+    const items = page.locator('.share-menu-list [role="menuitem"]')
+    await expect(items.first()).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(shareBtn).toBeFocused()
+  })
+
+  test('대화상자는 Esc 로 닫힌다', async ({ page }) => {
+    await openApp(page)
+    await openDeleteDialog(page)
+    await expect(page.locator('dialog.dialog[open]')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.locator('dialog.dialog[open]')).toHaveCount(0)
+  })
+})
+
+test.describe('F-172 A6 움직임 줄이기', () => {
+  test('prefers-reduced-motion: reduce 면 닫자마자 닫힌 상태가 된다', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await skipPersistNotice(page)
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    const menu = page.locator('.share-menu-list')
+    await expect(menu).toBeVisible()
+    const duration = await menu.evaluate((el) => getComputedStyle(el).transitionDuration)
+    expect(duration.split(',').every((d) => d.trim() === '0s')).toBe(true)
+
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+
+    await dropMarkdownFile(page, '.sidebar', { name: 'a.md', content: '내용\n' })
+    const notice = page.locator('.notice')
+    await expect(notice).toBeVisible()
+    await notice.locator('.icon-btn-wrap .icon-btn').click()
+    await expect(notice).toHaveCount(0)
   })
 })
