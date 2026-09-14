@@ -148,3 +148,55 @@
   font-size: 12px;
   pointer-events: none;
 }
+
+/* 보기 모드·공유 화면 이미지 블록 (F-158 2.1·2.2) — 편집 모드 위젯도 클래스에 md-image 가 섞여 있어 .viewer 로 범위를 좁힌다 */
+.viewer .md-image {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 1rem;
+  border-radius: var(--radius-image);
+  overflow: hidden;
+  background: var(--md-bg-muted);
+}
+
+.viewer .md-image--left {
+  margin-inline: 0 auto;
+}
+
+.viewer .md-image--center {
+  margin-inline: auto;
+}
+
+.viewer .md-image--right {
+  margin-inline: auto 0;
+}
+
+.viewer .md-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* 첨부를 찾을 수 없을 때(또는 공유 화면) 자리 표시 — F-157 2.2 와 같은 모양 */
+.viewer .md-image.md-image-missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 120px;
+}
+
+.viewer .md-image .md-image-missing-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: var(--muted);
+}
+
+.viewer .md-image .md-image-missing-text {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}

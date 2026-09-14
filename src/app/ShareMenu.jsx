@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { encodeShare } from '../lib/shareCodec.js'
+import { extractAttachmentRefs } from '../lib/imageBlock.js'
 import { formatShareHash } from './hashRoute.js'
 import { IconShare, IconTooltip, IconLink, IconCopy } from './icons.jsx'
 import usePresence from './usePresence.js'
@@ -77,9 +78,13 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice }) {
       return
     }
 
+    // 이미지 첨부가 있으면 링크에 담기지 않는다는 사실을 알린다 (F-158.md 2.2)
+    const hasAttachments = extractAttachmentRefs(doc.content).size > 0
     onNotice({
       type: 'info',
-      message: '공유 링크를 복사했습니다. 문서 내용이 링크 주소에 담깁니다.',
+      message: hasAttachments
+        ? '공유 링크를 복사했습니다. 이미지는 링크에 담기지 않습니다.'
+        : '공유 링크를 복사했습니다. 문서 내용이 링크 주소에 담깁니다.',
     })
   }
 

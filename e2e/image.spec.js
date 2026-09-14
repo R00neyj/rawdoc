@@ -1,6 +1,7 @@
 // 이미지 첨부 저장·붙여넣기·끌어놓기 (F-156.md) — 실제 클립보드·OS 끌어놓기는 도구로 못 내 합성 ClipboardEvent·DragEvent 로 확인한다(3장 머리말)
 import { test, expect } from '@playwright/test'
 import zlib from 'node:zlib'
+import { unzipSync } from 'fflate'
 import { openApp, importMarkdown, setViewMode, waitSaved, readSavedContent, setPrefBeforeLoad } from './helpers.js'
 
 function u32be(n) {
@@ -172,6 +173,24 @@ async function seedAttachment(page, { id, createdAt }) {
         }
       }),
     { id, createdAt },
+  )
+}
+
+async function deleteAttachment(page, id) {
+  await page.evaluate(
+    (id) =>
+      new Promise((resolve, reject) => {
+        const req = indexedDB.open('md-docs')
+        req.onerror = () => reject(req.error)
+        req.onsuccess = () => {
+          const db = req.result
+          const tx = db.transaction('attachments', 'readwrite')
+          tx.objectStore('attachments').delete(id)
+          tx.oncomplete = () => resolve()
+          tx.onerror = () => reject(tx.error)
+        }
+      }),
+    id,
   )
 }
 
@@ -420,7 +439,8 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
       .toEqual(['cccccccccccccccc', refId].sort())
   })
 
-  test('F-156 A11 원문 보존 — 붙여넣은 3줄이 .md 내보내기 파일 바이트와 같다(CRLF 문서)', async ({ page }) => {
+  test('F-156 A11 원문 보존 — 붙여넣은 3줄이 내보내기 안 .md 바이트와 같다(CRLF 문서)', async ({ page }) => {
+    // F-156 A11 은 "F-158 전" 조건부라 이제 zip 으로 내보낸다 — 풀어서 안의 .md 항목으로 비교한다
     await openApp(page)
     await importMarkdown(page, { content: '첫째 줄\r\n둘째 줄\r\n셋째 줄' })
     await page.locator('.cm-content .cm-line', { hasText: '둘째 줄' }).click()
@@ -431,10 +451,13 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
       page.waitForEvent('download'),
       page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
     ])
+    expect(download.suggestedFilename()).toMatch(/\.zip$/)
     const stream = await download.createReadStream()
     const chunks = []
     for await (const chunk of stream) chunks.push(chunk)
-    const fileBytes = Buffer.concat(chunks).toString('utf-8')
+    const unzipped = unzipSync(new Uint8Array(Buffer.concat(chunks)))
+    const mdName = Object.keys(unzipped).find((n) => n.endsWith('.md'))
+    const fileBytes = Buffer.from(unzipped[mdName]).toString('utf-8')
 
     const saved = await readSavedContent(page)
     expect(fileBytes).toBe(saved.content)
@@ -743,5 +766,195 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
     const created = await page.evaluate(() => window.blobUrlLog.created)
     const revoked = await page.evaluate(() => window.blobUrlLog.revoked)
     for (const url of created) expect(revoked).toContain(url)
+  })
+})
+
+test.describe('F-158 이미지 보기·공유·내보내기', () => {
+  test('F-158 A2 보기 모드 — 폭·정렬·모서리가 편집 모드와 같다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await pasteFiles(page, { files: [{ bytes: decodablePngBytes(400, 200), name: 'a.png', mime: 'image/png' }] })
+    await waitSaved(page)
+    await expect(page.locator('.md-image-box')).toBeVisible()
+
+    const editBox = await page.locator('.md-image-box').boundingBox()
+    const editRadius = await page.locator('.md-image-frame').evaluate((el) => getComputedStyle(el).borderRadius)
+
+    await setViewMode(page, 'view')
+    const viewImg = page.locator('.viewer img[data-attachment]')
+    await expect(viewImg).toBeVisible()
+    expect(await viewImg.evaluate((el) => el.naturalWidth)).toBeGreaterThan(0)
+
+    const viewBox = await page.locator('.viewer .md-image').boundingBox()
+    expect(Math.abs(viewBox.width - editBox.width)).toBeLessThanOrEqual(1)
+
+    const viewRadius = await page.locator('.viewer .md-image').evaluate((el) => getComputedStyle(el).borderRadius)
+    expect(viewRadius).toBe(editRadius)
+
+    // 가운데 정렬 — 뷰어 안 좌우 여백 차
+    const viewerRect = await page.locator('.viewer').boundingBox()
+    const leftGap = viewBox.x - viewerRect.x
+    const rightGap = viewerRect.x + viewerRect.width - (viewBox.x + viewBox.width)
+    expect(Math.abs(leftGap - rightGap)).toBeLessThanOrEqual(1)
+  })
+
+  test('F-158 A3 보기 자리 표시 — 없는 id 블록, img 요청 없음', async ({ page }) => {
+    await openApp(page)
+    const fakeId = 'aaaaaaaaaaaaaaaa'
+    await importMarkdown(page, {
+      content: `본문\n\n<div align="center">\n  <img src="attachments/${fakeId}.png" alt="없음" width="100">\n</div>\n`,
+    })
+    await setViewMode(page, 'view')
+    await expect(page.locator('.viewer .md-image-missing-text')).toHaveText('이미지를 찾을 수 없습니다')
+    expect(await page.locator('.viewer img[data-attachment]').count()).toBe(0) // src 를 낼 img 자체가 없다 → 요청 없음
+  })
+
+  test('F-158 A4 공유 화면 — 자리 표시 + 문구, attachments 요청 없음', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await pasteFiles(page, { files: [{ bytes: pngBytes(50, 50), name: 'a.png', mime: 'image/png' }] })
+    await waitSaved(page)
+
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    await page.getByRole('menuitem', { name: '링크 복사' }).click()
+    const link = await page.evaluate(() => navigator.clipboard.readText())
+    const hash = new URL(link).hash
+
+    await page.evaluate((h) => {
+      location.hash = h
+    }, hash)
+    await expect(page.locator('.shared-view')).toBeVisible()
+    await expect(page.locator('.shared-view .md-image-missing-text')).toHaveText(
+      '공유 링크에는 이미지가 담기지 않습니다',
+    )
+
+    const resourceUrls = await page.evaluate(() => performance.getEntriesByType('resource').map((r) => r.name))
+    expect(resourceUrls.some((u) => u.includes('attachments/'))).toBe(false)
+  })
+
+  test('F-158 A5 링크 복사 알림 — 이미지 문서 / 이미지 없는 문서', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await skipPersistNotice(page)
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    await page.getByRole('menuitem', { name: '링크 복사' }).click()
+    await expect(page.locator('.notice-message')).toHaveText(
+      '공유 링크를 복사했습니다. 문서 내용이 링크 주소에 담깁니다.',
+    )
+
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await pasteFiles(page, { files: [{ bytes: pngBytes(30, 30), name: 'a.png', mime: 'image/png' }] })
+    await waitSaved(page)
+
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    await page.getByRole('menuitem', { name: '링크 복사' }).click()
+    await expect(page.locator('.notice-message')).toHaveText('공유 링크를 복사했습니다. 이미지는 링크에 담기지 않습니다.')
+  })
+
+  test('F-158 A6 zip 내보내기 — PNG 2장(CRLF), 항목 3개, 바이트 동일', async ({ page }) => {
+    await openApp(page)
+    const png1 = pngBytes(50, 50)
+    const png2 = pngBytes(60, 40)
+    const docId = await importMarkdown(page, { name: '이미지문서.md', content: '본문\r\n' })
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await pasteFiles(page, {
+      files: [
+        { bytes: png1, name: 'a.png', mime: 'image/png' },
+        { bytes: png2, name: 'b.png', mime: 'image/png' },
+      ],
+    })
+    await waitSaved(page)
+    const saved = await readSavedContent(page, docId)
+    const ids = [...saved.content.matchAll(/attachments\/([0-9a-f]{16})\.png/g)].map((m) => m[1])
+    expect(ids.length).toBe(2)
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+    ])
+    expect(download.suggestedFilename()).toBe('이미지문서.zip')
+
+    const stream = await download.createReadStream()
+    const chunks = []
+    for await (const chunk of stream) chunks.push(chunk)
+    const unzipped = unzipSync(new Uint8Array(Buffer.concat(chunks)))
+
+    expect(Object.keys(unzipped).sort()).toEqual(
+      [`attachments/${ids[0]}.png`, `attachments/${ids[1]}.png`, '이미지문서.md'].sort(),
+    )
+    expect(Buffer.from(unzipped['이미지문서.md']).toString('utf-8')).toBe(saved.content)
+    expect(Array.from(unzipped[`attachments/${ids[0]}.png`])).toEqual(png1)
+    expect(Array.from(unzipped[`attachments/${ids[1]}.png`])).toEqual(png2)
+  })
+
+  test('F-158 A7 이미지 없음 — F-112 와 같게 .md', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { name: '일반문서.md', content: '본문\n' })
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+    ])
+    expect(download.suggestedFilename()).toBe('일반문서.md')
+  })
+
+  test('F-158 A8 없는 첨부 — 2장 중 1장 삭제 / 전부 삭제', async ({ page }) => {
+    await skipPersistNotice(page)
+    await openApp(page)
+    const docId = await importMarkdown(page, { name: '문서.md', content: '본문\r\n' })
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await pasteFiles(page, {
+      files: [
+        { bytes: pngBytes(20, 20), name: 'a.png', mime: 'image/png' },
+        { bytes: pngBytes(30, 30), name: 'b.png', mime: 'image/png' },
+      ],
+    })
+    await waitSaved(page)
+    const saved = await readSavedContent(page, docId)
+    const ids = [...saved.content.matchAll(/attachments\/([0-9a-f]{16})\.png/g)].map((m) => m[1])
+    expect(ids.length).toBe(2)
+
+    await deleteAttachment(page, ids[0])
+
+    let [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+    ])
+    await expect(page.locator('.notice-message')).toHaveText('이미지 1개를 찾을 수 없어 빼고 내보냈습니다.')
+    expect(download.suggestedFilename()).toBe('문서.zip')
+    let stream = await download.createReadStream()
+    let chunks = []
+    for await (const chunk of stream) chunks.push(chunk)
+    let unzipped = unzipSync(new Uint8Array(Buffer.concat(chunks)))
+    expect(Object.keys(unzipped).sort()).toEqual([`attachments/${ids[1]}.png`, '문서.md'].sort())
+
+    await deleteAttachment(page, ids[1])
+
+    ;[download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+    ])
+    await expect(page.locator('.notice-message')).toHaveText('이미지 2개를 찾을 수 없어 빼고 내보냈습니다.')
+    expect(download.suggestedFilename()).toBe('문서.md')
+  })
+
+  test('F-158 A9 오프라인 — 네트워크 끊긴 상태에서도 zip 내보내기 동작', async ({ page, context }) => {
+    await openApp(page)
+    await importMarkdown(page, { name: '오프라인.md', content: '본문\r\n' })
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await pasteFiles(page, { files: [{ bytes: pngBytes(20, 20), name: 'a.png', mime: 'image/png' }] })
+    await waitSaved(page)
+
+    await context.setOffline(true)
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+    ])
+    expect(download.suggestedFilename()).toBe('오프라인.zip')
+    await context.setOffline(false)
   })
 })

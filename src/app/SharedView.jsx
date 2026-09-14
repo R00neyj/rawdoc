@@ -31,7 +31,9 @@ export default function SharedView({ sharedDoc, onImport, onClose }) {
       </div>
       <div className="shared-view-body">
         <h1 className="shared-view-title">{sharedDoc.title || '제목 없는 문서'}</h1>
-        <Viewer html={html} />
+        {/* 공유 화면은 첨부를 읽지 않는다 — resolveAttachment 를 넘기지 않으면 이미지 블록은
+            모두 자리 표시로 보인다 (F-158.md 2.2) */}
+        <Viewer html={html} missingImageText="공유 링크에는 이미지가 담기지 않습니다" />
       </div>
     </div>
   )

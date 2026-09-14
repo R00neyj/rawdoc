@@ -1,30 +1,60 @@
-// .md 내보내기 (specs/features/F-112.md 2.2, specs/ia.md 3.8)
-import { toFileName } from '../lib/filename.js'
+// .md 내보내기 (specs/features/F-112.md 2.2, F-158.md 2.3, specs/ia.md 3.8)
+import { zipSync } from 'fflate'
 
-/**
- * @param {object} args
- * @param {{getText:(lineEnding:string)=>string}} args.handle 에디터 handle. 저장소를 다시
- *   읽지 않고 에디터의 현재 원문(대기 중 입력 포함)을 그대로 쓴다
- * @param {{title:string}} args.doc
- * @param {'crlf'|'lf'} args.lineEnding
- * @param {{flush: () => Promise<void>}} [args.saver] 자동 저장 flush 도 같이 호출하되
- *   다운로드는 그 결과를 기다리지 않는다
- */
-export function exportDoc({ handle, doc, lineEnding, saver }) {
+import { toFileName } from '../lib/filename.js'
+import { extractAttachmentRefs } from '../lib/imageBlock.js'
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+// 다운로드 바이트만 계산하는 순수 부분 — DOM 없이 단위 테스트할 수 있게 뗐다 (F-158.md 6장 A1)
+export async function buildExportPayload({ text, title, store }) {
+  const mdName = toFileName(title)
+  const ids = [...extractAttachmentRefs(text)]
+
+  if (ids.length === 0 || !store?.getAttachment) {
+    return { kind: 'md', filename: mdName, bytes: new TextEncoder().encode(text), missingCount: 0 }
+  }
+
+  const records = await Promise.all(ids.map((id) => store.getAttachment(id)))
+  const found = records.filter(Boolean)
+  const missingCount = records.length - found.length
+
+  if (found.length === 0) {
+    return { kind: 'md', filename: mdName, bytes: new TextEncoder().encode(text), missingCount }
+  }
+
+  const zipData = { [mdName]: new TextEncoder().encode(text) }
+  for (const record of found) {
+    const bytes = new Uint8Array(await record.blob.arrayBuffer())
+    zipData[`attachments/${record.id}.${record.ext}`] = bytes
+  }
+  const zipped = zipSync(zipData, { level: 0 }) // 압축 수준 0 — 이미지는 이미 압축돼 있다 (F-158.md 2.3)
+
+  return { kind: 'zip', filename: mdName.replace(/\.md$/, '.zip'), bytes: zipped, missingCount }
+}
+
+// handle.getText 로 에디터 현재 원문을 얻어 내려받는다. store 는 첨부가 있을 때만 읽는다 (F-158.md 2.3)
+export async function exportDoc({ handle, doc, lineEnding, saver, store, onNotice }) {
   if (!handle || !doc) return
 
   // 다운로드는 flush 를 기다리지 않는다 (F-112.md 2.2)
   saver?.flush()
 
   const text = handle.getText(lineEnding)
-  const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
+  const payload = await buildExportPayload({ text, title: doc.title, store })
+  const mime = payload.kind === 'zip' ? 'application/zip' : 'text/markdown;charset=utf-8'
+  downloadBlob(new Blob([payload.bytes], { type: mime }), payload.filename)
 
-  const link = document.createElement('a')
-  link.href = url
-  link.download = toFileName(doc.title)
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
+  if (payload.missingCount > 0) {
+    onNotice?.({ type: 'warn', message: `이미지 ${payload.missingCount}개를 찾을 수 없어 빼고 내보냈습니다.` })
+  }
 }

@@ -860,7 +860,7 @@ export default function App() {
     openWikiLinkRef.current(target)
   }, [])
 
-  // ----- .md 내보내기 (specs/features/F-112.md 2.2) -----
+  // ----- .md 내보내기 (specs/features/F-112.md 2.2, F-158.md 2.3) -----
   function handleExportDoc() {
     if (!currentDoc || !openDoc || openDoc.id !== currentDocId) return
     exportDoc({
@@ -868,6 +868,8 @@ export default function App() {
       doc: currentDoc,
       lineEnding: openDoc.lineEnding,
       saver: { flush: () => docSaverFlushRef.current() },
+      store,
+      onNotice: showNotice,
     })
   }
 
@@ -1340,7 +1342,13 @@ export default function App() {
                 )}
               </div>
               {viewMode === 'view' && openDoc?.id === currentDocId && (
-                <Viewer key={currentDocId} ref={viewerRef} html={viewerHtml} onOpenWikiLink={handleOpenWikiLink} />
+                <Viewer
+                  key={currentDocId}
+                  ref={viewerRef}
+                  html={viewerHtml}
+                  onOpenWikiLink={handleOpenWikiLink}
+                  resolveAttachment={resolveAttachment}
+                />
               )}
               {openDoc?.id === currentDocId && (
                 <Outline

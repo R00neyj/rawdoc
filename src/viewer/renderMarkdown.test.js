@@ -76,6 +76,57 @@ describe('renderMarkdown — 이미지', () => {
   })
 })
 
+describe('renderMarkdown — 이미지 블록 (specs/features/F-158.md 6장 A1)', () => {
+  it('로컬 첨부 이미지 블록을 div.md-image + img[data-attachment] 로 바꾼다(src 없음)', () => {
+    const html = renderMarkdown(
+      '본문\n\n<div align="center">\n  <img src="attachments/0f3a9c2e7b1d4a58.png" alt="다이어그램" width="480">\n</div>\n\n끝\n',
+    )
+    expect(html).toContain('<div class="md-image md-image--center" style="width:480px"><img data-attachment="0f3a9c2e7b1d4a58" alt="다이어그램" width="480"></div>')
+    expect(html).not.toContain('src=')
+    expect(html).not.toContain('<img src')
+  })
+
+  it('width 가 없으면 style·width 속성을 출력하지 않는다', () => {
+    const html = renderMarkdown('<div align="left">\n  <img src="attachments/0f3a9c2e7b1d4a58.png" alt="a">\n</div>\n')
+    expect(html).toContain('<div class="md-image md-image--left"><img data-attachment="0f3a9c2e7b1d4a58" alt="a"></div>')
+  })
+
+  it('alt 의 "·< 가 든 경우 다시 이스케이프한다', () => {
+    const html = renderMarkdown(
+      '<div align="center">\n  <img src="attachments/0f3a9c2e7b1d4a58.png" alt="&lt;b&gt;&quot;x&quot;">\n</div>\n',
+    )
+    expect(html).toContain('alt="&lt;b&gt;&quot;x&quot;"')
+  })
+
+  it('외부 src 는 이스케이프된 글자 그대로 (md-image 아님)', () => {
+    const html = renderMarkdown('<div align="center">\n  <img src="https://a.com/x.png" alt="a">\n</div>\n')
+    expect(html).not.toContain('md-image')
+    expect(html).toContain('&lt;div align=&quot;center&quot;&gt;')
+  })
+
+  it('형식이 틀리면(허용 안 되는 속성) 이스케이프된 글자 그대로', () => {
+    const html = renderMarkdown(
+      '<div align="center">\n  <img src="attachments/0f3a9c2e7b1d4a58.png" alt="a" data-x="y">\n</div>\n',
+    )
+    expect(html).not.toContain('md-image')
+    expect(html).toContain('&lt;img')
+  })
+
+  it('인용 안(목록·인용 밖 아님)은 이미지 블록으로 바꾸지 않는다', () => {
+    const html = renderMarkdown(
+      '> <div align="center">\n>   <img src="attachments/0f3a9c2e7b1d4a58.png" alt="a">\n> </div>\n',
+    )
+    expect(html).not.toContain('md-image')
+    expect(html).toContain('<blockquote>')
+  })
+
+  it('![a](b) 문법은 기존대로 "이미지: alt" 링크', () => {
+    const html = renderMarkdown('![그림](./photo.png)')
+    expect(html).not.toContain('<img')
+    expect(html).toContain('이미지: 그림')
+  })
+})
+
 describe('renderMarkdown — 코드블록', () => {
   it('fence 정보의 첫 단어로 language-{lang} 클래스를 붙인다', () => {
     const html = renderMarkdown('```js\nconst a = 1\n```\n')

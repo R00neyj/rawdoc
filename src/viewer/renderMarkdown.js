@@ -6,6 +6,7 @@ import { parseCalloutHeader, defaultCalloutTitle } from '../lib/callout.js'
 import { calloutIconSvg } from '../lib/calloutIcons.js'
 import { findWikiLinks } from '../lib/wikiLink.js'
 import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from '../lib/frontmatter.js'
+import { parseImageBlock } from '../lib/imageBlock.js'
 
 // html:false — 원문 HTML 태그는 파싱하지 않고 글자 그대로(이스케이프되어) 보인다.
 // 링크·이미지 주소 검사는 markdown-it 기본 validateLink 를 그대로 쓴다
@@ -145,6 +146,42 @@ function calloutRule(state) {
 }
 
 md.core.ruler.before('inline', 'callout', calloutRule)
+
+// ----- 이미지 블록 (F-158.md 2.1) — src 는 출력하지 않고 data-attachment 로 id 만 남겨 Viewer 가 채운다 -----
+function renderImageBlockHtml(parsed) {
+  const align = md.utils.escapeHtml(parsed.align)
+  const id = md.utils.escapeHtml(parsed.id)
+  const alt = md.utils.escapeHtml(parsed.alt)
+  const style = parsed.width ? ` style="width:${parsed.width}px"` : ''
+  const widthAttr = parsed.width ? ` width="${parsed.width}"` : ''
+  return `<div class="md-image md-image--${align}"${style}><img data-attachment="${id}" alt="${alt}"${widthAttr}></div>\n`
+}
+
+// token.level === 0 은 목록·인용 등 컨테이너 밖(최상위) 문단만 고른다는 뜻이다
+function imageBlockRule(state) {
+  const tokens = state.tokens
+
+  for (let i = 0; i < tokens.length; i++) {
+    const open = tokens[i]
+    if (open.type !== 'paragraph_open' || open.level !== 0) continue
+
+    const inline = tokens[i + 1]
+    const close = tokens[i + 2]
+    if (inline?.type !== 'inline' || close?.type !== 'paragraph_close') continue
+
+    const parsed = parseImageBlock(inline.content)
+    if (!parsed) continue
+
+    const html = new state.Token('html_block', '', 0)
+    html.content = renderImageBlockHtml(parsed)
+    html.block = true
+    html.map = open.map
+
+    tokens.splice(i, 3, html)
+  }
+}
+
+md.core.ruler.before('inline', 'image_block', imageBlockRule)
 
 // ----- 링크: target·rel (F-123.md 3.2) -----
 const defaultLinkOpen =
