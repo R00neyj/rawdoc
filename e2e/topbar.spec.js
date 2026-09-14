@@ -495,6 +495,45 @@ test.describe('F-153 A1 상단바 아이콘 버튼', () => {
   }
 })
 
+test.describe('F-163 공유 메뉴 `파일로 공유…` 제거', () => {
+  test('F-163 A1 메뉴는 링크 복사·마크다운 복사 2개, ↓ 두 번이면 첫 항목으로 돌아옴', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+
+    const items = page.locator('.share-menu-list [role="menuitem"]')
+    await expect(items).toHaveCount(2)
+    await expect(items.nth(0)).toHaveText('링크 복사')
+    await expect(items.nth(1)).toHaveText('마크다운 복사')
+
+    await expect(items.first()).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(items.nth(1)).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(items.first()).toBeFocused()
+  })
+
+  test('F-163 A2 10,000자 무작위 문서 링크 복사 — .md 내보내기 권장 문구', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await openApp(page)
+
+    // deflate 로 잘 안 줄어들도록 넓은 문자 범위에서 무작위로 뽑는다
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 !"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
+    let content = ''
+    for (let i = 0; i < 10_000; i++) {
+      content += chars[Math.floor(Math.random() * chars.length)]
+    }
+    await importMarkdown(page, { content })
+
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    await page.getByRole('menuitem', { name: '링크 복사' }).click()
+
+    const notice = page.locator('.notice--warn .notice-message')
+    await expect(notice).toBeVisible()
+    await expect(notice).toHaveText(/^링크가 깁니다\(약 \d+KB\)\. 일부 메신저에서 잘릴 수 있어 \.md 내보내기를 권장합니다\.$/)
+  })
+})
+
 test.describe('F-153 A2 설정 세그먼트 선택 표시', () => {
   test('아이콘 버튼 선택 표시와 같은 바탕, 검은 칠 없음', async ({ page }) => {
     await openApp(page)

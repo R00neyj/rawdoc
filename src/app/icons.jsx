@@ -20,7 +20,6 @@ import driveFileMoveSvg from '@material-symbols/svg-400/outlined/drive_file_move
 import deleteSvg from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import linkSvg from '@material-symbols/svg-400/outlined/link.svg?raw'
 import contentCopySvg from '@material-symbols/svg-400/outlined/content_copy.svg?raw'
-import shareSvg from '@material-symbols/svg-400/outlined/share.svg?raw'
 import closeSvg from '@material-symbols/svg-400/outlined/close.svg?raw'
 import moreHorizSvg from '@material-symbols/svg-400/outlined/more_horiz.svg?raw'
 import refreshSvg from '@material-symbols/svg-400/outlined/refresh.svg?raw'
@@ -67,7 +66,6 @@ export const IconMove = makeIcon(driveFileMoveSvg)
 export const IconDelete = makeIcon(deleteSvg)
 export const IconLink = makeIcon(linkSvg)
 export const IconCopy = makeIcon(contentCopySvg)
-export const IconShareFile = makeIcon(shareSvg)
 export const IconClose = makeIcon(closeSvg)
 export const IconMore = makeIcon(moreHorizSvg)
 export const IconRefresh = makeIcon(refreshSvg)
