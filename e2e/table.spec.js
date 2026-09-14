@@ -490,3 +490,161 @@ test.describe('F-164 표 줄무늬·칸 강조 제거 (편집 모드)', () => {
     expect(await highlight.evaluate((el) => getComputedStyle(el).display)).toBe('none')
   })
 })
+
+// 머리 + 본문 2행, 3열 (F-165 드래그 범위 선택용)
+const GRID_TABLE = `${LEAD}| a | b | c |\n| --- | --- | --- |\n| 1 | 2 | 3 |\n| 4 | 5 | 6 |\n`
+
+// cellA 에서 마우스를 누른 채 cellB 로 끌어 뗀다 (F-165 2.1)
+async function dragSelect(cellA, cellB) {
+  const boxA = await cellA.boundingBox()
+  const boxB = await cellB.boundingBox()
+  const page = cellA.page()
+  await page.mouse.move(boxA.x + boxA.width / 2, boxA.y + boxA.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(boxB.x + boxB.width / 2, boxB.y + boxB.height / 2, { steps: 8 })
+  await page.mouse.up()
+}
+
+function cellAt(table, row, col) {
+  return table.locator('tr').nth(row).locator('td, th').nth(col)
+}
+
+test.describe('F-165 표 칸 범위 선택과 행·열 삭제', () => {
+  test('F-165 A2 끌기로 범위를 선택하면 두 칸을 감싼 사각형이 보이고 하위 에디터는 없다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: GRID_TABLE })
+    const wrap = page.locator('.md-table-widget')
+    const table = wrap.locator('table')
+    const from = cellAt(table, 1, 0) // "1"
+    const to = cellAt(table, 2, 1) // "5"
+
+    await dragSelect(from, to)
+
+    const highlight = wrap.locator('.md-table-cell-highlight')
+    await expect(highlight).toBeVisible()
+    const [fromRect, toRect, hlRect] = await Promise.all([rectOf(from), rectOf(to), rectOf(highlight)])
+    expect(Math.abs(hlRect.left - fromRect.left)).toBeLessThanOrEqual(2)
+    expect(Math.abs(hlRect.top - fromRect.top)).toBeLessThanOrEqual(2)
+    expect(Math.abs(hlRect.right - toRect.right)).toBeLessThanOrEqual(2)
+    expect(Math.abs(hlRect.bottom - toRect.bottom)).toBeLessThanOrEqual(2)
+    await expect(wrap.locator('.md-table-cell-editing')).toHaveCount(0)
+  })
+
+  test('F-165 A3 끌지 않고 떼면 그 칸 편집이 시작된다(회귀, F-125 A3)', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: GRID_TABLE })
+    const wrap = page.locator('.md-table-widget')
+    const table = wrap.locator('table')
+    const cell = cellAt(table, 1, 1) // "2"
+
+    await dragSelect(cell, cell) // 같은 칸에서 누르고 뗀다 — 끌기 아님
+
+    await expect(wrap.locator('.md-table-cell-editing[data-row="1"][data-col="1"]')).toHaveCount(1)
+    await expect(wrap.locator('.md-table-cell-highlight')).not.toBeVisible()
+  })
+
+  test('F-165 A4 열 전체를 끌어 선택한 뒤 Delete 로 그 열을 지운다', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: GRID_TABLE })
+    const wrap = page.locator('.md-table-widget')
+    const table = wrap.locator('table')
+
+    await dragSelect(cellAt(table, 0, 1), cellAt(table, 2, 1)) // 머리~마지막 행, 가운데 열
+    await page.keyboard.press('Delete')
+
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content.replace(/\r\n/g, '\n')).toContain('| a | c |\n| --- | --- |\n| 1 | 3 |\n| 4 | 6 |')
+
+    // 삭제 뒤 포커스가 주 에디터로 돌아와 있어야 Ctrl+Z 한 번으로 되돌아간다
+    await page.keyboard.press('Control+z')
+    const undone = await readSavedContent(page, docId)
+    expect(undone.content.replace(/\r\n/g, '\n')).toBe(GRID_TABLE)
+  })
+
+  test('F-165 A5 본문 행 전체를 끌어 선택한 뒤 Backspace 로 그 행을 지운다, 커서는 표 다음 줄로', async ({ page }) => {
+    // 표와 "이후문단" 사이에 빈 줄이 있어야 표가 거기서 끝난다(빈 줄 없이 붙으면 그 줄도 표의 한 본문 행으로 읽힌다 — F-124 A2d 픽스처와 같은 이유)
+    const content = `${GRID_TABLE}\n이후문단\n`
+    await openApp(page)
+    const docId = await importMarkdown(page, { content })
+    const wrap = page.locator('.md-table-widget')
+    const table = wrap.locator('table')
+
+    await dragSelect(cellAt(table, 2, 0), cellAt(table, 2, 2)) // 본문 2행 전체("4 | 5 | 6")
+    await page.keyboard.press('Backspace')
+
+    await expect(table.locator('tr')).toHaveCount(2) // 머리 + 본문 1행만 남는다
+    await page.keyboard.type('X')
+
+    // 커서는 "표 다음 줄"(표와 "이후문단" 사이의 빈 줄) 시작에 있다 — 그 줄에 친 글자가 들어간다
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content.replace(/\r\n/g, '\n')).toContain('| 1 | 2 | 3 |\nX\n이후문단')
+  })
+
+  test('F-165 A6 머리+본문 행을 함께 선택해 Delete — 머리는 비우고 본문 행은 지운다', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: GRID_TABLE })
+    const wrap = page.locator('.md-table-widget')
+    const table = wrap.locator('table')
+
+    await dragSelect(cellAt(table, 0, 0), cellAt(table, 1, 2)) // 머리 전체 + 본문 1행 전체
+    await page.keyboard.press('Delete')
+
+    await expect(wrap).toHaveCount(1) // 위젯 그대로(표 구조 유지)
+    await expect(table.locator('tr')).toHaveCount(2) // 머리 + 본문 1행("4|5|6")만 남는다
+    const headerCells = table.locator('tr').nth(0).locator('th')
+    await expect(headerCells.nth(0)).toHaveText('')
+    await expect(headerCells.nth(1)).toHaveText('')
+    await expect(headerCells.nth(2)).toHaveText('')
+
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content.replace(/\r\n/g, '\n')).toContain('| 4 | 5 | 6 |')
+  })
+
+  test('F-165 A7 모든 칸을 선택해 Delete — 표가 사라지고 빈 줄 하나만 남는다', async ({ page }) => {
+    const content = `앞줄\n\n${GRID_TABLE.slice(LEAD.length)}\n뒤줄\n`
+    await openApp(page)
+    const docId = await importMarkdown(page, { content })
+    const wrap = page.locator('.md-table-widget')
+    const table = wrap.locator('table')
+
+    await dragSelect(cellAt(table, 0, 0), cellAt(table, 2, 2))
+    await page.keyboard.press('Delete')
+
+    await expect(page.locator('.md-table-widget')).toHaveCount(0)
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content.replace(/\r\n/g, '\n')).toContain('앞줄\n\n\n\n뒤줄')
+  })
+
+  test('F-165 A8 일부 칸만 선택해 Delete — 내용만 비우고 선택은 유지된다', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: GRID_TABLE })
+    const wrap = page.locator('.md-table-widget')
+    const table = wrap.locator('table')
+
+    await dragSelect(cellAt(table, 1, 0), cellAt(table, 1, 1)) // 본문 1행의 두 칸만("1","2")
+    await page.keyboard.press('Delete')
+
+    await expect(wrap.locator('.md-table-cell-highlight')).toBeVisible() // 선택 유지
+
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content.replace(/\r\n/g, '\n')).toContain('|  |  | 3 |')
+  })
+
+  test('F-165 A9 Esc 와 표 밖 클릭으로 범위 선택을 해제한다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: GRID_TABLE })
+    const wrap = page.locator('.md-table-widget')
+    const table = wrap.locator('table')
+    const highlight = wrap.locator('.md-table-cell-highlight')
+
+    await dragSelect(cellAt(table, 0, 0), cellAt(table, 1, 1))
+    await expect(highlight).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(highlight).not.toBeVisible()
+
+    await dragSelect(cellAt(table, 0, 0), cellAt(table, 1, 1))
+    await expect(highlight).toBeVisible()
+    await page.getByText('표', { exact: true }).click() // LEAD 문단(표 밖)
+    await expect(highlight).not.toBeVisible()
+  })
+})

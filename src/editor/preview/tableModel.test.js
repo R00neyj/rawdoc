@@ -1,7 +1,21 @@
 // tableModel 단위 테스트 (specs/features/F-125.md 3장 A1)
 import { describe, expect, it } from 'vitest'
 import { EditorState } from '@codemirror/state'
-import { addColumn, addRow, advanceCellRange, cellEdit, escapeCell, mapCellRange, parseTable, unescapeCell } from './tableModel.js'
+import {
+  addColumn,
+  addRow,
+  advanceCellRange,
+  cellEdit,
+  classifySelection,
+  clearCells,
+  deleteColumns,
+  deleteRows,
+  deleteTable,
+  escapeCell,
+  mapCellRange,
+  parseTable,
+  unescapeCell,
+} from './tableModel.js'
 
 /** ChangeSpec[] 를 실제 문서에 적용해 결과 문자열을 얻는다 */
 function apply(doc, changes) {
@@ -374,5 +388,150 @@ describe('addColumn — 열 추가', () => {
     const headerLine = result.split('\n')[0]
     expect(headerLine).toBe('| a | b |  |')
     expect(result[focus]).toBe(' ')
+  })
+})
+
+describe('classifySelection — 범위 선택 분류 (F-165 2.2)', () => {
+  // 머리 + 본문 3행, 3열
+  const doc = '| a | b | c |\n| - | - | - |\n| 1 | 2 | 3 |\n| 4 | 5 | 6 |\n| 7 | 8 | 9 |'
+  const table = parseTable(doc, 0)
+
+  it('모든 행 × 모든 열 → table', () => {
+    expect(classifySelection(table, { r1: 0, c1: 0, r2: 3, c2: 2 })).toBe('table')
+  })
+
+  it('모든 행 × 일부 열 → columns', () => {
+    expect(classifySelection(table, { r1: 0, c1: 1, r2: 3, c2: 1 })).toBe('columns')
+  })
+
+  it('일부 행(머리 미포함) × 모든 열 → rows', () => {
+    expect(classifySelection(table, { r1: 1, c1: 0, r2: 2, c2: 2 })).toBe('rows')
+  })
+
+  it('일부 행(머리 포함) × 모든 열 → rows-with-header', () => {
+    expect(classifySelection(table, { r1: 0, c1: 0, r2: 1, c2: 2 })).toBe('rows-with-header')
+  })
+
+  it('그 밖(일부 행 × 일부 열) → cells', () => {
+    expect(classifySelection(table, { r1: 1, c1: 0, r2: 2, c2: 1 })).toBe('cells')
+  })
+
+  it('꼭짓점 순서와 무관하다(반대 방향으로 끌어도 같은 결과)', () => {
+    expect(classifySelection(table, { r1: 3, c1: 2, r2: 0, c2: 0 })).toBe('table')
+    expect(classifySelection(table, { r1: 2, c1: 1, r2: 1, c2: 0 })).toBe('cells')
+  })
+})
+
+describe('deleteColumns — 열 삭제 (F-165 2.3)', () => {
+  it('앞뒤 파이프 있음, 가운데 열: `| a | b | c |` → `| a | c |`', () => {
+    const doc = '| a | b | c |'
+    const table = parseTable(doc, 0)
+    const result = apply(doc, deleteColumns(table, [1]))
+    expect(result).toBe('| a | c |')
+  })
+
+  it('앞 파이프 없음, 첫 열: `a | b | c` → `b | c`', () => {
+    const doc = 'a | b | c'
+    const table = parseTable(doc, 0)
+    const result = apply(doc, deleteColumns(table, [0]))
+    expect(result).toBe('b | c')
+  })
+
+  it('끝 파이프 없음, 끝 열: `a | b | c` → `a | b`', () => {
+    const doc = 'a | b | c'
+    const table = parseTable(doc, 0)
+    const result = apply(doc, deleteColumns(table, [2]))
+    expect(result).toBe('a | b')
+  })
+
+  it('구분 행 정렬 기호도 같은 규칙으로 지운다', () => {
+    const doc = '| a | b | c |\n| :--- | :---: | ---: |\n| 1 | 2 | 3 |'
+    const table = parseTable(doc, 0)
+    const result = apply(doc, deleteColumns(table, [1]))
+    expect(result).toBe('| a | c |\n| :--- | ---: |\n| 1 | 3 |')
+  })
+
+  it('칸 안 `\\|` 는 경계로 보지 않는다', () => {
+    const doc = '| a\\|b | c | d |'
+    const table = parseTable(doc, 0)
+    const result = apply(doc, deleteColumns(table, [1]))
+    expect(result).toBe('| a\\|b | d |')
+  })
+
+  it('칸 수가 머리 행보다 적어 그 열이 없는 줄은 그대로 둔다', () => {
+    const doc = '| a | b |\n| - | - |\n| 1 |'
+    const table = parseTable(doc, 0)
+    const result = apply(doc, deleteColumns(table, [1]))
+    const lines = result.split('\n')
+    expect(lines[0]).toBe('| a |')
+    expect(lines[1]).toBe('| - |')
+    expect(lines[2]).toBe('| 1 |') // 원래 칸이 하나뿐이던 줄은 바이트 그대로
+  })
+
+  it('지우지 않은 열의 다른 줄은 바이트가 같다', () => {
+    const doc = '| a | b | c |\n| - | - | - |\n| 1 | 2 | 3 |\n| 4 | 5 | 6 |'
+    const table = parseTable(doc, 0)
+    const result = apply(doc, deleteColumns(table, [1]))
+    const resultLines = result.split('\n')
+    expect(resultLines).toEqual(['| a | c |', '| - | - |', '| 1 | 3 |', '| 4 | 6 |'])
+  })
+})
+
+describe('deleteRows — 행 삭제 (F-165 2.3)', () => {
+  const build = () => '| a | b |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n| 5 | 6 |\n이후 문단'
+
+  it('중간 본문 행 하나를 줄바꿈과 함께 지운다', () => {
+    const doc = build()
+    const table = parseTable(doc, 0)
+    const result = apply(doc, deleteRows(table, [2])) // "3 | 4" 행
+    expect(result).toBe('| a | b |\n| - | - |\n| 1 | 2 |\n| 5 | 6 |\n이후 문단')
+  })
+
+  it('표 마지막 줄이 포함되면 앞 줄바꿈을 지운다(표 뒤 문단은 그대로)', () => {
+    const doc = build()
+    const table = parseTable(doc, 0)
+    const result = apply(doc, deleteRows(table, [3])) // "5 | 6" 행(표 마지막 줄)
+    expect(result).toBe('| a | b |\n| - | - |\n| 1 | 2 |\n| 3 | 4 |\n이후 문단')
+  })
+
+  it('이어진 여러 행은 겹치지 않게 한 구간으로 지운다', () => {
+    const doc = build()
+    const table = parseTable(doc, 0)
+    const result = apply(doc, deleteRows(table, [2, 3])) // "3|4"·"5|6" 두 행 모두(마지막 포함)
+    expect(result).toBe('| a | b |\n| - | - |\n| 1 | 2 |\n이후 문단')
+  })
+})
+
+describe('clearCells — 칸 내용 비우기 (F-165 2.2 #5)', () => {
+  it('선택한 칸의 원문만 비우고 패딩은 남긴다', () => {
+    const doc = '| a | b |\n| - | - |\n| 11 | 22 |'
+    const table = parseTable(doc, 0)
+    const result = apply(
+      doc,
+      clearCells(table, [
+        { row: 1, col: 0 },
+        { row: 1, col: 1 },
+      ]),
+    )
+    expect(result).toBe('| a | b |\n| - | - |\n|  |  |')
+  })
+
+  it('이미 빈 칸은 건드리지 않는다(바이트 동일)', () => {
+    const doc = '| a | b |\n| - | - |\n|  | 2 |'
+    const table = parseTable(doc, 0)
+    const result = apply(doc, clearCells(table, [{ row: 1, col: 0 }]))
+    expect(result).toBe(doc)
+  })
+})
+
+describe('deleteTable — 표 전체 삭제 (F-165 2.2 #1)', () => {
+  it('표 줄만 지우고 표가 있던 자리에 빈 줄 1개를 남긴다, 앞뒤 줄은 그대로', () => {
+    const prefix = '앞줄\n\n'
+    const tableText = '| a | b |\n| - | - |\n| 1 | 2 |'
+    const suffix = '\n\n뒤줄'
+    const fullDoc = prefix + tableText + suffix
+    const table = parseTable(tableText, prefix.length)
+    const result = apply(fullDoc, deleteTable(table))
+    expect(result).toBe(prefix + suffix)
   })
 })

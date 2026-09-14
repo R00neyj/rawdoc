@@ -45,6 +45,10 @@ function cellFromSegment(raw, segStart, segEnd, lineStart) {
 
 /**
  * 한 줄을 칸으로 나눈다. `\|` 는 구분자가 아니다(F-125 2.5).
+ * 각 칸에 `pipeBefore`·`pipeAfter`(그 칸을 감싼 실제 파이프의 절대 위치, 없으면
+ * null)를 같이 담아 둔다 — F-165 `deleteColumns` 가 "칸의 앞 파이프부터 다음
+ * 파이프 직전까지" 규칙을 계산하는 데 쓴다. 행 원문(`raw`)도 그대로 들고 있어
+ * (F-165 2.3 패딩 공백 1개 확인용) 문서 슬라이스를 따로 하지 않아도 된다.
  * @param {string} raw 그 줄 원문(줄바꿈 문자 제외)
  * @param {number} lineStart 그 줄의 문서 절대 시작 위치
  */
@@ -56,15 +60,26 @@ function parseRow(raw, lineStart) {
   const bounds = [-1, ...pipes, raw.length]
   const segments = []
   for (let i = 0; i < bounds.length - 1; i++) {
-    segments.push([bounds[i] + 1, bounds[i + 1]])
+    const left = bounds[i]
+    const right = bounds[i + 1]
+    segments.push({
+      s: left + 1,
+      e: right,
+      pipeBefore: left === -1 ? null : lineStart + left,
+      pipeAfter: right === raw.length ? null : lineStart + right,
+    })
   }
   if (leadingPipe) segments.shift()
   if (trailingPipe) segments.pop()
 
-  const cells = segments.map(([s, e]) => cellFromSegment(raw, s, e, lineStart))
+  const cells = segments.map((seg) => ({
+    ...cellFromSegment(raw, seg.s, seg.e, lineStart),
+    pipeBefore: seg.pipeBefore,
+    pipeAfter: seg.pipeAfter,
+  }))
   // `to` 는 그 줄 원문 전체의 끝(절대 위치, 줄바꿈 제외) — 행·열 추가는 항상 이
   // 위치 뒤에 이어붙인다. trailingPipe 가 있어도 이미 그 파이프를 지난 자리다
-  return { line: lineStart, to: lineStart + raw.length, cells, leadingPipe, trailingPipe }
+  return { line: lineStart, to: lineStart + raw.length, cells, leadingPipe, trailingPipe, raw }
 }
 
 /**
@@ -275,4 +290,110 @@ export function addColumn(table) {
   }
 
   return { changes, focus }
+}
+
+// 칸 범위 선택을 다섯 가지로 분류한다(F-165 2.2). range 좌표는 순서 무관, parseTable 행 번호(머리 0, 본문 1…) — 범위는 항상 직사각형(2.1)이라 행·열 연속 구간만 보면 된다
+export function classifySelection(table, range) {
+  const r1 = Math.min(range.r1, range.r2)
+  const r2 = Math.max(range.r1, range.r2)
+  const c1 = Math.min(range.c1, range.c2)
+  const c2 = Math.max(range.c1, range.c2)
+
+  const allRows = r2 - r1 + 1 === table.rows.length
+  const allCols = c2 - c1 + 1 === table.columnCount
+  const headerIncluded = r1 === 0
+
+  if (allRows && allCols) return 'table'
+  if (allRows) return 'columns'
+  if (allCols && !headerIncluded) return 'rows'
+  if (allCols) return 'rows-with-header'
+  return 'cells'
+}
+
+// 칸 col 을 지울 때 그 줄에서 실제로 지울 원문 범위(F-165 2.3). col 이 그 줄에 없으면(칸 수가 머리 행보다 적은 행) null — 그 줄은 그대로 둔다
+function columnRangeInRow(row, col) {
+  if (col >= row.cells.length) return null
+  const cell = row.cells[col]
+  const charAt = (pos) => row.raw[pos - row.line]
+
+  if (cell.pipeBefore == null && cell.pipeAfter == null) {
+    // 파이프가 하나도 없는 줄(칸이 이 하나뿐) — 줄 전체가 이 칸이다
+    return row.line < row.to ? { from: row.line, to: row.to } : null
+  }
+  if (cell.pipeBefore == null) {
+    // 첫 열, 앞 파이프 없음: 칸 시작부터 다음 파이프 뒤 공백 1개까지
+    let end = cell.pipeAfter + 1
+    if (charAt(end) === ' ') end++
+    return { from: row.line, to: end }
+  }
+  if (cell.pipeAfter == null) {
+    // 끝 열, 끝 파이프 없음: 앞 파이프 앞 공백 1개부터 줄 끝까지
+    let start = cell.pipeBefore
+    if (charAt(start - 1) === ' ') start--
+    return { from: start, to: row.to }
+  }
+  // 그 밖: 앞 파이프부터 다음 파이프 직전까지
+  return { from: cell.pipeBefore, to: cell.pipeAfter }
+}
+
+// 열들을 지운다(F-165 2.2 #2, 2.3) — 머리·구분·본문 모든 줄에서 각 열의 칸을 지운다. 다른 칸·줄의 패딩은 다시 맞추지 않는다(Q19)
+export function deleteColumns(table, cols) {
+  const sortedCols = [...new Set(cols)].sort((a, b) => a - b)
+  const header = table.rows[0]
+  const orderedRows = header && table.delimiterRow ? [header, table.delimiterRow, ...table.rows.slice(1)] : table.rows
+
+  const changes = []
+  for (const row of orderedRows) {
+    for (const col of sortedCols) {
+      const range = columnRangeInRow(row, col)
+      if (range && range.from < range.to) changes.push({ from: range.from, to: range.to, insert: '' })
+    }
+  }
+  return changes
+}
+
+// 본문 행들을 지운다(F-165 2.2 #3·#4, 2.3, rows 는 parseTable 행 번호 — 머리 0은 넣지 않는다) — 줄+줄바꿈 하나를 지운다. 표 마지막 줄이 포함된 구간은 대신 그 앞 줄바꿈을 지운다. 이어진 행은 한 구간으로 묶어 겹치지 않게 지운다
+export function deleteRows(table, rows) {
+  const sorted = [...new Set(rows)].sort((a, b) => a - b)
+  const changes = []
+  let i = 0
+  while (i < sorted.length) {
+    let j = i
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++
+    const startIdx = sorted[i]
+    const endIdx = sorted[j]
+    const runStart = table.rows[startIdx]
+    const runEnd = table.rows[endIdx]
+    const isLastLine = endIdx === table.rows.length - 1
+    if (isLastLine && startIdx > 0) {
+      const prevRow = table.rows[startIdx - 1]
+      changes.push({ from: prevRow.to, to: runEnd.to, insert: '' })
+    } else if (isLastLine) {
+      changes.push({ from: runStart.line, to: runEnd.to, insert: '' })
+    } else {
+      const nextRow = table.rows[endIdx + 1]
+      changes.push({ from: runStart.line, to: nextRow.line, insert: '' })
+    }
+    i = j + 1
+  }
+  return changes
+}
+
+// 선택한 칸들의 내용만 비운다(F-165 2.2 #5) — 원문 범위(앞뒤 공백 제외)를 빈 문자열로. 패딩은 건드리지 않는다
+export function clearCells(table, cells) {
+  const targets = cells
+    .map(({ row, col }) => table.rows[row]?.cells[col])
+    .filter((cell) => cell && cell.from < cell.to)
+    .sort((a, b) => a.from - b.from)
+  return targets.map((cell) => ({ from: cell.from, to: cell.to, insert: '' }))
+}
+
+// 표 전체를 지운다(F-165 2.2 #1) — 표 블록 줄들만 지우고 앞뒤 줄은 그대로 둔다. 표가 있던 자리에 빈 줄 1개가 남는다
+export function deleteTable(table) {
+  const header = table.rows[0]
+  if (!header) return []
+  const bodyRows = table.rows.slice(1)
+  const lastRow = bodyRows.length > 0 ? bodyRows[bodyRows.length - 1] : table.delimiterRow
+  if (!lastRow) return []
+  return [{ from: header.line, to: lastRow.to, insert: '' }]
 }

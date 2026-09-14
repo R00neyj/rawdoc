@@ -11,7 +11,21 @@ import { EditorSelection, EditorState } from '@codemirror/state'
 import { EditorView, WidgetType } from '@codemirror/view'
 import { redo, undo } from '@codemirror/commands'
 
-import { addColumn, addRow, advanceCellRange, cellEdit, escapeCell, mapCellRange, parseTable, unescapeCell } from './tableModel.js'
+import {
+  addColumn,
+  addRow,
+  advanceCellRange,
+  cellEdit,
+  classifySelection,
+  clearCells,
+  deleteColumns,
+  deleteRows,
+  deleteTable,
+  escapeCell,
+  mapCellRange,
+  parseTable,
+  unescapeCell,
+} from './tableModel.js'
 import { observeHeight, stopObservingHeight } from './blocks.js'
 import { parseCellInline } from './cellInline.js'
 import { insertLink, toggleEmphasis, toggleStrong } from '../commands.js'
@@ -31,6 +45,12 @@ const pendingFocus = new WeakMap()
 /** 표 위젯 최상위 요소(wrap) → 그 표가 속한 주 EditorView. destroy(dom) 이 view 를
  * 인자로 받지 못하는 WidgetType API 한계를 메꾼다 */
 const wrapView = new WeakMap()
+
+// 주 EditorView → 확정된 칸 범위 선택(F-165 2.1). { wrap, r1, c1, r2, c2 }(행·열은 parseTable 행 번호, 이미 정규화됨: r1<=r2, c1<=c2). 표 하나당 하나
+const activeRange = new WeakMap()
+
+// 주 EditorView → "표 밖 클릭 해제" 용으로 등록해 둔 document 캡처 리스너
+const outsideClickHandlers = new WeakMap()
 
 /**
  * 지금 이 주 view 의 활성 칸이 한글 조합 중인가 (F-125 2.2 "재계산 보류·따라잡기는
@@ -497,6 +517,45 @@ function renderCellText(el, text) {
   }
 }
 
+// 마우스 버튼을 누른 채 다른 칸으로 끌면 범위 선택, 끌지 않고 떼면 그 칸 편집(F-165 2.1). document 에 임시로 mousemove·mouseup 을 걸어 칸 밖으로 나간 뒤에도 계속 따라간다
+function beginPointerSelection(mainView, wrap, startRow, startCol) {
+  // 다른 칸을 편집 중이었으면 끝낸다. 지금 누른 칸을 이미 편집 중이면 끌기가 시작될 때까지는 그대로 둔다(F-125 2.2 "같은 칸이면 포커스만")
+  const existingEdit = activeEdit.get(mainView)
+  if (existingEdit && !(existingEdit.wrap === wrap && existingEdit.row === startRow && existingEdit.col === startCol)) {
+    endEdit(mainView)
+  }
+  clearRangeSelection(mainView)
+
+  let moved = false
+  let current = { row: startRow, col: startCol }
+
+  function onMove(event) {
+    const hit = clampCellFromPoint(wrap, event.clientX, event.clientY)
+    if (!hit) return
+    if (hit.row === current.row && hit.col === current.col) return
+    current = hit
+    if (!moved && (hit.row !== startRow || hit.col !== startCol)) {
+      moved = true
+      // 끌기가 시작되면 칸 편집은 끝낸다 — 하위 에디터 없음(F-165 2.1)
+      if (activeEdit.get(mainView)) endEdit(mainView)
+    }
+    if (moved) renderRangeHighlight(wrap, startRow, startCol, current.row, current.col)
+  }
+
+  function onUp() {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    if (moved) {
+      finalizeRangeSelection(mainView, wrap, startRow, startCol, current.row, current.col)
+    } else {
+      startEdit(mainView, wrap, currentWidgetFor(wrap), startRow, startCol)
+    }
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
 /** 칸(td/th) DOM 을 만들고 클릭·키보드 진입을 연결한다 */
 function buildCell(tagName, text, row, col, mainView, wrap) {
   const el = document.createElement(tagName)
@@ -506,12 +565,13 @@ function buildCell(tagName, text, row, col, mainView, wrap) {
   el.dataset.col = String(col)
 
   el.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) return
     event.preventDefault()
     // 칸 안 링크·위키링크 글자를 눌러도 열지 않고 칸 편집을 시작한다(F-140 3.2) —
     // 전파를 막아 EditorView 의 linkClicks·wikiLinkClicks(mousedown) 가 같은 클릭을
     // 다시 처리하지 않게 한다
     event.stopPropagation()
-    startEdit(mainView, wrap, currentWidgetFor(wrap), row, col)
+    beginPointerSelection(mainView, wrap, row, col)
   })
   el.addEventListener('keydown', (event) => {
     // 칸 요소 자신이 포커스를 들고 편집 중이 아닐 때만 — 하위 에디터에서 올라온 키는 target 이 다르다 (F-161 3.1)
@@ -582,6 +642,7 @@ function positionAddButtons(wrap) {
  * 그 칸 위치로 옮겨 다니게 한다 — `.md-table-scroll` 이 `position: relative` 라
  * td 의 offsetParent 가 되고, offsetLeft·offsetTop 은 스크롤 위치와 무관해(3.3
  * 근거 "표 가로 스크롤을 따라 움직인다") 스크롤 이벤트를 따로 볼 필요가 없다 */
+// 강조 요소를 만들 때 범위 선택 전용 키(Esc·Delete·Backspace, F-165 2.1·2.2)를 걸어 둔다. 요소 자신이 "범위 선택 전용 포커스 요소" 다 — tabIndex=-1 이라 Tab 순서에는 안 들어가고 finalizeRangeSelection 이 직접 focus() 한다. wrap 은 클로저로 잡고 이벤트 시점에 wrapView 로 최신 mainView 를 찾는다
 function getCellHighlight(wrap) {
   const scroll = wrap.querySelector('.md-table-scroll')
   if (!scroll) return null
@@ -590,6 +651,8 @@ function getCellHighlight(wrap) {
     el = document.createElement('div')
     el.className = 'md-table-cell-highlight'
     el.hidden = true
+    el.tabIndex = -1
+    el.addEventListener('keydown', (event) => rangeHighlightKeydown(wrapView.get(wrap), wrap, event))
     scroll.appendChild(el)
   }
   return el
@@ -611,6 +674,168 @@ function hideCellHighlight(wrap) {
   if (el) el.hidden = true
 }
 
+// 강조를 (r1,c1)-(r2,c2) 두 칸을 감싼 사각형(바깥 칸 테두리 안쪽)으로 그린다(F-165 2.1). 좌표 순서는 무관 — 여기서 정규화한다
+function renderRangeHighlight(wrap, r1, c1, r2, c2) {
+  const el = getCellHighlight(wrap)
+  const table = wrap.querySelector('table')
+  if (!el || !table) return false
+  const topRow = table.rows[Math.min(r1, r2)]
+  const bottomRow = table.rows[Math.max(r1, r2)]
+  const topLeft = topRow?.cells[Math.min(c1, c2)]
+  const bottomRight = bottomRow?.cells[Math.max(c1, c2)]
+  if (!topLeft || !bottomRight) return false
+
+  const left = topLeft.offsetLeft + 1
+  const top = topLeft.offsetTop + 1
+  const right = bottomRight.offsetLeft + bottomRight.offsetWidth - 1
+  const bottom = bottomRight.offsetTop + bottomRight.offsetHeight - 1
+  el.style.left = `${left}px`
+  el.style.top = `${top}px`
+  el.style.width = `${Math.max(0, right - left)}px`
+  el.style.height = `${Math.max(0, bottom - top)}px`
+  el.hidden = false
+  return true
+}
+
+// 범위 [a,b](양끝 포함) 정수 배열 — a>b 면 빈 배열
+function indicesBetween(a, b) {
+  const out = []
+  for (let i = a; i <= b; i++) out.push(i)
+  return out
+}
+
+// 지금 화면(clientX·clientY) 위치에서 가장 가까운 칸의 행·열을 구한다. 표 밖으로 나가면 표 테두리 안쪽으로 좌표를 clamp 한다(F-165 2.1 "표 밖으로 끌면 가장 가까운 칸으로 제한")
+function clampCellFromPoint(wrap, clientX, clientY) {
+  const table = wrap.querySelector('table')
+  if (!table) return null
+  const rect = table.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0) return null
+  const x = Math.min(Math.max(clientX, rect.left), rect.right - 1)
+  const y = Math.min(Math.max(clientY, rect.top), rect.bottom - 1)
+  const el = document.elementFromPoint(x, y)
+  const cell = el?.closest('td, th')
+  if (!cell || !table.contains(cell)) return null
+  return { row: Number(cell.dataset.row), col: Number(cell.dataset.col) }
+}
+
+function detachOutsideClickListener(mainView) {
+  const handler = outsideClickHandlers.get(mainView)
+  if (!handler) return
+  document.removeEventListener('mousedown', handler, true)
+  outsideClickHandlers.delete(mainView)
+}
+
+// 표 밖 클릭으로 범위 선택을 해제한다(F-165 2.1). 캡처 단계라 표 안 다른 칸을 눌러 새 편집·새 끌기를 시작하는 경우와도 순서 걱정 없이 안전하다 — 그 경우도 각 칸의 mousedown 이 스스로 clearRangeSelection 을 부른다
+function attachOutsideClickListener(mainView, wrap) {
+  detachOutsideClickListener(mainView)
+  const handler = (event) => {
+    if (wrap.contains(event.target)) return
+    clearRangeSelection(mainView)
+  }
+  outsideClickHandlers.set(mainView, handler)
+  document.addEventListener('mousedown', handler, true)
+}
+
+// 범위 선택을 해제한다(F-165 2.1 "해제"). 강조를 숨기고 표 밖 클릭 리스너를 뗀다
+function clearRangeSelection(mainView) {
+  if (!mainView) return
+  const range = activeRange.get(mainView)
+  if (!range) return
+  activeRange.delete(mainView)
+  hideCellHighlight(range.wrap)
+  detachOutsideClickListener(mainView)
+}
+
+// 범위 선택 전용 포커스 요소(강조 자신)의 키 처리(F-165 2.1·2.2). Esc 는 해제, Delete·Backspace 는 삭제·비우기 — 그 밖의 키(글자·붙여넣기·복사)는 아무것도 하지 않는다
+function rangeHighlightKeydown(mainView, wrap, event) {
+  if (!mainView) return
+  const range = activeRange.get(mainView)
+  if (!range || range.wrap !== wrap) return
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    clearRangeSelection(mainView)
+    return
+  }
+  if (event.key === 'Delete' || event.key === 'Backspace') {
+    event.preventDefault()
+    performRangeDelete(mainView, wrap, range)
+  }
+}
+
+// 끌기를 마쳐 범위 선택을 확정한다 — 강조를 보이고 포커스를 강조 요소(범위 선택 전용 포커스 요소)로 옮긴다(F-165 2.1)
+function finalizeRangeSelection(mainView, wrap, r1, c1, r2, c2) {
+  if (!renderRangeHighlight(wrap, r1, c1, r2, c2)) return
+  activeRange.set(mainView, {
+    wrap,
+    r1: Math.min(r1, r2),
+    c1: Math.min(c1, c2),
+    r2: Math.max(r1, r2),
+    c2: Math.max(c1, c2),
+  })
+  const el = getCellHighlight(wrap)
+  el?.focus()
+  attachOutsideClickListener(mainView, wrap)
+}
+
+// Del·Backspace 규칙 5가지(F-165 2.2)를 실행한다. 결과는 트랜잭션 1개(userEvent: 'delete.table'). 표 전체·열·행·머리 포함 행 삭제 뒤에는 범위 선택을 해제하고 커서를 표 다음 줄 시작으로 옮긴다(표 전체 삭제면 표가 있던 빈 줄). 내용 비우기(cells)는 범위 선택을 유지한다
+function performRangeDelete(mainView, wrap, range) {
+  const widget = currentWidgetFor(wrap)
+  if (!widget) return
+  const table = widget.table
+  const { r1, c1, r2, c2 } = range
+  const kind = classifySelection(table, { r1, c1, r2, c2 })
+  const blockFrom = mainView.posAtDOM(wrap)
+  const blockTo = blockFrom + widget.text.length
+
+  let changes
+  const keepSelection = kind === 'cells'
+
+  if (kind === 'table') {
+    changes = deleteTable(table)
+  } else if (kind === 'columns') {
+    changes = deleteColumns(table, indicesBetween(c1, c2))
+  } else if (kind === 'rows') {
+    changes = deleteRows(table, indicesBetween(r1, r2))
+  } else if (kind === 'rows-with-header') {
+    const headerCells = indicesBetween(c1, c2).map((col) => ({ row: 0, col }))
+    const bodyRows = indicesBetween(Math.max(r1, 1), r2)
+    changes = [...clearCells(table, headerCells), ...deleteRows(table, bodyRows)]
+  } else {
+    const cells = []
+    for (let r = r1; r <= r2; r++) {
+      for (let c = c1; c <= c2; c++) cells.push({ row: r, col: c })
+    }
+    changes = clearCells(table, cells)
+  }
+
+  if (changes.length === 0) {
+    if (!keepSelection) clearRangeSelection(mainView)
+    return
+  }
+
+  const mapped = changes.map((c) => ({ ...c, from: c.from + blockFrom, to: c.to != null ? c.to + blockFrom : undefined }))
+
+  if (keepSelection) {
+    mainView.dispatch({ changes: mapped, userEvent: 'delete.table' })
+    return
+  }
+
+  clearRangeSelection(mainView)
+  if (kind === 'table') {
+    // 표가 있던 자리의 빈 줄 시작 — blockFrom 자신은 이 트랜잭션으로 바뀌지 않는다
+    mainView.dispatch({ changes: mapped, selection: { anchor: blockFrom }, userEvent: 'delete.table' })
+    mainView.focus() // 범위 선택 전용 포커스 요소는 사라졌다 — 주 에디터로 포커스를 돌려준다
+    return
+  }
+  // 표 다음 줄 시작(F-125 Esc 와 같은 위치) — 원래 그 위치(blockTo+1)를 이번 트랜잭션에 맞춰 옮긴다(exitToMain 과 같은 발상, F-135 3.5)
+  const changeSet = mainView.state.changes(mapped)
+  const nextLineStart = Math.min(blockTo + 1, mainView.state.doc.length)
+  const cursor = Math.min(changeSet.mapPos(nextLineStart), changeSet.newLength)
+  mainView.dispatch({ changes: mapped, selection: { anchor: cursor }, userEvent: 'delete.table' })
+  mainView.focus()
+}
+
 /** wrap → 버튼 위치 재계산용 ResizeObserver. 표(<table>) 크기(칸 편집으로 열 폭이
  * 바뀌는 등)와 스크롤 뷰포트(`.md-table-scroll`, 창 너비 변화) 둘 다 관찰한다.
  * 편집 중인 칸이 있으면(칸 글자가 늘어 칸 크기가 바뀌는 경우 등) 강조 위치도 같이 맞춘다 */
@@ -625,6 +850,8 @@ function observeButtonPosition(wrap) {
     const view = wrapView.get(wrap)
     const entry = view && activeEdit.get(view)
     if (entry && entry.wrap === wrap) positionCellHighlight(wrap, entry.td, { visible: false })
+    const range = view && activeRange.get(view)
+    if (range && range.wrap === wrap) renderRangeHighlight(wrap, range.r1, range.c1, range.r2, range.c2)
   })
   observer.observe(table)
   observer.observe(scroll)
@@ -752,6 +979,8 @@ export class TableWidget extends WidgetType {
       // 참이므로 통째로 다시 그린다. updateDOM 은 뷰 갱신 도중이라(F-138 3.5) 지금
       // 바로 dispatch 할 수 없다 — deferDispatch 로 미룬다
       endEdit(view, { deferDispatch: true })
+      // 주 에디터 문서 변경으로 표 구조가 바뀌면 범위 선택도 해제한다(F-165 2.1) — 지금 든 행·열 번호가 새 구조에서는 더 이상 유효하지 않다
+      clearRangeSelection(view)
       renderTable(dom, this, view)
       if (pending) startEdit(view, dom, this, pending.row, pending.col)
       return true
@@ -777,6 +1006,10 @@ export class TableWidget extends WidgetType {
       }
     })
 
+    // 구조가 그대로라 범위 선택도 유지된다(F-165 2.2 비우기 뒤) — 칸 글자가 바뀌어 크기가 달라졌을 수 있으니 강조 사각형을 다시 맞춘다
+    const range = activeRange.get(view)
+    if (range && range.wrap === dom) renderRangeHighlight(dom, range.r1, range.c1, range.r2, range.c2)
+
     return true
   }
 
@@ -796,6 +1029,8 @@ export class TableWidget extends WidgetType {
     const entry = activeEdit.get(view)
     // destroy 도 뷰 갱신 도중 불린다(F-138 3.5) — updateDOM 과 같은 이유로 미룬다
     if (entry && entry.wrap === dom) endEdit(view, { deferDispatch: true })
+    const range = activeRange.get(view)
+    if (range && range.wrap === dom) clearRangeSelection(view)
   }
 }
 
