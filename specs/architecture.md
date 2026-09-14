@@ -50,7 +50,12 @@ src/
 - 디자인 수정(2026-09-14)으로 추가
   - `app/`: `icons.jsx`(F-142), `theme.js`(F-141)
   - `styles/`: `tokens.test.js`(F-141)
-- editor·viewer 가 문서 목록이 필요하면(위키링크) 저장소를 import 하지 않고 App 이 인자로 넘긴다
+- 사이드바·이미지(2026-09-14)로 추가
+  - `app/`: `SidebarHead.jsx`·`sidebarWidth.js`(F-159), `attachImages.js`·`attachmentGc.js`(F-156)
+  - `editor/`: `imageInsert.js`(F-156), `preview/imageWidget.js`(F-157)
+  - `lib/`: `imageFile.js`·`imageBlock.js`(F-156)
+  - `styles/`: `image.css`(F-157)
+- editor·viewer 가 문서 목록이 필요하면(위키링크) 저장소를 import 하지 않고 App 이 인자로 넘긴다. 첨부 이미지도 같다: App 이 `onImageFiles`(넣기)·`resolveAttachment(id)`(읽기) 콜백을 넘긴다 (F-156·F-157)
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
@@ -75,10 +80,18 @@ store.create({ ..., folderId })                // F-126
 store.moveDoc(id, folderId)   // F-126. updatedAt 유지
 store.listFolders() / createFolder({ name, parentId }) / renameFolder(id, name) / moveFolder(id, parentId) / removeFolder(id)   // F-126
 store.setPinned(id, pinned)   // F-132. updatedAt 유지
+
+// 이미지 첨부 (2026-09-14, F-156)
+/** @typedef {{ id:string, mime:string, ext:'png'|'jpg'|'gif'|'webp', size:number, width:number, height:number, createdAt:number, blob:Blob }} Attachment */
+store.putAttachment({ blob, mime, ext, width, height })   // Promise<{id, ext}>  id 는 16진수 16자, 겹치면 다시 뽑는다
+store.getAttachment(id)       // Promise<Attachment|null>
+store.listAttachments()       // Promise<{id, ext, size, createdAt}[]>  blob 제외
+store.removeAttachment(id)    // Promise<void>
 ```
 
 - `folderId`·`pinnedAt` 필드가 없는 옛 문서는 null 로 본다
 - IndexedDB `md-docs` 버전 2 에서 `folders` 스토어 추가 (F-126)
+- 버전 3 에서 `attachments` 스토어 추가 (F-156). 첨부는 문서와 연결 필드 없이 id 로만 찾고, 어떤 문서 원문에도 없고 24시간 지난 것을 앱 시작 때 지운다
 
 - `content` 는 `lineEnding` 으로 줄을 이은 원문이다 (`specs/product.md` 5장, Q9)
 - 저장소 이름·키에 제품명을 쓰지 않는다 (CLAUDE.md 불변조건)
@@ -102,6 +115,7 @@ store.setPinned(id, pinned)   // F-132. updatedAt 유지
 | `md.bodyFont` | `sans` \| `serif` | `sans` | F-141 |
 | `md.theme` | `system` \| `white` \| `sepia` \| `dark` | `system` | F-141 |
 | `md.sidebar` | `expanded` \| `collapsed` | `expanded` | F-143 |
+| `md.sidebarWidth` | 정수 px, 200~480 | `224` | F-159 |
 | `md.lineNumbers` | `on` \| `off` | `on` | F-147 |
 | `md.fontSize` | `small` \| `medium` \| `large` | `medium` | F-154 |
 | `md.indent` | `2` \| `4` | `4` | F-154 |
