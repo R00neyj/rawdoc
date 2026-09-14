@@ -283,6 +283,53 @@ function exitToMain(mainView, above) {
   return true
 }
 
+// 한 축(세로: 편집 영역 mainView.scrollDOM, 가로: 표 .md-table-scroll)에서 target 이 container
+// 안에 이미 다 보이면 그대로 두고, 벗어난 쪽 끝만 닿을 만큼 스크롤한다(F-171 3장 — 가운데로 옮기지 않는다)
+function clampIntoView(container, targetRect, axis) {
+  const rect = container.getBoundingClientRect()
+  if (axis === 'y') {
+    if (targetRect.bottom - rect.bottom > 1) container.scrollTop += targetRect.bottom - rect.bottom
+    else if (rect.top - targetRect.top > 1) container.scrollTop -= rect.top - targetRect.top
+  } else {
+    if (targetRect.right - rect.right > 1) container.scrollLeft += targetRect.right - rect.right
+    else if (rect.left - targetRect.left > 1) container.scrollLeft -= rect.left - targetRect.left
+  }
+}
+
+// 행·열 추가처럼 구조가 바뀌는 트랜잭션을 보내기 직전의 스크롤 위치를 잡아 둔다(F-171 3장
+// 원인 후보 1 — 표 DOM 을 다시 그리며 주 에디터가 높이 변화에 맞춰 스크롤을 옮길 수 있다는
+// 가설의 방어책). 사용자가 손댄 적 없는 스크롤을 우리가 옮길 근거가 없으니, 트랜잭션을
+// 보내기 직전 그 위치로 되돌려 놓고 clampIntoView 로만 다시 맞춘다
+function captureScroll(mainView, wrap) {
+  const hScroll = wrap.querySelector('.md-table-scroll')
+  return { scrollTop: mainView.scrollDOM.scrollTop, scrollLeft: hScroll ? hScroll.scrollLeft : 0 }
+}
+
+// 칸에 포커스를 준 뒤 스크롤을 clampIntoView 규칙대로 맞춘다. restore 가 있으면 먼저 그 값으로
+// 되돌린 뒤 맞춘다 — 칸(하위 EditorView)에 포커스·선택을 옮기면 브라우저가 스스로 스크롤을
+// 옮기는 경우가 실측으로 확인됐다(F-171 2장 A1). Selection.collapse·Element.focus·
+// scrollIntoView·scrollTo·scrollBy·scrollTop 대입을 모두 가로채도 그 변화가 잡히지 않는
+// 네이티브 동작이라, 일으킨 원인을 막는 대신 다음 프레임까지 다시 맞춰 덮어써서 없앤다
+function focusCellClamped(mainView, wrap, td, cellView, restore) {
+  cellView.focus()
+  const scroller = mainView.scrollDOM
+  const hScroll = wrap.querySelector('.md-table-scroll')
+  const run = () => {
+    if (restore) {
+      scroller.scrollTop = restore.scrollTop
+      if (hScroll) hScroll.scrollLeft = restore.scrollLeft
+    }
+    const rect = td.getBoundingClientRect()
+    clampIntoView(scroller, rect, 'y')
+    if (hScroll) clampIntoView(hScroll, rect, 'x')
+  }
+  run()
+  requestAnimationFrame(() => {
+    run()
+    requestAnimationFrame(run)
+  })
+}
+
 /**
  * 칸 편집을 시작한다(클릭·키보드 공통 진입점). 같은 칸이면 포커스만 옮긴다.
  * @param {EditorView} mainView
@@ -290,14 +337,17 @@ function exitToMain(mainView, above) {
  * @param {{table:object,text:string}} widget 최신 TableWidget 인스턴스
  * @param {number} row
  * @param {number} col
+ * @param {{scrollTop:number,scrollLeft:number}} [restore] 구조가 바뀌는 트랜잭션 보내기 직전 스크롤
+ *   (F-171 3장) — 없으면(클릭·방향키로 바로 부른 경우) 지금 스크롤을 그대로 기준으로 쓴다
  */
-function startEdit(mainView, wrap, widget, row, col) {
+function startEdit(mainView, wrap, widget, row, col, restore) {
   if (row < 0 || row >= widget.table.rows.length) return
   if (col < 0 || col >= widget.table.columnCount) return
+  const scrollBase = restore || captureScroll(mainView, wrap)
 
   const existing = activeEdit.get(mainView)
   if (existing && existing.wrap === wrap && existing.row === row && existing.col === col) {
-    existing.cellView.focus()
+    focusCellClamped(mainView, wrap, existing.td, existing.cellView, scrollBase)
     return
   }
   if (existing) endEdit(mainView)
@@ -358,7 +408,7 @@ function startEdit(mainView, wrap, widget, row, col) {
   })
 
   activeEdit.set(mainView, { wrap, td, row, col, cellView, widget, range, lineStart, pendingRecalc: false })
-  cellView.focus()
+  focusCellClamped(mainView, wrap, td, cellView, scrollBase)
   positionCellHighlight(wrap, td, { visible: false }) // 단일 칸 편집 강조는 보이지 않는다(F-164)
 }
 
@@ -420,7 +470,7 @@ function cellKeydown(mainView, wrap, cellView, event) {
       const blockFrom = mainView.posAtDOM(wrap)
       const { changes } = addRow(latest.table)
       if (changes.length === 0) return consume(exitToMain(mainView, false))
-      pendingFocus.set(mainView, { wrap, row: latest.table.rows.length, col: e.col })
+      pendingFocus.set(mainView, { wrap, row: latest.table.rows.length, col: e.col, restore: captureScroll(mainView, wrap) })
       mainView.dispatch({
         changes: changes.map((c) => ({ ...c, from: c.from + blockFrom })),
         userEvent: 'input.table',
@@ -774,7 +824,7 @@ function finalizeRangeSelection(mainView, wrap, r1, c1, r2, c2) {
     c2: Math.max(c1, c2),
   })
   const el = getCellHighlight(wrap)
-  el?.focus()
+  el?.focus({ preventScroll: true }) // F-171 3장 — 범위 선택 확정으로 화면이 튀지 않게 한다
   attachOutsideClickListener(mainView, wrap)
 }
 
@@ -910,7 +960,7 @@ function renderTable(wrap, widget, mainView) {
       const blockFrom = mainView.posAtDOM(wrap)
       const { changes } = addRow(latest.table)
       if (changes.length === 0) return
-      pendingFocus.set(mainView, { wrap, row: latest.table.rows.length, col: 0 })
+      pendingFocus.set(mainView, { wrap, row: latest.table.rows.length, col: 0, restore: captureScroll(mainView, wrap) })
       mainView.dispatch({
         changes: changes.map((c) => ({ ...c, from: c.from + blockFrom })),
         userEvent: 'input.table',
@@ -923,7 +973,7 @@ function renderTable(wrap, widget, mainView) {
       const blockFrom = mainView.posAtDOM(wrap)
       const { changes } = addColumn(latest.table)
       if (changes.length === 0) return
-      pendingFocus.set(mainView, { wrap, row: 0, col: latest.table.columnCount })
+      pendingFocus.set(mainView, { wrap, row: 0, col: latest.table.columnCount, restore: captureScroll(mainView, wrap) })
       mainView.dispatch({
         changes: changes.map((c) => ({ ...c, from: c.from + blockFrom })),
         userEvent: 'input.table',
@@ -982,7 +1032,7 @@ export class TableWidget extends WidgetType {
       // 주 에디터 문서 변경으로 표 구조가 바뀌면 범위 선택도 해제한다(F-165 2.1) — 지금 든 행·열 번호가 새 구조에서는 더 이상 유효하지 않다
       clearRangeSelection(view)
       renderTable(dom, this, view)
-      if (pending) startEdit(view, dom, this, pending.row, pending.col)
+      if (pending) startEdit(view, dom, this, pending.row, pending.col, pending.restore)
       return true
     }
 

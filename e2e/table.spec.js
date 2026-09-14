@@ -648,3 +648,162 @@ test.describe('F-165 표 칸 범위 선택과 행·열 삭제', () => {
     await expect(highlight).not.toBeVisible()
   })
 })
+
+// F-171: 표 행·열 추가 때 화면 튐. 표 앞뒤에 긴 여백을 둬 스크롤 여지를 만든다
+function f171Pad(n) {
+  return Array.from({ length: n }, (_, i) => `줄 ${i + 1}`).join('\n\n')
+}
+// 표 뒤 여백은 짧게 둔다 — Control+End 로 문서 끝까지 가면 CM6 가 끝 근처만 그리므로(가상화),
+// 표가 끝에서 너무 멀면 위젯이 DOM 에 없어 locator 가 못 찾는다. "칸 아래 room" 은 앞쪽 여백
+// 안으로 스크롤을 올려 만든다(f171PositionTable)
+const F171_DOC = `${f171Pad(60)}\n\n표\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n\n뒤 여백\n`
+
+function f171WideTable(cols) {
+  const head = `| ${Array.from({ length: cols }, (_, i) => `h${i}`).join(' | ')} |`
+  const sep = `| ${Array.from({ length: cols }, () => '---').join(' | ')} |`
+  const row = `| ${Array.from({ length: cols }, (_, i) => `v${i}`).join(' | ')} |`
+  return `${LEAD}${head}\n${sep}\n${row}\n`
+}
+
+// 편집 영역(주 에디터) scrollTop — 칸 하위 에디터도 .cm-scroller 를 가지므로 첫 번째(가장 바깥) 것만 쓴다
+async function mainScrollTop(page) {
+  return page.locator('.cm-scroller').first().evaluate((el) => el.scrollTop)
+}
+
+// F-165 포커스 요소·범위 선택 포커스로 인한 네이티브 스크롤 보정(focusCellClamped)이 끝날 때까지 기다린다
+async function waitScrollSettle(page) {
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)))),
+  )
+  await page.waitForTimeout(50)
+}
+
+// 표 위젯이 렌더링될 만큼 문서 끝으로 이동한 뒤(가상화 대응), wrap 아래 끝을 scroller 아래 끝에서
+// offsetFromBottom px 위에 오도록 마우스 휠로 스크롤한다(값이 크면 "칸이 다 보이는 경우", 작으면
+// "벗어나는 경우") — 실제 사용자처럼 휠 이벤트로 스크롤한다. scrollTop 이 늘수록(휠을 아래로)
+// 화면 위 내용은 위로 옮겨가므로(= wrap 아래 끝의 화면 y 는 줄어든다), 필요한 만큼 아래로
+// 스크롤한 delta 는 "wrap 아래 끝 - scroller 아래 끝 + offsetFromBottom" 이다
+async function f171PositionTable(page, offsetFromBottom) {
+  await page.locator('.cm-content').click()
+  await page.keyboard.press('Control+End')
+  const table = page.locator('.md-table-widget table')
+  await table.waitFor()
+  const scroller = page.locator('.cm-scroller').first()
+  const scRect = await rectOf(scroller)
+  await page.mouse.move(scRect.x + scRect.width / 2, scRect.y + scRect.height / 2)
+  const wrapRect = await rectOf(page.locator('.md-table-widget'))
+  await page.mouse.wheel(0, wrapRect.bottom - scRect.bottom + offsetFromBottom)
+  await waitScrollSettle(page)
+  return table
+}
+
+test.describe('F-171 표 행·열 추가 때 화면 튐', () => {
+  test('F-171 A2 칸이 이미 보이면 Enter·+ 행 추가 모두 scrollTop 을 바꾸지 않는다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: F171_DOC })
+    const table = await f171PositionTable(page, 300) // 아래에 room 넉넉
+
+    // 마지막 행 Enter 로 행 추가
+    const before1 = await mainScrollTop(page)
+    await table.locator('tr').last().locator('td').last().click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await waitScrollSettle(page)
+    await expect(table.locator('tr')).toHaveCount(4)
+    expect(Math.abs((await mainScrollTop(page)) - before1)).toBeLessThanOrEqual(1)
+    await page.keyboard.press('Escape')
+
+    // + 버튼으로 행 추가
+    const before2 = await mainScrollTop(page)
+    const wrap = page.locator('.md-table-widget')
+    await wrap.hover()
+    await wrap.locator('.md-table-add-row').click()
+    await waitScrollSettle(page)
+    await expect(table.locator('tr')).toHaveCount(5)
+    expect(Math.abs((await mainScrollTop(page)) - before2)).toBeLessThanOrEqual(1)
+  })
+
+  test('F-171 A3 칸이 창 아래로 벗어나면 그 칸 아래 끝만 창 아래 끝에 맞춘다', async ({ page }) => {
+    for (const method of ['enter', 'button']) {
+      await openApp(page)
+      await importMarkdown(page, { content: F171_DOC })
+      const table = await f171PositionTable(page, 4) // 표 마지막 행이 창 아래 끝에 걸침
+
+      if (method === 'enter') {
+        await table.locator('tr').last().locator('td').last().click()
+        await page.keyboard.press('End')
+        await page.keyboard.press('Enter')
+      } else {
+        const wrap = page.locator('.md-table-widget')
+        await wrap.hover()
+        await wrap.locator('.md-table-add-row').click()
+      }
+      await waitScrollSettle(page)
+      await expect(table.locator('tr')).toHaveCount(4)
+
+      const newCell = table.locator('tr').last().locator('td').last()
+      const cellRect = await rectOf(newCell)
+      const scRect = await rectOf(page.locator('.cm-scroller').first())
+      expect(Math.abs(cellRect.bottom - scRect.bottom)).toBeLessThanOrEqual(2)
+      expect(cellRect.top).toBeGreaterThanOrEqual(scRect.top - 1)
+    }
+  })
+
+  test('F-171 A4 행 추가를 5회 반복해도 매번 scrollTop 이 그대로다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: F171_DOC })
+    const table = await f171PositionTable(page, 400) // 5행 추가할 room
+    const wrap = page.locator('.md-table-widget')
+    await wrap.hover()
+    const rowBtn = wrap.locator('.md-table-add-row')
+
+    for (let i = 0; i < 5; i++) {
+      const before = await mainScrollTop(page)
+      await rowBtn.click()
+      await waitScrollSettle(page)
+      const after = await mainScrollTop(page)
+      expect(Math.abs(after - before)).toBeLessThanOrEqual(1)
+    }
+    await expect(table.locator('tr')).toHaveCount(8)
+  })
+
+  test('F-171 A5 열 추가·칸 이동(칸이 보이는 경우) 모두 scrollTop 을 바꾸지 않는다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: F171_DOC })
+    const table = await f171PositionTable(page, 300)
+    const wrap = page.locator('.md-table-widget')
+
+    const before1 = await mainScrollTop(page)
+    await wrap.hover()
+    await wrap.locator('.md-table-add-col').click()
+    await waitScrollSettle(page)
+    expect(Math.abs((await mainScrollTop(page)) - before1)).toBeLessThanOrEqual(1)
+
+    await table.locator('tr').nth(0).locator('th').first().click()
+    for (const key of ['Tab', 'Enter', 'ArrowDown', 'ArrowLeft', 'ArrowUp']) {
+      const before = await mainScrollTop(page)
+      await page.keyboard.press(key)
+      await waitScrollSettle(page)
+      expect(Math.abs((await mainScrollTop(page)) - before)).toBeLessThanOrEqual(1)
+    }
+  })
+
+  test('F-171 A6 가로 스크롤 — 열 추가로 새 칸이 보이고 세로 scrollTop 은 그대로다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: f171WideTable(12) })
+    const wrap = page.locator('.md-table-widget')
+    const scroll = wrap.locator('.md-table-scroll')
+    await wrap.hover()
+
+    const before = await mainScrollTop(page)
+    await wrap.locator('.md-table-add-col').click()
+    await waitScrollSettle(page)
+    expect(Math.abs((await mainScrollTop(page)) - before)).toBeLessThanOrEqual(1)
+
+    const newColCell = wrap.locator('table tr').first().locator('th').last()
+    const cellRect = await rectOf(newColCell)
+    const scrollRect = await rectOf(scroll)
+    expect(cellRect.left).toBeGreaterThanOrEqual(scrollRect.left - 1)
+    expect(cellRect.right).toBeLessThanOrEqual(scrollRect.right + 1)
+  })
+})
