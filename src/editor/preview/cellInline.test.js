@@ -77,4 +77,14 @@ describe('parseCellInline', () => {
   it('인라인코드 안에서는 위키링크를 찾지 않는다', () => {
     expect(parseCellInline('`[[a]]`')).toEqual([{ text: '[[a]]', marks: ['code'] }])
   })
+
+  it('<br>·<BR /> 를 줄바꿈 조각으로 (specs/features/F-162.md 4장 A1)', () => {
+    expect(parseCellInline('a<br>b')).toEqual([{ text: 'a', marks: [] }, { br: true }, { text: 'b', marks: [] }])
+    expect(parseCellInline('a<BR />b')).toEqual([{ text: 'a', marks: [] }, { br: true }, { text: 'b', marks: [] }])
+    expect(parseCellInline('a<br/>b')).toEqual([{ text: 'a', marks: [] }, { br: true }, { text: 'b', marks: [] }])
+  })
+
+  it('인라인코드 안의 <br> 은 글자 그대로', () => {
+    expect(parseCellInline('`a<br>b`')).toEqual([{ text: 'a<br>b', marks: ['code'] }])
+  })
 })

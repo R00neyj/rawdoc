@@ -17,6 +17,9 @@ const LEAD = '표\n\n'
 // 머리 행 + 데이터 2행 = tr 3개(F-140 A13·A14 가 "마지막 행" 을 가리키는 데 쓴다)
 const NARROW_TABLE = `${LEAD}| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n`
 
+// 칸 안에 이미 <br> 이 든 표 (F-162 A3·A4 용)
+const BR_TABLE = `${LEAD}| a | b |\n| --- | --- |\n| x<br>y | 2 |\n| 3 | 4 |\n`
+
 function wideTable(cols) {
   const head = `| ${Array.from({ length: cols }, (_, i) => `h${i}`).join(' | ')} |`
   const sep = `| ${Array.from({ length: cols }, () => '---').join(' | ')} |`
@@ -376,5 +379,77 @@ test.describe('F-161 표 칸 입력 결함', () => {
 
     await page.keyboard.press('Escape')
     await expect(wrap.locator('.md-table-cell-editing')).toHaveCount(0)
+  })
+})
+
+test.describe('F-162 표 칸 안 줄바꿈 (Alt+Enter → <br>)', () => {
+  test('F-162 A2 Alt+Enter 로 칸에 <br> 를 넣는다 — 원문 반영과 되돌리기', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: NARROW_TABLE })
+    const wrap = page.locator('.md-table-widget')
+    const cell = wrap.locator('td, th').nth(2) // row1 col0, "1"
+
+    await cell.click()
+    await page.keyboard.press('End')
+    await page.keyboard.type('a')
+    await page.keyboard.press('Alt+Enter')
+    // 편집 중인 칸은 원문 그대로 <br> 글자가 보인다 (F-162 2.2)
+    await expect(wrap.locator('.md-table-cell-editing .cm-content')).toHaveText('1a<br>')
+
+    // Ctrl+Z 한 번 — <br> 삽입만 되돌아가고 앞서 친 a 는 남는다(F-162 2.1)
+    await page.keyboard.press('Control+z')
+    let doc = await readSavedContent(page, docId)
+    expect(doc.content).toContain('| 1a | 2 |')
+
+    // 이어서 다시 Alt+Enter 로 넣고 b 를 이어 쳐 "1a<br>b" 를 만든다
+    await cell.click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Alt+Enter')
+    await page.keyboard.type('b')
+    await page.keyboard.press('Escape')
+
+    doc = await readSavedContent(page, docId)
+    expect(doc.content).toContain('| 1a<br>b | 2 |')
+    // 다른 줄은 바이트가 그대로다
+    expect(doc.content).toContain('| a | b |')
+    expect(doc.content).toContain('| --- | --- |')
+    expect(doc.content).toContain('| 3 | 4 |')
+  })
+
+  test('F-162 A3 편집 중이 아닌 칸의 <br> 은 줄바꿈으로 보이고 칸 높이가 늘어난다', async ({ page }) => {
+    const content = `${BR_TABLE}아래줄\n`
+    await openApp(page)
+    const docId = await importMarkdown(page, { content })
+    const wrap = page.locator('.md-table-widget')
+    const rows = wrap.locator('table tr')
+    const brCell = rows.nth(1).locator('td').first() // "x<br>y"
+
+    await expect(brCell.locator('br')).toHaveCount(1)
+
+    const oneLineHeight = (await rectOf(rows.nth(2))).height // "3" 칸(줄바꿈 없음)
+    const twoLineHeight = (await rectOf(rows.nth(1))).height
+    expect(twoLineHeight).toBeGreaterThan(oneLineHeight * 1.5)
+
+    // 표 아래 줄 클릭 위치가 F-124 3.4 규칙대로 맞는다(F-124 A2d 방법)
+    const belowTable = page.getByText('아래줄', { exact: true })
+    await belowTable.click()
+    await page.keyboard.press('End')
+    await page.keyboard.type('!')
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content).toContain('아래줄!')
+  })
+
+  test('F-162 A4 보기 모드 — 표 칸의 <br> 은 줄바꿈, 문단의 <br> 은 글자', async ({ page }) => {
+    const content = `${BR_TABLE}\n문단 x<br>y\n`
+    await openApp(page)
+    await importMarkdown(page, { content })
+    await setViewMode(page, 'view')
+
+    const cell = page.locator('.viewer table td').first() // "x<br>y"
+    await expect(cell.locator('br')).toHaveCount(1)
+
+    const paragraph = page.locator('.viewer p', { hasText: '문단' })
+    await expect(paragraph).toContainText('x<br>y')
+    await expect(paragraph.locator('br')).toHaveCount(0)
   })
 })

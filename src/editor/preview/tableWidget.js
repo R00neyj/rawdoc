@@ -382,6 +382,12 @@ function cellKeydown(mainView, wrap, cellView, event) {
     return consume(moveTo(row, col))
   }
 
+  if (event.key === 'Enter' && event.altKey) {
+    // 칸 안 줄바꿈(F-162 2.1) — <br> 를 선택 자리에 넣는다. 트랜잭션 1개라 Ctrl+Z 한 번에 되돌아간다
+    cellView.dispatch(cellView.state.replaceSelection('<br>'))
+    return consume(true)
+  }
+
   if (event.key === 'Enter') {
     const e = entry()
     if (!e) return false
@@ -475,6 +481,10 @@ function renderCellText(el, text) {
   el.textContent = ''
   el.dataset.rawText = text
   for (const seg of parseCellInline(text)) {
+    if (seg.br) {
+      el.appendChild(document.createElement('br')) // innerHTML 을 쓰지 않는다(F-162 2.2, F-140 3.2 보안)
+      continue
+    }
     let node = document.createTextNode(seg.text)
     for (const mark of seg.marks) {
       const span = document.createElement('span')

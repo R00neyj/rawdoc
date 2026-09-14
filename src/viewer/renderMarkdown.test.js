@@ -266,6 +266,37 @@ describe('renderMarkdown — 위키링크 (specs/features/F-131.md 7장 A3)', ()
   })
 })
 
+describe('renderMarkdown — 표 칸 안 <br> (specs/features/F-162.md 4장 A1)', () => {
+  it('표 칸의 <br>·<br/>·<br /> 를 <br> 요소로 바꾼다', () => {
+    const html = renderMarkdown('| a | b |\n| --- | --- |\n| x<br>y | p<br/>q<br />r |\n')
+    expect(html).toContain('x<br>y')
+    expect(html).toContain('p<br>q<br>r')
+  })
+
+  it('대소문자를 가리지 않는다', () => {
+    const html = renderMarkdown('| a |\n| --- |\n| x<BR />y |\n')
+    expect(html).toContain('x<br>y')
+  })
+
+  it('표 밖 문단의 <br> 은 이스케이프된다', () => {
+    const html = renderMarkdown('x<br>y\n')
+    expect(html).toContain('x&lt;br&gt;y')
+    expect(html).not.toContain('<br>')
+  })
+
+  it('표 칸 안의 다른 태그(<b>)는 이스케이프된 채로 둔다', () => {
+    const html = renderMarkdown('| a |\n| --- |\n| x<b>y</b>z |\n')
+    expect(html).toContain('x&lt;b&gt;y&lt;/b&gt;z')
+    expect(html).not.toContain('<b>')
+  })
+
+  it('표 칸 안 인라인코드 속 <br> 은 이스케이프된 채로 둔다', () => {
+    const html = renderMarkdown('| a |\n| --- |\n| `x<br>y` |\n')
+    expect(html).toContain('x&lt;br&gt;y')
+    expect(html).not.toContain('<br>')
+  })
+})
+
 describe('renderMarkdown — 성능 기록 (A2, 통과 기준 없음)', () => {
   it('약 5,000줄(표 50·코드블록 50 섞음) 변환 1회 시간을 기록한다', () => {
     const lines = []

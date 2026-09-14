@@ -269,6 +269,63 @@ function wikiLinkRule(state, resolveWikiLink) {
 // <span class=…>…</span>. F-123 의 link_open 규칙(target·rel 추가)은 타입이 달라 타지 않는다
 md.core.ruler.after('inline', 'wikilink', (state) => wikiLinkRule(state, state.env?.resolveWikiLink))
 
+// ----- 표 칸 안 <br> (F-162.md 2.3, html:false 예외 — taskListsRule 의 체크박스와 같은 html_inline 토큰 방식) -----
+const CELL_BR_RE = /<br\s*\/?>/gi
+
+function tableBrRule(state) {
+  const tokens = state.tokens
+  let tableDepth = 0
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+    if (token.type === 'table_open') tableDepth++
+    else if (token.type === 'table_close') tableDepth--
+    if (token.type !== 'inline' || tableDepth === 0 || !token.children) continue
+
+    let changed = false
+    const nextChildren = []
+
+    for (const child of token.children) {
+      if (child.type !== 'text') {
+        nextChildren.push(child)
+        continue
+      }
+
+      const content = child.content
+      CELL_BR_RE.lastIndex = 0
+      let cursor = 0
+      let match
+      let localChanged = false
+      while ((match = CELL_BR_RE.exec(content))) {
+        localChanged = true
+        if (match.index > cursor) {
+          const before = new state.Token('text', '', 0)
+          before.content = content.slice(cursor, match.index)
+          nextChildren.push(before)
+        }
+        const br = new state.Token('html_inline', '', 0)
+        br.content = '<br>'
+        nextChildren.push(br)
+        cursor = match.index + match[0].length
+      }
+      if (!localChanged) {
+        nextChildren.push(child)
+        continue
+      }
+      changed = true
+      if (cursor < content.length) {
+        const after = new state.Token('text', '', 0)
+        after.content = content.slice(cursor)
+        nextChildren.push(after)
+      }
+    }
+
+    if (changed) token.children = nextChildren
+  }
+}
+
+md.core.ruler.after('inline', 'table_br', tableBrRule)
+
 // ----- 프론트매터 (F-133.md 3.3) -----
 // 변환 전에 findFrontmatter 로 떼어 내고 나머지 본문만 markdown-it 에 넣는다.
 // 성공(속성 있음): 표. 구조를 알아볼 수 없음(null): 원문 그대로 <pre>. 빈 프론트매터
