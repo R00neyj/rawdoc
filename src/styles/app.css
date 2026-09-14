@@ -441,11 +441,102 @@ svg {
 /* 메인 열 전체를 --panel 하나로 (F-143 3.8) — 내용 칸과 좌우 여백의 색 구분을 없앤다.
    세로 스크롤은 각 자식(cm-scroller·viewer 등)이 전체 폭으로 맡는다 */
 .content-area {
+  position: relative; /* 오른쪽 목차(.outline) 기준점 (F-144.md 2장) */
   flex: 1;
   min-height: 0;
   display: flex;
   overflow: hidden;
   background: var(--panel);
+}
+
+/* ===== 오른쪽 목차 (specs/ia.md 3.23, specs/features/F-144.md 2장) ===== */
+.outline {
+  position: absolute;
+  top: 96px;
+  right: 16px;
+  z-index: 20;
+}
+
+.outline-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  transition: opacity var(--transition-fast);
+}
+
+.outline-rail-item span {
+  display: block;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--rule);
+}
+
+.outline-rail-item[data-current='true'] span {
+  background: var(--ink-2);
+}
+
+.outline--expanded .outline-rail {
+  opacity: 0;
+}
+
+.outline-card {
+  position: absolute;
+  top: 0;
+  right: 0;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  width: 240px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.outline--expanded .outline-card {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.outline-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outline-card li[data-level='2'] .outline-item {
+  padding-left: 20px;
+}
+
+.outline-card li[data-level='3'] .outline-item {
+  padding-left: 32px;
+}
+
+.outline-item:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+.outline-item[aria-current='location'] {
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .empty-state {

@@ -8,14 +8,18 @@ import { indentUnit } from '@codemirror/language'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 
 import { autoPair } from './autoPair.js'
-import { compositionCatchup } from './composition.js'
+import { compositionCatchup, isComposing, isForced } from './composition.js'
 import { frontmatterExtension } from './frontmatter.js'
 import { highlightExtension } from './highlight.js'
 import { shortcutKeymap } from './commands.js'
+import { extractHeadings } from './outline.js'
 import { livePreview } from './preview/index.js'
 import { fenceLinePreview } from './preview/lines.js'
 import { setWikiTitlesEffect, wikiTitlesField } from './preview/wikiLinks.js'
 import { wikiComplete } from './wikiComplete.js'
+
+// 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
+const HEADINGS_DEBOUNCE_MS = 150
 
 function previewExtensionFor(mode, { onOpenWikiLink } = {}) {
   return mode === 'live' ? livePreview({ onOpenWikiLink }) : []
@@ -40,6 +44,15 @@ export function createEditor(parent, options = {}) {
   const { text = '', viewMode = 'live', onDocChange, onSelectionChange, wikiTitles = [], onOpenWikiLink } = options
 
   let destroyed = false
+
+  // 목차 갱신은 조합 중 보류, 조합 종료(forceRecalc) 시 즉시 따라잡음 (F-144 3.3)
+  const headingsListeners = new Set()
+  let headingsTimer = null
+
+  function notifyHeadings(state) {
+    const headings = extractHeadings(state)
+    headingsListeners.forEach((cb) => cb(headings))
+  }
 
   const previewCompartment = new Compartment()
   const attributesCompartment = new Compartment()
@@ -77,6 +90,17 @@ export function createEditor(parent, options = {}) {
     EditorView.updateListener.of((update) => {
       if (update.docChanged && onDocChange) onDocChange(update.state)
       if (update.selectionSet && onSelectionChange) onSelectionChange(update.state)
+
+      if (isForced(update)) {
+        clearTimeout(headingsTimer)
+        notifyHeadings(update.state)
+      } else if (update.docChanged && !isComposing(update.view)) {
+        clearTimeout(headingsTimer)
+        headingsTimer = setTimeout(() => {
+          if (destroyed) return
+          notifyHeadings(update.state)
+        }, HEADINGS_DEBOUNCE_MS)
+      }
     }),
   ]
 
@@ -117,10 +141,28 @@ export function createEditor(parent, options = {}) {
       view.dispatch({ effects: setWikiTitlesEffect.of(titles) })
     },
 
+    getHeadings() {
+      return extractHeadings(view.state)
+    },
+
+    /** @returns {() => void} 구독 해제 */
+    onHeadingsChange(callback) {
+      headingsListeners.add(callback)
+      return () => headingsListeners.delete(callback)
+    },
+
+    // 줄 윗변을 스크롤 영역 위 16px 에 맞춤, 선택은 그대로 (F-144 3.3)
+    scrollToHeading(pos) {
+      const clamped = Math.max(0, Math.min(pos, view.state.doc.length))
+      view.dispatch({ effects: EditorView.scrollIntoView(clamped, { y: 'start', yMargin: 16 }) })
+    },
+
     /** 두 번째 호출은 무시한다 */
     destroy() {
       if (destroyed) return
       destroyed = true
+      clearTimeout(headingsTimer)
+      headingsListeners.clear()
       view.destroy()
     },
   }

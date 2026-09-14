@@ -19,6 +19,7 @@ import { countChars, countWords, cursorInfo } from '../editor/stats.js'
 import Viewer from '../viewer/Viewer.jsx'
 import { renderMarkdown } from '../viewer/renderMarkdown.js'
 import { decodeShare } from '../lib/shareCodec.js'
+import Outline from './Outline.jsx'
 
 import { useInstallPrompt } from '../pwa/useInstallPrompt.js'
 import { useAppUpdate } from '../pwa/useAppUpdate.js'
@@ -127,6 +128,8 @@ export default function App() {
   const focusTitleRef = useRef(false)
   const focusEditorRef = useRef(false)
   const editorRef = useRef(null)
+  const contentAreaRef = useRef(null) // 오른쪽 목차 여백 측정용 (F-144.md 2장)
+  const viewerRef = useRef(null) // 오른쪽 목차가 보기 모드에서 스크롤할 대상 (F-144.md 3.4)
   const statsTimerRef = useRef(null)
   const titleRequestIdRef = useRef(0)
   const noticeIdRef = useRef(0)
@@ -1120,7 +1123,7 @@ export default function App() {
             // 공유 화면(sharedDoc)이 떠 있는 동안 편집 영역을 언마운트하지 않고 hidden 으로만
             // 숨긴다(F-138 3.2) — 언마운트하면 같은 문서로 돌아올 때 EditorView 가 새로
             // 만들어져 그 사이 저장된 편집을 옛 openDoc.content 로 덮어쓴다
-            <div className="content-area" hidden={Boolean(sharedDoc)}>
+            <div className="content-area" ref={contentAreaRef} hidden={Boolean(sharedDoc)}>
               <div className="editor-slot" hidden={viewMode === 'view'}>
                 {openDoc?.id === currentDocId && (
                   <Editor
@@ -1139,7 +1142,16 @@ export default function App() {
                 )}
               </div>
               {viewMode === 'view' && openDoc?.id === currentDocId && (
-                <Viewer key={currentDocId} html={viewerHtml} onOpenWikiLink={handleOpenWikiLink} />
+                <Viewer key={currentDocId} ref={viewerRef} html={viewerHtml} onOpenWikiLink={handleOpenWikiLink} />
+              )}
+              {openDoc?.id === currentDocId && (
+                <Outline
+                  editorRef={editorRef}
+                  containerRef={contentAreaRef}
+                  viewerRef={viewerRef}
+                  docId={currentDocId}
+                  viewMode={viewMode}
+                />
               )}
             </div>
           )}

@@ -165,6 +165,22 @@ md.renderer.rules.image = function (tokens, idx, options, env, self) {
 // 코드블록(fence)의 language-{info 첫 단어} 클래스, 제목 앵커 없음은 markdown-it 기본
 // 동작 그대로다 (options.highlight 를 주지 않아 구문 강조 없음)
 
+// ----- 제목 원문 줄 번호 (F-144.md 3.4) — body 기준 0-based 에 프론트매터 줄 수를 더해 1-based -----
+const defaultHeadingOpen =
+  md.renderer.rules.heading_open ||
+  function (tokens, idx, options, env, self) {
+    return self.renderToken(tokens, idx, options)
+  }
+
+md.renderer.rules.heading_open = function (tokens, idx, options, env, self) {
+  const token = tokens[idx]
+  if (token.map && (token.tag === 'h1' || token.tag === 'h2' || token.tag === 'h3')) {
+    const sourceLine = (env.lineOffset ?? 0) + token.map[0] + 1
+    token.attrSet('data-source-line', String(sourceLine))
+  }
+  return defaultHeadingOpen(tokens, idx, options, env, self)
+}
+
 // ----- 위키링크 (F-131.md 4장) -----
 // 'inline' 규칙(코드 span·기존 링크 등을 이미 처리해 각각 code_inline·link_open 등의
 // 토큰으로 나눈 뒤) 다음에 실행해, 남은 'text' 자식 토큰(순수 글자)만 훑는다 — 이렇게
@@ -289,5 +305,6 @@ export function renderMarkdown(text, options = {}) {
   if (!frontmatter) return md.render(text, env)
 
   const body = textAfterFrontmatter(text, frontmatter)
+  env.lineOffset = (text.slice(0, text.length - body.length).match(/\n/g) || []).length
   return renderFrontmatter(text, frontmatter) + md.render(body, env)
 }

@@ -83,6 +83,23 @@ describe('renderMarkdown — 코드블록', () => {
   })
 })
 
+describe('renderMarkdown — 제목 원문 줄 번호 (specs/features/F-144.md 4장 A1)', () => {
+  it('h1~h3 에 data-source-line 을 붙인다', () => {
+    const html = renderMarkdown('본문\n\n## 제목\n')
+    expect(html).toContain('<h2 data-source-line="3">제목</h2>')
+  })
+
+  it('h4 이하에는 붙이지 않는다', () => {
+    const html = renderMarkdown('#### 제목\n')
+    expect(html).not.toContain('data-source-line')
+  })
+
+  it('프론트매터가 차지한 줄 수만큼 더한다', () => {
+    const html = renderMarkdown('---\na: 1\n---\n\n# 제목\n')
+    expect(html).toContain('<h1 data-source-line="5">제목</h1>')
+  })
+})
+
 describe('renderMarkdown — 줄바꿈', () => {
   it('문단 안 줄바꿈 1개는 <br> 이 되지 않는다', () => {
     const html = renderMarkdown('한 줄\n다음 줄')
@@ -184,8 +201,8 @@ describe('renderMarkdown — 프론트매터 (specs/features/F-133.md 4장 A6)',
     expect(html).toContain('본문')
   })
 
-  it('프론트매터가 없는 문서는 지금과 같다', () => {
-    expect(renderMarkdown('# 제목')).toBe('<h1>제목</h1>\n')
+  it('프론트매터가 없는 문서는 제목 줄 번호만 더해진다 (F-144.md 3.4)', () => {
+    expect(renderMarkdown('# 제목')).toBe('<h1 data-source-line="1">제목</h1>\n')
   })
 })
 

@@ -11,8 +11,10 @@ import './viewer.css'
  * @param {(target:string)=>void} [props.onOpenWikiLink] a.wikilink 클릭 시 (F-131 4장).
  *   있는 문서를 가리키는 링크도 같은 흐름을 탄다 — 저장 대기 입력을 먼저 저장하는 앱
  *   전환 흐름(App.jsx selectDoc)을 타기 위해서다
+ * @param {import('react').Ref<HTMLDivElement>} [props.ref] 오른쪽 목차(F-144.md 3.4)가
+ *   `data-source-line` 요소를 찾고 스크롤하는 데 쓴다
  */
-export default function Viewer({ html, onOpenWikiLink }) {
+export default function Viewer({ html, onOpenWikiLink, ref }) {
   function handleClick(event) {
     const anchor = event.target.closest?.('a.wikilink')
     if (!anchor) return
@@ -22,6 +24,7 @@ export default function Viewer({ html, onOpenWikiLink }) {
 
   return (
     <div
+      ref={ref}
       className="viewer markdown-body"
       tabIndex={0}
       onClick={handleClick}
