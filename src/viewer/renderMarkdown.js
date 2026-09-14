@@ -3,6 +3,7 @@
 import MarkdownIt from 'markdown-it'
 
 import { parseCalloutHeader, defaultCalloutTitle } from '../lib/callout.js'
+import { calloutIconSvg } from '../lib/calloutIcons.js'
 import { findWikiLinks } from '../lib/wikiLink.js'
 import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from '../lib/frontmatter.js'
 
@@ -112,12 +113,18 @@ function calloutRule(state) {
     open.attrSet('data-callout', type)
     tokens[closeIndex].tag = 'div'
 
-    // 머리 줄의 [!type] 과 접기 기호는 출력하지 않는다 — 제목만 별도 문단으로 뗀다
+    // 머리 줄의 [!type] 과 접기 기호는 출력하지 않는다 — 제목만 별도 문단으로 뗀다.
+    // 종류 아이콘은 제목 앞 첫 자식(F-148 3.2) — html_inline 토큰으로 titleInline.children
+    // 에 먼저 넣어 둔다. 'inline' 코어 규칙이 titleInline.content 를 파싱해 나온 토큰들을
+    // 이 배열에 이어 붙이므로(비우지 않고 push) 순서가 [아이콘, ...제목 파싱 결과] 가 된다.
+    // svg 는 앱에 들어 있는 파일 원문(calloutIconSvg)이라 사용자 입력이 아니다
     const titleOpen = new state.Token('paragraph_open', 'p', 1)
     titleOpen.attrSet('class', 'markdown-callout-title')
+    const iconToken = new state.Token('html_inline', '', 0)
+    iconToken.content = `<span class="markdown-callout-icon" aria-hidden="true">${calloutIconSvg(header.type)}</span>`
     const titleInline = new state.Token('inline', '', 0)
     titleInline.content = header.title || defaultCalloutTitle(header.type)
-    titleInline.children = []
+    titleInline.children = [iconToken]
     const titleClose = new state.Token('paragraph_close', 'p', -1)
 
     const replacement = [titleOpen, titleInline, titleClose]

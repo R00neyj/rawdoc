@@ -8,7 +8,9 @@ import { Decoration, EditorView, ViewPlugin, WidgetType } from '@codemirror/view
 
 import { activeLines, isEditorFocused } from './active.js'
 import { isComposing, isForced } from '../composition.js'
-import { parseCalloutHeader } from '../../lib/callout.js'
+import { frontmatterWidgetExtension, frontmatterWidgetInfo } from '../frontmatter.js'
+import { parseCalloutHeader, defaultCalloutTitle } from '../../lib/callout.js'
+import { calloutIconSvg } from '../../lib/calloutIcons.js'
 
 const HIDE = Decoration.replace({})
 
@@ -63,6 +65,47 @@ function calloutLineClass(kind, { isFirst, isLast }) {
   if (isFirst) cls += ' md-callout-title'
   if (isLast) cls += ' md-callout-last'
   return cls
+}
+
+/**
+ * 콜아웃 비활성 머리 줄의 종류 아이콘 위젯 (F-148 3.1). `[!type]`(+접기 기호, 제목이
+ * 있으면 뒤 공백 1칸까지) 자리를 통째로 이 위젯으로 바꾼다. 제목이 없는 콜아웃은
+ * 위젯 안에 보기 모드와 같은 기본 제목 글자를 같이 보인다(defaultTitle). 클릭은 커서
+ * 이동만 하도록(F-148 3.1 "다른 동작 없음") BulletWidget 과 같은 방식(ignoreEvent true)을 쓴다
+ */
+class CalloutIconWidget extends WidgetType {
+  constructor(type, defaultTitle) {
+    super()
+    this.type = type
+    this.defaultTitle = defaultTitle // 제목이 있으면 null
+  }
+
+  eq(other) {
+    return other instanceof CalloutIconWidget && other.type === this.type && other.defaultTitle === this.defaultTitle
+  }
+
+  toDOM() {
+    const wrap = document.createElement('span')
+    wrap.className = 'md-callout-icon-widget'
+    wrap.setAttribute('aria-hidden', 'true')
+
+    const icon = document.createElement('span')
+    icon.className = 'md-callout-icon'
+    icon.innerHTML = calloutIconSvg(this.type)
+    wrap.appendChild(icon)
+
+    if (this.defaultTitle !== null) {
+      const title = document.createElement('span')
+      title.textContent = this.defaultTitle
+      wrap.appendChild(title)
+    }
+
+    return wrap
+  }
+
+  ignoreEvent() {
+    return true
+  }
 }
 
 /** 글머리 목록 마커 → • */
@@ -189,13 +232,24 @@ export function buildLines(state, ranges, hasFocus = true) {
                     ),
                   )
                 }
-                // "[!type]" 자리 색 묶음 표시 (F-128 4.1). 기호는 숨기지 않고 항상 보인다
-                out.push(
-                  Decoration.mark({ class: 'md-callout-type' }).range(
-                    headFrom + header.typeFrom,
-                    headFrom + header.typeTo,
-                  ),
-                )
+                // "[!type]" 자리 — 활성 머리 줄은 원문 그대로 색만(F-128 4.1), 비활성 머리
+                // 줄은 접기 기호까지 숨기고 종류 아이콘 위젯으로 바꾼다 (F-148 3.1)
+                if (active.has(firstLine)) {
+                  out.push(
+                    Decoration.mark({ class: 'md-callout-type' }).range(
+                      headFrom + header.typeFrom,
+                      headFrom + header.typeTo,
+                    ),
+                  )
+                } else {
+                  let hideTo = headFrom + header.typeTo
+                  if (header.title && state.doc.sliceString(hideTo, hideTo + 1) === ' ') hideTo += 1
+                  out.push(
+                    Decoration.replace({
+                      widget: new CalloutIconWidget(header.type, header.title ? null : defaultCalloutTitle(header.type)),
+                    }).range(headFrom + header.typeFrom, hideTo),
+                  )
+                }
                 return
               }
             }
@@ -244,9 +298,10 @@ export function buildLines(state, ranges, hasFocus = true) {
           }
 
           case 'Frontmatter': {
-            // 원문을 숨기지 않는다(위젯 없음) — 줄 클래스만 준다 (F-133 3.2).
-            // 활성(커서) 여부와 무관하게 항상 이 모양이다 — 펜스 코드블록 본문처럼
-            // "펼쳐진 채 고정된" 영역이라 F-104 식 활성 줄 판정을 적용하지 않는다
+            // 위젯 조건(F-155 2.1)이면 frontmatter.js 의 블록 위젯이 대체한다 — 줄 클래스 없음
+            if (frontmatterWidgetInfo(state)) return false
+
+            // 예외(빈 프론트매터·닫는 줄 뒤 줄 없음)는 원문을 숨기지 않고 줄 클래스만 준다 (F-133 3.2)
             const firstLine = state.doc.lineAt(node.from).number
             const lastLine = state.doc.lineAt(Math.max(node.from, node.to - 1)).number
             for (let n = firstLine; n <= lastLine; n++) {
@@ -291,7 +346,7 @@ export function mapDecorationsOnHold(decorations, changes) {
 /** F-104 2.3 과 같은 IME 규칙. 조합 중 보류 시 문서 변경분은 따라간다(F-134 3.1).
  * 구문 트리만 바뀐 갱신도 재계산 조건에 넣는다(F-134 3.8) */
 export function linePreview() {
-  return ViewPlugin.fromClass(
+  const viewPlugin = ViewPlugin.fromClass(
     class {
       constructor(view) {
         this.decorations = Decoration.set(buildLines(view.state, view.visibleRanges, isEditorFocused(view)), true)
@@ -314,6 +369,8 @@ export function linePreview() {
     },
     { decorations: (v) => v.decorations },
   )
+  // 프론트매터 위젯(StateField·atomicRanges·커서 보정, F-155)도 이 호출부에 얹는다
+  return [viewPlugin, frontmatterWidgetExtension()]
 }
 
 /**

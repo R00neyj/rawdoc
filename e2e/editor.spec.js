@@ -65,7 +65,8 @@ const GUTTER_ALIGN_SELECTOR =
   '.cm-line.md-hr, .cm-line.md-frontmatter-first, .cm-line.md-callout-title'
 
 const A1_DOC =
-  '---\ntitle: 문서\n---\n\n# 제목1\n\n## 제목2\n\n### 제목3\n\n#### 제목4\n\n' +
+  // 빈 프론트매터는 F-155 위젯 대상이 아니라 원문 상자 첫 줄(md-frontmatter-first)이 남는다
+  '---\n---\n\n# 제목1\n\n## 제목2\n\n### 제목3\n\n#### 제목4\n\n' +
   '##### 제목5\n\n###### 제목6\n\n---\n\n> [!note] 콜아웃\n> 본문\n\n일반 문단\n'
 
 /** 거터 숫자 상자·내용 줄 첫 글자 상자의 세로 가운데 차이(px)를 대상 줄마다 잰다 */

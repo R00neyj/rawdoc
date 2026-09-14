@@ -118,7 +118,7 @@ describe('renderMarkdown — 콜아웃 (specs/features/F-128.md 5장 A3)', () =>
     const html = renderMarkdown('> [!tip] 제목\n> 본문')
     expect(html).toContain('class="markdown-callout md-callout--tip"')
     expect(html).toContain('data-callout="tip"')
-    expect(html).toContain('<p class="markdown-callout-title">제목</p>')
+    expect(html).toMatch(/<p class="markdown-callout-title"><span class="markdown-callout-icon" aria-hidden="true"><svg[\s\S]*?<\/svg><\/span>제목<\/p>/)
     expect(html).toContain('<p>본문</p>')
     expect(html).not.toContain('<blockquote>')
     expect(html).not.toContain('[!tip]')
@@ -126,12 +126,13 @@ describe('renderMarkdown — 콜아웃 (specs/features/F-128.md 5장 A3)', () =>
 
   it('제목 없는 [!note] 는 기본 제목 Note', () => {
     const html = renderMarkdown('> [!note]\n> 본문')
-    expect(html).toContain('<p class="markdown-callout-title">Note</p>')
+    expect(html).toContain('markdown-callout-icon')
+    expect(html).toContain('>Note</p>')
   })
 
   it('본문이 없어도 된다', () => {
     const html = renderMarkdown('> [!note] 제목만')
-    expect(html).toContain('<p class="markdown-callout-title">제목만</p>')
+    expect(html).toContain('>제목만</p>')
     expect(html).toContain('</div>')
   })
 
@@ -156,8 +157,8 @@ describe('renderMarkdown — 콜아웃 (specs/features/F-128.md 5장 A3)', () =>
     const html = renderMarkdown('> [!note] 바깥\n> > [!tip] 안쪽')
     expect(html).toContain('md-callout--note')
     expect(html).toContain('md-callout--tip')
-    expect(html).toContain('<p class="markdown-callout-title">바깥</p>')
-    expect(html).toContain('<p class="markdown-callout-title">안쪽</p>')
+    expect(html).toContain('>바깥</p>')
+    expect(html).toContain('>안쪽</p>')
     expect(html).not.toContain('<blockquote>')
   })
 
@@ -170,6 +171,36 @@ describe('renderMarkdown — 콜아웃 (specs/features/F-128.md 5장 A3)', () =>
   it('GitHub 별칭 [!IMPORTANT]는 tip, [!CAUTION]은 warning 묶음이 된다', () => {
     expect(renderMarkdown('> [!IMPORTANT] x')).toContain('md-callout--tip')
     expect(renderMarkdown('> [!CAUTION] x')).toContain('md-callout--warning')
+  })
+})
+
+describe('renderMarkdown — 콜아웃 아이콘 (specs/features/F-148.md 4장 A1)', () => {
+  function titleIconSvg(html) {
+    const m = /<p class="markdown-callout-title"><span class="markdown-callout-icon" aria-hidden="true">([\s\S]*?)<\/span>/.exec(html)
+    return m ? m[1] : null
+  }
+
+  it('제목 p 의 첫 자식은 아이콘 span', () => {
+    const html = renderMarkdown('> [!tip] 제목')
+    expect(titleIconSvg(html)).toContain('<svg')
+  })
+
+  it('종류마다 다른 아이콘 svg', () => {
+    const noteIcon = titleIconSvg(renderMarkdown('> [!note] x'))
+    const tipIcon = titleIconSvg(renderMarkdown('> [!tip] x'))
+    expect(noteIcon).not.toBe(tipIcon)
+  })
+
+  it('모르는 종류는 note 와 같은 아이콘', () => {
+    const noteIcon = titleIconSvg(renderMarkdown('> [!note] x'))
+    const unknownIcon = titleIconSvg(renderMarkdown('> [!zzz] x'))
+    expect(unknownIcon).toBe(noteIcon)
+  })
+
+  it('[!x] <b> 제목 이스케이프는 아이콘과 무관하게 유지된다', () => {
+    const html = renderMarkdown('> [!x] <b>강조</b>')
+    expect(html).toContain('markdown-callout-icon')
+    expect(html).toContain('&lt;b&gt;강조&lt;/b&gt;')
   })
 })
 

@@ -85,3 +85,34 @@
   color: var(--callout-color);
   margin: 0 0 4px;
 }
+
+/* ===== 종류 아이콘 (F-148 3장) — 색은 md-callout-title/markdown-callout-title 의
+   color(--callout-color)를 상속해 따로 지정하지 않는다 ===== */
+.cm-host .cm-editor .md-callout-icon-widget {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.cm-host .cm-editor .md-callout-icon-widget .md-callout-icon {
+  display: inline-flex;
+  margin-right: 8px;
+}
+
+.cm-host .cm-editor .md-callout-icon-widget .md-callout-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.app-shell .markdown-callout-icon {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+.app-shell .markdown-callout-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}

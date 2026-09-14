@@ -248,8 +248,64 @@ describe('buildLines — 콜아웃 (F-128 5장 A2)', () => {
     const state = makeState(doc, doc.length - 1) // 커서: 3번째 줄('x')
     const decos = build(state)
     // replaced() 는 class 없는(=replace) decoration 만 남긴다 — md-callout-type mark 는
-    // class 가 있어 여기서 자동으로 빠진다. 두 줄의 QuoteMark(+공백) 숨김만 남아야 한다
-    expect(replaced(decos)).toHaveLength(2)
+    // class 가 있어 여기서 자동으로 빠진다. 두 줄의 QuoteMark(+공백) 숨김 + 비활성 머리
+    // 줄의 아이콘 위젯(F-148 3.1) 1개 = 3개가 남아야 한다
+    expect(replaced(decos)).toHaveLength(3)
+  })
+})
+
+describe('buildLines — 콜아웃 아이콘 (F-148 4장 A1)', () => {
+  function iconWidgets(decos) {
+    return decos.filter((r) => r.value.spec.widget?.constructor.name === 'CalloutIconWidget')
+  }
+
+  function typeMarks(decos) {
+    return decos.filter((r) => r.value.spec.class === 'md-callout-type')
+  }
+
+  it('비활성 머리 줄엔 아이콘 위젯 1개, [!type] mark 는 없다', () => {
+    const doc = '> [!tip] 제목\n> 본문'
+    const state = makeState(doc, doc.length) // 커서: 2번째 줄('본문') — 머리 줄은 비활성
+    const decos = build(state)
+    expect(iconWidgets(decos)).toHaveLength(1)
+    expect(typeMarks(decos)).toHaveLength(0)
+  })
+
+  it('활성 머리 줄엔 아이콘 위젯이 없다', () => {
+    const doc = '> [!tip] 제목\n> 본문'
+    const state = makeState(doc, 2) // 커서: 첫 줄(머리 줄)
+    const decos = build(state)
+    expect(iconWidgets(decos)).toHaveLength(0)
+    expect(typeMarks(decos)).toHaveLength(1)
+  })
+
+  it('모르는 종류(unknown)·대소문자(DANGER)도 위젯 1개', () => {
+    for (const doc of ['> [!unknown] 제목\n> 본문', '> [!DANGER] 제목\n> 본문']) {
+      const state = makeState(doc, doc.length)
+      expect(iconWidgets(build(state))).toHaveLength(1)
+    }
+  })
+
+  it('제목이 없으면 위젯이 기본 제목을 담는다', () => {
+    const doc = '> [!info]\n> 본문'
+    const state = makeState(doc, doc.length)
+    const widgets = iconWidgets(build(state))
+    expect(widgets).toHaveLength(1)
+    expect(widgets[0].value.spec.widget.defaultTitle).toBe('Info')
+  })
+
+  it('제목이 있으면 위젯의 defaultTitle 은 null(원문 제목 글자를 그대로 보임)', () => {
+    const doc = '> [!tip] 제목\n> 본문'
+    const state = makeState(doc, doc.length)
+    const widgets = iconWidgets(build(state))
+    expect(widgets[0].value.spec.widget.defaultTitle).toBeNull()
+  })
+
+  it('문서 내용은 바뀌지 않는다(decoration 만)', () => {
+    const doc = '> [!tip] 제목\n> 본문'
+    const state = makeState(doc, doc.length)
+    build(state)
+    expect(state.doc.toString()).toBe(doc)
   })
 })
 
@@ -273,23 +329,30 @@ describe('mapDecorationsOnHold — F-134 3.1: 조합 중 보류 + 문서 변경'
   })
 })
 
-describe('buildLines — 프론트매터 (F-133 3.2, A3)', () => {
-  it('모든 줄에 md-frontmatter, 첫 줄에 md-frontmatter-first, 마지막 줄에 md-frontmatter-last', () => {
+describe('buildLines — 프론트매터 (F-133 3.2·F-155 2.1, A3)', () => {
+  it('위젯 조건(속성 있음, 닫는 줄 뒤 줄 있음)이면 줄 클래스를 주지 않는다', () => {
     const state = makeStateWithFrontmatter('---\na: 1\n---\n본문')
     const classes = lineClasses(build(state))
-    expect(classes.filter((c) => c.includes('md-frontmatter'))).toHaveLength(3)
+    expect(classes.some((c) => c.includes('md-frontmatter'))).toBe(false)
+    expect(replaced(build(state))).toHaveLength(0) // buildLines 자신은 위젯을 만들지 않는다(별도 StateField, frontmatter.js)
+  })
+
+  it('빈 프론트매터는 위젯 조건이 아니라 지금(F-133 3.2)처럼 줄 클래스를 준다', () => {
+    const state = makeStateWithFrontmatter('---\n---\n본문')
+    const classes = lineClasses(build(state))
+    expect(classes.filter((c) => c.includes('md-frontmatter'))).toHaveLength(2)
     expect(classes).toContain('md-frontmatter md-frontmatter-first')
-    expect(classes).toContain('md-frontmatter')
     expect(classes).toContain('md-frontmatter md-frontmatter-last')
   })
 
-  it('원문(기호)을 숨기지 않는다 — replace decoration 없음', () => {
-    const state = makeStateWithFrontmatter('---\na: 1\n---\n본문')
-    expect(replaced(build(state))).toHaveLength(0)
+  it('닫는 줄 뒤에 줄이 없으면 위젯 조건이 아니라 줄 클래스를 준다', () => {
+    const state = makeStateWithFrontmatter('---\na: 1\n---')
+    const classes = lineClasses(build(state))
+    expect(classes.filter((c) => c.includes('md-frontmatter'))).toHaveLength(3)
   })
 
-  it('커서가 프론트매터 안에 있어도 모양이 그대로다(활성 줄 판정 없음)', () => {
-    const state = makeStateWithFrontmatter('---\na: 1\n---\n본문', 5) // 커서: 2번째 줄
+  it('커서가 프론트매터 안에 있어도 모양이 그대로다(활성 줄 판정 없음, 예외 문서)', () => {
+    const state = makeStateWithFrontmatter('---\na: 1\n---', 5) // 커서: 2번째 줄, 닫는 줄 뒤 줄 없어 예외
     const classes = lineClasses(build(state))
     expect(classes.filter((c) => c.includes('md-frontmatter'))).toHaveLength(3)
   })

@@ -66,3 +66,58 @@
 .app-shell .markdown-body pre.markdown-frontmatter-raw {
   margin-bottom: 1rem;
 }
+
+/* ===== 편집 모드 위젯 (F-155 2.1) — 보기 모드와 같은 표. 세로 여백은 다른 블록 위젯과 같이 margin 대신 padding (F-124 3.4 12번 요청) */
+.md-block.md-frontmatter-widget {
+  position: relative;
+  padding: 4px 0;
+}
+
+.md-frontmatter-widget table.markdown-frontmatter {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 85%;
+  margin: 0;
+}
+
+.md-frontmatter-widget table.markdown-frontmatter th,
+.md-frontmatter-widget table.markdown-frontmatter td {
+  border: 1px solid var(--md-border);
+  padding: 6px 13px;
+}
+
+.md-frontmatter-widget table.markdown-frontmatter th {
+  width: 30%;
+  color: var(--ink-2);
+  font-weight: 600;
+  text-align: left;
+}
+
+.md-frontmatter-widget table.markdown-frontmatter tr:nth-child(2n) {
+  background-color: var(--panel);
+}
+
+.md-frontmatter-widget pre.markdown-frontmatter-raw {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 85%;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 마우스를 올렸을 때만 보이는 안내 문구 (F-155 2.2) */
+.md-frontmatter-widget-hint {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.md-block.md-frontmatter-widget:hover .md-frontmatter-widget-hint {
+  opacity: 1;
+}
