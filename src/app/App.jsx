@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createMemoryStore } from '../storage/memoryStore.js'
 import { openStore } from '../storage/openStore.js'
-import { ancestorsOfDoc } from '../lib/folderTree.js'
+import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree.js'
 import { resolveWikiTarget } from '../lib/wikiLink.js'
 import { getPref, setPref } from './prefs.js'
 import { parseHash, formatHash } from './hashRoute.js'
@@ -132,6 +132,9 @@ export default function App() {
   const docsRef = useRef(docs)
   const currentDocIdRef = useRef(currentDocId)
   const foldersRef = useRef(folders)
+  // hashchange 핸들러가 "지금 공유 화면을 보고 있는가" 를 최신으로 읽도록 매 렌더 후
+  // 갱신한다 (F-138 3.3 — 해시가 문서 경로로 바뀌면 문서 id 가 같아도 공유 화면을 닫는다)
+  const sharedDocRef = useRef(sharedDoc)
   // OS 파일 열기 연동(F-119)이 최신 store·beforeLeaveDoc 을 쓰도록 매 렌더 후 갱신한다
   const runImportFilesRef = useRef(async () => {})
   // Editor 는 마운트 시점의 onOpenWikiLink 클로저만 계속 쓰므로(F-131 3·5장), 여기서도
@@ -343,7 +346,10 @@ export default function App() {
       }
 
       const docId = parsedHash.type === 'doc' ? parsedHash.docId : null
-      if (docId === currentDocIdRef.current) return
+      // 해시가 문서 경로(doc)·문서 없음(none)으로 바뀌면 문서 id 가 같아도 공유
+      // 화면을 닫는다(F-138 3.3) — 뒤로 가기로 `#/s/{조각}` 를 벗어날 때 여기 걸리지
+      // 않으면 공유 화면이 그대로 남는다
+      if (docId === currentDocIdRef.current && !sharedDocRef.current) return
 
       ;(async () => {
         await beforeLeaveDoc()
@@ -557,6 +563,7 @@ export default function App() {
     docsRef.current = docs
     currentDocIdRef.current = currentDocId
     foldersRef.current = folders
+    sharedDocRef.current = sharedDoc
   })
 
   // runImportFiles 는 store·showNotice 등을 클로저로 담으므로, 매 커밋 후 최신 참조로
@@ -596,6 +603,14 @@ export default function App() {
     setStats((prev) => ({ ...prev, ...cursorInfo(state) }))
   }, [])
 
+  // 새 문서 대상 폴더 (F-138 3.4): 사이드바 새 문서(폴더 생략)·없는 위키링크 클릭·가져오기
+  // 세 경로가 이 함수로 통일한다. 현재 문서의 folderId 가 존재하는 폴더일 때만 그 값,
+  // 그 외(지운 폴더·옛 버그로 끊긴 값)는 최상위(null) — 저장소 create 가 없는 폴더 id 를
+  // 거부해도(F-136.md 3.1) 처리되지 않은 rejection 으로 이어지지 않게 한다
+  function newDocFolderId() {
+    return resolveTargetFolderId({ folders, folderId: currentDoc?.folderId ?? null })
+  }
+
   // folderId 를 생략하면 현재 문서가 속한 폴더 안에 만든다(없으면 최상위). 사이드바
   // 폴더 메뉴의 `새 문서` 는 그 폴더 id 를 명시로 넘긴다 (F-126.md 5.3)
   async function createNewDoc(folderId) {
@@ -604,13 +619,21 @@ export default function App() {
     if (viewMode === 'view') changeViewMode('live')
     await beforeLeaveDoc()
     setSharedDoc(null) // 공유 화면에서 새 문서 를 눌러도 화면을 떠난다 (F-130.md 4장, 자체 결정)
-    const targetFolderId = folderId !== undefined ? folderId : (currentDoc?.folderId ?? null)
-    const doc = await store.create({
-      title: '제목 없는 문서',
-      content: '',
-      lineEnding: 'crlf',
-      folderId: targetFolderId,
-    })
+    const targetFolderId = folderId !== undefined ? folderId : newDocFolderId()
+    let doc
+    try {
+      doc = await store.create({
+        title: '제목 없는 문서',
+        content: '',
+        lineEnding: 'crlf',
+        folderId: targetFolderId,
+      })
+    } catch {
+      // 저장소가 folderId 를 거부하면(F-136.md 3.1) 처리되지 않은 rejection 으로 두지
+      // 않고 기존 오류 알림 경로로 보여준다 (F-138 3.4, 문구는 스스로 정함)
+      showNotice({ type: 'error', message: '새 문서를 만들지 못했습니다. 다시 시도하세요.' })
+      return
+    }
     const meta = stripContent(doc)
     setDocs((prev) => sortByUpdatedAtDesc([...prev, meta]))
     addOpenFolders(ancestorsOfDoc({ folders, doc: meta }))
@@ -652,12 +675,19 @@ export default function App() {
     if (viewMode === 'view') changeViewMode('live') // 제목 입력 포커스가 필요하다 (ia.md 3.3)
     await beforeLeaveDoc()
     setSharedDoc(null)
-    const doc = await store.create({
-      title: target,
-      content: '',
-      lineEnding: 'crlf',
-      folderId: currentDoc?.folderId ?? null,
-    })
+    let doc
+    try {
+      doc = await store.create({
+        title: target,
+        content: '',
+        lineEnding: 'crlf',
+        folderId: newDocFolderId(),
+      })
+    } catch {
+      // F-138 3.4 — 3.4 참고 주석과 같은 이유·같은 알림 경로
+      showNotice({ type: 'error', message: '새 문서를 만들지 못했습니다. 다시 시도하세요.' })
+      return
+    }
     const meta = stripContent(doc)
     setDocs((prev) => sortByUpdatedAtDesc([...prev, meta]))
     addOpenFolders(ancestorsOfDoc({ folders, doc: meta }))
@@ -703,7 +733,7 @@ export default function App() {
     await beforeLeaveDoc()
     setSharedDoc(null) // 공유 화면에서 가져와도 화면을 떠난다 (F-130.md 4장, 자체 결정)
 
-    const targetFolderId = currentDoc?.folderId ?? null
+    const targetFolderId = newDocFolderId() // F-138 3.4 — 끊긴 folderId 는 최상위로
     const scopedStore = {
       ...store,
       create: (args) => store.create({ ...args, folderId: targetFolderId }),
@@ -1039,8 +1069,11 @@ export default function App() {
               <EmptyState onCreateDoc={createNewDoc} onImportDoc={requestImport} />
             </div>
           )}
-          {!sharedDoc && showEditor && (
-            <div className="content-area">
+          {showEditor && (
+            // 공유 화면(sharedDoc)이 떠 있는 동안 편집 영역을 언마운트하지 않고 hidden 으로만
+            // 숨긴다(F-138 3.2) — 언마운트하면 같은 문서로 돌아올 때 EditorView 가 새로
+            // 만들어져 그 사이 저장된 편집을 옛 openDoc.content 로 덮어쓴다
+            <div className="content-area" hidden={Boolean(sharedDoc)}>
               <div className="editor-slot" hidden={viewMode === 'view'}>
                 {openDoc?.id === currentDocId && (
                   <Editor

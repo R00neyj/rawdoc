@@ -9,7 +9,13 @@ import { syntaxTree } from '@codemirror/language'
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap } from '@codemirror/view'
 
 import { isComposing, isForced } from '../composition.js'
-import { TableWidget, enterTableFromKeyboard, isCellComposing, trackActiveEditRange } from './tableWidget.js'
+import {
+  TableWidget,
+  enterTableFromKeyboard,
+  isCellComposing,
+  trackActiveEditRange,
+  trackPendingWrites,
+} from './tableWidget.js'
 
 /**
  * 커서나 선택 영역이 [from, to] 와 겹치는가.
@@ -21,6 +27,22 @@ function overlaps(state, from, to) {
     if (range.to >= from && range.from <= to) return true
   }
   return false
+}
+
+/**
+ * 표 원문 범위 안에 있는 **빈 커서**인가 (F-139 3.1). 표를 치는 도중(구분 행이
+ * 아직 다 안 쳐졌는데 GFM 최소 조건을 만족해 Table 로 인식되는 순간 등) 위젯이
+ * 그 범위를 가리면 커서가 위젯 DOM(비활성, `ignoreEvent()` 참) 안에 놓여 이어지는
+ * 키 입력이 사라진다 — 이 조건일 때는 표를 위젯이 아니라 원문으로 보여 코드블록과
+ * 같은 "겹치면 원문" 경로를 타게 한다.
+ * 표를 걸친 **비어 있지 않은** 선택(Shift+방향키)은 여기 해당하지 않는다(F-125 A2
+ * 유지) — `main.empty` 로 가른다.
+ * 칸 편집 중에는(tableWidget.js `startEdit`·`enterTableFromKeyboard`) 주 에디터
+ * 선택을 표 범위 안으로 옮기지 않으므로 이 조건과 겹치지 않는다.
+ */
+function emptyCursorInside(state, from, to) {
+  const { main } = state.selection
+  return main.empty && main.head >= from && main.head <= to
 }
 
 /**
@@ -242,7 +264,10 @@ export function buildBlocks(state) {
       // 표는 커서·선택이 걸쳐 있어도 항상 위젯이다(F-125 2.1) — 칸 편집은 위젯
       // 안 하위 에디터로 하므로 원문을 노출할 필요가 없다(코드블록은 그대로
       // "겹치면 원문" 규칙을 유지한다).
-      const alwaysWidget = node.name === 'Table'
+      // 예외(F-139 3.1): 주 에디터의 빈 커서가 표 원문 범위 안이면 위젯으로 만들지
+      // 않는다 — emptyCursorInside 가 참이면 overlaps 도 항상 참이라(같은 조건이라
+      // 부분집합) 아래 `!overlaps` 분기로 자연히 원문이 노출된다.
+      const alwaysWidget = node.name === 'Table' && !emptyCursorInside(state, from, to)
       if (alwaysWidget || !overlaps(state, from, to)) {
         out.push(Decoration.replace({ widget: make(state, node.node, from, to), block: true }).range(from, to))
       }
@@ -365,6 +390,9 @@ export function blockPreview() {
       // 포함) 세션이 든 칸 범위를 옮긴다. 이 재계산 함수 자체와 무관하게, 아래에서
       // 조합 중이라 위젯을 다시 그리지 않고 건너뛰는 경우에도 범위는 계속 옮겨야 한다
       if (tr.docChanged) trackActiveEditRange(viewRef.current, tr)
+      // F-138 3.5: endEdit 이 뷰 갱신 도중 미뤄둔 쓰기(마이크로태스크로 dispatch 대기 중)도
+      // 같은 이유로 모든 트랜잭션마다 범위를 옮긴다
+      if (tr.docChanged) trackPendingWrites(viewRef.current, tr)
       if (!isForced(tr)) {
         // F-134 3.8: 배경 구문 분석이 끝나 트리만 바뀐 갱신도 재계산 조건에 넣는다.
         // 안 넣으면 긴 문서 뒷부분(첫 파싱이 못 미친 곳)의 위젯이 다음 문서·선택

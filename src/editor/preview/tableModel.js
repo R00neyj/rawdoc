@@ -32,11 +32,15 @@ function cellFromSegment(raw, segStart, segEnd, lineStart) {
   while (s < e && /\s/.test(raw[s])) s++
   while (e > s && /\s/.test(raw[e - 1])) e--
   if (s < e) {
-    return { from: lineStart + s, to: lineStart + e, text: raw.slice(s, e) }
+    // paddingAfter: 칸 글자 뒤(트림된 공백)와 다음 구분자(파이프 또는 줄 끝) 사이에
+    // 공백이 하나라도 남아 있는가. cellEdit 이 F-138 3.1 "칸 끝" 규칙(패딩 없는 칸에
+    // 홀수 개 `\` 로 끝나는 값을 쓰면 뒤 파이프가 이스케이프되지 않도록 공백 1개를
+    // 함께 넣는다)을 적용할지 판단하는 데 쓴다.
+    return { from: lineStart + s, to: lineStart + e, text: raw.slice(s, e), paddingAfter: e < segEnd }
   }
   const pos = segStart + (raw[segStart] === ' ' ? 1 : 0)
   const clamped = Math.min(pos, segEnd)
-  return { from: lineStart + clamped, to: lineStart + clamped, text: '' }
+  return { from: lineStart + clamped, to: lineStart + clamped, text: '', paddingAfter: clamped < segEnd }
 }
 
 /**
@@ -87,30 +91,47 @@ export function parseTable(text, from) {
   return { rows, delimiterRow, columnCount }
 }
 
-/** 사용자가 칸에 입력한 값을 원문에 넣을 형태로 바꾼다 (F-125 2.2, F-135 3.1)
- * — 붙여넣기의 줄바꿈은 공백 1개로, `|` 는 `\|` 로(표 구조 유지).
- * 값 끝에 남는 연속 `\` 개수가 홀수면 `\` 를 하나 더 붙인다 — 그러지 않으면 이 칸
- * 뒤(범위 밖)에 있는 다음 파이프(칸 구분자)가 이스케이프돼 칸이 합쳐진다.
- * `unescapeCell` 의 역함수다: `escapeCell(unescapeCell(raw)) === raw`. */
+/** 사용자가 칸에 입력한 값을 원문에 넣을 형태로 바꾼다 (F-125 2.2, F-138 3.1 — F-135 3.1 을
+ * 대체한다). 붙여넣기의 줄바꿈은 공백 1개로 바꾼다. `|` 는 파이프 앞 연속 `\` 묶음만
+ * 다뤄 이스케이프한다 — 그 밖의 `\`(예: `C:\Users`, `a\*b`)는 글자 그대로 둔다.
+ * 규칙: `|` 바로 앞 연속 `\` 가 j 개면 `2j+1` 개 + `|` 로 바꾼다(기존 j 개를 지우고
+ * 새로 쓴다 — 이스케이프하는 역슬래시 자신이 다음에 또 이스케이프 대상이 되지 않는다).
+ * 값 끝이 패딩 없이 파이프 바로 앞에 붙어 홀수 개 `\` 로 끝나는 경우의 공백 삽입은 이
+ * 함수가 아니라 문서 위치를 아는 `cellEdit`(3.1 "칸 끝")과 `tableWidget.js`
+ * `pushCellEdit`(3.1 "패딩 삽입")이 한다. `unescapeCell` 의 역함수다:
+ * `escapeCell(unescapeCell(raw)) === raw`. */
 export function escapeCell(value) {
-  const flat = value.replace(/\r\n|\r|\n/g, ' ').replace(/\|/g, '\\|')
-  const trailingBackslashes = flat.match(/\\+$/)?.[0].length ?? 0
-  return trailingBackslashes % 2 === 1 ? `${flat}\\` : flat
-}
-
-/** `escapeCell` 의 역함수 (F-135 3.1) — 칸 원문(파이프 이스케이프 포함)을 칸 편집기에
- * 보여줄 값으로 되돌린다. `parseTable`(`unescapedPipePositions`)이 칸 구분자를 찾을 때와
- * 같은 규칙으로 읽는다: `\` 다음 글자는 무엇이든(백슬래시 자신 포함) 그 글자 자체로
- * 되돌리고 두 글자를 함께 소비한다. 짝을 이루지 못하고 글자 끝에 남은 `\` 는 그대로 둔다. */
-export function unescapeCell(raw) {
+  const flat = value.replace(/\r\n|\r|\n/g, ' ')
   let out = ''
-  for (let i = 0; i < raw.length; i++) {
-    if (raw[i] === '\\' && i + 1 < raw.length) {
-      out += raw[i + 1]
-      i++
+  for (const ch of flat) {
+    if (ch === '|') {
+      let j = out.length
+      while (j > 0 && out[j - 1] === '\\') j--
+      const backslashes = out.length - j
+      out = out.slice(0, j) + '\\'.repeat(backslashes * 2 + 1) + '|'
       continue
     }
-    out += raw[i]
+    out += ch
+  }
+  return out
+}
+
+/** `escapeCell` 의 역함수 (F-138 3.1 — F-135 3.1 을 대체한다). 칸 원문(파이프 이스케이프
+ * 포함)을 칸 편집기에 보여줄 값으로 되돌린다. 파이프 앞 연속 `\` 묶음만 되돌리고 그 밖의
+ * `\` 는 그대로 둔다: `parseTable`(`unescapedPipePositions`)이 칸 구분자가 아니라고
+ * 판정한 `\|` 앞 역슬래시는 칸 안에서는 항상 홀수 개다(그래야 그 파이프가 구분자로
+ * 갈라지지 않는다) — k 개면 `(k-1)/2` 개로 줄이고 `|` 를 남긴다. */
+export function unescapeCell(raw) {
+  let out = ''
+  for (const ch of raw) {
+    if (ch === '|') {
+      let j = out.length
+      while (j > 0 && out[j - 1] === '\\') j--
+      const k = out.length - j
+      out = out.slice(0, j) + '\\'.repeat(Math.floor((k - 1) / 2)) + '|'
+      continue
+    }
+    out += ch
   }
   return out
 }
@@ -167,10 +188,20 @@ export function cellEdit(table, row, col, value) {
   const rowInfo = table.rows[row]
   if (!rowInfo) return []
 
-  const escaped = escapeCell(value)
+  let escaped = escapeCell(value)
 
   if (col < rowInfo.cells.length) {
     const cell = rowInfo.cells[col]
+    // F-138 3.1 "칸 끝": 값이 홀수 개 `\` 로 끝나고(escapeCell 은 파이프 앞이 아니면
+    // 손대지 않으므로 그 `\` 가 그대로 남아 있다) 이 칸 범위 바로 뒤에 패딩 없이
+    // 파이프가 오면, 그 파이프가 이스케이프되어 칸이 합쳐진다. 원문 뒤에 공백 1개를
+    // 함께 넣어 막는다 — 바뀐 곳은 이 칸뿐이다.
+    const isLastCell = col === rowInfo.cells.length - 1
+    const pipeFollows = !isLastCell || rowInfo.trailingPipe
+    const trailingBackslashes = escaped.match(/\\+$/)?.[0].length ?? 0
+    if (pipeFollows && !cell.paddingAfter && trailingBackslashes % 2 === 1) {
+      escaped += ' '
+    }
     return [{ from: cell.from, to: cell.to, insert: escaped }]
   }
 

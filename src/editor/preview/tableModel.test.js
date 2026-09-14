@@ -135,26 +135,81 @@ describe('cellEdit — 값 바꾸기', () => {
   })
 })
 
-describe('unescapeCell/escapeCell — 파이프 이스케이프 왕복 (F-135 3.1)', () => {
+describe('이스케이프 왕복 (F-138 3.1) — F-135 3.1 을 대체. 파이프 앞 역슬래시 묶음만 다루고 그 밖의 `\\` 는 그대로 둔다', () => {
   it.each([
-    ['a\\|b', 'a|b'],
-    ['a\\\\', 'a\\'],
+    ['a\\|b', 'a|b'], // 파이프 앞 역슬래시 1개(홀수) → 0개 + `|`
     ['\\|', '|'],
     ['', ''],
     ['한글', '한글'],
+    ['C:\\Users', 'C:\\Users'], // 파이프가 없으면 `\` 를 전혀 건드리지 않는다
+    ['a\\*b', 'a\\*b'],
+    ['a\\', 'a\\'], // 끝에 남은 짝 없는 `\`(파이프 없음)도 그대로
+    ['\\\\\\|', '\\|'], // 파이프 앞 역슬래시 3개(홀수) → 1개 + `|`
   ])('unescapeCell(%j) → %j, escapeCell(unescapeCell(raw)) === raw', (raw, expectedValue) => {
     expect(unescapeCell(raw)).toBe(expectedValue)
     expect(escapeCell(unescapeCell(raw))).toBe(raw)
   })
 
+  it.each([
+    ['a|b', 'a\\|b'],
+    ['a\\|b', 'a\\\\\\|b'],
+    ['\\', '\\'], // 파이프가 없으면 값 끝의 `\` 를 건드리지 않는다
+    ['\\\\|', '\\\\\\\\\\|'],
+    ['C:\\Users', 'C:\\Users'],
+  ])('escapeCell(%j) → %j, unescapeCell(escapeCell(v)) === v', (value, expectedRaw) => {
+    expect(escapeCell(value)).toBe(expectedRaw)
+    expect(unescapeCell(escapeCell(value))).toBe(value)
+  })
+
   it('parseTable 로 읽은 모든 칸 원문에 대해 escapeCell(unescapeCell(raw)) === raw', () => {
-    const doc = '| a\\|b | \\| | 한글 |\n| - | - | - |\n| a\\\\ | x | y |'
+    const doc = '| a\\|b | \\| | 한글 | C:\\Users | a\\*b |\n| - | - | - | - | - |\n| a\\\\\\| | x | y | a\\ | z |'
     const table = parseTable(doc, 0)
     for (const row of table.rows) {
       for (const cell of row.cells) {
         expect(escapeCell(unescapeCell(cell.text))).toBe(cell.text)
       }
     }
+  })
+
+  it('칸에 `a\\|b` 를 쓴 뒤 parseTable 열 수·행 수가 그대로이고 다시 읽은 값이 쓴 값과 같다(패딩 없는 표)', () => {
+    const doc = '|a|b|'
+    const table = parseTable(doc, 0)
+    const changes = cellEdit(table, 0, 0, 'a\\|b')
+    const result = apply(doc, changes)
+    const reparsed = parseTable(result, 0)
+    expect(reparsed.columnCount).toBe(2)
+    expect(reparsed.rows).toHaveLength(1)
+    expect(unescapeCell(reparsed.rows[0].cells[0].text)).toBe('a\\|b')
+    expect(unescapeCell(reparsed.rows[0].cells[1].text)).toBe('b')
+  })
+
+  it('칸에 `|` 를 쓴 뒤 parseTable 열 수·행 수가 그대로이고 다시 읽은 값이 쓴 값과 같다(패딩 없는 표)', () => {
+    const doc = '|a|b|'
+    const table = parseTable(doc, 0)
+    const changes = cellEdit(table, 0, 0, '|')
+    const result = apply(doc, changes)
+    const reparsed = parseTable(result, 0)
+    expect(reparsed.columnCount).toBe(2)
+    expect(unescapeCell(reparsed.rows[0].cells[0].text)).toBe('|')
+    expect(unescapeCell(reparsed.rows[0].cells[1].text)).toBe('b')
+  })
+
+  it('칸 끝: 패딩 없는 마지막 칸에 `a\\` 를 쓰면 뒤 파이프가 이스케이프되지 않게 공백 1개가 함께 들어간다', () => {
+    const doc = '|a|b|'
+    const table = parseTable(doc, 0)
+    const changes = cellEdit(table, 0, 1, 'b\\')
+    const result = apply(doc, changes)
+    const reparsed = parseTable(result, 0)
+    expect(reparsed.columnCount).toBe(2)
+    expect(unescapeCell(reparsed.rows[0].cells[1].text)).toBe('b\\')
+  })
+
+  it('칸 끝: 패딩이 있으면 공백을 더 넣지 않는다', () => {
+    const doc = '| a | b |'
+    const table = parseTable(doc, 0)
+    const changes = cellEdit(table, 0, 0, 'a\\')
+    const result = apply(doc, changes)
+    expect(result).toBe('| a\\ | b |')
   })
 
   it('`a\\|b` 편집기 값은 `a|b` 이고, 끝에 c 를 입력하면 원문은 `a\\|bc`(열 수 그대로)', () => {

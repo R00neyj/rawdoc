@@ -112,3 +112,17 @@ export function ancestorsOfDoc({ folders, doc }) {
 export function pinnedDocs(docs) {
   return docs.filter((d) => d.pinnedAt != null).sort((a, b) => a.pinnedAt - b.pinnedAt)
 }
+
+/**
+ * 새 문서를 넣을 대상 폴더를 정한다 (specs/features/F-138.md 3.4). `folderId` 가
+ * 존재하는 폴더를 가리킬 때만 그 값을 쓰고, 그 외(지운 폴더·옛 버그로 끊긴 값·문서
+ * id 등)는 최상위(null)로 되돌린다 — 저장소 `create`·`moveDoc`(F-136.md 3.1·3.2)이
+ * 없는 폴더 id 를 거부해 처리되지 않은 rejection 으로 이어지는 것을 막는다.
+ * 사이드바 새 문서(폴더 생략)·없는 위키링크 클릭·가져오기 세 경로가 이 함수를 쓴다.
+ * @param {{ folders: FolderLike[], folderId: string|null|undefined }} args
+ * @returns {string|null}
+ */
+export function resolveTargetFolderId({ folders, folderId }) {
+  if (!folderId) return null
+  return folders.some((f) => f.id === folderId) ? folderId : null
+}

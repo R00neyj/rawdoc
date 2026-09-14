@@ -43,12 +43,13 @@ describe('buildBlocks — 생성 여부', () => {
     expect(widgets.some((w) => w.lines !== undefined)).toBe(true)
   })
 
-  it('커서가 표 안이어도 표 위젯은 사라지지 않는다(F-125 2.1) — 코드블록은 그대로 만든다', () => {
+  it('빈 커서가 표 원문 범위 안이면 표는 위젯이 아니라 원문이다(F-139 3.1) — 코드블록은 그대로 만든다', () => {
     const cursor = TABLE_DOC.indexOf('1') // 표 본문 행
     const state = makeState(MIXED_DOC, cursor)
     const widgets = widgetsOf(state)
-    // 표는 칸 편집을 위젯 안 하위 에디터로 하므로 커서가 안에 있어도 항상 위젯이다
-    expect(widgets.some((w) => w.table)).toBe(true)
+    // F-125 2.1 의 "항상 위젯" 은 F-139 3.1 로 이 예외가 생겼다 — 표를 치는 도중
+    // 빈 커서가 표 원문 안에 있으면 코드블록과 같은 "겹치면 원문" 규칙을 탄다
+    expect(widgets.some((w) => w.table)).toBe(false)
     expect(widgets.some((w) => w.lines !== undefined)).toBe(true)
   })
 
@@ -74,6 +75,41 @@ describe('buildBlocks — 생성 여부', () => {
     const state = makeState(MIXED_DOC, MIXED_DOC.length - 1, MIXED_DOC.length)
     const widgets = widgetsOf(state)
     expect(widgets).toHaveLength(2)
+  })
+})
+
+describe('buildBlocks — 표를 치는 도중 입력 손실 방지 (F-139 3.1)', () => {
+  // F-139 3.2 재현: 구분 행을 "| --- | - " 까지만 쳐도 GFM 최소 조건(칸마다
+  // ':?-+:?')을 만족해 즉시 Table 로 인식된다 — 사용자가 아직 다 치지 않았어도 그렇다
+  const PARTIAL_DOC = '앞 문단\n\n| a | b |\n| --- | - '
+
+  it('빈 커서가 표 원문 범위 안(문서 끝)이면 표 위젯을 만들지 않는다', () => {
+    const state = makeState(PARTIAL_DOC, PARTIAL_DOC.length)
+    const widgets = widgetsOf(state)
+    expect(widgets.some((w) => w.table)).toBe(false)
+  })
+
+  it('같은 문서, 빈 커서가 표 앞 줄이면 표 위젯을 만든다', () => {
+    const cursor = PARTIAL_DOC.indexOf('앞 문단')
+    const state = makeState(PARTIAL_DOC, cursor)
+    const widgets = widgetsOf(state)
+    expect(widgets.some((w) => w.table)).toBe(true)
+  })
+
+  it('표를 걸친 비어 있지 않은 선택은 표 위젯을 유지한다(F-125 A2)', () => {
+    const from = PARTIAL_DOC.indexOf('a') // 표 머리 행
+    const to = PARTIAL_DOC.length // 구분 행 끝
+    const state = makeState(PARTIAL_DOC, from, to)
+    const widgets = widgetsOf(state)
+    expect(widgets.some((w) => w.table)).toBe(true)
+  })
+
+  it('빈 커서가 표 범위 밖(표 뒤 줄)으로 나가면 다시 위젯이 된다', () => {
+    const doc = '앞 문단\n\n| a | b |\n| --- | --- |\n\n뒤 문단'
+    const cursor = doc.indexOf('뒤 문단')
+    const state = makeState(doc, cursor)
+    const widgets = widgetsOf(state)
+    expect(widgets.some((w) => w.table)).toBe(true)
   })
 })
 

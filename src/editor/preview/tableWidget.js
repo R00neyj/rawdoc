@@ -77,6 +77,27 @@ export function trackActiveEditRange(mainView, tr) {
   entry.lineStart = tr.changes.mapPos(entry.lineStart, -1)
 }
 
+/** `endEdit` 가 뷰 갱신 도중(updateDOM·destroy, F-138 3.5) 당장 dispatch 할 수 없어
+ * 마이크로태스크로 미룬 쓰기 항목. 주 EditorView 하나당 배열(짧은 시간 안에 항목이
+ * 하나뿐이라 보통이지만 방어적으로 배열로 둔다) */
+const pendingDeferredWrites = new WeakMap()
+
+/** 모든 주 문서 트랜잭션마다 미뤄둔 쓰기의 범위도 함께 옮긴다 (F-138 3.5). 이유는
+ * `trackActiveEditRange` 와 같다 — `endEdit` 이 이미 `activeEdit` 에서 세션을 지운
+ * 뒤에도, 마이크로태스크가 실제로 dispatch 하는 시점까지 그 사이 일어난 변경을
+ * 계속 따라가야 한다. `blocks.js` 의 `StateField.update` 가 모든 트랜잭션마다 이
+ * 함수도 부른다.
+ * @param {import('@codemirror/view').EditorView} mainView
+ * @param {import('@codemirror/state').Transaction} tr
+ */
+export function trackPendingWrites(mainView, tr) {
+  const items = pendingDeferredWrites.get(mainView)
+  if (!items || items.length === 0) return
+  for (const item of items) {
+    item.range = mapCellRange(item.range, tr.changes)
+  }
+}
+
 /** 세션이 든 칸 범위(entry.range)를 써서 값을 주 문서 트랜잭션으로 보낸다. 위젯
  * 인스턴스(entry.widget)의 칸 위치는 조합 중 재계산이 보류되어 낡을 수 있어 쓰지
  * 않는다(F-135 3.2) — 세션 자신이 든 범위만 신뢰한다. */
@@ -87,9 +108,19 @@ function pushCellEdit(mainView, row, col, value) {
 
   if (entry.range) {
     const { from, to } = entry.range
-    if (mainView.state.doc.sliceString(from, to) !== escaped) {
-      mainView.dispatch({ changes: { from, to, insert: escaped }, userEvent: 'input.table' })
-      entry.range = advanceCellRange(entry.range, escaped)
+    // F-138 3.1 "패딩 삽입": 값이 홀수 개 `\` 로 끝나고(escapeCell 은 파이프 앞이
+    // 아니면 손대지 않는다) 이 칸 범위 바로 뒤(주 문서, 아직 이 트랜잭션을 보내기
+    // 전)가 패딩 없이 파이프면, 그 파이프가 이스케이프되어 칸이 합쳐진다. 공백 1개를
+    // 함께 넣어 막는다 — 바뀐 곳은 이 칸뿐이다(tableModel.js cellEdit 의 "칸 끝"
+    // 규칙과 같은 목적, 여기서는 live 문서로 직접 판정한다)
+    let insert = escaped
+    const trailingBackslashes = escaped.match(/\\+$/)?.[0].length ?? 0
+    if (trailingBackslashes % 2 === 1 && mainView.state.doc.sliceString(to, to + 1) === '|') {
+      insert += ' '
+    }
+    if (mainView.state.doc.sliceString(from, to) !== insert) {
+      mainView.dispatch({ changes: { from, to, insert }, userEvent: 'input.table' })
+      entry.range = advanceCellRange(entry.range, insert)
     }
   } else {
     // 칸이 아직 실제로 존재하지 않는다(F-106 채움 칸, F-125 2.4 마지막 항목) — 모자란
@@ -117,17 +148,46 @@ function pushCellEdit(mainView, row, col, value) {
 /** 지금 편집 중인 칸을 끝낸다. DOM 을 그 칸의 현재(주 문서 기준) 글자로 되돌린다.
  * 조합 때문에 보류된 재계산이 있으면(F-135 3.4) 편집이 어떤 경로로 끝나든(클릭,
  * 포커스 이탈, Esc, 다른 위젯의 destroy) 여기서 반드시 forceRecalc 를 보낸다 —
- * `compositionend` 핸들러의 setTimeout 은 그사이 활성 칸이 바뀌면 스스로 건너뛴다. */
-function endEdit(mainView) {
+ * `compositionend` 핸들러의 setTimeout 은 그사이 활성 칸이 바뀌면 스스로 건너뛴다.
+ *
+ * `TableWidget.updateDOM`·`destroy` 는 CM6 가 뷰를 갱신하는 도중에 부른다 — 그 안에서
+ * `mainView.dispatch` 를 부르면 CM6 가 예외를 던진다(F-138 3.5,
+ * `@codemirror/view/dist/index.js:7948`). 그 두 경로는 `deferDispatch: true` 로 불러
+ * DOM 정리(activeEdit 삭제·하위 EditorView destroy)는 그대로 하되, 조합 중이던 값을
+ * 반영하는 쓰기와 forceRecalc 는 마이크로태스크로 미룬다. 미룬 사이 주 문서가 바뀌면
+ * (`trackPendingWrites`) 그 변경으로 범위를 옮긴 뒤 쓴다. 그 범위가 원래 비어 있지
+ * 않았는데(칸이 실재했는데) 마이크로태스크 시점에 빈 범위로 무너졌으면(표·행이
+ * 통째로 지워짐) 쓰지 않고 forceRecalc 만 보낸다.
+ * @param {EditorView} mainView
+ * @param {{ deferDispatch?: boolean }} [opts]
+ */
+function endEdit(mainView, { deferDispatch = false } = {}) {
   const entry = activeEdit.get(mainView)
   if (!entry) return
 
-  if (isComposing(entry.cellView)) {
-    // 편집기를 없애기 전에 조합 중이던 값을 먼저 주 문서에 반영한다(F-135 3.4) —
-    // 그러지 않으면 조합 중이던 글자가 원문에 반영되지 않고 사라진다
-    pushCellEdit(mainView, entry.row, entry.col, entry.cellView.state.doc.toString())
+  const composing = isComposing(entry.cellView)
+  // 편집기를 없애기 전에 조합 중이던 값을 먼저 주 문서에 반영해야 한다(F-135 3.4) —
+  // 그러지 않으면 조합 중이던 글자가 원문에 반영되지 않고 사라진다. 갱신 중이 아니면
+  // (deferDispatch=false) pushCellEdit 로 지금 바로 보낸다(entry 가 아직 activeEdit 에
+  // 있는 채로 — pushCellEdit 은 entry.range 를 그 자리에서 읽는다).
+  if (composing) {
+    if (!deferDispatch) {
+      pushCellEdit(mainView, entry.row, entry.col, entry.cellView.state.doc.toString())
+    }
     entry.pendingRecalc = true
   }
+  // deferDispatch 인데 조합 중이면, activeEdit 에서 지우기 전에 지금 시점의 범위·값을
+  // 붙잡아 둔다 — pushCellEdit 을 나중에 부를 수 없으므로(entry 는 곧 지워진다) 필요한
+  // 정보만 별도로 들고 마이크로태스크에서 직접 dispatch 한다
+  const deferredWrite =
+    deferDispatch && composing && entry.range
+      ? {
+          range: { ...entry.range },
+          wasNonEmpty: entry.range.from < entry.range.to,
+          value: entry.cellView.state.doc.toString(),
+        }
+      : null
+  const pendingRecalc = entry.pendingRecalc
 
   activeEdit.delete(mainView)
   entry.cellView.destroy()
@@ -135,9 +195,33 @@ function endEdit(mainView) {
   entry.td.textContent = cell ? cell.text : ''
   entry.td.classList.remove('md-table-cell-editing')
 
-  if (entry.pendingRecalc) {
-    mainView.dispatch({ effects: forceRecalc.of(null) })
+  if (!deferDispatch) {
+    if (pendingRecalc) mainView.dispatch({ effects: forceRecalc.of(null) })
+    return
   }
+
+  let items = pendingDeferredWrites.get(mainView)
+  if (!items) {
+    items = []
+    pendingDeferredWrites.set(mainView, items)
+  }
+  if (deferredWrite) items.push(deferredWrite)
+
+  Promise.resolve().then(() => {
+    if (deferredWrite) {
+      const idx = items.indexOf(deferredWrite)
+      if (idx !== -1) items.splice(idx, 1)
+      const { from, to } = deferredWrite.range
+      const collapsed = deferredWrite.wasNonEmpty && from >= to
+      if (!collapsed) {
+        const escaped = escapeCell(deferredWrite.value)
+        if (mainView.state.doc.sliceString(from, to) !== escaped) {
+          mainView.dispatch({ changes: { from, to, insert: escaped }, userEvent: 'input.table' })
+        }
+      }
+    }
+    if (pendingRecalc) mainView.dispatch({ effects: forceRecalc.of(null) })
+  })
 }
 
 /** entry.wrap 기준 표 앞 줄 끝(위) / 표 다음 줄 시작(아래) 위치로 주 에디터 커서를 옮긴다.
@@ -501,8 +585,9 @@ export class TableWidget extends WidgetType {
 
     if (!sameShape(dom, this.table)) {
       // 행·열 수가 바뀌었다 — 편집 중이던 칸은 다른 칸(추가된 칸)으로 옮겨갈
-      // 참이므로 통째로 다시 그린다
-      endEdit(view)
+      // 참이므로 통째로 다시 그린다. updateDOM 은 뷰 갱신 도중이라(F-138 3.5) 지금
+      // 바로 dispatch 할 수 없다 — deferDispatch 로 미룬다
+      endEdit(view, { deferDispatch: true })
       renderTable(dom, this, view)
       if (pending) startEdit(view, dom, this, pending.row, pending.col)
       return true
@@ -543,7 +628,8 @@ export class TableWidget extends WidgetType {
     const view = wrapView.get(dom)
     if (!view) return
     const entry = activeEdit.get(view)
-    if (entry && entry.wrap === dom) endEdit(view)
+    // destroy 도 뷰 갱신 도중 불린다(F-138 3.5) — updateDOM 과 같은 이유로 미룬다
+    if (entry && entry.wrap === dom) endEdit(view, { deferDispatch: true })
   }
 }
 

@@ -5,6 +5,10 @@ import { toEditorText, fromEditorText } from './lineEnding.js'
 
 const SHARE_VERSION = 1
 
+// 풀린 바이트가 이 값을 넘으면 읽기를 멈추고 거부한다 — 조작된 링크로 탭이 멈추는 것을
+// 막는다 (F-138 3.6). 스트림을 읽으면서 누적 크기로 판정한다
+const MAX_DECOMPRESSED_BYTES = 20 * 1024 * 1024
+
 function toBase64Url(bytes) {
   let binary = ''
   const chunkSize = 0x8000 // String.fromCharCode 인자 개수 상한을 피하기 위한 묶음 처리
@@ -54,17 +58,42 @@ async function compress(bytes) {
   }
 }
 
-async function decompress(bytes) {
+// 풀린 바이트를 한 번에 buffer 하지 않고 스트림을 읽으면서 누적 크기를 잰다 —
+// `maxBytes` 를 넘는 순간 더 읽지 않고 거부한다(F-138 3.6). 테스트에서 실제 20MB
+// 데이터를 만드는 대신 `maxBytes` 를 작은 값으로 넘겨 빠르게 확인할 수 있도록
+// export 한다.
+export async function decompress(bytes, maxBytes = MAX_DECOMPRESSED_BYTES) {
   const ds = new DecompressionStream('deflate-raw')
   const writer = ds.writable.getWriter()
   const writeDone = writer.write(bytes).catch(() => {})
   const closeDone = writer.close().catch(() => {})
+  const reader = ds.readable.getReader()
+
+  const chunks = []
+  let total = 0
   try {
-    return new Uint8Array(await new Response(ds.readable).arrayBuffer())
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > maxBytes) {
+        throw new Error(`압축 해제 결과가 상한(${maxBytes} 바이트)을 넘었습니다`)
+      }
+      chunks.push(value)
+    }
   } finally {
+    await reader.cancel().catch(() => {})
     await writeDone
     await closeDone
   }
+
+  const result = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    result.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return result
 }
 
 /**

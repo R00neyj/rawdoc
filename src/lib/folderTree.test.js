@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { buildTree, canCreateFolder, canMoveFolder, ancestorsOfDoc, pinnedDocs } from './folderTree.js'
+import {
+  buildTree,
+  canCreateFolder,
+  canMoveFolder,
+  ancestorsOfDoc,
+  pinnedDocs,
+  resolveTargetFolderId,
+} from './folderTree.js'
 
 function folder(id, name, parentId = null) {
   return { id, name, parentId }
@@ -146,5 +153,26 @@ describe('pinnedDocs (F-132)', () => {
   it('pinnedAt 필드가 없는 문서(undefined)는 제외한다', () => {
     const docs = [{ id: 'd1', title: '옛 문서', folderId: null, updatedAt: 0 }]
     expect(pinnedDocs(docs)).toEqual([])
+  })
+})
+
+describe('resolveTargetFolderId (F-138 3.4)', () => {
+  const folders = [folder('top', '위')]
+
+  it('존재하는 폴더면 그 값을 그대로 쓴다', () => {
+    expect(resolveTargetFolderId({ folders, folderId: 'top' })).toBe('top')
+  })
+
+  it('없는 폴더 id 는 최상위(null)로 되돌린다', () => {
+    expect(resolveTargetFolderId({ folders, folderId: '지운-폴더' })).toBeNull()
+  })
+
+  it('문서 id 등 폴더가 아닌 값도 최상위(null)로 되돌린다', () => {
+    expect(resolveTargetFolderId({ folders, folderId: 'doc-1' })).toBeNull()
+  })
+
+  it('null·undefined 는 그대로 최상위(null)', () => {
+    expect(resolveTargetFolderId({ folders, folderId: null })).toBeNull()
+    expect(resolveTargetFolderId({ folders, folderId: undefined })).toBeNull()
   })
 })
