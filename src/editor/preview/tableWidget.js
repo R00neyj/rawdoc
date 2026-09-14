@@ -13,6 +13,7 @@ import { redo, undo } from '@codemirror/commands'
 
 import { addColumn, addRow, advanceCellRange, cellEdit, escapeCell, mapCellRange, parseTable, unescapeCell } from './tableModel.js'
 import { observeHeight, stopObservingHeight } from './blocks.js'
+import { parseCellInline } from './cellInline.js'
 import { insertLink, toggleEmphasis, toggleStrong } from '../commands.js'
 import { forceRecalc, isComposing } from '../composition.js'
 
@@ -192,8 +193,9 @@ function endEdit(mainView, { deferDispatch = false } = {}) {
   activeEdit.delete(mainView)
   entry.cellView.destroy()
   const cell = entry.widget.table.rows[entry.row]?.cells[entry.col]
-  entry.td.textContent = cell ? cell.text : ''
+  renderCellText(entry.td, cell ? cell.text : '')
   entry.td.classList.remove('md-table-cell-editing')
+  hideCellHighlight(entry.wrap) // 편집이 끝나면 강조를 숨긴다(F-140 3.3)
 
   if (!deferDispatch) {
     if (pendingRecalc) mainView.dispatch({ effects: forceRecalc.of(null) })
@@ -337,6 +339,7 @@ function startEdit(mainView, wrap, widget, row, col) {
 
   activeEdit.set(mainView, { wrap, td, row, col, cellView, widget, range, lineStart, pendingRecalc: false })
   cellView.focus()
+  positionCellHighlight(wrap, td) // 강조를 이 칸으로 옮긴다(F-140 3.3)
 }
 
 /** 칸 하위 에디터 키 처리 (F-125 2.3). 조합 중에는 가로채지 않는다 */
@@ -382,7 +385,22 @@ function cellKeydown(mainView, wrap, cellView, event) {
   if (event.key === 'Enter') {
     const e = entry()
     if (!e) return false
-    if (e.row + 1 >= e.widget.table.rows.length) return consume(exitToMain(mainView, false))
+    if (e.row + 1 >= e.widget.table.rows.length) {
+      // 마지막 행(F-140 3.5): 글자 있는 칸이 하나라도 있으면 행을 추가해 같은 열에서
+      // 이어 편집한다. 모두 비어 있으면 지금처럼 표를 빠져나간다(빈 행은 그대로 둔다)
+      const hasText = e.widget.table.rows[e.row].cells.some((c) => c && c.text !== '')
+      if (!hasText) return consume(exitToMain(mainView, false))
+      const latest = e.widget
+      const blockFrom = mainView.posAtDOM(wrap)
+      const { changes } = addRow(latest.table)
+      if (changes.length === 0) return consume(exitToMain(mainView, false))
+      pendingFocus.set(mainView, { wrap, row: latest.table.rows.length, col: e.col })
+      mainView.dispatch({
+        changes: changes.map((c) => ({ ...c, from: c.from + blockFrom })),
+        userEvent: 'input.table',
+      })
+      return consume(true)
+    }
     return consume(moveTo(e.row + 1, e.col))
   }
 
@@ -447,16 +465,42 @@ function cellKeydown(mainView, wrap, cellView, event) {
   return false
 }
 
+/** 표시용 mark 이름 → CSS 클래스(편집 모드 인라인 프리뷰와 같다, F-140 3.2) */
+const CELL_MARK_CLASS = { strong: 'md-strong', em: 'md-em', strike: 'md-strike', code: 'md-code', link: 'md-link', wikilink: 'md-wikilink' }
+
+/** 칸(td/th) 안쪽을 편집 중이 아닌 표시(인라인 서식)로 채운다. createElement·textContent 만
+ * 쓴다 — innerHTML 로 칸 글자를 넣지 않는다(F-140 3.2 보안). el.dataset.rawText 는 구조가
+ * 같을 때 "바뀌었는지" 를 표시 글자가 아니라 칸 원문으로 비교하는 데 쓴다(updateDOM patch) */
+function renderCellText(el, text) {
+  el.textContent = ''
+  el.dataset.rawText = text
+  for (const seg of parseCellInline(text)) {
+    let node = document.createTextNode(seg.text)
+    for (const mark of seg.marks) {
+      const span = document.createElement('span')
+      span.className = CELL_MARK_CLASS[mark]
+      span.appendChild(node)
+      node = span
+    }
+    if (seg.title && node.nodeType === Node.ELEMENT_NODE) node.title = seg.title
+    el.appendChild(node)
+  }
+}
+
 /** 칸(td/th) DOM 을 만들고 클릭·키보드 진입을 연결한다 */
 function buildCell(tagName, text, row, col, mainView, wrap) {
   const el = document.createElement(tagName)
-  el.textContent = text
+  renderCellText(el, text)
   el.tabIndex = 0
   el.dataset.row = String(row)
   el.dataset.col = String(col)
 
   el.addEventListener('mousedown', (event) => {
     event.preventDefault()
+    // 칸 안 링크·위키링크 글자를 눌러도 열지 않고 칸 편집을 시작한다(F-140 3.2) —
+    // 전파를 막아 EditorView 의 linkClicks·wikiLinkClicks(mousedown) 가 같은 클릭을
+    // 다시 처리하지 않게 한다
+    event.stopPropagation()
     startEdit(mainView, wrap, currentWidgetFor(wrap), row, col)
   })
   el.addEventListener('keydown', (event) => {
@@ -474,6 +518,109 @@ const renderedWidget = new WeakMap()
 
 function currentWidgetFor(wrap) {
   return renderedWidget.get(wrap)
+}
+
+const BUTTON_HALF = 10 // 20px 버튼의 절반
+
+/** 열 추가 버튼 툴팁이 가운데 정렬로 편집 영역(`.cm-scroller`) 밖에 나가면 오른쪽
+ * 끝을 버튼 오른쪽 끝에 맞춘다(F-140 3.1). `getComputedStyle` 의 pseudo-element
+ * 인자로 실제 렌더링된 툴팁 폭을 잰다 — opacity:0 이어도 레이아웃은 계산된다 */
+function positionColTooltip(colBtn, colX, editRight) {
+  const afterWidth = parseFloat(getComputedStyle(colBtn, '::after').width) || 0
+  colBtn.classList.toggle('md-table-add-col-tooltip-edge', colX + afterWidth / 2 > editRight)
+}
+
+/** 표 테두리 기준으로 두 버튼의 중심 좌표(wrap 기준 px)를 구해 놓는다(F-140 3.1).
+ * 표가 편집 영역보다 넓어 가로 스크롤 중이면 열 버튼은 "보이는 스크롤 영역"의
+ * 오른쪽 끝에, 행 버튼은 그 가로 가운데에 고정한다 — `.md-table-scroll` 자신은
+ * 스크롤해도 크기가 바뀌지 않는 요소라 스크롤 위치와 무관하게 계산할 수 있다.
+ * 열 버튼은 스크롤 여부와 무관하게 `.cm-scroller` 안에 완전히 들어오도록 clamp 한다 —
+ * 스크롤하지 않는 표라도 오른쪽 끝이 편집 영역 끝에 가까우면 버튼이 밖으로 나가 가로
+ * 스크롤을 만들 수 있다 */
+function positionAddButtons(wrap) {
+  const scroll = wrap.querySelector('.md-table-scroll')
+  const table = wrap.querySelector('table')
+  const rowBtn = wrap.querySelector('.md-table-add-row')
+  const colBtn = wrap.querySelector('.md-table-add-col')
+  if (!scroll || !table || !rowBtn || !colBtn) return
+
+  const wrapRect = wrap.getBoundingClientRect()
+  const scrollRect = scroll.getBoundingClientRect()
+  const tableRect = table.getBoundingClientRect()
+  if (wrapRect.width === 0 || scrollRect.width === 0) return // 아직 화면에 없다 — 다음 관찰에서 다시 계산
+
+  const scroller = wrap.closest('.cm-scroller')
+  const editRight = scroller ? scroller.getBoundingClientRect().right - wrapRect.left : Infinity
+
+  const scrollable = tableRect.width > scrollRect.width + 0.5
+  const rawColX = scrollable ? scrollRect.right - wrapRect.left : tableRect.right - wrapRect.left
+  const colX = Math.min(Math.max(rawColX, BUTTON_HALF), editRight - BUTTON_HALF)
+  const rowX = scrollable ? scrollRect.width / 2 : tableRect.width / 2
+
+  colBtn.style.left = `${colX}px`
+  colBtn.style.top = `${tableRect.top - wrapRect.top + tableRect.height / 2}px`
+  rowBtn.style.left = `${rowX}px`
+  rowBtn.style.top = `${tableRect.bottom - wrapRect.top}px`
+
+  positionColTooltip(colBtn, colX, editRight)
+}
+
+/** 편집 중인 칸 강조 요소(F-140 3.3). `.md-table-scroll` 의 자식 하나를 표마다
+ * 그 칸 위치로 옮겨 다니게 한다 — `.md-table-scroll` 이 `position: relative` 라
+ * td 의 offsetParent 가 되고, offsetLeft·offsetTop 은 스크롤 위치와 무관해(3.3
+ * 근거 "표 가로 스크롤을 따라 움직인다") 스크롤 이벤트를 따로 볼 필요가 없다 */
+function getCellHighlight(wrap) {
+  const scroll = wrap.querySelector('.md-table-scroll')
+  if (!scroll) return null
+  let el = scroll.querySelector('.md-table-cell-highlight')
+  if (!el) {
+    el = document.createElement('div')
+    el.className = 'md-table-cell-highlight'
+    el.hidden = true
+    scroll.appendChild(el)
+  }
+  return el
+}
+
+/** 강조를 td 위치, 칸 테두리(1px) 안쪽으로 옮긴다 */
+function positionCellHighlight(wrap, td) {
+  const el = getCellHighlight(wrap)
+  if (!el) return
+  el.style.left = `${td.offsetLeft + 1}px`
+  el.style.top = `${td.offsetTop + 1}px`
+  el.style.width = `${Math.max(0, td.offsetWidth - 2)}px`
+  el.style.height = `${Math.max(0, td.offsetHeight - 2)}px`
+  el.hidden = false
+}
+
+function hideCellHighlight(wrap) {
+  const el = wrap.querySelector('.md-table-cell-highlight')
+  if (el) el.hidden = true
+}
+
+/** wrap → 버튼 위치 재계산용 ResizeObserver. 표(<table>) 크기(칸 편집으로 열 폭이
+ * 바뀌는 등)와 스크롤 뷰포트(`.md-table-scroll`, 창 너비 변화) 둘 다 관찰한다.
+ * 편집 중인 칸이 있으면(칸 글자가 늘어 칸 크기가 바뀌는 경우 등) 강조 위치도 같이 맞춘다 */
+const positionObservers = new WeakMap()
+
+function observeButtonPosition(wrap) {
+  const table = wrap.querySelector('table')
+  const scroll = wrap.querySelector('.md-table-scroll')
+  if (!table || !scroll) return
+  const observer = new ResizeObserver(() => {
+    positionAddButtons(wrap)
+    const view = wrapView.get(wrap)
+    const entry = view && activeEdit.get(view)
+    if (entry && entry.wrap === wrap) positionCellHighlight(wrap, entry.td)
+  })
+  observer.observe(table)
+  observer.observe(scroll)
+  positionObservers.set(wrap, observer)
+}
+
+function stopObservingButtonPosition(wrap) {
+  positionObservers.get(wrap)?.disconnect()
+  positionObservers.delete(wrap)
 }
 
 /** `뒤에 행/열 추가하기` 버튼 1개 */
@@ -494,6 +641,7 @@ function buildAddButton(className, label, onClick) {
  * 머리 행보다 칸이 적은 행은 빈 칸으로 채워 보여준다(F-106 의 채움 규칙과 같다) */
 function renderTable(wrap, widget, mainView) {
   wrap.innerHTML = ''
+  stopObservingButtonPosition(wrap) // 다시 그리므로 이전 관찰 대상(옛 table)을 놓는다
   renderedWidget.set(wrap, widget)
   wrapView.set(wrap, mainView)
 
@@ -542,6 +690,9 @@ function renderTable(wrap, widget, mainView) {
       })
     }),
   )
+
+  observeButtonPosition(wrap)
+  positionAddButtons(wrap) // 관찰이 실제로 불리기 전에도 화면에 붙어 있으면 바로 맞춘다
 }
 
 /** 구조(행·열 수)가 이전과 같은지 — 같으면 칸 글자만 patch 하고 DOM 은 유지한다 */
@@ -606,7 +757,8 @@ export class TableWidget extends WidgetType {
         const cell = row.cells[c]
         const text = cell ? cell.text : ''
         const el = tr.cells[c]
-        if (el.textContent !== text) el.textContent = text
+        // "바뀌었는지" 는 표시 글자가 아니라 칸 원문으로 비교한다(F-140 3.2)
+        if (el.dataset.rawText !== text) renderCellText(el, text)
         el.dataset.row = String(r)
         el.dataset.col = String(c)
       }
@@ -625,6 +777,7 @@ export class TableWidget extends WidgetType {
    * "지금 실제로 제거되는" DOM 이므로, 그 DOM 이 활성 세션의 wrap 인지로 판정한다. */
   destroy(dom) {
     stopObservingHeight(dom)
+    stopObservingButtonPosition(dom)
     const view = wrapView.get(dom)
     if (!view) return
     const entry = activeEdit.get(view)

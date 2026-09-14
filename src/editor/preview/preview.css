@@ -83,6 +83,7 @@
   padding: 0.2em 0.4em;
   border-radius: 6px;
   background: var(--md-code-bg);
+  --tracking: 0; /* F-141 3.6 */
 }
 
 /* 펼친 코드블록 줄 (F-124 3.4 11번). lines.js 의 fenceLinePreview() 가 편집·원문
@@ -103,6 +104,7 @@
   font-family: var(--font-mono);
   font-size: 85%;
   background: var(--md-bg-muted);
+  --tracking: 0; /* F-141 3.6 */
 }
 
 .md-link,
@@ -201,6 +203,7 @@
   font-size: 85%;
   line-height: 1.45;
   white-space: pre;
+  --tracking: 0; /* F-141 3.6 */
 }
 
 /* ===== 블록 위젯 — 표 (F-106 2.4, F-124 3.4) =====
@@ -211,7 +214,11 @@
   cursor: text;
 }
 
+/* position: relative — 편집 중인 칸의 offsetParent 가 되어 강조 요소(F-140 3.3)를
+   그 칸 좌표(offsetLeft·offsetTop)로 놓을 수 있게 한다. 좌표는 스크롤 위치와
+   무관해 스크롤해도 다시 계산할 필요 없이 표 내용과 함께 그대로 움직인다 */
 .md-table-scroll {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   overflow-x: auto;
@@ -227,11 +234,16 @@
   width: max-content;
 }
 
+/* td·th 는 min-height 가 먹지 않아 height 로 최소 높이를 준다(표 칸의 height 는
+   floor 로 동작) — 빈 행도 글자 든 행과 높이가 같다(F-140 3.4). 1em 은 칸 자신의
+   font-size(--md-font-size 상속)를 쓰므로 하드코딩 없이 줄 높이를 따라간다 */
 .md-table th,
 .md-table td {
   border: 1px solid var(--md-border);
   padding: 6px 13px;
   text-align: left;
+  vertical-align: top;
+  height: calc(1em * var(--md-line-height) + 14px);
 }
 
 .md-table th {
@@ -256,9 +268,12 @@
 }
 
 /* 편집 중인 칸: 하위 EditorView(tableWidget.js 의 startEdit) 가 이 td/th 를 채운다.
-   칸 자체 padding 을 지우고 하위 에디터의 cm-content/cm-line 쪽에서 같은 여백을
-   다시 줘서, 편집 시작·종료로 글자 위치가 튀지 않게 한다 */
-.md-table-cell-editing {
+   칸 자체 padding 을 지우고 하위 에디터 안쪽(.cm-content) 에서만 그 여백을 다시 줘서,
+   편집 시작·종료로 글자 위치·칸 크기가 튀지 않게 한다 (F-140 3.3).
+   기본 선택자(`.md-table td` 등, `.cm-host .cm-editor .cm-content` 전역 규칙)보다
+   특정도를 높여야 실제로 이긴다 — 클래스 개수를 늘려 둔다(F-140 3.3 원인) */
+.md-table td.md-table-cell-editing,
+.md-table th.md-table-cell-editing {
   padding: 0;
 }
 
@@ -266,16 +281,46 @@
   outline: none;
 }
 
-.md-table-cell-editing .cm-content,
-.md-table-cell-editing .cm-line {
+/* .cm-content 하나에만 여백을 준다 — .cm-line 에도 같이 주면 두 배가 된다(3.3 원인) */
+.md-table-widget .md-table-cell-editing .cm-editor .cm-content {
   padding: 6px 13px;
   font-family: inherit;
   font-size: inherit;
 }
 
-/* ===== 표 행·열 추가 버튼 (F-125 2.4) =====
+.md-table-widget .md-table-cell-editing .cm-editor .cm-line {
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* 하위 에디터 안 현재 줄 강조 등 앱 전역 CM6 규칙은 칸 안에서 끈다(3.3) */
+.md-table-cell-editing .cm-activeLine {
+  background: none;
+}
+
+/* 편집 중인 칸 강조 (F-140 3.3) — 표 위젯 안 요소 하나가 활성 칸 위치로 옮겨 다닌다.
+   칸 테두리(1px) 안쪽에만 그리도록 tableWidget.js 가 1px 씩 안으로 넣어 크기를 준다.
+   마우스 입력을 막지 않고, `.md-table-scroll` 자식이라 가로 스크롤을 그대로 따라간다 */
+.md-table-cell-highlight {
+  position: absolute;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+  pointer-events: none;
+  transition: left 100ms ease, top 100ms ease, width 100ms ease, height 100ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md-table-cell-highlight {
+    transition: none;
+  }
+}
+
+/* ===== 표 행·열 추가 버튼 (F-125 2.4, 위치는 F-140 3.1) =====
    평소엔 숨겨 두고 표에 마우스가 올라오거나(hover) 버튼 자체가 키보드 포커스를
-   받으면("키보드 포커스로도 보인다") 나타난다 */
+   받으면("키보드 포커스로도 보인다") 나타난다.
+   위치(left·top, px)는 tableWidget.js 가 표 테두리를 실측해 준다 — 버튼은 그
+   점에 중심이 오도록 translate(-50%, -50%) 만 쓴다 */
 .md-table-add {
   position: absolute;
   display: flex;
@@ -293,6 +338,7 @@
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 .md-table-widget:hover .md-table-add,
@@ -307,26 +353,13 @@
   color: var(--accent);
 }
 
-/* 아래 가장자리 가운데 — 행 추가 */
-.md-table-add-row {
-  left: 50%;
-  bottom: -10px;
-  transform: translateX(-50%);
-}
-
-/* 오른쪽 가장자리 가운데 — 열 추가 */
-.md-table-add-col {
-  top: 50%;
-  right: -10px;
-  transform: translateY(-50%);
-}
-
 /* 툴팁은 앱이 그린다(F-125 2.4): 배경 --ink, 글자 --panel, 12px, 모서리 6px.
    버튼의 aria-label 을 그대로 문구로 쓴다 — 접근성 이름과 화면에 보이는 문구가
-   어긋나지 않는다. 행 추가 버튼은 아래, 열 추가 버튼은 오른쪽에 뜬다 */
+   어긋나지 않는다. 행 추가는 버튼 아래, 열 추가는 버튼 위(둘 다 가운데 정렬, F-140 3.1) */
 .md-table-add::after {
   content: attr(aria-label);
   position: absolute;
+  left: 50%;
   padding: 4px 8px;
   border-radius: 6px;
   background: var(--ink);
@@ -337,18 +370,23 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.1s ease;
+  transform: translateX(-50%);
 }
 
 .md-table-add-row::after {
   top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
 }
 
 .md-table-add-col::after {
-  left: calc(100% + 6px);
-  top: 50%;
-  transform: translateY(-50%);
+  bottom: calc(100% + 6px);
+}
+
+/* 가운데 정렬이 편집 영역 밖으로 나가면 툴팁 오른쪽 끝을 버튼 오른쪽 끝에 맞춘다
+   (F-140 3.1, tableWidget.js positionColTooltip 이 판정해 이 클래스를 붙인다) */
+.md-table-add-col.md-table-add-col-tooltip-edge::after {
+  left: auto;
+  right: 0;
+  transform: none;
 }
 
 .md-table-add:hover::after,

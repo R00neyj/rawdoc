@@ -4,4 +4,5 @@ export default {
   name: 'Rawdoc',
   shortName: 'Rawdoc',
   accent: '#3B4890',
+  icon: '/icons/icon-192.png',
 }

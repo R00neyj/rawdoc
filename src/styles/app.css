@@ -36,11 +36,25 @@
   background: var(--rule-2);
 }
 
+/* 상단바 제품 아이콘 + 제품명 — 간격 8px (F-142 3.3) */
+.brand-group {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
 .brand {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 16px;
-  letter-spacing: -0.02em;
+  /* 자간은 tokens.css 전역 규칙(letter-spacing: var(--tracking))이 준다 (F-141 3.6) */
   white-space: nowrap;
 }
 
@@ -112,6 +126,7 @@
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.14em;
+  --tracking: 0; /* F-141 3.6 — 위 자간(0.14em)이 자체 값이라 자손에도 0 을 물려준다 */
   color: var(--muted);
   margin: 6px 6px 10px;
   font-weight: 500;
@@ -170,12 +185,11 @@
 .tree-toggle,
 .tree-toggle-spacer {
   flex: none;
-  width: 18px;
+  width: 22px;
   height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
   color: var(--muted);
   border-radius: var(--radius-control);
 }
@@ -183,6 +197,32 @@
 .tree-toggle:hover {
   background: var(--rule-2);
   color: var(--ink);
+}
+
+/* 폴더 토글 아이콘 — 펼치면 90도 회전 (F-142 3.4) */
+.tree-toggle-icon {
+  transition: transform var(--transition-fast);
+}
+
+.tree-toggle-icon--open {
+  transform: rotate(90deg);
+}
+
+/* 폴더 가이드 선 — 폴더 행 아래부터 마지막 하위 행 아래 끝까지, 토글 아이콘 가로
+   가운데에 맞춘다. 절대 위치라 레이아웃을 밀지 않고, pointer-events 없음 (F-142 3.5) */
+.tree-group {
+  position: relative;
+}
+
+.tree-group::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(9px + var(--depth, 0) * 14px + 11px);
+  width: 1px;
+  background: var(--rule);
+  pointer-events: none;
 }
 
 .tree-label {
@@ -502,6 +542,68 @@
   color: var(--ink-2);
 }
 
+/* 아이콘만 있는 상단바 버튼 — 누르는 영역 32x32px, 아이콘 18px (F-142 3.2) */
+.icon-btn-wrap {
+  position: relative;
+  flex: none;
+  display: flex;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.icon-btn svg {
+  fill: currentColor;
+}
+
+/* 앱이 그리는 툴팁 — F-125 2.4 표 툴팁과 같은 모양 (F-142 3.2, specs/design.md 4장) */
+.icon-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 40;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--panel);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0s linear 0s;
+}
+
+.icon-tooltip--center {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.icon-tooltip--end {
+  right: 0;
+}
+
+.icon-btn-wrap:hover .icon-tooltip {
+  opacity: 1;
+  transition-delay: 400ms;
+}
+
+.icon-btn-wrap button:focus-visible ~ .icon-tooltip {
+  opacity: 1;
+  transition-delay: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon-tooltip {
+    transition-duration: 0s;
+  }
+}
+
 .seg button + button {
   border-left: 1px solid var(--rule);
 }
@@ -520,16 +622,37 @@
 
 .view-mode-seg {
   flex: none;
+  /* 툴팁이 버튼 아래로 튀어나오므로 `.seg` 의 overflow:hidden(모서리 둥글리기 용)을
+     이 세그먼트만 끈다. 모서리는 아래에서 버튼 자체에 다시 둥글린다 (F-142 3.2) */
+  overflow: visible;
+}
+
+/* 보기 모드 세그먼트는 아이콘 전용 32x32 버튼이다. `.seg button` 텍스트 패딩을 덮어쓴다
+   (F-142 3.2). 세그먼트 자체의 선택 표시(.seg button[aria-pressed])는 그대로 물려받는다 */
+.view-mode-seg .icon-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+/* 버튼이 `.icon-btn-wrap` 으로 감싸이며 `.seg button + button` 이 더는 안 걸리므로
+   구분선을 여기서 다시 그린다 */
+.view-mode-seg .icon-btn-wrap + .icon-btn-wrap .icon-btn {
+  border-left: 1px solid var(--rule);
+}
+
+.view-mode-seg .icon-btn-wrap:first-child .icon-btn {
+  border-radius: 6px 0 0 6px;
+}
+
+.view-mode-seg .icon-btn-wrap:last-child .icon-btn {
+  border-radius: 0 6px 6px 0;
 }
 
 .export-btn {
-  flex: none;
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
-  padding: 7px 12px;
-  font-size: 13px;
   color: var(--ink-2);
-  white-space: nowrap;
 }
 
 .export-btn:hover:not(:disabled) {
@@ -564,9 +687,11 @@
   line-height: var(--md-line-height);
 }
 
-/* data-view 는 createEditor.js 가 EditorView.editorAttributes 로 붙인다 */
+/* data-view 는 createEditor.js 가 EditorView.editorAttributes 로 붙인다.
+   문단·목록·인용·표 칸의 기본 서체는 --font-body 다 (design.md 2.4, F-141 3.3) —
+   제목(--font-display)·코드(--font-mono)는 각자 자리에서 따로 덮어쓴다 */
 .cm-host .cm-editor[data-view='live'] .cm-scroller {
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
 }
 
 /* 원문 모드: --font-mono 14px, 줄 간격 1.5 (F-124 3.1). 줄 간격은 위 --md-line-height(1.5)
@@ -574,6 +699,7 @@
 .cm-host .cm-editor[data-view='raw'] .cm-scroller {
   font-family: var(--font-mono);
   font-size: 14px;
+  --tracking: 0; /* F-141 3.6 — 고정폭 자리는 자간 0 */
 }
 
 .cm-host .cm-editor .cm-gutters {
@@ -582,6 +708,7 @@
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 12px;
+  --tracking: 0; /* F-141 3.6 */
 }
 
 /* 줄 번호 오른쪽 끝 ~ 본문 첫 글자 왼쪽 끝 거리를 --gutter-gap 으로 맞춘다 (F-122 2.2).
@@ -597,6 +724,12 @@
   padding: 12px 0;
 }
 
+/* CM6 기본 테마는 커서 테두리를 black 고정값으로 준다 — 테마를 따르게 덮는다
+   (design.md 3.4, F-141 3.1) */
+.cm-host .cm-editor .cm-cursor {
+  border-left-color: var(--ink);
+}
+
 .cm-host .cm-editor .cm-selectionBackground {
   background: var(--accent-soft) !important;
 }
@@ -610,6 +743,7 @@
 .md-mark {
   color: var(--accent);
   font-family: var(--font-mono);
+  --tracking: 0; /* F-141 3.6 */
 }
 
 .md-heading {
@@ -633,6 +767,7 @@
   font-family: var(--font-mono);
   background: var(--rule-2);
   border-radius: 3px;
+  --tracking: 0; /* F-141 3.6 */
 }
 
 .md-link,
@@ -651,13 +786,9 @@
 }
 
 .share-menu-btn {
-  flex: none;
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
-  padding: 7px 12px;
-  font-size: 13px;
   color: var(--ink-2);
-  white-space: nowrap;
 }
 
 .share-menu-btn:hover:not(:disabled) {
@@ -672,10 +803,11 @@
 
 .share-menu-list {
   position: absolute;
-  left: 0;
+  right: 0;
   top: calc(100% + 4px);
   z-index: 30;
   min-width: 200px;
+  max-width: min(200px, calc(100vw - 32px));
   list-style: none;
   margin: 0;
   padding: 6px;
@@ -781,6 +913,7 @@
   border-top: 1px solid var(--rule);
   background: var(--paper);
   font-family: var(--font-mono);
+  --tracking: 0; /* F-141 3.6 */
   font-size: 10.5px;
   color: var(--muted);
 }

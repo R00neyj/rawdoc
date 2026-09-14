@@ -3,6 +3,8 @@
 const ALLOWED_KEYS = new Set([
   'md.viewMode',
   'md.headingFont',
+  'md.bodyFont',
+  'md.theme',
   'md.lastDocId',
   'md.firstRunDone',
   'md.persistNoticeShown',

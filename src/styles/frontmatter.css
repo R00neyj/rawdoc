@@ -10,6 +10,7 @@
   font-family: var(--font-mono);
   font-size: 85%;
   color: var(--ink-2);
+  --tracking: 0; /* F-141 3.6 */
 }
 
 .cm-host .cm-editor .cm-line.md-frontmatter-first {

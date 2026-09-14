@@ -5,6 +5,7 @@ import { openStore } from '../storage/openStore.js'
 import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree.js'
 import { resolveWikiTarget } from '../lib/wikiLink.js'
 import { getPref, setPref } from './prefs.js'
+import { resolveTheme } from './theme.js'
 import { parseHash, formatHash } from './hashRoute.js'
 import { pushNotice } from './notice.js'
 import { resolveInitialDoc } from './resolveInitialDoc.js'
@@ -93,6 +94,8 @@ export default function App() {
   const [currentDocId, setCurrentDocId] = useState(null)
   const [notice, setNotice] = useState(null)
   const [headingFont, setHeadingFont] = useState(() => getPref('md.headingFont', 'serif'))
+  const [bodyFont, setBodyFont] = useState(() => getPref('md.bodyFont', 'sans')) // F-141 3.3
+  const [themePref, setThemePref] = useState(() => getPref('md.theme', 'system')) // F-141 3.1
   const [settingsOpen, setSettingsOpen] = useState(false)
   // { type:'doc', id, name } | { type:'folder', id, name } | null (F-126.md 5.3)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -414,6 +417,18 @@ export default function App() {
       },
     })
   }, [bootPhase])
+
+  // ----- 테마: 시스템 설정을 즉시 따라간다 (F-141 3.1 A3) -----
+  useEffect(() => {
+    if (themePref !== 'system') return
+    const mql = window.matchMedia('(prefers-color-scheme: dark)')
+    function apply() {
+      document.documentElement.dataset.theme = resolveTheme('system', mql.matches)
+    }
+    apply()
+    mql.addEventListener('change', apply)
+    return () => mql.removeEventListener('change', apply)
+  }, [themePref])
 
   // ----- 좁은 창 감지 (ia.md 3.11, 7장) -----
   useEffect(() => {
@@ -971,6 +986,19 @@ export default function App() {
     setPref('md.headingFont', value)
   }
 
+  function changeBodyFont(value) {
+    setBodyFont(value)
+    document.documentElement.dataset.bodyFont = value
+    setPref('md.bodyFont', value)
+  }
+
+  function changeTheme(value) {
+    setThemePref(value)
+    setPref('md.theme', value)
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    document.documentElement.dataset.theme = resolveTheme(value, prefersDark)
+  }
+
   function changeViewMode(mode) {
     setViewMode(mode)
     setPref('md.viewMode', mode)
@@ -1118,8 +1146,12 @@ export default function App() {
       />
       <SettingsDialog
         open={settingsOpen}
+        theme={themePref}
+        onChangeTheme={changeTheme}
         headingFont={headingFont}
         onChangeHeadingFont={changeHeadingFont}
+        bodyFont={bodyFont}
+        onChangeBodyFont={changeBodyFont}
         onClose={closeSettings}
       />
     </div>

@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { buildTree, canMoveFolder, pinnedDocs } from '../lib/folderTree.js'
 import FolderMenu from './FolderMenu.jsx'
+import { IconChevron } from './icons.jsx'
 
 function dropKeyOf(target) {
   return target.type === 'root' ? 'root' : `${target.type}:${target.id}`
@@ -67,7 +68,7 @@ function FolderRow({ node, depth, ctx, editingInputRef }) {
           aria-label={`${node.name} ${isOpen ? '접기' : '펼치기'}`}
           onClick={() => ctx.onToggleFolder(node.id)}
         >
-          {isOpen ? '▾' : '▸'}
+          <IconChevron size={16} className={`tree-toggle-icon${isOpen ? ' tree-toggle-icon--open' : ''}`} />
         </button>
         {isEditing ? (
           <input
@@ -86,7 +87,7 @@ function FolderRow({ node, depth, ctx, editingInputRef }) {
         {!isEditing && <FolderMenu label={node.name} items={items} />}
       </div>
       {isOpen && node.children.length > 0 && (
-        <ul role="group">
+        <ul role="group" className="tree-group" style={{ '--depth': depth }}>
           {node.children.map((child) => (
             <TreeNode
               key={child.id}

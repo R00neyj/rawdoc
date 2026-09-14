@@ -32,7 +32,7 @@ function brandHtmlPlugin() {
           },
           {
             tag: 'style',
-            children: `:root{--accent:${brand.accent}}`,
+            children: `:root{--brand-accent:${brand.accent}}`,
             injectTo: 'head-prepend',
           },
         ],

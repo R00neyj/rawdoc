@@ -33,16 +33,19 @@
   color: var(--accent);
 }
 
-/* ===== [[ 뒤 제목 자동완성 팝업 (F-131 3.1) =====
-   그림자·모서리는 기존 ⋯ 메뉴(app.css .item-menu-list)와 같게 맞춘다 */
-.cm-tooltip.cm-tooltip-autocomplete {
+/* ===== [[ 뒤 제목 자동완성 팝업 (F-131 3.1, F-141 3.5) =====
+   그림자·모서리는 기존 ⋯ 메뉴(app.css .item-menu-list)와 같게 맞춘다.
+   CM6 기본 테마가 `.cm-tooltip.cm-tooltip-autocomplete > ul` 에 font-family: monospace 를
+   똑같은 구체성으로 주므로(한국어 Windows 에서 굴림체로 보임), 클래스를 한 번 더 반복해
+   구체성을 확실히 높인다(!important 는 쓰지 않는다) */
+.cm-tooltip.cm-tooltip-autocomplete.cm-tooltip-autocomplete {
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
 }
 
-.cm-tooltip.cm-tooltip-autocomplete > ul {
+.cm-tooltip.cm-tooltip-autocomplete.cm-tooltip-autocomplete > ul {
   max-height: 260px;
   font-family: var(--font-sans);
   font-size: 14px;
@@ -52,7 +55,9 @@
   padding: 4px 8px;
 }
 
-.cm-tooltip-autocomplete ul li[aria-selected] {
+/* CM6 기본 테마의 &light/&dark 선택자가 구체성이 더 높아(F-141 3.5 와 같은 원인) 클래스를
+   반복해 확실히 이긴다 — 다크에서도 CM6 고정 파란 배경이 남지 않게 한다 */
+.cm-tooltip.cm-tooltip-autocomplete.cm-tooltip-autocomplete ul li[aria-selected] {
   background: var(--accent-soft);
   color: var(--ink);
 }
