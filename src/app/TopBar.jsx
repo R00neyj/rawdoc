@@ -3,7 +3,8 @@
 // 아이콘·툴팁은 F-142 3.2·3.3
 import brand from '../brand.js'
 import ShareMenu from './ShareMenu.jsx'
-import { IconEdit, IconRaw, IconView, IconDownload, IconTooltip, IconPanelOpen } from './icons.jsx'
+import { IconEdit, IconRaw, IconView, IconDownload, IconTooltip, IconPanelOpen, IconPanelClose, IconSearch } from './icons.jsx'
+import { SIDEBAR_ID } from './Sidebar.jsx'
 
 const VIEW_MODES = [
   { value: 'live', label: '편집 — 서식을 보며 편집', Icon: IconEdit },
@@ -14,6 +15,7 @@ const VIEW_MODES = [
 export default function TopBar({
   narrow,
   sidebarOpen,
+  sidebarCollapsed,
   onToggleSidebar,
   toggleButtonRef,
   title,
@@ -32,27 +34,48 @@ export default function TopBar({
   exportDisabled,
   onExportDoc,
 }) {
+  // 앞 묶음(제품 아이콘·이름·토글·검색) 배치·상태는 F-151 2.1·2.2
+  const sidebarExpanded = narrow ? sidebarOpen : !sidebarCollapsed
+  const ToggleIcon = sidebarExpanded ? IconPanelClose : IconPanelOpen
+  const toggleLabel = narrow
+    ? sidebarOpen
+      ? '사이드바 닫기'
+      : '사이드바 열기'
+    : sidebarCollapsed
+      ? '사이드바 펴기'
+      : '사이드바 접기'
+  const searchLabel = '검색 — 준비 중'
+
   return (
     <header className="topbar">
-      {narrow && (
-        <span className="icon-btn-wrap">
-          <button
-            type="button"
-            ref={toggleButtonRef}
-            className="icon-btn sidebar-toggle"
-            aria-label="사이드바 열기"
-            aria-expanded={sidebarOpen}
-            onClick={onToggleSidebar}
-          >
-            <IconPanelOpen size={18} />
-          </button>
-          <IconTooltip text="사이드바 열기" />
+      <div className={`topbar-lead${!narrow && !sidebarCollapsed ? ' topbar-lead--wide' : ''}`}>
+        <span className="brand-group">
+          <img className="brand-icon" src={brand.icon} alt="" width={20} height={20} />
+          <span className="brand">{brand.name}</span>
         </span>
-      )}
-      <span className="brand-group">
-        <img className="brand-icon" src={brand.icon} alt="" width={20} height={20} />
-        <span className="brand">{brand.name}</span>
-      </span>
+        <div className="topbar-lead-actions">
+          <span className="icon-btn-wrap">
+            <button
+              type="button"
+              ref={toggleButtonRef}
+              className="icon-btn sidebar-toggle"
+              aria-label={toggleLabel}
+              aria-expanded={sidebarExpanded}
+              aria-controls={SIDEBAR_ID}
+              onClick={onToggleSidebar}
+            >
+              <ToggleIcon size={18} />
+            </button>
+            <IconTooltip text={toggleLabel} />
+          </span>
+          <span className="icon-btn-wrap">
+            <button type="button" className="icon-btn topbar-search-btn" aria-label={searchLabel} aria-disabled="true">
+              <IconSearch size={18} />
+            </button>
+            <IconTooltip text={searchLabel} />
+          </span>
+        </div>
+      </div>
       <input
         ref={titleInputRef}
         className="doc-title"

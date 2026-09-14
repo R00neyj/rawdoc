@@ -1011,15 +1011,10 @@ export default function App() {
     editorRef.current?.setViewMode(mode)
   }
 
+  // 상단바 토글: 좁은 창은 겹쳐 열기·닫기, 그 밖은 접기·펴기를 저장한다 (F-151 2.2)
   function toggleSidebar() {
-    setSidebarOpen((v) => !v)
-  }
-
-  // 사이드바 머리 줄 토글: 좁은 창은 겹친 사이드바를 닫고, 그 밖에는 접기·펴기를 저장한다
-  // (F-143 3.3·3.4)
-  function handleSidebarHeadToggle() {
     if (narrow) {
-      setSidebarOpen(false)
+      setSidebarOpen((v) => !v)
       return
     }
     setSidebarCollapsed((v) => {
@@ -1038,6 +1033,7 @@ export default function App() {
       <TopBar
         narrow={narrow}
         sidebarOpen={sidebarOpen}
+        sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
         toggleButtonRef={toggleButtonRef}
         title={currentDoc?.title ?? ''}
@@ -1076,7 +1072,7 @@ export default function App() {
           narrow={narrow}
           open={sidebarOpen}
           collapsed={sidebarCollapsed}
-          onToggleCollapse={handleSidebarHeadToggle}
+          onToggleCollapse={toggleSidebar}
           docs={docs}
           folders={folders}
           currentDocId={currentDocId}

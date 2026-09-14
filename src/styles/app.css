@@ -38,6 +38,36 @@ svg {
   background: var(--rule-2);
 }
 
+/* 상단바 검색 버튼(로직 없음, F-151 2.3) — 비활성 모양은 F-143 3.5 그대로 */
+.topbar-search-btn {
+  color: var(--muted);
+  cursor: default;
+}
+
+/* 앞 묶음(제품명·토글·검색) — 펼침이면 사이드바 오른쪽 테두리 8px 안쪽까지 (F-151 2.1) */
+.topbar-lead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  interpolate-size: allow-keywords; /* max-content ↔ 고정 폭도 전환되게 */
+  transition: width var(--transition-fast);
+}
+
+/* 22px = 상단바 왼쪽 여백 14px + 테두리 안쪽 8px */
+.topbar-lead--wide {
+  width: calc(var(--sidebar-w) - 22px);
+  justify-content: space-between;
+}
+
+.topbar-lead-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 /* 상단바 제품 아이콘 + 제품명 — 간격 8px (F-142 3.3) */
 .brand-group {
   flex: none;
@@ -124,13 +154,6 @@ svg {
   inset: 0;
   z-index: 10;
   background: transparent;
-}
-
-/* 머리 줄(접기·펴기 버튼) — 스크롤 밖에 고정 (F-143 3.2) */
-.sidebar-head {
-  flex: none;
-  display: flex;
-  margin-bottom: 6px;
 }
 
 .sidebar-scroll {

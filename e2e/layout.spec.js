@@ -2,6 +2,8 @@
 import { test, expect } from '@playwright/test'
 import { openApp, importMarkdown, resizeWindow, rectOf, computedStyle, waitTransitionEnd, tokenAsRgb } from './helpers.js'
 
+// F-143 A3·A6 은 토글·검색이 상단바로 옮겨가 (F-151) e2e/topbar.spec.js 의
+// F-151 A2·A3·A5·A6 테스트로 옮겼다. 레일 폭·유지만 여기 남긴다
 test.describe('F-143 사이드바 접기', () => {
   test('F-143 A3 접으면 48px 레일이 되고 새로고침 뒤에도 유지된다', async ({ page }) => {
     await openApp(page)
@@ -18,7 +20,6 @@ test.describe('F-143 사이드바 접기', () => {
     await expect(page.getByRole('button', { name: '새 문서' })).toBeVisible()
     await expect(page.getByRole('button', { name: '새 폴더' })).toBeVisible()
     await expect(page.getByRole('button', { name: '가져오기' })).toBeVisible()
-    await expect(page.getByRole('button', { name: '검색 — 준비 중' })).toBeVisible()
 
     await page.reload()
     await expect(page.locator('.sidebar')).toHaveClass(/sidebar--collapsed/)
@@ -26,7 +27,7 @@ test.describe('F-143 사이드바 접기', () => {
     const openBtn = page.getByRole('button', { name: '사이드바 펴기' })
     await openBtn.click()
     await expect(page.locator('.sidebar')).not.toHaveClass(/sidebar--collapsed/)
-    // 포커스가 반대쪽 토글로 옮겨간다
+    // F-151 2.2 — 버튼이 사라지지 않으므로 누른 뒤 포커스는 그대로 토글 버튼에 남는다
     await expect(page.getByRole('button', { name: '사이드바 접기' })).toBeFocused()
   })
 })
@@ -50,19 +51,6 @@ test.describe('F-143 A5 좁은 창(900px)', () => {
     await resizeWindow(page, 1280)
     await expect(page.locator('.sidebar')).toBeVisible()
     await expect(page.locator('.sidebar')).not.toHaveClass(/sidebar--collapsed/)
-  })
-})
-
-test.describe('F-143 A6 검색 버튼', () => {
-  test('눌러도 아무 동작이 없고 준비 중 표시가 있다', async ({ page }) => {
-    await openApp(page)
-    const search = page.getByRole('button', { name: /^검색/ })
-    await expect(search).toHaveAttribute('aria-disabled', 'true')
-    await expect(page.locator('.sidebar-btn-hint')).toHaveText('준비 중')
-    await search.focus()
-    await page.keyboard.press('Enter')
-    // 눌러도 사이드바·문서 상태가 그대로(다른 화면으로 전환되지 않음)
-    await expect(page.locator('.sidebar')).toBeVisible()
   })
 })
 

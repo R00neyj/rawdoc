@@ -9,11 +9,8 @@ import {
   IconNoteAdd,
   IconFolderAdd,
   IconUpload,
-  IconSearch,
   IconSettings,
   IconInstall,
-  IconPanelClose,
-  IconPanelOpen,
   IconPin,
   IconUnpin,
   IconMove,
@@ -22,7 +19,8 @@ import {
   IconTooltip,
 } from './icons.jsx'
 
-const SIDEBAR_ID = 'sidebar-nav'
+// 상단바 토글의 aria-controls 가 참조한다 (F-151 2.2)
+export const SIDEBAR_ID = 'sidebar-nav'
 
 function dropKeyOf(target) {
   return target.type === 'root' ? 'root' : `${target.type}:${target.id}`
@@ -290,8 +288,6 @@ export default function Sidebar({
 
   const editingInputRef = useRef(null)
   const skipBlurCommitRef = useRef(false)
-  const headToggleRef = useRef(null)
-  const collapseMountedRef = useRef(false)
 
   useEffect(() => {
     if (editingId && editingInputRef.current) {
@@ -299,16 +295,6 @@ export default function Sidebar({
       editingInputRef.current.select()
     }
   }, [editingId])
-
-  // 접기·펴기 뒤 포커스를 반대쪽 토글 버튼으로 옮긴다(F-143 3.3). 첫 렌더에서는 건너뛴다
-  useEffect(() => {
-    if (narrow) return
-    if (!collapseMountedRef.current) {
-      collapseMountedRef.current = true
-      return
-    }
-    headToggleRef.current?.focus()
-  }, [collapsed, narrow])
 
   const tree = buildTree({ folders, docs })
   const pinned = pinnedDocs(docs) // F-132.md 2장, 3장
@@ -436,51 +422,17 @@ export default function Sidebar({
       hidden={narrow && !open}
       aria-label="문서 목록"
     >
-      <div className="sidebar-head">
-        {narrow ? (
-          <span className="icon-btn-wrap">
-            <button
-              ref={headToggleRef}
-              type="button"
-              className="icon-btn"
-              aria-label="사이드바 닫기"
-              onClick={onToggleCollapse}
-            >
-              <IconPanelClose size={18} />
-            </button>
-            <IconTooltip text="사이드바 닫기" side />
-          </span>
-        ) : (
-          <span className="icon-btn-wrap">
-            <button
-              ref={headToggleRef}
-              type="button"
-              className="icon-btn"
-              aria-label={collapsed ? '사이드바 펴기' : '사이드바 접기'}
-              aria-expanded={!collapsed}
-              aria-controls={SIDEBAR_ID}
-              onClick={onToggleCollapse}
-            >
-              {collapsed ? <IconPanelOpen size={18} /> : <IconPanelClose size={18} />}
-            </button>
-            <IconTooltip text={collapsed ? '사이드바 펴기' : '사이드바 접기'} side />
-          </span>
-        )}
-      </div>
-
       {isRail ? (
         <div className="sidebar-rail-scroll">
           <RailButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
           <RailButton icon={IconFolderAdd} label="새 폴더" onClick={handleRailCreateFolder} />
           <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
-          <RailButton icon={IconSearch} label="검색 — 준비 중" ariaDisabled />
         </div>
       ) : (
         <div className="sidebar-scroll">
           <SidebarButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
           <SidebarButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
           <SidebarButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
-          <SidebarButton icon={IconSearch} label="검색" hint="준비 중" ariaDisabled />
           {pinned.length > 0 && (
             <>
               <h2>
