@@ -25,6 +25,11 @@ describe('prefs', () => {
     expect(getPref('md.viewMode', 'live')).toBe('raw')
   })
 
+  it('md.sidebarWidth 는 허용된 키다', () => {
+    expect(() => setPref('md.sidebarWidth', '300')).not.toThrow()
+    expect(getPref('md.sidebarWidth', '224')).toBe('300')
+  })
+
   it('허용되지 않은 키는 getPref 에서 예외', () => {
     expect(() => getPref('md.unknown', 'x')).toThrow()
   })

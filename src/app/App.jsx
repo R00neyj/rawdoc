@@ -5,6 +5,7 @@ import { openStore } from '../storage/openStore.js'
 import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree.js'
 import { resolveWikiTarget } from '../lib/wikiLink.js'
 import { getPref, setPref } from './prefs.js'
+import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth.js'
 import { IconRefresh } from './icons.jsx'
 import { resolveTheme } from './theme.js'
 import { parseHash, formatHash } from './hashRoute.js'
@@ -109,6 +110,11 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   // 사이드바 접힘(아이콘 레일) — 좁은 창에서는 쓰지 않는다 (F-143 3.3·3.4, md.sidebar)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getPref('md.sidebar', 'expanded') === 'collapsed')
+  // 사이드바 너비(원 저장값) — 끄는 동안은 실시간으로, 놓으면 md.sidebarWidth 에 저장한다 (F-159 2.5)
+  const [sidebarWidth, setSidebarWidth] = useState(() => resolveStoredSidebarWidth(getPref('md.sidebarWidth', null)))
+  const [windowWidth, setWindowWidth] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 1600,
+  )
   const [viewMode, setViewMode] = useState(() => getPref('md.viewMode', 'live'))
   // 문서를 열 때 에디터에 넘기는 용도로만 쓰는 스냅샷. 편집 중 본문을 여기 동기화하지
   // 않는다 — 원본은 CM6 EditorState 하나다 (architecture.md 3장)
@@ -445,6 +451,15 @@ export default function App() {
     }
     mql.addEventListener('change', handleChange)
     return () => mql.removeEventListener('change', handleChange)
+  }, [])
+
+  // ----- 창 폭 추적 (사이드바 너비 clamp 용, F-159 2.5·2.4) -----
+  useEffect(() => {
+    function handleResize() {
+      setWindowWidth(window.innerWidth)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   // ----- 좁은 창 사이드바: 바깥 클릭·Esc 로 닫기 (ia.md 3.11) -----
@@ -1024,41 +1039,61 @@ export default function App() {
     })
   }
 
+  // 끄는 동안 실시간 반영만, 저장하지 않는다 (F-159 2.5)
+  function handleSidebarWidthChange(px) {
+    setSidebarWidth(px)
+  }
+
+  // 놓거나 더블클릭·키보드로 값이 확정될 때 저장한다 (F-159 2.5)
+  function handleSidebarWidthCommit(px) {
+    setSidebarWidth(px)
+    setPref('md.sidebarWidth', String(px))
+  }
+
+  // 화면에 쓰는 폭 — sidebarWidth(저장값) 자체는 건드리지 않는다, 창을 넓히면 되돌아온다 (A7)
+  const displaySidebarWidth = narrow
+    ? overlaySidebarWidth(sidebarWidth, windowWidth)
+    : clampSidebarWidth(sidebarWidth, windowWidth)
+
   const currentDoc = docs.find((d) => d.id === currentDocId) ?? null
   const isEmpty = bootPhase === 'ready' && docs.length === 0
   const showEditor = bootPhase === 'ready' && !isEmpty
 
+  // 상단바 — 좁은 창은 앞 묶음을 담아 창 전체 위에, 넓은 창은 앞 묶음 없이 메인 열 안에만 (F-159 2.1)
+  const topBar = (
+    <TopBar
+      narrow={narrow}
+      sidebarOpen={sidebarOpen}
+      onToggleSidebar={toggleSidebar}
+      toggleButtonRef={toggleButtonRef}
+      title={currentDoc?.title ?? ''}
+      titleDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
+      titleReadOnly={viewMode === 'view' || Boolean(sharedDoc)}
+      titleInputRef={titleInputRef}
+      onTitleChange={handleTitleChange}
+      onTitleBlur={handleTitleBlur}
+      onTitleKeyDown={handleTitleKeyDown}
+      viewMode={viewMode}
+      viewModeDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
+      onChangeViewMode={changeViewMode}
+      shareDisabled={
+        bootPhase !== 'ready' ||
+        isEmpty ||
+        Boolean(sharedDoc) ||
+        !currentDoc ||
+        !openDoc ||
+        openDoc.id !== currentDocId
+      }
+      getShareDoc={getShareDoc}
+      onShareNotice={showNotice}
+      exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
+      onExportDoc={handleExportDoc}
+    />
+  )
+
   return (
-    <div className="app-shell">
-      <TopBar
-        narrow={narrow}
-        sidebarOpen={sidebarOpen}
-        sidebarCollapsed={sidebarCollapsed}
-        onToggleSidebar={toggleSidebar}
-        toggleButtonRef={toggleButtonRef}
-        title={currentDoc?.title ?? ''}
-        titleDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
-        titleReadOnly={viewMode === 'view' || Boolean(sharedDoc)}
-        titleInputRef={titleInputRef}
-        onTitleChange={handleTitleChange}
-        onTitleBlur={handleTitleBlur}
-        onTitleKeyDown={handleTitleKeyDown}
-        viewMode={viewMode}
-        viewModeDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
-        onChangeViewMode={changeViewMode}
-        shareDisabled={
-          bootPhase !== 'ready' ||
-          isEmpty ||
-          Boolean(sharedDoc) ||
-          !currentDoc ||
-          !openDoc ||
-          openDoc.id !== currentDocId
-        }
-        getShareDoc={getShareDoc}
-        onShareNotice={showNotice}
-        exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
-        onExportDoc={handleExportDoc}
-      />
+    <div className="app-shell" style={{ '--sidebar-w': `${displaySidebarWidth}px` }}>
+      {narrow && topBar}
       <input
         ref={importInputRef}
         type="file"
@@ -1092,11 +1127,15 @@ export default function App() {
           onOpenSettings={openSettings}
           canInstall={canInstall}
           onInstall={install}
+          width={displaySidebarWidth}
+          onWidthChange={handleSidebarWidthChange}
+          onWidthCommit={handleSidebarWidthCommit}
         />
         {narrow && sidebarOpen && (
           <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
         )}
         <div className="main-column">
+          {!narrow && topBar}
           <NoticeBar notice={notice} onDismiss={() => setNotice(null)} />
           {bootPhase === 'booting' && (
             <div className="content-area" data-editor-slot>

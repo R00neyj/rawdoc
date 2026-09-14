@@ -153,6 +153,72 @@ test.describe('F-143 A16 아이콘 크기·가이드 선', () => {
   })
 })
 
+test.describe('F-159 사이드바 너비 조절', () => {
+  async function dragHandleBy(page, dx) {
+    const handle = page.locator('.sidebar-resize-handle')
+    const box = await handle.boundingBox()
+    const startX = box.x + box.width / 2
+    const startY = box.y + box.height / 2
+    await page.mouse.move(startX, startY)
+    await page.mouse.down()
+    await page.mouse.move(startX + dx, startY, { steps: 5 })
+    await page.mouse.up()
+  }
+
+  test('F-159 A5 +100px 끌기 → 324px, 저장', async ({ page }) => {
+    await openApp(page)
+    await dragHandleBy(page, 100)
+    const width = (await rectOf(page.locator('.sidebar'))).width
+    expect(Math.abs(width - 324)).toBeLessThanOrEqual(2)
+    expect(await page.evaluate(() => window.localStorage.getItem('md.sidebarWidth'))).toBe('324')
+  })
+
+  test('F-159 A5 -200px 끌기 → 최소 200px', async ({ page }) => {
+    await openApp(page)
+    await dragHandleBy(page, -200)
+    const width = (await rectOf(page.locator('.sidebar'))).width
+    expect(Math.abs(width - 200)).toBeLessThanOrEqual(2)
+  })
+
+  test('F-159 A5 +600px 끌기 → min(480, 창 폭-560) (1600px 창 → 480)', async ({ page }) => {
+    await openApp(page)
+    await dragHandleBy(page, 600)
+    const width = (await rectOf(page.locator('.sidebar'))).width
+    expect(Math.abs(width - 480)).toBeLessThanOrEqual(2)
+  })
+
+  test('F-159 A7 창 줄이기 — 저장값 480 유지, 화면만 464 로 줄고 1600px 에서 되돌아온다', async ({ page }) => {
+    await openApp(page)
+    await dragHandleBy(page, 600) // 480 으로 저장
+    await waitTransitionEnd(page.locator('.sidebar'))
+    expect(await page.evaluate(() => window.localStorage.getItem('md.sidebarWidth'))).toBe('480')
+
+    await resizeWindow(page, 1024)
+    await waitTransitionEnd(page.locator('.sidebar'))
+    const narrowWidth = (await rectOf(page.locator('.sidebar'))).width
+    expect(Math.abs(narrowWidth - 464)).toBeLessThanOrEqual(1)
+    expect(await page.evaluate(() => window.localStorage.getItem('md.sidebarWidth'))).toBe('480')
+
+    await resizeWindow(page, 1600)
+    await waitTransitionEnd(page.locator('.sidebar'))
+    const backWidth = (await rectOf(page.locator('.sidebar'))).width
+    expect(Math.abs(backWidth - 480)).toBeLessThanOrEqual(1)
+  })
+
+  test('F-159 A8 좁은 창 — 손잡이 없음, 겹쳐 열린 폭 = 저장 너비(창 폭-48 이하)', async ({ page }) => {
+    await openApp(page)
+    await dragHandleBy(page, 100) // 324 로 저장
+    await waitTransitionEnd(page.locator('.sidebar'))
+
+    await resizeWindow(page, 900)
+    await page.locator('.sidebar-toggle').click() // 겹쳐 열기
+    await expect(page.locator('.sidebar')).toBeVisible()
+    await expect(page.locator('.sidebar-resize-handle')).toHaveCount(0)
+    const overlayWidth = (await rectOf(page.locator('.sidebar'))).width
+    expect(Math.abs(overlayWidth - 324)).toBeLessThanOrEqual(2)
+  })
+})
+
 test.describe('F-143 A17 / F-124 A2d 문서 여백', () => {
   test('첫 줄 위 48px, 마지막 줄 아래 50dvh, Ctrl+End 커서가 화면 안', async ({ page }) => {
     await openApp(page)

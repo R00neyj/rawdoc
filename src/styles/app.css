@@ -38,27 +38,18 @@ svg {
   background: var(--rule-2);
 }
 
-/* 상단바 검색 버튼(로직 없음, F-151 2.3) — 비활성 모양은 F-143 3.5 그대로 */
+/* 검색 버튼(로직 없음, F-143 3.5) — 사이드바 머리 줄·레일·좁은 창 상단바가 함께 쓴다 */
 .topbar-search-btn {
   color: var(--muted);
   cursor: default;
 }
 
-/* 앞 묶음(제품명·토글·검색) — 펼침이면 사이드바 오른쪽 테두리 8px 안쪽까지 (F-151 2.1) */
+/* 좁은 창 상단바 앞 묶음(제품명·토글·검색) — 내용만큼의 폭 (F-159 2.4, ia.md 3.11) */
 .topbar-lead {
   flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
-  width: max-content;
-  interpolate-size: allow-keywords; /* max-content ↔ 고정 폭도 전환되게 */
-  transition: width var(--transition-fast);
-}
-
-/* 22px = 상단바 왼쪽 여백 14px + 테두리 안쪽 8px */
-.topbar-lead--wide {
-  width: calc(var(--sidebar-w) - 22px);
-  justify-content: space-between;
 }
 
 .topbar-lead-actions {
@@ -123,22 +114,26 @@ svg {
   position: relative;
 }
 
+/* 사이드바는 창 맨 위부터 맨 아래까지 한 열 — 손잡이 절대 위치 기준 (F-159 2.1·2.5) */
 .sidebar {
+  position: relative;
   width: var(--sidebar-w);
   flex: none;
   border-right: 1px solid var(--rule);
   background: var(--paper);
-  padding: 10px 10px 12px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   transition: width var(--transition-fast);
 }
 
 /* 접힘(아이콘 레일, F-143 3.3) */
 .sidebar--collapsed {
   width: var(--sidebar-rail-w);
-  padding: 10px 6px 12px;
+}
+
+/* 끄는 동안은 폭 전환 애니메이션 없이 포인터를 그대로 따라간다 (F-159 2.5) */
+.sidebar:has(.sidebar-resize-handle.is-dragging) {
+  transition: none;
 }
 
 .sidebar--overlay {
@@ -147,6 +142,89 @@ svg {
   z-index: 20;
   box-shadow: 8px 0 30px rgba(0, 0, 0, 0.12);
   transition: transform var(--transition-fast);
+}
+
+/* 머리 줄 아래 스크롤 영역 — 안쪽 여백·잘림은 여기서 맡는다 (F-159 2.2) */
+.sidebar-inner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 10px 10px 12px;
+}
+
+.sidebar--collapsed .sidebar-inner {
+  padding: 10px 6px 12px;
+}
+
+/* 사이드바 머리 줄 (펼침·레일 공통, F-159 2.2·2.3) */
+.sidebar-head {
+  flex: none;
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px 0 14px;
+  min-width: 0;
+}
+
+.sidebar-head--rail {
+  justify-content: center;
+  padding: 0;
+}
+
+/* 좁아 제품명이 모자라면 말줄임, 토글·검색은 줄지 않는다 (F-159 2.2) */
+.sidebar-head .brand-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-head .brand {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 오른쪽 테두리 너비 손잡이 — 테두리 가운데 기준 폭 8px, 사이드바 전체 높이 (F-159 2.5) */
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -4px;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 25;
+  background: transparent;
+  user-select: none;
+}
+
+.sidebar-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: transparent;
+}
+
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle:focus-visible::after,
+.sidebar-resize-handle.is-dragging::after {
+  background: color-mix(in srgb, var(--ink) 25%, transparent);
+}
+
+.sidebar-resize-handle:focus-visible {
+  outline: none;
+}
+
+/* 끄는 동안 글자 선택을 막는다 (F-159 2.5) */
+body.sidebar-resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .sidebar-backdrop {

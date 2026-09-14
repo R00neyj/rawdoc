@@ -4,11 +4,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { buildTree, canMoveFolder, pinnedDocs } from '../lib/folderTree.js'
 import FolderMenu from './FolderMenu.jsx'
+import SidebarHead, { SIDEBAR_ID, SEARCH_LABEL } from './SidebarHead.jsx'
+import { clampSidebarWidth, maxSidebarWidth, MIN_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, ARROW_KEY_STEP } from './sidebarWidth.js'
 import {
   IconChevron,
   IconNoteAdd,
   IconFolderAdd,
   IconUpload,
+  IconSearch,
   IconSettings,
   IconInstall,
   IconPin,
@@ -19,8 +22,7 @@ import {
   IconTooltip,
 } from './icons.jsx'
 
-// 상단바 토글의 aria-controls 가 참조한다 (F-151 2.2)
-export const SIDEBAR_ID = 'sidebar-nav'
+export { SIDEBAR_ID }
 
 function dropKeyOf(target) {
   return target.type === 'root' ? 'root' : `${target.type}:${target.id}`
@@ -254,6 +256,65 @@ function SidebarButton(props) {
   )
 }
 
+// 사이드바 오른쪽 테두리 너비 손잡이 — 끄는 동안 onWidthChange, 값 확정 시 onWidthCommit (F-159 2.5)
+function WidthHandle({ width, onWidthChange, onWidthCommit }) {
+  const [dragging, setDragging] = useState(false)
+
+  function handleMouseDown(e) {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = width
+    setDragging(true)
+    document.body.classList.add('sidebar-resizing')
+
+    function next(clientX) {
+      return clampSidebarWidth(startWidth + (clientX - startX), window.innerWidth)
+    }
+    function handleMove(ev) {
+      onWidthChange(next(ev.clientX))
+    }
+    function handleUp(ev) {
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+      document.body.classList.remove('sidebar-resizing')
+      setDragging(false)
+      onWidthCommit(next(ev.clientX))
+    }
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+  }
+
+  function handleDoubleClick() {
+    onWidthCommit(DEFAULT_SIDEBAR_WIDTH)
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      onWidthCommit(clampSidebarWidth(width - ARROW_KEY_STEP, window.innerWidth))
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      onWidthCommit(clampSidebarWidth(width + ARROW_KEY_STEP, window.innerWidth))
+    }
+  }
+
+  return (
+    <div
+      className={`sidebar-resize-handle${dragging ? ' is-dragging' : ''}`}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="사이드바 너비"
+      aria-valuemin={MIN_SIDEBAR_WIDTH}
+      aria-valuemax={maxSidebarWidth(window.innerWidth)}
+      aria-valuenow={width}
+      tabIndex={0}
+      onMouseDown={handleMouseDown}
+      onDoubleClick={handleDoubleClick}
+      onKeyDown={handleKeyDown}
+    />
+  )
+}
+
 export default function Sidebar({
   sidebarRef,
   narrow,
@@ -279,6 +340,9 @@ export default function Sidebar({
   onOpenSettings,
   canInstall,
   onInstall,
+  width,
+  onWidthChange,
+  onWidthCommit,
 }) {
   const [editingId, setEditingId] = useState(null)
   const [editingValue, setEditingValue] = useState('')
@@ -422,57 +486,68 @@ export default function Sidebar({
       hidden={narrow && !open}
       aria-label="문서 목록"
     >
-      {isRail ? (
-        <div className="sidebar-rail-scroll">
-          <RailButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
-          <RailButton icon={IconFolderAdd} label="새 폴더" onClick={handleRailCreateFolder} />
-          <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
-        </div>
-      ) : (
-        <div className="sidebar-scroll">
-          <SidebarButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
-          <SidebarButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
-          <SidebarButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
-          {pinned.length > 0 && (
-            <>
-              <h2>
-                <IconPin size={14} />
-                고정됨
-              </h2>
-              <ul className="pinned-list" role="list" aria-label="고정된 문서">
-                {pinned.map((doc) => (
-                  <PinnedRow key={doc.id} doc={doc} ctx={ctx} />
-                ))}
-              </ul>
-            </>
-          )}
-          <h2>문서</h2>
-          <ul className="doc-list" role="tree" aria-label="문서와 폴더">
-            {tree.map((node) => (
-              <TreeNode key={node.id} node={node} depth={0} ctx={ctx} editingInputRef={editingInputRef} />
-            ))}
-          </ul>
-          <div
-            className={`tree-root-drop${isRootDropTarget ? ' tree-row--drop' : ''}`}
-            onDragOver={(e) => handleDragOver(e, rootTarget)}
-            onDrop={(e) => handleDrop(e, rootTarget)}
-          />
-        </div>
+      {/* 사이드바 전체 높이 머리 줄 — 좁은 창 겹침 사이드바에는 없다 (F-159 2.1·2.4) */}
+      {!narrow && (
+        <SidebarHead variant="sidebar" expanded={!collapsed} collapsed={isRail} onToggleSidebar={onToggleCollapse} />
       )}
-
-      <div className={isRail ? 'sidebar-rail-bottom' : 'sidebar-bottom'}>
-        {canInstall &&
-          (isRail ? (
-            <RailButton icon={IconInstall} label="앱 설치" onClick={onInstall} />
-          ) : (
-            <SidebarButton icon={IconInstall} label="앱 설치" onClick={onInstall} />
-          ))}
+      <div className="sidebar-inner">
         {isRail ? (
-          <RailButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
+          <div className="sidebar-rail-scroll">
+            <RailButton icon={IconSearch} label={SEARCH_LABEL} ariaDisabled />
+            <RailButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
+            <RailButton icon={IconFolderAdd} label="새 폴더" onClick={handleRailCreateFolder} />
+            <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
+          </div>
         ) : (
-          <SidebarButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
+          <div className="sidebar-scroll">
+            <SidebarButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
+            <SidebarButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
+            <SidebarButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
+            {pinned.length > 0 && (
+              <>
+                <h2>
+                  <IconPin size={14} />
+                  고정됨
+                </h2>
+                <ul className="pinned-list" role="list" aria-label="고정된 문서">
+                  {pinned.map((doc) => (
+                    <PinnedRow key={doc.id} doc={doc} ctx={ctx} />
+                  ))}
+                </ul>
+              </>
+            )}
+            <h2>문서</h2>
+            <ul className="doc-list" role="tree" aria-label="문서와 폴더">
+              {tree.map((node) => (
+                <TreeNode key={node.id} node={node} depth={0} ctx={ctx} editingInputRef={editingInputRef} />
+              ))}
+            </ul>
+            <div
+              className={`tree-root-drop${isRootDropTarget ? ' tree-row--drop' : ''}`}
+              onDragOver={(e) => handleDragOver(e, rootTarget)}
+              onDrop={(e) => handleDrop(e, rootTarget)}
+            />
+          </div>
         )}
+
+        <div className={isRail ? 'sidebar-rail-bottom' : 'sidebar-bottom'}>
+          {canInstall &&
+            (isRail ? (
+              <RailButton icon={IconInstall} label="앱 설치" onClick={onInstall} />
+            ) : (
+              <SidebarButton icon={IconInstall} label="앱 설치" onClick={onInstall} />
+            ))}
+          {isRail ? (
+            <RailButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
+          ) : (
+            <SidebarButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
+          )}
+        </div>
       </div>
+      {/* 너비 손잡이 — 레일·좁은 창에는 없다 (F-159 2.5) */}
+      {!narrow && !isRail && (
+        <WidthHandle width={width} onWidthChange={onWidthChange} onWidthCommit={onWidthCommit} />
+      )}
     </nav>
   )
 }

@@ -114,13 +114,20 @@ test.describe('F-142 A12 / F-142 3.6 공유 메뉴 가로 스크롤', () => {
   })
 })
 
-test.describe('F-151 상단바 앞 묶음(토글·검색)', () => {
-  test('F-151 A1 펼침 배치 — 1600×900', async ({ page }) => {
+// F-151 A1·A2·A5·A7 은 F-159 사이드바 머리 줄 위치로 옮겨 여기서 판정
+test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () => {
+  test('F-159 A3 (구 F-151 A1) 머리 줄 배치 — 1600×900, 펼침', async ({ page }) => {
     await openApp(page)
+    const head = page.locator('.sidebar-head')
+    await expect(head).toHaveCount(1)
     const search = page.getByRole('button', { name: '검색 — 준비 중' })
     const toggle = page.getByRole('button', { name: '사이드바 접기' })
     const sidebar = page.locator('.sidebar')
-    const brand = page.locator('.brand')
+    const brandIcon = page.locator('.brand-icon')
+    const topbar = page.locator('.topbar')
+
+    const brandRect = await rectOf(brandIcon)
+    expect(Math.abs(brandRect.left - 14)).toBeLessThanOrEqual(1)
 
     const searchRect = await rectOf(search)
     const sidebarRect = await rectOf(sidebar)
@@ -128,27 +135,54 @@ test.describe('F-151 상단바 앞 묶음(토글·검색)', () => {
 
     const toggleRect = await rectOf(toggle)
     expect(toggleRect.right).toBeLessThanOrEqual(searchRect.left + 1)
-
-    const brandRect = await rectOf(brand)
     expect(brandRect.left).toBeLessThan(toggleRect.left)
+
+    const headRect = await rectOf(head)
+    const topbarRect = await rectOf(topbar)
+    expect(Math.abs((headRect.top + headRect.bottom) / 2 - (topbarRect.top + topbarRect.bottom) / 2)).toBeLessThanOrEqual(1)
+
+    const newDocBtn = page.getByRole('button', { name: '새 문서', exact: true })
+    const newDocRect = await rectOf(newDocBtn)
+    expect(newDocRect.top).toBeGreaterThanOrEqual(headRect.bottom - 1)
   })
 
-  test('F-151 A2 레일 배치 — 접은 뒤·새로고침 뒤', async ({ page }) => {
+  test('F-159 A2 사이드바 전체 높이 — 사이드바 윗변 0, 아랫변 창 높이, 상단바에 제품명·토글 없음', async ({ page }) => {
+    await openApp(page)
+    const sidebar = page.locator('.sidebar')
+    const sidebarRect = await rectOf(sidebar)
+    expect(Math.abs(sidebarRect.top - 0)).toBeLessThanOrEqual(1)
+    const viewportHeight = await page.evaluate(() => window.innerHeight)
+    expect(Math.abs(sidebarRect.bottom - viewportHeight)).toBeLessThanOrEqual(1)
+
+    const topbar = page.locator('.topbar')
+    const topbarRect = await rectOf(topbar)
+    expect(Math.abs(topbarRect.left - sidebarRect.right)).toBeLessThanOrEqual(1)
+    await expect(topbar.locator('.brand')).toHaveCount(0)
+    await expect(topbar.locator('.sidebar-toggle')).toHaveCount(0)
+  })
+
+  test('F-159 A4 (구 F-151 A2) 레일 머리 줄 — 토글만 가운데, 제품명 숨김, 상단바 왼쪽 48px', async ({ page }) => {
     await openApp(page)
     const toggle = page.getByRole('button', { name: '사이드바 접기' })
     await toggle.click()
-    await waitTransitionEnd(page.locator('.topbar-lead'))
+    await waitTransitionEnd(page.locator('.sidebar'))
 
     const sidebar = page.locator('.sidebar')
     await expect(sidebar).toHaveClass(/sidebar--collapsed/)
     const sidebarRect = await rectOf(sidebar)
     expect(Math.abs(sidebarRect.width - 48)).toBeLessThanOrEqual(1)
 
+    await expect(page.locator('.brand')).toBeHidden() // 토글 버튼 노드를 유지하려고 hidden 속성만 준다 (F-151 2.2)
+    const railHead = page.locator('.sidebar-head--rail')
+    await expect(railHead).toHaveCount(1)
     const openToggle = page.getByRole('button', { name: '사이드바 펴기' })
-    const brand = page.locator('.brand')
     const toggleRect = await rectOf(openToggle)
-    const brandRect = await rectOf(brand)
-    expect(Math.abs(toggleRect.left - brandRect.right - 8)).toBeLessThanOrEqual(1)
+    const headRect = await rectOf(railHead)
+    expect(Math.abs((toggleRect.left + toggleRect.right) / 2 - (headRect.left + headRect.right) / 2)).toBeLessThanOrEqual(1)
+
+    const topbar = page.locator('.topbar')
+    const topbarRect = await rectOf(topbar)
+    expect(Math.abs(topbarRect.left - 48)).toBeLessThanOrEqual(1)
 
     await page.reload()
     const sidebarAfterReload = page.locator('.sidebar')
@@ -157,6 +191,85 @@ test.describe('F-151 상단바 앞 묶음(토글·검색)', () => {
     expect(Math.abs(sidebarRect2.width - 48)).toBeLessThanOrEqual(1)
   })
 
+  test('F-159 A5 (구 F-151 A5) 사이드바 머리 줄 — 펼침·레일에 있고 좁은 창엔 없다, 레일 위쪽 4개(검색 포함)', async ({ page }) => {
+    await openApp(page)
+    await expect(page.locator('.sidebar-head')).toHaveCount(1)
+    await expect(page.locator('.sidebar-scroll').getByRole('button', { name: /검색/ })).toHaveCount(0)
+
+    await page.locator('.sidebar-toggle').click() // 레일로 접기
+    await expect(page.locator('.sidebar-head--rail')).toHaveCount(1)
+    const railButtons = page.locator('.sidebar-rail-scroll .rail-btn')
+    await expect(railButtons).toHaveCount(4)
+    await expect(railButtons.first()).toHaveAttribute('aria-label', '검색 — 준비 중')
+    await expect(railButtons.nth(1)).toHaveAttribute('aria-label', '새 문서')
+    await expect(railButtons.nth(2)).toHaveAttribute('aria-label', '새 폴더')
+    await expect(railButtons.nth(3)).toHaveAttribute('aria-label', '가져오기')
+
+    await page.locator('.sidebar-toggle').click() // 펼침으로
+    await resizeWindow(page, 900)
+    await page.locator('.sidebar-toggle').click() // 겹쳐 열기
+    await expect(page.locator('.sidebar-head')).toHaveCount(0)
+    await expect(page.locator('.sidebar').getByRole('button', { name: /검색/ })).toHaveCount(0)
+  })
+
+  test('F-159 A9 (구 F-151 A7) 포커스 순서 — 사이드바(토글→검색→…→너비 손잡이) → 상단바 → 편집 영역', async ({ page }) => {
+    await openApp(page)
+    const toggle = page.locator('.sidebar-toggle')
+    await toggle.focus()
+    await page.keyboard.press('Enter')
+    await expect(toggle).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(toggle).toBeFocused()
+
+    await page.keyboard.press('Tab')
+    await expect(page.getByRole('button', { name: '검색 — 준비 중' })).toBeFocused()
+
+    // 제목 입력 바로 앞 포커스가 너비 손잡이인지만 확인 (F-159 2.6)
+    let lastRole = null
+    for (let i = 0; i < 15; i++) {
+      await page.keyboard.press('Tab')
+      const isTitle = await page.locator('.doc-title').evaluate((el) => el === document.activeElement)
+      if (isTitle) break
+      lastRole = await page.evaluate(() => document.activeElement?.getAttribute('role'))
+    }
+    await expect(page.locator('.doc-title')).toBeFocused()
+    expect(lastRole).toBe('separator')
+
+    await page.keyboard.press('Tab')
+    await expect(page.getByRole('button', { name: '편집 — 서식을 보며 편집' })).toBeFocused()
+
+    await page.reload()
+    const activeTag = await page.evaluate(() => document.activeElement?.tagName)
+    expect(activeTag === 'BODY' || activeTag === undefined).toBe(true)
+    const visibleTooltip = await page.locator('.icon-tooltip').evaluateAll((els) =>
+      els.some((el) => parseFloat(getComputedStyle(el).opacity) > 0),
+    )
+    expect(visibleTooltip).toBe(false)
+  })
+
+  test('F-159 A6 더블클릭·키보드로 너비 조절', async ({ page }) => {
+    await openApp(page)
+    const handle = page.locator('.sidebar-resize-handle')
+    await handle.dblclick()
+    await expect(handle).toHaveAttribute('aria-valuenow', '224')
+
+    await handle.focus()
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    await expect(handle).toHaveAttribute('aria-valuenow', '256')
+    await waitTransitionEnd(page.locator('.sidebar'))
+    const sidebarRect = await rectOf(page.locator('.sidebar'))
+    expect(Math.abs(sidebarRect.width - 256)).toBeLessThanOrEqual(1)
+
+    await page.keyboard.press('ArrowLeft')
+    await expect(handle).toHaveAttribute('aria-valuenow', '240')
+
+    await page.reload()
+    await expect(page.locator('.sidebar-resize-handle')).toHaveAttribute('aria-valuenow', '240')
+  })
+})
+
+test.describe('F-151 상단바 앞 묶음(토글·검색)', () => {
   test('F-151 A3 토글 아이콘·aria-label·툴팁·aria-expanded·aria-controls (4 상태)', async ({ page }) => {
     await openApp(page)
     const toggle = page.locator('.sidebar-toggle')
@@ -220,23 +333,6 @@ test.describe('F-151 상단바 앞 묶음(토글·검색)', () => {
     expect(prefAfter).toBe(prefBefore)
   })
 
-  test('F-151 A5 사이드바 — 머리 줄·검색 버튼 없음, 레일 위쪽 버튼 3개', async ({ page }) => {
-    await openApp(page)
-    await expect(page.locator('.sidebar-head')).toHaveCount(0)
-    await expect(page.locator('.sidebar').getByRole('button', { name: /검색/ })).toHaveCount(0)
-
-    await page.locator('.sidebar-toggle').click() // 레일로 접기
-    const railButtons = page.locator('.sidebar-rail-scroll .rail-btn')
-    await expect(railButtons).toHaveCount(3)
-    await expect(page.locator('.sidebar-rail-scroll').getByRole('button', { name: /검색/ })).toHaveCount(0)
-
-    await page.locator('.sidebar-toggle').click() // 펼침으로
-    await resizeWindow(page, 900)
-    await page.locator('.sidebar-toggle').click() // 겹쳐 열기
-    await expect(page.locator('.sidebar-head')).toHaveCount(0)
-    await expect(page.locator('.sidebar').getByRole('button', { name: /검색/ })).toHaveCount(0)
-  })
-
   test('F-151 A6 검색 버튼 — 클릭·Enter 해도 아무 변화 없음', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '내용\n' })
@@ -257,31 +353,6 @@ test.describe('F-151 상단바 앞 묶음(토글·검색)', () => {
     await expect(search).toBeFocused()
   })
 
-  test('F-151 A7 포커스 — 토글에 계속 남고, 새로고침 직후엔 어디에도 없다', async ({ page }) => {
-    await openApp(page)
-    const toggle = page.locator('.sidebar-toggle')
-    await toggle.focus()
-    await page.keyboard.press('Enter')
-    await expect(toggle).toBeFocused()
-    await page.keyboard.press('Enter')
-    await expect(toggle).toBeFocused()
-
-    // Tab 순서: 토글(이미 포커스) → 검색 → 제목 → 보기 모드 → 공유 → 내보내기 (2.5)
-    await page.keyboard.press('Tab')
-    await expect(page.getByRole('button', { name: '검색 — 준비 중' })).toBeFocused()
-    await page.keyboard.press('Tab')
-    await expect(page.locator('.doc-title')).toBeFocused()
-    await page.keyboard.press('Tab')
-    await expect(page.getByRole('button', { name: '편집 — 서식을 보며 편집' })).toBeFocused()
-
-    await page.reload()
-    const activeTag = await page.evaluate(() => document.activeElement?.tagName)
-    expect(activeTag === 'BODY' || activeTag === undefined).toBe(true)
-    const visibleTooltip = await page.locator('.icon-tooltip').evaluateAll(
-      (els) => els.some((el) => parseFloat(getComputedStyle(el).opacity) > 0),
-    )
-    expect(visibleTooltip).toBe(false)
-  })
 })
 
 test.describe('F-143 A10 그 밖의 기능 버튼 아이콘', () => {
