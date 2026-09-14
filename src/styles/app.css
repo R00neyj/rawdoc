@@ -1023,6 +1023,11 @@ body.sidebar-resizing {
   padding-right: calc(var(--gutter-gap) - 6px);
 }
 
+/* 줄 번호 숨김 — .cm-line 기본 왼쪽 패딩(6px)을 없애 첫 글자가 내용 칸 왼쪽 끝에서 시작한다(F-147 2장) */
+.cm-host .cm-editor[data-gutters='off'] .cm-line {
+  padding-left: 0;
+}
+
 /* 문서 위아래 여백 — 편집·원문·보기·공유 화면 공통 토큰 (F-143 3.10) */
 .cm-host .cm-editor .cm-content {
   caret-color: var(--accent);

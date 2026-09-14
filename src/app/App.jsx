@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { createMemoryStore } from '../storage/memoryStore.js'
 import { openStore } from '../storage/openStore.js'
@@ -101,6 +101,7 @@ export default function App() {
   const [headingFont, setHeadingFont] = useState(() => getPref('md.headingFont', 'serif'))
   const [bodyFont, setBodyFont] = useState(() => getPref('md.bodyFont', 'sans')) // F-141 3.3
   const [themePref, setThemePref] = useState(() => getPref('md.theme', 'system')) // F-141 3.1
+  const [lineNumbersPref, setLineNumbersPref] = useState(() => getPref('md.lineNumbers', 'on')) // F-147 2장
   const [settingsOpen, setSettingsOpen] = useState(false)
   // { type:'doc', id, name } | { type:'folder', id, name } | null (F-126.md 5.3)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -554,6 +555,12 @@ export default function App() {
     if (openDoc?.id !== currentDocId) return
     editorRef.current?.setWikiTitles(wikiTitles)
   }, [wikiTitles, openDoc, currentDocId])
+
+  // 문서 전환·최초 마운트로 에디터가 새로 생기면 저장된 줄 번호 값을 그리기 전에 맞춘다 (F-147 2장)
+  useLayoutEffect(() => {
+    if (openDoc?.id !== currentDocId) return
+    editorRef.current?.setLineNumbers(lineNumbersPref === 'on')
+  }, [openDoc, currentDocId, lineNumbersPref])
 
   // ----- 문서 전환 후 포커스 요청 플래그 정리 (ia.md 3.4, F-103 3.4) -----
   // 실제 포커스 + 커서 맨 앞 이동은 Editor 가 뷰를 만드는 layout effect 안에서
@@ -1090,6 +1097,12 @@ export default function App() {
     document.documentElement.dataset.theme = resolveTheme(value, prefersDark)
   }
 
+  // 설정 마지막 항목: 줄 번호(거터) 켜기·끄기. 실제 반영은 아래 useLayoutEffect 가 한다 (F-147 2장)
+  function changeLineNumbers(value) {
+    setLineNumbersPref(value)
+    setPref('md.lineNumbers', value)
+  }
+
   function changeViewMode(mode) {
     setViewMode(mode)
     setPref('md.viewMode', mode)
@@ -1239,6 +1252,7 @@ export default function App() {
                     text={openDoc.content}
                     lineEnding={openDoc.lineEnding}
                     viewMode={viewMode}
+                    lineNumbers={lineNumbersPref === 'on'}
                     autoFocus={focusEditorRef.current}
                     onDocChange={handleDocChange}
                     onSelectionChange={handleSelectionChange}
@@ -1289,6 +1303,8 @@ export default function App() {
         onChangeHeadingFont={changeHeadingFont}
         bodyFont={bodyFont}
         onChangeBodyFont={changeBodyFont}
+        lineNumbers={lineNumbersPref}
+        onChangeLineNumbers={changeLineNumbers}
         onClose={closeSettings}
       />
     </div>

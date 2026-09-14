@@ -29,6 +29,15 @@ function attributesExtensionFor(mode) {
   return EditorView.editorAttributes.of({ 'data-view': mode })
 }
 
+// 줄 번호(거터) 켜기·끄기 — 끈 상태는 data-gutters='off' 로 표시해 app.css 가 반응한다 (F-147 2장)
+function lineNumbersExtensionFor(on) {
+  return on ? lineNumbers() : []
+}
+
+function gutterAttributesExtensionFor(on) {
+  return EditorView.editorAttributes.of({ 'data-gutters': on ? 'on' : 'off' })
+}
+
 // src/app/fileDrop.js 의 isExternalFileDrag() 와 같은 판정 — src/editor 는 src/app 을 import 하지 않아(단방향 계층) 옮겨 적는다
 function isExternalFileDrag(dataTransfer) {
   const types = dataTransfer?.types
@@ -86,6 +95,8 @@ function focusRelay() {
  * @param {object} [options]
  * @param {string} [options.text] 저장소 content 그대로. 줄바꿈 형식을 여기서 바꾸지 않는다
  * @param {'live'|'raw'} [options.viewMode]
+ * @param {boolean} [options.lineNumbers] 줄 번호(거터) 표시 여부, 기본 true (F-147 2장). 이후
+ *   전환은 handle.setLineNumbers(on) 으로 한다 — 이 값은 최초 생성에만 쓴다
  * @param {(state:import('@codemirror/state').EditorState)=>void} [options.onDocChange]
  * @param {(state:import('@codemirror/state').EditorState)=>void} [options.onSelectionChange]
  * @param {string[]} [options.wikiTitles] 위키링크 대상 판정용 문서 제목 목록(F-131). 이후
@@ -93,7 +104,15 @@ function focusRelay() {
  * @param {(target:string)=>void} [options.onOpenWikiLink] 위키링크 클릭·자동완성 흐름 (F-131 3·5장)
  */
 export function createEditor(parent, options = {}) {
-  const { text = '', viewMode = 'live', onDocChange, onSelectionChange, wikiTitles = [], onOpenWikiLink } = options
+  const {
+    text = '',
+    viewMode = 'live',
+    lineNumbers: showLineNumbers = true,
+    onDocChange,
+    onSelectionChange,
+    wikiTitles = [],
+    onOpenWikiLink,
+  } = options
 
   let destroyed = false
 
@@ -108,9 +127,12 @@ export function createEditor(parent, options = {}) {
 
   const previewCompartment = new Compartment()
   const attributesCompartment = new Compartment()
+  const lineNumbersCompartment = new Compartment()
+  const gutterAttributesCompartment = new Compartment()
 
   const extensions = [
-    lineNumbers(),
+    lineNumbersCompartment.of(lineNumbersExtensionFor(showLineNumbers)),
+    gutterAttributesCompartment.of(gutterAttributesExtensionFor(showLineNumbers)),
     history(),
     EditorView.lineWrapping,
     dropFileGuard,
@@ -186,6 +208,18 @@ export function createEditor(parent, options = {}) {
         effects: [
           previewCompartment.reconfigure(previewExtensionFor(mode, { onOpenWikiLink })),
           attributesCompartment.reconfigure(attributesExtensionFor(mode)),
+          scroll,
+        ],
+      })
+    },
+
+    // on(boolean) — 재마운트하지 않는다. 커서·선택·실행 취소 기록·스크롤 위치 유지 (F-147 2장)
+    setLineNumbers(on) {
+      const scroll = view.scrollSnapshot()
+      view.dispatch({
+        effects: [
+          lineNumbersCompartment.reconfigure(lineNumbersExtensionFor(on)),
+          gutterAttributesCompartment.reconfigure(gutterAttributesExtensionFor(on)),
           scroll,
         ],
       })

@@ -15,6 +15,12 @@ const FONT_OPTIONS = [
   { value: 'sans', label: '산세리프', fontVar: '--font-sans' },
 ]
 
+// 줄 번호(거터) 켜기·끄기 (F-147 2장)
+const LINE_NUMBERS_OPTIONS = [
+  { value: 'on', label: '표시' },
+  { value: 'off', label: '숨김' },
+]
+
 function Segment({ labelId, label, value, options, onChange, useFontPreview, checkedRef }) {
   return (
     <div className="dialog-field">
@@ -49,6 +55,8 @@ export default function SettingsDialog({
   onChangeHeadingFont,
   bodyFont,
   onChangeBodyFont,
+  lineNumbers,
+  onChangeLineNumbers,
   onClose,
 }) {
   const titleId = 'settings-title'
@@ -80,6 +88,13 @@ export default function SettingsDialog({
         options={FONT_OPTIONS}
         onChange={onChangeBodyFont}
         useFontPreview
+      />
+      <Segment
+        labelId="line-numbers-label"
+        label="줄 번호"
+        value={lineNumbers}
+        options={LINE_NUMBERS_OPTIONS}
+        onChange={onChangeLineNumbers}
       />
       <div className="dialog-actions">
         <button type="button" onClick={onClose}>

@@ -11,6 +11,7 @@ const ALLOWED_KEYS = new Set([
   'md.openFolders',
   'md.sidebar',
   'md.sidebarWidth',
+  'md.lineNumbers',
 ])
 
 function assertAllowed(key) {
