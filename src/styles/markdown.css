@@ -10,6 +10,7 @@
   /* 문단·목록·인용·표 칸의 기본 서체 (design.md 2.4, F-141 3.3). 제목(h1·h2)·코드는
      아래에서 각자 자리(--font-display·--font-mono)로 다시 덮는다 */
   font-family: var(--font-body);
+  line-height: var(--md-line-height);
 }
 
 .app-shell .markdown-body a {

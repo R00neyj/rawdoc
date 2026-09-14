@@ -1000,11 +1000,11 @@ body.sidebar-resizing {
   font-family: var(--font-body);
 }
 
-/* 원문 모드: --font-mono 14px, 줄 간격 1.5 (F-124 3.1). 줄 간격은 위 --md-line-height(1.5)
-   와 값이 같아 물려받는다 */
+/* 원문 모드: --font-mono 14px, 줄 간격 1.5 (F-124 3.1) */
 .cm-host .cm-editor[data-view='raw'] .cm-scroller {
   font-family: var(--font-mono);
   font-size: 14px;
+  line-height: 1.5;
   --tracking: 0; /* F-141 3.6 — 고정폭 자리는 자간 0 */
 }
 
