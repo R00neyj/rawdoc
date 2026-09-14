@@ -6,6 +6,8 @@ import {
   readSavedContent,
   setViewMode,
   rectOf,
+  fakeImeCompose,
+  fakeImeCommit,
 } from './helpers.js'
 
 // 문서 첫 줄에 표를 바로 두지 않는다 — 가져오기 직후 커서가 문서 맨 앞(0)에 있는데,
@@ -241,5 +243,138 @@ test.describe('F-138 표 칸 역슬래시 왕복', () => {
     expect(doc.content).toContain('C:\\Users!')
     // 표 열 수(칸 개수)가 그대로 — 원문이 3칸씩 유지된다
     expect((doc.content.match(/\|/g) ?? []).length).toBe((content.match(/\|/g) ?? []).length)
+  })
+})
+
+test.describe('F-161 표 칸 입력 결함', () => {
+  test('F-161 A1 칸 안에서 실제 키로 띄어쓰기가 그대로 들어간다', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: NARROW_TABLE })
+    const wrap = page.locator('.md-table-widget')
+    const cell = wrap.locator('td, th').nth(2) // 2행 1열, "1"
+
+    await cell.click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Shift+Home')
+    await page.keyboard.type('a b c')
+    await page.keyboard.press('Escape')
+
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content).toContain('| a b c | 2 |')
+    // 다른 줄은 바이트가 그대로다
+    expect(doc.content).toContain('| a | b |')
+    expect(doc.content).toContain('| --- | --- |')
+    expect(doc.content).toContain('| 3 | 4 |')
+  })
+
+  test('F-161 A2 칸에 키보드로 포커스한 뒤 Enter·Space 로 편집을 시작한다', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: NARROW_TABLE })
+    const wrap = page.locator('.md-table-widget')
+
+    // Tab 으로 포커스한 뒤 Enter — 그 칸 편집 시작
+    const cellA = wrap.locator('td, th').nth(0) // 머리 행 "a"
+    await cellA.focus()
+    await page.keyboard.press('Enter')
+    await expect(wrap.locator('.md-table-cell-editing[data-row="0"][data-col="0"]')).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await expect(wrap.locator('.md-table-cell-editing')).toHaveCount(0)
+
+    // 다른 칸에 포커스한 뒤 Space — 그 칸 편집 시작, Space 가 글자로 들어가지 않는다
+    const cellB = wrap.locator('td, th').nth(2) // "1"
+    await cellB.focus()
+    await page.keyboard.press(' ')
+    await expect(wrap.locator('.md-table-cell-editing[data-row="1"][data-col="0"]')).toHaveCount(1)
+    await page.keyboard.press('Escape')
+
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content).toContain('| 1 | 2 |') // Space 가 칸에 들어가지 않아 "1" 그대로
+  })
+
+  test('F-161 A3 조합 확정 뒤 스페이스로 이어 조합해도 칸에 그대로 남는다', async ({ page }) => {
+    const content = `${LEAD}| a | b |\n| --- | --- |\n|  | y |\n`
+    await openApp(page)
+    const docId = await importMarkdown(page, { content })
+    const wrap = page.locator('.md-table-widget')
+    const cell = wrap.locator('td, th').nth(2) // 빈 칸
+
+    await cell.click()
+    const cdp1 = await fakeImeCompose(page, '한')
+    await fakeImeCommit(cdp1, '한')
+    await page.keyboard.press(' ')
+    const cdp2 = await fakeImeCompose(page, '글')
+    await fakeImeCommit(cdp2, '글')
+    await page.keyboard.press('Escape')
+
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content).toContain('| 한 글 | y |')
+  })
+
+  test('F-161 A4 조합 중에는 Tab 이 칸을 이동시키지 않는다', async ({ page }) => {
+    const content = `${LEAD}| a | b |\n| --- | --- |\n|  | y |\n`
+    await openApp(page)
+    const docId = await importMarkdown(page, { content })
+    const wrap = page.locator('.md-table-widget')
+    const cell = wrap.locator('td, th').nth(2) // 빈 칸, row=1 col=0
+
+    await cell.click()
+    await expect(wrap.locator('.md-table-cell-editing[data-row="1"][data-col="0"]')).toHaveCount(1)
+
+    const cdp = await fakeImeCompose(page, '한')
+    await page.keyboard.press('Tab')
+    await page.waitForTimeout(50)
+    // 다른 칸(row=1 col=1)으로 옮겨가지 않았어야 한다
+    await expect(wrap.locator('.md-table-cell-editing[data-row="1"][data-col="1"]')).toHaveCount(0)
+
+    await fakeImeCommit(cdp, '한')
+    await page.keyboard.press('Escape')
+
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content).toContain('한')
+    expect(doc.content).toContain('| y |')
+  })
+
+  test('F-161 A5 표를 줄 단위로 한글 포함해 쳐도 세 줄이 그대로 남는다', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: '\n' })
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+End')
+
+    await page.keyboard.type('| ')
+    const cdp1 = await fakeImeCompose(page, '이름')
+    await fakeImeCommit(cdp1, '이름')
+    await page.keyboard.type(' | ')
+    const cdp2 = await fakeImeCompose(page, '값')
+    await fakeImeCommit(cdp2, '값')
+    await page.keyboard.type(' |\n| --- | --- |\n| ')
+    const cdp3 = await fakeImeCompose(page, '가')
+    await fakeImeCommit(cdp3, '가')
+    await page.keyboard.type(' | ')
+    const cdp4 = await fakeImeCompose(page, '나')
+    await fakeImeCommit(cdp4, '나')
+    await page.keyboard.type(' |')
+
+    await setViewMode(page, 'raw')
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content.replace(/\r\n/g, '\n')).toContain('| 이름 | 값 |\n| --- | --- |\n| 가 | 나 |')
+  })
+
+  test('F-161 A6 회귀 — 방향키·Tab 으로 칸 사이를 옮긴다 (F-125 2.3)', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: NARROW_TABLE })
+    const wrap = page.locator('.md-table-widget')
+
+    await wrap.locator('td, th').nth(0).click() // row0 col0
+    await page.keyboard.press('Tab')
+    await expect(wrap.locator('.md-table-cell-editing[data-row="0"][data-col="1"]')).toHaveCount(1)
+
+    await page.keyboard.press('ArrowDown')
+    await expect(wrap.locator('.md-table-cell-editing[data-row="1"][data-col="1"]')).toHaveCount(1)
+
+    await page.keyboard.press('ArrowLeft')
+    await expect(wrap.locator('.md-table-cell-editing[data-row="1"][data-col="0"]')).toHaveCount(1)
+
+    await page.keyboard.press('Escape')
+    await expect(wrap.locator('.md-table-cell-editing')).toHaveCount(0)
   })
 })

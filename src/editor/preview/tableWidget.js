@@ -342,9 +342,9 @@ function startEdit(mainView, wrap, widget, row, col) {
   positionCellHighlight(wrap, td) // 강조를 이 칸으로 옮긴다(F-140 3.3)
 }
 
-/** 칸 하위 에디터 키 처리 (F-125 2.3). 조합 중에는 가로채지 않는다 */
+// 칸 하위 에디터 키 처리 (F-125 2.3). 조합 중(네이티브 isComposing·keyCode 229 포함, view.composing 은 한 틱 늦다 — F-161 3.2)에는 가로채지 않는다
 function cellKeydown(mainView, wrap, cellView, event) {
-  if (isComposing(cellView)) return false
+  if (event.isComposing || event.keyCode === 229 || isComposing(cellView)) return false
 
   const mod = event.ctrlKey || event.metaKey
   const entry = () => activeEdit.get(mainView)
@@ -504,6 +504,9 @@ function buildCell(tagName, text, row, col, mainView, wrap) {
     startEdit(mainView, wrap, currentWidgetFor(wrap), row, col)
   })
   el.addEventListener('keydown', (event) => {
+    // 칸 요소 자신이 포커스를 들고 편집 중이 아닐 때만 — 하위 에디터에서 올라온 키는 target 이 다르다 (F-161 3.1)
+    if (event.target !== el) return
+    if (el.classList.contains('md-table-cell-editing')) return
     if (event.key !== 'Enter' && event.key !== ' ') return
     event.preventDefault()
     startEdit(mainView, wrap, currentWidgetFor(wrap), row, col)
