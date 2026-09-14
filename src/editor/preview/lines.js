@@ -3,7 +3,8 @@
 // decoration 은 문서를 바꾸지 않는다 — 체크박스 클릭도 위젯이 트랜잭션을 하나 내보낼 뿐,
 // decoration 자체는 표시만 바꾼다 (CLAUDE.md 불변조건)
 import { syntaxTree } from '@codemirror/language'
-import { Decoration, ViewPlugin, WidgetType } from '@codemirror/view'
+import { StateEffect, StateField } from '@codemirror/state'
+import { Decoration, EditorView, ViewPlugin, WidgetType } from '@codemirror/view'
 
 import { activeLines, isEditorFocused } from './active.js'
 import { isComposing, isForced } from '../composition.js'
@@ -472,9 +473,44 @@ export function listContentStarts(state, ranges) {
   return out
 }
 
+// --md-list-indent 실측값을 문서 위치에 매단다(StateEffect) — el.style 에 직접 쓰면 CM6 가 그 줄을 다시 그릴 때(커서 출입만으로도) decoration 밖 style 을 지운다(observer.ignore 로도 못 막음); decoration attributes 로 넣으면 재적용이 최신 값 그대로라 지워지는 틈이 없다 (F-166 3장 (나))
+const setListIndent = StateEffect.define()
+
+function listIndentDecorations(results) {
+  return Decoration.set(
+    results.map(({ lineFrom, px }) => Decoration.line({ attributes: { style: `--md-list-indent: ${px}px` } }).range(lineFrom)),
+    true,
+  )
+}
+
+const listIndentField = StateField.define({
+  create: () => Decoration.none,
+  update(value, tr) {
+    let next = value.map(tr.changes)
+    for (const effect of tr.effects) {
+      if (effect.is(setListIndent)) next = listIndentDecorations(effect.value)
+    }
+    return next
+  },
+  provide: (field) => EditorView.decorations.from(field),
+})
+
+// results 가 view 에 이미 반영된 값과 같으면 true — 같으면 쓰지 않는다 (F-166 3장)
+function sameListIndent(view, results) {
+  const current = []
+  view.state.field(listIndentField).between(0, view.state.doc.length, (from, _to, deco) => {
+    current.push(`${from}:${deco.spec.attributes.style}`)
+  })
+  const next = results
+    .map(({ lineFrom, px }) => `${lineFrom}:--md-list-indent: ${px}px`)
+    .sort()
+  current.sort()
+  return current.length === next.length && current.every((v, i) => v === next[i])
+}
+
 // 글자 시작 x 를 실측해 줄에 --md-list-indent 로 씀 (F-152 2.3)
 export function listIndentPreview() {
-  return ViewPlugin.fromClass(
+  const viewPlugin = ViewPlugin.fromClass(
     class {
       constructor(view) {
         this.scheduleMeasure(view)
@@ -498,16 +534,19 @@ export function listIndentPreview() {
               })
               .filter(Boolean),
           write: (results, view) => {
-            const matched = new Map(results.map((r) => [r.lineFrom, r.px]))
-            for (const el of view.contentDOM.querySelectorAll('.cm-line.md-list-line')) {
-              const pos = view.posAtDOM(el)
-              const px = matched.get(view.state.doc.lineAt(pos).from)
-              if (px === undefined) el.style.removeProperty('--md-list-indent')
-              else el.style.setProperty('--md-list-indent', `${px}px`)
-            }
+            if (sameListIndent(view, results)) return
+            // write 는 CM6 자신의 update 처리 도중(같은 호출 스택)에도 불려 바로 dispatch 하면 "update 중 update 호출" 오류가 난다 — 현재 동기 실행이 끝난 뒤(마이크로태스크)로 미룬다
+            Promise.resolve().then(() => {
+              // 조합 중에는 줄 속성을 다시 쓰지 않는다 — compositionend 의 forceRecalc 로 다시 잰다
+              if (view.dom.isConnected && !isComposing(view) && !sameListIndent(view, results)) {
+                view.dispatch({ effects: setListIndent.of(results) })
+              }
+            })
           },
         })
       }
     },
   )
+
+  return [listIndentField, viewPlugin]
 }

@@ -1,4 +1,5 @@
 // 편집 화면 자잘한 표시 결함 6가지 (specs/features/F-152.md)
+// 편집 모드 목록 기호 흔들림 (specs/features/F-166.md)
 import { test, expect } from '@playwright/test'
 import {
   openApp,
@@ -8,7 +9,55 @@ import {
   rectOf,
   computedStyle,
   readSavedContent,
+  fakeImeCompose,
+  fakeImeCommit,
 } from './helpers.js'
+
+// 목록 줄의 마커 뒤 실제 글자가 화면 줄마다 시작하는 x 좌표 목록 (F-152 A5, F-166 A1·A3)
+async function rowStartXs(page, selector) {
+  return page.evaluate((sel) => {
+    const lineEl = document.querySelector(sel)
+    let textNode = null
+    for (const n of lineEl.childNodes) {
+      if (n.nodeType === 3 && n.textContent.trim().length > 0) {
+        textNode = n
+        break
+      }
+    }
+    const skip = textNode.textContent.startsWith(' ') ? 1 : 0
+    const range = document.createRange()
+    range.setStart(textNode, skip)
+    range.setEnd(lineEl, lineEl.childNodes.length)
+    return [...range.getClientRects()].filter((r) => r.width > 0 || r.height > 0).map((r) => r.left)
+  }, selector)
+}
+
+// 커서 안(원문 드러남) 목록 줄에서 원문 글자 수 offset 뒤 실제 글자가 화면 줄마다 시작하는 x 좌표 목록. 마커·내용이 여러 텍스트 노드로 나뉜 경우(체크박스 "[ ] " 등)도 문자 수로 정확히 자른다 (F-166 A4)
+async function rowStartXsAtOffset(page, selector, offset) {
+  return page.evaluate(
+    ({ sel, offset }) => {
+      const lineEl = document.querySelector(sel)
+      const walker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT)
+      let remaining = offset
+      let startNode = null
+      let startOffset = 0
+      let node
+      while ((node = walker.nextNode())) {
+        if (remaining <= node.textContent.length) {
+          startNode = node
+          startOffset = remaining
+          break
+        }
+        remaining -= node.textContent.length
+      }
+      const range = document.createRange()
+      range.setStart(startNode, startOffset)
+      range.setEnd(lineEl, lineEl.childNodes.length)
+      return [...range.getClientRects()].filter((r) => r.width > 0 || r.height > 0).map((r) => r.left)
+    },
+    { sel: selector, offset },
+  )
+}
 
 // 2.1 대상 줄 클래스(specs/features/F-152.md 목표 목록)
 const GUTTER_ALIGN_SELECTOR =
@@ -167,25 +216,6 @@ test.describe('F-152 A4 원문 모양 누수', () => {
 test.describe('F-152 A5 목록 내어쓰기', () => {
   const LONG_ITEM = '목록 항목 글자가 아주 아주 길어서 화면 폭을 넘어 다음 줄로 접히도록 만든다 '.repeat(3)
 
-  /** 목록 줄의 마커 뒤 실제 글자가 화면 줄마다 시작하는 x 좌표 목록 */
-  async function rowStartXs(page, selector) {
-    return page.evaluate((sel) => {
-      const lineEl = document.querySelector(sel)
-      let textNode = null
-      for (const n of lineEl.childNodes) {
-        if (n.nodeType === 3 && n.textContent.trim().length > 0) {
-          textNode = n
-          break
-        }
-      }
-      const skip = textNode.textContent.startsWith(' ') ? 1 : 0
-      const range = document.createRange()
-      range.setStart(textNode, skip)
-      range.setEnd(lineEl, lineEl.childNodes.length)
-      return [...range.getClientRects()].filter((r) => r.width > 0 || r.height > 0).map((r) => r.left)
-    }, selector)
-  }
-
   test('둘째 화면 줄 시작 x = 첫 줄 글자 시작 x (커서 밖)', async ({ page }) => {
     await page.setViewportSize({ width: 600, height: 900 })
     await openApp(page)
@@ -321,6 +351,172 @@ test.describe('F-152 A8a 보기 모드 코드블록', () => {
       const inlineCodeBg = await computedStyle(page.locator('.markdown-body p code').first(), 'background-color')
       expect(preCodeBg).toBe('rgba(0, 0, 0, 0)')
       expect(inlineCodeBg).not.toBe('rgba(0, 0, 0, 0)')
+    })
+  }
+})
+
+// 편집 모드 목록 기호 흔들림 (specs/features/F-166.md)
+const F166_LONG_ITEM = '목록 항목 글자가 아주 아주 길어서 화면 폭을 넘어 다음 줄로 접히도록 만든다 '.repeat(3)
+
+test.describe('F-166 A1 기호 위치', () => {
+  const MARKER_DOC = '문단\n\n- 목록\n1. 순서목록\n- [ ] 할일\n- 부모\n  - 자식\n'
+
+  for (const width of [1600, 800]) {
+    test(`${width}×900 — 커서 밖, 기호가 내용 칸 왼쪽을 넘지 않는다`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await openApp(page)
+      await importMarkdown(page, { content: MARKER_DOC })
+
+      const diffs = await page.evaluate(() => {
+        const out = []
+        for (const lineEl of document.querySelectorAll('.cm-line.md-list-line')) {
+          const marker = lineEl.querySelector('.md-bullet, .md-list-marker, .md-checkbox')
+          if (!marker) continue
+          const lineLeft = lineEl.getBoundingClientRect().left
+          const markerLeft = marker.getBoundingClientRect().left
+          out.push({ cls: marker.className, diff: markerLeft - lineLeft })
+        }
+        return out
+      })
+      // 목록·순서목록·할일·부모·자식 다섯 줄 모두 기호를 가진다
+      expect(diffs.length).toBe(5)
+      for (const { cls, diff } of diffs) {
+        expect(diff, cls).toBeGreaterThanOrEqual(-1)
+      }
+    })
+  }
+
+  test('긴 글머리 목록 — 둘째 화면 줄 시작 x = 첫 줄 글자 시작 x (커서 밖)', async ({ page }) => {
+    await page.setViewportSize({ width: 600, height: 900 })
+    await openApp(page)
+    await importMarkdown(page, { content: `문단\n\n- ${F166_LONG_ITEM}\n` })
+
+    const rows = await rowStartXs(page, '.cm-line.md-list-line')
+    expect(rows.length).toBeGreaterThanOrEqual(2)
+    for (const x of rows.slice(1)) {
+      expect(Math.abs(x - rows[0])).toBeLessThanOrEqual(4)
+    }
+  })
+
+  test('긴 순서 목록 — 둘째 화면 줄 시작 x = 첫 줄 글자 시작 x (커서 밖)', async ({ page }) => {
+    await page.setViewportSize({ width: 600, height: 900 })
+    await openApp(page)
+    await importMarkdown(page, { content: `문단\n\n1. ${F166_LONG_ITEM}\n` })
+
+    const rows = await rowStartXs(page, '.cm-line.md-list-line')
+    expect(rows.length).toBeGreaterThanOrEqual(2)
+    for (const x of rows.slice(1)) {
+      expect(Math.abs(x - rows[0])).toBeLessThanOrEqual(4)
+    }
+  })
+})
+
+test.describe('F-166 A2 입력 중 흔들림', () => {
+  test('옆 목록 줄에서 입력·Enter·커서 이동·IME 흉내 입력해도 감시줄 기호 x 는 그대로', async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height: 900 })
+    await openApp(page)
+    await importMarkdown(page, { content: '- 감시줄\n- 편집줄\n' })
+
+    await expect(page.locator('.cm-line.md-list-line')).toHaveCount(2)
+
+    // rAF 로 60 프레임 동안 감시줄(첫 md-list-line) 기호 x·--md-list-indent 계산값을 기록
+    const monitorPromise = page.evaluate(() => {
+      return new Promise((resolve) => {
+        const frames = []
+        let count = 0
+        function tick() {
+          const lineEl = document.querySelectorAll('.cm-line.md-list-line')[0]
+          const marker = lineEl?.querySelector('.md-bullet, .md-list-marker, .md-checkbox')
+          const rect = marker?.getBoundingClientRect()
+          const indent = lineEl ? getComputedStyle(lineEl).getPropertyValue('--md-list-indent') : ''
+          frames.push({ x: rect ? rect.left : null, indent })
+          count += 1
+          if (count < 60) requestAnimationFrame(tick)
+          else resolve(frames)
+        }
+        requestAnimationFrame(tick)
+      })
+    })
+
+    // 편집줄 끝에서 입력·Enter
+    await page.locator('.cm-line.md-list-line').nth(1).click()
+    await page.keyboard.press('End')
+    await page.keyboard.type('abc')
+    await page.keyboard.press('Enter')
+    // 커서를 감시줄 안으로 들였다 다시 밖으로 (방향키)
+    await page.keyboard.press('ArrowUp')
+    await page.keyboard.press('ArrowUp')
+    await page.keyboard.press('ArrowDown')
+    // CDP 조합 흉내 입력
+    const cdp = await fakeImeCompose(page, '한')
+    await fakeImeCommit(cdp, '한')
+
+    const frames = await monitorPromise
+    const xs = frames.map((f) => f.x).filter((x) => x !== null)
+    expect(xs.length).toBeGreaterThan(0)
+    const first = xs[0]
+    for (const x of xs) {
+      expect(Math.abs(x - first)).toBeLessThanOrEqual(1)
+    }
+    const emptyIndentFrames = frames.filter((f) => f.indent === '').length
+    expect(emptyIndentFrames).toBe(0)
+  })
+})
+
+test.describe('F-166 A3 되먹임', () => {
+  test('1. 긴 목록 옆 줄에서 Enter 5회 — 내어쓰기 값이 커지지 않는다', async ({ page }) => {
+    await page.setViewportSize({ width: 600, height: 900 })
+    await openApp(page)
+    await importMarkdown(page, { content: `1. ${F166_LONG_ITEM}\n2. 둘째\n` })
+
+    const firstLine = page.locator('.cm-line.md-list-line').first()
+    // 활성 줄은 기호 폭을 2em 으로 넓히지 않아(F-152 2.3) 편집줄로 커서를 옮겨 감시줄이 비활성으로 자리잡은 뒤(값이 한 번 커지는 건 정상) 기준값을 잰다 — 문제는 그 뒤 Enter 반복마다 더 커지는 것
+    await page.locator('.cm-line.md-list-line').nth(1).click()
+    await page.keyboard.press('End')
+    // 비활성 전환(기호 2em 폭 적용) 뒤에 기준값을 잰다 — .md-list-marker 는 비활성 줄에만 붙는다
+    await firstLine.locator('.md-list-marker').waitFor()
+    const initial = await firstLine.evaluate((el) => getComputedStyle(el).getPropertyValue('--md-list-indent'))
+
+    for (let i = 0; i < 5; i += 1) {
+      await page.keyboard.press('Enter')
+    }
+
+    const after = await firstLine.evaluate((el) => getComputedStyle(el).getPropertyValue('--md-list-indent'))
+    expect(parseFloat(after)).toBeLessThanOrEqual(parseFloat(initial) + 1)
+
+    const rows = await rowStartXs(page, '.cm-line.md-list-line')
+    expect(rows.length).toBeGreaterThanOrEqual(2)
+    for (const x of rows.slice(1)) {
+      expect(Math.abs(x - rows[0])).toBeLessThanOrEqual(4)
+    }
+  })
+})
+
+test.describe('F-166 A4 커서 줄 내어쓰기', () => {
+  for (const [label, prefix] of [
+    ['순서 목록', '1. '],
+    ['할일', '- [ ] '],
+  ]) {
+    test(`${label} — 커서 안, 둘째 화면 줄 시작 x = 첫 줄 글자 시작 x`, async ({ page }) => {
+      await page.setViewportSize({ width: 600, height: 900 })
+      await openApp(page)
+      await importMarkdown(page, { content: `문단\n\n${prefix}${F166_LONG_ITEM}\n` })
+
+      await page.locator('.cm-line.md-list-line').click()
+      // 클릭으로 활성화되며 기호 상자 폭(2em 강제 → 자연폭)이 바뀌어 줄바꿈이 다시 계산된다 — 안정될 때까지(연속 두 번 같은 결과) 기다린다
+      let rows = await rowStartXsAtOffset(page, '.cm-line.md-list-line', prefix.length)
+      await expect
+        .poll(async () => {
+          const next = await rowStartXsAtOffset(page, '.cm-line.md-list-line', prefix.length)
+          const stable = JSON.stringify(next) === JSON.stringify(rows)
+          rows = next
+          return stable
+        })
+        .toBe(true)
+      expect(rows.length).toBeGreaterThanOrEqual(2)
+      for (const x of rows.slice(1)) {
+        expect(Math.abs(x - rows[0])).toBeLessThanOrEqual(4)
+      }
     })
   }
 })

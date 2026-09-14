@@ -69,10 +69,11 @@
   text-indent: calc(-1 * var(--md-list-indent, 0px));
 }
 
-/* ===== 글머리 목록 — 폭 2em 은 보기 모드 목록 들여쓰기와 같게 (F-152 2.3) ===== */
+/* 글머리 목록 — 폭 2em 은 보기 모드 목록 들여쓰기와 같게. text-indent 는 상속돼 inline-block 상자 안 글자에도 다시 적용돼(F-166 3장 원인 1) 0 으로 끊는다 (F-152 2.3) */
 .md-bullet {
   display: inline-block;
   min-width: 2em;
+  text-indent: 0;
   color: var(--accent);
   font-weight: 700;
 }
@@ -81,10 +82,12 @@
 .md-list-marker {
   display: inline-block;
   min-width: 2em;
+  text-indent: 0;
 }
 
 /* ===== 체크박스 ===== */
 .md-checkbox {
+  text-indent: 0;
   accent-color: var(--accent);
   vertical-align: middle;
   margin: 0 2px 0 0;
