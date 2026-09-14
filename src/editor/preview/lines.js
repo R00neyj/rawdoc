@@ -5,7 +5,7 @@
 import { syntaxTree } from '@codemirror/language'
 import { Decoration, ViewPlugin, WidgetType } from '@codemirror/view'
 
-import { activeLines } from './active.js'
+import { activeLines, isEditorFocused } from './active.js'
 import { isComposing, isForced } from '../composition.js'
 import { parseCalloutHeader } from '../../lib/callout.js'
 
@@ -125,10 +125,12 @@ class CheckboxWidget extends WidgetType {
 /**
  * @param {import('@codemirror/state').EditorState} state
  * @param {{from:number, to:number}[]} ranges 보통 view.visibleRanges
+ * @param {boolean} [hasFocus] 편집기 포커스 (F-146 3.2). 기본값 true 는 포커스를
+ *   다루지 않는 기존 호출부(테스트 등)의 동작을 그대로 유지한다
  * @returns {import('@codemirror/state').Range<import('@codemirror/view').Decoration>[]}
  */
-export function buildLines(state, ranges) {
-  const active = activeLines(state)
+export function buildLines(state, ranges, hasFocus = true) {
+  const active = activeLines(state, hasFocus)
   const out = []
   // 콜아웃으로 판정된 줄 번호 — 중첩된 인용(부모 Blockquote 가 콜아웃)이 같은 줄에
   // md-quote 를 겹쳐 붙이지 않게 막는 데 쓴다 (F-128 4.1 "이 줄들에는 md-quote 를
@@ -291,7 +293,7 @@ export function linePreview() {
   return ViewPlugin.fromClass(
     class {
       constructor(view) {
-        this.decorations = Decoration.set(buildLines(view.state, view.visibleRanges), true)
+        this.decorations = Decoration.set(buildLines(view.state, view.visibleRanges, isEditorFocused(view)), true)
       }
 
       update(update) {
@@ -303,7 +305,10 @@ export function linePreview() {
             return
           }
         }
-        this.decorations = Decoration.set(buildLines(update.state, update.view.visibleRanges), true)
+        this.decorations = Decoration.set(
+          buildLines(update.state, update.view.visibleRanges, isEditorFocused(update.view)),
+          true,
+        )
       }
     },
     { decorations: (v) => v.decorations },

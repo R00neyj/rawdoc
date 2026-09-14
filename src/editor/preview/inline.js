@@ -5,7 +5,7 @@
 import { syntaxTree } from '@codemirror/language'
 import { Decoration, ViewPlugin } from '@codemirror/view'
 
-import { activeLines, selectionTouches } from './active.js'
+import { activeLines, isEditorFocused, selectionTouches } from './active.js'
 import { isComposing, isForced } from '../composition.js'
 import { parseCalloutHeader } from '../../lib/callout.js'
 import { findWikiLinks } from '../../lib/wikiLink.js'
@@ -107,10 +107,12 @@ function isInsideWikiLink(state, linkNode) {
 /**
  * @param {import('@codemirror/state').EditorState} state
  * @param {{from:number, to:number}[]} ranges 보통 view.visibleRanges
+ * @param {boolean} [hasFocus] 편집기 포커스 (F-146 3.2). 기본값 true 는 포커스를
+ *   다루지 않는 기존 호출부(테스트 등)의 동작을 그대로 유지한다
  * @returns {import('@codemirror/state').Range<import('@codemirror/view').Decoration>[]}
  */
-export function buildInline(state, ranges) {
-  const active = activeLines(state)
+export function buildInline(state, ranges, hasFocus = true) {
+  const active = activeLines(state, hasFocus)
   const out = []
 
   for (const { from, to } of ranges) {
@@ -145,7 +147,7 @@ export function buildInline(state, ranges) {
             // F-131: 위키링크 범위는 wikiLinks.js 가 그린다 — 이 파일은 손대지 않는다
             if (isInsideWikiLink(state, parent)) return
             // F-129 3.2: 줄이 아니라 선택이 이 Link [from, to] 에 닿는지로 판정한다
-            if (!selectionTouches(state, parent.from, parent.to)) pushHide(out, state, node.from, node.to)
+            if (!selectionTouches(state, parent.from, parent.to, hasFocus)) pushHide(out, state, node.from, node.to)
             return
           }
           if (node.name === 'URL' && parent?.name !== 'Autolink' && parent?.name !== 'Image') {
@@ -162,7 +164,7 @@ export function buildInline(state, ranges) {
           // 대상이 아니고(F-129 3.1), 드러난 상태(선택이 닿음)에서는 넣지 않는다(3.3)
           const linkNode = node.node
           const urlNode = linkNode.getChild('URL')
-          if (urlNode && !selectionTouches(state, linkNode.from, linkNode.to)) {
+          if (urlNode && !selectionTouches(state, linkNode.from, linkNode.to, hasFocus)) {
             const [open, close] = linkMarks(linkNode)
             if (open && close && open.to < close.from) {
               const url = state.doc.sliceString(urlNode.from, urlNode.to)
@@ -209,7 +211,7 @@ export function inlinePreview() {
   return ViewPlugin.fromClass(
     class {
       constructor(view) {
-        this.decorations = Decoration.set(buildInline(view.state, view.visibleRanges), true)
+        this.decorations = Decoration.set(buildInline(view.state, view.visibleRanges, isEditorFocused(view)), true)
       }
 
       update(update) {
@@ -221,7 +223,10 @@ export function inlinePreview() {
             return
           }
         }
-        this.decorations = Decoration.set(buildInline(update.state, update.view.visibleRanges), true)
+        this.decorations = Decoration.set(
+          buildInline(update.state, update.view.visibleRanges, isEditorFocused(update.view)),
+          true,
+        )
       }
     },
     { decorations: (v) => v.decorations },

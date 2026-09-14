@@ -9,6 +9,7 @@ import { syntaxTree } from '@codemirror/language'
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap } from '@codemirror/view'
 
 import { isComposing, isForced } from '../composition.js'
+import { isEditorFocused } from './active.js'
 import {
   TableWidget,
   enterTableFromKeyboard,
@@ -247,9 +248,13 @@ const TARGET = { Table: tableWidget, FencedCode: codeWidget }
 /**
  * 표·코드블록을 위젯 decoration 으로 치환한다. DOM 없이 동작한다.
  * @param {import('@codemirror/state').EditorState} state
+ * @param {boolean} [hasFocus] 편집기 포커스 (F-146 3.2). 포커스가 없으면 겹침(커서가
+ *   원문 안)을 무시하고 항상 위젯(접힌 프리뷰)으로 본다 — "코드블록·표 원문 펼침"도
+ *   비포커스 표시에서 숨기는 예로 든 것과 같다. 기본값 true 는 포커스를 다루지 않는
+ *   기존 호출부(테스트 등)의 동작을 그대로 유지한다
  * @returns {import('@codemirror/state').Range<import('@codemirror/view').Decoration>[]}
  */
-export function buildBlocks(state) {
+export function buildBlocks(state, hasFocus = true) {
   const out = []
   syntaxTree(state).iterate({
     enter: (node) => {
@@ -267,8 +272,10 @@ export function buildBlocks(state) {
       // 예외(F-139 3.1): 주 에디터의 빈 커서가 표 원문 범위 안이면 위젯으로 만들지
       // 않는다 — emptyCursorInside 가 참이면 overlaps 도 항상 참이라(같은 조건이라
       // 부분집합) 아래 `!overlaps` 분기로 자연히 원문이 노출된다.
-      const alwaysWidget = node.name === 'Table' && !emptyCursorInside(state, from, to)
-      if (alwaysWidget || !overlaps(state, from, to)) {
+      // 포커스가 없으면(F-146 3.2) 이 예외를 적용하지 않는다 — 항상 위젯이다
+      const alwaysWidget = node.name === 'Table' && (!hasFocus || !emptyCursorInside(state, from, to))
+      const showsSource = hasFocus && overlaps(state, from, to)
+      if (alwaysWidget || !showsSource) {
         out.push(Decoration.replace({ widget: make(state, node.node, from, to), block: true }).range(from, to))
       }
       // 어느 쪽이든 블록 내부는 더 볼 것이 없다. 표 안 인라인·코드블록 강조는 하지 않는다.
@@ -384,7 +391,8 @@ export function blockPreview() {
   )
 
   const field = StateField.define({
-    create: (state) => Decoration.set(buildBlocks(state), true),
+    // EditorState.create 시점엔 view 가 없어 포커스를 알 수 없다 — false 가 맞다(autoFocus 의 focus() 가 곧 focusin·forceRecalc 로 다시 그린다, F-146 3.2)
+    create: (state) => Decoration.set(buildBlocks(state, false), true),
     update(value, tr) {
       // F-135 3.2: 편집 중인 칸이 있으면 모든 주 문서 트랜잭션마다(칸 자신의 입력
       // 포함) 세션이 든 칸 범위를 옮긴다. 이 재계산 함수 자체와 무관하게, 아래에서
@@ -403,7 +411,7 @@ export function blockPreview() {
           return tr.docChanged ? value.map(tr.changes) : value
         }
       }
-      return Decoration.set(buildBlocks(tr.state), true)
+      return Decoration.set(buildBlocks(tr.state, isEditorFocused(viewRef.current)), true)
     },
     provide: (f) => EditorView.decorations.from(f),
   })

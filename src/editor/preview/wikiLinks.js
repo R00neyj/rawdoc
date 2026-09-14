@@ -6,7 +6,7 @@ import { StateEffect, StateField } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin } from '@codemirror/view'
 
 import { findWikiLinks, resolveWikiTarget } from '../../lib/wikiLink.js'
-import { selectionTouches } from './active.js'
+import { isEditorFocused, selectionTouches } from './active.js'
 import { isComposing, isForced } from '../composition.js'
 
 const HIDE = Decoration.replace({})
@@ -82,9 +82,11 @@ const SYNTAX_MARK = Decoration.mark({ class: 'md-wikilink-mark' })
  * @param {import('@codemirror/state').EditorState} state
  * @param {{from:number, to:number}[]} ranges 보통 view.visibleRanges
  * @param {string[]} titles 문서 제목 목록
+ * @param {boolean} [hasFocus] 편집기 포커스 (F-146 3.2). 기본값 true 는 포커스를
+ *   다루지 않는 기존 호출부(테스트 등)의 동작을 그대로 유지한다
  * @returns {import('@codemirror/state').Range<import('@codemirror/view').Decoration>[]}
  */
-export function buildWikiLinks(state, ranges, titles) {
+export function buildWikiLinks(state, ranges, titles, hasFocus = true) {
   const out = []
   const seenLines = new Set()
 
@@ -98,7 +100,7 @@ export function buildWikiLinks(state, ranges, titles) {
 
       const line = state.doc.line(n)
       for (const link of wikiLinksOnLine(state, line)) {
-        if (selectionTouches(state, link.from, link.to)) {
+        if (selectionTouches(state, link.from, link.to, hasFocus)) {
           // 닿음: 원문 전체 표시, 기호 색만 (--accent)
           out.push(SYNTAX_MARK.range(link.openFrom, link.openTo))
           if (link.hasAlias) out.push(SYNTAX_MARK.range(link.prefixFrom, link.prefixTo))
@@ -168,7 +170,7 @@ export function wikiLinksPreview() {
     class {
       constructor(view) {
         this.decorations = Decoration.set(
-          buildWikiLinks(view.state, view.visibleRanges, view.state.field(wikiTitlesField)),
+          buildWikiLinks(view.state, view.visibleRanges, view.state.field(wikiTitlesField), isEditorFocused(view)),
           true,
         )
       }
@@ -186,7 +188,12 @@ export function wikiLinksPreview() {
           }
         }
         this.decorations = Decoration.set(
-          buildWikiLinks(update.state, update.view.visibleRanges, update.state.field(wikiTitlesField)),
+          buildWikiLinks(
+            update.state,
+            update.view.visibleRanges,
+            update.state.field(wikiTitlesField),
+            isEditorFocused(update.view),
+          ),
           true,
         )
       }
@@ -218,7 +225,7 @@ export function wikiLinkClicks(onOpenWikiLink) {
       if (event.ctrlKey || event.metaKey) return false // 열지 않고 커서 이동 — 편집 진입
 
       // 드러난 상태(커서가 위키링크에 닿음)면 보통 커서 이동 — 열지 않는다
-      if (selectionTouches(view.state, link.from, link.to)) return false
+      if (selectionTouches(view.state, link.from, link.to, isEditorFocused(view))) return false
 
       event.preventDefault()
       onOpenWikiLink(link.target)

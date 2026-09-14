@@ -4,7 +4,7 @@
 import { syntaxTree } from '@codemirror/language'
 import { EditorView } from '@codemirror/view'
 
-import { selectionTouches } from './active.js'
+import { isEditorFocused, selectionTouches } from './active.js'
 import { isComposing } from '../composition.js'
 
 /** F-129 3.1: 이 스킴으로 시작하는 것만 연다 (대소문자 무시) */
@@ -146,7 +146,7 @@ export function linkClicks() {
 
       // 드러난 상태(커서가 링크에 닿음)면 보통 커서 이동 — 열지 않는다
       const enclosing = enclosingLink(view.state, pos)
-      if (enclosing && selectionTouches(view.state, enclosing.from, enclosing.to)) return false
+      if (enclosing && selectionTouches(view.state, enclosing.from, enclosing.to, isEditorFocused(view))) return false
 
       if (!isOpenableUrl(link.url)) return false // 열 수 없는 주소 — 보통 커서 이동
 

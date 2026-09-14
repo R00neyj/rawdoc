@@ -33,11 +33,7 @@
   color: var(--accent);
 }
 
-/* ===== [[ 뒤 제목 자동완성 팝업 (F-131 3.1, F-141 3.5) =====
-   그림자·모서리는 기존 ⋯ 메뉴(app.css .item-menu-list)와 같게 맞춘다.
-   CM6 기본 테마가 `.cm-tooltip.cm-tooltip-autocomplete > ul` 에 font-family: monospace 를
-   똑같은 구체성으로 주므로(한국어 Windows 에서 굴림체로 보임), 클래스를 한 번 더 반복해
-   구체성을 확실히 높인다(!important 는 쓰지 않는다) */
+/* [[ 뒤 제목 자동완성 팝업(F-131 3.1, F-141 3.5, F-146 3.4) — 사이드바 ⋯ 메뉴(.item-menu-list)와 같은 모양. CM6 기본 테마의 `.cm-tooltip-autocomplete ul`·`li` 가 이미 구체성 있는 값(monospace, padding 1px 3px)을 줘 클래스를 반복해 구체성을 높인다(!important 는 쓰지 않는다) */
 .cm-tooltip.cm-tooltip-autocomplete.cm-tooltip-autocomplete {
   background: var(--panel);
   border: 1px solid var(--rule);
@@ -47,13 +43,20 @@
 
 .cm-tooltip.cm-tooltip-autocomplete.cm-tooltip-autocomplete > ul {
   max-height: 260px;
+  padding: 6px;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 13px;
 }
 
-.cm-tooltip-autocomplete ul li {
-  padding: 4px 8px;
+.cm-tooltip.cm-tooltip-autocomplete.cm-tooltip-autocomplete ul li {
+  padding: 7px 9px;
+  border-radius: var(--radius-control);
   transition: var(--transition-colors);
+}
+
+/* 위키링크 자동완성은 종류 구분이 없다 — CM6 기본 종류 아이콘 자리를 없앤다 (F-146 3.4) */
+.cm-tooltip-autocomplete .cm-completionIcon {
+  display: none;
 }
 
 /* CM6 기본 테마의 &light/&dark 선택자가 구체성이 더 높아(F-141 3.5 와 같은 원인) 클래스를

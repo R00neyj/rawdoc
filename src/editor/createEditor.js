@@ -8,7 +8,7 @@ import { indentUnit } from '@codemirror/language'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 
 import { autoPair } from './autoPair.js'
-import { compositionCatchup, isComposing, isForced } from './composition.js'
+import { compositionCatchup, forceRecalc, isComposing, isForced } from './composition.js'
 import { frontmatterExtension } from './frontmatter.js'
 import { highlightExtension } from './highlight.js'
 import { shortcutKeymap } from './commands.js'
@@ -50,6 +50,37 @@ const dropFileGuard = EditorView.domEventHandlers({
   },
 })
 
+// 좌우 여백(.cm-content·.cm-gutters 밖, F-143 3.8) 클릭 시 포커스만 없앤다(F-146 3.1) — EditorView.domEventHandlers 는 contentDOM 에만 붙어 scroller 자신을 target 으로 한 클릭엔 안 닿아 view.scrollDOM 에 원시 리스너를 붙인다. 막지 않으면 tabIndex=-1 인 scroller 가 기본 동작으로 포커스를 먹어 view.dom 안에 남는다
+function attachMarginClickGuard(view) {
+  const handler = (event) => {
+    if (event.button !== 0) return
+    if (event.target.closest?.('.cm-content, .cm-gutters')) return
+    event.preventDefault()
+    view.root.activeElement?.blur()
+  }
+  view.scrollDOM.addEventListener('mousedown', handler)
+  return () => view.scrollDOM.removeEventListener('mousedown', handler)
+}
+
+// 편집기 포커스 변화를 밀린 재계산 신호(forceRecalc)로 전달한다(F-146 3.2) — focusin·focusout 은 버블링해 view.dom 밑 어디든(표 칸 하위 EditorView 포함) 뜨고, relatedTarget 이 여전히 view.dom 안이면 실제 전환이 아니라 건너뛴다. 조합 중 여백 클릭(3.3)은 attachMarginClickGuard 의 blur() 가 compositionend 를 유도하고 composition.js 의 compositionCatchup 이 뒤이어 forceRecalc 를 보낸다 — 여기서 다시 보내도 내용엔 영향 없다
+function focusRelay() {
+  let editorFocused = false
+  return EditorView.domEventHandlers({
+    focusin(_event, view) {
+      if (editorFocused) return false
+      editorFocused = true
+      view.dispatch({ effects: forceRecalc.of(null) })
+      return false
+    },
+    focusout(event, view) {
+      if (view.dom.contains(event.relatedTarget)) return false
+      editorFocused = false
+      view.dispatch({ effects: forceRecalc.of(null) })
+      return false
+    },
+  })
+}
+
 /**
  * @param {HTMLElement} parent
  * @param {object} [options]
@@ -83,6 +114,7 @@ export function createEditor(parent, options = {}) {
     history(),
     EditorView.lineWrapping,
     dropFileGuard,
+    focusRelay(),
     // autoPair() 의 Backspace 키맵(Prec.high)이 markdown()의 deleteMarkupBackward
     // (역시 Prec.high)보다 먼저 받으려면 같은 우선순위 안에서 더 앞서 조립해야 한다
     // (@codemirror/view keymap 문서: "specified early... get checked first")
@@ -128,6 +160,7 @@ export function createEditor(parent, options = {}) {
 
   const state = EditorState.create({ doc: text, extensions })
   const view = new EditorView({ state, parent })
+  const detachMarginClickGuard = attachMarginClickGuard(view)
 
   return {
     view,
@@ -195,6 +228,7 @@ export function createEditor(parent, options = {}) {
       destroyed = true
       clearTimeout(headingsTimer)
       headingsListeners.clear()
+      detachMarginClickGuard()
       view.destroy()
     },
   }

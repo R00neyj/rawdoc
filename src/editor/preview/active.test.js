@@ -1,7 +1,7 @@
 // active.js 단위 테스트 (specs/features/F-104.md 2.2, specs/features/F-129.md 3.4)
 import { describe, expect, it } from 'vitest'
 import { EditorState, EditorSelection } from '@codemirror/state'
-import { activeLines, selectionTouches } from './active.js'
+import { activeLines, isEditorFocused, selectionTouches } from './active.js'
 
 function stateWithSelection(doc, anchor, head) {
   return EditorState.create({ doc, selection: { anchor, head } })
@@ -30,6 +30,16 @@ describe('activeLines', () => {
       extensions: [EditorState.allowMultipleSelections.of(true)],
     })
     expect(activeLines(state)).toEqual(new Set([1, 3]))
+  })
+
+  it('편집기 포커스가 없으면(hasFocus=false) 커서가 있어도 활성 줄이 빈 집합이다 (F-146 3.2)', () => {
+    const state = stateWithSelection('one\ntwo\nthree', 5, 5)
+    expect(activeLines(state, false)).toEqual(new Set())
+  })
+
+  it('편집기 포커스가 있으면(hasFocus=true) 지금 결과와 같다 (F-146 3.2)', () => {
+    const state = stateWithSelection('one\ntwo\nthree', 5, 5)
+    expect(activeLines(state, true)).toEqual(new Set([2]))
   })
 })
 
@@ -66,5 +76,33 @@ describe('selectionTouches', () => {
       extensions: [EditorState.allowMultipleSelections.of(true)],
     })
     expect(selectionTouches(state, 2, 8)).toBe(true)
+  })
+
+  it('편집기 포커스가 없으면(hasFocus=false) 닿는 커서여도 false 다 (F-146 3.2)', () => {
+    const state = stateWithSelection('0123456789', 5, 5)
+    expect(selectionTouches(state, 2, 8, false)).toBe(false)
+  })
+
+  it('편집기 포커스가 있으면(hasFocus=true) 지금 결과와 같다 (F-146 3.2)', () => {
+    const state = stateWithSelection('0123456789', 5, 5)
+    expect(selectionTouches(state, 2, 8, true)).toBe(true)
+  })
+})
+
+describe('isEditorFocused', () => {
+  it('view 가 없으면 false 다', () => {
+    expect(isEditorFocused(null)).toBe(false)
+    expect(isEditorFocused(undefined)).toBe(false)
+  })
+
+  it('view.dom 이 root.activeElement 를 담고 있으면 true 다', () => {
+    const active = {}
+    const view = { dom: { contains: (el) => el === active }, root: { activeElement: active } }
+    expect(isEditorFocused(view)).toBe(true)
+  })
+
+  it('view.dom 이 root.activeElement 를 담고 있지 않으면 false 다', () => {
+    const view = { dom: { contains: () => false }, root: { activeElement: {} } }
+    expect(isEditorFocused(view)).toBe(false)
   })
 })
