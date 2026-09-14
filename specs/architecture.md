@@ -8,6 +8,7 @@
 
 ```
 brand.config.js          제품명·짧은 이름·메인 컬러. 유일한 정의 위치 (design.md 3.2)
+scripts/                 검증 도구 (F-160). measure·verify·e2e-one. src/ 가 import 하지 않는다
 index.html               <title>·theme-color·--accent 는 빌드 시 brand.config.js 에서 주입
 vite.config.js           React, brand 주입 플러그인, Vitest, (F-115) PWA
 public/                  아이콘 등 정적 파일
