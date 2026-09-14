@@ -91,13 +91,14 @@
 /* 테마 3종 (design.md 3.4, F-141 3.1). :root[data-theme] 는 위 화이트 값 중 필요한
    것만 바꾼다 — --md-*·--accent-soft·--callout-note 등 var() 로 참조하는 파생 토큰은
    다시 적지 않아도 참조 대상이 바뀌면 함께 바뀐다 */
+/* 대비를 더 올린 값 — ink>=14:1, ink-2>=9:1, muted>=4.5:1, rule>=1.4:1, 검산은 tokens.test.js (design.md 3.4, F-153 2.4) */
 :root[data-theme='sepia'] {
   --paper: #f4ecd8;
   --panel: #fbf4e4;
-  --ink: #3b2f20;
-  --ink-2: #5c4b36;
-  --muted: #85735c;
-  --rule: #e3d6bc;
+  --ink: #241d13;
+  --ink-2: #493b2b;
+  --muted: #796853;
+  --rule: #ddccac;
   --rule-2: #ede3cc;
   --link: #2450a0;
   --danger: #b23a0a;

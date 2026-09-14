@@ -78,6 +78,27 @@ describe('테마 3종 대비 (design.md 3.4, F-141 3.1)', () => {
   }
 })
 
+describe('세피아 대비 상향 (design.md 3.4, F-153 2.4)', () => {
+  const SEPIA_TARGETS = { ink: 14, 'ink-2': 9, muted: 4.5 }
+
+  for (const bg of ['paper', 'panel']) {
+    const bgHex = resolve(sepiaTokens, sepiaTokens[bg])
+
+    for (const [token, target] of Object.entries(SEPIA_TARGETS)) {
+      test(`--${token} vs --${bg} >= ${target}`, () => {
+        const hex = resolve(sepiaTokens, sepiaTokens[token])
+        expect(contrastRatio(hex, bgHex)).toBeGreaterThanOrEqual(target)
+      })
+    }
+  }
+
+  test('--rule vs --panel >= 1.4', () => {
+    const panelHex = resolve(sepiaTokens, sepiaTokens.panel)
+    const ruleHex = resolve(sepiaTokens, sepiaTokens.rule)
+    expect(contrastRatio(ruleHex, panelHex)).toBeGreaterThanOrEqual(1.4)
+  })
+})
+
 describe('메인 컬러 대비 — 확정 전까지 경고만 (design.md 3.2)', () => {
   // 다크는 srgb 55% 흰 혼합으로 계산한다 (design.md 3.4)
   function mixWhite(hex, pct) {

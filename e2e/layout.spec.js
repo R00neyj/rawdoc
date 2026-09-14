@@ -74,7 +74,7 @@ test.describe('F-143 A7 행 호버', () => {
 })
 
 test.describe('F-143 A8 행 여백', () => {
-  test('왼쪽 6px·오른쪽 4px·토글-글자 간격 6px', async ({ page }) => {
+  test('왼쪽 0px(최상위)·오른쪽 4px·토글-글자 간격 6px', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { name: '문서.md', content: '내용\n' })
     const row = page.locator('.tree-row').filter({ hasText: '문서' }).first()
@@ -83,8 +83,9 @@ test.describe('F-143 A8 행 여백', () => {
     const label = row.locator('.tree-label')
     const menuBtn = row.locator('.item-menu-btn')
 
+    // 최상위(depth 0) 행 왼쪽 여백 0 — 사이드바 동작 버튼과 글자 시작선을 맞춘다 (F-153 2.3)
     const spacerRect = await rectOf(toggleSpacer)
-    expect(Math.abs(spacerRect.left - rowRect.left - 6)).toBeLessThanOrEqual(1)
+    expect(Math.abs(spacerRect.left - rowRect.left)).toBeLessThanOrEqual(1)
 
     const labelRect = await rectOf(label)
     expect(labelRect.left).toBeGreaterThan(spacerRect.right - 1)
@@ -216,6 +217,99 @@ test.describe('F-159 사이드바 너비 조절', () => {
     await expect(page.locator('.sidebar-resize-handle')).toHaveCount(0)
     const overlayWidth = (await rectOf(page.locator('.sidebar'))).width
     expect(Math.abs(overlayWidth - 324)).toBeLessThanOrEqual(2)
+  })
+})
+
+// canvas 로 실제 rgba 값을 읽는다 (Chrome 이 color-mix() 를 color(srgb ...) 로 줄 때가 있어서, F-153)
+async function colorOf(locator, prop = 'backgroundColor') {
+  return locator.evaluate((el, p) => {
+    const cs = getComputedStyle(el)
+    const canvas = document.createElement('canvas')
+    canvas.width = 1
+    canvas.height = 1
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = cs[p]
+    ctx.fillRect(0, 0, 1, 1)
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+    return { r, g, b, a: a / 255 }
+  }, prop)
+}
+
+test.describe('F-153 A3 사이드바 현재 문서 행', () => {
+  test('테두리 없이 --ink 7% 바탕, 호버해도 같은 바탕', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { name: '첫문서.md', content: '내용\n' })
+    await importMarkdown(page, { name: '둘째문서.md', content: '내용\n' })
+
+    const currentRow = page.locator('.tree-row').filter({ has: page.locator('[aria-current="page"]') })
+    const boxShadow = await computedStyle(currentRow, 'box-shadow')
+    expect(boxShadow).toBe('none')
+
+    const color = await colorOf(currentRow)
+    // --panel 불투명 흰색이 아니라 --ink 를 섞은 반투명 바탕이어야 한다 (F-153 2.3)
+    expect(color.a).toBeGreaterThan(0)
+    expect(color.a).toBeLessThan(1)
+
+    await currentRow.hover()
+    const hoverColor = await colorOf(currentRow)
+    expect(hoverColor).toEqual(color)
+  })
+})
+
+test.describe('F-153 A4 사이드바 글자 시작선', () => {
+  async function textStartX(locator) {
+    return locator.evaluate((el) => {
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      return range.getBoundingClientRect().x
+    })
+  }
+
+  test('최상위 문서·폴더·고정 행 글자 시작 x = 새 문서 버튼 글자 시작 x (±1px)', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { name: '문서.md', content: '내용\n' })
+    await page.getByRole('button', { name: '새 폴더', exact: true }).click()
+    await page.keyboard.press('Enter')
+
+    const docRow = page.locator('.tree-row').filter({ has: page.locator('.tree-toggle-spacer') }).first()
+    await docRow.hover()
+    await docRow.locator('.item-menu-btn').click()
+    await page.getByRole('menuitem', { name: '상단 고정' }).click()
+
+    const newDocLabel = page.getByRole('button', { name: '새 문서', exact: true }).locator('.sidebar-btn-label')
+    const newDocX = await textStartX(newDocLabel)
+
+    const folderRow = page.locator('.doc-list .tree-row').filter({ has: page.locator('.tree-toggle') }).first()
+    const folderLabelX = await textStartX(folderRow.locator('.tree-label'))
+    const pinnedLabelX = await textStartX(page.locator('.pinned-list .tree-label').first())
+    const docRowLabelX = await textStartX(
+      page.locator('.doc-list .tree-row').filter({ has: page.locator('.tree-toggle-spacer') }).first().locator('.tree-label'),
+    )
+
+    expect(Math.abs(folderLabelX - newDocX)).toBeLessThanOrEqual(1)
+    expect(Math.abs(pinnedLabelX - newDocX)).toBeLessThanOrEqual(1)
+    expect(Math.abs(docRowLabelX - newDocX)).toBeLessThanOrEqual(1)
+  })
+
+  test('가이드 선 x = 토글 아이콘 가로 가운데', async ({ page }) => {
+    await openApp(page)
+    await page.getByRole('button', { name: '새 폴더', exact: true }).click()
+    await page.keyboard.press('Enter')
+    const folderRow = page.locator('.tree-row').filter({ has: page.locator('.tree-toggle') }).first()
+    const menuBtn = folderRow.locator('.item-menu-btn')
+    await menuBtn.focus()
+    await menuBtn.click()
+    await page.getByRole('menuitem', { name: '새 문서' }).click()
+
+    const folderToggle = page.locator('.tree-toggle').first()
+    const toggleBox = await rectOf(folderToggle)
+    const toggleCenter = (toggleBox.left + toggleBox.right) / 2
+
+    const guideLeft = await page.locator('.tree-group').first().evaluate((el) => {
+      const cs = getComputedStyle(el, '::before')
+      return el.getBoundingClientRect().left + parseFloat(cs.left)
+    })
+    expect(Math.abs(guideLeft - toggleCenter)).toBeLessThanOrEqual(1)
   })
 })
 

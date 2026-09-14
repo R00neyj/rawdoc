@@ -30,17 +30,8 @@ svg {
   background: var(--panel);
 }
 
-.sidebar-toggle {
-  color: var(--ink-2);
-}
-
-.sidebar-toggle:hover {
-  background: var(--rule-2);
-}
-
-/* 검색 버튼(로직 없음, F-143 3.5) — 사이드바 머리 줄·레일·좁은 창 상단바가 함께 쓴다 */
+/* 검색 버튼(로직 없음, F-143 3.5) — 색은 .icon-btn[aria-disabled] 기본값(--muted)을 따른다 */
 .topbar-search-btn {
-  color: var(--muted);
   cursor: default;
 }
 
@@ -360,23 +351,19 @@ body.sidebar-resizing {
   display: flex;
   align-items: center;
   gap: 6px;
-  /* 좌우 여백: 왼쪽 6px(들여쓰기와 별도) + 들여쓰기, 오른쪽 4px (F-143 3.6) */
-  padding: 0 4px 0 calc(6px + var(--depth, 0) * 14px);
+  /* 좌우 여백: 왼쪽은 들여쓰기만, 오른쪽 4px — 최상위 글자 시작선을 사이드바 버튼과 맞춘다 (F-143 3.6, F-153 2.3) */
+  padding: 0 4px 0 calc(var(--depth, 0) * 14px);
   border-radius: var(--radius-control);
 }
 
-/* 호버·현재 표시는 행 전체 (F-143 3.6) */
+/* 호버·현재 표시는 행 전체 (F-143 3.6). 현재 행은 --ink 7% 바탕·테두리 없음, 호버해도 그대로 (F-153 2.3) */
 .tree-row:hover {
   background: var(--rule-2);
 }
 
-.tree-row:has(.doc-item-btn[aria-current='page']) {
-  background: var(--panel);
-  box-shadow: 0 0 0 1px var(--rule) inset;
-}
-
+.tree-row:has(.doc-item-btn[aria-current='page']),
 .tree-row:hover:has(.doc-item-btn[aria-current='page']) {
-  background: var(--panel);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
 }
 
 /* 놓을 수 있는 대상은 --accent-soft 배경 (F-126.md 5.3) */
@@ -423,7 +410,8 @@ body.sidebar-resizing {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(6px + var(--depth, 0) * 14px + 11px);
+  /* 토글 아이콘(22px) 가로 가운데 — .tree-row 왼쪽 여백 계산과 함께 맞춘다 (F-153 2.3) */
+  left: calc(var(--depth, 0) * 14px + 11px);
   width: 1px;
   background: var(--muted);
   pointer-events: none;
@@ -840,6 +828,7 @@ body.sidebar-resizing {
   display: flex;
 }
 
+/* 상단바 아이콘 버튼 공통 모양 — 테두리 없는 한 가지 모양 (design.md 4장, F-153 2.1) */
 .icon-btn {
   width: 32px;
   height: 32px;
@@ -847,6 +836,25 @@ body.sidebar-resizing {
   align-items: center;
   justify-content: center;
   padding: 0;
+  border-radius: var(--radius-control);
+  color: var(--ink-2);
+}
+
+.icon-btn:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+.icon-btn:disabled,
+.icon-btn[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: default;
+}
+
+/* 선택된 버튼 — 검은 칠 대신 --ink 10% 섞은 바탕, hover 규칙과 우선순위를 맞춰 이긴다 (design.md 4장, F-153 2.1) */
+.icon-btn[aria-pressed='true']:not(:disabled):not([aria-disabled='true']) {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
 }
 
 .icon-btn svg {
@@ -906,10 +914,11 @@ body.sidebar-resizing {
   border-left: 1px solid var(--rule);
 }
 
+/* 선택된 버튼 — 2.1 아이콘 버튼 선택 표시와 같은 모양, 설정 대화상자 글자 세그먼트도 포함 (design.md 4장, F-153 2.1·2.2) */
 .seg button[aria-checked='true'],
 .seg button[aria-pressed='true'] {
-  background: var(--ink);
-  color: var(--panel);
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -918,50 +927,23 @@ body.sidebar-resizing {
   cursor: default;
 }
 
+/* 보기 모드 묶음 — 바깥 테두리·구분선 없음, 버튼 사이 2px, 툴팁 때문에 overflow:hidden 끈다 (design.md 4장, F-153 2.1) */
 .view-mode-seg {
   flex: none;
-  /* 툴팁이 버튼 아래로 튀어나오므로 `.seg` 의 overflow:hidden(모서리 둥글리기 용)을
-     이 세그먼트만 끈다. 모서리는 아래에서 버튼 자체에 다시 둥글린다 (F-142 3.2) */
+  border: none;
+  border-radius: 0;
   overflow: visible;
+  gap: 2px;
 }
 
-/* 보기 모드 세그먼트는 아이콘 전용 32x32 버튼이다. `.seg button` 텍스트 패딩을 덮어쓴다
-   (F-142 3.2). 세그먼트 자체의 선택 표시(.seg button[aria-pressed])는 그대로 물려받는다 */
+/* 보기 모드 세그먼트는 아이콘 전용 32x32 버튼, 모양·선택 표시는 .icon-btn 기본값 그대로 (F-142 3.2, F-153 2.1) */
 .view-mode-seg .icon-btn {
   width: 32px;
   height: 32px;
   padding: 0;
 }
 
-/* 버튼이 `.icon-btn-wrap` 으로 감싸이며 `.seg button + button` 이 더는 안 걸리므로
-   구분선을 여기서 다시 그린다 */
-.view-mode-seg .icon-btn-wrap + .icon-btn-wrap .icon-btn {
-  border-left: 1px solid var(--rule);
-}
-
-.view-mode-seg .icon-btn-wrap:first-child .icon-btn {
-  border-radius: 6px 0 0 6px;
-}
-
-.view-mode-seg .icon-btn-wrap:last-child .icon-btn {
-  border-radius: 0 6px 6px 0;
-}
-
-.export-btn {
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-control);
-  color: var(--ink-2);
-}
-
-.export-btn:hover:not(:disabled) {
-  background: var(--rule-2);
-  color: var(--ink);
-}
-
-.export-btn:disabled {
-  color: var(--muted);
-  cursor: default;
-}
+/* .export-btn 은 더 꾸미지 않는다 — 모양은 .icon-btn 기본값 그대로 (design.md 4장, F-153 2.1) */
 
 /* ===== 편집 영역 (specs/features/F-103.md 3.5, F-107.md) ===== */
 /* 메인 열 전체 폭 — 내용은 .cm-scroller 안쪽 여백으로 800px 가운데 정렬한다 (F-143 3.8) */
@@ -1092,20 +1074,10 @@ body.sidebar-resizing {
   flex: none;
 }
 
-.share-menu-btn {
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-control);
-  color: var(--ink-2);
-}
-
-.share-menu-btn:hover:not(:disabled) {
-  background: var(--rule-2);
+/* 모양은 .icon-btn 기본값 그대로, 메뉴가 열린 동안은 선택 버튼과 같은 바탕, hover 규칙과 우선순위를 맞춰 이긴다 (design.md 4장, F-153 2.1) */
+.share-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']) {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
   color: var(--ink);
-}
-
-.share-menu-btn:disabled {
-  color: var(--muted);
-  cursor: default;
 }
 
 .share-menu-list {

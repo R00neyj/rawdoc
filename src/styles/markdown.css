@@ -22,19 +22,17 @@
 }
 
 .app-shell .markdown-body h1,
-.app-shell .markdown-body h2 {
+.app-shell .markdown-body h2,
+.app-shell .markdown-body h3,
+.app-shell .markdown-body h4,
+.app-shell .markdown-body h5,
+.app-shell .markdown-body h6 {
+  /* h1~h6 전부 --font-display (design.md 2.1, F-153 2.5, 이전: h1·h2 만) */
   font-family: var(--font-display);
 }
 
 .app-shell .markdown-body h2 {
   border-bottom: 1px solid var(--md-border-muted);
-}
-
-.app-shell .markdown-body h3,
-.app-shell .markdown-body h4,
-.app-shell .markdown-body h5,
-.app-shell .markdown-body h6 {
-  font-family: var(--font-sans);
 }
 
 .app-shell .markdown-body h6 {

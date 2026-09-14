@@ -47,6 +47,60 @@ async function contrastScan(page) {
   })
 }
 
+// F-153 A6 — 4.5 미만은 실패, 단 흐린 글자(--muted)·비활성 요소는 3.0 까지 허용
+async function contrastScanStrict(page) {
+  return page.evaluate(() => {
+    function luminance(rgb) {
+      const [r, g, b] = rgb.match(/\d+/g).map(Number).map((c) => {
+        const s = c / 255
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+    function contrast(a, b) {
+      const l1 = luminance(a)
+      const l2 = luminance(b)
+      const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1]
+      return (hi + 0.05) / (lo + 0.05)
+    }
+    function bgOf(el) {
+      let node = el
+      while (node) {
+        const bg = getComputedStyle(node).backgroundColor
+        if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg
+        node = node.parentElement
+      }
+      return 'rgb(255, 255, 255)'
+    }
+    const probe = document.createElement('div')
+    probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim()
+    document.body.appendChild(probe)
+    const mutedRgb = getComputedStyle(probe).color
+    probe.remove()
+
+    const failures = []
+    const all = document.querySelectorAll('body *')
+    for (const el of all) {
+      if (el.children.length > 0) continue
+      const text = el.textContent?.trim()
+      if (!text) continue
+      const style = getComputedStyle(el)
+      if (style.visibility === 'hidden' || style.display === 'none') continue
+      const rect = el.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) continue
+      const fg = style.color
+      const bg = bgOf(el)
+      const ratio = contrast(fg, bg)
+      const isDisabled = el.disabled || el.getAttribute('aria-disabled') === 'true' || el.closest('[aria-disabled="true"]') || el.closest(':disabled')
+      const threshold = fg === mutedRgb || isDisabled ? 3.0 : 4.5
+      if (ratio < threshold) {
+        failures.push({ text: text.slice(0, 20), ratio: Number(ratio.toFixed(2)), tag: el.tagName, threshold })
+      }
+    }
+    return failures
+  })
+}
+
 test.describe('F-141 설정 대화상자', () => {
   test('테마 / 제목 서체 / 본문 서체 순서, 버튼 순서 동일', async ({ page }) => {
     await openApp(page)
@@ -175,4 +229,50 @@ test.describe('F-141 A15 자간', () => {
     const rawTracking = await rawLine.evaluate((el) => getComputedStyle(el).letterSpacing)
     expect(['0px', 'normal']).toContain(rawTracking)
   })
+})
+
+test.describe('F-153 A6 세피아 화면 스캔', () => {
+  test('4.5 미만 글자 요소 0개 (흐린 글자·비활성은 3.0)', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.theme', 'sepia')
+    await openApp(page)
+    await importMarkdown(page, {
+      content:
+        '# 제목\n## 부제\n- 목록\n> 인용\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\n```js\ncode\n```\n\n[링크](https://example.com)\n[[위키링크]]\n',
+    })
+    const failures = await contrastScanStrict(page)
+    expect(failures, JSON.stringify(failures)).toEqual([])
+  })
+})
+
+test.describe('F-153 A7 제목 서체 h1~h6', () => {
+  const content = [1, 2, 3, 4, 5, 6].map((n) => `${'#'.repeat(n)} 제목${n}`).join('\n') + '\n'
+
+  for (const [settingValue, expectedFont] of [
+    ['serif', 'Noto Serif KR'],
+    ['sans', 'Pretendard Variable'],
+  ]) {
+    test(`제목 서체 ${settingValue} — 편집·보기 12개 요소 모두 설정 서체`, async ({ page }) => {
+      await openApp(page)
+      await importMarkdown(page, { content })
+
+      if (settingValue === 'sans') {
+        await page.getByRole('button', { name: '설정', exact: true }).click()
+        await page.locator('#heading-font-label').locator('..').getByRole('radio', { name: '산세리프', exact: true }).click()
+        await page.getByRole('button', { name: '닫기', exact: true }).click()
+      }
+
+      for (let i = 1; i <= 6; i++) {
+        const line = page.locator(`.cm-line.md-h${i}`)
+        const font = await line.evaluate((el) => getComputedStyle(el).fontFamily)
+        expect(font.split(',')[0].replace(/['"]/g, '').trim()).toBe(expectedFont)
+      }
+
+      await page.getByRole('button', { name: '보기 — 읽기 전용으로 보기' }).click()
+      for (let i = 1; i <= 6; i++) {
+        const heading = page.locator(`.markdown-body h${i}`)
+        const font = await heading.evaluate((el) => getComputedStyle(el).fontFamily)
+        expect(font.split(',')[0].replace(/['"]/g, '').trim()).toBe(expectedFont)
+      }
+    })
+  }
 })

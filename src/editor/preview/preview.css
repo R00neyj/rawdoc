@@ -37,22 +37,22 @@
 
 .cm-host .cm-editor .cm-line.md-h3 {
   font-size: 1.25em;
-  font-family: var(--font-sans);
+  font-family: var(--font-display);
 }
 
 .cm-host .cm-editor .cm-line.md-h4 {
   font-size: 1em;
-  font-family: var(--font-sans);
+  font-family: var(--font-display);
 }
 
 .cm-host .cm-editor .cm-line.md-h5 {
   font-size: 0.875em;
-  font-family: var(--font-sans);
+  font-family: var(--font-display);
 }
 
 .cm-host .cm-editor .cm-line.md-h6 {
   font-size: 0.85em;
-  font-family: var(--font-sans);
+  font-family: var(--font-display);
   color: var(--md-fg-muted);
 }
 

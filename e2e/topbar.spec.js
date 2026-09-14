@@ -1,6 +1,79 @@
 // 상단바 아이콘·툴팁·공유 메뉴 (F-150.md 3.3), 토글·검색 앞 묶음 (F-151)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, resizeWindow, rectOf, waitTransitionEnd, currentDocId } from './helpers.js'
+import {
+  openApp,
+  importMarkdown,
+  resizeWindow,
+  rectOf,
+  waitTransitionEnd,
+  currentDocId,
+  setPrefBeforeLoad,
+} from './helpers.js'
+
+// 배경이 반투명일 수 있어 부모를 거슬러 올라가 첫 불투명 바탕과 합성한 뒤 대비를 잰다 (F-153 A1)
+async function selectedContrast(locator) {
+  return locator.evaluate((el) => {
+    // 정규식 대신 canvas 로 실제 픽셀 값을 읽는다 — 어떤 CSS 색 표기든 처리된다
+    function toRgba(str) {
+      const canvas = toRgba.canvas ?? (toRgba.canvas = document.createElement('canvas'))
+      canvas.width = 1
+      canvas.height = 1
+      const ctx = canvas.getContext('2d')
+      ctx.clearRect(0, 0, 1, 1)
+      ctx.fillStyle = str
+      ctx.fillRect(0, 0, 1, 1)
+      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+      return { r, g, b, a: a / 255 }
+    }
+    function luminance({ r, g, b }) {
+      const [rl, gl, bl] = [r, g, b].map((c) => {
+        const s = c / 255
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl
+    }
+    function contrast(a, b) {
+      const l1 = luminance(a)
+      const l2 = luminance(b)
+      const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1]
+      return (hi + 0.05) / (lo + 0.05)
+    }
+    function opaqueBg(node) {
+      let n = node.parentElement
+      while (n) {
+        const rgba = toRgba(getComputedStyle(n).backgroundColor)
+        if (rgba.a === 1) return rgba
+        n = n.parentElement
+      }
+      return { r: 255, g: 255, b: 255, a: 1 }
+    }
+    const cs = getComputedStyle(el)
+    const fg = toRgba(cs.color)
+    const overlay = toRgba(cs.backgroundColor)
+    const under = opaqueBg(el)
+    const blended = {
+      r: overlay.r * overlay.a + under.r * (1 - overlay.a),
+      g: overlay.g * overlay.a + under.g * (1 - overlay.a),
+      b: overlay.b * overlay.a + under.b * (1 - overlay.a),
+    }
+    return contrast(fg, blended)
+  })
+}
+
+// 임의의 CSS 색 표기(rgb()/color(srgb ...) 등)를 canvas 로 읽어 실제 rgba 값을 얻는다
+async function colorOf(locator, prop = 'backgroundColor') {
+  return locator.evaluate((el, p) => {
+    const cs = getComputedStyle(el)
+    const canvas = document.createElement('canvas')
+    canvas.width = 1
+    canvas.height = 1
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = cs[p]
+    ctx.fillRect(0, 0, 1, 1)
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+    return { r, g, b, a: a / 255 }
+  }, prop)
+}
 
 const BUTTON_LABELS = [
   '편집 — 서식을 보며 편집',
@@ -376,5 +449,75 @@ test.describe('F-143 A10 그 밖의 기능 버튼 아이콘', () => {
     for (let i = 0; i < shareCount; i++) {
       await expect(shareItems.nth(i).locator('svg')).toHaveCount(1)
     }
+  })
+})
+
+test.describe('F-153 A1 상단바 아이콘 버튼', () => {
+  for (const theme of ['white', 'sepia', 'dark']) {
+    test(`${theme} — 테두리 없음, 32x32, 모서리 6px, 선택 표시 대비 4.5 이상`, async ({ page }) => {
+      await setPrefBeforeLoad(page, 'md.theme', theme)
+      await openApp(page)
+      await importMarkdown(page, { content: '내용\n' })
+
+      const buttons = page.locator('.sidebar-head .icon-btn, .topbar .icon-btn')
+      await expect(buttons).toHaveCount(7) // 토글·검색·보기모드 3개·공유·내보내기
+      const count = await buttons.count()
+      for (let i = 0; i < count; i++) {
+        const btn = buttons.nth(i)
+        const box = await rectOf(btn)
+        expect(Math.abs(box.width - 32)).toBeLessThanOrEqual(1)
+        expect(Math.abs(box.height - 32)).toBeLessThanOrEqual(1)
+        const style = await btn.evaluate((el) => {
+          const cs = getComputedStyle(el)
+          return { borderWidth: cs.borderTopWidth, radius: cs.borderTopLeftRadius }
+        })
+        expect(style.borderWidth).toBe('0px')
+        expect(style.radius).toBe('6px')
+      }
+
+      // 기본 모드는 편집(live) 이라 선택 상태다 — 비선택 버튼은 보기 모드로 확인한다
+      const viewBtn = page.getByRole('button', { name: '보기 — 읽기 전용으로 보기' })
+      expect((await colorOf(viewBtn)).a).toBe(0)
+
+      // 선택 버튼 — 원문 모드로 바꾼 뒤 대비 확인
+      const liveBtn = page.getByRole('button', { name: '편집 — 서식을 보며 편집' })
+      const rawBtn = page.getByRole('button', { name: '원문 — 마크다운 기호 그대로 편집' })
+      await rawBtn.click()
+      await expect(rawBtn).toHaveAttribute('aria-pressed', 'true')
+      expect((await colorOf(rawBtn)).a).toBeGreaterThan(0)
+      // 방금 선택이 풀린 편집 버튼은 다시 투명이어야 한다
+      expect((await colorOf(liveBtn)).a).toBe(0)
+      const ratio = await selectedContrast(rawBtn)
+      expect(ratio).toBeGreaterThanOrEqual(4.5)
+    })
+  }
+})
+
+test.describe('F-153 A2 설정 세그먼트 선택 표시', () => {
+  test('아이콘 버튼 선택 표시와 같은 바탕, 검은 칠 없음', async ({ page }) => {
+    await openApp(page)
+    await page.getByRole('button', { name: '설정', exact: true }).click()
+    const selected = page.locator('#theme-label').locator('..').getByRole('radio', { name: '시스템' })
+    await selected.click()
+    await expect(selected).toHaveAttribute('aria-checked', 'true')
+    const segStyle = await selected.evaluate((el) => {
+      const cs = getComputedStyle(el)
+      return { bg: cs.backgroundColor, color: cs.color, weight: cs.fontWeight }
+    })
+    expect(segStyle.weight).toBe('600')
+    // 검은 칠(불투명 --ink 바탕)이 아니라 반투명 섞음이어야 한다
+    const segAlpha = (await colorOf(selected)).a
+    expect(segAlpha).toBeGreaterThan(0)
+    expect(segAlpha).toBeLessThan(1)
+
+    await page.getByRole('button', { name: '닫기', exact: true }).click()
+    const rawBtn = page.getByRole('button', { name: '원문 — 마크다운 기호 그대로 편집' })
+    await rawBtn.click()
+    const iconStyle = await rawBtn.evaluate((el) => {
+      const cs = getComputedStyle(el)
+      return { bg: cs.backgroundColor, color: cs.color }
+    })
+    expect(segStyle.bg).toBe(iconStyle.bg)
+    expect(segStyle.color).toBe(iconStyle.color)
   })
 })
