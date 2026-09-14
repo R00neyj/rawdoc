@@ -22,8 +22,8 @@ import { wikiComplete } from './wikiComplete.js'
 // 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
 const HEADINGS_DEBOUNCE_MS = 150
 
-function previewExtensionFor(mode, { onOpenWikiLink } = {}) {
-  return mode === 'live' ? livePreview({ onOpenWikiLink }) : []
+function previewExtensionFor(mode, { onOpenWikiLink, resolveAttachment } = {}) {
+  return mode === 'live' ? livePreview({ onOpenWikiLink, resolveAttachment }) : []
 }
 
 function attributesExtensionFor(mode) {
@@ -112,6 +112,8 @@ function focusRelay() {
  * @param {(target:string)=>void} [options.onOpenWikiLink] 위키링크 클릭·자동완성 흐름 (F-131 3·5장)
  * @param {(files:File[], meta:{source:'paste'|'drop', blocked?:boolean})=>Promise<Array<object>>} [options.onImageFiles]
  *   붙여넣기·끌어놓기 이미지 받기 (F-156.md 2.4·2.5). App 이 저장·알림을 하고 첨부 메타를 돌려준다
+ * @param {(id:string)=>Promise<{blob:Blob,width:number,height:number}|null>} [options.resolveAttachment]
+ *   편집 모드 이미지 블록 위젯이 첨부를 읽는 콜백 (F-157.md 2.2)
  */
 export function createEditor(parent, options = {}) {
   const {
@@ -124,6 +126,7 @@ export function createEditor(parent, options = {}) {
     wikiTitles = [],
     onOpenWikiLink,
     onImageFiles,
+    resolveAttachment,
   } = options
 
   let destroyed = false
@@ -172,7 +175,7 @@ export function createEditor(parent, options = {}) {
     // 같은 필드를 읽고, 모드 전환으로 previewCompartment 가 바뀌어도 값을 잃지 않는다
     wikiTitlesField.init(() => wikiTitles),
     wikiComplete(),
-    previewCompartment.of(previewExtensionFor(viewMode, { onOpenWikiLink })),
+    previewCompartment.of(previewExtensionFor(viewMode, { onOpenWikiLink, resolveAttachment })),
     attributesCompartment.of(attributesExtensionFor(viewMode)),
     // F-109 단축키가 defaultKeymap 보다 먼저 키를 받도록 Prec.high
     Prec.high(keymap.of(shortcutKeymap)),
@@ -221,7 +224,7 @@ export function createEditor(parent, options = {}) {
       const scroll = view.scrollSnapshot()
       view.dispatch({
         effects: [
-          previewCompartment.reconfigure(previewExtensionFor(mode, { onOpenWikiLink })),
+          previewCompartment.reconfigure(previewExtensionFor(mode, { onOpenWikiLink, resolveAttachment })),
           attributesCompartment.reconfigure(attributesExtensionFor(mode)),
           scroll,
         ],

@@ -1,0 +1,150 @@
+/* 이미지 블록 모양 — 편집 모드(F-157.md)와 보기 모드(F-158) 공통. 토큰만 참조한다(hex 를 직접 쓰지 않는다) */
+
+/* 위아래 간격은 wrap 의 margin 이 아니라 padding 으로 준다 — 표·코드블록 위젯과 같은 이유(CM6 는 위젯 높이를 잴 때 margin 을 포함하지 않는다) */
+.md-block.md-image {
+  padding: 4px 0;
+  cursor: default;
+}
+
+/* width 속성이 없으면 이미지 자연 폭(최대 100%) — fit-content 로 내용만큼만 차지해야 margin-inline 정렬이 의미가 있다. width 가 있으면 인라인 style 이 이 규칙을 덮는다 */
+.md-image-box {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.md-image-box[data-align='left'] {
+  margin-inline: 0 auto;
+}
+
+.md-image-box[data-align='center'] {
+  margin-inline: auto;
+}
+
+.md-image-box[data-align='right'] {
+  margin-inline: auto 0;
+}
+
+.md-image-frame {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-image);
+  background: var(--md-bg-muted);
+}
+
+.md-image-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* 첨부를 찾을 수 없을 때 자리 표시 (F-157 2.2) */
+.md-image-frame.md-image-missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 120px;
+}
+
+.md-image-missing-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: var(--muted);
+}
+
+.md-image-missing-text {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* 정렬 버튼 묶음 — 이미지 안 오른쪽 위 8px 안쪽, 호버·포커스 때만 보인다 (F-157 2.3) */
+.md-image-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.md-image-box:hover .md-image-toolbar,
+.md-image-box:focus-within .md-image-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 상단바 아이콘 버튼(32×32, app.css .icon-btn)보다 작다(28×28) — 조상·클래스 둘을 합쳐 특정도를 올려 이긴다 */
+.md-image-toolbar .icon-btn.md-image-align-btn {
+  width: 28px;
+  height: 28px;
+}
+
+/* 손잡이 — 호버·포커스 때만 보인다 (F-157 2.4) */
+.md-image-handle {
+  position: absolute;
+  background: var(--panel);
+  border: 1px solid var(--ink-2);
+  border-radius: 3px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.md-image-box:hover .md-image-handle,
+.md-image-box:focus-within .md-image-handle {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.md-image-handle-edge {
+  top: 50%;
+  right: 4px;
+  width: 6px;
+  height: 40px;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.md-image-handle-corner {
+  right: 4px;
+  bottom: 4px;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
+}
+
+/* right 정렬은 이미지가 오른쪽에 붙으므로 손잡이를 왼쪽으로 뒤집는다 (F-157 2.4) */
+.md-image-box[data-align='right'] .md-image-handle-edge,
+.md-image-box[data-align='right'] .md-image-handle-corner {
+  right: auto;
+  left: 4px;
+}
+
+.md-image-box[data-align='right'] .md-image-handle-corner {
+  cursor: nesw-resize;
+}
+
+/* 끄는 동안 표시하는 {N}px 라벨 — 툴팁과 같은 모양 (F-157 2.4) */
+.md-image-size-label {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--panel);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  pointer-events: none;
+}

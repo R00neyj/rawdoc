@@ -939,6 +939,15 @@ export default function App() {
     [store, showNotice],
   )
 
+  // 편집 모드 이미지 블록 위젯이 첨부를 읽는 콜백 (F-157.md 2.2) — {blob,width,height} 만 추려서 준다
+  const resolveAttachment = useCallback(
+    async (id) => {
+      const record = await store.getAttachment(id)
+      return record ? { blob: record.blob, width: record.width, height: record.height } : null
+    },
+    [store],
+  )
+
   // ----- 공유 (specs/features/F-130.md 2·4장) -----
   // 저장 대기 중인 입력이 있어도 현재 에디터 원문을 그대로 쓴다. 저장소를 다시 읽지 않는다
   function getShareDoc() {
@@ -1326,6 +1335,7 @@ export default function App() {
                     wikiTitles={wikiTitles}
                     onOpenWikiLink={handleOpenWikiLink}
                     onImageFiles={handleImageFiles}
+                    resolveAttachment={resolveAttachment}
                   />
                 )}
               </div>

@@ -8,8 +8,10 @@ import { Prec, StateField } from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap } from '@codemirror/view'
 
+import { parseImageBlock } from '../../lib/imageBlock.js'
 import { isComposing, isForced } from '../composition.js'
 import { isEditorFocused } from './active.js'
+import { ImageWidget, destroyImageCache } from './imageWidget.js'
 import {
   TableWidget,
   enterTableFromKeyboard,
@@ -245,19 +247,46 @@ function tableWidget(state, node, blockFrom, blockTo) {
 
 const TARGET = { Table: tableWidget, FencedCode: codeWidget }
 
+// 목록·인용 안인가 (F-157 2.1 "문서 최상위"). 이미지 블록만 검사한다 — 표·코드블록은 F-106 그대로 목록·인용 안에서도 위젯이 된다
+const LIST_OR_QUOTE = new Set(['Blockquote', 'BulletList', 'OrderedList', 'ListItem'])
+function isInsideListOrQuote(node) {
+  for (let n = node.parent; n; n = n.parent) {
+    if (LIST_OR_QUOTE.has(n.name)) return true
+  }
+  return false
+}
+
 /**
- * 표·코드블록을 위젯 decoration 으로 치환한다. DOM 없이 동작한다.
+ * 표·코드블록·이미지 블록을 위젯 decoration 으로 치환한다. DOM 없이 동작한다.
  * @param {import('@codemirror/state').EditorState} state
  * @param {boolean} [hasFocus] 편집기 포커스 (F-146 3.2). 포커스가 없으면 겹침(커서가
  *   원문 안)을 무시하고 항상 위젯(접힌 프리뷰)으로 본다 — "코드블록·표 원문 펼침"도
  *   비포커스 표시에서 숨기는 예로 든 것과 같다. 기본값 true 는 포커스를 다루지 않는
  *   기존 호출부(테스트 등)의 동작을 그대로 유지한다
+ * @param {(id:string)=>Promise<{blob:Blob,width:number,height:number}|null>} [resolveAttachment]
+ *   이미지 블록 위젯이 첨부를 읽는 콜백 (F-157 2.2)
  * @returns {import('@codemirror/state').Range<import('@codemirror/view').Decoration>[]}
  */
-export function buildBlocks(state, hasFocus = true) {
+export function buildBlocks(state, hasFocus = true, resolveAttachment) {
   const out = []
   syntaxTree(state).iterate({
     enter: (node) => {
+      // 이미지 블록 (F-157 2.1) — HTMLBlock 은 TARGET 에 없어 parseImageBlock 이 실패하거나 목록·인용 안이면 원문 그대로 둔다
+      if (node.name === 'HTMLBlock') {
+        if (isInsideListOrQuote(node.node)) return
+        const from = state.doc.lineAt(node.from).from
+        const to = state.doc.lineAt(node.to).to
+        const parsed = parseImageBlock(state.doc.sliceString(from, to))
+        if (!parsed) return
+        const showsSource = hasFocus && overlaps(state, from, to)
+        if (!showsSource) {
+          out.push(
+            Decoration.replace({ widget: new ImageWidget(parsed, resolveAttachment), block: true }).range(from, to),
+          )
+        }
+        return false
+      }
+
       const make = TARGET[node.name]
       if (!make) return
 
@@ -379,20 +408,26 @@ const blockKeymap = Prec.highest(
  * 못 잡는다. `isCellComposing` 으로 "지금 편집 중인 칸이 조합 중인가" 도 같이 본다.
  * 이걸 안 보면 조합 중 표 재계산이 그대로 일어나 편집 중인 하위 EditorView 의 DOM 을
  * 파괴해 조합이 깨진다(updateDOM 의 "구조 바뀜" 분기 → endEdit → cellView.destroy()).
+ * @param {{resolveAttachment?: (id:string)=>Promise<{blob:Blob,width:number,height:number}|null>}} [options]
+ *   resolveAttachment 는 이미지 블록 위젯이 첨부를 읽는 콜백 (F-157 2.2)
  */
-export function blockPreview() {
+export function blockPreview({ resolveAttachment } = {}) {
   const viewRef = { current: null }
   const tracker = ViewPlugin.fromClass(
     class {
       constructor(view) {
         viewRef.current = view
       }
+      // 에디터 destroy 때 이미지 블록 위젯이 만든 blob URL 을 모두 해제한다 (F-157 2.2)
+      destroy() {
+        destroyImageCache(viewRef.current)
+      }
     },
   )
 
   const field = StateField.define({
     // EditorState.create 시점엔 view 가 없어 포커스를 알 수 없다 — false 가 맞다(autoFocus 의 focus() 가 곧 focusin·forceRecalc 로 다시 그린다, F-146 3.2)
-    create: (state) => Decoration.set(buildBlocks(state, false), true),
+    create: (state) => Decoration.set(buildBlocks(state, false, resolveAttachment), true),
     update(value, tr) {
       // F-135 3.2: 편집 중인 칸이 있으면 모든 주 문서 트랜잭션마다(칸 자신의 입력
       // 포함) 세션이 든 칸 범위를 옮긴다. 이 재계산 함수 자체와 무관하게, 아래에서
@@ -411,7 +446,7 @@ export function blockPreview() {
           return tr.docChanged ? value.map(tr.changes) : value
         }
       }
-      return Decoration.set(buildBlocks(tr.state, isEditorFocused(viewRef.current)), true)
+      return Decoration.set(buildBlocks(tr.state, isEditorFocused(viewRef.current), resolveAttachment), true)
     },
     provide: (f) => EditorView.decorations.from(f),
   })

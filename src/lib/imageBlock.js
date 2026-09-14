@@ -111,6 +111,45 @@ export function extractAttachmentRefs(content) {
   return ids
 }
 
+// align 값 글자만 바꾸는 CM6 변경 하나를 계산한다 (F-157.md 2.3). blockFrom 은 blockText 가 문서 안에서 시작하는 위치. 해석 실패·align 값이 이미 같으면 null
+export function imageAlignChange(blockText, blockFrom, align) {
+  const parsed = parseImageBlock(blockText)
+  if (!parsed || parsed.align === align) return null
+  const line1 = blockText.split('\n')[0]
+  const m = /align="(left|center|right)"/.exec(line1)
+  if (!m) return null
+  const valueStart = blockFrom + m.index + 'align="'.length
+  return { from: valueStart, to: valueStart + m[1].length, insert: align }
+}
+
+// width 값 글자만 바꾸는 CM6 변경 하나를 계산한다 (F-157.md 2.4). width 속성이 없으면 alt 뒤(alt 도 없으면 src 뒤)에 ` width="{N}"` 을 넣는다. 해석 실패·값이 이미 같으면 null
+export function imageWidthChange(blockText, blockFrom, width) {
+  const parsed = parseImageBlock(blockText)
+  if (!parsed) return null
+  const safeWidth = Math.max(1, Math.round(width))
+  if (parsed.width === safeWidth) return null
+
+  const lines = blockText.split('\n')
+  const line2 = lines[1]
+  const line2Start = blockFrom + lines[0].length + 1 // +1 은 줄 사이 '\n'
+
+  const widthMatch = /width="([0-9]{1,4})"/.exec(line2)
+  if (widthMatch) {
+    const valueStart = line2Start + widthMatch.index + 'width="'.length
+    return { from: valueStart, to: valueStart + widthMatch[1].length, insert: String(safeWidth) }
+  }
+
+  const altMatch = /alt="[^"]*"/.exec(line2)
+  if (altMatch) {
+    const insertAt = line2Start + altMatch.index + altMatch[0].length
+    return { from: insertAt, to: insertAt, insert: ` width="${safeWidth}"` }
+  }
+
+  const srcMatch = /src="[^"]*"/.exec(line2)
+  const insertAt = line2Start + srcMatch.index + srcMatch[0].length
+  return { from: insertAt, to: insertAt, insert: ` width="${safeWidth}"` }
+}
+
 // 이미 있는 이미지 블록의 align·width·alt 값을 바꿔 새 원문을 만든다(F-157·F-158 용). 해석 실패면 null
 export function setImageBlockAttrs(blockText, patch) {
   const parsed = parseImageBlock(blockText)

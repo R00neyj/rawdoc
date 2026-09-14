@@ -23,6 +23,10 @@ import contentCopySvg from '@material-symbols/svg-400/outlined/content_copy.svg?
 import closeSvg from '@material-symbols/svg-400/outlined/close.svg?raw'
 import moreHorizSvg from '@material-symbols/svg-400/outlined/more_horiz.svg?raw'
 import refreshSvg from '@material-symbols/svg-400/outlined/refresh.svg?raw'
+import formatAlignLeftSvg from '@material-symbols/svg-400/outlined/format_align_left.svg?raw'
+import formatAlignCenterSvg from '@material-symbols/svg-400/outlined/format_align_center.svg?raw'
+import formatAlignRightSvg from '@material-symbols/svg-400/outlined/format_align_right.svg?raw'
+import brokenImageSvg from '@material-symbols/svg-400/outlined/broken_image.svg?raw'
 
 function innerMarkupOf(raw) {
   return raw.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '')
@@ -69,6 +73,10 @@ export const IconCopy = makeIcon(contentCopySvg)
 export const IconClose = makeIcon(closeSvg)
 export const IconMore = makeIcon(moreHorizSvg)
 export const IconRefresh = makeIcon(refreshSvg)
+export const IconAlignLeft = makeIcon(formatAlignLeftSvg)
+export const IconAlignCenter = makeIcon(formatAlignCenterSvg)
+export const IconAlignRight = makeIcon(formatAlignRightSvg)
+export const IconBrokenImage = makeIcon(brokenImageSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 export function IconTooltip({ text, align = 'center', side }) {

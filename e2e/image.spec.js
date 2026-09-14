@@ -1,5 +1,6 @@
 // 이미지 첨부 저장·붙여넣기·끌어놓기 (F-156.md) — 실제 클립보드·OS 끌어놓기는 도구로 못 내 합성 ClipboardEvent·DragEvent 로 확인한다(3장 머리말)
 import { test, expect } from '@playwright/test'
+import zlib from 'node:zlib'
 import { openApp, importMarkdown, setViewMode, waitSaved, readSavedContent, setPrefBeforeLoad } from './helpers.js'
 
 function u32be(n) {
@@ -18,6 +19,46 @@ function pngBytes(width, height) {
     ...u32be(height),
     8, 6, 0, 0, 0,
   ]
+}
+
+// F-157 A2 는 브라우저가 실제로 디코드해 naturalWidth 를 재야 해서 zlib 로 완전한 PNG를 만든다(pngBytes 는 IHDR 만 있어 디코드가 안 된다)
+function crc32(buf) {
+  const table = crc32.table ?? (crc32.table = Array.from({ length: 256 }, (_, n) => {
+    let c = n
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+    return c >>> 0
+  }))
+  let crc = 0xffffffff
+  for (const b of buf) crc = table[(crc ^ b) & 0xff] ^ (crc >>> 8)
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function pngChunk(type, data) {
+  const typeBuf = Buffer.from(type, 'ascii')
+  const len = Buffer.alloc(4)
+  len.writeUInt32BE(data.length, 0)
+  const crc = Buffer.alloc(4)
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0)
+  return Buffer.concat([len, typeBuf, data, crc])
+}
+
+function decodablePngBytes(width, height) {
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(width, 0)
+  ihdr.writeUInt32BE(height, 4)
+  ihdr[8] = 8 // bit depth
+  ihdr[9] = 2 // color type RGB
+  const rowBytes = width * 3 + 1
+  const raw = Buffer.alloc(rowBytes * height, 0xc8)
+  for (let y = 0; y < height; y++) raw[y * rowBytes] = 0 // 필터 없음
+  const idat = zlib.deflateSync(raw)
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', idat),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ])
+  return Array.from(png)
 }
 
 // SOF0 마커 하나만 있는 최소 JPEG
@@ -399,5 +440,308 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
     expect(fileBytes).toBe(saved.content)
     expect(fileBytes).toContain('<div align="center">\r\n')
     expect(fileBytes).toContain('</div>\r\n')
+  })
+})
+
+test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () => {
+  // F-156 붙여넣기로 첨부를 만든다 — afterText 줄 클릭 후 붙여넣으면 커서가 블록 다음 줄로 가 자연히 블록 밖(위젯 표시 조건)에 있게 된다
+  async function pasteImage(page, { width = 400, height = 200, afterText, bytes }) {
+    await page.locator('.cm-content .cm-line', { hasText: afterText }).click()
+    await pasteFiles(page, { files: [{ bytes: bytes ?? pngBytes(width, height), name: 'a.png', mime: 'image/png' }] })
+    await waitSaved(page)
+    await expect(page.locator('.md-image-box')).toBeVisible()
+  }
+
+  async function dragHandle(page, handle, deltaX) {
+    const box = await handle.boundingBox()
+    const x = box.x + box.width / 2
+    const y = box.y + box.height / 2
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x + deltaX, y, { steps: 10 })
+    await page.mouse.up()
+  }
+
+  function widthOf(content) {
+    return Number(/width="(\d+)"/.exec(content)[1])
+  }
+
+  test('F-157 A2 모양 — 폭·높이·모서리·가운데 정렬', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteImage(page, { width: 400, height: 200, afterText: '본문', bytes: decodablePngBytes(400, 200) })
+
+    const img = page.locator('.md-image-img')
+    await expect(img).toBeVisible()
+    expect(await img.evaluate((el) => el.naturalWidth)).toBeGreaterThan(0)
+
+    const boxRect = await page.locator('.md-image-box').boundingBox()
+    expect(Math.abs(boxRect.width - 400)).toBeLessThanOrEqual(1)
+    const frameRect = await page.locator('.md-image-frame').boundingBox()
+    expect(Math.abs(frameRect.height - 200)).toBeLessThanOrEqual(1)
+
+    const radius = await page.locator('.md-image-frame').evaluate((el) => getComputedStyle(el).borderRadius)
+    const tokenRadius = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--radius-image').trim(),
+    )
+    expect(radius).toBe(tokenRadius)
+
+    const contentRect = await page.locator('.cm-content').boundingBox()
+    const leftGap = boxRect.x - contentRect.x
+    const rightGap = contentRect.x + contentRect.width - (boxRect.x + boxRect.width)
+    expect(Math.abs(leftGap - rightGap)).toBeLessThanOrEqual(1)
+  })
+
+  test('F-157 A3 정렬 버튼 — align 값만 원문 변경, aria-pressed, 위치, Ctrl+Z', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteImage(page, { width: 200, height: 100, afterText: '본문' })
+
+    const before = (await readSavedContent(page)).content
+    expect(before).toContain('<div align="center">')
+
+    const box = page.locator('.md-image-box')
+    await box.hover()
+    const leftBtn = page.getByRole('button', { name: '왼쪽 정렬' })
+    await leftBtn.click()
+    await waitSaved(page)
+    const afterLeft = (await readSavedContent(page)).content
+    expect(afterLeft).toBe(before.replace('align="center"', 'align="left"')) // align 값 글자만 바뀜
+    await expect(leftBtn).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: '가운데 정렬' })).toHaveAttribute('aria-pressed', 'false')
+
+    const contentRect = await page.locator('.cm-content').boundingBox()
+    const padLeft = parseFloat(await page.locator('.cm-content').evaluate((el) => getComputedStyle(el).paddingLeft))
+    let boxRect = await box.boundingBox()
+    expect(Math.abs(boxRect.x - (contentRect.x + padLeft))).toBeLessThanOrEqual(2) // 왼쪽 = 글자 칸 왼쪽
+
+    await box.hover()
+    const rightBtn = page.getByRole('button', { name: '오른쪽 정렬' })
+    await rightBtn.click()
+    await waitSaved(page)
+    const afterRight = (await readSavedContent(page)).content
+    expect(afterRight).toBe(before.replace('align="center"', 'align="right"'))
+
+    const padRight = parseFloat(await page.locator('.cm-content').evaluate((el) => getComputedStyle(el).paddingRight))
+    boxRect = await box.boundingBox()
+    expect(Math.abs(boxRect.x + boxRect.width - (contentRect.x + contentRect.width - padRight))).toBeLessThanOrEqual(2) // 오른쪽 = 글자 칸 오른쪽
+
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click() // 편집기로 포커스 복귀(Ctrl+Z 는 CM6 키맵)
+    await page.keyboard.press('Control+z')
+    await waitSaved(page)
+    const undone = (await readSavedContent(page)).content
+    expect(undone).toBe(afterLeft)
+  })
+
+  test('F-157 A4 끌어 조절 — 정렬별 폭 계산, 비율 유지, 끄는 중 원문 불변', async ({ page }) => {
+    await openApp(page)
+
+    // 왼쪽 정렬 + 가장자리 막대 +100px → 500 (±1)
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteImage(page, { width: 400, height: 200, afterText: '본문' })
+    let box = page.locator('.md-image-box')
+    await box.hover()
+    await page.getByRole('button', { name: '왼쪽 정렬' }).click()
+    await waitSaved(page)
+    const before = (await readSavedContent(page)).content
+
+    await box.hover()
+    const edge = page.locator('.md-image-handle-edge')
+    const hbox = await edge.boundingBox()
+    await page.mouse.move(hbox.x + hbox.width / 2, hbox.y + hbox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(hbox.x + hbox.width / 2 + 100, hbox.y + hbox.height / 2, { steps: 10 })
+    // 끄는 동안 화면 폭만 바뀌고 문서(저장 내용)는 그대로
+    expect((await readSavedContent(page)).content).toBe(before)
+    await expect(page.locator('.md-image-size-label')).toBeVisible()
+    await page.mouse.up()
+    await waitSaved(page)
+    let saved = await readSavedContent(page)
+    expect(Math.abs(widthOf(saved.content) - 500)).toBeLessThanOrEqual(1)
+
+    // Ctrl+Z 1번에 원래 값
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await page.keyboard.press('Control+z')
+    await waitSaved(page)
+    saved = await readSavedContent(page)
+    expect(widthOf(saved.content)).toBe(400)
+
+    // 가운데 정렬(기본) + 모서리 +50px → 500 (±1), 높이 비율 유지
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteImage(page, { width: 400, height: 200, afterText: '본문' })
+    box = page.locator('.md-image-box')
+    await box.hover()
+    await dragHandle(page, page.locator('.md-image-handle-corner'), 50)
+    await waitSaved(page)
+    saved = await readSavedContent(page)
+    expect(Math.abs(widthOf(saved.content) - 500)).toBeLessThanOrEqual(1)
+    const frameRect = await page.locator('.md-image-frame').boundingBox()
+    expect(Math.abs(frameRect.width / frameRect.height - 2)).toBeLessThan(0.1) // 400x200 비율 = 2
+
+    // 오른쪽 정렬 + 왼쪽(뒤집힌) 막대 -60px → 460 (±1)
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteImage(page, { width: 400, height: 200, afterText: '본문' })
+    box = page.locator('.md-image-box')
+    await box.hover()
+    await page.getByRole('button', { name: '오른쪽 정렬' }).click()
+    await waitSaved(page)
+    await box.hover()
+    await dragHandle(page, page.locator('.md-image-handle-edge'), -60)
+    await waitSaved(page)
+    saved = await readSavedContent(page)
+    expect(Math.abs(widthOf(saved.content) - 460)).toBeLessThanOrEqual(1)
+  })
+
+  test('F-157 A5 한계·취소 — 최대/최소 폭 clamp, Esc 는 원문 불변', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteImage(page, { width: 100, height: 100, afterText: '본문' })
+    const maxWidth = await measureContentWidth(page)
+
+    let box = page.locator('.md-image-box')
+    await box.hover()
+    await dragHandle(page, page.locator('.md-image-handle-corner'), 5000) // 크게 끌기
+    await waitSaved(page)
+    let saved = await readSavedContent(page)
+    expect(Math.abs(widthOf(saved.content) - maxWidth)).toBeLessThanOrEqual(1)
+
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteImage(page, { width: 100, height: 100, afterText: '본문' })
+    box = page.locator('.md-image-box')
+    await box.hover()
+    await dragHandle(page, page.locator('.md-image-handle-edge'), -5000) // 작게 끌기
+    await waitSaved(page)
+    saved = await readSavedContent(page)
+    expect(widthOf(saved.content)).toBe(48)
+
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteImage(page, { width: 100, height: 100, afterText: '본문' })
+    const before = (await readSavedContent(page)).content
+    box = page.locator('.md-image-box')
+    await box.hover()
+    const handle = page.locator('.md-image-handle-corner')
+    const hbox = await handle.boundingBox()
+    await page.mouse.move(hbox.x + hbox.width / 2, hbox.y + hbox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(hbox.x + hbox.width / 2 + 200, hbox.y + hbox.height / 2, { steps: 5 })
+    await page.keyboard.press('Escape')
+    await page.mouse.up()
+    await page.waitForTimeout(150)
+    const after = (await readSavedContent(page)).content
+    expect(after).toBe(before)
+  })
+
+  test('F-157 A6 키보드 — → 10px, Shift+→ 50px', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteImage(page, { width: 200, height: 100, afterText: '본문' })
+
+    const box = page.locator('.md-image-box')
+    await box.hover()
+    const handle = page.locator('.md-image-handle-edge')
+    await handle.click() // 포커스만 준다(이동 없음)
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    await waitSaved(page)
+    let saved = await readSavedContent(page)
+    expect(widthOf(saved.content)).toBe(230)
+
+    await page.keyboard.press('Shift+ArrowLeft')
+    await waitSaved(page)
+    saved = await readSavedContent(page)
+    expect(widthOf(saved.content)).toBe(180)
+  })
+
+  test('F-157 A7 원문 진입 — ↓ 로 들어감, 더블클릭, 벗어나면 다시 위젯', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteImage(page, { width: 100, height: 100, afterText: '본문' })
+
+    // '본문' 다음 줄은 F-156 이 넣은 빈 줄(스페이서)이라, 두 번째 ArrowDown 이 블록 첫 줄로 들어가며 원문이 드러난다(F-106 규칙)
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ArrowDown')
+    await expect(page.locator('.md-image-box')).toHaveCount(0)
+    await expect(page.locator('.cm-content')).toContainText('<div align="center">')
+
+    await page.keyboard.press('Control+Home')
+    await expect(page.locator('.md-image-box')).toHaveCount(1)
+
+    await page.locator('.md-image-box').dblclick()
+    await expect(page.locator('.md-image-box')).toHaveCount(0)
+
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await expect(page.locator('.md-image-box')).toHaveCount(1)
+  })
+
+  test('F-157 A8 없는 첨부 — 자리 표시, 정렬 버튼 동작', async ({ page }) => {
+    await openApp(page)
+    const fakeId = 'aaaaaaaaaaaaaaaa'
+    await importMarkdown(page, {
+      content: `본문\n\n<div align="center">\n  <img src="attachments/${fakeId}.png" alt="없음" width="100">\n</div>\n\n끝\n`,
+    })
+    await page.locator('.cm-content .cm-line', { hasText: '끝' }).click() // 블록 밖
+
+    await expect(page.locator('.md-image-missing-text')).toHaveText('이미지를 찾을 수 없습니다')
+    await expect(page.locator('.md-image-frame[role="img"]')).toHaveAttribute('aria-label', '없음')
+
+    const box = page.locator('.md-image-box')
+    await box.hover()
+    await page.getByRole('button', { name: '왼쪽 정렬' }).click()
+    await waitSaved(page)
+    const saved = await readSavedContent(page)
+    expect(saved.content).toContain('<div align="left">')
+  })
+
+  test('F-157 A9 줄 위치 — 위젯 아래 줄 클릭 위치', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '위\n' })
+    await pasteImage(page, { width: 300, height: 150, afterText: '위' })
+    await page.keyboard.press('Control+End')
+    await page.keyboard.type('\n아래줄')
+    await waitSaved(page)
+    await expect(page.locator('.md-image-img')).toBeVisible()
+
+    const line = page.locator('.cm-content .cm-line', { hasText: '아래줄' })
+    const rect = await line.boundingBox()
+    await page.mouse.click(rect.x + 5, rect.y + rect.height / 2)
+    await page.keyboard.type('X')
+    await waitSaved(page)
+    const saved = await readSavedContent(page)
+    expect(saved.content).toContain('X아래줄')
+  })
+
+  test('F-157 A10 blob URL — 문서 전환 때 만든 URL 모두 해제', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.blobUrlLog = { created: [], revoked: [] }
+      const origCreate = URL.createObjectURL.bind(URL)
+      URL.createObjectURL = (blob) => {
+        const url = origCreate(blob)
+        window.blobUrlLog.created.push(url)
+        return url
+      }
+      const origRevoke = URL.revokeObjectURL.bind(URL)
+      URL.revokeObjectURL = (url) => {
+        window.blobUrlLog.revoked.push(url)
+        return origRevoke(url)
+      }
+    })
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteImage(page, { width: 50, height: 50, afterText: '본문' })
+    await expect(page.locator('.md-image-img')).toBeVisible()
+
+    const createdCount = await page.evaluate(() => window.blobUrlLog.created.length)
+    expect(createdCount).toBeGreaterThan(0)
+
+    await importMarkdown(page, { content: '다른 문서\n' }) // 문서 전환 → 이전 에디터 destroy
+
+    await expect
+      .poll(async () => page.evaluate(() => window.blobUrlLog.revoked.length))
+      .toBeGreaterThanOrEqual(createdCount)
+    const created = await page.evaluate(() => window.blobUrlLog.created)
+    const revoked = await page.evaluate(() => window.blobUrlLog.revoked)
+    for (const url of created) expect(revoked).toContain(url)
   })
 })

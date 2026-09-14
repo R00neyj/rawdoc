@@ -350,6 +350,68 @@ describe('observeHeight/stopObservingHeight — DOM 요소 기준 추적 (F-134 
   })
 })
 
+describe('buildBlocks — 이미지 블록 위젯 (F-157 2.1 A1)', () => {
+  const ID = '0f3a9c2e7b1d4a58'
+  const IMAGE_BLOCK = [`<div align="center">`, `  <img src="attachments/${ID}.png" alt="설명" width="120">`, `</div>`].join(
+    '\n',
+  )
+
+  function findImageWidget(state) {
+    return buildBlocks(state).find((r) => r.value.spec.widget?.id !== undefined)?.value.spec.widget
+  }
+
+  it('커서가 밖이면 위젯을 만든다', () => {
+    const doc = IMAGE_BLOCK + '\n\nx'
+    const state = makeState(doc, doc.length)
+    const widget = findImageWidget(state)
+    expect(widget).toBeDefined()
+    expect(widget.id).toBe(ID)
+    expect(widget.ext).toBe('png')
+    expect(widget.alt).toBe('설명')
+    expect(widget.align).toBe('center')
+    expect(widget.width).toBe(120)
+  })
+
+  it('커서가 블록 범위 안이면 위젯을 만들지 않는다', () => {
+    const doc = IMAGE_BLOCK + '\n\nx'
+    const cursor = doc.indexOf('img')
+    const state = makeState(doc, cursor)
+    expect(findImageWidget(state)).toBeUndefined()
+  })
+
+  it('해석 실패(다른 속성이 섞임)면 위젯을 만들지 않는다', () => {
+    const bad = [`<div align="center" class="x">`, `  <img src="attachments/${ID}.png">`, `</div>`].join('\n')
+    const doc = bad + '\n\nx'
+    const state = makeState(doc, doc.length)
+    expect(findImageWidget(state)).toBeUndefined()
+  })
+
+  it('목록 안이면 위젯을 만들지 않는다', () => {
+    const doc = `- 항목\n\n  <div align="center">\n    <img src="attachments/${ID}.png">\n  </div>\n\nx`
+    const state = makeState(doc, doc.length)
+    expect(findImageWidget(state)).toBeUndefined()
+  })
+
+  it('인용 안이면 위젯을 만들지 않는다', () => {
+    const doc = `> <div align="center">\n>   <img src="attachments/${ID}.png">\n> </div>\n\nx`
+    const state = makeState(doc, doc.length)
+    expect(findImageWidget(state)).toBeUndefined()
+  })
+
+  it('eq() 는 id·ext·alt·align·width 가 모두 같아야 참이다', () => {
+    const doc = IMAGE_BLOCK + '\n\nx'
+    const state = makeState(doc, doc.length)
+    const a = findImageWidget(state)
+
+    const changedAlign = IMAGE_BLOCK.replace('center', 'left') + '\n\nx'
+    const b = findImageWidget(makeState(changedAlign, changedAlign.length))
+    expect(a.eq(b)).toBe(false)
+
+    const same = findImageWidget(makeState(IMAGE_BLOCK + '\n\nx', doc.length))
+    expect(a.eq(same)).toBe(true)
+  })
+})
+
 describe('blockPreview — 구문 트리만 바뀐 갱신 (F-134 3.8)', () => {
   function widgetCount(state) {
     const decos = state.facet(EditorView.decorations).find((e) => typeof e !== 'function')

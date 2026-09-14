@@ -14,6 +14,7 @@ import './styles/markdown.css'
 import './styles/callout.css'
 import './styles/frontmatter.css'
 import './styles/wikilink.css'
+import './styles/image.css'
 
 import { getPref } from './app/prefs.js'
 import { resolveTheme } from './app/theme.js'

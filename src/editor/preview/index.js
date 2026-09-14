@@ -8,14 +8,14 @@ import { gutterAlignPreview, linePreview, listIndentPreview } from './lines.js'
 import { linkClicks } from './links.js'
 import { wikiLinkClicks, wikiLinksPreview } from './wikiLinks.js'
 
-/** @param {{onOpenWikiLink?: (target:string)=>void}} [options] */
-export function livePreview({ onOpenWikiLink } = {}) {
+// resolveAttachment 는 이미지 블록 위젯이 첨부를 읽는 콜백 (F-157.md 2.2)
+export function livePreview({ onOpenWikiLink, resolveAttachment } = {}) {
   return [
     inlinePreview(),
     linePreview(),
     gutterAlignPreview(),
     listIndentPreview(),
-    blockPreview(),
+    blockPreview({ resolveAttachment }),
     linkClicks(),
     wikiLinksPreview(),
     wikiLinkClicks(onOpenWikiLink),
