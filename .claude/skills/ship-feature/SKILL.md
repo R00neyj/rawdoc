@@ -14,8 +14,9 @@ description: Rawdoc 작은 명세 F-xxx 를 구현 에이전트에 맡기고 자
 1. `specs/features/F-xxx.md` 존재, 상태 줄의 선행 조건(커밋 순서)을 `git log --oneline` 로 확인
 2. `specs/product.md` 4장 "진행 순서" 와 사용자 지시 확인. 사용자가 "진행 전에 물어봐" 라고 했으면 물어본다
 3. `git status --short` — `.claude/settings.json` 외 변경이 있으면 누구 것인지 확인하고 섞지 않는다
-4. 병렬이면 명세들의 1장 파일 소유 표를 비교. 같은 파일이 있으면 병렬 금지(부분 Edit 허용이라 적힌 경우도 같은 영역이면 금지)
-5. 슬롯 배정: n 번째 에이전트 `E2E_PORT=450n`, `E2E_DIST=dist-f{번호}`. 단독이면 생략 가능
+4. **기본은 최대 병렬.** 명세들의 1장 파일 소유 표를 비교해 겹치지 않으면 선행 조건 문구와 관계없이 동시에 띄운다. 같은 파일이라도 다른 영역(예: 콜아웃 부분 / 프론트매터 부분)이면 병렬로 하고 "Edit 직전 다시 Read, 넓은 교체·전체 Write 금지" 를 메모로 준다. 한 명세가 다른 명세의 신규 파일을 쓰는 경우만 순서대로
+5. 동시 에이전트는 4개까지 (e2e 브라우저 부하로 PC 가 다운된 적 있음)
+6. 슬롯 배정: n 번째 에이전트 `E2E_PORT=450n`, `E2E_DIST=dist-f{번호}`
 
 ## 2. 구현 맡기기
 `Agent` 도구, `subagent_type: "feature-implementer"`, `run_in_background: true`. 프롬프트는 짧게:
@@ -32,8 +33,8 @@ F-xxx 구현. E2E_PORT=4501 E2E_DIST=dist-f153
    - 주석 줄이기 같은 사소한 것은 메인이 직접 고친다
    - 코드 판단이 필요한 것은 `SendMessage` 로 에이전트에 돌려보낸다 (최대 2회, 넘으면 사용자에게 보고)
    - 소유 밖 경고는 메인이 이유를 보고 받아들이거나 되돌린다
-3. `E2E_PORT=… E2E_DIST=… node scripts/verify.mjs --e2e --repeat 2` — 실패면 요약을 에이전트에 보내 수정 (최대 2회)
-4. 메인이 고친 뒤에는 `node scripts/verify.mjs` 로 lint·단위·build 를 다시 확인
+3. **검증은 가볍게 (프로토타입 단계 기본값).** 에이전트가 돌린 스모크 결과를 믿고, 메인은 `npx eslint <소유 파일>` 만 다시 돌린다. 에이전트 보고에 스모크 미실행·실패가 있을 때만 그 명세 e2e 1회(`npx playwright test -g "F-xxx" --workers=2`)를 직접 돌린다
+4. 전체 e2e(`verify.mjs --e2e`)는 사용자가 요청하거나 배포·마일스톤 직전에만. 이때도 `--workers=4`, 한 번에 하나
 5. 종료 코드로 판정한다. 출력 grep 으로 통과를 추정하지 않는다
 
 ## 4. 사람 확인 목록
@@ -45,7 +46,7 @@ F-xxx 구현. E2E_PORT=4501 E2E_DIST=dist-f153
 ```
 {기능 요약} (F-xxx)
 
-- 검증: review-diff 위반 0, lint·단위 N·build 통과, e2e 2회 연속 M/M
+- 검증: review-diff 위반 0, lint 통과, 스모크(관련 단위 N, F-xxx e2e M/M). 전체 e2e 미실행
 - 미검증·사람 확인: …
 - 명세와 다른 부분: … (없으면 줄 삭제)
 

@@ -83,7 +83,7 @@ npm run dev:spike    # 스파이크 확인용
 - 받은 `F-xxx.md` 의 수용 기준과 수정 파일 목록 안에서만 작업한다
 - 명세 파일(`specs/**`)과 이 파일은 수정하지 않는다. 명세가 틀렸거나 모자라면 멈추고 보고한다
 - 새 의존성은 명세에 적힌 것만 설치한다
-- 끝나면 `npm run build`, `npm run lint`, `npm test`, `npm run test:e2e`(F-150 이후) 를 돌리고 결과를 그대로 보고한다
+- 끝나면 린트·스모크만 돌리고 결과를 그대로 보고한다: 바꾼 파일 eslint, 관련 단위 테스트, 그 명세 e2e 1회(`-g "F-xxx" --workers=2`). 전체 e2e 는 사용자 요청·배포 직전에만 (2026-09-15 사용자 "프로토타입인데 너무 엄격")
 - 측정·부분 e2e 는 임시 스크립트를 쓰지 않고 `scripts/` 도구(measure·e2e-one·verify·review-diff)를 쓴다. 진행은 `ship-feature` 스킬 + `feature-implementer` 에이전트 (F-160)
 - 명세의 브라우저 수용 기준은 `e2e/F-xxx` 이름이 붙은 Playwright 테스트로 작성해 자동으로 판정한다 (F-150 이후. claude-in-chrome 수동 조작으로 대신하지 않는다)
 - 자동화할 수 없는 기준(실제 한글 IME, OS 창, 색감·느낌)은 테스트로 만들지 않고 "사람 확인 필요" 로 보고한다. 메인이 `specs/human-checks.md` 에 올린다

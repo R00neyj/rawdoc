@@ -23,9 +23,15 @@ model: sonnet
 ## 도구 (임시 스크립트를 새로 쓰기 전에 먼저 쓴다. 옵션은 `specs/features/F-160.md` 2장)
 - 화면 위치·크기·스타일 측정: `node scripts/measure.mjs --doc … --mode … --select … --style … --action …` (포트·빌드 폴더는 슬롯 값)
 - 테스트 문서: `e2e/fixtures/docs.js` (`longDoc`·`headingsDoc`·`listDoc`·`mixedDoc`)
-- 특정 e2e 반복: `node scripts/e2e-one.mjs "F-xxx A3" --repeat 3`
-- 전체 검증: `node scripts/verify.mjs --e2e --repeat 2`
+- 특정 e2e 반복: `node scripts/e2e-one.mjs "F-xxx A3" --repeat 3` (흔들림 확인이 필요할 때만)
 - 자기 검토: `node scripts/review-diff.mjs F-xxx` — 위반 0 이 될 때까지 고친다
+
+## 검증 (프로토타입 단계 — 린트·스모크만)
+1. `npx eslint <바꾼 파일>`
+2. 관련 단위 테스트만 `npx vitest run <test 파일>`
+3. 이 명세 e2e 1회: `E2E_PORT=… E2E_DIST=… npx playwright test -g "F-xxx" --workers=2` (빌드는 webServer 가 한다)
+- 전체 e2e·`verify.mjs --e2e`·반복 실행은 하지 않는다 (메인이 따로 요청할 때만)
+- 다른 에이전트가 같은 레포에서 동시에 작업할 수 있다. 소유 밖 파일 때문에 난 lint·빌드·테스트 실패는 고치지 말고 보고만. 소유 파일도 Edit 직전에 다시 Read
 - 도구로 안 되는 측정만 scratchpad 에 임시 스크립트. 그때는 보고에 "도구에 없던 측정" 으로 적는다
 
 ## 슬롯
@@ -42,7 +48,7 @@ model: sonnet
 ## 보고 (간결, 음슴체)
 1. 바꾼 파일
 2. 수용 기준별 충족 여부 (A1…)
-3. `review-diff` 결과 요약, `verify --e2e --repeat 2` 요약 (실행하지 않은 것은 "미실행")
+3. `review-diff` 결과 요약, 검증 3단계 결과 (실행하지 않은 것은 "미실행")
 4. 명세와 다르게 한 부분과 이유
 5. 사람 확인 필요 항목
 6. 도구에 없던 측정 (있으면)
