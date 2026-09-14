@@ -3,6 +3,7 @@
 // renderMarkdown 이 위키링크를 링크로 바꿀 근거(같은 저장소 문서 목록)가 없기 때문이다
 import Viewer from '../viewer/Viewer.jsx'
 import { renderMarkdown } from '../viewer/renderMarkdown.js'
+import { IconDownload, IconClose } from './icons.jsx'
 
 /**
  * @param {object} props
@@ -19,9 +20,11 @@ export default function SharedView({ sharedDoc, onImport, onClose }) {
         <span>공유받은 문서입니다. 아직 내 문서에 저장되지 않았습니다.</span>
         <div className="shared-view-notice-actions">
           <button type="button" onClick={onImport}>
+            <IconDownload size={18} />
             내 문서로 가져오기
           </button>
           <button type="button" onClick={onClose}>
+            <IconClose size={18} />
             닫기
           </button>
         </div>

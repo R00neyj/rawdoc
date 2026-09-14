@@ -102,6 +102,7 @@ store.setPinned(id, pinned)   // F-132. updatedAt 유지
 | `md.bodyFont` | `sans` \| `serif` | `sans` | F-141 |
 | `md.theme` | `system` \| `white` \| `sepia` \| `dark` | `system` | F-141 |
 | `md.sidebar` | `expanded` \| `collapsed` | `expanded` | F-143 |
+| `md.lineNumbers` | `on` \| `off` | `on` | F-147 |
 | `md.lastDocId` | 문서 id | 없음 | F-111 |
 | `md.firstRunDone` | `1` | 없음 | F-111 |
 | `md.persistNoticeShown` | `1` | 없음 | F-118 |

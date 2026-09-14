@@ -9,6 +9,7 @@ const ALLOWED_KEYS = new Set([
   'md.firstRunDone',
   'md.persistNoticeShown',
   'md.openFolders',
+  'md.sidebar',
 ])
 
 function assertAllowed(key) {

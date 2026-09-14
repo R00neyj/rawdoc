@@ -1,10 +1,28 @@
-// 사이드바 (specs/ia.md 2장 B, 3.11, specs/features/F-111.md·F-114.md·F-121.md·F-115.md·F-126.md·F-132.md)
+// 사이드바 (specs/ia.md 2장 B, 3.11, 3.22, specs/features/F-111.md·F-114.md·F-121.md·F-115.md·F-126.md·F-132.md·F-143.md)
 // 폴더 2단계 트리, 항목 `⋯` 메뉴, 마우스 끌어놓기로 문서·폴더 이동 (F-126.md 4·5장)
-// 맨 위 `고정됨` 묶음 (F-132.md 3장)
+// 맨 위 `고정됨` 묶음 (F-132.md 3장). 접기·아이콘·행 모양은 F-143
 import { useEffect, useRef, useState } from 'react'
 import { buildTree, canMoveFolder, pinnedDocs } from '../lib/folderTree.js'
 import FolderMenu from './FolderMenu.jsx'
-import { IconChevron } from './icons.jsx'
+import {
+  IconChevron,
+  IconNoteAdd,
+  IconFolderAdd,
+  IconUpload,
+  IconSearch,
+  IconSettings,
+  IconInstall,
+  IconPanelClose,
+  IconPanelOpen,
+  IconPin,
+  IconUnpin,
+  IconMove,
+  IconDelete,
+  IconEdit,
+  IconTooltip,
+} from './icons.jsx'
+
+const SIDEBAR_ID = 'sidebar-nav'
 
 function dropKeyOf(target) {
   return target.type === 'root' ? 'root' : `${target.type}:${target.id}`
@@ -17,6 +35,7 @@ function pinMenuItem(doc, onTogglePin) {
   return {
     key: 'pin',
     label: isPinned ? '고정 해제' : '상단 고정',
+    icon: isPinned ? IconUnpin : IconPin,
     onSelect: () => onTogglePin(doc.id, !isPinned),
   }
 }
@@ -39,14 +58,20 @@ function FolderRow({ node, depth, ctx, editingInputRef }) {
   const target = { type: 'folder', id: node.id }
   const isDropTarget = ctx.dropTargetKey === dropKeyOf(target)
 
-  const items = [{ key: 'new-doc', label: '새 문서', onSelect: () => ctx.onCreateDoc(node.id) }]
+  const items = [{ key: 'new-doc', label: '새 문서', icon: IconNoteAdd, onSelect: () => ctx.onCreateDoc(node.id) }]
   if (node.parentId === null) {
-    items.push({ key: 'new-subfolder', label: '하위 폴더', onSelect: () => ctx.onCreateFolder(node.id) })
+    items.push({
+      key: 'new-subfolder',
+      label: '하위 폴더',
+      icon: IconFolderAdd,
+      onSelect: () => ctx.onCreateFolder(node.id),
+    })
   }
-  items.push({ key: 'rename', label: '이름 변경', onSelect: () => ctx.onStartRename(node.id, node.name) })
+  items.push({ key: 'rename', label: '이름 변경', icon: IconEdit, onSelect: () => ctx.onStartRename(node.id, node.name) })
   items.push({
     key: 'delete',
     label: '삭제',
+    icon: IconDelete,
     danger: true,
     onSelect: () => ctx.onRequestDeleteFolder({ id: node.id, name: node.name }),
   })
@@ -112,11 +137,13 @@ function DocRow({ node, depth, ctx }) {
     {
       key: 'move',
       label: '폴더로 이동…',
+      icon: IconMove,
       onSelect: () => ctx.onRequestMoveDoc({ id: node.id, title: node.title, folderId: node.folderId }),
     },
     {
       key: 'delete',
       label: '삭제',
+      icon: IconDelete,
       danger: true,
       onSelect: () => ctx.onRequestDeleteDoc({ id: node.id, title: node.title }),
     },
@@ -149,18 +176,21 @@ function DocRow({ node, depth, ctx }) {
 }
 
 // 사이드바 맨 위 `고정됨` 묶음의 항목 — 트리와 별도로 `role="list"`/`listitem` 이고
-// 들여쓰기가 없다. 문서 삭제 시 목록에서 빠지므로 별도 처리가 필요 없다 (F-132.md 3·4장)
+// 들여쓰기가 없다. 토글 자리에는 IconPin 을 둔다(F-143 3.2). 문서 삭제 시 목록에서
+// 빠지므로 별도 처리가 필요 없다 (F-132.md 3·4장)
 function PinnedRow({ doc, ctx }) {
   const items = [
     pinMenuItem(doc, ctx.onTogglePin),
     {
       key: 'move',
       label: '폴더로 이동…',
+      icon: IconMove,
       onSelect: () => ctx.onRequestMoveDoc({ id: doc.id, title: doc.title, folderId: doc.folderId }),
     },
     {
       key: 'delete',
       label: '삭제',
+      icon: IconDelete,
       danger: true,
       onSelect: () => ctx.onRequestDeleteDoc({ id: doc.id, title: doc.title }),
     },
@@ -169,6 +199,9 @@ function PinnedRow({ doc, ctx }) {
   return (
     <li role="listitem" className="tree-item">
       <div className="tree-row">
+        <span className="tree-toggle-spacer" aria-hidden="true">
+          <IconPin size={16} className="pinned-row-icon" />
+        </span>
         <button
           type="button"
           className="tree-label doc-item-btn"
@@ -183,10 +216,52 @@ function PinnedRow({ doc, ctx }) {
   )
 }
 
+// 접힘 레일의 아이콘 전용 버튼 (F-143 3.3). 툴팁은 버튼 오른쪽. `props.icon` 으로 접근하는
+// 것은 item.icon·mode.Icon 과 같은 관례다(구조 분해로 알파벳 대문자 별칭을 주면 no-unused-vars
+// 가 JSX 태그 이름 참조를 잡지 못한다)
+function RailButton(props) {
+  const { label, onClick, ariaDisabled, buttonRef, ariaExpanded } = props
+  return (
+    <span className="icon-btn-wrap rail-btn-wrap">
+      <button
+        ref={buttonRef}
+        type="button"
+        className="icon-btn rail-btn"
+        aria-label={label}
+        aria-disabled={ariaDisabled || undefined}
+        aria-expanded={ariaExpanded}
+        onClick={onClick}
+      >
+        <props.icon size={18} />
+      </button>
+      <IconTooltip text={label} side />
+    </span>
+  )
+}
+
+// 펼친 사이드바의 아이콘+글자 동작 버튼 (F-143 3.2). hint 는 `검색` 의 `준비 중` 문구
+function SidebarButton(props) {
+  const { label, hint, onClick, ariaDisabled } = props
+  return (
+    <button
+      type="button"
+      className="sidebar-btn"
+      aria-disabled={ariaDisabled || undefined}
+      onClick={onClick}
+    >
+      <props.icon size={18} className="sidebar-btn-icon" />
+      <span className="sidebar-btn-label">{label}</span>
+      {hint && <span className="sidebar-btn-hint">{hint}</span>}
+    </button>
+  )
+}
+
 export default function Sidebar({
   sidebarRef,
   narrow,
   open,
+  collapsed,
+  onToggleCollapse,
   docs,
   folders,
   currentDocId,
@@ -215,6 +290,8 @@ export default function Sidebar({
 
   const editingInputRef = useRef(null)
   const skipBlurCommitRef = useRef(false)
+  const headToggleRef = useRef(null)
+  const collapseMountedRef = useRef(false)
 
   useEffect(() => {
     if (editingId && editingInputRef.current) {
@@ -222,6 +299,16 @@ export default function Sidebar({
       editingInputRef.current.select()
     }
   }, [editingId])
+
+  // 접기·펴기 뒤 포커스를 반대쪽 토글 버튼으로 옮긴다(F-143 3.3). 첫 렌더에서는 건너뛴다
+  useEffect(() => {
+    if (narrow) return
+    if (!collapseMountedRef.current) {
+      collapseMountedRef.current = true
+      return
+    }
+    headToggleRef.current?.focus()
+  }, [collapsed, narrow])
 
   const tree = buildTree({ folders, docs })
   const pinned = pinnedDocs(docs) // F-132.md 2장, 3장
@@ -258,6 +345,13 @@ export default function Sidebar({
   async function handleCreateFolder(parentId) {
     const folder = await onCreateFolder(parentId)
     if (folder) startRename(folder.id, folder.name)
+  }
+
+  // 레일에서 `새 폴더`: 펼친 뒤 이름 입력을 시작한다 — 이름 입력 칸은 트리 안에 있으므로
+  // 먼저 사이드바를 펼쳐야 보인다 (F-143 3.3)
+  function handleRailCreateFolder() {
+    onToggleCollapse()
+    handleCreateFolder(null)
   }
 
   // ----- 끌어놓기 (specs/features/F-126.md 5.3, 마우스 전용) -----
@@ -332,53 +426,101 @@ export default function Sidebar({
   const rootTarget = { type: 'root' }
   const isRootDropTarget = dropTargetKey === dropKeyOf(rootTarget)
 
+  const isRail = collapsed && !narrow
+
   return (
     <nav
       ref={sidebarRef}
-      className={`sidebar${narrow ? ' sidebar--overlay' : ''}`}
+      id={SIDEBAR_ID}
+      className={`sidebar${narrow ? ' sidebar--overlay' : ''}${isRail ? ' sidebar--collapsed' : ''}`}
       hidden={narrow && !open}
       aria-label="문서 목록"
     >
-      <div className="sidebar-scroll">
-        <h2>문서</h2>
-        <button type="button" className="add-doc" onClick={() => onCreateDoc()}>
-          ＋ 새 문서
-        </button>
-        <button type="button" className="add-doc" onClick={() => handleCreateFolder(null)}>
-          ＋ 새 폴더
-        </button>
-        <button type="button" className="import-doc" onClick={onImportDoc}>
-          ↥ 가져오기
-        </button>
-        {pinned.length > 0 && (
-          <>
-            <h2>고정됨</h2>
-            <ul className="pinned-list" role="list" aria-label="고정된 문서">
-              {pinned.map((doc) => (
-                <PinnedRow key={doc.id} doc={doc} ctx={ctx} />
-              ))}
-            </ul>
-          </>
+      <div className="sidebar-head">
+        {narrow ? (
+          <span className="icon-btn-wrap">
+            <button
+              ref={headToggleRef}
+              type="button"
+              className="icon-btn"
+              aria-label="사이드바 닫기"
+              onClick={onToggleCollapse}
+            >
+              <IconPanelClose size={18} />
+            </button>
+            <IconTooltip text="사이드바 닫기" side />
+          </span>
+        ) : (
+          <span className="icon-btn-wrap">
+            <button
+              ref={headToggleRef}
+              type="button"
+              className="icon-btn"
+              aria-label={collapsed ? '사이드바 펴기' : '사이드바 접기'}
+              aria-expanded={!collapsed}
+              aria-controls={SIDEBAR_ID}
+              onClick={onToggleCollapse}
+            >
+              {collapsed ? <IconPanelOpen size={18} /> : <IconPanelClose size={18} />}
+            </button>
+            <IconTooltip text={collapsed ? '사이드바 펴기' : '사이드바 접기'} side />
+          </span>
         )}
-        <ul className="doc-list" role="tree" aria-label="문서와 폴더">
-          {tree.map((node) => (
-            <TreeNode key={node.id} node={node} depth={0} ctx={ctx} editingInputRef={editingInputRef} />
-          ))}
-        </ul>
-        <div
-          className={`tree-root-drop${isRootDropTarget ? ' tree-row--drop' : ''}`}
-          onDragOver={(e) => handleDragOver(e, rootTarget)}
-          onDrop={(e) => handleDrop(e, rootTarget)}
-        />
       </div>
-      {canInstall && (
-        <button type="button" className="settings-btn" onClick={onInstall}>
-          앱 설치
-        </button>
+
+      {isRail ? (
+        <div className="sidebar-rail-scroll">
+          <RailButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
+          <RailButton icon={IconFolderAdd} label="새 폴더" onClick={handleRailCreateFolder} />
+          <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
+          <RailButton icon={IconSearch} label="검색 — 준비 중" ariaDisabled />
+        </div>
+      ) : (
+        <div className="sidebar-scroll">
+          <SidebarButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
+          <SidebarButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
+          <SidebarButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
+          <SidebarButton icon={IconSearch} label="검색" hint="준비 중" ariaDisabled />
+          {pinned.length > 0 && (
+            <>
+              <h2>
+                <IconPin size={14} />
+                고정됨
+              </h2>
+              <ul className="pinned-list" role="list" aria-label="고정된 문서">
+                {pinned.map((doc) => (
+                  <PinnedRow key={doc.id} doc={doc} ctx={ctx} />
+                ))}
+              </ul>
+            </>
+          )}
+          <h2>문서</h2>
+          <ul className="doc-list" role="tree" aria-label="문서와 폴더">
+            {tree.map((node) => (
+              <TreeNode key={node.id} node={node} depth={0} ctx={ctx} editingInputRef={editingInputRef} />
+            ))}
+          </ul>
+          <div
+            className={`tree-root-drop${isRootDropTarget ? ' tree-row--drop' : ''}`}
+            onDragOver={(e) => handleDragOver(e, rootTarget)}
+            onDrop={(e) => handleDrop(e, rootTarget)}
+          />
+        </div>
       )}
-      <button type="button" className="settings-btn" onClick={onOpenSettings}>
-        설정
-      </button>
+
+      <div className={isRail ? 'sidebar-rail-bottom' : 'sidebar-bottom'}>
+        {canInstall &&
+          (isRail ? (
+            <RailButton icon={IconInstall} label="앱 설치" onClick={onInstall} />
+          ) : (
+            <SidebarButton icon={IconInstall} label="앱 설치" onClick={onInstall} />
+          ))}
+        {isRail ? (
+          <RailButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
+        ) : (
+          <SidebarButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
+        )}
+      </div>
     </nav>
   )
 }

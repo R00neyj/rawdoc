@@ -6,6 +6,12 @@
   display: none !important;
 }
 
+/* 앱 아이콘(F-142 2장)은 전부 글자색을 따른다. flex 안에서 줄어들지 않게 한다(F-143 3.9) */
+svg {
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
 .app-shell {
   height: 100%;
   display: flex;
@@ -25,10 +31,6 @@
 }
 
 .sidebar-toggle {
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-control);
-  padding: 6px 10px;
-  font-size: 14px;
   color: var(--ink-2);
 }
 
@@ -96,10 +98,17 @@
   flex: none;
   border-right: 1px solid var(--rule);
   background: var(--paper);
-  padding: 12px 10px;
+  padding: 10px 10px 12px;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
+  transition: width var(--transition-fast);
+}
+
+/* 접힘(아이콘 레일, F-143 3.3) */
+.sidebar--collapsed {
+  width: var(--sidebar-rail-w);
+  padding: 10px 6px 12px;
 }
 
 .sidebar--overlay {
@@ -117,12 +126,47 @@
   background: transparent;
 }
 
+/* 머리 줄(접기·펴기 버튼) — 스크롤 밖에 고정 (F-143 3.2) */
+.sidebar-head {
+  flex: none;
+  display: flex;
+  margin-bottom: 6px;
+}
+
 .sidebar-scroll {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-rail-scroll,
+.sidebar-rail-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebar-rail-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-bottom {
+  flex: none;
+  margin-top: 6px;
+}
+
+.sidebar-rail-bottom {
+  flex: none;
+  margin-top: 6px;
 }
 
 .sidebar h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.14em;
@@ -133,19 +177,60 @@
   text-transform: uppercase;
 }
 
-.add-doc,
-.import-doc {
+/* 사이드바 동작 버튼 (새 문서·새 폴더·가져오기·검색·앱 설치·설정, F-143 3.2·2장) */
+.sidebar-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  text-align: left;
-  padding: 7px 9px;
+  padding: 7px 4px 7px 6px;
   border-radius: var(--radius-control);
   font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 6px;
+  color: var(--ink-2);
+  margin-bottom: 2px;
 }
 
-.add-doc:hover,
-.import-doc:hover {
+.sidebar-btn:hover:not([aria-disabled='true']) {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+.sidebar-btn[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: default;
+}
+
+.sidebar-btn-label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-btn-hint {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* 레일 아이콘 전용 버튼 — 툴팁은 버튼 오른쪽 (F-143 3.3) */
+.rail-btn-wrap {
+  justify-content: center;
+}
+
+.rail-btn {
+  width: 32px;
+  height: 32px;
+  color: var(--ink-2);
+}
+
+.rail-btn[aria-disabled='true'] {
+  color: var(--muted);
+}
+
+.rail-btn:hover:not([aria-disabled='true']) {
   background: var(--rule-2);
   color: var(--ink);
 }
@@ -173,8 +258,24 @@
   position: relative;
   display: flex;
   align-items: center;
-  padding-left: calc(9px + var(--depth, 0) * 14px);
+  gap: 6px;
+  /* 좌우 여백: 왼쪽 6px(들여쓰기와 별도) + 들여쓰기, 오른쪽 4px (F-143 3.6) */
+  padding: 0 4px 0 calc(6px + var(--depth, 0) * 14px);
   border-radius: var(--radius-control);
+}
+
+/* 호버·현재 표시는 행 전체 (F-143 3.6) */
+.tree-row:hover {
+  background: var(--rule-2);
+}
+
+.tree-row:has(.doc-item-btn[aria-current='page']) {
+  background: var(--panel);
+  box-shadow: 0 0 0 1px var(--rule) inset;
+}
+
+.tree-row:hover:has(.doc-item-btn[aria-current='page']) {
+  background: var(--panel);
 }
 
 /* 놓을 수 있는 대상은 --accent-soft 배경 (F-126.md 5.3) */
@@ -214,22 +315,25 @@
   position: relative;
 }
 
+/* 폴더 가이드 선 — 행 배경 위에 보이도록 z-index 를 준다(F-143 3.6·3.9, F-142 3.5).
+   색은 --paper 위에서 --rule 이 거의 안 보여 --muted 로 바꿨다 (F-143 3.9) */
 .tree-group::before {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(9px + var(--depth, 0) * 14px + 11px);
+  left: calc(6px + var(--depth, 0) * 14px + 11px);
   width: 1px;
-  background: var(--rule);
+  background: var(--muted);
   pointer-events: none;
+  z-index: 1;
 }
 
 .tree-label {
   flex: 1;
   min-width: 0;
   text-align: left;
-  padding: 7px 8px 7px 2px;
+  padding: 7px 4px;
   border-radius: var(--radius-control);
   font-size: 13.5px;
   color: var(--ink-2);
@@ -238,13 +342,7 @@
   text-overflow: ellipsis;
 }
 
-.tree-label:hover {
-  background: var(--rule-2);
-}
-
 .doc-item-btn[aria-current='page'] {
-  background: var(--panel);
-  border: 1px solid var(--rule);
   color: var(--ink);
   font-weight: 600;
 }
@@ -275,6 +373,9 @@
 .item-menu-btn {
   width: 22px;
   height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--radius-control);
   color: var(--muted);
   opacity: 0;
@@ -308,7 +409,9 @@
 }
 
 .item-menu-list button {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   text-align: left;
   padding: 7px 9px;
@@ -327,20 +430,6 @@
   color: var(--danger);
 }
 
-.settings-btn {
-  flex: none;
-  width: 100%;
-  text-align: left;
-  padding: 8px 9px;
-  border-radius: var(--radius-control);
-  font-size: 13.5px;
-  color: var(--ink-2);
-}
-
-.settings-btn:hover {
-  background: var(--rule-2);
-}
-
 /* ===== 메인 열 ===== */
 .main-column {
   flex: 1;
@@ -349,18 +438,20 @@
   flex-direction: column;
 }
 
+/* 메인 열 전체를 --panel 하나로 (F-143 3.8) — 내용 칸과 좌우 여백의 색 구분을 없앤다.
+   세로 스크롤은 각 자식(cm-scroller·viewer 등)이 전체 폭으로 맡는다 */
 .content-area {
   flex: 1;
   min-height: 0;
   display: flex;
-  justify-content: center;
-  overflow: auto;
-  background: var(--paper);
+  overflow: hidden;
+  background: var(--panel);
 }
 
 .empty-state {
   width: 100%;
   max-width: var(--content-max);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -381,6 +472,9 @@
 }
 
 .empty-state button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
   padding: 8px 16px;
@@ -418,14 +512,18 @@
   flex: 1;
 }
 
-.notice button {
+/* 동작 버튼(아이콘+글자)만 대상 — 닫기 버튼(.icon-btn)은 F-142 아이콘 버튼 모양 그대로 (F-143 2장) */
+.notice button:not(.icon-btn) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
   padding: 4px 9px;
   font-size: 12px;
 }
 
-.notice button:hover {
+.notice button:not(.icon-btn):hover {
   background: var(--panel);
 }
 
@@ -588,6 +686,13 @@
   right: 0;
 }
 
+/* 사이드바 레일·접기 버튼 툴팁 — 버튼 오른쪽 6px, 세로 가운데 (F-143 2장) */
+.icon-tooltip--side {
+  top: 50%;
+  left: calc(100% + 6px);
+  transform: translateY(-50%);
+}
+
 .icon-btn-wrap:hover .icon-tooltip {
   opacity: 1;
   transition-delay: 400ms;
@@ -666,9 +771,10 @@
 }
 
 /* ===== 편집 영역 (specs/features/F-103.md 3.5, F-107.md) ===== */
+/* 메인 열 전체 폭 — 내용은 .cm-scroller 안쪽 여백으로 800px 가운데 정렬한다 (F-143 3.8) */
 .editor-slot {
-  width: 100%;
-  max-width: var(--content-max);
+  flex: 1;
+  min-width: 0;
   background: var(--panel);
   height: 100%;
 }
@@ -683,8 +789,15 @@
   font-size: var(--md-font-size);
 }
 
+/* cm-scroller 는 CM6 가 계속 스크롤을 맡는 실제 요소다(폭을 넓혀도 유지, F-143 3.8) —
+   좌우 안쪽 여백으로 gutter+content 를 800px 로 가운데 정렬한다. 스크롤바는 이 요소의
+   오른쪽 끝(메인 열 오른쪽 끝)에 붙는다 */
+/* 좌우 안쪽 여백으로 gutter+본문을 800px 로 가운데 정렬한다 (F-143 3.8). 세로
+   스크롤바(10px)가 실제로 나타나면 그만큼 본문이 오른쪽으로 치우쳐 보일 수 있다 —
+   대부분의 문서는 --doc-pad-bottom(3.10) 때문에 스크롤이 생기므로 큰 차이는 아니다 */
 .cm-host .cm-editor .cm-scroller {
   line-height: var(--md-line-height);
+  padding: 0 max(0px, calc((100% - var(--content-max)) / 2));
 }
 
 /* data-view 는 createEditor.js 가 EditorView.editorAttributes 로 붙인다.
@@ -719,9 +832,10 @@
   padding-right: calc(var(--gutter-gap) - 6px);
 }
 
+/* 문서 위아래 여백 — 편집·원문·보기·공유 화면 공통 토큰 (F-143 3.10) */
 .cm-host .cm-editor .cm-content {
   caret-color: var(--accent);
-  padding: 12px 0;
+  padding: var(--doc-pad-top) 0 var(--doc-pad-bottom);
 }
 
 /* CM6 기본 테마는 커서 테두리를 black 고정값으로 준다 — 테마를 따르게 덮는다
@@ -818,7 +932,9 @@
 }
 
 .share-menu-list button {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   text-align: left;
   padding: 8px 10px;
@@ -835,9 +951,9 @@
 }
 
 /* ===== 공유받은 문서 화면 S-4 (specs/features/F-130.md 4장, ia.md 3.19) ===== */
+/* 메인 열 전체 폭 — 내용은 자식 요소가 800px 로 가운데 정렬한다 (F-143 3.8) */
 .shared-view {
   width: 100%;
-  max-width: var(--content-max);
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -867,6 +983,9 @@
 }
 
 .shared-view-notice-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
   padding: 6px 10px;
@@ -879,15 +998,19 @@
   background: var(--panel);
 }
 
+/* 문서 위아래 여백(F-143 3.10)을 여기서 준다 — 제목이 문서의 첫 줄 역할 */
 .shared-view-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  padding-top: var(--doc-pad-top);
+  padding-bottom: var(--doc-pad-bottom);
 }
 
 .shared-view-title {
-  margin: 0;
-  padding: 24px 32px 0;
+  margin: 0 auto;
+  max-width: var(--content-max);
+  padding: 0 32px;
   font-size: 22px;
   font-weight: 700;
   color: var(--ink);
@@ -897,8 +1020,10 @@
    .shared-view-body 가 그 역할을 하므로 겹치는 속성을 무효화한다 */
 .shared-view-body .viewer {
   height: auto;
-  max-width: none;
+  max-width: var(--content-max);
+  margin: 16px auto 0;
   overflow: visible;
+  padding: 0 32px;
 }
 
 /* ===== 상태바 E (specs/ia.md 2장 E, specs/features/F-113.md) ===== */

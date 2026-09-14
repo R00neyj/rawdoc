@@ -5,6 +5,7 @@ import { openStore } from '../storage/openStore.js'
 import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree.js'
 import { resolveWikiTarget } from '../lib/wikiLink.js'
 import { getPref, setPref } from './prefs.js'
+import { IconRefresh } from './icons.jsx'
 import { resolveTheme } from './theme.js'
 import { parseHash, formatHash } from './hashRoute.js'
 import { pushNotice } from './notice.js'
@@ -105,6 +106,8 @@ export default function App() {
     typeof window !== 'undefined' ? window.matchMedia(NARROW_QUERY).matches : false,
   )
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  // 사이드바 접힘(아이콘 레일) — 좁은 창에서는 쓰지 않는다 (F-143 3.3·3.4, md.sidebar)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getPref('md.sidebar', 'expanded') === 'collapsed')
   const [viewMode, setViewMode] = useState(() => getPref('md.viewMode', 'live'))
   // 문서를 열 때 에디터에 넘기는 용도로만 쓰는 스냅샷. 편집 중 본문을 여기 동기화하지
   // 않는다 — 원본은 CM6 EditorState 하나다 (architecture.md 3장)
@@ -233,7 +236,7 @@ export default function App() {
       showNotice({
         type: 'update',
         message: '새 버전이 있습니다.',
-        action: { label: '새로고침', onClick: applyUpdate },
+        action: { label: '새로고침', icon: IconRefresh, onClick: applyUpdate },
       })
     }
     wasUpdateAvailableRef.current = updateAvailable
@@ -262,7 +265,7 @@ export default function App() {
           showNotice({
             type: 'error',
             message: '새 버전이 다른 창에서 열렸습니다. 이 창을 새로 고쳐 주세요.',
-            action: { label: '새로 고침', onClick: () => location.reload() },
+            action: { label: '새로고침', icon: IconRefresh, onClick: () => location.reload() },
           })
         },
       })
@@ -1009,6 +1012,20 @@ export default function App() {
     setSidebarOpen((v) => !v)
   }
 
+  // 사이드바 머리 줄 토글: 좁은 창은 겹친 사이드바를 닫고, 그 밖에는 접기·펴기를 저장한다
+  // (F-143 3.3·3.4)
+  function handleSidebarHeadToggle() {
+    if (narrow) {
+      setSidebarOpen(false)
+      return
+    }
+    setSidebarCollapsed((v) => {
+      const next = !v
+      setPref('md.sidebar', next ? 'collapsed' : 'expanded')
+      return next
+    })
+  }
+
   const currentDoc = docs.find((d) => d.id === currentDocId) ?? null
   const isEmpty = bootPhase === 'ready' && docs.length === 0
   const showEditor = bootPhase === 'ready' && !isEmpty
@@ -1055,6 +1072,8 @@ export default function App() {
           sidebarRef={sidebarRef}
           narrow={narrow}
           open={sidebarOpen}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={handleSidebarHeadToggle}
           docs={docs}
           folders={folders}
           currentDocId={currentDocId}

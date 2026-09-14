@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { encodeShare } from '../lib/shareCodec.js'
 import { formatShareHash } from './hashRoute.js'
 import { toFileName } from '../lib/filename.js'
-import { IconShare, IconTooltip } from './icons.jsx'
+import { IconShare, IconTooltip, IconLink, IconCopy, IconShareFile } from './icons.jsx'
 
 // 상단바 `공유` 메뉴 (specs/ia.md 2장 A·3.19, specs/features/F-130.md 2장)
 // FolderMenu(F-126.md 5.2)와 같은 패턴 — 라이브러리 없이 방향키·Enter·Esc·바깥 클릭을 직접 구현
@@ -120,9 +120,9 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice }) {
   }
 
   const items = [
-    { key: 'link', label: '링크 복사', onSelect: handleCopyLink },
-    { key: 'markdown', label: '마크다운 복사', onSelect: handleCopyMarkdown },
-    ...(canShareFile ? [{ key: 'file', label: '파일로 공유…', onSelect: handleFileShare }] : []),
+    { key: 'link', label: '링크 복사', icon: IconLink, onSelect: handleCopyLink },
+    { key: 'markdown', label: '마크다운 복사', icon: IconCopy, onSelect: handleCopyMarkdown },
+    ...(canShareFile ? [{ key: 'file', label: '파일로 공유…', icon: IconShareFile, onSelect: handleFileShare }] : []),
   ]
 
   function handleKeyDown(e) {
@@ -179,6 +179,7 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice }) {
                 }}
                 onClick={() => runAndClose(item.onSelect)}
               >
+                <item.icon size={16} />
                 {item.label}
               </button>
             </li>

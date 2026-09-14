@@ -3,7 +3,7 @@
 // 아이콘·툴팁은 F-142 3.2·3.3
 import brand from '../brand.js'
 import ShareMenu from './ShareMenu.jsx'
-import { IconEdit, IconRaw, IconView, IconDownload, IconTooltip } from './icons.jsx'
+import { IconEdit, IconRaw, IconView, IconDownload, IconTooltip, IconPanelOpen } from './icons.jsx'
 
 const VIEW_MODES = [
   { value: 'live', label: '편집 — 서식을 보며 편집', Icon: IconEdit },
@@ -35,16 +35,19 @@ export default function TopBar({
   return (
     <header className="topbar">
       {narrow && (
-        <button
-          type="button"
-          ref={toggleButtonRef}
-          className="sidebar-toggle"
-          aria-label="사이드바 열기"
-          aria-expanded={sidebarOpen}
-          onClick={onToggleSidebar}
-        >
-          ☰
-        </button>
+        <span className="icon-btn-wrap">
+          <button
+            type="button"
+            ref={toggleButtonRef}
+            className="icon-btn sidebar-toggle"
+            aria-label="사이드바 열기"
+            aria-expanded={sidebarOpen}
+            onClick={onToggleSidebar}
+          >
+            <IconPanelOpen size={18} />
+          </button>
+          <IconTooltip text="사이드바 열기" />
+        </span>
       )}
       <span className="brand-group">
         <img className="brand-icon" src={brand.icon} alt="" width={20} height={20} />

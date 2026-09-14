@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { IconMore } from './icons.jsx'
 
 // 사이드바 항목 `⋯` 메뉴 — 라이브러리 없이 앱이 그린다 (specs/features/F-126.md 5.2)
 // 마우스 오버·키보드 포커스 시 트리거가 보인다(app.css). 방향키로 항목 이동, Enter 실행,
@@ -63,7 +64,7 @@ export default function FolderMenu({ label, items }) {
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        ⋯
+        <IconMore size={16} />
       </button>
       {open && (
         <ul className="item-menu-list" role="menu" ref={menuRef} onKeyDown={handleKeyDown}>
@@ -78,6 +79,7 @@ export default function FolderMenu({ label, items }) {
                 className={item.danger ? 'danger' : undefined}
                 onClick={() => selectItem(item)}
               >
+                {item.icon && <item.icon size={16} />}
                 {item.label}
               </button>
             </li>
