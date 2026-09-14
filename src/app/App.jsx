@@ -15,6 +15,8 @@ import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc.js'
 import { useDocSaver } from './useDocSaver.js'
 import { exportDoc } from './exportDoc.js'
 import { importFiles } from './importFiles.js'
+import { isExternalFileDrag, pickMarkdownFiles } from './fileDrop.js'
+import DropOverlay from './DropOverlay.jsx'
 import Editor from '../editor/Editor.jsx'
 import { countChars, countWords, cursorInfo } from '../editor/stats.js'
 import Viewer from '../viewer/Viewer.jsx'
@@ -126,6 +128,8 @@ export default function App() {
   // 공유받은 문서 화면 S-4 (specs/features/F-130.md 4장). decodeShare 결과 그대로 —
   // 저장소 문서가 아니므로 currentDocId 와 무관하게 독립적으로 둔다
   const [sharedDoc, setSharedDoc] = useState(null) // { title, content, lineEnding } | null
+  // 외부 .md 파일을 창 위로 끄는 동안의 덮개 (F-145.md 2.4)
+  const [dropActive, setDropActive] = useState(false)
 
   const titleInputRef = useRef(null)
   const sidebarRef = useRef(null)
@@ -152,6 +156,8 @@ export default function App() {
   const sharedDocRef = useRef(sharedDoc)
   // OS 파일 열기 연동(F-119)이 최신 store·beforeLeaveDoc 을 쓰도록 매 렌더 후 갱신한다
   const runImportFilesRef = useRef(async () => {})
+  // 창 전체 끌어놓기(F-145.md 2.1)가 매 렌더 후 최신 "받지 않는 때" 여부를 보도록 갱신한다
+  const dropBlockedRef = useRef(false)
   // Editor 는 마운트 시점의 onOpenWikiLink 클로저만 계속 쓰므로(F-131 3·5장), 여기서도
   // ref 로 우회해 항상 최신 docs·currentDocId·viewMode 를 보게 한다
   const openWikiLinkRef = useRef(async () => {})
@@ -600,6 +606,10 @@ export default function App() {
     currentDocIdRef.current = currentDocId
     foldersRef.current = folders
     sharedDocRef.current = sharedDoc
+    // 받지 않는 때(F-145.md 2.1): 대화상자·공유 화면·저장소를 못 쓸 때(store.kind==='memory')
+    dropBlockedRef.current = Boolean(
+      settingsOpen || deleteTarget || moveDocTarget || sharedDoc || store.kind === 'memory',
+    )
   })
 
   // runImportFiles 는 store·showNotice 등을 클로저로 담으므로, 매 커밋 후 최신 참조로
@@ -607,6 +617,66 @@ export default function App() {
   useEffect(() => {
     runImportFilesRef.current = runImportFiles
   })
+
+  // 창 전체 .md 파일 끌어놓기(F-145.md 2장) — 외부 파일만 반응, depth 로 진입 횟수를 센다
+  useEffect(() => {
+    let depth = 0
+
+    function handleDragEnter(e) {
+      if (!isExternalFileDrag(e.dataTransfer)) return
+      e.preventDefault()
+      depth++
+      if (!dropBlockedRef.current) setDropActive(true)
+    }
+
+    function handleDragOver(e) {
+      if (!isExternalFileDrag(e.dataTransfer)) return
+      // 받지 않는 때에도 브라우저 기본 파일 열기를 막는다 (2.1)
+      e.preventDefault()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = dropBlockedRef.current ? 'none' : 'copy'
+    }
+
+    function handleDragLeave(e) {
+      if (!isExternalFileDrag(e.dataTransfer)) return
+      depth = Math.max(0, depth - 1)
+      if (depth === 0) setDropActive(false)
+    }
+
+    function handleDrop(e) {
+      if (!isExternalFileDrag(e.dataTransfer)) return
+      e.preventDefault()
+      depth = 0
+      setDropActive(false)
+      if (dropBlockedRef.current) return
+
+      const { mdFiles, allNonMd } = pickMarkdownFiles(e.dataTransfer.files)
+      if (mdFiles.length > 0) {
+        runImportFilesRef.current(mdFiles)
+      } else if (allNonMd) {
+        showNotice({ type: 'info', message: '마크다운(.md) 파일만 가져올 수 있습니다.' })
+      }
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === 'Escape' && depth > 0) {
+        depth = 0
+        setDropActive(false)
+      }
+    }
+
+    window.addEventListener('dragenter', handleDragEnter)
+    window.addEventListener('dragover', handleDragOver)
+    window.addEventListener('dragleave', handleDragLeave)
+    window.addEventListener('drop', handleDrop)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('dragenter', handleDragEnter)
+      window.removeEventListener('dragover', handleDragOver)
+      window.removeEventListener('dragleave', handleDragLeave)
+      window.removeEventListener('drop', handleDrop)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [showNotice])
 
   // ----- 탭이 숨겨지거나 닫힐 때 최선 시도로 저장 (F-110.md 3.4, 데이터 손실 구간) -----
   useEffect(() => {
@@ -1093,6 +1163,7 @@ export default function App() {
 
   return (
     <div className="app-shell" style={{ '--sidebar-w': `${displaySidebarWidth}px` }}>
+      <DropOverlay visible={dropActive} />
       {narrow && topBar}
       <input
         ref={importInputRef}

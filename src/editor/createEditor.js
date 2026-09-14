@@ -29,6 +29,27 @@ function attributesExtensionFor(mode) {
   return EditorView.editorAttributes.of({ 'data-view': mode })
 }
 
+// src/app/fileDrop.js 의 isExternalFileDrag() 와 같은 판정 — src/editor 는 src/app 을 import 하지 않아(단방향 계층) 옮겨 적는다
+function isExternalFileDrag(dataTransfer) {
+  const types = dataTransfer?.types
+  if (!types) return false
+  return Array.from(types).includes('Files')
+}
+
+// CM6 기본 파일 삽입을 외부 파일 끌어놓기에서만 막는다. true 를 돌려주면 이벤트는 계속 버블돼 App 의 처리(F-145.md 2.2·2.3)로 넘어간다
+const dropFileGuard = EditorView.domEventHandlers({
+  dragover(event) {
+    if (!isExternalFileDrag(event.dataTransfer)) return false
+    event.preventDefault()
+    return true
+  },
+  drop(event) {
+    if (!isExternalFileDrag(event.dataTransfer)) return false
+    event.preventDefault()
+    return true
+  },
+})
+
 /**
  * @param {HTMLElement} parent
  * @param {object} [options]
@@ -61,6 +82,7 @@ export function createEditor(parent, options = {}) {
     lineNumbers(),
     history(),
     EditorView.lineWrapping,
+    dropFileGuard,
     // autoPair() 의 Backspace 키맵(Prec.high)이 markdown()의 deleteMarkupBackward
     // (역시 Prec.high)보다 먼저 받으려면 같은 우선순위 안에서 더 앞서 조립해야 한다
     // (@codemirror/view keymap 문서: "specified early... get checked first")

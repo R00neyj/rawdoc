@@ -1231,3 +1231,31 @@ body.sidebar-resizing {
 .statusbar-save--danger {
   color: var(--danger);
 }
+
+/* 외부 .md 파일 끌어놓기 덮개(F-145.md 2.4) — 입력을 막는 용도만, 포커스는 가져가지 않는다 */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+}
+
+.drop-overlay-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 56px;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-dialog);
+  color: var(--ink);
+}
+
+.drop-overlay-box p {
+  margin: 0;
+  font-size: 15px;
+  font-family: var(--font-display);
+}
