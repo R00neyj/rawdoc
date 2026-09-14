@@ -21,6 +21,8 @@
 | `specs/design.md` | 서체, 색 토큰, 형태·움직임 | 사람 승인 후 |
 | `specs/architecture.md` | `src/` 디렉터리, 저장소 인터페이스, 상태 흐름, 설정 키 | 사람 승인 후 |
 | `specs/features/F-xxx.md` | 작은 명세. 하나가 구현 단위 1개 | 사람 승인 후 |
+| `specs/human-checks.md` | 자동 테스트로 판정할 수 없어 사람이 확인할 목록과 상태 | 메인이 명세 완료마다 |
+| `e2e/` | Playwright E2E 테스트 (F-150) | 명세에 따라 |
 | `.workflow/` | 종료된 CM6 스파이크 기록 (2026-09-07~08). 새 작업에 쓰지 않는다 | 하지 않음 |
 | `spike/` | 스파이크 코드. 에디터 이식 시 참고만 한다 | 하지 않음 |
 | `src/` | 웹앱 본 코드 | 명세에 따라 |
@@ -38,6 +40,7 @@
 | 실시간 동기화 | Durable Object + y-partyserver, `y-codemirror.next` | 미도입 |
 | 메타 DB / 파일 | D1 / R2 | 미도입 |
 | 인증 | 미정 | — |
+| E2E 테스트 | Playwright (`@playwright/test`), 설치된 Chrome 채널 | F-150 에서 도입 |
 
 "미도입" 항목은 해당 명세가 생기기 전까지 의존성을 추가하지 않는다
 
@@ -49,6 +52,7 @@ npm run build        # 웹앱 빌드
 npm run lint         # ESLint (루트 전체)
 npm test             # Vitest 1회 실행 (src/**/*.test.{js,jsx})
 npm run test:watch   # Vitest 감시 모드
+npm run test:e2e     # Playwright E2E — 빌드 후 preview(4317) 에서 e2e/*.spec.js (F-150 이후)
 npm run dev:spike    # 스파이크 확인용
 ```
 
@@ -74,6 +78,8 @@ npm run dev:spike    # 스파이크 확인용
 - 받은 `F-xxx.md` 의 수용 기준과 수정 파일 목록 안에서만 작업한다
 - 명세 파일(`specs/**`)과 이 파일은 수정하지 않는다. 명세가 틀렸거나 모자라면 멈추고 보고한다
 - 새 의존성은 명세에 적힌 것만 설치한다
-- 끝나면 `npm run build` 와 `npm run lint` 를 돌리고 결과를 그대로 보고한다
+- 끝나면 `npm run build`, `npm run lint`, `npm test`, `npm run test:e2e`(F-150 이후) 를 돌리고 결과를 그대로 보고한다
+- 명세의 브라우저 수용 기준은 `e2e/F-xxx` 이름이 붙은 Playwright 테스트로 작성해 자동으로 판정한다 (F-150 이후. claude-in-chrome 수동 조작으로 대신하지 않는다)
+- 자동화할 수 없는 기준(실제 한글 IME, OS 창, 색감·느낌)은 테스트로 만들지 않고 "사람 확인 필요" 로 보고한다. 메인이 `specs/human-checks.md` 에 올린다
 - 보고에 포함: 바꾼 파일, 수용 기준별 충족 여부, 확인하지 못한 항목. 실행하지 않은 확인을 통과로 적지 않는다
 - 커밋은 하지 않는다
