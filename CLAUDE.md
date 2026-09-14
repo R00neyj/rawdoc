@@ -53,6 +53,11 @@ npm run lint         # ESLint (루트 전체)
 npm test             # Vitest 1회 실행 (src/**/*.test.{js,jsx})
 npm run test:watch   # Vitest 감시 모드
 npm run test:e2e     # Playwright E2E — 빌드 후 preview(4317) 에서 e2e/*.spec.js (F-150 이후)
+npm run verify       # lint·단위·build 요약 (verify:full = e2e 포함, -- --repeat 2)
+npm run e2e:one -- "F-152 A8a" --repeat 3   # e2e 일부 반복, 빌드 최신이면 건너뜀
+npm run measure -- --doc long:300 --select ".cm-line" --style line-height   # 화면 측정 JSON (4400·dist-measure)
+npm run review -- F-xxx   # 소유 밖 파일·금지 패턴 검토
+E2E_PORT=4501 E2E_DIST=dist-a npx playwright test   # e2e 병렬 슬롯
 npm run dev:spike    # 스파이크 확인용
 ```
 
@@ -79,6 +84,7 @@ npm run dev:spike    # 스파이크 확인용
 - 명세 파일(`specs/**`)과 이 파일은 수정하지 않는다. 명세가 틀렸거나 모자라면 멈추고 보고한다
 - 새 의존성은 명세에 적힌 것만 설치한다
 - 끝나면 `npm run build`, `npm run lint`, `npm test`, `npm run test:e2e`(F-150 이후) 를 돌리고 결과를 그대로 보고한다
+- 측정·부분 e2e 는 임시 스크립트를 쓰지 않고 `scripts/` 도구(measure·e2e-one·verify·review-diff)를 쓴다. 진행은 `ship-feature` 스킬 + `feature-implementer` 에이전트 (F-160)
 - 명세의 브라우저 수용 기준은 `e2e/F-xxx` 이름이 붙은 Playwright 테스트로 작성해 자동으로 판정한다 (F-150 이후. claude-in-chrome 수동 조작으로 대신하지 않는다)
 - 자동화할 수 없는 기준(실제 한글 IME, OS 창, 색감·느낌)은 테스트로 만들지 않고 "사람 확인 필요" 로 보고한다. 메인이 `specs/human-checks.md` 에 올린다
 - 보고에 포함: 바꾼 파일, 수용 기준별 충족 여부, 확인하지 못한 항목. 실행하지 않은 확인을 통과로 적지 않는다

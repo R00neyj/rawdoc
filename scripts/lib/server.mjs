@@ -73,6 +73,10 @@ export async function ensureServer({ port, dist, build }) {
     stop()
     process.exit(1)
   })
+  process.on('SIGTERM', () => {
+    stop()
+    process.exit(1)
+  })
 
   return { url: `http://localhost:${port}`, stop }
 }

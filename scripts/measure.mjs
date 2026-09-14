@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { chromium } from '@playwright/test'
 import { ensureServer } from './lib/server.mjs'
-import { openApp, importMarkdown, setPrefBeforeLoad, waitTransitionEnd } from '../e2e/helpers.js'
+import { openApp, importMarkdown, setPrefBeforeLoad, setViewMode, waitTransitionEnd } from '../e2e/helpers.js'
 import { longDoc, headingsDoc, listDoc, mixedDoc } from '../e2e/fixtures/docs.js'
 
 function parseArgs(argv) {
@@ -21,6 +21,7 @@ function parseArgs(argv) {
     port: 4400,
     dist: 'dist-measure',
     build: false,
+    dryRun: false,
   }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -39,6 +40,7 @@ function parseArgs(argv) {
       case '--port': opts.port = Number(next()); break
       case '--dist': opts.dist = next(); break
       case '--build': opts.build = true; break
+      case '--dry-run': opts.dryRun = true; break
       default: throw new Error(`알 수 없는 옵션: ${arg}`)
     }
   }
@@ -98,6 +100,11 @@ async function main() {
   const size = { width: Number(widthStr), height: Number(heightStr) }
   const content = resolveDoc(opts.doc)
 
+  if (opts.dryRun) {
+    console.log(JSON.stringify({ port: opts.port, dist: opts.dist, build: opts.build, mode: opts.mode, theme: opts.theme }))
+    return
+  }
+
   const server = await ensureServer({ port: opts.port, dist: opts.dist, build: opts.build })
   const browser = await chromium.launch({ channel: 'chrome' })
   const errors = []
@@ -107,7 +114,6 @@ async function main() {
     page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()) })
     page.on('pageerror', (err) => errors.push(err.message))
 
-    await setPrefBeforeLoad(page, 'md.viewMode', opts.mode)
     await setPrefBeforeLoad(page, 'md.theme', opts.theme)
     for (const pref of opts.prefs) {
       const eq = pref.indexOf('=')
@@ -116,6 +122,11 @@ async function main() {
 
     await openApp(page)
     await importMarkdown(page, { content })
+
+    // live 로 연 뒤 상단바 버튼으로 모드를 바꾼다 — view·raw 를 먼저 심으면 에디터가 숨겨져 openApp 대기가 끝나지 않는다 (F-160 2.7)
+    if (opts.mode !== 'live') {
+      await setViewMode(page, opts.mode)
+    }
 
     for (const action of opts.actions) {
       await runAction(page, action)

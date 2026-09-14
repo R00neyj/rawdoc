@@ -74,7 +74,9 @@ async function main() {
     return
   }
 
-  const result = spawnSync('npx', args, { shell: true, encoding: 'utf-8', env: { ...process.env, ...env } })
+  // shell:true 는 인자를 알아서 인용해주지 않는다 — 공백 있는 인자(검색어)가 쪼개지지 않게 직접 인용한다
+  const quoted = args.map((a) => (a.includes(' ') ? `"${a}"` : a))
+  const result = spawnSync('npx', quoted, { shell: true, encoding: 'utf-8', env: { ...process.env, ...env } })
   const output = (result.stdout ?? '') + (result.stderr ?? '')
   const { passed, failed, names, firstErrors } = summarize(output)
 

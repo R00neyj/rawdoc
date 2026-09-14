@@ -13,6 +13,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "verify": "node scripts/verify.mjs",
+    "verify:full": "node scripts/verify.mjs --e2e",
+    "e2e:one": "node scripts/e2e-one.mjs",
+    "measure": "node scripts/measure.mjs",
+    "review": "node scripts/review-diff.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
