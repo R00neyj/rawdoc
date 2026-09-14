@@ -4,7 +4,7 @@ import './preview.css'
 
 import { blockPreview } from './blocks.js'
 import { inlinePreview } from './inline.js'
-import { linePreview } from './lines.js'
+import { gutterAlignPreview, linePreview, listIndentPreview } from './lines.js'
 import { linkClicks } from './links.js'
 import { wikiLinkClicks, wikiLinksPreview } from './wikiLinks.js'
 
@@ -13,6 +13,8 @@ export function livePreview({ onOpenWikiLink } = {}) {
   return [
     inlinePreview(),
     linePreview(),
+    gutterAlignPreview(),
+    listIndentPreview(),
     blockPreview(),
     linkClicks(),
     wikiLinksPreview(),

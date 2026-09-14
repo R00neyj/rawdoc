@@ -56,6 +56,10 @@
   color: var(--md-fg-muted);
 }
 
+/* 거터 줄 번호 세로 정렬 (F-152 2.1) 은 lines.js 의 gutterAlignPreview() 가 실측해
+   거터 칸(.cm-gutterElement)에 padding-top 을 직접 쓴다 — rem·em 계산은 글꼴마다
+   실제 줄 높이·베이스라인이 달라 픽셀이 안 맞을 수 있다(실측 보고 참고) */
+
 /* ===== 인용 (F-124 3.4) ===== */
 .cm-host .cm-editor .cm-line.md-quote {
   border-left: 0.25em solid var(--md-border);
@@ -63,10 +67,30 @@
   color: var(--md-fg-muted);
 }
 
-/* ===== 글머리 목록 ===== */
+/* ===== 목록 줄 내어쓰기 (F-152 2.3) =====
+   listIndentPreview() 가 마커+공백 뒤 "글자 시작" 위치를 실측해 --md-list-indent 로
+   그 줄에 직접 쓴다. text-indent(첫 화면 줄만) 를 음수로 주고 padding-left(모든
+   화면 줄) 를 같은 값으로 줘서, 첫 줄은 원래 위치 그대로(둘이 상쇄), 접힌 둘째
+   화면 줄부터는 padding-left 만큼 내어쓴다 — 측정 전(기본값 0)에는 아무 효과 없다 */
+.cm-host .cm-editor .cm-line.md-list-line {
+  padding-left: var(--md-list-indent, 0px);
+  text-indent: calc(-1 * var(--md-list-indent, 0px));
+}
+
+/* ===== 글머리 목록 =====
+   폭을 2em 고정(보기 모드 ul,ol{padding-left:2em}, F-152 2.3 A5) 으로 줘 listIndentPreview()
+   가 재는 "마커 뒤 글자 시작" 값이 마커 글자 폭과 무관하게 보기 모드와 같아지게 한다 */
 .md-bullet {
+  display: inline-block;
+  min-width: 2em;
   color: var(--accent);
   font-weight: 700;
+}
+
+/* 순서 매김 목록 기호(숫자+구두점+공백) — 기호 색은 highlight.js 가 준다 */
+.md-list-marker {
+  display: inline-block;
+  min-width: 2em;
 }
 
 /* ===== 체크박스 ===== */
@@ -76,14 +100,28 @@
   margin: 0 2px 0 0;
 }
 
-/* ===== 인라인코드·링크 (F-124 3.3) ===== */
+/* ===== 인라인코드·링크 (F-124 3.3, 원문 모드 모양 제외는 F-152 2.2) =====
+   서체·크기(F-124 1장 "원문 모드는 서체·크기만 따른다")는 모드 공통이지만, 칩
+   모양(바탕·안쪽 여백·모서리)은 편집 모드에서만 준다. src/styles/app.css 에
+   F-107 시절 만든 `.md-code`(배경·모서리, F-152 소유 범위 밖이라 고치지 않는다)가
+   같은 특정도로 남아 있어, 원문 모드 규칙은 그 배경이 이기지 못하도록 데이터
+   속성으로 특정도를 높여 명시적으로 지운다 */
 .md-code {
   font-family: var(--font-mono);
   font-size: 85%;
+  --tracking: 0; /* F-141 3.6 */
+}
+
+.cm-host .cm-editor[data-view='live'] .md-code {
   padding: 0.2em 0.4em;
   border-radius: 6px;
   background: var(--md-code-bg);
-  --tracking: 0; /* F-141 3.6 */
+}
+
+.cm-host .cm-editor[data-view='raw'] .md-code {
+  padding: 0;
+  border-radius: 0;
+  background: none;
 }
 
 /* 펼친 코드블록 줄 (F-124 3.4 11번). lines.js 의 fenceLinePreview() 가 편집·원문
@@ -117,7 +155,8 @@
   cursor: pointer;
 }
 
-.md-link:hover {
+/* 호버 밑줄은 GitHub 스타일 요소 모양이라 편집 모드에서만 (F-152 2.2 원문 모양 누수) */
+.cm-host .cm-editor[data-view='live'] .md-link:hover {
   text-decoration: underline;
 }
 

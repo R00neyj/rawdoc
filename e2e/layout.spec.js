@@ -126,9 +126,12 @@ test.describe('F-143 A16 아이콘 크기·가이드 선', () => {
 
     // 폴더 안에 문서를 만들어야 펼친 폴더에 하위 항목(가이드 선 조건)이 생긴다.
     // 폴더 행만 `.tree-toggle` 버튼을 갖는다(문서 행은 `.tree-toggle-spacer`) — 이걸로 가른다
+    // hover 는 병렬 실행 중 재렌더로 풀릴 수 있어(F-152 A16 불안정 원인) 대신 focus 로 연다 —
+    // .item-menu-btn 은 :hover 외 :focus-within 에서도 보인다(app.css 407~410행)
     const folderRow = page.locator('.tree-row').filter({ has: page.locator('.tree-toggle') }).first()
-    await folderRow.hover()
-    await folderRow.locator('.item-menu-btn').click()
+    const menuBtn = folderRow.locator('.item-menu-btn')
+    await menuBtn.focus()
+    await menuBtn.click()
     await page.getByRole('menuitem', { name: '새 문서' }).click()
 
     const folderToggle = page.locator('.tree-toggle').first()

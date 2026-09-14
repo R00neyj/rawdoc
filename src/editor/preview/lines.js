@@ -213,15 +213,23 @@ export function buildLines(state, ranges) {
           case 'ListMark': {
             const listItem = node.node.parent
             const list = listItem?.parent
-            const line = state.doc.lineAt(node.from).number
-            if (active.has(line)) return
+            const lineObj = state.doc.lineAt(node.from)
+            // 목록 내어쓰기(F-152 2.3) — 활성·비활성 모두, 접힌 둘째 화면 줄이 글자
+            // 시작선에 맞도록 listIndentPreview() 가 실측해 주는 값을 이 클래스가 쓴다
+            out.push(lineClassRange(lineObj, 'md-list-line'))
+            if (active.has(lineObj.number)) return
             const nextIsTask = node.node.nextSibling?.name === 'Task'
             if (nextIsTask) {
               out.push(hideMarkAndSpace(state, node.node))
             } else if (list?.name === 'BulletList') {
               out.push(Decoration.replace({ widget: new BulletWidget() }).range(node.from, node.to))
+            } else {
+              // OrderedList — 기호는 그대로(기호 색만, highlight.js), 폭만 보기 모드
+              // 들여쓰기와 맞춘다(F-152 2.3 A5, md-list-marker 의 min-width: 2em)
+              let markEnd = node.to
+              if (state.doc.sliceString(markEnd, markEnd + 1) === ' ') markEnd += 1
+              out.push(Decoration.mark({ class: 'md-list-marker' }).range(node.from, markEnd))
             }
-            // OrderedList 는 그대로 둔다 (기호 색만 — highlight.js)
             return
           }
 
@@ -360,5 +368,171 @@ export function fenceLinePreview() {
       }
     },
     { decorations: (v) => v.decorations },
+  )
+}
+
+/**
+ * F-152 2.1 대상 줄 클래스 — 위아래 여백·글자 크기가 본문과 달라 거터 숫자가
+ * 어긋나는 줄들. 전부 buildLines() 가 이미 붙이는 기존 클래스라 새로 계산하지
+ * 않는다(제목·구분선은 이 파일, 프론트매터·콜아웃 첫 줄은 F-133·F-128)
+ */
+const GUTTER_ALIGN_SELECTOR = [
+  'md-h1',
+  'md-h2',
+  'md-h3',
+  'md-h4',
+  'md-h5',
+  'md-h6',
+  'md-hr',
+  'md-frontmatter-first',
+  'md-callout-title',
+]
+  .map((cls) => `.cm-line.${cls}`)
+  .join(', ')
+
+/**
+ * 거터 숫자를 그 줄 첫 화면 줄 세로 가운데에 맞춘다 (F-152 2.1). rem·em 기반 CSS 값은
+ * `--font-display` 토글(F-105 A3)이나 글꼴마다 실제 줄 높이·베이스라인이 달라 계산만으로는
+ * 픽셀이 안 맞을 수 있어(실측: h1·h2 최대 2.5px 차이), 거터 숫자와 그 줄 첫 글자를 둘 다
+ * DOM 에서 실측해 거터 칸 숫자에 `transform: translateY()` 를 쓴다. `padding-top` 은
+ * `.cm-gutterElement` 가 box-sizing:border-box + CM6 가 매긴 고정 height 라, 필요한
+ * 값이 그 height 보다 크면 박스 자체가 넘쳐 커진다. `getBoundingClientRect()` 는 transform
+ * 도 반영하므로, 거터 칸 자신의 rect 를 다음 측정의 기준(매칭·기준선)으로 다시 읽으면
+ * 우리가 쓴 값이 되먹임돼 둘 다 h3 부터 어긋난다(F-152 2.1 실측). 그래서 매칭은 절대
+ * 바뀌지 않는 거터 칸의 줄번호 텍스트로, 기준선은 내용 줄(content line) 쪽 rect 로만
+ * 잡는다. decoration 이 아니라 표시용 인라인 스타일 하나만 옮기는 값이라 문서 내용은
+ * 바꾸지 않는다(CLAUDE.md 불변조건)
+ */
+export function gutterAlignPreview() {
+  return ViewPlugin.fromClass(
+    class {
+      constructor(view) {
+        this.scheduleMeasure(view)
+      }
+
+      update(update) {
+        if (isForced(update) || update.docChanged || update.selectionSet || update.viewportChanged || update.geometryChanged) {
+          this.scheduleMeasure(update.view)
+        }
+      }
+
+      scheduleMeasure(view) {
+        view.requestMeasure({
+          read: (view) => {
+            const numberMap = new Map()
+            for (const el of view.dom.querySelectorAll('.cm-lineNumbers .cm-gutterElement')) {
+              const n = Number(el.textContent)
+              if (el.getBoundingClientRect().height > 0 && Number.isInteger(n)) numberMap.set(n, el)
+            }
+            const results = []
+            for (const lineEl of view.contentDOM.querySelectorAll(GUTTER_ALIGN_SELECTOR)) {
+              const pos = view.posAtDOM(lineEl, 0)
+              const gutterEl = numberMap.get(view.state.doc.lineAt(pos).number)
+              if (!gutterEl) continue
+              const coords = view.coordsAtPos(pos, 1)
+              if (!coords) continue
+              const lineRect = lineEl.getBoundingClientRect()
+              const contentCenter = (coords.top + coords.bottom) / 2
+              const gutterLineHeight = parseFloat(getComputedStyle(gutterEl).lineHeight) || 0
+              const shift = Math.max(0, Math.round(contentCenter - lineRect.top - gutterLineHeight / 2))
+              results.push({ gutterEl, shift })
+            }
+            return results
+          },
+          write: (results, view) => {
+            const used = new Set(results.map((r) => r.gutterEl))
+            for (const el of view.dom.querySelectorAll('.cm-lineNumbers .cm-gutterElement')) {
+              if (!used.has(el)) el.style.removeProperty('transform')
+            }
+            for (const { gutterEl, shift } of results) {
+              gutterEl.style.setProperty('transform', `translateY(${shift}px)`)
+            }
+          },
+        })
+      }
+    },
+  )
+}
+
+/**
+ * 목록 줄의 "글자 시작" 위치(마커+뒤 공백 다음) — F-152 2.3 내어쓰기 실측에 쓴다.
+ * 활성·비활성과 무관하게 항상 같은 규칙(문서 위치 기준)이라 실제 렌더링(위젯으로
+ * 바뀐 기호든 드러난 원문이든)에 맞춰 listIndentPreview() 가 픽셀로 재는 기준점이 된다
+ */
+export function listContentStarts(state, ranges) {
+  const out = []
+
+  for (const { from, to } of ranges) {
+    syntaxTree(state).iterate({
+      from,
+      to,
+      enter: (node) => {
+        if (node.name === 'ListMark') {
+          const line = state.doc.lineAt(node.from)
+          let pos = node.to
+          if (state.doc.sliceString(pos, pos + 1) === ' ') pos += 1
+          out.push({ lineFrom: line.from, pos })
+          return
+        }
+        if (node.name === 'TaskMarker') {
+          const line = state.doc.lineAt(node.from)
+          let pos = node.to
+          if (state.doc.sliceString(pos, pos + 1) === ' ') pos += 1
+          const existing = out.find((e) => e.lineFrom === line.from)
+          if (existing) existing.pos = pos
+          else out.push({ lineFrom: line.from, pos })
+        }
+      },
+    })
+  }
+
+  return out
+}
+
+/**
+ * 목록 줄 내어쓰기 (F-152 2.3) — CSS 만으로는 마커 폭(비례 폭 서체·중첩 공백마다
+ * 다름)을 알 수 없어, 마커+공백 뒤 "글자 시작" 위치를 실측해 그 줄 DOM 에
+ * `--md-list-indent` 값을 직접 쓴다. 최상위 마커(글머리 점 위젯·순서 매김 숫자)는
+ * preview.css 에서 `min-width: 2em` 을 줘 보기 모드 목록 들여쓰기(github-markdown-css
+ * `ul,ol{padding-left:2em}`) 와 같은 값이 실측되게 한다(A5). decoration 이 아니라
+ * 표시용 CSS 변수 하나만 옮기는 값이라 문서 내용은 바꾸지 않는다(CLAUDE.md 불변조건).
+ * 조합 중에도 항상 최신 state 로 다시 재는 값이라 별도 보류·따라잡기가 필요 없다(F-134 3.1)
+ */
+export function listIndentPreview() {
+  return ViewPlugin.fromClass(
+    class {
+      constructor(view) {
+        this.scheduleMeasure(view)
+      }
+
+      update(update) {
+        if (isForced(update) || update.docChanged || update.selectionSet || update.viewportChanged || update.geometryChanged) {
+          this.scheduleMeasure(update.view)
+        }
+      }
+
+      scheduleMeasure(view) {
+        view.requestMeasure({
+          read: (view) =>
+            listContentStarts(view.state, view.visibleRanges)
+              .map(({ lineFrom, pos }) => {
+                const lineLeft = view.coordsAtPos(lineFrom, 1)
+                const contentLeft = view.coordsAtPos(pos, 1)
+                if (!lineLeft || !contentLeft) return null
+                return { lineFrom, px: Math.max(0, Math.round(contentLeft.left - lineLeft.left)) }
+              })
+              .filter(Boolean),
+          write: (results, view) => {
+            const matched = new Map(results.map((r) => [r.lineFrom, r.px]))
+            for (const el of view.contentDOM.querySelectorAll('.cm-line.md-list-line')) {
+              const pos = view.posAtDOM(el)
+              const px = matched.get(view.state.doc.lineAt(pos).from)
+              if (px === undefined) el.style.removeProperty('--md-list-indent')
+              else el.style.setProperty('--md-list-indent', `${px}px`)
+            }
+          },
+        })
+      }
+    },
   )
 }

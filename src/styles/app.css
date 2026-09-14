@@ -622,7 +622,10 @@ svg {
   background: var(--accent-soft);
 }
 
-.notice span {
+/* 메시지만 남은 폭을 채운다 — `.notice span` 처럼 자식 span 전체를 잡으면 닫기
+   버튼을 감싼 `.icon-btn-wrap` 도 span 이라 같이 걸려 버튼 칸이 폭 절반을
+   차지한다(F-152 2.4). 동작·닫기 버튼은 오른쪽 끝에 그대로 붙는다 */
+.notice-message {
   flex: 1;
 }
 

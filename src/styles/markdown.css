@@ -65,6 +65,14 @@
   background-color: var(--md-code-bg);
 }
 
+/* 코드블록(`pre`) 안 code·tt 는 바탕 투명 — 위 규칙이 github-markdown-css 의
+   `.markdown-body pre code, pre tt`(투명)보다 특이성이 높아 코드블록 줄마다 인라인코드
+   바탕이 칠해지는 문제를 고친다(F-152 2.6). 인라인코드(pre 밖)는 그대로 */
+.app-shell .markdown-body pre code,
+.app-shell .markdown-body pre tt {
+  background-color: transparent;
+}
+
 .app-shell .markdown-body pre {
   color: var(--ink);
   background-color: var(--md-bg-muted);

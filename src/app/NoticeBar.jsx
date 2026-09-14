@@ -6,7 +6,7 @@ export default function NoticeBar({ notice, onDismiss }) {
 
   return (
     <div className={`notice notice--${notice.type}`} role={notice.type === 'error' ? 'alert' : 'status'}>
-      <span>{notice.message}</span>
+      <span className="notice-message">{notice.message}</span>
       {notice.action && (
         <button type="button" onClick={notice.action.onClick}>
           {notice.action.icon && <notice.action.icon size={18} />}
