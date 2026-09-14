@@ -70,7 +70,7 @@
   --gutter-gap: 20px;
   /* 문서 위아래 여백 — 편집·원문·보기 모드·공유 화면 공통 (F-143 3.10) */
   --doc-pad-top: 48px;
-  --doc-pad-bottom: max(120px, 30vh);
+  --doc-pad-bottom: 50dvh;
 
   /* 형태 (design.md 4장) */
   --radius-control: 6px;
