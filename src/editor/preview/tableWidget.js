@@ -339,7 +339,7 @@ function startEdit(mainView, wrap, widget, row, col) {
 
   activeEdit.set(mainView, { wrap, td, row, col, cellView, widget, range, lineStart, pendingRecalc: false })
   cellView.focus()
-  positionCellHighlight(wrap, td) // 강조를 이 칸으로 옮긴다(F-140 3.3)
+  positionCellHighlight(wrap, td, { visible: false }) // 단일 칸 편집 강조는 보이지 않는다(F-164)
 }
 
 // 칸 하위 에디터 키 처리 (F-125 2.3). 조합 중(네이티브 isComposing·keyCode 229 포함, view.composing 은 한 틱 늦다 — F-161 3.2)에는 가로채지 않는다
@@ -595,15 +595,15 @@ function getCellHighlight(wrap) {
   return el
 }
 
-/** 강조를 td 위치, 칸 테두리(1px) 안쪽으로 옮긴다 */
-function positionCellHighlight(wrap, td) {
+// 강조를 td 위치로 옮긴다. visible=false 면 위치만 계산하고 보이지 않는다(F-164, DOM·계산은 F-165 재사용)
+function positionCellHighlight(wrap, td, { visible = true } = {}) {
   const el = getCellHighlight(wrap)
   if (!el) return
   el.style.left = `${td.offsetLeft + 1}px`
   el.style.top = `${td.offsetTop + 1}px`
   el.style.width = `${Math.max(0, td.offsetWidth - 2)}px`
   el.style.height = `${Math.max(0, td.offsetHeight - 2)}px`
-  el.hidden = false
+  if (visible) el.hidden = false
 }
 
 function hideCellHighlight(wrap) {
@@ -624,7 +624,7 @@ function observeButtonPosition(wrap) {
     positionAddButtons(wrap)
     const view = wrapView.get(wrap)
     const entry = view && activeEdit.get(view)
-    if (entry && entry.wrap === wrap) positionCellHighlight(wrap, entry.td)
+    if (entry && entry.wrap === wrap) positionCellHighlight(wrap, entry.td, { visible: false })
   })
   observer.observe(table)
   observer.observe(scroll)

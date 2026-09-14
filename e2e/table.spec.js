@@ -8,6 +8,8 @@ import {
   rectOf,
   fakeImeCompose,
   fakeImeCommit,
+  setPrefBeforeLoad,
+  tokenAsRgb,
 } from './helpers.js'
 
 // 문서 첫 줄에 표를 바로 두지 않는다 — 가져오기 직후 커서가 문서 맨 앞(0)에 있는데,
@@ -451,5 +453,40 @@ test.describe('F-162 표 칸 안 줄바꿈 (Alt+Enter → <br>)', () => {
     const paragraph = page.locator('.viewer p', { hasText: '문단' })
     await expect(paragraph).toContainText('x<br>y')
     await expect(paragraph.locator('br')).toHaveCount(0)
+  })
+})
+
+// 머리 행 + 본문 4행 (F-164 A1 "본문 4행 표")
+const STRIPE_TABLE = `${LEAD}| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n| 5 | 6 |\n| 7 | 8 |\n`
+
+test.describe('F-164 표 줄무늬·칸 강조 제거 (편집 모드)', () => {
+  for (const theme of ['white', 'sepia', 'dark']) {
+    test(`F-164 A1 ${theme} 모든 행 바탕이 문서 칸 바탕과 같다`, async ({ page }) => {
+      await setPrefBeforeLoad(page, 'md.theme', theme)
+      await openApp(page)
+      await importMarkdown(page, { content: STRIPE_TABLE })
+      const panelBg = await tokenAsRgb(page, '--panel')
+      const rows = page.locator('.md-table-widget table tr')
+      const count = await rows.count()
+      expect(count).toBe(5) // 머리 1 + 본문 4
+      for (let i = 0; i < count; i++) {
+        const bg = await rows.nth(i).evaluate((el) => getComputedStyle(el).backgroundColor)
+        expect(bg).toBe(panelBg)
+      }
+    })
+  }
+
+  test('F-164 A3 칸 편집 중 강조 요소가 보이지 않는다, Tab 으로 옆 칸도 마찬가지', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: NARROW_TABLE })
+    const firstCell = page.locator('.md-table-widget td, .md-table-widget th').first()
+    await firstCell.click()
+
+    const highlight = page.locator('.md-table-cell-highlight')
+    await expect(highlight).toHaveCount(1) // 요소 자체는 남는다 — F-165 범위 선택이 다시 쓴다
+    expect(await highlight.evaluate((el) => getComputedStyle(el).display)).toBe('none')
+
+    await page.keyboard.press('Tab')
+    expect(await highlight.evaluate((el) => getComputedStyle(el).display)).toBe('none')
   })
 })

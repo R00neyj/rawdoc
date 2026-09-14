@@ -99,6 +99,44 @@ describe('세피아 대비 상향 (design.md 3.4, F-153 2.4)', () => {
   })
 })
 
+describe('글자 선택 바탕 대비 (design.md 3.2, F-164)', () => {
+  // 다크 --accent 는 THEMES.dark 가 resolve 못하는 color-mix() 라 여기서 다시 계산한다
+  function mixWhite(hex, pct) {
+    const int = parseInt(hex.slice(1), 16)
+    const r = (int >> 16) & 255
+    const g = (int >> 8) & 255
+    const b = int & 255
+    const mixCh = (c) => Math.round((c * pct) / 100 + 255 * (1 - pct / 100))
+    return `#${[r, g, b].map((c) => mixCh(c).toString(16).padStart(2, '0')).join('')}`
+  }
+
+  // color-mix(in srgb, A pct%, B) 를 hex 로 근사 계산한다(sRGB 채널 선형 보간)
+  function mix(hexA, hexB, pct) {
+    const a = parseInt(hexA.slice(1), 16)
+    const b = parseInt(hexB.slice(1), 16)
+    const chA = [(a >> 16) & 255, (a >> 8) & 255, a & 255]
+    const chB = [(b >> 16) & 255, (b >> 8) & 255, b & 255]
+    const mixed = chA.map((c, i) => Math.round((c * pct) / 100 + chB[i] * (1 - pct / 100)))
+    return `#${mixed.map((c) => c.toString(16).padStart(2, '0')).join('')}`
+  }
+
+  const accentDark = mixWhite(brand.accent, 55)
+
+  for (const [name, tokens] of Object.entries(THEMES)) {
+    const accentHex = name === 'dark' ? accentDark : brand.accent
+    describe(name, () => {
+      for (const bg of ['paper', 'panel']) {
+        test(`--ink vs (--selection-bg 24% + --${bg}) >= 4.5`, () => {
+          const bgHex = resolve(tokens, tokens[bg])
+          const inkHex = resolve(tokens, tokens.ink)
+          const selectionHex = mix(accentHex, bgHex, 24)
+          expect(contrastRatio(inkHex, selectionHex)).toBeGreaterThanOrEqual(4.5)
+        })
+      }
+    })
+  }
+})
+
 describe('메인 컬러 대비 — 확정 전까지 경고만 (design.md 3.2)', () => {
   // 다크는 srgb 55% 흰 혼합으로 계산한다 (design.md 3.4)
   function mixWhite(hex, pct) {

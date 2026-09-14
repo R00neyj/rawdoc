@@ -22,6 +22,8 @@
   /* 메인 컬러 파생 색 — color-mix() 로만 계산한다 (design.md 3.2) */
   --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
   --accent-ring: color-mix(in srgb, var(--accent) 55%, transparent);
+  /* 글자 선택 바탕 — 앱 전체 ::selection 이 쓴다 (design.md 3.2, F-164) */
+  --selection-bg: color-mix(in srgb, var(--accent) 24%, transparent);
 
   /* GitHub 마크다운 스타일 대응 토큰 (F-124 2장). 편집·보기 모드가 함께 참조한다.
      이름은 나중에 사용자 CSS 가 편집 모드를 바꿀 창구이므로 바꾸지 않는다 */

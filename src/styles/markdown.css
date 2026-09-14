@@ -82,13 +82,14 @@
   border: 1px solid var(--md-border);
 }
 
+/* 모든 행이 같은 바탕 — 표 바깥 문서 칸 바탕과 같다, 줄무늬 없음. github-markdown-css 원본 :nth-child(2n) 줄무늬도 함께 덮어써야 이긴다 (F-164) */
 .app-shell .markdown-body table tr {
   background-color: var(--panel);
   border-top: 1px solid var(--md-border-muted);
 }
 
 .app-shell .markdown-body table tr:nth-child(2n) {
-  background-color: var(--md-bg-muted);
+  background-color: var(--panel);
 }
 
 /* 작업 목록 체크박스 (F-124 3.4). F-123 의 렌더러는 markdown-it-task-lists 를 쓰지 않고

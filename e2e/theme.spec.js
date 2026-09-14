@@ -1,6 +1,6 @@
 // 테마 3종·본문 서체·자동완성 서체·자간 (F-150.md 3.3)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, setPrefBeforeLoad } from './helpers.js'
+import { openApp, importMarkdown, setPrefBeforeLoad, setViewMode, tokenAsRgb } from './helpers.js'
 
 async function contrastScan(page) {
   return page.evaluate(() => {
@@ -242,6 +242,149 @@ test.describe('F-153 A6 세피아 화면 스캔', () => {
     const failures = await contrastScanStrict(page)
     expect(failures, JSON.stringify(failures)).toEqual([])
   })
+})
+
+// 머리 행 + 본문 4행 (F-164 A1 과 같은 구성)
+const STRIPE_TABLE = '# 문서\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n| 5 | 6 |\n| 7 | 8 |\n'
+
+async function expectUniformRowBg(page, rowsLocator, panelBg) {
+  const count = await rowsLocator.count()
+  expect(count).toBe(5)
+  for (let i = 0; i < count; i++) {
+    const bg = await rowsLocator.nth(i).evaluate((el) => getComputedStyle(el).backgroundColor)
+    expect(bg).toBe(panelBg)
+  }
+}
+
+test.describe('F-164 A2 표 줄무늬 제거 (보기 모드·공유 화면)', () => {
+  for (const theme of ['white', 'sepia', 'dark']) {
+    test(`${theme} 보기 모드 모든 행 바탕이 문서 칸 바탕과 같다`, async ({ page }) => {
+      await setPrefBeforeLoad(page, 'md.theme', theme)
+      await openApp(page)
+      await importMarkdown(page, { content: STRIPE_TABLE })
+      await setViewMode(page, 'view')
+      const panelBg = await tokenAsRgb(page, '--panel')
+      await expectUniformRowBg(page, page.locator('.viewer table tr'), panelBg)
+    })
+
+    test(`${theme} 공유 화면 모든 행 바탕이 문서 칸 바탕과 같다`, async ({ page, context }) => {
+      await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+      await setPrefBeforeLoad(page, 'md.theme', theme)
+      await openApp(page)
+      await importMarkdown(page, { content: STRIPE_TABLE })
+      await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+      await page.getByRole('menuitem', { name: '링크 복사' }).click()
+      const link = await page.evaluate(() => navigator.clipboard.readText())
+      const hash = new URL(link).hash
+      await page.evaluate((h) => {
+        location.hash = h
+      }, hash)
+      await expect(page.locator('.shared-view')).toBeVisible()
+      const panelBg = await tokenAsRgb(page, '--panel')
+      await expectUniformRowBg(page, page.locator('.shared-view table tr'), panelBg)
+    })
+  }
+})
+
+test.describe('F-164 A4 글자 선택 색', () => {
+  // el 의 ::selection 바탕을 재고, 문서 칸 바탕과 합성해 --ink 대비를 계산한다
+  async function checkSelection(page, selector) {
+    return page.evaluate((sel) => {
+      function toRgba(str) {
+        const m = str.match(/[\d.]+/g).map(Number)
+        return { r: m[0], g: m[1], b: m[2], a: m[3] ?? 1 }
+      }
+      function bgOf(el) {
+        let node = el
+        while (node) {
+          const bg = getComputedStyle(node).backgroundColor
+          if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg
+          node = node.parentElement
+        }
+        return 'rgb(255, 255, 255)'
+      }
+      function blend(fg, bg) {
+        return {
+          r: fg.r * fg.a + bg.r * (1 - fg.a),
+          g: fg.g * fg.a + bg.g * (1 - fg.a),
+          b: fg.b * fg.a + bg.b * (1 - fg.a),
+        }
+      }
+      function luminance({ r, g, b }) {
+        const [lr, lg, lb] = [r, g, b].map((c) => {
+          const s = c / 255
+          return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+        })
+        return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb
+      }
+      function contrast(rgbA, rgbB) {
+        const l1 = luminance(rgbA)
+        const l2 = luminance(rgbB)
+        const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1]
+        return (hi + 0.05) / (lo + 0.05)
+      }
+
+      const el = document.querySelector(sel)
+      const selectionBg = getComputedStyle(el, '::selection').backgroundColor
+
+      const probe = document.createElement('div')
+      probe.style.backgroundColor = getComputedStyle(document.documentElement).getPropertyValue('--selection-bg').trim()
+      document.body.appendChild(probe)
+      const expectedSelectionBg = getComputedStyle(probe).backgroundColor
+      probe.remove()
+
+      const inkProbe = document.createElement('div')
+      inkProbe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()
+      document.body.appendChild(inkProbe)
+      const inkRgb = toRgba(getComputedStyle(inkProbe).color)
+      inkProbe.remove()
+
+      const docBg = toRgba(bgOf(el))
+      const composited = blend(toRgba(selectionBg), docBg)
+      const contrastRatio = contrast(inkRgb, composited)
+
+      return { selectionBg, expectedSelectionBg, contrastRatio }
+    }, selector)
+  }
+
+  for (const theme of ['white', 'sepia', 'dark']) {
+    test(`${theme} 편집·원문·보기 모드, 표 칸, 제목 입력의 ::selection 이 --selection-bg 와 같고 대비 4.5 이상`, async ({
+      page,
+    }) => {
+      await setPrefBeforeLoad(page, 'md.theme', theme)
+      await openApp(page)
+      await importMarkdown(page, { content: '문단 글자\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n' })
+
+      // 편집 모드 본문
+      let result = await checkSelection(page, ".cm-editor[data-view='live'] .cm-line")
+      expect(result.selectionBg).toBe(result.expectedSelectionBg)
+      expect(result.contrastRatio).toBeGreaterThanOrEqual(4.5)
+
+      // 원문 모드 본문
+      await setViewMode(page, 'raw')
+      result = await checkSelection(page, ".cm-editor[data-view='raw'] .cm-line")
+      expect(result.selectionBg).toBe(result.expectedSelectionBg)
+      expect(result.contrastRatio).toBeGreaterThanOrEqual(4.5)
+
+      // 보기 모드 본문
+      await setViewMode(page, 'view')
+      result = await checkSelection(page, '.viewer p')
+      expect(result.selectionBg).toBe(result.expectedSelectionBg)
+      expect(result.contrastRatio).toBeGreaterThanOrEqual(4.5)
+      await setViewMode(page, 'live')
+
+      // 표 칸 하위 에디터
+      await page.locator('.md-table-widget td, .md-table-widget th').first().click()
+      result = await checkSelection(page, '.md-table-cell-editing .cm-line')
+      expect(result.selectionBg).toBe(result.expectedSelectionBg)
+      expect(result.contrastRatio).toBeGreaterThanOrEqual(4.5)
+
+      // 상단바 제목 입력
+      result = await checkSelection(page, '.doc-title')
+      expect(result.selectionBg).toBe(result.expectedSelectionBg)
+      expect(result.contrastRatio).toBeGreaterThanOrEqual(4.5)
+    })
+  }
 })
 
 test.describe('F-153 A7 제목 서체 h1~h6', () => {

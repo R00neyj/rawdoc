@@ -277,15 +277,9 @@
   font-weight: 600;
 }
 
+/* 모든 행이 같은 바탕 — 표 바깥 문서 칸 바탕과 같다, 줄무늬 없음 (F-164) */
 .md-table tr {
   background: var(--panel);
-}
-
-/* 짝수 행(본문 기준). 위젯이 만드는 table 은 thead/tbody 없이 tr 을 한 부모에 평평하게
-   두므로(TableWidget.toDOM), 머리 행(1번째)을 뺀 본문 행 중 짝수 번째 = 표 전체 기준
-   3, 5, 7... 번째 행이다 */
-.md-table tr:nth-child(n + 2):nth-child(odd) {
-  background: var(--md-bg-muted);
 }
 
 /* ===== 표 칸 편집 (F-125 2.2) =====

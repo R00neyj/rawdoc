@@ -12,6 +12,11 @@ svg {
   flex-shrink: 0;
 }
 
+/* 글자 선택 — 앱 전체(편집·원문·보기 모드 본문, 표 칸, 입력란) 공통, 글자 색은 바꾸지 않는다 (design.md 3.2, F-164) */
+::selection {
+  background: var(--selection-bg);
+}
+
 .app-shell {
   height: 100%;
   display: flex;
@@ -1028,10 +1033,6 @@ body.sidebar-resizing {
    (design.md 3.4, F-141 3.1) */
 .cm-host .cm-editor .cm-cursor {
   border-left-color: var(--ink);
-}
-
-.cm-host .cm-editor .cm-selectionBackground {
-  background: var(--accent-soft) !important;
 }
 
 /* 편집면 자체가 포커스 대상이라 바깥 기본 점선 외곽선은 끈다 */
