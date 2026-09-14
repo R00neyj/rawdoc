@@ -484,6 +484,8 @@ test.describe('F-153 A1 상단바 아이콘 버튼', () => {
       const rawBtn = page.getByRole('button', { name: '원문 — 마크다운 기호 그대로 편집' })
       await rawBtn.click()
       await expect(rawBtn).toHaveAttribute('aria-pressed', 'true')
+      // 색 전환(F-149)이 끝난 값을 읽는다
+      await Promise.all([waitTransitionEnd(rawBtn), waitTransitionEnd(liveBtn)])
       expect((await colorOf(rawBtn)).a).toBeGreaterThan(0)
       // 방금 선택이 풀린 편집 버튼은 다시 투명이어야 한다
       expect((await colorOf(liveBtn)).a).toBe(0)
@@ -500,6 +502,7 @@ test.describe('F-153 A2 설정 세그먼트 선택 표시', () => {
     const selected = page.locator('#theme-label').locator('..').getByRole('radio', { name: '시스템' })
     await selected.click()
     await expect(selected).toHaveAttribute('aria-checked', 'true')
+    await waitTransitionEnd(selected)
     const segStyle = await selected.evaluate((el) => {
       const cs = getComputedStyle(el)
       return { bg: cs.backgroundColor, color: cs.color, weight: cs.fontWeight }
@@ -513,6 +516,7 @@ test.describe('F-153 A2 설정 세그먼트 선택 표시', () => {
     await page.getByRole('button', { name: '닫기', exact: true }).click()
     const rawBtn = page.getByRole('button', { name: '원문 — 마크다운 기호 그대로 편집' })
     await rawBtn.click()
+    await waitTransitionEnd(rawBtn)
     const iconStyle = await rawBtn.evaluate((el) => {
       const cs = getComputedStyle(el)
       return { bg: cs.backgroundColor, color: cs.color }

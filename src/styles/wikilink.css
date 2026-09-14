@@ -53,6 +53,7 @@
 
 .cm-tooltip-autocomplete ul li {
   padding: 4px 8px;
+  transition: var(--transition-colors);
 }
 
 /* CM6 기본 테마의 &light/&dark 선택자가 구체성이 더 높아(F-141 3.5 와 같은 원인) 클래스를

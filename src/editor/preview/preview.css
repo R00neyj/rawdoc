@@ -367,6 +367,7 @@
   opacity: 0;
   pointer-events: none;
   transform: translate(-50%, -50%);
+  transition: var(--transition-colors);
 }
 
 .md-table-widget:hover .md-table-add,
@@ -397,7 +398,8 @@
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.1s var(--ease-spring);
+  /* 나타남·사라짐 전환은 --transition-fast, 지연은 아래 트리거 규칙이 준다 (F-149 2.2) */
+  transition: opacity var(--transition-fast);
   transform: translateX(-50%);
 }
 
@@ -417,7 +419,13 @@
   transform: none;
 }
 
-.md-table-add:hover::after,
+/* 마우스 호버로 나타날 때만 지연 400ms, 키보드 포커스·사라질 때는 지연 없음 (F-149 2.2) */
+.md-table-add:hover::after {
+  opacity: 1;
+  transition-delay: 400ms;
+}
+
 .md-table-add:focus-visible::after {
   opacity: 1;
+  transition-delay: 0s;
 }
