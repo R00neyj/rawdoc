@@ -5,9 +5,9 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'dist-spike']),
+  globalIgnores(['dist', 'dist-spike', 'dist-*']),
   {
-    files: ['**/*.{js,jsx}'],
+    files: ['**/*.{js,jsx,mjs}'],
     extends: [
       js.configs.recommended,
       reactHooks.configs.flat.recommended,
@@ -31,6 +31,15 @@ export default defineConfig([
     files: ['e2e/**/*.js', 'playwright.config.js'],
     languageOptions: {
       globals: { ...globals.node, ...globals.browser },
+    },
+  },
+  {
+    // 검증 도구 CLI (specs/features/F-160.md) 는 node 환경에서 돈다
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: globals.node,
     },
   },
 ])
