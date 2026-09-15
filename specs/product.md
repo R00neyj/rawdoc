@@ -243,7 +243,7 @@ M3 이후는 착수 전 이 장을 풀어 4장 형식으로 다시 쓴다. M2 �
 | F-213 | 편집 잠금 | 편집 권한자가 같은 문서를 동시에 열면 먼저 연 사람만 편집, 나머지는 읽기 + 편집 중인 사람 표시. 신호가 끊기면 일정 시간 뒤 풀린다. 방식(D1 임대 / Durable Object)은 작은 명세에서. 동시 편집은 M3 |
 
 - 사람이 할 준비: `wrangler login`, R2 구독 켜기(무료 사용분이 있어도 대시보드 결제 절차 필요), Zero Trust 조직 만들기·일회용 코드 로그인·Access 앱. `specs/human-checks.md` 5장
-- 만든 리소스 (2026-09-15, Cloudflare MCP): D1 `md-editor-db` (id `073462f8-7a95-4b0f-8d32-4b07f8c4448e`, APAC), R2 `md-editor-attachments` (APAC, 공개 접근 없음). 이름에 제품명을 쓰지 않는다(불변조건). 원격 마이그레이션은 해당 명세 커밋 뒤 적용. Access 팀 `fragrant-sky-f428.cloudflareaccess.com`, 앱 `md-editor-api` (`rawdoc.app/api`, 정책 `all-emails`, 일회용 코드만, 세션 168h). AUD 는 `wrangler.jsonc` vars
+- 만든 리소스 (2026-09-15, Cloudflare MCP): D1 `md-editor-db` (id `073462f8-7a95-4b0f-8d32-4b07f8c4448e`, APAC), R2 `md-editor-attachments` (APAC, 공개 접근 없음). 이름에 제품명을 쓰지 않는다(불변조건). 원격 마이그레이션은 해당 명세 커밋 뒤 적용. Access 팀 `fragrant-sky-f428.cloudflareaccess.com`, 앱 `md-editor-api` (`rawdoc.app/api`, 정책 `all-emails`, 로그인 수단 Google·일회용 코드(선택 화면), 세션 168h). AUD 는 `wrangler.jsonc` vars
 - Access 좌석: 로그인 인증 1회마다 사용자 1명이 좌석을 쓴다. 좌석이 차면 새 로그인이 막히고, Zero Trust 사용자 제거로 돌려받는다. 무료 좌석 수는 문서에서 확인하지 못했다 (2026-09-15). 공유 링크를 보는 사람은 로그인하지 않아 좌석을 쓰지 않는다 (https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/)
 - 호스트의 특정 경로만 Access 로 보호할 수 있다 — `rawdoc.app/api` (https://developers.cloudflare.com/workers/configuration/cloudflare-access/). `rawdoc.app` 존은 이 계정에 active (2026-09-15 확인, Free 플랜)
 - D1: 값·행 최대 2MB, 무료 DB 500MB, 무료는 Worker 호출당 쿼리 50회, 무료 하루 쓰기 10만 행 초과 시 쿼리 실패 (https://developers.cloudflare.com/d1/platform/limits/, https://developers.cloudflare.com/workers/platform/pricing/)
@@ -308,7 +308,7 @@ M3 이후는 착수 전 이 장을 풀어 4장 형식으로 다시 쓴다. M2 �
 | Q9 | 줄바꿈 형식 | **CRLF 기본** (2026-09-14. 사용자 근거: 한국은 Windows 사용자가 많다). 새 문서는 CRLF. 가져온 파일은 원래 형식(CRLF 또는 LF)을 문서에 기억해 저장·내보내기에 그대로 쓴다. CRLF·LF·`\r` 단독이 섞인 파일은 CRLF 로 통일하고 알린다 | 데이터 모델 `lineEnding`, F-112, F-114. 구현 방향: CM6 는 `lineSeparator` 를 지정하지 않는다(기본 설정은 세 종류 줄 구분을 모두 읽고, 줄 구분 문자를 줄 안에 두지 않는다). 저장·내보내기 때 `lineEnding` 으로 줄을 잇는다. `lineSeparator: "\r\n"` 지정 방식은 붙여넣기·입력된 `\n` 처리가 어떻게 되는지 확인하지 않아 쓰지 않는다. CM6 기본 동작은 F-103·F-114 에서 실측한다 |
 | Q29 | 초대·공동 편집·폴더 공유 단계 | **M2**: 계정 초대, 보기/편집 권한, 문서·폴더 공유(편집은 한 명씩 잠금). **M3**: 잠금 해제, 실시간 동시 편집. 폴더 공유는 M2 서버 공유와 함께 (2026-09-14 사용자 선택) | 7장 M2·M3 |
 | Q30 | 이미지를 언제, 어떤 원문으로 넣는가 | **M1 에 로컬(IndexedDB) 첨부**로 넣는다. 원문은 `<div align="left\|center\|right">` + `<img src="attachments/{id}.{ext}" alt width>` (GitHub·VS Code 에서도 정렬·크기가 보인다). 장당 5MB. 내보내기는 이미지가 있으면 `.md` + `attachments/` zip. 서버 저장은 M5, WebP 변환은 M2 (2026-09-14 사용자 선택) | F-156~F-158, 5장 Attachment, 7장 M2·M5 |
-| Q5 | 인증 방식 | **Cloudflare Access 일회용 코드, 모든 이메일 허용.** 문서 권한은 앱(D1)이 판정한다 (2026-09-15 사용자 선택). 허용 이메일 목록 방식은 앱 초대와 이중 관리라 쓰지 않음 | F-205. 로그인 인원만큼 Access 좌석 |
+| Q5 | 인증 방식 | **Cloudflare Access 일회용 코드, 모든 이메일 허용.** 문서 권한은 앱(D1)이 판정한다 (2026-09-15 사용자 선택). 같은 날 Google 로그인 추가(사용자 "매번 이메일 인증 불편") — Access 선택 화면에서 Google / 일회용 코드, 같은 이메일이면 같은 계정. 앱 코드 변경 없음. 허용 이메일 목록 방식은 앱 초대와 이중 관리라 쓰지 않음 | F-205. 로그인 인원만큼 Access 좌석 |
 | Q31 | M2 착수 시점 | M1 우클릭(F-167~F-170)을 보류하고 M2 먼저. M2 는 전체 범위 (2026-09-15 사용자 "며칠 뒤부터 교안 공유용") | 3장 순서 규칙 예외, 7장 M2 |
 | Q32 | 로그인 사용자 문서의 원본 | 서버 원본 + IndexedDB 캐시. 오프라인 편집은 대기열, 충돌은 사본으로 저장 (2026-09-15 사용자 선택) | F-207. "원본은 `EditorState` 하나" 불변조건은 열린 문서 편집 중 기준으로 그대로 유지, 저장 대상만 서버 |
 | Q33 | 기존 로컬 문서 | 첫 로그인 때 전부 계정으로 올린다 (2026-09-15 사용자 선택) | F-208 |
