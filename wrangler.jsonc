@@ -3,6 +3,10 @@
   "name": "md-editor-web",
   "main": "worker/index.ts",
   "compatibility_date": "2026-09-14",
+  "vars": {
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": ""
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

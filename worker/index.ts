@@ -1,4 +1,5 @@
 import { errorResponse, jsonResponse } from './http'
+import { getUser } from './auth'
 
 type RouteHandler = (request: Request, env: Env, ctx: ExecutionContext) => Promise<Response>
 
@@ -18,7 +19,26 @@ async function handleHealth(_request: Request, env: Env): Promise<Response> {
   }
 }
 
-const routes: Route[] = [{ method: 'GET', path: '/api/health', handler: handleHealth }]
+async function handleMe(request: Request, env: Env): Promise<Response> {
+  const user = await getUser(request, env)
+  if (!user) return errorResponse('unauthenticated', 401)
+  return jsonResponse({ id: user.id, email: user.email })
+}
+
+async function handleLogin(request: Request, env: Env): Promise<Response> {
+  const user = await getUser(request, env)
+  if (!user) return errorResponse('unauthenticated', 401)
+  const url = new URL(request.url)
+  const returnTo = url.searchParams.get('return') ?? ''
+  const location = returnTo.startsWith('#/') ? `/${returnTo}` : '/'
+  return new Response(null, { status: 302, headers: { Location: location } })
+}
+
+const routes: Route[] = [
+  { method: 'GET', path: '/api/health', handler: handleHealth },
+  { method: 'GET', path: '/api/me', handler: handleMe },
+  { method: 'GET', path: '/api/login', handler: handleLogin },
+]
 
 export default {
   async fetch(request, env, ctx) {
