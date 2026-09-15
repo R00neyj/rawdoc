@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { migrateLocalIfNeeded, type LocalSnapshot } from './migrateLocal'
 import type { Doc, Folder } from '../types'
+import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
 
 function makeFolder(overrides: Partial<Folder> = {}): Folder {
   return { id: 'f1', name: '폴더', parentId: null, createdAt: 1, updatedAt: 1, ...overrides }
@@ -96,6 +97,26 @@ describe('migrateLocalIfNeeded', () => {
     expect(folders.map((f: Folder) => f.id)).toEqual(['c', 'p']) // 순서는 이 함수가 바꾸지 않는다(부모 먼저 정렬은 serverStore.importLocal 책임)
     expect(docs[0].id).toBe('d-pinned')
     expect(docs[0].pinnedAt).toBe(999)
+  })
+
+  it('손대지 않은 사용법 문서는 옮기지 않고, 고친 사용법 문서는 옮긴다', async () => {
+    const untouched = makeDoc({ id: 'g1', title: GUIDE_DOC_TITLE, content: GUIDE_DOC_CONTENT_CRLF })
+    const edited = makeDoc({ id: 'g2', title: GUIDE_DOC_TITLE, content: `${GUIDE_DOC_CONTENT_CRLF}메모` })
+    const { deps, importLocal } = makeDeps({
+      readLocal: vi.fn(async () => ({ folders: [], docs: [untouched, edited, makeDoc()] })),
+    })
+    await migrateLocalIfNeeded(deps)
+    expect(importLocal.mock.calls[0][0].docs.map((d: Doc) => d.id)).toEqual(['g2', 'd1'])
+  })
+
+  it('손대지 않은 사용법 문서만 있으면 옮길 것 없이 기록만 한다', async () => {
+    const { deps, prefs, importLocal, notice } = makeDeps({
+      readLocal: vi.fn(async () => ({ folders: [], docs: [makeDoc({ title: GUIDE_DOC_TITLE, content: GUIDE_DOC_CONTENT_CRLF })] })),
+    })
+    await migrateLocalIfNeeded(deps)
+    expect(prefs.get('md.localMigrated')).toBe('u1')
+    expect(importLocal).not.toHaveBeenCalled()
+    expect(notice).not.toHaveBeenCalled()
   })
 
   it('캐시 쓰기 실패면 기록하지 않고 오류 알림', async () => {

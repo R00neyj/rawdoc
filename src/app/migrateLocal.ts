@@ -1,5 +1,6 @@
 // 로컬 → 계정 이관 (specs/features/F-208.md 2장) — 브라우저당 한 번, md.localMigrated 로 기록한다
 import type { Doc, Folder } from '../types'
+import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
 
 export type LocalSnapshot = { folders: Folder[]; docs: Doc[] }
 
@@ -22,7 +23,10 @@ export async function migrateLocalIfNeeded(deps: MigrateLocalDeps): Promise<void
   // 브라우저당 한 번 — 다른 계정으로 로그인해도 다시 옮기지 않는다 (2.1)
   if (getPref(MIGRATED_KEY, '') === userId) return
 
-  const { folders, docs } = await readLocal()
+  const local = await readLocal()
+  const folders = local.folders
+  // 손대지 않은 첫 실행 안내 문서는 옮기지 않는다 — 기기마다 새 id 로 만들어져 계정에 쌓인다 (2.2)
+  const docs = local.docs.filter((d) => !(d.title === GUIDE_DOC_TITLE && d.content === GUIDE_DOC_CONTENT_CRLF))
 
   if (docs.length === 0) {
     setPref(MIGRATED_KEY, userId)
