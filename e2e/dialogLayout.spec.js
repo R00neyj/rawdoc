@@ -96,7 +96,7 @@ test.describe('F-224 A2 기본 폭', () => {
 
     const deleteDialog = await openDeleteDialog(page)
     await expect(deleteDialog).toBeVisible()
-    let box = await deleteDialog.boundingBox()
+    let box = await deleteDialog.evaluate((el) => ({ width: el.offsetWidth }))
     expect(box.width).toBeCloseTo(420, 0)
     await page.keyboard.press('Escape')
 
@@ -104,19 +104,19 @@ test.describe('F-224 A2 기본 폭', () => {
     await importMarkdown(page, { name: `${longTitle}.md`, content: '내용\n' })
     const deleteDialog2 = await openDeleteDialog(page)
     await expect(deleteDialog2).toBeVisible()
-    box = await deleteDialog2.boundingBox()
+    box = await deleteDialog2.evaluate((el) => ({ width: el.offsetWidth }))
     expect(box.width).toBeCloseTo(420, 0)
     await page.keyboard.press('Escape')
 
     const settingsDialog = await openSettingsDialog(page)
     await expect(settingsDialog).toBeVisible()
-    box = await settingsDialog.boundingBox()
+    box = await settingsDialog.evaluate((el) => ({ width: el.offsetWidth }))
     expect(box.width).toBeCloseTo(420, 0)
     await page.keyboard.press('Escape')
 
     const moveDialog = await openMoveDialog(page)
     await expect(moveDialog).toBeVisible()
-    box = await moveDialog.boundingBox()
+    box = await moveDialog.evaluate((el) => ({ width: el.offsetWidth }))
     expect(box.width).toBeCloseTo(420, 0)
     await page.keyboard.press('Escape')
   })
@@ -131,26 +131,26 @@ test.describe('F-224 A3 넓은 폭', () => {
 
     const inviteDialog = await openInviteDialog(page)
     await expect(inviteDialog).toBeVisible()
-    let box = await inviteDialog.boundingBox()
+    let box = await inviteDialog.evaluate((el) => ({ width: el.offsetWidth }))
     expect(box.width).toBeCloseTo(520, 0)
 
     const longEmail = `${'긴'.repeat(60)}@example.com`
     await inviteDialog.locator('.invite-email-input').fill(longEmail)
     await inviteDialog.getByRole('button', { name: '초대' }).click()
     await expect(inviteDialog.locator('.invite-grant-row')).toHaveCount(1)
-    box = await inviteDialog.boundingBox()
+    box = await inviteDialog.evaluate((el) => ({ width: el.offsetWidth }))
     expect(box.width).toBeCloseTo(520, 0)
     await page.keyboard.press('Escape')
 
     const tokensDialog = await openApiTokensDialog(page)
     await expect(tokensDialog).toBeVisible()
-    box = await tokensDialog.boundingBox()
+    box = await tokensDialog.evaluate((el) => ({ width: el.offsetWidth }))
     expect(box.width).toBeCloseTo(520, 0)
 
     await tokensDialog.locator('.api-token-name-input').fill('원문 표시 중 토큰')
     await tokensDialog.getByRole('button', { name: '토큰 만들기' }).click()
     await expect(tokensDialog.locator('.api-token-value')).toBeVisible()
-    box = await tokensDialog.boundingBox()
+    box = await tokensDialog.evaluate((el) => ({ width: el.offsetWidth }))
     expect(box.width).toBeCloseTo(520, 0)
   })
 })
@@ -165,7 +165,7 @@ test.describe('F-224 A4 좁은 창', () => {
 
     const settingsDialog = await openSettingsDialog(page)
     await expect(settingsDialog).toBeVisible()
-    let box = await settingsDialog.boundingBox()
+    let box = await settingsDialog.evaluate((el) => ({ width: el.offsetWidth }))
     expect(box.width).toBeCloseTo(368, 0)
     await page.keyboard.press('Escape')
     // 겹침 사이드바가 열린 채면 배경 막이 공유 버튼 클릭을 가로챈다 — 먼저 닫는다
@@ -177,7 +177,7 @@ test.describe('F-224 A4 좁은 창', () => {
 
     const inviteDialog = await openInviteDialog(page)
     await expect(inviteDialog).toBeVisible()
-    box = await inviteDialog.boundingBox()
+    box = await inviteDialog.evaluate((el) => ({ width: el.offsetWidth }))
     expect(box.width).toBeCloseTo(368, 0)
   })
 })

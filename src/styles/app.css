@@ -1045,12 +1045,22 @@ body.sidebar-resizing {
   transition: var(--transition-colors);
 }
 
+/* 포커스 표시는 묶음 테두리 한 겹 — 입력 자체 외곽선은 끈다 (F-225 2장) */
 .invite-input-group:focus-within {
-  border-color: var(--ink-2);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.invite-email-input:focus-visible {
+  outline: none;
 }
 
 .invite-input-group[aria-invalid='true'] {
   border-color: var(--danger);
+}
+
+.invite-input-group[aria-invalid='true']:focus-within {
+  box-shadow: 0 0 0 1px var(--danger);
 }
 
 .invite-email-input {
@@ -1064,21 +1074,26 @@ body.sidebar-resizing {
   font-size: 13.5px;
 }
 
-.invite-role-seg {
+/* 세그먼트가 묶음 오른쪽 칸을 빈틈 없이 채운다 — 뒤에 오는 .seg 기본 규칙을 이기게 묶음으로 한정 (F-225 2장) */
+.invite-input-group .invite-role-seg {
   flex: none;
   align-self: stretch;
   display: flex;
-  align-items: center;
-  padding: 0 8px;
+  padding: 0;
   border: none;
   border-left: 1px solid var(--rule);
-  border-radius: 0;
+  border-radius: 0 calc(var(--radius-control) - 1px) calc(var(--radius-control) - 1px) 0;
 }
 
-.invite-role-seg button {
-  height: 28px;
-  padding: 0 10px;
+.invite-input-group .invite-role-seg button {
+  height: 100%;
+  border-radius: 0;
+  padding: 0 14px;
   font-size: 12.5px;
+}
+
+.invite-input-group .invite-role-seg button:focus-visible {
+  outline-offset: -2px;
 }
 
 .invite-submit {
@@ -1157,12 +1172,12 @@ body.sidebar-resizing {
   white-space: nowrap;
 }
 
-.invite-grant-role {
+.invite-grant-row .invite-grant-role {
   flex: none;
   height: 26px;
 }
 
-.invite-grant-role button {
+.invite-grant-row .invite-grant-role button {
   padding: 0 9px;
   font-size: 12px;
 }
