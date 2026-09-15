@@ -21,5 +21,6 @@
   ],
   "r2_buckets": [
     { "binding": "BUCKET", "bucket_name": "md-editor-attachments" }
-  ]
+  ],
+  "triggers": { "crons": ["0 18 * * *"] }
 }

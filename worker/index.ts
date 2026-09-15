@@ -37,6 +37,7 @@ import {
   handlePutDocGrant,
   handlePutFolderGrant,
 } from './grants'
+import { cleanupServerAttachments } from './attachmentGc'
 
 type RouteHandler = (
   request: Request,
@@ -165,5 +166,8 @@ export default {
       console.error(err)
       return errorResponse('internal', 500)
     }
+  },
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(cleanupServerAttachments(env, Date.now()))
   },
 } satisfies ExportedHandler<Env>
