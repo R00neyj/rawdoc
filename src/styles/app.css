@@ -101,7 +101,7 @@ svg {
   margin: 0;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: calc(var(--md-font-size) * 2.25);
+  font-size: calc(var(--md-font-size) * 2);
   line-height: 1.25;
   color: var(--ink);
   word-break: keep-all;
@@ -124,12 +124,20 @@ svg {
   color: var(--muted);
 }
 
+/* 앱 공통 테두리형 포커스 링 대신 아래 밑줄만 — box-shadow 라 레이아웃이 안 밀린다 (F-217 2.2, 2026-09-15 사용자 "포커스 시 밑줄만") */
+.doc-title:focus-visible {
+  outline: none;
+  border-radius: 0;
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
 .doc-title[readonly] {
   cursor: default;
 }
 
 .doc-title[readonly]:focus-visible {
   outline: none;
+  box-shadow: none;
 }
 
 /* 휴대폰 폭 — 상단바가 화면보다 넓어 가로·세로 스크롤이 생기던 문제, 제품명 글자·준비 중 검색을 빼고 간격을 줄인다 (F-216) */
