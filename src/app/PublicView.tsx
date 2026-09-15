@@ -10,8 +10,11 @@ import { renderMarkdown } from '../viewer/renderMarkdown'
 import { extractHeadings, type Heading } from '../editor/outline'
 import { frontmatterExtension } from '../editor/frontmatter'
 import Outline from './Outline'
-import { IconDownload } from './icons'
+import { IconDownload, IconSettings } from './icons'
 import { buildExportPayload } from './exportDoc'
+import { getPref, setPref } from './prefs'
+import { resolveTheme } from './theme'
+import SettingsDialog from './SettingsDialog'
 import {
   fetchPublicDoc,
   fetchPublicFolder,
@@ -62,6 +65,68 @@ function makeFakeHandle(content: string): FakeEditorHandle {
   }
 }
 
+// 공개 보기 화면 전용 설정 상태 — 테마/서체/글자 크기 4개만(들여쓰기·줄 번호는 없음, F-230 2.1). 그 브라우저의 기존 값을 읽고 쓴다(F-121·F-141·F-154 와 같은 키)
+type PublicSettings = {
+  theme: string
+  headingFont: string
+  bodyFont: string
+  fontSize: string
+  changeTheme: (value: string) => void
+  changeHeadingFont: (value: string) => void
+  changeBodyFont: (value: string) => void
+  changeFontSize: (value: string) => void
+}
+
+function usePublicSettings(): PublicSettings {
+  const [theme, setTheme] = useState(() => getPref('md.theme', 'system'))
+  const [headingFont, setHeadingFont] = useState(() => getPref('md.headingFont', 'serif'))
+  const [bodyFont, setBodyFont] = useState(() => getPref('md.bodyFont', 'sans'))
+  const [fontSize, setFontSize] = useState(() => getPref('md.fontSize', 'medium'))
+
+  // 시스템 테마를 따르는 동안은 OS 설정 변화도 즉시 반영한다 (App.tsx 와 같은 방식, F-141 3.1)
+  useEffect(() => {
+    if (theme !== 'system') return
+    const mql = window.matchMedia('(prefers-color-scheme: dark)')
+    function apply() {
+      document.documentElement.dataset.theme = resolveTheme('system', mql.matches)
+    }
+    apply()
+    mql.addEventListener('change', apply)
+    return () => mql.removeEventListener('change', apply)
+  }, [theme])
+
+  function changeTheme(value: string) {
+    const v = value as 'system' | 'white' | 'sepia' | 'dark'
+    setTheme(v)
+    setPref('md.theme', v)
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    document.documentElement.dataset.theme = resolveTheme(v, prefersDark)
+  }
+
+  function changeHeadingFont(value: string) {
+    const v = value as 'serif' | 'sans'
+    setHeadingFont(v)
+    document.documentElement.dataset.headingFont = v
+    setPref('md.headingFont', v)
+  }
+
+  function changeBodyFont(value: string) {
+    const v = value as 'sans' | 'serif'
+    setBodyFont(v)
+    document.documentElement.dataset.bodyFont = v
+    setPref('md.bodyFont', v)
+  }
+
+  function changeFontSize(value: string) {
+    const v = value as 'small' | 'medium' | 'large'
+    setFontSize(v)
+    document.documentElement.dataset.fontSize = v
+    setPref('md.fontSize', v)
+  }
+
+  return { theme, headingFont, bodyFont, fontSize, changeTheme, changeHeadingFont, changeBodyFont, changeFontSize }
+}
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -86,6 +151,7 @@ function DocPane({
   onRetry,
   notFoundMessage = '링크가 없거나 끊겼습니다.',
   showBrand = true,
+  settings,
 }: {
   docKey: string
   state: DocLoadState
@@ -94,10 +160,12 @@ function DocPane({
   onRetry: () => void
   notFoundMessage?: string
   showBrand?: boolean
+  settings: PublicSettings
 }) {
   const contentAreaRef = useRef<HTMLDivElement | null>(null)
   const viewerRef = useRef<HTMLDivElement | null>(null)
   const doc = state.status === 'ready' ? state.doc : null
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   useEffect(() => {
     if (doc) document.title = doc.title || '제목 없는 문서'
@@ -121,6 +189,10 @@ function DocPane({
           )}
           <h1 className="public-view-title">{title}</h1>
         </div>
+        <button type="button" className="public-view-settings" onClick={() => setSettingsOpen(true)}>
+          <IconSettings size={18} />
+          설정
+        </button>
         <button type="button" className="public-view-export" disabled={!doc} onClick={onExport}>
           <IconDownload size={18} />
           .md 내보내기
@@ -144,6 +216,18 @@ function DocPane({
           </>
         )}
       </div>
+      <SettingsDialog
+        open={settingsOpen}
+        theme={settings.theme}
+        onChangeTheme={settings.changeTheme}
+        headingFont={settings.headingFont}
+        onChangeHeadingFont={settings.changeHeadingFont}
+        bodyFont={settings.bodyFont}
+        onChangeBodyFont={settings.changeBodyFont}
+        fontSize={settings.fontSize}
+        onChangeFontSize={settings.changeFontSize}
+        onClose={() => setSettingsOpen(false)}
+      />
     </div>
   )
 }
@@ -162,12 +246,14 @@ function useNarrow(): boolean {
 }
 
 export default function PublicView(props: PublicViewProps) {
-  if (props.kind === 'folder') return <PublicFolderView token={props.token} docId={props.docId} />
-  return <PublicDocView token={props.token} />
+  // 문서·폴더 화면이 설정 상태를 따로 갖지 않는다 — 여기서 한 번만 관리한다 (F-230 2.3)
+  const settings = usePublicSettings()
+  if (props.kind === 'folder') return <PublicFolderView token={props.token} docId={props.docId} settings={settings} />
+  return <PublicDocView token={props.token} settings={settings} />
 }
 
 // `#/p/{토큰}` 문서 단독 공개 보기 (F-210.md 2.4)
-function PublicDocView({ token }: { token: string }) {
+function PublicDocView({ token, settings }: { token: string; settings: PublicSettings }) {
   const [state, setState] = useState<DocLoadState>({ status: 'loading' })
 
   useEffect(() => {
@@ -234,7 +320,7 @@ function PublicDocView({ token }: { token: string }) {
 
   return (
     <div className="public-view">
-      <DocPane docKey={token} state={state} resolveAttachment={resolveAttachment} onExport={handleExport} onRetry={retry} />
+      <DocPane docKey={token} state={state} resolveAttachment={resolveAttachment} onExport={handleExport} onRetry={retry} settings={settings} />
     </div>
   )
 }
@@ -246,7 +332,7 @@ type FolderLoadState =
   | { status: 'network' }
 
 // `#/p/f/{토큰}[/{문서id}]` 폴더 공개 보기 — 왼쪽 문서 목록 + 오른쪽 문서 본문 (F-211.md 2.3)
-function PublicFolderView({ token, docId }: { token: string; docId?: string }) {
+function PublicFolderView({ token, docId, settings }: { token: string; docId?: string; settings: PublicSettings }) {
   const [folderState, setFolderState] = useState<FolderLoadState>({ status: 'loading' })
   const [activeDocId, setActiveDocId] = useState<string | null>(docId ?? null)
   // 요청한 문서 id(forId)와 결과. activeDocId 가 forId 와 다르면 렌더 중에 loading 으로 유도한다(react-hooks/set-state-in-effect)
@@ -445,6 +531,7 @@ function PublicFolderView({ token, docId }: { token: string; docId?: string }) {
             onRetry={retryDoc}
             notFoundMessage="이 문서는 더 이상 공유되지 않습니다."
             showBrand={false}
+            settings={settings}
           />
         )}
       </div>

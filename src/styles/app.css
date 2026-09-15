@@ -2099,6 +2099,7 @@ body.sidebar-resizing {
   white-space: nowrap;
 }
 
+.public-view-settings,
 .public-view-export {
   display: inline-flex;
   flex: none;
@@ -2113,6 +2114,7 @@ body.sidebar-resizing {
   transition: var(--transition-colors);
 }
 
+.public-view-settings:hover,
 .public-view-export:hover {
   background: var(--rule-2);
 }

@@ -90,10 +90,10 @@ type SettingsDialogProps = {
   onChangeBodyFont: (value: string) => void
   fontSize: string
   onChangeFontSize: (value: string) => void
-  indent: string
-  onChangeIndent: (value: string) => void
-  lineNumbers: string
-  onChangeLineNumbers: (value: string) => void
+  indent?: string
+  onChangeIndent?: (value: string) => void
+  lineNumbers?: string
+  onChangeLineNumbers?: (value: string) => void
   onClose: () => void
 }
 
@@ -115,6 +115,8 @@ export default function SettingsDialog({
 }: SettingsDialogProps) {
   const titleId = 'settings-title'
   const checkedRef = useRef<HTMLButtonElement | null>(null) // 열 때 포커스: 첫 항목(테마)의 현재 선택 버튼
+  // 들여쓰기·줄 번호는 CM6 편집 영역 전용 — 넷 다 있을 때만 그린다(공개 보기 화면은 안 줌, F-230 2.2)
+  const showEditorSettings = indent !== undefined && onChangeIndent !== undefined && lineNumbers !== undefined && onChangeLineNumbers !== undefined
 
   return (
     <Dialog open={open} onClose={onClose} titleId={titleId} initialFocusRef={checkedRef}>
@@ -150,20 +152,24 @@ export default function SettingsDialog({
         options={FONT_SIZE_OPTIONS}
         onChange={onChangeFontSize}
       />
-      <Segment
-        labelId="indent-label"
-        label="들여쓰기"
-        value={indent}
-        options={INDENT_OPTIONS}
-        onChange={onChangeIndent}
-      />
-      <Segment
-        labelId="line-numbers-label"
-        label="줄 번호"
-        value={lineNumbers}
-        options={LINE_NUMBERS_OPTIONS}
-        onChange={onChangeLineNumbers}
-      />
+      {showEditorSettings && (
+        <>
+          <Segment
+            labelId="indent-label"
+            label="들여쓰기"
+            value={indent}
+            options={INDENT_OPTIONS}
+            onChange={onChangeIndent}
+          />
+          <Segment
+            labelId="line-numbers-label"
+            label="줄 번호"
+            value={lineNumbers}
+            options={LINE_NUMBERS_OPTIONS}
+            onChange={onChangeLineNumbers}
+          />
+        </>
+      )}
       <div className="dialog-actions">
         <button type="button" onClick={onClose}>
           닫기

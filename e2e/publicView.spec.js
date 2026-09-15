@@ -262,3 +262,61 @@ test.describe('F-215 A4 오류 화면', () => {
     await expect(page.getByRole('link', { name: `${brand.name} 열기` })).toBeVisible()
   })
 })
+
+// 공유 화면 설정(테마·서체·글자 크기) F-230
+test.describe('F-230 A1 버튼·대화상자', () => {
+  test('설정 버튼 클릭 — 테마/제목 서체/본문 서체/글자 크기 4항목만, 들여쓰기·줄 번호 없음', async ({ page }) => {
+    await mockPublicDoc(page)
+    await page.goto('/#/p/tok123')
+    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
+
+    await page.getByRole('button', { name: '설정', exact: true }).click()
+    const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
+    await expect(dialog).toBeVisible()
+    const labels = dialog.locator('.dialog-field > span, .dialog-field [id]')
+    await expect(labels).toHaveCount(4)
+    await expect(labels.nth(0)).toHaveText('테마')
+    await expect(labels.nth(1)).toHaveText('제목 서체')
+    await expect(labels.nth(2)).toHaveText('본문 서체')
+    await expect(labels.nth(3)).toHaveText('글자 크기')
+    await expect(page.locator('#indent-label')).toHaveCount(0)
+    await expect(page.locator('#line-numbers-label')).toHaveCount(0)
+  })
+})
+
+test.describe('F-230 A2·A3 반영·저장', () => {
+  test('테마를 다크로, 본문 서체를 세리프로 — 즉시 반영되고 새로고침 뒤에도 유지', async ({ page }) => {
+    await mockPublicDoc(page)
+    await page.goto('/#/p/tok123')
+    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
+
+    await page.getByRole('button', { name: '설정', exact: true }).click()
+    const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
+    await dialog.locator('#theme-label').locator('..').getByRole('radio', { name: '다크' }).click()
+    await dialog.locator('#body-font-label').locator('..').getByRole('radio', { name: '세리프', exact: true }).click()
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect(page.locator('html')).toHaveAttribute('data-body-font', 'serif')
+
+    await page.reload()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect(page.locator('html')).toHaveAttribute('data-body-font', 'serif')
+  })
+})
+
+test.describe('F-230 A4 폴더 화면', () => {
+  test('폴더 공개 보기 — 설정 버튼·대화상자·반영 동일', async ({ page }) => {
+    await mockPublicFolder(page)
+    await page.goto('/#/p/f/tokF')
+    await expect(page.locator('.public-view-title')).toHaveText('문서2')
+
+    await page.getByRole('button', { name: '설정', exact: true }).click()
+    const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
+    await expect(dialog).toBeVisible()
+    const labels = dialog.locator('.dialog-field > span, .dialog-field [id]')
+    await expect(labels).toHaveCount(4)
+
+    await dialog.locator('#theme-label').locator('..').getByRole('radio', { name: '다크' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  })
+})
