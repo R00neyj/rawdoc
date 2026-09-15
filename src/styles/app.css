@@ -624,17 +624,17 @@ body.sidebar-resizing {
 .item-menu-list[data-state='closed'] {
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-4px) scale(0.96);
+  transform: translateY(-4px) scale(0.9);
 }
 
 .item-menu-list[data-state='open'] {
-  transition: opacity var(--transition-fast), transform var(--transition-pop), visibility var(--transition-fast);
+  transition: opacity var(--transition-pop-fade), transform var(--transition-pop), visibility var(--transition-pop-fade);
 }
 
 @starting-style {
   .item-menu-list[data-state='open'] {
     opacity: 0;
-    transform: translateY(-4px) scale(0.96);
+    transform: translateY(-4px) scale(0.9);
   }
 }
 
@@ -977,7 +977,7 @@ body.sidebar-resizing {
   max-width: none;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
   opacity: 0;
-  transform: scale(0.98);
+  transform: scale(0.9);
   /* 닫힘은 튕기지 않는다(F-172 그대로) — 열림 전용 곡선은 [open] 규칙이 덮는다 (F-228 2.3) */
   transition: opacity var(--transition-fast), transform var(--transition-fast),
     display var(--transition-fast), overlay var(--transition-fast);
@@ -991,14 +991,14 @@ body.sidebar-resizing {
 .dialog[open] {
   opacity: 1;
   transform: scale(1);
-  transition: opacity var(--transition-fast), transform var(--transition-pop),
-    display var(--transition-fast), overlay var(--transition-fast);
+  transition: opacity var(--transition-pop-fade), transform var(--transition-pop),
+    display var(--transition-pop-fade), overlay var(--transition-pop-fade);
 }
 
 @starting-style {
   .dialog[open] {
     opacity: 0;
-    transform: scale(0.96);
+    transform: scale(0.9);
   }
 }
 
@@ -1518,7 +1518,7 @@ body.sidebar-resizing {
   opacity: 0;
   pointer-events: none;
   /* 가운데 정렬용 transform 과 겹치지 않게 크기·위치는 개별 속성 scale·translate 로 준다 (F-228 2.2) */
-  scale: 0.9;
+  scale: 0.82;
   translate: 0 -4px;
   transform-origin: top center;
   /* 사라짐은 튕기지 않는다, 크기는 그대로 두고 opacity 만 120ms — 나타남 전용 곡선은 아래 트리거 규칙이 덮는다 (F-228 2.2) */
@@ -1554,7 +1554,7 @@ body.sidebar-resizing {
   opacity: 1;
   scale: 1;
   translate: 0 0;
-  transition: opacity var(--transition-fast), scale var(--transition-pop), translate var(--transition-pop);
+  transition: opacity var(--transition-pop-fade), scale var(--transition-pop), translate var(--transition-pop);
   transition-delay: 400ms;
 }
 
@@ -1562,7 +1562,7 @@ body.sidebar-resizing {
   opacity: 1;
   scale: 1;
   translate: 0 0;
-  transition: opacity var(--transition-fast), scale var(--transition-pop), translate var(--transition-pop);
+  transition: opacity var(--transition-pop-fade), scale var(--transition-pop), translate var(--transition-pop);
   transition-delay: 0s;
 }
 
@@ -1764,17 +1764,17 @@ body.sidebar-resizing {
 .share-menu-list[data-state='closed'] {
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-4px) scale(0.96);
+  transform: translateY(-4px) scale(0.9);
 }
 
 .share-menu-list[data-state='open'] {
-  transition: opacity var(--transition-fast), transform var(--transition-pop), visibility var(--transition-fast);
+  transition: opacity var(--transition-pop-fade), transform var(--transition-pop), visibility var(--transition-pop-fade);
 }
 
 @starting-style {
   .share-menu-list[data-state='open'] {
     opacity: 0;
-    transform: translateY(-4px) scale(0.96);
+    transform: translateY(-4px) scale(0.9);
   }
 }
 
@@ -1835,17 +1835,17 @@ body.sidebar-resizing {
 .account-menu-list[data-state='closed'] {
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-4px) scale(0.96);
+  transform: translateY(-4px) scale(0.9);
 }
 
 .account-menu-list[data-state='open'] {
-  transition: opacity var(--transition-fast), transform var(--transition-pop), visibility var(--transition-fast);
+  transition: opacity var(--transition-pop-fade), transform var(--transition-pop), visibility var(--transition-pop-fade);
 }
 
 @starting-style {
   .account-menu-list[data-state='open'] {
     opacity: 0;
-    transform: translateY(-4px) scale(0.96);
+    transform: translateY(-4px) scale(0.9);
   }
 }
 

@@ -8,9 +8,11 @@ const EASE_OUT = 'cubic-bezier(0, 0, 0.2, 1)'
 // 크기·위치(transform) 전환 곡선 — --transition-move(F-173), 끝에서 살짝 넘쳤다 돌아온다
 const EASE_SPRING = 'cubic-bezier(0.51, 0.08, 0.5, 1.23)'
 const DURATION = '0.18s'
-// 툴팁·메뉴·대화상자 나타남 전용 곡선 — --transition-pop(F-228), 끝에서 뚜렷하게 넘쳤다 돌아온다
-const EASE_POP = 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+// 툴팁·메뉴·대화상자 나타남 전용 곡선 — --transition-pop(F-228, 2026-09-15 H86 로 넘침 폭 키움), 끝에서 뚜렷하게 넘쳤다 돌아온다
+const EASE_POP = 'cubic-bezier(0.32, 1.9, 0.5, 1)'
 const POP_DURATION = '0.24s'
+// 튀어나오는 요소의 opacity 전용 — --transition-pop-fade(F-228, 2026-09-15 H86), scale·translate 보다 짧게 끝난다
+const POP_FADE_DURATION = '0.1s'
 
 // cubic-bezier(...) 값은 괄호 안에도 콤마가 있어 단순 split(',') 로 못 나눈다 — 괄호 깊이를 세어 최상위 콤마에서만 자른다
 function splitTopLevel(value) {
@@ -65,6 +67,11 @@ async function expectMoveTransition(locator, props) {
 // 툴팁·메뉴·대화상자 나타남 전용 — --transition-pop(EASE_POP) 기대 (F-228 2.1)
 async function expectPopTransition(locator, props) {
   return expectTransition(locator, props, EASE_POP, POP_DURATION)
+}
+
+// 튀어나오는 요소의 opacity — --transition-pop-fade(EASE_OUT, 더 짧은 duration) 기대 (F-228 2.1, H86)
+async function expectPopFadeTransition(locator, props) {
+  return expectTransition(locator, props, EASE_OUT, POP_FADE_DURATION)
 }
 
 test.describe('F-149 A2 계산값 — 상단바·제목·설정', () => {
@@ -367,34 +374,40 @@ async function sampleOpacityFrames(page, { kind, selector, frames = 15 }) {
 }
 
 test.describe('F-172 A2 계산값 — 열린 상태 opacity 전환', () => {
-  test('공유 메뉴·⋯ 메뉴·알림 띠·대화상자·겹침 사이드바에 opacity 전환(0.18s)이 있다', async ({ page }) => {
+  test('알림 띠·겹침 사이드바에 opacity 전환(0.18s)이 있다', async ({ page }) => {
     await skipPersistNotice(page)
     await openApp(page)
     await importMarkdown(page, { content: '내용\n' })
-
-    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
-    await expectColorTransition(page.locator('.share-menu-list'), ['opacity'])
-    await page.keyboard.press('Escape')
-
-    const row = page.locator('.tree-row').first()
-    await row.hover()
-    await row.locator('.item-menu-btn').click()
-    await expectColorTransition(page.locator('.item-menu-list'), ['opacity'])
-    await page.keyboard.press('Escape')
 
     await dropMarkdownFile(page, '.sidebar', { name: 'a.md', content: '내용\n' })
     await expect(page.locator('.notice')).toBeVisible()
     await expectColorTransition(page.locator('.notice'), ['opacity'])
 
-    await openDeleteDialog(page)
-    const dialog = page.locator('dialog.dialog[open]')
-    await expect(dialog).toBeVisible()
-    await expectColorTransition(dialog, ['opacity'])
-    await page.keyboard.press('Escape')
-
     await resizeWindow(page, 900)
     await page.locator('.sidebar-toggle').click()
     await expectColorTransition(page.locator('.sidebar'), ['opacity'])
+  })
+
+  // 공유 메뉴·⋯ 메뉴·대화상자는 F-228(H86)에서 opacity 가 --transition-pop-fade(0.1s)로 바뀌었다
+  test('공유 메뉴·⋯ 메뉴·대화상자에 opacity 전환(0.1s, --transition-pop-fade)이 있다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    await expectPopFadeTransition(page.locator('.share-menu-list'), ['opacity'])
+    await page.keyboard.press('Escape')
+
+    const row = page.locator('.tree-row').first()
+    await row.hover()
+    await row.locator('.item-menu-btn').click()
+    await expectPopFadeTransition(page.locator('.item-menu-list'), ['opacity'])
+    await page.keyboard.press('Escape')
+
+    await openDeleteDialog(page)
+    const dialog = page.locator('dialog.dialog[open]')
+    await expect(dialog).toBeVisible()
+    await expectPopFadeTransition(dialog, ['opacity'])
+    await page.keyboard.press('Escape')
   })
 })
 
@@ -591,24 +604,26 @@ test.describe('F-173 A3 움직임 줄이기 — 두 곡선 토큰 모두 0', () 
 // ===== F-228 툴팁·메뉴 튀어나오는 움직임 =====
 
 test.describe('F-228 A1 토큰', () => {
-  test('--ease-pop·--transition-pop 계산값', async ({ page }) => {
+  test('--ease-pop·--transition-pop·--transition-pop-fade 계산값', async ({ page }) => {
     await openApp(page)
     const tokens = await page.evaluate(() => {
       const cs = getComputedStyle(document.documentElement)
       return {
         easePop: cs.getPropertyValue('--ease-pop').trim(),
         transitionPop: cs.getPropertyValue('--transition-pop').trim(),
+        transitionPopFade: cs.getPropertyValue('--transition-pop-fade').trim(),
       }
     })
-    // 커스텀 프로퍼티 원문 값은 브라우저가 0 을 뺀 소수(.34)로 정규화한다 — transitionTimingFunction 계산값과 다르다
+    // 커스텀 프로퍼티 원문 값은 브라우저가 0 을 뺀 소수(.32)로 정규화한다 — transitionTimingFunction 계산값과 다르다
     const stripLeadingZero = (s) => s.replace(/(?<![\d])0(\.\d)/g, '$1')
     expect(tokens.easePop).toBe(stripLeadingZero(EASE_POP))
     expect(tokens.transitionPop).toBe(`.24s ${stripLeadingZero(EASE_POP)}`)
+    expect(tokens.transitionPopFade).toBe(`.1s ${stripLeadingZero(EASE_OUT)}`)
   })
 })
 
 test.describe('F-228 A2 툴팁 곡선', () => {
-  test('상단바 아이콘 버튼 호버 상태 .icon-tooltip 의 scale·translate 는 --ease-pop, opacity 는 --ease-out', async ({ page }) => {
+  test('상단바 아이콘 버튼 호버 상태 .icon-tooltip 의 scale·translate 는 --ease-pop, opacity 는 --transition-pop-fade', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '내용\n' })
 
@@ -618,7 +633,7 @@ test.describe('F-228 A2 툴팁 곡선', () => {
 
     await btn.hover()
     await expectPopTransition(tooltip, ['scale', 'translate'])
-    await expectColorTransition(tooltip, ['opacity'])
+    await expectPopFadeTransition(tooltip, ['opacity'])
   })
 })
 
