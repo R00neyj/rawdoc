@@ -78,6 +78,7 @@
 
 - 제목 강조 자리(2.1 표)는 반드시 `--font-display` 로 참조한다. `--font-serif` 를 직접 쓰면 토글이 먹지 않는다
 - **자간**: 한국어 서체(Pretendard·Noto Serif KR — `--font-sans`·`--font-serif`·`--font-body`·`--font-display`)로 그리는 글자는 `letter-spacing: -0.02em`. 고정폭(`--font-mono`: 원문 모드, 코드, 프론트매터 등)은 열 정렬을 위해 `0`. 요소마다 자기 글자 크기 기준으로 계산되어야 한다 (2026-09-14 사용자 요청, F-141 3.6)
+- **줄바꿈**: 앱 전체 `word-break: keep-all` — 한글 낱말 중간에서 줄을 바꾸지 않고 띄어쓰기에서 바꾼다. 한 줄보다 긴 낱말(주소 등)은 넘치지 않게 끊는다(UI `overflow-wrap: break-word`, 편집기는 CM6 기본 `anywhere`). 편집기(CM6 줄바꿈)·보기 모드·공유 화면·UI 모두 (2026-09-15 사용자 요청, F-216)
 - 본문 자리(2.1 표)는 `--font-body` 로 참조한다. 기본 `var(--font-sans)`, `:root[data-body-font="serif"]` 이면 `var(--font-serif)` (D8). 세리프 본문용으로 Noto Serif KR 400 을 함께 포함한다 (F-141)
 - 산세리프 선택 시 산세리프 제목은 굵기로 위계를 유지한다 (Pretendard 700). 크기는 세리프와 같게 둔다
 - 산세리프를 선택해도 Noto Serif KR 은 오프라인 대비로 precache 에 남긴다

@@ -90,6 +90,12 @@
   height: 28px;
 }
 
+/* 원본 svg 파일은 width·height 48 이라 버튼(28px)을 넘친다 — 다른 아이콘 버튼과 같은 18px (F-216) */
+.md-image-align-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
 /* 손잡이 — 호버·포커스 때만 보인다 (F-157 2.4) */
 .md-image-handle {
   position: absolute;

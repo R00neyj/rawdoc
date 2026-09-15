@@ -103,6 +103,20 @@ svg {
   color: var(--muted);
 }
 
+/* 휴대폰 폭 — 상단바가 화면보다 넓어 가로·세로 스크롤이 생기던 문제, 제품명 글자·준비 중 검색을 빼고 간격을 줄인다 (F-216) */
+@media (max-width: 600px) {
+  .topbar {
+    gap: 4px;
+    padding: 0 8px;
+    overflow-x: clip;
+  }
+
+  .topbar .brand,
+  .topbar .icon-btn-wrap:has(> .topbar-search-btn) {
+    display: none;
+  }
+}
+
 /* ===== 본문 영역 (사이드바 + 메인 열) ===== */
 .app-body {
   flex: 1;
