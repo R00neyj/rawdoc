@@ -1,0 +1,23 @@
+# main·PR 점검 — 린트·타입·단위·빌드. e2e 는 설치된 Chrome 이 필요해 로컬 verify:full 로 돌린다. 배포는 deploy 브랜치(Cloudflare Workers Builds)
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run typecheck:worker
+      - run: npm test
+      - run: npm run build
