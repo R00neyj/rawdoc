@@ -1379,6 +1379,15 @@ body.sidebar-resizing {
   fill: currentColor;
 }
 
+/* 터치 기기 사이드바 여닫기 버튼 — 누르는 영역 44×44, 아이콘 크기·상단바 높이는 그대로 두고 음수 여백으로 흡수 (F-227 2.1) */
+@media (pointer: coarse) {
+  .icon-btn.sidebar-toggle {
+    width: 44px;
+    height: 44px;
+    margin: -6px;
+  }
+}
+
 /* 앱이 그리는 툴팁 — F-125 2.4 표 툴팁과 같은 모양 (F-142 3.2, specs/design.md 4장) */
 .icon-tooltip {
   position: absolute;

@@ -21,6 +21,7 @@ import { getPref, setPref } from './prefs'
 import { fetchAccount, type AccountState } from './account'
 import type { SyncState } from '../types'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
+import { useEdgeSwipe } from './useEdgeSwipe'
 import { IconRefresh } from './icons'
 import { resolveTheme } from './theme'
 import { parseHash, formatHash, type HashRoute } from './hashRoute'
@@ -198,6 +199,7 @@ export default function App() {
   const [syncState, setSyncState] = useState<SyncState | undefined>(undefined)
 
   const sidebarRef = useRef<HTMLElement | null>(null)
+  const appShellRef = useRef<HTMLDivElement | null>(null)
   const toggleButtonRef = useRef<HTMLButtonElement | null>(null)
   const bootedRef = useRef(false)
   const focusTitleRef = useRef(false)
@@ -307,6 +309,18 @@ export default function App() {
   const closeSidebarIfNarrow = useCallback(() => {
     setSidebarOpen(false)
   }, [])
+
+  // ----- 화면 밀기로 좁은 창 겹침 사이드바 여닫기 (F-227 2.2) -----
+  const openSidebarBySwipe = useCallback(() => setSidebarOpen(true), [])
+  const closeSidebarBySwipe = useCallback(() => setSidebarOpen(false), [])
+  useEdgeSwipe({
+    shellRef: appShellRef,
+    sidebarRef,
+    enabled: narrow,
+    sidebarOpen,
+    onOpen: openSidebarBySwipe,
+    onClose: closeSidebarBySwipe,
+  })
 
   // ----- 공유 링크 조각 해석 (specs/features/F-130.md 4장) -----
   // 성공하면 S-4 를 보여준다. 실패하면 알림을 띄우고 일반 첫 화면(3.2 규칙)으로 대신
@@ -1532,7 +1546,11 @@ export default function App() {
   )
 
   return (
-    <div className="app-shell" style={{ '--sidebar-w': `${displaySidebarWidth}px` } as CSSProperties}>
+    <div
+      className="app-shell"
+      ref={appShellRef}
+      style={{ '--sidebar-w': `${displaySidebarWidth}px` } as CSSProperties}
+    >
       <DropOverlay visible={dropActive} />
       {narrow && topBar}
       <input
