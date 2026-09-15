@@ -126,9 +126,9 @@ async function findOrCreateUser(env: Env, email: string): Promise<AuthUser> {
 }
 
 export async function getUser(request: Request, env: Env): Promise<AuthUser | null> {
-  const url = new URL(request.url)
   const devEmail = (env as unknown as { DEV_AUTH_EMAIL?: string }).DEV_AUTH_EMAIL
-  if (devEmail && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) {
+  // wrangler dev 는 커스텀 도메인 routes 가 있으면 호스트를 바꾸므로 호스트 대신 예약 도메인·Access 미설정으로 제한 (F-205 2.2)
+  if (devEmail && devEmail.toLowerCase().endsWith('@example.com') && !env.ACCESS_AUD) {
     try {
       return await findOrCreateUser(env, devEmail)
     } catch {
