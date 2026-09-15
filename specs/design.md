@@ -33,7 +33,7 @@
 | UI | 산세리프 | 버튼, 목록, 상단바 제목 입력, 상태바, 알림 |
 | 본문 | 산세리프 (UI 와 같은 서체, D1). 사용자가 세리프로 바꿀 수 있다 (D8) | 라이브 프리뷰의 문단·목록·인용·표·콜아웃 본문, 보기 모드 본문 |
 | 제목 강조 | 세리프 — Noto Serif KR (D2). 사용자가 산세리프로 바꿀 수 있다 (D6) | 편집·보기 모드 `#`~`######` 제목 (2026-09-14 `#` `##` 에서 넓힘, F-153), 빈 상태 문구, 상단바 제품명 |
-| 원문·코드 | 고정폭 — JetBrains Mono (D3), 한글은 D2Coding (D5, F-154) | 원문 모드 전체, 인라인코드, 코드블록, 기호 문자 |
+| 원문·코드 | 고정폭 — D2Coding (영문·한글 모두, D3·D5, 2026-09-15) | 원문 모드 전체, 인라인코드, 코드블록, 기호 문자 |
 
 세리프를 쓰지 않는 곳: 버튼·입력 등 조작 요소, 원문 모드
 
@@ -64,12 +64,12 @@
 | --- | --- | --- |
 | UI·본문 | Pretendard Variable | 포함 (실측) |
 | 제목 강조 | Noto Serif KR Bold | 포함으로 알려져 있으나 파일 실측 전. F-102 에서 실측 |
-| 고정폭 | JetBrains Mono | **없음 (실측 0자) → Pretendard 로 대체** |
+| 고정폭 | D2Coding Regular (2026-09-15 JetBrains Mono 에서 변경, D3) | 포함 (실측) |
 
 ```css
 --font-sans:  "Pretendard Variable", system-ui, sans-serif;
 --font-serif: "Noto Serif KR", serif;
---font-mono:  "JetBrains Mono", "Pretendard Variable", monospace;
+--font-mono:  "D2Coding", "Pretendard Variable", monospace;
 
 /* 제목 강조 자리는 --font-serif 가 아니라 이 토큰을 참조한다 (D6) */
 --font-display: var(--font-serif);
@@ -83,7 +83,7 @@
 - 산세리프를 선택해도 Noto Serif KR 은 오프라인 대비로 precache 에 남긴다
 
 - 세 서체 모두 앱에 포함해 자체 호스팅한다 (2.3). Noto Serif KR 은 Google Fonts 링크를 쓰지 않는다
-- **JetBrains Mono 선택의 결과:** 원문 모드·코드블록의 한글은 Pretendard 로 그려진다. 한글 폭이 영문 2자와 달라서 공백으로 맞춘 표 열이 어긋난다. 비교 화면에서 보인 동작 그대로다. 보완 여부는 D5
+- **고정폭 D2Coding 전용 (2026-09-15):** 영문 0.5em·한글 1em 이라 크기 보정 없이 표 열이 맞는다. 이전 JetBrains Mono + D2Coding 한글 120% 조합은 한글이 커 보여 사용자가 바꿈 (D3·D5). `@fontsource/jetbrains-mono` 제거
 
 ## 3. 색
 
@@ -168,9 +168,9 @@
 | --- | --- | --- | --- |
 | D1 | 라이브 프리뷰 본문을 비례폭으로 하는가, 고정폭으로 하는가 | **결정: 비례폭 산세리프** (2026-09-13). Obsidian 라이브 프리뷰와 같은 방식 | 원문 모드와 전환하면 글자 위치가 달라진다. 라이브 프리뷰에서 커서가 닿아 드러나는 기호도 비례폭으로 표시할지는 F-104 작은 명세에서 정한다 |
 | D2 | 세리프 서체 | **결정: Noto Serif KR** (2026-09-14) | 2.4 |
-| D3 | 고정폭 서체 | **결정: JetBrains Mono** (2026-09-14) | 한글 글리프가 없어 Pretendard 로 대체된다. 2.4, D5 |
+| D3 | 고정폭 서체 | **결정 변경: D2Coding** (2026-09-15 사용자 "한글이 너무 커보임" → "고정폭 전부 D2Coding"). 이전: JetBrains Mono (2026-09-14) | 2.4, D5 |
 | D4 | 메인 컬러(기호 강조색) | **보류 — 변수로 둔다** (2026-09-14). 임시값 `#3B4890` (같은 날 `#D6337E` 에서 변경) | 3.2 |
-| D5 | 고정폭의 한글 대체 서체를 보완하는가 | **결정 변경: 보완한다** (2026-09-14 화면 점검 후 사용자 승인, F-154). D2Coding Regular 의 한글만 `unicode-range` + `size-adjust` 로 끌어와 한글 1자 = 영문 2자 폭. 이전 결정: 보완하지 않음 | 검토했던 대안: D2Coding 의 한글만 `unicode-range` 로 끌어오고 `size-adjust: 120%` 를 주면 한글 1자 폭이 JetBrains Mono 영문 2자(0.6em × 2)와 같아져 표가 정렬된다. 대신 한글이 20% 커 보이고 서체 파일이 하나 늘어난다 |
+| D5 | 고정폭의 한글 대체 서체를 보완하는가 | **D3 변경으로 해소** (2026-09-15). 고정폭 전체가 D2Coding 이라 대체·`size-adjust` 없음. 이전: D2Coding 한글만 `unicode-range` + `size-adjust` 120% (2026-09-14, F-154) | 검토했던 대안: D2Coding 의 한글만 `unicode-range` 로 끌어오고 `size-adjust: 120%` 를 주면 한글 1자 폭이 JetBrains Mono 영문 2자(0.6em × 2)와 같아져 표가 정렬된다. 대신 한글이 20% 커 보이고 서체 파일이 하나 늘어난다 |
 
 | D6 | 제목 세리프를 사용자가 끌 수 있는가 | **결정: 끌 수 있다** (2026-09-14). 기본 세리프, 설정 대화상자에서 산세리프로 바꾼다 | 2.4 `--font-display`, `specs/ia.md` 3.15 |
 | D7 | 산세리프 서체 | **결정: Pretendard** (2026-09-14). UI·본문·산세리프 제목 공통 | 2.4 `--font-sans` |

@@ -4,12 +4,10 @@
    index.html <head> 에 <style>:root{--brand-accent:...}</style> 로 넣는다.
    테마별 --accent 는 --brand-accent 에서 이 파일이 만든다 */
 
-/* 고정폭 한글 보완 — D2Coding Regular 한글만 unicode-range 로, size-adjust 120% 로 JetBrains Mono 영문 2자 폭에 맞춘다 (design.md D5, F-154 2.1, 실측: scripts/measure.mjs A2) */
+/* 고정폭은 영문·한글 모두 D2Coding Regular, 크기 보정 없음 — 한글 1자 = 영문 2자 (design.md D3·D5, F-154 2.1) */
 @font-face {
-  font-family: 'D2Coding Hangul';
+  font-family: 'D2Coding';
   src: url('../../node_modules/@kfonts/d2coding/D2Coding.woff2') format('woff2');
-  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
-  size-adjust: 120%;
   font-weight: 400;
   font-display: swap;
 }
@@ -60,7 +58,7 @@
   /* 서체 (design.md 2.4) */
   --font-sans: 'Pretendard Variable', system-ui, sans-serif;
   --font-serif: 'Noto Serif KR', serif;
-  --font-mono: 'JetBrains Mono', 'D2Coding Hangul', 'Pretendard Variable', monospace;
+  --font-mono: 'D2Coding', 'Pretendard Variable', monospace;
 
   /* 제목 강조 자리는 반드시 --font-display 로 참조한다 (D6) */
   --font-display: var(--font-serif);

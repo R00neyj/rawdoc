@@ -105,7 +105,8 @@ test.describe('F-141 설정 대화상자', () => {
   test('테마 / 제목 서체 / 본문 서체 순서, 버튼 순서 동일', async ({ page }) => {
     await openApp(page)
     await page.getByRole('button', { name: '설정', exact: true }).click()
-    const labels = page.locator('.dialog-field > span, .dialog-field [id]')
+    // 초대 대화상자(F-212)도 닫힌 채 DOM 에 있어 설정 대화상자로 좁힌다
+    const labels = page.locator('dialog[aria-labelledby="settings-title"]').locator('.dialog-field > span, .dialog-field [id]')
     await expect(labels.nth(0)).toHaveText('테마')
     await expect(labels.nth(1)).toHaveText('제목 서체')
     await expect(labels.nth(2)).toHaveText('본문 서체')
@@ -123,7 +124,7 @@ test.describe('F-154 A7 설정 항목 — 글자 크기·들여쓰기', () => {
   test('테마/제목 서체/본문 서체/글자 크기/들여쓰기/줄 번호 순서, 기본 선택 표시', async ({ page }) => {
     await openApp(page)
     await page.getByRole('button', { name: '설정', exact: true }).click()
-    const labels = page.locator('.dialog-field > span, .dialog-field [id]')
+    const labels = page.locator('dialog[aria-labelledby="settings-title"]').locator('.dialog-field > span, .dialog-field [id]')
     await expect(labels.nth(3)).toHaveText('글자 크기')
     await expect(labels.nth(4)).toHaveText('들여쓰기')
     await expect(labels.nth(5)).toHaveText('줄 번호')
@@ -279,7 +280,7 @@ test.describe('F-154 A3 원문 표 정렬', () => {
 })
 
 test.describe('F-154 A4 사용 서체', () => {
-  test('원문 모드 한글은 D2Coding, 영문은 JetBrains Mono', async ({ page, context }) => {
+  test('원문 모드 한글·영문 모두 D2Coding', async ({ page, context }) => {
     await openApp(page)
     await importMarkdown(page, { content: '가나다\nabcdef\n' })
     await setViewMode(page, 'raw')
@@ -302,7 +303,7 @@ test.describe('F-154 A4 사용 서체', () => {
     const hangulFonts = await fontsForLine(0)
     const latinFonts = await fontsForLine(1)
     expect(hangulFonts.some((f) => f.includes('D2Coding'))).toBe(true)
-    expect(latinFonts.some((f) => f.includes('JetBrains Mono'))).toBe(true)
+    expect(latinFonts.some((f) => f.includes('D2Coding'))).toBe(true)
   })
 })
 
