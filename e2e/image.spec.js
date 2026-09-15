@@ -122,13 +122,25 @@ async function readAttachment(page, id) {
             const rec = getReq.result
             if (!rec) return resolve(null)
             const buf = await rec.blob.arrayBuffer()
-            resolve({ mime: rec.mime, ext: rec.ext, size: rec.size, bytes: Array.from(new Uint8Array(buf)) })
+            resolve({
+              mime: rec.mime,
+              ext: rec.ext,
+              size: rec.size,
+              width: rec.width,
+              height: rec.height,
+              bytes: Array.from(new Uint8Array(buf)),
+            })
           }
           getReq.onerror = () => reject(getReq.error)
         }
       }),
     id,
   )
+}
+
+// 최소 GIF 헤더(픽셀 없음) — shrinkImage 는 GIF 를 건드리지 않아 디코딩이 필요 없다
+function gifBytes(width, height) {
+  return [...ascii('GIF89a'), width & 0xff, (width >> 8) & 0xff, height & 0xff, (height >> 8) & 0xff, 0, 0, 0]
 }
 
 async function listAttachmentIds(page) {
@@ -296,7 +308,7 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
     expect(Math.abs(width - contentWidth)).toBeLessThanOrEqual(1)
   })
 
-  test('F-156 A5 거부 — 5MB 초과·SVG·형식뿐인 파일·헤더 초과 크기', async ({ page }) => {
+  test('F-156 A5 거부 — 20MB 초과·SVG·형식뿐인 파일·헤더 초과 크기', async ({ page }) => {
     await skipPersistNotice(page)
     await openApp(page)
     await importMarkdown(page, { content: '본문\n' })
@@ -304,10 +316,11 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
 
     await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
 
-    const big = Array(5 * 1024 * 1024 + 1).fill(0)
-    pngBytes(1, 1).forEach((b, i) => (big[i] = b))
+    // Uint8Array 로 만든다 — plain Array(20M).fill(0) 은 boxed 숫자 배열이라 메모리를 크게 써 전체 스위트 실행 중 OOM 을 유발한다
+    const big = new Uint8Array(20 * 1024 * 1024 + 1)
+    big.set(pngBytes(1, 1))
     await pasteFiles(page, { files: [{ bytes: big, name: 'big.png', mime: 'image/png' }] })
-    await expect(page.locator('.notice-message')).toHaveText('이미지는 한 장에 5MB 까지 넣을 수 있습니다.')
+    await expect(page.locator('.notice-message')).toHaveText('이미지는 한 장에 20MB 까지 넣을 수 있습니다.')
 
     await pasteFiles(page, { files: [{ bytes: SVG_BYTES, name: 'a.svg', mime: 'image/svg+xml' }] })
     await expect(page.locator('.notice-message')).toHaveText('PNG·JPEG·GIF·WebP 이미지만 넣을 수 있습니다.')
@@ -463,6 +476,64 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
     expect(fileBytes).toBe(saved.content)
     expect(fileBytes).toContain('<div align="center">\r\n')
     expect(fileBytes).toContain('</div>\r\n')
+  })
+})
+
+test.describe('F-220 이미지 넣을 때 자동 축소', () => {
+  test('F-220 A2 큰 PNG — webp 로 축소, width ≤ 문서 칸 폭, 저장 2000x1500', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    const contentWidth = await measureContentWidth(page)
+
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await pasteFiles(page, { files: [{ bytes: decodablePngBytes(4000, 3000), name: 'big.png', mime: 'image/png' }] })
+
+    await expect(page.locator('.md-image-box')).toBeVisible({ timeout: 15_000 })
+    await waitSaved(page)
+    const saved = await readSavedContent(page)
+    const match = /attachments\/([0-9a-f]{16})\.(webp)/.exec(saved.content)
+    expect(match).not.toBeNull()
+    const width = Number(/width="(\d+)"/.exec(saved.content)[1])
+    expect(width).toBeLessThanOrEqual(contentWidth + 1)
+
+    const attachment = await readAttachment(page, match[1])
+    expect(attachment.ext).toBe('webp')
+    expect(attachment.width).toBe(2000)
+    expect(attachment.height).toBe(1500)
+  })
+
+  test('F-220 A3 작은 PNG — 400x200 유지(F-157 A2 회귀 없음)', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await pasteFiles(page, { files: [{ bytes: decodablePngBytes(400, 200), name: 'small.png', mime: 'image/png' }] })
+
+    await expect(page.locator('.md-image-box')).toBeVisible()
+    await waitSaved(page)
+    const saved = await readSavedContent(page)
+    const width = Number(/width="(\d+)"/.exec(saved.content)[1])
+    expect(width).toBe(400)
+    const id = /attachments\/([0-9a-f]{16})\./.exec(saved.content)[1]
+    const attachment = await readAttachment(page, id)
+    expect(attachment.width).toBe(400)
+    expect(attachment.height).toBe(200)
+  })
+
+  test('F-220 A4 GIF — .gif 그대로, 3000x100', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await pasteFiles(page, { files: [{ bytes: gifBytes(3000, 100), name: 'a.gif', mime: 'image/gif' }] })
+
+    await expect(page.locator('.md-image-box')).toBeVisible()
+    await waitSaved(page)
+    const saved = await readSavedContent(page)
+    const match = /attachments\/([0-9a-f]{16})\.(gif)/.exec(saved.content)
+    expect(match).not.toBeNull()
+    const attachment = await readAttachment(page, match[1])
+    expect(attachment.ext).toBe('gif')
+    expect(attachment.width).toBe(3000)
+    expect(attachment.height).toBe(100)
   })
 })
 

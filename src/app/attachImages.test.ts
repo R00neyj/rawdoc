@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { attachImages, type AttachImagesStore } from './attachImages'
 import type { ImageExt } from '../lib/imageBlock'
+import * as shrinkImageModule from '../lib/shrinkImage'
 
 function u32be(n: number): number[] {
   return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff]
@@ -47,14 +48,14 @@ describe('attachImages', () => {
     expect(inserted[0].alt).toBe('다이어그램')
   })
 
-  it('5MB 초과면 저장하지 않고 알림', async () => {
+  it('20MB 초과면 저장하지 않고 알림', async () => {
     const store = fakeStore()
     const big = pngFile('big.png')
-    Object.defineProperty(big, 'size', { value: 5 * 1024 * 1024 + 1 })
+    Object.defineProperty(big, 'size', { value: 20 * 1024 * 1024 + 1 })
     const { inserted, notice } = await attachImages([big], { store, source: 'paste' })
     expect(inserted).toHaveLength(0)
     expect(store.putAttachment).not.toHaveBeenCalled()
-    expect(notice).toEqual({ type: 'warn', message: '이미지는 한 장에 5MB 까지 넣을 수 있습니다.' })
+    expect(notice).toEqual({ type: 'warn', message: '이미지는 한 장에 20MB 까지 넣을 수 있습니다.' })
   })
 
   it('SVG(형식 시그니처 아님)는 알림', async () => {
@@ -108,5 +109,43 @@ describe('attachImages', () => {
     const { inserted, notice } = await attachImages([], { store })
     expect(inserted).toEqual([])
     expect(notice).toBeNull()
+  })
+
+  it('축소 결과(shrinkImage)를 저장·삽입에 반영한다', async () => {
+    const shrunkBlob = new Blob([new Uint8Array(10)])
+    const spy = vi
+      .spyOn(shrinkImageModule, 'shrinkImage')
+      .mockResolvedValue({ blob: shrunkBlob, mime: 'image/webp', ext: 'webp' as ImageExt, width: 2000, height: 1500 })
+    const store = fakeStore({ putAttachment: vi.fn(async () => ({ id: 'id0', ext: 'webp' as ImageExt })) })
+    const { inserted } = await attachImages([pngFile('a.png', 4000, 3000)], { store, source: 'paste' })
+    expect(inserted[0]).toMatchObject({ ext: 'webp', width: 2000, height: 1500 })
+    expect(store.putAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({ blob: shrunkBlob, mime: 'image/webp', ext: 'webp', width: 2000, height: 1500 }),
+    )
+    spy.mockRestore()
+  })
+
+  it('축소 뒤에도 5MB 초과 — GIF 문구', async () => {
+    const bigBlob = new Blob([new Uint8Array(5 * 1024 * 1024 + 1)])
+    const spy = vi
+      .spyOn(shrinkImageModule, 'shrinkImage')
+      .mockResolvedValue({ blob: bigBlob, mime: 'image/gif', ext: 'gif' as ImageExt, width: 3000, height: 100 })
+    const store = fakeStore()
+    const { inserted, notice } = await attachImages([pngFile('a.gif')], { store, source: 'paste' })
+    expect(inserted).toHaveLength(0)
+    expect(notice).toEqual({ type: 'warn', message: 'GIF 는 한 장에 5MB 까지 넣을 수 있습니다.' })
+    spy.mockRestore()
+  })
+
+  it('축소 뒤에도 5MB 초과 — 그 외 형식 문구', async () => {
+    const bigBlob = new Blob([new Uint8Array(5 * 1024 * 1024 + 1)])
+    const spy = vi
+      .spyOn(shrinkImageModule, 'shrinkImage')
+      .mockResolvedValue({ blob: bigBlob, mime: 'image/webp', ext: 'webp' as ImageExt, width: 2000, height: 1500 })
+    const store = fakeStore()
+    const { inserted, notice } = await attachImages([pngFile('a.png')], { store, source: 'paste' })
+    expect(inserted).toHaveLength(0)
+    expect(notice).toEqual({ type: 'warn', message: '이미지는 줄인 뒤에도 5MB 를 넘어 넣지 못했습니다.' })
+    spy.mockRestore()
   })
 })

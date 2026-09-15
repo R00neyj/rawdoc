@@ -638,9 +638,9 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       kickSend()
     },
 
-    // GIF 가 아니면 WebP 로 변환해 본다(더 커지거나 실패하면 원본). 캐시에 먼저 넣고 즉시 반환, 올리기는 보낼 목록으로 (2.5)
+    // GIF·이미 WebP 면 변환을 건너뛴다(이중 인코딩 방지, F-220.md 2.3). 그 외는 WebP 로 변환해 본다(더 커지거나 실패하면 원본). 캐시에 먼저 넣고 즉시 반환, 올리기는 보낼 목록으로 (2.5)
     async putAttachment({ blob, mime, ext, width, height }) {
-      const converted = ext === 'gif' ? blob : await toWebp(blob)
+      const converted = ext === 'gif' || ext === 'webp' ? blob : await toWebp(blob)
       const finalExt: AttachmentExt = converted === blob ? ext : 'webp'
       const finalMime = converted === blob ? mime : 'image/webp'
 

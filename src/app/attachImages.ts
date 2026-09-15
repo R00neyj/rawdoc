@@ -1,16 +1,20 @@
-// 이미지 파일 검사 → 저장 → 알림 (specs/features/F-156.md 2.2). F-114 importFiles.js 와 같은 자리
+// 이미지 파일 검사 → 축소 → 저장 → 알림 (specs/features/F-156.md 2.2, F-220.md 2.2). F-114 importFiles.js 와 같은 자리
 import { inspectImageBytes } from '../lib/imageFile'
+import { shrinkImage } from '../lib/shrinkImage'
 import type { ImageExt } from '../lib/imageBlock'
 import type { Notice } from './notice'
 
-const MAX_BYTES = 5 * 1024 * 1024
+const MAX_INPUT_BYTES = 20 * 1024 * 1024
+const MAX_RESULT_BYTES = 5 * 1024 * 1024
 const MAX_DIM = 10000
 const MAX_AREA = 40_000_000
 
 const MESSAGES = {
-  size: '이미지는 한 장에 5MB 까지 넣을 수 있습니다.',
+  size: '이미지는 한 장에 20MB 까지 넣을 수 있습니다.',
   format: 'PNG·JPEG·GIF·WebP 이미지만 넣을 수 있습니다.',
   dims: '이미지가 너무 큽니다. 가로·세로 10000px 이하만 넣을 수 있습니다.',
+  resultTooLargeGif: 'GIF 는 한 장에 5MB 까지 넣을 수 있습니다.',
+  resultTooLarge: '이미지는 줄인 뒤에도 5MB 를 넘어 넣지 못했습니다.',
   save: '저장 공간이 부족해 이미지를 넣지 못했습니다.',
 }
 
@@ -45,7 +49,7 @@ export async function attachImages(
   const failures: Failure[] = []
 
   for (const file of fileArray) {
-    if (file.size > MAX_BYTES) {
+    if (file.size > MAX_INPUT_BYTES) {
       failures.push({ message: MESSAGES.size, isError: false })
       continue
     }
@@ -69,16 +73,21 @@ export async function attachImages(
       continue
     }
 
+    const shrunk = await shrinkImage(new Blob([bytes], { type: info.mime }), info)
+    if (shrunk.blob.size > MAX_RESULT_BYTES) {
+      failures.push({ message: shrunk.ext === 'gif' ? MESSAGES.resultTooLargeGif : MESSAGES.resultTooLarge, isError: false })
+      continue
+    }
+
     try {
-      const blob = new Blob([bytes], { type: info.mime })
       const { id, ext } = await store.putAttachment({
-        blob,
-        mime: info.mime,
-        ext: info.ext,
-        width: info.width,
-        height: info.height,
+        blob: shrunk.blob,
+        mime: shrunk.mime,
+        ext: shrunk.ext,
+        width: shrunk.width,
+        height: shrunk.height,
       })
-      inserted.push({ id, ext, width: info.width, height: info.height, alt: altFromFile(file, source), file })
+      inserted.push({ id, ext, width: shrunk.width, height: shrunk.height, alt: altFromFile(file, source), file })
     } catch {
       failures.push({ message: MESSAGES.save, isError: true })
     }
