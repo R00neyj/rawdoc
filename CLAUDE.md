@@ -55,7 +55,7 @@ npm run typecheck    # tsc --noEmit (앱)
 npm run typecheck:worker   # tsc -p worker
 npm run dev:worker   # 빌드 후 wrangler dev(8790, 로컬 D1·R2). .dev.vars 의 DEV_AUTH_EMAIL 로 로그인 우회
 npm run cf:types     # wrangler.jsonc 바인딩 → worker/worker-configuration.d.ts
-npm run deploy       # 빌드 후 wrangler deploy (로그인 필요)
+npm run deploy       # 빌드 후 wrangler deploy (로그인 필요). 평소 배포는 deploy 브랜치 push — 아래 "배포"
 npm run test:watch   # Vitest 감시 모드
 npm run test:e2e     # Playwright E2E — 빌드 후 preview(4317) 에서 e2e/*.spec.js (F-150 이후)
 npm run verify       # lint·단위·build 요약 (verify:full = e2e 포함, -- --repeat 2)
@@ -67,6 +67,25 @@ npm run dev:spike    # 스파이크 확인용
 ```
 
 테스트는 대상 파일 옆에 `{이름}.test.js` 로 두고, `vitest` 에서 명시적으로 import 한다 (`specs/features/F-101.md` 5.3)
+
+## 메인 진행 규칙
+
+작업 PC 가 둘(노트북·PC)이라 사용자 로컬 메모리 대신 여기에 둔다
+
+- **F-NNN 끝나면 바로 커밋.** 서브에이전트 보고 검토 → 그 F 의 코드·명세만 커밋. 다음 명세 서브에이전트는 커밋 뒤에 띄운다. 파일이 겹치지 않는 명세만 병렬 (2026-09-14, 미커밋 변경이 쌓여 명세끼리 섞였던 일)
+- **병렬 중 커밋은 경로 지정.** 새 파일은 `git add -- 경로` 먼저, 그다음 `git commit -m … -- 경로`. `git commit` 만 하면 다른 에이전트가 스테이징한 것까지 담긴다 (2026-09-15 F-204 커밋에 F-201 이름 변경 섞임)
+- **구현은 `ship-feature` 스킬 + `feature-implementer` 에이전트.** 프롬프트에는 명세 번호와 `E2E_PORT`·`E2E_DIST` 슬롯만. 판정은 `npm run review -- F-xxx` → 관련 e2e. 손 스크립트 대신 `scripts/` 도구, 도구에 없는 반복이 보이면 도구 추가를 제안
+- `e2e:one` 검색어는 `"F-225|F-212"` 처럼 `|` 로 묶을 수 있다. 슬롯은 `--port`·`--dist` 또는 `E2E_PORT`·`E2E_DIST`
+
+## 배포 (2026-09-15)
+
+- `main` push → GitHub Actions `ci.yml`(린트·타입·단위·빌드)만. 배포 안 됨
+- 배포 = `npm run verify:full` 통과한 main 커밋을 `deploy` 브랜치로: `git push --force origin <sha>:refs/heads/deploy` → Cloudflare Workers Builds(`md-editor-web`, 분기 제어 `deploy`)가 빌드·배포. **올리기 전후로 사용자에게 알린다** (사용자 "다음 배포때 말만해줘")
+- 확인: 그 커밋에 Cloudflare check run, `https://rawdoc.app/` 의 `assets/index-*.js` 이름이 로컬 빌드와 같은지. Workers Builds 첫 빌드는 아직 확인 전
+- verify:full 에서 알려진 실패: F-146 A2(원래 실패). F-156·F-158 A2·F-208 은 부하에서 흔들림 — 단독 재실행으로 판정
+- D1 원격 마이그레이션은 자동화하지 않는다. 새 `migrations/000N` 이 있으면 배포 전에 `npx wrangler d1 migrations apply md-editor-db --remote`
+- 빌드가 안 돌면 로컬 배포: 깨끗한 워크트리 `../rawdoc-deploy`(없으면 `git worktree add ../rawdoc-deploy deploy`)에서 `npm run deploy`
+- 루트 `.env`(커밋 안 함, PC 마다 따로)의 `CLOUDFLARE_API_TOKEN` 이 있으면 wrangler 가 브라우저 로그인 대신 그 토큰을 쓴다. 2026-09-15 토큰은 Workers·D1 권한이 없어(10000·7403) 로컬 배포·마이그레이션 때는 `.env` 를 잠시 비키거나 권한을 추가한다
 
 ## 불변조건
 
