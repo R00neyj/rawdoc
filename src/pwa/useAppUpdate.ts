@@ -41,7 +41,11 @@ export function useAppUpdate({
   const applyUpdate = useCallback(async () => {
     // 자동 새로고침 금지 — 사용자가 '새로고침'을 눌렀을 때만 호출된다 (ia.md 3.13)
     await beforeReloadRef.current?.()
+    const controlled = !!navigator.serviceWorker?.controller
     await updateServiceWorkerRef.current(true)
+    // 강제 새로고침으로 연 페이지는 SW 제어 밖이라 controlling 이벤트가 오지 않아 직접 새로고침한다
+    if (!controlled) window.location.reload()
+    else setTimeout(() => window.location.reload(), 3000)
   }, [])
 
   return { updateAvailable: needRefresh, applyUpdate }
