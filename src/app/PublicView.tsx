@@ -23,6 +23,7 @@ import {
 } from './publicDoc'
 import { formatPublicFolderHash } from './hashRoute'
 import PublicFolderList from './PublicFolderList'
+import PublicBrand from './PublicBrand'
 
 const NARROW_QUERY = '(max-width: 1023px)'
 
@@ -84,6 +85,7 @@ function DocPane({
   onExport,
   onRetry,
   notFoundMessage = '링크가 없거나 끊겼습니다.',
+  showBrand = true,
 }: {
   docKey: string
   state: DocLoadState
@@ -91,6 +93,7 @@ function DocPane({
   onExport: () => void
   onRetry: () => void
   notFoundMessage?: string
+  showBrand?: boolean
 }) {
   const contentAreaRef = useRef<HTMLDivElement | null>(null)
   const viewerRef = useRef<HTMLDivElement | null>(null)
@@ -109,7 +112,15 @@ function DocPane({
   return (
     <div className="public-view-main">
       <div className="public-view-header">
-        <h1 className="public-view-title">{title}</h1>
+        <div className="public-view-header-lead">
+          {showBrand && (
+            <>
+              <PublicBrand />
+              <span className="public-brand-divider" aria-hidden="true" />
+            </>
+          )}
+          <h1 className="public-view-title">{title}</h1>
+        </div>
         <button type="button" className="public-view-export" disabled={!doc} onClick={onExport}>
           <IconDownload size={18} />
           .md 내보내기
@@ -372,6 +383,9 @@ function PublicFolderView({ token, docId }: { token: string; docId?: string }) {
   if (folderState.status === 'loading') {
     return (
       <div className="public-view public-view--folder">
+        <div className="public-folder-topbar">
+          <PublicBrand />
+        </div>
         <p className="public-view-notice">불러오는 중…</p>
       </div>
     )
@@ -379,6 +393,9 @@ function PublicFolderView({ token, docId }: { token: string; docId?: string }) {
   if (folderState.status === 'not_found') {
     return (
       <div className="public-view public-view--folder">
+        <div className="public-folder-topbar">
+          <PublicBrand />
+        </div>
         <p className="public-view-notice">링크가 없거나 끊겼습니다.</p>
       </div>
     )
@@ -386,6 +403,9 @@ function PublicFolderView({ token, docId }: { token: string; docId?: string }) {
   if (folderState.status === 'network') {
     return (
       <div className="public-view public-view--folder">
+        <div className="public-folder-topbar">
+          <PublicBrand />
+        </div>
         <div className="public-view-notice">
           <p>링크를 불러오지 못했습니다. 연결을 확인하세요.</p>
         </div>
@@ -399,6 +419,7 @@ function PublicFolderView({ token, docId }: { token: string; docId?: string }) {
     <div className="public-view public-view--folder">
       {narrow && (
         <div className="public-folder-topbar">
+          <PublicBrand />
           <button type="button" className="public-folder-list-toggle" onClick={() => setListOpen((v) => !v)}>
             목록
           </button>
@@ -423,6 +444,7 @@ function PublicFolderView({ token, docId }: { token: string; docId?: string }) {
             onExport={handleExport}
             onRetry={retryDoc}
             notFoundMessage="이 문서는 더 이상 공유되지 않습니다."
+            showBrand={false}
           />
         )}
       </div>

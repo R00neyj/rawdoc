@@ -1,6 +1,7 @@
 // 공개 폴더 보기 왼쪽 문서 목록 (specs/features/F-211.md 2.3) — 위키링크로 만들지 않는다(F-130 과 같음)
 import type { PublicFolder } from './publicDoc'
 import { sortDocsByUpdatedAtDesc } from './publicDoc'
+import PublicBrand from './PublicBrand'
 
 type PublicFolderListProps = {
   folder: PublicFolder
@@ -13,6 +14,9 @@ export default function PublicFolderList({ folder, currentDocId, onSelectDoc }: 
 
   return (
     <nav className="public-folder-list" aria-label={`${folder.name} 문서 목록`}>
+      <div className="public-folder-list-head">
+        <PublicBrand />
+      </div>
       <h2 className="public-folder-list-title">{folder.name}</h2>
       {rootDocs.length > 0 && (
         <ul className="public-folder-list-docs">

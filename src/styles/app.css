@@ -1581,7 +1581,44 @@ body.sidebar-resizing {
   background: var(--paper);
 }
 
+.public-view-header-lead {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 로고 묶음 링크 — SidebarHead 와 같은 색·간격, 호버만 더한다 (F-215.md 2.1) */
+.public-brand {
+  flex: none;
+  color: var(--ink);
+  text-decoration: none;
+  padding: 4px 6px;
+  border-radius: var(--radius-control);
+  transition: var(--transition-colors);
+}
+
+.public-brand:hover {
+  background: var(--rule-2);
+}
+
+.public-brand-divider {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  background: var(--rule);
+}
+
+@media (max-width: 600px) {
+  .public-view-header-lead .public-brand .brand {
+    display: none;
+  }
+}
+
 .public-view-title {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: 16px;
   font-weight: 700;
@@ -1647,6 +1684,8 @@ body.sidebar-resizing {
   flex: none;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   height: 40px;
   padding: 0 16px;
   border-bottom: 1px solid var(--rule);
@@ -1691,6 +1730,16 @@ body.sidebar-resizing {
     z-index: 19;
     background: rgb(0 0 0 / 0.3);
   }
+}
+
+/* 목록 머리 — 오른쪽 문서 머리 줄과 같은 높이·아래 선이라 가로선이 화면 끝까지 이어진다 (F-215.md 2.2) */
+.public-folder-list-head {
+  display: flex;
+  align-items: center;
+  height: var(--topbar-h);
+  margin: -16px -12px 12px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--rule);
 }
 
 .public-folder-list-title {

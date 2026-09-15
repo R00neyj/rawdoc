@@ -1,5 +1,6 @@
 // 공개 보기 화면 S-5 (specs/features/F-210.md 2.4·2.5)
 import { test, expect } from '@playwright/test'
+import brand from '../brand.config.ts'
 
 const DOC = {
   title: '공개 문서',
@@ -196,5 +197,68 @@ test.describe('F-211 A4 좁은 창', () => {
     await page.getByRole('button', { name: '문서3' }).click()
     await expect(page.locator('.public-folder-list')).toHaveCount(0)
     await expect(page.locator('.public-view-title')).toHaveText('문서3')
+  })
+})
+
+test.describe('F-215 A1 문서 링크 로고', () => {
+  test('머리 줄에 로고 링크와 제목이 보인다', async ({ page }) => {
+    await mockPublicDoc(page)
+    await page.goto('/#/p/tok123')
+
+    const logo = page.getByRole('link', { name: `${brand.name} 열기` })
+    await expect(logo).toBeVisible()
+    await expect(logo).toHaveAttribute('href', '/')
+    await expect(logo.locator('img.brand-icon')).toBeVisible()
+    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
+  })
+})
+
+test.describe('F-215 A2 폴더 링크 로고', () => {
+  test('넓은 창 — 목록 안 로고 1개, 문서 머리 줄에는 없음', async ({ page }) => {
+    await mockPublicFolder(page)
+    await page.goto('/#/p/f/tokF')
+    await expect(page.locator('.public-view-title')).toHaveText('문서2')
+
+    await expect(page.getByRole('link', { name: `${brand.name} 열기` })).toHaveCount(1)
+    await expect(page.locator('.public-folder-list').getByRole('link', { name: `${brand.name} 열기` })).toBeVisible()
+    await expect(page.locator('.public-view-main .public-brand')).toHaveCount(0)
+  })
+})
+
+test.describe('F-215 A3 좁은 창', () => {
+  test('800px 폴더 링크 — 머리 줄에 로고 + 목록 버튼', async ({ page }) => {
+    await page.setViewportSize({ width: 800, height: 800 })
+    await mockPublicFolder(page)
+    await page.goto('/#/p/f/tokF')
+    await expect(page.locator('.public-view-title')).toHaveText('문서2')
+
+    const topbarLogo = page.locator('.public-folder-topbar').getByRole('link', { name: `${brand.name} 열기` })
+    await expect(topbarLogo).toBeVisible()
+    await expect(page.getByRole('button', { name: '목록' })).toBeVisible()
+  })
+
+  test('400px 문서 링크 — 로고 글자 숨김, 아이콘 보임, 가로 스크롤 없음', async ({ page }) => {
+    await page.setViewportSize({ width: 400, height: 800 })
+    await mockPublicDoc(page)
+    await page.goto('/#/p/tok123')
+
+    const logo = page.getByRole('link', { name: `${brand.name} 열기` })
+    await expect(logo.locator('img.brand-icon')).toBeVisible()
+    await expect(logo.locator('span.brand')).not.toBeVisible()
+
+    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
+    const clientWidth = await page.evaluate(() => document.documentElement.clientWidth)
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth)
+  })
+})
+
+test.describe('F-215 A4 오류 화면', () => {
+  test('폴더 링크 404 — 안내 문구와 로고 링크', async ({ page }) => {
+    await page.route('**/pub/folders/*', (route) =>
+      route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not_found' }) }),
+    )
+    await page.goto('/#/p/f/badtok')
+    await expect(page.locator('.public-view-notice')).toContainText('링크가 없거나 끊겼습니다.')
+    await expect(page.getByRole('link', { name: `${brand.name} 열기` })).toBeVisible()
   })
 })
