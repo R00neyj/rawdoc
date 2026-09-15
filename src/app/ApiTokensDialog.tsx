@@ -105,7 +105,7 @@ export default function ApiTokensDialog({ open, onClose }: ApiTokensDialogProps)
   }
 
   return (
-    <Dialog open={open} onClose={onClose} titleId={titleId} initialFocusRef={nameInputRef}>
+    <Dialog open={open} onClose={onClose} titleId={titleId} initialFocusRef={nameInputRef} size="wide">
       <h2 id={titleId}>API 토큰</h2>
       <p>스크립트나 자동화 도구가 이 계정으로 문서를 올릴 때 씁니다. 토큰을 가진 사람은 내 문서를 읽고 고칠 수 있습니다.</p>
 

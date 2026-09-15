@@ -95,3 +95,4 @@
 | H79 | F-221 A6 | 배포 뒤 계정 메뉴 `이미지 {N} / 500MB` 가 실제 올린 양과 맞는지(이미지 몇 장 넣고 메뉴 다시 열기) | 대기 |
 | H80 | F-222 A7 | 배포 뒤 계정 메뉴 `API 토큰` 에서 만들고 복사 → `curl -H "Authorization: Bearer rd_…" https://rawdoc.app/v1/docs` 가 401 아님, 폐기 뒤 401. 복사 버튼·대화상자 모양 | 대기 |
 | H81 | F-223 A6 | 배포 뒤 토큰으로 `curl -X POST https://rawdoc.app/v1/docs` → 앱 사이드바에 보임, `POST /v1/attachments` 응답 `markdown` 을 본문에 넣어 `PUT` → 편집 모드 이미지 표시, `POST /v1/docs/:id/link` 주소가 시크릿 창에서 열림 | 대기 |
+| H82 | F-224 A6 | 대화상자 뒤 흐림 6px 세기, 다크 테마에서 막 느낌, 고정 폭에서 각 대화상자 내용이 어색하지 않은지 | 대기 |

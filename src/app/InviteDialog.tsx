@@ -99,7 +99,7 @@ export default function InviteDialog({ target, onClose, onNotice }: InviteDialog
   }
 
   return (
-    <Dialog open={Boolean(target)} onClose={onClose} titleId={titleId} initialFocusRef={emailInputRef}>
+    <Dialog open={Boolean(target)} onClose={onClose} titleId={titleId} initialFocusRef={emailInputRef} size="wide">
       <h2 id={titleId}>사람 초대</h2>
       <form onSubmit={handleSubmit}>
         <div className="dialog-field">

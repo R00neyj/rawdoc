@@ -869,19 +869,25 @@ body.sidebar-resizing {
 /* ===== 대화상자 ===== */
 /* 나타나고 사라지는 전환 — 네이티브 <dialog> [open]·::backdrop 그대로, Dialog.jsx 는 JS 변경 없이 CSS 의 allow-discrete 로 닫기를 늦춘다 (F-172.md 2.1·2.2) */
 .dialog {
+  box-sizing: border-box;
   border: 1px solid var(--rule);
   border-radius: var(--radius-dialog);
   padding: 18px;
   background: var(--panel);
   color: var(--ink);
-  min-width: 280px;
-  max-width: min(90vw, 420px);
+  width: min(420px, calc(100vw - 32px));
+  /* 브라우저 기본 dialog:modal 이 max-width: calc(100% - 6px - 2em) 를 따로 얹어 폭을 더 줄인다 — 지운다 */
+  max-width: none;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
   opacity: 0;
   transform: scale(0.98);
   transition: opacity var(--transition-fast), transform var(--transition-move),
     display var(--transition-fast), overlay var(--transition-fast);
   transition-behavior: allow-discrete;
+}
+
+.dialog--wide {
+  width: min(520px, calc(100vw - 32px));
 }
 
 .dialog[open] {
@@ -898,6 +904,7 @@ body.sidebar-resizing {
 
 .dialog::backdrop {
   background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(6px);
   opacity: 0;
   transition: opacity var(--transition-fast), display var(--transition-fast), overlay var(--transition-fast);
   transition-behavior: allow-discrete;
