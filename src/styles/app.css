@@ -1004,20 +1004,87 @@ body.sidebar-resizing {
   font-weight: 600;
 }
 
-/* ----- D-4 사람 초대 대화상자 (F-212.md 2.5) ----- */
-.invite-email-input {
-  display: block;
-  width: 100%;
-  padding: 7px 10px;
+/* ----- D-4 사람 초대 대화상자 (F-225.md 2장) ----- */
+.invite-target {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-form {
+  container-type: inline-size;
+}
+
+.invite-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.invite-input-group {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  height: 36px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
   background: var(--paper);
+  transition: var(--transition-colors);
+}
+
+.invite-input-group:focus-within {
+  border-color: var(--ink-2);
+}
+
+.invite-input-group[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.invite-email-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+  padding: 0 10px;
+  background: transparent;
   color: var(--ink);
   font-size: 13.5px;
 }
 
-.invite-email-input[aria-invalid='true'] {
-  border-color: var(--danger);
+.invite-role-seg {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border: none;
+  border-left: 1px solid var(--rule);
+  border-radius: 0;
+}
+
+.invite-role-seg button {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+
+.invite-submit {
+  flex: none;
+  height: 36px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: var(--transition-colors);
+}
+
+.invite-submit:hover {
+  background: var(--rule-2);
 }
 
 .invite-error {
@@ -1026,11 +1093,31 @@ body.sidebar-resizing {
   color: var(--danger);
 }
 
+.invite-list-head {
+  margin-top: 24px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.invite-list-count {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.invite-empty {
+  margin: 0;
+  padding: 11px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .invite-grant-list {
   list-style: none;
-  margin: 0 0 16px;
+  margin: 0;
   padding: 0;
-  max-height: 220px;
+  max-height: 200px;
   overflow-y: auto;
 }
 
@@ -1038,14 +1125,24 @@ body.sidebar-resizing {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 0;
-  border-top: 1px solid var(--rule);
+  height: 40px;
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.invite-grant-row--highlight-start {
+  background: var(--accent-soft);
+}
+
+.invite-grant-row--highlight-fading {
+  background: transparent;
+  transition: background-color 1200ms var(--ease-out);
 }
 
 .invite-grant-email {
   flex: 1;
   min-width: 0;
-  font-size: 13px;
+  font-size: 13.5px;
+  color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1053,19 +1150,60 @@ body.sidebar-resizing {
 
 .invite-grant-role {
   flex: none;
+  height: 26px;
+}
+
+.invite-grant-role button {
+  padding: 0 9px;
+  font-size: 12px;
 }
 
 .invite-grant-remove {
   flex: none;
-  border: 1px solid var(--rule);
+  border: none;
+  background: none;
   border-radius: var(--radius-control);
-  padding: 5px 10px;
+  padding: 5px 8px;
   font-size: 12.5px;
+  color: var(--muted);
   transition: var(--transition-colors);
 }
 
 .invite-grant-remove:hover {
   background: var(--rule-2);
+  color: var(--danger);
+}
+
+.invite-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.invite-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.invite-foot .dialog-actions {
+  flex: none;
+}
+
+@container (max-width: 480px) {
+  .invite-bar {
+    flex-wrap: wrap;
+  }
+
+  .invite-input-group {
+    flex: 1 1 100%;
+  }
+
+  .invite-submit {
+    margin-left: auto;
+  }
 }
 
 /* ----- D-5 API 토큰 대화상자 (F-222.md 2.4) ----- */
