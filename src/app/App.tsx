@@ -9,7 +9,7 @@ import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
 } from 'react'
-import type { EditorState } from '@codemirror/state'
+import type { EditorState, StateCommand } from '@codemirror/state'
 
 import { createMemoryStore } from '../storage/memoryStore'
 import { createIdbStore } from '../storage/idbStore'
@@ -161,6 +161,7 @@ export default function App() {
   const [fontSizePref, setFontSizePref] = useState(() => getPref('md.fontSize', 'medium')) // F-154 2.2
   const [indentPref, setIndentPref] = useState(() => getPref('md.indent', '4')) // F-154 2.3
   const [startScreenPref, setStartScreenPref] = useState(() => getPref('md.startScreen', 'home')) // F-232 3.4
+  const [toolbarPref, setToolbarPref] = useState(() => getPref('md.toolbar', 'on')) // F-233 3.5
   const [settingsOpen, setSettingsOpen] = useState(false)
   // (F-126.md 5.3)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
@@ -1547,6 +1548,21 @@ export default function App() {
     setPref('md.startScreen', v)
   }
 
+  // 탭바 표시·숨김 — 즉시 반영(F-233 3.5, A6)
+  function changeToolbar(value: string) {
+    const v = value as 'on' | 'off'
+    setToolbarPref(v)
+    setPref('md.toolbar', v)
+  }
+
+  // 탭바 아이콘 버튼이 명령을 실행하고 포커스를 에디터로 돌려준다 (F-233 3.2)
+  const runToolbarCommand = useCallback((cmd: StateCommand) => {
+    const view = editorRef.current?.view
+    if (!view) return
+    cmd(view)
+    view.focus()
+  }, [])
+
   function changeViewMode(mode: string) {
     const v = mode as 'live' | 'raw' | 'view'
     setViewMode(v)
@@ -1596,6 +1612,15 @@ export default function App() {
   const isEmpty = bootPhase === 'ready' && currentDocId === null
   const showEditor = bootPhase === 'ready' && !isEmpty
 
+  // 탭바 표시 조건 (F-233 3.1) — 자리는 항상 유지, 조건에 안 맞으면 안 그린다
+  const showToolbar =
+    toolbarPref === 'on' &&
+    !isEmpty &&
+    !sharedDoc &&
+    !isReadOnlyDoc &&
+    (viewMode === 'live' || viewMode === 'raw') &&
+    !narrow
+
   // 상단바 — 좁은 창은 앞 묶음을 담아 창 전체 위에, 넓은 창은 앞 묶음 없이 메인 열 안에만 (F-159 2.1)
   const topBar = (
     <TopBar
@@ -1623,6 +1648,8 @@ export default function App() {
       onExportDoc={handleExportDoc}
       account={account}
       onAccountBeforeNavigate={() => docSaverFlushRef.current()}
+      showToolbar={showToolbar}
+      onRunToolbarCommand={runToolbarCommand}
     />
   )
 
@@ -1781,6 +1808,8 @@ export default function App() {
         onChangeFontSize={changeFontSize}
         startScreen={startScreenPref}
         onChangeStartScreen={changeStartScreen}
+        toolbar={toolbarPref}
+        onChangeToolbar={changeToolbar}
         indent={indentPref}
         onChangeIndent={changeIndent}
         lineNumbers={lineNumbersPref}

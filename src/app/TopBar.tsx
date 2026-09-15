@@ -2,8 +2,10 @@
 // 보기 모드 토글은 F-107·F-123. .md 내보내기는 F-112. 공유는 F-130
 // 아이콘·툴팁은 F-142 3.2·3.3. 앞 묶음(제품 아이콘·이름·토글·검색)은 좁은 창에만 있다 (F-159 2.1)
 import type { RefObject } from 'react'
+import type { StateCommand } from '@codemirror/state'
 import ShareMenu from './ShareMenu'
 import AccountMenu from './AccountMenu'
+import EditorToolbar from './EditorToolbar'
 import { IconEdit, IconRaw, IconView, IconDownload, IconTooltip } from './icons'
 import SidebarHead from './SidebarHead'
 import type { ShareDoc } from '../lib/shareCodec'
@@ -36,6 +38,9 @@ type TopBarProps = {
   onExportDoc: () => void
   account: AccountState
   onAccountBeforeNavigate: () => Promise<void>
+  // 서식·단락·삽입 탭바 (F-233.md 3.1) — App.tsx 가 표시 조건을 계산해 넘긴다
+  showToolbar: boolean
+  onRunToolbarCommand: (cmd: StateCommand) => void
 }
 
 export default function TopBar({
@@ -56,6 +61,8 @@ export default function TopBar({
   onExportDoc,
   account,
   onAccountBeforeNavigate,
+  showToolbar,
+  onRunToolbarCommand,
 }: TopBarProps) {
   return (
     <header className="topbar">
@@ -67,7 +74,9 @@ export default function TopBar({
           toggleButtonRef={toggleButtonRef}
         />
       )}
-      <div className="topbar-spacer" />
+      <div className="topbar-spacer">
+        {showToolbar && <EditorToolbar onRunCommand={onRunToolbarCommand} />}
+      </div>
       <div className="seg view-mode-seg" role="group" aria-label="보기 모드">
         {VIEW_MODES.map((mode) => (
           <span className="icon-btn-wrap" key={mode.value}>

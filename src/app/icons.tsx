@@ -36,6 +36,26 @@ import personAddSvg from '@material-symbols/svg-400/outlined/person_add.svg?raw'
 import groupSvg from '@material-symbols/svg-400/outlined/group.svg?raw'
 import keySvg from '@material-symbols/svg-400/outlined/key.svg?raw'
 import tocSvg from '@material-symbols/svg-400/outlined/toc.svg?raw'
+import openInNewSvg from '@material-symbols/svg-400/outlined/open_in_new.svg?raw'
+import formatBoldSvg from '@material-symbols/svg-400/outlined/format_bold.svg?raw'
+import formatItalicSvg from '@material-symbols/svg-400/outlined/format_italic.svg?raw'
+import strikethroughSSvg from '@material-symbols/svg-400/outlined/strikethrough_s.svg?raw'
+import formatInkHighlighterSvg from '@material-symbols/svg-400/outlined/format_ink_highlighter.svg?raw'
+import functionsSvg from '@material-symbols/svg-400/outlined/functions.svg?raw'
+import calculateSvg from '@material-symbols/svg-400/outlined/calculate.svg?raw'
+import commentSvg from '@material-symbols/svg-400/outlined/comment.svg?raw'
+import formatClearSvg from '@material-symbols/svg-400/outlined/format_clear.svg?raw'
+import formatListBulletedSvg from '@material-symbols/svg-400/outlined/format_list_bulleted.svg?raw'
+import formatListNumberedSvg from '@material-symbols/svg-400/outlined/format_list_numbered.svg?raw'
+import checklistSvg from '@material-symbols/svg-400/outlined/checklist.svg?raw'
+import titleSvg from '@material-symbols/svg-400/outlined/title.svg?raw'
+import notesSvg from '@material-symbols/svg-400/outlined/notes.svg?raw'
+import formatQuoteSvg from '@material-symbols/svg-400/outlined/format_quote.svg?raw'
+import superscriptSvg from '@material-symbols/svg-400/outlined/superscript.svg?raw'
+import tableSvg from '@material-symbols/svg-400/outlined/table.svg?raw'
+import stickyNote2Svg from '@material-symbols/svg-400/outlined/sticky_note_2.svg?raw'
+import horizontalRuleSvg from '@material-symbols/svg-400/outlined/horizontal_rule.svg?raw'
+import codeBlocksSvg from '@material-symbols/svg-400/outlined/code_blocks.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -97,6 +117,30 @@ export const IconPersonAdd = makeIcon(personAddSvg)
 export const IconGroup = makeIcon(groupSvg)
 export const IconKey = makeIcon(keySvg)
 export const IconToc = makeIcon(tocSvg)
+
+// 상단바 탭바(F-233 3.4) — 링크 추가(위키링크)는 기존 IconLink 를 그대로 쓴다(명령이 다를 뿐 "연결" 개념은 같다)
+export const IconAddLink = IconLink
+export const IconExternalLink = makeIcon(openInNewSvg)
+export const IconBold = makeIcon(formatBoldSvg)
+export const IconItalic = makeIcon(formatItalicSvg)
+export const IconStrikethrough = makeIcon(strikethroughSSvg)
+export const IconHighlight = makeIcon(formatInkHighlighterSvg)
+export const IconInlineCode = makeIcon(codeSvg)
+export const IconFunctions = makeIcon(functionsSvg)
+export const IconCalculate = makeIcon(calculateSvg)
+export const IconComment = makeIcon(commentSvg)
+export const IconFormatClear = makeIcon(formatClearSvg)
+export const IconBulletList = makeIcon(formatListBulletedSvg)
+export const IconOrderedList = makeIcon(formatListNumberedSvg)
+export const IconChecklist = makeIcon(checklistSvg)
+export const IconTitle = makeIcon(titleSvg)
+export const IconNotes = makeIcon(notesSvg)
+export const IconQuote = makeIcon(formatQuoteSvg)
+export const IconSuperscript = makeIcon(superscriptSvg)
+export const IconTable = makeIcon(tableSvg)
+export const IconCallout = makeIcon(stickyNote2Svg)
+export const IconHorizontalRule = makeIcon(horizontalRuleSvg)
+export const IconCodeBlock = makeIcon(codeBlocksSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

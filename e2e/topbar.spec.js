@@ -298,18 +298,22 @@ test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () 
     await page.keyboard.press('Tab')
     await expect(page.getByRole('button', { name: '검색 — 준비 중' })).toBeFocused()
 
-    // 너비 손잡이 바로 다음 포커스가 상단바(편집 모드 버튼)인지 — 제목 입력이 빠졌다 (F-217.md 2.5)
-    let lastRole = null
-    for (let i = 0; i < 15; i++) {
+    // 상단바(편집 모드 버튼) 바로 앞은 너비 손잡이(separator)이거나, 탭바(F-233, 기본
+    // 켜짐)가 있으면 탭바 안이어야 한다 — 제목 입력은 빠졌다(F-217.md 2.5)
+    let last = null
+    for (let i = 0; i < 30; i++) {
       await page.keyboard.press('Tab')
       const isViewModeBtn = await page
         .getByRole('button', { name: '편집 — 서식을 보며 편집' })
         .evaluate((el) => el === document.activeElement)
       if (isViewModeBtn) break
-      lastRole = await page.evaluate(() => document.activeElement?.getAttribute('role'))
+      last = await page.evaluate(() => ({
+        role: document.activeElement?.getAttribute('role'),
+        inToolbar: !!document.activeElement?.closest('.editor-toolbar'),
+      }))
     }
     await expect(page.getByRole('button', { name: '편집 — 서식을 보며 편집' })).toBeFocused()
-    expect(lastRole).toBe('separator')
+    expect(last?.role === 'separator' || last?.inToolbar).toBe(true)
 
     await page.reload()
     const activeTag = await page.evaluate(() => document.activeElement?.tagName)

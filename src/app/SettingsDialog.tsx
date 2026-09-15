@@ -40,6 +40,12 @@ const LINE_NUMBERS_OPTIONS = [
   { value: 'off', label: '숨김' },
 ] as const
 
+// 상단바 서식·단락·삽입 탭바 켜기·끄기 (F-233 3.5)
+const TOOLBAR_OPTIONS = [
+  { value: 'on', label: '표시' },
+  { value: 'off', label: '숨김' },
+] as const
+
 type SegmentOption = { value: string; label: string; fontVar?: string }
 
 type SegmentProps<T extends string> = {
@@ -98,6 +104,8 @@ type SettingsDialogProps = {
   onChangeFontSize: (value: string) => void
   startScreen?: string
   onChangeStartScreen?: (value: string) => void
+  toolbar?: string
+  onChangeToolbar?: (value: string) => void
   indent?: string
   onChangeIndent?: (value: string) => void
   lineNumbers?: string
@@ -117,6 +125,8 @@ export default function SettingsDialog({
   onChangeFontSize,
   startScreen,
   onChangeStartScreen,
+  toolbar,
+  onChangeToolbar,
   indent,
   onChangeIndent,
   lineNumbers,
@@ -162,6 +172,16 @@ export default function SettingsDialog({
         options={FONT_SIZE_OPTIONS}
         onChange={onChangeFontSize}
       />
+      {/* 공개 읽기전용 화면(F-230)에는 편집 명령이 없어 이 항목을 안 준다 (F-233 3.5) */}
+      {toolbar !== undefined && onChangeToolbar !== undefined && (
+        <Segment
+          labelId="toolbar-label"
+          label="탭바"
+          value={toolbar}
+          options={TOOLBAR_OPTIONS}
+          onChange={onChangeToolbar}
+        />
+      )}
       {/* 로그인/로컬 앱 전용 — PublicView 는 목록·홈 개념이 없어 이 항목을 안 준다 (F-232 3.4) */}
       {startScreen !== undefined && onChangeStartScreen !== undefined && (
         <Segment

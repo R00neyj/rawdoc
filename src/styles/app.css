@@ -103,6 +103,78 @@ svg {
   padding-left: 0;
 }
 
+/* 상단바 서식·단락·삽입 탭바 — topbar-spacer 자리를 대신한다 (specs/features/F-233.md 3.1·3.2) */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.editor-toolbar-tabs {
+  flex: none;
+}
+
+.editor-toolbar-items {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 탭 선택 표시 — .seg 재사용, radiogroup 대신 tablist 라 aria-selected 로 맞춘 규칙만 더한다 (F-153 2.1) */
+.editor-toolbar-tabs button[aria-selected='true'] {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* 명령 아이콘 버튼 — .icon-btn 과 같은 모양이지만 전역 개수 판정과 겹치지 않게 클래스는 따로 둔다 (F-233.md 3.2) */
+.editor-toolbar-btn,
+.editor-toolbar-heading-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-control);
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.editor-toolbar-btn {
+  width: 32px;
+}
+
+.editor-toolbar-btn:hover,
+.editor-toolbar-heading-btn:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+.editor-toolbar-btn svg,
+.editor-toolbar-heading-btn svg {
+  fill: currentColor;
+}
+
+.editor-toolbar-heading {
+  position: relative;
+}
+
+.editor-toolbar-heading-btn {
+  gap: 4px;
+  padding: 0 8px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* 제목 목록 위치 — 트리거 바로 아래, 왼쪽 정렬 (item-menu-list 기본은 오른쪽 정렬이라 덮는다) */
+.editor-toolbar-heading .item-menu-list {
+  left: 0;
+  right: auto;
+  min-width: 120px;
+}
+
 /* 제목인지 알아보기 쉽게 — 텍스트 영역 위 작은 표시, 줄 번호 칸 상태와 무관하게 항상 보임 (F-217.md 2.3-1) */
 .doc-title-label {
   display: block;
