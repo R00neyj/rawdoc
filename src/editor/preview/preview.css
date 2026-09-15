@@ -160,14 +160,12 @@
   text-decoration: line-through;
 }
 
-/* ===== 구분선 (F-124 3.4. 기호 글자는 decoration 이 숨기고, 선은 여기서 그린다) =====
-   높이·색은 ::before 로 그린다 — .cm-line 자체의 세로 간격은 padding 으로 준다
-   (margin 은 CM6 줄 높이 계산에 반영되지 않는다) */
+/* ===== 구분선 (F-124 3.4). 높이·색은 ::before, 세로 간격은 padding(margin 은 CM6 줄 높이에 안 잡힘). 블록 전체 높이 = 본문 한 줄 높이, 선 두께 2px (2026-09-16) ===== */
 .cm-host .cm-editor .cm-line.md-hr {
   position: relative;
   min-height: 1em;
-  padding-top: 24px;
-  padding-bottom: 24px;
+  padding-top: calc((var(--md-line-height) * 1em - 2px) / 2);
+  padding-bottom: calc((var(--md-line-height) * 1em - 2px) / 2);
 }
 
 .cm-host .cm-editor .cm-line.md-hr::before {
@@ -176,8 +174,8 @@
   left: 0;
   right: 0;
   top: 50%;
-  height: 1px;
-  margin-top: -0.5px;
+  height: 2px;
+  margin-top: -1px;
   background: var(--muted);
 }
 

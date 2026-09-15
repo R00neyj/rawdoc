@@ -651,7 +651,7 @@ body.sidebar-resizing {
   flex: 1;
   min-width: 0;
   text-align: left;
-  padding: 7px 4px;
+  padding: 4px;
   border-radius: var(--radius-control);
   font-size: 13.5px;
   color: var(--ink-2);

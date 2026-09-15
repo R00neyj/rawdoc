@@ -202,6 +202,8 @@ test.describe('F-152 A4 원문 모양 누수', () => {
         if (el.classList.contains('cm-selectionBackground') || el.classList.contains('cm-activeLine')) continue
         if (el.tagName === 'IMG' || el.tagName === 'INPUT') continue
         const cs = getComputedStyle(el)
+        // opacity:0 인 요소(F-217 제목 툴팁 등 .icon-tooltip 패턴)는 실제로 안 보이므로 누수가 아니다
+        if (parseFloat(cs.opacity) === 0) continue
         if (cs.backgroundColor !== 'rgba(0, 0, 0, 0)') out.push({ cls: el.className, kind: 'bg', v: cs.backgroundColor })
         if (cs.textDecorationLine !== 'none') out.push({ cls: el.className, kind: 'underline' })
         if (parseFloat(cs.borderTopWidth) > 0 || parseFloat(cs.borderLeftWidth) > 0) {

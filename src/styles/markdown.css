@@ -42,8 +42,9 @@
 }
 
 :is(.app-shell, .public-view) .markdown-body hr {
-  /* 얇고 진한 1px 선 — 편집 모드 md-hr 과 같게 (2026-09-15 사용자 "hr 더 얇고 진하게") */
-  height: 1px;
+  /* 진한 2px 선, 위아래 여백은 본문 한 줄 높이 — 편집 모드 md-hr 과 같게 (2026-09-16) */
+  height: 2px;
+  margin: calc((var(--md-line-height) * 1em - 2px) / 2) 0;
   background: transparent;
   background-color: var(--muted);
   border-bottom: 0;
