@@ -10,6 +10,7 @@ import {
   handleUpdateDoc,
 } from './docs'
 import { handleCreateFolder, handleDeleteFolder, handleListFolders, handleUpdateFolder } from './folders'
+import { handleLockDoc, handleUnlockDoc } from './locks'
 import {
   handleCreateDocLink,
   handleCreateFolderLink,
@@ -104,6 +105,8 @@ const routes: Route[] = [
   { method: 'DELETE', path: '/api/docs/:id', handler: handleDeleteDoc },
   { method: 'PUT', path: '/api/docs/:id/folder', handler: handleMoveDocFolder },
   { method: 'PUT', path: '/api/docs/:id/pin', handler: handleSetPinned },
+  { method: 'POST', path: '/api/docs/:id/lock', handler: handleLockDoc },
+  { method: 'DELETE', path: '/api/docs/:id/lock', handler: handleUnlockDoc },
   { method: 'GET', path: '/api/docs/:id/link', handler: handleGetDocLink },
   { method: 'POST', path: '/api/docs/:id/link', handler: handleCreateDocLink },
   { method: 'DELETE', path: '/api/docs/:id/link', handler: handleDeleteDocLink },

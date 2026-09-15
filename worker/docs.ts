@@ -2,6 +2,7 @@
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { getDocAccess, roleAtLeast } from './access'
+import { getActiveLock } from './locks'
 import {
   MAX_BODY_BYTES,
   MAX_CONTENT_BYTES,
@@ -225,6 +226,11 @@ export async function handleUpdateDoc(
   if (!access) return errorResponse('not_found', 404)
   if (!roleAtLeast(access.role, 'edit')) return errorResponse('forbidden', 403)
   const existing = access.doc
+
+  const activeLock = await getActiveLock(env, params.id)
+  if (activeLock && activeLock.session_id !== request.headers.get('X-Lock-Session')) {
+    return jsonResponse({ error: 'locked', email: activeLock.email, expiresAt: activeLock.expires_at }, 423)
+  }
 
   if (existing.version !== baseVersion) {
     return jsonResponse({ error: 'conflict', doc: rowToDoc(existing) }, 409)
