@@ -36,7 +36,7 @@
 | 프론트 | React 19, Vite 7, TypeScript 6.0 (`typescript-eslint`) | 사용 중. 2026-09-15 JS → TS 이전 중 (F-201~F-203). `e2e/`·`scripts/` 는 JS |
 | 에디터 | CodeMirror 6 + `@codemirror/lang-markdown` | 사용 중 |
 | PWA | `vite-plugin-pwa` (Workbox) | 사용 중 |
-| 정적 + API | Cloudflare Workers (static assets + `worker/`), `yjw1555.workers.dev` | 사용 중 (F-204). 구조는 `specs/architecture.md` 6장 |
+| 정적 + API | Cloudflare Workers (static assets + `worker/`), 커스텀 도메인 `rawdoc.app` (workers.dev 끔) | 사용 중 (F-204). 구조는 `specs/architecture.md` 6장 |
 | 메타 DB / 파일 | D1 `md-editor-db` / R2 `md-editor-attachments` | 사용 중 (F-205~) |
 | 인증 | Cloudflare Access 일회용 코드 + Worker JWT 검증 | F-205 (Q5) |
 | 실시간 동기화 | Durable Object + y-partyserver, `y-codemirror.next` | 미도입 (M3) |

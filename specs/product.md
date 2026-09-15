@@ -231,7 +231,7 @@ M3 이후는 착수 전 이 장을 풀어 4장 형식으로 다시 쓴다. M2 �
 | ID | 기능 | 내용 |
 | --- | --- | --- |
 | F-201~F-203 | TypeScript 이전 | Q27. `src/` 전체를 TS 로, `e2e/`·`scripts/` 는 JS 유지. 동작 불변 |
-| F-204 | Worker 기반·배포 | `wrangler.jsonc` 에 Worker 스크립트(`main`)·D1 바인딩. `run_worker_first` 로 API 경로만 Worker, 나머지는 정적 자산(`not_found_handling: single-page-application`). D1 마이그레이션, 상태 확인 API. 서비스 워커가 API 응답을 캐시·대체하지 않게. `yjw1555.workers.dev` 에 배포 (F-120 H23 포함) |
+| F-204 | Worker 기반·배포 | `wrangler.jsonc` 에 Worker 스크립트(`main`)·D1 바인딩. `run_worker_first` 로 API 경로만 Worker, 나머지는 정적 자산(`not_found_handling: single-page-application`). D1 마이그레이션, 상태 확인 API. 서비스 워커가 API 응답을 캐시·대체하지 않게. 커스텀 도메인 `rawdoc.app` 에 배포, workers.dev·미리보기 주소는 끈다 — 주소가 둘이면 IndexedDB 가 출처별로 갈라진다 (2026-09-15 사용자 "도메인은 rawdoc.app", F-120 H23 포함) |
 | F-205 | 로그인 | Cloudflare Access(일회용 코드, 모든 이메일 허용)가 **보호 API 경로**를 막고, Worker 가 `Cf-Access-Jwt-Assertion` JWT(발급자·AUD)를 검증해 이메일로 사용자를 찾거나 만든다. 로그인 없이 쓰는 공개 경로(F-210)와 접두사로 나눈다. 상단바 계정 메뉴(로그인·로그아웃·이메일). 로그인하지 않으면 M1 로컬 기능 그대로 |
 | F-206 | 서버 문서 API | D1 에 문서·폴더·고정. 소유자만 읽기·쓰기(F-212 에서 권한 확장). 쓰기는 버전 번호로 충돌 판정. 원문은 바이트 그대로 저장(6장 원문 보존). 문서 크기 상한(Q6) |
 | F-207 | 서버 저장소 클라이언트 | 로그인 상태면 서버가 원본, IndexedDB 는 캐시 (Q32). 오프라인 편집은 대기열에 두고 온라인 복귀 시 올린다. 그 사이 서버 버전이 바뀌었으면 덮지 않고 충돌 사본으로 저장하고 알린다. 저장 상태에 동기화 대기 추가 |
@@ -245,7 +245,7 @@ M3 이후는 착수 전 이 장을 풀어 4장 형식으로 다시 쓴다. M2 �
 - 사람이 할 준비: `wrangler login`, R2 구독 켜기(무료 사용분이 있어도 대시보드 결제 절차 필요), Zero Trust 조직 만들기·일회용 코드 로그인·Access 앱. `specs/human-checks.md` 5장
 - 만든 리소스 (2026-09-15, Cloudflare MCP): D1 `md-editor-db` (id `073462f8-7a95-4b0f-8d32-4b07f8c4448e`, APAC), R2 `md-editor-attachments` (APAC, 공개 접근 없음). 이름에 제품명을 쓰지 않는다(불변조건). 테이블은 아직 없음 — F-206 마이그레이션이 만든다
 - Access 좌석: 로그인 인증 1회마다 사용자 1명이 좌석을 쓴다. 좌석이 차면 새 로그인이 막히고, Zero Trust 사용자 제거로 돌려받는다. 무료 좌석 수는 문서에서 확인하지 못했다 (2026-09-15). 공유 링크를 보는 사람은 로그인하지 않아 좌석을 쓰지 않는다 (https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/)
-- workers.dev 호스트의 특정 경로만 Access 로 보호할 수 있다 (https://developers.cloudflare.com/workers/configuration/cloudflare-access/)
+- 호스트의 특정 경로만 Access 로 보호할 수 있다 — `rawdoc.app/api` (https://developers.cloudflare.com/workers/configuration/cloudflare-access/). `rawdoc.app` 존은 이 계정에 active (2026-09-15 확인, Free 플랜)
 - D1: 값·행 최대 2MB, 무료 DB 500MB, 무료는 Worker 호출당 쿼리 50회, 무료 하루 쓰기 10만 행 초과 시 쿼리 실패 (https://developers.cloudflare.com/d1/platform/limits/, https://developers.cloudflare.com/workers/platform/pricing/)
 - 미인증 요청에 Access 가 리다이렉트를 주는지 401 을 주는지 문서에 없다 — 클라이언트는 둘 다 로그인 필요로 처리한다 (F-205)
 - 화면 구조·URL(`#/d/{id}` 재정의, 공유 링크 주소, 계정 메뉴)은 `specs/ia.md` 를, 서버 필드(소유자·버전)는 5장·`specs/architecture.md` 를 해당 작은 명세와 함께 고친다
