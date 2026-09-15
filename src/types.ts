@@ -77,4 +77,7 @@ export type Store = {
   getAttachment(id: string): Promise<Attachment | null>
   listAttachments(): Promise<AttachmentMeta[]>
   removeAttachment(id: string): Promise<void>
+  // idb 저장소에만 있다 (둘 다 있을 때만 OS 파일 열기 재중복 판정을 한다, F-231.md 3.3)
+  findDocByFileHandle?(handle: FileSystemFileHandle): Promise<string | null>
+  linkFileHandle?(docId: string, handle: FileSystemFileHandle): Promise<void>
 }

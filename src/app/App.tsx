@@ -222,7 +222,11 @@ export default function App() {
   // 갱신한다 (F-138 3.3 — 해시가 문서 경로로 바뀌면 문서 id 가 같아도 공유 화면을 닫는다)
   const sharedDocRef = useRef(sharedDoc)
   // OS 파일 열기 연동(F-119)이 최신 store·beforeLeaveDoc 을 쓰도록 매 렌더 후 갱신한다
-  const runImportFilesRef = useRef<(files: File[]) => Promise<void>>(async () => {})
+  const runImportFilesRef = useRef<(files: File[]) => Promise<Doc | null>>(async () => null)
+  // OS 파일 열기 재중복 방지(F-231)도 같은 이유로 매 렌더 후 최신 참조로 갱신한다
+  const openOrImportLaunchedFilesRef = useRef<
+    (items: { file: File; handle: FileSystemFileHandle }[]) => Promise<void>
+  >(async () => {})
   // 창 전체 끌어놓기(F-145.md 2.1)가 매 렌더 후 최신 "받지 않는 때" 여부를 보도록 갱신한다
   const dropBlockedRef = useRef(false)
   // 이미지 끌어놓기(F-156.md 2.5) — 대화상자·공유 화면에서는 md 와 같이 막지만, 메모리 저장소에서는 받는다
@@ -678,8 +682,8 @@ export default function App() {
   useEffect(() => {
     if (bootPhase !== 'ready') return
     setupFileLaunch({
-      onFiles: (files) => {
-        runImportFilesRef.current(files)
+      onFiles: (items) => {
+        openOrImportLaunchedFilesRef.current(items)
       },
     })
   }, [bootPhase])
@@ -900,6 +904,7 @@ export default function App() {
   // 갱신해야 file launch consumer(F-119)가 낡은 상태를 쓰지 않는다
   useEffect(() => {
     runImportFilesRef.current = runImportFiles
+    openOrImportLaunchedFilesRef.current = openOrImportLaunchedFiles
   })
 
   // 창 전체 .md 파일 끌어놓기(F-145.md 2장) — 외부 파일만 반응, depth 로 진입 횟수를 센다
@@ -1142,8 +1147,8 @@ export default function App() {
   // 가져오기 실행 (specs/features/F-114.md 2.2). 파일 선택 input 과 OS 파일 열기 연동
   // (F-119) 이 함께 쓴다. 현재 문서가 속한 폴더 안에 만든다 (F-126.md 5.3) — importFiles.js
   // 는 F-126 수정 범위 밖이라 store.create 를 감싸 folderId 를 주입한다
-  async function runImportFiles(files: File[]) {
-    if (files.length === 0) return
+  async function runImportFiles(files: File[]): Promise<Doc | null> { // 마지막으로 만든 문서를 돌려준다 — OS 파일 열기 재중복 방지(F-231)가 handle 연결에 쓴다
+    if (files.length === 0) return null
 
     await beforeLeaveDoc()
     setSharedDoc(null) // 공유 화면에서 가져와도 화면을 떠난다 (F-130.md 4장, 자체 결정)
@@ -1183,12 +1188,58 @@ export default function App() {
       pushHashUrl(createdDoc.id) // 추가 (ia.md 3.10)
       addOpenFolders(ancestorsOfDoc({ folders, doc: stripContent(createdDoc) }))
     }
+    return createdDoc
   }
 
   async function handleImportInputChange(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? [])
     e.target.value = '' // 같은 파일을 연달아 고를 수 있게 (F-114.md 2.3)
     await runImportFiles(files)
+  }
+
+  // OS 파일 열기 재중복 방지 — idb 이고 판정 메서드가 둘 다 있을 때만 handle 로 찾는다 (F-231.md 3.3)
+  async function openOrImportLaunchedFiles(items: { file: File; handle: FileSystemFileHandle }[]) {
+    if (items.length === 0) return
+
+    const canDedupe = store.kind === 'idb' && Boolean(store.findDocByFileHandle) && Boolean(store.linkFileHandle)
+    if (!canDedupe) {
+      await runImportFiles(items.map((item) => item.file))
+      return
+    }
+
+    for (const { file, handle } of items) {
+      let matchedId: string | null = null
+      try {
+        matchedId = await store.findDocByFileHandle!(handle)
+      } catch {
+        matchedId = null
+      }
+
+      const matchedDoc = matchedId ? docsRef.current.find((d) => d.id === matchedId) : undefined
+      if (matchedId && matchedDoc) {
+        if (matchedId !== currentDocIdRef.current || sharedDocRef.current) {
+          await beforeLeaveDoc()
+          setSharedDoc(null)
+          focusEditorRef.current = true
+          setCurrentDocId(matchedId)
+          setPref('md.lastDocId', matchedId)
+          pushHashUrl(matchedId)
+          addOpenFolders(ancestorsOfDoc({ folders: foldersRef.current, doc: matchedDoc }))
+          closeSidebarIfNarrow()
+        }
+        showNotice({ type: 'info', message: `"${matchedDoc.title}" 을(를) 열었습니다. (이미 가져온 파일)` })
+        continue
+      }
+
+      const createdDoc = await runImportFiles([file])
+      if (createdDoc) {
+        try {
+          await store.linkFileHandle!(createdDoc.id, handle)
+        } catch {
+          // 연결 실패해도 가져오기는 이미 끝났다 — 다음엔 새 문서로 다시 가져올 뿐 기능은 막히지 않는다
+        }
+      }
+    }
   }
 
   // 이미지 붙여넣기·끌어놓기(F-156.md 2.2·2.4·2.5·2.6) — 위치 계산·삽입은 imageInsert.js 가 하고, 여기는 검사·저장·알림만. blocked:true 면 저장을 시도하지 않는다

@@ -417,7 +417,7 @@ describe('idbStore', () => {
       const onBlocked = vi.fn(() => {
         v1db.close()
       })
-      // createIdbStore 는 항상 DB_VERSION(3)으로 연다 — v1 이 열려 있으므로 이 열기는
+      // createIdbStore 는 항상 DB_VERSION(4)으로 연다 — v1 이 열려 있으므로 이 열기는
       // v1 이 닫힐 때까지 막힌다(blocked)
       const store = await createIdbStore(dbName, { onBlocked })
 
@@ -435,11 +435,11 @@ describe('idbStore', () => {
         order.push('closed')
       })
 
-      // 이 창의 연결(F-156 코드 기준 버전 3)
+      // 이 창의 연결(F-231 코드 기준 버전 4)
       await createIdbStore(dbName, { onBlocking, onClosed })
 
-      // "새 버전 창" 이 더 높은 버전(4)을 열려고 하면 위 연결의 blocking 이 불린다
-      const v4db = await openDB(dbName, 4, {
+      // "새 버전 창" 이 더 높은 버전(5)을 열려고 하면 위 연결의 blocking 이 불린다
+      const v5db = await openDB(dbName, 5, {
         upgrade(database, oldVersion) {
           if (oldVersion < 1) {
             database.createObjectStore('docs', { keyPath: 'id' })
@@ -451,6 +451,9 @@ describe('idbStore', () => {
           if (oldVersion < 3) {
             database.createObjectStore('attachments', { keyPath: 'id' })
           }
+          if (oldVersion < 4) {
+            database.createObjectStore('fileHandles', { keyPath: 'docId' })
+          }
         },
       })
 
@@ -459,7 +462,47 @@ describe('idbStore', () => {
       // 정리(flush 시늉)가 끝난 뒤에 닫힘 콜백이 불려야 한다 (F-136.md 3.3 순서)
       expect(order).toEqual(['blocking', 'closed'])
 
-      v4db.close()
+      v5db.close()
+    })
+  })
+
+  describe('OS 파일 열기 재중복 방지 (F-231.md 3.1)', () => {
+    // Node 의 structuredClone 은 FileSystemFileHandle 을 모른다 — 이 테스트는 조회·정리 로직만 보므로 클론을 항등 함수로 바꿔 메서드를 유지한다
+    function makeHandle(name: string) {
+      return { kind: 'file' as const, name, isSameEntry: vi.fn(async (other: { name: string }) => other?.name === name) }
+    }
+
+    it('linkFileHandle 뒤 findDocByFileHandle 는 같은 handle 로 docId 를 찾고, 다른 handle 은 null', async () => {
+      vi.stubGlobal('structuredClone', (v: unknown) => v)
+      try {
+        const store = await freshStore()
+        const doc = await store.create({ title: 'A', content: '', lineEnding: 'crlf' })
+        const handleA = makeHandle('a.md')
+        const handleB = makeHandle('b.md')
+
+        await store.linkFileHandle!(doc.id, handleA as unknown as FileSystemFileHandle)
+
+        expect(await store.findDocByFileHandle!(handleA as unknown as FileSystemFileHandle)).toBe(doc.id)
+        expect(await store.findDocByFileHandle!(handleB as unknown as FileSystemFileHandle)).toBeNull()
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    })
+
+    it('매치된 문서를 remove 한 뒤 같은 handle 로 조회하면 null (고아 정리)', async () => {
+      vi.stubGlobal('structuredClone', (v: unknown) => v)
+      try {
+        const store = await freshStore()
+        const doc = await store.create({ title: 'A', content: '', lineEnding: 'crlf' })
+        const handle = makeHandle('a.md')
+
+        await store.linkFileHandle!(doc.id, handle as unknown as FileSystemFileHandle)
+        await store.remove(doc.id)
+
+        expect(await store.findDocByFileHandle!(handle as unknown as FileSystemFileHandle)).toBeNull()
+      } finally {
+        vi.unstubAllGlobals()
+      }
     })
   })
 })

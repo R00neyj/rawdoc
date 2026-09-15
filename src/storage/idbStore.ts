@@ -5,11 +5,14 @@ import { canCreateFolder, canMoveFolder } from '../lib/folderTree'
 import type { Store, Doc, Folder, Attachment, AttachmentExt } from '../types'
 
 const DEFAULT_DB_NAME = 'md-docs'
-const DB_VERSION = 3
+const DB_VERSION = 4
 const DOCS_STORE = 'docs'
 const META_STORE = 'meta'
 const FOLDERS_STORE = 'folders'
 const ATTACHMENTS_STORE = 'attachments' // F-156.md 2.3, 버전 3
+const FILE_HANDLES_STORE = 'fileHandles' // F-231.md 2장, 버전 4 — docId ↔ FileSystemFileHandle
+
+type StoredFileHandle = { docId: string; handle: FileSystemFileHandle }
 
 // 저장소에 실제로 든 문서 모양 — 옛 스키마 문서는 folderId·pinnedAt 이 없을 수 있다
 type StoredDoc = Omit<Doc, 'folderId' | 'pinnedAt'> & {
@@ -86,6 +89,9 @@ export async function createIdbStore(
       if (oldVersion < 3) {
         database.createObjectStore(ATTACHMENTS_STORE, { keyPath: 'id' })
       }
+      if (oldVersion < 4) {
+        database.createObjectStore(FILE_HANDLES_STORE, { keyPath: 'docId' })
+      }
       transaction.objectStore(META_STORE).put({ key: 'schema', version: DB_VERSION })
     },
     blocked(currentVersion, blockedVersion, event) {
@@ -153,8 +159,10 @@ export async function createIdbStore(
       return updated
     },
 
+    // 연결된 fileHandles 항목도 함께 지운다 — 고아 방지 (F-231.md 3.1)
     async remove(id) {
       await db.delete(DOCS_STORE, id)
+      await db.delete(FILE_HANDLES_STORE, id)
     },
 
     // moveDoc 은 folderId 만 바꾼다. updatedAt 은 바꾸지 않는다 — 편집이 아니므로 최근
@@ -309,6 +317,42 @@ export async function createIdbStore(
 
     async removeAttachment(id) {
       await db.delete(ATTACHMENTS_STORE, id)
+    },
+
+    // 저장된 handle 을 돌며 isSameEntry 로 첫 매치를 찾는다 — 지워진 문서면 정리하고 계속, 예외면 건너뛴다 (F-231.md 3.1)
+    async findDocByFileHandle(handle: FileSystemFileHandle) {
+      const tx = db.transaction([FILE_HANDLES_STORE, DOCS_STORE], 'readwrite')
+      const handleStore = tx.objectStore(FILE_HANDLES_STORE)
+      const docStore = tx.objectStore(DOCS_STORE)
+      let cursor = await handleStore.openCursor()
+      let result: string | null = null
+      while (cursor) {
+        const stored = cursor.value as StoredFileHandle
+        let same = false
+        try {
+          same = await stored.handle.isSameEntry(handle)
+        } catch {
+          same = false
+        }
+        if (same) {
+          const doc = await docStore.get(stored.docId)
+          if (!doc) {
+            await cursor.delete()
+          } else {
+            result = stored.docId
+            break
+          }
+        }
+        cursor = await cursor.continue()
+      }
+      await tx.done
+      return result
+    },
+
+    // upsert — 문서가 지워졌다 같은 파일로 다시 만들어진 경우를 덮어쓴다 (F-231.md 3.1)
+    async linkFileHandle(docId: string, handle: FileSystemFileHandle) {
+      const record: StoredFileHandle = { docId, handle }
+      await db.put(FILE_HANDLES_STORE, record)
     },
   }
 }

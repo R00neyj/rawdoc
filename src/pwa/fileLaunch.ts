@@ -10,14 +10,20 @@ declare global {
   }
 }
 
-// onFiles: 열린 파일들을 F-114 importFiles 에 넘긴다
-export function setupFileLaunch({ onFiles }: { onFiles: (files: File[]) => void }): void {
+// onFiles: 열린 파일마다 File 과 원본 handle 을 함께 넘긴다 — 재중복 판정에 쓴다 (F-231.md 3.2)
+export function setupFileLaunch({
+  onFiles,
+}: {
+  onFiles: (items: { file: File; handle: FileSystemFileHandle }[]) => void
+}): void {
   if (!('launchQueue' in window) || !window.launchQueue) return
 
   window.launchQueue.setConsumer(async (params) => {
     if (!params.files || params.files.length === 0) return
     // 원본 파일에 다시 쓰지 않는다 — File 만 읽고 쓰기 권한은 요청하지 않는다 (F-119.md 2장)
-    const files = await Promise.all(params.files.map((handle) => handle.getFile()))
-    onFiles(files)
+    const items = await Promise.all(
+      params.files.map(async (handle) => ({ file: await handle.getFile(), handle })),
+    )
+    onFiles(items)
   })
 }
