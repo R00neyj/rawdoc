@@ -87,11 +87,21 @@ svg {
 /* 아래 여백은 wrap 의 padding-bottom (margin 은 collapse 로 새어나가 CM6 위젯 높이 측정이 어긋난다, F-157 A9 회귀) */
 /* 좌우 여백은 .cm-line 기본 패딩(6px·2px)과 같게 — 본문 첫 글자와 맞추고, 포커스 링 왼쪽이 줄 번호 칸 바탕에 가려지지 않게 (H77) */
 .doc-title-block {
+  position: relative;
   padding: 4px 2px calc(var(--md-font-size) * 1) 6px;
 }
 
 .cm-host .cm-editor[data-gutters='off'] .doc-title-block {
   padding-left: 0;
+}
+
+/* 제목인지 알아보기 쉽게 — 텍스트 영역 위 작은 표시, 줄 번호 칸 상태와 무관하게 항상 보임 (F-217.md 2.3-1) */
+.doc-title-label {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
 }
 
 .doc-title,
@@ -138,6 +148,23 @@ svg {
 .doc-title[readonly]:focus-visible {
   outline: none;
   box-shadow: none;
+}
+
+/* 제목 호버·포커스 툴팁 — 아이콘 버튼 툴팁과 같은 지연 규칙(F-149), 모양은 .icon-tooltip 그대로 (F-217.md 2.3-1) */
+.doc-title-block:hover .doc-title-tooltip {
+  opacity: 1;
+  scale: 1;
+  translate: 0 0;
+  transition: opacity var(--transition-pop-fade), scale var(--transition-pop), translate var(--transition-pop);
+  transition-delay: 400ms;
+}
+
+.doc-title:focus-visible ~ .doc-title-tooltip {
+  opacity: 1;
+  scale: 1;
+  translate: 0 0;
+  transition: opacity var(--transition-pop-fade), scale var(--transition-pop), translate var(--transition-pop);
+  transition-delay: 0s;
 }
 
 /* 휴대폰 폭 — 상단바가 화면보다 넓어 가로·세로 스크롤이 생기던 문제, 제품명 글자·준비 중 검색을 빼고 간격을 줄인다 (F-216) */

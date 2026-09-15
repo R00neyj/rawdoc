@@ -88,6 +88,13 @@ class TitleWidget extends WidgetType {
     const wrap = document.createElement('div')
     wrap.className = 'md-block doc-title-block'
 
+    // 줄 번호 칸이 켜져 있을 때만 보이는 "제목" 표시 — app.css [data-gutters='off'] 가 숨긴다 (F-217.md 2.3-1)
+    const label = document.createElement('span')
+    label.className = 'doc-title-label'
+    label.setAttribute('aria-hidden', 'true')
+    label.textContent = '제목'
+    wrap.appendChild(label)
+
     const textarea = document.createElement('textarea')
     textarea.className = 'doc-title'
     textarea.setAttribute('aria-label', '문서 제목')
@@ -122,6 +129,14 @@ class TitleWidget extends WidgetType {
     })
 
     wrap.appendChild(textarea)
+
+    // 호버·포커스 시 뜨는 툴팁 — 앱 공통 아이콘 툴팁과 같은 모양(F-149·F-228, F-217.md 2.3-1)
+    const tooltip = document.createElement('span')
+    tooltip.className = 'icon-tooltip doc-title-tooltip'
+    tooltip.setAttribute('aria-hidden', 'true')
+    tooltip.textContent = '문서 제목'
+    wrap.appendChild(tooltip)
+
     requestAnimationFrame(() => resizeToContent(textarea))
     // textarea 가 늘어나 위젯 높이가 바뀌면 CM6 에 알려 그 아래 줄 클릭 위치가 어긋나지 않게 한다 (F-134 3.6 과 같은 이유)
     observeHeight(wrap, view)
