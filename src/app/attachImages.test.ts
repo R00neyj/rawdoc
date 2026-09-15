@@ -90,6 +90,18 @@ describe('attachImages', () => {
     expect(notice).toEqual({ type: 'error', message: '저장 공간이 부족해 이미지를 넣지 못했습니다.' })
   })
 
+  it('계정당 500MB 한도 초과(quota_exceeded)는 전용 문구', async () => {
+    const quotaError = new Error('quota_exceeded')
+    quotaError.name = 'quota_exceeded'
+    const store = fakeStore({ putAttachment: vi.fn().mockRejectedValue(quotaError) })
+    const { inserted, notice } = await attachImages([pngFile('a.png')], { store })
+    expect(inserted).toHaveLength(0)
+    expect(notice).toEqual({
+      type: 'error',
+      message: '이미지 저장 공간(500MB)이 가득 찼습니다. 문서에서 지운 이미지는 하루 뒤 정리됩니다.',
+    })
+  })
+
   it('여러 장 중 일부만 실패하면 나머지는 넣고 N장 알림', async () => {
     const store = fakeStore()
     const svg = new File([new TextEncoder().encode('<svg></svg>')], 'b.svg')

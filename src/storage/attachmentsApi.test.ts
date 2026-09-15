@@ -1,6 +1,6 @@
 // attachmentsApi 단위 — fetch 를 대체해 상태별 분류를 확인한다
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { uploadAttachment, fetchAttachment, AttachmentApiError } from './attachmentsApi'
+import { uploadAttachment, fetchAttachment, fetchUsage, AttachmentApiError } from './attachmentsApi'
 
 function mockFetch(impl: () => Promise<Response> | Response) {
   vi.stubGlobal('fetch', vi.fn(impl))
@@ -32,6 +32,11 @@ describe('uploadAttachment', () => {
     await expect(uploadAttachment('a', 'png', new Blob(['x']))).rejects.toMatchObject({ kind: 'unsupported' })
   })
 
+  it('507 이면 quota_exceeded', async () => {
+    mockFetch(() => new Response(JSON.stringify({ error: 'quota_exceeded', used: 1, limit: 2 }), { status: 507 }))
+    await expect(uploadAttachment('a', 'png', new Blob(['x']))).rejects.toMatchObject({ kind: 'quota_exceeded' })
+  })
+
   it('401 이면 unauthorized', async () => {
     mockFetch(() => new Response('{}', { status: 401 }))
     await expect(uploadAttachment('a', 'png', new Blob(['x']))).rejects.toMatchObject({ kind: 'unauthorized' })
@@ -57,5 +62,18 @@ describe('fetchAttachment', () => {
     await expect(fetchAttachment('a', 'png')).rejects.toBeInstanceOf(AttachmentApiError)
     mockFetch(() => new Response('{}', { status: 404 }))
     await expect(fetchAttachment('a', 'png')).rejects.toMatchObject({ kind: 'not_found' })
+  })
+})
+
+describe('fetchUsage', () => {
+  it('200 이면 used·limit 을 돌려준다', async () => {
+    mockFetch(() => new Response(JSON.stringify({ used: 1024, limit: 524_288_000 }), { status: 200 }))
+    const usage = await fetchUsage()
+    expect(usage).toEqual({ used: 1024, limit: 524_288_000 })
+  })
+
+  it('401 이면 unauthorized', async () => {
+    mockFetch(() => new Response('{}', { status: 401 }))
+    await expect(fetchUsage()).rejects.toMatchObject({ kind: 'unauthorized' })
   })
 })

@@ -9,6 +9,8 @@ import { folderTreeIds } from './links'
 import { getDocAccess, isDocAttachmentOwner } from './access'
 
 const MAX_ATTACHMENT_BYTES = 5_242_880
+// 계정당 첨부 저장 한도 500MB (specs/features/F-221.md 2.1)
+export const ATTACHMENT_QUOTA_BYTES = 524_288_000
 const ID_EXT_RE = /^([0-9a-f]{16})\.(png|jpg|gif|webp)$/
 
 type AttachmentRow = {
@@ -31,6 +33,13 @@ function parseIdExt(idext: string): { id: string; ext: 'png' | 'jpg' | 'gif' | '
 
 function rowToAttachment(row: AttachmentRow) {
   return { id: row.id, ext: row.ext, mime: row.mime, size: row.size, width: row.width, height: row.height }
+}
+
+async function getUsedBytes(env: Env, ownerId: string): Promise<number> {
+  const row = await env.DB.prepare('SELECT COALESCE(SUM(size),0) as used FROM attachments WHERE owner_id = ?')
+    .bind(ownerId)
+    .first<{ used: number }>()
+  return row?.used ?? 0
 }
 
 function attachmentResponse(object: R2ObjectBody, mime: string, cacheControl: string): Response {
@@ -74,6 +83,11 @@ export async function handleUploadAttachment(
   if (!sniffed) return errorResponse('unsupported', 400)
   if (sniffed.ext !== ext) return errorResponse('type_mismatch', 400)
 
+  const used = await getUsedBytes(env, user.id)
+  if (used + buffer.length > ATTACHMENT_QUOTA_BYTES) {
+    return jsonResponse({ error: 'quota_exceeded', used, limit: ATTACHMENT_QUOTA_BYTES }, 507)
+  }
+
   const key = `att/${user.id}/${id}.${ext}`
   await env.BUCKET.put(key, buffer, { httpMetadata: { contentType: sniffed.mime } })
 
@@ -88,6 +102,12 @@ export async function handleUploadAttachment(
     { id, ext, mime: sniffed.mime, size: buffer.length, width: sniffed.width, height: sniffed.height },
     201,
   )
+}
+
+export async function handleGetUsage(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const used = await getUsedBytes(env, user.id)
+  return jsonResponse({ used, limit: ATTACHMENT_QUOTA_BYTES })
 }
 
 export async function handleGetAttachment(

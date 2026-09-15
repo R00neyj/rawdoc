@@ -24,6 +24,7 @@ import {
 } from './links'
 import {
   handleGetAttachment,
+  handleGetUsage,
   handlePublicGetAttachment,
   handlePublicGetFolderAttachment,
   handleUploadAttachment,
@@ -126,6 +127,7 @@ const routes: Route[] = [
   { method: 'DELETE', path: '/api/folders/:id/grants/:email', handler: handleDeleteFolderGrant },
   { method: 'GET', path: '/api/shared', handler: handleGetShared },
   { method: 'GET', path: '/pub/docs/:token', handler: handlePublicGetDoc },
+  { method: 'GET', path: '/api/usage', handler: handleGetUsage },
   { method: 'PUT', path: '/api/attachments/:idext', handler: handleUploadAttachment },
   { method: 'GET', path: '/api/attachments/:idext', handler: handleGetAttachment },
   { method: 'GET', path: '/pub/docs/:token/attachments/:idext', handler: handlePublicGetAttachment },

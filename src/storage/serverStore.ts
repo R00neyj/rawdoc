@@ -4,7 +4,7 @@ import { createIdbStore } from './idbStore'
 import { createRemoteCache, docIdOf, type CachedAttachment, type CachedDoc, type CachedFolder, type OutboxEntry, type OutboxItem, type RemoteCache } from './remoteCache'
 import * as api from './docsApi'
 import { ApiError, type ServerDoc } from './docsApi'
-import { uploadAttachment, fetchAttachment, AttachmentApiError } from './attachmentsApi'
+import { uploadAttachment, fetchAttachment, fetchUsage, AttachmentApiError } from './attachmentsApi'
 import { toWebp } from './toWebp'
 import { extractAttachmentRefs } from '../lib/imageBlock'
 import type { Attachment, AttachmentExt, Doc, Folder, LineEnding, Store, SyncState } from '../types'
@@ -12,9 +12,18 @@ import type { Attachment, AttachmentExt, Doc, Folder, LineEnding, Store, SyncSta
 const RETRY_INTERVAL_MS = 30000
 const TOO_LARGE_MESSAGE = '문서가 너무 커서 서버에 저장하지 못했습니다(1MB 초과).'
 const ATTACHMENT_UPLOAD_FAIL_MESSAGE = '이미지를 서버에 올리지 못했습니다.'
+const ATTACHMENT_QUOTA_MESSAGE = '이미지 저장 공간(500MB)이 가득 찼습니다. 문서에서 지운 이미지는 하루 뒤 정리됩니다.'
 const ATTACHMENT_EXT_RE = '(png|jpg|gif|webp)'
 
 type StoreNotice = { type: 'info' | 'error' | 'update' | 'warn'; message: string }
+
+// putAttachment 사전 검사가 한도 초과를 알릴 때 던진다 — attachImages 가 name 으로 구분한다 (F-221.md 2.3)
+export class QuotaExceededError extends Error {
+  constructor() {
+    super('quota_exceeded')
+    this.name = 'quota_exceeded'
+  }
+}
 
 export type ServerStoreHandlers = {
   // reason:'locked' 면 F-213.md 2.4 — 다른 세션이 편집 중이라 내 편집을 사본으로 돌렸다
@@ -108,6 +117,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   let state: SyncState = { pending: 0, online: typeof navigator === 'undefined' ? true : navigator.onLine, signedOut: false }
   let sending = false
   let inFlightKey: number | null = null
+  // 507 알림은 한 번 보내기 회차에 한 번만 (F-221.md 2.4)
+  let quotaNoticeShownThisRound = false
 
   function notify() {
     for (const listener of listeners) listener(state)
@@ -130,6 +141,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   async function kickSend(): Promise<void> {
     if (sending) return
     sending = true
+    quotaNoticeShownThisRound = false
     try {
       for (;;) {
         const entries = await cache.getOutbox(userId)
@@ -274,6 +286,15 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         if (err.kind === 'unauthorized') {
           patchState({ signedOut: true })
           return false
+        }
+        if (err.kind === 'quota_exceeded') {
+          // 원문·캐시는 그대로 두고 올리기 항목만 뺀다 — 다른 기기에선 '이미지를 찾을 수 없습니다' (F-221.md 2.4)
+          await cache.removeOutbox(entry.key)
+          if (!quotaNoticeShownThisRound) {
+            quotaNoticeShownThisRound = true
+            notice({ type: 'error', message: ATTACHMENT_QUOTA_MESSAGE })
+          }
+          return true
         }
         if (err.kind === 'too_large' || err.kind === 'unsupported' || err.kind === 'type_mismatch') {
           await cache.removeOutbox(entry.key)
@@ -639,10 +660,25 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     },
 
     // GIF·이미 WebP 면 변환을 건너뛴다(이중 인코딩 방지, F-220.md 2.3). 그 외는 WebP 로 변환해 본다(더 커지거나 실패하면 원본). 캐시에 먼저 넣고 즉시 반환, 올리기는 보낼 목록으로 (2.5)
+    // 넣기 전 사전 검사(F-221.md 2.3) — used + 아직 안 올린 캐시 합 + 새 크기 > limit 면 던진다. 조회 실패(오프라인 등)면 건너뛴다(서버가 최종 판정)
     async putAttachment({ blob, mime, ext, width, height }) {
       const converted = ext === 'gif' || ext === 'webp' ? blob : await toWebp(blob)
       const finalExt: AttachmentExt = converted === blob ? ext : 'webp'
       const finalMime = converted === blob ? mime : 'image/webp'
+
+      let usage: { used: number; limit: number } | null = null
+      try {
+        usage = await fetchUsage()
+      } catch {
+        usage = null
+      }
+      if (usage) {
+        const cachedAttachments = await cache.listAttachments(userId)
+        const unsent = cachedAttachments.reduce((sum, a) => sum + (a.uploaded ? 0 : a.size), 0)
+        if (usage.used + unsent + converted.size > usage.limit) {
+          throw new QuotaExceededError()
+        }
+      }
 
       let id = randomAttachmentId()
       while (await cache.getAttachment(userId, id)) {

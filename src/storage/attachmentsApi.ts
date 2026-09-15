@@ -10,6 +10,7 @@ export type AttachmentApiErrorKind =
   | 'unsupported'
   | 'type_mismatch'
   | 'not_found'
+  | 'quota_exceeded'
   | 'server_error'
   | 'other'
 
@@ -37,6 +38,7 @@ function classifyStatus(status: number): AttachmentApiErrorKind | null {
 
 export async function uploadAttachment(id: string, ext: AttachmentExt, blob: Blob): Promise<UploadedAttachment> {
   const res = await send(`/api/attachments/${id}.${ext}`, { method: 'PUT', body: blob })
+  if (res.status === 507) throw new AttachmentApiError('quota_exceeded')
   const kind = classifyStatus(res.status)
   if (kind) throw new AttachmentApiError(kind)
   if (res.status === 413) throw new AttachmentApiError('too_large')
@@ -46,6 +48,16 @@ export async function uploadAttachment(id: string, ext: AttachmentExt, blob: Blo
   }
   if (!res.ok) throw new AttachmentApiError('other')
   return (await res.json()) as UploadedAttachment
+}
+
+export type Usage = { used: number; limit: number }
+
+export async function fetchUsage(): Promise<Usage> {
+  const res = await send('/api/usage')
+  const kind = classifyStatus(res.status)
+  if (kind) throw new AttachmentApiError(kind)
+  if (!res.ok) throw new AttachmentApiError('other')
+  return (await res.json()) as Usage
 }
 
 // docId 를 주면 ?doc= 를 붙인다 — 내 것이 아닌 첨부는 그 문서 열람 권한으로 판정한다 (specs/features/F-212.md 2.2)

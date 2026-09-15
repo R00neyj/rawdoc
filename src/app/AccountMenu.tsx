@@ -4,6 +4,15 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { loginUrl, logoutUrl, storedAccount, type AccountState } from './account'
 import { IconAccount, IconLogin, IconLogout, IconTooltip } from './icons'
 import usePresence from './usePresence'
+import { fetchUsage, type Usage } from '../storage/attachmentsApi'
+
+const MB = 1_048_576
+
+// 10MB 미만은 소수 1자리, 이상은 정수 (F-221.md 2.5)
+function formatUsage(bytes: number): string {
+  const mb = bytes / MB
+  return mb < 10 ? `${mb.toFixed(1)}MB` : `${Math.round(mb)}MB`
+}
 
 type AccountMenuProps = {
   account: AccountState
@@ -12,6 +21,7 @@ type AccountMenuProps = {
 
 export default function AccountMenu({ account, onBeforeNavigate }: AccountMenuProps) {
   const [open, setOpen] = useState(false)
+  const [usage, setUsage] = useState<Usage | null>(null)
   const { mounted, state } = usePresence(open)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLUListElement | null>(null)
@@ -34,6 +44,22 @@ export default function AccountMenu({ account, onBeforeNavigate }: AccountMenuPr
       itemRefs.current[0]?.focus()
     }
   }, [open])
+
+  // 열 때마다 사용량을 새로 받는다. 실패·오프라인이면 줄을 숨긴다 (F-221.md 2.5)
+  useEffect(() => {
+    if (!open || account.state !== 'in') return
+    let cancelled = false
+    fetchUsage()
+      .then((u) => {
+        if (!cancelled) setUsage(u)
+      })
+      .catch(() => {
+        if (!cancelled) setUsage(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, account.state])
 
   function closeAndReturnFocus() {
     setOpen(false)
@@ -120,6 +146,16 @@ export default function AccountMenu({ account, onBeforeNavigate }: AccountMenuPr
           {!email && account.state === 'offline' && (
             <li className="account-menu-email" role="none">
               <span className="account-menu-offline">오프라인</span>
+            </li>
+          )}
+          {usage && (
+            <li
+              className={
+                usage.used / usage.limit >= 0.9 ? 'account-menu-usage account-menu-usage-danger' : 'account-menu-usage'
+              }
+              role="none"
+            >
+              이미지 {formatUsage(usage.used)} / 500MB
             </li>
           )}
           {actionItems.map((item, i) => (

@@ -1465,6 +1465,18 @@ body.sidebar-resizing {
   opacity: 0.7;
 }
 
+/* 계정당 이미지 저장 사용량 (F-221.md 2.5) */
+.account-menu-usage {
+  padding: 0 10px 6px;
+  font-size: 12px;
+  color: var(--muted);
+  user-select: none;
+}
+
+.account-menu-usage-danger {
+  color: var(--danger);
+}
+
 /* ===== 공유받은 문서 화면 S-4 (specs/features/F-130.md 4장, ia.md 3.19) ===== */
 /* 메인 열 전체 폭 — 내용은 자식 요소가 800px 로 가운데 정렬한다 (F-143 3.8) */
 .shared-view {

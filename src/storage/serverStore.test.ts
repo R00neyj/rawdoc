@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { createServerStore } from './serverStore'
+import { createServerStore, QuotaExceededError } from './serverStore'
 
 let dbCounter = 0
 function freshDbName() {
@@ -31,6 +31,8 @@ function makeFakeServer() {
   const docs = new Map<string, FakeDoc>()
   let networkDown = false
   let serverError = false
+  let usage = { used: 0, limit: 524_288_000 }
+  let forceUploadQuota = false
 
   function jsonResponse(status: number, data?: unknown): Response {
     return new Response(data === undefined ? null : JSON.stringify(data), {
@@ -115,6 +117,16 @@ function makeFakeServer() {
 
     if (path === '/api/folders' && method === 'GET') return jsonResponse(200, [])
 
+    if (path === '/api/usage' && method === 'GET') return jsonResponse(200, usage)
+
+    // F-221 흉내: PUT /api/attachments/:idext — forceUploadQuota 면 507 (fakeServer.js 와 같은 형식)
+    const attMatch = /^\/api\/attachments\/([0-9a-f]{16})\.(png|jpg|gif|webp)$/.exec(path)
+    if (attMatch && method === 'PUT') {
+      if (forceUploadQuota) return jsonResponse(507, { error: 'quota_exceeded', used: usage.used, limit: usage.limit })
+      const [, id, ext] = attMatch
+      return jsonResponse(201, { id, ext, mime: 'image/png', size: 1, width: 1, height: 1 })
+    }
+
     return jsonResponse(404, { error: 'not_found' })
   }
 
@@ -125,6 +137,12 @@ function makeFakeServer() {
     },
     setServerError: (v: boolean) => {
       serverError = v
+    },
+    setUsage: (v: { used: number; limit: number }) => {
+      usage = v
+    },
+    setForceUploadQuota: (v: boolean) => {
+      forceUploadQuota = v
     },
     bumpVersion: (id: string) => {
       const d = docs.get(id)
@@ -271,5 +289,49 @@ describe('serverStore', () => {
 
     expect(store.syncState?.pending).toBe(0)
     expect(await store.get(doc.id)).toBeNull()
+  })
+
+  it('F-221 A2: used+미전송+새 크기가 한도를 넘으면 던지고 캐시에 쓰지 않는다', async () => {
+    const server = makeFakeServer()
+    server.setUsage({ used: 524_288_000 - 10, limit: 524_288_000 })
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const blob = new Blob([new Uint8Array(1000)])
+    await expect(
+      store.putAttachment({ blob, mime: 'image/png', ext: 'png', width: 1, height: 1 }),
+    ).rejects.toBeInstanceOf(QuotaExceededError)
+
+    expect(await store.listAttachments()).toEqual([])
+  })
+
+  it('F-221 A2: 사용량 조회 실패(오프라인)면 검사를 건너뛰고 그대로 저장한다', async () => {
+    const server = makeFakeServer()
+    server.setNetworkDown(true)
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const blob = new Blob([new Uint8Array(1000)])
+    const result = await store.putAttachment({ blob, mime: 'image/png', ext: 'png', width: 1, height: 1 })
+    expect(result.id).toBeTruthy()
+    const list = await store.listAttachments()
+    expect(list.map((a) => a.id)).toEqual([result.id])
+  })
+
+  it('F-221 A2: 보낼 목록에서 507 이면 항목을 빼고 알림을 띄운다(원문·캐시는 그대로)', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const notices: Array<{ type: string; message: string }> = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), onNotice: (n) => notices.push(n) })
+
+    server.setForceUploadQuota(true)
+    const blob = new Blob([new Uint8Array(1000)])
+    const result = await store.putAttachment({ blob, mime: 'image/png', ext: 'png', width: 1, height: 1 })
+    await tick(50)
+
+    expect(store.syncState?.pending).toBe(0)
+    expect(notices.some((n) => n.type === 'error' && n.message.includes('500MB'))).toBe(true)
+    const list = await store.listAttachments()
+    expect(list.map((a) => a.id)).toEqual([result.id]) // 캐시는 남는다
   })
 })

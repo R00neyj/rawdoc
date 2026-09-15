@@ -11,6 +11,8 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
   const attachments = new Map() // key `${id}.${ext}` -> { mime, bytes, width, height }
   // context.setOffline() 은 page.route 가 먼저 가로채 못 걸러낸다 — 이 플래그로 직접 흉내낸다 (F-207 A4)
   let offline = false
+  // 계정당 이미지 저장 한도 흉내 (F-221 2.2·2.5)
+  let usage = { used: 0, limit: 524_288_000 }
 
   function docSummary(d) {
     const { content: _content, ...rest } = d
@@ -168,9 +170,17 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
         })
       }
       const bytes = req.postDataBuffer() ?? Buffer.alloc(0)
+      if (usage.used + bytes.length > usage.limit) {
+        return route.fulfill({
+          status: 507,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'quota_exceeded', used: usage.used, limit: usage.limit }),
+        })
+      }
       const mime = ATTACHMENT_MIME[ext]
       const record = { mime, bytes, width: 2, height: 2 }
       attachments.set(key, record)
+      usage = { ...usage, used: usage.used + bytes.length }
       return route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -183,6 +193,11 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       return route.fulfill({ status: 200, contentType: record.mime, body: record.bytes })
     }
     return route.fallback()
+  })
+
+  await page.route('**/api/usage', async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(usage) })
   })
 
   return {
@@ -200,6 +215,10 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
         doc.version += 1
         doc.updatedAt = Date.now()
       }
+    },
+    // 계정당 이미지 사용량을 직접 설정한다 (F-221 A3·A4)
+    setUsage(v) {
+      usage = { ...usage, ...v }
     },
   }
 }

@@ -16,6 +16,7 @@ const MESSAGES = {
   resultTooLargeGif: 'GIF 는 한 장에 5MB 까지 넣을 수 있습니다.',
   resultTooLarge: '이미지는 줄인 뒤에도 5MB 를 넘어 넣지 못했습니다.',
   save: '저장 공간이 부족해 이미지를 넣지 못했습니다.',
+  quota: '이미지 저장 공간(500MB)이 가득 찼습니다. 문서에서 지운 이미지는 하루 뒤 정리됩니다.',
 }
 
 export type AttachImagesSource = 'paste' | 'drop'
@@ -88,8 +89,10 @@ export async function attachImages(
         height: shrunk.height,
       })
       inserted.push({ id, ext, width: shrunk.width, height: shrunk.height, alt: altFromFile(file, source), file })
-    } catch {
-      failures.push({ message: MESSAGES.save, isError: true })
+    } catch (err) {
+      // 계정당 500MB 한도 초과는 다른 문구 (F-221.md 2.3)
+      const isQuota = err instanceof Error && err.name === 'quota_exceeded'
+      failures.push({ message: isQuota ? MESSAGES.quota : MESSAGES.save, isError: true })
     }
   }
 
