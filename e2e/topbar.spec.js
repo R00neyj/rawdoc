@@ -568,7 +568,7 @@ test.describe('F-210 C 소유자 읽기 전용 링크 메뉴', () => {
     await openServerDoc(page)
     const shareBtn = page.getByRole('button', { name: '공유 — 링크·마크다운 복사' })
     await shareBtn.click()
-    await expect(page.locator('.share-menu-list [role="menuitem"]')).toHaveCount(3)
+    await expect(page.locator('.share-menu-list [role="menuitem"]')).toHaveCount(4)
     await expect(page.getByRole('menuitem', { name: '읽기 전용 링크 복사' })).toBeVisible()
     await expect(page.getByRole('menuitem', { name: '읽기 전용 링크 끊기' })).toHaveCount(0)
 
