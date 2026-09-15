@@ -1,12 +1,45 @@
 import { errorResponse, jsonResponse } from './http'
 import { getUser } from './auth'
+import {
+  handleCreateDoc,
+  handleDeleteDoc,
+  handleGetDoc,
+  handleListDocs,
+  handleMoveDocFolder,
+  handleSetPinned,
+  handleUpdateDoc,
+} from './docs'
+import { handleCreateFolder, handleDeleteFolder, handleListFolders, handleUpdateFolder } from './folders'
 
-type RouteHandler = (request: Request, env: Env, ctx: ExecutionContext) => Promise<Response>
+type RouteHandler = (
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  params: Record<string, string>,
+) => Promise<Response>
 
 interface Route {
   method: string
   path: string
   handler: RouteHandler
+}
+
+// ':id' 같은 세그먼트를 params 로 뽑는다. 세그먼트 수가 다르면 매치하지 않는다
+function matchPath(pattern: string, pathname: string): Record<string, string> | null {
+  const patternParts = pattern.split('/').filter(Boolean)
+  const pathParts = pathname.split('/').filter(Boolean)
+  if (patternParts.length !== pathParts.length) return null
+
+  const params: Record<string, string> = {}
+  for (let i = 0; i < patternParts.length; i++) {
+    const part = patternParts[i]
+    if (part.startsWith(':')) {
+      params[part.slice(1)] = decodeURIComponent(pathParts[i])
+    } else if (part !== pathParts[i]) {
+      return null
+    }
+  }
+  return params
 }
 
 async function handleHealth(_request: Request, env: Env): Promise<Response> {
@@ -38,6 +71,17 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/health', handler: handleHealth },
   { method: 'GET', path: '/api/me', handler: handleMe },
   { method: 'GET', path: '/api/login', handler: handleLogin },
+  { method: 'GET', path: '/api/docs', handler: handleListDocs },
+  { method: 'POST', path: '/api/docs', handler: handleCreateDoc },
+  { method: 'GET', path: '/api/docs/:id', handler: handleGetDoc },
+  { method: 'PUT', path: '/api/docs/:id', handler: handleUpdateDoc },
+  { method: 'DELETE', path: '/api/docs/:id', handler: handleDeleteDoc },
+  { method: 'PUT', path: '/api/docs/:id/folder', handler: handleMoveDocFolder },
+  { method: 'PUT', path: '/api/docs/:id/pin', handler: handleSetPinned },
+  { method: 'GET', path: '/api/folders', handler: handleListFolders },
+  { method: 'POST', path: '/api/folders', handler: handleCreateFolder },
+  { method: 'PUT', path: '/api/folders/:id', handler: handleUpdateFolder },
+  { method: 'DELETE', path: '/api/folders/:id', handler: handleDeleteFolder },
 ]
 
 export default {
@@ -49,18 +93,22 @@ export default {
     }
 
     try {
-      const matchingPath = routes.filter((route) => route.path === url.pathname)
+      const matchingPath = routes
+        .map((route) => ({ route, params: matchPath(route.path, url.pathname) }))
+        .filter((m): m is { route: Route; params: Record<string, string> } => m.params !== null)
       if (matchingPath.length === 0) {
         return errorResponse('not_found', 404)
       }
 
-      const route = matchingPath.find((r) => r.method === request.method)
-      if (!route) {
+      const found = matchingPath.find((m) => m.route.method === request.method)
+      if (!found) {
         return errorResponse('method_not_allowed', 405)
       }
 
-      return await route.handler(request, env, ctx)
+      return await found.route.handler(request, env, ctx, found.params)
     } catch (err) {
+      // requireUser 는 401 Response 를 던진다 — 그대로 돌려준다
+      if (err instanceof Response) return err
       console.error(err)
       return errorResponse('internal', 500)
     }
