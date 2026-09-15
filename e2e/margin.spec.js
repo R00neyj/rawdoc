@@ -166,14 +166,17 @@ test.describe('F-146 A5 문서 칸 안 빈 곳', () => {
     const contentRect = await rectOf(page.locator('.cm-content'))
 
     // 줄 끝 오른쪽 빈 곳
-    await page.mouse.click(contentRect.right - 5, contentRect.top + 55)
+    const shortLineRect = await rectOf(page.locator('.cm-line', { hasText: '짧은 줄' })) // F-217 제목 블록 아래 실제 첫 줄
+    await page.mouse.click(contentRect.right - 5, shortLineRect.top + shortLineRect.height / 2)
     let state = await focusState(page)
     expect(state.cmFocused).toBe(true)
 
     // 위 여백(문서 첫 줄 위, F-143 3.10 의 48px 패딩 안)
     await page.mouse.click(contentRect.left + contentRect.width / 2, contentRect.top + 5)
     state = await focusState(page)
-    expect(state.cmFocused).toBe(true)
+    // F-217 이후 첫 줄 위는 본문 제목 — 제목 입력칸에 포커스가 가도 에디터 안이다
+    const titleFocused = await page.evaluate(() => document.activeElement?.classList.contains('doc-title') ?? false)
+    expect(state.cmFocused || titleFocused).toBe(true)
 
     // 아래 여백(F-143 3.10 의 50dvh 패딩 안)
     await page.mouse.click(contentRect.left + contentRect.width / 2, contentRect.bottom - 5)

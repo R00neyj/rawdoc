@@ -319,7 +319,8 @@ test.describe('F-143 A17 / F-124 A2d 문서 여백', () => {
     await importMarkdown(page, { content: Array.from({ length: 300 }, (_, i) => `줄 ${i}`).join('\n') })
 
     const scroller = page.locator('.cm-scroller')
-    const firstLine = page.locator('.cm-line').first()
+    // F-217 이후 문서 맨 위는 본문 제목 블록 — 48px 는 그 위에 있다
+    const firstLine = page.locator('.cm-content > :first-child')
     const scrollerTop = (await rectOf(scroller)).top
     const firstLineTop = (await rectOf(firstLine)).top
     expect(Math.abs(firstLineTop - scrollerTop - 48)).toBeLessThanOrEqual(2)
