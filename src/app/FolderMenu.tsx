@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } from 'react'
-import { IconMore, IconLink, IconLinkOff } from './icons'
+import { IconMore, IconLink, IconLinkOff, IconPersonAdd } from './icons'
 import usePresence from './usePresence'
 import { getFolderShareLink, createFolderShareLink, revokeFolderShareLink } from './linkApi'
 import type { Notice } from './notice'
@@ -18,12 +18,14 @@ type FolderMenuProps = {
   // 서버 저장소일 때 폴더 id — 있으면 읽기 전용 링크 항목 2개를 덧붙인다 (F-211.md 2.4)
   shareFolderId?: string
   onNotice?: (notice: Notice) => void
+  // 서버 저장소일 때 — `사람 초대…` 항목 (F-212.md 2.5, 폴더는 항상 owner 만 목록에 있다)
+  onInvite?: () => void
 }
 
 // 사이드바 항목 `⋯` 메뉴 — 라이브러리 없이 앱이 그린다 (specs/features/F-126.md 5.2)
 // 마우스 오버·키보드 포커스 시 트리거가 보인다(app.css). 방향키로 항목 이동, Enter 실행,
 // Esc·바깥 클릭으로 닫고 포커스를 트리거(⋯)로 되돌린다
-export default function FolderMenu({ label, items, shareFolderId, onNotice }: FolderMenuProps) {
+export default function FolderMenu({ label, items, shareFolderId, onNotice, onInvite }: FolderMenuProps) {
   const [open, setOpen] = useState(false)
   const [hasLink, setHasLink] = useState(false)
   const { mounted, state } = usePresence(open) // 나타나고 사라지는 전환 (F-172.md 2.2)
@@ -114,6 +116,7 @@ export default function FolderMenu({ label, items, shareFolderId, onNotice }: Fo
     ...(shareFolderId && hasLink
       ? [{ key: 'share-link-off', label: '읽기 전용 링크 끊기', icon: IconLinkOff, onSelect: handleRevokeFolderLink }]
       : []),
+    ...(onInvite ? [{ key: 'invite', label: '사람 초대…', icon: IconPersonAdd, onSelect: onInvite }] : []),
   ]
 
   function selectItem(item: FolderMenuItem) {

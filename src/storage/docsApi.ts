@@ -13,6 +13,7 @@ export type ApiErrorKind =
   | 'conflict'
   | 'id_taken'
   | 'invalid'
+  | 'forbidden'
   | 'server_error'
   | 'other'
 
@@ -101,6 +102,7 @@ export async function updateDoc(
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
   if (res.status === 404) throw new ApiError('not_found')
+  if (res.status === 403) throw new ApiError('forbidden')
   if (res.status === 413) throw new ApiError('too_large')
   if (res.status === 409) {
     const data = (await readJson(res)) as { doc?: ServerDoc } | null
@@ -174,6 +176,62 @@ export async function updateFolder(
 
 export async function removeFolder(id: string): Promise<void> {
   const res = await send(`/api/folders/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 404) throw new ApiError('not_found')
+  if (!res.ok && res.status !== 204) throw new ApiError('other', { status: res.status })
+}
+
+// 나에게 권한이 있는(내 소유가 아닌) 문서 메타 — GET /api/shared (specs/features/F-212.md 2.3·2.4)
+export type SharedDocMeta = ServerDocSummary & {
+  role: 'edit' | 'view'
+  ownerEmail: string
+  viaFolder?: { id: string; name: string }
+}
+
+export async function getShared(): Promise<SharedDocMeta[]> {
+  const res = await send('/api/shared')
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as SharedDocMeta[]
+}
+
+// 초대(권한 부여) 관리 — owner 만 (F-212.md 2.3)
+export type GrantTargetType = 'doc' | 'folder'
+export type GrantRole = 'view' | 'edit'
+export type Grant = { email: string; role: GrantRole; createdAt: number }
+
+function grantsPath(targetType: GrantTargetType, targetId: string): string {
+  return `/api/${targetType}s/${encodeURIComponent(targetId)}/grants`
+}
+
+export async function listGrants(targetType: GrantTargetType, targetId: string): Promise<Grant[]> {
+  const res = await send(grantsPath(targetType, targetId))
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 404) throw new ApiError('not_found')
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as Grant[]
+}
+
+export async function putGrant(
+  targetType: GrantTargetType,
+  targetId: string,
+  email: string,
+  role: GrantRole,
+): Promise<Grant> {
+  const res = await send(`${grantsPath(targetType, targetId)}/${encodeURIComponent(email)}`, jsonInit({ role }, 'PUT'))
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 404) throw new ApiError('not_found')
+  if (res.status === 400) throw new ApiError('invalid')
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as Grant
+}
+
+export async function deleteGrant(targetType: GrantTargetType, targetId: string, email: string): Promise<void> {
+  const res = await send(`${grantsPath(targetType, targetId)}/${encodeURIComponent(email)}`, { method: 'DELETE' })
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
   if (res.status === 404) throw new ApiError('not_found')

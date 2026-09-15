@@ -28,6 +28,7 @@ import {
   IconDelete,
   IconEdit,
   IconTooltip,
+  IconGroup,
 } from './icons'
 import type { Notice } from './notice'
 
@@ -39,6 +40,15 @@ type Dragged = { type: 'doc' | 'folder'; id: string } | null
 type DeleteDocTarget = { id: string; title: string }
 type DeleteFolderTarget = { id: string; name: string }
 type MoveDocTarget = { id: string; title: string; folderId: string | null }
+
+// 공유받은 문서 한 항목 — 끌어 옮기기·⋯ 메뉴 없이 열기만 한다 (specs/features/F-212.md 2.4)
+export type SharedDocLike = {
+  id: string
+  title: string
+  role: 'edit' | 'view'
+  ownerEmail: string
+  viaFolder?: { id: string; name: string } | null
+}
 
 type SidebarCtx = {
   currentDocId: string | null
@@ -65,6 +75,8 @@ type SidebarCtx = {
   // 폴더 읽기 전용 링크 메뉴 항목 노출 조건·알림 (F-211.md 2.4) — App.tsx 에 경로가 없어 최소 전달만 한다
   isServerStore: boolean
   onNotice: (notice: Notice) => void
+  // 폴더 `⋯` 메뉴 `사람 초대…` (F-212.md 2.5)
+  onRequestInviteFolder: (id: string, name: string) => void
 }
 
 function dropKeyOf(target: DropTarget): string {
@@ -176,6 +188,7 @@ function FolderRow({
             items={items}
             shareFolderId={ctx.isServerStore ? node.id : undefined}
             onNotice={ctx.onNotice}
+            onInvite={ctx.isServerStore ? () => ctx.onRequestInviteFolder(node.id, node.name) : undefined}
           />
         )}
       </div>
@@ -273,6 +286,74 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
         <FolderMenu label={doc.title} items={items} />
       </div>
     </li>
+  )
+}
+
+// 공유받음 묶음의 문서 한 줄 — 끌어 옮기기·⋯ 메뉴가 없다. 오른쪽에 소유자 이메일 앞부분 (F-212.md 2.4)
+function SharedDocRow({ doc, ctx }: { doc: SharedDocLike; ctx: SidebarCtx }) {
+  const emailPrefix = doc.ownerEmail.split('@')[0] || doc.ownerEmail
+  return (
+    <li role="listitem" className="tree-item">
+      <div className="tree-row shared-doc-row">
+        <span className="tree-toggle-spacer" aria-hidden="true" />
+        <button
+          type="button"
+          className="tree-label doc-item-btn"
+          aria-current={doc.id === ctx.currentDocId ? 'page' : undefined}
+          onClick={() => ctx.onSelectDoc(doc.id)}
+        >
+          {doc.title}
+        </button>
+        <span className="shared-doc-owner">{emailPrefix}</span>
+      </div>
+    </li>
+  )
+}
+
+// 사이드바 `공유받음` 묶음 — 폴더로 받은 것은 폴더 이름 아래, 문서로 받은 것은 바로 (F-212.md 2.4)
+function SharedGroup({ sharedDocs, ctx }: { sharedDocs: SharedDocLike[]; ctx: SidebarCtx }) {
+  const [open, setOpen] = useState(true)
+  if (sharedDocs.length === 0) return null
+
+  const direct: SharedDocLike[] = []
+  const byFolder = new Map<string, { name: string; docs: SharedDocLike[] }>()
+  for (const doc of sharedDocs) {
+    if (doc.viaFolder) {
+      const group = byFolder.get(doc.viaFolder.id) ?? { name: doc.viaFolder.name, docs: [] }
+      group.docs.push(doc)
+      byFolder.set(doc.viaFolder.id, group)
+    } else {
+      direct.push(doc)
+    }
+  }
+
+  return (
+    <>
+      <h2>
+        <button type="button" className="shared-group-toggle" onClick={() => setOpen((v) => !v)}>
+          <IconChevron size={14} className={`tree-toggle-icon${open ? ' tree-toggle-icon--open' : ''}`} />
+          <IconGroup size={14} />
+          공유받음
+        </button>
+      </h2>
+      {open && (
+        <ul className="pinned-list shared-doc-list" role="list" aria-label="공유받은 문서">
+          {[...byFolder.values()].map((group) => (
+            <li key={group.name} role="presentation" className="shared-doc-folder">
+              <span className="shared-doc-folder-name">{group.name}</span>
+              <ul role="list">
+                {group.docs.map((doc) => (
+                  <SharedDocRow key={doc.id} doc={doc} ctx={ctx} />
+                ))}
+              </ul>
+            </li>
+          ))}
+          {direct.map((doc) => (
+            <SharedDocRow key={doc.id} doc={doc} ctx={ctx} />
+          ))}
+        </ul>
+      )}
+    </>
   )
 }
 
@@ -399,6 +480,7 @@ type SidebarProps = {
   onToggleCollapse: () => void
   docs: DocLike[]
   folders: FolderLike[]
+  sharedDocs: SharedDocLike[]
   currentDocId: string | null
   openFolderIds: string[]
   onToggleFolder: (id: string) => void
@@ -421,6 +503,7 @@ type SidebarProps = {
   onWidthCommit: (width: number) => void
   isServerStore: boolean
   onNotice: (notice: Notice) => void
+  onRequestInviteFolder: (id: string, name: string) => void
 }
 
 export default function Sidebar({
@@ -431,6 +514,7 @@ export default function Sidebar({
   onToggleCollapse,
   docs,
   folders,
+  sharedDocs,
   currentDocId,
   openFolderIds,
   onToggleFolder,
@@ -453,6 +537,7 @@ export default function Sidebar({
   onWidthCommit,
   isServerStore,
   onNotice,
+  onRequestInviteFolder,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
@@ -581,6 +666,7 @@ export default function Sidebar({
     onDrop: handleDrop,
     isServerStore,
     onNotice,
+    onRequestInviteFolder,
   }
 
   const rootTarget: DropTarget = { type: 'root' }
@@ -630,6 +716,7 @@ export default function Sidebar({
                 </ul>
               </>
             )}
+            <SharedGroup sharedDocs={sharedDocs} ctx={ctx} />
             <h2>문서</h2>
             <ul className="doc-list" role="tree" aria-label="문서와 폴더">
               {tree.map((node) => (

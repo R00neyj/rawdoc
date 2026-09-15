@@ -48,7 +48,7 @@ import { ensurePersist } from '../pwa/persistStorage'
 import { setupFileLaunch } from '../pwa/fileLaunch'
 
 import TopBar from './TopBar'
-import Sidebar from './Sidebar'
+import Sidebar, { type SharedDocLike } from './Sidebar'
 import NoticeBar, { type NoticeWithAction } from './NoticeBar'
 import EmptyState from './EmptyState'
 import ConfirmDeleteDialog, { type DeleteTarget } from './ConfirmDeleteDialog'
@@ -57,13 +57,14 @@ import SettingsDialog from './SettingsDialog'
 import StatusBar from './StatusBar'
 import SharedView from './SharedView'
 import PublicView from './PublicView'
+import InviteDialog, { type InviteTarget } from './InviteDialog'
 import type { Doc, Folder, LineEnding, Store } from '../types'
 
 const STATS_DEBOUNCE_MS = 150
 
 const NARROW_QUERY = '(max-width: 1023px)'
 
-type DocMeta = Pick<Doc, 'id' | 'title' | 'updatedAt' | 'folderId' | 'pinnedAt'>
+type DocMeta = Pick<Doc, 'id' | 'title' | 'updatedAt' | 'folderId' | 'pinnedAt' | 'role' | 'ownerEmail' | 'viaFolder'>
 type OpenDoc = { id: string; content: string; lineEnding: LineEnding }
 type Stats = { line: number; col: number; charCount: number; wordCount: number }
 type AppNotice = NoticeWithAction & { id: number }
@@ -75,7 +76,15 @@ function stripContent(doc: Doc): DocMeta {
     updatedAt: doc.updatedAt,
     folderId: doc.folderId ?? null,
     pinnedAt: doc.pinnedAt ?? null, // F-132
+    role: doc.role, // F-212
+    ownerEmail: doc.ownerEmail,
+    viaFolder: doc.viaFolder ?? null,
   }
+}
+
+// 공유받은 문서인가 — 'edit'|'view' 는 내 소유가 아니다 (F-212.md 2.4)
+function isSharedDoc(doc: Pick<DocMeta, 'role'> | null | undefined): boolean {
+  return doc?.role === 'edit' || doc?.role === 'view'
 }
 
 function sortByUpdatedAtDesc<T extends { updatedAt: number }>(list: T[]): T[] {
@@ -154,6 +163,10 @@ export default function App() {
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   // 폴더로 이동 대화상자(D-3) 대상 문서 (F-126.md 5.3)
   const [moveDocTarget, setMoveDocTarget] = useState<MoveDocTarget | null>(null)
+  // 사람 초대 대화상자(D-4) 대상 (F-212.md 2.5)
+  const [inviteTarget, setInviteTarget] = useState<InviteTarget>(null)
+  // edit 권한 문서가 서버에서 403 을 받아 이번 세션 동안 읽기 전용으로 내려간 문서 id (F-212.md 2.4)
+  const [forbiddenDocIds, setForbiddenDocIds] = useState<Set<string>>(() => new Set())
   const [narrow, setNarrow] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia(NARROW_QUERY).matches : false,
   )
@@ -211,9 +224,25 @@ export default function App() {
   const dropBlockedRef = useRef(false)
   // 이미지 끌어놓기(F-156.md 2.5) — 대화상자·공유 화면에서는 md 와 같이 막지만, 메모리 저장소에서는 받는다
   const imageDropBlockedRef = useRef(false)
+  // 현재 문서가 읽기 전용(view 권한·403 강등)인가 — handleImageFiles 가 이미지 올리기를 막는 데 쓴다 (F-212.md 2.4)
+  const readOnlyDocRef = useRef(false)
   // Editor 는 마운트 시점의 onOpenWikiLink 클로저만 계속 쓰므로(F-131 3·5장), 여기서도
   // ref 로 우회해 항상 최신 docs·currentDocId·viewMode 를 보게 한다
   const openWikiLinkRef = useRef<(target: string) => Promise<void>>(async () => {})
+
+  const currentDoc = docs.find((d) => d.id === currentDocId) ?? null
+
+  // 공유받음 묶음(F-212.md 2.4)과 내 트리를 나눈다 — role 이 없거나 'owner' 면 내 것
+  const ownedDocs = docs.filter((d) => !isSharedDoc(d))
+  const sharedDocsList: SharedDocLike[] = docs
+    .filter((d): d is DocMeta & { role: 'edit' | 'view' } => isSharedDoc(d))
+    .map((d) => ({ id: d.id, title: d.title, role: d.role as 'edit' | 'view', ownerEmail: d.ownerEmail ?? '', viaFolder: d.viaFolder }))
+
+  // view 권한 문서이거나(F-212.md 2.4), edit 권한 문서가 403 으로 강등됐으면 읽기 전용
+  const isReadOnlyDoc = currentDoc?.role === 'view' || (currentDocId != null && forbiddenDocIds.has(currentDocId))
+  // owner 문서(내 문서, role 없음 또는 'owner')이고 서버 저장소일 때만 초대할 수 있다 (F-212.md 2.5)
+  const canInviteCurrentDoc =
+    store.kind === 'server' && Boolean(currentDoc) && !isSharedDoc(currentDoc) && !sharedDoc
 
   // 문서 전환·삭제·해시 변경 전에 반드시 끝내는 훅 자리. 대기 중인 자동 저장을 끝낸다
   // (F-110.md 3.4). ref 를 거쳐 항상 최신 flush 를 부르므로 의존성 없이 안정된 참조를 유지한다
@@ -370,6 +399,10 @@ export default function App() {
         onNotice: showNotice,
         // 서버 저장소 409 충돌 — 사본 문서가 만들어졌다는 신호 (F-207.md 2.4)
         onConflict: (event) => conflictHandler?.(event),
+        // 편집 권한이 사라져 403 을 받은 문서 — 이번 세션 동안 읽기 전용으로 내린다 (F-212.md 2.4)
+        onForbidden: (docId) => {
+          setForbiddenDocIds((prev) => (prev.has(docId) ? prev : new Set(prev).add(docId)))
+        },
       })
       setDbBlockedMessage(null)
       setStore(resolvedStore)
@@ -722,6 +755,21 @@ export default function App() {
     editorRef.current?.setIndent(indentPref === '2' ? 2 : 4)
   }, [openDoc, currentDocId, indentPref])
 
+  // view 권한·403 강등 문서는 읽기 전용으로 (F-212.md 2.4) — 재마운트 없이 전환
+  useLayoutEffect(() => {
+    if (openDoc?.id !== currentDocId) return
+    editorRef.current?.setReadOnly(isReadOnlyDoc)
+  }, [openDoc, currentDocId, isReadOnlyDoc])
+
+  // view 권한 문서를 열면 알림 띠를 보인다 (F-212.md 2.4) — 문서를 열 때 1회
+  const notifiedViewDocRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!currentDoc || currentDoc.role !== 'view') return
+    if (notifiedViewDocRef.current === currentDoc.id) return
+    notifiedViewDocRef.current = currentDoc.id
+    showNotice({ type: 'info', message: '보기 권한만 있는 문서입니다.' })
+  }, [currentDoc, showNotice])
+
   // ----- 문서 전환 후 포커스 요청 플래그 정리 (ia.md 3.4, F-103 3.4) -----
   // 실제 포커스 + 커서 맨 앞 이동은 Editor 가 뷰를 만드는 layout effect 안에서
   // autoFocus prop 으로 직접 적용한다 (Editor.jsx). StrictMode 의 마운트→해제→재마운트
@@ -779,6 +827,10 @@ export default function App() {
     )
     // 이미지는 저장소를 못 쓸 때(메모리 저장소)는 막지 않는다 (F-156.md 2.5)
     imageDropBlockedRef.current = Boolean(settingsOpen || deleteTarget || moveDocTarget || sharedDoc)
+    // view 권한·403 강등 문서에서는 이미지 올리기(붙여넣기·끌어놓기)를 막는다 (F-212.md 2.4)
+    readOnlyDocRef.current =
+      docs.find((d) => d.id === currentDocId)?.role === 'view' ||
+      (currentDocId != null && forbiddenDocIds.has(currentDocId))
   })
 
   // runImportFiles 는 store·showNotice 등을 클로저로 담으므로, 매 커밋 후 최신 참조로
@@ -1082,7 +1134,7 @@ export default function App() {
       files: FileList | File[],
       { source, blocked }: { source?: 'paste' | 'drop'; blocked?: boolean } = {},
     ) => {
-      if (blocked) {
+      if (blocked || readOnlyDocRef.current) {
         showNotice({ type: 'info', message: '이 위치에는 이미지를 넣을 수 없습니다.' })
         return []
       }
@@ -1286,6 +1338,21 @@ export default function App() {
     await handleMoveDoc(id, folderId)
   }
 
+  // ----- D-4 사람 초대 (specs/features/F-212.md 2.5) -----
+  function requestInviteCurrentDoc() {
+    if (!currentDoc) return
+    setInviteTarget({ type: 'doc', id: currentDoc.id, name: currentDoc.title })
+  }
+
+  function requestInviteFolder(id: string, name: string) {
+    setInviteTarget({ type: 'folder', id, name })
+    closeSidebarIfNarrow()
+  }
+
+  function cancelInvite() {
+    setInviteTarget(null)
+  }
+
   function openSettings() {
     setSettingsOpen(true)
     closeSidebarIfNarrow()
@@ -1386,7 +1453,6 @@ export default function App() {
     )
   }
 
-  const currentDoc = docs.find((d) => d.id === currentDocId) ?? null
   const isEmpty = bootPhase === 'ready' && docs.length === 0
   const showEditor = bootPhase === 'ready' && !isEmpty
 
@@ -1398,7 +1464,7 @@ export default function App() {
       onToggleSidebar={toggleSidebar}
       toggleButtonRef={toggleButtonRef}
       title={currentDoc?.title ?? ''}
-      titleDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
+      titleDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc) || isReadOnlyDoc}
       titleReadOnly={viewMode === 'view' || Boolean(sharedDoc)}
       titleInputRef={titleInputRef}
       onTitleChange={handleTitleChange}
@@ -1417,8 +1483,9 @@ export default function App() {
       }
       getShareDoc={getShareDoc}
       onShareNotice={showNotice}
-      shareLinkDocId={store.kind === 'server' && currentDoc && !sharedDoc ? currentDoc.id : null}
+      shareLinkDocId={store.kind === 'server' && currentDoc && !sharedDoc && !isSharedDoc(currentDoc) ? currentDoc.id : null}
       onBeforeShareLinkAction={() => docSaverFlushRef.current()}
+      onInvite={canInviteCurrentDoc ? requestInviteCurrentDoc : undefined}
       exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
       onExportDoc={handleExportDoc}
       account={account}
@@ -1444,8 +1511,9 @@ export default function App() {
           open={sidebarOpen}
           collapsed={sidebarCollapsed}
           onToggleCollapse={toggleSidebar}
-          docs={docs}
+          docs={ownedDocs}
           folders={folders}
+          sharedDocs={sharedDocsList}
           currentDocId={currentDocId}
           openFolderIds={openFolders}
           onToggleFolder={toggleFolderOpen}
@@ -1468,6 +1536,7 @@ export default function App() {
           onWidthCommit={handleSidebarWidthCommit}
           isServerStore={store.kind === 'server'}
           onNotice={showNotice}
+          onRequestInviteFolder={requestInviteFolder}
         />
         {narrow && sidebarOpen && (
           <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
@@ -1504,6 +1573,7 @@ export default function App() {
                     ref={editorRef}
                     text={openDoc.content}
                     viewMode={viewMode}
+                    readOnly={isReadOnlyDoc}
                     autoFocus={focusEditorRef.current}
                     onDocChange={handleDocChange}
                     onSelectionChange={handleSelectionChange}
@@ -1555,6 +1625,7 @@ export default function App() {
         onCancel={cancelMoveDoc}
         onConfirm={confirmMoveDoc}
       />
+      <InviteDialog target={inviteTarget} onClose={cancelInvite} onNotice={showNotice} />
       <SettingsDialog
         open={settingsOpen}
         theme={themePref}

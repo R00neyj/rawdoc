@@ -16,6 +16,7 @@ export type EditorHandle = ReturnType<typeof createEditor>
 type EditorProps = {
   text?: string
   viewMode?: 'live' | 'raw' | 'view'
+  readOnly?: boolean
   autoFocus?: boolean
   onDocChange?: (state: EditorState) => void
   onSelectionChange?: (state: EditorState) => void
@@ -29,6 +30,7 @@ type EditorProps = {
 export default function Editor({
   text,
   viewMode,
+  readOnly,
   autoFocus,
   onDocChange,
   onSelectionChange,
@@ -51,6 +53,7 @@ export default function Editor({
     const handle = createEditor(containerRef.current!, {
       text,
       viewMode,
+      readOnly,
       onDocChange,
       onSelectionChange,
       wikiTitles,

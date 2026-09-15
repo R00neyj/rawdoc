@@ -48,8 +48,10 @@ export async function uploadAttachment(id: string, ext: AttachmentExt, blob: Blo
   return (await res.json()) as UploadedAttachment
 }
 
-export async function fetchAttachment(id: string, ext: AttachmentExt): Promise<Blob> {
-  const res = await send(`/api/attachments/${id}.${ext}`)
+// docId 를 주면 ?doc= 를 붙인다 — 내 것이 아닌 첨부는 그 문서 열람 권한으로 판정한다 (specs/features/F-212.md 2.2)
+export async function fetchAttachment(id: string, ext: AttachmentExt, docId?: string): Promise<Blob> {
+  const path = docId ? `/api/attachments/${id}.${ext}?doc=${encodeURIComponent(docId)}` : `/api/attachments/${id}.${ext}`
+  const res = await send(path)
   const kind = classifyStatus(res.status)
   if (kind) throw new AttachmentApiError(kind)
   if (res.status === 404) throw new AttachmentApiError('not_found')

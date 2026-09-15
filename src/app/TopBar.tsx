@@ -38,6 +38,7 @@ type TopBarProps = {
   onShareNotice: (notice: Notice) => void
   shareLinkDocId: string | null
   onBeforeShareLinkAction: () => void
+  onInvite?: () => void
   exportDisabled: boolean
   onExportDoc: () => void
   account: AccountState
@@ -64,6 +65,7 @@ export default function TopBar({
   onShareNotice,
   shareLinkDocId,
   onBeforeShareLinkAction,
+  onInvite,
   exportDisabled,
   onExportDoc,
   account,
@@ -113,6 +115,7 @@ export default function TopBar({
         onNotice={onShareNotice}
         linkDocId={shareLinkDocId}
         onBeforeLinkAction={onBeforeShareLinkAction}
+        onInvite={onInvite}
       />
       <span className="icon-btn-wrap">
         <button

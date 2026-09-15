@@ -55,6 +55,11 @@ function indentExtensionsFor(size: IndentSize): Extension[] {
   return [indentUnit.of(' '.repeat(size)), EditorState.tabSize.of(size)]
 }
 
+// 읽기 전용 — readOnly 는 기본 명령을 막고, editable=false 는 contentEditable 자체를 끈다 (F-212.md 2.4)
+function readOnlyExtensionsFor(readOnly: boolean): Extension[] {
+  return [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]
+}
+
 // src/app/fileDrop.js 의 isExternalFileDrag() 와 같은 판정 — src/editor 는 src/app 을 import 하지 않아(단방향 계층) 옮겨 적는다
 function isExternalFileDrag(dataTransfer: DataTransfer | null): boolean {
   const types = dataTransfer?.types
@@ -117,6 +122,8 @@ type CreateEditorOptions = {
   // 들여쓰기 칸 수, 기본 4 (F-154 2.3). 이후 전환은 handle.setIndent(n) 으로 한다 —
   // 이 값은 최초 생성에만 쓴다
   indent?: IndentSize
+  // 읽기 전용, 기본 false (F-212.md 2.4). 이후 전환은 handle.setReadOnly(on) 으로 한다
+  readOnly?: boolean
   onDocChange?: (state: EditorState) => void
   onSelectionChange?: (state: EditorState) => void
   // 위키링크 대상 판정용 문서 제목 목록(F-131). 이후 갱신은 handle.setWikiTitles() 로 한다 —
@@ -135,6 +142,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     viewMode = 'live',
     lineNumbers: showLineNumbers = true,
     indent: indentSize = 4,
+    readOnly: initialReadOnly = false,
     onDocChange,
     onSelectionChange,
     wikiTitles = [],
@@ -159,10 +167,12 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const lineNumbersCompartment = new Compartment()
   const gutterAttributesCompartment = new Compartment()
   const indentCompartment = new Compartment()
+  const readOnlyCompartment = new Compartment()
 
   const extensions: Extension[] = [
     lineNumbersCompartment.of(lineNumbersExtensionFor(showLineNumbers)),
     gutterAttributesCompartment.of(gutterAttributesExtensionFor(showLineNumbers)),
+    readOnlyCompartment.of(readOnlyExtensionsFor(initialReadOnly)),
     history(),
     EditorView.lineWrapping,
     // 놓을 자리 표시(F-156.md 2.5) — imageInsert() 는 dropFileGuard 보다 먼저 등록해 같은 'drop' 이벤트를 먼저 가로채야 한다(CM6 는 등록 순서로 호출)
@@ -262,6 +272,11 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       view.dispatch({
         effects: [indentCompartment.reconfigure(indentExtensionsFor(size)), scroll],
       })
+    },
+
+    // on(boolean) — 재마운트하지 않는다. 커서·선택·실행 취소 기록 유지 (F-212.md 2.4)
+    setReadOnly(on: boolean) {
+      view.dispatch({ effects: readOnlyCompartment.reconfigure(readOnlyExtensionsFor(on)) })
     },
 
     // 문서 제목 목록 갱신 (F-131 3장) — 문서 생성·삭제·제목 변경 시 App 이 부른다

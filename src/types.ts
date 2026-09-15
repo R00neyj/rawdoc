@@ -11,6 +11,12 @@ export type Doc = {
   updatedAt: number
   folderId: string | null
   pinnedAt: number | null
+  // 서버 저장소에서만 채운다 — 내 문서는 'owner', 공유받은 문서는 'edit'|'view' (specs/features/F-212.md 2.2·2.4)
+  role?: 'owner' | 'edit' | 'view'
+  // 공유받은 문서일 때만 — 소유자 이메일 (F-212.md 2.3)
+  ownerEmail?: string
+  // 공유받은 문서가 폴더 권한으로 보이는 것이면 그 폴더 (F-212.md 2.3·2.4)
+  viaFolder?: { id: string; name: string } | null
 }
 
 export type Folder = {

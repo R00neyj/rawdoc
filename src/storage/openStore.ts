@@ -24,13 +24,20 @@ function readStoredAccountId(): string | null {
 }
 
 // handlers 는 createIdbStore·createServerStore 에 그대로 전달한다
-export async function openStore({ account, onConflict, onNotice, dbName, ...idbHandlers }: OpenStoreHandlers): Promise<Store> {
+export async function openStore({
+  account,
+  onConflict,
+  onNotice,
+  onForbidden,
+  dbName,
+  ...idbHandlers
+}: OpenStoreHandlers): Promise<Store> {
   if (account.state === 'in') {
-    return createServerStore(account.id, { onConflict, onNotice, dbName })
+    return createServerStore(account.id, { onConflict, onNotice, onForbidden, dbName })
   }
   if (account.state === 'offline') {
     const storedId = readStoredAccountId()
-    if (storedId) return createServerStore(storedId, { onConflict, onNotice, dbName })
+    if (storedId) return createServerStore(storedId, { onConflict, onNotice, onForbidden, dbName })
   }
   if (typeof indexedDB === 'undefined') {
     return createMemoryStore()

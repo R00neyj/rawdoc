@@ -19,6 +19,8 @@ type StoreNotice = { type: 'info' | 'error' | 'update' | 'warn'; message: string
 export type ServerStoreHandlers = {
   onConflict?: (event: { docId: string; copyId: string }) => void
   onNotice?: (notice: StoreNotice) => void
+  // 편집 권한이 있어 저장을 대기하던 문서가 서버에서 403 을 받았다 — 앱이 읽기 전용으로 내린다 (F-212.md 2.4)
+  onForbidden?: (docId: string) => void
   dbName?: string
 }
 
@@ -76,11 +78,12 @@ function cachedToAttachment(record: CachedAttachment): Attachment {
 }
 
 // 캐시에 있는 문서 원문에서 이 id 의 확장자를 찾는다 — GET 은 원문 없이 id 만으로는 확장자를 모른다 (2.5)
-function findExtInDocs(docs: CachedDoc[], id: string): AttachmentExt | null {
+// 어느 문서에서 찾았는지도 같이 준다 — 내 것이 아닌 첨부는 그 문서 id 를 ?doc= 로 붙여야 한다 (F-212.md 2.2)
+function findExtInDocs(docs: CachedDoc[], id: string): { ext: AttachmentExt; docId: string } | null {
   const re = new RegExp(`attachments/${id}\\.${ATTACHMENT_EXT_RE}`)
   for (const doc of docs) {
     const m = re.exec(doc.content)
-    if (m) return m[1] as AttachmentExt
+    if (m) return { ext: m[1] as AttachmentExt, docId: doc.id }
   }
   return null
 }
@@ -311,6 +314,14 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         await cache.removeOutbox(entry.key)
         return true
       }
+      if (err.kind === 'forbidden' && entry.type === 'updateDoc') {
+        // 편집 권한이 사라졌다 — 이 문서로 대기 중인 나머지 편집 요청도 함께 버린다 (F-212.md 2.4)
+        await cache.removeOutboxForDoc(userId, entry.docId, entry.key)
+        await cache.removeOutbox(entry.key)
+        handlers.onForbidden?.(entry.docId)
+        notice({ type: 'error', message: '이 문서를 편집할 권한이 없어졌습니다.' })
+        return true
+      }
       // id_taken·invalid·other — 재시도해도 성공하지 못하므로 버리고 계속 진행한다
       await cache.removeOutbox(entry.key)
       notice({ type: 'error', message: '동기화하지 못했습니다.' })
@@ -439,7 +450,30 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
       const cached = await cache.getDocs(userId)
       await refreshPending()
-      return sortByUpdatedAtDesc(cached.map(toDoc))
+      const owned = cached.map((d) => ({ ...toDoc(d), role: 'owner' as const }))
+
+      // 공유받은 문서(F-212.md 2.4) — 캐시하지 않고 매번 새로 읽는다. 오프라인·오류면 빈 목록으로 조용히 건너뛴다
+      let shared: Doc[] = []
+      try {
+        const sharedMeta = await api.getShared()
+        shared = sharedMeta.map((d) => ({
+          id: d.id,
+          title: d.title,
+          content: '',
+          lineEnding: d.lineEnding,
+          createdAt: d.createdAt,
+          updatedAt: d.updatedAt,
+          folderId: d.folderId,
+          pinnedAt: d.pinnedAt,
+          role: d.role,
+          ownerEmail: d.ownerEmail,
+          viaFolder: d.viaFolder ?? null,
+        }))
+      } catch {
+        shared = []
+      }
+
+      return sortByUpdatedAtDesc([...owned, ...shared])
     },
 
     async get(id) {
@@ -598,11 +632,12 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       if (cached) return cachedToAttachment(cached)
 
       const docs = await cache.getDocs(userId)
-      const ext = findExtInDocs(docs, id)
-      if (!ext) return null
+      const found = findExtInDocs(docs, id)
+      if (!found) return null
+      const { ext, docId } = found
 
       try {
-        const blob = await fetchAttachment(id, ext)
+        const blob = await fetchAttachment(id, ext, docId)
         const { width, height } = await decodeDims(blob)
         const record: Omit<CachedAttachment, 'userId'> = {
           id,

@@ -4,7 +4,7 @@ import { encodeShare, type ShareDoc } from '../lib/shareCodec'
 import { extractAttachmentRefs } from '../lib/imageBlock'
 import { formatShareHash } from './hashRoute'
 import { getShareLink, createShareLink, revokeShareLink } from './linkApi'
-import { IconShare, IconTooltip, IconLink, IconLinkOff, IconCopy } from './icons'
+import { IconShare, IconTooltip, IconLink, IconLinkOff, IconCopy, IconPersonAdd } from './icons'
 import usePresence from './usePresence'
 import type { Notice } from './notice'
 
@@ -21,11 +21,13 @@ type ShareMenuProps = {
   // store.kind === 'server' 이고 열린 문서가 있을 때만 문서 id — 읽기 전용 링크 항목 노출 조건 (F-210.md 2.6)
   linkDocId: string | null
   onBeforeLinkAction: () => void // 저장 대기 입력 flush
+  // owner 이고 서버 저장소일 때만 — `사람 초대…` 항목 (F-212.md 2.5)
+  onInvite?: () => void
 }
 
 type ShareMenuItem = { key: string; label: string; icon: ComponentType<{ size?: number }>; onSelect: () => Promise<void> }
 
-export default function ShareMenu({ disabled, getShareDoc, onNotice, linkDocId, onBeforeLinkAction }: ShareMenuProps) {
+export default function ShareMenu({ disabled, getShareDoc, onNotice, linkDocId, onBeforeLinkAction, onInvite }: ShareMenuProps) {
   const [open, setOpen] = useState(false)
   const [hasLink, setHasLink] = useState(false)
   const { mounted, state } = usePresence(open) // 나타나고 사라지는 전환 (F-172.md 2.2)
@@ -168,6 +170,9 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice, linkDocId, 
       : []),
     ...(linkDocId && hasLink
       ? [{ key: 'readonly-link-off', label: '읽기 전용 링크 끊기', icon: IconLinkOff, onSelect: handleRevokeReadOnlyLink }]
+      : []),
+    ...(onInvite
+      ? [{ key: 'invite', label: '사람 초대…', icon: IconPersonAdd, onSelect: async () => onInvite() }]
       : []),
   ]
 
