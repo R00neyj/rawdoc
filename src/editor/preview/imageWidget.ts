@@ -2,12 +2,13 @@
 import { EditorView, WidgetType } from '@codemirror/view'
 
 import type { ImageAlign, ParsedImageBlock } from '../../lib/imageBlock'
-import { imageAlignChange, imageWidthChange } from '../../lib/imageBlock'
+import { imageAlignChange, imageWidthChange, imageBlockDeleteRange } from '../../lib/imageBlock'
 import { observeHeight, stopObservingHeight } from './blocks'
 
 import formatAlignLeftSvg from '@material-symbols/svg-400/outlined/format_align_left.svg?raw'
 import formatAlignCenterSvg from '@material-symbols/svg-400/outlined/format_align_center.svg?raw'
 import formatAlignRightSvg from '@material-symbols/svg-400/outlined/format_align_right.svg?raw'
+import deleteSvg from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import brokenImageSvg from '@material-symbols/svg-400/outlined/broken_image.svg?raw'
 
 const MIN_WIDTH = 48
@@ -102,6 +103,18 @@ function dispatchWidth(view: EditorView, wrap: HTMLElement, width: number): void
   if (change) view.dispatch({ changes: change, userEvent: 'input.image' })
 }
 
+// 이미지 블록 3줄(+줄바꿈 1개) 을 지우는 트랜잭션 1개, 커서는 지운 자리(F-218 2.2)
+function dispatchDelete(view: EditorView, wrap: HTMLElement): void {
+  const { blockFrom, blockTo } = currentBlockRange(view, wrap)
+  const range = imageBlockDeleteRange(view.state.doc.toString(), blockFrom, blockTo)
+  view.dispatch({
+    changes: { from: range.from, to: range.to, insert: '' },
+    selection: { anchor: range.from },
+    userEvent: 'delete.image',
+  })
+  view.focus()
+}
+
 function buildAlignButton(
   align: ImageAlign,
   label: string,
@@ -122,6 +135,25 @@ function buildAlignButton(
   return { wrapBtn, btn }
 }
 
+function buildDeleteButton(view: EditorView, wrap: HTMLElement): HTMLDivElement {
+  const wrapBtn = el('div', 'icon-btn-wrap md-image-align-wrap')
+  const btn = el('button', 'icon-btn md-image-delete-btn')
+  btn.type = 'button'
+  btn.setAttribute('aria-label', '이미지 삭제')
+  btn.innerHTML = deleteSvg
+  wrapBtn.appendChild(btn)
+  const tip = el('span', 'icon-tooltip icon-tooltip--center')
+  tip.textContent = '이미지 삭제'
+  wrapBtn.appendChild(tip)
+  btn.addEventListener('mousedown', (event) => event.stopPropagation())
+  btn.addEventListener('click', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    dispatchDelete(view, wrap)
+  })
+  return wrapBtn
+}
+
 function buildToolbar(view: EditorView, wrap: HTMLElement, alignNow: ImageAlign): HTMLDivElement {
   const toolbar = el('div', 'md-image-toolbar')
   const defs: [ImageAlign, string, string][] = [
@@ -139,6 +171,8 @@ function buildToolbar(view: EditorView, wrap: HTMLElement, alignNow: ImageAlign)
     })
     toolbar.appendChild(wrapBtn)
   }
+  toolbar.appendChild(el('div', 'md-image-toolbar-divider'))
+  toolbar.appendChild(buildDeleteButton(view, wrap))
   return toolbar
 }
 
@@ -332,11 +366,11 @@ export class ImageWidget extends WidgetType {
     this._loadImage(view, frame)
 
     wrap.addEventListener('mousedown', (event) => {
-      if ((event.target as Element | null)?.closest?.('.md-image-align-btn, .md-image-handle')) return
+      if ((event.target as Element | null)?.closest?.('.md-image-align-btn, .md-image-delete-btn, .md-image-handle')) return
       event.preventDefault()
     })
     wrap.addEventListener('dblclick', (event) => {
-      if ((event.target as Element | null)?.closest?.('.md-image-align-btn, .md-image-handle')) return
+      if ((event.target as Element | null)?.closest?.('.md-image-align-btn, .md-image-delete-btn, .md-image-handle')) return
       event.preventDefault()
       const { blockFrom } = currentBlockRange(view, wrap)
       view.dispatch({ selection: { anchor: blockFrom } })

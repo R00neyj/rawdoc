@@ -769,6 +769,66 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
   })
 })
 
+test.describe('F-218 편집 모드 이미지 삭제 버튼', () => {
+  async function pasteImage(page, { width = 200, height = 100, afterText, bytes }) {
+    await page.locator('.cm-content .cm-line', { hasText: afterText }).click()
+    await pasteFiles(page, { files: [{ bytes: bytes ?? pngBytes(width, height), name: 'a.png', mime: 'image/png' }] })
+    await waitSaved(page)
+    await expect(page.locator('.md-image-box')).toBeVisible()
+  }
+
+  test('F-218 A2 삭제 — 원문 3줄+줄바꿈 1개만 빠지고 위젯 없어짐, 커서는 지운 자리', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '위 문단\n' })
+    await pasteImage(page, { afterText: '위 문단' })
+    await page.keyboard.press('Control+End')
+    await page.keyboard.type('\n아래 문단')
+    await waitSaved(page)
+
+    const before = (await readSavedContent(page)).content
+    expect(before).toContain('<div align="center">')
+
+    const blockStart = before.indexOf('<div align="center">')
+    const divEnd = before.indexOf('</div>', blockStart) + '</div>'.length
+    const removeEnd = before[divEnd] === '\n' ? divEnd + 1 : divEnd
+    const expected = before.slice(0, blockStart) + before.slice(removeEnd)
+
+    const box = page.locator('.md-image-box')
+    await box.hover()
+    await page.getByRole('button', { name: '이미지 삭제' }).click()
+    await waitSaved(page)
+
+    await expect(page.locator('.md-image-box')).toHaveCount(0)
+    const after = (await readSavedContent(page)).content
+    expect(after).toBe(expected)
+
+    await page.keyboard.type('X')
+    await waitSaved(page)
+    const typed = (await readSavedContent(page)).content
+    expect(typed).toBe(before.slice(0, blockStart) + 'X' + before.slice(removeEnd))
+  })
+
+  test('F-218 A3 되돌리기 — Ctrl+Z 1번에 원문·위젯 원래대로', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteImage(page, { afterText: '본문' })
+    const before = (await readSavedContent(page)).content
+
+    const box = page.locator('.md-image-box')
+    await box.hover()
+    await page.getByRole('button', { name: '이미지 삭제' }).click()
+    await waitSaved(page)
+    await expect(page.locator('.md-image-box')).toHaveCount(0)
+
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await page.keyboard.press('Control+z')
+    await waitSaved(page)
+    const after = (await readSavedContent(page)).content
+    expect(after).toBe(before)
+    await expect(page.locator('.md-image-box')).toBeVisible()
+  })
+})
+
 test.describe('F-158 이미지 보기·공유·내보내기', () => {
   test('F-158 A2 보기 모드 — 폭·정렬·모서리가 편집 모드와 같다', async ({ page }) => {
     await openApp(page)

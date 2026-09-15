@@ -85,7 +85,8 @@
 }
 
 /* 상단바 아이콘 버튼(32×32, app.css .icon-btn)보다 작다(28×28) — 조상·클래스 둘을 합쳐 특정도를 올려 이긴다 */
-.md-image-toolbar .icon-btn.md-image-align-btn {
+.md-image-toolbar .icon-btn.md-image-align-btn,
+.md-image-toolbar .icon-btn.md-image-delete-btn {
   width: 28px;
   height: 28px;
 }
@@ -94,6 +95,25 @@
 .md-image-align-btn svg {
   width: 18px;
   height: 18px;
+}
+
+/* 정렬 버튼 묶음과 삭제 버튼 사이 구분선 (F-218 2.1) */
+.md-image-toolbar-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--rule);
+  align-self: center;
+}
+
+/* 삭제 버튼 — 크기·모양은 정렬 버튼과 같다, 호버 때 아이콘만 --danger (F-218 2.1) */
+.md-image-delete-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.md-image-delete-btn:hover svg {
+  fill: var(--danger);
 }
 
 /* 손잡이 — 호버·포커스 때만 보인다 (F-157 2.4) */

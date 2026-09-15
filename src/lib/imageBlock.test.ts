@@ -6,6 +6,7 @@ import {
   setImageBlockAttrs,
   imageAlignChange,
   imageWidthChange,
+  imageBlockDeleteRange,
 } from './imageBlock'
 
 const ID = '0f3a9c2e7b1d4a58'
@@ -221,5 +222,43 @@ describe('imageWidthChange — width 값 글자만 바꾸는 변경 계산 (F-15
 
   it('해석할 수 없는 원문이면 null', () => {
     expect(imageWidthChange('그냥 글자', 0, 100)).toBeNull()
+  })
+})
+
+describe('imageBlockDeleteRange — 블록 삭제 범위 계산 (F-218 2.2)', () => {
+  it('가운데 블록 — 뒤 줄바꿈 1개까지 포함', () => {
+    const block = buildImageBlock({ id: ID, ext: 'png', alt: 'x', width: 100 })
+    const full = `위\n\n${block}\n\n아래`
+    const blockFrom = full.indexOf(block)
+    const blockTo = blockFrom + block.length
+    const range = imageBlockDeleteRange(full, blockFrom, blockTo)
+    expect(range).toEqual({ from: blockFrom, to: blockTo + 1 })
+    expect(full.slice(0, range.from) + full.slice(range.to)).toBe('위\n\n\n아래')
+  })
+
+  it('문서 끝 블록 — 뒤 줄바꿈이 없으면 앞 줄바꿈 1개까지 포함', () => {
+    const block = buildImageBlock({ id: ID, ext: 'png', alt: 'x', width: 100 })
+    const full = `위\n\n${block}`
+    const blockFrom = full.indexOf(block)
+    const blockTo = full.length
+    const range = imageBlockDeleteRange(full, blockFrom, blockTo)
+    expect(range).toEqual({ from: blockFrom - 1, to: blockTo })
+    expect(full.slice(0, range.from) + full.slice(range.to)).toBe('위\n')
+  })
+
+  it('문서 전체가 블록 — 앞뒤 줄바꿈 없이 블록만', () => {
+    const block = buildImageBlock({ id: ID, ext: 'png', alt: 'x', width: 100 })
+    const range = imageBlockDeleteRange(block, 0, block.length)
+    expect(range).toEqual({ from: 0, to: block.length })
+  })
+
+  it('CRLF — \\r\\n 을 줄바꿈 1개로 본다', () => {
+    const block = buildImageBlock({ id: ID, ext: 'png', alt: 'x', width: 100 }).replace(/\n/g, '\r\n')
+    const full = `위\r\n\r\n${block}\r\n\r\n아래`
+    const blockFrom = full.indexOf(block)
+    const blockTo = blockFrom + block.length
+    const range = imageBlockDeleteRange(full, blockFrom, blockTo)
+    expect(range).toEqual({ from: blockFrom, to: blockTo + 2 })
+    expect(full.slice(0, range.from) + full.slice(range.to)).toBe('위\r\n\r\n\r\n아래')
   })
 })

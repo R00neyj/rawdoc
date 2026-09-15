@@ -176,6 +176,23 @@ export function imageWidthChange(blockText: string, blockFrom: number, width: nu
   return { from: insertAt, to: insertAt, insert: ` width="${safeWidth}"` }
 }
 
+// 이미지 블록(블록 첫 줄 시작 ~ 셋째 줄 끝) 삭제 범위를 뒤/앞 줄바꿈 1개까지 넓혀 계산한다(F-218 2.2). fullText 는 문서 전체, CRLF 는 줄바꿈 1개로 본다
+export function imageBlockDeleteRange(
+  fullText: string,
+  blockFrom: number,
+  blockTo: number,
+): { from: number; to: number } {
+  const after = fullText.slice(blockTo, blockTo + 2)
+  if (after.startsWith('\r\n')) return { from: blockFrom, to: blockTo + 2 }
+  if (after.startsWith('\n')) return { from: blockFrom, to: blockTo + 1 }
+
+  const before = fullText.slice(Math.max(0, blockFrom - 2), blockFrom)
+  if (before === '\r\n') return { from: blockFrom - 2, to: blockTo }
+  if (before.endsWith('\n')) return { from: blockFrom - 1, to: blockTo }
+
+  return { from: blockFrom, to: blockTo }
+}
+
 // 이미 있는 이미지 블록의 align·width·alt 값을 바꿔 새 원문을 만든다(F-157·F-158 용). 해석 실패면 null
 export function setImageBlockAttrs(
   blockText: string,
