@@ -3,6 +3,8 @@ import { StateEffect, StateField } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType } from '@codemirror/view'
 import type { Extension } from '@codemirror/state'
 
+import { observeHeight, stopObservingHeight } from './preview/blocks'
+
 export type OnTitleChange = (value: string) => void
 export type OnTitleCommit = () => void
 
@@ -121,7 +123,13 @@ class TitleWidget extends WidgetType {
 
     wrap.appendChild(textarea)
     requestAnimationFrame(() => resizeToContent(textarea))
+    // textarea 가 늘어나 위젯 높이가 바뀌면 CM6 에 알려 그 아래 줄 클릭 위치가 어긋나지 않게 한다 (F-134 3.6 과 같은 이유)
+    observeHeight(wrap, view)
     return wrap
+  }
+
+  destroy(dom: HTMLElement): void {
+    stopObservingHeight(dom)
   }
 
   // 값·읽기 전용이 바뀌어도 DOM 을 다시 만들지 않는다 — 포커스·커서·IME 조합 유지 (2.2)
