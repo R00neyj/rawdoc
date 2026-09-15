@@ -126,8 +126,10 @@ test.describe('F-154 A7 설정 항목 — 글자 크기·들여쓰기', () => {
     await page.getByRole('button', { name: '설정', exact: true }).click()
     const labels = page.locator('dialog[aria-labelledby="settings-title"]').locator('.dialog-field > span, .dialog-field [id]')
     await expect(labels.nth(3)).toHaveText('글자 크기')
-    await expect(labels.nth(4)).toHaveText('들여쓰기')
-    await expect(labels.nth(5)).toHaveText('줄 번호')
+    await expect(labels.nth(4)).toHaveText('탭바') // F-233
+    await expect(labels.nth(5)).toHaveText('시작 화면') // F-232
+    await expect(labels.nth(6)).toHaveText('들여쓰기')
+    await expect(labels.nth(7)).toHaveText('줄 번호')
 
     const fontSizeSeg = page.locator('#font-size-label').locator('..').locator('[role="radio"]')
     await expect(fontSizeSeg.nth(0)).toHaveText('작게')
