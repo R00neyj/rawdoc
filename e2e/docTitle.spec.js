@@ -137,6 +137,185 @@ test.describe('F-217 A6 읽기 전용', () => {
   })
 })
 
+// ----- F-234 제목 크기 축소, 폴더 경로 표시 -----
+
+async function renameFolderRow(page, name) {
+  await page.locator('.tree-rename-input').waitFor()
+  await page.keyboard.type(name)
+  await page.keyboard.press('Enter')
+}
+
+async function createTopFolder(page, name) {
+  await page.getByRole('button', { name: '새 폴더', exact: true }).click()
+  await renameFolderRow(page, name)
+}
+
+async function createSubfolder(page, parentName, name) {
+  const row = page.locator('.tree-row').filter({ hasText: parentName }).first()
+  await row.hover()
+  await row.locator('.item-menu-btn').click()
+  await page.getByRole('menuitem', { name: '하위 폴더' }).click()
+  await renameFolderRow(page, name)
+}
+
+async function moveCurrentDocToFolder(page, folderName) {
+  const docRow = page.locator('.tree-row').filter({ has: page.locator('.doc-item-btn[aria-current="page"]') })
+  await docRow.hover()
+  await docRow.locator('.item-menu-btn').click()
+  await page.getByRole('menuitem', { name: '폴더로 이동…' }).click()
+  const dialog = page.locator('.dialog[open]')
+  await dialog.getByRole('radio', { name: folderName, exact: true }).click()
+  await dialog.getByRole('button', { name: '이동', exact: true }).click()
+}
+
+test.describe('F-234 A1 제목 크기', () => {
+  test('20px 고정, 글자 크기 설정을 바꿔도 그대로', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await expect(page.locator('.doc-title')).toHaveCSS('font-size', '20px')
+
+    await page.getByRole('button', { name: '설정', exact: true }).click()
+    await page.locator('#font-size-label').locator('..').getByRole('radio', { name: '크게', exact: true }).click()
+    await page.getByRole('button', { name: '닫기', exact: true }).click()
+    await expect(page.locator('.doc-title')).toHaveCSS('font-size', '20px')
+
+    await setViewMode(page, 'view')
+    await expect(page.locator('.doc-title-view')).toHaveCSS('font-size', '20px')
+  })
+})
+
+test.describe('F-234 A2 폴더 밖', () => {
+  test('편집·원문은 "제목" 표시, 보기는 경로 줄이 없다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+
+    await expect(page.locator('.editor-slot .doc-title-label')).toHaveText('제목')
+    await expect(page.locator('.editor-slot .doc-title-label')).toHaveAttribute('aria-hidden', 'true')
+    await expect(page.locator('.editor-slot .doc-title-crumb')).toHaveCount(0)
+
+    await setViewMode(page, 'raw')
+    await expect(page.locator('.editor-slot .doc-title-label')).toHaveText('제목')
+
+    await setViewMode(page, 'view')
+    await expect(page.locator('.viewer .doc-title-label')).toHaveCount(0)
+  })
+})
+
+test.describe('F-234 A3 폴더 안(1단계)', () => {
+  test('편집·원문·보기 모두 폴더 이름, 구분자 없음', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await createTopFolder(page, 'A')
+    await moveCurrentDocToFolder(page, 'A')
+
+    await expect(page.locator('.editor-slot .doc-title-crumb')).toHaveCount(1)
+    await expect(page.locator('.editor-slot .doc-title-crumb')).toHaveText('A')
+    await expect(page.locator('.editor-slot .doc-title-crumb-sep')).toHaveCount(0)
+
+    await setViewMode(page, 'raw')
+    await expect(page.locator('.editor-slot .doc-title-crumb')).toHaveText('A')
+
+    await setViewMode(page, 'view')
+    await expect(page.locator('.viewer .doc-title-crumb')).toHaveText('A')
+    await expect(page.locator('.viewer .doc-title-crumb-sep')).toHaveCount(0)
+  })
+})
+
+test.describe('F-234 A4 폴더 안(2단계)', () => {
+  test('"A / B" 로 보인다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await createTopFolder(page, 'A')
+    await createSubfolder(page, 'A', 'B')
+    await moveCurrentDocToFolder(page, 'B')
+
+    await expect(page.locator('.doc-title-crumb')).toHaveCount(2)
+    await expect(page.locator('.doc-title-crumb').nth(0)).toHaveText('A')
+    await expect(page.locator('.doc-title-crumb').nth(1)).toHaveText('B')
+    await expect(page.locator('.doc-title-crumb-sep')).toHaveCount(1)
+  })
+})
+
+test.describe('F-234 A5 클릭 이동', () => {
+  test('경로의 폴더 이름을 누르면 사이드바 행이 보이고 잠깐 강조된다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await createTopFolder(page, 'A')
+    await moveCurrentDocToFolder(page, 'A')
+
+    await page.locator('.doc-title-crumb').click()
+    const folderRow = page.locator('[data-folder-id] .tree-row').filter({ hasText: 'A' }).first()
+    await expect(folderRow).toBeVisible()
+    await expect(folderRow).toHaveClass(/tree-row--highlight-(start|fading)/)
+  })
+})
+
+test.describe('F-234 A6 접힌 사이드바', () => {
+  test('레일 상태에서 경로를 누르면 사이드바가 펼쳐지고 행으로 스크롤·강조된다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await createTopFolder(page, 'A')
+    await moveCurrentDocToFolder(page, 'A')
+
+    await page.getByRole('button', { name: '사이드바 접기' }).click()
+    await expect(page.locator('.sidebar')).toHaveClass(/sidebar--collapsed/)
+
+    await page.locator('.doc-title-crumb').click()
+    await expect(page.locator('.sidebar')).not.toHaveClass(/sidebar--collapsed/)
+    const folderRow = page.locator('[data-folder-id] .tree-row').filter({ hasText: 'A' }).first()
+    await expect(folderRow).toBeVisible()
+    await expect(folderRow).toHaveClass(/tree-row--highlight-(start|fading)/)
+  })
+})
+
+test.describe('F-234 A7 폴더 이동 반영', () => {
+  test('문서를 다른 폴더로 옮기면 경로 표시가 바뀐다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await createTopFolder(page, 'A')
+    await createTopFolder(page, 'C')
+    await moveCurrentDocToFolder(page, 'A')
+    await expect(page.locator('.doc-title-crumb')).toHaveText('A')
+
+    await moveCurrentDocToFolder(page, 'C')
+    await expect(page.locator('.doc-title-crumb')).toHaveText('C')
+  })
+})
+
+test.describe('F-234 A8 공개·공유 화면 무관', () => {
+  test('공개 보기 화면은 경로 표시가 없다', async ({ page }) => {
+    await page.route('**/pub/docs/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ title: '공개 문서', content: '본문\n', lineEnding: 'lf', updatedAt: 1_700_000_000_000 }),
+      }),
+    )
+    await page.goto('/#/p/tok123')
+    await expect(page.locator('.viewer')).toBeVisible()
+    await expect(page.locator('.doc-title-crumb')).toHaveCount(0)
+    await expect(page.locator('.doc-title-label')).toHaveCount(0)
+  })
+})
+
+test.describe('F-234 A9 접근성', () => {
+  test('폴더 이름 버튼은 키보드로 닿고 Enter 로 동작한다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await createTopFolder(page, 'A')
+    await moveCurrentDocToFolder(page, 'A')
+
+    const crumb = page.locator('.doc-title-crumb')
+    await expect(crumb).toHaveAttribute('aria-label', 'A 폴더로 이동')
+    await crumb.focus()
+    await expect(crumb).toBeFocused()
+    await page.keyboard.press('Enter')
+
+    const folderRow = page.locator('[data-folder-id] .tree-row').filter({ hasText: 'A' }).first()
+    await expect(folderRow).toHaveClass(/tree-row--highlight-(start|fading)/)
+  })
+})
+
 test.describe('F-217 A7 긴 제목', () => {
   test('좁은 창에서 긴 제목은 가로 스크롤 없이 여러 줄로 보인다', async ({ page }) => {
     await openApp(page)

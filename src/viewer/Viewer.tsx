@@ -1,6 +1,6 @@
 // 보기 모드 화면 (specs/features/F-123.md 3.3, ia.md 3.9)
 // editor 를 import 하지 않는다 (architecture.md 1장)
-import { useEffect, useMemo, useRef } from 'react'
+import { Fragment, useEffect, useMemo, useRef } from 'react'
 import type { MouseEvent as ReactMouseEvent, Ref } from 'react'
 import 'github-markdown-css/github-markdown-light.css'
 import './viewer.css'
@@ -68,10 +68,15 @@ function buildCopyButton(getCode: () => string): HTMLButtonElement {
   return btn
 }
 
+type BreadcrumbEntry = { id: string; name: string }
+
 type ViewerProps = {
   html: string
   // 본문 맨 위 제목 (F-217.md 2.1) — 생략하면(공유·공개 보기 화면, 이미 자체 제목 줄이 있다) 그리지 않는다
   title?: string
+  // 문서가 든 폴더 경로 (F-234.md 3.4) — 생략하거나 비면 그리지 않는다
+  breadcrumb?: BreadcrumbEntry[]
+  onNavigateFolder?: (id: string) => void
   onOpenWikiLink?: (target: string) => void
   resolveAttachment?: ResolveAttachment
   missingImageText?: string
@@ -81,7 +86,17 @@ type ViewerProps = {
 
 // resolveAttachment(id) 는 생략하면(F-130 공유 화면) 항상 자리 표시, missingImageText 는 그 문구(생략 시 F-157 2.2 문구)
 // codeCopy 는 참이면 pre > code 마다 복사 버튼을 붙인다. 지금은 공개 보기(S-5)에서만 켠다 (F-210 2.5)
-export default function Viewer({ html, title, onOpenWikiLink, resolveAttachment, missingImageText, codeCopy, ref }: ViewerProps) {
+export default function Viewer({
+  html,
+  title,
+  breadcrumb,
+  onNavigateFolder,
+  onOpenWikiLink,
+  resolveAttachment,
+  missingImageText,
+  codeCopy,
+  ref,
+}: ViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const urlsRef = useRef<string[]>([])
   // 매 렌더 새 객체면 React 가 같은 html 로도 innerHTML 을 다시 써서 채운 이미지 src 가 사라진다
@@ -170,6 +185,28 @@ export default function Viewer({ html, title, onOpenWikiLink, resolveAttachment,
       tabIndex={0}
       onClick={handleClick}
     >
+      {/* 폴더 안일 때만 제목 위에 경로 (F-234.md 3.4) — 제목 자체와 같은 조건(title !== undefined) */}
+      {title !== undefined && breadcrumb && breadcrumb.length > 0 && (
+        <span className="doc-title-label">
+          {breadcrumb.map((entry, i) => (
+            <Fragment key={entry.id}>
+              {i > 0 && (
+                <span className="doc-title-crumb-sep" aria-hidden="true">
+                  {' / '}
+                </span>
+              )}
+              <button
+                type="button"
+                className="doc-title-crumb"
+                aria-label={`${entry.name} 폴더로 이동`}
+                onClick={() => onNavigateFolder?.(entry.id)}
+              >
+                {entry.name}
+              </button>
+            </Fragment>
+          ))}
+        </span>
+      )}
       {/* 목차(F-144) 항목에 넣지 않는다 — extractHeadings 는 본문(html)만 읽는다 (F-217.md 2.1) */}
       {title !== undefined && <h1 className="doc-title-view">{title || '제목 없는 문서'}</h1>}
       <div className="markdown-body" dangerouslySetInnerHTML={innerHtml} />

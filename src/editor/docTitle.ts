@@ -7,11 +7,26 @@ import { observeHeight, stopObservingHeight } from './preview/blocks'
 
 export type OnTitleChange = (value: string) => void
 export type OnTitleCommit = () => void
+export type Breadcrumb = { id: string; name: string }[]
+export type OnNavigateFolder = (id: string) => void
 
 export const setTitleEffect = StateEffect.define<string>()
 export const setTitleReadOnlyEffect = StateEffect.define<boolean>()
+// 폴더 경로 + 이동 콜백을 함께 갱신한다 — 새 문서(포커스 없음) 흐름 밖에서만 바뀐다 (F-234.md 3.3)
+export const setBreadcrumbEffect = StateEffect.define<{ breadcrumb: Breadcrumb; onNavigateFolder: OnNavigateFolder }>()
 
 const PLACEHOLDER = '제목 없는 문서'
+const NO_NAVIGATE: OnNavigateFolder = () => {}
+
+function breadcrumbEqual(a: Breadcrumb, b: Breadcrumb): boolean {
+  if (a.length !== b.length) return false
+  return a.every((entry, i) => entry.id === b[i].id && entry.name === b[i].name)
+}
+
+// updateDOM 이 재사용 가능한 DOM 인지 판정하는 값 — id·이름이 하나라도 다르면 다시 그린다(폴더 이름 변경 포함)
+function breadcrumbKey(breadcrumb: Breadcrumb): string {
+  return breadcrumb.map((entry) => `${entry.id}:${entry.name}`).join('/')
+}
 
 // 커서가 textarea 의 시각적 마지막 줄에 있는지 — 숨은 거울 요소로 줄바꿈 위치를 잰다
 function caretOnLastVisualLine(textarea: HTMLTextAreaElement): boolean {
@@ -74,25 +89,47 @@ class TitleWidget extends WidgetType {
   constructor(
     readonly title: string,
     readonly readOnly: boolean,
+    readonly breadcrumb: Breadcrumb,
     private readonly onChange: OnTitleChange,
     private readonly onCommit: OnTitleCommit,
+    private readonly onNavigateFolder: OnNavigateFolder,
   ) {
     super()
   }
 
   eq(other: TitleWidget): boolean {
-    return other.title === this.title && other.readOnly === this.readOnly
+    return other.title === this.title && other.readOnly === this.readOnly && breadcrumbEqual(other.breadcrumb, this.breadcrumb)
   }
 
   toDOM(view: EditorView): HTMLElement {
     const wrap = document.createElement('div')
     wrap.className = 'md-block doc-title-block'
+    wrap.dataset.breadcrumbKey = breadcrumbKey(this.breadcrumb)
 
-    // 줄 번호 칸이 켜져 있을 때만 보이는 "제목" 표시 — app.css [data-gutters='off'] 가 숨긴다 (F-217.md 2.3-1)
+    // 폴더 안이면 경로(F-234 3.3), 밖이면 줄 번호 칸이 켜져 있을 때만 보이는 "제목" 표시 (F-217.md 2.3-1)
     const label = document.createElement('span')
     label.className = 'doc-title-label'
-    label.setAttribute('aria-hidden', 'true')
-    label.textContent = '제목'
+    if (this.breadcrumb.length > 0) {
+      this.breadcrumb.forEach((entry, i) => {
+        if (i > 0) {
+          const sep = document.createElement('span')
+          sep.className = 'doc-title-crumb-sep'
+          sep.setAttribute('aria-hidden', 'true')
+          sep.textContent = ' / '
+          label.appendChild(sep)
+        }
+        const crumb = document.createElement('button')
+        crumb.type = 'button'
+        crumb.className = 'doc-title-crumb'
+        crumb.setAttribute('aria-label', `${entry.name} 폴더로 이동`)
+        crumb.textContent = entry.name
+        crumb.addEventListener('click', () => this.onNavigateFolder(entry.id))
+        label.appendChild(crumb)
+      })
+    } else {
+      label.setAttribute('aria-hidden', 'true')
+      label.textContent = '제목'
+    }
     wrap.appendChild(label)
 
     const textarea = document.createElement('textarea')
@@ -147,8 +184,9 @@ class TitleWidget extends WidgetType {
     stopObservingHeight(dom)
   }
 
-  // 값·읽기 전용이 바뀌어도 DOM 을 다시 만들지 않는다 — 포커스·커서·IME 조합 유지 (2.2)
+  // 값·읽기 전용이 바뀌어도 DOM 을 다시 만들지 않는다(2.2) — 경로가 바뀌면 false 로 CM6 가 toDOM 을 다시 부르게 한다(F-234.md 3.3)
   updateDOM(dom: HTMLElement): boolean {
+    if (dom.dataset.breadcrumbKey !== breadcrumbKey(this.breadcrumb)) return false
     const textarea = dom.querySelector('textarea.doc-title') as HTMLTextAreaElement | null
     if (!textarea) return false
     textarea.readOnly = this.readOnly
@@ -166,24 +204,34 @@ class TitleWidget extends WidgetType {
   }
 }
 
-export type TitleState = { title: string; readOnly: boolean }
+export type TitleState = { title: string; readOnly: boolean; breadcrumb: Breadcrumb; onNavigateFolder: OnNavigateFolder }
 
 type TitleFieldOptions = {
   title: string
   readOnly: boolean
   onChange: OnTitleChange
   onCommit: OnTitleCommit
+  breadcrumb?: Breadcrumb
+  onNavigateFolder?: OnNavigateFolder
 }
 
 // DOM 없이도(vitest environment: node) 값 갱신 리듀서만 검증할 수 있게 field 생성을 따로 뗐다
 export function createTitleField(opts: TitleFieldOptions): StateField<TitleState> {
   return StateField.define<TitleState>({
-    create: () => ({ title: opts.title, readOnly: opts.readOnly }),
+    create: () => ({
+      title: opts.title,
+      readOnly: opts.readOnly,
+      breadcrumb: opts.breadcrumb ?? [],
+      onNavigateFolder: opts.onNavigateFolder ?? NO_NAVIGATE,
+    }),
     update(value, tr) {
       let next = value
       for (const effect of tr.effects) {
         if (effect.is(setTitleEffect)) next = { ...next, title: effect.value }
         if (effect.is(setTitleReadOnlyEffect)) next = { ...next, readOnly: effect.value }
+        if (effect.is(setBreadcrumbEffect)) {
+          next = { ...next, breadcrumb: effect.value.breadcrumb, onNavigateFolder: effect.value.onNavigateFolder }
+        }
       }
       return next
     },
@@ -191,7 +239,14 @@ export function createTitleField(opts: TitleFieldOptions): StateField<TitleState
       EditorView.decorations.from(f, (state) =>
         Decoration.set([
           Decoration.widget({
-            widget: new TitleWidget(state.title, state.readOnly, opts.onChange, opts.onCommit),
+            widget: new TitleWidget(
+              state.title,
+              state.readOnly,
+              state.breadcrumb,
+              opts.onChange,
+              opts.onCommit,
+              state.onNavigateFolder,
+            ),
             side: -1,
             block: true,
           }).range(0),

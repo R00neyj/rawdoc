@@ -14,10 +14,11 @@ import {
   docTitleExtension,
   focusTitleFromBody,
   focusTitleWidget,
+  setBreadcrumbEffect,
   setTitleEffect,
   setTitleReadOnlyEffect,
 } from './docTitle'
-import type { OnTitleChange, OnTitleCommit } from './docTitle'
+import type { Breadcrumb, OnNavigateFolder, OnTitleChange, OnTitleCommit } from './docTitle'
 import { frontmatterExtension } from './frontmatter'
 import { highlightExtension } from './highlight'
 import { shortcutKeymap } from './commands'
@@ -147,6 +148,9 @@ type CreateEditorOptions = {
   titleReadOnly?: boolean
   onTitleChange?: OnTitleChange
   onTitleCommit?: OnTitleCommit
+  // 문서가 든 폴더 경로 (F-234.md 3.2) — 이후 갱신은 handle.setBreadcrumb() 로 한다. 이 값은 최초 생성에만 쓴다
+  breadcrumb?: Breadcrumb
+  onNavigateFolder?: OnNavigateFolder
 }
 
 export function createEditor(parent: HTMLElement, options: CreateEditorOptions = {}) {
@@ -166,6 +170,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     titleReadOnly = false,
     onTitleChange = () => {},
     onTitleCommit = () => {},
+    breadcrumb = [],
+    onNavigateFolder = () => {},
   } = options
 
   let destroyed = false
@@ -187,7 +193,14 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const readOnlyCompartment = new Compartment()
 
   const extensions: Extension[] = [
-    docTitleExtension({ title, readOnly: titleReadOnly, onChange: onTitleChange, onCommit: onTitleCommit }),
+    docTitleExtension({
+      title,
+      readOnly: titleReadOnly,
+      onChange: onTitleChange,
+      onCommit: onTitleCommit,
+      breadcrumb,
+      onNavigateFolder,
+    }),
     lineNumbersCompartment.of(lineNumbersExtensionFor(showLineNumbers)),
     gutterAttributesCompartment.of(gutterAttributesExtensionFor(showLineNumbers)),
     readOnlyCompartment.of(readOnlyExtensionsFor(initialReadOnly)),
@@ -312,6 +325,11 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // 읽기 전용 전환 (F-217.md 2.4)
     setTitleReadOnly(on: boolean) {
       view.dispatch({ effects: setTitleReadOnlyEffect.of(on) })
+    },
+
+    // 폴더 경로 + 이동 콜백 갱신 (F-234.md 3.3) — 경로가 바뀌면 위젯을 다시 그린다(TitleWidget.eq)
+    setBreadcrumb(next: Breadcrumb, onNavigate: OnNavigateFolder) {
+      view.dispatch({ effects: setBreadcrumbEffect.of({ breadcrumb: next, onNavigateFolder: onNavigate }) })
     },
 
     // 제목에 포커스 (+ 전체 선택) — 새 문서(F-217.md 2.3, ia.md 3.3)

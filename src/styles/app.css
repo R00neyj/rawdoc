@@ -175,12 +175,37 @@ svg {
   min-width: 120px;
 }
 
-/* 제목인지 알아보기 쉽게 — 텍스트 영역 위 작은 표시, 줄 번호 칸 상태와 무관하게 항상 보임 (F-217.md 2.3-1) */
+/* 제목인지 알아보기 쉽게 — 텍스트 영역 위 작은 표시, 줄 번호 칸 상태와 무관하게 항상 보임 (F-217.md 2.3-1). 폴더 안이면 경로로 바뀐다 (F-234.md 3.3·3.4) */
 .doc-title-label {
   display: block;
   font-family: var(--font-sans);
   font-size: 11px;
   line-height: 1.4;
+  color: var(--muted);
+}
+
+/* 경로의 폴더 이름 — 버튼이라 기본 테두리·바탕을 지우고 라벨과 같은 크기·색을 준다 */
+.doc-title-crumb {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-control);
+}
+
+.doc-title-crumb:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.doc-title-crumb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.doc-title-crumb-sep {
   color: var(--muted);
 }
 
@@ -191,7 +216,7 @@ svg {
   margin: 0;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: calc(var(--md-font-size) * 2);
+  font-size: 20px;
   line-height: 1.25;
   color: var(--ink);
   word-break: keep-all;
@@ -588,6 +613,22 @@ body.sidebar-resizing {
 /* 놓을 수 있는 대상은 --accent-soft 배경 (F-126.md 5.3) */
 .tree-row--drop {
   background: var(--accent-soft);
+}
+
+/* 제목 경로 클릭으로 이동한 폴더 잠깐 강조 — invite-grant-row 강조와 같은 패턴 (F-234.md 3.5) */
+.tree-row--highlight-start {
+  background: var(--accent-soft);
+}
+
+.tree-row--highlight-fading {
+  background: transparent;
+  transition: background-color 600ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-row--highlight-fading {
+    transition: none;
+  }
 }
 
 .tree-toggle,

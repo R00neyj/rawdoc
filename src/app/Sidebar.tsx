@@ -150,7 +150,7 @@ function FolderRow({
   })
 
   return (
-    <li role="treeitem" aria-expanded={isOpen} className="tree-item">
+    <li role="treeitem" aria-expanded={isOpen} className="tree-item" data-folder-id={node.id}>
       <div
         className={`tree-row${isDropTarget ? ' tree-row--drop' : ''}`}
         style={{ '--depth': depth } as CSSProperties}

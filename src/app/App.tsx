@@ -239,8 +239,22 @@ export default function App() {
   // Editor 는 마운트 시점의 onOpenWikiLink 클로저만 계속 쓰므로(F-131 3·5장), 여기서도
   // ref 로 우회해 항상 최신 docs·currentDocId·viewMode 를 보게 한다
   const openWikiLinkRef = useRef<(target: string) => Promise<void>>(async () => {})
+  // 제목 경로 클릭(onNavigateFolder, F-234.md 3.5)이 항상 최신 사이드바 열림 상태를 보도록 갱신한다
+  const narrowRef = useRef(narrow)
+  const sidebarOpenRef = useRef(sidebarOpen)
+  const sidebarCollapsedRef = useRef(sidebarCollapsed)
+  const highlightFolderTimeoutRef = useRef<number | null>(null)
 
   const currentDoc = docs.find((d) => d.id === currentDocId) ?? null
+
+  // 현재 문서가 든 폴더 경로, 최상위→하위 (F-234.md 3.2) — 폴더 밖이거나 매핑이 끊기면 빈 배열
+  const currentBreadcrumb = useMemo(() => {
+    if (!currentDoc || currentDoc.folderId === null) return []
+    const folderById = new Map(folders.map((f) => [f.id, f.name]))
+    return ancestorsOfDoc({ folders, doc: currentDoc })
+      .map((id) => ({ id, name: folderById.get(id) }))
+      .filter((entry): entry is { id: string; name: string } => entry.name !== undefined)
+  }, [currentDoc, folders])
 
   // 공유받음 묶음(F-212.md 2.4)과 내 트리를 나눈다 — role 이 없거나 'owner' 면 내 것
   const ownedDocs = docs.filter((d) => !isSharedDoc(d))
@@ -375,6 +389,48 @@ export default function App() {
       return next
     })
   }, [])
+
+  // 제목 경로의 폴더 이름을 눌렀을 때: 사이드바에서 그 폴더 행을 찾아 스크롤·강조한다 (F-234.md 3.5)
+  const scrollToFolderRow = useCallback((folderId: string) => {
+    const row = sidebarRef.current?.querySelector<HTMLElement>(`[data-folder-id="${folderId}"] .tree-row`)
+    if (!row) return
+    if (highlightFolderTimeoutRef.current) window.clearTimeout(highlightFolderTimeoutRef.current)
+    row.scrollIntoView({ block: 'nearest' })
+    row.classList.remove('tree-row--highlight-fading')
+    row.classList.add('tree-row--highlight-start')
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        row.classList.remove('tree-row--highlight-start')
+        row.classList.add('tree-row--highlight-fading')
+      })
+    })
+    highlightFolderTimeoutRef.current = window.setTimeout(() => {
+      row.classList.remove('tree-row--highlight-fading')
+    }, 600)
+  }, [])
+
+  // 접혀 있거나(레일) 좁은 창에서 숨겨져 있으면 먼저 펼친 뒤 스크롤·강조한다 (F-234.md 3.5)
+  const onNavigateFolder = useCallback(
+    (folderId: string) => {
+      let needsWait = false
+      if (narrowRef.current) {
+        if (!sidebarOpenRef.current) {
+          setSidebarOpen(true)
+          needsWait = true
+        }
+      } else if (sidebarCollapsedRef.current) {
+        setSidebarCollapsed(false)
+        setPref('md.sidebar', 'expanded')
+        needsWait = true
+      }
+      if (needsWait) {
+        requestAnimationFrame(() => requestAnimationFrame(() => scrollToFolderRow(folderId)))
+      } else {
+        scrollToFolderRow(folderId)
+      }
+    },
+    [scrollToFolderRow],
+  )
 
   // ----- 새 버전 알림 (specs/features/F-117.md, ia.md 3.13) -----
   // 첫 설치(대기 중인 옛 워커 없음)에는 updateAvailable 이 true 가 되지 않아 알림이 뜨지
@@ -839,6 +895,12 @@ export default function App() {
     editorRef.current?.setTitleReadOnly(titleReadOnly)
   }, [openDoc, currentDocId, titleReadOnly])
 
+  // 제목 위의 폴더 경로 갱신 (F-234.md 3.3) — 문서를 다른 폴더로 옮기면 반영된다
+  useLayoutEffect(() => {
+    if (openDoc?.id !== currentDocId) return
+    editorRef.current?.setBreadcrumb(currentBreadcrumb, onNavigateFolder)
+  }, [openDoc, currentDocId, currentBreadcrumb, onNavigateFolder])
+
   // view 권한 문서를 열면 알림 띠를 보인다 (F-212.md 2.4) — 문서를 열 때 1회
   const notifiedViewDocRef = useRef<string | null>(null)
   useEffect(() => {
@@ -907,6 +969,9 @@ export default function App() {
     imageDropBlockedRef.current = Boolean(settingsOpen || deleteTarget || moveDocTarget || sharedDoc)
     // view 권한·403 강등 문서·편집 잠금(F-213.md 2.3)에서는 이미지 올리기(붙여넣기·끌어놓기)를 막는다 (F-212.md 2.4)
     readOnlyDocRef.current = isReadOnlyDoc
+    narrowRef.current = narrow
+    sidebarOpenRef.current = sidebarOpen
+    sidebarCollapsedRef.current = sidebarCollapsed
   })
 
   // runImportFiles 는 store·showNotice 등을 클로저로 담으므로, 매 커밋 후 최신 참조로
@@ -1759,6 +1824,8 @@ export default function App() {
                   ref={viewerRef}
                   html={viewerHtml}
                   title={currentDoc?.title ?? ''}
+                  breadcrumb={currentBreadcrumb}
+                  onNavigateFolder={onNavigateFolder}
                   onOpenWikiLink={handleOpenWikiLink}
                   resolveAttachment={resolveAttachment}
                 />
