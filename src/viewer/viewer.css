@@ -8,3 +8,37 @@
   padding: var(--doc-pad-top) max(32px, calc((100% - var(--content-max)) / 2 + 32px)) var(--doc-pad-bottom);
   background: var(--panel);
 }
+
+/* 코드블록 복사 버튼 (specs/features/F-210.md 2.5) — pre 오른쪽 위 여백, 가로 스크롤해도 제자리 */
+.viewer--code-copy pre {
+  position: relative;
+}
+
+.code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: var(--transition-colors);
+}
+
+.code-copy-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.code-copy-btn:hover {
+  color: var(--ink);
+  background: var(--rule-2);
+}

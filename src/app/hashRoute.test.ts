@@ -10,6 +10,10 @@ describe('parseHash', () => {
     expect(parseHash('#/s/abc')).toEqual({ type: 'share', fragment: 'abc' })
   })
 
+  it('#/p/{토큰} 형식이면 type public, token 을 돌려준다', () => {
+    expect(parseHash('#/p/abc-token')).toEqual({ type: 'public', token: 'abc-token' })
+  })
+
   it('#/ 는 type none', () => {
     expect(parseHash('#/')).toEqual({ type: 'none' })
   })

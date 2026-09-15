@@ -6,8 +6,13 @@ import 'github-markdown-css/github-markdown-light.css'
 import './viewer.css'
 
 import brokenImageSvg from '@material-symbols/svg-400/outlined/broken_image.svg?raw'
+import contentCopySvg from '@material-symbols/svg-400/outlined/content_copy.svg?raw'
+import checkSvg from '@material-symbols/svg-400/outlined/check.svg?raw'
 
 const DEFAULT_MISSING_TEXT = '이미지를 찾을 수 없습니다' // F-157 2.2 자리 표시와 같은 문구
+const COPY_TOOLTIP = '코드 복사'
+const COPY_FAIL_TOOLTIP = '복사하지 못했습니다'
+const COPY_RESET_MS = 1500
 
 export type AttachmentRecord = { blob: Blob; width: number; height: number }
 export type ResolveAttachment = (id: string) => Promise<AttachmentRecord | null>
@@ -38,16 +43,43 @@ function showImage(container: HTMLElement, img: HTMLImageElement, url: string, w
   img.src = url
 }
 
+// pre 오른쪽 위에 코드 복사 버튼을 붙인다. 누르면 아이콘을 1.5초 체크로 바꾸고, 실패하면 툴팁만 바꾼다 (F-210 2.5)
+function buildCopyButton(getCode: () => string): HTMLButtonElement {
+  const btn = document.createElement('button')
+  btn.type = 'button'
+  btn.className = 'code-copy-btn'
+  btn.setAttribute('aria-label', COPY_TOOLTIP)
+  btn.title = COPY_TOOLTIP
+  btn.innerHTML = contentCopySvg
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(getCode()).then(
+      () => {
+        btn.innerHTML = checkSvg
+        btn.title = COPY_TOOLTIP
+        setTimeout(() => {
+          btn.innerHTML = contentCopySvg
+        }, COPY_RESET_MS)
+      },
+      () => {
+        btn.title = COPY_FAIL_TOOLTIP
+      },
+    )
+  })
+  return btn
+}
+
 type ViewerProps = {
   html: string
   onOpenWikiLink?: (target: string) => void
   resolveAttachment?: ResolveAttachment
   missingImageText?: string
+  codeCopy?: boolean
   ref?: Ref<HTMLDivElement | null>
 }
 
 // resolveAttachment(id) 는 생략하면(F-130 공유 화면) 항상 자리 표시, missingImageText 는 그 문구(생략 시 F-157 2.2 문구)
-export default function Viewer({ html, onOpenWikiLink, resolveAttachment, missingImageText, ref }: ViewerProps) {
+// codeCopy 는 참이면 pre > code 마다 복사 버튼을 붙인다. 지금은 공개 보기(S-5)에서만 켠다 (F-210 2.5)
+export default function Viewer({ html, onOpenWikiLink, resolveAttachment, missingImageText, codeCopy, ref }: ViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const urlsRef = useRef<string[]>([])
 
@@ -108,6 +140,17 @@ export default function Viewer({ html, onOpenWikiLink, resolveAttachment, missin
     }
   }, [])
 
+  // 그린 뒤 pre > code 마다 복사 버튼을 붙인다 (codeCopy 가 참일 때만, F-210 2.5)
+  useEffect(() => {
+    const root = containerRef.current
+    if (!root || !codeCopy) return
+    root.querySelectorAll('pre > code').forEach((code) => {
+      const pre = code.parentElement
+      if (!pre) return
+      pre.appendChild(buildCopyButton(() => code.textContent ?? ''))
+    })
+  }, [html, codeCopy])
+
   function handleClick(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement
     const anchor = target.closest?.<HTMLAnchorElement>('a.wikilink')
@@ -119,7 +162,7 @@ export default function Viewer({ html, onOpenWikiLink, resolveAttachment, missin
   return (
     <div
       ref={setRefs}
-      className="viewer markdown-body"
+      className={`viewer markdown-body${codeCopy ? ' viewer--code-copy' : ''}`}
       tabIndex={0}
       onClick={handleClick}
       dangerouslySetInnerHTML={{ __html: html }}
