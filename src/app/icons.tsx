@@ -35,6 +35,7 @@ import checkSvg from '@material-symbols/svg-400/outlined/check.svg?raw'
 import personAddSvg from '@material-symbols/svg-400/outlined/person_add.svg?raw'
 import groupSvg from '@material-symbols/svg-400/outlined/group.svg?raw'
 import keySvg from '@material-symbols/svg-400/outlined/key.svg?raw'
+import tocSvg from '@material-symbols/svg-400/outlined/toc.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -95,6 +96,7 @@ export const IconCheck = makeIcon(checkSvg)
 export const IconPersonAdd = makeIcon(personAddSvg)
 export const IconGroup = makeIcon(groupSvg)
 export const IconKey = makeIcon(keySvg)
+export const IconToc = makeIcon(tocSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

@@ -771,6 +771,97 @@ body.sidebar-resizing {
   font-weight: 600;
 }
 
+/* ===== 좁은 화면 목차 버튼(여백 56px 미만) — 선 대신 뜨는 버튼 + 카드 (specs/features/F-229.md 2장) ===== */
+.outline-popup {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 20;
+}
+
+.outline-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
+  transition: var(--transition-colors);
+}
+
+@media (pointer: coarse) {
+  .outline-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+.outline-btn:hover {
+  background: var(--rule-2);
+}
+
+/* 아이콘이 클릭 대상을 가로채지 않게 — 버튼이 항상 히트테스트 대상 */
+.outline-btn svg {
+  pointer-events: none;
+}
+
+/* 눌림 표시 — F-153 선택 바탕과 같은 규칙 (design.md 4장) */
+.outline-btn[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+/* 나타나고 사라지는 전환 — usePresence 의 [data-state] 로 몬다 (F-172.md 2.1·2.2, F-228 2.3) */
+.outline-popup-card {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  transform-origin: top right;
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.outline-popup-card[data-state='closed'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px) scale(0.96);
+}
+
+.outline-popup-card[data-state='open'] {
+  transition: opacity var(--transition-fast), transform var(--transition-pop), visibility var(--transition-fast);
+}
+
+@starting-style {
+  .outline-popup-card[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+}
+
+.outline-popup-card li[data-level='2'] .outline-item {
+  padding-left: 20px;
+}
+
+.outline-popup-card li[data-level='3'] .outline-item {
+  padding-left: 32px;
+}
+
 .empty-state {
   width: 100%;
   max-width: var(--content-max);

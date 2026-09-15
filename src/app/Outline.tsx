@@ -1,12 +1,16 @@
 // 오른쪽 목차 — 편집·원문은 CM6 handle, 보기는 data-source-line 요소 기준 (F-144.md 3.4)
-import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type RefObject } from 'react'
+// 여백 부족(56px 미만)이면 선 목차 대신 목차 버튼 + 같은 목록 카드 (F-229.md 2장)
+import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type RefObject } from 'react'
 import { computeCurrentIndex, findViewerHeadingEl, topInScroller } from './outlinePosition'
 import type { Heading } from '../editor/outline'
 import type { EditorHandle } from '../editor/Editor'
+import usePresence from './usePresence'
+import { IconToc } from './icons'
 
 const SELECT_MARGIN = 16 // 3.3 "그 제목이 스크롤 영역 위에서 16px 아래에 오도록"
 const MIN_MARGIN = 56 // 2장 "메인 열 오른쪽 여백이 … 56px 이상일 때만"
 const COLLAPSE_DELAY_MS = 150
+const POPUP_CARD_MARGIN = { width: 32, height: 80 } // 2.3 "폭 min(280px, 폭-32px), 최대 높이 min(60vh, 높이-80px)"
 
 const RULE_LENGTH: Record<number, number> = { 1: 16, 2: 12, 3: 8 }
 
@@ -30,9 +34,16 @@ type OutlineProps = {
 export default function Outline({ editorRef, containerRef, viewerRef, docId, viewMode }: OutlineProps) {
   const [headings, setHeadings] = useState<Heading[]>([])
   const [fits, setFits] = useState(false)
-  const [expanded, setExpanded] = useState(false)
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
+  const [expanded, setExpanded] = useState(false) // 선 목차 마우스 올림 펼침 (F-144 2장)
+  const [cardOpen, setCardOpen] = useState(false) // 버튼 모드 카드 (F-229 2.3)
   const [currentIndex, setCurrentIndex] = useState(0)
   const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cardId = useId()
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const popupRef = useRef<HTMLDivElement | null>(null)
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const { mounted: cardMounted, state: cardState } = usePresence(cardOpen)
 
   useEffect(() => {
     const handle = editorRef.current
@@ -41,7 +52,7 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
     return handle.onHeadingsChange(setHeadings)
   }, [editorRef, docId])
 
-  // 오른쪽 여백 56px 이상인지 (2장) — .content-area 폭 기준
+  // 오른쪽 여백 56px 이상인지 (2장) — .content-area 폭 기준. 좁으면 버튼 모드 카드 크기도 같이 잰다 (F-229 2.3)
   useEffect(() => {
     const el = containerRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
@@ -49,6 +60,7 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
       const contentMax =
         parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--content-max')) || 800
       setFits((el!.clientWidth - contentMax) / 2 >= MIN_MARGIN)
+      setContainerSize({ width: el!.clientWidth, height: el!.clientHeight })
     }
     compute()
     const ro = new ResizeObserver(compute)
@@ -56,7 +68,7 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
     return () => ro.disconnect()
   }, [containerRef])
 
-  const visible = fits && headings.length > 0
+  const visible = headings.length > 0
 
   // 현재 위치 갱신 + 스크롤 구독 (3.3)
   useEffect(() => {
@@ -93,6 +105,38 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
     return () => scroller.removeEventListener('scroll', update)
   }, [visible, headings, viewMode, editorRef, viewerRef])
 
+  // 카드가 열리면 현재 위치 항목이 보이도록 카드만 스크롤하고 포커스를 옮긴다 (F-229 2.3·2.5)
+  useEffect(() => {
+    if (!cardOpen) return
+    const item = itemRefs.current[currentIndex]
+    if (!item) return
+    item.scrollIntoView({ block: 'nearest' })
+    item.focus()
+  }, [cardOpen, currentIndex])
+
+  // 바깥 클릭·Esc·사이드바 겹침·대화상자 열림으로 카드 닫기 (F-229 2.4)
+  useEffect(() => {
+    if (!cardOpen) return
+
+    function handlePointerDown(e: MouseEvent) {
+      const target = e.target as Node
+      if (popupRef.current?.contains(target)) return
+      setCardOpen(false)
+    }
+    function handleOverlay() {
+      if (document.querySelector('.sidebar-backdrop') || document.querySelector('dialog[open]')) {
+        setCardOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    const mo = new MutationObserver(handleOverlay)
+    mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] })
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      mo.disconnect()
+    }
+  }, [cardOpen])
+
   if (!visible) return null
 
   function expand() {
@@ -121,6 +165,18 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
     editorRef.current?.focus()
   }
 
+  // 버튼 모드 — Esc 로 닫으면 포커스가 버튼으로, 카드 밖으로 Tab 이 나가면 닫힌다 (F-229 2.4·2.5)
+  function handlePopupKeyDown(e: KeyboardEvent<HTMLElement>) {
+    if (e.key !== 'Escape') return
+    e.preventDefault()
+    setCardOpen(false)
+    buttonRef.current?.focus()
+  }
+
+  function handlePopupBlur(e: FocusEvent<HTMLElement>) {
+    if (cardOpen && !e.currentTarget.contains(e.relatedTarget)) setCardOpen(false)
+  }
+
   function selectHeading(heading: Heading) {
     const handle = editorRef.current
     if (!handle) return
@@ -134,6 +190,54 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
       handle.scrollToHeading(heading.from)
     }
     collapseNow()
+    setCardOpen(false) // F-229 2.4 — 포커스는 버튼으로 돌아가지 않는다
+  }
+
+  if (!fits) {
+    const cardWidth = containerSize.width > 0 ? Math.min(280, containerSize.width - POPUP_CARD_MARGIN.width) : 280
+    const cardMaxHeight =
+      containerSize.height > 0 ? Math.min(window.innerHeight * 0.6, containerSize.height - POPUP_CARD_MARGIN.height) : undefined
+
+    return (
+      <div className="outline-popup" ref={popupRef} onKeyDown={handlePopupKeyDown} onBlur={handlePopupBlur}>
+        <button
+          type="button"
+          ref={buttonRef}
+          className="outline-btn"
+          aria-label="목차"
+          aria-expanded={cardOpen}
+          aria-controls={cardId}
+          onClick={() => setCardOpen((v) => !v)}
+        >
+          <IconToc size={20} />
+        </button>
+        {cardMounted && (
+          <ol
+            id={cardId}
+            className="outline-popup-card"
+            data-state={cardState}
+            inert={cardState === 'closed'}
+            style={{ width: cardWidth, maxHeight: cardMaxHeight }}
+          >
+            {headings.map((h, i) => (
+              <li key={h.from} data-level={h.level}>
+                <button
+                  type="button"
+                  className="outline-item"
+                  ref={(el) => {
+                    itemRefs.current[i] = el
+                  }}
+                  aria-current={i === currentIndex ? 'location' : undefined}
+                  onClick={() => selectHeading(h)}
+                >
+                  {h.text}
+                </button>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    )
   }
 
   return (
