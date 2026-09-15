@@ -1,3 +1,5 @@
+import { getTokenUser } from './apiTokens'
+
 export interface AuthUser {
   id: string
   email: string
@@ -125,7 +127,12 @@ async function findOrCreateUser(env: Env, email: string): Promise<AuthUser> {
   return row
 }
 
-export async function getUser(request: Request, env: Env): Promise<AuthUser | null> {
+export async function getUser(request: Request, env: Env, ctx?: ExecutionContext): Promise<AuthUser | null> {
+  // /v1/ 은 Bearer 토큰만 본다 — Access JWT·쿠키·DEV_AUTH_EMAIL 은 무시한다 (F-222 2.3)
+  if (new URL(request.url).pathname.startsWith('/v1/')) {
+    return getTokenUser(request, env, ctx)
+  }
+
   const devEmail = (env as unknown as { DEV_AUTH_EMAIL?: string }).DEV_AUTH_EMAIL
   // wrangler dev 는 커스텀 도메인 routes 가 있으면 호스트를 바꾸므로 호스트 대신 예약 도메인·Access 미설정으로 제한 (F-205 2.2)
   if (devEmail && devEmail.toLowerCase().endsWith('@example.com') && !env.ACCESS_AUD) {
@@ -154,8 +161,8 @@ export async function getUser(request: Request, env: Env): Promise<AuthUser | nu
   }
 }
 
-export async function requireUser(request: Request, env: Env): Promise<AuthUser> {
-  const user = await getUser(request, env)
+export async function requireUser(request: Request, env: Env, ctx?: ExecutionContext): Promise<AuthUser> {
+  const user = await getUser(request, env, ctx)
   if (!user) {
     throw new Response(JSON.stringify({ error: 'unauthenticated' }), {
       status: 401,

@@ -2,9 +2,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 
 import { loginUrl, logoutUrl, storedAccount, type AccountState } from './account'
-import { IconAccount, IconLogin, IconLogout, IconTooltip } from './icons'
+import { IconAccount, IconKey, IconLogin, IconLogout, IconTooltip } from './icons'
 import usePresence from './usePresence'
 import { fetchUsage, type Usage } from '../storage/attachmentsApi'
+import ApiTokensDialog from './ApiTokensDialog'
 
 const MB = 1_048_576
 
@@ -22,6 +23,7 @@ type AccountMenuProps = {
 export default function AccountMenu({ account, onBeforeNavigate }: AccountMenuProps) {
   const [open, setOpen] = useState(false)
   const [usage, setUsage] = useState<Usage | null>(null)
+  const [apiTokensOpen, setApiTokensOpen] = useState(false)
   const { mounted, state } = usePresence(open)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLUListElement | null>(null)
@@ -78,12 +80,21 @@ export default function AccountMenu({ account, onBeforeNavigate }: AccountMenuPr
     location.href = logoutUrl()
   }
 
+  // 로그인 상태에서만, 로그아웃 위에 (F-222 2.4)
+  async function handleOpenApiTokens() {
+    setOpen(false)
+    setApiTokensOpen(true)
+  }
+
   const stored = account.state === 'offline' ? storedAccount() : null
   const email = account.state === 'in' ? account.email : stored?.email ?? null
 
   const actionItems: { key: string; label: string; icon: typeof IconLogin; onSelect: () => Promise<void> }[] =
     account.state === 'in'
-      ? [{ key: 'logout', label: '로그아웃', icon: IconLogout, onSelect: handleLogout }]
+      ? [
+          { key: 'api-tokens', label: 'API 토큰', icon: IconKey, onSelect: handleOpenApiTokens },
+          { key: 'logout', label: '로그아웃', icon: IconLogout, onSelect: handleLogout },
+        ]
       : account.state === 'out'
         ? [{ key: 'login', label: '로그인', icon: IconLogin, onSelect: handleLogin }]
         : []
@@ -175,6 +186,7 @@ export default function AccountMenu({ account, onBeforeNavigate }: AccountMenuPr
           ))}
         </ul>
       )}
+      <ApiTokensDialog open={apiTokensOpen} onClose={() => setApiTokensOpen(false)} />
     </div>
   )
 }

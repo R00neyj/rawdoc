@@ -200,10 +200,57 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(usage) })
   })
 
+  // GET·POST /api/tokens, DELETE /api/tokens/:id 를 메모리로 흉내낸다 (F-222 2.2)
+  const apiTokens = new Map()
+  await page.route('**/api/tokens', async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() === 'GET') {
+      const list = [...apiTokens.values()]
+        .filter((t) => !t.revokedAt)
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .map(({ id, name, prefix, createdAt, lastUsedAt }) => ({ id, name, prefix, createdAt, lastUsedAt }))
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(list) })
+    }
+    if (req.method() === 'POST') {
+      const body = req.postDataJSON()
+      const trimmed = typeof body.name === 'string' ? body.name.trim() : ''
+      if (!trimmed || trimmed.length > 40) {
+        return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'invalid', field: 'name' }) })
+      }
+      const activeCount = [...apiTokens.values()].filter((t) => !t.revokedAt).length
+      if (activeCount >= 10) {
+        return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'too_many', limit: 10 }) })
+      }
+      const id = crypto.randomUUID()
+      const token = `rd_${id.replace(/-/g, '')}`
+      const record = { id, name: trimmed, prefix: token.slice(0, 11), createdAt: Date.now(), lastUsedAt: null, revokedAt: null }
+      apiTokens.set(id, record)
+      return route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: record.id, name: record.name, prefix: record.prefix, createdAt: record.createdAt, lastUsedAt: null, token }),
+      })
+    }
+    return route.fallback()
+  })
+
+  await page.route(/\/api\/tokens\/[^/]+$/, async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() !== 'DELETE') return route.fallback()
+    const id = decodeURIComponent(new URL(req.url()).pathname.split('/').pop())
+    const record = apiTokens.get(id)
+    if (!record) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+    record.revokedAt = Date.now()
+    return route.fulfill({ status: 204 })
+  })
+
   return {
     docs,
     folders,
     attachments,
+    apiTokens,
     // 네트워크 오프라인을 흉내낸다 — 이후 모든 요청은 실패한다 (F-207 A4)
     setOffline(v) {
       offline = v

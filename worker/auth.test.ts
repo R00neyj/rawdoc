@@ -104,6 +104,132 @@ function testEnv(): Env {
   return { ACCESS_TEAM_DOMAIN: DOMAIN, ACCESS_AUD: AUD, DB: createDb() } as unknown as Env
 }
 
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input))
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+type ApiTokenRow = { id: string; user_id: string; token_hash: string; last_used_at: number | null; revoked_at: number | null }
+type UserRow = { id: string; email: string }
+
+function tokenEnv(tokens: ApiTokenRow[], users: UserRow[]) {
+  const tokenById = new Map(tokens.map((t) => [t.id, t]))
+  const userById = new Map(users.map((u) => [u.id, u]))
+  const updateCalls: [number, string][] = []
+
+  const DB = {
+    prepare(sql: string) {
+      return {
+        bind(...args: unknown[]) {
+          return {
+            async first<T>() {
+              if (sql.startsWith('SELECT id, user_id, last_used_at FROM api_tokens')) {
+                const [tokenHash] = args as [string]
+                const row = [...tokenById.values()].find((t) => t.token_hash === tokenHash && !t.revoked_at)
+                return (row as T) ?? null
+              }
+              if (sql.startsWith('SELECT id, email FROM users')) {
+                const [id] = args as [string]
+                return (userById.get(id) as T) ?? null
+              }
+              throw new Error(`unhandled sql: ${sql}`)
+            },
+            async run() {
+              if (sql.startsWith('UPDATE api_tokens SET last_used_at')) {
+                const [now, id] = args as [number, string]
+                updateCalls.push([now, id])
+                const row = tokenById.get(id)
+                if (row) row.last_used_at = now
+                return { meta: { changes: row ? 1 : 0 } }
+              }
+              throw new Error(`unhandled sql: ${sql}`)
+            },
+          }
+        },
+      }
+    },
+  }
+
+  return { env: { DB } as unknown as Env, updateCalls, tokenById }
+}
+
+describe('F-222 A2 /v1/ 토큰 판정', () => {
+  it('올바른 Bearer 토큰이면 사용자를 돌려준다', async () => {
+    const tokenHash = await sha256Hex('rd_valid')
+    const { env } = tokenEnv(
+      [{ id: 't1', user_id: 'u1', token_hash: tokenHash, last_used_at: null, revoked_at: null }],
+      [{ id: 'u1', email: 'user@example.com' }],
+    )
+    const request = new Request('https://app.example.com/v1/docs', { headers: { Authorization: 'Bearer rd_valid' } })
+    const user = await getUser(request, env)
+    expect(user).toEqual({ id: 'u1', email: 'user@example.com' })
+  })
+
+  it('폐기된 토큰이면 null', async () => {
+    const tokenHash = await sha256Hex('rd_revoked')
+    const { env } = tokenEnv(
+      [{ id: 't1', user_id: 'u1', token_hash: tokenHash, last_used_at: null, revoked_at: Date.now() }],
+      [{ id: 'u1', email: 'user@example.com' }],
+    )
+    const request = new Request('https://app.example.com/v1/docs', { headers: { Authorization: 'Bearer rd_revoked' } })
+    expect(await getUser(request, env)).toBeNull()
+  })
+
+  it('틀린 토큰이면 null', async () => {
+    const { env } = tokenEnv([], [])
+    const request = new Request('https://app.example.com/v1/docs', { headers: { Authorization: 'Bearer rd_wrong' } })
+    expect(await getUser(request, env)).toBeNull()
+  })
+
+  it('헤더가 없으면 null', async () => {
+    const { env } = tokenEnv([], [])
+    const request = new Request('https://app.example.com/v1/docs')
+    expect(await getUser(request, env)).toBeNull()
+  })
+
+  it('/v1/ 요청에 Access 쿠키만 있으면 null', async () => {
+    const { env } = tokenEnv([], [])
+    const request = new Request('https://app.example.com/v1/docs', { headers: { Cookie: 'CF_Authorization=whatever' } })
+    expect(await getUser(request, env)).toBeNull()
+  })
+
+  it('/api/ 요청에 Bearer 헤더만 있으면 null (토큰은 /v1/ 에서만 본다)', async () => {
+    const tokenHash = await sha256Hex('rd_valid')
+    const { env } = tokenEnv(
+      [{ id: 't1', user_id: 'u1', token_hash: tokenHash, last_used_at: null, revoked_at: null }],
+      [{ id: 'u1', email: 'user@example.com' }],
+    )
+    const request = new Request('https://app.example.com/api/docs', { headers: { Authorization: 'Bearer rd_valid' } })
+    expect(await getUser(request, env)).toBeNull()
+  })
+
+  it('last_used_at 은 10분 넘게 지났거나 null 일 때만 갱신한다', async () => {
+    const tokenHash = await sha256Hex('rd_valid')
+    const now = Date.now()
+    const { env, updateCalls } = tokenEnv(
+      [{ id: 't1', user_id: 'u1', token_hash: tokenHash, last_used_at: now - 1000, revoked_at: null }],
+      [{ id: 'u1', email: 'user@example.com' }],
+    )
+    const request = new Request('https://app.example.com/v1/docs', { headers: { Authorization: 'Bearer rd_valid' } })
+    await getUser(request, env)
+    expect(updateCalls.length).toBe(0)
+
+    const { env: env2, updateCalls: updateCalls2 } = tokenEnv(
+      [{ id: 't1', user_id: 'u1', token_hash: tokenHash, last_used_at: now - 11 * 60 * 1000, revoked_at: null }],
+      [{ id: 'u1', email: 'user@example.com' }],
+    )
+    await getUser(request, env2)
+    expect(updateCalls2.length).toBe(1)
+
+    const { env: env3, updateCalls: updateCalls3 } = tokenEnv(
+      [{ id: 't1', user_id: 'u1', token_hash: tokenHash, last_used_at: null, revoked_at: null }],
+      [{ id: 'u1', email: 'user@example.com' }],
+    )
+    await getUser(request, env3)
+    expect(updateCalls3.length).toBe(1)
+  })
+})
+
 describe('F-205 A1 JWT 검증', () => {
   it('정상 토큰은 통과한다', async () => {
     stubJwksFetch()

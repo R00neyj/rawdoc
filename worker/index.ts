@@ -39,6 +39,7 @@ import {
   handlePutFolderGrant,
 } from './grants'
 import { cleanupServerAttachments } from './attachmentGc'
+import { handleCreateToken, handleDeleteToken, handleListTokens } from './apiTokens'
 
 type RouteHandler = (
   request: Request,
@@ -126,6 +127,9 @@ const routes: Route[] = [
   { method: 'PUT', path: '/api/folders/:id/grants/:email', handler: handlePutFolderGrant },
   { method: 'DELETE', path: '/api/folders/:id/grants/:email', handler: handleDeleteFolderGrant },
   { method: 'GET', path: '/api/shared', handler: handleGetShared },
+  { method: 'GET', path: '/api/tokens', handler: handleListTokens },
+  { method: 'POST', path: '/api/tokens', handler: handleCreateToken },
+  { method: 'DELETE', path: '/api/tokens/:id', handler: handleDeleteToken },
   { method: 'GET', path: '/pub/docs/:token', handler: handlePublicGetDoc },
   { method: 'GET', path: '/api/usage', handler: handleGetUsage },
   { method: 'PUT', path: '/api/attachments/:idext', handler: handleUploadAttachment },
@@ -144,7 +148,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
 
-    if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/pub/')) {
+    if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/pub/') && !url.pathname.startsWith('/v1/')) {
       return env.ASSETS.fetch(request)
     }
 
