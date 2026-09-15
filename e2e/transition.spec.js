@@ -68,7 +68,7 @@ test.describe('F-149 A2 계산값 — 상단바·제목·설정', () => {
       'background-color',
       'color',
     ])
-    await expectColorTransition(page.locator('.doc-title'), ['background-color', 'border-color'])
+    // 제목 입력은 본문 맨 위로 옮겨가 테두리·바탕 없는 글자다 — 색 전환 대상이 아니다 (F-217.md 2.1)
 
     await page.getByRole('button', { name: '설정', exact: true }).click()
     const segBtn = page.locator('#theme-label').locator('..').getByRole('radio', { name: '시스템' })

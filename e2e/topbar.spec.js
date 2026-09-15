@@ -298,19 +298,18 @@ test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () 
     await page.keyboard.press('Tab')
     await expect(page.getByRole('button', { name: '검색 — 준비 중' })).toBeFocused()
 
-    // 제목 입력 바로 앞 포커스가 너비 손잡이인지만 확인 (F-159 2.6)
+    // 너비 손잡이 바로 다음 포커스가 상단바(편집 모드 버튼)인지 — 제목 입력이 빠졌다 (F-217.md 2.5)
     let lastRole = null
     for (let i = 0; i < 15; i++) {
       await page.keyboard.press('Tab')
-      const isTitle = await page.locator('.doc-title').evaluate((el) => el === document.activeElement)
-      if (isTitle) break
+      const isViewModeBtn = await page
+        .getByRole('button', { name: '편집 — 서식을 보며 편집' })
+        .evaluate((el) => el === document.activeElement)
+      if (isViewModeBtn) break
       lastRole = await page.evaluate(() => document.activeElement?.getAttribute('role'))
     }
-    await expect(page.locator('.doc-title')).toBeFocused()
-    expect(lastRole).toBe('separator')
-
-    await page.keyboard.press('Tab')
     await expect(page.getByRole('button', { name: '편집 — 서식을 보며 편집' })).toBeFocused()
+    expect(lastRole).toBe('separator')
 
     await page.reload()
     const activeTag = await page.evaluate(() => document.activeElement?.tagName)

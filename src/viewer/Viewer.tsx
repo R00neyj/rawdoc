@@ -70,6 +70,8 @@ function buildCopyButton(getCode: () => string): HTMLButtonElement {
 
 type ViewerProps = {
   html: string
+  // 본문 맨 위 제목 (F-217.md 2.1) — 생략하면(공유·공개 보기 화면, 이미 자체 제목 줄이 있다) 그리지 않는다
+  title?: string
   onOpenWikiLink?: (target: string) => void
   resolveAttachment?: ResolveAttachment
   missingImageText?: string
@@ -79,7 +81,7 @@ type ViewerProps = {
 
 // resolveAttachment(id) 는 생략하면(F-130 공유 화면) 항상 자리 표시, missingImageText 는 그 문구(생략 시 F-157 2.2 문구)
 // codeCopy 는 참이면 pre > code 마다 복사 버튼을 붙인다. 지금은 공개 보기(S-5)에서만 켠다 (F-210 2.5)
-export default function Viewer({ html, onOpenWikiLink, resolveAttachment, missingImageText, codeCopy, ref }: ViewerProps) {
+export default function Viewer({ html, title, onOpenWikiLink, resolveAttachment, missingImageText, codeCopy, ref }: ViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const urlsRef = useRef<string[]>([])
 
@@ -162,10 +164,13 @@ export default function Viewer({ html, onOpenWikiLink, resolveAttachment, missin
   return (
     <div
       ref={setRefs}
-      className={`viewer markdown-body${codeCopy ? ' viewer--code-copy' : ''}`}
+      className={`viewer${codeCopy ? ' viewer--code-copy' : ''}`}
       tabIndex={0}
       onClick={handleClick}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    >
+      {/* 목차(F-144) 항목에 넣지 않는다 — extractHeadings 는 본문(html)만 읽는다 (F-217.md 2.1) */}
+      {title !== undefined && <h1 className="doc-title-view">{title || '제목 없는 문서'}</h1>}
+      <div className="markdown-body" dangerouslySetInnerHTML={{ __html: html }} />
+    </div>
   )
 }

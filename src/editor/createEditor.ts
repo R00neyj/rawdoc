@@ -10,6 +10,14 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 
 import { autoPair } from './autoPair'
 import { compositionCatchup, forceRecalc, isComposing, isForced } from './composition'
+import {
+  docTitleExtension,
+  focusTitleFromBody,
+  focusTitleWidget,
+  setTitleEffect,
+  setTitleReadOnlyEffect,
+} from './docTitle'
+import type { OnTitleChange, OnTitleCommit } from './docTitle'
 import { frontmatterExtension } from './frontmatter'
 import { highlightExtension } from './highlight'
 import { shortcutKeymap } from './commands'
@@ -134,6 +142,11 @@ type CreateEditorOptions = {
   onImageFiles?: OnImageFiles
   // 편집 모드 이미지 블록 위젯이 첨부를 읽는 콜백 (F-157.md 2.2)
   resolveAttachment?: ResolveAttachment
+  // 본문 맨 위 제목 (F-217.md 2장) — 이후 갱신은 handle.setTitle()·setTitleReadOnly() 로 한다. 이 값은 최초 생성에만 쓴다
+  title?: string
+  titleReadOnly?: boolean
+  onTitleChange?: OnTitleChange
+  onTitleCommit?: OnTitleCommit
 }
 
 export function createEditor(parent: HTMLElement, options: CreateEditorOptions = {}) {
@@ -149,6 +162,10 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     onOpenWikiLink,
     onImageFiles,
     resolveAttachment,
+    title = '',
+    titleReadOnly = false,
+    onTitleChange = () => {},
+    onTitleCommit = () => {},
   } = options
 
   let destroyed = false
@@ -170,6 +187,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const readOnlyCompartment = new Compartment()
 
   const extensions: Extension[] = [
+    docTitleExtension({ title, readOnly: titleReadOnly, onChange: onTitleChange, onCommit: onTitleCommit }),
     lineNumbersCompartment.of(lineNumbersExtensionFor(showLineNumbers)),
     gutterAttributesCompartment.of(gutterAttributesExtensionFor(showLineNumbers)),
     readOnlyCompartment.of(readOnlyExtensionsFor(initialReadOnly)),
@@ -201,6 +219,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     wikiComplete(),
     previewCompartment.of(previewExtensionFor(viewMode, { onOpenWikiLink, resolveAttachment })),
     attributesCompartment.of(attributesExtensionFor(viewMode)),
+    // 본문 첫 시각 줄에서 ↑ 는 제목으로 포커스를 옮긴다 — defaultKeymap 커서 이동보다 먼저 받아야 한다 (F-217.md 2.3)
+    Prec.high(keymap.of([{ key: 'ArrowUp', run: focusTitleFromBody }])),
     // F-109 단축키가 defaultKeymap 보다 먼저 키를 받도록 Prec.high
     Prec.high(keymap.of(shortcutKeymap)),
     keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
@@ -282,6 +302,21 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // 문서 제목 목록 갱신 (F-131 3장) — 문서 생성·삭제·제목 변경 시 App 이 부른다
     setWikiTitles(titles: string[]) {
       view.dispatch({ effects: setWikiTitlesEffect.of(titles) })
+    },
+
+    // 본문 맨 위 제목 값 갱신 (F-217.md 2.2) — 포커스가 없을 때만 위젯 DOM 값을 바꾼다
+    setTitle(value: string) {
+      view.dispatch({ effects: setTitleEffect.of(value) })
+    },
+
+    // 읽기 전용 전환 (F-217.md 2.4)
+    setTitleReadOnly(on: boolean) {
+      view.dispatch({ effects: setTitleReadOnlyEffect.of(on) })
+    },
+
+    // 제목에 포커스 (+ 전체 선택) — 새 문서(F-217.md 2.3, ia.md 3.3)
+    focusTitle(selectAll = false) {
+      focusTitleWidget(view, selectAll)
     },
 
     getHeadings(): Heading[] {

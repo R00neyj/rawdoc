@@ -10,6 +10,7 @@ import { createEditor } from './createEditor'
 import type { OnOpenWikiLink } from './preview/wikiLinks'
 import type { ResolveAttachment } from './preview/blocks'
 import type { OnImageFiles } from './imageInsert'
+import type { OnTitleChange, OnTitleCommit } from './docTitle'
 
 export type EditorHandle = ReturnType<typeof createEditor>
 
@@ -17,13 +18,18 @@ type EditorProps = {
   text?: string
   viewMode?: 'live' | 'raw' | 'view'
   readOnly?: boolean
-  autoFocus?: boolean
+  // true: 본문 맨 앞에 포커스. 'title': 본문 맨 위 제목에 포커스 + 전체 선택(새 문서, F-217.md 2.3)
+  autoFocus?: boolean | 'title'
   onDocChange?: (state: EditorState) => void
   onSelectionChange?: (state: EditorState) => void
   wikiTitles?: string[]
   onOpenWikiLink?: OnOpenWikiLink
   onImageFiles?: OnImageFiles
   resolveAttachment?: ResolveAttachment
+  title?: string
+  titleReadOnly?: boolean
+  onTitleChange?: OnTitleChange
+  onTitleCommit?: OnTitleCommit
   ref?: Ref<EditorHandle | null>
 }
 
@@ -38,6 +44,10 @@ export default function Editor({
   onOpenWikiLink,
   onImageFiles,
   resolveAttachment,
+  title,
+  titleReadOnly,
+  onTitleChange,
+  onTitleCommit,
   ref,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -60,6 +70,10 @@ export default function Editor({
       onOpenWikiLink,
       onImageFiles,
       resolveAttachment,
+      title,
+      titleReadOnly,
+      onTitleChange,
+      onTitleCommit,
     })
     handleRef.current = handle
     // 문서 전환 후 포커스 + 커서 맨 앞 (ia.md 3.4, F-103 3.4). App 의 passive effect 에서
@@ -69,7 +83,10 @@ export default function Editor({
     // 항상 포커스를 받는다. 이전에는 App 의 passive effect 가 첫 번째(곧 파괴될) 뷰만
     // focus() 하고 플래그를 내려서, StrictMode 재마운트로 만들어진 두 번째 뷰는 포커스를
     // 못 받는 문제가 있었다(dev 서버에서만 재현, 프로덕션 빌드는 이중 마운트가 없어 안 보임)
-    if (autoFocus) {
+    // autoFocus === 'title' 은 새 문서 흐름(ia.md 3.3) — 본문 맨 위 제목에 포커스 + 전체 선택
+    if (autoFocus === 'title') {
+      handle.focusTitle(true)
+    } else if (autoFocus) {
       handle.focus()
       handle.setCursorToStart()
     }

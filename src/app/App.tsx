@@ -7,7 +7,6 @@ import {
   useState,
   type ChangeEvent,
   type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import type { EditorState } from '@codemirror/state'
 
@@ -198,7 +197,6 @@ export default function App() {
   // 서버 저장소 동기화 표시 (F-207.md 2.5) — server 저장소가 아니면 undefined
   const [syncState, setSyncState] = useState<SyncState | undefined>(undefined)
 
-  const titleInputRef = useRef<HTMLInputElement | null>(null)
   const sidebarRef = useRef<HTMLElement | null>(null)
   const toggleButtonRef = useRef<HTMLButtonElement | null>(null)
   const bootedRef = useRef(false)
@@ -303,6 +301,8 @@ export default function App() {
     onReacquired: handleLockReacquired,
   })
   const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly
+  // 본문 맨 위 제목 읽기 전용 — 상단바 옛 제목 입력의 disabled·readOnly 조건을 하나로 합친다 (F-217.md 2.4)
+  const titleReadOnly = isReadOnlyDoc || viewMode === 'view' || Boolean(sharedDoc)
 
   const closeSidebarIfNarrow = useCallback(() => {
     setSidebarOpen(false)
@@ -726,15 +726,6 @@ export default function App() {
     }
   }, [narrow, sidebarOpen, settingsOpen, deleteTarget, moveDocTarget])
 
-  // ----- 새 문서 제목 입력 포커스 + 전체 선택 (ia.md 3.3) -----
-  useEffect(() => {
-    if (focusTitleRef.current && titleInputRef.current) {
-      titleInputRef.current.focus()
-      titleInputRef.current.select()
-      focusTitleRef.current = false
-    }
-  }, [currentDocId])
-
   // ----- 문서를 열 때 저장소 본문을 1회 읽어 에디터에 넘긴다 (architecture.md 3장) -----
   // openDoc.id 가 currentDocId 와 다르면(문서 없음 포함) 렌더링에서 에디터를 그리지
   // 않는 것으로 처리하므로, 여기서 별도로 null 로 되돌리지 않는다
@@ -810,6 +801,17 @@ export default function App() {
     editorRef.current?.setReadOnly(isReadOnlyDoc)
   }, [openDoc, currentDocId, isReadOnlyDoc])
 
+  // 본문 맨 위 제목 값·읽기 전용 갱신 (F-217.md 2.2·2.4) — 위젯은 포커스가 없을 때만 값을 바꾼다
+  useLayoutEffect(() => {
+    if (openDoc?.id !== currentDocId) return
+    editorRef.current?.setTitle(currentDoc?.title ?? '')
+  }, [openDoc, currentDocId, currentDoc?.title])
+
+  useLayoutEffect(() => {
+    if (openDoc?.id !== currentDocId) return
+    editorRef.current?.setTitleReadOnly(titleReadOnly)
+  }, [openDoc, currentDocId, titleReadOnly])
+
   // view 권한 문서를 열면 알림 띠를 보인다 (F-212.md 2.4) — 문서를 열 때 1회
   const notifiedViewDocRef = useRef<string | null>(null)
   useEffect(() => {
@@ -825,9 +827,9 @@ export default function App() {
   // 에서도 그 effect 가 매번 다시 실행되어 최종 뷰가 포커스를 받으므로, 여기 passive
   // effect 는 이번 전환 요청을 소비 표시(플래그 원복)만 해서 다음 전환에 새지 않게 한다
   useEffect(() => {
-    if (focusEditorRef.current && openDoc?.id === currentDocId) {
-      focusEditorRef.current = false
-    }
+    if (openDoc?.id !== currentDocId) return
+    focusEditorRef.current = false
+    focusTitleRef.current = false // 제목 포커스 요청도 같은 방식으로 소비한다 (F-217.md 2.3)
   }, [openDoc, currentDocId])
 
   // ----- 자동 저장 (specs/features/F-110.md 3.4) -----
@@ -1256,27 +1258,23 @@ export default function App() {
     })
   }
 
-  function handleTitleChange(e: ChangeEvent<HTMLInputElement>) {
-    commitTitle(e.target.value)
-  }
+  // 본문 맨 위 제목 위젯은 마운트 시점 클로저만 계속 쓰므로 ref 로 우회해 최신 commitTitle 을 쓰게 한다 (F-217.md 2.2)
+  const commitTitleRef = useRef(commitTitle)
+  useEffect(() => {
+    commitTitleRef.current = commitTitle
+  })
 
-  function handleTitleBlur() {
-    const doc = docs.find((d) => d.id === currentDocId)
+  const handleTitleChange = useCallback((value: string) => {
+    commitTitleRef.current(value)
+  }, [])
+
+  // 포커스를 잃을 때 공백만이면 되돌린다 (ia.md 3.5, F-111 3.4)
+  const handleTitleCommit = useCallback(() => {
+    const doc = docsRef.current.find((d) => d.id === currentDocIdRef.current)
     if (doc && doc.title.trim() === '') {
-      commitTitle('제목 없는 문서')
+      commitTitleRef.current('제목 없는 문서')
     }
-  }
-
-  function onRequestEditorFocus() {
-    editorRef.current?.focus()
-  }
-
-  function handleTitleKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      onRequestEditorFocus()
-    }
-  }
+  }, [])
 
   // ----- 삭제 D-1: 문서·폴더 공용 (specs/ia.md 3.6, F-126.md 5.3) -----
   function requestDeleteDoc(doc: { id: string; title: string }) {
@@ -1510,13 +1508,6 @@ export default function App() {
       sidebarOpen={sidebarOpen}
       onToggleSidebar={toggleSidebar}
       toggleButtonRef={toggleButtonRef}
-      title={currentDoc?.title ?? ''}
-      titleDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc) || isReadOnlyDoc}
-      titleReadOnly={viewMode === 'view' || Boolean(sharedDoc)}
-      titleInputRef={titleInputRef}
-      onTitleChange={handleTitleChange}
-      onTitleBlur={handleTitleBlur}
-      onTitleKeyDown={handleTitleKeyDown}
       viewMode={viewMode}
       viewModeDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
       onChangeViewMode={changeViewMode}
@@ -1621,13 +1612,17 @@ export default function App() {
                     text={openDoc.content}
                     viewMode={viewMode}
                     readOnly={isReadOnlyDoc}
-                    autoFocus={focusEditorRef.current}
+                    autoFocus={focusTitleRef.current ? 'title' : focusEditorRef.current}
                     onDocChange={handleDocChange}
                     onSelectionChange={handleSelectionChange}
                     wikiTitles={wikiTitles}
                     onOpenWikiLink={handleOpenWikiLink}
                     onImageFiles={handleImageFiles}
                     resolveAttachment={resolveAttachment}
+                    title={currentDoc?.title ?? ''}
+                    titleReadOnly={titleReadOnly}
+                    onTitleChange={handleTitleChange}
+                    onTitleCommit={handleTitleCommit}
                   />
                 )}
               </div>
@@ -1636,6 +1631,7 @@ export default function App() {
                   key={currentDocId}
                   ref={viewerRef}
                   html={viewerHtml}
+                  title={currentDoc?.title ?? ''}
                   onOpenWikiLink={handleOpenWikiLink}
                   resolveAttachment={resolveAttachment}
                 />

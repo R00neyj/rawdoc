@@ -77,30 +77,49 @@ svg {
   white-space: nowrap;
 }
 
-.doc-title {
+/* 제목 입력이 빠진 상단바 가운데 빈 자리 (F-217.md 2.5) */
+.topbar-spacer {
   flex: 1;
   min-width: 0;
-  font-weight: 600;
-  font-size: 14.5px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
-  padding: 6px 9px;
+}
+
+/* 본문 맨 위 제목 — 편집·원문 모드 widget textarea, 보기 모드 h1 같은 모양. 테두리·바탕 없음, 포커스 링은 tokens.css 공통 (F-217.md 2.1·2.2) */
+.doc-title-block {
+  padding: 4px 0 0;
+}
+
+.doc-title,
+.doc-title-view {
+  display: block;
+  width: 100%;
+  margin: 0 0 calc(var(--md-font-size) * 1);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: calc(var(--md-font-size) * 2.25);
+  line-height: 1.25;
+  color: var(--ink);
+  word-break: keep-all;
+}
+
+.doc-title {
+  box-sizing: border-box;
+  resize: none;
+  overflow: hidden;
+  border: none;
   background: transparent;
-  transition: var(--transition-colors);
+  padding: 0;
 }
 
-.doc-title:hover:not(:disabled) {
-  background: var(--rule-2);
-}
-
-.doc-title:focus {
-  background: var(--panel);
-  border-color: var(--rule);
-  outline: none;
-}
-
-.doc-title:disabled {
+.doc-title::placeholder {
   color: var(--muted);
+}
+
+.doc-title[readonly] {
+  cursor: default;
+}
+
+.doc-title[readonly]:focus-visible {
+  outline: none;
 }
 
 /* 휴대폰 폭 — 상단바가 화면보다 넓어 가로·세로 스크롤이 생기던 문제, 제품명 글자·준비 중 검색을 빼고 간격을 줄인다 (F-216) */

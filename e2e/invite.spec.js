@@ -96,7 +96,8 @@ test.describe('F-212 A5 공유받음 묶음·읽기 전용', () => {
     await page.locator('.cm-content').click()
     await page.keyboard.type('추가 입력')
     await expect(page.locator('.cm-content')).not.toContainText('추가 입력')
-    await expect(page.locator('.doc-title')).toBeDisabled()
+    // 제목은 F-217 로 본문 맨 위 textarea 다 — disabled 가 아니라 readOnly 로 막는다
+    await expect(page.locator('.doc-title')).not.toBeEditable()
 
     // edit 문서 — 평소처럼 편집, 저장된다
     await page.getByText('편집 가능 문서').click()

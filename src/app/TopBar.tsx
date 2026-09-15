@@ -1,7 +1,7 @@
 // 상단바 (specs/ia.md 2장 A, specs/features/F-102.md 5.3)
 // 보기 모드 토글은 F-107·F-123. .md 내보내기는 F-112. 공유는 F-130
 // 아이콘·툴팁은 F-142 3.2·3.3. 앞 묶음(제품 아이콘·이름·토글·검색)은 좁은 창에만 있다 (F-159 2.1)
-import type { ChangeEvent, FocusEvent, KeyboardEvent, RefObject } from 'react'
+import type { RefObject } from 'react'
 import ShareMenu from './ShareMenu'
 import AccountMenu from './AccountMenu'
 import { IconEdit, IconRaw, IconView, IconDownload, IconTooltip } from './icons'
@@ -23,13 +23,6 @@ type TopBarProps = {
   sidebarOpen: boolean
   onToggleSidebar: () => void
   toggleButtonRef: RefObject<HTMLButtonElement | null>
-  title: string
-  titleDisabled: boolean
-  titleReadOnly: boolean
-  titleInputRef: RefObject<HTMLInputElement | null>
-  onTitleChange: (e: ChangeEvent<HTMLInputElement>) => void
-  onTitleBlur: (e: FocusEvent<HTMLInputElement>) => void
-  onTitleKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void
   viewMode: ViewMode
   viewModeDisabled: boolean
   onChangeViewMode: (mode: ViewMode) => void
@@ -50,13 +43,6 @@ export default function TopBar({
   sidebarOpen,
   onToggleSidebar,
   toggleButtonRef,
-  title,
-  titleDisabled,
-  titleReadOnly,
-  titleInputRef,
-  onTitleChange,
-  onTitleBlur,
-  onTitleKeyDown,
   viewMode,
   viewModeDisabled,
   onChangeViewMode,
@@ -81,17 +67,7 @@ export default function TopBar({
           toggleButtonRef={toggleButtonRef}
         />
       )}
-      <input
-        ref={titleInputRef}
-        className="doc-title"
-        aria-label="문서 제목"
-        value={title}
-        disabled={titleDisabled}
-        readOnly={titleReadOnly}
-        onChange={onTitleChange}
-        onBlur={onTitleBlur}
-        onKeyDown={onTitleKeyDown}
-      />
+      <div className="topbar-spacer" />
       <div className="seg view-mode-seg" role="group" aria-label="보기 모드">
         {VIEW_MODES.map((mode) => (
           <span className="icon-btn-wrap" key={mode.value}>
