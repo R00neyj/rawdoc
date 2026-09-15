@@ -460,7 +460,7 @@ test.describe('F-153 A1 상단바 아이콘 버튼', () => {
       await importMarkdown(page, { content: '내용\n' })
 
       const buttons = page.locator('.sidebar-head .icon-btn, .topbar .icon-btn')
-      await expect(buttons).toHaveCount(7) // 토글·검색·보기모드 3개·공유·내보내기
+      await expect(buttons).toHaveCount(8) // 토글·검색·보기모드 3개·공유·내보내기·계정
       const count = await buttons.count()
       for (let i = 0; i < count; i++) {
         const btn = buttons.nth(i)

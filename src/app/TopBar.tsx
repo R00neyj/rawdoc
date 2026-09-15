@@ -3,10 +3,12 @@
 // 아이콘·툴팁은 F-142 3.2·3.3. 앞 묶음(제품 아이콘·이름·토글·검색)은 좁은 창에만 있다 (F-159 2.1)
 import type { ChangeEvent, FocusEvent, KeyboardEvent, RefObject } from 'react'
 import ShareMenu from './ShareMenu'
+import AccountMenu from './AccountMenu'
 import { IconEdit, IconRaw, IconView, IconDownload, IconTooltip } from './icons'
 import SidebarHead from './SidebarHead'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { Notice } from './notice'
+import type { AccountState } from './account'
 
 type ViewMode = 'live' | 'raw' | 'view'
 
@@ -36,6 +38,8 @@ type TopBarProps = {
   onShareNotice: (notice: Notice) => void
   exportDisabled: boolean
   onExportDoc: () => void
+  account: AccountState
+  onAccountBeforeNavigate: () => Promise<void>
 }
 
 export default function TopBar({
@@ -58,6 +62,8 @@ export default function TopBar({
   onShareNotice,
   exportDisabled,
   onExportDoc,
+  account,
+  onAccountBeforeNavigate,
 }: TopBarProps) {
   return (
     <header className="topbar">
@@ -110,6 +116,7 @@ export default function TopBar({
         </button>
         <IconTooltip text=".md 파일로 내보내기" align="end" />
       </span>
+      <AccountMenu account={account} onBeforeNavigate={onAccountBeforeNavigate} />
     </header>
   )
 }

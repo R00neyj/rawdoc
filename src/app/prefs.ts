@@ -35,6 +35,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.lineNumbers',
   'md.fontSize',
   'md.indent',
+  'md.account',
 ])
 
 function assertAllowed(key: string) {

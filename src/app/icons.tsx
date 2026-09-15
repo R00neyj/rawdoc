@@ -27,6 +27,9 @@ import formatAlignLeftSvg from '@material-symbols/svg-400/outlined/format_align_
 import formatAlignCenterSvg from '@material-symbols/svg-400/outlined/format_align_center.svg?raw'
 import formatAlignRightSvg from '@material-symbols/svg-400/outlined/format_align_right.svg?raw'
 import brokenImageSvg from '@material-symbols/svg-400/outlined/broken_image.svg?raw'
+import accountCircleSvg from '@material-symbols/svg-400/outlined/account_circle.svg?raw'
+import loginSvg from '@material-symbols/svg-400/outlined/login.svg?raw'
+import logoutSvg from '@material-symbols/svg-400/outlined/logout.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -79,6 +82,9 @@ export const IconAlignLeft = makeIcon(formatAlignLeftSvg)
 export const IconAlignCenter = makeIcon(formatAlignCenterSvg)
 export const IconAlignRight = makeIcon(formatAlignRightSvg)
 export const IconBrokenImage = makeIcon(brokenImageSvg)
+export const IconAccount = makeIcon(accountCircleSvg)
+export const IconLogin = makeIcon(loginSvg)
+export const IconLogout = makeIcon(logoutSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

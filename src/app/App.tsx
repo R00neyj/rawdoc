@@ -16,6 +16,7 @@ import { openStore } from '../storage/openStore'
 import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree'
 import { resolveWikiTarget } from '../lib/wikiLink'
 import { getPref, setPref } from './prefs'
+import { fetchAccount, type AccountState } from './account'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
 import { IconRefresh } from './icons'
 import { resolveTheme } from './theme'
@@ -161,6 +162,7 @@ export default function App() {
   const [sharedDoc, setSharedDoc] = useState<ShareDoc | null>(null)
   // 외부 .md 파일을 창 위로 끄는 동안의 덮개 (F-145.md 2.4)
   const [dropActive, setDropActive] = useState(false)
+  const [account, setAccount] = useState<AccountState>({ state: 'offline' })
 
   const titleInputRef = useRef<HTMLInputElement | null>(null)
   const sidebarRef = useRef<HTMLElement | null>(null)
@@ -290,6 +292,22 @@ export default function App() {
     }
     wasUpdateAvailableRef.current = updateAvailable
   }, [updateAvailable, applyUpdate, showNotice])
+
+  // 계정 상태 — 시작 때 1회, online 이벤트 때 1회 (F-205.md 2.5)
+  useEffect(() => {
+    let cancelled = false
+    function load() {
+      fetchAccount().then((next) => {
+        if (!cancelled) setAccount(next)
+      })
+    }
+    load()
+    window.addEventListener('online', load)
+    return () => {
+      cancelled = true
+      window.removeEventListener('online', load)
+    }
+  }, [])
 
   // ----- 부팅 (S-3 → S-1|S-2), 최초 실행 안내 문서 (ia.md 3.1·3.2, F-111 3.1) -----
   useEffect(() => {
@@ -1295,6 +1313,8 @@ export default function App() {
       onShareNotice={showNotice}
       exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
       onExportDoc={handleExportDoc}
+      account={account}
+      onAccountBeforeNavigate={() => docSaverFlushRef.current()}
     />
   )
 
