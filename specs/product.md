@@ -243,11 +243,11 @@ M3 이후는 착수 전 이 장을 풀어 4장 형식으로 다시 쓴다. M2 �
 | F-213 | 편집 잠금 | 편집 권한자가 같은 문서를 동시에 열면 먼저 연 사람만 편집, 나머지는 읽기 + 편집 중인 사람 표시. 신호가 끊기면 일정 시간 뒤 풀린다. 방식(D1 임대 / Durable Object)은 작은 명세에서. 동시 편집은 M3 |
 
 - 사람이 할 준비: `wrangler login`, R2 구독 켜기(무료 사용분이 있어도 대시보드 결제 절차 필요), Zero Trust 조직 만들기·일회용 코드 로그인·Access 앱. `specs/human-checks.md` 5장
-- 만든 리소스 (2026-09-15, Cloudflare MCP): D1 `md-editor-db` (id `073462f8-7a95-4b0f-8d32-4b07f8c4448e`, APAC), R2 `md-editor-attachments` (APAC, 공개 접근 없음). 이름에 제품명을 쓰지 않는다(불변조건). 테이블은 아직 없음 — F-206 마이그레이션이 만든다
+- 만든 리소스 (2026-09-15, Cloudflare MCP): D1 `md-editor-db` (id `073462f8-7a95-4b0f-8d32-4b07f8c4448e`, APAC), R2 `md-editor-attachments` (APAC, 공개 접근 없음). 이름에 제품명을 쓰지 않는다(불변조건). 원격 마이그레이션은 해당 명세 커밋 뒤 적용. Access 팀 `fragrant-sky-f428.cloudflareaccess.com`, 앱 `md-editor-api` (`rawdoc.app/api`, 정책 `all-emails`, 일회용 코드만, 세션 168h). AUD 는 `wrangler.jsonc` vars
 - Access 좌석: 로그인 인증 1회마다 사용자 1명이 좌석을 쓴다. 좌석이 차면 새 로그인이 막히고, Zero Trust 사용자 제거로 돌려받는다. 무료 좌석 수는 문서에서 확인하지 못했다 (2026-09-15). 공유 링크를 보는 사람은 로그인하지 않아 좌석을 쓰지 않는다 (https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/)
 - 호스트의 특정 경로만 Access 로 보호할 수 있다 — `rawdoc.app/api` (https://developers.cloudflare.com/workers/configuration/cloudflare-access/). `rawdoc.app` 존은 이 계정에 active (2026-09-15 확인, Free 플랜)
 - D1: 값·행 최대 2MB, 무료 DB 500MB, 무료는 Worker 호출당 쿼리 50회, 무료 하루 쓰기 10만 행 초과 시 쿼리 실패 (https://developers.cloudflare.com/d1/platform/limits/, https://developers.cloudflare.com/workers/platform/pricing/)
-- 미인증 요청에 Access 가 리다이렉트를 주는지 401 을 주는지 문서에 없다 — 클라이언트는 둘 다 로그인 필요로 처리한다 (F-205)
+- 미인증 요청에 Access 가 리다이렉트를 주는지 401 을 주는지 문서에 없다 — 클라이언트는 둘 다 로그인 필요로 처리한다 (F-205). 2026-09-15 실측: 쿠키 없는 `GET /api/health` 는 팀 도메인 로그인 화면으로 302
 - 화면 구조·URL(`#/d/{id}` 재정의, 공유 링크 주소, 계정 메뉴)은 `specs/ia.md` 를, 서버 필드(소유자·버전)는 5장·`specs/architecture.md` 를 해당 작은 명세와 함께 고친다
 - Workers 는 `node_modules`·`.git` 을 자동 제외하지 않는다 — 자산 디렉터리가 `dist/` 라 해당 없음 (F-120)
 

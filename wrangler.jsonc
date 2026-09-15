@@ -7,8 +7,8 @@
   "preview_urls": false,
   "routes": [{ "pattern": "rawdoc.app", "custom_domain": true }],
   "vars": {
-    "ACCESS_TEAM_DOMAIN": "",
-    "ACCESS_AUD": ""
+    "ACCESS_TEAM_DOMAIN": "https://fragrant-sky-f428.cloudflareaccess.com",
+    "ACCESS_AUD": "170e394a9d9137e9426d7dab75171a71210b71131ce7cb9eb46a45c88233cc85"
   },
   "assets": {
     "directory": "./dist",

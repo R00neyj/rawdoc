@@ -75,5 +75,5 @@
 | H60 | `npx wrangler login` | `npx wrangler whoami` 에 계정 표시 | 통과 (2026-09-15 사용자 로그인) |
 | H61 | R2 구독 켜기 | 버킷 생성 가능 | 통과 (2026-09-15 사용자 켬, 메인이 MCP 로 `md-editor-attachments` APAC 생성) |
 | H62 | D1 DB | `md-editor-db` 존재 | 통과 (2026-09-15 메인이 MCP 로 생성, id `073462f8-7a95-4b0f-8d32-4b07f8c4448e`, APAC, 테이블 없음 — 스키마는 F-206) |
-| H63 | Zero Trust 조직(팀 도메인)·일회용 코드 로그인 켜기 | API `access/organizations` 조회 성공 | 실패 (2026-09-15 사용자 "켜둠" 후에도 API 가 `Access is not enabled` — 대시보드 Zero Trust 첫 설정(팀 이름·플랜 선택)이 끝났는지 확인) |
-| H64 | Access 앱(보호 API 경로) | F-205 명세대로 경로·정책 | 대기 (F-205 승인 후) |
+| H63 | Zero Trust 조직(팀 도메인)·일회용 코드 로그인 켜기 | API `access/organizations` 조회 성공 | 통과 (2026-09-15 사용자 활성화, 팀 도메인 `fragrant-sky-f428.cloudflareaccess.com`, 메인이 MCP 로 일회용 코드 IdP 추가) |
+| H64 | Access 앱(보호 API 경로) | F-205 명세대로 경로·정책 | 통과 (2026-09-15 메인이 MCP 로 `md-editor-api` 자체 호스팅 앱 `rawdoc.app/api`, 정책 `all-emails` 모두 허용, 일회용 코드만, 세션 168h. 실제 로그인은 F-205 A8 사람 확인) |
