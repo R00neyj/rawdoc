@@ -4,6 +4,7 @@ import { requireUser } from './auth'
 import { isValidToken } from './token'
 import { sniffImage } from './imageSniff'
 import { extractAttachmentRefs } from '../src/lib/imageBlock'
+import { folderTreeIds } from './links'
 
 const MAX_ATTACHMENT_BYTES = 5_242_880
 const ID_EXT_RE = /^([0-9a-f]{16})\.(png|jpg|gif|webp)$/
@@ -128,6 +129,41 @@ export async function handlePublicGetAttachment(
     .bind(link.target_id)
     .first<{ owner_id: string; content: string }>()
   if (!doc) return errorResponse('not_found', 404)
+  if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)
+
+  const row = await env.DB.prepare('SELECT * FROM attachments WHERE owner_id = ? AND id = ?')
+    .bind(doc.owner_id, id)
+    .first<AttachmentRow>()
+  if (!row || row.ext !== ext) return errorResponse('not_found', 404)
+
+  const object = await env.BUCKET.get(`att/${doc.owner_id}/${id}.${ext}`)
+  if (!object) return errorResponse('not_found', 404)
+
+  return attachmentResponse(object, row.mime, 'private, max-age=300')
+}
+
+export async function handlePublicGetFolderAttachment(
+  _request: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const parsedName = parseIdExt(params.idext)
+  if (!parsedName || !isValidToken(params.token)) return errorResponse('not_found', 404)
+  const { id, ext } = parsedName
+
+  const link = await env.DB.prepare('SELECT target_type, target_id, owner_id FROM share_links WHERE token = ? AND revoked_at IS NULL')
+    .bind(params.token)
+    .first<{ target_type: string; target_id: string; owner_id: string }>()
+  if (!link || link.target_type !== 'folder') return errorResponse('not_found', 404)
+
+  const doc = await env.DB.prepare('SELECT owner_id, content, folder_id FROM docs WHERE id = ? AND owner_id = ?')
+    .bind(params.docId, link.owner_id)
+    .first<{ owner_id: string; content: string; folder_id: string | null }>()
+  if (!doc) return errorResponse('not_found', 404)
+
+  const treeIds = await folderTreeIds(env, link.target_id, link.owner_id)
+  if (!doc.folder_id || !treeIds.includes(doc.folder_id)) return errorResponse('not_found', 404)
   if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)
 
   const row = await env.DB.prepare('SELECT * FROM attachments WHERE owner_id = ? AND id = ?')

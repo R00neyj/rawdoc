@@ -10,8 +10,23 @@ import {
   handleUpdateDoc,
 } from './docs'
 import { handleCreateFolder, handleDeleteFolder, handleListFolders, handleUpdateFolder } from './folders'
-import { handleCreateDocLink, handleDeleteDocLink, handleGetDocLink, handlePublicGetDoc } from './links'
-import { handleGetAttachment, handlePublicGetAttachment, handleUploadAttachment } from './attachments'
+import {
+  handleCreateDocLink,
+  handleCreateFolderLink,
+  handleDeleteDocLink,
+  handleDeleteFolderLink,
+  handleGetDocLink,
+  handleGetFolderLink,
+  handlePublicGetDoc,
+  handlePublicGetFolder,
+  handlePublicGetFolderDoc,
+} from './links'
+import {
+  handleGetAttachment,
+  handlePublicGetAttachment,
+  handlePublicGetFolderAttachment,
+  handleUploadAttachment,
+} from './attachments'
 
 type RouteHandler = (
   request: Request,
@@ -87,10 +102,20 @@ const routes: Route[] = [
   { method: 'POST', path: '/api/folders', handler: handleCreateFolder },
   { method: 'PUT', path: '/api/folders/:id', handler: handleUpdateFolder },
   { method: 'DELETE', path: '/api/folders/:id', handler: handleDeleteFolder },
+  { method: 'GET', path: '/api/folders/:id/link', handler: handleGetFolderLink },
+  { method: 'POST', path: '/api/folders/:id/link', handler: handleCreateFolderLink },
+  { method: 'DELETE', path: '/api/folders/:id/link', handler: handleDeleteFolderLink },
   { method: 'GET', path: '/pub/docs/:token', handler: handlePublicGetDoc },
   { method: 'PUT', path: '/api/attachments/:idext', handler: handleUploadAttachment },
   { method: 'GET', path: '/api/attachments/:idext', handler: handleGetAttachment },
   { method: 'GET', path: '/pub/docs/:token/attachments/:idext', handler: handlePublicGetAttachment },
+  { method: 'GET', path: '/pub/folders/:token', handler: handlePublicGetFolder },
+  { method: 'GET', path: '/pub/folders/:token/docs/:docId', handler: handlePublicGetFolderDoc },
+  {
+    method: 'GET',
+    path: '/pub/folders/:token/docs/:docId/attachments/:idext',
+    handler: handlePublicGetFolderAttachment,
+  },
 ]
 
 export default {
