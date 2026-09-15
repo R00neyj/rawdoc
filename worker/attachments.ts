@@ -3,12 +3,12 @@
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { isValidToken } from './token'
-import { sniffImage } from './imageSniff'
+import { sniffImage, type ImageExt } from './imageSniff'
 import { extractAttachmentRefs } from '../src/lib/imageBlock'
 import { folderTreeIds } from './links'
 import { getDocAccess, isDocAttachmentOwner } from './access'
 
-const MAX_ATTACHMENT_BYTES = 5_242_880
+export const MAX_ATTACHMENT_BYTES = 5_242_880
 // 계정당 첨부 저장 한도 500MB (specs/features/F-221.md 2.1)
 export const ATTACHMENT_QUOTA_BYTES = 524_288_000
 const ID_EXT_RE = /^([0-9a-f]{16})\.(png|jpg|gif|webp)$/
@@ -52,6 +52,51 @@ function attachmentResponse(object: R2ObjectBody, mime: string, cacheControl: st
   return new Response(object.body, { headers })
 }
 
+// 이미지를 저장한다(시그니처 판정·계정 한도 검사·R2 put·D1 insert). id 는 호출하는 쪽이 정한다(F-223 2.2)
+export type StoreAttachmentResult =
+  | { ok: true; row: { id: string; ext: ImageExt; mime: string; size: number; width: number; height: number } }
+  | { ok: false; status: 400; error: 'unsupported' | 'type_mismatch' }
+  | { ok: false; status: 507; error: 'quota_exceeded'; used: number; limit: number }
+
+export async function storeAttachment(
+  env: Env,
+  ownerId: string,
+  id: string,
+  buffer: Uint8Array,
+  expectedExt: ImageExt | null,
+): Promise<StoreAttachmentResult> {
+  const sniffed = sniffImage(buffer)
+  if (!sniffed) return { ok: false, status: 400, error: 'unsupported' }
+  if (expectedExt && sniffed.ext !== expectedExt) return { ok: false, status: 400, error: 'type_mismatch' }
+
+  const used = await getUsedBytes(env, ownerId)
+  if (used + buffer.length > ATTACHMENT_QUOTA_BYTES) {
+    return { ok: false, status: 507, error: 'quota_exceeded', used, limit: ATTACHMENT_QUOTA_BYTES }
+  }
+
+  const key = `att/${ownerId}/${id}.${sniffed.ext}`
+  await env.BUCKET.put(key, buffer, { httpMetadata: { contentType: sniffed.mime } })
+
+  const now = Date.now()
+  await env.DB.prepare(
+    'INSERT INTO attachments (owner_id, id, ext, mime, size, width, height, created_at) VALUES (?,?,?,?,?,?,?,?)',
+  )
+    .bind(ownerId, id, sniffed.ext, sniffed.mime, buffer.length, sniffed.width, sniffed.height, now)
+    .run()
+
+  return {
+    ok: true,
+    row: { id, ext: sniffed.ext, mime: sniffed.mime, size: buffer.length, width: sniffed.width, height: sniffed.height },
+  }
+}
+
+// 첨부 id(16 hex) — 서버가 만들 때 쓴다(F-223 2.2)
+export function generateAttachmentId(): string {
+  const bytes = new Uint8Array(8)
+  crypto.getRandomValues(bytes)
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 export async function handleUploadAttachment(
   request: Request,
   env: Env,
@@ -79,29 +124,13 @@ export async function handleUploadAttachment(
     return jsonResponse({ error: 'too_large', limit: MAX_ATTACHMENT_BYTES }, 413)
   }
 
-  const sniffed = sniffImage(buffer)
-  if (!sniffed) return errorResponse('unsupported', 400)
-  if (sniffed.ext !== ext) return errorResponse('type_mismatch', 400)
-
-  const used = await getUsedBytes(env, user.id)
-  if (used + buffer.length > ATTACHMENT_QUOTA_BYTES) {
-    return jsonResponse({ error: 'quota_exceeded', used, limit: ATTACHMENT_QUOTA_BYTES }, 507)
+  const result = await storeAttachment(env, user.id, id, buffer, ext)
+  if (!result.ok) {
+    if (result.status === 400) return errorResponse(result.error, 400)
+    return jsonResponse({ error: result.error, used: result.used, limit: result.limit }, 507)
   }
 
-  const key = `att/${user.id}/${id}.${ext}`
-  await env.BUCKET.put(key, buffer, { httpMetadata: { contentType: sniffed.mime } })
-
-  const now = Date.now()
-  await env.DB.prepare(
-    'INSERT INTO attachments (owner_id, id, ext, mime, size, width, height, created_at) VALUES (?,?,?,?,?,?,?,?)',
-  )
-    .bind(user.id, id, ext, sniffed.mime, buffer.length, sniffed.width, sniffed.height, now)
-    .run()
-
-  return jsonResponse(
-    { id, ext, mime: sniffed.mime, size: buffer.length, width: sniffed.width, height: sniffed.height },
-    201,
-  )
+  return jsonResponse(result.row, 201)
 }
 
 export async function handleGetUsage(request: Request, env: Env): Promise<Response> {

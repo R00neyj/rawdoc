@@ -40,6 +40,7 @@ import {
 } from './grants'
 import { cleanupServerAttachments } from './attachmentGc'
 import { handleCreateToken, handleDeleteToken, handleListTokens } from './apiTokens'
+import { handleCreateAttachmentV1, handleCreateDocLinkV1, handleCreateDocV1, handleUpdateDocV1 } from './v1'
 
 type RouteHandler = (
   request: Request,
@@ -142,6 +143,14 @@ const routes: Route[] = [
     path: '/pub/folders/:token/docs/:docId/attachments/:idext',
     handler: handlePublicGetFolderAttachment,
   },
+  { method: 'GET', path: '/v1/docs', handler: handleListDocs },
+  { method: 'POST', path: '/v1/docs', handler: handleCreateDocV1 },
+  { method: 'GET', path: '/v1/docs/:id', handler: handleGetDoc },
+  { method: 'PUT', path: '/v1/docs/:id', handler: handleUpdateDocV1 },
+  { method: 'GET', path: '/v1/folders', handler: handleListFolders },
+  { method: 'POST', path: '/v1/folders', handler: handleCreateFolder },
+  { method: 'POST', path: '/v1/attachments', handler: handleCreateAttachmentV1 },
+  { method: 'POST', path: '/v1/docs/:id/link', handler: handleCreateDocLinkV1 },
 ]
 
 export default {
