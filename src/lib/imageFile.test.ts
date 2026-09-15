@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { inspectImageBytes } from './imageFile.js'
+import { inspectImageBytes } from './imageFile'
 
-function bytes(...arrays) {
+function bytes(...arrays: Uint8Array[]) {
   const total = arrays.reduce((n, a) => n + a.length, 0)
   const out = new Uint8Array(total)
   let offset = 0
@@ -12,20 +12,20 @@ function bytes(...arrays) {
   return out
 }
 
-function u32be(n) {
+function u32be(n: number) {
   return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff]
 }
-function u16be(n) {
+function u16be(n: number) {
   return [(n >>> 8) & 0xff, n & 0xff]
 }
-function u16le(n) {
+function u16le(n: number) {
   return [n & 0xff, (n >>> 8) & 0xff]
 }
-function ascii(s) {
+function ascii(s: string) {
   return Array.from(s).map((c) => c.charCodeAt(0))
 }
 
-function pngBytes(width, height) {
+function pngBytes(width: number, height: number) {
   return bytes(
     Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     Uint8Array.from(u32be(13)), // IHDR 길이
@@ -37,7 +37,7 @@ function pngBytes(width, height) {
 }
 
 // SOF0(0xC0) 마커 하나만 있는 최소 JPEG
-function jpegBytes(width, height) {
+function jpegBytes(width: number, height: number) {
   const sof = bytes(
     Uint8Array.from([0xff, 0xc0]),
     Uint8Array.from(u16be(8)), // 세그먼트 길이(길이 2바이트 포함)
@@ -48,11 +48,11 @@ function jpegBytes(width, height) {
   return bytes(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0]), Uint8Array.from(u16be(4)), Uint8Array.from([0, 0]), sof)
 }
 
-function gifBytes(width, height) {
+function gifBytes(width: number, height: number) {
   return bytes(Uint8Array.from(ascii('GIF89a')), Uint8Array.from(u16le(width)), Uint8Array.from(u16le(height)))
 }
 
-function webpVp8Bytes(width, height) {
+function webpVp8Bytes(width: number, height: number) {
   const frameTag = [0x30, 0x00, 0x00] // key frame
   const startCode = [0x9d, 0x01, 0x2a]
   const dims = [...u16le(width & 0x3fff), ...u16le(height & 0x3fff)]

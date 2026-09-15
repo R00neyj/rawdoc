@@ -1,30 +1,40 @@
-// 폴더 트리 조립·깊이 검사 — 순수 함수 (specs/features/F-126.md 4장)
-// 폴더는 2단계까지만 허용한다: 최상위 폴더(parentId null) → 하위 폴더(parentId = 최상위 폴더 id).
-// 하위 폴더는 하위 폴더를 가질 수 없다
+// 폴더 트리 조립·깊이 검사 — 순수 함수. 폴더는 2단계까지만 허용한다(하위 폴더는 하위 폴더를 못 가짐) (specs/features/F-126.md 4장)
 
-/**
- * @typedef {{ id:string, name:string, parentId:string|null }} FolderLike
- * @typedef {{ id:string, title:string, updatedAt:number, folderId:string|null, pinnedAt?:number|null }} DocLike
- * @typedef {{ type:'folder', id:string, name:string, parentId:string|null, children:Node[] }
- *         | { type:'doc', id:string, title:string, updatedAt:number, folderId:string|null, pinnedAt:number|null }} Node
- */
+export type FolderLike = { id: string; name: string; parentId: string | null }
+export type DocLike = {
+  id: string
+  title: string
+  updatedAt: number
+  folderId: string | null
+  pinnedAt?: number | null
+}
+export type FolderNode = {
+  type: 'folder'
+  id: string
+  name: string
+  parentId: string | null
+  children: TreeNode[]
+}
+export type DocNode = {
+  type: 'doc'
+  id: string
+  title: string
+  updatedAt: number
+  folderId: string | null
+  pinnedAt: number | null
+}
+export type TreeNode = FolderNode | DocNode
 
-/**
- * @param {{ folders: FolderLike[], docs: DocLike[] }} args
- * @returns {Node[]} 부모가 없는(또는 부모 참조가 끊긴) 폴더·문서는 최상위로 올라온다.
- *   같은 부모 안에서는 폴더 먼저(이름 `localeCompare(..., 'ko')` 오름차순), 그다음 문서
- *   (`updatedAt` 내림차순)
- */
-export function buildTree({ folders, docs }) {
+// 부모 없는(또는 끊긴) 폴더·문서는 최상위로. 같은 부모 안에서는 폴더 먼저(이름순), 그다음 문서(updatedAt 내림차순)
+export function buildTree({ folders, docs }: { folders: FolderLike[]; docs: DocLike[] }): TreeNode[] {
   const folderIds = new Set(folders.map((f) => f.id))
 
-  // 존재하지 않는 폴더를 가리키는 parentId·folderId 는 null(최상위)로 본다
-  // (F-126.md 3장 — 지운 폴더를 가리키는 문서는 최상위에 보인다)
-  const resolvedParentId = (parentId) => (parentId && folderIds.has(parentId) ? parentId : null)
-  const resolvedFolderId = (folderId) => (folderId && folderIds.has(folderId) ? folderId : null)
+  // 존재하지 않는 폴더를 가리키는 parentId·folderId 는 null(최상위)로 본다 (F-126.md 3장)
+  const resolvedParentId = (parentId: string | null) => (parentId && folderIds.has(parentId) ? parentId : null)
+  const resolvedFolderId = (folderId: string | null) => (folderId && folderIds.has(folderId) ? folderId : null)
 
-  function childrenOf(parentId) {
-    const childFolders = folders
+  function childrenOf(parentId: string | null): TreeNode[] {
+    const childFolders: FolderNode[] = folders
       .filter((f) => resolvedParentId(f.parentId) === parentId)
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
       .map((f) => ({
@@ -35,7 +45,7 @@ export function buildTree({ folders, docs }) {
         children: childrenOf(f.id),
       }))
 
-    const childDocs = docs
+    const childDocs: DocNode[] = docs
       .filter((d) => resolvedFolderId(d.folderId) === parentId)
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .map((d) => ({
@@ -53,26 +63,30 @@ export function buildTree({ folders, docs }) {
   return childrenOf(null)
 }
 
-/**
- * @param {{ folders: FolderLike[], parentId: string|null }} args
- * @returns {boolean} `parentId` 아래에 새 폴더를 만들 수 있는가. 최상위(null)는 항상 가능.
- *   `parentId` 가 가리키는 폴더가 없거나, 그 폴더 자신이 하위 폴더(parentId 가 있음)이면 불가
- */
-export function canCreateFolder({ folders, parentId }) {
+// parentId 아래에 새 폴더를 만들 수 있는가. 최상위(null)는 항상 가능. 대상이 없거나 하위 폴더면 불가
+export function canCreateFolder({
+  folders,
+  parentId,
+}: {
+  folders: FolderLike[]
+  parentId: string | null | undefined
+}): boolean {
   if (parentId === null || parentId === undefined) return true
   const target = folders.find((f) => f.id === parentId)
   if (!target) return false
   return target.parentId === null
 }
 
-/**
- * @param {{ folders: FolderLike[], id: string, parentId: string|null }} args
- * @returns {boolean} 폴더 `id` 를 `parentId` 아래로 옮길 수 있는가.
- *   자기 자신 밑으로는 못 간다. 최상위(null)로는 항상(자기 자신이 아니면) 갈 수 있다.
- *   대상이 없거나 대상 자신이 하위 폴더면 불가. 옮기려는 폴더가 하위 폴더를 가지고
- *   있으면(즉 그 자신이 최상위 폴더고 자식이 있으면) 다른 폴더 안으로는 못 간다(2단계 초과)
- */
-export function canMoveFolder({ folders, id, parentId }) {
+// 폴더 id 를 parentId 아래로 옮길 수 있는가. 자기 자신 밑·하위 폴더 안·자식 있는 폴더를 다른 폴더 안으로는 못 간다(2단계 초과)
+export function canMoveFolder({
+  folders,
+  id,
+  parentId,
+}: {
+  folders: FolderLike[]
+  id: string
+  parentId: string | null | undefined
+}): boolean {
   if (parentId === id) return false
   if (parentId === null || parentId === undefined) return true
 
@@ -86,43 +100,39 @@ export function canMoveFolder({ folders, id, parentId }) {
   return true
 }
 
-/**
- * @param {{ folders: FolderLike[], doc: DocLike|null|undefined }} args
- * @returns {string[]} 문서를 열 때 펼칠 폴더 id 목록(최상위 → 하위 순). 문서가 폴더 밖이거나
- *   가리키는 폴더가 없으면 빈 배열
- */
-export function ancestorsOfDoc({ folders, doc }) {
+// 문서를 열 때 펼칠 폴더 id 목록(최상위 → 하위 순). 폴더 밖이거나 가리키는 폴더가 없으면 빈 배열
+export function ancestorsOfDoc({
+  folders,
+  doc,
+}: {
+  folders: FolderLike[]
+  doc: DocLike | null | undefined
+}): string[] {
   const folderById = new Map(folders.map((f) => [f.id, f]))
-  const result = []
+  const result: string[] = []
   let current = doc?.folderId ?? null
 
   while (current && folderById.has(current)) {
     result.unshift(current)
-    current = folderById.get(current).parentId
+    current = folderById.get(current)!.parentId
   }
 
   return result
 }
 
-/**
- * @param {DocLike[]} docs
- * @returns {DocLike[]} `pinnedAt` 이 있는 문서를 고정한 순서(오름차순)로. `pinnedAt` 이
- *   없거나 null 이면 제외한다 (specs/features/F-132.md 2장)
- */
-export function pinnedDocs(docs) {
-  return docs.filter((d) => d.pinnedAt != null).sort((a, b) => a.pinnedAt - b.pinnedAt)
+// pinnedAt 이 있는 문서를 고정한 순서(오름차순)로. 없거나 null 이면 제외한다 (specs/features/F-132.md 2장)
+export function pinnedDocs<T extends DocLike>(docs: T[]): T[] {
+  return docs.filter((d) => d.pinnedAt != null).sort((a, b) => (a.pinnedAt ?? 0) - (b.pinnedAt ?? 0))
 }
 
-/**
- * 새 문서를 넣을 대상 폴더를 정한다 (specs/features/F-138.md 3.4). `folderId` 가
- * 존재하는 폴더를 가리킬 때만 그 값을 쓰고, 그 외(지운 폴더·옛 버그로 끊긴 값·문서
- * id 등)는 최상위(null)로 되돌린다 — 저장소 `create`·`moveDoc`(F-136.md 3.1·3.2)이
- * 없는 폴더 id 를 거부해 처리되지 않은 rejection 으로 이어지는 것을 막는다.
- * 사이드바 새 문서(폴더 생략)·없는 위키링크 클릭·가져오기 세 경로가 이 함수를 쓴다.
- * @param {{ folders: FolderLike[], folderId: string|null|undefined }} args
- * @returns {string|null}
- */
-export function resolveTargetFolderId({ folders, folderId }) {
+// 새 문서를 넣을 대상 폴더를 정한다. 존재하는 폴더가 아니면 최상위(null)로 되돌려 저장소 reject 을 막는다 (specs/features/F-138.md 3.4)
+export function resolveTargetFolderId({
+  folders,
+  folderId,
+}: {
+  folders: FolderLike[]
+  folderId: string | null | undefined
+}): string | null {
   if (!folderId) return null
   return folders.some((f) => f.id === folderId) ? folderId : null
 }

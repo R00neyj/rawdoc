@@ -48,7 +48,7 @@ function ownedPatterns(featureId) {
       const p = m[1]
       patterns.push(p)
       if (m[2]) {
-        const testVariant = p.replace(/\.jsx?$/, (ext) => (ext === '.jsx' ? '.test.jsx' : '.test.js'))
+        const testVariant = p.replace(/\.(jsx|tsx|js|ts)$/, (_, ext) => `.test.${ext}`)
         if (testVariant !== p) patterns.push(testVariant)
       }
     }
@@ -117,13 +117,13 @@ function addedLinesFor(file, base) {
 const HEX_RE = /#[0-9a-fA-F]{8}\b|#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/
 const HEX_EXEMPT = (file) =>
   file === 'src/styles/tokens.css' ||
-  file === 'brand.config.js' ||
-  /\.test\.jsx?$/.test(file) ||
+  file === 'brand.config.ts' ||
+  /\.test\.(jsx?|tsx?)$/.test(file) ||
   /^e2e\//.test(file)
 
 function loadBrandNames() {
   try {
-    const text = readFileSync('brand.config.js', 'utf-8')
+    const text = readFileSync('brand.config.ts', 'utf-8')
     const names = new Set()
     for (const m of text.matchAll(/(?:name|shortName)\s*:\s*'([^']+)'/g)) names.add(m[1])
     return [...names]
@@ -134,7 +134,7 @@ function loadBrandNames() {
 
 function checkLines(file, lines) {
   const violations = []
-  const isCodeFile = /\.(js|jsx|mjs)$/.test(file)
+  const isCodeFile = /\.(js|jsx|mjs|ts|tsx)$/.test(file)
   const isCssFile = /\.css$/.test(file)
   if (!isCodeFile && !isCssFile) return violations
 

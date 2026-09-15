@@ -6,14 +6,22 @@ import {
   ancestorsOfDoc,
   pinnedDocs,
   resolveTargetFolderId,
-} from './folderTree.js'
+  type FolderNode,
+  type TreeNode,
+} from './folderTree'
 
-function folder(id, name, parentId = null) {
+function folder(id: string, name: string, parentId: string | null = null) {
   return { id, name, parentId }
 }
 
-function doc(id, title, folderId = null, updatedAt = 0) {
+function doc(id: string, title: string, folderId: string | null = null, updatedAt = 0) {
   return { id, title, folderId, updatedAt }
+}
+
+// 테스트에서 찾은 노드가 폴더 노드임을 보장한다(없거나 문서 노드면 실패)
+function asFolder(node: TreeNode | undefined): FolderNode {
+  if (!node || node.type !== 'folder') throw new Error('폴더 노드가 아닙니다')
+  return node
 }
 
 describe('buildTree', () => {
@@ -35,7 +43,7 @@ describe('buildTree', () => {
     const tree = buildTree({ folders, docs })
 
     expect(tree.map((n) => n.id).sort()).toEqual(['d1', 'orphan', 'top'].sort())
-    expect(tree.find((n) => n.id === 'orphan').parentId).toBe('없는-부모') // 원본 parentId 는 보존
+    expect(asFolder(tree.find((n) => n.id === 'orphan')).parentId).toBe('없는-부모') // 원본 parentId 는 보존
   })
 
   it('하위 폴더와 그 안의 문서를 children 으로 중첩한다', () => {
@@ -45,9 +53,9 @@ describe('buildTree', () => {
     const tree = buildTree({ folders, docs })
 
     expect(tree.map((n) => n.id)).toEqual(['top', 'd2'])
-    const top = tree[0]
+    const top = asFolder(tree[0])
     expect(top.children.map((n) => n.id)).toEqual(['sub'])
-    const sub = top.children[0]
+    const sub = asFolder(top.children[0])
     expect(sub.children.map((n) => n.id)).toEqual(['d1'])
   })
 
@@ -132,7 +140,7 @@ describe('ancestorsOfDoc', () => {
 })
 
 describe('pinnedDocs (F-132)', () => {
-  function pinnedDoc(id, title, pinnedAt) {
+  function pinnedDoc(id: string, title: string, pinnedAt: number | null) {
     return { id, title, folderId: null, updatedAt: 0, pinnedAt }
   }
 

@@ -1,6 +1,6 @@
 // wikiLink.js 단위 테스트 (specs/features/F-131.md 7장 A1)
 import { describe, expect, it } from 'vitest'
-import { findWikiLinks, resolveWikiTarget } from './wikiLink.js'
+import { findWikiLinks, resolveWikiTarget } from './wikiLink'
 
 describe('findWikiLinks — 2장 표', () => {
   it('[[회의록]] — 대상·보이는 글자 모두 회의록', () => {

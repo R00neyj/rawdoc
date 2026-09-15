@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { encodeShare, decodeShare, decompress } from './shareCodec.js'
+import { encodeShare, decodeShare, decompress, type ShareDoc } from './shareCodec'
 
-/** deflate-raw 로 압축한 바이트를 만든다 (decompress 테스트용) */
-async function compressBytes(bytes) {
+// deflate-raw 로 압축한 바이트를 만든다 (decompress 테스트용)
+async function compressBytes(bytes: Uint8Array<ArrayBuffer>) {
   const cs = new CompressionStream('deflate-raw')
   const writer = cs.writable.getWriter()
   writer.write(bytes)
@@ -12,21 +12,21 @@ async function compressBytes(bytes) {
 
 describe('encodeShare/decodeShare 왕복', () => {
   it('한글·이모지 본문(LF)이 바이트 그대로 돌아온다', async () => {
-    const doc = { title: '제목 한글', content: '한글 이모지 😀 본문\n둘째 줄', lineEnding: 'lf' }
+    const doc: ShareDoc = { title: '제목 한글', content: '한글 이모지 😀 본문\n둘째 줄', lineEnding: 'lf' }
     const fragment = await encodeShare(doc)
     const result = await decodeShare(fragment)
     expect(result).toEqual(doc)
   })
 
   it('CRLF 문서가 바이트 그대로 돌아온다', async () => {
-    const doc = { title: 'CRLF 문서', content: '첫 줄\r\n둘째 줄\r\n', lineEnding: 'crlf' }
+    const doc: ShareDoc = { title: 'CRLF 문서', content: '첫 줄\r\n둘째 줄\r\n', lineEnding: 'crlf' }
     const fragment = await encodeShare(doc)
     const result = await decodeShare(fragment)
     expect(result).toEqual(doc)
   })
 
   it('빈 문서가 바이트 그대로 돌아온다', async () => {
-    const doc = { title: '', content: '', lineEnding: 'crlf' }
+    const doc: ShareDoc = { title: '', content: '', lineEnding: 'crlf' }
     const fragment = await encodeShare(doc)
     const result = await decodeShare(fragment)
     expect(result).toEqual(doc)
@@ -91,7 +91,7 @@ describe('decompress 압축 해제 크기 상한 (F-138 3.6)', () => {
   })
 
   it('decodeShare 는 기본 상한(20MB)을 쓰고, 그 아래 문서는 정상 왕복한다', async () => {
-    const doc = { title: '작은 문서', content: '평범한 본문', lineEnding: 'lf' }
+    const doc: ShareDoc = { title: '작은 문서', content: '평범한 본문', lineEnding: 'lf' }
     const fragment = await encodeShare(doc)
     await expect(decodeShare(fragment)).resolves.toEqual(doc)
   })

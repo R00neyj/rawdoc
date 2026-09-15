@@ -1,12 +1,26 @@
 // 이미지 블록 원문 만들기·해석·첨부 id 추출·속성 값 바꾸기 (F-156.md 2.1). 순수 함수, 줄은 항상 '\n' — lineEnding 변환은 이 파일 밖(CM6 doc)에서 한다
 
+export type ImageExt = 'png' | 'jpg' | 'gif' | 'webp'
+export type ImageAlign = 'left' | 'center' | 'right'
+
+export type ParsedImageBlock = {
+  align: ImageAlign
+  id: string
+  ext: ImageExt
+  src: string
+  alt: string
+  width: number | null
+}
+
+export type CodeMirrorChange = { from: number; to: number; insert: string }
+
 const SRC_RE = /^attachments\/([0-9a-f]{16})\.(png|jpg|gif|webp)$/
 const REF_RE = /attachments\/[0-9a-f]{16}\.(?:png|jpg|gif|webp)/g
 const WIDTH_RE = /^[0-9]{1,4}$/
 const ALIGN_VALUES = new Set(['left', 'center', 'right'])
 const INDENT = '  ' // img 줄 들여쓰기는 항상 공백 2칸 (F-154 설정과 무관)
 
-function escapeAlt(raw) {
+function escapeAlt(raw: string): string {
   return String(raw ?? '')
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
@@ -14,7 +28,7 @@ function escapeAlt(raw) {
     .replace(/>/g, '&gt;')
 }
 
-function unescapeAlt(raw) {
+function unescapeAlt(raw: string): string {
   return String(raw ?? '')
     .replace(/&quot;/g, '"')
     .replace(/&lt;/g, '<')
@@ -23,13 +37,25 @@ function unescapeAlt(raw) {
 }
 
 // 줄바꿈을 공백으로, 100자에서 자르고, 4개 문자 참조로 이스케이프한다 (2.1)
-function sanitizeAlt(raw) {
+function sanitizeAlt(raw: string): string {
   const flattened = String(raw ?? '').replace(/\r\n|\r|\n/g, ' ')
   return escapeAlt(flattened.slice(0, 100))
 }
 
-// 이미지 블록 원문 3줄을 만든다. params: {id, ext, alt, width, align?} → '\n' 으로 이은 3줄
-export function buildImageBlock({ id, ext, alt, width, align = 'center' }) {
+// 이미지 블록 원문 3줄을 만든다 → '\n' 으로 이은 3줄
+export function buildImageBlock({
+  id,
+  ext,
+  alt,
+  width,
+  align = 'center',
+}: {
+  id: string
+  ext: ImageExt
+  alt: string
+  width: number
+  align?: ImageAlign
+}): string {
   const safeAlt = sanitizeAlt(alt)
   const safeWidth = Math.max(1, Math.round(width))
   return [
@@ -40,12 +66,12 @@ export function buildImageBlock({ id, ext, alt, width, align = 'center' }) {
 }
 
 // attrsStr(따옴표 안 값)을 key="value" 쌍으로 해석한다. 순서 무관, 각 1번, 그 밖의 글자가 있으면 null
-function parseAttrs(attrsStr) {
+function parseAttrs(attrsStr: string): Record<string, string> | null {
   const ATTR_RE = /([a-zA-Z]+)="([^"]*)"/g
-  const result = {}
-  const seen = new Set()
+  const result: Record<string, string> = {}
+  const seen = new Set<string>()
   let lastEnd = 0
-  let m
+  let m: RegExpExecArray | null
   while ((m = ATTR_RE.exec(attrsStr))) {
     const gap = attrsStr.slice(lastEnd, m.index)
     if (!/^\s*$/.test(gap) || (lastEnd > 0 && gap.length === 0)) return null
@@ -62,7 +88,7 @@ function parseAttrs(attrsStr) {
 }
 
 // 정확히 3줄인 이미지 블록 원문을 해석한다. 맞지 않으면 null(원문 그대로 취급)
-export function parseImageBlock(text) {
+export function parseImageBlock(text: unknown): ParsedImageBlock | null {
   if (typeof text !== 'string') return null
   const lines = text.split(/\r\n|\r|\n/)
   if (lines.length !== 3) return null
@@ -82,16 +108,16 @@ export function parseImageBlock(text) {
   const srcMatch = SRC_RE.exec(attrs.src)
   if (!srcMatch) return null
 
-  let width = null
+  let width: number | null = null
   if ('width' in attrs) {
     if (!WIDTH_RE.test(attrs.width)) return null
     width = Number(attrs.width)
   }
 
   return {
-    align: openMatch[1],
+    align: openMatch[1] as ImageAlign,
     id: srcMatch[1],
-    ext: srcMatch[2],
+    ext: srcMatch[2] as ImageExt,
     src: attrs.src,
     alt: 'alt' in attrs ? unescapeAlt(attrs.alt) : '',
     width,
@@ -99,20 +125,20 @@ export function parseImageBlock(text) {
 }
 
 // 내용 안 모든 attachments/{16hex}.{ext} 문자열의 id 집합 — 블록 해석과 무관하게 넓게 잡아 원문이 깨져도 첨부를 안 지운다 (2.1)
-export function extractAttachmentRefs(content) {
-  const ids = new Set()
+export function extractAttachmentRefs(content: unknown): Set<string> {
+  const ids = new Set<string>()
   if (typeof content !== 'string') return ids
-  let m
+  let m: RegExpExecArray | null
   REF_RE.lastIndex = 0
   while ((m = REF_RE.exec(content))) {
-    const id = /attachments\/([0-9a-f]{16})\./.exec(m[0])[1]
-    ids.add(id)
+    const idMatch = /attachments\/([0-9a-f]{16})\./.exec(m[0])
+    if (idMatch) ids.add(idMatch[1])
   }
   return ids
 }
 
 // align 값 글자만 바꾸는 CM6 변경 하나를 계산한다 (F-157.md 2.3). blockFrom 은 blockText 가 문서 안에서 시작하는 위치. 해석 실패·align 값이 이미 같으면 null
-export function imageAlignChange(blockText, blockFrom, align) {
+export function imageAlignChange(blockText: string, blockFrom: number, align: ImageAlign): CodeMirrorChange | null {
   const parsed = parseImageBlock(blockText)
   if (!parsed || parsed.align === align) return null
   const line1 = blockText.split('\n')[0]
@@ -123,7 +149,7 @@ export function imageAlignChange(blockText, blockFrom, align) {
 }
 
 // width 값 글자만 바꾸는 CM6 변경 하나를 계산한다 (F-157.md 2.4). width 속성이 없으면 alt 뒤(alt 도 없으면 src 뒤)에 ` width="{N}"` 을 넣는다. 해석 실패·값이 이미 같으면 null
-export function imageWidthChange(blockText, blockFrom, width) {
+export function imageWidthChange(blockText: string, blockFrom: number, width: number): CodeMirrorChange | null {
   const parsed = parseImageBlock(blockText)
   if (!parsed) return null
   const safeWidth = Math.max(1, Math.round(width))
@@ -145,20 +171,23 @@ export function imageWidthChange(blockText, blockFrom, width) {
     return { from: insertAt, to: insertAt, insert: ` width="${safeWidth}"` }
   }
 
-  const srcMatch = /src="[^"]*"/.exec(line2)
+  const srcMatch = /src="[^"]*"/.exec(line2) as RegExpExecArray
   const insertAt = line2Start + srcMatch.index + srcMatch[0].length
   return { from: insertAt, to: insertAt, insert: ` width="${safeWidth}"` }
 }
 
 // 이미 있는 이미지 블록의 align·width·alt 값을 바꿔 새 원문을 만든다(F-157·F-158 용). 해석 실패면 null
-export function setImageBlockAttrs(blockText, patch) {
+export function setImageBlockAttrs(
+  blockText: string,
+  patch: { align?: ImageAlign; width?: number; alt?: string },
+): string | null {
   const parsed = parseImageBlock(blockText)
   if (!parsed) return null
   return buildImageBlock({
     id: parsed.id,
     ext: parsed.ext,
-    alt: 'alt' in patch ? patch.alt : parsed.alt,
-    width: 'width' in patch ? patch.width : (parsed.width ?? 1),
-    align: 'align' in patch ? patch.align : parsed.align,
+    alt: 'alt' in patch ? (patch.alt as string) : parsed.alt,
+    width: 'width' in patch ? (patch.width as number) : (parsed.width ?? 1),
+    align: 'align' in patch ? (patch.align as ImageAlign) : parsed.align,
   })
 }

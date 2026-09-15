@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectLineEnding, toEditorText, fromEditorText } from './lineEnding.js'
+import { detectLineEnding, toEditorText, fromEditorText } from './lineEnding'
 
 describe('detectLineEnding', () => {
   it('줄바꿈이 없으면 crlf·false', () => {

@@ -1,11 +1,11 @@
 // specs/features/F-133.md 4장 A1·A4
 import { describe, expect, it } from 'vitest'
-import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from './frontmatter.js'
+import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from './frontmatter'
 
 describe('findFrontmatter — 범위 찾기 (A1)', () => {
   it('---\\na: 1\\n---\\n본문 을 인식한다', () => {
     const text = '---\na: 1\n---\n본문'
-    const fm = findFrontmatter(text)
+    const fm = findFrontmatter(text)!
     expect(fm).not.toBeNull()
     expect(fm.from).toBe(0)
     expect(fm.closeMark).toBe('---')
@@ -15,14 +15,14 @@ describe('findFrontmatter — 범위 찾기 (A1)', () => {
 
   it('CRLF 문서도 인식한다', () => {
     const text = '---\r\na: 1\r\n---\r\n본문'
-    const fm = findFrontmatter(text)
+    const fm = findFrontmatter(text)!
     expect(fm).not.toBeNull()
     expect(text.slice(fm.contentFrom, fm.contentTo)).toBe('a: 1\r\n')
     expect(textAfterFrontmatter(text, fm)).toBe('본문')
   })
 
   it('닫는 줄이 ... 이어도 인식한다', () => {
-    const fm = findFrontmatter('---\na: 1\n...\n본문')
+    const fm = findFrontmatter('---\na: 1\n...\n본문')!
     expect(fm).not.toBeNull()
     expect(fm.closeMark).toBe('...')
   })
@@ -45,7 +45,7 @@ describe('findFrontmatter — 범위 찾기 (A1)', () => {
 
   it('빈 프론트매터(---\\n---)를 인식하고 내용이 빈 문자열이다', () => {
     const text = '---\n---'
-    const fm = findFrontmatter(text)
+    const fm = findFrontmatter(text)!
     expect(fm).not.toBeNull()
     expect(text.slice(fm.contentFrom, fm.contentTo)).toBe('')
     expect(textAfterFrontmatter(text, fm)).toBe('')

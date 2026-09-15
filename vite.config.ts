@@ -1,13 +1,14 @@
+/// <reference types="vitest/config" />
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
-import brand from './brand.config.js'
+import brand from './brand.config'
 
 // tokens.css 에서 색 토큰을 정규식으로 읽는다. 매니페스트 background_color 를 위해서다
 // (hex 중복 금지 — specs/features/F-115.md 3.1)
-function readTokenColor(name) {
+function readTokenColor(name: string): string {
   const cssPath = fileURLToPath(new URL('./src/styles/tokens.css', import.meta.url))
   const css = readFileSync(cssPath, 'utf-8')
   const match = new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{3,8})`).exec(css)
@@ -18,10 +19,10 @@ function readTokenColor(name) {
 const paperColor = readTokenColor('paper')
 
 // index.html 의 %BRAND_NAME% 치환, theme-color·--accent 주입 (specs/architecture.md 5장)
-function brandHtmlPlugin() {
+function brandHtmlPlugin(): Plugin {
   return {
     name: 'brand-html',
-    transformIndexHtml(html) {
+    transformIndexHtml(html: string) {
       return {
         html: html.replace(/%BRAND_NAME%/g, brand.name),
         tags: [
@@ -84,12 +85,13 @@ export default defineConfig({
         // 여유를 둔다
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api\//],
         cleanupOutdatedCaches: true,
       },
     }),
   ],
   test: {
-    include: ['src/**/*.test.{js,jsx}'],
+    include: ['src/**/*.test.{js,jsx,ts,tsx}', 'worker/**/*.test.ts'],
     environment: 'node',
   },
 })

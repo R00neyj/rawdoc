@@ -6,7 +6,7 @@ import {
   setImageBlockAttrs,
   imageAlignChange,
   imageWidthChange,
-} from './imageBlock.js'
+} from './imageBlock'
 
 const ID = '0f3a9c2e7b1d4a58'
 
@@ -28,7 +28,7 @@ describe('buildImageBlock', () => {
   it('alt 줄바꿈은 공백으로 바꾸고 100자에서 자른다', () => {
     const long = 'a'.repeat(120)
     const text = buildImageBlock({ id: ID, ext: 'png', alt: `한\n줄\r\n바꿈 ${long}`, width: 10 })
-    const altMatch = /alt="([^"]*)"/.exec(text)
+    const altMatch = /alt="([^"]*)"/.exec(text)!
     expect(altMatch[1].startsWith('한 줄 바꿈 ')).toBe(true)
     expect(altMatch[1].length).toBe(100)
   })
@@ -166,7 +166,7 @@ describe('setImageBlockAttrs', () => {
 describe('imageAlignChange — align 값 글자만 바꾸는 변경 계산 (F-157 2.3)', () => {
   it('바뀌는 범위가 align 값 글자뿐이다', () => {
     const built = buildImageBlock({ id: ID, ext: 'png', alt: 'x', width: 100, align: 'center' })
-    const change = imageAlignChange(built, 1000, 'left')
+    const change = imageAlignChange(built, 1000, 'left')!
     expect(change).not.toBeNull()
     expect(built.slice(change.from - 1000, change.to - 1000)).toBe('center')
     expect(change.insert).toBe('left')
@@ -188,18 +188,18 @@ describe('imageAlignChange — align 값 글자만 바꾸는 변경 계산 (F-15
 describe('imageWidthChange — width 값 글자만 바꾸는 변경 계산 (F-157 2.4)', () => {
   it('width 속성이 있으면 그 값 글자만 바뀐다', () => {
     const built = buildImageBlock({ id: ID, ext: 'png', alt: 'x', width: 100, align: 'center' })
-    const change = imageWidthChange(built, 50, 250)
+    const change = imageWidthChange(built, 50, 250)!
     expect(change).not.toBeNull()
     expect(built.slice(change.from - 50, change.to - 50)).toBe('100')
     expect(change.insert).toBe('250')
 
     const applied = built.slice(0, change.from - 50) + change.insert + built.slice(change.to - 50)
-    expect(parseImageBlock(applied).width).toBe(250)
+    expect(parseImageBlock(applied)!.width).toBe(250)
   })
 
   it('width 속성이 없으면 alt 뒤에 추가한다', () => {
     const text = ['<div align="center">', `  <img src="attachments/${ID}.png" alt="설명">`, '</div>'].join('\n')
-    const change = imageWidthChange(text, 0, 300)
+    const change = imageWidthChange(text, 0, 300)!
     expect(change.from).toBe(change.to) // 삽입(범위 없음)
     expect(change.insert).toBe(' width="300"')
     const applied = text.slice(0, change.from) + change.insert + text.slice(change.to)
@@ -208,7 +208,7 @@ describe('imageWidthChange — width 값 글자만 바꾸는 변경 계산 (F-15
 
   it('width·alt 속성이 모두 없으면 src 뒤에 추가한다', () => {
     const text = ['<div align="center">', `  <img src="attachments/${ID}.png">`, '</div>'].join('\n')
-    const change = imageWidthChange(text, 0, 300)
+    const change = imageWidthChange(text, 0, 300)!
     expect(change.insert).toBe(' width="300"')
     const applied = text.slice(0, change.from) + change.insert + text.slice(change.to)
     expect(parseImageBlock(applied)).toEqual({ align: 'center', id: ID, ext: 'png', src: `attachments/${ID}.png`, alt: '', width: 300 })

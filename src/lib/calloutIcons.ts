@@ -17,7 +17,7 @@ import formatQuoteSvg from '@material-symbols/svg-400/outlined/format_quote.svg?
 
 // 종류(별칭, 소문자) → Material Symbols 이름 (F-148 2장 표). callout.js 의 색 묶음
 // 별칭(KIND_ALIASES)과는 다른 표다 — 예: note·info·todo 는 같은 색 묶음이지만 아이콘은 다르다
-const ICON_ALIASES = {
+const ICON_ALIASES: Record<string, string> = {
   note: 'edit',
 
   abstract: 'summarize',
@@ -59,7 +59,7 @@ const ICON_ALIASES = {
   cite: 'format_quote',
 }
 
-const ICON_SVG = {
+const ICON_SVG: Record<string, string> = {
   edit: editSvg,
   summarize: summarizeSvg,
   info: infoSvg,
@@ -75,16 +75,12 @@ const ICON_SVG = {
   format_quote: formatQuoteSvg,
 }
 
-/**
- * 종류 이름 → Material Symbols 이름. 별칭 목록에 없으면 note 와 같은 'edit' (F-148 2장 마지막 행)
- * @param {string} type 적힌 그대로의 종류 이름
- * @returns {string}
- */
-export function calloutIconName(type) {
+// 종류 이름 → Material Symbols 이름. 별칭 목록에 없으면 note 와 같은 'edit' (F-148 2장 마지막 행)
+export function calloutIconName(type: string): string {
   return ICON_ALIASES[type.toLowerCase()] ?? 'edit'
 }
 
 // 종류 이름 → 아이콘 svg 원문 (파일 내용 그대로, `<svg …>…</svg>`)
-export function calloutIconSvg(type) {
+export function calloutIconSvg(type: string): string {
   return ICON_SVG[calloutIconName(type)]
 }

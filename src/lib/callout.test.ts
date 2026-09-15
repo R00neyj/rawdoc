@@ -1,6 +1,6 @@
 // callout.js 단위 테스트 (specs/features/F-128.md 5장 A1)
 import { describe, expect, it } from 'vitest'
-import { parseCalloutHeader, defaultCalloutTitle } from './callout.js'
+import { parseCalloutHeader, defaultCalloutTitle } from './callout'
 
 describe('parseCalloutHeader', () => {
   it('종류·제목을 해석한다', () => {
@@ -61,13 +61,13 @@ describe('parseCalloutHeader', () => {
   })
 
   it('typeFrom·typeTo 는 [ 부터 ](접기 기호 포함) 끝까지', () => {
-    const header = parseCalloutHeader('[!warning]- folded')
+    const header = parseCalloutHeader('[!warning]- folded')!
     expect(header.typeFrom).toBe(0)
     expect(header.typeTo).toBe('[!warning]-'.length)
   })
 
   it('typeTo 는 접기 기호가 없으면 ] 바로 다음', () => {
-    const header = parseCalloutHeader('[!note] 제목')
+    const header = parseCalloutHeader('[!note] 제목')!
     expect(header.typeTo).toBe('[!note]'.length)
   })
 })

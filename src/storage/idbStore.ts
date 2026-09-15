@@ -1,7 +1,8 @@
 // IndexedDB 저장소 (specs/architecture.md 2장, specs/features/F-110.md 3.1, F-126.md 3장)
 // 이름에 제품명을 쓰지 않는다. 제품명이 바뀌어도 사용자 문서가 남아야 한다 (CLAUDE.md 불변조건)
 import { openDB } from 'idb'
-import { canCreateFolder, canMoveFolder } from '../lib/folderTree.js'
+import { canCreateFolder, canMoveFolder } from '../lib/folderTree'
+import type { Store, Doc, Folder, Attachment, AttachmentExt } from '../types'
 
 const DEFAULT_DB_NAME = 'md-docs'
 const DB_VERSION = 3
@@ -10,62 +11,69 @@ const META_STORE = 'meta'
 const FOLDERS_STORE = 'folders'
 const ATTACHMENTS_STORE = 'attachments' // F-156.md 2.3, 버전 3
 
+// 저장소에 실제로 든 문서 모양 — 옛 스키마 문서는 folderId·pinnedAt 이 없을 수 있다
+type StoredDoc = Omit<Doc, 'folderId' | 'pinnedAt'> & {
+  folderId?: string | null
+  pinnedAt?: number | null
+}
+
 // 소문자 16진수 16자 (crypto.getRandomValues 8바이트, F-156.md 2.1)
-function randomAttachmentId() {
+function randomAttachmentId(): string {
   const bytes = new Uint8Array(8)
   crypto.getRandomValues(bytes)
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-function applyPatch(existing, patch) {
+function applyPatch(existing: Doc, patch: { title?: string; content?: string }): Doc {
   return {
     ...existing,
-    ...('title' in patch ? { title: patch.title } : {}),
-    ...('content' in patch ? { content: patch.content } : {}),
+    ...('title' in patch ? { title: patch.title as string } : {}),
+    ...('content' in patch ? { content: patch.content as string } : {}),
     updatedAt: Date.now(),
   }
 }
 
 // folderId 가 없는 옛 문서(F-126 이전)는 null 로 취급한다. 읽을 때만 이렇게 채우고
 // 저장소를 일괄 다시 쓰지 않는다 (F-126.md 3장)
-function withFolderId(doc) {
+function withFolderId(doc: StoredDoc): StoredDoc {
   if (!doc) return doc
   return doc.folderId === undefined ? { ...doc, folderId: null } : doc
 }
 
 // pinnedAt 이 없는 옛 문서(F-132 이전)는 null 로 취급한다. 같은 이유로 일괄 다시 쓰지
 // 않는다 (F-132.md 2장)
-function withPinnedAt(doc) {
+function withPinnedAt(doc: StoredDoc): StoredDoc {
   if (!doc) return doc
   return doc.pinnedAt === undefined ? { ...doc, pinnedAt: null } : doc
 }
 
-function normalizeDoc(doc) {
-  return withPinnedAt(withFolderId(doc))
+function normalizeDoc(doc: StoredDoc): Doc {
+  return withPinnedAt(withFolderId(doc)) as Doc
 }
 
 // folderId 가 null 이거나 존재하는 폴더를 가리키는 문자열이면 유효하다. 그 외(문자열이
 // 아니거나 없는 폴더)는 무효 — create·moveDoc 이 이 검사를 통과 못 하면 아무것도 바꾸지
 // 않고 오류를 던진다 (F-136.md 3.1·3.2)
-function isValidFolderId(folders, folderId) {
+function isValidFolderId(folders: Folder[], folderId: unknown): folderId is string | null {
   if (folderId === null) return true
   if (typeof folderId !== 'string') return false
   return folders.some((f) => f.id === folderId)
 }
 
-/**
- * @param {string} [dbName] 기본값 `md-docs`. 테스트에서만 다른 이름을 넘겨 DB 를 격리한다
- * @param {object} [handlers]
- * @param {(currentVersion:number, blockedVersion:number|null, event:IDBVersionChangeEvent)=>void} [handlers.onBlocked]
- *   새 버전 창: 다른 창이 옛 버전 연결을 쥐고 있어 이 열기가 막혔을 때 (F-136.md 3.3)
- * @param {()=>(void|Promise<void>)} [handlers.onBlocking]
- *   옛 버전 창: 새 버전이 열리려 해서 이 연결을 닫아야 할 때. 연결을 닫기 전에 호출하고
- *   반환하는 프라미스를 기다린다 — 저장 대기 중인 내용을 먼저 저장하는 데 쓴다
- * @param {()=>void} [handlers.onClosed]
- *   옛 버전 창: 위 정리가 끝나고 연결을 닫은 뒤 호출 (알림 표시용)
- * @returns {Promise<store>} architecture.md 2장 인터페이스, kind: 'idb'
- */
-export async function createIdbStore(dbName = DEFAULT_DB_NAME, { onBlocked, onBlocking, onClosed } = {}) {
+export type IdbStoreHandlers = {
+  // 새 버전 창: 다른 창이 옛 버전 연결을 쥐고 있어 이 열기가 막혔을 때 (F-136.md 3.3)
+  onBlocked?: (currentVersion: number, blockedVersion: number | null, event: IDBVersionChangeEvent) => void
+  // 옛 버전 창: 새 버전이 열리려 해 연결을 닫기 전에 호출 — 저장 대기 중인 내용을 먼저 저장하는 데 쓴다
+  onBlocking?: () => void | Promise<void>
+  // 옛 버전 창: 위 정리가 끝나고 연결을 닫은 뒤 호출 (알림 표시용)
+  onClosed?: () => void
+}
+
+// dbName 기본값 md-docs. 테스트에서만 다른 이름을 넘겨 DB 를 격리한다
+export async function createIdbStore(
+  dbName: string = DEFAULT_DB_NAME,
+  { onBlocked, onBlocking, onClosed }: IdbStoreHandlers = {},
+): Promise<Store> {
   const db = await openDB(dbName, DB_VERSION, {
     upgrade(database, oldVersion, _newVersion, transaction) {
       if (oldVersion < 1) {
@@ -100,23 +108,23 @@ export async function createIdbStore(dbName = DEFAULT_DB_NAME, { onBlocked, onBl
     kind: 'idb',
 
     async list() {
-      const all = await db.getAll(DOCS_STORE)
+      const all: StoredDoc[] = await db.getAll(DOCS_STORE)
       return all.map(normalizeDoc).sort((a, b) => b.updatedAt - a.updatedAt)
     },
 
     async get(id) {
-      const doc = await db.get(DOCS_STORE, id)
+      const doc: StoredDoc | undefined = await db.get(DOCS_STORE, id)
       return doc ? normalizeDoc(doc) : null
     },
 
     async create({ title, content, lineEnding, folderId = null }) {
       // folderId 가 null 또는 존재하는 폴더가 아니면 문서를 만들지 않는다 (F-136.md 3.1·3.2)
-      const folders = await db.getAll(FOLDERS_STORE)
+      const folders: Folder[] = await db.getAll(FOLDERS_STORE)
       if (!isValidFolderId(folders, folderId)) {
         throw new Error(`유효하지 않은 folderId: ${String(folderId)}`)
       }
       const now = Date.now()
-      const doc = {
+      const doc: Doc = {
         id: crypto.randomUUID(),
         title,
         content,
@@ -134,7 +142,7 @@ export async function createIdbStore(dbName = DEFAULT_DB_NAME, { onBlocked, onBl
     async update(id, patch) {
       const tx = db.transaction(DOCS_STORE, 'readwrite')
       const store = tx.objectStore(DOCS_STORE)
-      const existing = await store.get(id)
+      const existing: StoredDoc | undefined = await store.get(id)
       if (!existing) {
         await tx.done
         throw new Error(`문서를 찾을 수 없음: ${id}`)
@@ -156,7 +164,7 @@ export async function createIdbStore(dbName = DEFAULT_DB_NAME, { onBlocked, onBl
       const tx = db.transaction([DOCS_STORE, FOLDERS_STORE], 'readwrite')
       const docStore = tx.objectStore(DOCS_STORE)
       const folderStore = tx.objectStore(FOLDERS_STORE)
-      const existing = await docStore.get(id)
+      const existing: StoredDoc | undefined = await docStore.get(id)
       if (!existing) {
         await tx.done
         throw new Error(`문서를 찾을 수 없음: ${id}`)
@@ -164,7 +172,7 @@ export async function createIdbStore(dbName = DEFAULT_DB_NAME, { onBlocked, onBl
       // folderId 가 null 이 아니고 존재하는 폴더가 아니면 오류를 던지고 아무것도 바꾸지
       // 않는다 (F-136.md 3.2) — 다른 문서 위에 놓아 그 문서 id 가 folderId 로 들어오는
       // 경우 등을 저장소 수준에서도 막는다
-      const folders = await folderStore.getAll()
+      const folders: Folder[] = await folderStore.getAll()
       if (!isValidFolderId(folders, resolvedFolderId)) {
         await tx.done
         throw new Error(`유효하지 않은 folderId: ${resolvedFolderId}`)
@@ -180,7 +188,7 @@ export async function createIdbStore(dbName = DEFAULT_DB_NAME, { onBlocked, onBl
     async setPinned(id, pinned) {
       const tx = db.transaction(DOCS_STORE, 'readwrite')
       const store = tx.objectStore(DOCS_STORE)
-      const existing = await store.get(id)
+      const existing: StoredDoc | undefined = await store.get(id)
       if (!existing) {
         await tx.done
         throw new Error(`문서를 찾을 수 없음: ${id}`)
@@ -196,12 +204,12 @@ export async function createIdbStore(dbName = DEFAULT_DB_NAME, { onBlocked, onBl
     },
 
     async createFolder({ name, parentId = null }) {
-      const folders = await db.getAll(FOLDERS_STORE)
+      const folders: Folder[] = await db.getAll(FOLDERS_STORE)
       if (!canCreateFolder({ folders, parentId })) {
         throw new Error(`상위 폴더가 될 수 없음: ${parentId}`)
       }
       const now = Date.now()
-      const folder = {
+      const folder: Folder = {
         id: crypto.randomUUID(),
         name: name || '새 폴더',
         parentId,
@@ -215,7 +223,7 @@ export async function createIdbStore(dbName = DEFAULT_DB_NAME, { onBlocked, onBl
     async renameFolder(id, name) {
       const tx = db.transaction(FOLDERS_STORE, 'readwrite')
       const store = tx.objectStore(FOLDERS_STORE)
-      const existing = await store.get(id)
+      const existing: Folder | undefined = await store.get(id)
       if (!existing) {
         await tx.done
         throw new Error(`폴더를 찾을 수 없음: ${id}`)
@@ -231,7 +239,7 @@ export async function createIdbStore(dbName = DEFAULT_DB_NAME, { onBlocked, onBl
     async moveFolder(id, parentId) {
       const tx = db.transaction(FOLDERS_STORE, 'readwrite')
       const store = tx.objectStore(FOLDERS_STORE)
-      const allFolders = await store.getAll()
+      const allFolders: Folder[] = await store.getAll()
       const existing = allFolders.find((f) => f.id === id)
       if (!existing) {
         await tx.done
@@ -255,21 +263,21 @@ export async function createIdbStore(dbName = DEFAULT_DB_NAME, { onBlocked, onBl
       const folderStore = tx.objectStore(FOLDERS_STORE)
       const docStore = tx.objectStore(DOCS_STORE)
 
-      const existing = await folderStore.get(id)
+      const existing: Folder | undefined = await folderStore.get(id)
       if (!existing) {
         await tx.done
         throw new Error(`폴더를 찾을 수 없음: ${id}`)
       }
       const parentId = existing.parentId
 
-      const allDocs = await docStore.getAll()
+      const allDocs: StoredDoc[] = await docStore.getAll()
       await Promise.all(
         allDocs
           .filter((d) => d.folderId === id)
           .map((d) => docStore.put({ ...normalizeDoc(d), folderId: parentId })),
       )
 
-      const allFolders = await folderStore.getAll()
+      const allFolders: Folder[] = await folderStore.getAll()
       await Promise.all(
         allFolders.filter((f) => f.parentId === id).map((f) => folderStore.put({ ...f, parentId })),
       )
@@ -279,23 +287,23 @@ export async function createIdbStore(dbName = DEFAULT_DB_NAME, { onBlocked, onBl
     },
 
     // 첨부는 문서와 연결 필드가 없다 — id 만으로 찾는다. id 가 이미 있으면 다시 뽑는다 (F-156.md 2.1·2.3)
-    async putAttachment({ blob, mime, ext, width, height }) {
+    async putAttachment({ blob, mime, ext, width, height }: { blob: Blob; mime: string; ext: AttachmentExt; width: number; height: number }) {
       let id = randomAttachmentId()
       while (await db.get(ATTACHMENTS_STORE, id)) {
         id = randomAttachmentId()
       }
-      const record = { id, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob }
+      const record: Attachment = { id, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob }
       await db.put(ATTACHMENTS_STORE, record)
       return { id, ext }
     },
 
     async getAttachment(id) {
-      const record = await db.get(ATTACHMENTS_STORE, id)
+      const record: Attachment | undefined = await db.get(ATTACHMENTS_STORE, id)
       return record ?? null
     },
 
     async listAttachments() {
-      const all = await db.getAll(ATTACHMENTS_STORE)
+      const all: Attachment[] = await db.getAll(ATTACHMENTS_STORE)
       return all.map(({ id, ext, size, createdAt }) => ({ id, ext, size, createdAt }))
     },
 

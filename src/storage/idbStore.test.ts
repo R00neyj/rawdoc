@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, vi } from 'vitest'
 import { openDB } from 'idb'
-import { createIdbStore } from './idbStore.js'
+import { createIdbStore } from './idbStore'
 
 // 테스트마다 새 DB 이름을 써서 격리한다 (fake-indexeddb 는 전역 indexedDB 를 공유)
 let dbCounter = 0
@@ -128,7 +128,7 @@ describe('idbStore', () => {
 
       const store = await createIdbStore(dbName)
       const doc = await store.get('legacy-doc')
-      expect(doc.pinnedAt).toBeNull()
+      expect(doc!.pinnedAt).toBeNull()
 
       const pinned = await store.setPinned('legacy-doc', true)
       expect(pinned.pinnedAt).not.toBeNull()
@@ -224,10 +224,10 @@ describe('idbStore', () => {
 
       const folders = await store.listFolders()
       expect(folders.find((f) => f.id === top.id)).toBeUndefined()
-      expect(folders.find((f) => f.id === sub.id).parentId).toBeNull()
+      expect(folders.find((f) => f.id === sub.id)!.parentId).toBeNull()
 
       const updatedDoc = await store.get(doc.id)
-      expect(updatedDoc.folderId).toBeNull()
+      expect(updatedDoc!.folderId).toBeNull()
     })
 
     it('없는 폴더를 removeFolder 하면 reject 한다', async () => {
@@ -240,7 +240,8 @@ describe('idbStore', () => {
     it('create 는 folderId 가 문자열이 아니면(예: 클릭 이벤트 객체) reject 하고 문서를 만들지 않는다', async () => {
       const store = await freshStore()
       await expect(
-        store.create({ title: 'A', content: '', lineEnding: 'crlf', folderId: { type: 'click' } }),
+        // 런타임 방어 검사를 테스트하려고 의도적으로 잘못된 타입을 넘긴다 (F-136.md 3.1)
+        store.create({ title: 'A', content: '', lineEnding: 'crlf', folderId: { type: 'click' } as unknown as string }),
       ).rejects.toThrow()
       expect(await store.list()).toEqual([])
     })
@@ -263,7 +264,7 @@ describe('idbStore', () => {
       await expect(store.moveDoc(doc.id, other.id)).rejects.toThrow()
 
       const unchanged = await store.get(doc.id)
-      expect(unchanged.folderId).toBeNull()
+      expect(unchanged!.folderId).toBeNull()
     })
   })
 
@@ -322,10 +323,10 @@ describe('idbStore', () => {
       expect(ext).toBe('png')
 
       const record = await store.getAttachment(id)
-      expect(record.mime).toBe('image/png')
-      expect(record.width).toBe(10)
-      expect(record.height).toBe(20)
-      expect(record.size).toBe(3)
+      expect(record!.mime).toBe('image/png')
+      expect(record!.width).toBe(10)
+      expect(record!.height).toBe(20)
+      expect(record!.size).toBe(3)
     })
 
     it('없는 id 는 null', async () => {
@@ -426,7 +427,7 @@ describe('idbStore', () => {
 
     it('이 창이 옛 버전이 되면(더 높은 버전이 열리면) 정리 콜백을 기다린 뒤 연결을 닫고 onClosed 를 부른다', async () => {
       const dbName = freshDbName()
-      const order = []
+      const order: string[] = []
       const onBlocking = vi.fn(async () => {
         order.push('blocking')
       })

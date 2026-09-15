@@ -1,6 +1,6 @@
 // specs/features/F-148.md 4장 A1
 import { describe, expect, it } from 'vitest'
-import { calloutIconName, calloutIconSvg } from './calloutIcons.js'
+import { calloutIconName, calloutIconSvg } from './calloutIcons'
 
 describe('calloutIconName — 2장 표', () => {
   it('종류마다 정해진 아이콘 이름', () => {

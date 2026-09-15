@@ -5,21 +5,22 @@
 // 한 줄 안 위키링크 정규식 (F-131 2장). 대상·별칭 모두 대괄호·파이프·줄바꿈을 담지 않는다
 const WIKILINK_RE = /\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]/g
 
-/**
- * 한 줄 글자에서 위키링크를 전부 찾는다.
- * - `![[…]]`(이미지식)는 대상이 아니다 (원문 그대로)
- * - 대상 제목은 `#` 뒤를 떼고 앞뒤 공백을 지운다(M1 은 `#` 뒤를 무시). 비면 위키링크가 아니다
- * - `targetFrom`·`targetTo` 는 대괄호 안 원문 그대로의 범위(별칭이 있으면 그 앞까지, `#`
- *   뒤도 포함) — "보이는 글자" 범위 계산에 쓴다(별칭 없을 때는 이 범위 전체가 보이는 글자다)
- * @param {string} lineText
- * @returns {{from:number, to:number, target:string, alias:string|null, targetFrom:number, targetTo:number}[]}
- */
-export function findWikiLinks(lineText) {
-  const results = []
+export type WikiLinkMatch = {
+  from: number
+  to: number
+  target: string
+  alias: string | null
+  targetFrom: number
+  targetTo: number
+}
+
+// 한 줄 글자에서 위키링크를 전부 찾는다. ![[…]](이미지식)는 제외, 대상은 '#' 뒤를 떼고 앞뒤 공백을 지운다(비면 제외)
+export function findWikiLinks(lineText: unknown): WikiLinkMatch[] {
+  const results: WikiLinkMatch[] = []
   if (typeof lineText !== 'string') return results
 
   WIKILINK_RE.lastIndex = 0
-  let match
+  let match: RegExpExecArray | null
   while ((match = WIKILINK_RE.exec(lineText))) {
     const [full, rawTarget, rawAlias] = match
     const from = match.index
@@ -47,17 +48,8 @@ export function findWikiLinks(lineText) {
   return results
 }
 
-/**
- * 대상 제목 → 문서. `docs` 는 `updatedAt` 내림차순 목록이어야 한다 (F-131 2.1)
- * 1. 제목(앞뒤 공백 제거)이 대상과 정확히 같은 문서
- * 2. 없으면 대소문자 무시(`toLocaleLowerCase('ko')`)로 같은 문서
- * 3. 여러 개면 목록 앞(최근 수정)의 것
- * 제목이 빈 문서는 매칭하지 않는다
- * @param {string} target
- * @param {{title:string}[]} docs
- * @returns {object|null}
- */
-export function resolveWikiTarget(target, docs) {
+// 대상 제목 → 문서. 정확히 같은 제목, 없으면 대소문자 무시로, 여러 개면 최근 수정 것. 제목 빈 문서는 매칭 안 함 (F-131 2.1)
+export function resolveWikiTarget<T extends { title: string }>(target: unknown, docs: T[] | null | undefined): T | null {
   if (typeof target !== 'string') return null
   const trimmedTarget = target.trim()
   if (trimmedTarget === '') return null

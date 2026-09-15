@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { decodeMarkdown } from './decodeMarkdown.js'
+import { decodeMarkdown } from './decodeMarkdown'
 
-function bytesOf(str) {
+function bytesOf(str: string) {
   return new TextEncoder().encode(str)
 }
 

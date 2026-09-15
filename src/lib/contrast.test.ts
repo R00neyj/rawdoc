@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { contrastRatio } from './contrast.js'
-import brand from '../../brand.config.js'
+import { contrastRatio } from './contrast'
+import brand from '../../brand.config'
 
 const tokensPath = fileURLToPath(new URL('../styles/tokens.css', import.meta.url))
 const tokensCss = readFileSync(tokensPath, 'utf-8')
 
-function readToken(name) {
+function readToken(name: string) {
   const pattern = new RegExp(`${name}\\s*:\\s*(#[0-9a-fA-F]{6})`)
   const match = pattern.exec(tokensCss)
   if (!match) {

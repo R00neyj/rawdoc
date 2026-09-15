@@ -30,8 +30,8 @@ const RESERVED_NAMES = new Set([
 
 const MAX_CODE_POINTS = 100
 
-/** @param {string} title @returns {string} `.md` 로 끝나는 안전한 파일명 */
-export function toFileName(title) {
+// title → '.md' 로 끝나는 안전한 파일명
+export function toFileName(title: string): string {
   let name = String(title ?? '').replace(FORBIDDEN_CHARS, '_')
 
   name = name.replace(/^\s+/, '')

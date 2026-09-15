@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createMemoryStore } from './memoryStore.js'
+import { createMemoryStore } from './memoryStore'
+import type { Store } from '../types'
 
 describe('memoryStore', () => {
-  let store
+  let store: Store
 
   beforeEach(() => {
     store = createMemoryStore()
@@ -26,7 +27,7 @@ describe('memoryStore', () => {
     const doc = await store.create({ title: 'A', content: '', lineEnding: 'crlf' })
     doc.title = '외부에서 변경'
     const fromStore = await store.get(doc.id)
-    expect(fromStore.title).toBe('A')
+    expect(fromStore!.title).toBe('A')
   })
 
   it('수정하면 updatedAt 이 늘어난다', async () => {
@@ -147,17 +148,18 @@ describe('memoryStore', () => {
 
       const folders = await store.listFolders()
       expect(folders.find((f) => f.id === top.id)).toBeUndefined()
-      expect(folders.find((f) => f.id === sub.id).parentId).toBeNull()
+      expect(folders.find((f) => f.id === sub.id)!.parentId).toBeNull()
 
       const updatedDoc = await store.get(doc.id)
-      expect(updatedDoc.folderId).toBeNull()
+      expect(updatedDoc!.folderId).toBeNull()
     })
   })
 
   describe('folderId 검사 (F-136.md 3.1·3.2)', () => {
     it('create 는 folderId 가 문자열이 아니면(예: 클릭 이벤트 객체) reject 하고 문서를 만들지 않는다', async () => {
       await expect(
-        store.create({ title: 'A', content: '', lineEnding: 'crlf', folderId: { type: 'click' } }),
+        // 런타임 방어 검사를 테스트하려고 의도적으로 잘못된 타입을 넘긴다 (F-136.md 3.1)
+        store.create({ title: 'A', content: '', lineEnding: 'crlf', folderId: { type: 'click' } as unknown as string }),
       ).rejects.toThrow()
       expect(await store.list()).toEqual([])
     })
@@ -178,7 +180,7 @@ describe('memoryStore', () => {
       await expect(store.moveDoc(doc.id, other.id)).rejects.toThrow()
 
       const unchanged = await store.get(doc.id)
-      expect(unchanged.folderId).toBeNull()
+      expect(unchanged!.folderId).toBeNull()
     })
   })
 
@@ -193,11 +195,11 @@ describe('memoryStore', () => {
       expect(ext).toBe('png')
 
       const record = await store.getAttachment(id)
-      expect(record.mime).toBe('image/png')
-      expect(record.width).toBe(10)
-      expect(record.height).toBe(20)
-      expect(record.size).toBe(3)
-      expect(record.blob).toBeInstanceOf(Blob)
+      expect(record!.mime).toBe('image/png')
+      expect(record!.width).toBe(10)
+      expect(record!.height).toBe(20)
+      expect(record!.size).toBe(3)
+      expect(record!.blob).toBeInstanceOf(Blob)
     })
 
     it('없는 id 는 null', async () => {
