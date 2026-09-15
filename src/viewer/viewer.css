@@ -9,6 +9,13 @@
   background: var(--panel);
 }
 
+/* 목차 이동 스크롤을 부드럽게 (F-144 3.3, 2026-09-15). 움직임 줄이기면 기본값(즉시) 그대로 둔다 */
+@media (prefers-reduced-motion: no-preference) {
+  .viewer {
+    scroll-behavior: smooth;
+  }
+}
+
 /* 코드블록 복사 버튼 (specs/features/F-210.md 2.5) — pre 오른쪽 위 여백, 가로 스크롤해도 제자리 */
 .viewer--code-copy pre {
   position: relative;
