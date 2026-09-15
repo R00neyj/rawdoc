@@ -36,8 +36,14 @@ export type Attachment = {
 
 export type AttachmentMeta = Pick<Attachment, 'id' | 'ext' | 'size' | 'createdAt'>
 
+// 서버 저장소 동기화 표시 (specs/features/F-207.md 2.5)
+export type SyncState = { pending: number; online: boolean; signedOut: boolean }
+
 export type Store = {
-  kind: 'idb' | 'memory'
+  kind: 'idb' | 'memory' | 'server'
+  // server 저장소만 채운다. subscribeSync(listener) 는 즉시 1회 호출 후 변화마다 부르고, unsubscribe 함수를 돌려준다 (F-207.md 2.5)
+  syncState?: SyncState
+  subscribeSync?: (listener: (state: SyncState) => void) => () => void
   list(): Promise<Doc[]>
   get(id: string): Promise<Doc | null>
   create(input: {

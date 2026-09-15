@@ -1,0 +1,177 @@
+// F-206 서버 API 호출 래퍼 — fetch 하나로 감싸고 오류를 종류별로 분류한다 (specs/features/F-207.md 2.3)
+import type { Doc, Folder, LineEnding } from '../types'
+
+export type ServerDoc = Doc & { version: number }
+export type ServerDocSummary = Omit<Doc, 'content'> & { version: number }
+export type ServerFolder = Folder
+
+export type ApiErrorKind =
+  | 'network'
+  | 'unauthorized'
+  | 'not_found'
+  | 'too_large'
+  | 'conflict'
+  | 'id_taken'
+  | 'invalid'
+  | 'server_error'
+  | 'other'
+
+export class ApiError extends Error {
+  kind: ApiErrorKind
+  status?: number
+  doc?: ServerDoc
+
+  constructor(kind: ApiErrorKind, extra: { status?: number; doc?: ServerDoc } = {}) {
+    super(kind)
+    this.kind = kind
+    this.status = extra.status
+    this.doc = extra.doc
+  }
+}
+
+async function send(path: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(path, { credentials: 'same-origin', ...init })
+  } catch {
+    throw new ApiError('network')
+  }
+}
+
+function classifyStatus(status: number): ApiErrorKind | null {
+  if (status === 401) return 'unauthorized'
+  if (status >= 500) return 'server_error'
+  return null
+}
+
+async function readJson(res: Response): Promise<unknown> {
+  try {
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+function jsonInit(body: unknown, method: string): RequestInit {
+  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+}
+
+export async function listDocs(): Promise<ServerDocSummary[]> {
+  const res = await send('/api/docs')
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as ServerDocSummary[]
+}
+
+export async function getDoc(id: string): Promise<ServerDoc> {
+  const res = await send(`/api/docs/${encodeURIComponent(id)}`)
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 404) throw new ApiError('not_found')
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as ServerDoc
+}
+
+export async function createDoc(body: {
+  id: string
+  title: string
+  content: string
+  lineEnding: LineEnding
+  folderId: string | null
+}): Promise<ServerDoc> {
+  const res = await send('/api/docs', jsonInit(body, 'POST'))
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 413) throw new ApiError('too_large')
+  if (res.status === 409) throw new ApiError('id_taken')
+  if (res.status === 400) throw new ApiError('invalid')
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as ServerDoc
+}
+
+export async function updateDoc(
+  id: string,
+  body: { title?: string; content?: string; baseVersion: number },
+): Promise<ServerDoc> {
+  const res = await send(`/api/docs/${encodeURIComponent(id)}`, jsonInit(body, 'PUT'))
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 404) throw new ApiError('not_found')
+  if (res.status === 413) throw new ApiError('too_large')
+  if (res.status === 409) {
+    const data = (await readJson(res)) as { doc?: ServerDoc } | null
+    throw new ApiError('conflict', { doc: data?.doc })
+  }
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as ServerDoc
+}
+
+export async function moveDocFolder(id: string, folderId: string | null): Promise<ServerDoc> {
+  const res = await send(`/api/docs/${encodeURIComponent(id)}/folder`, jsonInit({ folderId }, 'PUT'))
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 404) throw new ApiError('not_found')
+  if (res.status === 400) throw new ApiError('invalid')
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as ServerDoc
+}
+
+export async function setPinned(id: string, pinned: boolean): Promise<ServerDoc> {
+  const res = await send(`/api/docs/${encodeURIComponent(id)}/pin`, jsonInit({ pinned }, 'PUT'))
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 404) throw new ApiError('not_found')
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as ServerDoc
+}
+
+export async function removeDoc(id: string): Promise<void> {
+  const res = await send(`/api/docs/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 404) throw new ApiError('not_found')
+  if (!res.ok && res.status !== 204) throw new ApiError('other', { status: res.status })
+}
+
+export async function listFolders(): Promise<ServerFolder[]> {
+  const res = await send('/api/folders')
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as ServerFolder[]
+}
+
+export async function createFolder(body: {
+  id: string
+  name: string
+  parentId: string | null
+}): Promise<ServerFolder> {
+  const res = await send('/api/folders', jsonInit(body, 'POST'))
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 409) throw new ApiError('id_taken')
+  if (res.status === 400) throw new ApiError('invalid')
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as ServerFolder
+}
+
+export async function updateFolder(
+  id: string,
+  body: { name?: string; parentId?: string | null },
+): Promise<ServerFolder> {
+  const res = await send(`/api/folders/${encodeURIComponent(id)}`, jsonInit(body, 'PUT'))
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 404) throw new ApiError('not_found')
+  if (res.status === 400) throw new ApiError('invalid')
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as ServerFolder
+}
+
+export async function removeFolder(id: string): Promise<void> {
+  const res = await send(`/api/folders/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 404) throw new ApiError('not_found')
+  if (!res.ok && res.status !== 204) throw new ApiError('other', { status: res.status })
+}

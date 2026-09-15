@@ -17,6 +17,7 @@ import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree'
 import { resolveWikiTarget } from '../lib/wikiLink'
 import { getPref, setPref } from './prefs'
 import { fetchAccount, type AccountState } from './account'
+import type { SyncState } from '../types'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
 import { IconRefresh } from './icons'
 import { resolveTheme } from './theme'
@@ -52,6 +53,7 @@ import MoveDocDialog, { type MoveDocTarget } from './MoveDocDialog'
 import SettingsDialog from './SettingsDialog'
 import StatusBar from './StatusBar'
 import SharedView from './SharedView'
+import PublicView from './PublicView'
 import type { Doc, Folder, LineEnding, Store } from '../types'
 
 const STATS_DEBOUNCE_MS = 150
@@ -115,6 +117,22 @@ function pushHashUrl(docId: string | null) {
 }
 
 export default function App() {
+  // 공개 보기 화면 S-5 (F-210.md 2.4) — `#/p/{토큰}` 이면 저장소를 열지 않고 이 값만으로 PublicView 를 그린다
+  const [publicToken, setPublicToken] = useState<string | null>(() => {
+    const route = parseHash(location.hash)
+    return route.type === 'public' ? route.token : null
+  })
+
+  // 뒤로·앞으로 가기로 `#/p/{토큰}` 을 드나들 때 publicToken 을 갱신한다 (그 외 해시는 아래 별도 효과가 처리)
+  useEffect(() => {
+    function handlePublicHashChange() {
+      const route = parseHash(location.hash)
+      setPublicToken(route.type === 'public' ? route.token : null)
+    }
+    window.addEventListener('hashchange', handlePublicHashChange)
+    return () => window.removeEventListener('hashchange', handlePublicHashChange)
+  }, [])
+
   // 부팅 전 임시값. boot() 가 openStore() 결과로 교체한다 (F-110.md 3.2)
   const [store, setStore] = useState<Store>(() => createMemoryStore())
 
@@ -163,6 +181,8 @@ export default function App() {
   // 외부 .md 파일을 창 위로 끄는 동안의 덮개 (F-145.md 2.4)
   const [dropActive, setDropActive] = useState(false)
   const [account, setAccount] = useState<AccountState>({ state: 'offline' })
+  // 서버 저장소 동기화 표시 (F-207.md 2.5) — server 저장소가 아니면 undefined
+  const [syncState, setSyncState] = useState<SyncState | undefined>(undefined)
 
   const titleInputRef = useRef<HTMLInputElement | null>(null)
   const sidebarRef = useRef<HTMLElement | null>(null)
@@ -293,21 +313,19 @@ export default function App() {
     wasUpdateAvailableRef.current = updateAvailable
   }, [updateAvailable, applyUpdate, showNotice])
 
-  // 계정 상태 — 시작 때 1회, online 이벤트 때 1회 (F-205.md 2.5)
+  // 계정 상태 시작 때 1회는 boot() 가 읽는다 — 여기는 online 때 화면 표시만 최신화 (F-207.md 2.6)
   useEffect(() => {
-    let cancelled = false
     function load() {
-      fetchAccount().then((next) => {
-        if (!cancelled) setAccount(next)
-      })
+      fetchAccount().then((next) => setAccount(next))
     }
-    load()
     window.addEventListener('online', load)
-    return () => {
-      cancelled = true
-      window.removeEventListener('online', load)
-    }
+    return () => window.removeEventListener('online', load)
   }, [])
+
+  // 서버 저장소 동기화 표시 구독 — server 가 아니면 subscribeSync 가 없어 초기값 그대로다 (F-207.md 2.5)
+  useEffect(() => {
+    return store.subscribeSync?.((next) => setSyncState(next))
+  }, [store])
 
   // ----- 부팅 (S-3 → S-1|S-2), 최초 실행 안내 문서 (ia.md 3.1·3.2, F-111 3.1) -----
   useEffect(() => {
@@ -315,7 +333,21 @@ export default function App() {
     bootedRef.current = true
 
     async function boot() {
+      // 공개 보기 화면(F-210.md 2.4) — 저장소를 열지 않는다. render 는 publicToken 으로 갈린다
+      if (parseHash(location.hash).type === 'public') {
+        setBootPhase('ready')
+        return
+      }
+
+      // 저장소는 부팅 때 한 번만 고른다 — 계정 상태를 먼저 읽고 그 결과로 고른다 (F-207.md 2.6)
+      const accountState = await fetchAccount()
+      setAccount(accountState)
+
+      // resolvedStore 가 정해지기 전엔 handleServerConflict 를 못 만드므로 자리만 먼저 둔다
+      let conflictHandler: ((event: { docId: string; copyId: string }) => void) | null = null
+
       const resolvedStore = await openStore({
+        account: accountState,
         // 새 버전 창: 다른 창이 옛 버전 연결을 쥐고 있어 열기가 막혔다. 부팅 화면에 문구를
         // 보이고 계속 기다린다 (F-136.md 3.3)
         onBlocked: () => {
@@ -335,9 +367,44 @@ export default function App() {
             action: { label: '새로고침', icon: IconRefresh, onClick: () => location.reload() },
           })
         },
+        // 서버 저장소 413·동기화 오류 알림 (F-207.md 2.3)
+        onNotice: showNotice,
+        // 서버 저장소 409 충돌 — 사본 문서가 만들어졌다는 신호 (F-207.md 2.4)
+        onConflict: (event) => conflictHandler?.(event),
       })
       setDbBlockedMessage(null)
       setStore(resolvedStore)
+
+      // 열린 문서가 충돌한 원본이면 서버 내용을 밀어 넣지 않고(불변조건) 사본으로 전환한다
+      async function handleServerConflict({ docId, copyId }: { docId: string; copyId: string }) {
+        const [orig, copy] = await Promise.all([resolvedStore.get(docId), resolvedStore.get(copyId)])
+        setDocs((prev) => {
+          let next = prev
+          if (orig) {
+            next = next.map((d) => (d.id === docId ? { ...d, title: orig.title, updatedAt: orig.updatedAt } : d))
+          }
+          if (copy) {
+            next = sortByUpdatedAtDesc([...next, stripContent(copy)])
+          }
+          return next
+        })
+        const copyTitle = copy?.title ?? ''
+        showNotice({
+          type: 'warn',
+          message: `다른 곳에서 먼저 바뀌어 내 편집을 "${copyTitle}" 으로 저장했습니다.`,
+        })
+        if (docId === currentDocIdRef.current) {
+          setSharedDoc(null)
+          focusEditorRef.current = false
+          setCurrentDocId(copyId)
+          setPref('md.lastDocId', copyId)
+          replaceHashUrl(copyId)
+          if (copy) addOpenFolders(ancestorsOfDoc({ folders: foldersRef.current, doc: stripContent(copy) }))
+        }
+      }
+      conflictHandler = (event) => {
+        handleServerConflict(event)
+      }
 
       if (resolvedStore.kind === 'memory') {
         showNotice({
@@ -364,8 +431,17 @@ export default function App() {
       const folderList = await resolvedStore.listFolders()
       setFolders(folderList)
 
-      // 안 쓰는 첨부 정리 — 문서 목록을 읽은 뒤 1회 (F-156.md 2.7)
-      scheduleAttachmentGc(() => cleanupUnusedAttachments({ store: resolvedStore }))
+      // 안 쓰는 첨부 정리 (F-156.md 2.7) — server 저장소는 kind 만 idb 로 보이게 해 캐시 문서 기준으로 돈다 (F-207.md 2.5)
+      const gcStore =
+        resolvedStore.kind === 'server'
+          ? {
+              kind: 'idb',
+              list: () => resolvedStore.list(),
+              listAttachments: () => resolvedStore.listAttachments(),
+              removeAttachment: (id: string) => resolvedStore.removeAttachment(id),
+            }
+          : resolvedStore
+      scheduleAttachmentGc(() => cleanupUnusedAttachments({ store: gcStore }))
 
       const parsedHash = parseHash(location.hash)
 
@@ -1280,6 +1356,11 @@ export default function App() {
     ? overlaySidebarWidth(sidebarWidth, windowWidth)
     : clampSidebarWidth(sidebarWidth, windowWidth)
 
+  // 공개 보기 화면(F-210.md 2.4) — 위 모든 훅은 매 렌더 그대로 호출되고 여기서 조기 반환만 한다
+  if (publicToken) {
+    return <PublicView key={publicToken} token={publicToken} />
+  }
+
   const currentDoc = docs.find((d) => d.id === currentDocId) ?? null
   const isEmpty = bootPhase === 'ready' && docs.length === 0
   const showEditor = bootPhase === 'ready' && !isEmpty
@@ -1435,6 +1516,7 @@ export default function App() {
               wordCount={stats.wordCount}
               saveStatus={docSaver.status}
               viewMode={viewMode}
+              syncState={syncState}
             />
           )}
         </div>
