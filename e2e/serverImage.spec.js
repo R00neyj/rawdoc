@@ -128,3 +128,28 @@ test.describe('F-209 A7 공개 보기 — 이미지가 보이고 zip 내보내�
     expect(Array.from(unzipped[`attachments/${attId}.png`])).toEqual(Array.from(png))
   })
 })
+
+test.describe('F-216 A5 보기 화면 — 다시 그려도 이미지 src 유지', () => {
+  test('폴더 공개 링크에서 좁은 창으로 바뀌어 다시 그려도 이미지가 남는다', async ({ page }) => {
+    const png = decodablePngBytes(20, 10)
+    const attId = 'abcd1234abcd5678'
+    const content = `본문\n\n<div align="center">\n  <img src="attachments/${attId}.png" alt="이미지" width="20">\n</div>\n`
+    const doc = { title: '폴더 이미지 문서', content, lineEnding: 'lf', updatedAt: Date.now() }
+    const folder = { name: '교안', folders: [], docs: [{ id: 'd1', title: doc.title, folderId: null, updatedAt: doc.updatedAt }] }
+
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.route('**/pub/folders/tok-f', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(folder) }))
+    await page.route('**/pub/folders/tok-f/docs/d1', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) }))
+    await page.route(`**/pub/folders/tok-f/docs/d1/attachments/${attId}.png`, (route) =>
+      route.fulfill({ status: 200, contentType: 'image/png', body: png }),
+    )
+
+    await page.goto('/#/p/f/tok-f/d1')
+    const img = page.locator('.viewer img[data-attachment]')
+    await expect(img).toHaveAttribute('src', /^blob:/, { timeout: 10_000 })
+
+    await page.setViewportSize({ width: 800, height: 800 }) // useNarrow 가 바뀌어 DocPane 이 다시 그려진다
+    await page.waitForTimeout(300) // 다시 그리기 뒤 innerHTML 이 덮이는지 보는 자리라 고정 대기
+    await expect(img).toHaveAttribute('src', /^blob:/)
+  })
+})
