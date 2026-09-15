@@ -158,6 +158,7 @@ worker/
 - 로컬 개발: `.dev.vars` 의 `DEV_AUTH_EMAIL` 은 localhost 요청에서만 로그인으로 본다. 포트는 `dev:worker` 8790, 에이전트 병렬 슬롯 8791~
 - 클라이언트: 로그인 상태면 `store.kind === 'server'` (F-207). IndexedDB `md-remote` 에 캐시·보낼 목록·첨부. 로컬 `md-docs` 는 로그아웃 상태와 이관(F-208)에 쓴다
 - R2 키 `att/{owner_id}/{id}.{ext}`, 공개 버킷·서명 URL 없음 (F-209)
+- 안 쓰는 첨부 정리: 매일 UTC 18시 Cron `scheduled` → 모든 문서 원문에 없고 24시간 지난 첨부 R2·D1 삭제 (F-219)
 
 ## 5. 브랜드 주입
 
