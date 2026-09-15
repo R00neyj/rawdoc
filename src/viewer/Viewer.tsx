@@ -1,6 +1,6 @@
 // 보기 모드 화면 (specs/features/F-123.md 3.3, ia.md 3.9)
 // editor 를 import 하지 않는다 (architecture.md 1장)
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { MouseEvent as ReactMouseEvent, Ref } from 'react'
 import 'github-markdown-css/github-markdown-light.css'
 import './viewer.css'
@@ -84,6 +84,8 @@ type ViewerProps = {
 export default function Viewer({ html, title, onOpenWikiLink, resolveAttachment, missingImageText, codeCopy, ref }: ViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const urlsRef = useRef<string[]>([])
+  // 매 렌더 새 객체면 React 가 같은 html 로도 innerHTML 을 다시 써서 채운 이미지 src 가 사라진다
+  const innerHtml = useMemo(() => ({ __html: html }), [html])
 
   function setRefs(node: HTMLDivElement | null) {
     containerRef.current = node
@@ -170,7 +172,7 @@ export default function Viewer({ html, title, onOpenWikiLink, resolveAttachment,
     >
       {/* 목차(F-144) 항목에 넣지 않는다 — extractHeadings 는 본문(html)만 읽는다 (F-217.md 2.1) */}
       {title !== undefined && <h1 className="doc-title-view">{title || '제목 없는 문서'}</h1>}
-      <div className="markdown-body" dangerouslySetInnerHTML={{ __html: html }} />
+      <div className="markdown-body" dangerouslySetInnerHTML={innerHtml} />
     </div>
   )
 }
