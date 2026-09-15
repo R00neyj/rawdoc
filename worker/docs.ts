@@ -6,6 +6,8 @@ import {
   MAX_CONTENT_BYTES,
   isContentTooLarge,
   isValidLineEnding,
+  isValidPinnedAt,
+  isValidTimestamp,
   isValidTitle,
   isValidUuid,
 } from './validate'
@@ -129,7 +131,8 @@ export async function handleCreateDoc(request: Request, env: Env): Promise<Respo
 
   const body = parsed.data
   if (typeof body !== 'object' || body === null) return errorResponse('invalid', 400)
-  const { id: bodyId, title, content, lineEnding, folderId } = body as Record<string, unknown>
+  const { id: bodyId, title, content, lineEnding, folderId, createdAt, updatedAt, pinnedAt } =
+    body as Record<string, unknown>
 
   if (bodyId !== undefined && !isValidUuid(bodyId)) {
     return jsonResponse({ error: 'invalid', field: 'id' }, 400)
@@ -141,6 +144,15 @@ export async function handleCreateDoc(request: Request, env: Env): Promise<Respo
   }
   if (folderId !== undefined && folderId !== null && !isValidUuid(folderId)) {
     return jsonResponse({ error: 'invalid', field: 'folderId' }, 400)
+  }
+  if (createdAt !== undefined && !isValidTimestamp(createdAt)) {
+    return jsonResponse({ error: 'invalid', field: 'createdAt' }, 400)
+  }
+  if (updatedAt !== undefined && !isValidTimestamp(updatedAt)) {
+    return jsonResponse({ error: 'invalid', field: 'updatedAt' }, 400)
+  }
+  if (pinnedAt !== undefined && !isValidPinnedAt(pinnedAt)) {
+    return jsonResponse({ error: 'invalid', field: 'pinnedAt' }, 400)
   }
   if (isContentTooLarge(content)) {
     return jsonResponse({ error: 'too_large', limit: MAX_CONTENT_BYTES }, 413)
@@ -157,10 +169,13 @@ export async function handleCreateDoc(request: Request, env: Env): Promise<Respo
   const id = typeof bodyId === 'string' ? bodyId : crypto.randomUUID()
   const now = Date.now()
   const resolvedFolderId = (folderId as string | null | undefined) ?? null
+  const resolvedCreatedAt = typeof createdAt === 'number' ? createdAt : now
+  const resolvedUpdatedAt = typeof updatedAt === 'number' ? updatedAt : now
+  const resolvedPinnedAt = pinnedAt === undefined ? null : (pinnedAt as number | null)
   await env.DB.prepare(
     'INSERT INTO docs (id, owner_id, title, content, line_ending, folder_id, pinned_at, version, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
   )
-    .bind(id, user.id, title, content, lineEnding, resolvedFolderId, null, 1, now, now)
+    .bind(id, user.id, title, content, lineEnding, resolvedFolderId, resolvedPinnedAt, 1, resolvedCreatedAt, resolvedUpdatedAt)
     .run()
 
   return jsonResponse(
@@ -171,10 +186,10 @@ export async function handleCreateDoc(request: Request, env: Env): Promise<Respo
       content,
       line_ending: lineEnding as 'crlf' | 'lf',
       folder_id: resolvedFolderId,
-      pinned_at: null,
+      pinned_at: resolvedPinnedAt,
       version: 1,
-      created_at: now,
-      updated_at: now,
+      created_at: resolvedCreatedAt,
+      updated_at: resolvedUpdatedAt,
     }),
     201,
   )

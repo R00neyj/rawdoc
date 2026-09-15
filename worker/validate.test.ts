@@ -6,6 +6,8 @@ import {
   isContentTooLarge,
   isValidFolderName,
   isValidLineEnding,
+  isValidPinnedAt,
+  isValidTimestamp,
   isValidTitle,
   isValidUuid,
   utf8ByteLength,
@@ -99,5 +101,47 @@ describe('isValidLineEnding', () => {
   it('rejects other values', () => {
     expect(isValidLineEnding('cr')).toBe(false)
     expect(isValidLineEnding(undefined)).toBe(false)
+  })
+})
+
+describe('isValidTimestamp', () => {
+  it('accepts a past integer ms value', () => {
+    expect(isValidTimestamp(1_000)).toBe(true)
+  })
+
+  it('accepts now + 1 day exactly', () => {
+    expect(isValidTimestamp(Date.now() + 86_400_000)).toBe(true)
+  })
+
+  it('rejects now + 1 day + 1ms', () => {
+    expect(isValidTimestamp(Date.now() + 86_400_000 + 1)).toBe(false)
+  })
+
+  it('rejects zero and negative', () => {
+    expect(isValidTimestamp(0)).toBe(false)
+    expect(isValidTimestamp(-1)).toBe(false)
+  })
+
+  it('rejects non-integers and non-numbers', () => {
+    expect(isValidTimestamp(1.5)).toBe(false)
+    expect(isValidTimestamp('1000')).toBe(false)
+    expect(isValidTimestamp(undefined)).toBe(false)
+    expect(isValidTimestamp(null)).toBe(false)
+  })
+})
+
+describe('isValidPinnedAt', () => {
+  it('accepts null', () => {
+    expect(isValidPinnedAt(null)).toBe(true)
+  })
+
+  it('accepts a valid timestamp', () => {
+    expect(isValidPinnedAt(1_000)).toBe(true)
+  })
+
+  it('rejects invalid timestamps and undefined', () => {
+    expect(isValidPinnedAt(0)).toBe(false)
+    expect(isValidPinnedAt(undefined)).toBe(false)
+    expect(isValidPinnedAt('1000')).toBe(false)
   })
 })

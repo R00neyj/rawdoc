@@ -31,3 +31,12 @@ export function isValidLineEnding(value: unknown): value is 'crlf' | 'lf' {
 export function isContentTooLarge(content: string): boolean {
   return utf8ByteLength(content) > MAX_CONTENT_BYTES
 }
+
+// 정수 ms, 0 초과, 지금+1일 이하 (F-208 2.3)
+export function isValidTimestamp(value: unknown): value is number {
+  return Number.isInteger(value) && (value as number) > 0 && (value as number) <= Date.now() + 86_400_000
+}
+
+export function isValidPinnedAt(value: unknown): value is number | null {
+  return value === null || isValidTimestamp(value)
+}
