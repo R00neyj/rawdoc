@@ -12,7 +12,10 @@ import {
 import type { EditorState } from '@codemirror/state'
 
 import { createMemoryStore } from '../storage/memoryStore'
+import { createIdbStore } from '../storage/idbStore'
 import { openStore } from '../storage/openStore'
+import type { ServerStore } from '../storage/serverStore'
+import { migrateLocalIfNeeded } from './migrateLocal'
 import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree'
 import { resolveWikiTarget } from '../lib/wikiLink'
 import { getPref, setPref } from './prefs'
@@ -32,10 +35,10 @@ import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag 
 import { attachImages } from './attachImages'
 import { cleanupUnusedAttachments, scheduleAttachmentGc } from './attachmentGc'
 import DropOverlay from './DropOverlay'
-import Editor from '../editor/Editor.jsx'
+import Editor, { type EditorHandle } from '../editor/Editor'
 import { countChars, countWords, cursorInfo } from '../editor/stats'
-import Viewer from '../viewer/Viewer.jsx'
-import { renderMarkdown } from '../viewer/renderMarkdown.js'
+import Viewer from '../viewer/Viewer'
+import { renderMarkdown } from '../viewer/renderMarkdown'
 import { decodeShare, type ShareDoc } from '../lib/shareCodec'
 import Outline from './Outline'
 
@@ -64,15 +67,6 @@ type DocMeta = Pick<Doc, 'id' | 'title' | 'updatedAt' | 'folderId' | 'pinnedAt'>
 type OpenDoc = { id: string; content: string; lineEnding: LineEnding }
 type Stats = { line: number; col: number; charCount: number; wordCount: number }
 type AppNotice = NoticeWithAction & { id: number }
-// Editor(F-202) 핸들 타입은 아직 연결 전(2.3 단계) — 이 파일이 쓰는 메서드만 최소로 적는다
-type EditorHandle = {
-  getText(lineEnding?: LineEnding): string
-  setWikiTitles(titles: string[]): void
-  setLineNumbers(on: boolean): void
-  setIndent(spaces: number): void
-  setViewMode(mode: string): void
-  focus(): void
-}
 
 function stripContent(doc: Doc): DocMeta {
   return {
@@ -413,6 +407,28 @@ export default function App() {
         })
       }
 
+      // 로컬 → 계정 이관 (F-208.md 2.1·2.2) — 첫 실행 안내 문서 판단은 이 뒤에 한다
+      if (resolvedStore.kind === 'server' && accountState.state === 'in') {
+        const serverStore = resolvedStore as ServerStore
+        await migrateLocalIfNeeded({
+          userId: accountState.id,
+          getPref,
+          setPref,
+          readLocal: async () => {
+            const local = await createIdbStore()
+            const [folders, docs] = await Promise.all([local.listFolders(), local.list()])
+            return { folders, docs }
+          },
+          importLocal: (input) => serverStore.importLocal(input),
+          notice: showNotice,
+          afterImport: async () => {
+            const [freshDocs, freshFolders] = await Promise.all([resolvedStore.list(), resolvedStore.listFolders()])
+            setDocs(sortByUpdatedAtDesc(freshDocs.map(stripContent)))
+            setFolders(freshFolders)
+          },
+        })
+      }
+
       let list = await resolvedStore.list()
 
       if (list.length === 0 && getPref('md.firstRunDone', '') === '') {
@@ -734,7 +750,7 @@ export default function App() {
     store,
     docId: currentDocId,
     lineEnding: openDoc?.lineEnding,
-    getText: (lineEnding: LineEnding | undefined) => editorRef.current?.getText(lineEnding) ?? '',
+    getText: (lineEnding: LineEnding | undefined) => editorRef.current?.getText(lineEnding ?? 'crlf') ?? '',
     onSaved: handleDocSaved,
     onSaveError: handleSaveError,
   })
@@ -1392,6 +1408,8 @@ export default function App() {
       }
       getShareDoc={getShareDoc}
       onShareNotice={showNotice}
+      shareLinkDocId={store.kind === 'server' && currentDoc && !sharedDoc ? currentDoc.id : null}
+      onBeforeShareLinkAction={() => docSaverFlushRef.current()}
       exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
       onExportDoc={handleExportDoc}
       account={account}
@@ -1473,11 +1491,8 @@ export default function App() {
                   <Editor
                     key={currentDocId}
                     ref={editorRef}
-                    docId={currentDocId}
                     text={openDoc.content}
-                    lineEnding={openDoc.lineEnding}
                     viewMode={viewMode}
-                    lineNumbers={lineNumbersPref === 'on'}
                     autoFocus={focusEditorRef.current}
                     onDocChange={handleDocChange}
                     onSelectionChange={handleSelectionChange}

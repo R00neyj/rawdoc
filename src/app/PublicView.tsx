@@ -1,17 +1,24 @@
-// 공개 보기 화면 S-5 (specs/features/F-210.md 2.4) — 저장소를 열지 않는다, 사이드바·상단바·상태바 없음
-import { useEffect, useMemo, useRef, useState } from 'react'
+// 공개 보기 화면 S-5 (specs/features/F-210.md 2.4, F-209.md 2.6) — 저장소를 열지 않는다, 사이드바·상단바·상태바 없음
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorState } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import type { EditorView } from '@codemirror/view'
 
-import Viewer from '../viewer/Viewer.jsx'
-import { renderMarkdown } from '../viewer/renderMarkdown.js'
+import Viewer from '../viewer/Viewer'
+import type { ResolveAttachment } from '../viewer/Viewer'
+import { renderMarkdown } from '../viewer/renderMarkdown'
 import { extractHeadings, type Heading } from '../editor/outline'
 import { frontmatterExtension } from '../editor/frontmatter'
 import Outline from './Outline'
 import { IconDownload } from './icons'
-import { toFileName } from '../lib/filename'
+import { buildExportPayload } from './exportDoc'
 import { fetchPublicDoc, PublicDocError, type PublicDoc } from './publicDoc'
+
+// 원문에서 attachments/{id}.{ext} 참조를 찾아 확장자를 얻는다 — 공개 문서는 id 만으로 GET 경로를 못 만든다 (F-209.md 2.6)
+function findAttachmentExt(content: string, id: string): string | null {
+  const m = new RegExp(`attachments/${id}\\.(png|jpg|gif|webp)`).exec(content)
+  return m ? m[1] : null
+}
 
 type LoadState =
   | { status: 'loading' }
@@ -42,12 +49,11 @@ function makeFakeHandle(content: string): FakeEditorHandle {
   }
 }
 
-function downloadMd(title: string, content: string) {
-  const blob = new Blob([content], { type: 'text/markdown' })
+function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = toFileName(title)
+  link.download = filename
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
@@ -87,6 +93,43 @@ export default function PublicView({ token }: PublicViewProps) {
   const fakeHandle = useMemo(() => (doc ? makeFakeHandle(doc.content) : null), [doc])
   const editorRef = useMemo(() => ({ current: fakeHandle }), [fakeHandle])
 
+  // 원문에서 확장자를 찾아 공개 첨부 경로로 읽는다. 실패는 자리 표시(F-157 문구, F-209.md 2.6)
+  const resolveAttachment: ResolveAttachment = useCallback(
+    async (id) => {
+      if (!doc) return null
+      const ext = findAttachmentExt(doc.content, id)
+      if (!ext) return null
+      const res = await fetch(`/pub/docs/${encodeURIComponent(token)}/attachments/${id}.${ext}`, { cache: 'no-store' })
+      if (!res.ok) return null
+      const blob = await res.blob()
+      try {
+        const bitmap = await createImageBitmap(blob)
+        const { width, height } = bitmap
+        bitmap.close?.()
+        return { blob, width, height }
+      } catch {
+        return null
+      }
+    },
+    [doc, token],
+  )
+
+  async function handleExport() {
+    if (!doc) return
+    const store = {
+      async getAttachment(id: string) {
+        const ext = findAttachmentExt(doc.content, id)
+        if (!ext) return null
+        const res = await fetch(`/pub/docs/${encodeURIComponent(token)}/attachments/${id}.${ext}`, { cache: 'no-store' })
+        if (!res.ok) return null
+        return { id, ext, blob: await res.blob() }
+      },
+    }
+    const payload = await buildExportPayload({ text: doc.content, title: doc.title, store })
+    const mime = payload.kind === 'zip' ? 'application/zip' : 'text/markdown;charset=utf-8'
+    downloadBlob(new Blob([payload.bytes], { type: mime }), payload.filename)
+  }
+
   function retry() {
     setState({ status: 'loading' })
     fetchPublicDoc(token)
@@ -107,7 +150,7 @@ export default function PublicView({ token }: PublicViewProps) {
           type="button"
           className="public-view-export"
           disabled={!doc}
-          onClick={() => doc && downloadMd(doc.title, doc.content)}
+          onClick={() => handleExport()}
         >
           <IconDownload size={18} />
           .md 내보내기
@@ -126,7 +169,7 @@ export default function PublicView({ token }: PublicViewProps) {
         )}
         {state.status === 'ready' && (
           <>
-            <Viewer ref={viewerRef} html={html} missingImageText="이미지를 불러올 수 없습니다" codeCopy />
+            <Viewer ref={viewerRef} html={html} resolveAttachment={resolveAttachment} codeCopy />
             <Outline editorRef={editorRef} containerRef={contentAreaRef} viewerRef={viewerRef} docId={token} viewMode="view" />
           </>
         )}

@@ -78,6 +78,10 @@ export async function createDoc(body: {
   content: string
   lineEnding: LineEnding
   folderId: string | null
+  // 로컬 이관(F-208 2.2·2.3)이 원본 시각을 유지할 때만 보낸다
+  createdAt?: number
+  updatedAt?: number
+  pinnedAt?: number | null
 }): Promise<ServerDoc> {
   const res = await send('/api/docs', jsonInit(body, 'POST'))
   const kind = classifyStatus(res.status)

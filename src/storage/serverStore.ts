@@ -1,12 +1,18 @@
 // F-207 서버 저장소 — 캐시에 먼저 쓰고 즉시 resolve, 보낼 목록(outbox)을 순서대로 보낸다 (2.3)
+// F-209 2.5: 첨부는 캐시에 blob 을 두고 서버로 올린다(변환은 toWebp)
 import { createIdbStore } from './idbStore'
-import { createRemoteCache, docIdOf, type CachedDoc, type CachedFolder, type OutboxEntry, type OutboxItem, type RemoteCache } from './remoteCache'
+import { createRemoteCache, docIdOf, type CachedAttachment, type CachedDoc, type CachedFolder, type OutboxEntry, type OutboxItem, type RemoteCache } from './remoteCache'
 import * as api from './docsApi'
 import { ApiError, type ServerDoc } from './docsApi'
-import type { Doc, Folder, LineEnding, Store, SyncState } from '../types'
+import { uploadAttachment, fetchAttachment, AttachmentApiError } from './attachmentsApi'
+import { toWebp } from './toWebp'
+import { extractAttachmentRefs } from '../lib/imageBlock'
+import type { Attachment, AttachmentExt, Doc, Folder, LineEnding, Store, SyncState } from '../types'
 
 const RETRY_INTERVAL_MS = 30000
 const TOO_LARGE_MESSAGE = '문서가 너무 커서 서버에 저장하지 못했습니다(1MB 초과).'
+const ATTACHMENT_UPLOAD_FAIL_MESSAGE = '이미지를 서버에 올리지 못했습니다.'
+const ATTACHMENT_EXT_RE = '(png|jpg|gif|webp)'
 
 type StoreNotice = { type: 'info' | 'error' | 'update' | 'warn'; message: string }
 
@@ -14,6 +20,27 @@ export type ServerStoreHandlers = {
   onConflict?: (event: { docId: string; copyId: string }) => void
   onNotice?: (notice: StoreNotice) => void
   dbName?: string
+}
+
+// server 저장소에만 있는 로컬 이관(F-208 2.2) 진입점 — Store 표준 타입엔 없어 이 타입으로 좁혀 쓴다
+export type ServerStore = Store & {
+  importLocal(input: { folders: Folder[]; docs: Doc[] }): Promise<{ importedCount: number }>
+}
+
+// 폴더를 부모가 먼저 오도록 정렬한다 (2.2) — 순환 참조는 만들 수 없으므로 방어적으로만 끊는다
+function sortFoldersParentFirst(folders: Folder[]): Folder[] {
+  function depthOf(folder: Folder): number {
+    let depth = 0
+    let current: Folder | undefined = folder
+    const seen = new Set<string>()
+    while (current?.parentId && !seen.has(current.id)) {
+      seen.add(current.id)
+      current = folders.find((f) => f.id === current!.parentId)
+      depth++
+    }
+    return depth
+  }
+  return [...folders].sort((a, b) => depthOf(a) - depthOf(b))
 }
 
 function toDoc(cached: Doc & { version: number; userId?: string }): Doc {
@@ -31,13 +58,45 @@ function sortByUpdatedAtDesc<T extends { updatedAt: number }>(list: T[]): T[] {
 }
 
 let sharedLocalAttachmentStore: Promise<Store> | null = null
-// 첨부는 로그인 여부와 무관하게 로컬 md-docs 첨부 스토어를 그대로 쓴다 (2.5)
+// 옮겨 온 로컬 첨부(F-208)를 읽어올 때만 쓰는 로컬 md-docs 첨부 스토어 (2.5)
 function getLocalAttachmentStore(): Promise<Store> {
   if (!sharedLocalAttachmentStore) sharedLocalAttachmentStore = createIdbStore()
   return sharedLocalAttachmentStore
 }
 
-export async function createServerStore(userId: string, handlers: ServerStoreHandlers = {}): Promise<Store> {
+// 소문자 16진수 16자 (F-156 2.1 과 같은 형식)
+function randomAttachmentId(): string {
+  const bytes = new Uint8Array(8)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function cachedToAttachment(record: CachedAttachment): Attachment {
+  return { id: record.id, mime: record.mime, ext: record.ext, size: record.size, width: record.width, height: record.height, createdAt: record.createdAt, blob: record.blob }
+}
+
+// 캐시에 있는 문서 원문에서 이 id 의 확장자를 찾는다 — GET 은 원문 없이 id 만으로는 확장자를 모른다 (2.5)
+function findExtInDocs(docs: CachedDoc[], id: string): AttachmentExt | null {
+  const re = new RegExp(`attachments/${id}\\.${ATTACHMENT_EXT_RE}`)
+  for (const doc of docs) {
+    const m = re.exec(doc.content)
+    if (m) return m[1] as AttachmentExt
+  }
+  return null
+}
+
+async function decodeDims(blob: Blob): Promise<{ width: number; height: number }> {
+  try {
+    const bitmap = await createImageBitmap(blob)
+    const { width, height } = bitmap
+    bitmap.close?.()
+    return { width, height }
+  } catch {
+    return { width: 0, height: 0 }
+  }
+}
+
+export async function createServerStore(userId: string, handlers: ServerStoreHandlers = {}): Promise<ServerStore> {
   const cache: RemoteCache = await createRemoteCache(handlers.dbName)
   const listeners = new Set<(state: SyncState) => void>()
   let state: SyncState = { pending: 0, online: typeof navigator === 'undefined' ? true : navigator.onLine, signedOut: false }
@@ -115,7 +174,17 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     try {
       switch (entry.type) {
         case 'createDoc': {
-          const created = await api.createDoc({ id: entry.docId, title: entry.title, content: entry.content, lineEnding: entry.lineEnding, folderId: entry.folderId })
+          const created = await api.createDoc({
+            id: entry.docId,
+            title: entry.title,
+            content: entry.content,
+            lineEnding: entry.lineEnding,
+            folderId: entry.folderId,
+            // 로컬 이관(F-208 2.2)이 넣은 값만 있다 — 보통 생성은 이 필드들이 없다
+            ...(entry.createdAt !== undefined ? { createdAt: entry.createdAt } : {}),
+            ...(entry.updatedAt !== undefined ? { updatedAt: entry.updatedAt } : {}),
+            ...(entry.pinnedAt !== undefined ? { pinnedAt: entry.pinnedAt } : {}),
+          })
           await cache.putDoc(userId, created)
           await cache.removeOutbox(entry.key)
           break
@@ -168,6 +237,17 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           await cache.removeOutbox(entry.key)
           break
         }
+        case 'upload': {
+          const cachedAttachment = await cache.getAttachment(userId, entry.attachmentId)
+          if (!cachedAttachment) {
+            await cache.removeOutbox(entry.key)
+            break
+          }
+          await uploadAttachment(entry.attachmentId, entry.ext, cachedAttachment.blob)
+          await cache.markAttachmentUploaded(userId, entry.attachmentId)
+          await cache.removeOutbox(entry.key)
+          break
+        }
         default:
           break
       }
@@ -175,6 +255,24 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       patchState({ online: true })
       return true
     } catch (err) {
+      if (err instanceof AttachmentApiError) {
+        if (err.kind === 'network') {
+          patchState({ online: false })
+          return false
+        }
+        patchState({ online: true })
+        if (err.kind === 'unauthorized') {
+          patchState({ signedOut: true })
+          return false
+        }
+        if (err.kind === 'too_large' || err.kind === 'unsupported' || err.kind === 'type_mismatch') {
+          await cache.removeOutbox(entry.key)
+          notice({ type: 'error', message: ATTACHMENT_UPLOAD_FAIL_MESSAGE })
+          return true
+        }
+        // server_error·other — 재시도해도 될 수 있으니 이번 회차는 멈춘다
+        return false
+      }
       if (!(err instanceof ApiError)) throw err
 
       if (err.kind === 'network') {
@@ -233,8 +331,43 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     }, RETRY_INTERVAL_MS)
   }
 
+  // 옮겨 온 로컬 첨부(F-208): 캐시 문서가 참조하는 첨부 중 서버 캐시에 없고 로컬에 있는 것을 변환 없이 그대로 캐시에 복사 + 올리기 (2.5)
+  async function migrateLocalAttachments() {
+    const docs = await cache.getDocs(userId)
+    const referenced = new Set<string>()
+    for (const doc of docs) for (const id of extractAttachmentRefs(doc.content)) referenced.add(id)
+    if (referenced.size === 0) return
+
+    const local = await getLocalAttachmentStore()
+    let migrated = false
+    for (const id of referenced) {
+      const existing = await cache.getAttachment(userId, id)
+      if (existing) continue
+      const localAttachment = await local.getAttachment(id)
+      if (!localAttachment) continue
+      await cache.putAttachment(userId, {
+        id: localAttachment.id,
+        ext: localAttachment.ext,
+        mime: localAttachment.mime,
+        size: localAttachment.size,
+        width: localAttachment.width,
+        height: localAttachment.height,
+        blob: localAttachment.blob,
+        uploaded: false,
+        createdAt: localAttachment.createdAt,
+      })
+      await cache.addOutbox(userId, { type: 'upload', attachmentId: localAttachment.id, ext: localAttachment.ext })
+      migrated = true
+    }
+    if (migrated) {
+      await refreshPending()
+      kickSend()
+    }
+  }
+
   refreshPending()
   kickSend()
+  migrateLocalAttachments()
 
   async function enqueueUpdateDoc(docId: string, patch: { title?: string; content?: string }) {
     const entries = await cache.getOutbox(userId)
@@ -442,24 +575,106 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       kickSend()
     },
 
-    async putAttachment(input) {
-      const local = await getLocalAttachmentStore()
-      return local.putAttachment(input)
+    // GIF 가 아니면 WebP 로 변환해 본다(더 커지거나 실패하면 원본). 캐시에 먼저 넣고 즉시 반환, 올리기는 보낼 목록으로 (2.5)
+    async putAttachment({ blob, mime, ext, width, height }) {
+      const converted = ext === 'gif' ? blob : await toWebp(blob)
+      const finalExt: AttachmentExt = converted === blob ? ext : 'webp'
+      const finalMime = converted === blob ? mime : 'image/webp'
+
+      let id = randomAttachmentId()
+      while (await cache.getAttachment(userId, id)) {
+        id = randomAttachmentId()
+      }
+
+      await cache.putAttachment(userId, { id, ext: finalExt, mime: finalMime, size: converted.size, width, height, blob: converted, uploaded: false, createdAt: Date.now() })
+      await cache.addOutbox(userId, { type: 'upload', attachmentId: id, ext: finalExt })
+      await refreshPending()
+      kickSend()
+      return { id, ext: finalExt }
     },
 
     async getAttachment(id) {
-      const local = await getLocalAttachmentStore()
-      return local.getAttachment(id)
+      const cached = await cache.getAttachment(userId, id)
+      if (cached) return cachedToAttachment(cached)
+
+      const docs = await cache.getDocs(userId)
+      const ext = findExtInDocs(docs, id)
+      if (!ext) return null
+
+      try {
+        const blob = await fetchAttachment(id, ext)
+        const { width, height } = await decodeDims(blob)
+        const record: Omit<CachedAttachment, 'userId'> = {
+          id,
+          ext,
+          mime: blob.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+          size: blob.size,
+          width,
+          height,
+          blob,
+          uploaded: true,
+          createdAt: Date.now(),
+        }
+        await cache.putAttachment(userId, record)
+        return cachedToAttachment({ ...record, userId })
+      } catch {
+        return null
+      }
     },
 
+    // 캐시만(서버 삭제·GC 는 범위 밖, 2.5)
     async listAttachments() {
-      const local = await getLocalAttachmentStore()
-      return local.listAttachments()
+      const all = await cache.listAttachments(userId)
+      return all.map(({ id, ext, size, createdAt }) => ({ id, ext, size, createdAt }))
     },
 
     async removeAttachment(id) {
-      const local = await getLocalAttachmentStore()
-      return local.removeAttachment(id)
+      await cache.deleteAttachment(userId, id)
+    },
+
+    // 로컬 → 계정 이관 (F-208 2.2) — id 를 그대로 캐시에 쓰고 보낼 목록에 넣는다.
+    // 캐시에 같은 id 가 이미 있으면(서버에 이미 있음) 건너뛴다
+    async importLocal({ folders, docs }) {
+      for (const folder of sortFoldersParentFirst(folders)) {
+        const existing = await cache.getFolder(userId, folder.id)
+        if (existing) continue
+        await cache.putFolder(userId, { id: folder.id, name: folder.name, parentId: folder.parentId, createdAt: folder.createdAt, updatedAt: folder.updatedAt })
+        await cache.addOutbox(userId, { type: 'createFolder', folderId: folder.id, name: folder.name, parentId: folder.parentId })
+      }
+
+      let importedCount = 0
+      for (const doc of docs) {
+        const existing = await cache.getDoc(userId, doc.id)
+        if (existing) continue
+        const cachedDoc: Omit<CachedDoc, 'userId'> = {
+          id: doc.id,
+          title: doc.title,
+          content: doc.content,
+          lineEnding: doc.lineEnding,
+          folderId: doc.folderId,
+          pinnedAt: doc.pinnedAt,
+          createdAt: doc.createdAt,
+          updatedAt: doc.updatedAt,
+          version: 0,
+        }
+        await cache.putDoc(userId, cachedDoc)
+        await cache.addOutbox(userId, {
+          type: 'createDoc',
+          docId: doc.id,
+          title: doc.title,
+          content: doc.content,
+          lineEnding: doc.lineEnding,
+          folderId: doc.folderId,
+          createdAt: doc.createdAt,
+          updatedAt: doc.updatedAt,
+          pinnedAt: doc.pinnedAt,
+        })
+        importedCount++
+      }
+
+      await refreshPending()
+      kickSend()
+      return { importedCount }
     },
   }
 }

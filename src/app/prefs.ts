@@ -36,6 +36,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.fontSize',
   'md.indent',
   'md.account',
+  'md.localMigrated',
 ])
 
 function assertAllowed(key: string) {
