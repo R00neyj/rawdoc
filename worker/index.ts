@@ -10,6 +10,7 @@ import {
   handleUpdateDoc,
 } from './docs'
 import { handleCreateFolder, handleDeleteFolder, handleListFolders, handleUpdateFolder } from './folders'
+import { handleCreateDocLink, handleDeleteDocLink, handleGetDocLink, handlePublicGetDoc } from './links'
 
 type RouteHandler = (
   request: Request,
@@ -78,17 +79,21 @@ const routes: Route[] = [
   { method: 'DELETE', path: '/api/docs/:id', handler: handleDeleteDoc },
   { method: 'PUT', path: '/api/docs/:id/folder', handler: handleMoveDocFolder },
   { method: 'PUT', path: '/api/docs/:id/pin', handler: handleSetPinned },
+  { method: 'GET', path: '/api/docs/:id/link', handler: handleGetDocLink },
+  { method: 'POST', path: '/api/docs/:id/link', handler: handleCreateDocLink },
+  { method: 'DELETE', path: '/api/docs/:id/link', handler: handleDeleteDocLink },
   { method: 'GET', path: '/api/folders', handler: handleListFolders },
   { method: 'POST', path: '/api/folders', handler: handleCreateFolder },
   { method: 'PUT', path: '/api/folders/:id', handler: handleUpdateFolder },
   { method: 'DELETE', path: '/api/folders/:id', handler: handleDeleteFolder },
+  { method: 'GET', path: '/pub/docs/:token', handler: handlePublicGetDoc },
 ]
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
 
-    if (!url.pathname.startsWith('/api/')) {
+    if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/pub/')) {
       return env.ASSETS.fetch(request)
     }
 
