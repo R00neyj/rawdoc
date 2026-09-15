@@ -1,6 +1,18 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "md-editor-web",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-09-14",
-  "assets": { "directory": "./dist" }
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "md-editor-db", "database_id": "073462f8-7a95-4b0f-8d32-4b07f8c4448e", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [
+    { "binding": "BUCKET", "bucket_name": "md-editor-attachments" }
+  ]
 }

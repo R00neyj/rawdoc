@@ -28,3 +28,6 @@ dist-*
 # Playwright E2E (specs/features/F-150.md 2장)
 test-results/
 playwright-report/
+
+.wrangler/
+.dev.vars
