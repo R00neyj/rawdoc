@@ -108,3 +108,93 @@ test.describe('F-210 A8 내보내기', () => {
     expect(Buffer.concat(chunks).toString('utf-8')).toBe(DOC.content)
   })
 })
+
+// 폴더 공개 보기 (specs/features/F-211.md 2.3)
+const FOLDER = {
+  name: '공유 폴더',
+  folders: [{ id: 'sub1', name: '하위 폴더', parentId: 'root' }],
+  docs: [
+    { id: 'd1', title: '문서1', folderId: 'root', updatedAt: 100 },
+    { id: 'd2', title: '문서2', folderId: 'root', updatedAt: 200 },
+    { id: 'd3', title: '문서3', folderId: 'sub1', updatedAt: 300 },
+  ],
+}
+
+const FOLDER_DOCS = {
+  d1: { title: '문서1', content: '# 문서1 제목\n\n본문1\n', lineEnding: 'lf', updatedAt: 100 },
+  d2: { title: '문서2', content: '# 문서2 제목\n\n본문2\n', lineEnding: 'lf', updatedAt: 200 },
+  d3: { title: '문서3', content: '# 문서3 제목\n\n본문3\n', lineEnding: 'lf', updatedAt: 300 },
+}
+
+async function mockPublicFolder(page, folder = FOLDER, docs = FOLDER_DOCS) {
+  await page.route('**/pub/folders/*', (route) => {
+    const url = route.request().url()
+    if (/\/pub\/folders\/[^/]+$/.test(url)) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(folder) })
+    }
+    return route.continue()
+  })
+  await page.route('**/pub/folders/*/docs/*', (route) => {
+    const url = new URL(route.request().url())
+    const docId = url.pathname.split('/').pop()
+    const doc = docs[docId]
+    if (!doc) return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not_found' }) })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) })
+  })
+}
+
+test.describe('F-211 A3 폴더 공개 보기', () => {
+  test('목록·첫 문서·해시 교체, 다른 문서 클릭 후 뒤로 가기', async ({ page }) => {
+    await mockPublicFolder(page)
+    await page.goto('/#/p/f/tokF')
+
+    await expect(page.locator('.public-folder-list-title')).toHaveText(FOLDER.name)
+    await expect(page.locator('.public-folder-list-doc')).toHaveCount(3)
+    // 첫 문서(root 안 updatedAt 내림차순 맨 위) = 문서2
+    await expect(page.locator('.public-view-title')).toHaveText('문서2')
+    await expect(page).toHaveURL(/#\/p\/f\/tokF\/d2$/)
+
+    await page.getByRole('button', { name: '문서3' }).click()
+    await expect(page.locator('.public-view-title')).toHaveText('문서3')
+    await expect(page).toHaveURL(/#\/p\/f\/tokF\/d3$/)
+
+    await page.goBack()
+    await expect(page.locator('.public-view-title')).toHaveText('문서2')
+  })
+
+  test('문서가 0개면 안내 문구', async ({ page }) => {
+    await mockPublicFolder(page, { name: '빈 폴더', folders: [], docs: [] }, {})
+    await page.goto('/#/p/f/tokEmpty')
+    await expect(page.locator('.public-view-notice')).toContainText('이 폴더에 문서가 없습니다.')
+  })
+
+  test('링크 없음 — 404', async ({ page }) => {
+    await page.route('**/pub/folders/*', (route) =>
+      route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not_found' }) }),
+    )
+    await page.goto('/#/p/f/badtok')
+    await expect(page.locator('.public-view-notice')).toContainText('링크가 없거나 끊겼습니다.')
+  })
+
+  test('문서 하나만 404 — 안내 문구', async ({ page }) => {
+    await mockPublicFolder(page, FOLDER, { d2: FOLDER_DOCS.d2, d3: FOLDER_DOCS.d3 })
+    await page.goto('/#/p/f/tokF/d1')
+    await expect(page.locator('.public-view-notice')).toContainText('이 문서는 더 이상 공유되지 않습니다.')
+  })
+})
+
+test.describe('F-211 A4 좁은 창', () => {
+  test('900px — 목록 버튼으로 열고 닫기', async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 800 })
+    await mockPublicFolder(page)
+    await page.goto('/#/p/f/tokF')
+    await expect(page.locator('.public-view-title')).toHaveText('문서2')
+
+    await expect(page.locator('.public-folder-list')).toHaveCount(0)
+    await page.getByRole('button', { name: '목록' }).click()
+    await expect(page.locator('.public-folder-list')).toBeVisible()
+    await page.getByRole('button', { name: '문서3' }).click()
+    await expect(page.locator('.public-folder-list')).toHaveCount(0)
+    await expect(page.locator('.public-view-title')).toHaveText('문서3')
+  })
+})

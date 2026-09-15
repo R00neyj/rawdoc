@@ -50,3 +50,30 @@ export async function revokeShareLink(docId: string): Promise<void> {
   if (kind) throw new LinkApiError(kind)
   if (!res.ok && res.status !== 204) throw new LinkApiError('other')
 }
+
+// 폴더 읽기 전용 링크 — GET·POST·DELETE /api/folders/:id/link (F-211.md 2.1, 규칙은 문서와 같다)
+export async function getFolderShareLink(folderId: string): Promise<string | null> {
+  const res = await send(`/api/folders/${encodeURIComponent(folderId)}/link`)
+  if (res.status === 404) return null
+  const kind = classifyStatus(res.status)
+  if (kind) throw new LinkApiError(kind)
+  if (!res.ok) throw new LinkApiError('other')
+  const data = (await res.json()) as { token: string }
+  return data.token
+}
+
+export async function createFolderShareLink(folderId: string): Promise<string> {
+  const res = await send(`/api/folders/${encodeURIComponent(folderId)}/link`, { method: 'POST' })
+  const kind = classifyStatus(res.status)
+  if (kind) throw new LinkApiError(kind)
+  if (!res.ok) throw new LinkApiError('other')
+  const data = (await res.json()) as { token: string }
+  return data.token
+}
+
+export async function revokeFolderShareLink(folderId: string): Promise<void> {
+  const res = await send(`/api/folders/${encodeURIComponent(folderId)}/link`, { method: 'DELETE' })
+  const kind = classifyStatus(res.status)
+  if (kind) throw new LinkApiError(kind)
+  if (!res.ok && res.status !== 204) throw new LinkApiError('other')
+}

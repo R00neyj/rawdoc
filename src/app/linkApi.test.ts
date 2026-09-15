@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { getShareLink, createShareLink, revokeShareLink, LinkApiError } from './linkApi'
+import {
+  getShareLink,
+  createShareLink,
+  revokeShareLink,
+  getFolderShareLink,
+  createFolderShareLink,
+  revokeFolderShareLink,
+  LinkApiError,
+} from './linkApi'
 
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -49,5 +57,43 @@ describe('revokeShareLink', () => {
   it('5xx 면 server_error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 500, ok: false }))
     await expect(revokeShareLink('d1')).rejects.toMatchObject({ kind: 'server_error' })
+  })
+})
+
+describe('getFolderShareLink', () => {
+  it('200 이면 토큰', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => ({ token: 'tokF' }) })
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await getFolderShareLink('f1')).toBe('tokF')
+    expect(fetchMock).toHaveBeenCalledWith('/api/folders/f1/link', { credentials: 'same-origin' })
+  })
+
+  it('404 면 null', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404, ok: false }))
+    expect(await getFolderShareLink('f1')).toBeNull()
+  })
+})
+
+describe('createFolderShareLink', () => {
+  it('201 이면 토큰', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 201, ok: true, json: async () => ({ token: 'tokF2' }) }))
+    expect(await createFolderShareLink('f1')).toBe('tokF2')
+  })
+
+  it('5xx 면 server_error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 500, ok: false }))
+    await expect(createFolderShareLink('f1')).rejects.toMatchObject({ kind: 'server_error' })
+  })
+})
+
+describe('revokeFolderShareLink', () => {
+  it('204 면 성공', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 204, ok: true }))
+    await expect(revokeFolderShareLink('f1')).resolves.toBeUndefined()
+  })
+
+  it('5xx 면 server_error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 500, ok: false }))
+    await expect(revokeFolderShareLink('f1')).rejects.toMatchObject({ kind: 'server_error' })
   })
 })

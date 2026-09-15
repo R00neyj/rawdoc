@@ -1,15 +1,17 @@
-// 해시 URL 해석·생성 — 순수 함수 (specs/ia.md 3.10, specs/architecture.md 1장, F-130.md 3.1)
+// 해시 URL 해석·생성 — 순수 함수 (specs/ia.md 3.10, specs/architecture.md 1장, F-130.md 3.1, F-211.md 1장)
 const HASH_DOC_PATTERN = /^#\/d\/(.+)$/
 const HASH_SHARE_PATTERN = /^#\/s\/(.+)$/
+const HASH_PUBLIC_FOLDER_PATTERN = /^#\/p\/f\/([^/]+)(?:\/(.+))?$/
 const HASH_PUBLIC_PATTERN = /^#\/p\/(.+)$/
 
 export type HashRoute =
   | { type: 'doc'; docId: string }
   | { type: 'share'; fragment: string }
   | { type: 'public'; token: string }
+  | { type: 'publicFolder'; token: string; docId?: string }
   | { type: 'none' }
 
-// `#/d/{id}`·`#/s/{조각}`·`#/p/{토큰}` 만 인정, 나머지는 { type: 'none' } (F-210.md 2.4)
+// `#/d/{id}`·`#/s/{조각}`·`#/p/{토큰}`·`#/p/f/{토큰}[/{문서id}]` 만 인정, 나머지는 { type: 'none' } (F-210.md 2.4, F-211.md 2.3)
 export function parseHash(hash: string | undefined): HashRoute {
   if (typeof hash !== 'string') {
     return { type: 'none' }
@@ -17,6 +19,12 @@ export function parseHash(hash: string | undefined): HashRoute {
   const shareMatch = HASH_SHARE_PATTERN.exec(hash)
   if (shareMatch) {
     return { type: 'share', fragment: shareMatch[1] }
+  }
+  const publicFolderMatch = HASH_PUBLIC_FOLDER_PATTERN.exec(hash)
+  if (publicFolderMatch) {
+    return publicFolderMatch[2]
+      ? { type: 'publicFolder', token: publicFolderMatch[1], docId: publicFolderMatch[2] }
+      : { type: 'publicFolder', token: publicFolderMatch[1] }
   }
   const publicMatch = HASH_PUBLIC_PATTERN.exec(hash)
   if (publicMatch) {
@@ -37,4 +45,9 @@ export function formatHash(docId: string | null | undefined): string {
 // `#/s/{조각}` (F-130.md 3.1)
 export function formatShareHash(fragment: string): string {
   return `#/s/${fragment}`
+}
+
+// `#/p/f/{토큰}` 또는 `#/p/f/{토큰}/{문서id}` (F-211.md 2.3)
+export function formatPublicFolderHash(token: string, docId?: string | null): string {
+  return docId ? `#/p/f/${token}/${docId}` : `#/p/f/${token}`
 }

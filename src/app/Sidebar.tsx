@@ -29,6 +29,7 @@ import {
   IconEdit,
   IconTooltip,
 } from './icons'
+import type { Notice } from './notice'
 
 export { SIDEBAR_ID }
 
@@ -61,6 +62,9 @@ type SidebarCtx = {
   onDragEnd: () => void
   onDragOver: (e: DragEvent<HTMLDivElement>, target: DropTarget) => void
   onDrop: (e: DragEvent<HTMLDivElement>, target: DropTarget) => void
+  // 폴더 읽기 전용 링크 메뉴 항목 노출 조건·알림 (F-211.md 2.4) — App.tsx 에 경로가 없어 최소 전달만 한다
+  isServerStore: boolean
+  onNotice: (notice: Notice) => void
 }
 
 function dropKeyOf(target: DropTarget): string {
@@ -166,7 +170,14 @@ function FolderRow({
             {node.name}
           </button>
         )}
-        {!isEditing && <FolderMenu label={node.name} items={items} />}
+        {!isEditing && (
+          <FolderMenu
+            label={node.name}
+            items={items}
+            shareFolderId={ctx.isServerStore ? node.id : undefined}
+            onNotice={ctx.onNotice}
+          />
+        )}
       </div>
       {isOpen && node.children.length > 0 && (
         <ul role="group" className="tree-group" style={{ '--depth': depth } as CSSProperties}>
@@ -408,6 +419,8 @@ type SidebarProps = {
   width: number
   onWidthChange: (width: number) => void
   onWidthCommit: (width: number) => void
+  isServerStore: boolean
+  onNotice: (notice: Notice) => void
 }
 
 export default function Sidebar({
@@ -438,6 +451,8 @@ export default function Sidebar({
   width,
   onWidthChange,
   onWidthCommit,
+  isServerStore,
+  onNotice,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
@@ -564,6 +579,8 @@ export default function Sidebar({
     onDragEnd: handleDragEnd,
     onDragOver: handleDragOver,
     onDrop: handleDrop,
+    isServerStore,
+    onNotice,
   }
 
   const rootTarget: DropTarget = { type: 'root' }

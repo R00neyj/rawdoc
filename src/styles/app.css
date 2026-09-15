@@ -1531,3 +1531,117 @@ body.sidebar-resizing {
   color: var(--ink-2);
   font-size: 14px;
 }
+
+.public-view-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+/* ===== 폴더 공개 보기 왼쪽 목록 (specs/features/F-211.md 2.3) ===== */
+.public-view--folder {
+  flex-direction: column;
+}
+
+.public-folder-topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.public-folder-list-toggle {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 4px 10px;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--panel);
+}
+
+.public-folder-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.public-folder-list {
+  flex: none;
+  width: 240px;
+  overflow-y: auto;
+  padding: 16px 12px;
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+@media (max-width: 1023px) {
+  .public-folder-list {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 20;
+    box-shadow: 2px 0 12px rgb(0 0 0 / 0.15);
+  }
+
+  .public-folder-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 19;
+    background: rgb(0 0 0 / 0.3);
+  }
+}
+
+.public-folder-list-title {
+  margin: 0 0 8px;
+  padding: 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.public-folder-list-subtitle {
+  margin: 14px 0 6px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.public-folder-list-docs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.public-folder-list-doc {
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-folder-list-doc:hover {
+  background: var(--rule-2);
+}
+
+.public-folder-list-doc.is-current {
+  background: var(--rule-2);
+  font-weight: 600;
+}
+
+.public-folder-list-empty {
+  padding: 0 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+}

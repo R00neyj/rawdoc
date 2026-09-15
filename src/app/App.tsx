@@ -24,7 +24,7 @@ import type { SyncState } from '../types'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
 import { IconRefresh } from './icons'
 import { resolveTheme } from './theme'
-import { parseHash, formatHash } from './hashRoute'
+import { parseHash, formatHash, type HashRoute } from './hashRoute'
 import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
@@ -110,18 +110,22 @@ function pushHashUrl(docId: string | null) {
   history.pushState(null, '', url)
 }
 
-export default function App() {
-  // 공개 보기 화면 S-5 (F-210.md 2.4) — `#/p/{토큰}` 이면 저장소를 열지 않고 이 값만으로 PublicView 를 그린다
-  const [publicToken, setPublicToken] = useState<string | null>(() => {
-    const route = parseHash(location.hash)
-    return route.type === 'public' ? route.token : null
-  })
+// `#/p/{토큰}`·`#/p/f/{토큰}` 이면 저장소를 열지 않고 이 값만으로 PublicView 를 그린다 (F-210.md 2.4, F-211.md 2.3)
+type PublicRoute = { type: 'public'; token: string } | { type: 'publicFolder'; token: string; docId?: string } | null
 
-  // 뒤로·앞으로 가기로 `#/p/{토큰}` 을 드나들 때 publicToken 을 갱신한다 (그 외 해시는 아래 별도 효과가 처리)
+function toPublicRoute(route: HashRoute): PublicRoute {
+  if (route.type === 'public') return route
+  if (route.type === 'publicFolder') return route
+  return null
+}
+
+export default function App() {
+  const [publicRoute, setPublicRoute] = useState<PublicRoute>(() => toPublicRoute(parseHash(location.hash)))
+
+  // 뒤로·앞으로 가기로 공개 보기 경로를 드나들 때 갱신한다 (그 외 해시는 아래 별도 효과가 처리, F-211.md 2.3)
   useEffect(() => {
     function handlePublicHashChange() {
-      const route = parseHash(location.hash)
-      setPublicToken(route.type === 'public' ? route.token : null)
+      setPublicRoute(toPublicRoute(parseHash(location.hash)))
     }
     window.addEventListener('hashchange', handlePublicHashChange)
     return () => window.removeEventListener('hashchange', handlePublicHashChange)
@@ -327,8 +331,9 @@ export default function App() {
     bootedRef.current = true
 
     async function boot() {
-      // 공개 보기 화면(F-210.md 2.4) — 저장소를 열지 않는다. render 는 publicToken 으로 갈린다
-      if (parseHash(location.hash).type === 'public') {
+      // 공개 보기 화면(F-210.md 2.4, F-211.md 2.3) — 저장소를 열지 않는다. render 는 publicRoute 로 갈린다
+      const bootHashType = parseHash(location.hash).type
+      if (bootHashType === 'public' || bootHashType === 'publicFolder') {
         setBootPhase('ready')
         return
       }
@@ -1373,8 +1378,12 @@ export default function App() {
     : clampSidebarWidth(sidebarWidth, windowWidth)
 
   // 공개 보기 화면(F-210.md 2.4) — 위 모든 훅은 매 렌더 그대로 호출되고 여기서 조기 반환만 한다
-  if (publicToken) {
-    return <PublicView key={publicToken} token={publicToken} />
+  if (publicRoute) {
+    return publicRoute.type === 'publicFolder' ? (
+      <PublicView key={`f:${publicRoute.token}`} kind="folder" token={publicRoute.token} docId={publicRoute.docId} />
+    ) : (
+      <PublicView key={publicRoute.token} kind="doc" token={publicRoute.token} />
+    )
   }
 
   const currentDoc = docs.find((d) => d.id === currentDocId) ?? null
@@ -1457,6 +1466,8 @@ export default function App() {
           width={displaySidebarWidth}
           onWidthChange={handleSidebarWidthChange}
           onWidthCommit={handleSidebarWidthCommit}
+          isServerStore={store.kind === 'server'}
+          onNotice={showNotice}
         />
         {narrow && sidebarOpen && (
           <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />

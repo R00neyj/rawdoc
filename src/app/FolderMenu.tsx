@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } from 'react'
-import { IconMore } from './icons'
+import { IconMore, IconLink, IconLinkOff } from './icons'
 import usePresence from './usePresence'
+import { getFolderShareLink, createFolderShareLink, revokeFolderShareLink } from './linkApi'
+import type { Notice } from './notice'
 
 export type FolderMenuItem = {
   key: string
@@ -10,13 +12,20 @@ export type FolderMenuItem = {
   onSelect: () => void
 }
 
-type FolderMenuProps = { label: string; items: FolderMenuItem[] }
+type FolderMenuProps = {
+  label: string
+  items: FolderMenuItem[]
+  // 서버 저장소일 때 폴더 id — 있으면 읽기 전용 링크 항목 2개를 덧붙인다 (F-211.md 2.4)
+  shareFolderId?: string
+  onNotice?: (notice: Notice) => void
+}
 
 // 사이드바 항목 `⋯` 메뉴 — 라이브러리 없이 앱이 그린다 (specs/features/F-126.md 5.2)
 // 마우스 오버·키보드 포커스 시 트리거가 보인다(app.css). 방향키로 항목 이동, Enter 실행,
 // Esc·바깥 클릭으로 닫고 포커스를 트리거(⋯)로 되돌린다
-export default function FolderMenu({ label, items }: FolderMenuProps) {
+export default function FolderMenu({ label, items, shareFolderId, onNotice }: FolderMenuProps) {
   const [open, setOpen] = useState(false)
+  const [hasLink, setHasLink] = useState(false)
   const { mounted, state } = usePresence(open) // 나타나고 사라지는 전환 (F-172.md 2.2)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLUListElement | null>(null)
@@ -34,6 +43,22 @@ export default function FolderMenu({ label, items }: FolderMenuProps) {
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [open])
 
+  // 메뉴를 열 때마다 링크 유무를 다시 확인 — `끊기` 항목 노출 조건 (F-210.md 2.6, F-211.md 2.4)
+  useEffect(() => {
+    if (!open || !shareFolderId) return
+    let cancelled = false
+    getFolderShareLink(shareFolderId)
+      .then((token) => {
+        if (!cancelled) setHasLink(Boolean(token))
+      })
+      .catch(() => {
+        if (!cancelled) setHasLink(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, shareFolderId])
+
   useEffect(() => {
     if (open) {
       itemRefs.current[0]?.focus()
@@ -44,6 +69,52 @@ export default function FolderMenu({ label, items }: FolderMenuProps) {
     setOpen(false)
     buttonRef.current?.focus()
   }
+
+  // ----- 폴더 읽기 전용 링크 (F-211.md 2.4, 문구는 F-210.md 2.6 과 같다) -----
+  async function handleCopyFolderLink() {
+    if (!shareFolderId) return
+    let token: string
+    try {
+      token = await createFolderShareLink(shareFolderId)
+    } catch {
+      onNotice?.({ type: 'error', message: '링크를 만들지 못했습니다. 연결을 확인하세요.' })
+      return
+    }
+    const link = `${location.origin}/#/p/f/${token}`
+    try {
+      await navigator.clipboard.writeText(link)
+    } catch {
+      onNotice?.({ type: 'error', message: '복사하지 못했습니다. 브라우저 권한을 확인하세요.' })
+      return
+    }
+    setHasLink(true)
+    onNotice?.({
+      type: 'info',
+      message: '읽기 전용 링크를 복사했습니다. 링크를 아는 사람은 로그인 없이 볼 수 있습니다.',
+    })
+  }
+
+  async function handleRevokeFolderLink() {
+    if (!shareFolderId) return
+    try {
+      await revokeFolderShareLink(shareFolderId)
+    } catch {
+      onNotice?.({ type: 'error', message: '링크를 끊지 못했습니다. 연결을 확인하세요.' })
+      return
+    }
+    setHasLink(false)
+    onNotice?.({ type: 'info', message: '읽기 전용 링크를 끊었습니다. 이전 주소는 더 이상 열리지 않습니다.' })
+  }
+
+  const allItems: FolderMenuItem[] = [
+    ...items,
+    ...(shareFolderId
+      ? [{ key: 'share-link', label: '읽기 전용 링크 복사', icon: IconLink, onSelect: handleCopyFolderLink }]
+      : []),
+    ...(shareFolderId && hasLink
+      ? [{ key: 'share-link-off', label: '읽기 전용 링크 끊기', icon: IconLinkOff, onSelect: handleRevokeFolderLink }]
+      : []),
+  ]
 
   function selectItem(item: FolderMenuItem) {
     setOpen(false)
@@ -58,7 +129,7 @@ export default function FolderMenu({ label, items }: FolderMenuProps) {
     }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
-      const count = items.length
+      const count = allItems.length
       const current = itemRefs.current.indexOf(document.activeElement as HTMLButtonElement)
       const delta = e.key === 'ArrowDown' ? 1 : -1
       const next = current === -1 ? 0 : (current + delta + count) % count
@@ -88,7 +159,7 @@ export default function FolderMenu({ label, items }: FolderMenuProps) {
           ref={menuRef}
           onKeyDown={handleKeyDown}
         >
-          {items.map((item, i) => (
+          {allItems.map((item, i) => (
             <li key={item.key} role="none">
               <button
                 type="button"
