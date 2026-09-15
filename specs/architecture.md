@@ -126,6 +126,38 @@ store.removeAttachment(id)    // Promise<void>
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
 
+## 4.1 M2 추가 설정 키 (2026-09-15)
+
+| 키 | 값 | 기본 | 명세 |
+| --- | --- | --- | --- |
+| `md.account` | 마지막 로그인 `{"id","email"}` JSON | 없음 | F-205 |
+| `md.localMigrated` | 로컬 문서를 옮긴 사용자 id | 없음 | F-208 |
+
+## 6. 서버 (M2, 2026-09-15)
+
+```
+wrangler.jsonc           Worker 스크립트·D1(DB)·R2(BUCKET)·정적 자산(ASSETS) 바인딩 (F-204)
+migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213)
+worker/
+  index.ts               fetch 진입점, 라우트 표 { method, path, handler }
+  http.ts                JSON 응답 도우미
+  auth.ts                Access JWT 검증, requireUser (F-205)
+  docs.ts folders.ts validate.ts   (F-206)
+  links.ts token.ts      (F-210·F-211)
+  attachments.ts imageSniff.ts     (F-209)
+  access.ts grants.ts    (F-212)
+  locks.ts               (F-213)
+  tsconfig.json worker-configuration.d.ts(`npm run cf:types` 생성)
+```
+
+- 경로: `/api/*` 는 로그인(Access 가 경로를 보호, Worker 가 JWT 재검증). `/pub/*` 는 로그인 없이 읽기만(쓰기 메서드 405). 나머지는 정적 자산, 없는 경로는 `index.html`
+- API 응답 헤더: `Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`. 오류 본문에 내부 정보 없음
+- 남의 자원은 404, 권한은 있으나 동작이 막히면 403 (F-206·F-212)
+- Worker 는 `src/lib/**` 순수 함수와 `src/types.ts` 만 import 한다
+- 로컬 개발: `.dev.vars` 의 `DEV_AUTH_EMAIL` 은 localhost 요청에서만 로그인으로 본다. 포트는 `dev:worker` 8790, 에이전트 병렬 슬롯 8791~
+- 클라이언트: 로그인 상태면 `store.kind === 'server'` (F-207). IndexedDB `md-remote` 에 캐시·보낼 목록·첨부. 로컬 `md-docs` 는 로그아웃 상태와 이관(F-208)에 쓴다
+- R2 키 `att/{owner_id}/{id}.{ext}`, 공개 버킷·서명 URL 없음 (F-209)
+
 ## 5. 브랜드 주입
 
 - `brand.config.js`: `export default { name, shortName, accent, icon }` (`icon` 은 상단바 제품 아이콘 경로, F-142)

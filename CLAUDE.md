@@ -33,13 +33,13 @@
 
 | 계층 | 선택 | 상태 |
 | --- | --- | --- |
-| 프론트 | React 19, Vite 7, JavaScript(JSX) | 사용 중. M2 착수 전 TypeScript 로 이전 (`specs/product.md` Q27) |
-| 에디터 | CodeMirror 6 + `@codemirror/lang-markdown` | 스파이크로 데스크톱 Chrome 검증 |
-| PWA | `vite-plugin-pwa` (Workbox) — M1 포함 | 미도입 |
-| 정적 + API | Cloudflare Workers (static assets) — M1 은 정적 배포만 | 미도입 |
-| 실시간 동기화 | Durable Object + y-partyserver, `y-codemirror.next` | 미도입 |
-| 메타 DB / 파일 | D1 / R2 | 미도입 |
-| 인증 | 미정 | — |
+| 프론트 | React 19, Vite 7, TypeScript 6.0 (`typescript-eslint`) | 사용 중. 2026-09-15 JS → TS 이전 중 (F-201~F-203). `e2e/`·`scripts/` 는 JS |
+| 에디터 | CodeMirror 6 + `@codemirror/lang-markdown` | 사용 중 |
+| PWA | `vite-plugin-pwa` (Workbox) | 사용 중 |
+| 정적 + API | Cloudflare Workers (static assets + `worker/`), `yjw1555.workers.dev` | 사용 중 (F-204). 구조는 `specs/architecture.md` 6장 |
+| 메타 DB / 파일 | D1 `md-editor-db` / R2 `md-editor-attachments` | 사용 중 (F-205~) |
+| 인증 | Cloudflare Access 일회용 코드 + Worker JWT 검증 | F-205 (Q5) |
+| 실시간 동기화 | Durable Object + y-partyserver, `y-codemirror.next` | 미도입 (M3) |
 | E2E 테스트 | Playwright (`@playwright/test`), 설치된 Chrome 채널 | F-150 에서 도입 |
 
 "미도입" 항목은 해당 명세가 생기기 전까지 의존성을 추가하지 않는다
@@ -50,7 +50,12 @@
 npm run dev          # 웹앱 dev 서버
 npm run build        # 웹앱 빌드
 npm run lint         # ESLint (루트 전체)
-npm test             # Vitest 1회 실행 (src/**/*.test.{js,jsx})
+npm test             # Vitest 1회 실행 (src/**/*.test.{js,jsx,ts,tsx}, worker/**/*.test.ts)
+npm run typecheck    # tsc --noEmit (앱)
+npm run typecheck:worker   # tsc -p worker
+npm run dev:worker   # 빌드 후 wrangler dev(8790, 로컬 D1·R2). .dev.vars 의 DEV_AUTH_EMAIL 로 로그인 우회
+npm run cf:types     # wrangler.jsonc 바인딩 → worker/worker-configuration.d.ts
+npm run deploy       # 빌드 후 wrangler deploy (로그인 필요)
 npm run test:watch   # Vitest 감시 모드
 npm run test:e2e     # Playwright E2E — 빌드 후 preview(4317) 에서 e2e/*.spec.js (F-150 이후)
 npm run verify       # lint·단위·build 요약 (verify:full = e2e 포함, -- --repeat 2)
