@@ -176,9 +176,9 @@
   left: 0;
   right: 0;
   top: 50%;
-  height: 0.25em;
-  margin-top: -0.125em;
-  background: var(--md-border);
+  height: 1px;
+  margin-top: -0.5px;
+  background: var(--muted);
 }
 
 /* ===== 블록 위젯 — 코드블록 (F-106 2.4, F-124 3.4) =====
