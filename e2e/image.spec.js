@@ -958,3 +958,38 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
     await context.setOffline(false)
   })
 })
+
+test.describe('F-214 공유 화면에서 주석 숨기기', () => {
+  const COMMENT_DOC = '본문 %%비밀%% 끝\n\n%%\n여러 줄\n비밀\n%%\n\n마무리'
+
+  test('F-214 A3 공유 링크 화면에는 주석이 안 보인다', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await openApp(page)
+    await importMarkdown(page, { content: COMMENT_DOC })
+
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    await page.getByRole('menuitem', { name: '링크 복사' }).click()
+    const link = await page.evaluate(() => navigator.clipboard.readText())
+    const hash = new URL(link).hash
+    await page.evaluate((h) => {
+      location.hash = h
+    }, hash)
+    await expect(page.locator('.shared-view')).toBeVisible()
+
+    const bodyText = await page.locator('.shared-view-body').innerText()
+    expect(bodyText).not.toContain('비밀')
+    expect(bodyText).not.toContain('%%')
+    expect(bodyText).toContain('본문')
+    expect(bodyText).toContain('끝')
+    expect(bodyText).toContain('마무리')
+  })
+
+  test('F-214 A4 소유자 보기 모드는 주석 기호가 글자 그대로 보인다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: COMMENT_DOC })
+    await setViewMode(page, 'view')
+
+    const bodyText = await page.locator('.viewer').innerText()
+    expect(bodyText).toContain('%%비밀%%')
+  })
+})

@@ -2,6 +2,7 @@
 import Viewer from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { IconDownload, IconClose } from './icons'
+import { stripComments } from '../lib/comments'
 import type { ShareDoc } from '../lib/shareCodec'
 
 type SharedViewProps = {
@@ -11,7 +12,8 @@ type SharedViewProps = {
 }
 
 export default function SharedView({ sharedDoc, onImport, onClose }: SharedViewProps) {
-  const html = renderMarkdown(sharedDoc.content)
+  // 이미 만든 옛 링크(주석이 담긴 채로 공유된 것) 대비 렌더 전에도 한 번 더 제거한다 (F-214.md 2.2)
+  const html = renderMarkdown(stripComments(sharedDoc.content))
 
   return (
     <div className="shared-view">

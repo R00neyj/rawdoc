@@ -2,6 +2,7 @@
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { generateToken, isValidToken } from './token'
+import { stripComments } from '../src/lib/comments'
 
 type LinkRow = {
   token: string
@@ -137,7 +138,7 @@ export async function handlePublicGetDoc(
 
   return pubResponse({
     title: doc.title,
-    content: doc.content,
+    content: stripComments(doc.content),
     lineEnding: doc.line_ending,
     updatedAt: doc.updated_at,
   })
@@ -258,7 +259,7 @@ export async function handlePublicGetFolderDoc(
 
   return pubResponse({
     title: doc.title,
-    content: doc.content,
+    content: stripComments(doc.content),
     lineEnding: doc.line_ending,
     updatedAt: doc.updated_at,
   })

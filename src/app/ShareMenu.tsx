@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } f
 
 import { encodeShare, type ShareDoc } from '../lib/shareCodec'
 import { extractAttachmentRefs } from '../lib/imageBlock'
+import { stripComments } from '../lib/comments'
 import { formatShareHash } from './hashRoute'
 import { getShareLink, createShareLink, revokeShareLink } from './linkApi'
 import { IconShare, IconTooltip, IconLink, IconLinkOff, IconCopy, IconPersonAdd } from './icons'
@@ -76,7 +77,9 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice, linkDocId, 
 
   // ----- 링크 복사 (F-130.md 2·3장) -----
   async function handleCopyLink() {
-    const doc = getShareDoc()
+    const rawDoc = getShareDoc()
+    // 공유 링크 주소에는 주석을 담지 않는다 (F-214.md 2.2)
+    const doc: ShareDoc = { ...rawDoc, content: stripComments(rawDoc.content) }
     const fragment = await encodeShare(doc)
     const link = `${location.origin}${location.pathname}${formatShareHash(fragment)}`
 
