@@ -66,7 +66,7 @@
 }
 
 /* ===== 보기 모드 (F-128 4.2) ===== */
-.app-shell .markdown-callout {
+:is(.app-shell, .public-view) .markdown-callout {
   background: color-mix(in srgb, var(--callout-color) 8%, var(--panel));
   border-left: 4px solid var(--callout-color);
   border-top-right-radius: 6px;
@@ -76,11 +76,11 @@
   margin: 0 0 1rem;
 }
 
-.app-shell .markdown-callout > :last-child {
+:is(.app-shell, .public-view) .markdown-callout > :last-child {
   margin-bottom: 0;
 }
 
-.app-shell .markdown-callout-title {
+:is(.app-shell, .public-view) .markdown-callout-title {
   font-weight: 600;
   color: var(--callout-color);
   margin: 0 0 4px;
@@ -105,13 +105,13 @@
   fill: currentColor;
 }
 
-.app-shell .markdown-callout-icon {
+:is(.app-shell, .public-view) .markdown-callout-icon {
   display: inline-flex;
   vertical-align: middle;
   margin-right: 8px;
 }
 
-.app-shell .markdown-callout-icon svg {
+:is(.app-shell, .public-view) .markdown-callout-icon svg {
   width: 18px;
   height: 18px;
   fill: currentColor;

@@ -518,8 +518,8 @@ test.describe('F-163 공유 메뉴 `파일로 공유…` 제거', () => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     await openApp(page)
 
-    // deflate 로 잘 안 줄어들도록 넓은 문자 범위에서 무작위로 뽑는다
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 !"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
+    // deflate 로 잘 안 줄어들도록 넓은 문자 범위에서 무작위로 뽑는다 — `%`·`<` 는 주석(F-214)으로 잘려 링크가 짧아져 뺀다
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 !"#$&\'()*+,-./:;=>?@[\\]^_`{|}~'
     let content = ''
     for (let i = 0; i < 10_000; i++) {
       content += chars[Math.floor(Math.random() * chars.length)]
