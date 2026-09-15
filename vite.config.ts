@@ -85,7 +85,8 @@ export default defineConfig({
         // 여유를 둔다
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        // Access 로그인·로그아웃(/cdn-cgi/access/*)과 공개 API 는 SW 가 index.html 로 가로채면 안 된다
+        navigateFallbackDenylist: [/^\/api\//, /^\/pub\//, /^\/cdn-cgi\//],
         cleanupOutdatedCaches: true,
       },
     }),
