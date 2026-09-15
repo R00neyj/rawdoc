@@ -28,6 +28,12 @@ const INDENT_OPTIONS = [
   { value: '4', label: '4칸' },
 ] as const
 
+// 시작 화면 — 홈이 기본, 마지막 문서를 고르면 부팅 때 자동으로 연다 (F-232 3.4)
+const START_SCREEN_OPTIONS = [
+  { value: 'home', label: '홈' },
+  { value: 'last', label: '마지막 문서' },
+] as const
+
 // 줄 번호(거터) 켜기·끄기 (F-147 2장)
 const LINE_NUMBERS_OPTIONS = [
   { value: 'on', label: '표시' },
@@ -90,6 +96,8 @@ type SettingsDialogProps = {
   onChangeBodyFont: (value: string) => void
   fontSize: string
   onChangeFontSize: (value: string) => void
+  startScreen?: string
+  onChangeStartScreen?: (value: string) => void
   indent?: string
   onChangeIndent?: (value: string) => void
   lineNumbers?: string
@@ -107,6 +115,8 @@ export default function SettingsDialog({
   onChangeBodyFont,
   fontSize,
   onChangeFontSize,
+  startScreen,
+  onChangeStartScreen,
   indent,
   onChangeIndent,
   lineNumbers,
@@ -152,6 +162,16 @@ export default function SettingsDialog({
         options={FONT_SIZE_OPTIONS}
         onChange={onChangeFontSize}
       />
+      {/* 로그인/로컬 앱 전용 — PublicView 는 목록·홈 개념이 없어 이 항목을 안 준다 (F-232 3.4) */}
+      {startScreen !== undefined && onChangeStartScreen !== undefined && (
+        <Segment
+          labelId="start-screen-label"
+          label="시작 화면"
+          value={startScreen}
+          options={START_SCREEN_OPTIONS}
+          onChange={onChangeStartScreen}
+        />
+      )}
       {showEditorSettings && (
         <>
           <Segment

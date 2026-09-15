@@ -82,7 +82,7 @@ npm run dev:spike    # 스파이크 확인용
 - `main` push → GitHub Actions `ci.yml`(린트·타입·단위·빌드)만. 배포 안 됨
 - 배포 = `npm run verify:full` 통과한 main 커밋을 `deploy` 브랜치로: `git push --force origin <sha>:refs/heads/deploy` → Cloudflare Workers Builds(`md-editor-web`, 분기 제어 `deploy`)가 빌드·배포. **올리기 전후로 사용자에게 알린다** (사용자 "다음 배포때 말만해줘")
 - 확인: 그 커밋에 Cloudflare check run, `https://rawdoc.app/` 의 `assets/index-*.js` 이름이 로컬 빌드와 같은지. 2026-09-15 `c75c14f` 첫 빌드 확인: 푸시 후 약 1분에 `Workers Builds: md-editor-web` 성공·운영 반영
-- verify:full 에서 알려진 실패: F-146 A2(원래 실패). F-156·F-158 A2·F-208 은 부하에서 흔들림 — 단독 재실행으로 판정
+- verify:full 에서 알려진 실패: F-146 A2(원래 실패). F-146 A4·F-156·F-158 A2·F-208 은 부하에서 흔들림 — 단독 재실행으로 판정 (F-146 A4 는 2026-09-16 F-232 구현 중 발견, Dialog 포커스 복귀 타이밍 레이스로 추정, F-232 변경과 무관 — HEAD 단독 5회 중 4회 실패로 확인)
 - D1 원격 마이그레이션은 자동화하지 않는다. 새 `migrations/000N` 이 있으면 배포 전에 `npx wrangler d1 migrations apply md-editor-db --remote`
 - 빌드가 안 돌면 로컬 배포: 깨끗한 워크트리 `../rawdoc-deploy`(없으면 `git worktree add ../rawdoc-deploy deploy`)에서 `npm run deploy`
 - 루트 `.env`(커밋 안 함, PC 마다 따로)의 `CLOUDFLARE_API_TOKEN` 이 있으면 wrangler 가 브라우저 로그인 대신 그 토큰을 쓴다. 2026-09-15 토큰은 Workers·D1 권한이 없어(10000·7403) 로컬 배포·마이그레이션 때는 `.env` 를 잠시 비키거나 권한을 추가한다

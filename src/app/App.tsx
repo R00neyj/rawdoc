@@ -7,6 +7,7 @@ import {
   useState,
   type ChangeEvent,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
 } from 'react'
 import type { EditorState } from '@codemirror/state'
 
@@ -159,6 +160,7 @@ export default function App() {
   const [lineNumbersPref, setLineNumbersPref] = useState(() => getPref('md.lineNumbers', 'on')) // F-147 2장
   const [fontSizePref, setFontSizePref] = useState(() => getPref('md.fontSize', 'medium')) // F-154 2.2
   const [indentPref, setIndentPref] = useState(() => getPref('md.indent', '4')) // F-154 2.3
+  const [startScreenPref, setStartScreenPref] = useState(() => getPref('md.startScreen', 'home')) // F-232 3.4
   const [settingsOpen, setSettingsOpen] = useState(false)
   // (F-126.md 5.3)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
@@ -576,17 +578,23 @@ export default function App() {
 
       const hashDocId = parsedHash.type === 'doc' ? parsedHash.docId : null
       const lastDocId = getPref('md.lastDocId', '') || null
-      const resolved = resolveInitialDoc({ hashDocId, lastDocId, docs: metaList })
+      // 해시가 특정 문서를 안 가리키면 시작 화면 설정을 따른다 — 기본(home)은 자동으로 안 연다 (F-232 3.1)
+      const shouldAutoOpen = Boolean(hashDocId) || getPref('md.startScreen', 'home') === 'last'
 
-      if (resolved.docId) {
-        setCurrentDocId(resolved.docId)
-        setPref('md.lastDocId', resolved.docId)
-        replaceHashUrl(resolved.docId)
-        if (resolved.notFound) {
-          showNotice({ type: 'info', message: '문서를 찾을 수 없습니다.' })
+      if (shouldAutoOpen) {
+        const resolved = resolveInitialDoc({ hashDocId, lastDocId, docs: metaList })
+        if (resolved.docId) {
+          setCurrentDocId(resolved.docId)
+          setPref('md.lastDocId', resolved.docId)
+          replaceHashUrl(resolved.docId)
+          if (resolved.notFound) {
+            showNotice({ type: 'info', message: '문서를 찾을 수 없습니다.' })
+          }
+          const openedDoc = metaList.find((d) => d.id === resolved.docId)
+          addOpenFolders(ancestorsOfDoc({ folders: folderList, doc: openedDoc }))
+        } else {
+          replaceHashUrl(null)
         }
-        const openedDoc = metaList.find((d) => d.id === resolved.docId)
-        addOpenFolders(ancestorsOfDoc({ folders: folderList, doc: openedDoc }))
       } else {
         replaceHashUrl(null)
       }
@@ -1079,6 +1087,20 @@ export default function App() {
     closeSidebarIfNarrow()
   }
 
+  // ----- 로고 클릭 → 홈 (F-232 3.3) — 이미 홈(문서 미선택, 공유 화면도 아님)이면 조용히 아무 일 없음 -----
+  async function goHome() {
+    if (currentDocId === null && !sharedDoc) return
+    await beforeLeaveDoc()
+    setSharedDoc(null)
+    setCurrentDocId(null)
+    replaceHashUrl(null)
+  }
+
+  // 로고(data-go-home) 위임 클릭 — Sidebar.tsx·TopBar.tsx 를 거쳐 렌더되는 SidebarHead 대신 여기서 잡는다 (F-232 3.3)
+  function handleAppShellClick(e: ReactMouseEvent<HTMLDivElement>) {
+    if ((e.target as HTMLElement).closest('[data-go-home]')) goHome()
+  }
+
   // ----- 위키링크 열기 (specs/features/F-131.md 5장) -----
   // 있는 문서면 selectDoc 과 같은 흐름(저장 대기 입력 flush 뒤 전환)을 탄다. 없으면 그
   // 자리에서 빈 문서를 새로 만들어 연다 — 새 문서 는 현재 문서와 같은 폴더에 만든다
@@ -1518,6 +1540,13 @@ export default function App() {
     setPref('md.indent', v)
   }
 
+  // 시작 화면 — 저장은 다음에 앱을 열 때부터 적용, 지금 화면은 강제로 바꾸지 않는다 (F-232 3.4)
+  function changeStartScreen(value: string) {
+    const v = value as 'home' | 'last'
+    setStartScreenPref(v)
+    setPref('md.startScreen', v)
+  }
+
   function changeViewMode(mode: string) {
     const v = mode as 'live' | 'raw' | 'view'
     setViewMode(v)
@@ -1563,7 +1592,8 @@ export default function App() {
     )
   }
 
-  const isEmpty = bootPhase === 'ready' && docs.length === 0
+  // 홈 화면(빈 상태 재사용) 표시 조건 — 부팅 완료 후 문서를 선택하지 않은 상태 (F-232 3.2)
+  const isEmpty = bootPhase === 'ready' && currentDocId === null
   const showEditor = bootPhase === 'ready' && !isEmpty
 
   // 상단바 — 좁은 창은 앞 묶음을 담아 창 전체 위에, 넓은 창은 앞 묶음 없이 메인 열 안에만 (F-159 2.1)
@@ -1600,6 +1630,7 @@ export default function App() {
     <div
       className="app-shell"
       ref={appShellRef}
+      onClick={handleAppShellClick}
       style={{ '--sidebar-w': `${displaySidebarWidth}px` } as CSSProperties}
     >
       <DropOverlay visible={dropActive} />
@@ -1665,7 +1696,7 @@ export default function App() {
           )}
           {!sharedDoc && isEmpty && (
             <div className="content-area">
-              <EmptyState onCreateDoc={createNewDoc} onImportDoc={requestImport} />
+              <EmptyState hasDocs={docs.length > 0} onCreateDoc={createNewDoc} onImportDoc={requestImport} />
             </div>
           )}
           {showEditor && (
@@ -1748,6 +1779,8 @@ export default function App() {
         onChangeBodyFont={changeBodyFont}
         fontSize={fontSizePref}
         onChangeFontSize={changeFontSize}
+        startScreen={startScreenPref}
+        onChangeStartScreen={changeStartScreen}
         indent={indentPref}
         onChangeIndent={changeIndent}
         lineNumbers={lineNumbersPref}

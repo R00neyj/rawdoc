@@ -50,6 +50,12 @@ describe('prefs', () => {
     expect(getPref('md.indent', '4')).toBe('2')
   })
 
+  it('md.startScreen 읽기·쓰기, 저장값 없으면 기본값(home) (F-232 A1)', () => {
+    expect(getPref('md.startScreen', 'home')).toBe('home')
+    expect(() => setPref('md.startScreen', 'last')).not.toThrow()
+    expect(getPref('md.startScreen', 'home')).toBe('last')
+  })
+
   it('허용되지 않은 키는 getPref 에서 예외', () => {
     expect(() => getPref('md.unknown', 'x')).toThrow()
   })

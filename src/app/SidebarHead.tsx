@@ -35,10 +35,11 @@ export default function SidebarHead({
 
   return (
     <div className={`${variant === 'topbar' ? 'topbar-lead' : 'sidebar-head'}${rail ? ' sidebar-head--rail' : ''}`}>
-      <span className="brand-group" hidden={rail}>
+      {/* 홈으로 이동 — App.tsx 의 위임 클릭 리스너가 data-go-home 을 잡아 처리한다 (F-232 3.3) */}
+      <button type="button" className="brand-group" hidden={rail} aria-label={`${brand.name} 홈으로`} data-go-home>
         <img className="brand-icon" src={brand.icon} alt="" width={20} height={20} />
         <span className="brand">{brand.name}</span>
-      </span>
+      </button>
       <div className="topbar-lead-actions">
         <span className="icon-btn-wrap">
           <button

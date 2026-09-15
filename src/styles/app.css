@@ -55,12 +55,20 @@ svg {
   gap: 2px;
 }
 
-/* 상단바 제품 아이콘 + 제품명 — 간격 8px (F-142 3.3) */
+/* 상단바 제품 아이콘 + 제품명, 간격 8px — 홈으로 이동하는 버튼, 음수 여백으로 누르는 영역만 넓힌다 (F-142 3.3, F-232 3.3) */
 .brand-group {
   flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  border-radius: var(--radius-control);
+  transition: var(--transition-colors);
+}
+
+.brand-group:hover {
+  background: var(--rule-2);
 }
 
 .brand-icon {

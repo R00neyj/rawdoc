@@ -17,6 +17,7 @@ type PrefMap = {
   'md.persistNoticeShown': '1'
   'md.account': string
   'md.localMigrated': string
+  'md.startScreen': 'home' | 'last'
 }
 
 type PrefKey = keyof PrefMap
@@ -37,6 +38,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.indent',
   'md.account',
   'md.localMigrated',
+  'md.startScreen',
 ])
 
 function assertAllowed(key: string) {

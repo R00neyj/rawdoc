@@ -9,14 +9,21 @@ const VIEW_MODE_LABEL = {
   view: '보기 — 읽기 전용으로 보기',
 }
 
-/** 앱을 열고 부팅(첫 실행 안내 문서 생성 포함)이 끝날 때까지 기다린다 */
+// 앱을 열고 부팅이 끝날 때까지 기다린다. 시작 화면 기본값은 홈(F-232)이라 md.startScreen='last' 를 미리 넣어 지금까지처럼 마지막 문서를 자동으로 연다 — 진짜 기본값 확인은 openAppHome
 export async function openApp(page) {
+  await setPrefBeforeLoad(page, 'md.startScreen', 'last')
   await page.goto('/')
   await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
 }
 
+// 진짜 기본값(홈 화면) 확인용 — md.startScreen 을 건드리지 않고 연다 (F-232 A2)
+export async function openAppHome(page) {
+  await page.goto('/')
+  await expect(page.locator('.empty-state')).toBeVisible()
+}
+
 /** localStorage 설정을 첫 스크립트 실행 전에 넣는다(F-141 A2 첫 화면 값 확인용).
- * openApp 전에 호출해야 한다 */
+ * openApp/openAppHome 전에 호출해야 한다 */
 export async function setPrefBeforeLoad(page, key, value) {
   await page.addInitScript(
     ([k, v]) => window.localStorage.setItem(k, v),
