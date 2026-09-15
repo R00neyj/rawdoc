@@ -36,6 +36,8 @@ type TopBarProps = {
   shareDisabled: boolean
   getShareDoc: () => ShareDoc
   onShareNotice: (notice: Notice) => void
+  shareLinkDocId: string | null
+  onBeforeShareLinkAction: () => void
   exportDisabled: boolean
   onExportDoc: () => void
   account: AccountState
@@ -60,6 +62,8 @@ export default function TopBar({
   shareDisabled,
   getShareDoc,
   onShareNotice,
+  shareLinkDocId,
+  onBeforeShareLinkAction,
   exportDisabled,
   onExportDoc,
   account,
@@ -103,7 +107,13 @@ export default function TopBar({
           </span>
         ))}
       </div>
-      <ShareMenu disabled={shareDisabled} getShareDoc={getShareDoc} onNotice={onShareNotice} />
+      <ShareMenu
+        disabled={shareDisabled}
+        getShareDoc={getShareDoc}
+        onNotice={onShareNotice}
+        linkDocId={shareLinkDocId}
+        onBeforeLinkAction={onBeforeShareLinkAction}
+      />
       <span className="icon-btn-wrap">
         <button
           type="button"

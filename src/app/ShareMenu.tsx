@@ -3,7 +3,8 @@ import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } f
 import { encodeShare, type ShareDoc } from '../lib/shareCodec'
 import { extractAttachmentRefs } from '../lib/imageBlock'
 import { formatShareHash } from './hashRoute'
-import { IconShare, IconTooltip, IconLink, IconCopy } from './icons'
+import { getShareLink, createShareLink, revokeShareLink } from './linkApi'
+import { IconShare, IconTooltip, IconLink, IconLinkOff, IconCopy } from './icons'
 import usePresence from './usePresence'
 import type { Notice } from './notice'
 
@@ -17,12 +18,16 @@ type ShareMenuProps = {
   // 호출 시점의 에디터 원문을 그대로 읽는다 — 저장 대기 입력 포함, 저장소를 다시 읽지 않는다 (F-130.md 2장)
   getShareDoc: () => ShareDoc
   onNotice: (notice: Notice) => void
+  // store.kind === 'server' 이고 열린 문서가 있을 때만 문서 id — 읽기 전용 링크 항목 노출 조건 (F-210.md 2.6)
+  linkDocId: string | null
+  onBeforeLinkAction: () => void // 저장 대기 입력 flush
 }
 
 type ShareMenuItem = { key: string; label: string; icon: ComponentType<{ size?: number }>; onSelect: () => Promise<void> }
 
-export default function ShareMenu({ disabled, getShareDoc, onNotice }: ShareMenuProps) {
+export default function ShareMenu({ disabled, getShareDoc, onNotice, linkDocId, onBeforeLinkAction }: ShareMenuProps) {
   const [open, setOpen] = useState(false)
+  const [hasLink, setHasLink] = useState(false)
   const { mounted, state } = usePresence(open) // 나타나고 사라지는 전환 (F-172.md 2.2)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLUListElement | null>(null)
@@ -39,6 +44,22 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice }: ShareMenu
     document.addEventListener('mousedown', handlePointerDown)
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [open])
+
+  // 메뉴를 열 때마다 링크 유무를 다시 확인 — `끊기` 항목 노출 조건 (F-210.md 2.6)
+  useEffect(() => {
+    if (!open || !linkDocId) return
+    let cancelled = false
+    getShareLink(linkDocId)
+      .then((token) => {
+        if (!cancelled) setHasLink(Boolean(token))
+      })
+      .catch(() => {
+        if (!cancelled) setHasLink(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, linkDocId])
 
   useEffect(() => {
     if (open) {
@@ -102,9 +123,52 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice }: ShareMenu
     }
   }
 
+  // ----- 읽기 전용 링크 (F-210.md 2.6) -----
+  async function handleCopyReadOnlyLink() {
+    if (!linkDocId) return
+    onBeforeLinkAction()
+    let token: string
+    try {
+      token = await createShareLink(linkDocId)
+    } catch {
+      onNotice({ type: 'error', message: '링크를 만들지 못했습니다. 연결을 확인하세요.' })
+      return
+    }
+    const link = `${location.origin}${location.pathname}#/p/${token}`
+    try {
+      await navigator.clipboard.writeText(link)
+    } catch {
+      onNotice({ type: 'error', message: '복사하지 못했습니다. 브라우저 권한을 확인하세요.' })
+      return
+    }
+    setHasLink(true)
+    onNotice({
+      type: 'info',
+      message: '읽기 전용 링크를 복사했습니다. 링크를 아는 사람은 로그인 없이 볼 수 있습니다.',
+    })
+  }
+
+  async function handleRevokeReadOnlyLink() {
+    if (!linkDocId) return
+    try {
+      await revokeShareLink(linkDocId)
+    } catch {
+      onNotice({ type: 'error', message: '링크를 끊지 못했습니다. 연결을 확인하세요.' })
+      return
+    }
+    setHasLink(false)
+    onNotice({ type: 'info', message: '읽기 전용 링크를 끊었습니다. 이전 주소는 더 이상 열리지 않습니다.' })
+  }
+
   const items: ShareMenuItem[] = [
     { key: 'link', label: '링크 복사', icon: IconLink, onSelect: handleCopyLink },
     { key: 'markdown', label: '마크다운 복사', icon: IconCopy, onSelect: handleCopyMarkdown },
+    ...(linkDocId
+      ? [{ key: 'readonly-link', label: '읽기 전용 링크 복사', icon: IconLink, onSelect: handleCopyReadOnlyLink }]
+      : []),
+    ...(linkDocId && hasLink
+      ? [{ key: 'readonly-link-off', label: '읽기 전용 링크 끊기', icon: IconLinkOff, onSelect: handleRevokeReadOnlyLink }]
+      : []),
   ]
 
   function handleKeyDown(e: KeyboardEvent<HTMLUListElement>) {

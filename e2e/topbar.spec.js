@@ -9,6 +9,7 @@ import {
   currentDocId,
   setPrefBeforeLoad,
 } from './helpers.js'
+import { fakeServer } from './fixtures/fakeServer.js'
 
 // 배경이 반투명일 수 있어 부모를 거슬러 올라가 첫 불투명 바탕과 합성한 뒤 대비를 잰다 (F-153 A1)
 async function selectedContrast(locator) {
@@ -531,6 +532,74 @@ test.describe('F-163 공유 메뉴 `파일로 공유…` 제거', () => {
     const notice = page.locator('.notice--warn .notice-message')
     await expect(notice).toBeVisible()
     await expect(notice).toHaveText(/^링크가 깁니다\(약 \d+KB\)\. 일부 메신저에서 잘릴 수 있어 \.md 내보내기를 권장합니다\.$/)
+  })
+})
+
+test.describe('F-210 C 소유자 읽기 전용 링크 메뉴', () => {
+  async function openServerDoc(page) {
+    await openApp(page)
+    await page.getByRole('button', { name: '새 문서' }).click()
+    await page.locator('.cm-content').click()
+    await page.keyboard.type('내용')
+  }
+
+  test('F-210 C1 항목 노출·발급·복사·끊기', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await fakeServer(page)
+    let token = null
+    await page.route(/\/api\/docs\/[^/]+\/link$/, async (route) => {
+      const req = route.request()
+      if (req.method() === 'GET') {
+        if (!token) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"no_link"}' })
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token }) })
+      }
+      if (req.method() === 'POST') {
+        const created = !token
+        if (!token) token = 'tok-abc'
+        return route.fulfill({ status: created ? 201 : 200, contentType: 'application/json', body: JSON.stringify({ token }) })
+      }
+      if (req.method() === 'DELETE') {
+        token = null
+        return route.fulfill({ status: 204 })
+      }
+      return route.fallback()
+    })
+
+    await openServerDoc(page)
+    const shareBtn = page.getByRole('button', { name: '공유 — 링크·마크다운 복사' })
+    await shareBtn.click()
+    await expect(page.locator('.share-menu-list [role="menuitem"]')).toHaveCount(3)
+    await expect(page.getByRole('menuitem', { name: '읽기 전용 링크 복사' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: '읽기 전용 링크 끊기' })).toHaveCount(0)
+
+    await page.getByRole('menuitem', { name: '읽기 전용 링크 복사' }).click()
+    await expect(page.locator('.notice--info .notice-message')).toHaveText(
+      '읽기 전용 링크를 복사했습니다. 링크를 아는 사람은 로그인 없이 볼 수 있습니다.',
+    )
+    const clip = await page.evaluate(() => navigator.clipboard.readText())
+    expect(clip).toContain('#/p/tok-abc')
+
+    await shareBtn.click()
+    await expect(page.getByRole('menuitem', { name: '읽기 전용 링크 끊기' })).toBeVisible()
+    await page.getByRole('menuitem', { name: '읽기 전용 링크 끊기' }).click()
+    await expect(page.locator('.notice--info .notice-message')).toHaveText(
+      '읽기 전용 링크를 끊었습니다. 이전 주소는 더 이상 열리지 않습니다.',
+    )
+
+    await shareBtn.click()
+    await expect(page.getByRole('menuitem', { name: '읽기 전용 링크 끊기' })).toHaveCount(0)
+  })
+
+  test('F-210 C2 오프라인이면 만들지 못했다는 오류 알림', async ({ page }) => {
+    await fakeServer(page)
+    await page.route(/\/api\/docs\/[^/]+\/link$/, (route) => route.abort('internetdisconnected'))
+
+    await openServerDoc(page)
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    await page.getByRole('menuitem', { name: '읽기 전용 링크 복사' }).click()
+    await expect(page.locator('.notice--error .notice-message')).toHaveText(
+      '링크를 만들지 못했습니다. 연결을 확인하세요.',
+    )
   })
 })
 

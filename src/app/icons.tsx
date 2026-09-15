@@ -19,6 +19,7 @@ import keepOffSvg from '@material-symbols/svg-400/outlined/keep_off.svg?raw'
 import driveFileMoveSvg from '@material-symbols/svg-400/outlined/drive_file_move.svg?raw'
 import deleteSvg from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import linkSvg from '@material-symbols/svg-400/outlined/link.svg?raw'
+import linkOffSvg from '@material-symbols/svg-400/outlined/link_off.svg?raw'
 import contentCopySvg from '@material-symbols/svg-400/outlined/content_copy.svg?raw'
 import closeSvg from '@material-symbols/svg-400/outlined/close.svg?raw'
 import moreHorizSvg from '@material-symbols/svg-400/outlined/more_horiz.svg?raw'
@@ -75,6 +76,7 @@ export const IconUnpin = makeIcon(keepOffSvg)
 export const IconMove = makeIcon(driveFileMoveSvg)
 export const IconDelete = makeIcon(deleteSvg)
 export const IconLink = makeIcon(linkSvg)
+export const IconLinkOff = makeIcon(linkOffSvg)
 export const IconCopy = makeIcon(contentCopySvg)
 export const IconClose = makeIcon(closeSvg)
 export const IconMore = makeIcon(moreHorizSvg)
