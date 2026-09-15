@@ -1,6 +1,6 @@
 // 공유받은 문서 화면 S-4 (specs/ia.md 1장 S-4·3.19, F-130.md 4장) — 위키링크(F-131)는 문서 목록이 없어 여기선 만들지 않는다
-import Viewer from '../viewer/Viewer.jsx'
-import { renderMarkdown } from '../viewer/renderMarkdown.js'
+import Viewer from '../viewer/Viewer'
+import { renderMarkdown } from '../viewer/renderMarkdown'
 import { IconDownload, IconClose } from './icons'
 import type { ShareDoc } from '../lib/shareCodec'
 

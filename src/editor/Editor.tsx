@@ -15,7 +15,7 @@ export type EditorHandle = ReturnType<typeof createEditor>
 
 type EditorProps = {
   text?: string
-  viewMode?: 'live' | 'raw'
+  viewMode?: 'live' | 'raw' | 'view'
   autoFocus?: boolean
   onDocChange?: (state: EditorState) => void
   onSelectionChange?: (state: EditorState) => void

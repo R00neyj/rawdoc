@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type RefObject } from 'react'
 import { computeCurrentIndex, findViewerHeadingEl, topInScroller } from './outlinePosition'
 import type { Heading } from '../editor/outline'
-import type { EditorView } from '@codemirror/view'
+import type { EditorHandle } from '../editor/Editor'
 
 const SELECT_MARGIN = 16 // 3.3 "그 제목이 스크롤 영역 위에서 16px 아래에 오도록"
 const MIN_MARGIN = 56 // 2장 "메인 열 오른쪽 여백이 … 56px 이상일 때만"
@@ -15,15 +15,11 @@ function scrollTo(el: HTMLElement, top: number) {
   el.scrollTop = top
 }
 
+// PublicView.tsx 의 가짜 handle 도 맞도록 실제 쓰는 메서드만 Pick 한다
+type OutlineEditorHandle = Pick<EditorHandle, 'getHeadings' | 'onHeadingsChange' | 'view' | 'scrollToHeading' | 'focus'>
+
 type OutlineProps = {
-  // Editor(F-202) 핸들 타입은 아직 연결 전(2.3 단계) — 이 파일이 쓰는 메서드만 최소로 적는다
-  editorRef: RefObject<{
-    getHeadings(): Heading[]
-    onHeadingsChange(cb: (headings: Heading[]) => void): () => void
-    view: EditorView
-    scrollToHeading(from: number): void
-    focus(): void
-  } | null>
+  editorRef: RefObject<OutlineEditorHandle | null>
   containerRef: RefObject<HTMLElement | null>
   viewerRef?: RefObject<HTMLElement | null>
   docId: string | null

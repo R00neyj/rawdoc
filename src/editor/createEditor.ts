@@ -27,7 +27,7 @@ import { wikiComplete } from './wikiComplete'
 // 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
 const HEADINGS_DEBOUNCE_MS = 150
 
-type ViewMode = 'live' | 'raw'
+type ViewMode = 'live' | 'raw' | 'view'
 type LineEnding = 'crlf' | 'lf'
 type IndentSize = 2 | 4
 

@@ -2,8 +2,10 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
-import { contrastRatio } from '../lib/contrast.js'
-import brand from '../../brand.config.js'
+import { contrastRatio } from '../lib/contrast'
+import brand from '../../brand.config'
+
+type Tokens = Record<string, string>
 
 // /* ... */ 주석을 먼저 지운다 — 주석 안 예시 코드에 :root{...} 가 있어 그대로 두면 잘못 걸린다
 const css = readFileSync(fileURLToPath(new URL('./tokens.css', import.meta.url)), 'utf-8').replace(
@@ -12,33 +14,33 @@ const css = readFileSync(fileURLToPath(new URL('./tokens.css', import.meta.url))
 )
 
 // data-theme 블록 하나(:root 포함)의 본문에서 --token: 값 을 뽑아 hex 만 남긴다
-function extractBlock(selector) {
+function extractBlock(selector: string): Tokens {
   const re = new RegExp(`${selector}\\s*\\{([^}]*)\\}`, 's')
   const match = re.exec(css)
   if (!match) throw new Error(`${selector} 블록을 찾을 수 없음`)
-  const tokens = {}
+  const tokens: Tokens = {}
   const tokenRe = /--([\w-]+):\s*([^;]+);/g
-  let m
+  let m: RegExpExecArray | null
   while ((m = tokenRe.exec(match[1]))) {
     tokens[m[1]] = m[2].trim()
   }
   return tokens
 }
 
-function resolve(tokens, value, fallback) {
+function resolve(tokens: Tokens, value: string, fallback?: Tokens): string {
   const varMatch = /^var\(--([\w-]+)\)$/.exec(value)
   if (varMatch) {
-    return tokens[varMatch[1]] ?? fallback?.[varMatch[1]]
+    return tokens[varMatch[1]] ?? fallback?.[varMatch[1]] ?? ''
   }
   if (/^#[0-9a-fA-F]{6}$/.test(value)) return value
-  return null // color-mix() 등 계산식 — 별도 검사(accent)
+  return '' // color-mix() 등 계산식 — 별도 검사(accent)
 }
 
 const whiteTokens = extractBlock(':root')
 const sepiaTokens = { ...whiteTokens, ...extractBlock(":root\\[data-theme='sepia'\\]") }
 const darkTokens = { ...whiteTokens, ...extractBlock(":root\\[data-theme='dark'\\]") }
 
-const THEMES = {
+const THEMES: Record<string, Tokens> = {
   white: whiteTokens,
   sepia: sepiaTokens,
   dark: darkTokens,
@@ -55,6 +57,16 @@ const CALLOUT_TOKENS = [
   'callout-example',
   'callout-quote',
 ]
+
+// 다크 --accent 는 THEMES.dark 가 resolve 못하는 color-mix() 라 srgb 흰 혼합으로 다시 계산한다 (design.md 3.4)
+function mixWhite(hex: string, pct: number): string {
+  const int = parseInt(hex.slice(1), 16)
+  const r = (int >> 16) & 255
+  const g = (int >> 8) & 255
+  const b = int & 255
+  const mixCh = (c: number) => Math.round((c * pct) / 100 + 255 * (1 - pct / 100))
+  return `#${[r, g, b].map((c) => mixCh(c).toString(16).padStart(2, '0')).join('')}`
+}
 
 describe('테마 3종 대비 (design.md 3.4, F-141 3.1)', () => {
   for (const [name, tokens] of Object.entries(THEMES)) {
@@ -79,7 +91,7 @@ describe('테마 3종 대비 (design.md 3.4, F-141 3.1)', () => {
 })
 
 describe('세피아 대비 상향 (design.md 3.4, F-153 2.4)', () => {
-  const SEPIA_TARGETS = { ink: 14, 'ink-2': 9, muted: 4.5 }
+  const SEPIA_TARGETS: Record<string, number> = { ink: 14, 'ink-2': 9, muted: 4.5 }
 
   for (const bg of ['paper', 'panel']) {
     const bgHex = resolve(sepiaTokens, sepiaTokens[bg])
@@ -100,18 +112,8 @@ describe('세피아 대비 상향 (design.md 3.4, F-153 2.4)', () => {
 })
 
 describe('글자 선택 바탕 대비 (design.md 3.2, F-164)', () => {
-  // 다크 --accent 는 THEMES.dark 가 resolve 못하는 color-mix() 라 여기서 다시 계산한다
-  function mixWhite(hex, pct) {
-    const int = parseInt(hex.slice(1), 16)
-    const r = (int >> 16) & 255
-    const g = (int >> 8) & 255
-    const b = int & 255
-    const mixCh = (c) => Math.round((c * pct) / 100 + 255 * (1 - pct / 100))
-    return `#${[r, g, b].map((c) => mixCh(c).toString(16).padStart(2, '0')).join('')}`
-  }
-
   // color-mix(in srgb, A pct%, B) 를 hex 로 근사 계산한다(sRGB 채널 선형 보간)
-  function mix(hexA, hexB, pct) {
+  function mix(hexA: string, hexB: string, pct: number): string {
     const a = parseInt(hexA.slice(1), 16)
     const b = parseInt(hexB.slice(1), 16)
     const chA = [(a >> 16) & 255, (a >> 8) & 255, a & 255]
@@ -138,16 +140,6 @@ describe('글자 선택 바탕 대비 (design.md 3.2, F-164)', () => {
 })
 
 describe('메인 컬러 대비 — 확정 전까지 경고만 (design.md 3.2)', () => {
-  // 다크는 srgb 55% 흰 혼합으로 계산한다 (design.md 3.4)
-  function mixWhite(hex, pct) {
-    const int = parseInt(hex.slice(1), 16)
-    const r = (int >> 16) & 255
-    const g = (int >> 8) & 255
-    const b = int & 255
-    const mixCh = (c) => Math.round((c * pct) / 100 + 255 * (1 - pct / 100))
-    return `#${[r, g, b].map((c) => mixCh(c).toString(16).padStart(2, '0')).join('')}`
-  }
-
   test('brand.config.js 값으로 확인 (경고만, 실패 조건 아님)', () => {
     const accentDark = mixWhite(brand.accent, 55)
     for (const [name, tokens] of Object.entries(THEMES)) {
