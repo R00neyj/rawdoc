@@ -17,7 +17,8 @@ const ATTACHMENT_EXT_RE = '(png|jpg|gif|webp)'
 type StoreNotice = { type: 'info' | 'error' | 'update' | 'warn'; message: string }
 
 export type ServerStoreHandlers = {
-  onConflict?: (event: { docId: string; copyId: string }) => void
+  // reason:'locked' 면 F-213.md 2.4 — 다른 세션이 편집 중이라 내 편집을 사본으로 돌렸다
+  onConflict?: (event: { docId: string; copyId: string; reason?: 'locked'; email?: string }) => void
   onNotice?: (notice: StoreNotice) => void
   // 편집 권한이 있어 저장을 대기하던 문서가 서버에서 403 을 받았다 — 앱이 읽기 전용으로 내린다 (F-212.md 2.4)
   onForbidden?: (docId: string) => void
@@ -27,6 +28,8 @@ export type ServerStoreHandlers = {
 // server 저장소에만 있는 로컬 이관(F-208 2.2) 진입점 — Store 표준 타입엔 없어 이 타입으로 좁혀 쓴다
 export type ServerStore = Store & {
   importLocal(input: { folders: Folder[]; docs: Doc[] }): Promise<{ importedCount: number }>
+  // 잠금을 되찾은 뒤 서버 값을 다시 받아 캐시에 반영한다(에디터 재마운트용) (F-213.md 2.3)
+  refreshDocFromServer(id: string): Promise<Doc | null>
 }
 
 // 폴더를 부모가 먼저 오도록 정렬한다 (2.2) — 순환 참조는 만들 수 없으므로 방어적으로만 끊는다
@@ -143,7 +146,11 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     }
   }
 
-  async function handleConflict(entry: Extract<OutboxEntry, { type: 'updateDoc' }>, serverDoc: ServerDoc | undefined) {
+  async function handleConflict(
+    entry: Extract<OutboxEntry, { type: 'updateDoc' }>,
+    serverDoc: ServerDoc | undefined,
+    extra?: { reason: 'locked'; email?: string },
+  ) {
     const myDoc = await cache.getDoc(userId, entry.docId)
     const now = Date.now()
     const copyId = crypto.randomUUID()
@@ -169,7 +176,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       await cache.putDoc(userId, { ...serverDoc, id: entry.docId })
     }
 
-    handlers.onConflict?.({ docId: entry.docId, copyId })
+    handlers.onConflict?.({ docId: entry.docId, copyId, ...extra })
   }
 
   // true 면 계속 보낸다. false 면 이 회차 보내기를 멈춘다(네트워크·5xx·401) (2.3)
@@ -311,6 +318,18 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       }
       if (err.kind === 'conflict' && entry.type === 'updateDoc') {
         await handleConflict(entry, err.doc)
+        await cache.removeOutbox(entry.key)
+        return true
+      }
+      if (err.kind === 'locked' && entry.type === 'updateDoc') {
+        // 423 에는 문서 본문이 없다 — 서버 값을 따로 받아 원본 캐시에 반영한다 (F-213.md 2.4)
+        let serverDoc: ServerDoc | undefined
+        try {
+          serverDoc = await api.getDoc(entry.docId)
+        } catch {
+          // 못 받아도 사본은 만든다 — 원본 캐시는 다음 list() 때 다시 맞춰진다
+        }
+        await handleConflict(entry, serverDoc, { reason: 'locked', email: err.email })
         await cache.removeOutbox(entry.key)
         return true
       }
@@ -479,6 +498,16 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     async get(id) {
       const cached = await cache.getDoc(userId, id)
       if (cached) return toDoc(cached)
+      try {
+        const full = await api.getDoc(id)
+        await cache.putDoc(userId, full)
+        return toDoc(full)
+      } catch {
+        return null
+      }
+    },
+
+    async refreshDocFromServer(id) {
       try {
         const full = await api.getDoc(id)
         await cache.putDoc(userId, full)

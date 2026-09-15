@@ -11,6 +11,7 @@ export type ApiErrorKind =
   | 'not_found'
   | 'too_large'
   | 'conflict'
+  | 'locked'
   | 'id_taken'
   | 'invalid'
   | 'forbidden'
@@ -21,14 +22,25 @@ export class ApiError extends Error {
   kind: ApiErrorKind
   status?: number
   doc?: ServerDoc
+  email?: string
+  expiresAt?: number
 
-  constructor(kind: ApiErrorKind, extra: { status?: number; doc?: ServerDoc } = {}) {
+  constructor(
+    kind: ApiErrorKind,
+    extra: { status?: number; doc?: ServerDoc; email?: string; expiresAt?: number } = {},
+  ) {
     super(kind)
     this.kind = kind
     this.status = extra.status
     this.doc = extra.doc
+    this.email = extra.email
+    this.expiresAt = extra.expiresAt
   }
 }
+
+// 편집 잠금 세션 id — 창(탭)마다 하나, 문서를 옮겨 다녀도 같다 (specs/features/F-213.md 2.2)
+export const lockSessionId: string =
+  typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
 
 async function send(path: string, init?: RequestInit): Promise<Response> {
   try {
@@ -98,18 +110,54 @@ export async function updateDoc(
   id: string,
   body: { title?: string; content?: string; baseVersion: number },
 ): Promise<ServerDoc> {
-  const res = await send(`/api/docs/${encodeURIComponent(id)}`, jsonInit(body, 'PUT'))
+  const res = await send(`/api/docs/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Lock-Session': lockSessionId },
+    body: JSON.stringify(body),
+  })
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
   if (res.status === 404) throw new ApiError('not_found')
   if (res.status === 403) throw new ApiError('forbidden')
   if (res.status === 413) throw new ApiError('too_large')
+  if (res.status === 423) {
+    const data = (await readJson(res)) as { email?: string; expiresAt?: number } | null
+    throw new ApiError('locked', { email: data?.email, expiresAt: data?.expiresAt })
+  }
   if (res.status === 409) {
     const data = (await readJson(res)) as { doc?: ServerDoc } | null
     throw new ApiError('conflict', { doc: data?.doc })
   }
   if (!res.ok) throw new ApiError('other', { status: res.status })
   return (await readJson(res)) as ServerDoc
+}
+
+// 잡기·연장 — edit 이상 권한 필요, 200 이면 잡음/연장, 423 이면 다른 세션이 쥐고 있음 (F-213.md 2.2)
+export async function lockDoc(id: string, sessionId: string): Promise<{ expiresAt: number }> {
+  const res = await send(`/api/docs/${encodeURIComponent(id)}/lock`, jsonInit({ sessionId }, 'POST'))
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 404) throw new ApiError('not_found')
+  if (res.status === 403) throw new ApiError('forbidden')
+  if (res.status === 423) {
+    const data = (await readJson(res)) as { email?: string; expiresAt?: number } | null
+    throw new ApiError('locked', { email: data?.email, expiresAt: data?.expiresAt })
+  }
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as { expiresAt: number }
+}
+
+// 같은 세션일 때만 서버가 지운다. 못 보내도 60초 뒤 만료하므로 오류는 무시한다 (F-213.md 2.2·2.3)
+export async function unlockDoc(id: string, sessionId: string, opts: { keepalive?: boolean } = {}): Promise<void> {
+  try {
+    await fetch(`/api/docs/${encodeURIComponent(id)}/lock?session=${encodeURIComponent(sessionId)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      keepalive: opts.keepalive,
+    })
+  } catch {
+    // 못 보내도 60초 뒤 만료 (2.3)
+  }
 }
 
 export async function moveDocFolder(id: string, folderId: string | null): Promise<ServerDoc> {

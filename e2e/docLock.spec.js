@@ -1,0 +1,210 @@
+// 편집 잠금 — fakeServer.js(F-207 소유) 대신 이 파일만의 최소 가짜 서버 + 잠금 라우트를 context.route 로 등록한다 (specs/features/F-213.md 3장 A4·A5)
+import crypto from 'node:crypto'
+import { test, expect } from '@playwright/test'
+import { openApp, currentDocId } from './helpers.js'
+
+const LOCK_DURATION_MS = 60_000
+
+async function installFakeServer(context, { id = 'u1', email = 'a@b.com' } = {}) {
+  const docs = new Map()
+  const locks = new Map() // docId -> { sessionId, email, expiresAt }
+  let offline = false
+
+  function activeLock(docId) {
+    const lock = locks.get(docId)
+    if (!lock || lock.expiresAt <= Date.now()) return null
+    return lock
+  }
+
+  await context.route('**/api/me', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, email }) }),
+  )
+  await context.route('**/api/folders', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+  )
+  await context.route('**/api/shared', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+  )
+
+  await context.route('**/api/docs', async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() === 'GET') {
+      const list = [...docs.values()].map((d) => {
+        const { content: _content, ...rest } = d
+        return rest
+      })
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(list) })
+    }
+    if (req.method() === 'POST') {
+      const body = req.postDataJSON()
+      const now = Date.now()
+      const doc = {
+        id: body.id || crypto.randomUUID(),
+        title: body.title,
+        content: body.content,
+        lineEnding: body.lineEnding,
+        folderId: body.folderId ?? null,
+        pinnedAt: null,
+        version: 1,
+        createdAt: now,
+        updatedAt: now,
+      }
+      docs.set(doc.id, doc)
+      return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(doc) })
+    }
+    return route.fallback()
+  })
+
+  await context.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    const docId = decodeURIComponent(new URL(req.url()).pathname.split('/').slice(-2, -1)[0])
+    if (req.method() === 'POST') {
+      const { sessionId } = req.postDataJSON()
+      const now = Date.now()
+      const lock = locks.get(docId)
+      if (lock && lock.expiresAt > now && lock.sessionId !== sessionId) {
+        return route.fulfill({
+          status: 423,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'locked', email: lock.email, expiresAt: lock.expiresAt }),
+        })
+      }
+      const expiresAt = now + LOCK_DURATION_MS
+      locks.set(docId, { sessionId, email, expiresAt })
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt }) })
+    }
+    if (req.method() === 'DELETE') {
+      const sessionId = new URL(req.url()).searchParams.get('session')
+      const lock = locks.get(docId)
+      if (lock && lock.sessionId === sessionId) locks.delete(docId)
+      return route.fulfill({ status: 204 })
+    }
+    return route.fallback()
+  })
+
+  await context.route(/\/api\/docs\/[^/]+$/, async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    const id = decodeURIComponent(new URL(req.url()).pathname.split('/').pop())
+    const doc = docs.get(id)
+    if (req.method() === 'GET') {
+      if (!doc) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) })
+    }
+    if (req.method() === 'PUT') {
+      if (!doc) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+      const lock = activeLock(id)
+      const sessionHeader = req.headers()['x-lock-session']
+      if (lock && lock.sessionId !== sessionHeader) {
+        return route.fulfill({
+          status: 423,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'locked', email: lock.email, expiresAt: lock.expiresAt }),
+        })
+      }
+      const body = req.postDataJSON()
+      if (body.baseVersion !== doc.version) {
+        return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'conflict', doc }) })
+      }
+      if (body.title !== undefined) doc.title = body.title
+      if (body.content !== undefined) doc.content = body.content
+      doc.version += 1
+      doc.updatedAt = Date.now()
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) })
+    }
+    if (req.method() === 'DELETE') {
+      docs.delete(id)
+      return route.fulfill({ status: 204 })
+    }
+    return route.fallback()
+  })
+
+  return {
+    docs,
+    locks,
+    setOffline(v) {
+      offline = v
+    },
+    // 다른 세션이 이미 잡고 있는 상태를 직접 만든다 (A5 — 오프라인 중 다른 세션이 잠금)
+    forceLock(docId, { sessionId = crypto.randomUUID(), lockEmail = 'other@b.com', ttlMs = LOCK_DURATION_MS } = {}) {
+      locks.set(docId, { sessionId, email: lockEmail, expiresAt: Date.now() + ttlMs })
+    },
+  }
+}
+
+async function typeIntoEditor(page, text) {
+  await page.locator('.cm-content').click()
+  await page.keyboard.type(text)
+}
+
+async function waitSyncIdle(page) {
+  await expect(page.locator('.statusbar-save')).toHaveText('저장됨', { timeout: 15_000 })
+}
+
+test.describe('F-213 A4 두 창', () => {
+  test('두 번째 창은 읽기 전용이고, 첫 창을 닫으면 곧 편집할 수 있다', async ({ page, context }) => {
+    await installFakeServer(context)
+    await openApp(page)
+    await page.getByRole('button', { name: '새 문서' }).click()
+    await typeIntoEditor(page, '원본')
+    await waitSyncIdle(page)
+    const docId = await currentDocId(page)
+
+    const page2 = await context.newPage()
+    await page2.goto(`/#/d/${docId}`)
+    await expect(page2.locator('.cm-host .cm-editor')).toBeVisible()
+
+    await expect(page2.locator('.notice-message')).toContainText('편집 중입니다', { timeout: 10_000 })
+    // 읽기 전용 판정은 실제 입력 시도로 확인한다 — 내용이 그대로다
+    await page2.locator('.cm-content').click()
+    await page2.keyboard.type('두 번째 창 입력')
+    await expect(page2.locator('.cm-content')).toContainText('원본')
+    await expect(page2.locator('.cm-content')).not.toContainText('두 번째 창 입력')
+
+    // 실제 탭 닫기는 렌더러가 곧장 죽어 keepalive fetch 가 못 나갈 수 있다 — pagehide 를 직접 흉내낸다(2.3)
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
+    await page.close()
+
+    await expect(page2.locator('.notice-message')).toContainText('이제 편집할 수 있습니다', { timeout: 20_000 })
+    await page2.locator('.cm-content').click()
+    await page2.keyboard.type(' 다시 편집')
+    await expect(page2.locator('.cm-content')).toContainText('다시 편집')
+  })
+})
+
+test.describe('F-213 A5 423 저장', () => {
+  test('오프라인 편집 중 다른 세션이 잠그면 온라인이 될 때 충돌 사본으로 저장한다', async ({ page, context }) => {
+    const server = await installFakeServer(context)
+    await openApp(page)
+    await page.getByRole('button', { name: '새 문서' }).click()
+    await typeIntoEditor(page, '원본 내용')
+    await waitSyncIdle(page)
+    const docId = await currentDocId(page)
+    const originalTitle = await page.locator('.doc-title').inputValue()
+
+    server.setOffline(true)
+    await page.locator('.cm-content').click()
+    await page.keyboard.type(' 오프라인 편집')
+    await expect(page.locator('.statusbar-save')).toContainText('오프라인', { timeout: 10_000 })
+
+    server.forceLock(docId, { lockEmail: 'other@b.com' })
+    server.setOffline(false)
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+
+    await expect.poll(() => currentDocId(page)).not.toBe(docId)
+    const copyId = await currentDocId(page)
+    await expect.poll(() => server.docs.get(copyId)?.content).toBe('원본 내용 오프라인 편집')
+    expect(server.docs.get(copyId)?.title).toBe(`${originalTitle} (충돌 사본)`)
+    await expect(page.locator('.notice-message')).toContainText('other@b.com 님이 편집 중이라')
+
+    // 원래 문서는 서버 값 그대로
+    await page.evaluate((id) => {
+      location.hash = `#/d/${id}`
+    }, docId)
+    await expect.poll(() => currentDocId(page)).toBe(docId)
+    await expect(page.locator('.cm-content')).toContainText('원본 내용')
+    await expect(page.locator('.cm-content')).not.toContainText('오프라인 편집')
+  })
+})

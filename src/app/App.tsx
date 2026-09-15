@@ -29,6 +29,7 @@ import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
 import { useDocSaver } from './useDocSaver'
+import { useDocLock } from './useDocLock'
 import { exportDoc } from './exportDoc'
 import { importFiles } from './importFiles'
 import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag } from './fileDrop'
@@ -182,6 +183,8 @@ export default function App() {
   // 문서를 열 때 에디터에 넘기는 용도로만 쓰는 스냅샷. 편집 중 본문을 여기 동기화하지
   // 않는다 — 원본은 CM6 EditorState 하나다 (architecture.md 3장)
   const [openDoc, setOpenDoc] = useState<OpenDoc | null>(null)
+  // 잠금을 되찾은 뒤 서버 값을 다시 받아 에디터를 다시 마운트할 때 올린다 (F-213.md 2.3)
+  const [editorRemountNonce, setEditorRemountNonce] = useState(0)
   const [stats, setStats] = useState<Stats>({ line: 1, col: 1, charCount: 0, wordCount: 0 })
   // 보기 모드 변환 결과 HTML (specs/features/F-123.md 3.3). 편집 중 계속 동기화하는
   // 본문 사본이 아니라, 변환 시점(전환 시·문서를 열 때)에만 1회 만드는 파생값이다
@@ -239,7 +242,7 @@ export default function App() {
     .map((d) => ({ id: d.id, title: d.title, role: d.role as 'edit' | 'view', ownerEmail: d.ownerEmail ?? '', viaFolder: d.viaFolder }))
 
   // view 권한 문서이거나(F-212.md 2.4), edit 권한 문서가 403 으로 강등됐으면 읽기 전용
-  const isReadOnlyDoc = currentDoc?.role === 'view' || (currentDocId != null && forbiddenDocIds.has(currentDocId))
+  const isReadOnlyByRole = currentDoc?.role === 'view' || (currentDocId != null && forbiddenDocIds.has(currentDocId))
   // owner 문서(내 문서, role 없음 또는 'owner')이고 서버 저장소일 때만 초대할 수 있다 (F-212.md 2.5)
   const canInviteCurrentDoc =
     store.kind === 'server' && Boolean(currentDoc) && !isSharedDoc(currentDoc) && !sharedDoc
@@ -270,6 +273,36 @@ export default function App() {
       return result
     })
   }, [])
+
+  // 편집 잠금(F-213.md 2.3) — 다른 세션이 잡고 있으면 읽기 전용 + 알림, 되찾으면 에디터를 다시 마운트한다
+  const handleLockReacquired = useCallback(
+    (docId: string) => {
+      const serverStore = store as ServerStore
+      if (typeof serverStore.refreshDocFromServer !== 'function') return
+      serverStore.refreshDocFromServer(docId).then((fresh) => {
+        if (!fresh || docId !== currentDocIdRef.current) return
+        setOpenDoc({ id: fresh.id, content: fresh.content, lineEnding: fresh.lineEnding })
+        setDocs((prev) =>
+          sortByUpdatedAtDesc(
+            prev.map((d) => (d.id === fresh.id ? { ...d, title: fresh.title, updatedAt: fresh.updatedAt } : d)),
+          ),
+        )
+        focusEditorRef.current = false
+        setEditorRemountNonce((n) => n + 1)
+      })
+    },
+    [store],
+  )
+  const { readOnly: isLockedReadOnly } = useDocLock({
+    isServerStore: store.kind === 'server',
+    docId: currentDocId,
+    role: currentDoc?.role as 'owner' | 'edit' | 'view' | undefined,
+    online: syncState?.online ?? true,
+    myEmail: account.state === 'in' ? account.email : null,
+    onNotice: showNotice,
+    onReacquired: handleLockReacquired,
+  })
+  const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly
 
   const closeSidebarIfNarrow = useCallback(() => {
     setSidebarOpen(false)
@@ -372,7 +405,9 @@ export default function App() {
       setAccount(accountState)
 
       // resolvedStore 가 정해지기 전엔 handleServerConflict 를 못 만드므로 자리만 먼저 둔다
-      let conflictHandler: ((event: { docId: string; copyId: string }) => void) | null = null
+      let conflictHandler:
+        | ((event: { docId: string; copyId: string; reason?: 'locked'; email?: string }) => void)
+        | null = null
 
       const resolvedStore = await openStore({
         account: accountState,
@@ -408,7 +443,17 @@ export default function App() {
       setStore(resolvedStore)
 
       // 열린 문서가 충돌한 원본이면 서버 내용을 밀어 넣지 않고(불변조건) 사본으로 전환한다
-      async function handleServerConflict({ docId, copyId }: { docId: string; copyId: string }) {
+      async function handleServerConflict({
+        docId,
+        copyId,
+        reason,
+        email,
+      }: {
+        docId: string
+        copyId: string
+        reason?: 'locked'
+        email?: string
+      }) {
         const [orig, copy] = await Promise.all([resolvedStore.get(docId), resolvedStore.get(copyId)])
         setDocs((prev) => {
           let next = prev
@@ -421,9 +466,13 @@ export default function App() {
           return next
         })
         const copyTitle = copy?.title ?? ''
+        // 423(F-213.md 2.4) 이면 문구가 다르다 — 그 외(409)는 기존 충돌 문구
         showNotice({
           type: 'warn',
-          message: `다른 곳에서 먼저 바뀌어 내 편집을 "${copyTitle}" 으로 저장했습니다.`,
+          message:
+            reason === 'locked'
+              ? `${email ?? ''} 님이 편집 중이라 내 편집을 "${copyTitle}" 으로 저장했습니다.`
+              : `다른 곳에서 먼저 바뀌어 내 편집을 "${copyTitle}" 으로 저장했습니다.`,
         })
         if (docId === currentDocIdRef.current) {
           setSharedDoc(null)
@@ -827,10 +876,8 @@ export default function App() {
     )
     // 이미지는 저장소를 못 쓸 때(메모리 저장소)는 막지 않는다 (F-156.md 2.5)
     imageDropBlockedRef.current = Boolean(settingsOpen || deleteTarget || moveDocTarget || sharedDoc)
-    // view 권한·403 강등 문서에서는 이미지 올리기(붙여넣기·끌어놓기)를 막는다 (F-212.md 2.4)
-    readOnlyDocRef.current =
-      docs.find((d) => d.id === currentDocId)?.role === 'view' ||
-      (currentDocId != null && forbiddenDocIds.has(currentDocId))
+    // view 권한·403 강등 문서·편집 잠금(F-213.md 2.3)에서는 이미지 올리기(붙여넣기·끌어놓기)를 막는다 (F-212.md 2.4)
+    readOnlyDocRef.current = isReadOnlyDoc
   })
 
   // runImportFiles 는 store·showNotice 등을 클로저로 담으므로, 매 커밋 후 최신 참조로
@@ -1569,7 +1616,7 @@ export default function App() {
               <div className="editor-slot" hidden={viewMode === 'view'}>
                 {openDoc?.id === currentDocId && (
                   <Editor
-                    key={currentDocId}
+                    key={`${currentDocId}:${editorRemountNonce}`}
                     ref={editorRef}
                     text={openDoc.content}
                     viewMode={viewMode}
