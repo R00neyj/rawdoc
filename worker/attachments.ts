@@ -9,8 +9,8 @@ import { folderTreeIds } from './links'
 import { getDocAccess, isDocAttachmentOwner } from './access'
 
 export const MAX_ATTACHMENT_BYTES = 5_242_880
-// 계정당 첨부 저장 한도 500MB (specs/features/F-221.md 2.1)
-export const ATTACHMENT_QUOTA_BYTES = 524_288_000
+// 계정당 첨부 저장 한도 300MB (specs/features/F-221.md 2.1)
+export const ATTACHMENT_QUOTA_BYTES = 314_572_800
 const ID_EXT_RE = /^([0-9a-f]{16})\.(png|jpg|gif|webp)$/
 
 type AttachmentRow = {

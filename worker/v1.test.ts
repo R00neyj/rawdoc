@@ -315,7 +315,7 @@ describe('F-223 A2 POST /v1/attachments', () => {
   })
 
   it('계정 한도를 넘으면 507', async () => {
-    const { env } = makeEnv({ attachments: [{ owner_id: 'u1', id: 'existing', ext: 'png', mime: 'image/png', size: 524_288_000 - 10, width: 1, height: 1, created_at: 1 }] })
+    const { env } = makeEnv({ attachments: [{ owner_id: 'u1', id: 'existing', ext: 'png', mime: 'image/png', size: 314_572_800 - 10, width: 1, height: 1, created_at: 1 }] })
     const bytes = pngBytes()
     const res = await handleCreateAttachmentV1(
       new Request('http://local.test/v1/attachments', { method: 'POST', headers: { 'x-test-user': 'u1', 'Content-Length': String(bytes.length) }, body: bytes }),

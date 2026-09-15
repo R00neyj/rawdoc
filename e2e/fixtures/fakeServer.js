@@ -12,7 +12,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
   // context.setOffline() 은 page.route 가 먼저 가로채 못 걸러낸다 — 이 플래그로 직접 흉내낸다 (F-207 A4)
   let offline = false
   // 계정당 이미지 저장 한도 흉내 (F-221 2.2·2.5)
-  let usage = { used: 0, limit: 524_288_000 }
+  let usage = { used: 0, limit: 314_572_800 }
 
   function docSummary(d) {
     const { content: _content, ...rest } = d

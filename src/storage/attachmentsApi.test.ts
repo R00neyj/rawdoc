@@ -67,9 +67,9 @@ describe('fetchAttachment', () => {
 
 describe('fetchUsage', () => {
   it('200 이면 used·limit 을 돌려준다', async () => {
-    mockFetch(() => new Response(JSON.stringify({ used: 1024, limit: 524_288_000 }), { status: 200 }))
+    mockFetch(() => new Response(JSON.stringify({ used: 1024, limit: 314_572_800 }), { status: 200 }))
     const usage = await fetchUsage()
-    expect(usage).toEqual({ used: 1024, limit: 524_288_000 })
+    expect(usage).toEqual({ used: 1024, limit: 314_572_800 })
   })
 
   it('401 이면 unauthorized', async () => {

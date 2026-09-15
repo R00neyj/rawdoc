@@ -12,7 +12,7 @@ import type { Attachment, AttachmentExt, Doc, Folder, LineEnding, Store, SyncSta
 const RETRY_INTERVAL_MS = 30000
 const TOO_LARGE_MESSAGE = '문서가 너무 커서 서버에 저장하지 못했습니다(1MB 초과).'
 const ATTACHMENT_UPLOAD_FAIL_MESSAGE = '이미지를 서버에 올리지 못했습니다.'
-const ATTACHMENT_QUOTA_MESSAGE = '이미지 저장 공간(500MB)이 가득 찼습니다. 문서에서 지운 이미지는 하루 뒤 정리됩니다.'
+const ATTACHMENT_QUOTA_MESSAGE = '이미지 저장 공간(300MB)이 가득 찼습니다. 문서에서 지운 이미지는 하루 뒤 정리됩니다.'
 const ATTACHMENT_EXT_RE = '(png|jpg|gif|webp)'
 
 type StoreNotice = { type: 'info' | 'error' | 'update' | 'warn'; message: string }

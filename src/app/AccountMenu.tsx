@@ -166,7 +166,7 @@ export default function AccountMenu({ account, onBeforeNavigate }: AccountMenuPr
               }
               role="none"
             >
-              이미지 {formatUsage(usage.used)} / 500MB
+              이미지 {formatUsage(usage.used)} / 300MB
             </li>
           )}
           {actionItems.map((item, i) => (

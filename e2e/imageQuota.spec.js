@@ -1,4 +1,4 @@
-// 계정당 이미지 저장 한도 500MB (specs/features/F-221.md 3장 A3·A4)
+// 계정당 이미지 저장 한도 300MB (specs/features/F-221.md 3장 A3·A4)
 import { test, expect } from '@playwright/test'
 import zlib from 'node:zlib'
 import { openApp, currentDocId } from './helpers.js'
@@ -59,7 +59,7 @@ test.describe('F-221 A3 넣기 거부 — 계정 한도가 거의 찼을 때', (
   test('붙여넣기가 거부되고 원문이 바뀌지 않는다', async ({ page }) => {
     const server = await fakeServer(page)
     // 정확히 한도에 닿아 있어 어떤 크기의 이미지를 더해도 넘친다(webp 변환 결과 크기에 흔들리지 않는다)
-    server.setUsage({ used: 524_288_000, limit: 524_288_000 })
+    server.setUsage({ used: 314_572_800, limit: 314_572_800 })
     await openApp(page)
 
     const before = await currentDocId(page)
@@ -73,7 +73,7 @@ test.describe('F-221 A3 넣기 거부 — 계정 한도가 거의 찼을 때', (
     await pasteFiles(page, { files: [{ bytes: Array.from(png), name: 'a.png', mime: 'image/png' }] })
 
     await expect(page.locator('.notice-message')).toHaveText(
-      '이미지 저장 공간(500MB)이 가득 찼습니다. 문서에서 지운 이미지는 하루 뒤 정리됩니다.',
+      '이미지 저장 공간(300MB)이 가득 찼습니다. 문서에서 지운 이미지는 하루 뒤 정리됩니다.',
     )
     await expect(page.locator('.md-image-img, .md-image-missing')).toHaveCount(0)
     await expect(page.locator('.cm-content')).toHaveText(beforeText)
@@ -82,23 +82,23 @@ test.describe('F-221 A3 넣기 거부 — 계정 한도가 거의 찼을 때', (
 })
 
 test.describe('F-221 A4 계정 메뉴 사용량', () => {
-  test('used 120MB 이면 "이미지 120MB / 500MB"', async ({ page }) => {
+  test('used 120MB 이면 "이미지 120MB / 300MB"', async ({ page }) => {
     const server = await fakeServer(page)
-    server.setUsage({ used: 125_829_120, limit: 524_288_000 })
+    server.setUsage({ used: 125_829_120, limit: 314_572_800 })
     await openApp(page)
 
     await page.getByRole('button', { name: '계정' }).click()
-    await expect(page.locator('.account-menu-usage')).toHaveText('이미지 120MB / 500MB')
+    await expect(page.locator('.account-menu-usage')).toHaveText('이미지 120MB / 300MB')
     await expect(page.locator('.account-menu-usage')).not.toHaveClass(/account-menu-usage-danger/)
   })
 
-  test('used 480MB(90% 이상) 이면 --danger 색 클래스', async ({ page }) => {
+  test('used 270MB(90% 이상) 이면 --danger 색 클래스', async ({ page }) => {
     const server = await fakeServer(page)
-    server.setUsage({ used: 503_316_480, limit: 524_288_000 })
+    server.setUsage({ used: 283_115_520, limit: 314_572_800 })
     await openApp(page)
 
     await page.getByRole('button', { name: '계정' }).click()
-    await expect(page.locator('.account-menu-usage')).toHaveText('이미지 480MB / 500MB')
+    await expect(page.locator('.account-menu-usage')).toHaveText('이미지 270MB / 300MB')
     await expect(page.locator('.account-menu-usage')).toHaveClass(/account-menu-usage-danger/)
   })
 })

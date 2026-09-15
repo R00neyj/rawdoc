@@ -31,7 +31,7 @@ function makeFakeServer() {
   const docs = new Map<string, FakeDoc>()
   let networkDown = false
   let serverError = false
-  let usage = { used: 0, limit: 524_288_000 }
+  let usage = { used: 0, limit: 314_572_800 }
   let forceUploadQuota = false
 
   function jsonResponse(status: number, data?: unknown): Response {
@@ -293,7 +293,7 @@ describe('serverStore', () => {
 
   it('F-221 A2: used+미전송+새 크기가 한도를 넘으면 던지고 캐시에 쓰지 않는다', async () => {
     const server = makeFakeServer()
-    server.setUsage({ used: 524_288_000 - 10, limit: 524_288_000 })
+    server.setUsage({ used: 314_572_800 - 10, limit: 314_572_800 })
     vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
     const store = await createServerStore('u1', { dbName: freshDbName() })
 
@@ -330,7 +330,7 @@ describe('serverStore', () => {
     await tick(50)
 
     expect(store.syncState?.pending).toBe(0)
-    expect(notices.some((n) => n.type === 'error' && n.message.includes('500MB'))).toBe(true)
+    expect(notices.some((n) => n.type === 'error' && n.message.includes('300MB'))).toBe(true)
     const list = await store.listAttachments()
     expect(list.map((a) => a.id)).toEqual([result.id]) // 캐시는 남는다
   })
