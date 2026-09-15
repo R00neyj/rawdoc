@@ -4,7 +4,8 @@ import { spawnSync } from 'node:child_process'
 import { existsSync as exists, statSync as stat, readdirSync as readdir } from 'node:fs'
 
 function parseArgs(argv) {
-  const opts = { target: null, repeat: null, build: null, dryRun: false, port: 4317, dist: 'dist' }
+  // 슬롯은 --port·--dist 가 없으면 E2E_PORT·E2E_DIST 환경 변수를 따른다
+  const opts = { target: null, repeat: null, build: null, dryRun: false, port: Number(process.env.E2E_PORT) || 4317, dist: process.env.E2E_DIST || 'dist' }
   const rest = []
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -75,7 +76,7 @@ async function main() {
   }
 
   // shell:true 는 인자를 알아서 인용해주지 않는다 — 공백 있는 인자(검색어)가 쪼개지지 않게 직접 인용한다
-  const quoted = args.map((a) => (a.includes(' ') ? `"${a}"` : a))
+  const quoted = args.map((a) => (/[\s|&<>^]/.test(a) ? `"${a}"` : a))
   const result = spawnSync('npx', quoted, { shell: true, encoding: 'utf-8', env: { ...process.env, ...env } })
   const output = (result.stdout ?? '') + (result.stderr ?? '')
   const { passed, failed, names, firstErrors } = summarize(output)
