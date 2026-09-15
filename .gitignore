@@ -31,3 +31,5 @@ playwright-report/
 
 .wrangler/
 .dev.vars
+# Cloudflare API 토큰 — wrangler 가 루트 .env 를 읽는다
+.env
