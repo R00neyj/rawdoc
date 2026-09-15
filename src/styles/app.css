@@ -614,21 +614,27 @@ body.sidebar-resizing {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
-  transition: opacity var(--transition-fast), transform var(--transition-move), visibility var(--transition-fast);
+  transform: translateY(0) scale(1);
+  transform-origin: top right;
+  /* 닫힘은 튕기지 않는다(F-172 그대로) — 열림 전용 곡선은 [data-state='open'] 규칙이 덮는다 (F-228 2.3) */
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
   transition-behavior: allow-discrete;
 }
 
 .item-menu-list[data-state='closed'] {
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-4px);
+  transform: translateY(-4px) scale(0.96);
+}
+
+.item-menu-list[data-state='open'] {
+  transition: opacity var(--transition-fast), transform var(--transition-pop), visibility var(--transition-fast);
 }
 
 @starting-style {
   .item-menu-list[data-state='open'] {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-4px) scale(0.96);
   }
 }
 
@@ -881,7 +887,8 @@ body.sidebar-resizing {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
   opacity: 0;
   transform: scale(0.98);
-  transition: opacity var(--transition-fast), transform var(--transition-move),
+  /* 닫힘은 튕기지 않는다(F-172 그대로) — 열림 전용 곡선은 [open] 규칙이 덮는다 (F-228 2.3) */
+  transition: opacity var(--transition-fast), transform var(--transition-fast),
     display var(--transition-fast), overlay var(--transition-fast);
   transition-behavior: allow-discrete;
 }
@@ -893,12 +900,14 @@ body.sidebar-resizing {
 .dialog[open] {
   opacity: 1;
   transform: scale(1);
+  transition: opacity var(--transition-fast), transform var(--transition-pop),
+    display var(--transition-fast), overlay var(--transition-fast);
 }
 
 @starting-style {
   .dialog[open] {
     opacity: 0;
-    transform: scale(0.98);
+    transform: scale(0.96);
   }
 }
 
@@ -1402,8 +1411,19 @@ body.sidebar-resizing {
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  /* 나타남·사라짐 전환은 --transition-fast, 지연은 아래 트리거 규칙이 준다 (F-149 2.2) */
-  transition: opacity var(--transition-fast);
+  /* 가운데 정렬용 transform 과 겹치지 않게 크기·위치는 개별 속성 scale·translate 로 준다 (F-228 2.2) */
+  scale: 0.9;
+  translate: 0 -4px;
+  transform-origin: top center;
+  /* 사라짐은 튕기지 않는다, 크기는 그대로 두고 opacity 만 120ms — 나타남 전용 곡선은 아래 트리거 규칙이 덮는다 (F-228 2.2) */
+  transition: opacity 120ms var(--ease-out);
+}
+
+/* 사라짐 고정 시간(120ms)은 토큰이 아니라 움직임 줄이기가 따로 0 으로 덮는다 (F-149 A6 회귀, F-228 2.4) */
+@media (prefers-reduced-motion: reduce) {
+  .icon-tooltip {
+    transition-duration: 0ms;
+  }
 }
 
 .icon-tooltip--center {
@@ -1420,15 +1440,23 @@ body.sidebar-resizing {
   top: 50%;
   left: calc(100% + 6px);
   transform: translateY(-50%);
+  translate: -4px 0;
+  transform-origin: left center;
 }
 
 .icon-btn-wrap:hover .icon-tooltip {
   opacity: 1;
+  scale: 1;
+  translate: 0 0;
+  transition: opacity var(--transition-fast), scale var(--transition-pop), translate var(--transition-pop);
   transition-delay: 400ms;
 }
 
 .icon-btn-wrap button:focus-visible ~ .icon-tooltip {
   opacity: 1;
+  scale: 1;
+  translate: 0 0;
+  transition: opacity var(--transition-fast), scale var(--transition-pop), translate var(--transition-pop);
   transition-delay: 0s;
 }
 
@@ -1620,21 +1648,27 @@ body.sidebar-resizing {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
-  transition: opacity var(--transition-fast), transform var(--transition-move), visibility var(--transition-fast);
+  transform: translateY(0) scale(1);
+  transform-origin: top right;
+  /* 닫힘은 튕기지 않는다(F-172 그대로) — 열림 전용 곡선은 [data-state='open'] 규칙이 덮는다 (F-228 2.3) */
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
   transition-behavior: allow-discrete;
 }
 
 .share-menu-list[data-state='closed'] {
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-4px);
+  transform: translateY(-4px) scale(0.96);
+}
+
+.share-menu-list[data-state='open'] {
+  transition: opacity var(--transition-fast), transform var(--transition-pop), visibility var(--transition-fast);
 }
 
 @starting-style {
   .share-menu-list[data-state='open'] {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-4px) scale(0.96);
   }
 }
 
@@ -1685,21 +1719,27 @@ body.sidebar-resizing {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
-  transition: opacity var(--transition-fast), transform var(--transition-move), visibility var(--transition-fast);
+  transform: translateY(0) scale(1);
+  transform-origin: top right;
+  /* 닫힘은 튕기지 않는다(F-172 그대로) — 열림 전용 곡선은 [data-state='open'] 규칙이 덮는다 (F-228 2.3) */
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
   transition-behavior: allow-discrete;
 }
 
 .account-menu-list[data-state='closed'] {
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-4px);
+  transform: translateY(-4px) scale(0.96);
+}
+
+.account-menu-list[data-state='open'] {
+  transition: opacity var(--transition-fast), transform var(--transition-pop), visibility var(--transition-fast);
 }
 
 @starting-style {
   .account-menu-list[data-state='open'] {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-4px) scale(0.96);
   }
 }
 

@@ -400,17 +400,23 @@
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  /* 나타남·사라짐 전환은 --transition-fast, 지연은 아래 트리거 규칙이 준다 (F-149 2.2) */
-  transition: opacity var(--transition-fast);
+  /* 가운데 정렬용 transform 과 겹치지 않게 크기·위치는 개별 속성 scale·translate 로 준다 (F-228 2.2) */
+  scale: 0.9;
   transform: translateX(-50%);
+  /* 사라짐은 튕기지 않는다, 크기는 그대로 두고 opacity 만 120ms — 나타남 전용 곡선은 아래 트리거 규칙이 덮는다 (F-228 2.2) */
+  transition: opacity 120ms var(--ease-out);
 }
 
 .md-table-add-row::after {
   top: calc(100% + 6px);
+  translate: 0 -4px;
+  transform-origin: top center;
 }
 
 .md-table-add-col::after {
   bottom: calc(100% + 6px);
+  translate: 0 4px;
+  transform-origin: bottom center;
 }
 
 /* 가운데 정렬이 편집 영역 밖으로 나가면 툴팁 오른쪽 끝을 버튼 오른쪽 끝에 맞춘다
@@ -421,13 +427,26 @@
   transform: none;
 }
 
+/* 사라짐 고정 시간(120ms)은 토큰이 아니라 움직임 줄이기가 따로 0 으로 덮는다 (F-149 A6 회귀, F-228 2.4) */
+@media (prefers-reduced-motion: reduce) {
+  .md-table-add::after {
+    transition-duration: 0ms;
+  }
+}
+
 /* 마우스 호버로 나타날 때만 지연 400ms, 키보드 포커스·사라질 때는 지연 없음 (F-149 2.2) */
 .md-table-add:hover::after {
   opacity: 1;
+  scale: 1;
+  translate: 0 0;
+  transition: opacity var(--transition-fast), scale var(--transition-pop), translate var(--transition-pop);
   transition-delay: 400ms;
 }
 
 .md-table-add:focus-visible::after {
   opacity: 1;
+  scale: 1;
+  translate: 0 0;
+  transition: opacity var(--transition-fast), scale var(--transition-pop), translate var(--transition-pop);
   transition-delay: 0s;
 }
