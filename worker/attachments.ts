@@ -1,10 +1,12 @@
 // 이미지 첨부 올리기·받기 — 서버 판정을 믿고 클라이언트 Content-Type 은 쓰지 않는다 (specs/features/F-209.md 2.3, 2.4)
+// 공유 문서의 첨부 열람 판정은 F-212.md 2.2 로 넓힌다
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { isValidToken } from './token'
 import { sniffImage } from './imageSniff'
 import { extractAttachmentRefs } from '../src/lib/imageBlock'
 import { folderTreeIds } from './links'
+import { getDocAccess, isDocAttachmentOwner } from './access'
 
 const MAX_ATTACHMENT_BYTES = 5_242_880
 const ID_EXT_RE = /^([0-9a-f]{16})\.(png|jpg|gif|webp)$/
@@ -99,12 +101,41 @@ export async function handleGetAttachment(
   if (!parsedName) return errorResponse('not_found', 404)
   const { id, ext } = parsedName
 
-  const row = await env.DB.prepare('SELECT * FROM attachments WHERE owner_id = ? AND id = ?')
+  const own = await env.DB.prepare('SELECT * FROM attachments WHERE owner_id = ? AND id = ?')
     .bind(user.id, id)
     .first<AttachmentRow>()
-  if (!row || row.ext !== ext) return errorResponse('not_found', 404)
+  if (own) {
+    if (own.ext !== ext) return errorResponse('not_found', 404)
+    const object = await env.BUCKET.get(`att/${user.id}/${id}.${ext}`)
+    if (!object) return errorResponse('not_found', 404)
+    return attachmentResponse(object, own.mime, 'private, max-age=31536000, immutable')
+  }
 
-  const object = await env.BUCKET.get(`att/${user.id}/${id}.${ext}`)
+  // 내 것이 아니면 문서 조회 권한 + 그 문서 원문의 참조가 있어야 한다 (F-212 2.2, ?doc= 로 문서를 지정)
+  const docId = new URL(request.url).searchParams.get('doc')
+  if (!docId) return errorResponse('not_found', 404)
+  const access = await getDocAccess<{ id: string; owner_id: string; folder_id: string | null; content: string }>(
+    env,
+    docId,
+    user,
+    'id, owner_id, folder_id, content',
+  )
+  if (!access) return errorResponse('not_found', 404)
+  if (!extractAttachmentRefs(access.doc.content).has(id)) return errorResponse('not_found', 404)
+
+  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ?')
+    .bind(id, ext)
+    .all<AttachmentRow>()
+  let row: AttachmentRow | null = null
+  for (const candidate of candidates) {
+    if (await isDocAttachmentOwner(env, access.doc, candidate.owner_id)) {
+      row = candidate
+      break
+    }
+  }
+  if (!row) return errorResponse('not_found', 404)
+
+  const object = await env.BUCKET.get(`att/${row.owner_id}/${id}.${ext}`)
   if (!object) return errorResponse('not_found', 404)
 
   return attachmentResponse(object, row.mime, 'private, max-age=31536000, immutable')
@@ -125,18 +156,25 @@ export async function handlePublicGetAttachment(
     .first<{ target_type: string; target_id: string }>()
   if (!link || link.target_type !== 'doc') return errorResponse('not_found', 404)
 
-  const doc = await env.DB.prepare('SELECT owner_id, content FROM docs WHERE id = ?')
+  const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ?')
     .bind(link.target_id)
-    .first<{ owner_id: string; content: string }>()
+    .first<{ id: string; owner_id: string; content: string; folder_id: string | null }>()
   if (!doc) return errorResponse('not_found', 404)
   if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)
 
-  const row = await env.DB.prepare('SELECT * FROM attachments WHERE owner_id = ? AND id = ?')
-    .bind(doc.owner_id, id)
-    .first<AttachmentRow>()
-  if (!row || row.ext !== ext) return errorResponse('not_found', 404)
+  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ?')
+    .bind(id, ext)
+    .all<AttachmentRow>()
+  let row: AttachmentRow | null = null
+  for (const candidate of candidates) {
+    if (await isDocAttachmentOwner(env, doc, candidate.owner_id)) {
+      row = candidate
+      break
+    }
+  }
+  if (!row) return errorResponse('not_found', 404)
 
-  const object = await env.BUCKET.get(`att/${doc.owner_id}/${id}.${ext}`)
+  const object = await env.BUCKET.get(`att/${row.owner_id}/${id}.${ext}`)
   if (!object) return errorResponse('not_found', 404)
 
   return attachmentResponse(object, row.mime, 'private, max-age=300')
@@ -157,21 +195,28 @@ export async function handlePublicGetFolderAttachment(
     .first<{ target_type: string; target_id: string; owner_id: string }>()
   if (!link || link.target_type !== 'folder') return errorResponse('not_found', 404)
 
-  const doc = await env.DB.prepare('SELECT owner_id, content, folder_id FROM docs WHERE id = ? AND owner_id = ?')
+  const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ? AND owner_id = ?')
     .bind(params.docId, link.owner_id)
-    .first<{ owner_id: string; content: string; folder_id: string | null }>()
+    .first<{ id: string; owner_id: string; content: string; folder_id: string | null }>()
   if (!doc) return errorResponse('not_found', 404)
 
   const treeIds = await folderTreeIds(env, link.target_id, link.owner_id)
   if (!doc.folder_id || !treeIds.includes(doc.folder_id)) return errorResponse('not_found', 404)
   if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)
 
-  const row = await env.DB.prepare('SELECT * FROM attachments WHERE owner_id = ? AND id = ?')
-    .bind(doc.owner_id, id)
-    .first<AttachmentRow>()
-  if (!row || row.ext !== ext) return errorResponse('not_found', 404)
+  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ?')
+    .bind(id, ext)
+    .all<AttachmentRow>()
+  let row: AttachmentRow | null = null
+  for (const candidate of candidates) {
+    if (await isDocAttachmentOwner(env, doc, candidate.owner_id)) {
+      row = candidate
+      break
+    }
+  }
+  if (!row) return errorResponse('not_found', 404)
 
-  const object = await env.BUCKET.get(`att/${doc.owner_id}/${id}.${ext}`)
+  const object = await env.BUCKET.get(`att/${row.owner_id}/${id}.${ext}`)
   if (!object) return errorResponse('not_found', 404)
 
   return attachmentResponse(object, row.mime, 'private, max-age=300')

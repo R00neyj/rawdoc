@@ -1,9 +1,10 @@
-// 폴더 라우트 (specs/features/F-206.md 2.4)
+// 폴더 라우트 (specs/features/F-206.md 2.4, 접근 판정은 F-212.md 2.2)
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { badBody, readJsonLimited } from './docs'
 import { MAX_BODY_BYTES, isValidFolderName, isValidUuid } from './validate'
 import { canCreateFolder, canMoveFolder } from '../src/lib/folderTree'
+import { getOwnedFolder } from './access'
 
 type FolderRow = {
   id: string
@@ -112,9 +113,7 @@ export async function handleUpdateFolder(
     return jsonResponse({ error: 'invalid', field: 'parentId' }, 400)
   }
 
-  const existing = await env.DB.prepare('SELECT * FROM folders WHERE id = ? AND owner_id = ?')
-    .bind(params.id, user.id)
-    .first<FolderRow>()
+  const existing = await getOwnedFolder<FolderRow>(env, params.id, user)
   if (!existing) return errorResponse('not_found', 404)
 
   let nextParentId = existing.parent_id
@@ -150,9 +149,7 @@ export async function handleDeleteFolder(
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
-  const existing = await env.DB.prepare('SELECT * FROM folders WHERE id = ? AND owner_id = ?')
-    .bind(params.id, user.id)
-    .first<FolderRow>()
+  const existing = await getOwnedFolder<FolderRow>(env, params.id, user)
   if (!existing) return errorResponse('not_found', 404)
 
   const parentId = existing.parent_id

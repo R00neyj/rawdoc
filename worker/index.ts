@@ -27,6 +27,15 @@ import {
   handlePublicGetFolderAttachment,
   handleUploadAttachment,
 } from './attachments'
+import {
+  handleDeleteDocGrant,
+  handleDeleteFolderGrant,
+  handleGetDocGrants,
+  handleGetFolderGrants,
+  handleGetShared,
+  handlePutDocGrant,
+  handlePutFolderGrant,
+} from './grants'
 
 type RouteHandler = (
   request: Request,
@@ -105,6 +114,13 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/folders/:id/link', handler: handleGetFolderLink },
   { method: 'POST', path: '/api/folders/:id/link', handler: handleCreateFolderLink },
   { method: 'DELETE', path: '/api/folders/:id/link', handler: handleDeleteFolderLink },
+  { method: 'GET', path: '/api/docs/:id/grants', handler: handleGetDocGrants },
+  { method: 'PUT', path: '/api/docs/:id/grants/:email', handler: handlePutDocGrant },
+  { method: 'DELETE', path: '/api/docs/:id/grants/:email', handler: handleDeleteDocGrant },
+  { method: 'GET', path: '/api/folders/:id/grants', handler: handleGetFolderGrants },
+  { method: 'PUT', path: '/api/folders/:id/grants/:email', handler: handlePutFolderGrant },
+  { method: 'DELETE', path: '/api/folders/:id/grants/:email', handler: handleDeleteFolderGrant },
+  { method: 'GET', path: '/api/shared', handler: handleGetShared },
   { method: 'GET', path: '/pub/docs/:token', handler: handlePublicGetDoc },
   { method: 'PUT', path: '/api/attachments/:idext', handler: handleUploadAttachment },
   { method: 'GET', path: '/api/attachments/:idext', handler: handleGetAttachment },

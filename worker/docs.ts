@@ -1,6 +1,7 @@
-// 문서 라우트 (specs/features/F-206.md 2.3)
+// 문서 라우트 (specs/features/F-206.md 2.3, 접근 판정은 F-212.md 2.2)
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
+import { getDocAccess, roleAtLeast } from './access'
 import {
   MAX_BODY_BYTES,
   MAX_CONTENT_BYTES,
@@ -117,11 +118,9 @@ export async function handleGetDoc(
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
-  const row = await env.DB.prepare('SELECT * FROM docs WHERE id = ? AND owner_id = ?')
-    .bind(params.id, user.id)
-    .first<DocRow>()
-  if (!row) return errorResponse('not_found', 404)
-  return jsonResponse(rowToDoc(row))
+  const access = await getDocAccess<DocRow>(env, params.id, user)
+  if (!access) return errorResponse('not_found', 404)
+  return jsonResponse(rowToDoc(access.doc))
 }
 
 export async function handleCreateDoc(request: Request, env: Env): Promise<Response> {
@@ -222,10 +221,10 @@ export async function handleUpdateDoc(
     return jsonResponse({ error: 'invalid', field: 'baseVersion' }, 400)
   }
 
-  const existing = await env.DB.prepare('SELECT * FROM docs WHERE id = ? AND owner_id = ?')
-    .bind(params.id, user.id)
-    .first<DocRow>()
-  if (!existing) return errorResponse('not_found', 404)
+  const access = await getDocAccess<DocRow>(env, params.id, user)
+  if (!access) return errorResponse('not_found', 404)
+  if (!roleAtLeast(access.role, 'edit')) return errorResponse('forbidden', 403)
+  const existing = access.doc
 
   if (existing.version !== baseVersion) {
     return jsonResponse({ error: 'conflict', doc: rowToDoc(existing) }, 409)
@@ -239,12 +238,12 @@ export async function handleUpdateDoc(
   const result = await env.DB.prepare(
     'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ?',
   )
-    .bind(nextTitle, nextContent, nextVersion, now, params.id, user.id, existing.version)
+    .bind(nextTitle, nextContent, nextVersion, now, params.id, existing.owner_id, existing.version)
     .run()
 
   if (result.meta.changes === 0) {
     const latest = await env.DB.prepare('SELECT * FROM docs WHERE id = ? AND owner_id = ?')
-      .bind(params.id, user.id)
+      .bind(params.id, existing.owner_id)
       .first<DocRow>()
     if (!latest) return errorResponse('not_found', 404)
     return jsonResponse({ error: 'conflict', doc: rowToDoc(latest) }, 409)
@@ -272,10 +271,10 @@ export async function handleMoveDocFolder(
     return jsonResponse({ error: 'invalid', field: 'folderId' }, 400)
   }
 
-  const existing = await env.DB.prepare('SELECT * FROM docs WHERE id = ? AND owner_id = ?')
-    .bind(params.id, user.id)
-    .first<DocRow>()
-  if (!existing) return errorResponse('not_found', 404)
+  const access = await getDocAccess<DocRow>(env, params.id, user)
+  if (!access) return errorResponse('not_found', 404)
+  if (access.role !== 'owner') return errorResponse('forbidden', 403)
+  const existing = access.doc
 
   if (folderId !== null) {
     const folder = await env.DB.prepare('SELECT id FROM folders WHERE id = ? AND owner_id = ?')
@@ -306,10 +305,10 @@ export async function handleSetPinned(
   const { pinned } = body as Record<string, unknown>
   if (typeof pinned !== 'boolean') return jsonResponse({ error: 'invalid', field: 'pinned' }, 400)
 
-  const existing = await env.DB.prepare('SELECT * FROM docs WHERE id = ? AND owner_id = ?')
-    .bind(params.id, user.id)
-    .first<DocRow>()
-  if (!existing) return errorResponse('not_found', 404)
+  const access = await getDocAccess<DocRow>(env, params.id, user)
+  if (!access) return errorResponse('not_found', 404)
+  if (access.role !== 'owner') return errorResponse('forbidden', 403)
+  const existing = access.doc
 
   const pinnedAt = pinned ? Date.now() : null
   await env.DB.prepare('UPDATE docs SET pinned_at = ? WHERE id = ? AND owner_id = ?')
@@ -326,9 +325,10 @@ export async function handleDeleteDoc(
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
-  const result = await env.DB.prepare('DELETE FROM docs WHERE id = ? AND owner_id = ?')
-    .bind(params.id, user.id)
-    .run()
-  if (result.meta.changes === 0) return errorResponse('not_found', 404)
+  const access = await getDocAccess<DocRow>(env, params.id, user)
+  if (!access) return errorResponse('not_found', 404)
+  if (access.role !== 'owner') return errorResponse('forbidden', 403)
+
+  await env.DB.prepare('DELETE FROM docs WHERE id = ? AND owner_id = ?').bind(params.id, user.id).run()
   return new Response(null, { status: 204 })
 }
