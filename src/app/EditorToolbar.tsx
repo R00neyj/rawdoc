@@ -36,6 +36,28 @@ export default function EditorToolbar({ onRunCommand }: EditorToolbarProps) {
     if (headingOpen) headingItemRefs.current[0]?.focus()
   }, [headingOpen])
 
+  // 드롭다운이 뜨는 위치 계산 — position: fixed 라 뷰포트 기준 좌표를 직접 준다.
+  // .editor-toolbar 의 overflow-x: auto 가 overflow-y 도 강제로 clip 시켜(CSS 스펙) absolute 로 두면 항상 잘렸다
+  useEffect(() => {
+    if (!headingMounted) return
+    const btn = headingBtnRef.current
+    const menu = headingMenuRef.current
+    if (!btn || !menu) return
+    const r = btn.getBoundingClientRect()
+    menu.style.left = `${r.left}px`
+    menu.style.top = `${r.bottom + 2}px`
+  }, [headingMounted])
+
+  // 아이콘 툴팁도 같은 이유로 position: fixed — 마우스 오버·포커스 시점에 좌표를 다시 잰다
+  function positionToolbarTooltip(wrapper: HTMLElement) {
+    const btn = wrapper.querySelector('button')
+    const tooltip = wrapper.querySelector<HTMLElement>('.icon-tooltip')
+    if (!btn || !tooltip) return
+    const r = btn.getBoundingClientRect()
+    tooltip.style.left = `${r.left + r.width / 2}px`
+    tooltip.style.top = `${r.bottom + 6}px`
+  }
+
   // 탭을 바꾸면 그 전 탭에서 열려 있던 제목 목록은 닫는다
   function selectTab(id: ToolbarTabId) {
     setActiveTab(id)
@@ -155,7 +177,12 @@ export default function EditorToolbar({ onRunCommand }: EditorToolbarProps) {
               )}
             </span>
           ) : (
-            <span className="icon-btn-wrap" key={item.id}>
+            <span
+              className="icon-btn-wrap"
+              key={item.id}
+              onMouseEnter={(e) => positionToolbarTooltip(e.currentTarget)}
+              onFocus={(e) => positionToolbarTooltip(e.currentTarget)}
+            >
               <button
                 type="button"
                 className="editor-toolbar-btn"

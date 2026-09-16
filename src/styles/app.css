@@ -110,8 +110,15 @@ svg {
   gap: 10px;
   min-width: 0;
   overflow-x: auto;
-  /* overflow-x 만 정하면 overflow-y 도 visible 대신 auto 로 계산돼(CSS 스펙) 세로로 살짝만 넘쳐도 스크롤바가 생긴다 */
+  /* overflow-x 만 정하면 overflow-y 도 visible 대신 auto 로 계산돼(CSS 스펙) 세로로 살짝만 넘쳐도 스크롤바가 생긴다.
+     안의 툴팁·드롭다운은 이 클리핑에 걸리지 않게 position: fixed 로 뺐다 (아래 두 규칙) */
   overflow-y: hidden;
+}
+
+/* 안의 툴팁·헤딩 드롭다운은 fixed 로 띄운다 — .editor-toolbar 의 overflow-y: hidden 에 안 잘리게.
+   좌표는 EditorToolbar.tsx 가 뜨는 시점에 getBoundingClientRect 로 인라인 style 에 넣는다 */
+.editor-toolbar .icon-tooltip {
+  position: fixed;
 }
 
 .editor-toolbar-tabs {
@@ -170,8 +177,10 @@ svg {
   white-space: nowrap;
 }
 
-/* 제목 목록 위치 — 트리거 바로 아래, 왼쪽 정렬 (item-menu-list 기본은 오른쪽 정렬이라 덮는다) */
+/* 제목 목록 위치 — 트리거 바로 아래, 왼쪽 정렬 (item-menu-list 기본은 오른쪽 정렬이라 덮는다).
+   position: fixed 로 .editor-toolbar 의 overflow-y: hidden 을 피한다. 좌표는 EditorToolbar.tsx 가 인라인 style 로 넣는다 */
 .editor-toolbar-heading .item-menu-list {
+  position: fixed;
   left: 0;
   right: auto;
   min-width: 120px;
