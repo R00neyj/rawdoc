@@ -1320,9 +1320,12 @@ body.sidebar-resizing {
   color: var(--muted);
 }
 
-/* Viewer 는 본문 보기 화면 전용 여백(--doc-pad-top·--doc-pad-bottom, 특히 50dvh)을 가진다 —
-   카드 안에 재사용할 때는 지운다 (F-235.md 2.2) */
+/* Viewer 는 본문 보기 화면 전용 여백(--doc-pad-top·--doc-pad-bottom, 특히 50dvh)과
+   height: 100%(앱 레이아웃 열 전체 높이를 채우는 용도)를 가진다 — 카드 안에 재사용할 때는
+   둘 다 지운다. height: 100% 를 그대로 두면 flex 로 늘어난 카드 높이를 다시 채우려 들어
+   대화상자가 화면 아래로 넘친다 (F-235.md 2.2, 2026-09-16 사용자 확인) */
 .help-card .viewer {
+  height: auto;
   padding: 0;
 }
 
