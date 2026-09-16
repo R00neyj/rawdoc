@@ -13,7 +13,7 @@ export default function HelpDialog({ open, onClose }: HelpDialogProps) {
   const titleId = 'help-title'
 
   return (
-    <Dialog open={open} onClose={onClose} titleId={titleId} size="wide">
+    <Dialog open={open} onClose={onClose} titleId={titleId} size="xwide">
       <h2 id={titleId}>도움말</h2>
       {HELP_GROUPS.map((group) => (
         <section key={group.group} className="help-group">

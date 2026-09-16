@@ -1176,6 +1176,11 @@ body.sidebar-resizing {
   width: min(520px, calc(100vw - 32px));
 }
 
+/* 도움말처럼 표·코드블록 예시가 들어가 520px 로는 답답한 대화상자용 (F-235) */
+.dialog--xwide {
+  width: min(720px, calc(100vw - 32px));
+}
+
 .dialog[open] {
   opacity: 1;
   transform: scale(1);

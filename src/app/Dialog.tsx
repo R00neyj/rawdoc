@@ -5,7 +5,7 @@ type DialogProps = {
   onClose: () => void
   titleId: string
   initialFocusRef?: RefObject<HTMLElement | null>
-  size?: 'default' | 'wide'
+  size?: 'default' | 'wide' | 'xwide'
   describedById?: string
   children: ReactNode
 }
@@ -60,7 +60,12 @@ export default function Dialog({ open, onClose, titleId, initialFocusRef, size =
   }, [onClose])
 
   return (
-    <dialog ref={dialogRef} className={size === 'wide' ? 'dialog dialog--wide' : 'dialog'} aria-labelledby={titleId} aria-describedby={describedById}>
+    <dialog
+      ref={dialogRef}
+      className={size === 'default' ? 'dialog' : `dialog dialog--${size}`}
+      aria-labelledby={titleId}
+      aria-describedby={describedById}
+    >
       {children}
     </dialog>
   )
