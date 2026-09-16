@@ -53,6 +53,9 @@ import {
   IconCallout,
   IconHorizontalRule,
   IconCodeBlock,
+  IconTabFormat,
+  IconTabBlock,
+  IconTabInsert,
 } from './icons'
 
 type IconComponent = ComponentType<{ size?: number; className?: string }>
@@ -78,7 +81,8 @@ export type ToolbarHeadingItem = {
 
 export type ToolbarItem = ToolbarCommandItem | ToolbarHeadingItem
 export type ToolbarTabId = 'format' | 'block' | 'insert'
-export type ToolbarTab = { id: ToolbarTabId; label: string; items: ToolbarItem[] }
+// Icon 은 좁은 창 탭바에서 글자 대신 쓴다 (F-233.md 3.6, 2026-09-16 재개정 "아이콘으로 공간 최소화")
+export type ToolbarTab = { id: ToolbarTabId; label: string; Icon: IconComponent; items: ToolbarItem[] }
 
 const headingLevels: ToolbarHeadingLevel[] = [1, 2, 3, 4, 5, 6].map((level) => ({
   level,
@@ -91,6 +95,7 @@ export const toolbarTabs: ToolbarTab[] = [
   {
     id: 'format',
     label: '서식',
+    Icon: IconTabFormat,
     items: [
       { kind: 'command', id: 'wikilink', label: '링크 추가', Icon: IconAddLink, run: insertWikiLink },
       { kind: 'command', id: 'link', label: '외부 링크 추가', Icon: IconExternalLink, run: insertLink },
@@ -107,6 +112,7 @@ export const toolbarTabs: ToolbarTab[] = [
   {
     id: 'block',
     label: '단락',
+    Icon: IconTabBlock,
     items: [
       { kind: 'command', id: 'bullet', label: '글머리 목록', Icon: IconBulletList, run: setBulletList },
       { kind: 'command', id: 'ordered', label: '숫자 목록', Icon: IconOrderedList, run: setOrderedList },
@@ -119,6 +125,7 @@ export const toolbarTabs: ToolbarTab[] = [
   {
     id: 'insert',
     label: '삽입',
+    Icon: IconTabInsert,
     items: [
       { kind: 'command', id: 'footnote', label: '각주', Icon: IconSuperscript, run: insertFootnote },
       { kind: 'command', id: 'table', label: '표', Icon: IconTable, run: insertTable },

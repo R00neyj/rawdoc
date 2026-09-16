@@ -114,23 +114,51 @@ export default function EditorToolbar({ onRunCommand, narrow }: EditorToolbarPro
         aria-label="서식 명령 탭"
         onKeyDown={handleTabKeyDown}
       >
-        {toolbarTabs.map((t, i) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            id={`editor-toolbar-tab-${t.id}`}
-            aria-selected={activeTab === t.id}
-            aria-controls={`editor-toolbar-panel-${t.id}`}
-            tabIndex={activeTab === t.id ? 0 : -1}
-            ref={(el) => {
-              tabRefs.current[i] = el
-            }}
-            onClick={() => selectTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
+        {toolbarTabs.map((t, i) =>
+          narrow ? (
+            // 좁은 창은 글자 대신 아이콘으로 폭을 줄이고, 가로 스크롤 중에도 항상 보이게 왼쪽에 고정한다 (F-233.md 3.6 재개정)
+            <span
+              key={t.id}
+              className="icon-btn-wrap editor-toolbar-tab-wrap"
+              onMouseEnter={(e) => positionToolbarTooltip(e.currentTarget)}
+              onFocus={(e) => positionToolbarTooltip(e.currentTarget)}
+            >
+              <button
+                type="button"
+                role="tab"
+                className="editor-toolbar-btn"
+                id={`editor-toolbar-tab-${t.id}`}
+                aria-selected={activeTab === t.id}
+                aria-controls={`editor-toolbar-panel-${t.id}`}
+                aria-label={t.label}
+                tabIndex={activeTab === t.id ? 0 : -1}
+                ref={(el) => {
+                  tabRefs.current[i] = el
+                }}
+                onClick={() => selectTab(t.id)}
+              >
+                <t.Icon size={18} />
+              </button>
+              <IconTooltip text={t.label} />
+            </span>
+          ) : (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              id={`editor-toolbar-tab-${t.id}`}
+              aria-selected={activeTab === t.id}
+              aria-controls={`editor-toolbar-panel-${t.id}`}
+              tabIndex={activeTab === t.id ? 0 : -1}
+              ref={(el) => {
+                tabRefs.current[i] = el
+              }}
+              onClick={() => selectTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ),
+        )}
       </div>
       <div
         className="editor-toolbar-items"

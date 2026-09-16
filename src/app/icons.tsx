@@ -56,6 +56,9 @@ import tableSvg from '@material-symbols/svg-400/outlined/table.svg?raw'
 import stickyNote2Svg from '@material-symbols/svg-400/outlined/sticky_note_2.svg?raw'
 import horizontalRuleSvg from '@material-symbols/svg-400/outlined/horizontal_rule.svg?raw'
 import codeBlocksSvg from '@material-symbols/svg-400/outlined/code_blocks.svg?raw'
+import textFormatSvg from '@material-symbols/svg-400/outlined/text_format.svg?raw'
+import subjectSvg from '@material-symbols/svg-400/outlined/subject.svg?raw'
+import addSvg from '@material-symbols/svg-400/outlined/add.svg?raw'
 import helpSvg from '@material-symbols/svg-400/outlined/help.svg?raw'
 
 type IconProps = { size?: number; className?: string }
@@ -142,6 +145,10 @@ export const IconTable = makeIcon(tableSvg)
 export const IconCallout = makeIcon(stickyNote2Svg)
 export const IconHorizontalRule = makeIcon(horizontalRuleSvg)
 export const IconCodeBlock = makeIcon(codeBlocksSvg)
+// 모바일 탭바 아이콘 — 서식·단락·삽입 탭 자체(F-233.md 3.6, 2026-09-16 재개정)
+export const IconTabFormat = makeIcon(textFormatSvg)
+export const IconTabBlock = makeIcon(subjectSvg)
+export const IconTabInsert = makeIcon(addSvg)
 
 // 사이드바 `도움말` 항목 (F-235.md 1장)
 export const IconHelp = makeIcon(helpSvg)

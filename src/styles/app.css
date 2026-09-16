@@ -142,6 +142,14 @@ svg {
 /* 좁은 창도 줄바꿈 없이 한 줄 — 넘치면 .editor-toolbar 기본 overflow-x: auto 로 가로 스크롤
    (2026-09-16 개정, F-233 3.6 — 이전엔 탭 줄/아이콘 줄을 세로로 나눠 2~3줄로 접었다) */
 
+/* 좁은 창 탭은 아이콘만, 가로 스크롤 중에도 왼쪽 고정 — 배경을 깔아 뒤로 스크롤되는 줄을 가린다 (F-233 3.6 재개정) */
+.editor-toolbar--narrow .editor-toolbar-tabs {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
+}
+
 /* 탭 선택 표시 — .seg 재사용, radiogroup 대신 tablist 라 aria-selected 로 맞춘 규칙만 더한다 (F-153 2.1) */
 .editor-toolbar-tabs button[aria-selected='true'] {
   background: color-mix(in srgb, var(--ink) 10%, transparent);
