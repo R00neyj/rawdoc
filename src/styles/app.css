@@ -131,6 +131,27 @@ svg {
   gap: 2px;
 }
 
+/* 좁은 창 탭바 줄 — 상단바 바로 밑, 상단바와 같은 바탕·테두리로 이어 보이게 (사용자 2026-09-16) */
+.editor-toolbar-row {
+  flex: none;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel);
+}
+
+/* 좁은 창은 가로 스크롤 대신 탭 줄 밑으로 아이콘이 접혀 2줄까지 보인다 */
+.editor-toolbar--narrow {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  overflow: visible;
+}
+
+.editor-toolbar--narrow .editor-toolbar-items {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
 /* 탭 선택 표시 — .seg 재사용, radiogroup 대신 tablist 라 aria-selected 로 맞춘 규칙만 더한다 (F-153 2.1) */
 .editor-toolbar-tabs button[aria-selected='true'] {
   background: color-mix(in srgb, var(--ink) 10%, transparent);

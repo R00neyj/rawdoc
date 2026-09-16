@@ -1872,14 +1872,14 @@ export default function App() {
   const isEmpty = bootPhase === 'ready' && currentDocId === null
   const showEditor = bootPhase === 'ready' && !isEmpty
 
-  // 탭바 표시 조건 (F-233 3.1) — 자리는 항상 유지, 조건에 안 맞으면 안 그린다
+  // 탭바 표시 조건 (F-233 3.1) — 자리는 항상 유지, 조건에 안 맞으면 안 그린다.
+  // 좁은 창도 보여준다(2026-09-16 사용자 "모바일일때가 툴바 더 필요할거임") — TopBar 가 narrow 면 상단바 밑 자기 줄에 그린다
   const showToolbar =
     toolbarPref === 'on' &&
     !isEmpty &&
     !sharedDoc &&
     !isReadOnlyDoc &&
-    (viewMode === 'live' || viewMode === 'raw') &&
-    !narrow
+    (viewMode === 'live' || viewMode === 'raw')
 
   // 상단바 — 좁은 창은 앞 묶음을 담아 창 전체 위에, 넓은 창은 앞 묶음 없이 메인 열 안에만 (F-159 2.1)
   const topBar = (

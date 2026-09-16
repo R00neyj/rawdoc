@@ -71,7 +71,7 @@ test.describe('F-233 A4 제목 드롭다운', () => {
 })
 
 test.describe('F-233 A5 숨김 조건', () => {
-  test('보기 모드·좁은 창에서는 탭바가 안 보이고, 되돌리면 다시 보인다', async ({ page }) => {
+  test('보기 모드에서는 탭바가 안 보이고, 되돌리면 다시 보인다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '내용\n' })
     const toolbar = page.locator('.editor-toolbar')
@@ -81,11 +81,24 @@ test.describe('F-233 A5 숨김 조건', () => {
     await expect(toolbar).toHaveCount(0)
     await setViewMode(page, 'live')
     await expect(toolbar).toBeVisible()
+  })
+
+  test('좁은 창은 상단바 밑 자기 줄에 접히는 모양(--narrow)으로 보인다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+    const toolbar = page.locator('.editor-toolbar')
+    await expect(toolbar).toBeVisible()
+    await expect(toolbar).not.toHaveClass(/editor-toolbar--narrow/)
 
     await resizeWindow(page, 900)
-    await expect(toolbar).toHaveCount(0)
+    await expect(toolbar).toBeVisible()
+    await expect(toolbar).toHaveClass(/editor-toolbar--narrow/)
+    await expect(page.locator('.editor-toolbar-row .editor-toolbar')).toHaveCount(1)
+    await expect(page.locator('.topbar-spacer .editor-toolbar')).toHaveCount(0)
+
     await resizeWindow(page, 1280)
     await expect(toolbar).toBeVisible()
+    await expect(toolbar).not.toHaveClass(/editor-toolbar--narrow/)
   })
 
   test('홈 화면(문서 미선택)에서는 탭바가 안 보인다', async ({ page }) => {

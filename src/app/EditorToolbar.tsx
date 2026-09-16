@@ -8,9 +8,11 @@ import { toolbarTabs, type ToolbarTabId } from './toolbarConfig'
 
 type EditorToolbarProps = {
   onRunCommand: (cmd: StateCommand) => void
+  // 좁은 창은 상단바 밑 자기 줄에 그려 탭·아이콘 줄이 접혀 2줄까지 보인다 (App.tsx·TopBar.tsx 가 넘긴다)
+  narrow?: boolean
 }
 
-export default function EditorToolbar({ onRunCommand }: EditorToolbarProps) {
+export default function EditorToolbar({ onRunCommand, narrow }: EditorToolbarProps) {
   const [activeTab, setActiveTab] = useState<ToolbarTabId>('format')
   const [headingOpen, setHeadingOpen] = useState(false)
   const { mounted: headingMounted, state: headingState } = usePresence(headingOpen) // 나타나고 사라지는 전환 (F-172.md 2.2)
@@ -105,7 +107,7 @@ export default function EditorToolbar({ onRunCommand }: EditorToolbarProps) {
   }
 
   return (
-    <div className="editor-toolbar">
+    <div className={narrow ? 'editor-toolbar editor-toolbar--narrow' : 'editor-toolbar'}>
       <div
         className="seg editor-toolbar-tabs"
         role="tablist"

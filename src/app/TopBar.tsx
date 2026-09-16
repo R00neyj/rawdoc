@@ -65,56 +65,64 @@ export default function TopBar({
   onRunToolbarCommand,
 }: TopBarProps) {
   return (
-    <header className="topbar">
-      {narrow && (
-        <SidebarHead
-          variant="topbar"
-          expanded={sidebarOpen}
-          onToggleSidebar={onToggleSidebar}
-          toggleButtonRef={toggleButtonRef}
+    <>
+      <header className="topbar">
+        {narrow && (
+          <SidebarHead
+            variant="topbar"
+            expanded={sidebarOpen}
+            onToggleSidebar={onToggleSidebar}
+            toggleButtonRef={toggleButtonRef}
+          />
+        )}
+        <div className="topbar-spacer">
+          {showToolbar && !narrow && <EditorToolbar onRunCommand={onRunToolbarCommand} />}
+        </div>
+        <div className="seg view-mode-seg" role="group" aria-label="보기 모드">
+          {VIEW_MODES.map((mode) => (
+            <span className="icon-btn-wrap" key={mode.value}>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={mode.label}
+                aria-pressed={viewMode === mode.value}
+                disabled={viewModeDisabled}
+                onClick={() => onChangeViewMode(mode.value)}
+              >
+                <mode.Icon size={18} />
+              </button>
+              <IconTooltip text={mode.label} />
+            </span>
+          ))}
+        </div>
+        <ShareMenu
+          disabled={shareDisabled}
+          getShareDoc={getShareDoc}
+          onNotice={onShareNotice}
+          linkDocId={shareLinkDocId}
+          onBeforeLinkAction={onBeforeShareLinkAction}
+          onInvite={onInvite}
         />
+        <span className="icon-btn-wrap">
+          <button
+            type="button"
+            className="icon-btn export-btn"
+            aria-label=".md 파일로 내보내기"
+            disabled={exportDisabled}
+            onClick={onExportDoc}
+          >
+            <IconDownload size={18} />
+          </button>
+          <IconTooltip text=".md 파일로 내보내기" align="end" />
+        </span>
+        <AccountMenu account={account} onBeforeNavigate={onAccountBeforeNavigate} />
+      </header>
+      {/* 좁은 창은 탭바를 상단바 밑 줄로 뺀다 — 아이콘 줄이 세로로도 접혀(2줄) 가로 스크롤 없이 다 보인다 (사용자 2026-09-16 "모바일일때가 툴바 더 필요할거임") */}
+      {narrow && showToolbar && (
+        <div className="editor-toolbar-row">
+          <EditorToolbar onRunCommand={onRunToolbarCommand} narrow />
+        </div>
       )}
-      <div className="topbar-spacer">
-        {showToolbar && <EditorToolbar onRunCommand={onRunToolbarCommand} />}
-      </div>
-      <div className="seg view-mode-seg" role="group" aria-label="보기 모드">
-        {VIEW_MODES.map((mode) => (
-          <span className="icon-btn-wrap" key={mode.value}>
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label={mode.label}
-              aria-pressed={viewMode === mode.value}
-              disabled={viewModeDisabled}
-              onClick={() => onChangeViewMode(mode.value)}
-            >
-              <mode.Icon size={18} />
-            </button>
-            <IconTooltip text={mode.label} />
-          </span>
-        ))}
-      </div>
-      <ShareMenu
-        disabled={shareDisabled}
-        getShareDoc={getShareDoc}
-        onNotice={onShareNotice}
-        linkDocId={shareLinkDocId}
-        onBeforeLinkAction={onBeforeShareLinkAction}
-        onInvite={onInvite}
-      />
-      <span className="icon-btn-wrap">
-        <button
-          type="button"
-          className="icon-btn export-btn"
-          aria-label=".md 파일로 내보내기"
-          disabled={exportDisabled}
-          onClick={onExportDoc}
-        >
-          <IconDownload size={18} />
-        </button>
-        <IconTooltip text=".md 파일로 내보내기" align="end" />
-      </span>
-      <AccountMenu account={account} onBeforeNavigate={onAccountBeforeNavigate} />
-    </header>
+    </>
   )
 }
