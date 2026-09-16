@@ -74,6 +74,9 @@ function buildCopyButton(getCode: () => string): HTMLButtonElement {
 
 type BreadcrumbEntry = { id: string; name: string }
 
+// 보기 모드·공유 화면 우클릭 메뉴가 열릴 정보 (specs/features/F-170.md 2·3.3장)
+export type ViewContextMenuInfo = { x: number; y: number; hasSelection: boolean; container: HTMLElement | null }
+
 type ViewerProps = {
   html: string
   // 본문 맨 위 제목 (F-217.md 2.1) — 생략하면(공유·공개 보기 화면, 이미 자체 제목 줄이 있다) 그리지 않는다
@@ -85,6 +88,8 @@ type ViewerProps = {
   resolveAttachment?: ResolveAttachment
   missingImageText?: string
   codeCopy?: boolean
+  // 생략하면(F-210 공개 보기) 우클릭은 브라우저 기본 메뉴 그대로 (F-170.md 3.3)
+  onContextMenu?: (info: ViewContextMenuInfo) => void
   ref?: Ref<HTMLDivElement | null>
 }
 
@@ -99,6 +104,7 @@ export default function Viewer({
   resolveAttachment,
   missingImageText,
   codeCopy,
+  onContextMenu,
   ref,
 }: ViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -182,12 +188,25 @@ export default function Viewer({
     if (onOpenWikiLink && anchor.dataset.wikilink) onOpenWikiLink(anchor.dataset.wikilink)
   }
 
+  // 우클릭 메뉴 (F-170.md 2·3.3장) — Shift+우클릭은 브라우저 기본 메뉴 그대로 둔다
+  function handleContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!onContextMenu || event.shiftKey) return
+    event.preventDefault()
+    const root = containerRef.current
+    const sel = window.getSelection()
+    const hasSelection = Boolean(
+      sel && !sel.isCollapsed && root && sel.anchorNode && root.contains(sel.anchorNode) && sel.focusNode && root.contains(sel.focusNode),
+    )
+    onContextMenu({ x: event.clientX, y: event.clientY, hasSelection, container: root })
+  }
+
   return (
     <div
       ref={setRefs}
       className={`viewer${codeCopy ? ' viewer--code-copy' : ''}`}
       tabIndex={0}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
     >
       {/* 폴더 안일 때만 제목 위에 경로 (F-234.md 3.4) — 제목 자체와 같은 조건(title !== undefined) */}
       {title !== undefined && breadcrumb && breadcrumb.length > 0 && (

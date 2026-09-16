@@ -75,6 +75,16 @@ const activeRange = new WeakMap<EditorView, ActiveRangeEntry>()
 // 주 EditorView → "표 밖 클릭 해제" 용으로 등록해 둔 document 캡처 리스너
 const outsideClickHandlers = new WeakMap<EditorView, (event: MouseEvent) => void>()
 
+// 칸 하위 에디터 우클릭 메뉴 콜백 — createEditor.ts 가 주 EditorView 하나당 하나씩 등록한다 (F-170.md 3.2)
+export type CellContextMenuInfo = { x: number; y: number; place: 'cell'; view: EditorView; mainView: EditorView }
+export type CellContextMenuHandler = (info: CellContextMenuInfo) => void
+const cellContextMenuHandlers = new WeakMap<EditorView, CellContextMenuHandler>()
+
+export function setCellContextMenuHandler(mainView: EditorView, handler: CellContextMenuHandler | undefined): void {
+  if (handler) cellContextMenuHandlers.set(mainView, handler)
+  else cellContextMenuHandlers.delete(mainView)
+}
+
 // 지금 이 주 view 의 활성 칸이 한글 조합 중인가 (F-125 2.2 "재계산 보류·따라잡기는
 // composition.ts 규칙을 따른다"). 조합은 칸의 하위 EditorView(자기 DOM)에서 일어나서
 // 주 view 의 composing 은 그동안 계속 false 다 — blocks.ts 의 blockPreview 는 주
@@ -403,6 +413,7 @@ function startEdit(
             }, 0)
           },
           keydown: (event, view) => cellKeydown(mainView, wrap, view, event),
+          contextmenu: (event, cv) => cellContextMenu(mainView, cv, event),
           // 이 칸(하위 EditorView)에서 조합이 끝나면 주 view 에 forceRecalc 를 보낸다
           // (composition.js 규칙) — 조합 중 blockPreview 가 미뤄뒀던 위젯 재계산을
           // 여기서 따라잡는다. isCellComposing 이 조합 중임을 주 view 쪽에 알리는
@@ -554,6 +565,34 @@ function cellKeydown(mainView: EditorView, wrap: HTMLElement, cellView: EditorVi
   }
 
   return false
+}
+
+// 칸 하위 에디터 우클릭 (specs/features/F-170.md 2·3.2장) — Shift+우클릭·조합 중은 기본 메뉴
+function cellContextMenu(mainView: EditorView, cellView: EditorView, event: MouseEvent): boolean {
+  const handler = cellContextMenuHandlers.get(mainView)
+  if (!handler) return false
+  if (event.shiftKey || isComposing(cellView)) return false
+  event.preventDefault()
+
+  const fromKeyboard = event.button !== 2
+  const pos = fromKeyboard
+    ? cellView.state.selection.main.head
+    : cellView.posAtCoords({ x: event.clientX, y: event.clientY }) ?? cellView.state.selection.main.head
+  const main = cellView.state.selection.main
+  if (pos < main.from || pos > main.to) cellView.dispatch({ selection: { anchor: pos } })
+
+  let x = event.clientX
+  let y = event.clientY
+  if (fromKeyboard) {
+    const coords = cellView.coordsAtPos(cellView.state.selection.main.head)
+    if (coords) {
+      x = coords.left
+      y = coords.bottom
+    }
+  }
+
+  handler({ x, y, place: 'cell', view: cellView, mainView })
+  return true
 }
 
 // 표시용 mark 이름 → CSS 클래스(편집 모드 인라인 프리뷰와 같다, F-140 3.2)

@@ -10,6 +10,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react'
 import type { EditorState, StateCommand } from '@codemirror/state'
+import { EditorView } from '@codemirror/view'
 
 import { createMemoryStore } from '../storage/memoryStore'
 import { createIdbStore } from '../storage/idbStore'
@@ -38,11 +39,15 @@ import { attachImages } from './attachImages'
 import { cleanupUnusedAttachments, scheduleAttachmentGc } from './attachmentGc'
 import DropOverlay from './DropOverlay'
 import Editor, { type EditorHandle } from '../editor/Editor'
+import type { EditorContextMenuInfo } from '../editor/createEditor'
+import { insertTable } from '../editor/insertCommands'
 import { countChars, countWords, cursorInfo } from '../editor/stats'
-import Viewer from '../viewer/Viewer'
+import Viewer, { type ViewContextMenuInfo } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { decodeShare, type ShareDoc } from '../lib/shareCodec'
 import Outline from './Outline'
+import ContextMenu from './ContextMenu'
+import { buildEditorContextMenu, buildViewContextMenu, type ContextMenuNode, type MenuItemNode } from './contextMenuItems'
 
 import { useInstallPrompt } from '../pwa/useInstallPrompt'
 import { useAppUpdate } from '../pwa/useAppUpdate'
@@ -70,6 +75,17 @@ type DocMeta = Pick<Doc, 'id' | 'title' | 'updatedAt' | 'folderId' | 'pinnedAt' 
 type OpenDoc = { id: string; content: string; lineEnding: LineEnding }
 type Stats = { line: number; col: number; charCount: number; wordCount: number }
 type AppNotice = NoticeWithAction & { id: number }
+
+// 우클릭 메뉴 상태 (specs/features/F-170.md) — 'editor'|'cell' 은 view·mainView, 'view' 는 container 를 쓴다
+type ContextMenuState = {
+  x: number
+  y: number
+  place: 'editor' | 'cell' | 'view'
+  view: EditorView | null
+  mainView: EditorView | null
+  container: HTMLElement | null
+  nodes: ContextMenuNode[]
+}
 
 function stripContent(doc: Doc): DocMeta {
   return {
@@ -200,6 +216,8 @@ export default function App() {
   const [account, setAccount] = useState<AccountState>({ state: 'offline' })
   // 서버 저장소 동기화 표시 (F-207.md 2.5) — server 저장소가 아니면 undefined
   const [syncState, setSyncState] = useState<SyncState | undefined>(undefined)
+  // 우클릭 메뉴 상태 (specs/features/F-170.md) — view·container 는 place 에 따라 하나만 쓴다
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
 
   const sidebarRef = useRef<HTMLElement | null>(null)
   const appShellRef = useRef<HTMLDivElement | null>(null)
@@ -900,6 +918,7 @@ export default function App() {
     if (openDoc?.id !== currentDocId) return
     editorRef.current?.setBreadcrumb(currentBreadcrumb, onNavigateFolder)
   }, [openDoc, currentDocId, currentBreadcrumb, onNavigateFolder])
+
 
   // view 권한 문서를 열면 알림 띠를 보인다 (F-212.md 2.4) — 문서를 열 때 1회
   const notifiedViewDocRef = useRef<string | null>(null)
@@ -1628,6 +1647,182 @@ export default function App() {
     view.focus()
   }, [])
 
+  // ----- 우클릭 메뉴 (specs/features/F-170.md) -----
+
+  // 주 에디터·표 칸 하위 에디터 우클릭 — createEditor.ts handle.onContextMenu() 구독으로 온다
+  const handleEditorContextMenu = useCallback((info: EditorContextMenuInfo) => {
+    const hasSelection = !info.view.state.selection.main.empty
+    const nodes = buildEditorContextMenu({ place: info.place, state: info.view.state, hasSelection })
+    setContextMenu({ x: info.x, y: info.y, place: info.place, view: info.view, mainView: info.mainView, container: null, nodes })
+  }, [])
+
+  // 보기 모드·공유 화면 우클릭 (3.3) — Viewer.tsx 가 넘긴다
+  const handleViewContextMenu = useCallback((info: ViewContextMenuInfo) => {
+    const nodes = buildViewContextMenu({ hasSelection: info.hasSelection })
+    setContextMenu({ x: info.x, y: info.y, place: 'view', view: null, mainView: null, container: info.container, nodes })
+  }, [])
+
+  // 우클릭 메뉴 구독 (F-170.md) — Editor.tsx 는 손대지 않고 handle.onContextMenu() 로 나중에 등록한다
+  useLayoutEffect(() => {
+    if (openDoc?.id !== currentDocId) return
+    return editorRef.current?.onContextMenu(handleEditorContextMenu)
+  }, [openDoc, currentDocId, handleEditorContextMenu])
+
+  // 창 크기 변경·흐림·편집 영역 스크롤로 닫는다 (F-170.md 5장) — 포커스는 옮기지 않는다
+  useEffect(() => {
+    if (!contextMenu) return
+    function close() {
+      setContextMenu(null)
+    }
+    window.addEventListener('resize', close)
+    window.addEventListener('blur', close)
+    const scroller = contextMenu.place === 'view' ? contextMenu.container : contextMenu.mainView?.scrollDOM ?? null
+    scroller?.addEventListener('scroll', close)
+    return () => {
+      window.removeEventListener('resize', close)
+      window.removeEventListener('blur', close)
+      scroller?.removeEventListener('scroll', close)
+    }
+  }, [contextMenu])
+
+  // Esc(1차)로 닫힐 때만 원래 에디터로 포커스를 돌리고 커서가 보이게 스크롤한다 (F-170.md 5장)
+  function closeContextMenu(opts?: { returnFocus?: boolean }) {
+    const cm = contextMenu
+    setContextMenu(null)
+    if (opts?.returnFocus && cm?.view) {
+      cm.view.focus()
+      cm.view.dispatch({ effects: EditorView.scrollIntoView(cm.view.state.selection.main.head) })
+    }
+  }
+
+  function refocusContextMenuTarget(cm: ContextMenuState) {
+    if (!cm.view) return
+    cm.view.focus()
+    cm.view.dispatch({ effects: EditorView.scrollIntoView(cm.view.state.selection.main.head) })
+  }
+
+  function contextMenuSelectionText(view: EditorView): string {
+    // CM6 Ctrl+C 와 같은 글자 — 줄 구분 \n (F-170.md 4장)
+    return view.state.selection.ranges.map((r) => view.state.sliceDoc(r.from, r.to)).join('\n')
+  }
+
+  async function copyContextMenuSelection(cm: ContextMenuState): Promise<boolean> {
+    const text = cm.place === 'view' ? window.getSelection()?.toString() ?? '' : cm.view ? contextMenuSelectionText(cm.view) : ''
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      showNotice({ type: 'error', message: '복사하지 못했습니다. 브라우저 권한을 확인하세요.' })
+      return false
+    }
+  }
+
+  async function cutContextMenuSelection(cm: ContextMenuState) {
+    if (!cm.view) return
+    const ok = await copyContextMenuSelection(cm)
+    if (!ok) return
+    const view = cm.view
+    view.dispatch({
+      changes: view.state.selection.ranges.map((r) => ({ from: r.from, to: r.to, insert: '' })),
+      userEvent: 'delete.cut',
+    })
+  }
+
+  function insertTextAtContextMenuSelection(view: EditorView, text: string) {
+    view.dispatch({
+      changes: view.state.selection.ranges.map((r) => ({ from: r.from, to: r.to, insert: text })),
+      userEvent: 'input.paste',
+    })
+  }
+
+  // 합성 paste 이벤트를 주 에디터 contentDOM 에 보내 F-156 의 imageInsert.ts 붙여넣기로 넘긴다 (F-170.md 4장)
+  function forwardImagePasteToEditor(view: EditorView, file: File) {
+    const dt = new DataTransfer()
+    dt.items.add(file)
+    view.contentDOM.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+  }
+
+  async function pasteContextMenuClipboard(cm: ContextMenuState) {
+    if (!cm.view) return
+    let items: ClipboardItem[]
+    try {
+      items = await navigator.clipboard.read()
+    } catch {
+      showNotice({ type: 'error', message: '클립보드를 읽지 못했습니다. Ctrl+V 로 붙여넣으세요.' })
+      return
+    }
+    for (const it of items) {
+      if (it.types.includes('text/plain')) {
+        const blob = await it.getType('text/plain')
+        insertTextAtContextMenuSelection(cm.view, await blob.text())
+        return
+      }
+    }
+    if (cm.place === 'editor') {
+      for (const it of items) {
+        const imageType = it.types.find((t) => t.startsWith('image/'))
+        if (imageType) {
+          const blob = await it.getType(imageType)
+          forwardImagePasteToEditor(cm.view, new File([blob], `pasted.${imageType.split('/')[1] ?? 'png'}`, { type: imageType }))
+          return
+        }
+      }
+    }
+  }
+
+  async function pasteContextMenuPlainText(cm: ContextMenuState) {
+    if (!cm.view) return
+    let text: string
+    try {
+      text = await navigator.clipboard.readText()
+    } catch {
+      showNotice({ type: 'error', message: '클립보드를 읽지 못했습니다. Ctrl+V 로 붙여넣으세요.' })
+      return
+    }
+    insertTextAtContextMenuSelection(cm.view, text)
+  }
+
+  function selectAllContextMenuTarget(cm: ContextMenuState) {
+    if (cm.place === 'view') {
+      if (!cm.container) return
+      const sel = window.getSelection()
+      const range = document.createRange()
+      range.selectNodeContents(cm.container)
+      sel?.removeAllRanges()
+      sel?.addRange(range)
+      return
+    }
+    cm.view?.dispatch({ selection: { anchor: 0, head: cm.view.state.doc.length } })
+  }
+
+  // 편집 모드에서 표 삽입 뒤에는 새 표의 머리 첫 칸 편집을 시작한다 (F-170.md 3.1 A6)
+  function runContextMenuCommand(cmd: StateCommand, cm: ContextMenuState) {
+    if (!cm.view) return
+    const ok = cmd(cm.view)
+    if (!ok) return
+    if (cmd === insertTable && cm.place === 'editor' && cm.view.dom.dataset.view === 'live') {
+      editorRef.current?.enterTableAtCursor()
+      return
+    }
+    refocusContextMenuTarget(cm)
+  }
+
+  async function handleContextMenuSelect(node: MenuItemNode) {
+    const cm = contextMenu
+    setContextMenu(null)
+    if (!cm) return
+    if (node.action === 'command') {
+      if (node.run) runContextMenuCommand(node.run, cm)
+      return
+    }
+    if (node.action === 'clipboard-cut') await cutContextMenuSelection(cm)
+    else if (node.action === 'clipboard-copy') await copyContextMenuSelection(cm)
+    else if (node.action === 'clipboard-paste') await pasteContextMenuClipboard(cm)
+    else if (node.action === 'clipboard-paste-text') await pasteContextMenuPlainText(cm)
+    else if (node.action === 'select-all') selectAllContextMenuTarget(cm)
+    refocusContextMenuTarget(cm)
+  }
+
   function changeViewMode(mode: string) {
     const v = mode as 'live' | 'raw' | 'view'
     setViewMode(v)
@@ -1783,7 +1978,7 @@ export default function App() {
           )}
           {sharedDoc && (
             <div className="content-area">
-              <SharedView sharedDoc={sharedDoc} onImport={importSharedDoc} onClose={closeSharedDoc} />
+              <SharedView sharedDoc={sharedDoc} onImport={importSharedDoc} onClose={closeSharedDoc} onContextMenu={handleViewContextMenu} />
             </div>
           )}
           {!sharedDoc && isEmpty && (
@@ -1828,6 +2023,7 @@ export default function App() {
                   onNavigateFolder={onNavigateFolder}
                   onOpenWikiLink={handleOpenWikiLink}
                   resolveAttachment={resolveAttachment}
+                  onContextMenu={handleViewContextMenu}
                 />
               )}
               {openDoc?.id === currentDocId && (
@@ -1855,6 +2051,17 @@ export default function App() {
         </div>
       </div>
 
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          nodes={contextMenu.nodes}
+          onSelect={handleContextMenuSelect}
+          onClose={closeContextMenu}
+          // 표 칸 하위 에디터는 blur 되면 편집을 끝내 버려(tableWidget.ts) 메뉴가 실제 DOM 포커스를 가져가면 안 된다
+          keepSourceFocus={contextMenu.place === 'cell'}
+        />
+      )}
       <ConfirmDeleteDialog target={deleteTarget} onCancel={cancelDelete} onConfirm={confirmDelete} />
       <MoveDocDialog
         doc={moveDocTarget}

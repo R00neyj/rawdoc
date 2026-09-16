@@ -5,7 +5,7 @@ import type { Extension } from '@codemirror/state'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { dropCursor, EditorView, keymap, lineNumbers } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { indentUnit } from '@codemirror/language'
+import { indentUnit, syntaxTree } from '@codemirror/language'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 
 import { autoPair } from './autoPair'
@@ -31,6 +31,7 @@ import { fenceLinePreview } from './preview/lines'
 import { setWikiTitlesEffect, wikiTitlesField } from './preview/wikiLinks'
 import type { OnOpenWikiLink } from './preview/wikiLinks'
 import type { ResolveAttachment } from './preview/blocks'
+import { enterTableFromKeyboard, setCellContextMenuHandler } from './preview/tableWidget'
 import { wikiComplete } from './wikiComplete'
 
 // 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
@@ -90,6 +91,51 @@ const dropFileGuard = EditorView.domEventHandlers({
   },
 })
 
+// 우클릭 메뉴가 뜰 자리·대상 (F-170.md 2·5장) — view 는 명령을 실행할 뷰, mainView 는 항상 주 에디터
+export type EditorContextMenuInfo = {
+  x: number
+  y: number
+  place: 'editor' | 'cell'
+  view: EditorView
+  mainView: EditorView
+}
+export type OnEditorContextMenu = (info: EditorContextMenuInfo) => void
+
+// 우클릭 지점이 현재 선택 밖이면 커서를 옮긴다 — 키보드로 연 메뉴(Shift+F10 등)는 button 이 2 가 아니다 (F-170.md 2장)
+function resolveContextMenuTarget(view: EditorView, event: MouseEvent): { pos: number; x: number; y: number } {
+  const fromKeyboard = event.button !== 2
+  const pos = fromKeyboard
+    ? view.state.selection.main.head
+    : view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head
+
+  const main = view.state.selection.main
+  if (pos < main.from || pos > main.to) view.dispatch({ selection: { anchor: pos } })
+
+  let x = event.clientX
+  let y = event.clientY
+  if (fromKeyboard) {
+    const coords = view.coordsAtPos(view.state.selection.main.head)
+    if (coords) {
+      x = coords.left
+      y = coords.bottom
+    }
+  }
+  return { pos, x, y }
+}
+
+// 주 에디터(.cm-content) 우클릭 — Shift+우클릭·한글 조합 중은 기본 메뉴 그대로 둔다(F-170.md 2장)
+function editorContextMenuHandler(notify: (info: EditorContextMenuInfo) => void): Extension {
+  return EditorView.domEventHandlers({
+    contextmenu(event, view) {
+      if (event.shiftKey || isComposing(view)) return false
+      event.preventDefault()
+      const { x, y } = resolveContextMenuTarget(view, event)
+      notify({ x, y, place: 'editor', view, mainView: view })
+      return true
+    },
+  })
+}
+
 // 좌우 여백(.cm-content·.cm-gutters 밖, F-143 3.8) 클릭 시 포커스만 없앤다(F-146 3.1) — EditorView.domEventHandlers 는 contentDOM 에만 붙어 scroller 자신을 target 으로 한 클릭엔 안 닿아 view.scrollDOM 에 원시 리스너를 붙인다. 막지 않으면 tabIndex=-1 인 scroller 가 기본 동작으로 포커스를 먹어 view.dom 안에 남는다
 function attachMarginClickGuard(view: EditorView): () => void {
   const handler = (event: MouseEvent) => {
@@ -143,6 +189,8 @@ type CreateEditorOptions = {
   onImageFiles?: OnImageFiles
   // 편집 모드 이미지 블록 위젯이 첨부를 읽는 콜백 (F-157.md 2.2)
   resolveAttachment?: ResolveAttachment
+  // 우클릭 메뉴 열기 (F-170.md 2·5장) — 주 에디터·표 칸 하위 에디터 공통. handle.onContextMenu() 로도 나중에 등록할 수 있다
+  onContextMenu?: OnEditorContextMenu
   // 본문 맨 위 제목 (F-217.md 2장) — 이후 갱신은 handle.setTitle()·setTitleReadOnly() 로 한다. 이 값은 최초 생성에만 쓴다
   title?: string
   titleReadOnly?: boolean
@@ -166,6 +214,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     onOpenWikiLink,
     onImageFiles,
     resolveAttachment,
+    onContextMenu,
     title = '',
     titleReadOnly = false,
     onTitleChange = () => {},
@@ -183,6 +232,13 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   function notifyHeadings(state: EditorState) {
     const headings = extractHeadings(state)
     headingsListeners.forEach((cb) => cb(headings))
+  }
+
+  // 우클릭 메뉴 콜백 — onHeadingsChange 와 같은 구독 패턴(F-144), 생성 옵션과 handle.onContextMenu() 등록분 모두 부른다
+  const contextMenuListeners = new Set<OnEditorContextMenu>()
+  if (onContextMenu) contextMenuListeners.add(onContextMenu)
+  function notifyContextMenu(info: EditorContextMenuInfo) {
+    contextMenuListeners.forEach((cb) => cb(info))
   }
 
   const previewCompartment = new Compartment()
@@ -211,6 +267,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     imageInsert({ onImageFiles }),
     dropFileGuard,
     focusRelay(),
+    editorContextMenuHandler(notifyContextMenu),
     // autoPair() 의 Backspace 키맵(Prec.high)이 markdown()의 deleteMarkupBackward
     // (역시 Prec.high)보다 먼저 받으려면 같은 우선순위 안에서 더 앞서 조립해야 한다
     // (@codemirror/view keymap 문서: "specified early... get checked first")
@@ -258,6 +315,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const state = EditorState.create({ doc: text, extensions })
   const view = new EditorView({ state, parent })
   const detachMarginClickGuard = attachMarginClickGuard(view)
+  // 표 칸 하위 에디터(tableWidget.ts)의 우클릭도 같은 콜백으로 (F-170.md 3.2)
+  setCellContextMenuHandler(view, (info) => notifyContextMenu(info))
 
   return {
     view,
@@ -347,6 +406,27 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       return () => headingsListeners.delete(callback)
     },
 
+    // 우클릭 메뉴 열림 구독 (F-170.md 5장) — 구독 해제 함수를 돌려준다
+    onContextMenu(callback: OnEditorContextMenu): () => void {
+      contextMenuListeners.add(callback)
+      return () => contextMenuListeners.delete(callback)
+    },
+
+    // 커서가 든 표의 머리 첫 칸 편집을 시작한다 — 우클릭 메뉴 `표` 삽입 뒤(F-170.md 3.1 A6)
+    enterTableAtCursor(): boolean {
+      const pos = view.state.selection.main.head
+      let tableFrom: number | null = null
+      syntaxTree(view.state).iterate({
+        from: pos,
+        to: pos,
+        enter: (node) => {
+          if (node.name === 'Table') tableFrom = view.state.doc.lineAt(node.from).from
+        },
+      })
+      if (tableFrom == null) return false
+      return enterTableFromKeyboard(view, tableFrom, true)
+    },
+
     // 화면 밖 줄 높이 추정 오차를 그려진 뒤(rAF 2회) 실측으로 보정 (F-144 3.3, F-152 2.5)
     scrollToHeading(pos: number) {
       const clamped = Math.max(0, Math.min(pos, view.state.doc.length))
@@ -369,6 +449,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       destroyed = true
       clearTimeout(headingsTimer)
       headingsListeners.clear()
+      contextMenuListeners.clear()
+      setCellContextMenuHandler(view, undefined)
       detachMarginClickGuard()
       view.destroy()
     },

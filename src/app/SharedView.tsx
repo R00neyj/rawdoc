@@ -1,5 +1,5 @@
 // 공유받은 문서 화면 S-4 (specs/ia.md 1장 S-4·3.19, F-130.md 4장) — 위키링크(F-131)는 문서 목록이 없어 여기선 만들지 않는다
-import Viewer from '../viewer/Viewer'
+import Viewer, { type ViewContextMenuInfo } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { IconDownload, IconClose } from './icons'
 import { stripComments } from '../lib/comments'
@@ -9,9 +9,10 @@ type SharedViewProps = {
   sharedDoc: ShareDoc // decodeShare 결과
   onImport: () => void // `내 문서로 가져오기`
   onClose: () => void // `닫기`
+  onContextMenu?: (info: ViewContextMenuInfo) => void // 우클릭 메뉴 (F-170.md 3.3)
 }
 
-export default function SharedView({ sharedDoc, onImport, onClose }: SharedViewProps) {
+export default function SharedView({ sharedDoc, onImport, onClose, onContextMenu }: SharedViewProps) {
   // 이미 만든 옛 링크(주석이 담긴 채로 공유된 것) 대비 렌더 전에도 한 번 더 제거한다 (F-214.md 2.2)
   const html = renderMarkdown(stripComments(sharedDoc.content))
 
@@ -34,7 +35,7 @@ export default function SharedView({ sharedDoc, onImport, onClose }: SharedViewP
         <h1 className="shared-view-title">{sharedDoc.title || '제목 없는 문서'}</h1>
         {/* 공유 화면은 첨부를 읽지 않는다 — resolveAttachment 를 넘기지 않으면 이미지 블록은
             모두 자리 표시로 보인다 (F-158.md 2.2) */}
-        <Viewer html={html} missingImageText="공유 링크에는 이미지가 담기지 않습니다" />
+        <Viewer html={html} missingImageText="공유 링크에는 이미지가 담기지 않습니다" onContextMenu={onContextMenu} />
       </div>
     </div>
   )
