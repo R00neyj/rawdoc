@@ -2170,6 +2170,29 @@ body.sidebar-resizing {
   color: var(--danger);
 }
 
+/* 저장 상태 원형 표시 — 입력 중(주황)·저장됨(초록)·실패(빨강). memory 는 입력 중과 같이 취급(둘 다 아직 안전하게 저장되지 않음) */
+.statusbar-save-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.statusbar-save-dot--saved {
+  background: var(--callout-success);
+}
+
+.statusbar-save-dot--dirty,
+.statusbar-save-dot--memory {
+  background: var(--callout-warning);
+}
+
+.statusbar-save-dot--error {
+  background: var(--danger);
+}
+
 /* 외부 .md 파일 끌어놓기 덮개(F-145.md 2.4) — 입력을 막는 용도만, 포커스는 가져가지 않는다 */
 .drop-overlay {
   position: fixed;

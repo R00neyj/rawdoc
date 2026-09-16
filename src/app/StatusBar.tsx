@@ -41,6 +41,7 @@ export default function StatusBar({ line, col, charCount, wordCount, saveStatus,
         {charCount.toLocaleString('ko-KR')}자 · {wordCount.toLocaleString('ko-KR')}단어
       </span>
       <span className={`statusbar-save${saveStatus === 'error' ? ' statusbar-save--danger' : ''}`}>
+        <span className={`statusbar-save-dot statusbar-save-dot--${saveStatus}`} aria-hidden="true" />
         {text}
         {syncSuffix(syncState)}
       </span>
