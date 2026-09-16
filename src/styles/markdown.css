@@ -127,13 +127,15 @@
   margin-top: 0;
 }
 
-/* 기호 칸 폭은 단계와 무관하게 늘 2em — li 마다 새로 그린다. 작업 목록은 기호 없음(3장) */
+/* 기호 칸 폭은 단계와 무관하게 늘 2em — li 마다 새로 그린다. 작업 목록은 기호 없음(3장).
+   inline-flex + justify-content:center 로 칸 안에서 가운데 정렬해 리스트 내용과의 거리를 줄인다 */
 :is(.app-shell, .public-view) .markdown-body ul li:not(.task-list-item)::before {
   content: '•';
   position: absolute;
   left: -2em;
   width: 2em;
-  text-align: left;
+  display: inline-flex;
+  justify-content: center;
   color: var(--accent);
   font-weight: 700;
 }
@@ -144,7 +146,8 @@
   position: absolute;
   left: -2em;
   width: 2em;
-  text-align: left;
+  display: inline-flex;
+  justify-content: center;
 }
 
 /* 작업 목록(F-124 3.4) — renderMarkdown.js 가 붙이는 ul.contains-task-list 안 체크박스로 고른다. 칸 폭은 편집 모드 md-checkbox 실측값(F-226 A1) */
