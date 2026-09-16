@@ -18,16 +18,18 @@ export default function HelpDialog({ open, onClose }: HelpDialogProps) {
       {HELP_GROUPS.map((group) => (
         <section key={group.group} className="help-group">
           <h3 className="help-group-title">{group.group}</h3>
-          {group.items.map((item) => (
-            <div key={item.name} className="help-card">
-              <span className="help-card-name">{item.name}</span>
-              <pre className="help-card-source">
-                <code>{item.source}</code>
-              </pre>
-              <Viewer html={renderMarkdown(item.source)} />
-              {item.caption && <p className="help-card-caption">{item.caption}</p>}
-            </div>
-          ))}
+          <div className="help-cards">
+            {group.items.map((item) => (
+              <div key={item.name} className={`help-card${item.wide ? ' help-card--wide' : ''}`}>
+                <span className="help-card-name">{item.name}</span>
+                <pre className="help-card-source">
+                  <code>{item.source}</code>
+                </pre>
+                <Viewer html={renderMarkdown(item.source)} />
+                {item.caption && <p className="help-card-caption">{item.caption}</p>}
+              </div>
+            ))}
+          </div>
         </section>
       ))}
       <div className="dialog-actions">

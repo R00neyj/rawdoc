@@ -1274,12 +1274,26 @@ body.sidebar-resizing {
   color: var(--muted);
 }
 
+.help-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .help-card {
-  margin-bottom: 14px;
+  flex: 1 1 200px;
+  /* flex item 기본 min-width: auto 는 .help-card-source(white-space: pre) 의 긴 줄만큼
+     줄어들기를 거부해 좁은 창에서 카드가 넘친다 — 안에서 가로 스크롤(overflow-x: auto)로 대신 처리 */
+  min-width: 0;
   padding: 12px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
   background: var(--paper);
+}
+
+/* 표·코드블록·이미지 등 좁은 칸에 답답한 결과는 한 줄 전체를 차지한다 (2026-09-16 사용자 "한줄에 세개도 되겠는데") */
+.help-card--wide {
+  flex-basis: 100%;
 }
 
 .help-card-name {
