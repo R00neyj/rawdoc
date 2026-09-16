@@ -66,10 +66,11 @@ export function useDocSaver({
         try {
           // 저장 시점에 docId 는 이미 열린 문서를 가리킨다 (App 이 문서 없이는 호출하지 않는다)
           const updated = await store.update(id!, { content: text })
-          if (docIdRef.current === id) setStatus('saved')
+          // memory 모드는 새로고침하면 사라지지만, 같은 세션 안에서 문서를 오갈 때는 저장소에 반영돼야 한다 — status 표시만 'memory' 로 고정한다
+          if (docIdRef.current === id) setStatus(isMemory ? 'memory' : 'saved')
           onSaved?.(updated)
         } catch {
-          if (docIdRef.current === id) setStatus('error')
+          if (docIdRef.current === id) setStatus(isMemory ? 'memory' : 'error')
           onSaveError?.()
         }
       }
@@ -80,12 +81,11 @@ export function useDocSaver({
       savingRef.current = null
     })
     return promise
-  }, [store, onSaved, onSaveError])
+  }, [store, onSaved, onSaveError, isMemory])
 
   const notifyChange = useCallback(() => {
-    if (isMemory) return
     dirtyRef.current = true
-    setStatus('dirty')
+    setStatus(isMemory ? 'memory' : 'dirty')
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
       runSave()
@@ -93,12 +93,11 @@ export function useDocSaver({
   }, [isMemory, runSave])
 
   const flush = useCallback(async () => {
-    if (isMemory) return
     if (timerRef.current) clearTimeout(timerRef.current)
     if (dirtyRef.current || savingRef.current) {
       await runSave()
     }
-  }, [isMemory, runSave])
+  }, [runSave])
 
   return { status, notifyChange, flush }
 }

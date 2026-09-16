@@ -21,7 +21,7 @@ type ShareMenuProps = {
   onNotice: (notice: Notice) => void
   // store.kind === 'server' 이고 열린 문서가 있을 때만 문서 id — 읽기 전용 링크 항목 노출 조건 (F-210.md 2.6)
   linkDocId: string | null
-  onBeforeLinkAction: () => void // 저장 대기 입력 flush
+  onBeforeLinkAction: () => Promise<void> // 저장 대기 입력 flush — 링크를 만들기 전 끝나길 기다려야 한다
   // owner 이고 서버 저장소일 때만 — `사람 초대…` 항목 (F-212.md 2.5)
   onInvite?: () => void
 }
@@ -131,7 +131,7 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice, linkDocId, 
   // ----- 읽기 전용 링크 (F-210.md 2.6) -----
   async function handleCopyReadOnlyLink() {
     if (!linkDocId) return
-    onBeforeLinkAction()
+    await onBeforeLinkAction()
     let token: string
     try {
       token = await createShareLink(linkDocId)

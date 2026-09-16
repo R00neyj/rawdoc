@@ -24,8 +24,9 @@ export function createPresenceController(
   open: boolean,
   duration: number,
   onChange: (state: PresenceState) => void,
-): { get: () => PresenceState; update: (nextOpen: boolean) => void; dispose: () => void } {
+): { get: () => PresenceState; update: (nextOpen: boolean) => void; setDuration: (next: number) => void; dispose: () => void } {
   let current: PresenceState = open ? { mounted: true, state: 'open' } : { mounted: false, state: 'closed' }
+  let currentDuration = duration
   let timer: ReturnType<typeof setTimeout> | null = null
 
   function clearTimer() {
@@ -50,12 +51,15 @@ export function createPresenceController(
     timer = setTimeout(() => {
       timer = null
       set({ mounted: false, state: 'closed' })
-    }, duration)
+    }, currentDuration)
   }
 
   return {
     get: () => current,
     update,
+    setDuration: (next) => {
+      currentDuration = next
+    },
     dispose: clearTimer,
   }
 }
@@ -76,6 +80,8 @@ export default function usePresence(open: boolean, duration?: number): PresenceS
   const isFirstRun = useRef(true)
 
   useEffect(() => {
+    // resolvedDuration 이 바뀌었을 수 있다(예: OS 모션 감소 설정 토글) — 다음 update() 가 새 값을 쓰게 먼저 반영한다
+    controller.setDuration(resolvedDuration)
     if (isFirstRun.current) {
       isFirstRun.current = false
       return undefined

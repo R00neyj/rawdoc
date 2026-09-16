@@ -416,6 +416,12 @@ type WidthHandleProps = {
 // 사이드바 오른쪽 테두리 너비 손잡이 — 끄는 동안 onWidthChange, 값 확정 시 onWidthCommit (F-159 2.5)
 function WidthHandle({ width, onWidthChange, onWidthCommit }: WidthHandleProps) {
   const [dragging, setDragging] = useState(false)
+  // 드래그 중 사이드바가 rail 로 접히거나 좁아져 이 컴포넌트가 언마운트되면 mouseup 이 못 와 리스너가 안 지워진다 — 언마운트 시 직접 정리한다
+  const cleanupRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    return () => cleanupRef.current?.()
+  }, [])
 
   function handleMouseDown(e: ReactMouseEvent<HTMLDivElement>) {
     e.preventDefault()
@@ -430,13 +436,18 @@ function WidthHandle({ width, onWidthChange, onWidthCommit }: WidthHandleProps) 
     function handleMove(ev: MouseEvent) {
       onWidthChange(next(ev.clientX))
     }
-    function handleUp(ev: MouseEvent) {
+    function cleanup() {
       window.removeEventListener('mousemove', handleMove)
       window.removeEventListener('mouseup', handleUp)
       document.body.classList.remove('sidebar-resizing')
+      cleanupRef.current = null
+    }
+    function handleUp(ev: MouseEvent) {
+      cleanup()
       setDragging(false)
       onWidthCommit(next(ev.clientX))
     }
+    cleanupRef.current = cleanup
     window.addEventListener('mousemove', handleMove)
     window.addEventListener('mouseup', handleUp)
   }

@@ -28,12 +28,15 @@ export async function migrateLocalIfNeeded(deps: MigrateLocalDeps): Promise<void
   // 손대지 않은 첫 실행 안내 문서는 옮기지 않는다 — 기기마다 새 id 로 만들어져 계정에 쌓인다 (2.2)
   const docs = local.docs.filter((d) => !(d.title === GUIDE_DOC_TITLE && d.content === GUIDE_DOC_CONTENT_CRLF))
 
-  if (docs.length === 0) {
+  // 문서도 폴더도 없으면 옮길 게 없다 — 폴더만 있는 경우(문서 없이 폴더만 만든 사용자)는 아래에서 folders 를 계속 옮긴다
+  if (docs.length === 0 && folders.length === 0) {
     setPref(MIGRATED_KEY, userId)
     return
   }
 
-  notice({ type: 'info', message: `로컬 문서 ${docs.length}개를 계정으로 옮기는 중…` })
+  if (docs.length > 0) {
+    notice({ type: 'info', message: `로컬 문서 ${docs.length}개를 계정으로 옮기는 중…` })
+  }
 
   let result: { importedCount: number }
   try {
@@ -46,5 +49,7 @@ export async function migrateLocalIfNeeded(deps: MigrateLocalDeps): Promise<void
 
   setPref(MIGRATED_KEY, userId)
   await afterImport?.()
-  notice({ type: 'info', message: `로컬 문서 ${result.importedCount}개를 계정에 넣었습니다. 서버로 보내는 중입니다.` })
+  if (result.importedCount > 0) {
+    notice({ type: 'info', message: `로컬 문서 ${result.importedCount}개를 계정에 넣었습니다. 서버로 보내는 중입니다.` })
+  }
 }

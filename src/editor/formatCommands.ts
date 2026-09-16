@@ -17,6 +17,8 @@ function sliceSafe(state: EditorState, from: number, to: number): string {
 type WrapOptions = {
   blockOuterGuard?: boolean // $ 전용: 바깥이 실제로는 $$(수식 블럭 기호)의 일부면 벗기지 않는다 (3장 각주)
   customWrap?: (text: string) => { insert: string; innerFrom: number; innerLength: number } // 코드 전용: 감싸기 분기에서 marker+text+marker 대신 쓸 모양, innerFrom·innerLength 는 insert 안에서 선택이 시작하는 자리와 길이 (3장)
+  // customWrap 이 marker 자체와 다른 바깥 경계를 만들 때(코드: ``+공백) 벗기기 판정에 쓸 그 경계 문자열 — customWrap 직후 선택되는 innerFrom·innerLength 구간을 다시 선택해 토글하는 경우를 위함
+  customOuter?: { before: string; after: string }
 }
 
 // 감싸기/벗기기 공용 규칙(3장): 선택 바로 바깥 양옆이 marker 면 벗기고, 아니면 선택 안쪽 양끝이 marker 면 벗기고, 아니면 marker 로 감싼다. 선택 없으면 marker+marker 삽입
@@ -50,6 +52,21 @@ function wrapRange(
         { from: range.to, to: range.to + len },
       ],
       range: EditorSelection.range(range.from - len, range.to - len),
+    }
+  }
+
+  if (options.customOuter) {
+    const { before, after } = options.customOuter
+    const customOutsideBefore = sliceSafe(state, range.from - before.length, range.from)
+    const customOutsideAfter = sliceSafe(state, range.to, range.to + after.length)
+    if (customOutsideBefore === before && customOutsideAfter === after) {
+      return {
+        changes: [
+          { from: range.from - before.length, to: range.from },
+          { from: range.to, to: range.to + after.length },
+        ],
+        range: EditorSelection.range(range.from - before.length, range.to - before.length),
+      }
     }
   }
 
@@ -101,6 +118,7 @@ export const toggleInlineCode: StateCommand = ({ state, dispatch }) => {
     customWrap: (text) => text.includes('`')
       ? { insert: `\`\` ${text} \`\``, innerFrom: 3, innerLength: text.length }
       : { insert: `\`${text}\``, innerFrom: 1, innerLength: text.length },
+    customOuter: { before: '`` ', after: ' ``' },
   })))
   dispatch(tr)
   return true

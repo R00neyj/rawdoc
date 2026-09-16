@@ -255,15 +255,18 @@ export default function PublicView(props: PublicViewProps) {
 // `#/p/{토큰}` 문서 단독 공개 보기 (F-210.md 2.4)
 function PublicDocView({ token, settings }: { token: string; settings: PublicSettings }) {
   const [state, setState] = useState<DocLoadState>({ status: 'loading' })
+  // 연달아 재시도하면 응답이 뒤바뀌어 올 수 있다 — 가장 최근 요청의 결과만 반영한다
+  const requestIdRef = useRef(0)
 
   useEffect(() => {
     let cancelled = false
+    const requestId = ++requestIdRef.current
     fetchPublicDoc(token)
       .then((next) => {
-        if (!cancelled) setState({ status: 'ready', doc: next })
+        if (!cancelled && requestIdRef.current === requestId) setState({ status: 'ready', doc: next })
       })
       .catch((err: unknown) => {
-        if (cancelled) return
+        if (cancelled || requestIdRef.current !== requestId) return
         setState(err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' })
       })
     return () => {
@@ -310,10 +313,14 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
   }
 
   function retry() {
+    const requestId = ++requestIdRef.current
     setState({ status: 'loading' })
     fetchPublicDoc(token)
-      .then((next) => setState({ status: 'ready', doc: next }))
+      .then((next) => {
+        if (requestIdRef.current === requestId) setState({ status: 'ready', doc: next })
+      })
       .catch((err: unknown) => {
+        if (requestIdRef.current !== requestId) return
         setState(err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' })
       })
   }
@@ -341,6 +348,8 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
   const [listOpen, setListOpen] = useState(false)
   // 폴더별로 첫 문서를 한 번만 고르기 위한 표시. 렌더 중 상태를 맞추는 공식 패턴(React 문서 "Adjusting state when a prop changes")
   const [autoPickedFor, setAutoPickedFor] = useState<string | null>(null)
+  // 같은 문서를 연달아 재시도하면 응답이 뒤바뀌어 올 수 있다 — 가장 최근 요청의 결과만 반영한다
+  const docRequestIdRef = useRef(0)
 
   useEffect(() => {
     let cancelled = false
@@ -374,12 +383,13 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
   useEffect(() => {
     if (!activeDocId) return
     let cancelled = false
+    const requestId = ++docRequestIdRef.current
     fetchPublicFolderDoc(token, activeDocId)
       .then((next) => {
-        if (!cancelled) setDocResult({ forId: activeDocId, state: { status: 'ready', doc: next } })
+        if (!cancelled && docRequestIdRef.current === requestId) setDocResult({ forId: activeDocId, state: { status: 'ready', doc: next } })
       })
       .catch((err: unknown) => {
-        if (cancelled) return
+        if (cancelled || docRequestIdRef.current !== requestId) return
         setDocResult({
           forId: activeDocId,
           state: err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' },
@@ -435,10 +445,14 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
 
   function retryDoc() {
     if (!activeDocId) return
+    const requestId = ++docRequestIdRef.current
     setDocResult(null)
     fetchPublicFolderDoc(token, activeDocId)
-      .then((next) => setDocResult({ forId: activeDocId, state: { status: 'ready', doc: next } }))
+      .then((next) => {
+        if (docRequestIdRef.current === requestId) setDocResult({ forId: activeDocId, state: { status: 'ready', doc: next } })
+      })
       .catch((err: unknown) => {
+        if (docRequestIdRef.current !== requestId) return
         setDocResult({
           forId: activeDocId,
           state: err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' },

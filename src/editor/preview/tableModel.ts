@@ -359,7 +359,8 @@ export function deleteRows(table: TableModel, rows: number[]): ChangeSpec[] {
     const runEnd = table.rows[endIdx]
     const isLastLine = endIdx === table.rows.length - 1
     if (isLastLine && startIdx > 0) {
-      const prevRow = table.rows[startIdx - 1]
+      // startIdx===1 이면 바로 앞은 머리 행이 아니라 구분선(delimiterRow) — rows 배열엔 안 들어 있어 따로 잡는다
+      const prevRow = startIdx === 1 && table.delimiterRow ? table.delimiterRow : table.rows[startIdx - 1]
       changes.push({ from: prevRow.to, to: runEnd.to, insert: '' })
     } else if (isLastLine) {
       changes.push({ from: runStart.line, to: runEnd.to, insert: '' })

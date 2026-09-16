@@ -150,7 +150,8 @@ export function useDocLock({
   const [trackedKey, setTrackedKey] = useState(trackKey)
   if (trackKey !== trackedKey) {
     setTrackedKey(trackKey)
-    if (!applicable) setReadOnly(false)
+    // applicable 이 유지된 채 docId 만 바뀌어도 새 문서의 잠금 여부는 아직 모른다 — 이전 값을 들고 있지 않는다
+    setReadOnly(false)
   }
 
   const onNoticeRef = useRef(onNotice)

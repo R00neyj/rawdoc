@@ -12,7 +12,9 @@ const SETEXT_LEVEL: Record<string, 1 | 2> = { SetextHeading1: 1, SetextHeading2:
 // 이스케이프된 기호는 사설 영역 글자로 잠시 바꿔 아래 정규식이 마크업으로 오인하지 않게 함
 const ESCAPABLE = '\\`*_{}[]()#+.!>~-'
 const ESCAPE_RE = /\\([\\`*_{}[\]()#+.!>~-])/g
-const PLACEHOLDER_RE = /[-]/g
+// toPlaceholder 가 만드는 사설 영역 글자(U+E000 부터 ESCAPABLE 개수만큼) 전체에 매칭
+const PLACEHOLDER_CHARS = ESCAPABLE.split('').map((_, i) => String.fromCodePoint(0xe000 + i)).join('')
+const PLACEHOLDER_RE = new RegExp(`[${PLACEHOLDER_CHARS}]`, 'g')
 
 function toPlaceholder(ch: string): string {
   return String.fromCodePoint(0xe000 + ESCAPABLE.indexOf(ch))

@@ -7,6 +7,7 @@ import { ApiError, type ServerDoc } from './docsApi'
 import { uploadAttachment, fetchAttachment, fetchUsage, AttachmentApiError } from './attachmentsApi'
 import { toWebp } from './toWebp'
 import { extractAttachmentRefs } from '../lib/imageBlock'
+import { canCreateFolder, canMoveFolder } from '../lib/folderTree'
 import type { Attachment, AttachmentExt, Doc, Folder, LineEnding, Store, SyncState } from '../types'
 
 const RETRY_INTERVAL_MS = 30000
@@ -69,6 +70,13 @@ function toFolder(cached: CachedFolder): Folder {
 
 function sortByUpdatedAtDesc<T extends { updatedAt: number }>(list: T[]): T[] {
   return [...list].sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+// folderId 가 null 이거나 존재하는 폴더를 가리키는 문자열이면 유효하다 (idbStore.ts isValidFolderId 와 동일 규칙, F-136.md 3.1·3.2)
+function isValidFolderId(folders: Folder[], folderId: unknown): folderId is string | null {
+  if (folderId === null) return true
+  if (typeof folderId !== 'string') return false
+  return folders.some((f) => f.id === folderId)
 }
 
 let sharedLocalAttachmentStore: Promise<Store> | null = null
@@ -233,6 +241,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         }
         case 'removeDoc': {
           await api.removeDoc(entry.docId)
+          // in-flight 로 살아남은 createDoc/updateDoc 등이 먼저 끝나 캐시를 되살렸을 수 있다 — 서버는 확실히 지워졌으니 캐시도 맞춘다
+          await cache.deleteDoc(userId, entry.docId)
           await cache.removeOutbox(entry.key)
           break
         }
@@ -256,6 +266,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         }
         case 'removeFolder': {
           await api.removeFolder(entry.folderId)
+          // in-flight 로 살아남은 createFolder/moveFolder 등이 먼저 끝나 캐시를 되살렸을 수 있다 — 서버는 확실히 지워졌으니 캐시도 맞춘다
+          await cache.deleteFolder(userId, entry.folderId)
           await cache.removeOutbox(entry.key)
           break
         }
@@ -539,6 +551,10 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     },
 
     async create({ title, content, lineEnding, folderId = null }) {
+      const folders = await cache.getFolders(userId)
+      if (!isValidFolderId(folders, folderId)) {
+        throw new Error(`유효하지 않은 folderId: ${String(folderId)}`)
+      }
       const id = crypto.randomUUID()
       const now = Date.now()
       const doc: Omit<CachedDoc, 'userId'> = { id, title, content, lineEnding, folderId, pinnedAt: null, createdAt: now, updatedAt: now, version: 0 }
@@ -565,9 +581,12 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
     async remove(id) {
       const existing = await cache.getDoc(userId, id)
+      // in-flight createDoc 은 removeOutboxForDoc 이 건드리지 않으므로, 그게 나중에 성공하면 서버에 남는다 — removeDoc 을 같이 큐잉해야 한다
+      const outboxBefore = await cache.getOutbox(userId)
+      const hasInFlightCreate = outboxBefore.some((e) => e.type === 'createDoc' && e.docId === id && e.key === inFlightKey)
       await cache.deleteDoc(userId, id)
       await cache.removeOutboxForDoc(userId, id, inFlightKey)
-      if (existing && existing.version > 0) {
+      if (existing && (existing.version > 0 || hasInFlightCreate)) {
         await cache.addOutbox(userId, { type: 'removeDoc', docId: id })
       }
       await refreshPending()
@@ -578,6 +597,10 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       const existing = await cache.getDoc(userId, id)
       if (!existing) throw new Error(`문서를 찾을 수 없음: ${id}`)
       const resolvedFolderId = folderId ?? null
+      const folders = await cache.getFolders(userId)
+      if (!isValidFolderId(folders, resolvedFolderId)) {
+        throw new Error(`유효하지 않은 folderId: ${resolvedFolderId}`)
+      }
       const updated = { ...existing, folderId: resolvedFolderId }
       await cache.putDoc(userId, updated)
       await enqueueCoalesced(
@@ -605,6 +628,10 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     },
 
     async createFolder({ name, parentId = null }) {
+      const existingFolders = await cache.getFolders(userId)
+      if (!canCreateFolder({ folders: existingFolders, parentId })) {
+        throw new Error(`상위 폴더가 될 수 없음: ${parentId}`)
+      }
       const id = crypto.randomUUID()
       const now = Date.now()
       const folder: Omit<CachedFolder, 'userId'> = { id, name: name || '새 폴더', parentId, createdAt: now, updatedAt: now }
@@ -632,6 +659,10 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       const existing = await cache.getFolder(userId, id)
       if (!existing) throw new Error(`폴더를 찾을 수 없음: ${id}`)
       const resolvedParentId = parentId ?? null
+      const allFolders = await cache.getFolders(userId)
+      if (!canMoveFolder({ folders: allFolders, id, parentId: resolvedParentId })) {
+        throw new Error(`이동할 수 없음: ${id} → ${resolvedParentId}`)
+      }
       const updated = { ...existing, parentId: resolvedParentId, updatedAt: Date.now() }
       await cache.putFolder(userId, updated)
       await enqueueCoalesced(

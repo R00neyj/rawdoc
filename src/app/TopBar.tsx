@@ -32,7 +32,7 @@ type TopBarProps = {
   getShareDoc: () => ShareDoc
   onShareNotice: (notice: Notice) => void
   shareLinkDocId: string | null
-  onBeforeShareLinkAction: () => void
+  onBeforeShareLinkAction: () => Promise<void>
   onInvite?: () => void
   exportDisabled: boolean
   onExportDoc: () => void

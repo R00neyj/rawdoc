@@ -52,18 +52,22 @@ function buildCopyButton(getCode: () => string): HTMLButtonElement {
   btn.title = COPY_TOOLTIP
   btn.innerHTML = contentCopySvg
   btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(getCode()).then(
-      () => {
-        btn.innerHTML = checkSvg
-        btn.title = COPY_TOOLTIP
-        setTimeout(() => {
-          btn.innerHTML = contentCopySvg
-        }, COPY_RESET_MS)
-      },
-      () => {
-        btn.title = COPY_FAIL_TOOLTIP
-      },
-    )
+    function onSuccess() {
+      btn.innerHTML = checkSvg
+      btn.title = COPY_TOOLTIP
+      setTimeout(() => {
+        btn.innerHTML = contentCopySvg
+      }, COPY_RESET_MS)
+    }
+    function onFail() {
+      btn.title = COPY_FAIL_TOOLTIP
+    }
+    // 비보안 컨텍스트·미지원 브라우저는 navigator.clipboard 자체가 없어 호출이 동기적으로 던진다 (ShareMenu.tsx 등 다른 호출부와 동일하게 감싼다)
+    try {
+      navigator.clipboard.writeText(getCode()).then(onSuccess, onFail)
+    } catch {
+      onFail()
+    }
   })
   return btn
 }
