@@ -58,6 +58,7 @@ export const HELP_GROUPS: HelpGroup[] = [
         name: '이미지 (예시)',
         source: '<div align="center">\n  <img src="attachments/0000000000000000.png" width="320">\n</div>',
         wide: true,
+        caption: '붙여넣기·끌어넣기로 넣은 이미지만 이렇게 보입니다. 표준 문법 ![설명](주소)으로 직접 쓴 외부 이미지는 오프라인에서도 항상 보이도록 이미지 대신 "이미지: 설명" 링크로 바뀝니다.',
       },
     ],
   },
