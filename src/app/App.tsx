@@ -61,6 +61,7 @@ import EmptyState from './EmptyState'
 import ConfirmDeleteDialog, { type DeleteTarget } from './ConfirmDeleteDialog'
 import MoveDocDialog, { type MoveDocTarget } from './MoveDocDialog'
 import SettingsDialog from './SettingsDialog'
+import HelpDialog from './HelpDialog'
 import StatusBar from './StatusBar'
 import SharedView from './SharedView'
 import PublicView from './PublicView'
@@ -179,6 +180,7 @@ export default function App() {
   const [startScreenPref, setStartScreenPref] = useState(() => getPref('md.startScreen', 'home')) // F-232 3.4
   const [toolbarPref, setToolbarPref] = useState(() => getPref('md.toolbar', 'on')) // F-233 3.5
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false) // F-235 도움말 대화상자
   // (F-126.md 5.3)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   // 폴더로 이동 대화상자(D-3) 대상 문서 (F-126.md 5.3)
@@ -814,7 +816,7 @@ export default function App() {
       setSidebarOpen(false)
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !settingsOpen && !deleteTarget && !moveDocTarget) {
+      if (e.key === 'Escape' && !settingsOpen && !helpOpen && !deleteTarget && !moveDocTarget) {
         setSidebarOpen(false)
       }
     }
@@ -825,7 +827,7 @@ export default function App() {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [narrow, sidebarOpen, settingsOpen, deleteTarget, moveDocTarget])
+  }, [narrow, sidebarOpen, settingsOpen, helpOpen, deleteTarget, moveDocTarget])
 
   // ----- 문서를 열 때 저장소 본문을 1회 읽어 에디터에 넘긴다 (architecture.md 3장) -----
   // openDoc.id 가 currentDocId 와 다르면(문서 없음 포함) 렌더링에서 에디터를 그리지
@@ -982,10 +984,10 @@ export default function App() {
     sharedDocRef.current = sharedDoc
     // 받지 않는 때(F-145.md 2.1): 대화상자·공유 화면·저장소를 못 쓸 때(store.kind==='memory')
     dropBlockedRef.current = Boolean(
-      settingsOpen || deleteTarget || moveDocTarget || sharedDoc || store.kind === 'memory',
+      settingsOpen || helpOpen || deleteTarget || moveDocTarget || sharedDoc || store.kind === 'memory',
     )
     // 이미지는 저장소를 못 쓸 때(메모리 저장소)는 막지 않는다 (F-156.md 2.5)
-    imageDropBlockedRef.current = Boolean(settingsOpen || deleteTarget || moveDocTarget || sharedDoc)
+    imageDropBlockedRef.current = Boolean(settingsOpen || helpOpen || deleteTarget || moveDocTarget || sharedDoc)
     // view 권한·403 강등 문서·편집 잠금(F-213.md 2.3)에서는 이미지 올리기(붙여넣기·끌어놓기)를 막는다 (F-212.md 2.4)
     readOnlyDocRef.current = isReadOnlyDoc
     narrowRef.current = narrow
@@ -1579,6 +1581,15 @@ export default function App() {
     setSettingsOpen(false)
   }
 
+  function openHelp() {
+    setHelpOpen(true)
+    closeSidebarIfNarrow()
+  }
+
+  function closeHelp() {
+    setHelpOpen(false)
+  }
+
   // SettingsDialog 는 여러 설정 종류를 같은 Segment 컴포넌트로 그려 값이 string 으로 온다.
   // 실제 값은 항상 각 설정의 고정 옵션 목록 중 하나다 (SettingsDialog.tsx 참고)
   function changeHeadingFont(value: string) {
@@ -1954,6 +1965,7 @@ export default function App() {
           onRequestMoveDoc={requestMoveDoc}
           onTogglePin={handleTogglePin}
           onOpenSettings={openSettings}
+          onOpenHelp={openHelp}
           canInstall={canInstall}
           onInstall={install}
           width={displaySidebarWidth}
@@ -2090,6 +2102,7 @@ export default function App() {
         onChangeLineNumbers={changeLineNumbers}
         onClose={closeSettings}
       />
+      <HelpDialog open={helpOpen} onClose={closeHelp} />
     </div>
   )
 }

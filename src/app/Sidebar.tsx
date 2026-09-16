@@ -29,6 +29,7 @@ import {
   IconEdit,
   IconTooltip,
   IconGroup,
+  IconHelp,
 } from './icons'
 import type { Notice } from './notice'
 
@@ -507,6 +508,7 @@ type SidebarProps = {
   onRequestMoveDoc: (target: MoveDocTarget) => void
   onTogglePin: (id: string, pinned: boolean) => void
   onOpenSettings: () => void
+  onOpenHelp: () => void
   canInstall: boolean
   onInstall: () => void
   width: number
@@ -541,6 +543,7 @@ export default function Sidebar({
   onRequestMoveDoc,
   onTogglePin,
   onOpenSettings,
+  onOpenHelp,
   canInstall,
   onInstall,
   width,
@@ -750,9 +753,15 @@ export default function Sidebar({
               <SidebarButton icon={IconInstall} label="앱 설치" onClick={onInstall} />
             ))}
           {isRail ? (
-            <RailButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
+            <>
+              <RailButton icon={IconHelp} label="도움말" onClick={onOpenHelp} />
+              <RailButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
+            </>
           ) : (
-            <SidebarButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
+            <>
+              <SidebarButton icon={IconHelp} label="도움말" onClick={onOpenHelp} />
+              <SidebarButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
+            </>
           )}
         </div>
       </div>

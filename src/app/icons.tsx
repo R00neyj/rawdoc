@@ -56,6 +56,7 @@ import tableSvg from '@material-symbols/svg-400/outlined/table.svg?raw'
 import stickyNote2Svg from '@material-symbols/svg-400/outlined/sticky_note_2.svg?raw'
 import horizontalRuleSvg from '@material-symbols/svg-400/outlined/horizontal_rule.svg?raw'
 import codeBlocksSvg from '@material-symbols/svg-400/outlined/code_blocks.svg?raw'
+import helpSvg from '@material-symbols/svg-400/outlined/help.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -141,6 +142,9 @@ export const IconTable = makeIcon(tableSvg)
 export const IconCallout = makeIcon(stickyNote2Svg)
 export const IconHorizontalRule = makeIcon(horizontalRuleSvg)
 export const IconCodeBlock = makeIcon(codeBlocksSvg)
+
+// 사이드바 `도움말` 항목 (F-235.md 1장)
+export const IconHelp = makeIcon(helpSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }
