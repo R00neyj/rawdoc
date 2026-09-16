@@ -1301,6 +1301,12 @@ body.sidebar-resizing {
   color: var(--muted);
 }
 
+/* Viewer 는 본문 보기 화면 전용 여백(--doc-pad-top·--doc-pad-bottom, 특히 50dvh)을 가진다 —
+   카드 안에 재사용할 때는 지운다 (F-235.md 2.2) */
+.help-card .viewer {
+  padding: 0;
+}
+
 /* ----- D-3 폴더로 이동 대화상자 (F-126.md 5.3) ----- */
 .move-doc-list {
   list-style: none;
