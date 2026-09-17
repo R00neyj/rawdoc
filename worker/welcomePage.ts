@@ -3,7 +3,7 @@ import brand from '../brand.config'
 
 const siteUrl = 'https://rawdoc.app/'
 const pageTitle = `한국어로 쓰는 마크다운 협업 도구 — ${brand.name}`
-const subheadText = '##를 쳐도 기호가 사라지지 않고, 입력한 그대로 남는 한국어 마크다운 에디터입니다.'
+const subheadText = '##를 쳐도 기호가 사라지지 않고, 입력한 그대로 남습니다.'
 const ogImageUrl = new URL(brand.ogImage, siteUrl).href
 const ogUrl = new URL('welcome', siteUrl).href
 
@@ -24,77 +24,119 @@ export function renderWelcomePage(): Response {
     <meta property="og:locale" content="ko_KR" />
     <style>
       :root { color-scheme: light; }
+      * { box-sizing: border-box; }
       body {
         margin: 0;
-        font-family: system-ui, -apple-system, 'Malgun Gothic', sans-serif;
-        color: black;
+        background: #FBFBFA;
+        color: #16171A;
+        font-family: -apple-system, BlinkMacSystemFont, 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
         line-height: 1.6;
       }
       main {
-        max-width: 640px;
+        max-width: 600px;
         margin: 0 auto;
-        padding: 4rem 1.5rem 3rem;
-        text-align: center;
+        padding: 88px 24px 96px;
+      }
+      .word {
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #16171A;
+        margin: 0 0 72px;
       }
       h1 {
-        font-size: 2rem;
-        line-height: 1.4;
-        margin: 0 0 1rem;
+        font-size: clamp(1.9rem, 5vw, 2.6rem);
+        line-height: 1.28;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        margin: 0 0 20px;
       }
       .subhead {
         font-size: 1.1rem;
-        color: color-mix(in srgb, black 70%, white);
-        margin: 0 0 2rem;
+        line-height: 1.7;
+        color: #40434D;
+        max-width: 30em;
+        margin: 0 0 40px;
+      }
+      .demo-frame {
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 0 0 40px;
       }
       .demo {
-        text-align: left;
-        background: color-mix(in srgb, ${brand.accent} 6%, white);
-        border: 1px solid color-mix(in srgb, ${brand.accent} 25%, white);
-        border-radius: 8px;
-        padding: 1.25rem 1.5rem;
-        margin: 0 auto 2rem;
-        overflow: hidden;
+        background: #FFFFFF;
+        border: 1px solid #E6E5E1;
+        border-radius: 10px;
+        padding: 18px 20px;
+        animation: rd-reveal 1.6s steps(30, end) 0.15s 1 backwards;
       }
-      .demo code {
-        display: inline-block;
-        white-space: pre;
-        font-family: ui-monospace, 'Consolas', monospace;
-        font-size: 0.95rem;
-        clip-path: inset(0 100% 0 0);
-        animation: rd-type 2.2s steps(24, end) 0.2s 1 forwards;
-      }
-      @keyframes rd-type {
+      @keyframes rd-reveal {
+        from { clip-path: inset(0 100% 0 0); }
         to { clip-path: inset(0 0 0 0); }
       }
       @media (prefers-reduced-motion: reduce) {
-        .demo code { animation: none; clip-path: none; }
+        .demo { animation: none; }
+      }
+      .demo-line {
+        display: flex;
+        gap: 16px;
+      }
+      .demo-line + .demo-line {
+        margin-top: 2px;
+      }
+      .ln {
+        flex: none;
+        width: 1.2em;
+        color: #8B8F9A;
+        font-family: ui-monospace, 'D2Coding', 'JetBrains Mono', monospace;
+        font-size: 0.9rem;
+        text-align: right;
+        user-select: none;
+      }
+      .code {
+        font-family: ui-monospace, 'D2Coding', 'JetBrains Mono', monospace;
+        font-size: 0.9rem;
+        white-space: pre-wrap;
       }
       .tok {
-        color: color-mix(in srgb, ${brand.accent} 60%, white);
+        color: ${brand.accent};
         font-weight: 600;
       }
       .local-note {
-        color: color-mix(in srgb, black 60%, white);
-        margin: 0 0 2rem;
+        color: #40434D;
+        margin: 0 0 32px;
       }
       .cta {
         display: inline-block;
         background: ${brand.accent};
-        color: white;
+        color: #FFFFFF;
         text-decoration: none;
-        font-weight: 600;
-        padding: 0.85rem 2rem;
-        border-radius: 999px;
+        font-weight: 700;
+        padding: 13px 26px;
+        border-radius: 8px;
+      }
+      .cta:focus-visible {
+        outline: 2px solid ${brand.accent};
+        outline-offset: 3px;
+      }
+      @media (max-width: 480px) {
+        main { padding: 56px 20px 72px; }
+        .word { margin-bottom: 48px; }
       }
     </style>
   </head>
   <body>
     <main>
+      <p class="word">rawdoc</p>
       <h1>원문 그대로 쓰는<br />한국어 마크다운 협업 도구</h1>
       <p class="subhead">${subheadText}</p>
-      <pre class="demo"><code><span class="tok">##</span> 소개
-
-이 문장은 <span class="tok">**</span>그대로<span class="tok">**</span> 남는다</code></pre>
+      <div class="demo-frame">
+        <div class="demo">
+          <div class="demo-line"><span class="ln">1</span><span class="code"><span class="tok">##</span> 소개</span></div>
+          <div class="demo-line"><span class="ln">2</span><span class="code"></span></div>
+          <div class="demo-line"><span class="ln">3</span><span class="code">이 문장은 <span class="tok">**</span>그대로<span class="tok">**</span> 남는다</span></div>
+        </div>
+      </div>
       <p class="local-note">설치 없이, 로그인 없이 바로 로컬로 시작하세요.</p>
       <a class="cta" href="/">지금 써보기</a>
     </main>
