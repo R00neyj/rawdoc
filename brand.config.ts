@@ -12,7 +12,8 @@ const brand: Brand = {
   name: 'Rawdoc',
   shortName: 'Rawdoc',
   accent: '#3B4890',
-  icon: '/icons/icon-192.png',
+  // scripts/make-logo.mjs 로 만든다
+  icon: '/icons/icon.svg',
   // 제품명이 들어간 이미지라 이름·색을 바꾸면 node scripts/make-og-image.mjs 로 다시 만든다
   ogImage: '/og-image.png',
 }

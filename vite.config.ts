@@ -120,7 +120,7 @@ export default defineConfig({
       },
       workbox: {
         // 서체(woff2)까지 precache 한다 (specs/features/F-116.md)
-        globPatterns: ['**/*.{js,css,html,woff2,png,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,woff2,png,svg,webmanifest}'],
         // 링크 미리보기 이미지는 오프라인 동작에 필요 없다
         globIgnores: ['og-image.png'],
         // Workbox 기본 상한은 2MiB. PretendardVariable.woff2 가 2,057,688바이트라

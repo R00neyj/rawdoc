@@ -13,6 +13,7 @@ const icon = (name) =>
   readFileSync(fileURLToPath(new URL(`node_modules/@material-symbols/svg-400/outlined/${name}.svg`, root)), 'utf-8')
 export const OG_SIZE = { width: 1200, height: 630 }
 const outPath = fileURLToPath(new URL('public/og-image.png', root))
+const logo = readFileSync(fileURLToPath(new URL(`public${brand.icon}`, root)), 'utf-8')
 
 const html = `<!doctype html>
 <html lang="ko" data-theme="white">
@@ -35,7 +36,8 @@ body {
 svg { width: 1em; height: 1em; fill: currentColor; display: block; }
 
 .brand { position: absolute; top: 40px; left: 0; right: 0; display: flex; justify-content: center; align-items: center; gap: 12px; }
-.brand-mark { width: 38px; height: 38px; border-radius: 10px; background: var(--ink); display: grid; place-items: center; }
+.brand-mark { width: 38px; height: 38px; }
+.brand-mark svg { width: 100%; height: 100%; }
 .brand-name { font-family: var(--font-serif); font-weight: 700; font-size: 32px; letter-spacing: -0.03em; }
 
 .headline {
@@ -58,7 +60,7 @@ svg { width: 1em; height: 1em; fill: currentColor; display: block; }
 }
 .side { background: var(--paper); border-right: 1px solid var(--rule); padding: 16px 12px; font-size: 14px; color: var(--ink-2); }
 .side-brand { display: flex; align-items: center; gap: 8px; padding: 0 6px 16px; font-family: var(--font-serif); font-weight: 700; font-size: 17px; color: var(--ink); }
-.side-brand .brand-mark { width: 22px; height: 22px; border-radius: 6px; }
+.side-brand .brand-mark { width: 22px; height: 22px; }
 .side-row { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; }
 .side-row svg { font-size: 18px; }
 .side-label { font-size: 11px; color: var(--muted); padding: 10px 8px 4px; }
@@ -84,13 +86,13 @@ svg { width: 1em; height: 1em; fill: currentColor; display: block; }
 </style>
 </head>
 <body>
-  <div class="brand"><span class="brand-mark" style="color: var(--paper); font-size: 28px">${icon('tag')}</span><span class="brand-name">${brand.name}</span></div>
+  <div class="brand"><span class="brand-mark">${logo}</span><span class="brand-name">${brand.name}</span></div>
 
   <h1 class="headline">기호까지 그대로 남는<br><span class="pill">##</span>마크다운 편집기</h1>
 
   <div class="window">
     <aside class="side">
-      <div class="side-brand"><span class="brand-mark" style="color: var(--paper); font-size: 16px">${icon('tag')}</span>${brand.name}</div>
+      <div class="side-brand"><span class="brand-mark">${logo}</span>${brand.name}</div>
       <div class="side-row">${icon('note_add')}새 문서</div>
       <div class="side-row">${icon('create_new_folder')}새 폴더</div>
       <div class="side-label">문서</div>
