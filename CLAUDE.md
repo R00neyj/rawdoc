@@ -1,4 +1,4 @@
-# Rawdoc (가칭)
+# Rawdoc
 
 원문 보존형 마크다운 협업 도구. `##` 를 쳐도 기호가 사라지지 않고, `.md` 로 뽑으면 사용자가 친 원문과 바이트가 같다
 
@@ -96,7 +96,7 @@ npm run dev:spike    # 스파이크 확인용
 - **문서 상태의 원본은 CM6 `EditorState` 하나다.** 별도 문자열 사본을 두고 동기화하지 않는다
 - **`src/` 는 `spike/` 를 import 하지 않는다.** 필요한 코드는 옮겨 적고, `imeLog` 같은 검증 장치는 가져오지 않는다
 - **IME 조합 중 재계산을 보류하면, 조합 종료 시 밀린 재계산을 반드시 따라잡는다.** 근거: `.workflow/tasks/T-004/verify.md` 6.5·7장
-- **제품명과 메인 컬러는 미정이다.** 루트 `brand.config.js` 에서만 정의하고, 코드·CSS·HTML·UI 문구·매니페스트에 이름 문자열이나 색 hex 를 직접 쓰지 않는다. 파생 색은 `color-mix()` 로 계산한다 (`specs/design.md` 3.2)
+- **제품명은 `rawdoc`(표기 `Rawdoc`)으로 확정(2026-09-17). 메인 컬러는 미정이다.** 그래도 루트 `brand.config.ts` 에서만 정의하고, 코드·CSS·HTML·UI 문구·매니페스트에 이름 문자열이나 색 hex 를 직접 쓰지 않는다 — 확정 후에도 값을 흩어 쓰지 않는 게 목적. 파생 색은 `color-mix()` 로 계산한다 (`specs/design.md` 3.2)
 - **저장소 식별자는 제품명과 무관하게 고정한다.** IndexedDB DB 이름, localStorage 키, 서비스 워커 캐시 이름에 제품명을 쓰지 않는다. 이름을 바꿔도 사용자 문서가 남아야 한다
 
 에디터 이식 시 알려진 함정은 `.workflow/architecture.md` 3장, `.workflow/tasks/T-004/verify.md` 4·5장에 있다 (`view.composing` 타이밍, 블록 위젯 방향키 보조와 `lineWrapping` 충돌 등)
