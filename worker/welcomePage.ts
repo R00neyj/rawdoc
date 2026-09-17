@@ -33,74 +33,60 @@ export function renderWelcomePage(): Response {
         line-height: 1.6;
       }
       main {
-        max-width: 600px;
+        max-width: 560px;
         margin: 0 auto;
-        padding: 88px 24px 96px;
+        padding: 96px 24px 110px;
       }
       .word {
         font-size: 15px;
         font-weight: 700;
-        letter-spacing: -0.02em;
+        letter-spacing: -0.01em;
+        text-transform: lowercase;
         color: #16171A;
-        margin: 0 0 72px;
+        margin: 0 0 88px;
+      }
+      .mark {
+        font-family: ui-monospace, 'D2Coding', 'JetBrains Mono', monospace;
+        font-weight: 600;
+        color: ${brand.accent};
+        animation: rd-mark 1s ease 0.4s 1 backwards;
+      }
+      @keyframes rd-mark {
+        from { color: #A9ACB3; }
+        to { color: ${brand.accent}; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .mark { animation: none; }
       }
       h1 {
-        font-size: clamp(1.9rem, 5vw, 2.6rem);
-        line-height: 1.28;
+        font-size: clamp(1.9rem, 5vw, 2.5rem);
+        line-height: 1.35;
         font-weight: 800;
         letter-spacing: -0.02em;
-        margin: 0 0 20px;
+        margin: 0 0 22px;
+      }
+      h1 .mark {
+        font-size: 0.68em;
+        margin-right: 0.15em;
       }
       .subhead {
         font-size: 1.1rem;
-        line-height: 1.7;
+        line-height: 1.75;
         color: #40434D;
         max-width: 30em;
-        margin: 0 0 40px;
+        margin: 0 0 44px;
+        word-break: keep-all;
       }
-      .demo-frame {
-        border-radius: 10px;
-        overflow: hidden;
-        margin: 0 0 40px;
-      }
-      .demo {
-        background: #FFFFFF;
-        border: 1px solid #E6E5E1;
-        border-radius: 10px;
-        padding: 18px 20px;
-        animation: rd-reveal 1.6s steps(30, end) 0.15s 1 backwards;
-      }
-      @keyframes rd-reveal {
-        from { clip-path: inset(0 100% 0 0); }
-        to { clip-path: inset(0 0 0 0); }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .demo { animation: none; }
-      }
-      .demo-line {
-        display: flex;
-        gap: 16px;
-      }
-      .demo-line + .demo-line {
-        margin-top: 2px;
-      }
-      .ln {
-        flex: none;
-        width: 1.2em;
-        color: #8B8F9A;
+      .excerpt {
+        border-left: 2px solid ${brand.accent}55;
+        padding: 2px 0 2px 20px;
+        margin: 0 0 44px;
         font-family: ui-monospace, 'D2Coding', 'JetBrains Mono', monospace;
-        font-size: 0.9rem;
-        text-align: right;
-        user-select: none;
+        font-size: 0.92rem;
+        color: #40434D;
       }
-      .code {
-        font-family: ui-monospace, 'D2Coding', 'JetBrains Mono', monospace;
-        font-size: 0.9rem;
-        white-space: pre-wrap;
-      }
-      .tok {
-        color: ${brand.accent};
-        font-weight: 600;
+      .excerpt p {
+        margin: 0.5em 0;
       }
       .local-note {
         color: #40434D;
@@ -120,22 +106,19 @@ export function renderWelcomePage(): Response {
         outline-offset: 3px;
       }
       @media (max-width: 480px) {
-        main { padding: 56px 20px 72px; }
-        .word { margin-bottom: 48px; }
+        main { padding: 64px 20px 80px; }
+        .word { margin-bottom: 56px; }
       }
     </style>
   </head>
   <body>
     <main>
-      <p class="word">rawdoc</p>
-      <h1>원문 그대로 쓰는<br />한국어 마크다운 협업 도구</h1>
-      <p class="subhead">${subheadText}</p>
-      <div class="demo-frame">
-        <div class="demo">
-          <div class="demo-line"><span class="ln">1</span><span class="code"><span class="tok">##</span> 소개</span></div>
-          <div class="demo-line"><span class="ln">2</span><span class="code"></span></div>
-          <div class="demo-line"><span class="ln">3</span><span class="code">이 문장은 <span class="tok">**</span>그대로<span class="tok">**</span> 남는다</span></div>
-        </div>
+      <p class="word">${brand.name}</p>
+      <h1><span class="mark">##</span> 원문 그대로 쓰는<br />한국어 마크다운 협업 도구</h1>
+      <p class="subhead">이 문장의 <span class="mark">**</span>강조<span class="mark">**</span>처럼, 기호가 사라지지 않고 그대로 남습니다.</p>
+      <div class="excerpt">
+        <p><span class="mark">##</span> 소개</p>
+        <p>이 문장은 <span class="mark">**</span>그대로<span class="mark">**</span> 남는다</p>
       </div>
       <p class="local-note">설치 없이, 로그인 없이 바로 로컬로 시작하세요.</p>
       <a class="cta" href="/">지금 써보기</a>
