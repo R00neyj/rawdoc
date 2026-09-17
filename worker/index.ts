@@ -42,6 +42,7 @@ import { cleanupServerAttachments } from './attachmentGc'
 import { handleCreateToken, handleDeleteToken, handleListTokens } from './apiTokens'
 import { handleCreateAttachmentV1, handleCreateDocLinkV1, handleCreateDocV1, handleUpdateDocV1 } from './v1'
 import { renderPublicPage } from './publicPage'
+import { renderWelcomePage } from './welcomePage'
 
 type RouteHandler = (
   request: Request,
@@ -162,6 +163,9 @@ export default {
       if (url.pathname.startsWith('/p/')) {
         const publicPage = await renderPublicPage(request, env, url.pathname)
         if (publicPage) return publicPage
+      }
+      if (url.pathname === '/welcome') {
+        return renderWelcomePage()
       }
       return env.ASSETS.fetch(request)
     }
