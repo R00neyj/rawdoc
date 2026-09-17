@@ -80,13 +80,50 @@ export function renderWelcomePage(): Response {
       .excerpt {
         border-left: 2px solid ${brand.accent}55;
         padding: 2px 0 2px 20px;
-        margin: 0 0 44px;
+        margin: 0 0 56px;
         font-family: ui-monospace, 'D2Coding', 'JetBrains Mono', monospace;
         font-size: 0.92rem;
         color: #40434D;
       }
       .excerpt p {
         margin: 0.5em 0;
+      }
+      .shot {
+        width: 100%;
+        display: block;
+        border: 1px solid #E6E5E1;
+        border-radius: 10px;
+        margin: 0 0 12px;
+      }
+      .shot-caption {
+        font-size: 0.9rem;
+        color: #8B8F9A;
+        margin: 0 0 64px;
+      }
+      .lead {
+        margin: 0 0 16px;
+      }
+      .features {
+        list-style: none;
+        margin: 0 0 64px;
+        padding: 0;
+      }
+      .features li {
+        position: relative;
+        padding-left: 20px;
+        color: #40434D;
+        margin: 0 0 14px;
+        word-break: keep-all;
+      }
+      .features li::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0.65em;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: ${brand.accent};
       }
       .local-note {
         color: #40434D;
@@ -117,9 +154,18 @@ export function renderWelcomePage(): Response {
       <h1><span class="mark">##</span> 원문 그대로 쓰는<br />한국어 마크다운 협업 도구</h1>
       <p class="subhead">이 문장의 <span class="mark">**</span>강조<span class="mark">**</span>처럼, 기호가 사라지지 않고 그대로 남습니다.</p>
       <div class="excerpt">
-        <p><span class="mark">##</span> 소개</p>
-        <p>이 문장은 <span class="mark">**</span>그대로<span class="mark">**</span> 남는다</p>
+        <p><span class="mark">##</span> 회의록</p>
+        <p>다음 회의는 <span class="mark">**</span>금요일 오후 2시<span class="mark">**</span>입니다</p>
       </div>
+      <img class="shot" src="/welcome-screenshot.png" width="700" height="285" alt="실제 편집 화면. 제목 줄의 ## 기호가 강조색으로 표시되고 지워지지 않는다" />
+      <p class="shot-caption">실제 편집 화면. 기호는 지워지지 않고, 강조색으로만 표시됩니다.</p>
+      <p class="lead">그 외에 이런 것도 됩니다.</p>
+      <ul class="features">
+        <li>로그인 없이 로컬로 바로 시작하고, 필요하면 로그인해서 여러 기기에서 이어서 씁니다</li>
+        <li>링크 하나로 공개 공유하거나 사람을 초대해 함께 씁니다. 편집 중인 문서는 자동으로 잠겨 내용이 겹치지 않습니다</li>
+        <li>표, 콜아웃, 위키링크, 이미지 첨부까지 실제 문서에 쓰는 문법을 폭넓게 지원합니다</li>
+        <li>설치하면 오프라인에서도 그대로 씁니다</li>
+      </ul>
       <p class="local-note">설치 없이, 로그인 없이 바로 로컬로 시작하세요.</p>
       <a class="cta" href="/">지금 써보기</a>
     </main>

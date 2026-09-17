@@ -20,8 +20,8 @@ describe('F-239 renderWelcomePage', () => {
     expect(html).toContain('한국어 마크다운 협업 도구')
     expect(html).toContain('href="/"')
     const text = stripTags(html)
-    expect(text).toContain('## 소개')
-    expect(text).toContain('이 문장은 **그대로** 남는다')
+    expect(text).toContain('## 회의록')
+    expect(text).toContain('다음 회의는 **금요일 오후 2시**입니다')
   })
 
   it('A3: og/twitter 메타가 brand.config 값을 반영', async () => {
