@@ -84,6 +84,20 @@ function brandHtmlPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      // 랜딩(/welcome)이 불러올 편집기 데모. 워커가 정적 HTML 에 경로를 직접 적으므로
+      // 이 엔트리만 해시 없는 고정 이름으로 낸다 (specs/features/F-239.md 2.1)
+      input: {
+        index: fileURLToPath(new URL('./index.html', import.meta.url)),
+        'welcome-demo': fileURLToPath(new URL('./src/welcome/demo.ts', import.meta.url)),
+      },
+      output: {
+        entryFileNames: (chunk) =>
+          chunk.name === 'welcome-demo' ? 'assets/welcome-demo.js' : 'assets/[name]-[hash].js',
+      },
+    },
+  },
   plugins: [
     react(),
     brandHtmlPlugin(),
