@@ -17,8 +17,10 @@ function readTokenColor(name: string): string {
 }
 
 const paperColor = readTokenColor('paper')
+const siteUrl = 'https://rawdoc.app/'
+const description = '원문이 남는 마크다운 편집기'
 
-// index.html 의 %BRAND_NAME% 치환, theme-color·--accent 주입 (specs/architecture.md 5장)
+// index.html 의 %BRAND_NAME% 치환, theme-color·--accent·OG/Twitter 카드 태그 주입 (specs/architecture.md 5장)
 function brandHtmlPlugin(): Plugin {
   return {
     name: 'brand-html',
@@ -35,6 +37,40 @@ function brandHtmlPlugin(): Plugin {
             tag: 'style',
             children: `:root{--brand-accent:${brand.accent}}`,
             injectTo: 'head-prepend',
+          },
+          { tag: 'meta', attrs: { property: 'og:type', content: 'website' }, injectTo: 'head' },
+          { tag: 'meta', attrs: { property: 'og:title', content: brand.name }, injectTo: 'head' },
+          {
+            tag: 'meta',
+            attrs: { property: 'og:description', content: description },
+            injectTo: 'head',
+          },
+          { tag: 'meta', attrs: { property: 'og:url', content: siteUrl }, injectTo: 'head' },
+          {
+            tag: 'meta',
+            attrs: { property: 'og:image', content: new URL(brand.icon, siteUrl).href },
+            injectTo: 'head',
+          },
+          { tag: 'meta', attrs: { property: 'og:locale', content: 'ko_KR' }, injectTo: 'head' },
+          {
+            tag: 'meta',
+            attrs: { name: 'twitter:card', content: 'summary' },
+            injectTo: 'head',
+          },
+          {
+            tag: 'meta',
+            attrs: { name: 'twitter:title', content: brand.name },
+            injectTo: 'head',
+          },
+          {
+            tag: 'meta',
+            attrs: { name: 'twitter:description', content: description },
+            injectTo: 'head',
+          },
+          {
+            tag: 'meta',
+            attrs: { name: 'twitter:image', content: new URL(brand.icon, siteUrl).href },
+            injectTo: 'head',
           },
         ],
       }
@@ -57,7 +93,7 @@ export default defineConfig({
       manifest: {
         name: brand.name,
         short_name: brand.shortName,
-        description: '원문이 남는 마크다운 편집기',
+        description,
         lang: 'ko',
         id: '/',
         start_url: '/',
