@@ -41,6 +41,7 @@ import {
 import { cleanupServerAttachments } from './attachmentGc'
 import { handleCreateToken, handleDeleteToken, handleListTokens } from './apiTokens'
 import { handleCreateAttachmentV1, handleCreateDocLinkV1, handleCreateDocV1, handleUpdateDocV1 } from './v1'
+import { renderPublicPage } from './publicPage'
 
 type RouteHandler = (
   request: Request,
@@ -158,6 +159,10 @@ export default {
     const url = new URL(request.url)
 
     if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/pub/') && !url.pathname.startsWith('/v1/')) {
+      if (url.pathname.startsWith('/p/')) {
+        const publicPage = await renderPublicPage(request, env, url.pathname)
+        if (publicPage) return publicPage
+      }
       return env.ASSETS.fetch(request)
     }
 

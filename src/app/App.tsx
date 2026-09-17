@@ -26,7 +26,7 @@ import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } fro
 import { useEdgeSwipe } from './useEdgeSwipe'
 import { IconRefresh } from './icons'
 import { resolveTheme } from './theme'
-import { parseHash, formatHash, type HashRoute } from './hashRoute'
+import { parseHash, formatHash, parsePathRoute, type HashRoute } from './hashRoute'
 import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
@@ -148,7 +148,10 @@ function toPublicRoute(route: HashRoute): PublicRoute {
 }
 
 export default function App() {
-  const [publicRoute, setPublicRoute] = useState<PublicRoute>(() => toPublicRoute(parseHash(location.hash)))
+  const [publicRoute, setPublicRoute] = useState<PublicRoute>(() => {
+    const pathRoute = toPublicRoute(parsePathRoute(location.pathname))
+    return pathRoute ?? toPublicRoute(parseHash(location.hash))
+  })
 
   // 뒤로·앞으로 가기로 공개 보기 경로를 드나들 때 갱신한다 (그 외 해시는 아래 별도 효과가 처리, F-211.md 2.3)
   useEffect(() => {

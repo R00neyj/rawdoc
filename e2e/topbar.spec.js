@@ -580,7 +580,7 @@ test.describe('F-210 C 소유자 읽기 전용 링크 메뉴', () => {
       '읽기 전용 링크를 복사했습니다. 링크를 아는 사람은 로그인 없이 볼 수 있습니다.',
     )
     const clip = await page.evaluate(() => navigator.clipboard.readText())
-    expect(clip).toContain('#/p/tok-abc')
+    expect(clip).toContain('/p/tok-abc')
 
     await shareBtn.click()
     await expect(page.getByRole('menuitem', { name: '읽기 전용 링크 끊기' })).toBeVisible()

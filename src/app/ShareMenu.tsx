@@ -139,7 +139,7 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice, linkDocId, 
       onNotice({ type: 'error', message: '링크를 만들지 못했습니다. 연결을 확인하세요.' })
       return
     }
-    const link = `${location.origin}${location.pathname}#/p/${token}`
+    const link = `${location.origin}/p/${token}`
     try {
       await navigator.clipboard.writeText(link)
     } catch {

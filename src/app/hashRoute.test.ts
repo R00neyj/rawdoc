@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseHash, formatHash, formatShareHash, formatPublicFolderHash } from './hashRoute'
+import { parseHash, formatHash, formatShareHash, formatPublicFolderHash, parsePathRoute } from './hashRoute'
 
 describe('parseHash', () => {
   it('#/d/{id} 형식이면 type doc, docId 를 돌려준다', () => {
@@ -62,5 +62,35 @@ describe('formatPublicFolderHash', () => {
 
   it('docId 있으면 #/p/f/{토큰}/{docId}', () => {
     expect(formatPublicFolderHash('tok1', 'doc1')).toBe('#/p/f/tok1/doc1')
+  })
+})
+
+describe('parsePathRoute', () => {
+  it('/p/{토큰} 형식이면 type public, token 을 돌려준다', () => {
+    expect(parsePathRoute('/p/abc-token')).toEqual({ type: 'public', token: 'abc-token' })
+  })
+
+  it('/p/f/{토큰} 형식이면 type publicFolder', () => {
+    expect(parsePathRoute('/p/f/tok1')).toEqual({ type: 'publicFolder', token: 'tok1' })
+  })
+
+  it('/ 는 type none', () => {
+    expect(parsePathRoute('/')).toEqual({ type: 'none' })
+  })
+
+  it('/p/ 는 type none', () => {
+    expect(parsePathRoute('/p/')).toEqual({ type: 'none' })
+  })
+
+  it('/p/f/ 는 type none', () => {
+    expect(parsePathRoute('/p/f/')).toEqual({ type: 'none' })
+  })
+
+  it('/p/f/{토큰}/{문서id} 처럼 하위 세그먼트가 있으면 type none', () => {
+    expect(parsePathRoute('/p/f/tok1/doc1')).toEqual({ type: 'none' })
+  })
+
+  it('/p/a/b 는 type none', () => {
+    expect(parsePathRoute('/p/a/b')).toEqual({ type: 'none' })
   })
 })

@@ -5,6 +5,7 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import brand from './brand.config'
+import { SITE_DESCRIPTION } from './src/lib/siteMeta'
 
 // tokens.css 에서 색 토큰을 정규식으로 읽는다. 매니페스트 background_color 를 위해서다
 // (hex 중복 금지 — specs/features/F-115.md 3.1)
@@ -18,7 +19,7 @@ function readTokenColor(name: string): string {
 
 const paperColor = readTokenColor('paper')
 const siteUrl = 'https://rawdoc.app/'
-const description = '원문이 남는 마크다운 편집기'
+const description = SITE_DESCRIPTION
 
 // index.html 의 %BRAND_NAME% 치환, theme-color·--accent·OG/Twitter 카드 태그 주입 (specs/architecture.md 5장)
 function brandHtmlPlugin(): Plugin {
@@ -48,13 +49,16 @@ function brandHtmlPlugin(): Plugin {
           { tag: 'meta', attrs: { property: 'og:url', content: siteUrl }, injectTo: 'head' },
           {
             tag: 'meta',
-            attrs: { property: 'og:image', content: new URL(brand.icon, siteUrl).href },
+            attrs: { property: 'og:image', content: new URL(brand.ogImage, siteUrl).href },
             injectTo: 'head',
           },
+          { tag: 'meta', attrs: { property: 'og:image:width', content: '2400' }, injectTo: 'head' },
+          { tag: 'meta', attrs: { property: 'og:image:height', content: '1260' }, injectTo: 'head' },
+          { tag: 'meta', attrs: { property: 'og:image:alt', content: description }, injectTo: 'head' },
           { tag: 'meta', attrs: { property: 'og:locale', content: 'ko_KR' }, injectTo: 'head' },
           {
             tag: 'meta',
-            attrs: { name: 'twitter:card', content: 'summary' },
+            attrs: { name: 'twitter:card', content: 'summary_large_image' },
             injectTo: 'head',
           },
           {
@@ -69,7 +73,7 @@ function brandHtmlPlugin(): Plugin {
           },
           {
             tag: 'meta',
-            attrs: { name: 'twitter:image', content: new URL(brand.icon, siteUrl).href },
+            attrs: { name: 'twitter:image', content: new URL(brand.ogImage, siteUrl).href },
             injectTo: 'head',
           },
         ],
@@ -117,6 +121,8 @@ export default defineConfig({
       workbox: {
         // 서체(woff2)까지 precache 한다 (specs/features/F-116.md)
         globPatterns: ['**/*.{js,css,html,woff2,png,webmanifest}'],
+        // 링크 미리보기 이미지는 오프라인 동작에 필요 없다
+        globIgnores: ['og-image.png'],
         // Workbox 기본 상한은 2MiB. PretendardVariable.woff2 가 2,057,688바이트라
         // 여유를 둔다
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,

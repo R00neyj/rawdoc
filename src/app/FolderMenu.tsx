@@ -82,7 +82,7 @@ export default function FolderMenu({ label, items, shareFolderId, onNotice, onIn
       onNotice?.({ type: 'error', message: '링크를 만들지 못했습니다. 연결을 확인하세요.' })
       return
     }
-    const link = `${location.origin}/#/p/f/${token}`
+    const link = `${location.origin}/p/f/${token}`
     try {
       await navigator.clipboard.writeText(link)
     } catch {

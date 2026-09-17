@@ -51,3 +51,19 @@ export function formatShareHash(fragment: string): string {
 export function formatPublicFolderHash(token: string, docId?: string | null): string {
   return docId ? `#/p/f/${token}/${docId}` : `#/p/f/${token}`
 }
+
+const PATH_PUBLIC_FOLDER_PATTERN = /^\/p\/f\/([^/]+)$/
+const PATH_PUBLIC_PATTERN = /^\/p\/([^/]+)$/
+
+// 경로 기반 공개 공유 링크 — `/p/:token`·`/p/f/:token` 만 인식(문서 id 하위 경로는 없음) (F-238.md 5장)
+export function parsePathRoute(pathname: string): HashRoute {
+  const publicFolderMatch = PATH_PUBLIC_FOLDER_PATTERN.exec(pathname)
+  if (publicFolderMatch) {
+    return { type: 'publicFolder', token: publicFolderMatch[1] }
+  }
+  const publicMatch = PATH_PUBLIC_PATTERN.exec(pathname)
+  if (publicMatch) {
+    return { type: 'public', token: publicMatch[1] }
+  }
+  return { type: 'none' }
+}
