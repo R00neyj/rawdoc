@@ -38,6 +38,7 @@ import {
   handlePutDocGrant,
   handlePutFolderGrant,
 } from './grants'
+import { handleListShares } from './shares'
 import { cleanupServerAttachments } from './attachmentGc'
 import { handleCreateToken, handleDeleteToken, handleListTokens } from './apiTokens'
 import { handleCreateAttachmentV1, handleCreateDocLinkV1, handleCreateDocV1, handleUpdateDocV1 } from './v1'
@@ -130,6 +131,7 @@ const routes: Route[] = [
   { method: 'PUT', path: '/api/folders/:id/grants/:email', handler: handlePutFolderGrant },
   { method: 'DELETE', path: '/api/folders/:id/grants/:email', handler: handleDeleteFolderGrant },
   { method: 'GET', path: '/api/shared', handler: handleGetShared },
+  { method: 'GET', path: '/api/shares', handler: handleListShares },
   { method: 'GET', path: '/api/tokens', handler: handleListTokens },
   { method: 'POST', path: '/api/tokens', handler: handleCreateToken },
   { method: 'DELETE', path: '/api/tokens/:id', handler: handleDeleteToken },

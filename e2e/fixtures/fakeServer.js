@@ -9,6 +9,9 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
   const docs = new Map()
   const folders = new Map()
   const attachments = new Map() // key `${id}.${ext}` -> { mime, bytes, width, height }
+  // F-243 공유 관리 — 링크·권한을 흉내낸다. 대상마다 살아있는 링크 최대 1개 (worker/links.ts 와 같은 규칙)
+  const shareLinks = new Map() // key `${targetType}:${targetId}` -> { token, createdAt, revokedAt }
+  const grants = new Map() // key `${targetType}:${targetId}:${email}` -> { role, createdAt }
   // context.setOffline() 은 page.route 가 먼저 가로채 못 걸러낸다 — 이 플래그로 직접 흉내낸다 (F-207 A4)
   let offline = false
   // 계정당 이미지 저장 한도 흉내 (F-221 2.2·2.5)
@@ -246,10 +249,102 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     return route.fulfill({ status: 204 })
   })
 
+  // GET·POST·DELETE /api/(docs|folders)/:id/link — 읽기 전용 링크 (F-210·F-211)
+  await page.route(/\/api\/(docs|folders)\/[^/]+\/link$/, async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    const parts = new URL(req.url()).pathname.split('/')
+    parts.pop() // 'link'
+    const targetId = decodeURIComponent(parts.pop())
+    const targetType = parts.pop() === 'folders' ? 'folder' : 'doc'
+    const key = `${targetType}:${targetId}`
+    const existing = shareLinks.get(key)
+
+    if (req.method() === 'GET') {
+      if (!existing || existing.revokedAt) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"no_link"}' })
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: existing.token }) })
+    }
+    if (req.method() === 'POST') {
+      if (existing && !existing.revokedAt) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: existing.token }) })
+      }
+      const record = { token: crypto.randomUUID().replace(/-/g, ''), createdAt: Date.now(), revokedAt: null }
+      shareLinks.set(key, record)
+      return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ token: record.token }) })
+    }
+    if (req.method() === 'DELETE') {
+      if (existing) existing.revokedAt = Date.now()
+      return route.fulfill({ status: 204 })
+    }
+    return route.fallback()
+  })
+
+  // GET·PUT·DELETE /api/(docs|folders)/:id/grants(/:email)? — 초대 권한 (F-212)
+  await page.route(/\/api\/(docs|folders)\/[^/]+\/grants(\/[^/]+)?$/, async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    const url = new URL(req.url())
+    const parts = url.pathname.split('/')
+    const hasEmail = parts.at(-2) === 'grants'
+    const email = hasEmail ? decodeURIComponent(parts.pop()) : null
+    parts.pop() // 'grants'
+    const targetId = decodeURIComponent(parts.pop())
+    const targetType = parts.pop() === 'folders' ? 'folder' : 'doc'
+
+    if (req.method() === 'GET' && !hasEmail) {
+      const list = [...grants.entries()]
+        .filter(([k]) => k.startsWith(`${targetType}:${targetId}:`))
+        .map(([k, v]) => ({ email: k.split(':').slice(2).join(':'), role: v.role, createdAt: v.createdAt }))
+        .sort((a, b) => a.createdAt - b.createdAt)
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(list) })
+    }
+    if (req.method() === 'PUT' && hasEmail) {
+      const body = req.postDataJSON()
+      const key = `${targetType}:${targetId}:${email}`
+      const createdAt = grants.get(key)?.createdAt ?? Date.now()
+      grants.set(key, { role: body.role, createdAt })
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ email, role: body.role }) })
+    }
+    if (req.method() === 'DELETE' && hasEmail) {
+      grants.delete(`${targetType}:${targetId}:${email}`)
+      return route.fulfill({ status: 204 })
+    }
+    return route.fallback()
+  })
+
+  // GET /api/shares — 공유 관리 페이지 목록 (F-243 3.1)
+  await page.route('**/api/shares', async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    function targetName(targetType, targetId) {
+      const rec = targetType === 'doc' ? docs.get(targetId) : folders.get(targetId)
+      return rec ? (targetType === 'doc' ? rec.title : rec.name) : null
+    }
+    const links = [...shareLinks.entries()]
+      .filter(([, v]) => !v.revokedAt)
+      .map(([k, v]) => {
+        const [targetType, targetId] = k.split(':')
+        const name = targetName(targetType, targetId)
+        return name === null ? null : { token: v.token, targetType, targetId, targetName: name, createdAt: v.createdAt }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.createdAt - a.createdAt)
+    const grantList = [...grants.entries()]
+      .map(([k, v]) => {
+        const [targetType, targetId, email] = k.split(':')
+        const name = targetName(targetType, targetId)
+        return name === null ? null : { targetType, targetId, targetName: name, email, role: v.role, createdAt: v.createdAt }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.createdAt - a.createdAt)
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ links, grants: grantList }) })
+  })
+
   return {
     docs,
     folders,
     attachments,
+    shareLinks,
+    grants,
     apiTokens,
     // 네트워크 오프라인을 흉내낸다 — 이후 모든 요청은 실패한다 (F-207 A4)
     setOffline(v) {

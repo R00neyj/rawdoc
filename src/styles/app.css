@@ -2675,3 +2675,190 @@ body.sidebar-resizing {
   font-size: 13px;
   color: var(--ink-2);
 }
+
+/* ===== 공유 관리 페이지 (specs/features/F-243.md 3.3) ===== */
+.shares-page {
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 32px 16px 48px;
+  overflow-y: auto;
+  container-type: inline-size;
+}
+
+.shares-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.shares-page-head h1 {
+  margin: 0;
+  font-size: 20px;
+  font-family: var(--font-display);
+  color: var(--ink);
+}
+
+.shares-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.shares-close:hover {
+  background: var(--rule-2);
+}
+
+.shares-login-required {
+  margin: 24px 0 12px;
+  color: var(--ink-2);
+}
+
+.shares-loading,
+.shares-empty,
+.shares-group-empty {
+  padding: 12px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.shares-group {
+  margin-bottom: 28px;
+}
+
+.shares-group-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.shares-group-count {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.shares-link-list,
+.shares-grant-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shares-link-row,
+.shares-grant-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.shares-row-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.shares-target-btn {
+  flex: none;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: var(--transition-colors);
+}
+
+.shares-target-btn:hover {
+  text-decoration-color: currentColor;
+}
+
+.shares-badge,
+.shares-role-badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--rule-2);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.shares-date {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.shares-url,
+.shares-grant-email {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.shares-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.shares-row-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 5px 10px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.shares-row-actions button:hover {
+  background: var(--rule-2);
+}
+
+.shares-row-actions button.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.shares-row-actions button.danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+@container (max-width: 560px) {
+  .shares-link-row,
+  .shares-grant-row {
+    flex-wrap: wrap;
+  }
+
+  .shares-row-main {
+    flex: 1 1 100%;
+  }
+
+  .shares-row-actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
+}

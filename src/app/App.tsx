@@ -20,7 +20,7 @@ import { migrateLocalIfNeeded } from './migrateLocal'
 import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree'
 import { resolveWikiTarget } from '../lib/wikiLink'
 import { getPref, setPref } from './prefs'
-import { fetchAccount, type AccountState } from './account'
+import { fetchAccount, loginUrl, type AccountState } from './account'
 import type { SyncState } from '../types'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
 import { useEdgeSwipe } from './useEdgeSwipe'
@@ -66,6 +66,10 @@ import StatusBar from './StatusBar'
 import SharedView from './SharedView'
 import PublicView from './PublicView'
 import InviteDialog, { type InviteTarget } from './InviteDialog'
+import SharesPage from './SharesPage'
+import { listShares, type ShareLinkRow, type ShareGrantRow } from './sharesApi'
+import { revokeShareLink, revokeFolderShareLink } from './linkApi'
+import { deleteGrant } from '../storage/docsApi'
 import type { Doc, Folder, FolderDeleteMode, LineEnding, Store } from '../types'
 
 const STATS_DEBOUNCE_MS = 150
@@ -216,6 +220,11 @@ export default function App() {
   // 공유받은 문서 화면 S-4 (specs/features/F-130.md 4장). decodeShare 결과 그대로 —
   // 저장소 문서가 아니므로 currentDocId 와 무관하게 독립적으로 둔다
   const [sharedDoc, setSharedDoc] = useState<ShareDoc | null>(null)
+  // 공유 관리 페이지 S-6 (specs/features/F-243.md 3.3·3.4) — currentDocId 는 이 화면 동안 null
+  const [sharesOpen, setSharesOpen] = useState(false)
+  const [sharesLoading, setSharesLoading] = useState(false)
+  const [sharesLinks, setSharesLinks] = useState<ShareLinkRow[]>([])
+  const [sharesGrants, setSharesGrants] = useState<ShareGrantRow[]>([])
   // 외부 .md 파일을 창 위로 끄는 동안의 덮개 (F-145.md 2.4)
   const [dropActive, setDropActive] = useState(false)
   const [account, setAccount] = useState<AccountState>({ state: 'offline' })
@@ -247,6 +256,8 @@ export default function App() {
   // hashchange 핸들러가 "지금 공유 화면을 보고 있는가" 를 최신으로 읽도록 매 렌더 후
   // 갱신한다 (F-138 3.3 — 해시가 문서 경로로 바뀌면 문서 id 가 같아도 공유 화면을 닫는다)
   const sharedDocRef = useRef(sharedDoc)
+  // hashchange 핸들러가 "지금 공유 관리 페이지를 보고 있는가" 를 최신으로 읽도록 갱신한다 (F-243.md 3.4)
+  const sharesOpenRef = useRef(sharesOpen)
   // OS 파일 열기 연동(F-119)이 최신 store·beforeLeaveDoc 을 쓰도록 매 렌더 후 갱신한다
   const runImportFilesRef = useRef<(files: File[]) => Promise<Doc | null>>(async () => null)
   // OS 파일 열기 재중복 방지(F-231)도 같은 이유로 매 렌더 후 최신 참조로 갱신한다
@@ -658,6 +669,13 @@ export default function App() {
         return
       }
 
+      // 공유 관리 페이지(#/shares) — 문서를 열지 않는다 (F-243.md 3.4)
+      if (parsedHash.type === 'shares') {
+        setSharesOpen(true)
+        setBootPhase('ready')
+        return
+      }
+
       const hashDocId = parsedHash.type === 'doc' ? parsedHash.docId : null
       const lastDocId = getPref('md.lastDocId', '') || null
       // 해시가 특정 문서를 안 가리키면 시작 화면 설정을 따른다 — 기본(home)은 자동으로 안 연다 (F-232 3.1)
@@ -708,15 +726,26 @@ export default function App() {
         return
       }
 
+      // 공유 관리 페이지(F-243.md 3.4) — 뒤로·앞으로 가기·주소창 직접 수정으로 드나들 때
+      if (parsedHash.type === 'shares') {
+        if (sharesOpenRef.current) return
+        ;(async () => {
+          await beforeLeaveDoc()
+          setSharedDoc(null)
+          setCurrentDocId(null)
+          setSharesOpen(true)
+        })()
+        return
+      }
+
       const docId = parsedHash.type === 'doc' ? parsedHash.docId : null
-      // 해시가 문서 경로(doc)·문서 없음(none)으로 바뀌면 문서 id 가 같아도 공유
-      // 화면을 닫는다(F-138 3.3) — 뒤로 가기로 `#/s/{조각}` 를 벗어날 때 여기 걸리지
-      // 않으면 공유 화면이 그대로 남는다
-      if (docId === currentDocIdRef.current && !sharedDocRef.current) return
+      // 해시가 문서 경로·문서 없음으로 바뀌면 문서 id 가 같아도 공유 화면·공유 관리 페이지를 닫는다 (F-138 3.3, F-243 3.4)
+      if (docId === currentDocIdRef.current && !sharedDocRef.current && !sharesOpenRef.current) return
 
       ;(async () => {
         await beforeLeaveDoc()
         setSharedDoc(null) // 공유 화면을 보고 있었으면 떠난다 (F-130.md 4장)
+        setSharesOpen(false) // 공유 관리 페이지를 보고 있었으면 떠난다 (F-243.md 3.4)
         focusEditorRef.current = true
         const latestDocs = docsRef.current
         if (docId && latestDocs.some((d) => d.id === docId)) {
@@ -987,12 +1016,13 @@ export default function App() {
     currentDocIdRef.current = currentDocId
     foldersRef.current = folders
     sharedDocRef.current = sharedDoc
-    // 받지 않는 때(F-145.md 2.1): 대화상자·공유 화면·저장소를 못 쓸 때(store.kind==='memory')
+    sharesOpenRef.current = sharesOpen
+    // 받지 않는 때(F-145.md 2.1): 대화상자·공유 화면·공유 관리 페이지·저장소를 못 쓸 때(store.kind==='memory')
     dropBlockedRef.current = Boolean(
-      settingsOpen || helpOpen || deleteTarget || moveDocTarget || sharedDoc || store.kind === 'memory',
+      settingsOpen || helpOpen || deleteTarget || moveDocTarget || sharedDoc || sharesOpen || store.kind === 'memory',
     )
     // 이미지는 저장소를 못 쓸 때(메모리 저장소)는 막지 않는다 (F-156.md 2.5)
-    imageDropBlockedRef.current = Boolean(settingsOpen || helpOpen || deleteTarget || moveDocTarget || sharedDoc)
+    imageDropBlockedRef.current = Boolean(settingsOpen || helpOpen || deleteTarget || moveDocTarget || sharedDoc || sharesOpen)
     // view 권한·403 강등 문서·편집 잠금(F-213.md 2.3)에서는 이미지 올리기(붙여넣기·끌어놓기)를 막는다 (F-212.md 2.4)
     readOnlyDocRef.current = isReadOnlyDoc
     narrowRef.current = narrow
@@ -1166,11 +1196,11 @@ export default function App() {
   }
 
   async function selectDoc(id: string) {
-    // sharedDoc 이 있으면 currentDocId 가 우연히 같아도 화면을 떠나야 한다
-    // (ia.md 3.19 "사이드바에서 다른 문서를 누르면 공유 화면을 떠난다")
-    if (id === currentDocId && !sharedDoc) return
+    // sharedDoc·공유 관리 페이지가 있으면 currentDocId 가 우연히 같아도 화면을 떠나야 한다 (ia.md 3.19, F-243.md 3.4)
+    if (id === currentDocId && !sharedDoc && !sharesOpen) return
     await beforeLeaveDoc()
     setSharedDoc(null)
+    setSharesOpen(false)
     focusEditorRef.current = true
     setCurrentDocId(id)
     setPref('md.lastDocId', id)
@@ -1179,11 +1209,12 @@ export default function App() {
     closeSidebarIfNarrow()
   }
 
-  // ----- 로고 클릭 → 홈 (F-232 3.3) — 이미 홈(문서 미선택, 공유 화면도 아님)이면 조용히 아무 일 없음 -----
+  // ----- 로고 클릭 → 홈 (F-232 3.3) — 이미 홈(문서 미선택, 공유 화면·공유 관리 페이지도 아님)이면 조용히 아무 일 없음 -----
   async function goHome() {
-    if (currentDocId === null && !sharedDoc) return
+    if (currentDocId === null && !sharedDoc && !sharesOpen) return
     await beforeLeaveDoc()
     setSharedDoc(null)
+    setSharesOpen(false)
     setCurrentDocId(null)
     replaceHashUrl(null)
   }
@@ -1191,6 +1222,64 @@ export default function App() {
   // 로고(data-go-home) 위임 클릭 — Sidebar.tsx·TopBar.tsx 를 거쳐 렌더되는 SidebarHead 대신 여기서 잡는다 (F-232 3.3)
   function handleAppShellClick(e: ReactMouseEvent<HTMLDivElement>) {
     if ((e.target as HTMLElement).closest('[data-go-home]')) goHome()
+  }
+
+  // ----- 공유 관리 페이지 (specs/features/F-243.md 3.4) — 들어올 때마다 새로 부른다, 로그인 아니면 요청하지 않는다 -----
+  useEffect(() => {
+    if (!sharesOpen || account.state !== 'in') return
+    let cancelled = false
+
+    async function loadShares() {
+      setSharesLoading(true)
+      try {
+        const data = await listShares()
+        if (cancelled) return
+        setSharesLinks(data.links)
+        setSharesGrants(data.grants)
+      } catch {
+        if (!cancelled) {
+          setSharesLinks([])
+          setSharesGrants([])
+        }
+      } finally {
+        if (!cancelled) setSharesLoading(false)
+      }
+    }
+    loadShares()
+
+    return () => {
+      cancelled = true
+    }
+  }, [sharesOpen, account.state])
+
+  // 대상 이름 클릭 — 문서면 열고, 폴더면 홈으로 가며 사이드바에서 펼친다 (F-243.md 3.4)
+  function openSharesTarget(targetType: 'doc' | 'folder', targetId: string) {
+    if (targetType === 'doc') {
+      selectDoc(targetId)
+      return
+    }
+    addOpenFolders([targetId])
+    goHome()
+  }
+
+  async function revokeShareLinkRow(link: ShareLinkRow) {
+    if (link.targetType === 'doc') {
+      await revokeShareLink(link.targetId)
+    } else {
+      await revokeFolderShareLink(link.targetId)
+    }
+    setSharesLinks((prev) => prev.filter((l) => l.token !== link.token))
+  }
+
+  async function revokeShareGrantRow(grant: ShareGrantRow) {
+    await deleteGrant(grant.targetType, grant.targetId, grant.email)
+    setSharesGrants((prev) =>
+      prev.filter((g) => !(g.targetType === grant.targetType && g.targetId === grant.targetId && g.email === grant.email)),
+    )
+  }
+
+  function loginFromShares() {
+    location.href = loginUrl('#/shares')
   }
 
   // ----- 위키링크 열기 (specs/features/F-131.md 5장) -----
@@ -2007,7 +2096,23 @@ export default function App() {
               <SharedView sharedDoc={sharedDoc} onImport={importSharedDoc} onClose={closeSharedDoc} onContextMenu={handleViewContextMenu} />
             </div>
           )}
-          {!sharedDoc && isEmpty && (
+          {!sharedDoc && sharesOpen && (
+            <div className="content-area">
+              <SharesPage
+                loggedIn={account.state === 'in'}
+                loading={account.state === 'in' && sharesLoading}
+                links={account.state === 'in' ? sharesLinks : []}
+                grants={account.state === 'in' ? sharesGrants : []}
+                onClose={goHome}
+                onOpenTarget={openSharesTarget}
+                onRevokeLink={revokeShareLinkRow}
+                onRevokeGrant={revokeShareGrantRow}
+                onLogin={loginFromShares}
+                onNotice={showNotice}
+              />
+            </div>
+          )}
+          {!sharedDoc && !sharesOpen && isEmpty && (
             <div className="content-area">
               <EmptyState
                 hasDocs={docs.length > 0}

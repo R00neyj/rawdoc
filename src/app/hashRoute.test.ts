@@ -34,6 +34,18 @@ describe('parseHash', () => {
     expect(parseHash('#somethingelse')).toEqual({ type: 'none' })
   })
 
+  it('#/shares 는 type shares (F-243 A7)', () => {
+    expect(parseHash('#/shares')).toEqual({ type: 'shares' })
+  })
+
+  it('#/s/abc 는 shares 가 아니라 share', () => {
+    expect(parseHash('#/s/abc')).toEqual({ type: 'share', fragment: 'abc' })
+  })
+
+  it('#/shares/x 는 type none', () => {
+    expect(parseHash('#/shares/x')).toEqual({ type: 'none' })
+  })
+
   it('문자열이 아니면 type none', () => {
     expect(parseHash(undefined)).toEqual({ type: 'none' })
   })

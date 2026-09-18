@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 
 import { loginUrl, logoutUrl, storedAccount, type AccountState } from './account'
-import { IconAccount, IconKey, IconLogin, IconLogout, IconTooltip } from './icons'
+import { IconAccount, IconKey, IconLogin, IconLogout, IconShare, IconTooltip } from './icons'
 import usePresence from './usePresence'
 import { fetchUsage, type Usage } from '../storage/attachmentsApi'
 import ApiTokensDialog from './ApiTokensDialog'
@@ -86,12 +86,19 @@ export default function AccountMenu({ account, onBeforeNavigate }: AccountMenuPr
     setApiTokensOpen(true)
   }
 
+  // 로그인 상태에서만, API 토큰 위 (F-243 3.5) — 같은 앱 안 이동이라 onBeforeNavigate 는 부르지 않는다(App.tsx 의 hashchange 처리가 맡는다)
+  async function handleOpenShares() {
+    setOpen(false)
+    location.hash = '#/shares'
+  }
+
   const stored = account.state === 'offline' ? storedAccount() : null
   const email = account.state === 'in' ? account.email : stored?.email ?? null
 
   const actionItems: { key: string; label: string; icon: typeof IconLogin; onSelect: () => Promise<void> }[] =
     account.state === 'in'
       ? [
+          { key: 'shares', label: '공유 관리', icon: IconShare, onSelect: handleOpenShares },
           { key: 'api-tokens', label: 'API 토큰', icon: IconKey, onSelect: handleOpenApiTokens },
           { key: 'logout', label: '로그아웃', icon: IconLogout, onSelect: handleLogout },
         ]
