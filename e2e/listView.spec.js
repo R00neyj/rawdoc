@@ -1,6 +1,6 @@
 // 보기 화면 목록을 편집 화면과 같게 (specs/features/F-226.md)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, setViewMode, waitSaved } from './helpers.js'
+import { openApp, importMarkdown, setViewMode, waitSaved, readSavedContent, rectOf } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const LIST_DOC = '- 가\n  - 나\n    - 다\n1. 하나\n   1. 둘\n- [ ] 할 일\n'
@@ -484,5 +484,188 @@ test.describe('F-246 A6 연속으로 두 번 만들기', () => {
     await page.keyboard.press('Enter')
 
     await expect(page.locator('.tree-toggle')).toHaveCount(2)
+  })
+})
+
+// 커서가 기호 위에 있을 때만 목록 기호를 원문으로 (specs/features/F-254.md)
+test.describe('F-254 C1 본문 커서', () => {
+  test('본문에 커서 — 불릿 위젯 유지, 원문 `- ` 안 보임', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- 하나\n' })
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+Home')
+    await page.keyboard.press('End') // 커서: '나' 뒤(본문) — 문서 끝에는 빈 줄이 하나 더 있어 Control+End 는 쓰지 않는다
+
+    const line = page.locator('.cm-line.md-list-line').first()
+    await expect(line.locator('.md-bullet')).toBeVisible()
+    expect(await line.textContent()).not.toContain('-')
+  })
+})
+
+test.describe('F-254 C2 기호 커서', () => {
+  test('Home — 원문 `- ` 그대로 보인다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- 하나\n' })
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+Home')
+    await page.keyboard.press('End')
+    await page.keyboard.press('Home')
+
+    const line = page.locator('.cm-line.md-list-line').first()
+    await expect(line.locator('.md-bullet')).toHaveCount(0)
+    expect(await line.textContent()).toContain('- 하나')
+  })
+})
+
+test.describe('F-254 C3 기호 직후', () => {
+  test('본문 첫 글자 바로 앞도 기호 구역이라 원문 그대로', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- 하나\n' })
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+Home')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight') // '- ' 뒤, '하' 바로 앞
+
+    const line = page.locator('.cm-line.md-list-line').first()
+    await expect(line.locator('.md-bullet')).toHaveCount(0)
+    expect(await line.textContent()).toContain('- 하나')
+  })
+})
+
+test.describe('F-254 C4 좌우 흔들림', () => {
+  test('본문 커서 줄의 첫 글자 x = 커서가 다른 줄에 있을 때 x (1px 이내)', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- 하나\n- 둘\n' })
+    await page.locator('.cm-content').click()
+
+    const firstCharX = () =>
+      page.evaluate(() => {
+        const line = document.querySelectorAll('.cm-line.md-list-line')[0]
+        for (const n of line.childNodes) {
+          if (n.nodeType === 3 && n.textContent.trim().length > 0) {
+            const r = document.createRange()
+            r.setStart(n, 0)
+            r.setEnd(n, n.textContent.length)
+            return r.getClientRects()[0].left
+          }
+        }
+        return null
+      })
+
+    await page.keyboard.press('Control+Home')
+    await page.keyboard.press('ArrowDown') // 커서: 둘째 줄 — 첫 줄엔 커서 없음
+    const xAway = await firstCharX()
+
+    await page.keyboard.press('ArrowUp')
+    await page.keyboard.press('End') // 커서: 첫 줄 본문
+    const xBody = await firstCharX()
+
+    expect(Math.abs(xAway - xBody)).toBeLessThanOrEqual(1)
+  })
+})
+
+test.describe('F-254 C5 중첩 들여쓰기 유지', () => {
+  test('둘째 줄 본문에 커서 — 고정 폭 위젯 유지', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- 하나\n  - 둘\n' })
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+Home')
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('End') // 커서: 둘째 줄('둘') 뒤(본문)
+
+    const lines = page.locator('.cm-line.md-list-line')
+    const widget = lines.nth(1).locator('.md-list-indent-step')
+    await expect(widget).toHaveCount(1) // 고정 폭 스페이서는 장식용이라 높이 0 — toBeVisible 대신 존재·폭으로 판정
+    expect(await widget.getAttribute('style')).toContain('--md-list-indent-steps: 1')
+  })
+})
+
+test.describe('F-254 C6 중첩 기호 커서', () => {
+  test('둘째 줄 Home — 원문 공백 + `- ` 로 보인다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- 하나\n  - 둘\n' })
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+Home')
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Home')
+
+    const lines = page.locator('.cm-line.md-list-line')
+    await expect(lines.nth(1).locator('.md-list-indent-step')).toHaveCount(0)
+    await expect(lines.nth(1).locator('.md-bullet')).toHaveCount(0)
+    expect(await lines.nth(1).textContent()).toContain('  - 둘')
+  })
+})
+
+test.describe('F-254 C7 순서 목록', () => {
+  test('본문에 커서 — md-list-marker 폭 유지', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '1. 하나\n' })
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+End')
+
+    const line = page.locator('.cm-line.md-list-line').first()
+    await expect(line.locator('.md-list-marker')).toBeVisible()
+  })
+})
+
+test.describe('F-254 C8 체크박스', () => {
+  test('본문에 커서 — 체크박스 위젯 그대로, `- ` 안 보임', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- [ ] 하나\n' })
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+End')
+
+    const line = page.locator('.cm-line.md-list-line').first()
+    await expect(line.locator('.md-checkbox')).toBeVisible()
+    expect(await line.textContent()).not.toContain('- [')
+  })
+})
+
+test.describe('F-254 C9 선택 범위', () => {
+  test('줄 전체를 드래그 선택하면 기호 구역을 걸치므로 원문', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- 하나\n' })
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+Home')
+    await page.keyboard.down('Shift')
+    await page.keyboard.press('End')
+    await page.keyboard.up('Shift')
+
+    const line = page.locator('.cm-line.md-list-line').first()
+    await expect(line.locator('.md-bullet')).toHaveCount(0)
+  })
+})
+
+test.describe('F-254 C10 포커스 없음', () => {
+  test('편집기 밖 클릭 — 기호 구역에 커서가 있어도 보기 모드로 돌아간다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- 하나\n' })
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+Home') // 기호 구역
+
+    const line = page.locator('.cm-line.md-list-line').first()
+    await expect(line.locator('.md-bullet')).toHaveCount(0)
+
+    // 문서 칸 왼쪽 여백을 클릭해 포커스만 없앤다 (e2e/margin.spec.js 와 같은 방식)
+    const scrollerRect = await rectOf(page.locator('.cm-scroller'))
+    await page.mouse.click(scrollerRect.left + 10, scrollerRect.top + scrollerRect.height / 2)
+
+    await expect(line.locator('.md-bullet')).toBeVisible()
+  })
+})
+
+test.describe('F-254 C11 기호 편집', () => {
+  test('기호 구역에서 `- ` 를 지우고 다시 쳐도 정상 편집된다', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: '- 하나\n' })
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+Home') // 기호 구역(Home)
+
+    await page.keyboard.press('Delete')
+    await page.keyboard.press('Delete') // '- ' 두 글자 지움
+    await page.keyboard.type('- ')
+
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content).toBe('- 하나\n')
   })
 })

@@ -137,6 +137,60 @@ describe('buildLines — 목록', () => {
   })
 })
 
+// 목록 기호는 커서가 기호 구역(줄 시작~ListMark 끝+공백 1칸) 안에 있을 때만 원문으로 보인다 (F-254 3.1·3.2)
+describe('buildLines — 목록 기호 구역 (F-254)', () => {
+  it('C1 본문에 커서면 불릿 위젯을 유지한다', () => {
+    const doc = '- 하나'
+    const state = makeState(doc, doc.length) // 커서: '나' 뒤(본문)
+    const hidden = replaced(build(state))
+    expect(hidden).toHaveLength(1)
+    expect(hidden[0].value.spec.widget.constructor.name).toBe('BulletWidget')
+  })
+
+  it('C2 기호에 커서(Home)면 원문 `- ` 를 그대로 둔다', () => {
+    const doc = '- 하나'
+    const state = makeState(doc, 0)
+    expect(replaced(build(state))).toHaveLength(0)
+  })
+
+  it('C3 기호 직후(본문 첫 글자 앞)도 기호 구역이라 원문을 그대로 둔다', () => {
+    const doc = '- 하나'
+    const state = makeState(doc, doc.indexOf('하'))
+    expect(replaced(build(state))).toHaveLength(0)
+  })
+
+  it('C7 순서 목록 본문에 커서면 md-list-marker 폭을 유지한다', () => {
+    const doc = '1. 하나'
+    const state = makeState(doc, doc.length)
+    const decos = build(state)
+    const marker = decos.find((r) => r.value.spec.class === 'md-list-marker')
+    expect(marker).toBeDefined()
+    expect(replaced(decos)).toHaveLength(0) // 원문 숨김 없음(마커는 class 로만 표시)
+  })
+
+  it('C8 체크박스 본문에 커서면 ListMark 는 숨고 체크박스 위젯은 유지한다', () => {
+    const doc = '- [ ] 하나'
+    const state = makeState(doc, doc.length)
+    const hidden = replaced(build(state))
+    expect(hidden).toHaveLength(2) // ListMark+공백 숨김 1개 + CheckboxWidget 1개
+    expect(hidden.some((h) => h.value.spec.widget?.constructor.name === 'CheckboxWidget')).toBe(true)
+  })
+
+  it('C9 줄 전체를 선택하면 기호 구역을 걸치므로 원문을 그대로 둔다', () => {
+    const doc = '- 하나'
+    const state = makeState(doc, 0, doc.length) // 선택: 줄 전체
+    expect(replaced(build(state))).toHaveLength(0)
+  })
+
+  it('C10 편집기 포커스가 없으면 커서가 본문에 있어도 위젯을 유지한다(F-146 회귀)', () => {
+    const doc = '- 하나'
+    const state = makeState(doc, doc.length)
+    const hidden = replaced(buildLines(state, [{ from: 0, to: state.doc.length }], false))
+    expect(hidden).toHaveLength(1)
+    expect(hidden[0].value.spec.widget.constructor.name).toBe('BulletWidget')
+  })
+})
+
 describe('buildLines — 목록 들여쓰기 고정 폭 (F-251 3.1·3.2, A1)', () => {
   function indentSteps(state: EditorState): (number | null)[] {
     // 문서 순서대로 목록 줄 각각의 ListIndentWidget steps — 위젯이 없으면(1단계) null
@@ -166,9 +220,17 @@ describe('buildLines — 목록 들여쓰기 고정 폭 (F-251 3.1·3.2, A1)', (
     expect(indentSteps(state)).toEqual([null, 1, 2])
   })
 
-  it('활성 줄은 앞 공백을 그대로 둔다(위젯 없음)', () => {
+  // F-254 로 판정이 줄 전체 활성에서 기호 구역(줄 시작~ListMark+공백)으로 바뀌었다 — 본문 커서는 위젯을 그대로 둔다(C5)
+  it('본문에 커서면 위젯을 그대로 둔다(C5)', () => {
     const doc = '- 하나\n  - 둘'
-    const state = makeState(doc, doc.length) // 커서: 마지막 줄('둘')
+    const state = makeState(doc, doc.length) // 커서: 둘째 줄 본문('둘' 뒤)
+    expect(indentSteps(state)).toEqual([null, 1])
+  })
+
+  it('기호 구역(Home)에 커서면 앞 공백을 원문 그대로 둔다(위젯 없음, C6)', () => {
+    const doc = '- 하나\n  - 둘'
+    const homeOfSecondLine = doc.indexOf('  - 둘')
+    const state = makeState(doc, homeOfSecondLine)
     expect(indentSteps(state)).toEqual([null, null])
   })
 })

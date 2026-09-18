@@ -9,7 +9,7 @@ import { StateEffect, StateField } from '@codemirror/state'
 import type { DecorationSet, ViewUpdate } from '@codemirror/view'
 import { Decoration, EditorView, ViewPlugin, WidgetType } from '@codemirror/view'
 
-import { activeLines, isEditorFocused } from './active'
+import { activeLines, isEditorFocused, selectionTouches } from './active'
 import { isComposing, isForced } from '../composition'
 import { frontmatterWidgetExtension, frontmatterWidgetInfo } from '../frontmatter'
 import { parseCalloutHeader, defaultCalloutTitle } from '../../lib/callout'
@@ -33,11 +33,21 @@ const SETEXT_CLASS: Record<string, string> = {
 
 type Line = ReturnType<EditorState['doc']['lineAt']>
 
-// ListMark(또는 HeaderMark·QuoteMark) 뒤에 오는 공백 1칸까지 포함한 숨김 범위
-function hideMarkAndSpace(state: EditorState, node: SyntaxNode): CMRange<Decoration> {
+// ListMark(또는 HeaderMark·QuoteMark) 끝 + 뒤 공백 1칸(있을 때)까지의 위치
+function markAndSpaceEnd(state: EditorState, node: SyntaxNode): number {
   let to = node.to
   if (state.doc.sliceString(to, to + 1) === ' ') to += 1
-  return HIDE.range(node.from, to)
+  return to
+}
+
+// ListMark(또는 HeaderMark·QuoteMark) 뒤에 오는 공백 1칸까지 포함한 숨김 범위
+function hideMarkAndSpace(state: EditorState, node: SyntaxNode): CMRange<Decoration> {
+  return HIDE.range(node.from, markAndSpaceEnd(state, node))
+}
+
+// 목록 기호 구역(줄 시작 ~ ListMark 끝 + 공백 1칸)에 커서(선택 범위 하나라도)가 있는가 (F-254 3.1)
+function isCursorInMarkZone(state: EditorState, hasFocus: boolean, lineFrom: number, markNode: SyntaxNode): boolean {
+  return selectionTouches(state, lineFrom, markAndSpaceEnd(state, markNode), hasFocus)
 }
 
 function lineClassRange(line: Line, className: string): CMRange<Decoration> {
@@ -312,7 +322,7 @@ export function buildLines(
             const lineObj = state.doc.lineAt(node.from)
             // 내어쓰기 대상 (F-152 2.3, 값은 listIndentPreview)
             out.push(lineClassRange(lineObj, 'md-list-line'))
-            if (active.has(lineObj.number)) return
+            if (isCursorInMarkZone(state, hasFocus, lineObj.from, node.node)) return
             const depth = listItemDepth(node.node)
             if (depth > 1) {
               const indentText = state.doc.sliceString(lineObj.from, node.from)
@@ -336,8 +346,11 @@ export function buildLines(
           }
 
           case 'TaskMarker': {
-            const line = state.doc.lineAt(node.from).number
-            if (active.has(line)) return
+            const line = state.doc.lineAt(node.from)
+            // 앞에 있는 ListMark(F-254 3.1) 와 같은 기호 구역 판정을 받는다 — 둘은 한 시각 단위
+            const listMark = node.node.parent?.parent?.getChild('ListMark')
+            const inZone = listMark ? isCursorInMarkZone(state, hasFocus, line.from, listMark) : active.has(line.number)
+            if (inZone) return
             const mid = state.doc.sliceString(node.from + 1, node.to - 1)
             const checked = mid === 'x' || mid === 'X'
             out.push(Decoration.replace({ widget: new CheckboxWidget(checked) }).range(node.from, node.to))
