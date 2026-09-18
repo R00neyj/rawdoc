@@ -1,10 +1,17 @@
 // 도움말 전체 화면 읽기 전용 뷰어 (specs/features/F-244.md 3.2) — 대화상자 대신 전용 라우트 #/help 에서 그린다
+import type { RefObject } from 'react'
+
 import Viewer from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { HELP_DOC_CONTENT } from './helpDoc'
+import Outline from './Outline'
+import { helpOutlineHandle, type HelpOutlineHandle } from './helpOutline'
 
-// 정적 문서라 렌더 결과를 모듈 스코프에서 한 번만 만든다 — 컴포넌트를 훅 없이 순수 함수로 둔다
+// 정적 문서라 렌더 결과·목차 ref 를 모듈 스코프에서 한 번만 만든다 — 컴포넌트를 훅 없이 순수 함수로 둔다 (F-249.md 3.1)
 const HELP_HTML = renderMarkdown(HELP_DOC_CONTENT)
+const helpEditorRef: RefObject<HelpOutlineHandle | null> = { current: helpOutlineHandle }
+const containerRef: RefObject<HTMLElement | null> = { current: null }
+const viewerRef: RefObject<HTMLElement | null> = { current: null }
 
 type HelpPageProps = {
   onClose: () => void
@@ -25,8 +32,9 @@ export default function HelpPage({ onClose, onCopy }: HelpPageProps) {
           </button>
         </div>
       </div>
-      <div className="help-page-body">
-        <Viewer html={HELP_HTML} codeCopy />
+      <div className="help-page-body" ref={containerRef as RefObject<HTMLDivElement | null>}>
+        <Viewer ref={viewerRef as RefObject<HTMLDivElement | null>} html={HELP_HTML} codeCopy />
+        <Outline editorRef={helpEditorRef} containerRef={containerRef} viewerRef={viewerRef} docId="help" viewMode="view" />
       </div>
     </div>
   )

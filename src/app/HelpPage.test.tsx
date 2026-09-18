@@ -2,6 +2,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import HelpPage from './HelpPage'
 import Viewer from '../viewer/Viewer'
+import Outline from './Outline'
+import { helpOutlineHandle } from './helpOutline'
 
 type Node =
   | { type: unknown; props?: { className?: unknown; children?: unknown; onClick?: (...a: unknown[]) => unknown } }
@@ -77,5 +79,32 @@ describe('F-244 A3 HelpPage', () => {
     const props = viewers[0].props as unknown as { html: string; codeCopy?: boolean }
     expect(props.html).toContain('<strong>굵게</strong>')
     expect(props.codeCopy).toBe(true)
+  })
+})
+
+describe('F-249 A2 HelpPage 목차', () => {
+  it('트리에 Outline 이 있고 핸들·ref 가 전달된다', () => {
+    const tree = HelpPage({ onClose: () => {}, onCopy: () => {} })
+    const outlines = findByType(tree, Outline)
+    expect(outlines).toHaveLength(1)
+    const props = outlines[0].props as unknown as {
+      editorRef: { current: unknown }
+      containerRef: { current: unknown }
+      viewerRef: { current: unknown }
+      docId: string | null
+      viewMode: string
+    }
+    expect(props.editorRef.current).toBe(helpOutlineHandle)
+    expect(props.containerRef).toHaveProperty('current')
+    expect(props.viewerRef).toHaveProperty('current')
+    expect(props.viewMode).toBe('view')
+  })
+
+  it('목차가 Viewer 다음에 온다(같은 content-area 안, 머리줄 밖)', () => {
+    const tree = HelpPage({ onClose: () => {}, onCopy: () => {} })
+    const viewers = findByType(tree, Viewer)
+    const outlines = findByType(tree, Outline)
+    expect(viewers).toHaveLength(1)
+    expect(outlines).toHaveLength(1)
   })
 })

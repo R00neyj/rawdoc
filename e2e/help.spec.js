@@ -1,6 +1,6 @@
-// 도움말 전용 페이지 (specs/features/F-244.md)
+// 도움말 전용 페이지 (specs/features/F-244.md), 오른쪽 목차 (F-249.md)
 import { test, expect } from '@playwright/test'
-import { openApp } from './helpers.js'
+import { openApp, resizeWindow } from './helpers.js'
 
 // 그룹 순서 — F-244.md 3.1 이 명시한 순서 그대로(helpSyntax.ts 와 같다)
 const EXPECTED_GROUP_ORDER = [
@@ -104,5 +104,44 @@ test.describe('F-244 A10 직접 진입', () => {
     await page.goto('/#/help')
     await expect(page.locator('.help-page')).toBeVisible()
     await expect(page.locator('.help-page-title')).toHaveText('도움말')
+  })
+})
+
+test.describe('F-249 A3 목차 보임', () => {
+  test('넓은 창 — 오른쪽에 목차가 보이고 항목 수가 제목 수와 같다', async ({ page }) => {
+    await resizeWindow(page, 1400, 900)
+    await page.goto('/#/help')
+    await expect(page.locator('.help-page')).toBeVisible()
+    await expect(page.locator('nav.outline')).toBeVisible()
+
+    const headingCount = await page.locator('.help-page-body h1, .help-page-body h2, .help-page-body h3').count()
+    await expect(page.locator('.outline-rail-item')).toHaveCount(headingCount)
+  })
+})
+
+test.describe('F-249 A4 이동', () => {
+  test('목차의 표 항목 클릭 — 본문이 그 제목으로 스크롤된다', async ({ page }) => {
+    await resizeWindow(page, 1400, 900)
+    await page.goto('/#/help')
+    await expect(page.locator('nav.outline')).toBeVisible()
+
+    await page.locator('nav.outline').hover()
+    await page.locator('.outline-item', { hasText: /^표$/ }).click()
+
+    await expect(page.locator('.help-page-body h2', { hasText: /^표$/ })).toBeInViewport()
+  })
+})
+
+test.describe('F-249 A5 좁은 창', () => {
+  test('선 목차 대신 목차 버튼이 보이고 누르면 카드가 열린다', async ({ page }) => {
+    await resizeWindow(page, 900, 700)
+    await page.goto('/#/help')
+    await expect(page.locator('.help-page')).toBeVisible()
+
+    await expect(page.locator('nav.outline')).toHaveCount(0)
+    const btn = page.locator('.outline-btn')
+    await expect(btn).toBeVisible()
+    await btn.click()
+    await expect(page.locator('.outline-popup-card')).toBeVisible()
   })
 })

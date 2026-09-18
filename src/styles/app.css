@@ -1373,6 +1373,7 @@ body.sidebar-resizing {
 }
 
 .help-page-body {
+  position: relative; /* 오른쪽 목차(.outline) 기준점 — .content-area 와 같은 역할 (F-249.md 3.2) */
   flex: 1;
   min-height: 0;
 }
