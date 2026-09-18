@@ -44,6 +44,19 @@ function lineClassRange(line: Line, className: string): CMRange<Decoration> {
   return Decoration.line({ class: className }).range(line.from)
 }
 
+// ListMark 가 속한 목록 항목의 중첩 단계 — 조상 ListItem 수 + 1 (F-251 3.1)
+function listItemDepth(listMarkNode: SyntaxNode): number {
+  let depth = 1
+  let list = listMarkNode.parent?.parent
+  while (list) {
+    const ancestorItem = list.parent
+    if (!ancestorItem || ancestorItem.name !== 'ListItem') break
+    depth += 1
+    list = ancestorItem.parent
+  }
+  return depth
+}
+
 // Blockquote 의 "머리 텍스트" — `>` 와 그 뒤 공백 0~1개를 뗀 첫 줄 나머지, 그리고
 // 그 텍스트가 시작하는 문서 위치. parseCalloutHeader(F-128 2장)에 그대로 적용한다
 function calloutHeadOf(state: EditorState, blockquoteNode: SyntaxNode): { headFrom: number; headText: string } {
@@ -103,6 +116,31 @@ class CalloutIconWidget extends WidgetType {
     }
 
     return wrap
+  }
+
+  ignoreEvent(): boolean {
+    return true
+  }
+}
+
+// 중첩 목록 줄의 앞 공백을 단계 수(steps=깊이-1)만큼 고정 폭으로 보이게 하는 위젯 — 원문은 그대로 둔다 (F-251 3.1·3.2)
+class ListIndentWidget extends WidgetType {
+  steps: number
+
+  constructor(steps: number) {
+    super()
+    this.steps = steps
+  }
+
+  eq(other: ListIndentWidget): boolean {
+    return other instanceof ListIndentWidget && other.steps === this.steps
+  }
+
+  toDOM(): HTMLElement {
+    const span = document.createElement('span')
+    span.className = 'md-list-indent-step'
+    span.style.setProperty('--md-list-indent-steps', String(this.steps))
+    return span
   }
 
   ignoreEvent(): boolean {
@@ -275,6 +313,14 @@ export function buildLines(
             // 내어쓰기 대상 (F-152 2.3, 값은 listIndentPreview)
             out.push(lineClassRange(lineObj, 'md-list-line'))
             if (active.has(lineObj.number)) return
+            const depth = listItemDepth(node.node)
+            if (depth > 1) {
+              const indentText = state.doc.sliceString(lineObj.from, node.from)
+              // 앞이 공백뿐일 때만 고정 폭으로 바꾼다 — 인용 안 목록 등은 범위 밖(F-251)
+              if (/^[ \t]+$/.test(indentText)) {
+                out.push(Decoration.replace({ widget: new ListIndentWidget(depth - 1) }).range(lineObj.from, node.from))
+              }
+            }
             const nextIsTask = node.node.nextSibling?.name === 'Task'
             if (nextIsTask) {
               out.push(hideMarkAndSpace(state, node.node))

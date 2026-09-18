@@ -137,6 +137,42 @@ describe('buildLines — 목록', () => {
   })
 })
 
+describe('buildLines — 목록 들여쓰기 고정 폭 (F-251 3.1·3.2, A1)', () => {
+  function indentSteps(state: EditorState): (number | null)[] {
+    // 문서 순서대로 목록 줄 각각의 ListIndentWidget steps — 위젯이 없으면(1단계) null
+    const decos = build(state)
+    const listLines = [...state.doc.iterLines()]
+      .map((_, i) => i + 1)
+      .filter((n) => {
+        const line = state.doc.line(n)
+        return decos.some((r) => r.from === line.from && r.value.spec.class?.includes('md-list-line'))
+      })
+    return listLines.map((n) => {
+      const line = state.doc.line(n)
+      const widgetDeco = decos.find(
+        (r) => r.from === line.from && r.value.spec.widget?.constructor.name === 'ListIndentWidget',
+      )
+      return widgetDeco ? widgetDeco.value.spec.widget.steps : null
+    })
+  }
+
+  it('2칸 들여쓰기 3단계 문서 — 1·2·3단계 steps 는 null(0)·1·2', () => {
+    const state = makeState('- 하나\n  - 둘\n    - 셋\n', 0)
+    expect(indentSteps(state)).toEqual([null, 1, 2])
+  })
+
+  it('4칸 들여쓰기 3단계 문서도 원문 칸 수와 무관하게 같은 steps', () => {
+    const state = makeState('- 하나\n    - 둘\n        - 셋\n', 0)
+    expect(indentSteps(state)).toEqual([null, 1, 2])
+  })
+
+  it('활성 줄은 앞 공백을 그대로 둔다(위젯 없음)', () => {
+    const doc = '- 하나\n  - 둘'
+    const state = makeState(doc, doc.length) // 커서: 마지막 줄('둘')
+    expect(indentSteps(state)).toEqual([null, null])
+  })
+})
+
 describe('listAncestorMarks — 중첩 목록 깊이 안내선 (F-236 3장)', () => {
   function marksOf(state: EditorState) {
     return listAncestorMarks(state, [{ from: 0, to: state.doc.length }])

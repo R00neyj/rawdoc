@@ -65,17 +65,28 @@
   color: var(--md-fg-muted);
 }
 
+/* 중첩 목록 단계마다 고정 폭 — 값 하나로 관리한다(F-251 3.4). 보기 모드는 markdown.css 가 같은 이름으로 따로 정의한다(DOM 트리가 다르다) */
+.cm-host .cm-editor {
+  --md-list-step: 2em;
+}
+
 /* 목록 내어쓰기: 첫 화면 줄은 상쇄, 둘째 줄부터 글자 시작선 (F-152 2.3) */
 .cm-host .cm-editor .cm-line.md-list-line {
   padding-left: var(--md-list-indent, 0px);
   text-indent: calc(-1 * var(--md-list-indent, 0px));
 }
 
-/* 글머리 목록 — 폭 2em 은 보기 모드 목록 들여쓰기와 같게. inline-flex + justify-content:center 로 상자 안에서 가운데 정렬해 글자와의 거리를 줄인다. text-indent 는 상속돼 안 글자에도 다시 적용돼(F-166 3장 원인 1) 0 으로 끊는다 (F-152 2.3) */
+/* 중첩 줄의 앞 공백 자리 — ListIndentWidget 이 원문 공백 수와 무관하게 단계 수만큼 고정 폭을 채운다(F-251 3.2, decoration 은 표시만 바꾼다) */
+.md-list-indent-step {
+  display: inline-block;
+  width: calc(var(--md-list-step) * var(--md-list-indent-steps, 0));
+}
+
+/* 글머리 목록 — 폭은 --md-list-step 한 칸, 보기 모드 목록 들여쓰기와 같게. inline-flex + justify-content:center 로 상자 안에서 가운데 정렬해 글자와의 거리를 줄인다. text-indent 는 상속돼 안 글자에도 다시 적용돼(F-166 3장 원인 1) 0 으로 끊는다 (F-152 2.3) */
 .md-bullet {
   display: inline-flex;
   justify-content: center;
-  min-width: 2em;
+  min-width: var(--md-list-step);
   text-indent: 0;
   color: var(--accent);
   font-weight: 700;
@@ -85,7 +96,7 @@
 .md-list-marker {
   display: inline-flex;
   justify-content: center;
-  min-width: 2em;
+  min-width: var(--md-list-step);
   text-indent: 0;
 }
 

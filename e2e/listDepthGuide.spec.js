@@ -1,6 +1,6 @@
 // 중첩 목록 깊이 안내선 (specs/features/F-236.md)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, setViewMode, readSavedContent } from './helpers.js'
+import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad } from './helpers.js'
 
 // li 자신의 글머리·번호 기호 ::before 칸의 가로 가운데 (F-236 6장 — 칸은 justify-content:center 라 칸 가운데 = 글자 가운데, F-226 listView.spec.js 와 같은 측정 방법)
 async function markerX(li) {
@@ -220,4 +220,111 @@ test.describe('F-236 A12 편집 모드 가운데', () => {
     expect(guideNa.count).toBe(1)
     expect(Math.abs(guideNa.xs[0] - markerGa)).toBeLessThanOrEqual(4)
   })
+})
+
+// 중첩 목록 들여쓰기를 단계마다 고정 폭으로 (specs/features/F-251.md)
+async function stepFontSize(page) {
+  return page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.cm-line')).fontSize))
+}
+
+test.describe('F-251 A2 편집 모드 단계별 폭', () => {
+  test('2칸·4칸 문서에서 기호 x 가 같고 단계 간격이 2em(±2px)', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- 가\n  - 나\n    - 다\n마침\n' })
+    await page.locator('.cm-line', { hasText: '마침' }).click()
+    const font = await stepFontSize(page)
+    const ga2 = await editMarkerX(page, '가')
+    const na2 = await editMarkerX(page, '나')
+    const da2 = await editMarkerX(page, '다')
+
+    await importMarkdown(page, { content: '- 가\n    - 나\n        - 다\n마침\n' })
+    await page.locator('.cm-line', { hasText: '마침' }).click()
+    const ga4 = await editMarkerX(page, '가')
+    const na4 = await editMarkerX(page, '나')
+    const da4 = await editMarkerX(page, '다')
+
+    // 2칸 문서와 4칸 문서 — 같은 단계는 같은 x (원문 칸 수와 무관, F-251 3.1)
+    expect(Math.abs(ga2 - ga4)).toBeLessThanOrEqual(2)
+    expect(Math.abs(na2 - na4)).toBeLessThanOrEqual(2)
+    expect(Math.abs(da2 - da4)).toBeLessThanOrEqual(2)
+    // 단계 간격은 고정 폭 2em (F-251 3.4 기본값)
+    expect(Math.abs(na2 - ga2 - font * 2)).toBeLessThanOrEqual(2)
+    expect(Math.abs(da2 - na2 - font * 2)).toBeLessThanOrEqual(2)
+  })
+})
+
+test.describe('F-251 A3 보기 모드 단계별 폭', () => {
+  for (const [label, doc] of [
+    ['2칸', '- 가\n  - 나\n    - 다\n마침\n'],
+    ['4칸', '- 가\n    - 나\n        - 다\n마침\n'],
+  ]) {
+    test(`${label} 문서 — 편집 모드와 단계 간격이 같다(±4px)`, async ({ page }) => {
+      await openApp(page)
+      await importMarkdown(page, { content: doc })
+      await page.locator('.cm-line', { hasText: '마침' }).click()
+
+      const editGa = await editMarkerX(page, '가')
+      const editNa = await editMarkerX(page, '나')
+
+      await setViewMode(page, 'view')
+      const items = page.locator('.markdown-body li')
+      const viewGa = await markerX(items.nth(0))
+      const viewNa = await markerX(items.nth(1))
+
+      // 측정 방식이 달라(위젯 상자 vs ::before) 절대값엔 구조적 오프셋이 있어 간격끼리 비교한다(F-152 A5 와 같은 델타 비교)
+      expect(Math.abs(editNa - editGa - (viewNa - viewGa))).toBeLessThanOrEqual(4)
+    })
+  }
+})
+
+test.describe('F-251 A4 안내선 새 폭 기준', () => {
+  test('2칸·4칸 문서에서 안내선 x 가 같고 조상 기호 가운데를 따른다(±2px)', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- 가\n  - 나\n    - 다\n마침\n' })
+    await page.locator('.cm-line', { hasText: '마침' }).click()
+    const markerGa2 = await editMarkerX(page, '가')
+    const markerNa2 = await editMarkerX(page, '나')
+    const guideNa2 = await editGuideLine(page, '나')
+    const guideDa2 = await editGuideLine(page, '다')
+
+    await importMarkdown(page, { content: '- 가\n    - 나\n        - 다\n마침\n' })
+    await page.locator('.cm-line', { hasText: '마침' }).click()
+    const guideNa4 = await editGuideLine(page, '나')
+    const guideDa4 = await editGuideLine(page, '다')
+
+    expect(guideNa2.count).toBe(1)
+    expect(Math.abs(guideNa2.xs[0] - markerGa2)).toBeLessThanOrEqual(2)
+    expect(guideDa2.count).toBe(2)
+    expect(Math.abs(guideDa2.xs[0] - markerGa2)).toBeLessThanOrEqual(2)
+    expect(Math.abs(guideDa2.xs[1] - markerNa2)).toBeLessThanOrEqual(2)
+
+    // 4칸 문서도 같은 안내선 x (원문 칸 수와 무관)
+    expect(Math.abs(guideNa4.xs[0] - guideNa2.xs[0])).toBeLessThanOrEqual(2)
+    expect(Math.abs(guideDa4.xs[0] - guideDa2.xs[0])).toBeLessThanOrEqual(2)
+    expect(Math.abs(guideDa4.xs[1] - guideDa2.xs[1])).toBeLessThanOrEqual(2)
+  })
+})
+
+test.describe('F-251 A8 Tab 뒤 화면 깊이', () => {
+  for (const indent of ['2', '4']) {
+    test(`설정 ${indent}칸 — 원문은 설정대로, 화면 깊이는 고정 2em`, async ({ page }) => {
+      await setPrefBeforeLoad(page, 'md.indent', indent)
+      await openApp(page)
+      const docId = await importMarkdown(page, { content: '- 가\n- 나\n마침\n' })
+
+      await page.locator('.cm-line', { hasText: '나' }).click()
+      await page.keyboard.press('Home')
+      await page.keyboard.press('Tab')
+
+      const saved = await readSavedContent(page, docId)
+      const naLine = saved.content.split('\n')[1]
+      expect(naLine.match(/^( *)-/)[1].length).toBe(Number(indent))
+
+      await page.locator('.cm-line', { hasText: '마침' }).click()
+      const font = await stepFontSize(page)
+      const ga = await editMarkerX(page, '가')
+      const na = await editMarkerX(page, '나')
+      expect(Math.abs(na - ga - font * 2)).toBeLessThanOrEqual(2)
+    })
+  }
 })
