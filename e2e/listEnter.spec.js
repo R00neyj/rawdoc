@@ -170,14 +170,91 @@ test.describe('F-245 A14 항목 1개·3개 — 회귀', () => {
   })
 })
 
-test.describe('F-245 A15 이미 loose 인 목록', () => {
-  test('- 하나\\n\\n- 둘 끝에서 Enter → 빈 줄 이어쓰기 유지', async ({ page }) => {
+// F-245 6.5 A15 를 뒤집는다 — loose 목록 이어쓰기가 빈 줄을 새로 만들지 않는다 (specs/features/F-253.md)
+test.describe('F-253 B2 loose 글머리', () => {
+  test('- 하나\\n\\n- 둘 끝에서 Enter → 새 빈 줄 없이 바로 다음 줄, 원래 빈 줄은 그대로', async ({ page }) => {
     await openApp(page)
     const docId = await importMarkdown(page, { content: '\n- 하나\n\n- 둘' })
     await placeCursorAtEnd(page)
     await page.keyboard.press('Enter')
     await page.keyboard.type('X')
-    expect((await readSavedContent(page, docId)).content).toBe('\n- 하나\n\n- 둘\n\n- X')
+    expect((await readSavedContent(page, docId)).content).toBe('\n- 하나\n\n- 둘\n- X')
+  })
+})
+
+test.describe('F-253 B3 loose 체크박스', () => {
+  test('- [x] 완료\\n\\n- 테스트 끝에서 Enter', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: '\n- [x] 완료\n\n- 테스트' })
+    await placeCursorAtEnd(page)
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('X')
+    expect((await readSavedContent(page, docId)).content).toBe('\n- [x] 완료\n\n- 테스트\n- X')
+  })
+})
+
+test.describe('F-253 B4 loose 순서 목록', () => {
+  test('1. 하나\\n\\n2. 둘 끝에서 Enter → 번호 증가 유지', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: '\n1. 하나\n\n2. 둘' })
+    await placeCursorAtEnd(page)
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('X')
+    expect((await readSavedContent(page, docId)).content).toBe('\n1. 하나\n\n2. 둘\n3. X')
+  })
+})
+
+test.describe('F-253 B5 loose 중첩', () => {
+  test('- 하나\\n\\n  - 둘 끝에서 Enter → 들여쓰기 유지한 채 바로 다음 줄', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: '\n- 하나\n\n  - 둘' })
+    await placeCursorAtEnd(page)
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('X')
+    expect((await readSavedContent(page, docId)).content).toBe('\n- 하나\n\n  - 둘\n  - X')
+  })
+})
+
+test.describe('F-253 B8 loose 목록 빈 항목 Enter', () => {
+  test('- 하나\\n\\n- 끝에서 Enter → 목록이 끝난다, 앞의 빈 줄은 그대로', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: '\n- 하나\n\n- ' })
+    await placeCursorAtEnd(page)
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('X')
+    expect((await readSavedContent(page, docId)).content).toBe('\n- 하나\n\nX')
+  })
+})
+
+test.describe('F-253 B9 인용문 안 목록', () => {
+  test('> - 하나\\n>\\n> - 둘 끝에서 Enter → 바로 다음 줄에 인용·목록 기호', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: '\n> - 하나\n>\n> - 둘' })
+    await placeCursorAtEnd(page)
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('X')
+    expect((await readSavedContent(page, docId)).content).toBe('\n> - 하나\n>\n> - 둘\n> - X')
+  })
+})
+
+test.describe('F-253 B10 원문 불변', () => {
+  test('B2 결과를 .md 로 내보내기 — 화면에서 본 줄 수와 같다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '\n- 하나\n\n- 둘' })
+    await placeCursorAtEnd(page)
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('X')
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+    ])
+    const stream = await download.createReadStream()
+    const chunks = []
+    for await (const chunk of stream) chunks.push(chunk)
+    const text = Buffer.concat(chunks).toString('utf-8')
+    expect(text).toBe('\n- 하나\n\n- 둘\n- X')
+    expect(text.split('\n')).toHaveLength(5)
   })
 })
 

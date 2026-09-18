@@ -100,13 +100,36 @@ describe('F-245 A11~A16 빈 목록 항목 Enter — 단위', () => {
     expect(runEnter('- 하나\n- 둘\n- ')).toBe('- 하나\n- 둘\n')
   })
 
-  it('A15 이미 loose 인 목록 — 빈 줄 이어쓰기는 유지한다', () => {
-    expect(runEnter('- 하나\n\n- 둘')).toBe('- 하나\n\n- 둘\n\n- ')
-  })
-
   it('A16 순서 목록·중첩 — 각각 목록이 끝난다', () => {
     expect(runEnter('1. 하나\n2. ')).toBe('1. 하나\n')
     expect(runEnter('  - 하나\n  - ')).toBe('  - 하나\n')
+  })
+})
+
+// F-245 6.5 A15 를 뒤집는다 — loose 목록 이어쓰기가 빈 줄을 새로 만들지 않는다 (specs/features/F-253.md)
+describe('F-253 B2~B9 빈 줄로 끊긴(loose) 목록 Enter — 단위', () => {
+  it('B2 loose 글머리 — 새 빈 줄 없이 바로 다음 줄, 원래 빈 줄은 그대로', () => {
+    expect(runEnter('- 하나\n\n- 둘')).toBe('- 하나\n\n- 둘\n- ')
+  })
+
+  it('B3 loose 체크박스', () => {
+    expect(runEnter('- [x] 완료\n\n- 테스트')).toBe('- [x] 완료\n\n- 테스트\n- ')
+  })
+
+  it('B4 loose 순서 목록 — 번호 증가 유지', () => {
+    expect(runEnter('1. 하나\n\n2. 둘')).toBe('1. 하나\n\n2. 둘\n3. ')
+  })
+
+  it('B5 loose 중첩 — 들여쓰기 유지한 채 바로 다음 줄', () => {
+    expect(runEnter('- 하나\n\n  - 둘')).toBe('- 하나\n\n  - 둘\n  - ')
+  })
+
+  it('B8 loose 목록 빈 항목 Enter — 목록이 끝난다, 앞의 빈 줄은 그대로', () => {
+    expect(runEnter('- 하나\n\n- ')).toBe('- 하나\n\n')
+  })
+
+  it('B9 인용문 안 목록 — 바로 다음 줄에 인용 기호와 목록 기호', () => {
+    expect(runEnter('> - 하나\n>\n> - 둘')).toBe('> - 하나\n>\n> - 둘\n> - ')
   })
 })
 
