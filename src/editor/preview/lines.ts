@@ -533,14 +533,54 @@ export function listContentStarts(state: EditorState, ranges: readonly { from: n
   return out
 }
 
-type ListIndentResult = { lineFrom: number; px: number }
+type ListAncestorMarks = { lineFrom: number; ancestorMarkFroms: number[] }
+
+// ListMark 가 있는 줄의 조상 목록 항목 ListMark 문서 위치 — 1단계 조상이 배열 앞, 가까운 부모가 뒤 (F-236 3장). 최상위 줄은 결과에 없다
+export function listAncestorMarks(state: EditorState, ranges: readonly { from: number; to: number }[]): ListAncestorMarks[] {
+  const out: ListAncestorMarks[] = []
+
+  for (const { from, to } of ranges) {
+    syntaxTree(state).iterate({
+      from,
+      to,
+      enter: (node) => {
+        if (node.name !== 'ListMark') return
+        const marks: number[] = []
+        let list = node.node.parent?.parent // 이 항목을 담은 List(BulletList/OrderedList)
+        while (list) {
+          const ancestorItem = list.parent
+          if (!ancestorItem || ancestorItem.name !== 'ListItem') break
+          const ancestorMark = ancestorItem.getChild('ListMark')
+          if (ancestorMark) marks.push(ancestorMark.from)
+          list = ancestorItem.parent
+        }
+        if (marks.length > 0) out.push({ lineFrom: state.doc.lineAt(node.from).from, ancestorMarkFroms: marks.reverse() })
+      },
+    })
+  }
+
+  return out
+}
+
+type ListIndentResult = { lineFrom: number; px: number; guides?: number[] }
+
+// 줄 하나의 --md-list-indent + 중첩 깊이 안내선(F-236) 을 합친 style 속성 문자열 — 안내선은 조상마다 배경 세로 선(1px, 줄 높이 100%) 하나, decoration 은 표시만 바꾼다(원문·구조는 그대로)
+function listIndentStyle({ px, guides }: ListIndentResult): string {
+  let style = `--md-list-indent: ${px}px`
+  if (guides && guides.length > 0) {
+    const image = guides.map(() => 'linear-gradient(var(--md-border-muted), var(--md-border-muted))').join(', ')
+    const position = guides.map((g) => `${g}px 0`).join(', ')
+    style += `; background-image: ${image}; background-position: ${position}; background-size: 1px 100%; background-repeat: no-repeat`
+  }
+  return style
+}
 
 // --md-list-indent 실측값을 문서 위치에 매단다(StateEffect) — el.style 에 직접 쓰면 CM6 가 그 줄을 다시 그릴 때(커서 출입만으로도) decoration 밖 style 을 지운다(observer.ignore 로도 못 막음); decoration attributes 로 넣으면 재적용이 최신 값 그대로라 지워지는 틈이 없다 (F-166 3장 (나))
 const setListIndent = StateEffect.define<ListIndentResult[]>()
 
 function listIndentDecorations(results: ListIndentResult[]): DecorationSet {
   return Decoration.set(
-    results.map(({ lineFrom, px }) => Decoration.line({ attributes: { style: `--md-list-indent: ${px}px` } }).range(lineFrom)),
+    results.map((result) => Decoration.line({ attributes: { style: listIndentStyle(result) } }).range(result.lineFrom)),
     true,
   )
 }
@@ -564,9 +604,7 @@ function sameListIndent(view: EditorView, results: ListIndentResult[]): boolean 
     const style = (deco.spec.attributes as { style: string }).style
     current.push(`${from}:${style}`)
   })
-  const next = results
-    .map(({ lineFrom, px }) => `${lineFrom}:--md-list-indent: ${px}px`)
-    .sort()
+  const next = results.map((result) => `${result.lineFrom}:${listIndentStyle(result)}`).sort()
   current.sort()
   return current.length === next.length && current.every((v, i) => v === next[i])
 }
@@ -587,15 +625,29 @@ export function listIndentPreview(): Extension {
 
       scheduleMeasure(view: EditorView) {
         view.requestMeasure<ListIndentResult[]>({
-          read: (view) =>
-            listContentStarts(view.state, view.visibleRanges)
+          read: (view) => {
+            const ancestorsByLine = new Map(
+              listAncestorMarks(view.state, view.visibleRanges).map((a) => [a.lineFrom, a.ancestorMarkFroms]),
+            )
+            return listContentStarts(view.state, view.visibleRanges)
               .map(({ lineFrom, pos }) => {
                 const lineLeft = view.coordsAtPos(lineFrom, 1)
                 const contentLeft = view.coordsAtPos(pos, 1)
                 if (!lineLeft || !contentLeft) return null
-                return { lineFrom, px: Math.max(0, Math.round(contentLeft.left - lineLeft.left)) }
+                const px = Math.max(0, Math.round(contentLeft.left - lineLeft.left))
+                const ancestorMarkFroms = ancestorsByLine.get(lineFrom)
+                if (!ancestorMarkFroms) return { lineFrom, px }
+                // 조상 마커 좌표를 하나라도 못 재면(화면 밖 등) 안내선 없이 들여쓰기만 둔다
+                const guides: number[] = []
+                for (const markFrom of ancestorMarkFroms) {
+                  const markCoords = view.coordsAtPos(markFrom, 1)
+                  if (!markCoords) return { lineFrom, px }
+                  guides.push(Math.round(markCoords.left - lineLeft.left))
+                }
+                return { lineFrom, px, guides }
               })
-              .filter((r): r is ListIndentResult => r !== null),
+              .filter((r): r is ListIndentResult => r !== null)
+          },
           write: (results, view) => {
             if (sameListIndent(view, results)) return
             // write 는 CM6 자신의 update 처리 도중(같은 호출 스택)에도 불려 바로 dispatch 하면 "update 중 update 호출" 오류가 난다 — 현재 동기 실행이 끝난 뒤(마이크로태스크)로 미룬다

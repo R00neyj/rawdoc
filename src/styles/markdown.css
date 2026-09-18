@@ -150,6 +150,28 @@
   justify-content: center;
 }
 
+/* 중첩 목록 깊이 안내선(F-236) — li 가 padding 이 없어 그 자식 목록 왼쪽 경계 = li 왼쪽 경계라, li 기호 위치(-2em)를 그대로 이 목록 기준으로 쓰면 "부모 항목 기호" 자리에 선다. 깊이 3+ 은 조상마다 자기 몫을 그려 겹친다(top:0~bottom:0 이 더 깊은 중첩도 자연히 덮음, 사이드바 .tree-group::before(app.css) 와 같은 개념) */
+:is(.app-shell, .public-view) .markdown-body ul ul,
+:is(.app-shell, .public-view) .markdown-body ol ul,
+:is(.app-shell, .public-view) .markdown-body ul ol,
+:is(.app-shell, .public-view) .markdown-body ol ol {
+  position: relative;
+}
+
+:is(.app-shell, .public-view) .markdown-body ul ul::before,
+:is(.app-shell, .public-view) .markdown-body ol ul::before,
+:is(.app-shell, .public-view) .markdown-body ul ol::before,
+:is(.app-shell, .public-view) .markdown-body ol ol::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -2em;
+  width: 1px;
+  background: var(--md-border-muted);
+  pointer-events: none;
+}
+
 /* 작업 목록(F-124 3.4) — renderMarkdown.js 가 붙이는 ul.contains-task-list 안 체크박스로 고른다. 칸 폭은 편집 모드 md-checkbox 실측값(F-226 A1) */
 :is(.app-shell, .public-view) .markdown-body ul.contains-task-list {
   padding-left: 1.1875em;

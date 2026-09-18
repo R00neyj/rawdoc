@@ -5,7 +5,7 @@ import { EditorState } from '@codemirror/state'
 import { Decoration } from '@codemirror/view'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
-import { buildLines, fenceLineRanges, mapDecorationsOnHold } from './lines'
+import { buildLines, fenceLineRanges, listAncestorMarks, mapDecorationsOnHold } from './lines'
 import { frontmatterExtension } from '../frontmatter'
 
 function makeState(doc: string, anchor = 0, head = anchor): EditorState {
@@ -134,6 +134,50 @@ describe('buildLines — 목록', () => {
   it('체크박스가 활성 줄이면 그대로 둔다', () => {
     const state = makeState('- [ ] todo\nx', 0)
     expect(replaced(build(state))).toHaveLength(0)
+  })
+})
+
+describe('listAncestorMarks — 중첩 목록 깊이 안내선 (F-236 3장)', () => {
+  function marksOf(state: EditorState) {
+    return listAncestorMarks(state, [{ from: 0, to: state.doc.length }])
+  }
+
+  it('최상위 줄은 결과에 없다', () => {
+    const state = makeState('- 가\n')
+    expect(marksOf(state)).toHaveLength(0)
+  })
+
+  it('2단계 줄은 조상 1개(최상위 ListMark 위치)', () => {
+    const doc = '- 가\n  - 나\n'
+    const state = makeState(doc)
+    const naLine = state.doc.line(2)
+    const result = marksOf(state).find((r) => r.lineFrom === naLine.from)
+    expect(result?.ancestorMarkFroms).toEqual([0]) // '-' 위치(첫 줄 시작)
+  })
+
+  it('3단계 줄은 조상 2개, 1단계가 앞·2단계가 뒤', () => {
+    const doc = '- 가\n  - 나\n    - 다\n'
+    const state = makeState(doc)
+    const daLine = state.doc.line(3)
+    const naLine = state.doc.line(2)
+    const result = marksOf(state).find((r) => r.lineFrom === daLine.from)
+    expect(result?.ancestorMarkFroms).toEqual([0, naLine.from + 2]) // 가(최상위) → 나(ListMark 는 공백 2칸 뒤)
+  })
+
+  it('순서 목록도 같은 규칙', () => {
+    const doc = '1. 가\n   1. 나\n'
+    const state = makeState(doc)
+    const naLine = state.doc.line(2)
+    const result = marksOf(state).find((r) => r.lineFrom === naLine.from)
+    expect(result?.ancestorMarkFroms).toEqual([0])
+  })
+
+  it('형제 목록으로는 조상을 잘못 찾지 않는다(세로 범위가 새지 않는 근거)', () => {
+    const doc = '- 가\n  - 나1\n  - 나2\n- 다\n'
+    const state = makeState(doc)
+    // '다' 는 최상위라 조상이 없다 — '가' 의 자식 목록과 무관
+    const daLine = state.doc.line(4)
+    expect(marksOf(state).find((r) => r.lineFrom === daLine.from)).toBeUndefined()
   })
 })
 
