@@ -299,3 +299,97 @@ test.describe('F-242 A12 열린 문서가 지워짐', () => {
     expect(await page.evaluate(() => location.hash)).toBe('#/')
   })
 })
+
+// 새 폴더 직후 Enter 로 폴더가 두 개 생기는 문제 (F-246.md) — Enter 재진입을 같은 턴 연속 클릭으로 결정적으로 재현한다
+async function raceClickButton(page, label, times = 2) {
+  await page.evaluate(
+    ({ label, times }) => {
+      const btn = [...document.querySelectorAll('button')].find(
+        (b) => b.getAttribute('aria-label') === label || b.textContent.trim() === label,
+      )
+      if (!btn) throw new Error(`button not found: ${label}`)
+      for (let i = 0; i < times; i++) btn.click()
+    },
+    { label, times },
+  )
+}
+
+test.describe('F-246 A1 사이드바 버튼 + Enter', () => {
+  test('대기 없이 바로 Enter 를 쳐도 폴더는 하나만 생기고 이름 칸에 포커스가 있다', async ({ page }) => {
+    await openApp(page)
+    await raceClickButton(page, '새 폴더')
+
+    const renameInput = page.locator('.tree-rename-input')
+    await expect(renameInput).toBeFocused()
+    await expect(page.locator('.tree-toggle')).toHaveCount(1)
+  })
+})
+
+test.describe('F-246 A2 연타', () => {
+  test('Enter 를 3번 연속 쳐도 폴더는 하나', async ({ page }) => {
+    await openApp(page)
+    await raceClickButton(page, '새 폴더', 3)
+
+    await expect(page.locator('.tree-toggle')).toHaveCount(1)
+  })
+})
+
+test.describe('F-246 A3 레일 버튼', () => {
+  test('사이드바 접은 상태에서 레일 새 폴더 → 바로 Enter — 폴더 하나, 펼쳐지고 이름 칸 포커스', async ({ page }) => {
+    await openApp(page)
+    await page.locator('.sidebar-toggle').click() // 레일로 접기
+    await expect(page.locator('.sidebar')).toHaveClass(/sidebar--collapsed/)
+
+    await raceClickButton(page, '새 폴더')
+
+    await expect(page.locator('.sidebar')).not.toHaveClass(/sidebar--collapsed/)
+    const renameInput = page.locator('.tree-rename-input')
+    await expect(renameInput).toBeFocused()
+    await expect(page.locator('.tree-toggle')).toHaveCount(1)
+  })
+})
+
+test.describe('F-246 A4 하위 폴더', () => {
+  test('하위 폴더 만들기 → 바로 Enter — 그 폴더 안에 하나만', async ({ page }) => {
+    await openApp(page)
+    const parentRow = await createFolder(page)
+
+    await openFolderMenu(parentRow)
+    await raceClickButton(page, '하위 폴더')
+
+    const renameInput = page.locator('.tree-rename-input')
+    await expect(renameInput).toBeFocused()
+    // 부모 폴더 + 하위 폴더 = 토글 2개. 하위가 둘이면 3개가 된다
+    await expect(page.locator('.tree-toggle')).toHaveCount(2)
+  })
+})
+
+test.describe('F-246 A5 정상 흐름 회귀', () => {
+  test('새 폴더 → 이름 칸에 이름 치고 Enter — 이름이 저장된다', async ({ page }) => {
+    await openApp(page)
+    await page.getByRole('button', { name: '새 폴더', exact: true }).click()
+    const renameInput = page.locator('.tree-rename-input')
+    await expect(renameInput).toBeFocused()
+    await page.keyboard.type('내 폴더')
+    await page.keyboard.press('Enter')
+
+    await expect(page.locator('.tree-toggle')).toHaveCount(1)
+    await expect(page.locator('.tree-row').filter({ hasText: '내 폴더' })).toHaveCount(1)
+  })
+})
+
+test.describe('F-246 A6 연속으로 두 번 만들기', () => {
+  test('폴더 하나 만들어 이름 확정 뒤, 다시 새 폴더를 눌러도 정상으로 만들어진다', async ({ page }) => {
+    await openApp(page)
+    await createFolder(page)
+    await expect(page.locator('.tree-toggle')).toHaveCount(1)
+
+    // 방금 만든 폴더 이름이 기본값 "새 폴더" 라 트리 안에도 같은 이름 버튼이 생긴다 — 사이드바 만들기 버튼만 짚는다
+    await page.locator('.sidebar-btn').filter({ hasText: '새 폴더' }).click()
+    const renameInput = page.locator('.tree-rename-input')
+    await expect(renameInput).toBeFocused()
+    await page.keyboard.press('Enter')
+
+    await expect(page.locator('.tree-toggle')).toHaveCount(2)
+  })
+})

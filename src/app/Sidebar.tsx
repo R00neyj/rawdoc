@@ -561,6 +561,8 @@ export default function Sidebar({
 
   const editingInputRef = useRef<HTMLInputElement | null>(null)
   const skipBlurCommitRef = useRef(false)
+  // `새 폴더` 저장소 왕복이 끝나기 전(포커스가 아직 버튼에 있는 사이) Enter·재클릭이 들어와 폴더가 두 번 생기는 문제 방지 (F-246 3.1)
+  const creatingFolderRef = useRef(false)
 
   useEffect(() => {
     if (editingId && editingInputRef.current) {
@@ -602,12 +604,20 @@ export default function Sidebar({
   }
 
   async function handleCreateFolder(parentId: string | null) {
-    const folder = await onCreateFolder(parentId)
-    if (folder) startRename(folder.id, folder.name)
+    if (creatingFolderRef.current) return // 이미 만드는 중 — 조용히 무시 (F-246 3.2)
+    creatingFolderRef.current = true
+    try {
+      const folder = await onCreateFolder(parentId)
+      if (folder) startRename(folder.id, folder.name)
+    } finally {
+      creatingFolderRef.current = false
+    }
   }
 
   // 레일에서 `새 폴더`: 이름 입력 칸은 트리 안에 있으므로 먼저 사이드바를 펼친 뒤 이름 입력을 시작한다 (F-143 3.3)
+  // 가드를 여기서도 확인해야 한다 — 그렇지 않으면 재진입마다 onToggleCollapse() 가 다시 불려 접힘·펼침이 뒤집힌다
   function handleRailCreateFolder() {
+    if (creatingFolderRef.current) return
     onToggleCollapse()
     handleCreateFolder(null)
   }
