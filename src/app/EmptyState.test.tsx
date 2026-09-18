@@ -21,6 +21,7 @@ const baseProps = {
   onCreateDoc: () => {},
   onImportDoc: () => {},
   onSelectDoc: () => {},
+  onOpenHelp: () => {},
 }
 
 function makeDocs(n: number) {
@@ -59,5 +60,18 @@ describe('F-241 A3 클릭', () => {
 
     expect(onSelectDoc).toHaveBeenCalledTimes(1)
     expect(onSelectDoc).toHaveBeenCalledWith('doc-1')
+  })
+})
+
+describe('F-257 G12 도움말 줄', () => {
+  it('누르면 onOpenHelp 가 불린다', () => {
+    const onOpenHelp = vi.fn()
+    const tree = EmptyState({ ...baseProps, recentDocs: [], onOpenHelp })
+    const items = collect(tree, 'empty-state-help')
+    expect(items).toHaveLength(1)
+
+    items[0].props?.onClick?.()
+
+    expect(onOpenHelp).toHaveBeenCalledTimes(1)
   })
 })

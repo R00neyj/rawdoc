@@ -15,6 +15,7 @@ type EmptyStateProps = {
   onImportDoc: () => void
   recentDocs: RecentDoc[]
   onSelectDoc: (id: string) => void
+  onOpenHelp: () => void
 }
 
 // ApiTokensDialog.tsx 의 formatDate 와 같은 모양(YYYY-MM-DD) — 쓰는 곳이 둘뿐이라 공용 유틸로 빼지 않는다 (F-241 3.2)
@@ -27,7 +28,7 @@ function formatDate(ts: number): string {
 }
 
 // hasDocs — 문서가 하나도 없을 때와 홈 화면(문서는 있지만 선택 안 함)일 때 문구만 다르다 (F-232 3.2)
-export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDocs, onSelectDoc }: EmptyStateProps) {
+export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDocs, onSelectDoc, onOpenHelp }: EmptyStateProps) {
   const recent = recentDocs.slice(0, MAX_RECENT)
   return (
     <div className="empty-state">
@@ -46,6 +47,9 @@ export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDo
           가져오기
         </button>
       </div>
+      <button type="button" className="empty-state-help" onClick={onOpenHelp}>
+        처음이신가요? 도움말 보기
+      </button>
       {recent.length > 0 && (
         <>
           <div className="empty-state-recent-heading">최근 문서</div>

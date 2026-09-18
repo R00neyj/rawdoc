@@ -31,7 +31,6 @@ import { resolveTheme } from './theme'
 import { parseHash, formatHash, parsePathRoute, type HashRoute } from './hashRoute'
 import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
-import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
 import { exportDoc } from './exportDoc'
@@ -66,6 +65,7 @@ import MoveDocDialog, { type MoveDocTarget } from './MoveDocDialog'
 import SettingsDialog from './SettingsDialog'
 import HelpPage from './HelpPage'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
+import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
 import StatusBar from './StatusBar'
 import SharedView from './SharedView'
 import PublicView from './PublicView'
@@ -2257,6 +2257,7 @@ export default function App() {
                 onImportDoc={requestImport}
                 recentDocs={ownedDocs.slice(0, 5)}
                 onSelectDoc={selectDoc}
+                onOpenHelp={openHelp}
               />
             </div>
           )}

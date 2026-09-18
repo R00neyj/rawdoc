@@ -47,7 +47,8 @@ test.describe('F-244 A5 내용', () => {
       cursor = idx + 1
     }
 
-    await expect(helpPage.locator('.help-page-body table')).toBeVisible()
+    // F-257.md 2장의 "자주 쓰는 문법" 요약 표가 하나 더 생겨 표가 여럿이다 — 하나 이상만 확인한다
+    await expect(helpPage.locator('.help-page-body table').first()).toBeVisible()
     await expect(helpPage.locator('.help-page-body .markdown-callout')).toBeVisible()
   })
 })
@@ -59,7 +60,8 @@ test.describe('F-244 A6 원문·결과 둘 다', () => {
 
     const boldSource = helpPage.locator('pre', { hasText: '**굵게**' }).first()
     await expect(boldSource.locator('code')).toHaveText('**굵게**')
-    await expect(helpPage.locator('.help-page-body strong', { hasText: '굵게' })).toBeVisible()
+    // F-257.md 2장 요약 표에도 굵게 예시가 있어 <strong> 이 여럿이다 — 하나 이상만 확인한다
+    await expect(helpPage.locator('.help-page-body strong', { hasText: '굵게' }).first()).toBeVisible()
   })
 })
 
@@ -95,7 +97,8 @@ test.describe('F-244 A9 내 문서로 복사', () => {
 
     await expect(page).toHaveURL(/#\/d\/.+/)
     await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    await expect(page.locator('.sidebar').getByRole('button', { name: '마크다운 문법', exact: true })).toBeVisible()
+    // 문서 목록 행(.tree-row) 으로 좁혀 확인한다 — 사이드바 도움말 이동 버튼과 이름이 같다(F-257.md G2)
+    await expect(page.locator('.sidebar .tree-row', { hasText: '도움말' })).toBeVisible()
   })
 })
 
@@ -143,5 +146,35 @@ test.describe('F-249 A5 좁은 창', () => {
     await expect(btn).toBeVisible()
     await btn.click()
     await expect(page.locator('.outline-popup-card')).toBeVisible()
+  })
+})
+
+// 앱 사용법 절이 추가된 뒤에도 렌더가 깨지지 않는지 (F-257.md 5장 G5)
+test.describe('F-257 G5 앱 사용법 절 렌더', () => {
+  test('새 절 제목이 보이고 표·체크박스·콜아웃이 깨지지 않는다', async ({ page }) => {
+    await openApp(page)
+    const helpPage = await openHelpPage(page)
+
+    await expect(helpPage.locator('h2', { hasText: '이 앱은' })).toBeVisible()
+    await expect(helpPage.locator('h2', { hasText: '단축키' })).toBeVisible()
+    await expect(helpPage.locator('table').first()).toBeVisible()
+    await expect(helpPage.locator('.markdown-callout')).toBeVisible()
+    await expect(helpPage.locator('input[type="checkbox"]').first()).toBeVisible()
+  })
+})
+
+// 오른쪽 목차에 새 절이 모두 뜨는지 (F-257.md 5장 G6, F-249 A3 회귀)
+test.describe('F-257 G6 목차에 새 절 반영', () => {
+  test('넓은 창 — 목차 항목 수가 본문 제목 수와 같고 앱 사용법 절도 들어 있다', async ({ page }) => {
+    await resizeWindow(page, 1400, 900)
+    await page.goto('/#/help')
+    await expect(page.locator('.help-page')).toBeVisible()
+    await expect(page.locator('nav.outline')).toBeVisible()
+
+    const headingCount = await page.locator('.help-page-body h1, .help-page-body h2, .help-page-body h3').count()
+    await expect(page.locator('.outline-rail-item')).toHaveCount(headingCount)
+
+    await page.locator('nav.outline').hover()
+    await expect(page.locator('.outline-item', { hasText: '문서 관리' })).toBeVisible()
   })
 })
