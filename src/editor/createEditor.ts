@@ -137,11 +137,17 @@ function editorContextMenuHandler(notify: (info: EditorContextMenuInfo) => void)
 }
 
 // 좌우 여백(.cm-content·.cm-gutters 밖, F-143 3.8) 클릭 시 포커스만 없앤다(F-146 3.1) — EditorView.domEventHandlers 는 contentDOM 에만 붙어 scroller 자신을 target 으로 한 클릭엔 안 닿아 view.scrollDOM 에 원시 리스너를 붙인다. 막지 않으면 tabIndex=-1 인 scroller 가 기본 동작으로 포커스를 먹어 view.dom 안에 남는다
+// event.target 이 아니라 composedPath() 로 판정한다(F-240.md 3.1) — target 은 핸들러가 도는 동안 DOM 이 바뀌면(위젯이 원문으로 풀려 그 DOM 이 트리에서 떨어지면) closest() 판정이 뒤집히지만, composedPath() 는 디스패치 시점에 확정돼 이후 DOM 변화와 무관하다
+function isInsideEditorContent(event: MouseEvent): boolean {
+  return event
+    .composedPath()
+    .some((node) => node instanceof Element && node.matches('.cm-content, .cm-gutters'))
+}
+
 function attachMarginClickGuard(view: EditorView): () => void {
   const handler = (event: MouseEvent) => {
     if (event.button !== 0) return
-    const target = event.target as HTMLElement | null
-    if (target?.closest?.('.cm-content, .cm-gutters')) return
+    if (isInsideEditorContent(event)) return
     event.preventDefault()
     ;(view.root.activeElement as HTMLElement | null)?.blur()
   }

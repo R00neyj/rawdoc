@@ -1,6 +1,8 @@
 /* 라이브 프리뷰 전용 스타일 (specs/features/F-105.md 2장 "제목 크기", specs/features/F-124.md —
    GitHub 마크다운 스타일(크기·굵기·여백·테두리·모서리·줄 간격), CLAUDE.md 불변조건 —
    제품명·색 hex 를 직접 쓰지 않는다. 토큰만 참조한다) */
+/* 코드블록 복사 버튼 모양(.code-copy-btn) 공용 CSS (specs/features/F-240.md 3.4) — @import 는 파일 맨 위에 있어야 한다 */
+@import '../../styles/codeCopy.css';
 
 /* ===== 제목 (F-124 3.2) =====
    CM6 는 줄 높이를 DOM 에서 재는데 margin 은 반영되지 않는다고 알려져 있어(F-124 3.2),
@@ -200,10 +202,16 @@
   border-radius: 6px;
 }
 
+/* 머리줄 — 언어 + 복사 버튼 (F-240.md 3.2). 복사 버튼(.code-copy-btn) 은 공용 CSS 그대로 position:absolute 라 레이아웃과 무관하게 오른쪽 위에 놓인다 — 머리줄은 그 버튼이 code 첫 줄과 겹치지 않게 자리만 비워 준다 */
+.md-codeblock-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 36px;
+  padding: 0 40px 0 12px;
+}
+
 .md-codeblock-lang {
-  position: absolute;
-  top: 4px;
-  right: 8px;
   color: var(--muted);
   font-size: 11px;
   font-family: var(--font-sans);

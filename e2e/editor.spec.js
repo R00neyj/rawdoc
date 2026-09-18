@@ -523,3 +523,116 @@ test.describe('F-166 A4 커서 줄 내어쓰기', () => {
     })
   }
 })
+
+// 코드블록 클릭 진입 회귀 + 언어·복사 버튼 (specs/features/F-240.md) — 앞에 문단을 둔다(코드블록이 문서 맨 앞이면 초기 커서(pos 0)와 겹쳐 원문으로 열려 클릭 진입 재현이 안 된다)
+const F240_CODE_DOC = '문단\n\n```js\nline1\nline2\nline3\n```\n'
+
+test.describe('F-240 A1 클릭 진입 (회귀)', () => {
+  test('둘째 줄 클릭 → End → ! 입력 — 그 줄에 들어가고 포커스가 유지되며 원문으로 펼쳐진다', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: F240_CODE_DOC })
+
+    await page.locator('.md-codeblock-line', { hasText: 'line2' }).click()
+    await page.keyboard.press('End')
+    await page.keyboard.type('!')
+
+    await expect(page.locator('.cm-editor.cm-focused')).toHaveCount(1)
+    // 클릭한 코드블록이 원문으로 펼쳐졌다 — 위젯(줄 span)이 더는 없다
+    await expect(page.locator('.md-codeblock-line')).toHaveCount(0)
+
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content).toContain('line2!')
+  })
+})
+
+test.describe('F-240 A2 클릭 진입 — 첫 줄·마지막 줄', () => {
+  test('첫 줄 클릭 → Home → ! 입력', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: F240_CODE_DOC })
+
+    await page.locator('.md-codeblock-line', { hasText: 'line1' }).click()
+    await page.keyboard.press('Home')
+    await page.keyboard.type('!')
+
+    await expect(page.locator('.cm-editor.cm-focused')).toHaveCount(1)
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content).toContain('!line1')
+  })
+
+  test('마지막 줄 클릭 → End → ! 입력', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: F240_CODE_DOC })
+
+    await page.locator('.md-codeblock-line', { hasText: 'line3' }).click()
+    await page.keyboard.press('End')
+    await page.keyboard.type('!')
+
+    await expect(page.locator('.cm-editor.cm-focused')).toHaveCount(1)
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content).toContain('line3!')
+  })
+})
+
+test.describe('F-240 A3 여백 클릭은 그대로', () => {
+  test('.cm-content 바깥 좌우 여백을 클릭하면 포커스가 풀린다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: F240_CODE_DOC })
+
+    await page.locator('.md-codeblock-line', { hasText: 'line2' }).click()
+    await expect(page.locator('.cm-editor.cm-focused')).toHaveCount(1)
+
+    const rect = await rectOf(page.locator('.cm-scroller'))
+    await page.mouse.click(rect.left + 10, rect.top + rect.height / 2)
+
+    await expect(page.locator('.cm-editor.cm-focused')).toHaveCount(0)
+  })
+})
+
+test.describe('F-240 A4 언어 표시', () => {
+  test('```js — 오른쪽 위에 js', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: F240_CODE_DOC })
+    await expect(page.locator('.md-codeblock-lang')).toHaveText('js')
+  })
+
+  test('```js title="a.js" — js 만', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '문단\n\n```js title="a.js"\nline1\n```\n' })
+    await expect(page.locator('.md-codeblock-lang')).toHaveText('js')
+  })
+})
+
+test.describe('F-240 A5 언어 없는 코드블록', () => {
+  test('언어 칸 없음, 복사 버튼은 있음', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '문단\n\n```\nline1\n```\n' })
+    await expect(page.locator('.md-codeblock-lang')).toHaveCount(0)
+    await expect(page.locator('.md-codeblock-head .code-copy-btn')).toHaveCount(1)
+  })
+})
+
+test.describe('F-240 A6 복사', () => {
+  test('본문 줄만(펜스·정보 문자열 제외) \\n 으로 이어진 문자열이 클립보드에 담긴다', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await openApp(page)
+    await importMarkdown(page, { content: F240_CODE_DOC })
+
+    await page.locator('.md-codeblock-head .code-copy-btn').click()
+    const clip = await page.evaluate(() => navigator.clipboard.readText())
+    // OS 클립보드 왕복(Windows)이 \n 을 \r\n 으로 바꿀 수 있다 — 앱이 쓴 값 자체를 보려면 되돌린다
+    expect(clip.replace(/\r\n/g, '\n')).toBe('line1\nline2\nline3')
+  })
+})
+
+test.describe('F-240 A7 복사 버튼은 편집 진입 아님', () => {
+  test('복사 버튼을 눌러도 위젯이 유지되고 커서가 코드블록 안으로 들어가지 않는다', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await openApp(page)
+    await importMarkdown(page, { content: F240_CODE_DOC })
+
+    await page.locator('.md-codeblock-head .code-copy-btn').click()
+
+    await expect(page.locator('.md-codeblock-line')).toHaveCount(3) // 위젯 유지(원문으로 펼쳐지지 않음)
+    await expect(page.locator('.cm-editor.cm-focused')).toHaveCount(0)
+  })
+})

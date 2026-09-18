@@ -1,0 +1,29 @@
+/* 코드블록 복사 버튼 공용 모양 (F-210.md 2.5, F-240.md 3.4) — 보기 모드(viewer.css)·편집 모드(preview.css) 양쪽에서 import 한다 */
+.code-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: var(--transition-colors);
+}
+
+.code-copy-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.code-copy-btn:hover {
+  color: var(--ink);
+  background: var(--rule-2);
+}

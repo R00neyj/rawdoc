@@ -6,7 +6,7 @@ import { EditorState } from '@codemirror/state'
 import { Decoration, EditorView } from '@codemirror/view'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
-import { blockPreview, buildBlocks, observeHeight, stopObservingHeight } from './blocks'
+import { blockPreview, buildBlocks, codeBlockText, observeHeight, stopObservingHeight } from './blocks'
 import type { EditorState as CMState } from '@codemirror/state'
 import type { TableModel } from './tableModel'
 
@@ -424,6 +424,32 @@ describe('buildBlocks — 이미지 블록 위젯 (F-157 2.1 A1)', () => {
 
     const same = findImageWidget(makeState(IMAGE_BLOCK + '\n\nx', doc.length))
     expect(a!.eq(same!)).toBe(true)
+  })
+})
+
+describe('codeBlockText — 복사 대상 문자열 (F-240.md 3.3 A8)', () => {
+  it('펜스·정보 문자열 없이 본문 줄만 \\n 으로 잇는다', () => {
+    const doc = '```js\nconst a = 1\nconst b = 2\n```\nx'
+    const state = makeState(doc, doc.length)
+    const widget = buildBlocks(state).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec
+      .widget as TestCodeWidget
+    expect(codeBlockText(widget.lines)).toBe('const a = 1\nconst b = 2')
+  })
+
+  it('목록 안 코드블록도 본문 줄만(들여쓰기 제외한 원문) 이어 붙는다', () => {
+    const doc = '- 항목\n\n  ```\n  a\n  b\n  ```\n\nx'
+    const state = makeState(doc, doc.length)
+    const widget = buildBlocks(state).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec
+      .widget as TestCodeWidget
+    expect(codeBlockText(widget.lines)).toBe('a\nb')
+  })
+
+  it('인용 안 코드블록도 본문 줄만("> " 접두 제외한 원문) 이어 붙는다', () => {
+    const doc = '> ```\n> a\n> b\n> ```\n\nx'
+    const state = makeState(doc, doc.length)
+    const widget = buildBlocks(state).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec
+      .widget as TestCodeWidget
+    expect(codeBlockText(widget.lines)).toBe('a\nb')
   })
 })
 
