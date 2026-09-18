@@ -9,6 +9,7 @@ import { findWikiLinks } from '../lib/wikiLink'
 import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from '../lib/frontmatter'
 import { parseImageBlock } from '../lib/imageBlock'
 import type { ParsedImageBlock } from '../lib/imageBlock'
+import { isMermaidInfo } from '../lib/codeLang'
 
 // html:false — 원문 HTML 태그는 파싱하지 않고 글자 그대로(이스케이프되어) 보인다.
 // 링크·이미지 주소 검사는 markdown-it 기본 validateLink 를 그대로 쓴다
@@ -210,6 +211,21 @@ md.renderer.rules.image = function (tokens, idx, options, env, self) {
 
 // 코드블록(fence)의 language-{info 첫 단어} 클래스, 제목 앵커 없음은 markdown-it 기본
 // 동작 그대로다 (options.highlight 를 주지 않아 구문 강조 없음)
+
+// ----- Mermaid 다이어그램 (F-258.md 2.4) — mermaid 면 placeholder div(Viewer.tsx 가 채운다), 아니면 기본 fence 렌더러 위임 -----
+const defaultFence: RendererRule =
+  md.renderer.rules.fence ||
+  function (tokens, idx, options, _env, self) {
+    return self.renderToken(tokens, idx, options)
+  }
+
+md.renderer.rules.fence = function (tokens, idx, options, env, self) {
+  const token = tokens[idx]
+  if (isMermaidInfo(token.info)) {
+    return `<div class="md-mermaid" data-mermaid-source="${md.utils.escapeHtml(token.content)}"></div>\n`
+  }
+  return defaultFence(tokens, idx, options, env, self)
+}
 
 // ----- 제목 원문 줄 번호 (F-144.md 3.4) — body 기준 0-based 에 프론트매터 줄 수를 더해 1-based -----
 const defaultHeadingOpen: RendererRule =

@@ -22,6 +22,7 @@ type TestImageWidget = {
   width: number | null
   eq(other: TestImageWidget): boolean
 }
+type TestMermaidWidget = { source: string; eq(other: TestMermaidWidget): boolean }
 
 function makeState(doc: string, anchor = 0, head = anchor, timeout = 5000) {
   const state = EditorState.create({
@@ -424,6 +425,46 @@ describe('buildBlocks — 이미지 블록 위젯 (F-157 2.1 A1)', () => {
 
     const same = findImageWidget(makeState(IMAGE_BLOCK + '\n\nx', doc.length))
     expect(a!.eq(same!)).toBe(true)
+  })
+})
+
+describe('buildBlocks — mermaid 코드블록 위젯 (F-258 A1)', () => {
+  const MERMAID_DOC = '```mermaid\ngraph TD; A-->B\n```\n'
+  const MIXED_MERMAID_DOC = MERMAID_DOC + '\n' + CODE_DOC + 'x'
+
+  function findMermaidWidget(state: CMState): TestMermaidWidget | undefined {
+    return buildBlocks(state).find((r) => (r.value.spec.widget as TestMermaidWidget).source !== undefined)?.value.spec
+      .widget
+  }
+
+  it('정보문자열이 mermaid 면 MermaidWidget 을 만든다(원문 코드블록은 그대로 CodeWidget)', () => {
+    const state = makeState(MIXED_MERMAID_DOC, MIXED_MERMAID_DOC.length)
+    const widgets = widgetsOf(state)
+    expect(widgets.some((w) => w.source !== undefined)).toBe(true)
+    expect(widgets.some((w) => w.lines !== undefined)).toBe(true)
+    expect(widgets).toHaveLength(2)
+  })
+
+  it('MermaidWidget 은 코드 본문을 source 로 들고 있다', () => {
+    const state = makeState(MERMAID_DOC + 'x', (MERMAID_DOC + 'x').length)
+    const widget = findMermaidWidget(state)
+    expect(widget).toBeDefined()
+    expect(widget!.source).toBe('graph TD; A-->B')
+  })
+
+  it('커서가 mermaid 코드블록 안이면 위젯을 만들지 않는다(F-106 겹치면 원문 규칙)', () => {
+    const doc = MERMAID_DOC + 'x'
+    const cursor = doc.indexOf('A-->B')
+    const state = makeState(doc, cursor)
+    expect(findMermaidWidget(state)).toBeUndefined()
+  })
+
+  it('eq() 는 소스 문자열만 비교한다(위치가 달라져도 내용이 같으면 eq)', () => {
+    const docA = 'x\n' + MERMAID_DOC + '\ny'
+    const docB = 'xx\n' + MERMAID_DOC + '\ny'
+    const a = findMermaidWidget(makeState(docA, docA.length))!
+    const b = findMermaidWidget(makeState(docB, docB.length))!
+    expect(a.eq(b)).toBe(true)
   })
 })
 

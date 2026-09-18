@@ -474,3 +474,23 @@
   transition: opacity var(--transition-pop-fade), scale var(--transition-pop), translate var(--transition-pop);
   transition-delay: 0s;
 }
+
+/* 블록 위젯 — Mermaid 다이어그램(F-258 2.5, 최소 구현). 위아래 간격은 코드블록·표와 같은 이유로 margin 대신 padding */
+.md-block.md-mermaid {
+  padding: 4px 0;
+  text-align: center;
+  cursor: text;
+}
+
+.md-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.md-mermaid-error {
+  padding: 16px;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-align: left;
+}

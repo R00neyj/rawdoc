@@ -23,3 +23,21 @@
 .viewer--code-copy pre {
   position: relative;
 }
+
+/* Mermaid 다이어그램 (specs/features/F-258.md 2.5, 최소 구현) — svg 는 가운데 정렬 */
+.md-mermaid {
+  text-align: center;
+}
+
+.md-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.md-mermaid-error {
+  padding: 16px;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-align: left;
+}

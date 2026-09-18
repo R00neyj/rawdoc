@@ -50,3 +50,9 @@ export function displayLang(info: string): string {
   if (!word) return ''
   return CODE_LANG_DISPLAY[word.toLowerCase()] ?? word
 }
+
+// 정보 문자열의 첫 단어가 (대소문자 무관) mermaid 인가 (F-258 2.1) — displayLang 과 같은 방식으로 첫 단어만 본다
+export function isMermaidInfo(info: string): boolean {
+  const word = info.trim().split(/\s+/)[0] ?? ''
+  return word.toLowerCase() === 'mermaid'
+}

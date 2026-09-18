@@ -12,11 +12,12 @@ import type { SyntaxNode } from '@lezer/common'
 
 import { parseImageBlock } from '../../lib/imageBlock'
 import { createCodeCopyButton } from '../../lib/codeCopyButton'
-import { displayLang } from '../../lib/codeLang'
+import { displayLang, isMermaidInfo } from '../../lib/codeLang'
 import { isComposing, isForced } from '../composition'
 import { isEditorFocused } from './active'
 import type { ResolveAttachment } from './imageWidget'
 import { ImageWidget, destroyImageCache } from './imageWidget'
+import { MermaidWidget, destroyMermaidCache } from './mermaidWidget'
 import {
   TableWidget,
   enterTableFromKeyboard,
@@ -64,7 +65,7 @@ function offsetAt(event: MouseEvent): number {
 // selection 을 다시 잡아 진입 위치가 어긋난다.
 // 위치는 위젯이 들고 있지 않고 클릭 시점에 view.posAtDOM(wrap) 으로 역산한다 —
 // eq() 가 true 면 CM6 가 옛 위젯 인스턴스를 그대로 두므로 저장해 둔 위치는 낡을 수 있다.
-function enterOnClick(wrap: HTMLElement, view: EditorView): void {
+export function enterOnClick(wrap: HTMLElement, view: EditorView): void {
   wrap.addEventListener('mousedown', (event) => {
     event.preventDefault()
     const pos = view.posAtDOM(wrap) + offsetAt(event)
@@ -214,7 +215,8 @@ class CodeWidget extends WidgetType {
 // 조각이 하나뿐(목록·인용 밖의 보통 코드블록)이면 늘 "마지막" 이라 아무것도 버리지
 // 않는다 — 끝에 진짜 빈 줄이 있으면 그대로 남는다(예전 동작과 같다).
 // blockFrom: 위젯이 치환할 범위의 시작(줄 경계로 확장한 값)
-function codeWidget(state: EditorState, node: SyntaxNode, blockFrom: number): CodeWidget {
+// 정보문자열이 mermaid 면(F-258 2.1) MermaidWidget 을, 아니면 기존 CodeWidget 을 만든다(겹치면 원문 규칙 등은 그대로 상속)
+function codeWidget(state: EditorState, node: SyntaxNode, blockFrom: number): WidgetType {
   let info = ''
   const codeTexts: SyntaxNode[] = []
   for (let child = node.firstChild; child; child = child.nextSibling) {
@@ -234,6 +236,7 @@ function codeWidget(state: EditorState, node: SyntaxNode, blockFrom: number): Co
     }
   })
 
+  if (isMermaidInfo(info)) return new MermaidWidget(codeBlockText(lines))
   return new CodeWidget(info, lines)
 }
 
@@ -414,8 +417,10 @@ export function blockPreview({ resolveAttachment }: { resolveAttachment?: Resolv
         viewRef.current = view
       }
       // 에디터 destroy 때 이미지 블록 위젯이 만든 blob URL 을 모두 해제한다 (F-157 2.2)
+      // mermaid 위젯 캐시도 비운다(blob URL 이 없어 URL 해제는 불필요, F-258 2.3)
       destroy() {
         destroyImageCache(viewRef.current)
+        destroyMermaidCache(viewRef.current)
       }
     },
   )

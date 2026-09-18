@@ -134,6 +134,25 @@ describe('renderMarkdown — 코드블록', () => {
   })
 })
 
+describe('renderMarkdown — mermaid (specs/features/F-258.md 2.4)', () => {
+  it('mermaid fence 는 data-mermaid-source 를 든 placeholder div 로 바꾼다(기본 fence 아님)', () => {
+    const html = renderMarkdown('```mermaid\ngraph TD; A-->B\n```\n')
+    expect(html).toContain('<div class="md-mermaid" data-mermaid-source="graph TD; A--&gt;B\n"></div>')
+    expect(html).not.toContain('<pre>')
+  })
+
+  it('본문은 이스케이프해서 넣는다', () => {
+    const html = renderMarkdown('```mermaid\n<script>\n```\n')
+    expect(html).toContain('data-mermaid-source="&lt;script&gt;\n"')
+  })
+
+  it('다른 언어 fence 는 그대로 기본 렌더러를 쓴다(회귀)', () => {
+    const html = renderMarkdown('```js\nconst a = 1\n```\n')
+    expect(html).toContain('<pre><code class="language-js">')
+    expect(html).not.toContain('md-mermaid')
+  })
+})
+
 describe('renderMarkdown — 제목 원문 줄 번호 (specs/features/F-144.md 4장 A1)', () => {
   it('h1~h3 에 data-source-line 을 붙인다', () => {
     const html = renderMarkdown('본문\n\n## 제목\n')

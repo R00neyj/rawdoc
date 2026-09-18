@@ -7,6 +7,7 @@ import './viewer.css'
 
 import brokenImageSvg from '@material-symbols/svg-400/outlined/broken_image.svg?raw'
 import { createCodeCopyButton } from '../lib/codeCopyButton'
+import { renderMermaid } from '../lib/mermaidRender'
 
 const DEFAULT_MISSING_TEXT = '이미지를 찾을 수 없습니다' // F-157 2.2 자리 표시와 같은 문구
 
@@ -135,6 +136,37 @@ export default function Viewer({
       urlsRef.current = []
     }
   }, [])
+
+  // 그린 뒤 .md-mermaid[data-mermaid-source] 마다 렌더링해 채운다 (F-258 2.4, 이미지 로드와 같은 패턴)
+  useEffect(() => {
+    const root = containerRef.current
+    if (!root) return
+
+    let cancelled = false
+    const nodes = root.querySelectorAll<HTMLElement>('.md-mermaid[data-mermaid-source]')
+
+    nodes.forEach((node) => {
+      const source = node.dataset.mermaidSource
+      if (source === undefined) return
+
+      renderMermaid(source).then((result) => {
+        if (cancelled) return
+        if ('svg' in result) {
+          node.innerHTML = result.svg
+        } else {
+          node.replaceChildren()
+          const errorEl = document.createElement('div')
+          errorEl.className = 'md-mermaid-error'
+          errorEl.textContent = result.error
+          node.appendChild(errorEl)
+        }
+      })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [html])
 
   // 그린 뒤 pre > code 마다 복사 버튼을 붙인다 (codeCopy 가 참일 때만, F-210 2.5)
   useEffect(() => {
