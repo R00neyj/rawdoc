@@ -288,15 +288,20 @@ describe('renderMarkdown — 프론트매터 (specs/features/F-133.md 4장 A6)',
   })
 })
 
-describe('renderMarkdown — 위키링크 (specs/features/F-131.md 7장 A3)', () => {
-  it('resolveWikiLink 가 id 를 돌려주면 #/d/{id} 링크가 된다 (새 탭 속성 없음)', () => {
-    const html = renderMarkdown('[[회의록]]', { resolveWikiLink: (t) => (t === '회의록' ? 'abc' : null) })
+describe('renderMarkdown — 위키링크 (specs/features/F-131.md 7장 A3, F-252.md 4.1 C1)', () => {
+  it('resolveWikiLink 가 href 문자열을 돌려주면 그대로 href 로 쓴다 (새 탭 속성 없음)', () => {
+    const html = renderMarkdown('[[회의록]]', { resolveWikiLink: (t) => (t === '회의록' ? '#/d/abc' : null) })
     expect(html).toContain('<a ')
     expect(html).toContain('class="wikilink"')
     expect(html).toContain('href="#/d/abc"')
     expect(html).toContain('data-wikilink="회의록"')
     expect(html).toContain('>회의록</a>')
     expect(html).not.toContain('target="_blank"')
+  })
+
+  it('href 형식을 정하지 않는다 — 어떤 문자열이든 그대로 href 가 된다 (F-252.md 4.1)', () => {
+    const html = renderMarkdown('[[회의록]]', { resolveWikiLink: () => '#/p/tok1/doc1' })
+    expect(html).toContain('href="#/p/tok1/doc1"')
   })
 
   it('resolveWikiLink 가 null 이면 wikilink--missing', () => {
@@ -308,7 +313,7 @@ describe('renderMarkdown — 위키링크 (specs/features/F-131.md 7장 A3)', ()
   })
 
   it('별칭은 보이는 글자만 바뀐다', () => {
-    const html = renderMarkdown('[[회의록|9월 회의]]', { resolveWikiLink: () => 'abc' })
+    const html = renderMarkdown('[[회의록|9월 회의]]', { resolveWikiLink: () => '#/d/abc' })
     expect(html).toContain('data-wikilink="회의록"')
     expect(html).toContain('>9월 회의</a>')
   })

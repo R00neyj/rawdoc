@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseHash, formatHash, formatShareHash, formatPublicFolderHash, parsePathRoute } from './hashRoute'
+import { parseHash, formatHash, formatShareHash, formatPublicFolderHash, formatPublicHash, parsePathRoute } from './hashRoute'
 
 describe('parseHash', () => {
   it('#/d/{id} 형식이면 type doc, docId 를 돌려준다', () => {
@@ -12,6 +12,10 @@ describe('parseHash', () => {
 
   it('#/p/{토큰} 형식이면 type public, token 을 돌려준다', () => {
     expect(parseHash('#/p/abc-token')).toEqual({ type: 'public', token: 'abc-token' })
+  })
+
+  it('#/p/{토큰}/{문서id} 형식이면 type public, docId 포함 (F-252.md 4.2 C3)', () => {
+    expect(parseHash('#/p/abc-token/doc1')).toEqual({ type: 'public', token: 'abc-token', docId: 'doc1' })
   })
 
   it('#/p/f/{토큰} 형식이면 type publicFolder, docId 없음', () => {
@@ -86,6 +90,16 @@ describe('formatPublicFolderHash', () => {
 
   it('docId 있으면 #/p/f/{토큰}/{docId}', () => {
     expect(formatPublicFolderHash('tok1', 'doc1')).toBe('#/p/f/tok1/doc1')
+  })
+})
+
+describe('formatPublicHash', () => {
+  it('docId 없으면 #/p/{토큰} (F-252.md 4.2)', () => {
+    expect(formatPublicHash('tok1')).toBe('#/p/tok1')
+  })
+
+  it('docId 있으면 #/p/{토큰}/{docId}', () => {
+    expect(formatPublicHash('tok1', 'doc1')).toBe('#/p/tok1/doc1')
   })
 })
 

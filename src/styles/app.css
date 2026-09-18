@@ -1629,6 +1629,57 @@ body.sidebar-resizing {
   }
 }
 
+/* ----- D-6 함께 공유할 문서 대화상자 (F-252.md 3.2) ----- */
+.share-set-notice {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.share-set-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.share-set-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.share-set-row {
+  padding: 2px 0;
+}
+
+.share-set-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: var(--radius-control);
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.share-set-row label:has(input:disabled) {
+  color: var(--muted);
+}
+
+.share-set-truncated {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.share-set-warning {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
 /* ----- D-5 API 토큰 대화상자 (F-222.md 2.4) ----- */
 .api-token-name-input {
   display: block;

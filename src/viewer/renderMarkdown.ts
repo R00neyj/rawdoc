@@ -228,11 +228,13 @@ md.renderer.rules.heading_open = function (tokens, idx, options, env, self) {
   return defaultHeadingOpen(tokens, idx, options, env, self)
 }
 
-// ----- 위키링크 (F-131.md 4장) -----
+// ----- 위키링크 (F-131.md 4장, F-252.md 4.1) -----
 // 'inline' 규칙(코드 span·기존 링크 등을 이미 처리해 각각 code_inline·link_open 등의
 // 토큰으로 나눈 뒤) 다음에 실행해, 남은 'text' 자식 토큰(순수 글자)만 훑는다 — 이렇게
 // 하면 인라인코드·fence(펜스는 애초에 'inline' 토큰이 아니다)는 자연히 대상에서 빠진다.
 // 표 칸은 'inline' 토큰이 따로 생기므로 table_open/close 로 깊이를 세어 건너뛴다
+
+// 대상 제목 → href 문자열(찾으면) | null(못 찾으면) — href 모양은 호출부가 정한다 (F-252.md 4.1)
 type ResolveWikiLink = (target: string) => string | null
 
 function wikiLinkTokens(
@@ -256,13 +258,13 @@ function wikiLinkTokens(
   // 'link_open'/'link_close' 를 그대로 쓰지 않는다 — 그 타입은 위 F-123 규칙이
   // target="_blank" rel="noopener noreferrer" 를 붙인다(F-131 4장: 새 탭 속성 없음).
   // 다른 타입 이름으로 만들어 그 규칙을 타지 않고 기본 renderToken 으로 렌더한다
-  const id = resolveWikiLink(target)
+  const href = resolveWikiLink(target)
   const open = new state.Token('wikilink_open', 'a', 1)
   const close = new state.Token('wikilink_close', 'a', -1)
   open.attrSet('data-wikilink', target)
-  if (id) {
+  if (href) {
     open.attrSet('class', 'wikilink')
-    open.attrSet('href', `#/d/${id}`)
+    open.attrSet('href', href)
   } else {
     open.attrSet('class', 'wikilink wikilink--missing')
     open.attrSet('href', '#')

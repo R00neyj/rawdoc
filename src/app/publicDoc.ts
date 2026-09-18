@@ -62,6 +62,35 @@ export function firstFolderDocId(folder: PublicFolder): string | null {
   return null
 }
 
+// 묶음(시작 문서 + 위키링크로 딸린 문서) 목록 (F-252.md 4.3) — 시작 문서가 맨 앞
+export type PublicSetDoc = { id: string; title: string }
+export type PublicSet = { docs: PublicSetDoc[] }
+
+export async function fetchPublicSet(token: string): Promise<PublicSet> {
+  let res: Response
+  try {
+    res = await fetch(`/pub/docs/${encodeURIComponent(token)}/set`, { cache: 'no-store' })
+  } catch {
+    throw new PublicDocError('network')
+  }
+  if (res.status === 404) throw new PublicDocError('not_found')
+  if (!res.ok) throw new PublicDocError('other')
+  return (await res.json()) as PublicSet
+}
+
+// 묶음 안 시작 문서가 아닌 다른 문서 본문 (F-252.md 4.3) — 묶음 밖이면 404
+export async function fetchPublicSetDoc(token: string, docId: string): Promise<PublicDoc> {
+  let res: Response
+  try {
+    res = await fetch(`/pub/docs/${encodeURIComponent(token)}/docs/${encodeURIComponent(docId)}`, { cache: 'no-store' })
+  } catch {
+    throw new PublicDocError('network')
+  }
+  if (res.status === 404) throw new PublicDocError('not_found')
+  if (!res.ok) throw new PublicDocError('other')
+  return (await res.json()) as PublicDoc
+}
+
 // 폴더 링크로 그 트리 안 문서 하나를 읽는다 (F-211.md 2.2) — 트리 밖이면 404
 export async function fetchPublicFolderDoc(token: string, docId: string): Promise<PublicDoc> {
   let res: Response

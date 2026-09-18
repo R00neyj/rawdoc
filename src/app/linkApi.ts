@@ -23,20 +23,27 @@ function classifyStatus(status: number): LinkApiErrorKind | null {
   return null
 }
 
-// 끊기지 않은 링크가 있으면 토큰, 없으면(404) null
-export async function getShareLink(docId: string): Promise<string | null> {
+export type ShareLinkInfo = { token: string; docIds: string[] }
+
+// 끊기지 않은 링크가 있으면 token·docIds, 없으면(404) null (docIds — F-252.md 2.4)
+export async function getShareLink(docId: string): Promise<ShareLinkInfo | null> {
   const res = await send(`/api/docs/${encodeURIComponent(docId)}/link`)
   if (res.status === 404) return null
   const kind = classifyStatus(res.status)
   if (kind) throw new LinkApiError(kind)
   if (!res.ok) throw new LinkApiError('other')
-  const data = (await res.json()) as { token: string }
-  return data.token
+  const data = (await res.json()) as { token: string; docIds?: string[] }
+  return { token: data.token, docIds: data.docIds ?? [] }
 }
 
-// 있으면 그 토큰, 없으면 새로 발급
-export async function createShareLink(docId: string): Promise<string> {
-  const res = await send(`/api/docs/${encodeURIComponent(docId)}/link`, { method: 'POST' })
+// 있으면 그 토큰, 없으면 새로 발급. docIds 를 주면 함께 공유할 문서 묶음으로 발급한다 (F-252.md 2.4)
+export async function createShareLink(docId: string, docIds?: string[]): Promise<string> {
+  const init: RequestInit = { method: 'POST' }
+  if (docIds !== undefined) {
+    init.headers = { 'Content-Type': 'application/json' }
+    init.body = JSON.stringify({ docIds })
+  }
+  const res = await send(`/api/docs/${encodeURIComponent(docId)}/link`, init)
   const kind = classifyStatus(res.status)
   if (kind) throw new LinkApiError(kind)
   if (!res.ok) throw new LinkApiError('other')

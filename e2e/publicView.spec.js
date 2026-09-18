@@ -77,8 +77,12 @@ test.describe('F-210 A7 오류', () => {
   })
 
   test('네트워크 오류 — 문구 + 다시 시도로 재요청', async ({ page }) => {
+    // 시작 문서 요청만 센다 — 묶음 목록(/set) 요청은 F-252.md 4.4 에 따라 같이 나가지만 실패해도 시작 문서 표시는 막지 않는다
+    await page.route('**/pub/docs/tok123/set', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ docs: [] }) }),
+    )
     let calls = 0
-    await page.route('**/pub/docs/**', (route) => {
+    await page.route('**/pub/docs/tok123', (route) => {
       calls++
       if (calls === 1) return route.abort('failed')
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(DOC) })
@@ -260,6 +264,137 @@ test.describe('F-215 A4 오류 화면', () => {
     await page.goto('/#/p/f/badtok')
     await expect(page.locator('.public-view-notice')).toContainText('링크가 없거나 끊겼습니다.')
     await expect(page.getByRole('link', { name: `${brand.name} 열기` })).toBeVisible()
+  })
+})
+
+// 공개 보기 위키링크 이동 — 문서 묶음 (specs/features/F-252.md 4장)
+async function mockPublicSet(page, token, { start, list, others = {} }) {
+  await page.route(`**/pub/docs/${token}/set`, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(list) }),
+  )
+  await page.route(`**/pub/docs/${token}/docs/*`, (route) => {
+    const url = new URL(route.request().url())
+    const docId = url.pathname.split('/').pop()
+    const doc = others[docId]
+    if (!doc) return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not_found' }) })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) })
+  })
+  await page.route(`**/pub/docs/${token}`, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(start) }),
+  )
+}
+
+test.describe('F-252 C4 묶음 이동', () => {
+  test('위키링크 클릭 → 해시 이동·문서 전환, 뒤로 가기로 시작 문서', async ({ page }) => {
+    const token = 'tokSet1'
+    await mockPublicSet(page, token, {
+      start: { title: '문서A', content: '[[문서B]]\n', lineEnding: 'lf', updatedAt: 1 },
+      list: { docs: [{ id: 'a1', title: '문서A' }, { id: 'b1', title: '문서B' }] },
+      others: { b1: { title: '문서B', content: '# 문서B 본문\n', lineEnding: 'lf', updatedAt: 2 } },
+    })
+    await page.goto(`/#/p/${token}`)
+    await expect(page.locator('.public-view-title')).toHaveText('문서A')
+
+    const link = page.locator('a.wikilink', { hasText: '문서B' })
+    await expect(link).toBeVisible()
+    await link.click()
+
+    await expect(page).toHaveURL(new RegExp(`#/p/${token}/b1$`))
+    await expect(page.locator('.public-view-title')).toHaveText('문서B')
+
+    await page.goBack()
+    await expect(page.locator('.public-view-title')).toHaveText('문서A')
+  })
+})
+
+test.describe('F-252 C5 묶음 밖 대상', () => {
+  test('묶음에 없는 위키링크는 missing 스타일, 클릭해도 이동 없음', async ({ page }) => {
+    const token = 'tokSet2'
+    await mockPublicSet(page, token, {
+      start: { title: '문서A', content: '[[없는문서]]\n\n[[문서B]]\n', lineEnding: 'lf', updatedAt: 1 },
+      list: { docs: [{ id: 'a1', title: '문서A' }, { id: 'b1', title: '문서B' }] },
+      others: { b1: { title: '문서B', content: '# 문서B\n', lineEnding: 'lf', updatedAt: 2 } },
+    })
+    await page.goto(`/#/p/${token}`)
+    await expect(page.locator('.public-view-title')).toHaveText('문서A')
+
+    const missing = page.locator('a.wikilink--missing')
+    await expect(missing).toBeVisible()
+    await missing.click()
+    await expect(page.locator('.public-view-title')).toHaveText('문서A')
+    await expect(page).toHaveURL(new RegExp(`#/p/${token}$`))
+  })
+})
+
+test.describe('F-252 C6 단일 문서 링크', () => {
+  test('묶음이 1개면 위키링크는 plain, 추가 문서 요청 없음', async ({ page }) => {
+    const token = 'tokSet3'
+    let otherDocRequested = false
+    await page.route(`**/pub/docs/${token}/set`, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ docs: [{ id: 'a1', title: '문서A' }] }) }),
+    )
+    await page.route(`**/pub/docs/${token}/docs/*`, (route) => {
+      otherDocRequested = true
+      return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not_found' }) })
+    })
+    await page.route(`**/pub/docs/${token}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ title: '문서A', content: '[[문서B]]\n', lineEnding: 'lf', updatedAt: 1 }),
+      }),
+    )
+    await page.goto(`/#/p/${token}`)
+    await expect(page.locator('.public-view-title')).toHaveText('문서A')
+
+    await expect(page.locator('span.wikilink--plain')).toBeVisible()
+    await expect(page.locator('a.wikilink')).toHaveCount(0)
+    expect(otherDocRequested).toBe(false)
+  })
+})
+
+test.describe('F-252 C7 폴더 링크', () => {
+  test('폴더 공개 보기 위키링크 클릭 → #/p/f/{t}/{id} 로 이동', async ({ page }) => {
+    const folder = {
+      name: '공유 폴더2',
+      folders: [],
+      docs: [
+        { id: 'g1', title: '문서1', folderId: null, updatedAt: 100 },
+        { id: 'g2', title: '문서2', folderId: null, updatedAt: 200 },
+      ],
+    }
+    const docs = {
+      g1: { title: '문서1', content: '# 문서1\n', lineEnding: 'lf', updatedAt: 100 },
+      g2: { title: '문서2', content: '[[문서1]]\n', lineEnding: 'lf', updatedAt: 200 },
+    }
+    await mockPublicFolder(page, folder, docs)
+    await page.goto('/#/p/f/tokF2')
+    await expect(page.locator('.public-view-title')).toHaveText('문서2')
+
+    const link = page.locator('a.wikilink', { hasText: '문서1' })
+    await link.click()
+    await expect(page).toHaveURL(/#\/p\/f\/tokF2\/g1$/)
+    await expect(page.locator('.public-view-title')).toHaveText('문서1')
+  })
+})
+
+test.describe('F-252 C8 별칭·섹션', () => {
+  test('별칭은 보이는 글자, #절 뒤는 무시하고 대상으로 이동', async ({ page }) => {
+    const token = 'tokSet4'
+    await mockPublicSet(page, token, {
+      start: { title: '문서A', content: '[[문서B|보이는글자]]\n\n[[문서B#절]]\n', lineEnding: 'lf', updatedAt: 1 },
+      list: { docs: [{ id: 'a1', title: '문서A' }, { id: 'b1', title: '문서B' }] },
+      others: { b1: { title: '문서B', content: '# 문서B\n', lineEnding: 'lf', updatedAt: 2 } },
+    })
+    await page.goto(`/#/p/${token}`)
+    await expect(page.locator('.public-view-title')).toHaveText('문서A')
+
+    await expect(page.locator('a.wikilink', { hasText: '보이는글자' })).toBeVisible()
+    const sectionLink = page.locator('a.wikilink').filter({ hasText: /^문서B$/ })
+    await expect(sectionLink).toBeVisible()
+    await sectionLink.click()
+    await expect(page).toHaveURL(new RegExp(`#/p/${token}/b1$`))
+    await expect(page.locator('.public-view-title')).toHaveText('문서B')
   })
 })
 

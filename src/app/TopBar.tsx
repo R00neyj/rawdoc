@@ -34,6 +34,8 @@ type TopBarProps = {
   shareLinkDocId: string | null
   onBeforeShareLinkAction: () => Promise<void>
   onInvite?: () => void
+  // 위키링크 대상 판정용 문서 제목 목록 — ShareMenu 의 D-6 여닫는 조건 (F-252.md 3.1)
+  wikiDocs: { id: string; title: string }[]
   exportDisabled: boolean
   onExportDoc: () => void
   account: AccountState
@@ -57,6 +59,7 @@ export default function TopBar({
   shareLinkDocId,
   onBeforeShareLinkAction,
   onInvite,
+  wikiDocs,
   exportDisabled,
   onExportDoc,
   account,
@@ -102,6 +105,7 @@ export default function TopBar({
           linkDocId={shareLinkDocId}
           onBeforeLinkAction={onBeforeShareLinkAction}
           onInvite={onInvite}
+          wikiDocs={wikiDocs}
         />
         <span className="icon-btn-wrap">
           <button

@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { fetchPublicDoc, fetchPublicFolder, fetchPublicFolderDoc, firstFolderDocId, PublicDocError, type PublicFolder } from './publicDoc'
+import {
+  fetchPublicDoc,
+  fetchPublicFolder,
+  fetchPublicFolderDoc,
+  fetchPublicSet,
+  fetchPublicSetDoc,
+  firstFolderDocId,
+  PublicDocError,
+  type PublicFolder,
+} from './publicDoc'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -70,6 +79,41 @@ describe('fetchPublicFolderDoc', () => {
   it('404 면 not_found', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404, ok: false, json: async () => ({}) }))
     await expect(fetchPublicFolderDoc('tok', 'd1')).rejects.toMatchObject({ kind: 'not_found' })
+  })
+})
+
+describe('fetchPublicSet (F-252.md 4.3)', () => {
+  it('200 이면 묶음 문서 목록을 돌려준다', async () => {
+    const body = { docs: [{ id: 'a1', title: '문서A' }, { id: 'b1', title: '문서B' }] }
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => body })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(fetchPublicSet('tok')).resolves.toEqual(body)
+    expect(fetchMock).toHaveBeenCalledWith('/pub/docs/tok/set', { cache: 'no-store' })
+  })
+
+  it('404 면 not_found', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404, ok: false, json: async () => ({}) }))
+    await expect(fetchPublicSet('tok')).rejects.toMatchObject({ kind: 'not_found' })
+  })
+
+  it('네트워크 오류면 network', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    await expect(fetchPublicSet('tok')).rejects.toMatchObject({ kind: 'network' })
+  })
+})
+
+describe('fetchPublicSetDoc (F-252.md 4.3)', () => {
+  it('200 이면 문서를 돌려준다', async () => {
+    const body = { title: '문서B', content: '본문', lineEnding: 'lf', updatedAt: 1 }
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => body })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(fetchPublicSetDoc('tok', 'b1')).resolves.toEqual(body)
+    expect(fetchMock).toHaveBeenCalledWith('/pub/docs/tok/docs/b1', { cache: 'no-store' })
+  })
+
+  it('404 면 not_found (묶음 밖 문서)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404, ok: false, json: async () => ({}) }))
+    await expect(fetchPublicSetDoc('tok', 'b1')).rejects.toMatchObject({ kind: 'not_found' })
   })
 })
 

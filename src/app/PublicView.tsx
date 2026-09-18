@@ -9,6 +9,7 @@ import type { ResolveAttachment } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { extractHeadings, type Heading } from '../editor/outline'
 import { frontmatterExtension } from '../editor/frontmatter'
+import { resolveWikiTarget } from '../lib/wikiLink'
 import Outline from './Outline'
 import { IconDownload, IconSettings } from './icons'
 import { buildExportPayload } from './exportDoc'
@@ -19,12 +20,15 @@ import {
   fetchPublicDoc,
   fetchPublicFolder,
   fetchPublicFolderDoc,
+  fetchPublicSet,
+  fetchPublicSetDoc,
   firstFolderDocId,
   PublicDocError,
   type PublicDoc,
   type PublicFolder,
+  type PublicSetDoc,
 } from './publicDoc'
-import { formatPublicFolderHash } from './hashRoute'
+import { formatPublicFolderHash, formatPublicHash, parseHash } from './hashRoute'
 import PublicFolderList from './PublicFolderList'
 import PublicBrand from './PublicBrand'
 
@@ -143,6 +147,7 @@ type PublicViewProps =
   | { kind: 'folder'; token: string; docId?: string }
 
 // 문서 하나를 읽어 머리 줄 + 본문 + 목차를 그린다 — 어떤 attachments 경로로 읽을지만 호출부가 정한다 (F-210.md 2.4·2.5, F-211.md 2.3)
+// resolveWikiLink·onOpenWikiLink 를 주지 않으면 위키링크는 지금처럼 wikilink--plain (F-252.md 4.6)
 function DocPane({
   docKey,
   state,
@@ -152,6 +157,8 @@ function DocPane({
   notFoundMessage = '링크가 없거나 끊겼습니다.',
   showBrand = true,
   settings,
+  resolveWikiLink,
+  onOpenWikiLink,
 }: {
   docKey: string
   state: DocLoadState
@@ -161,6 +168,8 @@ function DocPane({
   notFoundMessage?: string
   showBrand?: boolean
   settings: PublicSettings
+  resolveWikiLink?: (target: string) => string | null
+  onOpenWikiLink?: (target: string) => void
 }) {
   const contentAreaRef = useRef<HTMLDivElement | null>(null)
   const viewerRef = useRef<HTMLDivElement | null>(null)
@@ -175,7 +184,7 @@ function DocPane({
   const editorRef = useMemo(() => ({ current: fakeHandle }), [fakeHandle])
 
   const title = doc ? doc.title || '제목 없는 문서' : ''
-  const html = doc ? renderMarkdown(doc.content) : ''
+  const html = doc ? renderMarkdown(doc.content, { resolveWikiLink }) : ''
 
   return (
     <div className="public-view-main">
@@ -211,7 +220,7 @@ function DocPane({
         )}
         {state.status === 'ready' && (
           <>
-            <Viewer ref={viewerRef} html={html} resolveAttachment={resolveAttachment} codeCopy />
+            <Viewer ref={viewerRef} html={html} resolveAttachment={resolveAttachment} codeCopy onOpenWikiLink={onOpenWikiLink} />
             <Outline editorRef={editorRef} containerRef={contentAreaRef} viewerRef={viewerRef} docId={docKey} viewMode="view" />
           </>
         )}
@@ -252,36 +261,121 @@ export default function PublicView(props: PublicViewProps) {
   return <PublicDocView token={props.token} settings={settings} />
 }
 
-// `#/p/{토큰}` 문서 단독 공개 보기 (F-210.md 2.4)
+// 해시(`#/p/{토큰}/{문서id}`)에서 초기 활성 문서 id 를 읽는다 — 없으면 시작 문서 (F-252.md 4.2·4.4)
+function initialSetDocId(): string | null {
+  const route = parseHash(location.hash)
+  return route.type === 'public' && route.docId ? route.docId : null
+}
+
+// `#/p/{토큰}` 문서 단독 공개 보기 + 위키링크로 딸린 묶음 이동 (F-210.md 2.4, F-252.md 4.4)
 function PublicDocView({ token, settings }: { token: string; settings: PublicSettings }) {
-  const [state, setState] = useState<DocLoadState>({ status: 'loading' })
+  const [startState, setStartState] = useState<DocLoadState>({ status: 'loading' })
+  // null = 못 받았거나 아직 못 받음 — 이때는 묶음 없이 지금처럼 단일 문서로 취급한다
+  const [setDocs, setSetDocs] = useState<PublicSetDoc[] | null>(null)
+  const [activeDocId, setActiveDocId] = useState<string | null>(initialSetDocId)
+  // forId(요청한 id)와 결과 — activeDocId 가 forId 와 다르면 렌더 중 loading 으로 유도한다
+  const [docResult, setDocResult] = useState<{ forId: string; state: DocLoadState } | null>(null)
   // 연달아 재시도하면 응답이 뒤바뀌어 올 수 있다 — 가장 최근 요청의 결과만 반영한다
-  const requestIdRef = useRef(0)
+  const startRequestIdRef = useRef(0)
+  const docRequestIdRef = useRef(0)
+
+  const startDocId = setDocs && setDocs.length > 0 ? setDocs[0].id : null
+  const isStartDoc = activeDocId === null || activeDocId === startDocId
 
   useEffect(() => {
     let cancelled = false
-    const requestId = ++requestIdRef.current
+    const requestId = ++startRequestIdRef.current
     fetchPublicDoc(token)
       .then((next) => {
-        if (!cancelled && requestIdRef.current === requestId) setState({ status: 'ready', doc: next })
+        if (!cancelled && startRequestIdRef.current === requestId) setStartState({ status: 'ready', doc: next })
       })
       .catch((err: unknown) => {
-        if (cancelled || requestIdRef.current !== requestId) return
-        setState(err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' })
+        if (cancelled || startRequestIdRef.current !== requestId) return
+        setStartState(err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' })
+      })
+    // 실패해도 시작 문서 표시는 막지 않는다 — 묶음을 못 받으면 위키링크는 plain (4.4)
+    fetchPublicSet(token)
+      .then((next) => {
+        if (!cancelled) setSetDocs(next.docs)
+      })
+      .catch(() => {
+        if (!cancelled) setSetDocs(null)
       })
     return () => {
       cancelled = true
     }
   }, [token])
 
+  useEffect(() => {
+    if (isStartDoc || activeDocId === null) return
+    const id = activeDocId
+    let cancelled = false
+    const requestId = ++docRequestIdRef.current
+    fetchPublicSetDoc(token, id)
+      .then((next) => {
+        if (!cancelled && docRequestIdRef.current === requestId) setDocResult({ forId: id, state: { status: 'ready', doc: next } })
+      })
+      .catch((err: unknown) => {
+        if (cancelled || docRequestIdRef.current !== requestId) return
+        setDocResult({ forId: id, state: err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' } })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [token, activeDocId, isStartDoc])
+
+  const state: DocLoadState = isStartDoc
+    ? startState
+    : docResult && docResult.forId === activeDocId
+      ? docResult.state
+      : { status: 'loading' }
   const doc = state.status === 'ready' ? state.doc : null
+
+  // 묶음 문서가 2개 이상일 때만 위키링크를 클릭 가능하게 한다 (4.4)
+  const resolveWikiLink = useMemo(() => {
+    if (!setDocs || setDocs.length < 2) return undefined
+    return (target: string) => {
+      const match = resolveWikiTarget(target, setDocs)
+      return match ? formatPublicHash(token, match.id) : null
+    }
+  }, [setDocs, token])
+
+  const openSetDoc = useCallback(
+    (id: string) => {
+      setActiveDocId(id)
+      history.pushState(null, '', `${location.pathname}${location.search}${formatPublicHash(token, id)}`)
+    },
+    [token],
+  )
+
+  const onOpenWikiLink = useCallback(
+    (target: string) => {
+      if (!setDocs) return
+      const match = resolveWikiTarget(target, setDocs)
+      if (match) openSetDoc(match.id)
+    },
+    [setDocs, openSetDoc],
+  )
+
+  // 뒤로·앞으로 가기로 문서 id 가 바뀌면 그 문서를 연다 (F-211 PublicFolderView 와 같은 방식)
+  useEffect(() => {
+    function handleHashChange() {
+      const route = parseHash(location.hash)
+      setActiveDocId(route.type === 'public' && route.docId ? route.docId : null)
+    }
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [])
 
   const resolveAttachment: ResolveAttachment = useCallback(
     async (id) => {
       if (!doc) return null
       const ext = findAttachmentExt(doc.content, id)
       if (!ext) return null
-      const res = await fetch(`/pub/docs/${encodeURIComponent(token)}/attachments/${id}.${ext}`, { cache: 'no-store' })
+      const path = isStartDoc
+        ? `/pub/docs/${encodeURIComponent(token)}/attachments/${id}.${ext}`
+        : `/pub/docs/${encodeURIComponent(token)}/docs/${encodeURIComponent(activeDocId as string)}/attachments/${id}.${ext}`
+      const res = await fetch(path, { cache: 'no-store' })
       if (!res.ok) return null
       const blob = await res.blob()
       try {
@@ -293,7 +387,7 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
         return null
       }
     },
-    [doc, token],
+    [doc, token, isStartDoc, activeDocId],
   )
 
   async function handleExport() {
@@ -302,7 +396,10 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
       async getAttachment(id: string) {
         const ext = findAttachmentExt(doc.content, id)
         if (!ext) return null
-        const res = await fetch(`/pub/docs/${encodeURIComponent(token)}/attachments/${id}.${ext}`, { cache: 'no-store' })
+        const path = isStartDoc
+          ? `/pub/docs/${encodeURIComponent(token)}/attachments/${id}.${ext}`
+          : `/pub/docs/${encodeURIComponent(token)}/docs/${encodeURIComponent(activeDocId as string)}/attachments/${id}.${ext}`
+        const res = await fetch(path, { cache: 'no-store' })
         if (!res.ok) return null
         return { id, ext, blob: await res.blob() }
       },
@@ -313,21 +410,44 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
   }
 
   function retry() {
-    const requestId = ++requestIdRef.current
-    setState({ status: 'loading' })
-    fetchPublicDoc(token)
+    if (isStartDoc) {
+      const requestId = ++startRequestIdRef.current
+      setStartState({ status: 'loading' })
+      fetchPublicDoc(token)
+        .then((next) => {
+          if (startRequestIdRef.current === requestId) setStartState({ status: 'ready', doc: next })
+        })
+        .catch((err: unknown) => {
+          if (startRequestIdRef.current !== requestId) return
+          setStartState(err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' })
+        })
+      return
+    }
+    const id = activeDocId as string
+    const requestId = ++docRequestIdRef.current
+    setDocResult(null)
+    fetchPublicSetDoc(token, id)
       .then((next) => {
-        if (requestIdRef.current === requestId) setState({ status: 'ready', doc: next })
+        if (docRequestIdRef.current === requestId) setDocResult({ forId: id, state: { status: 'ready', doc: next } })
       })
       .catch((err: unknown) => {
-        if (requestIdRef.current !== requestId) return
-        setState(err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' })
+        if (docRequestIdRef.current !== requestId) return
+        setDocResult({ forId: id, state: err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' } })
       })
   }
 
   return (
     <div className="public-view">
-      <DocPane docKey={token} state={state} resolveAttachment={resolveAttachment} onExport={handleExport} onRetry={retry} settings={settings} />
+      <DocPane
+        docKey={activeDocId ?? token}
+        state={state}
+        resolveAttachment={resolveAttachment}
+        onExport={handleExport}
+        onRetry={retry}
+        settings={settings}
+        resolveWikiLink={resolveWikiLink}
+        onOpenWikiLink={onOpenWikiLink}
+      />
     </div>
   )
 }
@@ -402,6 +522,25 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
 
   const docState: DocLoadState = docResult && docResult.forId === activeDocId ? docResult.state : { status: 'loading' }
   const doc = docState.status === 'ready' ? docState.doc : null
+
+  // 위키링크는 이 폴더 안 문서만 대상 풀로 쓴다 — 폴더 밖 제목이 새어나가지 않는다 (F-252.md 4.5)
+  const resolveWikiLink = useCallback(
+    (target: string) => {
+      if (folderState.status !== 'ready') return null
+      const match = resolveWikiTarget(target, folderState.folder.docs)
+      return match ? formatPublicFolderHash(token, match.id) : null
+    },
+    [folderState, token],
+  )
+
+  const onOpenWikiLink = useCallback(
+    (target: string) => {
+      if (folderState.status !== 'ready') return
+      const match = resolveWikiTarget(target, folderState.folder.docs)
+      if (match) selectDoc(match.id)
+    },
+    [folderState, selectDoc],
+  )
 
   const resolveAttachment: ResolveAttachment = useCallback(
     async (id) => {
@@ -546,6 +685,8 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
             notFoundMessage="이 문서는 더 이상 공유되지 않습니다."
             showBrand={false}
             settings={settings}
+            resolveWikiLink={resolveWikiLink}
+            onOpenWikiLink={onOpenWikiLink}
           />
         )}
       </div>

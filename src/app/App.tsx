@@ -938,7 +938,11 @@ export default function App() {
     if (!editorRef.current || openDoc?.id !== currentDocId) return
     setViewerHtml(
       renderMarkdown(editorRef.current.getText('lf'), {
-        resolveWikiLink: (target: unknown) => resolveWikiTarget(target, docs)?.id ?? null,
+        // resolveWikiLink 는 href 를 돌려준다 — 이 화면은 항상 #/d/{id} (F-252.md 4.1)
+        resolveWikiLink: (target: unknown) => {
+          const match = resolveWikiTarget(target, docs)
+          return match ? `#/d/${match.id}` : null
+        },
       }),
     )
   }, [viewMode, openDoc, currentDocId, docs])
@@ -2078,6 +2082,7 @@ export default function App() {
       shareLinkDocId={store.kind === 'server' && currentDoc && !sharedDoc && !isSharedDoc(currentDoc) ? currentDoc.id : null}
       onBeforeShareLinkAction={() => docSaverFlushRef.current()}
       onInvite={canInviteCurrentDoc ? requestInviteCurrentDoc : undefined}
+      wikiDocs={docs}
       exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
       onExportDoc={handleExportDoc}
       account={account}

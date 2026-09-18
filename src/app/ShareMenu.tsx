@@ -3,10 +3,12 @@ import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } f
 import { encodeShare, type ShareDoc } from '../lib/shareCodec'
 import { extractAttachmentRefs } from '../lib/imageBlock'
 import { stripComments } from '../lib/comments'
+import { findWikiLinks, resolveWikiTarget } from '../lib/wikiLink'
 import { formatShareHash } from './hashRoute'
 import { getShareLink, createShareLink, revokeShareLink } from './linkApi'
 import { IconShare, IconTooltip, IconLink, IconLinkOff, IconCopy, IconPersonAdd } from './icons'
 import usePresence from './usePresence'
+import ShareSetDialog from './ShareSetDialog'
 import type { Notice } from './notice'
 
 // 상단바 `공유` 메뉴 (specs/ia.md 2장 A·3.19, specs/features/F-130.md 2장)
@@ -24,13 +26,24 @@ type ShareMenuProps = {
   onBeforeLinkAction: () => Promise<void> // 저장 대기 입력 flush — 링크를 만들기 전 끝나길 기다려야 한다
   // owner 이고 서버 저장소일 때만 — `사람 초대…` 항목 (F-212.md 2.5)
   onInvite?: () => void
+  // 위키링크 대상 판정용 문서 제목 목록 — D-6 을 열지 결정한다 (F-252.md 3.1)
+  wikiDocs: { id: string; title: string }[]
 }
 
 type ShareMenuItem = { key: string; label: string; icon: ComponentType<{ size?: number }>; onSelect: () => Promise<void> }
 
-export default function ShareMenu({ disabled, getShareDoc, onNotice, linkDocId, onBeforeLinkAction, onInvite }: ShareMenuProps) {
+export default function ShareMenu({
+  disabled,
+  getShareDoc,
+  onNotice,
+  linkDocId,
+  onBeforeLinkAction,
+  onInvite,
+  wikiDocs,
+}: ShareMenuProps) {
   const [open, setOpen] = useState(false)
   const [hasLink, setHasLink] = useState(false)
+  const [shareSetOpen, setShareSetOpen] = useState(false)
   const { mounted, state } = usePresence(open) // 나타나고 사라지는 전환 (F-172.md 2.2)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLUListElement | null>(null)
@@ -53,8 +66,8 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice, linkDocId, 
     if (!open || !linkDocId) return
     let cancelled = false
     getShareLink(linkDocId)
-      .then((token) => {
-        if (!cancelled) setHasLink(Boolean(token))
+      .then((info) => {
+        if (!cancelled) setHasLink(Boolean(info))
       })
       .catch(() => {
         if (!cancelled) setHasLink(false)
@@ -69,6 +82,17 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice, linkDocId, 
       itemRefs.current[0]?.focus()
     }
   }, [open])
+
+  // 위키링크 대상 유무 — 메뉴를 열 때 로컬 판정, 렌더 중 open 전이 감지로 갱신한다 (F-252.md 3.1, MoveDocDialog.tsx 와 같은 패턴)
+  const [trackedMenuOpen, setTrackedMenuOpen] = useState(open)
+  const [hasWikiTargets, setHasWikiTargets] = useState(false)
+  if (open !== trackedMenuOpen) {
+    setTrackedMenuOpen(open)
+    if (open) {
+      const content = getShareDoc().content
+      setHasWikiTargets(findWikiLinks(content).some((m) => Boolean(resolveWikiTarget(m.target, wikiDocs))))
+    }
+  }
 
   function closeAndReturnFocus() {
     setOpen(false)
@@ -165,11 +189,29 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice, linkDocId, 
     onNotice({ type: 'info', message: '읽기 전용 링크를 끊었습니다. 이전 주소는 더 이상 열리지 않습니다.' })
   }
 
+  // 위키링크 대상이 있으면 D-6 을 연다. 없으면 지금 동작 그대로 바로 발급·복사 (F-252.md 3.1)
+  async function handleReadOnlyLinkSelect() {
+    if (!linkDocId) return
+    await onBeforeLinkAction()
+    if (hasWikiTargets) {
+      setShareSetOpen(true)
+      return
+    }
+    await handleCopyReadOnlyLink()
+  }
+
   const items: ShareMenuItem[] = [
     { key: 'link', label: '링크 복사', icon: IconLink, onSelect: handleCopyLink },
     { key: 'markdown', label: '마크다운 복사', icon: IconCopy, onSelect: handleCopyMarkdown },
     ...(linkDocId
-      ? [{ key: 'readonly-link', label: '읽기 전용 링크 복사', icon: IconLink, onSelect: handleCopyReadOnlyLink }]
+      ? [
+          {
+            key: 'readonly-link',
+            label: hasWikiTargets ? '읽기 전용 링크 복사…' : '읽기 전용 링크 복사',
+            icon: IconLink,
+            onSelect: handleReadOnlyLinkSelect,
+          },
+        ]
       : []),
     ...(linkDocId && hasLink
       ? [{ key: 'readonly-link-off', label: '읽기 전용 링크 끊기', icon: IconLinkOff, onSelect: handleRevokeReadOnlyLink }]
@@ -247,6 +289,13 @@ export default function ShareMenu({ disabled, getShareDoc, onNotice, linkDocId, 
           ))}
         </ul>
       )}
+      <ShareSetDialog
+        open={shareSetOpen}
+        docId={linkDocId}
+        onClose={() => setShareSetOpen(false)}
+        onNotice={onNotice}
+        onLinked={() => setHasLink(true)}
+      />
     </div>
   )
 }
