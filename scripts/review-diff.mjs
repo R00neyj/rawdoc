@@ -25,13 +25,14 @@ function normalize(p) {
   return p.replace(/\\/g, '/')
 }
 
-// 1장 표(부속 ### 포함)의 첫 칸 백틱 경로를 모아 소유 패턴 목록을 만든다
+// "파일 소유" 절 표(부속 ### 포함)의 첫 칸 백틱 경로를 모아 소유 패턴 목록을 만든다
 function ownedPatterns(featureId) {
   const specPath = `specs/features/${featureId}.md`
   if (!existsSync(specPath)) throw new Error(`명세를 찾을 수 없습니다: ${specPath}`)
   const text = readFileSync(specPath, 'utf-8')
-  const startMatch = /^##\s+1\./m.exec(text)
-  if (!startMatch) throw new Error('명세에 "1. 파일 소유" 절이 없습니다')
+  // 절 번호는 명세마다 다르다(1장 또는 2장) — 제목으로 찾고, 못 찾으면 옛 형식대로 1장을 본다
+  const startMatch = /^##\s+\d+\.\s*파일 소유/m.exec(text) ?? /^##\s+1\./m.exec(text)
+  if (!startMatch) throw new Error('명세에 "파일 소유" 절이 없습니다')
   const rest = text.slice(startMatch.index + startMatch[0].length)
   const endMatch = /^##\s+\d/m.exec(rest)
   const section = endMatch ? rest.slice(0, endMatch.index) : rest

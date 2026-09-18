@@ -1,7 +1,12 @@
 // 시작 화면 홈, 설정에서 마지막 문서 토글 (specs/features/F-232.md)
 import { test, expect } from '@playwright/test'
 import brand from '../brand.config.ts'
-import { openApp, openAppHome, setPrefBeforeLoad, importMarkdown, currentDocId } from './helpers.js'
+import { openApp, openAppHome, setPrefBeforeLoad, importMarkdown, currentDocId, waitSaved } from './helpers.js'
+import { fakeServer } from './fixtures/fakeServer.js'
+
+async function goHome(page) {
+  await page.getByRole('button', { name: `${brand.name} 홈으로` }).click()
+}
 
 async function mockPublicDoc(page) {
   await page.route('**/pub/docs/**', (route) =>
@@ -120,5 +125,105 @@ test.describe('F-232 A10 공개 화면 설정 대화상자', () => {
     await page.locator('.public-view-settings').click()
     await expect(page.locator('#settings-title')).toBeVisible()
     await expect(page.locator('#start-screen-label')).toHaveCount(0)
+  })
+})
+
+test.describe('F-241 A4 홈에 최근 문서', () => {
+  test('문서를 3개 만들면 홈 화면에 최근 목록이 최신순으로 보인다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.firstRunDone', '1') // 안내 문서 없이 정확히 3개만 세려고
+    await openAppHome(page)
+    await importMarkdown(page, { name: 'A.md', content: '문서 A\n' })
+    await importMarkdown(page, { name: 'B.md', content: '문서 B\n' })
+    await importMarkdown(page, { name: 'C.md', content: '문서 C\n' })
+    await goHome(page)
+
+    const items = page.locator('.empty-state-recent-item')
+    await expect(items).toHaveCount(3)
+    await expect(items.first()).toContainText('C')
+  })
+})
+
+test.describe('F-241 A5 최근 항목 열기', () => {
+  test('최근 목록 항목을 클릭하면 그 문서가 열리고 해시가 바뀐다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+    await openAppHome(page)
+    const docId = await importMarkdown(page, { name: 'A.md', content: '문서 A\n' })
+    await goHome(page)
+
+    await page.locator('.empty-state-recent-item').filter({ hasText: 'A' }).click()
+
+    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+    expect(await currentDocId(page)).toBe(docId)
+  })
+})
+
+test.describe('F-241 A6 최근 목록 5개 제한', () => {
+  test('문서가 6개 이상이어도 최근 목록엔 5개만 보인다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+    await openAppHome(page)
+    for (const name of ['A', 'B', 'C', 'D', 'E', 'F']) {
+      await importMarkdown(page, { name: `${name}.md`, content: `문서 ${name}\n` })
+    }
+    await goHome(page)
+
+    await expect(page.locator('.empty-state-recent-item')).toHaveCount(5)
+  })
+})
+
+test.describe('F-241 A7 순서 갱신', () => {
+  test('목록 아래쪽 문서를 고쳐 저장하면 홈에서 맨 위로 온다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+    await openAppHome(page)
+    await importMarkdown(page, { name: 'A.md', content: '문서 A\n' })
+    await importMarkdown(page, { name: 'B.md', content: '문서 B\n' })
+    await importMarkdown(page, { name: 'C.md', content: '문서 C\n' })
+    await goHome(page)
+
+    let items = page.locator('.empty-state-recent-item')
+    await expect(items.first()).toContainText('C')
+    await expect(items.last()).toContainText('A')
+
+    await items.filter({ hasText: 'A' }).click()
+    await page.locator('.cm-content').click()
+    await page.keyboard.type('고침')
+    await waitSaved(page)
+    await goHome(page)
+
+    items = page.locator('.empty-state-recent-item')
+    await expect(items.first()).toContainText('A')
+  })
+})
+
+test.describe('F-241 A8 공유 문서 제외', () => {
+  test('최근 목록에는 내 문서만 보이고 공유받은 문서는 섞이지 않는다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.firstRunDone', '1') // 안내 문서 없이 가져온 문서 1개만 세려고
+    await fakeServer(page)
+    await page.route('**/api/shared', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'shared-doc',
+            title: '공유받은 문서',
+            lineEnding: 'lf',
+            folderId: null,
+            pinnedAt: null,
+            version: 1,
+            createdAt: Date.now(),
+            updatedAt: Date.now() + 10_000, // 내 문서보다 더 최근이어도 섞이면 안 된다
+            role: 'view',
+            ownerEmail: 'owner@x.com',
+          },
+        ]),
+      }),
+    )
+    await openAppHome(page)
+    await importMarkdown(page, { name: 'my-doc.md', content: '내 문서\n' })
+    await goHome(page)
+
+    const items = page.locator('.empty-state-recent-item')
+    await expect(items).toHaveCount(1)
+    await expect(items).toContainText('my-doc')
   })
 })

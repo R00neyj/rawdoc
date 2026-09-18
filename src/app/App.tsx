@@ -2000,7 +2000,13 @@ export default function App() {
           )}
           {!sharedDoc && isEmpty && (
             <div className="content-area">
-              <EmptyState hasDocs={docs.length > 0} onCreateDoc={createNewDoc} onImportDoc={requestImport} />
+              <EmptyState
+                hasDocs={docs.length > 0}
+                onCreateDoc={createNewDoc}
+                onImportDoc={requestImport}
+                recentDocs={ownedDocs.slice(0, 5)}
+                onSelectDoc={selectDoc}
+              />
             </div>
           )}
           {showEditor && (
