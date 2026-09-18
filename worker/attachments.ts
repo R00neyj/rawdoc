@@ -5,7 +5,7 @@ import { requireUser } from './auth'
 import { isValidToken } from './token'
 import { sniffImage, type ImageExt } from './imageSniff'
 import { extractAttachmentRefs } from '../src/lib/imageBlock'
-import { folderTreeIds } from './links'
+import { folderTreeIds, isDocInLinkSet } from './links'
 import { getDocAccess, isDocAttachmentOwner } from './access'
 
 export const MAX_ATTACHMENT_BYTES = 5_242_880
@@ -207,6 +207,48 @@ export async function handlePublicGetAttachment(
 
   const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ?')
     .bind(link.target_id)
+    .first<{ id: string; owner_id: string; content: string; folder_id: string | null }>()
+  if (!doc) return errorResponse('not_found', 404)
+  if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)
+
+  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ?')
+    .bind(id, ext)
+    .all<AttachmentRow>()
+  let row: AttachmentRow | null = null
+  for (const candidate of candidates) {
+    if (await isDocAttachmentOwner(env, doc, candidate.owner_id)) {
+      row = candidate
+      break
+    }
+  }
+  if (!row) return errorResponse('not_found', 404)
+
+  const object = await env.BUCKET.get(`att/${row.owner_id}/${id}.${ext}`)
+  if (!object) return errorResponse('not_found', 404)
+
+  return attachmentResponse(object, row.mime, 'private, max-age=300')
+}
+
+// 위키링크 묶음 문서 이미지 — 검사 순서는 handlePublicGetFolderAttachment 와 같다 (F-252 2.6)
+export async function handlePublicGetDocSetAttachment(
+  _request: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const parsedName = parseIdExt(params.idext)
+  if (!parsedName || !isValidToken(params.token)) return errorResponse('not_found', 404)
+  const { id, ext } = parsedName
+
+  const link = await env.DB.prepare('SELECT target_type, target_id FROM share_links WHERE token = ? AND revoked_at IS NULL')
+    .bind(params.token)
+    .first<{ target_type: string; target_id: string }>()
+  if (!link || link.target_type !== 'doc') return errorResponse('not_found', 404)
+
+  if (!(await isDocInLinkSet(env, params.token, link.target_id, params.docId))) return errorResponse('not_found', 404)
+
+  const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ?')
+    .bind(params.docId)
     .first<{ id: string; owner_id: string; content: string; folder_id: string | null }>()
   if (!doc) return errorResponse('not_found', 404)
   if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)

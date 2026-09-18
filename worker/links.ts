@@ -1,8 +1,10 @@
 // 공유 링크 라우트 — 관리(/api, 로그인) + 공개 조회(/pub, 로그인 없음) (specs/features/F-210.md 2.2, 2.3)
+// 위키링크로 묶인 문서 묶음 공유는 F-252 2.3~2.5
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { generateToken, isValidToken } from './token'
 import { stripComments } from '../src/lib/comments'
+import { collectWikiSet, type LoadDoc } from './shareSet'
 
 type LinkRow = {
   token: string
@@ -62,6 +64,22 @@ export async function folderTreeIds(env: Env, folderId: string, ownerId: string)
   return [folderId, ...results.map((r) => r.id)]
 }
 
+async function fetchShareLinkDocIds(env: Env, token: string): Promise<string[]> {
+  const { results } = await env.DB.prepare('SELECT doc_id FROM share_link_docs WHERE token = ?')
+    .bind(token)
+    .all<{ doc_id: string }>()
+  return results.map((r) => r.doc_id)
+}
+
+// docId 가 링크의 시작 문서이거나 share_link_docs 묶음 안인지 (F-252 2.5·2.6 공용)
+export async function isDocInLinkSet(env: Env, token: string, targetId: string, docId: string): Promise<boolean> {
+  if (docId === targetId) return true
+  const row = await env.DB.prepare('SELECT 1 FROM share_link_docs WHERE token = ? AND doc_id = ?')
+    .bind(token, docId)
+    .first()
+  return row !== null
+}
+
 export async function handleGetDocLink(
   request: Request,
   env: Env,
@@ -74,10 +92,59 @@ export async function handleGetDocLink(
 
   const link = await findActiveLink(env, 'doc', params.id)
   if (!link) return jsonResponse({ error: 'no_link' }, 404)
-  return jsonResponse({ token: link.token })
+  const docIds = await fetchShareLinkDocIds(env, link.token)
+  return jsonResponse({ token: link.token, docIds })
 }
 
-// 재발급은 끊고 다시 만들기(DELETE → POST) 이므로 여기서는 살아있는 링크가 있으면 그대로 돌려준다
+// 문서 원문에서 위키링크로 연결된 대상 문서 묶음 미리보기 (F-252 2.3)
+export async function handleGetDocShareSet(
+  request: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  const doc = await findOwnedDoc(env, params.id, user.id)
+  if (!doc) return errorResponse('not_found', 404)
+
+  const { results: allDocs } = await env.DB.prepare('SELECT id, title, content FROM docs WHERE owner_id = ?')
+    .bind(user.id)
+    .all<{ id: string; title: string; content: string }>()
+
+  const byId = new Map(allDocs.map((d) => [d.id, d]))
+  const loadDoc: LoadDoc = (id) => {
+    const found = byId.get(id)
+    if (!found) return null
+    return { id: found.id, title: found.title, content: stripComments(found.content) }
+  }
+
+  const { nodes, truncated } = collectWikiSet(
+    params.id,
+    loadDoc,
+    allDocs.map((d) => ({ id: d.id, title: d.title })),
+  )
+  return jsonResponse({
+    nodes: nodes.map((n) => ({ id: n.id, title: n.title, depth: n.depth, parentId: n.parentId })),
+    truncated,
+  })
+}
+
+// docIds 본문을 읽는다. 본문이 없거나 빈 배열이면 []('묶음 없음'), 모양이 틀리면 'bad_request' (F-252 2.4)
+async function readDocIds(request: Request): Promise<string[] | 'bad_request'> {
+  let raw: unknown
+  try {
+    raw = await request.json()
+  } catch {
+    return []
+  }
+  if (raw === null || typeof raw !== 'object') return []
+  const docIds = (raw as { docIds?: unknown }).docIds
+  if (docIds === undefined) return []
+  if (!Array.isArray(docIds) || !docIds.every((id) => typeof id === 'string')) return 'bad_request'
+  return docIds
+}
+
+// 재발급은 끊고 다시 만들기(DELETE → POST). docIds 가 있으면 위키링크 묶음 발급(F-252 2.4) — 묶음이 바뀌면 이전 토큰을 끊고 새로 만든다
 export async function handleCreateDocLink(
   request: Request,
   env: Env,
@@ -88,8 +155,36 @@ export async function handleCreateDocLink(
   const doc = await findOwnedDoc(env, params.id, user.id)
   if (!doc) return errorResponse('not_found', 404)
 
+  const docIds = await readDocIds(request)
+  if (docIds === 'bad_request') return errorResponse('bad_request', 400)
+
+  if (docIds.length === 0) {
+    const existing = await findActiveLink(env, 'doc', params.id)
+    if (existing) return jsonResponse({ token: existing.token })
+
+    const token = generateToken()
+    await env.DB.prepare(
+      'INSERT INTO share_links (token, owner_id, target_type, target_id, created_at, revoked_at) VALUES (?,?,?,?,?,NULL)',
+    )
+      .bind(token, user.id, 'doc', params.id, Date.now())
+      .run()
+    return jsonResponse({ token }, 201)
+  }
+
+  const uniqueIds = [...new Set(docIds)].filter((id) => id !== params.id)
+  for (const id of uniqueIds) {
+    const owned = await findOwnedDoc(env, id, user.id)
+    if (!owned) return errorResponse('bad_request', 400)
+  }
+
   const existing = await findActiveLink(env, 'doc', params.id)
-  if (existing) return jsonResponse({ token: existing.token })
+  if (existing) {
+    const existingIds = new Set(await fetchShareLinkDocIds(env, existing.token))
+    const sameSet = existingIds.size === uniqueIds.length && uniqueIds.every((id) => existingIds.has(id))
+    if (sameSet) return jsonResponse({ token: existing.token })
+
+    await env.DB.prepare('UPDATE share_links SET revoked_at = ? WHERE token = ?').bind(Date.now(), existing.token).run()
+  }
 
   const token = generateToken()
   await env.DB.prepare(
@@ -97,6 +192,9 @@ export async function handleCreateDocLink(
   )
     .bind(token, user.id, 'doc', params.id, Date.now())
     .run()
+  for (const id of uniqueIds) {
+    await env.DB.prepare('INSERT INTO share_link_docs (token, doc_id) VALUES (?,?)').bind(token, id).run()
+  }
   return jsonResponse({ token }, 201)
 }
 
@@ -133,6 +231,64 @@ export async function handlePublicGetDoc(
 
   const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at FROM docs WHERE id = ?')
     .bind(link.target_id)
+    .first<PublicDocRow>()
+  if (!doc) return pubResponse({ error: 'not_found' }, 404)
+
+  return pubResponse({
+    title: doc.title,
+    content: stripComments(doc.content),
+    lineEnding: doc.line_ending,
+    updatedAt: doc.updated_at,
+  })
+}
+
+// 묶음 문서 목록 — 시작 문서가 맨 앞, 삭제된 문서는 빠진다 (F-252 2.5)
+export async function handlePublicGetDocSet(
+  _request: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  if (!isValidToken(params.token)) return pubResponse({ error: 'not_found' }, 404)
+
+  const link = await env.DB.prepare('SELECT * FROM share_links WHERE token = ? AND revoked_at IS NULL')
+    .bind(params.token)
+    .first<LinkRow>()
+  if (!link || link.target_type !== 'doc') return pubResponse({ error: 'not_found' }, 404)
+
+  const bundledIds = await fetchShareLinkDocIds(env, params.token)
+  const orderedIds = [link.target_id, ...bundledIds]
+  const placeholders = orderedIds.map(() => '?').join(',')
+  const { results: docs } = await env.DB.prepare(`SELECT id, title FROM docs WHERE id IN (${placeholders})`)
+    .bind(...orderedIds)
+    .all<{ id: string; title: string }>()
+
+  const byId = new Map(docs.map((d) => [d.id, d]))
+  const ordered = orderedIds
+    .map((id) => byId.get(id))
+    .filter((d): d is { id: string; title: string } => d !== undefined)
+
+  return pubResponse({ docs: ordered })
+}
+
+// 묶음 안 문서 본문. docId 가 묶음 밖(시작 문서도 아니고 share_link_docs 에도 없음)이면 404 (F-252 2.5)
+export async function handlePublicGetDocSetDoc(
+  _request: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  if (!isValidToken(params.token)) return pubResponse({ error: 'not_found' }, 404)
+
+  const link = await env.DB.prepare('SELECT * FROM share_links WHERE token = ? AND revoked_at IS NULL')
+    .bind(params.token)
+    .first<LinkRow>()
+  if (!link || link.target_type !== 'doc') return pubResponse({ error: 'not_found' }, 404)
+
+  if (!(await isDocInLinkSet(env, params.token, link.target_id, params.docId))) return pubResponse({ error: 'not_found' }, 404)
+
+  const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at FROM docs WHERE id = ?')
+    .bind(params.docId)
     .first<PublicDocRow>()
   if (!doc) return pubResponse({ error: 'not_found' }, 404)
 
