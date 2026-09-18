@@ -533,9 +533,10 @@ export function listContentStarts(state: EditorState, ranges: readonly { from: n
   return out
 }
 
-type ListAncestorMarks = { lineFrom: number; ancestorMarkFroms: number[] }
+type ListAncestorMarks = { lineFrom: number; ancestorMarkFroms: number[]; ancestorMarkTos: number[] }
 
 // ListMark 가 있는 줄의 조상 목록 항목 ListMark 문서 위치 — 1단계 조상이 배열 앞, 가까운 부모가 뒤 (F-236 3장). 최상위 줄은 결과에 없다
+// ancestorMarkTos 는 각 조상 기호가 끝나는 위치(가로 가운데 계산용, F-236 6장)
 export function listAncestorMarks(state: EditorState, ranges: readonly { from: number; to: number }[]): ListAncestorMarks[] {
   const out: ListAncestorMarks[] = []
 
@@ -546,15 +547,21 @@ export function listAncestorMarks(state: EditorState, ranges: readonly { from: n
       enter: (node) => {
         if (node.name !== 'ListMark') return
         const marks: number[] = []
+        const marksTo: number[] = []
         let list = node.node.parent?.parent // 이 항목을 담은 List(BulletList/OrderedList)
         while (list) {
           const ancestorItem = list.parent
           if (!ancestorItem || ancestorItem.name !== 'ListItem') break
           const ancestorMark = ancestorItem.getChild('ListMark')
-          if (ancestorMark) marks.push(ancestorMark.from)
+          if (ancestorMark) {
+            marks.push(ancestorMark.from)
+            marksTo.push(ancestorMark.to)
+          }
           list = ancestorItem.parent
         }
-        if (marks.length > 0) out.push({ lineFrom: state.doc.lineAt(node.from).from, ancestorMarkFroms: marks.reverse() })
+        if (marks.length > 0) {
+          out.push({ lineFrom: state.doc.lineAt(node.from).from, ancestorMarkFroms: marks.reverse(), ancestorMarkTos: marksTo.reverse() })
+        }
       },
     })
   }
@@ -627,7 +634,7 @@ export function listIndentPreview(): Extension {
         view.requestMeasure<ListIndentResult[]>({
           read: (view) => {
             const ancestorsByLine = new Map(
-              listAncestorMarks(view.state, view.visibleRanges).map((a) => [a.lineFrom, a.ancestorMarkFroms]),
+              listAncestorMarks(view.state, view.visibleRanges).map((a) => [a.lineFrom, { froms: a.ancestorMarkFroms, tos: a.ancestorMarkTos }]),
             )
             return listContentStarts(view.state, view.visibleRanges)
               .map(({ lineFrom, pos }) => {
@@ -635,14 +642,15 @@ export function listIndentPreview(): Extension {
                 const contentLeft = view.coordsAtPos(pos, 1)
                 if (!lineLeft || !contentLeft) return null
                 const px = Math.max(0, Math.round(contentLeft.left - lineLeft.left))
-                const ancestorMarkFroms = ancestorsByLine.get(lineFrom)
-                if (!ancestorMarkFroms) return { lineFrom, px }
-                // 조상 마커 좌표를 하나라도 못 재면(화면 밖 등) 안내선 없이 들여쓰기만 둔다
+                const ancestors = ancestorsByLine.get(lineFrom)
+                if (!ancestors) return { lineFrom, px }
+                // 조상 마커 좌표를 하나라도 못 재면(화면 밖 등) 안내선 없이 들여쓰기만 둔다. 가운데 = 기호 시작·끝 좌표 평균 (F-236 6장)
                 const guides: number[] = []
-                for (const markFrom of ancestorMarkFroms) {
-                  const markCoords = view.coordsAtPos(markFrom, 1)
-                  if (!markCoords) return { lineFrom, px }
-                  guides.push(Math.round(markCoords.left - lineLeft.left))
+                for (let i = 0; i < ancestors.froms.length; i++) {
+                  const markLeft = view.coordsAtPos(ancestors.froms[i], 1)
+                  const markRight = view.coordsAtPos(ancestors.tos[i], -1)
+                  if (!markLeft || !markRight) return { lineFrom, px }
+                  guides.push(Math.round((markLeft.left + markRight.left) / 2 - lineLeft.left))
                 }
                 return { lineFrom, px, guides }
               })

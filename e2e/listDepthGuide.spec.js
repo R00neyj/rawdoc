@@ -2,12 +2,12 @@
 import { test, expect } from '@playwright/test'
 import { openApp, importMarkdown, setViewMode, readSavedContent } from './helpers.js'
 
-// li 자신의 글머리·번호 기호 ::before 가 서는 실제 화면 x (F-226 listView.spec.js 와 같은 방법)
+// li 자신의 글머리·번호 기호 ::before 칸의 가로 가운데 (F-236 6장 — 칸은 justify-content:center 라 칸 가운데 = 글자 가운데, F-226 listView.spec.js 와 같은 측정 방법)
 async function markerX(li) {
   return li.evaluate((el) => {
     const rect = el.getBoundingClientRect()
     const cs = getComputedStyle(el, '::before')
-    return rect.left + parseFloat(cs.left)
+    return rect.left + parseFloat(cs.left) + parseFloat(cs.width) / 2
   })
 }
 
@@ -121,12 +121,14 @@ async function editGuideLine(page, textFragment) {
   }, textFragment)
 }
 
+// .md-bullet·.md-list-marker 칸의 가로 가운데 (F-236 6장, 칸은 min-width:2em + justify-content:center)
 async function editMarkerX(page, textFragment) {
   return page.evaluate((frag) => {
     const lines = [...document.querySelectorAll('.cm-line')]
     const line = lines.find((l) => l.textContent.trim().endsWith(frag))
     const mark = line.querySelector('.md-bullet, .md-list-marker')
-    return mark.getBoundingClientRect().left
+    const rect = mark.getBoundingClientRect()
+    return rect.left + rect.width / 2
   }, textFragment)
 }
 
@@ -176,5 +178,46 @@ test.describe('F-236 A7 원문 불변', () => {
 
     const saved = await readSavedContent(page, docId)
     expect(saved.content).toBe('- 가\n  - 나!\n')
+  })
+})
+
+// 6장 후속 — 안내선을 조상 기호 왼쪽이 아닌 가로 가운데로 (2026-09-18)
+test.describe('F-236 A10 보기 모드 가운데 — ul', () => {
+  test('안내선 x 가 1단계 • 기호의 가로 가운데 ±2px', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- 가\n  - 나\n' })
+    await setViewMode(page, 'view')
+
+    const items = page.locator('.markdown-body li')
+    const nestedUl = page.locator('.markdown-body li ul').first()
+    const [markerGa, guide] = await Promise.all([markerX(items.first()), guideOf(nestedUl)])
+    expect(Math.abs(guide.x - markerGa)).toBeLessThanOrEqual(2)
+  })
+})
+
+test.describe('F-236 A11 보기 모드 가운데 — ol', () => {
+  test('안내선 x 가 1단계 1. 의 가로 가운데 ±2px', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '1. 가\n   1. 나\n' })
+    await setViewMode(page, 'view')
+
+    const items = page.locator('.markdown-body li')
+    const nestedOl = page.locator('.markdown-body li ol').first()
+    const [markerGa, guide] = await Promise.all([markerX(items.first()), guideOf(nestedOl)])
+    expect(Math.abs(guide.x - markerGa)).toBeLessThanOrEqual(2)
+  })
+})
+
+test.describe('F-236 A12 편집 모드 가운데', () => {
+  test('보기 모드와 같은 x, ±4px', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- 가\n  - 나\n' })
+    await page.keyboard.press('Control+End')
+    await setViewMode(page, 'live')
+
+    const markerGa = await editMarkerX(page, '가')
+    const guideNa = await editGuideLine(page, '나')
+    expect(guideNa.count).toBe(1)
+    expect(Math.abs(guideNa.xs[0] - markerGa)).toBeLessThanOrEqual(4)
   })
 })
