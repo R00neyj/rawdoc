@@ -3,8 +3,10 @@ import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { badBody, readJsonLimited } from './docs'
 import { MAX_BODY_BYTES, isValidFolderName, isValidUuid } from './validate'
-import { canCreateFolder, canMoveFolder } from '../src/lib/folderTree'
+import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../src/lib/folderTree'
 import { getOwnedFolder } from './access'
+
+const BATCH_ID_LIMIT = 100
 
 type FolderRow = {
   id: string
@@ -142,6 +144,7 @@ export async function handleUpdateFolder(
   )
 }
 
+// contents 질의 문자열 — 'move-up'(기본) 또는 'delete-all' (specs/features/F-242.md 3.4)
 export async function handleDeleteFolder(
   request: Request,
   env: Env,
@@ -151,6 +154,39 @@ export async function handleDeleteFolder(
   const user = await requireUser(request, env)
   const existing = await getOwnedFolder<FolderRow>(env, params.id, user)
   if (!existing) return errorResponse('not_found', 404)
+
+  const contents = new URL(request.url).searchParams.get('contents') ?? 'move-up'
+  if (contents !== 'move-up' && contents !== 'delete-all') {
+    return jsonResponse({ error: 'invalid', field: 'contents' }, 400)
+  }
+
+  if (contents === 'delete-all') {
+    const { results: ownFolders } = await env.DB.prepare(
+      'SELECT id, name, parent_id FROM folders WHERE owner_id = ?',
+    )
+      .bind(user.id)
+      .all<{ id: string; name: string; parent_id: string | null }>()
+    const folderLikes = ownFolders.map((f) => ({ id: f.id, name: f.name, parentId: f.parent_id }))
+    const ids = descendantFolderIds(folderLikes, params.id)
+
+    const statements = []
+    for (let i = 0; i < ids.length; i += BATCH_ID_LIMIT) {
+      const chunk = ids.slice(i, i + BATCH_ID_LIMIT)
+      const placeholders = chunk.map(() => '?').join(',')
+      statements.push(
+        env.DB.prepare(`DELETE FROM docs WHERE owner_id = ? AND folder_id IN (${placeholders})`).bind(
+          user.id,
+          ...chunk,
+        ),
+        env.DB.prepare(`DELETE FROM folders WHERE owner_id = ? AND id IN (${placeholders})`).bind(
+          user.id,
+          ...chunk,
+        ),
+      )
+    }
+    if (statements.length > 0) await env.DB.batch(statements)
+    return new Response(null, { status: 204 })
+  }
 
   const parentId = existing.parent_id
   await env.DB.batch([

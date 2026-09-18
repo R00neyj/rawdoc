@@ -198,3 +198,104 @@ test.describe('F-226 A5 공개 보기', () => {
     }
   })
 })
+
+// 폴더 삭제 — 위로 옮기기/전부 삭제 선택 (specs/features/F-242.md)
+async function createFolder(page) {
+  await page.getByRole('button', { name: '새 폴더', exact: true }).click()
+  // 포커스가 이름 입력 칸으로 옮겨가기 전에 Enter 를 누르면 "새 폴더" 버튼이 한 번 더 눌려 폴더가 두 개 생긴다
+  const renameInput = page.locator('.tree-rename-input')
+  await expect(renameInput).toBeFocused()
+  await page.keyboard.press('Enter') // 이름 그대로 커밋
+  return page.locator('.tree-row').filter({ has: page.locator('.tree-toggle') }).first()
+}
+
+async function openFolderMenu(folderRow) {
+  const menuBtn = folderRow.locator('.item-menu-btn')
+  await menuBtn.focus()
+  await menuBtn.click()
+  return menuBtn
+}
+
+async function addDocInFolder(folderRow, page) {
+  await openFolderMenu(folderRow)
+  await page.getByRole('menuitem', { name: '새 문서' }).click()
+  await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+}
+
+async function requestDeleteFolder(folderRow, page) {
+  await openFolderMenu(folderRow)
+  await page.getByRole('menuitem', { name: '삭제' }).click()
+  return page.locator('dialog[open]')
+}
+
+test.describe('F-242 A8 폴더 삭제 선택지', () => {
+  test('문서가 든 폴더 삭제 — 대화상자에 위로 옮기기·전부 삭제 두 버튼', async ({ page }) => {
+    await openApp(page)
+    const folderRow = await createFolder(page)
+    await addDocInFolder(folderRow, page)
+
+    const dialog = await requestDeleteFolder(folderRow, page)
+    await expect(dialog.getByRole('button', { name: '위로 옮기기' })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: '전부 삭제' })).toBeVisible()
+  })
+})
+
+test.describe('F-242 A9 위로 옮기기', () => {
+  test('문서가 상위로 옮겨지고 폴더만 사라진다', async ({ page }) => {
+    await openApp(page)
+    const folderRow = await createFolder(page)
+    await addDocInFolder(folderRow, page)
+    const docRowCount = await page.locator('.tree-row').filter({ has: page.locator('.tree-toggle-spacer') }).count()
+
+    const dialog = await requestDeleteFolder(folderRow, page)
+    await dialog.getByRole('button', { name: '위로 옮기기' }).click()
+
+    await expect(page.locator('.tree-toggle')).toHaveCount(0)
+    // 문서는 지워지지 않고 그대로 남는다 — 폴더만 사라져 트리 깊이만 얕아진다
+    await expect(page.locator('.tree-row').filter({ has: page.locator('.tree-toggle-spacer') })).toHaveCount(docRowCount)
+  })
+})
+
+test.describe('F-242 A10 전부 삭제', () => {
+  test('폴더와 안의 문서가 사이드바에서 사라진다', async ({ page }) => {
+    await openApp(page)
+    const folderRow = await createFolder(page)
+    await addDocInFolder(folderRow, page)
+    const docRowCount = await page.locator('.tree-row').filter({ has: page.locator('.tree-toggle-spacer') }).count()
+
+    const dialog = await requestDeleteFolder(folderRow, page)
+    await dialog.getByRole('button', { name: '전부 삭제' }).click()
+
+    await expect(page.locator('.tree-toggle')).toHaveCount(0)
+    await expect(page.locator('.tree-row').filter({ has: page.locator('.tree-toggle-spacer') })).toHaveCount(docRowCount - 1)
+  })
+})
+
+test.describe('F-242 A11 빈 폴더', () => {
+  test('버튼이 취소·삭제 두 개뿐이고, 누르면 폴더만 사라진다', async ({ page }) => {
+    await openApp(page)
+    const folderRow = await createFolder(page)
+
+    const dialog = await requestDeleteFolder(folderRow, page)
+    await expect(dialog.locator('.dialog-actions button')).toHaveCount(2)
+    await expect(dialog.getByRole('button', { name: '취소' })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: '삭제', exact: true })).toBeVisible()
+
+    await dialog.getByRole('button', { name: '삭제', exact: true }).click()
+    await expect(page.locator('.tree-toggle')).toHaveCount(0)
+  })
+})
+
+test.describe('F-242 A12 열린 문서가 지워짐', () => {
+  test('열어 둔 문서가 든 폴더를 전부 삭제하면 홈 화면으로 돌아간다', async ({ page }) => {
+    await openApp(page)
+    const folderRow = await createFolder(page)
+    await addDocInFolder(folderRow, page)
+
+    const dialog = await requestDeleteFolder(folderRow, page)
+    await dialog.getByRole('button', { name: '전부 삭제' }).click()
+
+    await expect(page.locator('.empty-state')).toBeVisible()
+    expect(await page.evaluate(() => location.hash)).toBe('#/')
+  })
+})

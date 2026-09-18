@@ -15,7 +15,7 @@ import {
   handleUpdateDocV1,
 } from './v1'
 import { handleGetDoc, handleListDocs } from './docs'
-import { handleCreateFolder, handleListFolders } from './folders'
+import { handleCreateFolder, handleDeleteFolder, handleListFolders } from './folders'
 
 type DocRow = {
   id: string
@@ -150,11 +150,54 @@ function makeEnv(data: {
                 attachments.push({ owner_id: ownerId, id, ext, mime, size, width, height, created_at: createdAt })
                 return { meta: { changes: 1 } }
               }
+              if (sql.startsWith('UPDATE docs SET folder_id = ? WHERE folder_id = ? AND owner_id = ?')) {
+                const [parentId, folderId, ownerId] = args as [string | null, string, string]
+                for (const d of docs) if (d.folder_id === folderId && d.owner_id === ownerId) d.folder_id = parentId
+                return { meta: { changes: 1 } }
+              }
+              if (sql.startsWith('UPDATE folders SET parent_id = ? WHERE parent_id = ? AND owner_id = ?')) {
+                const [parentId, id, ownerId] = args as [string | null, string, string]
+                for (const f of folders) if (f.parent_id === id && f.owner_id === ownerId) f.parent_id = parentId
+                return { meta: { changes: 1 } }
+              }
+              if (sql.startsWith('DELETE FROM folders WHERE id = ? AND owner_id = ?')) {
+                const [id, ownerId] = args as [string, string]
+                const idx = folders.findIndex((f) => f.id === id && f.owner_id === ownerId)
+                if (idx >= 0) folders.splice(idx, 1)
+                return { meta: { changes: idx >= 0 ? 1 : 0 } }
+              }
+              if (sql.startsWith('DELETE FROM docs WHERE owner_id = ? AND folder_id IN')) {
+                const [ownerId, ...ids] = args as string[]
+                let changes = 0
+                for (let i = docs.length - 1; i >= 0; i--) {
+                  if (docs[i].owner_id === ownerId && ids.includes(docs[i].folder_id as string)) {
+                    docs.splice(i, 1)
+                    changes++
+                  }
+                }
+                return { meta: { changes } }
+              }
+              if (sql.startsWith('DELETE FROM folders WHERE owner_id = ? AND id IN')) {
+                const [ownerId, ...ids] = args as string[]
+                let changes = 0
+                for (let i = folders.length - 1; i >= 0; i--) {
+                  if (folders[i].owner_id === ownerId && ids.includes(folders[i].id)) {
+                    folders.splice(i, 1)
+                    changes++
+                  }
+                }
+                return { meta: { changes } }
+              }
               throw new Error(`unhandled run sql: ${sql}`)
             },
           }
         },
       }
+    },
+    async batch(statements: { run(): Promise<unknown> }[]) {
+      const results = []
+      for (const s of statements) results.push(await s.run())
+      return results
     },
   }
 
@@ -358,6 +401,68 @@ describe('F-223 A3 폴더', () => {
     const res = await handleListFolders(new Request('http://local.test/v1/folders', { headers: { 'x-test-user': 'u1' } }), env)
     const body = (await res.json()) as { name: string }[]
     expect(body.map((f) => f.name)).toContain('새 폴더')
+  })
+})
+
+describe('F-242 A7 DELETE /api/folders/:id — contents', () => {
+  function baseFolder(overrides: Partial<FolderRow> = {}): FolderRow {
+    return { id: 'top', owner_id: 'u1', name: '위', parent_id: null, created_at: 1, updated_at: 1, ...overrides }
+  }
+
+  it('질의 문자열이 없으면 move-up — 안의 문서·하위 폴더가 부모로 올라가고 대상 폴더만 지워진다', async () => {
+    const { env, docs, folders } = makeEnv({
+      folders: [baseFolder(), baseFolder({ id: 'sub', name: '아래', parent_id: 'top' })],
+      docs: [{ id: 'd1', owner_id: 'u1', title: 't', content: 'c', line_ending: 'lf', folder_id: 'top', pinned_at: null, version: 1, created_at: 1, updated_at: 1 }],
+    })
+    const res = await handleDeleteFolder(
+      new Request('http://local.test/api/folders/top', { method: 'DELETE', headers: { 'x-test-user': 'u1' } }),
+      env, {} as ExecutionContext, { id: 'top' },
+    )
+    expect(res.status).toBe(204)
+    expect(folders.find((f) => f.id === 'top')).toBeUndefined()
+    expect(folders.find((f) => f.id === 'sub')!.parent_id).toBeNull()
+    expect(docs.find((d) => d.id === 'd1')!.folder_id).toBeNull()
+  })
+
+  it('contents=delete-all 이면 하위 문서·폴더가 D1 에서 사라진다', async () => {
+    const { env, docs, folders } = makeEnv({
+      folders: [
+        baseFolder(),
+        baseFolder({ id: 'sub', name: '아래', parent_id: 'top' }),
+        baseFolder({ id: 'sibling', name: '형제', parent_id: null }),
+      ],
+      docs: [
+        { id: 'd-top', owner_id: 'u1', title: 't', content: 'c', line_ending: 'lf', folder_id: 'top', pinned_at: null, version: 1, created_at: 1, updated_at: 1 },
+        { id: 'd-sub', owner_id: 'u1', title: 't', content: 'c', line_ending: 'lf', folder_id: 'sub', pinned_at: null, version: 1, created_at: 1, updated_at: 1 },
+        { id: 'd-outside', owner_id: 'u1', title: 't', content: 'c', line_ending: 'lf', folder_id: null, pinned_at: null, version: 1, created_at: 1, updated_at: 1 },
+      ],
+    })
+    const res = await handleDeleteFolder(
+      new Request('http://local.test/api/folders/top?contents=delete-all', { method: 'DELETE', headers: { 'x-test-user': 'u1' } }),
+      env, {} as ExecutionContext, { id: 'top' },
+    )
+    expect(res.status).toBe(204)
+    expect(folders.map((f) => f.id)).toEqual(['sibling'])
+    expect(docs.map((d) => d.id)).toEqual(['d-outside'])
+  })
+
+  it('잘못된 contents 값은 400', async () => {
+    const { env } = makeEnv({ folders: [baseFolder()] })
+    const res = await handleDeleteFolder(
+      new Request('http://local.test/api/folders/top?contents=wrong', { method: 'DELETE', headers: { 'x-test-user': 'u1' } }),
+      env, {} as ExecutionContext, { id: 'top' },
+    )
+    expect(res.status).toBe(400)
+    expect((await res.json()) as { error: string; field: string }).toEqual({ error: 'invalid', field: 'contents' })
+  })
+
+  it('남의 폴더는 404', async () => {
+    const { env } = makeEnv({ folders: [baseFolder({ owner_id: 'owner-2' })] })
+    const res = await handleDeleteFolder(
+      new Request('http://local.test/api/folders/top?contents=delete-all', { method: 'DELETE', headers: { 'x-test-user': 'u1' } }),
+      env, {} as ExecutionContext, { id: 'top' },
+    )
+    expect(res.status).toBe(404)
   })
 })
 

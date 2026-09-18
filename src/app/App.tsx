@@ -66,7 +66,7 @@ import StatusBar from './StatusBar'
 import SharedView from './SharedView'
 import PublicView from './PublicView'
 import InviteDialog, { type InviteTarget } from './InviteDialog'
-import type { Doc, Folder, LineEnding, Store } from '../types'
+import type { Doc, Folder, FolderDeleteMode, LineEnding, Store } from '../types'
 
 const STATS_DEBOUNCE_MS = 150
 
@@ -1461,8 +1461,10 @@ export default function App() {
     closeSidebarIfNarrow()
   }
 
+  // 폴더가 비어 있는지 대화상자에 알려 준다 — 비어 있으면 버튼 하나만 보여준다 (F-242.md 3.5·3.6)
   function requestDeleteFolder(folder: { id: string; name: string }) {
-    setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name })
+    const empty = !docs.some((d) => d.folderId === folder.id) && !folders.some((f) => f.parentId === folder.id)
+    setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name, empty })
     closeSidebarIfNarrow()
   }
 
@@ -1470,15 +1472,22 @@ export default function App() {
     setDeleteTarget(null)
   }
 
-  async function confirmDelete(target: DeleteTarget | null) {
+  async function confirmDelete(target: DeleteTarget | null, mode: FolderDeleteMode = 'move-up') {
     if (!target) return
 
     if (target.type === 'folder') {
-      await store.removeFolder(target.id)
+      await store.removeFolder(target.id, mode)
       const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
       setFolders(newFolders)
-      setDocs(sortByUpdatedAtDesc(newDocs.map(stripContent)))
+      const strippedDocs = sortByUpdatedAtDesc(newDocs.map(stripContent))
+      setDocs(strippedDocs)
       setDeleteTarget(null)
+
+      // delete-all 로 열려 있던 문서가 사라졌으면 홈으로 (F-242.md 3.6, F-232 3.3 의 홈 이동 경로)
+      if (currentDocId && !strippedDocs.some((d) => d.id === currentDocId)) {
+        setCurrentDocId(null)
+        replaceHashUrl(null)
+      }
       return
     }
 

@@ -7,8 +7,8 @@ import { ApiError, type ServerDoc } from './docsApi'
 import { uploadAttachment, fetchAttachment, fetchUsage, AttachmentApiError } from './attachmentsApi'
 import { toWebp } from './toWebp'
 import { extractAttachmentRefs } from '../lib/imageBlock'
-import { canCreateFolder, canMoveFolder } from '../lib/folderTree'
-import type { Attachment, AttachmentExt, Doc, Folder, LineEnding, Store, SyncState } from '../types'
+import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
+import type { Attachment, AttachmentExt, Doc, Folder, FolderDeleteMode, LineEnding, Store, SyncState } from '../types'
 
 const RETRY_INTERVAL_MS = 30000
 const TOO_LARGE_MESSAGE = '문서가 너무 커서 서버에 저장하지 못했습니다(1MB 초과).'
@@ -265,7 +265,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           break
         }
         case 'removeFolder': {
-          await api.removeFolder(entry.folderId)
+          await api.removeFolder(entry.folderId, entry.mode ?? 'move-up')
           // in-flight 로 살아남은 createFolder/moveFolder 등이 먼저 끝나 캐시를 되살렸을 수 있다 — 서버는 확실히 지워졌으니 캐시도 맞춘다
           await cache.deleteFolder(userId, entry.folderId)
           await cache.removeOutbox(entry.key)
@@ -695,9 +695,31 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       return toFolder(updated)
     },
 
-    async removeFolder(id) {
+    async removeFolder(id, mode: FolderDeleteMode = 'move-up') {
       const existing = await cache.getFolder(userId, id)
       if (!existing) throw new Error(`폴더를 찾을 수 없음: ${id}`)
+
+      if (mode === 'delete-all') {
+        const allFolders = await cache.getFolders(userId)
+        const ids = descendantFolderIds(allFolders, id)
+
+        const docs = await cache.getDocs(userId)
+        for (const doc of docs) {
+          if (doc.folderId && ids.includes(doc.folderId)) {
+            await cache.deleteDoc(userId, doc.id)
+            await cache.removeOutboxForDoc(userId, doc.id, inFlightKey)
+          }
+        }
+        for (const fid of ids) {
+          await cache.deleteFolder(userId, fid)
+          await cache.removeOutboxForFolder(userId, fid, inFlightKey)
+        }
+        await cache.addOutbox(userId, { type: 'removeFolder', folderId: id, mode: 'delete-all' })
+        await refreshPending()
+        kickSend()
+        return
+      }
+
       const parentId = existing.parentId
 
       const docs = await cache.getDocs(userId)
@@ -708,7 +730,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
       await cache.deleteFolder(userId, id)
       await cache.removeOutboxForFolder(userId, id, inFlightKey)
-      await cache.addOutbox(userId, { type: 'removeFolder', folderId: id })
+      await cache.addOutbox(userId, { type: 'removeFolder', folderId: id, mode: 'move-up' })
       await refreshPending()
       kickSend()
     },

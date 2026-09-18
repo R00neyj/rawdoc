@@ -1,7 +1,7 @@
 // 메모리 저장소 — 저장소를 못 쓸 때의 대체 (specs/architecture.md 2장, specs/features/F-126.md 3장)
 // B1 은 IndexedDB 가 없으므로 이 저장소로만 동작한다 (F-110 이 idbStore 로 교체)
-import { canCreateFolder, canMoveFolder } from '../lib/folderTree'
-import type { Store, Doc, Folder, Attachment, AttachmentExt, LineEnding } from '../types'
+import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
+import type { Store, Doc, Folder, Attachment, AttachmentExt, LineEnding, FolderDeleteMode } from '../types'
 
 function clone<T extends object>(doc: T): T {
   return { ...doc }
@@ -177,13 +177,25 @@ export function createMemoryStore(): Store {
       return clone(updated)
     },
 
-    // 안의 문서 folderId 와 하위 폴더 parentId 를 지운 폴더의 parentId 로 바꾸고 폴더 삭제
-    // (F-126.md 3장)
-    async removeFolder(id) {
+    // move-up: 문서·하위 폴더를 부모로 옮기고 폴더만 삭제. delete-all: 하위 폴더·그 안 문서까지 삭제 (F-126.md 3장, F-242.md 3.1·3.2)
+    async removeFolder(id, mode: FolderDeleteMode = 'move-up') {
       const existing = folders.get(id)
       if (!existing) {
         throw new Error(`폴더를 찾을 수 없음: ${id}`)
       }
+
+      if (mode === 'delete-all') {
+        const ids = new Set(descendantFolderIds([...folders.values()], id))
+        for (const doc of docs.values()) {
+          const normalized = normalizeDoc(doc)
+          if (normalized.folderId && ids.has(normalized.folderId)) {
+            docs.delete(doc.id)
+          }
+        }
+        for (const fid of ids) folders.delete(fid)
+        return
+      }
+
       const parentId = existing.parentId
 
       for (const doc of docs.values()) {

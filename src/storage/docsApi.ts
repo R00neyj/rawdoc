@@ -222,8 +222,8 @@ export async function updateFolder(
   return (await readJson(res)) as ServerFolder
 }
 
-export async function removeFolder(id: string): Promise<void> {
-  const res = await send(`/api/folders/${encodeURIComponent(id)}`, { method: 'DELETE' })
+export async function removeFolder(id: string, mode: 'move-up' | 'delete-all' = 'move-up'): Promise<void> {
+  const res = await send(`/api/folders/${encodeURIComponent(id)}?contents=${mode}`, { method: 'DELETE' })
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
   if (res.status === 404) throw new ApiError('not_found')

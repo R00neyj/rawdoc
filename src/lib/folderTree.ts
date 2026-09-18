@@ -125,6 +125,23 @@ export function pinnedDocs<T extends DocLike>(docs: T[]): T[] {
   return docs.filter((d) => d.pinnedAt != null).sort((a, b) => (a.pinnedAt ?? 0) - (b.pinnedAt ?? 0))
 }
 
+// id 자신과 그 아래 모든 하위 폴더 id (형제·부모 미포함). id 가 없으면 빈 배열 (F-242.md 3.1)
+export function descendantFolderIds(folders: FolderLike[], id: string): string[] {
+  if (!folders.some((f) => f.id === id)) return []
+  const result = new Set<string>([id])
+  let added = true
+  while (added) {
+    added = false
+    for (const f of folders) {
+      if (f.parentId && result.has(f.parentId) && !result.has(f.id)) {
+        result.add(f.id)
+        added = true
+      }
+    }
+  }
+  return [...result]
+}
+
 // 새 문서를 넣을 대상 폴더를 정한다. 존재하는 폴더가 아니면 최상위(null)로 되돌려 저장소 reject 을 막는다 (specs/features/F-138.md 3.4)
 export function resolveTargetFolderId({
   folders,

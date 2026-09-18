@@ -19,6 +19,9 @@ export type Doc = {
   viaFolder?: { id: string; name: string } | null
 }
 
+// 폴더 삭제 방식 — 안의 문서·하위 폴더를 위로 옮기거나 전부 함께 지운다 (specs/features/F-242.md 3.1)
+export type FolderDeleteMode = 'move-up' | 'delete-all'
+
 export type Folder = {
   id: string
   name: string
@@ -66,7 +69,7 @@ export type Store = {
   createFolder(input: { name: string; parentId?: string | null }): Promise<Folder>
   renameFolder(id: string, name: string): Promise<Folder>
   moveFolder(id: string, parentId: string | null): Promise<Folder>
-  removeFolder(id: string): Promise<void>
+  removeFolder(id: string, mode?: FolderDeleteMode): Promise<void>
   putAttachment(input: {
     blob: Blob
     mime: string

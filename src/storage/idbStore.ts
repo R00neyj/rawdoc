@@ -1,8 +1,8 @@
 // IndexedDB 저장소 (specs/architecture.md 2장, specs/features/F-110.md 3.1, F-126.md 3장)
 // 이름에 제품명을 쓰지 않는다. 제품명이 바뀌어도 사용자 문서가 남아야 한다 (CLAUDE.md 불변조건)
 import { openDB } from 'idb'
-import { canCreateFolder, canMoveFolder } from '../lib/folderTree'
-import type { Store, Doc, Folder, Attachment, AttachmentExt } from '../types'
+import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
+import type { Store, Doc, Folder, Attachment, AttachmentExt, FolderDeleteMode } from '../types'
 
 const DEFAULT_DB_NAME = 'md-docs'
 const DB_VERSION = 4
@@ -264,9 +264,8 @@ export async function createIdbStore(
       return updated
     },
 
-    // 한 트랜잭션: 안의 문서 folderId 와 하위 폴더 parentId 를 지운 폴더의 parentId 로
-    // 바꾸고 폴더 삭제. 문서는 지우지 않는다 (F-126.md 3장)
-    async removeFolder(id) {
+    // move-up: 문서·하위 폴더를 부모로 옮기고 폴더만 삭제. delete-all: 하위 폴더·그 안 문서까지 삭제 (F-126.md 3장, F-242.md 3.1·3.2)
+    async removeFolder(id, mode: FolderDeleteMode = 'move-up') {
       const tx = db.transaction([DOCS_STORE, FOLDERS_STORE], 'readwrite')
       const folderStore = tx.objectStore(FOLDERS_STORE)
       const docStore = tx.objectStore(DOCS_STORE)
@@ -276,6 +275,20 @@ export async function createIdbStore(
         await tx.done
         throw new Error(`폴더를 찾을 수 없음: ${id}`)
       }
+
+      if (mode === 'delete-all') {
+        const allFolders: Folder[] = await folderStore.getAll()
+        const ids = new Set(descendantFolderIds(allFolders, id))
+
+        const allDocs: StoredDoc[] = await docStore.getAll()
+        await Promise.all(
+          allDocs.filter((d) => d.folderId !== undefined && d.folderId !== null && ids.has(d.folderId)).map((d) => docStore.delete(d.id)),
+        )
+        await Promise.all([...ids].map((fid) => folderStore.delete(fid)))
+        await tx.done
+        return
+      }
+
       const parentId = existing.parentId
 
       const allDocs: StoredDoc[] = await docStore.getAll()

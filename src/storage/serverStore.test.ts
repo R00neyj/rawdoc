@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createServerStore, QuotaExceededError } from './serverStore'
+import { descendantFolderIds } from '../lib/folderTree'
 
 let dbCounter = 0
 function freshDbName() {
@@ -42,6 +43,7 @@ function makeFakeServer() {
   let serverError = false
   let usage = { used: 0, limit: 314_572_800 }
   let forceUploadQuota = false
+  const deleteFolderCalls: Array<{ id: string; contents: string | null }> = []
 
   function jsonResponse(status: number, data?: unknown): Response {
     return new Response(data === undefined ? null : JSON.stringify(data), {
@@ -154,7 +156,18 @@ function makeFakeServer() {
         return jsonResponse(200, folder)
       }
       if (method === 'DELETE') {
-        folders.delete(folderMatch[1])
+        deleteFolderCalls.push({ id: folderMatch[1], contents: new URL(String(url), 'http://local.test').searchParams.get('contents') })
+        // F-242.md 3.4 — delete-all 은 하위 폴더·그 안 문서까지 서버에서 지운다
+        if (new URL(String(url), 'http://local.test').searchParams.get('contents') === 'delete-all') {
+          const ids = descendantFolderIds(
+            [...folders.values()].map((f) => ({ id: f.id, name: f.name, parentId: f.parentId })),
+            folderMatch[1],
+          )
+          for (const [id, d] of docs) if (d.folderId && ids.includes(d.folderId)) docs.delete(id)
+          for (const id of ids) folders.delete(id)
+        } else {
+          folders.delete(folderMatch[1])
+        }
         return jsonResponse(204)
       }
     }
@@ -175,6 +188,7 @@ function makeFakeServer() {
   return {
     docs,
     folders,
+    deleteFolderCalls,
     setNetworkDown: (v: boolean) => {
       networkDown = v
     },
@@ -445,5 +459,66 @@ describe('serverStore', () => {
     const docs = await other.list()
     expect(folders.map((f) => f.id)).toEqual([folder.id])
     expect(docs[0].folderId).toBe(folder.id)
+  })
+
+  describe('폴더 삭제 모드 (F-242)', () => {
+    it('delete-all: 캐시에서 하위 트리가 사라지고, 서버에 contents=delete-all 로 한 번 요청이 간다', async () => {
+      const server = makeFakeServer()
+      vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+      const store = await createServerStore('u1', { dbName: freshDbName() })
+
+      const top = await store.createFolder({ name: '위' })
+      const sub = await store.createFolder({ name: '아래', parentId: top.id })
+      const docInSub = await store.create({ title: '문서', content: '내용', lineEnding: 'lf', folderId: sub.id })
+      await tick(20)
+
+      await store.removeFolder(top.id, 'delete-all')
+      await tick(30)
+
+      const folders = await store.listFolders()
+      expect(folders).toEqual([])
+      expect(await store.get(docInSub.id)).toBeNull()
+
+      expect(server.folders.has(top.id)).toBe(false)
+      expect(server.folders.has(sub.id)).toBe(false)
+      expect(server.docs.has(docInSub.id)).toBe(false)
+      expect(server.deleteFolderCalls).toEqual([{ id: top.id, contents: 'delete-all' }])
+    })
+
+    it('mode 를 생략하면 move-up 요청이 간다', async () => {
+      const server = makeFakeServer()
+      vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+      const store = await createServerStore('u1', { dbName: freshDbName() })
+
+      const top = await store.createFolder({ name: '위' })
+      await tick()
+
+      await store.removeFolder(top.id)
+      await tick(20)
+
+      expect(server.deleteFolderCalls).toEqual([{ id: top.id, contents: 'move-up' }])
+    })
+
+    it('오프라인에서 폴더 안 문서를 고친 뒤 delete-all 하면 그 문서의 보낼 목록 항목이 남지 않는다', async () => {
+      const server = makeFakeServer()
+      vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+      const store = await createServerStore('u1', { dbName: freshDbName() })
+
+      const top = await store.createFolder({ name: '위' })
+      const doc = await store.create({ title: '문서', content: '내용', lineEnding: 'lf', folderId: top.id })
+      await tick(20)
+
+      server.setNetworkDown(true)
+      await store.update(doc.id, { content: '오프라인 수정' })
+      await tick(10)
+      expect(store.syncState?.pending).toBe(1)
+
+      await store.removeFolder(top.id, 'delete-all')
+      server.setNetworkDown(false)
+      await tick(30)
+
+      expect(store.syncState?.pending).toBe(0)
+      expect(await store.get(doc.id)).toBeNull()
+    })
   })
 })

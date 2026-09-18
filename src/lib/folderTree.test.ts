@@ -6,6 +6,7 @@ import {
   ancestorsOfDoc,
   pinnedDocs,
   resolveTargetFolderId,
+  descendantFolderIds,
   type FolderNode,
   type TreeNode,
 } from './folderTree'
@@ -182,5 +183,31 @@ describe('resolveTargetFolderId (F-138 3.4)', () => {
   it('null·undefined 는 그대로 최상위(null)', () => {
     expect(resolveTargetFolderId({ folders, folderId: null })).toBeNull()
     expect(resolveTargetFolderId({ folders, folderId: undefined })).toBeNull()
+  })
+})
+
+describe('descendantFolderIds (F-242 3.1)', () => {
+  it('자신 포함, 2단계 이상 하위 전부를 모은다', () => {
+    const folders = [
+      folder('top', '위'),
+      folder('sub', '아래', 'top'),
+      folder('subsub', '더 아래', 'sub'),
+    ]
+    expect(descendantFolderIds(folders, 'top').sort()).toEqual(['sub', 'subsub', 'top'].sort())
+  })
+
+  it('형제 폴더는 포함하지 않는다', () => {
+    const folders = [folder('a', 'A'), folder('b', 'B'), folder('a-sub', '하위', 'a')]
+    expect(descendantFolderIds(folders, 'a').sort()).toEqual(['a', 'a-sub'].sort())
+  })
+
+  it('없는 id 면 빈 배열', () => {
+    const folders = [folder('top', '위')]
+    expect(descendantFolderIds(folders, '없는-id')).toEqual([])
+  })
+
+  it('하위가 없는 폴더는 자신만', () => {
+    const folders = [folder('top', '위')]
+    expect(descendantFolderIds(folders, 'top')).toEqual(['top'])
   })
 })

@@ -153,6 +153,37 @@ describe('memoryStore', () => {
       const updatedDoc = await store.get(doc.id)
       expect(updatedDoc!.folderId).toBeNull()
     })
+
+    it('removeFolder(id, "move-up") 은 인자 없을 때와 같다', async () => {
+      const top = await store.createFolder({ name: '위', parentId: null })
+      const sub = await store.createFolder({ name: '아래', parentId: top.id })
+      const doc = await store.create({ title: 'A', content: '', lineEnding: 'crlf', folderId: top.id })
+
+      await store.removeFolder(top.id, 'move-up')
+
+      const folders = await store.listFolders()
+      expect(folders.find((f) => f.id === top.id)).toBeUndefined()
+      expect(folders.find((f) => f.id === sub.id)!.parentId).toBeNull()
+      expect((await store.get(doc.id))!.folderId).toBeNull()
+    })
+
+    it('removeFolder(id, "delete-all") 은 대상·하위 폴더·그 안 문서를 모두 지우고, 형제 폴더·바깥 문서는 남긴다', async () => {
+      const top = await store.createFolder({ name: '위', parentId: null })
+      const sub = await store.createFolder({ name: '아래', parentId: top.id })
+      const sibling = await store.createFolder({ name: '형제', parentId: null })
+      const docInTop = await store.create({ title: '탑문서', content: '', lineEnding: 'crlf', folderId: top.id })
+      const docInSub = await store.create({ title: '서브문서', content: '', lineEnding: 'crlf', folderId: sub.id })
+      const outsideDoc = await store.create({ title: '바깥문서', content: '', lineEnding: 'crlf' })
+
+      await store.removeFolder(top.id, 'delete-all')
+
+      const folders = await store.listFolders()
+      expect(folders.map((f) => f.id).sort()).toEqual([sibling.id].sort())
+
+      expect(await store.get(docInTop.id)).toBeNull()
+      expect(await store.get(docInSub.id)).toBeNull()
+      expect(await store.get(outsideDoc.id)).not.toBeNull()
+    })
   })
 
   describe('folderId 검사 (F-136.md 3.1·3.2)', () => {

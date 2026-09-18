@@ -1,7 +1,7 @@
 // F-207 서버 저장소 캐시 — IndexedDB `md-remote`(제품명 쓰지 않음). 로그아웃해도 지우지 않는다 (2.1)
 // 버전 2(F-209 2.5): 첨부 blob 캐시 스토어 추가
 import { openDB, type IDBPDatabase } from 'idb'
-import type { AttachmentExt, Doc, Folder, LineEnding } from '../types'
+import type { AttachmentExt, Doc, Folder, FolderDeleteMode, LineEnding } from '../types'
 
 const DEFAULT_DB_NAME = 'md-remote'
 const DB_VERSION = 2
@@ -41,7 +41,8 @@ export type OutboxItem =
   | { type: 'createFolder'; folderId: string; name: string; parentId: string | null }
   | { type: 'renameFolder'; folderId: string; name: string }
   | { type: 'moveFolder'; folderId: string; parentId: string | null }
-  | { type: 'removeFolder'; folderId: string }
+  // mode 가 없는 옛 항목(이전 버전이 남긴 것)은 'move-up' 으로 읽는다 (F-242.md 3.3)
+  | { type: 'removeFolder'; folderId: string; mode?: FolderDeleteMode }
   | { type: 'upload'; attachmentId: string; ext: AttachmentExt }
 
 export type OutboxEntry = OutboxItem & { key: number; userId: string }
