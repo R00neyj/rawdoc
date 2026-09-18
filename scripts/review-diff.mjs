@@ -25,17 +25,33 @@ function normalize(p) {
   return p.replace(/\\/g, '/')
 }
 
-// "파일 소유" 절 표(부속 ### 포함)의 첫 칸 백틱 경로를 모아 소유 패턴 목록을 만든다
+// 제목에 "소유" 가 든 모든 절(뒤에 붙인 후속 절 포함)의 표 첫 칸 백틱 경로를 모아 소유 패턴 목록을 만든다
 function ownedPatterns(featureId) {
   const specPath = `specs/features/${featureId}.md`
   if (!existsSync(specPath)) throw new Error(`명세를 찾을 수 없습니다: ${specPath}`)
   const text = readFileSync(specPath, 'utf-8')
-  // 절 번호는 명세마다 다르다(1장 또는 2장) — 제목으로 찾고, 못 찾으면 옛 형식대로 1장을 본다
-  const startMatch = /^##\s+\d+\.\s*파일 소유/m.exec(text) ?? /^##\s+1\./m.exec(text)
-  if (!startMatch) throw new Error('명세에 "파일 소유" 절이 없습니다')
-  const rest = text.slice(startMatch.index + startMatch[0].length)
-  const endMatch = /^##\s+\d/m.exec(rest)
-  const section = endMatch ? rest.slice(0, endMatch.index) : rest
+  // 소유 절은 명세마다 절 번호·제목·깊이가 다르고, 후속 절(F-236 6.1·F-245 6.4)이 표를 더 들고 있다
+  const ownSections = []
+  let collecting = null
+  for (const line of text.split(/\r?\n/)) {
+    const heading = /^(#{2,4})\s+(.*)$/.exec(line)
+    if (heading) {
+      if (collecting) ownSections.push(collecting)
+      collecting = /파일 소유|소유 파일/.test(heading[2]) ? [] : null
+      continue
+    }
+    if (collecting) collecting.push(line)
+  }
+  if (collecting) ownSections.push(collecting)
+  if (ownSections.length === 0) {
+    // 옛 형식 — 제목에 "소유" 가 없고 1장이 소유 절이던 명세
+    const legacy = /^##\s+1\./m.exec(text)
+    if (!legacy) throw new Error('명세에 "파일 소유" 절이 없습니다')
+    const rest = text.slice(legacy.index + legacy[0].length)
+    const endMatch = /^##\s+\d/m.exec(rest)
+    ownSections.push((endMatch ? rest.slice(0, endMatch.index) : rest).split(/\r?\n/))
+  }
+  const section = ownSections.flat().join('\n')
 
   const patterns = []
   for (const line of section.split(/\r?\n/)) {
