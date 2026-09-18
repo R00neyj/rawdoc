@@ -12,6 +12,7 @@ import type { SyntaxNode } from '@lezer/common'
 
 import { parseImageBlock } from '../../lib/imageBlock'
 import { createCodeCopyButton } from '../../lib/codeCopyButton'
+import { displayLang } from '../../lib/codeLang'
 import { isComposing, isForced } from '../composition'
 import { isEditorFocused } from './active'
 import type { ResolveAttachment } from './imageWidget'
@@ -117,11 +118,6 @@ export function codeBlockText(lines: CodeLine[]): string {
   return lines.map((line) => line.text).join('\n')
 }
 
-// 정보 문자열의 첫 단어만 언어로 보여준다 (F-240.md 3.2) — ` ```js title="a.js" ` 는 `js` 만
-function codeLangWord(info: string): string {
-  return info.trim().split(/\s+/)[0] ?? ''
-}
-
 // 펜스 코드블록 위젯. 구문 강조는 하지 않는다 (F-106 2.1)
 class CodeWidget extends WidgetType {
   info: string
@@ -161,7 +157,7 @@ class CodeWidget extends WidgetType {
     // 머리줄 — 언어 + 복사 버튼 (F-240.md 3.2). 언어 글자 클릭은 그대로 편집 진입, 복사 버튼만 mousedown stopPropagation 으로 막는다(imageWidget.ts 와 같은 방식)
     const head = document.createElement('div')
     head.className = 'md-codeblock-head'
-    const langWord = codeLangWord(this.info)
+    const langWord = displayLang(this.info)
     if (langWord) {
       const lang = document.createElement('span')
       lang.className = 'md-codeblock-lang'

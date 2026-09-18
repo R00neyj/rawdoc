@@ -592,13 +592,13 @@ test.describe('F-240 A4 언어 표시', () => {
   test('```js — 오른쪽 위에 js', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: F240_CODE_DOC })
-    await expect(page.locator('.md-codeblock-lang')).toHaveText('js')
+    await expect(page.locator('.md-codeblock-lang')).toHaveText('JavaScript')
   })
 
   test('```js title="a.js" — js 만', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '문단\n\n```js title="a.js"\nline1\n```\n' })
-    await expect(page.locator('.md-codeblock-lang')).toHaveText('js')
+    await expect(page.locator('.md-codeblock-lang')).toHaveText('JavaScript')
   })
 })
 
