@@ -95,7 +95,7 @@ npm run dev:spike    # 스파이크 확인용
 - F-166 A1·A3(긴 순서 목록 둘째 화면 줄 x 좌표·내어쓰기 값)도 2026-09-17 F-238 배포 전 검증 중 발견 — 단독 재실행해도 계속 실패, `git worktree` 로 F-238 이전 커밋(`49b5a20`)에서도 동일하게 실패해 이번 세션 변경과 무관함을 확인. 원인 미조사, 목록에만 추가
 - D1 원격 마이그레이션은 자동화하지 않는다. 새 `migrations/000N` 이 있으면 배포 전에 `npx wrangler d1 migrations apply md-editor-db --remote`
 - 빌드가 안 돌면 로컬 배포: 깨끗한 워크트리 `../rawdoc-deploy`(없으면 `git worktree add ../rawdoc-deploy deploy`)에서 `npm run deploy`
-- 루트 `.env`(커밋 안 함, PC 마다 따로)의 `CLOUDFLARE_API_TOKEN` 이 있으면 wrangler 가 브라우저 로그인 대신 그 토큰을 쓴다. 2026-09-15 토큰은 Workers·D1 권한이 없어(10000·7403) 로컬 배포·마이그레이션 때는 `.env` 를 잠시 비키거나 권한을 추가한다
+- 루트 `.env`(커밋 안 함, PC 마다 따로)의 `CLOUDFLARE_API_TOKEN` 이 있으면 wrangler 가 브라우저 로그인 대신 그 토큰을 쓴다. 2026-09-18 토큰을 다시 발급해 Workers Scripts 편집·D1 편집·R2 편집 권한을 넣었다 — 로컬 배포·원격 마이그레이션 모두 `.env` 그대로 된다. `wrangler d1 list` 의 `num_tables: 0` 은 Cloudflare 쪽 집계가 늦은 것뿐이니 스키마는 `d1 migrations list --remote` 로 본다
 
 ## 불변조건
 
