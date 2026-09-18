@@ -5,6 +5,7 @@ import type { Transaction } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
 
 import { handleComposingEnter } from './composition'
+import { insertNewlineContinueList } from './listEnter'
 
 function fakeEvent(overrides: Partial<{ key: string; shiftKey: boolean; ctrlKey: boolean; altKey: boolean; metaKey: boolean }> = {}) {
   let prevented = false
@@ -69,6 +70,43 @@ describe('F-245 A1~A5 조합 중 Enter — 단위', () => {
   it('A5 빈 목록 항목 — 목록을 끝낸다(기호 지우고 빈 줄)', () => {
     const { doc } = runComposingEnter('- 항목\n- 둘째\n- ')
     expect(doc).toBe('- 항목\n- 둘째\n')
+  })
+})
+
+// 진짜 원인(F-245.md 6.2) — 조합과 무관하게 일반 Enter 로도 100% 재현된다
+function runEnter(doc: string) {
+  const state = EditorState.create({ doc, selection: EditorSelection.cursor(doc.length), extensions: [markdown()] })
+  let result = state
+  insertNewlineContinueList({
+    state,
+    dispatch(tr: Transaction) {
+      result = state.update(tr).state
+    },
+  })
+  return result.doc.toString()
+}
+
+describe('F-245 A11~A16 빈 목록 항목 Enter — 단위', () => {
+  it('A11 항목 2개 — 빈 항목 Enter 는 빈 줄도 기호도 없이 목록을 끝낸다', () => {
+    expect(runEnter('- 하나\n- ')).toBe('- 하나\n')
+  })
+
+  it('A12 항목 2개 — 체크박스도 같다', () => {
+    expect(runEnter('- [x] test\n- [ ] ')).toBe('- [x] test\n')
+  })
+
+  it('A14 항목 1개·3개 — 지금처럼 목록이 끝난다(회귀)', () => {
+    expect(runEnter('- ')).toBe('')
+    expect(runEnter('- 하나\n- 둘\n- ')).toBe('- 하나\n- 둘\n')
+  })
+
+  it('A15 이미 loose 인 목록 — 빈 줄 이어쓰기는 유지한다', () => {
+    expect(runEnter('- 하나\n\n- 둘')).toBe('- 하나\n\n- 둘\n\n- ')
+  })
+
+  it('A16 순서 목록·중첩 — 각각 목록이 끝난다', () => {
+    expect(runEnter('1. 하나\n2. ')).toBe('1. 하나\n')
+    expect(runEnter('  - 하나\n  - ')).toBe('  - 하나\n')
   })
 })
 

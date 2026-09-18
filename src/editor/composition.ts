@@ -13,7 +13,7 @@ import type { EditorState, Transaction } from '@codemirror/state'
 import { StateEffect } from '@codemirror/state'
 import type { Extension } from '@codemirror/state'
 import { EditorView, type ViewUpdate } from '@codemirror/view'
-import { insertNewlineContinueMarkup } from '@codemirror/lang-markdown'
+import { insertNewlineContinueList } from './listEnter'
 
 // 조합이 끝났으니 밀린 재계산을 지금 하라는 신호
 export const forceRecalc = StateEffect.define<null>()
@@ -44,7 +44,7 @@ export function handleComposingEnter(target: ComposingEnterTarget, event: Compos
   if (!target.composing) return false
   if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return false
   event.preventDefault()
-  insertNewlineContinueMarkup(target)
+  insertNewlineContinueList(target)
   return true
 }
 

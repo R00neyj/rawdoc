@@ -6,10 +6,11 @@ import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { dropCursor, EditorView, keymap, lineNumbers } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { indentUnit, syntaxTree } from '@codemirror/language'
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { deleteMarkupBackward, markdown, markdownLanguage } from '@codemirror/lang-markdown'
 
 import { autoPair } from './autoPair'
 import { attachComposingEnterGuard, compositionCatchup, forceRecalc, isComposing, isForced } from './composition'
+import { insertNewlineContinueList } from './listEnter'
 import {
   docTitleExtension,
   focusTitleFromBody,
@@ -282,7 +283,9 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // extensions: 문서 첫 줄 YAML 프론트매터를 Frontmatter 노드로 만든다 (F-133 3.2) —
     // 모드(편집·원문) 공통. 이게 없으면 lezer 는 첫 `---` 를 HorizontalRule, 그 다음
     // 줄을 SetextHeading2 로 잘못 읽는다
-    markdown({ base: markdownLanguage, extensions: [frontmatterExtension()] }),
+    // addKeymap:false — markdownKeymap 의 기본 Enter(insertNewlineContinueMarkup) 대신 insertNewlineContinueList 를 같은 자리에 쓴다(F-245 6.3)
+    markdown({ base: markdownLanguage, extensions: [frontmatterExtension()], addKeymap: false }),
+    Prec.high(keymap.of([{ key: 'Enter', run: insertNewlineContinueList }, { key: 'Backspace', run: deleteMarkupBackward }])),
     indentCompartment.of(indentExtensionsFor(indentSize)),
     highlightExtension(),
     // 펼친 코드블록 줄 표시 (F-124 3.4 11번) — 모드(편집·원문)와 무관하게 항상 켠다.
