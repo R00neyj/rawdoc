@@ -14,7 +14,8 @@
   font-size: var(--md-font-size);
   line-height: var(--md-line-height);
   /* 중첩 목록 단계마다 고정 폭 — 값 하나로 관리한다(F-251 3.4). 편집 모드는 preview.css 가 같은 이름으로 따로 정의한다(DOM 트리가 다르다) */
-  --md-list-step: 2em;
+  --md-list-step: 1em;
+  --md-checkbox-size: 0.9em;
 }
 
 :is(.app-shell, .public-view) .markdown-body a {
@@ -107,8 +108,17 @@
   list-style: none;
 }
 
-/* 최상위 칸 폭은 github-markdown-css 원본 2em 그대로 — F-152 A5 회귀와 F-226 A1 요구 폭이 겹치지 않아(보고 참고) 회귀를 우선 */
-/* 중첩 padding-left 는 단계마다 고정 폭 --md-list-step(기본 2em) — 원문 공백 수와 무관하다 (F-251 3.3) */
+/* 최상위 칸 폭도 --md-list-step 을 따른다 (F-256 3장) — 2em 고정이던 때는 --md-list-step 도 2em 이라 F-226 A1(편집↔보기 기호 x) 이 우연히 맞았는데, 1em 으로 줄이자 기호만 안쪽으로 밀려 어긋났다 */
+:is(.app-shell, .public-view) .markdown-body > ul,
+:is(.app-shell, .public-view) .markdown-body > ol,
+:is(.app-shell, .public-view) .markdown-body li > ul,
+:is(.app-shell, .public-view) .markdown-body li > ol,
+:is(.app-shell, .public-view) .markdown-body blockquote ul,
+:is(.app-shell, .public-view) .markdown-body blockquote ol {
+  padding-left: var(--md-list-step);
+}
+
+/* 중첩 padding-left 는 단계마다 고정 폭 --md-list-step(기본 1em) — 원문 공백 수와 무관하다 (F-251 3.3) */
 :is(.app-shell, .public-view) .markdown-body ul ul,
 :is(.app-shell, .public-view) .markdown-body ol ul,
 :is(.app-shell, .public-view) .markdown-body ul ol,
@@ -170,15 +180,16 @@
   pointer-events: none;
 }
 
-/* 작업 목록(F-124 3.4) — renderMarkdown.js 가 붙이는 ul.contains-task-list 안 체크박스로 고른다. 칸 폭은 편집 모드 md-checkbox 실측값(F-226 A1) */
-:is(.app-shell, .public-view) .markdown-body ul.contains-task-list {
-  padding-left: 1.1875em;
-}
-
+/* 작업 목록(F-124 3.4) — 기호 칸을 일반 목록과 같이 쓴다(F-256 2장). ul.contains-task-list 에 따로 padding 을 주지 않아 위 일반 ul 규칙(최상위 2em, 중첩 --md-list-step)이 그대로 적용되고, 체크박스는 li:not(.task-list-item)::before 와 같은 자리(-1*--md-list-step 칸)에 절대 위치로 가운데 놓인다 */
 :is(.app-shell, .public-view) .markdown-body .task-list-item input[type='checkbox'] {
+  box-sizing: border-box;
+  position: absolute;
+  left: calc(-1 * var(--md-list-step) + (var(--md-list-step) - var(--md-checkbox-size)) / 2);
+  top: calc((1em * var(--md-line-height) - var(--md-checkbox-size)) / 2);
+  width: var(--md-checkbox-size);
+  height: var(--md-checkbox-size);
+  margin: 0;
   accent-color: var(--accent);
-  margin: 0 2px 0 -1.1875em;
-  vertical-align: middle;
 }
 
 /* 원문 모드 글자 크기도 설정을 따른다 (F-154 2.2) — app.css 의 고정 14px(F-124 3.1)을 import 순서로 덮는다 */

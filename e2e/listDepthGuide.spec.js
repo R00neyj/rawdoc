@@ -223,16 +223,26 @@ test.describe('F-236 A12 편집 모드 가운데', () => {
 })
 
 // 중첩 목록 들여쓰기를 단계마다 고정 폭으로 (specs/features/F-251.md)
-async function stepFontSize(page) {
-  return page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.cm-line')).fontSize))
+// 단계 폭은 --md-list-step 토큰이 진실이다 — 값을 바꿔도 테스트가 따라오게 em 을 px 로 환산해 읽는다 (F-256 에서 2em → 1em)
+async function stepPx(page) {
+  return page.evaluate(() => {
+    const line = document.querySelector('.cm-line')
+    const step = getComputedStyle(line).getPropertyValue('--md-list-step').trim()
+    const probe = document.createElement('div')
+    probe.style.cssText = `position:absolute;visibility:hidden;width:${step}`
+    line.appendChild(probe)
+    const px = probe.getBoundingClientRect().width
+    probe.remove()
+    return px
+  })
 }
 
 test.describe('F-251 A2 편집 모드 단계별 폭', () => {
-  test('2칸·4칸 문서에서 기호 x 가 같고 단계 간격이 2em(±2px)', async ({ page }) => {
+  test('2칸·4칸 문서에서 기호 x 가 같고 단계 간격이 --md-list-step 한 칸(±2px)', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '- 가\n  - 나\n    - 다\n마침\n' })
     await page.locator('.cm-line', { hasText: '마침' }).click()
-    const font = await stepFontSize(page)
+    const step = await stepPx(page)
     const ga2 = await editMarkerX(page, '가')
     const na2 = await editMarkerX(page, '나')
     const da2 = await editMarkerX(page, '다')
@@ -247,9 +257,9 @@ test.describe('F-251 A2 편집 모드 단계별 폭', () => {
     expect(Math.abs(ga2 - ga4)).toBeLessThanOrEqual(2)
     expect(Math.abs(na2 - na4)).toBeLessThanOrEqual(2)
     expect(Math.abs(da2 - da4)).toBeLessThanOrEqual(2)
-    // 단계 간격은 고정 폭 2em (F-251 3.4 기본값)
-    expect(Math.abs(na2 - ga2 - font * 2)).toBeLessThanOrEqual(2)
-    expect(Math.abs(da2 - na2 - font * 2)).toBeLessThanOrEqual(2)
+    // 단계 간격은 고정 폭 --md-list-step (F-251 3.4)
+    expect(Math.abs(na2 - ga2 - step)).toBeLessThanOrEqual(2)
+    expect(Math.abs(da2 - na2 - step)).toBeLessThanOrEqual(2)
   })
 })
 
@@ -307,7 +317,7 @@ test.describe('F-251 A4 안내선 새 폭 기준', () => {
 
 test.describe('F-251 A8 Tab 뒤 화면 깊이', () => {
   for (const indent of ['2', '4']) {
-    test(`설정 ${indent}칸 — 원문은 설정대로, 화면 깊이는 고정 2em`, async ({ page }) => {
+    test(`설정 ${indent}칸 — 원문은 설정대로, 화면 깊이는 --md-list-step 고정`, async ({ page }) => {
       await setPrefBeforeLoad(page, 'md.indent', indent)
       await openApp(page)
       const docId = await importMarkdown(page, { content: '- 가\n- 나\n마침\n' })
@@ -321,10 +331,10 @@ test.describe('F-251 A8 Tab 뒤 화면 깊이', () => {
       expect(naLine.match(/^( *)-/)[1].length).toBe(Number(indent))
 
       await page.locator('.cm-line', { hasText: '마침' }).click()
-      const font = await stepFontSize(page)
+      const step = await stepPx(page)
       const ga = await editMarkerX(page, '가')
       const na = await editMarkerX(page, '나')
-      expect(Math.abs(na - ga - font * 2)).toBeLessThanOrEqual(2)
+      expect(Math.abs(na - ga - step)).toBeLessThanOrEqual(2)
     })
   }
 })

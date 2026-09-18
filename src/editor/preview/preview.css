@@ -67,7 +67,8 @@
 
 /* 중첩 목록 단계마다 고정 폭 — 값 하나로 관리한다(F-251 3.4). 보기 모드는 markdown.css 가 같은 이름으로 따로 정의한다(DOM 트리가 다르다) */
 .cm-host .cm-editor {
-  --md-list-step: 2em;
+  --md-list-step: 1em;
+  --md-checkbox-size: 0.9em;
 }
 
 /* 목록 내어쓰기: 첫 화면 줄은 상쇄, 둘째 줄부터 글자 시작선 (F-152 2.3) */
@@ -101,11 +102,15 @@
 }
 
 /* ===== 체크박스 ===== */
+/* 글머리 .md-bullet 과 같은 기호 칸 한 칸을 차지하고 칸 안에서 가운데 (F-256 2장) — input 이라 inline-flex 로 못 감싸니 좌우 margin 으로 가운데를 만든다 */
 .md-checkbox {
+  box-sizing: border-box;
+  width: var(--md-checkbox-size);
+  height: var(--md-checkbox-size);
+  margin: 0 calc((var(--md-list-step) - var(--md-checkbox-size)) / 2);
   text-indent: 0;
   accent-color: var(--accent);
   vertical-align: middle;
-  margin: 0 2px 0 0;
 }
 
 /* ===== 인라인코드·링크 — 칩 모양은 편집 모드만, 원문 모드는 app.css 옛 규칙까지 지움 (F-152 2.2) ===== */
