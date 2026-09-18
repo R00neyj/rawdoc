@@ -87,7 +87,7 @@ export default function ShareSetDialog({ open, docId, onClose, onNotice, onLinke
   function isActive(id: string): boolean {
     const node = nodesById.get(id)
     if (!node) return false
-    if (node.parentId === null) return true
+    if (node.parentId === null || node.parentId === docId) return true
     if (!checked.has(node.parentId)) return false
     return isActive(node.parentId)
   }
