@@ -174,6 +174,50 @@ test.describe('F-213 A4 두 창', () => {
   })
 })
 
+test.describe('F-250 A4 새로고침', () => {
+  test('새로고침 직후 바로 편집할 수 있다(60초 안 기다림)', async ({ page, context }) => {
+    await installFakeServer(context)
+    await openApp(page)
+    await page.getByRole('button', { name: '새 문서' }).click()
+    await typeIntoEditor(page, '원본')
+    await waitSyncIdle(page)
+    const docId = await currentDocId(page)
+
+    await page.reload()
+    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+    await expect.poll(() => currentDocId(page)).toBe(docId)
+
+    // 읽기 전용 안내가 뜨지 않는다 — 짧게 기다려 늦게 뜨는 경우도 잡는다
+    await page.waitForTimeout(500)
+    await expect(page.locator('.notice-message')).not.toBeVisible()
+
+    await page.locator('.cm-content').click()
+    await page.keyboard.type(' 이어서 편집')
+    await expect(page.locator('.cm-content')).toContainText('원본 이어서 편집')
+  })
+})
+
+test.describe('F-250 A6 다른 탭', () => {
+  test('같은 문서를 다른 탭에서 열면 그 탭은 읽기 전용이다', async ({ page, context }) => {
+    await installFakeServer(context)
+    await openApp(page)
+    await page.getByRole('button', { name: '새 문서' }).click()
+    await typeIntoEditor(page, '원본')
+    await waitSyncIdle(page)
+    const docId = await currentDocId(page)
+
+    const page2 = await context.newPage()
+    await page2.goto(`/#/d/${docId}`)
+    await expect(page2.locator('.cm-host .cm-editor')).toBeVisible()
+
+    await expect(page2.locator('.notice-message')).toContainText('편집 중입니다', { timeout: 10_000 })
+    await page2.locator('.cm-content').click()
+    await page2.keyboard.type('다른 탭 입력')
+    await expect(page2.locator('.cm-content')).toContainText('원본')
+    await expect(page2.locator('.cm-content')).not.toContainText('다른 탭 입력')
+  })
+})
+
 test.describe('F-213 A5 423 저장', () => {
   test('오프라인 편집 중 다른 세션이 잠그면 온라인이 될 때 충돌 사본으로 저장한다', async ({ page, context }) => {
     const server = await installFakeServer(context)

@@ -38,9 +38,28 @@ export class ApiError extends Error {
   }
 }
 
-// 편집 잠금 세션 id — 창(탭)마다 하나, 문서를 옮겨 다녀도 같다 (specs/features/F-213.md 2.2)
-export const lockSessionId: string =
-  typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+const LOCK_SESSION_STORAGE_KEY = 'md.lockSession'
+
+function newLockSessionId(): string {
+  return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+}
+
+// 탭 수명 동안 하나로 고정 — 새로고침해도 같은 값이라 서버가 자기 잠금으로 알아본다 (specs/features/F-250.md 3.1)
+function resolveLockSessionId(): string {
+  try {
+    const existing = globalThis.sessionStorage?.getItem(LOCK_SESSION_STORAGE_KEY)
+    if (existing) return existing
+    const created = newLockSessionId()
+    globalThis.sessionStorage?.setItem(LOCK_SESSION_STORAGE_KEY, created)
+    return created
+  } catch {
+    // 사생활 보호 모드 등으로 sessionStorage 접근이 막히면 지금까지처럼 메모리 값으로 간다
+    return newLockSessionId()
+  }
+}
+
+// 편집 잠금 세션 id — 창(탭)마다 하나, 문서를 옮겨 다녀도 같다 (specs/features/F-213.md 2.2, F-250.md 3.1)
+export const lockSessionId: string = resolveLockSessionId()
 
 async function send(path: string, init?: RequestInit): Promise<Response> {
   try {
