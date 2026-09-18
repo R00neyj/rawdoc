@@ -66,6 +66,7 @@ export type RemoteCache = {
   getFolder(userId: string, id: string): Promise<CachedFolder | null>
   putFolder(userId: string, folder: Omit<CachedFolder, 'userId'>): Promise<void>
   deleteFolder(userId: string, id: string): Promise<void>
+  deleteFoldersNotIn(userId: string, keepIds: Set<string>): Promise<void>
   getOutbox(userId: string): Promise<OutboxEntry[]>
   addOutbox(userId: string, item: OutboxItem): Promise<number>
   putOutboxEntry(entry: OutboxEntry): Promise<void>
@@ -147,6 +148,13 @@ export async function createRemoteCache(dbName: string = DEFAULT_DB_NAME): Promi
 
     async deleteFolder(userId, id) {
       await db.delete('folders', [userId, id])
+    },
+
+    async deleteFoldersNotIn(userId, keepIds) {
+      const all: CachedFolder[] = await db.getAllFromIndex('folders', 'byUser', userId)
+      await Promise.all(
+        all.filter((f) => !keepIds.has(f.id)).map((f) => db.delete('folders', [userId, f.id])),
+      )
     },
 
     async getOutbox(userId) {

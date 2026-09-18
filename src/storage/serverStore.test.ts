@@ -26,9 +26,18 @@ type FakeDoc = {
   updatedAt: number
 }
 
+type FakeFolder = {
+  id: string
+  name: string
+  parentId: string | null
+  createdAt: number
+  updatedAt: number
+}
+
 // 최소 F-206 흉내 — GET/POST /api/docs, GET/PUT/DELETE /api/docs/:id (specs/features/F-207.md 2.3)
 function makeFakeServer() {
   const docs = new Map<string, FakeDoc>()
+  const folders = new Map<string, FakeFolder>()
   let networkDown = false
   let serverError = false
   let usage = { used: 0, limit: 314_572_800 }
@@ -115,7 +124,40 @@ function makeFakeServer() {
       return jsonResponse(200, doc)
     }
 
-    if (path === '/api/folders' && method === 'GET') return jsonResponse(200, [])
+    if (path === '/api/folders' && method === 'GET') {
+      return jsonResponse(200, [...folders.values()])
+    }
+    if (path === '/api/folders' && method === 'POST') {
+      const body = JSON.parse(String(init.body)) as Partial<FakeFolder>
+      if (body.id && folders.has(body.id)) return jsonResponse(200, folders.get(body.id))
+      const now = Date.now()
+      const folder: FakeFolder = {
+        id: body.id ?? crypto.randomUUID(),
+        name: body.name ?? '',
+        parentId: body.parentId ?? null,
+        createdAt: now,
+        updatedAt: now,
+      }
+      folders.set(folder.id, folder)
+      return jsonResponse(201, folder)
+    }
+
+    const folderMatch = /^\/api\/folders\/([^/]+)$/.exec(path)
+    if (folderMatch) {
+      const folder = folders.get(folderMatch[1])
+      if (method === 'PUT') {
+        if (!folder) return jsonResponse(404, { error: 'not_found' })
+        const body = JSON.parse(String(init.body)) as { name?: string; parentId?: string | null }
+        if (body.name !== undefined) folder.name = body.name
+        if (body.parentId !== undefined) folder.parentId = body.parentId
+        folder.updatedAt = Date.now()
+        return jsonResponse(200, folder)
+      }
+      if (method === 'DELETE') {
+        folders.delete(folderMatch[1])
+        return jsonResponse(204)
+      }
+    }
 
     if (path === '/api/usage' && method === 'GET') return jsonResponse(200, usage)
 
@@ -132,6 +174,7 @@ function makeFakeServer() {
 
   return {
     docs,
+    folders,
     setNetworkDown: (v: boolean) => {
       networkDown = v
     },
@@ -333,5 +376,74 @@ describe('serverStore', () => {
     expect(notices.some((n) => n.type === 'error' && n.message.includes('300MB'))).toBe(true)
     const list = await store.listAttachments()
     expect(list.map((a) => a.id)).toEqual([result.id]) // 캐시는 남는다
+  })
+
+  it('listFolders: 캐시가 비어도 서버 폴더 목록을 받아 캐시에 채운다 (다른 기기 첫 로그인)', async () => {
+    const server = makeFakeServer()
+    const now = Date.now()
+    server.folders.set('f1', { id: 'f1', name: '업무', parentId: null, createdAt: now, updatedAt: now })
+    server.folders.set('f2', { id: 'f2', name: '메모', parentId: 'f1', createdAt: now, updatedAt: now })
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const folders = await store.listFolders()
+    expect(folders.map((f) => f.id).sort()).toEqual(['f1', 'f2'])
+    expect(folders.find((f) => f.id === 'f2')?.parentId).toBe('f1')
+  })
+
+  it('listFolders: 서버에서 사라진 폴더는 캐시에서도 빠진다', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const dbName = freshDbName()
+    const store = await createServerStore('u1', { dbName })
+
+    const folder = await store.createFolder({ name: '업무' })
+    await tick()
+    expect(server.folders.has(folder.id)).toBe(true)
+
+    server.folders.delete(folder.id)
+    expect(await store.listFolders()).toEqual([])
+  })
+
+  it('listFolders: 아직 못 보낸 폴더는 서버 목록에 없어도 캐시에서 지우지 않는다', async () => {
+    const server = makeFakeServer()
+    server.setNetworkDown(true)
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const folder = await store.createFolder({ name: '오프라인 폴더' })
+    server.setNetworkDown(false)
+    // 보내기 전에 목록을 받아도 대기 중인 폴더는 남아야 한다
+    const folders = await store.listFolders()
+    expect(folders.map((f) => f.id)).toEqual([folder.id])
+  })
+
+  it('listFolders: 오프라인이면 캐시 폴더를 그대로 돌려준다', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const folder = await store.createFolder({ name: '업무' })
+    await tick()
+
+    server.setNetworkDown(true)
+    const folders = await store.listFolders()
+    expect(folders.map((f) => f.id)).toEqual([folder.id])
+    expect(store.syncState?.online).toBe(false)
+  })
+
+  it('폴더 안 문서를 만들면 다른 기기에서도 그 폴더에 들어 있다', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const folder = await store.createFolder({ name: '업무' })
+    await store.create({ title: '문서', content: '내용', lineEnding: 'lf', folderId: folder.id })
+    await tick()
+
+    const other = await createServerStore('u1', { dbName: freshDbName() })
+    const folders = await other.listFolders()
+    const docs = await other.list()
+    expect(folders.map((f) => f.id)).toEqual([folder.id])
+    expect(docs[0].folderId).toBe(folder.id)
   })
 })

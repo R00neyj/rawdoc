@@ -1,7 +1,7 @@
 // F-207 서버 저장소 — 캐시에 먼저 쓰고 즉시 resolve, 보낼 목록(outbox)을 순서대로 보낸다 (2.3)
 // F-209 2.5: 첨부는 캐시에 blob 을 두고 서버로 올린다(변환은 toWebp)
 import { createIdbStore } from './idbStore'
-import { createRemoteCache, docIdOf, type CachedAttachment, type CachedDoc, type CachedFolder, type OutboxEntry, type OutboxItem, type RemoteCache } from './remoteCache'
+import { createRemoteCache, docIdOf, folderIdOf, type CachedAttachment, type CachedDoc, type CachedFolder, type OutboxEntry, type OutboxItem, type RemoteCache } from './remoteCache'
 import * as api from './docsApi'
 import { ApiError, type ServerDoc } from './docsApi'
 import { uploadAttachment, fetchAttachment, fetchUsage, AttachmentApiError } from './attachmentsApi'
@@ -622,7 +622,30 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       return toDoc(updated)
     },
 
+    // list() 와 같은 방식 — 서버 목록으로 캐시를 맞추고 캐시에서 돌려준다 (F-207.md 2.2)
     async listFolders() {
+      let serverFolders: api.ServerFolder[] | null = null
+      try {
+        serverFolders = await api.listFolders()
+        patchState({ online: true })
+      } catch (err) {
+        if (!(err instanceof ApiError)) throw err
+        if (err.kind === 'unauthorized') patchState({ signedOut: true })
+        if (err.kind === 'network') patchState({ online: false })
+        serverFolders = null
+      }
+
+      if (serverFolders) {
+        const outbox = await cache.getOutbox(userId)
+        const pendingFolderIds = new Set(outbox.map(folderIdOf).filter((v): v is string => Boolean(v)))
+        const serverIds = new Set(serverFolders.map((f) => f.id))
+        await cache.deleteFoldersNotIn(userId, new Set([...serverIds, ...pendingFolderIds]))
+        for (const folder of serverFolders) {
+          if (pendingFolderIds.has(folder.id)) continue
+          await cache.putFolder(userId, folder)
+        }
+      }
+
       const cached = await cache.getFolders(userId)
       return cached.map(toFolder)
     },

@@ -616,6 +616,8 @@ export default function App() {
         })
       }
 
+      // 폴더를 문서와 함께 받아 먼저 반영한다 — 폴더가 늦으면 그 안의 문서가 잠깐 루트에 보인다
+      const foldersPromise = resolvedStore.listFolders()
       let list = await resolvedStore.list()
 
       if (list.length === 0 && getPref('md.firstRunDone', '') === '') {
@@ -628,11 +630,11 @@ export default function App() {
         list = await resolvedStore.list()
       }
 
+      const folderList = await foldersPromise
+      setFolders(folderList)
+
       const metaList = sortByUpdatedAtDesc(list.map(stripContent))
       setDocs(metaList)
-
-      const folderList = await resolvedStore.listFolders()
-      setFolders(folderList)
 
       // 안 쓰는 첨부 정리 (F-156.md 2.7) — server 저장소는 kind 만 idb 로 보이게 해 캐시 문서 기준으로 돈다 (F-207.md 2.5)
       const gcStore =

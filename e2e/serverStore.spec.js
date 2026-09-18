@@ -188,3 +188,32 @@ test.describe('F-208 A3 한 번만', () => {
     expect(server.docs.size).toBe(3)
   })
 })
+
+test.describe('F-207 2.2 폴더 목록 동기화', () => {
+  test('다른 기기에서도 서버 폴더와 그 안의 문서가 폴더 안에 보인다', async ({ page }) => {
+    const server = await fakeServer(page)
+    const now = Date.now()
+    const folderId = '11111111-1111-4111-8111-111111111111'
+    server.folders.set(folderId, { id: folderId, name: '업무', parentId: null, createdAt: now, updatedAt: now })
+    server.docs.set('22222222-2222-4222-8222-222222222222', {
+      id: '22222222-2222-4222-8222-222222222222',
+      title: '회의록',
+      content: '회의록 내용',
+      lineEnding: 'lf',
+      folderId,
+      pinnedAt: null,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    await openApp(page)
+
+    const folder = page.locator(`[data-folder-id="${folderId}"]`)
+    await expect(folder).toBeVisible()
+    if ((await folder.getAttribute('aria-expanded')) !== 'true') {
+      await folder.locator('.tree-toggle').first().click()
+    }
+    await expect(folder.locator('.tree-group .doc-item-btn', { hasText: '회의록' })).toBeVisible()
+  })
+})
