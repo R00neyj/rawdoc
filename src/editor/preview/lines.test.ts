@@ -168,9 +168,16 @@ describe('buildLines — 목록 기호 구역 (F-254)', () => {
     expect(replaced(decos)).toHaveLength(0) // 원문 숨김 없음(마커는 class 로만 표시)
   })
 
-  it('C8 체크박스 본문에 커서면 ListMark 는 숨고 체크박스 위젯은 유지한다', () => {
+  // 체크박스는 줄 전체 활성 판정을 그대로 쓴다 — 명세 3.2 C8 과 다른 예외, F-166 A4 회귀(2026-09-18) 조사 후 메인 확인, lines.ts TaskMarker 분기 주석 참고
+  it('C8 예외 — 체크박스는 줄에 커서가 있으면(본문 포함) 원문 그대로 남는다', () => {
     const doc = '- [ ] 하나'
     const state = makeState(doc, doc.length)
+    expect(replaced(build(state))).toHaveLength(0)
+  })
+
+  it('C8 예외 — 체크박스 줄에 커서가 없으면 지금처럼 위젯으로 바뀐다', () => {
+    const doc = '- [ ] 하나\nx'
+    const state = makeState(doc, doc.length) // 커서: 둘째 줄
     const hidden = replaced(build(state))
     expect(hidden).toHaveLength(2) // ListMark+공백 숨김 1개 + CheckboxWidget 1개
     expect(hidden.some((h) => h.value.spec.widget?.constructor.name === 'CheckboxWidget')).toBe(true)

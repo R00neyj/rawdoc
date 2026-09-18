@@ -608,12 +608,25 @@ test.describe('F-254 C7 순서 목록', () => {
   })
 })
 
-test.describe('F-254 C8 체크박스', () => {
-  test('본문에 커서 — 체크박스 위젯 그대로, `- ` 안 보임', async ({ page }) => {
+// 체크박스는 줄 전체 활성 판정을 그대로 쓴다 — 명세 3.2 C8 과 다른 예외, F-166 A4(e2e/editor.spec.js) 회귀(2026-09-18) 조사 후 메인 확인, lines.ts TaskMarker 분기 주석 참고
+test.describe('F-254 C8 예외 — 체크박스', () => {
+  test('줄에 커서가 있으면(본문 포함) 원문 `- [ ] ` 그대로 남는다', async ({ page }) => {
     await openApp(page)
-    await importMarkdown(page, { content: '- [ ] 하나\n' })
+    await importMarkdown(page, { content: '- [ ] 하나\nx' })
     await page.locator('.cm-content').click()
-    await page.keyboard.press('Control+End')
+    await page.keyboard.press('Control+Home')
+    await page.keyboard.press('End') // 커서: 첫 줄('하나' 뒤, 본문)
+
+    const line = page.locator('.cm-line.md-list-line').first()
+    await expect(line.locator('.md-checkbox')).toHaveCount(0)
+    expect(await line.textContent()).toContain('- [ ] 하나')
+  })
+
+  test('커서가 없으면 지금처럼 체크박스 위젯으로 바뀐다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '- [ ] 하나\nx' })
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+End') // 커서: 둘째 줄('x')
 
     const line = page.locator('.cm-line.md-list-line').first()
     await expect(line.locator('.md-checkbox')).toBeVisible()

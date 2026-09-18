@@ -322,7 +322,10 @@ export function buildLines(
             const lineObj = state.doc.lineAt(node.from)
             // 내어쓰기 대상 (F-152 2.3, 값은 listIndentPreview)
             out.push(lineClassRange(lineObj, 'md-list-line'))
-            if (isCursorInMarkZone(state, hasFocus, lineObj.from, node.node)) return
+            const nextIsTask = node.node.nextSibling?.name === 'Task'
+            // 체크박스 줄은 기호 구역 대신 줄 전체 활성 판정을 그대로 쓴다 — F-166 A4 회귀(2026-09-18), 아래 TaskMarker 주석 참고
+            const inMarkZone = nextIsTask ? active.has(lineObj.number) : isCursorInMarkZone(state, hasFocus, lineObj.from, node.node)
+            if (inMarkZone) return
             const depth = listItemDepth(node.node)
             if (depth > 1) {
               const indentText = state.doc.sliceString(lineObj.from, node.from)
@@ -331,7 +334,6 @@ export function buildLines(
                 out.push(Decoration.replace({ widget: new ListIndentWidget(depth - 1) }).range(lineObj.from, node.from))
               }
             }
-            const nextIsTask = node.node.nextSibling?.name === 'Task'
             if (nextIsTask) {
               out.push(hideMarkAndSpace(state, node.node))
             } else if (list?.name === 'BulletList') {
@@ -346,11 +348,9 @@ export function buildLines(
           }
 
           case 'TaskMarker': {
-            const line = state.doc.lineAt(node.from)
-            // 앞에 있는 ListMark(F-254 3.1) 와 같은 기호 구역 판정을 받는다 — 둘은 한 시각 단위
-            const listMark = node.node.parent?.parent?.getChild('ListMark')
-            const inZone = listMark ? isCursorInMarkZone(state, hasFocus, line.from, listMark) : active.has(line.number)
-            if (inZone) return
+            // 앞 ListMark 와 같은 줄 전체 활성 판정을 쓴다(위 ListMark 분기 참고)
+            const line = state.doc.lineAt(node.from).number
+            if (active.has(line)) return
             const mid = state.doc.sliceString(node.from + 1, node.to - 1)
             const checked = mid === 'x' || mid === 'X'
             out.push(Decoration.replace({ widget: new CheckboxWidget(checked) }).range(node.from, node.to))
