@@ -9,10 +9,11 @@
 // compositionStarted 뿐이다. 즉 composing 을 기준으로 보류를 걸면 조합 진입 직후
 // 첫 update 1건은 보류를 타지 않고 통과한다 (.workflow/architecture.md 3장).
 // spike 의 검증 전용 로그 장치는 옮기지 않는다 — CLAUDE.md 불변조건.
-import type { Transaction } from '@codemirror/state'
+import type { EditorState, Transaction } from '@codemirror/state'
 import { StateEffect } from '@codemirror/state'
 import type { Extension } from '@codemirror/state'
 import { EditorView, type ViewUpdate } from '@codemirror/view'
+import { insertNewlineContinueMarkup } from '@codemirror/lang-markdown'
 
 // 조합이 끝났으니 밀린 재계산을 지금 하라는 신호
 export const forceRecalc = StateEffect.define<null>()
@@ -26,6 +27,34 @@ export function isForced(updateOrTransaction: ViewUpdate | Transaction): boolean
   const transactions: readonly Transaction[] =
     'transactions' in updateOrTransaction ? updateOrTransaction.transactions : [updateOrTransaction]
   return transactions.some((tr) => tr?.effects?.some((e) => e.is(forceRecalc)))
+}
+
+type ComposingEnterTarget = { composing: boolean; state: EditorState; dispatch: (tr: Transaction) => void }
+type ComposingEnterEvent = {
+  key: string
+  shiftKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  metaKey: boolean
+  preventDefault: () => void
+}
+
+// CM6 는 composing 중 keydown 을 전부 건너뛰어(view 내부 ignoreDuringComposition) markdownKeymap 의 Enter 가 안 불린다 — 같은 명령을 여기서 직접 불러 조합 여부와 무관하게 같은 결과를 낸다 (F-245)
+export function handleComposingEnter(target: ComposingEnterTarget, event: ComposingEnterEvent): boolean {
+  if (!target.composing) return false
+  if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return false
+  event.preventDefault()
+  insertNewlineContinueMarkup(target)
+  return true
+}
+
+// contentDOM 에 캡처 단계로 직접 붙인다 — EditorView.domEventHandlers 는 같은 ignoreDuringComposition 게이트를 타 조합 중엔 안 불린다
+export function attachComposingEnterGuard(view: EditorView): () => void {
+  const handler = (event: KeyboardEvent) => {
+    handleComposingEnter(view, event)
+  }
+  view.contentDOM.addEventListener('keydown', handler, true)
+  return () => view.contentDOM.removeEventListener('keydown', handler, true)
 }
 
 // compositionend 뒤 한 틱 지나 forceRecalc 를 dispatch 한다.

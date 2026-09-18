@@ -9,7 +9,7 @@ import { indentUnit, syntaxTree } from '@codemirror/language'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 
 import { autoPair } from './autoPair'
-import { compositionCatchup, forceRecalc, isComposing, isForced } from './composition'
+import { attachComposingEnterGuard, compositionCatchup, forceRecalc, isComposing, isForced } from './composition'
 import {
   docTitleExtension,
   focusTitleFromBody,
@@ -321,6 +321,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const state = EditorState.create({ doc: text, extensions })
   const view = new EditorView({ state, parent })
   const detachMarginClickGuard = attachMarginClickGuard(view)
+  const detachComposingEnterGuard = attachComposingEnterGuard(view)
   // 표 칸 하위 에디터(tableWidget.ts)의 우클릭도 같은 콜백으로 (F-170.md 3.2)
   setCellContextMenuHandler(view, (info) => notifyContextMenu(info))
 
@@ -458,6 +459,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       contextMenuListeners.clear()
       setCellContextMenuHandler(view, undefined)
       detachMarginClickGuard()
+      detachComposingEnterGuard()
       view.destroy()
     },
   }
