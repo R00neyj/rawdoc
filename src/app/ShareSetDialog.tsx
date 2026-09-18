@@ -181,7 +181,9 @@ export default function ShareSetDialog({ open, docId, onClose, onNotice, onLinke
             })}
           </ul>
           {state.truncated && <p className="share-set-truncated">링크가 많아 일부만 보여줍니다.</p>}
-          {showWarning && <p className="share-set-warning">주소가 새로 발급되어 이전 주소는 열리지 않습니다.</p>}
+          {showWarning && (
+            <p className="share-set-warning">이미 이 주소를 아는 사람도 방금 선택한 문서를 보게 됩니다.</p>
+          )}
         </>
       )}
       <div className="dialog-actions">
