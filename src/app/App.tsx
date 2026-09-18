@@ -17,7 +17,8 @@ import { createIdbStore } from '../storage/idbStore'
 import { openStore } from '../storage/openStore'
 import type { ServerStore } from '../storage/serverStore'
 import { migrateLocalIfNeeded } from './migrateLocal'
-import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree'
+import { ancestorsOfDoc, resolveTargetFolderId, canMoveFolder } from '../lib/folderTree'
+import type { SelectionItem } from './sidebarSelection'
 import { resolveWikiTarget } from '../lib/wikiLink'
 import { fromEditorText } from '../lib/lineEnding'
 import { getPref, setPref } from './prefs'
@@ -60,6 +61,7 @@ import Sidebar, { type SharedDocLike } from './Sidebar'
 import NoticeBar, { type NoticeWithAction } from './NoticeBar'
 import EmptyState from './EmptyState'
 import ConfirmDeleteDialog, { type DeleteTarget } from './ConfirmDeleteDialog'
+import Dialog from './Dialog'
 import MoveDocDialog, { type MoveDocTarget } from './MoveDocDialog'
 import SettingsDialog from './SettingsDialog'
 import HelpPage from './HelpPage'
@@ -199,6 +201,9 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false)
   // (F-126.md 5.3)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
+  // 여러 항목 삭제 확인 대상 — 개수만 문구에 넣는다 (F-255.md 3.3)
+  const [bulkDeleteItems, setBulkDeleteItems] = useState<SelectionItem[] | null>(null)
+  const bulkDeleteCancelRef = useRef<HTMLButtonElement | null>(null)
   // 폴더로 이동 대화상자(D-3) 대상 문서 (F-126.md 5.3)
   const [moveDocTarget, setMoveDocTarget] = useState<MoveDocTarget | null>(null)
   // 사람 초대 대화상자(D-4) 대상 (F-212.md 2.5)
@@ -881,7 +886,7 @@ export default function App() {
       setSidebarOpen(false)
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !settingsOpen && !deleteTarget && !moveDocTarget) {
+      if (e.key === 'Escape' && !settingsOpen && !deleteTarget && !moveDocTarget && !bulkDeleteItems) {
         setSidebarOpen(false)
       }
     }
@@ -892,7 +897,7 @@ export default function App() {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [narrow, sidebarOpen, settingsOpen, deleteTarget, moveDocTarget])
+  }, [narrow, sidebarOpen, settingsOpen, deleteTarget, moveDocTarget, bulkDeleteItems])
 
   // ----- 문서를 열 때 저장소 본문을 1회 읽어 에디터에 넘긴다 (architecture.md 3장) -----
   // openDoc.id 가 currentDocId 와 다르면(문서 없음 포함) 렌더링에서 에디터를 그리지
@@ -1055,10 +1060,12 @@ export default function App() {
     helpOpenRef.current = helpOpen
     // 받지 않는 때(F-145.md 2.1): 대화상자·공유 화면·공유 관리 페이지·저장소를 못 쓸 때(store.kind==='memory')
     dropBlockedRef.current = Boolean(
-      settingsOpen || deleteTarget || moveDocTarget || sharedDoc || sharesOpen || store.kind === 'memory',
+      settingsOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen || store.kind === 'memory',
     )
     // 이미지는 저장소를 못 쓸 때(메모리 저장소)는 막지 않는다 (F-156.md 2.5) — #/help 화면은 편집기가 없어 차단 대상이 아니다 (F-244.md 3.3)
-    imageDropBlockedRef.current = Boolean(settingsOpen || deleteTarget || moveDocTarget || sharedDoc || sharesOpen)
+    imageDropBlockedRef.current = Boolean(
+      settingsOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen,
+    )
     // view 권한·403 강등 문서·편집 잠금(F-213.md 2.3)에서는 이미지 올리기(붙여넣기·끌어놓기)를 막는다 (F-212.md 2.4)
     readOnlyDocRef.current = isReadOnlyDoc
     narrowRef.current = narrow
@@ -1672,6 +1679,66 @@ export default function App() {
     }
   }
 
+  // ----- 여러 항목 삭제·이동 (specs/features/F-255.md 3.3) -----
+  function requestBulkDelete(items: SelectionItem[]) {
+    setBulkDeleteItems(items)
+    closeSidebarIfNarrow()
+  }
+
+  function cancelBulkDelete() {
+    setBulkDeleteItems(null)
+  }
+
+  async function confirmBulkDelete() {
+    const items = bulkDeleteItems
+    setBulkDeleteItems(null)
+    if (!items || items.length === 0) return
+
+    let failed = 0
+    for (const item of items) {
+      try {
+        if (item.kind === 'doc') {
+          await store.remove(item.id)
+        } else {
+          await store.removeFolder(item.id, 'move-up')
+        }
+      } catch {
+        failed++
+      }
+    }
+
+    const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
+    setFolders(newFolders)
+    const strippedDocs = sortByUpdatedAtDesc(newDocs.map(stripContent))
+    setDocs(strippedDocs)
+    if (currentDocId && !strippedDocs.some((d) => d.id === currentDocId)) {
+      setCurrentDocId(null)
+      replaceHashUrl(null)
+    }
+    if (failed > 0) {
+      showNotice({ type: 'error', message: `${failed}개를 삭제하지 못했습니다.` })
+    }
+  }
+
+  // canMoveFolder 가 막는 항목(제 자손 등)은 건너뛰고 몇 개인지 알린다 (F-255.md 2·3.3)
+  async function handleBulkMove(items: SelectionItem[], targetFolderId: string | null) {
+    let skipped = 0
+    for (const item of items) {
+      if (item.kind === 'doc') {
+        await handleMoveDoc(item.id, targetFolderId)
+        continue
+      }
+      if (!canMoveFolder({ folders, id: item.id, parentId: targetFolderId })) {
+        skipped++
+        continue
+      }
+      await handleMoveFolder(item.id, targetFolderId)
+    }
+    if (skipped > 0) {
+      showNotice({ type: 'error', message: `${skipped}개 폴더는 옮길 수 없어 건너뛰었습니다.` })
+    }
+  }
+
   // ----- 상단 고정 (specs/features/F-132.md 2·4장) -----
   // updatedAt 은 바꾸지 않으므로 최근 수정순 목록 위치는 흔들리지 않는다
   async function handleTogglePin(id: string, pinned: boolean) {
@@ -2126,10 +2193,10 @@ export default function App() {
           onImportDoc={requestImport}
           onCreateFolder={handleCreateFolder}
           onRenameFolder={handleRenameFolder}
-          onMoveFolder={handleMoveFolder}
-          onMoveDoc={handleMoveDoc}
+          onBulkMove={handleBulkMove}
           onRequestDeleteDoc={requestDeleteDoc}
           onRequestDeleteFolder={requestDeleteFolder}
+          onRequestBulkDelete={requestBulkDelete}
           onRequestMoveDoc={requestMoveDoc}
           onTogglePin={handleTogglePin}
           onOpenSettings={openSettings}
@@ -2270,6 +2337,29 @@ export default function App() {
         />
       )}
       <ConfirmDeleteDialog target={deleteTarget} onCancel={cancelDelete} onConfirm={confirmDelete} />
+      <Dialog
+        open={Boolean(bulkDeleteItems)}
+        onClose={cancelBulkDelete}
+        titleId="confirm-bulk-delete-title"
+        initialFocusRef={bulkDeleteCancelRef}
+      >
+        <h2 id="confirm-bulk-delete-title">항목 삭제</h2>
+        <p>선택한 {bulkDeleteItems?.length ?? 0}개 항목을 삭제할까요? 되돌릴 수 없습니다.</p>
+        <div className="dialog-actions">
+          <button type="button" ref={bulkDeleteCancelRef} onClick={cancelBulkDelete}>
+            취소
+          </button>
+          <button
+            type="button"
+            className="danger"
+            onClick={() => {
+              void confirmBulkDelete()
+            }}
+          >
+            삭제
+          </button>
+        </div>
+      </Dialog>
       <MoveDocDialog
         doc={moveDocTarget}
         folders={folders}

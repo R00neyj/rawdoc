@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type KeyboardEvent } from 'react'
 import { IconMore, IconLink, IconLinkOff, IconPersonAdd } from './icons'
 import usePresence from './usePresence'
 import { getFolderShareLink, createFolderShareLink, revokeFolderShareLink } from './linkApi'
@@ -20,13 +20,38 @@ type FolderMenuProps = {
   onNotice?: (notice: Notice) => void
   // 서버 저장소일 때 — `사람 초대…` 항목 (F-212.md 2.5, 폴더는 항상 owner 만 목록에 있다)
   onInvite?: () => void
+  // 바깥에서 열림·위치를 제어 — 안 주면 지금처럼 자기 버튼 클릭으로 연다 (F-255.md 3.2)
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  anchorPoint?: { x: number; y: number }
+  // 트리거(⋯) 버튼을 감춘다 — 우클릭·여러 항목 메뉴처럼 버튼 없이 여는 인스턴스용 (F-255.md 3.4)
+  hideTrigger?: boolean
 }
 
 // 사이드바 항목 `⋯` 메뉴 — 라이브러리 없이 앱이 그린다 (specs/features/F-126.md 5.2)
 // 마우스 오버·키보드 포커스 시 트리거가 보인다(app.css). 방향키로 항목 이동, Enter 실행,
 // Esc·바깥 클릭으로 닫고 포커스를 트리거(⋯)로 되돌린다
-export default function FolderMenu({ label, items, shareFolderId, onNotice, onInvite }: FolderMenuProps) {
-  const [open, setOpen] = useState(false)
+export default function FolderMenu({
+  label,
+  items,
+  shareFolderId,
+  onNotice,
+  onInvite,
+  open: openProp,
+  onOpenChange,
+  anchorPoint,
+  hideTrigger,
+}: FolderMenuProps) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = openProp !== undefined
+  const open = isControlled ? openProp : internalOpen
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (openProp === undefined) setInternalOpen(next)
+      onOpenChange?.(next)
+    },
+    [openProp, onOpenChange],
+  )
   const [hasLink, setHasLink] = useState(false)
   const { mounted, state } = usePresence(open) // 나타나고 사라지는 전환 (F-172.md 2.2)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
@@ -43,7 +68,7 @@ export default function FolderMenu({ label, items, shareFolderId, onNotice, onIn
     }
     document.addEventListener('mousedown', handlePointerDown)
     return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [open])
+  }, [open, setOpen])
 
   // 메뉴를 열 때마다 링크 유무를 다시 확인 — `끊기` 항목 노출 조건 (F-210.md 2.6, F-211.md 2.4)
   useEffect(() => {
@@ -140,22 +165,34 @@ export default function FolderMenu({ label, items, shareFolderId, onNotice, onIn
     }
   }
 
+  // 우클릭 등 좌표로 열렸을 때 — 화면 오른쪽·아래로 넘치면 안쪽으로 당긴다 (F-255.md 3.2)
+  useLayoutEffect(() => {
+    if (!open || !anchorPoint || !menuRef.current) return
+    const el = menuRef.current
+    const rect = el.getBoundingClientRect()
+    const left = Math.max(0, Math.min(anchorPoint.x, window.innerWidth - rect.width))
+    const top = Math.max(0, Math.min(anchorPoint.y, window.innerHeight - rect.height))
+    el.style.left = `${left}px`
+    el.style.top = `${top}px`
+  }, [open, anchorPoint])
+
   return (
     <div className="item-menu">
       <button
         type="button"
         ref={buttonRef}
-        className="item-menu-btn"
+        className={`item-menu-btn${hideTrigger ? ' item-menu-btn--hidden' : ''}`}
         aria-label={`${label} 메뉴`}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        tabIndex={hideTrigger ? -1 : undefined}
+        onClick={() => setOpen(!open)}
       >
         <IconMore size={16} />
       </button>
       {mounted && (
         <ul
-          className="item-menu-list"
+          className={`item-menu-list${anchorPoint ? ' item-menu-list--anchored' : ''}`}
           data-state={state}
           inert={state === 'closed'}
           role="menu"

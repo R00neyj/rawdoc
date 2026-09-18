@@ -15,6 +15,18 @@ import FolderMenu, { type FolderMenuItem } from './FolderMenu'
 import SidebarHead, { SIDEBAR_ID, SEARCH_LABEL } from './SidebarHead'
 import { clampSidebarWidth, maxSidebarWidth, MIN_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, ARROW_KEY_STEP } from './sidebarWidth'
 import {
+  EMPTY_SELECTION,
+  toggle as toggleSelection,
+  extend as extendSelection,
+  replace as replaceSelection,
+  prune as pruneSelection,
+  visibleOrder,
+  commonParentId,
+  dedupeDescendants,
+  type Selection,
+  type SelectionItem,
+} from './sidebarSelection'
+import {
   IconChevron,
   IconNoteAdd,
   IconFolderAdd,
@@ -36,7 +48,10 @@ import type { Notice } from './notice'
 export { SIDEBAR_ID }
 
 type DropTarget = { type: 'folder'; id: string } | { type: 'doc'; id: string } | { type: 'root' }
-type Dragged = { type: 'doc' | 'folder'; id: string } | null
+// 선택 전체를 끌 때는 항목이 여럿(F-255.md 3.4), 선택 밖 항목은 하나뿐이다
+type Dragged = { items: SelectionItem[] } | null
+// 우클릭·여러 항목 메뉴 버튼이 forcedOpen 으로 여는 행 하나 — 자리는 행 자신의 위치, 좌표는 우클릭일 때만 (F-255.md 3.2)
+type ContextMenuState = { id: string; point: { x: number; y: number } } | null
 
 type DeleteDocTarget = { id: string; title: string }
 type DeleteFolderTarget = { id: string; name: string }
@@ -73,6 +88,13 @@ type SidebarCtx = {
   onDragEnd: () => void
   onDragOver: (e: DragEvent<HTMLDivElement>, target: DropTarget) => void
   onDrop: (e: DragEvent<HTMLDivElement>, target: DropTarget) => void
+  // 여러 항목 선택 — 클릭 뜻(일반/Ctrl/Shift), 우클릭 메뉴, 여러 항목 전용 메뉴 (F-255.md 3.1~3.4)
+  selection: Selection
+  contextMenu: ContextMenuState
+  multiMenuItems: FolderMenuItem[]
+  onItemClick: (e: ReactMouseEvent<HTMLButtonElement>, item: SelectionItem, action: () => void) => void
+  onRowContextMenu: (e: ReactMouseEvent<HTMLDivElement>, item: SelectionItem, isEditingRow: boolean) => void
+  onCloseContextMenu: () => void
   // 폴더 읽기 전용 링크 메뉴 항목 노출 조건·알림 (F-211.md 2.4) — App.tsx 에 경로가 없어 최소 전달만 한다
   isServerStore: boolean
   onNotice: (notice: Notice) => void
@@ -129,37 +151,43 @@ function FolderRow({
   const isEditing = ctx.editingId === node.id
   const target: DropTarget = { type: 'folder', id: node.id }
   const isDropTarget = ctx.dropTargetKey === dropKeyOf(target)
+  const isSelected = ctx.selection.ids.includes(node.id)
+  const isMulti = isSelected && ctx.selection.ids.length > 1
+  const item: SelectionItem = { kind: 'folder', id: node.id }
+  const menuOpenHere = ctx.contextMenu?.id === node.id
 
-  const items: FolderMenuItem[] = [
+  const ownItems: FolderMenuItem[] = [
     { key: 'new-doc', label: '새 문서', icon: IconNoteAdd, onSelect: () => ctx.onCreateDoc(node.id) },
   ]
   if (node.parentId === null) {
-    items.push({
+    ownItems.push({
       key: 'new-subfolder',
       label: '하위 폴더',
       icon: IconFolderAdd,
       onSelect: () => ctx.onCreateFolder(node.id),
     })
   }
-  items.push({ key: 'rename', label: '이름 변경', icon: IconEdit, onSelect: () => ctx.onStartRename(node.id, node.name) })
-  items.push({
+  ownItems.push({ key: 'rename', label: '이름 변경', icon: IconEdit, onSelect: () => ctx.onStartRename(node.id, node.name) })
+  ownItems.push({
     key: 'delete',
     label: '삭제',
     icon: IconDelete,
     danger: true,
     onSelect: () => ctx.onRequestDeleteFolder({ id: node.id, name: node.name }),
   })
+  const items = isMulti ? ctx.multiMenuItems : ownItems
 
   return (
     <li role="treeitem" aria-expanded={isOpen} className="tree-item" data-folder-id={node.id}>
       <div
-        className={`tree-row${isDropTarget ? ' tree-row--drop' : ''}`}
+        className={`tree-row${isDropTarget ? ' tree-row--drop' : ''}${isSelected ? ' tree-row--selected' : ''}`}
         style={{ '--depth': depth } as CSSProperties}
         draggable={!isEditing}
         onDragStart={(e) => ctx.onDragStart(e, 'folder', node.id)}
         onDragEnd={ctx.onDragEnd}
         onDragOver={(e) => ctx.onDragOver(e, target)}
         onDrop={(e) => ctx.onDrop(e, target)}
+        onContextMenu={(e) => ctx.onRowContextMenu(e, item, isEditing)}
       >
         <button
           type="button"
@@ -179,7 +207,11 @@ function FolderRow({
             onBlur={ctx.onCommitRename}
           />
         ) : (
-          <button type="button" className="tree-label" onClick={() => ctx.onToggleFolder(node.id)}>
+          <button
+            type="button"
+            className="tree-label"
+            onClick={(e) => ctx.onItemClick(e, item, () => ctx.onToggleFolder(node.id))}
+          >
             {node.name}
           </button>
         )}
@@ -187,9 +219,12 @@ function FolderRow({
           <FolderMenu
             label={node.name}
             items={items}
-            shareFolderId={ctx.isServerStore ? node.id : undefined}
+            shareFolderId={!isMulti && ctx.isServerStore ? node.id : undefined}
             onNotice={ctx.onNotice}
-            onInvite={ctx.isServerStore ? () => ctx.onRequestInviteFolder(node.id, node.name) : undefined}
+            onInvite={!isMulti && ctx.isServerStore ? () => ctx.onRequestInviteFolder(node.id, node.name) : undefined}
+            open={menuOpenHere ? true : undefined}
+            onOpenChange={menuOpenHere ? (v) => { if (!v) ctx.onCloseContextMenu() } : undefined}
+            anchorPoint={menuOpenHere ? ctx.contextMenu!.point : undefined}
           />
         )}
       </div>
@@ -207,8 +242,12 @@ function FolderRow({
 function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: SidebarCtx }) {
   const target: DropTarget = { type: 'doc', id: node.id }
   const isDropTarget = ctx.dropTargetKey === dropKeyOf(target)
+  const isSelected = ctx.selection.ids.includes(node.id)
+  const isMulti = isSelected && ctx.selection.ids.length > 1
+  const item: SelectionItem = { kind: 'doc', id: node.id }
+  const menuOpenHere = ctx.contextMenu?.id === node.id
 
-  const items: FolderMenuItem[] = [
+  const ownItems: FolderMenuItem[] = [
     pinMenuItem(node, ctx.onTogglePin),
     {
       key: 'move',
@@ -224,28 +263,36 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
       onSelect: () => ctx.onRequestDeleteDoc({ id: node.id, title: node.title }),
     },
   ]
+  const items = isMulti ? ctx.multiMenuItems : ownItems
 
   return (
     <li role="treeitem" className="tree-item">
       <div
-        className={`tree-row${isDropTarget ? ' tree-row--drop' : ''}`}
+        className={`tree-row${isDropTarget ? ' tree-row--drop' : ''}${isSelected ? ' tree-row--selected' : ''}`}
         style={{ '--depth': depth } as CSSProperties}
         draggable
         onDragStart={(e) => ctx.onDragStart(e, 'doc', node.id)}
         onDragEnd={ctx.onDragEnd}
         onDragOver={(e) => ctx.onDragOver(e, target)}
         onDrop={(e) => ctx.onDrop(e, target)}
+        onContextMenu={(e) => ctx.onRowContextMenu(e, item, false)}
       >
         <span className="tree-toggle-spacer" aria-hidden="true" />
         <button
           type="button"
           className="tree-label doc-item-btn"
           aria-current={node.id === ctx.currentDocId ? 'page' : undefined}
-          onClick={() => ctx.onSelectDoc(node.id)}
+          onClick={(e) => ctx.onItemClick(e, item, () => ctx.onSelectDoc(node.id))}
         >
           {node.title}
         </button>
-        <FolderMenu label={node.title} items={items} />
+        <FolderMenu
+          label={node.title}
+          items={items}
+          open={menuOpenHere ? true : undefined}
+          onOpenChange={menuOpenHere ? (v) => { if (!v) ctx.onCloseContextMenu() } : undefined}
+          anchorPoint={menuOpenHere ? ctx.contextMenu!.point : undefined}
+        />
       </div>
     </li>
   )
@@ -253,7 +300,12 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
 
 // 사이드바 맨 위 `고정됨` 묶음의 항목 — 트리와 별도로 role="list"/listitem, 들여쓰기 없음, 토글 자리엔 IconPin (F-143 3.2, F-132.md 3·4장)
 function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
-  const items: FolderMenuItem[] = [
+  const isSelected = ctx.selection.ids.includes(doc.id)
+  const isMulti = isSelected && ctx.selection.ids.length > 1
+  const item: SelectionItem = { kind: 'doc', id: doc.id }
+  const menuOpenHere = ctx.contextMenu?.id === doc.id
+
+  const ownItems: FolderMenuItem[] = [
     pinMenuItem(doc, ctx.onTogglePin),
     {
       key: 'move',
@@ -269,10 +321,11 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
       onSelect: () => ctx.onRequestDeleteDoc({ id: doc.id, title: doc.title }),
     },
   ]
+  const items = isMulti ? ctx.multiMenuItems : ownItems
 
   return (
     <li role="listitem" className="tree-item">
-      <div className="tree-row">
+      <div className={`tree-row${isSelected ? ' tree-row--selected' : ''}`} onContextMenu={(e) => ctx.onRowContextMenu(e, item, false)}>
         <span className="tree-toggle-spacer" aria-hidden="true">
           <IconPin size={16} className="pinned-row-icon" />
         </span>
@@ -280,11 +333,17 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
           type="button"
           className="tree-label doc-item-btn"
           aria-current={doc.id === ctx.currentDocId ? 'page' : undefined}
-          onClick={() => ctx.onSelectDoc(doc.id)}
+          onClick={(e) => ctx.onItemClick(e, item, () => ctx.onSelectDoc(doc.id))}
         >
           {doc.title}
         </button>
-        <FolderMenu label={doc.title} items={items} />
+        <FolderMenu
+          label={doc.title}
+          items={items}
+          open={menuOpenHere ? true : undefined}
+          onOpenChange={menuOpenHere ? (v) => { if (!v) ctx.onCloseContextMenu() } : undefined}
+          anchorPoint={menuOpenHere ? ctx.contextMenu!.point : undefined}
+        />
       </div>
     </li>
   )
@@ -501,10 +560,11 @@ type SidebarProps = {
   onImportDoc: () => void
   onCreateFolder: (parentId: string | null) => Promise<{ id: string; name: string } | null>
   onRenameFolder: (id: string, name: string) => void
-  onMoveFolder: (id: string, parentId: string | null) => void
-  onMoveDoc: (id: string, folderId: string | null) => void
+  // 여러 항목 이동 — 폴더로 드래그·최상위로 옮기기 모두 이걸 쓴다(단일 항목도 배열 하나로) (F-255.md 3.3)
+  onBulkMove: (items: SelectionItem[], targetFolderId: string | null) => void
   onRequestDeleteDoc: (target: DeleteDocTarget) => void
   onRequestDeleteFolder: (target: DeleteFolderTarget) => void
+  onRequestBulkDelete: (items: SelectionItem[]) => void
   onRequestMoveDoc: (target: MoveDocTarget) => void
   onTogglePin: (id: string, pinned: boolean) => void
   onOpenSettings: () => void
@@ -536,10 +596,10 @@ export default function Sidebar({
   onImportDoc,
   onCreateFolder,
   onRenameFolder,
-  onMoveFolder,
-  onMoveDoc,
+  onBulkMove,
   onRequestDeleteDoc,
   onRequestDeleteFolder,
+  onRequestBulkDelete,
   onRequestMoveDoc,
   onTogglePin,
   onOpenSettings,
@@ -558,6 +618,9 @@ export default function Sidebar({
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null)
   // 끌고 있는 항목. 드래그 중에만 바뀌므로 렌더 비용은 무시할 만하다
   const [dragged, setDragged] = useState<Dragged>(null)
+  // 여러 항목 선택 — 마우스 전용(F-255.md 1장 "하지 않는다"), Ctrl/Shift+클릭·우클릭으로 바뀐다
+  const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION)
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
 
   const editingInputRef = useRef<HTMLInputElement | null>(null)
   const skipBlurCommitRef = useRef(false)
@@ -570,6 +633,37 @@ export default function Sidebar({
       editingInputRef.current.select()
     }
   }, [editingId])
+
+  // 목록에서 사라진 id 는 선택에서 뺀다 — 렌더 중 상태를 맞추는 공식 패턴, useEffect 에서 바로 setState 하지 않는다 (F-255.md 3.1, D18)
+  const visibleIdsKey = [...docs.map((d) => d.id), ...folders.map((f) => f.id)].join(' ')
+  const [prunedForKey, setPrunedForKey] = useState(visibleIdsKey)
+  if (visibleIdsKey !== prunedForKey) {
+    setPrunedForKey(visibleIdsKey)
+    const visibleIds = visibleIdsKey === '' ? [] : visibleIdsKey.split(' ')
+    const next = pruneSelection(selection, visibleIds)
+    if (next.ids.length !== selection.ids.length || next.anchorId !== selection.anchorId) {
+      setSelection(next)
+    }
+  }
+
+  // 빈 곳 클릭·Esc·사이드바 밖 클릭으로 선택 해제 (F-255.md 2장, D7)
+  useEffect(() => {
+    if (selection.ids.length === 0) return
+    function handlePointerDown(e: MouseEvent) {
+      const nav = sidebarRef.current
+      if (nav && nav.contains(e.target as Node)) return
+      setSelection(EMPTY_SELECTION)
+    }
+    function handleKeyDown(e: globalThis.KeyboardEvent) {
+      if (e.key === 'Escape') setSelection(EMPTY_SELECTION)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [selection.ids.length, sidebarRef])
 
   const tree = buildTree({ folders, docs })
   const pinned = pinnedDocs(docs) // F-132.md 2장, 3장
@@ -614,19 +708,111 @@ export default function Sidebar({
     }
   }
 
-  // 레일에서 `새 폴더`: 이름 입력 칸은 트리 안에 있으므로 먼저 사이드바를 펼친 뒤 이름 입력을 시작한다 (F-143 3.3)
-  // 가드를 여기서도 확인해야 한다 — 그렇지 않으면 재진입마다 onToggleCollapse() 가 다시 불려 접힘·펼침이 뒤집힌다
+  // 레일에서 `새 폴더`: 이름 입력 칸이 트리 안에 있어 먼저 펼친다 — 가드가 없으면 재진입마다 접힘·펼침이 뒤집힌다 (F-143 3.3)
   function handleRailCreateFolder() {
     if (creatingFolderRef.current) return
     onToggleCollapse()
     handleCreateFolder(null)
   }
 
-  // ----- 끌어놓기 (specs/features/F-126.md 5.3, 마우스 전용) -----
+  function kindOf(id: string): 'doc' | 'folder' | null {
+    if (docs.some((d) => d.id === id)) return 'doc'
+    if (folders.some((f) => f.id === id)) return 'folder'
+    return null
+  }
+
+  const visibleItems = visibleOrder({ pinnedIds: pinned.map((d) => d.id), tree, openFolderIds })
+
+  // 일반 클릭은 그대로 열고 단독 선택도 겸한다. Ctrl/Cmd 는 더하고 빼기, Shift 는 화면 순서 범위 (F-255.md 2·3.1)
+  function handleItemClick(e: ReactMouseEvent<HTMLButtonElement>, item: SelectionItem, action: () => void) {
+    if (e.ctrlKey || e.metaKey) {
+      setSelection((sel) => toggleSelection(sel, item))
+      return
+    }
+    if (e.shiftKey) {
+      setSelection((sel) => extendSelection(sel, item, visibleItems))
+      return
+    }
+    setSelection(replaceSelection(EMPTY_SELECTION, item))
+    action()
+  }
+
+  // 선택 안 우클릭 → 그 행만 선택하고 단일 메뉴, 선택(2개 이상) 안 우클릭 → 여러 항목 메뉴 (F-255.md 2·3.2)
+  function handleRowContextMenu(e: ReactMouseEvent<HTMLDivElement>, item: SelectionItem, isEditingRow: boolean) {
+    if (isEditingRow) return // 텍스트 편집 기본 메뉴가 필요하다 (D17)
+    e.preventDefault()
+    const point = { x: e.clientX, y: e.clientY }
+    const inMultiSelection = selection.ids.length > 1 && selection.ids.includes(item.id)
+    if (!inMultiSelection) {
+      setSelection(replaceSelection(EMPTY_SELECTION, item))
+    }
+    setContextMenu({ id: item.id, point })
+  }
+
+  const selectedItems: SelectionItem[] = selection.ids
+    .map((id) => {
+      const kind = kindOf(id)
+      return kind ? { kind, id } : null
+    })
+    .filter((v): v is SelectionItem => v !== null)
+
+  // 선택한 것들의 공통 부모 아래 폴더를 만들고 옮긴 뒤 이름 편집을 연다 (F-255.md 2·3.3, D13)
+  async function handleGroupIntoFolder() {
+    if (creatingFolderRef.current || selectedItems.length === 0) return
+    creatingFolderRef.current = true
+    try {
+      const parentId = commonParentId(selectedItems, docs, folders)
+      const folder = await onCreateFolder(parentId)
+      if (!folder) return
+      onBulkMove(dedupeDescendants(selectedItems, docs, folders), folder.id)
+      startRename(folder.id, folder.name)
+    } finally {
+      creatingFolderRef.current = false
+    }
+  }
+
+  const multiMenuItems: FolderMenuItem[] = [
+    {
+      key: 'new-folder',
+      label: '새 폴더로 넣기',
+      icon: IconFolderAdd,
+      onSelect: () => {
+        void handleGroupIntoFolder()
+      },
+    },
+    {
+      key: 'move-root',
+      label: '최상위로 옮기기',
+      icon: IconMove,
+      onSelect: () => onBulkMove(dedupeDescendants(selectedItems, docs, folders), null),
+    },
+    {
+      key: 'delete',
+      label: '삭제',
+      icon: IconDelete,
+      danger: true,
+      onSelect: () => onRequestBulkDelete(selectedItems),
+    },
+  ]
+
+  // ----- 끌어놓기 (specs/features/F-126.md 5.3, F-255.md 3.4, 마우스 전용) -----
   function handleDragStart(e: DragEvent<HTMLDivElement>, type: 'doc' | 'folder', id: string) {
-    setDragged({ type, id })
+    const isPartOfSelection = selection.ids.length > 1 && selection.ids.includes(id)
+    const items: SelectionItem[] = isPartOfSelection
+      ? selection.ids.map((sid) => ({ kind: kindOf(sid) ?? type, id: sid }))
+      : [{ kind: type, id }]
+    setDragged({ items })
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', id) // Firefox 는 setData 를 호출해야 드래그가 시작된다
+    if (items.length > 1) {
+      // 기본 드래그 이미지 대신 개수 배지 (F-255.md 3.4)
+      const badge = document.createElement('div')
+      badge.className = 'drag-count-badge'
+      badge.textContent = `${items.length}개 항목`
+      document.body.appendChild(badge)
+      e.dataTransfer.setDragImage(badge, 12, 12)
+      requestAnimationFrame(() => badge.remove())
+    }
   }
 
   function handleDragEnd() {
@@ -635,14 +821,14 @@ export default function Sidebar({
   }
 
   function canDropOn(target: DropTarget): boolean {
-    if (!dragged) return false
-    if (dragged.type === 'doc') {
-      // 문서는 폴더 행이나 최상위 빈 영역에만 놓을 수 있다 — 다른 문서 행에 놓으면 폴더 id 자리에 문서 id 가 저장되던 버그 수정 (F-136.md 3.2)
-      return target.type === 'folder' || target.type === 'root'
-    }
-    // 폴더를 끄는 중: 대상이 최상위 폴더 행이거나 최상위 빈 영역일 때만 유효할 수 있다
+    if (!dragged || dragged.items.length === 0) return false
+    if (target.type === 'doc') return false
+    // 문서는 폴더 행이나 최상위 빈 영역에만 놓을 수 있다 — 다른 문서 행에 놓으면 폴더 id 자리에 문서 id 가 저장되던 버그 수정 (F-136.md 3.2)
     const targetParentId = target.type === 'root' ? null : target.id
-    return canMoveFolder({ folders, id: dragged.id, parentId: targetParentId })
+    const hasDoc = dragged.items.some((it) => it.kind === 'doc')
+    if (hasDoc) return true
+    // 폴더만 끄는 중: 그중 하나라도 이 대상으로 옮길 수 있어야 한다(나머지는 놓을 때 건너뛴다)
+    return dragged.items.some((it) => canMoveFolder({ folders, id: it.id, parentId: targetParentId }))
   }
 
   function handleDragOver(e: DragEvent<HTMLDivElement>, target: DropTarget) {
@@ -659,11 +845,7 @@ export default function Sidebar({
     setDragged(null)
     if (!wasDragged || !canDropOn(target)) return
     const targetParentId = target.type === 'root' ? null : target.id
-    if (wasDragged.type === 'doc') {
-      onMoveDoc(wasDragged.id, targetParentId)
-    } else {
-      onMoveFolder(wasDragged.id, targetParentId)
-    }
+    onBulkMove(dedupeDescendants(wasDragged.items, docs, folders), targetParentId)
   }
 
   const ctx: SidebarCtx = {
@@ -688,6 +870,12 @@ export default function Sidebar({
     onDragEnd: handleDragEnd,
     onDragOver: handleDragOver,
     onDrop: handleDrop,
+    selection,
+    contextMenu,
+    multiMenuItems,
+    onItemClick: handleItemClick,
+    onRowContextMenu: handleRowContextMenu,
+    onCloseContextMenu: () => setContextMenu(null),
     isServerStore,
     onNotice,
     onRequestInviteFolder,
@@ -723,7 +911,12 @@ export default function Sidebar({
             <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
           </div>
         ) : (
-          <div className="sidebar-scroll">
+          <div
+            className="sidebar-scroll"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setSelection(EMPTY_SELECTION)
+            }}
+          >
             <SidebarButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
             <SidebarButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
             <SidebarButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
@@ -751,6 +944,7 @@ export default function Sidebar({
               className={`tree-root-drop${isRootDropTarget ? ' tree-row--drop' : ''}`}
               onDragOver={(e) => handleDragOver(e, rootTarget)}
               onDrop={(e) => handleDrop(e, rootTarget)}
+              onClick={() => setSelection(EMPTY_SELECTION)}
             />
           </div>
         )}

@@ -645,6 +645,12 @@ body.sidebar-resizing {
   background: var(--accent-soft);
 }
 
+/* 여러 항목 선택 표시 (F-255.md 3.4) */
+.tree-row--selected,
+.tree-row--selected:hover {
+  background: var(--selection-bg);
+}
+
 /* 제목 경로 클릭으로 이동한 폴더 잠깐 강조 — invite-grant-row 강조와 같은 패턴 (F-234.md 3.5) */
 .tree-row--highlight-start {
   background: var(--accent-soft);
@@ -811,6 +817,34 @@ body.sidebar-resizing {
   opacity: 0;
   visibility: hidden;
   transform: translateY(-4px) scale(0.9);
+}
+
+/* 우클릭 등 좌표로 연 메뉴 — left·top 은 JS 가 정한다 (F-255.md 3.2) */
+.item-menu-list--anchored {
+  position: fixed;
+  right: auto;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
+/* 트리거 없이 프로그램으로만 여는 인스턴스(우클릭·여러 항목 메뉴) — 자리를 차지하지 않는다 (F-255.md 3.4) */
+.item-menu-btn--hidden {
+  display: none;
+}
+
+/* 여러 항목 드래그 중 커서 옆 개수 배지 — setDragImage 로만 쓰인다 (F-255.md 3.4) */
+.drag-count-badge {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  padding: 4px 10px;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--panel);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .item-menu-list[data-state='open'] {
