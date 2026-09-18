@@ -1320,70 +1320,61 @@ body.sidebar-resizing {
   filter: brightness(0.95);
 }
 
-/* ----- 도움말 대화상자 (F-235.md 2.2) ----- */
-.help-group {
-  margin-bottom: 20px;
-}
-
-.help-group-title {
-  margin: 0 0 10px;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.help-cards {
+/* ----- 도움말 전용 페이지 (specs/features/F-244.md 3.2) ----- */
+.help-page {
+  width: 100%;
+  height: 100%;
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-direction: column;
+  background: var(--panel);
 }
 
-.help-card {
-  flex: 1 1 200px;
-  /* flex item 기본 min-width: auto 는 .help-card-source(white-space: pre) 의 긴 줄만큼
-     줄어들기를 거부해 좁은 창에서 카드가 넘친다 — 안에서 가로 스크롤(overflow-x: auto)로 대신 처리 */
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-control);
+.help-page-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: var(--topbar-h);
+  padding: 0 max(16px, calc((100% - var(--content-max)) / 2 + 16px));
+  border-bottom: 1px solid var(--rule);
   background: var(--paper);
 }
 
-/* 표·코드블록·이미지 등 좁은 칸에 답답한 결과는 한 줄 전체를 차지한다 (2026-09-16 사용자 "한줄에 세개도 되겠는데") */
-.help-card--wide {
-  flex-basis: 100%;
+.help-page-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
 }
 
-.help-card-name {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 12.5px;
-  color: var(--muted);
+.help-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.help-card-source {
-  margin: 0 0 10px;
-  padding: 8px 10px;
+.help-page-copy,
+.help-page-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--rule);
   border-radius: var(--radius-control);
-  background: var(--panel);
-  overflow-x: auto;
-  font-family: var(--font-mono, monospace);
-  font-size: 12.5px;
-  white-space: pre;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
 }
 
-.help-card-caption {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: var(--muted);
+.help-page-copy:hover,
+.help-page-close:hover {
+  background: var(--rule-2);
 }
 
-/* Viewer 는 본문 보기 화면 전용 여백(--doc-pad-top·--doc-pad-bottom, 특히 50dvh)과
-   height: 100%(앱 레이아웃 열 전체 높이를 채우는 용도)를 가진다 — 카드 안에 재사용할 때는
-   둘 다 지운다. height: 100% 를 그대로 두면 flex 로 늘어난 카드 높이를 다시 채우려 들어
-   대화상자가 화면 아래로 넘친다 (F-235.md 2.2, 2026-09-16 사용자 확인) */
-.help-card .viewer {
-  height: auto;
-  padding: 0;
+.help-page-body {
+  flex: 1;
+  min-height: 0;
 }
 
 /* ----- D-3 폴더로 이동 대화상자 (F-126.md 5.3) ----- */

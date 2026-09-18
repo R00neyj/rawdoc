@@ -2,6 +2,7 @@
 const HASH_DOC_PATTERN = /^#\/d\/(.+)$/
 const HASH_SHARE_PATTERN = /^#\/s\/(.+)$/
 const HASH_SHARES_PATTERN = /^#\/shares$/
+const HASH_HELP_PATTERN = /^#\/help$/
 const HASH_PUBLIC_FOLDER_PATTERN = /^#\/p\/f\/([^/]+)(?:\/(.+))?$/
 const HASH_PUBLIC_PATTERN = /^#\/p\/(.+)$/
 
@@ -9,12 +10,14 @@ export type HashRoute =
   | { type: 'doc'; docId: string }
   | { type: 'share'; fragment: string }
   | { type: 'shares' }
+  | { type: 'help' }
   | { type: 'public'; token: string }
   | { type: 'publicFolder'; token: string; docId?: string }
   | { type: 'none' }
 
 // `#/d/{id}`·`#/s/{조각}`·`#/p/{토큰}`·`#/p/f/{토큰}[/{문서id}]` 만 인정, 나머지는 { type: 'none' } (F-210.md 2.4, F-211.md 2.3)
 // `#/shares` 는 `#/s/{조각}` 과 헷갈리지 않도록 그 뒤에 검사한다(F-243.md 3.4)
+// `#/help` 는 정확히 그 값만 인정한다(F-244.md 3.3)
 export function parseHash(hash: string | undefined): HashRoute {
   if (typeof hash !== 'string') {
     return { type: 'none' }
@@ -25,6 +28,9 @@ export function parseHash(hash: string | undefined): HashRoute {
   }
   if (HASH_SHARES_PATTERN.test(hash)) {
     return { type: 'shares' }
+  }
+  if (HASH_HELP_PATTERN.test(hash)) {
+    return { type: 'help' }
   }
   const publicFolderMatch = HASH_PUBLIC_FOLDER_PATTERN.exec(hash)
   if (publicFolderMatch) {
