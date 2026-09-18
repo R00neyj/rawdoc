@@ -1,6 +1,7 @@
 // 보기 화면 목록을 편집 화면과 같게 (specs/features/F-226.md)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, setViewMode } from './helpers.js'
+import { openApp, importMarkdown, setViewMode, waitSaved } from './helpers.js'
+import { fakeServer } from './fixtures/fakeServer.js'
 
 const LIST_DOC = '- 가\n  - 나\n    - 다\n1. 하나\n   1. 둘\n- [ ] 할 일\n'
 
@@ -75,6 +76,98 @@ test.describe('F-226 A1 가로 위치', () => {
       expect(Math.abs(view[i].textStartX - edit[i].textStartX)).toBeLessThanOrEqual(4)
       expect(Math.abs(view[i].markX - edit[i].markX)).toBeLessThanOrEqual(2)
     }
+  })
+})
+
+// DELETE 를 늦춰 confirmDelete 의 재조정 경합을 재현하고, delete-all 캐스케이드를 여기서 직접 흉낸다 (F-247.md)
+async function delayFolderDeletes(page, server, ms = 500) {
+  await page.route(/\/api\/folders\/[^/]+\?contents=/, async (route) => {
+    const req = route.request()
+    if (req.method() !== 'DELETE') return route.fallback()
+    await new Promise((resolve) => setTimeout(resolve, ms))
+    const url = new URL(req.url())
+    const id = decodeURIComponent(url.pathname.split('/').pop())
+    const mode = url.searchParams.get('contents') ?? 'move-up'
+    if (mode === 'delete-all') {
+      const subIds = [...server.folders.values()].filter((f) => f.parentId === id).map((f) => f.id)
+      const ids = [id, ...subIds]
+      for (const [docId, doc] of server.docs) if (doc.folderId && ids.includes(doc.folderId)) server.docs.delete(docId)
+      for (const fid of ids) server.folders.delete(fid)
+    } else {
+      server.folders.delete(id)
+    }
+    return route.fulfill({ status: 204 })
+  })
+}
+
+async function buildTopSubDoc(page) {
+  await page.getByRole('button', { name: '새 폴더', exact: true }).click()
+  await expect(page.locator('.tree-rename-input')).toBeFocused()
+  await page.keyboard.type('위')
+  await page.keyboard.press('Enter')
+
+  const topRow = page.locator('.tree-row').filter({ hasText: '위' })
+  await topRow.hover()
+  await topRow.locator('.item-menu-btn').click()
+  await topRow.getByRole('menuitem', { name: '하위 폴더' }).click()
+  await expect(page.locator('.tree-rename-input')).toBeFocused()
+  await page.keyboard.type('아래')
+  await page.keyboard.press('Enter')
+
+  const subRow = page.locator('.tree-row').filter({ hasText: '아래' })
+  await subRow.hover()
+  await subRow.locator('.item-menu-btn').click()
+  await subRow.getByRole('menuitem', { name: '새 문서' }).click()
+  await page.locator('.doc-title').fill('문서')
+  await page.locator('.cm-content').click()
+  await page.keyboard.type('내용')
+  await waitSaved(page)
+}
+
+async function deleteTopFolder(page, buttonName) {
+  const topRow = page.locator('.tree-row').filter({ hasText: '위' })
+  await topRow.hover()
+  await topRow.locator('.item-menu-btn').click()
+  await topRow.getByRole('menuitem', { name: '삭제' }).click()
+  await page.getByRole('button', { name: buttonName, exact: true }).click()
+}
+
+test.describe('F-247 A7 전부 삭제', () => {
+  test('상위 폴더를 전부 삭제하면 하위 폴더·그 안 문서가 되살아나지 않는다', async ({ page }) => {
+    const server = await fakeServer(page)
+    await delayFolderDeletes(page, server)
+    await openApp(page)
+
+    await buildTopSubDoc(page)
+    await deleteTopFolder(page, '전부 삭제')
+
+    await expect(page.locator('.tree-row').filter({ hasText: '위' })).toHaveCount(0)
+    await expect(page.locator('.tree-row').filter({ hasText: '아래' })).toHaveCount(0)
+    await expect(page.locator('.tree-row').filter({ hasText: '문서' })).toHaveCount(0)
+
+    // DELETE 가 실제로 서버에 닿을 때까지 기다린 뒤 새로 고침해도 그대로다
+    await page.waitForTimeout(700)
+    await page.reload()
+    await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible()
+    await expect(page.locator('.tree-row').filter({ hasText: '위' })).toHaveCount(0)
+    await expect(page.locator('.tree-row').filter({ hasText: '아래' })).toHaveCount(0)
+    await expect(page.locator('.tree-row').filter({ hasText: '문서' })).toHaveCount(0)
+  })
+})
+
+test.describe('F-247 A8 위로 옮기기', () => {
+  test('상위 폴더를 위로 옮기면 하위 폴더·문서가 사라지지 않는다', async ({ page }) => {
+    const server = await fakeServer(page)
+    await delayFolderDeletes(page, server)
+    await openApp(page)
+
+    await buildTopSubDoc(page)
+    await deleteTopFolder(page, '위로 옮기기')
+
+    await expect(page.locator('.tree-row').filter({ hasText: '위' })).toHaveCount(0)
+    await expect(page.locator('.tree-row').filter({ hasText: '아래' })).toHaveCount(1)
+
+    await page.waitForTimeout(700)
   })
 })
 

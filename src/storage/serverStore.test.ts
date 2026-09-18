@@ -499,6 +499,122 @@ describe('serverStore', () => {
       expect(server.deleteFolderCalls).toEqual([{ id: top.id, contents: 'move-up' }])
     })
 
+    it('삭제 되살아남 (F-247) A1·A2: DELETE 가 서버에 닿기 전 재조정이 하위 폴더·그 안 문서를 되살리지 않는다', async () => {
+      const server = makeFakeServer()
+      let releaseDelete = () => {}
+      const gate = new Promise<void>((resolve) => {
+        releaseDelete = resolve
+      })
+      const fetchSpy = vi.fn(async (url: string, init: RequestInit = {}) => {
+        const method = init.method ?? 'GET'
+        const path = new URL(String(url), 'http://local.test').pathname
+        if (method === 'DELETE' && /^\/api\/folders\//.test(path)) await gate
+        return server.fetchImpl(url, init)
+      })
+      vi.stubGlobal('fetch', fetchSpy)
+      const store = await createServerStore('u1', { dbName: freshDbName() })
+
+      const top = await store.createFolder({ name: '위' })
+      const sub = await store.createFolder({ name: '아래', parentId: top.id })
+      const docInSub = await store.create({ title: '문서', content: '내용', lineEnding: 'lf', folderId: sub.id })
+      await tick(20)
+
+      await store.removeFolder(top.id, 'delete-all')
+      // DELETE 가 아직 서버에 도달하지 않았다 — 서버 목록엔 위·아래가 그대로 있다
+      const folders = await store.listFolders()
+      const docs = await store.list()
+
+      expect(folders.map((f) => f.id)).not.toContain(sub.id)
+      expect(docs.map((d) => d.id)).not.toContain(docInSub.id)
+
+      releaseDelete()
+      await tick(30)
+    })
+
+    it('F-247 A3: move-up 뒤 재조정이 서버의 옛 parentId 로 덮지 않는다', async () => {
+      const server = makeFakeServer()
+      let releaseDelete = () => {}
+      const gate = new Promise<void>((resolve) => {
+        releaseDelete = resolve
+      })
+      const fetchSpy = vi.fn(async (url: string, init: RequestInit = {}) => {
+        const method = init.method ?? 'GET'
+        const path = new URL(String(url), 'http://local.test').pathname
+        if (method === 'DELETE' && /^\/api\/folders\//.test(path)) await gate
+        return server.fetchImpl(url, init)
+      })
+      vi.stubGlobal('fetch', fetchSpy)
+      const store = await createServerStore('u1', { dbName: freshDbName() })
+
+      const top = await store.createFolder({ name: '위' })
+      const sub = await store.createFolder({ name: '아래', parentId: top.id })
+      await tick(20)
+
+      await store.removeFolder(top.id, 'move-up')
+      // 서버는 아직 옛 parentId(위) 를 답한다
+      const folders = await store.listFolders()
+      const subFolder = folders.find((f) => f.id === sub.id)
+      expect(subFolder?.parentId).toBe(null) // 위로 올라간 값 — 지워진 폴더를 가리키지 않는다
+
+      releaseDelete()
+      await tick(30)
+    })
+
+    it('F-247 A4: outbox 가 빈 다음 재조정은 서버·캐시가 같아지고, 무관한 폴더는 지워지지 않는다', async () => {
+      const server = makeFakeServer()
+      vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+      const store = await createServerStore('u1', { dbName: freshDbName() })
+
+      const top = await store.createFolder({ name: '위' })
+      await store.createFolder({ name: '아래', parentId: top.id })
+      const other = await store.createFolder({ name: '무관' })
+      await tick(20)
+
+      await store.removeFolder(top.id, 'delete-all')
+      await tick(30) // outbox 플러시 완료
+
+      const folders = await store.listFolders()
+      expect(folders.map((f) => f.id)).toEqual([other.id])
+    })
+
+    it('F-247 A6: 남의 삭제(outbox 의 removeFolder)는 무관한 새 폴더가 들어오는 것을 막지 않는다', async () => {
+      const server = makeFakeServer()
+      let releaseDelete = () => {}
+      const gate = new Promise<void>((resolve) => {
+        releaseDelete = resolve
+      })
+      const fetchSpy = vi.fn(async (url: string, init: RequestInit = {}) => {
+        const method = init.method ?? 'GET'
+        const path = new URL(String(url), 'http://local.test').pathname
+        if (method === 'DELETE' && /^\/api\/folders\//.test(path)) await gate
+        return server.fetchImpl(url, init)
+      })
+      vi.stubGlobal('fetch', fetchSpy)
+      const store = await createServerStore('u1', { dbName: freshDbName() })
+
+      const top = await store.createFolder({ name: '위' })
+      await tick(20)
+
+      await store.removeFolder(top.id, 'delete-all')
+
+      const now = Date.now()
+      server.folders.set('b1', { id: 'b1', name: '무관', parentId: null, createdAt: now, updatedAt: now })
+
+      const folders = await store.listFolders()
+      expect(folders.map((f) => f.id)).toContain('b1')
+
+      releaseDelete()
+      await tick(30)
+    })
+
+    it('F-247 A5: 캐시에 없는 폴더를 지우려 하면 예외를 던지지 않는다', async () => {
+      const server = makeFakeServer()
+      vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+      const store = await createServerStore('u1', { dbName: freshDbName() })
+
+      await expect(store.removeFolder('00000000-0000-0000-0000-000000000000', 'delete-all')).resolves.toBeUndefined()
+    })
+
     it('오프라인에서 폴더 안 문서를 고친 뒤 delete-all 하면 그 문서의 보낼 목록 항목이 남지 않는다', async () => {
       const server = makeFakeServer()
       vi.stubGlobal('fetch', vi.fn(server.fetchImpl))

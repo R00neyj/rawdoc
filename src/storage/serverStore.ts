@@ -42,6 +42,25 @@ export type ServerStore = Store & {
   refreshDocFromServer(id: string): Promise<Doc | null>
 }
 
+// 안 보낸 removeFolder(delete-all) 이 지운 폴더 id 들(자신 포함) — 서버 목록 기준 자손 판정 (F-247.md 3.1)
+function excludedByPendingDeleteAll(outbox: OutboxEntry[], serverFolders: api.ServerFolder[]): Set<string> {
+  const excluded = new Set<string>()
+  for (const entry of outbox) {
+    if (entry.type !== 'removeFolder' || entry.mode !== 'delete-all') continue
+    for (const id of descendantFolderIds(serverFolders, entry.folderId)) excluded.add(id)
+  }
+  return excluded
+}
+
+// 안 보낸 removeFolder(move-up) 이 위로 올린 폴더들의 옛 부모 id 집합 — 이 id 를 부모로 답하는 서버 값은 믿지 않는다 (3.1)
+function pendingMoveUpParentIds(outbox: OutboxEntry[]): Set<string> {
+  const ids = new Set<string>()
+  for (const entry of outbox) {
+    if (entry.type === 'removeFolder' && entry.mode !== 'delete-all') ids.add(entry.folderId)
+  }
+  return ids
+}
+
 // 폴더를 부모가 먼저 오도록 정렬한다 (2.2) — 순환 참조는 만들 수 없으므로 방어적으로만 끊는다
 function sortFoldersParentFirst(folders: Folder[]): Folder[] {
   function depthOf(folder: Folder): number {
@@ -484,11 +503,31 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       if (summaries) {
         const outbox = await cache.getOutbox(userId)
         const pendingDocIds = new Set(outbox.map(docIdOf).filter((v): v is string => Boolean(v)))
+
+        // 아직 안 보낸 delete-all 이 있으면 그 하위 폴더의 문서를 재조정에서 제외한다 — 자손 판정은 서버 폴더 목록 기준 (F-247.md 3.1)
+        const hasPendingDeleteAll = outbox.some((e) => e.type === 'removeFolder' && e.mode === 'delete-all')
+        let excludedDocIds = new Set<string>()
+        if (hasPendingDeleteAll) {
+          let serverFolders: api.ServerFolder[] = []
+          try {
+            serverFolders = await api.listFolders()
+          } catch {
+            serverFolders = []
+          }
+          const excludedFolderIds = excludedByPendingDeleteAll(outbox, serverFolders)
+          excludedDocIds = new Set(
+            summaries.filter((d) => d.folderId && excludedFolderIds.has(d.folderId)).map((d) => d.id),
+          )
+        }
+
         const serverIds = new Set(summaries.map((d) => d.id))
-        await cache.deleteDocsNotIn(userId, new Set([...serverIds, ...pendingDocIds]))
+        const keepIds = new Set([...serverIds, ...pendingDocIds])
+        for (const id of excludedDocIds) keepIds.delete(id)
+        await cache.deleteDocsNotIn(userId, keepIds)
 
         for (const summary of summaries) {
           if (pendingDocIds.has(summary.id)) continue
+          if (excludedDocIds.has(summary.id)) continue
           const cached = await cache.getDoc(userId, summary.id)
           if (cached && cached.version === summary.version) continue
           try {
@@ -638,10 +677,23 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       if (serverFolders) {
         const outbox = await cache.getOutbox(userId)
         const pendingFolderIds = new Set(outbox.map(folderIdOf).filter((v): v is string => Boolean(v)))
+        // 안 보낸 delete-all 의 하위 트리, move-up 이 위로 올린 값을 서버의 옛 값이 덮지 못하게 한다 (F-247.md 3.1)
+        const excludedFolderIds = excludedByPendingDeleteAll(outbox, serverFolders)
+        const moveUpParentIds = pendingMoveUpParentIds(outbox)
+
         const serverIds = new Set(serverFolders.map((f) => f.id))
-        await cache.deleteFoldersNotIn(userId, new Set([...serverIds, ...pendingFolderIds]))
+        const keepIds = new Set([...serverIds, ...pendingFolderIds])
+        for (const id of excludedFolderIds) keepIds.delete(id)
+        await cache.deleteFoldersNotIn(userId, keepIds)
+
         for (const folder of serverFolders) {
           if (pendingFolderIds.has(folder.id)) continue
+          if (excludedFolderIds.has(folder.id)) continue
+          if (folder.parentId && moveUpParentIds.has(folder.parentId)) {
+            const cachedFolder = await cache.getFolder(userId, folder.id)
+            await cache.putFolder(userId, cachedFolder ? { ...folder, parentId: cachedFolder.parentId } : folder)
+            continue
+          }
           await cache.putFolder(userId, folder)
         }
       }
@@ -697,7 +749,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
     async removeFolder(id, mode: FolderDeleteMode = 'move-up') {
       const existing = await cache.getFolder(userId, id)
-      if (!existing) throw new Error(`폴더를 찾을 수 없음: ${id}`)
+      // 캐시에 없으면 이미 지워진 것으로 본다 — 되살아난 폴더의 행이 남아 삭제를 눌렀을 때 등 (F-247.md 3.2)
+      if (!existing) return
 
       if (mode === 'delete-all') {
         const allFolders = await cache.getFolders(userId)
