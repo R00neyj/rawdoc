@@ -170,7 +170,8 @@ export default function App() {
   // 뒤로·앞으로 가기로 공개 보기 경로를 드나들 때 갱신한다 (그 외 해시는 아래 별도 효과가 처리, F-211.md 2.3)
   useEffect(() => {
     function handlePublicHashChange() {
-      setPublicRoute(toPublicRoute(parseHash(location.hash)))
+      const pathRoute = toPublicRoute(parsePathRoute(location.pathname))
+      setPublicRoute(pathRoute ?? toPublicRoute(parseHash(location.hash)))
     }
     window.addEventListener('hashchange', handlePublicHashChange)
     return () => window.removeEventListener('hashchange', handlePublicHashChange)

@@ -307,6 +307,30 @@ test.describe('F-252 C4 묶음 이동', () => {
   })
 })
 
+// 버그 수정 회귀 테스트(2026-09-19): 경로 기반 공유 링크(`/p/{token}`, F-238)에서 위키링크로
+// 들어간 뒤 뒤로 가면 App.tsx 의 hashchange 핸들러가 location.hash 만 보고 pathname 을
+// 안 봐서 앱 홈으로 빠졌다
+test.describe('경로 기반 공유 링크 뒤로 가기', () => {
+  test('위키링크 클릭 → 뒤로 가기로 앱 홈이 아니라 시작 문서로', async ({ page }) => {
+    const token = 'tokSet2Path'
+    await mockPublicSet(page, token, {
+      start: { title: '문서A', content: '[[문서B]]\n', lineEnding: 'lf', updatedAt: 1 },
+      list: { docs: [{ id: 'a1', title: '문서A' }, { id: 'b1', title: '문서B' }] },
+      others: { b1: { title: '문서B', content: '# 문서B 본문\n', lineEnding: 'lf', updatedAt: 2 } },
+    })
+    await page.goto(`/p/${token}`)
+    await expect(page.locator('.public-view-title')).toHaveText('문서A')
+
+    const link = page.locator('a.wikilink', { hasText: '문서B' })
+    await expect(link).toBeVisible()
+    await link.click()
+    await expect(page.locator('.public-view-title')).toHaveText('문서B')
+
+    await page.goBack()
+    await expect(page.locator('.public-view-title')).toHaveText('문서A')
+  })
+})
+
 test.describe('F-252 C5 묶음 밖 대상', () => {
   test('묶음에 없는 위키링크는 missing 스타일, 클릭해도 이동 없음', async ({ page }) => {
     const token = 'tokSet2'
