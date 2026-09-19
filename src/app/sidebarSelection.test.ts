@@ -100,9 +100,17 @@ describe('visibleOrder', () => {
     expect(order.map((i) => i.id)).toEqual(['f1', 'd-in-f1', 'd1'])
   })
 
-  it('고정됨 항목이 맨 앞에 온다', () => {
+  // 고정된 문서는 트리 제자리에도 그대로 보이지만(F-132), 여기 목록엔 한 번만 들어가야 한다 —
+  // 두 번 들어가면 extend() 의 findIndex 가 항상 고정됨 자리를 찾아, 트리 쪽 그 문서를
+  // Shift+클릭했을 때 선택 범위가 엉뚱하게 뒤집히는 버그가 있었다(2026-09-20 사용자 신고)
+  it('고정됨 항목이 맨 앞에 오고, 트리 제자리에서는 빠진다', () => {
     const order = visibleOrder({ pinnedIds: ['d1'], tree, openFolderIds: [] })
-    expect(order.map((i) => i.id)).toEqual(['d1', 'f1', 'd1'])
+    expect(order.map((i) => i.id)).toEqual(['d1', 'f1'])
+  })
+
+  it('고정된 문서가 펼친 폴더 안에 있어도 트리 제자리에서 빠진다', () => {
+    const order = visibleOrder({ pinnedIds: ['d-in-f1'], tree, openFolderIds: ['f1'] })
+    expect(order.map((i) => i.id)).toEqual(['d-in-f1', 'f1', 'd1'])
   })
 })
 

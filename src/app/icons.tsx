@@ -6,7 +6,9 @@ import visibilitySvg from '@material-symbols/svg-400/outlined/visibility.svg?raw
 import iosShareSvg from '@material-symbols/svg-400/outlined/ios_share.svg?raw'
 import downloadSvg from '@material-symbols/svg-400/outlined/download.svg?raw'
 import chevronRightSvg from '@material-symbols/svg-400/outlined/chevron_right.svg?raw'
-import noteAddSvg from '@material-symbols/svg-400/outlined/note_add.svg?raw'
+// 사이드바 `새 문서` — note_add(페이지+플러스)는 가져오기(upload_file, 역시 페이지 모양)와
+// 나란히 놓으면 작은 크기에서 헷갈려 note_stack_add(쌓인 노트)로 바꿨다 (2026-09-20 사용자 지적)
+import noteAddSvg from '@material-symbols/svg-400/outlined/note_stack_add.svg?raw'
 import createNewFolderSvg from '@material-symbols/svg-400/outlined/create_new_folder.svg?raw'
 import uploadFileSvg from '@material-symbols/svg-400/outlined/upload_file.svg?raw'
 import searchSvg from '@material-symbols/svg-400/outlined/search.svg?raw'
@@ -60,6 +62,7 @@ import textFormatSvg from '@material-symbols/svg-400/outlined/text_format.svg?ra
 import subjectSvg from '@material-symbols/svg-400/outlined/subject.svg?raw'
 import addSvg from '@material-symbols/svg-400/outlined/add.svg?raw'
 import helpSvg from '@material-symbols/svg-400/outlined/help.svg?raw'
+import collapseAllSvg from '@material-symbols/svg-400/outlined/collapse_all.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -152,6 +155,9 @@ export const IconTabInsert = makeIcon(addSvg)
 
 // 사이드바 `도움말` 항목 (F-235.md 1장)
 export const IconHelp = makeIcon(helpSvg)
+
+// 사이드바 `모두 접기` (2026-09-20 사용자 요청)
+export const IconCollapseAll = makeIcon(collapseAllSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

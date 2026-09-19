@@ -42,6 +42,7 @@ import {
   IconTooltip,
   IconGroup,
   IconHelp,
+  IconCollapseAll,
 } from './icons'
 import type { Notice } from './notice'
 
@@ -467,6 +468,19 @@ function SidebarButton(props: SidebarButtonProps) {
   )
 }
 
+// 펼친 사이드바 위쪽 고정 영역의 새 문서·새 폴더·가져오기 — 가로로 나란히, 아이콘만(아래쪽 툴팁)
+// (2026-09-20 사용자 요청 "새문서, 새폴더, 가져오기는 아이콘 버튼으로 가로로 표시")
+function SidebarIconButton({ label, icon: Icon, onClick }: { label: string; icon: ComponentType<{ size?: number }>; onClick?: () => void }) {
+  return (
+    <span className="icon-btn-wrap">
+      <button type="button" className="icon-btn" aria-label={label} onClick={onClick}>
+        <Icon size={18} />
+      </button>
+      <IconTooltip text={label} />
+    </span>
+  )
+}
+
 type WidthHandleProps = {
   width: number
   onWidthChange: (width: number) => void
@@ -555,6 +569,7 @@ type SidebarProps = {
   currentDocId: string | null
   openFolderIds: string[]
   onToggleFolder: (id: string) => void
+  onCollapseAllFolders: () => void
   onSelectDoc: (id: string) => void
   onCreateDoc: (folderId?: string | null) => void
   onImportDoc: () => void
@@ -591,6 +606,7 @@ export default function Sidebar({
   currentDocId,
   openFolderIds,
   onToggleFolder,
+  onCollapseAllFolders,
   onSelectDoc,
   onCreateDoc,
   onImportDoc,
@@ -911,42 +927,51 @@ export default function Sidebar({
             <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
           </div>
         ) : (
-          <div
-            className="sidebar-scroll"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setSelection(EMPTY_SELECTION)
-            }}
-          >
-            <SidebarButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
-            <SidebarButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
-            <SidebarButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
-            {pinned.length > 0 && (
-              <>
-                <h2>
-                  <IconPin size={14} />
-                  고정됨
-                </h2>
-                <ul className="pinned-list" role="list" aria-label="고정된 문서">
-                  {pinned.map((doc) => (
-                    <PinnedRow key={doc.id} doc={doc} ctx={ctx} />
-                  ))}
-                </ul>
-              </>
-            )}
-            <SharedGroup sharedDocs={sharedDocs} ctx={ctx} />
-            <h2>문서</h2>
-            <ul className="doc-list" role="tree" aria-label="문서와 폴더">
-              {tree.map((node) => (
-                <TreeNode key={node.id} node={node} depth={0} ctx={ctx} editingInputRef={editingInputRef} />
-              ))}
-            </ul>
+          <>
+            {/* 문서 많아져도 같이 스크롤되지 않는 고정 영역 — 동작 버튼·고정됨 묶음
+                (2026-09-20 사용자 "고정됨과 함께 스크롤 안되고 상단에 고정으로 표시") */}
+            <div className="sidebar-fixed">
+              <div className="sidebar-actions">
+                <SidebarIconButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
+                <SidebarIconButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
+                <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
+                <SidebarIconButton icon={IconCollapseAll} label="모두 접기" onClick={onCollapseAllFolders} />
+              </div>
+              {pinned.length > 0 && (
+                <>
+                  <h2>
+                    <IconPin size={14} />
+                    고정됨
+                  </h2>
+                  <ul className="pinned-list" role="list" aria-label="고정된 문서">
+                    {pinned.map((doc) => (
+                      <PinnedRow key={doc.id} doc={doc} ctx={ctx} />
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
             <div
-              className={`tree-root-drop${isRootDropTarget ? ' tree-row--drop' : ''}`}
-              onDragOver={(e) => handleDragOver(e, rootTarget)}
-              onDrop={(e) => handleDrop(e, rootTarget)}
-              onClick={() => setSelection(EMPTY_SELECTION)}
-            />
-          </div>
+              className="sidebar-scroll"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setSelection(EMPTY_SELECTION)
+              }}
+            >
+              <SharedGroup sharedDocs={sharedDocs} ctx={ctx} />
+              <h2>문서</h2>
+              <ul className="doc-list" role="tree" aria-label="문서와 폴더">
+                {tree.map((node) => (
+                  <TreeNode key={node.id} node={node} depth={0} ctx={ctx} editingInputRef={editingInputRef} />
+                ))}
+              </ul>
+              <div
+                className={`tree-root-drop${isRootDropTarget ? ' tree-row--drop' : ''}`}
+                onDragOver={(e) => handleDragOver(e, rootTarget)}
+                onDrop={(e) => handleDrop(e, rootTarget)}
+                onClick={() => setSelection(EMPTY_SELECTION)}
+              />
+            </div>
+          </>
         )}
 
         <div className={isRail ? 'sidebar-rail-bottom' : 'sidebar-bottom'}>

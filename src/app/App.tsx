@@ -11,6 +11,7 @@ import {
 } from 'react'
 import type { EditorState, StateCommand } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
+import { openSearchPanel } from '@codemirror/search'
 
 import { createMemoryStore } from '../storage/memoryStore'
 import { createIdbStore } from '../storage/idbStore'
@@ -438,6 +439,15 @@ export default function App() {
       const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
       persistOpenFolders(next)
       return next
+    })
+  }, [])
+
+  // 사이드바 `모두 접기` — 열린 폴더를 전부 닫는다 (2026-09-20 사용자 요청)
+  const collapseAllFolders = useCallback(() => {
+    setOpenFolders((prev) => {
+      if (prev.length === 0) return prev
+      persistOpenFolders([])
+      return []
     })
   }, [])
 
@@ -899,6 +909,23 @@ export default function App() {
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [narrow, sidebarOpen, settingsOpen, deleteTarget, moveDocTarget, bulkDeleteItems])
+
+  // ----- 브라우저 기본 찾기(Ctrl/Cmd+F) 비활성화 (2026-09-20 사용자 요청) -----
+  // 포커스가 에디터 안이면 createEditor.ts 의 Mod-f 키맵(scope 'editor search-panel')이 먼저
+  // 처리해 CM6 검색 패널을 연다 — 여기서는 사이드바·상단바 등 에디터 밖에 포커스가 있을 때만 대신 열어
+  // 브라우저 자체 찾기 창이 뜨지 않게 한다
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return
+      if (e.key.toLowerCase() !== 'f') return
+      const view = editorRef.current?.view
+      if (view?.dom.contains(document.activeElement)) return
+      e.preventDefault()
+      if (view) openSearchPanel(view)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   // ----- 문서를 열 때 저장소 본문을 1회 읽어 에디터에 넘긴다 (architecture.md 3장) -----
   // openDoc.id 가 currentDocId 와 다르면(문서 없음 포함) 렌더링에서 에디터를 그리지
@@ -2189,6 +2216,7 @@ export default function App() {
           currentDocId={currentDocId}
           openFolderIds={openFolders}
           onToggleFolder={toggleFolderOpen}
+          onCollapseAllFolders={collapseAllFolders}
           onSelectDoc={selectDoc}
           onCreateDoc={createNewDoc}
           onImportDoc={requestImport}

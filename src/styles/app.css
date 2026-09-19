@@ -379,7 +379,9 @@ svg {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 10px 10px 12px;
+  /* 오른쪽 여백을 없애 스크롤바가 차지하는 만큼까지 가로 공간을 넉넉하게 쓴다
+     (2026-09-20 사용자 요청 — 처음엔 왼쪽으로 잘못 전달됐던 걸 정정) */
+  padding: 10px 0 12px 10px;
 }
 
 .sidebar--collapsed .sidebar-inner {
@@ -461,6 +463,19 @@ body.sidebar-resizing {
   inset: 0;
   z-index: 10;
   background: transparent;
+}
+
+/* 동작 버튼(새 문서·새 폴더·가져오기)·고정됨 묶음 — 문서가 많아져도 스크롤 밖에 고정
+   (2026-09-20 사용자 "고정됨과 함께 스크롤 안되고 상단에 고정으로 표시") */
+.sidebar-fixed {
+  flex: none;
+}
+
+.sidebar-actions {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin: 2px 0 8px;
 }
 
 .sidebar-scroll {
@@ -826,6 +841,25 @@ body.sidebar-resizing {
   top: 0;
   left: 0;
   transform-origin: top left;
+}
+
+/* 스크롤되는 조상(.sidebar-scroll 등) 아래쪽에 가까운 행은 메뉴가 아래로 열리면 잘려
+   `삭제` 같은 항목이 안 보이는 문제가 있었다(2026-09-20 사용자 신고) — FolderMenu.tsx 가
+   열릴 자리를 재고 위로 열 때 붙이는 보정 클래스 */
+.item-menu-list--up {
+  top: auto;
+  bottom: calc(100% + 2px);
+  transform-origin: bottom right;
+}
+
+.item-menu-list--up[data-state='closed'] {
+  transform: translateY(4px) scale(0.9);
+}
+
+@starting-style {
+  .item-menu-list--up[data-state='open'] {
+    transform: translateY(4px) scale(0.9);
+  }
 }
 
 /* 트리거 없이 프로그램으로만 여는 인스턴스(우클릭·여러 항목 메뉴) — 자리를 차지하지 않는다 (F-255.md 3.4) */

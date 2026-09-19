@@ -45,7 +45,11 @@ export function prune(sel: Selection, visibleIds: string[]): Selection {
   return { ids, anchorId }
 }
 
-// 화면에 보이는 순서 — 고정됨 묶음 다음 트리 순, 접힌 폴더 안은 뺀다
+// 화면에 보이는 순서 — 고정됨 묶음 다음 트리 순, 접힌 폴더 안은 뺀다.
+// 고정된 문서는 트리 안 제자리에도 그대로 보이지만(F-132) 여기 목록엔 한 번만 넣는다 —
+// 같은 id 가 두 번 들어가면 extend() 의 findIndex 가 항상 첫 번째(고정됨 자리)만 찾아,
+// 트리 쪽 그 문서를 Shift+클릭했을 때 클릭한 자리가 아니라 고정됨 자리 기준으로 범위를
+// 계산해 선택이 엉뚱한(반대) 구간으로 뒤집히는 버그가 있었다(2026-09-20 사용자 신고)
 export function visibleOrder({
   pinnedIds,
   tree,
@@ -55,6 +59,7 @@ export function visibleOrder({
   tree: TreeNode[]
   openFolderIds: string[]
 }): SelectionItem[] {
+  const pinnedIdSet = new Set(pinnedIds)
   const out: SelectionItem[] = pinnedIds.map((id) => ({ kind: 'doc', id }))
 
   function walk(nodes: TreeNode[]) {
@@ -63,6 +68,7 @@ export function visibleOrder({
         out.push({ kind: 'folder', id: node.id })
         if (openFolderIds.includes(node.id)) walk(node.children)
       } else {
+        if (pinnedIdSet.has(node.id)) continue
         out.push({ kind: 'doc', id: node.id })
       }
     }
