@@ -3,7 +3,8 @@
 // 짝은 `@codemirror/autocomplete` 의 closeBrackets() 가 아니라 F-127 의 autoPair() 다
 import type { Extension } from '@codemirror/state'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
-import { dropCursor, EditorView, keymap, lineNumbers } from '@codemirror/view'
+import { dropCursor, EditorView, keymap, lineNumbers, ViewPlugin } from '@codemirror/view'
+import type { ViewUpdate } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { indentUnit, syntaxTree } from '@codemirror/language'
 import { deleteMarkupBackward, markdown, markdownLanguage } from '@codemirror/lang-markdown'
@@ -81,6 +82,78 @@ function openSearchPanelWithReplace(view: EditorView): boolean {
   replaceField?.select()
   return true
 }
+
+// 검색 패널의 "모두 선택·대소문자 구분·정규식·단어 단위" 는 일반 사용자가 자주 쓰는 기능이
+// 아니라 기본은 숨기고, "···" 토글을 눌러야 그 아래 별도 팝오버로 뜬다 (2026-09-20 사용자 요청 —
+// 처음엔 같은 줄에 펼치는 방식이었으나 "별도 창으로 아래에 띄웠으면" 요청으로 바꿨다).
+// @codemirror/search 는 이런 UI 를 그리지 않으므로 패널 DOM 이 나타날 때마다 한 번씩 만든다 —
+// 패널은 열 때마다 새로 만들어지므로(SearchPanel 생성자) 매번 다시 넣어야 한다
+const searchMoreToggle = ViewPlugin.fromClass(
+  class {
+    constructor(view: EditorView) {
+      this.sync(view)
+    }
+    update(update: ViewUpdate) {
+      this.sync(update.view)
+    }
+    sync(view: EditorView) {
+      const panel = view.dom.querySelector<HTMLElement>('.cm-panel.cm-search')
+      if (!panel || panel.querySelector('.cm-search-more')) return
+      const searchField = panel.querySelector('input[name="search"]')
+      const nextBtn = panel.querySelector('button[name="next"]')
+      const prevBtn = panel.querySelector('button[name="prev"]')
+      const selectBtn = panel.querySelector('button[name="select"]')
+      const closeBtn = panel.querySelector('button[name="close"]')
+      const optionLabels = panel.querySelectorAll('label')
+      if (!searchField || !nextBtn || !prevBtn || !selectBtn || !closeBtn) return
+
+      const toggle = document.createElement('button')
+      toggle.type = 'button'
+      toggle.className = 'cm-button cm-search-more'
+      toggle.setAttribute('aria-label', '옵션 더 보기')
+      toggle.addEventListener('click', () => {
+        const expanded = panel.classList.toggle('cm-search--expanded')
+        toggle.setAttribute('aria-label', expanded ? '옵션 접기' : '옵션 더 보기')
+      })
+
+      // 모두 선택 버튼 + 대소문자·정규식·단어 단위 라벨을 팝오버 컨테이너로 옮긴다(이동이라
+      // 기존 클릭·:checked 동작·이벤트 리스너는 그대로 유지된다 — append() 는 기존 부모에서 뗀다)
+      const popover = document.createElement('div')
+      popover.className = 'cm-search-more-panel'
+      popover.append(selectBtn, ...optionLabels)
+
+      // 찾기 줄(입력·다음·이전·더보기)과 바꾸기 줄을 각각 실제 줄(row) 컨테이너로 감싼다 —
+      // 원래 라이브러리는 <br style="flex-basis:100%"> 로 줄을 억지로 나누는데, 퍼센트
+      // flex-basis 를 가진 자식이 있으면 카드의 width:max-content 계산이 브라우저마다
+      // 어긋나 접었을 때도 펼친 폭 그대로 자리를 차지하는 문제가 있었다(2026-09-20 사용자
+      // "더보기를 열지 않아도 공간이 그대로 차지되고 있는데"). 줄마다 독립된 가로 flex 컨테이너로
+      // 감싸고 카드는 세로로만 쌓아(column) 이 계산을 아예 피한다
+      // 닫기 버튼도 이 줄 끝에 넣는다 — 예전엔 position:absolute 로 카드 오른쪽 위에 따로
+      // 띄웠는데 다른 버튼과 세로 정렬이 살짝 어긋나 보였다(2026-09-20 사용자 지적).
+      // margin-left:auto 로 같은 줄 안에서 오른쪽 끝으로 미는 것으로 바꾼다
+      const searchRow = document.createElement('div')
+      searchRow.className = 'cm-search-row'
+      searchRow.append(searchField, nextBtn, prevBtn, toggle, closeBtn)
+      panel.prepend(searchRow)
+      searchRow.insertAdjacentElement('afterend', popover)
+      // 팝오버 위치는 CSS right:0 으로 카드 오른쪽 끝에 맞춘다 — 토글의 offsetLeft 를 그대로
+      // 쓰면 카드가 화면 오른쪽 끝(right:10px)에 붙어 있어 팝오버가 화면 밖으로 나갔다
+      // (2026-09-20 사용자 지적)
+
+      const replaceField = panel.querySelector('input[name="replace"]')
+      const replaceBtn = panel.querySelector('button[name="replace"]')
+      const replaceAllBtn = panel.querySelector('button[name="replaceAll"]')
+      const oldBreak = panel.querySelector('br')
+      oldBreak?.remove()
+      if (replaceField && replaceBtn && replaceAllBtn) {
+        const replaceRow = document.createElement('div')
+        replaceRow.className = 'cm-search-row cm-search-row--replace'
+        replaceRow.append(replaceField, replaceBtn, replaceAllBtn)
+        popover.insertAdjacentElement('afterend', replaceRow)
+      }
+    }
+  },
+)
 
 // src/app/fileDrop.js 의 isExternalFileDrag() 와 같은 판정 — src/editor 는 src/app 을 import 하지 않아(단방향 계층) 옮겨 적는다
 function isExternalFileDrag(dataTransfer: DataTransfer | null): boolean {
@@ -301,6 +374,29 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     highlightExtension(),
     // 찾기·바꾸기 패널(F-261.md 2.1) — 모드와 무관하게 항상 켠다. previewCompartment 밖: fenceLinePreview()·wikiComplete() 와 같은 이유
     search({ top: true }),
+    // 검색 패널 문구 한국어화 (2026-09-20 사용자 요청 "한글로 나와야함") — @codemirror/search 가
+    // view.state.phrase() 로 찾는 원문 문자열을 키로 매핑한다. 키 철자는 라이브러리 원문과 정확히 같아야 한다
+    EditorState.phrases.of({
+      Find: '찾기',
+      Replace: '바꾸기',
+      next: '다음',
+      previous: '이전',
+      all: '모두 선택',
+      'match case': '대소문자 구분',
+      regexp: '정규식',
+      'by word': '단어 단위',
+      replace: '바꾸기',
+      'replace all': '모두 바꾸기',
+      close: '닫기',
+      'current match': '현재 일치 항목',
+      'on line': '줄',
+      'replaced match on line $': '$ 줄에서 바꿨습니다',
+      'replaced $ matches': '$ 개를 바꿨습니다',
+      'Go to line': '줄로 이동',
+      go: '이동',
+    }),
+    // 모두 선택·대소문자 구분·정규식·단어 단위 옵션을 여닫는 "더보기" 토글 (위 searchMoreToggle 주석 참고)
+    searchMoreToggle,
     // 펼친 코드블록 줄 표시 (F-124 3.4 11번) — 모드(편집·원문)와 무관하게 항상 켠다.
     // highlight.js 의 주석 참고: 태그 자체를 나누는 방법은 실측으로 안 먹히는 것을
     // 확인해 줄 decoration 으로 바꿨다
