@@ -9,6 +9,12 @@
   <a href="https://rawdoc.app"><strong>rawdoc.app</strong></a>
 </p>
 
+<p align="center">
+  <a href="https://rawdoc.app"><img src="https://img.shields.io/badge/Cloudflare_Workers-배포됨-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers 배포"></a>
+  <a href="https://github.com/R00neyj/rawdoc/commits/deploy"><img src="https://img.shields.io/github/check-runs/R00neyj/rawdoc/deploy?nameFilter=Workers%20Builds%3A%20md-editor-web&label=%EB%B0%B0%ED%8F%AC" alt="배포 빌드 상태"></a>
+  <a href="https://github.com/R00neyj/rawdoc/actions/workflows/ci.yml"><img src="https://github.com/R00neyj/rawdoc/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+</p>
+
 ## 소개
 
 Rawdoc 은 입력한 마크다운 기호를 지우거나 바꾸지 않는 편집기입니다. `##` 를 쳐도 기호가 화면에서 사라지지 않고, `.md` 로 내보낸 파일은 사용자가 입력한 원문과 바이트 단위로 같습니다
