@@ -1,0 +1,49 @@
+/* CM6 검색·치환 패널(`@codemirror/search`) 색·서체를 앱 토큰에 맞춘다 (F-261.md 2.5, 최소 구현) */
+
+.cm-host .cm-panel.cm-search {
+  background: var(--panel);
+  color: var(--ink);
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+
+.cm-host .cm-panel.cm-search .cm-textfield {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+}
+
+.cm-host .cm-panel.cm-search .cm-textfield:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.cm-host .cm-panel.cm-search .cm-button {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  transition: var(--transition-colors);
+}
+
+.cm-host .cm-panel.cm-search .cm-button:hover {
+  border-color: var(--accent);
+}
+
+.cm-host .cm-panel.cm-search label {
+  color: var(--ink-2);
+}
+
+.cm-host .cm-panel.cm-search [name='close'] {
+  color: var(--muted);
+}
+
+.cm-host .cm-editor .cm-searchMatch {
+  background: var(--accent-soft);
+}
+
+.cm-host .cm-editor .cm-searchMatch-selected {
+  background: var(--accent-ring);
+}

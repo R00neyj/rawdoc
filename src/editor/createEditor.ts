@@ -7,6 +7,7 @@ import { dropCursor, EditorView, keymap, lineNumbers } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { indentUnit, syntaxTree } from '@codemirror/language'
 import { deleteMarkupBackward, markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { openSearchPanel, search, searchKeymap, searchPanelOpen } from '@codemirror/search'
 
 import { autoPair } from './autoPair'
 import { attachComposingEnterGuard, compositionCatchup, forceRecalc, isComposing, isForced } from './composition'
@@ -34,6 +35,7 @@ import type { OnOpenWikiLink } from './preview/wikiLinks'
 import type { ResolveAttachment } from './preview/blocks'
 import { enterTableFromKeyboard, setCellContextMenuHandler } from './preview/tableWidget'
 import { wikiComplete } from './wikiComplete'
+import './searchPanel.css'
 
 // 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
 const HEADINGS_DEBOUNCE_MS = 150
@@ -69,6 +71,15 @@ function indentExtensionsFor(size: IndentSize): Extension[] {
 // 읽기 전용 — readOnly 는 기본 명령을 막고, editable=false 는 contentEditable 자체를 끈다 (F-212.md 2.4)
 function readOnlyExtensionsFor(readOnly: boolean): Extension[] {
   return [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]
+}
+
+// Mod-h: 검색 패널을 열되 치환 입력에 포커스를 둔다 (F-261.md 2.2). 이미 열려 있으면 openSearchPanel() 을 다시 부르지 않는다 — 읽기 전용이면 라이브러리가 치환 입력을 그리지 않아(SearchPanel 생성자) 검색 패널만 남는다
+function openSearchPanelWithReplace(view: EditorView): boolean {
+  if (!searchPanelOpen(view.state)) openSearchPanel(view)
+  const replaceField = view.dom.querySelector<HTMLInputElement>('.cm-search input[name="replace"]')
+  replaceField?.focus()
+  replaceField?.select()
+  return true
 }
 
 // src/app/fileDrop.js 의 isExternalFileDrag() 와 같은 판정 — src/editor 는 src/app 을 import 하지 않아(단방향 계층) 옮겨 적는다
@@ -288,6 +299,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     Prec.high(keymap.of([{ key: 'Enter', run: insertNewlineContinueList }, { key: 'Backspace', run: deleteMarkupBackward }])),
     indentCompartment.of(indentExtensionsFor(indentSize)),
     highlightExtension(),
+    // 찾기·바꾸기 패널(F-261.md 2.1) — 모드와 무관하게 항상 켠다. previewCompartment 밖: fenceLinePreview()·wikiComplete() 와 같은 이유
+    search({ top: true }),
     // 펼친 코드블록 줄 표시 (F-124 3.4 11번) — 모드(편집·원문)와 무관하게 항상 켠다.
     // highlight.js 의 주석 참고: 태그 자체를 나누는 방법은 실측으로 안 먹히는 것을
     // 확인해 줄 decoration 으로 바꿨다
@@ -302,6 +315,13 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     Prec.high(keymap.of([{ key: 'ArrowUp', run: focusTitleFromBody }])),
     // F-109 단축키가 defaultKeymap 보다 먼저 키를 받도록 Prec.high
     Prec.high(keymap.of(shortcutKeymap)),
+    // Mod-h 는 searchKeymap 기본값(F-261.md 2.2)에 없어 따로 얹는다. Mod-f 와 같은 scope 를 둬 패널 입력에 포커스가 있어도 반응한다(기본 scope 'editor' 는 contentDOM 키다운만 듣는다)
+    Prec.high(
+      keymap.of([
+        { key: 'Mod-h', run: openSearchPanelWithReplace, scope: 'editor search-panel' },
+        ...searchKeymap,
+      ]),
+    ),
     keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
     compositionCatchup(() => destroyed),
     EditorView.updateListener.of((update) => {
