@@ -35,6 +35,51 @@ test('F-272 A11 robots.txt·sitemap.xml', async ({ page }) => {
   expect(sitemapBody).not.toContain('404')
 })
 
+test('F-273 A4 체인지로그 페이지가 뜬다', async ({ page }) => {
+  await page.goto('/changelog')
+  await expect(page.getByRole('heading', { level: 1, name: '체인지로그' })).toBeVisible()
+  await expect(page.locator('.site-nav a[href="/changelog"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('.site-foot')).toBeVisible()
+})
+
+test('F-273 A5 완결된 정적 페이지다', async ({ page }) => {
+  const res = await page.request.get('/changelog')
+  expect(res.status()).toBe(200)
+  const body = await res.text()
+  expect(body).toContain('<title>체인지로그 · Rawdoc</title>')
+  expect(body).toContain('rel="canonical"')
+  expect(body).toContain('https://rawdoc.app/changelog')
+  expect(body).not.toContain('<script')
+})
+
+test('F-273 A6 내용 규칙 — 내부 말을 쓰지 않는다', async ({ page }) => {
+  const res = await page.request.get('/changelog')
+  const body = await res.text()
+  const article = /<article[^>]*>[\s\S]*?<\/article>/.exec(body)?.[0] ?? ''
+  expect(article).not.toMatch(/F-\d{3}/)
+  expect(article).not.toContain('e2e')
+  expect(article).not.toContain('리팩토링')
+  expect(article).not.toContain('명세')
+})
+
+test('F-273 A7 sitemap.xml 에 등재된다', async ({ page }) => {
+  const res = await page.request.get('/sitemap.xml')
+  const body = await res.text()
+  expect(body).toContain('<loc>https://rawdoc.app/changelog</loc>')
+})
+
+test('F-273 A8 서비스 워커 precache 에서 빠진다', async ({ page }) => {
+  const res = await page.request.get('/sw.js')
+  const body = await res.text()
+  expect(body).not.toContain('changelog.html')
+})
+
+test('F-273 A9 랜딩 머리에도 체인지로그 링크가 보인다', async ({ page }) => {
+  await mockLanding(page)
+  await page.goto('/')
+  await expect(page.locator('.site-head a[href="/changelog"]', { hasText: '체인지로그' })).toBeVisible()
+})
+
 test('F-272 A12 랜딩에 같은 머리·꼬리가 보이고 앱 열기 로 앱이 뜬다', async ({ page }) => {
   await mockLanding(page)
   await page.goto('/')

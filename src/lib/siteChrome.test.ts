@@ -2,6 +2,15 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { SITE_NAV, SITE_FOOTER_LINKS, renderSiteHeader, renderSiteFooter } from './siteChrome'
 
+const INITIAL_NAV = [...SITE_NAV]
+
+describe('F-273 A2 SITE_NAV 에 체인지로그가 등록돼 있다', () => {
+  it('/changelog 항목이 정확히 하나 있다', () => {
+    const matches = INITIAL_NAV.filter((link) => link.path === '/changelog' && link.label === '체인지로그')
+    expect(matches).toHaveLength(1)
+  })
+})
+
 describe('F-272 A1 renderSiteHeader/renderSiteFooter', () => {
   beforeEach(() => {
     SITE_NAV.length = 0

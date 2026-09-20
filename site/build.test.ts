@@ -1,11 +1,19 @@
 // buildSite — 빌드 진입 (specs/features/F-272.md 3.3, A5·A6·A7·A8)
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { buildSite } from './build'
 import brand from '../brand.config'
 import { SITE_NAV, SITE_FOOTER_LINKS } from '../src/lib/siteChrome'
 
 const builtAt = new Date('2026-09-20T00:00:00Z')
 const appCssHref = '/assets/index-abc.css'
+
+// SITE_NAV·SITE_FOOTER_LINKS 에 실제 링크가 있어 buildSite 가 그 페이지를 요구하므로, 이 파일은 빈 목록에서 시작해 끝나면 되돌린다
+const savedNav = SITE_NAV.splice(0, SITE_NAV.length)
+const savedFooter = SITE_FOOTER_LINKS.splice(0, SITE_FOOTER_LINKS.length)
+afterAll(() => {
+  SITE_NAV.push(...savedNav)
+  SITE_FOOTER_LINKS.push(...savedFooter)
+})
 
 describe('F-272 A5 빈 content', () => {
   it('키가 정확히 404.html·sitemap.xml·robots.txt 셋이다', () => {
@@ -15,7 +23,10 @@ describe('F-272 A5 빈 content', () => {
 })
 
 describe('F-272 A6 404·sitemap·robots', () => {
-  const out = buildSite({ content: {}, appCssHref, builtAt })
+  let out: Record<string, string>
+  beforeEach(() => {
+    out = buildSite({ content: {}, appCssHref, builtAt })
+  })
 
   it('404.html 에 안내·noindex·머리꼬리가 있다', () => {
     expect(out['404.html']).toContain('찾는 페이지가 없습니다')
@@ -68,6 +79,28 @@ describe('F-272 A7 buildSite 빌드 가드', () => {
   it('{{운영자}} 자리표시는 실패한다', () => {
     const content = { 'changelog.md': '---\ntitle: 제목\n---\n{{운영자}}' }
     expect(() => buildSite({ content, appCssHref, builtAt })).toThrow(/changelog\.md/)
+  })
+})
+
+describe('F-273 A1 글 하나로 페이지·sitemap 이 난다', () => {
+  it('changelog 글로 changelog.html·sitemap 항목·머리 링크가 생긴다', () => {
+    SITE_NAV.length = 0
+    SITE_FOOTER_LINKS.length = 0
+    SITE_NAV.push({ path: '/changelog', label: '체인지로그' })
+    try {
+      const content = {
+        'changelog.md': '---\ntitle: 체인지로그\nupdated: 2026-09-21\n---\n## 2026-09-21\n\n- 항목 하나\n',
+      }
+      const out = buildSite({ content, appCssHref, builtAt })
+      expect(Object.keys(out)).toContain('changelog.html')
+      expect(out['sitemap.xml']).toContain(
+        '<url><loc>https://rawdoc.app/changelog</loc><lastmod>2026-09-21</lastmod></url>',
+      )
+      expect(out['changelog.html']).toContain('<title>체인지로그 · Rawdoc</title>')
+      expect(out['changelog.html']).toMatch(/<a href="\/changelog" aria-current="page">체인지로그<\/a>/)
+    } finally {
+      SITE_NAV.length = 0
+    }
   })
 })
 
