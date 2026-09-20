@@ -10,7 +10,7 @@
 brand.config.js          제품명·짧은 이름·메인 컬러. 유일한 정의 위치 (design.md 3.2)
 scripts/                 검증 도구 (F-160). measure·verify·e2e-one. src/ 가 import 하지 않는다
 content/                 공개 사이트 글 원본 `.md` (F-272). 글은 F-273~F-276 이 넣는다
-site/                    공개 사이트 빌드 (F-272). build·pages·guard·render. 순수 문자열만 다루고 DOM·React·node:fs 를 import 하지 않는다
+site/                    공개 사이트 빌드 (F-272). build·pages·guard·render·helpPage. 순수 문자열만 다루고 DOM·React·node:fs 를 import 하지 않는다
 index.html               <title>·theme-color·--accent 는 빌드 시 brand.config.js 에서 주입
 vite.config.js           React, brand 주입 플러그인, Vitest, (F-115) PWA
 public/                  아이콘 등 정적 파일
@@ -66,7 +66,7 @@ src/
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
-- **`site → src`, `site → brand.config` 도 한 방향이다** — `src/` 는 `site/` 를 import 하지 않는다 (F-272 3.3)
+- **`site → src`, `site → brand.config` 도 한 방향이다** — `src/` 는 `site/` 를 import 하지 않는다 (F-272 3.3). `site/helpPage.ts` 가 `src/app/helpDoc.ts` 를 읽는 것이 그 예다 — 도움말 글은 앱과 사이트가 같아야 해서 원본을 하나로 둔다 (F-274)
 - 라우터·상태관리·UI 컴포넌트 라이브러리를 들이지 않는다. 아이콘은 `@material-symbols/svg-400` SVG 파일만 쓴다 (2026-09-14 사용자 지정, F-142)
 
 ## 2. 저장소 인터페이스
