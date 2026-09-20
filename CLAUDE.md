@@ -186,7 +186,8 @@ A Sonnet subagent implements one small spec at a time.
 - Do not edit spec files (`specs/**`) or this file. If a spec is wrong or incomplete, stop and report
 - Install only the dependencies the spec names
 - When done, run lint and smoke tests only, and report the results verbatim: eslint on changed files, the related unit tests, and one e2e pass for that spec (`-g "F-xxx" --workers=2`). Full e2e only on user request or right before a deploy (user, 2026-09-15: "프로토타입인데 너무 엄격")
-- For measurements and partial e2e, use the tools in `scripts/` (measure, e2e-one, verify, review-diff) instead of temporary scripts. Work proceeds through the `ship-feature` skill + `feature-implementer` agent (F-160)
+- **Never run `git stash` (or `git checkout -- <path>`) to check what the code did before your change.** Several agents share one working tree, so a stash sweeps up everyone else's uncommitted work — it nearly cost an agent its files on 2026-09-15. Use `npm run e2e:before -- "<test>" --ref <sha>`, which builds a throwaway `git worktree` and never touches the working tree
+- For measurements and partial e2e, use the tools in `scripts/` (measure, e2e-one, e2e-before, verify, review-diff) instead of temporary scripts. Work proceeds through the `ship-feature` skill + `feature-implementer` agent (F-160)
 - A spec's **behavioral** acceptance criteria become Playwright tests named `e2e/F-xxx`, judged automatically (F-150 onward; do not substitute manual claude-in-chrome operation). Visual criteria get smoke coverage only — see "How we work"
 - Criteria that cannot be automated (real Korean IME, OS windows, color and feel) do not become tests; report them as "사람 확인 필요". Main adds them to `specs/human-checks.md`
 - Include in your report: files changed, pass/fail per acceptance criterion, and anything you could not verify. Never record a check you did not run as passing
