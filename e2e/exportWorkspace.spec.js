@@ -1,7 +1,7 @@
 // 전체·폴더 내보내기 (specs/features/F-281.md) — A11~A15
 import { test, expect } from '@playwright/test'
 import { unzipSync } from 'fflate'
-import { openApp, importMarkdown } from './helpers.js'
+import { openApp, openAppHome, importMarkdown, setPrefBeforeLoad } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 async function openSettings(page) {
@@ -32,7 +32,8 @@ async function openFolderMenu(folderRow) {
 
 async function addDocInFolder(folderRow, page, title) {
   await openFolderMenu(folderRow)
-  await page.getByRole('menuitem', { name: '새 문서' }).click()
+  // 방금 닫힌 다른 행의 메뉴가 사라지는 애니메이션 중(inert) 남아 있어 지금 열린 메뉴 안에서만 찾는다
+  await page.locator('.item-menu-list:not([inert])').getByRole('menuitem', { name: '새 문서' }).click()
   await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
   if (title) {
     await page.locator('.doc-title').fill(title)
@@ -73,9 +74,12 @@ test.describe('F-281 A12 전체 내보내기', () => {
     const folderRow = await createFolder(page, '폴더')
     await addDocInFolder(folderRow, page, '폴더문서')
 
-    await folderRow.locator('.tree-toggle').click() // 펼쳐 하위 폴더 만들기 버튼이 보이게
+    // 이름 입력 칸은 트리 안에 있어 부모가 펼쳐져 있어야 한다 — 이미 펼쳐졌는데 누르면 접혀서 .tree-rename-input 이 영영 안 보인다
+    const toggle = folderRow.locator('.tree-toggle')
+    const alreadyOpen = await toggle.locator('.tree-toggle-icon--open').count()
+    if (!alreadyOpen) await toggle.click()
     await openFolderMenu(folderRow)
-    await page.getByRole('menuitem', { name: '하위 폴더' }).click()
+    await page.locator('.item-menu-list:not([inert])').getByRole('menuitem', { name: '하위 폴더' }).click()
     const subRenameInput = page.locator('.tree-rename-input')
     await subRenameInput.fill('하위폴더')
     await page.keyboard.press('Enter')
@@ -115,7 +119,7 @@ test.describe('F-281 A13 폴더 내보내기', () => {
     await openFolderMenu(folderRow)
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('menuitem', { name: '폴더 내보내기' }).click(),
+      page.locator('.item-menu-list:not([inert])').getByRole('menuitem', { name: '폴더 내보내기' }).click(),
     ])
     expect(download.suggestedFilename()).toBe('내보낼폴더.zip')
 
@@ -143,7 +147,14 @@ test.describe('F-281 A14 오프라인', () => {
 
 test.describe('F-281 A15 내보낼 것 없음', () => {
   test('문서·폴더가 없는 빈 상태 — 다운로드 없이 안내 알림', async ({ page }) => {
-    await openApp(page)
+    // 첫 실행이면 앱이 `사용법` 문서를 하나 만든다(App.tsx md.firstRunDone) — 그 시드를 막아야 진짜 빈 상태다
+    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+    await openAppHome(page)
+
+    // e2e 브라우저는 저장 공간 보호를 거부해 그 경고가 알림 자리를 차지한다 — 설정을 열기 전에 닫아야 한다(대화상자가 덮는다)
+    const closeNotice = page.getByRole('button', { name: '알림 닫기' })
+    if (await closeNotice.count()) await closeNotice.click()
+
     const dialog = await openSettings(page)
 
     let downloadHappened = false

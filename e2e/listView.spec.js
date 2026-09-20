@@ -478,7 +478,8 @@ test.describe('F-246 A6 연속으로 두 번 만들기', () => {
     await expect(page.locator('.tree-toggle')).toHaveCount(1)
 
     // 방금 만든 폴더 이름이 기본값 "새 폴더" 라 트리 안에도 같은 이름 버튼이 생긴다 — 사이드바 만들기 버튼만 짚는다
-    await page.locator('.sidebar-btn').filter({ hasText: '새 폴더' }).click()
+    // (2026-09-21: 0705550 에서 이 버튼이 .sidebar-btn 에서 아이콘 버튼으로 바뀌어 셀렉터를 고쳤다)
+    await page.locator('.sidebar-actions').getByRole('button', { name: '새 폴더', exact: true }).click()
     const renameInput = page.locator('.tree-rename-input')
     await expect(renameInput).toBeFocused()
     await page.keyboard.press('Enter')
