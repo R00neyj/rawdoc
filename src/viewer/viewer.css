@@ -19,9 +19,17 @@
   }
 }
 
-/* 코드블록 복사 버튼 (specs/features/F-210.md 2.5) — pre 오른쪽 위 여백, 가로 스크롤해도 제자리 */
+/* 코드블록 복사 버튼 (specs/features/F-210.md 2.5) — pre 오른쪽 위 여백, 가로 스크롤해도 제자리.
+   가로 스크롤을 pre 가 아니라 안쪽 code 가 맡는다 — pre 가 스크롤 컨테이너면 그 안에 절대 위치로
+   놓인 버튼이 코드와 함께 밀려 글자 위에 겹친다 (2026-09-21 공유 문서에서 발견) */
 .viewer--code-copy pre {
   position: relative;
+  overflow: visible;
+}
+
+.viewer--code-copy pre > code {
+  display: block;
+  overflow-x: auto;
 }
 
 /* Mermaid 다이어그램 (specs/features/F-258.md 2.5, 최소 구현) — svg 는 가운데 정렬 */
