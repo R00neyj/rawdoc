@@ -113,6 +113,16 @@
   vertical-align: middle;
 }
 
+/* 끝낸 항목은 글에 취소선 (2026-09-21 사용자 요청). 체크박스 자신은 빼 네모에 선이 걸리지 않게 한다 */
+.cm-host .cm-editor .cm-line.md-task-done {
+  text-decoration: line-through;
+  text-decoration-color: var(--muted);
+}
+
+.cm-host .cm-editor .cm-line.md-task-done .md-checkbox {
+  text-decoration: none;
+}
+
 /* ===== 인라인코드·링크 — 칩 모양은 편집 모드만, 원문 모드는 app.css 옛 규칙까지 지움 (F-152 2.2) ===== */
 .md-code {
   font-family: var(--font-mono);

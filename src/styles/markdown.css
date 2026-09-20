@@ -192,6 +192,18 @@
   accent-color: var(--accent);
 }
 
+/* 끝낸 항목은 글에 취소선 (2026-09-21 사용자 요청). 체크박스는 위 규칙에서 absolute 라
+   선이 걸리지 않고, 중첩 목록은 아래 규칙으로 되돌린다 */
+:is(.app-shell, .public-view) .markdown-body .task-list-item:has(> input:checked),
+:is(.app-shell, .public-view) .markdown-body .task-list-item:has(> p > input:checked) {
+  text-decoration: line-through;
+  text-decoration-color: var(--muted);
+}
+
+:is(.app-shell, .public-view) .markdown-body .task-list-item :is(ul, ol) {
+  text-decoration: none;
+}
+
 /* 원문 모드 글자 크기도 설정을 따른다 (F-154 2.2) — app.css 의 고정 14px(F-124 3.1)을 import 순서로 덮는다 */
 .cm-host .cm-editor[data-view='raw'] .cm-scroller {
   font-size: var(--md-font-size);
