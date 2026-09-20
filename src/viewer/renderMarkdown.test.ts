@@ -426,3 +426,88 @@ describe('renderMarkdown — 성능 기록 (A2, 통과 기준 없음)', () => {
     expect(html.length).toBeGreaterThan(0)
   })
 })
+
+// specs/features/F-283.md 3.1~3.2, 9장 A1~A8
+describe('renderMarkdown — 하이라이트 ==…==', () => {
+  it('A1 기본 렌더 — <mark> 로 감싸고 == 가 글자로 남지 않는다', () => {
+    const html = renderMarkdown('==강조==')
+    expect(html).toContain('<mark>강조</mark>')
+    expect(html).not.toContain('==')
+  })
+
+  it('A2 인라인코드 안은 글자 그대로', () => {
+    const html = renderMarkdown('`==코드==`')
+    expect(html).toContain('==코드==')
+    expect(html).not.toContain('<mark')
+  })
+
+  it('A2 펜스 코드블록 안은 글자 그대로', () => {
+    const html = renderMarkdown('```\n==코드==\n```\n')
+    expect(html).toContain('==코드==')
+    expect(html).not.toContain('<mark')
+  })
+
+  it('A3 줄바꿈을 넘으면 짝이 아니다', () => {
+    const html = renderMarkdown('==앞\n뒤==')
+    expect(html).not.toContain('<mark')
+    expect(html).toContain('==')
+  })
+
+  it('A4 플랭킹 — 여는 기호 뒤 공백', () => {
+    const html = renderMarkdown('== 글자==')
+    expect(html).not.toContain('<mark')
+    expect(html).toContain('==')
+  })
+
+  it('A4 플랭킹 — 닫는 기호 앞 공백', () => {
+    const html = renderMarkdown('==글자 ==')
+    expect(html).not.toContain('<mark')
+    expect(html).toContain('==')
+  })
+
+  it('A5 중첩 — 다른 인라인 서식을 건너뛴다', () => {
+    const html = renderMarkdown('==a **b** c==')
+    expect(html).toContain('<mark>a <strong>b</strong> c</mark>')
+  })
+
+  it('A6 목록 항목 안', () => {
+    const html = renderMarkdown('- ==글자==\n')
+    expect(html).toContain('<mark>글자</mark>')
+  })
+
+  it('A6 표 칸 안', () => {
+    const html = renderMarkdown('| a |\n| --- |\n| ==글자== |\n')
+    expect(html).toContain('<mark>글자</mark>')
+  })
+
+  it('A6 콜아웃 본문 안', () => {
+    const html = renderMarkdown('> [!note]\n> ==글자==\n')
+    expect(html).toContain('<mark>글자</mark>')
+  })
+
+  it('A6 인용 안', () => {
+    const html = renderMarkdown('> ==글자==\n')
+    expect(html).toContain('<mark>글자</mark>')
+  })
+
+  it('A7 setext 제목 회귀 — 지금과 같다', () => {
+    const html = renderMarkdown('문단\n===\n')
+    expect(html).toMatch(/<h1[^>]*>문단<\/h1>/)
+    expect(html).not.toContain('<mark')
+  })
+
+  it('A8 경계 — ===셋=== 은 취소선과 같은 결과', () => {
+    const html = renderMarkdown('===셋===')
+    expect(html).toContain('=<mark>셋</mark>=')
+  })
+
+  it('A8 경계 — ====a==== 은 중첩된 <mark>', () => {
+    const html = renderMarkdown('====a====')
+    expect(html).toContain('<mark><mark>a</mark></mark>')
+  })
+
+  it('A8 경계 — a==b==c 는 낱말 가운데도 허용', () => {
+    const html = renderMarkdown('a==b==c')
+    expect(html).toContain('a<mark>b</mark>c')
+  })
+})

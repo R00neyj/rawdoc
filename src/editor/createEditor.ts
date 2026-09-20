@@ -30,6 +30,7 @@ import type { Heading } from './outline'
 import { imageInsert } from './imageInsert'
 import type { OnImageFiles } from './imageInsert'
 import { livePreview } from './preview/index'
+import { highlightMarkStyle } from './preview/highlightMark'
 import { fenceLinePreview } from './preview/lines'
 import { setWikiTitlesEffect, wikiTitlesField } from './preview/wikiLinks'
 import type { OnOpenWikiLink } from './preview/wikiLinks'
@@ -401,6 +402,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // highlight.js 의 주석 참고: 태그 자체를 나누는 방법은 실측으로 안 먹히는 것을
     // 확인해 줄 decoration 으로 바꿨다
     fenceLinePreview(),
+    // 하이라이트(==…==) 기호 색 — 편집·원문 모드 모두 켠다. 배경은 편집 모드만 livePreview() 가 준다(F-283.md 4.2)
+    highlightMarkStyle(),
     // 위키링크 대상 문서 제목(F-131). 모드와 무관하게 항상 켠다 — wikiComplete() 도
     // 같은 필드를 읽고, 모드 전환으로 previewCompartment 가 바뀌어도 값을 잃지 않는다
     wikiTitlesField.init(() => wikiTitles),

@@ -196,3 +196,9 @@
 .cm-host .cm-editor[data-view='raw'] .cm-scroller {
   font-size: var(--md-font-size);
 }
+
+/* 하이라이트(==…==) — 보기 모드·공유 화면·공개 보기 공용, 편집 모드와 같은 토큰. 글자색은 건드리지 않는다(F-283.md 3.1·5장) */
+:is(.app-shell, .public-view) .markdown-body mark {
+  background-color: var(--md-highlight-bg);
+  color: inherit;
+}

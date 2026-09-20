@@ -1,7 +1,7 @@
 // 마크다운 → HTML 문자열 변환 (specs/features/F-123.md 3.2)
 // 순수 함수. DOM·React 를 다루지 않는다
 import MarkdownIt from 'markdown-it'
-import type { StateCore, Token, RendererRule } from 'markdown-it'
+import type { StateCore, StateInline, Delimiter, Token, RendererRule } from 'markdown-it'
 
 import { parseCalloutHeader, defaultCalloutTitle } from '../lib/callout'
 import { calloutIconSvg } from '../lib/calloutIcons'
@@ -187,6 +187,103 @@ function imageBlockRule(state: StateCore): void {
 }
 
 md.core.ruler.before('inline', 'image_block', imageBlockRule)
+
+// ----- 하이라이트 ==…== (F-283.md 3.1) — 취소선 규칙을 '~'→'=', s_open/close→mark_open/close 로 옮겨 적은 것. renderer 규칙은 따로 두지 않는다 -----
+const HIGHLIGHT_MARKER = 0x3d // '='
+
+function highlightTokenize(state: StateInline, silent: boolean): boolean {
+  const start = state.pos
+  const marker = state.src.charCodeAt(start)
+  if (silent) return false
+  if (marker !== HIGHLIGHT_MARKER) return false
+
+  const scanned = state.scanDelims(state.pos, true)
+  let len = scanned.length
+  const ch = String.fromCharCode(marker)
+  if (len < 2) return false
+
+  let token: Token
+  if (len % 2) {
+    token = state.push('text', '', 0)
+    token.content = ch
+    len--
+  }
+
+  for (let i = 0; i < len; i += 2) {
+    token = state.push('text', '', 0)
+    token.content = ch + ch
+    state.delimiters.push({
+      marker,
+      length: 0,
+      token: state.tokens.length - 1,
+      end: -1,
+      open: scanned.can_open,
+      close: scanned.can_close,
+    })
+  }
+
+  state.pos += scanned.length
+  return true
+}
+
+// 3.2.1 — 여는·닫는 토큰 사이에 softbreak·hardbreak 가 있으면(줄을 넘으면) 짝으로 바꾸지 않는다
+function spansLine(tokens: Token[], fromToken: number, toToken: number): boolean {
+  for (let j = fromToken + 1; j < toToken; j++) {
+    if (tokens[j].type === 'softbreak' || tokens[j].type === 'hardbreak') return true
+  }
+  return false
+}
+
+function highlightPostProcessDelimiters(state: StateInline, delimiters: Delimiter[]): void {
+  const tokens = state.tokens
+  for (let i = 0; i < delimiters.length; i++) {
+    const startDelim = delimiters[i]
+    if (startDelim.marker !== HIGHLIGHT_MARKER) continue
+    if (startDelim.end === -1) continue
+    const endDelim = delimiters[startDelim.end]
+    if (spansLine(tokens, startDelim.token, endDelim.token)) continue
+
+    let token = tokens[startDelim.token]
+    token.type = 'mark_open'
+    token.tag = 'mark'
+    token.nesting = 1
+    token.markup = '=='
+    token.content = ''
+
+    token = tokens[endDelim.token]
+    token.type = 'mark_close'
+    token.tag = 'mark'
+    token.nesting = -1
+    token.markup = '=='
+    token.content = ''
+
+    // 홀수 낱개 마커(===셋=== 등)가 닫는 짝 앞에 남으면 mark_close 뒤로 밀어 순서를 맞춘다(취소선 loneMarkers 처리와 같다)
+    if (tokens[endDelim.token - 1]?.type === 'text' && tokens[endDelim.token - 1].content === String.fromCharCode(HIGHLIGHT_MARKER)) {
+      const loneIndex = endDelim.token - 1
+      let j = loneIndex + 1
+      while (j < tokens.length && tokens[j].type === 'mark_close') j++
+      j--
+      if (loneIndex !== j) {
+        const swap = tokens[j]
+        tokens[j] = tokens[loneIndex]
+        tokens[loneIndex] = swap
+      }
+    }
+  }
+}
+
+function highlightPostProcess(state: StateInline): void {
+  const tokensMeta = state.tokens_meta
+  const max = state.tokens_meta.length
+  highlightPostProcessDelimiters(state, state.delimiters)
+  for (let curr = 0; curr < max; curr++) {
+    const delimiters = tokensMeta[curr]?.delimiters
+    if (delimiters) highlightPostProcessDelimiters(state, delimiters)
+  }
+}
+
+md.inline.ruler.before('emphasis', 'highlight', highlightTokenize)
+md.inline.ruler2.before('emphasis', 'highlight', highlightPostProcess)
 
 // ----- 링크: target·rel (F-123.md 3.2) -----
 const defaultLinkOpen: RendererRule =

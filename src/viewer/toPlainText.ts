@@ -7,12 +7,6 @@ import { isMermaidInfo } from '../lib/codeLang'
 import type { ParsedImageBlock } from '../lib/imageBlock'
 import type { LineEnding } from '../types'
 
-// ==글자== 만 뗀다 — F-283 이 하이라이트를 토큰으로 지원할 때까지의 예외(4.6)
-const HIGHLIGHT_RE = /==(.+?)==/g
-function stripHighlight(s: string): string {
-  return s.replace(HIGHLIGHT_RE, '$1')
-}
-
 const CHECKBOX_RE = /^<input\s+type="checkbox"/i
 const BR_RE = /^<br\s*\/?>/i
 
@@ -37,7 +31,7 @@ function inlineToText(children: Token[]): string {
     const t = children[i]
     switch (t.type) {
       case 'text':
-        out += stripHighlight(t.content)
+        out += t.content
         i++
         break
       case 'code_inline':
@@ -58,6 +52,8 @@ function inlineToText(children: Token[]): string {
       case 'em_close':
       case 's_open':
       case 's_close':
+      case 'mark_open':
+      case 'mark_close':
         i++
         break
       case 'link_open': {

@@ -55,6 +55,9 @@
   --callout-example: #7644d0;
   --callout-quote: var(--ink-2);
 
+  /* 하이라이트(==…==) 배경 — 편집·보기 모드 공용, --callout-question 파생(F-283.md 5장) */
+  --md-highlight-bg: color-mix(in srgb, var(--callout-question) 22%, transparent);
+
   /* 서체 (design.md 2.4) */
   --font-sans: 'Pretendard Variable', system-ui, sans-serif;
   --font-serif: 'Noto Serif KR', serif;

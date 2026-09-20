@@ -6,6 +6,7 @@ import './preview.css'
 
 import { blockPreview } from './blocks'
 import type { ResolveAttachment } from './blocks'
+import { highlightMarkPreview } from './highlightMark'
 import { inlinePreview } from './inline'
 import { gutterAlignPreview, linePreview, listIndentPreview } from './lines'
 import { linkClicks } from './links'
@@ -19,6 +20,7 @@ export function livePreview({
 }: { onOpenWikiLink?: OnOpenWikiLink; resolveAttachment?: ResolveAttachment } = {}): Extension {
   return [
     inlinePreview(),
+    highlightMarkPreview(),
     linePreview(),
     gutterAlignPreview(),
     listIndentPreview(),

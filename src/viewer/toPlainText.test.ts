@@ -147,6 +147,13 @@ describe('toPlainText — 줄바꿈·BOM·끝 줄 (A13)', () => {
   })
 })
 
+// specs/features/F-283.md 6.2, 9장 A16 — F-278 A2 의 == 떼기 정규식을 지운 뒤에도 같은 결과인지
+describe('toPlainText — 하이라이트 평문 회귀 (F-283 A16)', () => {
+  it('F-278 A2 입력이 mark_open/mark_close 로 바뀐 뒤에도 같은 평문을 낸다', () => {
+    expect(toPlainText('**굵게** *기울임* ~~취소~~ ==강조== `코드`', 'lf')).toBe('굵게 기울임 취소 강조 코드\n')
+  })
+})
+
 describe('toPlainText — 가로줄·빈 문서 (A14)', () => {
   it('가로줄 단독은 --- 한 줄', () => {
     expect(toPlainText('---', 'lf')).toBe('---\n')
