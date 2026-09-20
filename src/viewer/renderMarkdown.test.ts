@@ -511,3 +511,80 @@ describe('renderMarkdown — 하이라이트 ==…==', () => {
     expect(html).toContain('a<mark>b</mark>c')
   })
 })
+
+describe('renderMarkdown — sourceLines 옵션 (specs/features/F-295.md 11장 U11~U16)', () => {
+  const mixed = [
+    '문단 하나',
+    '',
+    '> 인용문',
+    '',
+    '- 목록 항목',
+    '  - 중첩 항목',
+    '',
+    '| a | b |',
+    '| --- | --- |',
+    '| 1 | 2 |',
+    '',
+    '```js',
+    'const x = 1',
+    '```',
+    '',
+    '<div align="center">',
+    '  <img src="attachments/0f3a9c2e7b1d4a58.png" alt="a">',
+    '</div>',
+    '',
+    '```mermaid',
+    'graph TD; A-->B',
+    '```',
+    '',
+    '---',
+    '',
+  ].join('\n')
+
+  it('U11 — 옵션을 안 주면 출력이 지금과 같다(제목에만 data-source-line)', () => {
+    const withOption = renderMarkdown(mixed)
+    const matches = withOption.match(/data-source-line/g) || []
+    expect(matches.length).toBe(0) // mixed 에는 제목이 없다
+    expect(withOption).not.toContain('data-source-line')
+  })
+
+  it('U12 — 최상위 p·blockquote·ul·table·hr 에 줄 번호가 붙는다', () => {
+    const html = renderMarkdown(mixed, { sourceLines: true })
+    expect(html).toContain('<p data-source-line="1">문단 하나</p>')
+    expect(html).toContain('<blockquote data-source-line="3">')
+    expect(html).toContain('<ul data-source-line="5">')
+    expect(html).toContain('<table data-source-line="8">')
+    expect(html).toContain('<hr data-source-line="24"')
+  })
+
+  it('U13 — h4~h6 에도 붙는다. 기존 h1~h3 값은 그대로다', () => {
+    const html = renderMarkdown('#### 넷\n\n##### 다섯\n\n###### 여섯\n\n# 하나\n', { sourceLines: true })
+    expect(html).toContain('<h4 data-source-line="1">넷</h4>')
+    expect(html).toContain('<h5 data-source-line="3">다섯</h5>')
+    expect(html).toContain('<h6 data-source-line="5">여섯</h6>')
+    expect(html).toContain('<h1 data-source-line="7">하나</h1>')
+  })
+
+  it('U14 — 목록 항목 안 문단·표 칸·인용 안 문단에는 안 붙는다(최상위만)', () => {
+    const html = renderMarkdown(mixed, { sourceLines: true })
+    expect(html).not.toContain('<p data-source-line="3">인용문</p>')
+    expect(html).not.toContain('<li data-source-line')
+    expect(html).not.toContain('<td data-source-line')
+    expect(html).not.toContain('<th data-source-line')
+  })
+
+  it('U15 — 이미지 블록·mermaid 에 붙는다. 옵션이 꺼지면 toHtmlDoc.ts 정규식과 계속 맞는다', () => {
+    const on = renderMarkdown(mixed, { sourceLines: true })
+    expect(on).toMatch(/<div class="md-image md-image--center" data-source-line="\d+">/)
+    expect(on).toMatch(/<div class="md-mermaid" data-source-line="\d+" data-mermaid-source="/)
+
+    const off = renderMarkdown(mixed)
+    expect(off).toContain('<div class="md-image md-image--center"><img data-attachment="0f3a9c2e7b1d4a58" alt="a"></div>')
+    expect(off).toContain('<div class="md-mermaid" data-mermaid-source="graph TD; A--&gt;B\n"></div>')
+  })
+
+  it('U16 — 프론트매터 줄 수만큼 더해진다', () => {
+    const html = renderMarkdown('---\na: 1\n---\n\n문단\n', { sourceLines: true })
+    expect(html).toContain('<p data-source-line="5">문단</p>')
+  })
+})

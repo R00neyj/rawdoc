@@ -62,6 +62,8 @@ import Viewer, { type ViewContextMenuInfo } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { printDoc } from './printDoc'
 import { decodeShare, type ShareDoc } from '../lib/shareCodec'
+import { readViewerAnchor, scrollViewerToAnchor } from './viewerScroll'
+import type { ScrollAnchor } from '../lib/scrollAnchor'
 import Outline from './Outline'
 import ContextMenu from './ContextMenu'
 import { buildEditorContextMenu, buildViewContextMenu, type ContextMenuNode, type MenuItemNode } from './contextMenuItems'
@@ -283,6 +285,8 @@ export default function App() {
   const editorRef = useRef<EditorHandle | null>(null)
   const contentAreaRef = useRef<HTMLDivElement | null>(null) // 오른쪽 목차 여백 측정용 (F-144.md 2장)
   const viewerRef = useRef<HTMLDivElement | null>(null) // 오른쪽 목차가 보기 모드에서 스크롤할 대상 (F-144.md 3.4)
+  // 모드 전환 직전 화면 맨 위 원문 줄 — 문서가 바뀌면(docId 불일치) 버린다 (F-295.md 5.1·5.6)
+  const scrollAnchorRef = useRef<{ docId: string; anchor: ScrollAnchor } | null>(null)
   const statsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const titleRequestIdRef = useRef(0)
   const noticeIdRef = useRef(0)
@@ -1049,7 +1053,7 @@ export default function App() {
     if (viewMode !== 'view') return
     if (!editorRef.current || openDoc?.id !== currentDocId) return
     setViewerHtml(
-      renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref }),
+      renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true }),
     )
   }, [viewMode, openDoc, currentDocId, resolveWikiHref])
 
@@ -1102,6 +1106,25 @@ export default function App() {
     editorRef.current?.setBreadcrumb(currentBreadcrumb, onNavigateFolder)
   }, [openDoc, currentDocId, currentBreadcrumb, onNavigateFolder])
 
+  // 모드 전환 스크롤 위치 복원 (F-295.md 5.2) — useLayoutEffect 라 같은 커밋에서 hidden 이 이미 떨어져 튐이 안 보이고, 줄 번호·테마·들여쓰기 재구성 뒤에 돈다
+  useLayoutEffect(() => {
+    const saved = scrollAnchorRef.current
+    if (!saved || saved.docId !== currentDocId) return
+    scrollAnchorRef.current = null
+
+    if (viewMode === 'view') {
+      const el = viewerRef.current
+      scrollViewerToAnchor(el, saved.anchor)
+      // 그려진 뒤(rAF 2회) 실측 보정 — 편집기의 scrollToAnchor(createEditor.ts 8.2)와 같은 이유
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollViewerToAnchor(el, saved.anchor)
+        })
+      })
+    } else {
+      editorRef.current?.scrollToAnchor(saved.anchor)
+    }
+  }, [viewMode, viewerHtml, currentDocId])
 
   // view 권한 문서를 열면 알림 띠를 보인다 (F-212.md 2.4) — 문서를 열 때 1회
   const notifiedViewDocRef = useRef<string | null>(null)
@@ -2450,8 +2473,22 @@ export default function App() {
     refocusContextMenuTarget(cm)
   }
 
+  // 스크롤 위치 유지 (F-295.md 5.2) — 기준값은 맨 앞에서 읽는다. 이 시점의 DOM 은 아직 "떠나는 화면" 이다(React 19 커밋 지연, 4.1)
   function changeViewMode(mode: string) {
     const v = mode as 'live' | 'raw' | 'view'
+    if (v === viewMode) return // 5.7 — 같은 모드면 기준값만 갱신되고 복원 effect 는 안 돈다
+
+    if (currentDocId) {
+      const anchor = viewMode === 'view' ? readViewerAnchor(viewerRef.current) : (editorRef.current?.getScrollAnchor() ?? null)
+      if (anchor !== null) scrollAnchorRef.current = { docId: currentDocId, anchor }
+    }
+    // 5.2a — 보기로 갈 때 변환을 여기서 한다. passive effect(1050행대)에 맡기면 복원 시점에 편집 전 옛 HTML 로 좌표를 잰다
+    if (v === 'view' && editorRef.current) {
+      setViewerHtml(
+        renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true }),
+      )
+    }
+
     setViewMode(v)
     setPref('md.viewMode', v)
     editorRef.current?.setViewMode(v)

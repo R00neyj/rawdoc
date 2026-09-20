@@ -151,18 +151,21 @@ function calloutRule(state: StateCore): void {
 md.core.ruler.before('inline', 'callout', calloutRule)
 
 // ----- 이미지 블록 (F-158.md 2.1) — src 는 출력하지 않고 data-attachment 로 id 만 남겨 Viewer 가 채운다 -----
-function renderImageBlockHtml(parsed: ParsedImageBlock): string {
+// sourceLine: F-295 9.3 — html_block 렌더러는 attrs 를 무시하므로 문자열에 직접 넣는다. null 이면(옵션 꺼짐) 지금과 바이트가 같다
+function renderImageBlockHtml(parsed: ParsedImageBlock, sourceLine: number | null): string {
   const align = md.utils.escapeHtml(parsed.align)
   const id = md.utils.escapeHtml(parsed.id)
   const alt = md.utils.escapeHtml(parsed.alt)
+  const lineAttr = sourceLine !== null ? ` data-source-line="${sourceLine}"` : ''
   const style = parsed.width ? ` style="width:${parsed.width}px"` : ''
   const widthAttr = parsed.width ? ` width="${parsed.width}"` : ''
-  return `<div class="md-image md-image--${align}"${style}><img data-attachment="${id}" alt="${alt}"${widthAttr}></div>\n`
+  return `<div class="md-image md-image--${align}"${lineAttr}${style}><img data-attachment="${id}" alt="${alt}"${widthAttr}></div>\n`
 }
 
 // token.level === 0 은 목록·인용 등 컨테이너 밖(최상위) 문단만 고른다는 뜻이다
 function imageBlockRule(state: StateCore): void {
   const tokens = state.tokens
+  const env = state.env as { sourceLines?: boolean; lineOffset?: number } | undefined
 
   for (let i = 0; i < tokens.length; i++) {
     const open = tokens[i]
@@ -175,8 +178,10 @@ function imageBlockRule(state: StateCore): void {
     const parsed = parseImageBlock(inline.content)
     if (!parsed) continue
 
+    const sourceLine = env?.sourceLines && open.map ? (env.lineOffset ?? 0) + open.map[0] + 1 : null
+
     const html = new state.Token('html_block', '', 0)
-    html.content = renderImageBlockHtml(parsed)
+    html.content = renderImageBlockHtml(parsed, sourceLine)
     html.block = true
     html.map = open.map
     // 평문 변환기가 정규식으로 다시 뜯지 않도록 해석 결과를 남겨 둔다 (F-278.md 4.2). 렌더 결과는 안 바뀐다
@@ -321,7 +326,11 @@ const defaultFence: RendererRule =
 md.renderer.rules.fence = function (tokens, idx, options, env, self) {
   const token = tokens[idx]
   if (isMermaidInfo(token.info)) {
-    return `<div class="md-mermaid" data-mermaid-source="${md.utils.escapeHtml(token.content)}"></div>\n`
+    // fence 렌더러는 자체 문자열을 만들어 attrs 를 안 쓰므로 직접 넣는다 (F-295 9.3)
+    const e = env as { sourceLines?: boolean; lineOffset?: number } | undefined
+    const sourceLine = e?.sourceLines && token.map ? (e.lineOffset ?? 0) + token.map[0] + 1 : null
+    const lineAttr = sourceLine !== null ? ` data-source-line="${sourceLine}"` : ''
+    return `<div class="md-mermaid"${lineAttr} data-mermaid-source="${md.utils.escapeHtml(token.content)}"></div>\n`
   }
   return defaultFence(tokens, idx, options, env, self)
 }
@@ -499,6 +508,24 @@ function tableBrRule(state: StateCore): void {
 
 md.core.ruler.after('inline', 'table_br', tableBrRule)
 
+// ----- 최상위 블록 원문 줄 번호 (F-295.md 9장) — env.sourceLines 가 켜졌을 때만. push 로 맨 끝에 달아 다른 규칙들이 토큰을 다 자르고 붙인 뒤에 돈다 -----
+function sourceLinesRule(state: StateCore): void {
+  const env = state.env as { sourceLines?: boolean; lineOffset?: number } | undefined
+  if (!env?.sourceLines) return
+  const lineOffset = env.lineOffset ?? 0
+
+  for (const token of state.tokens) {
+    if (!token.block) continue
+    if (token.nesting < 0) continue
+    if (token.level !== 0) continue
+    if (!token.map) continue
+    if (token.attrGet('data-source-line') !== null) continue
+    token.attrSet('data-source-line', String(lineOffset + token.map[0] + 1))
+  }
+}
+
+md.core.ruler.push('source_lines', sourceLinesRule)
+
 // ----- 프론트매터 (F-133.md 3.3) -----
 // 변환 전에 findFrontmatter 로 떼어 내고 나머지 본문만 markdown-it 에 넣는다.
 // 성공(속성 있음): 표. 구조를 알아볼 수 없음(null): 원문 그대로 <pre>. 빈 프론트매터
@@ -526,11 +553,15 @@ export function parseMarkdownTokens(body: string, env: Record<string, unknown> =
   return md.parse(body, env)
 }
 
-// text: 저장소·에디터 원문 그대로 (CRLF 도 그대로 넘길 수 있다 — markdown-it 이 파싱 전
-// 줄바꿈을 정규화한다). options.resolveWikiLink: 위키링크 대상 제목 → 문서 id. 생략하면
-// (F-130 공유 화면) 위키링크를 클릭 불가능한 글자로만 렌더한다 (F-131 4장)
-export function renderMarkdown(text: string, options: { resolveWikiLink?: ResolveWikiLink } = {}): string {
-  const env: { resolveWikiLink?: ResolveWikiLink; lineOffset?: number } = { resolveWikiLink: options.resolveWikiLink }
+// text: 저장소·에디터 원문 그대로. resolveWikiLink 생략 시 위키링크는 클릭 불가 글자로만(F-131 4장). sourceLines: 최상위 블록에 data-source-line 부착, 기본 꺼짐(F-295.md 9장)
+export function renderMarkdown(
+  text: string,
+  options: { resolveWikiLink?: ResolveWikiLink; sourceLines?: boolean } = {},
+): string {
+  const env: { resolveWikiLink?: ResolveWikiLink; lineOffset?: number; sourceLines?: boolean } = {
+    resolveWikiLink: options.resolveWikiLink,
+    sourceLines: options.sourceLines,
+  }
   const frontmatter = findFrontmatter(text)
   if (!frontmatter) return md.render(text, env)
 

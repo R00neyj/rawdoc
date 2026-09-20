@@ -10,6 +10,8 @@ import { indentUnit, syntaxTree } from '@codemirror/language'
 import { deleteMarkupBackward, markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { openSearchPanel, search, searchKeymap, searchPanelOpen } from '@codemirror/search'
 
+import { anchorInBlock, ratioInBlock } from '../lib/scrollAnchor'
+import type { ScrollAnchor } from '../lib/scrollAnchor'
 import { autoPair } from './autoPair'
 import { attachComposingEnterGuard, compositionCatchup, forceRecalc, isComposing, isForced } from './composition'
 import { insertNewlineContinueList } from './listEnter'
@@ -78,6 +80,11 @@ function indentExtensionsFor(size: IndentSize): Extension[] {
 // 읽기 전용 — readOnly 는 기본 명령을 막고, editable=false 는 contentEditable 자체를 끈다 (F-212.md 2.4)
 function readOnlyExtensionsFor(readOnly: boolean): Extension[] {
   return [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]
+}
+
+// 숨겨져 있으면(.editor-slot hidden → display:none → clientHeight 0) 스냅샷을 찍지 않는다 — 높이 0 에서 찍힌 스냅샷은 문서 맨 위를 가리켜 다시 보일 때 그리로 튄다 (F-295 4.1)
+function scrollSnapshotIfVisible(view: EditorView) {
+  return view.scrollDOM.clientHeight > 0 ? [view.scrollSnapshot()] : []
 }
 
 // Mod-h: 검색 패널을 열되 치환 입력에 포커스를 둔다 (F-261.md 2.2). 이미 열려 있으면 openSearchPanel() 을 다시 부르지 않는다 — 읽기 전용이면 라이브러리가 치환 입력을 그리지 않아(SearchPanel 생성자) 검색 패널만 남는다
@@ -478,12 +485,11 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // mode 는 재마운트하지 않는다. 커서·선택·실행 취소 기록 유지
     setViewMode(mode: ViewMode) {
       currentMode = mode
-      const scroll = view.scrollSnapshot()
       view.dispatch({
         effects: [
           previewCompartment.reconfigure(previewExtensionFor(mode, currentTheme, { onOpenWikiLink, resolveAttachment })),
           attributesCompartment.reconfigure(attributesExtensionFor(mode)),
-          scroll,
+          ...scrollSnapshotIfVisible(view),
         ],
       })
     },
@@ -500,21 +506,19 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
 
     // on(boolean) — 재마운트하지 않는다. 커서·선택·실행 취소 기록·스크롤 위치 유지 (F-147 2장)
     setLineNumbers(on: boolean) {
-      const scroll = view.scrollSnapshot()
       view.dispatch({
         effects: [
           lineNumbersCompartment.reconfigure(lineNumbersExtensionFor(on)),
           gutterAttributesCompartment.reconfigure(gutterAttributesExtensionFor(on)),
-          scroll,
+          ...scrollSnapshotIfVisible(view),
         ],
       })
     },
 
     // 2|4 — 재마운트하지 않는다. 이미 쓴 문서 원문은 바꾸지 않는다 (F-154 2.3)
     setIndent(size: IndentSize) {
-      const scroll = view.scrollSnapshot()
       view.dispatch({
-        effects: [indentCompartment.reconfigure(indentExtensionsFor(size)), scroll],
+        effects: [indentCompartment.reconfigure(indentExtensionsFor(size)), ...scrollSnapshotIfVisible(view)],
       })
     },
 
@@ -591,6 +595,47 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
           const scrollerTop = view.scrollDOM.getBoundingClientRect().top
           const delta = coords.top - scrollerTop - 16
           if (Math.abs(delta) > 0.5) view.scrollDOM.scrollTop += delta
+        })
+      })
+    },
+
+    // 화면 맨 위에 보이는 원문 줄 (F-295.md 8.1). 숨겨져 있으면(높이 0) 읽지 않는다
+    getScrollAnchor(): ScrollAnchor | null {
+      if (view.scrollDOM.clientHeight === 0) return null
+      // 제목 위젯이 보이는 채 맨 위(anchor=1 과 구별 안 됨)와 정확히 맨 위를 나누는 sentinel (F-295 A4 실측, 명세 8.1 을 벗어난 보정)
+      if (view.scrollDOM.scrollTop <= 0) return 0
+      const doc = view.state.doc
+      const padTop = view.documentPadding.top
+      const top = view.scrollDOM.scrollTop
+      const block = view.lineBlockAtHeight(top - padTop)
+      const startLine = doc.lineAt(block.from).number
+      const endLine = Math.min(doc.lineAt(block.to).number + 1, doc.lines + 1)
+      const ratio = block.height > 0 ? (top - padTop - block.top) / block.height : 0
+      return anchorInBlock(startLine, endLine, ratio)
+    },
+
+    // getScrollAnchor 의 역 (F-295.md 8.2). 숨겨져 있으면 아무것도 안 한다
+    scrollToAnchor(anchor: ScrollAnchor) {
+      if (view.scrollDOM.clientHeight === 0) return
+      // getScrollAnchor 의 0 sentinel 짝 — scrollIntoView(줄 1) 은 제목 위젯을 밀어내 버리므로 그냥 맨 위로 간다
+      if (anchor <= 1) {
+        view.scrollDOM.scrollTop = 0
+        return
+      }
+      const n = Math.max(1, Math.min(Math.floor(anchor), view.state.doc.lines))
+      const pos = view.state.doc.line(n).from
+      // 1차 — 그 줄이 보이도록 뷰포트를 옮겨, 그 둘레의 진짜 줄 높이가 측정되게 한다
+      view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: 0 }) })
+      // 2차 — 그려진 뒤(rAF 2회) 실측으로 보정한다. scrollToHeading 과 같은 방식
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (destroyed || view.scrollDOM.clientHeight === 0) return
+          const doc = view.state.doc
+          const block = view.lineBlockAt(pos)
+          const startLine = doc.lineAt(block.from).number
+          const endLine = Math.min(doc.lineAt(block.to).number + 1, doc.lines + 1)
+          const want = block.top + view.documentPadding.top + ratioInBlock(startLine, endLine, anchor) * block.height
+          if (Math.abs(view.scrollDOM.scrollTop - want) > 0.5) view.scrollDOM.scrollTop = want
         })
       })
     },
