@@ -30,8 +30,8 @@ const RESERVED_NAMES = new Set([
 
 const MAX_CODE_POINTS = 100
 
-// title → '.md' 로 끝나는 안전한 파일명
-export function toFileName(title: string): string {
+// toFileName·toFolderName 공통 규칙 — 금지 문자 치환, 공백·마침표 정리, 빈 이름·예약 이름·길이 처리 (F-281.md 2장)
+function sanitizeName(title: string): string {
   let name = String(title ?? '').replace(FORBIDDEN_CHARS, '_')
 
   name = name.replace(/^\s+/, '')
@@ -50,5 +50,15 @@ export function toFileName(title: string): string {
     name = codePoints.slice(0, MAX_CODE_POINTS).join('')
   }
 
-  return `${name}.md`
+  return name
+}
+
+// title → '.md' 로 끝나는 안전한 파일명
+export function toFileName(title: string): string {
+  return `${sanitizeName(title)}.md`
+}
+
+// 폴더 이름 → 안전한 디렉터리 이름. toFileName 과 같은 규칙에서 '.md' 만 붙이지 않는다 (F-281.md 3.2)
+export function toFolderName(name: string): string {
+  return sanitizeName(name)
 }

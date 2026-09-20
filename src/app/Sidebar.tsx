@@ -43,6 +43,7 @@ import {
   IconGroup,
   IconHelp,
   IconCollapseAll,
+  IconDownload,
 } from './icons'
 import type { Notice } from './notice'
 
@@ -101,6 +102,8 @@ type SidebarCtx = {
   onNotice: (notice: Notice) => void
   // 폴더 `⋯` 메뉴 `사람 초대…` (F-212.md 2.5)
   onRequestInviteFolder: (id: string, name: string) => void
+  // 폴더 `⋯` 메뉴 `폴더 내보내기` (F-281.md 3.7)
+  onExportFolder: (id: string) => void
 }
 
 function dropKeyOf(target: DropTarget): string {
@@ -169,6 +172,12 @@ function FolderRow({
     })
   }
   ownItems.push({ key: 'rename', label: '이름 변경', icon: IconEdit, onSelect: () => ctx.onStartRename(node.id, node.name) })
+  ownItems.push({
+    key: 'export-folder',
+    label: '폴더 내보내기',
+    icon: IconDownload,
+    onSelect: () => ctx.onExportFolder(node.id),
+  })
   ownItems.push({
     key: 'delete',
     label: '삭제',
@@ -592,6 +601,7 @@ type SidebarProps = {
   isServerStore: boolean
   onNotice: (notice: Notice) => void
   onRequestInviteFolder: (id: string, name: string) => void
+  onExportFolder: (id: string) => void
 }
 
 export default function Sidebar({
@@ -628,6 +638,7 @@ export default function Sidebar({
   isServerStore,
   onNotice,
   onRequestInviteFolder,
+  onExportFolder,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
@@ -895,6 +906,7 @@ export default function Sidebar({
     isServerStore,
     onNotice,
     onRequestInviteFolder,
+    onExportFolder,
   }
 
   const rootTarget: DropTarget = { type: 'root' }

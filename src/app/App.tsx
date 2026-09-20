@@ -35,6 +35,7 @@ import { resolveInitialDoc } from './resolveInitialDoc'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
 import { exportDoc, exportDocAsText } from './exportDoc'
+import { downloadWorkspaceExport, type WorkspaceExportSourceStore } from './exportWorkspace'
 import { importFiles } from './importFiles'
 import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag } from './fileDrop'
 import { attachImages } from './attachImages'
@@ -1425,6 +1426,37 @@ export default function App() {
     })
   }
 
+  // 로그인 + 오프라인이면 서버 첨부를 못 받아 내보내기를 막는다 (F-281.md 3.1)
+  const exportOffline = store.kind === 'server' && syncState?.online === false
+
+  // ----- 전체 내보내기 — 설정 `데이터` 절 (specs/features/F-281.md 3.6) -----
+  async function handleExportAll() {
+    await docSaverFlushRef.current()
+    await downloadWorkspaceExport({
+      store: store as WorkspaceExportSourceStore,
+      scope: { kind: 'all' },
+      onProgress: ({ done, total }) => showNotice({ type: 'info', message: `내보내는 중… ${done}/${total}` }),
+      onNotice: showNotice,
+    })
+  }
+
+  // ----- 폴더 내보내기 — 사이드바 폴더 `⋯` 메뉴 (specs/features/F-281.md 3.7) -----
+  function handleExportFolder(id: string) {
+    if (exportOffline) {
+      showNotice({ type: 'error', message: '온라인일 때 내보낼 수 있습니다.' })
+      return
+    }
+    void (async () => {
+      await docSaverFlushRef.current()
+      await downloadWorkspaceExport({
+        store: store as WorkspaceExportSourceStore,
+        scope: { kind: 'folder', folderId: id },
+        onProgress: ({ done, total }) => showNotice({ type: 'info', message: `내보내는 중… ${done}/${total}` }),
+        onNotice: showNotice,
+      })
+    })()
+  }
+
   // ----- .md 가져오기 (specs/features/F-114.md 2.2·2.3) -----
   function requestImport() {
     importInputRef.current?.click()
@@ -2250,6 +2282,7 @@ export default function App() {
           isServerStore={store.kind === 'server'}
           onNotice={showNotice}
           onRequestInviteFolder={requestInviteFolder}
+          onExportFolder={handleExportFolder}
         />
         {narrow && sidebarOpen && (
           <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
@@ -2427,6 +2460,8 @@ export default function App() {
         onChangeIndent={changeIndent}
         lineNumbers={lineNumbersPref}
         onChangeLineNumbers={changeLineNumbers}
+        onExportAll={handleExportAll}
+        exportAllDisabled={exportOffline}
         onClose={closeSettings}
       />
     </div>

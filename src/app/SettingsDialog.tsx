@@ -110,6 +110,9 @@ type SettingsDialogProps = {
   onChangeIndent?: (value: string) => void
   lineNumbers?: string
   onChangeLineNumbers?: (value: string) => void
+  // `데이터` 절 — 전체 내보내기 (F-281.md 3.6). 안 주면 절을 그리지 않는다(공개 보기 화면)
+  onExportAll?: () => void
+  exportAllDisabled?: boolean
   onClose: () => void
 }
 
@@ -131,6 +134,8 @@ export default function SettingsDialog({
   onChangeIndent,
   lineNumbers,
   onChangeLineNumbers,
+  onExportAll,
+  exportAllDisabled,
   onClose,
 }: SettingsDialogProps) {
   const titleId = 'settings-title'
@@ -209,6 +214,18 @@ export default function SettingsDialog({
             onChange={onChangeLineNumbers}
           />
         </>
+      )}
+      {/* 로컬 앱·로그인 계정 전용 — PublicView 는 안 준다 (F-281.md 3.6) */}
+      {onExportAll && (
+        <div className="dialog-field">
+          <span id="data-export-label">데이터</span>
+          <div>
+            <button type="button" onClick={onExportAll} disabled={exportAllDisabled}>
+              전체 내보내기
+            </button>
+            {exportAllDisabled && <span style={{ marginLeft: 8, fontSize: 12.5, color: 'var(--muted)' }}>온라인일 때 내보낼 수 있습니다</span>}
+          </div>
+        </div>
       )}
       <div className="dialog-actions">
         <button type="button" onClick={onClose}>
