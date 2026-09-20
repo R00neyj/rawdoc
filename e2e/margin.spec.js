@@ -276,13 +276,13 @@ test.describe('F-146 A8 회귀', () => {
     await openApp(page)
     await importMarkdown(page, { content: '문단 [링크](https://example.com) 끝\n' })
 
-    let opened = false
-    page.once('popup', () => {
-      opened = true
-    })
-    await page.getByText('링크', { exact: true }).click()
-    await page.waitForTimeout(200)
-    expect(opened).toBe(true) // window.open 으로 새 탭은 뜨되, 같은 페이지 내비게이션은 없다
+    // window.open 으로 새 탭은 뜨되, 같은 페이지 내비게이션은 없다.
+    // 고정 대기(200ms)로 보면 popup 이 그 안에 안 와서 늘 실패한다 — 실제로는 1초 안팎 (2026-09-21)
+    const [popup] = await Promise.all([
+      page.waitForEvent('popup'),
+      page.getByText('링크', { exact: true }).click(),
+    ])
+    expect(popup).toBeTruthy()
     await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
   })
 

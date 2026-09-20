@@ -137,6 +137,10 @@ test.describe('F-281 A14 오프라인', () => {
     await openApp(page)
     await importMarkdown(page, { content: '본문\n' })
     server.setOffline(true)
+    // setOffline 은 fakeServer 가 요청을 끊게 하는 플래그일 뿐이다. 앱의 syncState.online 은
+    // 요청이 실제로 실패하거나 브라우저 offline 이벤트가 올 때만 false 가 된다(serverStore.ts) —
+    // 설정만 열면 요청이 한 번도 안 나가 online 이 true 로 남는다 (2026-09-21)
+    await page.evaluate(() => window.dispatchEvent(new Event('offline')))
 
     const dialog = await openSettings(page)
     const exportBtn = dialog.getByRole('button', { name: '전체 내보내기' })
