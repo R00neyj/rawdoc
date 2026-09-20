@@ -28,8 +28,11 @@ function frontmatter(text) {
   const end = text.indexOf('\n---', 3)
   if (end < 0) return null
   const out = {}
+  // 끝을 `\n---` 앞에서 자르므로 CRLF 파일은 마지막 줄에 `\r` 가 남는다. JS 의 `.` 는 `\r` 를
+  // 줄바꿈으로 쳐서 안 먹고 `$` 는(m 플래그 없이) 문자열 끝에서만 맞아, 그 줄이 통째로 버려졌다.
+  // 체크아웃이 CRLF 인 머신(core.autocrlf=true)에서는 모든 명세의 마지막 항목이 사라진다 (2026-09-21)
   for (const line of text.slice(text.indexOf('\n') + 1, end).split(/\r?\n/)) {
-    const m = /^([a-z_]+):\s*(.*)$/.exec(line)
+    const m = /^([a-z_]+):\s*(.*?)\r?$/.exec(line)
     if (!m) continue
     let v = m[2].trim()
     if (v.startsWith('[') && v.endsWith(']')) v = v.slice(1, -1).split(',').map((s) => s.trim()).filter(Boolean)
