@@ -63,8 +63,11 @@ function ownedPatterns(featureId) {
     if (!firstCell.includes('`')) continue
     const cellRe = /`([^`]+)`(\(\+test\))?/g
     let m
+    let lastDir = '' // 한 셀에 `src/a/b.ts`·`b.test.ts` 처럼 파일명만 이어 적는 명세가 있다 (F-283 2장)
     while ((m = cellRe.exec(firstCell))) {
-      const p = m[1]
+      let p = m[1]
+      if (!p.includes('/') && lastDir) p = `${lastDir}/${p}`
+      else if (p.includes('/')) lastDir = p.slice(0, p.lastIndexOf('/'))
       patterns.push(p)
       if (m[2]) {
         const testVariant = p.replace(/\.(jsx|tsx|js|ts)$/, (_, ext) => `.test.${ext}`)
