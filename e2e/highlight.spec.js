@@ -1,8 +1,6 @@
 // 하이라이트 ==…== 표시 — 편집·원문·보기 모드 (specs/features/F-283.md 9장 A17~A20)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, setViewMode } from './helpers.js'
-
-const EXPORT_LABEL = '내보내기 — .md·.txt 파일'
+import { openApp, importMarkdown, setViewMode, openExportMenu } from './helpers.js'
 
 test.describe('F-283 A17 편집 모드', () => {
   test('==글자== 를 만들면 기호가 숨고, 커서를 그 줄로 되돌리면 다시 보인다', async ({ page }) => {
@@ -49,7 +47,7 @@ test.describe('F-283 A19 원문 모드·원문 불변', () => {
     await setViewMode(page, 'raw')
     await expect(page.locator('.cm-content')).toContainText('==강조==')
 
-    await page.getByRole('button', { name: EXPORT_LABEL }).click()
+    await openExportMenu(page)
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('menuitem', { name: '.md', exact: true }).click(),

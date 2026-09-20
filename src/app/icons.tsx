@@ -63,6 +63,8 @@ import subjectSvg from '@material-symbols/svg-400/outlined/subject.svg?raw'
 import addSvg from '@material-symbols/svg-400/outlined/add.svg?raw'
 import helpSvg from '@material-symbols/svg-400/outlined/help.svg?raw'
 import collapseAllSvg from '@material-symbols/svg-400/outlined/collapse_all.svg?raw'
+// 내보내기 메뉴 `PDF (A4 인쇄)` (F-279.md 3.1)
+import printSvg from '@material-symbols/svg-400/outlined/print.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -158,6 +160,9 @@ export const IconHelp = makeIcon(helpSvg)
 
 // 사이드바 `모두 접기` (2026-09-20 사용자 요청)
 export const IconCollapseAll = makeIcon(collapseAllSvg)
+
+// 내보내기 메뉴 `PDF (A4 인쇄)` (F-279.md 3.1)
+export const IconPrint = makeIcon(printSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

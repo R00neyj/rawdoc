@@ -5,40 +5,14 @@ import type { MouseEvent as ReactMouseEvent, Ref } from 'react'
 import 'github-markdown-css/github-markdown-light.css'
 import './viewer.css'
 
-import brokenImageSvg from '@material-symbols/svg-400/outlined/broken_image.svg?raw'
 import { createCodeCopyButton } from '../lib/codeCopyButton'
 import { renderMermaid } from '../lib/mermaidRender'
+import { showPlaceholder, showImage } from './fillMarkdownAssets'
 
 const DEFAULT_MISSING_TEXT = '이미지를 찾을 수 없습니다' // F-157 2.2 자리 표시와 같은 문구
 
 export type AttachmentRecord = { blob: Blob; width: number; height: number }
 export type ResolveAttachment = (id: string) => Promise<AttachmentRecord | null>
-
-// 자리 표시로 바꾼다 (F-157 2.2 와 같은 모양, F-158 2.1)
-function showPlaceholder(container: HTMLElement, alt: string, text: string): void {
-  container.replaceChildren()
-  container.classList.add('md-image-missing')
-  container.style.aspectRatio = ''
-  const icon = document.createElement('span')
-  icon.className = 'md-image-missing-icon'
-  icon.setAttribute('aria-hidden', 'true')
-  icon.innerHTML = brokenImageSvg
-  const label = document.createElement('span')
-  label.className = 'md-image-missing-text'
-  label.textContent = text
-  container.append(icon, label)
-  container.setAttribute('role', 'img')
-  container.setAttribute('aria-label', alt || '이미지')
-}
-
-// blob URL 을 img.src 에 넣고 불러오기 전에도 높이가 정해지게 aspect-ratio 를 준다 (F-157 2.2)
-function showImage(container: HTMLElement, img: HTMLImageElement, url: string, width: number, height: number): void {
-  container.classList.remove('md-image-missing')
-  container.removeAttribute('role')
-  container.removeAttribute('aria-label')
-  if (width > 0 && height > 0) container.style.aspectRatio = `${width} / ${height}`
-  img.src = url
-}
 
 type BreadcrumbEntry = { id: string; name: string }
 

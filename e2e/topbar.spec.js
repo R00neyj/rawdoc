@@ -8,6 +8,7 @@ import {
   waitTransitionEnd,
   currentDocId,
   setPrefBeforeLoad,
+  EXPORT_BUTTON_LABEL,
 } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
@@ -81,7 +82,7 @@ const BUTTON_LABELS = [
   '원문 — 마크다운 기호 그대로 편집',
   '보기 — 읽기 전용으로 보기',
   '공유 — 링크·마크다운 복사',
-  '내보내기 — .md·.txt 파일',
+  EXPORT_BUTTON_LABEL,
 ]
 
 test.describe('F-142 상단바 버튼·툴팁', () => {
@@ -103,7 +104,7 @@ test.describe('F-142 상단바 버튼·툴팁', () => {
       await openApp(page)
       await importMarkdown(page, { content: '내용\n' })
       await resizeWindow(page, width)
-      const exportBtn = page.getByRole('button', { name: '내보내기 — .md·.txt 파일' })
+      const exportBtn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
       await exportBtn.hover()
       await page.waitForTimeout(450) // 3.2 "400ms 뒤 표시" — 지연 자체를 확인하는 자리라 고정 대기
       const tooltipRect = await exportBtn.evaluate((el) => {
@@ -145,7 +146,7 @@ test.describe('F-142 상단바 버튼·툴팁', () => {
     await page.getByRole('button', { name: '삭제', exact: true }).click()
 
     await expect(page.getByRole('button', { name: '공유 — 링크·마크다운 복사' })).toBeDisabled()
-    await expect(page.getByRole('button', { name: '내보내기 — .md·.txt 파일' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })).toBeDisabled()
   })
 })
 

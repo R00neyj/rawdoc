@@ -1,6 +1,6 @@
 // 본문 맨 위 제목 (specs/features/F-217.md)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, readSavedContent, resizeWindow, rectOf, setViewMode } from './helpers.js'
+import { openApp, importMarkdown, readSavedContent, resizeWindow, rectOf, setViewMode, openExportMenu } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 async function fillTitle(page, text) {
@@ -18,7 +18,7 @@ test.describe('F-217 A1 원문 불변', () => {
     expect(saved.content).toBe('본문 첫 줄\n둘째 줄\n')
     expect(saved.content).not.toContain('내 제목')
 
-    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
+    await openExportMenu(page)
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('menuitem', { name: '.md', exact: true }).click(),

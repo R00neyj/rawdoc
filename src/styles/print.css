@@ -1,0 +1,50 @@
+/* 인쇄 CSS — A4 인쇄 전용 영역 (specs/features/F-279.md 5장). 색 hex 를 쓰지 않는다 */
+
+@page {
+  size: A4;
+  margin: 20mm;
+}
+
+/* 화면에서는 안 보이지만 레이아웃·이미지·다이어그램 크기는 잡힌다 (display:none 이면 Mermaid 가 크기를 못 잰다) */
+.viewer.print-root {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  width: 170mm; /* A4 210mm − 좌우 여백 20mm×2 */
+  height: auto;
+  padding: 0;
+  overflow: visible;
+  background: none;
+}
+
+@media print {
+  /* 사이드바·상단바·목차·상태바·알림·대화상자가 모두 .app-shell 안에 있으므로 이 한 줄로 앱 화면이 빠진다 */
+  html[data-printing] .app-shell > *:not(.print-root) {
+    display: none;
+  }
+
+  /* 인쇄 흐름에 들어가 여러 쪽으로 나뉜다 (fixed 로 두면 쪽마다 겹쳐 찍힐 수 있다) */
+  html[data-printing] .viewer.print-root {
+    position: static;
+    width: auto;
+  }
+
+  .print-root .doc-title-view,
+  .print-root .markdown-body :is(h1, h2, h3, h4, h5, h6) {
+    break-after: avoid;
+    break-inside: avoid;
+  }
+
+  .print-root .markdown-body :is(table, pre, blockquote, .markdown-callout, .md-image, .md-mermaid) {
+    break-inside: avoid;
+  }
+
+  .print-root .markdown-body {
+    background: none;
+  }
+
+  .print-root .markdown-body :is(pre, code, .markdown-callout, mark, th, tr:nth-child(even)) {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

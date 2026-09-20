@@ -47,6 +47,7 @@ import { insertTable } from '../editor/insertCommands'
 import { countChars, countWords, cursorInfo } from '../editor/stats'
 import Viewer, { type ViewContextMenuInfo } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
+import { printDoc } from './printDoc'
 import { decodeShare, type ShareDoc } from '../lib/shareCodec'
 import Outline from './Outline'
 import ContextMenu from './ContextMenu'
@@ -265,6 +266,9 @@ export default function App() {
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const docSaverFlushRef = useRef(async () => {})
   const notifyChangeRef = useRef(() => {})
+  const printRootRef = useRef<HTMLDivElement | null>(null) // 인쇄 전용 영역 (F-279.md 4.2)
+  const printDocRef = useRef(() => {}) // Ctrl+P 가 매 커밋 최신 handlePrintDoc 을 읽게 한다 (F-279.md 6.1)
+  const printDisabledRef = useRef(true) // exportDisabled 와 같은 조건 (F-279.md 6.1)
   // hashchange 핸들러가 낡은 클로저의 docs·currentDocId 를 읽지 않도록 매 렌더 후 갱신한다
   // (0단계 버그 수정)
   const docsRef = useRef(docs)
@@ -928,6 +932,19 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // ----- Ctrl+P(Cmd+P) → 앱 인쇄, 에디터 안에 포커스가 있어도 가로챈다 (specs/features/F-279.md 6.1) -----
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return
+      if (e.key.toLowerCase() !== 'p') return
+      if (printDisabledRef.current) return // 브라우저 기본 인쇄에 맡긴다
+      e.preventDefault()
+      printDocRef.current()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   // ----- 문서를 열 때 저장소 본문을 1회 읽어 에디터에 넘긴다 (architecture.md 3장) -----
   // openDoc.id 가 currentDocId 와 다르면(문서 없음 포함) 렌더링에서 에디터를 그리지
   // 않는 것으로 처리하므로, 여기서 별도로 null 로 되돌리지 않는다
@@ -961,6 +978,15 @@ export default function App() {
   // Editor(자동완성·표시)와 renderMarkdown(보기 모드) 둘 다 이 값을 쓴다
   const wikiTitles = useMemo(() => docs.map((d) => d.title), [docs])
 
+  // 위키링크 href 판정 — 보기 모드·인쇄가 함께 쓴다(F-279.md 4.3). 이 화면은 항상 #/d/{id} (F-252.md 4.1)
+  const resolveWikiHref = useCallback(
+    (target: unknown) => {
+      const match = resolveWikiTarget(target, docs)
+      return match ? `#/d/${match.id}` : null
+    },
+    [docs],
+  )
+
   // ----- 보기 모드 변환 (specs/features/F-123.md 3.3) -----
   // 변환 시점: 보기 모드로 전환할 때(viewMode 변화), 보기 모드에서 문서를 열 때
   // (openDoc 변화, Editor 마운트 직후 — 이 effect 는 자식의 layout effect 뒤에 돈다).
@@ -971,15 +997,9 @@ export default function App() {
     if (viewMode !== 'view') return
     if (!editorRef.current || openDoc?.id !== currentDocId) return
     setViewerHtml(
-      renderMarkdown(editorRef.current.getText('lf'), {
-        // resolveWikiLink 는 href 를 돌려준다 — 이 화면은 항상 #/d/{id} (F-252.md 4.1)
-        resolveWikiLink: (target: unknown) => {
-          const match = resolveWikiTarget(target, docs)
-          return match ? `#/d/${match.id}` : null
-        },
-      }),
+      renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref }),
     )
-  }, [viewMode, openDoc, currentDocId, docs])
+  }, [viewMode, openDoc, currentDocId, resolveWikiHref])
 
   // 편집 모드 위키링크 표시·자동완성용 제목 목록 갱신 (F-131 3장) — 문서 생성·삭제·제목
   // 변경 때마다 에디터에 최신 목록을 반영한다. openDoc.id !== currentDocId 인 동안은(문서
@@ -1072,10 +1092,13 @@ export default function App() {
     onSaveError: handleSaveError,
   })
 
-  // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후 최신 flush·notifyChange 를 반영한다
+  // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후 최신 flush·notifyChange·handlePrintDoc 을 반영한다
   useEffect(() => {
     docSaverFlushRef.current = docSaver.flush
     notifyChangeRef.current = docSaver.notifyChange
+    printDocRef.current = handlePrintDoc
+    // exportDisabled 와 같은 조건 (F-279.md 6.1) — bootPhase !== 'ready' 면 isEmpty 자체가 false 라 첫 항으로 충분하다
+    printDisabledRef.current = bootPhase !== 'ready' || currentDocId === null || Boolean(sharedDoc)
   })
 
   // hashchange 핸들러(위)가 항상 최신 docs·currentDocId 를 보도록 매 커밋 후 갱신한다
@@ -1423,6 +1446,19 @@ export default function App() {
       doc: currentDoc,
       lineEnding: openDoc.lineEnding,
       saver: { flush: () => docSaverFlushRef.current() },
+    })
+  }
+
+  // ----- PDF (A4 인쇄) — specs/features/F-279.md 4.3 -----
+  function handlePrintDoc() {
+    if (!currentDoc || !openDoc || openDoc.id !== currentDocId || !editorRef.current) return
+    docSaverFlushRef.current() // 기다리지 않는다 (F-112 2.2 와 같다)
+    const html = renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref })
+    void printDoc({
+      root: printRootRef.current,
+      html,
+      title: currentDoc.title,
+      resolveAttachment,
     })
   }
 
@@ -2224,6 +2260,7 @@ export default function App() {
       exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
       onExportMd={handleExportDoc}
       onExportTxt={handleExportDocAsText}
+      onPrintDoc={handlePrintDoc}
       account={account}
       onAccountBeforeNavigate={() => docSaverFlushRef.current()}
       showToolbar={showToolbar}
@@ -2464,6 +2501,8 @@ export default function App() {
         exportAllDisabled={exportOffline}
         onClose={closeSettings}
       />
+      {/* 인쇄 전용 영역 — printDoc() 이 채운다. .app-shell 의 마지막 직계 자식이어야 한다 (F-279.md 4.2) */}
+      <div className="viewer print-root" ref={printRootRef} aria-hidden="true" inert />
     </div>
   )
 }

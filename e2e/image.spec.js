@@ -2,7 +2,7 @@
 import { test, expect } from '@playwright/test'
 import zlib from 'node:zlib'
 import { unzipSync } from 'fflate'
-import { openApp, importMarkdown, setViewMode, waitSaved, readSavedContent, setPrefBeforeLoad } from './helpers.js'
+import { openApp, importMarkdown, setViewMode, waitSaved, readSavedContent, setPrefBeforeLoad, openExportMenu } from './helpers.js'
 
 function u32be(n) {
   return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff]
@@ -460,7 +460,7 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
     await pasteFiles(page, { files: [{ bytes: pngBytes(50, 50), name: 'a.png', mime: 'image/png' }] })
     await waitSaved(page)
 
-    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
+    await openExportMenu(page)
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('menuitem', { name: '.md', exact: true }).click(),
@@ -914,18 +914,19 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
     const editRadius = await page.locator('.md-image-frame').evaluate((el) => getComputedStyle(el).borderRadius)
 
     await setViewMode(page, 'view')
-    const viewImg = page.locator('.viewer img[data-attachment]')
+    // .content-area 안으로 좁힌다 — 인쇄 전용 영역(.print-root)도 .viewer 클래스를 쓴다(F-279.md 4.2)
+    const viewImg = page.locator('.content-area .viewer img[data-attachment]')
     await expect(viewImg).toBeVisible()
     expect(await viewImg.evaluate((el) => el.naturalWidth)).toBeGreaterThan(0)
 
-    const viewBox = await page.locator('.viewer .md-image').boundingBox()
+    const viewBox = await page.locator('.content-area .viewer .md-image').boundingBox()
     expect(Math.abs(viewBox.width - editBox.width)).toBeLessThanOrEqual(1)
 
-    const viewRadius = await page.locator('.viewer .md-image').evaluate((el) => getComputedStyle(el).borderRadius)
+    const viewRadius = await page.locator('.content-area .viewer .md-image').evaluate((el) => getComputedStyle(el).borderRadius)
     expect(viewRadius).toBe(editRadius)
 
     // 가운데 정렬 — 뷰어 안 좌우 여백 차
-    const viewerRect = await page.locator('.viewer').boundingBox()
+    const viewerRect = await page.locator('.content-area .viewer').boundingBox()
     const leftGap = viewBox.x - viewerRect.x
     const rightGap = viewerRect.x + viewerRect.width - (viewBox.x + viewBox.width)
     expect(Math.abs(leftGap - rightGap)).toBeLessThanOrEqual(1)
@@ -1005,7 +1006,7 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
     const ids = [...saved.content.matchAll(/attachments\/([0-9a-f]{16})\.png/g)].map((m) => m[1])
     expect(ids.length).toBe(2)
 
-    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
+    await openExportMenu(page)
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('menuitem', { name: '.md', exact: true }).click(),
@@ -1028,7 +1029,7 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
   test('F-158 A7 이미지 없음 — F-112 와 같게 .md', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { name: '일반문서.md', content: '본문\n' })
-    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
+    await openExportMenu(page)
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('menuitem', { name: '.md', exact: true }).click(),
@@ -1054,7 +1055,7 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
 
     await deleteAttachment(page, ids[0])
 
-    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
+    await openExportMenu(page)
     let [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('menuitem', { name: '.md', exact: true }).click(),
@@ -1069,7 +1070,7 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
 
     await deleteAttachment(page, ids[1])
 
-    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
+    await openExportMenu(page)
     ;[download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('menuitem', { name: '.md', exact: true }).click(),
@@ -1086,7 +1087,7 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
     await waitSaved(page)
 
     await context.setOffline(true)
-    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
+    await openExportMenu(page)
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('menuitem', { name: '.md', exact: true }).click(),
@@ -1126,7 +1127,7 @@ test.describe('F-214 공유 화면에서 주석 숨기기', () => {
     await importMarkdown(page, { content: COMMENT_DOC })
     await setViewMode(page, 'view')
 
-    const bodyText = await page.locator('.viewer').innerText()
+    const bodyText = await page.locator('.content-area .viewer').innerText()
     expect(bodyText).toContain('%%비밀%%')
   })
 })

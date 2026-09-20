@@ -1,6 +1,6 @@
 // 코드블록 언어 이름을 정식 표기로 (specs/features/F-248.md)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, readSavedContent } from './helpers.js'
+import { openApp, importMarkdown, readSavedContent, openExportMenu } from './helpers.js'
 
 const DOC = '문단\n\n```js\nconst a = 1\n```\n'
 
@@ -22,7 +22,7 @@ test.describe('F-248 A8 원문 불변', () => {
     expect(saved.content).toBe(DOC)
     expect(saved.content).not.toContain('JavaScript')
 
-    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
+    await openExportMenu(page)
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('menuitem', { name: '.md', exact: true }).click(),

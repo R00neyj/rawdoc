@@ -1,8 +1,6 @@
-// 상단바 `내보내기` 메뉴와 .txt 평문 내보내기 (specs/features/F-278.md)
+// 상단바 `내보내기` 메뉴와 .txt 평문 내보내기 (specs/features/F-278.md, F-279.md)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown } from './helpers.js'
-
-const EXPORT_LABEL = '내보내기 — .md·.txt 파일'
+import { openApp, importMarkdown, openExportMenu, EXPORT_BUTTON_LABEL } from './helpers.js'
 
 async function fillTitle(page, text) {
   await page.locator('.doc-title').fill(text)
@@ -10,20 +8,18 @@ async function fillTitle(page, text) {
 }
 
 test.describe('F-278 A16 메뉴 열림', () => {
-  test('내보내기 버튼을 누르면 항목이 .md·.txt (평문) 2개뿐이다', async ({ page }) => {
+  test('내보내기 버튼을 누르면 항목이 .md·.txt (평문)·PDF (A4 인쇄) 순서로 있다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '본문\n' })
 
-    const btn = page.getByRole('button', { name: EXPORT_LABEL })
+    const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
     await btn.click()
     await expect(btn).toHaveAttribute('aria-expanded', 'true')
 
     const menu = page.getByRole('menu')
     await expect(menu).toBeVisible()
     const items = page.locator('.export-menu-list [role="menuitem"]')
-    await expect(items).toHaveCount(2)
-    await expect(items.nth(0)).toHaveText('.md')
-    await expect(items.nth(1)).toHaveText('.txt (평문)')
+    await expect(items).toHaveText(['.md', '.txt (평문)', 'PDF (A4 인쇄)'])
   })
 })
 
@@ -32,7 +28,7 @@ test.describe('F-278 A17 키보드·포커스', () => {
     await openApp(page)
     await importMarkdown(page, { content: '본문\n' })
 
-    const btn = page.getByRole('button', { name: EXPORT_LABEL })
+    const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
     await btn.click()
     const items = page.locator('.export-menu-list [role="menuitem"]')
     await expect(items.nth(0)).toBeFocused()
@@ -54,7 +50,7 @@ test.describe('F-278 A18 .md 회귀', () => {
     await importMarkdown(page, { name: 'doc.md', content: '# 제목\n\n본문\n' })
     await fillTitle(page, '내 문서')
 
-    await page.getByRole('button', { name: EXPORT_LABEL }).click()
+    await openExportMenu(page)
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('menuitem', { name: '.md', exact: true }).click(),
@@ -75,7 +71,7 @@ test.describe('F-278 A19 .txt 다운로드', () => {
     await importMarkdown(page, { name: 'doc.md', content })
     await fillTitle(page, '평문 문서')
 
-    await page.getByRole('button', { name: EXPORT_LABEL }).click()
+    await openExportMenu(page)
     const [download] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('menuitem', { name: '.txt (평문)' }).click(),
@@ -104,7 +100,7 @@ test.describe('F-278 A20 비활성', () => {
     await page.getByRole('menuitem', { name: /삭제/ }).click()
     await page.getByRole('button', { name: '삭제', exact: true }).click()
 
-    const btn = page.getByRole('button', { name: EXPORT_LABEL })
+    const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
     await expect(btn).toBeDisabled()
     await btn.click({ force: true })
     await expect(page.getByRole('menu')).toHaveCount(0)
