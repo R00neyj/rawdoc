@@ -22,6 +22,7 @@ import { ancestorsOfDoc, resolveTargetFolderId, canMoveFolder } from '../lib/fol
 import type { SelectionItem } from './sidebarSelection'
 import { resolveWikiTarget } from '../lib/wikiLink'
 import { fromEditorText } from '../lib/lineEnding'
+import { decodeMarkdown } from '../lib/decodeMarkdown'
 import { getPref, setPref } from './prefs'
 import { fetchAccount, loginUrl, type AccountState } from './account'
 import type { SyncState } from '../types'
@@ -36,6 +37,18 @@ import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
 import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from './exportDoc'
 import { downloadWorkspaceExport, type WorkspaceExportSourceStore } from './exportWorkspace'
+import {
+  readZipEntries,
+  detectZipKind,
+  planWorkspaceImport,
+  planPlainImport,
+  applyImportPlan,
+  ZIP_UNREADABLE_MESSAGE,
+  type ApplyStore,
+  type ImportPlan,
+  type PlainEntryInput,
+} from './importWorkspace'
+import ImportPreviewDialog, { type ImportDialogState } from './ImportPreviewDialog'
 import { importFiles } from './importFiles'
 import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag } from './fileDrop'
 import { attachImages } from './attachImages'
@@ -250,6 +263,8 @@ export default function App() {
   const [syncState, setSyncState] = useState<SyncState | undefined>(undefined)
   // 우클릭 메뉴 상태 (specs/features/F-170.md) — view·container 는 place 에 따라 하나만 쓴다
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  // zip 가져오기 미리보기·진행·결과 대화상자 (F-282.md 3.8)
+  const [importState, setImportState] = useState<ImportDialogState | null>(null)
 
   const sidebarRef = useRef<HTMLElement | null>(null)
   const appShellRef = useRef<HTMLDivElement | null>(null)
@@ -264,6 +279,11 @@ export default function App() {
   const titleRequestIdRef = useRef(0)
   const noticeIdRef = useRef(0)
   const importInputRef = useRef<HTMLInputElement | null>(null)
+  // zip 가져오기 — 선택 input, 확정된 계획, 취소 신호 (F-282.md 3.1·3.9)
+  const importZipInputRef = useRef<HTMLInputElement | null>(null)
+  const importFileRef = useRef<File | null>(null)
+  const importPlanRef = useRef<ImportPlan | null>(null)
+  const importCancelRef = useRef(false)
   const docSaverFlushRef = useRef(async () => {})
   const notifyChangeRef = useRef(() => {})
   const printRootRef = useRef<HTMLDivElement | null>(null) // 인쇄 전용 영역 (F-279.md 4.2)
@@ -1578,6 +1598,170 @@ export default function App() {
     await runImportFiles(files)
   }
 
+  // ----- zip 가져오기 — 설정 `데이터` 절 (specs/features/F-282.md 3.1~3.9) -----
+  function requestImportZip() {
+    closeSettings() // 설정 위에 미리보기를 겹쳐 열지 않는다 (3.1)
+    importZipInputRef.current?.click()
+  }
+
+  async function handleImportZipInputChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null
+    e.target.value = '' // 같은 파일을 연달아 고를 수 있게
+    if (!file) return
+    await docSaverFlushRef.current() // 지금 열린 문서가 갱신 대상일 수 있다 (3.1)
+    await previewImportZip(file)
+  }
+
+  // 1차 훑기 — manifest.json 은 판별에, .md·.markdown 은 일반 zip 미리보기의 이미지 참조·경고 집계에 쓴다. 3.3 은 "want 가 manifest.json 만" 이라 적었지만, 일반 zip 요약을 미리보기에서 보이려면 텍스트가 필요해 넣었다 — 이미지 바이트는 여전히 2차에서만 읽는다
+  async function previewImportZip(file: File) {
+    const names: string[] = []
+    let manifestBytes: Uint8Array | null = null
+    const mdContent = new Map<string, string>()
+    try {
+      for await (const entry of readZipEntries(file.stream(), {
+        want: (name) => name === 'manifest.json' || /\.(md|markdown)$/i.test(name),
+      })) {
+        names.push(entry.name)
+        if (entry.bytes === null) continue
+        if (entry.name === 'manifest.json') {
+          manifestBytes = entry.bytes
+          continue
+        }
+        try {
+          mdContent.set(entry.name, decodeMarkdown(entry.bytes).text)
+        } catch {
+          // UTF-8 이 아니면 미리보기에서는 참조를 못 찾고 넘어간다 — 적용 때 실패 목록에 들어간다 (3.7)
+        }
+      }
+    } catch {
+      showNotice({ type: 'error', message: ZIP_UNREADABLE_MESSAGE })
+      return
+    }
+    if (names.length === 0) {
+      showNotice({ type: 'error', message: ZIP_UNREADABLE_MESSAGE })
+      return
+    }
+
+    const kindResult = detectZipKind(manifestBytes)
+    if (kindResult.kind === 'rejected') {
+      showNotice({ type: 'error', message: kindResult.message })
+      return
+    }
+
+    const now = Date.now()
+    const zipPaths = new Set(names)
+    let plan: ImportPlan
+    if (kindResult.kind === 'workspace') {
+      const attachmentMetas = await store.listAttachments()
+      plan = planWorkspaceImport({
+        manifest: kindResult.manifest,
+        existingDocs: docsRef.current.map((d) => ({ id: d.id, updatedAt: d.updatedAt, role: d.role })),
+        existingFolders: foldersRef.current.map((f) => ({ id: f.id, parentId: f.parentId })),
+        zipPaths,
+        existingAttachmentIds: new Set(attachmentMetas.map((a) => a.id)),
+        now,
+      })
+    } else {
+      const entries: PlainEntryInput[] = names.map((name) => ({ name, content: mdContent.get(name) }))
+      plan = planPlainImport({ entries, now })
+    }
+
+    importFileRef.current = file
+    importPlanRef.current = plan
+    setImportState({ stage: 'preview', fileName: file.name, plan })
+  }
+
+  function cancelImportPreview() {
+    importFileRef.current = null
+    importPlanRef.current = null
+    setImportState(null)
+  }
+
+  function cancelImportProgress() {
+    importCancelRef.current = true
+  }
+
+  function closeImportResult() {
+    setImportState(null)
+  }
+
+  async function confirmImport() {
+    const file = importFileRef.current
+    const plan = importPlanRef.current
+    if (!file || !plan) return
+
+    const wantedPaths = new Set<string>([...plan.docs.map((d) => d.path), ...plan.attachments.map((a) => a.path)])
+    const total = plan.docs.length + plan.attachments.length
+    const updatedIds = new Set(plan.docs.filter((d) => d.action === 'update').map((d) => d.id))
+    const openBeforeId = currentDocIdRef.current
+
+    importCancelRef.current = false
+    setImportState({ stage: 'progress', fileName: file.name, done: 0, total })
+
+    const result = await applyImportPlan({
+      plan,
+      entries: readZipEntries(file.stream(), { want: (name) => wantedPaths.has(name) }),
+      store: store as ApplyStore,
+      isCancelled: () => importCancelRef.current,
+      onProgress: ({ done, total }) => setImportState({ stage: 'progress', fileName: file.name, done, total }),
+    })
+
+    importFileRef.current = null
+    importPlanRef.current = null
+
+    const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
+    setFolders(newFolders)
+    const strippedDocs = sortByUpdatedAtDesc(newDocs.map(stripContent))
+    setDocs(strippedDocs)
+
+    // 열려 있던 문서가 갱신 대상이었으면 에디터를 다시 마운트한다 — 안 하면 옛 EditorState 가 다음 저장 때 가져온 내용을 덮어쓴다 (3.9, F-213 2.3 과 같은 방식)
+    if (openBeforeId && updatedIds.has(openBeforeId) && openBeforeId === currentDocIdRef.current) {
+      const fresh = await store.get(openBeforeId)
+      if (fresh && fresh.id === currentDocIdRef.current) {
+        setOpenDoc({ id: fresh.id, content: fresh.content, lineEnding: fresh.lineEnding })
+        focusEditorRef.current = false
+        setEditorRemountNonce((n) => n + 1)
+      }
+    }
+
+    if (result.cancelled) {
+      showNotice({
+        type: 'warn',
+        message: `가져오기를 멈췄습니다. 문서 ${result.createdCount + result.updatedCount}개를 들였습니다.`,
+      })
+      setImportState(null)
+    } else if (result.failures.length === 0) {
+      showNotice({
+        type: 'info',
+        message:
+          result.updatedCount > 0
+            ? `문서 ${result.createdCount}개를 가져오고 ${result.updatedCount}개를 갱신했습니다.`
+            : `문서 ${result.createdCount}개를 가져왔습니다.`,
+      })
+      setImportState(null)
+    } else {
+      const allFailed = result.createdCount + result.updatedCount === 0
+      showNotice({
+        type: allFailed ? 'error' : 'warn',
+        message: allFailed ? '가져오지 못했습니다.' : `${result.failures.length}개를 가져오지 못했습니다.`,
+      })
+      setImportState({
+        stage: 'result',
+        fileName: file.name,
+        createdCount: result.createdCount,
+        updatedCount: result.updatedCount,
+        failures: result.failures,
+      })
+    }
+
+    if (result.quotaSkippedCount > 0) {
+      showNotice({
+        type: 'error',
+        message: `이미지 저장 공간(300MB)이 가득 차 이미지 ${result.quotaSkippedCount}개를 넣지 못했습니다.`,
+      })
+    }
+  }
+
   // OS 파일 열기 재중복 방지 — idb 이고 판정 메서드가 둘 다 있을 때만 handle 로 찾는다 (F-231.md 3.3)
   async function openOrImportLaunchedFiles(items: { file: File; handle: FileSystemFileHandle }[]) {
     if (items.length === 0) return
@@ -2309,8 +2493,17 @@ export default function App() {
         ref={importInputRef}
         type="file"
         accept=".md,text/markdown"
+        data-import="md"
         hidden
         onChange={handleImportInputChange}
+      />
+      <input
+        ref={importZipInputRef}
+        type="file"
+        accept=".zip,application/zip"
+        data-import="zip"
+        hidden
+        onChange={handleImportZipInputChange}
       />
       <div className="app-body">
         <Sidebar
@@ -2527,7 +2720,14 @@ export default function App() {
         onChangeLineNumbers={changeLineNumbers}
         onExportAll={handleExportAll}
         exportAllDisabled={exportOffline}
+        onImport={requestImportZip}
         onClose={closeSettings}
+      />
+      <ImportPreviewDialog
+        state={importState}
+        onCancel={importState?.stage === 'progress' ? cancelImportProgress : cancelImportPreview}
+        onConfirm={confirmImport}
+        onClose={closeImportResult}
       />
       {/* 인쇄 전용 영역 — printDoc() 이 채운다. .app-shell 의 마지막 직계 자식이어야 한다 (F-279.md 4.2) */}
       <div className="viewer print-root" ref={printRootRef} aria-hidden="true" inert />

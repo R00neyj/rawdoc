@@ -123,22 +123,27 @@ export async function createIdbStore(
       return doc ? normalizeDoc(doc) : null
     },
 
-    async create({ title, content, lineEnding, folderId = null }) {
+    // id 가 이미 있으면 던진다(덮지 않는다). 가져오기(F-282)가 id·시각·고정을 유지할 때만 준다 (F-282.md 3.11)
+    async create({ title, content, lineEnding, folderId = null, id, createdAt, updatedAt, pinnedAt }) {
       // folderId 가 null 또는 존재하는 폴더가 아니면 문서를 만들지 않는다 (F-136.md 3.1·3.2)
       const folders: Folder[] = await db.getAll(FOLDERS_STORE)
       if (!isValidFolderId(folders, folderId)) {
         throw new Error(`유효하지 않은 folderId: ${String(folderId)}`)
       }
+      if (id !== undefined) {
+        const existing = await db.get(DOCS_STORE, id)
+        if (existing) throw new Error(`이미 있는 id: ${id}`)
+      }
       const now = Date.now()
       const doc: Doc = {
-        id: crypto.randomUUID(),
+        id: id ?? crypto.randomUUID(),
         title,
         content,
         lineEnding,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: createdAt ?? now,
+        updatedAt: updatedAt ?? now,
         folderId,
-        pinnedAt: null,
+        pinnedAt: pinnedAt ?? null,
       }
       await db.put(DOCS_STORE, doc)
       return doc
@@ -211,18 +216,23 @@ export async function createIdbStore(
       return db.getAll(FOLDERS_STORE)
     },
 
-    async createFolder({ name, parentId = null }) {
+    // id 가 이미 있으면 던진다. 가져오기(F-282)가 id·시각을 유지할 때만 준다 (F-282.md 3.11)
+    async createFolder({ name, parentId = null, id, createdAt, updatedAt }) {
       const folders: Folder[] = await db.getAll(FOLDERS_STORE)
       if (!canCreateFolder({ folders, parentId })) {
         throw new Error(`상위 폴더가 될 수 없음: ${parentId}`)
       }
+      if (id !== undefined) {
+        const existing = await db.get(FOLDERS_STORE, id)
+        if (existing) throw new Error(`이미 있는 id: ${id}`)
+      }
       const now = Date.now()
       const folder: Folder = {
-        id: crypto.randomUUID(),
+        id: id ?? crypto.randomUUID(),
         name: name || '새 폴더',
         parentId,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: createdAt ?? now,
+        updatedAt: updatedAt ?? now,
       }
       await db.put(FOLDERS_STORE, folder)
       return folder
@@ -307,8 +317,29 @@ export async function createIdbStore(
       await tx.done
     },
 
-    // 첨부는 문서와 연결 필드가 없다 — id 만으로 찾는다. id 가 이미 있으면 다시 뽑는다 (F-156.md 2.1·2.3)
-    async putAttachment({ blob, mime, ext, width, height }: { blob: Blob; mime: string; ext: AttachmentExt; width: number; height: number }) {
+    // 첨부는 문서와 연결 필드가 없다 — id 만으로 찾는다. id 를 주면 그 id 로, 없으면 자동 채번(F-156.md 2.1·2.3). 이미 있는 id 면 덮지 않고 기존 것을 그대로 돌려준다 (F-282.md 3.11)
+    async putAttachment({
+      blob,
+      mime,
+      ext,
+      width,
+      height,
+      id: givenId,
+    }: {
+      blob: Blob
+      mime: string
+      ext: AttachmentExt
+      width: number
+      height: number
+      id?: string
+    }) {
+      if (givenId !== undefined) {
+        const existing: Attachment | undefined = await db.get(ATTACHMENTS_STORE, givenId)
+        if (existing) return { id: existing.id, ext: existing.ext }
+        const record: Attachment = { id: givenId, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob }
+        await db.put(ATTACHMENTS_STORE, record)
+        return { id: givenId, ext }
+      }
       let id = randomAttachmentId()
       while (await db.get(ATTACHMENTS_STORE, id)) {
         id = randomAttachmentId()

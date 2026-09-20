@@ -46,7 +46,7 @@ export async function setPrefBeforeLoad(page, key, value) {
  */
 export async function importMarkdown(page, { name = 'doc.md', content }) {
   const before = await currentDocId(page)
-  const input = page.locator('input[type="file"]')
+  const input = page.locator('input[data-import="md"]')
   await input.setInputFiles({ name, mimeType: 'text/markdown', buffer: Buffer.from(content, 'utf-8') })
   await expect
     .poll(async () => currentDocId(page))

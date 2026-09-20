@@ -395,7 +395,12 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       }
       // id_taken·invalid·other — 재시도해도 성공하지 못하므로 버리고 계속 진행한다
       await cache.removeOutbox(entry.key)
-      notice({ type: 'error', message: '동기화하지 못했습니다.' })
+      // id_taken 만 원인을 알려준다 — 재발급은 F-289 로 미룬다 (F-282.md 3.14)
+      if (err.kind === 'id_taken') {
+        notice({ type: 'error', message: '다른 사람이 만든 문서·폴더와 번호가 겹쳐 서버에 올리지 못했습니다. 이 기기에는 남아 있습니다.' })
+      } else {
+        notice({ type: 'error', message: '동기화하지 못했습니다.' })
+      }
       return true
     }
   }
@@ -589,16 +594,41 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       }
     },
 
-    async create({ title, content, lineEnding, folderId = null }) {
+    // id 가 이미 있으면 던진다(덮지 않는다). 가져오기(F-282)가 id·시각·고정을 유지할 때만 준다 (F-282.md 3.11)
+    async create({ title, content, lineEnding, folderId = null, id: givenId, createdAt, updatedAt, pinnedAt }) {
       const folders = await cache.getFolders(userId)
       if (!isValidFolderId(folders, folderId)) {
         throw new Error(`유효하지 않은 folderId: ${String(folderId)}`)
       }
-      const id = crypto.randomUUID()
+      if (givenId !== undefined) {
+        const existing = await cache.getDoc(userId, givenId)
+        if (existing) throw new Error(`이미 있는 id: ${givenId}`)
+      }
+      const id = givenId ?? crypto.randomUUID()
       const now = Date.now()
-      const doc: Omit<CachedDoc, 'userId'> = { id, title, content, lineEnding, folderId, pinnedAt: null, createdAt: now, updatedAt: now, version: 0 }
+      const doc: Omit<CachedDoc, 'userId'> = {
+        id,
+        title,
+        content,
+        lineEnding,
+        folderId,
+        pinnedAt: pinnedAt ?? null,
+        createdAt: createdAt ?? now,
+        updatedAt: updatedAt ?? now,
+        version: 0,
+      }
       await cache.putDoc(userId, doc)
-      await cache.addOutbox(userId, { type: 'createDoc', docId: id, title, content, lineEnding, folderId })
+      await cache.addOutbox(userId, {
+        type: 'createDoc',
+        docId: id,
+        title,
+        content,
+        lineEnding,
+        folderId,
+        ...(createdAt !== undefined ? { createdAt } : {}),
+        ...(updatedAt !== undefined ? { updatedAt } : {}),
+        ...(pinnedAt !== undefined ? { pinnedAt } : {}),
+      })
       await refreshPending()
       kickSend()
       return toDoc({ ...doc, userId })
@@ -702,14 +732,25 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       return cached.map(toFolder)
     },
 
-    async createFolder({ name, parentId = null }) {
+    // id 가 이미 있으면 던진다. createdAt·updatedAt 은 서버가 받지 않는다 — 캐시에만 쓴다(F-282.md 3.11·3.12)
+    async createFolder({ name, parentId = null, id: givenId, createdAt, updatedAt }) {
       const existingFolders = await cache.getFolders(userId)
       if (!canCreateFolder({ folders: existingFolders, parentId })) {
         throw new Error(`상위 폴더가 될 수 없음: ${parentId}`)
       }
-      const id = crypto.randomUUID()
+      if (givenId !== undefined) {
+        const existing = await cache.getFolder(userId, givenId)
+        if (existing) throw new Error(`이미 있는 id: ${givenId}`)
+      }
+      const id = givenId ?? crypto.randomUUID()
       const now = Date.now()
-      const folder: Omit<CachedFolder, 'userId'> = { id, name: name || '새 폴더', parentId, createdAt: now, updatedAt: now }
+      const folder: Omit<CachedFolder, 'userId'> = {
+        id,
+        name: name || '새 폴더',
+        parentId,
+        createdAt: createdAt ?? now,
+        updatedAt: updatedAt ?? now,
+      }
       await cache.putFolder(userId, folder)
       await cache.addOutbox(userId, { type: 'createFolder', folderId: id, name: folder.name, parentId })
       await refreshPending()
@@ -790,8 +831,14 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
     // GIF·이미 WebP 면 변환을 건너뛴다(이중 인코딩 방지, F-220.md 2.3). 그 외는 WebP 로 변환해 본다(더 커지거나 실패하면 원본). 캐시에 먼저 넣고 즉시 반환, 올리기는 보낼 목록으로 (2.5)
     // 넣기 전 사전 검사(F-221.md 2.3) — used + 아직 안 올린 캐시 합 + 새 크기 > limit 면 던진다. 조회 실패(오프라인 등)면 건너뛴다(서버가 최종 판정)
-    async putAttachment({ blob, mime, ext, width, height }) {
-      const converted = ext === 'gif' || ext === 'webp' ? blob : await toWebp(blob)
+    // id 를 주면 그 id 로 저장하고 WebP 변환을 건너뛴다(원문 attachments/{id}.{ext} 를 고치지 않으려면 ext 가 그대로여야 한다). 이미 있으면 덮지 않고 그대로 돌려준다 (F-282.md 3.11)
+    async putAttachment({ blob, mime, ext, width, height, id: givenId }) {
+      if (givenId !== undefined) {
+        const existing = await cache.getAttachment(userId, givenId)
+        if (existing) return { id: existing.id, ext: existing.ext }
+      }
+
+      const converted = givenId !== undefined || ext === 'gif' || ext === 'webp' ? blob : await toWebp(blob)
       const finalExt: AttachmentExt = converted === blob ? ext : 'webp'
       const finalMime = converted === blob ? mime : 'image/webp'
 
@@ -809,9 +856,12 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         }
       }
 
-      let id = randomAttachmentId()
-      while (await cache.getAttachment(userId, id)) {
+      let id = givenId
+      if (id === undefined) {
         id = randomAttachmentId()
+        while (await cache.getAttachment(userId, id)) {
+          id = randomAttachmentId()
+        }
       }
 
       await cache.putAttachment(userId, { id, ext: finalExt, mime: finalMime, size: converted.size, width, height, blob: converted, uploaded: false, createdAt: Date.now() })

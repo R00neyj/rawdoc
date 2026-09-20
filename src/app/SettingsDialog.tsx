@@ -137,6 +137,8 @@ type SettingsDialogProps = {
   // `데이터` 절 — 전체 내보내기 (F-281.md 3.6). 안 주면 절을 그리지 않는다(공개 보기 화면)
   onExportAll?: () => void
   exportAllDisabled?: boolean
+  // `데이터` 절 — 가져오기 (F-282.md 3.1). onExportAll 이 있을 때만 의미가 있다(같은 절)
+  onImport?: () => void
   onClose: () => void
 }
 
@@ -160,6 +162,7 @@ export default function SettingsDialog({
   onChangeLineNumbers,
   onExportAll,
   exportAllDisabled,
+  onImport,
   onClose,
 }: SettingsDialogProps) {
   const titleId = 'settings-title'
@@ -282,13 +285,18 @@ export default function SettingsDialog({
         </>
       )
     }
-    // data — 로컬 앱·로그인 계정 전용, PublicView 는 안 준다 (F-281.md 3.6)
+    // data — 로컬 앱·로그인 계정 전용, PublicView 는 안 준다 (F-281.md 3.6, F-282.md 3.1)
     return (
       <div className="dialog-btn-row">
         <button type="button" className="dialog-btn" onClick={onExportAll} disabled={exportAllDisabled}>
           전체 내보내기
         </button>
         {exportAllDisabled && <span className="dialog-note">온라인일 때 내보낼 수 있습니다</span>}
+        {onImport && (
+          <button type="button" className="dialog-btn" onClick={onImport}>
+            가져오기…
+          </button>
+        )}
       </div>
     )
   }
