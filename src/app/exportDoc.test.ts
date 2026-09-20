@@ -2,7 +2,7 @@
 // (exportDoc 은 new Blob([text]) 로 다운로드 바이트를 만든다)
 import { describe, it, expect } from 'vitest'
 import { unzipSync } from 'fflate'
-import { buildExportPayload, buildPlainPayload } from './exportDoc'
+import { buildExportPayload, buildPlainPayload, buildHtmlPayload, buildRichCopyPayload } from './exportDoc'
 import { toPlainText } from '../viewer/toPlainText'
 
 describe('Blob 바이트 동일성 (F-112 A2)', () => {
@@ -92,5 +92,36 @@ describe('buildPlainPayload (F-278 A15)', () => {
     const text = '첫\r\n\r\n둘\r\n'
     const payload = buildPlainPayload({ text, title: '문서', lineEnding: 'crlf' })
     expect(payload.bytes).toEqual(new TextEncoder().encode(toPlainText(text, 'crlf')))
+  })
+})
+
+// F-280.md 7장 A13: buildHtmlPayload — 파일명·바이트
+describe('buildHtmlPayload (F-280 A13)', () => {
+  it('파일명은 toFileName 확장자만 .html, bytes 는 TextEncoder().encode(html) 과 같다. BOM 없음', () => {
+    const payload = buildHtmlPayload({ title: 'CON', body: '<p>본문</p>', css: 'x{}' })
+    expect(payload.filename).toBe('CON_.html')
+    expect(payload.bytes[0]).not.toBe(0xef) // UTF-8 BOM 첫 바이트가 아니다
+    expect(new TextDecoder().decode(payload.bytes)).toContain('<p>본문</p>')
+  })
+
+  it('일반 제목도 확장자만 .html 로 바뀐다', () => {
+    const payload = buildHtmlPayload({ title: '내 문서', body: '<p>a</p>', css: '' })
+    expect(payload.filename).toBe('내 문서.html')
+  })
+})
+
+// F-280.md 7장 A14: buildRichCopyPayload — 서식 있는 복사 payload
+describe('buildRichCopyPayload (F-280 A14)', () => {
+  it('plain 은 toPlainText(text, "lf") 와 같고, html 은 meta charset 으로 시작하고 html·style 태그가 없다', () => {
+    const text = '# 제목\r\n\r\n**굵게**\r\n'
+    const palette = { rule: '#e8e4db', rule2: '#f2efe8', ink: '#1c1b18', ink2: '#4a4740' }
+    const body = '<h1>제목</h1>\n<p><strong>굵게</strong></p>\n'
+    const payload = buildRichCopyPayload({ text, body, palette })
+
+    expect(payload.plain).toBe(toPlainText(text, 'lf'))
+    expect(payload.plain).not.toContain('\r\n')
+    expect(payload.html.startsWith('<meta charset="utf-8">')).toBe(true)
+    expect(payload.html).not.toContain('<html')
+    expect(payload.html).not.toContain('<style')
   })
 })

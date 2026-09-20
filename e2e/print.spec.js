@@ -62,25 +62,27 @@ async function triggerPrint(page) {
   await page.getByRole('menuitem', { name: 'PDF (A4 인쇄)', exact: true }).click()
 }
 
+// 메뉴 항목 전체 순서를 못박는 단언은 e2e/export.spec.js 한 곳에만 둔다 — 여기서는 인쇄 항목이 제 라벨로 있는지만 본다 (항목이 늘 때마다(F-280) 두 곳을 고치지 않으려는 것)
 test.describe('F-279 A3 메뉴 항목', () => {
-  test('내보내기 메뉴에 항목 3개가 순서대로 있다', async ({ page }) => {
+  test('내보내기 메뉴에 PDF (A4 인쇄) 항목이 있다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '본문\n' })
     const items = await openExportMenu(page)
-    await expect(items).toHaveText(['.md', '.txt (평문)', 'PDF (A4 인쇄)'])
+    await expect(items.filter({ hasText: /^PDF \(A4 인쇄\)$/ })).toHaveCount(1)
   })
 })
 
 test.describe('F-279 A4 키보드 순회', () => {
-  test('ArrowDown 3번이면 첫 항목으로 순환한다', async ({ page }) => {
+  test('ArrowDown 을 항목 수만큼 누르면 첫 항목으로 순환한다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '본문\n' })
     const items = await openExportMenu(page)
+    const count = await items.count()
     await expect(items.nth(0)).toBeFocused()
-    await page.keyboard.press('ArrowDown')
-    await expect(items.nth(1)).toBeFocused()
-    await page.keyboard.press('ArrowDown')
-    await expect(items.nth(2)).toBeFocused()
+    for (let i = 1; i < count; i += 1) {
+      await page.keyboard.press('ArrowDown')
+      await expect(items.nth(i)).toBeFocused()
+    }
     await page.keyboard.press('ArrowDown')
     await expect(items.nth(0)).toBeFocused()
   })

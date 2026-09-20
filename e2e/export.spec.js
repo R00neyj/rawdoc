@@ -19,7 +19,7 @@ test.describe('F-278 A16 메뉴 열림', () => {
     const menu = page.getByRole('menu')
     await expect(menu).toBeVisible()
     const items = page.locator('.export-menu-list [role="menuitem"]')
-    await expect(items).toHaveText(['.md', '.txt (평문)', 'PDF (A4 인쇄)'])
+    await expect(items).toHaveText(['.md', '.txt (평문)', 'HTML 파일', 'PDF (A4 인쇄)', '서식 있는 복사'])
   })
 })
 

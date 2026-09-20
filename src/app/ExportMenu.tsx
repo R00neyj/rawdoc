@@ -1,19 +1,21 @@
 import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } from 'react'
 
-import { IconDownload, IconNotes, IconPrint, IconTooltip } from './icons'
+import { IconDownload, IconNotes, IconPrint, IconRaw, IconCopy, IconTooltip } from './icons'
 import usePresence from './usePresence'
 
-// 상단바 `내보내기` 메뉴 (specs/features/F-278.md 3장, F-279.md 3장) — ShareMenu.tsx 패턴을 그대로 따른다(3.1)
+// 상단바 `내보내기` 메뉴 (specs/features/F-278.md 3장, F-279.md 3장, F-280.md 3.3) — ShareMenu.tsx 패턴을 그대로 따른다(3.1)
 type ExportMenuProps = {
   disabled: boolean // 문서가 없을 때·공유 문서일 때 비활성 (3.2)
   onExportMd: () => void
   onExportTxt: () => void
   onPrintDoc: () => void
+  onExportHtml: () => void
+  onCopyRich: () => void
 }
 
 type ExportMenuItem = { key: string; label: string; icon: ComponentType<{ size?: number }>; onSelect: () => void }
 
-export default function ExportMenu({ disabled, onExportMd, onExportTxt, onPrintDoc }: ExportMenuProps) {
+export default function ExportMenu({ disabled, onExportMd, onExportTxt, onPrintDoc, onExportHtml, onCopyRich }: ExportMenuProps) {
   const [open, setOpen] = useState(false)
   const { mounted, state } = usePresence(open) // 나타나고 사라지는 전환 (F-172.md 2.2)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
@@ -46,7 +48,9 @@ export default function ExportMenu({ disabled, onExportMd, onExportTxt, onPrintD
   const items: ExportMenuItem[] = [
     { key: 'md', label: '.md', icon: IconDownload, onSelect: onExportMd },
     { key: 'txt', label: '.txt (평문)', icon: IconNotes, onSelect: onExportTxt },
+    { key: 'html', label: 'HTML 파일', icon: IconRaw, onSelect: onExportHtml },
     { key: 'print', label: 'PDF (A4 인쇄)', icon: IconPrint, onSelect: onPrintDoc },
+    { key: 'copy-rich', label: '서식 있는 복사', icon: IconCopy, onSelect: onCopyRich },
   ]
 
   function handleKeyDown(e: KeyboardEvent<HTMLUListElement>) {

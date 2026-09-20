@@ -34,7 +34,7 @@ import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
-import { exportDoc, exportDocAsText } from './exportDoc'
+import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from './exportDoc'
 import { downloadWorkspaceExport, type WorkspaceExportSourceStore } from './exportWorkspace'
 import { importFiles } from './importFiles'
 import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag } from './fileDrop'
@@ -1449,6 +1449,32 @@ export default function App() {
     })
   }
 
+  // ----- HTML 파일 내보내기 (specs/features/F-280.md 4장) -----
+  function handleExportDocAsHtml() {
+    if (!currentDoc || !openDoc || openDoc.id !== currentDocId) return
+    void exportDocAsHtml({
+      handle: editorRef.current,
+      doc: currentDoc,
+      lineEnding: openDoc.lineEnding,
+      saver: { flush: () => docSaverFlushRef.current() },
+      store,
+      onNotice: showNotice,
+    })
+  }
+
+  // ----- 서식 있는 복사 (specs/features/F-280.md 5장) -----
+  function handleCopyDocAsRichText() {
+    if (!currentDoc || !openDoc || openDoc.id !== currentDocId) return
+    void copyDocAsRichText({
+      handle: editorRef.current,
+      doc: currentDoc,
+      lineEnding: openDoc.lineEnding,
+      saver: { flush: () => docSaverFlushRef.current() },
+      store,
+      onNotice: showNotice,
+    })
+  }
+
   // ----- PDF (A4 인쇄) — specs/features/F-279.md 4.3 -----
   function handlePrintDoc() {
     if (!currentDoc || !openDoc || openDoc.id !== currentDocId || !editorRef.current) return
@@ -2261,6 +2287,8 @@ export default function App() {
       onExportMd={handleExportDoc}
       onExportTxt={handleExportDocAsText}
       onPrintDoc={handlePrintDoc}
+      onExportHtml={handleExportDocAsHtml}
+      onCopyRich={handleCopyDocAsRichText}
       account={account}
       onAccountBeforeNavigate={() => docSaverFlushRef.current()}
       showToolbar={showToolbar}

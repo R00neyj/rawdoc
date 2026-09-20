@@ -41,6 +41,8 @@ type TopBarProps = {
   onExportMd: () => void
   onExportTxt: () => void
   onPrintDoc: () => void
+  onExportHtml: () => void
+  onCopyRich: () => void
   account: AccountState
   onAccountBeforeNavigate: () => Promise<void>
   // 서식·단락·삽입 탭바 (F-233.md 3.1) — App.tsx 가 표시 조건을 계산해 넘긴다
@@ -67,6 +69,8 @@ export default function TopBar({
   onExportMd,
   onExportTxt,
   onPrintDoc,
+  onExportHtml,
+  onCopyRich,
   account,
   onAccountBeforeNavigate,
   showToolbar,
@@ -112,7 +116,14 @@ export default function TopBar({
           onInvite={onInvite}
           wikiDocs={wikiDocs}
         />
-        <ExportMenu disabled={exportDisabled} onExportMd={onExportMd} onExportTxt={onExportTxt} onPrintDoc={onPrintDoc} />
+        <ExportMenu
+          disabled={exportDisabled}
+          onExportMd={onExportMd}
+          onExportTxt={onExportTxt}
+          onPrintDoc={onPrintDoc}
+          onExportHtml={onExportHtml}
+          onCopyRich={onCopyRich}
+        />
         <AccountMenu account={account} onBeforeNavigate={onAccountBeforeNavigate} />
       </header>
       {/* 좁은 창은 탭바를 상단바 밑 줄로 뺀다 — 아이콘 줄이 세로로도 접혀(2줄) 가로 스크롤 없이 다 보인다 (사용자 2026-09-16 "모바일일때가 툴바 더 필요할거임") */}
