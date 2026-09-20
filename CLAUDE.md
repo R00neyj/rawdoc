@@ -98,6 +98,8 @@ npm run test:watch   # Vitest watch mode
 npm run test:e2e     # Playwright E2E — build, then e2e/*.spec.js against preview (4317) (F-150 onward)
 npm run verify       # lint/unit/build summary (verify:full adds e2e, -- --repeat 2)
 npm run e2e:one -- "F-152 A8a" --repeat 3   # repeat a subset of e2e; skips the build if it is current
+npm run e2e:one -- e2e/site.spec.js "F-274 A9" --workers 2   # several targets at once; unknown flags pass through to playwright; prints the raw tail on failure
+npm run e2e:before -- "F-246 A6" --ref 2f4099a --repeat 3   # run the same test at an earlier commit, to tell "my change broke it" from "it was already broken"
 npm run measure -- --doc long:300 --select ".cm-line" --style line-height   # on-screen measurement JSON (4400, dist-measure)
 npm run review -- F-xxx   # check for out-of-ownership files and forbidden patterns
 npm run specs -- --todo   # remaining specs (--status pending, --milestone M3, --check, --json)
