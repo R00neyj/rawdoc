@@ -77,7 +77,7 @@
 
   /* 크기 (ia.md 7장) */
   --topbar-h: 52px;
-  --sidebar-w: 224px;
+  --sidebar-w: 300px;
   /* 사이드바 접힘 폭 — 아이콘 레일 (F-143 3.3) */
   --sidebar-rail-w: 48px;
   --statusbar-h: 26px;

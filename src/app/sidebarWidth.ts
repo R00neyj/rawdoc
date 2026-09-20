@@ -2,7 +2,7 @@
 export const MIN_SIDEBAR_WIDTH = 200
 export const MAX_SIDEBAR_WIDTH_CAP = 480
 export const MAX_SIDEBAR_WIDTH_MARGIN = 560
-export const DEFAULT_SIDEBAR_WIDTH = 224
+export const DEFAULT_SIDEBAR_WIDTH = 300
 export const ARROW_KEY_STEP = 16
 export const NARROW_OVERLAY_MARGIN = 48
 

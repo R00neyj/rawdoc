@@ -166,12 +166,12 @@ test.describe('F-159 사이드바 너비 조절', () => {
     await page.mouse.up()
   }
 
-  test('F-159 A5 +100px 끌기 → 324px, 저장', async ({ page }) => {
+  test('F-159 A5 +100px 끌기 → 400px, 저장', async ({ page }) => {
     await openApp(page)
     await dragHandleBy(page, 100)
     const width = (await rectOf(page.locator('.sidebar'))).width
-    expect(Math.abs(width - 324)).toBeLessThanOrEqual(2)
-    expect(await page.evaluate(() => window.localStorage.getItem('md.sidebarWidth'))).toBe('324')
+    expect(Math.abs(width - 400)).toBeLessThanOrEqual(2)
+    expect(await page.evaluate(() => window.localStorage.getItem('md.sidebarWidth'))).toBe('400')
   })
 
   test('F-159 A5 -200px 끌기 → 최소 200px', async ({ page }) => {
@@ -208,7 +208,7 @@ test.describe('F-159 사이드바 너비 조절', () => {
 
   test('F-159 A8 좁은 창 — 손잡이 없음, 겹쳐 열린 폭 = 저장 너비(창 폭-48 이하)', async ({ page }) => {
     await openApp(page)
-    await dragHandleBy(page, 100) // 324 로 저장
+    await dragHandleBy(page, 100) // 400 으로 저장
     await waitTransitionEnd(page.locator('.sidebar'))
 
     await resizeWindow(page, 900)
@@ -216,7 +216,7 @@ test.describe('F-159 사이드바 너비 조절', () => {
     await expect(page.locator('.sidebar')).toBeVisible()
     await expect(page.locator('.sidebar-resize-handle')).toHaveCount(0)
     const overlayWidth = (await rectOf(page.locator('.sidebar'))).width
-    expect(Math.abs(overlayWidth - 324)).toBeLessThanOrEqual(2)
+    expect(Math.abs(overlayWidth - 400)).toBeLessThanOrEqual(2)
   })
 })
 
