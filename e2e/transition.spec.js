@@ -185,7 +185,7 @@ test.describe('F-149 A3 툴팁 전환·지연', () => {
     await openApp(page)
     await importMarkdown(page, { content: '내용\n' })
 
-    const btn = page.getByRole('button', { name: '.md 파일로 내보내기' })
+    const btn = page.getByRole('button', { name: '내보내기 — .md·.txt 파일' })
     const wrap = page.locator('.icon-btn-wrap').filter({ has: btn })
     const tooltip = wrap.locator('.icon-tooltip')
 
@@ -280,7 +280,7 @@ test.describe('F-149 A6 움직임 줄이기', () => {
     const duration = await btn.evaluate((el) => getComputedStyle(el).transitionDuration)
     expect(duration.split(',').every((d) => d.trim() === '0s')).toBe(true)
 
-    const wrap = page.locator('.icon-btn-wrap').filter({ has: page.getByRole('button', { name: '.md 파일로 내보내기' }) })
+    const wrap = page.locator('.icon-btn-wrap').filter({ has: page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }) })
     const tooltipDuration = await wrap
       .locator('.icon-tooltip')
       .evaluate((el) => getComputedStyle(el).transitionDuration)
@@ -627,7 +627,7 @@ test.describe('F-228 A2 툴팁 곡선', () => {
     await openApp(page)
     await importMarkdown(page, { content: '내용\n' })
 
-    const btn = page.getByRole('button', { name: '.md 파일로 내보내기' })
+    const btn = page.getByRole('button', { name: '내보내기 — .md·.txt 파일' })
     const wrap = page.locator('.icon-btn-wrap').filter({ has: btn })
     const tooltip = wrap.locator('.icon-tooltip')
 
@@ -642,7 +642,7 @@ test.describe('F-228 A3 툴팁 넘침', () => {
     await openApp(page)
     await importMarkdown(page, { content: '내용\n' })
 
-    const btn = page.getByRole('button', { name: '.md 파일로 내보내기' })
+    const btn = page.getByRole('button', { name: '내보내기 — .md·.txt 파일' })
     const wrap = page.locator('.icon-btn-wrap').filter({ has: btn })
 
     const sample = wrap.locator('.icon-tooltip').evaluate(
@@ -716,7 +716,7 @@ test.describe('F-228 A6 움직임 줄이기', () => {
     )
     expect(tokenValue).toBe('0ms')
 
-    const btn = page.getByRole('button', { name: '.md 파일로 내보내기' })
+    const btn = page.getByRole('button', { name: '내보내기 — .md·.txt 파일' })
     const wrap = page.locator('.icon-btn-wrap').filter({ has: btn })
     await btn.hover()
     const tooltipDuration = await wrap

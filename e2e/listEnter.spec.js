@@ -245,9 +245,10 @@ test.describe('F-253 B10 원문 불변', () => {
     await page.keyboard.press('Enter')
     await page.keyboard.type('X')
 
+    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     const stream = await download.createReadStream()
     const chunks = []
@@ -284,9 +285,10 @@ test.describe('F-245 A19 원문 불변', () => {
     await page.keyboard.press('Enter')
     await page.keyboard.type('X')
 
+    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     const stream = await download.createReadStream()
     const chunks = []
@@ -307,9 +309,10 @@ test.describe('F-245 A7 원문 불변', () => {
     await page.keyboard.press('Enter')
     await page.keyboard.type('X')
 
+    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     const stream = await download.createReadStream()
     const chunks = []

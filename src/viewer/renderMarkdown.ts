@@ -179,6 +179,8 @@ function imageBlockRule(state: StateCore): void {
     html.content = renderImageBlockHtml(parsed)
     html.block = true
     html.map = open.map
+    // 평문 변환기가 정규식으로 다시 뜯지 않도록 해석 결과를 남겨 둔다 (F-278.md 4.2). 렌더 결과는 안 바뀐다
+    html.meta = parsed
 
     tokens.splice(i, 3, html)
   }
@@ -420,6 +422,11 @@ function renderFrontmatter(text: string, frontmatter: { contentFrom: number; con
     })
     .join('')
   return `<table class="markdown-frontmatter"><tbody>${rows}</tbody></table>`
+}
+
+// 보기 모드와 같은 해석의 토큰 배열, 렌더러만 거치지 않는다 — 평문 변환기(toPlainText.ts)가 쓴다 (F-278.md 4.1·4.2)
+export function parseMarkdownTokens(body: string, env: Record<string, unknown> = {}): Token[] {
+  return md.parse(body, env)
 }
 
 // text: 저장소·에디터 원문 그대로 (CRLF 도 그대로 넘길 수 있다 — markdown-it 이 파싱 전

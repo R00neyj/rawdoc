@@ -2152,20 +2152,23 @@ body.sidebar-resizing {
   color: var(--ink-2);
 }
 
-/* ===== 상단바 공유 메뉴 (specs/features/F-130.md 2장, ia.md 3.19) ===== */
-.share-menu {
+/* ===== 상단바 공유·내보내기 메뉴 (specs/features/F-130.md 2장, F-278.md 3장, ia.md 3.19) ===== */
+.share-menu,
+.export-menu {
   position: relative;
   flex: none;
 }
 
 /* 모양은 .icon-btn 기본값 그대로, 메뉴가 열린 동안은 선택 버튼과 같은 바탕, hover 규칙과 우선순위를 맞춰 이긴다 (design.md 4장, F-153 2.1) */
-.share-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']) {
+.share-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']),
+.export-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']) {
   background: color-mix(in srgb, var(--ink) 10%, transparent);
   color: var(--ink);
 }
 
 /* 나타나고 사라지는 전환 — usePresence 의 [data-state] 로 몬다 (F-172.md 2.1·2.2) */
-.share-menu-list {
+.share-menu-list,
+.export-menu-list {
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
@@ -2188,24 +2191,28 @@ body.sidebar-resizing {
   transition-behavior: allow-discrete;
 }
 
-.share-menu-list[data-state='closed'] {
+.share-menu-list[data-state='closed'],
+.export-menu-list[data-state='closed'] {
   opacity: 0;
   visibility: hidden;
   transform: translateY(-4px) scale(0.9);
 }
 
-.share-menu-list[data-state='open'] {
+.share-menu-list[data-state='open'],
+.export-menu-list[data-state='open'] {
   transition: opacity var(--transition-pop-fade), transform var(--transition-pop), visibility var(--transition-pop-fade);
 }
 
 @starting-style {
-  .share-menu-list[data-state='open'] {
+  .share-menu-list[data-state='open'],
+  .export-menu-list[data-state='open'] {
     opacity: 0;
     transform: translateY(-4px) scale(0.9);
   }
 }
 
-.share-menu-list button {
+.share-menu-list button,
+.export-menu-list button {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2220,7 +2227,9 @@ body.sidebar-resizing {
 }
 
 .share-menu-list button:hover,
-.share-menu-list button:focus-visible {
+.share-menu-list button:focus-visible,
+.export-menu-list button:hover,
+.export-menu-list button:focus-visible {
   background: var(--rule-2);
   color: var(--ink);
 }

@@ -460,9 +460,10 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
     await pasteFiles(page, { files: [{ bytes: pngBytes(50, 50), name: 'a.png', mime: 'image/png' }] })
     await waitSaved(page)
 
+    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     expect(download.suggestedFilename()).toMatch(/\.zip$/)
     const stream = await download.createReadStream()
@@ -1004,9 +1005,10 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
     const ids = [...saved.content.matchAll(/attachments\/([0-9a-f]{16})\.png/g)].map((m) => m[1])
     expect(ids.length).toBe(2)
 
+    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     expect(download.suggestedFilename()).toBe('이미지문서.zip')
 
@@ -1026,9 +1028,10 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
   test('F-158 A7 이미지 없음 — F-112 와 같게 .md', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { name: '일반문서.md', content: '본문\n' })
+    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     expect(download.suggestedFilename()).toBe('일반문서.md')
   })
@@ -1051,9 +1054,10 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
 
     await deleteAttachment(page, ids[0])
 
+    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
     let [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     await expect(page.locator('.notice-message')).toHaveText('이미지 1개를 찾을 수 없어 빼고 내보냈습니다.')
     expect(download.suggestedFilename()).toBe('문서.zip')
@@ -1065,9 +1069,10 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
 
     await deleteAttachment(page, ids[1])
 
+    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
     ;[download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     await expect(page.locator('.notice-message')).toHaveText('이미지 2개를 찾을 수 없어 빼고 내보냈습니다.')
     expect(download.suggestedFilename()).toBe('문서.md')
@@ -1081,9 +1086,10 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
     await waitSaved(page)
 
     await context.setOffline(true)
+    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     expect(download.suggestedFilename()).toBe('오프라인.zip')
     await context.setOffline(false)

@@ -22,9 +22,10 @@ test.describe('F-248 A8 원문 불변', () => {
     expect(saved.content).toBe(DOC)
     expect(saved.content).not.toContain('JavaScript')
 
+    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     const stream = await download.createReadStream()
     const chunks = []

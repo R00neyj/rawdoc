@@ -18,9 +18,10 @@ test.describe('F-217 A1 원문 불변', () => {
     expect(saved.content).toBe('본문 첫 줄\n둘째 줄\n')
     expect(saved.content).not.toContain('내 제목')
 
+    await page.getByRole('button', { name: '내보내기 — .md·.txt 파일' }).click()
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     const stream = await download.createReadStream()
     const chunks = []

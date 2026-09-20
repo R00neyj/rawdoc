@@ -34,7 +34,7 @@ import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
-import { exportDoc } from './exportDoc'
+import { exportDoc, exportDocAsText } from './exportDoc'
 import { importFiles } from './importFiles'
 import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag } from './fileDrop'
 import { attachImages } from './attachImages'
@@ -1414,6 +1414,17 @@ export default function App() {
     })
   }
 
+  // ----- .txt 평문 내보내기 (specs/features/F-278.md 5.1) -----
+  function handleExportDocAsText() {
+    if (!currentDoc || !openDoc || openDoc.id !== currentDocId) return
+    exportDocAsText({
+      handle: editorRef.current,
+      doc: currentDoc,
+      lineEnding: openDoc.lineEnding,
+      saver: { flush: () => docSaverFlushRef.current() },
+    })
+  }
+
   // ----- .md 가져오기 (specs/features/F-114.md 2.2·2.3) -----
   function requestImport() {
     importInputRef.current?.click()
@@ -2179,7 +2190,8 @@ export default function App() {
       onInvite={canInviteCurrentDoc ? requestInviteCurrentDoc : undefined}
       wikiDocs={docs}
       exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
-      onExportDoc={handleExportDoc}
+      onExportMd={handleExportDoc}
+      onExportTxt={handleExportDocAsText}
       account={account}
       onAccountBeforeNavigate={() => docSaverFlushRef.current()}
       showToolbar={showToolbar}

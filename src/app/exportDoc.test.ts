@@ -2,7 +2,8 @@
 // (exportDoc 은 new Blob([text]) 로 다운로드 바이트를 만든다)
 import { describe, it, expect } from 'vitest'
 import { unzipSync } from 'fflate'
-import { buildExportPayload } from './exportDoc'
+import { buildExportPayload, buildPlainPayload } from './exportDoc'
+import { toPlainText } from '../viewer/toPlainText'
 
 describe('Blob 바이트 동일성 (F-112 A2)', () => {
   it('CRLF·한글·이모지가 섞인 문자열도 TextEncoder 인코딩과 바이트가 같다', async () => {
@@ -70,5 +71,26 @@ describe('buildExportPayload (F-158 A1)', () => {
     const payload = await buildExportPayload({ text, title: '문서', store: fakeStore({}) })
     expect(payload.kind).toBe('md')
     expect(payload.missingCount).toBe(1)
+  })
+})
+
+// F-278.md 7장 A15: buildPlainPayload — 파일명·바이트
+describe('buildPlainPayload (F-278 A15)', () => {
+  it('파일명은 toFileName 확장자만 .txt 로 바꾼 것, bytes 는 평문 인코딩과 같다', () => {
+    const text = '# 제목\n\n본문\n'
+    const payload = buildPlainPayload({ text, title: '내 문서', lineEnding: 'lf' })
+    expect(payload.filename).toBe('내 문서.txt')
+    expect(payload.bytes).toEqual(new TextEncoder().encode(toPlainText(text, 'lf')))
+  })
+
+  it('예약어 제목도 toFileName 규칙(뒤에 _) 을 그대로 따르되 확장자만 .txt', () => {
+    const payload = buildPlainPayload({ text: '본문\n', title: 'CON', lineEnding: 'lf' })
+    expect(payload.filename).toBe('CON_.txt')
+  })
+
+  it('crlf 문서도 바이트가 toPlainText(text, "crlf") 와 같다', () => {
+    const text = '첫\r\n\r\n둘\r\n'
+    const payload = buildPlainPayload({ text, title: '문서', lineEnding: 'crlf' })
+    expect(payload.bytes).toEqual(new TextEncoder().encode(toPlainText(text, 'crlf')))
   })
 })
