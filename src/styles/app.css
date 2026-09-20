@@ -1366,7 +1366,65 @@ body.sidebar-resizing {
   color: var(--muted);
 }
 
-.dialog-actions button {
+/* 설정 대화상자 왼쪽 탭 목록 + 오른쪽 패널 (specs/features/F-290.md 3.8) */
+.settings-body {
+  display: flex;
+  gap: 14px;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+  width: 84px;
+}
+
+.settings-tabs button {
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.settings-panel {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-panel .dialog-field:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 459px) {
+  .settings-body {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .settings-tabs {
+    flex-direction: row;
+    width: auto;
+  }
+}
+
+/* `데이터` 탭 버튼 행 — 전체 내보내기(F-282 뒤 가져오기…) + 안내 문구 (F-290.md 3.6) */
+.dialog-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dialog-btn-row .dialog-note {
+  margin: 0;
+  text-align: left;
+}
+
+.dialog-actions button,
+.dialog-btn {
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
   padding: 7px 14px;
@@ -1374,7 +1432,8 @@ body.sidebar-resizing {
   transition: var(--transition-colors);
 }
 
-.dialog-actions button:hover {
+.dialog-actions button:hover,
+.dialog-btn:hover {
   background: var(--rule-2);
 }
 
@@ -1997,15 +2056,17 @@ body.sidebar-resizing {
   border-left: 1px solid var(--rule);
 }
 
-/* 선택된 버튼 — 2.1 아이콘 버튼 선택 표시와 같은 모양, 설정 대화상자 글자 세그먼트도 포함 (design.md 4장, F-153 2.1·2.2) */
+/* 선택된 버튼 — 2.1 아이콘 버튼 선택 표시와 같은 모양, 설정 대화상자 글자 세그먼트·왼쪽 탭도 포함 (design.md 4장, F-153 2.1·2.2, F-290.md 3.8) */
 .seg button[aria-checked='true'],
-.seg button[aria-pressed='true'] {
+.seg button[aria-pressed='true'],
+.settings-tabs button[aria-selected='true'] {
   background: color-mix(in srgb, var(--ink) 10%, transparent);
   color: var(--ink);
   font-weight: 600;
 }
 
-.seg button:disabled {
+.seg button:disabled,
+.dialog-btn:disabled {
   color: var(--muted);
   cursor: default;
 }

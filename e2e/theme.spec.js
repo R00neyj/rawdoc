@@ -124,18 +124,22 @@ test.describe('F-154 A7 설정 항목 — 글자 크기·들여쓰기', () => {
   test('테마/제목 서체/본문 서체/글자 크기/들여쓰기/줄 번호 순서, 기본 선택 표시', async ({ page }) => {
     await openApp(page)
     await page.getByRole('button', { name: '설정', exact: true }).click()
-    const labels = page.locator('dialog[aria-labelledby="settings-title"]').locator('.dialog-field > span, .dialog-field [id]')
-    await expect(labels.nth(3)).toHaveText('글자 크기')
-    await expect(labels.nth(4)).toHaveText('탭바') // F-233
-    await expect(labels.nth(5)).toHaveText('시작 화면') // F-232
-    await expect(labels.nth(6)).toHaveText('들여쓰기')
-    await expect(labels.nth(7)).toHaveText('줄 번호')
+    const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
+    const screenLabels = dialog.locator('.settings-panel .dialog-field > span, .settings-panel .dialog-field [id]')
+    await expect(screenLabels.nth(3)).toHaveText('글자 크기')
+    await expect(screenLabels.nth(4)).toHaveText('시작 화면') // F-232 — 화면 탭 맨 아래 (F-290 3.1)
 
     const fontSizeSeg = page.locator('#font-size-label').locator('..').locator('[role="radio"]')
     await expect(fontSizeSeg.nth(0)).toHaveText('작게')
     await expect(fontSizeSeg.nth(1)).toHaveText('보통')
     await expect(fontSizeSeg.nth(2)).toHaveText('크게')
     await expect(fontSizeSeg.nth(1)).toHaveAttribute('aria-checked', 'true') // 기본 medium(보통)
+
+    await dialog.getByRole('tab', { name: '편집기' }).click() // F-290 — 탭바·들여쓰기·줄 번호는 편집기 탭
+    const editorLabels = dialog.locator('.settings-panel .dialog-field > span, .settings-panel .dialog-field [id]')
+    await expect(editorLabels.nth(0)).toHaveText('탭바') // F-233
+    await expect(editorLabels.nth(1)).toHaveText('들여쓰기')
+    await expect(editorLabels.nth(2)).toHaveText('줄 번호')
 
     const indentSeg = page.locator('#indent-label').locator('..').locator('[role="radio"]')
     await expect(indentSeg.nth(0)).toHaveText('2칸')
@@ -194,6 +198,7 @@ test.describe('F-154 A7a 들여쓰기', () => {
     expect(baseline.content.match(/^( *)-/)[1].length).toBe(0) // 내어쓰기 복원
 
     await page.getByRole('button', { name: '설정', exact: true }).click()
+    await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '편집기' }).click() // F-290 — 들여쓰기는 편집기 탭
     await page.locator('#indent-label').locator('..').getByRole('radio', { name: '2칸', exact: true }).click()
     await page.getByRole('button', { name: '닫기', exact: true }).click()
 

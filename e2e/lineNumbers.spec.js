@@ -15,6 +15,7 @@ async function closeSettings(page) {
 
 async function setLineNumbers(page, label) {
   await openSettings(page)
+  await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '편집기' }).click() // F-290 — 줄 번호는 편집기 탭
   await page.locator(LINE_NUMBERS_LABEL_SCOPE).locator('..').getByRole('radio', { name: label, exact: true }).click()
   await closeSettings(page)
 }
@@ -23,8 +24,9 @@ test.describe('F-147 A1 설정', () => {
   test('마지막 항목 줄 번호, 표시/숨김 두 버튼, 기본 표시', async ({ page }) => {
     await openApp(page)
     await openSettings(page)
+    await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '편집기' }).click() // F-290 — 줄 번호는 편집기 탭
 
-    const labels = page.locator('.dialog-field > span, .dialog-field [id]')
+    const labels = page.locator('.settings-panel .dialog-field > span, .settings-panel .dialog-field [id]')
     const count = await labels.count()
     await expect(labels.nth(count - 1)).toHaveText('줄 번호')
 

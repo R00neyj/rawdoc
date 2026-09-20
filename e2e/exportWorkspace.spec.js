@@ -6,7 +6,9 @@ import { fakeServer } from './fixtures/fakeServer.js'
 
 async function openSettings(page) {
   await page.getByRole('button', { name: '설정', exact: true }).click()
-  return page.locator('dialog[aria-labelledby="settings-title"]')
+  const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
+  await dialog.getByRole('tab', { name: '데이터' }).click() // F-290 — 전체 내보내기는 데이터 탭
+  return dialog
 }
 
 // 사이드바 위쪽 아이콘 버튼으로 최상위에 폴더를 만들고, 기본 이름("새 폴더") 그대로 Enter 로 커밋한다

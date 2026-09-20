@@ -1,7 +1,8 @@
-import { useRef, type RefObject } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import Dialog from './Dialog'
+import { visibleSettingsTabs, nextTabIndex, type SettingsTabId } from './settingsTabs'
 
-// 설정 대화상자 D-2 (specs/ia.md 3.15, specs/features/F-121.md, F-141.md 3.2)
+// 설정 대화상자 D-2 (specs/ia.md 3.15, specs/features/F-121.md, F-141.md 3.2, F-290.md 왼쪽 탭)
 const THEME_OPTIONS = [
   { value: 'system', label: '시스템' },
   { value: 'white', label: '화이트' },
@@ -45,6 +46,29 @@ const TOOLBAR_OPTIONS = [
   { value: 'on', label: '표시' },
   { value: 'off', label: '숨김' },
 ] as const
+
+// 탭 3개 — 순서·구성은 F-290.md 3.1
+const TAB_LABELS: Record<SettingsTabId, string> = {
+  screen: '화면',
+  editor: '편집기',
+  data: '데이터',
+}
+
+// 대화상자 폭이 460px 아래로 줄면 탭 목록을 가로로 눕힌다 (F-290.md 3.5). app.css 의 같은 값과 맞춘다
+const NARROW_QUERY = '(max-width: 459px)'
+
+function useSettingsNarrow(): boolean {
+  const [narrow, setNarrow] = useState(() => (typeof window !== 'undefined' ? window.matchMedia(NARROW_QUERY).matches : false))
+  useEffect(() => {
+    const mql = window.matchMedia(NARROW_QUERY)
+    function handle(e: MediaQueryListEvent) {
+      setNarrow(e.matches)
+    }
+    mql.addEventListener('change', handle)
+    return () => mql.removeEventListener('change', handle)
+  }, [])
+  return narrow
+}
 
 type SegmentOption = { value: string; label: string; fontVar?: string }
 
@@ -139,93 +163,187 @@ export default function SettingsDialog({
   onClose,
 }: SettingsDialogProps) {
   const titleId = 'settings-title'
-  const checkedRef = useRef<HTMLButtonElement | null>(null) // 열 때 포커스: 첫 항목(테마)의 현재 선택 버튼
+  const checkedRef = useRef<HTMLButtonElement | null>(null) // 탭이 없을 때 초점: 테마의 현재 선택 버튼 (3.3)
+  const activeTabButtonRef = useRef<HTMLButtonElement | null>(null) // 탭이 있을 때 초점: 활성 탭 버튼
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const narrow = useSettingsNarrow()
+
   // 들여쓰기·줄 번호는 CM6 편집 영역 전용 — 넷 다 있을 때만 그린다(공개 보기 화면은 안 줌, F-230 2.2)
   const showEditorSettings = indent !== undefined && onChangeIndent !== undefined && lineNumbers !== undefined && onChangeLineNumbers !== undefined
+  const hasToolbar = toolbar !== undefined && onChangeToolbar !== undefined
 
-  return (
-    <Dialog open={open} onClose={onClose} titleId={titleId} initialFocusRef={checkedRef}>
-      <h2 id={titleId}>설정</h2>
-      <Segment
-        labelId="theme-label"
-        label="테마"
-        value={theme}
-        options={THEME_OPTIONS}
-        onChange={onChangeTheme}
-        checkedRef={checkedRef}
-      />
-      <Segment
-        labelId="heading-font-label"
-        label="제목 서체"
-        value={headingFont}
-        options={FONT_OPTIONS}
-        onChange={onChangeHeadingFont}
-        useFontPreview
-      />
-      <Segment
-        labelId="body-font-label"
-        label="본문 서체"
-        value={bodyFont}
-        options={FONT_OPTIONS}
-        onChange={onChangeBodyFont}
-        useFontPreview
-      />
-      <Segment
-        labelId="font-size-label"
-        label="글자 크기"
-        value={fontSize}
-        options={FONT_SIZE_OPTIONS}
-        onChange={onChangeFontSize}
-      />
-      {/* 공개 읽기전용 화면(F-230)에는 편집 명령이 없어 이 항목을 안 준다 (F-233 3.5) */}
-      {toolbar !== undefined && onChangeToolbar !== undefined && (
-        <Segment
-          labelId="toolbar-label"
-          label="탭바"
-          value={toolbar}
-          options={TOOLBAR_OPTIONS}
-          onChange={onChangeToolbar}
-        />
-      )}
-      {/* 로그인/로컬 앱 전용 — PublicView 는 목록·홈 개념이 없어 이 항목을 안 준다 (F-232 3.4) */}
-      {startScreen !== undefined && onChangeStartScreen !== undefined && (
-        <Segment
-          labelId="start-screen-label"
-          label="시작 화면"
-          value={startScreen}
-          options={START_SCREEN_OPTIONS}
-          onChange={onChangeStartScreen}
-        />
-      )}
-      {showEditorSettings && (
+  const tabs = visibleSettingsTabs({
+    screen: true,
+    editor: hasToolbar || showEditorSettings,
+    data: onExportAll !== undefined,
+  })
+
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(tabs[0])
+  const [openSeen, setOpenSeen] = useState(open)
+
+  // 대화상자를 다시 열 때마다 첫 탭(화면)으로 되돌린다 — 렌더 중에 조정해 Dialog 의 초점 이펙트보다 먼저 반영한다 (F-290.md 3.7)
+  let resolvedActiveTab = tabs.includes(activeTab) ? activeTab : tabs[0]
+  if (open !== openSeen) {
+    setOpenSeen(open)
+    if (open) {
+      resolvedActiveTab = tabs[0]
+      if (activeTab !== tabs[0]) setActiveTab(tabs[0])
+    }
+  }
+
+  function handleTabKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
+    const current = tabs.indexOf(resolvedActiveTab)
+    const next = nextTabIndex(current, tabs.length, e.key)
+    if (next === current) return
+    e.preventDefault()
+    setActiveTab(tabs[next])
+    tabRefs.current[next]?.focus()
+  }
+
+  function fieldsForTab(id: SettingsTabId): ReactNode {
+    if (id === 'screen') {
+      return (
         <>
           <Segment
-            labelId="indent-label"
-            label="들여쓰기"
-            value={indent}
-            options={INDENT_OPTIONS}
-            onChange={onChangeIndent}
+            labelId="theme-label"
+            label="테마"
+            value={theme}
+            options={THEME_OPTIONS}
+            onChange={onChangeTheme}
+            checkedRef={checkedRef}
           />
           <Segment
-            labelId="line-numbers-label"
-            label="줄 번호"
-            value={lineNumbers}
-            options={LINE_NUMBERS_OPTIONS}
-            onChange={onChangeLineNumbers}
+            labelId="heading-font-label"
+            label="제목 서체"
+            value={headingFont}
+            options={FONT_OPTIONS}
+            onChange={onChangeHeadingFont}
+            useFontPreview
           />
+          <Segment
+            labelId="body-font-label"
+            label="본문 서체"
+            value={bodyFont}
+            options={FONT_OPTIONS}
+            onChange={onChangeBodyFont}
+            useFontPreview
+          />
+          <Segment
+            labelId="font-size-label"
+            label="글자 크기"
+            value={fontSize}
+            options={FONT_SIZE_OPTIONS}
+            onChange={onChangeFontSize}
+          />
+          {/* 로그인/로컬 앱 전용 — PublicView 는 목록·홈 개념이 없어 이 항목을 안 준다 (F-232 3.4) */}
+          {startScreen !== undefined && onChangeStartScreen !== undefined && (
+            <Segment
+              labelId="start-screen-label"
+              label="시작 화면"
+              value={startScreen}
+              options={START_SCREEN_OPTIONS}
+              onChange={onChangeStartScreen}
+            />
+          )}
         </>
-      )}
-      {/* 로컬 앱·로그인 계정 전용 — PublicView 는 안 준다 (F-281.md 3.6) */}
-      {onExportAll && (
-        <div className="dialog-field">
-          <span id="data-export-label">데이터</span>
-          <div>
-            <button type="button" onClick={onExportAll} disabled={exportAllDisabled}>
-              전체 내보내기
-            </button>
-            {exportAllDisabled && <span style={{ marginLeft: 8, fontSize: 12.5, color: 'var(--muted)' }}>온라인일 때 내보낼 수 있습니다</span>}
+      )
+    }
+    if (id === 'editor') {
+      return (
+        <>
+          {/* 공개 읽기전용 화면(F-230)에는 편집 명령이 없어 이 항목을 안 준다 (F-233 3.5) */}
+          {toolbar !== undefined && onChangeToolbar !== undefined && (
+            <Segment
+              labelId="toolbar-label"
+              label="탭바"
+              value={toolbar}
+              options={TOOLBAR_OPTIONS}
+              onChange={onChangeToolbar}
+            />
+          )}
+          {showEditorSettings && (
+            <>
+              <Segment
+                labelId="indent-label"
+                label="들여쓰기"
+                value={indent}
+                options={INDENT_OPTIONS}
+                onChange={onChangeIndent}
+              />
+              <Segment
+                labelId="line-numbers-label"
+                label="줄 번호"
+                value={lineNumbers}
+                options={LINE_NUMBERS_OPTIONS}
+                onChange={onChangeLineNumbers}
+              />
+            </>
+          )}
+        </>
+      )
+    }
+    // data — 로컬 앱·로그인 계정 전용, PublicView 는 안 준다 (F-281.md 3.6)
+    return (
+      <div className="dialog-btn-row">
+        <button type="button" className="dialog-btn" onClick={onExportAll} disabled={exportAllDisabled}>
+          전체 내보내기
+        </button>
+        {exportAllDisabled && <span className="dialog-note">온라인일 때 내보낼 수 있습니다</span>}
+      </div>
+    )
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      titleId={titleId}
+      size="wide"
+      initialFocusRef={tabs.length > 1 ? activeTabButtonRef : checkedRef}
+    >
+      <h2 id={titleId}>설정</h2>
+      {tabs.length > 1 ? (
+        <div className="settings-body">
+          <div
+            className="settings-tabs"
+            role="tablist"
+            aria-label="설정 분류"
+            aria-orientation={narrow ? 'horizontal' : 'vertical'}
+            onKeyDown={handleTabKeyDown}
+          >
+            {tabs.map((id, i) => {
+              const selected = id === resolvedActiveTab
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  id={`settings-tab-${id}`}
+                  aria-selected={selected}
+                  aria-controls={`settings-panel-${id}`}
+                  tabIndex={selected ? 0 : -1}
+                  ref={(el) => {
+                    tabRefs.current[i] = el
+                    if (selected) activeTabButtonRef.current = el
+                  }}
+                  onClick={() => setActiveTab(id)}
+                >
+                  {TAB_LABELS[id]}
+                </button>
+              )
+            })}
+          </div>
+          <div
+            className="settings-panel"
+            role="tabpanel"
+            id={`settings-panel-${resolvedActiveTab}`}
+            aria-labelledby={`settings-tab-${resolvedActiveTab}`}
+          >
+            {fieldsForTab(resolvedActiveTab)}
           </div>
         </div>
+      ) : (
+        fieldsForTab(tabs[0])
       )}
       <div className="dialog-actions">
         <button type="button" onClick={onClose}>
