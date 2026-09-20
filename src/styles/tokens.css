@@ -55,8 +55,10 @@
   --callout-example: #7644d0;
   --callout-quote: var(--ink-2);
 
-  /* 하이라이트(==…==) 배경 — 편집·보기 모드 공용, --callout-question 파생(F-283.md 5장) */
-  --md-highlight-bg: color-mix(in srgb, var(--callout-question) 22%, transparent);
+  /* 하이라이트(==…==) 배경 — 편집·보기 모드 공용. 형광펜 노랑 전용 기준색을 두고
+     테마별로 그 값만 바꾼다 (F-283.md 5장, 2026-09-21 사용자 요청으로 노란색으로) */
+  --highlight-base: #ffd43b;
+  --md-highlight-bg: color-mix(in srgb, var(--highlight-base) 60%, transparent);
 
   /* 서체 (design.md 2.4) */
   --font-sans: 'Pretendard Variable', system-ui, sans-serif;
@@ -165,6 +167,8 @@
   --callout-success: #5cbf73;
   --callout-question: #d9a441;
   --callout-warning: #f0904a;
+  /* 다크는 밝은 노랑을 깔면 글자가 묻힌다 — 같은 60% 비율로 어두운 노랑을 쓴다 */
+  --highlight-base: #7a5c0a;
   --callout-danger: #f0706f;
   --callout-example: #a98bf0;
   /* 다크는 어두운 바탕 대비를 위해 브랜드색을 흰색과 섞어 밝힌다 (design.md 3.4) */
