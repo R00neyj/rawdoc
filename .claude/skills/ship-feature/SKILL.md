@@ -45,6 +45,7 @@ F-xxx 구현. E2E_PORT=4501, E2E_DIST=dist-f153
 - 보고의 "사람 확인 필요" 를 `specs/human-checks.md` 해당 절에 추가하거나, 이미 있는 행의 `(F-xxx 구현 후)` 를 지운다
 
 ## 5. 커밋·push
+- **커밋 뒤 그 명세의 프론트매터를 갱신한다** — `status: done`, `implemented: {커밋 해시}`. 해시는 커밋 후에 알 수 있으므로 다음 커밋에 딸려 보내거나 `--amend` 한다. `npm run specs -- --check` 가 `done` 인데 `implemented` 가 없는 것을 잡는다
 - `git add` 는 명세 파일 소유 목록 + `specs/human-checks.md` + 메인이 고친 파일만. `.claude/settings.json` 은 넣지 않는다
 - 메시지:
 ```

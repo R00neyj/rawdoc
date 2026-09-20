@@ -29,7 +29,7 @@
 | `specs/ia.md` | 화면 구조, 사용자 흐름, 상태, UI 문구 | 사람 승인 후 |
 | `specs/design.md` | 서체, 색 토큰, 형태·움직임 | 사람 승인 후 |
 | `specs/architecture.md` | `src/` 디렉터리, 저장소 인터페이스, 상태 흐름, 설정 키 | 사람 승인 후 |
-| `specs/features/F-xxx.md` | 작은 명세. 하나가 구현 단위 1개. **번호는 단계별로 백 단위** — M1 은 `F-1NN`, M2·M1 보강은 `F-2NN`, M3(실시간 협업)은 `F-3NN` (2026-09-20 사용자 지시) | 사람 승인 후 |
+| `specs/features/F-xxx.md` | 작은 명세. 하나가 구현 단위 1개. **번호는 단계별로 백 단위** — M1 은 `F-1NN`, M2·M1 보강은 `F-2NN`, M3(실시간 협업)은 `F-3NN` (2026-09-20 사용자 지시). **맨 앞에 YAML 프론트매터** (아래) | 사람 승인 후 |
 | `specs/human-checks.md` | 자동 테스트로 판정할 수 없어 사람이 확인할 목록과 상태 | 메인이 명세 완료마다 |
 | `e2e/` | Playwright E2E 테스트 (F-150) | 명세에 따라 |
 | `.workflow/` | 종료된 CM6 스파이크 기록 (2026-09-07~08). 새 작업에 쓰지 않는다 | 하지 않음 |
@@ -37,6 +37,27 @@
 | `src/` | 웹앱 본 코드 | 명세에 따라 |
 
 작업 전 읽는 순서: 이 파일 → `specs/product.md` → `specs/ia.md` → `specs/design.md` → 해당 `specs/features/F-xxx.md`
+
+### 명세 프론트매터 (2026-09-21 사용자 제안)
+
+`specs/features/F-xxx.md` 는 맨 앞에 YAML 프론트매터를 둔다. 상태 줄 산문은 그대로 남기고(왜 그렇게 정했는지가 거기 있다), 프론트매터는 **기계가 읽는 요약**이다. 151개 전부에 소급했다
+
+```yaml
+---
+id: F-290                    # 파일명과 같다
+title: 설정 대화상자 왼쪽 탭    # H1 에서 "F-290 " 을 뗀 것
+milestone: M1 | M2 | M3
+status: draft | pending | approved | done | deferred | superseded | overview
+created: 2026-09-21
+approved: 2026-09-21         # 사람 승인을 받은 날. 안 받았으면 줄 자체를 뺀다
+implemented: cd23dbb         # 구현 커밋. 없으면 줄을 뺀다
+depends: [F-232, F-281]      # 선행 명세. 없으면 줄을 뺀다
+---
+```
+
+- `status` 뜻: `draft` 초안 / `pending` 사람 승인 대기 / `approved` 승인됐고 구현 전 / `done` 구현 커밋됨 / `deferred` 승인과 별개로 착수 시점 미정 / `superseded` 다른 명세로 대체 / `overview` 설계 개요(구현 단위가 아니다)
+- **파일 소유 표는 프론트매터에 복제하지 않는다.** 1장 표가 원본이고 `npm run review` 가 그것을 읽는다. 두 곳에 두면 어긋난다
+- 조회는 `npm run specs`. 형식 오류·`done` 인데 `implemented` 없음·없는 명세를 가리키는 `depends` 는 `npm run specs -- --check` 가 잡는다
 
 ## 기술 스택
 
@@ -71,6 +92,7 @@ npm run verify       # lint·단위·build 요약 (verify:full = e2e 포함, -- 
 npm run e2e:one -- "F-152 A8a" --repeat 3   # e2e 일부 반복, 빌드 최신이면 건너뜀
 npm run measure -- --doc long:300 --select ".cm-line" --style line-height   # 화면 측정 JSON (4400·dist-measure)
 npm run review -- F-xxx   # 소유 밖 파일·금지 패턴 검토
+npm run specs -- --todo   # 남은 명세 (--status pending, --milestone M3, --check, --json)
 E2E_PORT=4501 E2E_DIST=dist-a npx playwright test   # e2e 병렬 슬롯
 npm run dev:spike    # 스파이크 확인용
 ```
