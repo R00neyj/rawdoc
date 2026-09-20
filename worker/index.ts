@@ -178,6 +178,8 @@ export default {
       if (url.pathname.startsWith('/p/')) {
         const publicPage = await renderPublicPage(request, env, url.pathname)
         if (publicPage) return publicPage
+        // 토큰 형식 오류·폐기·없는 링크 — 앱을 준다. PublicView 가 "링크를 찾을 수 없습니다" 를 보여준다 (F-272.md 7.1)
+        return env.ASSETS.fetch(new URL('/', url))
       }
       if (url.pathname === '/welcome') {
         return welcomeRedirect()

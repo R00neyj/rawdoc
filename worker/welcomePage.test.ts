@@ -64,3 +64,20 @@ describe('F-271 A5 renderWelcomePage — 조기 판정·CTA', () => {
     expect(html).toContain('/?app=1')
   })
 })
+
+describe('F-272 A12 renderWelcomePage — 사이트 공통 머리·꼬리', () => {
+  it('머리(site-head)의 앱 열기 에 data-cta="enter" 가 붙는다', async () => {
+    const html = await renderWelcomePage().text()
+    const headMatch = /<header class="site-head">[\s\S]*?<\/header>/.exec(html)
+    expect(headMatch).not.toBeNull()
+    expect(headMatch![0]).toContain('data-cta="enter"')
+    expect(headMatch![0]).toContain(brand.name)
+  })
+
+  it('꼬리(site-foot)에 제품명이 들어 있다', async () => {
+    const html = await renderWelcomePage().text()
+    expect(html).toMatch(/<footer class="site-foot">[\s\S]*?<\/footer>/)
+    const footMatch = /<footer class="site-foot">[\s\S]*?<\/footer>/.exec(html)
+    expect(footMatch![0]).toContain(brand.name)
+  })
+})

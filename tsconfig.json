@@ -12,5 +12,5 @@
     "skipLibCheck": true,
     "checkJs": false
   },
-  "include": ["src", "brand.config.ts", "vite.config.ts"]
+  "include": ["src", "brand.config.ts", "vite.config.ts", "site"]
 }
