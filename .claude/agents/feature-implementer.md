@@ -32,10 +32,16 @@ Korean copy of this file: `.claude/ko/agents/feature-implementer.ko.md` (snapsho
 - Color hex outside `src/styles/tokens.css`, product-name strings, `spike/` imports, leftover debug globals (`window.__*`) or `console.log`
 - Weakening a test to make it pass; `test.only`; new `test.skip`
 
+## Paths (2026-09-21 — from reading 12 past implementation transcripts)
+- **Write file paths relative to the repo root** (`src/app/App.tsx`), or with forward slashes if you must be absolute (`F:/Works/22_Projects_AI_VibeCoding/06_rawdoc/src/app/App.tsx`). Both work in Read/Edit/Write and in Bash
+- **Never type the backslash form.** 7 of 12 past agents lost turns to it — the long directory name came back mangled (`22_Workspaceyjw`, `22_Workhr`, `22_Workaround`, `22_Workspace_AI_VibeCoding`), and `"F:\\Works\\…"` also broke the tool call outright with `InputValidationError: could not be parsed as JSON`
+- Do not `cd` to the repo in Bash — it is already the working directory
+
 ## Tools (reach for these before writing a new throwaway script. Options are in `specs/features/F-160.md` ch. 2)
 - Measuring on-screen position, size, style: `node scripts/measure.mjs --doc … --mode … --select … --style … --action …` (port and build folder come from your slot)
 - Test documents: `e2e/fixtures/docs.js` (`longDoc`, `headingsDoc`, `listDoc`, `mixedDoc`)
-- Repeating one e2e test: `node scripts/e2e-one.mjs "F-xxx A3" --repeat 3` (only when you need to check flakiness)
+- Running e2e: `node scripts/e2e-one.mjs "F-xxx" --workers 2` — takes several targets (files and search terms), passes unknown flags through to playwright, and prints the raw tail when something fails. Add `--repeat 3` to check flakiness. **Do not call `npx playwright test` directly**; the past transcripts show half the agents doing that only because this script used to drop the extra arguments
+- Telling "my change broke it" from "it was already broken": `npm run e2e:before -- "F-xxx A3" --ref <sha>` — builds a throwaway `git worktree` at that commit and runs the same test there. **Never `git stash`**: several agents share one working tree, so a stash sweeps up everyone else's uncommitted work
 - Self-review: `node scripts/review-diff.mjs F-xxx` — fix until there are zero violations
 
 ## Verification (prototype stage — lint and smoke only)
