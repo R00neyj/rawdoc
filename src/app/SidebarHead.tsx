@@ -4,7 +4,7 @@ import brand from '../brand'
 import { IconPanelOpen, IconPanelClose, IconSearch, IconTooltip } from './icons'
 
 export const SIDEBAR_ID = 'sidebar-nav'
-export const SEARCH_LABEL = '검색 — 준비 중'
+export const SEARCH_LABEL = '검색'
 
 type SidebarHeadProps = {
   variant: 'topbar' | 'sidebar'
@@ -12,6 +12,7 @@ type SidebarHeadProps = {
   collapsed?: boolean
   onToggleSidebar: () => void
   toggleButtonRef?: RefObject<HTMLButtonElement | null>
+  onOpenSearch: () => void
 }
 
 export default function SidebarHead({
@@ -20,6 +21,7 @@ export default function SidebarHead({
   collapsed,
   onToggleSidebar,
   toggleButtonRef,
+  onOpenSearch,
 }: SidebarHeadProps) {
   const ToggleIcon = expanded ? IconPanelClose : IconPanelOpen
   const toggleLabel =
@@ -56,7 +58,7 @@ export default function SidebarHead({
           <IconTooltip text={toggleLabel} />
         </span>
         <span className="icon-btn-wrap" hidden={rail}>
-          <button type="button" className="icon-btn topbar-search-btn" aria-label={SEARCH_LABEL} aria-disabled="true">
+          <button type="button" className="icon-btn topbar-search-btn" aria-label={SEARCH_LABEL} onClick={onOpenSearch}>
             <IconSearch size={18} />
           </button>
           <IconTooltip text={SEARCH_LABEL} />

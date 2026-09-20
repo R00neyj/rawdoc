@@ -459,30 +459,38 @@ function RailButton(props: RailButtonProps) {
 
 type SidebarButtonProps = {
   label: string
-  hint?: string
   icon: ComponentType<{ size?: number; className?: string }>
   onClick?: () => void
   ariaDisabled?: boolean
 }
 
-// 펼친 사이드바의 아이콘+글자 동작 버튼 (F-143 3.2). hint 는 `검색` 의 `준비 중` 문구
+// 펼친 사이드바의 아이콘+글자 동작 버튼 (F-143 3.2)
 function SidebarButton(props: SidebarButtonProps) {
-  const { label, hint, onClick, ariaDisabled } = props
+  const { label, onClick, ariaDisabled } = props
   return (
     <button type="button" className="sidebar-btn" aria-disabled={ariaDisabled || undefined} onClick={onClick}>
       <props.icon size={18} className="sidebar-btn-icon" />
       <span className="sidebar-btn-label">{label}</span>
-      {hint && <span className="sidebar-btn-hint">{hint}</span>}
     </button>
   )
 }
 
-// 펼친 사이드바 위쪽 고정 영역의 새 문서·새 폴더·가져오기 — 가로로 나란히, 아이콘만(아래쪽 툴팁)
+// 펼친 사이드바 위쪽 고정 영역의 새 문서·새 폴더·가져오기·검색 — 가로로 나란히, 아이콘만(아래쪽 툴팁)
 // (2026-09-20 사용자 요청 "새문서, 새폴더, 가져오기는 아이콘 버튼으로 가로로 표시")
-function SidebarIconButton({ label, icon: Icon, onClick }: { label: string; icon: ComponentType<{ size?: number }>; onClick?: () => void }) {
+function SidebarIconButton({
+  label,
+  icon: Icon,
+  onClick,
+  btnClassName,
+}: {
+  label: string
+  icon: ComponentType<{ size?: number }>
+  onClick?: () => void
+  btnClassName?: string
+}) {
   return (
     <span className="icon-btn-wrap">
-      <button type="button" className="icon-btn" aria-label={label} onClick={onClick}>
+      <button type="button" className={btnClassName ? `icon-btn ${btnClassName}` : 'icon-btn'} aria-label={label} onClick={onClick}>
         <Icon size={18} />
       </button>
       <IconTooltip text={label} />
@@ -593,6 +601,7 @@ type SidebarProps = {
   onTogglePin: (id: string, pinned: boolean) => void
   onOpenSettings: () => void
   onOpenHelp: () => void
+  onOpenSearch: () => void
   canInstall: boolean
   onInstall: () => void
   width: number
@@ -630,6 +639,7 @@ export default function Sidebar({
   onTogglePin,
   onOpenSettings,
   onOpenHelp,
+  onOpenSearch,
   canInstall,
   onInstall,
   width,
@@ -928,12 +938,18 @@ export default function Sidebar({
     >
       {/* 사이드바 전체 높이 머리 줄 — 좁은 창 겹침 사이드바에는 없다 (F-159 2.1·2.4) */}
       {!narrow && (
-        <SidebarHead variant="sidebar" expanded={!collapsed} collapsed={isRail} onToggleSidebar={onToggleCollapse} />
+        <SidebarHead
+          variant="sidebar"
+          expanded={!collapsed}
+          collapsed={isRail}
+          onToggleSidebar={onToggleCollapse}
+          onOpenSearch={onOpenSearch}
+        />
       )}
       <div className="sidebar-inner">
         {isRail ? (
           <div className="sidebar-rail-scroll">
-            <RailButton icon={IconSearch} label={SEARCH_LABEL} ariaDisabled />
+            <RailButton icon={IconSearch} label={SEARCH_LABEL} onClick={onOpenSearch} />
             <RailButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
             <RailButton icon={IconFolderAdd} label="새 폴더" onClick={handleRailCreateFolder} />
             <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
@@ -944,6 +960,7 @@ export default function Sidebar({
                 (2026-09-20 사용자 "고정됨과 함께 스크롤 안되고 상단에 고정으로 표시") */}
             <div className="sidebar-fixed">
               <div className="sidebar-actions">
+                <SidebarIconButton icon={IconSearch} label="검색" btnClassName="sidebar-search-btn" onClick={onOpenSearch} />
                 <SidebarIconButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
                 <SidebarIconButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
                 <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />

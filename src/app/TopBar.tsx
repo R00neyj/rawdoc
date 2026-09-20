@@ -26,6 +26,7 @@ type TopBarProps = {
   sidebarOpen: boolean
   onToggleSidebar: () => void
   toggleButtonRef: RefObject<HTMLButtonElement | null>
+  onOpenSearch: () => void
   viewMode: ViewMode
   viewModeDisabled: boolean
   onChangeViewMode: (mode: ViewMode) => void
@@ -55,6 +56,7 @@ export default function TopBar({
   sidebarOpen,
   onToggleSidebar,
   toggleButtonRef,
+  onOpenSearch,
   viewMode,
   viewModeDisabled,
   onChangeViewMode,
@@ -85,6 +87,7 @@ export default function TopBar({
             expanded={sidebarOpen}
             onToggleSidebar={onToggleSidebar}
             toggleButtonRef={toggleButtonRef}
+            onOpenSearch={onOpenSearch}
           />
         )}
         <div className="topbar-spacer">

@@ -79,6 +79,8 @@ import ConfirmDeleteDialog, { type DeleteTarget } from './ConfirmDeleteDialog'
 import Dialog from './Dialog'
 import MoveDocDialog, { type MoveDocTarget } from './MoveDocDialog'
 import SettingsDialog from './SettingsDialog'
+import SearchDialog from './SearchDialog'
+import { searchScope } from './searchIndex'
 import HelpPage from './HelpPage'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
 import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
@@ -218,6 +220,8 @@ export default function App() {
   const [startScreenPref, setStartScreenPref] = useState(() => getPref('md.startScreen', 'home')) // F-232 3.4
   const [toolbarPref, setToolbarPref] = useState(() => getPref('md.toolbar', 'on')) // F-233 3.5
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // 검색 대화상자 D-6 (specs/features/F-287.md 3장)
+  const [searchOpen, setSearchOpen] = useState(false)
   // 도움말 전용 페이지 S-7 (specs/features/F-244.md 3.3) — currentDocId 는 이 화면 동안 null
   const [helpOpen, setHelpOpen] = useState(false)
   // (F-126.md 5.3)
@@ -292,6 +296,8 @@ export default function App() {
   const notifyChangeRef = useRef(() => {})
   const printRootRef = useRef<HTMLDivElement | null>(null) // 인쇄 전용 영역 (F-279.md 4.2)
   const printDocRef = useRef(() => {}) // Ctrl+P 가 매 커밋 최신 handlePrintDoc 을 읽게 한다 (F-279.md 6.1)
+  const openSearchRef = useRef(() => {}) // Ctrl+Shift+F 가 매 커밋 최신 openSearch 를 읽게 한다 (F-287.md 3.4)
+  const selectSearchQueryRef = useRef(() => {}) // 검색 대화상자가 이미 열려 있을 때 검색어를 전체 선택 — SearchDialog 가 채운다 (F-287.md 3.4)
   const printDisabledRef = useRef(true) // exportDisabled 와 같은 조건 (F-279.md 6.1)
   // hashchange 핸들러가 낡은 클로저의 docs·currentDocId 를 읽지 않도록 매 렌더 후 갱신한다
   // (0단계 버그 수정)
@@ -929,7 +935,7 @@ export default function App() {
       setSidebarOpen(false)
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !settingsOpen && !deleteTarget && !moveDocTarget && !bulkDeleteItems) {
+      if (e.key === 'Escape' && !settingsOpen && !searchOpen && !deleteTarget && !moveDocTarget && !bulkDeleteItems) {
         setSidebarOpen(false)
       }
     }
@@ -940,7 +946,7 @@ export default function App() {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [narrow, sidebarOpen, settingsOpen, deleteTarget, moveDocTarget, bulkDeleteItems])
+  }, [narrow, sidebarOpen, settingsOpen, searchOpen, deleteTarget, moveDocTarget, bulkDeleteItems])
 
   // ----- 브라우저 기본 찾기(Ctrl/Cmd+F) 비활성화 (2026-09-20 사용자 요청) -----
   // 포커스가 에디터 안이면 createEditor.ts 의 Mod-f 키맵(scope 'editor search-panel')이 먼저
@@ -971,6 +977,25 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
+
+  // ----- Ctrl+Shift+F(Cmd+Shift+F) → 검색 대화상자 D-6 (specs/features/F-287.md 3.4) -----
+  useEffect(() => {
+    if (publicRoute) return // 공개 보기(S-5)에는 저장소가 없다
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return
+      if (e.key.toLowerCase() !== 'f') return
+      const open = document.querySelector('dialog[open]')
+      if (open && !open.querySelector('.search-dialog')) return // 다른 대화상자 위에 겹치지 않는다
+      e.preventDefault()
+      if (open) {
+        selectSearchQueryRef.current()
+        return
+      }
+      openSearchRef.current()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [publicRoute])
 
   // ----- 문서를 열 때 저장소 본문을 1회 읽어 에디터에 넘긴다 (architecture.md 3장) -----
   // openDoc.id 가 currentDocId 와 다르면(문서 없음 포함) 렌더링에서 에디터를 그리지
@@ -1125,13 +1150,14 @@ export default function App() {
     onSaveError: handleSaveError,
   })
 
-  // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후 최신 flush·notifyChange·handlePrintDoc 을 반영한다
+  // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후 최신 flush·notifyChange·handlePrintDoc·openSearch 를 반영한다
   useEffect(() => {
     docSaverFlushRef.current = docSaver.flush
     notifyChangeRef.current = docSaver.notifyChange
     printDocRef.current = handlePrintDoc
     // exportDisabled 와 같은 조건 (F-279.md 6.1) — bootPhase !== 'ready' 면 isEmpty 자체가 false 라 첫 항으로 충분하다
     printDisabledRef.current = bootPhase !== 'ready' || currentDocId === null || Boolean(sharedDoc)
+    openSearchRef.current = openSearch
   })
 
   // hashchange 핸들러(위)가 항상 최신 docs·currentDocId 를 보도록 매 커밋 후 갱신한다
@@ -1145,11 +1171,11 @@ export default function App() {
     helpOpenRef.current = helpOpen
     // 받지 않는 때(F-145.md 2.1): 대화상자·공유 화면·공유 관리 페이지·저장소를 못 쓸 때(store.kind==='memory')
     dropBlockedRef.current = Boolean(
-      settingsOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen || store.kind === 'memory',
+      settingsOpen || searchOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen || store.kind === 'memory',
     )
     // 이미지는 저장소를 못 쓸 때(메모리 저장소)는 막지 않는다 (F-156.md 2.5) — #/help 화면은 편집기가 없어 차단 대상이 아니다 (F-244.md 3.3)
     imageDropBlockedRef.current = Boolean(
-      settingsOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen,
+      settingsOpen || searchOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen,
     )
     // view 권한·403 강등 문서·편집 잠금(F-213.md 2.3)에서는 이미지 올리기(붙여넣기·끌어놓기)를 막는다 (F-212.md 2.4)
     readOnlyDocRef.current = isReadOnlyDoc
@@ -2119,6 +2145,27 @@ export default function App() {
     setSettingsOpen(false)
   }
 
+  // 검색 대화상자 D-6 (specs/features/F-287.md 3.5)
+  function openSearch() {
+    if (bootPhase !== 'ready') return // 부팅 중 store 는 임시 memoryStore 라 인덱스가 빈다
+    setSearchOpen(true) // 먼저 — 대화상자가 먼저 그려져야 한다 (4.2)
+    closeSidebarIfNarrow()
+  }
+
+  function closeSearch() {
+    setSearchOpen(false)
+  }
+
+  // 검색 결과에서 문서 열기 (F-287.md 4.6) — 지금 문서를 그대로 두지 않고 그 문서로 이동한다
+  async function openDocFromSearch(id: string) {
+    setSearchOpen(false)
+    await selectDoc(id)
+    // 편집·원문 모드면 에디터에 포커스를 준다 — Dialog 기본 복귀만으로는 사라진 요소를 가리키거나 사이드바로 돌아간다 (4.6)
+    if (viewMode !== 'view') {
+      setTimeout(() => editorRef.current?.focus(), 0)
+    }
+  }
+
   // 사이드바 `도움말` → 전용 페이지로 이동 (F-244.md 3.3, 3.5)
   async function openHelp() {
     await beforeLeaveDoc()
@@ -2450,6 +2497,9 @@ export default function App() {
   const isEmpty = bootPhase === 'ready' && currentDocId === null
   const showEditor = bootPhase === 'ready' && !isEmpty
 
+  // 검색 인덱스 재사용 범위 (specs/features/F-287.md 4.2) — searchIndex.ts 는 localStorage 를 읽지 않는다
+  const searchDialogScope = searchScope(store.kind, account.state === 'in' ? account.id : null)
+
   // 탭바 표시 조건 (F-233 3.1) — 자리는 항상 유지, 조건에 안 맞으면 안 그린다.
   // 좁은 창도 보여준다(2026-09-16 사용자 "모바일일때가 툴바 더 필요할거임") — TopBar 가 narrow 면 상단바 밑 자기 줄에 그린다
   const showToolbar =
@@ -2466,6 +2516,7 @@ export default function App() {
       sidebarOpen={sidebarOpen}
       onToggleSidebar={toggleSidebar}
       toggleButtonRef={toggleButtonRef}
+      onOpenSearch={openSearch}
       viewMode={viewMode}
       viewModeDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
       onChangeViewMode={changeViewMode}
@@ -2548,6 +2599,7 @@ export default function App() {
           onTogglePin={handleTogglePin}
           onOpenSettings={openSettings}
           onOpenHelp={openHelp}
+          onOpenSearch={openSearch}
           canInstall={canInstall}
           onInstall={install}
           width={displaySidebarWidth}
@@ -2739,6 +2791,15 @@ export default function App() {
         exportAllDisabled={exportOffline}
         onImport={requestImportZip}
         onClose={closeSettings}
+      />
+      <SearchDialog
+        open={searchOpen}
+        store={store}
+        scope={searchDialogScope}
+        beforeIndex={beforeLeaveDoc}
+        onOpenDoc={openDocFromSearch}
+        onClose={closeSearch}
+        selectQueryRef={selectSearchQueryRef}
       />
       <ImportPreviewDialog
         state={importState}

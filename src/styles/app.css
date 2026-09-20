@@ -35,10 +35,7 @@ svg {
   background: var(--panel);
 }
 
-/* 검색 버튼(로직 없음, F-143 3.5) — 색은 .icon-btn[aria-disabled] 기본값(--muted)을 따른다 */
-.topbar-search-btn {
-  cursor: default;
-}
+/* .topbar-search-btn 클래스 이름은 F-216 의 :has(> .topbar-search-btn) 선택자가 걸려 있어 남긴다 (F-287) */
 
 /* 좁은 창 상단바 앞 묶음(제품명·토글·검색) — 내용만큼의 폭 (F-159 2.4, ia.md 3.11) */
 .topbar-lead {
@@ -478,6 +475,17 @@ body.sidebar-resizing {
   margin: 2px 0 8px;
 }
 
+/* 휴대폰 폭 검색 진입점(F-287 3.3) — 상단바 검색이 숨는(F-216) 그 600px 미디어 쿼리를 그대로 쓴다 */
+.icon-btn-wrap:has(> .sidebar-search-btn) {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .icon-btn-wrap:has(> .sidebar-search-btn) {
+    display: flex;
+  }
+}
+
 .sidebar-scroll {
   flex: 1;
   min-height: 0;
@@ -552,12 +560,6 @@ body.sidebar-resizing {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.sidebar-btn-hint {
-  flex: none;
-  font-size: 11px;
-  color: var(--muted);
 }
 
 /* 레일 아이콘 전용 버튼 — 툴팁은 버튼 오른쪽 (F-143 3.3) */
@@ -1364,6 +1366,92 @@ body.sidebar-resizing {
   text-align: right;
   font-size: 12.5px;
   color: var(--muted);
+}
+
+/* 검색 대화상자 (specs/features/F-287.md 4.1) */
+.search-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.search-status {
+  padding: 24px 4px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.search-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.search-result--on {
+  background: var(--rule-2);
+}
+
+.search-result-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.search-result-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.search-result-meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.search-result-shared {
+  color: var(--link);
+}
+
+.search-result-snippet {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.search-hit {
+  background: var(--md-highlight-bg);
+  color: inherit;
 }
 
 /* 설정 대화상자 왼쪽 탭 목록 + 오른쪽 패널 (specs/features/F-290.md 3.8) */

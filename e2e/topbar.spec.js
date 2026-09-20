@@ -6,7 +6,6 @@ import {
   resizeWindow,
   rectOf,
   waitTransitionEnd,
-  currentDocId,
   setPrefBeforeLoad,
   EXPORT_BUTTON_LABEL,
 } from './helpers.js'
@@ -195,7 +194,7 @@ test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () 
     await openApp(page)
     const head = page.locator('.sidebar-head')
     await expect(head).toHaveCount(1)
-    const search = page.getByRole('button', { name: '검색 — 준비 중' })
+    const search = page.getByRole('button', { name: '검색', exact: true })
     const toggle = page.getByRole('button', { name: '사이드바 접기' })
     const sidebar = page.locator('.sidebar')
     const brandIcon = page.locator('.brand-icon')
@@ -275,7 +274,7 @@ test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () 
     await expect(page.locator('.sidebar-head--rail')).toHaveCount(1)
     const railButtons = page.locator('.sidebar-rail-scroll .rail-btn')
     await expect(railButtons).toHaveCount(4)
-    await expect(railButtons.first()).toHaveAttribute('aria-label', '검색 — 준비 중')
+    await expect(railButtons.first()).toHaveAttribute('aria-label', '검색')
     await expect(railButtons.nth(1)).toHaveAttribute('aria-label', '새 문서')
     await expect(railButtons.nth(2)).toHaveAttribute('aria-label', '새 폴더')
     await expect(railButtons.nth(3)).toHaveAttribute('aria-label', '가져오기')
@@ -297,7 +296,7 @@ test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () 
     await expect(toggle).toBeFocused()
 
     await page.keyboard.press('Tab')
-    await expect(page.getByRole('button', { name: '검색 — 준비 중' })).toBeFocused()
+    await expect(page.getByRole('button', { name: '검색', exact: true })).toBeFocused()
 
     // 상단바(편집 모드 버튼) 바로 앞은 너비 손잡이(separator)이거나, 탭바(F-233, 기본
     // 켜짐)가 있으면 탭바 안이어야 한다 — 제목 입력은 빠졌다(F-217.md 2.5)
@@ -411,26 +410,7 @@ test.describe('F-151 상단바 앞 묶음(토글·검색)', () => {
     expect(prefAfter).toBe(prefBefore)
   })
 
-  test('F-151 A6 검색 버튼 — 클릭·Enter 해도 아무 변화 없음', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '내용\n' })
-    const search = page.getByRole('button', { name: '검색 — 준비 중' })
-    await expect(search).toHaveAttribute('aria-disabled', 'true')
-
-    const docIdBefore = await currentDocId(page)
-    const docCountBefore = await page.locator('.tree-row').count()
-    const urlBefore = page.url()
-
-    await search.click({ force: true }) // aria-disabled='true' 라 Playwright 기본 클릭 판정을 우회한다
-    await search.focus()
-    await page.keyboard.press('Enter')
-
-    expect(await currentDocId(page)).toBe(docIdBefore)
-    expect(await page.locator('.tree-row').count()).toBe(docCountBefore)
-    expect(page.url()).toBe(urlBefore)
-    await expect(search).toBeFocused()
-  })
-
+  // F-151 A6(검색 버튼 — 준비 중)은 F-287 로 대체됐다. 검색 버튼 동작은 e2e/docSearch.spec.js
 })
 
 test.describe('F-143 A10 그 밖의 기능 버튼 아이콘', () => {
