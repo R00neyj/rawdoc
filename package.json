@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "prepare": "node scripts/install-hooks.mjs",
     "dev": "vite",
     "dev:spike": "vite --config spike/vite.config.js",
     "build": "vite build",

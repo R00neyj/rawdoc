@@ -1,0 +1,54 @@
+#!/bin/sh
+# 배포 전 체인지로그 확인 — 사용자 지시 2026-09-21 "배포시 체인지로그 작성은 훅으로 고정"
+#
+# 배포는 `git push --force origin <sha>:refs/heads/deploy` 한 줄뿐이라 여기가 유일한 배포 지점이다.
+# origin/deploy 의 현재 끝이 곧 "마지막으로 배포한 커밋" 이므로, 이번에 배포할 범위를 정확히 알 수 있다.
+# (F-273 5장은 "배포 지점 기록이 없어 기계로 못 본다" 고 적었는데, 훅 자리에서는 git 이 그 기록을 준다.)
+#
+# git 이 stdin 으로 한 줄씩 준다: <local ref> <local sha> <remote ref> <remote sha>
+# 규칙을 건너뛰어야 하면 `git push --no-verify ...`
+
+CHANGELOG=content/changelog.md
+ZERO=0000000000000000000000000000000000000000
+status=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+	[ "$remote_ref" = "refs/heads/deploy" ] || continue
+	[ "$local_sha" = "$ZERO" ] && continue
+
+	if [ "$remote_sha" = "$ZERO" ]; then
+		git cat-file -e "$local_sha:$CHANGELOG" 2>/dev/null && continue
+		echo "" >&2
+		echo "배포 거부: $CHANGELOG 가 없습니다. (specs/features/F-273.md)" >&2
+		status=1
+		continue
+	fi
+
+	if ! git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
+		echo "" >&2
+		echo "배포 거부: 직전 배포 커밋 $remote_sha 이 로컬에 없어 체인지로그를 확인하지 못했습니다." >&2
+		echo "  git fetch origin deploy 뒤 다시 미세요." >&2
+		status=1
+		continue
+	fi
+
+	count=$(git rev-list --count "$remote_sha".."$local_sha")
+	[ "$count" = "0" ] && continue
+
+	if [ -n "$(git diff --name-only "$remote_sha" "$local_sha" -- "$CHANGELOG")" ]; then
+		continue
+	fi
+
+	echo "" >&2
+	echo "배포 거부: 이번 배포 범위에 $CHANGELOG 변경이 없습니다." >&2
+	echo "" >&2
+	echo "  범위: $(git rev-parse --short "$remote_sha")..$(git rev-parse --short "$local_sha") (커밋 ${count}개)" >&2
+	echo "  할 일: $CHANGELOG 맨 위에 '## YYYY-MM-DD' 묶음을 만들고, 지난 배포 뒤" >&2
+	echo "         사용자 눈에 보이는 변화를 한 줄씩 적은 뒤 그 커밋까지 포함해 미세요." >&2
+	echo "         프론트매터 updated: 도 같은 날짜로. 규칙은 specs/features/F-273.md 3장" >&2
+	echo "  정말 사용자 눈에 보이는 변화가 없으면: git push --no-verify ..." >&2
+	echo "" >&2
+	status=1
+done
+
+exit $status
