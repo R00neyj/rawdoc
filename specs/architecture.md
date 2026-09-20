@@ -9,6 +9,8 @@
 ```
 brand.config.js          제품명·짧은 이름·메인 컬러. 유일한 정의 위치 (design.md 3.2)
 scripts/                 검증 도구 (F-160). measure·verify·e2e-one. src/ 가 import 하지 않는다
+content/                 공개 사이트 글 원본 `.md` (F-272). 글은 F-273~F-276 이 넣는다
+site/                    공개 사이트 빌드 (F-272). build·pages·guard·render. 순수 문자열만 다루고 DOM·React·node:fs 를 import 하지 않는다
 index.html               <title>·theme-color·--accent 는 빌드 시 brand.config.js 에서 주입
 vite.config.js           React, brand 주입 플러그인, Vitest, (F-115) PWA
 public/                  아이콘 등 정적 파일
@@ -64,6 +66,7 @@ src/
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
+- **`site → src`, `site → brand.config` 도 한 방향이다** — `src/` 는 `site/` 를 import 하지 않는다 (F-272 3.3)
 - 라우터·상태관리·UI 컴포넌트 라이브러리를 들이지 않는다. 아이콘은 `@material-symbols/svg-400` SVG 파일만 쓴다 (2026-09-14 사용자 지정, F-142)
 
 ## 2. 저장소 인터페이스
@@ -157,7 +160,7 @@ worker/
 
 - 배포: GitHub `deploy` 브랜치에 올리면 Cloudflare Workers Builds 가 `npm run build` → `npx wrangler deploy`. `deploy` 는 로컬 `verify:full` 을 통과한 main 커밋만 가리킨다(`git push origin <sha>:deploy`). main push 는 GitHub Actions `ci.yml`(린트·타입·단위·빌드)만. D1 원격 마이그레이션은 자동화하지 않고 배포 전에 손으로 (2026-09-15)
 - 배포 주소: `rawdoc.app` 하나 (커스텀 도메인). `workers_dev`·`preview_urls` 는 끈다 — IndexedDB·서비스 워커가 출처별로 갈라지지 않게
-- 경로: `/api/*` 는 로그인(Access 가 경로를 보호, Worker 가 JWT 재검증). `/pub/*` 는 로그인 없이 읽기만(쓰기 메서드 405). 나머지는 정적 자산, 없는 경로는 `index.html`
+- 경로: `/api/*` 는 로그인(Access 가 경로를 보호, Worker 가 JWT 재검증). `/pub/*` 는 로그인 없이 읽기만(쓰기 메서드 405). 나머지는 정적 자산, 없는 경로는 `404.html` (`wrangler.jsonc` 의 `not_found_handling: "404-page"`, F-272 7장. 그전에는 `index.html` 이었다). 사이트 페이지(`/changelog`·`/help`·`/privacy`·`/terms`·`/guides/*`)는 빌드가 낸 평평한 `{경로}.html` 정적 자산이다
 - API 응답 헤더: `Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`. 오류 본문에 내부 정보 없음
 - 남의 자원은 404, 권한은 있으나 동작이 막히면 403 (F-206·F-212)
 - Worker 는 `src/lib/**` 순수 함수와 `src/types.ts` 만 import 한다

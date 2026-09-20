@@ -35,6 +35,8 @@ Logic gets TDD; design gets a fast human-review loop.
 | `specs/architecture.md` | `src/` layout, storage interfaces, state flow, setting keys | After human approval |
 | `specs/features/F-xxx.md` | Small specs. One spec = one implementation unit. **Numbers run in hundreds per milestone** — M1 is `F-1NN`, M2 and M1 follow-ups are `F-2NN`, M3 (live collaboration) is `F-3NN` (user instruction, 2026-09-20). **YAML frontmatter at the top** (below) | After human approval |
 | `specs/human-checks.md` | Items no automated test can judge, plus their status | By main, as each spec lands |
+| `content/` | Public-site article sources, `.md` (F-272). `site/` reads them | Per spec |
+| `site/` | Public-site build — articles → HTML, 404, sitemap, robots (F-272). `src/` never imports from here | Per spec |
 | `e2e/` | Playwright E2E tests (F-150) | Per spec |
 | `.workflow/` | Closed CM6 spike records (2026-09-07~08). Not used for new work | Never |
 | `spike/` | Spike code. Reference only when porting the editor | Never |
