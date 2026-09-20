@@ -1,68 +1,71 @@
 ---
 name: ship-feature
-description: Rawdoc 작은 명세 F-xxx 를 구현 에이전트에 맡기고 자동 검토·검증·사람 확인 목록·커밋·push 까지 끝낸다. "F-153 진행", "다음 F 진행", "F-148 병렬로" 같은 요청에 쓴다.
+description: Hands a Rawdoc small spec (F-xxx) to the implementation agent and carries it through review, verification, the human-check list, commit, and push. Use it for requests like "F-153 진행", "다음 F 진행", "F-148 병렬로".
 ---
 
 # ship-feature
 
-메인(오케스트레이터)이 따르는 절차. 판단·승인·커밋은 메인이 직접 하고, 구현만 `feature-implementer` 에이전트에 맡긴다.
+The procedure main (the orchestrator) follows. Main makes the judgment calls, approvals, and commits itself; only the implementation goes to the `feature-implementer` agent.
 
-## 입력
-- 명세 번호 1개 이상. 여러 개면 병렬 가능 여부를 1단계에서 판정
+Korean copy: `.claude/ko/skills/ship-feature/SKILL.ko.md` (snapshot, for humans). This file is the source of truth.
 
-## 1. 준비
-1. `specs/features/F-xxx.md` 존재, 상태 줄의 선행 조건(커밋 순서)을 `git log --oneline` 로 확인
-2. `specs/product.md` 4장 "진행 순서" 와 사용자 지시 확인. 사용자가 "진행 전에 물어봐" 라고 했으면 물어본다
-3. `git status --short` — `.claude/settings.json` 외 변경이 있으면 누구 것인지 확인하고 섞지 않는다
-4. **기본은 최대 병렬.** 명세들의 파일 소유 표를 비교해 겹치지 않으면 선행 조건 문구와 관계없이 동시에 띄운다. 같은 파일이라도 다른 영역(예: 콜아웃 부분 / 프론트매터 부분)이면 병렬로 하고 "Edit 직전 다시 Read, 넓은 교체·전체 Write 금지" 를 메모로 준다. 한 명세가 다른 명세의 신규 파일을 쓰는 경우만 순서대로
-   - 소유 표 제목은 명세마다 다르다 — "파일 소유"·"수정 파일"·"바꾸는 파일". `npm run review` 는 셋 다 읽지만 사람이 비교할 때도 셋 다 본다
-   - `src/app/App.tsx` 는 거의 모든 명세가 건드린다. 여기가 겹치면 순차로 가는 게 안전하다
-5. 동시 에이전트는 4개까지 (e2e 브라우저 부하로 PC 가 다운된 적 있음)
-6. 슬롯 배정: n 번째 에이전트 `E2E_PORT=450n`, `E2E_DIST=dist-f{번호}`
+## Input
+- One or more spec numbers. With several, decide in step 1 whether they can run in parallel
 
-## 2. 구현 맡기기
-`Agent` 도구, `subagent_type: "feature-implementer"`, `run_in_background: true`. 프롬프트는 짧게:
+## 1. Preparation
+1. Confirm `specs/features/F-xxx.md` exists, and check the prerequisites in its status line (commit order) with `git log --oneline`
+2. Check `specs/product.md` ch. 4 "진행 순서" and the user's instructions. If the user said "진행 전에 물어봐", ask
+3. `git status --short` — if anything besides `.claude/settings.json` changed, find out whose it is and do not mix it in
+4. **Default to maximum parallelism.** Compare the specs' file-ownership tables; if they do not overlap, launch them together regardless of what the prerequisite prose says. Even for the same file, if they touch different regions (say, the callout part vs. the frontmatter part), go parallel and add the note "Edit 직전 다시 Read, 넓은 교체·전체 Write 금지". Only go sequential when one spec needs a file the other creates
+   - The ownership heading differs per spec — "파일 소유", "수정 파일", "바꾸는 파일". `npm run review` reads all three, and so should you when comparing by hand
+   - `src/app/App.tsx` is touched by nearly every spec. If that is the overlap, sequential is the safe call
+5. At most 4 agents at once (e2e browser load has crashed the machine before)
+6. Slot assignment: the nth agent gets `E2E_PORT=450n`, `E2E_DIST=dist-f{number}`
+
+## 2. Handing off the implementation
+Use the `Agent` tool with `subagent_type: "feature-implementer"` and `run_in_background: true`. Keep the prompt short:
 ```
 F-xxx 구현. E2E_PORT=4501, E2E_DIST=dist-f153
-(세션 메모: 사용자가 이번 세션에 준 추가 지시가 있으면 한두 줄)
+(session note: one or two lines if the user gave extra instructions this session)
 ```
-- 세션 메모에 꼭 넣을 것: 사용자가 **"이번엔 e2e 생략, 내가 육안 확인"** 같은 방침을 줬으면 그 한 줄. 안 주면 에이전트가 스모크를 돌리다 시간을 다 쓴다
-- 명세가 `사람 승인 대기` 면 띄우지 않는다. 승인 줄(`사람 승인 — 받음 (날짜)`)을 먼저 확인한다
-- 기다리는 동안 같은 파일을 만지지 않는다. 결과를 예측해 보고하지 않는다
-- 오래 걸린다고 사용자가 말하면 `SendMessage` 로 "마무리하고 보고" 를 보낸다
+- Always include in the session note: any policy the user gave, such as **"이번엔 e2e 생략, 내가 육안 확인"**. Without it the agent will burn all its time on smoke tests
+- Do not launch a spec still marked `사람 승인 대기`. Check for the approval line (`사람 승인 — 받음 (날짜)`) first
+- While waiting, do not touch the same files. Do not predict the result and report it
+- If the user says it is taking too long, send "마무리하고 보고" with `SendMessage`
 
-## 3. 결과 받으면
-1. 보고를 읽고 수용 기준별 미충족·명세와 다른 부분을 표시
-2. `node scripts/review-diff.mjs F-xxx` — 위반이 있으면
-   - 주석 줄이기 같은 사소한 것은 메인이 직접 고친다
-   - 코드 판단이 필요한 것은 `SendMessage` 로 에이전트에 돌려보낸다 (최대 2회, 넘으면 사용자에게 보고)
-   - 소유 밖 경고는 메인이 이유를 보고 받아들이거나 되돌린다
-3. **검증은 가볍게 (프로토타입 단계 기본값).** 에이전트가 돌린 스모크 결과를 믿고, 메인은 `npx eslint <소유 파일>` 만 다시 돌린다. 에이전트 보고에 스모크 미실행·실패가 있을 때만 그 명세 e2e 1회(`npx playwright test -g "F-xxx" --workers=2`)를 직접 돌린다
-4. 전체 e2e(`verify.mjs --e2e`)는 사용자가 요청하거나 배포·마일스톤 직전에만. 이때도 `--workers=4`, 한 번에 하나
-5. 종료 코드로 판정한다. 출력 grep 으로 통과를 추정하지 않는다
+## 3. When the result arrives
+1. Read the report and flag unmet criteria and anything that diverges from the spec
+2. `node scripts/review-diff.mjs F-xxx` — if there are violations:
+   - Main fixes trivia (like trimming comments) directly
+   - Send anything needing a code judgment back to the agent with `SendMessage` (at most twice; beyond that, report to the user)
+   - For out-of-ownership warnings, main reads the reason and either accepts it or reverts
+3. **Keep verification light (the prototype-stage default).** Trust the smoke results the agent ran; main only reruns `npx eslint <owned files>`. Run that spec's e2e once yourself (`npx playwright test -g "F-xxx" --workers=2`) only when the report says smoke tests were skipped or failed
+4. Full e2e (`verify.mjs --e2e`) only on user request or right before a deploy or milestone. Even then, `--workers=4`, one at a time
+5. Judge by exit code. Do not infer a pass by grepping output
 
-## 4. 사람 확인 목록
-- 보고의 "사람 확인 필요" 를 `specs/human-checks.md` 해당 절에 추가하거나, 이미 있는 행의 `(F-xxx 구현 후)` 를 지운다
+## 4. Human-check list
+- Move the report's "사람 확인 필요" items into the right section of `specs/human-checks.md`, or strike the `(F-xxx 구현 후)` note from a row that already exists
 
-## 5. 커밋·push
-- **커밋 뒤 그 명세의 프론트매터를 갱신한다** — `status: done`, `implemented: {커밋 해시}`. 해시는 커밋 후에 알 수 있으므로 다음 커밋에 딸려 보내거나 `--amend` 한다. `npm run specs -- --check` 가 `done` 인데 `implemented` 가 없는 것을 잡는다
-- `git add` 는 명세 파일 소유 목록 + `specs/human-checks.md` + 메인이 고친 파일만. `.claude/settings.json` 은 넣지 않는다
-- 메시지:
+## 5. Commit and push
+- Commit granularity follows `CLAUDE.md` "Commit granularity" — one commit per spec, and the spec and its implementation are separate commits
+- **After committing, update that spec's frontmatter** — `status: done`, `implemented: {commit hash}`. The hash only exists after the commit, so carry it in the next commit or `--amend`. `npm run specs -- --check` catches `done` without `implemented`
+- `git add` covers only the spec's file-ownership list, `specs/human-checks.md`, and files main fixed. Never `.claude/settings.json`
+- Message:
 ```
-{기능 요약} (F-xxx)
+{feature summary} (F-xxx)
 
 - 검증: review-diff 위반 0, lint 통과, 스모크(관련 단위 N, F-xxx e2e M/M). 전체 e2e 미실행
 - 미검증·사람 확인: …
-- 명세와 다른 부분: … (없으면 줄 삭제)
+- 명세와 다른 부분: … (drop the line if none)
 
-Co-Authored-By / Claude-Session 줄 (시스템 안내대로)
+Co-Authored-By / Claude-Session lines (as the system notice specifies)
 ```
-- 검증을 끝내지 못한 채 커밋해야 하면(토큰·시간) 제목에 `검증 미완` 을 넣고 다음 세션이 이어서 볼 파일·명령을 본문에 적는다
+- If you must commit without finishing verification (tokens, time), put `검증 미완` in the subject and list the files and commands for the next session in the body
 - `git push`
 
-## 6. 사용자 보고 (음슴체, 짧게)
-- 커밋 해시, 수용 기준 결과 한 줄, 사람 확인 항목, 다음 순서 명세
-- 다음 명세를 자동 진행할지는 사용자 최근 지시를 따른다. 지시가 없으면 묻는다
+## 6. Report to the user (음슴체, short)
+- Commit hash, one line on the acceptance-criteria results, human-check items, the next spec in order
+- Whether to move on to the next spec automatically follows the user's latest instruction. Without one, ask
 
-## 멈출 때
-- 명세 선행 조건 불일치, 에이전트가 명세 결함 보고, 수정 2회 후에도 검증 실패 → 커밋하지 않고 사용자에게 보고
+## When to stop
+- Prerequisites do not match, the agent reports a defect in the spec, or verification still fails after two rounds of fixes → do not commit; report to the user

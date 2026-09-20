@@ -1,83 +1,85 @@
 ---
 name: write-spec
-description: Rawdoc 명세(specs/features/F-xxx.md)를 spec-writer 에이전트로 작성한다. 설계 개요와 작은 명세 둘 다. "F-273 명세 써줘", "검색 명세 작성", "남은 명세 리스트업 후 작성" 같은 요청에 쓴다. 구현은 ship-feature 가 맡는다.
+description: Writes a Rawdoc spec (specs/features/F-xxx.md) using the spec-writer agent. Covers both design overviews and small specs. Use it for requests like "F-273 명세 써줘", "검색 명세 작성", "남은 명세 리스트업 후 작성". Implementation belongs to ship-feature.
 ---
 
 # write-spec
 
-명세 작성만 한다. 구현은 `ship-feature`.
+Writing specs only. Implementation is `ship-feature`.
 
-## 1. 준비 — 메인이 먼저 정한다
+Korean copy: `.claude/ko/skills/write-spec/SKILL.ko.md` (snapshot, for humans). This file is the source of truth.
 
-1. **번호를 정한다.** 단계별 백 단위 — M1 `F-1NN`, M2·M1 보강 `F-2NN`, M3 `F-3NN`. `ls specs/features/` 로 빈 번호를 찾고, `npm run specs -- --todo` 로 지금 남은 것을 본다 (상위 개요의 로드맵 표에만 있고 아직 파일이 없는 번호는 그 개요를 열어야 보인다)
-2. **개요인지 작은 명세인지** 정한다
-   - 여러 화면·여러 구현 단위에 걸치면 **설계 개요** (`F-270`·`F-277`·`F-284` 형식). 1~5장 결정 + 6장 하위 로드맵 표
-   - 하나가 구현 단위 1개면 **작은 명세** (`F-279`·`F-282` 형식)
-3. **사용자에게 물을 것을 먼저 묻는다.** 설계가 갈리는 지점(어디서 도나, 어떤 UI 형태, 범위 경계)은 에이전트가 고르게 두지 말고 `AskUserQuestion` 으로 결정받아 프롬프트에 **"이미 정한 것, 바꾸지 말 것"** 으로 박는다. 이게 가장 큰 품질 차이를 만든다
-4. `specs/product.md` 가 그 기능을 **범위 밖**으로 적고 있는지 확인한다. 적혀 있으면 프롬프트에 "갱신 대상" 으로 넣게 한다 (에이전트는 기존 `specs/**` 를 못 고친다)
-5. **파일 겹침을 본다.** 같은 소스 파일을 건드릴 명세끼리는 병렬로 띄워도 되지만(각자 다른 `F-xxx.md` 를 쓰므로), 그 사실을 양쪽 프롬프트에 알려 서로 모순되는 결정을 못 하게 한다
+## 1. Preparation — main decides these first
 
-## 2. 에이전트 띄우기
+1. **Pick the number.** Hundreds per milestone — M1 `F-1NN`, M2 and M1 follow-ups `F-2NN`, M3 `F-3NN`. Find a free number with `ls specs/features/` and see what is outstanding with `npm run specs -- --todo` (numbers that exist only in an overview's roadmap table have no file yet, so you have to open that overview to see them)
+2. **Decide overview or small spec**
+   - Spanning several screens or implementation units → a **design overview** (the `F-270` / `F-277` / `F-284` format). Chapters 1–5 are decisions, chapter 6 is the roadmap table of children
+   - One implementation unit → a **small spec** (the `F-279` / `F-282` format)
+3. **Ask the user first what needs asking.** Do not let the agent pick where the design forks (where it runs, what UI shape, where the scope ends) — settle it with `AskUserQuestion` and put it in the prompt as **"이미 정한 것, 바꾸지 말 것"**. This makes the biggest difference in quality
+4. Check whether `specs/product.md` records the feature as **out of scope**. If it does, have the prompt list it under "갱신 대상" (the agent cannot edit existing `specs/**`)
+5. **Look for file overlap.** Specs touching the same source file can still run in parallel (each writes its own `F-xxx.md`), but tell both prompts about it so they do not make contradictory decisions
 
-`Agent`, **`subagent_type: "spec-writer"`** (`.claude/agents/spec-writer.md`, Opus 로 정의돼 있어 `model` 을 따로 주지 않는다). 병렬 가능하면 한 메시지에 여러 개.
+## 2. Launching the agent
 
-**에이전트 정의에 이미 들어 있는 것은 프롬프트에 다시 쓰지 않는다** — 읽기 순서, 불변조건, 테스트 환경이 `node` 인 것, 시각값은 사람 확인, 새 의존성 비교표, 수용 기준·파일 소유 표·갱신 대상·열린 질문을 담는 것, 보고 형식. 프롬프트에는 **이 명세에만 해당하는 것**만 쓴다.
+`Agent` with **`subagent_type: "spec-writer"`** (`.claude/agents/spec-writer.md` is defined with Opus, so do not pass a `model`). If they can run in parallel, put them in one message.
 
-프롬프트 뼈대:
+**Do not repeat in the prompt what the agent definition already covers** — reading order, invariants, the `node` test environment, visual values going to human checks, the dependency comparison table, including acceptance criteria / file-ownership table / 갱신 대상 / open questions, and the report format. The prompt carries **only what is specific to this spec**.
+
+Prompt skeleton:
 
 ```
 `specs/features/F-xxx.md` 를 새로 작성한다. **명세만 쓴다. 구현·코드 수정·커밋은 하지 않는다.**
 새로 만드는 파일은 그 하나뿐이다.
 
 ## F-xxx 는 무엇인가
-{상위 개요의 로드맵 행을 인용} / {선행 명세의 구현 상태}
+{quote the overview's roadmap row} / {status of the prerequisite spec}
 
 ## 사용자가 이미 정한 것 (바꾸지 말 것)
-{1단계에서 받은 결정을 번호로. 이유까지 적는다}
+{the decisions from step 1, numbered, with reasons}
 
 ## 먼저 읽을 것 (읽기 순서는 에이전트가 안다 — 여기서는 어느 장·어느 파일인지만)
-- specs/product.md {해당 장} · ia.md {장} · design.md {장} · architecture.md {장}
-- {상위 개요} 전문
-- {선행 명세} 전문 — 형식 본보기이자 이어받는 것
-- 실제 코드: {파일 목록. 무엇을 확인해야 하는지까지}
+- specs/product.md {chapter} · ia.md {chapter} · design.md {chapter} · architecture.md {chapter}
+- {the overview} in full
+- {the prerequisite spec} in full — the format model and what it inherits
+- 실제 코드: {file list, and what to check in each}
 
 ## 반드시 결론을 내는 것 (조사 항목으로 미루지 않는다)
-{이 명세에서 애매하게 남기면 안 되는 지점을 2~5개. 무엇을 읽고 무엇을 재서 답하라는 것까지}
+{2–5 points that must not be left vague, including what to read and what to measure}
 
 ## 명세에 반드시 담을 것
-{장별로 무엇을 결정해야 하는지. 이 명세에만 해당하는 것}
+{what each chapter must decide — only what is specific to this spec}
 
 ## 이 명세에만 해당하는 주의
-{같은 시각에 도는 다른 명세, 건드리면 안 되는 범위, 이미 구현된 선행 기능의 상태}
+{other specs running at the same time, boundaries not to cross, the state of already-implemented prerequisites}
 ```
 
-### 품질을 올리는 한 줄
+### The line that raises quality
 
-공통 규칙은 에이전트 정의에 있다. 프롬프트에서는 **이번 명세의 어디에 그걸 적용하라는지**를 짚어 준다.
+Shared rules live in the agent definition. In the prompt, point at **where in this spec to apply them**.
 
-- 상위 개요가 미뤄둔 항목을 이름으로 짚어 "이건 네가 결론을 내라" 로 준다
-- 성능이 걸리면 **무엇을 몇 개 규모로 재라**까지 적는다 (예: "문서 1,000개·5,000개에서 링크 추출 시간과 레이아웃 계산 시간")
-- 이어받을 선행 명세가 이미 알아낸 사실(예: F-284 의 "공유받은 문서는 `content` 가 비어 있다")을 짚어 주면 같은 것을 다시 파지 않는다
+- Name the items the overview deferred and hand them over as "이건 네가 결론을 내라"
+- If performance matters, say **what to measure at what scale** (e.g. "문서 1,000개·5,000개에서 링크 추출 시간과 레이아웃 계산 시간")
+- Point at what the prerequisite spec already established (e.g. F-284's "공유받은 문서는 `content` 가 비어 있다") so the agent does not dig it up again
 
-## 3. 보고 받으면
+## 3. When the report arrives
 
-1. **"가정으로 둔 것" 을 먼저 읽는다.** 거기 있는 것이 다음 사고의 지점이다
-2. 보고가 짚은 **기존 코드·명세와의 불일치**를 메인이 직접 확인한다 (파일 한두 개 읽는 수준). 에이전트 말만 믿고 사용자에게 전하지 않는다
-3. `npm run review -- F-xxx` 로 수정 파일 표가 파싱되는지, `npm run specs -- --check` 로 프론트매터가 맞는지 본다 (전자는 제목이 "파일 소유"·"수정 파일"·"바꾸는 파일" 중 무엇이든 읽는다)
-4. 절 번호 참조가 어긋난 곳이 있는지 `grep -n "^### \|(N\.M)"` 로 훑는다 — 에이전트가 절을 옮기고 참조를 안 고치는 일이 잦다
+1. **Read "가정으로 둔 것" first.** That is where the next round of thinking belongs
+2. Verify yourself any **conflict with existing code or specs** the report flags (reading a file or two is enough). Do not relay the agent's word to the user unchecked
+3. Run `npm run review -- F-xxx` to confirm the file table parses, and `npm run specs -- --check` for the frontmatter (the former reads any of "파일 소유", "수정 파일", "바꾸는 파일")
+4. Scan for broken section references with `grep -n "^### \|(N\.M)"` — agents often move a section without fixing what points at it
 
-## 4. 커밋
+## 4. Commit
 
-- **명세 파일만.** 병렬 중이면 반드시 경로 지정: `git add -- specs/features/F-xxx.md` → `git commit … -- specs/features/F-xxx.md`
-- 메시지는 `F-xxx {제목} 명세` 한 줄. 결정이 뒤집힌 게 있으면 본문에 이유
+- Commit granularity follows `CLAUDE.md` "Commit granularity" — **the spec file only**. When running in parallel, always scope the paths: `git add -- specs/features/F-xxx.md` then `git commit … -- specs/features/F-xxx.md`
+- The subject is one line, `F-xxx {title} 명세`. If a decision got reversed, put the reason in the body
 
-## 5. 사용자 보고 (음슴체, 짧게)
+## 5. Report to the user (음슴체, short)
 
-- 실측/코드 확인으로 새로 드러난 사실 — 이게 제일 값어치 있다
-- **사람 결정이 필요한 항목을 선택지와 추천으로.** 기본값이 다 타당하면 "기본값대로 갈지만 확인" 으로 묶어 묻는다
-- 다음에 쓸 명세와 구현 순서(파일 겹침 기준)
+- Facts newly established by measurement or reading code — this is the most valuable part
+- **Items needing a human decision, as options with a recommendation.** If every default is sound, bundle them as "기본값대로 갈지만 확인"
+- The next spec to write and the implementation order (based on file overlap)
 
-## 멈출 때
+## When to stop
 
-- 상위 개요가 없는데 여러 구현 단위에 걸친다 → 개요부터 쓸지 사용자에게 묻는다
-- `specs/product.md` 가 범위 밖으로 못박은 기능이다 → 범위를 바꾸는 승인을 먼저 받는다
+- No overview exists but the work spans several implementation units → ask the user whether to write the overview first
+- `specs/product.md` pins the feature as out of scope → get approval to change the scope first

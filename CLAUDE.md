@@ -1,180 +1,186 @@
 # Rawdoc
 
-원문 보존형 마크다운 협업 도구. `##` 를 쳐도 기호가 사라지지 않고, `.md` 로 뽑으면 사용자가 친 원문과 바이트가 같다
+A source-preserving Markdown collaboration tool. Typing `##` does not make the marks disappear, and exporting to `.md` gives back the exact bytes the user typed.
 
-- 제품 배경·경쟁·기술 선택 근거: `docs/research.html`
-- 화면·기능 원형: `docs/prototype.html` (textarea + 오버레이 방식. 동작 참고용이고 구조는 따르지 않는다)
+> Korean translation: `CLAUDE.ko.md` (snapshot as of 2026-09-21, for humans to read).
+> **This file is the source of truth.** Edit rules here; the Korean copy does not follow automatically.
+> UI strings, user quotes, and test selectors stay in Korean everywhere — they are product text, not prose.
 
-## 진행 방침
+- Product background, competitors, rationale for tech choices: `docs/research.html`
+- Screen and feature prototype: `docs/prototype.html` (textarea + overlay approach. Reference for behavior only; do not follow its structure)
 
-1. **웹앱 먼저.** 데스크톱 브라우저 기준으로 완성한다. PWA(설치·오프라인)까지 웹앱 완성에 포함한다
-2. 안드로이드(Capacitor)는 웹앱이 끝나고 여유가 있을 때. 그 전까지 안드로이드 전용 작업은 하지 않는다
-3. 명세 → 작은 명세 → 구현 순서. **명세에 없는 것은 만들지 않는다**
+## Direction
 
-## 개발 방식 (2026-09-18)
+1. **Web app first.** Finish it for desktop browsers. PWA (install, offline) counts as part of finishing the web app
+2. Android (Capacitor) comes after the web app is done and there is room. Until then, no Android-only work
+3. Order is spec → small spec → implementation. **If it is not in a spec, do not build it**
 
-기능(로직)은 TDD, 디자인(시각)은 빠른 사람 확인 루프로 나눈다
+## How we work (2026-09-18)
 
-- **로직은 TDD.** 수용 기준을 실패하는 테스트로 먼저 쓰고(단위 `*.test.ts`, 브라우저 동작은 `e2e/F-xxx`), 빨간 것을 확인한 뒤 구현한다. 통과시키는 데 필요한 만큼만 쓴다
-- 먼저 쓸 수 없었으면(외부 응답 모양을 모름, 버그 수정 등) 나중에 붙인 테스트가 **고치기 전 코드에서 실패하는지** 확인해 회귀 테스트로 쓸 수 있는지 판정하고, 그 사실을 보고에 적는다
-- **디자인은 TDD 하지 않는다.** 버튼·메뉴·다이얼로그 같은 상호작용 요소가 열리고 닫히고 눌리는지만 스모크 e2e 로 잡는다. 색·여백·정렬·글꼴 같은 시각값은 e2e 로 고정하지 않는다 — 값을 고칠 때마다 테스트도 고쳐야 하고 서브픽셀로 흔들린다 (아래 "배포" 의 F-146·F-166·F-225 가 그 예)
-- **디자인은 빨리 만들고 사용자가 눈으로 본다.** 구현 → `npm run dev`·배포 → 사용자 확인 → 고치기 루프를 짧게 돈다. 시각 판정은 `specs/human-checks.md` 로 넘기고 에이전트가 붙들고 있지 않는다
+Logic gets TDD; design gets a fast human-review loop.
 
-## 문서 구조
+- **Logic is TDD.** Write the acceptance criteria as failing tests first (unit `*.test.ts`, browser behavior in `e2e/F-xxx`), confirm red, then implement. Write only as much as it takes to pass
+- If a test could not come first (unknown shape of an external response, bug fixes, etc.), check whether the test you added afterward **fails against the pre-fix code**, decide whether it works as a regression test, and say so in your report
+- **Design does not get TDD.** Smoke e2e only covers whether interactive elements — buttons, menus, dialogs — open, close, and respond. Do not pin visual values (color, spacing, alignment, typeface) in e2e: every value change would force a test change, and subpixel rendering makes them flaky (see F-146, F-166, F-225 under "Deployment")
+- **Build design fast and let the user look at it.** Keep the loop short: implement → `npm run dev` / deploy → user checks → fix. Hand visual judgment to `specs/human-checks.md` instead of having an agent sit on it
 
-| 위치 | 내용 | 수정 |
+## Document layout
+
+| Location | Contents | Edited |
 | --- | --- | --- |
-| `docs/` | 조사·프로토타입 원본 | 하지 않음 |
-| `specs/product.md` | 전체 기능명세 (범위, 단계, 제외 항목) | 사람 승인 후 |
-| `specs/ia.md` | 화면 구조, 사용자 흐름, 상태, UI 문구 | 사람 승인 후 |
-| `specs/design.md` | 서체, 색 토큰, 형태·움직임 | 사람 승인 후 |
-| `specs/architecture.md` | `src/` 디렉터리, 저장소 인터페이스, 상태 흐름, 설정 키 | 사람 승인 후 |
-| `specs/features/F-xxx.md` | 작은 명세. 하나가 구현 단위 1개. **번호는 단계별로 백 단위** — M1 은 `F-1NN`, M2·M1 보강은 `F-2NN`, M3(실시간 협업)은 `F-3NN` (2026-09-20 사용자 지시). **맨 앞에 YAML 프론트매터** (아래) | 사람 승인 후 |
-| `specs/human-checks.md` | 자동 테스트로 판정할 수 없어 사람이 확인할 목록과 상태 | 메인이 명세 완료마다 |
-| `e2e/` | Playwright E2E 테스트 (F-150) | 명세에 따라 |
-| `.workflow/` | 종료된 CM6 스파이크 기록 (2026-09-07~08). 새 작업에 쓰지 않는다 | 하지 않음 |
-| `spike/` | 스파이크 코드. 에디터 이식 시 참고만 한다 | 하지 않음 |
-| `src/` | 웹앱 본 코드 | 명세에 따라 |
+| `docs/` | Research and prototype originals | Never |
+| `specs/product.md` | Full feature spec (scope, milestones, exclusions) | After human approval |
+| `specs/ia.md` | Screen structure, user flows, states, UI strings | After human approval |
+| `specs/design.md` | Typography, color tokens, shape and motion | After human approval |
+| `specs/architecture.md` | `src/` layout, storage interfaces, state flow, setting keys | After human approval |
+| `specs/features/F-xxx.md` | Small specs. One spec = one implementation unit. **Numbers run in hundreds per milestone** — M1 is `F-1NN`, M2 and M1 follow-ups are `F-2NN`, M3 (live collaboration) is `F-3NN` (user instruction, 2026-09-20). **YAML frontmatter at the top** (below) | After human approval |
+| `specs/human-checks.md` | Items no automated test can judge, plus their status | By main, as each spec lands |
+| `e2e/` | Playwright E2E tests (F-150) | Per spec |
+| `.workflow/` | Closed CM6 spike records (2026-09-07~08). Not used for new work | Never |
+| `spike/` | Spike code. Reference only when porting the editor | Never |
+| `src/` | The web app itself | Per spec |
+| `.claude/agents/`, `.claude/skills/` | Agent and skill definitions. **English is the source of truth** | As rules change |
+| `.claude/ko/` | Korean snapshots of the above (2026-09-21). Not scanned as agents or skills, so they never register twice | Never auto-synced |
 
-작업 전 읽는 순서: 이 파일 → `specs/product.md` → `specs/ia.md` → `specs/design.md` → 해당 `specs/features/F-xxx.md`
+Reading order before starting work: this file → `specs/product.md` → `specs/ia.md` → `specs/design.md` → the relevant `specs/features/F-xxx.md`
 
-### 명세 프론트매터 (2026-09-21 사용자 제안)
+### Spec frontmatter (user proposal, 2026-09-21)
 
-`specs/features/F-xxx.md` 는 맨 앞에 YAML 프론트매터를 둔다. 상태 줄 산문은 그대로 남기고(왜 그렇게 정했는지가 거기 있다), 프론트매터는 **기계가 읽는 요약**이다. 151개 전부에 소급했다
+Every `specs/features/F-xxx.md` starts with YAML frontmatter. Keep the prose status paragraph as it is — that is where the reasoning lives — and treat the frontmatter as the **machine-readable summary**. All 151 specs were backfilled.
 
 ```yaml
 ---
-id: F-290                    # 파일명과 같다
-title: 설정 대화상자 왼쪽 탭    # H1 에서 "F-290 " 을 뗀 것
+id: F-290                    # same as the filename
+title: 설정 대화상자 왼쪽 탭    # the H1 with "F-290 " stripped
 milestone: M1 | M2 | M3
 status: draft | pending | approved | done | deferred | superseded | overview
 created: 2026-09-21
-approved: 2026-09-21         # 사람 승인을 받은 날. 안 받았으면 줄 자체를 뺀다
-implemented: cd23dbb         # 구현 커밋. 없으면 줄을 뺀다
-depends: [F-232, F-281]      # 선행 명세. 없으면 줄을 뺀다
+approved: 2026-09-21         # date human approval was given. Omit the line entirely if not approved
+implemented: cd23dbb         # implementation commit. Omit the line if none
+depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 ---
 ```
 
-- `status` 뜻: `draft` 초안 / `pending` 사람 승인 대기 / `approved` 승인됐고 구현 전 / `done` 구현 커밋됨 / `deferred` 승인과 별개로 착수 시점 미정 / `superseded` 다른 명세로 대체 / `overview` 설계 개요(구현 단위가 아니다)
-- **파일 소유 표는 프론트매터에 복제하지 않는다.** 1장 표가 원본이고 `npm run review` 가 그것을 읽는다. 두 곳에 두면 어긋난다
-- 조회는 `npm run specs`. 형식 오류·`done` 인데 `implemented` 없음·없는 명세를 가리키는 `depends` 는 `npm run specs -- --check` 가 잡는다
+- `status` meanings: `draft` rough / `pending` awaiting human approval / `approved` approved, not yet implemented / `done` implementation committed / `deferred` approved but start date undecided / `superseded` replaced by another spec / `overview` design overview (not an implementation unit)
+- **Do not duplicate the file-ownership table into the frontmatter.** The chapter 1 table is the original and `npm run review` reads it. Two copies drift apart
+- Query with `npm run specs`. Format errors, `done` without `implemented`, and `depends` pointing at a nonexistent spec are caught by `npm run specs -- --check`
 
-## 기술 스택
+## Tech stack
 
-| 계층 | 선택 | 상태 |
+| Layer | Choice | Status |
 | --- | --- | --- |
-| 프론트 | React 19, Vite 7, TypeScript 6.0 (`typescript-eslint`) | 사용 중. 2026-09-15 JS → TS 이전 중 (F-201~F-203). `e2e/`·`scripts/` 는 JS |
-| 에디터 | CodeMirror 6 + `@codemirror/lang-markdown` | 사용 중 |
-| PWA | `vite-plugin-pwa` (Workbox) | 사용 중 |
-| 정적 + API | Cloudflare Workers (static assets + `worker/`), 커스텀 도메인 `rawdoc.app` (workers.dev 끔) | 사용 중 (F-204). 구조는 `specs/architecture.md` 6장 |
-| 메타 DB / 파일 | D1 `md-editor-db` / R2 `md-editor-attachments` | 사용 중 (F-205~) |
-| 인증 | Cloudflare Access 일회용 코드 + Worker JWT 검증 | F-205 (Q5) |
-| 실시간 동기화 | Durable Object + y-partyserver, `y-codemirror.next` | 미도입 (M3) |
-| E2E 테스트 | Playwright (`@playwright/test`), 설치된 Chrome 채널 | F-150 에서 도입 |
+| Frontend | React 19, Vite 7, TypeScript 6.0 (`typescript-eslint`) | In use. JS → TS migration since 2026-09-15 (F-201~F-203). `e2e/` and `scripts/` stay JS |
+| Editor | CodeMirror 6 + `@codemirror/lang-markdown` | In use |
+| PWA | `vite-plugin-pwa` (Workbox) | In use |
+| Static + API | Cloudflare Workers (static assets + `worker/`), custom domain `rawdoc.app` (workers.dev disabled) | In use (F-204). Structure in `specs/architecture.md` ch. 6 |
+| Metadata DB / files | D1 `md-editor-db` / R2 `md-editor-attachments` | In use (F-205~) |
+| Auth | Cloudflare Access one-time codes + Worker JWT verification | F-205 (Q5) |
+| Live sync | Durable Object + y-partyserver, `y-codemirror.next` | Not adopted (M3) |
+| E2E tests | Playwright (`@playwright/test`), installed Chrome channel | Adopted in F-150 |
 
-"미도입" 항목은 해당 명세가 생기기 전까지 의존성을 추가하지 않는다
+For anything marked "not adopted", do not add the dependency until its spec exists.
 
-## 명령어
+## Commands
 
 ```
-npm run dev          # 웹앱 dev 서버
-npm run build        # 웹앱 빌드
-npm run lint         # ESLint (루트 전체)
-npm test             # Vitest 1회 실행 (src/**/*.test.{js,jsx,ts,tsx}, worker/**/*.test.ts)
-npm run typecheck    # tsc --noEmit (앱)
+npm run dev          # web app dev server
+npm run build        # web app build
+npm run lint         # ESLint (whole repo)
+npm test             # Vitest single run (src/**/*.test.{js,jsx,ts,tsx}, worker/**/*.test.ts)
+npm run typecheck    # tsc --noEmit (app)
 npm run typecheck:worker   # tsc -p worker
-npm run dev:worker   # 빌드 후 wrangler dev(8790, 로컬 D1·R2). .dev.vars 의 DEV_AUTH_EMAIL 로 로그인 우회
-npm run cf:types     # wrangler.jsonc 바인딩 → worker/worker-configuration.d.ts
-npm run deploy       # 빌드 후 wrangler deploy (로그인 필요). 평소 배포는 deploy 브랜치 push — 아래 "배포"
-npm run test:watch   # Vitest 감시 모드
-npm run test:e2e     # Playwright E2E — 빌드 후 preview(4317) 에서 e2e/*.spec.js (F-150 이후)
-npm run verify       # lint·단위·build 요약 (verify:full = e2e 포함, -- --repeat 2)
-npm run e2e:one -- "F-152 A8a" --repeat 3   # e2e 일부 반복, 빌드 최신이면 건너뜀
-npm run measure -- --doc long:300 --select ".cm-line" --style line-height   # 화면 측정 JSON (4400·dist-measure)
-npm run review -- F-xxx   # 소유 밖 파일·금지 패턴 검토
-npm run specs -- --todo   # 남은 명세 (--status pending, --milestone M3, --check, --json)
-E2E_PORT=4501 E2E_DIST=dist-a npx playwright test   # e2e 병렬 슬롯
-npm run dev:spike    # 스파이크 확인용
+npm run dev:worker   # build, then wrangler dev (8790, local D1/R2). DEV_AUTH_EMAIL in .dev.vars bypasses login
+npm run cf:types     # wrangler.jsonc bindings → worker/worker-configuration.d.ts
+npm run deploy       # build, then wrangler deploy (needs login). Normal deploys push the deploy branch — see "Deployment"
+npm run test:watch   # Vitest watch mode
+npm run test:e2e     # Playwright E2E — build, then e2e/*.spec.js against preview (4317) (F-150 onward)
+npm run verify       # lint/unit/build summary (verify:full adds e2e, -- --repeat 2)
+npm run e2e:one -- "F-152 A8a" --repeat 3   # repeat a subset of e2e; skips the build if it is current
+npm run measure -- --doc long:300 --select ".cm-line" --style line-height   # on-screen measurement JSON (4400, dist-measure)
+npm run review -- F-xxx   # check for out-of-ownership files and forbidden patterns
+npm run specs -- --todo   # remaining specs (--status pending, --milestone M3, --check, --json)
+E2E_PORT=4501 E2E_DIST=dist-a npx playwright test   # parallel e2e slot
+npm run dev:spike    # for checking spikes
 ```
 
-테스트는 대상 파일 옆에 `{이름}.test.js` 로 두고, `vitest` 에서 명시적으로 import 한다 (`specs/features/F-101.md` 5.3)
+Put tests next to their target as `{name}.test.js` and import them explicitly in `vitest` (`specs/features/F-101.md` 5.3).
 
-## 메인 진행 규칙
+## Rules for main (the orchestrator)
 
-작업 PC 가 둘(노트북·PC)이라 사용자 로컬 메모리 대신 여기에 둔다
+There are two work machines (laptop and desktop), so this lives here instead of in local user memory.
 
-- **커밋 단위는 아래 "커밋 단위" 절을 따른다.** 다음 서브에이전트는 커밋 뒤에 띄운다. 파일이 겹치지 않는 명세만 병렬
-- **명세 작성은 `spec-writer` 에이전트**(`.claude/agents/spec-writer.md`, Opus 로 정의 — 2026-09-20 사용자 지시 "명세 작성을 sonnet 말고 opus로"). `model` 을 따로 주지 않는다. 구현은 `feature-implementer`(Sonnet)
-- **반복 프롬프트는 스킬에 있다. 에이전트를 직접 띄우지 말고 스킬을 거친다** (2026-09-21 사용자 지시). 명세 작성은 `write-spec`, 구현은 `ship-feature`. 프롬프트 뼈대·품질을 올리는 지시·보고 검토 순서가 그 안에 있다
-- **구현은 `ship-feature` 스킬 + `feature-implementer` 에이전트.** 프롬프트에는 명세 번호와 `E2E_PORT`·`E2E_DIST` 슬롯만. 판정은 `npm run review -- F-xxx` → 관련 e2e. 손 스크립트 대신 `scripts/` 도구, 도구에 없는 반복이 보이면 도구 추가를 제안
-- `e2e:one` 검색어는 `"F-225|F-212"` 처럼 `|` 로 묶을 수 있다. 슬롯은 `--port`·`--dist` 또는 `E2E_PORT`·`E2E_DIST`
+- **Commit granularity follows the "Commit granularity" section below.** Launch the next subagent only after committing. Run specs in parallel only when their files do not overlap
+- **Specs are written by the `spec-writer` agent** (`.claude/agents/spec-writer.md`, defined with Opus — user instruction 2026-09-20: "명세 작성을 sonnet 말고 opus로"). Do not pass a separate `model`. Implementation uses `feature-implementer` (Sonnet)
+- **Repeated prompts live in skills. Go through the skill instead of launching an agent directly** (user instruction, 2026-09-21). Spec writing is `write-spec`, implementation is `ship-feature`. The prompt skeleton, the quality-raising instructions, and the report-review order are inside them
+- **Implementation is the `ship-feature` skill + the `feature-implementer` agent.** The prompt carries only the spec number and the `E2E_PORT` / `E2E_DIST` slots. Judge with `npm run review -- F-xxx` then the related e2e. Use the tools in `scripts/` instead of ad-hoc scripts; if you see a repeat the tools do not cover, propose adding one
+- `e2e:one` search terms can be OR'd with `|`, e.g. `"F-225|F-212"`. Slots are `--port`/`--dist` or `E2E_PORT`/`E2E_DIST`
 
-## 커밋 단위 (2026-09-21 사용자 지시)
+## Commit granularity (user instruction, 2026-09-21)
 
-**1 커밋 = 1 단위.** 단위는 셋 중 하나다
+**One commit = one unit.** A unit is one of three:
 
-| 단위 | 담는 것 | 제목 예 |
+| Unit | What it contains | Example subject |
 | --- | --- | --- |
-| 명세 1개 작성 | `specs/features/F-xxx.md` 하나 (+ 그 명세가 "갱신 대상" 으로 요구한 상위 명세 수정) | `F-285 검색 입력 명세` |
-| 명세 1개 구현 | 그 명세의 파일 소유 표에 있는 파일 + 테스트 + `specs/human-checks.md` + 프론트매터 갱신 | `문서 가져오기 (F-282)` |
-| 명세에 없는 수정 1개 | 버그 수정 1건, 문서·규칙 수정 1건, 도구 추가 1건 | `HTML 내보내기에서 CSS 가 평문으로 쏟아지던 버그` |
+| One spec written | a single `specs/features/F-xxx.md` (+ any upstream spec edits that spec listed under "갱신 대상") | `F-285 검색 입력 명세` |
+| One spec implemented | the files in that spec's ownership table + tests + `specs/human-checks.md` + the frontmatter update | `문서 가져오기 (F-282)` |
+| One change outside any spec | one bug fix, one docs/rules change, or one tool addition | `HTML 내보내기에서 CSS 가 평문으로 쏟아지던 버그` |
 
-지키는 방법
+How to hold to it:
 
-- **명세 작성과 그 구현은 다른 커밋이다.** 명세를 쓴 뒤 바로 구현하더라도 커밋을 나눈다 — 승인 시점과 구현 시점이 다르고, 되돌릴 때도 따로 되돌린다
-- **여러 F 를 한 커밋에 담지 않는다.** 병렬 작업 중이면 `git add -- 경로` → `git commit … -- 경로` 로 경로를 지정한다. `git add -A`·경로 없는 `git commit` 은 다른 에이전트가 스테이징한 것까지 담는다 (2026-09-15 F-204 커밋에 F-201 이름 변경이 섞였던 일)
-- **한 F 를 여러 커밋으로 쪼개지 않는다.** 예외는 검증을 끝내지 못하고 중단할 때 하나뿐이고, 그때는 제목에 `검증 미완` 을 넣는다
-- **일이 끝나면 바로 커밋한다.** 미커밋 변경을 쌓아두면 다음 작업과 섞인다 (2026-09-14 그 일로 명세끼리 섞임)
-- 구현 커밋 제목은 `{기능 요약} (F-xxx)`, 명세 커밋 제목은 `F-xxx {제목} 명세`. 본문 형식은 `ship-feature` 스킬 5장
-- 커밋 뒤 그 명세의 프론트매터를 `status: done`·`implemented: {해시}` 로 갱신한다. 해시는 커밋 후에 알 수 있으므로 `--amend` 하거나 다음 커밋에 딸려 보낸다
-- `.claude/settings.json` 은 어느 커밋에도 넣지 않는다
+- **A spec and its implementation are separate commits.** Split them even when you implement right after writing the spec — approval and implementation happen at different times, and they get reverted separately
+- **Never put several F-numbers in one commit.** When working in parallel, scope explicitly: `git add -- <path>` then `git commit … -- <path>`. `git add -A` or a pathless `git commit` sweeps in whatever another agent staged (on 2026-09-15 the F-204 commit swallowed an F-201 rename)
+- **Never split one F across several commits.** The single exception is stopping before verification is done; in that case put `검증 미완` in the subject
+- **Commit as soon as a unit is done.** Uncommitted changes left to pile up bleed into the next task (that is exactly how specs got tangled on 2026-09-14)
+- Implementation subjects read `{feature summary} (F-xxx)`; spec subjects read `F-xxx {title} 명세`. Body format is in the `ship-feature` skill, ch. 5
+- After committing, update that spec's frontmatter to `status: done` and `implemented: {hash}`. The hash only exists after the commit, so `--amend` or carry it in the next commit
+- `.claude/settings.json` goes into no commit, ever
 
-## 배포 (2026-09-15)
+## Deployment (2026-09-15)
 
-- `main` push → GitHub Actions `ci.yml`(린트·타입·단위·빌드)만. 배포 안 됨
-- 배포 = `npm run verify:full` 통과한 main 커밋을 `deploy` 브랜치로: `git push --force origin <sha>:refs/heads/deploy` → Cloudflare Workers Builds(`md-editor-web`, 분기 제어 `deploy`)가 빌드·배포. **올리기 전후로 사용자에게 알린다** (사용자 "다음 배포때 말만해줘")
-- 확인: 그 커밋에 Cloudflare check run, `https://rawdoc.app/` 의 `assets/index-*.js` 이름이 로컬 빌드와 같은지. 2026-09-15 `c75c14f` 첫 빌드 확인: 푸시 후 약 1분에 `Workers Builds: md-editor-web` 성공·운영 반영
-- verify:full 에서 알려진 실패: F-146 A2(원래 실패). F-146 A4·F-152 A5·F-156·F-158 A2·F-158 A8·F-208·F-213 A5·F-225 A1/A2·F-210 C1/C2·F-143 A16 은 부하·서브픽셀 렌더링에서 흔들림 — 단독 재실행으로 판정 (F-146 A4 는 2026-09-16 F-232 구현 중 발견, Dialog 포커스 복귀 타이밍 레이스로 추정, F-232 변경과 무관 — HEAD 단독 5회 중 4회 실패로 확인. F-225 A1 은 2026-09-16 F-234 배포 전 검증 중 재확인 — `git worktree` 로 이번 세션 변경 전 커밋(`1b17c8b`)에서도 3회 중 2회 실패해 세션 변경과 무관함을 확인, `.invite-submit`/`.invite-role-seg` 행 정렬이 2px 기준을 0.5px 안팎으로 넘나드는 서브픽셀 문제로 추정)
-- F-166 A1·A3(긴 순서 목록 둘째 화면 줄 x 좌표·내어쓰기 값)도 2026-09-17 F-238 배포 전 검증 중 발견 — 단독 재실행해도 계속 실패, `git worktree` 로 F-238 이전 커밋(`49b5a20`)에서도 동일하게 실패해 이번 세션 변경과 무관함을 확인. 원인 미조사, 목록에만 추가
-- F-247 A7(전부 삭제 후 하위 폴더·문서 미복원 확인)·F-209 A6(이미지 붙여넣기 새로고침 후 유지)도 2026-09-19 공유 링크 뒤로 가기 버그 수정 배포 전 검증 중 발견 — 단독 재실행 5회 중 각각 2회·1회 실패, `git worktree` 로 그 커밋 이전(`ee0ce8d`)에서도 5회 중 2회·1회 실패해 이번 세션 변경과 무관함을 확인. 원인 미조사, 목록에만 추가
-- F-271 A6(첫 방문 — 랜딩만 보임)은 2026-09-21 F-272 구현 중 발견 — 단독 재실행해도 **5회 중 5회 계속 실패**. `git worktree` 로 F-272 이전 커밋(`a807be3`)에서도 5회 중 5회 같게 실패해 F-272 변경과 무관함을 확인. 랜딩 데모가 CM6 에디터로 마운트되며 접근성 트리의 heading 이 textbox 로 바뀌는 타이밍으로 추정, 원인 미조사
-- F-246 A6(폴더 만들고 다시 `새 폴더` 누르기)도 2026-09-21 체크박스 취소선 작업 중 발견 — 단독 재실행 3회 중 3회 실패(`.sidebar-btn` 의 `새 폴더` 클릭에서 30초 타임아웃). `git worktree` 로 그 작업 이전 커밋(`2f4099a`)에서도 3회 중 3회 같게 실패해 그 변경과 무관함을 확인. 원인 미조사
-- **위 흔들림 목록과 달리, 아래 5개는 단독 재실행에서도 3회 중 3회 실패한다 (2026-09-21 F-290 구현 중 발견, 메인이 `cd23dbb` 에서 직접 재확인). 흔들림이 아니라 어딘가에서 깨진 것으로 보이고, 언제 깨졌는지는 아직 찾지 않았다**
-  - `F-153 A4`(사이드바 글자 시작선) — `새 폴더` 뒤 `locator.evaluate` 30초 타임아웃
-  - `F-281 A12`(전체 내보내기) — `하위 폴더` 뒤 `.tree-rename-input` 의 `fill` 30초 타임아웃
-  - 위 둘과 `F-246 A6` 은 모두 **폴더 만들기 → 이름 입력** 자리에서 멈춘다. 한 원인일 가능성이 있다
-  - `F-281 A14`(오프라인) — `전체 내보내기` 버튼이 비활성이 되지 않는다 (타임아웃이 아닌 단언 실패)
-  - `F-281 A15`(내보낼 것 없음) — 알림 문구가 `내보낼 문서가 없습니다.` 가 아니다
-  - `F-146 A8`(기호 숨김 링크 클릭) — `popup` 이벤트가 오지 않는다
-- F-222 A4(토큰 폐기)·F-224 A4(좁은 창 대화상자 폭)·F-225 A6(초대 삭제 포커스)도 2026-09-20 F-261 배포 전 검증 중 발견 — 셋을 묶어 반복 재실행하면 매번 그중 1~2개가 무작위로 실패(`workers` 부하), `git worktree` 로 F-261 이전 커밋(`f839ecc`)에서 같은 조합·같은 반복 횟수로 재실행해도 동일한 빈도로 실패해 F-261 변경과 무관함을 확인. 원인 미조사, 목록에만 추가
-- D1 원격 마이그레이션은 자동화하지 않는다. 새 `migrations/000N` 이 있으면 배포 전에 `npx wrangler d1 migrations apply md-editor-db --remote`
-- 빌드가 안 돌면 로컬 배포: 깨끗한 워크트리 `../rawdoc-deploy`(없으면 `git worktree add ../rawdoc-deploy deploy`)에서 `npm run deploy`
-- 루트 `.env`(커밋 안 함, PC 마다 따로)의 `CLOUDFLARE_API_TOKEN` 이 있으면 wrangler 가 브라우저 로그인 대신 그 토큰을 쓴다. 2026-09-18 토큰을 다시 발급해 Workers Scripts 편집·D1 편집·R2 편집 권한을 넣었다 — 로컬 배포·원격 마이그레이션 모두 `.env` 그대로 된다. `wrangler d1 list` 의 `num_tables: 0` 은 Cloudflare 쪽 집계가 늦은 것뿐이니 스키마는 `d1 migrations list --remote` 로 본다
+- Pushing `main` runs GitHub Actions `ci.yml` (lint, types, unit, build) only. It does not deploy
+- To deploy, push a `main` commit that passed `npm run verify:full` to the `deploy` branch: `git push --force origin <sha>:refs/heads/deploy` → Cloudflare Workers Builds (`md-editor-web`, branch control `deploy`) builds and deploys. **Tell the user before and after** (user: "다음 배포때 말만해줘")
+- To confirm: the Cloudflare check run on that commit, and whether the `assets/index-*.js` name at `https://rawdoc.app/` matches the local build. First build confirmed 2026-09-15 on `c75c14f`: `Workers Builds: md-editor-web` succeeded and went live about a minute after the push
+- Known failures in verify:full: F-146 A2 (failing from the start). F-146 A4, F-152 A5, F-156, F-158 A2, F-158 A8, F-208, F-213 A5, F-225 A1/A2, F-210 C1/C2, F-143 A16 are flaky under load and subpixel rendering — judge them by rerunning alone (F-146 A4 was found during F-232 on 2026-09-16, presumed a Dialog focus-return timing race, unrelated to F-232 — confirmed by 4 failures out of 5 solo runs on HEAD. F-225 A1 was reconfirmed during pre-deploy verification for F-234 on 2026-09-16 — a `git worktree` at the pre-session commit (`1b17c8b`) also failed 2 of 3 times, so it is unrelated to the session's changes; presumed subpixel, with the `.invite-submit` / `.invite-role-seg` row alignment drifting around the 2px threshold by roughly 0.5px)
+- F-166 A1/A3 (x coordinate and hanging indent of the second visual line in a long ordered list) were also found during pre-deploy verification for F-238 on 2026-09-17 — they keep failing even alone, and a `git worktree` at the pre-F-238 commit (`49b5a20`) failed identically, so they are unrelated to that session. Cause not investigated; listed only
+- F-247 A7 (subfolders and docs not restored after deleting everything) and F-209 A6 (pasted image surviving a reload) were found during pre-deploy verification for the share-link back-navigation fix on 2026-09-19 — 2 and 1 failures respectively out of 5 solo runs, and a `git worktree` before that commit (`ee0ce8d`) failed 2 and 1 times out of 5 as well, so they are unrelated to that session. Cause not investigated; listed only
+- F-271 A6 (first visit — landing page only) was found during F-272 on 2026-09-21 — it **fails 5 out of 5 even when rerun alone**. A `git worktree` at the pre-F-272 commit (`a807be3`) failed 5 out of 5 identically, so it is unrelated to F-272. Presumed to be the timing of the landing demo mounting as a CM6 editor, which turns the accessibility tree's heading into a textbox. Cause not investigated
+- F-246 A6 (create a folder, then press `새 폴더` again) was found during the checkbox strikethrough work on 2026-09-21 — 3 out of 3 solo failures (30s timeout clicking `새 폴더` in `.sidebar-btn`). A `git worktree` at the commit before that work (`2f4099a`) failed 3 out of 3 identically, so it is unrelated. Cause not investigated
+- **Unlike the flaky list above, these 5 fail 3 out of 3 even when rerun alone (found during F-290 on 2026-09-21, reconfirmed directly by main at `cd23dbb`). These look broken rather than flaky, and we have not yet found when they broke**
+  - `F-153 A4` (sidebar text start line) — 30s `locator.evaluate` timeout after `새 폴더`
+  - `F-281 A12` (export all) — 30s timeout on `fill` of `.tree-rename-input` after `하위 폴더`
+  - Those two and `F-246 A6` all stall at the same place: **create folder → type name**. They may share a cause
+  - `F-281 A14` (offline) — the `전체 내보내기` button does not become disabled (an assertion failure, not a timeout)
+  - `F-281 A15` (nothing to export) — the notice text is not `내보낼 문서가 없습니다.`
+  - `F-146 A8` (clicking a link with marks hidden) — the `popup` event never arrives
+- F-222 A4 (token revocation), F-224 A4 (dialog width in a narrow window), and F-225 A6 (focus after deleting an invite) were found during pre-deploy verification for F-261 on 2026-09-20 — rerunning the three together makes 1–2 of them fail at random each time (`workers` load), and a `git worktree` at the pre-F-261 commit (`f839ecc`) failed at the same rate with the same combination and repeat count, so they are unrelated to F-261. Cause not investigated; listed only
+- Remote D1 migrations are not automated. If there is a new `migrations/000N`, run `npx wrangler d1 migrations apply md-editor-db --remote` before deploying
+- If the build does not run, deploy locally: from a clean worktree `../rawdoc-deploy` (create it with `git worktree add ../rawdoc-deploy deploy` if missing), run `npm run deploy`
+- If the root `.env` (never committed, separate per machine) has `CLOUDFLARE_API_TOKEN`, wrangler uses that token instead of browser login. The token was reissued on 2026-09-18 with Workers Scripts edit, D1 edit, and R2 edit permissions — local deploys and remote migrations both work straight from `.env`. `num_tables: 0` in `wrangler d1 list` is just Cloudflare's aggregation lagging, so read the schema with `d1 migrations list --remote`
 
-## 불변조건
+## Invariants
 
-깨지면 버그가 아니라 설계 위반이다. 바꿔야 하면 명세를 먼저 고치고 사람 승인을 받는다
+Breaking one of these is a design violation, not a bug. To change one, fix the spec first and get human approval.
 
-- **decoration 은 문서 내용을 바꾸지 않는다.** 표시만 바꾼다
-- **문서 상태의 원본은 CM6 `EditorState` 하나다.** 별도 문자열 사본을 두고 동기화하지 않는다
-- **`src/` 는 `spike/` 를 import 하지 않는다.** 필요한 코드는 옮겨 적고, `imeLog` 같은 검증 장치는 가져오지 않는다
-- **IME 조합 중 재계산을 보류하면, 조합 종료 시 밀린 재계산을 반드시 따라잡는다.** 근거: `.workflow/tasks/T-004/verify.md` 6.5·7장
-- **제품명은 `rawdoc`(표기 `Rawdoc`)으로 확정(2026-09-17). 메인 컬러는 미정이다.** 그래도 루트 `brand.config.ts` 에서만 정의하고, 코드·CSS·HTML·UI 문구·매니페스트에 이름 문자열이나 색 hex 를 직접 쓰지 않는다 — 확정 후에도 값을 흩어 쓰지 않는 게 목적. 파생 색은 `color-mix()` 로 계산한다 (`specs/design.md` 3.2)
-- **저장소 식별자는 제품명과 무관하게 고정한다.** IndexedDB DB 이름, localStorage 키, 서비스 워커 캐시 이름에 제품명을 쓰지 않는다. 이름을 바꿔도 사용자 문서가 남아야 한다
+- **Decorations never change document content.** They change presentation only
+- **There is exactly one source of truth for document state: the CM6 `EditorState`.** Do not keep a separate string copy in sync with it
+- **`src/` never imports from `spike/`.** Copy over what you need, and do not bring verification scaffolding like `imeLog`
+- **If you defer recomputation during IME composition, you must catch up on the deferred work when composition ends.** Rationale: `.workflow/tasks/T-004/verify.md` 6.5 and ch. 7
+- **The product name is `rawdoc` (styled `Rawdoc`), settled 2026-09-17. The primary color is still undecided.** Even so, define it only in the root `brand.config.ts`; never write the name string or a color hex directly in code, CSS, HTML, UI text, or the manifest — the point is to keep values from scattering even after they are settled. Derive colors with `color-mix()` (`specs/design.md` 3.2)
+- **Storage identifiers stay fixed regardless of the product name.** Do not put the product name in the IndexedDB database name, localStorage keys, or service worker cache names. A rename must not lose the user's documents
 
-에디터 이식 시 알려진 함정은 `.workflow/architecture.md` 3장, `.workflow/tasks/T-004/verify.md` 4·5장에 있다 (`view.composing` 타이밍, 블록 위젯 방향키 보조와 `lineWrapping` 충돌 등)
+Known pitfalls when porting the editor are in `.workflow/architecture.md` ch. 3 and `.workflow/tasks/T-004/verify.md` ch. 4–5 (`view.composing` timing, arrow-key assistance for block widgets colliding with `lineWrapping`, and so on).
 
-## 구현 담당 서브에이전트 규칙
+## Rules for the implementing subagent
 
-구현은 Sonnet 서브에이전트가 작은 명세 1개 단위로 한다
+A Sonnet subagent implements one small spec at a time.
 
-- 받은 `F-xxx.md` 의 수용 기준과 수정 파일 목록 안에서만 작업한다
-- **테스트를 먼저 쓴다.** 그 명세의 동작 수용 기준을 테스트로 옮겨 실패를 확인한 뒤 구현한다 (위 "개발 방식")
-- 명세 파일(`specs/**`)과 이 파일은 수정하지 않는다. 명세가 틀렸거나 모자라면 멈추고 보고한다
-- 새 의존성은 명세에 적힌 것만 설치한다
-- 끝나면 린트·스모크만 돌리고 결과를 그대로 보고한다: 바꾼 파일 eslint, 관련 단위 테스트, 그 명세 e2e 1회(`-g "F-xxx" --workers=2`). 전체 e2e 는 사용자 요청·배포 직전에만 (2026-09-15 사용자 "프로토타입인데 너무 엄격")
-- 측정·부분 e2e 는 임시 스크립트를 쓰지 않고 `scripts/` 도구(measure·e2e-one·verify·review-diff)를 쓴다. 진행은 `ship-feature` 스킬 + `feature-implementer` 에이전트 (F-160)
-- 명세의 **동작** 수용 기준은 `e2e/F-xxx` 이름이 붙은 Playwright 테스트로 작성해 자동으로 판정한다 (F-150 이후. claude-in-chrome 수동 조작으로 대신하지 않는다). 시각 기준은 스모크까지만 — 위 "개발 방식"
-- 자동화할 수 없는 기준(실제 한글 IME, OS 창, 색감·느낌)은 테스트로 만들지 않고 "사람 확인 필요" 로 보고한다. 메인이 `specs/human-checks.md` 에 올린다
-- 보고에 포함: 바꾼 파일, 수용 기준별 충족 여부, 확인하지 못한 항목. 실행하지 않은 확인을 통과로 적지 않는다
-- 커밋은 하지 않는다
+- Work only within the acceptance criteria and the file list of the `F-xxx.md` you were given
+- **Write the tests first.** Turn that spec's behavioral acceptance criteria into tests, confirm they fail, then implement (see "How we work")
+- Do not edit spec files (`specs/**`) or this file. If a spec is wrong or incomplete, stop and report
+- Install only the dependencies the spec names
+- When done, run lint and smoke tests only, and report the results verbatim: eslint on changed files, the related unit tests, and one e2e pass for that spec (`-g "F-xxx" --workers=2`). Full e2e only on user request or right before a deploy (user, 2026-09-15: "프로토타입인데 너무 엄격")
+- For measurements and partial e2e, use the tools in `scripts/` (measure, e2e-one, verify, review-diff) instead of temporary scripts. Work proceeds through the `ship-feature` skill + `feature-implementer` agent (F-160)
+- A spec's **behavioral** acceptance criteria become Playwright tests named `e2e/F-xxx`, judged automatically (F-150 onward; do not substitute manual claude-in-chrome operation). Visual criteria get smoke coverage only — see "How we work"
+- Criteria that cannot be automated (real Korean IME, OS windows, color and feel) do not become tests; report them as "사람 확인 필요". Main adds them to `specs/human-checks.md`
+- Include in your report: files changed, pass/fail per acceptance criterion, and anything you could not verify. Never record a check you did not run as passing
+- Do not commit
