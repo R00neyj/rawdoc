@@ -122,6 +122,9 @@ function addedLinesFromDiff(diffText) {
       newLine++
       continue
     }
+    if (raw.startsWith('-') || raw.startsWith('\\')) continue
+    /* 문맥 줄도 새 파일에서 한 줄을 차지한다. 여기서 안 올려 한 hunk 의 두 번째 추가부터 줄 번호가 전부 틀렸다 (2026-09-21) */
+    newLine++
   }
   return lines
 }
@@ -167,7 +170,8 @@ function checkLines(file, lines) {
   for (const { line, text } of lines) {
     const isLineComment = /^\s*\/\//.test(text)
     const consecutive = prevLine !== null && line === prevLine + 1
-    if (isLineComment && consecutive) {
+    /* 주석 아닌 추가 줄 바로 다음의 주석은 consecutive 가 참이라 runStart 를 안 잡았고, 그대로 `App.tsx:null` 이 나갔다 (2026-09-21) */
+    if (isLineComment && consecutive && runStart !== null) {
       runLen++
     } else if (isLineComment) {
       runStart = line
