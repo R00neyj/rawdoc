@@ -83,7 +83,7 @@ npm run dev:spike    # 스파이크 확인용
 
 - **F-NNN 끝나면 바로 커밋.** 서브에이전트 보고 검토 → 그 F 의 코드·명세만 커밋. 다음 명세 서브에이전트는 커밋 뒤에 띄운다. 파일이 겹치지 않는 명세만 병렬 (2026-09-14, 미커밋 변경이 쌓여 명세끼리 섞였던 일)
 - **병렬 중 커밋은 경로 지정.** 새 파일은 `git add -- 경로` 먼저, 그다음 `git commit -m … -- 경로`. `git commit` 만 하면 다른 에이전트가 스테이징한 것까지 담긴다 (2026-09-15 F-204 커밋에 F-201 이름 변경 섞임)
-- **명세 작성 서브에이전트는 Opus 로 띄운다** (2026-09-20 사용자 지시 "명세 작성을 sonnet 말고 opus로"). `Agent` 호출에 `model: "opus"` 를 명시한다. 구현은 그대로 Sonnet
+- **명세 작성은 `spec-writer` 에이전트**(`.claude/agents/spec-writer.md`, Opus 로 정의 — 2026-09-20 사용자 지시 "명세 작성을 sonnet 말고 opus로"). `model` 을 따로 주지 않는다. 구현은 `feature-implementer`(Sonnet)
 - **반복 프롬프트는 스킬에 있다. 에이전트를 직접 띄우지 말고 스킬을 거친다** (2026-09-21 사용자 지시). 명세 작성은 `write-spec`, 구현은 `ship-feature`. 프롬프트 뼈대·품질을 올리는 지시·보고 검토 순서가 그 안에 있다
 - **구현은 `ship-feature` 스킬 + `feature-implementer` 에이전트.** 프롬프트에는 명세 번호와 `E2E_PORT`·`E2E_DIST` 슬롯만. 판정은 `npm run review -- F-xxx` → 관련 e2e. 손 스크립트 대신 `scripts/` 도구, 도구에 없는 반복이 보이면 도구 추가를 제안
 - `e2e:one` 검색어는 `"F-225|F-212"` 처럼 `|` 로 묶을 수 있다. 슬롯은 `--port`·`--dist` 또는 `E2E_PORT`·`E2E_DIST`
