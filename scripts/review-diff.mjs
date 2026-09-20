@@ -37,7 +37,9 @@ function ownedPatterns(featureId) {
     const heading = /^(#{2,4})\s+(.*)$/.exec(line)
     if (heading) {
       if (collecting) ownSections.push(collecting)
-      collecting = /파일 소유|소유 파일/.test(heading[2]) ? [] : null
+      // "수정 파일"(F-271)·"바꾸는 파일" 도 같은 뜻으로 쓰인다. 하나만 보면
+      // 제목이 조금 다른 명세에서 목록이 빈 채로 통과해 경고가 전부 오탐이 된다
+      collecting = /파일 소유|소유 파일|수정 파일|바꾸는 파일|고치는 파일/.test(heading[2]) ? [] : null
       continue
     }
     if (collecting) collecting.push(line)
