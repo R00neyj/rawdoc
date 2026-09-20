@@ -9,6 +9,7 @@ import {
   stripFontFaceBlocks,
   stripImportLines,
 } from './toHtmlDoc'
+import { EXPORT_CSS } from './exportHtmlCss'
 import { buildImageBlock } from '../lib/imageBlock'
 
 describe('collectMermaidSources (A1)', () => {
@@ -202,5 +203,21 @@ describe('CSS 조립 규칙 (M7)', () => {
     const out = stripImportLines(css)
     expect(out).not.toContain('@import')
     expect(out).toContain('.viewer { height: auto; }')
+  })
+})
+
+// 2026-09-21 사용자 제보: 내보낸 .html 에서 CSS 가 평문으로 쭉 나온다
+// 원인은 tokens.css 4행 주석의 </style> — HTML 파서는 CSS 주석을 모르고 그 자리에서 스타일을 끝낸다
+describe('buildHtmlDocument — CSS 안의 </style> 가 스타일 블록을 끊지 않는다', () => {
+  it('CSS 주석에 </style> 이 있어도 문서에 </style> 가 두 번 나오지 않는다', () => {
+    const css = '/* index.html <head> 에 <style>:root{--a:1}</style> 로 넣는다 */\n:root { --b: 2; }'
+    const html = buildHtmlDocument({ title: '문서', body: '<p>본문</p>', css })
+    expect(html.match(/<\/style>/g) ?? []).toHaveLength(1)
+    expect(html).toContain('--b: 2')
+  })
+
+  it('실제 EXPORT_CSS 로 만든 문서도 </style> 가 한 번뿐이다', () => {
+    const html = buildHtmlDocument({ title: '사용법', body: '<p>본문</p>', css: EXPORT_CSS })
+    expect(html.match(/<\/style>/g) ?? []).toHaveLength(1)
   })
 })

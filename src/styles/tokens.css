@@ -1,7 +1,7 @@
 /* 색·서체·크기 토큰 (specs/design.md 2.4·3.1·3.2·3.4, specs/architecture.md 5장,
    specs/features/F-141.md 3.1)
    --brand-accent 는 hex 로 여기 정의하지 않는다. vite.config.js 의 브랜드 주입 플러그인이
-   index.html <head> 에 <style>:root{--brand-accent:...}</style> 로 넣는다.
+   index.html <head> 에 style 요소로 :root{--brand-accent:...} 를 넣는다.
    테마별 --accent 는 --brand-accent 에서 이 파일이 만든다 */
 
 /* 고정폭은 영문·한글 모두 D2Coding Regular, 크기 보정 없음 — 한글 1자 = 영문 2자 (design.md D3·D5, F-154 2.1) */

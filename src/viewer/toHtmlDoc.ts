@@ -83,10 +83,18 @@ export function stripImportLines(css: string): string {
   return css.replace(/^@import[^;]*;\r?\n?/gm, '')
 }
 
+// CSS 안의 </style 를 끊기지 않게 바꾼다. HTML 파서는 CSS 주석을 모르고 </style 를 만나면 그 자리에서
+// 스타일을 끝내므로, 주석에 든 것 하나로 나머지 CSS 가 전부 본문 글자로 쏟아진다 (2026-09-21 사용자 제보,
+// tokens.css 4행 주석이 그랬다). CSS 문법에서 \/ 는 / 와 같아 값 안에 있어도 뜻이 바뀌지 않는다
+export function escapeStyleClose(css: string): string {
+  return css.replace(/<\/(style)/gi, '<\\/$1')
+}
+
 // 단독 .html 파일 한 개 (4.5)
 export function buildHtmlDocument({ title, body, css }: { title: string; body: string; css: string }): string {
   const safeTitleText = title.trim() ? title : '제목 없는 문서'
   const safeTitle = escapeHtml(safeTitleText)
+  const safeCss = escapeStyleClose(css)
   const safeBody = body.replace(SCRIPT_TAG_RE, '') // SVG 안 <script> 를 빼는 마지막 방어 (4.3, A7)
 
   return `<!doctype html>
@@ -95,7 +103,7 @@ export function buildHtmlDocument({ title, body, css }: { title: string; body: s
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${safeTitle}</title>
-<style>${css}</style>
+<style>${safeCss}</style>
 </head>
 <body class="public-view">
 <div class="viewer">
