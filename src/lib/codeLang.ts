@@ -51,6 +51,13 @@ export function displayLang(info: string): string {
   return CODE_LANG_DISPLAY[word.toLowerCase()] ?? word
 }
 
+// <code class="language-js"> 같은 클래스에서 언어를 읽어 정식 표기로 — 없으면 빈 문자열 (F-293 3.8)
+export function displayLangFromClass(className: string): string {
+  const token = className.split(/\s+/).find((t) => t.startsWith('language-'))
+  if (!token) return ''
+  return displayLang(token.slice('language-'.length))
+}
+
 // 정보 문자열의 첫 단어가 (대소문자 무관) mermaid 인가 (F-258 2.1) — displayLang 과 같은 방식으로 첫 단어만 본다
 export function isMermaidInfo(info: string): boolean {
   const word = info.trim().split(/\s+/)[0] ?? ''

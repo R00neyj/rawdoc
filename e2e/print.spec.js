@@ -205,6 +205,21 @@ test.describe('F-279 A10 인쇄 미디어 구조', () => {
   })
 })
 
+test.describe('F-293 A13 인쇄 영역에 머리줄 없음', () => {
+  test('코드블록이 있어도 .print-root 안에 md-code-head·code-copy-btn 이 없다', async ({ page }) => {
+    await stubPrint(page)
+    await openApp(page)
+    await importMarkdown(page, { content: '```js\nalert(1)\n```\n' })
+
+    await triggerPrint(page)
+    await expect.poll(() => printCallCount(page)).toBe(1)
+
+    await expect(page.locator('.print-root .md-code-head')).toHaveCount(0)
+    await expect(page.locator('.print-root .code-copy-btn')).toHaveCount(0)
+    await expect(page.locator('.print-root pre')).not.toHaveCount(0)
+  })
+})
+
 test.describe('F-279 A11 Ctrl+P', () => {
   test('편집 영역에 포커스가 있어도 인쇄된다', async ({ page }) => {
     await stubPrint(page)

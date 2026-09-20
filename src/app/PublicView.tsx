@@ -11,7 +11,7 @@ import { extractHeadings, type Heading } from '../editor/outline'
 import { frontmatterExtension } from '../editor/frontmatter'
 import { resolveWikiTarget } from '../lib/wikiLink'
 import Outline from './Outline'
-import { IconDownload, IconSettings } from './icons'
+import { IconDownload, IconSettings, IconPanelOpen, IconPanelClose, IconRefresh, IconTooltip } from './icons'
 import { buildExportPayload } from './exportDoc'
 import { getPref, setPref } from './prefs'
 import { resolveTheme } from './theme'
@@ -207,14 +207,18 @@ function DocPane({
           )}
           <h1 className="public-view-title">{title}</h1>
         </div>
-        <button type="button" className="public-view-settings" onClick={() => setSettingsOpen(true)}>
-          <IconSettings size={18} />
-          설정
-        </button>
-        <button type="button" className="public-view-export" disabled={!doc} onClick={onExport}>
-          <IconDownload size={18} />
-          .md 내보내기
-        </button>
+        <span className="icon-btn-wrap">
+          <button type="button" className="icon-btn public-view-settings" aria-label="설정" onClick={() => setSettingsOpen(true)}>
+            <IconSettings size={18} />
+          </button>
+          <IconTooltip text="설정" />
+        </span>
+        <span className="icon-btn-wrap">
+          <button type="button" className="icon-btn public-view-export" aria-label=".md 내보내기" disabled={!doc} onClick={onExport}>
+            <IconDownload size={18} />
+          </button>
+          <IconTooltip text=".md 내보내기" align="end" />
+        </span>
       </div>
       <div className="public-view-body content-area" ref={contentAreaRef}>
         {state.status === 'loading' && <p className="public-view-notice">불러오는 중…</p>}
@@ -223,6 +227,7 @@ function DocPane({
           <div className="public-view-notice">
             <p>링크를 불러오지 못했습니다. 연결을 확인하세요.</p>
             <button type="button" onClick={onRetry}>
+              <IconRefresh size={18} />
               다시 시도
             </button>
           </div>
@@ -675,9 +680,18 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
       {narrow && (
         <div className="public-folder-topbar">
           <PublicBrand />
-          <button type="button" className="public-folder-list-toggle" onClick={() => setListOpen((v) => !v)}>
-            목록
-          </button>
+          <span className="icon-btn-wrap">
+            <button
+              type="button"
+              className="icon-btn public-folder-list-toggle"
+              aria-label={listOpen ? '문서 목록 닫기' : '문서 목록 열기'}
+              aria-expanded={listOpen}
+              onClick={() => setListOpen((v) => !v)}
+            >
+              {listOpen ? <IconPanelClose size={18} /> : <IconPanelOpen size={18} />}
+            </button>
+            <IconTooltip text={listOpen ? '문서 목록 닫기' : '문서 목록 열기'} align="end" />
+          </span>
         </div>
       )}
       <div className="public-folder-layout">

@@ -6,6 +6,7 @@ import 'github-markdown-css/github-markdown-light.css'
 import './viewer.css'
 
 import { createCodeCopyButton } from '../lib/codeCopyButton'
+import { displayLangFromClass } from '../lib/codeLang'
 import { renderMermaid } from '../lib/mermaidRender'
 import { showPlaceholder, showImage } from './fillMarkdownAssets'
 
@@ -146,14 +147,32 @@ export default function Viewer({
     }
   }, [html, theme])
 
-  // 그린 뒤 pre > code 마다 복사 버튼을 붙인다 (codeCopy 가 참일 때만, F-210 2.5)
+  // 그린 뒤 pre > code 마다 머리줄(언어 + 복사 버튼)을 조립해 붙인다 (codeCopy 가 참일 때만, F-210 2.5, F-293 3.6)
   useEffect(() => {
     const root = containerRef.current
     if (!root || !codeCopy) return
     root.querySelectorAll('pre > code').forEach((code) => {
       const pre = code.parentElement
       if (!pre) return
-      pre.appendChild(createCodeCopyButton(() => code.textContent ?? ''))
+      // 멱등 가드 — StrictMode 이중 실행으로 이미 감싸져 있으면 다시 만들지 않는다 (F-293 3.6)
+      if (pre.parentElement?.classList.contains('md-code')) return
+
+      const wrap = document.createElement('div')
+      wrap.className = 'md-code'
+      const head = document.createElement('div')
+      head.className = 'md-code-head'
+      const word = displayLangFromClass(code.className)
+      if (word) {
+        const lang = document.createElement('span')
+        lang.className = 'md-code-lang'
+        lang.textContent = word
+        head.appendChild(lang)
+      }
+      head.appendChild(createCodeCopyButton(() => code.textContent ?? ''))
+
+      pre.replaceWith(wrap)
+      wrap.appendChild(head)
+      wrap.appendChild(pre)
     })
   }, [html, codeCopy])
 

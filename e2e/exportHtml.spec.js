@@ -160,6 +160,23 @@ test.describe('F-280 A20 복사 대체 경로', () => {
   })
 })
 
+test.describe('F-293 A12 내보낸 HTML에 머리줄 없음', () => {
+  test('코드블록이 있어도 md-code-head·md-code-lang·code-copy-btn 요소가 없고 pre>code 는 그대로', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '```js\nalert(1)\n```\n' })
+
+    await openExportMenu(page)
+    const { text } = await downloadText(page, 'HTML 파일')
+
+    // <style> 안에는 선택자 문자열이 죽은 규칙으로 남는다(F-293 3.6) — 실제 DOM 요소만 본다
+    expect(text).not.toContain('class="md-code"')
+    expect(text).not.toContain('class="md-code-head"')
+    expect(text).not.toContain('class="md-code-lang"')
+    expect(text).not.toContain('class="code-copy-btn"')
+    expect(text).toContain('<pre><code class="language-')
+  })
+})
+
 test.describe('F-280 A21 비활성 회귀', () => {
   test('문서가 없는 빈 상태에서는 내보내기 버튼이 비활성, 메뉴가 열리지 않는다', async ({ page }) => {
     await openApp(page)

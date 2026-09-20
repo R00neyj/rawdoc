@@ -19,17 +19,39 @@
   }
 }
 
-/* 코드블록 복사 버튼 (specs/features/F-210.md 2.5) — pre 오른쪽 위 여백, 가로 스크롤해도 제자리.
-   가로 스크롤을 pre 가 아니라 안쪽 code 가 맡는다 — pre 가 스크롤 컨테이너면 그 안에 절대 위치로
-   놓인 버튼이 코드와 함께 밀려 글자 위에 겹친다 (2026-09-21 공유 문서에서 발견) */
-.viewer--code-copy pre {
-  position: relative;
-  overflow: visible;
+/* 코드블록 머리줄 — 편집 모드 .md-codeblock-head 와 같은 모양 (F-240 3.2, F-293 3.7) */
+.viewer--code-copy .md-code {
+  position: relative;              /* .code-copy-btn(position:absolute)의 기준 */
+  overflow: hidden;                /* 모서리 안쪽으로 pre 를 잘라 준다 */
+  margin-bottom: 1rem;             /* pre 가 갖고 있던 아래 여백을 래퍼가 받는다 */
+  border-radius: 6px;
+  background: var(--md-bg-muted);
 }
 
-.viewer--code-copy pre > code {
-  display: block;
-  overflow-x: auto;
+.viewer--code-copy .markdown-body .md-code > pre,
+.viewer--code-copy .markdown-body .md-code > pre.markdown-frontmatter-raw {
+  margin: 0;
+  padding-top: 0;                  /* 머리줄이 위 여백을 대신한다 */
+  border-radius: 0;
+  background: transparent;         /* 바탕은 래퍼가 그린다 */
+}
+
+.viewer--code-copy .md-code-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 36px;
+  padding: 0 40px 0 12px;          /* 오른쪽 40px = 버튼 28 + right 8 + 4 */
+}
+
+.viewer--code-copy .md-code-lang {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: var(--font-sans);
 }
 
 /* Mermaid 다이어그램 (specs/features/F-258.md 2.5, 최소 구현) — svg 는 가운데 정렬 */
