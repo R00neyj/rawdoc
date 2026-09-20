@@ -1,12 +1,15 @@
 // 검색 대화상자 D-6 (specs/features/F-287.md 4장) — 인덱스 만들기·검색 실행·결과 그리기·키보드
+// 해석 줄·안내 줄·꼬리 줄·상태 문구는 F-288.md 4~6장
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import Dialog from './Dialog'
 import { IconSearch } from './icons'
 import { parseSearchQuery, searchDocs, type SnippetPart, type SearchOutcome } from '../lib/docSearch'
 import { buildSearchIndex, type SearchIndex, type SearchSource } from './searchIndex'
-import { buildResultRows, nextResultIndex } from './searchResults'
+import { buildResultRows, nextResultIndex, formatQuerySummary, buildSearchNotes, formatResultCount, searchStatusText } from './searchResults'
 
 const DEBOUNCE_MS = 150
+// '목록을 새로 읽는 중…' 이 뜨기까지의 지연 (F-288.md 13장 Q4)
+const LOADING_NOTE_MS = 250
 
 type SearchDialogProps = {
   open: boolean
@@ -17,6 +20,8 @@ type SearchDialogProps = {
   onClose: () => void
   // 이미 열려 있을 때 Ctrl+Shift+F 를 다시 누르면 App 이 이 ref 를 통해 검색어 전체 선택을 시킨다 (3.4)
   selectQueryRef: RefObject<() => void>
+  // 서버 저장소이면서 온라인이 아니다 — 대화상자 안내 줄에 쓴다 (F-288.md 7.5)
+  offline: boolean
 }
 
 function renderParts(parts: SnippetPart[]) {
@@ -31,7 +36,7 @@ function renderParts(parts: SnippetPart[]) {
   )
 }
 
-export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDoc, onClose, selectQueryRef }: SearchDialogProps) {
+export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDoc, onClose, selectQueryRef, offline }: SearchDialogProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const resultRefs = useRef<(HTMLLIElement | null)[]>([])
 
@@ -88,6 +93,18 @@ export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDo
     return () => clearTimeout(id)
   }, [query])
 
+  // 인덱스가 250ms 넘게 안 오면 '목록을 새로 읽는 중…' 을 보여준다. 그 안에 오면 아예 뜨지 않는다 (F-288.md 6.2, 13장 Q4)
+  const [loading, setLoading] = useState(false)
+  useEffect(() => {
+    if (!open || index !== null || failed) return
+    const id = setTimeout(() => setLoading(true), LOADING_NOTE_MS)
+    return () => clearTimeout(id)
+  }, [open, index, failed])
+  // 인덱스가 왔거나(또는 실패했거나) 닫히면 곧바로 끈다 — 렌더 중 조정(trackedOpen 과 같은 패턴)
+  if (loading && (!open || index !== null || failed)) {
+    setLoading(false)
+  }
+
   const parsed = useMemo(() => parseSearchQuery(term), [term])
   const outcome = useMemo(() => (index ? searchDocs(index.entries, parsed) : null), [index, parsed])
   const rows = useMemo(() => (index && outcome ? buildResultRows(index.entries, outcome, parsed) : []), [index, outcome, parsed])
@@ -116,11 +133,14 @@ export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDo
     }
   }
 
-  // 상태 문구 3개 — 인덱스가 아직 없는 동안 입력하면(loading) 아무 문구도 보이지 않는다(빈 영역, 4.3)
-  let status: string | null = null
-  if (parsed.isEmpty) status = '검색어를 입력하세요'
-  else if (index && rows.length === 0) status = '찾는 문서가 없습니다'
-  if (failed) status = '문서를 읽지 못했습니다'
+  // 상태 문구 — 우선순위는 searchStatusText 가 고정한다 (F-288.md 5.4)
+  const status = searchStatusText({ query: parsed, outcome, rowCount: rows.length, failed })
+
+  // 해석 줄·안내 줄·꼬리 줄 (F-288.md 5장)
+  const querySummary = formatQuerySummary(parsed)
+  const notes = buildSearchNotes({ query: parsed, outcome, sharedCount: index?.sharedCount ?? 0, offline, loading })
+  const hasNotes = querySummary !== null || notes.length > 0
+  const foot = formatResultCount(outcome, rows.length)
 
   return (
     <Dialog open={open} onClose={onClose} titleId="search-dialog-title" size="wide" initialFocusRef={inputRef}>
@@ -144,7 +164,21 @@ export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDo
             onKeyDown={handleKeyDown}
           />
         </div>
-        {status && <p className="search-status">{status}</p>}
+        {hasNotes && (
+          <div className="search-notes">
+            {querySummary && <p className="search-summary">{querySummary}</p>}
+            {notes.map((note, i) => (
+              <p key={i} className="search-note">
+                {note}
+              </p>
+            ))}
+          </div>
+        )}
+        {status && (
+          <p className="search-status" role="status">
+            {status}
+          </p>
+        )}
         {!status && (
           <ul id="search-result-list" role="listbox" aria-label="검색 결과" className="search-results">
             {rows.map((row, i) => (
@@ -172,6 +206,7 @@ export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDo
             ))}
           </ul>
         )}
+        {foot && <p className="search-foot">{foot}</p>}
       </div>
     </Dialog>
   )

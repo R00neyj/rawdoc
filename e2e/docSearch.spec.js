@@ -1,6 +1,8 @@
 // 검색 대화상자와 진입점 (specs/features/F-287.md 8장 A1~A17)
+// F-288 A1~A11 은 안내 문구·공백 표시 (specs/features/F-288.md 8장)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, resizeWindow, currentDocId } from './helpers.js'
+import { openApp, openAppHome, setPrefBeforeLoad, importMarkdown, resizeWindow, currentDocId } from './helpers.js'
+import { fakeServer } from './fixtures/fakeServer.js'
 
 test.describe('F-287 검색 대화상자와 진입점', () => {
   test('F-287 A1 머리 줄 버튼으로 열기', async ({ page }) => {
@@ -227,5 +229,142 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
     await page.keyboard.press('Escape')
     await expect(page.locator('dialog[open]')).toHaveCount(0)
     await expect(page.locator('.sidebar')).toBeVisible()
+  })
+})
+
+// 세 문서(1개는 tag:일기 프론트매터, 2개는 속성 없음) — A1~A4 공용 (F-288.md 8.2)
+async function seedThreeDocs(page) {
+  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+  await openAppHome(page)
+  await importMarkdown(page, { name: '일기1.md', content: '---\ntag: 일기\n---\n오늘 하루\n' })
+  await importMarkdown(page, { name: '일반문서.md', content: '태그 없는 문서\n' })
+  await importMarkdown(page, { name: '다른문서.md', content: '역시 태그 없음\n' })
+}
+
+test.describe('F-288 안내 문구와 공백 표시', () => {
+  test('F-288 A1 해석 줄', async ({ page }) => {
+    await seedThreeDocs(page)
+
+    await page.keyboard.press('Control+Shift+F')
+    await page.locator('.search-input').fill('tag:일기 하루')
+    await page.waitForTimeout(250)
+
+    await expect(page.locator('dialog[open] .search-summary')).toHaveText('필터 tag=일기 · 검색어 "하루"')
+  })
+
+  test('F-288 A2 필터가 없으면 해석 줄이 없다', async ({ page }) => {
+    await seedThreeDocs(page)
+
+    await page.keyboard.press('Control+Shift+F')
+    await page.locator('.search-input').fill('하루')
+    await page.waitForTimeout(250)
+
+    await expect(page.locator('dialog[open] .search-summary')).toHaveCount(0)
+  })
+
+  test('F-288 A3 속성 안내 줄', async ({ page }) => {
+    await seedThreeDocs(page)
+
+    await page.keyboard.press('Control+Shift+F')
+    await page.locator('.search-input').fill('tag:일기')
+    await page.waitForTimeout(250)
+
+    await expect(page.locator('dialog[open] .search-note')).toContainText('속성이 없거나 읽지 못한 문서 2개는 필터에서 빠졌습니다')
+  })
+
+  test('F-288 A4 없는 속성 키', async ({ page }) => {
+    await seedThreeDocs(page)
+
+    await page.keyboard.press('Control+Shift+F')
+    await page.locator('.search-input').fill('tagg:일기')
+    await page.waitForTimeout(250)
+
+    await expect(page.getByText("'tagg' 속성을 가진 문서가 없습니다")).toBeVisible()
+    await expect(page.getByText('찾는 문서가 없습니다')).toHaveCount(0)
+  })
+
+  test('F-288 A5 꼬리 줄 결과 수', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { name: '회고1.md', content: '주간 회고를 썼다\n' })
+    await importMarkdown(page, { name: '회고2.md', content: '오늘도 회고\n' })
+    await importMarkdown(page, { name: '상관없음.md', content: '전혀 다른 내용\n' })
+
+    await page.keyboard.press('Control+Shift+F')
+    await page.locator('.search-input').fill('회고')
+    await page.waitForTimeout(250)
+
+    await expect(page.locator('dialog[open] .search-foot')).toHaveText('결과 2개')
+  })
+
+  test('F-288 A6 결과가 0개면 꼬리 줄이 없다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+
+    await page.keyboard.press('Control+Shift+F')
+    await page.locator('.search-input').fill('zzzz없는말')
+    await page.waitForTimeout(250)
+
+    await expect(page.locator('dialog[open] .search-foot')).toHaveCount(0)
+    await expect(page.getByText('찾는 문서가 없습니다')).toBeVisible()
+  })
+
+  test('F-288 A7 오프라인 안내', async ({ page }) => {
+    const server = await fakeServer(page)
+    await openApp(page)
+    await importMarkdown(page, { content: '오늘의 회고\n' })
+    server.setOffline(true)
+    await page.evaluate(() => window.dispatchEvent(new Event('offline')))
+
+    await page.keyboard.press('Control+Shift+F')
+    await expect(page.locator('dialog[open] .search-note')).toContainText('오프라인 — 이 기기에 저장된 문서에서 찾습니다')
+
+    await page.locator('.search-input').fill('회고')
+    await page.waitForTimeout(250)
+    await expect(page.getByRole('option')).not.toHaveCount(0)
+  })
+
+  test('F-288 A8 로컬 저장소에는 안 뜬다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+    await page.evaluate(() => window.dispatchEvent(new Event('offline')))
+
+    await page.keyboard.press('Control+Shift+F')
+    await expect(page.locator('dialog[open] .search-note')).toHaveCount(0)
+  })
+
+  test('F-288 A9 목록을 새로 읽는 중…', async ({ page }) => {
+    await fakeServer(page)
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+    await page.route('**/api/docs', async (route) => {
+      await new Promise((res) => setTimeout(res, 1200))
+      await route.fallback()
+    })
+
+    await page.keyboard.press('Control+Shift+F')
+    await expect(page.locator('dialog[open] .search-note')).toContainText('목록을 새로 읽는 중…')
+    await expect(page.locator('dialog[open] .search-note', { hasText: '목록을 새로 읽는 중…' })).toHaveCount(0, { timeout: 3000 })
+  })
+
+  test('F-288 A10 빠르면 안 뜬다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { name: 'a.md', content: '내용1\n' })
+    await importMarkdown(page, { name: 'b.md', content: '내용2\n' })
+    await importMarkdown(page, { name: 'c.md', content: '내용3\n' })
+
+    await page.keyboard.press('Control+Shift+F')
+    await expect(page.locator('dialog[open] .search-note')).toHaveCount(0)
+    await page.waitForTimeout(300)
+    await expect(page.locator('dialog[open] .search-note')).toHaveCount(0)
+  })
+
+  test('F-288 A11 상태 문구 접근성', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '내용\n' })
+    await page.keyboard.press('Control+Shift+F')
+    await page.locator('.search-input').fill('zzzz없는말')
+    await page.waitForTimeout(250)
+
+    await expect(page.locator('dialog[open] .search-status')).toHaveAttribute('role', 'status')
   })
 })

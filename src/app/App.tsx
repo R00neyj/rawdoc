@@ -1549,6 +1549,8 @@ export default function App() {
 
   // 로그인 + 오프라인이면 서버 첨부를 못 받아 내보내기를 막는다 (F-281.md 3.1)
   const exportOffline = store.kind === 'server' && syncState?.online === false
+  // 검색 대화상자 오프라인 안내 — exportOffline 과 식은 같지만 뜻이 다른 이름이라 재사용하지 않는다 (F-288.md 7.5, 13장 Q8)
+  const searchOffline = store.kind === 'server' && syncState?.online === false
 
   // ----- 전체 내보내기 — 설정 `데이터` 절 (specs/features/F-281.md 3.6) -----
   async function handleExportAll() {
@@ -2800,6 +2802,7 @@ export default function App() {
         onOpenDoc={openDocFromSearch}
         onClose={closeSearch}
         selectQueryRef={selectSearchQueryRef}
+        offline={searchOffline}
       />
       <ImportPreviewDialog
         state={importState}

@@ -1,4 +1,5 @@
 // 검색 결과 — DOM 없는 순수 함수 (specs/features/F-287.md 4.4). 선례: settingsTabs.ts(F-290)
+// 안내 문구 4개(formatQuerySummary·buildSearchNotes·formatResultCount·searchStatusText)는 F-288.md 5장
 import { highlightParts, buildSnippet, type ParsedQuery, type SnippetPart, type SearchOutcome } from '../lib/docSearch'
 import type { SearchIndexEntry } from './searchIndex'
 
@@ -65,4 +66,64 @@ export function buildResultRows(
   }
 
   return rows
+}
+
+// 쿼리 해석 줄. 필터가 하나도 없으면 null (F-288.md 5.1)
+export function formatQuerySummary(query: ParsedQuery): string | null {
+  if (query.filters.length === 0) return null
+
+  const filterPart = query.filters.map((f) => `${f.key}=${f.value === '' ? '(모두)' : f.value}`).join(', ')
+  const termPart = query.terms.length > 0 ? ` · 검색어 ${query.terms.map((t) => `"${t}"`).join(' ')}` : ''
+  return `필터 ${filterPart}${termPart}`
+}
+
+// 해석 줄 아래 안내 줄들. 화면에 그릴 순서 그대로. 없으면 빈 배열 (F-288.md 5.2)
+export function buildSearchNotes(input: {
+  query: ParsedQuery
+  outcome: SearchOutcome | null
+  sharedCount: number
+  offline: boolean
+  loading: boolean
+}): string[] {
+  const { query, outcome, sharedCount, offline, loading } = input
+  const notes: string[] = []
+
+  if (loading) notes.push('목록을 새로 읽는 중…')
+  if (offline) notes.push('오프라인 — 이 기기에 저장된 문서에서 찾습니다')
+  if (outcome !== null && outcome.unreadableProperties > 0) {
+    notes.push(`속성이 없거나 읽지 못한 문서 ${outcome.unreadableProperties.toLocaleString('ko-KR')}개는 필터에서 빠졌습니다`)
+  }
+  if (sharedCount > 0 && query.terms.length > 0) {
+    notes.push(`공유받은 문서 ${sharedCount.toLocaleString('ko-KR')}개는 제목만 찾았습니다`)
+  }
+
+  return notes
+}
+
+// 결과 꼬리 줄. 결과가 0개거나 아직 모르면 null (F-288.md 5.3)
+export function formatResultCount(outcome: SearchOutcome | null, rowCount: number): string | null {
+  if (outcome === null || rowCount === 0) return null
+
+  const total = outcome.total.toLocaleString('ko-KR')
+  if (!outcome.truncated) return `결과 ${total}개`
+  return `결과 ${total}개 — 앞 ${rowCount.toLocaleString('ko-KR')}개만 보입니다`
+}
+
+// 결과 자리에 그릴 상태 문구. 결과 목록을 그려야 하면 null (F-288.md 5.4)
+export function searchStatusText(input: {
+  query: ParsedQuery
+  outcome: SearchOutcome | null
+  rowCount: number
+  failed: boolean
+}): string | null {
+  const { query, outcome, rowCount, failed } = input
+
+  if (failed) return '문서를 읽지 못했습니다'
+  if (query.isEmpty) return '검색어를 입력하세요'
+  if (outcome === null) return null
+  if (outcome.missingFilterKeys.length > 0) {
+    return `${outcome.missingFilterKeys.map((k) => `'${k}'`).join(', ')} 속성을 가진 문서가 없습니다`
+  }
+  if (rowCount === 0) return '찾는 문서가 없습니다'
+  return null
 }

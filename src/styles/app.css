@@ -1479,6 +1479,27 @@ body.sidebar-resizing {
   color: inherit;
 }
 
+/* 해석 줄·안내 줄·꼬리 줄 (specs/features/F-288.md 10.1) */
+.search-notes {
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.search-summary,
+.search-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.search-foot {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 /* 설정 대화상자 왼쪽 탭 목록 + 오른쪽 패널 (specs/features/F-290.md 3.8) */
 .settings-body {
   display: flex;
