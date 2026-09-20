@@ -1477,9 +1477,14 @@ body.sidebar-resizing {
   transition: var(--transition-colors);
 }
 
+/* 탭마다 항목 수가 달라(화면 388px ↔ 데이터 108px) 닫기 버튼 자리가 280px 씩 튀던 것을 막는다.
+   가장 긴 `화면` 탭에 맞춰 고정하고 넘치면 스크롤한다 (F-290 9장 3번을 사용자가 2026-09-21 판단).
+   min() 은 창이 아주 낮을 때만 걸린다 — 900px 창에서는 60vh=540px 라 392px 그대로다 */
 .settings-panel {
   flex: 1;
   min-width: 0;
+  height: min(392px, 60vh);
+  overflow-y: auto;
 }
 
 .settings-panel .dialog-field:last-child {
