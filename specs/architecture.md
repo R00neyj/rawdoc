@@ -56,6 +56,9 @@ src/
   - `editor/`: `imageInsert.js`(F-156), `preview/imageWidget.js`(F-157)
   - `lib/`: `imageFile.js`·`imageBlock.js`(F-156)
   - `styles/`: `image.css`(F-157)
+- 여러 문서 검색(2026-09-21)으로 추가
+  - `lib/`: `docSearch.ts`(F-285 — 쿼리 파싱·매칭·발췌, import 문 없음)
+  - `app/`: `searchIndex.ts`(F-286 — 인덱스 만들기·재사용), `SearchDialog.tsx`(F-287)
 - editor·viewer 가 문서 목록이 필요하면(위키링크) 저장소를 import 하지 않고 App 이 인자로 넘긴다. 첨부 이미지도 같다: App 이 `onImageFiles`(넣기)·`resolveAttachment(id)`(읽기) 콜백을 넘긴다 (F-156·F-157)
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
@@ -96,6 +99,7 @@ store.removeAttachment(id)    // Promise<void>
 
 - `content` 는 `lineEnding` 으로 줄을 이은 원문이다 (`specs/product.md` 5장, Q9)
 - 저장소 이름·키에 제품명을 쓰지 않는다 (CLAUDE.md 불변조건)
+- 검색은 이 인터페이스를 넓히지 않는다. `list()`·`listFolders()` 만 쓰고, F-286 의 `SearchSource` 타입이 그 둘만 받는다(`Pick<Store, 'list' | 'listFolders'>`)
 
 ## 3. 문서 상태 흐름
 
