@@ -2,6 +2,7 @@
 import { checkContentFile } from './guard'
 import { contentUrl, urlToFile } from './pages'
 import { renderSitePage } from './render'
+import { HELP_CONTENT_PATH, helpContent } from './helpPage'
 import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS, SITE_NAV, SITE_FOOTER_LINKS } from '../src/lib/siteChrome'
 import { SITE_URL } from '../src/lib/siteMeta'
 import brand from '../brand.config'
@@ -66,7 +67,12 @@ export function buildSite(input: SiteInput): Record<string, string> {
   const lastmodByUrl = new Map<string, string>()
   const urls: string[] = []
 
-  const mdEntries = Object.entries(input.content).filter(([relPath]) => relPath.endsWith('.md'))
+  const fileEntries = Object.entries(input.content).filter(([relPath]) => relPath.endsWith('.md'))
+  if (fileEntries.some(([relPath]) => relPath === HELP_CONTENT_PATH)) {
+    throw new Error(`content/${HELP_CONTENT_PATH}: 도움말은 src/app/helpDoc.ts 가 원본입니다 — content/ 에 두지 않습니다`)
+  }
+  // 도움말은 content/ 에 파일이 없다 — 맨 뒤에 붙여 content/ 의 가드 에러가 먼저 나오게 한다 (F-274.md 3.3)
+  const mdEntries: [string, string][] = [...fileEntries, [HELP_CONTENT_PATH, helpContent()]]
 
   for (const [relPath, raw] of mdEntries) {
     checkContentFile(relPath, raw)

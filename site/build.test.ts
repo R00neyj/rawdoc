@@ -1,6 +1,7 @@
 // buildSite — 빌드 진입 (specs/features/F-272.md 3.3, A5·A6·A7·A8)
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { buildSite } from './build'
+import { HELP_CONTENT_PATH } from './helpPage'
 import brand from '../brand.config'
 import { SITE_NAV, SITE_FOOTER_LINKS } from '../src/lib/siteChrome'
 
@@ -16,9 +17,40 @@ afterAll(() => {
 })
 
 describe('F-272 A5 빈 content', () => {
-  it('키가 정확히 404.html·sitemap.xml·robots.txt 셋이다', () => {
+  // 도움말(help.html)은 content 와 무관하게 buildSite 가 항상 만들어 낸다 (F-274.md 3장) — 그래서 넷이다
+  it('키가 정확히 404.html·help.html·robots.txt·sitemap.xml 넷이다', () => {
     const out = buildSite({ content: {}, appCssHref, builtAt })
-    expect(Object.keys(out).sort()).toEqual(['404.html', 'robots.txt', 'sitemap.xml'])
+    expect(Object.keys(out).sort()).toEqual(['404.html', 'help.html', 'robots.txt', 'sitemap.xml'])
+  })
+})
+
+describe('F-274 A5 글이 없어도 도움말은 난다', () => {
+  it('키가 정확히 404.html·help.html·robots.txt·sitemap.xml 넷이다', () => {
+    const out = buildSite({ content: {}, appCssHref, builtAt })
+    expect(Object.keys(out).sort()).toEqual(['404.html', 'help.html', 'robots.txt', 'sitemap.xml'])
+  })
+})
+
+describe('F-274 A6 페이지·색인 내용', () => {
+  it('help.html 에 title·canonical 이 있고 script 가 없다', () => {
+    const out = buildSite({ content: {}, appCssHref, builtAt })
+    expect(out['help.html']).toContain('<title>도움말 · Rawdoc</title>')
+    expect(out['help.html']).toContain('rel="canonical" href="https://rawdoc.app/help"')
+    expect(out['help.html']).not.toContain('<script')
+  })
+
+  it('sitemap.xml 에 /help 항목이 빌드 시각 lastmod 로 들어간다', () => {
+    const out = buildSite({ content: {}, appCssHref, builtAt })
+    expect(out['sitemap.xml']).toContain(
+      '<url><loc>https://rawdoc.app/help</loc><lastmod>2026-09-20</lastmod></url>',
+    )
+  })
+})
+
+describe('F-274 A7 content/help.md 중복', () => {
+  it('content 에 help.md 가 있으면 에러를 던진다', () => {
+    const content = { [HELP_CONTENT_PATH]: '---\ntitle: x\n---\n' }
+    expect(() => buildSite({ content, appCssHref, builtAt })).toThrow(/content\/help\.md/)
   })
 })
 

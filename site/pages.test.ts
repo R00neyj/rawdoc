@@ -27,6 +27,19 @@ describe('F-272 A4 contentUrl/urlToFile', () => {
     expect(contentUrl('random.md')).toBeNull()
   })
 
+  it('F-274 A4 help.md → /help', () => {
+    expect(contentUrl('help.md')).toBe('/help')
+  })
+
+  it('F-274 A4 urlToFile(/help) → help.html', () => {
+    expect(urlToFile('/help')).toBe('help.html')
+  })
+
+  it('F-274 A4 매핑은 정확히 help.md 하나 — helper.md·legal/help.md 는 null', () => {
+    expect(contentUrl('helper.md')).toBeNull()
+    expect(contentUrl('legal/help.md')).toBeNull()
+  })
+
   it("urlToFile('/guides/a') → 'guides/a.html'", () => {
     expect(urlToFile('/guides/a')).toBe('guides/a.html')
   })

@@ -7,6 +7,8 @@ export function contentUrl(relPath: string): string | null {
   if (relPath === 'changelog.md') return '/changelog'
   if (relPath === 'legal/privacy.md') return '/privacy'
   if (relPath === 'legal/terms.md') return '/terms'
+  // 도움말만 content/ 에 파일이 없다 — site/build.ts 가 src/app/helpDoc.ts 로 만들어 넣는다 (F-274.md 3장)
+  if (relPath === 'help.md') return '/help'
 
   const guideMatch = /^guides\/([^/]+)\.md$/.exec(relPath)
   if (guideMatch && SLUG_RE.test(guideMatch[1])) return `/guides/${guideMatch[1]}`

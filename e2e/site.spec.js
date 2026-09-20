@@ -95,3 +95,50 @@ test('F-272 A12 랜딩에 같은 머리·꼬리가 보이고 앱 열기 로 앱�
   const cookies = await page.context().cookies()
   expect(cookies.find((c) => c.name === 'md_app')?.value).toBe('1')
 })
+
+test('F-274 A9 /help 페이지가 뜬다', async ({ page }) => {
+  await page.goto('/help')
+  await expect(page.getByRole('heading', { level: 1, name: '도움말' })).toBeVisible()
+  await expect(page.locator('.site-nav a[href="/help"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('.site-foot')).toBeVisible()
+})
+
+test('F-274 A10 본문이 실제로 들어 있다', async ({ page }) => {
+  await page.goto('/help')
+  await expect(page.getByRole('heading', { level: 2, name: '이 앱은' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: '단축키' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: '마크다운 문법' })).toBeVisible()
+  expect(await page.locator('table').count()).toBeGreaterThanOrEqual(1)
+  expect(await page.locator('.markdown-callout').count()).toBeGreaterThanOrEqual(1)
+  expect(await page.locator('input[type="checkbox"]').count()).toBeGreaterThanOrEqual(1)
+})
+
+test('F-274 A11 완결된 정적 페이지다', async ({ page }) => {
+  const res = await page.request.get('/help')
+  expect(res.status()).toBe(200)
+  const body = await res.text()
+  expect(body).toContain('<title>도움말 · Rawdoc</title>')
+  expect(body).toContain('rel="canonical"')
+  expect(body).toContain('https://rawdoc.app/help')
+  expect(body).not.toContain('<script')
+  expect(body).not.toContain('data-mermaid-source')
+  expect(body).not.toContain('data-attachment')
+})
+
+test('F-274 A12 sitemap.xml 에 등재된다', async ({ page }) => {
+  const res = await page.request.get('/sitemap.xml')
+  const body = await res.text()
+  expect(body).toContain('<loc>https://rawdoc.app/help</loc>')
+})
+
+test('F-274 A13 서비스 워커 precache 에서 빠진다', async ({ page }) => {
+  const res = await page.request.get('/sw.js')
+  const body = await res.text()
+  expect(body).not.toContain('help.html')
+})
+
+test('F-274 A14 랜딩 머리에도 도움말 링크가 보인다', async ({ page }) => {
+  await mockLanding(page)
+  await page.goto('/')
+  await expect(page.locator('.site-head a[href="/help"]', { hasText: '도움말' })).toBeVisible()
+})

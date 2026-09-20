@@ -3,7 +3,10 @@
 export type SiteLink = { path: string; label: string }
 
 // F-273~F-276 이 자기 페이지를 만들면서 한 줄씩 더한다. 최종 순서: 사용법(F-276)·체인지로그(F-273)·도움말(F-274)
-export const SITE_NAV: SiteLink[] = [{ path: '/changelog', label: '체인지로그' }]
+export const SITE_NAV: SiteLink[] = [
+  { path: '/changelog', label: '체인지로그' },
+  { path: '/help', label: '도움말' },
+]
 export const SITE_FOOTER_LINKS: SiteLink[] = []
 
 function escapeHtml(value: string): string {

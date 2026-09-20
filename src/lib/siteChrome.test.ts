@@ -11,6 +11,16 @@ describe('F-273 A2 SITE_NAV 에 체인지로그가 등록돼 있다', () => {
   })
 })
 
+describe('F-274 A8 SITE_NAV 에 도움말이 등록돼 있다', () => {
+  it('/help 항목이 정확히 하나 있고 /changelog 뒤에 있다', () => {
+    const matches = INITIAL_NAV.filter((link) => link.path === '/help' && link.label === '도움말')
+    expect(matches).toHaveLength(1)
+    const changelogIdx = INITIAL_NAV.findIndex((link) => link.path === '/changelog')
+    const helpIdx = INITIAL_NAV.findIndex((link) => link.path === '/help')
+    expect(helpIdx).toBeGreaterThan(changelogIdx)
+  })
+})
+
 describe('F-272 A1 renderSiteHeader/renderSiteFooter', () => {
   beforeEach(() => {
     SITE_NAV.length = 0
