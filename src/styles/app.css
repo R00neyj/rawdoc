@@ -1384,15 +1384,32 @@ body.sidebar-resizing {
   padding: 8px 10px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
+  background: var(--paper);
   color: var(--muted);
   margin-bottom: 10px;
+  transition: var(--transition-colors);
 }
 
+/* 포커스 표시는 묶음 테두리 한 겹 — 입력 자체 외곽선은 끈다 (F-225 2장의 .invite-input-group 과 같은 방식) */
+.search-input-row:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* tokens.css 의 전역 리셋은 button 만 덮고 input 은 font·color 만 물려준다.
+   테두리·배경을 끄지 않으면 브라우저 기본 상자가 위 묶음 테두리 안에 한 겹 더 보인다 (2026-09-21) */
 .search-input {
   flex: 1;
   min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
   font-size: 14px;
   color: var(--ink);
+}
+
+.search-input:focus-visible {
+  outline: none;
 }
 
 .search-status {
