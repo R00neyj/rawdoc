@@ -101,6 +101,7 @@ npm run e2e:one -- "F-152 A8a" --repeat 3   # repeat a subset of e2e; skips the 
 npm run measure -- --doc long:300 --select ".cm-line" --style line-height   # on-screen measurement JSON (4400, dist-measure)
 npm run review -- F-xxx   # check for out-of-ownership files and forbidden patterns
 npm run specs -- --todo   # remaining specs (--status pending, --milestone M3, --check, --json)
+npm run clean        # delete dist-* e2e slots, test-results/, playwright-report/ (--all also drops dist/, --force ignores the 10-minute in-use guard)
 E2E_PORT=4501 E2E_DIST=dist-a npx playwright test   # parallel e2e slot
 npm run dev:spike    # for checking spikes
 ```
