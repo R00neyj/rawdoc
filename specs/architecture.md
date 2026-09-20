@@ -58,7 +58,8 @@ src/
   - `styles/`: `image.css`(F-157)
 - 여러 문서 검색(2026-09-21)으로 추가
   - `lib/`: `docSearch.ts`(F-285 — 쿼리 파싱·매칭·발췌, import 문 없음)
-  - `app/`: `searchIndex.ts`(F-286 — 인덱스 만들기·재사용), `SearchDialog.tsx`(F-287), `searchResults.ts`(F-287 — 결과 행·문구 계산 순수 함수)
+  - `app/`: `searchIndex.ts`(F-286 — 인덱스 만들기·재사용), `SearchDialog.tsx`(F-287), `searchResults.ts`(F-287 — 결과 행·문구 계산 순수 함수 + 에디터에 넘길 검색어 고르기(F-294))
+  - `editor/`: `showSearchMatches.ts`(F-294 — 검색 결과로 연 문서에서 CM6 찾기 패널 열기)
 - editor·viewer 가 문서 목록이 필요하면(위키링크) 저장소를 import 하지 않고 App 이 인자로 넘긴다. 첨부 이미지도 같다: App 이 `onImageFiles`(넣기)·`resolveAttachment(id)`(읽기) 콜백을 넘긴다 (F-156·F-157)
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
