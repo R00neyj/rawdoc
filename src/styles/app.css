@@ -500,10 +500,18 @@ body.sidebar-resizing {
   gap: 4px;
 }
 
+/* 레일 아이콘 4개는 늘어나지 않으므로 스크롤이 필요 없다. `overflow-y: auto` 를 두면 가로축도
+   `auto` 로 계산돼(CSS Overflow 3 — 한 축이 visible 이 아니면 다른 축의 visible 은 auto 가 된다)
+   버튼 오른쪽으로 나가는 툴팁이 잘리고 48px 레일에 가로 스크롤바까지 생겼다 (2026-09-21) */
 .sidebar-rail-scroll {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: visible;
+}
+
+/* 같은 이유로 접혔을 때만 바깥 묶음의 가리기를 푼다. 펼친 사이드바는 그대로 둔다 */
+.sidebar--collapsed .sidebar-inner {
+  overflow: visible;
 }
 
 .sidebar-bottom {
