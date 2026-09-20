@@ -48,6 +48,7 @@ import { handleCreateToken, handleDeleteToken, handleListTokens } from './apiTok
 import { handleCreateAttachmentV1, handleCreateDocLinkV1, handleCreateDocV1, handleUpdateDocV1 } from './v1'
 import { renderPublicPage } from './publicPage'
 import { renderWelcomePage } from './welcomePage'
+import { rootTarget, welcomeRedirect, withRootHeaders } from './rootRoute'
 
 type RouteHandler = (
   request: Request,
@@ -179,7 +180,20 @@ export default {
         if (publicPage) return publicPage
       }
       if (url.pathname === '/welcome') {
-        return renderWelcomePage()
+        return welcomeRedirect()
+      }
+      if (url.pathname === '/') {
+        if (rootTarget(request) === 'landing') {
+          return withRootHeaders(renderWelcomePage())
+        }
+        const appRes = withRootHeaders(await env.ASSETS.fetch(request))
+        // ?app=1 탈출구 응답은 중복 색인을 막는다 (2.3) — 평소 / 응답에는 붙이지 않는다
+        if (url.searchParams.get('app') === '1') {
+          const headers = new Headers(appRes.headers)
+          headers.set('X-Robots-Tag', 'noindex')
+          return new Response(appRes.body, { status: appRes.status, statusText: appRes.statusText, headers })
+        }
+        return appRes
       }
       return env.ASSETS.fetch(request)
     }

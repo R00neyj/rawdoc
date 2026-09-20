@@ -140,6 +140,17 @@ export async function tokenAsRgb(page, tokenName) {
   }, tokenName)
 }
 
+// 랜딩 HTML 을 '/' 에 한 번만 물린다 — preview 는 워커가 없어 '/' 가 항상 앱이다(F-271 9.2). 되돌이 확인처럼 두 번째 요청도 랜딩이어야 하면 두 번 부른다
+export async function mockLanding(page) {
+  const { renderWelcomePage } = await import('../worker/welcomePage.ts')
+  const html = await renderWelcomePage().text()
+  await page.route(
+    (url) => url.pathname === '/',
+    (route) => route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html }),
+    { times: 1 },
+  )
+}
+
 /** 요소의 rect 를 읽는다 (JSON 으로 안전하게 직렬화) */
 export async function rectOf(locator) {
   return locator.evaluate((el) => {
