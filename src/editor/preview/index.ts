@@ -14,17 +14,19 @@ import { wikiLinkClicks, wikiLinksPreview } from './wikiLinks'
 import type { OnOpenWikiLink } from './wikiLinks'
 
 // resolveAttachment 는 이미지 블록 위젯이 첨부를 읽는 콜백 (F-157.md 2.2)
+// theme: 앱 테마 — mermaid 코드블록 위젯에 쓰인다(F-260.md 2.2·2.3)
 export function livePreview({
   onOpenWikiLink,
   resolveAttachment,
-}: { onOpenWikiLink?: OnOpenWikiLink; resolveAttachment?: ResolveAttachment } = {}): Extension {
+  theme,
+}: { onOpenWikiLink?: OnOpenWikiLink; resolveAttachment?: ResolveAttachment; theme: string }): Extension {
   return [
     inlinePreview(),
     highlightMarkPreview(),
     linePreview(),
     gutterAlignPreview(),
     listIndentPreview(),
-    blockPreview({ resolveAttachment }),
+    blockPreview({ resolveAttachment, theme }),
     linkClicks(),
     wikiLinksPreview(),
     wikiLinkClicks(onOpenWikiLink),

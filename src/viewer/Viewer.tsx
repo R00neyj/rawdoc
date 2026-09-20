@@ -21,6 +21,8 @@ export type ViewContextMenuInfo = { x: number; y: number; hasSelection: boolean;
 
 type ViewerProps = {
   html: string
+  // 앱 테마(white|sepia|dark) — mermaid 다이어그램 렌더링에 쓰인다. 생략하면 'white' (F-260.md 2.4)
+  theme?: string
   // 본문 맨 위 제목 (F-217.md 2.1) — 생략하면(공유·공개 보기 화면, 이미 자체 제목 줄이 있다) 그리지 않는다
   title?: string
   // 문서가 든 폴더 경로 (F-234.md 3.4) — 생략하거나 비면 그리지 않는다
@@ -39,6 +41,7 @@ type ViewerProps = {
 // codeCopy 는 참이면 pre > code 마다 복사 버튼을 붙인다. 지금은 공개 보기(S-5)에서만 켠다 (F-210 2.5)
 export default function Viewer({
   html,
+  theme,
   title,
   breadcrumb,
   onNavigateFolder,
@@ -112,6 +115,7 @@ export default function Viewer({
   }, [])
 
   // 그린 뒤 .md-mermaid[data-mermaid-source] 마다 렌더링해 채운다 (F-258 2.4, 이미지 로드와 같은 패턴)
+  // theme 이 바뀌면(F-260 2.4) html 은 그대로라도 다시 그린다 — 의존성 배열에 theme 을 넣는다
   useEffect(() => {
     const root = containerRef.current
     if (!root) return
@@ -123,7 +127,7 @@ export default function Viewer({
       const source = node.dataset.mermaidSource
       if (source === undefined) return
 
-      renderMermaid(source).then((result) => {
+      renderMermaid(source, theme ?? 'white').then((result) => {
         if (cancelled) return
         if ('svg' in result) {
           node.innerHTML = result.svg
@@ -140,7 +144,7 @@ export default function Viewer({
     return () => {
       cancelled = true
     }
-  }, [html])
+  }, [html, theme])
 
   // 그린 뒤 pre > code 마다 복사 버튼을 붙인다 (codeCopy 가 참일 때만, F-210 2.5)
   useEffect(() => {

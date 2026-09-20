@@ -22,7 +22,10 @@ type TestImageWidget = {
   width: number | null
   eq(other: TestImageWidget): boolean
 }
-type TestMermaidWidget = { source: string; eq(other: TestMermaidWidget): boolean }
+type TestMermaidWidget = { source: string; theme: string; eq(other: TestMermaidWidget): boolean }
+
+// buildBlocks 의 theme 은 기본값이 없다(F-260 2.2) — 테마와 무관한 테스트는 이 값으로 고정한다
+const TEST_THEME = 'white'
 
 function makeState(doc: string, anchor = 0, head = anchor, timeout = 5000) {
   const state = EditorState.create({
@@ -39,8 +42,8 @@ function makeState(doc: string, anchor = 0, head = anchor, timeout = 5000) {
   return state.update({}).state
 }
 
-function widgetsOf(state: CMState) {
-  return buildBlocks(state).map((r) => r.value.spec.widget)
+function widgetsOf(state: CMState, hasFocus = true) {
+  return buildBlocks(state, hasFocus, undefined, TEST_THEME).map((r) => r.value.spec.widget)
 }
 
 const TABLE_DOC = '| a | b |\n| - | - |\n| 1 | 2 |\n'
@@ -50,7 +53,7 @@ const MIXED_DOC = TABLE_DOC + '\n' + CODE_DOC + 'x'
 describe('buildBlocks — 생성 여부', () => {
   it('커서가 블록 밖이면 표·코드블록 위젯을 만든다', () => {
     const state = makeState(MIXED_DOC, MIXED_DOC.length) // 커서: 맨 끝 'x'
-    const ranges = buildBlocks(state)
+    const ranges = buildBlocks(state, true, undefined, TEST_THEME)
     expect(ranges).toHaveLength(2)
     for (const r of ranges) expect(r.value.spec.block).toBe(true)
 
@@ -135,7 +138,7 @@ describe('buildBlocks — 셀·줄 상대 오프셋', () => {
     // 흡수한다(단일 셀 행). 표를 확실히 끝내려면 빈 줄이 필요하다
     const doc = TABLE_DOC + '\nx'
     const state = makeState(doc, doc.length)
-    const range = buildBlocks(state).find((r) => r.value.spec.widget.table)!
+    const range = buildBlocks(state, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.table)!
     const blockFrom = range.from
     const widget = range.value.spec.widget as TestTableWidget
 
@@ -156,7 +159,7 @@ describe('buildBlocks — 셀·줄 상대 오프셋', () => {
   it('코드블록 각 줄의 오프셋은 블록 시작 기준 상대 위치이고, 그 위치에 그 줄 원문이 있다', () => {
     const doc = CODE_DOC + 'x'
     const state = makeState(doc, doc.length)
-    const range = buildBlocks(state).find((r) => r.value.spec.widget.lines !== undefined)!
+    const range = buildBlocks(state, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.lines !== undefined)!
     const blockFrom = range.from
     const widget = range.value.spec.widget as TestCodeWidget
 
@@ -172,7 +175,7 @@ describe('buildBlocks — 셀·줄 상대 오프셋', () => {
   it('빈 셀(TableCell 노드 자체가 없는 칸)도 빈 문자열 칸으로 채워지고 오프셋이 유효하다(from===to)', () => {
     const doc = '| a |  |\n| - | - |\n| 1 |  |\n\nx'
     const state = makeState(doc, doc.length)
-    const range = buildBlocks(state).find((r) => r.value.spec.widget.table)!
+    const range = buildBlocks(state, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.table)!
     const blockFrom = range.from
     const widget = range.value.spec.widget as TestTableWidget
 
@@ -193,8 +196,8 @@ describe('buildBlocks — widget.eq (F-106 2.1: 위치를 넣지 않는다)', ()
     const docB = 'xx\n' + TABLE_DOC + '\ny'
     const a = makeState(docA, docA.length)
     const b = makeState(docB, docB.length)
-    const wa = buildBlocks(a).find((r) => r.value.spec.widget.table)!.value.spec.widget as TestTableWidget
-    const wb = buildBlocks(b).find((r) => r.value.spec.widget.table)!.value.spec.widget as TestTableWidget
+    const wa = buildBlocks(a, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.table)!.value.spec.widget as TestTableWidget
+    const wb = buildBlocks(b, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.table)!.value.spec.widget as TestTableWidget
     expect(wa.eq(wb)).toBe(true)
   })
 
@@ -203,8 +206,8 @@ describe('buildBlocks — widget.eq (F-106 2.1: 위치를 넣지 않는다)', ()
     const docB = 'xx\n' + CODE_DOC + 'y'
     const a = makeState(docA, docA.length)
     const b = makeState(docB, docB.length)
-    const wa = buildBlocks(a).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec.widget as TestCodeWidget
-    const wb = buildBlocks(b).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec.widget as TestCodeWidget
+    const wa = buildBlocks(a, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec.widget as TestCodeWidget
+    const wb = buildBlocks(b, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec.widget as TestCodeWidget
     expect(wa.eq(wb)).toBe(true)
   })
 })
@@ -235,7 +238,7 @@ describe('buildBlocks — 성능 기록 (F-106 2.5, 통과 기준 없음)', () =
     expect(state.doc.lines).toBeGreaterThanOrEqual(5000)
 
     const t0 = performance.now()
-    const ranges = buildBlocks(state)
+    const ranges = buildBlocks(state, true, undefined, TEST_THEME)
     const t1 = performance.now()
 
     console.log(
@@ -253,8 +256,8 @@ describe('buildBlocks — widget.eq 는 클릭 위치 계산에 쓰는 offset �
     const docB = '|  a | b |\n| - | - |\n| 1 | 2 |\n\nx' // 첫 칸 앞 공백 1개 더
     const a = makeState(docA, docA.length)
     const b = makeState(docB, docB.length)
-    const wa = buildBlocks(a).find((r) => r.value.spec.widget.table)!.value.spec.widget as TestTableWidget
-    const wb = buildBlocks(b).find((r) => r.value.spec.widget.table)!.value.spec.widget as TestTableWidget
+    const wa = buildBlocks(a, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.table)!.value.spec.widget as TestTableWidget
+    const wb = buildBlocks(b, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.table)!.value.spec.widget as TestTableWidget
 
     // 칸 글자는 완전히 같다 — 이전 eq() 는 이 경우를 참으로 오판했다
     expect(wa.table.rows.map((r) => r.cells.map((c) => c.text))).toEqual(
@@ -274,8 +277,8 @@ describe('buildBlocks — widget.eq 는 클릭 위치 계산에 쓰는 offset �
     const docB = '````js\na\n````\n' // 4개짜리 펜스 — 정보·코드 글자는 같고 위치만 밀림
     const a = makeState(docA, docA.length)
     const b = makeState(docB, docB.length)
-    const wa = buildBlocks(a).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec.widget as TestCodeWidget
-    const wb = buildBlocks(b).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec.widget as TestCodeWidget
+    const wa = buildBlocks(a, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec.widget as TestCodeWidget
+    const wb = buildBlocks(b, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec.widget as TestCodeWidget
 
     expect(wa.info).toBe(wb.info)
     expect(wa.lines.map((l) => l.text)).toEqual(wb.lines.map((l) => l.text))
@@ -288,7 +291,7 @@ describe('buildBlocks — 목록·인용 안 여러 CodeText (F-134 3.4)', () =>
   it('목록 안 코드블록: 들여쓴 두 줄 모두 표시되고, 둘째 줄 offset 이 원문 b 위치다', () => {
     const doc = '- 항목\n\n  ```\n  a\n  b\n  ```\n\nx'
     const state = makeState(doc, doc.length)
-    const range = buildBlocks(state).find((r) => r.value.spec.widget.lines !== undefined)!
+    const range = buildBlocks(state, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.lines !== undefined)!
     const blockFrom = range.from
     const widget = range.value.spec.widget as TestCodeWidget
 
@@ -300,7 +303,7 @@ describe('buildBlocks — 목록·인용 안 여러 CodeText (F-134 3.4)', () =>
   it('인용 안 코드블록: 두 줄 모두 표시되고, 둘째 줄 offset 이 원문 b 위치다', () => {
     const doc = '> ```\n> a\n> b\n> ```\n\nx'
     const state = makeState(doc, doc.length)
-    const range = buildBlocks(state).find((r) => r.value.spec.widget.lines !== undefined)!
+    const range = buildBlocks(state, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.lines !== undefined)!
     const blockFrom = range.from
     const widget = range.value.spec.widget as TestCodeWidget
 
@@ -312,7 +315,7 @@ describe('buildBlocks — 목록·인용 안 여러 CodeText (F-134 3.4)', () =>
   it('목록 안 코드블록에 빈 줄이 껴 있어도(a, 빈 줄, b) 세 줄 모두 표시된다', () => {
     const doc = '- x\n\n  ```\n  a\n\n  b\n  ```\n\nx'
     const state = makeState(doc, doc.length)
-    const range = buildBlocks(state).find((r) => r.value.spec.widget.lines !== undefined)!
+    const range = buildBlocks(state, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.lines !== undefined)!
     const widget = range.value.spec.widget as TestCodeWidget
     expect(widget.lines.map((l) => l.text)).toEqual(['a', '', 'b'])
   })
@@ -373,7 +376,7 @@ describe('buildBlocks — 이미지 블록 위젯 (F-157 2.1 A1)', () => {
   )
 
   function findImageWidget(state: CMState): TestImageWidget | undefined {
-    return buildBlocks(state).find((r) => r.value.spec.widget?.id !== undefined)?.value.spec.widget
+    return buildBlocks(state, true, undefined, TEST_THEME).find((r) => r.value.spec.widget?.id !== undefined)?.value.spec.widget
   }
 
   it('커서가 밖이면 위젯을 만든다', () => {
@@ -432,8 +435,8 @@ describe('buildBlocks — mermaid 코드블록 위젯 (F-258 A1)', () => {
   const MERMAID_DOC = '```mermaid\ngraph TD; A-->B\n```\n'
   const MIXED_MERMAID_DOC = MERMAID_DOC + '\n' + CODE_DOC + 'x'
 
-  function findMermaidWidget(state: CMState): TestMermaidWidget | undefined {
-    return buildBlocks(state).find((r) => (r.value.spec.widget as TestMermaidWidget).source !== undefined)?.value.spec
+  function findMermaidWidget(state: CMState, theme = TEST_THEME): TestMermaidWidget | undefined {
+    return buildBlocks(state, true, undefined, theme).find((r) => (r.value.spec.widget as TestMermaidWidget).source !== undefined)?.value.spec
       .widget
   }
 
@@ -459,7 +462,7 @@ describe('buildBlocks — mermaid 코드블록 위젯 (F-258 A1)', () => {
     expect(findMermaidWidget(state)).toBeUndefined()
   })
 
-  it('eq() 는 소스 문자열만 비교한다(위치가 달라져도 내용이 같으면 eq)', () => {
+  it('eq() 는 소스 문자열·테마를 비교한다(위치가 달라져도 둘 다 같으면 eq)', () => {
     const docA = 'x\n' + MERMAID_DOC + '\ny'
     const docB = 'xx\n' + MERMAID_DOC + '\ny'
     const a = findMermaidWidget(makeState(docA, docA.length))!
@@ -468,11 +471,36 @@ describe('buildBlocks — mermaid 코드블록 위젯 (F-258 A1)', () => {
   })
 })
 
+describe('buildBlocks — mermaid 코드블록 위젯 테마 (F-260 A1)', () => {
+  const MERMAID_DOC = '```mermaid\ngraph TD; A-->B\n```\n'
+
+  function findMermaidWidget(state: CMState, theme: string): TestMermaidWidget | undefined {
+    return buildBlocks(state, true, undefined, theme).find((r) => (r.value.spec.widget as TestMermaidWidget).source !== undefined)?.value.spec
+      .widget
+  }
+
+  it('buildBlocks 에 넘긴 theme 인자가 MermaidWidget 에 그대로 전달된다', () => {
+    const doc = MERMAID_DOC + 'x'
+    const state = makeState(doc, doc.length)
+    const widget = findMermaidWidget(state, 'dark')
+    expect(widget).toBeDefined()
+    expect(widget!.theme).toBe('dark')
+  })
+
+  it('eq() 는 소스가 같아도 테마가 다르면 거짓이다', () => {
+    const doc = MERMAID_DOC + 'x'
+    const white = findMermaidWidget(makeState(doc, doc.length), 'white')!
+    const dark = findMermaidWidget(makeState(doc, doc.length), 'dark')!
+    expect(white.source).toBe(dark.source)
+    expect(white.eq(dark)).toBe(false)
+  })
+})
+
 describe('codeBlockText — 복사 대상 문자열 (F-240.md 3.3 A8)', () => {
   it('펜스·정보 문자열 없이 본문 줄만 \\n 으로 잇는다', () => {
     const doc = '```js\nconst a = 1\nconst b = 2\n```\nx'
     const state = makeState(doc, doc.length)
-    const widget = buildBlocks(state).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec
+    const widget = buildBlocks(state, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec
       .widget as TestCodeWidget
     expect(codeBlockText(widget.lines)).toBe('const a = 1\nconst b = 2')
   })
@@ -480,7 +508,7 @@ describe('codeBlockText — 복사 대상 문자열 (F-240.md 3.3 A8)', () => {
   it('목록 안 코드블록도 본문 줄만(들여쓰기 제외한 원문) 이어 붙는다', () => {
     const doc = '- 항목\n\n  ```\n  a\n  b\n  ```\n\nx'
     const state = makeState(doc, doc.length)
-    const widget = buildBlocks(state).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec
+    const widget = buildBlocks(state, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec
       .widget as TestCodeWidget
     expect(codeBlockText(widget.lines)).toBe('a\nb')
   })
@@ -488,7 +516,7 @@ describe('codeBlockText — 복사 대상 문자열 (F-240.md 3.3 A8)', () => {
   it('인용 안 코드블록도 본문 줄만("> " 접두 제외한 원문) 이어 붙는다', () => {
     const doc = '> ```\n> a\n> b\n> ```\n\nx'
     const state = makeState(doc, doc.length)
-    const widget = buildBlocks(state).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec
+    const widget = buildBlocks(state, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.lines !== undefined)!.value.spec
       .widget as TestCodeWidget
     expect(codeBlockText(widget.lines)).toBe('a\nb')
   })
@@ -512,7 +540,7 @@ describe('blockPreview — 구문 트리만 바뀐 갱신 (F-134 3.8)', () => {
     const doc = '문단\n'.repeat(3000) + '\n```js\nconst a = 1\n```\n'
     const state = EditorState.create({
       doc,
-      extensions: [markdown({ base: markdownLanguage }), blockPreview()],
+      extensions: [markdown({ base: markdownLanguage }), blockPreview({ theme: TEST_THEME })],
     })
     expect(widgetCount(state)).toBe(0) // 아직 코드블록까지 파싱되지 않았다
 

@@ -48,8 +48,13 @@ type IndentSize = 2 | 4
 
 type PreviewCallbacks = { onOpenWikiLink?: OnOpenWikiLink; resolveAttachment?: ResolveAttachment }
 
-function previewExtensionFor(mode: ViewMode, { onOpenWikiLink, resolveAttachment }: PreviewCallbacks = {}): Extension {
-  return mode === 'live' ? livePreview({ onOpenWikiLink, resolveAttachment }) : []
+// theme: 앱 테마 — mermaid 코드블록 위젯에 쓰인다(F-260.md 2.3)
+function previewExtensionFor(
+  mode: ViewMode,
+  theme: string,
+  { onOpenWikiLink, resolveAttachment }: PreviewCallbacks = {},
+): Extension {
+  return mode === 'live' ? livePreview({ onOpenWikiLink, resolveAttachment, theme }) : []
 }
 
 function attributesExtensionFor(mode: ViewMode): Extension {
@@ -263,6 +268,8 @@ function focusRelay(): Extension {
 type CreateEditorOptions = {
   text?: string
   viewMode?: ViewMode
+  // 앱 테마(white|sepia|dark), 기본 'white' — mermaid 위젯에 쓰인다. 이후 전환은 handle.setTheme(theme) (F-260.md 2.1·2.3, Editor.tsx 는 아직 이 값을 넘기지 않아 App.tsx 가 마운트 때마다 setTheme 으로 맞춘다)
+  theme?: string
   // 줄 번호(거터) 표시 여부, 기본 true (F-147 2장). 이후 전환은 handle.setLineNumbers(on) 으로
   // 한다 — 이 값은 최초 생성에만 쓴다
   lineNumbers?: boolean
@@ -297,6 +304,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const {
     text = '',
     viewMode = 'live',
+    theme: initialTheme = 'white',
     lineNumbers: showLineNumbers = true,
     indent: indentSize = 4,
     readOnly: initialReadOnly = false,
@@ -316,6 +324,10 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   } = options
 
   let destroyed = false
+
+  // 현재 모드·테마 — setViewMode·setTheme 이 서로의 최신 값을 유지한 채 previewCompartment 를 다시 구성하도록 클로저에 기억해 둔다(F-260.md 2.3)
+  let currentMode: ViewMode = viewMode
+  let currentTheme = initialTheme
 
   // 목차 갱신은 조합 중 보류, 조합 종료(forceRecalc) 시 즉시 따라잡음 (F-144 3.3)
   const headingsListeners = new Set<(headings: Heading[]) => void>()
@@ -408,7 +420,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // 같은 필드를 읽고, 모드 전환으로 previewCompartment 가 바뀌어도 값을 잃지 않는다
     wikiTitlesField.init(() => wikiTitles),
     wikiComplete(),
-    previewCompartment.of(previewExtensionFor(viewMode, { onOpenWikiLink, resolveAttachment })),
+    previewCompartment.of(previewExtensionFor(currentMode, currentTheme, { onOpenWikiLink, resolveAttachment })),
     attributesCompartment.of(attributesExtensionFor(viewMode)),
     // 본문 첫 시각 줄에서 ↑ 는 제목으로 포커스를 옮긴다 — defaultKeymap 커서 이동보다 먼저 받아야 한다 (F-217.md 2.3)
     Prec.high(keymap.of([{ key: 'ArrowUp', run: focusTitleFromBody }])),
@@ -465,13 +477,24 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
 
     // mode 는 재마운트하지 않는다. 커서·선택·실행 취소 기록 유지
     setViewMode(mode: ViewMode) {
+      currentMode = mode
       const scroll = view.scrollSnapshot()
       view.dispatch({
         effects: [
-          previewCompartment.reconfigure(previewExtensionFor(mode, { onOpenWikiLink, resolveAttachment })),
+          previewCompartment.reconfigure(previewExtensionFor(mode, currentTheme, { onOpenWikiLink, resolveAttachment })),
           attributesCompartment.reconfigure(attributesExtensionFor(mode)),
           scroll,
         ],
+      })
+    },
+
+    // 테마 전환 시 편집 모드 위젯(mermaid 등) 즉시 재렌더 — 재마운트 안 함, 스크롤 위치가 안 바뀌므로 scrollSnapshot 불필요 (F-260.md 2.3)
+    setTheme(theme: string) {
+      currentTheme = theme
+      view.dispatch({
+        effects: previewCompartment.reconfigure(
+          previewExtensionFor(currentMode, currentTheme, { onOpenWikiLink, resolveAttachment }),
+        ),
       })
     },
 

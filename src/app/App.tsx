@@ -208,6 +208,10 @@ export default function App() {
   const [headingFont, setHeadingFont] = useState(() => getPref('md.headingFont', 'serif'))
   const [bodyFont, setBodyFont] = useState(() => getPref('md.bodyFont', 'sans')) // F-141 3.3
   const [themePref, setThemePref] = useState(() => getPref('md.theme', 'system')) // F-141 3.1
+  // 적용된 테마(white|sepia|dark, themePref 와 달리 'system' 을 시스템 설정으로 풀어낸 값) — mermaid 렌더링에 쓰인다(F-260 2.4)
+  const [resolvedTheme, setResolvedTheme] = useState<'white' | 'sepia' | 'dark'>(() =>
+    resolveTheme(getPref('md.theme', 'system'), typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches),
+  )
   const [lineNumbersPref, setLineNumbersPref] = useState(() => getPref('md.lineNumbers', 'on')) // F-147 2장
   const [fontSizePref, setFontSizePref] = useState(() => getPref('md.fontSize', 'medium')) // F-154 2.2
   const [indentPref, setIndentPref] = useState(() => getPref('md.indent', '4')) // F-154 2.3
@@ -884,7 +888,10 @@ export default function App() {
     if (themePref !== 'system') return
     const mql = window.matchMedia('(prefers-color-scheme: dark)')
     function apply() {
-      document.documentElement.dataset.theme = resolveTheme('system', mql.matches)
+      const resolved = resolveTheme('system', mql.matches)
+      document.documentElement.dataset.theme = resolved
+      setResolvedTheme(resolved)
+      editorRef.current?.setTheme(resolved) // F-260 2.4 — mermaid 위젯 즉시 재렌더
     }
     apply()
     mql.addEventListener('change', apply)
@@ -1034,6 +1041,12 @@ export default function App() {
     if (openDoc?.id !== currentDocId) return
     editorRef.current?.setLineNumbers(lineNumbersPref === 'on')
   }, [openDoc, currentDocId, lineNumbersPref])
+
+  // 문서 전환·최초 마운트로 에디터가 새로 생기면(항상 기본 테마로 만들어진다) 페인트 전에 테마를 맞춘다 — setLineNumbers 와 같은 패턴(F-260 2.3·2.4)
+  useLayoutEffect(() => {
+    if (openDoc?.id !== currentDocId) return
+    editorRef.current?.setTheme(resolvedTheme)
+  }, [openDoc, currentDocId, resolvedTheme])
 
   // 문서 전환·최초 마운트로 에디터가 새로 생기면 들여쓰기 값을 맞춘다 (F-154 2.3, 모르는 값은 4칸)
   useLayoutEffect(() => {
@@ -2162,7 +2175,10 @@ export default function App() {
     setThemePref(v)
     setPref('md.theme', v)
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    document.documentElement.dataset.theme = resolveTheme(v, prefersDark)
+    const resolved = resolveTheme(v, prefersDark)
+    document.documentElement.dataset.theme = resolved
+    setResolvedTheme(resolved)
+    editorRef.current?.setTheme(resolved) // F-260 2.4 — mermaid 위젯 즉시 재렌더
   }
 
   // 설정 마지막 항목: 줄 번호(거터) 켜기·끄기. 실제 반영은 아래 useLayoutEffect 가 한다 (F-147 2장)
@@ -2625,6 +2641,7 @@ export default function App() {
                   key={currentDocId}
                   ref={viewerRef}
                   html={viewerHtml}
+                  theme={resolvedTheme}
                   title={currentDoc?.title ?? ''}
                   breadcrumb={currentBreadcrumb}
                   onNavigateFolder={onNavigateFolder}
