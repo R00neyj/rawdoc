@@ -29,6 +29,15 @@ Korean copy of this file: `.claude/ko/agents/spec-writer.ko.md` (snapshot, for h
 - For every fork, put the options in **열린 질문** with a default, why that default, and **what changes if the other option is chosen**
 - Write UI text as the actual string, matching the format of the `specs/ia.md` string table
 
+### Code blocks: contracts only, never implementations (user instruction, 2026-09-22)
+
+A spec decides **what and why**. The implementer decides **how**. So a code block belongs in a spec only when the exact shape *is* the decision.
+
+- **Write as code**: type and prop signatures, setting keys, CSS class and selector names, data schemas, UI strings. If the implementer picked a different name, another spec would stop matching — that is what makes it a contract
+- **Write as prose rules**: handler bodies, `useEffect` contents, the order of `if` branches, formulas, loops. State the rule and the reason, and let the implementer write the code. If an order or a boundary value *is itself* the decision, one short pseudocode paragraph is the most you use
+- **Cite by name, not by line number.** Function, selector, test name — those survive. Line numbers were already stale five commits later in the 2026-09-22 session, and every spec that quoted them had to carry a freshness warning. Give a line number only alongside the name, as a hint
+- Why: on 2026-09-22 an `F-2011` spec carried a 12-line `useEffect` for a decision that was then reversed. The code did not help the decision — it made the decision look already made. The same reason `CLAUDE.md` forbids duplicating the ownership table into the frontmatter: two copies drift apart
+
 ### What to include
 - **YAML frontmatter at the top** — the format and `status` values are in `CLAUDE.md` "Spec frontmatter". A new spec is usually `status: draft` (not yet up for approval) or `pending` (ready to request approval), with no `implemented` line. When done, check the format with `npm run specs -- --check`
 - Chapter 1 **file-ownership table** (first column is a backticked path; `npm run review -- F-xxx` reads it. The heading may be "파일 소유", "수정 파일", or "바꾸는 파일"). **Do not duplicate it into the frontmatter**
