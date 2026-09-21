@@ -40,6 +40,8 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
   const [nodeMenu, setNodeMenu] = useState<{ id: string; title: string; missing: boolean; x: number; y: number } | null>(null)
   // 지도 설정 패널 (F-2005 3·6장)
   const [view, setView] = useState<MapView>(() => loadMapView())
+  // 장력 슬라이더에서 손을 뗄 때마다 오른다. fitToken 과 같은 수법이다 (F-2006 7.4)
+  const [commitToken, setCommitToken] = useState(0)
   const [panelOpen, setPanelOpen] = useState(false)
   const panelPresence = usePresence(panelOpen)
   const settingsBtnRef = useRef<HTMLButtonElement | null>(null)
@@ -244,6 +246,7 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
                 graph={displayGraph}
                 centerId={centerDocId}
                 fitToken={fitToken}
+                commitToken={commitToken}
                 centerToken={centerToken}
                 menuOpen={nodeMenu !== null}
                 view={view}
@@ -315,7 +318,7 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
             data-state={panelPresence.state}
             inert={panelPresence.state === 'closed'}
           >
-            <MapPanel view={view} onChange={handleViewChange} onClose={closePanel} />
+            <MapPanel view={view} onChange={handleViewChange} onCommit={() => setCommitToken((n) => n + 1)} onClose={closePanel} />
           </div>
         )}
       </div>

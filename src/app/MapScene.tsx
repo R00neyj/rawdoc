@@ -22,7 +22,7 @@ import {
   WebGLRenderer,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { createMapLayout, type MapLayout } from '../lib/mapLayout3d'
+import { createMapLayout, type MapForceNorms, type MapLayout } from '../lib/mapLayout3d'
 import { clipPlanes, fitDistance, zoomLimits } from '../lib/mapCamera'
 import { parseCssColor, type Rgba } from '../lib/cssColor'
 import { blendRgb, depthMix, ndcToScreen, nodeRadius, pickLabelNodes, screenRadius, type ScreenPoint } from '../lib/mapNodeStyle'
@@ -35,9 +35,10 @@ type MapSceneProps = {
   graph: WikiGraph // 이미 상한으로 잘린 그래프
   centerId: string | null // #/map/{id} 의 그 문서. 없으면 null
   fitToken: number // 바뀔 때마다 카메라를 다시 맞추고 다시 그린다
+  commitToken: number // 장력 슬라이더에서 손을 뗄 때마다 오른다. 각도를 유지한 채 따라 맞춤을 켠다 (F-2006 6.4)
   centerToken: number // `여기로 이동` 을 고를 때마다 오른다. 이미 중심인 문서를 다시 골라도 카메라가 움직이게 (사용자 지시 2026-09-22)
   menuOpen: boolean // 노드 메뉴가 떠 있는 동안 조작을 잠근다 (F-2003 4.4)
-  view: MapView // 지도 설정 패널의 `표시` 3축 (F-2005 7장)
+  view: MapView // 지도 설정 패널의 `표시` 3축과 `장력` 4축 (F-2005 7장, F-2006 8장)
   onNodeClick: (id: string, modified: boolean) => void
   onNodeMenu: (id: string, x: number, y: number) => void // 뷰포트 좌표 (F-2003 4.3·5.2)
   onUnsupported: () => void // 렌더러를 못 만들었다 — MapPage 가 목록으로 돌린다
@@ -61,6 +62,13 @@ const LONG_PRESS_MS = 500
 const LONG_PRESS_SLOP = 10
 // 기본 0.05 보다 조금 무겁게 (F-292 4.1)
 const DAMPING_FACTOR = 0.08
+// 0.3 은 수축 방향에서 새 균형보다 15~16% 크게 굳고, 1.0 은 작은 그래프에서 지나친다 (F-2006 5.2)
+const MAP_REHEAT_ALPHA = 0.6
+
+// 네 축의 얕은 비교. 하나라도 다르면 힘을 다시 걸고 재가열한다 (F-2006 8.3)
+function forceChanged(a: MapForceNorms, b: MapForceNorms): boolean {
+  return a.center !== b.center || a.repel !== b.repel || a.linkStrength !== b.linkStrength || a.linkDistance !== b.linkDistance
+}
 
 let webgl2Cache: boolean | null = null
 
@@ -137,6 +145,7 @@ type SceneBundle = {
   lookAtNode: (id: string) => void
   setMenuOpen: (open: boolean) => void
   setView: (view: MapView) => void
+  beginFollowFit: () => void
   requestDraw: () => void
 }
 
@@ -165,7 +174,7 @@ function buildScene(
 
   const scene = new Scene()
   const camera = new PerspectiveCamera(50, 1, 0.1, 2000)
-  const layout: MapLayout = createMapLayout(graph)
+  const layout: MapLayout = createMapLayout(graph, { norms: initialView.force })
 
   const sphereGeometry = new SphereGeometry(1, SPHERE_SEGMENTS, SPHERE_RINGS)
   // 조명을 넣지 않으므로 Light 를 하나도 가져오지 않는다. 재질 기본 색이 흰색이라 인스턴스 색이 그대로 나온다
@@ -234,8 +243,8 @@ function buildScene(
   let labelIndices: number[] = []
   let cssW = 0
   let cssH = 0
-  // 직전에 적용한 표시 값. 바뀐 축만 다시 계산한다 (F-2005 7.1)
-  let applied = initialView.display
+  // 직전에 적용한 설정 값. 바뀐 축만 다시 계산한다 (F-2005 7.1, F-2006 8.3)
+  let applied = initialView
 
   // 중심 문서는 바뀔 수 있다. 테마만 다시 읽을 때는 인자 없이 부른다
   let activeCenterId = centerId
@@ -256,7 +265,7 @@ function buildScene(
     ruleColor = theme.rule
     inkColor = theme.ink
     scene.background = toColor(new Color(), theme.panel)
-    applyEdgeColor(applied.edgeStrength)
+    applyEdgeColor(applied.display.edgeStrength)
     centerIndex = -1
     for (let i = 0; i < nodeCount; i++) {
       const node = graph.nodes[i]
@@ -302,7 +311,7 @@ function buildScene(
 
   // 이름표 집합을 정하는 곳은 여기 하나뿐이다. 호버와 `이름표 표시 거리` 가 각자 정하면 서로를 지워 깜빡인다 (2026-09-22 버그)
   function refreshLabels() {
-    const distance = applied.labelDistance
+    const distance = applied.display.labelDistance
     // 기본값(거리 0·호버 없음)에서는 프레임 비용이 0 이어야 한다 (F-2005 7.3)
     if (distance <= 0 && hoverIndex < 0 && labelIndices.length === 0) return
     const distanceCandidates: number[] = []
@@ -373,6 +382,29 @@ function buildScene(
     userMoved = false
   }
 
+  // 보던 각도와 target 방향을 유지한 채 거리만 다시 잡는다. userMoved 는 건드리지 않는다 (F-2006 6.2)
+  function refit() {
+    const { center, radius } = layout.bounds()
+    const r = graphRadius(radius)
+    const dist = fitDistance(r, camera.fov, camera.aspect)
+    selfDriven = true
+    controls.enableDamping = false
+    controls.update()
+    offset.copy(camera.position).sub(controls.target)
+    // 첫 프레임 방어 — 카메라가 target 위에 있으면 방향이 없다
+    if (offset.lengthSq() === 0) offset.set(0, 0, 1)
+    offset.setLength(dist)
+    controls.target.set(center[0], center[1], center[2])
+    camera.position.copy(controls.target).add(offset)
+    const limits = zoomLimits(dist)
+    controls.minDistance = limits.min
+    controls.maxDistance = limits.max
+    applyClip(dist, r)
+    controls.update()
+    controls.enableDamping = true
+    selfDriven = false
+  }
+
   // 자동 맞춤이 꺼진 뒤에도 절단면은 다시 잡는다 — 배치가 퍼지는 동안 far 를 두면 뒤쪽이 잘린다 (F-2003 7.3)
   function updateClip() {
     const { center, radius } = layout.bounds()
@@ -435,6 +467,10 @@ function buildScene(
   // 사용자가 카메라를 한 번이라도 움직였나. selfDriven 은 우리가 일으킨 change 를 빼고 세려는 표시다 (F-2003 7.3)
   let userMoved = false
   let selfDriven = false
+  // 장력 슬라이더에서 손을 뗀 뒤 배치가 멈출 때까지만 켜진다 (F-2006 6.3)
+  let followFit = false
+  // 장력 슬라이더가 일으킨 재계산인 동안에는 reduced-motion 분기를 건너뛴다 (F-2006 9장)
+  let forceDriven = false
   // 경계구는 인스턴스 행렬에만 달려 있고 카메라와 무관하다 — 좌표가 바뀐 뒤 한 번만 다시 잰다 (F-2004 7.6)
   let boundsStale = true
 
@@ -442,7 +478,7 @@ function buildScene(
     // controls.update() 보다 먼저 내린다 — 감쇠가 남아 있으면 change 가 이것을 다시 세운다 (F-2003 6.2)
     dirty = false
     let ticked = false
-    if (reduced) {
+    if (reduced && !forceDriven) {
       if (!layout.isSettled()) {
         layout.runTickBudget(REDUCED_BUDGET_MS)
         // 다 돌 때까지 그리지 않는다
@@ -460,9 +496,15 @@ function buildScene(
       ticked = true
       posDirty = true
     }
-    // 멈출 때까지 자동으로 맞추되, 사용자가 카메라를 건드린 뒤에는 절단면만 손본다
-    if (!userMoved && (ticked || !layout.isSettled())) fit()
+    // 멈출 때까지 자동으로 맞추되, 사용자가 카메라를 건드린 뒤에는 절단면만 손본다. 장력 슬라이더에서 손을 뗀 뒤에는 각도를 유지한 채 따라 맞춘다 (F-2006 6.3)
+    const settling = ticked || !layout.isSettled()
+    if (!userMoved && settling) fit()
+    else if (followFit && settling) refit()
     else updateClip()
+    if (!settling) {
+      followFit = false
+      forceDriven = false
+    }
     controls.update()
     if (posDirty) {
       uploadPositions()
@@ -681,14 +723,25 @@ function buildScene(
     },
     // 직전 값과 비교해 바뀐 축만 다시 계산한다 (F-2005 7.1)
     setView(next: MapView) {
-      if (next.display.nodeScale !== applied.nodeScale) {
+      if (next.display.nodeScale !== applied.display.nodeScale) {
         fillRadii(next.display.nodeScale)
         posDirty = true
       }
-      if (next.display.edgeStrength !== applied.edgeStrength) {
+      if (next.display.edgeStrength !== applied.display.edgeStrength) {
         applyEdgeColor(next.display.edgeStrength)
       }
-      applied = next.display
+      if (forceChanged(next.force, applied.force)) {
+        layout.setForces(next.force)
+        // setForces 는 스스로 재가열하지 않는다 — 다음 줄이 계약이다 (F-2001 12장 Q1)
+        layout.reheat(MAP_REHEAT_ALPHA)
+        forceDriven = true
+      }
+      applied = next
+      requestDraw()
+    },
+    // 손을 뗐다 — 배치가 멈출 때까지 각도를 유지한 채 따라 맞춘다 (F-2006 6.3)
+    beginFollowFit() {
+      followFit = true
       requestDraw()
     },
     requestDraw,
@@ -725,7 +778,7 @@ function buildScene(
   }
 }
 
-export default function MapScene({ graph, centerId, fitToken, centerToken, menuOpen, view, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }: MapSceneProps) {
+export default function MapScene({ graph, centerId, fitToken, commitToken, centerToken, menuOpen, view, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }: MapSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const probeRef = useRef<HTMLSpanElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -794,10 +847,16 @@ export default function MapScene({ graph, centerId, fitToken, centerToken, menuO
     sceneRef.current?.requestDraw()
   }, [labelItems])
 
-  // (f) `표시` 3축이 바뀔 때마다 장면에 반영한다 (F-2005 7.1)
+  // (f) `표시` 3축과 `장력` 4축이 바뀔 때마다 장면에 반영한다 (F-2005 7.1, F-2006 8.3)
   useEffect(() => {
     sceneRef.current?.setView(view)
   }, [view])
+
+  // (g) 장력 슬라이더에서 손을 뗐다. 0 은 걸러야 마운트 직후에 켜지지 않는다 — 그때는 462행의 자동 맞춤이 이미 돈다 (F-2006 8.1)
+  useEffect(() => {
+    if (commitToken === 0) return
+    sceneRef.current?.beginFollowFit()
+  }, [commitToken])
 
   return (
     <div className="map-scene" ref={wrapperRef}>

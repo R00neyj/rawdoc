@@ -24,10 +24,12 @@ export type MapForceAxisSpec = {
 
 // 5.1 축 정의표 — 실측으로 정한 곡선 (5.2)
 export const MAP_FORCE_AXES: Readonly<Record<MapForceAxis, MapForceAxisSpec>> = Object.freeze({
-  center: Object.freeze({ min: 0, max: 1, curve: 'pow2', start: 0.05 }),
+  // 최소가 0 이면 고립 노드를 붙잡는 힘이 하나도 없어 발산한다 — 0.005 로 올리면서 log 를 쓸 수 있게 됐다 (F-2006 4.5)
+  center: Object.freeze({ min: 0.005, max: 1, curve: 'log', start: 0.05 }),
   repel: Object.freeze({ min: 50, max: 3000, curve: 'log', start: 800 }),
-  linkStrength: Object.freeze({ min: 0.001, max: 0.1, curve: 'log', start: 0.02 }),
-  linkDistance: Object.freeze({ min: 30, max: 500, curve: 'linear', start: 120 }),
+  linkStrength: Object.freeze({ min: 0.003, max: 0.1, curve: 'log', start: 0.02 }),
+  // 500 까지는 자연 간선 길이보다 짧아 아무 일도 안 일어난다. 3,000 에서 포화한다 (F-2006 4.4)
+  linkDistance: Object.freeze({ min: 30, max: 3000, curve: 'pow2', start: 120 }),
 })
 
 function clamp(value: number, min: number, max: number): number {

@@ -710,16 +710,17 @@ test.describe('F-2005 지도 설정 패널', () => {
     await expect(map.getByRole('button', { name: '지도 설정', exact: true })).toBeFocused()
   })
 
-  test('F-2005 A3 묶음은 표시 하나', async ({ page }) => {
+  test('F-2005 A3 묶음은 표시·장력 둘', async ({ page }) => {
     const { map } = await openMapFresh(page)
     const p = await openPanel(map)
 
-    await expect(p.locator('.map-panel-section')).toHaveCount(1)
-    await expect(p.locator('.map-panel-section-head')).toHaveText('표시')
-    for (const name of ['필터', '그룹', '장력']) {
+    await expect(p.locator('.map-panel-section')).toHaveCount(2)
+    await expect(p.locator('.map-panel-section-head')).toHaveText(['표시', '장력'])
+    for (const name of ['필터', '그룹']) {
       await expect(p.getByRole('button', { name, exact: true })).toHaveCount(0)
     }
     await expect(p.getByRole('button', { name: '표시', exact: true })).toHaveAttribute('aria-expanded', 'true')
+    await expect(p.getByRole('button', { name: '장력', exact: true })).toHaveAttribute('aria-expanded', 'false')
   })
 
   test('F-2005 A4 슬라이더 셋과 기본값', async ({ page }) => {
@@ -876,5 +877,227 @@ test.describe('F-2005 지도 설정 패널', () => {
 
     await p.getByRole('slider', { name: '이름표 표시 거리', exact: true }).fill('0')
     await expect(visibleLabels(map)).toHaveCount(0)
+  })
+})
+
+// F-2006 지도 설정 패널 `장력` 4축 (specs/features/F-2006.md 14.2) A1~A11 — 캔버스 안은 못 보므로 슬라이더가 시뮬레이션에 닿았는지는 이름표 DOM 의 화면 좌표와 노드 클릭 적중으로만 판정한다
+const FORCE_NAMES = ['중심 장력', '반발력', '링크 장력', '링크 거리']
+// MAP_FORCE_AXES 의 start 를 forceValueToNorm 으로 되돌린 값 (F-2006 4.7)
+const FORCE_DEFAULTS = {
+  '중심 장력': 0.4345879896760937,
+  반발력: 0.6771752303951257,
+  '링크 장력': 0.5410205792797051,
+  '링크 거리': 0.17407765595569785,
+}
+// 장력 슬라이더가 일으킨 재가열은 reduced-motion 에서도 프레임마다 돈다 — 278 tick 이라 SETTLE 보다 오래 걸린다 (F-2006 5.2·9장)
+const FORCE_SETTLE = 8000
+
+// `장력` 묶음은 접힌 채로 뜬다 — 슬라이더를 잡으려면 먼저 펼쳐야 한다 (F-2006 7.1)
+async function openForce(map) {
+  const p = await openPanel(map)
+  await p.getByRole('button', { name: '장력', exact: true }).click()
+  return p
+}
+
+function forceSlider(p, name) {
+  return p.getByRole('slider', { name, exact: true })
+}
+
+test.describe('F-2006 장력 묶음', () => {
+  test.use({ reducedMotion: 'reduce' })
+
+  test('F-2006 A1 장력 묶음이 표시 아래에 접힌 채 생긴다', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openPanel(map)
+
+    await expect(p.locator('.map-panel-section')).toHaveCount(2)
+    await expect(p.locator('.map-panel-section-head')).toHaveText(['표시', '장력'])
+    await expect(p.getByRole('button', { name: '표시', exact: true })).toHaveAttribute('aria-expanded', 'true')
+    await expect(p.getByRole('button', { name: '장력', exact: true })).toHaveAttribute('aria-expanded', 'false')
+    for (const name of ['필터', '그룹']) {
+      await expect(p.getByRole('button', { name, exact: true })).toHaveCount(0)
+    }
+  })
+
+  test('F-2006 A2 펼치면 슬라이더 넷', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openPanel(map)
+
+    // 접힌 동안에는 hidden 안이라 접근성 트리에 없다
+    for (const name of FORCE_NAMES) await expect(forceSlider(p, name)).toHaveCount(0)
+
+    await p.getByRole('button', { name: '장력', exact: true }).click()
+
+    await expect(p.getByRole('button', { name: '장력', exact: true })).toHaveAttribute('aria-expanded', 'true')
+    for (const name of FORCE_NAMES) await expect(forceSlider(p, name)).toHaveCount(1)
+  })
+
+  test('F-2006 A3 기본값', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openForce(map)
+
+    for (const name of FORCE_NAMES) {
+      // step="any" 라 브라우저가 눈금에 스냅하지 않는다 (F-2006 7.3)
+      expect(Number(await forceSlider(p, name).inputValue())).toBeCloseTo(FORCE_DEFAULTS[name], 6)
+    }
+  })
+
+  test('F-2006 A4 값이 남는다', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openForce(map)
+    await forceSlider(p, '반발력').fill('0.9')
+    await forceSlider(p, '링크 거리').fill('0.6')
+
+    await map.getByRole('button', { name: '닫기', exact: true }).click()
+    await page.goto('/#/map')
+    const map2 = page.locator('.map-page')
+    await expect(map2).toBeVisible()
+    const p2 = await openForce(map2)
+
+    expect(await forceSlider(p2, '반발력').inputValue()).toBe('0.9')
+    expect(await forceSlider(p2, '링크 거리').inputValue()).toBe('0.6')
+  })
+
+  test('F-2006 A5 기본값으로가 장력도 되돌린다', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openForce(map)
+    await forceSlider(p, '중심 장력').fill('0.1')
+    await forceSlider(p, '반발력').fill('0.95')
+    await forceSlider(p, '링크 장력').fill('0.2')
+    await forceSlider(p, '링크 거리').fill('0.8')
+    await p.getByRole('slider', { name: '노드 크기', exact: true }).fill('2')
+
+    await p.getByRole('button', { name: '기본값으로', exact: true }).click()
+
+    for (const name of FORCE_NAMES) {
+      expect(Number(await forceSlider(p, name).inputValue())).toBeCloseTo(FORCE_DEFAULTS[name], 6)
+    }
+    expect(await p.getByRole('slider', { name: '노드 크기', exact: true }).inputValue()).toBe('1')
+
+    await map.getByRole('button', { name: '닫기', exact: true }).click()
+    await page.goto('/#/map')
+    const map2 = page.locator('.map-page')
+    await expect(map2).toBeVisible()
+    const p2 = await openForce(map2)
+    for (const name of FORCE_NAMES) {
+      expect(Number(await forceSlider(p2, name).inputValue())).toBeCloseTo(FORCE_DEFAULTS[name], 6)
+    }
+  })
+
+  test('F-2006 A6 깨진 저장값', async ({ page }) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(String(e)))
+    await setPrefBeforeLoad(page, 'md.mapView', '{"force":{"repel":"x","zzz":1,"center":9}}')
+
+    const { map } = await openMapFresh(page)
+    const p = await openForce(map)
+
+    // 문자열은 버려 기본값, 모르는 키는 버림, 유한수 9 는 1 로 잘린다
+    expect(Number(await forceSlider(p, '반발력').inputValue())).toBeCloseTo(FORCE_DEFAULTS['반발력'], 6)
+    expect(Number(await forceSlider(p, '링크 장력').inputValue())).toBeCloseTo(FORCE_DEFAULTS['링크 장력'], 6)
+    expect(Number(await forceSlider(p, '링크 거리').inputValue())).toBeCloseTo(FORCE_DEFAULTS['링크 거리'], 6)
+    expect(Number(await forceSlider(p, '중심 장력').inputValue())).toBe(1)
+    expect(errors).toEqual([])
+  })
+
+  test('F-2006 A7 끝에서 끝까지 움직여도 안 깨진다', async ({ page }) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(String(e)))
+    const { map, cx, cy } = await openMapFresh(page)
+    const p = await openForce(map)
+
+    for (const name of FORCE_NAMES) {
+      const slider = forceSlider(p, name)
+      await slider.fill('0')
+      await slider.fill('1')
+      // 브라우저가 17자리를 15자리로 줄여 되돌리므로 fill 에는 기본값 근처의 짧은 수를 쓴다
+      await slider.fill(FORCE_DEFAULTS[name].toFixed(3))
+    }
+
+    await expect(map.locator('canvas')).toHaveCount(1)
+    expect(errors).toEqual([])
+
+    await map.getByRole('button', { name: '지도 설정', exact: true }).click()
+    await expect(panel(map)).toHaveCount(0)
+    await page.waitForTimeout(FORCE_SETTLE)
+    await page.mouse.click(cx, cy)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+
+  test('F-2006 A8 놓으면 카메라가 다시 맞는다', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapFresh(page)
+    await page.mouse.move(cx, cy)
+    // 12칸 축소 = 화면 반지름 0.394H → 0.213H. 0.76 자리는 이제 빗나간다 (F-2003 A9 와 같은 통로)
+    await page.mouse.wheel(0, 1200)
+    await page.waitForTimeout(SETTLE)
+    await page.mouse.click(cx + NODE_R * 0.76 * H, cy)
+    await expect(page).toHaveURL(/#\/map$/)
+
+    const p = await openForce(map)
+    // fill 은 input 과 change 를 한 번씩 쏜다 — change 가 곧 "놓았다"다 (F-2006 6.4)
+    await forceSlider(p, '반발력').fill('0.7')
+    await page.waitForTimeout(SETTLE)
+    await map.getByRole('button', { name: '지도 설정', exact: true }).click()
+    await expect(panel(map)).toHaveCount(0)
+
+    await page.mouse.click(cx + NODE_R * 0.76 * H, cy)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+
+  test('F-2006 A9 장력은 접힌 채로 다시 열린다', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    await openForce(map)
+
+    await map.getByRole('button', { name: '지도 설정', exact: true }).click()
+    await expect(panel(map)).toHaveCount(0)
+    const p2 = await openPanel(map)
+
+    await expect(p2.getByRole('button', { name: '장력', exact: true })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  test('F-2006 A10 방향키로도 움직이고 저장된다', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openForce(map)
+    const slider = forceSlider(p, '반발력')
+    const before = Number(await slider.inputValue())
+
+    await slider.focus()
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+
+    const after = Number(await slider.inputValue())
+    expect(after - before).toBeCloseTo(0.03, 6)
+
+    await map.getByRole('button', { name: '닫기', exact: true }).click()
+    await page.goto('/#/map')
+    const map2 = page.locator('.map-page')
+    await expect(map2).toBeVisible()
+    const p2 = await openForce(map2)
+    expect(Number(await forceSlider(p2, '반발력').inputValue())).toBeCloseTo(after, 6)
+  })
+
+  test('F-2006 A11 링크 거리가 이어진 문서를 실제로 밀어낸다', async ({ page }) => {
+    // 호버 없이 이름표가 다 뜨게 해 둔다. 고립 문서 C 가 있어야 카메라가 맞추는 반지름이 링크 거리와 무관해진다 (F-2006 4.2·14.2)
+    await setPrefBeforeLoad(page, 'md.mapView', '{"display":{"nodeScale":1,"labelDistance":1,"edgeStrength":0.5}}')
+    const view = await openMapWithDocs(page, [
+      { name: 'C.md', content: 'C 문서' },
+      { name: 'B.md', content: 'B 문서' },
+      { name: 'A.md', content: 'A\n\n[[B]]' },
+    ])
+    await expect(visibleLabels(view.map)).toHaveCount(3)
+
+    async function gap() {
+      const a = await labelBox(view.map, 'A')
+      const b = await labelBox(view.map, 'B')
+      return Math.hypot(a.x + a.width / 2 - (b.x + b.width / 2), a.y + a.height / 2 - (b.y + b.height / 2))
+    }
+    const before = await gap()
+
+    const p = await openForce(view.map)
+    await forceSlider(p, '링크 거리').fill('1')
+
+    // 실측 301.1 px → 543.9 px (1.81배). 1.2 문턱은 그 아래로 50% 여유다 (F-2006 14.2)
+    await expect.poll(async () => (await gap()) / before, { timeout: FORCE_SETTLE + 4000 }).toBeGreaterThan(1.2)
   })
 })
