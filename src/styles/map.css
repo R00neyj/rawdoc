@@ -158,7 +158,14 @@
 
 .map-node {
   fill: var(--accent);
-  transition: var(--transition-fast);
+  /* 호버 확대의 기준점을 평소에도 걸어 둔다 — 호버 규칙에만 두면 마우스가 나갈 때
+     transform-box·transform-origin 이 먼저 초기값(뷰박스 좌상단 기준)으로 돌아가
+     원이 엉뚱한 자리로 튄 뒤 제자리로 전환된다 */
+  transform-box: fill-box;
+  transform-origin: center;
+  /* all 이 아니라 transform 만 — cx·cy·r 은 SVG2 기하 속성이라 all 이면 배치가 바뀔 때
+     같이 애니메이션된다(F-292 2·7장 "배치는 애니메이션하지 않는다") */
+  transition: transform var(--transition-fast);
 }
 
 .map-node--missing {
@@ -182,8 +189,6 @@
 .map-node-group:hover .map-node,
 .map-node-group:focus-visible .map-node {
   transform: scale(1.2);
-  transform-box: fill-box;
-  transform-origin: center;
 }
 
 .map-edge {
