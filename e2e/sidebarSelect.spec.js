@@ -6,9 +6,10 @@ async function newDoc(page, name) {
   await importMarkdown(page, { name: `${name}.md`, content: `${name}\n` })
 }
 
-// 사이드바 안 정확한 이름의 버튼(문서 제목·폴더 이름 라벨) 하나
+// 사이드바 안 정확한 이름의 항목 라벨 하나 — 폴더는 button, 문서는 link 다 (F-296.md 11장)
 function itemButton(page, name) {
-  return page.locator('.sidebar').getByRole('button', { name, exact: true })
+  const sidebar = page.locator('.sidebar')
+  return sidebar.getByRole('button', { name, exact: true }).or(sidebar.getByRole('link', { name, exact: true }))
 }
 
 function treeRowOf(locator) {

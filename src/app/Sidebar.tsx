@@ -46,7 +46,9 @@ import {
   IconExternalLink,
   IconCollapseAll,
   IconDownload,
+  IconOpenInNew,
 } from './icons'
+import { formatHash } from './hashRoute'
 import { GUIDES_PATH } from '../lib/siteChrome'
 import type { Notice } from './notice'
 
@@ -97,7 +99,7 @@ type SidebarCtx = {
   selection: Selection
   contextMenu: ContextMenuState
   multiMenuItems: FolderMenuItem[]
-  onItemClick: (e: ReactMouseEvent<HTMLButtonElement>, item: SelectionItem, action: () => void) => void
+  onItemClick: (e: ReactMouseEvent<HTMLElement>, item: SelectionItem, action: () => void) => void
   onRowContextMenu: (e: ReactMouseEvent<HTMLDivElement>, item: SelectionItem, isEditingRow: boolean) => void
   onCloseContextMenu: () => void
   // 폴더 읽기 전용 링크 메뉴 항목 노출 조건·알림 (F-211.md 2.4) — App.tsx 에 경로가 없어 최소 전달만 한다
@@ -261,6 +263,13 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
   const menuOpenHere = ctx.contextMenu?.id === node.id
 
   const ownItems: FolderMenuItem[] = [
+    {
+      key: 'open-new-tab',
+      label: '새 탭에서 열기',
+      icon: IconOpenInNew,
+      // noopener 가 필수다 — 없으면 sessionStorage 가 복제돼 F-213 편집 잠금이 깨진다 (F-296.md 4.1·5.2)
+      onSelect: () => { window.open(formatHash(node.id), '_blank', 'noopener') },
+    },
     pinMenuItem(node, ctx.onTogglePin),
     {
       key: 'move',
@@ -291,14 +300,15 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
         onContextMenu={(e) => ctx.onRowContextMenu(e, item, false)}
       >
         <span className="tree-toggle-spacer" aria-hidden="true" />
-        <button
-          type="button"
+        <a
           className="tree-label doc-item-btn"
+          href={formatHash(node.id)}
+          draggable={false}
           aria-current={node.id === ctx.currentDocId ? 'page' : undefined}
-          onClick={(e) => ctx.onItemClick(e, item, () => ctx.onSelectDoc(node.id))}
+          onClick={(e) => { e.preventDefault(); ctx.onItemClick(e, item, () => ctx.onSelectDoc(node.id)) }}
         >
           {node.title}
-        </button>
+        </a>
         <FolderMenu
           label={node.title}
           items={items}
@@ -319,6 +329,12 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
   const menuOpenHere = ctx.contextMenu?.id === doc.id
 
   const ownItems: FolderMenuItem[] = [
+    {
+      key: 'open-new-tab',
+      label: '새 탭에서 열기',
+      icon: IconOpenInNew,
+      onSelect: () => { window.open(formatHash(doc.id), '_blank', 'noopener') },
+    },
     pinMenuItem(doc, ctx.onTogglePin),
     {
       key: 'move',
@@ -342,14 +358,15 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
         <span className="tree-toggle-spacer" aria-hidden="true">
           <IconPin size={16} className="pinned-row-icon" />
         </span>
-        <button
-          type="button"
+        <a
           className="tree-label doc-item-btn"
+          href={formatHash(doc.id)}
+          draggable={false}
           aria-current={doc.id === ctx.currentDocId ? 'page' : undefined}
-          onClick={(e) => ctx.onItemClick(e, item, () => ctx.onSelectDoc(doc.id))}
+          onClick={(e) => { e.preventDefault(); ctx.onItemClick(e, item, () => ctx.onSelectDoc(doc.id)) }}
         >
           {doc.title}
-        </button>
+        </a>
         <FolderMenu
           label={doc.title}
           items={items}
@@ -369,14 +386,15 @@ function SharedDocRow({ doc, ctx }: { doc: SharedDocLike; ctx: SidebarCtx }) {
     <li role="listitem" className="tree-item">
       <div className="tree-row shared-doc-row">
         <span className="tree-toggle-spacer" aria-hidden="true" />
-        <button
-          type="button"
+        <a
           className="tree-label doc-item-btn"
+          href={formatHash(doc.id)}
+          draggable={false}
           aria-current={doc.id === ctx.currentDocId ? 'page' : undefined}
-          onClick={() => ctx.onSelectDoc(doc.id)}
+          onClick={(e) => { e.preventDefault(); ctx.onSelectDoc(doc.id) }}
         >
           {doc.title}
-        </button>
+        </a>
         <span className="shared-doc-owner">{emailPrefix}</span>
       </div>
     </li>
@@ -787,7 +805,7 @@ export default function Sidebar({
   const visibleItems = visibleOrder({ pinnedIds: pinned.map((d) => d.id), tree, openFolderIds })
 
   // 일반 클릭은 그대로 열고 단독 선택도 겸한다. Ctrl/Cmd 는 더하고 빼기, Shift 는 화면 순서 범위 (F-255.md 2·3.1)
-  function handleItemClick(e: ReactMouseEvent<HTMLButtonElement>, item: SelectionItem, action: () => void) {
+  function handleItemClick(e: ReactMouseEvent<HTMLElement>, item: SelectionItem, action: () => void) {
     if (e.ctrlKey || e.metaKey) {
       setSelection((sel) => toggleSelection(sel, item))
       return

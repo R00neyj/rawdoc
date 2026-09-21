@@ -1,5 +1,6 @@
 // 빈 상태 S-2 (specs/ia.md 4.3, specs/features/F-111.md 3.6, F-114.md 2.3)
 import { IconNoteAdd, IconUpload } from './icons'
+import { formatHash } from './hashRoute'
 
 const MAX_RECENT = 5
 
@@ -56,10 +57,15 @@ export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDo
           <ul className="empty-state-recent">
             {recent.map((doc) => (
               <li key={doc.id}>
-                <button type="button" className="empty-state-recent-item" onClick={() => onSelectDoc(doc.id)}>
+                <a
+                  className="empty-state-recent-item"
+                  href={formatHash(doc.id)}
+                  draggable={false}
+                  onClick={(e) => { e.preventDefault(); onSelectDoc(doc.id) }}
+                >
                   <span className="empty-state-recent-title">{doc.title || '제목 없음'}</span>
                   <span className="empty-state-recent-date">{formatDate(doc.updatedAt)}</span>
-                </button>
+                </a>
               </li>
             ))}
           </ul>

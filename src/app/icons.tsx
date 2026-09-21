@@ -131,6 +131,8 @@ export const IconToc = makeIcon(tocSvg)
 // 상단바 탭바(F-233 3.4) — 링크 추가(위키링크)는 기존 IconLink 를 그대로 쓴다(명령이 다를 뿐 "연결" 개념은 같다)
 export const IconAddLink = IconLink
 export const IconExternalLink = makeIcon(openInNewSvg)
+// 사이드바 문서 우클릭 메뉴 `새 탭에서 열기` (F-296.md 4.1) — IconExternalLink 와 같은 그림, 문맥이 달라 이름을 따로 둔다
+export const IconOpenInNew = makeIcon(openInNewSvg)
 export const IconBold = makeIcon(formatBoldSvg)
 export const IconItalic = makeIcon(formatItalicSvg)
 export const IconStrikethrough = makeIcon(strikethroughSSvg)

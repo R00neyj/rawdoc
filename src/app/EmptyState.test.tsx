@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import EmptyState from './EmptyState'
 
 // jsdom 없이(새 의존성 없음) 컴포넌트 함수를 직접 호출해 나온 엘리먼트 트리를 순회해 onClick 까지 검증한다
-type Node = { type: unknown; props?: { className?: unknown; children?: unknown; onClick?: () => void } } | null | undefined | boolean | string | number
+type Node = { type: unknown; props?: { className?: unknown; children?: unknown; onClick?: (e?: { preventDefault: () => void }) => void } } | null | undefined | boolean | string | number
 
 function collect(node: Node | Node[], className: string, out: Extract<Node, object>[] = []) {
   if (node == null || typeof node === 'boolean') return out
@@ -56,7 +56,7 @@ describe('F-241 A3 클릭', () => {
     const items = collect(tree, 'empty-state-recent-item')
     expect(items).toHaveLength(3)
 
-    items[1].props?.onClick?.()
+    items[1].props?.onClick?.({ preventDefault: () => {} })
 
     expect(onSelectDoc).toHaveBeenCalledTimes(1)
     expect(onSelectDoc).toHaveBeenCalledWith('doc-1')

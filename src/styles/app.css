@@ -768,6 +768,8 @@ body.sidebar-resizing {
   overflow: hidden;
   text-overflow: ellipsis;
   transition: var(--transition-colors);
+  text-decoration: none; /* F-296.md 4.4 — 문서 라벨이 <a> 가 됐다 */
+  cursor: pointer;
 }
 
 .doc-item-btn[aria-current='page'] {
@@ -1202,6 +1204,8 @@ body.sidebar-resizing {
   color: var(--ink);
   text-align: left;
   transition: var(--transition-colors);
+  text-decoration: none; /* F-296.md 4.4 — <a> 가 됐다 */
+  cursor: pointer;
 }
 
 .empty-state-recent-item:hover {

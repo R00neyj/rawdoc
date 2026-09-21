@@ -194,7 +194,9 @@ test.describe('F-295 A7 문서를 바꾸면 버린다', () => {
     await setViewMode(page, 'view')
     await expect(page.locator('.content-area .viewer')).toBeVisible()
 
-    await page.locator('.sidebar').getByRole('button', { name: 'b', exact: true }).click()
+    // 문서 라벨이 F-296 으로 link 역할이 됐다 — 폴더는 button 그대로라 둘 다 받는다
+    const sidebar = page.locator('.sidebar')
+    await sidebar.getByRole('button', { name: 'b', exact: true }).or(sidebar.getByRole('link', { name: 'b', exact: true })).click()
     await setViewMode(page, 'live')
     await expect(page.locator('.cm-scroller')).toBeVisible()
 

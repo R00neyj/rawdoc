@@ -28,13 +28,15 @@ import { fetchAccount, loginUrl, type AccountState } from './account'
 import type { SyncState } from '../types'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
 import { useEdgeSwipe } from './useEdgeSwipe'
-import { IconRefresh } from './icons'
+import { IconRefresh, IconNoteAdd } from './icons'
 import { resolveTheme } from './theme'
 import { parseHash, formatHash, parsePathRoute, type HashRoute } from './hashRoute'
 import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
+import { withTabBroadcast, newTabId } from './tabSync'
+import { useTabSync } from './useTabSync'
 import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from './exportDoc'
 import { downloadWorkspaceExport, type WorkspaceExportSourceStore } from './exportWorkspace'
 import {
@@ -208,6 +210,8 @@ export default function App() {
   const [folders, setFolders] = useState<Folder[]>([]) // F-126
   const [openFolders, setOpenFolders] = useState<string[]>(() => loadOpenFolders()) // F-126, md.openFolders
   const [currentDocId, setCurrentDocId] = useState<string | null>(null)
+  // 지금 연 문서가 다른 탭에서 지워졌을 때의 그 문서 id (F-296.md 7.3) — currentDocId 가 바뀌면 되돌린다
+  const [deletedElsewhereId, setDeletedElsewhereId] = useState<string | null>(null)
   const [notice, setNotice] = useState<AppNotice | null>(null)
   const [headingFont, setHeadingFont] = useState(() => getPref('md.headingFont', 'serif'))
   const [bodyFont, setBodyFont] = useState(() => getPref('md.bodyFont', 'sans')) // F-141 3.3
@@ -414,9 +418,76 @@ export default function App() {
     onNotice: showNotice,
     onReacquired: handleLockReacquired,
   })
-  const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly
+
+  // 탭마다 한 번 — 메모리에만 둔다 (F-296.md 6.1)
+  const tabIdRef = useRef<string>(newTabId())
+
+  // 다른 탭 신호를 받으면 목록만 다시 읽는다. 열린 문서 본문은 건드리지 않는다(불변조건, F-296.md 7.2)
+  const resyncFromStore = useCallback(async () => {
+    const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
+    setFolders(newFolders)
+    const stripped = sortByUpdatedAtDesc(newDocs.map(stripContent))
+    setDocs(stripped)
+    const openId = currentDocIdRef.current
+    if (openId && !stripped.some((d) => d.id === openId)) setDeletedElsewhereId(openId)
+  }, [store])
+
+  // 로컬 편집권을 되찾으면 서버 잠금 재획득(handleLockReacquired)과 같은 방식으로 다시 읽어 다시 마운트한다 (F-296.md 6.4)
+  const handleClaimRegained = useCallback(() => {
+    const docId = currentDocIdRef.current
+    if (!docId) return
+    store.get(docId).then((fresh) => {
+      if (!fresh || docId !== currentDocIdRef.current) return
+      setOpenDoc({ id: fresh.id, content: fresh.content, lineEnding: fresh.lineEnding })
+      setDocs((prev) =>
+        sortByUpdatedAtDesc(prev.map((d) => (d.id === fresh.id ? { ...d, title: fresh.title, updatedAt: fresh.updatedAt } : d))),
+      )
+      focusEditorRef.current = false
+      setEditorRemountNonce((n) => n + 1)
+    })
+  }, [store])
+
+  // 편집권은 로컬(idb) 문서에만 켠다 — 서버는 useDocLock(F-213)이, 메모리는 저장소가 탭마다 따로라 겹칠 일이 없다 (F-296.md 6.4)
+  const claimDocId = store.kind === 'idb' && !sharedDoc ? currentDocId : null
+  const { post: postTabMessage, claimReadOnly } = useTabSync({
+    enabled: bootPhase === 'ready',
+    tabId: tabIdRef.current,
+    claimDocId,
+    onDocsChanged: resyncFromStore,
+    onNotice: showNotice,
+    onClaimRegained: handleClaimRegained,
+  })
+
+  const isDeletedElsewhere = currentDocId != null && deletedElsewhereId === currentDocId
+  const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly || claimReadOnly || isDeletedElsewhere
   // 본문 맨 위 제목 읽기 전용 — 상단바 옛 제목 입력의 disabled·readOnly 조건을 하나로 합친다 (F-217.md 2.4)
   const titleReadOnly = isReadOnlyDoc || viewMode === 'view' || Boolean(sharedDoc)
+
+  // 문서를 바꾸면 지워짐 상태를 되돌린다 — 렌더 중 상태를 맞추는 공식 패턴 (F-296.md 7.3, useDocSaver.ts trackedDocId 와 같은 방식)
+  const [deletedElsewhereTrackedDocId, setDeletedElsewhereTrackedDocId] = useState(currentDocId)
+  if (currentDocId !== deletedElsewhereTrackedDocId) {
+    setDeletedElsewhereTrackedDocId(currentDocId)
+    setDeletedElsewhereId(null)
+  }
+
+  // 다른 탭에서 지워졌을 때 오류 알림 + `새 문서로 저장` — 같은 문서로는 1회만 (F-296.md 7.3)
+  const notifiedDeletedElsewhereRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!deletedElsewhereId || notifiedDeletedElsewhereRef.current === deletedElsewhereId) return
+    notifiedDeletedElsewhereRef.current = deletedElsewhereId
+    showNotice({
+      type: 'error',
+      message: '이 문서가 다른 탭에서 삭제되었습니다. 지금 화면의 내용은 저장되지 않습니다.',
+      action: {
+        label: '새 문서로 저장',
+        icon: IconNoteAdd,
+        onClick: () => {
+          void saveAsNewDocAfterDeletedElsewhere()
+        },
+      },
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- saveAsNewDocAfterDeletedElsewhere 는 아래(hoisted function)에서 항상 최신 store·currentDoc·openDoc 을 읽는다
+  }, [deletedElsewhereId, showNotice])
 
   const closeSidebarIfNarrow = useCallback(() => {
     setSidebarOpen(false)
@@ -617,7 +688,8 @@ export default function App() {
         },
       })
       setDbBlockedMessage(null)
-      setStore(resolvedStore)
+      // 이 한 곳만 감싸면 App.tsx 의 모든 저장 경로가 자동으로 다른 탭에 신호를 보낸다 (F-296.md 6.2)
+      setStore(withTabBroadcast(resolvedStore, postTabMessage, tabIdRef.current))
 
       // 열린 문서가 충돌한 원본이면 서버 내용을 밀어 넣지 않고(불변조건) 사본으로 전환한다
       async function handleServerConflict({
@@ -1171,6 +1243,8 @@ export default function App() {
     getText: (lineEnding: LineEnding | undefined) => editorRef.current?.getText(lineEnding ?? 'crlf') ?? '',
     onSaved: handleDocSaved,
     onSaveError: handleSaveError,
+    // 저장해 봤자 해로운 두 경우에만 막는다 — 잠금을 뺏긴 서버 문서는 그대로 내보내 423 충돌 사본을 만드는 게 설계다 (F-296.md 7.4)
+    blocked: isDeletedElsewhere || claimReadOnly,
   })
 
   // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후 최신 flush·notifyChange·handlePrintDoc·openSearch 를 반영한다
@@ -2017,6 +2091,23 @@ export default function App() {
       if (nextId) setPref('md.lastDocId', nextId)
       replaceHashUrl(nextId)
     }
+  }
+
+  // 다른 탭에서 지워진 문서 복구 `새 문서로 저장` — folderId 는 최상위로 고정한다(원래 폴더도 지워졌을 수 있다) (F-296.md 7.3)
+  async function saveAsNewDocAfterDeletedElsewhere() {
+    const text = editorRef.current?.getText(openDoc?.lineEnding ?? 'crlf') ?? ''
+    const doc = await store.create({
+      title: currentDoc?.title ?? '제목 없는 문서',
+      content: text,
+      lineEnding: openDoc?.lineEnding ?? 'crlf',
+      folderId: null,
+    })
+    setDocs((prev) => sortByUpdatedAtDesc([...prev, stripContent(doc)]))
+    setDeletedElsewhereId(null)
+    setCurrentDocId(doc.id)
+    setPref('md.lastDocId', doc.id)
+    pushHashUrl(doc.id)
+    setNotice(null)
   }
 
   // ----- 폴더 CRUD (specs/features/F-126.md 3장) -----
