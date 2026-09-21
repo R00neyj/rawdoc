@@ -62,6 +62,9 @@ src/
   - `lib/`: `docSearch.ts`(F-285 — 쿼리 파싱·매칭·발췌, import 문 없음)
   - `app/`: `searchIndex.ts`(F-286 — 인덱스 만들기·재사용), `SearchDialog.tsx`(F-287), `searchResults.ts`(F-287 — 결과 행·문구 계산 순수 함수 + 에디터에 넘길 검색어 고르기(F-294))
   - `editor/`: `showSearchMatches.ts`(F-294 — 검색 결과로 연 문서에서 CM6 찾기 패널 열기)
+- 탭 세션 겹침(2026-09-21)으로 추가
+  - `lib/`: `tabChannel.ts`(F-297 — 탭 사이 채널 이름·상수)
+  - `storage/`: `lockSession.ts`(F-297 — 잠금 세션 id 보관·회전)
 - 위키링크 지도(2026-09-21)로 추가
   - `lib/`: `wikiGraph.ts`(F-292 — 위키링크 추출·그래프 만들기 순수 함수), `graphLayout.ts`(F-292 — 힘 기반 배치 계산)
   - `app/`: `mapIndex.ts`(F-292 — 그래프 캐시), `MapPage.tsx`·`MapGraph.tsx`(F-292 — S-8 화면·SVG)
@@ -161,7 +164,7 @@ store.removeAttachment(id)    // Promise<void>
 
 | 키 | 값 | 기본 | 명세 |
 | --- | --- | --- | --- |
-| `md.lockSession` | 편집 잠금 세션 id (`src/storage/docsApi.ts`). 탭마다 다르고 새로고침에는 살아남는다 | 없음(첫 접근 때 만든다) | F-250 |
+| `md.lockSession` | 편집 잠금 세션 id (`src/storage/lockSession.ts`). 탭마다 다르고 새로고침에는 살아남는다. 탭 복제로 겹치면 부팅 때 회전한다 | 없음(첫 접근 때 만든다) | F-250, F-297 |
 
 ## 6. 서버 (M2, 2026-09-15)
 

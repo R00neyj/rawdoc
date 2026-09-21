@@ -1,9 +1,9 @@
 // 탭 간 동기화 순수 함수 — 메시지 타입·저장소 감싸기·편집권 (specs/features/F-296.md 6장). DOM 은 useTabSync.ts 가 다룬다
 import type { Store } from '../types'
 
-export const TAB_CHANNEL_NAME = 'md-tabs' // 저장소 식별자에 제품명을 쓰지 않는다 (CLAUDE.md 불변조건)
+// 채널 이름·클레임 대기 시간·탭 id 생성은 src/lib/tabChannel.ts 로 옮겨졌다 — storage 쪽(F-297 lockSession.ts)도 써야 해서다 (specs/features/F-297.md 5.1)
+export { TAB_CHANNEL_NAME, CLAIM_WAIT_MS, newTabId } from '../lib/tabChannel'
 export const RESYNC_DEBOUNCE_MS = 250
-export const CLAIM_WAIT_MS = 150
 export const CLAIM_RETRY_MS = 15_000 // useDocLock.ts RETRY_INTERVAL_MS 와 같은 값
 
 export type TabMessage =
@@ -11,11 +11,6 @@ export type TabMessage =
   | { kind: 'claim-query'; tabId: string; docId: string }
   | { kind: 'claim-hold'; tabId: string; docId: string; since: number }
   | { kind: 'claim-release'; tabId: string; docId: string }
-
-// 탭마다 한 번 만든다. sessionStorage 에 안 넣는다 — 새로고침을 새 탭으로 쳐도 된다, 편집권은 다시 잡는다 (6.1)
-export function newTabId(): string {
-  return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
-}
 
 function wrap<A extends unknown[], R>(fn: (...args: A) => Promise<R>, notify: () => void): (...args: A) => Promise<R> {
   return async (...args: A) => {

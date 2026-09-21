@@ -252,3 +252,119 @@ test.describe('F-213 A5 423 저장', () => {
     await expect(page.locator('.cm-content')).not.toContainText('오프라인 편집')
   })
 })
+
+// ----- F-297 탭 복제로 세션 id 가 겹치는 문제 (specs/features/F-297.md 7장) -----
+
+// 복제 탭 — 원래 탭의 세션 id 를 심은 채 연다. addInitScript 를 심은 페이지에서 reload() 를 쓰지 않는다 (7장)
+async function openDuplicateTab(context, page, docId, extraInit) {
+  const sessionId = await page.evaluate(() => sessionStorage.getItem('md.lockSession'))
+  const dup = await context.newPage()
+  await dup.addInitScript((sid) => {
+    try {
+      sessionStorage.setItem('md.lockSession', sid)
+    } catch {
+      /* about:blank 에서는 접근이 막힌다 */
+    }
+  }, sessionId)
+  if (extraInit) await dup.addInitScript(extraInit)
+  await dup.goto(`/#/d/${docId}`)
+  return { dup, sessionId }
+}
+
+async function makeServerDoc(page, context, text = '원본') {
+  await openApp(page)
+  await page.getByRole('button', { name: '새 문서' }).click()
+  await typeIntoEditor(page, text)
+  await waitSyncIdle(page)
+  return currentDocId(page)
+}
+
+test.describe('F-297 A1·A3·A4·A5·A6 복제 탭', () => {
+  test('세션 id 를 복사한 탭은 읽기 전용이 되고, id 를 회전시킨 뒤 원래 탭이 닫히면 편집할 수 있다', async ({
+    page,
+    context,
+  }) => {
+    const server = await installFakeServer(context)
+    const docId = await makeServerDoc(page, context)
+    const { dup, sessionId } = await openDuplicateTab(context, page, docId)
+    await expect(dup.locator('.cm-host .cm-editor')).toBeVisible()
+
+    // A1 — 복제 탭은 읽기 전용이다
+    await expect(dup.locator('.notice-message')).toContainText('편집 중입니다', { timeout: 10_000 })
+    await dup.locator('.cm-content').click()
+    await dup.keyboard.type('복제 탭 입력')
+    await expect(dup.locator('.cm-content')).toContainText('원본')
+    await expect(dup.locator('.cm-content')).not.toContainText('복제 탭 입력')
+
+    // A3 — 세션 id 가 회전했다
+    const rotated = await dup.evaluate(() => sessionStorage.getItem('md.lockSession'))
+    expect(rotated).toBeTruthy()
+    expect(rotated).not.toBe(sessionId)
+
+    // A4 — 원래 탭은 계속 편집된다
+    await page.locator('.cm-content').click()
+    await page.keyboard.type(' 계속')
+    await waitSyncIdle(page)
+    await expect(page.locator('.cm-content')).toContainText('원본 계속')
+
+    // A5 — 원래 탭을 닫으면 복제 탭이 회전한 새 id 로 잠금을 잡는다
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
+    await page.close()
+    await expect(dup.locator('.notice-message')).toContainText('이제 편집할 수 있습니다', { timeout: 20_000 })
+    await dup.locator('.cm-content').click()
+    await dup.keyboard.type(' 복제 탭에서 편집')
+    await expect(dup.locator('.cm-content')).toContainText('복제 탭에서 편집')
+
+    // A6 — 읽기 전용이던 동안 친 글자가 서버에 섞이지 않았다
+    expect(server.docs.get(docId)?.content).not.toContain('복제 탭 입력')
+  })
+})
+
+test.describe('F-297 A7 잠기지 않은 문서', () => {
+  test('원래 탭이 그 문서를 열고 있지 않으면 복제 탭은 그냥 편집된다', async ({ page, context }) => {
+    await installFakeServer(context)
+    const docId = await makeServerDoc(page, context)
+
+    // 원래 탭을 다른 문서로 옮겨 잠금을 놓는다
+    await page.getByRole('button', { name: '새 문서' }).click()
+    await typeIntoEditor(page, '다른 문서')
+    await waitSyncIdle(page)
+    await expect.poll(() => currentDocId(page)).not.toBe(docId)
+
+    const { dup } = await openDuplicateTab(context, page, docId)
+    await expect(dup.locator('.cm-host .cm-editor')).toBeVisible()
+    await dup.waitForTimeout(500) // 늦게 뜨는 안내도 잡는다
+    await expect(dup.locator('.notice-message')).not.toBeVisible()
+    await dup.locator('.cm-content').click()
+    await dup.keyboard.type(' 이어서')
+    await expect(dup.locator('.cm-content')).toContainText('원본 이어서')
+  })
+})
+
+test.describe('F-297 A8 BroadcastChannel 없음', () => {
+  test('채널이 없으면 기능이 조용히 꺼지고 세션 id 도 그대로다', async ({ page, context }) => {
+    await installFakeServer(context)
+    const docId = await makeServerDoc(page, context)
+
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
+    await page.close()
+
+    const dup = await context.newPage()
+    const sessionId = 'f297-no-channel'
+    await dup.addInitScript((sid) => {
+      try {
+        sessionStorage.setItem('md.lockSession', sid)
+      } catch {
+        /* about:blank */
+      }
+      delete window.BroadcastChannel
+    }, sessionId)
+    await dup.goto(`/#/d/${docId}`)
+    await expect(dup.locator('.cm-host .cm-editor')).toBeVisible()
+
+    expect(await dup.evaluate(() => sessionStorage.getItem('md.lockSession'))).toBe(sessionId)
+    await dup.locator('.cm-content').click()
+    await dup.keyboard.type(' 채널 없이 편집')
+    await expect(dup.locator('.cm-content')).toContainText('채널 없이 편집')
+  })
+})

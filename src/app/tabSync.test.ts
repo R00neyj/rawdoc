@@ -161,4 +161,12 @@ describe('F-296 U8~U14 reduceClaim', () => {
     expect(reduceClaim(readOnly, msg)).toEqual({ type: 'retake' })
     expect(reduceClaim(base, msg)).toBeNull()
   })
+
+  // 같은 md-tabs 채널로 lockSession 메시지가 들어오지만 kind 가 갈려 무시된다 (F-297 8장 U15)
+  it('U15 session-query·session-hold 를 받으면 아무 일도 하지 않는다', () => {
+    const sessionQuery = { kind: 'session-query', tabId: 'other', sessionId: 'SESSION-A' } as unknown as TabMessage
+    const sessionHold = { kind: 'session-hold', tabId: 'other', sessionId: 'SESSION-A' } as unknown as TabMessage
+    expect(reduceClaim(base, sessionQuery)).toBeNull()
+    expect(reduceClaim(base, sessionHold)).toBeNull()
+  })
 })

@@ -1,6 +1,6 @@
 // 편집 잠금 — 서버 문서를 owner·edit 권한으로 온라인에서 열면 잡고 유지한다 (specs/features/F-213.md 2.3)
 import { useEffect, useRef, useState } from 'react'
-import { ApiError, lockDoc, lockSessionId, unlockDoc } from '../storage/docsApi'
+import { ApiError, lockDoc, unlockDoc } from '../storage/docsApi'
 
 export const EXTEND_INTERVAL_MS = 20_000
 export const RETRY_INTERVAL_MS = 15_000
@@ -8,8 +8,8 @@ export const RETRY_INTERVAL_MS = 15_000
 export type DocLockRole = 'owner' | 'edit' | 'view' | undefined
 
 export type DocLockApi = {
-  lockDoc: (id: string, sessionId: string) => Promise<{ expiresAt: number }>
-  unlockDoc: (id: string, sessionId: string, opts?: { keepalive?: boolean }) => Promise<void>
+  lockDoc: (id: string) => Promise<{ expiresAt: number }>
+  unlockDoc: (id: string, opts?: { keepalive?: boolean }) => Promise<void>
 }
 
 export type DocLockCallbacks = {
@@ -26,7 +26,6 @@ function lockedMessage(email: string | undefined, myEmail: string | null): strin
 // 잡기·연장·놓친 뒤 재시도의 상태 기계 — 훅과 분리해 가짜 타이머로 직접 검증한다 (usePresence.ts 와 같은 방식)
 export function createDocLockController(
   docId: string,
-  sessionId: string,
   myEmail: string | null,
   api: DocLockApi,
   callbacks: DocLockCallbacks,
@@ -54,7 +53,7 @@ export function createDocLockController(
     stopExtend()
     extendTimer = setInterval(async () => {
       try {
-        await api.lockDoc(docId, sessionId)
+        await api.lockDoc(docId)
       } catch (err) {
         if (err instanceof ApiError && err.kind === 'locked') loseLock(err.email)
         // 네트워크 등 다른 오류는 다음 연장 때 다시 시도한다
@@ -66,7 +65,7 @@ export function createDocLockController(
     stopRetry()
     retryTimer = setInterval(async () => {
       try {
-        await api.lockDoc(docId, sessionId)
+        await api.lockDoc(docId)
         if (disposed) return
         stopRetry()
         holding = true
@@ -91,7 +90,7 @@ export function createDocLockController(
 
   async function start() {
     try {
-      await api.lockDoc(docId, sessionId)
+      await api.lockDoc(docId)
       if (disposed) return
       holding = true
       callbacks.onReadOnlyChange(false)
@@ -108,14 +107,14 @@ export function createDocLockController(
   }
 
   function pageHide() {
-    if (holding) api.unlockDoc(docId, sessionId, { keepalive: true })
+    if (holding) api.unlockDoc(docId, { keepalive: true })
   }
 
   function dispose() {
     disposed = true
     stopExtend()
     stopRetry()
-    if (holding) api.unlockDoc(docId, sessionId)
+    if (holding) api.unlockDoc(docId)
   }
 
   return { start, pageHide, dispose }
@@ -167,7 +166,6 @@ export function useDocLock({
 
     const controller = createDocLockController(
       docId,
-      lockSessionId,
       myEmail,
       { lockDoc, unlockDoc },
       {
