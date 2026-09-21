@@ -175,7 +175,8 @@
   padding-top: 4px;
   white-space: nowrap;
   font-family: var(--font-sans);
-  font-size: 11px;
+  /* F-292 6.2 는 11px 이었는데 앱에서 제일 작은 글자라 안 읽혔다. 14px 은 지도 머리 줄 제목과 같은 크기다 (사용자 지시 2026-09-22) */
+  font-size: 14px;
   line-height: 1.3;
   color: var(--ink-2);
 }
