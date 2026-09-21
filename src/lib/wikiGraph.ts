@@ -2,8 +2,23 @@
 import { findWikiLinks } from './wikiLink'
 import { findFrontmatter } from './frontmatter'
 
-// 줄 시작 공백 0~3칸 + 백틱 3개 이상 또는 물결 3개 이상 (3.2 펜스 코드블록)
-const FENCE_RE = /^ {0,3}(`{3,}|~{3,})/
+// 펜스 코드블록 여닫기 (3.2). 줄 앞 공백은 몇 칸이든, 목록 항목 안(`2. ```)이어도 펜스로 본다
+// — CommonMark 는 목록 항목 안의 펜스를 인정하는데, 공백 0~3칸만 보면 그 여는 펜스를 놓치고
+// 뒤따르는 닫는 펜스를 여는 펜스로 잡아 그 뒤 문서 전체가 코드블록이 된다
+// (2026-09-21 실제 문서에서 위키링크 5개가 통째로 빠졌다)
+const FENCE_RE = /^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)?(`{3,}|~{3,})([^\n]*)$/
+
+type Fence = { char: string; len: number; info: string }
+
+function matchFence(line: string): Fence | null {
+  const match = FENCE_RE.exec(line)
+  if (!match) return null
+  const marks = match[1]
+  const info = match[2]
+  // 백틱 펜스의 정보 문자열에는 백틱이 못 들어간다(CommonMark) — `- ```코드``` ` 같은 인라인코드를 펜스로 잡지 않는다
+  if (marks[0] === '`' && info.includes('`')) return null
+  return { char: marks[0], len: marks.length, info: info.trim() }
+}
 
 // 표 구분 줄 — `| --- | :--: |` 모양의 근사 판정 (3.2)
 const TABLE_DELIMITER_RE = /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/
@@ -43,24 +58,22 @@ export function extractWikiTargets(content: string): string[] {
   const lines = body.split(/\r\n|\r|\n/)
 
   const targets: string[] = []
-  let fenceChar: string | null = null
-  let fenceLen = 0
+  let openFence: Fence | null = null
   let inTable = false
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
 
-    const fenceMatch = FENCE_RE.exec(line)
-    if (fenceChar) {
-      if (fenceMatch && fenceMatch[1][0] === fenceChar && fenceMatch[1].length >= fenceLen) {
-        fenceChar = null
-        fenceLen = 0
+    const fence = matchFence(line)
+    if (openFence) {
+      // 닫는 펜스는 여는 펜스와 같은 글자로 같은 수 이상이고, 정보 문자열을 갖지 않는다(CommonMark)
+      if (fence && fence.char === openFence.char && fence.len >= openFence.len && fence.info === '') {
+        openFence = null
       }
       continue
     }
-    if (fenceMatch) {
-      fenceChar = fenceMatch[1][0]
-      fenceLen = fenceMatch[1].length
+    if (fence) {
+      openFence = fence
       continue
     }
 

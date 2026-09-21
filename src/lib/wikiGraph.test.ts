@@ -18,6 +18,41 @@ describe('extractWikiTargets — A1', () => {
     expect(extractWikiTargets(content)).toEqual(['본문'])
   })
 
+  // 회귀 — 목록 항목 안의 여는 펜스를 놓쳐 그 뒤 문서 전체가 코드블록이 되던 버그 (2026-09-21)
+  it('목록 항목 안(`2. ````)의 펜스도 여닫는다', () => {
+    const content = [
+      '1. 설명',
+      '2. ```',
+      '   코드 [[제외]]',
+      '   ```',
+      '3. 다음',
+      '',
+      '[[본문]]',
+    ].join('\n')
+    expect(extractWikiTargets(content)).toEqual(['본문'])
+  })
+
+  // 회귀 — 닫는 펜스는 정보 문자열을 갖지 않는다(CommonMark). ```text 가 앞 블록을 닫아버리면
+  // 그 뒤 여는 펜스가 짝을 잃고 문서 끝까지 코드블록이 된다
+  it('정보 문자열이 붙은 펜스는 닫는 펜스가 아니라 여는 펜스다', () => {
+    const content = [
+      '```',
+      '[[제외1]]',
+      '```',
+      '```text',
+      '[[제외2]]',
+      '```',
+      '[[본문]]',
+    ].join('\n')
+    expect(extractWikiTargets(content)).toEqual(['본문'])
+  })
+
+  // 회귀 — 목록 항목의 인라인코드를 펜스로 잡으면 안 된다(백틱 펜스의 정보 문자열에는 백틱이 못 들어간다)
+  it('목록 항목 안 인라인코드는 펜스가 아니다', () => {
+    const content = ['- ```코드```', '- [[본문]]'].join('\n')
+    expect(extractWikiTargets(content)).toEqual(['본문'])
+  })
+
   it('인라인코드 안 [[…]] 는 뺀다', () => {
     const content = '문장 중 `[[제외]]` 그리고 [[본문]]'
     expect(extractWikiTargets(content)).toEqual(['본문'])
