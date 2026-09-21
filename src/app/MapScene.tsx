@@ -26,14 +26,17 @@ import { createMapLayout, type MapLayout } from '../lib/mapLayout3d'
 import { clipPlanes, fitDistance, zoomLimits } from '../lib/mapCamera'
 import { parseCssColor, type Rgba } from '../lib/cssColor'
 import { blendRgb, depthMix, ndcToScreen, nodeRadius, pickLabelNodes, screenRadius, type ScreenPoint } from '../lib/mapNodeStyle'
+import { edgeColorAt } from '../lib/mapEdgeStyle'
 import MapLabels, { type MapLabelItem, type MapLabelsHandle } from './MapLabels'
 import type { WikiGraph } from '../lib/wikiGraph'
+import type { MapView } from './mapPrefs'
 
 type MapSceneProps = {
   graph: WikiGraph // 이미 상한으로 잘린 그래프
   centerId: string | null // #/map/{id} 의 그 문서. 없으면 null
   fitToken: number // 바뀔 때마다 카메라를 다시 맞추고 다시 그린다
   menuOpen: boolean // 노드 메뉴가 떠 있는 동안 조작을 잠근다 (F-2003 4.4)
+  view: MapView // 지도 설정 패널의 `표시` 3축 (F-2005 7장)
   onNodeClick: (id: string, modified: boolean) => void
   onNodeMenu: (id: string, x: number, y: number) => void // 뷰포트 좌표 (F-2003 4.3·5.2)
   onUnsupported: () => void // 렌더러를 못 만들었다 — MapPage 가 목록으로 돌린다
@@ -107,10 +110,19 @@ function toColor(target: Color, rgba: Rgba): Color {
   return target.setRGB(rgba[0], rgba[1], rgba[2], SRGBColorSpace)
 }
 
+// 순서는 무시하고 원소만 비교한다 — pickLabelNodes 의 결과가 매 프레임 같은 순서로 안 나올 수 있다 (F-2005 7.3)
+function sameLabelSet(a: readonly number[], b: readonly number[]): boolean {
+  if (a.length !== b.length) return false
+  const set = new Set(a)
+  for (const x of b) if (!set.has(x)) return false
+  return true
+}
+
 // 렌더마다 새로 만들어지는 값들. 장면을 다시 짓지 않고 최신 것을 쓰려고 ref 하나에 모은다
 type SceneInputs = {
   centerId: string | null
   menuOpen: boolean
+  view: MapView
   onNodeClick: (id: string, modified: boolean) => void
   onNodeMenu: (id: string, x: number, y: number) => void
   onUnsupported: () => void
@@ -123,6 +135,7 @@ type SceneBundle = {
   fit: () => void
   lookAtNode: (id: string) => void
   setMenuOpen: (open: boolean) => void
+  setView: (view: MapView) => void
   requestDraw: () => void
 }
 
@@ -132,6 +145,7 @@ function buildScene(
   wrapper: HTMLElement,
   graph: WikiGraph,
   centerId: string | null,
+  initialView: MapView,
   inputs: { current: SceneInputs },
   labelsRef: { current: MapLabelsHandle | null },
   setLabelItems: (items: MapLabelItem[]) => void,
@@ -170,15 +184,19 @@ function buildScene(
   edgeLines.frustumCulled = false
   if (edgeCount > 0) scene.add(edgeLines)
 
-  // 열 때 한 번 채운다. F-2004 가 공식으로 갈아끼울 자리를 배열로 잡아 둔다 (6.6)
+  // 열 때 한 번 채운다. `scale` 은 F-2004 의 NODE_SCALE 에 `표시 > 노드 크기` 슬라이더 배율을 곱한 값이다 (F-2005 7.2)
   const radii = new Float32Array(nodeCount)
-  for (let i = 0; i < nodeCount; i++) {
-    const node = graph.nodes[i]
-    radii[i] = nodeRadius(node.degree, node.missing, NODE_SCALE)
-  }
-  // 노드 반지름을 더하지 않으면 노드 하나짜리 그래프에서 카메라가 구체 안으로 들어간다 (F-2003 7.2)
   let maxNodeRadius = 0
-  for (let i = 0; i < nodeCount; i++) if (radii[i] > maxNodeRadius) maxNodeRadius = radii[i]
+  function fillRadii(scale: number) {
+    for (let i = 0; i < nodeCount; i++) {
+      const node = graph.nodes[i]
+      radii[i] = nodeRadius(node.degree, node.missing, NODE_SCALE * scale)
+    }
+    // 노드 반지름을 더하지 않으면 노드 하나짜리 그래프에서 카메라가 구체 안으로 들어간다 (F-2003 7.2)
+    maxNodeRadius = 0
+    for (let i = 0; i < nodeCount; i++) if (radii[i] > maxNodeRadius) maxNodeRadius = radii[i]
+  }
+  fillRadii(initialView.display.nodeScale)
 
   // 프레임마다 할당하지 않으려고 한 번 만들어 돌려쓴다 (6.6)
   const posBuf = new Float32Array(nodeCount * 3)
@@ -208,11 +226,17 @@ function buildScene(
     adjacency[edge.to]?.push(edge.from)
   }
   let panelColor: Rgba = FALLBACK
+  let ruleColor: Rgba = FALLBACK
+  let inkColor: Rgba = FALLBACK
   let centerIndex = -1
   let hoverIndex = -1
   let labelIndices: number[] = []
   let cssW = 0
   let cssH = 0
+  // 직전에 적용한 표시 값. 바뀐 축만 다시 계산한다 (F-2005 7.1)
+  let applied = initialView.display
+  // 거리 후보가 이번 프레임에 labelIndices 에 반영된 적이 있나 — 0 으로 내린 다음 프레임까지만 계속 돈다 (7.3)
+  let labelDistanceWasActive = false
 
   // 중심 문서는 바뀔 수 있다. 테마만 다시 읽을 때는 인자 없이 부른다
   let activeCenterId = centerId
@@ -220,13 +244,20 @@ function buildScene(
   // 공유받아 본문을 못 읽은 문서 — id 배열이라 한 번 Set 으로 만들어 돌려쓴다 (F-2004 6.1)
   const unreadable = new Set(graph.unreadable)
 
+  // `선 두께` 슬라이더 값으로 간선 색을 다시 칠한다. 테마가 바뀌어 applyColors() 가 다시 돌 때도 현재 strength 를 쓴다 (F-2005 7.4)
+  function applyEdgeColor(strength: number) {
+    toColor(edgeMaterial.color, edgeColorAt(strength, { panel: panelColor, rule: ruleColor, ink: inkColor }))
+  }
+
   // 인스턴스 색을 직접 쓰지 않고 base 색만 채운다. 판정 순서는 끊긴 링크 → 현재 문서 → 공유받음 → 기본이다 (F-2004 6.1)
   function applyColors(nextCenterId: string | null = activeCenterId) {
     activeCenterId = nextCenterId
     const theme = readTheme(probe)
     panelColor = theme.panel
+    ruleColor = theme.rule
+    inkColor = theme.ink
     scene.background = toColor(new Color(), theme.panel)
-    toColor(edgeMaterial.color, theme.rule)
+    applyEdgeColor(applied.edgeStrength)
     centerIndex = -1
     for (let i = 0; i < nodeCount; i++) {
       const node = graph.nodes[i]
@@ -266,6 +297,30 @@ function buildScene(
     }
     // setColorAt 을 처음 부를 때 instanceColor 가 만들어진다 (3.4)
     if (nodeMesh.instanceColor) nodeMesh.instanceColor.needsUpdate = true
+
+    // labelDistance 가 0 이면 건너뛴다 — 기본값이라 호버 전용 동작이 안 바뀌고, 1→0 으로 내린 다음 프레임만 한 번 더 돌아 정리한다 (F-2005 7.3)
+    if (applied.labelDistance > 0 || labelDistanceWasActive) {
+      const distanceCandidates: number[] = []
+      if (applied.labelDistance > 0) {
+        // near·far 는 depthMix 용 float64 라 Float32Array 인 depths[] 와 어긋날 수 있어 문턱값은 depths[] 에서 같은 정밀도로 다시 구한다
+        let dNear = Infinity
+        let dFar = -Infinity
+        for (let i = 0; i < nodeCount; i++) {
+          if (depths[i] < dNear) dNear = depths[i]
+          if (depths[i] > dFar) dFar = depths[i]
+        }
+        const threshold = dNear + (dFar - dNear) * applied.labelDistance
+        for (let i = 0; i < nodeCount; i++) if (depths[i] <= threshold) distanceCandidates.push(i)
+      }
+      labelDistanceWasActive = applied.labelDistance > 0
+      const pinned = hoverIndex >= 0 ? [hoverIndex] : []
+      const neighbors = hoverIndex >= 0 ? (adjacency[hoverIndex] ?? []) : []
+      const next = pickLabelNodes(pinned, neighbors.concat(distanceCandidates), (i) => graph.nodes[i]?.degree ?? 0)
+      if (!sameLabelSet(next, labelIndices)) {
+        labelIndices = next
+        setLabelItems(labelIndices.map((i) => ({ id: graph.nodes[i].id, title: graph.nodes[i].title })))
+      }
+    }
   }
 
   // 호버한 노드와 그 이웃의 이름표를 노드 아래에 놓는다 (F-2004 7.4)
@@ -622,6 +677,18 @@ function buildScene(
     setMenuOpen(open: boolean) {
       controls.enabled = !open
     },
+    // 직전 값과 비교해 바뀐 축만 다시 계산한다 (F-2005 7.1)
+    setView(next: MapView) {
+      if (next.display.nodeScale !== applied.nodeScale) {
+        fillRadii(next.display.nodeScale)
+        posDirty = true
+      }
+      if (next.display.edgeStrength !== applied.edgeStrength) {
+        applyEdgeColor(next.display.edgeStrength)
+      }
+      applied = next.display
+      requestDraw()
+    },
     requestDraw,
     // 순서를 지킨다: 루프 → controls → 시뮬레이션 → 지오메트리·재질 → dispose → forceContextLoss (3.6, F-2003 9.3)
     dispose() {
@@ -656,7 +723,7 @@ function buildScene(
   }
 }
 
-export default function MapScene({ graph, centerId, fitToken, menuOpen, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }: MapSceneProps) {
+export default function MapScene({ graph, centerId, fitToken, menuOpen, view, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }: MapSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const probeRef = useRef<HTMLSpanElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -666,10 +733,10 @@ export default function MapScene({ graph, centerId, fitToken, menuOpen, onNodeCl
   // 보일 이름표 목록만 React 가 들고, 좌표는 labelsRef 로 직접 쓴다 (F-2004 7.2)
   const [labelItems, setLabelItems] = useState<MapLabelItem[]>([])
 
-  const inputs = useRef<SceneInputs>({ centerId, menuOpen, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady })
-  // 선언 순서대로 도므로 아래 (a)~(d) 보다 먼저 최신 값이 채워진다
+  const inputs = useRef<SceneInputs>({ centerId, menuOpen, view, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady })
+  // 선언 순서대로 도므로 아래 (a)~(f) 보다 먼저 최신 값이 채워진다
   useEffect(() => {
-    inputs.current = { centerId, menuOpen, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }
+    inputs.current = { centerId, menuOpen, view, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }
   })
 
   // (a) 그래프가 바뀔 때 장면을 만들고 버린다
@@ -678,7 +745,7 @@ export default function MapScene({ graph, centerId, fitToken, menuOpen, onNodeCl
     const probe = probeRef.current
     const wrapper = wrapperRef.current
     if (!canvas || !probe || !wrapper) return
-    const bundle = buildScene(canvas, probe, wrapper, graph, inputs.current.centerId, inputs, labelsRef, setLabelItems)
+    const bundle = buildScene(canvas, probe, wrapper, graph, inputs.current.centerId, inputs.current.view, inputs, labelsRef, setLabelItems)
     if (!bundle) {
       // getContext 는 됐는데 생성자가 던진 경우 — 두 번째 그물이다 (6.2)
       inputs.current.onUnsupported()
@@ -722,6 +789,11 @@ export default function MapScene({ graph, centerId, fitToken, menuOpen, onNodeCl
   useEffect(() => {
     sceneRef.current?.requestDraw()
   }, [labelItems])
+
+  // (f) `표시` 3축이 바뀔 때마다 장면에 반영한다 (F-2005 7.1)
+  useEffect(() => {
+    sceneRef.current?.setView(view)
+  }, [view])
 
   return (
     <div className="map-scene" ref={wrapperRef}>

@@ -1,9 +1,12 @@
 // 위키링크 지도 전체 화면 (specs/features/F-292.md 6장) — 사이드바 `지도` 버튼으로 들어온다
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildMapIndex, type MapSource } from './mapIndex'
 import { buildWikiGraphFromEntries, truncateGraphByDegree, type WikiGraph } from '../lib/wikiGraph'
-import { IconClose, IconEdit, IconMap, IconNoteAdd, IconOpenInNew, IconRecenter } from './icons'
+import { IconClose, IconEdit, IconMap, IconNoteAdd, IconOpenInNew, IconRecenter, IconSettings } from './icons'
 import MapScene, { hasWebGL2 } from './MapScene'
+import MapPanel from './MapPanel'
+import usePresence from './usePresence'
+import { loadMapView, saveMapView, type MapView } from './mapPrefs'
 import FolderMenu from './FolderMenu'
 import { formatHash } from './hashRoute'
 
@@ -25,7 +28,7 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
   const [loading, setLoading] = useState(true)
   const [graph, setGraph] = useState<WikiGraph | null>(null)
   const [updatedAtById, setUpdatedAtById] = useState<Map<string, number>>(new Map())
-  const [view, setView] = useState<'graph' | 'list'>('graph')
+  const [viewMode, setViewMode] = useState<'graph' | 'list'>('graph')
   const [fitToken, setFitToken] = useState(0)
   // WebGL2 가 없으면 지도 자체를 마운트하지 않고 목록으로 보여 준다 (F-292 3.6)
   const [unsupported, setUnsupported] = useState(() => !hasWebGL2())
@@ -33,6 +36,35 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
   const [layoutReady, setLayoutReady] = useState(false)
   // 노드 우클릭·길게 누르기 메뉴. 떠 있는 동안 MapScene 이 조작을 잠근다 (F-2003 10.1)
   const [nodeMenu, setNodeMenu] = useState<{ id: string; title: string; missing: boolean; x: number; y: number } | null>(null)
+  // 지도 설정 패널 (F-2005 3·6장)
+  const [view, setView] = useState<MapView>(() => loadMapView())
+  const [panelOpen, setPanelOpen] = useState(false)
+  const panelPresence = usePresence(panelOpen)
+  const settingsBtnRef = useRef<HTMLButtonElement | null>(null)
+
+  function handleViewChange(next: MapView) {
+    setView(next)
+    saveMapView(next)
+  }
+
+  function closePanel() {
+    setPanelOpen(false)
+    settingsBtnRef.current?.focus()
+  }
+
+  // 패널이 열려 있을 때만 듣는다. 노드 메뉴와 앱 설정 대화상자가 먼저 Esc 를 먹는다 (6.2)
+  useEffect(() => {
+    if (!panelOpen) return undefined
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      if (nodeMenu !== null) return
+      if (document.querySelector('dialog[open]')) return
+      e.preventDefault()
+      closePanel()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [panelOpen, nodeMenu])
 
   useEffect(() => {
     let cancelled = false
@@ -106,12 +138,13 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
     if (unsupported) return
     setNodeMenu(null)
     setLayoutReady(false)
-    setView('graph')
+    setViewMode('graph')
   }
 
   function showList() {
     setNodeMenu(null)
-    setView('list')
+    setPanelOpen(false)
+    setViewMode('list')
   }
 
   function openNodeMenu(id: string, x: number, y: number) {
@@ -122,7 +155,7 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
 
   const sharedCount = graph ? graph.unreadable.length : 0
   const isEmptyWorkspace = !loading && docCount === 0
-  const effectiveView = unsupported ? 'list' : view
+  const effectiveView = unsupported ? 'list' : viewMode
   const hasNoLinksAtAll = !loading && graph !== null && graph.edges.length === 0 && graph.nodes.every((n) => !n.missing)
 
   return (
@@ -149,6 +182,19 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
           {effectiveView === 'graph' && (
             <button type="button" className="map-fit-btn" onClick={() => setFitToken((n) => n + 1)}>
               맞춤
+            </button>
+          )}
+          {effectiveView === 'graph' && (
+            <button
+              type="button"
+              className="icon-btn map-settings-btn"
+              aria-label="지도 설정"
+              aria-expanded={panelOpen}
+              aria-controls="map-panel"
+              ref={settingsBtnRef}
+              onClick={() => setPanelOpen((v) => !v)}
+            >
+              <IconSettings size={18} />
             </button>
           )}
           <button type="button" className="map-page-close" onClick={onClose}>
@@ -192,10 +238,12 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
                 centerId={centerDocId}
                 fitToken={fitToken}
                 menuOpen={nodeMenu !== null}
+                view={view}
                 onNodeClick={handleNodeClick}
                 onNodeMenu={openNodeMenu}
                 onUnsupported={() => {
                   setNodeMenu(null)
+                  setPanelOpen(false)
                   setUnsupported(true)
                 }}
                 onLayoutReady={() => setLayoutReady(true)}
@@ -251,6 +299,17 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
               <MapListGroup title="연결이 많은 순" nodes={allRanked} onSelect={handleNodeClick} showDegree />
             </div>
           ))}
+
+        {panelPresence.mounted && (
+          <div
+            className="map-panel"
+            id="map-panel"
+            data-state={panelPresence.state}
+            inert={panelPresence.state === 'closed'}
+          >
+            <MapPanel view={view} onChange={handleViewChange} onClose={closePanel} />
+          </div>
+        )}
       </div>
 
       <div className="map-page-foot">

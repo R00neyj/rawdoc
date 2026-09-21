@@ -66,7 +66,7 @@ src/
   - `lib/`: `tabChannel.ts`(F-297 — 탭 사이 채널 이름·상수)
   - `storage/`: `lockSession.ts`(F-297 — 잠금 세션 id 보관·회전)
 - 위키링크 지도(2026-09-21)로 추가
-  - `lib/`: `wikiGraph.ts`(F-292 — 위키링크 추출·그래프 만들기 순수 함수), `mapLayout3d.ts`(F-2001 — `d3-force-3d` 3D 배치), `cssColor.ts`(F-2002 — 계산된 CSS 색 파싱), `mapCamera.ts`(F-2003 — 카메라 거리·절단면·확대 한계 순수 계산), `mapNodeStyle.ts`(F-2004 — 노드 크기·깊이·이름표 판정), `mapFilter.ts`(F-2007 — 필터·거리 계산)
+  - `lib/`: `wikiGraph.ts`(F-292 — 위키링크 추출·그래프 만들기 순수 함수), `mapLayout3d.ts`(F-2001 — `d3-force-3d` 3D 배치), `cssColor.ts`(F-2002 — 계산된 CSS 색 파싱), `mapCamera.ts`(F-2003 — 카메라 거리·절단면·확대 한계 순수 계산), `mapNodeStyle.ts`(F-2004 — 노드 크기·깊이·이름표 판정), `mapEdgeStyle.ts`(F-2005 — `선 두께` 정규값 → 간선 색), `mapFilter.ts`(F-2007 — 필터·거리 계산)
   - `app/`: `mapIndex.ts`(F-292 — 그래프 캐시), `MapPage.tsx`(F-292 — S-8 화면), `MapScene.tsx`(F-2002 — three 렌더러), `MapLabels.tsx`(F-2004 — 이름표 DOM 레이어), `MapPanel.tsx`·`mapPrefs.ts`(F-2005 — 설정 패널과 그 저장)
   - `types/`: `d3-force-3d.d.ts`(F-2001 — npm 에 `@types/d3-force-3d` 가 없어 직접 선언)
   - `styles/`: `map.css`(F-292)
@@ -148,7 +148,7 @@ store.removeAttachment(id)    // Promise<void>
 | `md.firstRunDone` | `1` | 없음 | F-111 |
 | `md.persistNoticeShown` | `1` | 없음 | F-118 |
 | `md.startScreen` | `home` \| `last` | `home` | F-232 3.4 |
-| `md.mapView` | JSON — 표시·장력·필터 상태 | 없음 | F-292 개정판 6.11 (F-2005) |
+| `md.mapView` | JSON — 묶음 단위 객체 `{ display, force, … }` | 없음 | F-292 개정판 6.11 (F-2005) |
 | `md.mapGroups` | JSON — 그룹 쿼리 + 팔레트 인덱스 `1`~`8` | 없음 | F-292 개정판 6.5 (F-2008) |
 | `md.toolbar` | `on` \| `off` | `on` | F-233 3.5 |
 | `md.landingDone` | `1` | 없음 | F-271 |

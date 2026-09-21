@@ -285,3 +285,104 @@
 .map-list-group button:hover {
   background: var(--rule-2);
 }
+
+/* ----- 지도 설정 패널 (specs/features/F-2005.md 4·6·9장) — 캔버스를 줄이지 않고 위에 겹친다 (6.1) ----- */
+.map-settings-btn[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.map-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 280px;
+  overflow-y: auto;
+  background: var(--paper);
+  border-left: 1px solid var(--rule);
+  padding: 12px 16px;
+  transform: translateX(0);
+  transition: transform var(--transition-fast);
+}
+
+.map-panel[data-state='closed'] {
+  transform: translateX(100%);
+}
+
+@media (max-width: 560px) {
+  .map-panel {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-panel {
+    transition: none;
+  }
+}
+
+.map-panel-section + .map-panel-section {
+  border-top: 1px solid var(--rule);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.map-panel-section h2 {
+  margin: 0;
+}
+
+.map-panel-section-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.map-panel-section-body {
+  padding: 8px 0 4px;
+}
+
+.map-slider {
+  margin-bottom: 14px;
+}
+
+.map-slider label {
+  display: block;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.map-slider-value {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.map-slider input[type='range'] {
+  display: block;
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.map-panel-reset {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.map-panel-reset:hover {
+  background: var(--rule-2);
+}

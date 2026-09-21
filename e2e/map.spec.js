@@ -45,8 +45,8 @@ test.describe('F-2002 A3 머리 줄', () => {
       await expect(map.getByRole('button', { name: gone, exact: true })).toHaveCount(0)
     }
     await expect(map.getByText('몇 다리까지')).toHaveCount(0)
-    // 눌러도 아무 일 없는 단추를 미리 두지 않는다 (15장 Q3)
-    await expect(map.getByRole('button', { name: '설정', exact: true })).toHaveCount(0)
+    // 설정 패널을 여는 단추 (F-2005 5.1)
+    await expect(map.getByRole('button', { name: '지도 설정', exact: true })).toHaveCount(1)
 
     await expect(map.getByRole('button', { name: '지도', exact: true })).toHaveCount(1)
     await expect(map.getByRole('button', { name: '목록', exact: true })).toHaveCount(1)
@@ -635,5 +635,218 @@ test.describe('F-2004 이어서 조작', () => {
 
     await expect(map.locator('canvas')).toHaveCount(1)
     expect(errors).toEqual([])
+  })
+})
+
+// F-2005 지도 설정 패널과 `표시` 3축 (specs/features/F-2005.md 12.2) A1~A13
+function panel(map) {
+  // 닫히는 동안 inert 로 남는다 — F-281 A12/A13 과 같은 함정이다
+  return map.locator('.map-panel:not([inert])')
+}
+
+async function openPanel(map) {
+  await map.getByRole('button', { name: '지도 설정', exact: true }).click()
+  await expect(panel(map)).toBeVisible()
+  return panel(map)
+}
+
+test.describe('F-2005 지도 설정 패널', () => {
+  test.use({ reducedMotion: 'reduce' })
+
+  test('F-2005 A1 패널 여닫기', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const btn = map.getByRole('button', { name: '지도 설정', exact: true })
+
+    await btn.click()
+    await expect(panel(map)).toBeVisible()
+    await expect(btn).toHaveAttribute('aria-expanded', 'true')
+    await expect(map).toBeVisible()
+    await expect(map.locator('canvas')).toHaveCount(1)
+
+    await btn.click()
+    await expect(panel(map)).toHaveCount(0)
+    await expect(btn).toHaveAttribute('aria-expanded', 'false')
+    await expect(map).toBeVisible()
+    await expect(map.locator('canvas')).toHaveCount(1)
+  })
+
+  test('F-2005 A2 Esc 는 패널만 닫는다', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    await openPanel(map)
+
+    await page.keyboard.press('Escape')
+
+    await expect(panel(map)).toHaveCount(0)
+    await expect(map).toBeVisible()
+    await expect(page).toHaveURL(/#\/map$/)
+    await expect(map.getByRole('button', { name: '지도 설정', exact: true })).toBeFocused()
+  })
+
+  test('F-2005 A3 묶음은 표시 하나', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openPanel(map)
+
+    await expect(p.locator('.map-panel-section')).toHaveCount(1)
+    await expect(p.locator('.map-panel-section-head')).toHaveText('표시')
+    for (const name of ['필터', '그룹', '장력']) {
+      await expect(p.getByRole('button', { name, exact: true })).toHaveCount(0)
+    }
+    await expect(p.getByRole('button', { name: '표시', exact: true })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  test('F-2005 A4 슬라이더 셋과 기본값', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openPanel(map)
+
+    const nodeScale = p.getByRole('slider', { name: '노드 크기', exact: true })
+    const labelDistance = p.getByRole('slider', { name: '이름표 표시 거리', exact: true })
+    const edgeStrength = p.getByRole('slider', { name: '선 두께', exact: true })
+    await expect(nodeScale).toHaveCount(1)
+    await expect(labelDistance).toHaveCount(1)
+    await expect(edgeStrength).toHaveCount(1)
+    expect(await nodeScale.inputValue()).toBe('1')
+    expect(await labelDistance.inputValue()).toBe('0')
+    expect(await edgeStrength.inputValue()).toBe('0.5')
+  })
+
+  test('F-2005 A5 값이 남는다', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openPanel(map)
+    await p.getByRole('slider', { name: '노드 크기', exact: true }).fill('2.5')
+
+    await map.getByRole('button', { name: '닫기', exact: true }).click()
+    await page.goto('/#/map')
+    const map2 = page.locator('.map-page')
+    await expect(map2).toBeVisible()
+    const p2 = await openPanel(map2)
+
+    expect(await p2.getByRole('slider', { name: '노드 크기', exact: true }).inputValue()).toBe('2.5')
+  })
+
+  test('F-2005 A6 세 축이 다 남는다', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openPanel(map)
+    await p.getByRole('slider', { name: '이름표 표시 거리', exact: true }).fill('0.4')
+    await p.getByRole('slider', { name: '선 두께', exact: true }).fill('0.9')
+
+    await map.getByRole('button', { name: '닫기', exact: true }).click()
+    await page.goto('/#/map')
+    const map2 = page.locator('.map-page')
+    await expect(map2).toBeVisible()
+    const p2 = await openPanel(map2)
+
+    expect(await p2.getByRole('slider', { name: '이름표 표시 거리', exact: true }).inputValue()).toBe('0.4')
+    expect(await p2.getByRole('slider', { name: '선 두께', exact: true }).inputValue()).toBe('0.9')
+  })
+
+  test('F-2005 A7 기본값으로', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openPanel(map)
+    await p.getByRole('slider', { name: '노드 크기', exact: true }).fill('2')
+    await p.getByRole('slider', { name: '이름표 표시 거리', exact: true }).fill('0.6')
+    await p.getByRole('slider', { name: '선 두께', exact: true }).fill('0.1')
+
+    await p.getByRole('button', { name: '기본값으로', exact: true }).click()
+
+    expect(await p.getByRole('slider', { name: '노드 크기', exact: true }).inputValue()).toBe('1')
+    expect(await p.getByRole('slider', { name: '이름표 표시 거리', exact: true }).inputValue()).toBe('0')
+    expect(await p.getByRole('slider', { name: '선 두께', exact: true }).inputValue()).toBe('0.5')
+
+    await map.getByRole('button', { name: '닫기', exact: true }).click()
+    await page.goto('/#/map')
+    const map2 = page.locator('.map-page')
+    await expect(map2).toBeVisible()
+    const p2 = await openPanel(map2)
+    expect(await p2.getByRole('slider', { name: '노드 크기', exact: true }).inputValue()).toBe('1')
+    expect(await p2.getByRole('slider', { name: '이름표 표시 거리', exact: true }).inputValue()).toBe('0')
+    expect(await p2.getByRole('slider', { name: '선 두께', exact: true }).inputValue()).toBe('0.5')
+  })
+
+  test('F-2005 A8 깨진 저장값', async ({ page }) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(String(e)))
+    await setPrefBeforeLoad(page, 'md.mapView', '{{{')
+
+    const { map } = await openMapFresh(page)
+    const p = await openPanel(map)
+
+    expect(await p.getByRole('slider', { name: '노드 크기', exact: true }).inputValue()).toBe('1')
+    expect(await p.getByRole('slider', { name: '이름표 표시 거리', exact: true }).inputValue()).toBe('0')
+    expect(await p.getByRole('slider', { name: '선 두께', exact: true }).inputValue()).toBe('0.5')
+    expect(errors).toEqual([])
+  })
+
+  test('F-2005 A9 목록으로 가면 사라진다', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    await openPanel(map)
+
+    await map.getByRole('button', { name: '목록', exact: true }).click()
+    await expect(map.getByRole('button', { name: '지도 설정', exact: true })).toHaveCount(0)
+    await expect(map.locator('.map-panel')).toHaveCount(0)
+
+    await map.getByRole('button', { name: '지도', exact: true }).click()
+    await expect(map.getByRole('button', { name: '지도 설정', exact: true })).toBeVisible()
+    await expect(map.locator('.map-panel')).toHaveCount(0)
+  })
+
+  test('F-2005 A10 WebGL 없음', async ({ page }) => {
+    await page.addInitScript(() => {
+      const original = HTMLCanvasElement.prototype.getContext
+      HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
+        if (typeof type === 'string' && type.startsWith('webgl')) return null
+        return original.call(this, type, ...rest)
+      }
+    })
+    await openApp(page)
+    const map = await openMap(page)
+
+    await expect(map.getByRole('button', { name: '지도 설정', exact: true })).toHaveCount(0)
+  })
+
+  test('F-2005 A11 패널이 캔버스를 줄이지 않는다', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const before = await map.locator('.map-canvas').boundingBox()
+
+    await openPanel(map)
+    const after = await map.locator('.map-canvas').boundingBox()
+
+    expect(after.width).toBe(before.width)
+    expect(after.height).toBe(before.height)
+  })
+
+  test('F-2005 A12 슬라이더를 움직여도 안 깨진다', async ({ page }) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(String(e)))
+    const { map, cx, cy } = await openMapFresh(page)
+    const p = await openPanel(map)
+
+    const nodeScale = p.getByRole('slider', { name: '노드 크기', exact: true })
+    await nodeScale.fill('0.5')
+    await nodeScale.fill('3')
+    await nodeScale.fill('1.4')
+    const edgeStrength = p.getByRole('slider', { name: '선 두께', exact: true })
+    await edgeStrength.fill('0')
+    await edgeStrength.fill('1')
+
+    await expect(map.locator('canvas')).toHaveCount(1)
+    expect(errors).toEqual([])
+
+    await map.getByRole('button', { name: '지도 설정', exact: true }).click()
+    await expect(panel(map)).toHaveCount(0)
+    await page.mouse.click(cx, cy)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+
+  test('F-2005 A13 이름표 표시 거리', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openPanel(map)
+    await expect(visibleLabels(map)).toHaveCount(0)
+
+    await p.getByRole('slider', { name: '이름표 표시 거리', exact: true }).fill('1')
+    await expect(visibleLabels(map)).toHaveCount(1)
+    await expect(visibleLabels(map)).toHaveText(['사용법'])
+
+    await p.getByRole('slider', { name: '이름표 표시 거리', exact: true }).fill('0')
+    await expect(visibleLabels(map)).toHaveCount(0)
   })
 })
