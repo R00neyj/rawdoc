@@ -3,6 +3,7 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { SITE_NAV, SITE_FOOTER_LINKS, GUIDES_PATH, renderSiteHeader, renderSiteFooter } from './siteChrome'
 
 const INITIAL_NAV = [...SITE_NAV]
+const INITIAL_FOOTER = [...SITE_FOOTER_LINKS]
 
 describe('F-276 A9 SITE_NAV 에 사용법이 등록돼 있다', () => {
   it('/guides 항목이 정확히 하나 있고 맨 앞이다', () => {
@@ -30,6 +31,15 @@ describe('F-274 A8 SITE_NAV 에 도움말이 등록돼 있다', () => {
     const changelogIdx = INITIAL_NAV.findIndex((link) => link.path === '/changelog')
     const helpIdx = INITIAL_NAV.findIndex((link) => link.path === '/help')
     expect(helpIdx).toBeGreaterThan(changelogIdx)
+  })
+})
+
+describe('F-275 A2 꼬리 링크가 실제로 등록돼 있다', () => {
+  it('개인정보 처리방침 → 이용약관 순으로 정확히 두 줄이다', () => {
+    expect(INITIAL_FOOTER).toEqual([
+      { path: '/privacy', label: '개인정보 처리방침' },
+      { path: '/terms', label: '이용약관' },
+    ])
   })
 })
 

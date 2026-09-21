@@ -134,6 +134,9 @@ store.removeAttachment(id)    // Promise<void>
 | `md.lastDocId` | 문서 id | 없음 | F-111 |
 | `md.firstRunDone` | `1` | 없음 | F-111 |
 | `md.persistNoticeShown` | `1` | 없음 | F-118 |
+| `md.startScreen` | `home` \| `last` | `home` | F-232 3.4 |
+| `md.toolbar` | `on` \| `off` | `on` | F-233 3.5 |
+| `md.landingDone` | `1` | 없음 | F-271 |
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
 
@@ -143,6 +146,12 @@ store.removeAttachment(id)    // Promise<void>
 | --- | --- | --- | --- |
 | `md.account` | 마지막 로그인 `{"id","email"}` JSON | 없음 | F-205 |
 | `md.localMigrated` | 로컬 문서를 옮긴 사용자 id | 없음 | F-208 |
+
+**`sessionStorage`** — 탭 하나의 수명만 사는 값이다. 키 접두사는 같다
+
+| 키 | 값 | 기본 | 명세 |
+| --- | --- | --- | --- |
+| `md.lockSession` | 편집 잠금 세션 id (`src/storage/docsApi.ts`). 탭마다 다르고 새로고침에는 살아남는다 | 없음(첫 접근 때 만든다) | F-250 |
 
 ## 6. 서버 (M2, 2026-09-15)
 

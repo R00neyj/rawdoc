@@ -198,3 +198,40 @@ describe('F-276 A7 content/guides.md 중복', () => {
     expect(() => buildSite({ content, appCssHref, builtAt })).toThrow(/content\/guides\.md/)
   })
 })
+
+describe('F-275 A1 두 글로 페이지·sitemap 이 난다', () => {
+  it('privacy.html·terms.html 이 나고 제목·canonical·sitemap 에 등재된다', () => {
+    SITE_NAV.length = 0
+    SITE_FOOTER_LINKS.length = 0
+    SITE_FOOTER_LINKS.push(
+      { path: '/privacy', label: '개인정보 처리방침' },
+      { path: '/terms', label: '이용약관' },
+    )
+    try {
+      const content = {
+        'legal/privacy.md': '---\ntitle: 개인정보 처리방침\nupdated: 2026-09-21\n---\n본문',
+        'legal/terms.md': '---\ntitle: 이용약관\nupdated: 2026-09-21\n---\n본문',
+      }
+      const out = buildSite({ content, appCssHref, builtAt })
+      expect(Object.keys(out)).toContain('privacy.html')
+      expect(Object.keys(out)).toContain('terms.html')
+      expect(out['sitemap.xml']).toContain(
+        '<url><loc>https://rawdoc.app/privacy</loc><lastmod>2026-09-21</lastmod></url>',
+      )
+      expect(out['sitemap.xml']).toContain(
+        '<url><loc>https://rawdoc.app/terms</loc><lastmod>2026-09-21</lastmod></url>',
+      )
+      expect(out['privacy.html']).toContain('<title>개인정보 처리방침 · Rawdoc</title>')
+      expect(out['privacy.html']).toContain('rel="canonical" href="https://rawdoc.app/privacy"')
+    } finally {
+      SITE_FOOTER_LINKS.length = 0
+    }
+  })
+})
+
+describe('F-275 A3 가드는 자리표시 이름을 가리지 않는다', () => {
+  it('{{운영자}} 가 아닌 {{시행일}} 만 남아도 실패하고 메시지에 legal/privacy.md 가 있다', () => {
+    const content = { 'legal/privacy.md': '---\ntitle: 개인정보 처리방침\n---\n{{시행일}}' }
+    expect(() => buildSite({ content, appCssHref, builtAt })).toThrow(/legal\/privacy\.md/)
+  })
+})

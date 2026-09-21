@@ -235,3 +235,59 @@ test('F-276 A17 서비스 워커 precache 에서 빠진다', async ({ page }) =>
   const body = await res.text()
   expect(body).not.toContain('guides.html')
 })
+
+test('F-275 A4 처리방침 페이지가 뜬다', async ({ page }) => {
+  await page.goto('/privacy')
+  await expect(page.getByRole('heading', { level: 1, name: '개인정보 처리방침' })).toBeVisible()
+  await expect(page.locator('.site-foot a[href="/terms"]', { hasText: '이용약관' })).toBeVisible()
+})
+
+test('F-275 A5 이용약관 페이지가 뜬다', async ({ page }) => {
+  await page.goto('/terms')
+  await expect(page.getByRole('heading', { level: 1, name: '이용약관' })).toBeVisible()
+  await expect(page.locator('.site-foot a[href="/privacy"]', { hasText: '개인정보 처리방침' })).toBeVisible()
+})
+
+test('F-275 A6 완결된 정적 페이지다', async ({ page }) => {
+  const privacy = await page.request.get('/privacy')
+  expect(privacy.status()).toBe(200)
+  const privacyBody = await privacy.text()
+  expect(privacyBody).toContain('rel="canonical"')
+  expect(privacyBody).toContain('https://rawdoc.app/privacy')
+  expect(privacyBody).not.toContain('<script')
+
+  const terms = await page.request.get('/terms')
+  expect(terms.status()).toBe(200)
+  const termsBody = await terms.text()
+  expect(termsBody).toContain('rel="canonical"')
+  expect(termsBody).toContain('https://rawdoc.app/terms')
+  expect(termsBody).not.toContain('<script')
+})
+
+test('F-275 A7 자리표시가 남아 있지 않다', async ({ page }) => {
+  const privacyBody = await (await page.request.get('/privacy')).text()
+  const termsBody = await (await page.request.get('/terms')).text()
+  expect(privacyBody).not.toContain('{{')
+  expect(termsBody).not.toContain('{{')
+})
+
+test('F-275 A8 색인', async ({ page }) => {
+  const res = await page.request.get('/sitemap.xml')
+  const body = await res.text()
+  expect(body).toContain('<loc>https://rawdoc.app/privacy</loc>')
+  expect(body).toContain('<loc>https://rawdoc.app/terms</loc>')
+})
+
+test('F-275 A9 서비스 워커에서 빠진다', async ({ page }) => {
+  const res = await page.request.get('/sw.js')
+  const body = await res.text()
+  expect(body).not.toContain('privacy.html')
+  expect(body).not.toContain('terms.html')
+})
+
+test('F-275 A10 랜딩 꼬리에도 보인다', async ({ page }) => {
+  await mockLanding(page)
+  await page.goto('/')
+  await expect(page.locator('.site-foot a[href="/privacy"]')).toBeVisible()
+  await expect(page.locator('.site-foot a[href="/terms"]')).toBeVisible()
+})

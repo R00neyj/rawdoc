@@ -10,7 +10,11 @@ export const SITE_NAV: SiteLink[] = [
   { path: '/changelog', label: '체인지로그' },
   { path: '/help', label: '도움말' },
 ]
-export const SITE_FOOTER_LINKS: SiteLink[] = []
+// F-275 가 두 줄을 더한다. 순서: 개인정보 처리방침 → 이용약관
+export const SITE_FOOTER_LINKS: SiteLink[] = [
+  { path: '/privacy', label: '개인정보 처리방침' },
+  { path: '/terms', label: '이용약관' },
+]
 
 function escapeHtml(value: string): string {
   return value
