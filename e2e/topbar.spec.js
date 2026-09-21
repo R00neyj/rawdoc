@@ -265,7 +265,7 @@ test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () 
     expect(Math.abs(sidebarRect2.width - 48)).toBeLessThanOrEqual(1)
   })
 
-  test('F-159 A5 (구 F-151 A5) 사이드바 머리 줄 — 펼침·레일에 있고 좁은 창엔 없다, 레일 위쪽 4개(검색 포함)', async ({ page }) => {
+  test('F-159 A5 (구 F-151 A5) 사이드바 머리 줄 — 펼침·레일에 있고 좁은 창엔 없다, 레일 위쪽 5개(검색·지도 포함)', async ({ page }) => {
     await openApp(page)
     await expect(page.locator('.sidebar-head')).toHaveCount(1)
     await expect(page.locator('.sidebar-scroll').getByRole('button', { name: /검색/ })).toHaveCount(0)
@@ -273,11 +273,12 @@ test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () 
     await page.locator('.sidebar-toggle').click() // 레일로 접기
     await expect(page.locator('.sidebar-head--rail')).toHaveCount(1)
     const railButtons = page.locator('.sidebar-rail-scroll .rail-btn')
-    await expect(railButtons).toHaveCount(4)
+    await expect(railButtons).toHaveCount(5)
     await expect(railButtons.first()).toHaveAttribute('aria-label', '검색')
     await expect(railButtons.nth(1)).toHaveAttribute('aria-label', '새 문서')
     await expect(railButtons.nth(2)).toHaveAttribute('aria-label', '새 폴더')
     await expect(railButtons.nth(3)).toHaveAttribute('aria-label', '가져오기')
+    await expect(railButtons.nth(4)).toHaveAttribute('aria-label', '지도') // F-292 가 더했다
 
     await page.locator('.sidebar-toggle').click() // 펼침으로
     await resizeWindow(page, 900)
