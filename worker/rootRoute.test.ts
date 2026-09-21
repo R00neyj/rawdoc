@@ -58,3 +58,28 @@ describe('F-271 A3 withRootHeaders', () => {
     expect(wrapped.headers.get('X-Robots-Tag')).toBeNull()
   })
 })
+
+// 서비스 워커 precache 가 / 를 받아 랜딩을 index.html 로 캐시해 앱에 못 들어가던 버그 (2026-09-21)
+// 워크박스는 index.html 을 /index.html?__WB_REVISION__=… 로 받고, Cloudflare 정적 자산이 그 요청을 / 로 307 보낸다
+describe('문서 내비게이션이 아닌 / 요청은 언제나 앱', () => {
+  function fetchReq(url: string, headers: Record<string, string> = {}): Request {
+    return new Request(url, { headers })
+  }
+
+  it('__WB_REVISION__ 질의가 있으면 쿠키가 없어도 app', () => {
+    expect(rootTarget(fetchReq('https://rawdoc.app/?__WB_REVISION__=abc'))).toBe('app')
+  })
+
+  it('Sec-Fetch-Dest: empty (서비스 워커 fetch) 면 쿠키가 없어도 app', () => {
+    expect(rootTarget(fetchReq('https://rawdoc.app/', { 'Sec-Fetch-Dest': 'empty' }))).toBe('app')
+  })
+
+  it('Sec-Fetch-Dest: document 면 쿠키 판정 그대로', () => {
+    expect(rootTarget(fetchReq('https://rawdoc.app/', { 'Sec-Fetch-Dest': 'document' }))).toBe('landing')
+    expect(rootTarget(fetchReq('https://rawdoc.app/', { 'Sec-Fetch-Dest': 'document', Cookie: 'md_app=1' }))).toBe('app')
+  })
+
+  it('Sec-Fetch-Dest 헤더가 아예 없으면 쿠키 판정 그대로 (크롤러·구형 브라우저)', () => {
+    expect(rootTarget(fetchReq('https://rawdoc.app/'))).toBe('landing')
+  })
+})
