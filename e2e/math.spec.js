@@ -15,7 +15,8 @@ async function downloadText(page, menuitemName) {
 
 const INLINE_DOC = '값은 $x^2$ 이다\n\n다른 줄\n'
 const FALSE_POSITIVE_DOC = '이 책은 $5 이고 저 책은 $7 이다\n\n다른 줄\n'
-const BLOCK_DOC = '$$\n\\frac{a}{b}\n$$\n\n$$\n\\frac{\n$$\n'
+// 맨 앞 줄은 커서를 빼두는 자리다 — 가져오기 직후 커서가 0번지에 남는데, 그게 블록 안이면 F-106 규칙대로 원문이 보여 위젯이 안 뜬다 (A19 와 같은 전제)
+const BLOCK_DOC = '다른 줄\n\n$$\n\\frac{a}{b}\n$$\n\n$$\n\\frac{\n$$\n'
 
 test.describe('F-291 A19 편집 모드 인라인', () => {
   test('커서가 다른 줄이면 수식이 그려지고, 클릭하면 원문이 드러난다', async ({ page }) => {
@@ -73,6 +74,7 @@ test.describe('F-291 A22 블록·오류', () => {
     await openApp(page)
     await importMarkdown(page, { content: BLOCK_DOC })
 
+    await page.locator('.cm-content .cm-line', { hasText: '다른 줄' }).click()
     await expect(page.locator('.md-math .katex')).toHaveCount(1)
     await expect(page.locator('.md-math-error')).toBeVisible()
 
