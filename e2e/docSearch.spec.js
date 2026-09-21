@@ -37,7 +37,7 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
 
     await page.keyboard.press('Control+Shift+F')
     await expect(page.locator('dialog[open] .search-dialog')).toBeVisible()
-    await expect(page.locator('.cm-panel .cm-search')).toHaveCount(0)
+    await expect(page.locator('.cm-panel.cm-search')).toHaveCount(0)
 
     await page.locator('.search-input').fill('아무거나')
     await page.keyboard.press('Control+Shift+F')
