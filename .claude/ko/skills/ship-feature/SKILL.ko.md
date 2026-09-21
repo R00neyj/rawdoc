@@ -26,7 +26,12 @@ description: Rawdoc 작은 명세 F-xxx 를 구현 에이전트에 맡기고 자
 ## 2. 구현 맡기기
 
 **3D 지도 재작업(F-292 개정판과 그 `F-2NNN` 소명세들)은 메인이 직접 구현한다 — `feature-implementer` 를 쓰지 않는다** (사용자 지시, 2026-09-21: "3d 작업인데 맡겨도될지 모르겠어서, 메인이 직접 구현했으면함"). three.js·힘 시뮬레이션·투영·클릭 판정은 명세로 못 박히는 것보다 남는 판단이 많아서, 에이전트를 거치는 왕복이 아끼는 것보다 비싸다. 이 문서의 나머지는 그대로 적용된다 — 테스트 먼저, `npm run review -- F-xxx`, 한 명세 한 커밋. 대신 병렬성을 잃는다.
-`Agent` 도구, `subagent_type: "feature-implementer"`, `run_in_background: true`. 프롬프트는 짧게:
+
+나머지 명세는 아래처럼 맡긴다.
+
+**먼저 에이전트를 고른다.** `feature-implementer`(Sonnet) 가 기본이다. 명세의 수용 기준은 분명한데 거기 닿는 길이 분명하지 않을 때 **`complex-implementer`(Opus)** 를 쓴다 — 그래픽·3D, CM6 내부, 프레임·번들 예산, 소유 표 여러 개를 가로지르는 리팩터, 아무도 돌려 본 적 없는 외부 API. 비싸고, 만들기 전에 조사·스파이크·측정을 하므로 명세가 길다는 이유만으로 부르지 마라. 파일은 많지만 모르는 게 없는 명세는 여전히 `feature-implementer` 의 일이다.
+
+`Agent` 도구, `subagent_type` 에 고른 에이전트, `run_in_background: true`. 프롬프트는 짧게:
 ```
 F-xxx 구현. E2E_PORT=4501, E2E_DIST=dist-f153
 (세션 메모: 사용자가 이번 세션에 준 추가 지시가 있으면 한두 줄)
