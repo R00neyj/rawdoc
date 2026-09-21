@@ -2,8 +2,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { buildMapIndex, type MapSource } from './mapIndex'
 import { buildWikiGraphFromEntries, truncateGraphByDegree, type WikiGraph } from '../lib/wikiGraph'
-import { IconClose, IconMap } from './icons'
+import { IconClose, IconEdit, IconMap, IconOpenInNew, IconRecenter } from './icons'
 import MapScene, { hasWebGL2 } from './MapScene'
+import FolderMenu from './FolderMenu'
+import { formatHash } from './hashRoute'
 
 const NODE_CAP = 1000 // F-292 결정 11 + F-2002 10.3
 
@@ -29,6 +31,8 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
   const [unsupported, setUnsupported] = useState(() => !hasWebGL2())
   const [reduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [layoutReady, setLayoutReady] = useState(false)
+  // 노드 우클릭·길게 누르기 메뉴. 떠 있는 동안 MapScene 이 조작을 잠근다 (F-2003 10.1)
+  const [nodeMenu, setNodeMenu] = useState<{ id: string; title: string; x: number; y: number } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -100,8 +104,20 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
 
   function showGraph() {
     if (unsupported) return
+    setNodeMenu(null)
     setLayoutReady(false)
     setView('graph')
+  }
+
+  function showList() {
+    setNodeMenu(null)
+    setView('list')
+  }
+
+  function openNodeMenu(id: string, x: number, y: number) {
+    const node = displayGraph?.nodes.find((n) => n.id === id)
+    if (!node) return
+    setNodeMenu({ id, title: node.title, x, y })
   }
 
   const sharedCount = graph ? graph.unreadable.length : 0
@@ -124,7 +140,7 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
           <button type="button" aria-pressed={effectiveView === 'graph'} aria-disabled={unsupported || undefined} onClick={showGraph}>
             지도
           </button>
-          <button type="button" aria-pressed={effectiveView === 'list'} onClick={() => setView('list')}>
+          <button type="button" aria-pressed={effectiveView === 'list'} onClick={showList}>
             목록
           </button>
         </div>
@@ -175,11 +191,41 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
                 graph={displayGraph}
                 centerId={centerDocId}
                 fitToken={fitToken}
+                menuOpen={nodeMenu !== null}
                 onNodeClick={handleNodeClick}
-                onUnsupported={() => setUnsupported(true)}
+                onNodeMenu={openNodeMenu}
+                onUnsupported={() => {
+                  setNodeMenu(null)
+                  setUnsupported(true)
+                }}
                 onLayoutReady={() => setLayoutReady(true)}
               />
               {reduced && !layoutReady && <p className="map-status">배치를 계산하는 중…</p>}
+              {/* 항목을 고르면 FolderMenu 가 스스로 닫고 onSelect 를 부른다 — 우리가 따로 닫지 않는다 (F-2003 10.1) */}
+              {nodeMenu && (
+                <FolderMenu
+                  label={nodeMenu.title}
+                  hideTrigger
+                  open
+                  onOpenChange={(v) => {
+                    if (!v) setNodeMenu(null)
+                  }}
+                  anchorPoint={{ x: nodeMenu.x, y: nodeMenu.y }}
+                  items={[
+                    { key: 'open', label: '열기', icon: IconEdit, onSelect: () => handleNodeClick(nodeMenu.id, false) },
+                    {
+                      key: 'open-new-tab',
+                      label: '새 탭에서 열기',
+                      icon: IconOpenInNew,
+                      // noopener 가 없으면 sessionStorage 가 복제돼 편집 잠금이 깨진다 (F-296 4.1)
+                      onSelect: () => {
+                        window.open(formatHash(nodeMenu.id), '_blank', 'noopener')
+                      },
+                    },
+                    { key: 'recenter', label: '여기로 이동', icon: IconRecenter, onSelect: () => onRecenter(nodeMenu.id) },
+                  ]}
+                />
+              )}
             </>
           ) : (
             <div className="map-list">

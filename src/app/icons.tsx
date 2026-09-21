@@ -39,6 +39,7 @@ import groupSvg from '@material-symbols/svg-400/outlined/group.svg?raw'
 import keySvg from '@material-symbols/svg-400/outlined/key.svg?raw'
 import tocSvg from '@material-symbols/svg-400/outlined/toc.svg?raw'
 import openInNewSvg from '@material-symbols/svg-400/outlined/open_in_new.svg?raw'
+import recenterSvg from '@material-symbols/svg-400/outlined/recenter.svg?raw'
 import formatBoldSvg from '@material-symbols/svg-400/outlined/format_bold.svg?raw'
 import formatItalicSvg from '@material-symbols/svg-400/outlined/format_italic.svg?raw'
 import strikethroughSSvg from '@material-symbols/svg-400/outlined/strikethrough_s.svg?raw'
@@ -135,6 +136,8 @@ export const IconAddLink = IconLink
 export const IconExternalLink = makeIcon(openInNewSvg)
 // 사이드바 문서 우클릭 메뉴 `새 탭에서 열기` (F-296.md 4.1) — IconExternalLink 와 같은 그림, 문맥이 달라 이름을 따로 둔다
 export const IconOpenInNew = makeIcon(openInNewSvg)
+// 지도 노드 우클릭 메뉴 `여기로 이동` (F-2003.md 8.3)
+export const IconRecenter = makeIcon(recenterSvg)
 export const IconBold = makeIcon(formatBoldSvg)
 export const IconItalic = makeIcon(formatItalicSvg)
 export const IconStrikethrough = makeIcon(strikethroughSSvg)

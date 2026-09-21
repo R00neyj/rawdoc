@@ -147,6 +147,31 @@ async function runAction(page, raw) {
     case 'wait':
       await page.waitForTimeout(Number(rest))
       break
+    case 'eval':
+      await page.evaluate(rest)
+      break
+    // drag:{선택자}:{버튼}:{dx}:{dy}:{단계} — 선택자에 ':' 가 들어갈 수 있어 뒤에서부터 넷을 떼어 읽는다 (F-2003 11장)
+    case 'drag': {
+      const parts = rest.split(':')
+      const steps = Number(parts.pop())
+      const dy = Number(parts.pop())
+      const dx = Number(parts.pop())
+      const button = parts.pop()
+      const selector = parts.join(':')
+      const box = await page.locator(selector).boundingBox()
+      if (!box) throw new Error(`drag 대상이 없다: ${selector}`)
+      const cx = box.x + box.width / 2
+      const cy = box.y + box.height / 2
+      await page.mouse.move(cx, cy)
+      await page.mouse.down({ button })
+      for (let i = 1; i <= steps; i++) {
+        await page.mouse.move(cx + (dx * i) / steps, cy + (dy * i) / steps)
+        // 프레임마다 한 걸음 — fps 를 재려면 시간에 퍼져야 한다
+        await page.waitForTimeout(16)
+      }
+      await page.mouse.up({ button })
+      break
+    }
     default:
       throw new Error(`알 수 없는 action: ${type}`)
   }

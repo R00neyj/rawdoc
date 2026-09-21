@@ -243,3 +243,202 @@ test.describe('F-2002 A16 맞춤', () => {
     expect(errors).toEqual([])
   })
 })
+
+// F-2003 카메라 조작 (specs/features/F-2003.md 14.2) A1~A13 — 캔버스 안은 Playwright 가 못 보므로 "클릭이 노드에 맞느냐"로 조작을 판정한다. 첫 실행 상태는 노드가 하나뿐이라 맞춤 뒤 그 노드가 캔버스 한가운데에 놓이고 화면 반지름이 높이의 0.394배로 정해진다 (F-2003 7.2·14.2)
+const NODE_R = 0.394
+// 감쇠 꼬리가 약 110 프레임이라 조작 뒤 이만큼 기다린 다음 판정한다 (F-2003 4.2)
+const SETTLE = 1200
+
+async function openMapFresh(page) {
+  await page.goto('/#/map')
+  const map = page.locator('.map-page')
+  await expect(map).toBeVisible()
+  await expect(map.locator('canvas')).toHaveCount(1)
+  // reducedMotion 이라 배치가 한 번에 끝난다 — 안내 줄이 사라지는 것으로 준비 완료를 안다
+  await expect(map.locator('.map-status')).toHaveCount(0)
+  const box = await map.locator('.map-canvas').boundingBox()
+  return { map, H: box.height, cx: box.x + box.width / 2, cy: box.y + box.height / 2 }
+}
+
+// 닫히는 중인 메뉴가 inert 로 잠깐 남는다 — F-281 A12/A13 이 이것 때문에 깨졌다
+function nodeMenu(map) {
+  return map.locator('.item-menu-list:not([inert])')
+}
+
+// 합성 이벤트로는 OrbitControls 가 안 움직인다 — 진짜 입력만 쓴다 (F-2003 4.2)
+async function drag(page, x0, y0, dx, dy, button) {
+  await page.mouse.move(x0, y0)
+  await page.mouse.down({ button })
+  const steps = 20
+  for (let i = 1; i <= steps; i++) await page.mouse.move(x0 + (dx * i) / steps, y0 + (dy * i) / steps)
+  await page.mouse.up({ button })
+}
+
+test.describe('F-2003 카메라 조작', () => {
+  test.use({ reducedMotion: 'reduce' })
+
+  test('F-2003 A1 노드 우클릭 — 항목 셋짜리 메뉴', async ({ page }) => {
+    const { map, cx, cy } = await openMapFresh(page)
+    await page.mouse.click(cx, cy, { button: 'right' })
+
+    const items = nodeMenu(map).getByRole('menuitem')
+    await expect(items).toHaveCount(3)
+    await expect(items.nth(0)).toHaveText('열기')
+    await expect(items.nth(1)).toHaveText('새 탭에서 열기')
+    await expect(items.nth(2)).toHaveText('여기로 이동')
+  })
+
+  test('F-2003 A2 배경 우클릭 — 메뉴가 없고 브라우저 기본 메뉴도 막힌다', async ({ page }) => {
+    // 브라우저 기본 메뉴가 안 뜬다는 것을 자동으로 볼 통로는 defaultPrevented 뿐이다
+    await page.addInitScript(() => {
+      window.addEventListener('contextmenu', (e) => {
+        document.documentElement.setAttribute('data-ctx-prevented', String(e.defaultPrevented))
+      })
+    })
+    const { map, H, cx, cy } = await openMapFresh(page)
+    await page.mouse.click(cx + 0.45 * H, cy + 0.42 * H, { button: 'right' })
+
+    await expect(nodeMenu(map)).toHaveCount(0)
+    await expect(page.locator('html')).toHaveAttribute('data-ctx-prevented', 'true')
+  })
+
+  test('F-2003 A3 메뉴 열기 — 그 문서가 열리고 지도가 닫힌다', async ({ page }) => {
+    const { map, cx, cy } = await openMapFresh(page)
+    await page.mouse.click(cx, cy, { button: 'right' })
+    await nodeMenu(map).getByRole('menuitem', { name: '열기', exact: true }).click()
+
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+    await expect(page.locator('.map-page')).toHaveCount(0)
+  })
+
+  test('F-2003 A4 메뉴 새 탭에서 열기 — 새 탭이 뜨고 지도는 그대로 있다', async ({ page }) => {
+    const { map, cx, cy } = await openMapFresh(page)
+    await page.mouse.click(cx, cy, { button: 'right' })
+
+    // 고정 대기를 쓰지 않는다 — F-146 A8 이 그것 때문에 오래 깨져 있었다
+    const [popup] = await Promise.all([
+      page.waitForEvent('popup'),
+      nodeMenu(map).getByRole('menuitem', { name: '새 탭에서 열기' }).click(),
+    ])
+    expect(popup.url()).toMatch(/#\/d\/[^/]+$/)
+    await expect(page.locator('.map-page')).toBeVisible()
+  })
+
+  test('F-2003 A5 메뉴 여기로 이동 — 해시가 그 문서로 바뀌고 지도는 그대로 있다', async ({ page }) => {
+    const { map, cx, cy } = await openMapFresh(page)
+    await page.mouse.click(cx, cy, { button: 'right' })
+    await nodeMenu(map).getByRole('menuitem', { name: '여기로 이동' }).click()
+
+    await expect(page).toHaveURL(/#\/map\/[^/]+$/)
+    await expect(page.locator('.map-page')).toBeVisible()
+  })
+
+  test('F-2003 A6 메뉴가 떠 있을 때의 첫 클릭은 메뉴만 닫는다', async ({ page }) => {
+    const { map, cx, cy } = await openMapFresh(page)
+    await page.mouse.click(cx, cy, { button: 'right' })
+    await expect(nodeMenu(map)).toBeVisible()
+
+    await page.mouse.click(cx, cy)
+    await expect(nodeMenu(map)).toHaveCount(0)
+    await expect(page).toHaveURL(/#\/map$/)
+    await expect(page.locator('.map-page')).toBeVisible()
+  })
+
+  test('F-2003 A7 좌클릭 드래그 = 이동 — 노드가 끈 만큼 따라온다', async ({ page }) => {
+    const { H, cx, cy } = await openMapFresh(page)
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
+    await page.waitForTimeout(SETTLE)
+
+    // 원래 자리에는 이제 아무것도 없다
+    await page.mouse.click(cx, cy)
+    await expect(page).toHaveURL(/#\/map$/)
+    // 끈 만큼 옮겨 간 자리에 있다 — 레이캐스트가 카메라를 따라갔다는 직접 증거다
+    await page.mouse.click(cx + 0.55 * H, cy)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+
+  test('F-2003 A8 우클릭 드래그 = 회전 — 180° 돌면 반대쪽으로 간다', async ({ page }) => {
+    const { H, cx, cy } = await openMapFresh(page)
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
+    await page.waitForTimeout(SETTLE)
+    // 캔버스 높이의 1/2 을 끌면 180° 돈다 (F-2003 4.2)
+    await drag(page, cx - 0.3 * H, cy, 0.5 * H, 0, 'right')
+    await page.waitForTimeout(SETTLE)
+
+    await page.mouse.click(cx - 0.55 * H, cy)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+
+  test('F-2003 A9 휠 — 축소하면 노드가 작아진다', async ({ page }) => {
+    const { H, cx, cy } = await openMapFresh(page)
+    await page.mouse.move(cx, cy)
+    // 12칸 축소 = 거리 ×1.85 → 화면 반지름이 0.394H 에서 0.213H 로 줄어든다
+    await page.mouse.wheel(0, 1200)
+    await page.waitForTimeout(SETTLE)
+
+    await page.mouse.click(cx + 0.3 * H, cy)
+    await expect(page).toHaveURL(/#\/map$/)
+    await page.mouse.click(cx, cy)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+
+  test('F-2003 A10 맞춤 — 이동·회전·축소를 전부 되돌린다', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapFresh(page)
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
+    await drag(page, cx - 0.3 * H, cy, 0.5 * H, 0, 'right')
+    await page.mouse.move(cx, cy)
+    await page.mouse.wheel(0, 1200)
+    await page.waitForTimeout(SETTLE)
+
+    await map.getByRole('button', { name: '맞춤', exact: true }).click()
+    await page.waitForTimeout(SETTLE)
+
+    // 원래 크기·원래 자리로 돌아왔다
+    await page.mouse.click(cx + NODE_R * 0.76 * H, cy)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+
+  test('F-2003 A13 이어서 조작해도 오류가 없다', async ({ page }) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(String(e)))
+
+    const { map, H, cx, cy } = await openMapFresh(page)
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
+    await drag(page, cx - 0.3 * H, cy, 0.5 * H, 0, 'right')
+    await page.mouse.move(cx, cy)
+    await page.mouse.wheel(0, 1200)
+    await page.waitForTimeout(SETTLE)
+
+    await expect(map.locator('canvas')).toHaveCount(1)
+    expect(errors).toEqual([])
+  })
+})
+
+test.describe('F-2003 터치', () => {
+  test.use({ reducedMotion: 'reduce', hasTouch: true })
+
+  test('F-2003 A11 길게 누르기 — 메뉴가 뜨고 손가락을 떼도 남는다', async ({ page }) => {
+    const { map, cx, cy } = await openMapFresh(page)
+    const client = await page.context().newCDPSession(page)
+
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] })
+    await page.waitForTimeout(700)
+    await expect(nodeMenu(map)).toBeVisible()
+
+    // touchend 에서 preventDefault 를 안 하면 호환 mousedown 이 방금 연 메뉴를 닫는다 (F-2003 5.3)
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await expect(nodeMenu(map)).toBeVisible()
+  })
+
+  test('F-2003 A12 짧게 누르기 — 메뉴 없이 그 문서가 열린다', async ({ page }) => {
+    const { map, cx, cy } = await openMapFresh(page)
+    const client = await page.context().newCDPSession(page)
+
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] })
+    await page.waitForTimeout(150)
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+    await expect(map).toHaveCount(0)
+  })
+})
