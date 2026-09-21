@@ -201,6 +201,11 @@ export function buildHtmlPayload({
   return { filename, bytes }
 }
 
+// 본문에 KaTeX 출력이 있을 때만 mathCss 를 이어 붙인다(F-291.md 7.2) — 수식 없는 문서의 결과를 지금과 똑같이 둔다
+export function selectExportCss(body: string, baseCss: string, mathCss: string): string {
+  return body.includes('class="katex') ? baseCss + mathCss : baseCss
+}
+
 // 서식 있는 복사 payload — 순수 부분 (F-280.md 6.1)
 export function buildRichCopyPayload({
   text,
@@ -240,9 +245,10 @@ export async function exportDocAsHtml({
   const resources = await buildExportResources(text, store)
   const { html: body, missingImages } = buildExportBody(text, resources)
 
-  // CSS 원문 ~60KB 를 첫 화면 번들에서 뗀다 (F-280.md 6.1)
-  const { EXPORT_CSS } = await import('../viewer/exportHtmlCss')
-  const payload = buildHtmlPayload({ title: doc.title, body, css: EXPORT_CSS })
+  // CSS 원문을 첫 화면 번들에서 뗀다(F-280.md 6.1) — 수식 폰트 CSS(F-291.md 7.2)도 같은 동적 import 에 실려 번들 비용이 늘지 않는다
+  const { EXPORT_CSS, MATH_EXPORT_CSS } = await import('../viewer/exportHtmlCss')
+  const css = selectExportCss(body, EXPORT_CSS, MATH_EXPORT_CSS)
+  const payload = buildHtmlPayload({ title: doc.title, body, css })
   downloadBlob(new Blob([payload.bytes], { type: 'text/html;charset=utf-8' }), payload.filename)
 
   const sizeMB = payload.bytes.length / (1024 * 1024)

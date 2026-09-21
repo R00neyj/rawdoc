@@ -509,3 +509,31 @@
 .md-highlight {
   background-color: var(--md-highlight-bg);
 }
+
+/* 블록 위젯 — 수식 $$…$$(F-291 9장, 최소 구현). 위아래 간격은 코드블록·표와 같은 이유로 margin 대신 padding */
+.md-block.md-math {
+  padding: 4px 0;
+  text-align: center;
+  overflow-x: auto;
+  cursor: text;
+}
+
+/* 인라인 수식 — 여백 없음. 줄 높이를 밀지 않게 vertical-align 만 맞춘다(F-291 9장) */
+.md-math-inline {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.md-math-error {
+  padding: 16px;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-align: left;
+}
+
+/* 인라인 수식 오류는 원문 위에 색만 준다(4.1) — 블록처럼 문구를 담지 않는다 */
+span.md-math-error {
+  padding: 0;
+  display: inline;
+}

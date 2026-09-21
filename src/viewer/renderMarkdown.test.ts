@@ -588,3 +588,50 @@ describe('renderMarkdown — sourceLines 옵션 (specs/features/F-295.md 11장 U
     expect(html).toContain('<p data-source-line="5">문단</p>')
   })
 })
+
+// specs/features/F-291.md 5.1, 13장 A8~A9
+describe('renderMarkdown — 수식 인라인 (A8)', () => {
+  it('$…$ 는 class="katex" 를 담는다', () => {
+    const html = renderMarkdown('값은 $x^2$ 이다')
+    expect(html).toContain('class="katex"')
+  })
+
+  it('$5·$7 은 오탐 없이 글자로 남는다', () => {
+    const html = renderMarkdown('이 책은 $5 이고 저 책은 $7 이다')
+    expect(html).not.toContain('class="katex"')
+    expect(html).toContain('$5')
+    expect(html).toContain('$7')
+  })
+})
+
+describe('renderMarkdown — 수식 블록·제외 자리 (A9)', () => {
+  it('$$…$$ 블록은 katex-display 를 담는다', () => {
+    const html = renderMarkdown('$$\nx^2\n$$\n')
+    expect(html).toContain('katex-display')
+  })
+
+  it('인라인코드 안은 대상이 아니다', () => {
+    const html = renderMarkdown('`$x$`')
+    expect(html).not.toContain('katex')
+  })
+
+  it('펜스 코드블록 안은 대상이 아니다', () => {
+    const html = renderMarkdown('```\n$x$\n```\n')
+    expect(html).not.toContain('katex')
+  })
+
+  it('프론트매터 안은 대상이 아니다', () => {
+    const html = renderMarkdown('---\nprice: $5\n---\n본문')
+    expect(html).not.toContain('katex')
+  })
+
+  it('이스케이프(\\$5)는 글자로 남는다', () => {
+    const html = renderMarkdown('\\$5')
+    expect(html).toContain('<p>$5</p>')
+  })
+
+  it('표 칸 안 인라인 수식은 보기 모드에서 동작한다(Q2)', () => {
+    const html = renderMarkdown('| a |\n| --- |\n| $x$ |\n')
+    expect(html).toContain('katex')
+  })
+})

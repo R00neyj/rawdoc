@@ -71,3 +71,21 @@
   font-size: 13px;
   text-align: left;
 }
+
+/* 수식 (specs/features/F-291.md 9장, 최소 구현) — 블록은 위아래 여백과 가로 스크롤만 준다 */
+.katex-display {
+  margin: 1em 0;
+  overflow-x: auto;
+}
+
+span.md-math-error {
+  color: var(--muted);
+}
+
+div.md-math-error {
+  padding: 16px;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-align: left;
+}

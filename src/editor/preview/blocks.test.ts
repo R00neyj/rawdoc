@@ -496,6 +496,66 @@ describe('buildBlocks — mermaid 코드블록 위젯 테마 (F-260 A1)', () => 
   })
 })
 
+describe('buildBlocks — 수식 블록 위젯 (F-291 4.2 A14)', () => {
+  function findMathWidget(state: CMState): { tex: string; eq(other: unknown): boolean } | undefined {
+    return buildBlocks(state, true, undefined, TEST_THEME).find((r) => (r.value.spec.widget as { tex?: string }).tex !== undefined)?.value
+      .spec.widget
+  }
+
+  it('$$ 세 줄 범위에 block replace 위젯 1개. 문단 줄에는 없다', () => {
+    const doc = '문단\n\n$$\nx^2\n$$\n'
+    const state = makeState(doc, doc.length)
+    const ranges = buildBlocks(state, true, undefined, TEST_THEME)
+    expect(ranges).toHaveLength(1)
+    const r = ranges[0]
+    expect(r.value.spec.block).toBe(true)
+    expect(doc.slice(r.from, r.to)).toBe('$$\nx^2\n$$')
+    expect((r.value.spec.widget as { tex: string }).tex).toBe('x^2')
+  })
+
+  it('한 줄 형태($$…$$)도 위젯이 된다', () => {
+    const doc = '$$x^2$$\n\nx'
+    const state = makeState(doc, doc.length)
+    const widget = findMathWidget(state)
+    expect(widget).toBeDefined()
+    expect(widget!.tex).toBe('x^2')
+  })
+})
+
+describe('buildBlocks — 수식 블록 회귀·제외 (F-291 4.2 A15)', () => {
+  function findMathWidget(state: CMState): { tex: string } | undefined {
+    return buildBlocks(state, true, undefined, TEST_THEME).find((r) => (r.value.spec.widget as { tex?: string }).tex !== undefined)?.value
+      .spec.widget
+  }
+
+  it('커서가 $$ 범위 안이면 위젯을 만들지 않는다(원문 노출)', () => {
+    const doc = '문단\n\n$$\nx^2\n$$\n'
+    const cursor = doc.indexOf('x^2')
+    const state = makeState(doc, cursor)
+    expect(findMathWidget(state)).toBeUndefined()
+  })
+
+  it('목록 안 $$ 는 위젯을 만들지 않는다(B3)', () => {
+    const doc = '- 항목\n\n  $$\n  x^2\n  $$\n\nx'
+    const state = makeState(doc, doc.length)
+    expect(findMathWidget(state)).toBeUndefined()
+  })
+
+  it('일반 문단은 위젯을 만들지 않는다', () => {
+    const doc = '그냥 문단입니다\n'
+    const state = makeState(doc, doc.length)
+    expect(findMathWidget(state)).toBeUndefined()
+  })
+
+  it('표·코드블록 문서는 기존 위젯이 그대로 나온다(회귀)', () => {
+    const state = makeState(MIXED_DOC, MIXED_DOC.length)
+    const widgets = widgetsOf(state)
+    expect(widgets.some((w) => w.table)).toBe(true)
+    expect(widgets.some((w) => w.lines !== undefined)).toBe(true)
+    expect(widgets.some((w) => (w as { tex?: string }).tex !== undefined)).toBe(false)
+  })
+})
+
 describe('codeBlockText — 복사 대상 문자열 (F-240.md 3.3 A8)', () => {
   it('펜스·정보 문자열 없이 본문 줄만 \\n 으로 잇는다', () => {
     const doc = '```js\nconst a = 1\nconst b = 2\n```\nx'

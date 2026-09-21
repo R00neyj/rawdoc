@@ -62,6 +62,10 @@ src/
   - `lib/`: `docSearch.ts`(F-285 — 쿼리 파싱·매칭·발췌, import 문 없음)
   - `app/`: `searchIndex.ts`(F-286 — 인덱스 만들기·재사용), `SearchDialog.tsx`(F-287), `searchResults.ts`(F-287 — 결과 행·문구 계산 순수 함수 + 에디터에 넘길 검색어 고르기(F-294))
   - `editor/`: `showSearchMatches.ts`(F-294 — 검색 결과로 연 문서에서 CM6 찾기 패널 열기)
+- 수식(2026-09-21)으로 추가
+  - `lib/`: `mathSyntax.ts`(F-291 — `$…$`·`$$…$$` 감지 순수 함수), `mathRender.ts`(F-291 — KaTeX 동기 렌더 공용 모듈)
+  - `editor/`: `preview/mathPreview.ts`(F-291 — 인라인 수식 ViewPlugin), `preview/mathWidget.ts`(F-291 — 블록 수식 위젯)
+  - `viewer/`: `exportHtmlCss.ts`(F-291 — 내보내기용 KaTeX CSS·폰트 인라인)
 - 보기 모드 전환 스크롤 유지(2026-09-21)로 추가
   - `lib/`: `scrollAnchor.ts`(F-295 — 기준 줄 ↔ 화면 위치 순수 함수)
   - `app/`: `viewerScroll.ts`(F-295 — 보기 화면 좌표 읽기·스크롤)

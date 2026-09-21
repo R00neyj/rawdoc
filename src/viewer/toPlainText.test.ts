@@ -154,6 +154,13 @@ describe('toPlainText — 하이라이트 평문 회귀 (F-283 A16)', () => {
   })
 })
 
+// specs/features/F-291.md 7.4, 13장 A16
+describe('toPlainText — 수식 (F-291 A16)', () => {
+  it('인라인·블록 모두 $ 기호를 떼고 TeX 원문만 남긴다', () => {
+    expect(toPlainText('값은 $E = mc^2$ 이다\n\n$$\na+b\n$$\n', 'lf')).toBe('값은 E = mc^2 이다\n\na+b\n')
+  })
+})
+
 describe('toPlainText — 가로줄·빈 문서 (A14)', () => {
   it('가로줄 단독은 --- 한 줄', () => {
     expect(toPlainText('---', 'lf')).toBe('---\n')

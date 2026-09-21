@@ -11,12 +11,14 @@ import { syntaxTree } from '@codemirror/language'
 import type { SyntaxNode } from '@lezer/common'
 
 import { parseImageBlock } from '../../lib/imageBlock'
+import { parseMathBlock } from '../../lib/mathSyntax'
 import { createCodeCopyButton } from '../../lib/codeCopyButton'
 import { displayLang, isMermaidInfo } from '../../lib/codeLang'
 import { isComposing, isForced } from '../composition'
 import { isEditorFocused } from './active'
 import type { ResolveAttachment } from './imageWidget'
 import { ImageWidget, destroyImageCache } from './imageWidget'
+import { MathBlockWidget } from './mathWidget'
 import { MermaidWidget, destroyMermaidCache } from './mermaidWidget'
 import {
   TableWidget,
@@ -291,6 +293,20 @@ export function buildBlocks(
           out.push(
             Decoration.replace({ widget: new ImageWidget(parsed, resolveAttachment), block: true }).range(from, to),
           )
+        }
+        return false
+      }
+
+      // 수식 블록 $$…$$ (F-291 4.2) — 문서 최상위 문단만(B3). 대상 아니면(null) 자식으로 내려간다(인라인 수식이 계속 동작해야 한다)
+      if (node.name === 'Paragraph') {
+        if (isInsideListOrQuote(node.node)) return
+        const from = state.doc.lineAt(node.from).from
+        const to = state.doc.lineAt(node.to).to
+        const parsed = parseMathBlock(state.doc.sliceString(from, to))
+        if (!parsed) return
+        const showsSource = hasFocus && overlaps(state, from, to)
+        if (!showsSource) {
+          out.push(Decoration.replace({ widget: new MathBlockWidget(parsed.tex), block: true }).range(from, to))
         }
         return false
       }

@@ -38,6 +38,10 @@ function inlineToText(children: Token[]): string {
         out += t.content
         i++
         break
+      case 'math_inline':
+        out += t.content
+        i++
+        break
       case 'softbreak':
         out += ' '
         i++
@@ -250,6 +254,10 @@ function renderBlockSequence(tokens: Token[], start: number, end: number): strin
       }
       case 'hr':
         blocks.push('---')
+        i++
+        break
+      case 'math_block':
+        blocks.push(t.content)
         i++
         break
       default:

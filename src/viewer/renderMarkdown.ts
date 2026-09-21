@@ -9,6 +9,8 @@ import { findWikiLinks } from '../lib/wikiLink'
 import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from '../lib/frontmatter'
 import { parseImageBlock } from '../lib/imageBlock'
 import type { ParsedImageBlock } from '../lib/imageBlock'
+import { matchMathAt, parseMathBlock } from '../lib/mathSyntax'
+import { renderMath } from '../lib/mathRender'
 import { isMermaidInfo } from '../lib/codeLang'
 
 // html:false — 원문 HTML 태그는 파싱하지 않고 글자 그대로(이스케이프되어) 보인다.
@@ -289,6 +291,63 @@ function highlightPostProcess(state: StateInline): void {
 
 md.inline.ruler.before('emphasis', 'highlight', highlightTokenize)
 md.inline.ruler2.before('emphasis', 'highlight', highlightPostProcess)
+
+// ----- 수식 $…$ · $$…$$ (F-291.md 5.1) — 감지 규칙은 matchMathAt·parseMathBlock 하나, 편집 모드와 같다(3.5)
+const DOLLAR = 0x24 // '$'
+
+function mathInlineRule(state: StateInline, silent: boolean): boolean {
+  if (state.src.charCodeAt(state.pos) !== DOLLAR) return false
+  const match = matchMathAt(state.src, state.pos)
+  if (!match) return false
+
+  if (!silent) {
+    const token = state.push('math_inline', '', 0)
+    token.content = state.src.slice(match.innerFrom, match.innerTo)
+  }
+  state.pos = match.to
+  return true
+}
+
+// imageBlockRule(154~160행)과 같은 모양 — level 0(최상위) 문단만 대상이다(B3)
+function mathBlockRule(state: StateCore): void {
+  const tokens = state.tokens
+
+  for (let i = 0; i < tokens.length; i++) {
+    const open = tokens[i]
+    if (open.type !== 'paragraph_open' || open.level !== 0) continue
+
+    const inline = tokens[i + 1]
+    const close = tokens[i + 2]
+    if (inline?.type !== 'inline' || close?.type !== 'paragraph_close') continue
+
+    const parsed = parseMathBlock(inline.content)
+    if (!parsed) continue
+
+    const token = new state.Token('math_block', '', 0)
+    token.content = parsed.tex
+    token.block = true
+    token.map = open.map
+
+    tokens.splice(i, 3, token)
+  }
+}
+
+md.inline.ruler.before('emphasis', 'math_inline', mathInlineRule)
+md.core.ruler.before('inline', 'math_block', mathBlockRule)
+
+md.renderer.rules.math_inline = function (tokens, idx) {
+  const tex = tokens[idx].content
+  const result = renderMath(tex, { display: false })
+  if ('html' in result) return result.html
+  return `<span class="md-math-error">${md.utils.escapeHtml(`$${tex}$`)}</span>`
+}
+
+md.renderer.rules.math_block = function (tokens, idx) {
+  const tex = tokens[idx].content
+  const result = renderMath(tex, { display: true })
+  if ('html' in result) return `${result.html}\n`
+  return `<div class="md-math-error">${md.utils.escapeHtml(result.error)}</div>\n`
+}
 
 // ----- 링크: target·rel (F-123.md 3.2) -----
 const defaultLinkOpen: RendererRule =

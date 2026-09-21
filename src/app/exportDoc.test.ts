@@ -2,7 +2,7 @@
 // (exportDoc 은 new Blob([text]) 로 다운로드 바이트를 만든다)
 import { describe, it, expect } from 'vitest'
 import { unzipSync } from 'fflate'
-import { buildExportPayload, buildPlainPayload, buildHtmlPayload, buildRichCopyPayload } from './exportDoc'
+import { buildExportPayload, buildPlainPayload, buildHtmlPayload, buildRichCopyPayload, selectExportCss } from './exportDoc'
 import { toPlainText } from '../viewer/toPlainText'
 
 describe('Blob 바이트 동일성 (F-112 A2)', () => {
@@ -107,6 +107,26 @@ describe('buildHtmlPayload (F-280 A13)', () => {
   it('일반 제목도 확장자만 .html 로 바뀐다', () => {
     const payload = buildHtmlPayload({ title: '내 문서', body: '<p>a</p>', css: '' })
     expect(payload.filename).toBe('내 문서.html')
+  })
+})
+
+// specs/features/F-291.md 7.2, 13장 A18
+describe('selectExportCss — 수식 있을 때만 MATH_EXPORT_CSS 를 잇는다 (A18)', () => {
+  const BASE_CSS = 'body{color:red}'
+  const MATH_CSS = '@font-face{font-family:KaTeX_Main;src:url(data:font/woff2;base64,x)}'
+
+  it('수식 없는 본문 — buildHtmlPayload 결과 바이트에 KaTeX_Main 이 없다', () => {
+    const body = '<p>본문</p>'
+    const css = selectExportCss(body, BASE_CSS, MATH_CSS)
+    const payload = buildHtmlPayload({ title: '문서', body, css })
+    expect(new TextDecoder().decode(payload.bytes)).not.toContain('KaTeX_Main')
+  })
+
+  it('수식 있는 본문 — buildHtmlPayload 결과 바이트에 KaTeX_Main 이 있다', () => {
+    const body = '<span class="katex">x</span>'
+    const css = selectExportCss(body, BASE_CSS, MATH_CSS)
+    const payload = buildHtmlPayload({ title: '문서', body, css })
+    expect(new TextDecoder().decode(payload.bytes)).toContain('KaTeX_Main')
   })
 })
 

@@ -10,6 +10,7 @@ import { highlightMarkPreview } from './highlightMark'
 import { inlinePreview } from './inline'
 import { gutterAlignPreview, linePreview, listIndentPreview } from './lines'
 import { linkClicks } from './links'
+import { mathPreview } from './mathPreview'
 import { wikiLinkClicks, wikiLinksPreview } from './wikiLinks'
 import type { OnOpenWikiLink } from './wikiLinks'
 
@@ -23,6 +24,7 @@ export function livePreview({
   return [
     inlinePreview(),
     highlightMarkPreview(),
+    mathPreview(),
     linePreview(),
     gutterAlignPreview(),
     listIndentPreview(),
