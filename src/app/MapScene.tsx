@@ -27,6 +27,7 @@ import { clipPlanes, fitDistance, zoomLimits } from '../lib/mapCamera'
 import { parseCssColor, type Rgba } from '../lib/cssColor'
 import { blendRgb, depthMix, ndcToScreen, nodeRadius, pickLabelNodes, screenRadius, type ScreenPoint } from '../lib/mapNodeStyle'
 import { edgeColorAt } from '../lib/mapEdgeStyle'
+import { MAP_EDGE_CENTER, MAP_EDGE_FOCUS, MAP_HOVER_DIM, combineMix, edgeClass, fillNodeFocus } from '../lib/mapFocus'
 import MapLabels, { type MapLabelItem, type MapLabelsHandle } from './MapLabels'
 import type { WikiGraph } from '../lib/wikiGraph'
 import type { MapView } from './mapPrefs'
@@ -47,6 +48,9 @@ type MapSceneProps = {
 
 // 읽기에 실패했을 때 쓰는 중간 회색. 디자인 색이 아니라 "읽기 실패 표시"다 (6.3)
 const FALLBACK: Rgba = [0.5, 0.5, 0.5, 1]
+
+// 호버가 없을 때 fillNodeFocus 에 넘길 빈 목록. 호버가 바뀔 때마다 배열을 만들지 않으려는 것이다
+const NO_NEIGHBORS: readonly number[] = []
 
 // F-2005 가 `표시 > 노드 크기` 슬라이더로 넘겨 줄 자리다 (F-2004 2장). 2.0 인 것은 고립 문서가 F-2003 까지의 고정 반지름 6.0 과 같아지는 값이기 때문이다 — 공식만 넣으면 3.0 이라 점이 작아 보인다 (사용자 지시 2026-09-22)
 const NODE_SCALE = 2.0
@@ -189,7 +193,14 @@ function buildScene(
   const edgeAttr = new BufferAttribute(edgeBuf, 3)
   edgeAttr.setUsage(DynamicDrawUsage)
   edgeGeometry.setAttribute('position', edgeAttr)
-  const edgeMaterial = new LineBasicMaterial()
+  // 드로우 콜 하나 안에서 간선마다 색을 다르게 하는 길은 정점 색뿐이다 (F-2010 6.1). itemSize 를 4 로 두면 USE_COLOR_ALPHA 경로로 샌다
+  const edgeColorBuf = new Float32Array(edgeCount * 6)
+  const edgeColorAttr = new BufferAttribute(edgeColorBuf, 3)
+  edgeColorAttr.setUsage(DynamicDrawUsage)
+  // 재질보다 먼저·첫 렌더 전에 넣는다 — 셰이더는 material.vertexColors 만 보고 attribute vec3 color 를 읽으므로 속성이 없으면 간선이 통째로 검어진다
+  edgeGeometry.setAttribute('color', edgeColorAttr)
+  // 재질 색은 흰색(항등)으로 둔다. 정점 색과 곱해지므로 색 전부를 정점 버퍼에 맡긴다 (F-2010 6.3·6.4)
+  const edgeMaterial = new LineBasicMaterial({ vertexColors: true })
   const edgeLines = new LineSegments(edgeGeometry, edgeMaterial)
   edgeLines.frustumCulled = false
   if (edgeCount > 0) scene.add(edgeLines)
@@ -224,6 +235,14 @@ function buildScene(
   const depths = new Float32Array(nodeCount)
   const baseRgba: Rgba = [0, 0, 0, 1]
   const mixed: [number, number, number] = [0, 0, 0]
+  // 호버 초점 — 원색으로 둘 노드의 표시다. setHover() 에서만 채운다 (F-2010 5장)
+  const nodeFocus = new Uint8Array(nodeCount)
+  let focusActive = false
+  // 간선 갈래가 셋뿐이라 색을 간선마다 만들지 않고 먼저 세 번만 만든다 (F-2010 6.5)
+  const edgeRgba: Rgba = [0, 0, 0, 1]
+  const edgeBaseLin = new Float32Array(3)
+  const edgeDimLin = new Float32Array(3)
+  const edgeAccentLin = new Float32Array(3)
   // 투영 전용. v 는 uploadPositions 가 쓴다 (F-2004 9.2)
   const pv = new Vector3()
   const screenPt: ScreenPoint = { x: 0, y: 0, visible: false }
@@ -238,6 +257,7 @@ function buildScene(
   let panelColor: Rgba = FALLBACK
   let ruleColor: Rgba = FALLBACK
   let inkColor: Rgba = FALLBACK
+  let accentColor: Rgba = FALLBACK
   let centerIndex = -1
   let hoverIndex = -1
   let labelIndices: number[] = []
@@ -252,9 +272,45 @@ function buildScene(
   // 공유받아 본문을 못 읽은 문서 — id 배열이라 한 번 Set 으로 만들어 돌려쓴다 (F-2004 6.1)
   const unreadable = new Set(graph.unreadable)
 
-  // `선 두께` 슬라이더 값으로 간선 색을 다시 칠한다. 테마가 바뀌어 applyColors() 가 다시 돌 때도 현재 strength 를 쓴다 (F-2005 7.4)
-  function applyEdgeColor(strength: number) {
-    toColor(edgeMaterial.color, edgeColorAt(strength, { panel: panelColor, rule: ruleColor, ink: inkColor }))
+  // `선 두께`·테마·현재 문서·호버가 바뀌면 간선 색을 다시 써야 한다는 표시만 세운다. 실제 색은 frame() 이 writeEdgeColors() 로 쓴다 (F-2005 7.4, F-2010 7.1)
+  function applyEdgeColor() {
+    edgeColorDirty = true
+  }
+
+  // 정점 색 속성은 sRGB 가 아니라 선형 작업 공간이다 — Color 를 거치지 않고 sRGB 실수를 그대로 넣으면 밝고 뿌옇게 뜬다 (F-2010 6.2)
+  function toLinear(out: Float32Array, rgba: Rgba) {
+    toColor(scratchColor, rgba)
+    out[0] = scratchColor.r
+    out[1] = scratchColor.g
+    out[2] = scratchColor.b
+  }
+
+  // 간선마다 갈래를 정해 정점 색 버퍼에 쓴다. 갈래별 색은 위에서 세 번만 만든다 (F-2010 6.5)
+  function writeEdgeColors() {
+    if (edgeCount === 0) return
+    const base = edgeColorAt(applied.display.edgeStrength, { panel: panelColor, rule: ruleColor, ink: inkColor })
+    toLinear(edgeBaseLin, base)
+    blendRgb(base, panelColor, MAP_HOVER_DIM, mixed)
+    edgeRgba[0] = mixed[0]
+    edgeRgba[1] = mixed[1]
+    edgeRgba[2] = mixed[2]
+    toLinear(edgeDimLin, edgeRgba)
+    toLinear(edgeAccentLin, accentColor)
+    const hover = focusActive ? hoverIndex : -1
+    for (let e = 0; e < edgeCount; e++) {
+      const edge = graph.edges[e]
+      const cls = edgeClass(edge.from, edge.to, hover, centerIndex)
+      // 호버 중에는 현재 문서 간선도 흐려진다 — --accent 가 "지금 주목하는 것" 하나만 뜻하게 한다 (F-2010 5장)
+      const c = cls === MAP_EDGE_FOCUS ? edgeAccentLin : focusActive ? edgeDimLin : cls === MAP_EDGE_CENTER ? edgeAccentLin : edgeBaseLin
+      const o = e * 6
+      edgeColorBuf[o] = c[0]
+      edgeColorBuf[o + 1] = c[1]
+      edgeColorBuf[o + 2] = c[2]
+      edgeColorBuf[o + 3] = c[0]
+      edgeColorBuf[o + 4] = c[1]
+      edgeColorBuf[o + 5] = c[2]
+    }
+    edgeColorAttr.needsUpdate = true
   }
 
   // 인스턴스 색을 직접 쓰지 않고 base 색만 채운다. 판정 순서는 끊긴 링크 → 현재 문서 → 공유받음 → 기본이다 (F-2004 6.1)
@@ -264,8 +320,10 @@ function buildScene(
     panelColor = theme.panel
     ruleColor = theme.rule
     inkColor = theme.ink
+    accentColor = theme.accent
     scene.background = toColor(new Color(), theme.panel)
-    applyEdgeColor(applied.display.edgeStrength)
+    // 표시만 세우므로 centerIndex 가 아직 낡아 있어도 상관없다 — 아래 루프가 채운 뒤 frame() 이 쓴다 (F-2010 7.1)
+    applyEdgeColor()
     centerIndex = -1
     for (let i = 0; i < nodeCount; i++) {
       const node = graph.nodes[i]
@@ -295,8 +353,13 @@ function buildScene(
       if (d > far) far = d
     }
     for (let i = 0; i < nodeCount; i++) {
+      // 호버한 노드와 그 이웃은 위치와 무관하게 원색이다 — 뒤쪽 이웃이 65% 씻긴 채로는 강조가 아니다 (F-2010 5장)
+      const focused = focusActive && nodeFocus[i] === 1
       // 현재 문서만 원색으로 둔다 — 남은 표시가 색 하나뿐이다 (F-2004 6.2)
-      const t = i === centerIndex ? 0 : depthMix(depths[i], near, far)
+      const depthT = focused || i === centerIndex ? 0 : depthMix(depths[i], near, far)
+      // 초점 밖은 배경으로 가라앉힌다. 호버가 없으면 combineMix(depthT, 0) === depthT 라 F-2010 이전 화면과 한 픽셀도 다르지 않다
+      const dimT = focusActive && !focused ? MAP_HOVER_DIM : 0
+      const t = combineMix(depthT, dimT)
       baseRgba[0] = baseColors[i * 3]
       baseRgba[1] = baseColors[i * 3 + 1]
       baseRgba[2] = baseColors[i * 3 + 2]
@@ -473,6 +536,8 @@ function buildScene(
   let forceDriven = false
   // 경계구는 인스턴스 행렬에만 달려 있고 카메라와 무관하다 — 좌표가 바뀐 뒤 한 번만 다시 잰다 (F-2004 7.6)
   let boundsStale = true
+  // 간선 색은 카메라와 무관하다 — 테마·현재 문서·호버·`선 두께` 가 바뀐 프레임에만 다시 쓴다 (F-2010 7.1)
+  let edgeColorDirty = true
 
   function frame() {
     // controls.update() 보다 먼저 내린다 — 감쇠가 남아 있으면 change 가 이것을 다시 세운다 (F-2003 6.2)
@@ -510,6 +575,10 @@ function buildScene(
       uploadPositions()
       posDirty = false
       boundsStale = true
+    }
+    if (edgeColorDirty) {
+      writeEdgeColors()
+      edgeColorDirty = false
     }
     // posDirty 블록 뒤여야 posBuf 가 이 프레임 값이고, controls.update() 뒤여야 camera.position 이 이 프레임 값이다 (F-2004 5.3)
     applyDepth()
@@ -574,6 +643,9 @@ function buildScene(
     hoverIndex = next
     // 노드 위에서만 손가락 — 캔버스 전체가 한 요소라 CSS 로는 가릴 수 없다 (사용자 지시 2026-09-22)
     canvas.style.cursor = next >= 0 ? 'pointer' : ''
+    // 초점 마스크는 카메라와 무관하므로 프레임마다 다시 만들지 않는다 (F-2010 5장)
+    focusActive = fillNodeFocus(next, adjacency[next] ?? NO_NEIGHBORS, nodeFocus)
+    edgeColorDirty = true
     refreshLabels()
     requestDraw()
   }
@@ -728,7 +800,7 @@ function buildScene(
         posDirty = true
       }
       if (next.display.edgeStrength !== applied.display.edgeStrength) {
-        applyEdgeColor(next.display.edgeStrength)
+        applyEdgeColor()
       }
       if (forceChanged(next.force, applied.force)) {
         layout.setForces(next.force)

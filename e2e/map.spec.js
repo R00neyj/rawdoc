@@ -1101,3 +1101,216 @@ test.describe('F-2006 장력 묶음', () => {
     await expect.poll(async () => (await gap()) / before, { timeout: FORCE_SETTLE + 4000 }).toBeGreaterThan(1.2)
   })
 })
+
+// F-2010 호버 초점 (specs/features/F-2010.md 12.2) A1~A7 — 캔버스 픽셀은 preserveDrawingBuffer 가 없어 페이지 안에서 못 읽는다. Playwright 요소 스크린샷만 WebGL 내용을 잡는다
+async function canvasShot(map) {
+  return (await map.locator('.map-canvas').screenshot()).toString('base64')
+}
+
+// PNG 디코드는 브라우저에 되맡긴다 — 새 의존성을 깔지 않으려는 것이다
+async function comparePng(page, a, b) {
+  return page.evaluate(async ([p, q]) => {
+    const load = async (b64) => {
+      const img = new Image()
+      img.src = `data:image/png;base64,${b64}`
+      await img.decode()
+      const c = document.createElement('canvas')
+      c.width = img.naturalWidth
+      c.height = img.naturalHeight
+      const ctx = c.getContext('2d', { willReadFrequently: true })
+      ctx.drawImage(img, 0, 0)
+      return ctx.getImageData(0, 0, c.width, c.height)
+    }
+    // 그 그림에서 가장 많이 나온 색(= 배경)과의 채널별 최대 거리의 전체 평균. 배경색 hex 를 테스트에 적지 않으려는 것이다
+    const inkMean = (img) => {
+      const counts = new Map()
+      for (let i = 0; i < img.data.length; i += 4) {
+        const key = (img.data[i] << 16) | (img.data[i + 1] << 8) | img.data[i + 2]
+        counts.set(key, (counts.get(key) ?? 0) + 1)
+      }
+      let bg = 0
+      let best = -1
+      for (const [k, v] of counts) if (v > best) { best = v; bg = k }
+      const br = (bg >> 16) & 255
+      const bgc = (bg >> 8) & 255
+      const bb = bg & 255
+      let sum = 0
+      for (let i = 0; i < img.data.length; i += 4) {
+        sum += Math.max(Math.abs(img.data[i] - br), Math.abs(img.data[i + 1] - bgc), Math.abs(img.data[i + 2] - bb))
+      }
+      return sum / (img.data.length / 4)
+    }
+    const A = await load(p)
+    const B = await load(q)
+    const n = Math.min(A.data.length, B.data.length)
+    let diff8 = 0
+    let maxDiff = 0
+    for (let i = 0; i < n; i += 4) {
+      const d = Math.max(
+        Math.abs(A.data[i] - B.data[i]),
+        Math.abs(A.data[i + 1] - B.data[i + 1]),
+        Math.abs(A.data[i + 2] - B.data[i + 2]),
+      )
+      if (d > maxDiff) maxDiff = d
+      if (d > 8) diff8 += 1
+    }
+    return { pctDiff8: (diff8 / (n / 4)) * 100, maxDiff, inkMeanA: inkMean(A), inkMeanB: inkMean(B) }
+  }, [a, b])
+}
+
+// hoverUntil 은 마우스를 옮긴 직후 이름표 수를 보는데 이름표는 React 커밋 뒤에야 붙는다 — 파일 전체를 돌릴 때는 그 한 박자에 노드를 지나쳐 버린다. 판정이 아니라 준비 단계라 다시 훑는다
+async function hoverNode(page, view) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await settleFrames(page)
+    try {
+      return await hoverUntil(page, view.map, view, (n) => n >= 1)
+    } catch {
+      // 캔버스 밖으로 빼 호버를 비우고 다시 훑는다
+      await view.map.locator('.map-page-title').hover()
+      await page.waitForTimeout(300)
+    }
+  }
+  throw new Error('hoverNode: 세 번 훑어도 노드를 못 찾았다')
+}
+
+// 렌더 루프는 스스로 멈추므로 프레임을 두 번 기다려 그림이 자리 잡은 뒤에 찍는다
+async function settleFrames(page) {
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))))
+}
+
+// 노드 하나짜리 첫 실행 상태에서는 흐릴 대상이 없다 — 문서 12개, 문서마다 링크 2개로 고정한다 (F-2010 12.2)
+const FOCUS_N = 24
+const FOCUS_DOCS = Array.from({ length: FOCUS_N }, (_, i) => {
+  const n = i + 1
+  const a = (n % FOCUS_N) + 1
+  const b = ((n + 1) % FOCUS_N) + 1
+  return { name: `D${n}.md`, content: `D${n}\n\n[[D${a}]] [[D${b}]]` }
+})
+
+test.describe('F-2010 호버 초점', () => {
+  test.use({ reducedMotion: 'reduce' })
+
+  test('F-2010 A1 노드에 호버하면 캔버스 그림이 크게 바뀐다', async ({ page }) => {
+    const view = await openMapWithDocs(page, FOCUS_DOCS)
+    await settleFrames(page)
+    const before = await canvasShot(view.map)
+
+    await hoverNode(page, view)
+    await settleFrames(page)
+    const after = await canvasShot(view.map)
+
+    // 구현 전 실측 0.073%(이름표 DOM 뿐), 구현 뒤 2.09~2.11%. 1.0% 문턱은 양쪽에서 2배 넘게 떨어져 있다
+    const { pctDiff8 } = await comparePng(page, before, after)
+    expect(pctDiff8).toBeGreaterThanOrEqual(1.0)
+  })
+
+  test('F-2010 A2 호버를 풀면 호버 전 그림으로 돌아온다', async ({ page }) => {
+    const view = await openMapWithDocs(page, FOCUS_DOCS)
+    await settleFrames(page)
+    const before = await canvasShot(view.map)
+
+    await hoverNode(page, view)
+    await settleFrames(page)
+
+    // 캔버스 밖으로 나가면 pointerleave 가 거둔다 — 카메라는 그대로다 (F-2010 8.1)
+    await view.map.locator('.map-page-title').hover()
+    await expect(visibleLabels(view.map)).toHaveCount(0)
+    await settleFrames(page)
+    const back = await canvasShot(view.map)
+
+    const { pctDiff8 } = await comparePng(page, before, back)
+    expect(pctDiff8).toBeLessThanOrEqual(0.1)
+  })
+
+  test('F-2010 A3 호버 중에는 그림이 배경 쪽으로 가라앉는다', async ({ page }) => {
+    const view = await openMapWithDocs(page, FOCUS_DOCS)
+    await settleFrames(page)
+    const before = await canvasShot(view.map)
+
+    await hoverNode(page, view)
+    await settleFrames(page)
+    const during = await canvasShot(view.map)
+
+    // 실측 0.365배(혼자 8/8), 파일 전체를 돌리면 hoverUntil 이 다른 노드에 앉아 0.617배까지 뜬다. 흐리기를 끄면 1.15배로 오히려 오르므로 0.85 문턱이 그 사이다
+    const { inkMeanA, inkMeanB } = await comparePng(page, before, during)
+    expect(inkMeanB).toBeLessThanOrEqual(inkMeanA * 0.85)
+  })
+
+  test('F-2010 A4 흐리기가 이름표를 바꾸지 않는다', async ({ page }) => {
+    const view = await openMapWithDocs(page, [
+      { name: 'B.md', content: 'B 문서' },
+      { name: 'A.md', content: 'A\n\n[[B]]' },
+    ])
+    await hoverNode(page, view)
+
+    await expect(visibleLabels(view.map)).toHaveCount(2)
+    const texts = await visibleLabels(view.map).allTextContents()
+    expect(texts.slice().sort()).toEqual(['A', 'B'])
+  })
+
+  test('F-2010 A5 회전하는 내내 강조가 유지된다', async ({ page }) => {
+    const view = await openMapWithDocs(page, FOCUS_DOCS)
+    const spot = await hoverNode(page, view)
+
+    // 호버한 노드 위에서 끌기 시작한다 — 배경에서 시작하면 그 첫 이동이 호버를 먼저 푼다
+    await drag(page, spot.x, spot.y, 0.25 * view.H, 0, 'right')
+    await page.waitForTimeout(SETTLE)
+    await expect(visibleLabels(view.map)).not.toHaveCount(0)
+    await settleFrames(page)
+    const hovered = await canvasShot(view.map)
+
+    // 카메라를 건드리지 않고 호버만 푼다 — 같은 각도의 호버 없음 그림이다
+    await view.map.locator('.map-page-title').hover()
+    await expect(visibleLabels(view.map)).toHaveCount(0)
+    await settleFrames(page)
+    const plain = await canvasShot(view.map)
+
+    // 실측 2.11%. 구현 전에는 같은 자리가 0.073% 였다
+    const { pctDiff8 } = await comparePng(page, hovered, plain)
+    expect(pctDiff8).toBeGreaterThanOrEqual(1.0)
+  })
+
+  test('F-2010 A6 호버·회전·슬라이더를 이어서 해도 안 깨진다', async ({ page }) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(String(e)))
+
+    const view = await openMapWithDocs(page, FOCUS_DOCS)
+    const spot = await hoverNode(page, view)
+    await drag(page, spot.x, spot.y, 0.3 * view.H, 0.1 * view.H, 'right')
+    await page.waitForTimeout(SETTLE)
+
+    const p = await openPanel(view.map)
+    await p.getByRole('slider', { name: '선 두께', exact: true }).fill('0')
+    await p.getByRole('slider', { name: '선 두께', exact: true }).fill('1')
+    await view.map.getByRole('button', { name: '지도 설정', exact: true }).click()
+    await expect(panel(view.map)).toHaveCount(0)
+
+    await expect(view.map.locator('canvas')).toHaveCount(1)
+    expect(errors).toEqual([])
+
+    // 회전한 뒤에는 덩어리가 hoverUntil 의 탐색 반지름 밖으로 나갈 수 있다 — 먼저 카메라를 다시 맞춘다
+    await view.map.getByRole('button', { name: '맞춤', exact: true }).click()
+    await page.waitForTimeout(SETTLE)
+    const again = await hoverNode(page, view)
+    await page.mouse.click(again.x, again.y)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+
+  test('F-2010 A7 선 두께가 정점 색으로 옮겨 가도 계속 동작한다', async ({ page }) => {
+    const view = await openMapWithDocs(page, FOCUS_DOCS)
+    const p = await openPanel(view.map)
+    const edgeStrength = p.getByRole('slider', { name: '선 두께', exact: true })
+
+    await edgeStrength.fill('0')
+    await settleFrames(page)
+    const thin = await canvasShot(view.map)
+
+    await edgeStrength.fill('1')
+    await settleFrames(page)
+    const thick = await canvasShot(view.map)
+
+    // 실측 1.75%. 간선만으로도 먹 덮개의 상당 부분이다. 6.4 의 회귀 방지다
+    const { pctDiff8 } = await comparePng(page, thin, thick)
+    expect(pctDiff8).toBeGreaterThanOrEqual(0.3)
+  })
+})
