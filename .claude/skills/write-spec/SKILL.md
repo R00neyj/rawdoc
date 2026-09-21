@@ -63,6 +63,7 @@ Shared rules live in the agent definition. In the prompt, point at **where in th
 
 ## 3. When the report arrives
 
+0. **The spec is already open in VS Code.** A `PostToolUse` hook (`scripts/open-spec-hook.mjs`, wired in `.claude/settings.json`) runs `code <path>` whenever a `specs/features/F-xxx.md` is written — by the agent or by you. Read the report first, then read the file there. It reopens at most once a minute per file, so the frontmatter fixes that follow will not keep stealing focus
 1. **Read "가정으로 둔 것" first.** That is where the next round of thinking belongs
 2. Verify yourself any **conflict with existing code or specs** the report flags (reading a file or two is enough). Do not relay the agent's word to the user unchecked
 3. Run `npm run review -- F-xxx` to confirm the file table parses, and `npm run specs -- --check` for the frontmatter (the former reads any of "파일 소유", "수정 파일", "바꾸는 파일")

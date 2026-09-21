@@ -139,7 +139,7 @@ How to hold to it:
 - **Commit as soon as a unit is done.** Uncommitted changes left to pile up bleed into the next task (that is exactly how specs got tangled on 2026-09-14)
 - Implementation subjects read `{feature summary} (F-xxx)`; spec subjects read `F-xxx {title} 명세`. Body format is in the `ship-feature` skill, ch. 5
 - After committing, update that spec's frontmatter to `status: done` and `implemented: {hash}`. The hash only exists after the commit, so `--amend` or carry it in the next commit
-- `.claude/settings.json` goes into no commit, ever
+- **`.claude/settings.json` never rides along in another commit.** Permission and plugin entries churn per machine, so they stay out. The exception is a deliberate shared setting that has to reach both machines — currently the `PostToolUse` hook that opens a newly written spec in VS Code (user instruction, 2026-09-21). Change that on its own commit and say so in the subject
 
 ## Deployment (2026-09-15)
 

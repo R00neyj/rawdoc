@@ -64,6 +64,7 @@ description: Rawdoc 명세(specs/features/F-xxx.md)를 spec-writer 에이전트�
 
 ## 3. 보고 받으면
 
+0. **명세는 이미 VS Code 에 열려 있다.** `PostToolUse` 훅(`scripts/open-spec-hook.mjs`, `.claude/settings.json` 에 연결)이 `specs/features/F-xxx.md` 가 쓰일 때마다 `code <경로>` 를 돌린다 — 에이전트가 쓰든 네가 쓰든. 보고를 먼저 읽고, 파일은 거기서 본다. 한 파일당 1분에 한 번까지만 다시 여니까 뒤따르는 프론트매터 수정이 창을 계속 앞으로 끌어내지 않는다
 1. **"가정으로 둔 것" 을 먼저 읽는다.** 거기 있는 것이 다음 사고의 지점이다
 2. 보고가 짚은 **기존 코드·명세와의 불일치**를 메인이 직접 확인한다 (파일 한두 개 읽는 수준). 에이전트 말만 믿고 사용자에게 전하지 않는다
 3. `npm run review -- F-xxx` 로 수정 파일 표가 파싱되는지, `npm run specs -- --check` 로 프론트매터가 맞는지 본다 (전자는 제목이 "파일 소유"·"수정 파일"·"바꾸는 파일" 중 무엇이든 읽는다)
