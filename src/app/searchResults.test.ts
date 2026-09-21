@@ -1,7 +1,7 @@
 // F-287 검색 결과 순수 함수 — U1~U12 (specs/features/F-287.md 9장). DOM·React 를 import 하지 않는다
 // U13~U28 은 안내 문구 순수 함수 (specs/features/F-288.md 9장)
 import { describe, it, expect } from 'vitest'
-import { nextResultIndex, formatSearchDate, buildResultRows, formatQuerySummary, buildSearchNotes, formatResultCount, searchStatusText } from './searchResults'
+import { nextResultIndex, formatSearchDate, buildResultRows, formatQuerySummary, buildSearchNotes, formatResultCount, searchStatusText, pickEditorSearchTerm } from './searchResults'
 import { parseSearchQuery, RESULT_LIMIT } from '../lib/docSearch'
 import type { SearchOutcome, ParsedQuery } from '../lib/docSearch'
 import type { SearchIndexEntry } from './searchIndex'
@@ -298,5 +298,27 @@ describe('formatResultCount', () => {
     expect(formatResultCount(null, 3)).toBe(null)
     expect(formatResultCount(makeOutcome({ total: 3, truncated: false }), 0)).toBe(null)
     expect(formatResultCount(makeOutcome({ total: 1234, truncated: false }), 5)).toBe('결과 1,234개')
+  })
+})
+
+// F-294 에디터에 넘길 검색어 고르기 (specs/features/F-294.md 9.1)
+describe('pickEditorSearchTerm', () => {
+  it('U1 첫 검색어가 본문에 있다', () => {
+    expect(pickEditorSearchTerm('오늘 회고를 썼다', parseSearchQuery('회고 주간'))).toBe('회고')
+  })
+
+  it('U2 첫 검색어는 없고 둘째가 있다', () => {
+    expect(pickEditorSearchTerm('오늘 주간 기록', parseSearchQuery('회고 주간'))).toBe('주간')
+  })
+
+  it('U3 넣을 것이 없다', () => {
+    expect(pickEditorSearchTerm('아무 내용', parseSearchQuery('tag:일기'))).toBe(null)
+    expect(pickEditorSearchTerm('', parseSearchQuery('회고'))).toBe(null)
+    expect(pickEditorSearchTerm('전혀 다른 내용', parseSearchQuery('회고 주간'))).toBe(null)
+  })
+
+  it('U4 대소문자·NFD', () => {
+    expect(pickEditorSearchTerm('Hello World', parseSearchQuery('Hello'))).toBe('hello')
+    expect(pickEditorSearchTerm('오늘 회고'.normalize('NFD'), parseSearchQuery('회고'))).toBe('회고')
   })
 })

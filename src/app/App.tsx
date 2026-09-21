@@ -12,6 +12,7 @@ import {
 import type { EditorState, StateCommand } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { openSearchPanel } from '@codemirror/search'
+import { showSearchMatches } from '../editor/showSearchMatches'
 
 import { createMemoryStore } from '../storage/memoryStore'
 import { createIdbStore } from '../storage/idbStore'
@@ -228,6 +229,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   // 검색 대화상자 D-6 (specs/features/F-287.md 3장)
   const [searchOpen, setSearchOpen] = useState(false)
+  // 검색 결과로 연 문서에 넣어 줄 검색어 예약 — 본문이 도착하고 에디터가 만들어질 때까지 기다린다 (specs/features/F-294.md 4.3)
+  const [pendingEditorSearch, setPendingEditorSearch] = useState<{ docId: string; term: string } | null>(null)
   // 도움말 전용 페이지 S-7 (specs/features/F-244.md 3.3) — currentDocId 는 이 화면 동안 null
   const [helpOpen, setHelpOpen] = useState(false)
   // (F-126.md 5.3)
@@ -1128,6 +1131,17 @@ export default function App() {
       renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true }),
     )
   }, [viewMode, openDoc, currentDocId, resolveWikiHref])
+
+  // 검색 결과로 연 문서에 검색어 넘기기 — 새 EditorView 가 만들어진 뒤(자식 layout effect 뒤)에 적용한다 (specs/features/F-294.md 4.3)
+  useEffect(() => {
+    if (!pendingEditorSearch) return
+    if (currentDocId !== pendingEditorSearch.docId) return // 아직 그 문서가 아니다
+    if (openDoc?.id !== currentDocId) return // 본문이 아직 안 왔다 → 에디터가 없다
+    const view = editorRef.current?.view
+    if (!view) return
+    showSearchMatches(view, pendingEditorSearch.term)
+    setPendingEditorSearch(null) // 한 번만 쓴다
+  }, [pendingEditorSearch, openDoc, currentDocId])
 
   // 편집 모드 위키링크 표시·자동완성용 제목 목록 갱신 (F-131 3장) — 문서 생성·삭제·제목
   // 변경 때마다 에디터에 최신 목록을 반영한다. openDoc.id !== currentDocId 인 동안은(문서
@@ -2273,8 +2287,11 @@ export default function App() {
   }
 
   // 검색 결과에서 문서 열기 (F-287.md 4.6) — 지금 문서를 그대로 두지 않고 그 문서로 이동한다
-  async function openDocFromSearch(id: string) {
+  // term 이 있으면 그 문서의 찾기 패널에 검색어를 넣는다 (specs/features/F-294.md 4.3)
+  async function openDocFromSearch(id: string, term: string | null) {
     setSearchOpen(false)
+    // 문서 전환 전에 예약해야 한다 — 뒤에 두면 beforeLeaveDoc() 왕복 사이에 openDoc 이 먼저 도착해 effect 가 헛돈다
+    setPendingEditorSearch(term && viewMode !== 'view' ? { docId: id, term } : null)
     await selectDoc(id)
     // 편집·원문 모드면 에디터에 포커스를 준다 — Dialog 기본 복귀만으로는 사라진 요소를 가리키거나 사이드바로 돌아간다 (4.6)
     if (viewMode !== 'view') {

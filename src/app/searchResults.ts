@@ -1,6 +1,6 @@
 // 검색 결과 — DOM 없는 순수 함수 (specs/features/F-287.md 4.4). 선례: settingsTabs.ts(F-290)
 // 안내 문구 4개(formatQuerySummary·buildSearchNotes·formatResultCount·searchStatusText)는 F-288.md 5장
-import { highlightParts, buildSnippet, type ParsedQuery, type SnippetPart, type SearchOutcome } from '../lib/docSearch'
+import { highlightParts, buildSnippet, foldCase, normalizeForSearch, type ParsedQuery, type SnippetPart, type SearchOutcome } from '../lib/docSearch'
 import type { SearchIndexEntry } from './searchIndex'
 
 export type SearchResultRow = {
@@ -107,6 +107,17 @@ export function formatResultCount(outcome: SearchOutcome | null, rowCount: numbe
   const total = outcome.total.toLocaleString('ko-KR')
   if (!outcome.truncated) return `결과 ${total}개`
   return `결과 ${total}개 — 앞 ${rowCount.toLocaleString('ko-KR')}개만 보입니다`
+}
+
+// 에디터 찾기 패널에 넣을 검색어 하나. 본문에 들어 있는 첫 검색어, 없으면 null (F-294.md 4.1·5.1)
+export function pickEditorSearchTerm(body: string, query: ParsedQuery): string | null {
+  if (query.terms.length === 0 || body === '') return null
+
+  const foldedBody = foldCase(normalizeForSearch(body))
+  for (const term of query.terms) {
+    if (foldedBody.includes(term)) return term
+  }
+  return null
 }
 
 // 결과 자리에 그릴 상태 문구. 결과 목록을 그려야 하면 null (F-288.md 5.4)

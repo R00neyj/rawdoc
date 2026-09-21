@@ -5,7 +5,7 @@ import Dialog from './Dialog'
 import { IconSearch } from './icons'
 import { parseSearchQuery, searchDocs, type SnippetPart, type SearchOutcome } from '../lib/docSearch'
 import { buildSearchIndex, type SearchIndex, type SearchSource } from './searchIndex'
-import { buildResultRows, nextResultIndex, formatQuerySummary, buildSearchNotes, formatResultCount, searchStatusText } from './searchResults'
+import { buildResultRows, nextResultIndex, formatQuerySummary, buildSearchNotes, formatResultCount, searchStatusText, pickEditorSearchTerm } from './searchResults'
 
 const DEBOUNCE_MS = 150
 // '목록을 새로 읽는 중…' 이 뜨기까지의 지연 (F-288.md 13장 Q4)
@@ -16,7 +16,7 @@ type SearchDialogProps = {
   store: SearchSource
   scope: string
   beforeIndex: () => Promise<void>
-  onOpenDoc: (id: string) => void
+  onOpenDoc: (id: string, term: string | null) => void
   onClose: () => void
   // 이미 열려 있을 때 Ctrl+Shift+F 를 다시 누르면 App 이 이 ref 를 통해 검색어 전체 선택을 시킨다 (3.4)
   selectQueryRef: RefObject<() => void>
@@ -121,6 +121,13 @@ export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDo
     resultRefs.current[selected]?.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
+  // 여는 자리를 하나로 모아 Enter·클릭이 같은 검색어를 넘기게 한다 (F-294.md 5.3)
+  function openRow(id: string) {
+    const entry = index?.entries.find((e) => e.id === id) ?? null
+    const term = entry ? pickEditorSearchTerm(entry.body, parsed) : null
+    onOpenDoc(id, term)
+  }
+
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault()
@@ -129,7 +136,7 @@ export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDo
     }
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (selected >= 0 && rows[selected]) onOpenDoc(rows[selected].id)
+      if (selected >= 0 && rows[selected]) openRow(rows[selected].id)
     }
   }
 
@@ -191,7 +198,7 @@ export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDo
                   resultRefs.current[i] = el
                 }}
                 className={`search-result${i === selected ? ' search-result--on' : ''}`}
-                onClick={() => onOpenDoc(row.id)}
+                onClick={() => openRow(row.id)}
               >
                 <span className="search-result-head">
                   <span className="search-result-title">{renderParts(row.titleParts)}</span>
