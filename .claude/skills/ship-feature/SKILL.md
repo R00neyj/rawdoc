@@ -24,7 +24,7 @@ Korean copy: `.claude/ko/skills/ship-feature/SKILL.ko.md` (snapshot, for humans)
 
 ## 2. Handing off the implementation
 
-**Main implements the 3D map rework (F-292 revision and its `F-2NNN` children) itself — no `feature-implementer`** (user instruction, 2026-09-21: "3d 작업인데 맡겨도될지 모르겠어서, 메인이 직접 구현했으면함"). three.js, force simulation, projection and hit-testing leave more judgment outside the spec than a spec can pin down, so a round trip through an agent costs more than it saves. Everything else in this file still applies — write the tests first, run `npm run review -- F-xxx`, keep one spec to one commit. Parallelism is what you give up; accept it.
+**The 3D map rework is assigned per sub-spec, and the `누가` column of `specs/features/F-292.md` ch. 9 is the decision** (user, 2026-09-21). Main implements **F-2002~F-2004** itself — renderer swap, camera controls and node appearance have to be fixed while looking at the screen, and F-2002 carries the SVG deletion, so a round trip through an agent costs more than it saves. **F-2006** (tension sliders) goes to `complex-implementer`; its ranges are a feel judgment and it owns the G7 gate. The rest are ordinary handoffs. Everything else in this file still applies to main's own commits — write the tests first, run `npm run review -- F-xxx`, keep one spec to one commit.
 
 For every other spec, hand off as below.
 

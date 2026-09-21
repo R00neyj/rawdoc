@@ -108,7 +108,8 @@ npm run dev:spike    # 스파이크 확인용
 작업 PC 가 둘(노트북·PC)이라 사용자 로컬 메모리 대신 여기에 둔다
 
 - **커밋 단위는 아래 "커밋 단위" 절을 따른다.** 다음 서브에이전트는 커밋 뒤에 띄운다. 파일이 겹치지 않는 명세만 병렬
-- **명세 작성은 `spec-writer` 에이전트**(`.claude/agents/spec-writer.md`, Opus 로 정의 — 2026-09-20 사용자 지시 "명세 작성을 sonnet 말고 opus로"). `model` 을 따로 주지 않는다. 구현은 `feature-implementer`(Sonnet)
+- **명세 작성은 `spec-writer` 에이전트**(`.claude/agents/spec-writer.md`, Opus 로 정의 — 2026-09-20 사용자 지시 "명세 작성을 sonnet 말고 opus로"). `model` 을 따로 주지 않는다. 구현은 기본이 `feature-implementer`(Sonnet) 다. **3D 지도 재작업은 소명세마다 갈린다 — `specs/features/F-292.md` 9장의 `누가` 열이 그 결정이다** (사용자, 2026-09-21). 렌더러·카메라·노드 표현은 화면을 보면서 고쳐야 해서 F-2002~F-2004 는 메인이 직접 하고, F-2006 은 `complex-implementer`, 나머지는 평범하게 맡긴다
+- **`complex-implementer`(Opus) 가 세 번째 에이전트다.** 수용 기준은 분명한데 거기 닿는 길이 분명하지 않은 명세 — 그래픽·3D, CM6 내부, 프레임·번들 예산, 소유 표를 가로지르는 리팩터, 아무도 돌려 본 적 없는 외부 API. 만들기 전에 조사·측정하고, 기준 안쪽의 빈틈은 스스로 정한 뒤 보고하며, 빌드·precache 증분을 보고하는 점이 `feature-implementer` 와 다르다. 기본은 여전히 `feature-implementer` 이고 메인이 명시적으로 이쪽을 고른다 (사용자 지시, 2026-09-21: "복잡한 작업용 별도 에이전트 만들어두는것도 좋을듯")
 - **반복 프롬프트는 스킬에 있다. 에이전트를 직접 띄우지 말고 스킬을 거친다** (2026-09-21 사용자 지시). 명세 작성은 `write-spec`, 구현은 `ship-feature`. 프롬프트 뼈대·품질을 올리는 지시·보고 검토 순서가 그 안에 있다
 - **구현은 `ship-feature` 스킬 + `feature-implementer` 에이전트.** 프롬프트에는 명세 번호와 `E2E_PORT`·`E2E_DIST` 슬롯만. 판정은 `npm run review -- F-xxx` → 관련 e2e. 손 스크립트 대신 `scripts/` 도구, 도구에 없는 반복이 보이면 도구 추가를 제안
 - `e2e:one` 검색어는 `"F-225|F-212"` 처럼 `|` 로 묶을 수 있다. 슬롯은 `--port`·`--dist` 또는 `E2E_PORT`·`E2E_DIST`
