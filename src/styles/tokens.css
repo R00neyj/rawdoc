@@ -221,6 +221,11 @@
   letter-spacing: var(--tracking);
 }
 
+/* 기본 여백 지우기 (2026-09-21 사용자 지시) — :where() 라 특정도가 0 이고, 자기 여백을 적어 둔 규칙(github-markdown-css 의 `.markdown-body` 등)은 전부 그대로 이긴다. 목록의 padding-left 는 기호 자리가 기본값에 걸려 있어 건드리지 않는다 */
+:where(h1, h2, h3, h4, h5, h6, p, ul, ol, dl, dd, figure, blockquote, pre, fieldset, menu) {
+  margin: 0;
+}
+
 html,
 body {
   height: 100%;
