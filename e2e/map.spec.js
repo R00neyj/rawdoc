@@ -1,6 +1,6 @@
 // 위키링크 지도 3D 판 (specs/features/F-2002.md 12.2) A1~A16 — 캔버스 안의 좌표·색·크기는 판정하지 않고, 노드 클릭 경로는 목록 통로로 판정한다 (F-292 11장)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, currentDocId, waitSaved } from './helpers.js'
+import { openApp, importMarkdown, currentDocId, waitSaved, setPrefBeforeLoad } from './helpers.js'
 
 // 사이드바 `지도` 버튼을 눌러 지도 화면을 연다
 async function openMap(page) {
@@ -440,5 +440,200 @@ test.describe('F-2003 터치', () => {
 
     await expect(page).toHaveURL(/#\/d\/[^/]+$/)
     await expect(map).toHaveCount(0)
+  })
+})
+
+// F-2004 노드 표현 (specs/features/F-2004.md 14.2) A1~A9 — 노드 크기·깊이 섞기·색은 캔버스 픽셀이라 판정하지 않고, DOM 인 이름표와 메뉴만 본다
+function visibleLabels(map) {
+  return map.locator('.map-label:not([hidden])')
+}
+
+async function labelBox(map, text) {
+  return map.locator('.map-label', { hasText: text }).first().boundingBox()
+}
+
+// 첫 실행 문서를 막고 원하는 문서만 넣어 지도를 연다 (F-2004 14.2)
+async function openMapWithDocs(page, docs) {
+  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+  await setPrefBeforeLoad(page, 'md.startScreen', 'last')
+  await page.goto('/')
+  await expect(page.locator('.empty-state')).toBeVisible()
+  for (const doc of docs) await importMarkdown(page, doc)
+  await page.goto('/#/map')
+  const map = page.locator('.map-page')
+  await expect(map).toBeVisible()
+  await expect(map.locator('canvas')).toHaveCount(1)
+  await expect(map.locator('.map-status')).toHaveCount(0)
+  const box = await map.locator('.map-canvas').boundingBox()
+  return { map, H: box.height, cx: box.x + box.width / 2, cy: box.y + box.height / 2 }
+}
+
+// 3D 배치의 좌표는 알 수 없다. 이름표가 떴다는 것이 곧 그 자리에 노드가 있다는 신호라 가운데부터 나선으로 훑는다 (F-2004 14.2)
+async function hoverUntil(page, map, { cx, cy, H }, want) {
+  const step = 0.028 * H
+  const maxR = 0.4 * H
+  const labels = visibleLabels(map)
+  for (let r = 0; r <= maxR; r += step) {
+    const count = r === 0 ? 1 : Math.max(6, Math.round((2 * Math.PI * r) / step))
+    for (let k = 0; k < count; k++) {
+      const a = (2 * Math.PI * k) / count
+      const x = cx + r * Math.cos(a)
+      const y = cy + r * Math.sin(a)
+      await page.mouse.move(x, y)
+      if (want(await labels.count())) return { x, y }
+    }
+  }
+  throw new Error(`hoverUntil: 반지름 ${Math.round(maxR)}px 안에서 조건을 만족하는 노드를 못 찾았다`)
+}
+
+test.describe('F-2004 노드 표현', () => {
+  test.use({ reducedMotion: 'reduce' })
+
+  test('F-2004 A1 호버 이름표', async ({ page }) => {
+    const { map, cx, cy } = await openMapFresh(page)
+    await expect(visibleLabels(map)).toHaveCount(0)
+
+    await page.mouse.move(cx, cy)
+    await expect(visibleLabels(map)).toHaveCount(1)
+    await expect(visibleLabels(map)).toHaveText(['사용법'])
+  })
+
+  test('F-2004 A2 호버를 풀면 사라진다', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapFresh(page)
+    await page.mouse.move(cx, cy)
+    await expect(visibleLabels(map)).toHaveCount(1)
+
+    // 노드 밖 — 배경이다
+    await page.mouse.move(cx + 0.45 * H, cy + 0.42 * H)
+    await expect(visibleLabels(map)).toHaveCount(0)
+
+    // 캔버스 밖으로 나가면 pointerleave 가 거둔다
+    await page.mouse.move(cx, cy)
+    await expect(visibleLabels(map)).toHaveCount(1)
+    await map.locator('.map-page-title').hover()
+    await expect(visibleLabels(map)).toHaveCount(0)
+  })
+
+  test('F-2004 A3 이름표가 카메라를 따라온다', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapFresh(page)
+    await page.mouse.move(cx, cy)
+    await expect(visibleLabels(map)).toHaveCount(1)
+    const before = await labelBox(map, '사용법')
+
+    // 노드 위에서 끌기 시작한다 — 배경에서 시작하면 그 첫 이동이 호버를 먼저 푼다
+    await drag(page, cx, cy, 0.25 * H, 0, 'left')
+    await page.waitForTimeout(SETTLE)
+
+    const after = await labelBox(map, '사용법')
+    const moved = after.x + after.width / 2 - (before.x + before.width / 2)
+    expect(Math.abs(moved - 0.25 * H)).toBeLessThanOrEqual(8)
+  })
+
+  test('F-2004 A4 이름표가 클릭을 가로채지 않는다', async ({ page }) => {
+    const { map, cx, cy } = await openMapFresh(page)
+    await page.mouse.move(cx, cy)
+    await expect(visibleLabels(map)).toHaveCount(1)
+
+    // 이름표 한가운데에서 잡히는 요소가 캔버스여야 한다 — pointer-events: none 이 아니면 span 이 잡힌다
+    const box = await labelBox(map, '사용법')
+    const atLabel = await page.evaluate(
+      ([x, y]) => document.elementFromPoint(x, y)?.className ?? '',
+      [box.x + box.width / 2, box.y + box.height / 2],
+    )
+    expect(atLabel).toContain('map-canvas')
+
+    // 레이어가 캔버스를 통째로 덮고 있어도 클릭이 지나간다
+    await page.mouse.click(cx, cy)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+})
+
+// 이름표는 제 노드 바로 아래에 붙는다 — 그 상자 위쪽을 2px 씩 올라가며 노드에 닿는 지점을 찾는다 (F-2004 7.4·14.2)
+async function findNodeAboveLabel(page, map, text) {
+  const box = await labelBox(map, text)
+  const x = box.x + box.width / 2
+  const labels = visibleLabels(map)
+  for (let dy = 2; dy <= 80; dy += 2) {
+    const y = box.y - dy
+    await page.mouse.move(x, y)
+    if ((await labels.count()) > 0) return { x, y }
+  }
+  throw new Error(`findNodeAboveLabel: 이름표 '${text}' 위 80px 안에서 노드를 못 찾았다`)
+}
+
+test.describe('F-2004 이웃·끊긴 링크', () => {
+  test.use({ reducedMotion: 'reduce' })
+
+  test('F-2004 A5 이웃까지 이름표', async ({ page }) => {
+    const view = await openMapWithDocs(page, [
+      { name: 'B.md', content: 'B 문서' },
+      { name: 'A.md', content: 'A\n\n[[B]]' },
+    ])
+    await hoverUntil(page, view.map, view, (n) => n >= 1)
+
+    await expect(visibleLabels(view.map)).toHaveCount(2)
+    const texts = await visibleLabels(view.map).allTextContents()
+    expect(texts.slice().sort()).toEqual(['A', 'B'])
+  })
+
+  test('F-2004 A6 끊긴 링크 노드 메뉴', async ({ page }) => {
+    const view = await openMapWithDocs(page, [{ name: 'A.md', content: 'A\n\n[[없는 제목]]' }])
+    await hoverUntil(page, view.map, view, (n) => n >= 1)
+    await expect(visibleLabels(view.map)).toHaveCount(2)
+
+    const spot = await findNodeAboveLabel(page, view.map, '없는 제목')
+    await page.mouse.click(spot.x, spot.y, { button: 'right' })
+
+    const items = nodeMenu(view.map).getByRole('menuitem')
+    await expect(items).toHaveCount(1)
+    await expect(items.first()).toHaveText('이 제목으로 새 문서')
+  })
+
+  test('F-2004 A7 이 제목으로 새 문서', async ({ page }) => {
+    const view = await openMapWithDocs(page, [{ name: 'A.md', content: 'A\n\n[[없는 제목]]' }])
+    await hoverUntil(page, view.map, view, (n) => n >= 1)
+    const spot = await findNodeAboveLabel(page, view.map, '없는 제목')
+    await page.mouse.click(spot.x, spot.y, { button: 'right' })
+    await nodeMenu(view.map).getByRole('menuitem', { name: '이 제목으로 새 문서' }).click()
+
+    await expect(page.locator('.doc-title')).toHaveValue('없는 제목')
+    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+    await expect(page.locator('.map-page')).toHaveCount(0)
+  })
+
+  test('F-2004 A8 문서 노드 메뉴는 그대로 셋', async ({ page }) => {
+    const view = await openMapWithDocs(page, [
+      { name: 'B.md', content: 'B 문서' },
+      { name: 'A.md', content: 'A\n\n[[B]]' },
+    ])
+    await hoverUntil(page, view.map, view, (n) => n >= 1)
+    const spot = await findNodeAboveLabel(page, view.map, 'B')
+    await page.mouse.click(spot.x, spot.y, { button: 'right' })
+
+    const items = nodeMenu(view.map).getByRole('menuitem')
+    await expect(items).toHaveCount(3)
+    await expect(items.nth(0)).toHaveText('열기')
+    await expect(items.nth(2)).toHaveText('여기로 이동')
+  })
+})
+
+test.describe('F-2004 이어서 조작', () => {
+  test.use({ reducedMotion: 'reduce' })
+
+  test('F-2004 A9 호버·회전을 이어서 해도 오류가 없다', async ({ page }) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(String(e)))
+
+    const { map, H, cx, cy } = await openMapFresh(page)
+    await page.mouse.move(cx, cy)
+    await expect(visibleLabels(map)).toHaveCount(1)
+    await drag(page, cx, cy, 0.5 * H, 0, 'right')
+    await page.mouse.wheel(0, 1200)
+    await page.waitForTimeout(SETTLE)
+    await page.mouse.move(cx, cy)
+    await page.waitForTimeout(SETTLE)
+
+    await expect(map.locator('canvas')).toHaveCount(1)
+    expect(errors).toEqual([])
   })
 })

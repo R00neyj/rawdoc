@@ -1,5 +1,5 @@
 // 위키링크 지도의 3D 장면 (specs/features/F-2002.md 6장, F-2003 4~9장). three 를 `import * as THREE` 로 가져오지 않는다 — 이름으로만 가져와야 tree-shaking 이 되고 그 차이가 gzip 55 KB 다 (F-2002 3.1)
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   BufferAttribute,
   BufferGeometry,
@@ -25,6 +25,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { createMapLayout, type MapLayout } from '../lib/mapLayout3d'
 import { clipPlanes, fitDistance, zoomLimits } from '../lib/mapCamera'
 import { parseCssColor, type Rgba } from '../lib/cssColor'
+import { blendRgb, depthMix, ndcToScreen, nodeRadius, pickLabelNodes, screenRadius, type ScreenPoint } from '../lib/mapNodeStyle'
+import MapLabels, { type MapLabelItem, type MapLabelsHandle } from './MapLabels'
 import type { WikiGraph } from '../lib/wikiGraph'
 
 type MapSceneProps = {
@@ -41,8 +43,8 @@ type MapSceneProps = {
 // 읽기에 실패했을 때 쓰는 중간 회색. 디자인 색이 아니라 "읽기 실패 표시"다 (6.3)
 const FALLBACK: Rgba = [0.5, 0.5, 0.5, 1]
 
-const NODE_RADIUS = 6.0
-const MISSING_RADIUS = 3.0
+// F-2005 가 `표시 > 노드 크기` 슬라이더로 넘겨 줄 자리다 (F-2004 2장). 2.0 인 것은 고립 문서가 F-2003 까지의 고정 반지름 6.0 과 같아지는 값이기 때문이다 — 공식만 넣으면 3.0 이라 점이 작아 보인다 (사용자 지시 2026-09-22)
+const NODE_SCALE = 2.0
 // 기본값 (1, 32, 16) 은 인스턴스당 1,024 삼각형이라 2,000개면 200만이 된다 (3.4)
 const SPHERE_SEGMENTS = 8
 const SPHERE_RINGS = 6
@@ -78,6 +80,7 @@ type ThemeColors = {
   ink: Rgba
   accent: Rgba
   muted: Rgba
+  ink2: Rgba
   rule: Rgba
 }
 
@@ -94,6 +97,7 @@ function readTheme(probe: HTMLElement): ThemeColors {
     ink: readToken(probe, '--ink'),
     accent: readToken(probe, '--accent'),
     muted: readToken(probe, '--muted'),
+    ink2: readToken(probe, '--ink-2'),
     rule: readToken(probe, '--rule'),
   }
 }
@@ -129,6 +133,8 @@ function buildScene(
   graph: WikiGraph,
   centerId: string | null,
   inputs: { current: SceneInputs },
+  labelsRef: { current: MapLabelsHandle | null },
+  setLabelItems: (items: MapLabelItem[]) => void,
 ): SceneBundle | null {
   let renderer: WebGLRenderer
   try {
@@ -166,7 +172,10 @@ function buildScene(
 
   // 열 때 한 번 채운다. F-2004 가 공식으로 갈아끼울 자리를 배열로 잡아 둔다 (6.6)
   const radii = new Float32Array(nodeCount)
-  for (let i = 0; i < nodeCount; i++) radii[i] = graph.nodes[i].missing ? MISSING_RADIUS : NODE_RADIUS
+  for (let i = 0; i < nodeCount; i++) {
+    const node = graph.nodes[i]
+    radii[i] = nodeRadius(node.degree, node.missing, NODE_SCALE)
+  }
   // 노드 반지름을 더하지 않으면 노드 하나짜리 그래프에서 카메라가 구체 안으로 들어간다 (F-2003 7.2)
   let maxNodeRadius = 0
   for (let i = 0; i < nodeCount; i++) if (radii[i] > maxNodeRadius) maxNodeRadius = radii[i]
@@ -182,22 +191,96 @@ function buildScene(
   const scratchColor = new Color()
   const raycaster = new Raycaster()
   const ndc = new Vector2()
+  // 인스턴스에 쓰는 것은 applyDepth() 하나로 모은다 — applyColors 는 여기까지만 채운다 (F-2004 6.1)
+  const baseColors = new Float32Array(nodeCount * 3)
+  const depths = new Float32Array(nodeCount)
+  const baseRgba: Rgba = [0, 0, 0, 1]
+  const mixed: [number, number, number] = [0, 0, 0]
+  // 투영 전용. v 는 uploadPositions 가 쓴다 (F-2004 9.2)
+  const pv = new Vector3()
+  const screenPt: ScreenPoint = { x: 0, y: 0, visible: false }
+  const tanHalfVFov = Math.tan((camera.fov * Math.PI) / 360)
+  // 간선을 훑어 양방향으로 담는다. 호버한 노드의 이웃을 O(1) 로 꺼내려는 것이다 (F-2004 7.6)
+  const adjacency: number[][] = Array.from({ length: nodeCount }, () => [])
+  for (const edge of graph.edges) {
+    if (edge.from === edge.to) continue
+    adjacency[edge.from]?.push(edge.to)
+    adjacency[edge.to]?.push(edge.from)
+  }
+  let panelColor: Rgba = FALLBACK
+  let centerIndex = -1
+  let hoverIndex = -1
+  let labelIndices: number[] = []
+  let cssW = 0
+  let cssH = 0
 
   // 중심 문서는 바뀔 수 있다. 테마만 다시 읽을 때는 인자 없이 부른다
   let activeCenterId = centerId
 
+  // 공유받아 본문을 못 읽은 문서 — id 배열이라 한 번 Set 으로 만들어 돌려쓴다 (F-2004 6.1)
+  const unreadable = new Set(graph.unreadable)
+
+  // 인스턴스 색을 직접 쓰지 않고 base 색만 채운다. 판정 순서는 끊긴 링크 → 현재 문서 → 공유받음 → 기본이다 (F-2004 6.1)
   function applyColors(nextCenterId: string | null = activeCenterId) {
     activeCenterId = nextCenterId
     const theme = readTheme(probe)
+    panelColor = theme.panel
     scene.background = toColor(new Color(), theme.panel)
     toColor(edgeMaterial.color, theme.rule)
+    centerIndex = -1
     for (let i = 0; i < nodeCount; i++) {
       const node = graph.nodes[i]
-      const rgba = node.missing ? theme.muted : node.id === activeCenterId ? theme.accent : theme.ink
-      nodeMesh.setColorAt(i, toColor(scratchColor, rgba))
+      let rgba: Rgba
+      if (node.missing) rgba = theme.muted
+      else if (node.id === activeCenterId) {
+        rgba = theme.accent
+        centerIndex = i
+      } else if (unreadable.has(node.id)) rgba = theme.ink2
+      else rgba = theme.ink
+      baseColors[i * 3] = rgba[0]
+      baseColors[i * 3 + 1] = rgba[1]
+      baseColors[i * 3 + 2] = rgba[2]
+    }
+  }
+
+  // 카메라에서 먼 노드일수록 배경 쪽으로 섞는다. 정규화 범위는 경계구가 아니라 그 프레임 실제 노드 거리의 최소·최대다 (F-2004 5.1)
+  function applyDepth() {
+    if (nodeCount === 0) return
+    let near = Infinity
+    let far = -Infinity
+    for (let i = 0; i < nodeCount; i++) {
+      pv.set(posBuf[i * 3], posBuf[i * 3 + 1], posBuf[i * 3 + 2])
+      const d = pv.distanceTo(camera.position)
+      depths[i] = d
+      if (d < near) near = d
+      if (d > far) far = d
+    }
+    for (let i = 0; i < nodeCount; i++) {
+      // 현재 문서만 원색으로 둔다 — 남은 표시가 색 하나뿐이다 (F-2004 6.2)
+      const t = i === centerIndex ? 0 : depthMix(depths[i], near, far)
+      baseRgba[0] = baseColors[i * 3]
+      baseRgba[1] = baseColors[i * 3 + 1]
+      baseRgba[2] = baseColors[i * 3 + 2]
+      blendRgb(baseRgba, panelColor, t, mixed)
+      nodeMesh.setColorAt(i, scratchColor.setRGB(mixed[0], mixed[1], mixed[2], SRGBColorSpace))
     }
     // setColorAt 을 처음 부를 때 instanceColor 가 만들어진다 (3.4)
     if (nodeMesh.instanceColor) nodeMesh.instanceColor.needsUpdate = true
+  }
+
+  // 호버한 노드와 그 이웃의 이름표를 노드 아래에 놓는다 (F-2004 7.4)
+  function placeLabels() {
+    const handle = labelsRef.current
+    if (!handle) return
+    for (let k = 0; k < labelIndices.length; k++) {
+      const i = labelIndices[k]
+      pv.set(posBuf[i * 3], posBuf[i * 3 + 1], posBuf[i * 3 + 2])
+      const d = pv.distanceTo(camera.position)
+      pv.project(camera)
+      ndcToScreen(pv.x, pv.y, pv.z, cssW, cssH, screenPt)
+      const r = screenRadius(radii[i], d, cssH, tanHalfVFov)
+      handle.place(k, screenPt.x, screenPt.y + r, screenPt.visible)
+    }
   }
 
   // 그래프 반지름. 노드 반지름을 더해야 카메라가 구체 안으로 들어가지 않는다 (F-2003 7.2)
@@ -264,6 +347,9 @@ function buildScene(
     if (w === 0 || h === 0) return
     // 세 번째 인자 false — 캔버스의 CSS 크기는 CSS 가 잡고 그리기 버퍼만 맞춘다
     renderer.setSize(w, h, false)
+    // 이름표는 CSS 픽셀 위의 DOM 이다 — 픽셀비를 곱하면 고DPI 화면에서 두 배 어긋난다 (F-2004 7.4)
+    cssW = w
+    cssH = h
     camera.aspect = w / h
     camera.updateProjectionMatrix()
   }
@@ -292,6 +378,8 @@ function buildScene(
   // 사용자가 카메라를 한 번이라도 움직였나. selfDriven 은 우리가 일으킨 change 를 빼고 세려는 표시다 (F-2003 7.3)
   let userMoved = false
   let selfDriven = false
+  // 경계구는 인스턴스 행렬에만 달려 있고 카메라와 무관하다 — 좌표가 바뀐 뒤 한 번만 다시 잰다 (F-2004 7.6)
+  let boundsStale = true
 
   function frame() {
     // controls.update() 보다 먼저 내린다 — 감쇠가 남아 있으면 change 가 이것을 다시 세운다 (F-2003 6.2)
@@ -322,7 +410,11 @@ function buildScene(
     if (posDirty) {
       uploadPositions()
       posDirty = false
+      boundsStale = true
     }
+    // posDirty 블록 뒤여야 posBuf 가 이 프레임 값이고, controls.update() 뒤여야 camera.position 이 이 프레임 값이다 (F-2004 5.3)
+    applyDepth()
+    placeLabels()
     renderer.render(scene, camera)
     if (layout.isSettled() && !dirty) {
       renderer.setAnimationLoop(null)
@@ -358,19 +450,33 @@ function buildScene(
   let longPressTimer = 0
   let longPressOpened = false
 
-  function hitAt(clientX: number, clientY: number): { id: string; missing: boolean } | null {
+  function hitAt(clientX: number, clientY: number): { index: number; id: string; missing: boolean } | null {
     if (nodeCount === 0) return null
     const rect = canvas.getBoundingClientRect()
     if (rect.width === 0 || rect.height === 0) return null
     ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -(((clientY - rect.top) / rect.height) * 2 - 1))
-    // 낡은 경계구로 걸러지면 클릭이 조용히 안 먹는다 (3.4)
-    nodeMesh.computeBoundingSphere()
+    // 낡은 경계구로 걸러지면 클릭이 조용히 안 먹는다 (3.4). 좌표가 바뀐 뒤 한 번만 다시 잰다 (F-2004 7.6)
+    if (boundsStale) {
+      nodeMesh.computeBoundingSphere()
+      boundsStale = false
+    }
     raycaster.setFromCamera(ndc, camera)
     const hits = raycaster.intersectObject(nodeMesh, false)
     const instanceId = hits[0]?.instanceId
     if (instanceId === undefined) return null
     const node = graph.nodes[instanceId]
-    return node ? { id: node.id, missing: Boolean(node.missing) } : null
+    return node ? { index: instanceId, id: node.id, missing: Boolean(node.missing) } : null
+  }
+
+  // 같은 노드 위에서 움직이는 동안에는 아무 일도 없다 — React 렌더는 호버가 바뀔 때만 한 번이다 (F-2004 7.6)
+  function setHover(hit: { index: number } | null) {
+    const next = hit ? hit.index : -1
+    if (next === hoverIndex) return
+    hoverIndex = next
+    labelIndices =
+      next < 0 ? [] : pickLabelNodes([next], adjacency[next] ?? [], (i) => graph.nodes[i]?.degree ?? 0)
+    setLabelItems(labelIndices.map((i) => ({ id: graph.nodes[i].id, title: graph.nodes[i].title })))
+    requestDraw()
   }
 
   function endLongPress() {
@@ -404,8 +510,8 @@ function buildScene(
       return
     }
     const hit = hitAt(e.clientX, e.clientY)
-    // 배경이면 그냥 회전하게 둔다
-    if (!hit || hit.missing) return
+    // 배경이면 그냥 회전하게 둔다. 끊긴 링크 노드도 길게 누르면 메뉴가 열린다 (F-2004 8.1)
+    if (!hit) return
     // enabled 가 아니라 enableRotate 를 끈다 — 두 손가락 확대가 살아남는다 (F-2003 5.1)
     controls.enableRotate = false
     longPress = { id: e.pointerId, x: e.clientX, y: e.clientY, nodeId: hit.id }
@@ -414,8 +520,19 @@ function buildScene(
 
   function onPointerMove(e: PointerEvent) {
     const lp = longPress
-    if (!lp || e.pointerId !== lp.id) return
-    if (Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > LONG_PRESS_SLOP) endLongPress()
+    if (lp && e.pointerId === lp.id && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > LONG_PRESS_SLOP) {
+      endLongPress()
+    }
+    // 터치에는 호버가 없고, 메뉴가 떠 있는 동안과 끄는 동안에는 갱신하지 않는다 (F-2004 7.6)
+    if (e.pointerType === 'touch') return
+    if (inputs.current.menuOpen) return
+    if (e.buttons !== 0) return
+    setHover(hitAt(e.clientX, e.clientY))
+  }
+
+  // 커서가 캔버스를 벗어나면 이름표를 거둔다 (F-2004 7.6)
+  function onPointerLeave() {
+    setHover(null)
   }
 
   function onPointerUp(e: PointerEvent) {
@@ -461,8 +578,8 @@ function buildScene(
     // 드래그였다 — 회전이지 메뉴가 아니다
     if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > CLICK_SLOP) return
     const hit = hitAt(e.clientX, e.clientY)
-    // 배경·끊긴 링크면 아무 일도 없다 (F-2003 8.5)
-    if (!hit || hit.missing) return
+    // 배경이면 아무 일도 없다. 끊긴 링크 노드는 `이 제목으로 새 문서` 한 항목짜리 메뉴다 (F-2004 8.1)
+    if (!hit) return
     inputs.current.onNodeMenu(hit.id, e.clientX, e.clientY)
   }
 
@@ -472,11 +589,11 @@ function buildScene(
   canvas.addEventListener('pointercancel', onPointerCancel)
   canvas.addEventListener('touchend', onTouchEnd, { passive: false })
   canvas.addEventListener('contextmenu', onContextMenu)
+  canvas.addEventListener('pointerleave', onPointerLeave)
 
   // 여기서 붙인다 — OrbitControls 의 리스너가 우리 것보다 뒤에 등록돼야 한다 (F-2003 4.1)
   controls.connect(canvas)
-  // setter 가 domElement.style.cursor 를 직접 쓰므로 connect 뒤여야 한다 (F-2003 8.4)
-  controls.cursorStyle = 'grab'
+  // cursorStyle 을 'grab' 으로 두지 않는다 — 손 모양에는 팁이 없어 어느 노드를 가리키는지 안 보인다 (사용자 지시 2026-09-22)
 
   const ro = new ResizeObserver(() => {
     resize()
@@ -522,6 +639,7 @@ function buildScene(
       canvas.removeEventListener('pointercancel', onPointerCancel)
       canvas.removeEventListener('touchend', onTouchEnd)
       canvas.removeEventListener('contextmenu', onContextMenu)
+      canvas.removeEventListener('pointerleave', onPointerLeave)
       sphereGeometry.dispose()
       edgeGeometry.dispose()
       nodeMaterial.dispose()
@@ -544,6 +662,9 @@ export default function MapScene({ graph, centerId, fitToken, menuOpen, onNodeCl
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const sceneRef = useRef<SceneBundle | null>(null)
   const prevCenterRef = useRef<string | null>(centerId)
+  const labelsRef = useRef<MapLabelsHandle | null>(null)
+  // 보일 이름표 목록만 React 가 들고, 좌표는 labelsRef 로 직접 쓴다 (F-2004 7.2)
+  const [labelItems, setLabelItems] = useState<MapLabelItem[]>([])
 
   const inputs = useRef<SceneInputs>({ centerId, menuOpen, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady })
   // 선언 순서대로 도므로 아래 (a)~(d) 보다 먼저 최신 값이 채워진다
@@ -557,7 +678,7 @@ export default function MapScene({ graph, centerId, fitToken, menuOpen, onNodeCl
     const probe = probeRef.current
     const wrapper = wrapperRef.current
     if (!canvas || !probe || !wrapper) return
-    const bundle = buildScene(canvas, probe, wrapper, graph, inputs.current.centerId, inputs)
+    const bundle = buildScene(canvas, probe, wrapper, graph, inputs.current.centerId, inputs, labelsRef, setLabelItems)
     if (!bundle) {
       // getContext 는 됐는데 생성자가 던진 경우 — 두 번째 그물이다 (6.2)
       inputs.current.onUnsupported()
@@ -567,6 +688,7 @@ export default function MapScene({ graph, centerId, fitToken, menuOpen, onNodeCl
     sceneRef.current = bundle
     return () => {
       sceneRef.current = null
+      setLabelItems([])
       bundle.dispose()
     }
   }, [graph])
@@ -596,6 +718,11 @@ export default function MapScene({ graph, centerId, fitToken, menuOpen, onNodeCl
     sceneRef.current?.setMenuOpen(menuOpen)
   }, [menuOpen])
 
+  // (e) React 가 이름표 DOM 을 커밋한 직후 한 프레임을 더 돌려 자리를 잡는다 (F-2004 7.3)
+  useEffect(() => {
+    sceneRef.current?.requestDraw()
+  }, [labelItems])
+
   return (
     <div className="map-scene" ref={wrapperRef}>
       <canvas
@@ -605,6 +732,7 @@ export default function MapScene({ graph, centerId, fitToken, menuOpen, onNodeCl
         aria-label={`문서 ${graph.nodes.length}개, 연결 ${graph.edges.length}개의 지도. 같은 내용을 목록으로 보려면 목록 단추를 누르세요.`}
         tabIndex={-1}
       />
+      <MapLabels ref={labelsRef} items={labelItems} />
       <span className="map-probe" aria-hidden="true" ref={probeRef} />
     </div>
   )

@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { buildMapIndex, type MapSource } from './mapIndex'
 import { buildWikiGraphFromEntries, truncateGraphByDegree, type WikiGraph } from '../lib/wikiGraph'
-import { IconClose, IconEdit, IconMap, IconOpenInNew, IconRecenter } from './icons'
+import { IconClose, IconEdit, IconMap, IconNoteAdd, IconOpenInNew, IconRecenter } from './icons'
 import MapScene, { hasWebGL2 } from './MapScene'
 import FolderMenu from './FolderMenu'
 import { formatHash } from './hashRoute'
@@ -32,7 +32,7 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
   const [reduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [layoutReady, setLayoutReady] = useState(false)
   // 노드 우클릭·길게 누르기 메뉴. 떠 있는 동안 MapScene 이 조작을 잠근다 (F-2003 10.1)
-  const [nodeMenu, setNodeMenu] = useState<{ id: string; title: string; x: number; y: number } | null>(null)
+  const [nodeMenu, setNodeMenu] = useState<{ id: string; title: string; missing: boolean; x: number; y: number } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -117,7 +117,7 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
   function openNodeMenu(id: string, x: number, y: number) {
     const node = displayGraph?.nodes.find((n) => n.id === id)
     if (!node) return
-    setNodeMenu({ id, title: node.title, x, y })
+    setNodeMenu({ id, title: node.title, missing: Boolean(node.missing), x, y })
   }
 
   const sharedCount = graph ? graph.unreadable.length : 0
@@ -211,19 +211,31 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
                     if (!v) setNodeMenu(null)
                   }}
                   anchorPoint={{ x: nodeMenu.x, y: nodeMenu.y }}
-                  items={[
-                    { key: 'open', label: '열기', icon: IconEdit, onSelect: () => handleNodeClick(nodeMenu.id, false) },
-                    {
-                      key: 'open-new-tab',
-                      label: '새 탭에서 열기',
-                      icon: IconOpenInNew,
-                      // noopener 가 없으면 sessionStorage 가 복제돼 편집 잠금이 깨진다 (F-296 4.1)
-                      onSelect: () => {
-                        window.open(formatHash(nodeMenu.id), '_blank', 'noopener')
-                      },
-                    },
-                    { key: 'recenter', label: '여기로 이동', icon: IconRecenter, onSelect: () => onRecenter(nodeMenu.id) },
-                  ]}
+                  items={
+                    // 끊긴 링크 노드는 아직 문서가 아니라 열 것도 옮길 것도 없다 (F-2004 8.2)
+                    nodeMenu.missing
+                      ? [
+                          {
+                            key: 'create',
+                            label: '이 제목으로 새 문서',
+                            icon: IconNoteAdd,
+                            onSelect: () => onOpenWikiLink(nodeMenu.title),
+                          },
+                        ]
+                      : [
+                          { key: 'open', label: '열기', icon: IconEdit, onSelect: () => handleNodeClick(nodeMenu.id, false) },
+                          {
+                            key: 'open-new-tab',
+                            label: '새 탭에서 열기',
+                            icon: IconOpenInNew,
+                            // noopener 가 없으면 sessionStorage 가 복제돼 편집 잠금이 깨진다 (F-296 4.1)
+                            onSelect: () => {
+                              window.open(formatHash(nodeMenu.id), '_blank', 'noopener')
+                            },
+                          },
+                          { key: 'recenter', label: '여기로 이동', icon: IconRecenter, onSelect: () => onRecenter(nodeMenu.id) },
+                        ]
+                  }
                 />
               )}
             </>
