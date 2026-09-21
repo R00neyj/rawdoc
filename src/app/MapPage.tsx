@@ -23,6 +23,13 @@ type MapPageProps = {
 
 type Depth = 1 | 2 | 3
 
+// `1단계` 가 무엇의 단계인지 화면에 글로 밝힌다 (2026-09-21 사용자 "설명이 없어서 뭔질 모르겠음")
+const DEPTH_CHOICES: { depth: Depth; hint: string }[] = [
+  { depth: 1, hint: '1단계 — 이 문서와 바로 이어진 문서까지' },
+  { depth: 2, hint: '2단계 — 그 문서에 이어진 문서까지 (두 다리 건너)' },
+  { depth: 3, hint: '3단계 — 세 다리 건너까지' },
+]
+
 function readDepthPref(): Depth {
   const raw = getPref('md.mapDepth', '1')
   return raw === '2' || raw === '3' ? (Number(raw) as Depth) : 1
@@ -137,18 +144,14 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
 
   return (
     <div className="map-page">
+      {/* 제목·보기 설정·닫기를 한 줄에 둔다 — 편집 화면의 상단바까지 세면 가로 막대가
+          세 겹이 되어 지도가 볼 자리를 잃는다 (2026-09-21 사용자 확인) */}
       <div className="map-page-head">
         <h1 className="map-page-title">
-          <IconMap size={20} />
+          <IconMap size={18} />
           지도
         </h1>
-        <button type="button" className="map-page-close" onClick={onClose}>
-          <IconClose size={18} />
-          닫기
-        </button>
-      </div>
 
-      <div className="map-page-controls">
         <div className="map-segment" role="group" aria-label="보기 범위">
           <button
             type="button"
@@ -164,13 +167,24 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
         </div>
 
         {mode === 'center' && (
-          <div className="map-segment" role="group" aria-label="단계">
-            {[1, 2, 3].map((d) => (
-              <button key={d} type="button" aria-pressed={depth === d} onClick={() => changeDepth(d as Depth)}>
-                {d}단계
-              </button>
-            ))}
-          </div>
+          <>
+            <span className="map-control-label" id="map-depth-label">
+              몇 다리까지
+            </span>
+            <div className="map-segment" role="group" aria-labelledby="map-depth-label">
+              {DEPTH_CHOICES.map((choice) => (
+                <button
+                  key={choice.depth}
+                  type="button"
+                  aria-pressed={depth === choice.depth}
+                  title={choice.hint}
+                  onClick={() => changeDepth(choice.depth)}
+                >
+                  {choice.depth}단계
+                </button>
+              ))}
+            </div>
+          </>
         )}
 
         <div className="map-segment" role="group" aria-label="지도·목록">
@@ -182,11 +196,17 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
           </button>
         </div>
 
-        {view === 'graph' && (
-          <button type="button" className="map-fit-btn" onClick={() => setFitToken((n) => n + 1)}>
-            맞춤
+        <div className="map-page-actions">
+          {view === 'graph' && (
+            <button type="button" className="map-fit-btn" onClick={() => setFitToken((n) => n + 1)}>
+              맞춤
+            </button>
+          )}
+          <button type="button" className="map-page-close" onClick={onClose}>
+            <IconClose size={16} />
+            닫기
           </button>
-        )}
+        </div>
       </div>
 
       <div className="map-page-body">

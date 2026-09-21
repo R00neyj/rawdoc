@@ -2725,6 +2725,8 @@ export default function App() {
     !isEmpty &&
     !sharedDoc &&
     !isReadOnlyDoc &&
+    // 지도는 편집기를 숨기고 그 자리를 통째로 쓴다 — 서식 단추가 누를 대상이 없다 (F-292 6.1)
+    !mapRoute &&
     (viewMode === 'live' || viewMode === 'raw')
 
   // 상단바 — 좁은 창은 앞 묶음을 담아 창 전체 위에, 넓은 창은 앞 묶음 없이 메인 열 안에만 (F-159 2.1)
