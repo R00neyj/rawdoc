@@ -1,6 +1,6 @@
 // 사이트 틀과 글 빌드 (specs/features/F-272.md 12장 A9~A12)
 import { test, expect } from '@playwright/test'
-import { mockLanding } from './helpers.js'
+import { mockLanding, openApp } from './helpers.js'
 
 test('F-272 A9 서비스 워커 precache 에서 사이트 경로가 빠진다', async ({ page }) => {
   const res = await page.request.get('/sw.js')
@@ -141,4 +141,97 @@ test('F-274 A14 랜딩 머리에도 도움말 링크가 보인다', async ({ pag
   await mockLanding(page)
   await page.goto('/')
   await expect(page.locator('.site-head a[href="/help"]', { hasText: '도움말' })).toBeVisible()
+})
+
+test('F-276 A10 /guides 목록 페이지가 뜬다', async ({ page }) => {
+  await page.goto('/guides')
+  await expect(page.getByRole('heading', { level: 1, name: '사용법' })).toBeVisible()
+  await expect(page.locator('.site-nav a[href="/guides"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('.site-foot')).toBeVisible()
+  await expect(page.locator('.site-article ul a')).toHaveCount(3)
+})
+
+test('F-276 A11 글 3편이 각각 뜬다', async ({ page }) => {
+  await page.goto('/guides/wiki-links')
+  await expect(page.getByRole('heading', { level: 1, name: '위키링크로 문서 잇기' })).toBeVisible()
+
+  await page.goto('/guides/zettelkasten')
+  await expect(page.getByRole('heading', { level: 1, name: '제텔카스텐으로 메모 쌓기' })).toBeVisible()
+
+  await page.goto('/guides/markdown-portability')
+  await expect(page.getByRole('heading', { level: 1, name: '한 번 쓴 글을 다른 도구로 옮기기' })).toBeVisible()
+})
+
+test('F-276 A12 완결된 정적 페이지다', async ({ page }) => {
+  const listRes = await page.request.get('/guides')
+  expect(listRes.status()).toBe(200)
+  const listBody = await listRes.text()
+  expect(listBody).toContain('<title>사용법 · Rawdoc</title>')
+  expect(listBody).toContain('rel="canonical"')
+  expect(listBody).toContain('https://rawdoc.app/guides')
+  expect(listBody).not.toContain('<script')
+
+  const postRes = await page.request.get('/guides/wiki-links')
+  expect(postRes.status()).toBe(200)
+  const postBody = await postRes.text()
+  expect(postBody).toContain('<title>위키링크로 문서 잇기 · Rawdoc</title>')
+  expect(postBody).toContain('rel="canonical"')
+  expect(postBody).toContain('https://rawdoc.app/guides/wiki-links')
+  expect(postBody).not.toContain('<script')
+  expect(postBody).not.toContain('data-mermaid-source')
+  expect(postBody).not.toContain('data-attachment')
+})
+
+test('F-276 A13 sitemap.xml 에 등재된다', async ({ page }) => {
+  const res = await page.request.get('/sitemap.xml')
+  const body = await res.text()
+  expect(body).toContain('<loc>https://rawdoc.app/guides</loc>')
+  expect(body).toContain('<loc>https://rawdoc.app/guides/wiki-links</loc>')
+  expect(body).toContain('<loc>https://rawdoc.app/guides/zettelkasten</loc>')
+  expect(body).toContain('<loc>https://rawdoc.app/guides/markdown-portability</loc>')
+})
+
+test('F-276 A14 랜딩 머리에도 사용법 링크가 보인다', async ({ page }) => {
+  await mockLanding(page)
+  await page.goto('/')
+  await expect(page.locator('.site-head a[href="/guides"]', { hasText: '사용법' })).toBeVisible()
+})
+
+test('F-276 A15 사이드바 사용법 항목이 새 탭으로 연다', async ({ page }) => {
+  await openApp(page)
+  const link = page.locator('.sidebar-bottom a[href="/guides"]')
+  await expect(link).toHaveAttribute('target', '_blank')
+  await expect(link).toHaveAttribute('rel', /noopener/)
+  await expect(link).toHaveAccessibleName('사용법')
+
+  const [popup] = await Promise.all([page.waitForEvent('popup'), link.click()])
+  await popup.waitForLoadState()
+  expect(popup.url()).toMatch(/\/guides$/)
+  await expect(popup.getByRole('heading', { level: 1, name: '사용법' })).toBeVisible()
+  await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible()
+})
+
+test('F-276 A16 접힌 레일에도 있다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await openApp(page)
+  await page.locator('.sidebar-toggle').click()
+
+  const link = page.locator('.sidebar-rail-bottom a[href="/guides"]')
+  await expect(link).toBeVisible()
+  await expect(link).toHaveAccessibleName('사용법')
+
+  const labels = await page
+    .locator('.sidebar-rail-bottom [aria-label]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
+  const helpIdx = labels.indexOf('도움말')
+  const guideIdx = labels.indexOf('사용법')
+  const settingsIdx = labels.indexOf('설정')
+  expect(guideIdx).toBeGreaterThan(helpIdx)
+  expect(guideIdx).toBeLessThan(settingsIdx)
+})
+
+test('F-276 A17 서비스 워커 precache 에서 빠진다', async ({ page }) => {
+  const res = await page.request.get('/sw.js')
+  const body = await res.text()
+  expect(body).not.toContain('guides.html')
 })

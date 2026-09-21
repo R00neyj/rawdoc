@@ -42,9 +42,12 @@ import {
   IconTooltip,
   IconGroup,
   IconHelp,
+  IconGuide,
+  IconExternalLink,
   IconCollapseAll,
   IconDownload,
 } from './icons'
+import { GUIDES_PATH } from '../lib/siteChrome'
 import type { Notice } from './notice'
 
 export { SIDEBAR_ID }
@@ -434,11 +437,23 @@ type RailButtonProps = {
   ariaDisabled?: boolean
   buttonRef?: RefObject<HTMLButtonElement | null>
   ariaExpanded?: boolean
+  href?: string
 }
 
 // 접힘 레일의 아이콘 전용 버튼(F-143 3.3, 툴팁은 오른쪽) — props.icon 을 구조 분해로 대문자 별칭하면 no-unused-vars 가 JSX 태그 참조를 못 잡는다
+// href 를 주면 사이트로 나가는 새 탭 링크로 그린다 (F-276.md 4.3) — onClick·ariaDisabled·buttonRef·ariaExpanded 는 그 통로에서 쓰지 않는다
 function RailButton(props: RailButtonProps) {
-  const { label, onClick, ariaDisabled, buttonRef, ariaExpanded } = props
+  const { label, onClick, ariaDisabled, buttonRef, ariaExpanded, href } = props
+  if (href) {
+    return (
+      <span className="icon-btn-wrap rail-btn-wrap">
+        <a className="icon-btn rail-btn" href={href} target="_blank" rel="noopener noreferrer" aria-label={label}>
+          <props.icon size={18} />
+        </a>
+        <IconTooltip text={label} side />
+      </span>
+    )
+  }
   return (
     <span className="icon-btn-wrap rail-btn-wrap">
       <button
@@ -462,11 +477,22 @@ type SidebarButtonProps = {
   icon: ComponentType<{ size?: number; className?: string }>
   onClick?: () => void
   ariaDisabled?: boolean
+  href?: string
 }
 
 // 펼친 사이드바의 아이콘+글자 동작 버튼 (F-143 3.2)
+// href 를 주면 사이트로 나가는 새 탭 링크로 그린다 (F-276.md 4.3)
 function SidebarButton(props: SidebarButtonProps) {
-  const { label, onClick, ariaDisabled } = props
+  const { label, onClick, ariaDisabled, href } = props
+  if (href) {
+    return (
+      <a className="sidebar-btn" href={href} target="_blank" rel="noopener noreferrer">
+        <props.icon size={18} className="sidebar-btn-icon" />
+        <span className="sidebar-btn-label">{label}</span>
+        <IconExternalLink size={14} className="sidebar-btn-ext" />
+      </a>
+    )
+  }
   return (
     <button type="button" className="sidebar-btn" aria-disabled={ariaDisabled || undefined} onClick={onClick}>
       <props.icon size={18} className="sidebar-btn-icon" />
@@ -1013,11 +1039,13 @@ export default function Sidebar({
           {isRail ? (
             <>
               <RailButton icon={IconHelp} label="도움말" onClick={onOpenHelp} />
+              <RailButton icon={IconGuide} label="사용법" href={GUIDES_PATH} />
               <RailButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
             </>
           ) : (
             <>
               <SidebarButton icon={IconHelp} label="도움말" onClick={onOpenHelp} />
+              <SidebarButton icon={IconGuide} label="사용법" href={GUIDES_PATH} />
               <SidebarButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
             </>
           )}

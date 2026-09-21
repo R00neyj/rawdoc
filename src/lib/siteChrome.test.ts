@@ -1,8 +1,20 @@
 // 사이트 공통 머리·꼬리 (specs/features/F-272.md 5.1, A1)
 import { describe, expect, it, beforeEach } from 'vitest'
-import { SITE_NAV, SITE_FOOTER_LINKS, renderSiteHeader, renderSiteFooter } from './siteChrome'
+import { SITE_NAV, SITE_FOOTER_LINKS, GUIDES_PATH, renderSiteHeader, renderSiteFooter } from './siteChrome'
 
 const INITIAL_NAV = [...SITE_NAV]
+
+describe('F-276 A9 SITE_NAV 에 사용법이 등록돼 있다', () => {
+  it('/guides 항목이 정확히 하나 있고 맨 앞이다', () => {
+    const matches = INITIAL_NAV.filter((link) => link.path === '/guides' && link.label === '사용법')
+    expect(matches).toHaveLength(1)
+    expect(INITIAL_NAV[0]).toEqual({ path: '/guides', label: '사용법' })
+  })
+
+  it('GUIDES_PATH 는 /guides 다', () => {
+    expect(GUIDES_PATH).toBe('/guides')
+  })
+})
 
 describe('F-273 A2 SITE_NAV 에 체인지로그가 등록돼 있다', () => {
   it('/changelog 항목이 정확히 하나 있다', () => {

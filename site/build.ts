@@ -3,6 +3,7 @@ import { checkContentFile } from './guard'
 import { contentUrl, urlToFile } from './pages'
 import { renderSitePage } from './render'
 import { HELP_CONTENT_PATH, helpContent } from './helpPage'
+import { GUIDES_INDEX_PATH, guideEntry, guidesIndexContent } from './guidesIndex'
 import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS, SITE_NAV, SITE_FOOTER_LINKS } from '../src/lib/siteChrome'
 import { SITE_URL } from '../src/lib/siteMeta'
 import brand from '../brand.config'
@@ -71,8 +72,23 @@ export function buildSite(input: SiteInput): Record<string, string> {
   if (fileEntries.some(([relPath]) => relPath === HELP_CONTENT_PATH)) {
     throw new Error(`content/${HELP_CONTENT_PATH}: 도움말은 src/app/helpDoc.ts 가 원본입니다 — content/ 에 두지 않습니다`)
   }
-  // 도움말은 content/ 에 파일이 없다 — 맨 뒤에 붙여 content/ 의 가드 에러가 먼저 나오게 한다 (F-274.md 3.3)
-  const mdEntries: [string, string][] = [...fileEntries, [HELP_CONTENT_PATH, helpContent()]]
+  if (fileEntries.some(([relPath]) => relPath === GUIDES_INDEX_PATH)) {
+    throw new Error(`content/${GUIDES_INDEX_PATH}: 사용법 목록은 빌드가 만듭니다 — 글은 content/guides/{slug}.md 로 두세요`)
+  }
+
+  // 목록은 content/guides/*.md 의 프론트매터로 만든다. 주소 매핑이 없는 파일(잘못된 slug)은 건너뛴다 — 아래 루프의 가드 G2 가 그 파일에서 빌드를 실패시킨다
+  const guideEntries = fileEntries.flatMap(([relPath, raw]) => {
+    if (!relPath.startsWith('guides/')) return []
+    const url = contentUrl(relPath)
+    return url === null ? [] : [guideEntry(url, raw)]
+  })
+
+  // 도움말·사용법 목록은 content/ 에 파일이 없다 — 맨 뒤에 붙여 content/ 의 가드 에러가 먼저 나오게 한다 (F-274.md 3.3)
+  const mdEntries: [string, string][] = [
+    ...fileEntries,
+    [GUIDES_INDEX_PATH, guidesIndexContent(guideEntries)],
+    [HELP_CONTENT_PATH, helpContent()],
+  ]
 
   for (const [relPath, raw] of mdEntries) {
     checkContentFile(relPath, raw)

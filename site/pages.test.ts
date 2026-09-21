@@ -48,3 +48,21 @@ describe('F-272 A4 contentUrl/urlToFile', () => {
     expect(urlToFile('/changelog')).toBe('changelog.html')
   })
 })
+
+describe('F-276 A8 guides 목록 주소 매핑', () => {
+  it("contentUrl('guides.md') → '/guides'", () => {
+    expect(contentUrl('guides.md')).toBe('/guides')
+  })
+
+  it("urlToFile('/guides') → 'guides.html'", () => {
+    expect(urlToFile('/guides')).toBe('guides.html')
+  })
+
+  it("contentUrl('guides/index.md') → '/guides/index' (/guides 와 겹치지 않는다)", () => {
+    expect(contentUrl('guides/index.md')).toBe('/guides/index')
+  })
+
+  it("contentUrl('guides/Bad Slug.md') → null", () => {
+    expect(contentUrl('guides/Bad Slug.md')).toBeNull()
+  })
+})

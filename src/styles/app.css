@@ -549,6 +549,13 @@ body.sidebar-resizing {
   color: var(--ink-2);
   margin-bottom: 2px;
   transition: var(--transition-colors);
+  text-decoration: none;
+}
+
+/* 사이트로 나가는 사이드바 항목의 새 탭 표시 (F-276 4.3) */
+.sidebar-btn-ext {
+  flex: none;
+  color: var(--muted);
 }
 
 .sidebar-btn:hover:not([aria-disabled='true']) {
@@ -2193,7 +2200,7 @@ body.sidebar-resizing {
   transition-delay: 400ms;
 }
 
-.icon-btn-wrap button:focus-visible ~ .icon-tooltip {
+.icon-btn-wrap :is(button, a):focus-visible ~ .icon-tooltip {
   opacity: 1;
   scale: 1;
   translate: 0 0;

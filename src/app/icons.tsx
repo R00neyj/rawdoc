@@ -62,6 +62,7 @@ import textFormatSvg from '@material-symbols/svg-400/outlined/text_format.svg?ra
 import subjectSvg from '@material-symbols/svg-400/outlined/subject.svg?raw'
 import addSvg from '@material-symbols/svg-400/outlined/add.svg?raw'
 import helpSvg from '@material-symbols/svg-400/outlined/help.svg?raw'
+import menuBookSvg from '@material-symbols/svg-400/outlined/menu_book.svg?raw'
 import collapseAllSvg from '@material-symbols/svg-400/outlined/collapse_all.svg?raw'
 // 내보내기 메뉴 `PDF (A4 인쇄)` (F-279.md 3.1)
 import printSvg from '@material-symbols/svg-400/outlined/print.svg?raw'
@@ -157,6 +158,9 @@ export const IconTabInsert = makeIcon(addSvg)
 
 // 사이드바 `도움말` 항목 (F-235.md 1장)
 export const IconHelp = makeIcon(helpSvg)
+
+// 사이드바 `사용법` 항목 — 사이트 /guides 로 나가는 링크 (F-276.md 4.4)
+export const IconGuide = makeIcon(menuBookSvg)
 
 // 사이드바 `모두 접기` (2026-09-20 사용자 요청)
 export const IconCollapseAll = makeIcon(collapseAllSvg)

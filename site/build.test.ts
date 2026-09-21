@@ -2,6 +2,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { buildSite } from './build'
 import { HELP_CONTENT_PATH } from './helpPage'
+import { GUIDES_INDEX_PATH } from './guidesIndex'
 import brand from '../brand.config'
 import { SITE_NAV, SITE_FOOTER_LINKS } from '../src/lib/siteChrome'
 
@@ -17,17 +18,17 @@ afterAll(() => {
 })
 
 describe('F-272 A5 빈 content', () => {
-  // 도움말(help.html)은 content 와 무관하게 buildSite 가 항상 만들어 낸다 (F-274.md 3장) — 그래서 넷이다
-  it('키가 정확히 404.html·help.html·robots.txt·sitemap.xml 넷이다', () => {
+  // 도움말(help.html)·사용법 목록(guides.html)은 content 와 무관하게 buildSite 가 항상 만들어 낸다 (F-274.md 3장, F-276.md 3.3) — 그래서 다섯이다
+  it('키가 정확히 404.html·guides.html·help.html·robots.txt·sitemap.xml 다섯이다', () => {
     const out = buildSite({ content: {}, appCssHref, builtAt })
-    expect(Object.keys(out).sort()).toEqual(['404.html', 'help.html', 'robots.txt', 'sitemap.xml'])
+    expect(Object.keys(out).sort()).toEqual(['404.html', 'guides.html', 'help.html', 'robots.txt', 'sitemap.xml'])
   })
 })
 
 describe('F-274 A5 글이 없어도 도움말은 난다', () => {
-  it('키가 정확히 404.html·help.html·robots.txt·sitemap.xml 넷이다', () => {
+  it('키가 정확히 404.html·guides.html·help.html·robots.txt·sitemap.xml 다섯이다', () => {
     const out = buildSite({ content: {}, appCssHref, builtAt })
-    expect(Object.keys(out).sort()).toEqual(['404.html', 'help.html', 'robots.txt', 'sitemap.xml'])
+    expect(Object.keys(out).sort()).toEqual(['404.html', 'guides.html', 'help.html', 'robots.txt', 'sitemap.xml'])
   })
 })
 
@@ -160,5 +161,40 @@ describe('F-272 A8 링크 목록 검사', () => {
     } finally {
       SITE_NAV.length = 0
     }
+  })
+})
+
+describe('F-276 A6 글 2편 → 목록·색인', () => {
+  it('날짜 내림차순 정렬, 개별 페이지 생성, sitemap 등재, 목록 페이지 메타', () => {
+    SITE_NAV.length = 0
+    SITE_FOOTER_LINKS.length = 0
+    SITE_NAV.push({ path: '/guides', label: '사용법' })
+    try {
+      const content = {
+        'guides/a.md': '---\ntitle: 에이\nsummary: 에이요약\ndate: 2026-09-01\n---\n본문a',
+        'guides/b.md': '---\ntitle: 비\nsummary: 비요약\ndate: 2026-09-05\n---\n본문b',
+      }
+      const out = buildSite({ content, appCssHref, builtAt })
+      const listHtml = /<ul>[\s\S]*?<\/ul>/.exec(out['guides.html'])![0]
+      expect(listHtml.indexOf('/guides/b')).toBeLessThan(listHtml.indexOf('/guides/a'))
+      expect(Object.keys(out)).toContain('guides/a.html')
+      expect(Object.keys(out)).toContain('guides/b.html')
+      expect(out['sitemap.xml']).toContain(
+        '<url><loc>https://rawdoc.app/guides</loc><lastmod>2026-09-20</lastmod></url>',
+      )
+      expect(out['sitemap.xml']).toContain('<loc>https://rawdoc.app/guides/a</loc>')
+      expect(out['sitemap.xml']).toContain('<loc>https://rawdoc.app/guides/b</loc>')
+      expect(out['guides.html']).toContain('<title>사용법 · Rawdoc</title>')
+      expect(out['guides.html']).toMatch(/<a href="\/guides" aria-current="page">사용법<\/a>/)
+    } finally {
+      SITE_NAV.length = 0
+    }
+  })
+})
+
+describe('F-276 A7 content/guides.md 중복', () => {
+  it('content 에 guides.md 가 있으면 에러를 던진다', () => {
+    const content = { [GUIDES_INDEX_PATH]: '---\ntitle: x\n---\n' }
+    expect(() => buildSite({ content, appCssHref, builtAt })).toThrow(/content\/guides\.md/)
   })
 })
