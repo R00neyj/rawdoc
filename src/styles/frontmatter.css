@@ -60,7 +60,7 @@
 
 /* F-124 표의 짝수 행 바탕(--md-bg-muted)을 프론트매터 표에는 적용하지 않는다 (F-133 3.3) */
 :is(.app-shell, .public-view) .markdown-body table.markdown-frontmatter tr:nth-child(2n) {
-  background-color: var(--panel);
+  background-color: transparent;
 }
 
 :is(.app-shell, .public-view) .markdown-body pre.markdown-frontmatter-raw {

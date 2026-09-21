@@ -6,7 +6,10 @@
 
 :is(.app-shell, .public-view) .markdown-body {
   color: var(--ink);
-  background-color: var(--panel);
+  /* 원본의 고정 #ffffff 만 지운다 — 바탕색은 조상이 정한다(앱 보기 모드 `.content-area`,
+     공개 보기 `.public-view`, 사이트 글 `<body>` 의 --paper). 여기서 --panel 을 칠하면
+     사이트 페이지에서 본문만 다른 색 박스로 떠 보인다 (2026-09-21) */
+  background-color: transparent;
   /* 문단·목록·인용·표 칸의 기본 서체 (design.md 2.4, F-141 3.3). 제목(h1·h2)·코드는
      아래에서 각자 자리(--font-display·--font-mono)로 다시 덮는다 */
   font-family: var(--font-body);
@@ -92,14 +95,14 @@
   border: 1px solid var(--md-border);
 }
 
-/* 모든 행이 같은 바탕 — 표 바깥 문서 칸 바탕과 같다, 줄무늬 없음. github-markdown-css 원본 :nth-child(2n) 줄무늬도 함께 덮어써야 이긴다 (F-164) */
+/* 모든 행이 같은 바탕 — 표 바깥 바탕이 그대로 비친다, 줄무늬 없음. github-markdown-css 원본 :nth-child(2n) 줄무늬도 함께 덮어써야 이긴다 (F-164) */
 :is(.app-shell, .public-view) .markdown-body table tr {
-  background-color: var(--panel);
+  background-color: transparent;
   border-top: 1px solid var(--md-border-muted);
 }
 
 :is(.app-shell, .public-view) .markdown-body table tr:nth-child(2n) {
-  background-color: var(--panel);
+  background-color: transparent;
 }
 
 /* 목록 (F-226) — 편집 모드 F-152 2.3 을 기준으로 맞춘다. list-style:none 후 ::before 로 다시 그린다 */

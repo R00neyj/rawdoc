@@ -95,6 +95,10 @@ export const SITE_CHROME_CSS = `
 
 /* app.css 의 .public-view(공개 보기 화면 S-5)는 화면 꽉 채우는 flex 열이다 — 사이트 글은 그 선택자만 빌려 쓰고 배치는 문서 흐름으로 되돌린다 (F-272 5.2) */
 .site-article.public-view { display: block; height: auto; width: auto; background: none; }
+/* 사이트 글은 앱의 문서 칸(--panel)이 아니라 <body>(--paper) 위에 놓인다. 콜아웃처럼
+   --panel 을 기준색으로 섞어 쓰는 값(callout.css)이 실제 바탕과 어긋나지 않도록
+   이 범위에서만 기준을 바꾼다 (2026-09-21) */
+.site-article.public-view { --panel: var(--paper); }
 `
 
 export function renderSiteHeader(args: {
