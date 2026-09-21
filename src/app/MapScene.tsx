@@ -35,6 +35,7 @@ type MapSceneProps = {
   graph: WikiGraph // 이미 상한으로 잘린 그래프
   centerId: string | null // #/map/{id} 의 그 문서. 없으면 null
   fitToken: number // 바뀔 때마다 카메라를 다시 맞추고 다시 그린다
+  centerToken: number // `여기로 이동` 을 고를 때마다 오른다. 이미 중심인 문서를 다시 골라도 카메라가 움직이게 (사용자 지시 2026-09-22)
   menuOpen: boolean // 노드 메뉴가 떠 있는 동안 조작을 잠근다 (F-2003 4.4)
   view: MapView // 지도 설정 패널의 `표시` 3축 (F-2005 7장)
   onNodeClick: (id: string, modified: boolean) => void
@@ -529,6 +530,8 @@ function buildScene(
     const next = hit ? hit.index : -1
     if (next === hoverIndex) return
     hoverIndex = next
+    // 노드 위에서만 손가락 — 캔버스 전체가 한 요소라 CSS 로는 가릴 수 없다 (사용자 지시 2026-09-22)
+    canvas.style.cursor = next >= 0 ? 'pointer' : ''
     refreshLabels()
     requestDraw()
   }
@@ -722,12 +725,13 @@ function buildScene(
   }
 }
 
-export default function MapScene({ graph, centerId, fitToken, menuOpen, view, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }: MapSceneProps) {
+export default function MapScene({ graph, centerId, fitToken, centerToken, menuOpen, view, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }: MapSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const probeRef = useRef<HTMLSpanElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const sceneRef = useRef<SceneBundle | null>(null)
   const prevCenterRef = useRef<string | null>(centerId)
+  const prevCenterTokenRef = useRef(centerToken)
   const labelsRef = useRef<MapLabelsHandle | null>(null)
   // 보일 이름표 목록만 React 가 들고, 좌표는 labelsRef 로 직접 쓴다 (F-2004 7.2)
   const [labelItems, setLabelItems] = useState<MapLabelItem[]>([])
@@ -768,16 +772,17 @@ export default function MapScene({ graph, centerId, fitToken, menuOpen, view, on
     bundle.requestDraw()
   }, [fitToken])
 
-  // (c) 중심 문서가 바뀌면 색을 다시 쓰고 그 노드로 카메라를 옮긴다. 마운트 직후에는 건너뛴다 — 안 그러면 열자마자 userMoved 가 켜져 자동 맞춤이 죽는다 (F-2003 9.2)
+  // (c) 중심 문서가 바뀌거나 `여기로 이동` 을 다시 고르면 색을 다시 쓰고 그 노드로 카메라를 옮긴다. 마운트 직후에는 건너뛴다 — 안 그러면 열자마자 userMoved 가 켜져 자동 맞춤이 죽는다 (F-2003 9.2)
   useEffect(() => {
     const bundle = sceneRef.current
     if (!bundle) return
-    if (prevCenterRef.current === centerId) return
+    if (prevCenterRef.current === centerId && prevCenterTokenRef.current === centerToken) return
     prevCenterRef.current = centerId
+    prevCenterTokenRef.current = centerToken
     bundle.applyColors(centerId)
     if (centerId) bundle.lookAtNode(centerId)
     bundle.requestDraw()
-  }, [centerId])
+  }, [centerId, centerToken])
 
   // (d) 메뉴가 떠 있는 동안만 조작을 잠근다 (F-2003 4.4)
   useEffect(() => {

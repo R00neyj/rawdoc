@@ -412,6 +412,34 @@ test.describe('F-2003 카메라 조작', () => {
     await expect(map.locator('canvas')).toHaveCount(1)
     expect(errors).toEqual([])
   })
+
+  // 2026-09-22 사용자 신고 둘 — 명세에 없던 기준이라 F-2003 명세도 손봐야 한다
+  test('F-2003 A14 이미 중심인 문서에 `여기로 이동` 을 다시 골라도 카메라가 맞춰진다', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapFresh(page)
+    await page.mouse.click(cx, cy, { button: 'right' })
+    await nodeMenu(map).getByRole('menuitem', { name: '여기로 이동' }).click()
+    await expect(page).toHaveURL(/#\/map\/[^/]+$/)
+    await page.waitForTimeout(SETTLE)
+
+    // 이동으로 노드를 한쪽으로 밀어낸 뒤 같은 문서에 다시 `여기로 이동`
+    await drag(page, cx, cy, 0.55 * H, 0, 'left')
+    await page.waitForTimeout(SETTLE)
+    await page.mouse.click(cx + 0.55 * H, cy, { button: 'right' })
+    await nodeMenu(map).getByRole('menuitem', { name: '여기로 이동' }).click()
+    await page.waitForTimeout(SETTLE)
+
+    await page.mouse.click(cx, cy)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+
+  test('F-2003 A15 노드 위에서만 커서가 손가락 모양이다', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapFresh(page)
+    const canvas = map.locator('canvas')
+    await page.mouse.move(cx, cy)
+    await expect(canvas).toHaveCSS('cursor', 'pointer')
+    await page.mouse.move(cx + 0.45 * H, cy + 0.42 * H)
+    await expect(canvas).toHaveCSS('cursor', 'auto')
+  })
 })
 
 test.describe('F-2003 터치', () => {

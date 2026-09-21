@@ -30,6 +30,8 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
   const [updatedAtById, setUpdatedAtById] = useState<Map<string, number>>(new Map())
   const [viewMode, setViewMode] = useState<'graph' | 'list'>('graph')
   const [fitToken, setFitToken] = useState(0)
+  // `여기로 이동` 은 해시만 바꾸므로 이미 중심인 문서를 다시 고르면 centerDocId 가 안 바뀐다. 토큰이 그때도 카메라를 움직인다 (사용자 지시 2026-09-22)
+  const [centerToken, setCenterToken] = useState(0)
   // WebGL2 가 없으면 지도 자체를 마운트하지 않고 목록으로 보여 준다 (F-292 3.6)
   const [unsupported, setUnsupported] = useState(() => !hasWebGL2())
   const [reduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
@@ -128,10 +130,15 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
       return
     }
     if (modified) {
-      onRecenter(id)
+      recenter(id)
       return
     }
     onOpenDoc(id)
+  }
+
+  function recenter(id: string) {
+    setCenterToken((n) => n + 1)
+    onRecenter(id)
   }
 
   function showGraph() {
@@ -237,6 +244,7 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
                 graph={displayGraph}
                 centerId={centerDocId}
                 fitToken={fitToken}
+                centerToken={centerToken}
                 menuOpen={nodeMenu !== null}
                 view={view}
                 onNodeClick={handleNodeClick}
@@ -281,7 +289,7 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
                               window.open(formatHash(nodeMenu.id), '_blank', 'noopener')
                             },
                           },
-                          { key: 'recenter', label: '여기로 이동', icon: IconRecenter, onSelect: () => onRecenter(nodeMenu.id) },
+                          { key: 'recenter', label: '여기로 이동', icon: IconRecenter, onSelect: () => recenter(nodeMenu.id) },
                         ]
                   }
                 />
