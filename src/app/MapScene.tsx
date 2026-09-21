@@ -327,8 +327,13 @@ function buildScene(
       nodeMaterial.dispose()
       edgeMaterial.dispose()
       renderer.dispose()
-      // dispose() 는 컨텍스트를 놓지 않는다 — 이걸 빠뜨리면 StrictMode 에서 하나씩 쌓인다 (3.6)
-      renderer.forceContextLoss()
+      // dispose() 는 컨텍스트를 놓지 않아 forceContextLoss 가 따로 필요한데(3.6), 캔버스가
+      // 화면에 남아 있는 동안 부르면 안 된다 — StrictMode 의 두 번째 마운트가 같은 캔버스를
+      // 그대로 물려받아 잃은 컨텍스트를 집고 렌더러 생성이 터진다. 캔버스가 정말 떨어져
+      // 나갔을 때만 놓는다 (2026-09-21 개발 서버에서 재현)
+      setTimeout(() => {
+        if (!canvas.isConnected) renderer.forceContextLoss()
+      }, 0)
     },
   }
 }
