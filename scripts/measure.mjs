@@ -9,6 +9,8 @@ import { longDoc, headingsDoc, listDoc, mixedDoc } from '../e2e/fixtures/docs.js
 function parseArgs(argv) {
   const opts = {
     doc: 'mixed',
+    docs: null,
+    reducedMotion: false,
     mode: 'live',
     theme: 'white',
     prefs: [],
@@ -28,6 +30,8 @@ function parseArgs(argv) {
     const next = () => argv[++i]
     switch (arg) {
       case '--doc': opts.doc = next(); break
+      case '--docs': opts.docs = parseDocs(next()); break
+      case '--reduced-motion': opts.reducedMotion = true; break
       case '--mode': opts.mode = next(); break
       case '--theme': opts.theme = next(); break
       case '--pref': opts.prefs.push(next()); break
@@ -45,6 +49,60 @@ function parseArgs(argv) {
     }
   }
   return opts
+}
+
+// `--docs 2000:1` → { count: 2000, links: 1 } (specs/features/F-2002.md 9.1)
+function parseDocs(raw) {
+  const m = /^(\d+):(\d+)$/.exec(String(raw))
+  if (!m) throw new Error(`--docs 는 {문서 수}:{문서당 링크 수} 꼴이다: ${raw}`)
+  return { count: Number(m[1]), links: Number(m[2]) }
+}
+
+// 브라우저 안에서 도는 함수 — IndexedDB 의 docs 스토어에 문서를 통째로 넣는다. importMarkdown 은 한 건씩 열릴 때까지 기다려 2,000건에 쓸 수 없다 (F-2002 9.1)
+function seedDocs({ count, links }) {
+  return new Promise((resolve, reject) => {
+    const open = indexedDB.open('md-docs', 4)
+    open.onerror = () => reject(open.error)
+    open.onsuccess = () => {
+      const db = open.result
+      const tx = db.transaction('docs', 'readwrite')
+      const store = tx.objectStore('docs')
+      const base = Date.now()
+      // 씨앗 1 의 선형 합동 난수 — Math.random 을 쓰지 않는다. 재현되지 않는 측정은 게이트 판정에 못 쓴다
+      let seed = 1
+      const rand = () => {
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        return seed / 2147483648
+      }
+      // 앞쪽 95% 만 링크를 갖고 나머지는 고립 문서다. 상대는 선호적 연결로 골라 허브를 만든다
+      const linked = Math.round(count * 0.95)
+      for (let i = 0; i < count; i++) {
+        const targets = []
+        if (i > 0 && i < linked) {
+          for (let k = 0; k < links; k++) {
+            const r = rand()
+            targets.push(1 + Math.floor(r * r * (i - 1)))
+          }
+        }
+        const body = targets.map((t) => `[[문서 ${t}]]`).join(' ')
+        store.put({
+          id: `m${i}`,
+          title: `문서 ${i}`,
+          content: `문서 ${i}
+
+${body}
+`,
+          lineEnding: 'lf',
+          createdAt: base + i,
+          updatedAt: base + i,
+          folderId: null,
+          pinnedAt: null,
+        })
+      }
+      tx.oncomplete = () => { db.close(); resolve(count) }
+      tx.onerror = () => reject(tx.error)
+    }
+  })
 }
 
 function resolveDoc(doc) {
@@ -98,10 +156,11 @@ async function main() {
   const opts = parseArgs(process.argv.slice(2))
   const [widthStr, heightStr] = opts.size.split('x')
   const size = { width: Number(widthStr), height: Number(heightStr) }
-  const content = resolveDoc(opts.doc)
+  if (opts.docs && opts.doc !== 'mixed') throw new Error('--docs 와 --doc 은 같이 쓸 수 없다')
+  const content = opts.docs ? null : resolveDoc(opts.doc)
 
   if (opts.dryRun) {
-    console.log(JSON.stringify({ port: opts.port, dist: opts.dist, build: opts.build, mode: opts.mode, theme: opts.theme }))
+    console.log(JSON.stringify({ port: opts.port, dist: opts.dist, build: opts.build, mode: opts.mode, theme: opts.theme, docs: opts.docs, reducedMotion: opts.reducedMotion }))
     return
   }
 
@@ -111,6 +170,8 @@ async function main() {
   try {
     const context = await browser.newContext({ baseURL: server.url, viewport: size, serviceWorkers: 'block' })
     const page = await context.newPage()
+    // goto 전에 걸어야 첫 렌더부터 먹는다 (e2e/transition.spec.js:269 와 같은 방법)
+    if (opts.reducedMotion) await page.emulateMedia({ reducedMotion: 'reduce' })
     page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()) })
     page.on('pageerror', (err) => errors.push(err.message))
 
@@ -121,7 +182,14 @@ async function main() {
     }
 
     await openApp(page)
-    await importMarkdown(page, { content })
+    if (opts.docs) {
+      // 첫 실행으로 DB 가 만들어진 뒤에 넣고 다시 읽힌다
+      await page.evaluate(seedDocs, opts.docs)
+      await page.reload()
+      await page.locator('.sidebar').waitFor()
+    } else {
+      await importMarkdown(page, { content })
+    }
 
     // live 로 연 뒤 상단바 버튼으로 모드를 바꾼다 — view·raw 를 먼저 심으면 에디터가 숨겨져 openApp 대기가 끝나지 않는다 (F-160 2.7)
     if (opts.mode !== 'live') {
@@ -171,7 +239,7 @@ async function main() {
       await page.screenshot({ path: opts.shot })
     }
 
-    console.log(JSON.stringify({ url: server.url, size, selectors, eval: evalResult, errors }))
+    console.log(JSON.stringify({ url: server.url, size, docs: opts.docs, selectors, eval: evalResult, errors }))
   } finally {
     await browser.close()
     server.stop()

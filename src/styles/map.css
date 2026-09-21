@@ -53,12 +53,6 @@
   background: var(--rule-2);
 }
 
-/* 세그먼트 앞 작은 이름표 — `1단계` 가 무엇의 단계인지 글로 밝힌다 */
-.map-control-label {
-  font-size: 12px;
-  color: var(--muted);
-}
-
 .map-segment {
   display: inline-flex;
   border: 1px solid var(--rule);
@@ -145,75 +139,73 @@
   background: var(--rule-2);
 }
 
-.map-graph {
+/* ----- 3D 장면 (specs/features/F-2002.md 8장) ----- */
+.map-scene {
+  position: absolute;
+  inset: 0;
+}
+
+.map-canvas {
+  display: block;
   width: 100%;
   height: 100%;
   touch-action: none;
-  cursor: grab;
 }
 
-/* tabindex="-1" 이라 Tab 으로 닿지 않는다 — 배경을 끌어 옮길 때 클릭으로만 포커스가
-   들어오므로 테두리를 보일 이유가 없다. 키보드 사용자의 대안은 `목록` 세그먼트다 (F-292 7.3) */
-.map-graph:focus,
-.map-graph:focus-visible {
+/* tabindex="-1" 이라 Tab 으로 닿지 않는다 — 키보드 사용자의 대안은 `목록` 세그먼트다 (F-292 6.10) */
+.map-canvas:focus,
+.map-canvas:focus-visible {
   outline: none;
 }
 
-.map-node-group {
-  cursor: pointer;
-  /* 이름표까지 포함한 사각 영역 전체를 눌러도 반응한다 — 원과 글자 사이 빈틈을 눌러도 된다 */
-  pointer-events: bounding-box;
-}
-
-.map-node {
-  fill: var(--accent);
-  /* 호버 확대의 기준점을 평소에도 걸어 둔다 — 호버 규칙에만 두면 마우스가 나갈 때
-     transform-box·transform-origin 이 먼저 초기값(뷰박스 좌상단 기준)으로 돌아가
-     원이 엉뚱한 자리로 튄 뒤 제자리로 전환된다 */
-  transform-box: fill-box;
-  transform-origin: center;
-  /* all 이 아니라 transform 만 — cx·cy·r 은 SVG2 기하 속성이라 all 이면 배치가 바뀔 때
-     같이 애니메이션된다(F-292 2·7장 "배치는 애니메이션하지 않는다") */
-  transition: transform var(--transition-fast);
-}
-
-.map-node--missing {
-  fill: none;
-  stroke: var(--muted);
-  stroke-width: 1;
-  stroke-dasharray: 2 2;
-}
-
-.map-node--shared {
-  stroke: var(--ink-2);
-  stroke-width: 1;
-}
-
-.map-node-ring {
-  fill: none;
-  stroke: color-mix(in srgb, var(--accent) 40%, transparent);
-  stroke-width: 2;
-}
-
-.map-node-group:hover .map-node,
-.map-node-group:focus-visible .map-node {
-  transform: scale(1.2);
-}
-
-.map-edge {
-  stroke: var(--rule);
-  stroke-width: 1;
-}
-
-.map-edge--center {
-  stroke: color-mix(in srgb, var(--ink) 30%, transparent);
-}
-
-.map-node-label {
-  font-size: 11px;
-  fill: var(--ink-2);
-  font-family: var(--font-sans);
+/* 테마 토큰을 읽으려고 돌려쓰는 요소 하나 (6.3). 화면에 아무것도 내지 않는다 */
+.map-probe {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
   pointer-events: none;
+}
+
+/* 본문을 대체하지 않고 캔버스 위에 겹치는 한 줄 안내 (7.4) */
+.map-notice {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 16px;
+  text-align: center;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.map-notice a {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 2px 10px;
+  color: var(--ink);
+  transition: var(--transition-colors);
+}
+
+.map-notice a:hover {
+  background: var(--rule-2);
+}
+
+/* 안내 줄이 떠 있으면 목록 첫 줄이 그 밑에 깔린다 — 그만큼 밀어 둔다 */
+.map-page-body:has(.map-notice) .map-list {
+  padding-top: 56px;
+}
+
+/* `배치를 계산하는 중…` 이 캔버스와 형제로 겹쳐 뜬다 */
+.map-page-body > .map-status {
+  position: absolute;
 }
 
 .map-page-foot {

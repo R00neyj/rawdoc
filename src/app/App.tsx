@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -97,7 +99,8 @@ import SharesPage from './SharesPage'
 import { listShares, type ShareLinkRow, type ShareGrantRow } from './sharesApi'
 import { revokeShareLink, revokeFolderShareLink } from './linkApi'
 import { deleteGrant } from '../storage/docsApi'
-import MapPage from './MapPage'
+// three 가 초기 로드에 붙지 않게 지연 경계를 여기 긋는다 (specs/features/F-292.md 3.3, F-2002 4장)
+const MapPage = lazy(() => import('./MapPage'))
 import { mapIndexScope } from './mapIndex'
 import type { Doc, Folder, FolderDeleteMode, LineEnding, Store } from '../types'
 
@@ -2872,17 +2875,19 @@ export default function App() {
           )}
           {!sharedDoc && !sharesOpen && !helpOpen && mapRoute && (
             <div className="content-area">
-              <MapPage
-                docCount={docs.length}
-                store={store}
-                scope={mapDialogScope}
-                centerDocId={mapRoute.centerDocId}
-                onOpenDoc={selectDoc}
-                onOpenWikiLink={handleOpenWikiLink}
-                onRecenter={recenterMap}
-                onClose={closeMap}
-                onCreateDoc={() => createNewDoc()}
-              />
+              <Suspense fallback={<p className="map-status">연결을 읽는 중…</p>}>
+                <MapPage
+                  docCount={docs.length}
+                  store={store}
+                  scope={mapDialogScope}
+                  centerDocId={mapRoute.centerDocId}
+                  onOpenDoc={selectDoc}
+                  onOpenWikiLink={handleOpenWikiLink}
+                  onRecenter={recenterMap}
+                  onClose={closeMap}
+                  onCreateDoc={() => createNewDoc()}
+                />
+              </Suspense>
             </div>
           )}
           {!sharedDoc && !sharesOpen && !helpOpen && !mapRoute && isEmpty && (

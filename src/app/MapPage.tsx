@@ -1,13 +1,11 @@
 // 위키링크 지도 전체 화면 (specs/features/F-292.md 6장) — 사이드바 `지도` 버튼으로 들어온다
 import { useEffect, useMemo, useState } from 'react'
 import { buildMapIndex, type MapSource } from './mapIndex'
-import { buildWikiGraphFromEntries, subgraphAround, truncateGraphByDegree, type WikiGraph } from '../lib/wikiGraph'
-import { getPref, setPref } from './prefs'
-import { formatMapHash } from './hashRoute'
+import { buildWikiGraphFromEntries, truncateGraphByDegree, type WikiGraph } from '../lib/wikiGraph'
 import { IconClose, IconMap } from './icons'
-import MapGraph from './MapGraph'
+import MapScene, { hasWebGL2 } from './MapScene'
 
-const NODE_CAP = 500 // 5.4
+const NODE_CAP = 1000 // F-292 결정 11 + F-2002 10.3
 
 type MapPageProps = {
   docCount: number
@@ -21,35 +19,16 @@ type MapPageProps = {
   onCreateDoc: () => void
 }
 
-type Depth = 1 | 2 | 3
-
-// `1단계` 가 무엇의 단계인지 화면에 글로 밝힌다 (2026-09-21 사용자 "설명이 없어서 뭔질 모르겠음")
-const DEPTH_CHOICES: { depth: Depth; hint: string }[] = [
-  { depth: 1, hint: '1단계 — 이 문서와 바로 이어진 문서까지' },
-  { depth: 2, hint: '2단계 — 그 문서에 이어진 문서까지 (두 다리 건너)' },
-  { depth: 3, hint: '3단계 — 세 다리 건너까지' },
-]
-
-function readDepthPref(): Depth {
-  const raw = getPref('md.mapDepth', '1')
-  return raw === '2' || raw === '3' ? (Number(raw) as Depth) : 1
-}
-
 export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc, onOpenWikiLink, onRecenter, onClose, onCreateDoc }: MapPageProps) {
   const [loading, setLoading] = useState(true)
   const [graph, setGraph] = useState<WikiGraph | null>(null)
   const [updatedAtById, setUpdatedAtById] = useState<Map<string, number>>(new Map())
-  const [mode, setMode] = useState<'center' | 'all'>(() => (centerDocId ? 'center' : 'all'))
-  const [depth, setDepth] = useState<Depth>(() => readDepthPref())
   const [view, setView] = useState<'graph' | 'list'>('graph')
   const [fitToken, setFitToken] = useState(0)
-
-  // centerDocId 가 바뀌면(Ctrl+클릭 재중심) 현재 문서 모드로 돌아간다 — 렌더 중 상태를 맞추는 패턴, useEffect 에서 바로 setState 하지 않는다(Sidebar.tsx prunedForKey 와 같은 방식)
-  const [syncedCenterDocId, setSyncedCenterDocId] = useState(centerDocId)
-  if (centerDocId !== syncedCenterDocId) {
-    setSyncedCenterDocId(centerDocId)
-    if (centerDocId) setMode('center')
-  }
+  // WebGL2 가 없으면 지도 자체를 마운트하지 않고 목록으로 보여 준다 (F-292 3.6)
+  const [unsupported, setUnsupported] = useState(() => !hasWebGL2())
+  const [reduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const [layoutReady, setLayoutReady] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -69,34 +48,19 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
     }
   }, [store, scope])
 
-  function changeDepth(next: Depth) {
-    setDepth(next)
-    setPref('md.mapDepth', String(next) as '1' | '2' | '3')
-  }
-
-  // 전체 ↔ 현재 전환은 해시 replace 다 — 뒤로 가기 기록이 쌓이지 않게 한다 (6.1)
-  function changeMode(next: 'center' | 'all') {
-    setMode(next)
-    const url = `${location.pathname}${location.search}${next === 'center' ? formatMapHash(centerDocId) : formatMapHash()}`
-    history.replaceState(null, '', url)
-  }
-
   const centerIndex = useMemo(() => {
     if (!graph || !centerDocId) return -1
     return graph.nodes.findIndex((n) => n.id === centerDocId)
   }, [graph, centerDocId])
 
-  const { displayGraph, truncated, truncatedAt } = useMemo(() => {
-    if (!graph) return { displayGraph: null as WikiGraph | null, truncated: false, truncatedAt: depth }
-    if (mode === 'center' && centerIndex >= 0) {
-      const result = subgraphAround(graph, centerIndex, depth, NODE_CAP)
-      return { displayGraph: result.graph, truncated: result.truncated, truncatedAt: depth }
-    }
+  // 지도가 열려 있는 동안 그래프를 다시 만들지 않는다 (7.2)
+  const { displayGraph, truncated } = useMemo(() => {
+    if (!graph) return { displayGraph: null as WikiGraph | null, truncated: false }
     const result = truncateGraphByDegree(graph, updatedAtById, NODE_CAP)
-    return { displayGraph: result.graph, truncated: result.truncated, truncatedAt: depth }
-  }, [graph, mode, centerIndex, depth, updatedAtById])
+    return { displayGraph: result.graph, truncated: result.truncated }
+  }, [graph, updatedAtById])
 
-  // 나가는·들어오는·끊긴 링크 — 중심의 직접 간선만(깊이 설정과 무관, 7.4)
+  // 나가는·들어오는·끊긴 링크 — 중심의 직접 간선만 (7.3)
   const directLinks = useMemo(() => {
     if (!graph || centerIndex < 0) return { outgoing: [], incoming: [], broken: [] }
     const outgoing: WikiGraph['nodes'] = []
@@ -134,13 +98,16 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
     onOpenDoc(id)
   }
 
+  function showGraph() {
+    if (unsupported) return
+    setLayoutReady(false)
+    setView('graph')
+  }
+
   const sharedCount = graph ? graph.unreadable.length : 0
   const isEmptyWorkspace = !loading && docCount === 0
-  // 현재 문서 중심인데 연결이 없는 경우가 "전체에 링크가 하나도 없다" 보다 먼저다(6.5) — 문서가 하나뿐이고 링크가 없으면 두 조건이 동시에 참이 되는데, 이땐 문서별 안내를 보인다
-  const centerHasNoLinks =
-    !loading && mode === 'center' && centerIndex >= 0 && displayGraph !== null && displayGraph.nodes.length <= 1
-  const hasNoLinksAtAll =
-    !loading && !centerHasNoLinks && graph !== null && graph.edges.length === 0 && graph.nodes.every((n) => !n.missing)
+  const effectiveView = unsupported ? 'list' : view
+  const hasNoLinksAtAll = !loading && graph !== null && graph.edges.length === 0 && graph.nodes.every((n) => !n.missing)
 
   return (
     <div className="map-page">
@@ -152,52 +119,18 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
           지도
         </h1>
 
-        <div className="map-segment" role="group" aria-label="보기 범위">
-          <button
-            type="button"
-            aria-pressed={mode === 'center'}
-            disabled={!centerDocId}
-            onClick={() => changeMode('center')}
-          >
-            현재 문서
-          </button>
-          <button type="button" aria-pressed={mode === 'all'} onClick={() => changeMode('all')}>
-            전체
-          </button>
-        </div>
-
-        {mode === 'center' && (
-          <>
-            <span className="map-control-label" id="map-depth-label">
-              몇 다리까지
-            </span>
-            <div className="map-segment" role="group" aria-labelledby="map-depth-label">
-              {DEPTH_CHOICES.map((choice) => (
-                <button
-                  key={choice.depth}
-                  type="button"
-                  aria-pressed={depth === choice.depth}
-                  title={choice.hint}
-                  onClick={() => changeDepth(choice.depth)}
-                >
-                  {choice.depth}단계
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
         <div className="map-segment" role="group" aria-label="지도·목록">
-          <button type="button" aria-pressed={view === 'graph'} onClick={() => setView('graph')}>
+          {/* disabled 가 아니라 aria-disabled — 포커스는 받아야 한다 (7.1) */}
+          <button type="button" aria-pressed={effectiveView === 'graph'} aria-disabled={unsupported || undefined} onClick={showGraph}>
             지도
           </button>
-          <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')}>
+          <button type="button" aria-pressed={effectiveView === 'list'} onClick={() => setView('list')}>
             목록
           </button>
         </div>
 
         <div className="map-page-actions">
-          {view === 'graph' && (
+          {effectiveView === 'graph' && (
             <button type="button" className="map-fit-btn" onClick={() => setFitToken((n) => n + 1)}>
               맞춤
             </button>
@@ -221,49 +154,43 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
           </div>
         )}
 
-        {!loading && !isEmptyWorkspace && hasNoLinksAtAll && (
-          <div className="map-empty">
-            <p>아직 이어진 문서가 없습니다.</p>
-            <p>문서에 [[다른 문서 제목]] 을 쓰면 여기에 이어집니다.</p>
-            <a href="#/help">도움말</a>
-          </div>
+        {/* 고립 문서도 전부 노드로 띄우므로(F-292 결정 10) 본문을 대체하지 않고 한 줄만 겹친다 (7.4) */}
+        {!loading && !isEmptyWorkspace && unsupported && (
+          <p className="map-notice">이 브라우저에서는 3D 지도를 그릴 수 없습니다. 목록으로 보여 드립니다.</p>
         )}
 
-        {!loading && !isEmptyWorkspace && !hasNoLinksAtAll && centerHasNoLinks && (
-          <div className="map-empty">
-            <p>이 문서에 이어진 문서가 없습니다.</p>
-            <button type="button" onClick={() => changeMode('all')}>
-              전체 보기
-            </button>
-          </div>
+        {!loading && !isEmptyWorkspace && !unsupported && hasNoLinksAtAll && (
+          <p className="map-notice">
+            <span>아직 이어진 문서가 없습니다. 문서에 [[다른 문서 제목]] 을 쓰면 여기에 이어집니다.</span>
+            <a href="#/help">도움말</a>
+          </p>
         )}
 
         {!loading &&
           !isEmptyWorkspace &&
-          !hasNoLinksAtAll &&
-          !centerHasNoLinks &&
           displayGraph &&
-          (view === 'graph' ? (
-            <MapGraph graph={displayGraph} centerId={mode === 'center' ? centerDocId : null} onNodeClick={handleNodeClick} fitToken={fitToken} />
+          (effectiveView === 'graph' ? (
+            <>
+              <MapScene
+                graph={displayGraph}
+                centerId={centerDocId}
+                fitToken={fitToken}
+                onNodeClick={handleNodeClick}
+                onUnsupported={() => setUnsupported(true)}
+                onLayoutReady={() => setLayoutReady(true)}
+              />
+              {reduced && !layoutReady && <p className="map-status">배치를 계산하는 중…</p>}
+            </>
           ) : (
             <div className="map-list">
-              {mode === 'center' && centerIndex >= 0 ? (
+              {centerIndex >= 0 && (
                 <>
                   <MapListGroup title={`나가는 링크 (${directLinks.outgoing.length})`} nodes={directLinks.outgoing} onSelect={handleNodeClick} />
                   <MapListGroup title={`들어오는 링크 (${directLinks.incoming.length})`} nodes={directLinks.incoming} onSelect={handleNodeClick} />
                   <MapListGroup title={`끊긴 링크 (${directLinks.broken.length})`} nodes={directLinks.broken} onSelect={handleNodeClick} />
                 </>
-              ) : (
-                <ul className="map-list-group">
-                  {allRanked.map((node) => (
-                    <li key={node.id}>
-                      <button type="button" onClick={() => handleNodeClick(node.id, false)}>
-                        {node.title} · {node.degree}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
               )}
+              <MapListGroup title="연결이 많은 순" nodes={allRanked} onSelect={handleNodeClick} showDegree />
             </div>
           ))}
       </div>
@@ -274,8 +201,7 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
             노드 {displayGraph.nodes.length}개 · 간선 {displayGraph.edges.length}개
           </span>
         )}
-        {truncated && mode === 'all' && <span>문서가 많아 연결이 많은 500개만 보입니다.</span>}
-        {truncated && mode === 'center' && <span>{truncatedAt}단계까지는 노드가 너무 많아 그 앞 단계까지만 보입니다.</span>}
+        {truncated && <span>문서가 많아 연결이 많은 {NODE_CAP.toLocaleString('ko-KR')}개만 보입니다.</span>}
         {sharedCount > 0 && <span>공유받은 문서 {sharedCount}개는 나가는 링크를 읽지 못했습니다.</span>}
       </div>
     </div>
@@ -286,10 +212,12 @@ function MapListGroup({
   title,
   nodes,
   onSelect,
+  showDegree = false,
 }: {
   title: string
   nodes: WikiGraph['nodes']
   onSelect: (id: string, modified: boolean) => void
+  showDegree?: boolean
 }) {
   return (
     <div className="map-list-group">
@@ -297,8 +225,9 @@ function MapListGroup({
       <ul>
         {nodes.map((node) => (
           <li key={node.id}>
-            <button type="button" onClick={() => onSelect(node.id, false)}>
-              {node.title}
+            {/* 캔버스 안은 Playwright 가 못 보므로 Ctrl+클릭 재중심을 자동으로 판정할 수 있는 유일한 통로다 (7.3) */}
+            <button type="button" onClick={(e) => onSelect(node.id, e.ctrlKey || e.metaKey)}>
+              {showDegree ? `${node.title} · ${node.degree}` : node.title}
             </button>
           </li>
         ))}
