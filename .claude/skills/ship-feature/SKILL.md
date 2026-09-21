@@ -23,7 +23,10 @@ Korean copy: `.claude/ko/skills/ship-feature/SKILL.ko.md` (snapshot, for humans)
 6. Slot assignment: the nth agent gets `E2E_PORT=450n`, `E2E_DIST=dist-f{number}`
 
 ## 2. Handing off the implementation
-Use the `Agent` tool with `subagent_type: "feature-implementer"` and `run_in_background: true`. Keep the prompt short:
+
+**Main implements the 3D map rework (F-292 revision and its `F-2NNN` children) itself — no `feature-implementer`** (user instruction, 2026-09-21: "3d 작업인데 맡겨도될지 모르겠어서, 메인이 직접 구현했으면함"). three.js, force simulation, projection and hit-testing leave more judgment outside the spec than a spec can pin down, so a round trip through an agent costs more than it saves. Everything else in this file still applies — write the tests first, run `npm run review -- F-xxx`, keep one spec to one commit. Parallelism is what you give up; accept it.
+
+For every other spec, hand off as below. Use the `Agent` tool with `subagent_type: "feature-implementer"` and `run_in_background: true`. Keep the prompt short:
 ```
 F-xxx 구현. E2E_PORT=4501, E2E_DIST=dist-f153
 (session note: one or two lines if the user gave extra instructions this session)

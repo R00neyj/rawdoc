@@ -24,6 +24,8 @@ description: Rawdoc 작은 명세 F-xxx 를 구현 에이전트에 맡기고 자
 6. 슬롯 배정: n 번째 에이전트 `E2E_PORT=450n`, `E2E_DIST=dist-f{번호}`
 
 ## 2. 구현 맡기기
+
+**3D 지도 재작업(F-292 개정판과 그 `F-2NNN` 소명세들)은 메인이 직접 구현한다 — `feature-implementer` 를 쓰지 않는다** (사용자 지시, 2026-09-21: "3d 작업인데 맡겨도될지 모르겠어서, 메인이 직접 구현했으면함"). three.js·힘 시뮬레이션·투영·클릭 판정은 명세로 못 박히는 것보다 남는 판단이 많아서, 에이전트를 거치는 왕복이 아끼는 것보다 비싸다. 이 문서의 나머지는 그대로 적용된다 — 테스트 먼저, `npm run review -- F-xxx`, 한 명세 한 커밋. 대신 병렬성을 잃는다.
 `Agent` 도구, `subagent_type: "feature-implementer"`, `run_in_background: true`. 프롬프트는 짧게:
 ```
 F-xxx 구현. E2E_PORT=4501, E2E_DIST=dist-f153
