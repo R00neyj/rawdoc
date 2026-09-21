@@ -45,7 +45,8 @@ function frontmatter(text) {
 function load() {
   return readdirSync(DIR)
     .filter((f) => /^F-\d+\.md$/.test(f))
-    .sort()
+    // 숫자 정렬 — 문자열 정렬이면 네 자리 번호(F-2001)가 세 자리(F-201) 앞으로 간다
+    .sort((a, b) => Number(a.slice(2, -3)) - Number(b.slice(2, -3)))
     .map((f) => ({ file: `${DIR}/${f}`, fm: frontmatter(readFileSync(`${DIR}/${f}`, 'utf-8')) }))
 }
 
