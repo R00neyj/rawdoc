@@ -23,8 +23,11 @@ import {
   visibleOrder,
   commonParentId,
   dedupeDescendants,
+  allAtRoot,
+  rowKey,
   type Selection,
   type SelectionItem,
+  type SelectionRow,
 } from './sidebarSelection'
 import {
   IconChevron,
@@ -59,7 +62,7 @@ type DropTarget = { type: 'folder'; id: string } | { type: 'doc'; id: string } |
 // 선택 전체를 끌 때는 항목이 여럿(F-255.md 3.4), 선택 밖 항목은 하나뿐이다
 type Dragged = { items: SelectionItem[] } | null
 // 우클릭·여러 항목 메뉴 버튼이 forcedOpen 으로 여는 행 하나 — 자리는 행 자신의 위치, 좌표는 우클릭일 때만 (F-255.md 3.2)
-type ContextMenuState = { id: string; point: { x: number; y: number } } | null
+type ContextMenuState = { key: string; point: { x: number; y: number } } | null
 
 type DeleteDocTarget = { id: string; title: string }
 type DeleteFolderTarget = { id: string; name: string }
@@ -100,8 +103,8 @@ type SidebarCtx = {
   selection: Selection
   contextMenu: ContextMenuState
   multiMenuItems: FolderMenuItem[]
-  onItemClick: (e: ReactMouseEvent<HTMLElement>, item: SelectionItem, action: () => void) => void
-  onRowContextMenu: (e: ReactMouseEvent<HTMLDivElement>, item: SelectionItem, isEditingRow: boolean) => void
+  onItemClick: (e: ReactMouseEvent<HTMLElement>, row: SelectionRow, action: () => void) => void
+  onRowContextMenu: (e: ReactMouseEvent<HTMLDivElement>, row: SelectionRow, isEditingRow: boolean) => void
   onCloseContextMenu: () => void
   // 폴더 읽기 전용 링크 메뉴 항목 노출 조건·알림 (F-211.md 2.4) — App.tsx 에 경로가 없어 최소 전달만 한다
   isServerStore: boolean
@@ -163,8 +166,8 @@ function FolderRow({
   const isDropTarget = ctx.dropTargetKey === dropKeyOf(target)
   const isSelected = ctx.selection.ids.includes(node.id)
   const isMulti = isSelected && ctx.selection.ids.length > 1
-  const item: SelectionItem = { kind: 'folder', id: node.id }
-  const menuOpenHere = ctx.contextMenu?.id === node.id
+  const row: SelectionRow = { kind: 'folder', id: node.id, key: rowKey('tree', node.id) }
+  const menuOpenHere = ctx.contextMenu?.key === row.key
 
   const ownItems: FolderMenuItem[] = [
     { key: 'new-doc', label: '새 문서', icon: IconNoteAdd, onSelect: () => ctx.onCreateDoc(node.id) },
@@ -203,7 +206,7 @@ function FolderRow({
         onDragEnd={ctx.onDragEnd}
         onDragOver={(e) => ctx.onDragOver(e, target)}
         onDrop={(e) => ctx.onDrop(e, target)}
-        onContextMenu={(e) => ctx.onRowContextMenu(e, item, isEditing)}
+        onContextMenu={(e) => ctx.onRowContextMenu(e, row, isEditing)}
       >
         <button
           type="button"
@@ -226,7 +229,7 @@ function FolderRow({
           <button
             type="button"
             className="tree-label"
-            onClick={(e) => ctx.onItemClick(e, item, () => ctx.onToggleFolder(node.id))}
+            onClick={(e) => ctx.onItemClick(e, row, () => ctx.onToggleFolder(node.id))}
           >
             {node.name}
           </button>
@@ -260,8 +263,8 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
   const isDropTarget = ctx.dropTargetKey === dropKeyOf(target)
   const isSelected = ctx.selection.ids.includes(node.id)
   const isMulti = isSelected && ctx.selection.ids.length > 1
-  const item: SelectionItem = { kind: 'doc', id: node.id }
-  const menuOpenHere = ctx.contextMenu?.id === node.id
+  const row: SelectionRow = { kind: 'doc', id: node.id, key: rowKey('tree', node.id) }
+  const menuOpenHere = ctx.contextMenu?.key === row.key
 
   const ownItems: FolderMenuItem[] = [
     {
@@ -298,7 +301,7 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
         onDragEnd={ctx.onDragEnd}
         onDragOver={(e) => ctx.onDragOver(e, target)}
         onDrop={(e) => ctx.onDrop(e, target)}
-        onContextMenu={(e) => ctx.onRowContextMenu(e, item, false)}
+        onContextMenu={(e) => ctx.onRowContextMenu(e, row, false)}
       >
         <span className="tree-toggle-spacer" aria-hidden="true" />
         <a
@@ -306,7 +309,7 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
           href={formatHash(node.id)}
           draggable={false}
           aria-current={node.id === ctx.currentDocId ? 'page' : undefined}
-          onClick={(e) => { e.preventDefault(); ctx.onItemClick(e, item, () => ctx.onSelectDoc(node.id)) }}
+          onClick={(e) => { e.preventDefault(); ctx.onItemClick(e, row, () => ctx.onSelectDoc(node.id)) }}
         >
           {node.title}
         </a>
@@ -326,8 +329,8 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
 function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
   const isSelected = ctx.selection.ids.includes(doc.id)
   const isMulti = isSelected && ctx.selection.ids.length > 1
-  const item: SelectionItem = { kind: 'doc', id: doc.id }
-  const menuOpenHere = ctx.contextMenu?.id === doc.id
+  const row: SelectionRow = { kind: 'doc', id: doc.id, key: rowKey('pinned', doc.id) }
+  const menuOpenHere = ctx.contextMenu?.key === row.key
 
   const ownItems: FolderMenuItem[] = [
     {
@@ -355,7 +358,7 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
 
   return (
     <li role="listitem" className="tree-item">
-      <div className={`tree-row${isSelected ? ' tree-row--selected' : ''}`} onContextMenu={(e) => ctx.onRowContextMenu(e, item, false)}>
+      <div className={`tree-row${isSelected ? ' tree-row--selected' : ''}`} onContextMenu={(e) => ctx.onRowContextMenu(e, row, false)}>
         <span className="tree-toggle-spacer" aria-hidden="true">
           <IconPin size={16} className="pinned-row-icon" />
         </span>
@@ -364,7 +367,7 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
           href={formatHash(doc.id)}
           draggable={false}
           aria-current={doc.id === ctx.currentDocId ? 'page' : undefined}
-          onClick={(e) => { e.preventDefault(); ctx.onItemClick(e, item, () => ctx.onSelectDoc(doc.id)) }}
+          onClick={(e) => { e.preventDefault(); ctx.onItemClick(e, row, () => ctx.onSelectDoc(doc.id)) }}
         >
           {doc.title}
         </a>
@@ -725,7 +728,7 @@ export default function Sidebar({
     setPrunedForKey(visibleIdsKey)
     const visibleIds = visibleIdsKey === '' ? [] : visibleIdsKey.split(' ')
     const next = pruneSelection(selection, visibleIds)
-    if (next.ids.length !== selection.ids.length || next.anchorId !== selection.anchorId) {
+    if (next.ids.length !== selection.ids.length || next.anchor !== selection.anchor) {
       setSelection(next)
     }
   }
@@ -805,32 +808,34 @@ export default function Sidebar({
     return null
   }
 
-  const visibleItems = visibleOrder({ pinnedIds: pinned.map((d) => d.id), tree, openFolderIds })
+  const visibleRows = visibleOrder({ pinnedIds: pinned.map((d) => d.id), tree, openFolderIds })
 
   // 일반 클릭은 그대로 열고 단독 선택도 겸한다. Ctrl/Cmd 는 더하고 빼기, Shift 는 화면 순서 범위 (F-255.md 2·3.1)
-  function handleItemClick(e: ReactMouseEvent<HTMLElement>, item: SelectionItem, action: () => void) {
+  function handleItemClick(e: ReactMouseEvent<HTMLElement>, row: SelectionRow, action: () => void) {
     if (e.ctrlKey || e.metaKey) {
-      setSelection((sel) => toggleSelection(sel, item))
+      setSelection((sel) => toggleSelection(sel, row))
       return
     }
     if (e.shiftKey) {
-      setSelection((sel) => extendSelection(sel, item, visibleItems))
+      setSelection((sel) => extendSelection(sel, row, visibleRows))
       return
     }
-    setSelection(replaceSelection(EMPTY_SELECTION, item))
+    setSelection(replaceSelection(EMPTY_SELECTION, row))
     action()
   }
 
   // 선택 안 우클릭 → 그 행만 선택하고 단일 메뉴, 선택(2개 이상) 안 우클릭 → 여러 항목 메뉴 (F-255.md 2·3.2)
-  function handleRowContextMenu(e: ReactMouseEvent<HTMLDivElement>, item: SelectionItem, isEditingRow: boolean) {
+  function handleRowContextMenu(e: ReactMouseEvent<HTMLDivElement>, row: SelectionRow, isEditingRow: boolean) {
     if (isEditingRow) return // 텍스트 편집 기본 메뉴가 필요하다 (D17)
     e.preventDefault()
     const point = { x: e.clientX, y: e.clientY }
-    const inMultiSelection = selection.ids.length > 1 && selection.ids.includes(item.id)
+    const inMultiSelection = selection.ids.length > 1 && selection.ids.includes(row.id)
     if (!inMultiSelection) {
-      setSelection(replaceSelection(EMPTY_SELECTION, item))
+      setSelection(replaceSelection(EMPTY_SELECTION, row))
     }
-    setContextMenu({ id: item.id, point })
+    // 열쇠는 id 가 아니라 줄이다 — 고정된 문서는 두 줄이라 id 로 열면 메뉴가 둘 다 열리고,
+    // 한쪽의 바깥 클릭 감지가 다른 쪽을 클릭 전에 닫아 항목이 안 눌렸다 (2026-09-22 사용자 신고)
+    setContextMenu({ key: row.key, point })
   }
 
   const selectedItems: SelectionItem[] = selection.ids
@@ -855,6 +860,7 @@ export default function Sidebar({
     }
   }
 
+  // 고른 것이 전부 이미 최상위면 `최상위로 옮기기` 는 아무 일도 못 하므로 빼둔다 (2026-09-22 사용자 신고)
   const multiMenuItems: FolderMenuItem[] = [
     {
       key: 'new-folder',
@@ -864,12 +870,16 @@ export default function Sidebar({
         void handleGroupIntoFolder()
       },
     },
-    {
-      key: 'move-root',
-      label: '최상위로 옮기기',
-      icon: IconMove,
-      onSelect: () => onBulkMove(dedupeDescendants(selectedItems, docs, folders), null),
-    },
+    ...(allAtRoot(selectedItems, docs, folders)
+      ? []
+      : [
+          {
+            key: 'move-root',
+            label: '최상위로 옮기기',
+            icon: IconMove,
+            onSelect: () => onBulkMove(dedupeDescendants(selectedItems, docs, folders), null),
+          },
+        ]),
     {
       key: 'delete',
       label: '삭제',
