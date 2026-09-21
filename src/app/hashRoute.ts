@@ -5,6 +5,8 @@ const HASH_SHARES_PATTERN = /^#\/shares$/
 const HASH_HELP_PATTERN = /^#\/help$/
 const HASH_PUBLIC_FOLDER_PATTERN = /^#\/p\/f\/([^/]+)(?:\/(.+))?$/
 const HASH_PUBLIC_PATTERN = /^#\/p\/([^/]+)(?:\/(.+))?$/
+const HASH_MAP_PATTERN = /^#\/map$/
+const HASH_MAP_DOC_PATTERN = /^#\/map\/([^/]+)$/
 
 export type HashRoute =
   | { type: 'doc'; docId: string }
@@ -13,6 +15,7 @@ export type HashRoute =
   | { type: 'help' }
   | { type: 'public'; token: string; docId?: string }
   | { type: 'publicFolder'; token: string; docId?: string }
+  | { type: 'map'; docId?: string }
   | { type: 'none' }
 
 // `#/d/{id}`·`#/s/{조각}`·`#/p/{토큰}[/{문서id}]`·`#/p/f/{토큰}[/{문서id}]` 만 인정, 나머지는 { type: 'none' } (F-210.md 2.4, F-211.md 2.3, F-252.md 4.2)
@@ -31,6 +34,14 @@ export function parseHash(hash: string | undefined): HashRoute {
   }
   if (HASH_HELP_PATTERN.test(hash)) {
     return { type: 'help' }
+  }
+  // `#/map`·`#/map/{id}` (F-292.md 6.1) — `#/d/{id}`·`#/p/…` 와 접두사가 겹치지 않아 순서는 상관없다
+  if (HASH_MAP_PATTERN.test(hash)) {
+    return { type: 'map' }
+  }
+  const mapDocMatch = HASH_MAP_DOC_PATTERN.exec(hash)
+  if (mapDocMatch) {
+    return { type: 'map', docId: mapDocMatch[1] }
   }
   const publicFolderMatch = HASH_PUBLIC_FOLDER_PATTERN.exec(hash)
   if (publicFolderMatch) {
@@ -69,6 +80,11 @@ export function formatPublicFolderHash(token: string, docId?: string | null): st
 // `#/p/{토큰}` 또는 `#/p/{토큰}/{문서id}` (F-252.md 4.2)
 export function formatPublicHash(token: string, docId?: string | null): string {
   return docId ? `#/p/${token}/${docId}` : `#/p/${token}`
+}
+
+// `#/map` 또는 `#/map/{docId}` (F-292.md 6.1)
+export function formatMapHash(docId?: string | null): string {
+  return docId ? `#/map/${docId}` : '#/map'
 }
 
 const PATH_PUBLIC_FOLDER_PATTERN = /^\/p\/f\/([^/]+)$/

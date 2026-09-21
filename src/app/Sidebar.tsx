@@ -47,6 +47,7 @@ import {
   IconCollapseAll,
   IconDownload,
   IconOpenInNew,
+  IconMap,
 } from './icons'
 import { formatHash } from './hashRoute'
 import { GUIDES_PATH } from '../lib/siteChrome'
@@ -645,6 +646,7 @@ type SidebarProps = {
   onTogglePin: (id: string, pinned: boolean) => void
   onOpenSettings: () => void
   onOpenHelp: () => void
+  onOpenMap: () => void
   onOpenSearch: () => void
   canInstall: boolean
   onInstall: () => void
@@ -683,6 +685,7 @@ export default function Sidebar({
   onTogglePin,
   onOpenSettings,
   onOpenHelp,
+  onOpenMap,
   onOpenSearch,
   canInstall,
   onInstall,
@@ -997,6 +1000,7 @@ export default function Sidebar({
             <RailButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
             <RailButton icon={IconFolderAdd} label="새 폴더" onClick={handleRailCreateFolder} />
             <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
+            <RailButton icon={IconMap} label="지도" onClick={onOpenMap} />
           </div>
         ) : (
           <>
@@ -1009,6 +1013,7 @@ export default function Sidebar({
                 <SidebarIconButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
                 <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
                 <SidebarIconButton icon={IconCollapseAll} label="모두 접기" onClick={onCollapseAllFolders} />
+                <SidebarIconButton icon={IconMap} label="지도" onClick={onOpenMap} />
               </div>
               {pinned.length > 0 && (
                 <>

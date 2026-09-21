@@ -20,6 +20,7 @@ type PrefMap = {
   'md.startScreen': 'home' | 'last'
   'md.toolbar': 'on' | 'off'
   'md.landingDone': '1'
+  'md.mapDepth': '1' | '2' | '3'
 }
 
 type PrefKey = keyof PrefMap
@@ -43,6 +44,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.startScreen',
   'md.toolbar',
   'md.landingDone',
+  'md.mapDepth',
 ])
 
 function assertAllowed(key: string) {

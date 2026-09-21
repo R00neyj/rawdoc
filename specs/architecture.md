@@ -62,6 +62,10 @@ src/
   - `lib/`: `docSearch.ts`(F-285 — 쿼리 파싱·매칭·발췌, import 문 없음)
   - `app/`: `searchIndex.ts`(F-286 — 인덱스 만들기·재사용), `SearchDialog.tsx`(F-287), `searchResults.ts`(F-287 — 결과 행·문구 계산 순수 함수 + 에디터에 넘길 검색어 고르기(F-294))
   - `editor/`: `showSearchMatches.ts`(F-294 — 검색 결과로 연 문서에서 CM6 찾기 패널 열기)
+- 위키링크 지도(2026-09-21)로 추가
+  - `lib/`: `wikiGraph.ts`(F-292 — 위키링크 추출·그래프 만들기 순수 함수), `graphLayout.ts`(F-292 — 힘 기반 배치 계산)
+  - `app/`: `mapIndex.ts`(F-292 — 그래프 캐시), `MapPage.tsx`·`MapGraph.tsx`(F-292 — S-8 화면·SVG)
+  - `styles/`: `map.css`(F-292)
 - 수식(2026-09-21)으로 추가
   - `lib/`: `mathSyntax.ts`(F-291 — `$…$`·`$$…$$` 감지 순수 함수), `mathRender.ts`(F-291 — KaTeX 동기 렌더 공용 모듈)
   - `editor/`: `preview/mathPreview.ts`(F-291 — 인라인 수식 ViewPlugin), `preview/mathWidget.ts`(F-291 — 블록 수식 위젯)
@@ -110,6 +114,7 @@ store.removeAttachment(id)    // Promise<void>
 
 - `content` 는 `lineEnding` 으로 줄을 이은 원문이다 (`specs/product.md` 5장, Q9)
 - 저장소 이름·키에 제품명을 쓰지 않는다 (CLAUDE.md 불변조건)
+- 지도(F-292)도 넓히지 않는다. `list()` 하나로 문서 원문을 읽어 위키링크를 뽑는다
 - 검색은 이 인터페이스를 넓히지 않는다. `list()`·`listFolders()` 만 쓰고, F-286 의 `SearchSource` 타입이 그 둘만 받는다(`Pick<Store, 'list' | 'listFolders'>`)
 
 ## 3. 문서 상태 흐름
@@ -139,6 +144,7 @@ store.removeAttachment(id)    // Promise<void>
 | `md.firstRunDone` | `1` | 없음 | F-111 |
 | `md.persistNoticeShown` | `1` | 없음 | F-118 |
 | `md.startScreen` | `home` \| `last` | `home` | F-232 3.4 |
+| `md.mapDepth` | `1` \| `2` \| `3` | `1` | F-292 |
 | `md.toolbar` | `on` \| `off` | `on` | F-233 3.5 |
 | `md.landingDone` | `1` | 없음 | F-271 |
 

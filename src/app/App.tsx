@@ -31,7 +31,7 @@ import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } fro
 import { useEdgeSwipe } from './useEdgeSwipe'
 import { IconRefresh, IconNoteAdd } from './icons'
 import { resolveTheme } from './theme'
-import { parseHash, formatHash, parsePathRoute, type HashRoute } from './hashRoute'
+import { parseHash, formatHash, formatMapHash, parsePathRoute, type HashRoute } from './hashRoute'
 import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { useDocSaver } from './useDocSaver'
@@ -97,6 +97,8 @@ import SharesPage from './SharesPage'
 import { listShares, type ShareLinkRow, type ShareGrantRow } from './sharesApi'
 import { revokeShareLink, revokeFolderShareLink } from './linkApi'
 import { deleteGrant } from '../storage/docsApi'
+import MapPage from './MapPage'
+import { mapIndexScope } from './mapIndex'
 import type { Doc, Folder, FolderDeleteMode, LineEnding, Store } from '../types'
 
 const STATS_DEBOUNCE_MS = 150
@@ -233,6 +235,8 @@ export default function App() {
   const [pendingEditorSearch, setPendingEditorSearch] = useState<{ docId: string; term: string } | null>(null)
   // 도움말 전용 페이지 S-7 (specs/features/F-244.md 3.3) — currentDocId 는 이 화면 동안 null
   const [helpOpen, setHelpOpen] = useState(false)
+  // 위키링크 지도 S-8 (specs/features/F-292.md 6.1) — 공유 화면과 같은 방식으로 currentDocId 를 비우지 않고 유지한다
+  const [mapRoute, setMapRoute] = useState<{ centerDocId: string | null; returnDocId: string | null } | null>(null)
   // (F-126.md 5.3)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   // 여러 항목 삭제 확인 대상 — 개수만 문구에 넣는다 (F-255.md 3.3)
@@ -322,6 +326,8 @@ export default function App() {
   const sharesOpenRef = useRef(sharesOpen)
   // hashchange 핸들러가 "지금 도움말 페이지를 보고 있는가" 를 최신으로 읽도록 갱신한다 (F-244.md 3.3)
   const helpOpenRef = useRef(helpOpen)
+  // hashchange 핸들러가 "지금 지도를 보고 있는가" 를 최신으로 읽도록 갱신한다 (F-292.md 6.1)
+  const mapRouteRef = useRef(mapRoute)
   // OS 파일 열기 연동(F-119)이 최신 store·beforeLeaveDoc 을 쓰도록 매 렌더 후 갱신한다
   const runImportFilesRef = useRef<(files: File[]) => Promise<Doc | null>>(async () => null)
   // OS 파일 열기 재중복 방지(F-231)도 같은 이유로 매 렌더 후 최신 참조로 갱신한다
@@ -824,6 +830,16 @@ export default function App() {
         return
       }
 
+      // 위키링크 지도(#/map·#/map/{id}) — currentDocId 는 비우지 않고 유지한다 (F-292.md 6.1, A15)
+      if (parsedHash.type === 'map') {
+        const anchorId = parsedHash.docId && metaList.some((d) => d.id === parsedHash.docId) ? parsedHash.docId : null
+        setCurrentDocId(anchorId)
+        if (anchorId) setPref('md.lastDocId', anchorId)
+        setMapRoute({ centerDocId: anchorId, returnDocId: anchorId })
+        setBootPhase('ready')
+        return
+      }
+
       const hashDocId = parsedHash.type === 'doc' ? parsedHash.docId : null
       const lastDocId = getPref('md.lastDocId', '') || null
       // 해시가 특정 문서를 안 가리키면 시작 화면 설정을 따른다 — 기본(home)은 자동으로 안 연다 (F-232 3.1)
@@ -869,6 +885,7 @@ export default function App() {
       if (parsedHash.type === 'share') {
         ;(async () => {
           await beforeLeaveDoc()
+          setMapRoute(null)
           await openSharedFragment(parsedHash.fragment, docsRef.current)
         })()
         return
@@ -880,6 +897,7 @@ export default function App() {
         ;(async () => {
           await beforeLeaveDoc()
           setSharedDoc(null)
+          setMapRoute(null)
           setCurrentDocId(null)
           setSharesOpen(true)
         })()
@@ -892,21 +910,40 @@ export default function App() {
         ;(async () => {
           await beforeLeaveDoc()
           setSharedDoc(null)
+          setMapRoute(null)
           setCurrentDocId(null)
           setHelpOpen(true)
         })()
         return
       }
 
+      // 위키링크 지도(F-292.md 6.1) — 뒤로·앞으로 가기·주소창 직접 수정으로 드나들 때
+      if (parsedHash.type === 'map') {
+        const nextCenterId = parsedHash.docId ?? null
+        if (mapRouteRef.current && (mapRouteRef.current.centerDocId ?? null) === nextCenterId) return
+        ;(async () => {
+          await beforeLeaveDoc()
+          setSharedDoc(null)
+          setSharesOpen(false)
+          setHelpOpen(false)
+          const anchorId = nextCenterId && docsRef.current.some((d) => d.id === nextCenterId) ? nextCenterId : null
+          setCurrentDocId(anchorId)
+          if (anchorId) setPref('md.lastDocId', anchorId)
+          setMapRoute({ centerDocId: anchorId, returnDocId: anchorId })
+        })()
+        return
+      }
+
       const docId = parsedHash.type === 'doc' ? parsedHash.docId : null
-      // 해시가 문서 경로·문서 없음으로 바뀌면 문서 id 가 같아도 공유 화면·공유 관리 페이지·도움말 페이지를 닫는다 (F-138 3.3, F-243 3.4, F-244 3.3)
-      if (docId === currentDocIdRef.current && !sharedDocRef.current && !sharesOpenRef.current && !helpOpenRef.current) return
+      // 해시가 문서 경로·문서 없음으로 바뀌면 문서 id 가 같아도 공유 화면·공유 관리 페이지·도움말 페이지·지도를 닫는다 (F-138 3.3, F-243 3.4, F-244 3.3, F-292 6.1)
+      if (docId === currentDocIdRef.current && !sharedDocRef.current && !sharesOpenRef.current && !helpOpenRef.current && !mapRouteRef.current) return
 
       ;(async () => {
         await beforeLeaveDoc()
         setSharedDoc(null) // 공유 화면을 보고 있었으면 떠난다 (F-130.md 4장)
         setSharesOpen(false) // 공유 관리 페이지를 보고 있었으면 떠난다 (F-243.md 3.4)
         setHelpOpen(false) // 도움말 페이지를 보고 있었으면 떠난다 (F-244.md 3.3)
+        setMapRoute(null) // 지도를 보고 있었으면 떠난다 — 뒤로 가기로 지도를 나갈 때가 그렇다 (F-292.md 6.1)
         focusEditorRef.current = true
         const latestDocs = docsRef.current
         if (docId && latestDocs.some((d) => d.id === docId)) {
@@ -1280,13 +1317,14 @@ export default function App() {
     sharedDocRef.current = sharedDoc
     sharesOpenRef.current = sharesOpen
     helpOpenRef.current = helpOpen
-    // 받지 않는 때(F-145.md 2.1): 대화상자·공유 화면·공유 관리 페이지·저장소를 못 쓸 때(store.kind==='memory')
+    mapRouteRef.current = mapRoute
+    // 받지 않는 때(F-145.md 2.1): 대화상자·공유 화면·공유 관리 페이지·지도·저장소를 못 쓸 때(store.kind==='memory')
     dropBlockedRef.current = Boolean(
-      settingsOpen || searchOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen || store.kind === 'memory',
+      settingsOpen || searchOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen || mapRoute || store.kind === 'memory',
     )
     // 이미지는 저장소를 못 쓸 때(메모리 저장소)는 막지 않는다 (F-156.md 2.5) — #/help 화면은 편집기가 없어 차단 대상이 아니다 (F-244.md 3.3)
     imageDropBlockedRef.current = Boolean(
-      settingsOpen || searchOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen,
+      settingsOpen || searchOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen || mapRoute,
     )
     // view 권한·403 강등 문서·편집 잠금(F-213.md 2.3)에서는 이미지 올리기(붙여넣기·끌어놓기)를 막는다 (F-212.md 2.4)
     readOnlyDocRef.current = isReadOnlyDoc
@@ -1432,6 +1470,7 @@ export default function App() {
     if (viewMode === 'view') changeViewMode('live')
     await beforeLeaveDoc()
     setSharedDoc(null) // 공유 화면에서 새 문서 를 눌러도 화면을 떠난다 (F-130.md 4장, 자체 결정)
+    setMapRoute(null) // 지도의 "문서가 없습니다" 빈 상태에서 새 문서 를 눌러도 지도를 떠난다 (F-292.md 6.5)
     const targetFolderId = folderId !== undefined ? folderId : newDocFolderId()
     let doc: Doc
     try {
@@ -1461,12 +1500,13 @@ export default function App() {
   }
 
   async function selectDoc(id: string) {
-    // sharedDoc·공유 관리 페이지·도움말 페이지가 있으면 currentDocId 가 우연히 같아도 화면을 떠나야 한다 (ia.md 3.19, F-243.md 3.4, F-244.md 3.3)
-    if (id === currentDocId && !sharedDoc && !sharesOpen && !helpOpen) return
+    // sharedDoc·공유 관리 페이지·도움말 페이지·지도가 있으면 currentDocId 가 우연히 같아도 화면을 떠나야 한다 (ia.md 3.19, F-243.md 3.4, F-244.md 3.3, F-292.md 6.4 "노드 클릭 → 문서 열고 지도 닫기")
+    if (id === currentDocId && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute) return
     await beforeLeaveDoc()
     setSharedDoc(null)
     setSharesOpen(false)
     setHelpOpen(false)
+    setMapRoute(null)
     focusEditorRef.current = true
     setCurrentDocId(id)
     setPref('md.lastDocId', id)
@@ -1477,11 +1517,12 @@ export default function App() {
 
   // ----- 로고 클릭 → 홈 (F-232 3.3, F-244 3.3) — 이미 홈이거나 도움말 페이지의 `닫기` 도 이 함수를 그대로 쓴다 -----
   async function goHome() {
-    if (currentDocId === null && !sharedDoc && !sharesOpen && !helpOpen) return
+    if (currentDocId === null && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute) return
     await beforeLeaveDoc()
     setSharedDoc(null)
     setSharesOpen(false)
     setHelpOpen(false)
+    setMapRoute(null)
     setCurrentDocId(null)
     replaceHashUrl(null)
   }
@@ -1563,6 +1604,8 @@ export default function App() {
     if (viewMode === 'view') changeViewMode('live') // 제목 입력 포커스가 필요하다 (ia.md 3.3)
     await beforeLeaveDoc()
     setSharedDoc(null)
+    // 지도의 끊긴 링크 노드를 눌러도 이 흐름을 그대로 타므로(F-292.md 6.4), 새 문서를 만들며 지도를 닫는다
+    setMapRoute(null)
     let doc: Doc
     try {
       doc = await store.create({
@@ -2304,10 +2347,36 @@ export default function App() {
     await beforeLeaveDoc()
     setSharedDoc(null)
     setSharesOpen(false)
+    setMapRoute(null)
     setCurrentDocId(null)
     setHelpOpen(true)
     pushHelpHash()
     closeSidebarIfNarrow()
+  }
+
+  // ----- 위키링크 지도 S-8 — currentDocId 는 비우지 않는다(F-138 3.2 와 같은 방식, F-292.md 6.1) -----
+  async function openMap() {
+    await beforeLeaveDoc()
+    setSharedDoc(null)
+    setSharesOpen(false)
+    setHelpOpen(false)
+    const anchorId = currentDocId
+    setMapRoute({ centerDocId: anchorId, returnDocId: anchorId })
+    history.pushState(null, '', `${location.pathname}${location.search}${formatMapHash(anchorId ?? undefined)}`)
+    closeSidebarIfNarrow()
+  }
+
+  // 닫기 — 지도를 열 때의 문서로 돌아간다(replace). 열 때 문서가 없었으면 홈으로(6.1)
+  function closeMap() {
+    const returnId = mapRoute?.returnDocId ?? null
+    setMapRoute(null)
+    replaceHashUrl(returnId)
+  }
+
+  // Ctrl(⌘)+클릭 — 그 노드를 중심으로 다시 그린다. 지도는 닫지 않는다(6.4)
+  function recenterMap(id: string) {
+    setMapRoute((prev) => (prev ? { ...prev, centerDocId: id } : prev))
+    history.replaceState(null, '', `${location.pathname}${location.search}${formatMapHash(id)}`)
   }
 
   // 도움말 페이지 `내 문서로 복사` (F-244.md 3.4) — 중복 검사 없이 그냥 하나 더 만든다
@@ -2646,6 +2715,8 @@ export default function App() {
 
   // 검색 인덱스 재사용 범위 (specs/features/F-287.md 4.2) — searchIndex.ts 는 localStorage 를 읽지 않는다
   const searchDialogScope = searchScope(store.kind, account.state === 'in' ? account.id : null)
+  // 지도 인덱스 재사용 범위 — 같은 방식(specs/features/F-292.md 5.3)
+  const mapDialogScope = mapIndexScope(store.kind, account.state === 'in' ? account.id : null)
 
   // 탭바 표시 조건 (F-233 3.1) — 자리는 항상 유지, 조건에 안 맞으면 안 그린다.
   // 좁은 창도 보여준다(2026-09-16 사용자 "모바일일때가 툴바 더 필요할거임") — TopBar 가 narrow 면 상단바 밑 자기 줄에 그린다
@@ -2746,6 +2817,7 @@ export default function App() {
           onTogglePin={handleTogglePin}
           onOpenSettings={openSettings}
           onOpenHelp={openHelp}
+          onOpenMap={openMap}
           onOpenSearch={openSearch}
           canInstall={canInstall}
           onInstall={install}
@@ -2796,7 +2868,22 @@ export default function App() {
               <HelpPage onClose={goHome} onCopy={copyHelpToDoc} />
             </div>
           )}
-          {!sharedDoc && !sharesOpen && !helpOpen && isEmpty && (
+          {!sharedDoc && !sharesOpen && !helpOpen && mapRoute && (
+            <div className="content-area">
+              <MapPage
+                docCount={docs.length}
+                store={store}
+                scope={mapDialogScope}
+                centerDocId={mapRoute.centerDocId}
+                onOpenDoc={selectDoc}
+                onOpenWikiLink={handleOpenWikiLink}
+                onRecenter={recenterMap}
+                onClose={closeMap}
+                onCreateDoc={() => createNewDoc()}
+              />
+            </div>
+          )}
+          {!sharedDoc && !sharesOpen && !helpOpen && !mapRoute && isEmpty && (
             <div className="content-area">
               <EmptyState
                 hasDocs={docs.length > 0}
@@ -2809,10 +2896,8 @@ export default function App() {
             </div>
           )}
           {showEditor && (
-            // 공유 화면(sharedDoc)이 떠 있는 동안 편집 영역을 언마운트하지 않고 hidden 으로만
-            // 숨긴다(F-138 3.2) — 언마운트하면 같은 문서로 돌아올 때 EditorView 가 새로
-            // 만들어져 그 사이 저장된 편집을 옛 openDoc.content 로 덮어쓴다
-            <div className="content-area" ref={contentAreaRef} hidden={Boolean(sharedDoc)}>
+            // 공유 화면·지도가 떠 있는 동안 편집 영역을 언마운트하지 않고 hidden 으로만 숨긴다 — 언마운트하면 EditorView 가 새로 만들어져 저장된 편집을 덮어쓴다(F-138 3.2, F-292.md 6.1)
+            <div className="content-area" ref={contentAreaRef} hidden={Boolean(sharedDoc) || Boolean(mapRoute)}>
               <div className="editor-slot" hidden={viewMode === 'view'}>
                 {openDoc?.id === currentDocId && (
                   <Editor
@@ -2860,7 +2945,7 @@ export default function App() {
               )}
             </div>
           )}
-          {!sharedDoc && showEditor && (
+          {!sharedDoc && !mapRoute && showEditor && (
             <StatusBar
               line={stats.line}
               col={stats.col}

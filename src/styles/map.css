@@ -1,0 +1,255 @@
+/* ----- 위키링크 지도 (specs/features/F-292.md 8장) — 색은 토큰·color-mix() 만 쓴다 ----- */
+.map-page {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+
+.map-page-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: var(--topbar-h);
+  padding: 0 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.map-page-title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.map-page-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.map-page-close:hover {
+  background: var(--rule-2);
+}
+
+.map-page-controls {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.map-segment {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.map-segment button {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.map-segment button + button {
+  border-left: 1px solid var(--rule);
+}
+
+.map-segment button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.map-segment button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.map-fit-btn {
+  margin-left: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.map-fit-btn:hover {
+  background: var(--rule-2);
+}
+
+.map-page-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.map-status {
+  padding: 24px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.map-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  color: var(--ink-2);
+  padding: 24px;
+}
+
+.map-empty p {
+  margin: 0;
+}
+
+.map-empty button,
+.map-empty a {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--ink);
+  transition: var(--transition-colors);
+}
+
+.map-empty button:hover,
+.map-empty a:hover {
+  background: var(--rule-2);
+}
+
+.map-graph {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+
+.map-node-group {
+  cursor: pointer;
+  /* 이름표까지 포함한 사각 영역 전체를 눌러도 반응한다 — 원과 글자 사이 빈틈을 눌러도 된다 */
+  pointer-events: bounding-box;
+}
+
+.map-node {
+  fill: var(--accent);
+  transition: var(--transition-fast);
+}
+
+.map-node--missing {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+
+.map-node--shared {
+  stroke: var(--ink-2);
+  stroke-width: 1;
+}
+
+.map-node-ring {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 40%, transparent);
+  stroke-width: 2;
+}
+
+.map-node-group:hover .map-node,
+.map-node-group:focus-visible .map-node {
+  transform: scale(1.2);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.map-edge {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.map-edge--center {
+  stroke: color-mix(in srgb, var(--ink) 30%, transparent);
+}
+
+.map-node-label {
+  font-size: 11px;
+  fill: var(--ink-2);
+  font-family: var(--font-sans);
+  pointer-events: none;
+}
+
+.map-page-foot {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--rule);
+  background: var(--paper);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ----- 목록 대체 표시 (7.4) — 글이라 읽기 폭이 있는 게 낫다 ----- */
+.map-list {
+  height: 100%;
+  overflow-y: auto;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.map-list-group + .map-list-group {
+  margin-top: 20px;
+}
+
+.map-list-group h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.map-list-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.map-list-group button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  font-size: 13.5px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.map-list-group button:hover {
+  background: var(--rule-2);
+}
