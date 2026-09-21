@@ -21,6 +21,11 @@ function escapeHtml(value: string): string {
 }
 
 export const SITE_CHROME_CSS = `
+/* 폭은 앱 토큰에 없어 여기서 정의한다. rem 이라야 상속 글자 크기에 안 흔들린다 (F-272 5.1) */
+:root {
+  --site-page: 1060px;
+  --site-read: 40rem;
+}
 .site-head {
   display: flex;
   align-items: center;
