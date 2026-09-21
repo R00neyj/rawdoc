@@ -235,8 +235,6 @@ function buildScene(
   let cssH = 0
   // 직전에 적용한 표시 값. 바뀐 축만 다시 계산한다 (F-2005 7.1)
   let applied = initialView.display
-  // 거리 후보가 이번 프레임에 labelIndices 에 반영된 적이 있나 — 0 으로 내린 다음 프레임까지만 계속 돈다 (7.3)
-  let labelDistanceWasActive = false
 
   // 중심 문서는 바뀔 수 있다. 테마만 다시 읽을 때는 인자 없이 부른다
   let activeCenterId = centerId
@@ -298,29 +296,32 @@ function buildScene(
     // setColorAt 을 처음 부를 때 instanceColor 가 만들어진다 (3.4)
     if (nodeMesh.instanceColor) nodeMesh.instanceColor.needsUpdate = true
 
-    // labelDistance 가 0 이면 건너뛴다 — 기본값이라 호버 전용 동작이 안 바뀌고, 1→0 으로 내린 다음 프레임만 한 번 더 돌아 정리한다 (F-2005 7.3)
-    if (applied.labelDistance > 0 || labelDistanceWasActive) {
-      const distanceCandidates: number[] = []
-      if (applied.labelDistance > 0) {
-        // near·far 는 depthMix 용 float64 라 Float32Array 인 depths[] 와 어긋날 수 있어 문턱값은 depths[] 에서 같은 정밀도로 다시 구한다
-        let dNear = Infinity
-        let dFar = -Infinity
-        for (let i = 0; i < nodeCount; i++) {
-          if (depths[i] < dNear) dNear = depths[i]
-          if (depths[i] > dFar) dFar = depths[i]
-        }
-        const threshold = dNear + (dFar - dNear) * applied.labelDistance
-        for (let i = 0; i < nodeCount; i++) if (depths[i] <= threshold) distanceCandidates.push(i)
+    refreshLabels()
+  }
+
+  // 이름표 집합을 정하는 곳은 여기 하나뿐이다. 호버와 `이름표 표시 거리` 가 각자 정하면 서로를 지워 깜빡인다 (2026-09-22 버그)
+  function refreshLabels() {
+    const distance = applied.labelDistance
+    // 기본값(거리 0·호버 없음)에서는 프레임 비용이 0 이어야 한다 (F-2005 7.3)
+    if (distance <= 0 && hoverIndex < 0 && labelIndices.length === 0) return
+    const distanceCandidates: number[] = []
+    if (distance > 0 && nodeCount > 0) {
+      // near·far 는 depthMix 용 float64 라 Float32Array 인 depths[] 와 어긋날 수 있어 문턱값은 depths[] 에서 같은 정밀도로 다시 구한다
+      let dNear = Infinity
+      let dFar = -Infinity
+      for (let i = 0; i < nodeCount; i++) {
+        if (depths[i] < dNear) dNear = depths[i]
+        if (depths[i] > dFar) dFar = depths[i]
       }
-      labelDistanceWasActive = applied.labelDistance > 0
-      const pinned = hoverIndex >= 0 ? [hoverIndex] : []
-      const neighbors = hoverIndex >= 0 ? (adjacency[hoverIndex] ?? []) : []
-      const next = pickLabelNodes(pinned, neighbors.concat(distanceCandidates), (i) => graph.nodes[i]?.degree ?? 0)
-      if (!sameLabelSet(next, labelIndices)) {
-        labelIndices = next
-        setLabelItems(labelIndices.map((i) => ({ id: graph.nodes[i].id, title: graph.nodes[i].title })))
-      }
+      const threshold = dNear + (dFar - dNear) * distance
+      for (let i = 0; i < nodeCount; i++) if (depths[i] <= threshold) distanceCandidates.push(i)
     }
+    const pinned = hoverIndex >= 0 ? [hoverIndex] : []
+    const neighbors = hoverIndex >= 0 ? (adjacency[hoverIndex] ?? []) : []
+    const next = pickLabelNodes(pinned, neighbors.concat(distanceCandidates), (i) => graph.nodes[i]?.degree ?? 0)
+    if (sameLabelSet(next, labelIndices)) return
+    labelIndices = next
+    setLabelItems(labelIndices.map((i) => ({ id: graph.nodes[i].id, title: graph.nodes[i].title })))
   }
 
   // 호버한 노드와 그 이웃의 이름표를 노드 아래에 놓는다 (F-2004 7.4)
@@ -528,9 +529,7 @@ function buildScene(
     const next = hit ? hit.index : -1
     if (next === hoverIndex) return
     hoverIndex = next
-    labelIndices =
-      next < 0 ? [] : pickLabelNodes([next], adjacency[next] ?? [], (i) => graph.nodes[i]?.degree ?? 0)
-    setLabelItems(labelIndices.map((i) => ({ id: graph.nodes[i].id, title: graph.nodes[i].title })))
+    refreshLabels()
     requestDraw()
   }
 
