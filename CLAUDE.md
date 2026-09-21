@@ -79,6 +79,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | Auth | Cloudflare Access one-time codes + Worker JWT verification | F-205 (Q5) |
 | Live sync | Durable Object + y-partyserver, `y-codemirror.next` | Not adopted (M3) |
 | E2E tests | Playwright (`@playwright/test`), installed Chrome channel | Adopted in F-150 |
+| 3D map | `three` + `d3-force-3d` (plus `@types/three` and a local `src/types/d3-force-3d.d.ts`) | Adopted in the F-292 revision (M2). F-2001 and F-2002 install them; no other spec may add a 3D dependency. `3d-force-graph` was measured and rejected — it statically pulls in `WebGPURenderer` |
 
 For anything marked "not adopted", do not add the dependency until its spec exists.
 

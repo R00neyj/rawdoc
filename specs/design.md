@@ -140,6 +140,7 @@
 | `--gutter-gap` | `20px` (줄 번호 오른쪽 끝~본문 첫 글자) | F-122 |
 | `--md-*` (본문 크기·줄 간격·테두리·코드 바탕 등) | 기존 토큰에 대응. GitHub 마크다운 스타일 수치 | F-124 2장 |
 | `--callout-*` 8종 | note `var(--link)`, tip `#0B7285`, success `#177A33`, question `#855A00`, warning `#A84400`, danger `#C4212C`, example `#7644D0`, quote `var(--ink-2)`. 전부 `--panel` 대비 4.5:1 이상 | F-128 3장 |
+| `--map-group-1`~`-8` | 위 `--callout-*` 8색의 **별칭**이다. 새 hex 가 아니다. 지도 그룹 색이 쓰고, 저장값은 hex 가 아니라 인덱스 `1`~`8` 이라 테마를 바꾸면 그룹 색도 따라 바뀐다 | F-292 개정판 6.5 |
 
 - 마크다운 요소의 크기·여백은 GitHub 스타일(`github-markdown-css` 5.9.0)을 따르고, 색은 위 토큰, 서체는 2.4 그대로다 (`specs/product.md` Q18)
 

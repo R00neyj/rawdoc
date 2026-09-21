@@ -75,6 +75,7 @@ depends: [F-232, F-281]      # 선행 명세. 없으면 줄을 뺀다
 | 인증 | Cloudflare Access 일회용 코드 + Worker JWT 검증 | F-205 (Q5) |
 | 실시간 동기화 | Durable Object + y-partyserver, `y-codemirror.next` | 미도입 (M3) |
 | E2E 테스트 | Playwright (`@playwright/test`), 설치된 Chrome 채널 | F-150 에서 도입 |
+| 3D 지도 | `three` + `d3-force-3d` (더해서 `@types/three` 와 로컬 `src/types/d3-force-3d.d.ts`) | F-292 개정판(M2)에서 채택. 설치는 F-2001·F-2002 가 하고, 다른 명세는 3D 의존성을 더하지 않는다. `3d-force-graph` 는 재 보고 뺐다 — `WebGPURenderer` 를 정적으로 끌고 온다 |
 
 "미도입" 항목은 해당 명세가 생기기 전까지 의존성을 추가하지 않는다
 
