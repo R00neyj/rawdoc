@@ -283,7 +283,7 @@ test.describe('F-255 사이드바 여러 항목 선택·우클릭 메뉴', () =>
   })
 
   // 2026-09-22 사용자 신고 세 건 — 전부 `고정된 문서가 두 줄로 나온다`(F-132)에서 왔거나 메뉴 조건 문제다
-  test('F-255 D19 폴더 안 항목이 섞여야 `최상위로 옮기기` 가 나오고, 누르면 실제로 올라온다', async ({ page }) => {
+  test('F-255 D22 폴더 안 항목이 섞여야 `최상위로 옮기기` 가 나오고, 누르면 실제로 올라온다', async ({ page }) => {
     await openApp(page)
     await newFolder(page, '폴더1')
     await newDoc(page, 'A')
@@ -299,7 +299,7 @@ test.describe('F-255 사이드바 여러 항목 선택·우클릭 메뉴', () =>
     await expect(folderItem(page, '폴더1')).not.toContainText('B')
   })
 
-  test('F-255 D20 고정된 문서를 트리에서 우클릭해도 메뉴는 하나만 열리고 `고정 해제` 가 먹는다', async ({ page }) => {
+  test('F-255 D23 고정된 문서를 트리에서 우클릭해도 메뉴는 하나만 열리고 `고정 해제` 가 먹는다', async ({ page }) => {
     await openApp(page)
     await newDoc(page, 'A')
     const list = page.locator('.doc-list')
@@ -313,7 +313,7 @@ test.describe('F-255 사이드바 여러 항목 선택·우클릭 메뉴', () =>
     await expect(page.locator('.pinned-list')).toHaveCount(0)
   })
 
-  test('F-255 D21 고정된 문서의 트리 줄을 Shift+클릭하면 그 줄 기준으로 범위를 센다', async ({ page }) => {
+  test('F-255 D24 고정된 문서의 트리 줄을 Shift+클릭하면 그 줄 기준으로 범위를 센다', async ({ page }) => {
     await openApp(page)
     await newDoc(page, 'A')
     await newDoc(page, 'B')
