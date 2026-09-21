@@ -502,6 +502,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
           previewExtensionFor(currentMode, currentTheme, { onOpenWikiLink, resolveAttachment }),
         ),
       })
+      // 재구성으로 blockPreview 의 StateField 가 create 부터 다시 도는데, 그 시점엔 새 ViewPlugin 이 아직 viewRef 를 채우지 않아 포커스가 false 로 잡힌다 — 커서가 든 코드블록·표까지 위젯으로 접힌다. 한 번 더 보내 실제 포커스로 다시 계산시킨다
+      view.dispatch({ effects: forceRecalc.of(null) })
     },
 
     // on(boolean) — 재마운트하지 않는다. 커서·선택·실행 취소 기록·스크롤 위치 유지 (F-147 2장)
