@@ -144,6 +144,8 @@
 
 - 마크다운 요소의 크기·여백은 GitHub 스타일(`github-markdown-css` 5.9.0)을 따르고, 색은 위 토큰, 서체는 2.4 그대로다 (`specs/product.md` Q18)
 
+- **`tokens.css` 의 `color-mix()` 는 반드시 `in srgb` 로 쓴다.** 지도(F-292 개정판)가 프로브 요소의 계산된 `color` 를 파싱해 three 에 넘기는데, `in oklab`·`in oklch` 로 쓰면 Chrome 계산값이 `oklab(…)`/`oklch(…)` 문자열이 되고 `src/lib/cssColor.ts` 가 거절해 지도 색이 통째로 중간 회색으로 떨어진다 (2026-09-21 F-2002 5.1 실측). 현재 9건 전부 `in srgb` 인 것은 확인했다
+
 ### 3.4 테마 (2026-09-14, D9)
 
 - 화이트(3.1 값) / 세피아 / 다크 3종. `<html data-theme>` 속성 하나로 토큰 값만 바꾼다
