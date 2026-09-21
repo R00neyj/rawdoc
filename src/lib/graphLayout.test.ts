@@ -55,6 +55,19 @@ describe('layoutGraph — A5', () => {
     }
   })
 
+  // 회귀 — 틀 밖으로 밀려나던 버그 (2026-09-21). 이어지지 않은 덩어리가 반발력만 받아
+  // 끝없이 퍼지면 그래프 크기가 노드 수와 무관해지고 `맞춤` 배율이 제멋대로가 된다
+  it('모든 좌표가 width·height 틀 안에 있다', () => {
+    const edges = [0, 1, 1, 2, 40, 41]
+    const { x, y } = layoutGraph(100, edges, { width: 900, height: 600 })
+    for (let i = 0; i < 100; i++) {
+      expect(x[i]).toBeGreaterThanOrEqual(0)
+      expect(x[i]).toBeLessThanOrEqual(900)
+      expect(y[i]).toBeGreaterThanOrEqual(0)
+      expect(y[i]).toBeLessThanOrEqual(600)
+    }
+  })
+
   it('노드가 2개 이상이면 가장 가까운 두 노드 거리가 0보다 크다', () => {
     const edges = [0, 1, 1, 2, 2, 3, 3, 0]
     const { x, y } = layoutGraph(30, edges, { iterations: 100 })

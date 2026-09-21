@@ -3,9 +3,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { layoutGraph } from '../lib/graphLayout'
 import type { WikiGraph } from '../lib/wikiGraph'
 
-const CANVAS_SIZE = 1000
+// 노드 하나가 차지할 한 변 — 원(최대 반지름 12) + 이름표를 놓을 만큼. 배치 틀은 이 값 × √(노드 수) 라
+// 노드가 늘어도 밀도가 그대로고, 그래서 `맞춤` 배율이 노드 수에 따라 자연스럽게 작아진다
+const NODE_SPACING = 90
+const MIN_CANVAS = 320
 const MIN_SCALE = 0.2
 const MAX_SCALE = 4
+// `맞춤` 은 1 배를 넘겨 키우지 않는다 — 노드가 두세 개뿐일 때 원과 글자만 거대해지는 것을 막는다
+const FIT_MAX_SCALE = 1
+const FIT_MARGIN = 120 // 이름표가 오른쪽으로 삐져나가는 몫까지 감안한 여백
 const MAX_LABELS = 60
 
 function radiusOf(node: { degree: number; missing: boolean }): number {
@@ -22,9 +28,13 @@ type MapGraphProps = {
 
 export default function MapGraph({ graph, centerId, onNodeClick, fitToken }: MapGraphProps) {
   const edgeArray = useMemo(() => graph.edges.flatMap((e) => [e.from, e.to]), [graph])
+  const canvasSize = useMemo(
+    () => Math.max(MIN_CANVAS, Math.round(NODE_SPACING * Math.sqrt(graph.nodes.length))),
+    [graph.nodes.length],
+  )
   const { x, y } = useMemo(
-    () => layoutGraph(graph.nodes.length, edgeArray, { width: CANVAS_SIZE, height: CANVAS_SIZE }),
-    [graph.nodes.length, edgeArray],
+    () => layoutGraph(graph.nodes.length, edgeArray, { width: canvasSize, height: canvasSize }),
+    [graph.nodes.length, edgeArray, canvasSize],
   )
 
   const centerIndex = useMemo(() => (centerId ? graph.nodes.findIndex((n) => n.id === centerId) : -1), [graph, centerId])
@@ -56,16 +66,17 @@ export default function MapGraph({ graph, centerId, onNodeClick, fitToken }: Map
       if (y[i] > maxY) maxY = y[i]
     }
     const svg = svgRef.current
-    const vw = svg?.clientWidth || CANVAS_SIZE
-    const vh = svg?.clientHeight || CANVAS_SIZE
+    const vw = svg?.clientWidth || canvasSize
+    const vh = svg?.clientHeight || canvasSize
     const gw = Math.max(maxX - minX, 1)
     const gh = Math.max(maxY - minY, 1)
-    const margin = 80
-    const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((vw - margin) / gw, (vh - margin) / gh)))
+    const usableW = Math.max(vw - FIT_MARGIN, 1)
+    const usableH = Math.max(vh - FIT_MARGIN, 1)
+    const scale = Math.min(FIT_MAX_SCALE, Math.max(MIN_SCALE, Math.min(usableW / gw, usableH / gh)))
     const cx = (minX + maxX) / 2
     const cy = (minY + maxY) / 2
     setTransform({ x: vw / 2 - cx * scale, y: vh / 2 - cy * scale, scale })
-  }, [graph, x, y])
+  }, [graph, x, y, canvasSize])
 
   useEffect(() => {
     // fitToken 이 바뀔 때(맞춤 버튼)도 다시 맞춘다 — fit() 을 async 함수 안에서 불러 effect 본문에서 setState 를 직접 부르지 않는다(App.tsx loadShares 와 같은 방식)

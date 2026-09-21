@@ -89,6 +89,9 @@ export function layoutGraph(
     }
 
     // 변위를 온도 t 로 제한 — 수렴을 안정시킨다 (4장)
+    // 이어서 좌표를 틀 안으로 자른다. FR 원논문의 마지막 단계다 — 이게 없으면 서로 이어지지
+    // 않은 덩어리끼리 반발력만 받아 끝없이 밀려나고, 그러면 그래프 크기가 노드 수와 무관하게
+    // 커져 MapGraph 의 `맞춤` 배율이 제멋대로가 된다
     for (let i = 0; i < nodeCount; i++) {
       const dLen = Math.sqrt(dispX[i] * dispX[i] + dispY[i] * dispY[i])
       if (dLen > 1e-9) {
@@ -96,6 +99,8 @@ export function layoutGraph(
         x[i] += (dispX[i] / dLen) * capped
         y[i] += (dispY[i] / dLen) * capped
       }
+      x[i] = Math.min(width, Math.max(0, x[i]))
+      y[i] = Math.min(height, Math.max(0, y[i]))
     }
 
     // 선형 냉각
