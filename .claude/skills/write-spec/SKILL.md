@@ -74,7 +74,20 @@ Shared rules live in the agent definition. In the prompt, point at **where in th
 - Commit granularity follows `CLAUDE.md` "Commit granularity" — **the spec file only**. When running in parallel, always scope the paths: `git add -- specs/features/F-xxx.md` then `git commit … -- specs/features/F-xxx.md`
 - The subject is one line, `F-xxx {title} 명세`. If a decision got reversed, put the reason in the body
 
-## 5. Report to the user (음슴체, short)
+## 5. Keep going when nothing needs deciding
+
+**If the spec leaves no real fork for the user, do not stop — commit it and go straight into `ship-feature`** (user instruction, 2026-09-21: "명세 작성 후 사용자가 검토할 결정이 없으면 바로 구현까지 진행"). Report the facts and say what you are starting; do not wait for a reply.
+
+A real fork is one of these. Anything else is not:
+
+- An option table where the recommendation could reasonably go the other way
+- A decision that reverses something the user already settled
+- A new dependency the overview did not already name
+- The spec contradicting existing code or an approved spec
+
+Open questions that all have sound defaults are **not** a fork. Write "기본값대로 간다" in the report and keep going. Under this instruction the spec counts as approved, so set `status: approved` with today's `approved:` date and say in the prose status line that the approval came from the standing instruction, not a separate review.
+
+## 6. Report to the user (음슴체, short)
 
 - Facts newly established by measurement or reading code — this is the most valuable part
 - **Items needing a human decision, as options with a recommendation.** If every default is sound, bundle them as "기본값대로 갈지만 확인"
