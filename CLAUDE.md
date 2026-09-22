@@ -35,6 +35,7 @@ Logic gets TDD; design gets a fast human-review loop.
 | `specs/architecture.md` | `src/` layout, storage interfaces, state flow, setting keys | After human approval |
 | `specs/features/F-xxx.md` | Small specs. One spec = one implementation unit. **Numbers run in hundreds per milestone** — M1 is `F-1NN`, M2 and M1 follow-ups are `F-2NN`, M3 (live collaboration) is `F-3NN` (user instruction, 2026-09-20). **When a milestone's hundred block fills up, it widens to four digits keeping the same leading digit** — M2 continues at `F-2001` onward, not `F-4NN` (user instruction, 2026-09-21; `F-2NN` ran out with only 298/299 left). The leading digit always says which milestone. `npm run specs` sorts numerically, so `F-201` still comes before `F-2001`. **YAML frontmatter at the top** (below) | After human approval |
 | `specs/human-checks.md` | Items no automated test can judge, plus their status | By main, as each spec lands |
+| `specs/notes.md` | Discussion notes from before anything becomes a spec (direction, rationale, what is still open). Moved into `product.md` or an `F-xxx.md` once it settles, and deleted from here | Freely, no approval needed |
 | `content/` | Public-site article sources, `.md` (F-272). `site/` reads them | Per spec |
 | `site/` | Public-site build — articles → HTML, 404, sitemap, robots (F-272). `src/` never imports from here | Per spec |
 | `e2e/` | Playwright E2E tests (F-150) | Per spec |
