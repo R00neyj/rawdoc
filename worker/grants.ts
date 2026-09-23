@@ -4,6 +4,7 @@ import { requireUser, type AuthUser } from './auth'
 import { badBody, readJsonLimited } from './docs'
 import { MAX_BODY_BYTES } from './validate'
 import { higherRole, resolveDocAccess, type GrantRole, type Role } from './access'
+import { notifyRevalidate } from './docRoomRpc'
 
 type TargetType = 'doc' | 'folder'
 
@@ -80,6 +81,7 @@ async function handlePutGrant(
   targetType: TargetType,
   request: Request,
   env: Env,
+  ctx: ExecutionContext | undefined,
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
@@ -105,13 +107,17 @@ async function handlePutGrant(
     .bind(targetType, params.id, user.id, email, role, Date.now())
     .run()
 
-  return jsonResponse({ email, role })
+  const response = jsonResponse({ email, role })
+  // 보기로 낮추면 열린 편집 연결을 다시 본다. 폴더 초대는 주기 점검이 잡는다 (F-304 9.1)
+  if (targetType === 'doc' && role === 'view') await notifyRevalidate(env, ctx, params.id, email)
+  return response
 }
 
 async function handleDeleteGrant(
   targetType: TargetType,
   request: Request,
   env: Env,
+  ctx: ExecutionContext | undefined,
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
@@ -122,21 +128,23 @@ async function handleDeleteGrant(
   await env.DB.prepare('DELETE FROM grants WHERE target_type = ? AND target_id = ? AND grantee_email = ?')
     .bind(targetType, params.id, email)
     .run()
-  return new Response(null, { status: 204 })
+  const response = new Response(null, { status: 204 })
+  if (targetType === 'doc') await notifyRevalidate(env, ctx, params.id, email)
+  return response
 }
 
 export const handleGetDocGrants = (r: Request, e: Env, _c: ExecutionContext, p: Record<string, string>) =>
   handleListGrants('doc', r, e, p)
 export const handleGetFolderGrants = (r: Request, e: Env, _c: ExecutionContext, p: Record<string, string>) =>
   handleListGrants('folder', r, e, p)
-export const handlePutDocGrant = (r: Request, e: Env, _c: ExecutionContext, p: Record<string, string>) =>
-  handlePutGrant('doc', r, e, p)
+export const handlePutDocGrant = (r: Request, e: Env, c: ExecutionContext, p: Record<string, string>) =>
+  handlePutGrant('doc', r, e, c, p)
 export const handlePutFolderGrant = (r: Request, e: Env, _c: ExecutionContext, p: Record<string, string>) =>
-  handlePutGrant('folder', r, e, p)
-export const handleDeleteDocGrant = (r: Request, e: Env, _c: ExecutionContext, p: Record<string, string>) =>
-  handleDeleteGrant('doc', r, e, p)
+  handlePutGrant('folder', r, e, undefined, p)
+export const handleDeleteDocGrant = (r: Request, e: Env, c: ExecutionContext, p: Record<string, string>) =>
+  handleDeleteGrant('doc', r, e, c, p)
 export const handleDeleteFolderGrant = (r: Request, e: Env, _c: ExecutionContext, p: Record<string, string>) =>
-  handleDeleteGrant('folder', r, e, p)
+  handleDeleteGrant('folder', r, e, undefined, p)
 
 // 저장된 부모 사슬(가까운 것부터) — folderAncestors 와 같은 규칙을 미리 만든 표로. 없는 폴더·순환에서 멈춘다
 function storedChain(folderById: Map<string, { parent_id: string | null }>, folderId: string): string[] {

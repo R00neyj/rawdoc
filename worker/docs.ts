@@ -3,6 +3,7 @@ import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { getDocAccess, roleAtLeast } from './access'
 import { getActiveLock } from './locks'
+import { notifyPurge } from './docRoomRpc'
 import {
   MAX_BODY_BYTES,
   MAX_CONTENT_BYTES,
@@ -327,7 +328,7 @@ export async function handleSetPinned(
 export async function handleDeleteDoc(
   request: Request,
   env: Env,
-  _ctx: ExecutionContext,
+  ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
@@ -336,5 +337,7 @@ export async function handleDeleteDoc(
   if (access.role !== 'owner') return errorResponse('forbidden', 403)
 
   await env.DB.prepare('DELETE FROM docs WHERE id = ? AND owner_id = ?').bind(params.id, user.id).run()
+  // 열린 연결을 닫고 DO 저장소를 비운다 (F-304 9.4)
+  await notifyPurge(env, ctx, params.id)
   return new Response(null, { status: 204 })
 }

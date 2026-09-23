@@ -8,5 +8,5 @@
     "moduleResolution": "bundler",
     "skipLibCheck": true
   },
-  "include": ["./**/*.ts", "../src/lib/folderTree.ts", "../src/lib/imageBlock.ts","../src/types.ts", "../src/lib/comments.ts", "../src/lib/siteMeta.ts", "../src/lib/appEntry.ts", "../src/lib/siteChrome.ts", "../brand.config.ts"]
+  "include": ["./**/*.ts", "../src/lib/folderTree.ts", "../src/lib/imageBlock.ts","../src/types.ts", "../src/lib/comments.ts", "../src/lib/siteMeta.ts", "../src/lib/appEntry.ts", "../src/lib/siteChrome.ts", "../src/lib/lineEnding.ts", "../src/lib/docRoomProtocol.ts", "../brand.config.ts"]
 }

@@ -49,6 +49,10 @@ import { handleCreateAttachmentV1, handleCreateDocLinkV1, handleCreateDocV1, han
 import { renderPublicPage } from './publicPage'
 import { renderWelcomePage } from './welcomePage'
 import { rootTarget, welcomeRedirect, withRootHeaders } from './rootRoute'
+import { handleDocSocket } from './docSocket'
+import { DOC_SOCKET_PREFIX } from '../src/lib/docRoomProtocol'
+
+export { DocRoom } from './docRoom'
 
 type RouteHandler = (
   request: Request,
@@ -173,6 +177,24 @@ const routes: Route[] = [
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
+
+    // 실시간 동기화 소켓 — JSON API 분기보다 앞에서 받는다 (F-304 4.1)
+    if (url.pathname.startsWith('/ws/')) {
+      const rest = url.pathname.startsWith(DOC_SOCKET_PREFIX) ? url.pathname.slice(DOC_SOCKET_PREFIX.length) : ''
+      if (!rest || rest.includes('/')) return errorResponse('not_found', 404)
+      let docId: string
+      try {
+        docId = decodeURIComponent(rest)
+      } catch {
+        return errorResponse('not_found', 404)
+      }
+      try {
+        return await handleDocSocket(request, env, docId)
+      } catch (err) {
+        console.error(err)
+        return errorResponse('internal', 500)
+      }
+    }
 
     if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/pub/') && !url.pathname.startsWith('/v1/')) {
       if (url.pathname.startsWith('/p/')) {

@@ -478,6 +478,8 @@ describe('F-223 A1 GET /v1/docs', () => {
 describe('F-223 A4 /v1 라우팅 — 실제 auth 로 확인', () => {
   async function freshWorker() {
     vi.doUnmock('./auth')
+    // index → docRoom → partyserver → cloudflare:workers 는 node 에서 풀리지 않는다 (F-304)
+    vi.doMock('./docRoom', () => ({ DocRoom: class {} }))
     vi.resetModules()
     const mod = await import('./index')
     return mod.default
