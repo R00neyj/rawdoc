@@ -385,7 +385,7 @@
 | H371 | F-2022 11.4 H7 | 스크린 리더에서 combobox·listbox 가 읽히는지(H190 과 같은 패턴) | 대기 |
 | H372 | F-2022 A10 (구현 추론) | 표 칸에서 우클릭 → 명령 팔레트 → 템플릿 삽입 — 그 칸 자리에 들어가는지, 표가 깨지지 않는지 | 대기 |
 | H373 | F-2021 13.4 S1 | Windows 11 Chrome, `dev:worker` 띄우고 `rawdoc login --server http://localhost:8790` — 해시까지 온전한 인증 화면 → 승인 → 성공 문구 → `whoami`·`ls`·`new`·`get` 이 되는지 | 대기 |
-| H374 | F-2021 13.4 S2 | 배포·게시 뒤 로그아웃 상태 브라우저에서 `npx -y rawdoc login` → `로그인` → Access 일회용 코드 → 인증 화면으로 복귀 → 승인 → `ls` | 대기 |
+| H374 | F-2021 13.4 S2 | 배포·게시 뒤 로그아웃 상태 브라우저에서 `npx -y rawdoc login` → `로그인` → Access 일회용 코드 → 인증 화면으로 복귀 → 승인 → `ls` | 통과 (2026-09-24 Windows 11 Chrome, `npx -y rawdoc login` → 승인 → `whoami`·`ls` 정상). 참고: 첫 시도는 브라우저에 "잘못된 로그인 주소" — 같은 주소를 자동 브라우저로 열면 정상이고, 주소 전체를 붙여 넣자 성공했다. 474자 주소가 터미널 링크에서 잘린 것으로 추정(확인 안 함). 저장소 안에서는 `npx rawdoc` 이 루트 `package.json`(이름 `rawdoc`, bin 없음)을 잡아 `could not determine executable` |
 | H375 | F-2021 13.4 S3 | Edge·Firefox(데스크톱)에서 S1 — https 페이지에서 `http://127.0.0.1` 로의 최상위 이동이 막히거나 권한 창이 뜨는지 | 대기 |
 | H376 | F-2021 13.4 S4 | PWA 로 설치한 Chrome 에서 S2 — 인증 화면이 앱 창으로 열려도 콜백 이동이 되는지 | 대기 |
 | H377 | F-2021 13.4 S5 | macOS 또는 Linux 가 있으면 브라우저 열기(`open`·`xdg-open`)가 되는지 | 대기 |
