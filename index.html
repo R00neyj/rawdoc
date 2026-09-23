@@ -3,12 +3,50 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    %BOOT_PAINT_SCRIPT%
     <meta name="google-site-verification" content="Fm3jrGxBDjOaORMgXr6cRbEY1s4Mgrny60PylqWYOH0" />
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <title>%BRAND_NAME%</title>
   </head>
   <body>
+    <div id="boot-skeleton" class="boot-skeleton" role="status" aria-label="불러오는 중…">
+      <div class="boot-skeleton-sidebar" aria-hidden="true">
+        <div class="boot-skeleton-sidebar-head"><div class="boot-skeleton-bar"></div></div>
+        <div class="boot-skeleton-sidebar-list">
+          <div class="boot-skeleton-bar"></div>
+          <div class="boot-skeleton-bar"></div>
+          <div class="boot-skeleton-bar"></div>
+          <div class="boot-skeleton-bar"></div>
+          <div class="boot-skeleton-bar"></div>
+          <div class="boot-skeleton-bar"></div>
+        </div>
+      </div>
+      <div class="boot-skeleton-main" aria-hidden="true">
+        <div class="boot-skeleton-topbar"></div>
+        <div class="boot-skeleton-content">
+          <div class="boot-skeleton-doc">
+            <div class="boot-skeleton-doc-title boot-skeleton-bar"></div>
+            <div class="boot-skeleton-doc-body">
+              <div class="boot-skeleton-bar"></div>
+              <div class="boot-skeleton-bar"></div>
+              <div class="boot-skeleton-bar"></div>
+              <div class="boot-skeleton-bar"></div>
+              <div class="boot-skeleton-bar"></div>
+              <div class="boot-skeleton-bar"></div>
+              <div class="boot-skeleton-bar"></div>
+            </div>
+          </div>
+          <div class="boot-skeleton-home">
+            <div class="boot-skeleton-home-sentence boot-skeleton-bar"></div>
+            <div class="boot-skeleton-home-actions">
+              <div class="boot-skeleton-bar"></div>
+              <div class="boot-skeleton-bar"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

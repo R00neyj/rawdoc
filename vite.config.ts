@@ -7,6 +7,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import brand from './brand.config'
 import { SITE_DESCRIPTION, SITE_URL } from './src/lib/siteMeta'
+import { BOOT_PAINT_SCRIPT } from './src/app/bootPaint'
 import type { SiteInput } from './site/build'
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url))
@@ -151,6 +152,20 @@ function brandHtmlPlugin(): Plugin {
   }
 }
 
+// index.html 의 %BOOT_PAINT_SCRIPT% 자리표시를 머리 스크립트로 바꾼다 (specs/features/F-2015.md 4.3)
+function bootPaintPlugin(): Plugin {
+  return {
+    name: 'boot-paint',
+    transformIndexHtml(html: string) {
+      if (!html.includes('%BOOT_PAINT_SCRIPT%')) {
+        throw new Error('index.html 에서 %BOOT_PAINT_SCRIPT% 자리표시를 찾을 수 없습니다')
+      }
+      // 함수로 넘겨야 스크립트 안의 $' ·$& 가 치환 패턴으로 풀려 HTML 이 겹치지 않는다
+      return html.replace('%BOOT_PAINT_SCRIPT%', () => `<script>${BOOT_PAINT_SCRIPT}</script>`)
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   build: {
@@ -170,6 +185,7 @@ export default defineConfig({
   plugins: [
     react(),
     brandHtmlPlugin(),
+    bootPaintPlugin(),
     VitePWA({
       // 새 서비스 워커가 대기 상태가 되면 앱이 직접 알린다 (registerType 'prompt').
       // injectRegister:false — 등록 스크립트는 src/pwa/useAppUpdate.js 가 useRegisterSW 로

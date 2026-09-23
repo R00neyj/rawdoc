@@ -1,0 +1,180 @@
+/* 첫 로딩 부팅 스켈레톤 — index.html 정적 마크업 위에 그린다 (specs/features/F-2015.md 6·9장) */
+
+.boot-skeleton {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+}
+
+html[data-boot-view='off'] .boot-skeleton {
+  display: none;
+}
+
+.boot-skeleton-sidebar {
+  position: relative;
+  flex: none;
+  width: var(--boot-sidebar-w, var(--sidebar-w));
+  background: var(--paper);
+  border-right: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+html[data-boot-sidebar='collapsed'] .boot-skeleton-sidebar {
+  width: var(--sidebar-rail-w);
+}
+
+html[data-boot-sidebar='collapsed'] .boot-skeleton-sidebar-head,
+html[data-boot-sidebar='collapsed'] .boot-skeleton-sidebar-list {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .boot-skeleton-sidebar {
+    display: none;
+  }
+}
+
+.boot-skeleton-sidebar-head {
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  padding-left: 14px;
+}
+
+.boot-skeleton-sidebar-head .boot-skeleton-bar {
+  width: 88px;
+  height: 12px;
+}
+
+.boot-skeleton-sidebar-list {
+  position: absolute;
+  top: 136px;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.boot-skeleton-sidebar-list .boot-skeleton-bar {
+  height: 10px;
+  margin: 10px 16px;
+}
+
+.boot-skeleton-sidebar-list .boot-skeleton-bar:nth-child(1) { width: 64%; }
+.boot-skeleton-sidebar-list .boot-skeleton-bar:nth-child(2) { width: 48%; }
+.boot-skeleton-sidebar-list .boot-skeleton-bar:nth-child(3) { width: 72%; }
+.boot-skeleton-sidebar-list .boot-skeleton-bar:nth-child(4) { width: 40%; }
+.boot-skeleton-sidebar-list .boot-skeleton-bar:nth-child(5) { width: 56%; }
+.boot-skeleton-sidebar-list .boot-skeleton-bar:nth-child(6) { width: 36%; }
+
+.boot-skeleton-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+
+.boot-skeleton-topbar {
+  flex: none;
+  height: var(--topbar-h);
+  border-bottom: 1px solid var(--rule);
+}
+
+.boot-skeleton-content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.boot-skeleton-doc,
+.boot-skeleton-home {
+  display: none;
+  position: absolute;
+  inset: 0;
+}
+
+html[data-boot-view='doc'] .boot-skeleton-doc {
+  display: block;
+}
+
+html[data-boot-view='home'] .boot-skeleton-home {
+  display: flex;
+}
+
+.boot-skeleton-doc {
+  width: min(100%, var(--content-max));
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding-top: 67px;
+}
+
+.boot-skeleton-doc-title {
+  margin-left: 37px;
+  width: 40%;
+  height: 20px;
+}
+
+.boot-skeleton-doc-body {
+  margin: 23px 0 0 31px;
+  display: flex;
+  flex-direction: column;
+}
+
+.boot-skeleton-doc-body .boot-skeleton-bar {
+  height: 10px;
+  margin: 0 31px 16px 0;
+}
+
+.boot-skeleton-doc-body .boot-skeleton-bar:nth-child(1) { width: 92%; }
+.boot-skeleton-doc-body .boot-skeleton-bar:nth-child(2) { width: 100%; }
+.boot-skeleton-doc-body .boot-skeleton-bar:nth-child(3) { width: 96%; }
+.boot-skeleton-doc-body .boot-skeleton-bar:nth-child(4) { width: 68%; }
+.boot-skeleton-doc-body .boot-skeleton-bar:nth-child(5) { width: 88%; }
+.boot-skeleton-doc-body .boot-skeleton-bar:nth-child(6) { width: 94%; }
+.boot-skeleton-doc-body .boot-skeleton-bar:nth-child(7) { width: 52%; }
+
+.boot-skeleton-home {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.boot-skeleton-home-sentence {
+  width: 268px;
+  height: 16px;
+}
+
+.boot-skeleton-home-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.boot-skeleton-home-actions .boot-skeleton-bar {
+  height: 40px;
+  border-radius: var(--radius-control);
+}
+
+.boot-skeleton-home-actions .boot-skeleton-bar:nth-child(1) { width: 97px; }
+.boot-skeleton-home-actions .boot-skeleton-bar:nth-child(2) { width: 106px; }
+
+.boot-skeleton-bar {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  border-radius: 4px;
+  animation: boot-skeleton-pulse 1.6s ease-in-out infinite;
+  animation-delay: 400ms;
+}
+
+@keyframes boot-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-skeleton-bar {
+    animation: none;
+  }
+}

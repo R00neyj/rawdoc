@@ -33,6 +33,7 @@ import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } fro
 import { useEdgeSwipe } from './useEdgeSwipe'
 import { IconRefresh, IconNoteAdd } from './icons'
 import { resolveTheme } from './theme'
+import { removeBootSkeleton } from './bootPaint'
 import { parseHash, formatHash, formatMapHash, parsePathRoute, type HashRoute } from './hashRoute'
 import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
@@ -873,6 +874,13 @@ export default function App() {
     boot()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 부팅 스켈레톤 인계 — ready·공개 보기·F-136 막힘 중 하나라도 되면 겹침을 걷는다 (specs/features/F-2015.md 5.3)
+  useLayoutEffect(() => {
+    if (bootPhase === 'ready' || publicRoute !== null || dbBlockedMessage !== null) {
+      removeBootSkeleton(document)
+    }
+  }, [bootPhase, publicRoute, dbBlockedMessage])
 
   // ----- 뒤로·앞으로 가기, 주소창 직접 수정 (ia.md 3.10) -----
   // docs·currentDocId 는 ref 로 읽는다: 이 effect 는 bootPhase 가 바뀔 때만 재구독하므로
@@ -2777,6 +2785,8 @@ export default function App() {
       ref={appShellRef}
       onClick={handleAppShellClick}
       style={{ '--sidebar-w': `${displaySidebarWidth}px` } as CSSProperties}
+      aria-busy={bootPhase === 'booting' ? true : undefined}
+      inert={bootPhase === 'booting'}
     >
       <DropOverlay visible={dropActive} />
       {narrow && topBar}
@@ -2843,8 +2853,7 @@ export default function App() {
           <NoticeBar notice={notice} onDismiss={() => setNotice(null)} />
           {bootPhase === 'booting' && (
             <div className="content-area" data-editor-slot>
-              {/* 평소엔 순간적으로 지나가 로딩 표시를 두지 않지만(ia.md 4.4), 다른 창이
-                  옛 버전 연결을 쥐고 있어 막힌 동안은 예외로 문구를 보인다 (F-136.md 3.3) */}
+              {/* 평소엔 부팅 스켈레톤이 가리고(F-2015.md), 다른 창이 옛 버전 연결을 쥐고 있어 막힌 동안만 이 문구를 보인다 (F-136.md 3.3) */}
               {dbBlockedMessage && <p className="boot-blocked-notice">{dbBlockedMessage}</p>}
             </div>
           )}

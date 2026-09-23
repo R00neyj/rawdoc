@@ -11,8 +11,8 @@ brand.config.js          제품명·짧은 이름·메인 컬러. 유일한 정�
 scripts/                 검증 도구 (F-160). measure·verify·e2e-one. src/ 가 import 하지 않는다
 content/                 공개 사이트 글 원본 `.md` (F-272). 글은 F-273~F-276 이 넣는다
 site/                    공개 사이트 빌드 (F-272). build·pages·guard·render·helpPage·guidesIndex. 순수 문자열만 다루고 DOM·React·node:fs 를 import 하지 않는다
-index.html               <title>·theme-color·--accent 는 빌드 시 brand.config.js 에서 주입
-vite.config.js           React, brand 주입 플러그인, Vitest, (F-115) PWA
+index.html               <title>·theme-color·--accent 는 빌드 시 brand.config.js 에서 주입. 첫 페인트 전 테마·사이드바 값을 <html> 에 넣는 인라인 스크립트(%BOOT_PAINT_SCRIPT%)와 부팅 스켈레톤 마크업 (F-2015)
+vite.config.js           React, brand 주입 플러그인, 부팅 스크립트 주입 플러그인(F-2015), Vitest, (F-115) PWA
 public/                  아이콘 등 정적 파일
 src/
   main.jsx               폰트·CSS import, 저장된 설정을 <html> 속성에 반영, 렌더
@@ -20,6 +20,7 @@ src/
   styles/
     tokens.css           색·서체·크기 토큰. 메인 컬러 hex 는 쓰지 않는다
     app.css              레이아웃·컴포넌트 스타일
+    boot.css             부팅 스켈레톤 (F-2015)
   app/                   React 화면. CM6·IndexedDB 를 직접 다루지 않는다
     App.jsx              최상위 상태와 흐름
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
@@ -27,6 +28,7 @@ src/
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
     notice.js            알림 띠 규칙 (순수 함수)
     prefs.js             localStorage 설정
+    bootPaint.ts         첫 페인트 전 머리 스크립트 문자열·스켈레톤 걷기 (F-2015)
   editor/                CM6. React 를 import 하지 않는다 (Editor.jsx 제외)
     createEditor.js      EditorView 생성, 확장 조립
     Editor.jsx           React 래퍼
@@ -140,7 +142,7 @@ store.removeAttachment(id)    // Promise<void>
 | `md.bodyFont` | `sans` \| `serif` | `sans` | F-141 |
 | `md.theme` | `system` \| `white` \| `sepia` \| `dark` | `system` | F-141 |
 | `md.sidebar` | `expanded` \| `collapsed` | `expanded` | F-143 |
-| `md.sidebarWidth` | 정수 px, 200~480 | `224` | F-159 |
+| `md.sidebarWidth` | 정수 px, 200~480 | `300` | F-159 |
 | `md.lineNumbers` | `on` \| `off` | `on` | F-147 |
 | `md.fontSize` | `small` \| `medium` \| `large` | `medium` | F-154 |
 | `md.indent` | `2` \| `4` | `4` | F-154 |
@@ -154,6 +156,7 @@ store.removeAttachment(id)    // Promise<void>
 | `md.landingDone` | `1` | 없음 | F-271 |
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
+  - 예외: `md.theme`·`md.sidebar`·`md.sidebarWidth`·`md.startScreen` 은 `BOOT_PAINT_SCRIPT` 도 읽는다 — 첫 페인트 전이라 `prefs.ts` 를 쓸 수 없다 (F-2015)
 
 ## 4.1 M2 추가 설정 키 (2026-09-15)
 
