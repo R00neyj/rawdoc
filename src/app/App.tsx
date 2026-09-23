@@ -23,7 +23,7 @@ import type { ServerStore } from '../storage/serverStore'
 import { migrateLocalIfNeeded } from './migrateLocal'
 import { ancestorsOfDoc, resolveTargetFolderId, canMoveFolder } from '../lib/folderTree'
 import type { SelectionItem } from './sidebarSelection'
-import { resolveWikiTarget } from '../lib/wikiLink'
+import { createWikiResolver } from '../lib/wikiResolve'
 import { fromEditorText } from '../lib/lineEnding'
 import { decodeMarkdown } from '../lib/decodeMarkdown'
 import { getPref, setPref } from './prefs'
@@ -66,6 +66,8 @@ import { insertTable } from '../editor/insertCommands'
 import { countChars, countWords, cursorInfo } from '../editor/stats'
 import Viewer, { type ViewContextMenuInfo } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
+import { findHeadingLine } from '../viewer/headingTarget'
+import { findViewerHeadingElByLine, topInScroller } from './outlinePosition'
 import { printDoc } from './printDoc'
 import { decodeShare, type ShareDoc } from '../lib/shareCodec'
 import { readViewerAnchor, scrollViewerToAnchor } from './viewerScroll'
@@ -108,6 +110,7 @@ import type { Doc, Folder, FolderDeleteMode, LineEnding, Store } from '../types'
 const STATS_DEBOUNCE_MS = 150
 
 const NARROW_QUERY = '(max-width: 1023px)'
+const HEADING_JUMP_MARGIN = 16 // 목차 SELECT_MARGIN 과 같다 (F-2018 7.3)
 
 type DocMeta = Pick<Doc, 'id' | 'title' | 'updatedAt' | 'folderId' | 'pinnedAt' | 'role' | 'ownerEmail' | 'viaFolder'>
 type OpenDoc = { id: string; content: string; lineEnding: LineEnding }
@@ -237,6 +240,8 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false)
   // 검색 결과로 연 문서에 넣어 줄 검색어 예약 — 본문이 도착하고 에디터가 만들어질 때까지 기다린다 (specs/features/F-294.md 4.3)
   const [pendingEditorSearch, setPendingEditorSearch] = useState<{ docId: string; term: string } | null>(null)
+  // 위키링크 [[문서#제목]] 으로 연 문서에서 이동할 제목 — 그 문서가 열려 그려진 뒤 한 번 쓴다 (specs/features/F-2018.md 8.3)
+  const pendingHeadingRef = useRef<{ docId: string; heading: string } | null>(null)
   // 도움말 전용 페이지 S-7 (specs/features/F-244.md 3.3) — currentDocId 는 이 화면 동안 null
   const [helpOpen, setHelpOpen] = useState(false)
   // 위키링크 지도 S-8 (specs/features/F-292.md 6.1) — 공유 화면과 같은 방식으로 currentDocId 를 비우지 않고 유지한다
@@ -273,6 +278,8 @@ export default function App() {
   // 보기 모드 변환 결과 HTML (specs/features/F-123.md 3.3). 편집 중 계속 동기화하는
   // 본문 사본이 아니라, 변환 시점(전환 시·문서를 열 때)에만 1회 만드는 파생값이다
   const [viewerHtml, setViewerHtml] = useState('')
+  // viewerHtml 을 만든 문서 — 헤딩 이동이 옛 문서 HTML 에서 요소를 찾지 않게 같이 바꾼다 (F-2018 8.3)
+  const [viewerDocId, setViewerDocId] = useState<string | null>(null)
   // 공유받은 문서 화면 S-4 (specs/features/F-130.md 4장). decodeShare 결과 그대로 —
   // 저장소 문서가 아니므로 currentDocId 와 무관하게 독립적으로 둔다
   const [sharedDoc, setSharedDoc] = useState<ShareDoc | null>(null)
@@ -346,7 +353,7 @@ export default function App() {
   const readOnlyDocRef = useRef(false)
   // Editor 는 마운트 시점의 onOpenWikiLink 클로저만 계속 쓰므로(F-131 3·5장), 여기서도
   // ref 로 우회해 항상 최신 docs·currentDocId·viewMode 를 보게 한다
-  const openWikiLinkRef = useRef<(target: string) => Promise<void>>(async () => {})
+  const openWikiLinkRef = useRef<(target: string, heading: string | null) => Promise<void>>(async () => {})
   // 제목 경로 클릭(onNavigateFolder, F-234.md 3.5)이 항상 최신 사이드바 열림 상태를 보도록 갱신한다
   const narrowRef = useRef(narrow)
   const sidebarOpenRef = useRef(sidebarOpen)
@@ -1154,17 +1161,56 @@ export default function App() {
     }
   }, [currentDocId])
 
-  // 위키링크 대상 판정용 문서 제목 목록 (F-131 3·5장). docs 가 바뀔 때만 새로 만든다 —
-  // Editor(자동완성·표시)와 renderMarkdown(보기 모드) 둘 다 이 값을 쓴다
-  const wikiTitles = useMemo(() => docs.map((d) => d.title), [docs])
+  // 위키링크 해석기 (specs/features/F-2018.md 8.1). docs·folders 가 바뀔 때만 새로 만든다 — 입력마다 만들지 않는다 (5.2)
+  const wikiResolver = useMemo(
+    () => createWikiResolver(docs.map((d) => ({ id: d.id, title: d.title, folderId: d.folderId ?? null })), folders),
+    [docs, folders],
+  )
+  const currentFolderId = currentDoc?.folderId ?? null
+  // 편집기 문맥 — 해석기나 원본 폴더가 바뀔 때만 새 객체 (5.2)
+  const wikiContext = useMemo(() => ({ resolver: wikiResolver, sourceFolderId: currentFolderId }), [wikiResolver, currentFolderId])
 
-  // 위키링크 href 판정 — 보기 모드·인쇄가 함께 쓴다(F-279.md 4.3). 이 화면은 항상 #/d/{id} (F-252.md 4.1)
+  // 위키링크 href 판정 — 보기 모드·인쇄가 함께 쓴다(F-279.md 4.3). 이 화면은 항상 #/d/{id}, '' 는 지금 문서 (F-252.md 4.1, F-2018 8.2)
   const resolveWikiHref = useCallback(
-    (target: unknown) => {
-      const match = resolveWikiTarget(target, docs)
+    (target: string) => {
+      if (target === '') return currentDocId ? `#/d/${currentDocId}` : null
+      const match = wikiResolver.resolve(target, currentFolderId)
       return match ? `#/d/${match.id}` : null
     },
-    [docs],
+    [wikiResolver, currentFolderId, currentDocId],
+  )
+
+  // 지금 문서 안 제목으로 이동 — 찾음은 원문으로, 못 찾으면 문서 처음 + 알림 (F-2018 7.3·7.4)
+  const jumpToHeading = useCallback(
+    (heading: string) => {
+      const handle = editorRef.current
+      if (!handle) return
+      const line = findHeadingLine(handle.getText('lf'), heading)
+      if (viewMode === 'view') {
+        const container = viewerRef.current
+        if (!container) return
+        if (line === null) {
+          container.scrollTo({ top: 0 })
+        } else {
+          const place = () => {
+            const el = findViewerHeadingElByLine(container, line)
+            if (el) container.scrollTo({ top: Math.max(0, topInScroller(el, container) - HEADING_JUMP_MARGIN) })
+          }
+          place()
+          // 그려진 뒤(rAF 2회) 실측 보정 — 모드 전환 복원과 같은 이유
+          requestAnimationFrame(() => requestAnimationFrame(place))
+        }
+      } else {
+        const view = handle.view
+        const pos = line === null ? 0 : view.state.doc.line(line).from
+        view.dispatch({ selection: { anchor: pos } })
+        handle.focus()
+        if (line === null) view.scrollDOM.scrollTo({ top: 0 })
+        else handle.scrollToHeading(pos)
+      }
+      if (line === null) showNotice({ type: 'info', message: `"${heading}" 제목을 찾지 못해 문서 처음을 엽니다.` })
+    },
+    [viewMode, showNotice],
   )
 
   // ----- 보기 모드 변환 (specs/features/F-123.md 3.3) -----
@@ -1179,6 +1225,7 @@ export default function App() {
     setViewerHtml(
       renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true }),
     )
+    setViewerDocId(currentDocId)
   }, [viewMode, openDoc, currentDocId, resolveWikiHref])
 
   // 검색 결과로 연 문서에 검색어 넘기기 — 새 EditorView 가 만들어진 뒤(자식 layout effect 뒤)에 적용한다 (specs/features/F-294.md 4.3)
@@ -1192,13 +1239,21 @@ export default function App() {
     setPendingEditorSearch(null) // 한 번만 쓴다
   }, [pendingEditorSearch, openDoc, currentDocId])
 
-  // 편집 모드 위키링크 표시·자동완성용 제목 목록 갱신 (F-131 3장) — 문서 생성·삭제·제목
-  // 변경 때마다 에디터에 최신 목록을 반영한다. openDoc.id !== currentDocId 인 동안은(문서
-  // 전환 중 옛 에디터가 아직 붙어 있는 짧은 순간) 건드리지 않는다
+  // [[문서#제목]] 으로 연 문서 — 에디터가 만들어지고(보기 모드면 그 문서 HTML 이 그려진) 뒤 한 번 이동한다 (F-2018 8.3, F-294 4.3 과 같은 방식)
+  useEffect(() => {
+    const pending = pendingHeadingRef.current
+    if (!pending || currentDocId !== pending.docId) return
+    if (openDoc?.id !== currentDocId || !editorRef.current) return
+    if (viewMode === 'view' && viewerDocId !== currentDocId) return
+    pendingHeadingRef.current = null // 한 번만 쓴다
+    jumpToHeading(pending.heading)
+  }, [openDoc, currentDocId, viewMode, viewerDocId, jumpToHeading])
+
+  // 편집기 위키링크 해석 문맥 갱신 — 문서 전환 중(옛 에디터가 붙은 순간)은 건드리지 않는다 (F-2018 5.2)
   useEffect(() => {
     if (openDoc?.id !== currentDocId) return
-    editorRef.current?.setWikiTitles(wikiTitles)
-  }, [wikiTitles, openDoc, currentDocId])
+    editorRef.current?.setWikiContext(wikiContext)
+  }, [wikiContext, openDoc, currentDocId])
 
   // 문서 전환·최초 마운트로 에디터가 새로 생기면 저장된 줄 번호 값을 그리기 전에 맞춘다 (F-147 2장)
   useLayoutEffect(() => {
@@ -1606,12 +1661,25 @@ export default function App() {
   // 있는 문서면 selectDoc 과 같은 흐름(저장 대기 입력 flush 뒤 전환)을 탄다. 없으면 그
   // 자리에서 빈 문서를 새로 만들어 연다 — 새 문서 는 현재 문서와 같은 폴더에 만든다
   // (F-126.md 5.3 의 folderId 생략 규칙과 같다)
-  async function openWikiLinkTarget(target: string) {
-    const match = resolveWikiTarget(target, docs)
+  // F-2018 8.3 — '' 또는 지금 문서면 제목 이동(기록 없음), 다른 문서면 연 뒤 이동, 없으면 새 문서(헤딩 버림, 경로식은 그 폴더)
+  async function openWikiLinkTarget(target: string, heading: string | null = null) {
+    if (target === '') {
+      if (heading) jumpToHeading(heading)
+      return
+    }
+    const match = wikiResolver.resolve(target, currentFolderId)
+    const onDocScreen = !sharedDoc && !sharesOpen && !helpOpen && !mapRoute
+    if (match && match.id === currentDocId && onDocScreen) {
+      if (heading) jumpToHeading(heading)
+      return
+    }
     if (match) {
+      pendingHeadingRef.current = heading ? { docId: match.id, heading } : null
       await selectDoc(match.id)
       return
     }
+
+    const place = wikiResolver.findLinkFolder(target, currentFolderId)
 
     if (viewMode === 'view') changeViewMode('live') // 제목 입력 포커스가 필요하다 (ia.md 3.3)
     await beforeLeaveDoc()
@@ -1621,10 +1689,10 @@ export default function App() {
     let doc: Doc
     try {
       doc = await store.create({
-        title: target,
+        title: place ? place.title : target,
         content: '',
         lineEnding: 'crlf',
-        folderId: newDocFolderId(),
+        folderId: place ? place.folderId : newDocFolderId(),
       })
     } catch {
       // F-138 3.4 — 3.4 참고 주석과 같은 이유·같은 알림 경로
@@ -1646,8 +1714,8 @@ export default function App() {
     openWikiLinkRef.current = openWikiLinkTarget
   })
 
-  const handleOpenWikiLink = useCallback((target: string) => {
-    openWikiLinkRef.current(target)
+  const handleOpenWikiLink = useCallback((target: string, heading?: string | null) => {
+    openWikiLinkRef.current(target, heading ?? null)
   }, [])
 
   // ----- .md 내보내기 (specs/features/F-112.md 2.2, F-158.md 2.3) -----
@@ -2676,6 +2744,7 @@ export default function App() {
       setViewerHtml(
         renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true }),
       )
+      setViewerDocId(currentDocId)
     }
 
     setViewMode(v)
@@ -2765,7 +2834,7 @@ export default function App() {
       shareLinkDocId={store.kind === 'server' && currentDoc && !sharedDoc && !isSharedDoc(currentDoc) ? currentDoc.id : null}
       onBeforeShareLinkAction={() => docSaverFlushRef.current()}
       onInvite={canInviteCurrentDoc ? requestInviteCurrentDoc : undefined}
-      wikiDocs={docs}
+      wikiResolver={wikiResolver}
       exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
       onExportMd={handleExportDoc}
       onExportTxt={handleExportDocAsText}
@@ -2927,7 +2996,7 @@ export default function App() {
                     autoFocus={focusTitleRef.current ? 'title' : focusEditorRef.current}
                     onDocChange={handleDocChange}
                     onSelectionChange={handleSelectionChange}
-                    wikiTitles={wikiTitles}
+                    wikiContext={wikiContext}
                     onOpenWikiLink={handleOpenWikiLink}
                     onImageFiles={handleImageFiles}
                     resolveAttachment={resolveAttachment}

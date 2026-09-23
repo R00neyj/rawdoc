@@ -158,8 +158,8 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
         buildSearchIndex({ store, scope: searchScope, docs, folders: folderList }),
       ])
       if (cancelled) return
-      const entries = mapResult.entries.map((e) => ({ id: e.id, title: e.title, targets: e.targets, unreadable: e.unreadable }))
-      setGraph(buildWikiGraphFromEntries(entries))
+      const entries = mapResult.entries.map((e) => ({ id: e.id, title: e.title, targets: e.targets, unreadable: e.unreadable, folderId: e.folderId }))
+      setGraph(buildWikiGraphFromEntries(entries, folderList))
       setUpdatedAtById(new Map(mapResult.entries.map((e) => [e.id, e.updatedAt])))
       setFolders(folderList)
       setSearchEntries(searchResult.entries)

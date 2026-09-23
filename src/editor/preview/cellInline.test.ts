@@ -45,6 +45,11 @@ describe('parseCellInline', () => {
     expect(parseCellInline('[[문서|별칭]]')).toEqual([{ text: '별칭', marks: ['wikilink'] }])
   })
 
+  it('위키링크 헤딩 — [[문서#절]] 은 문서#절, [[#절]] 은 #절 (F-2018 U12)', () => {
+    expect(parseCellInline('[[문서#절]]')).toEqual([{ text: '문서#절', marks: ['wikilink'] }])
+    expect(parseCellInline('[[#절]]')).toEqual([{ text: '#절', marks: ['wikilink'] }])
+  })
+
   it('표 안 파이프 이스케이프에서 온 [[문서\\|별칭]] 도 별칭', () => {
     expect(parseCellInline('[[문서\\|별칭]]')).toEqual([{ text: '별칭', marks: ['wikilink'] }])
   })

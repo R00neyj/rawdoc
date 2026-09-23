@@ -3,7 +3,8 @@ import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } f
 import { encodeShare, type ShareDoc } from '../lib/shareCodec'
 import { extractAttachmentRefs } from '../lib/imageBlock'
 import { stripComments } from '../lib/comments'
-import { findWikiLinks, resolveWikiTarget } from '../lib/wikiLink'
+import { findWikiLinks } from '../lib/wikiLink'
+import type { WikiResolver } from '../lib/wikiResolve'
 import { formatShareHash } from './hashRoute'
 import { getShareLink, createShareLink, revokeShareLink } from './linkApi'
 import { IconShare, IconTooltip, IconLink, IconLinkOff, IconCopy, IconPersonAdd } from './icons'
@@ -27,7 +28,7 @@ type ShareMenuProps = {
   // owner 이고 서버 저장소일 때만 — `사람 초대…` 항목 (F-212.md 2.5)
   onInvite?: () => void
   // 위키링크 대상 판정용 문서 제목 목록 — D-6 을 열지 결정한다 (F-252.md 3.1)
-  wikiDocs: { id: string; title: string }[]
+  wikiResolver: WikiResolver
 }
 
 type ShareMenuItem = { key: string; label: string; icon: ComponentType<{ size?: number }>; onSelect: () => Promise<void> }
@@ -39,7 +40,7 @@ export default function ShareMenu({
   linkDocId,
   onBeforeLinkAction,
   onInvite,
-  wikiDocs,
+  wikiResolver,
 }: ShareMenuProps) {
   const [open, setOpen] = useState(false)
   const [hasLink, setHasLink] = useState(false)
@@ -90,7 +91,8 @@ export default function ShareMenu({
     setTrackedMenuOpen(open)
     if (open) {
       const content = getShareDoc().content
-      setHasWikiTargets(findWikiLinks(content).some((m) => Boolean(resolveWikiTarget(m.target, wikiDocs))))
+      // 있음/없음은 원본 폴더와 무관하다 — 원본 없이 판정한다 (F-2018 8.4)
+      setHasWikiTargets(findWikiLinks(content).some((m) => m.target !== '' && wikiResolver.resolve(m.target, null) !== null))
     }
   }
 

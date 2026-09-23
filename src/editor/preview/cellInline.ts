@@ -105,7 +105,8 @@ function walkRange(
     if (item.from < cursor) continue // 안전망: 겹치면 뒤 항목을 건너뛴다
     if (item.from > cursor) push(out, text.slice(cursor, item.from), marks)
     if (item.kind === 'wiki') {
-      push(out, item.wiki.alias ?? item.wiki.target, [...marks, 'wikilink'])
+      // 보이는 글자: 별칭, 없으면 '#' 뒤까지 원문 조각 (F-2018 3.2)
+      push(out, item.wiki.alias ?? text.slice(item.wiki.targetFrom, item.wiki.targetTo).trim(), [...marks, 'wikilink'])
     } else if (item.kind === 'br') {
       out.push({ br: true })
     } else {

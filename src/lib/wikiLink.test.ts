@@ -23,6 +23,35 @@ describe('findWikiLinks — 2장 표', () => {
     expect(m.target).toBe('회의록')
     expect(m.alias).toBeNull()
     expect(line.slice(m.targetFrom, m.targetTo)).toBe('회의록#결정')
+    expect(m.heading).toBe('결정')
+  })
+})
+
+describe('findWikiLinks — heading (F-2018 3.1 U1)', () => {
+  const rows: [string, string, string | null][] = [
+    ['[[회의록]]', '회의록', null],
+    ['[[회의록#결정]]', '회의록', '결정'],
+    ['[[회의록# 결정 ]]', '회의록', '결정'],
+    ['[[노트#상위#하위]]', '노트', '하위'],
+    ['[[#결정]]', '', '결정'],
+    ['[[회의록#^abc123]]', '회의록', null],
+    ['[[회의록#]]', '회의록', null],
+    ['[[C# 정리]]', 'C', '정리'],
+  ]
+  for (const [line, target, heading] of rows) {
+    it(`${line} — target ${JSON.stringify(target)}, heading ${JSON.stringify(heading)}`, () => {
+      const matches = findWikiLinks(line)
+      expect(matches).toHaveLength(1)
+      expect(matches[0].target).toBe(target)
+      expect(matches[0].heading).toBe(heading)
+      expect(line.slice(matches[0].targetFrom, matches[0].targetTo)).toBe(line.slice(2, -2))
+    })
+  }
+
+  it('[[#^abc]]·[[#]]·[[ # ]] 는 링크가 아니다', () => {
+    expect(findWikiLinks('[[#^abc]]')).toEqual([])
+    expect(findWikiLinks('[[#]]')).toEqual([])
+    expect(findWikiLinks('[[ # ]]')).toEqual([])
   })
 })
 

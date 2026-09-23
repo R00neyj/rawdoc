@@ -4,8 +4,9 @@ import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { generateToken, isValidToken } from './token'
 import { stripComments } from '../src/lib/comments'
-import { collectWikiSet, type LoadDoc } from './shareSet'
+import { buildWikiLinkTable, collectWikiSet, type LoadDoc } from './shareSet'
 import { descendantFolderIds } from '../src/lib/folderTree'
+import { createWikiResolver, type WikiFolderRef } from '../src/lib/wikiResolve'
 
 type LinkRow = {
   token: string
@@ -67,6 +68,10 @@ async function ownerFolders(env: Env, ownerId: string): Promise<FolderListRow[]>
   return results
 }
 
+function toWikiFolders(folders: FolderListRow[]): WikiFolderRef[] {
+  return folders.map((f) => ({ id: f.id, name: f.name, parentId: f.parent_id }))
+}
+
 function subtreeIds(folders: FolderListRow[], folderId: string): string[] {
   const ids = descendantFolderIds(
     folders.map((f) => ({ id: f.id, name: f.name, parentId: f.parent_id })),
@@ -123,9 +128,13 @@ export async function handleGetDocShareSet(
   const doc = await findOwnedDoc(env, params.id, user.id)
   if (!doc) return errorResponse('not_found', 404)
 
-  const { results: allDocs } = await env.DB.prepare('SELECT id, title, content FROM docs WHERE owner_id = ?')
-    .bind(user.id)
-    .all<{ id: string; title: string; content: string }>()
+  // updated_at 내림차순 — 같은 제목이면 최근 수정이 같은 단계 안에서 이긴다 (F-2018 10.4)
+  const [{ results: allDocs }, folders] = await Promise.all([
+    env.DB.prepare('SELECT id, title, content, folder_id FROM docs WHERE owner_id = ? ORDER BY updated_at DESC')
+      .bind(user.id)
+      .all<{ id: string; title: string; content: string; folder_id: string | null }>(),
+    ownerFolders(env, user.id),
+  ])
 
   const byId = new Map(allDocs.map((d) => [d.id, d]))
   const loadDoc: LoadDoc = (id) => {
@@ -137,7 +146,8 @@ export async function handleGetDocShareSet(
   const { nodes, truncated } = collectWikiSet(
     params.id,
     loadDoc,
-    allDocs.map((d) => ({ id: d.id, title: d.title })),
+    allDocs.map((d) => ({ id: d.id, title: d.title, folderId: d.folder_id })),
+    toWikiFolders(folders),
   )
   return jsonResponse({
     nodes: nodes.map((n) => ({ id: n.id, title: n.title, depth: n.depth, parentId: n.parentId })),
@@ -288,7 +298,33 @@ export async function handlePublicGetDocSet(
     .map((id) => byId.get(id))
     .filter((d): d is { id: string; title: string } => d !== undefined)
 
-  return pubResponse({ docs: ordered })
+  // 문서 1개면 위키링크를 쓰지 않는다 — 소유자 전체를 읽지 않는다 (F-2018 10.3)
+  if (ordered.length < 2) return pubResponse({ docs: ordered.map((d) => ({ id: d.id, title: d.title, links: {} })) })
+
+  const setIds = ordered.map((d) => d.id)
+  const [{ results: bodies }, { results: ownerDocs }, folders] = await Promise.all([
+    env.DB.prepare(`SELECT id, content, folder_id FROM docs WHERE id IN (${setIds.map(() => '?').join(',')})`)
+      .bind(...setIds)
+      .all<{ id: string; content: string; folder_id: string | null }>(),
+    env.DB.prepare('SELECT id, title, folder_id FROM docs WHERE owner_id = ? ORDER BY updated_at DESC')
+      .bind(link.owner_id)
+      .all<{ id: string; title: string; folder_id: string | null }>(),
+    ownerFolders(env, link.owner_id),
+  ])
+  const resolver = createWikiResolver(
+    ownerDocs.map((d) => ({ id: d.id, title: d.title, folderId: d.folder_id })),
+    toWikiFolders(folders),
+  )
+  const allowed = new Set(setIds)
+  const bodyById = new Map(bodies.map((b) => [b.id, b]))
+
+  return pubResponse({
+    docs: ordered.map((d) => {
+      const body = bodyById.get(d.id)
+      const links = body ? buildWikiLinkTable(stripComments(body.content), body.folder_id, resolver, allowed) : {}
+      return { id: d.id, title: d.title, links }
+    }),
+  })
 }
 
 // 묶음 안 문서 본문. docId 가 묶음 밖(시작 문서도 아니고 share_link_docs 에도 없음)이면 404 (F-252 2.5)

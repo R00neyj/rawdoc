@@ -76,4 +76,20 @@ describe('buildMapIndex — A6', () => {
     await buildMapIndex({ store: counting, scope })
     expect(listCalls).toBe(1)
   })
+
+  it('F-2018 U16 folderId 만 바뀐 문서는 targets 를 재사용하고 folderId 는 새 값', async () => {
+    const store = createMemoryStore()
+    const folder = await store.createFolder({ name: '교안', parentId: null })
+    const a = await store.create({ title: 'A', content: '[[B]]', lineEnding: 'lf' })
+    const scope = mapIndexScope('memory', null)
+
+    const first = await buildMapIndex({ store, scope })
+    expect(first.entries[0].folderId).toBeNull()
+
+    await store.moveDoc(a.id, folder.id)
+    const second = await buildMapIndex({ store, scope })
+    expect(second.reusedCount).toBe(1)
+    expect(second.entries[0].targets).toBe(first.entries[0].targets)
+    expect(second.entries[0].folderId).toBe(folder.id)
+  })
 })

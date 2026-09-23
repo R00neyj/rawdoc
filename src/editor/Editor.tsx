@@ -7,7 +7,7 @@ import type { Ref } from 'react'
 import type { EditorState } from '@codemirror/state'
 
 import { createEditor } from './createEditor'
-import type { OnOpenWikiLink } from './preview/wikiLinks'
+import type { OnOpenWikiLink, WikiContext } from './preview/wikiLinks'
 import type { ResolveAttachment } from './preview/blocks'
 import type { OnImageFiles } from './imageInsert'
 import type { OnTitleChange, OnTitleCommit } from './docTitle'
@@ -22,7 +22,7 @@ type EditorProps = {
   autoFocus?: boolean | 'title'
   onDocChange?: (state: EditorState) => void
   onSelectionChange?: (state: EditorState) => void
-  wikiTitles?: string[]
+  wikiContext?: WikiContext
   onOpenWikiLink?: OnOpenWikiLink
   onImageFiles?: OnImageFiles
   resolveAttachment?: ResolveAttachment
@@ -40,7 +40,7 @@ export default function Editor({
   autoFocus,
   onDocChange,
   onSelectionChange,
-  wikiTitles,
+  wikiContext,
   onOpenWikiLink,
   onImageFiles,
   resolveAttachment,
@@ -66,7 +66,7 @@ export default function Editor({
       readOnly,
       onDocChange,
       onSelectionChange,
-      wikiTitles,
+      wikiContext,
       onOpenWikiLink,
       onImageFiles,
       resolveAttachment,

@@ -50,7 +50,7 @@ function cyclicFolderIds(folderById: Map<string, FolderLike>): Set<string> {
 }
 
 // 화면 트리의 부모 판정 — 없는 부모·순환에 든 폴더는 최상위(null), 그 밖은 저장된 부모 (3.3)
-function screenParentResolver(folders: FolderLike[]): (f: FolderLike) => string | null {
+export function screenParentResolver(folders: readonly FolderLike[]): (f: FolderLike) => string | null {
   const folderById = new Map(folders.map((f) => [f.id, f]))
   const cyclic = cyclicFolderIds(folderById)
   return (f) => (f.parentId !== null && folderById.has(f.parentId) && !cyclic.has(f.id) ? f.parentId : null)

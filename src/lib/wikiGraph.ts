@@ -1,6 +1,7 @@
 // 위키링크 관계 뽑기·그래프 만들기·부분 그래프. 순수 함수, DOM·CM6·markdown-it·React·저장소를 import 하지 않는다 (specs/features/F-292.md 3장, architecture.md 1장)
 import { findWikiLinks } from './wikiLink'
 import { findFrontmatter } from './frontmatter'
+import { createWikiResolver, type WikiDocRef, type WikiFolderRef } from './wikiResolve'
 
 // 펜스 코드블록 여닫기 (3.2). 줄 앞 공백은 몇 칸이든, 목록 항목 안(`2. ```)이어도 펜스로 본다
 // — CommonMark 는 목록 항목 안의 펜스를 인정하는데, 공백 0~3칸만 보면 그 여는 펜스를 놓치고
@@ -90,7 +91,7 @@ export function extractWikiTargets(content: string): string[] {
 
     const masked = maskInlineCode(line)
     for (const link of findWikiLinks(masked)) {
-      targets.push(link.target)
+      if (link.target !== '') targets.push(link.target) // [[#헤딩]] 은 다른 문서를 가리키지 않는다 (F-2018 9.1)
     }
   }
 
@@ -104,24 +105,10 @@ export type WikiGraph = {
 }
 
 // mapIndex.ts 가 이미 뽑아 둔 대상 목록을 재사용할 때 쓰는 낮은 단계 입력 (5.3 재사용)
-export type WikiGraphEntry = { id: string; title: string; targets: string[]; unreadable?: boolean }
+export type WikiGraphEntry = { id: string; title: string; targets: string[]; unreadable?: boolean; folderId?: string | null }
 
-// 제목 → 노드 인덱스. resolveWikiTarget(lib/wikiLink.ts) 과 같은 규칙(정확 일치 → 대소문자 무시 → 먼저 등장한 것)을 맵 두 개로 O(1) 조회한다 (3.3)
-function buildTitleMaps(entries: { title: string }[]) {
-  const exact = new Map<string, number>()
-  const lower = new Map<string, number>()
-  entries.forEach((entry, index) => {
-    const title = entry.title.trim()
-    if (title === '') return
-    if (!exact.has(title)) exact.set(title, index)
-    const lowerTitle = title.toLocaleLowerCase('ko')
-    if (!lower.has(lowerTitle)) lower.set(lowerTitle, index)
-  })
-  return { exact, lower }
-}
-
-// 이미 뽑아 둔 { id, title, targets } 목록에서 그래프를 만든다 (mapIndex.ts 재사용 통로)
-export function buildWikiGraphFromEntries(entries: WikiGraphEntry[]): WikiGraph {
+// 이미 뽑아 둔 { id, title, targets } 목록에서 그래프를 만든다 (mapIndex.ts 재사용 통로). 간선 대상은 해석기로 — 원본은 그 항목의 폴더 (F-2018 9.1)
+export function buildWikiGraphFromEntries(entries: WikiGraphEntry[], folders: readonly WikiFolderRef[] = []): WikiGraph {
   const nodes: WikiGraph['nodes'] = entries.map((entry) => ({
     id: entry.id,
     title: entry.title,
@@ -129,15 +116,14 @@ export function buildWikiGraphFromEntries(entries: WikiGraphEntry[]): WikiGraph 
     degree: 0,
   }))
 
-  const { exact, lower } = buildTitleMaps(entries)
+  const refs: WikiDocRef[] = entries.map((entry) => ({ id: entry.id, title: entry.title, folderId: entry.folderId ?? null }))
+  const indexByRef = new Map<WikiDocRef, number>()
+  refs.forEach((ref, index) => indexByRef.set(ref, index))
+  const resolver = createWikiResolver(refs, folders)
 
-  function resolveIndex(rawTarget: string): number | null {
-    const target = rawTarget.trim()
-    if (target === '') return null
-    const exactHit = exact.get(target)
-    if (exactHit !== undefined) return exactHit
-    const lowerHit = lower.get(target.toLocaleLowerCase('ko'))
-    return lowerHit !== undefined ? lowerHit : null
+  function resolveIndex(target: string, sourceFolderId: string | null): number | null {
+    const hit = resolver.resolve(target, sourceFolderId)
+    return hit ? (indexByRef.get(hit) ?? null) : null
   }
 
   const missingIndexByNorm = new Map<string, number>()
@@ -149,7 +135,7 @@ export function buildWikiGraphFromEntries(entries: WikiGraphEntry[]): WikiGraph 
       const target = rawTarget.trim()
       if (target === '') continue
 
-      let toIndex = resolveIndex(target)
+      let toIndex = resolveIndex(target, refs[fromIndex].folderId)
       if (toIndex === null) {
         const norm = target.toLocaleLowerCase('ko')
         let missingIndex = missingIndexByNorm.get(norm)
@@ -181,14 +167,18 @@ export function buildWikiGraphFromEntries(entries: WikiGraphEntry[]): WikiGraph 
 }
 
 // docs 는 store.list() 결과 그대로 — updatedAt 내림차순 (3.2)
-export function buildWikiGraph(docs: { id: string; title: string; content: string; role?: string }[]): WikiGraph {
+export function buildWikiGraph(
+  docs: { id: string; title: string; content: string; role?: string; folderId?: string | null }[],
+  folders?: readonly WikiFolderRef[],
+): WikiGraph {
   const entries: WikiGraphEntry[] = docs.map((doc) => ({
     id: doc.id,
     title: doc.title,
     targets: extractWikiTargets(doc.content),
     unreadable: doc.content === '',
+    folderId: doc.folderId ?? null,
   }))
-  return buildWikiGraphFromEntries(entries)
+  return buildWikiGraphFromEntries(entries, folders)
 }
 
 // 중심에서 몇 다리인가 — 방향을 가리지 않는 너비 우선 탐색. 중심 자신은 0, 닿지 않는 노드는 -1 (specs/features/F-2007.md 4장)

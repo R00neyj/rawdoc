@@ -418,7 +418,7 @@ test.describe('F-252 C8 별칭·섹션', () => {
     await expect(page.locator('.public-view-title')).toHaveText('문서A')
 
     await expect(page.locator('a.wikilink', { hasText: '보이는글자' })).toBeVisible()
-    const sectionLink = page.locator('a.wikilink').filter({ hasText: /^문서B$/ })
+    const sectionLink = page.locator('a.wikilink').filter({ hasText: /^문서B#절$/ })
     await expect(sectionLink).toBeVisible()
     await sectionLink.click()
     await expect(page).toHaveURL(new RegExp(`#/p/${token}/b1$`))

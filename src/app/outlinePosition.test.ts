@@ -1,6 +1,6 @@
 // 좌표 계산 순수 함수 (specs/features/F-144.md 3.3 — 메인 검토 A4·A5 좌표 버그 수정)
 import { describe, expect, it } from 'vitest'
-import { computeCurrentIndex, topInScroller } from './outlinePosition'
+import { computeCurrentIndex, findViewerHeadingElByLine, topInScroller } from './outlinePosition'
 
 describe('computeCurrentIndex — 현재 위치 (F-144.md 3.3)', () => {
   it('스크롤 위 끝 + 24px 보다 위에 있는 제목 중 마지막을 고른다', () => {
@@ -29,5 +29,26 @@ describe('topInScroller — offsetTop 대신 getBoundingClientRect 차이 (메�
     const el = { getBoundingClientRect: () => ({ top: 120 }) }
     const container = { getBoundingClientRect: () => ({ top: 20 }), scrollTop: 0 }
     expect(topInScroller(el, container)).toBe(100)
+  })
+})
+
+describe('findViewerHeadingElByLine — 줄 번호로 h1~h6 (F-2018 7.3 U21)', () => {
+  it('h1~h6[data-source-line="n"] 선택자로 찾는다', () => {
+    let asked = ''
+    const el = { tag: 'h5' }
+    const container = {
+      querySelector: (selector: string) => {
+        asked = selector
+        return el
+      },
+    }
+    expect(findViewerHeadingElByLine(container as unknown as Element, 12)).toBe(el)
+    expect(asked).toBe(
+      'h1[data-source-line="12"], h2[data-source-line="12"], h3[data-source-line="12"], h4[data-source-line="12"], h5[data-source-line="12"], h6[data-source-line="12"]',
+    )
+  })
+
+  it('컨테이너가 없으면 null', () => {
+    expect(findViewerHeadingElByLine(null, 3)).toBeNull()
   })
 })

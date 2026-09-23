@@ -10,7 +10,12 @@ import { renderMarkdown } from '../viewer/renderMarkdown'
 import { extractHeadings, type Heading } from '../editor/outline'
 import { frontmatterExtension } from '../editor/frontmatter'
 import { resolveWikiTarget } from '../lib/wikiLink'
+import { createWikiResolver, type WikiFolderRef } from '../lib/wikiResolve'
+import { findHeadingLine } from '../viewer/headingTarget'
 import Outline from './Outline'
+import NoticeBar from './NoticeBar'
+import type { Notice } from './notice'
+import { findViewerHeadingElByLine, topInScroller } from './outlinePosition'
 import { IconDownload, IconSettings, IconPanelOpen, IconPanelClose, IconRefresh, IconTooltip } from './icons'
 import { buildExportPayload } from './exportDoc'
 import { getPref, setPref } from './prefs'
@@ -24,6 +29,7 @@ import {
   fetchPublicSetDoc,
   firstFolderDocId,
   PublicDocError,
+  sortDocsByUpdatedAtDesc,
   type PublicDoc,
   type PublicFolder,
   type PublicSetDoc,
@@ -33,6 +39,37 @@ import PublicFolderList from './PublicFolderList'
 import PublicBrand from './PublicBrand'
 
 const NARROW_QUERY = '(max-width: 1023px)'
+const HEADING_JUMP_MARGIN = 16 // 목차 SELECT_MARGIN 과 같다 (F-2018 7.3)
+const NOTICE_MS = 4000 // 앱 showNotice 의 info 와 같은 시간 (F-2018 11.3)
+
+// 문서가 그려진 뒤 이동할 제목 — seq 로 같은 제목을 다시 눌러도 새 요청이 된다 (F-2018 11.3)
+type HeadingRequest = { docId: string; heading: string; seq: number }
+
+// 공개 화면 알림 띠 — 앱이 publicRoute 에서 일찍 돌아가 앱 알림 띠가 없다 (F-2018 11.3)
+function usePublicNotice() {
+  const [notice, setNotice] = useState<(Notice & { id: number }) | null>(null)
+  const idRef = useRef(0)
+  const show = useCallback((message: string) => {
+    const id = ++idRef.current
+    setNotice({ id, type: 'info', message })
+    setTimeout(() => setNotice((cur) => (cur && cur.id === id ? null : cur)), NOTICE_MS)
+  }, [])
+  const dismiss = useCallback(() => setNotice(null), [])
+  return { notice, show, dismiss }
+}
+
+// 제목 요청을 만드는 쪽 — 같은 문서면 바로, 다른 문서면 그 문서가 그려진 뒤 DocPane 이 처리한다
+function useHeadingRequests() {
+  const [request, setRequest] = useState<HeadingRequest | null>(null)
+  const seqRef = useRef(0)
+  const requestHeading = useCallback((docId: string, heading: string) => {
+    setRequest({ docId, heading, seq: ++seqRef.current })
+  }, [])
+  const clearRequest = useCallback((done: HeadingRequest) => {
+    setRequest((cur) => (cur && cur.seq === done.seq ? null : cur))
+  }, [])
+  return { request, requestHeading, clearRequest }
+}
 
 // 원문에서 attachments/{id}.{ext} 참조를 찾아 확장자를 얻는다 — 공개 문서는 id 만으로 GET 경로를 못 만든다 (F-209.md 2.6)
 function findAttachmentExt(content: string, id: string): string | null {
@@ -168,6 +205,9 @@ function DocPane({
   settings,
   resolveWikiLink,
   onOpenWikiLink,
+  shownDocId = null,
+  headingRequest = null,
+  onHeadingDone,
 }: {
   docKey: string
   state: DocLoadState
@@ -178,7 +218,11 @@ function DocPane({
   showBrand?: boolean
   settings: PublicSettings
   resolveWikiLink?: (target: string) => string | null
-  onOpenWikiLink?: (target: string) => void
+  onOpenWikiLink?: (target: string, heading?: string | null) => void
+  // 지금 그리는 문서 id 와 이동할 제목 — 그 문서가 그려진 뒤 한 번 이동하고 onHeadingDone(찾았나) (F-2018 11.3)
+  shownDocId?: string | null
+  headingRequest?: HeadingRequest | null
+  onHeadingDone?: (request: HeadingRequest, found: boolean) => void
 }) {
   const contentAreaRef = useRef<HTMLDivElement | null>(null)
   const viewerRef = useRef<HTMLDivElement | null>(null)
@@ -193,7 +237,26 @@ function DocPane({
   const editorRef = useMemo(() => ({ current: fakeHandle }), [fakeHandle])
 
   const title = doc ? doc.title || '제목 없는 문서' : ''
-  const html = doc ? renderMarkdown(doc.content, { resolveWikiLink }) : ''
+  // sourceLines — h4~h6 에도 줄 번호가 붙어야 헤딩 이동이 요소를 찾는다 (F-2018 7.3)
+  const html = doc ? renderMarkdown(doc.content, { resolveWikiLink, sourceLines: true }) : ''
+
+  useEffect(() => {
+    if (!headingRequest || !doc || headingRequest.docId !== shownDocId) return
+    const container = viewerRef.current
+    if (!container) return
+    const line = findHeadingLine(doc.content, headingRequest.heading)
+    if (line === null) {
+      container.scrollTo({ top: 0 })
+    } else {
+      const place = () => {
+        const el = findViewerHeadingElByLine(container, line)
+        if (el) container.scrollTo({ top: Math.max(0, topInScroller(el, container) - HEADING_JUMP_MARGIN) })
+      }
+      place()
+      requestAnimationFrame(() => requestAnimationFrame(place))
+    }
+    onHeadingDone?.(headingRequest, line !== null)
+  }, [headingRequest, doc, shownDocId, onHeadingDone])
 
   return (
     <div className="public-view-main">
@@ -302,6 +365,9 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
 
   const startDocId = setDocs && setDocs.length > 0 ? setDocs[0].id : null
   const isStartDoc = activeDocId === null || activeDocId === startDocId
+  const shownDocId = isStartDoc ? startDocId : activeDocId
+  const { notice, show: showNotice, dismiss: dismissNotice } = usePublicNotice()
+  const { request: headingRequest, requestHeading, clearRequest } = useHeadingRequests()
 
   useEffect(() => {
     let cancelled = false
@@ -352,14 +418,25 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
       : { status: 'loading' }
   const doc = state.status === 'ready' ? state.doc : null
 
+  // 대상 → 묶음 문서 id. '' 는 지금 문서, 서버 링크 표(links)가 있으면 그것만, 없으면(옛 서버) 묶음 안 제목으로 (F-2018 11.1)
+  const resolveSetTarget = useMemo(() => {
+    if (!setDocs || setDocs.length < 2) return null
+    const links = setDocs.find((d) => d.id === shownDocId)?.links
+    return (target: string): string | null => {
+      if (target === '') return shownDocId
+      if (links) return Object.prototype.hasOwnProperty.call(links, target) ? links[target] : null
+      return resolveWikiTarget(target, setDocs)?.id ?? null
+    }
+  }, [setDocs, shownDocId])
+
   // 묶음 문서가 2개 이상일 때만 위키링크를 클릭 가능하게 한다 (4.4)
   const resolveWikiLink = useMemo(() => {
-    if (!setDocs || setDocs.length < 2) return undefined
+    if (!resolveSetTarget) return undefined
     return (target: string) => {
-      const match = resolveWikiTarget(target, setDocs)
-      return match ? formatPublicHash(token, match.id) : null
+      const id = resolveSetTarget(target)
+      return id ? formatPublicHash(token, id) : null
     }
-  }, [setDocs, token])
+  }, [resolveSetTarget, token])
 
   const openSetDoc = useCallback(
     (id: string) => {
@@ -369,13 +446,24 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
     [token],
   )
 
+  // 8.3 과 같은 순서 — 지금 문서면 제목 이동, 다른 묶음 문서면 연 뒤 이동, 못 풀면 아무것도 안 한다 (F-2018 11.1)
   const onOpenWikiLink = useCallback(
-    (target: string) => {
-      if (!setDocs) return
-      const match = resolveWikiTarget(target, setDocs)
-      if (match) openSetDoc(match.id)
+    (target: string, heading?: string | null) => {
+      if (!resolveSetTarget) return
+      const id = resolveSetTarget(target)
+      if (!id) return
+      if (id !== shownDocId) openSetDoc(id)
+      if (heading) requestHeading(id, heading)
     },
-    [setDocs, openSetDoc],
+    [resolveSetTarget, shownDocId, openSetDoc, requestHeading],
+  )
+
+  const onHeadingDone = useCallback(
+    (done: HeadingRequest, found: boolean) => {
+      clearRequest(done)
+      if (!found) showNotice(`"${done.heading}" 제목을 찾지 못해 문서 처음을 엽니다.`)
+    },
+    [clearRequest, showNotice],
   )
 
   // 뒤로·앞으로 가기로 문서 id 가 바뀌면 그 문서를 연다 (F-211 PublicFolderView 와 같은 방식)
@@ -459,6 +547,7 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
 
   return (
     <div className="public-view">
+      <NoticeBar notice={notice} onDismiss={dismissNotice} />
       <DocPane
         docKey={activeDocId ?? token}
         state={state}
@@ -468,6 +557,9 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
         settings={settings}
         resolveWikiLink={resolveWikiLink}
         onOpenWikiLink={onOpenWikiLink}
+        shownDocId={shownDocId}
+        headingRequest={headingRequest}
+        onHeadingDone={onHeadingDone}
       />
     </div>
   )
@@ -491,6 +583,8 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
   const [autoPickedFor, setAutoPickedFor] = useState<string | null>(null)
   // 같은 문서를 연달아 재시도하면 응답이 뒤바뀌어 올 수 있다 — 가장 최근 요청의 결과만 반영한다
   const docRequestIdRef = useRef(0)
+  const { notice, show: showNotice, dismiss: dismissNotice } = usePublicNotice()
+  const { request: headingRequest, requestHeading, clearRequest } = useHeadingRequests()
 
   useEffect(() => {
     let cancelled = false
@@ -544,23 +638,50 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
   const docState: DocLoadState = docResult && docResult.forId === activeDocId ? docResult.state : { status: 'loading' }
   const doc = docState.status === 'ready' ? docState.doc : null
 
-  // 위키링크는 이 폴더 안 문서만 대상 풀로 쓴다 — 폴더 밖 제목이 새어나가지 않는다 (F-252.md 4.5)
+  // 위키링크는 이 폴더 안 문서만 대상 풀로 쓴다 — 폴더 밖 제목이 새어나가지 않는다 (F-252.md 4.5). 해석기는 최근 수정 순 문서 + 링크 폴더를 보탠 폴더 목록 (F-2018 11.2)
+  const folderResolver = useMemo(() => {
+    if (folderState.status !== 'ready') return null
+    const { folder } = folderState
+    return createWikiResolver(
+      sortDocsByUpdatedAtDesc(folder.docs).map((d) => ({ id: d.id, title: d.title, folderId: d.folderId })),
+      withLinkFolder(folder),
+    )
+  }, [folderState])
+  const sourceFolderId =
+    folderState.status === 'ready' ? (folderState.folder.docs.find((d) => d.id === activeDocId)?.folderId ?? null) : null
+
+  const resolveFolderTarget = useCallback(
+    (target: string): string | null => {
+      if (target === '') return activeDocId
+      return folderResolver?.resolve(target, sourceFolderId)?.id ?? null
+    },
+    [folderResolver, sourceFolderId, activeDocId],
+  )
+
   const resolveWikiLink = useCallback(
     (target: string) => {
-      if (folderState.status !== 'ready') return null
-      const match = resolveWikiTarget(target, folderState.folder.docs)
-      return match ? formatPublicFolderHash(token, match.id) : null
+      const id = resolveFolderTarget(target)
+      return id ? formatPublicFolderHash(token, id) : null
     },
-    [folderState, token],
+    [resolveFolderTarget, token],
   )
 
   const onOpenWikiLink = useCallback(
-    (target: string) => {
-      if (folderState.status !== 'ready') return
-      const match = resolveWikiTarget(target, folderState.folder.docs)
-      if (match) selectDoc(match.id)
+    (target: string, heading?: string | null) => {
+      const id = resolveFolderTarget(target)
+      if (!id) return
+      if (id !== activeDocId) selectDoc(id)
+      if (heading) requestHeading(id, heading)
     },
-    [folderState, selectDoc],
+    [resolveFolderTarget, activeDocId, selectDoc, requestHeading],
+  )
+
+  const onHeadingDone = useCallback(
+    (done: HeadingRequest, found: boolean) => {
+      clearRequest(done)
+      if (!found) showNotice(`"${done.heading}" 제목을 찾지 못해 문서 처음을 엽니다.`)
+    },
+    [clearRequest, showNotice],
   )
 
   const resolveAttachment: ResolveAttachment = useCallback(
@@ -677,6 +798,7 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
 
   return (
     <div className="public-view public-view--folder">
+      <NoticeBar notice={notice} onDismiss={dismissNotice} />
       {narrow && (
         <div className="public-folder-topbar">
           <PublicBrand />
@@ -717,9 +839,23 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
             settings={settings}
             resolveWikiLink={resolveWikiLink}
             onOpenWikiLink={onOpenWikiLink}
+            shownDocId={activeDocId}
+            headingRequest={headingRequest}
+            onHeadingDone={onHeadingDone}
           />
         )}
       </div>
     </div>
   )
+}
+
+// 응답 folders 에는 링크 폴더 자신이 없다 — 가리키는 id 가 하나로 정해지면 { 그 id, 폴더 이름, 최상위 } 를 보탠다 (F-2018 11.2)
+function withLinkFolder(folder: PublicFolder): WikiFolderRef[] {
+  const known = new Set(folder.folders.map((f) => f.id))
+  const pointed = new Set<string>()
+  for (const d of folder.docs) if (d.folderId !== null && !known.has(d.folderId)) pointed.add(d.folderId)
+  for (const f of folder.folders) if (f.parentId !== null && !known.has(f.parentId)) pointed.add(f.parentId)
+  const refs: WikiFolderRef[] = folder.folders.map((f) => ({ id: f.id, name: f.name, parentId: f.parentId }))
+  if (pointed.size === 1) refs.push({ id: [...pointed][0], name: folder.name, parentId: null })
+  return refs
 }

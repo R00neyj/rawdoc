@@ -100,7 +100,8 @@ export function firstFolderDocId(folder: PublicFolder): string | null {
 }
 
 // 묶음(시작 문서 + 위키링크로 딸린 문서) 목록 (F-252.md 4.3) — 시작 문서가 맨 앞
-export type PublicSetDoc = { id: string; title: string }
+// links: 이 문서 원문의 위키링크 대상 → 묶음 안 문서 id. 없으면 옛 서버 모양 (F-2018 10.3·11.1)
+export type PublicSetDoc = { id: string; title: string; links?: Record<string, string> }
 export type PublicSet = { docs: PublicSetDoc[] }
 
 export async function fetchPublicSet(token: string): Promise<PublicSet> {

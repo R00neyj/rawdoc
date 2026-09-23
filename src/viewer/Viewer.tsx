@@ -29,7 +29,7 @@ type ViewerProps = {
   // 문서가 든 폴더 경로 (F-234.md 3.4) — 생략하거나 비면 그리지 않는다
   breadcrumb?: BreadcrumbEntry[]
   onNavigateFolder?: (id: string) => void
-  onOpenWikiLink?: (target: string) => void
+  onOpenWikiLink?: (target: string, heading?: string | null) => void
   resolveAttachment?: ResolveAttachment
   missingImageText?: string
   codeCopy?: boolean
@@ -181,7 +181,9 @@ export default function Viewer({
     const anchor = target.closest?.<HTMLAnchorElement>('a.wikilink')
     if (!anchor) return
     event.preventDefault()
-    if (onOpenWikiLink && anchor.dataset.wikilink) onOpenWikiLink(anchor.dataset.wikilink)
+    // data-wikilink 이 '' 이면 지금 문서 헤딩 링크 — 속성이 없을 때만 안 부른다 (F-2018 6.2)
+    const wikiTarget = anchor.dataset.wikilink
+    if (onOpenWikiLink && wikiTarget !== undefined) onOpenWikiLink(wikiTarget, anchor.dataset.wikilinkHeading ?? null)
   }
 
   // 우클릭 메뉴 (F-170.md 2·3.3장) — Shift+우클릭은 브라우저 기본 메뉴 그대로 둔다

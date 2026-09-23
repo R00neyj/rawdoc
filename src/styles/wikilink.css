@@ -74,3 +74,9 @@
   background: var(--accent-soft);
   color: var(--ink);
 }
+
+/* 같은 제목 후보 옆 폴더 경로 (F-2018 5.5) — CM6 기본의 기울임을 끄고 흐린 글자로 */
+.cm-tooltip.cm-tooltip-autocomplete .cm-completionDetail {
+  color: var(--muted);
+  font-style: normal;
+}

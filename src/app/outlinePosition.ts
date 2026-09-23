@@ -21,6 +21,13 @@ export function findViewerHeadingEl(
   return container.querySelector(`h1[data-source-line="${n}"], h2[data-source-line="${n}"], h3[data-source-line="${n}"]`)
 }
 
+// 위키링크 헤딩 이동용 — 원문 줄 번호로 h1~h6 을 찾는다. 목차용 findViewerHeadingEl 은 h1~h3 그대로 (F-2018 7.3)
+export function findViewerHeadingElByLine(container: Element | null | undefined, line: number): Element | null {
+  if (!container) return null
+  const selector = [1, 2, 3, 4, 5, 6].map((level) => `h${level}[data-source-line="${line}"]`).join(', ')
+  return container.querySelector(selector)
+}
+
 // offsetTop 은 offsetParent(.content-area) 기준이라 쓰지 않음
 export function topInScroller(el: RectSource, container: Scroller): number {
   return el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop

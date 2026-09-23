@@ -181,3 +181,13 @@ describe('publicFolderGroups (F-2017 U10)', () => {
     expect(firstFolderDocId(folder)).toBe('new')
   })
 })
+
+describe('fetchPublicSet — links (F-2018 10.3 U22)', () => {
+  it('links 를 그대로 돌려준다, 없어도 된다', async () => {
+    const body = { docs: [{ id: 'a1', title: '문서A', links: { 문서B: 'b1' } }, { id: 'b1', title: '문서B' }] }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => body }))
+    const set = await fetchPublicSet('tok')
+    expect(set.docs[0].links).toEqual({ 문서B: 'b1' })
+    expect(set.docs[1].links).toBeUndefined()
+  })
+})

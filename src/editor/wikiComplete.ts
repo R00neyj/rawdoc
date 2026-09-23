@@ -1,13 +1,11 @@
-// `[[` 뒤 제목 자동완성 (specs/features/F-131.md 3.1)
-// closeBrackets() 를 쓰지 않는 이유는 autoPair.js 와 같다 — 여기서는 autocompletion() 의
-// override 소스만 쓴다. 제목 목록은 wikiLinks.js 의 wikiTitlesField 를 그대로 읽는다
-// (단일 출처 — createEditor.js 의 setWikiTitles 가 갱신하는 그 필드)
+// `[[` 뒤 제목 자동완성, autocompletion() override 소스만 쓴다 — 후보는 wikiContextField 해석기 (specs/features/F-131.md 3.1, F-2018 5.5)
 import type { Completion, CompletionContext, CompletionResult } from '@codemirror/autocomplete'
 import { autocompletion } from '@codemirror/autocomplete'
 import type { Extension } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
 
-import { isOpaquePosition, wikiTitlesField } from './preview/wikiLinks'
+import { shortestWikiTarget, type WikiDocRef, type WikiResolver } from '../lib/wikiResolve'
+import { isOpaquePosition, wikiContextField } from './preview/wikiLinks'
 
 // [[ 뒤부터 커서까지, 대괄호·파이프·줄바꿈이 없는 구간에서만 튀운다(F-131 3.1 "| 를 친
 // 뒤에는 띄우지 않는다" — 이 문자 클래스가 자연히 그 조건을 만족한다)
@@ -40,6 +38,13 @@ function applyTitle(view: EditorView, from: number, to: number, title: string): 
   }
 }
 
+// 같은 제목이 여럿일 때 후보 옆 폴더 자리 — 검색 결과 경로·문서 옮기기·공유받음 표시와 같은 말 (F-2018 5.5)
+function folderDetail(resolver: WikiResolver, doc: WikiDocRef): string {
+  const names = resolver.folderNames(doc.folderId)
+  if (names === null) return '공유받음'
+  return names.length === 0 ? '최상위' : names.join(' / ')
+}
+
 // [[ 자동완성 소스. F-137 3.2 테스트가 구문 트리 판정(FencedCode·InlineCode·
 // Frontmatter 안 제외)을 직접 확인할 수 있도록 내보낸다
 export function wikiCompletionSource(context: CompletionContext): CompletionResult | null {
@@ -50,17 +55,29 @@ export function wikiCompletionSource(context: CompletionContext): CompletionResu
   if (isOpaquePosition(context.state, context.pos)) return null
 
   const query = match.text.slice(2)
-  const titles = context.state.field(wikiTitlesField, false) ?? []
-  const nonEmptyTitles = titles.filter((t) => t.trim() !== '')
-  const candidates = query === '' ? nonEmptyTitles : nonEmptyTitles.filter((t) => titleMatches(t, query))
+  const wiki = context.state.field(wikiContextField, false)
+  if (!wiki) return null
+  const { resolver, sourceFolderId } = wiki
+  const nonEmpty = resolver.docs.filter((d) => d.title.trim() !== '')
+  const candidates = query === '' ? nonEmpty : nonEmpty.filter((d) => titleMatches(d.title, query))
 
   if (candidates.length === 0) return null
 
-  const options: Completion[] = candidates.slice(0, MAX_OPTIONS).map((title) => ({
-    label: title,
-    apply: (view: EditorView, _completion: Completion, from: number, to: number) =>
-      applyTitle(view, from, to, title),
-  }))
+  const titleCount = new Map<string, number>()
+  for (const d of nonEmpty) {
+    const key = d.title.trim().toLowerCase()
+    titleCount.set(key, (titleCount.get(key) ?? 0) + 1)
+  }
+
+  const options: Completion[] = candidates.slice(0, MAX_OPTIONS).map((doc) => {
+    const option: Completion = {
+      label: doc.title,
+      apply: (view: EditorView, _completion: Completion, from: number, to: number) =>
+        applyTitle(view, from, to, shortestWikiTarget(resolver, doc, sourceFolderId)),
+    }
+    if ((titleCount.get(doc.title.trim().toLowerCase()) ?? 0) > 1) option.detail = folderDetail(resolver, doc)
+    return option
+  })
 
   return { from: match.from + 2, to: context.pos, options, filter: false }
 }

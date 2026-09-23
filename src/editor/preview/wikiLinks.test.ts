@@ -6,19 +6,24 @@ import { EditorState } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
 import { frontmatterExtension } from '../frontmatter'
-import { buildWikiLinks, findWikiLinkAt, setWikiTitlesEffect, wikiTitlesField } from './wikiLinks'
+import { buildWikiLinks, findWikiLinkAt, setWikiContextEffect, wikiContextField, type WikiContext } from './wikiLinks'
 import type { EditorState as CMState } from '@codemirror/state'
+import { createWikiResolver } from '../../lib/wikiResolve'
+
+function titlesContext(titles: string[]): WikiContext {
+  return { resolver: createWikiResolver(titles.map((title, i) => ({ id: String(i), title, folderId: null })), []), sourceFolderId: null }
+}
 
 function makeState(
   doc: string,
-  { anchor = 0, head = anchor, titles = [] }: { anchor?: number; head?: number; titles?: string[] } = {},
+  { anchor = 0, head = anchor, titles = [], context }: { anchor?: number; head?: number; titles?: string[]; context?: WikiContext } = {},
 ) {
   const state = EditorState.create({
     doc,
     selection: { anchor, head },
     extensions: [
       markdown({ base: markdownLanguage, extensions: [frontmatterExtension()] }),
-      wikiTitlesField.init(() => titles),
+      wikiContextField.init(() => context ?? titlesContext(titles)),
     ],
   })
   ensureSyntaxTree(state, doc.length, 5000)
@@ -26,7 +31,7 @@ function makeState(
 }
 
 function build(state: CMState) {
-  return buildWikiLinks(state, [{ from: 0, to: state.doc.length }], state.field(wikiTitlesField))
+  return buildWikiLinks(state, [{ from: 0, to: state.doc.length }], state.field(wikiContextField))
 }
 
 describe('buildWikiLinks — 커서가 밖일 때', () => {
@@ -114,7 +119,7 @@ describe('buildWikiLinks — 코드블록·인라인코드·표 칸 제외', () 
   })
 })
 
-describe('setWikiTitles 재계산', () => {
+describe('setWikiContext 재계산', () => {
   it('제목 목록이 바뀌면 있음/없음 클래스가 바뀐다', () => {
     const doc = '[[a]]\nx'
     let state = makeState(doc, { anchor: doc.length, titles: [] })
@@ -122,7 +127,7 @@ describe('setWikiTitles 재계산', () => {
     let visible = ranges.find((r) => r.value.spec.class?.includes('md-wikilink'))!
     expect(visible.value.spec.class).toContain('--missing')
 
-    const tr = state.update({ effects: setWikiTitlesEffect.of(['a']) })
+    const tr = state.update({ effects: setWikiContextEffect.of(titlesContext(['a'])) })
     state = tr.state
     ranges = build(state)
     visible = ranges.find((r) => r.value.spec.class?.includes('md-wikilink'))!
@@ -141,5 +146,59 @@ describe('findWikiLinkAt', () => {
     const doc = '[[a]] x'
     const state = makeState(doc, { titles: ['a'] })
     expect(findWikiLinkAt(state, 6)).toBeNull()
+  })
+})
+
+describe('F-2018 U13 — 해석 문맥으로 표시', () => {
+  const folders = [
+    { id: 'g', name: '교안', parentId: null },
+    { id: 'h', name: '과제', parentId: null },
+  ]
+  const docs = [
+    { id: 'm', title: '회의록', folderId: null },
+    { id: 'w', title: '1주차', folderId: 'g' },
+  ]
+  const context: WikiContext = { resolver: createWikiResolver(docs, folders), sourceFolderId: 'h' }
+
+  function visibleOf(doc: string, ctx: WikiContext = context) {
+    const state = makeState(`${doc}\nx`, { anchor: doc.length + 2, context: ctx })
+    const visible = build(state).find((r) => r.value.spec.class?.includes('md-wikilink') && r.value.spec.class !== 'md-wikilink-mark')!
+    return { cls: visible.value.spec.class, title: visible.value.spec.attributes.title, text: state.doc.sliceString(visible.from, visible.to) }
+  }
+
+  it('[[회의록]] 있음 / 없음', () => {
+    expect(visibleOf('[[회의록]]')).toEqual({ cls: 'md-wikilink', title: '회의록', text: '회의록' })
+    expect(visibleOf('[[없음]]')).toEqual({ cls: 'md-wikilink md-wikilink--missing', title: '새 문서 만들기: 없음', text: '없음' })
+  })
+
+  it('[[회의록#결정]] 은 문서만 본다', () => {
+    expect(visibleOf('[[회의록#결정]]')).toEqual({ cls: 'md-wikilink', title: '회의록#결정', text: '회의록#결정' })
+    expect(visibleOf('[[없음#결정]]')).toEqual({ cls: 'md-wikilink md-wikilink--missing', title: '새 문서 만들기: 없음', text: '없음#결정' })
+  })
+
+  it('[[#결정]] 은 언제나 있음', () => {
+    expect(visibleOf('[[#결정]]')).toEqual({ cls: 'md-wikilink', title: '#결정', text: '#결정' })
+  })
+
+  it('[[교안/1주차]] 는 경로식 해석', () => {
+    expect(visibleOf('[[교안/1주차]]')).toEqual({ cls: 'md-wikilink', title: '교안/1주차', text: '교안/1주차' })
+    expect(visibleOf('[[과제/1주차]]').cls).toBe('md-wikilink md-wikilink--missing')
+  })
+
+  it('setWikiContextEffect 뒤 경로식 링크가 있음이 된다', () => {
+    const doc = '[[교안/1주차]]\nx'
+    let state = makeState(doc, { anchor: doc.length, titles: ['1주차'] })
+    let visible = build(state).find((r) => r.value.spec.class?.includes('md-wikilink'))!
+    expect(visible.value.spec.class).toContain('--missing')
+    state = state.update({ effects: setWikiContextEffect.of(context) }).state
+    visible = build(state).find((r) => r.value.spec.class?.includes('md-wikilink'))!
+    expect(visible.value.spec.class).toBe('md-wikilink')
+  })
+
+  it('findWikiLinkAt 이 heading 을 돌려준다', () => {
+    const state = makeState('[[회의록#결정]] [[#끝]] [[a]]', { context })
+    expect(findWikiLinkAt(state, 3)).toMatchObject({ target: '회의록', heading: '결정' })
+    expect(findWikiLinkAt(state, 14)).toMatchObject({ target: '', heading: '끝' })
+    expect(findWikiLinkAt(state, 21)).toMatchObject({ target: 'a', heading: null })
   })
 })

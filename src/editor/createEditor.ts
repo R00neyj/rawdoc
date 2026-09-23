@@ -34,8 +34,8 @@ import type { OnImageFiles } from './imageInsert'
 import { livePreview } from './preview/index'
 import { highlightMarkStyle } from './preview/highlightMark'
 import { fenceLinePreview } from './preview/lines'
-import { setWikiTitlesEffect, wikiTitlesField } from './preview/wikiLinks'
-import type { OnOpenWikiLink } from './preview/wikiLinks'
+import { setWikiContextEffect, wikiContextField } from './preview/wikiLinks'
+import type { OnOpenWikiLink, WikiContext } from './preview/wikiLinks'
 import type { ResolveAttachment } from './preview/blocks'
 import { enterTableFromKeyboard, setCellContextMenuHandler } from './preview/tableWidget'
 import { wikiComplete } from './wikiComplete'
@@ -287,9 +287,8 @@ type CreateEditorOptions = {
   readOnly?: boolean
   onDocChange?: (state: EditorState) => void
   onSelectionChange?: (state: EditorState) => void
-  // 위키링크 대상 판정용 문서 제목 목록(F-131). 이후 갱신은 handle.setWikiTitles() 로 한다 —
-  // 이 값은 최초 생성에만 쓴다
-  wikiTitles?: string[]
+  // 위키링크 해석 문맥(F-2018 5.1). 최초 생성에만 쓰고 이후 갱신은 handle.setWikiContext() 로 한다
+  wikiContext?: WikiContext
   onOpenWikiLink?: OnOpenWikiLink
   // 붙여넣기·끌어놓기 이미지 받기 (F-156.md 2.4·2.5). App 이 저장·알림을 하고 첨부 메타를 돌려준다
   onImageFiles?: OnImageFiles
@@ -317,7 +316,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     readOnly: initialReadOnly = false,
     onDocChange,
     onSelectionChange,
-    wikiTitles = [],
+    wikiContext,
     onOpenWikiLink,
     onImageFiles,
     resolveAttachment,
@@ -423,9 +422,9 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     fenceLinePreview(),
     // 하이라이트(==…==) 기호 색 — 편집·원문 모드 모두 켠다. 배경은 편집 모드만 livePreview() 가 준다(F-283.md 4.2)
     highlightMarkStyle(),
-    // 위키링크 대상 문서 제목(F-131). 모드와 무관하게 항상 켠다 — wikiComplete() 도
+    // 위키링크 해석 문맥(F-2018). 모드와 무관하게 항상 켠다 — wikiComplete() 도
     // 같은 필드를 읽고, 모드 전환으로 previewCompartment 가 바뀌어도 값을 잃지 않는다
-    wikiTitlesField.init(() => wikiTitles),
+    wikiContext ? wikiContextField.init(() => wikiContext) : wikiContextField,
     wikiComplete(),
     previewCompartment.of(previewExtensionFor(currentMode, currentTheme, { onOpenWikiLink, resolveAttachment })),
     attributesCompartment.of(attributesExtensionFor(viewMode)),
@@ -529,9 +528,9 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       view.dispatch({ effects: readOnlyCompartment.reconfigure(readOnlyExtensionsFor(on)) })
     },
 
-    // 문서 제목 목록 갱신 (F-131 3장) — 문서 생성·삭제·제목 변경 시 App 이 부른다
-    setWikiTitles(titles: string[]) {
-      view.dispatch({ effects: setWikiTitlesEffect.of(titles) })
+    // 위키링크 해석 문맥 갱신 (F-2018 5.2) — 문서·폴더 목록이나 연 문서의 폴더가 바뀌면 App 이 부른다
+    setWikiContext(context: WikiContext) {
+      view.dispatch({ effects: setWikiContextEffect.of(context) })
     },
 
     // 본문 맨 위 제목 값 갱신 (F-217.md 2.2) — 포커스가 없을 때만 위젯 DOM 값을 바꾼다

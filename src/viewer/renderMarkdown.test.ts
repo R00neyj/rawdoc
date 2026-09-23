@@ -372,6 +372,54 @@ describe('renderMarkdown — 위키링크 (specs/features/F-131.md 7장 A3, F-25
   })
 })
 
+describe('renderMarkdown — 위키링크 헤딩 (specs/features/F-2018.md 6.1 U11)', () => {
+  it("[[#결정]] 은 resolveWikiLink('') 를 부르고 data-wikilink=\"\"·data-wikilink-heading·보이는 글자 #결정", () => {
+    const calls: string[] = []
+    const html = renderMarkdown('[[#결정]]', {
+      resolveWikiLink: (t) => {
+        calls.push(t)
+        return '#/d/now'
+      },
+    })
+    expect(calls).toEqual([''])
+    expect(html).toContain('data-wikilink=""')
+    expect(html).toContain('data-wikilink-heading="결정"')
+    expect(html).toContain('href="#/d/now"')
+    expect(html).toMatch(/>#결정<\/a>/)
+  })
+
+  it('[[회의록#결정]] 의 보이는 글자는 회의록#결정, 대상은 회의록', () => {
+    const calls: string[] = []
+    const html = renderMarkdown('[[회의록#결정]]', {
+      resolveWikiLink: (t) => {
+        calls.push(t)
+        return '#/d/abc'
+      },
+    })
+    expect(calls).toEqual(['회의록'])
+    expect(html).toContain('data-wikilink="회의록"')
+    expect(html).toContain('data-wikilink-heading="결정"')
+    expect(html).toMatch(/>회의록#결정<\/a>/)
+  })
+
+  it('헤딩이 없으면 data-wikilink-heading 을 달지 않는다', () => {
+    const html = renderMarkdown('[[회의록]] [[회의록#^abc]]', { resolveWikiLink: () => '#/d/abc' })
+    expect(html).not.toContain('data-wikilink-heading')
+  })
+
+  it('옵션이 없으면 --plain, 보이는 글자는 같은 규칙', () => {
+    const html = renderMarkdown('[[#결정]] [[회의록#결정]]')
+    expect(html).toContain('<span class="wikilink wikilink--plain">#결정</span>')
+    expect(html).toContain('<span class="wikilink wikilink--plain">회의록#결정</span>')
+  })
+
+  it('헤딩의 " < 는 이스케이프한다', () => {
+    const html = renderMarkdown('[[a#"<x>]]', { resolveWikiLink: () => null })
+    expect(html).toContain('data-wikilink-heading="&quot;&lt;x&gt;"')
+    expect(html).not.toContain('<x>')
+  })
+})
+
 describe('renderMarkdown — 표 칸 안 <br> (specs/features/F-162.md 4장 A1)', () => {
   it('표 칸의 <br>·<br/>·<br /> 를 <br> 요소로 바꾼다', () => {
     const html = renderMarkdown('| a | b |\n| --- | --- |\n| x<br>y | p<br/>q<br />r |\n')

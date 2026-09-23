@@ -9,12 +9,21 @@ export type WikiLinkMatch = {
   from: number
   to: number
   target: string
+  heading: string | null
   alias: string | null
   targetFrom: number
   targetTo: number
 }
 
-// 한 줄 글자에서 위키링크를 전부 찾는다. ![[…]](이미지식)는 제외, 대상은 '#' 뒤를 떼고 앞뒤 공백을 지운다(비면 제외)
+// '#' 뒤 헤딩 — 마지막 '#' 뒤 조각, 비었거나 블록 참조('^')면 null (specs/features/F-2018.md 3.1)
+function headingOf(rawTarget: string): string | null {
+  const lastHash = rawTarget.lastIndexOf('#')
+  if (lastHash === -1) return null
+  const heading = rawTarget.slice(lastHash + 1).trim()
+  return heading === '' || heading.startsWith('^') ? null : heading
+}
+
+// 한 줄 글자에서 위키링크를 전부 찾는다. ![[…]](이미지식)는 제외, 대상은 첫 '#' 앞(비면 지금 문서, 헤딩도 없으면 제외)
 export function findWikiLinks(lineText: unknown): WikiLinkMatch[] {
   const results: WikiLinkMatch[] = []
   if (typeof lineText !== 'string') return results
@@ -33,12 +42,14 @@ export function findWikiLinks(lineText: unknown): WikiLinkMatch[] {
 
     const hashIndex = rawTarget.indexOf('#')
     const semanticTarget = (hashIndex === -1 ? rawTarget : rawTarget.slice(0, hashIndex)).trim()
-    if (semanticTarget === '') continue // 대상이 비면 위키링크가 아니다
+    const heading = headingOf(rawTarget)
+    if (semanticTarget === '' && heading === null) continue // 대상도 헤딩도 없으면 위키링크가 아니다
 
     results.push({
       from,
       to,
       target: semanticTarget,
+      heading,
       alias: rawAlias !== undefined ? rawAlias : null,
       targetFrom,
       targetTo,

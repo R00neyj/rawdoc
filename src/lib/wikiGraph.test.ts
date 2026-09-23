@@ -1,6 +1,6 @@
 // specs/features/F-292.md 10장 A1~A4
 import { describe, it, expect } from 'vitest'
-import { extractWikiTargets, buildWikiGraph, distancesFrom, truncateGraphByDegree } from './wikiGraph'
+import { extractWikiTargets, buildWikiGraph, buildWikiGraphFromEntries, distancesFrom, truncateGraphByDegree } from './wikiGraph'
 
 describe('extractWikiTargets — A1', () => {
   it('프론트매터 안 [[…]] 는 뺀다', () => {
@@ -243,5 +243,41 @@ describe('truncateGraphByDegree — 전체 보기 상한 (5.4)', () => {
     const { graph: result, truncated } = truncateGraphByDegree(graph, updatedAtById, 2)
     expect(truncated).toBe(true)
     expect(result.nodes.map((n) => n.id).sort()).toEqual(['B', 'C'])
+  })
+})
+
+describe('F-2018 U15 — 폴더를 주면 가까운 폴더로', () => {
+  const folders = [
+    { id: 'g', name: '교안', parentId: null },
+    { id: 'h', name: '과제', parentId: null },
+  ]
+  const entries = [
+    { id: 'hw', title: '1주차', targets: [], folderId: 'h' },
+    { id: 'lec', title: '1주차', targets: [], folderId: 'g' },
+    { id: 'toc', title: '목차', targets: ['1주차', '과제/1주차', ''], folderId: 'g' },
+  ]
+
+  it('같은 폴더 문서로 간선, 경로식은 그 폴더로', () => {
+    const graph = buildWikiGraphFromEntries(entries, folders)
+    const idOf = (i: number) => graph.nodes[i].id
+    expect(graph.edges.map((e) => [idOf(e.from), idOf(e.to)])).toEqual([
+      ['toc', 'lec'],
+      ['toc', 'hw'],
+    ])
+    expect(graph.nodes.some((n) => n.missing)).toBe(false)
+  })
+
+  it('인자를 안 주면 지금 결과(목록 앞)와 같다', () => {
+    const plain = entries.map(({ id, title, targets }) => ({ id, title, targets }))
+    const graph = buildWikiGraphFromEntries(plain)
+    const idOf = (i: number) => graph.nodes[i].id
+    expect(graph.edges.map((e) => [idOf(e.from), idOf(e.to)])[0]).toEqual(['toc', 'hw'])
+  })
+
+  it('[[#헤딩]] 은 간선·끊긴 노드를 안 만든다', () => {
+    expect(extractWikiTargets('[[#결정]] [[a#b]]')).toEqual(['a'])
+    const graph = buildWikiGraph([{ id: 'x', title: 'x', content: '[[#결정]]' }])
+    expect(graph.nodes).toHaveLength(1)
+    expect(graph.edges).toHaveLength(0)
   })
 })

@@ -10,6 +10,7 @@ import EditorToolbar from './EditorToolbar'
 import { IconEdit, IconRaw, IconView, IconTooltip } from './icons'
 import SidebarHead from './SidebarHead'
 import type { ShareDoc } from '../lib/shareCodec'
+import type { WikiResolver } from '../lib/wikiResolve'
 import type { Notice } from './notice'
 import type { AccountState } from './account'
 
@@ -36,8 +37,8 @@ type TopBarProps = {
   shareLinkDocId: string | null
   onBeforeShareLinkAction: () => Promise<void>
   onInvite?: () => void
-  // 위키링크 대상 판정용 문서 제목 목록 — ShareMenu 의 D-6 여닫는 조건 (F-252.md 3.1)
-  wikiDocs: { id: string; title: string }[]
+  // 위키링크 해석기 — ShareMenu 의 D-6 여닫는 조건 (F-252.md 3.1, F-2018 8.4)
+  wikiResolver: WikiResolver
   exportDisabled: boolean
   onExportMd: () => void
   onExportTxt: () => void
@@ -66,7 +67,7 @@ export default function TopBar({
   shareLinkDocId,
   onBeforeShareLinkAction,
   onInvite,
-  wikiDocs,
+  wikiResolver,
   exportDisabled,
   onExportMd,
   onExportTxt,
@@ -117,7 +118,7 @@ export default function TopBar({
           linkDocId={shareLinkDocId}
           onBeforeLinkAction={onBeforeShareLinkAction}
           onInvite={onInvite}
-          wikiDocs={wikiDocs}
+          wikiResolver={wikiResolver}
         />
         <ExportMenu
           disabled={exportDisabled}

@@ -8,7 +8,8 @@ import type { ChangeDesc, Line } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin } from '@codemirror/view'
 import type { ViewUpdate } from '@codemirror/view'
 
-import { findWikiLinks, resolveWikiTarget } from '../../lib/wikiLink'
+import { findWikiLinks } from '../../lib/wikiLink'
+import { createWikiResolver, type WikiResolver } from '../../lib/wikiResolve'
 import { isEditorFocused, selectionTouches } from './active'
 import { isComposing, isForced } from '../composition'
 
@@ -40,6 +41,7 @@ type WikiLinkOnLine = {
   visibleTo: number
   hasAlias: boolean
   target: string
+  heading: string | null
 }
 
 // 위키링크 범위(from, to) 안 자리를 찾는다. 편집 모드 표시·클릭이 공용으로 쓴다
@@ -75,28 +77,32 @@ function wikiLinksOnLine(state: EditorState, line: Line): WikiLinkOnLine[] {
         visibleTo,
         hasAlias,
         target: m.target,
+        heading: m.heading,
       }
     })
     .filter((entry): entry is WikiLinkOnLine => entry !== null)
 }
 
-// 위키링크가 존재하는 문서를 가리키는지에 따른 표시용 mark
-function visibleMark(target: string, titles: string[]): Decoration {
-  const exists = resolveWikiTarget(target, titles.map((title) => ({ title }))) !== null
+// 위키링크 해석 문맥 — 해석기와 지금 연 문서의 폴더 (specs/features/F-2018.md 5.1)
+export type WikiContext = { resolver: WikiResolver; sourceFolderId: string | null }
+
+// 있음 판정은 문서만, [[#헤딩]] 은 지금 문서라 언제나 있음. title 속성은 있으면 대상 원문 조각, 없으면 대상 (5.4)
+function visibleMark(target: string, shown: string, context: WikiContext): Decoration {
+  const exists = target === '' || context.resolver.resolve(target, context.sourceFolderId) !== null
   const cls = exists ? 'md-wikilink' : 'md-wikilink md-wikilink--missing'
-  const titleAttr = exists ? target : `새 문서 만들기: ${target}`
+  const titleAttr = exists ? shown : `새 문서 만들기: ${target}`
   return Decoration.mark({ class: cls, attributes: { title: titleAttr } })
 }
 
 const SYNTAX_MARK = Decoration.mark({ class: 'md-wikilink-mark' })
 
-// ranges 는 보통 view.visibleRanges, titles 는 문서 제목 목록.
+// ranges 는 보통 view.visibleRanges, context 는 해석 문맥.
 // hasFocus 는 편집기 포커스 (F-146 3.2). 기본값 true 는 포커스를
 // 다루지 않는 기존 호출부(테스트 등)의 동작을 그대로 유지한다
 export function buildWikiLinks(
   state: EditorState,
   ranges: readonly { from: number; to: number }[],
-  titles: string[],
+  context: WikiContext,
   hasFocus = true,
 ): CMRange<Decoration>[] {
   const out: CMRange<Decoration>[] = []
@@ -124,7 +130,8 @@ export function buildWikiLinks(
         out.push(HIDE.range(link.openFrom, link.openTo))
         if (link.hasAlias) out.push(HIDE.range(link.prefixFrom, link.prefixTo))
         out.push(HIDE.range(link.closeFrom, link.closeTo))
-        out.push(visibleMark(link.target, titles).range(link.visibleFrom, link.visibleTo))
+        const shown = state.doc.sliceString(link.prefixFrom, link.hasAlias ? link.prefixTo - 1 : link.visibleTo).trim()
+        out.push(visibleMark(link.target, shown, context).range(link.visibleFrom, link.visibleTo))
       }
     }
   }
@@ -132,35 +139,35 @@ export function buildWikiLinks(
   return out
 }
 
-export type WikiLinkAt = { from: number; to: number; visibleFrom: number; visibleTo: number; target: string }
+export type WikiLinkAt = { from: number; to: number; visibleFrom: number; visibleTo: number; target: string; heading: string | null }
 
 // pos 가 어느 위키링크의 범위 안인지 찾는다 (클릭 처리용). 보이는 글자 범위도 함께 돌려준다
 export function findWikiLinkAt(state: EditorState, pos: number): WikiLinkAt | null {
   const line = state.doc.lineAt(pos)
   for (const link of wikiLinksOnLine(state, line)) {
     if (pos >= link.from && pos <= link.to) {
-      return { from: link.from, to: link.to, visibleFrom: link.visibleFrom, visibleTo: link.visibleTo, target: link.target }
+      return { from: link.from, to: link.to, visibleFrom: link.visibleFrom, visibleTo: link.visibleTo, target: link.target, heading: link.heading }
     }
   }
   return null
 }
 
-// 제목 목록 갱신 신호 (createEditor.ts handle 의 setWikiTitles)
-export const setWikiTitlesEffect = StateEffect.define<string[]>()
+// 해석 문맥 갱신 신호 (createEditor.ts handle 의 setWikiContext)
+export const setWikiContextEffect = StateEffect.define<WikiContext>()
 
-// 현재 문서 제목 목록. 초기값은 createEditor.ts 가 wikiTitlesField.init() 으로 준다
-export const wikiTitlesField = StateField.define<string[]>({
-  create: () => [],
+// 지금 해석 문맥. 초기값은 createEditor.ts 가 wikiContextField.init() 으로 준다
+export const wikiContextField = StateField.define<WikiContext>({
+  create: () => ({ resolver: createWikiResolver([], []), sourceFolderId: null }),
   update(value, tr) {
     for (const effect of tr.effects) {
-      if (effect.is(setWikiTitlesEffect)) return effect.value
+      if (effect.is(setWikiContextEffect)) return effect.value
     }
     return value
   },
 })
 
-function hasTitlesEffect(update: ViewUpdate): boolean {
-  return update.transactions.some((tr) => tr.effects.some((e) => e.is(setWikiTitlesEffect)))
+function hasContextEffect(update: ViewUpdate): boolean {
+  return update.transactions.some((tr) => tr.effects.some((e) => e.is(setWikiContextEffect)))
 }
 
 // mapDecorationsOnHold — inline.ts·lines.ts 와 같은 이유(F-134 3.1)로 조합 중 문서
@@ -173,7 +180,7 @@ export function mapDecorationsOnHold(
 }
 
 // 편집 모드 위키링크 표시 확장. IME 규칙은 다른 프리뷰 확장과 같다(F-104 2.3·F-134 3.1·3.8).
-// 제목 목록이 바뀌면(setWikiTitles) 재계산 조건에 포함한다 (F-131 3장)
+// 해석 문맥이 바뀌면(setWikiContext) 재계산 조건에 포함한다 — 조합 중이면 보류, forceRecalc 로 따라잡는다 (F-2018 5.3)
 export function wikiLinksPreview(): Extension {
   return ViewPlugin.fromClass(
     class {
@@ -181,16 +188,16 @@ export function wikiLinksPreview(): Extension {
 
       constructor(view: EditorView) {
         this.decorations = Decoration.set(
-          buildWikiLinks(view.state, view.visibleRanges, view.state.field(wikiTitlesField), isEditorFocused(view)),
+          buildWikiLinks(view.state, view.visibleRanges, view.state.field(wikiContextField), isEditorFocused(view)),
           true,
         )
       }
 
       update(update: ViewUpdate) {
-        const titlesChanged = hasTitlesEffect(update)
+        const contextChanged = hasContextEffect(update)
         if (!isForced(update)) {
           const treeChanged = syntaxTree(update.startState) !== syntaxTree(update.state)
-          if (!update.docChanged && !update.selectionSet && !update.viewportChanged && !treeChanged && !titlesChanged) {
+          if (!update.docChanged && !update.selectionSet && !update.viewportChanged && !treeChanged && !contextChanged) {
             return
           }
           if (isComposing(update.view)) {
@@ -202,7 +209,7 @@ export function wikiLinksPreview(): Extension {
           buildWikiLinks(
             update.state,
             update.view.visibleRanges,
-            update.state.field(wikiTitlesField),
+            update.state.field(wikiContextField),
             isEditorFocused(update.view),
           ),
           true,
@@ -213,7 +220,7 @@ export function wikiLinksPreview(): Extension {
   )
 }
 
-export type OnOpenWikiLink = (target: string) => void
+export type OnOpenWikiLink = (target: string, heading?: string | null) => void
 
 // 편집 모드 위키링크 클릭 확장 (F-131 3장). F-129 링크 클릭과 같은 구조 —
 // mousedown 에서 기본 동작을 막아야 여는 클릭에서 커서가 움직이지 않는다
@@ -238,7 +245,7 @@ export function wikiLinkClicks(onOpenWikiLink?: OnOpenWikiLink): Extension {
       if (selectionTouches(view.state, link.from, link.to, isEditorFocused(view))) return false
 
       event.preventDefault()
-      onOpenWikiLink(link.target)
+      onOpenWikiLink(link.target, link.heading)
       return true
     },
   })

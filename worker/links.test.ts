@@ -18,13 +18,16 @@ type LinkRow = {
   created_at: number
   revoked_at: number | null
 }
-type DocRow = { id: string; owner_id: string; title: string }
+type DocRow = { id: string; owner_id: string; title: string; content?: string; folder_id?: string | null; updated_at?: number }
+type FolderRow = { id: string; owner_id: string; name: string; parent_id: string | null }
 
-function makeEnv({ docs = [], links = [] }: { docs?: DocRow[]; links?: LinkRow[] } = {}) {
+function makeEnv({ docs = [], links = [], folders = [] }: { docs?: DocRow[]; links?: LinkRow[]; folders?: FolderRow[] } = {}) {
   const shareLinkDocs: { token: string; doc_id: string }[] = []
+  const sqls: string[] = []
 
   const DB = {
     prepare(sql: string) {
+      sqls.push(sql)
       return {
         bind(...args: unknown[]) {
           return {
@@ -55,6 +58,22 @@ function makeEnv({ docs = [], links = [] }: { docs?: DocRow[]; links?: LinkRow[]
               if (sql.startsWith('SELECT id, title FROM docs WHERE id IN')) {
                 const results = docs.filter((d) => (args as string[]).includes(d.id)).map((d) => ({ id: d.id, title: d.title }))
                 return { results: results as T[] }
+              }
+              if (sql.startsWith('SELECT id, content, folder_id FROM docs WHERE id IN')) {
+                const results = docs
+                  .filter((d) => (args as string[]).includes(d.id))
+                  .map((d) => ({ id: d.id, content: d.content ?? '', folder_id: d.folder_id ?? null }))
+                return { results: results as T[] }
+              }
+              if (sql.startsWith('SELECT id, title, folder_id FROM docs WHERE owner_id = ? ORDER BY updated_at DESC')) {
+                const results = docs
+                  .filter((d) => d.owner_id === args[0])
+                  .sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0))
+                  .map((d) => ({ id: d.id, title: d.title, folder_id: d.folder_id ?? null }))
+                return { results: results as T[] }
+              }
+              if (sql.startsWith('SELECT id, name, parent_id FROM folders WHERE owner_id = ?')) {
+                return { results: folders.filter((f) => f.owner_id === args[0]) as T[] }
               }
               throw new Error(`unhandled all sql: ${sql}`)
             },
@@ -90,7 +109,7 @@ function makeEnv({ docs = [], links = [] }: { docs?: DocRow[]; links?: LinkRow[]
     },
   }
 
-  return { env: { DB } as unknown as Env, links, shareLinkDocs }
+  return { env: { DB } as unknown as Env, links, shareLinkDocs, sqls }
 }
 
 function req(pathname: string, docIds?: string[]): Request {
@@ -309,5 +328,60 @@ describe('F-2017 S3 공개 폴더 — 모든 자손', () => {
     expect(ok.status).toBe(200)
     const outside = await handlePublicGetFolderDoc(new Request('http://local.test/'), env, ctx, { token: FOLDER_TOKEN, docId: 'out' })
     expect(outside.status).toBe(404)
+  })
+})
+
+// ---------- F-2018 U20 공개 묶음 링크 표 ----------
+describe('F-2018 U20 /pub/docs/:token/set 의 links', () => {
+  const TOKEN = 'T'.repeat(43)
+  const link: LinkRow = { token: TOKEN, owner_id: 'u1', target_type: 'doc', target_id: 'd1', created_at: 1, revoked_at: null }
+
+  async function getSet(env: Env) {
+    const res = await handlePublicGetDocSet(new Request(`http://local.test/pub/docs/${TOKEN}/set`), env, {} as ExecutionContext, { token: TOKEN })
+    return { status: res.status, text: await res.text() }
+  }
+
+  it('문서 2개 묶음이면 links, 폴더 이름·주석 안 대상은 응답에 없다', async () => {
+    const { env, shareLinkDocs } = makeEnv({
+      links: [link],
+      folders: [
+        { id: 'fa', owner_id: 'u1', name: '폴더이름가', parent_id: null },
+        { id: 'fb', owner_id: 'u1', name: '폴더이름나', parent_id: null },
+      ],
+      docs: [
+        { id: 'd1', owner_id: 'u1', title: '시작', content: '[[1주차]] [[폴더이름나/1주차]] [[밖]] %%[[SECRET]]%% [[#절]]', folder_id: 'fa', updated_at: 1 },
+        { id: 'd2', owner_id: 'u1', title: '1주차', content: '[[시작]]', folder_id: 'fa', updated_at: 2 },
+        { id: 'd3', owner_id: 'u1', title: 'Secret', content: '', folder_id: null, updated_at: 3 },
+        { id: 'd4', owner_id: 'u1', title: '1주차', content: '', folder_id: 'fb', updated_at: 9 },
+        { id: 'd5', owner_id: 'u1', title: '밖', content: '', folder_id: null, updated_at: 4 },
+      ],
+    })
+    shareLinkDocs.push({ token: TOKEN, doc_id: 'd2' }, { token: TOKEN, doc_id: 'd3' })
+
+    const { status, text } = await getSet(env)
+    expect(status).toBe(200)
+    const body = JSON.parse(text) as { docs: { id: string; title: string; links: Record<string, string> }[] }
+    expect(body.docs.map((d) => d.id)).toEqual(['d1', 'd2', 'd3'])
+    expect(body.docs[0].links).toEqual({ '1주차': 'd2' })
+    expect(body.docs[1].links).toEqual({ 시작: 'd1' })
+    expect(body.docs[2].links).toEqual({})
+    expect(text).not.toContain('폴더이름')
+    expect(text).not.toContain('SECRET')
+    expect(text).not.toContain('d4')
+  })
+
+  it('문서 1개면 links: {} 이고 소유자 전체 질의를 부르지 않는다', async () => {
+    const { env, sqls } = makeEnv({
+      links: [link],
+      docs: [
+        { id: 'd1', owner_id: 'u1', title: '시작', content: '[[다른]]', folder_id: null, updated_at: 1 },
+        { id: 'd2', owner_id: 'u1', title: '다른', content: '', folder_id: null, updated_at: 2 },
+      ],
+    })
+    const { text } = await getSet(env)
+    const body = JSON.parse(text) as { docs: { id: string; links: Record<string, string> }[] }
+    expect(body.docs).toEqual([{ id: 'd1', title: '시작', links: {} }])
+    expect(sqls.some((s) => s.includes('WHERE owner_id'))).toBe(false)
+    expect(sqls.some((s) => s.includes('FROM folders'))).toBe(false)
   })
 })

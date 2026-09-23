@@ -11,9 +11,10 @@ export type MapIndexEntry = {
   targets: string[]
   unreadable: boolean // content 가 '' — 공유받은 문서라 본문을 못 읽었을 때 (F-284 5.2 와 같다)
   updatedAt: number
+  folderId: string | null // 캐시하지 않는다 — moveDoc 은 updatedAt 을 안 바꾼다 (F-2018 9.2)
 }
 
-type CachedEntry = MapIndexEntry & { __key: string }
+type CachedEntry = Omit<MapIndexEntry, 'folderId'> & { __key: string }
 
 let cache = new Map<string, CachedEntry>()
 let cachedScope: string | null = null
@@ -70,7 +71,14 @@ export async function buildMapIndex(args: { store: MapSource; scope: string; doc
     }
 
     cache.set(doc.id, cached)
-    entries.push({ id: cached.id, title: cached.title, targets: cached.targets, unreadable: cached.unreadable, updatedAt: cached.updatedAt })
+    entries.push({
+      id: cached.id,
+      title: cached.title,
+      targets: cached.targets,
+      unreadable: cached.unreadable,
+      updatedAt: cached.updatedAt,
+      folderId: doc.folderId ?? null,
+    })
   }
 
   // list() 에 없는 id 는 지운다 — 끝에 둬서 중간에 실패해도 인덱스가 반쯤 지워지지 않는다

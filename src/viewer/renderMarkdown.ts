@@ -420,13 +420,14 @@ md.renderer.rules.heading_open = function (tokens, idx, options, env, self) {
 // 대상 제목 → href 문자열(찾으면) | null(못 찾으면) — href 모양은 호출부가 정한다 (F-252.md 4.1)
 type ResolveWikiLink = (target: string) => string | null
 
+// label: 별칭, 없으면 '#' 뒤까지 원문 조각 (F-2018 3.2). target '' 은 지금 문서 — resolveWikiLink('') 가 지금 문서 주소를 준다 (6.1)
 function wikiLinkTokens(
   state: StateCore,
   target: string,
-  alias: string | null | undefined,
+  heading: string | null,
+  label: string,
   resolveWikiLink: ResolveWikiLink | undefined,
 ): Token[] {
-  const label = alias ?? target
   const text = new state.Token('text', '', 0)
   text.content = label
 
@@ -445,6 +446,7 @@ function wikiLinkTokens(
   const open = new state.Token('wikilink_open', 'a', 1)
   const close = new state.Token('wikilink_close', 'a', -1)
   open.attrSet('data-wikilink', target)
+  if (heading !== null) open.attrSet('data-wikilink-heading', heading)
   if (href) {
     open.attrSet('class', 'wikilink')
     open.attrSet('href', href)
@@ -489,7 +491,8 @@ function wikiLinkRule(state: StateCore, resolveWikiLink: ResolveWikiLink | undef
           before.content = child.content.slice(cursor, m.from)
           nextChildren.push(before)
         }
-        nextChildren.push(...wikiLinkTokens(state, m.target, m.alias, resolveWikiLink))
+        const label = m.alias ?? child.content.slice(m.targetFrom, m.targetTo).trim()
+        nextChildren.push(...wikiLinkTokens(state, m.target, m.heading, label, resolveWikiLink))
         cursor = m.to
       }
       if (cursor < child.content.length) {
