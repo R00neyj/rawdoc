@@ -24,9 +24,9 @@ function ringGraph(nodeCount: number, edgeCount: number): MapLayoutGraph {
 
 describe('mapLayout3d — A1 축 정의 상수', () => {
   it('네 축의 min·max·curve·start 가 5.1 표 그대로다', () => {
-    expect(MAP_FORCE_AXES.center).toEqual({ min: 0.005, max: 1, curve: 'log', start: 0.05 })
+    expect(MAP_FORCE_AXES.center).toEqual({ min: 0.005, max: 1, curve: 'log', start: 0.15 })
     expect(MAP_FORCE_AXES.repel).toEqual({ min: 50, max: 3000, curve: 'log', start: 800 })
-    expect(MAP_FORCE_AXES.linkStrength).toEqual({ min: 0.003, max: 0.1, curve: 'log', start: 0.02 })
+    expect(MAP_FORCE_AXES.linkStrength).toEqual({ min: 0.003, max: 1, curve: 'log', start: 0.05 })
     expect(MAP_FORCE_AXES.linkDistance).toEqual({ min: 30, max: 3000, curve: 'pow2', start: 120 })
   })
 })
@@ -52,7 +52,7 @@ describe('mapLayout3d — A2 매핑 경계', () => {
 describe('mapLayout3d — A3 곡선 중간값', () => {
   it('0.5 에서 축별 곡선값이 실측과 같다', () => {
     expect(normToForceValue('repel', 0.5)).toBeCloseTo(387.2983346207417, 9)
-    expect(normToForceValue('linkStrength', 0.5)).toBeCloseTo(0.017320508075688777, 12)
+    expect(normToForceValue('linkStrength', 0.5)).toBeCloseTo(0.05477225575051661, 12)
     expect(normToForceValue('center', 0.5)).toBeCloseTo(0.07071067811865475, 12)
     expect(normToForceValue('linkDistance', 0.5)).toBe(772.5)
   })
@@ -69,9 +69,9 @@ describe('mapLayout3d — A4 왕복과 기본 정규값', () => {
   })
 
   it('MAP_FORCE_DEFAULT_NORMS 가 5.1 표의 네 숫자와 같다', () => {
-    expect(MAP_FORCE_DEFAULT_NORMS.center).toBeCloseTo(0.4345879896760937, 12)
+    expect(MAP_FORCE_DEFAULT_NORMS.center).toBeCloseTo(0.6419391565964472, 12)
     expect(MAP_FORCE_DEFAULT_NORMS.repel).toBeCloseTo(0.6771752303951257, 12)
-    expect(MAP_FORCE_DEFAULT_NORMS.linkStrength).toBeCloseTo(0.5410205792797051, 12)
+    expect(MAP_FORCE_DEFAULT_NORMS.linkStrength).toBeCloseTo(0.48430736193807317, 12)
     expect(MAP_FORCE_DEFAULT_NORMS.linkDistance).toBeCloseTo(0.17407765595569785, 12)
   })
 })
