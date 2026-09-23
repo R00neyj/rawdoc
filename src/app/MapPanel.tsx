@@ -51,7 +51,7 @@ const FORCE_LABEL: Record<MapForceAxis, string> = {
 // 네 축 다 0~1 정규값이다 — 800·0.02 같은 d3 내부 단위는 사람에게 뜻이 없고 범위를 바꾸면 표시 숫자만 튄다 (F-2006 7.3)
 const forcePercent = (v: number) => `${Math.round(v * 100)}%`
 
-// `링크 거리` 값 문자열 (F-2007 7.5, 2026-09-23 개정)
+// `링크 단계` 값 문자열 (F-2007 7.5, 2026-09-23 개정)
 const HOPS_FORMAT: Record<number, string> = {
   0: '전부 보기',
   1: '1단계 — 바로 링크된 문서까지',
@@ -278,7 +278,7 @@ export default function MapPanel({
             </label>
             <MapSlider
               id={`${idBase}-hops`}
-              label="링크 거리"
+              label="링크 단계"
               min={0}
               max={MAP_HOPS_MAX}
               step={1}

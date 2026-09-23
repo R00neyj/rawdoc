@@ -1758,7 +1758,7 @@ test.describe('F-2009 터치', () => {
 
 // F-2007 지도 설정 패널 `필터` 5항목 (specs/features/F-2007.md 16.2) A1~A14 — 전부 꼬리 줄 숫자와 `목록` 보기로 판정한다
 async function openMapCentered(page, docs) {
-  // 마지막으로 가져온 문서를 중심으로 지도를 연다 — `링크 거리` 는 중심이 없으면 잠긴다 (7.5)
+  // 마지막으로 가져온 문서를 중심으로 지도를 연다 — `링크 단계` 는 중심이 없으면 잠긴다 (7.5)
   await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
   await setPrefBeforeLoad(page, 'md.startScreen', 'last')
   await page.goto('/')
@@ -1801,7 +1801,7 @@ test.describe('F-2007 지도 설정 패널 필터', () => {
     await expect(isolated).toBeChecked()
     await expect(broken).toHaveCount(1)
     await expect(broken).toBeChecked()
-    const hops = p.getByRole('slider', { name: '링크 거리' })
+    const hops = p.getByRole('slider', { name: '링크 단계' })
     await expect(hops).toHaveCount(1)
     expect(await hops.inputValue()).toBe('0')
   })
@@ -1842,7 +1842,7 @@ test.describe('F-2007 지도 설정 패널 필터', () => {
     await expect(view.map.locator('.map-list-group h2', { hasText: '끊긴 링크 (0)' })).toBeVisible()
   })
 
-  test('F-2007 A6 링크 거리', async ({ page }) => {
+  test('F-2007 A6 링크 단계', async ({ page }) => {
     const view = await openMapCentered(page, [
       { name: 'D.md', content: 'D 문서' },
       { name: 'C.md', content: '[[D]]' },
@@ -1850,7 +1850,7 @@ test.describe('F-2007 지도 설정 패널 필터', () => {
       { name: 'A.md', content: 'A\n\n[[B]]' },
     ])
     const p = await openPanel(view.map)
-    const hops = p.getByRole('slider', { name: '링크 거리' })
+    const hops = p.getByRole('slider', { name: '링크 단계' })
     // 중심이 있으면 잠김 안내가 없다 (F-2007 7.5 개정)
     await expect(hops).toHaveAccessibleDescription('')
 
@@ -1863,7 +1863,7 @@ test.describe('F-2007 지도 설정 패널 필터', () => {
   test('F-2007 A7 중심이 없으면 잠긴다', async ({ page }) => {
     const { map } = await openMapFresh(page)
     const p = await openPanel(map)
-    const hops = p.getByRole('slider', { name: '링크 거리' })
+    const hops = p.getByRole('slider', { name: '링크 단계' })
 
     await expect(hops).toBeDisabled()
     await expect(hops).toHaveAttribute('aria-valuetext', '현재 문서가 없습니다')
@@ -1910,7 +1910,7 @@ test.describe('F-2007 지도 설정 패널 필터', () => {
     ])
     const p = await openPanel(view.map)
     await p.getByRole('checkbox', { name: '고립 문서' }).uncheck()
-    await p.getByRole('slider', { name: '링크 거리' }).fill('2')
+    await p.getByRole('slider', { name: '링크 단계' }).fill('2')
     await p.getByRole('searchbox', { name: '파일 검색' }).fill('아무거나')
 
     await view.map.getByRole('button', { name: '닫기', exact: true }).click()
@@ -1921,7 +1921,7 @@ test.describe('F-2007 지도 설정 패널 필터', () => {
 
     await expect(p2.getByRole('searchbox', { name: '파일 검색' })).toHaveValue('')
     await expect(p2.getByRole('checkbox', { name: '고립 문서' })).not.toBeChecked()
-    await expect(p2.getByRole('slider', { name: '링크 거리' })).toHaveValue('2')
+    await expect(p2.getByRole('slider', { name: '링크 단계' })).toHaveValue('2')
   })
 
   test('F-2007 A11 기본값으로가 필터도 되돌린다', async ({ page }) => {
@@ -1932,7 +1932,7 @@ test.describe('F-2007 지도 설정 패널 필터', () => {
     const p = await openPanel(view.map)
     await p.getByRole('checkbox', { name: '고립 문서' }).uncheck()
     await p.getByRole('checkbox', { name: '끊긴 링크' }).uncheck()
-    await p.getByRole('slider', { name: '링크 거리' }).fill('1')
+    await p.getByRole('slider', { name: '링크 단계' }).fill('1')
     await p.getByRole('searchbox', { name: '파일 검색' }).fill('무언가')
 
     await p.getByRole('button', { name: '기본값으로', exact: true }).click()
@@ -1940,7 +1940,7 @@ test.describe('F-2007 지도 설정 패널 필터', () => {
     await expect(p.getByRole('searchbox', { name: '파일 검색' })).toHaveValue('')
     await expect(p.getByRole('checkbox', { name: '고립 문서' })).toBeChecked()
     await expect(p.getByRole('checkbox', { name: '끊긴 링크' })).toBeChecked()
-    await expect(p.getByRole('slider', { name: '링크 거리' })).toHaveValue('0')
+    await expect(p.getByRole('slider', { name: '링크 단계' })).toHaveValue('0')
     await expect(footFilter(view.map)).toHaveCount(0)
   })
 
@@ -1997,7 +1997,7 @@ test.describe('F-2007 지도 설정 패널 필터', () => {
     await expect(page).toHaveURL(/#\/map\/[^/]+$/)
 
     const p = await openPanel(view.map)
-    await expect(p.getByRole('slider', { name: '링크 거리' })).toHaveValue('1')
+    await expect(p.getByRole('slider', { name: '링크 단계' })).toHaveValue('1')
     await expect(footFilter(view.map)).toHaveText('3개 중 3개 보임')
   })
 })
