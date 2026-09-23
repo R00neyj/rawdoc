@@ -391,4 +391,4 @@
 | H377 | F-2021 13.4 S5 | macOS 또는 Linux 가 있으면 브라우저 열기(`open`·`xdg-open`)가 되는지 | 대기 |
 | H378 | F-2021 13.4 S6 | 인증 화면 모양 — 밝게·어둡게, 좁은 창 | 대기 |
 | H379 | F-2021 13.4 S7 | AI 도구(Claude Code 등)가 `RAWDOC_TOKEN` 을 넣고 `npx -y rawdoc ls --json`·`new 파일 --json` 을 비대화형으로 부를 수 있는지 | 대기 |
-| H380 | F-2021 13.4 S8 | 게시 완료 확인 — `npm view rawdoc version`, 다른 컴퓨터에서 `npx -y rawdoc --version` | 대기 |
+| H380 | F-2021 13.4 S8 | 게시 완료 확인 — `npm view rawdoc version`, 다른 컴퓨터에서 `npx -y rawdoc --version` | 통과 (2026-09-24 `npm view rawdoc version` = 0.1.0, `npx -y rawdoc@latest --version` = 0.1.0. 다른 컴퓨터에서는 아직 안 해 봄) |
