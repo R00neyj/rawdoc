@@ -1,6 +1,6 @@
 // 한글 입력 중 목록 줄 엔터가 두 번 넘어가는 문제 (specs/features/F-245.md) — CDP 조합은 시각 표시(cm-composing)는 실제 IME 와 다르지만 view.composing 은 true 가 되어 CM6 가 keydown 을 건너뛰는 조건은 같다(F-245.md 3.3)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, readSavedContent, fakeImeCompose } from './helpers.js'
+import { openApp, importMarkdown, readSavedContent, fakeImeCompose, openExportMenu } from './helpers.js'
 
 async function placeCursorAtEnd(page) {
   await page.locator('.cm-content').click()
@@ -245,9 +245,10 @@ test.describe('F-253 B10 원문 불변', () => {
     await page.keyboard.press('Enter')
     await page.keyboard.type('X')
 
+    await openExportMenu(page)
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     const stream = await download.createReadStream()
     const chunks = []
@@ -284,9 +285,10 @@ test.describe('F-245 A19 원문 불변', () => {
     await page.keyboard.press('Enter')
     await page.keyboard.type('X')
 
+    await openExportMenu(page)
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     const stream = await download.createReadStream()
     const chunks = []
@@ -307,9 +309,10 @@ test.describe('F-245 A7 원문 불변', () => {
     await page.keyboard.press('Enter')
     await page.keyboard.type('X')
 
+    await openExportMenu(page)
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 파일로 내보내기' }).click(),
+      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
     ])
     const stream = await download.createReadStream()
     const chunks = []

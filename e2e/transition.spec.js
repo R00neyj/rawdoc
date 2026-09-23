@@ -1,7 +1,7 @@
 // 호버·툴팁 전환 전부 적용 (specs/features/F-149.md 3장)
 // 나타나고 사라지는 요소 전환 (specs/features/F-172.md 3장)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, resizeWindow, waitTransitionEnd, setPrefBeforeLoad } from './helpers.js'
+import { openApp, importMarkdown, resizeWindow, waitTransitionEnd, setPrefBeforeLoad, EXPORT_BUTTON_LABEL } from './helpers.js'
 
 // 색·바탕·테두리·그림자·투명도 전환 곡선 — --transition-fast(F-173) (cubic-bezier(0, 0, 0.2, 1)) 가 튕기지 않는다
 const EASE_OUT = 'cubic-bezier(0, 0, 0.2, 1)'
@@ -185,7 +185,7 @@ test.describe('F-149 A3 툴팁 전환·지연', () => {
     await openApp(page)
     await importMarkdown(page, { content: '내용\n' })
 
-    const btn = page.getByRole('button', { name: '.md 파일로 내보내기' })
+    const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
     const wrap = page.locator('.icon-btn-wrap').filter({ has: btn })
     const tooltip = wrap.locator('.icon-tooltip')
 
@@ -280,7 +280,7 @@ test.describe('F-149 A6 움직임 줄이기', () => {
     const duration = await btn.evaluate((el) => getComputedStyle(el).transitionDuration)
     expect(duration.split(',').every((d) => d.trim() === '0s')).toBe(true)
 
-    const wrap = page.locator('.icon-btn-wrap').filter({ has: page.getByRole('button', { name: '.md 파일로 내보내기' }) })
+    const wrap = page.locator('.icon-btn-wrap').filter({ has: page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true }) })
     const tooltipDuration = await wrap
       .locator('.icon-tooltip')
       .evaluate((el) => getComputedStyle(el).transitionDuration)
@@ -627,7 +627,7 @@ test.describe('F-228 A2 툴팁 곡선', () => {
     await openApp(page)
     await importMarkdown(page, { content: '내용\n' })
 
-    const btn = page.getByRole('button', { name: '.md 파일로 내보내기' })
+    const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
     const wrap = page.locator('.icon-btn-wrap').filter({ has: btn })
     const tooltip = wrap.locator('.icon-tooltip')
 
@@ -642,7 +642,7 @@ test.describe('F-228 A3 툴팁 넘침', () => {
     await openApp(page)
     await importMarkdown(page, { content: '내용\n' })
 
-    const btn = page.getByRole('button', { name: '.md 파일로 내보내기' })
+    const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
     const wrap = page.locator('.icon-btn-wrap').filter({ has: btn })
 
     const sample = wrap.locator('.icon-tooltip').evaluate(
@@ -716,7 +716,7 @@ test.describe('F-228 A6 움직임 줄이기', () => {
     )
     expect(tokenValue).toBe('0ms')
 
-    const btn = page.getByRole('button', { name: '.md 파일로 내보내기' })
+    const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
     const wrap = page.locator('.icon-btn-wrap').filter({ has: btn })
     await btn.hover()
     const tooltipDuration = await wrap

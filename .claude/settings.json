@@ -2,5 +2,18 @@
   "enabledPlugins": {
     "cloudflare@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/open-spec-hook.mjs\""
+          }
+        ]
+      }
+    ]
   }
 }

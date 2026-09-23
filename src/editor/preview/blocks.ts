@@ -11,12 +11,15 @@ import { syntaxTree } from '@codemirror/language'
 import type { SyntaxNode } from '@lezer/common'
 
 import { parseImageBlock } from '../../lib/imageBlock'
+import { parseMathBlock } from '../../lib/mathSyntax'
 import { createCodeCopyButton } from '../../lib/codeCopyButton'
-import { displayLang } from '../../lib/codeLang'
+import { displayLang, isMermaidInfo } from '../../lib/codeLang'
 import { isComposing, isForced } from '../composition'
 import { isEditorFocused } from './active'
 import type { ResolveAttachment } from './imageWidget'
 import { ImageWidget, destroyImageCache } from './imageWidget'
+import { MathBlockWidget } from './mathWidget'
+import { MermaidWidget, destroyMermaidCache } from './mermaidWidget'
 import {
   TableWidget,
   enterTableFromKeyboard,
@@ -64,7 +67,7 @@ function offsetAt(event: MouseEvent): number {
 // selection 을 다시 잡아 진입 위치가 어긋난다.
 // 위치는 위젯이 들고 있지 않고 클릭 시점에 view.posAtDOM(wrap) 으로 역산한다 —
 // eq() 가 true 면 CM6 가 옛 위젯 인스턴스를 그대로 두므로 저장해 둔 위치는 낡을 수 있다.
-function enterOnClick(wrap: HTMLElement, view: EditorView): void {
+export function enterOnClick(wrap: HTMLElement, view: EditorView): void {
   wrap.addEventListener('mousedown', (event) => {
     event.preventDefault()
     const pos = view.posAtDOM(wrap) + offsetAt(event)
@@ -213,8 +216,9 @@ class CodeWidget extends WidgetType {
 // 연결일 뿐 실제 빈 줄이 아니면) 쪼갠 결과의 마지막 빈 문자열 하나만 버린다.
 // 조각이 하나뿐(목록·인용 밖의 보통 코드블록)이면 늘 "마지막" 이라 아무것도 버리지
 // 않는다 — 끝에 진짜 빈 줄이 있으면 그대로 남는다(예전 동작과 같다).
-// blockFrom: 위젯이 치환할 범위의 시작(줄 경계로 확장한 값)
-function codeWidget(state: EditorState, node: SyntaxNode, blockFrom: number): CodeWidget {
+// blockFrom: 위젯이 치환할 범위의 시작(줄 경계로 확장한 값). blockTo 는 TARGET 맵의 다른 항목(tableWidget)과 시그니처를 맞추려고만 받아 쓰지 않는다. theme(F-260 2.2)은 MermaidWidget 에만 쓰인다
+// 정보문자열이 mermaid 면(F-258 2.1) MermaidWidget 을, 아니면 기존 CodeWidget 을 만든다(겹치면 원문 규칙 등은 그대로 상속)
+function codeWidget(state: EditorState, node: SyntaxNode, blockFrom: number, _blockTo: number, theme: string): WidgetType {
   let info = ''
   const codeTexts: SyntaxNode[] = []
   for (let child = node.firstChild; child; child = child.nextSibling) {
@@ -234,19 +238,22 @@ function codeWidget(state: EditorState, node: SyntaxNode, blockFrom: number): Co
     }
   })
 
+  if (isMermaidInfo(info)) return new MermaidWidget(codeBlockText(lines), theme)
   return new CodeWidget(info, lines)
 }
 
 // 표는 tableModel.ts 가 텍스트를 직접 다시 해석하므로(lezer TableCell 노드를 쓰지
 // 않는다 — tableModel.ts 상단 주석 참고), 여기서는 블록 전체 원문을 그대로 잘라
-// 새 TableWidget 에 넘기기만 한다. node(lezer Table 노드)는 쓰지 않지만 TARGET
+// 새 TableWidget 에 넘기기만 한다. node(lezer Table 노드)·theme 은 쓰지 않지만 TARGET
 // 맵의 다른 항목(codeWidget)과 시그니처를 맞추려고 인자로 받는다.
 // blockFrom·blockTo: 위젯이 치환할 범위의 시작·끝(줄 경계로 확장한 값)
-function tableWidget(state: EditorState, _node: SyntaxNode, blockFrom: number, blockTo: number): TableWidget {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- _theme 은 시그니처를 맞추려고만 받는다(TARGET.Table)
+function tableWidget(state: EditorState, _node: SyntaxNode, blockFrom: number, blockTo: number, _theme: string): TableWidget {
   return new TableWidget(state.doc.sliceString(blockFrom, blockTo))
 }
 
-type BlockMaker = (state: EditorState, node: SyntaxNode, blockFrom: number, blockTo: number) => WidgetType
+// theme: 앱 테마(F-260 2.2) — 호출부(buildBlocks)가 항상 넘긴다
+type BlockMaker = (state: EditorState, node: SyntaxNode, blockFrom: number, blockTo: number, theme: string) => WidgetType
 const TARGET: Record<string, BlockMaker> = { Table: tableWidget, FencedCode: codeWidget }
 
 // 목록·인용 안인가 (F-157 2.1 "문서 최상위"). 이미지 블록만 검사한다 — 표·코드블록은 F-106 그대로 목록·인용 안에서도 위젯이 된다
@@ -264,10 +271,12 @@ function isInsideListOrQuote(node: SyntaxNode): boolean {
 // 표시에서 숨기는 예로 든 것과 같다. 기본값 true 는 포커스를 다루지 않는 기존
 // 호출부(테스트 등)의 동작을 그대로 유지한다.
 // resolveAttachment: 이미지 블록 위젯이 첨부를 읽는 콜백 (F-157 2.2)
+// theme: 앱 테마(white|sepia|dark), 기본값 없음(호출부가 항상 넘긴다) — mermaid 코드블록 위젯에 쓰인다(F-260 2.2)
 export function buildBlocks(
   state: EditorState,
   hasFocus = true,
-  resolveAttachment?: ResolveAttachment,
+  resolveAttachment: ResolveAttachment | undefined,
+  theme: string,
 ): CMRange<Decoration>[] {
   const out: CMRange<Decoration>[] = []
   syntaxTree(state).iterate({
@@ -284,6 +293,20 @@ export function buildBlocks(
           out.push(
             Decoration.replace({ widget: new ImageWidget(parsed, resolveAttachment), block: true }).range(from, to),
           )
+        }
+        return false
+      }
+
+      // 수식 블록 $$…$$ (F-291 4.2) — 문서 최상위 문단만(B3). 대상 아니면(null) 자식으로 내려간다(인라인 수식이 계속 동작해야 한다)
+      if (node.name === 'Paragraph') {
+        if (isInsideListOrQuote(node.node)) return
+        const from = state.doc.lineAt(node.from).from
+        const to = state.doc.lineAt(node.to).to
+        const parsed = parseMathBlock(state.doc.sliceString(from, to))
+        if (!parsed) return
+        const showsSource = hasFocus && overlaps(state, from, to)
+        if (!showsSource) {
+          out.push(Decoration.replace({ widget: new MathBlockWidget(parsed.tex), block: true }).range(from, to))
         }
         return false
       }
@@ -306,7 +329,7 @@ export function buildBlocks(
       const alwaysWidget = node.name === 'Table' && (!hasFocus || !emptyCursorInside(state, from, to))
       const showsSource = hasFocus && overlaps(state, from, to)
       if (alwaysWidget || !showsSource) {
-        out.push(Decoration.replace({ widget: make(state, node.node, from, to), block: true }).range(from, to))
+        out.push(Decoration.replace({ widget: make(state, node.node, from, to, theme), block: true }).range(from, to))
       }
       // 어느 쪽이든 블록 내부는 더 볼 것이 없다. 표 안 인라인·코드블록 강조는 하지 않는다.
       return false
@@ -406,7 +429,8 @@ const blockKeymap = Prec.highest(
 // 이걸 안 보면 조합 중 표 재계산이 그대로 일어나 편집 중인 하위 EditorView 의 DOM 을
 // 파괴해 조합이 깨진다(updateDOM 의 "구조 바뀜" 분기 → endEdit → cellView.destroy()).
 // resolveAttachment: 이미지 블록 위젯이 첨부를 읽는 콜백 (F-157 2.2)
-export function blockPreview({ resolveAttachment }: { resolveAttachment?: ResolveAttachment } = {}): Extension {
+// theme: 앱 테마 — mermaid 코드블록 위젯에 쓰인다. previewCompartment 가 다시 구성되면(createEditor.ts setTheme) 새 theme 으로 다시 불려 StateField 가 create 부터 다시 돈다(F-260 2.2)
+export function blockPreview({ resolveAttachment, theme }: { resolveAttachment?: ResolveAttachment; theme: string }): Extension {
   const viewRef: { current: EditorView | null } = { current: null }
   const tracker = ViewPlugin.fromClass(
     class {
@@ -414,15 +438,17 @@ export function blockPreview({ resolveAttachment }: { resolveAttachment?: Resolv
         viewRef.current = view
       }
       // 에디터 destroy 때 이미지 블록 위젯이 만든 blob URL 을 모두 해제한다 (F-157 2.2)
+      // mermaid 위젯 캐시도 비운다(blob URL 이 없어 URL 해제는 불필요, F-258 2.3)
       destroy() {
         destroyImageCache(viewRef.current)
+        destroyMermaidCache(viewRef.current)
       }
     },
   )
 
   const field = StateField.define({
     // EditorState.create 시점엔 view 가 없어 포커스를 알 수 없다 — false 가 맞다(autoFocus 의 focus() 가 곧 focusin·forceRecalc 로 다시 그린다, F-146 3.2)
-    create: (state) => Decoration.set(buildBlocks(state, false, resolveAttachment), true),
+    create: (state) => Decoration.set(buildBlocks(state, false, resolveAttachment, theme), true),
     update(value, tr) {
       // F-135 3.2: 편집 중인 칸이 있으면 모든 주 문서 트랜잭션마다(칸 자신의 입력
       // 포함) 세션이 든 칸 범위를 옮긴다. 이 재계산 함수 자체와 무관하게, 아래에서
@@ -441,7 +467,7 @@ export function blockPreview({ resolveAttachment }: { resolveAttachment?: Resolv
           return tr.docChanged ? value.map(tr.changes) : value
         }
       }
-      return Decoration.set(buildBlocks(tr.state, isEditorFocused(viewRef.current), resolveAttachment), true)
+      return Decoration.set(buildBlocks(tr.state, isEditorFocused(viewRef.current), resolveAttachment, theme), true)
     },
     provide: (f) => EditorView.decorations.from(f),
   })

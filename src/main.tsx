@@ -13,9 +13,12 @@ import './styles/callout.css'
 import './styles/frontmatter.css'
 import './styles/wikilink.css'
 import './styles/image.css'
+import './styles/print.css'
+import './styles/map.css'
 
 import { getPref } from './app/prefs'
 import { resolveTheme } from './app/theme'
+import { markAppEntry } from './app/markAppEntry'
 import App from './app/App'
 
 // 첫 화면 그리기 전에 반영해 서체가 바뀌며 깜빡이지 않게 한다 (specs/features/F-121.md, F-141)
@@ -27,6 +30,9 @@ document.documentElement.dataset.theme = resolveTheme(
   getPref('md.theme', 'system'),
   window.matchMedia('(prefers-color-scheme: dark)').matches,
 )
+
+// 서비스 워커로 들어온 기존 사용자·설치한 PWA 도 다음 요청부터 서버 판정이 맞게 한다 (F-271 5장)
+markAppEntry()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

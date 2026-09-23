@@ -11,7 +11,7 @@ import { extractHeadings, type Heading } from '../editor/outline'
 import { frontmatterExtension } from '../editor/frontmatter'
 import { resolveWikiTarget } from '../lib/wikiLink'
 import Outline from './Outline'
-import { IconDownload, IconSettings } from './icons'
+import { IconDownload, IconSettings, IconPanelOpen, IconPanelClose, IconRefresh, IconTooltip } from './icons'
 import { buildExportPayload } from './exportDoc'
 import { getPref, setPref } from './prefs'
 import { resolveTheme } from './theme'
@@ -72,6 +72,8 @@ function makeFakeHandle(content: string): FakeEditorHandle {
 // 공개 보기 화면 전용 설정 상태 — 테마/서체/글자 크기 4개만(들여쓰기·줄 번호는 없음, F-230 2.1). 그 브라우저의 기존 값을 읽고 쓴다(F-121·F-141·F-154 와 같은 키)
 type PublicSettings = {
   theme: string
+  // 적용된 테마(white|sepia|dark, theme 과 달리 'system' 을 시스템 설정으로 풀어낸 값) — mermaid 렌더링에 쓰인다(F-260 2.4)
+  resolvedTheme: 'white' | 'sepia' | 'dark'
   headingFont: string
   bodyFont: string
   fontSize: string
@@ -83,6 +85,9 @@ type PublicSettings = {
 
 function usePublicSettings(): PublicSettings {
   const [theme, setTheme] = useState(() => getPref('md.theme', 'system'))
+  const [resolvedTheme, setResolvedTheme] = useState<'white' | 'sepia' | 'dark'>(() =>
+    resolveTheme(getPref('md.theme', 'system'), typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches),
+  )
   const [headingFont, setHeadingFont] = useState(() => getPref('md.headingFont', 'serif'))
   const [bodyFont, setBodyFont] = useState(() => getPref('md.bodyFont', 'sans'))
   const [fontSize, setFontSize] = useState(() => getPref('md.fontSize', 'medium'))
@@ -92,7 +97,9 @@ function usePublicSettings(): PublicSettings {
     if (theme !== 'system') return
     const mql = window.matchMedia('(prefers-color-scheme: dark)')
     function apply() {
-      document.documentElement.dataset.theme = resolveTheme('system', mql.matches)
+      const resolved = resolveTheme('system', mql.matches)
+      document.documentElement.dataset.theme = resolved
+      setResolvedTheme(resolved)
     }
     apply()
     mql.addEventListener('change', apply)
@@ -104,7 +111,9 @@ function usePublicSettings(): PublicSettings {
     setTheme(v)
     setPref('md.theme', v)
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    document.documentElement.dataset.theme = resolveTheme(v, prefersDark)
+    const resolved = resolveTheme(v, prefersDark)
+    document.documentElement.dataset.theme = resolved
+    setResolvedTheme(resolved)
   }
 
   function changeHeadingFont(value: string) {
@@ -128,7 +137,7 @@ function usePublicSettings(): PublicSettings {
     setPref('md.fontSize', v)
   }
 
-  return { theme, headingFont, bodyFont, fontSize, changeTheme, changeHeadingFont, changeBodyFont, changeFontSize }
+  return { theme, resolvedTheme, headingFont, bodyFont, fontSize, changeTheme, changeHeadingFont, changeBodyFont, changeFontSize }
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -198,14 +207,18 @@ function DocPane({
           )}
           <h1 className="public-view-title">{title}</h1>
         </div>
-        <button type="button" className="public-view-settings" onClick={() => setSettingsOpen(true)}>
-          <IconSettings size={18} />
-          설정
-        </button>
-        <button type="button" className="public-view-export" disabled={!doc} onClick={onExport}>
-          <IconDownload size={18} />
-          .md 내보내기
-        </button>
+        <span className="icon-btn-wrap">
+          <button type="button" className="icon-btn public-view-settings" aria-label="설정" onClick={() => setSettingsOpen(true)}>
+            <IconSettings size={18} />
+          </button>
+          <IconTooltip text="설정" />
+        </span>
+        <span className="icon-btn-wrap">
+          <button type="button" className="icon-btn public-view-export" aria-label=".md 내보내기" disabled={!doc} onClick={onExport}>
+            <IconDownload size={18} />
+          </button>
+          <IconTooltip text=".md 내보내기" align="end" />
+        </span>
       </div>
       <div className="public-view-body content-area" ref={contentAreaRef}>
         {state.status === 'loading' && <p className="public-view-notice">불러오는 중…</p>}
@@ -214,13 +227,21 @@ function DocPane({
           <div className="public-view-notice">
             <p>링크를 불러오지 못했습니다. 연결을 확인하세요.</p>
             <button type="button" onClick={onRetry}>
+              <IconRefresh size={18} />
               다시 시도
             </button>
           </div>
         )}
         {state.status === 'ready' && (
           <>
-            <Viewer ref={viewerRef} html={html} resolveAttachment={resolveAttachment} codeCopy onOpenWikiLink={onOpenWikiLink} />
+            <Viewer
+              ref={viewerRef}
+              html={html}
+              theme={settings.resolvedTheme}
+              resolveAttachment={resolveAttachment}
+              codeCopy
+              onOpenWikiLink={onOpenWikiLink}
+            />
             <Outline editorRef={editorRef} containerRef={contentAreaRef} viewerRef={viewerRef} docId={docKey} viewMode="view" />
           </>
         )}
@@ -659,9 +680,18 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
       {narrow && (
         <div className="public-folder-topbar">
           <PublicBrand />
-          <button type="button" className="public-folder-list-toggle" onClick={() => setListOpen((v) => !v)}>
-            목록
-          </button>
+          <span className="icon-btn-wrap">
+            <button
+              type="button"
+              className="icon-btn public-folder-list-toggle"
+              aria-label={listOpen ? '문서 목록 닫기' : '문서 목록 열기'}
+              aria-expanded={listOpen}
+              onClick={() => setListOpen((v) => !v)}
+            >
+              {listOpen ? <IconPanelClose size={18} /> : <IconPanelOpen size={18} />}
+            </button>
+            <IconTooltip text={listOpen ? '문서 목록 닫기' : '문서 목록 열기'} align="end" />
+          </span>
         </div>
       )}
       <div className="public-folder-layout">

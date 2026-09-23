@@ -57,6 +57,10 @@ export default function FolderMenu({
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLUListElement | null>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
+  // 트리거(⋯) 버튼으로 연 메뉴가 스크롤 영역(.sidebar-scroll 등) 아래쪽 경계 밖으로 넘치면
+  // 위로 열어 잘리지 않게 한다 — 우클릭 메뉴(anchorPoint)는 이미 fixed + 창 기준 clamp 로
+  // 안전하다(아래 useLayoutEffect), 트리거 메뉴만 이 보정이 없었다(2026-09-20 사용자 신고)
+  const [openUp, setOpenUp] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -176,6 +180,28 @@ export default function FolderMenu({
     el.style.top = `${top}px`
   }, [open, anchorPoint])
 
+  // 트리거(⋯) 버튼으로 열렸을 때 — 버튼 아래로 펼치면 스크롤 조상의 아래쪽 경계(또는
+  // 창 아래) 밖으로 넘치는지 재서, 넘치면 위로 연다 (2026-09-20 사용자 신고)
+  useLayoutEffect(() => {
+    if (!open || anchorPoint || !buttonRef.current || !menuRef.current) {
+      setOpenUp(false)
+      return
+    }
+    const btnRect = buttonRef.current.getBoundingClientRect()
+    const menuHeight = menuRef.current.getBoundingClientRect().height
+    let limit = window.innerHeight
+    let node: HTMLElement | null = buttonRef.current.parentElement
+    while (node) {
+      const overflowY = getComputedStyle(node).overflowY
+      if (overflowY === 'auto' || overflowY === 'scroll') {
+        limit = Math.min(limit, node.getBoundingClientRect().bottom)
+        break
+      }
+      node = node.parentElement
+    }
+    setOpenUp(btnRect.bottom + menuHeight > limit)
+  }, [open, anchorPoint])
+
   return (
     <div className="item-menu">
       <button
@@ -192,7 +218,7 @@ export default function FolderMenu({
       </button>
       {mounted && (
         <ul
-          className={`item-menu-list${anchorPoint ? ' item-menu-list--anchored' : ''}`}
+          className={`item-menu-list${anchorPoint ? ' item-menu-list--anchored' : ''}${openUp ? ' item-menu-list--up' : ''}`}
           data-state={state}
           inert={state === 'closed'}
           role="menu"

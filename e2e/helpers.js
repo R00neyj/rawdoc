@@ -9,6 +9,15 @@ const VIEW_MODE_LABEL = {
   view: '보기 — 읽기 전용으로 보기',
 }
 
+// 상단바 내보내기 버튼 툴팁·aria-label (F-279.md 3.2, 3.3) — 항목이 늘어도 이 값은 그대로다
+export const EXPORT_BUTTON_LABEL = '내보내기'
+
+// 내보내기 메뉴를 열고 항목 목록 로케이터를 돌려준다 (F-279.md 3.3)
+export async function openExportMenu(page) {
+  await page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true }).click()
+  return page.locator('.export-menu-list [role="menuitem"]')
+}
+
 // 앱을 열고 부팅이 끝날 때까지 기다린다. 시작 화면 기본값은 홈(F-232)이라 md.startScreen='last' 를 미리 넣어 지금까지처럼 마지막 문서를 자동으로 연다 — 진짜 기본값 확인은 openAppHome
 export async function openApp(page) {
   await setPrefBeforeLoad(page, 'md.startScreen', 'last')
@@ -37,7 +46,7 @@ export async function setPrefBeforeLoad(page, key, value) {
  */
 export async function importMarkdown(page, { name = 'doc.md', content }) {
   const before = await currentDocId(page)
-  const input = page.locator('input[type="file"]')
+  const input = page.locator('input[data-import="md"]')
   await input.setInputFiles({ name, mimeType: 'text/markdown', buffer: Buffer.from(content, 'utf-8') })
   await expect
     .poll(async () => currentDocId(page))
@@ -138,6 +147,17 @@ export async function tokenAsRgb(page, tokenName) {
     probe.remove()
     return rgb
   }, tokenName)
+}
+
+// 랜딩 HTML 을 '/' 에 한 번만 물린다 — preview 는 워커가 없어 '/' 가 항상 앱이다(F-271 9.2). 되돌이 확인처럼 두 번째 요청도 랜딩이어야 하면 두 번 부른다
+export async function mockLanding(page) {
+  const { renderWelcomePage } = await import('../worker/welcomePage.ts')
+  const html = await renderWelcomePage().text()
+  await page.route(
+    (url) => url.pathname === '/',
+    (route) => route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html }),
+    { times: 1 },
+  )
 }
 
 /** 요소의 rect 를 읽는다 (JSON 으로 안전하게 직렬화) */

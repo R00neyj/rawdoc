@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -11,6 +13,8 @@ import {
 } from 'react'
 import type { EditorState, StateCommand } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
+import { openSearchPanel } from '@codemirror/search'
+import { showSearchMatches } from '../editor/showSearchMatches'
 
 import { createMemoryStore } from '../storage/memoryStore'
 import { createIdbStore } from '../storage/idbStore'
@@ -21,19 +25,35 @@ import { ancestorsOfDoc, resolveTargetFolderId, canMoveFolder } from '../lib/fol
 import type { SelectionItem } from './sidebarSelection'
 import { resolveWikiTarget } from '../lib/wikiLink'
 import { fromEditorText } from '../lib/lineEnding'
+import { decodeMarkdown } from '../lib/decodeMarkdown'
 import { getPref, setPref } from './prefs'
 import { fetchAccount, loginUrl, type AccountState } from './account'
 import type { SyncState } from '../types'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
 import { useEdgeSwipe } from './useEdgeSwipe'
-import { IconRefresh } from './icons'
+import { IconRefresh, IconNoteAdd } from './icons'
 import { resolveTheme } from './theme'
-import { parseHash, formatHash, parsePathRoute, type HashRoute } from './hashRoute'
+import { parseHash, formatHash, formatMapHash, parsePathRoute, type HashRoute } from './hashRoute'
 import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
-import { exportDoc } from './exportDoc'
+import { withTabBroadcast, newTabId } from './tabSync'
+import { useTabSync } from './useTabSync'
+import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from './exportDoc'
+import { downloadWorkspaceExport, type WorkspaceExportSourceStore } from './exportWorkspace'
+import {
+  readZipEntries,
+  detectZipKind,
+  planWorkspaceImport,
+  planPlainImport,
+  applyImportPlan,
+  ZIP_UNREADABLE_MESSAGE,
+  type ApplyStore,
+  type ImportPlan,
+  type PlainEntryInput,
+} from './importWorkspace'
+import ImportPreviewDialog, { type ImportDialogState } from './ImportPreviewDialog'
 import { importFiles } from './importFiles'
 import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag } from './fileDrop'
 import { attachImages } from './attachImages'
@@ -45,7 +65,10 @@ import { insertTable } from '../editor/insertCommands'
 import { countChars, countWords, cursorInfo } from '../editor/stats'
 import Viewer, { type ViewContextMenuInfo } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
+import { printDoc } from './printDoc'
 import { decodeShare, type ShareDoc } from '../lib/shareCodec'
+import { readViewerAnchor, scrollViewerToAnchor } from './viewerScroll'
+import type { ScrollAnchor } from '../lib/scrollAnchor'
 import Outline from './Outline'
 import ContextMenu from './ContextMenu'
 import { buildEditorContextMenu, buildViewContextMenu, type ContextMenuNode, type MenuItemNode } from './contextMenuItems'
@@ -63,6 +86,8 @@ import ConfirmDeleteDialog, { type DeleteTarget } from './ConfirmDeleteDialog'
 import Dialog from './Dialog'
 import MoveDocDialog, { type MoveDocTarget } from './MoveDocDialog'
 import SettingsDialog from './SettingsDialog'
+import SearchDialog from './SearchDialog'
+import { searchScope } from './searchIndex'
 import HelpPage from './HelpPage'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
 import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
@@ -74,6 +99,9 @@ import SharesPage from './SharesPage'
 import { listShares, type ShareLinkRow, type ShareGrantRow } from './sharesApi'
 import { revokeShareLink, revokeFolderShareLink } from './linkApi'
 import { deleteGrant } from '../storage/docsApi'
+// three 가 초기 로드에 붙지 않게 지연 경계를 여기 긋는다 (specs/features/F-292.md 3.3, F-2002 4장)
+const MapPage = lazy(() => import('./MapPage'))
+import { mapIndexScope } from './mapIndex'
 import type { Doc, Folder, FolderDeleteMode, LineEnding, Store } from '../types'
 
 const STATS_DEBOUNCE_MS = 150
@@ -170,7 +198,8 @@ export default function App() {
   // 뒤로·앞으로 가기로 공개 보기 경로를 드나들 때 갱신한다 (그 외 해시는 아래 별도 효과가 처리, F-211.md 2.3)
   useEffect(() => {
     function handlePublicHashChange() {
-      setPublicRoute(toPublicRoute(parseHash(location.hash)))
+      const pathRoute = toPublicRoute(parsePathRoute(location.pathname))
+      setPublicRoute(pathRoute ?? toPublicRoute(parseHash(location.hash)))
     }
     window.addEventListener('hashchange', handlePublicHashChange)
     return () => window.removeEventListener('hashchange', handlePublicHashChange)
@@ -187,18 +216,30 @@ export default function App() {
   const [folders, setFolders] = useState<Folder[]>([]) // F-126
   const [openFolders, setOpenFolders] = useState<string[]>(() => loadOpenFolders()) // F-126, md.openFolders
   const [currentDocId, setCurrentDocId] = useState<string | null>(null)
+  // 지금 연 문서가 다른 탭에서 지워졌을 때의 그 문서 id (F-296.md 7.3) — currentDocId 가 바뀌면 되돌린다
+  const [deletedElsewhereId, setDeletedElsewhereId] = useState<string | null>(null)
   const [notice, setNotice] = useState<AppNotice | null>(null)
   const [headingFont, setHeadingFont] = useState(() => getPref('md.headingFont', 'serif'))
   const [bodyFont, setBodyFont] = useState(() => getPref('md.bodyFont', 'sans')) // F-141 3.3
   const [themePref, setThemePref] = useState(() => getPref('md.theme', 'system')) // F-141 3.1
+  // 적용된 테마(white|sepia|dark, themePref 와 달리 'system' 을 시스템 설정으로 풀어낸 값) — mermaid 렌더링에 쓰인다(F-260 2.4)
+  const [resolvedTheme, setResolvedTheme] = useState<'white' | 'sepia' | 'dark'>(() =>
+    resolveTheme(getPref('md.theme', 'system'), typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches),
+  )
   const [lineNumbersPref, setLineNumbersPref] = useState(() => getPref('md.lineNumbers', 'on')) // F-147 2장
   const [fontSizePref, setFontSizePref] = useState(() => getPref('md.fontSize', 'medium')) // F-154 2.2
   const [indentPref, setIndentPref] = useState(() => getPref('md.indent', '4')) // F-154 2.3
   const [startScreenPref, setStartScreenPref] = useState(() => getPref('md.startScreen', 'home')) // F-232 3.4
   const [toolbarPref, setToolbarPref] = useState(() => getPref('md.toolbar', 'on')) // F-233 3.5
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // 검색 대화상자 D-6 (specs/features/F-287.md 3장)
+  const [searchOpen, setSearchOpen] = useState(false)
+  // 검색 결과로 연 문서에 넣어 줄 검색어 예약 — 본문이 도착하고 에디터가 만들어질 때까지 기다린다 (specs/features/F-294.md 4.3)
+  const [pendingEditorSearch, setPendingEditorSearch] = useState<{ docId: string; term: string } | null>(null)
   // 도움말 전용 페이지 S-7 (specs/features/F-244.md 3.3) — currentDocId 는 이 화면 동안 null
   const [helpOpen, setHelpOpen] = useState(false)
+  // 위키링크 지도 S-8 (specs/features/F-292.md 6.1) — 공유 화면과 같은 방식으로 currentDocId 를 비우지 않고 유지한다
+  const [mapRoute, setMapRoute] = useState<{ centerDocId: string | null; returnDocId: string | null } | null>(null)
   // (F-126.md 5.3)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   // 여러 항목 삭제 확인 대상 — 개수만 문구에 넣는다 (F-255.md 3.3)
@@ -246,6 +287,8 @@ export default function App() {
   const [syncState, setSyncState] = useState<SyncState | undefined>(undefined)
   // 우클릭 메뉴 상태 (specs/features/F-170.md) — view·container 는 place 에 따라 하나만 쓴다
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  // zip 가져오기 미리보기·진행·결과 대화상자 (F-282.md 3.8)
+  const [importState, setImportState] = useState<ImportDialogState | null>(null)
 
   const sidebarRef = useRef<HTMLElement | null>(null)
   const appShellRef = useRef<HTMLDivElement | null>(null)
@@ -256,12 +299,24 @@ export default function App() {
   const editorRef = useRef<EditorHandle | null>(null)
   const contentAreaRef = useRef<HTMLDivElement | null>(null) // 오른쪽 목차 여백 측정용 (F-144.md 2장)
   const viewerRef = useRef<HTMLDivElement | null>(null) // 오른쪽 목차가 보기 모드에서 스크롤할 대상 (F-144.md 3.4)
+  // 모드 전환 직전 화면 맨 위 원문 줄 — 문서가 바뀌면(docId 불일치) 버린다 (F-295.md 5.1·5.6)
+  const scrollAnchorRef = useRef<{ docId: string; anchor: ScrollAnchor } | null>(null)
   const statsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const titleRequestIdRef = useRef(0)
   const noticeIdRef = useRef(0)
   const importInputRef = useRef<HTMLInputElement | null>(null)
+  // zip 가져오기 — 선택 input, 확정된 계획, 취소 신호 (F-282.md 3.1·3.9)
+  const importZipInputRef = useRef<HTMLInputElement | null>(null)
+  const importFileRef = useRef<File | null>(null)
+  const importPlanRef = useRef<ImportPlan | null>(null)
+  const importCancelRef = useRef(false)
   const docSaverFlushRef = useRef(async () => {})
   const notifyChangeRef = useRef(() => {})
+  const printRootRef = useRef<HTMLDivElement | null>(null) // 인쇄 전용 영역 (F-279.md 4.2)
+  const printDocRef = useRef(() => {}) // Ctrl+P 가 매 커밋 최신 handlePrintDoc 을 읽게 한다 (F-279.md 6.1)
+  const openSearchRef = useRef(() => {}) // Ctrl+Shift+F 가 매 커밋 최신 openSearch 를 읽게 한다 (F-287.md 3.4)
+  const selectSearchQueryRef = useRef(() => {}) // 검색 대화상자가 이미 열려 있을 때 검색어를 전체 선택 — SearchDialog 가 채운다 (F-287.md 3.4)
+  const printDisabledRef = useRef(true) // exportDisabled 와 같은 조건 (F-279.md 6.1)
   // hashchange 핸들러가 낡은 클로저의 docs·currentDocId 를 읽지 않도록 매 렌더 후 갱신한다
   // (0단계 버그 수정)
   const docsRef = useRef(docs)
@@ -274,6 +329,8 @@ export default function App() {
   const sharesOpenRef = useRef(sharesOpen)
   // hashchange 핸들러가 "지금 도움말 페이지를 보고 있는가" 를 최신으로 읽도록 갱신한다 (F-244.md 3.3)
   const helpOpenRef = useRef(helpOpen)
+  // hashchange 핸들러가 "지금 지도를 보고 있는가" 를 최신으로 읽도록 갱신한다 (F-292.md 6.1)
+  const mapRouteRef = useRef(mapRoute)
   // OS 파일 열기 연동(F-119)이 최신 store·beforeLeaveDoc 을 쓰도록 매 렌더 후 갱신한다
   const runImportFilesRef = useRef<(files: File[]) => Promise<Doc | null>>(async () => null)
   // OS 파일 열기 재중복 방지(F-231)도 같은 이유로 매 렌더 후 최신 참조로 갱신한다
@@ -373,9 +430,76 @@ export default function App() {
     onNotice: showNotice,
     onReacquired: handleLockReacquired,
   })
-  const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly
+
+  // 탭마다 한 번 — 메모리에만 둔다 (F-296.md 6.1)
+  const tabIdRef = useRef<string>(newTabId())
+
+  // 다른 탭 신호를 받으면 목록만 다시 읽는다. 열린 문서 본문은 건드리지 않는다(불변조건, F-296.md 7.2)
+  const resyncFromStore = useCallback(async () => {
+    const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
+    setFolders(newFolders)
+    const stripped = sortByUpdatedAtDesc(newDocs.map(stripContent))
+    setDocs(stripped)
+    const openId = currentDocIdRef.current
+    if (openId && !stripped.some((d) => d.id === openId)) setDeletedElsewhereId(openId)
+  }, [store])
+
+  // 로컬 편집권을 되찾으면 서버 잠금 재획득(handleLockReacquired)과 같은 방식으로 다시 읽어 다시 마운트한다 (F-296.md 6.4)
+  const handleClaimRegained = useCallback(() => {
+    const docId = currentDocIdRef.current
+    if (!docId) return
+    store.get(docId).then((fresh) => {
+      if (!fresh || docId !== currentDocIdRef.current) return
+      setOpenDoc({ id: fresh.id, content: fresh.content, lineEnding: fresh.lineEnding })
+      setDocs((prev) =>
+        sortByUpdatedAtDesc(prev.map((d) => (d.id === fresh.id ? { ...d, title: fresh.title, updatedAt: fresh.updatedAt } : d))),
+      )
+      focusEditorRef.current = false
+      setEditorRemountNonce((n) => n + 1)
+    })
+  }, [store])
+
+  // 편집권은 로컬(idb) 문서에만 켠다 — 서버는 useDocLock(F-213)이, 메모리는 저장소가 탭마다 따로라 겹칠 일이 없다 (F-296.md 6.4)
+  const claimDocId = store.kind === 'idb' && !sharedDoc ? currentDocId : null
+  const { post: postTabMessage, claimReadOnly } = useTabSync({
+    enabled: bootPhase === 'ready',
+    tabId: tabIdRef.current,
+    claimDocId,
+    onDocsChanged: resyncFromStore,
+    onNotice: showNotice,
+    onClaimRegained: handleClaimRegained,
+  })
+
+  const isDeletedElsewhere = currentDocId != null && deletedElsewhereId === currentDocId
+  const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly || claimReadOnly || isDeletedElsewhere
   // 본문 맨 위 제목 읽기 전용 — 상단바 옛 제목 입력의 disabled·readOnly 조건을 하나로 합친다 (F-217.md 2.4)
   const titleReadOnly = isReadOnlyDoc || viewMode === 'view' || Boolean(sharedDoc)
+
+  // 문서를 바꾸면 지워짐 상태를 되돌린다 — 렌더 중 상태를 맞추는 공식 패턴 (F-296.md 7.3, useDocSaver.ts trackedDocId 와 같은 방식)
+  const [deletedElsewhereTrackedDocId, setDeletedElsewhereTrackedDocId] = useState(currentDocId)
+  if (currentDocId !== deletedElsewhereTrackedDocId) {
+    setDeletedElsewhereTrackedDocId(currentDocId)
+    setDeletedElsewhereId(null)
+  }
+
+  // 다른 탭에서 지워졌을 때 오류 알림 + `새 문서로 저장` — 같은 문서로는 1회만 (F-296.md 7.3)
+  const notifiedDeletedElsewhereRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!deletedElsewhereId || notifiedDeletedElsewhereRef.current === deletedElsewhereId) return
+    notifiedDeletedElsewhereRef.current = deletedElsewhereId
+    showNotice({
+      type: 'error',
+      message: '이 문서가 다른 탭에서 삭제되었습니다. 지금 화면의 내용은 저장되지 않습니다.',
+      action: {
+        label: '새 문서로 저장',
+        icon: IconNoteAdd,
+        onClick: () => {
+          void saveAsNewDocAfterDeletedElsewhere()
+        },
+      },
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- saveAsNewDocAfterDeletedElsewhere 는 아래(hoisted function)에서 항상 최신 store·currentDoc·openDoc 을 읽는다
+  }, [deletedElsewhereId, showNotice])
 
   const closeSidebarIfNarrow = useCallback(() => {
     setSidebarOpen(false)
@@ -437,6 +561,15 @@ export default function App() {
       const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
       persistOpenFolders(next)
       return next
+    })
+  }, [])
+
+  // 사이드바 `모두 접기` — 열린 폴더를 전부 닫는다 (2026-09-20 사용자 요청)
+  const collapseAllFolders = useCallback(() => {
+    setOpenFolders((prev) => {
+      if (prev.length === 0) return prev
+      persistOpenFolders([])
+      return []
     })
   }, [])
 
@@ -567,7 +700,8 @@ export default function App() {
         },
       })
       setDbBlockedMessage(null)
-      setStore(resolvedStore)
+      // 이 한 곳만 감싸면 App.tsx 의 모든 저장 경로가 자동으로 다른 탭에 신호를 보낸다 (F-296.md 6.2)
+      setStore(withTabBroadcast(resolvedStore, postTabMessage, tabIdRef.current))
 
       // 열린 문서가 충돌한 원본이면 서버 내용을 밀어 넣지 않고(불변조건) 사본으로 전환한다
       async function handleServerConflict({
@@ -699,6 +833,16 @@ export default function App() {
         return
       }
 
+      // 위키링크 지도(#/map·#/map/{id}) — currentDocId 는 비우지 않고 유지한다 (F-292.md 6.1, A15)
+      if (parsedHash.type === 'map') {
+        const anchorId = parsedHash.docId && metaList.some((d) => d.id === parsedHash.docId) ? parsedHash.docId : null
+        setCurrentDocId(anchorId)
+        if (anchorId) setPref('md.lastDocId', anchorId)
+        setMapRoute({ centerDocId: anchorId, returnDocId: anchorId })
+        setBootPhase('ready')
+        return
+      }
+
       const hashDocId = parsedHash.type === 'doc' ? parsedHash.docId : null
       const lastDocId = getPref('md.lastDocId', '') || null
       // 해시가 특정 문서를 안 가리키면 시작 화면 설정을 따른다 — 기본(home)은 자동으로 안 연다 (F-232 3.1)
@@ -744,6 +888,7 @@ export default function App() {
       if (parsedHash.type === 'share') {
         ;(async () => {
           await beforeLeaveDoc()
+          setMapRoute(null)
           await openSharedFragment(parsedHash.fragment, docsRef.current)
         })()
         return
@@ -755,6 +900,7 @@ export default function App() {
         ;(async () => {
           await beforeLeaveDoc()
           setSharedDoc(null)
+          setMapRoute(null)
           setCurrentDocId(null)
           setSharesOpen(true)
         })()
@@ -767,21 +913,40 @@ export default function App() {
         ;(async () => {
           await beforeLeaveDoc()
           setSharedDoc(null)
+          setMapRoute(null)
           setCurrentDocId(null)
           setHelpOpen(true)
         })()
         return
       }
 
+      // 위키링크 지도(F-292.md 6.1) — 뒤로·앞으로 가기·주소창 직접 수정으로 드나들 때
+      if (parsedHash.type === 'map') {
+        const nextCenterId = parsedHash.docId ?? null
+        if (mapRouteRef.current && (mapRouteRef.current.centerDocId ?? null) === nextCenterId) return
+        ;(async () => {
+          await beforeLeaveDoc()
+          setSharedDoc(null)
+          setSharesOpen(false)
+          setHelpOpen(false)
+          const anchorId = nextCenterId && docsRef.current.some((d) => d.id === nextCenterId) ? nextCenterId : null
+          setCurrentDocId(anchorId)
+          if (anchorId) setPref('md.lastDocId', anchorId)
+          setMapRoute({ centerDocId: anchorId, returnDocId: anchorId })
+        })()
+        return
+      }
+
       const docId = parsedHash.type === 'doc' ? parsedHash.docId : null
-      // 해시가 문서 경로·문서 없음으로 바뀌면 문서 id 가 같아도 공유 화면·공유 관리 페이지·도움말 페이지를 닫는다 (F-138 3.3, F-243 3.4, F-244 3.3)
-      if (docId === currentDocIdRef.current && !sharedDocRef.current && !sharesOpenRef.current && !helpOpenRef.current) return
+      // 해시가 문서 경로·문서 없음으로 바뀌면 문서 id 가 같아도 공유 화면·공유 관리 페이지·도움말 페이지·지도를 닫는다 (F-138 3.3, F-243 3.4, F-244 3.3, F-292 6.1)
+      if (docId === currentDocIdRef.current && !sharedDocRef.current && !sharesOpenRef.current && !helpOpenRef.current && !mapRouteRef.current) return
 
       ;(async () => {
         await beforeLeaveDoc()
         setSharedDoc(null) // 공유 화면을 보고 있었으면 떠난다 (F-130.md 4장)
         setSharesOpen(false) // 공유 관리 페이지를 보고 있었으면 떠난다 (F-243.md 3.4)
         setHelpOpen(false) // 도움말 페이지를 보고 있었으면 떠난다 (F-244.md 3.3)
+        setMapRoute(null) // 지도를 보고 있었으면 떠난다 — 뒤로 가기로 지도를 나갈 때가 그렇다 (F-292.md 6.1)
         focusEditorRef.current = true
         const latestDocs = docsRef.current
         if (docId && latestDocs.some((d) => d.id === docId)) {
@@ -848,7 +1013,10 @@ export default function App() {
     if (themePref !== 'system') return
     const mql = window.matchMedia('(prefers-color-scheme: dark)')
     function apply() {
-      document.documentElement.dataset.theme = resolveTheme('system', mql.matches)
+      const resolved = resolveTheme('system', mql.matches)
+      document.documentElement.dataset.theme = resolved
+      setResolvedTheme(resolved)
+      editorRef.current?.setTheme(resolved) // F-260 2.4 — mermaid 위젯 즉시 재렌더
     }
     apply()
     mql.addEventListener('change', apply)
@@ -886,7 +1054,7 @@ export default function App() {
       setSidebarOpen(false)
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !settingsOpen && !deleteTarget && !moveDocTarget && !bulkDeleteItems) {
+      if (e.key === 'Escape' && !settingsOpen && !searchOpen && !deleteTarget && !moveDocTarget && !bulkDeleteItems) {
         setSidebarOpen(false)
       }
     }
@@ -897,7 +1065,56 @@ export default function App() {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [narrow, sidebarOpen, settingsOpen, deleteTarget, moveDocTarget, bulkDeleteItems])
+  }, [narrow, sidebarOpen, settingsOpen, searchOpen, deleteTarget, moveDocTarget, bulkDeleteItems])
+
+  // ----- 브라우저 기본 찾기(Ctrl/Cmd+F) 비활성화 (2026-09-20 사용자 요청) -----
+  // 포커스가 에디터 안이면 createEditor.ts 의 Mod-f 키맵(scope 'editor search-panel')이 먼저
+  // 처리해 CM6 검색 패널을 연다 — 여기서는 사이드바·상단바 등 에디터 밖에 포커스가 있을 때만 대신 열어
+  // 브라우저 자체 찾기 창이 뜨지 않게 한다
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return
+      if (e.key.toLowerCase() !== 'f') return
+      const view = editorRef.current?.view
+      if (view?.dom.contains(document.activeElement)) return
+      e.preventDefault()
+      if (view) openSearchPanel(view)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // ----- Ctrl+P(Cmd+P) → 앱 인쇄, 에디터 안에 포커스가 있어도 가로챈다 (specs/features/F-279.md 6.1) -----
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return
+      if (e.key.toLowerCase() !== 'p') return
+      if (printDisabledRef.current) return // 브라우저 기본 인쇄에 맡긴다
+      e.preventDefault()
+      printDocRef.current()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // ----- Ctrl+Shift+F(Cmd+Shift+F) → 검색 대화상자 D-6 (specs/features/F-287.md 3.4) -----
+  useEffect(() => {
+    if (publicRoute) return // 공개 보기(S-5)에는 저장소가 없다
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return
+      if (e.key.toLowerCase() !== 'f') return
+      const open = document.querySelector('dialog[open]')
+      if (open && !open.querySelector('.search-dialog')) return // 다른 대화상자 위에 겹치지 않는다
+      e.preventDefault()
+      if (open) {
+        selectSearchQueryRef.current()
+        return
+      }
+      openSearchRef.current()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [publicRoute])
 
   // ----- 문서를 열 때 저장소 본문을 1회 읽어 에디터에 넘긴다 (architecture.md 3장) -----
   // openDoc.id 가 currentDocId 와 다르면(문서 없음 포함) 렌더링에서 에디터를 그리지
@@ -932,6 +1149,15 @@ export default function App() {
   // Editor(자동완성·표시)와 renderMarkdown(보기 모드) 둘 다 이 값을 쓴다
   const wikiTitles = useMemo(() => docs.map((d) => d.title), [docs])
 
+  // 위키링크 href 판정 — 보기 모드·인쇄가 함께 쓴다(F-279.md 4.3). 이 화면은 항상 #/d/{id} (F-252.md 4.1)
+  const resolveWikiHref = useCallback(
+    (target: unknown) => {
+      const match = resolveWikiTarget(target, docs)
+      return match ? `#/d/${match.id}` : null
+    },
+    [docs],
+  )
+
   // ----- 보기 모드 변환 (specs/features/F-123.md 3.3) -----
   // 변환 시점: 보기 모드로 전환할 때(viewMode 변화), 보기 모드에서 문서를 열 때
   // (openDoc 변화, Editor 마운트 직후 — 이 effect 는 자식의 layout effect 뒤에 돈다).
@@ -942,15 +1168,20 @@ export default function App() {
     if (viewMode !== 'view') return
     if (!editorRef.current || openDoc?.id !== currentDocId) return
     setViewerHtml(
-      renderMarkdown(editorRef.current.getText('lf'), {
-        // resolveWikiLink 는 href 를 돌려준다 — 이 화면은 항상 #/d/{id} (F-252.md 4.1)
-        resolveWikiLink: (target: unknown) => {
-          const match = resolveWikiTarget(target, docs)
-          return match ? `#/d/${match.id}` : null
-        },
-      }),
+      renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true }),
     )
-  }, [viewMode, openDoc, currentDocId, docs])
+  }, [viewMode, openDoc, currentDocId, resolveWikiHref])
+
+  // 검색 결과로 연 문서에 검색어 넘기기 — 새 EditorView 가 만들어진 뒤(자식 layout effect 뒤)에 적용한다 (specs/features/F-294.md 4.3)
+  useEffect(() => {
+    if (!pendingEditorSearch) return
+    if (currentDocId !== pendingEditorSearch.docId) return // 아직 그 문서가 아니다
+    if (openDoc?.id !== currentDocId) return // 본문이 아직 안 왔다 → 에디터가 없다
+    const view = editorRef.current?.view
+    if (!view) return
+    showSearchMatches(view, pendingEditorSearch.term)
+    setPendingEditorSearch(null) // 한 번만 쓴다
+  }, [pendingEditorSearch, openDoc, currentDocId])
 
   // 편집 모드 위키링크 표시·자동완성용 제목 목록 갱신 (F-131 3장) — 문서 생성·삭제·제목
   // 변경 때마다 에디터에 최신 목록을 반영한다. openDoc.id !== currentDocId 인 동안은(문서
@@ -965,6 +1196,12 @@ export default function App() {
     if (openDoc?.id !== currentDocId) return
     editorRef.current?.setLineNumbers(lineNumbersPref === 'on')
   }, [openDoc, currentDocId, lineNumbersPref])
+
+  // 문서 전환·최초 마운트로 에디터가 새로 생기면(항상 기본 테마로 만들어진다) 페인트 전에 테마를 맞춘다 — setLineNumbers 와 같은 패턴(F-260 2.3·2.4)
+  useLayoutEffect(() => {
+    if (openDoc?.id !== currentDocId) return
+    editorRef.current?.setTheme(resolvedTheme)
+  }, [openDoc, currentDocId, resolvedTheme])
 
   // 문서 전환·최초 마운트로 에디터가 새로 생기면 들여쓰기 값을 맞춘다 (F-154 2.3, 모르는 값은 4칸)
   useLayoutEffect(() => {
@@ -995,6 +1232,25 @@ export default function App() {
     editorRef.current?.setBreadcrumb(currentBreadcrumb, onNavigateFolder)
   }, [openDoc, currentDocId, currentBreadcrumb, onNavigateFolder])
 
+  // 모드 전환 스크롤 위치 복원 (F-295.md 5.2) — useLayoutEffect 라 같은 커밋에서 hidden 이 이미 떨어져 튐이 안 보이고, 줄 번호·테마·들여쓰기 재구성 뒤에 돈다
+  useLayoutEffect(() => {
+    const saved = scrollAnchorRef.current
+    if (!saved || saved.docId !== currentDocId) return
+    scrollAnchorRef.current = null
+
+    if (viewMode === 'view') {
+      const el = viewerRef.current
+      scrollViewerToAnchor(el, saved.anchor)
+      // 그려진 뒤(rAF 2회) 실측 보정 — 편집기의 scrollToAnchor(createEditor.ts 8.2)와 같은 이유
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollViewerToAnchor(el, saved.anchor)
+        })
+      })
+    } else {
+      editorRef.current?.scrollToAnchor(saved.anchor)
+    }
+  }, [viewMode, viewerHtml, currentDocId])
 
   // view 권한 문서를 열면 알림 띠를 보인다 (F-212.md 2.4) — 문서를 열 때 1회
   const notifiedViewDocRef = useRef<string | null>(null)
@@ -1041,12 +1297,18 @@ export default function App() {
     getText: (lineEnding: LineEnding | undefined) => editorRef.current?.getText(lineEnding ?? 'crlf') ?? '',
     onSaved: handleDocSaved,
     onSaveError: handleSaveError,
+    // 저장해 봤자 해로운 두 경우에만 막는다 — 잠금을 뺏긴 서버 문서는 그대로 내보내 423 충돌 사본을 만드는 게 설계다 (F-296.md 7.4)
+    blocked: isDeletedElsewhere || claimReadOnly,
   })
 
-  // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후 최신 flush·notifyChange 를 반영한다
+  // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후 최신 flush·notifyChange·handlePrintDoc·openSearch 를 반영한다
   useEffect(() => {
     docSaverFlushRef.current = docSaver.flush
     notifyChangeRef.current = docSaver.notifyChange
+    printDocRef.current = handlePrintDoc
+    // exportDisabled 와 같은 조건 (F-279.md 6.1) — bootPhase !== 'ready' 면 isEmpty 자체가 false 라 첫 항으로 충분하다
+    printDisabledRef.current = bootPhase !== 'ready' || currentDocId === null || Boolean(sharedDoc)
+    openSearchRef.current = openSearch
   })
 
   // hashchange 핸들러(위)가 항상 최신 docs·currentDocId 를 보도록 매 커밋 후 갱신한다
@@ -1058,13 +1320,14 @@ export default function App() {
     sharedDocRef.current = sharedDoc
     sharesOpenRef.current = sharesOpen
     helpOpenRef.current = helpOpen
-    // 받지 않는 때(F-145.md 2.1): 대화상자·공유 화면·공유 관리 페이지·저장소를 못 쓸 때(store.kind==='memory')
+    mapRouteRef.current = mapRoute
+    // 받지 않는 때(F-145.md 2.1): 대화상자·공유 화면·공유 관리 페이지·지도·저장소를 못 쓸 때(store.kind==='memory')
     dropBlockedRef.current = Boolean(
-      settingsOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen || store.kind === 'memory',
+      settingsOpen || searchOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen || mapRoute || store.kind === 'memory',
     )
     // 이미지는 저장소를 못 쓸 때(메모리 저장소)는 막지 않는다 (F-156.md 2.5) — #/help 화면은 편집기가 없어 차단 대상이 아니다 (F-244.md 3.3)
     imageDropBlockedRef.current = Boolean(
-      settingsOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen,
+      settingsOpen || searchOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen || mapRoute,
     )
     // view 권한·403 강등 문서·편집 잠금(F-213.md 2.3)에서는 이미지 올리기(붙여넣기·끌어놓기)를 막는다 (F-212.md 2.4)
     readOnlyDocRef.current = isReadOnlyDoc
@@ -1210,6 +1473,7 @@ export default function App() {
     if (viewMode === 'view') changeViewMode('live')
     await beforeLeaveDoc()
     setSharedDoc(null) // 공유 화면에서 새 문서 를 눌러도 화면을 떠난다 (F-130.md 4장, 자체 결정)
+    setMapRoute(null) // 지도의 "문서가 없습니다" 빈 상태에서 새 문서 를 눌러도 지도를 떠난다 (F-292.md 6.5)
     const targetFolderId = folderId !== undefined ? folderId : newDocFolderId()
     let doc: Doc
     try {
@@ -1239,12 +1503,13 @@ export default function App() {
   }
 
   async function selectDoc(id: string) {
-    // sharedDoc·공유 관리 페이지·도움말 페이지가 있으면 currentDocId 가 우연히 같아도 화면을 떠나야 한다 (ia.md 3.19, F-243.md 3.4, F-244.md 3.3)
-    if (id === currentDocId && !sharedDoc && !sharesOpen && !helpOpen) return
+    // sharedDoc·공유 관리 페이지·도움말 페이지·지도가 있으면 currentDocId 가 우연히 같아도 화면을 떠나야 한다 (ia.md 3.19, F-243.md 3.4, F-244.md 3.3, F-292.md 6.4 "노드 클릭 → 문서 열고 지도 닫기")
+    if (id === currentDocId && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute) return
     await beforeLeaveDoc()
     setSharedDoc(null)
     setSharesOpen(false)
     setHelpOpen(false)
+    setMapRoute(null)
     focusEditorRef.current = true
     setCurrentDocId(id)
     setPref('md.lastDocId', id)
@@ -1255,11 +1520,12 @@ export default function App() {
 
   // ----- 로고 클릭 → 홈 (F-232 3.3, F-244 3.3) — 이미 홈이거나 도움말 페이지의 `닫기` 도 이 함수를 그대로 쓴다 -----
   async function goHome() {
-    if (currentDocId === null && !sharedDoc && !sharesOpen && !helpOpen) return
+    if (currentDocId === null && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute) return
     await beforeLeaveDoc()
     setSharedDoc(null)
     setSharesOpen(false)
     setHelpOpen(false)
+    setMapRoute(null)
     setCurrentDocId(null)
     replaceHashUrl(null)
   }
@@ -1341,6 +1607,8 @@ export default function App() {
     if (viewMode === 'view') changeViewMode('live') // 제목 입력 포커스가 필요하다 (ia.md 3.3)
     await beforeLeaveDoc()
     setSharedDoc(null)
+    // 지도의 끊긴 링크 노드를 눌러도 이 흐름을 그대로 타므로(F-292.md 6.4), 새 문서를 만들며 지도를 닫는다
+    setMapRoute(null)
     let doc: Doc
     try {
       doc = await store.create({
@@ -1384,6 +1652,89 @@ export default function App() {
       store,
       onNotice: showNotice,
     })
+  }
+
+  // ----- .txt 평문 내보내기 (specs/features/F-278.md 5.1) -----
+  function handleExportDocAsText() {
+    if (!currentDoc || !openDoc || openDoc.id !== currentDocId) return
+    exportDocAsText({
+      handle: editorRef.current,
+      doc: currentDoc,
+      lineEnding: openDoc.lineEnding,
+      saver: { flush: () => docSaverFlushRef.current() },
+    })
+  }
+
+  // ----- HTML 파일 내보내기 (specs/features/F-280.md 4장) -----
+  function handleExportDocAsHtml() {
+    if (!currentDoc || !openDoc || openDoc.id !== currentDocId) return
+    void exportDocAsHtml({
+      handle: editorRef.current,
+      doc: currentDoc,
+      lineEnding: openDoc.lineEnding,
+      saver: { flush: () => docSaverFlushRef.current() },
+      store,
+      onNotice: showNotice,
+    })
+  }
+
+  // ----- 서식 있는 복사 (specs/features/F-280.md 5장) -----
+  function handleCopyDocAsRichText() {
+    if (!currentDoc || !openDoc || openDoc.id !== currentDocId) return
+    void copyDocAsRichText({
+      handle: editorRef.current,
+      doc: currentDoc,
+      lineEnding: openDoc.lineEnding,
+      saver: { flush: () => docSaverFlushRef.current() },
+      store,
+      onNotice: showNotice,
+    })
+  }
+
+  // ----- PDF (A4 인쇄) — specs/features/F-279.md 4.3 -----
+  function handlePrintDoc() {
+    if (!currentDoc || !openDoc || openDoc.id !== currentDocId || !editorRef.current) return
+    docSaverFlushRef.current() // 기다리지 않는다 (F-112 2.2 와 같다)
+    const html = renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref })
+    void printDoc({
+      root: printRootRef.current,
+      html,
+      title: currentDoc.title,
+      resolveAttachment,
+    })
+  }
+
+  // 로그인 + 오프라인이면 서버 첨부를 못 받아 내보내기를 막는다 (F-281.md 3.1)
+  const exportOffline = store.kind === 'server' && syncState?.online === false
+  // 검색 대화상자 오프라인 안내 — exportOffline 과 식은 같지만 뜻이 다른 이름이라 재사용하지 않는다 (F-288.md 7.5, 13장 Q8)
+  const searchOffline = store.kind === 'server' && syncState?.online === false
+
+  // ----- 전체 내보내기 — 설정 `데이터` 절 (specs/features/F-281.md 3.6) -----
+  async function handleExportAll() {
+    await docSaverFlushRef.current()
+    await downloadWorkspaceExport({
+      store: store as WorkspaceExportSourceStore,
+      scope: { kind: 'all' },
+      onProgress: ({ done, total }) => showNotice({ type: 'info', message: `내보내는 중… ${done}/${total}` }),
+      onNotice: showNotice,
+    })
+  }
+
+  // ----- 폴더 내보내기 — 사이드바 폴더 `⋯` 메뉴 (specs/features/F-281.md 3.7) -----
+  function handleExportFolder(id: string) {
+    if (exportOffline) {
+      showNotice({ type: 'error', message: '온라인일 때 내보낼 수 있습니다.' })
+      return
+    }
+    void (async () => {
+      await docSaverFlushRef.current()
+      await downloadWorkspaceExport({
+        store: store as WorkspaceExportSourceStore,
+        scope: { kind: 'folder', folderId: id },
+        onProgress: ({ done, total }) => showNotice({ type: 'info', message: `내보내는 중… ${done}/${total}` }),
+        onNotice: showNotice,
+      })
+    })()
   }
 
   // ----- .md 가져오기 (specs/features/F-114.md 2.2·2.3) -----
@@ -1443,6 +1794,170 @@ export default function App() {
     const files = Array.from(e.target.files ?? [])
     e.target.value = '' // 같은 파일을 연달아 고를 수 있게 (F-114.md 2.3)
     await runImportFiles(files)
+  }
+
+  // ----- zip 가져오기 — 설정 `데이터` 절 (specs/features/F-282.md 3.1~3.9) -----
+  function requestImportZip() {
+    closeSettings() // 설정 위에 미리보기를 겹쳐 열지 않는다 (3.1)
+    importZipInputRef.current?.click()
+  }
+
+  async function handleImportZipInputChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null
+    e.target.value = '' // 같은 파일을 연달아 고를 수 있게
+    if (!file) return
+    await docSaverFlushRef.current() // 지금 열린 문서가 갱신 대상일 수 있다 (3.1)
+    await previewImportZip(file)
+  }
+
+  // 1차 훑기 — manifest.json 은 판별에, .md·.markdown 은 일반 zip 미리보기의 이미지 참조·경고 집계에 쓴다. 3.3 은 "want 가 manifest.json 만" 이라 적었지만, 일반 zip 요약을 미리보기에서 보이려면 텍스트가 필요해 넣었다 — 이미지 바이트는 여전히 2차에서만 읽는다
+  async function previewImportZip(file: File) {
+    const names: string[] = []
+    let manifestBytes: Uint8Array | null = null
+    const mdContent = new Map<string, string>()
+    try {
+      for await (const entry of readZipEntries(file.stream(), {
+        want: (name) => name === 'manifest.json' || /\.(md|markdown)$/i.test(name),
+      })) {
+        names.push(entry.name)
+        if (entry.bytes === null) continue
+        if (entry.name === 'manifest.json') {
+          manifestBytes = entry.bytes
+          continue
+        }
+        try {
+          mdContent.set(entry.name, decodeMarkdown(entry.bytes).text)
+        } catch {
+          // UTF-8 이 아니면 미리보기에서는 참조를 못 찾고 넘어간다 — 적용 때 실패 목록에 들어간다 (3.7)
+        }
+      }
+    } catch {
+      showNotice({ type: 'error', message: ZIP_UNREADABLE_MESSAGE })
+      return
+    }
+    if (names.length === 0) {
+      showNotice({ type: 'error', message: ZIP_UNREADABLE_MESSAGE })
+      return
+    }
+
+    const kindResult = detectZipKind(manifestBytes)
+    if (kindResult.kind === 'rejected') {
+      showNotice({ type: 'error', message: kindResult.message })
+      return
+    }
+
+    const now = Date.now()
+    const zipPaths = new Set(names)
+    let plan: ImportPlan
+    if (kindResult.kind === 'workspace') {
+      const attachmentMetas = await store.listAttachments()
+      plan = planWorkspaceImport({
+        manifest: kindResult.manifest,
+        existingDocs: docsRef.current.map((d) => ({ id: d.id, updatedAt: d.updatedAt, role: d.role })),
+        existingFolders: foldersRef.current.map((f) => ({ id: f.id, parentId: f.parentId })),
+        zipPaths,
+        existingAttachmentIds: new Set(attachmentMetas.map((a) => a.id)),
+        now,
+      })
+    } else {
+      const entries: PlainEntryInput[] = names.map((name) => ({ name, content: mdContent.get(name) }))
+      plan = planPlainImport({ entries, now })
+    }
+
+    importFileRef.current = file
+    importPlanRef.current = plan
+    setImportState({ stage: 'preview', fileName: file.name, plan })
+  }
+
+  function cancelImportPreview() {
+    importFileRef.current = null
+    importPlanRef.current = null
+    setImportState(null)
+  }
+
+  function cancelImportProgress() {
+    importCancelRef.current = true
+  }
+
+  function closeImportResult() {
+    setImportState(null)
+  }
+
+  async function confirmImport() {
+    const file = importFileRef.current
+    const plan = importPlanRef.current
+    if (!file || !plan) return
+
+    const wantedPaths = new Set<string>([...plan.docs.map((d) => d.path), ...plan.attachments.map((a) => a.path)])
+    const total = plan.docs.length + plan.attachments.length
+    const updatedIds = new Set(plan.docs.filter((d) => d.action === 'update').map((d) => d.id))
+    const openBeforeId = currentDocIdRef.current
+
+    importCancelRef.current = false
+    setImportState({ stage: 'progress', fileName: file.name, done: 0, total })
+
+    const result = await applyImportPlan({
+      plan,
+      entries: readZipEntries(file.stream(), { want: (name) => wantedPaths.has(name) }),
+      store: store as ApplyStore,
+      isCancelled: () => importCancelRef.current,
+      onProgress: ({ done, total }) => setImportState({ stage: 'progress', fileName: file.name, done, total }),
+    })
+
+    importFileRef.current = null
+    importPlanRef.current = null
+
+    const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
+    setFolders(newFolders)
+    const strippedDocs = sortByUpdatedAtDesc(newDocs.map(stripContent))
+    setDocs(strippedDocs)
+
+    // 열려 있던 문서가 갱신 대상이었으면 에디터를 다시 마운트한다 — 안 하면 옛 EditorState 가 다음 저장 때 가져온 내용을 덮어쓴다 (3.9, F-213 2.3 과 같은 방식)
+    if (openBeforeId && updatedIds.has(openBeforeId) && openBeforeId === currentDocIdRef.current) {
+      const fresh = await store.get(openBeforeId)
+      if (fresh && fresh.id === currentDocIdRef.current) {
+        setOpenDoc({ id: fresh.id, content: fresh.content, lineEnding: fresh.lineEnding })
+        focusEditorRef.current = false
+        setEditorRemountNonce((n) => n + 1)
+      }
+    }
+
+    if (result.cancelled) {
+      showNotice({
+        type: 'warn',
+        message: `가져오기를 멈췄습니다. 문서 ${result.createdCount + result.updatedCount}개를 들였습니다.`,
+      })
+      setImportState(null)
+    } else if (result.failures.length === 0) {
+      showNotice({
+        type: 'info',
+        message:
+          result.updatedCount > 0
+            ? `문서 ${result.createdCount}개를 가져오고 ${result.updatedCount}개를 갱신했습니다.`
+            : `문서 ${result.createdCount}개를 가져왔습니다.`,
+      })
+      setImportState(null)
+    } else {
+      const allFailed = result.createdCount + result.updatedCount === 0
+      showNotice({
+        type: allFailed ? 'error' : 'warn',
+        message: allFailed ? '가져오지 못했습니다.' : `${result.failures.length}개를 가져오지 못했습니다.`,
+      })
+      setImportState({
+        stage: 'result',
+        fileName: file.name,
+        createdCount: result.createdCount,
+        updatedCount: result.updatedCount,
+        failures: result.failures,
+      })
+    }
+
+    if (result.quotaSkippedCount > 0) {
+      showNotice({
+        type: 'error',
+        message: `이미지 저장 공간(300MB)이 가득 차 이미지 ${result.quotaSkippedCount}개를 넣지 못했습니다.`,
+      })
+    }
   }
 
   // OS 파일 열기 재중복 방지 — idb 이고 판정 메서드가 둘 다 있을 때만 handle 로 찾는다 (F-231.md 3.3)
@@ -1638,6 +2153,23 @@ export default function App() {
     }
   }
 
+  // 다른 탭에서 지워진 문서 복구 `새 문서로 저장` — folderId 는 최상위로 고정한다(원래 폴더도 지워졌을 수 있다) (F-296.md 7.3)
+  async function saveAsNewDocAfterDeletedElsewhere() {
+    const text = editorRef.current?.getText(openDoc?.lineEnding ?? 'crlf') ?? ''
+    const doc = await store.create({
+      title: currentDoc?.title ?? '제목 없는 문서',
+      content: text,
+      lineEnding: openDoc?.lineEnding ?? 'crlf',
+      folderId: null,
+    })
+    setDocs((prev) => sortByUpdatedAtDesc([...prev, stripContent(doc)]))
+    setDeletedElsewhereId(null)
+    setCurrentDocId(doc.id)
+    setPref('md.lastDocId', doc.id)
+    pushHashUrl(doc.id)
+    setNotice(null)
+  }
+
   // ----- 폴더 CRUD (specs/features/F-126.md 3장) -----
   async function handleCreateFolder(parentId: string | null): Promise<Folder | null> {
     try {
@@ -1789,15 +2321,65 @@ export default function App() {
     setSettingsOpen(false)
   }
 
+  // 검색 대화상자 D-6 (specs/features/F-287.md 3.5)
+  function openSearch() {
+    if (bootPhase !== 'ready') return // 부팅 중 store 는 임시 memoryStore 라 인덱스가 빈다
+    setSearchOpen(true) // 먼저 — 대화상자가 먼저 그려져야 한다 (4.2)
+    closeSidebarIfNarrow()
+  }
+
+  function closeSearch() {
+    setSearchOpen(false)
+  }
+
+  // 검색 결과에서 문서 열기 (F-287.md 4.6) — 지금 문서를 그대로 두지 않고 그 문서로 이동한다
+  // term 이 있으면 그 문서의 찾기 패널에 검색어를 넣는다 (specs/features/F-294.md 4.3)
+  async function openDocFromSearch(id: string, term: string | null) {
+    setSearchOpen(false)
+    // 문서 전환 전에 예약해야 한다 — 뒤에 두면 beforeLeaveDoc() 왕복 사이에 openDoc 이 먼저 도착해 effect 가 헛돈다
+    setPendingEditorSearch(term && viewMode !== 'view' ? { docId: id, term } : null)
+    await selectDoc(id)
+    // 편집·원문 모드면 에디터에 포커스를 준다 — Dialog 기본 복귀만으로는 사라진 요소를 가리키거나 사이드바로 돌아간다 (4.6)
+    if (viewMode !== 'view') {
+      setTimeout(() => editorRef.current?.focus(), 0)
+    }
+  }
+
   // 사이드바 `도움말` → 전용 페이지로 이동 (F-244.md 3.3, 3.5)
   async function openHelp() {
     await beforeLeaveDoc()
     setSharedDoc(null)
     setSharesOpen(false)
+    setMapRoute(null)
     setCurrentDocId(null)
     setHelpOpen(true)
     pushHelpHash()
     closeSidebarIfNarrow()
+  }
+
+  // ----- 위키링크 지도 S-8 — currentDocId 는 비우지 않는다(F-138 3.2 와 같은 방식, F-292.md 6.1) -----
+  async function openMap() {
+    await beforeLeaveDoc()
+    setSharedDoc(null)
+    setSharesOpen(false)
+    setHelpOpen(false)
+    const anchorId = currentDocId
+    setMapRoute({ centerDocId: anchorId, returnDocId: anchorId })
+    history.pushState(null, '', `${location.pathname}${location.search}${formatMapHash(anchorId ?? undefined)}`)
+    closeSidebarIfNarrow()
+  }
+
+  // 닫기 — 지도를 열 때의 문서로 돌아간다(replace). 열 때 문서가 없었으면 홈으로(6.1)
+  function closeMap() {
+    const returnId = mapRoute?.returnDocId ?? null
+    setMapRoute(null)
+    replaceHashUrl(returnId)
+  }
+
+  // Ctrl(⌘)+클릭 — 그 노드를 중심으로 다시 그린다. 지도는 닫지 않는다(6.4)
+  function recenterMap(id: string) {
+    setMapRoute((prev) => (prev ? { ...prev, centerDocId: id } : prev))
+    history.replaceState(null, '', `${location.pathname}${location.search}${formatMapHash(id)}`)
   }
 
   // 도움말 페이지 `내 문서로 복사` (F-244.md 3.4) — 중복 검사 없이 그냥 하나 더 만든다
@@ -1845,7 +2427,10 @@ export default function App() {
     setThemePref(v)
     setPref('md.theme', v)
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    document.documentElement.dataset.theme = resolveTheme(v, prefersDark)
+    const resolved = resolveTheme(v, prefersDark)
+    document.documentElement.dataset.theme = resolved
+    setResolvedTheme(resolved)
+    editorRef.current?.setTheme(resolved) // F-260 2.4 — mermaid 위젯 즉시 재렌더
   }
 
   // 설정 마지막 항목: 줄 번호(거터) 켜기·끄기. 실제 반영은 아래 useLayoutEffect 가 한다 (F-147 2장)
@@ -2068,8 +2653,22 @@ export default function App() {
     refocusContextMenuTarget(cm)
   }
 
+  // 스크롤 위치 유지 (F-295.md 5.2) — 기준값은 맨 앞에서 읽는다. 이 시점의 DOM 은 아직 "떠나는 화면" 이다(React 19 커밋 지연, 4.1)
   function changeViewMode(mode: string) {
     const v = mode as 'live' | 'raw' | 'view'
+    if (v === viewMode) return // 5.7 — 같은 모드면 기준값만 갱신되고 복원 effect 는 안 돈다
+
+    if (currentDocId) {
+      const anchor = viewMode === 'view' ? readViewerAnchor(viewerRef.current) : (editorRef.current?.getScrollAnchor() ?? null)
+      if (anchor !== null) scrollAnchorRef.current = { docId: currentDocId, anchor }
+    }
+    // 5.2a — 보기로 갈 때 변환을 여기서 한다. passive effect(1050행대)에 맡기면 복원 시점에 편집 전 옛 HTML 로 좌표를 잰다
+    if (v === 'view' && editorRef.current) {
+      setViewerHtml(
+        renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true }),
+      )
+    }
+
     setViewMode(v)
     setPref('md.viewMode', v)
     editorRef.current?.setViewMode(v)
@@ -2117,6 +2716,11 @@ export default function App() {
   const isEmpty = bootPhase === 'ready' && currentDocId === null
   const showEditor = bootPhase === 'ready' && !isEmpty
 
+  // 검색 인덱스 재사용 범위 (specs/features/F-287.md 4.2) — searchIndex.ts 는 localStorage 를 읽지 않는다
+  const searchDialogScope = searchScope(store.kind, account.state === 'in' ? account.id : null)
+  // 지도 인덱스 재사용 범위 — 같은 방식(specs/features/F-292.md 5.3)
+  const mapDialogScope = mapIndexScope(store.kind, account.state === 'in' ? account.id : null)
+
   // 탭바 표시 조건 (F-233 3.1) — 자리는 항상 유지, 조건에 안 맞으면 안 그린다.
   // 좁은 창도 보여준다(2026-09-16 사용자 "모바일일때가 툴바 더 필요할거임") — TopBar 가 narrow 면 상단바 밑 자기 줄에 그린다
   const showToolbar =
@@ -2124,6 +2728,8 @@ export default function App() {
     !isEmpty &&
     !sharedDoc &&
     !isReadOnlyDoc &&
+    // 지도는 편집기를 숨기고 그 자리를 통째로 쓴다 — 서식 단추가 누를 대상이 없다 (F-292 6.1)
+    !mapRoute &&
     (viewMode === 'live' || viewMode === 'raw')
 
   // 상단바 — 좁은 창은 앞 묶음을 담아 창 전체 위에, 넓은 창은 앞 묶음 없이 메인 열 안에만 (F-159 2.1)
@@ -2133,6 +2739,7 @@ export default function App() {
       sidebarOpen={sidebarOpen}
       onToggleSidebar={toggleSidebar}
       toggleButtonRef={toggleButtonRef}
+      onOpenSearch={openSearch}
       viewMode={viewMode}
       viewModeDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
       onChangeViewMode={changeViewMode}
@@ -2151,7 +2758,11 @@ export default function App() {
       onInvite={canInviteCurrentDoc ? requestInviteCurrentDoc : undefined}
       wikiDocs={docs}
       exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
-      onExportDoc={handleExportDoc}
+      onExportMd={handleExportDoc}
+      onExportTxt={handleExportDocAsText}
+      onPrintDoc={handlePrintDoc}
+      onExportHtml={handleExportDocAsHtml}
+      onCopyRich={handleCopyDocAsRichText}
       account={account}
       onAccountBeforeNavigate={() => docSaverFlushRef.current()}
       showToolbar={showToolbar}
@@ -2172,8 +2783,17 @@ export default function App() {
         ref={importInputRef}
         type="file"
         accept=".md,text/markdown"
+        data-import="md"
         hidden
         onChange={handleImportInputChange}
+      />
+      <input
+        ref={importZipInputRef}
+        type="file"
+        accept=".zip,application/zip"
+        data-import="zip"
+        hidden
+        onChange={handleImportZipInputChange}
       />
       <div className="app-body">
         <Sidebar
@@ -2188,6 +2808,7 @@ export default function App() {
           currentDocId={currentDocId}
           openFolderIds={openFolders}
           onToggleFolder={toggleFolderOpen}
+          onCollapseAllFolders={collapseAllFolders}
           onSelectDoc={selectDoc}
           onCreateDoc={createNewDoc}
           onImportDoc={requestImport}
@@ -2201,6 +2822,8 @@ export default function App() {
           onTogglePin={handleTogglePin}
           onOpenSettings={openSettings}
           onOpenHelp={openHelp}
+          onOpenMap={openMap}
+          onOpenSearch={openSearch}
           canInstall={canInstall}
           onInstall={install}
           width={displaySidebarWidth}
@@ -2209,6 +2832,7 @@ export default function App() {
           isServerStore={store.kind === 'server'}
           onNotice={showNotice}
           onRequestInviteFolder={requestInviteFolder}
+          onExportFolder={handleExportFolder}
         />
         {narrow && sidebarOpen && (
           <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
@@ -2249,7 +2873,24 @@ export default function App() {
               <HelpPage onClose={goHome} onCopy={copyHelpToDoc} />
             </div>
           )}
-          {!sharedDoc && !sharesOpen && !helpOpen && isEmpty && (
+          {!sharedDoc && !sharesOpen && !helpOpen && mapRoute && (
+            <div className="content-area">
+              <Suspense fallback={<p className="map-status">연결을 읽는 중…</p>}>
+                <MapPage
+                  docCount={docs.length}
+                  store={store}
+                  scope={mapDialogScope}
+                  centerDocId={mapRoute.centerDocId}
+                  onOpenDoc={selectDoc}
+                  onOpenWikiLink={handleOpenWikiLink}
+                  onRecenter={recenterMap}
+                  onClose={closeMap}
+                  onCreateDoc={() => createNewDoc()}
+                />
+              </Suspense>
+            </div>
+          )}
+          {!sharedDoc && !sharesOpen && !helpOpen && !mapRoute && isEmpty && (
             <div className="content-area">
               <EmptyState
                 hasDocs={docs.length > 0}
@@ -2262,10 +2903,8 @@ export default function App() {
             </div>
           )}
           {showEditor && (
-            // 공유 화면(sharedDoc)이 떠 있는 동안 편집 영역을 언마운트하지 않고 hidden 으로만
-            // 숨긴다(F-138 3.2) — 언마운트하면 같은 문서로 돌아올 때 EditorView 가 새로
-            // 만들어져 그 사이 저장된 편집을 옛 openDoc.content 로 덮어쓴다
-            <div className="content-area" ref={contentAreaRef} hidden={Boolean(sharedDoc)}>
+            // 공유 화면·지도가 떠 있는 동안 편집 영역을 언마운트하지 않고 hidden 으로만 숨긴다 — 언마운트하면 EditorView 가 새로 만들어져 저장된 편집을 덮어쓴다(F-138 3.2, F-292.md 6.1)
+            <div className="content-area" ref={contentAreaRef} hidden={Boolean(sharedDoc) || Boolean(mapRoute)}>
               <div className="editor-slot" hidden={viewMode === 'view'}>
                 {openDoc?.id === currentDocId && (
                   <Editor
@@ -2293,6 +2932,7 @@ export default function App() {
                   key={currentDocId}
                   ref={viewerRef}
                   html={viewerHtml}
+                  theme={resolvedTheme}
                   title={currentDoc?.title ?? ''}
                   breadcrumb={currentBreadcrumb}
                   onNavigateFolder={onNavigateFolder}
@@ -2312,7 +2952,7 @@ export default function App() {
               )}
             </div>
           )}
-          {!sharedDoc && showEditor && (
+          {!sharedDoc && !mapRoute && showEditor && (
             <StatusBar
               line={stats.line}
               col={stats.col}
@@ -2386,8 +3026,29 @@ export default function App() {
         onChangeIndent={changeIndent}
         lineNumbers={lineNumbersPref}
         onChangeLineNumbers={changeLineNumbers}
+        onExportAll={handleExportAll}
+        exportAllDisabled={exportOffline}
+        onImport={requestImportZip}
         onClose={closeSettings}
       />
+      <SearchDialog
+        open={searchOpen}
+        store={store}
+        scope={searchDialogScope}
+        beforeIndex={beforeLeaveDoc}
+        onOpenDoc={openDocFromSearch}
+        onClose={closeSearch}
+        selectQueryRef={selectSearchQueryRef}
+        offline={searchOffline}
+      />
+      <ImportPreviewDialog
+        state={importState}
+        onCancel={importState?.stage === 'progress' ? cancelImportProgress : cancelImportPreview}
+        onConfirm={confirmImport}
+        onClose={closeImportResult}
+      />
+      {/* 인쇄 전용 영역 — printDoc() 이 채운다. .app-shell 의 마지막 직계 자식이어야 한다 (F-279.md 4.2) */}
+      <div className="viewer print-root" ref={printRootRef} aria-hidden="true" inert />
     </div>
   )
 }

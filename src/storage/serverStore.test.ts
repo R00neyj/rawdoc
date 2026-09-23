@@ -43,6 +43,7 @@ function makeFakeServer() {
   let serverError = false
   let usage = { used: 0, limit: 314_572_800 }
   let forceUploadQuota = false
+  let forceIdTaken = false
   const deleteFolderCalls: Array<{ id: string; contents: string | null }> = []
 
   function jsonResponse(status: number, data?: unknown): Response {
@@ -63,6 +64,7 @@ function makeFakeServer() {
       return jsonResponse(200, [...docs.values()].map((d) => ({ ...d, content: undefined })))
     }
     if (path === '/api/docs' && method === 'POST') {
+      if (forceIdTaken) return jsonResponse(409, { error: 'id_taken' })
       const body = JSON.parse(String(init.body)) as Partial<FakeDoc>
       if (body.id && docs.has(body.id)) return jsonResponse(200, docs.get(body.id))
       const now = Date.now()
@@ -72,10 +74,10 @@ function makeFakeServer() {
         content: body.content ?? '',
         lineEnding: body.lineEnding ?? 'lf',
         folderId: body.folderId ?? null,
-        pinnedAt: null,
+        pinnedAt: typeof body.pinnedAt === 'number' ? body.pinnedAt : null,
         version: 1,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: typeof body.createdAt === 'number' ? body.createdAt : now,
+        updatedAt: typeof body.updatedAt === 'number' ? body.updatedAt : now,
       }
       docs.set(doc.id, doc)
       return jsonResponse(201, doc)
@@ -200,6 +202,9 @@ function makeFakeServer() {
     },
     setForceUploadQuota: (v: boolean) => {
       forceUploadQuota = v
+    },
+    setForceIdTaken: (v: boolean) => {
+      forceIdTaken = v
     },
     bumpVersion: (id: string) => {
       const d = docs.get(id)
@@ -635,6 +640,64 @@ describe('serverStore', () => {
 
       expect(store.syncState?.pending).toBe(0)
       expect(await store.get(doc.id)).toBeNull()
+    })
+  })
+
+  describe('가져오기 선택 필드 (F-282.md 3.11·3.14)', () => {
+    it('create 에 id·createdAt·updatedAt·pinnedAt 을 주면 캐시·서버 모두에 그대로 실리고, 이미 있는 id 면 던진다', async () => {
+      const server = makeFakeServer()
+      vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+      const store = await createServerStore('u1', { dbName: freshDbName() })
+
+      const doc = await store.create({ title: 'A', content: '내용', lineEnding: 'lf', id: 'fixed-id', createdAt: 111, updatedAt: 222, pinnedAt: 333 })
+      expect(doc.id).toBe('fixed-id')
+      expect(doc.createdAt).toBe(111)
+      expect(doc.updatedAt).toBe(222)
+      expect(doc.pinnedAt).toBe(333)
+
+      await tick()
+      expect(server.docs.get('fixed-id')?.createdAt).toBe(111)
+      expect(server.docs.get('fixed-id')?.updatedAt).toBe(222)
+      expect(server.docs.get('fixed-id')?.pinnedAt).toBe(333)
+
+      await expect(store.create({ title: 'B', content: '', lineEnding: 'lf', id: 'fixed-id' })).rejects.toThrow()
+    })
+
+    it('createFolder 에 id 를 주면 그대로 쓰고, 이미 있는 id 면 던진다', async () => {
+      const server = makeFakeServer()
+      vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+      const store = await createServerStore('u1', { dbName: freshDbName() })
+
+      const folder = await store.createFolder({ name: 'A', id: 'fixed-folder' })
+      expect(folder.id).toBe('fixed-folder')
+
+      await expect(store.createFolder({ name: 'B', id: 'fixed-folder' })).rejects.toThrow()
+    })
+
+    it('putAttachment 에 id 를 주면 WebP 변환을 건너뛰고, 이미 있으면 다시 올리지 않고 그대로 돌려준다', async () => {
+      const server = makeFakeServer()
+      vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+      const store = await createServerStore('u1', { dbName: freshDbName() })
+
+      const blob = new Blob([new Uint8Array([1, 2, 3, 4])])
+      const first = await store.putAttachment({ blob, mime: 'image/png', ext: 'png', width: 1, height: 1, id: 'fixedattachid01' })
+      expect(first).toEqual({ id: 'fixedattachid01', ext: 'png' }) // webp 로 안 바뀐다
+
+      const dup = await store.putAttachment({ blob: new Blob([new Uint8Array([9])]), mime: 'image/png', ext: 'png', width: 1, height: 1, id: 'fixedattachid01' })
+      expect(dup).toEqual({ id: 'fixedattachid01', ext: 'png' })
+    })
+
+    it('id_taken 이면 전용 문구를 알린다', async () => {
+      const server = makeFakeServer()
+      server.setForceIdTaken(true)
+      vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+      const notices: Array<{ type: string; message: string }> = []
+      const store = await createServerStore('u1', { dbName: freshDbName(), onNotice: (n) => notices.push(n) })
+
+      await store.create({ title: 'T', content: 'a', lineEnding: 'lf', id: 'clashing-id' })
+      await tick(20)
+
+      expect(notices.some((n) => n.message.includes('번호가 겹쳐'))).toBe(true)
     })
   })
 })

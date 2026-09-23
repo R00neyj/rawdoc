@@ -165,6 +165,7 @@ test.describe('F-233 A6 설정 토글', () => {
     await expect(page.locator('.editor-toolbar')).toBeVisible()
 
     await page.getByRole('button', { name: '설정', exact: true }).click()
+    await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '편집기' }).click() // F-290 — 탭바는 편집기 탭
     await page.locator('#toolbar-label').locator('..').getByRole('radio', { name: '숨김' }).click()
     await page.getByRole('button', { name: '닫기', exact: true }).click()
 

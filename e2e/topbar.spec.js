@@ -6,8 +6,8 @@ import {
   resizeWindow,
   rectOf,
   waitTransitionEnd,
-  currentDocId,
   setPrefBeforeLoad,
+  EXPORT_BUTTON_LABEL,
 } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
@@ -81,7 +81,7 @@ const BUTTON_LABELS = [
   '원문 — 마크다운 기호 그대로 편집',
   '보기 — 읽기 전용으로 보기',
   '공유 — 링크·마크다운 복사',
-  '.md 파일로 내보내기',
+  EXPORT_BUTTON_LABEL,
 ]
 
 test.describe('F-142 상단바 버튼·툴팁', () => {
@@ -103,7 +103,7 @@ test.describe('F-142 상단바 버튼·툴팁', () => {
       await openApp(page)
       await importMarkdown(page, { content: '내용\n' })
       await resizeWindow(page, width)
-      const exportBtn = page.getByRole('button', { name: '.md 파일로 내보내기' })
+      const exportBtn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
       await exportBtn.hover()
       await page.waitForTimeout(450) // 3.2 "400ms 뒤 표시" — 지연 자체를 확인하는 자리라 고정 대기
       const tooltipRect = await exportBtn.evaluate((el) => {
@@ -145,7 +145,7 @@ test.describe('F-142 상단바 버튼·툴팁', () => {
     await page.getByRole('button', { name: '삭제', exact: true }).click()
 
     await expect(page.getByRole('button', { name: '공유 — 링크·마크다운 복사' })).toBeDisabled()
-    await expect(page.getByRole('button', { name: '.md 파일로 내보내기' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })).toBeDisabled()
   })
 })
 
@@ -194,7 +194,7 @@ test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () 
     await openApp(page)
     const head = page.locator('.sidebar-head')
     await expect(head).toHaveCount(1)
-    const search = page.getByRole('button', { name: '검색 — 준비 중' })
+    const search = page.getByRole('button', { name: '검색', exact: true })
     const toggle = page.getByRole('button', { name: '사이드바 접기' })
     const sidebar = page.locator('.sidebar')
     const brandIcon = page.locator('.brand-icon')
@@ -265,7 +265,7 @@ test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () 
     expect(Math.abs(sidebarRect2.width - 48)).toBeLessThanOrEqual(1)
   })
 
-  test('F-159 A5 (구 F-151 A5) 사이드바 머리 줄 — 펼침·레일에 있고 좁은 창엔 없다, 레일 위쪽 4개(검색 포함)', async ({ page }) => {
+  test('F-159 A5 (구 F-151 A5) 사이드바 머리 줄 — 펼침·레일에 있고 좁은 창엔 없다, 레일 위쪽 5개(검색·지도 포함)', async ({ page }) => {
     await openApp(page)
     await expect(page.locator('.sidebar-head')).toHaveCount(1)
     await expect(page.locator('.sidebar-scroll').getByRole('button', { name: /검색/ })).toHaveCount(0)
@@ -273,11 +273,12 @@ test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () 
     await page.locator('.sidebar-toggle').click() // 레일로 접기
     await expect(page.locator('.sidebar-head--rail')).toHaveCount(1)
     const railButtons = page.locator('.sidebar-rail-scroll .rail-btn')
-    await expect(railButtons).toHaveCount(4)
-    await expect(railButtons.first()).toHaveAttribute('aria-label', '검색 — 준비 중')
+    await expect(railButtons).toHaveCount(5)
+    await expect(railButtons.first()).toHaveAttribute('aria-label', '검색')
     await expect(railButtons.nth(1)).toHaveAttribute('aria-label', '새 문서')
     await expect(railButtons.nth(2)).toHaveAttribute('aria-label', '새 폴더')
     await expect(railButtons.nth(3)).toHaveAttribute('aria-label', '가져오기')
+    await expect(railButtons.nth(4)).toHaveAttribute('aria-label', '지도') // F-292 가 더했다
 
     await page.locator('.sidebar-toggle').click() // 펼침으로
     await resizeWindow(page, 900)
@@ -296,7 +297,7 @@ test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () 
     await expect(toggle).toBeFocused()
 
     await page.keyboard.press('Tab')
-    await expect(page.getByRole('button', { name: '검색 — 준비 중' })).toBeFocused()
+    await expect(page.getByRole('button', { name: '검색', exact: true })).toBeFocused()
 
     // 상단바(편집 모드 버튼) 바로 앞은 너비 손잡이(separator)이거나, 탭바(F-233, 기본
     // 켜짐)가 있으면 탭바 안이어야 한다 — 제목 입력은 빠졌다(F-217.md 2.5)
@@ -328,21 +329,22 @@ test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () 
     await openApp(page)
     const handle = page.locator('.sidebar-resize-handle')
     await handle.dblclick()
-    await expect(handle).toHaveAttribute('aria-valuenow', '224')
+    await expect(handle).toHaveAttribute('aria-valuenow', '300')
 
     await handle.focus()
     await page.keyboard.press('ArrowRight')
     await page.keyboard.press('ArrowRight')
-    await expect(handle).toHaveAttribute('aria-valuenow', '256')
+    await expect(handle).toHaveAttribute('aria-valuenow', '332')
     await waitTransitionEnd(page.locator('.sidebar'))
     const sidebarRect = await rectOf(page.locator('.sidebar'))
-    expect(Math.abs(sidebarRect.width - 256)).toBeLessThanOrEqual(1)
+    // 허용치는 같은 명세의 A5 들과 같은 2px — 기본값이 300 이 된 뒤 1.375px 어긋나 걸렸다 (2026-09-21)
+    expect(Math.abs(sidebarRect.width - 332)).toBeLessThanOrEqual(2)
 
     await page.keyboard.press('ArrowLeft')
-    await expect(handle).toHaveAttribute('aria-valuenow', '240')
+    await expect(handle).toHaveAttribute('aria-valuenow', '316')
 
     await page.reload()
-    await expect(page.locator('.sidebar-resize-handle')).toHaveAttribute('aria-valuenow', '240')
+    await expect(page.locator('.sidebar-resize-handle')).toHaveAttribute('aria-valuenow', '316')
   })
 })
 
@@ -410,26 +412,7 @@ test.describe('F-151 상단바 앞 묶음(토글·검색)', () => {
     expect(prefAfter).toBe(prefBefore)
   })
 
-  test('F-151 A6 검색 버튼 — 클릭·Enter 해도 아무 변화 없음', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '내용\n' })
-    const search = page.getByRole('button', { name: '검색 — 준비 중' })
-    await expect(search).toHaveAttribute('aria-disabled', 'true')
-
-    const docIdBefore = await currentDocId(page)
-    const docCountBefore = await page.locator('.tree-row').count()
-    const urlBefore = page.url()
-
-    await search.click({ force: true }) // aria-disabled='true' 라 Playwright 기본 클릭 판정을 우회한다
-    await search.focus()
-    await page.keyboard.press('Enter')
-
-    expect(await currentDocId(page)).toBe(docIdBefore)
-    expect(await page.locator('.tree-row').count()).toBe(docCountBefore)
-    expect(page.url()).toBe(urlBefore)
-    await expect(search).toBeFocused()
-  })
-
+  // F-151 A6(검색 버튼 — 준비 중)은 F-287 로 대체됐다. 검색 버튼 동작은 e2e/docSearch.spec.js
 })
 
 test.describe('F-143 A10 그 밖의 기능 버튼 아이콘', () => {

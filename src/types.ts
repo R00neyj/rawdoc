@@ -60,13 +60,25 @@ export type Store = {
     content: string
     lineEnding: LineEnding
     folderId?: string | null
+    // 가져오기(F-282)·이관이 원본 값을 유지할 때만 준다. id 가 이미 있으면 던진다(덮지 않는다) (F-282.md 3.11)
+    id?: string
+    createdAt?: number
+    updatedAt?: number
+    pinnedAt?: number | null
   }): Promise<Doc>
   update(id: string, patch: { title?: string; content?: string }): Promise<Doc>
   remove(id: string): Promise<void>
   moveDoc(id: string, folderId: string | null): Promise<Doc>
   setPinned(id: string, pinned: boolean): Promise<Doc>
   listFolders(): Promise<Folder[]>
-  createFolder(input: { name: string; parentId?: string | null }): Promise<Folder>
+  createFolder(input: {
+    name: string
+    parentId?: string | null
+    // 가져오기(F-282)가 id 를 유지할 때만 준다. 이미 있으면 던진다. createdAt·updatedAt 은 로컬 저장소에서만 쓰인다(서버는 안 받는다) (F-282.md 3.11)
+    id?: string
+    createdAt?: number
+    updatedAt?: number
+  }): Promise<Folder>
   renameFolder(id: string, name: string): Promise<Folder>
   moveFolder(id: string, parentId: string | null): Promise<Folder>
   removeFolder(id: string, mode?: FolderDeleteMode): Promise<void>
@@ -76,6 +88,8 @@ export type Store = {
     ext: AttachmentExt
     width: number
     height: number
+    // 주면 이 id 로 저장한다. 이미 있으면 덮지 않고 기존 것을 그대로 돌려준다. serverStore 는 WebP 변환을 건너뛴다 (F-282.md 3.11)
+    id?: string
   }): Promise<{ id: string; ext: AttachmentExt }>
   getAttachment(id: string): Promise<Attachment | null>
   listAttachments(): Promise<AttachmentMeta[]>

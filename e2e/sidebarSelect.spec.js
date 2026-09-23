@@ -6,9 +6,10 @@ async function newDoc(page, name) {
   await importMarkdown(page, { name: `${name}.md`, content: `${name}\n` })
 }
 
-// 사이드바 안 정확한 이름의 버튼(문서 제목·폴더 이름 라벨) 하나
+// 사이드바 안 정확한 이름의 항목 라벨 하나 — 폴더는 button, 문서는 link 다 (F-296.md 11장)
 function itemButton(page, name) {
-  return page.locator('.sidebar').getByRole('button', { name, exact: true })
+  const sidebar = page.locator('.sidebar')
+  return sidebar.getByRole('button', { name, exact: true }).or(sidebar.getByRole('link', { name, exact: true }))
 }
 
 function treeRowOf(locator) {
@@ -141,7 +142,8 @@ test.describe('F-255 사이드바 여러 항목 선택·우클릭 메뉴', () =>
 
     await treeRowOf(itemButton(page, 'A')).click({ button: 'right' })
     await expect(page.getByRole('menuitem', { name: '새 폴더로 넣기' })).toBeVisible()
-    await expect(page.getByRole('menuitem', { name: '최상위로 옮기기' })).toBeVisible()
+    // A·B 는 둘 다 이미 최상위라 이 항목은 안 보인다 (2026-09-22 사용자 신고로 조건 추가)
+    await expect(page.getByRole('menuitem', { name: '최상위로 옮기기' })).toHaveCount(0)
     await expect(page.getByRole('menuitem', { name: '삭제' })).toBeVisible()
     await expect(page.getByRole('menuitem', { name: '폴더로 이동…' })).not.toBeVisible() // 단일 전용은 숨긴다
     await page.keyboard.press('Escape')
@@ -278,5 +280,54 @@ test.describe('F-255 사이드바 여러 항목 선택·우클릭 메뉴', () =>
 
     await page.locator('.tree-rename-input').click({ button: 'right' })
     await expect(page.locator('.item-menu-list[data-state="open"]')).toHaveCount(0)
+  })
+
+  // 2026-09-22 사용자 신고 세 건 — 전부 `고정된 문서가 두 줄로 나온다`(F-132)에서 왔거나 메뉴 조건 문제다
+  test('F-255 D22 폴더 안 항목이 섞여야 `최상위로 옮기기` 가 나오고, 누르면 실제로 올라온다', async ({ page }) => {
+    await openApp(page)
+    await newFolder(page, '폴더1')
+    await newDoc(page, 'A')
+    await newDoc(page, 'B')
+    await moveDocToFolder(page, 'B', '폴더1')
+    await expect(folderItem(page, '폴더1')).toContainText('B')
+
+    await itemButton(page, 'A').click()
+    await itemButton(page, 'B').click({ modifiers: ['Control'] })
+    await treeRowOf(itemButton(page, 'A')).click({ button: 'right' })
+    await page.locator('.item-menu-list:not([inert])').getByRole('menuitem', { name: '최상위로 옮기기' }).click()
+
+    await expect(folderItem(page, '폴더1')).not.toContainText('B')
+  })
+
+  test('F-255 D23 고정된 문서를 트리에서 우클릭해도 메뉴는 하나만 열리고 `고정 해제` 가 먹는다', async ({ page }) => {
+    await openApp(page)
+    await newDoc(page, 'A')
+    const list = page.locator('.doc-list')
+    await list.getByRole('button', { name: 'A 메뉴' }).click()
+    await page.locator('.item-menu-list:not([inert])').getByRole('menuitem', { name: '상단 고정' }).click()
+    await expect(page.locator('.pinned-list .tree-row')).toHaveCount(1)
+
+    await treeRowOf(list.getByRole('link', { name: 'A', exact: true })).click({ button: 'right' })
+    await expect(page.locator('.item-menu-list[data-state="open"]')).toHaveCount(1)
+    await page.locator('.item-menu-list:not([inert])').getByRole('menuitem', { name: '고정 해제' }).click()
+    await expect(page.locator('.pinned-list')).toHaveCount(0)
+  })
+
+  test('F-255 D24 고정된 문서의 트리 줄을 Shift+클릭하면 그 줄 기준으로 범위를 센다', async ({ page }) => {
+    await openApp(page)
+    await newDoc(page, 'A')
+    await newDoc(page, 'B')
+    await newDoc(page, 'C') // 트리 순서는 최근 수정순 — C, B, A
+    const list = page.locator('.doc-list')
+    await list.getByRole('button', { name: 'B 메뉴' }).click()
+    await page.locator('.item-menu-list:not([inert])').getByRole('menuitem', { name: '상단 고정' }).click()
+    await expect(page.locator('.pinned-list .tree-row')).toHaveCount(1)
+
+    await list.getByRole('link', { name: 'A', exact: true }).click()
+    await list.getByRole('link', { name: 'B', exact: true }).click({ modifiers: ['Shift'] })
+
+    // B 의 트리 줄부터 A 까지 두 개만 — C 는 화면에서 그 위에 있으므로 들어오면 안 된다
+    await expect(page.locator('.doc-list .tree-row--selected')).toHaveCount(2)
+    await expect(treeRowOf(list.getByRole('link', { name: 'C', exact: true }))).not.toHaveClass(/tree-row--selected/)
   })
 })

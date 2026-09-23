@@ -1,22 +1,92 @@
-// 마케팅 랜딩 페이지 /welcome — GEO 대응을 위해 React 번들 대신 완결된 정적 HTML 문자열을 반환한다 (F-239.md 2장)
+// 랜딩 페이지 / — GEO 대응을 위해 React 번들 대신 완결된 정적 HTML 문자열을 반환한다 (F-239.md 2장, F-271.md 4장, F-272.md 5.4)
 import brand from '../brand.config'
+import { APP_COOKIE, EARLY_APP_KEYS, LANDING_DONE_KEY, buildAppCookie } from '../src/lib/appEntry'
+import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS } from '../src/lib/siteChrome'
+import { SITE_URL } from '../src/lib/siteMeta'
 
-const siteUrl = 'https://rawdoc.app/'
+const siteUrl = SITE_URL
 const pageTitle = `한국어로 쓰는 마크다운 협업 도구 — ${brand.name}`
 const subheadText = '##를 쳐도 기호가 사라지지 않고, 입력한 그대로 남습니다.'
 const ogImageUrl = new URL(brand.ogImage, siteUrl).href
-const ogUrl = new URL('welcome', siteUrl).href
+const ogUrl = siteUrl
+
+// 조기 판정·CTA 클릭 모두 같은 쿠키 문자열을 쓴다 — 키 문자열을 여기 다시 적지 않는다 (3.2)
+const cookieSecure = buildAppCookie({ secure: true })
+const cookieInsecure = buildAppCookie({ secure: false })
+const earlyKeysJson = JSON.stringify(EARLY_APP_KEYS)
+const landingDoneKeyJson = JSON.stringify(LANDING_DONE_KEY)
+const cookieSecureJson = JSON.stringify(cookieSecure)
+const cookieInsecureJson = JSON.stringify(cookieInsecure)
+
+// 두 값 쓰기 — 조기 판정 스크립트·CTA 클릭 스크립트가 함께 쓴다 (4.2·4.3)
+const writeAppEntryJs = `function writeAppEntry() {
+        try { localStorage.setItem(${landingDoneKeyJson}, '1') } catch (e) {}
+        try {
+          document.cookie = location.protocol === 'https:' ? ${cookieSecureJson} : ${cookieInsecureJson}
+        } catch (e) {}
+      }`
+
+// 조기 판정(4.2) — 기존 사용자·공유 앱 해시는 곧바로 앱으로. 스타일보다 앞, <head> 맨 위에 둔다
+const earlyScript = `<script>
+      (function () {
+        ${writeAppEntryJs}
+        try {
+          var keys = ${earlyKeysJson}
+          var hasKey = false
+          for (var i = 0; i < keys.length; i++) {
+            if (localStorage.getItem(keys[i]) !== null) { hasKey = true; break }
+          }
+          var hasHash = /^#\\//.test(location.hash)
+          if (!hasKey && !hasHash) return
+          writeAppEntry()
+          var reloaded = false
+          try { reloaded = sessionStorage.getItem('md.landingReloaded') === '1' } catch (e) {}
+          if (!reloaded) {
+            try { sessionStorage.setItem('md.landingReloaded', '1') } catch (e) {}
+            location.reload()
+          } else {
+            // 쿠키가 차단된 브라우저 — 무한 왕복 대신 랜딩에 머무르고 탈출구를 보여준다 (2.3)
+            document.documentElement.setAttribute('data-cookie-escape', '1')
+          }
+        } catch (e) {}
+      })()
+    </script>`
+
+// CTA 클릭(4.3) — 두 값을 쓴 뒤 로그인 없이 사용은 reload, 로그인은 기존 로그인 흐름으로
+const ctaScript = `<script>
+      (function () {
+        ${writeAppEntryJs}
+        function bind(selector, run) {
+          var els = document.querySelectorAll(selector)
+          for (var i = 0; i < els.length; i++) {
+            els[i].addEventListener('click', function (ev) {
+              ev.preventDefault()
+              writeAppEntry()
+              run()
+            })
+          }
+        }
+        bind('[data-cta="enter"]', function () { location.reload() })
+        bind('[data-cta="login"]', function () { location.href = '/api/login?return=' })
+      })()
+    </script>`
+
+// 사이트 페이지와 같은 머리·꼬리 (F-272.md 5.4). appCta:'enter' 는 data-cta="enter" 를 붙여 기존 CTA 클릭 스크립트(4.3)가 두 값을 쓰고 reload 하게 한다
+const siteHeader = renderSiteHeader({ brandName: brand.name, brandIcon: brand.icon, appCta: 'enter' })
+const siteFooter = renderSiteFooter({ brandName: brand.name })
 
 export function renderWelcomePage(): Response {
   const html = `<!doctype html>
 <html lang="ko">
   <head>
+    ${earlyScript}
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${pageTitle}</title>
     <meta name="description" content="${subheadText}" />
     <meta name="theme-color" content="${brand.accent}" />
     <link rel="icon" href="${brand.icon}" />
+    <link rel="canonical" href="${siteUrl}" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="${pageTitle}" />
     <meta property="og:description" content="${subheadText}" />
@@ -169,7 +239,13 @@ export function renderWelcomePage(): Response {
       }
       .cta:hover { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
       .cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+      .cta-secondary { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+      .cta-secondary:hover { background: var(--rule-2); }
       .note { color: var(--ink-2); font-size: 0.95rem; }
+      /* 쿠키를 저장하지 못하는 브라우저에서만 조기 판정 스크립트가 <html data-cookie-escape> 로 드러낸다 (2.3) */
+      .cookie-escape { display: none; width: 100%; margin-top: 12px; color: var(--ink-2); font-size: 0.95rem; }
+      html[data-cookie-escape='1'] .cookie-escape { display: block; }
+      .cookie-escape a { color: var(--accent); }
 
       main section { margin-top: 104px; }
       h2 {
@@ -234,15 +310,11 @@ export function renderWelcomePage(): Response {
         main section { margin-top: 72px; }
         .feats { grid-template-columns: minmax(0, 1fr); row-gap: 24px; }
       }
+      ${SITE_CHROME_CSS}
     </style>
   </head>
   <body>
-    <header class="wrap bar">
-      <div class="brand-group">
-        <img class="brand-icon" src="${brand.icon}" alt="" width="20" height="20" />
-        <span class="brand">${brand.name}</span>
-      </div>
-    </header>
+    ${siteHeader}
     <main>
       <div class="wrap">
         <div class="doc" id="demo">
@@ -258,8 +330,10 @@ export function renderWelcomePage(): Response {
           </div>
         </div>
         <div class="actions">
-          <a class="cta" href="/">지금 써보기</a>
+          <a class="cta" href="/" data-cta="enter">로그인 없이 사용</a>
+          <a class="cta cta-secondary" href="/api/login?return=" data-cta="login">로그인</a>
           <span class="note">설치도 로그인도 없이 시작합니다</span>
+          <p class="cookie-escape">이 브라우저는 쿠키를 저장하지 못합니다. 아래 주소를 즐겨찾기에 두고 쓰세요 — <a href="/?app=1">앱으로 바로 가기</a></p>
         </div>
       </div>
 
@@ -306,12 +380,12 @@ export function renderWelcomePage(): Response {
 
       <section class="wrap close">
         <div class="actions">
-          <a class="cta" href="/">지금 써보기</a>
+          <a class="cta" href="/" data-cta="enter">로그인 없이 사용</a>
           <span class="note">브라우저에서 바로 열립니다</span>
         </div>
       </section>
     </main>
-    <footer class="wrap">${brand.name}</footer>
+    ${siteFooter}
     <script>
       /* 예시 줄을 한글 조합 순서(초성 → 중성 → 종성)로 다시 쳐 보인다.
          완성된 글자는 이미 HTML 에 있고 이 스크립트는 그것을 읽어 되감을 뿐이라,
@@ -393,6 +467,7 @@ export function renderWelcomePage(): Response {
         })
       })()
     </script>
+    ${ctaScript}
     <script type="module" src="/assets/welcome-demo.js"></script>
   </body>
 </html>`

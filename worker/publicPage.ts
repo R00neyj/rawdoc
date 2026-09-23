@@ -85,7 +85,8 @@ export async function renderPublicPage(request: Request, env: Env, pathname: str
       description = SITE_DESCRIPTION
     }
 
-    const base = await env.ASSETS.fetch(request)
+    // 자산에는 /p/{token} 자체가 없다 — 루트 자산(index.html)을 명시적으로 받는다. /index.html 로 받으면 301 한다 (F-272.md 7.1)
+    const base = await env.ASSETS.fetch(new URL('/', request.url))
     const html = await base.text()
     const injected = injectMeta(html, { title, description })
     const headers = new Headers(base.headers)

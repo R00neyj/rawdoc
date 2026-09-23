@@ -14,6 +14,7 @@ export function useDocSaver({
   getText, // 에디터 handle.getText 호출부
   onSaved, // 저장 성공 시 갱신된 Doc 전달 (updatedAt 갱신용)
   onSaveError, // 저장 실패 시 N-1 알림 등을 위한 콜백
+  blocked, // 저장해 봤자 해로운 두 경우(지워진 문서·로컬 편집권 상실)에만 켠다 (F-296.md 7.4)
 }: {
   store: SaverStore
   docId: string | null
@@ -21,6 +22,7 @@ export function useDocSaver({
   getText: (lineEnding: LineEnding | undefined) => string
   onSaved?: (doc: Doc) => void
   onSaveError?: () => void
+  blocked?: boolean
 }): { status: SaverStatus; notifyChange: () => void; flush: () => Promise<void> } {
   const isMemory = store.kind === 'memory'
 
@@ -40,12 +42,14 @@ export function useDocSaver({
   const docIdRef = useRef(docId)
   const lineEndingRef = useRef(lineEnding)
   const getTextRef = useRef(getText)
+  const blockedRef = useRef(Boolean(blocked))
 
   // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후(effect) 최신 값을 반영한다
   useEffect(() => {
     docIdRef.current = docId
     lineEndingRef.current = lineEnding
     getTextRef.current = getText
+    blockedRef.current = Boolean(blocked)
   })
 
   // 문서 전환 시 이전 문서의 대기 타이머·dirty 플래그를 버린다(전환 직전 저장은 App 의 beforeLeaveDoc→flush 가 먼저 끝낸다)
@@ -60,6 +64,10 @@ export function useDocSaver({
     const promise = (async () => {
       // 저장 중 또 입력되면 그 저장이 끝난 뒤 바로 다시 저장한다 — 항상 한 번에 하나만 진행해 늦게 끝난 옛 저장이 새 내용을 덮지 않게 한다
       while (dirtyRef.current) {
+        if (blockedRef.current) {
+          dirtyRef.current = false
+          break
+        }
         dirtyRef.current = false
         const id = docIdRef.current
         const text = getTextRef.current(lineEndingRef.current)
@@ -84,6 +92,7 @@ export function useDocSaver({
   }, [store, onSaved, onSaveError, isMemory])
 
   const notifyChange = useCallback(() => {
+    if (blockedRef.current) return
     dirtyRef.current = true
     setStatus(isMemory ? 'memory' : 'dirty')
     if (timerRef.current) clearTimeout(timerRef.current)

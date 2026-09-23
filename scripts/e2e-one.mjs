@@ -3,10 +3,12 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync as exists, statSync as stat, readdirSync as readdir } from 'node:fs'
 
+// playwright 쪽 플래그 중 값을 따로 받는 것들. 이 목록에 있으면 다음 토큰까지 함께 넘긴다
+const VALUE_FLAGS = new Set(['--workers', '--retries', '--timeout', '--project', '--reporter', '--repeat-each', '--max-failures', '--shard'])
+
 function parseArgs(argv) {
   // 슬롯은 --port·--dist 가 없으면 E2E_PORT·E2E_DIST 환경 변수를 따른다
-  const opts = { target: null, repeat: null, build: null, dryRun: false, port: Number(process.env.E2E_PORT) || 4317, dist: process.env.E2E_DIST || 'dist' }
-  const rest = []
+  const opts = { files: [], greps: [], repeat: null, build: null, dryRun: false, tail: 40, passthrough: [], port: Number(process.env.E2E_PORT) || 4317, dist: process.env.E2E_DIST || 'dist' }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     const next = () => argv[++i]
@@ -15,13 +17,22 @@ function parseArgs(argv) {
       case '--build': opts.build = true; break
       case '--no-build': opts.build = false; break
       case '--dry-run': opts.dryRun = true; break
+      case '--tail': opts.tail = Number(next()); break
       case '--port': opts.port = Number(next()); break
       case '--dist': opts.dist = next(); break
-      default: rest.push(arg)
+      // -g 를 직접 준 경우도 검색어로 받는다. 그냥 통과시키면 우리가 만드는 -g 와 둘이 돼 어긋난다
+      case '-g': case '--grep': opts.greps.push(next()); break
+      default:
+        // 모르는 플래그는 playwright 로 그대로 넘긴다 — 예전에는 조용히 버려서
+        // --workers 가 필요한 사람이 전부 npx playwright 로 돌아갔다 (2026-09-21)
+        if (arg.startsWith('-')) {
+          opts.passthrough.push(arg)
+          if (VALUE_FLAGS.has(arg) && argv[i + 1] && !argv[i + 1].startsWith('-')) opts.passthrough.push(next())
+        } else if (arg.endsWith('.spec.js')) opts.files.push(arg)
+        else opts.greps.push(arg)
     }
   }
-  if (!rest.length) throw new Error('테스트 파일 경로 또는 검색어가 필요합니다')
-  opts.target = rest[0]
+  if (!opts.files.length && !opts.greps.length) throw new Error('테스트 파일 경로 또는 검색어가 필요합니다')
   return opts
 }
 
@@ -52,15 +63,16 @@ function summarize(output) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2))
-  const isFile = opts.target.endsWith('.spec.js')
 
   let build = opts.build
   if (build === null) build = !shouldSkipBuild(opts.dist)
 
   const args = ['playwright', 'test']
-  if (isFile) args.push(opts.target)
-  else args.push('-g', opts.target)
+  args.push(...opts.files)
+  // 검색어 여러 개는 playwright 가 정규식으로 읽으므로 | 로 잇는다
+  if (opts.greps.length) args.push('-g', opts.greps.join('|'))
   if (opts.repeat) args.push('--repeat-each', String(opts.repeat))
+  args.push(...opts.passthrough)
 
   const env = {
     E2E_PORT: String(opts.port),
@@ -85,6 +97,14 @@ async function main() {
   names.forEach((name, i) => {
     console.log(`  ${name}${firstErrors[i] ? ' — ' + firstErrors[i] : ''}`)
   })
+
+  // 실패했을 때 원문 끝부분을 같이 준다. 이게 없어서 다들 npx playwright ... | tail -150 으로
+  // 돌아갔다 (2026-09-21 트랜스크립트 조사). --tail 0 이면 끈다
+  if (result.status !== 0 && opts.tail > 0) {
+    const lines = output.split(/\r?\n/)
+    console.log(`\n--- 원문 마지막 ${opts.tail}줄 ---`)
+    console.log(lines.slice(-opts.tail).join('\n'))
+  }
 
   process.exitCode = result.status === 0 ? 0 : 1
 }

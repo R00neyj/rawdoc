@@ -211,7 +211,7 @@ test.describe('F-252 B5 복사', () => {
 })
 
 test.describe('F-252 B6 기존 묶음 표시', () => {
-  test('살아있는 묶음 링크가 있으면 체크된 상태로 열리고, 바꾸면 재발급 경고', async ({ page }) => {
+  test('살아있는 묶음 링크가 있으면 체크된 상태로 열리고, 바꾸면 경고(문구는 F-259)', async ({ page }) => {
     const server = await fakeServer(page)
     seedDoc(server, { id: 'd1', title: 'A', content: '[[B]]' })
     seedDoc(server, { id: 'd2', title: 'B', content: '[[C]]' })
@@ -239,7 +239,38 @@ test.describe('F-252 B6 기존 묶음 표시', () => {
     await expect(page.locator('.share-set-warning')).toHaveCount(0)
 
     await page.getByRole('checkbox', { name: 'C' }).check()
-    await expect(page.locator('.share-set-warning')).toHaveText('주소가 새로 발급되어 이전 주소는 열리지 않습니다.')
+    await expect(page.locator('.share-set-warning')).toHaveText('이미 이 주소를 아는 사람도 방금 선택한 문서를 보게 됩니다.')
+  })
+})
+
+// F-259 B1 — 주소는 유지되고 묶음만 갱신되므로 "재발급" 경고 대신 "이미 아는 사람도 보게 된다" 경고로 바뀐다
+test.describe('F-259 B1 경고 문구', () => {
+  test('묶음이 기존 링크와 다르면 새 경고가 보이고, 재발급 문구는 어디에도 없다', async ({ page }) => {
+    const server = await fakeServer(page)
+    seedDoc(server, { id: 'd1', title: 'A', content: '[[B]]' })
+    seedDoc(server, { id: 'd2', title: 'B', content: '[[C]]' })
+    seedDoc(server, { id: 'd3', title: 'C' })
+    mockShareSetApi(page, {
+      shareSetByDoc: {
+        d1: {
+          nodes: [
+            { id: 'd2', title: 'B', depth: 1, parentId: null },
+            { id: 'd3', title: 'C', depth: 2, parentId: 'd2' },
+          ],
+          truncated: false,
+        },
+      },
+      initialLinks: { d1: { token: 'tok-existing', docIds: ['d2'] } },
+    })
+    await openApp(page)
+
+    await openDoc(page, 'd1')
+    await page.getByRole('button', { name: shareBtnName }).click()
+    await page.getByRole('menuitem', { name: '읽기 전용 링크 복사…' }).click()
+
+    await page.getByRole('checkbox', { name: 'C' }).check()
+    await expect(page.locator('.share-set-warning')).toHaveText('이미 이 주소를 아는 사람도 방금 선택한 문서를 보게 됩니다.')
+    await expect(page.getByText('주소가 새로 발급되어 이전 주소는 열리지 않습니다.')).toHaveCount(0)
   })
 })
 

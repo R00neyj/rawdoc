@@ -2,7 +2,8 @@
 // (exportDoc 은 new Blob([text]) 로 다운로드 바이트를 만든다)
 import { describe, it, expect } from 'vitest'
 import { unzipSync } from 'fflate'
-import { buildExportPayload } from './exportDoc'
+import { buildExportPayload, buildPlainPayload, buildHtmlPayload, buildRichCopyPayload, selectExportCss } from './exportDoc'
+import { toPlainText } from '../viewer/toPlainText'
 
 describe('Blob 바이트 동일성 (F-112 A2)', () => {
   it('CRLF·한글·이모지가 섞인 문자열도 TextEncoder 인코딩과 바이트가 같다', async () => {
@@ -70,5 +71,77 @@ describe('buildExportPayload (F-158 A1)', () => {
     const payload = await buildExportPayload({ text, title: '문서', store: fakeStore({}) })
     expect(payload.kind).toBe('md')
     expect(payload.missingCount).toBe(1)
+  })
+})
+
+// F-278.md 7장 A15: buildPlainPayload — 파일명·바이트
+describe('buildPlainPayload (F-278 A15)', () => {
+  it('파일명은 toFileName 확장자만 .txt 로 바꾼 것, bytes 는 평문 인코딩과 같다', () => {
+    const text = '# 제목\n\n본문\n'
+    const payload = buildPlainPayload({ text, title: '내 문서', lineEnding: 'lf' })
+    expect(payload.filename).toBe('내 문서.txt')
+    expect(payload.bytes).toEqual(new TextEncoder().encode(toPlainText(text, 'lf')))
+  })
+
+  it('예약어 제목도 toFileName 규칙(뒤에 _) 을 그대로 따르되 확장자만 .txt', () => {
+    const payload = buildPlainPayload({ text: '본문\n', title: 'CON', lineEnding: 'lf' })
+    expect(payload.filename).toBe('CON_.txt')
+  })
+
+  it('crlf 문서도 바이트가 toPlainText(text, "crlf") 와 같다', () => {
+    const text = '첫\r\n\r\n둘\r\n'
+    const payload = buildPlainPayload({ text, title: '문서', lineEnding: 'crlf' })
+    expect(payload.bytes).toEqual(new TextEncoder().encode(toPlainText(text, 'crlf')))
+  })
+})
+
+// F-280.md 7장 A13: buildHtmlPayload — 파일명·바이트
+describe('buildHtmlPayload (F-280 A13)', () => {
+  it('파일명은 toFileName 확장자만 .html, bytes 는 TextEncoder().encode(html) 과 같다. BOM 없음', () => {
+    const payload = buildHtmlPayload({ title: 'CON', body: '<p>본문</p>', css: 'x{}' })
+    expect(payload.filename).toBe('CON_.html')
+    expect(payload.bytes[0]).not.toBe(0xef) // UTF-8 BOM 첫 바이트가 아니다
+    expect(new TextDecoder().decode(payload.bytes)).toContain('<p>본문</p>')
+  })
+
+  it('일반 제목도 확장자만 .html 로 바뀐다', () => {
+    const payload = buildHtmlPayload({ title: '내 문서', body: '<p>a</p>', css: '' })
+    expect(payload.filename).toBe('내 문서.html')
+  })
+})
+
+// specs/features/F-291.md 7.2, 13장 A18
+describe('selectExportCss — 수식 있을 때만 MATH_EXPORT_CSS 를 잇는다 (A18)', () => {
+  const BASE_CSS = 'body{color:red}'
+  const MATH_CSS = '@font-face{font-family:KaTeX_Main;src:url(data:font/woff2;base64,x)}'
+
+  it('수식 없는 본문 — buildHtmlPayload 결과 바이트에 KaTeX_Main 이 없다', () => {
+    const body = '<p>본문</p>'
+    const css = selectExportCss(body, BASE_CSS, MATH_CSS)
+    const payload = buildHtmlPayload({ title: '문서', body, css })
+    expect(new TextDecoder().decode(payload.bytes)).not.toContain('KaTeX_Main')
+  })
+
+  it('수식 있는 본문 — buildHtmlPayload 결과 바이트에 KaTeX_Main 이 있다', () => {
+    const body = '<span class="katex">x</span>'
+    const css = selectExportCss(body, BASE_CSS, MATH_CSS)
+    const payload = buildHtmlPayload({ title: '문서', body, css })
+    expect(new TextDecoder().decode(payload.bytes)).toContain('KaTeX_Main')
+  })
+})
+
+// F-280.md 7장 A14: buildRichCopyPayload — 서식 있는 복사 payload
+describe('buildRichCopyPayload (F-280 A14)', () => {
+  it('plain 은 toPlainText(text, "lf") 와 같고, html 은 meta charset 으로 시작하고 html·style 태그가 없다', () => {
+    const text = '# 제목\r\n\r\n**굵게**\r\n'
+    const palette = { rule: '#e8e4db', rule2: '#f2efe8', ink: '#1c1b18', ink2: '#4a4740' }
+    const body = '<h1>제목</h1>\n<p><strong>굵게</strong></p>\n'
+    const payload = buildRichCopyPayload({ text, body, palette })
+
+    expect(payload.plain).toBe(toPlainText(text, 'lf'))
+    expect(payload.plain).not.toContain('\r\n')
+    expect(payload.html.startsWith('<meta charset="utf-8">')).toBe(true)
+    expect(payload.html).not.toContain('<html')
+    expect(payload.html).not.toContain('<style')
   })
 })

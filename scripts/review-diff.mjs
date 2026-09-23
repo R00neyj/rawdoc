@@ -37,7 +37,9 @@ function ownedPatterns(featureId) {
     const heading = /^(#{2,4})\s+(.*)$/.exec(line)
     if (heading) {
       if (collecting) ownSections.push(collecting)
-      collecting = /파일 소유|소유 파일/.test(heading[2]) ? [] : null
+      // "수정 파일"(F-271)·"바꾸는 파일" 도 같은 뜻으로 쓰인다. 하나만 보면
+      // 제목이 조금 다른 명세에서 목록이 빈 채로 통과해 경고가 전부 오탐이 된다
+      collecting = /파일 소유|소유 파일|수정 파일|바꾸는 파일|고치는 파일/.test(heading[2]) ? [] : null
       continue
     }
     if (collecting) collecting.push(line)
@@ -61,8 +63,11 @@ function ownedPatterns(featureId) {
     if (!firstCell.includes('`')) continue
     const cellRe = /`([^`]+)`(\(\+test\))?/g
     let m
+    let lastDir = '' // 한 셀에 `src/a/b.ts`·`b.test.ts` 처럼 파일명만 이어 적는 명세가 있다 (F-283 2장)
     while ((m = cellRe.exec(firstCell))) {
-      const p = m[1]
+      let p = m[1]
+      if (!p.includes('/') && lastDir) p = `${lastDir}/${p}`
+      else if (p.includes('/')) lastDir = p.slice(0, p.lastIndexOf('/'))
       patterns.push(p)
       if (m[2]) {
         const testVariant = p.replace(/\.(jsx|tsx|js|ts)$/, (_, ext) => `.test.${ext}`)
@@ -117,6 +122,9 @@ function addedLinesFromDiff(diffText) {
       newLine++
       continue
     }
+    if (raw.startsWith('-') || raw.startsWith('\\')) continue
+    /* 문맥 줄도 새 파일에서 한 줄을 차지한다. 여기서 안 올려 한 hunk 의 두 번째 추가부터 줄 번호가 전부 틀렸다 (2026-09-21) */
+    newLine++
   }
   return lines
 }
@@ -162,7 +170,8 @@ function checkLines(file, lines) {
   for (const { line, text } of lines) {
     const isLineComment = /^\s*\/\//.test(text)
     const consecutive = prevLine !== null && line === prevLine + 1
-    if (isLineComment && consecutive) {
+    /* 주석 아닌 추가 줄 바로 다음의 주석은 consecutive 가 참이라 runStart 를 안 잡았고, 그대로 `App.tsx:null` 이 나갔다 (2026-09-21) */
+    if (isLineComment && consecutive && runStart !== null) {
       runLen++
     } else if (isLineComment) {
       runStart = line

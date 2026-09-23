@@ -1,7 +1,7 @@
 // 마크다운 → HTML 문자열 변환 (specs/features/F-123.md 3.2)
 // 순수 함수. DOM·React 를 다루지 않는다
 import MarkdownIt from 'markdown-it'
-import type { StateCore, Token, RendererRule } from 'markdown-it'
+import type { StateCore, StateInline, Delimiter, Token, RendererRule } from 'markdown-it'
 
 import { parseCalloutHeader, defaultCalloutTitle } from '../lib/callout'
 import { calloutIconSvg } from '../lib/calloutIcons'
@@ -9,6 +9,9 @@ import { findWikiLinks } from '../lib/wikiLink'
 import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from '../lib/frontmatter'
 import { parseImageBlock } from '../lib/imageBlock'
 import type { ParsedImageBlock } from '../lib/imageBlock'
+import { matchMathAt, parseMathBlock } from '../lib/mathSyntax'
+import { renderMath } from '../lib/mathRender'
+import { isMermaidInfo } from '../lib/codeLang'
 
 // html:false — 원문 HTML 태그는 파싱하지 않고 글자 그대로(이스케이프되어) 보인다.
 // 링크·이미지 주소 검사는 markdown-it 기본 validateLink 를 그대로 쓴다
@@ -150,18 +153,21 @@ function calloutRule(state: StateCore): void {
 md.core.ruler.before('inline', 'callout', calloutRule)
 
 // ----- 이미지 블록 (F-158.md 2.1) — src 는 출력하지 않고 data-attachment 로 id 만 남겨 Viewer 가 채운다 -----
-function renderImageBlockHtml(parsed: ParsedImageBlock): string {
+// sourceLine: F-295 9.3 — html_block 렌더러는 attrs 를 무시하므로 문자열에 직접 넣는다. null 이면(옵션 꺼짐) 지금과 바이트가 같다
+function renderImageBlockHtml(parsed: ParsedImageBlock, sourceLine: number | null): string {
   const align = md.utils.escapeHtml(parsed.align)
   const id = md.utils.escapeHtml(parsed.id)
   const alt = md.utils.escapeHtml(parsed.alt)
+  const lineAttr = sourceLine !== null ? ` data-source-line="${sourceLine}"` : ''
   const style = parsed.width ? ` style="width:${parsed.width}px"` : ''
   const widthAttr = parsed.width ? ` width="${parsed.width}"` : ''
-  return `<div class="md-image md-image--${align}"${style}><img data-attachment="${id}" alt="${alt}"${widthAttr}></div>\n`
+  return `<div class="md-image md-image--${align}"${lineAttr}${style}><img data-attachment="${id}" alt="${alt}"${widthAttr}></div>\n`
 }
 
 // token.level === 0 은 목록·인용 등 컨테이너 밖(최상위) 문단만 고른다는 뜻이다
 function imageBlockRule(state: StateCore): void {
   const tokens = state.tokens
+  const env = state.env as { sourceLines?: boolean; lineOffset?: number } | undefined
 
   for (let i = 0; i < tokens.length; i++) {
     const open = tokens[i]
@@ -174,16 +180,174 @@ function imageBlockRule(state: StateCore): void {
     const parsed = parseImageBlock(inline.content)
     if (!parsed) continue
 
+    const sourceLine = env?.sourceLines && open.map ? (env.lineOffset ?? 0) + open.map[0] + 1 : null
+
     const html = new state.Token('html_block', '', 0)
-    html.content = renderImageBlockHtml(parsed)
+    html.content = renderImageBlockHtml(parsed, sourceLine)
     html.block = true
     html.map = open.map
+    // 평문 변환기가 정규식으로 다시 뜯지 않도록 해석 결과를 남겨 둔다 (F-278.md 4.2). 렌더 결과는 안 바뀐다
+    html.meta = parsed
 
     tokens.splice(i, 3, html)
   }
 }
 
 md.core.ruler.before('inline', 'image_block', imageBlockRule)
+
+// ----- 하이라이트 ==…== (F-283.md 3.1) — 취소선 규칙을 '~'→'=', s_open/close→mark_open/close 로 옮겨 적은 것. renderer 규칙은 따로 두지 않는다 -----
+const HIGHLIGHT_MARKER = 0x3d // '='
+
+function highlightTokenize(state: StateInline, silent: boolean): boolean {
+  const start = state.pos
+  const marker = state.src.charCodeAt(start)
+  if (silent) return false
+  if (marker !== HIGHLIGHT_MARKER) return false
+
+  const scanned = state.scanDelims(state.pos, true)
+  let len = scanned.length
+  const ch = String.fromCharCode(marker)
+  if (len < 2) return false
+
+  let token: Token
+  if (len % 2) {
+    token = state.push('text', '', 0)
+    token.content = ch
+    len--
+  }
+
+  for (let i = 0; i < len; i += 2) {
+    token = state.push('text', '', 0)
+    token.content = ch + ch
+    state.delimiters.push({
+      marker,
+      length: 0,
+      token: state.tokens.length - 1,
+      end: -1,
+      open: scanned.can_open,
+      close: scanned.can_close,
+    })
+  }
+
+  state.pos += scanned.length
+  return true
+}
+
+// 3.2.1 — 여는·닫는 토큰 사이에 softbreak·hardbreak 가 있으면(줄을 넘으면) 짝으로 바꾸지 않는다
+function spansLine(tokens: Token[], fromToken: number, toToken: number): boolean {
+  for (let j = fromToken + 1; j < toToken; j++) {
+    if (tokens[j].type === 'softbreak' || tokens[j].type === 'hardbreak') return true
+  }
+  return false
+}
+
+function highlightPostProcessDelimiters(state: StateInline, delimiters: Delimiter[]): void {
+  const tokens = state.tokens
+  for (let i = 0; i < delimiters.length; i++) {
+    const startDelim = delimiters[i]
+    if (startDelim.marker !== HIGHLIGHT_MARKER) continue
+    if (startDelim.end === -1) continue
+    const endDelim = delimiters[startDelim.end]
+    if (spansLine(tokens, startDelim.token, endDelim.token)) continue
+
+    let token = tokens[startDelim.token]
+    token.type = 'mark_open'
+    token.tag = 'mark'
+    token.nesting = 1
+    token.markup = '=='
+    token.content = ''
+
+    token = tokens[endDelim.token]
+    token.type = 'mark_close'
+    token.tag = 'mark'
+    token.nesting = -1
+    token.markup = '=='
+    token.content = ''
+
+    // 홀수 낱개 마커(===셋=== 등)가 닫는 짝 앞에 남으면 mark_close 뒤로 밀어 순서를 맞춘다(취소선 loneMarkers 처리와 같다)
+    if (tokens[endDelim.token - 1]?.type === 'text' && tokens[endDelim.token - 1].content === String.fromCharCode(HIGHLIGHT_MARKER)) {
+      const loneIndex = endDelim.token - 1
+      let j = loneIndex + 1
+      while (j < tokens.length && tokens[j].type === 'mark_close') j++
+      j--
+      if (loneIndex !== j) {
+        const swap = tokens[j]
+        tokens[j] = tokens[loneIndex]
+        tokens[loneIndex] = swap
+      }
+    }
+  }
+}
+
+function highlightPostProcess(state: StateInline): void {
+  const tokensMeta = state.tokens_meta
+  const max = state.tokens_meta.length
+  highlightPostProcessDelimiters(state, state.delimiters)
+  for (let curr = 0; curr < max; curr++) {
+    const delimiters = tokensMeta[curr]?.delimiters
+    if (delimiters) highlightPostProcessDelimiters(state, delimiters)
+  }
+}
+
+md.inline.ruler.before('emphasis', 'highlight', highlightTokenize)
+md.inline.ruler2.before('emphasis', 'highlight', highlightPostProcess)
+
+// ----- 수식 $…$ · $$…$$ (F-291.md 5.1) — 감지 규칙은 matchMathAt·parseMathBlock 하나, 편집 모드와 같다(3.5)
+const DOLLAR = 0x24 // '$'
+
+function mathInlineRule(state: StateInline, silent: boolean): boolean {
+  if (state.src.charCodeAt(state.pos) !== DOLLAR) return false
+  const match = matchMathAt(state.src, state.pos)
+  if (!match) return false
+
+  if (!silent) {
+    const token = state.push('math_inline', '', 0)
+    token.content = state.src.slice(match.innerFrom, match.innerTo)
+  }
+  state.pos = match.to
+  return true
+}
+
+// imageBlockRule(154~160행)과 같은 모양 — level 0(최상위) 문단만 대상이다(B3)
+function mathBlockRule(state: StateCore): void {
+  const tokens = state.tokens
+
+  for (let i = 0; i < tokens.length; i++) {
+    const open = tokens[i]
+    if (open.type !== 'paragraph_open' || open.level !== 0) continue
+
+    const inline = tokens[i + 1]
+    const close = tokens[i + 2]
+    if (inline?.type !== 'inline' || close?.type !== 'paragraph_close') continue
+
+    const parsed = parseMathBlock(inline.content)
+    if (!parsed) continue
+
+    const token = new state.Token('math_block', '', 0)
+    token.content = parsed.tex
+    token.block = true
+    token.map = open.map
+
+    tokens.splice(i, 3, token)
+  }
+}
+
+md.inline.ruler.before('emphasis', 'math_inline', mathInlineRule)
+md.core.ruler.before('inline', 'math_block', mathBlockRule)
+
+md.renderer.rules.math_inline = function (tokens, idx) {
+  const tex = tokens[idx].content
+  const result = renderMath(tex, { display: false })
+  if ('html' in result) return result.html
+  return `<span class="md-math-error">${md.utils.escapeHtml(`$${tex}$`)}</span>`
+}
+
+md.renderer.rules.math_block = function (tokens, idx) {
+  const tex = tokens[idx].content
+  const result = renderMath(tex, { display: true })
+  if ('html' in result) return `${result.html}\n`
+  return `<div class="md-math-error">${md.utils.escapeHtml(result.error)}</div>\n`
+}
 
 // ----- 링크: target·rel (F-123.md 3.2) -----
 const defaultLinkOpen: RendererRule =
@@ -210,6 +374,25 @@ md.renderer.rules.image = function (tokens, idx, options, env, self) {
 
 // 코드블록(fence)의 language-{info 첫 단어} 클래스, 제목 앵커 없음은 markdown-it 기본
 // 동작 그대로다 (options.highlight 를 주지 않아 구문 강조 없음)
+
+// ----- Mermaid 다이어그램 (F-258.md 2.4) — mermaid 면 placeholder div(Viewer.tsx 가 채운다), 아니면 기본 fence 렌더러 위임 -----
+const defaultFence: RendererRule =
+  md.renderer.rules.fence ||
+  function (tokens, idx, options, _env, self) {
+    return self.renderToken(tokens, idx, options)
+  }
+
+md.renderer.rules.fence = function (tokens, idx, options, env, self) {
+  const token = tokens[idx]
+  if (isMermaidInfo(token.info)) {
+    // fence 렌더러는 자체 문자열을 만들어 attrs 를 안 쓰므로 직접 넣는다 (F-295 9.3)
+    const e = env as { sourceLines?: boolean; lineOffset?: number } | undefined
+    const sourceLine = e?.sourceLines && token.map ? (e.lineOffset ?? 0) + token.map[0] + 1 : null
+    const lineAttr = sourceLine !== null ? ` data-source-line="${sourceLine}"` : ''
+    return `<div class="md-mermaid"${lineAttr} data-mermaid-source="${md.utils.escapeHtml(token.content)}"></div>\n`
+  }
+  return defaultFence(tokens, idx, options, env, self)
+}
 
 // ----- 제목 원문 줄 번호 (F-144.md 3.4) — body 기준 0-based 에 프론트매터 줄 수를 더해 1-based -----
 const defaultHeadingOpen: RendererRule =
@@ -384,6 +567,24 @@ function tableBrRule(state: StateCore): void {
 
 md.core.ruler.after('inline', 'table_br', tableBrRule)
 
+// ----- 최상위 블록 원문 줄 번호 (F-295.md 9장) — env.sourceLines 가 켜졌을 때만. push 로 맨 끝에 달아 다른 규칙들이 토큰을 다 자르고 붙인 뒤에 돈다 -----
+function sourceLinesRule(state: StateCore): void {
+  const env = state.env as { sourceLines?: boolean; lineOffset?: number } | undefined
+  if (!env?.sourceLines) return
+  const lineOffset = env.lineOffset ?? 0
+
+  for (const token of state.tokens) {
+    if (!token.block) continue
+    if (token.nesting < 0) continue
+    if (token.level !== 0) continue
+    if (!token.map) continue
+    if (token.attrGet('data-source-line') !== null) continue
+    token.attrSet('data-source-line', String(lineOffset + token.map[0] + 1))
+  }
+}
+
+md.core.ruler.push('source_lines', sourceLinesRule)
+
 // ----- 프론트매터 (F-133.md 3.3) -----
 // 변환 전에 findFrontmatter 로 떼어 내고 나머지 본문만 markdown-it 에 넣는다.
 // 성공(속성 있음): 표. 구조를 알아볼 수 없음(null): 원문 그대로 <pre>. 빈 프론트매터
@@ -406,11 +607,20 @@ function renderFrontmatter(text: string, frontmatter: { contentFrom: number; con
   return `<table class="markdown-frontmatter"><tbody>${rows}</tbody></table>`
 }
 
-// text: 저장소·에디터 원문 그대로 (CRLF 도 그대로 넘길 수 있다 — markdown-it 이 파싱 전
-// 줄바꿈을 정규화한다). options.resolveWikiLink: 위키링크 대상 제목 → 문서 id. 생략하면
-// (F-130 공유 화면) 위키링크를 클릭 불가능한 글자로만 렌더한다 (F-131 4장)
-export function renderMarkdown(text: string, options: { resolveWikiLink?: ResolveWikiLink } = {}): string {
-  const env: { resolveWikiLink?: ResolveWikiLink; lineOffset?: number } = { resolveWikiLink: options.resolveWikiLink }
+// 보기 모드와 같은 해석의 토큰 배열, 렌더러만 거치지 않는다 — 평문 변환기(toPlainText.ts)가 쓴다 (F-278.md 4.1·4.2)
+export function parseMarkdownTokens(body: string, env: Record<string, unknown> = {}): Token[] {
+  return md.parse(body, env)
+}
+
+// text: 저장소·에디터 원문 그대로. resolveWikiLink 생략 시 위키링크는 클릭 불가 글자로만(F-131 4장). sourceLines: 최상위 블록에 data-source-line 부착, 기본 꺼짐(F-295.md 9장)
+export function renderMarkdown(
+  text: string,
+  options: { resolveWikiLink?: ResolveWikiLink; sourceLines?: boolean } = {},
+): string {
+  const env: { resolveWikiLink?: ResolveWikiLink; lineOffset?: number; sourceLines?: boolean } = {
+    resolveWikiLink: options.resolveWikiLink,
+    sourceLines: options.sourceLines,
+  }
   const frontmatter = findFrontmatter(text)
   if (!frontmatter) return md.render(text, env)
 

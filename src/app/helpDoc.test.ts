@@ -132,4 +132,8 @@ describe('HELP_DOC_CONTENT', () => {
     expect(HELP_DOC_CONTENT).not.toContain(brand.name)
     expect(HELP_DOC_CONTENT.toLowerCase()).not.toContain(brand.shortName.toLowerCase())
   })
+
+  it('이미지 캡션에 ![설명](주소) 표준 이미지 문법을 그대로 쓰지 않는다 (F-274.md 4.2 — 빌드 가드 G4 회피)', () => {
+    expect(HELP_DOC_CONTENT).not.toMatch(/!\[[^\]]*\]\([^)]*\)/)
+  })
 })

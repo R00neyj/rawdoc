@@ -129,22 +129,37 @@ export async function handleGetDocShareSet(
   })
 }
 
-// docIds 본문을 읽는다. 본문이 없거나 빈 배열이면 []('묶음 없음'), 모양이 틀리면 'bad_request' (F-252 2.4)
-async function readDocIds(request: Request): Promise<string[] | 'bad_request'> {
+// docIds 본문을 읽는다. docIds 필드가 아예 없으면 undefined('묶음 정보 없음' — 기존 묶음 유지), 있으면(빈 배열 포함) 그 배열, 모양이 틀리면 'bad_request' (F-259 2장)
+async function readDocIds(request: Request): Promise<string[] | 'bad_request' | undefined> {
   let raw: unknown
   try {
     raw = await request.json()
   } catch {
-    return []
+    return undefined
   }
-  if (raw === null || typeof raw !== 'object') return []
+  if (raw === null || typeof raw !== 'object') return undefined
   const docIds = (raw as { docIds?: unknown }).docIds
-  if (docIds === undefined) return []
+  if (docIds === undefined) return undefined
   if (!Array.isArray(docIds) || !docIds.every((id) => typeof id === 'string')) return 'bad_request'
   return docIds
 }
 
-// 재발급은 끊고 다시 만들기(DELETE → POST). docIds 가 있으면 위키링크 묶음 발급(F-252 2.4) — 묶음이 바뀌면 이전 토큰을 끊고 새로 만든다
+async function insertLink(env: Env, token: string, ownerId: string, targetId: string): Promise<void> {
+  await env.DB.prepare(
+    'INSERT INTO share_links (token, owner_id, target_type, target_id, created_at, revoked_at) VALUES (?,?,?,?,?,NULL)',
+  )
+    .bind(token, ownerId, 'doc', targetId, Date.now())
+    .run()
+}
+
+async function replaceShareLinkDocs(env: Env, token: string, docIds: string[]): Promise<void> {
+  await env.DB.prepare('DELETE FROM share_link_docs WHERE token = ?').bind(token).run()
+  for (const id of docIds) {
+    await env.DB.prepare('INSERT INTO share_link_docs (token, doc_id) VALUES (?,?)').bind(token, id).run()
+  }
+}
+
+// 살아있는 링크가 있으면 토큰은 유지하고 share_link_docs 만 갱신한다 — 주소는 살아있는 링크가 있는 한 유지(F-259 2장). 새 토큰 발급은 살아있는 링크가 없을 때만
 export async function handleCreateDocLink(
   request: Request,
   env: Env,
@@ -158,16 +173,13 @@ export async function handleCreateDocLink(
   const docIds = await readDocIds(request)
   if (docIds === 'bad_request') return errorResponse('bad_request', 400)
 
-  if (docIds.length === 0) {
-    const existing = await findActiveLink(env, 'doc', params.id)
-    if (existing) return jsonResponse({ token: existing.token })
+  const existing = await findActiveLink(env, 'doc', params.id)
 
+  // 묶음 정보 없이 호출(예: ShareMenu 단순 링크 복사) — 기존 링크가 있으면 묶음을 건드리지 않고 그대로 반환
+  if (docIds === undefined) {
+    if (existing) return jsonResponse({ token: existing.token })
     const token = generateToken()
-    await env.DB.prepare(
-      'INSERT INTO share_links (token, owner_id, target_type, target_id, created_at, revoked_at) VALUES (?,?,?,?,?,NULL)',
-    )
-      .bind(token, user.id, 'doc', params.id, Date.now())
-      .run()
+    await insertLink(env, token, user.id, params.id)
     return jsonResponse({ token }, 201)
   }
 
@@ -177,24 +189,16 @@ export async function handleCreateDocLink(
     if (!owned) return errorResponse('bad_request', 400)
   }
 
-  const existing = await findActiveLink(env, 'doc', params.id)
   if (existing) {
     const existingIds = new Set(await fetchShareLinkDocIds(env, existing.token))
     const sameSet = existingIds.size === uniqueIds.length && uniqueIds.every((id) => existingIds.has(id))
-    if (sameSet) return jsonResponse({ token: existing.token })
-
-    await env.DB.prepare('UPDATE share_links SET revoked_at = ? WHERE token = ?').bind(Date.now(), existing.token).run()
+    if (!sameSet) await replaceShareLinkDocs(env, existing.token, uniqueIds)
+    return jsonResponse({ token: existing.token })
   }
 
   const token = generateToken()
-  await env.DB.prepare(
-    'INSERT INTO share_links (token, owner_id, target_type, target_id, created_at, revoked_at) VALUES (?,?,?,?,?,NULL)',
-  )
-    .bind(token, user.id, 'doc', params.id, Date.now())
-    .run()
-  for (const id of uniqueIds) {
-    await env.DB.prepare('INSERT INTO share_link_docs (token, doc_id) VALUES (?,?)').bind(token, id).run()
-  }
+  await insertLink(env, token, user.id, params.id)
+  if (uniqueIds.length > 0) await replaceShareLinkDocs(env, token, uniqueIds)
   return jsonResponse({ token }, 201)
 }
 

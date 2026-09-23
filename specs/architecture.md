@@ -9,6 +9,8 @@
 ```
 brand.config.js          제품명·짧은 이름·메인 컬러. 유일한 정의 위치 (design.md 3.2)
 scripts/                 검증 도구 (F-160). measure·verify·e2e-one. src/ 가 import 하지 않는다
+content/                 공개 사이트 글 원본 `.md` (F-272). 글은 F-273~F-276 이 넣는다
+site/                    공개 사이트 빌드 (F-272). build·pages·guard·render·helpPage·guidesIndex. 순수 문자열만 다루고 DOM·React·node:fs 를 import 하지 않는다
 index.html               <title>·theme-color·--accent 는 빌드 시 brand.config.js 에서 주입
 vite.config.js           React, brand 주입 플러그인, Vitest, (F-115) PWA
 public/                  아이콘 등 정적 파일
@@ -56,10 +58,30 @@ src/
   - `editor/`: `imageInsert.js`(F-156), `preview/imageWidget.js`(F-157)
   - `lib/`: `imageFile.js`·`imageBlock.js`(F-156)
   - `styles/`: `image.css`(F-157)
+- 여러 문서 검색(2026-09-21)으로 추가
+  - `lib/`: `docSearch.ts`(F-285 — 쿼리 파싱·매칭·발췌, import 문 없음)
+  - `app/`: `searchIndex.ts`(F-286 — 인덱스 만들기·재사용), `SearchDialog.tsx`(F-287), `searchResults.ts`(F-287 — 결과 행·문구 계산 순수 함수 + 에디터에 넘길 검색어 고르기(F-294))
+  - `editor/`: `showSearchMatches.ts`(F-294 — 검색 결과로 연 문서에서 CM6 찾기 패널 열기)
+- 탭 세션 겹침(2026-09-21)으로 추가
+  - `lib/`: `tabChannel.ts`(F-297 — 탭 사이 채널 이름·상수)
+  - `storage/`: `lockSession.ts`(F-297 — 잠금 세션 id 보관·회전)
+- 위키링크 지도(2026-09-21)로 추가
+  - `lib/`: `wikiGraph.ts`(F-292 — 위키링크 추출·그래프 만들기 순수 함수), `mapLayout3d.ts`(F-2001 — `d3-force-3d` 3D 배치), `cssColor.ts`(F-2002 — 계산된 CSS 색 파싱), `mapCamera.ts`(F-2003 — 카메라 거리·절단면·확대 한계 순수 계산), `mapNodeStyle.ts`(F-2004 — 노드 크기·깊이·이름표 판정), `mapEdgeStyle.ts`(F-2005 — `선 두께` 정규값 → 간선 색), `mapFilter.ts`(F-2007 — 필터·거리 계산)
+  - `app/`: `mapIndex.ts`(F-292 — 그래프 캐시), `MapPage.tsx`(F-292 — S-8 화면), `MapScene.tsx`(F-2002 — three 렌더러), `MapLabels.tsx`(F-2004 — 이름표 DOM 레이어), `MapPanel.tsx`·`mapPrefs.ts`(F-2005 — 설정 패널과 그 저장)
+  - `types/`: `d3-force-3d.d.ts`(F-2001 — npm 에 `@types/d3-force-3d` 가 없어 직접 선언)
+  - `styles/`: `map.css`(F-292)
+- 수식(2026-09-21)으로 추가
+  - `lib/`: `mathSyntax.ts`(F-291 — `$…$`·`$$…$$` 감지 순수 함수), `mathRender.ts`(F-291 — KaTeX 동기 렌더 공용 모듈)
+  - `editor/`: `preview/mathPreview.ts`(F-291 — 인라인 수식 ViewPlugin), `preview/mathWidget.ts`(F-291 — 블록 수식 위젯)
+  - `viewer/`: `exportHtmlCss.ts`(F-291 — 내보내기용 KaTeX CSS·폰트 인라인)
+- 보기 모드 전환 스크롤 유지(2026-09-21)로 추가
+  - `lib/`: `scrollAnchor.ts`(F-295 — 기준 줄 ↔ 화면 위치 순수 함수)
+  - `app/`: `viewerScroll.ts`(F-295 — 보기 화면 좌표 읽기·스크롤)
 - editor·viewer 가 문서 목록이 필요하면(위키링크) 저장소를 import 하지 않고 App 이 인자로 넘긴다. 첨부 이미지도 같다: App 이 `onImageFiles`(넣기)·`resolveAttachment(id)`(읽기) 콜백을 넘긴다 (F-156·F-157)
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
+- **`site → src`, `site → brand.config` 도 한 방향이다** — `src/` 는 `site/` 를 import 하지 않는다 (F-272 3.3). `site/helpPage.ts` 가 `src/app/helpDoc.ts` 를 읽는 것이 그 예다 — 도움말 글은 앱과 사이트가 같아야 해서 원본을 하나로 둔다 (F-274). `site/guidesIndex.ts` 는 `src/lib/frontmatter.ts` 만 읽는다 (F-276)
 - 라우터·상태관리·UI 컴포넌트 라이브러리를 들이지 않는다. 아이콘은 `@material-symbols/svg-400` SVG 파일만 쓴다 (2026-09-14 사용자 지정, F-142)
 
 ## 2. 저장소 인터페이스
@@ -96,6 +118,8 @@ store.removeAttachment(id)    // Promise<void>
 
 - `content` 는 `lineEnding` 으로 줄을 이은 원문이다 (`specs/product.md` 5장, Q9)
 - 저장소 이름·키에 제품명을 쓰지 않는다 (CLAUDE.md 불변조건)
+- 지도(F-292)도 넓히지 않는다. `list()` 하나로 문서 원문을 읽어 위키링크를 뽑는다
+- 검색은 이 인터페이스를 넓히지 않는다. `list()`·`listFolders()` 만 쓰고, F-286 의 `SearchSource` 타입이 그 둘만 받는다(`Pick<Store, 'list' | 'listFolders'>`)
 
 ## 3. 문서 상태 흐름
 
@@ -123,6 +147,11 @@ store.removeAttachment(id)    // Promise<void>
 | `md.lastDocId` | 문서 id | 없음 | F-111 |
 | `md.firstRunDone` | `1` | 없음 | F-111 |
 | `md.persistNoticeShown` | `1` | 없음 | F-118 |
+| `md.startScreen` | `home` \| `last` | `home` | F-232 3.4 |
+| `md.mapView` | JSON — 묶음 단위 객체 `{ display, force, … }` | 없음 | F-292 개정판 6.11 (F-2005) |
+| `md.mapGroups` | JSON — 그룹 쿼리 + 팔레트 인덱스 `1`~`8` | 없음 | F-292 개정판 6.5 (F-2008) |
+| `md.toolbar` | `on` \| `off` | `on` | F-233 3.5 |
+| `md.landingDone` | `1` | 없음 | F-271 |
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
 
@@ -132,6 +161,12 @@ store.removeAttachment(id)    // Promise<void>
 | --- | --- | --- | --- |
 | `md.account` | 마지막 로그인 `{"id","email"}` JSON | 없음 | F-205 |
 | `md.localMigrated` | 로컬 문서를 옮긴 사용자 id | 없음 | F-208 |
+
+**`sessionStorage`** — 탭 하나의 수명만 사는 값이다. 키 접두사는 같다
+
+| 키 | 값 | 기본 | 명세 |
+| --- | --- | --- | --- |
+| `md.lockSession` | 편집 잠금 세션 id (`src/storage/lockSession.ts`). 탭마다 다르고 새로고침에는 살아남는다. 탭 복제로 겹치면 부팅 때 회전한다 | 없음(첫 접근 때 만든다) | F-250, F-297 |
 
 ## 6. 서버 (M2, 2026-09-15)
 
@@ -152,7 +187,7 @@ worker/
 
 - 배포: GitHub `deploy` 브랜치에 올리면 Cloudflare Workers Builds 가 `npm run build` → `npx wrangler deploy`. `deploy` 는 로컬 `verify:full` 을 통과한 main 커밋만 가리킨다(`git push origin <sha>:deploy`). main push 는 GitHub Actions `ci.yml`(린트·타입·단위·빌드)만. D1 원격 마이그레이션은 자동화하지 않고 배포 전에 손으로 (2026-09-15)
 - 배포 주소: `rawdoc.app` 하나 (커스텀 도메인). `workers_dev`·`preview_urls` 는 끈다 — IndexedDB·서비스 워커가 출처별로 갈라지지 않게
-- 경로: `/api/*` 는 로그인(Access 가 경로를 보호, Worker 가 JWT 재검증). `/pub/*` 는 로그인 없이 읽기만(쓰기 메서드 405). 나머지는 정적 자산, 없는 경로는 `index.html`
+- 경로: `/api/*` 는 로그인(Access 가 경로를 보호, Worker 가 JWT 재검증). `/pub/*` 는 로그인 없이 읽기만(쓰기 메서드 405). 나머지는 정적 자산, 없는 경로는 `404.html` (`wrangler.jsonc` 의 `not_found_handling: "404-page"`, F-272 7장. 그전에는 `index.html` 이었다). 사이트 페이지(`/changelog`·`/help`·`/privacy`·`/terms`·`/guides/*`)는 빌드가 낸 평평한 `{경로}.html` 정적 자산이다
 - API 응답 헤더: `Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`. 오류 본문에 내부 정보 없음
 - 남의 자원은 404, 권한은 있으나 동작이 막히면 403 (F-206·F-212)
 - Worker 는 `src/lib/**` 순수 함수와 `src/types.ts` 만 import 한다

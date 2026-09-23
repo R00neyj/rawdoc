@@ -5,39 +5,15 @@ import type { MouseEvent as ReactMouseEvent, Ref } from 'react'
 import 'github-markdown-css/github-markdown-light.css'
 import './viewer.css'
 
-import brokenImageSvg from '@material-symbols/svg-400/outlined/broken_image.svg?raw'
 import { createCodeCopyButton } from '../lib/codeCopyButton'
+import { displayLangFromClass } from '../lib/codeLang'
+import { renderMermaid } from '../lib/mermaidRender'
+import { showPlaceholder, showImage } from './fillMarkdownAssets'
 
 const DEFAULT_MISSING_TEXT = '이미지를 찾을 수 없습니다' // F-157 2.2 자리 표시와 같은 문구
 
 export type AttachmentRecord = { blob: Blob; width: number; height: number }
 export type ResolveAttachment = (id: string) => Promise<AttachmentRecord | null>
-
-// 자리 표시로 바꾼다 (F-157 2.2 와 같은 모양, F-158 2.1)
-function showPlaceholder(container: HTMLElement, alt: string, text: string): void {
-  container.replaceChildren()
-  container.classList.add('md-image-missing')
-  container.style.aspectRatio = ''
-  const icon = document.createElement('span')
-  icon.className = 'md-image-missing-icon'
-  icon.setAttribute('aria-hidden', 'true')
-  icon.innerHTML = brokenImageSvg
-  const label = document.createElement('span')
-  label.className = 'md-image-missing-text'
-  label.textContent = text
-  container.append(icon, label)
-  container.setAttribute('role', 'img')
-  container.setAttribute('aria-label', alt || '이미지')
-}
-
-// blob URL 을 img.src 에 넣고 불러오기 전에도 높이가 정해지게 aspect-ratio 를 준다 (F-157 2.2)
-function showImage(container: HTMLElement, img: HTMLImageElement, url: string, width: number, height: number): void {
-  container.classList.remove('md-image-missing')
-  container.removeAttribute('role')
-  container.removeAttribute('aria-label')
-  if (width > 0 && height > 0) container.style.aspectRatio = `${width} / ${height}`
-  img.src = url
-}
 
 type BreadcrumbEntry = { id: string; name: string }
 
@@ -46,6 +22,8 @@ export type ViewContextMenuInfo = { x: number; y: number; hasSelection: boolean;
 
 type ViewerProps = {
   html: string
+  // 앱 테마(white|sepia|dark) — mermaid 다이어그램 렌더링에 쓰인다. 생략하면 'white' (F-260.md 2.4)
+  theme?: string
   // 본문 맨 위 제목 (F-217.md 2.1) — 생략하면(공유·공개 보기 화면, 이미 자체 제목 줄이 있다) 그리지 않는다
   title?: string
   // 문서가 든 폴더 경로 (F-234.md 3.4) — 생략하거나 비면 그리지 않는다
@@ -64,6 +42,7 @@ type ViewerProps = {
 // codeCopy 는 참이면 pre > code 마다 복사 버튼을 붙인다. 지금은 공개 보기(S-5)에서만 켠다 (F-210 2.5)
 export default function Viewer({
   html,
+  theme,
   title,
   breadcrumb,
   onNavigateFolder,
@@ -136,14 +115,64 @@ export default function Viewer({
     }
   }, [])
 
-  // 그린 뒤 pre > code 마다 복사 버튼을 붙인다 (codeCopy 가 참일 때만, F-210 2.5)
+  // 그린 뒤 .md-mermaid[data-mermaid-source] 마다 렌더링해 채운다 (F-258 2.4, 이미지 로드와 같은 패턴)
+  // theme 이 바뀌면(F-260 2.4) html 은 그대로라도 다시 그린다 — 의존성 배열에 theme 을 넣는다
+  useEffect(() => {
+    const root = containerRef.current
+    if (!root) return
+
+    let cancelled = false
+    const nodes = root.querySelectorAll<HTMLElement>('.md-mermaid[data-mermaid-source]')
+
+    nodes.forEach((node) => {
+      const source = node.dataset.mermaidSource
+      if (source === undefined) return
+
+      renderMermaid(source, theme ?? 'white').then((result) => {
+        if (cancelled) return
+        if ('svg' in result) {
+          node.innerHTML = result.svg
+        } else {
+          node.replaceChildren()
+          const errorEl = document.createElement('div')
+          errorEl.className = 'md-mermaid-error'
+          errorEl.textContent = result.error
+          node.appendChild(errorEl)
+        }
+      })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [html, theme])
+
+  // 그린 뒤 pre > code 마다 머리줄(언어 + 복사 버튼)을 조립해 붙인다 (codeCopy 가 참일 때만, F-210 2.5, F-293 3.6)
   useEffect(() => {
     const root = containerRef.current
     if (!root || !codeCopy) return
     root.querySelectorAll('pre > code').forEach((code) => {
       const pre = code.parentElement
       if (!pre) return
-      pre.appendChild(createCodeCopyButton(() => code.textContent ?? ''))
+      // 멱등 가드 — StrictMode 이중 실행으로 이미 감싸져 있으면 다시 만들지 않는다 (F-293 3.6)
+      if (pre.parentElement?.classList.contains('md-code')) return
+
+      const wrap = document.createElement('div')
+      wrap.className = 'md-code'
+      const head = document.createElement('div')
+      head.className = 'md-code-head'
+      const word = displayLangFromClass(code.className)
+      if (word) {
+        const lang = document.createElement('span')
+        lang.className = 'md-code-lang'
+        lang.textContent = word
+        head.appendChild(lang)
+      }
+      head.appendChild(createCodeCopyButton(() => code.textContent ?? ''))
+
+      pre.replaceWith(wrap)
+      wrap.appendChild(head)
+      wrap.appendChild(pre)
     })
   }, [html, codeCopy])
 

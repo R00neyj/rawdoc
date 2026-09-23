@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseHash, formatHash, formatShareHash, formatPublicFolderHash, formatPublicHash, parsePathRoute } from './hashRoute'
+import { parseHash, formatHash, formatShareHash, formatPublicFolderHash, formatPublicHash, formatMapHash, parsePathRoute } from './hashRoute'
 
 describe('parseHash', () => {
   it('#/d/{id} 형식이면 type doc, docId 를 돌려준다', () => {
@@ -65,6 +65,26 @@ describe('parseHash', () => {
   it('문자열이 아니면 type none', () => {
     expect(parseHash(undefined)).toEqual({ type: 'none' })
   })
+
+  it('#/map 은 type map, docId 없음 (F-292.md 6.1)', () => {
+    expect(parseHash('#/map')).toEqual({ type: 'map' })
+  })
+
+  it('#/map/{docId} 는 type map, docId 포함', () => {
+    expect(parseHash('#/map/abc-123')).toEqual({ type: 'map', docId: 'abc-123' })
+  })
+
+  it('#/map/ 은 / 뒤가 비어 type none', () => {
+    expect(parseHash('#/map/')).toEqual({ type: 'none' })
+  })
+
+  it('#/map/a/b 처럼 / 를 더 담으면 type none', () => {
+    expect(parseHash('#/map/a/b')).toEqual({ type: 'none' })
+  })
+
+  it('#/mapping 은 map 이 아니라 none', () => {
+    expect(parseHash('#/mapping')).toEqual({ type: 'none' })
+  })
 })
 
 describe('formatHash', () => {
@@ -100,6 +120,20 @@ describe('formatPublicHash', () => {
 
   it('docId 있으면 #/p/{토큰}/{docId}', () => {
     expect(formatPublicHash('tok1', 'doc1')).toBe('#/p/tok1/doc1')
+  })
+})
+
+describe('formatMapHash', () => {
+  it('docId 없으면 #/map', () => {
+    expect(formatMapHash()).toBe('#/map')
+  })
+
+  it('docId 있으면 #/map/{docId}', () => {
+    expect(formatMapHash('doc1')).toBe('#/map/doc1')
+  })
+
+  it('docId 가 null 이면 #/map', () => {
+    expect(formatMapHash(null)).toBe('#/map')
   })
 })
 

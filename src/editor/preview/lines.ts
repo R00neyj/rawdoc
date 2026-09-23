@@ -354,6 +354,9 @@ export function buildLines(
             const mid = state.doc.sliceString(node.from + 1, node.to - 1)
             const checked = mid === 'x' || mid === 'X'
             out.push(Decoration.replace({ widget: new CheckboxWidget(checked) }).range(node.from, node.to))
+            // 끝낸 항목은 글에 취소선 (2026-09-21 사용자 요청). 커서가 그 줄에 있으면 위 active 분기에서
+            // 이미 빠져나가므로, 원문이 드러난 줄에는 취소선도 걸리지 않는다
+            if (checked) out.push(lineClassRange(state.doc.lineAt(node.from), 'md-task-done'))
             return
           }
 

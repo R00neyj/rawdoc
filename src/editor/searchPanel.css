@@ -1,0 +1,391 @@
+/* CM6 검색·치환 패널(`@codemirror/search`) 색·서체를 앱 토큰에 맞춘다 (F-261.md 2.5, 최소 구현).
+   커스텀 UI를 새로 만들지 않고(F-261 사용자 확인) 라이브러리가 그리는 DOM 그대로 쓰되,
+   Notion 찾기 패널을 레퍼런스로 편집 영역 위에 뜨는 한 줄짜리 카드로 다시 입혔다
+   (2026-09-20 재작업 — 문구는 createEditor.ts 의 EditorState.phrases 로 한글화,
+   버튼은 아이콘 + 호버 툴팁으로 노출) */
+
+/* 라이브러리 기본 패널 래퍼(.cm-panels) — 상단에 회색 면 + 밑줄을 그리는데,
+   패널을 카드로 띄우면 래퍼는 내용이 없어(자식이 absolute) 밑줄만 남아 보인다. 지운다 */
+.cm-host .cm-panels {
+  position: static;
+  background: transparent;
+  color: inherit;
+}
+
+.cm-host .cm-panels-top,
+.cm-host .cm-panels-bottom {
+  border: none;
+}
+
+.cm-host .cm-panel.cm-search {
+  --icon-prev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 15l6-6 6 6' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --icon-next: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --icon-select: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --icon-replace: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 8h13l-3.5-3.5M20 16H7l3.5 3.5' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --icon-replace-all: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 5h12l-3-3M19 9H7l3 3M4 15h12l-3-3M19 19H7l3 3' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --icon-close: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 6l12 12M18 6L6 18' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E");
+  --icon-more: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='5' cy='12' r='2.1' fill='black'/%3E%3Ccircle cx='12' cy='12' r='2.1' fill='black'/%3E%3Ccircle cx='19' cy='12' r='2.1' fill='black'/%3E%3C/svg%3E");
+
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  left: auto;
+  z-index: 20;
+  /* 줄(row) 단위 세로 쌓기 — 예전엔 <br style="flex-basis:100%"> 로 줄을 억지로 나눴는데
+     퍼센트 flex-basis 를 가진 자식이 있으면 width:max-content 계산이 브라우저마다 어긋나
+     "더보기" 를 접어도 펼쳤을 때 폭 그대로 자리를 차지하는 문제가 있었다(2026-09-20 사용자
+     "더보기를 열지 않아도 공간이 그대로 차지되고 있는데"). createEditor.ts 의 searchMoreToggle 이
+     찾기·바꾸기 줄을 각각 .cm-search-row 로 감싸고, 카드는 그 줄들을 세로로만 쌓는다 */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: max-content;
+  max-width: min(300px, calc(100% - 20px));
+  /* 닫기 버튼이 flex 줄 안에 들어가(margin-left:auto) 더는 absolute 로 뺄 공간을
+     오른쪽에 미리 마련해 둘 필요가 없다 (2026-09-20 사용자 지적) */
+  padding: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-dialog);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  /* 카드 자체도 쫀득하게 나타난다 — 팝오버(.cm-search-more-panel)·대화상자(.dialog)와 같은
+     opacity+transform·@starting-style 패턴, 기존 --transition-pop* 변수 그대로 재사용
+     (2026-09-20 사용자 "쫀득하게 등장해야함") */
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transform-origin: top right;
+  transition: opacity var(--transition-pop-fade), transform var(--transition-pop);
+}
+
+@starting-style {
+  .cm-host .cm-panel.cm-search {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.9);
+  }
+}
+
+.cm-host .cm-panel.cm-search .cm-textfield {
+  /* 고정 폭 — flex:1 로 늘어나게 두면 검색어 입력 폭에 따라 뒤의 옵션 아이콘들이
+     줄바꿈 지점을 넘나들어 "단어 단위" 가 바꾸기 줄로 밀려나 보이는 문제가 있었다
+     (2026-09-20 사용자 "단어단위와 바꾸기 칸이 같이 있음"). 찾기·바꾸기 두 입력이 항상
+     같은 폭이라 줄 구성이 입력 내용과 무관하게 고정된다 */
+  flex: none;
+  width: 140px;
+  height: 30px;
+  padding: 0 10px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  font-family: inherit;
+  font-size: 13px;
+  transition: var(--transition-colors);
+}
+
+.cm-host .cm-panel.cm-search .cm-textfield:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* 아이콘 버튼 공통 — next·prev·select·replace·replaceAll·close.
+   원래 글자(phrase 로 한글화됨)는 화면엔 숨기고 접근성 트리에만 남긴다 */
+.cm-host .cm-panel.cm-search .cm-button,
+.cm-host .cm-panel.cm-search [name='close'] {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  color: var(--ink-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-size: 0;
+  line-height: 0;
+  transition: var(--transition-colors);
+}
+
+.cm-host .cm-panel.cm-search .cm-button:hover,
+.cm-host .cm-panel.cm-search [name='close']:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+.cm-host .cm-panel.cm-search .cm-button::before,
+.cm-host .cm-panel.cm-search [name='close']::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  background-color: currentColor;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
+.cm-host .cm-panel.cm-search .cm-button[name='prev']::before { -webkit-mask-image: var(--icon-prev); mask-image: var(--icon-prev); }
+.cm-host .cm-panel.cm-search .cm-button[name='next']::before { -webkit-mask-image: var(--icon-next); mask-image: var(--icon-next); }
+.cm-host .cm-panel.cm-search .cm-button[name='select']::before { -webkit-mask-image: var(--icon-select); mask-image: var(--icon-select); }
+.cm-host .cm-panel.cm-search .cm-button[name='replace']::before { -webkit-mask-image: var(--icon-replace); mask-image: var(--icon-replace); }
+.cm-host .cm-panel.cm-search .cm-button[name='replaceAll']::before { -webkit-mask-image: var(--icon-replace-all); mask-image: var(--icon-replace-all); }
+.cm-host .cm-panel.cm-search [name='close']::before { -webkit-mask-image: var(--icon-close); mask-image: var(--icon-close); }
+
+/* "더보기" 토글(createEditor.ts 의 searchMoreToggle 이 DOM 에 끼워 넣는다) — "···" 점 3개.
+   다음 찾기(icon-next, 아래 화살표)와 모양이 겹치지 않게 따로 둔다 (2026-09-20 사용자 지적).
+   자주 안 쓰는 옵션(모두 선택·대소문자·정규식·단어 단위)을 기본은 숨기고 이 버튼으로만 연다 */
+.cm-host .cm-panel.cm-search .cm-search-more::before {
+  -webkit-mask-image: var(--icon-more);
+  mask-image: var(--icon-more);
+}
+
+.cm-host .cm-panel.cm-search.cm-search--expanded .cm-search-more {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.cm-host .cm-panel.cm-search .cm-search-more::after { content: '옵션 더 보기'; }
+.cm-host .cm-panel.cm-search.cm-search--expanded .cm-search-more::after { content: '옵션 접기'; }
+
+/* 옵션 팝오버 — 같은 줄에 펼치지 않고 카드 아래에 별도 카드로 띄운다
+   (createEditor.ts 가 모두 선택 버튼·라벨 3개를 이 컨테이너로 옮긴다).
+   토글의 offsetLeft 로 left 를 맞추던 방식은 카드가 화면 오른쪽 끝(right:10px)에 붙어 있어
+   팝오버가 화면 밖으로 나가는 문제가 있었다(2026-09-20 사용자 지적) — 카드 오른쪽 끝에
+   맞춰 고정하면 카드 자체가 이미 뷰포트 안에 있으니 항상 안에 들어온다 */
+.cm-host .cm-panel.cm-search .cm-search-more-panel {
+  display: flex;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 25;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  max-width: 220px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  /* display:none 대신 opacity·visibility 로 여닫아 트랜지션을 준다 — 앱의 다른 팝오버
+     (.item-menu-list, F-255.md 3.2·3.4)와 같은 방식 (2026-09-20 사용자 "트랜지션 누락됨") */
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px) scale(0.9);
+  transform-origin: top right;
+  /* 닫힘은 튕기지 않는다 — 열림 전용 곡선은 .cm-search--expanded 규칙이 덮는다 */
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+}
+
+.cm-host .cm-panel.cm-search.cm-search--expanded .cm-search-more-panel {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  transition: opacity var(--transition-pop-fade), transform var(--transition-pop), visibility var(--transition-pop-fade);
+}
+
+@starting-style {
+  .cm-host .cm-panel.cm-search.cm-search--expanded .cm-search-more-panel {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.9);
+  }
+}
+
+/* 호버 툴팁 — 앱 공통 .icon-tooltip 규칙과 같은 모양·트랜지션(배경 --ink, 글자 --panel, 12px,
+   모서리 6px, scale·translate 로 나타남, design.md 4장). 전에는 opacity·visibility 만 바뀌어
+   앱의 다른 아이콘 버튼 툴팁과 트랜지션 규칙이 달랐다(2026-09-20 사용자 지적) */
+.cm-host .cm-panel.cm-search .cm-button::after,
+.cm-host .cm-panel.cm-search [name='close']::after {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--panel);
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  scale: 0.82;
+  translate: 0 -4px;
+  transform-origin: top center;
+  transition: opacity 120ms var(--ease-out);
+  z-index: 30;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-host .cm-panel.cm-search .cm-button::after,
+  .cm-host .cm-panel.cm-search [name='close']::after,
+  .cm-host .cm-panel.cm-search label::after {
+    transition-duration: 0ms;
+  }
+}
+
+.cm-host .cm-panel.cm-search .cm-button[name='prev']::after { content: '이전 찾기'; }
+.cm-host .cm-panel.cm-search .cm-button[name='next']::after { content: '다음 찾기'; }
+.cm-host .cm-panel.cm-search .cm-button[name='select']::after { content: '일치 항목 모두 선택'; }
+.cm-host .cm-panel.cm-search .cm-button[name='replace']::after { content: '바꾸기'; }
+.cm-host .cm-panel.cm-search .cm-button[name='replaceAll']::after { content: '모두 바꾸기'; }
+.cm-host .cm-panel.cm-search [name='close']::after { content: '닫기'; right: 0; left: auto; transform: none; }
+
+.cm-host .cm-panel.cm-search .cm-button:hover::after,
+.cm-host .cm-panel.cm-search .cm-button:focus-visible::after,
+.cm-host .cm-panel.cm-search [name='close']:hover::after,
+.cm-host .cm-panel.cm-search [name='close']:focus-visible::after {
+  opacity: 1;
+  scale: 1;
+  translate: 0 0;
+  transition: opacity var(--transition-pop-fade), scale var(--transition-pop), translate var(--transition-pop);
+  transition-delay: 400ms;
+}
+
+/* 대소문자·정규식·단어 단위 — 체크박스가 아니라 눌림 토글 아이콘 버튼처럼 보이게 한다.
+   실제 <input type=checkbox> 는 라벨 전체를 덮어 그대로 두고(클릭·접근성·:checked 는 그대로 동작),
+   시각적으로만 숨기고 글자 대신 짧은 기호를 ::before 로 그린다 */
+.cm-host .cm-panel.cm-search label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  color: var(--ink-2);
+  font-size: 0;
+  cursor: pointer;
+  transition: var(--transition-colors);
+}
+
+.cm-host .cm-panel.cm-search label:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+.cm-host .cm-panel.cm-search label:has(input:checked) {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.cm-host .cm-panel.cm-search label::before {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
+.cm-host .cm-panel.cm-search label:has(input[name='case'])::before { content: 'Aa'; }
+.cm-host .cm-panel.cm-search label:has(input[name='re'])::before { content: '.*'; font-size: 13px; }
+.cm-host .cm-panel.cm-search label:has(input[name='word'])::before { content: '|ab|'; font-size: 10px; letter-spacing: -0.03em; }
+
+.cm-host .cm-panel.cm-search label:has(input[name='case'])::after { content: '대소문자 구분'; }
+.cm-host .cm-panel.cm-search label:has(input[name='re'])::after { content: '정규식'; }
+.cm-host .cm-panel.cm-search label:has(input[name='word'])::after { content: '단어 단위'; }
+
+.cm-host .cm-panel.cm-search label::after {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--panel);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  scale: 0.82;
+  translate: 0 -4px;
+  transform-origin: top center;
+  transition: opacity 120ms var(--ease-out);
+  z-index: 30;
+}
+
+.cm-host .cm-panel.cm-search label:hover::after,
+.cm-host .cm-panel.cm-search label:focus-within::after {
+  opacity: 1;
+  scale: 1;
+  translate: 0 0;
+  transition: opacity var(--transition-pop-fade), scale var(--transition-pop), translate var(--transition-pop);
+  transition-delay: 400ms;
+}
+
+.cm-host .cm-panel.cm-search input[type='checkbox'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* 모두 선택·대소문자·정규식·단어 단위는 "더보기" 를 눌러야 보인다. 기본은 숨김 —
+   위 선택자(.cm-button·label)가 준 display:inline-flex 를 소스 순서로 덮는다 */
+.cm-host .cm-panel.cm-search .cm-button[name='select'],
+.cm-host .cm-panel.cm-search label {
+  display: none;
+}
+
+.cm-host .cm-panel.cm-search.cm-search--expanded .cm-button[name='select'] {
+  display: inline-flex;
+}
+
+.cm-host .cm-panel.cm-search.cm-search--expanded label {
+  display: inline-flex;
+}
+
+/* 찾기·바꾸기 각 줄(row) — searchMoreToggle 이 만드는 실제 <div> 컨테이너.
+   라이브러리가 원래 넣던 <br> 구분선은 JS 에서 지우고, 대신 바꾸기 줄 위 테두리로 같은
+   모양을 낸다 */
+.cm-host .cm-panel.cm-search .cm-search-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cm-host .cm-panel.cm-search .cm-search-row--replace {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid var(--rule);
+}
+
+/* 예전엔 position:absolute 로 카드 오른쪽 위에 따로 띄웠는데 다른 버튼과 세로 정렬이
+   살짝 어긋나 보였다(2026-09-20 사용자 지적) — 찾기 줄(.cm-search-row) 안에 넣고
+   margin-left:auto 로 같은 줄 끝으로 미는 것으로 바꾼다(createEditor.ts) */
+.cm-host .cm-panel.cm-search [name='close'] {
+  margin-left: auto;
+}
+
+/* 옅은 브랜드색은 시인성이 떨어져(2026-09-20 사용자 지적) CM6 라이브러리 기본 노랑으로 되돌린다.
+   현재 선택된 매치는 노랑 배경과 구분되도록 주황 계열 링으로 감싼다 — 임의 hex 대신
+   이미 테마별(화이트·세피아·다크)로 정의된 --callout-warning 토큰을 재사용해 다크모드에서도
+   따로 관리할 필요가 없게 한다(2026-09-20 사용자 "변수로 관리해야 다크모드에서 관리 편할듯") */
+.cm-host .cm-editor .cm-searchMatch {
+  background: #ffff0054;
+}
+
+/* background 는 따로 안 준다 — 선택된 매치도 cm-searchMatch 클래스를 같이 가지고 있어
+   (CM6 selectedMatchMark) 위 노랑 배경을 그대로 깔고 링만 더한다(2026-09-20 사용자 지적) */
+.cm-host .cm-editor .cm-searchMatch-selected {
+  box-shadow: 0 0 0 2px var(--callout-warning);
+  border-radius: 3px;
+}

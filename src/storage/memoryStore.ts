@@ -62,21 +62,43 @@ export function createMemoryStore(): Store {
       return doc ? clone(normalizeDoc(doc)) : null
     },
 
-    async create({ title, content, lineEnding, folderId = null }: { title: string; content: string; lineEnding: LineEnding; folderId?: string | null }) {
+    // id 가 이미 있으면 던진다(덮지 않는다). 가져오기(F-282)가 id·시각·고정을 유지할 때만 준다 (F-282.md 3.11)
+    async create({
+      title,
+      content,
+      lineEnding,
+      folderId = null,
+      id,
+      createdAt,
+      updatedAt,
+      pinnedAt,
+    }: {
+      title: string
+      content: string
+      lineEnding: LineEnding
+      folderId?: string | null
+      id?: string
+      createdAt?: number
+      updatedAt?: number
+      pinnedAt?: number | null
+    }) {
       // folderId 가 null 또는 존재하는 폴더가 아니면 문서를 만들지 않는다 (F-136.md 3.1·3.2)
       if (!isValidFolderId([...folders.values()], folderId)) {
         throw new Error(`유효하지 않은 folderId: ${String(folderId)}`)
       }
+      if (id !== undefined && docs.has(id)) {
+        throw new Error(`이미 있는 id: ${id}`)
+      }
       const now = Date.now()
       const doc: Doc = {
-        id: crypto.randomUUID(),
+        id: id ?? crypto.randomUUID(),
         title,
         content,
         lineEnding,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: createdAt ?? now,
+        updatedAt: updatedAt ?? now,
         folderId,
-        pinnedAt: null,
+        pinnedAt: pinnedAt ?? null,
       }
       docs.set(doc.id, doc)
       return clone(doc)
@@ -134,18 +156,34 @@ export function createMemoryStore(): Store {
       return [...folders.values()].map(clone)
     },
 
-    async createFolder({ name, parentId = null }: { name: string; parentId?: string | null }) {
+    // id 가 이미 있으면 던진다. 가져오기(F-282)가 id·시각을 유지할 때만 준다 (F-282.md 3.11)
+    async createFolder({
+      name,
+      parentId = null,
+      id,
+      createdAt,
+      updatedAt,
+    }: {
+      name: string
+      parentId?: string | null
+      id?: string
+      createdAt?: number
+      updatedAt?: number
+    }) {
       const allFolders = [...folders.values()]
       if (!canCreateFolder({ folders: allFolders, parentId })) {
         throw new Error(`상위 폴더가 될 수 없음: ${parentId}`)
       }
+      if (id !== undefined && folders.has(id)) {
+        throw new Error(`이미 있는 id: ${id}`)
+      }
       const now = Date.now()
       const folder: Folder = {
-        id: crypto.randomUUID(),
+        id: id ?? crypto.randomUUID(),
         name: name || '새 폴더',
         parentId,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: createdAt ?? now,
+        updatedAt: updatedAt ?? now,
       }
       folders.set(folder.id, folder)
       return clone(folder)
@@ -215,7 +253,29 @@ export function createMemoryStore(): Store {
     },
 
     // F-156.md 2.3 — idbStore 와 같은 모양. 새로고침하면 사라진다
-    async putAttachment({ blob, mime, ext, width, height }: { blob: Blob; mime: string; ext: AttachmentExt; width: number; height: number }) {
+    // id 를 주면 그 id 로 저장한다. 이미 있으면 덮지 않고 기존 것을 그대로 돌려준다 (F-282.md 3.11)
+    async putAttachment({
+      blob,
+      mime,
+      ext,
+      width,
+      height,
+      id: givenId,
+    }: {
+      blob: Blob
+      mime: string
+      ext: AttachmentExt
+      width: number
+      height: number
+      id?: string
+    }) {
+      if (givenId !== undefined) {
+        const existing = attachments.get(givenId)
+        if (existing) return { id: existing.id, ext: existing.ext }
+        const record: Attachment = { id: givenId, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob }
+        attachments.set(givenId, record)
+        return { id: givenId, ext }
+      }
       let id = randomAttachmentId()
       while (attachments.has(id)) {
         id = randomAttachmentId()

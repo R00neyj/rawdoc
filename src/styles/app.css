@@ -35,10 +35,7 @@ svg {
   background: var(--panel);
 }
 
-/* 검색 버튼(로직 없음, F-143 3.5) — 색은 .icon-btn[aria-disabled] 기본값(--muted)을 따른다 */
-.topbar-search-btn {
-  cursor: default;
-}
+/* .topbar-search-btn 클래스 이름은 F-216 의 :has(> .topbar-search-btn) 선택자가 걸려 있어 남긴다 (F-287) */
 
 /* 좁은 창 상단바 앞 묶음(제품명·토글·검색) — 내용만큼의 폭 (F-159 2.4, ia.md 3.11) */
 .topbar-lead {
@@ -379,7 +376,9 @@ svg {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 10px 10px 12px;
+  /* 오른쪽 여백을 없애 스크롤바가 차지하는 만큼까지 가로 공간을 넉넉하게 쓴다
+     (2026-09-20 사용자 요청 — 처음엔 왼쪽으로 잘못 전달됐던 걸 정정) */
+  padding: 10px 0 12px 10px;
 }
 
 .sidebar--collapsed .sidebar-inner {
@@ -463,6 +462,30 @@ body.sidebar-resizing {
   background: transparent;
 }
 
+/* 동작 버튼(새 문서·새 폴더·가져오기)·고정됨 묶음 — 문서가 많아져도 스크롤 밖에 고정
+   (2026-09-20 사용자 "고정됨과 함께 스크롤 안되고 상단에 고정으로 표시") */
+.sidebar-fixed {
+  flex: none;
+}
+
+.sidebar-actions {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin: 2px 0 8px;
+}
+
+/* 휴대폰 폭 검색 진입점(F-287 3.3) — 상단바 검색이 숨는(F-216) 그 600px 미디어 쿼리를 그대로 쓴다 */
+.icon-btn-wrap:has(> .sidebar-search-btn) {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .icon-btn-wrap:has(> .sidebar-search-btn) {
+    display: flex;
+  }
+}
+
 .sidebar-scroll {
   flex: 1;
   min-height: 0;
@@ -477,10 +500,18 @@ body.sidebar-resizing {
   gap: 4px;
 }
 
+/* 레일 아이콘 4개는 늘어나지 않으므로 스크롤이 필요 없다. `overflow-y: auto` 를 두면 가로축도
+   `auto` 로 계산돼(CSS Overflow 3 — 한 축이 visible 이 아니면 다른 축의 visible 은 auto 가 된다)
+   버튼 오른쪽으로 나가는 툴팁이 잘리고 48px 레일에 가로 스크롤바까지 생겼다 (2026-09-21) */
 .sidebar-rail-scroll {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: visible;
+}
+
+/* 같은 이유로 접혔을 때만 바깥 묶음의 가리기를 푼다. 펼친 사이드바는 그대로 둔다 */
+.sidebar--collapsed .sidebar-inner {
+  overflow: visible;
 }
 
 .sidebar-bottom {
@@ -518,6 +549,13 @@ body.sidebar-resizing {
   color: var(--ink-2);
   margin-bottom: 2px;
   transition: var(--transition-colors);
+  text-decoration: none;
+}
+
+/* 사이트로 나가는 사이드바 항목의 새 탭 표시 (F-276 4.3) */
+.sidebar-btn-ext {
+  flex: none;
+  color: var(--muted);
 }
 
 .sidebar-btn:hover:not([aria-disabled='true']) {
@@ -537,12 +575,6 @@ body.sidebar-resizing {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.sidebar-btn-hint {
-  flex: none;
-  font-size: 11px;
-  color: var(--muted);
 }
 
 /* 레일 아이콘 전용 버튼 — 툴팁은 버튼 오른쪽 (F-143 3.3) */
@@ -736,6 +768,8 @@ body.sidebar-resizing {
   overflow: hidden;
   text-overflow: ellipsis;
   transition: var(--transition-colors);
+  text-decoration: none; /* F-296.md 4.4 — 문서 라벨이 <a> 가 됐다 */
+  cursor: pointer;
 }
 
 .doc-item-btn[aria-current='page'] {
@@ -826,6 +860,25 @@ body.sidebar-resizing {
   top: 0;
   left: 0;
   transform-origin: top left;
+}
+
+/* 스크롤되는 조상(.sidebar-scroll 등) 아래쪽에 가까운 행은 메뉴가 아래로 열리면 잘려
+   `삭제` 같은 항목이 안 보이는 문제가 있었다(2026-09-20 사용자 신고) — FolderMenu.tsx 가
+   열릴 자리를 재고 위로 열 때 붙이는 보정 클래스 */
+.item-menu-list--up {
+  top: auto;
+  bottom: calc(100% + 2px);
+  transform-origin: bottom right;
+}
+
+.item-menu-list--up[data-state='closed'] {
+  transform: translateY(4px) scale(0.9);
+}
+
+@starting-style {
+  .item-menu-list--up[data-state='open'] {
+    transform: translateY(4px) scale(0.9);
+  }
 }
 
 /* 트리거 없이 프로그램으로만 여는 인스턴스(우클릭·여러 항목 메뉴) — 자리를 차지하지 않는다 (F-255.md 3.4) */
@@ -1151,6 +1204,8 @@ body.sidebar-resizing {
   color: var(--ink);
   text-align: left;
   transition: var(--transition-colors);
+  text-decoration: none; /* F-296.md 4.4 — <a> 가 됐다 */
+  cursor: pointer;
 }
 
 .empty-state-recent-item:hover {
@@ -1332,7 +1387,204 @@ body.sidebar-resizing {
   color: var(--muted);
 }
 
-.dialog-actions button {
+/* 검색 대화상자 (specs/features/F-287.md 4.1) */
+.search-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--muted);
+  margin-bottom: 10px;
+  transition: var(--transition-colors);
+}
+
+/* 포커스 표시는 묶음 테두리 한 겹 — 입력 자체 외곽선은 끈다 (F-225 2장의 .invite-input-group 과 같은 방식) */
+.search-input-row:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* tokens.css 의 전역 리셋은 button 만 덮고 input 은 font·color 만 물려준다.
+   테두리·배경을 끄지 않으면 브라우저 기본 상자가 위 묶음 테두리 안에 한 겹 더 보인다 (2026-09-21) */
+.search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.search-input:focus-visible {
+  outline: none;
+}
+
+.search-status {
+  padding: 24px 4px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.search-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.search-result--on {
+  background: var(--rule-2);
+}
+
+.search-result-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.search-result-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.search-result-meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.search-result-shared {
+  color: var(--link);
+}
+
+.search-result-snippet {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.search-hit {
+  background: var(--md-highlight-bg);
+  color: inherit;
+}
+
+/* 해석 줄·안내 줄·꼬리 줄 (specs/features/F-288.md 10.1) */
+.search-notes {
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.search-summary,
+.search-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.search-foot {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* 설정 대화상자 왼쪽 탭 목록 + 오른쪽 패널 (specs/features/F-290.md 3.8) */
+.settings-body {
+  display: flex;
+  gap: 14px;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+  width: 84px;
+}
+
+.settings-tabs button {
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+/* 탭마다 항목 수가 달라(화면 388px ↔ 데이터 108px) 닫기 버튼 자리가 280px 씩 튀던 것을 막는다.
+   가장 긴 `화면` 탭에 맞춰 고정하고 넘치면 스크롤한다 (F-290 9장 3번을 사용자가 2026-09-21 판단).
+   min() 은 창이 아주 낮을 때만 걸린다 — 900px 창에서는 60vh=540px 라 392px 그대로다 */
+.settings-panel {
+  flex: 1;
+  min-width: 0;
+  height: min(392px, 60vh);
+  overflow-y: auto;
+}
+
+.settings-panel .dialog-field:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 459px) {
+  .settings-body {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .settings-tabs {
+    flex-direction: row;
+    width: auto;
+  }
+}
+
+/* 가져오기 미리보기·결과 대화상자의 경고·실패 목록 (specs/features/F-282.md 3.8) */
+.import-list {
+  margin: 0 0 16px;
+  padding-left: 20px;
+  font-size: 12.5px;
+  color: var(--muted);
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+/* `데이터` 탭 버튼 행 — 전체 내보내기(F-282 뒤 가져오기…) + 안내 문구 (F-290.md 3.6) */
+.dialog-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dialog-btn-row .dialog-note {
+  margin: 0;
+  text-align: left;
+}
+
+.dialog-actions button,
+.dialog-btn {
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
   padding: 7px 14px;
@@ -1340,7 +1592,8 @@ body.sidebar-resizing {
   transition: var(--transition-colors);
 }
 
-.dialog-actions button:hover {
+.dialog-actions button:hover,
+.dialog-btn:hover {
   background: var(--rule-2);
 }
 
@@ -1951,7 +2204,7 @@ body.sidebar-resizing {
   transition-delay: 400ms;
 }
 
-.icon-btn-wrap button:focus-visible ~ .icon-tooltip {
+.icon-btn-wrap :is(button, a):focus-visible ~ .icon-tooltip {
   opacity: 1;
   scale: 1;
   translate: 0 0;
@@ -1963,26 +2216,34 @@ body.sidebar-resizing {
   border-left: 1px solid var(--rule);
 }
 
-/* 선택된 버튼 — 2.1 아이콘 버튼 선택 표시와 같은 모양, 설정 대화상자 글자 세그먼트도 포함 (design.md 4장, F-153 2.1·2.2) */
+/* 선택된 버튼 — 2.1 아이콘 버튼 선택 표시와 같은 모양, 설정 대화상자 글자 세그먼트·왼쪽 탭도 포함 (design.md 4장, F-153 2.1·2.2, F-290.md 3.8) */
 .seg button[aria-checked='true'],
-.seg button[aria-pressed='true'] {
+.seg button[aria-pressed='true'],
+.settings-tabs button[aria-selected='true'] {
   background: color-mix(in srgb, var(--ink) 10%, transparent);
   color: var(--ink);
   font-weight: 600;
 }
 
-.seg button:disabled {
+.seg button:disabled,
+.dialog-btn:disabled {
   color: var(--muted);
   cursor: default;
 }
 
-/* 보기 모드 묶음 — 바깥 테두리·구분선 없음, 버튼 사이 2px, 툴팁 때문에 overflow:hidden 끈다 (design.md 4장, F-153 2.1) */
+/* 보기 모드 묶음 — 버튼 사이 2px, 툴팁 때문에 overflow:hidden 끈다 (F-153 2.1) */
+/* 바깥 테두리는 .seg 기본값을 그대로 쓴다 — 세 모드가 배타적인 한 벌이라 묶어 보인다 (2026-09-21 F-153 2.1) */
 .view-mode-seg {
   flex: none;
-  border: none;
-  border-radius: 0;
   overflow: visible;
   gap: 2px;
+  /* 잘라내기를 껐으니 버튼(6px)과 묶음(7px)의 반지름 차이를 2px 들여놓기로 가린다 */
+  padding: 2px;
+}
+
+/* 버튼 사이가 2px 벌어져 있어 .seg 의 구분선이 허공에 뜬다 — 보기 모드에서만 끈다 */
+.view-mode-seg button + button {
+  border-left: none;
 }
 
 /* 보기 모드 세그먼트는 아이콘 전용 32x32 버튼, 모양·선택 표시는 .icon-btn 기본값 그대로 (F-142 3.2, F-153 2.1) */
@@ -2118,20 +2379,23 @@ body.sidebar-resizing {
   color: var(--ink-2);
 }
 
-/* ===== 상단바 공유 메뉴 (specs/features/F-130.md 2장, ia.md 3.19) ===== */
-.share-menu {
+/* ===== 상단바 공유·내보내기 메뉴 (specs/features/F-130.md 2장, F-278.md 3장, ia.md 3.19) ===== */
+.share-menu,
+.export-menu {
   position: relative;
   flex: none;
 }
 
 /* 모양은 .icon-btn 기본값 그대로, 메뉴가 열린 동안은 선택 버튼과 같은 바탕, hover 규칙과 우선순위를 맞춰 이긴다 (design.md 4장, F-153 2.1) */
-.share-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']) {
+.share-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']),
+.export-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']) {
   background: color-mix(in srgb, var(--ink) 10%, transparent);
   color: var(--ink);
 }
 
 /* 나타나고 사라지는 전환 — usePresence 의 [data-state] 로 몬다 (F-172.md 2.1·2.2) */
-.share-menu-list {
+.share-menu-list,
+.export-menu-list {
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
@@ -2154,24 +2418,28 @@ body.sidebar-resizing {
   transition-behavior: allow-discrete;
 }
 
-.share-menu-list[data-state='closed'] {
+.share-menu-list[data-state='closed'],
+.export-menu-list[data-state='closed'] {
   opacity: 0;
   visibility: hidden;
   transform: translateY(-4px) scale(0.9);
 }
 
-.share-menu-list[data-state='open'] {
+.share-menu-list[data-state='open'],
+.export-menu-list[data-state='open'] {
   transition: opacity var(--transition-pop-fade), transform var(--transition-pop), visibility var(--transition-pop-fade);
 }
 
 @starting-style {
-  .share-menu-list[data-state='open'] {
+  .share-menu-list[data-state='open'],
+  .export-menu-list[data-state='open'] {
     opacity: 0;
     transform: translateY(-4px) scale(0.9);
   }
 }
 
-.share-menu-list button {
+.share-menu-list button,
+.export-menu-list button {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2186,7 +2454,9 @@ body.sidebar-resizing {
 }
 
 .share-menu-list button:hover,
-.share-menu-list button:focus-visible {
+.share-menu-list button:focus-visible,
+.export-menu-list button:hover,
+.export-menu-list button:focus-visible {
   background: var(--rule-2);
   color: var(--ink);
 }
@@ -2586,31 +2856,6 @@ body.sidebar-resizing {
   white-space: nowrap;
 }
 
-.public-view-settings,
-.public-view-export {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-control);
-  padding: 6px 10px;
-  font-size: 12.5px;
-  white-space: nowrap;
-  color: var(--ink);
-  transition: var(--transition-colors);
-}
-
-.public-view-settings:hover,
-.public-view-export:hover {
-  background: var(--rule-2);
-}
-
-.public-view-export:disabled {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
 .public-view-body {
   flex: 1;
 }
@@ -2625,6 +2870,23 @@ body.sidebar-resizing {
   gap: 10px;
   color: var(--ink-2);
   font-size: 14px;
+}
+
+/* 오류 안내의 동작 버튼 — 빈 상태 버튼과 같은 모양 (design.md 4장 "기능 버튼은 아이콘 + 글자", F-293 3.5) */
+.public-view-notice button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 8px 16px;
+  font-size: 13.5px;
+  color: var(--ink);
+  transition: var(--transition-colors);
+}
+
+.public-view-notice button:hover {
+  background: var(--rule-2);
 }
 
 .public-view-main {
@@ -2650,15 +2912,6 @@ body.sidebar-resizing {
   padding: 0 16px;
   border-bottom: 1px solid var(--rule);
   background: var(--paper);
-}
-
-.public-folder-list-toggle {
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-control);
-  padding: 4px 10px;
-  font-size: 12.5px;
-  color: var(--ink);
-  background: var(--panel);
 }
 
 .public-folder-layout {
@@ -2731,8 +2984,8 @@ body.sidebar-resizing {
   text-align: left;
   padding: 6px 8px;
   border-radius: var(--radius-control);
-  font-size: 13px;
-  color: var(--ink);
+  font-size: 13.5px;
+  color: var(--ink-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2743,7 +2996,8 @@ body.sidebar-resizing {
 }
 
 .public-folder-list-doc.is-current {
-  background: var(--rule-2);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
   font-weight: 600;
 }
 

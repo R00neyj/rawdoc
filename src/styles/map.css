@@ -1,0 +1,389 @@
+/* ----- 위키링크 지도 (specs/features/F-292.md 8장) — 색은 토큰·color-mix() 만 쓴다 ----- */
+.map-page {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+
+/* 제목·보기 설정·닫기가 모두 이 한 줄에 들어간다. 좁은 창에서는 wrap 으로 접힌다 */
+.map-page-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  min-height: var(--topbar-h);
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.map-page-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-page-title {
+  margin: 0 6px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.map-page-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.map-page-close:hover {
+  background: var(--rule-2);
+}
+
+.map-segment {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.map-segment button {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.map-segment button + button {
+  border-left: 1px solid var(--rule);
+}
+
+.map-segment button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.map-segment button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.map-fit-btn {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.map-fit-btn:hover {
+  background: var(--rule-2);
+}
+
+.map-page-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.map-status {
+  padding: 24px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.map-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  color: var(--ink-2);
+  padding: 24px;
+}
+
+.map-empty p {
+  margin: 0;
+}
+
+.map-empty button,
+.map-empty a {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--ink);
+  transition: var(--transition-colors);
+}
+
+.map-empty button:hover,
+.map-empty a:hover {
+  background: var(--rule-2);
+}
+
+/* ----- 3D 장면 (specs/features/F-2002.md 8장) ----- */
+.map-scene {
+  position: absolute;
+  inset: 0;
+}
+
+.map-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* tabindex="-1" 이라 Tab 으로 닿지 않는다 — 키보드 사용자의 대안은 `목록` 세그먼트다 (F-292 6.10) */
+.map-canvas:focus,
+.map-canvas:focus-visible {
+  outline: none;
+}
+
+/* 캔버스 위에 겹치는 이름표 레이어 (specs/features/F-2004.md 7장·10장). pointer-events 를 빼면 노드 바로 아래 이름표가 클릭을 가로챈다 */
+.map-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* JS 는 style.translate(개별 속성)만 쓰고 가운데 맞춤·여백은 여기서 한다 — 둘은 섞이지 않는다 (7.4) */
+.map-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, 0);
+  padding-top: 4px;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  /* F-292 6.2 는 11px 이었는데 앱에서 제일 작은 글자라 안 읽혔다. 14px 은 지도 머리 줄 제목과 같은 크기다 (사용자 지시 2026-09-22) */
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--ink-2);
+}
+
+.map-label[hidden] {
+  display: none;
+}
+
+/* 테마 토큰을 읽으려고 돌려쓰는 요소 하나 (6.3). 화면에 아무것도 내지 않는다 */
+.map-probe {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 본문을 대체하지 않고 캔버스 위에 겹치는 한 줄 안내 (7.4) */
+.map-notice {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 16px;
+  text-align: center;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.map-notice a {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 2px 10px;
+  color: var(--ink);
+  transition: var(--transition-colors);
+}
+
+.map-notice a:hover {
+  background: var(--rule-2);
+}
+
+/* 안내 줄이 떠 있으면 목록 첫 줄이 그 밑에 깔린다 — 그만큼 밀어 둔다 */
+.map-page-body:has(.map-notice) .map-list {
+  padding-top: 56px;
+}
+
+/* `배치를 계산하는 중…` 이 캔버스와 형제로 겹쳐 뜬다 */
+.map-page-body > .map-status {
+  position: absolute;
+}
+
+.map-page-foot {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--rule);
+  background: var(--paper);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ----- 목록 대체 표시 (7.4) — 글이라 읽기 폭이 있는 게 낫다 ----- */
+.map-list {
+  height: 100%;
+  overflow-y: auto;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.map-list-group + .map-list-group {
+  margin-top: 20px;
+}
+
+.map-list-group h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.map-list-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.map-list-group button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  font-size: 13.5px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.map-list-group button:hover {
+  background: var(--rule-2);
+}
+
+/* ----- 지도 설정 패널 (specs/features/F-2005.md 4·6·9장) — 캔버스를 줄이지 않고 위에 겹친다 (6.1) ----- */
+.map-settings-btn[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.map-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 280px;
+  overflow-y: auto;
+  background: var(--paper);
+  border-left: 1px solid var(--rule);
+  padding: 12px 16px;
+  transform: translateX(0);
+  transition: transform var(--transition-fast);
+}
+
+.map-panel[data-state='closed'] {
+  transform: translateX(100%);
+}
+
+@media (max-width: 560px) {
+  .map-panel {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-panel {
+    transition: none;
+  }
+}
+
+.map-panel-section + .map-panel-section {
+  border-top: 1px solid var(--rule);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.map-panel-section h2 {
+  margin: 0;
+}
+
+.map-panel-section-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.map-panel-section-body {
+  padding: 8px 0 4px;
+}
+
+.map-slider {
+  margin-bottom: 14px;
+}
+
+.map-slider label {
+  display: block;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.map-slider-value {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.map-slider input[type='range'] {
+  display: block;
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.map-panel-reset {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.map-panel-reset:hover {
+  background: var(--rule-2);
+}

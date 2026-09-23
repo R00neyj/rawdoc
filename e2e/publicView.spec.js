@@ -1,6 +1,7 @@
 // 공개 보기 화면 S-5 (specs/features/F-210.md 2.4·2.5)
 import { test, expect } from '@playwright/test'
 import brand from '../brand.config.ts'
+import { openApp, importMarkdown } from './helpers.js'
 
 const DOC = {
   title: '공개 문서',
@@ -196,8 +197,11 @@ test.describe('F-211 A4 좁은 창', () => {
     await expect(page.locator('.public-view-title')).toHaveText('문서2')
 
     await expect(page.locator('.public-folder-list')).toHaveCount(0)
-    await page.getByRole('button', { name: '목록' }).click()
+    const toggle = page.getByRole('button', { name: '문서 목록 열기' })
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await toggle.click()
     await expect(page.locator('.public-folder-list')).toBeVisible()
+    await expect(page.getByRole('button', { name: '문서 목록 닫기' })).toHaveAttribute('aria-expanded', 'true')
     await page.getByRole('button', { name: '문서3' }).click()
     await expect(page.locator('.public-folder-list')).toHaveCount(0)
     await expect(page.locator('.public-view-title')).toHaveText('문서3')
@@ -238,7 +242,7 @@ test.describe('F-215 A3 좁은 창', () => {
 
     const topbarLogo = page.locator('.public-folder-topbar').getByRole('link', { name: `${brand.name} 열기` })
     await expect(topbarLogo).toBeVisible()
-    await expect(page.getByRole('button', { name: '목록' })).toBeVisible()
+    await expect(page.getByRole('button', { name: '문서 목록 열기' })).toBeVisible()
   })
 
   test('400px 문서 링크 — 로고 글자 숨김, 아이콘 보임, 가로 스크롤 없음', async ({ page }) => {
@@ -300,6 +304,30 @@ test.describe('F-252 C4 묶음 이동', () => {
     await link.click()
 
     await expect(page).toHaveURL(new RegExp(`#/p/${token}/b1$`))
+    await expect(page.locator('.public-view-title')).toHaveText('문서B')
+
+    await page.goBack()
+    await expect(page.locator('.public-view-title')).toHaveText('문서A')
+  })
+})
+
+// 버그 수정 회귀 테스트(2026-09-19): 경로 기반 공유 링크(`/p/{token}`, F-238)에서 위키링크로
+// 들어간 뒤 뒤로 가면 App.tsx 의 hashchange 핸들러가 location.hash 만 보고 pathname 을
+// 안 봐서 앱 홈으로 빠졌다
+test.describe('경로 기반 공유 링크 뒤로 가기', () => {
+  test('위키링크 클릭 → 뒤로 가기로 앱 홈이 아니라 시작 문서로', async ({ page }) => {
+    const token = 'tokSet2Path'
+    await mockPublicSet(page, token, {
+      start: { title: '문서A', content: '[[문서B]]\n', lineEnding: 'lf', updatedAt: 1 },
+      list: { docs: [{ id: 'a1', title: '문서A' }, { id: 'b1', title: '문서B' }] },
+      others: { b1: { title: '문서B', content: '# 문서B 본문\n', lineEnding: 'lf', updatedAt: 2 } },
+    })
+    await page.goto(`/p/${token}`)
+    await expect(page.locator('.public-view-title')).toHaveText('문서A')
+
+    const link = page.locator('a.wikilink', { hasText: '문서B' })
+    await expect(link).toBeVisible()
+    await link.click()
     await expect(page.locator('.public-view-title')).toHaveText('문서B')
 
     await page.goBack()
@@ -453,5 +481,221 @@ test.describe('F-230 A4 폴더 화면', () => {
 
     await dialog.locator('#theme-label').locator('..').getByRole('radio', { name: '다크' }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  })
+})
+
+// 공유 화면을 앱 디자인 문법에 맞춘다 (specs/features/F-293.md)
+test.describe('F-293 A2 머리줄 버튼 모양', () => {
+  test('아이콘 버튼 2개 — 글자 없이 svg 1개, aria-label 설정·.md 내보내기', async ({ page }) => {
+    await mockPublicDoc(page)
+    await page.goto('/#/p/tok123')
+    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
+
+    const buttons = page.locator('.public-view-header .icon-btn')
+    await expect(buttons).toHaveCount(2)
+    await expect(buttons.nth(0)).toHaveAttribute('aria-label', '설정')
+    await expect(buttons.nth(1)).toHaveAttribute('aria-label', '.md 내보내기')
+    for (const i of [0, 1]) {
+      await expect(buttons.nth(i)).toHaveText('')
+      await expect(buttons.nth(i).locator('svg')).toHaveCount(1)
+    }
+  })
+})
+
+test.describe('F-293 A3 툴팁', () => {
+  test('호버는 400ms 지연 뒤, 포커스는 지연 없이 뜬다', async ({ page }) => {
+    await mockPublicDoc(page)
+    await page.goto('/#/p/tok123')
+    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
+
+    for (const label of ['설정', '.md 내보내기']) {
+      const btn = page.locator(`.public-view-header .icon-btn[aria-label="${label}"]`)
+      const wrap = page.locator(`.public-view-header .icon-btn-wrap:has(.icon-btn[aria-label="${label}"])`)
+      const tooltip = wrap.locator('.icon-tooltip')
+
+      await btn.hover()
+      const hoverDelay = await tooltip.evaluate((el) => getComputedStyle(el).transitionDelay)
+      expect(hoverDelay).toBe('0.4s')
+      await page.waitForTimeout(600)
+      await expect(tooltip).toHaveCSS('opacity', '1')
+      await expect(tooltip).toHaveText(label)
+
+      await page.mouse.move(10, 10)
+      await expect(tooltip).toHaveCSS('opacity', '0')
+
+      await btn.focus()
+      const focusDelay = await tooltip.evaluate((el) => getComputedStyle(el).transitionDelay)
+      expect(focusDelay).toBe('0s')
+      await expect(tooltip).toHaveCSS('opacity', '1', { timeout: 300 })
+      await btn.blur()
+    }
+  })
+})
+
+test.describe('F-293 A4 좁은 창에서 툴팁이 창 밖으로 안 나감', () => {
+  test('1280×800·400×800 두 버튼 모두', async ({ page }) => {
+    await mockPublicDoc(page)
+    for (const width of [1280, 400]) {
+      await page.setViewportSize({ width, height: 800 })
+      await page.goto('/#/p/tok123')
+      await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
+
+      for (const label of ['설정', '.md 내보내기']) {
+        const btn = page.locator(`.public-view-header .icon-btn[aria-label="${label}"]`)
+        const wrap = page.locator(`.public-view-header .icon-btn-wrap:has(.icon-btn[aria-label="${label}"])`)
+        const tooltip = wrap.locator('.icon-tooltip')
+        await btn.hover()
+        await page.waitForTimeout(600)
+        const box = await tooltip.evaluate((el) => {
+          const r = el.getBoundingClientRect()
+          return { left: r.left, right: r.right }
+        })
+        expect(box.right).toBeLessThanOrEqual(width)
+        expect(box.left).toBeGreaterThanOrEqual(0)
+        await page.mouse.move(10, 10)
+      }
+
+      const scrollWidth = await page.evaluate(() => document.scrollingElement.scrollWidth)
+      const clientWidth = await page.evaluate(() => document.scrollingElement.clientWidth)
+      expect(scrollWidth).toBe(clientWidth)
+    }
+  })
+})
+
+test.describe('F-293 A5 설정 동작 (회귀)', () => {
+  test('새 설정 버튼 클릭 — 대화상자가 뜬다', async ({ page }) => {
+    await mockPublicDoc(page)
+    await page.goto('/#/p/tok123')
+    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
+
+    await page.getByRole('button', { name: '설정', exact: true }).click()
+    await expect(page.locator('dialog[aria-labelledby="settings-title"]')).toBeVisible()
+  })
+})
+
+test.describe('F-293 A6 내보내기 동작·비활성 (회귀)', () => {
+  test('문서 로딩 중엔 비활성, 뜬 뒤 클릭하면 응답 바이트 그대로 받는다', async ({ page }) => {
+    let resolveRoute
+    await page.route('**/pub/docs/tok123/set', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ docs: [] }) }),
+    )
+    await page.route('**/pub/docs/tok123', async (route) => {
+      await new Promise((resolve) => {
+        resolveRoute = () => {
+          route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(DOC) })
+          resolve()
+        }
+      })
+    })
+    await page.goto('/#/p/tok123')
+
+    const exportBtn = page.getByRole('button', { name: '.md 내보내기' })
+    await expect(exportBtn).toBeDisabled()
+
+    resolveRoute()
+    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
+    await expect(exportBtn).toBeEnabled()
+
+    const [download] = await Promise.all([page.waitForEvent('download'), exportBtn.click()])
+    const stream = await download.createReadStream()
+    const chunks = []
+    for await (const chunk of stream) chunks.push(chunk)
+    expect(Buffer.concat(chunks).toString('utf-8')).toBe(DOC.content)
+  })
+})
+
+test.describe('F-293 A7 좁은 창 목록 토글', () => {
+  test('900px — aria-label·aria-expanded 가 상태를 따라 바뀐다', async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 800 })
+    await mockPublicFolder(page)
+    await page.goto('/#/p/f/tokF')
+    await expect(page.locator('.public-view-title')).toHaveText('문서2')
+
+    const openBtn = page.getByRole('button', { name: '문서 목록 열기' })
+    await expect(openBtn).toHaveAttribute('aria-expanded', 'false')
+
+    await openBtn.click()
+    const closeBtn = page.getByRole('button', { name: '문서 목록 닫기' })
+    await expect(closeBtn).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.locator('.public-folder-list')).toBeVisible()
+
+    // .public-folder-backdrop(fixed, z-index:19)가 뷰포트 전체를 덮어 토글 버튼 클릭을 가로챈다(F-293 이전부터 있던 레이어링) — force 로 버튼 자체의 onClick 을 확인한다
+    await closeBtn.click({ force: true })
+    await expect(page.getByRole('button', { name: '문서 목록 열기' })).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.locator('.public-folder-list')).toHaveCount(0)
+  })
+})
+
+test.describe('F-293 A8 머리줄 구조', () => {
+  test('.md-code > .md-code-head(언어+복사버튼) + pre, pre 안에는 복사 버튼이 없다', async ({ page }) => {
+    await mockPublicDoc(page)
+    await page.goto('/#/p/tok123')
+    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
+
+    const mdCode = page.locator('.viewer .md-code')
+    await expect(mdCode).toHaveCount(1)
+    const head = mdCode.locator('.md-code-head')
+    await expect(head).toHaveCount(1)
+    await expect(head.locator('.md-code-lang')).toHaveText('JavaScript')
+    await expect(head.locator('.code-copy-btn')).toHaveCount(1)
+    const pre = mdCode.locator('pre')
+    await expect(pre).toHaveCount(1)
+    await expect(pre.locator('.code-copy-btn')).toHaveCount(0)
+
+    const headBox = await head.evaluate((el) => el.getBoundingClientRect())
+    const preBox = await pre.evaluate((el) => el.getBoundingClientRect())
+    expect(headBox.bottom).toBeLessThanOrEqual(preBox.top)
+  })
+})
+
+test.describe('F-293 A9 머리줄 복사 (회귀)', () => {
+  test('누르면 클립보드에 원문이 담기고 아이콘이 바뀐다', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await mockPublicDoc(page)
+    await page.goto('/#/p/tok123')
+
+    const btn = page.locator('.md-code .md-code-head .code-copy-btn')
+    await expect(btn).toBeVisible()
+    await btn.click()
+
+    const clip = await page.evaluate(() => navigator.clipboard.readText())
+    const expectedCode = /```js\n([\s\S]*?)\n```/.exec(DOC.content)[1]
+    expect(clip.trim()).toBe(expectedCode)
+    await expect(btn.locator('svg')).toBeVisible()
+  })
+})
+
+test.describe('F-293 A10 언어 없는 코드블록', () => {
+  test('머리줄엔 복사 버튼만, 언어 이름 없음', async ({ page }) => {
+    const doc = { ...DOC, content: '본문\n\n```\nplain text\n```\n' }
+    await mockPublicDoc(page, doc)
+    await page.goto('/#/p/tok123')
+    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
+
+    const head = page.locator('.viewer .md-code .md-code-head')
+    await expect(head).toHaveCount(1)
+    await expect(head.locator('.md-code-lang')).toHaveCount(0)
+    await expect(head.locator('.code-copy-btn')).toHaveCount(1)
+  })
+})
+
+test.describe('F-293 A11 도움말 화면 머리줄 (회귀)', () => {
+  test('#/help — 머리줄이 하나 이상 생긴다', async ({ page }) => {
+    await openApp(page)
+    await page.getByRole('button', { name: '도움말' }).first().click()
+    await expect(page.locator('.help-page')).toBeVisible()
+    await expect(page.locator('.help-page .md-code-head')).not.toHaveCount(0)
+  })
+})
+
+test.describe('F-293 A14 앱 보기 모드 불변', () => {
+  test('코드블록이 있어도 .viewer 에 머리줄·복사 버튼이 없다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '```js\nalert(1)\n```\n' })
+
+    await page.getByRole('button', { name: '보기 — 읽기 전용으로 보기' }).click()
+    await expect(page.locator('.viewer .markdown-body pre')).toBeVisible()
+    await expect(page.locator('.viewer .md-code-head')).toHaveCount(0)
+    await expect(page.locator('.viewer .code-copy-btn')).toHaveCount(0)
   })
 })

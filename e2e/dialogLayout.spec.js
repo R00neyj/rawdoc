@@ -89,7 +89,7 @@ test.describe('F-224 A1 뒤 막 흐림', () => {
 })
 
 test.describe('F-224 A2 기본 폭', () => {
-  test('D-1(짧은/긴 제목)·D-2·D-3 모두 420(±1)', async ({ page }) => {
+  test('D-1(짧은/긴 제목)·D-3 모두 420(±1)', async ({ page }) => {
     await resizeWindow(page, 1280, 800)
     await openApp(page)
     await importMarkdown(page, { name: '짧은.md', content: '내용\n' })
@@ -108,12 +108,6 @@ test.describe('F-224 A2 기본 폭', () => {
     expect(box.width).toBeCloseTo(420, 0)
     await page.keyboard.press('Escape')
 
-    const settingsDialog = await openSettingsDialog(page)
-    await expect(settingsDialog).toBeVisible()
-    box = await settingsDialog.evaluate((el) => ({ width: el.offsetWidth }))
-    expect(box.width).toBeCloseTo(420, 0)
-    await page.keyboard.press('Escape')
-
     const moveDialog = await openMoveDialog(page)
     await expect(moveDialog).toBeVisible()
     box = await moveDialog.evaluate((el) => ({ width: el.offsetWidth }))
@@ -123,15 +117,22 @@ test.describe('F-224 A2 기본 폭', () => {
 })
 
 test.describe('F-224 A3 넓은 폭', () => {
-  test('D-4(초대 0명/긴 이메일 1명)·D-5(토큰 0개/원문 표시 중) 모두 520(±1)', async ({ page }) => {
+  test('D-2·D-4(초대 0명/긴 이메일 1명)·D-5(토큰 0개/원문 표시 중) 모두 520(±1)', async ({ page }) => {
     await resizeWindow(page, 1280, 800)
     await fakeServer(page)
     await fakeGrants(page)
     await openApp(page)
 
+    // D-2 — 설정 대화상자는 F-290 이 넓은 폭(520px)으로 바꿨다
+    const settingsDialog = await openSettingsDialog(page)
+    await expect(settingsDialog).toBeVisible()
+    let box = await settingsDialog.evaluate((el) => ({ width: el.offsetWidth }))
+    expect(box.width).toBeCloseTo(520, 0)
+    await page.keyboard.press('Escape')
+
     const inviteDialog = await openInviteDialog(page)
     await expect(inviteDialog).toBeVisible()
-    let box = await inviteDialog.evaluate((el) => ({ width: el.offsetWidth }))
+    box = await inviteDialog.evaluate((el) => ({ width: el.offsetWidth }))
     expect(box.width).toBeCloseTo(520, 0)
 
     const longEmail = `${'긴'.repeat(60)}@example.com`

@@ -134,6 +134,25 @@ describe('renderMarkdown — 코드블록', () => {
   })
 })
 
+describe('renderMarkdown — mermaid (specs/features/F-258.md 2.4)', () => {
+  it('mermaid fence 는 data-mermaid-source 를 든 placeholder div 로 바꾼다(기본 fence 아님)', () => {
+    const html = renderMarkdown('```mermaid\ngraph TD; A-->B\n```\n')
+    expect(html).toContain('<div class="md-mermaid" data-mermaid-source="graph TD; A--&gt;B\n"></div>')
+    expect(html).not.toContain('<pre>')
+  })
+
+  it('본문은 이스케이프해서 넣는다', () => {
+    const html = renderMarkdown('```mermaid\n<script>\n```\n')
+    expect(html).toContain('data-mermaid-source="&lt;script&gt;\n"')
+  })
+
+  it('다른 언어 fence 는 그대로 기본 렌더러를 쓴다(회귀)', () => {
+    const html = renderMarkdown('```js\nconst a = 1\n```\n')
+    expect(html).toContain('<pre><code class="language-js">')
+    expect(html).not.toContain('md-mermaid')
+  })
+})
+
 describe('renderMarkdown — 제목 원문 줄 번호 (specs/features/F-144.md 4장 A1)', () => {
   it('h1~h3 에 data-source-line 을 붙인다', () => {
     const html = renderMarkdown('본문\n\n## 제목\n')
@@ -405,5 +424,214 @@ describe('renderMarkdown — 성능 기록 (A2, 통과 기준 없음)', () => {
     console.log(`[F-123 A2] renderMarkdown ${lines.length}줄 변환: ${elapsed.toFixed(2)}ms`)
 
     expect(html.length).toBeGreaterThan(0)
+  })
+})
+
+// specs/features/F-283.md 3.1~3.2, 9장 A1~A8
+describe('renderMarkdown — 하이라이트 ==…==', () => {
+  it('A1 기본 렌더 — <mark> 로 감싸고 == 가 글자로 남지 않는다', () => {
+    const html = renderMarkdown('==강조==')
+    expect(html).toContain('<mark>강조</mark>')
+    expect(html).not.toContain('==')
+  })
+
+  it('A2 인라인코드 안은 글자 그대로', () => {
+    const html = renderMarkdown('`==코드==`')
+    expect(html).toContain('==코드==')
+    expect(html).not.toContain('<mark')
+  })
+
+  it('A2 펜스 코드블록 안은 글자 그대로', () => {
+    const html = renderMarkdown('```\n==코드==\n```\n')
+    expect(html).toContain('==코드==')
+    expect(html).not.toContain('<mark')
+  })
+
+  it('A3 줄바꿈을 넘으면 짝이 아니다', () => {
+    const html = renderMarkdown('==앞\n뒤==')
+    expect(html).not.toContain('<mark')
+    expect(html).toContain('==')
+  })
+
+  it('A4 플랭킹 — 여는 기호 뒤 공백', () => {
+    const html = renderMarkdown('== 글자==')
+    expect(html).not.toContain('<mark')
+    expect(html).toContain('==')
+  })
+
+  it('A4 플랭킹 — 닫는 기호 앞 공백', () => {
+    const html = renderMarkdown('==글자 ==')
+    expect(html).not.toContain('<mark')
+    expect(html).toContain('==')
+  })
+
+  it('A5 중첩 — 다른 인라인 서식을 건너뛴다', () => {
+    const html = renderMarkdown('==a **b** c==')
+    expect(html).toContain('<mark>a <strong>b</strong> c</mark>')
+  })
+
+  it('A6 목록 항목 안', () => {
+    const html = renderMarkdown('- ==글자==\n')
+    expect(html).toContain('<mark>글자</mark>')
+  })
+
+  it('A6 표 칸 안', () => {
+    const html = renderMarkdown('| a |\n| --- |\n| ==글자== |\n')
+    expect(html).toContain('<mark>글자</mark>')
+  })
+
+  it('A6 콜아웃 본문 안', () => {
+    const html = renderMarkdown('> [!note]\n> ==글자==\n')
+    expect(html).toContain('<mark>글자</mark>')
+  })
+
+  it('A6 인용 안', () => {
+    const html = renderMarkdown('> ==글자==\n')
+    expect(html).toContain('<mark>글자</mark>')
+  })
+
+  it('A7 setext 제목 회귀 — 지금과 같다', () => {
+    const html = renderMarkdown('문단\n===\n')
+    expect(html).toMatch(/<h1[^>]*>문단<\/h1>/)
+    expect(html).not.toContain('<mark')
+  })
+
+  it('A8 경계 — ===셋=== 은 취소선과 같은 결과', () => {
+    const html = renderMarkdown('===셋===')
+    expect(html).toContain('=<mark>셋</mark>=')
+  })
+
+  it('A8 경계 — ====a==== 은 중첩된 <mark>', () => {
+    const html = renderMarkdown('====a====')
+    expect(html).toContain('<mark><mark>a</mark></mark>')
+  })
+
+  it('A8 경계 — a==b==c 는 낱말 가운데도 허용', () => {
+    const html = renderMarkdown('a==b==c')
+    expect(html).toContain('a<mark>b</mark>c')
+  })
+})
+
+describe('renderMarkdown — sourceLines 옵션 (specs/features/F-295.md 11장 U11~U16)', () => {
+  const mixed = [
+    '문단 하나',
+    '',
+    '> 인용문',
+    '',
+    '- 목록 항목',
+    '  - 중첩 항목',
+    '',
+    '| a | b |',
+    '| --- | --- |',
+    '| 1 | 2 |',
+    '',
+    '```js',
+    'const x = 1',
+    '```',
+    '',
+    '<div align="center">',
+    '  <img src="attachments/0f3a9c2e7b1d4a58.png" alt="a">',
+    '</div>',
+    '',
+    '```mermaid',
+    'graph TD; A-->B',
+    '```',
+    '',
+    '---',
+    '',
+  ].join('\n')
+
+  it('U11 — 옵션을 안 주면 출력이 지금과 같다(제목에만 data-source-line)', () => {
+    const withOption = renderMarkdown(mixed)
+    const matches = withOption.match(/data-source-line/g) || []
+    expect(matches.length).toBe(0) // mixed 에는 제목이 없다
+    expect(withOption).not.toContain('data-source-line')
+  })
+
+  it('U12 — 최상위 p·blockquote·ul·table·hr 에 줄 번호가 붙는다', () => {
+    const html = renderMarkdown(mixed, { sourceLines: true })
+    expect(html).toContain('<p data-source-line="1">문단 하나</p>')
+    expect(html).toContain('<blockquote data-source-line="3">')
+    expect(html).toContain('<ul data-source-line="5">')
+    expect(html).toContain('<table data-source-line="8">')
+    expect(html).toContain('<hr data-source-line="24"')
+  })
+
+  it('U13 — h4~h6 에도 붙는다. 기존 h1~h3 값은 그대로다', () => {
+    const html = renderMarkdown('#### 넷\n\n##### 다섯\n\n###### 여섯\n\n# 하나\n', { sourceLines: true })
+    expect(html).toContain('<h4 data-source-line="1">넷</h4>')
+    expect(html).toContain('<h5 data-source-line="3">다섯</h5>')
+    expect(html).toContain('<h6 data-source-line="5">여섯</h6>')
+    expect(html).toContain('<h1 data-source-line="7">하나</h1>')
+  })
+
+  it('U14 — 목록 항목 안 문단·표 칸·인용 안 문단에는 안 붙는다(최상위만)', () => {
+    const html = renderMarkdown(mixed, { sourceLines: true })
+    expect(html).not.toContain('<p data-source-line="3">인용문</p>')
+    expect(html).not.toContain('<li data-source-line')
+    expect(html).not.toContain('<td data-source-line')
+    expect(html).not.toContain('<th data-source-line')
+  })
+
+  it('U15 — 이미지 블록·mermaid 에 붙는다. 옵션이 꺼지면 toHtmlDoc.ts 정규식과 계속 맞는다', () => {
+    const on = renderMarkdown(mixed, { sourceLines: true })
+    expect(on).toMatch(/<div class="md-image md-image--center" data-source-line="\d+">/)
+    expect(on).toMatch(/<div class="md-mermaid" data-source-line="\d+" data-mermaid-source="/)
+
+    const off = renderMarkdown(mixed)
+    expect(off).toContain('<div class="md-image md-image--center"><img data-attachment="0f3a9c2e7b1d4a58" alt="a"></div>')
+    expect(off).toContain('<div class="md-mermaid" data-mermaid-source="graph TD; A--&gt;B\n"></div>')
+  })
+
+  it('U16 — 프론트매터 줄 수만큼 더해진다', () => {
+    const html = renderMarkdown('---\na: 1\n---\n\n문단\n', { sourceLines: true })
+    expect(html).toContain('<p data-source-line="5">문단</p>')
+  })
+})
+
+// specs/features/F-291.md 5.1, 13장 A8~A9
+describe('renderMarkdown — 수식 인라인 (A8)', () => {
+  it('$…$ 는 class="katex" 를 담는다', () => {
+    const html = renderMarkdown('값은 $x^2$ 이다')
+    expect(html).toContain('class="katex"')
+  })
+
+  it('$5·$7 은 오탐 없이 글자로 남는다', () => {
+    const html = renderMarkdown('이 책은 $5 이고 저 책은 $7 이다')
+    expect(html).not.toContain('class="katex"')
+    expect(html).toContain('$5')
+    expect(html).toContain('$7')
+  })
+})
+
+describe('renderMarkdown — 수식 블록·제외 자리 (A9)', () => {
+  it('$$…$$ 블록은 katex-display 를 담는다', () => {
+    const html = renderMarkdown('$$\nx^2\n$$\n')
+    expect(html).toContain('katex-display')
+  })
+
+  it('인라인코드 안은 대상이 아니다', () => {
+    const html = renderMarkdown('`$x$`')
+    expect(html).not.toContain('katex')
+  })
+
+  it('펜스 코드블록 안은 대상이 아니다', () => {
+    const html = renderMarkdown('```\n$x$\n```\n')
+    expect(html).not.toContain('katex')
+  })
+
+  it('프론트매터 안은 대상이 아니다', () => {
+    const html = renderMarkdown('---\nprice: $5\n---\n본문')
+    expect(html).not.toContain('katex')
+  })
+
+  it('이스케이프(\\$5)는 글자로 남는다', () => {
+    const html = renderMarkdown('\\$5')
+    expect(html).toContain('<p>$5</p>')
+  })
+
+  it('표 칸 안 인라인 수식은 보기 모드에서 동작한다(Q2)', () => {
+    const html = renderMarkdown('| a |\n| --- |\n| $x$ |\n')
+    expect(html).toContain('katex')
   })
 })

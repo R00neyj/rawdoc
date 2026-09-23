@@ -249,4 +249,36 @@ describe('memoryStore', () => {
       expect(await store.getAttachment(id)).toBeNull()
     })
   })
+
+  describe('가져오기 선택 필드 (F-282.md 3.11)', () => {
+    it('create 에 id·createdAt·updatedAt·pinnedAt 을 주면 그대로 쓰고, 이미 있는 id 면 던진다', async () => {
+      const doc = await store.create({ title: 'A', content: '내용', lineEnding: 'lf', id: 'fixed-id', createdAt: 111, updatedAt: 222, pinnedAt: 333 })
+      expect(doc.id).toBe('fixed-id')
+      expect(doc.createdAt).toBe(111)
+      expect(doc.updatedAt).toBe(222)
+      expect(doc.pinnedAt).toBe(333)
+
+      await expect(store.create({ title: 'B', content: '', lineEnding: 'lf', id: 'fixed-id' })).rejects.toThrow()
+    })
+
+    it('createFolder 에 id·createdAt·updatedAt 을 주면 그대로 쓰고, 이미 있는 id 면 던진다', async () => {
+      const folder = await store.createFolder({ name: 'A', id: 'fixed-folder', createdAt: 111, updatedAt: 222 })
+      expect(folder.id).toBe('fixed-folder')
+      expect(folder.createdAt).toBe(111)
+      expect(folder.updatedAt).toBe(222)
+
+      await expect(store.createFolder({ name: 'B', id: 'fixed-folder' })).rejects.toThrow()
+    })
+
+    it('putAttachment 에 id 를 주면 그 id 로 저장하고, 이미 있으면 덮지 않고 그대로 돌려준다', async () => {
+      const blob = new Blob([new Uint8Array([1, 2, 3])])
+      const first = await store.putAttachment({ blob, mime: 'image/png', ext: 'png', width: 1, height: 1, id: 'fixed-att' })
+      expect(first.id).toBe('fixed-att')
+
+      const dup = await store.putAttachment({ blob: new Blob([new Uint8Array([9, 9])]), mime: 'image/png', ext: 'png', width: 1, height: 1, id: 'fixed-att' })
+      expect(dup).toEqual({ id: 'fixed-att', ext: 'png' })
+      const record = await store.getAttachment('fixed-att')
+      expect(record!.size).toBe(3)
+    })
+  })
 })

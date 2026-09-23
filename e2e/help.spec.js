@@ -71,7 +71,7 @@ test.describe('F-244 A7 코드 복사', () => {
     await openApp(page)
     const helpPage = await openHelpPage(page)
 
-    const boldSource = helpPage.locator('pre', { hasText: '**굵게**' }).first()
+    const boldSource = helpPage.locator('.md-code', { hasText: '**굵게**' }).first()
     await boldSource.locator('.code-copy-btn').click()
     const clip = await page.evaluate(() => navigator.clipboard.readText())
     // markdown-it 펜스 렌더는 내용 끝에 줄바꿈 하나를 붙인다(F-240 A6 과 같은 이유) — 트림해 비교한다

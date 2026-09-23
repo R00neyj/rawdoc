@@ -4,9 +4,10 @@
 import type { RefObject } from 'react'
 import type { StateCommand } from '@codemirror/state'
 import ShareMenu from './ShareMenu'
+import ExportMenu from './ExportMenu'
 import AccountMenu from './AccountMenu'
 import EditorToolbar from './EditorToolbar'
-import { IconEdit, IconRaw, IconView, IconDownload, IconTooltip } from './icons'
+import { IconEdit, IconRaw, IconView, IconTooltip } from './icons'
 import SidebarHead from './SidebarHead'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { Notice } from './notice'
@@ -25,6 +26,7 @@ type TopBarProps = {
   sidebarOpen: boolean
   onToggleSidebar: () => void
   toggleButtonRef: RefObject<HTMLButtonElement | null>
+  onOpenSearch: () => void
   viewMode: ViewMode
   viewModeDisabled: boolean
   onChangeViewMode: (mode: ViewMode) => void
@@ -37,7 +39,11 @@ type TopBarProps = {
   // 위키링크 대상 판정용 문서 제목 목록 — ShareMenu 의 D-6 여닫는 조건 (F-252.md 3.1)
   wikiDocs: { id: string; title: string }[]
   exportDisabled: boolean
-  onExportDoc: () => void
+  onExportMd: () => void
+  onExportTxt: () => void
+  onPrintDoc: () => void
+  onExportHtml: () => void
+  onCopyRich: () => void
   account: AccountState
   onAccountBeforeNavigate: () => Promise<void>
   // 서식·단락·삽입 탭바 (F-233.md 3.1) — App.tsx 가 표시 조건을 계산해 넘긴다
@@ -50,6 +56,7 @@ export default function TopBar({
   sidebarOpen,
   onToggleSidebar,
   toggleButtonRef,
+  onOpenSearch,
   viewMode,
   viewModeDisabled,
   onChangeViewMode,
@@ -61,7 +68,11 @@ export default function TopBar({
   onInvite,
   wikiDocs,
   exportDisabled,
-  onExportDoc,
+  onExportMd,
+  onExportTxt,
+  onPrintDoc,
+  onExportHtml,
+  onCopyRich,
   account,
   onAccountBeforeNavigate,
   showToolbar,
@@ -76,6 +87,7 @@ export default function TopBar({
             expanded={sidebarOpen}
             onToggleSidebar={onToggleSidebar}
             toggleButtonRef={toggleButtonRef}
+            onOpenSearch={onOpenSearch}
           />
         )}
         <div className="topbar-spacer">
@@ -107,18 +119,14 @@ export default function TopBar({
           onInvite={onInvite}
           wikiDocs={wikiDocs}
         />
-        <span className="icon-btn-wrap">
-          <button
-            type="button"
-            className="icon-btn export-btn"
-            aria-label=".md 파일로 내보내기"
-            disabled={exportDisabled}
-            onClick={onExportDoc}
-          >
-            <IconDownload size={18} />
-          </button>
-          <IconTooltip text=".md 파일로 내보내기" align="end" />
-        </span>
+        <ExportMenu
+          disabled={exportDisabled}
+          onExportMd={onExportMd}
+          onExportTxt={onExportTxt}
+          onPrintDoc={onPrintDoc}
+          onExportHtml={onExportHtml}
+          onCopyRich={onCopyRich}
+        />
         <AccountMenu account={account} onBeforeNavigate={onAccountBeforeNavigate} />
       </header>
       {/* 좁은 창은 탭바를 상단바 밑 줄로 뺀다 — 아이콘 줄이 세로로도 접혀(2줄) 가로 스크롤 없이 다 보인다 (사용자 2026-09-16 "모바일일때가 툴바 더 필요할거임") */}

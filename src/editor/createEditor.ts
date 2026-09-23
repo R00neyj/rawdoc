@@ -3,11 +3,15 @@
 // 짝은 `@codemirror/autocomplete` 의 closeBrackets() 가 아니라 F-127 의 autoPair() 다
 import type { Extension } from '@codemirror/state'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
-import { dropCursor, EditorView, keymap, lineNumbers } from '@codemirror/view'
+import { dropCursor, EditorView, keymap, lineNumbers, ViewPlugin } from '@codemirror/view'
+import type { ViewUpdate } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { indentUnit, syntaxTree } from '@codemirror/language'
 import { deleteMarkupBackward, markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { openSearchPanel, search, searchKeymap, searchPanelOpen } from '@codemirror/search'
 
+import { anchorInBlock, ratioInBlock } from '../lib/scrollAnchor'
+import type { ScrollAnchor } from '../lib/scrollAnchor'
 import { autoPair } from './autoPair'
 import { attachComposingEnterGuard, compositionCatchup, forceRecalc, isComposing, isForced } from './composition'
 import { insertNewlineContinueList } from './listEnter'
@@ -28,12 +32,14 @@ import type { Heading } from './outline'
 import { imageInsert } from './imageInsert'
 import type { OnImageFiles } from './imageInsert'
 import { livePreview } from './preview/index'
+import { highlightMarkStyle } from './preview/highlightMark'
 import { fenceLinePreview } from './preview/lines'
 import { setWikiTitlesEffect, wikiTitlesField } from './preview/wikiLinks'
 import type { OnOpenWikiLink } from './preview/wikiLinks'
 import type { ResolveAttachment } from './preview/blocks'
 import { enterTableFromKeyboard, setCellContextMenuHandler } from './preview/tableWidget'
 import { wikiComplete } from './wikiComplete'
+import './searchPanel.css'
 
 // 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
 const HEADINGS_DEBOUNCE_MS = 150
@@ -44,8 +50,13 @@ type IndentSize = 2 | 4
 
 type PreviewCallbacks = { onOpenWikiLink?: OnOpenWikiLink; resolveAttachment?: ResolveAttachment }
 
-function previewExtensionFor(mode: ViewMode, { onOpenWikiLink, resolveAttachment }: PreviewCallbacks = {}): Extension {
-  return mode === 'live' ? livePreview({ onOpenWikiLink, resolveAttachment }) : []
+// theme: 앱 테마 — mermaid 코드블록 위젯에 쓰인다(F-260.md 2.3)
+function previewExtensionFor(
+  mode: ViewMode,
+  theme: string,
+  { onOpenWikiLink, resolveAttachment }: PreviewCallbacks = {},
+): Extension {
+  return mode === 'live' ? livePreview({ onOpenWikiLink, resolveAttachment, theme }) : []
 }
 
 function attributesExtensionFor(mode: ViewMode): Extension {
@@ -70,6 +81,92 @@ function indentExtensionsFor(size: IndentSize): Extension[] {
 function readOnlyExtensionsFor(readOnly: boolean): Extension[] {
   return [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]
 }
+
+// 숨겨져 있으면(.editor-slot hidden → display:none → clientHeight 0) 스냅샷을 찍지 않는다 — 높이 0 에서 찍힌 스냅샷은 문서 맨 위를 가리켜 다시 보일 때 그리로 튄다 (F-295 4.1)
+function scrollSnapshotIfVisible(view: EditorView) {
+  return view.scrollDOM.clientHeight > 0 ? [view.scrollSnapshot()] : []
+}
+
+// Mod-h: 검색 패널을 열되 치환 입력에 포커스를 둔다 (F-261.md 2.2). 이미 열려 있으면 openSearchPanel() 을 다시 부르지 않는다 — 읽기 전용이면 라이브러리가 치환 입력을 그리지 않아(SearchPanel 생성자) 검색 패널만 남는다
+function openSearchPanelWithReplace(view: EditorView): boolean {
+  if (!searchPanelOpen(view.state)) openSearchPanel(view)
+  const replaceField = view.dom.querySelector<HTMLInputElement>('.cm-search input[name="replace"]')
+  replaceField?.focus()
+  replaceField?.select()
+  return true
+}
+
+// 검색 패널의 "모두 선택·대소문자 구분·정규식·단어 단위" 는 일반 사용자가 자주 쓰는 기능이
+// 아니라 기본은 숨기고, "···" 토글을 눌러야 그 아래 별도 팝오버로 뜬다 (2026-09-20 사용자 요청 —
+// 처음엔 같은 줄에 펼치는 방식이었으나 "별도 창으로 아래에 띄웠으면" 요청으로 바꿨다).
+// @codemirror/search 는 이런 UI 를 그리지 않으므로 패널 DOM 이 나타날 때마다 한 번씩 만든다 —
+// 패널은 열 때마다 새로 만들어지므로(SearchPanel 생성자) 매번 다시 넣어야 한다
+const searchMoreToggle = ViewPlugin.fromClass(
+  class {
+    constructor(view: EditorView) {
+      this.sync(view)
+    }
+    update(update: ViewUpdate) {
+      this.sync(update.view)
+    }
+    sync(view: EditorView) {
+      const panel = view.dom.querySelector<HTMLElement>('.cm-panel.cm-search')
+      if (!panel || panel.querySelector('.cm-search-more')) return
+      const searchField = panel.querySelector('input[name="search"]')
+      const nextBtn = panel.querySelector('button[name="next"]')
+      const prevBtn = panel.querySelector('button[name="prev"]')
+      const selectBtn = panel.querySelector('button[name="select"]')
+      const closeBtn = panel.querySelector('button[name="close"]')
+      const optionLabels = panel.querySelectorAll('label')
+      if (!searchField || !nextBtn || !prevBtn || !selectBtn || !closeBtn) return
+
+      const toggle = document.createElement('button')
+      toggle.type = 'button'
+      toggle.className = 'cm-button cm-search-more'
+      toggle.setAttribute('aria-label', '옵션 더 보기')
+      toggle.addEventListener('click', () => {
+        const expanded = panel.classList.toggle('cm-search--expanded')
+        toggle.setAttribute('aria-label', expanded ? '옵션 접기' : '옵션 더 보기')
+      })
+
+      // 모두 선택 버튼 + 대소문자·정규식·단어 단위 라벨을 팝오버 컨테이너로 옮긴다(이동이라
+      // 기존 클릭·:checked 동작·이벤트 리스너는 그대로 유지된다 — append() 는 기존 부모에서 뗀다)
+      const popover = document.createElement('div')
+      popover.className = 'cm-search-more-panel'
+      popover.append(selectBtn, ...optionLabels)
+
+      // 찾기 줄(입력·다음·이전·더보기)과 바꾸기 줄을 각각 실제 줄(row) 컨테이너로 감싼다 —
+      // 원래 라이브러리는 <br style="flex-basis:100%"> 로 줄을 억지로 나누는데, 퍼센트
+      // flex-basis 를 가진 자식이 있으면 카드의 width:max-content 계산이 브라우저마다
+      // 어긋나 접었을 때도 펼친 폭 그대로 자리를 차지하는 문제가 있었다(2026-09-20 사용자
+      // "더보기를 열지 않아도 공간이 그대로 차지되고 있는데"). 줄마다 독립된 가로 flex 컨테이너로
+      // 감싸고 카드는 세로로만 쌓아(column) 이 계산을 아예 피한다
+      // 닫기 버튼도 이 줄 끝에 넣는다 — 예전엔 position:absolute 로 카드 오른쪽 위에 따로
+      // 띄웠는데 다른 버튼과 세로 정렬이 살짝 어긋나 보였다(2026-09-20 사용자 지적).
+      // margin-left:auto 로 같은 줄 안에서 오른쪽 끝으로 미는 것으로 바꾼다
+      const searchRow = document.createElement('div')
+      searchRow.className = 'cm-search-row'
+      searchRow.append(searchField, nextBtn, prevBtn, toggle, closeBtn)
+      panel.prepend(searchRow)
+      searchRow.insertAdjacentElement('afterend', popover)
+      // 팝오버 위치는 CSS right:0 으로 카드 오른쪽 끝에 맞춘다 — 토글의 offsetLeft 를 그대로
+      // 쓰면 카드가 화면 오른쪽 끝(right:10px)에 붙어 있어 팝오버가 화면 밖으로 나갔다
+      // (2026-09-20 사용자 지적)
+
+      const replaceField = panel.querySelector('input[name="replace"]')
+      const replaceBtn = panel.querySelector('button[name="replace"]')
+      const replaceAllBtn = panel.querySelector('button[name="replaceAll"]')
+      const oldBreak = panel.querySelector('br')
+      oldBreak?.remove()
+      if (replaceField && replaceBtn && replaceAllBtn) {
+        const replaceRow = document.createElement('div')
+        replaceRow.className = 'cm-search-row cm-search-row--replace'
+        replaceRow.append(replaceField, replaceBtn, replaceAllBtn)
+        popover.insertAdjacentElement('afterend', replaceRow)
+      }
+    }
+  },
+)
 
 // src/app/fileDrop.js 의 isExternalFileDrag() 와 같은 판정 — src/editor 는 src/app 을 import 하지 않아(단방향 계층) 옮겨 적는다
 function isExternalFileDrag(dataTransfer: DataTransfer | null): boolean {
@@ -178,6 +275,8 @@ function focusRelay(): Extension {
 type CreateEditorOptions = {
   text?: string
   viewMode?: ViewMode
+  // 앱 테마(white|sepia|dark), 기본 'white' — mermaid 위젯에 쓰인다. 이후 전환은 handle.setTheme(theme) (F-260.md 2.1·2.3, Editor.tsx 는 아직 이 값을 넘기지 않아 App.tsx 가 마운트 때마다 setTheme 으로 맞춘다)
+  theme?: string
   // 줄 번호(거터) 표시 여부, 기본 true (F-147 2장). 이후 전환은 handle.setLineNumbers(on) 으로
   // 한다 — 이 값은 최초 생성에만 쓴다
   lineNumbers?: boolean
@@ -212,6 +311,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const {
     text = '',
     viewMode = 'live',
+    theme: initialTheme = 'white',
     lineNumbers: showLineNumbers = true,
     indent: indentSize = 4,
     readOnly: initialReadOnly = false,
@@ -231,6 +331,10 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   } = options
 
   let destroyed = false
+
+  // 현재 모드·테마 — setViewMode·setTheme 이 서로의 최신 값을 유지한 채 previewCompartment 를 다시 구성하도록 클로저에 기억해 둔다(F-260.md 2.3)
+  let currentMode: ViewMode = viewMode
+  let currentTheme = initialTheme
 
   // 목차 갱신은 조합 중 보류, 조합 종료(forceRecalc) 시 즉시 따라잡음 (F-144 3.3)
   const headingsListeners = new Set<(headings: Heading[]) => void>()
@@ -288,20 +392,54 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     Prec.high(keymap.of([{ key: 'Enter', run: insertNewlineContinueList }, { key: 'Backspace', run: deleteMarkupBackward }])),
     indentCompartment.of(indentExtensionsFor(indentSize)),
     highlightExtension(),
+    // 찾기·바꾸기 패널(F-261.md 2.1) — 모드와 무관하게 항상 켠다. previewCompartment 밖: fenceLinePreview()·wikiComplete() 와 같은 이유
+    search({ top: true }),
+    // 검색 패널 문구 한국어화 (2026-09-20 사용자 요청 "한글로 나와야함") — @codemirror/search 가
+    // view.state.phrase() 로 찾는 원문 문자열을 키로 매핑한다. 키 철자는 라이브러리 원문과 정확히 같아야 한다
+    EditorState.phrases.of({
+      Find: '찾기',
+      Replace: '바꾸기',
+      next: '다음',
+      previous: '이전',
+      all: '모두 선택',
+      'match case': '대소문자 구분',
+      regexp: '정규식',
+      'by word': '단어 단위',
+      replace: '바꾸기',
+      'replace all': '모두 바꾸기',
+      close: '닫기',
+      'current match': '현재 일치 항목',
+      'on line': '줄',
+      'replaced match on line $': '$ 줄에서 바꿨습니다',
+      'replaced $ matches': '$ 개를 바꿨습니다',
+      'Go to line': '줄로 이동',
+      go: '이동',
+    }),
+    // 모두 선택·대소문자 구분·정규식·단어 단위 옵션을 여닫는 "더보기" 토글 (위 searchMoreToggle 주석 참고)
+    searchMoreToggle,
     // 펼친 코드블록 줄 표시 (F-124 3.4 11번) — 모드(편집·원문)와 무관하게 항상 켠다.
     // highlight.js 의 주석 참고: 태그 자체를 나누는 방법은 실측으로 안 먹히는 것을
     // 확인해 줄 decoration 으로 바꿨다
     fenceLinePreview(),
+    // 하이라이트(==…==) 기호 색 — 편집·원문 모드 모두 켠다. 배경은 편집 모드만 livePreview() 가 준다(F-283.md 4.2)
+    highlightMarkStyle(),
     // 위키링크 대상 문서 제목(F-131). 모드와 무관하게 항상 켠다 — wikiComplete() 도
     // 같은 필드를 읽고, 모드 전환으로 previewCompartment 가 바뀌어도 값을 잃지 않는다
     wikiTitlesField.init(() => wikiTitles),
     wikiComplete(),
-    previewCompartment.of(previewExtensionFor(viewMode, { onOpenWikiLink, resolveAttachment })),
+    previewCompartment.of(previewExtensionFor(currentMode, currentTheme, { onOpenWikiLink, resolveAttachment })),
     attributesCompartment.of(attributesExtensionFor(viewMode)),
     // 본문 첫 시각 줄에서 ↑ 는 제목으로 포커스를 옮긴다 — defaultKeymap 커서 이동보다 먼저 받아야 한다 (F-217.md 2.3)
     Prec.high(keymap.of([{ key: 'ArrowUp', run: focusTitleFromBody }])),
     // F-109 단축키가 defaultKeymap 보다 먼저 키를 받도록 Prec.high
     Prec.high(keymap.of(shortcutKeymap)),
+    // Mod-h 는 searchKeymap 기본값(F-261.md 2.2)에 없어 따로 얹는다. Mod-f 와 같은 scope 를 둬 패널 입력에 포커스가 있어도 반응한다(기본 scope 'editor' 는 contentDOM 키다운만 듣는다)
+    Prec.high(
+      keymap.of([
+        { key: 'Mod-h', run: openSearchPanelWithReplace, scope: 'editor search-panel' },
+        ...searchKeymap,
+      ]),
+    ),
     keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
     compositionCatchup(() => destroyed),
     EditorView.updateListener.of((update) => {
@@ -346,33 +484,43 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
 
     // mode 는 재마운트하지 않는다. 커서·선택·실행 취소 기록 유지
     setViewMode(mode: ViewMode) {
-      const scroll = view.scrollSnapshot()
+      currentMode = mode
       view.dispatch({
         effects: [
-          previewCompartment.reconfigure(previewExtensionFor(mode, { onOpenWikiLink, resolveAttachment })),
+          previewCompartment.reconfigure(previewExtensionFor(mode, currentTheme, { onOpenWikiLink, resolveAttachment })),
           attributesCompartment.reconfigure(attributesExtensionFor(mode)),
-          scroll,
+          ...scrollSnapshotIfVisible(view),
         ],
       })
     },
 
+    // 테마 전환 시 편집 모드 위젯(mermaid 등) 즉시 재렌더 — 재마운트 안 함, 스크롤 위치가 안 바뀌므로 scrollSnapshot 불필요 (F-260.md 2.3)
+    setTheme(theme: string) {
+      currentTheme = theme
+      view.dispatch({
+        effects: previewCompartment.reconfigure(
+          previewExtensionFor(currentMode, currentTheme, { onOpenWikiLink, resolveAttachment }),
+        ),
+      })
+      // 재구성으로 blockPreview 의 StateField 가 create 부터 다시 도는데, 그 시점엔 새 ViewPlugin 이 아직 viewRef 를 채우지 않아 포커스가 false 로 잡힌다 — 커서가 든 코드블록·표까지 위젯으로 접힌다. 한 번 더 보내 실제 포커스로 다시 계산시킨다
+      view.dispatch({ effects: forceRecalc.of(null) })
+    },
+
     // on(boolean) — 재마운트하지 않는다. 커서·선택·실행 취소 기록·스크롤 위치 유지 (F-147 2장)
     setLineNumbers(on: boolean) {
-      const scroll = view.scrollSnapshot()
       view.dispatch({
         effects: [
           lineNumbersCompartment.reconfigure(lineNumbersExtensionFor(on)),
           gutterAttributesCompartment.reconfigure(gutterAttributesExtensionFor(on)),
-          scroll,
+          ...scrollSnapshotIfVisible(view),
         ],
       })
     },
 
     // 2|4 — 재마운트하지 않는다. 이미 쓴 문서 원문은 바꾸지 않는다 (F-154 2.3)
     setIndent(size: IndentSize) {
-      const scroll = view.scrollSnapshot()
       view.dispatch({
-        effects: [indentCompartment.reconfigure(indentExtensionsFor(size)), scroll],
+        effects: [indentCompartment.reconfigure(indentExtensionsFor(size)), ...scrollSnapshotIfVisible(view)],
       })
     },
 
@@ -449,6 +597,47 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
           const scrollerTop = view.scrollDOM.getBoundingClientRect().top
           const delta = coords.top - scrollerTop - 16
           if (Math.abs(delta) > 0.5) view.scrollDOM.scrollTop += delta
+        })
+      })
+    },
+
+    // 화면 맨 위에 보이는 원문 줄 (F-295.md 8.1). 숨겨져 있으면(높이 0) 읽지 않는다
+    getScrollAnchor(): ScrollAnchor | null {
+      if (view.scrollDOM.clientHeight === 0) return null
+      // 제목 위젯이 보이는 채 맨 위(anchor=1 과 구별 안 됨)와 정확히 맨 위를 나누는 sentinel (F-295 A4 실측, 명세 8.1 을 벗어난 보정)
+      if (view.scrollDOM.scrollTop <= 0) return 0
+      const doc = view.state.doc
+      const padTop = view.documentPadding.top
+      const top = view.scrollDOM.scrollTop
+      const block = view.lineBlockAtHeight(top - padTop)
+      const startLine = doc.lineAt(block.from).number
+      const endLine = Math.min(doc.lineAt(block.to).number + 1, doc.lines + 1)
+      const ratio = block.height > 0 ? (top - padTop - block.top) / block.height : 0
+      return anchorInBlock(startLine, endLine, ratio)
+    },
+
+    // getScrollAnchor 의 역 (F-295.md 8.2). 숨겨져 있으면 아무것도 안 한다
+    scrollToAnchor(anchor: ScrollAnchor) {
+      if (view.scrollDOM.clientHeight === 0) return
+      // getScrollAnchor 의 0 sentinel 짝 — scrollIntoView(줄 1) 은 제목 위젯을 밀어내 버리므로 그냥 맨 위로 간다
+      if (anchor <= 1) {
+        view.scrollDOM.scrollTop = 0
+        return
+      }
+      const n = Math.max(1, Math.min(Math.floor(anchor), view.state.doc.lines))
+      const pos = view.state.doc.line(n).from
+      // 1차 — 그 줄이 보이도록 뷰포트를 옮겨, 그 둘레의 진짜 줄 높이가 측정되게 한다
+      view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: 0 }) })
+      // 2차 — 그려진 뒤(rAF 2회) 실측으로 보정한다. scrollToHeading 과 같은 방식
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (destroyed || view.scrollDOM.clientHeight === 0) return
+          const doc = view.state.doc
+          const block = view.lineBlockAt(pos)
+          const startLine = doc.lineAt(block.from).number
+          const endLine = Math.min(doc.lineAt(block.to).number + 1, doc.lines + 1)
+          const want = block.top + view.documentPadding.top + ratioInBlock(startLine, endLine, anchor) * block.height
+          if (Math.abs(view.scrollDOM.scrollTop - want) > 0.5) view.scrollDOM.scrollTop = want
         })
       })
     },

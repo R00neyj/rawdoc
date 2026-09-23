@@ -6,7 +6,9 @@ import visibilitySvg from '@material-symbols/svg-400/outlined/visibility.svg?raw
 import iosShareSvg from '@material-symbols/svg-400/outlined/ios_share.svg?raw'
 import downloadSvg from '@material-symbols/svg-400/outlined/download.svg?raw'
 import chevronRightSvg from '@material-symbols/svg-400/outlined/chevron_right.svg?raw'
-import noteAddSvg from '@material-symbols/svg-400/outlined/note_add.svg?raw'
+// 사이드바 `새 문서` — note_add(페이지+플러스)는 가져오기(upload_file, 역시 페이지 모양)와
+// 나란히 놓으면 작은 크기에서 헷갈려 note_stack_add(쌓인 노트)로 바꿨다 (2026-09-20 사용자 지적)
+import noteAddSvg from '@material-symbols/svg-400/outlined/note_stack_add.svg?raw'
 import createNewFolderSvg from '@material-symbols/svg-400/outlined/create_new_folder.svg?raw'
 import uploadFileSvg from '@material-symbols/svg-400/outlined/upload_file.svg?raw'
 import searchSvg from '@material-symbols/svg-400/outlined/search.svg?raw'
@@ -37,6 +39,7 @@ import groupSvg from '@material-symbols/svg-400/outlined/group.svg?raw'
 import keySvg from '@material-symbols/svg-400/outlined/key.svg?raw'
 import tocSvg from '@material-symbols/svg-400/outlined/toc.svg?raw'
 import openInNewSvg from '@material-symbols/svg-400/outlined/open_in_new.svg?raw'
+import recenterSvg from '@material-symbols/svg-400/outlined/recenter.svg?raw'
 import formatBoldSvg from '@material-symbols/svg-400/outlined/format_bold.svg?raw'
 import formatItalicSvg from '@material-symbols/svg-400/outlined/format_italic.svg?raw'
 import strikethroughSSvg from '@material-symbols/svg-400/outlined/strikethrough_s.svg?raw'
@@ -60,6 +63,12 @@ import textFormatSvg from '@material-symbols/svg-400/outlined/text_format.svg?ra
 import subjectSvg from '@material-symbols/svg-400/outlined/subject.svg?raw'
 import addSvg from '@material-symbols/svg-400/outlined/add.svg?raw'
 import helpSvg from '@material-symbols/svg-400/outlined/help.svg?raw'
+import menuBookSvg from '@material-symbols/svg-400/outlined/menu_book.svg?raw'
+import collapseAllSvg from '@material-symbols/svg-400/outlined/collapse_all.svg?raw'
+// 내보내기 메뉴 `PDF (A4 인쇄)` (F-279.md 3.1)
+import printSvg from '@material-symbols/svg-400/outlined/print.svg?raw'
+// 사이드바 `지도` (F-292.md 6.2)
+import hubSvg from '@material-symbols/svg-400/outlined/hub.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -125,6 +134,10 @@ export const IconToc = makeIcon(tocSvg)
 // 상단바 탭바(F-233 3.4) — 링크 추가(위키링크)는 기존 IconLink 를 그대로 쓴다(명령이 다를 뿐 "연결" 개념은 같다)
 export const IconAddLink = IconLink
 export const IconExternalLink = makeIcon(openInNewSvg)
+// 사이드바 문서 우클릭 메뉴 `새 탭에서 열기` (F-296.md 4.1) — IconExternalLink 와 같은 그림, 문맥이 달라 이름을 따로 둔다
+export const IconOpenInNew = makeIcon(openInNewSvg)
+// 지도 노드 우클릭 메뉴 `여기로 이동` (F-2003.md 8.3)
+export const IconRecenter = makeIcon(recenterSvg)
 export const IconBold = makeIcon(formatBoldSvg)
 export const IconItalic = makeIcon(formatItalicSvg)
 export const IconStrikethrough = makeIcon(strikethroughSSvg)
@@ -152,6 +165,18 @@ export const IconTabInsert = makeIcon(addSvg)
 
 // 사이드바 `도움말` 항목 (F-235.md 1장)
 export const IconHelp = makeIcon(helpSvg)
+
+// 사이드바 `사용법` 항목 — 사이트 /guides 로 나가는 링크 (F-276.md 4.4)
+export const IconGuide = makeIcon(menuBookSvg)
+
+// 사이드바 `모두 접기` (2026-09-20 사용자 요청)
+export const IconCollapseAll = makeIcon(collapseAllSvg)
+
+// 내보내기 메뉴 `PDF (A4 인쇄)` (F-279.md 3.1)
+export const IconPrint = makeIcon(printSvg)
+
+// 사이드바 `지도` (F-292.md 6.2)
+export const IconMap = makeIcon(hubSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

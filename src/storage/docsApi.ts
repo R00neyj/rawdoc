@@ -1,5 +1,6 @@
 // F-206 서버 API 호출 래퍼 — fetch 하나로 감싸고 오류를 종류별로 분류한다 (specs/features/F-207.md 2.3)
 import type { Doc, Folder, LineEnding } from '../types'
+import { getLockSessionId, isLockSessionSettled, lockSessionReady } from './lockSession'
 
 export type ServerDoc = Doc & { version: number }
 export type ServerDocSummary = Omit<Doc, 'content'> & { version: number }
@@ -37,29 +38,6 @@ export class ApiError extends Error {
     this.expiresAt = extra.expiresAt
   }
 }
-
-const LOCK_SESSION_STORAGE_KEY = 'md.lockSession'
-
-function newLockSessionId(): string {
-  return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
-}
-
-// 탭 수명 동안 하나로 고정 — 새로고침해도 같은 값이라 서버가 자기 잠금으로 알아본다 (specs/features/F-250.md 3.1)
-function resolveLockSessionId(): string {
-  try {
-    const existing = globalThis.sessionStorage?.getItem(LOCK_SESSION_STORAGE_KEY)
-    if (existing) return existing
-    const created = newLockSessionId()
-    globalThis.sessionStorage?.setItem(LOCK_SESSION_STORAGE_KEY, created)
-    return created
-  } catch {
-    // 사생활 보호 모드 등으로 sessionStorage 접근이 막히면 지금까지처럼 메모리 값으로 간다
-    return newLockSessionId()
-  }
-}
-
-// 편집 잠금 세션 id — 창(탭)마다 하나, 문서를 옮겨 다녀도 같다 (specs/features/F-213.md 2.2, F-250.md 3.1)
-export const lockSessionId: string = resolveLockSessionId()
 
 async function send(path: string, init?: RequestInit): Promise<Response> {
   try {
@@ -129,9 +107,10 @@ export async function updateDoc(
   id: string,
   body: { title?: string; content?: string; baseVersion: number },
 ): Promise<ServerDoc> {
+  if (!isLockSessionSettled()) await lockSessionReady() // 탭 복제로 회전할지 정해지기 전엔 세션 id 를 싣는 요청을 안 보낸다 (F-297.md 4.2)
   const res = await send(`/api/docs/${encodeURIComponent(id)}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'X-Lock-Session': lockSessionId },
+    headers: { 'Content-Type': 'application/json', 'X-Lock-Session': getLockSessionId() },
     body: JSON.stringify(body),
   })
   const kind = classifyStatus(res.status)
@@ -152,8 +131,9 @@ export async function updateDoc(
 }
 
 // 잡기·연장 — edit 이상 권한 필요, 200 이면 잡음/연장, 423 이면 다른 세션이 쥐고 있음 (F-213.md 2.2)
-export async function lockDoc(id: string, sessionId: string): Promise<{ expiresAt: number }> {
-  const res = await send(`/api/docs/${encodeURIComponent(id)}/lock`, jsonInit({ sessionId }, 'POST'))
+export async function lockDoc(id: string): Promise<{ expiresAt: number }> {
+  if (!isLockSessionSettled()) await lockSessionReady()
+  const res = await send(`/api/docs/${encodeURIComponent(id)}/lock`, jsonInit({ sessionId: getLockSessionId() }, 'POST'))
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
   if (res.status === 404) throw new ApiError('not_found')
@@ -167,9 +147,10 @@ export async function lockDoc(id: string, sessionId: string): Promise<{ expiresA
 }
 
 // 같은 세션일 때만 서버가 지운다. 못 보내도 60초 뒤 만료하므로 오류는 무시한다 (F-213.md 2.2·2.3)
-export async function unlockDoc(id: string, sessionId: string, opts: { keepalive?: boolean } = {}): Promise<void> {
+export async function unlockDoc(id: string, opts: { keepalive?: boolean } = {}): Promise<void> {
+  if (!isLockSessionSettled()) await lockSessionReady()
   try {
-    await fetch(`/api/docs/${encodeURIComponent(id)}/lock?session=${encodeURIComponent(sessionId)}`, {
+    await fetch(`/api/docs/${encodeURIComponent(id)}/lock?session=${encodeURIComponent(getLockSessionId())}`, {
       method: 'DELETE',
       credentials: 'same-origin',
       keepalive: opts.keepalive,

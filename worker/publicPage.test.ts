@@ -1,4 +1,4 @@
-// 공개 공유 링크 og/twitter 메타 동적 주입 (F-238.md 4장)
+// 공개 공유 링크 og/twitter 메타 동적 주입 (F-238.md 4장, F-272.md 7.1)
 import { describe, expect, it } from 'vitest'
 import { renderPublicPage } from './publicPage'
 import { SITE_DESCRIPTION } from '../src/lib/siteMeta'
@@ -67,13 +67,16 @@ function makeEnv(opts: { links?: ShareLinkRow[]; docs?: DocRow[]; folders?: Fold
     },
   }
 
+  // 7.1 — /p/{token} 에는 자산이 없어 루트(/)를 명시적으로 받는다. 어느 URL 로 받았는지 기록한다
+  const assetsRequests: string[] = []
   const ASSETS = {
-    async fetch() {
+    async fetch(input: RequestInfo | URL) {
+      assetsRequests.push(input instanceof URL ? input.href : input.toString())
       return new Response(SAMPLE_HTML, { status: 200, headers: { 'content-type': 'text/html' } })
     },
   }
 
-  return { DB, ASSETS } as unknown as Env
+  return { env: { DB, ASSETS } as unknown as Env, assetsRequests }
 }
 
 function req(pathname: string): Request {
@@ -82,7 +85,7 @@ function req(pathname: string): Request {
 
 describe('F-238 renderPublicPage', () => {
   it('A1: 유효한 문서 토큰이면 og/twitter 제목·발췌를 채운다', async () => {
-    const env = makeEnv({
+    const { env } = makeEnv({
       links: [{ token: 'a'.repeat(43), owner_id: 'u1', target_type: 'doc', target_id: 'd1', revoked_at: null }],
       docs: [{ id: 'd1', title: '내 문서', content: '본문 내용입니다' }],
     })
@@ -95,9 +98,18 @@ describe('F-238 renderPublicPage', () => {
     expect(html).toContain('name="twitter:description" content="본문 내용입니다"')
   })
 
+  it('A1b (F-272 7.1): 자산은 요청 경로가 아니라 루트(/)로 받는다', async () => {
+    const { env, assetsRequests } = makeEnv({
+      links: [{ token: 'a'.repeat(43), owner_id: 'u1', target_type: 'doc', target_id: 'd1', revoked_at: null }],
+      docs: [{ id: 'd1', title: '내 문서', content: '본문 내용입니다' }],
+    })
+    await renderPublicPage(req(`/p/${'a'.repeat(43)}`), env, `/p/${'a'.repeat(43)}`)
+    expect(assetsRequests).toEqual(['http://local.test/'])
+  })
+
   it('A2: 유효한 폴더 토큰이면 og:title 에 폴더 이름, description 은 SITE_DESCRIPTION', async () => {
     const token = 'b'.repeat(43)
-    const env = makeEnv({
+    const { env } = makeEnv({
       links: [{ token, owner_id: 'u1', target_type: 'folder', target_id: 'f1', revoked_at: null }],
       folders: [{ id: 'f1', name: '내 폴더' }],
     })
@@ -110,7 +122,7 @@ describe('F-238 renderPublicPage', () => {
 
   it('A3: 존재하지 않는/폐기된/형식이 틀린 토큰이면 null', async () => {
     const revokedToken = 'c'.repeat(43)
-    const env = makeEnv({
+    const { env } = makeEnv({
       links: [{ token: revokedToken, owner_id: 'u1', target_type: 'doc', target_id: 'd1', revoked_at: Date.now() }],
       docs: [{ id: 'd1', title: '문서', content: '내용' }],
     })
@@ -121,7 +133,7 @@ describe('F-238 renderPublicPage', () => {
 
   it('A4: 제목·본문에 <script>, ", & 가 있으면 이스케이프된다', async () => {
     const token = 'e'.repeat(43)
-    const env = makeEnv({
+    const { env } = makeEnv({
       links: [{ token, owner_id: 'u1', target_type: 'doc', target_id: 'd1', revoked_at: null }],
       docs: [{ id: 'd1', title: '<script>alert(1)</script>&"', content: '본문' }],
     })
@@ -134,7 +146,7 @@ describe('F-238 renderPublicPage', () => {
   it('A5: 본문이 100자 초과면 100자로 자르고 말줄임표', async () => {
     const token = 'f'.repeat(43)
     const long = 'a'.repeat(150)
-    const env = makeEnv({
+    const { env } = makeEnv({
       links: [{ token, owner_id: 'u1', target_type: 'doc', target_id: 'd1', revoked_at: null }],
       docs: [{ id: 'd1', title: '문서', content: long }],
     })
@@ -145,7 +157,7 @@ describe('F-238 renderPublicPage', () => {
 
   it('A6: 본문이 빈 문자열이거나 주석만 있으면 SITE_DESCRIPTION 폴백', async () => {
     const token = 'g'.repeat(43)
-    const env = makeEnv({
+    const { env } = makeEnv({
       links: [{ token, owner_id: 'u1', target_type: 'doc', target_id: 'd1', revoked_at: null }],
       docs: [{ id: 'd1', title: '문서', content: '<!-- 주석만 있음 -->' }],
     })
@@ -156,7 +168,7 @@ describe('F-238 renderPublicPage', () => {
 
   it('A7: /p/f/:token/extra 처럼 세그먼트가 더 있으면 null', async () => {
     const token = 'h'.repeat(43)
-    const env = makeEnv({
+    const { env } = makeEnv({
       links: [{ token, owner_id: 'u1', target_type: 'folder', target_id: 'f1', revoked_at: null }],
       folders: [{ id: 'f1', name: '폴더' }],
     })
@@ -165,7 +177,7 @@ describe('F-238 renderPublicPage', () => {
 
   it('A8: 응답 헤더에 X-Robots-Tag: noindex 포함', async () => {
     const token = 'i'.repeat(43)
-    const env = makeEnv({
+    const { env } = makeEnv({
       links: [{ token, owner_id: 'u1', target_type: 'doc', target_id: 'd1', revoked_at: null }],
       docs: [{ id: 'd1', title: '문서', content: '내용' }],
     })

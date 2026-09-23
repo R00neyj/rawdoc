@@ -1,0 +1,3 @@
+# git 훅은 Git for Windows 의 sh 가 실행한다. CRLF 로 체크아웃되면 셔뱅 끝에 CR 이 붙어
+# "bad interpreter" 로 훅이 통째로 안 돈다 (core.autocrlf=true 인 머신)
+.githooks/* text eol=lf
