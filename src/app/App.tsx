@@ -512,6 +512,7 @@ export default function App() {
     shellRef: appShellRef,
     sidebarRef,
     enabled: narrow,
+    canOpen: mapRoute == null,
     sidebarOpen,
     onOpen: openSidebarBySwipe,
     onClose: closeSidebarBySwipe,

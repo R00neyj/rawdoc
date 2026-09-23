@@ -52,6 +52,18 @@ test.describe('F-227 터치 사이드바 여닫기 (412×915, 터치)', () => {
     await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'closed')
   })
 
+  test('F-227 A8 지도 보기에서는 오른쪽으로 밀어도 사이드바가 열리지 않는다', async ({ page }) => {
+    await openApp(page)
+    await page.goto('/#/map')
+    const map = page.locator('.map-page')
+    await expect(map.locator('canvas')).toHaveCount(1)
+    const box = await rectOf(map.locator('.map-canvas'))
+    const y = box.y + box.height / 2
+    await touchSwipe(page, { startX: 150, startY: y, endX: 300, endY: y })
+    await page.waitForTimeout(300)
+    await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'closed')
+  })
+
   test('F-227 A5 세로 스크롤 제스처는 무시 — 본문은 스크롤되고 사이드바는 그대로', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: longDoc(80) })

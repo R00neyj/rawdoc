@@ -7,6 +7,8 @@ type UseEdgeSwipeArgs = {
   shellRef: RefObject<HTMLElement | null>
   sidebarRef: RefObject<HTMLElement | null>
   enabled: boolean
+  // 지도 보기처럼 가로 끌기를 화면이 쓰는 동안 열기만 막는다 (F-227 2.2)
+  canOpen: boolean
   sidebarOpen: boolean
   onOpen: () => void
   onClose: () => void
@@ -41,7 +43,7 @@ function isDraggingTextSelection(target: Element | null): boolean {
   return Boolean(selection && !selection.isCollapsed)
 }
 
-export function useEdgeSwipe({ shellRef, sidebarRef, enabled, sidebarOpen, onOpen, onClose }: UseEdgeSwipeArgs) {
+export function useEdgeSwipe({ shellRef, sidebarRef, enabled, canOpen, sidebarOpen, onOpen, onClose }: UseEdgeSwipeArgs) {
   const startRef = useRef<StartInfo | null>(null)
   const composingRef = useRef(false)
 
@@ -90,7 +92,7 @@ export function useEdgeSwipe({ shellRef, sidebarRef, enabled, sidebarOpen, onOpe
         startedInSidebar: start.startedInSidebar,
         startedInScrollableLeft: start.startedInScrollableLeft,
       })
-      if (result === 'open') onOpen()
+      if (result === 'open' && canOpen) onOpen()
       else if (result === 'close') onClose()
     }
 
@@ -110,5 +112,5 @@ export function useEdgeSwipe({ shellRef, sidebarRef, enabled, sidebarOpen, onOpe
       document.removeEventListener('compositionstart', handleCompositionStart)
       document.removeEventListener('compositionend', handleCompositionEnd)
     }
-  }, [shellRef, sidebarRef, enabled, sidebarOpen, onOpen, onClose])
+  }, [shellRef, sidebarRef, enabled, canOpen, sidebarOpen, onOpen, onClose])
 }
