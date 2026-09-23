@@ -109,8 +109,9 @@ async function createLocalDocsThenSignIn(page) {
   )
   await openApp(page)
 
-  // 첫 실행 안내 문서(사용법)를 지워 로컬 문서 수를 3개로 맞춘다
-  const guideRow = page.locator('.tree-row').filter({ hasText: '사용법' }).first()
+  // openApp 이 남긴 문서 하나(사용법이든 새 문서든)를 지워 3개로 맞춘다
+  await expect(page.locator('.tree-row')).toHaveCount(1)
+  const guideRow = page.locator('.tree-row').first()
   await guideRow.hover()
   await guideRow.locator('.item-menu-btn').click()
   await page.getByRole('menuitem', { name: /삭제/ }).click()

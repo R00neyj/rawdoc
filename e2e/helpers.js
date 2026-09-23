@@ -18,11 +18,22 @@ export async function openExportMenu(page) {
   return page.locator('.export-menu-list [role="menuitem"]')
 }
 
-// 앱을 열고 부팅이 끝날 때까지 기다린다. 시작 화면 기본값은 홈(F-232)이라 md.startScreen='last' 를 미리 넣어 지금까지처럼 마지막 문서를 자동으로 연다 — 진짜 기본값 확인은 openAppHome
+// 앱을 열고 부팅이 끝날 때까지 기다린다(시작 화면은 md.startScreen='last' 로 마지막 문서 자동 열기, 진짜 기본값 확인은 openAppHome). 문서가 없으면 홈의 새 문서로 들어간다(F-2014 3.1)
 export async function openApp(page) {
+  if (process.env.E2E_NO_FIRST_RUN_DOC === '1') {
+    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+  }
   await setPrefBeforeLoad(page, 'md.startScreen', 'last')
   await page.goto('/')
-  await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+  const editor = page.locator('.cm-host .cm-editor')
+  const emptyState = page.locator('.empty-state')
+  await expect(editor.or(emptyState)).toBeVisible()
+  if (await emptyState.isVisible()) {
+    const newDocButton = emptyState.getByRole('button', { name: '새 문서' })
+    await newDocButton.focus()
+    await newDocButton.press('Enter')
+    await expect(editor).toBeVisible()
+  }
 }
 
 // 진짜 기본값(홈 화면) 확인용 — md.startScreen 을 건드리지 않고 연다 (F-232 A2)
