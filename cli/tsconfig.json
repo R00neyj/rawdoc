@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM"],
+    "skipLibCheck": true
+  },
+  "include": [
+    "src",
+    "vite.config.ts",
+    "../brand.config.ts",
+    "../src/lib/cliLoginUrl.ts",
+    "../src/lib/cliSeal.ts",
+    "../src/lib/decodeMarkdown.ts",
+    "../src/lib/lineEnding.ts",
+    "../src/lib/siteMeta.ts",
+    "../src/lib/folderTree.ts",
+    "../worker/v1Contract.ts"
+  ]
+}

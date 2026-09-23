@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'dist-spike', 'dist-*', '.wrangler', 'worker/worker-configuration.d.ts']),
+  globalIgnores(['dist', 'dist-spike', 'dist-*', '.wrangler', 'worker/worker-configuration.d.ts', 'cli/dist']),
   {
     files: ['**/*.{js,jsx,mjs,ts,tsx}'],
     extends: [
@@ -50,6 +50,13 @@ export default defineConfig([
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: globals.node,
+    },
+  },
+  {
+    // npm 배포 CLI (specs/features/F-2021.md) 도 node 환경에서 돈다
+    files: ['cli/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
     },
   },
 ])

@@ -172,6 +172,7 @@ const routes: Route[] = [
   { method: 'POST', path: '/v1/folders', handler: handleCreateFolder },
   { method: 'POST', path: '/v1/attachments', handler: handleCreateAttachmentV1 },
   { method: 'POST', path: '/v1/docs/:id/link', handler: handleCreateDocLinkV1 },
+  { method: 'GET', path: '/v1/me', handler: handleMe },
 ]
 
 export default {

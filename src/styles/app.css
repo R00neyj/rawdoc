@@ -3214,3 +3214,74 @@ body.sidebar-resizing {
     justify-content: flex-end;
   }
 }
+
+/* S-9 CLI 로그인 화면 (specs/features/F-2021.md 6.3) */
+.cli-login {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.cli-login-card {
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-dialog);
+  background: var(--panel);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cli-login-card h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.cli-login-card h1:focus {
+  outline: none;
+}
+
+.cli-login-email {
+  color: var(--ink-2);
+}
+
+.cli-login-name {
+  margin: 4px 0 0;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+}
+
+.cli-login-warning {
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+.cli-login-note {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.cli-login-error {
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.cli-login-signin {
+  align-self: flex-start;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 8px 16px;
+  font-size: 13.5px;
+  color: var(--ink);
+  transition: var(--transition-colors);
+}
+
+.cli-login-signin:hover {
+  background: var(--rule-2);
+}

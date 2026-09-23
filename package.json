@@ -26,7 +26,9 @@
     "deploy": "npm run build && wrangler deploy",
     "cf:types": "wrangler types worker/worker-configuration.d.ts",
     "typecheck:worker": "tsc -p worker --noEmit",
-    "dev:worker": "npm run build && wrangler dev --port 8790"
+    "dev:worker": "npm run build && wrangler dev --port 8790",
+    "build:cli": "vite build --config cli/vite.config.ts",
+    "typecheck:cli": "tsc -p cli --noEmit"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

@@ -6,6 +6,7 @@ export type Brand = {
   accent: string
   icon: string
   ogImage: string
+  cliName: string
 }
 
 const brand: Brand = {
@@ -16,6 +17,8 @@ const brand: Brand = {
   icon: '/icons/icon.svg',
   // 제품명이 들어간 이미지라 이름·색을 바꾸면 node scripts/make-og-image.mjs 로 다시 만든다
   ogImage: '/og-image.png',
+  // CLI 실행 파일·npm 이름으로 쓸 소문자 식별자 (specs/features/F-2021.md 8장)
+  cliName: 'rawdoc',
 }
 
 export default brand

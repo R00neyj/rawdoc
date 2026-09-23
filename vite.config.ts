@@ -239,7 +239,7 @@ export default defineConfig({
     sitePlugin(),
   ],
   test: {
-    include: ['src/**/*.test.{js,jsx,ts,tsx}', 'worker/**/*.test.ts', 'site/**/*.test.ts'],
+    include: ['src/**/*.test.{js,jsx,ts,tsx}', 'worker/**/*.test.ts', 'site/**/*.test.ts', 'cli/**/*.test.ts'],
     environment: 'node',
   },
 })

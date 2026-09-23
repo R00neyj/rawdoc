@@ -95,6 +95,11 @@ src/
   - `styles/`: `palette.css`(F-2022)
 - DO 서버·`/ws` 인증(2026-09-24)으로 추가
   - `lib/`: `docRoomProtocol.ts`(F-304 — 서버·클라이언트 공용 소켓 계약. 앱은 F-304 에서 import 하지 않는다)
+- 명령줄 도구(2026-09-24)로 추가
+  - `cli/`: npm 게시용 CLI 패키지 — `package.json`·`tsconfig.json`·`vite.config.ts`·`README.md`, `src/main.ts`·`args.ts`·`commands.ts`·`client.ts`·`output.ts`·`credentials.ts`·`login.ts`·`openBrowser.ts`·`node-shim.d.ts`(F-2021). 빌드는 루트 `vite` 로 `cli/dist/rawdoc.js` 하나에 번들
+  - `lib/`: `cliLoginUrl.ts`(F-2021 — 인증 화면·콜백 주소 만들기·해석, 순수 함수), `cliSeal.ts`(F-2021 — WebCrypto RSA-OAEP 봉인·풀기). 웹과 CLI 가 같이 쓴다
+  - `app/`: `CliLoginPage.tsx`(F-2021 — S-9 터미널 로그인 화면)
+  - 의존 방향: `cli → src/lib`(순수 함수만)·`cli → brand.config.ts`·`cli → worker/v1Contract.ts`(타입·예시 값만). 반대 방향 금지 — `src/`·`worker/` 는 `cli/` 를 import 하지 않는다
 - editor·viewer 가 문서 목록이 필요하면(위키링크) 저장소를 import 하지 않고 App 이 인자로 넘긴다. 첨부 이미지도 같다: App 이 `onImageFiles`(넣기)·`resolveAttachment(id)`(읽기) 콜백을 넘긴다 (F-156·F-157)
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
@@ -203,6 +208,8 @@ worker/
   access.ts grants.ts    (F-212)
   locks.ts               (F-213)
   docSocket.ts docRoom.ts docRoomCore.ts yStore.ts textRebase.ts docRoomRpc.ts   (F-304)
+  v1.ts apiTokens.ts       `/v1` 핸들러·개인 토큰 (F-222·F-223)
+  v1Contract.ts            `/v1` 응답 타입과 예시 값. 핸들러는 import 하지 않는다 — 서버·CLI 양쪽 테스트가 이 파일에 댄다 (F-2021 7.2)
   tsconfig.json worker-configuration.d.ts(`npm run cf:types` 생성)
 ```
 
@@ -219,6 +226,7 @@ worker/
 - 안 쓰는 첨부 정리: 매일 UTC 18시 Cron `scheduled` → 모든 문서 원문에 없고 24시간 지난 첨부 R2·D1 삭제 (F-219)
 - `DocRoom` DO SQLite 표 `ydoc_updates`·`ydoc_meta` — Yjs 업데이트 로그와 메타(F-304 6.1). D1 `docs` 는 DO 도 쓴다 — 조용해지면 5초, 편집이 계속되면 최대 30초 뒤, `version` 조건부 `UPDATE` 로 (F-304 6.2·8.2)
 - 경로 접두사 4개: `/api/*` Access 로그인(브라우저), `/pub/*` 로그인 없음(공유 링크), `/v1/*` Access 밖·`Authorization: Bearer rd_…` 개인 토큰만(스크립트, F-222·F-223). `/v1` 은 쿠키를 보지 않는다. 토큰은 D1 `api_tokens` 에 SHA-256 해시만 (0007). `/ws/*` Access 밖 — Worker 가 Origin·`CF_Authorization` 쿠키로 인증하고 edit 이상만 `DocRoom` DO(`/ws/doc/:id`)로 넘긴다. 거절은 닫기 코드 4401·4403·4404 (F-304)
+- `GET /v1/me` → `{ id, email }`(토큰 없음·틀림·폐기는 401). `handleMe` 를 그대로 붙인 라우트 한 줄, 명령줄 도구의 `whoami`·`--with-token` 확인에 쓴다 (F-2021 7.1)
 
 ## 5. 브랜드 주입
 

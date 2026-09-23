@@ -43,6 +43,7 @@ Logic gets TDD; design gets a fast human-review loop.
 | `.workflow/` | Closed CM6 spike records (2026-09-07~08). Not used for new work | Never |
 | `spike/` | Spike code. Reference only when porting the editor | Never |
 | `src/` | The web app itself | Per spec |
+| `cli/` | npm-published CLI (F-2021). `src/`·`worker/` never import from here | Per spec |
 | `.claude/agents/`, `.claude/skills/` | Agent and skill definitions. **English is the source of truth** | As rules change |
 | `.claude/ko/` | Korean snapshots of the above (2026-09-21). Not scanned as agents or skills, so they never register twice | Never auto-synced |
 
@@ -83,6 +84,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | Live sync | Durable Object + y-partyserver | In use on the server (F-304, `worker/docRoom.ts`); the client connects from F-305 |
 | E2E tests | Playwright (`@playwright/test`), installed Chrome channel | Adopted in F-150 |
 | 3D map | `three` + `d3-force-3d` (plus `@types/three` and a local `src/types/d3-force-3d.d.ts`) | Adopted in the F-292 revision (M2). F-2001 and F-2002 install them; no other spec may add a 3D dependency. `3d-force-graph` was measured and rejected — it statically pulls in `WebGPURenderer` |
+| CLI | Node 22+, zero runtime dependencies, npm `rawdoc` | In use (F-2021) |
 
 For anything marked "not adopted", do not add the dependency until its spec exists.
 
@@ -95,6 +97,8 @@ npm run lint         # ESLint (whole repo)
 npm test             # Vitest single run (src/**/*.test.{js,jsx,ts,tsx}, worker/**/*.test.ts)
 npm run typecheck    # tsc --noEmit (app)
 npm run typecheck:worker   # tsc -p worker
+npm run build:cli    # vite build --config cli/vite.config.ts → cli/dist/rawdoc.js (F-2021)
+npm run typecheck:cli   # tsc -p cli --noEmit
 npm run dev:worker   # build, then wrangler dev (8790, local D1/R2). DEV_AUTH_EMAIL in .dev.vars bypasses login
 npm run cf:types     # wrangler.jsonc bindings → worker/worker-configuration.d.ts
 npm run deploy       # build, then wrangler deploy (needs login). Normal deploys push the deploy branch — see "Deployment"
@@ -172,6 +176,7 @@ How to hold to it:
 - Remote D1 migrations are not automated. If there is a new `migrations/000N`, run `npx wrangler d1 migrations apply md-editor-db --remote` before deploying
 - If the build does not run, deploy locally: from a clean worktree `../rawdoc-deploy` (create it with `git worktree add ../rawdoc-deploy deploy` if missing), run `npm run deploy`
 - If the root `.env` (never committed, separate per machine) has `CLOUDFLARE_API_TOKEN`, wrangler uses that token instead of browser login. The token was reissued on 2026-09-18 with Workers Scripts edit, D1 edit, and R2 edit permissions — local deploys and remote migrations both work straight from `.env`. `num_tables: 0` in `wrangler d1 list` is just Cloudflare's aggregation lagging, so read the schema with `d1 migrations list --remote`
+- **CLI publish (F-2021 10.3) — deploy the web first, then the CLI.** `login`'s auth screen (S-9) and `GET /v1/me` must already be live on `rawdoc.app` before the CLI is usable, so publish only after a web deploy has confirmed live. Then, by hand: a person runs `npm login` (2FA), `npm run build:cli` from the repo root, `npm pack --dry-run` inside `cli/` to confirm the tarball holds only `package.json`/`README.md`/`dist/rawdoc.js`, then `npm publish` (`prepublishOnly` rebuilds). Confirm with `npm view rawdoc version`, push tag `cli-v{version}`, and add a `content/changelog.md` line
 
 ## Invariants
 

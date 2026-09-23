@@ -384,3 +384,11 @@
 | H370 | F-2022 11.4 H6 | 내장 템플릿 4개 문구가 적당한지 — 문구는 제품 글이다 | 대기 |
 | H371 | F-2022 11.4 H7 | 스크린 리더에서 combobox·listbox 가 읽히는지(H190 과 같은 패턴) | 대기 |
 | H372 | F-2022 A10 (구현 추론) | 표 칸에서 우클릭 → 명령 팔레트 → 템플릿 삽입 — 그 칸 자리에 들어가는지, 표가 깨지지 않는지 | 대기 |
+| H373 | F-2021 13.4 S1 | Windows 11 Chrome, `dev:worker` 띄우고 `rawdoc login --server http://localhost:8790` — 해시까지 온전한 인증 화면 → 승인 → 성공 문구 → `whoami`·`ls`·`new`·`get` 이 되는지 | 대기 |
+| H374 | F-2021 13.4 S2 | 배포·게시 뒤 로그아웃 상태 브라우저에서 `npx -y rawdoc login` → `로그인` → Access 일회용 코드 → 인증 화면으로 복귀 → 승인 → `ls` | 대기 |
+| H375 | F-2021 13.4 S3 | Edge·Firefox(데스크톱)에서 S1 — https 페이지에서 `http://127.0.0.1` 로의 최상위 이동이 막히거나 권한 창이 뜨는지 | 대기 |
+| H376 | F-2021 13.4 S4 | PWA 로 설치한 Chrome 에서 S2 — 인증 화면이 앱 창으로 열려도 콜백 이동이 되는지 | 대기 |
+| H377 | F-2021 13.4 S5 | macOS 또는 Linux 가 있으면 브라우저 열기(`open`·`xdg-open`)가 되는지 | 대기 |
+| H378 | F-2021 13.4 S6 | 인증 화면 모양 — 밝게·어둡게, 좁은 창 | 대기 |
+| H379 | F-2021 13.4 S7 | AI 도구(Claude Code 등)가 `RAWDOC_TOKEN` 을 넣고 `npx -y rawdoc ls --json`·`new 파일 --json` 을 비대화형으로 부를 수 있는지 | 대기 |
+| H380 | F-2021 13.4 S8 | 게시 완료 확인 — `npm view rawdoc version`, 다른 컴퓨터에서 `npx -y rawdoc --version` | 대기 |

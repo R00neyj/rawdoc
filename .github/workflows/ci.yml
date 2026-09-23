@@ -21,3 +21,6 @@ jobs:
       - run: npm run typecheck:worker
       - run: npm test
       - run: npm run build
+      - run: npm run typecheck:cli
+      - run: npm run build:cli
+      - run: node cli/dist/rawdoc.js --version

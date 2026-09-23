@@ -16,6 +16,7 @@ import {
 } from './v1'
 import { handleGetDoc, handleListDocs } from './docs'
 import { handleCreateFolder, handleDeleteFolder, handleListFolders } from './folders'
+import { V1_EXAMPLES } from './v1Contract'
 
 type DocRow = {
   id: string
@@ -517,5 +518,183 @@ describe('F-223 A4 /v1 라우팅 — 실제 auth 로 확인', () => {
     const worker = await freshWorker()
     const res = await worker.fetch(new Request('https://app.example.com/v1/docs'), dummyEnv(), {} as ExecutionContext)
     expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull()
+  })
+})
+
+// F-2021 U14 (specs/features/F-2021.md 13.1, 7.1)
+describe('F-2021 U14 GET /v1/me — 실제 auth 로 확인', () => {
+  type MeApiTokenRow = { id: string; user_id: string; token_hash: string; revoked_at: number | null; last_used_at: number | null }
+  type MeUserRow = { id: string; email: string }
+
+  async function sha256Hex(input: string): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input))
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+  }
+
+  function makeMeEnv(opts: { tokens?: MeApiTokenRow[]; users?: MeUserRow[] } = {}): Env {
+    const tokens = opts.tokens ?? []
+    const users = opts.users ?? []
+    const DB = {
+      prepare(sql: string) {
+        return {
+          bind(...args: unknown[]) {
+            return {
+              async first<T>() {
+                if (sql.startsWith('SELECT id, user_id, last_used_at FROM api_tokens WHERE token_hash = ?')) {
+                  const [hash] = args as [string]
+                  const row = tokens.find((t) => t.token_hash === hash && !t.revoked_at)
+                  return (row ? { id: row.id, user_id: row.user_id, last_used_at: row.last_used_at } : null) as T | null
+                }
+                if (sql.startsWith('SELECT id, email FROM users WHERE id = ?')) {
+                  const [id] = args as [string]
+                  return (users.find((u) => u.id === id) as T) ?? null
+                }
+                throw new Error(`unhandled first sql: ${sql}`)
+              },
+              async run() {
+                if (sql.startsWith('UPDATE api_tokens SET last_used_at')) return { meta: { changes: 1 } }
+                throw new Error(`unhandled run sql: ${sql}`)
+              },
+            }
+          },
+        }
+      },
+    }
+    return { DB } as unknown as Env
+  }
+
+  async function freshWorker() {
+    vi.doUnmock('./auth')
+    vi.doMock('./docRoom', () => ({ DocRoom: class {} }))
+    vi.resetModules()
+    const mod = await import('./index')
+    return mod.default
+  }
+
+  it('토큰 없으면 401', async () => {
+    const worker = await freshWorker()
+    const res = await worker.fetch(new Request('https://app.example.com/v1/me'), makeMeEnv(), {} as ExecutionContext)
+    expect(res.status).toBe(401)
+    expect((await res.json()) as { error: string }).toEqual({ error: 'unauthenticated' })
+  })
+
+  it('Access 쿠키만 있으면 401 — /v1/ 은 Bearer 만 본다', async () => {
+    const worker = await freshWorker()
+    const res = await worker.fetch(
+      new Request('https://app.example.com/v1/me', { headers: { Cookie: 'CF_Authorization=whatever' } }),
+      makeMeEnv(),
+      {} as ExecutionContext,
+    )
+    expect(res.status).toBe(401)
+  })
+
+  it('올바른 Bearer 토큰이면 { id, email }', async () => {
+    const token = `rd_${'a'.repeat(43)}`
+    const hash = await sha256Hex(token)
+    const env = makeMeEnv({
+      tokens: [{ id: 't1', user_id: 'u1', token_hash: hash, revoked_at: null, last_used_at: null }],
+      users: [{ id: 'u1', email: 'a@b.com' }],
+    })
+    const worker = await freshWorker()
+    const res = await worker.fetch(
+      new Request('https://app.example.com/v1/me', { headers: { Authorization: `Bearer ${token}` } }),
+      env,
+      {} as ExecutionContext,
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ id: 'u1', email: 'a@b.com' })
+  })
+})
+
+// F-2021 U15 (specs/features/F-2021.md 13.1, 7.2)
+describe('F-2021 U15 /v1 응답 키 집합 = V1_EXAMPLES', () => {
+  function keysOf(obj: unknown): string[] {
+    return Object.keys(obj as object).sort()
+  }
+
+  it('POST /v1/docs, GET /v1/docs/:id, GET /v1/docs', async () => {
+    const { env } = makeEnv()
+    const created = await handleCreateDocV1(
+      new Request('http://local.test/v1/docs', {
+        method: 'POST',
+        headers: { 'x-test-user': 'u1' },
+        body: JSON.stringify({ title: 't', content: 'c' }),
+      }),
+      env,
+    )
+    const doc = (await created.json()) as Record<string, unknown>
+    expect(keysOf(doc)).toEqual(keysOf(V1_EXAMPLES.doc))
+
+    const got = await handleGetDoc(
+      new Request(`http://local.test/v1/docs/${doc.id}`, { headers: { 'x-test-user': 'u1' } }),
+      env,
+      {} as ExecutionContext,
+      { id: doc.id as string },
+    )
+    expect(keysOf(await got.json())).toEqual(keysOf(V1_EXAMPLES.doc))
+
+    const list = await handleListDocs(new Request('http://local.test/v1/docs', { headers: { 'x-test-user': 'u1' } }), env)
+    const listBody = (await list.json()) as Record<string, unknown>[]
+    expect(keysOf(listBody[0])).toEqual(keysOf(V1_EXAMPLES.docSummary))
+  })
+
+  it('PUT /v1/docs/:id', async () => {
+    const { env } = makeEnv({
+      docs: [{ id: 'd1', owner_id: 'u1', title: 't', content: 'c', line_ending: 'lf', folder_id: null, pinned_at: null, version: 1, created_at: 1, updated_at: 1 }],
+    })
+    const res = await handleUpdateDocV1(
+      new Request('http://local.test/v1/docs/d1', {
+        method: 'PUT',
+        headers: { 'x-test-user': 'u1' },
+        body: JSON.stringify({ content: 'new', baseVersion: 1 }),
+      }),
+      env,
+      {} as ExecutionContext,
+      { id: 'd1' },
+    )
+    expect(keysOf(await res.json())).toEqual(keysOf(V1_EXAMPLES.doc))
+  })
+
+  it('GET·POST /v1/folders', async () => {
+    const { env } = makeEnv()
+    const created = await handleCreateFolder(
+      new Request('http://local.test/v1/folders', {
+        method: 'POST',
+        headers: { 'x-test-user': 'u1' },
+        body: JSON.stringify({ name: 'f' }),
+      }),
+      env,
+    )
+    expect(keysOf(await created.json())).toEqual(keysOf(V1_EXAMPLES.folder))
+    const list = await handleListFolders(new Request('http://local.test/v1/folders', { headers: { 'x-test-user': 'u1' } }), env)
+    const listBody = (await list.json()) as Record<string, unknown>[]
+    expect(keysOf(listBody[0])).toEqual(keysOf(V1_EXAMPLES.folder))
+  })
+
+  it('POST /v1/attachments', async () => {
+    const { env } = makeEnv()
+    const bytes = pngBytes()
+    const res = await handleCreateAttachmentV1(
+      new Request('http://local.test/v1/attachments', {
+        method: 'POST',
+        headers: { 'x-test-user': 'u1', 'Content-Length': String(bytes.length) },
+        body: bytes,
+      }),
+      env,
+    )
+    expect(keysOf(await res.json())).toEqual(keysOf(V1_EXAMPLES.attachment))
+  })
+
+  it('POST /v1/docs/:id/link', async () => {
+    const { env } = makeEnv({
+      docs: [{ id: 'd1', owner_id: 'u1', title: 't', content: 'c', line_ending: 'lf', folder_id: null, pinned_at: null, version: 1, created_at: 1, updated_at: 1 }],
+    })
+    const res = await handleCreateDocLinkV1(
+      new Request('http://local.test/v1/docs/d1/link', { method: 'POST', headers: { 'x-test-user': 'u1' } }),
+      env,
+      {} as ExecutionContext,
+      { id: 'd1' },
+    )
+    expect(keysOf(await res.json())).toEqual(keysOf(V1_EXAMPLES.link))
   })
 })
