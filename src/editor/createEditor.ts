@@ -40,6 +40,7 @@ import type { ResolveAttachment } from './preview/blocks'
 import { enterTableFromKeyboard, setCellContextMenuHandler } from './preview/tableWidget'
 import { wikiComplete } from './wikiComplete'
 import { createYBinding, undoKeymap } from './yBinding'
+import { connectRemote } from './remoteGate'
 import './searchPanel.css'
 
 // 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
@@ -305,6 +306,8 @@ type CreateEditorOptions = {
   // 문서가 든 폴더 경로 (F-234.md 3.2) — 이후 갱신은 handle.setBreadcrumb() 로 한다. 이 값은 최초 생성에만 쓴다
   breadcrumb?: Breadcrumb
   onNavigateFolder?: OnNavigateFolder
+  // 원격 연결 훅에 넘기는 문서 id (F-303 4.4) — 없으면(랜딩 데모) 연결이 붙지 않는다
+  docId?: string
 }
 
 export function createEditor(parent: HTMLElement, options: CreateEditorOptions = {}) {
@@ -328,6 +331,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     onTitleCommit = () => {},
     breadcrumb = [],
     onNavigateFolder = () => {},
+    docId,
   } = options
 
   let destroyed = false
@@ -469,6 +473,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const detachComposingEnterGuard = attachComposingEnterGuard(view)
   // 표 칸 하위 에디터(tableWidget.ts)의 우클릭도 같은 콜백으로 (F-170.md 3.2)
   setCellContextMenuHandler(view, (info) => notifyContextMenu(info))
+  // 뷰가 있어야 조합 상태를 읽는다 — 훅이 없으면 null 이고 아무것도 만들지 않는다 (F-303 4.2·4.4)
+  const remote = connectRemote({ view, editorDoc: binding.ydoc, docId })
 
   return {
     view,
@@ -656,6 +662,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       setCellContextMenuHandler(view, undefined)
       detachMarginClickGuard()
       detachComposingEnterGuard()
+      remote?.destroy()
       view.destroy()
       binding.destroy()
     },

@@ -21,6 +21,7 @@ import { getPref } from './app/prefs'
 import { resolveTheme } from './app/theme'
 import { markAppEntry } from './app/markAppEntry'
 import App from './app/App'
+import { DEV_YSYNC } from './editor/devSyncFlag'
 
 // 첫 화면 그리기 전에 반영해 서체가 바뀌며 깜빡이지 않게 한다 (specs/features/F-121.md, F-141)
 document.documentElement.dataset.headingFont = getPref('md.headingFont', 'serif')
@@ -35,8 +36,20 @@ document.documentElement.dataset.theme = resolveTheme(
 // 서비스 워커로 들어온 기존 사용자·설치한 PWA 도 다음 요청부터 서버 판정이 맞게 한다 (F-271 5장)
 markAppEntry()
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+function render() {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+}
+
+// 개발 빌드 ?ysync — 첫 에디터가 만들어지기 전에 연결 훅을 심는다. 운영 빌드에서는 DEV_YSYNC 가 false 로 접혀 이 분기와 모듈이 빠진다 (F-303 9.1)
+if (DEV_YSYNC) {
+  import('./app/yDevLink')
+    .then((module) => module.installDevLink())
+    .catch((error: unknown) => console.error(error))
+    .finally(render)
+} else {
+  render()
+}

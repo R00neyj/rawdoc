@@ -10,6 +10,7 @@
 import { EditorSelection, EditorState } from '@codemirror/state'
 import { EditorView, WidgetType } from '@codemirror/view'
 import type { StateCommand, Transaction } from '@codemirror/state'
+import { ySyncAnnotation } from 'y-codemirror.next'
 
 import {
   addColumn,
@@ -95,6 +96,12 @@ export function isCellComposing(mainView: EditorView | null | undefined): boolea
   return !!entry && isComposing(entry.cellView)
 }
 
+// 활성 칸이 compositionstart 직후부터 조합 중인가 — 원격 게이트가 쓴다 (F-303 6.1)
+export function isCellCompositionStarted(mainView: EditorView | null | undefined): boolean {
+  const entry = mainView && activeEdit.get(mainView)
+  return !!entry && entry.cellView.compositionStarted
+}
+
 // 줄바꿈을 공백으로 접는다(F-125 2.2 "붙여넣기의 줄바꿈은 공백 1개로"). 하위 에디터에
 // 줄바꿈이 들어오면(붙여넣기 등) 즉시 다시 써서 한 줄로 되돌린다 — 한 줄 안 keymap
 // (Tab·Enter·화살표)만으로 "한 줄 에디터" 를 보장하기엔 붙여넣기가 새지 않아야 한다
@@ -120,8 +127,22 @@ function guardComposing(command: StateCommand) {
 export function trackActiveEditRange(mainView: EditorView | null | undefined, tr: Transaction): void {
   const entry = mainView && activeEdit.get(mainView)
   if (!entry) return
+  if (tr.annotation(ySyncAnnotation) !== undefined && remoteTouchesCell(entry, tr)) endEditAfterRemote(mainView, entry)
   if (entry.range) entry.range = mapCellRange(entry.range, tr.changes)
   entry.lineStart = tr.changes.mapPos(entry.lineStart, -1)
+}
+
+// 옮기기 전 칸 범위를 원격 변경이 건드렸는가(양 끝 포함). 아직 없는 채움 칸이면 그 행 줄 전체를 본다 (F-303 6.2)
+function remoteTouchesCell(entry: ActiveEditEntry, tr: Transaction): boolean {
+  const { from, to } = entry.range ?? tr.startState.doc.lineAt(entry.lineStart)
+  return tr.changes.touchesRange(from, to) !== false
+}
+
+// 같은 칸을 원격이 고치면 다음 입력의 칸 통째 갈아 끼우기가 원격 글자를 덮는다 — 세션을 끝낸다. StateField 갱신 도중이라 마이크로태스크로 미룬다 (F-303 6.2)
+function endEditAfterRemote(mainView: EditorView, entry: ActiveEditEntry): void {
+  queueMicrotask(() => {
+    if (activeEdit.get(mainView) === entry) endEdit(mainView)
+  })
 }
 
 // endEdit 가 뷰 갱신 도중(updateDOM·destroy, F-138 3.5) 당장 dispatch 할 수 없어

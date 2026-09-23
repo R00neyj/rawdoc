@@ -62,6 +62,7 @@ import { attachImages } from './attachImages'
 import { cleanupUnusedAttachments, scheduleAttachmentGc } from './attachmentGc'
 import DropOverlay from './DropOverlay'
 import Editor, { type EditorHandle } from '../editor/Editor'
+import { DEV_YSYNC } from '../editor/devSyncFlag'
 import type { EditorContextMenuInfo } from '../editor/createEditor'
 import { insertTable } from '../editor/insertCommands'
 import { countChars, countWords, cursorInfo } from '../editor/stats'
@@ -469,7 +470,8 @@ export default function App() {
   }, [store])
 
   // 편집권은 로컬(idb) 문서에만 켠다 — 서버는 useDocLock(F-213)이, 메모리는 저장소가 탭마다 따로라 겹칠 일이 없다 (F-296.md 6.4)
-  const claimDocId = store.kind === 'idb' && !sharedDoc ? currentDocId : null
+  // 개발 빌드 ?ysync 두 탭 연결에서는 두 탭 모두 편집해야 해 편집권을 잡지 않는다 (F-303 9.4)
+  const claimDocId = store.kind === 'idb' && !sharedDoc && !DEV_YSYNC ? currentDocId : null
   const { post: postTabMessage, claimReadOnly } = useTabSync({
     enabled: bootPhase === 'ready',
     tabId: tabIdRef.current,
@@ -3034,6 +3036,7 @@ export default function App() {
                     titleReadOnly={titleReadOnly}
                     onTitleChange={handleTitleChange}
                     onTitleCommit={handleTitleCommit}
+                    docId={currentDocId ?? undefined}
                   />
                 )}
               </div>

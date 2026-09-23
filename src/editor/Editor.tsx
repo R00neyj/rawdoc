@@ -1,5 +1,5 @@
 // CM6 React 래퍼 (specs/features/F-103.md 3.3)
-// docId·lineEnding 은 인터페이스에는 있지만 이 컴포넌트 내부에서는 쓰지 않는다.
+// docId 는 원격 연결 훅에 넘기는 데만 쓴다(F-303). lineEnding 은 이 컴포넌트 내부에서 쓰지 않는다.
 // App 이 key={docId} 로 문서마다 새로 마운트하고(위→아래 데이터 흐름), lineEnding 은
 // ref 로 노출한 handle.getText(lineEnding) 호출 시점에 App 이 직접 넘긴다 (F-110)
 import { useImperativeHandle, useLayoutEffect, useRef } from 'react'
@@ -30,6 +30,8 @@ type EditorProps = {
   titleReadOnly?: boolean
   onTitleChange?: OnTitleChange
   onTitleCommit?: OnTitleCommit
+  // 원격 연결 훅에 넘긴다 (F-303 4.4). 마운트 때 한 번만 읽는다 — App 이 key 로 문서마다 새로 마운트한다
+  docId?: string
   ref?: Ref<EditorHandle | null>
 }
 
@@ -48,6 +50,7 @@ export default function Editor({
   titleReadOnly,
   onTitleChange,
   onTitleCommit,
+  docId,
   ref,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -74,6 +77,7 @@ export default function Editor({
       titleReadOnly,
       onTitleChange,
       onTitleCommit,
+      docId,
     })
     handleRef.current = handle
     // 문서 전환 후 포커스 + 커서 맨 앞 (ia.md 3.4, F-103 3.4). App 의 passive effect 에서
