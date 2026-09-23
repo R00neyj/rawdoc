@@ -12,6 +12,7 @@ import {
   MeshBasicMaterial,
   MOUSE,
   PerspectiveCamera,
+  PlaneGeometry,
   Quaternion,
   Raycaster,
   Scene,
@@ -119,6 +120,33 @@ function readTheme(probe: HTMLElement): ThemeColors {
   }
 }
 
+// 사각형을 구의 앞면 깊이까지 시선을 따라 당겨 세우고(간선 끝을 가리려고, 화면 크기는 그대로) 반지름 1 밖을 버린다. 가장자리 한 픽셀은 알파로 흐려 alphaToCoverage 가 계단을 없앤다
+function shapeNodeImpostor(shader: { vertexShader: string; fragmentShader: string }) {
+  shader.vertexShader = 'varying vec2 vNodeUv;\n' + shader.vertexShader.replace(
+    '#include <project_vertex>',
+    [
+      'vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);',
+      'float nodeR = length(instanceMatrix[0].xyz);',
+      'float nodeL = length(mvPosition.xyz);',
+      'float nodeF = max(nodeL - nodeR, nodeL * 0.01) / max(nodeL, 1e-6);',
+      'mvPosition.xyz *= nodeF;',
+      'mvPosition.xy += position.xy * nodeR * nodeF;',
+      'gl_Position = projectionMatrix * mvPosition;',
+      'vNodeUv = position.xy;',
+    ].join('\n'),
+  )
+  shader.fragmentShader = 'varying vec2 vNodeUv;\n' + shader.fragmentShader.replace(
+    '#include <alphamap_fragment>',
+    [
+      'float nodeD = length(vNodeUv);',
+      'float nodeA = 1.0 - smoothstep(1.0 - fwidth(nodeD), 1.0, nodeD);',
+      'if (nodeA <= 0.0) discard;',
+      'diffuseColor.a *= nodeA;',
+      '#include <alphamap_fragment>',
+    ].join('\n'),
+  )
+}
+
 // 네 번째 인자를 빠뜨리면 sRGB 값이 "이미 선형"으로 취급돼 화면이 밝고 뿌옇게 나온다 — 컴파일도 테스트도 통과하고 눈으로만 잡힌다 (3.3)
 function toColor(target: Color, rgba: Rgba): Color {
   return target.setRGB(rgba[0], rgba[1], rgba[2], SRGBColorSpace)
@@ -181,12 +209,19 @@ function buildScene(
   const layout: MapLayout = createMapLayout(graph, { norms: initialView.force })
 
   const sphereGeometry = new SphereGeometry(1, SPHERE_SEGMENTS, SPHERE_RINGS)
+  const quadGeometry = new PlaneGeometry(2, 2)
   // 조명을 넣지 않으므로 Light 를 하나도 가져오지 않는다. 재질 기본 색이 흰색이라 인스턴스 색이 그대로 나온다
-  const nodeMaterial = new MeshBasicMaterial()
-  const nodeMesh = new InstancedMesh(sphereGeometry, nodeMaterial, nodeCount)
+  // 가장자리 반투명을 MSAA 표본으로 바꿔 정렬 없이 매끈하게 한다 — antialias 컨텍스트라서 된다
+  const nodeMaterial = new MeshBasicMaterial({ alphaToCoverage: true })
+  nodeMaterial.onBeforeCompile = shapeNodeImpostor
+  // 보이는 노드는 카메라를 보는 사각형에서 원을 오려 그린다(임포스터). 구는 윤곽이 각져 보여서다 (사용자 지시 2026-09-23)
+  const nodeMesh = new InstancedMesh(quadGeometry, nodeMaterial, nodeCount)
   // 매 tick 좌표가 바뀌어 경계구가 금방 낡는다 — 컬링을 켜 두면 덩어리가 통째로 안 그려질 수 있다 (3.4)
   nodeMesh.frustumCulled = false
   if (nodeCount > 0) scene.add(nodeMesh)
+  // 클릭 판정은 구로 한다. 장면에 넣지 않고 행렬 버퍼만 나눠 써서 올리는 비용이 늘지 않는다
+  const pickMesh = new InstancedMesh(sphereGeometry, nodeMaterial, nodeCount)
+  pickMesh.instanceMatrix = nodeMesh.instanceMatrix
 
   const edgeGeometry = new BufferGeometry()
   const edgeBuf = new Float32Array(edgeCount * 6)
@@ -756,11 +791,11 @@ function buildScene(
     if (!toNdc(clientX, clientY)) return null
     // 낡은 경계구로 걸러지면 클릭이 조용히 안 먹는다 (3.4). 좌표가 바뀐 뒤 한 번만 다시 잰다 (F-2004 7.6)
     if (boundsStale) {
-      nodeMesh.computeBoundingSphere()
+      pickMesh.computeBoundingSphere()
       boundsStale = false
     }
     raycaster.setFromCamera(ndc, camera)
-    const hits = raycaster.intersectObject(nodeMesh, false)
+    const hits = raycaster.intersectObject(pickMesh, false)
     const instanceId = hits[0]?.instanceId
     if (instanceId === undefined) return null
     const node = graph.nodes[instanceId]
@@ -1054,6 +1089,7 @@ function buildScene(
       canvas.removeEventListener('contextmenu', onContextMenu)
       canvas.removeEventListener('pointerleave', onPointerLeave)
       sphereGeometry.dispose()
+      quadGeometry.dispose()
       edgeGeometry.dispose()
       nodeMaterial.dispose()
       edgeMaterial.dispose()
