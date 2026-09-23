@@ -2200,3 +2200,139 @@ test.describe('F-2008 지도 설정 패널 그룹', () => {
     await expect(view.map.getByRole('button', { name: 'A' }).locator('.map-list-dot')).toHaveCount(1)
   })
 })
+
+// F-2013 호버 초점 전환 (specs/features/F-2013.md 13.2) A1~A5 — 드로우 콜을 가로채 프레임 시각을 모은다. three 는 InstancedMesh 하나를 drawElementsInstanced 로 그리므로 호출 한 번이 곧 한 프레임이다. recordLabelX(F-2012)와 같은 방식이다 — 전역에 쌓지 않고 클릭 전에 부르고 await 하지 않는 rAF 루프가 Promise 로 표본을 돌려준다
+function recordFrames(page, ms) {
+  return page.evaluate(
+    (duration) =>
+      new Promise((resolve) => {
+        const frames = []
+        const proto = WebGL2RenderingContext.prototype
+        const orig = proto.drawElementsInstanced
+        proto.drawElementsInstanced = function (...args) {
+          frames.push(performance.now())
+          return orig.apply(this, args)
+        }
+        const end = performance.now() + duration
+        const tick = () => {
+          if (performance.now() < end) {
+            requestAnimationFrame(tick)
+            return
+          }
+          proto.drawElementsInstanced = orig
+          resolve(frames)
+        }
+        requestAnimationFrame(tick)
+      }),
+    ms,
+  )
+}
+
+// quietMs 짜리 창을 그리기 0건으로 통과할 때까지 훑는다. reducedMotion 이 아닐 때는 배치가 tick 마다 돌아 .map-status 로는 준비 완료를 알 수 없다
+async function waitDrawsIdle(page, quietMs = 300, timeout = 8000) {
+  const start = Date.now()
+  while (Date.now() - start < timeout) {
+    const frames = await recordFrames(page, quietMs)
+    if (frames.length === 0) return
+  }
+  throw new Error(`waitDrawsIdle: ${timeout}ms 안에 자리 잡지 않았다`)
+}
+
+// hoverNode 의 나선 훑기 잡음을 빼고 깨끗한 좌표만 얻는다 — 찾은 뒤 배경으로 되돌리고 자리 잡을 때까지 기다린다
+async function findHoverSpot(page, view) {
+  const spot = await hoverNode(page, view)
+  await view.map.locator('.map-page-title').hover()
+  await waitDrawsIdle(page)
+  return spot
+}
+
+test.describe('F-2013 호버 초점 전환', () => {
+  test('F-2013 A1 호버하면 여러 프레임에 걸쳐 그린다', async ({ page }) => {
+    const view = await openMapWithDocs(page, FOCUS_DOCS)
+    await waitDrawsIdle(page)
+    const spot = await findHoverSpot(page, view)
+
+    const recording = recordFrames(page, 800)
+    await page.mouse.move(spot.x, spot.y)
+    const frames = await recording
+
+    expect(frames.length).toBeGreaterThanOrEqual(6)
+    expect(frames.at(-1) - frames[0]).toBeGreaterThanOrEqual(100)
+    expect(frames.at(-1) - frames[0]).toBeLessThanOrEqual(600)
+  })
+
+  test('F-2013 A3 전환이 끝나면 F-2010 의 그림이 나온다', async ({ page }) => {
+    const view = await openMapWithDocs(page, FOCUS_DOCS)
+    await waitDrawsIdle(page)
+    const spot = await findHoverSpot(page, view)
+    const before = await canvasShot(view.map)
+
+    await page.mouse.move(spot.x, spot.y)
+    await waitDrawsIdle(page)
+    const after = await canvasShot(view.map)
+
+    const { inkMeanA, inkMeanB } = await comparePng(page, before, after)
+    expect(inkMeanB).toBeLessThanOrEqual(inkMeanA * 0.85)
+  })
+
+  test('F-2013 A4 호버를 풀면 정확히 되돌아온다', async ({ page }) => {
+    const view = await openMapWithDocs(page, FOCUS_DOCS)
+    await waitDrawsIdle(page)
+    const spot = await findHoverSpot(page, view)
+    const before = await canvasShot(view.map)
+
+    await page.mouse.move(spot.x, spot.y)
+    await waitDrawsIdle(page)
+
+    await view.map.locator('.map-page-title').hover()
+    await waitDrawsIdle(page)
+    const back = await canvasShot(view.map)
+
+    const { pctDiff8 } = await comparePng(page, before, back)
+    expect(pctDiff8).toBeLessThanOrEqual(0.1)
+  })
+
+  test('F-2013 A5 호버를 이리저리 옮겨도 루프가 멈춘다', async ({ page }) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(String(e)))
+    const view = await openMapWithDocs(page, FOCUS_DOCS)
+    await waitDrawsIdle(page)
+    const spot = await findHoverSpot(page, view)
+    const titleBox = await view.map.locator('.map-page-title').boundingBox()
+    const outX = titleBox.x + titleBox.width / 2
+    const outY = titleBox.y + titleBox.height / 2
+
+    const recording = recordFrames(page, 3000)
+    for (let i = 0; i < 3; i++) {
+      await page.mouse.move(spot.x, spot.y)
+      await page.waitForTimeout(100)
+      await page.mouse.move(outX, outY)
+      await page.waitForTimeout(100)
+    }
+    const lastPointerAt = await page.evaluate(() => performance.now())
+    const frames = await recording
+
+    const after = frames.filter((t) => t >= lastPointerAt)
+    const lastDrawAt = after.length ? after[after.length - 1] : lastPointerAt
+    expect(lastDrawAt - lastPointerAt).toBeLessThanOrEqual(600)
+    expect(frames.some((t) => t > lastDrawAt + 500)).toBe(false)
+    expect(errors).toEqual([])
+  })
+})
+
+test.describe('F-2013 A2 움직임 줄이기', () => {
+  test.use({ reducedMotion: 'reduce' })
+
+  test('F-2013 A2 움직임 줄이기면 한 프레임에 끝난다', async ({ page }) => {
+    const view = await openMapWithDocs(page, FOCUS_DOCS)
+    await waitDrawsIdle(page)
+    const spot = await findHoverSpot(page, view)
+
+    const recording = recordFrames(page, 800)
+    await page.mouse.move(spot.x, spot.y)
+    const frames = await recording
+
+    expect(frames.length).toBeLessThanOrEqual(3)
+    expect(frames.length === 0 ? 0 : frames.at(-1) - frames[0]).toBeLessThanOrEqual(60)
+  })
+})

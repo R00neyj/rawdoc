@@ -28,7 +28,7 @@ import { clipPlanes, easeAt, fitDistance, parseCubicBezier, tweenPose, unproject
 import { parseCssColor, type Rgba } from '../lib/cssColor'
 import { blendRgb, depthMix, ndcToScreen, nodeRadius, pickLabelNodes, screenRadius, type ScreenPoint } from '../lib/mapNodeStyle'
 import { edgeColorAt } from '../lib/mapEdgeStyle'
-import { MAP_EDGE_CENTER, MAP_EDGE_FOCUS, MAP_HOVER_DIM, combineMix, edgeClass, fillNodeFocus } from '../lib/mapFocus'
+import { MAP_EDGE_CENTER, MAP_EDGE_FOCUS, MAP_FOCUS_FADE_MS, MAP_HOVER_DIM, combineMix, edgeClass, fillNodeFocus, stepFade } from '../lib/mapFocus'
 import { MAP_FILTER_DIM, MAP_GROUP_PALETTE } from '../lib/mapFilter'
 import MapLabels, { type MapLabelItem, type MapLabelsHandle } from './MapLabels'
 import type { WikiGraph } from '../lib/wikiGraph'
@@ -290,12 +290,17 @@ function buildScene(
   const mixed: [number, number, number] = [0, 0, 0]
   // 호버 초점 — 원색으로 둘 노드의 표시다. setHover() 에서만 채운다 (F-2010 5장)
   const nodeFocus = new Uint8Array(nodeCount)
-  let focusActive = false
+  // 마스크와 짝인 인덱스. 되돌아가는 전환이 끝나는 프레임까지 -1 로 안 비운다 (F-2013 5.1)
+  let focusHover = -1
+  // 초점 전환 상태 — 선형 진행도·목표·곡선을 씌운 값·직전 프레임 시각 (F-2013 6장·10장)
+  let focusP = 0
+  let focusTarget: 0 | 1 = 0
+  let focusW = 0
+  let focusFrameAt = 0
   // 간선 갈래가 넷뿐이라 색을 간선마다 만들지 않고 먼저 몇 번만 만든다 (F-2010 6.5, F-2007 9.3)
   const edgeRgba: Rgba = [0, 0, 0, 1]
-  const edgeBaseLin = new Float32Array(3)
-  const edgeDimLin = new Float32Array(3)
-  const edgeAccentLin = new Float32Array(3)
+  // 간선 끝 색 둘을 보간한 sRGB 결과를 담는 스크래치 — 매 간선마다 돌려쓴다 (F-2013 4.3)
+  const edgeMixRgba: Rgba = [0, 0, 0, 1]
   // 걸러진 간선 — MAP_FILTER_DIM(0.85) 이 MAP_HOVER_DIM(0.65) 보다 항상 커서 호버 흐리기와 쌓지 않고 이 색 하나로 대신한다 (F-2007 9.1·9.2)
   const edgeFilterRgba: Rgba = [0, 0, 0, 1]
   const edgeFilterLin = new Float32Array(3)
@@ -341,37 +346,49 @@ function buildScene(
     out[2] = scratchColor.b
   }
 
-  // 간선마다 갈래를 정해 정점 색 버퍼에 쓴다. 갈래별 색은 위에서 세 번만 만든다 (F-2010 6.5)
+  // 간선마다 끝 색 둘(focusW=0 쪽·focusW=1 쪽)을 고르고 그 사이를 sRGB 에서 보간한 뒤 선형으로 옮겨 쓴다 (F-2013 4.3)
   function writeEdgeColors() {
     if (edgeCount === 0) return
     const base = edgeColorAt(applied.display.edgeStrength, { panel: panelColor, rule: ruleColor, ink: inkColor })
-    toLinear(edgeBaseLin, base)
     blendRgb(base, panelColor, MAP_HOVER_DIM, mixed)
     edgeRgba[0] = mixed[0]
     edgeRgba[1] = mixed[1]
     edgeRgba[2] = mixed[2]
-    toLinear(edgeDimLin, edgeRgba)
-    toLinear(edgeAccentLin, accentColor)
     blendRgb(base, panelColor, MAP_FILTER_DIM, mixed)
     edgeFilterRgba[0] = mixed[0]
     edgeFilterRgba[1] = mixed[1]
     edgeFilterRgba[2] = mixed[2]
     toLinear(edgeFilterLin, edgeFilterRgba)
-    const hover = focusActive ? hoverIndex : -1
     for (let e = 0; e < edgeCount; e++) {
       const edge = graph.edges[e]
-      const cls = edgeClass(edge.from, edge.to, hover, centerIndex)
-      // 호버 중에는 현재 문서 간선도 흐려진다 — --accent 가 "지금 주목하는 것" 하나만 뜻하게 한다 (F-2010 5장)
-      let c = cls === MAP_EDGE_FOCUS ? edgeAccentLin : focusActive ? edgeDimLin : cls === MAP_EDGE_CENTER ? edgeAccentLin : edgeBaseLin
-      // 양끝 중 하나라도 걸러졌으면 그 간선도 걸러진 것이다. MAP_FILTER_DIM 이 항상 더 커서 호버 흐리기·강조를 덮는다 (F-2007 9.1·9.3)
-      if (visibleMask !== null && (visibleMask[edge.from] === 0 || visibleMask[edge.to] === 0)) c = edgeFilterLin
       const o = e * 6
-      edgeColorBuf[o] = c[0]
-      edgeColorBuf[o + 1] = c[1]
-      edgeColorBuf[o + 2] = c[2]
-      edgeColorBuf[o + 3] = c[0]
-      edgeColorBuf[o + 4] = c[1]
-      edgeColorBuf[o + 5] = c[2]
+      let r: number
+      let g: number
+      let b: number
+      // 양끝 중 하나라도 걸러졌으면 그 간선도 걸러진 것이다. MAP_FILTER_DIM 이 항상 더 커서 호버 흐리기·강조를 덮는다 (F-2007 9.1·9.3)
+      if (visibleMask !== null && (visibleMask[edge.from] === 0 || visibleMask[edge.to] === 0)) {
+        r = edgeFilterLin[0]
+        g = edgeFilterLin[1]
+        b = edgeFilterLin[2]
+      } else {
+        // focusW = 0 끝 — 호버가 없었을 때의 색. focusW = 1 끝 — F-2010 이 정한 호버 중의 색 (호버 중에는 현재 문서 간선도 흐려진다)
+        const endA = edgeClass(edge.from, edge.to, -1, centerIndex) === MAP_EDGE_CENTER ? accentColor : base
+        const endB = edgeClass(edge.from, edge.to, focusHover, -1) === MAP_EDGE_FOCUS ? accentColor : edgeRgba
+        blendRgb(endA, endB, focusW, mixed)
+        edgeMixRgba[0] = mixed[0]
+        edgeMixRgba[1] = mixed[1]
+        edgeMixRgba[2] = mixed[2]
+        toColor(scratchColor, edgeMixRgba)
+        r = scratchColor.r
+        g = scratchColor.g
+        b = scratchColor.b
+      }
+      edgeColorBuf[o] = r
+      edgeColorBuf[o + 1] = g
+      edgeColorBuf[o + 2] = b
+      edgeColorBuf[o + 3] = r
+      edgeColorBuf[o + 4] = g
+      edgeColorBuf[o + 5] = b
     }
     edgeColorAttr.needsUpdate = true
   }
@@ -419,12 +436,14 @@ function buildScene(
     for (let i = 0; i < nodeCount; i++) {
       // 걸러진 노드는 호버 초점 면제에서도 뺀다 — 그 이웃이어도 원색으로 밝아지지 않는다 (F-2007 9.3)
       const filteredOut = visibleMask !== null && visibleMask[i] === 0
-      // 호버한 노드와 그 이웃은 위치와 무관하게 원색이다 — 뒤쪽 이웃이 65% 씻긴 채로는 강조가 아니다 (F-2010 5장)
-      const focused = focusActive && nodeFocus[i] === 1 && !filteredOut
+      // 호버한 노드와 그 이웃은 위치와 무관하게 원색 쪽이다 — 뒤쪽 이웃이 65% 씻긴 채로는 강조가 아니다 (F-2010 5장)
+      const focused = focusHover >= 0 && nodeFocus[i] === 1 && !filteredOut
       // 현재 문서만 원색으로 둔다 — 남은 표시가 색 하나뿐이다 (F-2004 6.2)
-      const depthT = focused || i === centerIndex ? 0 : depthMix(depths[i], near, far)
-      // 초점 밖은 배경으로 가라앉힌다. 호버가 없으면 combineMix(depthT, 0) === depthT 라 F-2010 이전 화면과 한 픽셀도 다르지 않다
-      const hoverDimT = focusActive && !focused ? MAP_HOVER_DIM : 0
+      const rawDepthT = i === centerIndex ? 0 : depthMix(depths[i], near, far)
+      // 초점 노드는 focusW 가 1 로 갈수록 깊이 섞기에서 빠져나온다. 그 밖은 focusW 와 무관하게 그대로다 (F-2013 4.1)
+      const depthT = focused ? rawDepthT * (1 - focusW) : rawDepthT
+      // 초점 밖은 focusW 만큼 배경으로 가라앉는다. focusW = 0 이면 F-2010 이전 화면과 한 픽셀도 다르지 않다
+      const hoverDimT = focused ? 0 : MAP_HOVER_DIM * focusW
       // 걸러진 노드의 흐리기는 호버 흐리기와 쌓지 않고 큰 값 하나만 쓴다 — 쌓으면 8비트에서 배경과 구분이 사라진다 (F-2007 9.2)
       const dimT = Math.max(hoverDimT, filteredOut ? MAP_FILTER_DIM : 0)
       const t = combineMix(depthT, dimT)
@@ -719,6 +738,22 @@ function buildScene(
     beginTween('look', i)
   }
 
+  // focusP 를 target 쪽으로 옮기고 곡선을 씌워 focusW 를 갱신한다. 목표에 못 닿았으면 dirty 를, 값이 바뀌었으면 edgeColorDirty 를 세운다 (F-2013 7.2·9장)
+  function stepFocusFade(now: number) {
+    const dt = now - focusFrameAt
+    focusFrameAt = now
+    focusP = stepFade(focusP, focusTarget, dt, MAP_FOCUS_FADE_MS)
+    const prevW = focusW
+    focusW = easeAt(easeCurve, focusP)
+    if (focusW !== prevW) edgeColorDirty = true
+    if (focusP !== focusTarget) dirty = true
+    // 되돌아가는 전환이 끝나는 프레임에야 마스크를 비운다 (F-2013 5.1)
+    if (focusP === 0 && focusHover >= 0) {
+      fillNodeFocus(-1, NO_NEIGHBORS, nodeFocus)
+      focusHover = -1
+    }
+  }
+
   function frame() {
     // controls.update() 보다 먼저 내린다 — 감쇠가 남아 있으면 change 가 이것을 다시 세운다 (F-2003 6.2)
     dirty = false
@@ -759,6 +794,8 @@ function buildScene(
       posDirty = false
       boundsStale = true
     }
+    // 카메라 분기 뒤 · writeEdgeColors() 앞 — 간선·노드 색이 그 프레임의 focusW 를 쓰게 한다 (F-2013 7.3)
+    stepFocusFade(performance.now())
     if (edgeColorDirty) {
       writeEdgeColors()
       edgeColorDirty = false
@@ -850,8 +887,23 @@ function buildScene(
     hoverIndex = next
     // 노드 위에서만 손가락 — 캔버스 전체가 한 요소라 CSS 로는 가릴 수 없다 (사용자 지시 2026-09-22)
     canvas.style.cursor = next >= 0 ? 'pointer' : ''
-    // 초점 마스크는 카메라와 무관하므로 프레임마다 다시 만들지 않는다 (F-2010 5장)
-    focusActive = fillNodeFocus(next, adjacency[next] ?? NO_NEIGHBORS, nodeFocus)
+    if (next >= 0) {
+      // 마스크와 focusHover 는 즉시 바뀐다 — 노드 A 에서 B 로 옮겨가면 강조 자리가 그 프레임에 바뀐다 (F-2013 5.1)
+      fillNodeFocus(next, adjacency[next] ?? NO_NEIGHBORS, nodeFocus)
+      focusHover = next
+    }
+    // 목표만 바꾼다. 배경으로 나가도 마스크를 바로 비우지 않는다 — stepFocusFade 가 focusW = 0 에 닿는 프레임에 비운다 (F-2013 5.1)
+    focusTarget = next >= 0 ? 1 : 0
+    focusFrameAt = performance.now()
+    if (reduced) {
+      // 움직임 줄이기면 전환 단계 없이 목표로 바로 민다 — F-2010 과 글자 그대로 같은 동작이다 (F-2013 6.4)
+      focusP = focusTarget
+      focusW = focusTarget
+      if (focusTarget === 0) {
+        fillNodeFocus(-1, NO_NEIGHBORS, nodeFocus)
+        focusHover = -1
+      }
+    }
     edgeColorDirty = true
     refreshLabels()
     requestDraw()

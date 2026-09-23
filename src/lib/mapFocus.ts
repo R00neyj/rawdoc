@@ -47,3 +47,16 @@ export function combineMix(depthT: number, dimT: number): number {
   const m = clamp01(dimT)
   return d + (1 - d) * m
 }
+
+// 호버 초점이 들어오고 나가는 데 걸리는 시간. design.md 4장 `전환` 의 150~200ms 안이고 tokens.css `--transition-fast`(180ms)와 같다 (F-2013 6.1)
+export const MAP_FOCUS_FADE_MS = 180
+
+// 선형 진행도 p(0~1)를 target 쪽으로 dtMs 만큼 옮긴다. 곡선은 호출부가 easeAt 으로 따로 씌운다 (F-2013 9장)
+export function stepFade(p: number, target: 0 | 1, dtMs: number, durationMs: number): number {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return target
+  if (!Number.isFinite(p)) return target
+  if (!Number.isFinite(dtMs) || dtMs <= 0) return clamp01(p)
+  const step = dtMs / durationMs
+  const next = target > p ? p + step : p - step
+  return clamp01(next)
+}

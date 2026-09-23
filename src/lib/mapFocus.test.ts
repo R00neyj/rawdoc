@@ -1,12 +1,14 @@
-// specs/features/F-2010.md 12.1 U1~U9
+// specs/features/F-2010.md 12.1 U1~U9, specs/features/F-2013.md 13.1 U10~U16
 import { describe, expect, it } from 'vitest'
 import {
   MAP_EDGE_BASE,
   MAP_EDGE_CENTER,
   MAP_EDGE_FOCUS,
+  MAP_FOCUS_FADE_MS,
   combineMix,
   edgeClass,
   fillNodeFocus,
+  stepFade,
 } from './mapFocus'
 
 describe('fillNodeFocus', () => {
@@ -71,5 +73,46 @@ describe('combineMix', () => {
     expect(combineMix(0.65, 0.85)).toBeCloseTo(0.9475, 10)
     expect(combineMix(-1, 2)).toBe(1)
     expect(combineMix(NaN, 0.85)).toBeCloseTo(0.85, 10)
+  })
+})
+
+describe('stepFade', () => {
+  it('U10 절반쯤 간다', () => {
+    expect(stepFade(0, 1, 90, 180)).toBeCloseTo(0.5, 10)
+    expect(stepFade(0.5, 1, 45, 180)).toBeCloseTo(0.75, 10)
+  })
+
+  it('U11 목표를 지나치지 않는다', () => {
+    expect(stepFade(0.9, 1, 1000, 180)).toBe(1)
+    expect(stepFade(0.1, 0, 1000, 180)).toBe(0)
+  })
+
+  it('U12 되돌아갈 때 같은 진행도를 되짚는다', () => {
+    expect(stepFade(0.6, 0, 90, 180)).toBeCloseTo(0.1, 10)
+  })
+
+  it('U13 시간이 안 흘렀으면 그대로', () => {
+    expect(stepFade(0.4, 1, 0, 180)).toBe(0.4)
+    expect(stepFade(0.4, 1, -5, 180)).toBe(0.4)
+    expect(stepFade(0.4, 1, NaN, 180)).toBe(0.4)
+  })
+
+  it('U14 길이가 0 이면 즉시', () => {
+    expect(stepFade(0, 1, 16, 0)).toBe(1)
+    expect(stepFade(1, 0, 16, -1)).toBe(0)
+    expect(stepFade(1, 0, 16, NaN)).toBe(0)
+  })
+
+  it('U15 망가진 상태에서 벗어난다', () => {
+    expect(stepFade(NaN, 1, 16, 180)).toBe(1)
+    const result = stepFade(2, 0, 0, 180)
+    expect(result).toBeGreaterThanOrEqual(0)
+    expect(result).toBeLessThanOrEqual(1)
+  })
+
+  it('U16 MAP_FOCUS_FADE_MS 가 있다', () => {
+    expect(MAP_FOCUS_FADE_MS).toBe(180)
+    expect(MAP_FOCUS_FADE_MS).toBeGreaterThanOrEqual(150)
+    expect(MAP_FOCUS_FADE_MS).toBeLessThanOrEqual(200)
   })
 })
