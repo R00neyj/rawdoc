@@ -13,7 +13,7 @@ A source-preserving Markdown collaboration tool. Typing `##` does not make the m
 
 1. **Web app first.** Finish it for desktop browsers. PWA (install, offline) counts as part of finishing the web app
 2. Android (Capacitor) comes after the web app is done and there is room. Until then, no Android-only work
-3. Order is spec → small spec → implementation. **If it is not in a spec, do not build it**
+3. Order is spec → small spec → implementation. **If it is not in a spec, do not build it** — except a **tweak**: a small visual or interaction fix to something that already exists (color, spacing, copy, moving a button, menu order, hover/focus). Those skip the spec, go through the `tweak` skill, and leave one line in `specs/tweaks.md` as evidence. Data, storage, server, new screens/commands/shortcuts, new dependencies and invariants still need a spec (user instruction, 2026-09-23)
 
 ## How we work (2026-09-18)
 
@@ -35,6 +35,7 @@ Logic gets TDD; design gets a fast human-review loop.
 | `specs/architecture.md` | `src/` layout, storage interfaces, state flow, setting keys | After human approval |
 | `specs/features/F-xxx.md` | Small specs. One spec = one implementation unit. **Numbers run in hundreds per milestone** — M1 is `F-1NN`, M2 and M1 follow-ups are `F-2NN`, M3 (live collaboration) is `F-3NN` (user instruction, 2026-09-20). **When a milestone's hundred block fills up, it widens to four digits keeping the same leading digit** — M2 continues at `F-2001` onward, not `F-4NN` (user instruction, 2026-09-21; `F-2NN` ran out with only 298/299 left). The leading digit always says which milestone. `npm run specs` sorts numerically, so `F-201` still comes before `F-2001`. **YAML frontmatter at the top** (below) | After human approval |
 | `specs/human-checks.md` | Items no automated test can judge, plus their status | By main, as each spec lands |
+| `specs/tweaks.md` | One line per tweak (no-spec design/interaction fix): date, what, why (user's words), related spec | By main, in the tweak's commit |
 | `specs/notes.md` | Discussion notes from before anything becomes a spec (direction, rationale, what is still open). Moved into `product.md` or an `F-xxx.md` once it settles, and deleted from here | Freely, no approval needed |
 | `content/` | Public-site article sources, `.md` (F-272). `site/` reads them | Per spec |
 | `site/` | Public-site build — articles → HTML, 404, sitemap, robots (F-272). `src/` never imports from here | Per spec |
@@ -120,7 +121,7 @@ There are two work machines (laptop and desktop), so this lives here instead of 
 - **Commit granularity follows the "Commit granularity" section below.** Launch the next subagent only after committing. Run specs in parallel only when their files do not overlap
 - **Specs are written by the `spec-writer` agent** (`.claude/agents/spec-writer.md`, defined with Opus — user instruction 2026-09-20: "명세 작성을 sonnet 말고 opus로"). Do not pass a separate `model`. Implementation goes to `feature-implementer` (Sonnet) by default. **The 3D map rework is split per sub-spec — the `누가` column of `specs/features/F-292.md` ch. 9 is the decision** (user, 2026-09-21): main implements F-2002~F-2004 itself because renderer, camera and node appearance have to be fixed while looking at the screen; F-2006 goes to `complex-implementer`; the rest are ordinary handoffs
 - **`complex-implementer` (Opus) is the third agent**, for a spec whose acceptance criteria are clear but whose route to them is not — graphics and 3D, CM6 internals, a frame or bundle budget, a refactor across several ownership tables, an external API nobody has run yet. It differs from `feature-implementer` by researching and measuring before building, deciding the gaps inside a criterion itself, and reporting build and precache deltas. The default stays `feature-implementer`; main names this one explicitly (user instruction, 2026-09-21: "복잡한 작업용 별도 에이전트 만들어두는것도 좋을듯")
-- **Repeated prompts live in skills. Go through the skill instead of launching an agent directly** (user instruction, 2026-09-21). Stress-testing an idea before it becomes a spec is `grill`, spec writing is `write-spec`, implementation is `ship-feature`. **`grill` replaces the generic `grilling` skill** — it puts every open decision to the user through `AskUserQuestion` instead of prose, because typed answers came back partial (2026-09-21). The prompt skeleton, the quality-raising instructions, and the report-review order are inside them
+- **Repeated prompts live in skills. Go through the skill instead of launching an agent directly** (user instruction, 2026-09-21). Stress-testing an idea before it becomes a spec is `grill`, spec writing is `write-spec`, implementation is `ship-feature`, a no-spec design or interaction fix is `tweak`. **`grill` replaces the generic `grilling` skill** — it puts every open decision to the user through `AskUserQuestion` instead of prose, because typed answers came back partial (2026-09-21). The prompt skeleton, the quality-raising instructions, and the report-review order are inside them
 - **Implementation is the `ship-feature` skill + the `feature-implementer` agent.** The prompt carries only the spec number and the `E2E_PORT` / `E2E_DIST` slots. Judge with `npm run review -- F-xxx` then the related e2e. Use the tools in `scripts/` instead of ad-hoc scripts; if you see a repeat the tools do not cover, propose adding one
 - **A spec that leaves no real fork goes straight to implementation.** Do not stop for approval when the only open questions have sound defaults — commit the spec, say so, and launch `ship-feature` in the same turn (user instruction, 2026-09-21: "명세 작성 후 사용자가 검토할 결정이 없으면 바로 구현까지 진행"). What still counts as a fork is listed in the `write-spec` skill, ch. 5
 - `e2e:one` search terms can be OR'd with `|`, e.g. `"F-225|F-212"`. Slots are `--port`/`--dist` or `E2E_PORT`/`E2E_DIST`
@@ -134,6 +135,7 @@ There are two work machines (laptop and desktop), so this lives here instead of 
 | One spec written | a single `specs/features/F-xxx.md` (+ any upstream spec edits that spec listed under "갱신 대상") | `F-285 검색 입력 명세` |
 | One spec implemented | the files in that spec's ownership table + tests + `specs/human-checks.md` + the frontmatter update | `문서 가져오기 (F-282)` |
 | One change outside any spec | one bug fix, one docs/rules change, or one tool addition | `HTML 내보내기에서 CSS 가 평문으로 쏟아지던 버그` |
+| One tweak | the changed code + its `specs/tweaks.md` line (+ the `design.md` / `ia.md` line it changed) | `사이드바 행 간격 줄임 (tweak)` |
 
 How to hold to it:
 
