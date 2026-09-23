@@ -204,3 +204,37 @@ describe('dedupeDescendants', () => {
     expect(dedupeDescendants(items, docs, folders)).toEqual(items)
   })
 })
+
+describe('dedupeDescendants — 깊은 트리·순환 (F-2017 U9)', () => {
+  it('선택 [A, A 안 손자 폴더] 는 A 만 남는다', () => {
+    const folders = [
+      { id: 'A', name: 'A', parentId: null },
+      { id: 'A1', name: 'A1', parentId: 'A' },
+      { id: 'A2', name: 'A2', parentId: 'A1' },
+    ]
+    expect(dedupeDescendants([folder('A'), folder('A2')], [], folders)).toEqual([folder('A')])
+  })
+
+  // 구현 전 코드에서는 동기 무한 루프라 빨강 확인을 돌리지 않았다 (F-2017 12장)
+  it('순환 A↔B 데이터에서 [C(부모 A) 안 문서, 폴더 D] 는 끝나고 둘 다 남는다', () => {
+    const folders = [
+      { id: 'A', name: 'A', parentId: 'B' },
+      { id: 'B', name: 'B', parentId: 'A' },
+      { id: 'C', name: 'C', parentId: 'A' },
+      { id: 'D', name: 'D', parentId: null },
+    ]
+    const docs = [{ id: 'dc', title: '', updatedAt: 0, folderId: 'C' }]
+    const items = [doc('dc'), folder('D')]
+    expect(dedupeDescendants(items, docs, folders)).toEqual(items)
+  })
+
+  // 순환에 든 폴더는 화면에서 최상위라(3.3) 조상이 없다 — 자기 사슬에 자신이 있어도 빠지면 최상위로 끌어 풀 수 없다
+  it('순환 A↔B 에서 A 만, 또는 A·B 를 같이 고르면 고른 폴더가 모두 남는다', () => {
+    const folders = [
+      { id: 'A', name: 'A', parentId: 'B' },
+      { id: 'B', name: 'B', parentId: 'A' },
+    ]
+    expect(dedupeDescendants([folder('A')], [], folders)).toEqual([folder('A')])
+    expect(dedupeDescendants([folder('A'), folder('B')], [], folders)).toEqual([folder('A'), folder('B')])
+  })
+})

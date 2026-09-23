@@ -237,7 +237,7 @@ describe('planWorkspaceImport 문서 판정 (F-282 A4)', () => {
 describe('planWorkspaceImport 폴더 판정 (F-282 A5)', () => {
   const NOW = 1000
 
-  it('있으면 재사용, 없으면 id 유지해 만들기, 끊긴 부모는 최상위, 3단계는 2단계로, 부모가 자식보다 먼저', () => {
+  it('있으면 재사용, 없으면 id 유지해 만들기, 끊긴 부모는 최상위, 부모가 자식보다 먼저', () => {
     const manifest = {
       format: 1 as const,
       exportedAt: NOW,
@@ -269,14 +269,76 @@ describe('planWorkspaceImport 폴더 판정 (F-282 A5)', () => {
     expect(byId.get('new-f')?.action).toBe('create')
     expect(byId.get('orphan-f')?.parentId).toBeNull()
 
-    // d3 는 3단계라 2단계(d1 의 자식)로 합쳐진다
-    expect(byId.get('d3')?.parentId).toBe('d1')
-    expect(plan.warnings.some((w) => w.includes('2단계로 합친 폴더'))).toBe(true)
+    // 3단계도 부모 그대로 (F-2017 6장)
+    expect(byId.get('d3')?.parentId).toBe('d2')
+    expect(plan.warnings).toEqual([])
 
     // 부모가 자식보다 앞선다
     const order = plan.folders.map((f) => f.id)
     expect(order.indexOf('d1')).toBeLessThan(order.indexOf('d2'))
-    expect(order.indexOf('d1')).toBeLessThan(order.indexOf('d3'))
+    expect(order.indexOf('d2')).toBeLessThan(order.indexOf('d3'))
+  })
+
+  function workspaceManifest(folders: { id: string; name: string; parentId: string | null; path: string }[]) {
+    return { format: 1 as const, exportedAt: NOW, scope: 'all' as const, rootFolderId: null, folders, docs: [] }
+  }
+
+  function planFolders(manifest: Parameters<typeof planWorkspaceImport>[0]['manifest'], existingFolders: { id: string; parentId: string | null }[] = []) {
+    return planWorkspaceImport({
+      manifest,
+      existingDocs: [],
+      existingFolders,
+      zipPaths: new Set(),
+      existingAttachmentIds: new Set(),
+      now: NOW,
+    })
+  }
+
+  it('5단계 manifest 폴더가 부모 그대로, 경고 없음 (F-2017 U11)', () => {
+    const folders = ['e5', 'e4', 'e3', 'e2', 'e1'].map((id, i, all) => ({
+      id,
+      name: id,
+      parentId: i === all.length - 1 ? null : all[i + 1],
+      path: id,
+    }))
+    const plan = planFolders(workspaceManifest(folders))
+    const byId = new Map(plan.folders.map((f) => [f.id, f]))
+    expect(byId.get('e5')?.parentId).toBe('e4')
+    expect(byId.get('e2')?.parentId).toBe('e1')
+    expect(byId.get('e1')?.parentId).toBeNull()
+    expect(plan.folders.map((f) => f.id)).toEqual(['e1', 'e2', 'e3', 'e4', 'e5'])
+    expect(plan.warnings).toEqual([])
+  })
+
+  it('manifest 순환 A↔B 는 둘 다 최상위, 순환으로 들어가는 폴더는 부모 유지 (F-2017 U11)', () => {
+    const plan = planFolders(
+      workspaceManifest([
+        { id: 'A', name: 'A', parentId: 'B', path: 'A' },
+        { id: 'B', name: 'B', parentId: 'A', path: 'B' },
+        { id: 'C', name: 'C', parentId: 'A', path: 'C' },
+      ]),
+    )
+    const byId = new Map(plan.folders.map((f) => [f.id, f]))
+    expect(byId.get('A')?.parentId).toBeNull()
+    expect(byId.get('B')?.parentId).toBeNull()
+    expect(byId.get('C')?.parentId).toBe('A')
+    const order = plan.folders.map((f) => f.id)
+    expect(order.indexOf('A')).toBeLessThan(order.indexOf('C'))
+  })
+
+  it('scope:folder 의 rootFolderId 가 내 3단계 폴더여도 그 안에 붙는다 (F-2017 U11)', () => {
+    const manifest = {
+      ...workspaceManifest([{ id: 'sub', name: '하위', parentId: null, path: '하위' }]),
+      scope: 'folder' as const,
+      rootFolderId: 'r3',
+    }
+    const plan = planFolders(manifest, [
+      { id: 'r1', parentId: null },
+      { id: 'r2', parentId: 'r1' },
+      { id: 'r3', parentId: 'r2' },
+    ])
+    expect(plan.folders.find((f) => f.id === 'sub')?.parentId).toBe('r3')
+    expect(plan.warnings).toEqual([])
   })
 
   it('scope:folder 에서 rootFolderId 가 있으면 그 안, 없으면 최상위', () => {
@@ -328,16 +390,34 @@ describe('planPlainImport (F-282 A6)', () => {
     expect(titles).toEqual(['a', 'b', 'c'])
 
     const cDoc = plan.docs.find((d) => d.title === 'c')!
-    // c 는 A/B 로 합쳐진 폴더 안에 있어야 한다(3단계 → 2단계)
+    // c 는 C 폴더 안, C → B → A 부모 사슬 (F-2017 6장)
     const cFolder = plan.folders.find((f) => f.id === cDoc.folderId)!
-    expect(cFolder.name).toBe('B')
-    const cParent = plan.folders.find((f) => f.id === cFolder.parentId)!
-    expect(cParent.name).toBe('A')
+    expect(cFolder.name).toBe('C')
+    const bFolder = plan.folders.find((f) => f.id === cFolder.parentId)!
+    expect(bFolder.name).toBe('B')
+    const aFolder = plan.folders.find((f) => f.id === bFolder.parentId)!
+    expect(aFolder.name).toBe('A')
+    expect(aFolder.parentId).toBeNull()
 
     expect(plan.warnings.some((w) => w === '.md 가 아니라 건너뛴 파일 1개')).toBe(true)
-    expect(plan.warnings.some((w) => w.includes('2단계로 합친 폴더'))).toBe(true)
+    expect(plan.warnings.some((w) => w.includes('2단계로 합친 폴더'))).toBe(false)
     expect(plan.warnings.some((w) => w.includes('경로가 이상해 건너뛴 파일'))).toBe(true)
     expect(plan.docs.every((d) => d.action === 'create')).toBe(true)
+  })
+
+  it('V/a/b/c/d/e.md 는 폴더 a~d 사슬, e 는 d 안, 합친 폴더 경고 없음 (F-2017 U12)', () => {
+    const plan = planPlainImport({ entries: [{ name: 'V/a/b/c/d/e.md', content: '내용' }], now: 1000 })
+    expect(plan.folders.map((f) => f.name)).toEqual(['a', 'b', 'c', 'd'])
+    const byId = new Map(plan.folders.map((f) => [f.id, f]))
+    const chainNames: string[] = []
+    let current = plan.docs[0].folderId
+    while (current) {
+      const f = byId.get(current)!
+      chainNames.unshift(f.name)
+      current = f.parentId
+    }
+    expect(chainNames).toEqual(['a', 'b', 'c', 'd'])
+    expect(plan.warnings.some((w) => w.includes('2단계로 합친 폴더'))).toBe(false)
   })
 })
 

@@ -199,7 +199,7 @@ export function createMemoryStore(): Store {
       return clone(updated)
     },
 
-    // 결과 깊이가 2단계를 넘으면 reject (F-126.md 3장)
+    // 자기 자신·자기 자손·없는 부모면 reject (F-2017.md 3.2)
     async moveFolder(id, parentId) {
       const existing = folders.get(id)
       if (!existing) {

@@ -1,12 +1,13 @@
 // 문서·폴더 접근 권한 판정 (specs/features/F-212.md 2.2)
 import type { AuthUser } from './auth'
+import { folderAncestors } from '../src/lib/folderTree'
 
 export type Role = 'owner' | 'edit' | 'view'
 export type GrantRole = 'view' | 'edit'
 
 const RANK: Record<GrantRole, number> = { view: 1, edit: 2 }
 
-function higher(a: GrantRole | null, b: GrantRole | null): GrantRole | null {
+export function higherRole(a: GrantRole | null, b: GrantRole | null): GrantRole | null {
   if (!a) return b
   if (!b) return a
   return RANK[a] >= RANK[b] ? a : b
@@ -31,20 +32,50 @@ async function grantRole(
   return row?.role ?? null
 }
 
-// 폴더 자신 + 상위 폴더 grant 중 가장 높은 역할. 조회 시점 기준(옮기면 바로 바뀐다)
-async function folderChainRole(env: Env, folderId: string | null, email: string): Promise<GrantRole | null> {
+// 위로 올라가는 재귀 — 기본키로 찾고 UNION 이라 순환에서도 끝난다 (F-2017 4.3)
+const FOLDER_CHAIN_SQL = `WITH RECURSIVE chain(id, parent_id) AS (
+  SELECT id, parent_id FROM folders WHERE id = ? AND owner_id = ?
+  UNION
+  SELECT f.id, f.parent_id FROM folders f JOIN chain c ON f.id = c.parent_id WHERE f.owner_id = ?
+)
+SELECT id, parent_id FROM chain`
+
+// 사슬의 폴더 초대 중 가장 높은 역할 — 사슬은 가까운 것부터, 없는 폴더·순환에서 멈춘다
+function chainRole(
+  folders: { id: string; parent_id: string | null }[],
+  folderId: string | null,
+  folderGrants: Map<string, GrantRole>,
+): GrantRole | null {
   let role: GrantRole | null = null
-  let currentId = folderId
-  const visited = new Set<string>()
-  while (currentId && !visited.has(currentId)) {
-    visited.add(currentId)
-    role = higher(role, await grantRole(env, 'folder', currentId, email))
-    const parent = await env.DB.prepare('SELECT parent_id FROM folders WHERE id = ?')
-      .bind(currentId)
-      .first<{ parent_id: string | null }>()
-    currentId = parent?.parent_id ?? null
-  }
+  const chain = folderAncestors(
+    folders.map((f) => ({ id: f.id, name: '', parentId: f.parent_id })),
+    folderId,
+  )
+  for (const id of chain) role = higherRole(role, folderGrants.get(id) ?? null)
   return role
+}
+
+// 폴더 자신 + 상위 폴더 grant 중 가장 높은 역할. 질의는 2번 이하 — 이 소유자에게서 받은 폴더 초대가 없으면 사슬을 읽지 않는다
+async function folderChainRole(
+  env: Env,
+  folderId: string | null,
+  ownerId: string,
+  email: string,
+): Promise<GrantRole | null> {
+  if (!folderId) return null
+  const { results: grants } = await env.DB.prepare(
+    "SELECT target_id, role FROM grants WHERE grantee_email = ? AND owner_id = ? AND target_type = 'folder'",
+  )
+    .bind(email, ownerId)
+    .all<{ target_id: string; role: GrantRole }>()
+  if (grants.length === 0) return null
+  const folderGrants = new Map<string, GrantRole>()
+  for (const g of grants) folderGrants.set(g.target_id, higherRole(folderGrants.get(g.target_id) ?? null, g.role) as GrantRole)
+
+  const { results: chain } = await env.DB.prepare(FOLDER_CHAIN_SQL)
+    .bind(folderId, ownerId, ownerId)
+    .all<{ id: string; parent_id: string | null }>()
+  return chainRole(chain, folderId, folderGrants)
 }
 
 export interface DocRowLike {
@@ -65,7 +96,7 @@ export async function resolveDocAccess<T extends DocRowLike>(
   user: AuthUser,
 ): Promise<DocAccess<T> | null> {
   if (doc.owner_id === user.id) return { role: 'owner', doc }
-  const role = higher(await grantRole(env, 'doc', doc.id, user.email), await folderChainRole(env, doc.folder_id, user.email))
+  const role = higherRole(await grantRole(env, 'doc', doc.id, user.email), await folderChainRole(env, doc.folder_id, doc.owner_id, user.email))
   if (!role) return null
   return { role, doc }
 }
@@ -105,6 +136,6 @@ export async function isDocAttachmentOwner(env: Env, doc: DocRowLike, attachment
     .bind(attachmentOwnerId)
     .first<{ email: string }>()
   if (!owner) return false
-  const role = higher(await grantRole(env, 'doc', doc.id, owner.email), await folderChainRole(env, doc.folder_id, owner.email))
+  const role = higherRole(await grantRole(env, 'doc', doc.id, owner.email), await folderChainRole(env, doc.folder_id, doc.owner_id, owner.email))
   return role === 'edit'
 }

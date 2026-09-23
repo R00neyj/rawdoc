@@ -5,6 +5,7 @@ import { requireUser } from './auth'
 import { generateToken, isValidToken } from './token'
 import { stripComments } from '../src/lib/comments'
 import { collectWikiSet, type LoadDoc } from './shareSet'
+import { descendantFolderIds } from '../src/lib/folderTree'
 
 type LinkRow = {
   token: string
@@ -56,12 +57,27 @@ async function findOwnedFolder(env: Env, folderId: string, ownerId: string): Pro
     .first<{ id: string }>()
 }
 
-// 링크 폴더 + 그 직속 하위 폴더(폴더는 2단계까지만 있으므로 손자는 없다)의 id 목록. 조회 시점 기준
+type FolderListRow = Pick<FolderRow, 'id' | 'name' | 'parent_id'>
+
+// 소유자 폴더를 한 번 읽는다 — parent_id 색인이 없어 아래로 내려가는 재귀 CTE 는 쓰지 않는다 (F-2017 4.2)
+async function ownerFolders(env: Env, ownerId: string): Promise<FolderListRow[]> {
+  const { results } = await env.DB.prepare('SELECT id, name, parent_id FROM folders WHERE owner_id = ?')
+    .bind(ownerId)
+    .all<FolderListRow>()
+  return results
+}
+
+function subtreeIds(folders: FolderListRow[], folderId: string): string[] {
+  const ids = descendantFolderIds(
+    folders.map((f) => ({ id: f.id, name: f.name, parentId: f.parent_id })),
+    folderId,
+  )
+  return ids.length > 0 ? ids : [folderId]
+}
+
+// 링크 폴더 + 모든 자손 폴더의 id 목록(링크 폴더가 맨 앞). 조회 시점 기준
 export async function folderTreeIds(env: Env, folderId: string, ownerId: string): Promise<string[]> {
-  const { results } = await env.DB.prepare('SELECT id FROM folders WHERE parent_id = ? AND owner_id = ?')
-    .bind(folderId, ownerId)
-    .all<{ id: string }>()
-  return [folderId, ...results.map((r) => r.id)]
+  return subtreeIds(await ownerFolders(env, ownerId), folderId)
 }
 
 async function fetchShareLinkDocIds(env: Env, token: string): Promise<string[]> {
@@ -372,24 +388,20 @@ export async function handlePublicGetFolder(
     .first<LinkRow>()
   if (!link || link.target_type !== 'folder') return pubResponse({ error: 'not_found' }, 404)
 
-  const rootFolder = await env.DB.prepare('SELECT * FROM folders WHERE id = ? AND owner_id = ?')
-    .bind(link.target_id, link.owner_id)
-    .first<FolderRow>()
+  // 폴더 목록은 요청당 한 번. 트리 id 를 IN (…) 바인딩으로 보내지 않고 소유자 문서를 읽어 메모리에서 거른다 (F-2017 4.1·4.2)
+  const folders = await ownerFolders(env, link.owner_id)
+  const rootFolder = folders.find((f) => f.id === link.target_id)
   if (!rootFolder) return pubResponse({ error: 'not_found' }, 404)
 
-  const treeIds = await folderTreeIds(env, link.target_id, link.owner_id)
-  const { results: subfolders } = await env.DB.prepare(
-    'SELECT id, name, parent_id FROM folders WHERE parent_id = ? AND owner_id = ?',
-  )
-    .bind(link.target_id, link.owner_id)
-    .all<Pick<FolderRow, 'id' | 'name' | 'parent_id'>>()
+  const treeIds = new Set(subtreeIds(folders, link.target_id))
+  const subfolders = folders.filter((f) => f.id !== link.target_id && treeIds.has(f.id))
 
-  const placeholders = treeIds.map(() => '?').join(',')
-  const { results: docs } = await env.DB.prepare(
-    `SELECT id, title, folder_id, updated_at FROM docs WHERE owner_id = ? AND folder_id IN (${placeholders}) ORDER BY updated_at DESC`,
+  const { results: ownerDocs } = await env.DB.prepare(
+    'SELECT id, title, folder_id, updated_at FROM docs WHERE owner_id = ? ORDER BY updated_at DESC',
   )
-    .bind(link.owner_id, ...treeIds)
+    .bind(link.owner_id)
     .all<{ id: string; title: string; folder_id: string | null; updated_at: number }>()
+  const docs = ownerDocs.filter((d) => d.folder_id !== null && treeIds.has(d.folder_id))
 
   return pubResponse({
     name: rootFolder.name,

@@ -1,4 +1,5 @@
 // 공개 문서 조회 — 로그인 없이 /pub/docs/{토큰} (specs/features/F-210.md 2.3, 2.4)
+import { flattenFolderTree } from '../lib/folderTree'
 import type { LineEnding } from '../types'
 
 export type PublicDoc = { title: string; content: string; lineEnding: LineEnding; updatedAt: number }
@@ -26,7 +27,7 @@ export async function fetchPublicDoc(token: string): Promise<PublicDoc> {
   return (await res.json()) as PublicDoc
 }
 
-// 폴더 공개 조회 (F-211.md 2.2) — 링크 폴더 + 하위 폴더(2단계까지)의 폴더·문서 목록
+// 폴더 공개 조회 (F-211.md 2.2) — 링크 폴더 + 모든 자손 폴더의 폴더·문서 목록. folders 에 링크 폴더는 없다 (F-2017 4.2)
 export type PublicFolder = {
   name: string
   folders: { id: string; name: string; parentId: string | null }[]
@@ -51,13 +52,49 @@ export function sortDocsByUpdatedAtDesc(docs: PublicFolderDocEntry[]): PublicFol
   return [...docs].sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
-// 렌더 순서(자신의 문서 → 하위 폴더 묶음, 각각 updatedAt 내림차순) 맨 앞 문서 id — 토큰만 열었을 때 첫 문서를 정한다 (F-211.md 2.3)
+export function publicRootDocs(folder: PublicFolder): PublicFolderDocEntry[] {
+  const folderIds = new Set(folder.folders.map((f) => f.id))
+  return sortDocsByUpdatedAtDesc(folder.docs.filter((d) => d.folderId === null || !folderIds.has(d.folderId)))
+}
+
+export type PublicFolderGroup = {
+  id: string
+  name: string
+  depth: number // 링크 폴더의 직속 하위가 0
+  docs: PublicFolder['docs'] // updatedAt 내림차순
+}
+
+// 링크 폴더 자신의 문서 다음에 올 폴더 묶음들(트리 순서). 서브트리에 문서가 하나도 없는 폴더는 뺀다 (F-2017 5.3)
+export function publicFolderGroups(folder: PublicFolder): PublicFolderGroup[] {
+  const docsByFolder = new Map<string, PublicFolderDocEntry[]>()
+  for (const d of folder.docs) {
+    if (d.folderId === null) continue
+    const group = docsByFolder.get(d.folderId)
+    if (group) group.push(d)
+    else docsByFolder.set(d.folderId, [d])
+  }
+  const flat = flattenFolderTree(folder.folders)
+  // 앞선 순서의 역순으로 돌며 깊이별로 "아래에 문서가 있나" 를 모은다 — 자식은 늘 부모 뒤에 온다
+  const subtreeHasDocs: boolean[] = new Array(flat.length).fill(false)
+  const pendingByDepth: boolean[] = []
+  for (let i = flat.length - 1; i >= 0; i--) {
+    const { id, depth } = flat[i]
+    const has = (docsByFolder.get(id)?.length ?? 0) > 0 || Boolean(pendingByDepth[depth + 1])
+    pendingByDepth.length = depth + 1
+    pendingByDepth[depth] = Boolean(pendingByDepth[depth]) || has
+    subtreeHasDocs[i] = has
+  }
+  return flat
+    .filter((_, i) => subtreeHasDocs[i])
+    .map((f) => ({ id: f.id, name: f.name, depth: f.depth, docs: sortDocsByUpdatedAtDesc(docsByFolder.get(f.id) ?? []) }))
+}
+
+// 렌더 순서(자신의 문서 → 폴더 묶음, 각각 updatedAt 내림차순) 맨 앞 문서 id — 토큰만 열었을 때 첫 문서를 정한다 (F-211.md 2.3)
 export function firstFolderDocId(folder: PublicFolder): string | null {
-  const rootDocs = sortDocsByUpdatedAtDesc(folder.docs.filter((d) => !folder.folders.some((f) => f.id === d.folderId)))
+  const rootDocs = publicRootDocs(folder)
   if (rootDocs.length > 0) return rootDocs[0].id
-  for (const sub of folder.folders) {
-    const subDocs = sortDocsByUpdatedAtDesc(folder.docs.filter((d) => d.folderId === sub.id))
-    if (subDocs.length > 0) return subDocs[0].id
+  for (const group of publicFolderGroups(folder)) {
+    if (group.docs.length > 0) return group.docs[0].id
   }
   return null
 }

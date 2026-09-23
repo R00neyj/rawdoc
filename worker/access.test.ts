@@ -3,20 +3,42 @@ import { getDocAccess, getOwnedFolder, isDocAttachmentOwner, resolveDocAccess, r
 
 type Doc = { id: string; owner_id: string; folder_id: string | null }
 type Folder = { id: string; owner_id: string; parent_id: string | null }
-type Grant = { target_type: 'doc' | 'folder'; target_id: string; grantee_email: string; role: 'view' | 'edit' }
+// owner_id 를 비우면 대상 폴더의 소유자로 본다 — 실제로 handlePutGrant 가 대상 소유자를 넣는다
+type Grant = { target_type: 'doc' | 'folder'; target_id: string; grantee_email: string; role: 'view' | 'edit'; owner_id?: string }
 type UserRow = { id: string; email: string }
 
-function makeEnv(data: { docs?: Doc[]; folders?: Folder[]; grants?: Grant[]; users?: UserRow[] }): Env {
+function makeEnv(
+  data: { docs?: Doc[]; folders?: Folder[]; grants?: Grant[]; users?: UserRow[] },
+  sqlLog: string[] = [],
+): Env {
   const docs = data.docs ?? []
   const folders = data.folders ?? []
   const grants = data.grants ?? []
   const users = data.users ?? []
+  const grantOwner = (g: Grant) => g.owner_id ?? folders.find((f) => f.id === g.target_id)?.owner_id
 
   const DB = {
     prepare(sql: string) {
+      sqlLog.push(sql)
       return {
         bind(...args: unknown[]) {
           return {
+            async all<T>() {
+              if (sql.startsWith('SELECT target_id, role FROM grants')) {
+                const [email, ownerId] = args as [string, string]
+                const results = grants
+                  .filter((g) => g.target_type === 'folder' && g.grantee_email === email && grantOwner(g) === ownerId)
+                  .map((g) => ({ target_id: g.target_id, role: g.role }))
+                return { results: results as T[] }
+              }
+              // 가짜 DB 는 SQL 을 돌리지 않는다 — 재귀 사슬 대신 그 소유자의 폴더 전부(사슬의 상위 집합)를 준다 (F-2017 4.3)
+              if (sql.startsWith('WITH RECURSIVE')) {
+                const ownerId = args[1] as string
+                const results = folders.filter((f) => f.owner_id === ownerId).map((f) => ({ id: f.id, parent_id: f.parent_id }))
+                return { results: results as T[] }
+              }
+              throw new Error(`unhandled all sql: ${sql}`)
+            },
             async first<T>() {
               if (sql.startsWith('SELECT role FROM grants')) {
                 const [targetType, targetId, email] = args as [string, string, string]
@@ -176,5 +198,95 @@ describe('F-212 A1 isDocAttachmentOwner', () => {
     const env = makeEnv({ users: [{ id: STRANGER.id, email: STRANGER.email }] })
     const doc = { id: 'd1', owner_id: OWNER.id, folder_id: null }
     expect(await isDocAttachmentOwner(env, doc, STRANGER.id)).toBe(false)
+  })
+})
+
+describe('F-2017 S1 깊은 폴더 사슬의 초대', () => {
+  // f1 › f2 › … › f6
+  const chainFolders: Folder[] = Array.from({ length: 6 }, (_, i) => ({
+    id: `f${i + 1}`,
+    owner_id: OWNER.id,
+    parent_id: i === 0 ? null : `f${i}`,
+  }))
+
+  it('1단계 폴더 초대가 6단계 폴더 안 문서를 덮는다', async () => {
+    const env = makeEnv({
+      folders: chainFolders,
+      grants: [{ target_type: 'folder', target_id: 'f1', grantee_email: GRANTEE.email, role: 'edit' }],
+    })
+    const access = await resolveDocAccess(env, { id: 'd1', owner_id: OWNER.id, folder_id: 'f6' }, GRANTEE)
+    expect(access?.role).toBe('edit')
+  })
+
+  it('사슬 중간 view·위 edit 이면 edit', async () => {
+    const env = makeEnv({
+      folders: chainFolders,
+      grants: [
+        { target_type: 'folder', target_id: 'f4', grantee_email: GRANTEE.email, role: 'view' },
+        { target_type: 'folder', target_id: 'f2', grantee_email: GRANTEE.email, role: 'edit' },
+      ],
+    })
+    const access = await resolveDocAccess(env, { id: 'd1', owner_id: OWNER.id, folder_id: 'f6' }, GRANTEE)
+    expect(access?.role).toBe('edit')
+  })
+
+  it('순환 A↔B 사슬에서 끝나고, A 초대가 B 안 문서를 덮는다', async () => {
+    const env = makeEnv({
+      folders: [
+        { id: 'A', owner_id: OWNER.id, parent_id: 'B' },
+        { id: 'B', owner_id: OWNER.id, parent_id: 'A' },
+      ],
+      grants: [{ target_type: 'folder', target_id: 'A', grantee_email: GRANTEE.email, role: 'view' }],
+    })
+    const access = await resolveDocAccess(env, { id: 'd1', owner_id: OWNER.id, folder_id: 'B' }, GRANTEE)
+    expect(access?.role).toBe('view')
+  })
+
+  it('이 소유자에게서 받은 폴더 초대가 없으면 사슬 질의를 보내지 않는다', async () => {
+    const sqlLog: string[] = []
+    const env = makeEnv(
+      {
+        folders: [...chainFolders, { id: 'other', owner_id: 'owner-2', parent_id: null }],
+        grants: [
+          { target_type: 'doc', target_id: 'd1', grantee_email: GRANTEE.email, role: 'view' },
+          { target_type: 'folder', target_id: 'other', grantee_email: GRANTEE.email, role: 'edit' },
+        ],
+      },
+      sqlLog,
+    )
+    const access = await resolveDocAccess(env, { id: 'd1', owner_id: OWNER.id, folder_id: 'f6' }, GRANTEE)
+    expect(access?.role).toBe('view')
+    expect(sqlLog.some((sql) => sql.startsWith('WITH RECURSIVE'))).toBe(false)
+    expect(sqlLog.filter((sql) => /folders/.test(sql))).toEqual([])
+  })
+
+  it('folder_id 가 null 이면 폴더 질의가 없다', async () => {
+    const sqlLog: string[] = []
+    const env = makeEnv(
+      { grants: [{ target_type: 'doc', target_id: 'd1', grantee_email: GRANTEE.email, role: 'edit' }] },
+      sqlLog,
+    )
+    const access = await resolveDocAccess(env, { id: 'd1', owner_id: OWNER.id, folder_id: null }, GRANTEE)
+    expect(access?.role).toBe('edit')
+    expect(sqlLog.filter((sql) => /folder/.test(sql))).toEqual([])
+  })
+
+  it('판정 하나에 보내는 질의 수가 사슬 깊이와 무관하다', async () => {
+    const grants: Grant[] = [{ target_type: 'folder', target_id: 'f1', grantee_email: GRANTEE.email, role: 'edit' }]
+    const shallowLog: string[] = []
+    await resolveDocAccess(makeEnv({ folders: chainFolders, grants }, shallowLog), { id: 'd1', owner_id: OWNER.id, folder_id: 'f2' }, GRANTEE)
+    const deepLog: string[] = []
+    await resolveDocAccess(makeEnv({ folders: chainFolders, grants }, deepLog), { id: 'd1', owner_id: OWNER.id, folder_id: 'f6' }, GRANTEE)
+    expect(deepLog.length).toBe(shallowLog.length)
+    expect(deepLog.filter((sql) => /folder/.test(sql)).length).toBeLessThanOrEqual(2)
+  })
+
+  it('isDocAttachmentOwner 도 깊은 사슬의 edit 초대를 인정한다', async () => {
+    const env = makeEnv({
+      folders: chainFolders,
+      users: [{ id: GRANTEE.id, email: GRANTEE.email }],
+      grants: [{ target_type: 'folder', target_id: 'f1', grantee_email: GRANTEE.email, role: 'edit' }],
+    })
+    expect(await isDocAttachmentOwner(env, { id: 'd1', owner_id: OWNER.id, folder_id: 'f6' }, GRANTEE.id)).toBe(true)
   })
 })

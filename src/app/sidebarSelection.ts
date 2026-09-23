@@ -1,5 +1,5 @@
 // 사이드바 여러 항목 선택 — 순수 함수, 화면 없음 (specs/features/F-255.md 3.1)
-import type { DocLike, FolderLike, TreeNode } from '../lib/folderTree'
+import { folderAncestors, type DocLike, type FolderLike, type TreeNode } from '../lib/folderTree'
 
 export type SelectionKind = 'doc' | 'folder'
 export type SelectionItem = { kind: SelectionKind; id: string }
@@ -104,16 +104,12 @@ function parentIdOf(item: SelectionItem, docs: DocLike[], folders: FolderLike[])
 // 선택 안에 부모 폴더와 그 자식이 같이 있으면 부모만 남긴다 — 폴더가 옮겨가면 자식은 따라가므로 같은 이동을 두 번 하지 않는다
 export function dedupeDescendants(items: SelectionItem[], docs: DocLike[], folders: FolderLike[]): SelectionItem[] {
   const selectedFolderIds = new Set(items.filter((i) => i.kind === 'folder').map((i) => i.id))
-  const folderById = new Map(folders.map((f) => [f.id, f]))
-
-  function hasSelectedAncestor(parentId: string | null): boolean {
-    let current = parentId
-    while (current) {
-      if (selectedFolderIds.has(current)) return true
-      current = folderById.get(current)?.parentId ?? null
-    }
-    return false
+  // 저장된 부모 사슬을 올라간다 — 순환이 저장돼도 멈춘다. 사슬에 자신이 있으면 순환에 든 폴더라 화면상 조상이 없다 (F-2017 3.3·3.5)
+  function hasSelectedAncestor(item: SelectionItem): boolean {
+    const chain = folderAncestors(folders, parentIdOf(item, docs, folders))
+    if (item.kind === 'folder' && chain.includes(item.id)) return false
+    return chain.some((id) => selectedFolderIds.has(id))
   }
 
-  return items.filter((item) => !hasSelectedAncestor(parentIdOf(item, docs, folders)))
+  return items.filter((item) => !hasSelectedAncestor(item))
 }

@@ -6,6 +6,7 @@ import {
   fetchPublicSet,
   fetchPublicSetDoc,
   firstFolderDocId,
+  publicFolderGroups,
   PublicDocError,
   type PublicFolder,
 } from './publicDoc'
@@ -143,5 +144,40 @@ describe('firstFolderDocId', () => {
   it('문서가 없으면 null', () => {
     const folder: PublicFolder = { name: '폴더', folders: [], docs: [] }
     expect(firstFolderDocId(folder)).toBeNull()
+  })
+})
+
+describe('publicFolderGroups (F-2017 U10)', () => {
+  const folder: PublicFolder = {
+    name: '루트',
+    folders: [
+      { id: 'ra', name: '라', parentId: 'root' },
+      { id: 'ma', name: '마', parentId: 'root' },
+      { id: 'da', name: '다', parentId: 'na' },
+      { id: 'ga', name: '가', parentId: 'root' },
+      { id: 'na', name: '나', parentId: 'ga' },
+    ],
+    docs: [
+      { id: 'old', title: '옛', folderId: 'da', updatedAt: 10 },
+      { id: 'new', title: '새', folderId: 'da', updatedAt: 20 },
+      { id: 'm1', title: '마 문서', folderId: 'ma', updatedAt: 30 },
+    ],
+  }
+
+  it('트리 순서(형제 이름순)로 묶고, 자손까지 문서가 없는 폴더는 뺀다', () => {
+    const groups = publicFolderGroups(folder)
+    expect(groups.map((g) => [g.name, g.depth])).toEqual([
+      ['가', 0],
+      ['나', 1],
+      ['다', 2],
+      ['마', 0],
+    ])
+    expect(groups[0].docs).toEqual([])
+    expect(groups[1].docs).toEqual([])
+    expect(groups[2].docs.map((d) => d.id)).toEqual(['new', 'old'])
+  })
+
+  it('firstFolderDocId 는 묶음 순서로 처음 나오는 문서(다의 최신)', () => {
+    expect(firstFolderDocId(folder)).toBe('new')
   })
 })

@@ -8,7 +8,7 @@ vi.mock('./auth', () => ({
   }),
 }))
 
-import { handleCreateDocLink, handlePublicGetDocSet } from './links'
+import { handleCreateDocLink, handlePublicGetDocSet, handlePublicGetFolder, handlePublicGetFolderDoc } from './links'
 
 type LinkRow = {
   token: string
@@ -201,5 +201,113 @@ describe('F-259 묶음 정보 없는 호출(ShareMenu 단순 링크)', () => {
     const setRes = await handlePublicGetDocSet(new Request('http://local.test/pub/docs/' + token + '/set'), env, {} as ExecutionContext, { token })
     const setBody = (await setRes.json()) as { docs: { id: string }[] }
     expect(setBody.docs.map((d) => d.id)).toEqual(['d1', 'd2'])
+  })
+})
+
+// ---------- F-2017 S3 공개 폴더 — 모든 자손 폴더 ----------
+type TreeFolderRow = { id: string; owner_id: string; name: string; parent_id: string | null }
+type TreeDocRow = {
+  id: string
+  owner_id: string
+  title: string
+  content: string
+  line_ending: 'lf' | 'crlf'
+  folder_id: string | null
+  updated_at: number
+}
+
+const FOLDER_TOKEN = 'F'.repeat(43)
+
+function makeFolderEnv(folders: TreeFolderRow[], docs: TreeDocRow[]) {
+  const link: LinkRow = { token: FOLDER_TOKEN, owner_id: 'u1', target_type: 'folder', target_id: 'L', created_at: 1, revoked_at: null }
+  const DB = {
+    prepare(sql: string) {
+      return {
+        bind(...args: unknown[]) {
+          // D1 한 질의의 바인딩 인자 한도를 흉내 낸다 (F-2017 가정 G2)
+          if (args.length > 100) throw new Error(`too many bindings: ${args.length}`)
+          return {
+            async first<T>() {
+              if (sql.startsWith('SELECT * FROM share_links WHERE token = ? AND revoked_at IS NULL')) {
+                return (args[0] === link.token ? link : null) as T
+              }
+              if (sql.startsWith('SELECT title, content, line_ending, updated_at, folder_id FROM docs WHERE id = ? AND owner_id = ?')) {
+                const [id, ownerId] = args as [string, string]
+                return (docs.find((d) => d.id === id && d.owner_id === ownerId) ?? null) as T
+              }
+              throw new Error(`unhandled first sql: ${sql}`)
+            },
+            async all<T>() {
+              if (sql.startsWith('SELECT id, name, parent_id FROM folders WHERE owner_id = ?')) {
+                return { results: folders.filter((f) => f.owner_id === args[0]) as T[] }
+              }
+              if (sql.startsWith('SELECT id, title, folder_id, updated_at FROM docs WHERE owner_id = ?')) {
+                const rows = docs.filter((d) => d.owner_id === args[0]).sort((a, b) => b.updated_at - a.updated_at)
+                return { results: rows as T[] }
+              }
+              throw new Error(`unhandled all sql: ${sql}`)
+            },
+          }
+        },
+      }
+    },
+  }
+  return { DB } as unknown as Env
+}
+
+function treeFolder(id: string, parentId: string | null): TreeFolderRow {
+  return { id, owner_id: 'u1', name: `이름-${id}`, parent_id: parentId }
+}
+
+function treeDoc(id: string, folderId: string | null, updatedAt = 1): TreeDocRow {
+  return { id, owner_id: 'u1', title: `제목-${id}`, content: '본문', line_ending: 'lf', folder_id: folderId, updated_at: updatedAt }
+}
+
+// L › a › b › c › d, 옆에 밖 폴더 X
+const DEEP_FOLDERS = [
+  treeFolder('L', null),
+  treeFolder('a', 'L'),
+  treeFolder('b', 'a'),
+  treeFolder('c', 'b'),
+  treeFolder('d', 'c'),
+  treeFolder('X', null),
+]
+const DEEP_DOCS = [treeDoc('in-c', 'c', 3), treeDoc('in-d', 'd', 4), treeDoc('in-L', 'L', 1), treeDoc('out', 'X', 9), treeDoc('root', null, 8)]
+
+async function getPublicFolder(env: Env) {
+  return handlePublicGetFolder(new Request('http://local.test/pub/folders/x'), env, {} as ExecutionContext, { token: FOLDER_TOKEN })
+}
+
+describe('F-2017 S3 공개 폴더 — 모든 자손', () => {
+  it('링크 폴더 아래 4단계 폴더 전부가 parentId 와 함께, 증손 문서까지 docs 에', async () => {
+    const res = await getPublicFolder(makeFolderEnv(DEEP_FOLDERS, DEEP_DOCS))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { name: string; folders: { id: string; parentId: string }[]; docs: { id: string }[] }
+    expect(body.name).toBe('이름-L')
+    expect(body.folders.map((f) => [f.id, f.parentId]).sort()).toEqual([
+      ['a', 'L'],
+      ['b', 'a'],
+      ['c', 'b'],
+      ['d', 'c'],
+    ])
+    expect(body.docs.map((d) => d.id)).toEqual(['in-d', 'in-c', 'in-L'])
+  })
+
+  it('서브트리 폴더 150개여도 200', async () => {
+    const many = [treeFolder('L', null), ...Array.from({ length: 150 }, (_, i) => treeFolder(`s${i}`, i === 0 ? 'L' : `s${Math.floor(i / 2)}`))]
+    const res = await getPublicFolder(makeFolderEnv(many, [treeDoc('leaf', 's149')]))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { folders: unknown[]; docs: { id: string }[] }
+    expect(body.folders).toHaveLength(150)
+    expect(body.docs.map((d) => d.id)).toEqual(['leaf'])
+  })
+
+  it('handlePublicGetFolderDoc: 증손 문서 200, 서브트리 밖 문서 404', async () => {
+    const env = makeFolderEnv(DEEP_FOLDERS, DEEP_DOCS)
+    const ctx = {} as ExecutionContext
+    const ok = await handlePublicGetFolderDoc(new Request('http://local.test/'), env, ctx, { token: FOLDER_TOKEN, docId: 'in-d' })
+    expect(ok.status).toBe(200)
+    const outside = await handlePublicGetFolderDoc(new Request('http://local.test/'), env, ctx, { token: FOLDER_TOKEN, docId: 'out' })
+    expect(outside.status).toBe(404)
   })
 })

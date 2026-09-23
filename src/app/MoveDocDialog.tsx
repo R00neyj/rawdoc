@@ -1,24 +1,12 @@
 import { useRef, useState, type CSSProperties } from 'react'
 import Dialog from './Dialog'
+import { flattenFolderTree } from '../lib/folderTree'
 import type { Folder } from '../types'
 
 export type MoveDocTarget = { id: string; title: string; folderId: string | null }
 
 // D-3 폴더로 이동 대화상자 (specs/ia.md 1장, specs/features/F-126.md 5.3)
-// 선택지: 최상위 + 모든 폴더(하위 폴더는 들여써 표시), 현재 위치가 선택된 상태로 연다
-
-type OrderedFolder = Folder & { depth: number }
-
-function orderedFolders(folders: Folder[]): OrderedFolder[] {
-  const top = [...folders].filter((f) => f.parentId === null).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  const result: OrderedFolder[] = []
-  for (const folder of top) {
-    result.push({ ...folder, depth: 0 })
-    const subs = folders.filter((f) => f.parentId === folder.id).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-    for (const sub of subs) result.push({ ...sub, depth: 1 })
-  }
-  return result
-}
+// 선택지: 최상위 + 모든 폴더(트리 순서, 실제 깊이로 들여씀), 현재 위치가 선택된 상태로 연다 (F-2017 5.2)
 
 type MoveDocDialogProps = {
   doc: MoveDocTarget | null
@@ -41,7 +29,7 @@ export default function MoveDocDialog({ doc, folders, onCancel, onConfirm }: Mov
     setSelected(doc?.folderId ?? null)
   }
 
-  const list = orderedFolders(folders)
+  const list = flattenFolderTree(folders)
 
   return (
     <Dialog open={Boolean(doc)} onClose={onCancel} titleId={titleId} initialFocusRef={firstRadioRef}>

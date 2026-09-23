@@ -252,8 +252,7 @@ export async function createIdbStore(
       return updated
     },
 
-    // 결과 깊이가 2단계를 넘으면 reject (하위 폴더를 가진 폴더는 다른 폴더 안으로 못 감,
-    // 자기 자신 안으로 못 감) (F-126.md 3장)
+    // 자기 자신·자기 자손·없는 부모면 reject (F-2017.md 3.2)
     async moveFolder(id, parentId) {
       const tx = db.transaction(FOLDERS_STORE, 'readwrite')
       const store = tx.objectStore(FOLDERS_STORE)

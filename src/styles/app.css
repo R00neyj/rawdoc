@@ -656,8 +656,8 @@ body.sidebar-resizing {
   display: flex;
   align-items: center;
   gap: 6px;
-  /* 좌우 여백: 왼쪽은 들여쓰기만, 오른쪽 4px — 최상위 글자 시작선을 사이드바 버튼과 맞춘다 (F-143 3.6, F-153 2.3) */
-  padding: 0 4px 0 calc(var(--depth, 0) * 14px);
+  /* 왼쪽은 들여쓰기만(6번째 단계 70px 에서 멈춤), 오른쪽 4px — 최상위 글자 시작선을 사이드바 버튼과 맞춘다 (F-143 3.6, F-153 2.3, F-2017 5.4) */
+  padding: 0 4px 0 calc(min(var(--depth, 0), 5) * 14px);
   border-radius: var(--radius-control);
   transition: var(--transition-colors);
 }
@@ -748,8 +748,8 @@ body.sidebar-resizing {
   position: absolute;
   top: 0;
   bottom: 0;
-  /* 토글 아이콘(22px) 가로 가운데 — .tree-row 왼쪽 여백 계산과 함께 맞춘다 (F-153 2.3) */
-  left: calc(var(--depth, 0) * 14px + 11px);
+  /* 토글 아이콘(22px) 가로 가운데. 행보다 한 단계 낮은 4 에서 멈춰야 6단계 이하 토글 위를 지나지 않는다 (F-153 2.3, F-2017 5.4) */
+  left: calc(min(var(--depth, 0), 4) * 14px + 11px);
   width: 1px;
   background: var(--muted);
   pointer-events: none;
@@ -1675,7 +1675,7 @@ body.sidebar-resizing {
 }
 
 .move-doc-list li {
-  padding-left: calc(var(--depth, 0) * 14px);
+  padding-left: calc(min(var(--depth, 0), 5) * 14px);
 }
 
 .move-doc-list button {
@@ -2964,6 +2964,11 @@ body.sidebar-resizing {
   font-size: 14px;
   font-weight: 700;
   color: var(--ink);
+}
+
+/* 묶음은 중첩하지 않고 차례로 늘어놓아 여백이 쌓이지 않는다 (F-2017 5.3·5.4) */
+.public-folder-list-group {
+  padding-left: calc(min(var(--depth, 0), 5) * 14px);
 }
 
 .public-folder-list-subtitle {

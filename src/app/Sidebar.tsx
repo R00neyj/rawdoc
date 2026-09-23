@@ -1,4 +1,4 @@
-// 사이드바 — 폴더 2단계 트리·항목 메뉴·끌어놓기 이동·고정됨 묶음 (specs/ia.md 2장 B, F-111·F-114·F-121·F-115·F-126·F-132·F-143.md)
+// 사이드바 — 폴더 트리·항목 메뉴·끌어놓기 이동·고정됨 묶음 (specs/ia.md 2장 B, F-111·F-114·F-121·F-115·F-126·F-132·F-143.md)
 import {
   useEffect,
   useRef,
@@ -169,17 +169,11 @@ function FolderRow({
   const row: SelectionRow = { kind: 'folder', id: node.id, key: rowKey('tree', node.id) }
   const menuOpenHere = ctx.contextMenu?.key === row.key
 
+  // `하위 폴더` 는 모든 폴더에 — 깊이 제한 없음 (F-2017 5.1)
   const ownItems: FolderMenuItem[] = [
     { key: 'new-doc', label: '새 문서', icon: IconNoteAdd, onSelect: () => ctx.onCreateDoc(node.id) },
+    { key: 'new-subfolder', label: '하위 폴더', icon: IconFolderAdd, onSelect: () => ctx.onCreateFolder(node.id) },
   ]
-  if (node.parentId === null) {
-    ownItems.push({
-      key: 'new-subfolder',
-      label: '하위 폴더',
-      icon: IconFolderAdd,
-      onSelect: () => ctx.onCreateFolder(node.id),
-    })
-  }
   ownItems.push({ key: 'rename', label: '이름 변경', icon: IconEdit, onSelect: () => ctx.onStartRename(node.id, node.name) })
   ownItems.push({
     key: 'export-folder',

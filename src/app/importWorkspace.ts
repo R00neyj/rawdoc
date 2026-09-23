@@ -179,10 +179,6 @@ function buildWorkspaceFolderPlan(
   existingFolders: ExistingFolderInfo[],
 ): { folders: PlanFolder[]; warnings: string[] } {
   const existingIds = new Set(existingFolders.map((f) => f.id))
-  const existingDepth = new Map<string, number>()
-  for (const f of existingFolders) {
-    existingDepth.set(f.id, f.parentId && existingIds.has(f.parentId) ? 1 : 0)
-  }
 
   const rawFoldersUnknown = (Array.isArray(manifest.folders) ? manifest.folders : []) as unknown as RawManifestFolder[]
   const rawFolders = rawFoldersUnknown.filter((f) => Boolean(f) && typeof f.id === 'string' && f.id !== '') as Array<
@@ -204,29 +200,24 @@ function buildWorkspaceFolderPlan(
     parentOf.set(f.id, p)
   }
 
-  function depthOf(id: string, seen: Set<string> = new Set()): number {
-    if (seen.has(id)) return 0
-    seen.add(id)
-    const p = parentOf.get(id) ?? null
-    if (p == null) return 0
-    if (existingIds.has(p) && !manifestIds.has(p)) return (existingDepth.get(p) ?? 0) + 1
-    return depthOf(p, seen) + 1
+  // manifest 폴더끼리 부모 사슬이 순환이면 그 순환에 든 폴더를 최상위(또는 붙일 루트)로 본다 (F-2017 6장)
+  const manifestParentOf = new Map<string, string | null>()
+  for (const f of rawFolders) {
+    const p = parentOf.get(f.id) ?? null
+    manifestParentOf.set(f.id, p != null && manifestIds.has(p) ? p : null)
   }
-
-  const flattenedIds = new Set<string>()
-  for (let guard = 0; guard < 10; guard++) {
-    let changed = false
-    for (const f of rawFolders) {
-      if (depthOf(f.id) > 1) {
-        const p = parentOf.get(f.id) ?? null
-        const grandParent = p != null ? (parentOf.get(p) ?? null) : null
-        parentOf.set(f.id, grandParent)
-        flattenedIds.add(f.id)
-        changed = true
-      }
+  function inCycle(id: string): boolean {
+    const seen = new Set<string>()
+    let current = manifestParentOf.get(id) ?? null
+    while (current !== null && !seen.has(current)) {
+      if (current === id) return true
+      seen.add(current)
+      current = manifestParentOf.get(current) ?? null
     }
-    if (!changed) break
+    return false
   }
+  const cyclicIds = rawFolders.filter((f) => inCycle(f.id)).map((f) => f.id)
+  for (const id of cyclicIds) parentOf.set(id, attachRootTo)
 
   // 부모가 자식보다 먼저 오도록 위상 정렬한다 (manifest.folders 순서를 믿지 않는다, 3.6)
   const order: string[] = []
@@ -251,8 +242,7 @@ function buildWorkspaceFolderPlan(
     return { id, name, parentId, action: 'create', preserveId: true }
   })
 
-  const warnings = flattenedIds.size > 0 ? [`2단계로 합친 폴더 ${flattenedIds.size}개`] : []
-  return { folders, warnings }
+  return { folders, warnings: [] }
 }
 
 type RawManifestDoc = {
@@ -421,27 +411,21 @@ function extractAttachmentRefPairs(content: string): Array<{ id: string; ext: At
   return [...pairs].map(([id, ext]) => ({ id, ext }))
 }
 
-function buildPlainFolders(docPaths: string[]): { folders: PlanFolder[]; folderIdForDoc: Map<string, string | null>; clampedCount: number } {
+function buildPlainFolders(docPaths: string[]): { folders: PlanFolder[]; folderIdForDoc: Map<string, string | null> } {
   const folders: PlanFolder[] = []
   const keySeen = new Set<string>()
-  let clampedCount = 0
   const folderIdForDoc = new Map<string, string | null>()
 
   for (const docPath of docPaths) {
     const segs = docPath.split('/')
     const dirSegs = segs.slice(0, -1)
-    let used = dirSegs
-    if (dirSegs.length > 2) {
-      used = dirSegs.slice(0, 2)
-      clampedCount++
-    }
-    if (used.length === 0) {
+    if (dirSegs.length === 0) {
       folderIdForDoc.set(docPath, null)
       continue
     }
     let parentId: string | null = null
     let keyAcc = ''
-    for (const seg of used) {
+    for (const seg of dirSegs) {
       keyAcc = keyAcc ? `${keyAcc}/${seg}` : seg
       if (!keySeen.has(keyAcc)) {
         keySeen.add(keyAcc)
@@ -452,7 +436,7 @@ function buildPlainFolders(docPaths: string[]): { folders: PlanFolder[]; folderI
     folderIdForDoc.set(docPath, parentId)
   }
 
-  return { folders, folderIdForDoc, clampedCount }
+  return { folders, folderIdForDoc }
 }
 
 function planImagesForDoc(
@@ -505,7 +489,7 @@ export function planPlainImport({ entries, now }: { entries: PlainEntryInput[]; 
 
   const allPaths = new Set(stripped.map((n) => n.path))
   const docEntries = stripped.filter((n) => isDocPath(n.path))
-  const { folders, folderIdForDoc, clampedCount } = buildPlainFolders(docEntries.map((d) => d.path))
+  const { folders, folderIdForDoc } = buildPlainFolders(docEntries.map((d) => d.path))
 
   const docs: PlanDoc[] = docEntries.map((d) => ({
     action: 'create',
@@ -534,7 +518,6 @@ export function planPlainImport({ entries, now }: { entries: PlainEntryInput[]; 
   const warnings: string[] = []
   if (traversalCount > 0) warnings.push(`경로가 이상해 건너뛴 파일 ${traversalCount}개`)
   if (nonMdCount > 0) warnings.push(`.md 가 아니라 건너뛴 파일 ${nonMdCount}개`)
-  if (clampedCount > 0) warnings.push(`2단계로 합친 폴더 ${clampedCount}개`)
   if (missingRefTotal > 0) warnings.push(`가져오지 못한 이미지 참조 ${missingRefTotal}개`)
   if (foreignRefTotal > 0) warnings.push(`이 앱 형식이 아니라 가져오지 못한 이미지 ${foreignRefTotal}개`)
 

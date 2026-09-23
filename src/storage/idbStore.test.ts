@@ -156,11 +156,24 @@ describe('idbStore', () => {
       expect(sub.parentId).toBe(top.id)
     })
 
-    it('하위 폴더 안에는 폴더를 만들 수 없다(reject)', async () => {
+    it('하위 폴더 안에도 폴더를 만들 수 있다', async () => {
       const store = await freshStore()
       const top = await store.createFolder({ name: '위', parentId: null })
       const sub = await store.createFolder({ name: '아래', parentId: top.id })
-      await expect(store.createFolder({ name: '더 아래', parentId: sub.id })).rejects.toThrow()
+      const deeper = await store.createFolder({ name: '더 아래', parentId: sub.id })
+      expect(deeper.parentId).toBe(sub.id)
+    })
+
+    it('3단계 이상 만들기·자식 있는 폴더 옮기기는 되고, 자기 손자 안으로는 reject (F-2017 U8)', async () => {
+      const store = await freshStore()
+      const a = await store.createFolder({ name: 'A', parentId: null })
+      const a1 = await store.createFolder({ name: 'A1', parentId: a.id })
+      const a2 = await store.createFolder({ name: 'A2', parentId: a1.id })
+      const a3 = await store.createFolder({ name: 'A3', parentId: a2.id })
+      expect(a3.parentId).toBe(a2.id)
+      const b = await store.createFolder({ name: 'B', parentId: null })
+      expect((await store.moveFolder(a.id, b.id)).parentId).toBe(b.id)
+      await expect(store.moveFolder(a.id, a2.id)).rejects.toThrow()
     })
 
     it('renameFolder 는 updatedAt 을 갱신한다', async () => {
@@ -186,12 +199,12 @@ describe('idbStore', () => {
       expect(moved.parentId).toBe(b.id)
     })
 
-    it('moveFolder 는 2단계를 넘으면 reject 한다', async () => {
+    it('moveFolder 로 다른 폴더를 하위 폴더 안으로 옮길 수 있다', async () => {
       const store = await freshStore()
       const top = await store.createFolder({ name: '위', parentId: null })
       const sub = await store.createFolder({ name: '아래', parentId: top.id })
       const other = await store.createFolder({ name: '다른', parentId: null })
-      await expect(store.moveFolder(other.id, sub.id)).rejects.toThrow()
+      expect((await store.moveFolder(other.id, sub.id)).parentId).toBe(sub.id)
     })
 
     it('moveFolder 는 자기 자신 안으로는 못 간다(reject)', async () => {

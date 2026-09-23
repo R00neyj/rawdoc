@@ -3,7 +3,7 @@ import { errorResponse, jsonResponse } from './http'
 import { requireUser, type AuthUser } from './auth'
 import { badBody, readJsonLimited } from './docs'
 import { MAX_BODY_BYTES } from './validate'
-import { resolveDocAccess, type Role } from './access'
+import { higherRole, resolveDocAccess, type GrantRole, type Role } from './access'
 
 type TargetType = 'doc' | 'folder'
 
@@ -138,68 +138,104 @@ export const handleDeleteDocGrant = (r: Request, e: Env, _c: ExecutionContext, p
 export const handleDeleteFolderGrant = (r: Request, e: Env, _c: ExecutionContext, p: Record<string, string>) =>
   handleDeleteGrant('folder', r, e, p)
 
-// 나에게 권한이 있는(내 소유가 아닌) 문서 메타 목록 — 문서 직접 grant + 폴더·상위 폴더 grant 로 덮이는 문서
+// 저장된 부모 사슬(가까운 것부터) — folderAncestors 와 같은 규칙을 미리 만든 표로. 없는 폴더·순환에서 멈춘다
+function storedChain(folderById: Map<string, { parent_id: string | null }>, folderId: string): string[] {
+  const chain: string[] = []
+  const seen = new Set<string>()
+  let current: string | null = folderId
+  while (current !== null && folderById.has(current) && !seen.has(current)) {
+    chain.push(current)
+    seen.add(current)
+    current = folderById.get(current)!.parent_id
+  }
+  return chain
+}
+
+const SHARED_DOC_COLUMNS = 'id, title, line_ending, folder_id, pinned_at, version, created_at, updated_at, owner_id'
+const BATCH_ID_LIMIT = 100
+
+type SharedItem = {
+  id: string
+  title: string
+  lineEnding: 'crlf' | 'lf'
+  folderId: string | null
+  pinnedAt: number | null
+  version: number
+  createdAt: number
+  updatedAt: number
+  role: Role
+  ownerEmail: string
+  viaFolder?: { id: string; name: string }
+}
+
+// 내 소유가 아닌 공유받은 문서 목록 — 문서 grant + 저장된 조상 사슬의 폴더 grant. 질의 수는 폴더 깊이·문서 수와 무관하다 (F-2017 4.4)
 export async function handleGetShared(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
 
   const { results: myGrants } = await env.DB.prepare(
-    'SELECT target_type, target_id, role FROM grants WHERE grantee_email = ?',
+    'SELECT target_type, target_id, role, owner_id FROM grants WHERE grantee_email = ?',
   )
     .bind(user.email)
-    .all<{ target_type: TargetType; target_id: string; role: 'view' | 'edit' }>()
+    .all<{ target_type: TargetType; target_id: string; role: GrantRole; owner_id: string }>()
   if (myGrants.length === 0) return jsonResponse([])
 
-  const docGrantIds = myGrants.filter((g) => g.target_type === 'doc').map((g) => g.target_id)
-  const folderGrantIds = myGrants.filter((g) => g.target_type === 'folder').map((g) => g.target_id)
+  const docGrants = new Map<string, GrantRole>()
+  const folderGrantsByOwner = new Map<string, Map<string, GrantRole>>()
+  for (const g of myGrants) {
+    if (g.target_type === 'doc') {
+      docGrants.set(g.target_id, g.role)
+      continue
+    }
+    const byFolder = folderGrantsByOwner.get(g.owner_id) ?? new Map<string, GrantRole>()
+    byFolder.set(g.target_id, g.role)
+    folderGrantsByOwner.set(g.owner_id, byFolder)
+  }
 
-  const candidateDocIds = new Set<string>(docGrantIds)
+  const picked: Array<{ doc: SharedDocRow; role: GrantRole; viaFolder?: { id: string; name: string } }> = []
 
-  if (folderGrantIds.length > 0) {
-    const placeholders = folderGrantIds.map(() => '?').join(',')
-    const { results: coveredDocs } = await env.DB.prepare(
-      `SELECT id FROM docs WHERE folder_id IN (${placeholders})`,
+  for (const [ownerId, folderGrants] of folderGrantsByOwner) {
+    if (ownerId === user.id) continue
+    const { results: folders } = await env.DB.prepare('SELECT id, name, parent_id FROM folders WHERE owner_id = ?')
+      .bind(ownerId)
+      .all<{ id: string; name: string; parent_id: string | null }>()
+    const { results: docs } = await env.DB.prepare(
+      `SELECT ${SHARED_DOC_COLUMNS} FROM docs WHERE owner_id = ? ORDER BY updated_at DESC`,
     )
-      .bind(...folderGrantIds)
-      .all<{ id: string }>()
-    for (const d of coveredDocs) candidateDocIds.add(d.id)
+      .bind(ownerId)
+      .all<SharedDocRow>()
 
-    // 상위 폴더가 grant 대상인 하위 폴더의 문서도 포함 (폴더는 2단계까지)
-    const { results: subfolders } = await env.DB.prepare(
-      `SELECT id FROM folders WHERE parent_id IN (${placeholders})`,
-    )
-      .bind(...folderGrantIds)
-      .all<{ id: string }>()
-    if (subfolders.length > 0) {
-      const subIds = subfolders.map((f) => f.id)
-      const subPlaceholders = subIds.map(() => '?').join(',')
-      const { results: subDocs } = await env.DB.prepare(
-        `SELECT id FROM docs WHERE folder_id IN (${subPlaceholders})`,
-      )
-        .bind(...subIds)
-        .all<{ id: string }>()
-      for (const d of subDocs) candidateDocIds.add(d.id)
+    const folderById = new Map(folders.map((f) => [f.id, f]))
+    for (const doc of docs) {
+      let folderRole: GrantRole | null = null
+      let viaFolder: { id: string; name: string } | undefined
+      if (doc.folder_id) {
+        for (const id of storedChain(folderById, doc.folder_id)) {
+          const role = folderGrants.get(id)
+          if (!role) continue
+          folderRole = higherRole(folderRole, role)
+          if (!viaFolder) viaFolder = { id, name: folderById.get(id)?.name ?? '' }
+        }
+      }
+      const role = higherRole(folderRole, docGrants.get(doc.id) ?? null)
+      if (role) picked.push({ doc, role, viaFolder })
     }
   }
 
-  if (candidateDocIds.size === 0) return jsonResponse([])
-
-  const idList = [...candidateDocIds]
-  const idPlaceholders = idList.map(() => '?').join(',')
-  const { results: docs } = await env.DB.prepare(
-    `SELECT id, title, line_ending, folder_id, pinned_at, version, created_at, updated_at, owner_id FROM docs WHERE id IN (${idPlaceholders})`,
-  )
-    .bind(...idList)
-    .all<SharedDocRow>()
-
-  const folderCache = new Map<string, { id: string; name: string; parent_id: string | null } | null>()
-  async function getFolder(id: string) {
-    if (!folderCache.has(id)) {
-      const f = await env.DB.prepare('SELECT id, name, parent_id FROM folders WHERE id = ?')
-        .bind(id)
-        .first<{ id: string; name: string; parent_id: string | null }>()
-      folderCache.set(id, f ?? null)
+  // 폴더 초대를 주지 않은 소유자의 문서 초대 — 바인딩 한도 때문에 100개씩 나눈다
+  const docOnlyIds = myGrants
+    .filter((g) => g.target_type === 'doc' && !folderGrantsByOwner.has(g.owner_id))
+    .map((g) => g.target_id)
+  for (let i = 0; i < docOnlyIds.length; i += BATCH_ID_LIMIT) {
+    const batch = docOnlyIds.slice(i, i + BATCH_ID_LIMIT)
+    const { results: docs } = await env.DB.prepare(
+      `SELECT ${SHARED_DOC_COLUMNS} FROM docs WHERE id IN (${batch.map(() => '?').join(',')})`,
+    )
+      .bind(...batch)
+      .all<SharedDocRow>()
+    for (const doc of docs) {
+      const role = docGrants.get(doc.id)
+      if (role) picked.push({ doc, role })
     }
-    return folderCache.get(id) ?? null
   }
 
   const ownerEmailCache = new Map<string, string>()
@@ -211,36 +247,9 @@ export async function handleGetShared(request: Request, env: Env): Promise<Respo
     return ownerEmailCache.get(id) as string
   }
 
-  const out: Array<{
-    id: string
-    title: string
-    lineEnding: 'crlf' | 'lf'
-    folderId: string | null
-    pinnedAt: number | null
-    version: number
-    createdAt: number
-    updatedAt: number
-    role: Role
-    ownerEmail: string
-    viaFolder?: { id: string; name: string }
-  }> = []
-
-  for (const doc of docs) {
+  const out: SharedItem[] = []
+  for (const { doc, role, viaFolder } of picked) {
     if (doc.owner_id === user.id) continue
-    const access = await resolveDocAccess(env, { id: doc.id, owner_id: doc.owner_id, folder_id: doc.folder_id }, user)
-    if (!access) continue
-
-    let viaFolder: { id: string; name: string } | undefined
-    if (doc.folder_id) {
-      const own = await getFolder(doc.folder_id)
-      if (own && folderGrantIds.includes(own.id)) {
-        viaFolder = { id: own.id, name: own.name }
-      } else if (own?.parent_id && folderGrantIds.includes(own.parent_id)) {
-        const parent = await getFolder(own.parent_id)
-        if (parent) viaFolder = { id: parent.id, name: parent.name }
-      }
-    }
-
     out.push({
       id: doc.id,
       title: doc.title,
@@ -250,7 +259,7 @@ export async function handleGetShared(request: Request, env: Env): Promise<Respo
       version: doc.version,
       createdAt: doc.created_at,
       updatedAt: doc.updated_at,
-      role: access.role,
+      role,
       ownerEmail: await getOwnerEmail(doc.owner_id),
       viaFolder,
     })
