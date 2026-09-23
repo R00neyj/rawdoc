@@ -60,12 +60,14 @@ import {
 
 type IconComponent = ComponentType<{ size?: number; className?: string }>
 
+// sep — 이 항목 앞에 그룹 구분선을 그린다 (2026-09-23 tweak, specs/tweaks.md)
 export type ToolbarCommandItem = {
   kind: 'command'
   id: string
   label: string
   Icon: IconComponent
   run: StateCommand
+  sep?: boolean
 }
 
 export type ToolbarHeadingLevel = { level: number; label: string; run: StateCommand }
@@ -77,6 +79,7 @@ export type ToolbarHeadingItem = {
   label: string
   Icon: IconComponent
   levels: ToolbarHeadingLevel[]
+  sep?: boolean
 }
 
 export type ToolbarItem = ToolbarCommandItem | ToolbarHeadingItem
@@ -99,14 +102,14 @@ export const toolbarTabs: ToolbarTab[] = [
     items: [
       { kind: 'command', id: 'wikilink', label: '링크 추가', Icon: IconAddLink, run: insertWikiLink },
       { kind: 'command', id: 'link', label: '외부 링크 추가', Icon: IconExternalLink, run: insertLink },
-      { kind: 'command', id: 'bold', label: '볼드체', Icon: IconBold, run: toggleStrong },
+      { kind: 'command', id: 'bold', label: '볼드체', Icon: IconBold, run: toggleStrong, sep: true },
       { kind: 'command', id: 'italic', label: '기울이기', Icon: IconItalic, run: toggleEmphasis },
       { kind: 'command', id: 'strike', label: '취소선', Icon: IconStrikethrough, run: toggleStrike },
       { kind: 'command', id: 'highlight', label: '하이라이트', Icon: IconHighlight, run: toggleHighlight },
-      { kind: 'command', id: 'code', label: '코드', Icon: IconInlineCode, run: toggleInlineCode },
+      { kind: 'command', id: 'code', label: '코드', Icon: IconInlineCode, run: toggleInlineCode, sep: true },
       { kind: 'command', id: 'math', label: '수식', Icon: IconFunctions, run: toggleMath },
       { kind: 'command', id: 'comment', label: '주석', Icon: IconComment, run: toggleComment },
-      { kind: 'command', id: 'clear', label: '서식 지우기', Icon: IconFormatClear, run: clearFormatting },
+      { kind: 'command', id: 'clear', label: '서식 지우기', Icon: IconFormatClear, run: clearFormatting, sep: true },
     ],
   },
   {
@@ -117,9 +120,9 @@ export const toolbarTabs: ToolbarTab[] = [
       { kind: 'command', id: 'bullet', label: '글머리 목록', Icon: IconBulletList, run: setBulletList },
       { kind: 'command', id: 'ordered', label: '숫자 목록', Icon: IconOrderedList, run: setOrderedList },
       { kind: 'command', id: 'task', label: '체크박스', Icon: IconChecklist, run: setTaskList },
-      { kind: 'heading', id: 'heading', label: '제목', Icon: IconTitle, levels: headingLevels },
+      { kind: 'heading', id: 'heading', label: '제목', Icon: IconTitle, levels: headingLevels, sep: true },
       { kind: 'command', id: 'paragraph', label: '본문', Icon: IconNotes, run: setParagraph },
-      { kind: 'command', id: 'quote', label: '인용', Icon: IconQuote, run: toggleQuote },
+      { kind: 'command', id: 'quote', label: '인용', Icon: IconQuote, run: toggleQuote, sep: true },
     ],
   },
   {
@@ -128,10 +131,10 @@ export const toolbarTabs: ToolbarTab[] = [
     Icon: IconTabInsert,
     items: [
       { kind: 'command', id: 'footnote', label: '각주', Icon: IconSuperscript, run: insertFootnote },
-      { kind: 'command', id: 'table', label: '표', Icon: IconTable, run: insertTable },
+      { kind: 'command', id: 'table', label: '표', Icon: IconTable, run: insertTable, sep: true },
       { kind: 'command', id: 'callout', label: '콜아웃', Icon: IconCallout, run: insertCallout },
       { kind: 'command', id: 'hr', label: '수평선', Icon: IconHorizontalRule, run: insertHorizontalRule },
-      { kind: 'command', id: 'codeblock', label: '코드 블럭', Icon: IconCodeBlock, run: insertCodeBlock },
+      { kind: 'command', id: 'codeblock', label: '코드 블럭', Icon: IconCodeBlock, run: insertCodeBlock, sep: true },
       { kind: 'command', id: 'mathblock', label: '수식 블럭', Icon: IconCalculate, run: insertMathBlock },
     ],
   },

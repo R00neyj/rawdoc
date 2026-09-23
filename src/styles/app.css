@@ -125,7 +125,21 @@ svg {
 .editor-toolbar-items {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
+}
+
+/* 되돌리기·다시 실행 — 탭 왼쪽에 늘 보인다 (2026-09-23 tweak) */
+.editor-toolbar-history {
+  flex: none;
+}
+
+/* 그룹 사이 세로 구분선 — 틱틱 서식바처럼 (2026-09-23 tweak) */
+.editor-toolbar-sep {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  background: var(--rule);
 }
 
 /* 좁은 창 탭바 줄 — 상단바 바로 밑, 상단바와 같은 바탕·테두리로 이어 보이게 (사용자 2026-09-16) */
@@ -160,15 +174,15 @@ svg {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
+  height: 28px;
   padding: 0;
   border-radius: var(--radius-control);
-  color: var(--ink-2);
+  color: color-mix(in srgb, var(--ink-2) 75%, var(--muted));
   transition: var(--transition-colors);
 }
 
 .editor-toolbar-btn {
-  width: 32px;
+  width: 28px;
 }
 
 .editor-toolbar-btn:hover,
@@ -187,9 +201,8 @@ svg {
 }
 
 .editor-toolbar-heading-btn {
-  gap: 4px;
-  padding: 0 8px;
-  font-size: 13px;
+  gap: 0;
+  padding: 0 2px 0 5px;
   white-space: nowrap;
 }
 

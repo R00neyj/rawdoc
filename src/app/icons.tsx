@@ -41,6 +41,9 @@ import tocSvg from '@material-symbols/svg-400/outlined/toc.svg?raw'
 import openInNewSvg from '@material-symbols/svg-400/outlined/open_in_new.svg?raw'
 import recenterSvg from '@material-symbols/svg-400/outlined/recenter.svg?raw'
 import formatBoldSvg from '@material-symbols/svg-400/outlined/format_bold.svg?raw'
+import keyboardArrowDownSvg from '@material-symbols/svg-400/outlined/keyboard_arrow_down.svg?raw'
+import undoSvg from '@material-symbols/svg-400/outlined/undo.svg?raw'
+import redoSvg from '@material-symbols/svg-400/outlined/redo.svg?raw'
 import formatItalicSvg from '@material-symbols/svg-400/outlined/format_italic.svg?raw'
 import strikethroughSSvg from '@material-symbols/svg-400/outlined/strikethrough_s.svg?raw'
 import formatInkHighlighterSvg from '@material-symbols/svg-400/outlined/format_ink_highlighter.svg?raw'
@@ -143,6 +146,11 @@ export const IconOpenInNew = makeIcon(openInNewSvg)
 // 지도 노드 우클릭 메뉴 `여기로 이동` (F-2003.md 8.3)
 export const IconRecenter = makeIcon(recenterSvg)
 export const IconBold = makeIcon(formatBoldSvg)
+// 상단바 탭바 제목 드롭다운 표시 — 글자 ▾ 대신 (2026-09-23 tweak)
+export const IconDropdown = makeIcon(keyboardArrowDownSvg)
+// 상단바 탭바 되돌리기·다시 실행 — 모바일엔 단축키가 없다 (2026-09-23 tweak)
+export const IconUndo = makeIcon(undoSvg)
+export const IconRedo = makeIcon(redoSvg)
 export const IconItalic = makeIcon(formatItalicSvg)
 export const IconStrikethrough = makeIcon(strikethroughSSvg)
 export const IconHighlight = makeIcon(formatInkHighlighterSvg)

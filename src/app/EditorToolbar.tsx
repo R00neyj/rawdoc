@@ -1,8 +1,9 @@
 // 상단바 서식 탭바 (specs/features/F-233.md 3.2·3.3) — F-167·168·169 명령을 탭 3개 + 아이콘 버튼 줄로
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { StateCommand } from '@codemirror/state'
 
-import { IconTooltip } from './icons'
+import { IconDropdown, IconRedo, IconTooltip, IconUndo } from './icons'
+import { redoLocal, undoLocal } from '../editor/yBinding'
 import usePresence from './usePresence'
 import { toolbarTabs, type ToolbarTabId } from './toolbarConfig'
 
@@ -106,8 +107,35 @@ export default function EditorToolbar({ onRunCommand, narrow }: EditorToolbarPro
     }
   }
 
+  // 되돌리기·다시 실행은 탭과 무관하게 늘 왼쪽에 — 모바일엔 Ctrl+Z 가 없다 (2026-09-23 tweak, specs/tweaks.md)
+  const historyItems = [
+    { id: 'undo', label: '되돌리기', Icon: IconUndo, run: undoLocal },
+    { id: 'redo', label: '다시 실행', Icon: IconRedo, run: redoLocal },
+  ]
+
   return (
     <div className={narrow ? 'editor-toolbar editor-toolbar--narrow' : 'editor-toolbar'}>
+      <div className="editor-toolbar-items editor-toolbar-history">
+        {historyItems.map((item) => (
+          <span
+            className="icon-btn-wrap"
+            key={item.id}
+            onMouseEnter={(e) => positionToolbarTooltip(e.currentTarget)}
+            onFocus={(e) => positionToolbarTooltip(e.currentTarget)}
+          >
+            <button
+              type="button"
+              className="editor-toolbar-btn"
+              aria-label={item.label}
+              onClick={() => runCommand(item.run)}
+            >
+              <item.Icon size={18} />
+            </button>
+            <IconTooltip text={item.label} />
+          </span>
+        ))}
+        <span className="editor-toolbar-sep" aria-hidden="true" />
+      </div>
       <div
         className="seg editor-toolbar-tabs"
         role="tablist"
@@ -166,19 +194,22 @@ export default function EditorToolbar({ onRunCommand, narrow }: EditorToolbarPro
         id={`editor-toolbar-panel-${tab.id}`}
         aria-labelledby={`editor-toolbar-tab-${tab.id}`}
       >
-        {tab.items.map((item) =>
-          item.kind === 'heading' ? (
-            <span className="item-menu editor-toolbar-heading" key={item.id}>
+        {tab.items.map((item) => (
+          <Fragment key={item.id}>
+          {item.sep && <span className="editor-toolbar-sep" aria-hidden="true" />}
+          {item.kind === 'heading' ? (
+            <span className="item-menu editor-toolbar-heading">
               <button
                 type="button"
                 ref={headingBtnRef}
                 className="editor-toolbar-heading-btn"
+                aria-label={item.label}
                 aria-haspopup="menu"
                 aria-expanded={headingOpen}
                 onClick={() => setHeadingOpen((v) => !v)}
               >
                 <item.Icon size={18} />
-                {item.label} ▾
+                <IconDropdown size={14} />
               </button>
               {headingMounted && (
                 <ul
@@ -209,7 +240,6 @@ export default function EditorToolbar({ onRunCommand, narrow }: EditorToolbarPro
           ) : (
             <span
               className="icon-btn-wrap"
-              key={item.id}
               onMouseEnter={(e) => positionToolbarTooltip(e.currentTarget)}
               onFocus={(e) => positionToolbarTooltip(e.currentTarget)}
             >
@@ -223,8 +253,9 @@ export default function EditorToolbar({ onRunCommand, narrow }: EditorToolbarPro
               </button>
               <IconTooltip text={item.label} />
             </span>
-          ),
-        )}
+          )}
+          </Fragment>
+        ))}
       </div>
     </div>
   )
