@@ -1024,26 +1024,6 @@ test.describe('F-2006 장력 묶음', () => {
     await expect(page).toHaveURL(/#\/d\/[^/]+$/)
   })
 
-  test('F-2006 A8 놓으면 카메라가 다시 맞는다', async ({ page }) => {
-    const { map, H, cx, cy } = await openMapFresh(page)
-    await page.mouse.move(cx, cy)
-    // 12칸 축소 = 화면 반지름 0.394H → 0.213H. 0.76 자리는 이제 빗나간다 (F-2003 A9 와 같은 통로)
-    await page.mouse.wheel(0, 1200)
-    await page.waitForTimeout(SETTLE)
-    await page.mouse.click(cx + NODE_R * 0.76 * H, cy)
-    await expect(page).toHaveURL(/#\/map$/)
-
-    const p = await openForce(map)
-    // fill 은 input 과 change 를 한 번씩 쏜다 — change 가 곧 "놓았다"다 (F-2006 6.4)
-    await forceSlider(p, '반발력').fill('0.7')
-    await page.waitForTimeout(SETTLE)
-    await map.getByRole('button', { name: '지도 설정', exact: true }).click()
-    await expect(panel(map)).toHaveCount(0)
-
-    await page.mouse.click(cx + NODE_R * 0.76 * H, cy)
-    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
-  })
-
   test('F-2006 A9 장력은 접힌 채로 다시 열린다', async ({ page }) => {
     const { map } = await openMapFresh(page)
     await openForce(map)
@@ -1096,6 +1076,9 @@ test.describe('F-2006 장력 묶음', () => {
 
     const p = await openForce(view.map)
     await forceSlider(p, '링크 거리').fill('1')
+    // 장력 중에는 카메라가 안 맞으므로 A 가 화면 밖으로 나간다 — 멈춘 뒤 맞춤으로 되돌려 잰다 (F-2012 13.2)
+    await page.waitForTimeout(FORCE_SETTLE)
+    await view.map.getByRole('button', { name: '맞춤', exact: true }).click()
 
     // 실측 301.1 px → 543.9 px (1.81배). 1.2 문턱은 그 아래로 50% 여유다 (F-2006 14.2)
     await expect.poll(async () => (await gap()) / before, { timeout: FORCE_SETTLE + 4000 }).toBeGreaterThan(1.2)
@@ -1312,5 +1295,174 @@ test.describe('F-2010 호버 초점', () => {
     // 실측 1.75%. 간선만으로도 먹 덮개의 상당 부분이다. 6.4 의 회귀 방지다
     const { pctDiff8 } = await comparePng(page, thin, thick)
     expect(pctDiff8).toBeGreaterThanOrEqual(0.3)
+  })
+})
+
+// F-2012 카메라 전환 (specs/features/F-2012.md 14.2) A1~A7 — 이름표 하나의 화면 x 를 프레임마다 읽어 카메라가 여러 프레임에 걸쳐 움직였는지 본다
+const LABEL_ALL = '{"display":{"nodeScale":1,"labelDistance":1,"edgeStrength":0.5}}'
+
+// 클릭 전에 부르고 await 하지 않는다. ms 동안 이름표 하나의 가운데 x 를 프레임마다 기록해 돌려준다 — 이름표는 translate(-50%) 라 가운데가 노드 x 다
+function recordLabelX(page, ms) {
+  return page.evaluate(
+    (duration) =>
+      new Promise((resolve) => {
+        const xs = []
+        const end = performance.now() + duration
+        const tick = () => {
+          const el = document.querySelector('.map-label:not([hidden])')
+          if (el) {
+            const r = el.getBoundingClientRect()
+            xs.push([Math.round(performance.now()), Math.round((r.x + r.width / 2) * 10) / 10])
+          }
+          if (performance.now() < end) requestAnimationFrame(tick)
+          else resolve(xs)
+        }
+        requestAnimationFrame(tick)
+      }),
+    ms,
+  )
+}
+
+function distinctXs(xs) {
+  return new Set(xs.map(([, x]) => x)).size
+}
+
+// 처음 달라진 시각과 마지막으로 달라진 시각의 차이
+function motionSpan(xs) {
+  let first = -1
+  let last = -1
+  for (let i = 1; i < xs.length; i++) {
+    if (xs[i][1] === xs[i - 1][1]) continue
+    if (first < 0) first = xs[i][0]
+    last = xs[i][0]
+  }
+  return first < 0 ? 0 : last - first
+}
+
+async function openMapLabeled(page) {
+  await setPrefBeforeLoad(page, 'md.mapView', LABEL_ALL)
+  const view = await openMapFresh(page)
+  await expect(visibleLabels(view.map)).toHaveCount(1)
+  return view
+}
+
+test.describe('F-2012 카메라 전환', () => {
+  test('F-2012 A1 맞춤은 여러 프레임에 걸쳐 움직인다', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapLabeled(page)
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
+    await page.waitForTimeout(SETTLE)
+
+    const recording = recordLabelX(page, 900)
+    await map.getByRole('button', { name: '맞춤', exact: true }).click()
+    const xs = await recording
+
+    expect(distinctXs(xs)).toBeGreaterThanOrEqual(4)
+    expect(motionSpan(xs)).toBeGreaterThanOrEqual(80)
+    expect(Math.abs(xs.at(-1)[1] - cx)).toBeLessThanOrEqual(4)
+  })
+
+  test('F-2012 A3 여기로 이동도 전환을 탄다', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapLabeled(page)
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
+    await page.waitForTimeout(SETTLE)
+
+    const recording = recordLabelX(page, 900)
+    await page.mouse.click(cx + 0.55 * H, cy, { button: 'right' })
+    await nodeMenu(map).getByRole('menuitem', { name: '여기로 이동' }).click()
+    const xs = await recording
+
+    expect(distinctXs(xs)).toBeGreaterThanOrEqual(4)
+    expect(Math.abs(xs.at(-1)[1] - cx)).toBeLessThanOrEqual(4)
+  })
+
+  test('F-2012 A6 전환 중 사용자 조작이 이긴다', async ({ page }) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(e))
+    const { map, H, cx, cy } = await openMapLabeled(page)
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
+    await page.waitForTimeout(SETTLE)
+
+    await page.mouse.click(cx + 0.55 * H, cy, { button: 'right' })
+    await nodeMenu(map).getByRole('menuitem', { name: '여기로 이동' }).click()
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.3 * H, 0, 'left')
+    await page.waitForTimeout(SETTLE)
+
+    const box = await visibleLabels(map).first().boundingBox()
+    expect(Math.abs(box.x + box.width / 2 - cx)).toBeGreaterThanOrEqual(0.2 * H)
+    expect(errors).toEqual([])
+  })
+})
+
+test.describe('F-2012 움직임 줄이기', () => {
+  test.use({ reducedMotion: 'reduce' })
+
+  test('F-2012 A2 움직임 줄이기면 한 번에 간다', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapLabeled(page)
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
+    await page.waitForTimeout(SETTLE)
+
+    const recording = recordLabelX(page, 900)
+    await map.getByRole('button', { name: '맞춤', exact: true }).click()
+    const xs = await recording
+
+    expect(distinctXs(xs)).toBeLessThanOrEqual(2)
+    expect(Math.abs(xs.at(-1)[1] - cx)).toBeLessThanOrEqual(4)
+  })
+
+  test('F-2012 A4 장력을 바꿔도 카메라가 안 움직인다', async ({ page }) => {
+    const { map, cx, cy } = await openMapLabeled(page)
+    await page.mouse.move(cx, cy)
+    await page.mouse.wheel(0, 1200)
+    await page.waitForTimeout(SETTLE)
+    const before = await visibleLabels(map).first().boundingBox()
+
+    const p = await openForce(map)
+    await forceSlider(p, '반발력').fill('0.7')
+    await page.waitForTimeout(FORCE_SETTLE)
+    await map.getByRole('button', { name: '지도 설정', exact: true }).click()
+    await expect(panel(map)).toHaveCount(0)
+
+    // 노드 하나짜리 지도라 월드 좌표가 안 움직인다 — 이름표가 움직였다면 그것은 오직 카메라다 (F-2012 11장)
+    const after = await visibleLabels(map).first().boundingBox()
+    expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(1)
+    expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1)
+  })
+
+  test('F-2012 A5 그 뒤 맞춤이 되돌린다', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapLabeled(page)
+    await page.mouse.move(cx, cy)
+    await page.mouse.wheel(0, 1200)
+    await page.waitForTimeout(SETTLE)
+    const p = await openForce(map)
+    await forceSlider(p, '반발력').fill('0.7')
+    await page.waitForTimeout(FORCE_SETTLE)
+    await map.getByRole('button', { name: '지도 설정', exact: true }).click()
+    await expect(panel(map)).toHaveCount(0)
+
+    await map.getByRole('button', { name: '맞춤', exact: true }).click()
+    await page.waitForTimeout(SETTLE)
+    await page.mouse.click(cx + NODE_R * 0.76 * H, cy)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+
+  test('F-2012 A7 장력을 크게 바꾼 뒤에도 휠로 물러날 수 있다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.mapView', LABEL_ALL)
+    const view = await openMapWithDocs(page, [
+      { name: 'C.md', content: 'C 문서' },
+      { name: 'B.md', content: 'B 문서' },
+      { name: 'A.md', content: 'A\n\n[[B]]' },
+    ])
+    await expect(visibleLabels(view.map)).toHaveCount(3)
+
+    const p = await openForce(view.map)
+    await forceSlider(p, '링크 거리').fill('1')
+    await page.waitForTimeout(FORCE_SETTLE)
+    await view.map.getByRole('button', { name: '지도 설정', exact: true }).click()
+    await expect(panel(view.map)).toHaveCount(0)
+
+    await page.mouse.move(view.cx, view.cy)
+    await page.mouse.wheel(0, 4000)
+    await page.waitForTimeout(SETTLE)
+    await expect(visibleLabels(view.map)).toHaveCount(3)
   })
 })

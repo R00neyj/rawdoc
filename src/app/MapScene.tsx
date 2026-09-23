@@ -23,7 +23,7 @@ import {
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { createMapLayout, type MapForceNorms, type MapLayout } from '../lib/mapLayout3d'
-import { clipPlanes, fitDistance, zoomLimits } from '../lib/mapCamera'
+import { clipPlanes, easeAt, fitDistance, parseCubicBezier, tweenPose, zoomLimits, type CameraPose } from '../lib/mapCamera'
 import { parseCssColor, type Rgba } from '../lib/cssColor'
 import { blendRgb, depthMix, ndcToScreen, nodeRadius, pickLabelNodes, screenRadius, type ScreenPoint } from '../lib/mapNodeStyle'
 import { edgeColorAt } from '../lib/mapEdgeStyle'
@@ -36,7 +36,6 @@ type MapSceneProps = {
   graph: WikiGraph // 이미 상한으로 잘린 그래프
   centerId: string | null // #/map/{id} 의 그 문서. 없으면 null
   fitToken: number // 바뀔 때마다 카메라를 다시 맞추고 다시 그린다
-  commitToken: number // 장력 슬라이더에서 손을 뗄 때마다 오른다. 각도를 유지한 채 따라 맞춤을 켠다 (F-2006 6.4)
   centerToken: number // `여기로 이동` 을 고를 때마다 오른다. 이미 중심인 문서를 다시 골라도 카메라가 움직이게 (사용자 지시 2026-09-22)
   menuOpen: boolean // 노드 메뉴가 떠 있는 동안 조작을 잠근다 (F-2003 4.4)
   view: MapView // 지도 설정 패널의 `표시` 3축과 `장력` 4축 (F-2005 7장, F-2006 8장)
@@ -68,6 +67,8 @@ const LONG_PRESS_SLOP = 10
 const DAMPING_FACTOR = 0.08
 // 0.3 은 수축 방향에서 새 균형보다 15~16% 크게 굳고, 1.0 은 작은 그래프에서 지나친다 (F-2006 5.2)
 const MAP_REHEAT_ALPHA = 0.6
+// 카메라 전환 길이. 툴팁·메뉴·대화상자 나타남과 같은 240 ms 다 (design.md 4장 `전환`, F-2012 5.1)
+const CAMERA_TWEEN_MS = 240
 
 // 네 축의 얕은 비교. 하나라도 다르면 힘을 다시 걸고 재가열한다 (F-2006 8.3)
 function forceChanged(a: MapForceNorms, b: MapForceNorms): boolean {
@@ -149,7 +150,6 @@ type SceneBundle = {
   lookAtNode: (id: string) => void
   setMenuOpen: (open: boolean) => void
   setView: (view: MapView) => void
-  beginFollowFit: () => void
   requestDraw: () => void
 }
 
@@ -445,29 +445,6 @@ function buildScene(
     userMoved = false
   }
 
-  // 보던 각도와 target 방향을 유지한 채 거리만 다시 잡는다. userMoved 는 건드리지 않는다 (F-2006 6.2)
-  function refit() {
-    const { center, radius } = layout.bounds()
-    const r = graphRadius(radius)
-    const dist = fitDistance(r, camera.fov, camera.aspect)
-    selfDriven = true
-    controls.enableDamping = false
-    controls.update()
-    offset.copy(camera.position).sub(controls.target)
-    // 첫 프레임 방어 — 카메라가 target 위에 있으면 방향이 없다
-    if (offset.lengthSq() === 0) offset.set(0, 0, 1)
-    offset.setLength(dist)
-    controls.target.set(center[0], center[1], center[2])
-    camera.position.copy(controls.target).add(offset)
-    const limits = zoomLimits(dist)
-    controls.minDistance = limits.min
-    controls.maxDistance = limits.max
-    applyClip(dist, r)
-    controls.update()
-    controls.enableDamping = true
-    selfDriven = false
-  }
-
   // 자동 맞춤이 꺼진 뒤에도 절단면은 다시 잡는다 — 배치가 퍼지는 동안 far 를 두면 뒤쪽이 잘린다 (F-2003 7.3)
   function updateClip() {
     const { center, radius } = layout.bounds()
@@ -476,9 +453,7 @@ function buildScene(
   }
 
   // 보던 각도와 거리를 그대로 들고 target 만 그 노드로 옮긴다 (F-2003 7.4)
-  function lookAtNode(id: string) {
-    const i = graph.nodes.findIndex((n) => n.id === id)
-    if (i < 0) return
+  function lookAtIndex(i: number) {
     const pos = layout.readPositions(posBuf)
     selfDriven = true
     controls.enableDamping = false
@@ -530,20 +505,130 @@ function buildScene(
   // 사용자가 카메라를 한 번이라도 움직였나. selfDriven 은 우리가 일으킨 change 를 빼고 세려는 표시다 (F-2003 7.3)
   let userMoved = false
   let selfDriven = false
-  // 장력 슬라이더에서 손을 뗀 뒤 배치가 멈출 때까지만 켜진다 (F-2006 6.3)
-  let followFit = false
-  // 장력 슬라이더가 일으킨 재계산인 동안에는 reduced-motion 분기를 건너뛴다 (F-2006 9장)
-  let forceDriven = false
+  // 장력 슬라이더·노드 끌기가 일으킨 재계산인 동안에는 reduced-motion 분기를 건너뛴다 (F-2006 9장, F-2012 3.2)
+  let liveRecalc = false
+  // 장력 슬라이더가 일으킨 재계산인 동안에는 카메라를 맞추지 않는다 — 노드가 커져 보이던 원인이다 (F-2012 3장)
+  let holdFit = false
   // 경계구는 인스턴스 행렬에만 달려 있고 카메라와 무관하다 — 좌표가 바뀐 뒤 한 번만 다시 잰다 (F-2004 7.6)
   let boundsStale = true
   // 간선 색은 카메라와 무관하다 — 테마·현재 문서·호버·`선 두께` 가 바뀐 프레임에만 다시 쓴다 (F-2010 7.1)
   let edgeColorDirty = true
 
+  // `맞춤`·`여기로 이동` 전환. 시작 자세만 얼리고 끝 자세는 매 프레임 다시 잡는다 (F-2012 5.5·10장)
+  type CameraTween = { startedAt: number; mode: 'fit' | 'look'; nodeIndex: number }
+  let tween: CameraTween | null = null
+  const poseFrom: CameraPose = { target: [0, 0, 0], dir: [0, 0, 1], dist: 1 }
+  const poseTo: CameraPose = { target: [0, 0, 0], dir: [0, 0, 1], dist: 1 }
+  const tweenTarget = [0, 0, 0]
+  const tweenPosition = [0, 0, 0]
+  // `--ease-out` 을 프로브로 한 번 읽는다. 못 읽으면 선형이다 — 제어점을 코드에 적으면 tokens.css 와 갈라진다 (F-2012 5.2)
+  const easeCurve = parseCubicBezier(getComputedStyle(probe).getPropertyValue('--ease-out'))
+
+  // 지금 거리를 품도록 넓히기만 한다 — 좁히면 update() 가 카메라를 밀어내 그 자체가 이동이 된다 (F-2012 8.2)
+  function applyZoomLimits(fitDist: number) {
+    const lim = zoomLimits(fitDist)
+    const d = camera.position.distanceTo(controls.target)
+    controls.minDistance = Math.min(lim.min, d)
+    controls.maxDistance = Math.max(lim.max, d)
+  }
+
+  function beginTween(mode: 'fit' | 'look', nodeIndex = -1) {
+    // 움직임 줄이기면 전환 없이 즉시다 (F-2012 결정 5)
+    if (reduced) {
+      if (mode === 'fit') fit()
+      else lookAtIndex(nodeIndex)
+      return
+    }
+    cancelTween()
+    selfDriven = true
+    controls.enableDamping = false
+    // 남은 관성을 전부 적용하고 누적값을 비운다 (F-2003 3.4)
+    controls.update()
+    offset.copy(camera.position).sub(controls.target)
+    if (offset.lengthSq() === 0) offset.set(0, 0, 1)
+    poseFrom.dist = offset.length()
+    offset.normalize()
+    poseFrom.dir[0] = offset.x
+    poseFrom.dir[1] = offset.y
+    poseFrom.dir[2] = offset.z
+    poseFrom.target[0] = controls.target.x
+    poseFrom.target[1] = controls.target.y
+    poseFrom.target[2] = controls.target.z
+    tween = { startedAt: performance.now(), mode, nodeIndex }
+    // `여기로 이동` 은 시작하는 순간 자동 맞춤을 멈춘다 (F-2012 7.3)
+    if (mode === 'look') userMoved = true
+    requestDraw()
+  }
+
+  function stepTween(now: number) {
+    const tw = tween
+    if (!tw) return
+    const t = Math.min(Math.max((now - tw.startedAt) / CAMERA_TWEEN_MS, 0), 1)
+    const e = easeAt(easeCurve, t)
+    const { center, radius } = layout.bounds()
+    const fitDist = fitDistance(graphRadius(radius), camera.fov, camera.aspect)
+    if (tw.mode === 'fit') {
+      poseTo.target[0] = center[0]
+      poseTo.target[1] = center[1]
+      poseTo.target[2] = center[2]
+      poseTo.dir[0] = 0
+      poseTo.dir[1] = 0
+      poseTo.dir[2] = 1
+      poseTo.dist = fitDist
+    } else {
+      const pos = layout.readPositions(posBuf)
+      const i = tw.nodeIndex
+      poseTo.target[0] = pos[i * 3]
+      poseTo.target[1] = pos[i * 3 + 1]
+      poseTo.target[2] = pos[i * 3 + 2]
+      poseTo.dir[0] = poseFrom.dir[0]
+      poseTo.dir[1] = poseFrom.dir[1]
+      poseTo.dir[2] = poseFrom.dir[2]
+      poseTo.dist = poseFrom.dist
+    }
+    tweenPose(poseFrom, poseTo, e, tweenTarget, tweenPosition)
+    controls.target.set(tweenTarget[0], tweenTarget[1], tweenTarget[2])
+    camera.position.set(tweenPosition[0], tweenPosition[1], tweenPosition[2])
+    // 자세를 쓴 뒤여야 지금 거리가 맞다 (F-2012 8.2)
+    applyZoomLimits(fitDist)
+    updateClip()
+    // frame() 끝의 정지 판정을 막아 다음 프레임이 돈다 (F-2012 6.2)
+    dirty = true
+    if (t >= 1) endTween()
+  }
+
+  function endTween() {
+    const wasFit = tween?.mode === 'fit'
+    tween = null
+    controls.enableDamping = true
+    selfDriven = false
+    // `맞춤` 은 끝나는 순간 자동 맞춤을 다시 켠다 (F-2012 7.3, F-2003 17장 Q1)
+    if (wasFit) userMoved = false
+  }
+
+  // 사용자가 손을 댔다. userMoved 는 곧 오는 change 가 세운다 (F-2012 7.2)
+  function cancelTween() {
+    if (!tween) return
+    tween = null
+    controls.enableDamping = true
+    selfDriven = false
+  }
+
+  function requestFit() {
+    beginTween('fit')
+  }
+
+  function requestLook(id: string) {
+    const i = graph.nodes.findIndex((n) => n.id === id)
+    if (i < 0) return
+    beginTween('look', i)
+  }
+
   function frame() {
     // controls.update() 보다 먼저 내린다 — 감쇠가 남아 있으면 change 가 이것을 다시 세운다 (F-2003 6.2)
     dirty = false
     let ticked = false
-    if (reduced && !forceDriven) {
+    if (reduced && !liveRecalc) {
       if (!layout.isSettled()) {
         layout.runTickBudget(REDUCED_BUDGET_MS)
         // 다 돌 때까지 그리지 않는다
@@ -561,14 +646,17 @@ function buildScene(
       ticked = true
       posDirty = true
     }
-    // 멈출 때까지 자동으로 맞추되, 사용자가 카메라를 건드린 뒤에는 절단면만 손본다. 장력 슬라이더에서 손을 뗀 뒤에는 각도를 유지한 채 따라 맞춘다 (F-2006 6.3)
+    // 전환이 최우선이고, 장력 재계산 중에는 맞추지 않으며, 그 밖에는 멈출 때까지 자동으로 맞춘다 (F-2012 3.2·7.1)
     const settling = ticked || !layout.isSettled()
-    if (!userMoved && settling) fit()
-    else if (followFit && settling) refit()
+    if (tween) stepTween(performance.now())
+    else if (holdFit) {
+      updateClip()
+      applyZoomLimits(fitDistance(graphRadius(layout.bounds().radius), camera.fov, camera.aspect))
+    } else if (!userMoved && settling) fit()
     else updateClip()
     if (!settling) {
-      followFit = false
-      forceDriven = false
+      liveRecalc = false
+      holdFit = false
     }
     controls.update()
     if (posDirty) {
@@ -608,6 +696,8 @@ function buildScene(
     if (!selfDriven) userMoved = true
     requestDraw()
   })
+  // start 는 사용자 조작에서만 나온다 — update() 는 change 만 쏜다 (F-2012 7.2)
+  controls.addEventListener('start', cancelTween)
 
   let downAt: { x: number; y: number } | null = null
   // pointerup 이 downAt 을 비운 뒤에 contextmenu 가 오므로 따로 들고 있는다 (F-2003 4.2)
@@ -768,6 +858,11 @@ function buildScene(
 
   const ro = new ResizeObserver(() => {
     resize()
+    // 전환 중이면 끝점을 매 프레임 다시 잡으므로 새 aspect 가 저절로 들어간다 (F-2012 4장 6번)
+    if (tween) {
+      requestDraw()
+      return
+    }
     if (!userMoved) fit()
     else updateClip()
     requestDraw()
@@ -788,8 +883,8 @@ function buildScene(
 
   return {
     applyColors,
-    fit,
-    lookAtNode,
+    fit: requestFit,
+    lookAtNode: requestLook,
     setMenuOpen(open: boolean) {
       controls.enabled = !open
     },
@@ -806,19 +901,16 @@ function buildScene(
         layout.setForces(next.force)
         // setForces 는 스스로 재가열하지 않는다 — 다음 줄이 계약이다 (F-2001 12장 Q1)
         layout.reheat(MAP_REHEAT_ALPHA)
-        forceDriven = true
+        liveRecalc = true
+        holdFit = true
       }
       applied = next
-      requestDraw()
-    },
-    // 손을 뗐다 — 배치가 멈출 때까지 각도를 유지한 채 따라 맞춘다 (F-2006 6.3)
-    beginFollowFit() {
-      followFit = true
       requestDraw()
     },
     requestDraw,
     // 순서를 지킨다: 루프 → controls → 시뮬레이션 → 지오메트리·재질 → dispose → forceContextLoss (3.6, F-2003 9.3)
     dispose() {
+      cancelTween()
       renderer.setAnimationLoop(null)
       running = false
       // connect() 가 document 에 keydown capture 를 달기 때문에 빠뜨리면 지도를 닫아도 남는다 (F-2003 3.3)
@@ -850,7 +942,7 @@ function buildScene(
   }
 }
 
-export default function MapScene({ graph, centerId, fitToken, commitToken, centerToken, menuOpen, view, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }: MapSceneProps) {
+export default function MapScene({ graph, centerId, fitToken, centerToken, menuOpen, view, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }: MapSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const probeRef = useRef<HTMLSpanElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -923,12 +1015,6 @@ export default function MapScene({ graph, centerId, fitToken, commitToken, cente
   useEffect(() => {
     sceneRef.current?.setView(view)
   }, [view])
-
-  // (g) 장력 슬라이더에서 손을 뗐다. 0 은 걸러야 마운트 직후에 켜지지 않는다 — 그때는 462행의 자동 맞춤이 이미 돈다 (F-2006 8.1)
-  useEffect(() => {
-    if (commitToken === 0) return
-    sceneRef.current?.beginFollowFit()
-  }, [commitToken])
 
   return (
     <div className="map-scene" ref={wrapperRef}>
