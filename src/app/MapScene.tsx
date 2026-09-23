@@ -29,7 +29,7 @@ import { parseCssColor, type Rgba } from '../lib/cssColor'
 import { blendRgb, depthMix, ndcToScreen, nodeRadius, pickLabelNodes, screenRadius, type ScreenPoint } from '../lib/mapNodeStyle'
 import { edgeColorAt } from '../lib/mapEdgeStyle'
 import { MAP_EDGE_CENTER, MAP_EDGE_FOCUS, MAP_HOVER_DIM, combineMix, edgeClass, fillNodeFocus } from '../lib/mapFocus'
-import { MAP_FILTER_DIM } from '../lib/mapFilter'
+import { MAP_FILTER_DIM, MAP_GROUP_PALETTE } from '../lib/mapFilter'
 import MapLabels, { type MapLabelItem, type MapLabelsHandle } from './MapLabels'
 import type { WikiGraph } from '../lib/wikiGraph'
 import type { MapView } from './mapPrefs'
@@ -42,6 +42,7 @@ type MapSceneProps = {
   menuOpen: boolean // 노드 메뉴가 떠 있는 동안 조작을 잠근다 (F-2003 4.4)
   view: MapView // 지도 설정 패널의 `표시` 3축과 `장력` 4축 (F-2005 7장, F-2006 8장)
   visible: Uint8Array | null // 지도 필터가 계산한 보임 마스크. null = 전부 보임 (F-2007 12장)
+  groups: Uint8Array | null // 지도 필터가 계산한 그룹 색 마스크. null = 그룹 없음 (F-2008 9장)
   onNodeClick: (id: string, modified: boolean) => void
   onNodeMenu: (id: string, x: number, y: number) => void // 뷰포트 좌표 (F-2003 4.3·5.2)
   onUnsupported: () => void // 렌더러를 못 만들었다 — MapPage 가 목록으로 돌린다
@@ -102,6 +103,7 @@ type ThemeColors = {
   muted: Rgba
   ink2: Rgba
   rule: Rgba
+  group: Rgba[] // 팔레트 8개. --map-group-1~8 (F-2008 9장)
 }
 
 // 프로브 하나를 돌려쓴다 — 인라인 var() 도 계산값으로 풀려 나오고 조상에 display:none 이 걸려 있어도 읽힌다 (6.3)
@@ -112,6 +114,8 @@ function readToken(probe: HTMLElement, token: string): Rgba {
 }
 
 function readTheme(probe: HTMLElement): ThemeColors {
+  const group: Rgba[] = []
+  for (let i = 1; i <= MAP_GROUP_PALETTE; i++) group.push(readToken(probe, `--map-group-${i}`))
   return {
     panel: readToken(probe, '--panel'),
     ink: readToken(probe, '--ink'),
@@ -119,6 +123,7 @@ function readTheme(probe: HTMLElement): ThemeColors {
     muted: readToken(probe, '--muted'),
     ink2: readToken(probe, '--ink-2'),
     rule: readToken(probe, '--rule'),
+    group,
   }
 }
 
@@ -181,6 +186,7 @@ type SceneBundle = {
   setMenuOpen: (open: boolean) => void
   setView: (view: MapView) => void
   setVisible: (mask: Uint8Array | null) => void
+  setGroups: (mask: Uint8Array | null) => void
   requestDraw: () => void
 }
 
@@ -389,7 +395,8 @@ function buildScene(
       else if (node.id === activeCenterId) {
         rgba = theme.accent
         centerIndex = i
-      } else if (unreadable.has(node.id)) rgba = theme.ink2
+      } else if (groupsMask !== null && groupsMask[i] > 0) rgba = theme.group[groupsMask[i] - 1]
+      else if (unreadable.has(node.id)) rgba = theme.ink2
       else rgba = theme.ink
       baseColors[i * 3] = rgba[0]
       baseColors[i * 3 + 1] = rgba[1]
@@ -599,6 +606,8 @@ function buildScene(
   let edgeColorDirty = true
   // 지도 필터가 내려보낸 보임 마스크. null 이면 전부 보인다 (F-2007 12장)
   let visibleMask: Uint8Array | null = null
+  // 지도 그룹이 내려보낸 색 마스크. null 이면 그룹이 없다 (F-2008 9장)
+  let groupsMask: Uint8Array | null = null
 
   // `맞춤`·`여기로 이동` 전환. 시작 자세만 얼리고 끝 자세는 매 프레임 다시 잡는다 (F-2012 5.5·10장)
   type CameraTween = { startedAt: number; mode: 'fit' | 'look'; nodeIndex: number }
@@ -1109,6 +1118,12 @@ function buildScene(
       refreshLabels()
       requestDraw()
     },
+    // 배치도 카메라도 건드리지 않는다 — 마스크를 바꾼 뒤 색만 다시 채운다 (F-2008 9.2)
+    setGroups(mask: Uint8Array | null) {
+      groupsMask = mask
+      applyColors()
+      requestDraw()
+    },
     requestDraw,
     // 순서를 지킨다: 루프 → controls → 시뮬레이션 → 지오메트리·재질 → dispose → forceContextLoss (3.6, F-2003 9.3)
     dispose() {
@@ -1145,7 +1160,7 @@ function buildScene(
   }
 }
 
-export default function MapScene({ graph, centerId, fitToken, centerToken, menuOpen, view, visible, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }: MapSceneProps) {
+export default function MapScene({ graph, centerId, fitToken, centerToken, menuOpen, view, visible, groups, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }: MapSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const probeRef = useRef<HTMLSpanElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -1223,6 +1238,11 @@ export default function MapScene({ graph, centerId, fitToken, centerToken, menuO
   useEffect(() => {
     sceneRef.current?.setVisible(visible)
   }, [visible])
+
+  // (i) 지도 그룹의 색 마스크가 바뀔 때마다 반영한다 (F-2008 9장)
+  useEffect(() => {
+    sceneRef.current?.setGroups(groups)
+  }, [groups])
 
   return (
     <div className="map-scene" ref={wrapperRef}>

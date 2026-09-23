@@ -139,6 +139,44 @@ describe('글자 선택 바탕 대비 (design.md 3.2, F-164)', () => {
   }
 })
 
+describe('지도 그룹 팔레트 별칭 (F-2008 3장, 13.1 U9~U11)', () => {
+  const MAP_GROUP_TOKENS = Array.from({ length: 8 }, (_, i) => `map-group-${i + 1}`)
+
+  // var(--x) 를 최대 5단계까지 따라가 hex 값을 찾는다. resolve() 는 한 단계만 풀어 map-group-N -> callout-* 체인의 둘째 단계(callout-note -> link 등)를 못 본다
+  function resolveDeep(tokens: Tokens, value: string): string {
+    let current = value
+    for (let i = 0; i < 5; i++) {
+      if (/^#[0-9a-fA-F]{6}$/.test(current)) return current
+      const varMatch = /^var\(--([\w-]+)\)$/.exec(current)
+      if (!varMatch) return ''
+      current = tokens[varMatch[1]] ?? ''
+    }
+    return ''
+  }
+
+  test('U9 별칭 여덟 개가 있고 값이 전부 var(--callout-…) 꼴이다', () => {
+    for (const token of MAP_GROUP_TOKENS) {
+      expect(whiteTokens[token]).toBeDefined()
+      expect(whiteTokens[token]).toMatch(/^var\(--callout-[\w-]+\)$/)
+    }
+  })
+
+  test('U10 새 hex 0개', () => {
+    const hexCount = MAP_GROUP_TOKENS.filter((token) => whiteTokens[token].startsWith('#')).length
+    expect(hexCount).toBe(0)
+  })
+
+  for (const [name, tokens] of Object.entries(THEMES)) {
+    test(`U11 ${name} — 두 단계를 풀어 얻은 색이 --panel 대비 4.5:1 이상`, () => {
+      const bgHex = resolveDeep(tokens, tokens.panel)
+      for (const token of MAP_GROUP_TOKENS) {
+        const hex = resolveDeep(tokens, tokens[token])
+        expect(contrastRatio(hex, bgHex)).toBeGreaterThanOrEqual(4.5)
+      }
+    })
+  }
+})
+
 describe('메인 컬러 대비 — 확정 전까지 경고만 (design.md 3.2)', () => {
   test('brand.config.js 값으로 확인 (경고만, 실패 조건 아님)', () => {
     const accentDark = mixWhite(brand.accent, 55)

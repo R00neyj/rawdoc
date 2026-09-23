@@ -7,9 +7,10 @@ import {
   loadMapGroups,
   saveMapGroups,
   normalizeMapGroups,
+  MAP_GROUP_MAX,
 } from './mapPrefs'
 import { MAP_FORCE_DEFAULT_NORMS } from '../lib/mapLayout3d'
-import { MAP_FILTER_DEFAULT } from '../lib/mapFilter'
+import { MAP_FILTER_DEFAULT, MAP_GROUP_PALETTE } from '../lib/mapFilter'
 
 function createMemoryLocalStorage(): Storage {
   const store = new Map<string, string>()
@@ -164,5 +165,11 @@ describe('mapPrefs — md.mapGroups (12.1 U10~U13)', () => {
     ]
     saveMapGroups(groups)
     expect(loadMapGroups()).toEqual(groups)
+  })
+})
+
+describe('mapPrefs — 그룹 팔레트 상수 (F-2008 13.1 U12)', () => {
+  it('U12 MAP_GROUP_MAX 와 MAP_GROUP_PALETTE 가 같은 값이다', () => {
+    expect(MAP_GROUP_MAX).toBe(MAP_GROUP_PALETTE)
   })
 })

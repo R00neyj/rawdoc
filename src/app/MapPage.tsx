@@ -5,6 +5,7 @@ import { buildSearchIndex, folderPathMap, type SearchIndexEntry } from './search
 import { buildWikiGraphFromEntries, distancesFrom, truncateGraphByDegree, type WikiGraph } from '../lib/wikiGraph'
 import { parseSearchQuery } from '../lib/docSearch'
 import {
+  computeGroupColors,
   computeVisibleNodes,
   expandFolders,
   isFilterActive,
@@ -12,18 +13,21 @@ import {
   type MapFilterContext,
   type MapFilterDoc,
   type MapFilterFolder,
+  type MapFilterGroup,
   type MapFilterNode,
 } from '../lib/mapFilter'
 import { IconClose, IconEdit, IconFit, IconList, IconMap, IconNoteAdd, IconOpenInNew, IconRecenter, IconSettings, IconTooltip } from './icons'
 import MapScene, { hasWebGL2 } from './MapScene'
 import MapPanel, { type MapFolderRow } from './MapPanel'
 import usePresence from './usePresence'
-import { loadMapView, saveMapView, type MapView } from './mapPrefs'
+import { loadMapGroups, loadMapView, saveMapGroups, saveMapView, type MapGroup, type MapView } from './mapPrefs'
 import FolderMenu from './FolderMenu'
 import { formatHash } from './hashRoute'
 import type { Doc, Folder } from '../types'
 
 const NODE_CAP = 1000 // F-292 결정 11 + F-2002 10.3
+// 그룹 조건 글자만 미루는 값. SearchDialog.tsx 의 DEBOUNCE_MS 와 같다 (F-2008 8.2)
+const GROUP_PAINT_DEBOUNCE_MS = 150
 
 type MapPageProps = {
   docCount: number
@@ -65,6 +69,11 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
   const [query, setQuery] = useState('')
   const queryRef = useRef('')
   const [appliedQuery, setAppliedQuery] = useState('')
+  // `그룹` 묶음 (F-2008 6장) — 저장은 곧바로, 칠하기(appliedGroups)는 조건 글자만 150ms 미룬다 (8.2)
+  const [groups, setGroups] = useState<MapGroup[]>(() => loadMapGroups())
+  const [appliedGroups, setAppliedGroups] = useState<MapGroup[]>(() => loadMapGroups())
+  const groupComposingRef = useRef(false)
+  const groupPaintTimerRef = useRef<number | undefined>(undefined)
 
   function handleViewChange(next: MapView) {
     setView(next)
@@ -79,6 +88,42 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
   // 한글 입력기 조립이 끝났을 때만 거르기를 따라잡는다 (F-2007 8.2)
   function onCommitQuery() {
     setAppliedQuery(queryRef.current)
+  }
+
+  // 조건 글자만 150ms 뒤에 칠하기에 반영한다. 조립 중에는 타이머를 안 걸고 compositionend 에서 반드시 건다 (F-2008 8.2·8.3)
+  function scheduleGroupPaint(next: MapGroup[]) {
+    if (groupPaintTimerRef.current !== undefined) {
+      window.clearTimeout(groupPaintTimerRef.current)
+      groupPaintTimerRef.current = undefined
+    }
+    if (groupComposingRef.current) return
+    groupPaintTimerRef.current = window.setTimeout(() => {
+      groupPaintTimerRef.current = undefined
+      setAppliedGroups(next)
+    }, GROUP_PAINT_DEBOUNCE_MS)
+  }
+
+  // 색 칩·추가·삭제 — 저장과 칠하기 둘 다 곧바로 (6.2, 8.2)
+  function handleGroupsChange(next: MapGroup[]) {
+    setGroups(next)
+    saveMapGroups(next)
+    if (groupPaintTimerRef.current !== undefined) {
+      window.clearTimeout(groupPaintTimerRef.current)
+      groupPaintTimerRef.current = undefined
+    }
+    setAppliedGroups(next)
+  }
+
+  // 조건 글자 — 저장은 곧바로, 칠하기는 미룬다 (6.2, 8.2)
+  function handleGroupQueryChange(index: number, q: string) {
+    const next = groups.map((g, i) => (i === index ? { ...g, q } : g))
+    setGroups(next)
+    saveMapGroups(next)
+    scheduleGroupPaint(next)
+  }
+
+  function handleGroupComposing(composing: boolean) {
+    groupComposingRef.current = composing
   }
 
   function closePanel() {
@@ -161,6 +206,27 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
     const count = computeVisibleNodes(view.filter, parsedQuery, allowedFolders, filterCtx, out)
     return { visibleMask: out, visibleCount: count }
   }, [filterCtx, filterActive, view.filter, parsedQuery, allowedFolders])
+
+  // null = 그룹이 없거나 전부 빈 조건. 그 경로에서는 MapScene 이 오늘과 같은 색 사슬을 탄다 (F-2008 8.2·9.1)
+  const groupMask = useMemo(() => {
+    if (!filterCtx || appliedGroups.length === 0) return null
+    const anyQuery = appliedGroups.some((g) => !parseSearchQuery(g.q).isEmpty)
+    if (!anyQuery) return null
+    const out = new Uint8Array(filterCtx.nodes.length)
+    computeGroupColors(appliedGroups as MapFilterGroup[], filterCtx, out)
+    return out
+  }, [filterCtx, appliedGroups])
+
+  // id → 팔레트 번호. `목록` 보기가 displayGraph 노드 순서를 그대로 안 쓰므로 필요하다 (F-2008 10장)
+  const groupColorById = useMemo(() => {
+    const map = new Map<string, number>()
+    if (displayGraph && groupMask) {
+      for (let i = 0; i < displayGraph.nodes.length; i++) {
+        if (groupMask[i] > 0) map.set(displayGraph.nodes[i].id, groupMask[i])
+      }
+    }
+    return map
+  }, [displayGraph, groupMask])
 
   const folderRows = useMemo<MapFolderRow[]>(() => {
     if (folders.length === 0) return []
@@ -344,6 +410,7 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
                 menuOpen={nodeMenu !== null}
                 view={view}
                 visible={visibleMask}
+                groups={groupMask}
                 onNodeClick={handleNodeClick}
                 onNodeMenu={openNodeMenu}
                 onUnsupported={() => {
@@ -401,12 +468,12 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
             <div className="map-list">
               {centerIndex >= 0 && (
                 <>
-                  <MapListGroup title={`나가는 링크 (${directLinks.outgoing.length})`} nodes={directLinks.outgoing} onSelect={handleNodeClick} />
-                  <MapListGroup title={`들어오는 링크 (${directLinks.incoming.length})`} nodes={directLinks.incoming} onSelect={handleNodeClick} />
-                  <MapListGroup title={`끊긴 링크 (${directLinks.broken.length})`} nodes={directLinks.broken} onSelect={handleNodeClick} />
+                  <MapListGroup title={`나가는 링크 (${directLinks.outgoing.length})`} nodes={directLinks.outgoing} onSelect={handleNodeClick} groupColorById={groupColorById} />
+                  <MapListGroup title={`들어오는 링크 (${directLinks.incoming.length})`} nodes={directLinks.incoming} onSelect={handleNodeClick} groupColorById={groupColorById} />
+                  <MapListGroup title={`끊긴 링크 (${directLinks.broken.length})`} nodes={directLinks.broken} onSelect={handleNodeClick} groupColorById={groupColorById} />
                 </>
               )}
-              <MapListGroup title="연결이 많은 순" nodes={allRanked} onSelect={handleNodeClick} showDegree />
+              <MapListGroup title="연결이 많은 순" nodes={allRanked} onSelect={handleNodeClick} showDegree groupColorById={groupColorById} />
             </div>
           ))}
 
@@ -427,6 +494,10 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
               onQueryChange={onQueryChange}
               onCommit={onCommitQuery}
               onClose={closePanel}
+              groups={groups}
+              onGroupsChange={handleGroupsChange}
+              onGroupQueryChange={handleGroupQueryChange}
+              onGroupComposing={handleGroupComposing}
             />
           </div>
         )}
@@ -455,24 +526,31 @@ function MapListGroup({
   nodes,
   onSelect,
   showDegree = false,
+  groupColorById,
 }: {
   title: string
   nodes: WikiGraph['nodes']
   onSelect: (id: string, modified: boolean) => void
   showDegree?: boolean
+  // 그룹 색을 행 앞 점으로 드러낸다. aria-hidden 이라 버튼의 접근성 이름에 안 섞인다 (F-2008 10장)
+  groupColorById?: ReadonlyMap<string, number>
 }) {
   return (
     <div className="map-list-group">
       <h2>{title}</h2>
       <ul>
-        {nodes.map((node) => (
-          <li key={node.id}>
-            {/* 캔버스 안은 Playwright 가 못 보므로 Ctrl+클릭 재중심을 자동으로 판정할 수 있는 유일한 통로다 (7.3) */}
-            <button type="button" onClick={(e) => onSelect(node.id, e.ctrlKey || e.metaKey)}>
-              {showDegree ? `${node.title} · ${node.degree}` : node.title}
-            </button>
-          </li>
-        ))}
+        {nodes.map((node) => {
+          const groupColor = groupColorById?.get(node.id) ?? 0
+          return (
+            <li key={node.id}>
+              {/* 캔버스 안은 Playwright 가 못 보므로 Ctrl+클릭 재중심을 자동으로 판정할 수 있는 유일한 통로다 (7.3) */}
+              <button type="button" onClick={(e) => onSelect(node.id, e.ctrlKey || e.metaKey)}>
+                {groupColor > 0 && <span className="map-list-dot map-dot" data-group={groupColor} aria-hidden="true" />}
+                {showDegree ? `${node.title} · ${node.degree}` : node.title}
+              </button>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

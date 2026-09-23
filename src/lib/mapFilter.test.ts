@@ -9,6 +9,7 @@ import {
   expandFolders,
   isFilterActive,
   computeVisibleNodes,
+  computeGroupColors,
   type MapFilterContext,
   type MapFilterDoc,
   type MapFilterFolder,
@@ -161,5 +162,104 @@ describe('computeVisibleNodes', () => {
     expect(isFilterActive({ ...MAP_FILTER_DEFAULT, broken: false }, EMPTY_QUERY)).toBe(true)
     expect(isFilterActive({ ...MAP_FILTER_DEFAULT, hops: 1 }, EMPTY_QUERY)).toBe(true)
     expect(isFilterActive(MAP_FILTER_DEFAULT, parseSearchQuery('x'))).toBe(true)
+  })
+})
+
+// specs/features/F-2008.md 13.1 U1~U8
+describe('computeGroupColors', () => {
+  it('U1 그룹이 빈 배열이면 out 이 전부 0 이고 반환값 0', () => {
+    const { ctx } = makeCtx()
+    const out = new Uint8Array(ctx.nodes.length)
+    const count = computeGroupColors([], ctx, out)
+    expect(Array.from(out)).toEqual([0, 0, 0, 0, 0])
+    expect(count).toBe(0)
+  })
+
+  it('U2 한 그룹 — 맞는 문서만 그 그룹 번호, 반환값은 칠해진 수', () => {
+    const { ctx } = makeCtx()
+    const out = new Uint8Array(ctx.nodes.length)
+    const count = computeGroupColors([{ q: 'tag:일기', c: 3 }], ctx, out)
+    expect(Array.from(out)).toEqual([3, 0, 0, 0, 0])
+    expect(count).toBe(1)
+  })
+
+  it('U3 우선순위 — 두 그룹에 다 맞는 문서는 위 그룹. 순서를 뒤집으면 결과도 뒤집힌다', () => {
+    const { ctx } = makeCtx()
+    const out = new Uint8Array(ctx.nodes.length)
+    computeGroupColors(
+      [
+        { q: 'tag:일기', c: 2 },
+        { q: '에이', c: 5 },
+      ],
+      ctx,
+      out,
+    )
+    expect(out[0]).toBe(2)
+
+    const out2 = new Uint8Array(ctx.nodes.length)
+    computeGroupColors(
+      [
+        { q: '에이', c: 5 },
+        { q: 'tag:일기', c: 2 },
+      ],
+      ctx,
+      out2,
+    )
+    expect(out2[0]).toBe(5)
+  })
+
+  it('U4 끊긴 링크 — missing 노드는 제목이 조건에 맞아도 0 이다', () => {
+    const { ctx } = makeCtx()
+    const docById = new Map(ctx.docById)
+    docById.set('missing:e', { id: 'missing:e', title: '에이', body: '', properties: null, updatedAt: 0, folderId: null })
+    const withMissingDoc: MapFilterContext = { ...ctx, docById }
+    const out = new Uint8Array(withMissingDoc.nodes.length)
+    computeGroupColors([{ q: '에이', c: 4 }], withMissingDoc, out)
+    expect(out[4]).toBe(0)
+  })
+
+  it('U5 빈 쿼리인 그룹은 아무것도 안 칠하고, 뒤 그룹이 이어서 판정된다', () => {
+    const { ctx } = makeCtx()
+    const out = new Uint8Array(ctx.nodes.length)
+    computeGroupColors(
+      [
+        { q: '', c: 2 },
+        { q: '   ', c: 6 },
+        { q: 'tag:일기', c: 5 },
+      ],
+      ctx,
+      out,
+    )
+    expect(out[0]).toBe(5)
+  })
+
+  it('U6 범위 밖 c — 0·9·1.5·NaN 이 전부 1 로 칠해진다', () => {
+    const { ctx } = makeCtx()
+    for (const c of [0, 9, 1.5, NaN]) {
+      const out = new Uint8Array(ctx.nodes.length)
+      computeGroupColors([{ q: 'tag:일기', c }], ctx, out)
+      expect(out[0]).toBe(1)
+    }
+  })
+
+  it('U7 docById 에 없는 노드 — 0', () => {
+    const nodes: MapFilterNode[] = [
+      { id: 'A', missing: false, degree: 0 },
+      { id: 'Z', missing: false, degree: 0 },
+    ]
+    const docById = new Map<string, MapFilterDoc>([
+      ['A', { id: 'A', title: '에이', body: '', properties: null, updatedAt: 0, folderId: null }],
+    ])
+    const ctx: MapFilterContext = { nodes, docById, distances: null }
+    const out = new Uint8Array(2)
+    computeGroupColors([{ q: '에이', c: 2 }], ctx, out)
+    expect(Array.from(out)).toEqual([2, 0])
+  })
+
+  it('U8 out 되쓰기 — 직전 호출의 값이 담긴 배열을 다시 넘겨도 결과가 같다', () => {
+    const { ctx } = makeCtx()
+    const out = Uint8Array.from([7, 7, 7, 7, 7])
+    computeGroupColors([{ q: 'tag:일기', c: 3 }], ctx, out)
+    expect(Array.from(out)).toEqual([3, 0, 0, 0, 0])
   })
 })

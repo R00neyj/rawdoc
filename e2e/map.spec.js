@@ -711,14 +711,14 @@ test.describe('F-2005 지도 설정 패널', () => {
     await expect(map.getByRole('button', { name: '지도 설정', exact: true })).toBeFocused()
   })
 
-  test('F-2005 A3 묶음은 필터·표시·장력 셋', async ({ page }) => {
+  test('F-2005 A3 묶음은 필터·그룹·표시·장력 넷', async ({ page }) => {
     const { map } = await openMapFresh(page)
     const p = await openPanel(map)
 
-    await expect(p.locator('.map-panel-section')).toHaveCount(3)
-    await expect(p.locator('.map-panel-section-head')).toHaveText(['필터', '표시', '장력'])
-    await expect(p.getByRole('button', { name: '그룹', exact: true })).toHaveCount(0)
+    await expect(p.locator('.map-panel-section')).toHaveCount(4)
+    await expect(p.locator('.map-panel-section-head')).toHaveText(['필터', '그룹', '표시', '장력'])
     await expect(p.getByRole('button', { name: '필터', exact: true })).toHaveAttribute('aria-expanded', 'true')
+    await expect(p.getByRole('button', { name: '그룹', exact: true })).toHaveAttribute('aria-expanded', 'false')
     await expect(p.getByRole('button', { name: '표시', exact: true })).toHaveAttribute('aria-expanded', 'false')
     await expect(p.getByRole('button', { name: '장력', exact: true })).toHaveAttribute('aria-expanded', 'false')
   })
@@ -809,12 +809,12 @@ test.describe('F-2005 지도 설정 패널', () => {
     const { map } = await openMapFresh(page)
     await openPanel(map)
 
-    // 필터·그룹은 목록에도 반영되므로 두 보기에서 다 패널을 열 수 있다 (F-2007 11.3)
+    // 필터·그룹은 목록에도 반영되므로 두 보기에서 다 패널을 열 수 있다 (F-2007 11.3, F-2008 7.1)
     await map.getByRole('button', { name: '목록', exact: true }).click()
     await expect(map.getByRole('button', { name: '지도 설정', exact: true })).toBeVisible()
     await expect(panel(map)).toBeVisible()
-    await expect(panel(map).locator('.map-panel-section')).toHaveCount(1)
-    await expect(panel(map).locator('.map-panel-section-head')).toHaveText(['필터'])
+    await expect(panel(map).locator('.map-panel-section')).toHaveCount(2)
+    await expect(panel(map).locator('.map-panel-section-head')).toHaveText(['필터', '그룹'])
 
     await map.getByRole('button', { name: '지도', exact: true }).click()
     await expect(map.getByRole('button', { name: '지도 설정', exact: true })).toBeVisible()
@@ -909,6 +909,13 @@ async function openForce(map) {
   return p
 }
 
+// `그룹` 묶음은 필터 아래에 접힌 채로 뜬다 (F-2008 7.1)
+async function openGroup(map) {
+  const p = await openPanel(map)
+  await p.getByRole('button', { name: '그룹', exact: true }).click()
+  return p
+}
+
 function forceSlider(p, name) {
   return p.getByRole('slider', { name, exact: true })
 }
@@ -920,12 +927,12 @@ test.describe('F-2006 장력 묶음', () => {
     const { map } = await openMapFresh(page)
     const p = await openPanel(map)
 
-    await expect(p.locator('.map-panel-section')).toHaveCount(3)
-    await expect(p.locator('.map-panel-section-head')).toHaveText(['필터', '표시', '장력'])
+    await expect(p.locator('.map-panel-section')).toHaveCount(4)
+    await expect(p.locator('.map-panel-section-head')).toHaveText(['필터', '그룹', '표시', '장력'])
     await expect(p.getByRole('button', { name: '필터', exact: true })).toHaveAttribute('aria-expanded', 'true')
+    await expect(p.getByRole('button', { name: '그룹', exact: true })).toHaveAttribute('aria-expanded', 'false')
     await expect(p.getByRole('button', { name: '표시', exact: true })).toHaveAttribute('aria-expanded', 'false')
     await expect(p.getByRole('button', { name: '장력', exact: true })).toHaveAttribute('aria-expanded', 'false')
-    await expect(p.getByRole('button', { name: '그룹', exact: true })).toHaveCount(0)
   })
 
   test('F-2006 A2 펼치면 슬라이더 넷', async ({ page }) => {
@@ -1771,16 +1778,16 @@ const footFilter = (map) => map.locator('.map-foot-filter')
 test.describe('F-2007 지도 설정 패널 필터', () => {
   test.use({ reducedMotion: 'reduce' })
 
-  test('F-2007 A1 필터 가 맨 위에 펼쳐져 생긴다', async ({ page }) => {
+  test('F-2007 A1 필터 가 맨 위에 펼쳐져 생기고 그룹 은 접힌 채 보인다', async ({ page }) => {
     const { map } = await openMapFresh(page)
     const p = await openPanel(map)
 
-    await expect(p.locator('.map-panel-section')).toHaveCount(3)
-    await expect(p.locator('.map-panel-section-head')).toHaveText(['필터', '표시', '장력'])
+    await expect(p.locator('.map-panel-section')).toHaveCount(4)
+    await expect(p.locator('.map-panel-section-head')).toHaveText(['필터', '그룹', '표시', '장력'])
     await expect(p.getByRole('button', { name: '필터', exact: true })).toHaveAttribute('aria-expanded', 'true')
+    await expect(p.getByRole('button', { name: '그룹', exact: true })).toHaveAttribute('aria-expanded', 'false')
     await expect(p.getByRole('button', { name: '표시', exact: true })).toHaveAttribute('aria-expanded', 'false')
     await expect(p.getByRole('button', { name: '장력', exact: true })).toHaveAttribute('aria-expanded', 'false')
-    await expect(p.getByRole('button', { name: '그룹', exact: true })).toHaveCount(0)
   })
 
   test('F-2007 A2 다섯 항목', async ({ page }) => {
@@ -1963,8 +1970,8 @@ test.describe('F-2007 지도 설정 패널 필터', () => {
     await expect(view.map.getByRole('button', { name: '지도 설정', exact: true })).toBeVisible()
 
     const p = await openPanel(view.map)
-    await expect(p.locator('.map-panel-section')).toHaveCount(1)
-    await expect(p.locator('.map-panel-section-head')).toHaveText(['필터'])
+    await expect(p.locator('.map-panel-section')).toHaveCount(2)
+    await expect(p.locator('.map-panel-section-head')).toHaveText(['필터', '그룹'])
 
     await p.getByRole('checkbox', { name: '고립 문서' }).uncheck()
     await expect(
@@ -1989,5 +1996,204 @@ test.describe('F-2007 지도 설정 패널 필터', () => {
     const p = await openPanel(view.map)
     await expect(p.getByRole('slider', { name: '현재 문서에서 몇 다리' })).toHaveValue('1')
     await expect(footFilter(view.map)).toHaveText('3개 중 3개 보임')
+  })
+})
+
+// F-2008 지도 설정 패널 `그룹` 색 (specs/features/F-2008.md 13.2) A1~A13 — 캔버스 안의 색은 판정하지 않는다. 통로는 `목록` 보기의 행 앞 색 점이다 (13장)
+test.describe('F-2008 지도 설정 패널 그룹', () => {
+  test.use({ reducedMotion: 'reduce' })
+
+  test('F-2008 A1 묶음 넷', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openPanel(map)
+
+    await expect(p.locator('.map-panel-section')).toHaveCount(4)
+    await expect(p.locator('.map-panel-section-head')).toHaveText(['필터', '그룹', '표시', '장력'])
+    await expect(p.getByRole('button', { name: '필터', exact: true })).toHaveAttribute('aria-expanded', 'true')
+    await expect(p.getByRole('button', { name: '그룹', exact: true })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  test('F-2008 A2 빈 그룹', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openGroup(map)
+
+    await expect(p.getByRole('button', { name: '새 그룹', exact: true })).toHaveCount(1)
+    await expect(p.locator('.map-group-row')).toHaveCount(0)
+    await expect(p.getByText('조건에 맞는 문서에 색을 칠합니다.')).toBeVisible()
+  })
+
+  test('F-2008 A3 새 그룹', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openGroup(map)
+    await p.getByRole('button', { name: '새 그룹', exact: true }).click()
+
+    await expect(p.locator('.map-group-row')).toHaveCount(1)
+    await expect(p.getByRole('textbox', { name: '그룹 1 조건' })).toHaveValue('')
+    await expect(p.getByRole('radio')).toHaveCount(8)
+    await expect(p.getByRole('radio', { name: '색 1' })).toBeChecked()
+  })
+
+  test('F-2008 A4 색이 칠해진다', async ({ page }) => {
+    const view = await openMapWithDocs(page, [
+      { name: '사과.md', content: '사과 문서' },
+      { name: '바나나.md', content: '바나나 문서' },
+    ])
+    const p = await openGroup(view.map)
+    await p.getByRole('button', { name: '새 그룹', exact: true }).click()
+    await p.getByRole('textbox', { name: '그룹 1 조건' }).fill('사과')
+
+    await view.map.getByRole('button', { name: '목록', exact: true }).click()
+    await expect(view.map.getByRole('button', { name: '사과' }).locator('.map-list-dot[data-group="1"]')).toHaveCount(1)
+    await expect(view.map.getByRole('button', { name: '바나나' }).locator('.map-list-dot')).toHaveCount(0)
+  })
+
+  test('F-2008 A5 색 고르기', async ({ page }) => {
+    const view = await openMapWithDocs(page, [{ name: '사과.md', content: '사과 문서' }])
+    const p = await openGroup(view.map)
+    await p.getByRole('button', { name: '새 그룹', exact: true }).click()
+    await p.getByRole('textbox', { name: '그룹 1 조건' }).fill('사과')
+
+    await view.map.getByRole('button', { name: '목록', exact: true }).click()
+    await expect(view.map.getByRole('button', { name: '사과' }).locator('.map-list-dot[data-group="1"]')).toHaveCount(1)
+
+    await p.getByRole('radio', { name: '색 3' }).check()
+
+    await expect(view.map.getByRole('button', { name: '사과' }).locator('.map-list-dot[data-group="3"]')).toHaveCount(1)
+    await expect(p.getByRole('radio', { name: '색 3' })).toBeChecked()
+  })
+
+  test('F-2008 A6 우선순위', async ({ page }) => {
+    const view = await openMapWithDocs(page, [
+      { name: '사과.md', content: '사과 문서' },
+      { name: '바나나.md', content: '바나나 문서' },
+    ])
+    const p = await openGroup(view.map)
+    await p.getByRole('button', { name: '새 그룹', exact: true }).click()
+    await p.getByRole('textbox', { name: '그룹 1 조건' }).fill('문서')
+    await p.getByRole('button', { name: '새 그룹', exact: true }).click()
+    await p.getByRole('textbox', { name: '그룹 2 조건' }).fill('바나나')
+
+    await view.map.getByRole('button', { name: '목록', exact: true }).click()
+    await expect(view.map.getByRole('button', { name: '바나나' }).locator('.map-list-dot[data-group="1"]')).toHaveCount(1)
+  })
+
+  test('F-2008 A7 삭제', async ({ page }) => {
+    const view = await openMapWithDocs(page, [
+      { name: '사과.md', content: '사과 문서' },
+      { name: '바나나.md', content: '바나나 문서' },
+    ])
+    const p = await openGroup(view.map)
+    await p.getByRole('button', { name: '새 그룹', exact: true }).click()
+    await p.getByRole('textbox', { name: '그룹 1 조건' }).fill('사과')
+    await p.getByRole('button', { name: '새 그룹', exact: true }).click()
+    await p.getByRole('textbox', { name: '그룹 2 조건' }).fill('바나나')
+
+    await view.map.getByRole('button', { name: '목록', exact: true }).click()
+    await expect(view.map.getByRole('button', { name: '사과' }).locator('.map-list-dot')).toHaveCount(1)
+    await expect(view.map.getByRole('button', { name: '바나나' }).locator('.map-list-dot')).toHaveCount(1)
+
+    await p.getByRole('button', { name: '그룹 1 삭제', exact: true }).click()
+
+    await expect(p.locator('.map-group-row')).toHaveCount(1)
+    await expect(p.getByRole('textbox', { name: '그룹 1 조건' })).toHaveValue('바나나')
+    await expect(view.map.getByRole('button', { name: '사과' }).locator('.map-list-dot')).toHaveCount(0)
+    await expect(view.map.getByRole('button', { name: '바나나' }).locator('.map-list-dot')).toHaveCount(1)
+  })
+
+  test('F-2008 A8 남는다', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openGroup(map)
+    await p.getByRole('button', { name: '새 그룹', exact: true }).click()
+    await p.getByRole('textbox', { name: '그룹 1 조건' }).fill('tag:일기')
+    await p.getByRole('radio', { name: '색 3' }).check()
+
+    await map.getByRole('button', { name: '닫기', exact: true }).click()
+    await page.goto('/#/map')
+    const map2 = page.locator('.map-page')
+    await expect(map2).toBeVisible()
+    const p2 = await openGroup(map2)
+
+    await expect(p2.locator('.map-group-row')).toHaveCount(1)
+    await expect(p2.getByRole('textbox', { name: '그룹 1 조건' })).toHaveValue('tag:일기')
+    await expect(p2.getByRole('radio', { name: '색 3' })).toBeChecked()
+  })
+
+  test('F-2008 A9 기본값으로 는 그룹을 안 지운다', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openGroup(map)
+    await p.getByRole('button', { name: '새 그룹', exact: true }).click()
+    await p.getByRole('textbox', { name: '그룹 1 조건' }).fill('tag:일기')
+
+    await p.getByRole('button', { name: '표시', exact: true }).click()
+    await p.getByRole('slider', { name: '노드 크기', exact: true }).fill('2')
+
+    await p.getByRole('button', { name: '기본값으로', exact: true }).click()
+
+    await expect(p.getByRole('slider', { name: '노드 크기', exact: true })).toHaveValue('1')
+    await expect(p.locator('.map-group-row')).toHaveCount(1)
+  })
+
+  test('F-2008 A10 상한 8', async ({ page }) => {
+    const { map } = await openMapFresh(page)
+    const p = await openGroup(map)
+    const addBtn = p.getByRole('button', { name: '새 그룹', exact: true })
+    for (let i = 0; i < 9; i++) await addBtn.click({ force: true })
+
+    await expect(p.locator('.map-group-row')).toHaveCount(8)
+    await expect(addBtn).toBeDisabled()
+    await expect(p.getByText('그룹은 8개까지 만들 수 있습니다.')).toBeVisible()
+  })
+
+  test('F-2008 A11 깨진 저장값', async ({ page }) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(String(e)))
+    await setPrefBeforeLoad(page, 'md.mapGroups', '{"nope":1}')
+
+    const { map } = await openMapFresh(page)
+    const p = await openGroup(map)
+
+    await expect(p.locator('.map-group-row')).toHaveCount(0)
+    expect(errors).toEqual([])
+  })
+
+  test('F-2008 A12 한글 입력기', async ({ page }) => {
+    const view = await openMapWithDocs(page, [
+      { name: '사과.md', content: '사과 문서' },
+      { name: '바나나.md', content: '바나나 문서' },
+    ])
+    const p = await openGroup(view.map)
+    await p.getByRole('button', { name: '새 그룹', exact: true }).click()
+    const input = p.getByRole('textbox', { name: '그룹 1 조건' })
+    await input.fill('사과')
+
+    await view.map.getByRole('button', { name: '목록', exact: true }).click()
+    await expect(view.map.getByRole('button', { name: '사과' }).locator('.map-list-dot')).toHaveCount(1)
+
+    await input.fill('')
+    await expect(view.map.locator('.map-list-dot')).toHaveCount(0)
+
+    await input.focus()
+    const cdp = await fakeImeCompose(page, '바')
+    await page.waitForTimeout(400)
+    // 조립 중에는 다시 칠하지 않는다 — 앞서 확정된 상태(점 0개)가 유지된다
+    await expect(view.map.locator('.map-list-dot')).toHaveCount(0)
+
+    await fakeImeCommit(cdp, '바나나')
+    await expect(view.map.getByRole('button', { name: '바나나' }).locator('.map-list-dot')).toHaveCount(1)
+  })
+
+  test('F-2008 A13 목록 에서도 그룹 을 고친다', async ({ page }) => {
+    const view = await openMapWithDocs(page, [{ name: 'A.md', content: 'A 문서' }])
+    await view.map.getByRole('button', { name: '목록', exact: true }).click()
+    const p = await openPanel(view.map)
+
+    await expect(p.locator('.map-panel-section')).toHaveCount(2)
+    await expect(p.locator('.map-panel-section-head')).toHaveText(['필터', '그룹'])
+
+    await p.getByRole('button', { name: '그룹', exact: true }).click()
+    await p.getByRole('button', { name: '새 그룹', exact: true }).click()
+    await p.getByRole('textbox', { name: '그룹 1 조건' }).fill('A')
+
+    await expect(view.map.getByRole('button', { name: 'A' }).locator('.map-list-dot')).toHaveCount(1)
   })
 })

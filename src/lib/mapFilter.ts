@@ -1,5 +1,5 @@
 // 지도 필터 — 무엇을 보이게 두고 무엇을 배경으로 가라앉히나. DOM 도 three 도 import 하지 않는 순수 모듈이다 (specs/features/F-2007.md 3장)
-import { matchDoc, type ParsedQuery, type SearchDocInput } from './docSearch'
+import { matchDoc, parseSearchQuery, type ParsedQuery, type SearchDocInput } from './docSearch'
 
 // 걸러진 것을 --panel 쪽으로 섞는 비율. F-292 결정 14 가 정한 값이고 F-2010 의 MAP_HOVER_DIM 과 같다 (9장)
 export const MAP_FILTER_DIM = 0.85
@@ -124,6 +124,44 @@ function isNodeVisible(
   }
   if (searchActive && matchDoc(doc, query) === null) return false
   return withinHops(filter, ctx, i)
+}
+
+// 팔레트 색 수. src/app/mapPrefs.ts 의 MAP_GROUP_MAX 와 같은 값이어야 한다 (F-2008 13.1 U12 가 지킨다)
+export const MAP_GROUP_PALETTE = 8
+
+// src/app/mapPrefs.ts 의 MapGroup 과 구조가 같다. src/lib 은 src/app 을 가져오지 않는다 (F-2008 2.2)
+export type MapFilterGroup = { q: string; c: number }
+
+// out[i] = 0 이면 그룹 없음, 1~8 이면 그 팔레트 번호. 돌려주는 값은 색이 칠해진 노드 수 (F-2008 4장)
+export function computeGroupColors(
+  groups: readonly MapFilterGroup[],
+  ctx: MapFilterContext,
+  out: Uint8Array,
+): number {
+  out.fill(0)
+  if (groups.length === 0) return 0
+
+  const parsed = groups.map((g) => ({
+    query: parseSearchQuery(g.q),
+    color: Number.isInteger(g.c) && g.c >= 1 && g.c <= MAP_GROUP_PALETTE ? g.c : 1,
+  }))
+
+  let painted = 0
+  for (let i = 0; i < ctx.nodes.length; i++) {
+    const node = ctx.nodes[i]
+    if (node.missing) continue
+    const doc = ctx.docById.get(node.id)
+    if (!doc) continue
+    for (const g of parsed) {
+      if (g.query.isEmpty) continue
+      if (matchDoc(doc, g.query) !== null) {
+        out[i] = g.color
+        painted++
+        break
+      }
+    }
+  }
+  return painted
 }
 
 // out[i] = 1 이면 보임. 돌려주는 값은 보이는 노드 수

@@ -55,6 +55,16 @@
   --callout-example: #7644d0;
   --callout-quote: var(--ink-2);
 
+  /* 지도 그룹 팔레트 — 콜아웃 8색의 별칭. 저장값은 hex 가 아니라 인덱스 1~8 이다 (F-292 6.5, F-2008 3장) */
+  --map-group-1: var(--callout-note);
+  --map-group-2: var(--callout-tip);
+  --map-group-3: var(--callout-success);
+  --map-group-4: var(--callout-question);
+  --map-group-5: var(--callout-warning);
+  --map-group-6: var(--callout-danger);
+  --map-group-7: var(--callout-example);
+  --map-group-8: var(--callout-quote);
+
   /* 하이라이트(==…==) 배경 — 편집·보기 모드 공용. 형광펜 노랑 전용 기준색을 두고
      테마별로 그 값만 바꾼다 (F-283.md 5장, 2026-09-21 사용자 요청으로 노란색으로) */
   --highlight-base: #ffd43b;
