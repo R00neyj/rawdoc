@@ -51,12 +51,12 @@ const FORCE_LABEL: Record<MapForceAxis, string> = {
 // 네 축 다 0~1 정규값이다 — 800·0.02 같은 d3 내부 단위는 사람에게 뜻이 없고 범위를 바꾸면 표시 숫자만 튄다 (F-2006 7.3)
 const forcePercent = (v: number) => `${Math.round(v * 100)}%`
 
-// `현재 문서에서 몇 다리` 값 문자열. 라벨만 `몇 다리`, 값은 `단계` 다 — ia.md 6장 문구표와 어긋나는 것을 알고 그대로 간다 (F-2007 7.5)
+// `링크 거리` 값 문자열 (F-2007 7.5, 2026-09-23 개정)
 const HOPS_FORMAT: Record<number, string> = {
-  0: '없음 — 전부 보임',
-  1: '1단계 — 이 문서와 바로 이어진 문서까지',
-  2: '2단계 — 그 이웃이 이어진 문서까지',
-  3: '3단계 — 거기서 한 칸 더',
+  0: '전부 보기',
+  1: '1단계 — 바로 링크된 문서까지',
+  2: '2단계 — 두 번 건너 링크된 문서까지',
+  3: '3단계 — 세 번 건너 링크된 문서까지',
 }
 
 type MapSliderProps = {
@@ -74,10 +74,12 @@ type MapSliderProps = {
   onChange: (value: number) => void
   // 중심 문서가 없을 때 `몇 다리` 를 잠근다 (F-2007 7.5)
   disabled?: boolean
+  // 슬라이더 밑 안내 한 줄. aria-describedby 로 잇는다 (F-2007 7.5)
+  hint?: string
 }
 
 // F-2006 이 `장력` 4축에 그대로 재사용한다. 곡선 매핑은 format prop 으로 들어온다 (4.3)
-function MapSlider({ id, label, min, max, step, value, axis, format, onChange, disabled }: MapSliderProps) {
+function MapSlider({ id, label, min, max, step, value, axis, format, onChange, disabled, hint }: MapSliderProps) {
   const text = format(value)
   return (
     <div className="map-slider">
@@ -94,9 +96,15 @@ function MapSlider({ id, label, min, max, step, value, axis, format, onChange, d
         value={value}
         data-axis={axis}
         aria-valuetext={text}
+        aria-describedby={hint ? `${id}-hint` : undefined}
         disabled={disabled}
         onChange={(e) => onChange(Number(e.currentTarget.value))}
       />
+      {hint && (
+        <p id={`${id}-hint`} className="map-filter-hint">
+          {hint}
+        </p>
+      )}
     </div>
   )
 }
@@ -270,13 +278,14 @@ export default function MapPanel({
             </label>
             <MapSlider
               id={`${idBase}-hops`}
-              label="현재 문서에서 몇 다리"
+              label="링크 거리"
               min={0}
               max={MAP_HOPS_MAX}
               step={1}
               value={view.filter.hops}
               axis="hops"
               disabled={hopsDisabled}
+              hint={hopsDisabled ? '문서를 연 상태에서 지도를 열거나, 노드 메뉴의 ‘이어진 문서만 보기’를 쓰세요.' : undefined}
               format={(v) => (hopsDisabled ? '현재 문서가 없습니다' : (HOPS_FORMAT[v] ?? ''))}
               onChange={(v) => updateFilter({ hops: v })}
             />
