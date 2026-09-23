@@ -78,7 +78,8 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | Static + API | Cloudflare Workers (static assets + `worker/`), custom domain `rawdoc.app` (workers.dev disabled) | In use (F-204). Structure in `specs/architecture.md` ch. 6 |
 | Metadata DB / files | D1 `md-editor-db` / R2 `md-editor-attachments` | In use (F-205~) |
 | Auth | Cloudflare Access one-time codes + Worker JWT verification | F-205 (Q5) |
-| Live sync | Durable Object + y-partyserver, `y-codemirror.next` | Not adopted (M3) |
+| CRDT / editor binding | `yjs` + `y-codemirror.next` (local `Y.Doc` per editor, no network) | In use (F-302) |
+| Live sync | Durable Object + y-partyserver | Not adopted (M3, F-304~) |
 | E2E tests | Playwright (`@playwright/test`), installed Chrome channel | Adopted in F-150 |
 | 3D map | `three` + `d3-force-3d` (plus `@types/three` and a local `src/types/d3-force-3d.d.ts`) | Adopted in the F-292 revision (M2). F-2001 and F-2002 install them; no other spec may add a 3D dependency. `3d-force-graph` was measured and rejected — it statically pulls in `WebGPURenderer` |
 
@@ -175,9 +176,10 @@ How to hold to it:
 Breaking one of these is a design violation, not a bug. To change one, fix the spec first and get human approval.
 
 - **Decorations never change document content.** They change presentation only
-- **There is exactly one source of truth for document state: the CM6 `EditorState`.** Do not keep a separate string copy in sync with it
+- **The one source of truth for an open document is the `Y.Text` in its `Y.Doc`.** `EditorState` is a projection of it, and `y-codemirror.next` connects the two. Do not keep any other copy of the body text and sync it by hand. D1 `docs.content` and the IndexedDB cached body are **one-way derivations** of `Y.Text`; never write those values back into an open `Y.Doc` (F-301 2.1, F-302)
 - **`src/` never imports from `spike/`.** Copy over what you need, and do not bring verification scaffolding like `imeLog`
 - **If you defer recomputation during IME composition, you must catch up on the deferred work when composition ends.** Rationale: `.workflow/tasks/T-004/verify.md` 6.5 and ch. 7
+- **Never apply remote updates during IME composition.** Remote Yjs updates that arrive during composition (including composition in a table-cell sub-editor) are queued and applied together at the same point as the `forceRecalc` on `compositionend`. Yjs merges regardless of order, so delayed application does not break consistency (F-301 2.1)
 - **The product name is `rawdoc` (styled `Rawdoc`), settled 2026-09-17. The primary color is still undecided.** Even so, define it only in the root `brand.config.ts`; never write the name string or a color hex directly in code, CSS, HTML, UI text, or the manifest — the point is to keep values from scattering even after they are settled. Derive colors with `color-mix()` (`specs/design.md` 3.2)
 - **Storage identifiers stay fixed regardless of the product name.** Do not put the product name in the IndexedDB database name, localStorage keys, or service worker cache names. A rename must not lose the user's documents
 

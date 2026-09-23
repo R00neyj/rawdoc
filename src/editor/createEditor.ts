@@ -5,7 +5,7 @@ import type { Extension } from '@codemirror/state'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { dropCursor, EditorView, keymap, lineNumbers, ViewPlugin } from '@codemirror/view'
 import type { ViewUpdate } from '@codemirror/view'
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { defaultKeymap, indentWithTab } from '@codemirror/commands'
 import { indentUnit, syntaxTree } from '@codemirror/language'
 import { deleteMarkupBackward, markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { openSearchPanel, search, searchKeymap, searchPanelOpen } from '@codemirror/search'
@@ -39,6 +39,7 @@ import type { OnOpenWikiLink, WikiContext } from './preview/wikiLinks'
 import type { ResolveAttachment } from './preview/blocks'
 import { enterTableFromKeyboard, setCellContextMenuHandler } from './preview/tableWidget'
 import { wikiComplete } from './wikiComplete'
+import { createYBinding, undoKeymap } from './yBinding'
 import './searchPanel.css'
 
 // 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
@@ -358,6 +359,9 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const indentCompartment = new Compartment()
   const readOnlyCompartment = new Compartment()
 
+  // 열린 문서의 원본 Y.Text — EditorState 는 그 투영이다 (F-302 3.1)
+  const binding = createYBinding(text)
+
   const extensions: Extension[] = [
     docTitleExtension({
       title,
@@ -370,7 +374,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     lineNumbersCompartment.of(lineNumbersExtensionFor(showLineNumbers)),
     gutterAttributesCompartment.of(gutterAttributesExtensionFor(showLineNumbers)),
     readOnlyCompartment.of(readOnlyExtensionsFor(initialReadOnly)),
-    history(),
+    // compartment 밖에 둔다 — 재구성에 다시 만들어지면 묶음 상태·선택 저장이 끊긴다 (F-302 5.2)
+    binding.extension,
     EditorView.lineWrapping,
     // 놓을 자리 표시(F-156.md 2.5) — imageInsert() 는 dropFileGuard 보다 먼저 등록해 같은 'drop' 이벤트를 먼저 가로채야 한다(CM6 는 등록 순서로 호출)
     dropCursor(),
@@ -439,7 +444,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
         ...searchKeymap,
       ]),
     ),
-    keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+    keymap.of([...defaultKeymap, ...undoKeymap, indentWithTab]),
     compositionCatchup(() => destroyed),
     EditorView.updateListener.of((update) => {
       if (update.docChanged && onDocChange) onDocChange(update.state)
@@ -458,7 +463,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     }),
   ]
 
-  const state = EditorState.create({ doc: text, extensions })
+  const state = EditorState.create({ doc: binding.ytext.toString(), extensions })
   const view = new EditorView({ state, parent })
   const detachMarginClickGuard = attachMarginClickGuard(view)
   const detachComposingEnterGuard = attachComposingEnterGuard(view)
@@ -652,6 +657,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       detachMarginClickGuard()
       detachComposingEnterGuard()
       view.destroy()
+      binding.destroy()
     },
   }
 }

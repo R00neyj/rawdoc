@@ -82,6 +82,8 @@ src/
 - 위키링크 해석·헤딩 이동(2026-09-23)으로 추가
   - `lib/`: `wikiResolve.ts`(F-2018 — 경로식·가까운 폴더 해석기, 순수 함수, worker 도 import)
   - `viewer/`: `headingTarget.ts`(F-2018 — markdown-it 파싱 결과로 제목 찾기, DOM 없음)
+- Yjs 골격(2026-09-23)으로 추가
+  - `editor/`: `yBinding.ts`(F-302 — 로컬 `Y.Doc`·되돌리기), `undoGroup.ts`(F-302 — 되돌리기 묶음 판정)
 - editor·viewer 가 문서 목록이 필요하면(위키링크) 저장소를 import 하지 않고 App 이 인자로 넘긴다. 첨부 이미지도 같다: App 이 `onImageFiles`(넣기)·`resolveAttachment(id)`(읽기) 콜백을 넘긴다 (F-156·F-157)
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
@@ -128,8 +130,8 @@ store.removeAttachment(id)    // Promise<void>
 
 ## 3. 문서 상태 흐름
 
-- 문서 본문의 원본은 CM6 `EditorState` 하나다. React state 에 본문 문자열을 두지 않는다
-- 저장소 → 에디터: 문서를 여는 시점 1회 (`Editor` 를 문서 id 를 `key` 로 다시 마운트)
+- 열린 문서 본문의 원본은 에디터마다 만드는 `Y.Doc` 의 `Y.Text`(`content`) 하나다. CM6 `EditorState` 는 `y-codemirror.next` 로 이어진 투영이다. React state 에 본문 문자열을 두지 않는다 (F-302)
+- 저장소 → 에디터: 문서를 여는 시점 1회 (`Editor` 를 문서 id 를 `key` 로 다시 마운트) (에디터를 만들 때 `Y.Doc` 을 새로 만들어 저장소 본문을 LF 로 바꿔 심는다. 에디터를 버리면 `Y.Doc` 도 버린다)
 - 에디터 → 저장소: 입력이 멈추면 스냅샷 저장. 문서 전환·새로고침 적용 전에는 대기 중 저장을 먼저 끝낸다
 - 문서 목록(제목·수정 시각)은 `App` 의 React state 로 둔다. 본문은 넣지 않는다
 

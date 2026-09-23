@@ -9,7 +9,6 @@
 // 를 WeakMap 으로 추적한다(주 view 는 문서 하나에 하나뿐이라 안전하다).
 import { EditorSelection, EditorState } from '@codemirror/state'
 import { EditorView, WidgetType } from '@codemirror/view'
-import { redo, undo } from '@codemirror/commands'
 import type { StateCommand, Transaction } from '@codemirror/state'
 
 import {
@@ -32,6 +31,7 @@ import { observeHeight, stopObservingHeight } from './blocks'
 import { parseCellInline } from './cellInline'
 import { insertLink, toggleEmphasis, toggleStrong } from '../commands'
 import { forceRecalc, isComposing } from '../composition'
+import { redoLocal, undoLocal } from '../yBinding'
 
 type CellRange = { from: number; to: number }
 
@@ -540,13 +540,13 @@ function cellKeydown(mainView: EditorView, wrap: HTMLElement, cellView: EditorVi
 
   if (mod && !event.shiftKey && event.key.toLowerCase() === 'z') {
     endEdit(mainView)
-    guardComposing(undo)(mainView)
+    guardComposing(undoLocal)(mainView)
     mainView.focus()
     return consume(true)
   }
   if ((mod && event.shiftKey && event.key.toLowerCase() === 'z') || (mod && event.key.toLowerCase() === 'y')) {
     endEdit(mainView)
-    guardComposing(redo)(mainView)
+    guardComposing(redoLocal)(mainView)
     mainView.focus()
     return consume(true)
   }
