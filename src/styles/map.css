@@ -253,6 +253,13 @@
   transform: translateX(100%);
 }
 
+/* 열 때는 마운트와 동시에 open 이라 시작 상태가 없다 — 닫힌 자리에서 미끄러져 들어오게 한다 */
+@starting-style {
+  .map-panel[data-state='open'] {
+    transform: translateX(100%);
+  }
+}
+
 @media (max-width: 560px) {
   .map-panel {
     width: 100%;
