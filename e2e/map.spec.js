@@ -421,8 +421,8 @@ test.describe('F-2003 카메라 조작', () => {
     await expect(page).toHaveURL(/#\/map\/[^/]+$/)
     await page.waitForTimeout(SETTLE)
 
-    // 이동으로 노드를 한쪽으로 밀어낸 뒤 같은 문서에 다시 `여기로 이동`
-    await drag(page, cx, cy, 0.55 * H, 0, 'left')
+    // 이동으로 노드를 한쪽으로 밀어낸 뒤 같은 문서에 다시 `여기로 이동`. 노드 위에서 시작하면 노드 끌기가 된다 — F-2009
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
     await page.waitForTimeout(SETTLE)
     await page.mouse.click(cx + 0.55 * H, cy, { button: 'right' })
     await nodeMenu(map).getByRole('menuitem', { name: '여기로 이동' }).click()
@@ -546,15 +546,15 @@ test.describe('F-2004 노드 표현', () => {
     const { map, H, cx, cy } = await openMapFresh(page)
     await page.mouse.move(cx, cy)
     await expect(visibleLabels(map)).toHaveCount(1)
-    const before = await labelBox(map, '사용법')
 
-    // 노드 위에서 끌기 시작한다 — 배경에서 시작하면 그 첫 이동이 호버를 먼저 푼다
-    await drag(page, cx, cy, 0.25 * H, 0, 'left')
+    // 노드 위에서 끌면 노드 끌기가 되므로 배경에서 이동한 뒤 옮겨 간 자리에서 다시 호버한다 (F-2009 14장)
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.25 * H, 0, 'left')
     await page.waitForTimeout(SETTLE)
+    await page.mouse.move(cx + 0.25 * H, cy)
+    await expect(visibleLabels(map)).toHaveCount(1)
 
     const after = await labelBox(map, '사용법')
-    const moved = after.x + after.width / 2 - (before.x + before.width / 2)
-    expect(Math.abs(moved - 0.25 * H)).toBeLessThanOrEqual(8)
+    expect(Math.abs(after.x + after.width / 2 - (cx + 0.25 * H))).toBeLessThanOrEqual(8)
   })
 
   test('F-2004 A4 이름표가 클릭을 가로채지 않는다', async ({ page }) => {
@@ -1601,5 +1601,138 @@ test.describe('F-2011 A9 Esc 로는 안 닫힌다', () => {
     await page.keyboard.press('Escape')
     await expect(page.locator('.map-page')).toBeVisible()
     await expect(page).toHaveURL(/#\/map/)
+  })
+})
+
+// F-2009 노드 끌기 (specs/features/F-2009.md 13.2) A1~A8 — 이름표는 translate(-50%) 로 노드 밑에 붙으므로 상자의 가운데 x 가 곧 노드의 화면 x 다
+async function labelCenterX(map) {
+  const box = await visibleLabels(map).first().boundingBox()
+  return box.x + box.width / 2
+}
+
+async function dragHeld(page, x0, y0, dx, dy) {
+  await page.mouse.move(x0, y0)
+  await page.mouse.down()
+  const steps = 20
+  for (let i = 1; i <= steps; i++) await page.mouse.move(x0 + (dx * i) / steps, y0 + (dy * i) / steps)
+  await page.waitForTimeout(100)
+}
+
+test.describe('F-2009 노드 끌기', () => {
+  test.use({ reducedMotion: 'reduce' })
+
+  test('F-2009 A1 노드가 커서를 따라온다', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapFresh(page)
+    await page.mouse.move(cx, cy)
+    await expect(visibleLabels(map)).toHaveCount(1)
+
+    await dragHeld(page, cx, cy, 0.55 * H, 0)
+    expect(Math.abs((await labelCenterX(map)) - (cx + 0.55 * H))).toBeLessThanOrEqual(8)
+    await page.mouse.up()
+  })
+
+  test('F-2009 A2 놓으면 제자리로 돌아온다', async ({ page }) => {
+    const { H, cx, cy } = await openMapFresh(page)
+    await dragHeld(page, cx, cy, 0.55 * H, 0)
+    await page.mouse.up()
+    await page.waitForTimeout(SETTLE)
+
+    // 노드 하나짜리 그래프는 놓고 1 tick 만에 원점으로 돌아온다 (F-2009 6.4)
+    await page.mouse.click(cx + 0.55 * H, cy)
+    await expect(page).toHaveURL(/#\/map$/)
+    await page.mouse.click(cx, cy)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+
+  test('F-2009 A3 살짝 움직였다 뗀 것은 클릭이다', async ({ page }) => {
+    const { cx, cy } = await openMapFresh(page)
+    await page.mouse.move(cx, cy)
+    await page.mouse.down()
+    await page.mouse.move(cx + 3, cy)
+    await page.mouse.up()
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+
+  test('F-2009 A4 메뉴가 떠 있으면 끌리지 않는다', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapFresh(page)
+    await page.mouse.click(cx, cy, { button: 'right' })
+    await expect(nodeMenu(map)).toBeVisible()
+
+    await dragHeld(page, cx, cy, 0.55 * H, 0)
+    expect(Math.abs((await labelCenterX(map)) - cx)).toBeLessThanOrEqual(8)
+    await page.mouse.up()
+    await expect(nodeMenu(map)).toHaveCount(0)
+    await expect(page).toHaveURL(/#\/map$/)
+  })
+
+  test('F-2009 A5 배경 좌클릭 끌기는 그대로 이동이다', async ({ page }) => {
+    const { H, cx, cy } = await openMapFresh(page)
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
+    await page.waitForTimeout(SETTLE)
+
+    await page.mouse.click(cx, cy)
+    await expect(page).toHaveURL(/#\/map$/)
+    await page.mouse.click(cx + 0.55 * H, cy)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+  })
+
+  test('F-2009 A6 끄는 동안 이웃이 따라온다', async ({ page }) => {
+    const view = await openMapWithDocs(page, [
+      { name: 'B.md', content: 'B 문서' },
+      { name: 'A.md', content: 'A\n\n[[B]]' },
+    ])
+    const at = await hoverUntil(page, view.map, view, (n) => n >= 2)
+    const boxes = await Promise.all(['A', 'B'].map((t) => labelBox(view.map, t)))
+    const centers = boxes.map((b) => b.x + b.width / 2)
+    // 커서 바로 밑 노드가 끌리는 쪽이다 — 이름표는 노드 아래에 가운데를 맞춰 붙는다
+    const other = Math.abs(centers[0] - at.x) <= Math.abs(centers[1] - at.x) ? 1 : 0
+    const otherBefore = boxes[other]
+
+    await dragHeld(page, at.x, at.y, 0.3 * view.H, 0)
+    const otherAfter = await labelBox(view.map, other === 0 ? 'A' : 'B')
+    expect(Math.hypot(otherAfter.x - otherBefore.x, otherAfter.y - otherBefore.y)).toBeGreaterThanOrEqual(10)
+    await page.mouse.up()
+  })
+
+  test('F-2009 A8 이어서 조작해도 오류가 없다', async ({ page }) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(e))
+    const { map, H, cx, cy } = await openMapFresh(page)
+
+    await drag(page, cx, cy, 0.3 * H, 0, 'left')
+    await page.waitForTimeout(SETTLE)
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.5 * H, 0, 'right')
+    await page.mouse.move(cx, cy)
+    await page.mouse.wheel(0, 1200)
+    await page.waitForTimeout(SETTLE)
+    await drag(page, cx, cy, 0.2 * H, 0.1 * H, 'left')
+    await map.getByRole('button', { name: '맞춤', exact: true }).click()
+    await page.waitForTimeout(SETTLE)
+
+    expect(errors).toEqual([])
+    await expect(page.locator('.map-page canvas')).toHaveCount(1)
+  })
+})
+
+test.describe('F-2009 터치', () => {
+  test.use({ reducedMotion: 'reduce', hasTouch: true })
+
+  test('F-2009 A7 터치 한 손가락 노드 끌기', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapFresh(page)
+    const client = await page.context().newCDPSession(page)
+
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] })
+    for (let i = 1; i <= 6; i++) {
+      await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx + (0.55 * H * i) / 6, y: cy }] })
+    }
+    // 마우스는 별개 포인터라 호버가 켜진다 — 그 자리에 노드가 있으면 이름표가 뜬다
+    await page.mouse.move(cx + 0.55 * H, cy)
+    await expect(visibleLabels(map)).toHaveCount(1)
+    await expect(nodeMenu(map)).toHaveCount(0)
+
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await page.waitForTimeout(SETTLE)
+    await page.mouse.move(cx, cy)
+    await expect(visibleLabels(map)).toHaveCount(1)
   })
 })

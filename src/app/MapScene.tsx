@@ -23,7 +23,7 @@ import {
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { createMapLayout, type MapForceNorms, type MapLayout } from '../lib/mapLayout3d'
-import { clipPlanes, easeAt, fitDistance, parseCubicBezier, tweenPose, zoomLimits, type CameraPose } from '../lib/mapCamera'
+import { clipPlanes, easeAt, fitDistance, parseCubicBezier, tweenPose, unprojectToViewPlane, viewDepth, zoomLimits, type CameraPose } from '../lib/mapCamera'
 import { parseCssColor, type Rgba } from '../lib/cssColor'
 import { blendRgb, depthMix, ndcToScreen, nodeRadius, pickLabelNodes, screenRadius, type ScreenPoint } from '../lib/mapNodeStyle'
 import { edgeColorAt } from '../lib/mapEdgeStyle'
@@ -230,6 +230,15 @@ function buildScene(
   const scratchColor = new Color()
   const raycaster = new Raycaster()
   const ndc = new Vector2()
+  // 노드 끌기의 카메라 기저와 좌표 풀기 출력. three 를 모르는 순수 함수에 넘기려고 튜플로 옮겨 담는다 (F-2009 3.4·9.2)
+  const dragRight = new Vector3()
+  const dragUp = new Vector3()
+  const dragBack = new Vector3()
+  const camT: [number, number, number] = [0, 0, 0]
+  const rightT: [number, number, number] = [0, 0, 0]
+  const upT: [number, number, number] = [0, 0, 0]
+  const fwdT: [number, number, number] = [0, 0, 0]
+  const dragOut: [number, number, number] = [0, 0, 0]
   // 인스턴스에 쓰는 것은 applyDepth() 하나로 모은다 — applyColors 는 여기까지만 채운다 (F-2004 6.1)
   const baseColors = new Float32Array(nodeCount * 3)
   const depths = new Float32Array(nodeCount)
@@ -502,6 +511,24 @@ function buildScene(
   let readyNotified = false
   // 배치가 멈춘 뒤에는 좌표가 안 바뀌므로 회전 중에 다시 올릴 이유가 없다 (F-2003 6.3)
   let posDirty = true
+  // 끌기 중 camera 행렬을 지금 값으로 맞춘 뒤 기저를 꺼낸다 — controls.update() 는 matrixWorld 를 바로 안 고친다 (F-2009 3.4)
+  function readBasis() {
+    camera.updateMatrixWorld()
+    camera.matrixWorld.extractBasis(dragRight, dragUp, dragBack)
+    camT[0] = camera.position.x
+    camT[1] = camera.position.y
+    camT[2] = camera.position.z
+    rightT[0] = dragRight.x
+    rightT[1] = dragRight.y
+    rightT[2] = dragRight.z
+    upT[0] = dragUp.x
+    upT[1] = dragUp.y
+    upT[2] = dragUp.z
+    fwdT[0] = -dragBack.x
+    fwdT[1] = -dragBack.y
+    fwdT[2] = -dragBack.z
+  }
+
   // 사용자가 카메라를 한 번이라도 움직였나. selfDriven 은 우리가 일으킨 change 를 빼고 세려는 표시다 (F-2003 7.3)
   let userMoved = false
   let selfDriven = false
@@ -702,17 +729,31 @@ function buildScene(
   let downAt: { x: number; y: number } | null = null
   // pointerup 이 downAt 을 비운 뒤에 contextmenu 가 오므로 따로 들고 있는다 (F-2003 4.2)
   let downAtAny: { x: number; y: number } | null = null
+  // 노드 끌기. pendingDrag 는 문턱을 넘기 전의 후보라 fixNode 를 아직 안 했다 (F-2009 4.3·9.1)
+  let pendingDrag: { id: number; touch: boolean; index: number; x: number; y: number } | null = null
+  let drag: { id: number; touch: boolean; index: number } | null = null
+  let dragDepth = 0
+  // 누른 자리와 노드 중심의 차 — 노드가 커서로 튀지 않게 한다
+  const dragGrab: [number, number, number] = [0, 0, 0]
+  let menuOpen = false
+  // 끌기 때문에 controls.enabled 를 껐나. 메뉴 잠금과 한 스위치를 나눠 쓰므로 따로 든다 (F-2009 4.4)
+  let dragLock = false
   let menuWasOpen = false
   let activeTouches = 0
   let longPress: { id: number; x: number; y: number; nodeId: string } | null = null
   let longPressTimer = 0
   let longPressOpened = false
 
+  function toNdc(clientX: number, clientY: number): boolean {
+    const rect = canvas.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return false
+    ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -(((clientY - rect.top) / rect.height) * 2 - 1))
+    return true
+  }
+
   function hitAt(clientX: number, clientY: number): { index: number; id: string; missing: boolean } | null {
     if (nodeCount === 0) return null
-    const rect = canvas.getBoundingClientRect()
-    if (rect.width === 0 || rect.height === 0) return null
-    ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -(((clientY - rect.top) / rect.height) * 2 - 1))
+    if (!toNdc(clientX, clientY)) return null
     // 낡은 경계구로 걸러지면 클릭이 조용히 안 먹는다 (3.4). 좌표가 바뀐 뒤 한 번만 다시 잰다 (F-2004 7.6)
     if (boundsStale) {
       nodeMesh.computeBoundingSphere()
@@ -746,7 +787,68 @@ function buildScene(
       longPressTimer = 0
     }
     longPress = null
-    controls.enableRotate = true
+    // 끌고 있으면 한 손가락 회전을 잠근 채로 둔다 (F-2009 5.2)
+    controls.enableRotate = drag === null
+  }
+
+  function lockControls() {
+    dragLock = true
+    controls.enabled = false
+  }
+
+  function unlockControls() {
+    if (!dragLock) return
+    dragLock = false
+    controls.enabled = !menuOpen
+  }
+
+  function beginDrag(pd: { id: number; touch: boolean; index: number; x: number; y: number }, e: PointerEvent) {
+    drag = { id: pd.id, touch: pd.touch, index: pd.index }
+    pendingDrag = null
+    // 전환이 카메라를 옮기면 고정한 평면이 틀어진다
+    cancelTween()
+    const n = layout.nodes[pd.index]
+    readBasis()
+    // 평면은 끌기 시작에 한 번 정하고 끝까지 안 바꾼다 (F-2009 3.1)
+    dragDepth = Math.max(viewDepth([n.x, n.y, n.z], camT, fwdT), camera.near)
+    if (toNdc(pd.x, pd.y)) {
+      unprojectToViewPlane(ndc.x, ndc.y, dragDepth, camT, rightT, upT, fwdT, tanHalfVFov, camera.aspect, dragOut)
+      dragGrab[0] = n.x - dragOut[0]
+      dragGrab[1] = n.y - dragOut[1]
+      dragGrab[2] = n.z - dragOut[2]
+    } else {
+      dragGrab[0] = dragGrab[1] = dragGrab[2] = 0
+    }
+    // 멈춘 배치에서 끌 때만 자동 맞춤을 끈다 — 켜 두면 카메라가 노드를 쫓아가 안 움직여 보인다 (F-2009 7.2)
+    if (layout.isSettled()) userMoved = true
+    // reduced-motion 이어도 끄는 동안은 프레임마다 그린다. holdFit 은 안 켠다 (F-2009 7.3, F-2012 3.2)
+    liveRecalc = true
+    // 마우스는 controls 가 캡처를 안 했으므로 우리가 잡는다. 터치는 OrbitControls 가 이미 잡았다 (F-2009 4.5)
+    if (!pd.touch) canvas.setPointerCapture(pd.id)
+    canvas.style.cursor = 'grabbing'
+    moveDrag(e)
+  }
+
+  function moveDrag(e: PointerEvent) {
+    if (!drag) return
+    readBasis()
+    if (!toNdc(e.clientX, e.clientY)) return
+    unprojectToViewPlane(ndc.x, ndc.y, dragDepth, camT, rightT, upT, fwdT, tanHalfVFov, camera.aspect, dragOut)
+    layout.fixNode(drag.index, dragOut[0] + dragGrab[0], dragOut[1] + dragGrab[1], dragOut[2] + dragGrab[2])
+    // 입력마다 재가열 — alphaTarget 과 수치로 같고 놓는 신호를 놓쳐도 저절로 멈춘다 (F-2009 6.3)
+    layout.reheat(MAP_REHEAT_ALPHA)
+    requestDraw()
+  }
+
+  function endDrag() {
+    if (!drag) return
+    layout.releaseNode(drag.index)
+    // releaseNode 는 스스로 재가열하지 않는다 (F-2001 5.4)
+    layout.reheat(MAP_REHEAT_ALPHA)
+    drag = null
+    // setHover 는 hoverIndex 가 같으면 바로 돌아가 커서를 못 되돌린다 (F-2009 8.3)
+    canvas.style.cursor = hoverIndex >= 0 ? 'pointer' : ''
+    requestDraw()
   }
 
   function fireLongPress() {
@@ -763,14 +865,24 @@ function buildScene(
     downAtAny = { x: e.clientX, y: e.clientY }
     menuWasOpen = inputs.current.menuOpen
     downAt = e.button === 0 ? { x: e.clientX, y: e.clientY } : null
-    if (e.pointerType !== 'touch') return
-    activeTouches += 1
-    // 두 손가락은 확대·이동이다
-    if (activeTouches > 1) {
+    const touch = e.pointerType === 'touch'
+    if (touch) activeTouches += 1
+    // 두 손가락은 확대·이동이다 — 끌던 노드는 놓은 것으로 친다 (F-2009 5.2)
+    if (touch && activeTouches > 1) {
+      endDrag()
+      pendingDrag = null
       endLongPress()
       return
     }
+    if (e.button !== 0) return
+    // 레이캐스트는 누를 때 한 번만 하고 마우스·터치가 나눠 쓴다 (F-2009 4.1)
     const hit = hitAt(e.clientX, e.clientY)
+    if (hit && !inputs.current.menuOpen) {
+      pendingDrag = { id: e.pointerId, touch, index: hit.index, x: e.clientX, y: e.clientY }
+      // 문턱까지 미루면 OrbitControls 가 캡처하고 카메라를 밀어 놓는다. 터치는 두 손가락 확대가 살아야 해서 안 끈다 (F-2009 4.4)
+      if (!touch) lockControls()
+    }
+    if (!touch) return
     // 배경이면 그냥 회전하게 둔다. 끊긴 링크 노드도 길게 누르면 메뉴가 열린다 (F-2004 8.1)
     if (!hit) return
     // enabled 가 아니라 enableRotate 를 끈다 — 두 손가락 확대가 살아남는다 (F-2003 5.1)
@@ -780,6 +892,13 @@ function buildScene(
   }
 
   function onPointerMove(e: PointerEvent) {
+    // 문턱은 클릭·길게 누르기 판정과 같은 상수라 두 제스처와 정확히 맞물린다 (F-2009 4.2)
+    const pd = pendingDrag
+    if (pd && e.pointerId === pd.id && Math.hypot(e.clientX - pd.x, e.clientY - pd.y) > (pd.touch ? LONG_PRESS_SLOP : CLICK_SLOP)) {
+      beginDrag(pd, e)
+    } else if (drag && e.pointerId === drag.id) {
+      moveDrag(e)
+    }
     const lp = longPress
     if (lp && e.pointerId === lp.id && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > LONG_PRESS_SLOP) {
       endLongPress()
@@ -802,6 +921,10 @@ function buildScene(
     const openedByLongPress = longPressOpened
     downAt = null
     menuWasOpen = false
+    // 끈 뒤에는 아래 CLICK_SLOP 판정이 문서 열기를 거른다 (F-2009 4.1)
+    endDrag()
+    pendingDrag = null
+    unlockControls()
     if (e.pointerType === 'touch') {
       activeTouches = Math.max(0, activeTouches - 1)
       endLongPress()
@@ -817,6 +940,9 @@ function buildScene(
   }
 
   function onPointerCancel(e: PointerEvent) {
+    endDrag()
+    pendingDrag = null
+    unlockControls()
     downAt = null
     menuWasOpen = false
     if (e.pointerType === 'touch') activeTouches = Math.max(0, activeTouches - 1)
@@ -886,7 +1012,8 @@ function buildScene(
     fit: requestFit,
     lookAtNode: requestLook,
     setMenuOpen(open: boolean) {
-      controls.enabled = !open
+      menuOpen = open
+      controls.enabled = !open && !dragLock
     },
     // 직전 값과 비교해 바뀐 축만 다시 계산한다 (F-2005 7.1)
     setView(next: MapView) {

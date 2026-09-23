@@ -100,3 +100,30 @@ export function tweenPose(from: CameraPose, to: CameraPose, e: number, outTarget
     outPosition[i] = outTarget[i] + dir[i] * dist
   }
 }
+
+// 3원소 좌표. three 를 안 쓰려고 튜플로 받는다 (F-2009 3.2)
+export type MapVec3 = readonly [number, number, number]
+
+// 카메라에서 점까지의 '보는 방향' 깊이. fwd 는 카메라가 보는 방향의 단위벡터다
+export function viewDepth(point: MapVec3, camPos: MapVec3, fwd: MapVec3): number {
+  return (point[0] - camPos[0]) * fwd[0] + (point[1] - camPos[1]) * fwd[1] + (point[2] - camPos[2]) * fwd[2]
+}
+
+// NDC 를 카메라 시선에 수직이고 depth 만큼 떨어진 평면 위의 world 좌표로 푼다. out 에 써서 돌려준다 — 프레임마다 할당하지 않으려는 것이다 (F-2009 3.2)
+export function unprojectToViewPlane(
+  ndcX: number,
+  ndcY: number,
+  depth: number,
+  camPos: MapVec3,
+  right: MapVec3,
+  up: MapVec3,
+  fwd: MapVec3,
+  tanHalfVFov: number,
+  aspect: number,
+  out: [number, number, number],
+): [number, number, number] {
+  const sx = ndcX * aspect * tanHalfVFov * depth
+  const sy = ndcY * tanHalfVFov * depth
+  for (let i = 0; i < 3; i++) out[i] = camPos[i] + fwd[i] * depth + right[i] * sx + up[i] * sy
+  return out
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fitDistance, clipPlanes, zoomLimits, parseCubicBezier, easeAt, tweenPose, type CameraPose } from './mapCamera'
+import { fitDistance, clipPlanes, zoomLimits, parseCubicBezier, easeAt, tweenPose, viewDepth, unprojectToViewPlane, type CameraPose, type MapVec3 } from './mapCamera'
 
 describe('F-2003 14.1 mapCamera', () => {
   it('U1 가로로 넓은 창에서는 세로 시야에 맞춘다', () => {
@@ -120,5 +120,58 @@ describe('F-2012 14.1 mapCamera — 전환', () => {
     }
     const nan = run(pose([1, 2, 3], [0, 0, 1], 10), pose([9, 9, 9], [1, 0, 0], 20), NaN)
     expect(nan.t).toEqual([1, 2, 3])
+  })
+})
+
+describe('mapCamera — 화면 평행 평면 (F-2009)', () => {
+  const T = 0.4663076581549986
+  const CAM: MapVec3 = [0, 0, 100]
+  const R: MapVec3 = [1, 0, 0]
+  const U: MapVec3 = [0, 1, 0]
+  const F: MapVec3 = [0, 0, -1]
+  const near = (a: number[], b: number[]) => a.forEach((v, i) => expect(Math.abs(v - b[i])).toBeLessThan(1e-9))
+  const solve = (x: number, y: number, depth: number, aspect = 1.6) =>
+    unprojectToViewPlane(x, y, depth, CAM, R, U, F, T, aspect, [0, 0, 0])
+
+  it('U1 viewDepth — 정면 기저', () => {
+    expect(viewDepth([0, 0, 0], CAM, F)).toBe(100)
+    expect(viewDepth([10, 20, 60], CAM, F)).toBe(40)
+    expect(viewDepth([0, 0, 150], CAM, F)).toBe(-50)
+  })
+
+  it('U2 unprojectToViewPlane — 정면 기저, depth 100', () => {
+    near(solve(0, 0, 100), [0, 0, 0])
+    near(solve(1, 0, 100), [74.60922530479978, 0, 0])
+    near(solve(0, 1, 100), [0, 46.630765815499856, 0])
+    near(solve(-1, -1, 100), [-74.60922530479978, -46.630765815499856, 0])
+  })
+
+  it('U3 깊이에 비례한다', () => {
+    near(solve(1, 0, 50), [37.30461265239989, 0, 50])
+  })
+
+  it('U4 aspect 가 가로 배율에만 붙는다', () => {
+    expect(solve(1, 0, 100, 3.2)[0]).toBeCloseTo(solve(1, 0, 100, 1.6)[0] * 2, 9)
+    expect(solve(0, 1, 100, 3.2)[1]).toBeCloseTo(solve(0, 1, 100, 1.6)[1], 9)
+  })
+
+  it('U5 비스듬한 기저 왕복', () => {
+    const cam: MapVec3 = [120, -80, 60]
+    const right: MapVec3 = [0.4745561984078409, 5.551115123125783e-17, -0.8802252067242211]
+    const up: MapVec3 = [0.4720050152761559, 0.8440705715818445, 0.25447226910540577]
+    const fwd: MapVec3 = [-0.7429721933604605, 0.5362321047732019, -0.4005589216378135]
+    const depth = viewDepth([30, -10, 25], cam, fwd)
+    expect(Math.abs(depth - 118.42330699388906)).toBeLessThan(1e-9)
+    // 이 NDC 는 three 의 Vector3.project() 로 뽑았다 (F-2009 3.3). aspect 1.6 기준이다
+    const out = unprojectToViewPlane(-0.13470900828689558, 0.13940099490641078, depth, cam, right, up, fwd, T, 1.6, [0, 0, 0])
+    near(out, [30, -10, 25])
+  })
+
+  it('U6 경계', () => {
+    near(solve(0.7, -0.3, 0), [0, 0, 100])
+    const out: [number, number, number] = [9, 9, 9]
+    expect(unprojectToViewPlane(1, 0, 100, CAM, R, U, F, T, 1.6, out)).toBe(out)
+    unprojectToViewPlane(0, 1, 100, CAM, R, U, F, T, 1.6, out)
+    near(out, [0, 46.630765815499856, 0])
   })
 })
