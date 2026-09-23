@@ -345,3 +345,52 @@ describe('A1·A25 기타', () => {
     expect(searchScope('memory', null)).toBe('memory:local')
   })
 })
+
+describe('U19 docs·folders 선택 인자 (F-2007 5.2)', () => {
+  it('둘 다 주면 list()·listFolders() 를 안 부른다', async () => {
+    let listCalls = 0
+    let folderCalls = 0
+    const docs = [makeDoc({ id: 'a' })]
+    const folders: Folder[] = []
+    const counting: SearchSource = {
+      list: async () => {
+        listCalls++
+        return docs
+      },
+      listFolders: async () => {
+        folderCalls++
+        return folders
+      },
+    }
+    const scope = searchScope('memory', null)
+    const idx = await buildSearchIndex({ store: counting, scope, docs, folders })
+    expect(listCalls).toBe(0)
+    expect(folderCalls).toBe(0)
+    expect(idx.entries.map((e) => e.id)).toEqual(['a'])
+  })
+
+  it('folders 만 주면 listFolders() 가 0회이고 list() 는 1회', async () => {
+    let listCalls = 0
+    let folderCalls = 0
+    const counting: SearchSource = {
+      list: async () => {
+        listCalls++
+        return [makeDoc({ id: 'a' })]
+      },
+      listFolders: async () => {
+        folderCalls++
+        return []
+      },
+    }
+    const scope = searchScope('memory', null)
+    await buildSearchIndex({ store: counting, scope, folders: [] })
+    expect(listCalls).toBe(1)
+    expect(folderCalls).toBe(0)
+  })
+
+  it('안 주면 기존과 동작이 같다', async () => {
+    const store = stubSource([makeDoc({ id: 'a' })])
+    const idx = await buildSearchIndex({ store, scope: searchScope('memory', null) })
+    expect(idx.entries.map((e) => e.id)).toEqual(['a'])
+  })
+})

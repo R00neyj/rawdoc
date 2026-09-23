@@ -313,6 +313,77 @@
   accent-color: var(--accent);
 }
 
+/* ----- `필터` 묶음 (specs/features/F-2007.md 7·13장) ----- */
+.map-filter-field {
+  margin-bottom: 14px;
+}
+
+.map-filter-field > label,
+.map-filter-label {
+  display: block;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.map-filter-search {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.map-filter-folder-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 4px;
+  margin: 0;
+  list-style: none;
+}
+
+.map-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink);
+  padding: 2px 0;
+  cursor: pointer;
+}
+
+.map-check input {
+  accent-color: var(--accent);
+}
+
+.map-check span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-filter-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* 목록 보기에서 패널이 목록 위를 덮지 않게. 280(패널 폭) + 16(여백) (F-2007 11.3) */
+.map-page-body:has(.map-panel[data-state='open']) .map-list {
+  padding-right: 296px;
+}
+
+@media (max-width: 560px) {
+  /* 그 폭에서는 패널이 100% 라 목록이 어차피 다 가려진다 (F-2005 9.1) */
+  .map-page-body:has(.map-panel[data-state='open']) .map-list {
+    padding-right: 16px;
+  }
+}
+
 .map-panel-reset {
   display: block;
   width: 100%;

@@ -1,14 +1,27 @@
 // 위키링크 지도 전체 화면 (specs/features/F-292.md 6장) — 사이드바 `지도` 버튼으로 들어온다
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildMapIndex, type MapSource } from './mapIndex'
-import { buildWikiGraphFromEntries, truncateGraphByDegree, type WikiGraph } from '../lib/wikiGraph'
+import { buildSearchIndex, folderPathMap, type SearchIndexEntry } from './searchIndex'
+import { buildWikiGraphFromEntries, distancesFrom, truncateGraphByDegree, type WikiGraph } from '../lib/wikiGraph'
+import { parseSearchQuery } from '../lib/docSearch'
+import {
+  computeVisibleNodes,
+  expandFolders,
+  isFilterActive,
+  MAP_FILTER_ROOT,
+  type MapFilterContext,
+  type MapFilterDoc,
+  type MapFilterFolder,
+  type MapFilterNode,
+} from '../lib/mapFilter'
 import { IconClose, IconEdit, IconFit, IconList, IconMap, IconNoteAdd, IconOpenInNew, IconRecenter, IconSettings, IconTooltip } from './icons'
 import MapScene, { hasWebGL2 } from './MapScene'
-import MapPanel from './MapPanel'
+import MapPanel, { type MapFolderRow } from './MapPanel'
 import usePresence from './usePresence'
 import { loadMapView, saveMapView, type MapView } from './mapPrefs'
 import FolderMenu from './FolderMenu'
 import { formatHash } from './hashRoute'
+import type { Doc, Folder } from '../types'
 
 const NODE_CAP = 1000 // F-292 결정 11 + F-2002 10.3
 
@@ -16,6 +29,8 @@ type MapPageProps = {
   docCount: number
   store: MapSource
   scope: string
+  // 검색 인덱스 캐시 범위 — mapIndexScope 와 우연히 같은 문자열이어도 서로 다른 규칙이다 (F-2007 5.4)
+  searchScope: string
   centerDocId: string | null
   onOpenDoc: (id: string) => void
   onOpenWikiLink: (target: string) => void
@@ -24,7 +39,7 @@ type MapPageProps = {
   onCreateDoc: () => void
 }
 
-export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc, onOpenWikiLink, onRecenter, onClose, onCreateDoc }: MapPageProps) {
+export default function MapPage({ docCount, store, scope, searchScope, centerDocId, onOpenDoc, onOpenWikiLink, onRecenter, onClose, onCreateDoc }: MapPageProps) {
   const [loading, setLoading] = useState(true)
   const [graph, setGraph] = useState<WikiGraph | null>(null)
   const [updatedAtById, setUpdatedAtById] = useState<Map<string, number>>(new Map())
@@ -43,10 +58,27 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
   const [panelOpen, setPanelOpen] = useState(false)
   const panelPresence = usePresence(panelOpen)
   const settingsBtnRef = useRef<HTMLButtonElement | null>(null)
+  // 폴더·검색 인덱스 — 필터 5항목이 읽는다 (F-2007 5·7장)
+  const [folders, setFolders] = useState<Folder[]>([])
+  const [searchEntries, setSearchEntries] = useState<SearchIndexEntry[]>([])
+  // `파일 검색` 은 md.mapView 에 저장하지 않는다 — 지도를 열 때마다 빈 값이다 (F-2007 6.2)
+  const [query, setQuery] = useState('')
+  const queryRef = useRef('')
+  const [appliedQuery, setAppliedQuery] = useState('')
 
   function handleViewChange(next: MapView) {
     setView(next)
     saveMapView(next)
+  }
+
+  function onQueryChange(next: string) {
+    queryRef.current = next
+    setQuery(next)
+  }
+
+  // 한글 입력기 조립이 끝났을 때만 거르기를 따라잡는다 (F-2007 8.2)
+  function onCommitQuery() {
+    setAppliedQuery(queryRef.current)
   }
 
   function closePanel() {
@@ -73,23 +105,26 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
     // setState 를 effect 본문에서 바로 부르지 않고 async 함수 안에서 부른다(App.tsx loadShares 와 같은 방식)
     async function load() {
       setLoading(true)
-      const result = await buildMapIndex({ store, scope })
+      // 한 번의 list()·listFolders() 를 지도 인덱스와 검색 인덱스가 나눠 쓴다 — 시점이 어긋나지 않는다 (F-2007 5.2)
+      const [docs, folderList] = await Promise.all([store.list(), store.listFolders()])
       if (cancelled) return
-      const entries = result.entries.map((e) => ({ id: e.id, title: e.title, targets: e.targets, unreadable: e.unreadable }))
+      const [mapResult, searchResult] = await Promise.all([
+        buildMapIndex({ store, scope, docs }),
+        buildSearchIndex({ store, scope: searchScope, docs, folders: folderList }),
+      ])
+      if (cancelled) return
+      const entries = mapResult.entries.map((e) => ({ id: e.id, title: e.title, targets: e.targets, unreadable: e.unreadable }))
       setGraph(buildWikiGraphFromEntries(entries))
-      setUpdatedAtById(new Map(result.entries.map((e) => [e.id, e.updatedAt])))
+      setUpdatedAtById(new Map(mapResult.entries.map((e) => [e.id, e.updatedAt])))
+      setFolders(folderList)
+      setSearchEntries(searchResult.entries)
       setLoading(false)
     }
     load()
     return () => {
       cancelled = true
     }
-  }, [store, scope])
-
-  const centerIndex = useMemo(() => {
-    if (!graph || !centerDocId) return -1
-    return graph.nodes.findIndex((n) => n.id === centerDocId)
-  }, [graph, centerDocId])
+  }, [store, scope, searchScope])
 
   // 지도가 열려 있는 동안 그래프를 다시 만들지 않는다 (7.2)
   const { displayGraph, truncated } = useMemo(() => {
@@ -98,28 +133,66 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
     return { displayGraph: result.graph, truncated: result.truncated }
   }, [graph, updatedAtById])
 
-  // 나가는·들어오는·끊긴 링크 — 중심의 직접 간선만 (7.3)
+  // 장면과 목록이 같은 인덱스를 보게 displayGraph 기준으로 잡는다 (F-2007 11.3)
+  const centerIndex = useMemo(() => {
+    if (!displayGraph || !centerDocId) return -1
+    return displayGraph.nodes.findIndex((n) => n.id === centerDocId)
+  }, [displayGraph, centerDocId])
+
+  const parsedQuery = useMemo(() => parseSearchQuery(appliedQuery), [appliedQuery])
+
+  const filterCtx = useMemo<MapFilterContext | null>(() => {
+    if (!displayGraph) return null
+    const docById = new Map<string, MapFilterDoc>()
+    for (const e of searchEntries) docById.set(e.id, e)
+    const distances = centerIndex >= 0 ? distancesFrom(displayGraph, centerIndex) : null
+    return { nodes: displayGraph.nodes as MapFilterNode[], docById, distances }
+  }, [displayGraph, searchEntries, centerIndex])
+
+  const allowedFolders = useMemo(() => expandFolders(view.filter.folders, folders as MapFilterFolder[]), [view.filter.folders, folders])
+
+  const filterActive = useMemo(() => isFilterActive(view.filter, parsedQuery), [view.filter, parsedQuery])
+
+  // null = 필터가 하나도 안 걸림. 그 경로는 오늘과 한 픽셀도 다르지 않다 (F-2007 12.1)
+  const { visibleMask, visibleCount } = useMemo(() => {
+    if (!filterCtx) return { visibleMask: null as Uint8Array | null, visibleCount: 0 }
+    if (!filterActive) return { visibleMask: null as Uint8Array | null, visibleCount: filterCtx.nodes.length }
+    const out = new Uint8Array(filterCtx.nodes.length)
+    const count = computeVisibleNodes(view.filter, parsedQuery, allowedFolders, filterCtx, out)
+    return { visibleMask: out, visibleCount: count }
+  }, [filterCtx, filterActive, view.filter, parsedQuery, allowedFolders])
+
+  const folderRows = useMemo<MapFolderRow[]>(() => {
+    if (folders.length === 0) return []
+    const paths = folderPathMap(folders)
+    const rows = folders.map((f) => ({ id: f.id, label: paths.get(f.id) || f.name })).sort((a, b) => a.label.localeCompare(b.label, 'ko'))
+    return [{ id: MAP_FILTER_ROOT, label: '폴더 없음' }, ...rows]
+  }, [folders])
+
+  // 나가는·들어오는·끊긴 링크 — 중심의 직접 간선만, 걸러진 노드는 뺀다 (7.3, F-2007 11.3)
   const directLinks = useMemo(() => {
-    if (!graph || centerIndex < 0) return { outgoing: [], incoming: [], broken: [] }
+    if (!displayGraph || centerIndex < 0) return { outgoing: [], incoming: [], broken: [] }
     const outgoing: WikiGraph['nodes'] = []
     const incoming: WikiGraph['nodes'] = []
     const broken: WikiGraph['nodes'] = []
-    for (const edge of graph.edges) {
+    for (const edge of displayGraph.edges) {
+      if (visibleMask && (visibleMask[edge.from] === 0 || visibleMask[edge.to] === 0)) continue
       if (edge.from === centerIndex && edge.to !== centerIndex) {
-        const node = graph.nodes[edge.to]
+        const node = displayGraph.nodes[edge.to]
         if (node.missing) broken.push(node)
         else outgoing.push(node)
       } else if (edge.to === centerIndex && edge.from !== centerIndex) {
-        incoming.push(graph.nodes[edge.from])
+        incoming.push(displayGraph.nodes[edge.from])
       }
     }
     return { outgoing, incoming, broken }
-  }, [graph, centerIndex])
+  }, [displayGraph, centerIndex, visibleMask])
 
   const allRanked = useMemo(() => {
-    if (!graph) return []
-    return [...graph.nodes].sort((a, b) => b.degree - a.degree)
-  }, [graph])
+    if (!displayGraph) return []
+    const nodes = visibleMask ? displayGraph.nodes.filter((_, i) => visibleMask[i] === 1) : displayGraph.nodes
+    return [...nodes].sort((a, b) => b.degree - a.degree)
+  }, [displayGraph, visibleMask])
 
   function handleNodeClick(id: string, modified: boolean) {
     if (!displayGraph) return
@@ -141,6 +214,12 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
     onRecenter(id)
   }
 
+  // 노드 메뉴 `이어진 문서만 보기` — 그 노드를 중심으로 `몇 다리` 를 1 로 켠다 (F-2007 7.7)
+  function onlyLinked(id: string) {
+    recenter(id)
+    handleViewChange({ ...view, filter: { ...view.filter, hops: 1 } })
+  }
+
   function showGraph() {
     if (unsupported) return
     setNodeMenu(null)
@@ -150,7 +229,6 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
 
   function showList() {
     setNodeMenu(null)
-    setPanelOpen(false)
     setViewMode('list')
   }
 
@@ -205,22 +283,21 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
               <IconTooltip text="맞춤" />
             </span>
           )}
-          {effectiveView === 'graph' && (
-            <span className="icon-btn-wrap">
-              <button
-                type="button"
-                className="icon-btn map-settings-btn"
-                aria-label="지도 설정"
-                aria-expanded={panelOpen}
-                aria-controls="map-panel"
-                ref={settingsBtnRef}
-                onClick={() => setPanelOpen((v) => !v)}
-              >
-                <IconSettings size={18} />
-              </button>
-              <IconTooltip text="지도 설정" />
-            </span>
-          )}
+          {/* 목록 보기에서도 그린다 — WebGL 을 못 쓰는 사람에게는 목록이 유일한 화면이다 (F-2007 11.3) */}
+          <span className="icon-btn-wrap">
+            <button
+              type="button"
+              className="icon-btn map-settings-btn"
+              aria-label="지도 설정"
+              aria-expanded={panelOpen}
+              aria-controls="map-panel"
+              ref={settingsBtnRef}
+              onClick={() => setPanelOpen((v) => !v)}
+            >
+              <IconSettings size={18} />
+            </button>
+            <IconTooltip text="지도 설정" />
+          </span>
           <span className="icon-btn-wrap">
             <button type="button" className="icon-btn map-page-close" aria-label="닫기" onClick={onClose}>
               <IconClose size={18} />
@@ -266,11 +343,11 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
                 centerToken={centerToken}
                 menuOpen={nodeMenu !== null}
                 view={view}
+                visible={visibleMask}
                 onNodeClick={handleNodeClick}
                 onNodeMenu={openNodeMenu}
                 onUnsupported={() => {
                   setNodeMenu(null)
-                  setPanelOpen(false)
                   setUnsupported(true)
                 }}
                 onLayoutReady={() => setLayoutReady(true)}
@@ -309,6 +386,12 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
                             },
                           },
                           { key: 'recenter', label: '여기로 이동', icon: IconRecenter, onSelect: () => recenter(nodeMenu.id) },
+                          {
+                            key: 'only-linked',
+                            label: '이어진 문서만 보기',
+                            icon: IconMap,
+                            onSelect: () => onlyLinked(nodeMenu.id),
+                          },
                         ]
                   }
                 />
@@ -334,7 +417,17 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
             data-state={panelPresence.state}
             inert={panelPresence.state === 'closed'}
           >
-            <MapPanel view={view} onChange={handleViewChange} onClose={closePanel} />
+            <MapPanel
+              view={view}
+              mode={effectiveView}
+              query={query}
+              folderRows={folderRows}
+              hopsDisabled={centerIndex < 0}
+              onChange={handleViewChange}
+              onQueryChange={onQueryChange}
+              onCommit={onCommitQuery}
+              onClose={closePanel}
+            />
           </div>
         )}
       </div>
@@ -343,6 +436,11 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
         {displayGraph && (
           <span>
             노드 {displayGraph.nodes.length}개 · 간선 {displayGraph.edges.length}개
+          </span>
+        )}
+        {filterActive && displayGraph && (
+          <span className="map-foot-filter">
+            {displayGraph.nodes.length.toLocaleString('ko-KR')}개 중 {visibleCount.toLocaleString('ko-KR')}개 보임
           </span>
         )}
         {truncated && <span>문서가 많아 연결이 많은 {NODE_CAP.toLocaleString('ko-KR')}개만 보입니다.</span>}

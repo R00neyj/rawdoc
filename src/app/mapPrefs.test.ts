@@ -9,6 +9,7 @@ import {
   normalizeMapGroups,
 } from './mapPrefs'
 import { MAP_FORCE_DEFAULT_NORMS } from '../lib/mapLayout3d'
+import { MAP_FILTER_DEFAULT } from '../lib/mapFilter'
 
 function createMemoryLocalStorage(): Storage {
   const store = new Map<string, string>()
@@ -92,7 +93,30 @@ describe('mapPrefs — md.mapView (12.1 U1~U9)', () => {
   })
 
   it('U9 왕복 — saveMapView 뒤 loadMapView 가 깊게 같다', () => {
-    const view = { display: { nodeScale: 2.5, labelDistance: 0.4, edgeStrength: 0.9 }, force: { ...MAP_FORCE_DEFAULT_NORMS, repel: 0.7 } }
+    const view = {
+      display: { nodeScale: 2.5, labelDistance: 0.4, edgeStrength: 0.9 },
+      force: { ...MAP_FORCE_DEFAULT_NORMS, repel: 0.7 },
+      filter: MAP_FILTER_DEFAULT,
+    }
+    saveMapView(view)
+    expect(loadMapView()).toEqual(view)
+  })
+})
+
+describe('mapPrefs — md.mapView.filter (F-2007 16.1 U15~U17)', () => {
+  it('U15 defaultMapView().filter 가 MAP_FILTER_DEFAULT 와 같다', () => {
+    expect(defaultMapView().filter).toEqual(MAP_FILTER_DEFAULT)
+  })
+
+  it('U16 묶음 독립 — filter 가 깨져도 display·force 는 기본값 그대로다', () => {
+    const view = normalizeMapView({ filter: { hops: 'x' } })
+    expect(view.display).toEqual({ nodeScale: 1, labelDistance: 0, edgeStrength: 0.5 })
+    expect(view.force).toEqual(MAP_FORCE_DEFAULT_NORMS)
+    expect(view.filter.hops).toBe(0)
+  })
+
+  it('U17 왕복 — filter 를 바꿔 저장·적재하면 같다', () => {
+    const view = { ...defaultMapView(), filter: { folders: ['a'], isolated: false, broken: true, hops: 2 } }
     saveMapView(view)
     expect(loadMapView()).toEqual(view)
   })

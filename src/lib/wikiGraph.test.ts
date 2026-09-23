@@ -1,6 +1,6 @@
 // specs/features/F-292.md 10장 A1~A4
 import { describe, it, expect } from 'vitest'
-import { extractWikiTargets, buildWikiGraph, subgraphAround, truncateGraphByDegree } from './wikiGraph'
+import { extractWikiTargets, buildWikiGraph, distancesFrom, truncateGraphByDegree } from './wikiGraph'
 
 describe('extractWikiTargets — A1', () => {
   it('프론트매터 안 [[…]] 는 뺀다', () => {
@@ -181,7 +181,7 @@ describe('buildWikiGraph — A3', () => {
   })
 })
 
-describe('subgraphAround — A4', () => {
+describe('distancesFrom — F-2007 U12~U14', () => {
   // A - B - C - D 사슬
   const docs = [
     { id: 'A', title: 'A', content: '[[B]]' },
@@ -191,26 +191,25 @@ describe('subgraphAround — A4', () => {
   ]
   const graph = buildWikiGraph(docs)
 
-  it('깊이 1 — 중심과 바로 이웃만', () => {
-    const { graph: sub, truncated } = subgraphAround(graph, 0, 1, 500)
-    expect(sub.nodes.map((n) => n.id).sort()).toEqual(['A', 'B'])
-    expect(truncated).toBe(false)
+  it('U12 기본 — 중심 A 에서 사슬을 따라 거리가 늘어난다', () => {
+    expect(Array.from(distancesFrom(graph, 0))).toEqual([0, 1, 2, 3])
   })
 
-  it('깊이 2', () => {
-    const { graph: sub } = subgraphAround(graph, 0, 2, 500)
-    expect(sub.nodes.map((n) => n.id).sort()).toEqual(['A', 'B', 'C'])
+  it('U13 백링크도 이웃이다 — 중심 B 에서 A 도 거리 1', () => {
+    expect(Array.from(distancesFrom(graph, 1))).toEqual([1, 0, 1, 2])
   })
 
-  it('백링크도 이웃이다 — 나를 가리킨 문서도 depth 1 에 들어간다', () => {
-    const { graph: sub } = subgraphAround(graph, 1, 1, 500) // B 중심 — A 는 B 를 가리킴(백링크), C 는 B 가 가리킴
-    expect(sub.nodes.map((n) => n.id).sort()).toEqual(['A', 'B', 'C'])
-  })
+  it('U14 닿지 않음·범위 밖', () => {
+    const island = buildWikiGraph([
+      ...docs,
+      { id: 'E', title: 'E', content: '' }, // 아무도 안 가리키는 섬
+    ])
+    const distances = distancesFrom(island, 0)
+    expect(distances[4]).toBe(-1)
 
-  it('상한을 넘기는 단계는 통째로 더하지 않고 truncated', () => {
-    const { graph: sub, truncated } = subgraphAround(graph, 0, 3, 2) // depth1 만으로 A,B = 2개, depth2 에서 C 추가하면 3개라 상한 초과
-    expect(sub.nodes.map((n) => n.id).sort()).toEqual(['A', 'B'])
-    expect(truncated).toBe(true)
+    expect(Array.from(distancesFrom(graph, -1))).toEqual([-1, -1, -1, -1])
+    expect(Array.from(distancesFrom(graph, 999))).toEqual([-1, -1, -1, -1])
+    expect(Array.from(distancesFrom(graph, 1.5))).toEqual([-1, -1, -1, -1])
   })
 })
 

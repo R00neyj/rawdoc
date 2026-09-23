@@ -2890,6 +2890,7 @@ export default function App() {
                   docCount={docs.length}
                   store={store}
                   scope={mapDialogScope}
+                  searchScope={searchDialogScope}
                   centerDocId={mapRoute.centerDocId}
                   onOpenDoc={selectDoc}
                   onOpenWikiLink={handleOpenWikiLink}

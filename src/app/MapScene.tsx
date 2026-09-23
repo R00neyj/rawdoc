@@ -29,6 +29,7 @@ import { parseCssColor, type Rgba } from '../lib/cssColor'
 import { blendRgb, depthMix, ndcToScreen, nodeRadius, pickLabelNodes, screenRadius, type ScreenPoint } from '../lib/mapNodeStyle'
 import { edgeColorAt } from '../lib/mapEdgeStyle'
 import { MAP_EDGE_CENTER, MAP_EDGE_FOCUS, MAP_HOVER_DIM, combineMix, edgeClass, fillNodeFocus } from '../lib/mapFocus'
+import { MAP_FILTER_DIM } from '../lib/mapFilter'
 import MapLabels, { type MapLabelItem, type MapLabelsHandle } from './MapLabels'
 import type { WikiGraph } from '../lib/wikiGraph'
 import type { MapView } from './mapPrefs'
@@ -40,6 +41,7 @@ type MapSceneProps = {
   centerToken: number // `여기로 이동` 을 고를 때마다 오른다. 이미 중심인 문서를 다시 골라도 카메라가 움직이게 (사용자 지시 2026-09-22)
   menuOpen: boolean // 노드 메뉴가 떠 있는 동안 조작을 잠근다 (F-2003 4.4)
   view: MapView // 지도 설정 패널의 `표시` 3축과 `장력` 4축 (F-2005 7장, F-2006 8장)
+  visible: Uint8Array | null // 지도 필터가 계산한 보임 마스크. null = 전부 보임 (F-2007 12장)
   onNodeClick: (id: string, modified: boolean) => void
   onNodeMenu: (id: string, x: number, y: number) => void // 뷰포트 좌표 (F-2003 4.3·5.2)
   onUnsupported: () => void // 렌더러를 못 만들었다 — MapPage 가 목록으로 돌린다
@@ -178,6 +180,7 @@ type SceneBundle = {
   lookAtNode: (id: string) => void
   setMenuOpen: (open: boolean) => void
   setView: (view: MapView) => void
+  setVisible: (mask: Uint8Array | null) => void
   requestDraw: () => void
 }
 
@@ -282,11 +285,14 @@ function buildScene(
   // 호버 초점 — 원색으로 둘 노드의 표시다. setHover() 에서만 채운다 (F-2010 5장)
   const nodeFocus = new Uint8Array(nodeCount)
   let focusActive = false
-  // 간선 갈래가 셋뿐이라 색을 간선마다 만들지 않고 먼저 세 번만 만든다 (F-2010 6.5)
+  // 간선 갈래가 넷뿐이라 색을 간선마다 만들지 않고 먼저 몇 번만 만든다 (F-2010 6.5, F-2007 9.3)
   const edgeRgba: Rgba = [0, 0, 0, 1]
   const edgeBaseLin = new Float32Array(3)
   const edgeDimLin = new Float32Array(3)
   const edgeAccentLin = new Float32Array(3)
+  // 걸러진 간선 — MAP_FILTER_DIM(0.85) 이 MAP_HOVER_DIM(0.65) 보다 항상 커서 호버 흐리기와 쌓지 않고 이 색 하나로 대신한다 (F-2007 9.1·9.2)
+  const edgeFilterRgba: Rgba = [0, 0, 0, 1]
+  const edgeFilterLin = new Float32Array(3)
   // 투영 전용. v 는 uploadPositions 가 쓴다 (F-2004 9.2)
   const pv = new Vector3()
   const screenPt: ScreenPoint = { x: 0, y: 0, visible: false }
@@ -340,12 +346,19 @@ function buildScene(
     edgeRgba[2] = mixed[2]
     toLinear(edgeDimLin, edgeRgba)
     toLinear(edgeAccentLin, accentColor)
+    blendRgb(base, panelColor, MAP_FILTER_DIM, mixed)
+    edgeFilterRgba[0] = mixed[0]
+    edgeFilterRgba[1] = mixed[1]
+    edgeFilterRgba[2] = mixed[2]
+    toLinear(edgeFilterLin, edgeFilterRgba)
     const hover = focusActive ? hoverIndex : -1
     for (let e = 0; e < edgeCount; e++) {
       const edge = graph.edges[e]
       const cls = edgeClass(edge.from, edge.to, hover, centerIndex)
       // 호버 중에는 현재 문서 간선도 흐려진다 — --accent 가 "지금 주목하는 것" 하나만 뜻하게 한다 (F-2010 5장)
-      const c = cls === MAP_EDGE_FOCUS ? edgeAccentLin : focusActive ? edgeDimLin : cls === MAP_EDGE_CENTER ? edgeAccentLin : edgeBaseLin
+      let c = cls === MAP_EDGE_FOCUS ? edgeAccentLin : focusActive ? edgeDimLin : cls === MAP_EDGE_CENTER ? edgeAccentLin : edgeBaseLin
+      // 양끝 중 하나라도 걸러졌으면 그 간선도 걸러진 것이다. MAP_FILTER_DIM 이 항상 더 커서 호버 흐리기·강조를 덮는다 (F-2007 9.1·9.3)
+      if (visibleMask !== null && (visibleMask[edge.from] === 0 || visibleMask[edge.to] === 0)) c = edgeFilterLin
       const o = e * 6
       edgeColorBuf[o] = c[0]
       edgeColorBuf[o + 1] = c[1]
@@ -397,12 +410,16 @@ function buildScene(
       if (d > far) far = d
     }
     for (let i = 0; i < nodeCount; i++) {
+      // 걸러진 노드는 호버 초점 면제에서도 뺀다 — 그 이웃이어도 원색으로 밝아지지 않는다 (F-2007 9.3)
+      const filteredOut = visibleMask !== null && visibleMask[i] === 0
       // 호버한 노드와 그 이웃은 위치와 무관하게 원색이다 — 뒤쪽 이웃이 65% 씻긴 채로는 강조가 아니다 (F-2010 5장)
-      const focused = focusActive && nodeFocus[i] === 1
+      const focused = focusActive && nodeFocus[i] === 1 && !filteredOut
       // 현재 문서만 원색으로 둔다 — 남은 표시가 색 하나뿐이다 (F-2004 6.2)
       const depthT = focused || i === centerIndex ? 0 : depthMix(depths[i], near, far)
       // 초점 밖은 배경으로 가라앉힌다. 호버가 없으면 combineMix(depthT, 0) === depthT 라 F-2010 이전 화면과 한 픽셀도 다르지 않다
-      const dimT = focusActive && !focused ? MAP_HOVER_DIM : 0
+      const hoverDimT = focusActive && !focused ? MAP_HOVER_DIM : 0
+      // 걸러진 노드의 흐리기는 호버 흐리기와 쌓지 않고 큰 값 하나만 쓴다 — 쌓으면 8비트에서 배경과 구분이 사라진다 (F-2007 9.2)
+      const dimT = Math.max(hoverDimT, filteredOut ? MAP_FILTER_DIM : 0)
       const t = combineMix(depthT, dimT)
       baseRgba[0] = baseColors[i * 3]
       baseRgba[1] = baseColors[i * 3 + 1]
@@ -431,10 +448,15 @@ function buildScene(
         if (depths[i] > dFar) dFar = depths[i]
       }
       const threshold = dNear + (dFar - dNear) * distance
-      for (let i = 0; i < nodeCount; i++) if (depths[i] <= threshold) distanceCandidates.push(i)
+      for (let i = 0; i < nodeCount; i++) {
+        if (depths[i] > threshold) continue
+        if (visibleMask !== null && visibleMask[i] === 0) continue
+        distanceCandidates.push(i)
+      }
     }
+    // pinned 은 호버한 노드라 언제나 보인다 — 걸러진 노드는 애초에 호버되지 않는다 (F-2007 10·12장)
     const pinned = hoverIndex >= 0 ? [hoverIndex] : []
-    const neighbors = hoverIndex >= 0 ? (adjacency[hoverIndex] ?? []) : []
+    const neighbors = hoverIndex >= 0 ? (adjacency[hoverIndex] ?? []).filter((n) => visibleMask === null || visibleMask[n] === 1) : []
     const next = pickLabelNodes(pinned, neighbors.concat(distanceCandidates), (i) => graph.nodes[i]?.degree ?? 0)
     if (sameLabelSet(next, labelIndices)) return
     labelIndices = next
@@ -575,6 +597,8 @@ function buildScene(
   let boundsStale = true
   // 간선 색은 카메라와 무관하다 — 테마·현재 문서·호버·`선 두께` 가 바뀐 프레임에만 다시 쓴다 (F-2010 7.1)
   let edgeColorDirty = true
+  // 지도 필터가 내려보낸 보임 마스크. null 이면 전부 보인다 (F-2007 12장)
+  let visibleMask: Uint8Array | null = null
 
   // `맞춤`·`여기로 이동` 전환. 시작 자세만 얼리고 끝 자세는 매 프레임 다시 잡는다 (F-2012 5.5·10장)
   type CameraTween = { startedAt: number; mode: 'fit' | 'look'; nodeIndex: number }
@@ -795,8 +819,16 @@ function buildScene(
       boundsStale = false
     }
     raycaster.setFromCamera(ndc, camera)
+    // 거리 오름차순으로 정렬돼 있다 — 걸러진 인스턴스를 건너뛰고 앞에서부터 처음 만나는 보이는 것을 고른다 (F-2007 10장)
     const hits = raycaster.intersectObject(pickMesh, false)
-    const instanceId = hits[0]?.instanceId
+    let instanceId: number | undefined
+    for (const hit of hits) {
+      const id = hit.instanceId
+      if (id === undefined) continue
+      if (visibleMask !== null && visibleMask[id] === 0) continue
+      instanceId = id
+      break
+    }
     if (instanceId === undefined) return null
     const node = graph.nodes[instanceId]
     return node ? { index: instanceId, id: node.id, missing: Boolean(node.missing) } : null
@@ -1069,6 +1101,14 @@ function buildScene(
       applied = next
       requestDraw()
     },
+    // 배치를 다시 돌리지도 재가열하지도 않는다 — 걸러진 노드는 자리를 지킨다 (F-2007 12.2)
+    setVisible(mask: Uint8Array | null) {
+      visibleMask = mask
+      if (hoverIndex >= 0 && mask !== null && mask[hoverIndex] === 0) setHover(null)
+      edgeColorDirty = true
+      refreshLabels()
+      requestDraw()
+    },
     requestDraw,
     // 순서를 지킨다: 루프 → controls → 시뮬레이션 → 지오메트리·재질 → dispose → forceContextLoss (3.6, F-2003 9.3)
     dispose() {
@@ -1105,7 +1145,7 @@ function buildScene(
   }
 }
 
-export default function MapScene({ graph, centerId, fitToken, centerToken, menuOpen, view, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }: MapSceneProps) {
+export default function MapScene({ graph, centerId, fitToken, centerToken, menuOpen, view, visible, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }: MapSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const probeRef = useRef<HTMLSpanElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -1178,6 +1218,11 @@ export default function MapScene({ graph, centerId, fitToken, centerToken, menuO
   useEffect(() => {
     sceneRef.current?.setView(view)
   }, [view])
+
+  // (h) 지도 필터의 보임 마스크가 바뀔 때마다 반영한다 (F-2007 12장)
+  useEffect(() => {
+    sceneRef.current?.setVisible(visible)
+  }, [visible])
 
   return (
     <div className="map-scene" ref={wrapperRef}>

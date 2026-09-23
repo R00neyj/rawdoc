@@ -2,7 +2,8 @@
 import { extractWikiTargets } from '../lib/wikiGraph'
 import type { Doc, Store } from '../types'
 
-export type MapSource = Pick<Store, 'list'>
+// 폴더 목록도 읽어야 지도 필터의 `폴더` 항목을 그릴 수 있다 (F-2007 5.5)
+export type MapSource = Pick<Store, 'list' | 'listFolders'>
 
 export type MapIndexEntry = {
   id: string
@@ -33,14 +34,14 @@ export type MapIndexResult = {
   reusedCount: number
 }
 
-export async function buildMapIndex(args: { store: MapSource; scope: string }): Promise<MapIndexResult> {
+export async function buildMapIndex(args: { store: MapSource; scope: string; docs?: Doc[] }): Promise<MapIndexResult> {
   const { store, scope } = args
 
   if (scope !== cachedScope) {
     cache.clear()
   }
 
-  const docs = await store.list()
+  const docs = args.docs ?? (await store.list())
 
   let rebuiltCount = 0
   let reusedCount = 0

@@ -108,7 +108,7 @@ function toPublicEntry(entry: CachedEntry): SearchIndexEntry {
 }
 
 // 인덱스를 만들거나 다시 쓴다. 모듈 수준 Map 을 쓴다 (5장)
-export async function buildSearchIndex(args: { store: SearchSource; scope: string }): Promise<SearchIndex> {
+export async function buildSearchIndex(args: { store: SearchSource; scope: string; docs?: Doc[]; folders?: Folder[] }): Promise<SearchIndex> {
   const { store, scope } = args
 
   // 범위·저장소가 바뀌면 통째로 버린다 (3.4)
@@ -116,7 +116,10 @@ export async function buildSearchIndex(args: { store: SearchSource; scope: strin
     cache.clear()
   }
 
-  const [docs, folders] = await Promise.all([store.list(), store.listFolders()])
+  const [docs, folders] = await Promise.all([
+    args.docs ? Promise.resolve(args.docs) : store.list(),
+    args.folders ? Promise.resolve(args.folders) : store.listFolders(),
+  ])
   const folderPaths = folderPathMap(folders)
 
   let rebuiltCount = 0

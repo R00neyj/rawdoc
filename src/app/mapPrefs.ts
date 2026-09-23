@@ -1,6 +1,7 @@
 // 지도 설정 저장 — md.mapView·md.mapGroups 읽기·쓰기·검증 (specs/features/F-2005.md 3장). DOM 을 쓰지 않는다
 import { getPref, setPref } from './prefs'
 import { resolveForceNorms, MAP_FORCE_DEFAULT_NORMS, type MapForceNorms } from '../lib/mapLayout3d'
+import { normalizeMapFilter, MAP_FILTER_DEFAULT, type MapFilter } from '../lib/mapFilter'
 
 // 표시 묶음 3축 (F-292 6.6, F-2005 3.3)
 export type MapDisplayAxis = 'nodeScale' | 'labelDistance' | 'edgeStrength'
@@ -21,7 +22,7 @@ export const MAP_DISPLAY_AXES: Readonly<Record<MapDisplayAxis, MapDisplayAxisSpe
 const MAP_DISPLAY_AXIS_LIST: readonly MapDisplayAxis[] = ['nodeScale', 'labelDistance', 'edgeStrength']
 
 export type MapDisplay = Record<MapDisplayAxis, number>
-export type MapView = { display: MapDisplay; force: MapForceNorms }
+export type MapView = { display: MapDisplay; force: MapForceNorms; filter: MapFilter }
 export type MapGroup = { q: string; c: number }
 
 export const MAP_GROUP_MAX = 8
@@ -50,7 +51,7 @@ function normalizeDisplay(raw: unknown): MapDisplay {
 }
 
 export function defaultMapView(): MapView {
-  return { display: normalizeDisplay(null), force: MAP_FORCE_DEFAULT_NORMS }
+  return { display: normalizeDisplay(null), force: MAP_FORCE_DEFAULT_NORMS, filter: MAP_FILTER_DEFAULT }
 }
 
 export function normalizeMapView(raw: unknown): MapView {
@@ -58,6 +59,7 @@ export function normalizeMapView(raw: unknown): MapView {
   return {
     display: normalizeDisplay(source.display),
     force: resolveForceNorms(source.force as Partial<Record<string, unknown>> | null | undefined),
+    filter: normalizeMapFilter(source.filter),
   }
 }
 

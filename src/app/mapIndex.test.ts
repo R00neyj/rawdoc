@@ -54,4 +54,26 @@ describe('buildMapIndex — A6', () => {
     expect(second.rebuiltCount).toBe(1)
     expect(second.reusedCount).toBe(0)
   })
+
+  it('U18 docs 를 주면 list() 를 안 부른다 (F-2007 5.2)', async () => {
+    const store = createMemoryStore()
+    const a = await store.create({ title: 'A', content: '[[B]]', lineEnding: 'lf' })
+    let listCalls = 0
+    const counting = {
+      list: async () => {
+        listCalls++
+        return store.list()
+      },
+      listFolders: async () => store.listFolders(),
+    }
+    const scope = mapIndexScope('memory', null)
+    const docs = await store.list()
+
+    const result = await buildMapIndex({ store: counting, scope, docs })
+    expect(listCalls).toBe(0)
+    expect(result.entries.map((e) => e.id)).toEqual([a.id])
+
+    await buildMapIndex({ store: counting, scope })
+    expect(listCalls).toBe(1)
+  })
 })

@@ -150,7 +150,7 @@ store.removeAttachment(id)    // Promise<void>
 | `md.firstRunDone` | `1` | 없음 | F-111 |
 | `md.persistNoticeShown` | `1` | 없음 | F-118 |
 | `md.startScreen` | `home` \| `last` | `home` | F-232 3.4 |
-| `md.mapView` | JSON — 묶음 단위 객체 `{ display, force, … }` | 없음 | F-292 개정판 6.11 (F-2005) |
+| `md.mapView` | JSON — 묶음 단위 객체 `{ display, force, filter }`. **`파일 검색` 입력은 여기 넣지 않는다** — 지도를 열 때마다 비운다 (F-2007 6.2) | 없음 | F-292 개정판 6.11 (F-2005, F-2007) |
 | `md.mapGroups` | JSON — 그룹 쿼리 + 팔레트 인덱스 `1`~`8` | 없음 | F-292 개정판 6.5 (F-2008) |
 | `md.toolbar` | `on` \| `off` | `on` | F-233 3.5 |
 | `md.landingDone` | `1` | 없음 | F-271 |

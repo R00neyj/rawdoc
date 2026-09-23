@@ -191,44 +191,40 @@ export function buildWikiGraph(docs: { id: string; title: string; content: strin
   return buildWikiGraphFromEntries(entries)
 }
 
-// 현재 문서 중심 부분 그래프 — 너비 우선, 방향을 가리지 않는다(백링크 포함) (3.5)
-export function subgraphAround(
-  graph: WikiGraph,
-  centerIndex: number,
-  depth: number,
-  cap: number,
-): { graph: WikiGraph; truncated: boolean } {
-  const adjacency = new Map<number, number[]>()
-  const addEdge = (a: number, b: number) => {
-    if (!adjacency.has(a)) adjacency.set(a, [])
-    adjacency.get(a)!.push(b)
-  }
+// 중심에서 몇 다리인가 — 방향을 가리지 않는 너비 우선 탐색. 중심 자신은 0, 닿지 않는 노드는 -1 (specs/features/F-2007.md 4장)
+export function distancesFrom(graph: WikiGraph, centerIndex: number): Int32Array {
+  const n = graph.nodes.length
+  const distances = new Int32Array(n).fill(-1)
+  if (!Number.isInteger(centerIndex) || centerIndex < 0 || centerIndex >= n) return distances
+
+  const degree = new Int32Array(n)
   for (const edge of graph.edges) {
-    addEdge(edge.from, edge.to)
-    addEdge(edge.to, edge.from)
+    degree[edge.from]++
+    degree[edge.to]++
+  }
+  const start = new Int32Array(n + 1)
+  for (let i = 0; i < n; i++) start[i + 1] = start[i] + degree[i]
+  const cursor = start.slice(0, n)
+  const adj = new Int32Array(start[n])
+  for (const edge of graph.edges) {
+    adj[cursor[edge.from]++] = edge.to
+    adj[cursor[edge.to]++] = edge.from
   }
 
-  const included = new Set<number>([centerIndex])
-  let frontier = [centerIndex]
-  let truncated = false
-
-  for (let step = 0; step < depth; step++) {
-    const next = new Set<number>()
-    for (const node of frontier) {
-      for (const neighbor of adjacency.get(node) ?? []) {
-        if (!included.has(neighbor)) next.add(neighbor)
-      }
+  distances[centerIndex] = 0
+  const queue = [centerIndex]
+  let head = 0
+  while (head < queue.length) {
+    const cur = queue[head++]
+    const d = distances[cur]
+    for (let k = start[cur]; k < start[cur + 1]; k++) {
+      const next = adj[k]
+      if (distances[next] !== -1) continue
+      distances[next] = d + 1
+      queue.push(next)
     }
-    if (next.size === 0) break
-    if (included.size + next.size > cap) {
-      truncated = true
-      break
-    }
-    for (const n of next) included.add(n)
-    frontier = [...next]
   }
-
-  return { graph: induceSubgraph(graph, [...included]), truncated }
+  return distances
 }
 
 // 선택한 노드 인덱스만 남긴 그래프 — subgraphAround·truncateGraphByDegree 가 함께 쓴다
