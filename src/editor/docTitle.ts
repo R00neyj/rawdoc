@@ -101,12 +101,8 @@ class TitleWidget extends WidgetType {
     return other.title === this.title && other.readOnly === this.readOnly && breadcrumbEqual(other.breadcrumb, this.breadcrumb)
   }
 
-  toDOM(view: EditorView): HTMLElement {
-    const wrap = document.createElement('div')
-    wrap.className = 'md-block doc-title-block'
-    wrap.dataset.breadcrumbKey = breadcrumbKey(this.breadcrumb)
-
-    // 폴더 안이면 경로(F-234 3.3), 밖이면 줄 번호 칸이 켜져 있을 때만 보이는 "제목" 표시 (F-217.md 2.3-1)
+  // 폴더 안이면 경로(F-234 3.3), 밖이면 줄 번호 칸이 켜져 있을 때만 보이는 "제목" 표시 (F-217.md 2.3-1)
+  private buildLabel(): HTMLElement {
     const label = document.createElement('span')
     label.className = 'doc-title-label'
     if (this.breadcrumb.length > 0) {
@@ -130,7 +126,15 @@ class TitleWidget extends WidgetType {
       label.setAttribute('aria-hidden', 'true')
       label.textContent = '제목'
     }
-    wrap.appendChild(label)
+    return label
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const wrap = document.createElement('div')
+    wrap.className = 'md-block doc-title-block'
+    wrap.dataset.breadcrumbKey = breadcrumbKey(this.breadcrumb)
+
+    wrap.appendChild(this.buildLabel())
 
     const textarea = document.createElement('textarea')
     textarea.className = 'doc-title'
@@ -184,11 +188,17 @@ class TitleWidget extends WidgetType {
     stopObservingHeight(dom)
   }
 
-  // 값·읽기 전용이 바뀌어도 DOM 을 다시 만들지 않는다(2.2) — 경로가 바뀌면 false 로 CM6 가 toDOM 을 다시 부르게 한다(F-234.md 3.3)
+  // 값·읽기 전용·경로가 바뀌어도 textarea 는 다시 만들지 않는다(2.2) — 새 문서를 만든 직후 경로가 뒤늦게 오면
+  // textarea 를 갈아 끼우면서 막 받은 제목 포커스가 사라졌다(폴더 메뉴 새 문서, 2026-09-24). 경로 줄만 바꾼다(F-234.md 3.3)
   updateDOM(dom: HTMLElement): boolean {
-    if (dom.dataset.breadcrumbKey !== breadcrumbKey(this.breadcrumb)) return false
     const textarea = dom.querySelector('textarea.doc-title') as HTMLTextAreaElement | null
-    if (!textarea) return false
+    const label = dom.querySelector('.doc-title-label')
+    if (!textarea || !label) return false
+    const key = breadcrumbKey(this.breadcrumb)
+    if (dom.dataset.breadcrumbKey !== key) {
+      label.replaceWith(this.buildLabel())
+      dom.dataset.breadcrumbKey = key
+    }
     textarea.readOnly = this.readOnly
     textarea.placeholder = this.readOnly ? '' : PLACEHOLDER
     // 포커스가 없을 때만 값을 바꾼다 — 포커스 중엔 사용자가 입력한 값이 곧 최신 값이다 (2.2)

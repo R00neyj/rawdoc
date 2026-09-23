@@ -336,3 +336,21 @@ test.describe('F-217 A7 긴 제목', () => {
     expect(box.scrollHeight).toBeGreaterThan(box.lineHeight * 1.5)
   })
 })
+
+// 폴더 메뉴 새 문서 뒤 최상위 새 문서에서 제목 포커스가 비던 버그 (2026-09-24, F-2022 구현 중 발견)
+test.describe('F-217 A5b 폴더 메뉴 새 문서', () => {
+  test('폴더 메뉴 새 문서·이어서 최상위 새 문서 모두 제목에 포커스된다', async ({ page }) => {
+    await openApp(page)
+    await page.locator('.sidebar').getByRole('button', { name: '새 폴더', exact: true }).click()
+    const input = page.locator('.tree-rename-input')
+    await input.fill('폴더A')
+    await input.press('Enter')
+
+    await page.locator('.tree-row').filter({ hasText: '폴더A' }).first().click({ button: 'right' })
+    await page.getByRole('menuitem', { name: '새 문서' }).click()
+    await expect(page.locator('.doc-title')).toBeFocused()
+
+    await page.getByRole('button', { name: '새 문서' }).click()
+    await expect(page.locator('.doc-title')).toBeFocused()
+  })
+})
