@@ -88,6 +88,11 @@ src/
 - 옵시디언 볼트 내보내기(2026-09-23)으로 추가
   - `app/`: `exportVault.ts`(F-2020 — 볼트 계획·본문 변환·링크 고쳐 쓰기·스트리밍 zip)
   - `lib/`: `obsidianImage.ts`(F-2020 — 이미지 블록 → 옵시디언 임베드)
+- 명령 팔레트·템플릿(2026-09-23)으로 추가
+  - `app/`: `paletteContract.ts`(F-2022 — 명령 등록 계약 타입, `visibleCommands`·`filterPaletteItems`, 순수 함수), `paletteCommands.ts`(F-2022 — 등록된 명령 목록 `PALETTE_COMMANDS`), `CommandPalette.tsx`(F-2022 — 팔레트 UI, D-7)
+  - `lib/`: `templates.ts`(F-2022 — 템플릿 폴더 판정·목록·변수 치환·삽입 계획, 순수 함수), `builtinTemplates.ts`(F-2022 — 내장 템플릿 4개 원문)
+  - `editor/`: `insertTemplate.ts`(F-2022 — 본문 자리 계산 + 트랜잭션 1개 dispatch)
+  - `styles/`: `palette.css`(F-2022)
 - editor·viewer 가 문서 목록이 필요하면(위키링크) 저장소를 import 하지 않고 App 이 인자로 넘긴다. 첨부 이미지도 같다: App 이 `onImageFiles`(넣기)·`resolveAttachment(id)`(읽기) 콜백을 넘긴다 (F-156·F-157)
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)

@@ -38,6 +38,7 @@ export type MenuActionKind =
   | 'clipboard-paste'
   | 'clipboard-paste-text'
   | 'select-all'
+  | 'open-palette'
 
 export type MenuItemNode = {
   kind: 'item'
@@ -68,6 +69,9 @@ function item(id: string, label: string, shortcut: string | undefined, run: Stat
 function clipboardItem(id: string, label: string, shortcut: string | undefined, action: MenuActionKind, disabled: boolean): MenuItemNode {
   return { kind: 'item', id, label, shortcut, action, disabled }
 }
+
+// 명령 팔레트… — 편집·칸 메뉴 맨 끝(F-2022 7.1). 항상 활성
+const PALETTE_ITEM: MenuItemNode = { kind: 'item', id: 'palette', label: '명령 팔레트…', shortcut: 'Ctrl+P', action: 'open-palette', disabled: false }
 
 function submenu(id: string, label: string, items: MenuItemNode[], disabled = false): MenuSubmenuNode {
   return { kind: 'submenu', id, label, disabled, items }
@@ -174,6 +178,8 @@ export function buildEditorContextMenu({ place, state, hasSelection }: EditorMen
     clipboardItem('paste-text', '일반 텍스트로 붙여넣기', 'Ctrl+Shift+V', 'clipboard-paste-text', false),
     { kind: 'separator' },
     clipboardItem('select-all', '모두 선택', 'Ctrl+A', 'select-all', false),
+    { kind: 'separator' },
+    PALETTE_ITEM,
   ]
 }
 

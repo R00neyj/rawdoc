@@ -13,7 +13,8 @@ function lineOrNull(state: EditorState, num: number): Line | null {
 }
 
 // 선택이 걸친 줄들. 여러 줄 선택의 끝이 열 0 이면 그 마지막 줄은 뺀다 (F-168 2장과 같음, F-169 2·3장)
-function selectionLines(state: EditorState): { first: Line; last: Line } {
+// export: F-2022 editor/insertTemplate.ts 가 그대로 쓴다 (동작 불변)
+export function selectionLines(state: EditorState): { first: Line; last: Line } {
   const { from, to, empty } = state.selection.main
   const first = state.doc.lineAt(from)
   let last = state.doc.lineAt(to)
@@ -49,7 +50,8 @@ type Placement = {
 }
 
 // 블록 넣을 자리 계산 (F-169 2장). wrap 이면(감싸는 명령 + 선택 있음) 선택 줄 전체를 그 자리에서 바꾼다(in-place, to=last.to). 아니면 기준 줄이 빈 줄 하나일 때만 in-place(그 줄에 넣기), 그 밖은 기준 줄(마지막) 끝 뒤에 새 줄로 추가(append)
-function computePlacement(state: EditorState, first: Line, last: Line, wrap: boolean): Placement {
+// export: F-2022 editor/insertTemplate.ts 가 그대로 쓴다 (동작 불변)
+export function computePlacement(state: EditorState, first: Line, last: Line, wrap: boolean): Placement {
   const singleEmpty = !wrap && first.number === last.number && first.length === 0
   const belowLine = lineOrNull(state, last.number + 1)
   const hasBelow = belowLine !== null
@@ -67,7 +69,8 @@ function computePlacement(state: EditorState, first: Line, last: Line, wrap: boo
 }
 
 // 자리 앞뒤 빈 줄을 core(블록 원문) 에 둘러 삽입 문자열을 만든다. forceTrailingIfNoBelow 는 수평선 전용(F-169 3장 "아랫줄이 없으면 빈 줄 1개")
-function buildInsert(
+// export: F-2022 editor/insertTemplate.ts 가 그대로 쓴다 (동작 불변)
+export function buildInsert(
   placement: Placement,
   core: string,
   forceTrailingIfNoBelow = false,

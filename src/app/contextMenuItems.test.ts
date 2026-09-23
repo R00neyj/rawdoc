@@ -120,3 +120,22 @@ describe('buildViewContextMenu — 3.3 보기 모드·공유 화면', () => {
     expect(findItem(nodes, 'copy').disabled).toBe(true)
   })
 })
+
+// U10 (F-2022.md 7.1·11.1)
+describe('명령 팔레트 항목 — F-2022 7.1', () => {
+  it('편집·칸 메뉴 맨 끝에 구분선 + 명령 팔레트…', () => {
+    for (const place of ['editor', 'cell'] as const) {
+      const state = makeState('abc', EditorSelection.cursor(0))
+      const nodes = buildEditorContextMenu({ place, state, hasSelection: false })
+      const last = nodes[nodes.length - 1]
+      const beforeLast = nodes[nodes.length - 2]
+      expect(last).toEqual({ kind: 'item', id: 'palette', label: '명령 팔레트…', shortcut: 'Ctrl+P', action: 'open-palette', disabled: false })
+      expect(beforeLast).toEqual({ kind: 'separator' })
+    }
+  })
+
+  it('보기 메뉴는 항목 2개 그대로', () => {
+    const nodes = buildViewContextMenu({ hasSelection: true })
+    expect(nodes).toHaveLength(2)
+  })
+})

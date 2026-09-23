@@ -24,7 +24,9 @@ import { migrateLocalIfNeeded } from './migrateLocal'
 import { ancestorsOfDoc, resolveTargetFolderId, canMoveFolder } from '../lib/folderTree'
 import type { SelectionItem } from './sidebarSelection'
 import { createWikiResolver } from '../lib/wikiResolve'
-import { fromEditorText } from '../lib/lineEnding'
+import { fromEditorText, toEditorText } from '../lib/lineEnding'
+import { listTemplates, expandTemplateVariables, type TemplateEntry } from '../lib/templates'
+import { insertTemplate as insertTemplateIntoEditor } from '../editor/insertTemplate'
 import { decodeMarkdown } from '../lib/decodeMarkdown'
 import { getPref, setPref } from './prefs'
 import { fetchAccount, loginUrl, type AccountState } from './account'
@@ -77,6 +79,8 @@ import type { ScrollAnchor } from '../lib/scrollAnchor'
 import Outline from './Outline'
 import ContextMenu from './ContextMenu'
 import { buildEditorContextMenu, buildViewContextMenu, type ContextMenuNode, type MenuItemNode } from './contextMenuItems'
+import CommandPalette from './CommandPalette'
+import type { PaletteContext } from './paletteContract'
 
 import { useInstallPrompt } from '../pwa/useInstallPrompt'
 import { useAppUpdate } from '../pwa/useAppUpdate'
@@ -297,6 +301,8 @@ export default function App() {
   const [syncState, setSyncState] = useState<SyncState | undefined>(undefined)
   // 우클릭 메뉴 상태 (specs/features/F-170.md) — view·container 는 place 에 따라 하나만 쓴다
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  // 명령 팔레트 D-7 열림 상태 (specs/features/F-2022.md)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   // zip 가져오기 미리보기·진행·결과 대화상자 (F-282.md 3.8)
   const [importState, setImportState] = useState<ImportDialogState | null>(null)
 
@@ -327,6 +333,9 @@ export default function App() {
   const openSearchRef = useRef(() => {}) // Ctrl+Shift+F 가 매 커밋 최신 openSearch 를 읽게 한다 (F-287.md 3.4)
   const selectSearchQueryRef = useRef(() => {}) // 검색 대화상자가 이미 열려 있을 때 검색어를 전체 선택 — SearchDialog 가 채운다 (F-287.md 3.4)
   const printDisabledRef = useRef(true) // exportDisabled 와 같은 조건 (F-279.md 6.1)
+  const openPaletteRef = useRef(() => {}) // Ctrl+P 가 매 커밋 최신 openPalette 를 읽게 한다 (F-2022.md 6.1)
+  const selectPaletteQueryRef = useRef(() => {}) // 팔레트가 이미 열려 있을 때 입력칸 전체 선택 — CommandPalette 가 채운다 (F-2022.md 6.1)
+  const bootPhaseRef = useRef(bootPhase) // Ctrl+P 가 매 커밋 최신 bootPhase 를 읽게 한다 (F-2022.md 6.1)
   // hashchange 핸들러가 낡은 클로저의 docs·currentDocId 를 읽지 않도록 매 렌더 후 갱신한다
   // (0단계 버그 수정)
   const docsRef = useRef(docs)
@@ -485,6 +494,25 @@ export default function App() {
   const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly || claimReadOnly || isDeletedElsewhere
   // 본문 맨 위 제목 읽기 전용 — 상단바 옛 제목 입력의 disabled·readOnly 조건을 하나로 합친다 (F-217.md 2.4)
   const titleReadOnly = isReadOnlyDoc || viewMode === 'view' || Boolean(sharedDoc)
+
+  // 명령 팔레트 D-7 — 템플릿 삽입이 보이는 조건 (specs/features/F-2022.md 6.3)
+  const canInsertTemplate =
+    bootPhase === 'ready' &&
+    !sharedDoc &&
+    openDoc?.id === currentDocId &&
+    editorRef.current !== null &&
+    (viewMode === 'live' || viewMode === 'raw') &&
+    !isReadOnlyDoc &&
+    !mapRoute &&
+    !helpOpen &&
+    !sharesOpen
+  // printDisabledRef 와 같은 조건 (F-279.md 6.1) — 인쇄 가능 범위는 이 명세에서 바꾸지 않는다
+  const canPrint = bootPhase === 'ready' && currentDocId !== null && !sharedDoc
+  // 최상위 '템플릿'·'templates' 폴더 하위 문서 + 내장 4개 (F-2022.md 4.2)
+  const templateEntries: TemplateEntry[] = useMemo(
+    () => listTemplates({ folders, docs: docs.map((d) => ({ id: d.id, title: d.title, folderId: d.folderId ?? null, role: d.role })) }),
+    [folders, docs],
+  )
 
   // 문서를 바꾸면 지워짐 상태를 되돌린다 — 렌더 중 상태를 맞추는 공식 패턴 (F-296.md 7.3, useDocSaver.ts trackedDocId 와 같은 방식)
   const [deletedElsewhereTrackedDocId, setDeletedElsewhereTrackedDocId] = useState(currentDocId)
@@ -1073,7 +1101,7 @@ export default function App() {
       setSidebarOpen(false)
     }
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !settingsOpen && !searchOpen && !deleteTarget && !moveDocTarget && !bulkDeleteItems) {
+      if (e.key === 'Escape' && !settingsOpen && !searchOpen && !paletteOpen && !deleteTarget && !moveDocTarget && !bulkDeleteItems) {
         setSidebarOpen(false)
       }
     }
@@ -1084,7 +1112,7 @@ export default function App() {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [narrow, sidebarOpen, settingsOpen, searchOpen, deleteTarget, moveDocTarget, bulkDeleteItems])
+  }, [narrow, sidebarOpen, settingsOpen, searchOpen, paletteOpen, deleteTarget, moveDocTarget, bulkDeleteItems])
 
   // ----- 브라우저 기본 찾기(Ctrl/Cmd+F) 비활성화 (2026-09-20 사용자 요청) -----
   // 포커스가 에디터 안이면 createEditor.ts 의 Mod-f 키맵(scope 'editor search-panel')이 먼저
@@ -1103,18 +1131,25 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // ----- Ctrl+P(Cmd+P) → 앱 인쇄, 에디터 안에 포커스가 있어도 가로챈다 (specs/features/F-279.md 6.1) -----
+  // ----- Ctrl+P(Cmd+P) → 명령 팔레트 D-7, 에디터 안에 포커스가 있어도 가로챈다 (specs/features/F-2022.md 6.1) -----
   useEffect(() => {
+    if (publicRoute) return // 공개 보기(S-5)에는 저장소가 없다 — 브라우저 인쇄로 남긴다
     function handleKeyDown(e: KeyboardEvent) {
       if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return
       if (e.key.toLowerCase() !== 'p') return
-      if (printDisabledRef.current) return // 브라우저 기본 인쇄에 맡긴다
+      if (sharedDocRef.current) return // 공유 링크 화면 S-4 — 브라우저 인쇄로 남긴다
       e.preventDefault()
-      printDocRef.current()
+      if (bootPhaseRef.current !== 'ready') return // 부팅 중 — 아무것도 하지 않는다
+      const open = document.querySelector('dialog[open]')
+      if (open) {
+        if (open.querySelector('.command-palette')) selectPaletteQueryRef.current() // 이미 열려 있으면 입력칸 전체 선택
+        return // 팔레트 말고 다른 대화상자면 무시
+      }
+      openPaletteRef.current()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [publicRoute])
 
   // ----- Ctrl+Shift+F(Cmd+Shift+F) → 검색 대화상자 D-6 (specs/features/F-287.md 3.4) -----
   useEffect(() => {
@@ -1376,6 +1411,8 @@ export default function App() {
     // exportDisabled 와 같은 조건 (F-279.md 6.1) — bootPhase !== 'ready' 면 isEmpty 자체가 false 라 첫 항으로 충분하다
     printDisabledRef.current = bootPhase !== 'ready' || currentDocId === null || Boolean(sharedDoc)
     openSearchRef.current = openSearch
+    openPaletteRef.current = openPalette
+    bootPhaseRef.current = bootPhase
   })
 
   // hashchange 핸들러(위)가 항상 최신 docs·currentDocId 를 보도록 매 커밋 후 갱신한다
@@ -1388,13 +1425,13 @@ export default function App() {
     sharesOpenRef.current = sharesOpen
     helpOpenRef.current = helpOpen
     mapRouteRef.current = mapRoute
-    // 받지 않는 때(F-145.md 2.1): 대화상자·공유 화면·공유 관리 페이지·지도·저장소를 못 쓸 때(store.kind==='memory')
+    // 받지 않는 때(F-145.md 2.1): 대화상자·공유 화면·공유 관리 페이지·지도·저장소를 못 쓸 때(store.kind==='memory'). 팔레트도 다른 대화상자와 같다(F-2022.md 9.1)
     dropBlockedRef.current = Boolean(
-      settingsOpen || searchOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen || mapRoute || store.kind === 'memory',
+      settingsOpen || searchOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen || mapRoute || paletteOpen || store.kind === 'memory',
     )
     // 이미지는 저장소를 못 쓸 때(메모리 저장소)는 막지 않는다 (F-156.md 2.5) — #/help 화면은 편집기가 없어 차단 대상이 아니다 (F-244.md 3.3)
     imageDropBlockedRef.current = Boolean(
-      settingsOpen || searchOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen || mapRoute,
+      settingsOpen || searchOpen || deleteTarget || moveDocTarget || bulkDeleteItems || sharedDoc || sharesOpen || mapRoute || paletteOpen,
     )
     // view 권한·403 강등 문서·편집 잠금(F-213.md 2.3)에서는 이미지 올리기(붙여넣기·끌어놓기)를 막는다 (F-212.md 2.4)
     readOnlyDocRef.current = isReadOnlyDoc
@@ -2440,6 +2477,75 @@ export default function App() {
     setSearchOpen(false)
   }
 
+  // 명령 팔레트 D-7 (specs/features/F-2022.md 6.1) — 열려 있던 우클릭 메뉴를 닫고, 좁은 창 사이드바를 닫는다
+  function openPalette() {
+    setContextMenu(null)
+    closeSidebarIfNarrow()
+    setPaletteOpen(true)
+  }
+
+  function closePalette() {
+    setPaletteOpen(false)
+  }
+
+  // 명령 팔레트 `템플릿 삽입` — 원문 읽기 → 치환 → 자리에 넣기 (F-2022.md 5.7)
+  async function insertTemplate(templateId: string, signal: AbortSignal) {
+    if (!canInsertTemplate) {
+      showNotice({ type: 'info', message: '읽기 전용이라 템플릿을 넣지 못했습니다.' })
+      return
+    }
+    const startDocId = currentDocId
+    const template = templateEntries.find((t) => t.id === templateId)
+
+    let rawText: string | null = null
+    try {
+      if (template?.source.kind === 'builtin') {
+        rawText = template.source.body
+      } else if (template?.source.kind === 'doc') {
+        if (template.source.docId === startDocId) {
+          rawText = editorRef.current?.getText('lf') ?? null
+        } else {
+          const doc = await store.get(template.source.docId)
+          rawText = doc?.content ?? null
+        }
+      }
+    } catch {
+      rawText = null
+    }
+
+    if (rawText === null) {
+      showNotice({ type: 'error', message: '템플릿을 읽지 못했습니다.' })
+      return
+    }
+
+    if (signal.aborted) return
+    if (currentDocIdRef.current !== startDocId || !canInsertTemplate) return
+
+    closePalette()
+
+    const view = editorRef.current?.view
+    if (!view) return
+    const substituted = expandTemplateVariables(toEditorText(rawText), { title: currentDoc?.title ?? '', now: new Date() })
+    const result = insertTemplateIntoEditor({ state: view.state, dispatch: (tr) => view.dispatch(tr) }, substituted)
+
+    if (!result.inserted) {
+      showNotice({ type: 'info', message: '템플릿이 비어 있습니다.' })
+    } else if (result.frontmatterSkipped) {
+      showNotice({ type: 'info', message: '템플릿 속성을 문서 속성에 합치지 못해 본문만 넣었습니다.' })
+    }
+
+    // Dialog 가 닫는 요소로 포커스를 돌리는 비동기 처리(close 이벤트)를 이겨야 한다 — openDocFromSearch 와 같은 방식 (5.7-7)
+    setTimeout(() => editorRef.current?.focus(), 0)
+  }
+
+  const paletteContext: PaletteContext = {
+    canInsertTemplate,
+    canPrint,
+    templates: templateEntries,
+    insertTemplate,
+    printDoc: handlePrintDoc,
+  }
+
   // 검색 결과에서 문서 열기 (F-287.md 4.6) — 지금 문서를 그대로 두지 않고 그 문서로 이동한다
   // term 이 있으면 그 문서의 찾기 패널에 검색어를 넣는다 (specs/features/F-294.md 4.3)
   async function openDocFromSearch(id: string, term: string | null) {
@@ -2751,6 +2857,17 @@ export default function App() {
     if (!cm) return
     if (node.action === 'command') {
       if (node.run) runContextMenuCommand(node.run, cm)
+      return
+    }
+    if (node.action === 'open-palette') {
+      // 칸 메뉴에서 열었으면 템플릿이 표 뒤에 들어가야 한다(7.1) — 표 위젯 자리로 주 에디터 선택을 옮긴다
+      if (cm.place === 'cell' && cm.mainView && cm.view) {
+        const wrapEl = cm.view.dom.closest<HTMLElement>('.md-table-widget')
+        if (wrapEl) cm.mainView.dispatch({ selection: { anchor: cm.mainView.posAtDOM(wrapEl) } })
+      }
+      // 메뉴가 이미 사라져 Dialog 가 기억할 "연 순간의 요소" 가 없다 — 먼저 포커스를 돌려 놓는다(칸 메뉴면 주 에디터, F-2022.md 7.3)
+      ;(cm.mainView ?? cm.view)?.focus()
+      openPalette()
       return
     }
     if (node.action === 'clipboard-cut') await cutContextMenuSelection(cm)
@@ -3155,6 +3272,7 @@ export default function App() {
         selectQueryRef={selectSearchQueryRef}
         offline={searchOffline}
       />
+      <CommandPalette open={paletteOpen} context={paletteContext} onClose={closePalette} selectQueryRef={selectPaletteQueryRef} />
       <ImportPreviewDialog
         state={importState}
         onCancel={importState?.stage === 'progress' ? cancelImportProgress : cancelImportPreview}

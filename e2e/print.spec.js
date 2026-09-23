@@ -221,7 +221,7 @@ test.describe('F-293 A13 인쇄 영역에 머리줄 없음', () => {
 })
 
 test.describe('F-279 A11 Ctrl+P', () => {
-  test('편집 영역에 포커스가 있어도 인쇄된다', async ({ page }) => {
+  test('Ctrl+P 는 인쇄 대신 명령 팔레트를 연다', async ({ page }) => {
     await stubPrint(page)
     await openApp(page)
     await importMarkdown(page, { content: '## 소개\n\n본문\n' })
@@ -229,11 +229,17 @@ test.describe('F-279 A11 Ctrl+P', () => {
 
     await page.keyboard.press('Control+p')
 
+    expect(await printCallCount(page)).toBe(0)
+    const palette = page.locator('dialog[open] .command-palette')
+    await expect(palette).toBeVisible()
+
+    await page.getByRole('option', { name: 'PDF (A4 인쇄)' }).click()
+
     await expect.poll(() => printCallCount(page)).toBe(1)
     await expect(page.locator('.print-root .markdown-body h2')).toHaveText('소개')
   })
 
-  test('빈 상태에서는 인쇄를 부르지 않는다', async ({ page }) => {
+  test('빈 상태에서는 인쇄를 부르지 않고 팔레트에 명령이 없다', async ({ page }) => {
     await stubPrint(page)
     await openApp(page)
     await deleteFirstDoc(page) // 첫 실행 안내 문서를 지워 빈 상태를 만든다
@@ -242,5 +248,6 @@ test.describe('F-279 A11 Ctrl+P', () => {
     await page.waitForTimeout(300)
 
     expect(await printCallCount(page)).toBe(0)
+    await expect(page.locator('dialog[open] .command-palette .command-palette-status')).toHaveText('지금 쓸 수 있는 명령이 없습니다')
   })
 })
