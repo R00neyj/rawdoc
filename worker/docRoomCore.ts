@@ -5,8 +5,8 @@ import { SOCKET_CLOSE, Y_CONTENT_NAME, Y_TITLE_NAME, encodeDocRoomMessage } from
 import { fromEditorText, toEditorText } from '../src/lib/lineEnding'
 import type { LineEnding } from '../src/lib/lineEnding'
 import { resolveDocAccess, roleAtLeast } from './access'
-import { rebaseExternal } from './textRebase'
-import type { TextEdit } from './textRebase'
+import { rebaseExternal } from '../src/lib/textRebase'
+import type { TextEdit } from '../src/lib/textRebase'
 import { MAX_CONTENT_BYTES, MAX_TITLE_CHARS, utf8ByteLength } from './validate'
 import { YStore } from './yStore'
 import type { DoStorageLike } from './yStore'
@@ -370,6 +370,15 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
       if (!access || !roleAtLeast(access.role, 'edit')) safeClose(conn, SOCKET_CLOSE.forbidden, 'revoked')
     }
     this.lastRevalidate = Date.now()
+  }
+
+  // /v1 PUT 임시 423 (F-305 12.2) — 연결 상태만 읽는다. 연결은 모두 편집 권한 이상이다
+  activeEditor(): string | null {
+    for (const conn of this.host.connections()) {
+      const state = readConnState(conn.state)
+      if (state) return state.email
+    }
+    return null
   }
 
   private closeAll(code: number, reason: string) {

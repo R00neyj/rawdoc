@@ -39,8 +39,10 @@ import type { OnOpenWikiLink, WikiContext } from './preview/wikiLinks'
 import type { ResolveAttachment } from './preview/blocks'
 import { enterTableFromKeyboard, setCellContextMenuHandler } from './preview/tableWidget'
 import { wikiComplete } from './wikiComplete'
-import { createYBinding, undoKeymap } from './yBinding'
+import * as Y from 'yjs'
+import { createYBinding, createYBindingFromState, undoKeymap } from './yBinding'
 import { connectRemote } from './remoteGate'
+import { observeTitle, writeTitle } from './liveTitle'
 import './searchPanel.css'
 
 // 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
@@ -308,6 +310,13 @@ type CreateEditorOptions = {
   onNavigateFolder?: OnNavigateFolder
   // 원격 연결 훅에 넘기는 문서 id (F-303 4.4) — 없으면(랜딩 데모) 연결이 붙지 않는다
   docId?: string
+  // 실시간 경로 (F-305 9장) — 첫 동기화가 끝난 방 Doc 에서 편집기 Doc 을 복제하고 게이트를 세운다. text 는 쓰지 않는다
+  live?: LiveEditorOptions
+}
+
+export type LiveEditorOptions = {
+  roomDoc: Y.Doc
+  onRemoteTitle: (title: string) => void
 }
 
 export function createEditor(parent: HTMLElement, options: CreateEditorOptions = {}) {
@@ -332,6 +341,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     breadcrumb = [],
     onNavigateFolder = () => {},
     docId,
+    live,
   } = options
 
   let destroyed = false
@@ -363,8 +373,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const indentCompartment = new Compartment()
   const readOnlyCompartment = new Compartment()
 
-  // 열린 문서의 원본 Y.Text — EditorState 는 그 투영이다 (F-302 3.1)
-  const binding = createYBinding(text)
+  // 원본 Y.Text(F-302 3.1). 실시간이면 방 Doc 복제 — 여기서 connectRemote 까지 await 가 없어 사이에 원격 업데이트가 끼지 않는다 (F-305 5.3·9.2)
+  const binding = live ? createYBindingFromState(Y.encodeStateAsUpdate(live.roomDoc)) : createYBinding(text)
 
   const extensions: Extension[] = [
     docTitleExtension({
@@ -474,7 +484,9 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   // 표 칸 하위 에디터(tableWidget.ts)의 우클릭도 같은 콜백으로 (F-170.md 3.2)
   setCellContextMenuHandler(view, (info) => notifyContextMenu(info))
   // 뷰가 있어야 조합 상태를 읽는다 — 훅이 없으면 null 이고 아무것도 만들지 않는다 (F-303 4.2·4.4)
-  const remote = connectRemote({ view, editorDoc: binding.ydoc, docId })
+  const remote = connectRemote({ view, editorDoc: binding.ydoc, docId, sharedDoc: live?.roomDoc })
+  // 원격 제목은 게이트를 지나 편집기 Doc 에 들어온다 — 조합 중에는 같이 보류된다 (F-305 9.3)
+  const unobserveTitle = live ? observeTitle(binding.ydoc, live.onRemoteTitle) : () => {}
 
   return {
     view,
@@ -547,6 +559,12 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // 본문 맨 위 제목 값 갱신 (F-217.md 2.2) — 포커스가 없을 때만 위젯 DOM 값을 바꾼다
     setTitle(value: string) {
       view.dispatch({ effects: setTitleEffect.of(value) })
+    },
+
+    // 실시간 경로의 제목 쓰기 — 편집기 Doc 에 쓰고 게이트가 방 Doc 으로 중계한다 (F-305 9.3). live 가 없으면 아무것도 안 한다
+    writeLiveTitle(value: string) {
+      if (!live || destroyed) return
+      writeTitle(binding.ydoc, value)
     },
 
     // 읽기 전용 전환 (F-217.md 2.4)
@@ -662,6 +680,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       setCellContextMenuHandler(view, undefined)
       detachMarginClickGuard()
       detachComposingEnterGuard()
+      unobserveTitle()
       remote?.destroy()
       view.destroy()
       binding.destroy()

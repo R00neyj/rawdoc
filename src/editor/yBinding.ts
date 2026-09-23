@@ -43,11 +43,26 @@ function undoGroupPlugin(undoManager: Y.UndoManager): Extension {
   })
 }
 
+// 받은 상태를 적용하는 트랜잭션의 origin — 씨앗(null)과 구별된다 (F-305 9.1)
+const FROM_STATE = { seed: 'from-state' }
+
 export function createYBinding(text: string): YBinding {
   const ydoc = new Y.Doc()
   const ytext = ydoc.getText(Y_TEXT_NAME)
   const seed = toEditorText(text)
   if (seed) ytext.insert(0, seed)
+  return bind(ydoc, ytext)
+}
+
+// 방 Doc 이 서버에서 받은 상태를 그대로 옮겨 만든다 — 씨앗을 넣지 않는다 (F-305 5.3·9.1)
+export function createYBindingFromState(state: Uint8Array): YBinding {
+  const ydoc = new Y.Doc()
+  const ytext = ydoc.getText(Y_TEXT_NAME)
+  Y.applyUpdate(ydoc, state, FROM_STATE)
+  return bind(ydoc, ytext)
+}
+
+function bind(ydoc: Y.Doc, ytext: Y.Text): YBinding {
   // 씨앗 뒤에 만들고 null origin 을 추적하지 않는다 — 둘 다 첫 Ctrl+Z 가 본문을 지우지 않게 한다(3.4)
   const undoManager = new Y.UndoManager(ytext, {
     trackedOrigins: new Set(),

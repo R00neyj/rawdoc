@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('./docRoomRpc', () => ({
   notifyRevalidate: vi.fn(async () => {}),
   notifyPurge: vi.fn(async () => {}),
+  liveEditorOf: vi.fn(async () => null),
 }))
 vi.mock('./auth', () => ({
   requireUser: vi.fn(async () => ({ id: 'me', email: 'me@example.com' })),
@@ -13,11 +14,11 @@ import * as rpc from './docRoomRpc'
 import { handleDeleteDocGrant, handleDeleteFolderGrant, handlePutDocGrant } from './grants'
 import { handleDeleteDoc } from './docs'
 
-const { notifyPurge, notifyRevalidate } = await vi.importActual<typeof import('./docRoomRpc')>('./docRoomRpc')
+const { liveEditorOf, notifyPurge, notifyRevalidate } = await vi.importActual<typeof import('./docRoomRpc')>('./docRoomRpc')
 
 const DOC_ID = '33333333-3333-4333-8333-333333333333'
 
-function stubEnv(stub: { revalidateConnections?: (email?: string) => Promise<void>; purgeRoom?: () => Promise<void> }) {
+function stubEnv(stub: { revalidateConnections?: (email?: string) => Promise<void>; purgeRoom?: () => Promise<void>; activeEditor?: () => Promise<string | null> }) {
   const getByName = vi.fn(() => stub)
   return { env: { DOC_ROOM: { getByName } } as unknown as Env, getByName }
 }
@@ -180,5 +181,39 @@ describe('F-304 A24 배선', () => {
     expect(rpc.notifyPurge).toHaveBeenCalledTimes(1)
     expect(rpc.notifyPurge).toHaveBeenCalledWith(env, ctx, DOC_ID)
     expect(order).toEqual(['delete-docs', 'purge'])
+  })
+})
+
+describe('F-305 U24 liveEditorOf', () => {
+  it('env.DOC_ROOM 이 없으면 null', async () => {
+    await expect(liveEditorOf({} as Env, DOC_ID)).resolves.toBeNull()
+  })
+
+  it('스텁의 activeEditor 결과를 기다려 돌려준다', async () => {
+    const activeEditor = vi.fn(async () => 'a@example.com')
+    const { env, getByName } = stubEnv({ activeEditor })
+    await expect(liveEditorOf(env, DOC_ID)).resolves.toBe('a@example.com')
+    expect(getByName).toHaveBeenCalledWith(DOC_ID)
+    expect(activeEditor).toHaveBeenCalledTimes(1)
+    const empty = stubEnv({ activeEditor: vi.fn(async () => null) })
+    await expect(liveEditorOf(empty.env, DOC_ID)).resolves.toBeNull()
+  })
+
+  it('던지면 console.error 1번 뒤 null — 실패하면 통과', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { env } = stubEnv({
+      activeEditor: vi.fn(async () => {
+        throw new Error('DO down')
+      }),
+    })
+    await expect(liveEditorOf(env, DOC_ID)).resolves.toBeNull()
+    expect(error).toHaveBeenCalledTimes(1)
+    const sync = stubEnv({
+      activeEditor: vi.fn(() => {
+        throw new Error('sync throw')
+      }),
+    })
+    await expect(liveEditorOf(sync.env, DOC_ID)).resolves.toBeNull()
+    expect(error).toHaveBeenCalledTimes(2)
   })
 })

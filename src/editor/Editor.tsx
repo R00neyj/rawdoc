@@ -7,6 +7,7 @@ import type { Ref } from 'react'
 import type { EditorState } from '@codemirror/state'
 
 import { createEditor } from './createEditor'
+import type { LiveEditorOptions } from './createEditor'
 import type { OnOpenWikiLink, WikiContext } from './preview/wikiLinks'
 import type { ResolveAttachment } from './preview/blocks'
 import type { OnImageFiles } from './imageInsert'
@@ -32,6 +33,8 @@ type EditorProps = {
   onTitleCommit?: OnTitleCommit
   // 원격 연결 훅에 넘긴다 (F-303 4.4). 마운트 때 한 번만 읽는다 — App 이 key 로 문서마다 새로 마운트한다
   docId?: string
+  // 실시간 경로의 방 Doc (F-305 9장). 마운트 때 한 번만 읽는다
+  live?: LiveEditorOptions
   ref?: Ref<EditorHandle | null>
 }
 
@@ -51,6 +54,7 @@ export default function Editor({
   onTitleChange,
   onTitleCommit,
   docId,
+  live,
   ref,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -78,6 +82,7 @@ export default function Editor({
       onTitleChange,
       onTitleCommit,
       docId,
+      live,
     })
     handleRef.current = handle
     // 문서 전환 후 포커스 + 커서 맨 앞 (ia.md 3.4, F-103 3.4). App 의 passive effect 에서

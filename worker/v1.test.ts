@@ -1,5 +1,5 @@
 // F-223 자동 업로드 API '/v1' 단위 테스트 (specs/features/F-223.md 3장)
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./auth', () => ({
   requireUser: vi.fn(async (request: Request) => {
@@ -8,13 +8,20 @@ vi.mock('./auth', () => ({
   }),
 }))
 
+// 실시간 편집자 판정(F-305 12.3) — 기본은 null(지금과 같음), 임시 423 테스트만 값을 준다
+vi.mock('./docRoomRpc', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./docRoomRpc')>()),
+  liveEditorOf: vi.fn(async () => null),
+}))
+
 import {
   handleCreateAttachmentV1,
   handleCreateDocLinkV1,
   handleCreateDocV1,
   handleUpdateDocV1,
 } from './v1'
-import { handleGetDoc, handleListDocs } from './docs'
+import { handleGetDoc, handleListDocs, handleUpdateDoc } from './docs'
+import { liveEditorOf } from './docRoomRpc'
 import { handleCreateFolder, handleDeleteFolder, handleListFolders } from './folders'
 import { V1_EXAMPLES } from './v1Contract'
 
@@ -328,6 +335,99 @@ describe('F-223 A1 PUT /v1/docs/:id', () => {
     )
     expect(res.status).toBe(200)
     expect(docs[0].content).toBe('new content')
+  })
+})
+
+describe('F-305 U22·U23·U24 /v1 PUT 임시 423', () => {
+  function baseDoc(overrides: Partial<DocRow> = {}): DocRow {
+    return {
+      id: 'd1', owner_id: 'u1', title: 't', content: 'c', line_ending: 'lf',
+      folder_id: null, pinned_at: null, version: 1, created_at: 1, updated_at: 1,
+      ...overrides,
+    }
+  }
+
+  function put(body: unknown, headers: Record<string, string> = {}) {
+    return new Request('http://local.test/v1/docs/d1', {
+      method: 'PUT',
+      headers: { 'x-test-user': 'u1', ...headers },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    })
+  }
+
+  const live = vi.mocked(liveEditorOf)
+
+  beforeEach(() => {
+    live.mockReset()
+    live.mockImplementation(async () => null)
+  })
+
+  afterEach(() => {
+    live.mockImplementation(async () => null)
+  })
+
+  it('U22 실시간 편집자가 있으면 423 {error, email} — expiresAt 없음, 쓰지 않는다', async () => {
+    live.mockImplementation(async () => 'a@x')
+    const { env, docs } = makeEnv({ docs: [baseDoc()] })
+    const res = await handleUpdateDocV1(put({ content: 'new', baseVersion: 1 }), env, {} as ExecutionContext, { id: 'd1' })
+    expect(res.status).toBe(423)
+    expect(await res.json()).toEqual({ error: 'locked', email: 'a@x' })
+    expect(live).toHaveBeenCalledWith(env, 'd1')
+    expect(docs[0].content).toBe('c')
+  })
+
+  it('U22 null 이면 지금처럼 쓴다', async () => {
+    const { env, docs } = makeEnv({ docs: [baseDoc()] })
+    const res = await handleUpdateDocV1(put({ content: 'new', baseVersion: 1 }), env, {} as ExecutionContext, { id: 'd1' })
+    expect(res.status).toBe(200)
+    expect(docs[0].content).toBe('new')
+    expect(live).toHaveBeenCalledTimes(1)
+  })
+
+  it('U23 본문 400·413, 없는 문서 404, 보기 권한 403 이 먼저 — liveEditorOf 를 부르지 않는다', async () => {
+    live.mockImplementation(async () => 'a@x')
+    const cases: [DocRow[], GrantRow[], unknown, number][] = [
+      [[baseDoc()], [], 'not json', 400],
+      [[baseDoc()], [], { content: 'x' }, 400],
+      [[baseDoc()], [], { content: 'x'.repeat(1_000_001), baseVersion: 1 }, 413],
+      [[baseDoc({ owner_id: 'owner-2' })], [], { content: 'x', baseVersion: 1 }, 404],
+      [[baseDoc({ owner_id: 'owner-2' })], [{ target_type: 'doc', target_id: 'd1', grantee_email: 'u1@example.com', role: 'view' }], { content: 'x', baseVersion: 1 }, 403],
+    ]
+    for (const [docsRows, grants, body, status] of cases) {
+      const { env } = makeEnv({ docs: docsRows, grants })
+      const res = await handleUpdateDocV1(put(body), env, {} as ExecutionContext, { id: 'd1' })
+      expect(res.status).toBe(status)
+    }
+    expect(live).not.toHaveBeenCalled()
+  })
+
+  it('U23 D1 잠금 423(expiresAt 있음)이 실시간 423 보다 먼저', async () => {
+    live.mockImplementation(async () => 'a@x')
+    const expiresAt = Date.now() + 60_000
+    const { env } = makeEnv({ docs: [baseDoc()], locks: [{ doc_id: 'd1', user_id: 'other', email: 'other@example.com', session_id: 's', expires_at: expiresAt }] })
+    const res = await handleUpdateDocV1(put({ content: 'new', baseVersion: 1 }), env, {} as ExecutionContext, { id: 'd1' })
+    expect(res.status).toBe(423)
+    expect(await res.json()).toEqual({ error: 'locked', email: 'other@example.com', expiresAt })
+    expect(live).not.toHaveBeenCalled()
+  })
+
+  it('U23 실시간 423 이 version 409 보다 먼저', async () => {
+    live.mockImplementation(async () => 'a@x')
+    const { env } = makeEnv({ docs: [baseDoc()] })
+    const res = await handleUpdateDocV1(put({ content: 'new', baseVersion: 99 }), env, {} as ExecutionContext, { id: 'd1' })
+    expect(res.status).toBe(423)
+    live.mockImplementation(async () => null)
+    const again = await handleUpdateDocV1(put({ content: 'new', baseVersion: 99 }), env, {} as ExecutionContext, { id: 'd1' })
+    expect(again.status).toBe(409)
+  })
+
+  it('U24 /api PUT 은 liveEditorOf 를 부르지 않는다', async () => {
+    live.mockImplementation(async () => 'a@x')
+    const { env, docs } = makeEnv({ docs: [baseDoc()] })
+    const res = await handleUpdateDoc(put({ content: 'api', baseVersion: 1 }), env, {} as ExecutionContext, { id: 'd1' })
+    expect(res.status).toBe(200)
+    expect(docs[0].content).toBe('api')
+    expect(live).not.toHaveBeenCalled()
   })
 })
 

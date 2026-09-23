@@ -40,6 +40,8 @@ export type ServerStore = Store & {
   importLocal(input: { folders: Folder[]; docs: Doc[] }): Promise<{ importedCount: number }>
   // 잠금을 되찾은 뒤 서버 값을 다시 받아 캐시에 반영한다(에디터 재마운트용) (F-213.md 2.3)
   refreshDocFromServer(id: string): Promise<Doc | null>
+  // outbox 에 이 문서의 createDoc·updateDoc 이 남았는가 — 남았으면 실시간으로 붙지 않는다 (F-305 4.2)
+  hasPendingChanges(docId: string): Promise<boolean>
 }
 
 // 안 보낸 removeFolder(delete-all) 이 지운 폴더 id 들(자신 포함) — 서버 목록 기준 자손 판정 (F-247.md 3.1)
@@ -582,6 +584,12 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       } catch {
         return null
       }
+    },
+
+    // setPinned·moveDoc 은 세지 않는다 — baseVersion 을 보내지 않아 실시간과 부딪치지 않는다 (F-305 4.2)
+    async hasPendingChanges(docId) {
+      const entries = await cache.getOutbox(userId)
+      return entries.some((e) => (e.type === 'createDoc' || e.type === 'updateDoc') && e.docId === docId)
     },
 
     async refreshDocFromServer(id) {

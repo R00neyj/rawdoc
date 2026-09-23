@@ -701,3 +701,35 @@ describe('serverStore', () => {
     })
   })
 })
+
+describe('F-305 U20 hasPendingChanges', () => {
+  it('createDoc·updateDoc 이 남아 있으면 참, setPinned·moveDoc 만 있거나 다른 문서 것이면 거짓', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const sent = await store.create({ title: '보낸 문서', content: 'a', lineEnding: 'lf' })
+    const other = await store.create({ title: '다른 문서', content: 'b', lineEnding: 'lf' })
+    await tick()
+    expect(await store.hasPendingChanges(sent.id)).toBe(false)
+
+    server.setNetworkDown(true)
+    await store.setPinned(sent.id, true)
+    await store.moveDoc(sent.id, null)
+    await tick()
+    expect(await store.hasPendingChanges(sent.id)).toBe(false)
+
+    await store.update(other.id, { content: '다른 문서 편집' })
+    await tick()
+    expect(await store.hasPendingChanges(sent.id)).toBe(false)
+    expect(await store.hasPendingChanges(other.id)).toBe(true)
+
+    await store.update(sent.id, { title: '제목만' })
+    await tick()
+    expect(await store.hasPendingChanges(sent.id)).toBe(true)
+
+    const created = await store.create({ title: '새 문서', content: '', lineEnding: 'lf' })
+    await tick()
+    expect(await store.hasPendingChanges(created.id)).toBe(true)
+  })
+})

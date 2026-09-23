@@ -17,6 +17,8 @@ export const setBreadcrumbEffect = StateEffect.define<{ breadcrumb: Breadcrumb; 
 
 const PLACEHOLDER = '제목 없는 문서'
 const NO_NAVIGATE: OnNavigateFolder = () => {}
+// 위젯 DOM 마다 필드의 최신 제목 — 포커스 중에 원격 제목이 오면 blur 뒤 이 값으로 맞춘다 (F-305 9.3)
+const latestTitle = new WeakMap<HTMLElement, string>()
 
 function breadcrumbEqual(a: Breadcrumb, b: Breadcrumb): boolean {
   if (a.length !== b.length) return false
@@ -133,6 +135,7 @@ class TitleWidget extends WidgetType {
     const wrap = document.createElement('div')
     wrap.className = 'md-block doc-title-block'
     wrap.dataset.breadcrumbKey = breadcrumbKey(this.breadcrumb)
+    latestTitle.set(wrap, this.title)
 
     wrap.appendChild(this.buildLabel())
 
@@ -155,7 +158,17 @@ class TitleWidget extends WidgetType {
       this.onChange(textarea.value)
     })
 
-    textarea.addEventListener('blur', () => this.onCommit())
+    textarea.addEventListener('blur', () => {
+      this.onCommit()
+      // 포커스 중엔 updateDOM 이 값을 안 바꾸고, 필드가 이미 바뀌었으면 eq 가 같아 다시 불리지 않는다 — 여기서 맞춘다
+      setTimeout(() => {
+        if (document.activeElement === textarea || !textarea.isConnected) return
+        const latest = latestTitle.get(wrap)
+        if (latest === undefined || textarea.value === latest) return
+        textarea.value = latest
+        resizeToContent(textarea)
+      }, 0)
+    })
 
     textarea.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
@@ -201,6 +214,7 @@ class TitleWidget extends WidgetType {
     }
     textarea.readOnly = this.readOnly
     textarea.placeholder = this.readOnly ? '' : PLACEHOLDER
+    latestTitle.set(dom, this.title)
     // 포커스가 없을 때만 값을 바꾼다 — 포커스 중엔 사용자가 입력한 값이 곧 최신 값이다 (2.2)
     if (document.activeElement !== textarea && textarea.value !== this.title) {
       textarea.value = this.title

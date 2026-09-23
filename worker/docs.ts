@@ -3,7 +3,7 @@ import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { getDocAccess, roleAtLeast } from './access'
 import { getActiveLock } from './locks'
-import { notifyPurge } from './docRoomRpc'
+import { liveEditorOf, notifyPurge } from './docRoomRpc'
 import {
   MAX_BODY_BYTES,
   MAX_CONTENT_BYTES,
@@ -201,6 +201,8 @@ export async function handleUpdateDoc(
   env: Env,
   _ctx: ExecutionContext,
   params: Record<string, string>,
+  // /v1 만 켠다 — 실시간 편집자가 있으면 423. /api(폴백 세션)는 막지 않는다 (F-305 12.1, F-308 에서 뺀다)
+  options?: { refuseWhileLive?: boolean },
 ): Promise<Response> {
   const user = await requireUser(request, env)
   const parsed = await readJsonLimited(request, MAX_BODY_BYTES)
@@ -231,6 +233,11 @@ export async function handleUpdateDoc(
   const activeLock = await getActiveLock(env, params.id)
   if (activeLock && activeLock.session_id !== request.headers.get('X-Lock-Session')) {
     return jsonResponse({ error: 'locked', email: activeLock.email, expiresAt: activeLock.expires_at }, 423)
+  }
+
+  if (options?.refuseWhileLive) {
+    const liveEmail = await liveEditorOf(env, params.id)
+    if (liveEmail) return jsonResponse({ error: 'locked', email: liveEmail }, 423)
   }
 
   if (existing.version !== baseVersion) {

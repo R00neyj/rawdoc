@@ -633,3 +633,25 @@ describe('F-304 A20 비우기 뒤', () => {
     expect(store.log.length).toBe(logs)
   })
 })
+
+describe('F-305 U25 activeEditor', () => {
+  it('연결이 없으면 null, 있으면 첫 연결 상태의 email, 못 읽는 연결은 건너뛴다, D1 호출 0', () => {
+    const d1 = makeD1({ content: 'x' })
+    const room = makeRoom(d1)
+    expect(room.core.activeEditor()).toBeNull()
+
+    const broken: FakeConn = { ...conn('u0', 'broken@example.com'), state: { userId: 'u0' } }
+    broken.close = () => {
+      broken.open = false
+    }
+    room.conns.push(broken)
+    expect(room.core.activeEditor()).toBeNull()
+
+    room.conns.push(conn('u1', 'first@example.com'), conn('u2', 'second@example.com', 'owner'))
+    expect(room.core.activeEditor()).toBe('first@example.com')
+
+    room.conns[1].open = false
+    expect(room.core.activeEditor()).toBe('second@example.com')
+    expect(d1.state.calls).toHaveLength(0)
+  })
+})

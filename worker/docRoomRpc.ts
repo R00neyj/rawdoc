@@ -3,6 +3,7 @@
 type RoomStub = {
   revalidateConnections(email?: string): Promise<void>
   purgeRoom(): Promise<void>
+  activeEditor(): Promise<string | null>
 }
 
 function roomStub(env: Env, docId: string): RoomStub | null {
@@ -38,4 +39,16 @@ export async function notifyPurge(env: Env, ctx: ExecutionContext | undefined, d
   const stub = roomStub(env, docId)
   if (!stub) return
   await dispatch(ctx, () => stub.purgeRoom())
+}
+
+// /v1 PUT 임시 423 (F-305 12.2) — 결과가 응답을 바꾸므로 기다린다. 실패하면 통과시킨다(22장 Q3)
+export async function liveEditorOf(env: Env, docId: string): Promise<string | null> {
+  const stub = roomStub(env, docId)
+  if (!stub) return null
+  try {
+    return await stub.activeEditor()
+  } catch (err) {
+    console.error('docRoom activeEditor failed', err)
+    return null
+  }
 }

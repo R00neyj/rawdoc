@@ -100,7 +100,11 @@ src/
   - `lib/`: `cliLoginUrl.ts`(F-2021 — 인증 화면·콜백 주소 만들기·해석, 순수 함수. 주소 형식 v2 는 F-2023), `cliSeal.ts`(F-2021 — X25519 + HKDF + AES-GCM 봉인(v2), RSA-OAEP(v1, 0.1.0 호환) — F-2023). 웹과 CLI 가 같이 쓴다
   - `app/`: `CliLoginPage.tsx`(F-2021 — S-9 터미널 로그인 화면)
   - 의존 방향: `cli → src/lib`(순수 함수만)·`cli → brand.config.ts`·`cli → worker/v1Contract.ts`(타입·예시 값만). 반대 방향 금지 — `src/`·`worker/` 는 `cli/` 를 import 하지 않는다
-- editor·viewer 가 문서 목록이 필요하면(위키링크) 저장소를 import 하지 않고 App 이 인자로 넘긴다. 첨부 이미지도 같다: App 이 `onImageFiles`(넣기)·`resolveAttachment(id)`(읽기) 콜백을 넘긴다 (F-156·F-157)
+- 클라이언트 연결·잠금 폴백(2026-09-24)으로 추가
+  - `app/`: `docPath.ts`(F-305 — 경로 판정 `local`·`view`·`pending`·`realtime`·`fallback`, 순수 함수), `liveDoc.ts`(F-305 — 연결 제어기, `window`·`document`·`navigator` 를 읽지 않는다), `useLiveDoc.ts`(F-305 — 방 Doc·이벤트 배선)
+  - `storage/`: `liveSocket.ts`(F-305 — `y-partyserver/provider` 를 import 하는 유일한 파일, `openLiveSocket`)
+  - `editor/`: `liveTitle.ts`(F-305 — 방 Doc `title` `Y.Text` 읽고 쓰기)
+  - `lib/`: `textRebase.ts`(F-304 가 `worker/` 에 둔 것을 F-305 가 옮김 — 내용은 그대로. `diffText`·`rebaseExternal`)
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
@@ -151,6 +155,7 @@ store.removeAttachment(id)    // Promise<void>
 - 저장소 → 에디터: 문서를 여는 시점 1회 (`Editor` 를 문서 id 를 `key` 로 다시 마운트) (에디터를 만들 때 `Y.Doc` 을 새로 만들어 저장소 본문을 LF 로 바꿔 심는다. 에디터를 버리면 `Y.Doc` 도 버린다)
 - 에디터 → 저장소: 입력이 멈추면 스냅샷 저장. 문서 전환·새로고침 적용 전에는 대기 중 저장을 먼저 끝낸다
 - 문서 목록(제목·수정 시각)은 `App` 의 React state 로 둔다. 본문은 넣지 않는다
+- **서버 문서, 실시간 경로(M3, F-305)**: 위 흐름과 다르다 — 방 Doc(App 층 `useLiveDoc` 가 만드는 빈 `Y.Doc`) → 게이트(F-303 `remoteGate`, `sharedDoc` 옵션으로 방 Doc 을 그대로 씀) → 편집기 Doc(첫 동기화 뒤 방 Doc 에서 `createYBindingFromState` 로 복제) → `EditorState`. 본문 자동 저장(`PUT`)은 경로가 `pending`(outbox 대기) 또는 `fallback`(연결 실패) 일 때만 돈다 — `realtime` 경로에서는 꺼진다(F-305 4장·10장)
 
 ## 4. 설정 (localStorage)
 

@@ -7,7 +7,7 @@ import { YSyncConfig } from 'y-codemirror.next'
 
 import { createYBinding, undoLocal } from './yBinding'
 import type { YBinding } from './yBinding'
-import { REMOTE_HOLD_CHECK_MS, createRemoteGate } from './remoteGate'
+import { REMOTE_HOLD_CHECK_MS, connectRemote, createRemoteGate } from './remoteGate'
 import type { RemoteGate } from './remoteGate'
 
 type Peer = {
@@ -393,5 +393,132 @@ describe('F-303 A12 nogate', () => {
     expect(a.gate.port.holding()).toBe(false)
     expect(editorText(a)).toBe('X가나다')
     expect(screenText(a)).toBe('X가나다')
+  })
+})
+
+describe('F-305 U16 바깥 공유 Doc 으로 게이트', () => {
+  const PROVIDER = { provider: true }
+
+  function setupExternal(roomText: string) {
+    const room = new Y.Doc()
+    room.getText('content').insert(0, roomText)
+    const binding = createYBinding('')
+    Y.applyUpdate(binding.ydoc, Y.encodeStateAsUpdate(room))
+    const conf = new YSyncConfig(binding.ytext, null)
+    binding.undoManager.addTrackedOrigin(conf)
+    const flags = { composing: false }
+    const log: string[] = []
+    const gate = createRemoteGate(binding.ydoc, {
+      docId: 'doc-1',
+      sharedDoc: room,
+      isComposing: () => flags.composing,
+      afterFlush: () => log.push('afterFlush'),
+    })
+    return { room, binding, conf, flags, log, gate }
+  }
+
+  function remoteInsert(room: Y.Doc, index: number, text: string) {
+    const other = new Y.Doc()
+    Y.applyUpdate(other, Y.encodeStateAsUpdate(room))
+    other.getText('content').insert(index, text)
+    Y.applyUpdate(room, Y.encodeStateAsUpdate(other, Y.encodeStateVector(room)), PROVIDER)
+  }
+
+  it('그 Doc 을 공유 Doc 으로 쓰고 채우지 않는다 — 두 벌이 되지 않는다', () => {
+    const { room, binding, gate } = setupExternal('방 본문')
+    expect(gate.sharedDoc).toBe(room)
+    expect(room.getText('content').toString()).toBe('방 본문')
+    expect(binding.ytext.toString()).toBe('방 본문')
+    gate.destroy()
+    binding.destroy()
+  })
+
+  it('편집기 쓰기가 공유 Doc 에 닿고, 공유 Doc 원격 쓰기가 편집기 Doc 에 닿는다', () => {
+    const { room, binding, conf, gate } = setupExternal('abc')
+    binding.ydoc.transact(() => binding.ytext.insert(3, 'd'), conf)
+    expect(room.getText('content').toString()).toBe('abcd')
+    remoteInsert(room, 0, 'R')
+    expect(binding.ytext.toString()).toBe('Rabcd')
+    gate.destroy()
+    binding.destroy()
+  })
+
+  it('조합 중이면 보류했다가 flushIfIdle 에 들어온다', () => {
+    const { room, binding, flags, log, gate } = setupExternal('가나')
+    flags.composing = true
+    remoteInsert(room, 2, '다')
+    expect(binding.ytext.toString()).toBe('가나')
+    expect(gate.port.holding()).toBe(true)
+    gate.flushIfIdle()
+    expect(binding.ytext.toString()).toBe('가나')
+    flags.composing = false
+    gate.flushIfIdle()
+    expect(binding.ytext.toString()).toBe('가나다')
+    expect(log).toEqual(['afterFlush'])
+    gate.destroy()
+    binding.destroy()
+  })
+
+  it('destroy 뒤 공유 Doc 은 살아 있고 처리기가 떨어져 있다', () => {
+    const { room, binding, conf, gate } = setupExternal('x')
+    gate.destroy()
+    expect(room.isDestroyed).toBe(false)
+    remoteInsert(room, 0, 'R')
+    expect(binding.ytext.toString()).toBe('x')
+    binding.ydoc.transact(() => binding.ytext.insert(1, 'y'), conf)
+    expect(room.getText('content').toString()).toBe('Rx')
+    binding.destroy()
+    expect(room.isDestroyed).toBe(false)
+  })
+})
+
+describe('F-305 U17 connectRemote 에 sharedDoc 을 주면 훅을 부르지 않는다', () => {
+  afterEach(() => {
+    delete (globalThis as { window?: unknown }).window
+  })
+
+  function fakeView() {
+    const listeners: string[] = []
+    return {
+      listeners,
+      view: {
+        dom: {
+          addEventListener: (type: string) => listeners.push(`+${type}`),
+          removeEventListener: (type: string) => listeners.push(`-${type}`),
+        },
+        compositionStarted: false,
+        dispatch: () => {},
+      } as unknown as import('@codemirror/view').EditorView,
+    }
+  }
+
+  it('프로바이더 팩토리 훅이 있어도 부르지 않고 게이트만 세운다', () => {
+    const factory = vi.fn(() => ({ destroy() {} }))
+    ;(globalThis as { window?: unknown }).window = { __yProviderFactory: factory }
+    const room = new Y.Doc()
+    room.getText('content').insert(0, '방')
+    const binding = createYBinding('')
+    Y.applyUpdate(binding.ydoc, Y.encodeStateAsUpdate(room))
+    const { view, listeners } = fakeView()
+    const connection = connectRemote({ view, editorDoc: binding.ydoc, docId: 'doc-1', sharedDoc: room })
+    expect(factory).not.toHaveBeenCalled()
+    expect(connection).not.toBeNull()
+    binding.ydoc.getText('content').insert(1, '!')
+    expect(room.getText('content').toString()).toBe('방!')
+    connection!.destroy()
+    expect(listeners).toEqual(['+compositionend', '+keydown', '-compositionend', '-keydown'])
+    expect(room.isDestroyed).toBe(false)
+    binding.destroy()
+  })
+
+  it('sharedDoc 이 없으면 지금처럼 훅을 부른다', () => {
+    const factory = vi.fn(() => ({ destroy() {} }))
+    ;(globalThis as { window?: unknown }).window = { __yProviderFactory: factory }
+    const binding = createYBinding('a')
+    const { view } = fakeView()
+    const connection = connectRemote({ view, editorDoc: binding.ydoc, docId: 'doc-1' })
+    expect(factory).toHaveBeenCalledTimes(1)
+    connection!.destroy()
+    binding.destroy()
   })
 })

@@ -38,6 +38,8 @@ export type RemoteGateOptions = {
   isAlive?: () => boolean
   afterFlush?: () => void
   nogate?: boolean
+  // 주면 이 Doc 을 공유 Doc 으로 쓴다. 채우지도 destroy 하지도 않는다 — 주인은 useLiveDoc (F-305 9.2)
+  sharedDoc?: Y.Doc
 }
 
 export type RemoteGate = {
@@ -52,8 +54,10 @@ export type RemoteGate = {
 export function createRemoteGate(editorDoc: Y.Doc, options: RemoteGateOptions): RemoteGate {
   const { docId, isComposing = () => false, isAlive = () => true, afterFlush = () => {}, nogate = false } = options
 
-  const sharedDoc = new Y.Doc()
-  Y.applyUpdate(sharedDoc, Y.encodeStateAsUpdate(editorDoc), REMOTE)
+  const external = options.sharedDoc
+  const sharedDoc = external ?? new Y.Doc()
+  // 바깥 Doc 이면 편집기 Doc 이 이미 그 복제다 — 채우면 두 벌이 된다 (F-305 5.3)
+  if (!external) Y.applyUpdate(sharedDoc, Y.encodeStateAsUpdate(editorDoc), REMOTE)
 
   const listeners = new Set<(update: Uint8Array) => void>()
   let holding = false
@@ -155,7 +159,7 @@ export function createRemoteGate(editorDoc: Y.Doc, options: RemoteGateOptions): 
       listeners.clear()
       editorDoc.off('update', onEditorUpdate)
       sharedDoc.off('update', onSharedUpdate)
-      sharedDoc.destroy()
+      if (!external) sharedDoc.destroy()
     },
   }
 }
@@ -170,17 +174,20 @@ function compositionAlive(view: EditorView): boolean {
 }
 
 // 훅이 있을 때만 공유 Doc 을 만들고 연결한다. 없으면 아무것도 만들지 않는다 (4.2, 8.1)
+// sharedDoc 을 주면 훅을 부르지 않고 그 Doc 에 게이트만 세운다 — 연결은 바깥(useLiveDoc)이 한다 (F-305 9.2)
 export function connectRemote({
   view,
   editorDoc,
   docId,
+  sharedDoc,
 }: {
   view: EditorView
   editorDoc: Y.Doc
   docId?: string
+  sharedDoc?: Y.Doc
 }): RemoteConnection | null {
   const factory = typeof window === 'undefined' ? undefined : window.__yProviderFactory
-  if (!docId || typeof factory !== 'function') return null
+  if (!docId || (!sharedDoc && typeof factory !== 'function')) return null
 
   // composing 이 아니라 compositionStarted — 조합 진입 직후 첫 변경 전 틈까지 막는다 (5.1)
   const composing = () => view.compositionStarted || isCellCompositionStarted(view)
@@ -190,6 +197,7 @@ export function connectRemote({
     isAlive: () => compositionAlive(view),
     afterFlush: () => view.dispatch({ effects: forceRecalc.of(null) }),
     nogate: DEV_YSYNC_NOGATE,
+    sharedDoc,
   })
 
   const ticks = new Set<ReturnType<typeof setTimeout>>()
@@ -220,9 +228,9 @@ export function connectRemote({
     gate.destroy()
   }
 
-  let link: { destroy(): void }
+  let link: { destroy(): void } = { destroy() {} }
   try {
-    link = factory(gate.port)
+    if (!sharedDoc && factory) link = factory(gate.port)
   } catch (error) {
     console.error(error)
     detach()

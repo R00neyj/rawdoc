@@ -41,6 +41,9 @@ import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
+import { decideDocPath, type DocPathKind, type FallbackReason } from './docPath'
+import { useLiveDoc } from './useLiveDoc'
+import type { LiveSnapshot } from './liveDoc'
 import { withTabBroadcast, newTabId } from './tabSync'
 import { useTabSync } from './useTabSync'
 import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from './exportDoc'
@@ -100,7 +103,7 @@ import { searchScope } from './searchIndex'
 import HelpPage from './HelpPage'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
 import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
-import StatusBar from './StatusBar'
+import StatusBar, { type LiveStatus } from './StatusBar'
 import SharedView from './SharedView'
 import PublicView from './PublicView'
 import InviteDialog, { type InviteTarget } from './InviteDialog'
@@ -112,16 +115,55 @@ import { deleteGrant } from '../storage/docsApi'
 const MapPage = lazy(() => import('./MapPage'))
 import { mapIndexScope } from './mapIndex'
 import type { Doc, Folder, FolderDeleteMode, LineEnding, Store } from '../types'
+import type * as Y from 'yjs'
+import { Y_CONTENT_NAME, Y_TITLE_NAME } from '../lib/docRoomProtocol'
 
 const STATS_DEBOUNCE_MS = 150
+const SAVE_DEBOUNCE_MS = 700 // useDocSaver 와 같은 박자 — 실시간 경로의 사이드바 updatedAt 갱신 (F-305 10.1)
 
 const NARROW_QUERY = '(max-width: 1023px)'
 const HEADING_JUMP_MARGIN = 16 // 목차 SELECT_MARGIN 과 같다 (F-2018 7.3)
 
-type DocMeta = Pick<Doc, 'id' | 'title' | 'updatedAt' | 'folderId' | 'pinnedAt' | 'role' | 'ownerEmail' | 'viaFolder'>
+// lineEnding 은 실시간 경로가 편집기를 열 때 읽는다 — 본문을 store.get 으로 읽지 않기 때문이다 (F-305 5.2)
+type DocMeta = Pick<Doc, 'id' | 'title' | 'updatedAt' | 'folderId' | 'pinnedAt' | 'role' | 'ownerEmail' | 'viaFolder'> & {
+  lineEnding?: LineEnding
+}
 type OpenDoc = { id: string; content: string; lineEnding: LineEnding }
 type Stats = { line: number; col: number; charCount: number; wordCount: number }
 type AppNotice = NoticeWithAction & { id: number }
+// 문서 열기 세션 (F-305 3장) — 같은 currentDocId 가 유지되는 동안 한 번 정한 경로는 바뀌지 않는다. path 가 null 이면 판정 중
+type DocSession = {
+  seq: number
+  docId: string | null
+  store: Store
+  path: DocPathKind | null
+  fallbackReason: FallbackReason | null
+  // 첫 동기화 전 4403 으로 보기로 연 세션 — N1 을 띄우고 본문은 서버에서 먼저 읽는다 (8장)
+  forbiddenClose: boolean
+}
+
+// 실시간 알림 띠 문구 (F-305 11.2)
+const LIVE_NOTICE = {
+  forbidden: '편집 권한이 없어 읽기만 할 수 있습니다.',
+  revoked: '편집 권한이 없어져 읽기만 할 수 있습니다.',
+  gone: '이 문서가 삭제되었거나 접근할 수 없게 되었습니다. 지금 화면의 내용은 저장되지 않습니다.',
+  signedOut: '로그인이 만료되어 실시간 편집을 멈췄습니다. 지금 화면의 내용은 새 문서로 저장할 수 있습니다.',
+  disconnected: '서버와 연결이 끊겼습니다. 다시 연결되면 이어서 저장됩니다. 그 전에 창을 닫으면 끊긴 뒤의 편집은 사라집니다.',
+  tooLarge: '문서가 1MB 를 넘어 서버에 저장되지 않습니다. 내용을 줄이거나 문서를 나눠 주세요',
+} as const
+
+// 제어기 단계 → 상태바 표시 (F-305 11.1)
+function liveStatusOf(snapshot: LiveSnapshot | undefined): LiveStatus {
+  if (!snapshot) return 'connecting'
+  if (snapshot.phase === 'live') return 'live'
+  if (snapshot.phase === 'reconnecting') return 'reconnecting'
+  if (snapshot.phase === 'stopped') {
+    if (snapshot.stopReason === 'signed-out') return 'signed-out'
+    if (snapshot.stopReason === 'forbidden' || snapshot.stopReason === 'revoked') return 'revoked'
+    return 'gone'
+  }
+  return 'connecting'
+}
 
 // 우클릭 메뉴 상태 (specs/features/F-170.md) — 'editor'|'cell' 은 view·mainView, 'view' 는 container 를 쓴다
 type ContextMenuState = {
@@ -144,6 +186,7 @@ function stripContent(doc: Doc): DocMeta {
     role: doc.role, // F-212
     ownerEmail: doc.ownerEmail,
     viaFolder: doc.viaFolder ?? null,
+    lineEnding: doc.lineEnding,
   }
 }
 
@@ -339,6 +382,10 @@ export default function App() {
   // hashchange 핸들러가 낡은 클로저의 docs·currentDocId 를 읽지 않도록 매 렌더 후 갱신한다
   // (0단계 버그 수정)
   const docsRef = useRef(docs)
+  // 가져오기 같은 비동기 흐름이 지금 문서의 경로를 최신으로 읽는다 (F-305 10.1)
+  const docPathRef = useRef<{ docId: string | null; path: DocPathKind | null }>({ docId: null, path: null })
+  // 알림 버튼이 만들 때의 클로저가 아니라 최신 saveCurrentAsNewDoc 을 부르게 한다
+  const saveCurrentAsNewDocRef = useRef<() => Promise<void>>(async () => {})
   const currentDocIdRef = useRef(currentDocId)
   const foldersRef = useRef(folders)
   // hashchange 핸들러가 "지금 공유 화면을 보고 있는가" 를 최신으로 읽도록 매 렌더 후
@@ -406,7 +453,8 @@ export default function App() {
   // ----- 새 버전 적용 (specs/features/F-117.md, ia.md 3.13) -----
   const { updateAvailable, applyUpdate } = useAppUpdate({ beforeReload: beforeLeaveDoc })
 
-  const showNotice = useCallback((input: NoticeWithAction) => {
+  // 만든 알림 id 를 돌려준다 — 조건이 풀리면 dismissNotice(id) 로 그 알림만 걷는다 (F-305 11.2)
+  const showNotice = useCallback((input: NoticeWithAction): number => {
     const { type, message, action } = input
     const id = ++noticeIdRef.current
     const candidate: AppNotice = { id, type, message, action }
@@ -419,7 +467,180 @@ export default function App() {
       }
       return result
     })
+    return id
   }, [])
+
+  // 그 id 의 알림이 아직 떠 있을 때만 걷는다. 다른 알림이 자리를 차지했으면 건드리지 않는다
+  const dismissNotice = useCallback((id: number) => {
+    setNotice((cur) => (cur && cur.id === id ? null : cur))
+  }, [])
+
+  // ----- 문서 열기 경로 (F-305 4장) — 문서·저장소가 바뀌면 새 세션. local·view 는 여기서, 나머지는 아래 effect 가 outbox 를 읽고 정한다 -----
+  const [docSession, setDocSession] = useState<DocSession>(() => ({
+    seq: 0,
+    docId: null,
+    store,
+    path: null,
+    fallbackReason: null,
+    forbiddenClose: false,
+  }))
+  if (docSession.docId !== currentDocId || docSession.store !== store) {
+    const quick = decideDocPath({
+      storeKind: store.kind,
+      shareLinkScreen: Boolean(sharedDoc),
+      role: currentDoc?.role as 'owner' | 'edit' | 'view' | undefined,
+      forbidden: currentDocId != null && forbiddenDocIds.has(currentDocId),
+      hasPendingChanges: false,
+      online: true,
+    })
+    setDocSession({
+      seq: docSession.seq + 1,
+      docId: currentDocId,
+      store,
+      path: quick.kind === 'local' || quick.kind === 'view' ? quick.kind : null,
+      fallbackReason: null,
+      forbiddenClose: false,
+    })
+    // 옛 세션의 본문 스냅샷으로 편집기가 먼저 뜨지 않게 비운다 — 실시간이면 첫 동기화 뒤에 채운다 (5.1)
+    setOpenDoc(null)
+  }
+  const sessionReady = docSession.docId === currentDocId && docSession.store === store
+  const docPath = sessionReady ? docSession.path : null
+  const isRealtime = docPath === 'realtime'
+
+  // 이 탭에서 만들고 아직 열지 않은 문서 — 만든 직후 여는 세션은 createDoc POST 가 먼저 끝나도 pending 으로 본다 (4.1 3번)
+  const createdHereRef = useRef<Set<string>>(new Set())
+  // 이 페이지에서 실시간으로 동기화한 적 있는 문서 — 폴백으로 다시 열 때 캐시 대신 서버 본문을 먼저 읽는다 (8장)
+  const [everLiveIds, setEverLiveIds] = useState<Set<string>>(() => new Set())
+
+  useEffect(() => {
+    if (bootPhase !== 'ready' || docSession.path !== null || !docSession.docId) return
+    const id = docSession.docId
+    const sessionStore = docSession.store as Partial<ServerStore>
+    let cancelled = false
+    const pendingCheck =
+      typeof sessionStore.hasPendingChanges === 'function' ? sessionStore.hasPendingChanges(id) : Promise.resolve(false)
+    pendingCheck
+      .catch(() => true)
+      .then((pending) => {
+        if (cancelled) return
+        const createdHere = createdHereRef.current.delete(id)
+        const decided = decideDocPath({
+          storeKind: docSession.store.kind,
+          shareLinkScreen: false,
+          role: undefined,
+          forbidden: false,
+          hasPendingChanges: pending || createdHere,
+          online: navigator.onLine,
+        })
+        setDocSession((cur) =>
+          cur.seq === docSession.seq && cur.path === null
+            ? { ...cur, path: decided.kind, fallbackReason: decided.kind === 'fallback' ? decided.reason : null }
+            : cur,
+        )
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [bootPhase, docSession])
+
+  const liveSession = useLiveDoc(isRealtime ? currentDocId : null)
+  const liveSnapshot = liveSession?.snapshot
+
+  // 첫 동기화 전에 끝난 경우 — 폴백으로 가거나(7.2), 4403 이면 보기로 연다(8장). 렌더 중 상태를 맞추는 패턴
+  if (isRealtime && liveSnapshot && !liveSnapshot.everSynced) {
+    if (liveSnapshot.phase === 'fallback') {
+      setDocSession({ ...docSession, path: 'fallback', fallbackReason: liveSnapshot.fallbackReason })
+    } else if (liveSnapshot.phase === 'stopped' && liveSnapshot.stopReason === 'forbidden') {
+      setDocSession({ ...docSession, path: 'view', forbiddenClose: true })
+      if (currentDocId && !forbiddenDocIds.has(currentDocId)) setForbiddenDocIds(new Set(forbiddenDocIds).add(currentDocId))
+    }
+  }
+
+  // 첫 synced — 한 렌더 안에서 방 Doc 본문으로 편집기 스냅샷·제목·글자 수를 맞춘다 (5.2)
+  const [liveOpenedDoc, setLiveOpenedDoc] = useState<Y.Doc | null>(null)
+  if (isRealtime && liveSession && liveSnapshot?.everSynced && liveOpenedDoc !== liveSession.roomDoc) {
+    const content = liveSession.roomDoc.getText(Y_CONTENT_NAME).toString()
+    const title = liveSession.roomDoc.getText(Y_TITLE_NAME).toString()
+    setLiveOpenedDoc(liveSession.roomDoc)
+    if (!everLiveIds.has(liveSession.docId)) setEverLiveIds(new Set(everLiveIds).add(liveSession.docId))
+    setOpenDoc({ id: liveSession.docId, content, lineEnding: currentDoc?.lineEnding ?? 'lf' })
+    setDocs(docs.map((d) => (d.id === liveSession.docId ? { ...d, title } : d)))
+    setStats({ line: 1, col: 1, charCount: countChars(content), wordCount: countWords(content) })
+  }
+  const liveStopped = isRealtime && liveSnapshot?.phase === 'stopped'
+
+  // ----- 실시간 알림 띠 N1~N6 (F-305 11.2) -----
+  const saveAsNewAction = useMemo(
+    () => ({ label: '새 문서로 저장', icon: IconNoteAdd, onClick: () => void saveCurrentAsNewDocRef.current() }),
+    [],
+  )
+  // N1 — 첫 동기화 전 4403 으로 보기로 연 세션마다 한 번
+  const forbiddenNoticeSeqRef = useRef(0)
+  useEffect(() => {
+    if (!docSession.forbiddenClose || forbiddenNoticeSeqRef.current === docSession.seq) return
+    forbiddenNoticeSeqRef.current = docSession.seq
+    showNotice({ type: 'info', message: LIVE_NOTICE.forbidden })
+  }, [docSession, showNotice])
+
+  // N2·N3·N4 — 멈춘 방 Doc 마다 한 번. N5·N6 — 조건이 풀리면 그 알림이 아직 떠 있을 때만 걷는다
+  const liveStopNoticeDocRef = useRef<Y.Doc | null>(null)
+  const liveNoticeIdsRef = useRef<{ disconnected: number | null; tooLarge: number | null }>({ disconnected: null, tooLarge: null })
+  useEffect(() => {
+    const snap = liveSession?.snapshot
+    const ids = liveNoticeIdsRef.current
+    if (snap?.disconnectedLong && ids.disconnected === null) {
+      ids.disconnected = showNotice({ type: 'warn', message: LIVE_NOTICE.disconnected })
+    } else if (!snap?.disconnectedLong && ids.disconnected !== null) {
+      dismissNotice(ids.disconnected)
+      ids.disconnected = null
+    }
+    if (snap?.tooLarge && ids.tooLarge === null) {
+      ids.tooLarge = showNotice({ type: 'error', message: LIVE_NOTICE.tooLarge })
+    } else if (!snap?.tooLarge && ids.tooLarge !== null) {
+      dismissNotice(ids.tooLarge)
+      ids.tooLarge = null
+    }
+    if (!liveSession || snap?.phase !== 'stopped' || liveStopNoticeDocRef.current === liveSession.roomDoc) return
+    liveStopNoticeDocRef.current = liveSession.roomDoc
+    const reason = snap.stopReason
+    if (reason === 'revoked') showNotice({ type: 'warn', message: LIVE_NOTICE.revoked, action: saveAsNewAction })
+    else if (reason === 'not-found' || reason === 'deleted') showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: saveAsNewAction })
+    else if (reason === 'signed-out') showNotice({ type: 'error', message: LIVE_NOTICE.signedOut, action: saveAsNewAction })
+  }, [liveSession, showNotice, dismissNotice, saveAsNewAction])
+
+  // 동기화 뒤 방 Doc 이 바뀌면(내 편집·상대 편집) 700ms 뒤 사이드바 updatedAt 을 지금으로 — D1 은 DO 가 늦게 쓴다 (F-305 10.1)
+  const liveRoomDoc = isRealtime && liveSnapshot?.everSynced ? liveSession?.roomDoc ?? null : null
+  const liveRoomDocId = liveSession?.docId ?? null
+  useEffect(() => {
+    if (!liveRoomDoc || !liveRoomDocId) return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const handleUpdate = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        const now = Date.now()
+        setDocs((prev) => sortByUpdatedAtDesc(prev.map((d) => (d.id === liveRoomDocId ? { ...d, updatedAt: now } : d))))
+      }, SAVE_DEBOUNCE_MS)
+    }
+    liveRoomDoc.on('update', handleUpdate)
+    return () => {
+      liveRoomDoc.off('update', handleUpdate)
+      if (timer) clearTimeout(timer)
+    }
+  }, [liveRoomDoc, liveRoomDocId])
+
+  // 편집기에 넘기는 실시간 옵션 — 첫 동기화가 끝난 방 Doc 일 때만. 편집기는 마운트 때 한 번 읽는다 (9.3)
+  const liveEditorOption = useMemo(
+    () =>
+      liveRoomDoc && liveRoomDocId
+        ? {
+            roomDoc: liveRoomDoc,
+            onRemoteTitle: (title: string) =>
+              setDocs((prev) => prev.map((d) => (d.id === liveRoomDocId ? { ...d, title } : d))),
+          }
+        : undefined,
+    [liveRoomDoc, liveRoomDocId],
+  )
 
   // 편집 잠금(F-213.md 2.3) — 다른 세션이 잡고 있으면 읽기 전용 + 알림, 되찾으면 에디터를 다시 마운트한다
   const handleLockReacquired = useCallback(
@@ -442,7 +663,8 @@ export default function App() {
   )
   const { readOnly: isLockedReadOnly } = useDocLock({
     isServerStore: store.kind === 'server',
-    docId: currentDocId,
+    // 잠금은 pending·fallback 경로에서만 — 판정 전·실시간이면 null (F-305 10.1)
+    docId: docPath === 'pending' || docPath === 'fallback' ? currentDocId : null,
     role: currentDoc?.role as 'owner' | 'edit' | 'view' | undefined,
     online: syncState?.online ?? true,
     myEmail: account.state === 'in' ? account.email : null,
@@ -453,15 +675,23 @@ export default function App() {
   // 탭마다 한 번 — 메모리에만 둔다 (F-296.md 6.1)
   const tabIdRef = useRef<string>(newTabId())
 
+  // 실시간으로 연 문서의 제목은 편집기 Doc 을 따른다 — 저장소 목록(D1·캐시)은 DO 가 늦게 쓴 옛 제목일 수 있어 지금 값을 둔다 (F-305 9.3)
+  const liveTitleDocIdRef = useRef<string | null>(null)
+  const keepLiveTitle = useCallback((list: DocMeta[]): DocMeta[] => {
+    const id = liveTitleDocIdRef.current
+    const current = id ? docsRef.current.find((d) => d.id === id) : undefined
+    return current ? list.map((d) => (d.id === current.id ? { ...d, title: current.title } : d)) : list
+  }, [])
+
   // 다른 탭 신호를 받으면 목록만 다시 읽는다. 열린 문서 본문은 건드리지 않는다(불변조건, F-296.md 7.2)
   const resyncFromStore = useCallback(async () => {
     const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
     setFolders(newFolders)
-    const stripped = sortByUpdatedAtDesc(newDocs.map(stripContent))
+    const stripped = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
     setDocs(stripped)
     const openId = currentDocIdRef.current
     if (openId && !stripped.some((d) => d.id === openId)) setDeletedElsewhereId(openId)
-  }, [store])
+  }, [store, keepLiveTitle])
 
   // 로컬 편집권을 되찾으면 서버 잠금 재획득(handleLockReacquired)과 같은 방식으로 다시 읽어 다시 마운트한다 (F-296.md 6.4)
   const handleClaimRegained = useCallback(() => {
@@ -491,7 +721,7 @@ export default function App() {
   })
 
   const isDeletedElsewhere = currentDocId != null && deletedElsewhereId === currentDocId
-  const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly || claimReadOnly || isDeletedElsewhere
+  const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly || claimReadOnly || isDeletedElsewhere || liveStopped
   // 본문 맨 위 제목 읽기 전용 — 상단바 옛 제목 입력의 disabled·readOnly 조건을 하나로 합친다 (F-217.md 2.4)
   const titleReadOnly = isReadOnlyDoc || viewMode === 'view' || Boolean(sharedDoc)
 
@@ -533,11 +763,11 @@ export default function App() {
         label: '새 문서로 저장',
         icon: IconNoteAdd,
         onClick: () => {
-          void saveAsNewDocAfterDeletedElsewhere()
+          void saveCurrentAsNewDoc()
         },
       },
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- saveAsNewDocAfterDeletedElsewhere 는 아래(hoisted function)에서 항상 최신 store·currentDoc·openDoc 을 읽는다
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- saveCurrentAsNewDoc 는 아래(hoisted function)에서 항상 최신 store·currentDoc·openDoc 을 읽는다
   }, [deletedElsewhereId, showNotice])
 
   const closeSidebarIfNarrow = useCallback(() => {
@@ -741,7 +971,16 @@ export default function App() {
       })
       setDbBlockedMessage(null)
       // 이 한 곳만 감싸면 App.tsx 의 모든 저장 경로가 자동으로 다른 탭에 신호를 보낸다 (F-296.md 6.2)
-      setStore(withTabBroadcast(resolvedStore, postTabMessage, tabIdRef.current))
+      const broadcastStore = withTabBroadcast(resolvedStore, postTabMessage, tabIdRef.current)
+      setStore({
+        ...broadcastStore,
+        // 이 탭에서 만든 문서를 적어 둔다 — 곧바로 여는 세션은 pending 으로 본다 (F-305 4.1 3번)
+        create: async (input) => {
+          const doc = await broadcastStore.create(input)
+          createdHereRef.current.add(doc.id)
+          return doc
+        },
+      })
 
       // 열린 문서가 충돌한 원본이면 서버 내용을 밀어 넣지 않고(불변조건) 사본으로 전환한다
       async function handleServerConflict({
@@ -1174,10 +1413,23 @@ export default function App() {
   // openDoc.id 가 currentDocId 와 다르면(문서 없음 포함) 렌더링에서 에디터를 그리지
   // 않는 것으로 처리하므로, 여기서 별도로 null 로 되돌리지 않는다
   // (react-hooks: effect 본문에서 동기 setState 를 피한다)
+  const notFoundBeforeSync = isRealtime && liveSnapshot?.stopReason === 'not-found'
+  // 실시간은 첫 synced 에서 채우고 첫 동기화 전 4404 만 캐시를 읽는다. 실시간이었던 폴백·4403 보기는 서버 본문 먼저 (F-305 5.2·8장)
+  const openLoad =
+    !currentDocId || docPath === null || (isRealtime && !notFoundBeforeSync)
+      ? null
+      : (docPath === 'fallback' && everLiveIds.has(currentDocId)) || (docPath === 'view' && docSession.forbiddenClose)
+        ? 'server-first'
+        : 'store'
   useEffect(() => {
-    if (bootPhase !== 'ready' || !currentDocId) return
+    if (bootPhase !== 'ready' || !currentDocId || openLoad === null) return
     let cancelled = false
-    store.get(currentDocId).then((doc) => {
+    const serverStore = store as Partial<ServerStore>
+    const load =
+      openLoad === 'server-first' && typeof serverStore.refreshDocFromServer === 'function'
+        ? serverStore.refreshDocFromServer(currentDocId).then((fresh) => fresh ?? store.get(currentDocId))
+        : store.get(currentDocId)
+    load.then((doc) => {
       if (cancelled || !doc) return
       setOpenDoc({ id: doc.id, content: doc.content, lineEnding: doc.lineEnding })
       setStats({
@@ -1190,7 +1442,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [store, bootPhase, currentDocId])
+  }, [store, bootPhase, currentDocId, openLoad])
 
   // 문서를 전환하면 이전 문서의 대기 중인 글자·단어 수 재계산은 버린다
   useEffect(() => {
@@ -1400,7 +1652,8 @@ export default function App() {
     onSaved: handleDocSaved,
     onSaveError: handleSaveError,
     // 저장해 봤자 해로운 두 경우에만 막는다 — 잠금을 뺏긴 서버 문서는 그대로 내보내 423 충돌 사본을 만드는 게 설계다 (F-296.md 7.4)
-    blocked: isDeletedElsewhere || claimReadOnly,
+    // 실시간 경로는 본문을 방 Doc 으로 보낸다 — PUT 하면 DO 가 올린 version 과 갈려 409 사본이 생긴다 (F-305 10.1)
+    blocked: isDeletedElsewhere || claimReadOnly || isRealtime,
   })
 
   // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후 최신 flush·notifyChange·handlePrintDoc·openSearch 를 반영한다
@@ -1420,6 +1673,9 @@ export default function App() {
   useEffect(() => {
     docsRef.current = docs
     currentDocIdRef.current = currentDocId
+    docPathRef.current = { docId: currentDocId, path: docPath }
+    liveTitleDocIdRef.current = liveRoomDoc ? liveRoomDocId : null
+    saveCurrentAsNewDocRef.current = saveCurrentAsNewDoc
     foldersRef.current = folders
     sharedDocRef.current = sharedDoc
     sharesOpenRef.current = sharesOpen
@@ -2054,11 +2310,17 @@ export default function App() {
 
     const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
     setFolders(newFolders)
-    const strippedDocs = sortByUpdatedAtDesc(newDocs.map(stripContent))
+    const strippedDocs = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
     setDocs(strippedDocs)
 
     // 열려 있던 문서가 갱신 대상이었으면 에디터를 다시 마운트한다 — 안 하면 옛 EditorState 가 다음 저장 때 가져온 내용을 덮어쓴다 (3.9, F-213 2.3 과 같은 방식)
-    if (openBeforeId && updatedIds.has(openBeforeId) && openBeforeId === currentDocIdRef.current) {
+    // 실시간 경로면 건너뛴다 — 편집기는 방 Doc 에서 만들어지고, 가져온 본문은 DO 가 흡수할 때 들어온다 (F-305 10.1)
+    if (
+      openBeforeId &&
+      updatedIds.has(openBeforeId) &&
+      openBeforeId === currentDocIdRef.current &&
+      !(docPathRef.current.docId === openBeforeId && docPathRef.current.path === 'realtime')
+    ) {
       const fresh = await store.get(openBeforeId)
       if (fresh && fresh.id === currentDocIdRef.current) {
         setOpenDoc({ id: fresh.id, content: fresh.content, lineEnding: fresh.lineEnding })
@@ -2219,6 +2481,11 @@ export default function App() {
 
   function commitTitle(value: string) {
     setDocs((prev) => prev.map((d) => (d.id === currentDocId ? { ...d, title: value } : d)))
+    // 실시간 경로는 편집기 Doc 의 title Y.Text 에 쓴다 — PUT 하지 않는다 (F-305 9.3)
+    if (isRealtime) {
+      editorRef.current?.writeLiveTitle(value)
+      return
+    }
     const requestId = ++titleRequestIdRef.current
     const docId = currentDocId
     store.update(docId!, { title: value }).then((updated) => {
@@ -2273,7 +2540,7 @@ export default function App() {
       await store.removeFolder(target.id, mode)
       const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
       setFolders(newFolders)
-      const strippedDocs = sortByUpdatedAtDesc(newDocs.map(stripContent))
+      const strippedDocs = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
       setDocs(strippedDocs)
       setDeleteTarget(null)
 
@@ -2298,8 +2565,8 @@ export default function App() {
     }
   }
 
-  // 다른 탭에서 지워진 문서 복구 `새 문서로 저장` — folderId 는 최상위로 고정한다(원래 폴더도 지워졌을 수 있다) (F-296.md 7.3)
-  async function saveAsNewDocAfterDeletedElsewhere() {
+  // `새 문서로 저장` — 다른 탭에서 지워짐(F-296.md 7.3)·실시간 멈춤(F-305 8장) 공용. 원래 폴더도 지워졌을 수 있어 최상위에 만든다
+  async function saveCurrentAsNewDoc() {
     const text = editorRef.current?.getText(openDoc?.lineEnding ?? 'crlf') ?? ''
     const doc = await store.create({
       title: currentDoc?.title ?? '제목 없는 문서',
@@ -2386,7 +2653,7 @@ export default function App() {
 
     const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
     setFolders(newFolders)
-    const strippedDocs = sortByUpdatedAtDesc(newDocs.map(stripContent))
+    const strippedDocs = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
     setDocs(strippedDocs)
     if (currentDocId && !strippedDocs.some((d) => d.id === currentDocId)) {
       setCurrentDocId(null)
@@ -3154,6 +3421,7 @@ export default function App() {
                     onTitleChange={handleTitleChange}
                     onTitleCommit={handleTitleCommit}
                     docId={currentDocId ?? undefined}
+                    live={liveEditorOption}
                   />
                 )}
               </div>
@@ -3191,6 +3459,8 @@ export default function App() {
               saveStatus={docSaver.status}
               viewMode={viewMode}
               syncState={syncState}
+              live={isRealtime ? liveStatusOf(liveSnapshot) : null}
+              fallback={docPath === 'fallback'}
             />
           )}
         </div>

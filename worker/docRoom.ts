@@ -78,6 +78,11 @@ export class DocRoom extends YServer<Env> {
     await this.core.revalidateConnections(email)
   }
 
+  // /v1 PUT 이 묻는다 — 실시간 편집자 이메일, 없으면 null (F-305 12.2)
+  async activeEditor(): Promise<string | null> {
+    return this.core.activeEditor()
+  }
+
   async purgeRoom(): Promise<void> {
     this.core.purge()
     await this.ctx.storage.deleteAll()

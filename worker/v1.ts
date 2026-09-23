@@ -42,6 +42,7 @@ export async function handleCreateDocV1(request: Request, env: Env): Promise<Res
 }
 
 // 잠금이 살아 있으면 항상 423 — 토큰 요청에는 잠금 세션이 없다(X-Lock-Session 을 지운다) (F-223 2.2)
+// 브라우저가 실시간으로 편집 중이어도 423 — 임시 규칙, F-308 에서 뺀다 (F-305 12.1)
 export async function handleUpdateDocV1(
   request: Request,
   env: Env,
@@ -52,7 +53,7 @@ export async function handleUpdateDocV1(
   const parsed = await readJsonLimited(request, MAX_BODY_BYTES)
   if (!parsed.ok) return badBody(parsed)
 
-  return handleUpdateDoc(jsonRequest(request, parsed.data, ['X-Lock-Session']), env, ctx, params)
+  return handleUpdateDoc(jsonRequest(request, parsed.data, ['X-Lock-Session']), env, ctx, params, { refuseWhileLive: true })
 }
 
 export async function handleCreateAttachmentV1(request: Request, env: Env): Promise<Response> {

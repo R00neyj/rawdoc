@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import * as Y from 'yjs'
 import { EditorState } from '@codemirror/state'
 import { YSyncConfig } from 'y-codemirror.next'
 
 import { toEditorText } from '../lib/lineEnding'
-import { createYBinding, redoLocal, undoLocal } from './yBinding'
+import { createYBinding, createYBindingFromState, redoLocal, undoLocal } from './yBinding'
 import type { YBinding } from './yBinding'
 
 function stateOf(binding: YBinding, readOnly = false) {
@@ -99,5 +100,43 @@ describe('F-302 A6 버리기', () => {
     binding.destroy()
     expect(binding.ydoc.isDestroyed).toBe(true)
     expect(() => binding.destroy()).not.toThrow()
+  })
+})
+
+describe('F-305 U15 받은 상태로 바인딩 만들기', () => {
+  function roomState(content: string, title = '') {
+    const room = new Y.Doc()
+    room.getText('content').insert(0, content)
+    room.getText('title').insert(0, title)
+    return { room, state: Y.encodeStateAsUpdate(room) }
+  }
+
+  it('본문이 상태의 content 와 같고 제목도 옮겨 온다', () => {
+    const { state } = roomState('방 본문\n둘째 줄', '방 제목')
+    const binding = createYBindingFromState(state)
+    expect(binding.ytext.toString()).toBe('방 본문\n둘째 줄')
+    expect(binding.ydoc.getText('title').toString()).toBe('방 제목')
+    binding.destroy()
+  })
+
+  it('첫 undoLocal 이 아무것도 바꾸지 않는다', () => {
+    const binding = createYBindingFromState(roomState('받은 본문').state)
+    expect(run(undoLocal, stateOf(binding))).toBe(false)
+    expect(binding.ytext.toString()).toBe('받은 본문')
+    typeLocally(binding, 0, 'x')
+    expect(run(undoLocal, stateOf(binding))).toBe(true)
+    expect(binding.ytext.toString()).toBe('받은 본문')
+    expect(run(undoLocal, stateOf(binding))).toBe(false)
+    binding.destroy()
+  })
+
+  it('같은 구조의 복제라 방 Doc 과 합쳐도 두 벌이 되지 않는다', () => {
+    const { room, state } = roomState('하나')
+    const binding = createYBindingFromState(state)
+    Y.applyUpdate(room, Y.encodeStateAsUpdate(binding.ydoc))
+    Y.applyUpdate(binding.ydoc, Y.encodeStateAsUpdate(room))
+    expect(room.getText('content').toString()).toBe('하나')
+    expect(binding.ytext.toString()).toBe('하나')
+    binding.destroy()
   })
 })
