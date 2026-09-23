@@ -43,6 +43,7 @@ import { withTabBroadcast, newTabId } from './tabSync'
 import { useTabSync } from './useTabSync'
 import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from './exportDoc'
 import { downloadWorkspaceExport, type WorkspaceExportSourceStore } from './exportWorkspace'
+import { downloadVaultExport } from './exportVault'
 import {
   readZipEntries,
   detectZipKind,
@@ -1814,6 +1815,34 @@ export default function App() {
     })()
   }
 
+  // ----- 옵시디언 볼트로 내보내기 — 설정 `데이터` 절 (specs/features/F-2020.md 6.3) -----
+  async function handleExportVault() {
+    await docSaverFlushRef.current()
+    await downloadVaultExport({
+      store: store as WorkspaceExportSourceStore,
+      scope: { kind: 'all' },
+      onProgress: ({ done, total }) => showNotice({ type: 'info', message: `내보내는 중… ${done}/${total}` }),
+      onNotice: showNotice,
+    })
+  }
+
+  // ----- 옵시디언 볼트로 내보내기 — 사이드바 폴더 `⋯` 메뉴 (specs/features/F-2020.md 6.3) -----
+  function handleExportFolderVault(id: string) {
+    if (exportOffline) {
+      showNotice({ type: 'error', message: '온라인일 때 내보낼 수 있습니다.' })
+      return
+    }
+    void (async () => {
+      await docSaverFlushRef.current()
+      await downloadVaultExport({
+        store: store as WorkspaceExportSourceStore,
+        scope: { kind: 'folder', folderId: id },
+        onProgress: ({ done, total }) => showNotice({ type: 'info', message: `내보내는 중… ${done}/${total}` }),
+        onNotice: showNotice,
+      })
+    })()
+  }
+
   // ----- .md 가져오기 (specs/features/F-114.md 2.2·2.3) -----
   function requestImport() {
     importInputRef.current?.click()
@@ -2913,6 +2942,7 @@ export default function App() {
           onNotice={showNotice}
           onRequestInviteFolder={requestInviteFolder}
           onExportFolder={handleExportFolder}
+          onExportFolderVault={handleExportFolderVault}
         />
         {narrow && sidebarOpen && (
           <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
@@ -3108,6 +3138,7 @@ export default function App() {
         onChangeLineNumbers={changeLineNumbers}
         onExportAll={handleExportAll}
         exportAllDisabled={exportOffline}
+        onExportVault={handleExportVault}
         onImport={requestImportZip}
         onClose={closeSettings}
       />

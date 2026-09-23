@@ -1,5 +1,5 @@
 // 위키링크 관계 뽑기·그래프 만들기·부분 그래프. 순수 함수, DOM·CM6·markdown-it·React·저장소를 import 하지 않는다 (specs/features/F-292.md 3장, architecture.md 1장)
-import { findWikiLinks } from './wikiLink'
+import { findWikiLinks, type WikiLinkMatch } from './wikiLink'
 import { findFrontmatter } from './frontmatter'
 import { createWikiResolver, type WikiDocRef, type WikiFolderRef } from './wikiResolve'
 
@@ -50,20 +50,37 @@ function maskInlineCode(line: string): string {
   return chars.join('')
 }
 
-// 문서 원문 한 덩어리에서 위키링크 대상 제목을 순서대로 뽑는다 (3.2)
-export function extractWikiTargets(content: string): string[] {
+// 줄 시작 위치와 함께 훑는다. '\r\n'·'\r'·'\n' 을 줄 나눔으로 인정하고 그 길이를 그대로 센다 (F-2020.md 5.2)
+function linesWithOffsets(text: string): { line: string; start: number }[] {
+  const result: { line: string; start: number }[] = []
+  let pos = 0
+  while (pos <= text.length) {
+    let end = pos
+    while (end < text.length && text[end] !== '\n' && text[end] !== '\r') end++
+    result.push({ line: text.slice(pos, end), start: pos })
+    if (end >= text.length) break
+    pos = text[end] === '\r' && text[end + 1] === '\n' ? end + 2 : end + 1
+  }
+  return result
+}
+
+export type ScannedWikiLink = WikiLinkMatch & { inTable: boolean }
+
+// 문서 원문 한 덩어리에서 위키링크을 위치와 함께 훑는다 — extractWikiTargets 의 훑기 그대로, 표 줄도 뺴지 않고 inTable 로 남긴다 (F-2020.md 5.2)
+export function scanWikiLinks(content: string): ScannedWikiLink[] {
   if (typeof content !== 'string' || content === '') return []
 
   const fm = findFrontmatter(content)
   const body = fm ? content.slice(fm.to) : content
-  const lines = body.split(/\r\n|\r|\n/)
+  const baseOffset = fm ? fm.to : 0
+  const lines = linesWithOffsets(body)
 
-  const targets: string[] = []
+  const results: ScannedWikiLink[] = []
   let openFence: Fence | null = null
   let inTable = false
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+    const { line, start } = lines[i]
 
     const fence = matchFence(line)
     if (openFence) {
@@ -80,22 +97,34 @@ export function extractWikiTargets(content: string): string[] {
 
     if (!inTable && line.includes('|')) {
       const next = lines[i + 1]
-      if (next !== undefined && next.includes('-') && TABLE_DELIMITER_RE.test(next)) {
+      if (next !== undefined && next.line.includes('-') && TABLE_DELIMITER_RE.test(next.line)) {
         inTable = true
       }
     }
-    if (inTable) {
-      if (line.trim() === '') inTable = false
-      continue
-    }
+    const lineInTable = inTable
+    if (inTable && line.trim() === '') inTable = false
 
     const masked = maskInlineCode(line)
     for (const link of findWikiLinks(masked)) {
-      if (link.target !== '') targets.push(link.target) // [[#헤딩]] 은 다른 문서를 가리키지 않는다 (F-2018 9.1)
+      results.push({
+        ...link,
+        from: baseOffset + start + link.from,
+        to: baseOffset + start + link.to,
+        targetFrom: baseOffset + start + link.targetFrom,
+        targetTo: baseOffset + start + link.targetTo,
+        inTable: lineInTable,
+      })
     }
   }
 
-  return targets
+  return results
+}
+
+// 문서 원문 한 덩어리에서 위키링크 대상 제목을 순서대로 뽑는다 (3.2). 표 줄·빈 대상(헤딩만 있는 링크)은 뺀다
+export function extractWikiTargets(content: string): string[] {
+  return scanWikiLinks(content)
+    .filter((link) => !link.inTable && link.target !== '') // [[#헤딩]] 은 다른 문서를 가리키지 않는다 (F-2018 9.1)
+    .map((link) => link.target)
 }
 
 export type WikiGraph = {

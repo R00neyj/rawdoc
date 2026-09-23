@@ -83,10 +83,17 @@ function folderNameSuffix(base: string, n: number): string {
   return `${base} (${n})`
 }
 
+// 이름 함수 — F-281 은 toFileName·toFolderName, F-2020(옵시디언 볼트)은 toObsidianFileName·toObsidianFolderName (F-2020.md 3.2)
+export type ExportNaming = {
+  fileName(title: string): string // '.md' 로 끝나야 한다 — 충돌 번호가 '.md' 앞에 붙는다
+  folderName(name: string): string
+}
+
 // rootFolderId 아래 폴더 트리를 훑어 폴더 id → zip 경로를 만든다. 부모가 자식보다 먼저 오는 순서로 반환한다 (3.4)
 function buildFolderPaths(
   folders: Folder[],
   rootFolderId: string | null,
+  naming: ExportNaming,
 ): { pathById: Map<string, string>; orderedFolders: Folder[] } {
   const byParent = new Map<string | null, Folder[]>()
   for (const f of folders) {
@@ -102,7 +109,7 @@ function buildFolderPaths(
   function walk(parentId: string | null, parentPath: string) {
     const children = byParent.get(parentId) ?? []
     // 생성할 attachments/ 와 섞이지 않게 예약어로 민다 (3.2)
-    const names = resolveSiblingNames(children, (f) => toFolderName(f.name), folderNameSuffix, ['attachments'])
+    const names = resolveSiblingNames(children, (f) => naming.folderName(f.name), folderNameSuffix, ['attachments'])
     for (const f of children) {
       const name = names.get(f)!
       const path = parentPath ? `${parentPath}/${name}` : name
@@ -121,6 +128,7 @@ function buildDocPaths(
   docs: Doc[],
   folderPaths: Map<string, string>,
   rootFolderId: string | null,
+  naming: ExportNaming,
 ): Map<string, string> {
   const sorted = [...docs].sort(byCreatedThenId)
   const byDir = new Map<string, Doc[]>() // key: folder id, 루트는 ''
@@ -134,13 +142,43 @@ function buildDocPaths(
   const result = new Map<string, string>()
   for (const [dirKey, list] of byDir) {
     const dirPath = dirKey === '' ? '' : (folderPaths.get(dirKey) ?? '')
-    const names = resolveSiblingNames(list, (d) => toFileName(d.title), docFileSuffix)
+    const names = resolveSiblingNames(list, (d) => naming.fileName(d.title), docFileSuffix)
     for (const d of list) {
       const name = names.get(d)!
       result.set(d.id, dirPath ? `${dirPath}/${name}` : name)
     }
   }
   return result
+}
+
+// 대상 고르기 — 내 소유(owner 이거나 role 없음) 문서만, 폴더 범위면 그 하위(자기 자신은 빼고) (F-281.md 3.1, F-2020.md 3.2)
+export function selectExportScope(
+  docs: Doc[],
+  folders: Folder[],
+  scope: ExportScope,
+): { docs: Doc[]; folders: Folder[]; rootFolderId: string | null } {
+  const ownedDocs = docs.filter((d) => d.role === 'owner' || d.role === undefined)
+  const rootFolderId = scope.kind === 'folder' ? scope.folderId : null
+
+  if (scope.kind === 'all') {
+    return { docs: ownedDocs, folders, rootFolderId }
+  }
+  const ids = new Set(descendantFolderIds(folders as FolderLike[], scope.folderId))
+  const scopedFolders = folders.filter((f) => ids.has(f.id) && f.id !== scope.folderId)
+  const scopedDocs = ownedDocs.filter((d) => d.folderId != null && ids.has(d.folderId))
+  return { docs: scopedDocs, folders: scopedFolders, rootFolderId }
+}
+
+// 경로 계획 — 폴더·문서 이름 충돌 해소, 이름 함수만 인자로 받는다 (F-281.md 3.2, F-2020.md 3.2)
+export function planExportPaths(
+  docs: Doc[],
+  folders: Folder[],
+  rootFolderId: string | null,
+  naming: ExportNaming,
+): { folderPaths: Map<string, string>; orderedFolders: Folder[]; docPaths: Map<string, string> } {
+  const { pathById: folderPaths, orderedFolders } = buildFolderPaths(folders, rootFolderId, naming)
+  const docPaths = buildDocPaths(docs, folderPaths, rootFolderId, naming)
+  return { folderPaths, orderedFolders, docPaths }
 }
 
 function formatLocalDate(ts: number): string {
@@ -163,24 +201,11 @@ export function planWorkspaceExport({
   scope: ExportScope
   now: number
 }): WorkspacePlan {
-  // 내 소유 문서만 — role 이 'owner' 이거나 없는(undefined) 것 (3.1)
-  const ownedDocs = docs.filter((d) => d.role === 'owner' || d.role === undefined)
-
-  const rootFolderId = scope.kind === 'folder' ? scope.folderId : null
-
-  let scopedFolders: Folder[]
-  let scopedDocs: Doc[]
-  if (scope.kind === 'all') {
-    scopedFolders = folders
-    scopedDocs = ownedDocs
-  } else {
-    const ids = new Set(descendantFolderIds(folders as FolderLike[], scope.folderId))
-    scopedFolders = folders.filter((f) => ids.has(f.id) && f.id !== scope.folderId)
-    scopedDocs = ownedDocs.filter((d) => d.folderId != null && ids.has(d.folderId))
-  }
-
-  const { pathById: folderPaths, orderedFolders } = buildFolderPaths(scopedFolders, rootFolderId)
-  const docPaths = buildDocPaths(scopedDocs, folderPaths, rootFolderId)
+  const { docs: scopedDocs, folders: scopedFolders, rootFolderId } = selectExportScope(docs, folders, scope)
+  const { folderPaths, orderedFolders, docPaths } = planExportPaths(scopedDocs, scopedFolders, rootFolderId, {
+    fileName: toFileName,
+    folderName: toFolderName,
+  })
 
   const directories: PlanDirectory[] = []
   const docsByDir = new Map<string, Array<{ doc: Doc; path: string }>>()

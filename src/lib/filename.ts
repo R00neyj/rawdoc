@@ -2,6 +2,8 @@
 // 제어 문자(U+0000~U+001F, U+007F) 도 금지 문자라 의도적으로 포함한다
 // eslint-disable-next-line no-control-regex
 const FORBIDDEN_CHARS = /[\\/:*?"<>|\x00-\x1F\x7F]/g
+// eslint-disable-next-line no-control-regex -- 옵시디언 이름은 위 금지 문자에 # ^ [ ] 를 더한 것이다 (F-2020.md 3.1)
+const OBSIDIAN_FORBIDDEN_CHARS = /[\\/:*?"<>|#^[\]\x00-\x1F\x7F]/g
 
 const RESERVED_NAMES = new Set([
   'CON',
@@ -31,8 +33,8 @@ const RESERVED_NAMES = new Set([
 const MAX_CODE_POINTS = 100
 
 // toFileName·toFolderName 공통 규칙 — 금지 문자 치환, 공백·마침표 정리, 빈 이름·예약 이름·길이 처리 (F-281.md 2장)
-function sanitizeName(title: string): string {
-  let name = String(title ?? '').replace(FORBIDDEN_CHARS, '_')
+function sanitizeName(title: string, forbidden: RegExp = FORBIDDEN_CHARS): string {
+  let name = String(title ?? '').replace(forbidden, '_')
 
   name = name.replace(/^\s+/, '')
   name = name.replace(/[.\s]+$/, '')
@@ -61,4 +63,14 @@ export function toFileName(title: string): string {
 // 폴더 이름 → 안전한 디렉터리 이름. toFileName 과 같은 규칙에서 '.md' 만 붙이지 않는다 (F-281.md 3.2)
 export function toFolderName(name: string): string {
   return sanitizeName(name)
+}
+
+// title → 옵시디언 볼트에서 위키링크로 가리킬 수 있는 '.md' 파일명 (F-2020.md 3.1)
+export function toObsidianFileName(title: string): string {
+  return `${sanitizeName(title, OBSIDIAN_FORBIDDEN_CHARS)}.md`
+}
+
+// 폴더 이름 → 옵시디언 볼트 디렉터리 이름 (F-2020.md 3.1)
+export function toObsidianFolderName(name: string): string {
+  return sanitizeName(name, OBSIDIAN_FORBIDDEN_CHARS)
 }

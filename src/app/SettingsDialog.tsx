@@ -137,6 +137,8 @@ type SettingsDialogProps = {
   // `데이터` 절 — 전체 내보내기 (F-281.md 3.6). 안 주면 절을 그리지 않는다(공개 보기 화면)
   onExportAll?: () => void
   exportAllDisabled?: boolean
+  // `데이터` 절 — 옵시디언 볼트로 내보내기 (F-2020.md 6.1). 있을 때만 버튼을 그린다
+  onExportVault?: () => void
   // `데이터` 절 — 가져오기 (F-282.md 3.1). onExportAll 이 있을 때만 의미가 있다(같은 절)
   onImport?: () => void
   onClose: () => void
@@ -162,6 +164,7 @@ export default function SettingsDialog({
   onChangeLineNumbers,
   onExportAll,
   exportAllDisabled,
+  onExportVault,
   onImport,
   onClose,
 }: SettingsDialogProps) {
@@ -291,6 +294,11 @@ export default function SettingsDialog({
         <button type="button" className="dialog-btn" onClick={onExportAll} disabled={exportAllDisabled}>
           전체 내보내기
         </button>
+        {onExportVault && (
+          <button type="button" className="dialog-btn" onClick={onExportVault} disabled={exportAllDisabled}>
+            옵시디언 볼트로 내보내기
+          </button>
+        )}
         {exportAllDisabled && <span className="dialog-note">온라인일 때 내보낼 수 있습니다</span>}
         {onImport && (
           <button type="button" className="dialog-btn" onClick={onImport}>

@@ -113,6 +113,8 @@ type SidebarCtx = {
   onRequestInviteFolder: (id: string, name: string) => void
   // 폴더 `⋯` 메뉴 `폴더 내보내기` (F-281.md 3.7)
   onExportFolder: (id: string) => void
+  // 폴더 `⋯` 메뉴 `옵시디언 볼트로 내보내기` (F-2020.md 6.2)
+  onExportFolderVault: (id: string) => void
 }
 
 function dropKeyOf(target: DropTarget): string {
@@ -180,6 +182,12 @@ function FolderRow({
     label: '폴더 내보내기',
     icon: IconDownload,
     onSelect: () => ctx.onExportFolder(node.id),
+  })
+  ownItems.push({
+    key: 'export-folder-vault',
+    label: '옵시디언 볼트로 내보내기',
+    icon: IconDownload,
+    onSelect: () => ctx.onExportFolderVault(node.id),
   })
   ownItems.push({
     key: 'delete',
@@ -654,6 +662,7 @@ type SidebarProps = {
   onNotice: (notice: Notice) => void
   onRequestInviteFolder: (id: string, name: string) => void
   onExportFolder: (id: string) => void
+  onExportFolderVault: (id: string) => void
 }
 
 export default function Sidebar({
@@ -693,6 +702,7 @@ export default function Sidebar({
   onNotice,
   onRequestInviteFolder,
   onExportFolder,
+  onExportFolderVault,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
@@ -968,6 +978,7 @@ export default function Sidebar({
     onNotice,
     onRequestInviteFolder,
     onExportFolder,
+    onExportFolderVault,
   }
 
   const rootTarget: DropTarget = { type: 'root' }

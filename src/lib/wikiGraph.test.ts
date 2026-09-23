@@ -1,6 +1,6 @@
 // specs/features/F-292.md 10장 A1~A4
 import { describe, it, expect } from 'vitest'
-import { extractWikiTargets, buildWikiGraph, buildWikiGraphFromEntries, distancesFrom, truncateGraphByDegree } from './wikiGraph'
+import { extractWikiTargets, buildWikiGraph, buildWikiGraphFromEntries, distancesFrom, truncateGraphByDegree, scanWikiLinks } from './wikiGraph'
 
 describe('extractWikiTargets — A1', () => {
   it('프론트매터 안 [[…]] 는 뺀다', () => {
@@ -243,6 +243,64 @@ describe('truncateGraphByDegree — 전체 보기 상한 (5.4)', () => {
     const { graph: result, truncated } = truncateGraphByDegree(graph, updatedAtById, 2)
     expect(truncated).toBe(true)
     expect(result.nodes.map((n) => n.id).sort()).toEqual(['B', 'C'])
+  })
+})
+
+describe('scanWikiLinks (F-2020 U3)', () => {
+  it('content.slice(from, to) 가 [[…]] 원문과 같다 — 프론트매터가 있어도', () => {
+    const content = '---\ntitle: 문서\n---\n앞 [[본문|별칭]] 뒤'
+    const links = scanWikiLinks(content)
+    expect(links).toHaveLength(1)
+    expect(content.slice(links[0].from, links[0].to)).toBe('[[본문|별칭]]')
+    expect(content.slice(links[0].targetFrom, links[0].targetTo)).toBe('본문')
+  })
+
+  it('CRLF 원문에서도 위치가 맞는다', () => {
+    const content = '앞\r\n[[본문]]\r\n뒤'
+    const links = scanWikiLinks(content)
+    expect(links).toHaveLength(1)
+    expect(content.slice(links[0].from, links[0].to)).toBe('[[본문]]')
+  })
+
+  it('펜스·인라인 코드 안은 없다', () => {
+    const content = '`[[코드제외]]`\n```\n[[펜스제외]]\n```\n[[본문]]'
+    const links = scanWikiLinks(content)
+    expect(links.map((l) => l.target)).toEqual(['본문'])
+  })
+
+  it('표 줄 링크는 inTable: true', () => {
+    const content = ['[[앞]]', '| a | b |', '| --- | --- |', '| [[제외1]] | [[제외2]] |', '', '[[뒤]]'].join('\n')
+    const links = scanWikiLinks(content)
+    expect(links.map((l) => [l.target, l.inTable])).toEqual([
+      ['앞', false],
+      ['제외1', true],
+      ['제외2', true],
+      ['뒤', false],
+    ])
+  })
+
+  it('[[#헤딩]] 은 target: \'\' 로 나온다', () => {
+    const links = scanWikiLinks('[[#결정]]')
+    expect(links).toHaveLength(1)
+    expect(links[0].target).toBe('')
+    expect(links[0].heading).toBe('결정')
+  })
+
+  it('extractWikiTargets 는 scanWikiLinks 에서 표 줄·빈 대상을 뺀 target 목록과 같다', () => {
+    const content = [
+      '[[A]]',
+      '| a | b |',
+      '| --- | --- |',
+      '| [[제외1]] | [[제외2]] |',
+      '',
+      '[[B#헤딩]]',
+      '[[#결정]]',
+    ].join('\n')
+    const expected = scanWikiLinks(content)
+      .filter((l) => !l.inTable && l.target !== '')
+      .map((l) => l.target)
+    expect(extractWikiTargets(content)).toEqual(expected)
+    expect(extractWikiTargets(content)).toEqual(['A', 'B'])
   })
 })
 
