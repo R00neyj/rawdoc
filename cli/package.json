@@ -1,6 +1,6 @@
 {
   "name": "rawdoc",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "마크다운 편집기 rawdoc의 명령줄 도구(CLI)입니다",
   "type": "module",
   "bin": { "rawdoc": "dist/rawdoc.js" },

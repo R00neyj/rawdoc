@@ -97,7 +97,7 @@ src/
   - `lib/`: `docRoomProtocol.ts`(F-304 — 서버·클라이언트 공용 소켓 계약. 앱은 F-304 에서 import 하지 않는다)
 - 명령줄 도구(2026-09-24)로 추가
   - `cli/`: npm 게시용 CLI 패키지 — `package.json`·`tsconfig.json`·`vite.config.ts`·`README.md`, `src/main.ts`·`args.ts`·`commands.ts`·`client.ts`·`output.ts`·`credentials.ts`·`login.ts`·`openBrowser.ts`·`node-shim.d.ts`(F-2021). 빌드는 루트 `vite` 로 `cli/dist/rawdoc.js` 하나에 번들
-  - `lib/`: `cliLoginUrl.ts`(F-2021 — 인증 화면·콜백 주소 만들기·해석, 순수 함수), `cliSeal.ts`(F-2021 — WebCrypto RSA-OAEP 봉인·풀기). 웹과 CLI 가 같이 쓴다
+  - `lib/`: `cliLoginUrl.ts`(F-2021 — 인증 화면·콜백 주소 만들기·해석, 순수 함수. 주소 형식 v2 는 F-2023), `cliSeal.ts`(F-2021 — X25519 + HKDF + AES-GCM 봉인(v2), RSA-OAEP(v1, 0.1.0 호환) — F-2023). 웹과 CLI 가 같이 쓴다
   - `app/`: `CliLoginPage.tsx`(F-2021 — S-9 터미널 로그인 화면)
   - 의존 방향: `cli → src/lib`(순수 함수만)·`cli → brand.config.ts`·`cli → worker/v1Contract.ts`(타입·예시 값만). 반대 방향 금지 — `src/`·`worker/` 는 `cli/` 를 import 하지 않는다
 - editor·viewer 가 문서 목록이 필요하면(위키링크) 저장소를 import 하지 않고 App 이 인자로 넘긴다. 첨부 이미지도 같다: App 이 `onImageFiles`(넣기)·`resolveAttachment(id)`(읽기) 콜백을 넘긴다 (F-156·F-157)

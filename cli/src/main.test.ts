@@ -1,6 +1,7 @@
 // F-2021 U16 (specs/features/F-2021.md 13.1, 4.7)
 import { describe, expect, it, vi } from 'vitest'
 import { main, type MainDeps } from './main'
+import { cliCallbackUrl, parseCliLoginHash } from '../../src/lib/cliLoginUrl'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -165,5 +166,36 @@ describe('F-2021 U16 main()', () => {
     const parsed = JSON.parse(deps.stderrLog.join(''))
     expect(parsed.error).toBe('conflict')
     expect(parsed.currentVersion).toBe(9)
+  })
+
+  it('F-2023 U5 login — v2 주소, 취소 콜백 → 종료 1, 파일 시스템 안 건드림', async () => {
+    let capturedUrl = ''
+    const deps = baseDeps({
+      argv: ['login'],
+      hostname: 'test-host',
+      openBrowserFn: vi.fn((url: string) => {
+        capturedUrl = url
+        const parsed = parseCliLoginHash(new URL(url).hash)
+        if (parsed && parsed.version === 2) {
+          void fetch(cliCallbackUrl(parsed.port, { state: parsed.publicKey, error: 'denied' }))
+        }
+      }),
+    })
+
+    const code = await main(deps)
+
+    expect(code).toBe(1)
+    const parsed = parseCliLoginHash(new URL(capturedUrl).hash)
+    expect(parsed).not.toBeNull()
+    expect(parsed?.version).toBe(2)
+    if (parsed?.version === 2) {
+      expect(parsed.host).toBe('test-host')
+    }
+    expect(capturedUrl.length).toBeLessThanOrEqual(107)
+    const stderr = deps.stderrLog.join('')
+    expect(stderr).toContain(capturedUrl)
+    expect(capturedUrl).not.toContain('\n')
+    expect(deps.writeFile).not.toHaveBeenCalled()
+    expect(deps.readFile).not.toHaveBeenCalled()
   })
 })

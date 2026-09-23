@@ -1,6 +1,7 @@
 // 루프백 서버·콜백 판정·로그인 흐름 (specs/features/F-2021.md 5.1~5.5)
+// 콜백 state 는 자기 공개키 문자열, 풀기는 openSealedTokenV2 (F-2023 9장)
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { openSealedToken } from '../../src/lib/cliSeal'
+import { openSealedTokenV2 } from '../../src/lib/cliSeal'
 import { apiMe, type ClientConfig } from './client'
 import { CliError } from './output'
 import type { V1Me } from '../../worker/v1Contract'
@@ -63,7 +64,8 @@ export type CallbackServerHandle = {
 }
 
 // 127.0.0.1 에만 연다(5.2). 5분 제한·Ctrl+C 는 main.ts 가 잰다
-export function startCallbackServer(opts: { expectedState: string; privateKey: CryptoKey }): Promise<CallbackServerHandle> {
+// 기대하는 state 는 opts.publicKey 자신이다 — v2 는 state 를 따로 만들지 않는다(F-2023 5.1)
+export function startCallbackServer(opts: { publicKey: string; privateKey: CryptoKey }): Promise<CallbackServerHandle> {
   return new Promise((resolveHandle, rejectHandle) => {
     let resolveResult: (r: LoginCallbackResult) => void = () => {}
     const result = new Promise<LoginCallbackResult>((resolve) => {
@@ -82,7 +84,7 @@ export function startCallbackServer(opts: { expectedState: string; privateKey: C
           path: url.pathname,
           query: url.searchParams,
         }
-        const classification = classifyCallback(callbackReq, boundPort, opts.expectedState)
+        const classification = classifyCallback(callbackReq, boundPort, opts.publicKey)
 
         if (classification.kind === 'continue') {
           respond(res, classification.status, classification.body)
@@ -96,7 +98,7 @@ export function startCallbackServer(opts: { expectedState: string; privateKey: C
 
         let token: string
         try {
-          token = await openSealedToken(opts.privateKey, classification.sealed)
+          token = await openSealedTokenV2(opts.privateKey, opts.publicKey, classification.sealed)
         } catch {
           respond(res, 400, CALLBACK_MISMATCH_BODY)
           return
@@ -131,13 +133,4 @@ export async function checkAlreadyLoggedIn(cfg: ClientConfig): Promise<V1Me | nu
     if (err instanceof CliError && err.code === 'unauthenticated') return null
     throw err
   }
-}
-
-// state — 무작위 16바이트 base64url(22자) (5.1-2)
-export function generateLoginState(): string {
-  const bytes = new Uint8Array(16)
-  crypto.getRandomValues(bytes)
-  let binary = ''
-  for (const b of bytes) binary += String.fromCharCode(b)
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }

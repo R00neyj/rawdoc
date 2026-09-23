@@ -5,7 +5,7 @@ import brand from '../../brand.config'
 import { SITE_URL } from '../../src/lib/siteMeta'
 import { decodeMarkdown, type DecodedMarkdown } from '../../src/lib/decodeMarkdown'
 import { buildCliLoginUrl, sanitizeCliHost } from '../../src/lib/cliLoginUrl'
-import { generateSealKeyPair } from '../../src/lib/cliSeal'
+import { generateSealKeyPairV2 } from '../../src/lib/cliSeal'
 import type { V1Doc, V1Me } from '../../worker/v1Contract'
 import {
   COMMAND_NAMES,
@@ -24,7 +24,7 @@ import {
 } from './credentials'
 import { apiMe, type ClientConfig } from './client'
 import * as commands from './commands'
-import { checkAlreadyLoggedIn, generateLoginState, startCallbackServer } from './login'
+import { checkAlreadyLoggedIn, startCallbackServer } from './login'
 import { openBrowser } from './openBrowser'
 import {
   CliError,
@@ -240,18 +240,17 @@ async function runLoginCommand(
     return 0
   }
 
-  const { publicKey, privateKey } = await generateSealKeyPair()
-  const state = generateLoginState()
+  const { publicKey, privateKey } = await generateSealKeyPairV2()
   let handle
   try {
-    handle = await startCallbackServer({ expectedState: state, privateKey })
+    handle = await startCallbackServer({ publicKey, privateKey })
   } catch (err) {
     if (err instanceof CliError) return emitError(deps, false, err)
     throw err
   }
 
   const host = sanitizeCliHost(deps.hostname)
-  const url = buildCliLoginUrl(origin, { port: handle.port, state, publicKey, host })
+  const url = buildCliLoginUrl(origin, { port: handle.port, host, publicKey })
   deps.out.stderr(`브라우저에서 로그인을 승인하세요. 브라우저가 열리지 않으면 이 주소를 여세요:\n${url}\n`)
   if (!command.noBrowser) deps.openBrowserFn(url)
 

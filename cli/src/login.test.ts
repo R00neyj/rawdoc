@@ -1,13 +1,12 @@
-// F-2021 U9 (specs/features/F-2021.md 13.1, 5.2)
+// F-2021 U9 (specs/features/F-2021.md 13.1, 5.2) + F-2023 U6 (specs/features/F-2023.md 13.1, 9장) — 콜백 서버가 v2 로 푼다
 import { describe, expect, it } from 'vitest'
-import { generateSealKeyPair, sealToken } from '../../src/lib/cliSeal'
+import { generateSealKeyPair, generateSealKeyPairV2, sealToken, sealTokenV2 } from '../../src/lib/cliSeal'
 import {
   CALLBACK_DENIED_BODY,
   CALLBACK_MISMATCH_BODY,
   CALLBACK_SUCCESS_BODY,
   checkAlreadyLoggedIn,
   classifyCallback,
-  generateLoginState,
   startCallbackServer,
   type CallbackRequest,
 } from './login'
@@ -61,14 +60,16 @@ describe('F-2021 U9 classifyCallback — 5.2 표', () => {
   })
 })
 
-describe('F-2021 U9 startCallbackServer — 실제 루프백 서버', () => {
+describe('F-2023 U6 startCallbackServer — 실제 루프백 서버, state = 공개키', () => {
   it('올바른 콜백 → 성공, 토큰이 풀린다', async () => {
-    const { publicKey, privateKey } = await generateSealKeyPair()
-    const handle = await startCallbackServer({ expectedState: STATE, privateKey })
+    const { publicKey, privateKey } = await generateSealKeyPairV2()
+    const handle = await startCallbackServer({ publicKey, privateKey })
     const token = 'rd_' + 'a'.repeat(43)
-    const sealed = await sealToken(publicKey, token)
+    const sealed = await sealTokenV2(publicKey, token)
 
-    const res = await fetch(`http://127.0.0.1:${handle.port}/callback?state=${STATE}&sealed=${encodeURIComponent(sealed)}`)
+    const res = await fetch(
+      `http://127.0.0.1:${handle.port}/callback?state=${publicKey}&sealed=${encodeURIComponent(sealed)}`,
+    )
     expect(res.status).toBe(200)
     const text = await res.text()
     expect(text).toContain(CALLBACK_SUCCESS_BODY)
@@ -79,10 +80,10 @@ describe('F-2021 U9 startCallbackServer — 실제 루프백 서버', () => {
   })
 
   it('취소 → denied', async () => {
-    const { privateKey } = await generateSealKeyPair()
-    const handle = await startCallbackServer({ expectedState: STATE, privateKey })
+    const { publicKey, privateKey } = await generateSealKeyPairV2()
+    const handle = await startCallbackServer({ publicKey, privateKey })
 
-    const res = await fetch(`http://127.0.0.1:${handle.port}/callback?state=${STATE}&error=denied`)
+    const res = await fetch(`http://127.0.0.1:${handle.port}/callback?state=${publicKey}&error=denied`)
     expect(res.status).toBe(200)
     expect(await res.text()).toContain(CALLBACK_DENIED_BODY)
 
@@ -92,20 +93,45 @@ describe('F-2021 U9 startCallbackServer — 실제 루프백 서버', () => {
   })
 
   it('상태 불일치·풀기 실패 뒤에도 올바른 콜백을 받으면 성공한다', async () => {
-    const { publicKey, privateKey } = await generateSealKeyPair()
-    const handle = await startCallbackServer({ expectedState: STATE, privateKey })
+    const { publicKey, privateKey } = await generateSealKeyPairV2()
+    const handle = await startCallbackServer({ publicKey, privateKey })
 
-    const badState = await fetch(`http://127.0.0.1:${handle.port}/callback?state=${'x'.repeat(22)}&sealed=x`)
+    const badState = await fetch(`http://127.0.0.1:${handle.port}/callback?state=${'x'.repeat(43)}&sealed=x`)
     expect(badState.status).toBe(400)
 
-    const badSeal = await fetch(`http://127.0.0.1:${handle.port}/callback?state=${STATE}&sealed=not-a-real-seal`)
+    const badSeal = await fetch(`http://127.0.0.1:${handle.port}/callback?state=${publicKey}&sealed=not-a-real-seal`)
     expect(badSeal.status).toBe(400)
 
     const token = 'rd_' + 'b'.repeat(43)
-    const sealed = await sealToken(publicKey, token)
-    const good = await fetch(`http://127.0.0.1:${handle.port}/callback?state=${STATE}&sealed=${encodeURIComponent(sealed)}`)
+    const sealed = await sealTokenV2(publicKey, token)
+    const good = await fetch(
+      `http://127.0.0.1:${handle.port}/callback?state=${publicKey}&sealed=${encodeURIComponent(sealed)}`,
+    )
     expect(good.status).toBe(200)
 
+    const result = await handle.result
+    expect(result).toEqual({ kind: 'success', token })
+    handle.close()
+  })
+
+  it('v1 봉인(sealToken)으로 만든 sealed 는 400 — 맞지 않습니다, 계속 기다림', async () => {
+    const v2 = await generateSealKeyPairV2()
+    const v1 = await generateSealKeyPair()
+    const handle = await startCallbackServer({ publicKey: v2.publicKey, privateKey: v2.privateKey })
+
+    const v1Sealed = await sealToken(v1.publicKey, 'rd_' + 'c'.repeat(43))
+    const badRes = await fetch(
+      `http://127.0.0.1:${handle.port}/callback?state=${v2.publicKey}&sealed=${encodeURIComponent(v1Sealed)}`,
+    )
+    expect(badRes.status).toBe(400)
+    expect(await badRes.text()).toContain(CALLBACK_MISMATCH_BODY)
+
+    const token = 'rd_' + 'd'.repeat(43)
+    const sealed = await sealTokenV2(v2.publicKey, token)
+    const good = await fetch(
+      `http://127.0.0.1:${handle.port}/callback?state=${v2.publicKey}&sealed=${encodeURIComponent(sealed)}`,
+    )
+    expect(good.status).toBe(200)
     const result = await handle.result
     expect(result).toEqual({ kind: 'success', token })
     handle.close()
@@ -133,12 +159,5 @@ describe('F-2021 U9 checkAlreadyLoggedIn', () => {
   it('그 밖의 오류는 던진다', async () => {
     const fetchImpl = (async () => new Response('{}', { status: 500 })) as unknown as typeof fetch
     await expect(checkAlreadyLoggedIn(cfg(fetchImpl))).rejects.toBeInstanceOf(CliError)
-  })
-})
-
-describe('F-2021 U9 generateLoginState', () => {
-  it('22자 base64url', () => {
-    const state = generateLoginState()
-    expect(state).toMatch(/^[A-Za-z0-9_-]{22}$/)
   })
 })

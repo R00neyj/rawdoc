@@ -1,15 +1,24 @@
-// S-9 CLI 로그인 화면 — 터미널의 login 이 연 창에서만 뜬다 (specs/features/F-2021.md 6장)
+// S-9 CLI 로그인 화면 — 터미널의 login 이 연 창에서만 뜬다 (specs/features/F-2021.md 6장, specs/features/F-2023.md 8장)
 import { useEffect, useRef, useState } from 'react'
 import brand from '../../brand.config'
-import { cliCallbackUrl, cliTokenName, parseCliLoginHash, type CliLoginRequest } from '../lib/cliLoginUrl'
-import { sealToken } from '../lib/cliSeal'
+import {
+  callbackStateOf,
+  cliCallbackUrl,
+  cliTokenName,
+  isLegacyCliLoginHash,
+  parseCliLoginHash,
+  type CliLoginRequest,
+} from '../lib/cliLoginUrl'
+import { checkSealPublicKey, sealToken, sealTokenV2 } from '../lib/cliSeal'
 import { createToken } from '../storage/apiTokensApi'
 import { fetchAccount, loginUrl } from './account'
 import { removeBootSkeleton } from './bootPaint'
 
 type PageState =
   | { kind: 'checking' }
-  | { kind: 'invalid' }
+  | { kind: 'framed' }
+  | { kind: 'invalid'; legacy: boolean }
+  | { kind: 'unsupported' }
   | { kind: 'out' }
   | { kind: 'offline' }
   | { kind: 'ready'; email: string }
@@ -41,15 +50,27 @@ export default function CliLoginPage() {
     async function check() {
       // 클릭 가로채기 방어 — 다른 페이지의 틀 안이면 계정 조회조차 하지 않는다 (6.4-4)
       if (isFramed()) {
-        setState({ kind: 'invalid' })
+        setState({ kind: 'framed' })
         return
       }
       const parsed = parseCliLoginHash(location.hash)
       if (!parsed) {
-        setState({ kind: 'invalid' })
+        setState({ kind: 'invalid', legacy: isLegacyCliLoginHash(location.hash) })
         return
       }
       setRequest(parsed)
+
+      // importKey 검사는 비동기라 parseCliLoginHash 밖이다 — 여기까지 통과해야 /api/me 를 부른다 (F-2023 8.1)
+      const keyCheck = await checkSealPublicKey(parsed.version, parsed.publicKey)
+      if (cancelled) return
+      if (keyCheck === 'invalid') {
+        setState({ kind: 'invalid', legacy: false })
+        return
+      }
+      if (keyCheck === 'unsupported') {
+        setState({ kind: 'unsupported' })
+        return
+      }
 
       const account = await fetchAccount()
       if (cancelled) return
@@ -75,9 +96,9 @@ export default function CliLoginPage() {
     setState({ kind: 'issuing', email })
     try {
       const created = await createToken(cliTokenName(req.host))
-      const sealed = await sealToken(req.publicKey, created.token)
+      const sealed = req.version === 1 ? await sealToken(req.publicKey, created.token) : await sealTokenV2(req.publicKey, created.token)
       setState({ kind: 'returning' })
-      location.replace(cliCallbackUrl(req.port, { state: req.state, sealed }))
+      location.replace(cliCallbackUrl(req.port, { state: callbackStateOf(req), sealed }))
     } catch (err) {
       const kind = (err as { kind?: string } | null)?.kind
       if (kind === 'unauthorized') {
@@ -95,7 +116,7 @@ export default function CliLoginPage() {
   function handleCancel() {
     const req = request
     if (!req) return
-    location.replace(cliCallbackUrl(req.port, { state: req.state, error: 'denied' }))
+    location.replace(cliCallbackUrl(req.port, { state: callbackStateOf(req), error: 'denied' }))
   }
 
   const approvalState = state.kind === 'ready' || state.kind === 'issuing' || state.kind === 'error' ? state : null
@@ -110,7 +131,31 @@ export default function CliLoginPage() {
 
         {state.kind === 'checking' && <p>불러오는 중…</p>}
 
-        {state.kind === 'invalid' && <p>잘못된 로그인 주소입니다. 터미널에서 로그인 명령을 다시 실행하세요.</p>}
+        {state.kind === 'framed' && <p>잘못된 로그인 주소입니다. 터미널에서 로그인 명령을 다시 실행하세요.</p>}
+
+        {state.kind === 'invalid' && (
+          <>
+            <p>로그인 주소가 잘렸거나 올바르지 않습니다. 터미널에 찍힌 주소를 처음부터 끝까지 복사해 브라우저 주소창에 붙여 넣으세요.</p>
+            {state.legacy && (
+              <p className="cli-login-note">
+                명령줄 도구를 최신 버전으로 올리면 주소가 짧아집니다: <code>npx -y {brand.cliName}@latest login</code>
+              </p>
+            )}
+          </>
+        )}
+
+        {state.kind === 'unsupported' && (
+          <>
+            <p>
+              이 브라우저는 터미널 로그인에 필요한 암호화 방식(X25519)을 지원하지 않습니다. 브라우저를 최신 버전으로 업데이트하거나 다른
+              브라우저로 이 주소를 여세요.
+            </p>
+            <p className="cli-login-note">
+              또는 계정 메뉴 → API 토큰에서 토큰을 만든 뒤 <code>{brand.cliName} login --with-token &lt; token.txt</code> 로
+              넣으세요.
+            </p>
+          </>
+        )}
 
         {state.kind === 'out' && (
           <>
