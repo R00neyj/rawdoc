@@ -1466,3 +1466,140 @@ test.describe('F-2012 움직임 줄이기', () => {
     await expect(visibleLabels(view.map)).toHaveCount(3)
   })
 })
+
+// F-2011 지도 머리 줄 아이콘 버튼화 (specs/features/F-2011.md 9장) A1~A9
+const HEAD_BUTTON_NAMES = ['지도', '목록', '맞춤', '지도 설정', '닫기']
+
+function headButton(map, name) {
+  return map.getByRole('button', { name, exact: true })
+}
+
+test.describe('F-2011 A1 머리 줄에 글자 라벨이 없다', () => {
+  test('다섯 버튼 모두 글자가 없다', async ({ page }) => {
+    await openApp(page)
+    const map = await openMap(page)
+    for (const name of HEAD_BUTTON_NAMES) {
+      await expect(headButton(map, name)).toHaveText('')
+    }
+  })
+})
+
+test.describe('F-2011 A2 버튼마다 아이콘 하나', () => {
+  test('다섯 버튼 모두 svg 가 정확히 하나', async ({ page }) => {
+    await openApp(page)
+    const map = await openMap(page)
+    for (const name of HEAD_BUTTON_NAMES) {
+      await expect(headButton(map, name).locator('svg')).toHaveCount(1)
+    }
+  })
+})
+
+test.describe('F-2011 A3 제목에 아이콘이 없다', () => {
+  test('제목은 글자 지도 만, svg 는 0개', async ({ page }) => {
+    await openApp(page)
+    const map = await openMap(page)
+    const title = map.locator('.map-page-title')
+    await expect(title).toHaveText('지도')
+    await expect(title.locator('svg')).toHaveCount(0)
+  })
+})
+
+test.describe('F-2011 A4 지도·목록만 묶음 안', () => {
+  test('.map-segment 는 .seg 를 갖고 버튼 둘만 담는다', async ({ page }) => {
+    await openApp(page)
+    const map = await openMap(page)
+    const seg = map.locator('.map-segment')
+    await expect(seg).toHaveClass(/\bseg\b/)
+    const buttons = seg.getByRole('button')
+    await expect(buttons).toHaveCount(2)
+    await expect(seg.getByRole('button', { name: '지도', exact: true })).toHaveCount(1)
+    await expect(seg.getByRole('button', { name: '목록', exact: true })).toHaveCount(1)
+    await expect(seg.locator('.map-fit-btn')).toHaveCount(0)
+    await expect(seg.locator('.map-settings-btn')).toHaveCount(0)
+    await expect(seg.locator('.map-page-close')).toHaveCount(0)
+  })
+})
+
+test.describe('F-2011 A5 툴팁 다섯', () => {
+  test('각 버튼의 형제 자리에 aria-label 과 같은 글자의 툴팁이 있다', async ({ page }) => {
+    await openApp(page)
+    const map = await openMap(page)
+    for (const name of HEAD_BUTTON_NAMES) {
+      const wrap = headButton(map, name).locator('xpath=..')
+      await expect(wrap).toHaveClass(/\bicon-btn-wrap\b/)
+      const tooltip = wrap.locator('.icon-tooltip')
+      await expect(tooltip).toHaveCount(1)
+      await expect(tooltip).toHaveText(name)
+    }
+  })
+})
+
+test.describe('F-2011 A6 눌러도 하던 일을 한다', () => {
+  test('아이콘 버튼이 전과 같은 동작을 한다', async ({ page }) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(String(e)))
+    await openApp(page)
+    const docId = await currentDocId(page)
+    const map = await openMap(page)
+
+    await headButton(map, '목록').click()
+    await expect(map.locator('.map-list-group').first()).toBeVisible()
+    await expect(headButton(map, '지도 설정')).toHaveCount(0)
+
+    await headButton(map, '지도').click()
+    await expect(map.locator('canvas')).toHaveCount(1)
+
+    await headButton(map, '맞춤').click()
+    await expect(map.locator('canvas')).toHaveCount(1)
+
+    await headButton(map, '지도 설정').click()
+    await expect(map.locator('.map-panel')).toBeVisible()
+    await headButton(map, '지도 설정').click()
+    await expect(map.locator('.map-panel:not([inert])')).toHaveCount(0)
+
+    await headButton(map, '닫기').click()
+    await expect(map).toHaveCount(0)
+    await expect(page).toHaveURL(new RegExp(`#/d/${docId}$`))
+    expect(errors).toEqual([])
+  })
+})
+
+test.describe('F-2011 A7 선택 표시', () => {
+  test('지도가 처음에 눌린 상태, 목록을 누르면 뒤집힌다', async ({ page }) => {
+    await openApp(page)
+    const map = await openMap(page)
+    await expect(headButton(map, '지도')).toHaveAttribute('aria-pressed', 'true')
+    await expect(headButton(map, '목록')).toHaveAttribute('aria-pressed', 'false')
+
+    await headButton(map, '목록').click()
+    await expect(headButton(map, '지도')).toHaveAttribute('aria-pressed', 'false')
+    await expect(headButton(map, '목록')).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+test.describe('F-2011 A8 WebGL2 없음', () => {
+  test('지도 버튼이 aria-disabled 이고 안내 문구가 뜬다', async ({ page }) => {
+    await page.addInitScript(() => {
+      const original = HTMLCanvasElement.prototype.getContext
+      HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
+        if (typeof type === 'string' && type.startsWith('webgl')) return null
+        return original.call(this, type, ...rest)
+      }
+    })
+    await openApp(page)
+    const map = await openMap(page)
+
+    await expect(headButton(map, '지도')).toHaveAttribute('aria-disabled', 'true')
+    await expect(map.locator('.map-notice')).toContainText('이 브라우저에서는 3D 지도를 그릴 수 없습니다.')
+  })
+})
+
+test.describe('F-2011 A9 Esc 로는 안 닫힌다', () => {
+  test('지도를 연 뒤 Escape 를 눌러도 지도가 그대로 보인다', async ({ page }) => {
+    await openApp(page)
+    await openMap(page)
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.map-page')).toBeVisible()
+    await expect(page).toHaveURL(/#\/map/)
+  })
+})

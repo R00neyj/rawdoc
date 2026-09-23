@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildMapIndex, type MapSource } from './mapIndex'
 import { buildWikiGraphFromEntries, truncateGraphByDegree, type WikiGraph } from '../lib/wikiGraph'
-import { IconClose, IconEdit, IconMap, IconNoteAdd, IconOpenInNew, IconRecenter, IconSettings } from './icons'
+import { IconClose, IconEdit, IconFit, IconList, IconMap, IconNoteAdd, IconOpenInNew, IconRecenter, IconSettings, IconTooltip } from './icons'
 import MapScene, { hasWebGL2 } from './MapScene'
 import MapPanel from './MapPanel'
 import usePresence from './usePresence'
@@ -170,44 +170,63 @@ export default function MapPage({ docCount, store, scope, centerDocId, onOpenDoc
       {/* 제목·보기 설정·닫기를 한 줄에 둔다 — 편집 화면의 상단바까지 세면 가로 막대가
           세 겹이 되어 지도가 볼 자리를 잃는다 (2026-09-21 사용자 확인) */}
       <div className="map-page-head">
-        <h1 className="map-page-title">
-          <IconMap size={18} />
-          지도
-        </h1>
+        <h1 className="map-page-title">지도</h1>
 
-        <div className="map-segment" role="group" aria-label="지도·목록">
-          {/* disabled 가 아니라 aria-disabled — 포커스는 받아야 한다 (7.1) */}
-          <button type="button" aria-pressed={effectiveView === 'graph'} aria-disabled={unsupported || undefined} onClick={showGraph}>
-            지도
-          </button>
-          <button type="button" aria-pressed={effectiveView === 'list'} onClick={showList}>
-            목록
-          </button>
+        {/* 배타적인 한 벌이라 상단바 보기 모드와 같은 .seg 묶음을 쓴다 (design.md 4장 선택 상태, F-2011 6.2) */}
+        <div className="seg map-segment" role="group" aria-label="지도·목록">
+          {/* disabled 가 아니라 aria-disabled — 포커스는 받아야 한다 (F-2002 7.1) */}
+          <span className="icon-btn-wrap">
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="지도"
+              aria-pressed={effectiveView === 'graph'}
+              aria-disabled={unsupported || undefined}
+              onClick={showGraph}
+            >
+              <IconMap size={18} />
+            </button>
+            <IconTooltip text="지도" />
+          </span>
+          <span className="icon-btn-wrap">
+            <button type="button" className="icon-btn" aria-label="목록" aria-pressed={effectiveView === 'list'} onClick={showList}>
+              <IconList size={18} />
+            </button>
+            <IconTooltip text="목록" />
+          </span>
         </div>
 
         <div className="map-page-actions">
           {effectiveView === 'graph' && (
-            <button type="button" className="map-fit-btn" onClick={() => setFitToken((n) => n + 1)}>
-              맞춤
-            </button>
+            <span className="icon-btn-wrap">
+              <button type="button" className="icon-btn map-fit-btn" aria-label="맞춤" onClick={() => setFitToken((n) => n + 1)}>
+                <IconFit size={18} />
+              </button>
+              <IconTooltip text="맞춤" />
+            </span>
           )}
           {effectiveView === 'graph' && (
-            <button
-              type="button"
-              className="icon-btn map-settings-btn"
-              aria-label="지도 설정"
-              aria-expanded={panelOpen}
-              aria-controls="map-panel"
-              ref={settingsBtnRef}
-              onClick={() => setPanelOpen((v) => !v)}
-            >
-              <IconSettings size={18} />
-            </button>
+            <span className="icon-btn-wrap">
+              <button
+                type="button"
+                className="icon-btn map-settings-btn"
+                aria-label="지도 설정"
+                aria-expanded={panelOpen}
+                aria-controls="map-panel"
+                ref={settingsBtnRef}
+                onClick={() => setPanelOpen((v) => !v)}
+              >
+                <IconSettings size={18} />
+              </button>
+              <IconTooltip text="지도 설정" />
+            </span>
           )}
-          <button type="button" className="map-page-close" onClick={onClose}>
-            <IconClose size={16} />
-            닫기
-          </button>
+          <span className="icon-btn-wrap">
+            <button type="button" className="icon-btn map-page-close" aria-label="닫기" onClick={onClose}>
+              <IconClose size={18} />
+            </button>
+            <IconTooltip text="닫기" align="end" />
+          </span>
         </div>
       </div>
 

@@ -69,6 +69,10 @@ import collapseAllSvg from '@material-symbols/svg-400/outlined/collapse_all.svg?
 import printSvg from '@material-symbols/svg-400/outlined/print.svg?raw'
 // 사이드바 `지도` (F-292.md 6.2)
 import hubSvg from '@material-symbols/svg-400/outlined/hub.svg?raw'
+// 지도 머리 줄 `목록` 보기 (F-2011.md 2.2)
+import listSvg from '@material-symbols/svg-400/outlined/list.svg?raw'
+// 지도 머리 줄 `맞춤` (F-2011.md 2.1)
+import fitScreenSvg from '@material-symbols/svg-400/outlined/fit_screen.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -177,6 +181,11 @@ export const IconPrint = makeIcon(printSvg)
 
 // 사이드바 `지도` (F-292.md 6.2)
 export const IconMap = makeIcon(hubSvg)
+
+// 지도 머리 줄 `목록` (F-2011.md 2.2)
+export const IconList = makeIcon(listSvg)
+// 지도 머리 줄 `맞춤` (F-2011.md 2.1)
+export const IconFit = makeIcon(fitScreenSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

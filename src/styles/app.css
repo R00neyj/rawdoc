@@ -2231,9 +2231,10 @@ body.sidebar-resizing {
   cursor: default;
 }
 
-/* 보기 모드 묶음 — 버튼 사이 2px, 툴팁 때문에 overflow:hidden 끈다 (F-153 2.1) */
-/* 바깥 테두리는 .seg 기본값을 그대로 쓴다 — 세 모드가 배타적인 한 벌이라 묶어 보인다 (2026-09-21 F-153 2.1) */
-.view-mode-seg {
+/* 아이콘 전용 세그먼트 — 버튼 사이 2px, 툴팁 때문에 overflow:hidden 끈다 (F-153 2.1) */
+/* 바깥 테두리는 .seg 기본값 그대로 — 배타적인 한 벌이라 묶어 보인다 (F-153 2.1, F-2011 6.2) */
+.view-mode-seg,
+.map-segment {
   flex: none;
   overflow: visible;
   gap: 2px;
@@ -2241,13 +2242,15 @@ body.sidebar-resizing {
   padding: 2px;
 }
 
-/* 버튼 사이가 2px 벌어져 있어 .seg 의 구분선이 허공에 뜬다 — 보기 모드에서만 끈다 */
-.view-mode-seg button + button {
+/* 버튼 사이가 2px 벌어져 있어 .seg 의 구분선이 허공에 뜬다 — 아이콘 전용 세그먼트에서만 끈다 */
+.view-mode-seg button + button,
+.map-segment button + button {
   border-left: none;
 }
 
-/* 보기 모드 세그먼트는 아이콘 전용 32x32 버튼, 모양·선택 표시는 .icon-btn 기본값 그대로 (F-142 3.2, F-153 2.1) */
-.view-mode-seg .icon-btn {
+/* 아이콘 전용 세그먼트는 32x32 버튼, 모양·선택 표시는 .icon-btn 기본값 그대로 (F-142 3.2, F-153 2.1) */
+.view-mode-seg .icon-btn,
+.map-segment .icon-btn {
   width: 32px;
   height: 32px;
   padding: 0;
