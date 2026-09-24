@@ -114,9 +114,9 @@ export const SITE_CHROME_CSS = `
   letter-spacing: 0;
   color: var(--site-mark);
 }
-.site-doc .markdown-body h1::before { content: '#'; }
-.site-doc .markdown-body h2::before { content: '##'; }
-.site-doc .markdown-body h3::before { content: '###'; }
+.site-doc .markdown-body h1::before { content: '#' / ''; }
+.site-doc .markdown-body h2::before { content: '##' / ''; }
+.site-doc .markdown-body h3::before { content: '###' / ''; }
 .site-doc .markdown-body h2 {
   font-size: 1.5rem;
   letter-spacing: -0.02em;
@@ -128,7 +128,7 @@ export const SITE_CHROME_CSS = `
 .site-doc .markdown-body > ul { padding-left: 0; }
 .site-doc .markdown-body > ul > li + li { margin-top: 0.5em; }
 .site-doc .markdown-body > ul > li:not(.task-list-item)::before {
-  content: '-';
+  content: '-' / '';
   font-family: var(--font-mono);
   font-weight: 400;
   color: var(--site-mark);

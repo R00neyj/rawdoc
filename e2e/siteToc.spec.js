@@ -11,8 +11,8 @@ test('F-2036 A11 목차 링크로 절 이동', async ({ page }) => {
   const hash = await page.evaluate(() => decodeURIComponent(location.hash))
   expect(hash).toBe('#단축키')
 
-  // 제목 앞에 CSS ::before 로 붙는 # 기호가 접근성 이름에 섞여 들어가(F-2036 5.1) exact 매칭을 쓰지 않는다
-  const heading = page.getByRole('heading', { level: 2, name: '단축키' })
+  // 여백의 ## 기호는 대체 글자를 비워(content: '##' / '') 접근성 이름에 섞이지 않는다 — exact 로 확인
+  const heading = page.getByRole('heading', { level: 2, name: '단축키', exact: true })
   await expect(heading).toBeInViewport()
   const box = await heading.boundingBox()
   expect(box.y).toBeLessThanOrEqual(100)
