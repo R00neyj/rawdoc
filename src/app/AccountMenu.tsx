@@ -1,11 +1,13 @@
 // 상단바 계정 메뉴 (specs/features/F-205.md 2.5). 여닫기·키보드는 ShareMenu(F-130)와 같은 패턴
+// 로그아웃은 F-2034
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 
-import { loginUrl, logoutUrl, storedAccount, type AccountState } from './account'
+import { loginUrl, logout, AFTER_LOGOUT_URL, LOGOUT_FAILED_MESSAGE, storedAccount, type AccountState } from './account'
 import { IconAccount, IconKey, IconLogin, IconLogout, IconShare, IconTooltip } from './icons'
 import usePresence from './usePresence'
 import { fetchUsage, type Usage } from '../storage/attachmentsApi'
 import ApiTokensDialog from './ApiTokensDialog'
+import type { Notice } from './notice'
 
 const MB = 1_048_576
 
@@ -18,9 +20,10 @@ function formatUsage(bytes: number): string {
 type AccountMenuProps = {
   account: AccountState
   onBeforeNavigate: () => Promise<void>
+  onNotice: (notice: Notice) => void
 }
 
-export default function AccountMenu({ account, onBeforeNavigate }: AccountMenuProps) {
+export default function AccountMenu({ account, onBeforeNavigate, onNotice }: AccountMenuProps) {
   const [open, setOpen] = useState(false)
   const [usage, setUsage] = useState<Usage | null>(null)
   const [apiTokensOpen, setApiTokensOpen] = useState(false)
@@ -74,10 +77,16 @@ export default function AccountMenu({ account, onBeforeNavigate }: AccountMenuPr
     location.href = loginUrl(location.hash)
   }
 
+  // 순서는 4.1 — 저장 대기 입력 저장이 로그아웃 요청보다 먼저 (F-2034)
   async function handleLogout() {
     setOpen(false)
     await onBeforeNavigate()
-    location.href = logoutUrl()
+    const ok = await logout()
+    if (ok) {
+      location.replace(AFTER_LOGOUT_URL)
+    } else {
+      onNotice({ type: 'error', message: LOGOUT_FAILED_MESSAGE })
+    }
   }
 
   // 로그인 상태에서만, 로그아웃 위에 (F-222 2.4)

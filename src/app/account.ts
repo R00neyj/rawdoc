@@ -1,4 +1,4 @@
-// 로그인 상태 조회·이동 주소 (specs/features/F-205.md 2.4)
+// 로그인 상태 조회·이동 주소 (specs/features/F-205.md 2.4, 로그아웃은 F-2034)
 import { getPref, setPref } from './prefs'
 
 export type Account = { id: string; email: string }
@@ -60,6 +60,27 @@ export function loginUrl(hash: string): string {
   return `/api/login?return=${encodeURIComponent(hash)}`
 }
 
-export function logoutUrl(): string {
-  return '/cdn-cgi/access/logout'
+// 로그아웃 뒤 가는 곳 — 해시를 버린다 (F-2034 3.1)
+export const AFTER_LOGOUT_URL = '/?app=1'
+export const LOGOUT_FAILED_MESSAGE = '로그아웃하지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.'
+
+// true = 서버가 세션을 끝냈다(2xx). false = 그 밖 전부 (F-2034 3.1)
+export async function logout(): Promise<boolean> {
+  let response: Response
+  try {
+    response = await fetch('/api/auth/sign-out', {
+      method: 'POST',
+      credentials: 'same-origin',
+      redirect: 'manual',
+    })
+  } catch {
+    return false
+  }
+
+  if (response.type === 'opaqueredirect' || !response.ok) {
+    return false
+  }
+
+  setPref('md.account', '')
+  return true
 }

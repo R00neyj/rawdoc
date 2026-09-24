@@ -256,7 +256,7 @@ export default function InviteDialog({ target, onClose, onNotice }: InviteDialog
       )}
 
       <div className="invite-foot">
-        <p className="invite-hint">같은 이메일로 로그인하면 사이드바 공유받음에 보입니다.</p>
+        <p className="invite-hint">같은 이메일의 Google 또는 GitHub 계정으로 로그인하면 사이드바 공유받음에 보입니다.</p>
         <div className="dialog-actions">
           <button type="button" onClick={onClose}>
             닫기

@@ -16,15 +16,36 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
   let offline = false
   // 계정당 이미지 저장 한도 흉내 (F-221 2.2·2.5)
   let usage = { used: 0, limit: 314_572_800 }
+  // 로그인 상태 플래그와 /api/auth/sign-out 흉내 (F-2034 7장)
+  let loggedIn = true
+  let signOutFailureMode = null // null | 'network' | number
+  let signOutRequestCount = 0
 
   function docSummary(d) {
     const { content: _content, ...rest } = d
     return rest
   }
 
-  await page.route('**/api/me', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, email }) }),
-  )
+  await page.route('**/api/me', (route) => {
+    if (!loggedIn) {
+      return route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' })
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, email }) })
+  })
+
+  // POST /api/auth/sign-out — 로그아웃 흉내 (F-2034 7장). GET 등은 다른 경로로 넘긴다
+  await page.route('**/api/auth/sign-out', (route) => {
+    const req = route.request()
+    if (req.method() !== 'POST') return route.fallback()
+    signOutRequestCount += 1
+    if (offline) return route.abort('internetdisconnected')
+    if (signOutFailureMode === 'network') return route.abort('failed')
+    if (typeof signOutFailureMode === 'number') {
+      return route.fulfill({ status: signOutFailureMode, contentType: 'application/json', body: '{"error":"internal"}' })
+    }
+    loggedIn = false
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) })
+  })
 
   await page.route('**/api/docs', async (route) => {
     if (offline) return route.abort('internetdisconnected')
@@ -361,6 +382,14 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     // 계정당 이미지 사용량을 직접 설정한다 (F-221 A3·A4)
     setUsage(v) {
       usage = { ...usage, ...v }
+    },
+    // 로그아웃 응답을 바꾼다. null = 정상(200), 'network' = 연결 실패, 숫자 = 그 상태로 응답 (F-2034 7장)
+    setSignOutFailure(mode) {
+      signOutFailureMode = mode
+    },
+    // 지금까지 받은 POST /api/auth/sign-out 횟수 (F-2034 7장)
+    signOutCount() {
+      return signOutRequestCount
     },
   }
 }

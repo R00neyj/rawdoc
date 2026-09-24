@@ -3411,6 +3411,7 @@ export default function App() {
       onCopyRich={handleCopyDocAsRichText}
       account={account}
       onAccountBeforeNavigate={() => docSaverFlushRef.current()}
+      onAccountNotice={showNotice}
       showToolbar={showToolbar}
       onRunToolbarCommand={runToolbarCommand}
       // 공유 화면·지도가 떠 있는 동안은 지금 보는 것이 그 문서가 아니다 (F-307 7.4)
