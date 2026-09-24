@@ -15,6 +15,8 @@ import { encodeDocRoomMessage } from '../src/lib/docRoomProtocol'
 
 const DOC_ID = '11111111-1111-4111-8111-111111111111'
 const CLIENT = { client: true }
+const ROW_UPDATE_SQL = 'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ?'
+const ROOM_UPDATE_SQL = 'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND version = ?'
 
 type D1Doc = {
   id: string
@@ -24,6 +26,8 @@ type D1Doc = {
   content: string
   line_ending: 'crlf' | 'lf'
   version: number
+  pinned_at: number | null
+  created_at: number
   updated_at: number
 }
 
@@ -40,12 +44,15 @@ function makeD1(initial: Partial<D1Doc> | null) {
           content: '',
           line_ending: 'lf',
           version: 1,
+          pinned_at: null,
+          created_at: 0,
           updated_at: 0,
           ...initial,
         } as D1Doc)
       : null,
     calls: [] as SqlCall[],
     failUpdate: false,
+    beforeUpdate: null as (() => unknown) | null,
   }
   const DB = {
     prepare(sql: string) {
@@ -64,14 +71,28 @@ function makeD1(initial: Partial<D1Doc> | null) {
                 const { id, owner_id, folder_id } = state.row
                 return { id, owner_id, folder_id } as T
               }
+              if (sql.startsWith('SELECT * FROM docs WHERE id = ?')) {
+                if (!state.row || args[0] !== state.row.id) return null
+                return { ...state.row } as T
+              }
               throw new Error(`unhandled first sql: ${sql}`)
             },
             async run() {
               state.calls.push({ sql, args })
               if (sql.startsWith('UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND version = ?')) {
+                if (state.beforeUpdate) await state.beforeUpdate()
                 if (state.failUpdate) throw new Error('D1 down')
                 const [title, content, version, updatedAt, id, cond] = args as [string, string, number, number, string, number]
                 if (!state.row || state.row.id !== id || state.row.version !== cond) return { meta: { changes: 0 } }
+                state.row = { ...state.row, title, content, version, updated_at: updatedAt }
+                return { meta: { changes: 1 } }
+              }
+              if (sql.startsWith(ROW_UPDATE_SQL)) {
+                if (state.beforeUpdate) await state.beforeUpdate()
+                const [title, content, version, updatedAt, id, ownerId, cond] = args as [string, string, number, number, string, string, number]
+                if (!state.row || state.row.id !== id || state.row.owner_id !== ownerId || state.row.version !== cond) {
+                  return { meta: { changes: 0 } }
+                }
                 state.row = { ...state.row, title, content, version, updated_at: updatedAt }
                 return { meta: { changes: 1 } }
               }
@@ -157,9 +178,10 @@ function conn(userId: string, email: string, role: 'owner' | 'edit' = 'edit'): F
   return c
 }
 
-function makeRoom(d1: ReturnType<typeof makeD1>, store = makeStorage()) {
+function makeRoom(d1: ReturnType<typeof makeD1>, store = makeStorage(), opts: { ensureLoaded?: () => Promise<void> } = {}) {
   const doc = new Y.Doc()
   const conns: FakeConn[] = []
+  const counts = { ensureLoaded: 0, exclusive: 0, load: 0 }
   const host: DocRoomHost<FakeConn> = {
     docId: DOC_ID,
     env: { DB: d1.DB } as unknown as Env,
@@ -168,13 +190,28 @@ function makeRoom(d1: ReturnType<typeof makeD1>, store = makeStorage()) {
     connections: () => conns.filter((c) => c.open),
     sendCustom: (c, message) => c.sent.push(message),
     broadcastCustom: (message) => conns.filter((c) => c.open).forEach((c) => c.sent.push(message)),
+    // 5.3 — 아직 안 불렀으면 core.load(), exclusive 는 fn 을 그대로 부르고 횟수를 센다
+    ensureLoaded: async () => {
+      counts.ensureLoaded++
+      if (opts.ensureLoaded) return opts.ensureLoaded()
+      if (counts.load === 0) await core.load()
+    },
+    exclusive: async <T,>(fn: () => Promise<T>) => {
+      counts.exclusive++
+      return fn()
+    },
   }
   const core = new DocRoomCore(host)
+  const load = core.load.bind(core)
+  core.load = () => {
+    counts.load++
+    return load()
+  }
   const add = async (c: FakeConn, version: number, onSync?: () => void) => {
     conns.push(c)
     return core.connect(c, version, () => onSync?.())
   }
-  return { core, doc, conns, add, store }
+  return { core, doc, conns, add, store, counts }
 }
 
 const text = (doc: Y.Doc, name = 'content') => doc.getText(name).toString()
@@ -634,24 +671,306 @@ describe('F-304 A20 비우기 뒤', () => {
   })
 })
 
-describe('F-305 U25 activeEditor', () => {
-  it('연결이 없으면 null, 있으면 첫 연결 상태의 email, 못 읽는 연결은 건너뛴다, D1 호출 0', () => {
-    const d1 = makeD1({ content: 'x' })
+// F-308 /v1 PUT 을 DO 경유로 — writeText (specs/features/F-308.md 5·6장, A10~A22)
+const L = 'L1\nL2\nL3\n'
+
+function liveD1(overrides: Partial<D1Doc> = {}) {
+  return makeD1({ content: L, title: 't', line_ending: 'lf', version: 5, ...overrides })
+}
+
+function watchUpdates(doc: Y.Doc) {
+  const seen: Uint8Array[] = []
+  doc.on('update', (u: Uint8Array) => seen.push(u))
+  return seen
+}
+
+async function settle() {
+  for (let i = 0; i < 50; i++) await Promise.resolve()
+}
+
+describe('F-308 A10·A11 idle 경로', () => {
+  it('A10 불러오지 않은 방·연결 0 → exclusive 안에서 D1 만, Yjs·SQLite·타이머 없음', async () => {
+    const d1 = liveD1()
     const room = makeRoom(d1)
-    expect(room.core.activeEditor()).toBeNull()
+    const updates = watchUpdates(room.doc)
+    const result = await room.core.writeText({ content: 'L1\nX\nL3\n', baseVersion: 5, docVersion: 5 })
+    expect(result).toEqual({ type: 'ok', doc: { title: 't', content: 'L1\nX\nL3\n', version: 6, updatedAt: 1_000_000 } })
+    expect(room.counts.exclusive).toBe(1)
+    expect(room.counts.ensureLoaded).toBe(0)
+    expect(room.store.log.filter((l) => l.startsWith('INSERT INTO ydoc_'))).toHaveLength(0)
+    expect(updates).toHaveLength(0)
+    expect(d1.state.calls.map((c) => c.sql)).toEqual(['SELECT * FROM docs WHERE id = ?', ROW_UPDATE_SQL])
+    expect(d1.state.calls[1].args).toEqual(['t', 'L1\nX\nL3\n', 6, 1_000_000, DOC_ID, 'owner', 5])
+    expect(d1.state.row!.content).toBe('L1\nX\nL3\n')
+    expect(vi.getTimerCount()).toBe(0)
+  })
 
-    const broken: FakeConn = { ...conn('u0', 'broken@example.com'), state: { userId: 'u0' } }
-    broken.close = () => {
-      broken.open = false
+  it('A11 낡은 baseVersion → conflict(행), UPDATE 0', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    const result = await room.core.writeText({ content: 'L1\nX\nL3\n', baseVersion: 4, docVersion: 5 })
+    expect(result).toEqual({ type: 'conflict', doc: { title: 't', content: L, version: 5, updatedAt: 0 } })
+    expect(d1.updates()).toHaveLength(0)
+  })
+
+  it('A11 행이 없으면 not_found', async () => {
+    const d1 = makeD1(null)
+    const room = makeRoom(d1)
+    await expect(room.core.writeText({ content: 'x', baseVersion: 1, docVersion: 1 })).resolves.toEqual({ type: 'not_found' })
+    expect(d1.updates()).toHaveLength(0)
+  })
+
+  it('A11 요청 값이 행과 같으면 낡은 baseVersion 이어도 ok, version 그대로, UPDATE 0', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    const result = await room.core.writeText({ content: L, title: 't', baseVersion: 4, docVersion: 5 })
+    expect(result).toEqual({ type: 'ok', doc: { title: 't', content: L, version: 5, updatedAt: 0 } })
+    expect(d1.updates()).toHaveLength(0)
+  })
+
+  it('A11 UPDATE 가 0행이면 다시 읽은 행으로 conflict', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    d1.state.beforeUpdate = () => {
+      d1.state.row = { ...d1.state.row!, content: 'other\n', version: 6, updated_at: 7 }
     }
-    room.conns.push(broken)
-    expect(room.core.activeEditor()).toBeNull()
+    const result = await room.core.writeText({ content: 'L1\nX\nL3\n', baseVersion: 5, docVersion: 5 })
+    expect(result).toEqual({ type: 'conflict', doc: { title: 't', content: 'other\n', version: 6, updatedAt: 7 } })
+  })
+})
 
-    room.conns.push(conn('u1', 'first@example.com'), conn('u2', 'second@example.com', 'owner'))
-    expect(room.core.activeEditor()).toBe('first@example.com')
+describe('F-308 A12 경로 고르기', () => {
+  it('연결이 있고 불러오지 않은 방 → ensureLoaded 1번 뒤 실시간 경로', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    room.conns.push(conn('u1', 'u1@example.com'))
+    const result = await room.core.writeText({ content: 'L1\nL2x\nL3\n', baseVersion: 5, docVersion: 5 })
+    expect(result).toMatchObject({ type: 'ok', doc: { version: 6 } })
+    expect(room.counts.ensureLoaded).toBe(1)
+    expect(room.counts.load).toBe(1)
+    expect(room.counts.exclusive).toBe(0)
+    expect(text(room.doc)).toBe('L1\nL2x\nL3\n')
+    expect(d1.updates().map((c) => c.sql)).toEqual([ROOM_UPDATE_SQL])
+  })
 
-    room.conns[1].open = false
-    expect(room.core.activeEditor()).toBe('second@example.com')
-    expect(d1.state.calls).toHaveLength(0)
+  it('불러온 방·연결 0 → 실시간 경로, 불러오기를 다시 하지 않는다', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    await room.core.load()
+    const result = await room.core.writeText({ content: 'L1\nL2x\nL3\n', baseVersion: 5, docVersion: 5 })
+    expect(result).toMatchObject({ type: 'ok', doc: { version: 6 } })
+    expect(room.counts.ensureLoaded).toBe(1)
+    expect(room.counts.load).toBe(1)
+    expect(room.counts.exclusive).toBe(0)
+    expect(d1.updates().map((c) => c.sql)).toEqual([ROOM_UPDATE_SQL])
+  })
+
+  it('ensureLoaded 가 아무것도 안 하면 unavailable, doc 업데이트 0', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1, makeStorage(), { ensureLoaded: async () => {} })
+    room.conns.push(conn('u1', 'u1@example.com'))
+    const updates = watchUpdates(room.doc)
+    await expect(room.core.writeText({ content: 'L1\nL2x\nL3\n', baseVersion: 5, docVersion: 5 })).resolves.toEqual({ type: 'unavailable' })
+    expect(updates).toHaveLength(0)
+    expect(d1.updates()).toHaveLength(0)
+  })
+})
+
+describe('F-308 A13·A14 실시간 경로 — 차이만 적용', () => {
+  it('A13 못 나간 편집 없음 → ok v6, DO 스냅숏 문장 1번, 클라이언트에 같은 본문', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    await room.core.load()
+    const client = new Y.Doc()
+    Y.applyUpdate(client, Y.encodeStateAsUpdate(room.doc))
+    const updates = watchUpdates(room.doc)
+    const result = await room.core.writeText({ content: 'L1\nL2x\nL3\n', baseVersion: 5, docVersion: 5 })
+    expect(result).toEqual({ type: 'ok', doc: { title: 't', content: 'L1\nL2x\nL3\n', version: 6, updatedAt: 1_000_000 } })
+    expect(text(room.doc)).toBe('L1\nL2x\nL3\n')
+    const writes = d1.updates()
+    expect(writes).toHaveLength(1)
+    expect(writes[0].sql).toBe(ROOM_UPDATE_SQL)
+    expect(writes[0].args).toEqual(['t', 'L1\nL2x\nL3\n', 6, 1_000_000, DOC_ID, 5])
+    for (const u of updates) Y.applyUpdate(client, u)
+    expect(client.getText('content').toString()).toBe('L1\nL2x\nL3\n')
+  })
+
+  it('A14 편집 밖의 상대 위치가 제자리, 업데이트 500 B 미만', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    await room.core.load()
+    const content = room.doc.getText('content')
+    const atL1End = Y.createRelativePositionFromTypeIndex(content, 2)
+    const atL3 = Y.createRelativePositionFromTypeIndex(content, 6)
+    const updates = watchUpdates(room.doc)
+    await room.core.writeText({ content: 'L1\nL2x\nL3\n', baseVersion: 5, docVersion: 5 })
+    expect(Y.createAbsolutePositionFromRelativePosition(atL1End, room.doc)!.index).toBe(2)
+    expect(Y.createAbsolutePositionFromRelativePosition(atL3, room.doc)!.index).toBe(7)
+    expect(updates).toHaveLength(1)
+    expect(updates[0].length).toBeLessThan(500)
+  })
+})
+
+describe('F-308 A15·A16 못 나간 편집과 끼어든 편집', () => {
+  it('A15 못 나간 편집이 있으면 먼저 D1 에 쓰고 conflict, 그 version 으로 다시 → ok', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    await room.core.load()
+    edit(room.doc, (c) => c.insert(2, 'a'))
+    const first = await room.core.writeText({ content: 'L1\nL2x\nL3\n', baseVersion: 5, docVersion: 5 })
+    expect(first).toEqual({ type: 'conflict', doc: { title: 't', content: 'L1a\nL2\nL3\n', version: 6, updatedAt: 1_000_000 } })
+    expect(text(room.doc)).toBe('L1a\nL2\nL3\n')
+
+    const again = await room.core.writeText({ content: 'L1a\nL2x\nL3\n', baseVersion: 6, docVersion: 6 })
+    expect(again).toMatchObject({ type: 'ok', doc: { content: 'L1a\nL2x\nL3\n', version: 7 } })
+    expect(d1.state.row!.content).toBe('L1a\nL2x\nL3\n')
+  })
+
+  it('A16 flush(선) 동안 끼어든 편집이 안 겹치면 둘 다 산다', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    await room.core.load()
+    edit(room.doc, (_c, t) => t.insert(1, '2'))
+    d1.state.beforeUpdate = () => {
+      d1.state.beforeUpdate = null
+      edit(room.doc, (c) => c.insert(8, 'y'))
+    }
+    const result = await room.core.writeText({ content: 'L1\nL2x\nL3\n', baseVersion: 6, docVersion: 5 })
+    expect(result).toMatchObject({ type: 'ok', doc: { content: 'L1\nL2x\nL3y\n', version: 7 } })
+    expect(text(room.doc)).toBe('L1\nL2x\nL3y\n')
+    expect(d1.state.row!.content).toBe('L1\nL2x\nL3y\n')
+  })
+
+  it('A16 겹치면 conflict, 요청 편집이 안 들어간다', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    await room.core.load()
+    edit(room.doc, (_c, t) => t.insert(1, '2'))
+    d1.state.beforeUpdate = () => {
+      d1.state.beforeUpdate = null
+      edit(room.doc, (c) => {
+        c.delete(3, 1)
+        c.insert(3, 'N')
+      })
+    }
+    const result = await room.core.writeText({ content: 'L1\nM2\nL3\n', baseVersion: 6, docVersion: 5 })
+    expect(result).toEqual({ type: 'conflict', doc: { title: 't2', content: L, version: 6, updatedAt: 1_000_000 } })
+    expect(text(room.doc)).toBe('L1\nN2\nL3\n')
+  })
+})
+
+describe('F-308 A17·A18·A19 같은 값·줄바꿈·크기·제목', () => {
+  it('A17 지금 본문과 같으면 낡은 baseVersion 이어도 ok, version 그대로, 쓰기·업데이트 0', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    await room.core.load()
+    const updates = watchUpdates(room.doc)
+    const result = await room.core.writeText({ content: L, baseVersion: 3, docVersion: 5 })
+    expect(result).toEqual({ type: 'ok', doc: { title: 't', content: L, version: 5, updatedAt: null } })
+    expect(d1.updates()).toHaveLength(0)
+    expect(updates).toHaveLength(0)
+  })
+
+  it('A18 crlf 방 — doc 은 LF, D1·결과는 CRLF', async () => {
+    const d1 = makeD1({ content: 'a\r\nb\r\n', title: 't', line_ending: 'crlf', version: 1 })
+    const room = makeRoom(d1)
+    await room.core.load()
+    const result = await room.core.writeText({ content: 'a\r\nB\r\n', baseVersion: 1, docVersion: 1 })
+    expect(result).toMatchObject({ type: 'ok', doc: { content: 'a\r\nB\r\n', version: 2 } })
+    expect(text(room.doc)).toBe('a\nB\n')
+    expect(d1.state.row!.content).toBe('a\r\nB\r\n')
+  })
+
+  it('A18 CRLF 로 바꾸면 1,000,001 B → too_large, 적용하지 않는다', async () => {
+    const d1 = makeD1({ content: 'a\r\nb\r\n', title: 't', line_ending: 'crlf', version: 1 })
+    const room = makeRoom(d1)
+    await room.core.load()
+    const updates = watchUpdates(room.doc)
+    const result = await room.core.writeText({ content: 'x'.repeat(999_999) + '\r\n', baseVersion: 1, docVersion: 1 })
+    expect(result).toEqual({ type: 'too_large', bytes: 1_000_001 })
+    expect(text(room.doc)).toBe('a\nb\n')
+    expect(updates).toHaveLength(0)
+    expect(d1.updates()).toHaveLength(0)
+  })
+
+  it('A19 제목만 — 본문 그대로, D1 제목 값', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    await room.core.load()
+    const result = await room.core.writeText({ title: '새 제목', baseVersion: 5, docVersion: 5 })
+    expect(result).toMatchObject({ type: 'ok', doc: { title: '새 제목', content: L, version: 6 } })
+    expect(text(room.doc, 'title')).toBe('새 제목')
+    expect(text(room.doc)).toBe(L)
+    expect(d1.updates()[0].args[0]).toBe('새 제목')
+  })
+})
+
+describe('F-308 A20 D1 실패', () => {
+  it('flush(후)가 던지면 unavailable, 편집은 doc·SQLite 에, 재시도 1개. 재시도 뒤 같은 요청은 ok', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    await room.core.load()
+    const rows = room.store.seqCount()
+    d1.state.failUpdate = true
+    const result = await room.core.writeText({ content: 'L1\nL2x\nL3\n', baseVersion: 5, docVersion: 5 })
+    expect(result).toEqual({ type: 'unavailable' })
+    expect(text(room.doc)).toBe('L1\nL2x\nL3\n')
+    expect(room.store.seqCount()).toBe(rows + 1)
+    expect(vi.getTimerCount()).toBe(1)
+
+    d1.state.failUpdate = false
+    await vi.advanceTimersByTimeAsync(SNAPSHOT_RETRY_MS)
+    expect(d1.state.row!.version).toBe(6)
+    const written = d1.updates().length
+    const again = await room.core.writeText({ content: 'L1\nL2x\nL3\n', baseVersion: 5, docVersion: 6 })
+    expect(again).toMatchObject({ type: 'ok', doc: { content: 'L1\nL2x\nL3\n', version: 6 } })
+    expect(d1.updates()).toHaveLength(written)
+  })
+})
+
+describe('F-308 A21 한 번에 하나', () => {
+  it('같은 baseVersion 두 개를 동시에 → ok(6)·conflict(6), 두 번째는 첫 번째가 끝난 뒤 시작', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    await room.core.load()
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    d1.state.beforeUpdate = () => gate
+    const p1 = room.core.writeText({ content: 'L1\nL2x\nL3\n', baseVersion: 5, docVersion: 4 })
+    const p2 = room.core.writeText({ content: 'L1\nL2y\nL3\n', baseVersion: 5, docVersion: 4 })
+    await settle()
+    expect(d1.reads()).toHaveLength(2)
+    expect(d1.updates()).toHaveLength(1)
+    d1.state.beforeUpdate = null
+    release()
+    const [r1, r2] = await Promise.all([p1, p2])
+    expect(r1).toMatchObject({ type: 'ok', doc: { content: 'L1\nL2x\nL3\n', version: 6 } })
+    expect(r2).toMatchObject({ type: 'conflict', doc: { content: 'L1\nL2x\nL3\n', version: 6 } })
+    expect(d1.reads()).toHaveLength(3)
+    expect(text(room.doc)).toBe('L1\nL2x\nL3\n')
+  })
+})
+
+describe('F-308 A22 따라잡기·사라진 방', () => {
+  it('docVersion 이 방보다 새로우면 쓰기 전에 흡수한다', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    await room.core.load()
+    d1.state.row = { ...d1.state.row!, content: 'L1\nL2\nL3y\n', version: 7 }
+    const result = await room.core.writeText({ content: 'L1\nL2x\nL3y\n', baseVersion: 7, docVersion: 7 })
+    expect(result).toMatchObject({ type: 'ok', doc: { content: 'L1\nL2x\nL3y\n', version: 8 } })
+    expect(text(room.doc)).toBe('L1\nL2x\nL3y\n')
+  })
+
+  it('D1 줄이 없으면 not_found, 연결은 4404 deleted', async () => {
+    const d1 = liveD1()
+    const room = makeRoom(d1)
+    await room.core.load()
+    const c = conn('u1', 'u1@example.com')
+    await room.add(c, 5)
+    d1.state.row = null
+    await expect(room.core.writeText({ content: 'x', baseVersion: 5, docVersion: 6 })).resolves.toEqual({ type: 'not_found' })
+    expect(c.closed).toEqual({ code: 4404, reason: 'deleted' })
   })
 })

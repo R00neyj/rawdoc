@@ -6,7 +6,7 @@ import { applyAwarenessUpdate } from 'y-protocols/awareness'
 import { AWARENESS_CLOCKS_KEY, closingAwareness, encodeAwarenessMessage, readAwarenessClocks, readAwarenessMessage, relayAwareness } from './awarenessRelay'
 import type { AwarenessClocks, RelayConn } from './awarenessRelay'
 import { DocRoomCore, FLUSH_DEBOUNCE_MS, FLUSH_MAX_WAIT_MS, readConnState } from './docRoomCore'
-import type { RoomConnState } from './docRoomCore'
+import type { RoomConnState, RoomTextWrite, RoomTextWriteResult } from './docRoomCore'
 import { readForwardedIdentity } from './docSocket'
 import { SOCKET_CLOSE, SOCKET_PING, SOCKET_PONG } from '../src/lib/docRoomProtocol'
 
@@ -55,6 +55,9 @@ export class DocRoom extends YServer<Env> {
       connections: () => this.getConnections(),
       sendCustom: (conn, message) => this.sendCustomMessage(conn, message),
       broadcastCustom: (message) => this.broadcastCustomMessage(message),
+      // RPC 는 partyserver 초기화를 거치지 않는다 — getServerByName 이 RPC 앞에 쓰는 공개 입구 (F-308 5.3)
+      ensureLoaded: () => this.setName(this.name),
+      exclusive: <T,>(fn: () => Promise<T>) => ctx.blockConcurrencyWhile(fn),
     })
   }
 
@@ -141,9 +144,9 @@ export class DocRoom extends YServer<Env> {
     await this.core.revalidateConnections(email)
   }
 
-  // /v1 PUT 이 묻는다 — 실시간 편집자 이메일, 없으면 null (F-305 12.2)
-  async activeEditor(): Promise<string | null> {
-    return this.core.activeEditor()
+  // /v1 PUT (F-308 5.4) — idle 경로는 onLoad 를 거치지 않는다. 규칙은 전부 core 에
+  async writeText(input: RoomTextWrite): Promise<RoomTextWriteResult> {
+    return this.core.writeText(input)
   }
 
   async purgeRoom(): Promise<void> {

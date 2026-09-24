@@ -1,11 +1,18 @@
 // 자동 업로드 API '/v1' 전용 핸들러 — 몸통 보정·응답 모양만 여기서 하고, 나머지는 기존 /api 핸들러를 그대로 부른다 (specs/features/F-223.md)
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
+import { getDocAccess, roleAtLeast } from './access'
+import { getActiveLock } from './locks'
 import { badBody, handleCreateDoc, handleUpdateDoc, readJsonLimited } from './docs'
+import { rowToDoc } from './docWrite'
+import type { DocRow } from './docWrite'
+import { writeTextInRoom } from './docRoomRpc'
+import type { RoomDocState, RoomTextWrite } from './docRoomCore'
 import { handleCreateDocLink } from './links'
 import { MAX_ATTACHMENT_BYTES, generateAttachmentId, storeAttachment } from './attachments'
 import { buildImageBlock } from '../src/lib/imageBlock'
-import { MAX_BODY_BYTES, isValidLineEnding } from './validate'
+import { fromEditorText, toEditorText } from '../src/lib/lineEnding'
+import { MAX_BODY_BYTES, MAX_CONTENT_BYTES, isContentTooLarge, isValidLineEnding, isValidTitle } from './validate'
 
 // 헤더는 그대로(Authorization 포함), 몸통만 새 JSON 으로 바꿔 아래 핸들러에 넘긴다
 function jsonRequest(request: Request, bodyObj: unknown, dropHeaders: string[] = []): Request {
@@ -41,19 +48,81 @@ export async function handleCreateDocV1(request: Request, env: Env): Promise<Res
   return handleCreateDoc(jsonRequest(request, forwardBody), env)
 }
 
-// 잠금이 살아 있으면 항상 423 — 토큰 요청에는 잠금 세션이 없다(X-Lock-Session 을 지운다) (F-223 2.2)
-// 브라우저가 실시간으로 편집 중이어도 423 — 임시 규칙, F-308 에서 뺀다 (F-305 12.1)
+// DO 결과 값에 Worker 가 읽은 행의 나머지 열을 붙인다 (F-308 4장)
+function roomDocToV1(row: DocRow, doc: RoomDocState) {
+  return rowToDoc({ ...row, title: doc.title, content: doc.content, version: doc.version, updated_at: doc.updatedAt ?? row.updated_at })
+}
+
+// 문서의 DocRoom 을 거쳐 쓴다 — 판정 순서는 F-308 4장, DO 호출이 던지면 D1 직접 쓰기(9장), D1 잠금 423 은 F-309 까지
 export async function handleUpdateDocV1(
   request: Request,
   env: Env,
   ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
-  await requireUser(request, env)
+  const user = await requireUser(request, env)
   const parsed = await readJsonLimited(request, MAX_BODY_BYTES)
   if (!parsed.ok) return badBody(parsed)
 
-  return handleUpdateDoc(jsonRequest(request, parsed.data, ['X-Lock-Session']), env, ctx, params, { refuseWhileLive: true })
+  const body = parsed.data
+  if (typeof body !== 'object' || body === null) return errorResponse('invalid', 400)
+  const { title, content, baseVersion } = body as Record<string, unknown>
+  if (title !== undefined && !isValidTitle(title)) {
+    return jsonResponse({ error: 'invalid', field: 'title' }, 400)
+  }
+  if (content !== undefined && typeof content !== 'string') {
+    return jsonResponse({ error: 'invalid', field: 'content' }, 400)
+  }
+  if (typeof content === 'string' && isContentTooLarge(content)) {
+    return jsonResponse({ error: 'too_large', limit: MAX_CONTENT_BYTES }, 413)
+  }
+  if (!Number.isInteger(baseVersion)) {
+    return jsonResponse({ error: 'invalid', field: 'baseVersion' }, 400)
+  }
+
+  const access = await getDocAccess<DocRow>(env, params.id, user)
+  if (!access) return errorResponse('not_found', 404)
+  if (!roleAtLeast(access.role, 'edit')) return errorResponse('forbidden', 403)
+  const row = access.doc
+
+  const activeLock = await getActiveLock(env, params.id)
+  if (activeLock) {
+    return jsonResponse({ error: 'locked', email: activeLock.email, expiresAt: activeLock.expires_at }, 423)
+  }
+
+  // 문서 줄바꿈에 맞춘다 — Y.Text 는 LF 만 담는다 (8장)
+  const nextContent = typeof content === 'string' ? fromEditorText(toEditorText(content), row.line_ending) : undefined
+  if (nextContent !== undefined && isContentTooLarge(nextContent)) {
+    return jsonResponse({ error: 'too_large', limit: MAX_CONTENT_BYTES }, 413)
+  }
+
+  // 낡은 baseVersion 은 DO 안에서도 409 다 — 깨우지 않는다. 같은 값은 DO 가 200 으로 끝낸다 (7.3·7.4)
+  const differs = (nextContent !== undefined && nextContent !== row.content) || (title !== undefined && title !== row.title)
+  if (baseVersion !== row.version && differs) {
+    return jsonResponse({ error: 'conflict', doc: rowToDoc(row) }, 409)
+  }
+
+  const input: RoomTextWrite = { baseVersion: baseVersion as number, docVersion: row.version }
+  if (title !== undefined) input.title = title as string
+  if (nextContent !== undefined) input.content = nextContent
+  const result = await writeTextInRoom(env, params.id, input)
+
+  if (!result) {
+    const forward = { title, content: nextContent, baseVersion }
+    return handleUpdateDoc(jsonRequest(request, forward, ['X-Lock-Session']), env, ctx, params)
+  }
+  switch (result.type) {
+    case 'ok':
+      return jsonResponse(roomDocToV1(row, result.doc))
+    case 'conflict':
+      return jsonResponse({ error: 'conflict', doc: roomDocToV1(row, result.doc) }, 409)
+    case 'too_large':
+      return jsonResponse({ error: 'too_large', limit: MAX_CONTENT_BYTES }, 413)
+    case 'not_found':
+      return errorResponse('not_found', 404)
+    case 'unavailable':
+      return errorResponse('unavailable', 503)
+  }
 }
 
 export async function handleCreateAttachmentV1(request: Request, env: Env): Promise<Response> {

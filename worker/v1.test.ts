@@ -8,10 +8,10 @@ vi.mock('./auth', () => ({
   }),
 }))
 
-// 실시간 편집자 판정(F-305 12.3) — 기본은 null(지금과 같음), 임시 423 테스트만 값을 준다
+// DO 경유 쓰기(F-308) — 기본은 null 이라 D1 직접 쓰기(폴백)를 탄다. F-308 테스트만 결과를 준다
 vi.mock('./docRoomRpc', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./docRoomRpc')>()),
-  liveEditorOf: vi.fn(async () => null),
+  writeTextInRoom: vi.fn(async () => null),
 }))
 
 import {
@@ -21,7 +21,8 @@ import {
   handleUpdateDocV1,
 } from './v1'
 import { handleGetDoc, handleListDocs, handleUpdateDoc } from './docs'
-import { liveEditorOf } from './docRoomRpc'
+import { writeTextInRoom } from './docRoomRpc'
+import type { RoomTextWriteResult } from './docRoomCore'
 import { handleCreateFolder, handleDeleteFolder, handleListFolders } from './folders'
 import { V1_EXAMPLES } from './v1Contract'
 
@@ -338,11 +339,11 @@ describe('F-223 A1 PUT /v1/docs/:id', () => {
   })
 })
 
-describe('F-305 U22·U23·U24 /v1 PUT 임시 423', () => {
+describe('F-308 A1~A8 /v1 PUT 을 DO 경유로', () => {
   function baseDoc(overrides: Partial<DocRow> = {}): DocRow {
     return {
       id: 'd1', owner_id: 'u1', title: 't', content: 'c', line_ending: 'lf',
-      folder_id: null, pinned_at: null, version: 1, created_at: 1, updated_at: 1,
+      folder_id: 'f1', pinned_at: 11, version: 3, created_at: 12, updated_at: 13,
       ...overrides,
     }
   }
@@ -355,79 +356,166 @@ describe('F-305 U22·U23·U24 /v1 PUT 임시 423', () => {
     })
   }
 
-  const live = vi.mocked(liveEditorOf)
+  function callV1(env: Env, body: unknown, headers: Record<string, string> = {}) {
+    return handleUpdateDocV1(put(body, headers), env, {} as ExecutionContext, { id: 'd1' })
+  }
+
+  function watchUpdates(env: Env) {
+    const sqls: string[] = []
+    const prepare = env.DB.prepare.bind(env.DB)
+    env.DB.prepare = ((sql: string) => {
+      sqls.push(sql)
+      return prepare(sql)
+    }) as typeof env.DB.prepare
+    return () => sqls.filter((s) => s.startsWith('UPDATE'))
+  }
+
+  const room = vi.mocked(writeTextInRoom)
+  const okResult: RoomTextWriteResult = { type: 'ok', doc: { title: 'T2', content: 'new', version: 4, updatedAt: 99 } }
 
   beforeEach(() => {
-    live.mockReset()
-    live.mockImplementation(async () => null)
+    room.mockReset()
+    room.mockImplementation(async () => null)
   })
 
   afterEach(() => {
-    live.mockImplementation(async () => null)
+    room.mockImplementation(async () => null)
   })
 
-  it('U22 실시간 편집자가 있으면 423 {error, email} — expiresAt 없음, 쓰지 않는다', async () => {
-    live.mockImplementation(async () => 'a@x')
-    const { env, docs } = makeEnv({ docs: [baseDoc()] })
-    const res = await handleUpdateDocV1(put({ content: 'new', baseVersion: 1 }), env, {} as ExecutionContext, { id: 'd1' })
-    expect(res.status).toBe(423)
-    expect(await res.json()).toEqual({ error: 'locked', email: 'a@x' })
-    expect(live).toHaveBeenCalledWith(env, 'd1')
-    expect(docs[0].content).toBe('c')
-  })
-
-  it('U22 null 이면 지금처럼 쓴다', async () => {
-    const { env, docs } = makeEnv({ docs: [baseDoc()] })
-    const res = await handleUpdateDocV1(put({ content: 'new', baseVersion: 1 }), env, {} as ExecutionContext, { id: 'd1' })
-    expect(res.status).toBe(200)
-    expect(docs[0].content).toBe('new')
-    expect(live).toHaveBeenCalledTimes(1)
-  })
-
-  it('U23 본문 400·413, 없는 문서 404, 보기 권한 403 이 먼저 — liveEditorOf 를 부르지 않는다', async () => {
-    live.mockImplementation(async () => 'a@x')
+  it('A1 본문 400·413, 남의 문서 404, 보기 권한 403, D1 잠금 423 이 먼저 — writeTextInRoom 호출 0', async () => {
+    room.mockImplementation(async () => okResult)
+    const view: GrantRow = { target_type: 'doc', target_id: 'd1', grantee_email: 'u1@example.com', role: 'view' }
     const cases: [DocRow[], GrantRow[], unknown, number][] = [
       [[baseDoc()], [], 'not json', 400],
       [[baseDoc()], [], { content: 'x' }, 400],
-      [[baseDoc()], [], { content: 'x'.repeat(1_000_001), baseVersion: 1 }, 413],
-      [[baseDoc({ owner_id: 'owner-2' })], [], { content: 'x', baseVersion: 1 }, 404],
-      [[baseDoc({ owner_id: 'owner-2' })], [{ target_type: 'doc', target_id: 'd1', grantee_email: 'u1@example.com', role: 'view' }], { content: 'x', baseVersion: 1 }, 403],
+      [[baseDoc()], [], { content: 'x'.repeat(1_000_001), baseVersion: 3 }, 413],
+      [[baseDoc({ owner_id: 'owner-2', folder_id: null })], [], { content: 'x', baseVersion: 3 }, 404],
+      [[baseDoc({ owner_id: 'owner-2', folder_id: null })], [view], { content: 'x', baseVersion: 3 }, 403],
     ]
-    for (const [docsRows, grants, body, status] of cases) {
-      const { env } = makeEnv({ docs: docsRows, grants })
-      const res = await handleUpdateDocV1(put(body), env, {} as ExecutionContext, { id: 'd1' })
+    for (const [docs, grants, body, status] of cases) {
+      const { env } = makeEnv({ docs, grants })
+      const res = await callV1(env, body)
       expect(res.status).toBe(status)
     }
-    expect(live).not.toHaveBeenCalled()
-  })
-
-  it('U23 D1 잠금 423(expiresAt 있음)이 실시간 423 보다 먼저', async () => {
-    live.mockImplementation(async () => 'a@x')
     const expiresAt = Date.now() + 60_000
     const { env } = makeEnv({ docs: [baseDoc()], locks: [{ doc_id: 'd1', user_id: 'other', email: 'other@example.com', session_id: 's', expires_at: expiresAt }] })
-    const res = await handleUpdateDocV1(put({ content: 'new', baseVersion: 1 }), env, {} as ExecutionContext, { id: 'd1' })
-    expect(res.status).toBe(423)
-    expect(await res.json()).toEqual({ error: 'locked', email: 'other@example.com', expiresAt })
-    expect(live).not.toHaveBeenCalled()
+    const locked = await callV1(env, { content: 'x', baseVersion: 3 })
+    expect(locked.status).toBe(423)
+    expect(await locked.json()).toEqual({ error: 'locked', email: 'other@example.com', expiresAt })
+    expect(room).not.toHaveBeenCalled()
   })
 
-  it('U23 실시간 423 이 version 409 보다 먼저', async () => {
-    live.mockImplementation(async () => 'a@x')
-    const { env } = makeEnv({ docs: [baseDoc()] })
-    const res = await handleUpdateDocV1(put({ content: 'new', baseVersion: 99 }), env, {} as ExecutionContext, { id: 'd1' })
-    expect(res.status).toBe(423)
-    live.mockImplementation(async () => null)
-    const again = await handleUpdateDocV1(put({ content: 'new', baseVersion: 99 }), env, {} as ExecutionContext, { id: 'd1' })
-    expect(again.status).toBe(409)
-  })
-
-  it('U24 /api PUT 은 liveEditorOf 를 부르지 않는다', async () => {
-    live.mockImplementation(async () => 'a@x')
+  it('A2 낡은 baseVersion + 다른 content → 409(행), 호출 0. content 가 행과 같으면 DO 로 간다', async () => {
+    room.mockImplementation(async () => okResult)
     const { env, docs } = makeEnv({ docs: [baseDoc()] })
-    const res = await handleUpdateDoc(put({ content: 'api', baseVersion: 1 }), env, {} as ExecutionContext, { id: 'd1' })
+    const res = await callV1(env, { content: 'other', baseVersion: 1 })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({
+      error: 'conflict',
+      doc: { id: 'd1', title: 't', content: 'c', lineEnding: 'lf', folderId: 'f1', pinnedAt: 11, version: 3, createdAt: 12, updatedAt: 13 },
+    })
+    expect(room).not.toHaveBeenCalled()
+    expect(docs[0].version).toBe(3)
+
+    await callV1(env, { content: 'c', baseVersion: 1 })
+    expect(room).toHaveBeenCalledTimes(1)
+  })
+
+  it('A3 줄바꿈을 문서 line_ending 에 맞춰 넘기고, 맞춘 값이 1MB 를 넘으면 413', async () => {
+    room.mockImplementation(async () => okResult)
+    const crlf = makeEnv({ docs: [baseDoc({ line_ending: 'crlf' })] })
+    await callV1(crlf.env, { content: 'a\nb', baseVersion: 3 })
+    expect(room).toHaveBeenLastCalledWith(crlf.env, 'd1', { content: 'a\r\nb', baseVersion: 3, docVersion: 3 })
+
+    const lf = makeEnv({ docs: [baseDoc({ line_ending: 'lf' })] })
+    await callV1(lf.env, { content: 'a\r\nb', baseVersion: 3 })
+    expect(room).toHaveBeenLastCalledWith(lf.env, 'd1', { content: 'a\nb', baseVersion: 3, docVersion: 3 })
+
+    room.mockClear()
+    const big = makeEnv({ docs: [baseDoc({ line_ending: 'crlf' })] })
+    const res = await callV1(big.env, { content: 'x'.repeat(999_998) + '\n\n', baseVersion: 3 })
+    expect(res.status).toBe(413)
+    expect(await res.json()).toEqual({ error: 'too_large', limit: 1_000_000 })
+    expect(room).not.toHaveBeenCalled()
+  })
+
+  it('A4 ok → 200, 키 집합이 V1_EXAMPLES.doc, 결과 값 + 행 값, updatedAt 이 null 이면 행 값', async () => {
+    room.mockImplementation(async () => okResult)
+    const { env } = makeEnv({ docs: [baseDoc()] })
+    const res = await callV1(env, { title: 'T2', content: 'new', baseVersion: 3 })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(Object.keys(body).sort()).toEqual(Object.keys(V1_EXAMPLES.doc).sort())
+    expect(body).toEqual({ id: 'd1', title: 'T2', content: 'new', lineEnding: 'lf', folderId: 'f1', pinnedAt: 11, version: 4, createdAt: 12, updatedAt: 99 })
+
+    room.mockImplementation(async () => ({ type: 'ok', doc: { title: 't', content: 'new', version: 4, updatedAt: null } }))
+    const again = await callV1(env, { content: 'new', baseVersion: 3 })
+    expect(((await again.json()) as { updatedAt: number }).updatedAt).toBe(13)
+  })
+
+  it('A5 conflict·too_large·not_found·unavailable 매핑, 어느 경우도 D1 UPDATE 0', async () => {
+    const cases: [RoomTextWriteResult, number, unknown][] = [
+      [
+        { type: 'conflict', doc: { title: 't', content: 'live', version: 5, updatedAt: null } },
+        409,
+        { error: 'conflict', doc: { id: 'd1', title: 't', content: 'live', lineEnding: 'lf', folderId: 'f1', pinnedAt: 11, version: 5, createdAt: 12, updatedAt: 13 } },
+      ],
+      [{ type: 'too_large', bytes: 1_000_001 }, 413, { error: 'too_large', limit: 1_000_000 }],
+      [{ type: 'not_found' }, 404, { error: 'not_found' }],
+      [{ type: 'unavailable' }, 503, { error: 'unavailable' }],
+    ]
+    for (const [result, status, body] of cases) {
+      room.mockImplementation(async () => result)
+      const { env, docs } = makeEnv({ docs: [baseDoc()] })
+      const updates = watchUpdates(env)
+      const res = await callV1(env, { content: 'new', baseVersion: 3 })
+      expect(res.status).toBe(status)
+      expect(await res.json()).toEqual(body)
+      expect(updates()).toHaveLength(0)
+      expect(docs[0].version).toBe(3)
+    }
+  })
+
+  it('A6 writeTextInRoom 이 null 이면 D1 직접 쓰기 — 맞춘 본문, version +1', async () => {
+    const { env, docs } = makeEnv({ docs: [baseDoc({ line_ending: 'crlf' })] })
+    const res = await callV1(env, { content: 'a\nb', baseVersion: 3 })
+    expect(res.status).toBe(200)
+    expect(docs[0].content).toBe('a\r\nb')
+    expect(docs[0].version).toBe(4)
+    expect(((await res.json()) as { content: string; version: number })).toMatchObject({ content: 'a\r\nb', version: 4 })
+    expect(room).toHaveBeenCalledTimes(1)
+  })
+
+  it('A7 423 은 D1 잠금뿐 — /api PUT 은 writeTextInRoom 을 부르지 않는다', async () => {
+    const results: (RoomTextWriteResult | null)[] = [
+      okResult,
+      { type: 'conflict', doc: { title: 't', content: 'c', version: 3, updatedAt: null } },
+      { type: 'too_large', bytes: 1 },
+      { type: 'not_found' },
+      { type: 'unavailable' },
+      null,
+    ]
+    for (const result of results) {
+      room.mockImplementation(async () => result)
+      const { env } = makeEnv({ docs: [baseDoc()] })
+      const res = await callV1(env, { content: 'new', baseVersion: 3 })
+      expect(res.status).not.toBe(423)
+    }
+
+    room.mockClear()
+    const { env, docs } = makeEnv({ docs: [baseDoc()] })
+    const res = await handleUpdateDoc(put({ content: 'api', baseVersion: 3 }), env, {} as ExecutionContext, { id: 'd1' })
     expect(res.status).toBe(200)
     expect(docs[0].content).toBe('api')
-    expect(live).not.toHaveBeenCalled()
+    expect(room).not.toHaveBeenCalled()
+  })
+
+  it('A8 X-Lock-Session 을 보내도 D1 잠금이 있으면 423, DO 를 부르지 않는다', async () => {
+    room.mockImplementation(async () => okResult)
+    const { env } = makeEnv({ docs: [baseDoc()], locks: [{ doc_id: 'd1', user_id: 'other', email: 'other@example.com', session_id: 'sess-1', expires_at: Date.now() + 60_000 }] })
+    const res = await callV1(env, { content: 'new', baseVersion: 3 }, { 'X-Lock-Session': 'sess-1' })
+    expect(res.status).toBe(423)
+    expect(room).not.toHaveBeenCalled()
   })
 })
 

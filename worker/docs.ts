@@ -3,7 +3,9 @@ import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { getDocAccess, roleAtLeast } from './access'
 import { getActiveLock } from './locks'
-import { liveEditorOf, notifyPurge } from './docRoomRpc'
+import { notifyPurge } from './docRoomRpc'
+import { rowToDoc, updateDocRow } from './docWrite'
+import type { DocRow } from './docWrite'
 import {
   MAX_BODY_BYTES,
   MAX_CONTENT_BYTES,
@@ -14,19 +16,6 @@ import {
   isValidTitle,
   isValidUuid,
 } from './validate'
-
-type DocRow = {
-  id: string
-  owner_id: string
-  title: string
-  content: string
-  line_ending: 'crlf' | 'lf'
-  folder_id: string | null
-  pinned_at: number | null
-  version: number
-  created_at: number
-  updated_at: number
-}
 
 type ReadJsonResult =
   | { ok: true; data: unknown }
@@ -66,20 +55,6 @@ export async function readJsonLimited(request: Request, maxBytes: number): Promi
     return { ok: true, data: JSON.parse(text) }
   } catch {
     return { ok: false, reason: 'invalid_json' }
-  }
-}
-
-function rowToDoc(row: DocRow) {
-  return {
-    id: row.id,
-    title: row.title,
-    content: row.content,
-    lineEnding: row.line_ending,
-    folderId: row.folder_id,
-    pinnedAt: row.pinned_at,
-    version: row.version,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
   }
 }
 
@@ -201,8 +176,6 @@ export async function handleUpdateDoc(
   env: Env,
   _ctx: ExecutionContext,
   params: Record<string, string>,
-  // /v1 만 켠다 — 실시간 편집자가 있으면 423. /api(폴백 세션)는 막지 않는다 (F-305 12.1, F-308 에서 뺀다)
-  options?: { refuseWhileLive?: boolean },
 ): Promise<Response> {
   const user = await requireUser(request, env)
   const parsed = await readJsonLimited(request, MAX_BODY_BYTES)
@@ -235,27 +208,15 @@ export async function handleUpdateDoc(
     return jsonResponse({ error: 'locked', email: activeLock.email, expiresAt: activeLock.expires_at }, 423)
   }
 
-  if (options?.refuseWhileLive) {
-    const liveEmail = await liveEditorOf(env, params.id)
-    if (liveEmail) return jsonResponse({ error: 'locked', email: liveEmail }, 423)
-  }
-
   if (existing.version !== baseVersion) {
     return jsonResponse({ error: 'conflict', doc: rowToDoc(existing) }, 409)
   }
 
-  const nextTitle = title !== undefined ? (title as string) : existing.title
-  const nextContent = content !== undefined ? (content as string) : existing.content
-  const nextVersion = existing.version + 1
-  const now = Date.now()
-
-  const result = await env.DB.prepare(
-    'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ?',
-  )
-    .bind(nextTitle, nextContent, nextVersion, now, params.id, existing.owner_id, existing.version)
-    .run()
-
-  if (result.meta.changes === 0) {
+  const written = await updateDocRow(env, existing, {
+    title: title as string | undefined,
+    content: content as string | undefined,
+  })
+  if (!written.ok) {
     const latest = await env.DB.prepare('SELECT * FROM docs WHERE id = ? AND owner_id = ?')
       .bind(params.id, existing.owner_id)
       .first<DocRow>()
@@ -263,9 +224,7 @@ export async function handleUpdateDoc(
     return jsonResponse({ error: 'conflict', doc: rowToDoc(latest) }, 409)
   }
 
-  return jsonResponse(
-    rowToDoc({ ...existing, title: nextTitle, content: nextContent, version: nextVersion, updated_at: now }),
-  )
+  return jsonResponse(rowToDoc(written.row))
 }
 
 export async function handleMoveDocFolder(

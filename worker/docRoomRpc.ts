@@ -1,9 +1,10 @@
 // 다른 핸들러가 DocRoom 에 알리는 도우미 — 원래 응답은 알림 성공과 무관하게 나간다 (specs/features/F-304.md 9.3)
+import type { RoomTextWrite, RoomTextWriteResult } from './docRoomCore'
 
 type RoomStub = {
   revalidateConnections(email?: string): Promise<void>
   purgeRoom(): Promise<void>
-  activeEditor(): Promise<string | null>
+  writeText(input: RoomTextWrite): Promise<RoomTextWriteResult>
 }
 
 function roomStub(env: Env, docId: string): RoomStub | null {
@@ -41,14 +42,14 @@ export async function notifyPurge(env: Env, ctx: ExecutionContext | undefined, d
   await dispatch(ctx, () => stub.purgeRoom())
 }
 
-// /v1 PUT 임시 423 (F-305 12.2) — 결과가 응답을 바꾸므로 기다린다. 실패하면 통과시킨다(22장 Q3)
-export async function liveEditorOf(env: Env, docId: string): Promise<string | null> {
+// /v1 PUT (F-308 5.4) — 결과가 응답을 바꾸므로 기다린다. 던지면 null — Worker 가 D1 직접 쓰기로 넘긴다(9장)
+export async function writeTextInRoom(env: Env, docId: string, input: RoomTextWrite): Promise<RoomTextWriteResult | null> {
   const stub = roomStub(env, docId)
   if (!stub) return null
   try {
-    return await stub.activeEditor()
+    return await stub.writeText(input)
   } catch (err) {
-    console.error('docRoom activeEditor failed', err)
+    console.error('docRoom writeText failed', err)
     return null
   }
 }
