@@ -81,7 +81,7 @@ export function renderSitePage(input: { url: string; raw: string; appCssHref: st
   </head>
   <body>
     ${header}
-    <main class="site-main">
+    <main class="site-main site-doc">
       <div class="site-article public-view">
         <article class="markdown-body">${renderMarkdown(body)}</article>
       </div>
