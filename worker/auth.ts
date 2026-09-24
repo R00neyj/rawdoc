@@ -55,7 +55,17 @@ async function devUser(env: Env): Promise<AuthUser | null> {
   }
 }
 
+// 관문이 인증한 사용자를 같은 요청 안에서 다시 쓴다 — 핸들러가 또 인증하지 않게 (F-2026 6장)
+const rememberedUsers = new WeakMap<Request, AuthUser>()
+
+export function rememberUser(request: Request, user: AuthUser): void {
+  rememberedUsers.set(request, user)
+}
+
 export async function getUser(request: Request, env: Env, ctx?: ExecutionContext): Promise<AuthUser | null> {
+  const remembered = rememberedUsers.get(request)
+  if (remembered) return remembered
+
   // /v1/ 은 Bearer 토큰만 본다 — 쿠키·DEV_AUTH_EMAIL 은 무시한다 (F-222 2.3)
   if (new URL(request.url).pathname.startsWith('/v1/')) {
     return getTokenUser(request, env, ctx)

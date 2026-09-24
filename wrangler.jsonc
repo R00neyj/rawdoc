@@ -30,5 +30,8 @@
     "bindings": [{ "name": "DOC_ROOM", "class_name": "DocRoom" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DocRoom"] }],
+  "ratelimits": [
+    { "name": "WRITE_LIMITER", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } }
+  ],
   "triggers": { "crons": ["0 18 * * *"] }
 }

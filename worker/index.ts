@@ -54,6 +54,7 @@ import { renderWelcomePage } from './welcomePage'
 import { rootTarget, welcomeRedirect, withRootHeaders } from './rootRoute'
 import { handleDocSocket } from './docSocket'
 import { DOC_SOCKET_PREFIX } from '../src/lib/docRoomProtocol'
+import { isWriteRoute, runWriteGate } from './writeGate'
 
 export { DocRoom } from './docRoom'
 
@@ -337,6 +338,11 @@ export default {
       const found = matchingPath.find((m) => m.route.method === request.method)
       if (!found) {
         return errorResponse('method_not_allowed', 405)
+      }
+
+      if (isWriteRoute(request.method, found.route.path)) {
+        const gateResponse = await runWriteGate(request, env)
+        if (gateResponse) return gateResponse
       }
 
       return await found.route.handler(request, env, ctx, found.params)
