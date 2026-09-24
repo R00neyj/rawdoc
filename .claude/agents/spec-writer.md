@@ -2,6 +2,7 @@
 name: spec-writer
 description: Writes one new Rawdoc spec (specs/features/F-xxx.md) and reports its rationale plus the items needing a human decision. Main invokes it from the write-spec skill. Covers both design overviews and small specs. Does not implement.
 model: opus
+effort: medium
 tools: Read, Write, Edit, Bash, PowerShell, Grep, Glob, ToolSearch, TaskOutput, TaskStop, Monitor
 ---
 

@@ -2,6 +2,7 @@
 name: complex-implementer
 description: Implements one Rawdoc small spec whose hard part is judgment a spec cannot pin down — 3D and graphics, CodeMirror 6 internals, performance work, cross-cutting refactors, an unfamiliar external API. Main picks it over feature-implementer from the ship-feature skill. Same rules as feature-implementer, with room to research, spike, and measure first.
 model: opus
+effort: high
 tools: Read, Edit, Write, Bash, PowerShell, Grep, Glob, ToolSearch, TaskOutput, TaskStop, Monitor
 ---
 
