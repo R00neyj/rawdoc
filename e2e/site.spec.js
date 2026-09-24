@@ -56,7 +56,10 @@ test('F-273 A5 완결된 정적 페이지다', async ({ page }) => {
 test('F-273 A6 내용 규칙 — 내부 말을 쓰지 않는다', async ({ page }) => {
   const res = await page.request.get('/changelog')
   const body = await res.text()
-  const article = /<article[^>]*>[\s\S]*?<\/article>/.exec(body)?.[0] ?? ''
+  const article = (/<article[^>]*>[\s\S]*?<\/article>/.exec(body)?.[0] ?? '').replace(
+    /<details class="site-fold">[\s\S]*?<\/details>/,
+    '',
+  )
   expect(article).not.toMatch(/F-\d{3}/)
   expect(article).not.toContain('e2e')
   expect(article).not.toContain('리팩토링')
@@ -151,7 +154,7 @@ test('F-276 A10 /guides 목록 페이지가 뜬다', async ({ page }) => {
   await expect(page.locator('.site-foot')).toBeVisible()
   // 글이 늘 때마다 고치지 않도록 content/guides 의 .md 수와 맞춘다
   const guideCount = readdirSync('content/guides').filter((f) => f.endsWith('.md')).length
-  await expect(page.locator('.site-article ul a')).toHaveCount(guideCount)
+  await expect(page.locator('.site-article .markdown-body > ul a')).toHaveCount(guideCount)
 })
 
 test('F-276 A11 글 3편이 각각 뜬다', async ({ page }) => {

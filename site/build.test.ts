@@ -236,6 +236,18 @@ describe('F-275 A3 가드는 자리표시 이름을 가리지 않는다', () => 
   })
 })
 
+describe('F-2036 A9 달지 않는 곳', () => {
+  it('404 에는 문서 목록·목차·접는 목차가 없고, help·guides 에는 문서 목록이 있다', () => {
+    // CSS(SITE_CHROME_CSS)는 모든 페이지가 같이 쓰므로 클래스 이름 자체는 404 에도 있다 — 실제 요소(class="…") 만 본다
+    const out = buildSite({ content: {}, appCssHref, builtAt })
+    expect(out['404.html']).not.toContain('class="site-docnav"')
+    expect(out['404.html']).not.toContain('class="site-toc"')
+    expect(out['404.html']).not.toContain('class="site-fold"')
+    expect(out['help.html']).toContain('class="site-docnav"')
+    expect(out['guides.html']).toContain('class="site-docnav"')
+  })
+})
+
 describe('llms.txt — LLM 용 사이트 안내 (https://llmstxt.org 형식)', () => {
   it('제목·요약 인용·사용법 글 링크·도움말 링크를 담고 사이트맵과 같은 절대 주소를 쓴다', () => {
     const content = {

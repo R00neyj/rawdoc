@@ -24,9 +24,12 @@ describe('F-274 A1 helpContent', () => {
 })
 
 describe('F-274 A2 앱과 한 원본', () => {
-  it('사이트 페이지 HTML 이 renderMarkdown(HELP_DOC_CONTENT) 를 그대로 포함한다', () => {
+  it('article 안쪽에서 접는 목차를 들어내고 id 속성을 지우면 renderMarkdown(HELP_DOC_CONTENT) 와 정확히 같다 (F-2036 A8)', () => {
     const page = renderSitePage({ url: '/help', raw: helpContent(), appCssHref: '/a.css' })
-    expect(page.html).toContain(renderMarkdown(HELP_DOC_CONTENT))
+    const article = /<article class="markdown-body">([\s\S]*?)<\/article>/.exec(page.html)![1]
+    const withoutFold = article.replace(/<details class="site-fold">[\s\S]*?<\/details>/, '')
+    const withoutIds = withoutFold.replace(/ id="[^"]*"/g, '')
+    expect(withoutIds).toBe(renderMarkdown(HELP_DOC_CONTENT))
   })
 
   it('프론트매터 표가 본문에 없다', () => {

@@ -4,6 +4,7 @@ import { renderMarkdown } from '../src/viewer/renderMarkdown'
 import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS } from '../src/lib/siteChrome'
 import { SITE_URL, SITE_DESCRIPTION } from '../src/lib/siteMeta'
 import brand from '../brand.config'
+import { siteHeadings, addHeadingIds, renderDocNav, renderToc, renderFold, insertFoldIntoBody, type DocNav } from './pageNav'
 
 function escapeHtml(value: string): string {
   return value
@@ -41,10 +42,20 @@ export function parseSitePageMeta(raw: string): SitePageMeta {
 
 export type RenderSitePageResult = SitePageMeta & { html: string }
 
-export function renderSitePage(input: { url: string; raw: string; appCssHref: string }): RenderSitePageResult {
+export function renderSitePage(input: { url: string; raw: string; appCssHref: string; docNav?: DocNav }): RenderSitePageResult {
   const meta = parseSitePageMeta(input.raw)
   const frontmatter = findFrontmatter(input.raw)
   const body = frontmatter ? textAfterFrontmatter(input.raw, frontmatter) : input.raw
+
+  // 제목 id·문서 목록·목차·접는 목차 (F-2036 3~6장)
+  const headings = siteHeadings(body)
+  const showToc = headings.some((h) => h.level >= 2)
+  const bodyHtml = addHeadingIds(renderMarkdown(body), headings)
+  const hasFold = Boolean(input.docNav) || showToc
+  const foldHtml = hasFold ? renderFold({ docNav: input.docNav, currentUrl: input.url, headings, showToc }) : ''
+  const articleHtml = insertFoldIntoBody(bodyHtml, foldHtml)
+  const docNavHtml = input.docNav ? renderDocNav(input.docNav, input.url) : ''
+  const tocHtml = showToc ? renderToc(headings) : ''
 
   const canonical = new URL(input.url, SITE_URL).href
   const ogImage = new URL(brand.ogImage, SITE_URL).href
@@ -82,9 +93,11 @@ export function renderSitePage(input: { url: string; raw: string; appCssHref: st
   <body>
     ${header}
     <main class="site-main site-doc">
+      ${docNavHtml}
       <div class="site-article public-view">
-        <article class="markdown-body">${renderMarkdown(body)}</article>
+        <article class="markdown-body">${articleHtml}</article>
       </div>
+      ${tocHtml}
     </main>
     ${footer}
   </body>

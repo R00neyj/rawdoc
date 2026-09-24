@@ -92,16 +92,19 @@ export const SITE_CHROME_CSS = `
   margin: 56px 0 20px;
   padding: 0;
 }
-.site-doc .markdown-body > h1:first-child + p {
+/* h1 바로 다음 문단·요소 규칙 — 접는 목차(.site-fold)가 h1 바로 뒤에 끼면(F-2036 6.1) 그 사이를 건너뛴 다음 요소에 걸리게 두 벌을 둔다(6.2) */
+.site-doc .markdown-body > h1:first-child + p,
+.site-doc .markdown-body > h1:first-child + .site-fold + p {
   font-size: 1.125rem;
   line-height: 1.7;
   color: var(--ink-2);
   margin-bottom: 44px;
 }
-.site-doc .markdown-body > h1:first-child + :not(p) { margin-top: 44px; }
+.site-doc .markdown-body > h1:first-child + :not(p):not(.site-fold),
+.site-doc .markdown-body > h1:first-child + .site-fold + :not(p) { margin-top: 44px; }
 
 /* 원문 기호를 여백에 건다 — 이 제품은 # 을 지우지 않는다. 글자선은 본문과 맞고 기호만 밖으로 나간다 */
-.site-doc .markdown-body :is(h1, h2, h3) { position: relative; border-bottom: 0; }
+.site-doc .markdown-body :is(h1, h2, h3) { position: relative; border-bottom: 0; scroll-margin-top: 16px; }
 .site-doc .markdown-body :is(h1, h2, h3)::before {
   position: absolute;
   right: 100%;
@@ -154,8 +157,69 @@ export const SITE_CHROME_CSS = `
    markdown.css 쪽을 transparent 로 바꾸는 길은 F-164 2.1("문서 칸 바탕과 같은 계산값")과
    부딪혀 쓰지 않았다 (2026-09-21) */
 .site-article.public-view { --panel: var(--paper); }
-/* 여백이 기호를 받기에 좁으면 기호를 글줄 안으로 들인다 */
-@media (max-width: 1120px) {
+
+/* ===== 왼쪽 문서 목록·오른쪽 목차·좁은 창 접는 목차 (F-2036) ===== */
+/* 기본(1055px 이하)은 한 칸 — 옆칸을 숨기고 접는 목차만 보인다 */
+.site-docnav, .site-toc { display: none; }
+.site-fold { display: block; margin: 24px 0 32px; border: 1px solid var(--rule); border-radius: var(--radius-control); padding: 4px 14px; }
+.site-fold summary { cursor: pointer; padding: 10px 0; font-family: var(--font-body); font-size: 14px; font-weight: 600; color: var(--ink); }
+.site-fold-label { margin: 4px 0; font-family: var(--font-body); font-size: 12px; color: var(--muted); }
+/* 본문(.markdown-body) 목록·링크 규칙이 접는 목차 안 목록까지 새지 않게 되돌린다(6.2) */
+.site-fold :is(ul, ol) { list-style: none !important; padding-left: 0 !important; margin: 0 0 12px !important; }
+.site-fold li { position: static !important; }
+.site-fold li::before, .site-fold :is(ul, ol) :is(ul, ol)::before { content: none !important; }
+.site-fold a { text-decoration: none !important; }
+.site-fold .site-docnav-item { color: var(--ink-2) !important; }
+.site-fold .site-docnav-item:hover { color: var(--ink) !important; }
+.site-fold .site-docnav-item[aria-current='page'] { color: var(--accent) !important; font-weight: 600 !important; }
+.site-fold .outline-item { color: var(--muted) !important; }
+.site-fold .outline-item:hover, .site-fold .outline-item:target-current { color: var(--ink) !important; }
+
+.site-docnav-list { list-style: none; margin: 0; padding: 0; }
+.site-docnav-list .site-docnav-list { padding-left: 12px; }
+.site-docnav-legal { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.site-docnav-item {
+  display: block;
+  padding: 6px 4px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.site-docnav-item:hover { color: var(--ink); }
+.site-docnav-item[aria-current='page'] { color: var(--accent); font-weight: 600; }
+
+/* 목차 항목은 앱 목차와 같은 클래스(.outline-item) — 2·3단계 들여쓰기만 .outline-card 조상 기준이라 여기서 다시 그린다 */
+.site-toc-list { list-style: none; margin: 0; padding: 0; scroll-target-group: auto; }
+.site-toc-list li[data-level='2'] .outline-item { padding-left: 20px; }
+.site-toc-list li[data-level='3'] .outline-item { padding-left: 32px; }
+/* 고정 칸이라 잘린 글을 볼 방법이 없다 — 에디터의 말줄임 대신 줄바꿈한다(F-2036 10장 Q5) */
+.site-toc-list .outline-item { white-space: normal; overflow: visible; text-overflow: clip; }
+/* 현재 읽는 절 강조 — Chrome 만(:target-current 를 모르는 브라우저는 이 규칙 하나만 무시된다, F-2036 2.1) */
+.site-toc-list a:target-current { color: var(--ink); font-weight: 600; }
+
+@media (min-width: 1056px) {
+  .site-main.site-doc {
+    display: grid;
+    grid-template-columns: 168px 56px minmax(0, 34rem) minmax(40px, 1fr) 184px;
+    align-items: start;
+  }
+  .site-main.site-doc .site-docnav { display: block; grid-column: 1; }
+  .site-main.site-doc > .site-article { grid-column: 3; max-width: none; margin: 0; }
+  .site-main.site-doc .site-toc { display: block; grid-column: 5; }
+  .site-main.site-doc .site-fold { display: none; }
+  .site-docnav, .site-toc {
+    position: sticky;
+    top: 24px;
+    margin-top: 56px;
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .site-doc .markdown-body > h1:first-child { width: 100%; }
+}
+/* 여백이 기호를 받기에 좁으면 기호를 글줄 안으로 들인다 — 세 칸이 되는 경계와 같다(1055px, F-2036 5.2) */
+@media (max-width: 1055px) {
   .site-doc .markdown-body :is(h1, h2, h3)::before { position: static; margin-right: 0.35em; }
   .site-doc .markdown-body > ul { padding-left: var(--md-list-step); }
 }

@@ -4,6 +4,7 @@ import { contentUrl, urlToFile } from './pages'
 import { renderSitePage } from './render'
 import { HELP_CONTENT_PATH, helpContent } from './helpPage'
 import { GUIDES_INDEX_PATH, guideEntry, guidesIndexContent, sortGuideEntries, type GuideEntry } from './guidesIndex'
+import { buildDocNav } from './pageNav'
 import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS, SITE_NAV, SITE_FOOTER_LINKS } from '../src/lib/siteChrome'
 import { SITE_DESCRIPTION, SITE_URL } from '../src/lib/siteMeta'
 import brand from '../brand.config'
@@ -106,10 +107,13 @@ export function buildSite(input: SiteInput): Record<string, string> {
     [HELP_CONTENT_PATH, helpContent()],
   ]
 
+  // 루프 전에 한 번만 만들어 모든 renderSitePage 호출에 넘긴다(F-2036 4.3) — 페이지를 두 번 렌더하지 않는다
+  const docNav = buildDocNav(guideEntries)
+
   for (const [relPath, raw] of mdEntries) {
     checkContentFile(relPath, raw)
     const url = contentUrl(relPath)!
-    const page = renderSitePage({ url, raw, appCssHref: input.appCssHref })
+    const page = renderSitePage({ url, raw, appCssHref: input.appCssHref, docNav })
     out[urlToFile(url)] = page.html
     urls.push(url)
     pageLinks.set(url, { url, title: page.title, summary: page.summary })
