@@ -228,10 +228,12 @@ export default defineConfig({
         navigateFallback: 'index.html',
         // Cloudflare 예약 경로(/cdn-cgi/*)·로그인 페이지(/login)·공개 API 는 SW 가 index.html 로 가로채면 안 된다
         // /welcome 은 워커가 301 로 / 에 보낸다 — SW 가 index.html 로 가로채면 그 301 이 안 나간다 (F-271 6장)
+        // Workbox 는 이 목록을 경로 + 쿼리(`/login?return=…`)에 맞춘다 — 끝을 `$` 로 막으면 쿼리가 붙은 주소를 못 거른다.
+        // 그래서 끝은 `(\?|$)` 로 둔다 (2026-09-24 로그아웃 뒤 `/login?return=%23%2F` 가 앱으로 떨어지던 버그)
         navigateFallbackDenylist: [
-          /^\/api\//, /^\/pub\//, /^\/v1\//, /^\/cdn-cgi\//, /^\/welcome$/, // 지금 것
-          /^\/guides(\/|$)/, /^\/changelog$/, /^\/help$/, /^\/privacy$/, /^\/terms$/, /^\/login$/,
-          /^\/sitemap\.xml$/, /^\/robots\.txt$/, /^\/llms\.txt$/, /^\/404(\.html)?$/,
+          /^\/api\//, /^\/pub\//, /^\/v1\//, /^\/cdn-cgi\//, /^\/welcome(\?|$)/,
+          /^\/guides(\/|\?|$)/, /^\/changelog(\?|$)/, /^\/help(\?|$)/, /^\/privacy(\?|$)/, /^\/terms(\?|$)/, /^\/login(\?|$)/,
+          /^\/sitemap\.xml(\?|$)/, /^\/robots\.txt(\?|$)/, /^\/llms\.txt(\?|$)/, /^\/404(\.html)?(\?|$)/,
         ],
         cleanupOutdatedCaches: true,
       },
