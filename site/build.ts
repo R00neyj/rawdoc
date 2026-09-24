@@ -1,11 +1,11 @@
-// 빌드 진입 — 글 목록 만들기, 404·sitemap·robots, 링크 목록 검사 (specs/features/F-272.md 3.3, 6.4~6.6, 9.1). 파일 입출력 없음 — vite.config.ts 의 sitePlugin 이 파일을 읽고 쓴다
+// 빌드 진입 — 글 목록 만들기, 404·sitemap·robots·llms.txt, 링크 목록 검사 (specs/features/F-272.md 3.3, 6.4~6.6, 9.1). 파일 입출력 없음 — vite.config.ts 의 sitePlugin 이 파일을 읽고 쓴다
 import { checkContentFile } from './guard'
 import { contentUrl, urlToFile } from './pages'
 import { renderSitePage } from './render'
 import { HELP_CONTENT_PATH, helpContent } from './helpPage'
-import { GUIDES_INDEX_PATH, guideEntry, guidesIndexContent } from './guidesIndex'
+import { GUIDES_INDEX_PATH, guideEntry, guidesIndexContent, sortGuideEntries, type GuideEntry } from './guidesIndex'
 import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS, SITE_NAV, SITE_FOOTER_LINKS } from '../src/lib/siteChrome'
-import { SITE_URL } from '../src/lib/siteMeta'
+import { SITE_DESCRIPTION, SITE_URL } from '../src/lib/siteMeta'
 import brand from '../brand.config'
 
 export type SiteInput = {
@@ -63,10 +63,26 @@ function renderRobots(): string {
   return `User-agent: *\nDisallow: /api/\nDisallow: /v1/\nDisallow: /pub/\nDisallow: /p/\n\nSitemap: ${SITE_URL}sitemap.xml\n`
 }
 
+type LlmsLink = { url: string; title: string; summary: string }
+
+// LLM 이 사이트를 읽을 때 쓰는 안내 (https://llmstxt.org 형식) — 제목, 요약 인용, 절마다 링크 목록. 주소는 sitemap 과 같은 절대 주소
+function renderLlmsTxt(guides: readonly GuideEntry[], docs: readonly LlmsLink[], optional: readonly LlmsLink[]): string {
+  const line = (link: LlmsLink) => `- [${link.title}](${new URL(link.url, SITE_URL).href})${link.summary ? `: ${link.summary}` : ''}`
+  const sections: string[] = [
+    `# ${brand.name}`,
+    `> ${SITE_DESCRIPTION}. 브라우저에서 바로 쓰고, 입력한 원문을 바이트 그대로 보존합니다. 앱: ${SITE_URL}`,
+  ]
+  if (guides.length > 0) sections.push(`## 사용법\n\n${guides.map(line).join('\n')}`)
+  if (docs.length > 0) sections.push(`## 문서\n\n${docs.map(line).join('\n')}`)
+  if (optional.length > 0) sections.push(`## Optional\n\n${optional.map(line).join('\n')}`)
+  return `${sections.join('\n\n')}\n`
+}
+
 export function buildSite(input: SiteInput): Record<string, string> {
   const out: Record<string, string> = {}
   const lastmodByUrl = new Map<string, string>()
   const urls: string[] = []
+  const pageLinks = new Map<string, LlmsLink>()
 
   const fileEntries = Object.entries(input.content).filter(([relPath]) => relPath.endsWith('.md'))
   if (fileEntries.some(([relPath]) => relPath === HELP_CONTENT_PATH)) {
@@ -96,6 +112,7 @@ export function buildSite(input: SiteInput): Record<string, string> {
     const page = renderSitePage({ url, raw, appCssHref: input.appCssHref })
     out[urlToFile(url)] = page.html
     urls.push(url)
+    pageLinks.set(url, { url, title: page.title, summary: page.summary })
     lastmodByUrl.set(url, page.updated ?? page.date ?? formatDate(input.builtAt))
   }
 
@@ -115,6 +132,8 @@ export function buildSite(input: SiteInput): Record<string, string> {
   out['404.html'] = render404(input.appCssHref)
   out['sitemap.xml'] = renderSitemap(['/', ...urls].sort(), lastmodByUrl)
   out['robots.txt'] = renderRobots()
+  const pick = (paths: string[]) => paths.flatMap((path) => (pageLinks.has(path) ? [pageLinks.get(path)!] : []))
+  out['llms.txt'] = renderLlmsTxt(sortGuideEntries(guideEntries), pick(['/help', '/guides', '/changelog']), pick(['/privacy', '/terms']))
 
   return out
 }

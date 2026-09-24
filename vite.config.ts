@@ -231,7 +231,7 @@ export default defineConfig({
         navigateFallbackDenylist: [
           /^\/api\//, /^\/pub\//, /^\/v1\//, /^\/cdn-cgi\//, /^\/welcome$/, // 지금 것
           /^\/guides(\/|$)/, /^\/changelog$/, /^\/help$/, /^\/privacy$/, /^\/terms$/,
-          /^\/sitemap\.xml$/, /^\/robots\.txt$/, /^\/404(\.html)?$/,
+          /^\/sitemap\.xml$/, /^\/robots\.txt$/, /^\/llms\.txt$/, /^\/404(\.html)?$/,
         ],
         cleanupOutdatedCaches: true,
       },

@@ -18,17 +18,17 @@ afterAll(() => {
 })
 
 describe('F-272 A5 빈 content', () => {
-  // 도움말(help.html)·사용법 목록(guides.html)은 content 와 무관하게 buildSite 가 항상 만들어 낸다 (F-274.md 3장, F-276.md 3.3) — 그래서 다섯이다
-  it('키가 정확히 404.html·guides.html·help.html·robots.txt·sitemap.xml 다섯이다', () => {
+  // 도움말(help.html)·사용법 목록(guides.html)은 content 와 무관하게 buildSite 가 항상 만들어 낸다 (F-274.md 3장, F-276.md 3.3) — 그래서 llms.txt 까지 여섯이다
+  it('키가 정확히 404.html·guides.html·help.html·llms.txt·robots.txt·sitemap.xml 여섯이다', () => {
     const out = buildSite({ content: {}, appCssHref, builtAt })
-    expect(Object.keys(out).sort()).toEqual(['404.html', 'guides.html', 'help.html', 'robots.txt', 'sitemap.xml'])
+    expect(Object.keys(out).sort()).toEqual(['404.html', 'guides.html', 'help.html', 'llms.txt', 'robots.txt', 'sitemap.xml'])
   })
 })
 
 describe('F-274 A5 글이 없어도 도움말은 난다', () => {
-  it('키가 정확히 404.html·guides.html·help.html·robots.txt·sitemap.xml 다섯이다', () => {
+  it('키가 정확히 404.html·guides.html·help.html·llms.txt·robots.txt·sitemap.xml 여섯이다', () => {
     const out = buildSite({ content: {}, appCssHref, builtAt })
-    expect(Object.keys(out).sort()).toEqual(['404.html', 'guides.html', 'help.html', 'robots.txt', 'sitemap.xml'])
+    expect(Object.keys(out).sort()).toEqual(['404.html', 'guides.html', 'help.html', 'llms.txt', 'robots.txt', 'sitemap.xml'])
   })
 })
 
@@ -233,5 +233,22 @@ describe('F-275 A3 가드는 자리표시 이름을 가리지 않는다', () => 
   it('{{운영자}} 가 아닌 {{시행일}} 만 남아도 실패하고 메시지에 legal/privacy.md 가 있다', () => {
     const content = { 'legal/privacy.md': '---\ntitle: 개인정보 처리방침\n---\n{{시행일}}' }
     expect(() => buildSite({ content, appCssHref, builtAt })).toThrow(/legal\/privacy\.md/)
+  })
+})
+
+describe('llms.txt — LLM 용 사이트 안내 (https://llmstxt.org 형식)', () => {
+  it('제목·요약 인용·사용법 글 링크·도움말 링크를 담고 사이트맵과 같은 절대 주소를 쓴다', () => {
+    const content = {
+      'guides/a.md': '---\ntitle: 에이\nsummary: 에이요약\ndate: 2026-09-01\n---\n본문a',
+      'changelog.md': '---\ntitle: 체인지로그\nsummary: 바뀐 것\ndate: 2026-09-01\n---\n본문',
+    }
+    const out = buildSite({ content, appCssHref, builtAt })
+    const txt = out['llms.txt']
+    expect(txt.startsWith(`# ${brand.name}\n\n> `)).toBe(true)
+    expect(txt).toContain('## 사용법\n\n- [에이](https://rawdoc.app/guides/a): 에이요약')
+    expect(txt).toContain('- [도움말](https://rawdoc.app/help): ')
+    expect(txt).toContain('- [체인지로그](https://rawdoc.app/changelog): 바뀐 것')
+    expect(txt).not.toContain('](/')
+    expect(txt.endsWith('\n')).toBe(true)
   })
 })
