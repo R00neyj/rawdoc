@@ -1,9 +1,10 @@
-// 편집 잠금 라우트 (specs/features/F-213.md 2.2)
+// 편집 잠금 라우트 (specs/features/F-213.md 2.2. 사용량 줄은 F-2025.md 6.4)
 import { errorResponse, jsonResponse } from './http'
 import { requireUser, type AuthUser } from './auth'
 import { getDocAccess, roleAtLeast } from './access'
 import { badBody, readJsonLimited } from './docs'
 import { MAX_BODY_BYTES } from './validate'
+import { dayUsageStatement } from './usage'
 
 export const LOCK_DURATION_MS = 60_000
 
@@ -31,13 +32,14 @@ export async function acquireLock(
 ): Promise<AcquireLockResult> {
   const now = Date.now()
   const expiresAt = now + LOCK_DURATION_MS
-  const result = await env.DB.prepare(
-    `INSERT INTO doc_locks (doc_id, user_id, email, session_id, expires_at) VALUES (?,?,?,?,?)
-     ON CONFLICT(doc_id) DO UPDATE SET user_id = excluded.user_id, email = excluded.email, session_id = excluded.session_id, expires_at = excluded.expires_at
-     WHERE doc_locks.expires_at < ? OR doc_locks.session_id = ?`,
-  )
-    .bind(docId, user.id, user.email, sessionId, expiresAt, now, sessionId)
-    .run()
+  const [result] = await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO doc_locks (doc_id, user_id, email, session_id, expires_at) VALUES (?,?,?,?,?)
+       ON CONFLICT(doc_id) DO UPDATE SET user_id = excluded.user_id, email = excluded.email, session_id = excluded.session_id, expires_at = excluded.expires_at
+       WHERE doc_locks.expires_at < ? OR doc_locks.session_id = ?`,
+    ).bind(docId, user.id, user.email, sessionId, expiresAt, now, sessionId),
+    dayUsageStatement(env.DB, user.id, now),
+  ])
 
   if (result.meta.changes > 0) {
     return { ok: true, expiresAt }
@@ -77,13 +79,14 @@ export async function handleUnlockDoc(
   _ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
-  await requireUser(request, env)
+  const user = await requireUser(request, env)
   const url = new URL(request.url)
   const sessionId = url.searchParams.get('session')
   if (sessionId) {
-    await env.DB.prepare('DELETE FROM doc_locks WHERE doc_id = ? AND session_id = ?')
-      .bind(params.id, sessionId)
-      .run()
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM doc_locks WHERE doc_id = ? AND session_id = ?').bind(params.id, sessionId),
+      dayUsageStatement(env.DB, user.id, Date.now()),
+    ])
   }
   return new Response(null, { status: 204 })
 }

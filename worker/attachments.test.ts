@@ -44,6 +44,7 @@ function makeEnv(rows: AttachmentRow[] = []) {
                 const used = [...attachments.values()].filter((a) => a.owner_id === ownerId).reduce((sum, a) => sum + a.size, 0)
                 return { used } as T
               }
+              if (sql.startsWith('SELECT write_day')) return null
               throw new Error(`unhandled sql: ${sql}`)
             },
             async run() {
@@ -55,11 +56,17 @@ function makeEnv(rows: AttachmentRow[] = []) {
                 attachments.set(`${ownerId}:${id}`, { owner_id: ownerId, id, ext, mime, size, width, height, created_at: createdAt })
                 return { meta: { changes: 1 } }
               }
+              if (sql.startsWith('UPDATE users SET')) return { meta: { changes: 1 } }
               throw new Error(`unhandled sql: ${sql}`)
             },
           }
         },
       }
+    },
+    async batch(statements: { run(): Promise<unknown> }[]) {
+      const results = []
+      for (const statement of statements) results.push(await statement.run())
+      return results
     },
   }
 

@@ -1,4 +1,4 @@
-// 문서 라우트 (specs/features/F-206.md 2.3, 접근 판정은 F-212.md 2.2)
+// 문서 라우트 (specs/features/F-206.md 2.3, 접근 판정은 F-212.md 2.2. 사용량 줄·413 은 F-2025.md 6.2)
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { getDocAccess, roleAtLeast } from './access'
@@ -6,6 +6,16 @@ import { getActiveLock } from './locks'
 import { notifyPurge } from './docRoomRpc'
 import { rowToDoc, updateDocRow } from './docWrite'
 import type { DocRow } from './docWrite'
+import {
+  checkDocCreate,
+  checkDocGrow,
+  dayUsageStatement,
+  deleteDocUsageStatement,
+  docUsageStatements,
+  readUsage,
+  usageOf,
+  utf8Bytes,
+} from './usage'
 import {
   MAX_BODY_BYTES,
   MAX_CONTENT_BYTES,
@@ -142,17 +152,22 @@ export async function handleCreateDoc(request: Request, env: Env): Promise<Respo
     }
   }
 
+  const newBytes = utf8Bytes(content)
+  const quota = checkDocCreate(await usageOf(env, user), newBytes)
+  if (quota) return jsonResponse(quota, 413)
+
   const id = typeof bodyId === 'string' ? bodyId : crypto.randomUUID()
   const now = Date.now()
   const resolvedFolderId = (folderId as string | null | undefined) ?? null
   const resolvedCreatedAt = typeof createdAt === 'number' ? createdAt : now
   const resolvedUpdatedAt = typeof updatedAt === 'number' ? updatedAt : now
   const resolvedPinnedAt = pinnedAt === undefined ? null : (pinnedAt as number | null)
-  await env.DB.prepare(
-    'INSERT INTO docs (id, owner_id, title, content, line_ending, folder_id, pinned_at, version, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
-  )
-    .bind(id, user.id, title, content, lineEnding, resolvedFolderId, resolvedPinnedAt, 1, resolvedCreatedAt, resolvedUpdatedAt)
-    .run()
+  await env.DB.batch([
+    env.DB.prepare(
+      'INSERT INTO docs (id, owner_id, title, content, line_ending, folder_id, pinned_at, version, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    ).bind(id, user.id, title, content, lineEnding, resolvedFolderId, resolvedPinnedAt, 1, resolvedCreatedAt, resolvedUpdatedAt),
+    ...docUsageStatements(env.DB, { actorId: user.id, ownerId: user.id, now, deltaBytes: newBytes, deltaDocs: 1 }),
+  ])
 
   return jsonResponse(
     rowToDoc({
@@ -212,10 +227,24 @@ export async function handleUpdateDoc(
     return jsonResponse({ error: 'conflict', doc: rowToDoc(existing) }, 409)
   }
 
-  const written = await updateDocRow(env, existing, {
-    title: title as string | undefined,
-    content: content as string | undefined,
-  })
+  if (typeof content === 'string') {
+    const deltaBytes = utf8Bytes(content) - utf8Bytes(existing.content)
+    if (deltaBytes > 0) {
+      const ownerUsage = existing.owner_id === user.id ? await usageOf(env, user) : await readUsage(env, existing.owner_id)
+      const quota = checkDocGrow(ownerUsage, deltaBytes)
+      if (quota) return jsonResponse(quota, 413)
+    }
+  }
+
+  const written = await updateDocRow(
+    env,
+    existing,
+    {
+      title: title as string | undefined,
+      content: content as string | undefined,
+    },
+    user.id,
+  )
   if (!written.ok) {
     const latest = await env.DB.prepare('SELECT * FROM docs WHERE id = ? AND owner_id = ?')
       .bind(params.id, existing.owner_id)
@@ -256,9 +285,10 @@ export async function handleMoveDocFolder(
     if (!folder) return jsonResponse({ error: 'invalid', field: 'folderId' }, 400)
   }
 
-  await env.DB.prepare('UPDATE docs SET folder_id = ? WHERE id = ? AND owner_id = ?')
-    .bind(folderId, params.id, user.id)
-    .run()
+  await env.DB.batch([
+    env.DB.prepare('UPDATE docs SET folder_id = ? WHERE id = ? AND owner_id = ?').bind(folderId, params.id, user.id),
+    dayUsageStatement(env.DB, user.id, Date.now()),
+  ])
 
   return jsonResponse(rowToDoc({ ...existing, folder_id: folderId as string | null }))
 }
@@ -284,9 +314,10 @@ export async function handleSetPinned(
   const existing = access.doc
 
   const pinnedAt = pinned ? Date.now() : null
-  await env.DB.prepare('UPDATE docs SET pinned_at = ? WHERE id = ? AND owner_id = ?')
-    .bind(pinnedAt, params.id, user.id)
-    .run()
+  await env.DB.batch([
+    env.DB.prepare('UPDATE docs SET pinned_at = ? WHERE id = ? AND owner_id = ?').bind(pinnedAt, params.id, user.id),
+    dayUsageStatement(env.DB, user.id, Date.now()),
+  ])
 
   return jsonResponse(rowToDoc({ ...existing, pinned_at: pinnedAt }))
 }
@@ -302,7 +333,10 @@ export async function handleDeleteDoc(
   if (!access) return errorResponse('not_found', 404)
   if (access.role !== 'owner') return errorResponse('forbidden', 403)
 
-  await env.DB.prepare('DELETE FROM docs WHERE id = ? AND owner_id = ?').bind(params.id, user.id).run()
+  await env.DB.batch([
+    deleteDocUsageStatement(env.DB, user.id, params.id, Date.now()),
+    env.DB.prepare('DELETE FROM docs WHERE id = ? AND owner_id = ?').bind(params.id, user.id),
+  ])
   // 열린 연결을 닫고 DO 저장소를 비운다 (F-304 9.4)
   await notifyPurge(env, ctx, params.id)
   return new Response(null, { status: 204 })

@@ -3,6 +3,8 @@ import { errorResponse, jsonResponse } from './http'
 import { requireUser, type AuthUser } from './auth'
 import { badBody, readJsonLimited } from './docs'
 import { MAX_BODY_BYTES } from './validate'
+import { USAGE_COLUMNS, dayUsageStatement, rowToUsage } from './usage'
+import type { UsageRow } from './usage'
 
 export const MAX_TOKENS = 10
 const LAST_USED_UPDATE_INTERVAL_MS = 10 * 60 * 1000
@@ -72,11 +74,12 @@ export async function handleCreateToken(request: Request, env: Env): Promise<Res
   const id = crypto.randomUUID()
   const createdAt = Date.now()
 
-  await env.DB.prepare(
-    'INSERT INTO api_tokens (id, user_id, name, token_hash, prefix, created_at) VALUES (?,?,?,?,?,?)',
-  )
-    .bind(id, user.id, name, tokenHash, prefix, createdAt)
-    .run()
+  await env.DB.batch([
+    env.DB.prepare(
+      'INSERT INTO api_tokens (id, user_id, name, token_hash, prefix, created_at) VALUES (?,?,?,?,?,?)',
+    ).bind(id, user.id, name, tokenHash, prefix, createdAt),
+    dayUsageStatement(env.DB, user.id, Date.now()),
+  ])
 
   // token(원문)은 이 응답에만 담긴다 — D1 에는 해시·prefix 만 (F-222 2.1)
   return jsonResponse({ id, name, prefix, createdAt, lastUsedAt: null, token }, 201)
@@ -96,7 +99,11 @@ export async function handleDeleteToken(
     .first<{ id: string }>()
   if (!row) return errorResponse('not_found', 404)
 
-  await env.DB.prepare('UPDATE api_tokens SET revoked_at = ? WHERE id = ?').bind(Date.now(), params.id).run()
+  const now = Date.now()
+  await env.DB.batch([
+    env.DB.prepare('UPDATE api_tokens SET revoked_at = ? WHERE id = ?').bind(now, params.id),
+    dayUsageStatement(env.DB, user.id, now),
+  ])
   return new Response(null, { status: 204 })
 }
 
@@ -115,7 +122,9 @@ export async function getTokenUser(request: Request, env: Env, ctx?: ExecutionCo
     .first<ApiTokenAuthRow>()
   if (!row) return null
 
-  const userRow = await env.DB.prepare('SELECT id, email FROM users WHERE id = ?').bind(row.user_id).first<AuthUser>()
+  const userRow = await env.DB.prepare(`SELECT id, email, ${USAGE_COLUMNS} FROM users WHERE id = ?`)
+    .bind(row.user_id)
+    .first<{ id: string; email: string } & UsageRow>()
   if (!userRow) return null
 
   const now = Date.now()
@@ -125,5 +134,5 @@ export async function getTokenUser(request: Request, env: Env, ctx?: ExecutionCo
     else await update
   }
 
-  return userRow
+  return { id: userRow.id, email: userRow.email, usage: rowToUsage(userRow) }
 }

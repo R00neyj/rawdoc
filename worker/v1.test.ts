@@ -25,6 +25,7 @@ import { writeTextInRoom } from './docRoomRpc'
 import type { RoomTextWriteResult } from './docRoomCore'
 import { handleCreateFolder, handleDeleteFolder, handleListFolders } from './folders'
 import { V1_EXAMPLES } from './v1Contract'
+import { DOC_BYTES_QUOTA } from './usage'
 
 type DocRow = {
   id: string
@@ -43,6 +44,7 @@ type GrantRow = { target_type: 'doc' | 'folder'; target_id: string; grantee_emai
 type LockRow = { doc_id: string; user_id: string; email: string; session_id: string; expires_at: number }
 type LinkRow = { token: string; owner_id: string; target_type: 'doc' | 'folder'; target_id: string; created_at: number; revoked_at: number | null }
 type AttachmentRow = { owner_id: string; id: string; ext: string; mime: string; size: number; width: number; height: number; created_at: number }
+type UserRow = { id: string; write_day?: string | null; write_count?: number; content_bytes?: number; doc_count?: number; blocked_at?: number | null; warned_at?: number | null }
 
 function makeEnv(data: {
   docs?: DocRow[]
@@ -51,6 +53,7 @@ function makeEnv(data: {
   locks?: LockRow[]
   links?: LinkRow[]
   attachments?: AttachmentRow[]
+  users?: UserRow[]
 } = {}) {
   const docs = data.docs ?? []
   const folders = data.folders ?? []
@@ -58,6 +61,7 @@ function makeEnv(data: {
   const locks = data.locks ?? []
   const links = data.links ?? []
   const attachments = data.attachments ?? []
+  const users = data.users ?? []
 
   const DB = {
     prepare(sql: string) {
@@ -104,6 +108,19 @@ function makeEnv(data: {
                 const [ownerId] = args as [string]
                 const used = attachments.filter((a) => a.owner_id === ownerId).reduce((sum, a) => sum + a.size, 0)
                 return { used } as T
+              }
+              if (sql.startsWith('SELECT write_day')) {
+                const [id] = args as [string]
+                const row = users.find((u) => u.id === id)
+                if (!row) return null
+                return {
+                  write_day: row.write_day ?? null,
+                  write_count: row.write_count ?? 0,
+                  content_bytes: row.content_bytes ?? 0,
+                  doc_count: row.doc_count ?? 0,
+                  blocked_at: row.blocked_at ?? null,
+                  warned_at: row.warned_at ?? null,
+                } as T
               }
               throw new Error(`unhandled first sql: ${sql}`)
             },
@@ -197,6 +214,7 @@ function makeEnv(data: {
                 }
                 return { meta: { changes } }
               }
+              if (sql.startsWith('UPDATE users SET')) return { meta: { changes: 1 } }
               throw new Error(`unhandled run sql: ${sql}`)
             },
           }
@@ -517,6 +535,30 @@ describe('F-308 A1~A8 /v1 PUT 을 DO 경유로', () => {
     expect(res.status).toBe(423)
     expect(room).not.toHaveBeenCalled()
   })
+
+  it('V1 소유자 누계 한도에서 늘리는 본문은 413, writeTextInRoom 호출 0 (F-308 A1 과 같은 방식, F-2025 6.3)', async () => {
+    room.mockImplementation(async () => okResult)
+    const { env } = makeEnv({
+      docs: [baseDoc()],
+      users: [{ id: 'u1', content_bytes: DOC_BYTES_QUOTA - 1 }],
+    })
+    const res = await callV1(env, { content: 'ccc', baseVersion: 3 })
+    expect(res.status).toBe(413)
+    expect(await res.json()).toEqual({ error: 'doc_quota_exceeded', resource: 'bytes', used: DOC_BYTES_QUOTA - 1, limit: DOC_BYTES_QUOTA })
+    expect(room).not.toHaveBeenCalled()
+  })
+
+  it('V2 같은 상태 + 낡은 baseVersion + 늘리는 본문 → 413 (409 아님 — 6.3 자리)', async () => {
+    room.mockImplementation(async () => okResult)
+    const { env } = makeEnv({
+      docs: [baseDoc()],
+      users: [{ id: 'u1', content_bytes: DOC_BYTES_QUOTA - 1 }],
+    })
+    const res = await callV1(env, { content: 'ccc', baseVersion: 1 })
+    expect(res.status).toBe(413)
+    expect(await res.json()).toEqual({ error: 'doc_quota_exceeded', resource: 'bytes', used: DOC_BYTES_QUOTA - 1, limit: DOC_BYTES_QUOTA })
+    expect(room).not.toHaveBeenCalled()
+  })
 })
 
 describe('F-223 A2 POST /v1/attachments', () => {
@@ -733,9 +775,20 @@ describe('F-2021 U14 GET /v1/me — 실제 auth 로 확인', () => {
                   const row = tokens.find((t) => t.token_hash === hash && !t.revoked_at)
                   return (row ? { id: row.id, user_id: row.user_id, last_used_at: row.last_used_at } : null) as T | null
                 }
-                if (sql.startsWith('SELECT id, email FROM users WHERE id = ?')) {
+                if (sql.startsWith('SELECT id, email, write_day')) {
                   const [id] = args as [string]
-                  return (users.find((u) => u.id === id) as T) ?? null
+                  const user = users.find((u) => u.id === id)
+                  if (!user) return null
+                  return {
+                    id: user.id,
+                    email: user.email,
+                    write_day: null,
+                    write_count: 0,
+                    content_bytes: 0,
+                    doc_count: 0,
+                    blocked_at: null,
+                    warned_at: null,
+                  } as T
                 }
                 throw new Error(`unhandled first sql: ${sql}`)
               },

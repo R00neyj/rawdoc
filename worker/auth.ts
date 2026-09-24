@@ -2,15 +2,33 @@
 import { getTokenUser } from './apiTokens'
 import { getAuth } from './authServer'
 import { isDevBypass, readVar } from './origin'
+import { USAGE_COLUMNS, rowToUsage } from './usage'
+import type { UserUsage, UsageRow } from './usage'
+
+export type { UserUsage } from './usage'
 
 export interface AuthUser {
   id: string
   email: string
+  usage?: UserUsage // getUser 세 경로가 채운다. vi.mock('./auth') 테스트는 비워 둔다 (F-2024 2.1)
 }
 
-// F-2025 가 AuthUser.usage 를 더할 자리 (2.5)
-export function toAuthUser(user: { id: string; email: string }): AuthUser {
-  return { id: user.id, email: user.email }
+// better-auth 세션(getUser·getUserRefreshing) 전용 — writeCount 가 숫자일 때만 usage 를 싣는다
+export function toAuthUser(user: { id: string; email: string } & Partial<Record<keyof UserUsage, unknown>>): AuthUser {
+  const { id, email, writeCount } = user
+  if (typeof writeCount !== 'number') return { id, email }
+  return {
+    id,
+    email,
+    usage: {
+      writeDay: (user.writeDay as string | null | undefined) ?? null,
+      writeCount,
+      contentBytes: (user.contentBytes as number | undefined) ?? 0,
+      docCount: (user.docCount as number | undefined) ?? 0,
+      blockedAt: (user.blockedAt as number | null | undefined) ?? null,
+      warnedAt: (user.warnedAt as number | null | undefined) ?? null,
+    },
+  }
 }
 
 // better-auth 를 거치지 않는다 — 우회 사용자는 인증된 이메일로 본다 (3.2 2번)
@@ -22,11 +40,11 @@ async function findOrCreateDevUser(env: Env, email: string): Promise<AuthUser> {
   )
     .bind(crypto.randomUUID(), lower, now, 1, new Date(now).toISOString())
     .run()
-  const row = await env.DB.prepare('SELECT id, email FROM users WHERE email = ?')
+  const row = await env.DB.prepare(`SELECT id, email, ${USAGE_COLUMNS} FROM users WHERE email = ?`)
     .bind(lower)
-    .first<{ id: string; email: string }>()
+    .first<{ id: string; email: string } & UsageRow>()
   if (!row) throw new Error('user_lookup_failed')
-  return row
+  return { id: row.id, email: row.email, usage: rowToUsage(row) }
 }
 
 async function devUser(env: Env): Promise<AuthUser | null> {

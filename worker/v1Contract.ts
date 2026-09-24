@@ -30,6 +30,9 @@ export type V1Error = {
   email?: string
   expiresAt?: number
   doc?: V1Doc
+  resource?: 'bytes' | 'docs' // F-2025 (413 doc_quota_exceeded)
+  scope?: 'minute' | 'day' // F-2026 (429)
+  retryAfter?: number // F-2026 (429)
 }
 
 export const V1_EXAMPLES: {

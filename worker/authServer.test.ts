@@ -123,6 +123,14 @@ describe('F-2033 U1·U2 스키마', () => {
     await expect(ctx.checkSchema!()).rejects.toThrow()
   })
 
+  it('F-2025 U13 0009 까지만 적용한 DB 는 사용량 열이 없어 스키마 검사가 실패한다', async () => {
+    const db = openDb('0009')
+    const opts = authOptions(makeEnv(db), db as never)
+    const auth = betterAuth({ ...opts, advanced: { ...opts.advanced, database: { ...opts.advanced?.database, validateSchema: true } } })
+    const ctx = await auth.$context
+    await expect(ctx.checkSchema!()).rejects.toThrow(/write_day|warned_at|Missing columns/)
+  })
+
   it('U2 기존 users 행은 0009 뒤 인증된 행이 된다', () => {
     const db = openDb('0008')
     db.prepare('INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)').run('u-old', 'old@example.com', 1700000000000)

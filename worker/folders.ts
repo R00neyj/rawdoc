@@ -1,10 +1,11 @@
-// 폴더 라우트 (specs/features/F-206.md 2.4, 접근 판정은 F-212.md 2.2)
+// 폴더 라우트 (specs/features/F-206.md 2.4, 접근 판정은 F-212.md 2.2. 사용량 줄은 F-2025.md 6.4)
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { badBody, readJsonLimited } from './docs'
 import { MAX_BODY_BYTES, isValidFolderName, isValidUuid } from './validate'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../src/lib/folderTree'
 import { getOwnedFolder } from './access'
+import { dayUsageStatement, deleteFoldersUsageStatement } from './usage'
 
 const BATCH_ID_LIMIT = 100
 
@@ -75,11 +76,12 @@ export async function handleCreateFolder(request: Request, env: Env): Promise<Re
 
   const id = typeof bodyId === 'string' ? bodyId : crypto.randomUUID()
   const now = Date.now()
-  await env.DB.prepare(
-    'INSERT INTO folders (id, owner_id, name, parent_id, created_at, updated_at) VALUES (?,?,?,?,?,?)',
-  )
-    .bind(id, user.id, name, resolvedParentId, now, now)
-    .run()
+  await env.DB.batch([
+    env.DB.prepare(
+      'INSERT INTO folders (id, owner_id, name, parent_id, created_at, updated_at) VALUES (?,?,?,?,?,?)',
+    ).bind(id, user.id, name, resolvedParentId, now, now),
+    dayUsageStatement(env.DB, user.id, now),
+  ])
 
   return jsonResponse(
     rowToFolder({
@@ -135,9 +137,16 @@ export async function handleUpdateFolder(
 
   const nextName = name !== undefined ? (name as string) : existing.name
   const now = Date.now()
-  await env.DB.prepare('UPDATE folders SET name = ?, parent_id = ?, updated_at = ? WHERE id = ? AND owner_id = ?')
-    .bind(nextName, nextParentId, now, params.id, user.id)
-    .run()
+  await env.DB.batch([
+    env.DB.prepare('UPDATE folders SET name = ?, parent_id = ?, updated_at = ? WHERE id = ? AND owner_id = ?').bind(
+      nextName,
+      nextParentId,
+      now,
+      params.id,
+      user.id,
+    ),
+    dayUsageStatement(env.DB, user.id, now),
+  ])
 
   return jsonResponse(
     rowToFolder({ ...existing, name: nextName, parent_id: nextParentId, updated_at: now }),
@@ -170,6 +179,7 @@ export async function handleDeleteFolder(
     const ids = descendantFolderIds(folderLikes, params.id)
 
     const statements = []
+    if (ids.length > 0) statements.push(deleteFoldersUsageStatement(env.DB, user.id, ids, Date.now()))
     for (let i = 0; i < ids.length; i += BATCH_ID_LIMIT) {
       const chunk = ids.slice(i, i + BATCH_ID_LIMIT)
       const placeholders = chunk.map(() => '?').join(',')
@@ -201,6 +211,7 @@ export async function handleDeleteFolder(
       user.id,
     ),
     env.DB.prepare('DELETE FROM folders WHERE id = ? AND owner_id = ?').bind(params.id, user.id),
+    dayUsageStatement(env.DB, user.id, Date.now()),
   ])
 
   return new Response(null, { status: 204 })

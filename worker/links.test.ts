@@ -101,11 +101,17 @@ function makeEnv({ docs = [], links = [], folders = [] }: { docs?: DocRow[]; lin
                 if (row) row.revoked_at = revokedAt
                 return {}
               }
+              if (sql.startsWith('UPDATE users SET')) return { meta: { changes: 1 } }
               throw new Error(`unhandled run sql: ${sql}`)
             },
           }
         },
       }
+    },
+    async batch(statements: { run(): Promise<unknown> }[]) {
+      const results = []
+      for (const statement of statements) results.push(await statement.run())
+      return results
     },
   }
 

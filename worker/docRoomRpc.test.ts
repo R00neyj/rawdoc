@@ -118,11 +118,17 @@ describe('F-304 A24 배선', () => {
                   order.push('delete-docs')
                   return { meta: { changes: 1 } }
                 }
+                if (sql.startsWith('UPDATE users SET')) return { meta: { changes: 1 } }
                 throw new Error(`unhandled run sql: ${sql}`)
               },
             }
           },
         }
+      },
+      async batch(statements: { run(): Promise<unknown> }[]) {
+        const results = []
+        for (const statement of statements) results.push(await statement.run())
+        return results
       },
     }
     return { DB } as unknown as Env

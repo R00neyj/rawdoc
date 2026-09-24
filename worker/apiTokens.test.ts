@@ -72,11 +72,17 @@ function makeEnv(rows: ApiTokenRow[] = []) {
                 if (row) row.revoked_at = revokedAt
                 return { meta: { changes: row ? 1 : 0 } }
               }
+              if (sql.startsWith('UPDATE users SET')) return { meta: { changes: 1 } }
               throw new Error(`unhandled sql: ${sql}`)
             },
           }
         },
       }
+    },
+    async batch(statements: { run(): Promise<unknown> }[]) {
+      const results = []
+      for (const statement of statements) results.push(await statement.run())
+      return results
     },
   }
 

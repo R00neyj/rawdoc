@@ -1,5 +1,5 @@
 // 이미지 첨부 올리기·받기 — 서버 판정을 믿고 클라이언트 Content-Type 은 쓰지 않는다 (specs/features/F-209.md 2.3, 2.4)
-// 공유 문서의 첨부 열람 판정은 F-212.md 2.2 로 넓힌다
+// 공유 문서의 첨부 열람 판정은 F-212.md 2.2 로 넓힌다. 사용량 줄·GET /api/usage 확장은 F-2025.md 6.4·6.5
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { isValidToken } from './token'
@@ -7,6 +7,7 @@ import { sniffImage, type ImageExt } from './imageSniff'
 import { extractAttachmentRefs } from '../src/lib/imageBlock'
 import { folderTreeIds, isDocInLinkSet } from './links'
 import { getDocAccess, isDocAttachmentOwner } from './access'
+import { DAILY_WRITE_LIMIT, DOC_BYTES_QUOTA, DOC_COUNT_QUOTA, dayUsageStatement, usageOf, writesToday } from './usage'
 
 export const MAX_ATTACHMENT_BYTES = 5_242_880
 // 계정당 첨부 저장 한도 300MB (specs/features/F-221.md 2.1)
@@ -78,11 +79,12 @@ export async function storeAttachment(
   await env.BUCKET.put(key, buffer, { httpMetadata: { contentType: sniffed.mime } })
 
   const now = Date.now()
-  await env.DB.prepare(
-    'INSERT INTO attachments (owner_id, id, ext, mime, size, width, height, created_at) VALUES (?,?,?,?,?,?,?,?)',
-  )
-    .bind(ownerId, id, sniffed.ext, sniffed.mime, buffer.length, sniffed.width, sniffed.height, now)
-    .run()
+  await env.DB.batch([
+    env.DB.prepare(
+      'INSERT INTO attachments (owner_id, id, ext, mime, size, width, height, created_at) VALUES (?,?,?,?,?,?,?,?)',
+    ).bind(ownerId, id, sniffed.ext, sniffed.mime, buffer.length, sniffed.width, sniffed.height, now),
+    dayUsageStatement(env.DB, ownerId, now),
+  ])
 
   return {
     ok: true,
@@ -135,8 +137,18 @@ export async function handleUploadAttachment(
 
 export async function handleGetUsage(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
-  const used = await getUsedBytes(env, user.id)
-  return jsonResponse({ used, limit: ATTACHMENT_QUOTA_BYTES })
+  const [used, usage] = await Promise.all([getUsedBytes(env, user.id), usageOf(env, user)])
+  return jsonResponse({
+    used,
+    limit: ATTACHMENT_QUOTA_BYTES,
+    docs: {
+      bytes: usage.contentBytes,
+      bytesLimit: DOC_BYTES_QUOTA,
+      count: usage.docCount,
+      countLimit: DOC_COUNT_QUOTA,
+    },
+    writes: { today: writesToday(usage, Date.now()), limit: DAILY_WRITE_LIMIT },
+  })
 }
 
 export async function handleGetAttachment(

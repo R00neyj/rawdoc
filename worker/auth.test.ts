@@ -106,8 +106,19 @@ function bypassDb() {
               return { meta: { changes: 1 } }
             },
             async first<T>() {
-              if (!sql.startsWith('SELECT id, email FROM users WHERE email = ?')) throw new Error(`unhandled sql: ${sql}`)
-              return (users.get(args[0] as string) as T) ?? null
+              if (!sql.startsWith('SELECT id, email, write_day')) throw new Error(`unhandled sql: ${sql}`)
+              const user = users.get(args[0] as string)
+              if (!user) return null
+              return {
+                id: user.id,
+                email: user.email,
+                write_day: null,
+                write_count: 0,
+                content_bytes: 0,
+                doc_count: 0,
+                blocked_at: null,
+                warned_at: null,
+              } as T
             },
           }
         },
@@ -151,9 +162,20 @@ function tokenEnv(tokens: ApiTokenRow[], users: UserRow[]) {
                 const row = [...tokenById.values()].find((t) => t.token_hash === tokenHash && !t.revoked_at)
                 return (row as T) ?? null
               }
-              if (sql.startsWith('SELECT id, email FROM users')) {
+              if (sql.startsWith('SELECT id, email, write_day')) {
                 const [id] = args as [string]
-                return (userById.get(id) as T) ?? null
+                const user = userById.get(id)
+                if (!user) return null
+                return {
+                  id: user.id,
+                  email: user.email,
+                  write_day: null,
+                  write_count: 0,
+                  content_bytes: 0,
+                  doc_count: 0,
+                  blocked_at: null,
+                  warned_at: null,
+                } as T
               }
               throw new Error(`unhandled sql: ${sql}`)
             },
@@ -185,7 +207,25 @@ describe('F-222 A2 /v1/ 토큰 판정', () => {
     )
     const request = new Request('https://app.example.com/v1/docs', { headers: { Authorization: 'Bearer rd_valid' } })
     const user = await getUser(request, env)
-    expect(user).toEqual({ id: 'u1', email: 'user@example.com' })
+    expect(user).toEqual({ id: 'u1', email: 'user@example.com', usage: expect.any(Object) })
+  })
+
+  it('F-2025 AU2 usage 가 가짜 행 값에서 채워진다', async () => {
+    const tokenHash = await sha256Hex('rd_valid')
+    const { env } = tokenEnv(
+      [{ id: 't1', user_id: 'u1', token_hash: tokenHash, last_used_at: null, revoked_at: null }],
+      [{ id: 'u1', email: 'user@example.com' }],
+    )
+    const request = new Request('https://app.example.com/v1/docs', { headers: { Authorization: 'Bearer rd_valid' } })
+    const user = await getUser(request, env)
+    expect(user?.usage).toEqual({
+      writeDay: null,
+      writeCount: 0,
+      contentBytes: 0,
+      docCount: 0,
+      blockedAt: null,
+      warnedAt: null,
+    })
   })
 
   it('폐기된 토큰이면 null', async () => {
@@ -261,15 +301,29 @@ describe('F-2033 U15·U16 로컬 개발 우회', () => {
     const { DB, calls } = bypassDb()
     const env = { DB, BETTER_AUTH_URL: 'http://localhost:8790', DEV_AUTH_EMAIL: 'Dev@Example.com' } as unknown as Env
     const user = await getUser(new Request('http://rawdoc.app/api/docs'), env)
-    expect(user).toEqual({ id: expect.any(String), email: 'dev@example.com' })
+    expect(user).toEqual({ id: expect.any(String), email: 'dev@example.com', usage: expect.any(Object) })
     const insert = calls.find((c) => c.sql.startsWith('INSERT INTO users'))!
     expect(insert.sql).toContain('ON CONFLICT(email) DO NOTHING')
     const columns = insert.sql.slice(insert.sql.indexOf('(') + 1, insert.sql.indexOf(')')).split(',').map((s) => s.trim())
     expect(insert.args[columns.indexOf('email_verified')]).toBe(1)
     expect(String(insert.args[columns.indexOf('updated_at')])).toMatch(/Z$/)
     expect(await getUserRefreshing(new Request('http://rawdoc.app/api/me'), env)).toEqual({
-      user: { id: user!.id, email: 'dev@example.com' },
+      user: { id: user!.id, email: 'dev@example.com', usage: expect.any(Object) },
       setCookies: [],
+    })
+  })
+
+  it('F-2025 AU3 개발 우회 usage 가 채워진다', async () => {
+    const { DB } = bypassDb()
+    const env = { DB, BETTER_AUTH_URL: 'http://localhost:8790', DEV_AUTH_EMAIL: 'Dev@Example.com' } as unknown as Env
+    const user = await getUser(new Request('http://rawdoc.app/api/docs'), env)
+    expect(user?.usage).toEqual({
+      writeDay: null,
+      writeCount: 0,
+      contentBytes: 0,
+      docCount: 0,
+      blockedAt: null,
+      warnedAt: null,
     })
   })
 
@@ -294,11 +348,42 @@ describe('F-2033 U17~U21 better-auth 세션', () => {
     const cookie = await sessionCookie(db)
     const env = sessionEnv(db)
     const user = await getUser(apiRequest(cookie), env)
-    expect(user).toEqual({ id: expect.any(String), email: 'me@example.org' })
-    expect(Object.keys(user!).sort()).toEqual(['email', 'id'])
+    expect(user).toEqual({ id: expect.any(String), email: 'me@example.org', usage: expect.any(Object) })
+    expect(Object.keys(user!).sort()).toEqual(['email', 'id', 'usage'])
     expect(await getUser(apiRequest(), env)).toBeNull()
     const name = cookie.slice(0, cookie.indexOf('='))
     expect(await getUser(apiRequest(`${name}=unknown.token`), env)).toBeNull()
+  })
+
+  it('F-2025 AU1 세션 사용자 usage 는 0·NULL 기본값, users 를 고치면 다시 받는 값도 바뀐다', async () => {
+    const db = openDb()
+    const cookie = await sessionCookie(db)
+    const env = sessionEnv(db)
+    const user = await getUser(apiRequest(cookie), env)
+    expect(user?.usage).toEqual({
+      writeDay: null,
+      writeCount: 0,
+      contentBytes: 0,
+      docCount: 0,
+      blockedAt: null,
+      warnedAt: null,
+    })
+    db.prepare('UPDATE users SET write_day = ?, write_count = ?, content_bytes = ?, doc_count = ? WHERE id = ?').run(
+      '2026-09-24',
+      7,
+      123,
+      2,
+      user!.id,
+    )
+    const updated = await getUser(apiRequest(cookie), env)
+    expect(updated?.usage).toEqual({
+      writeDay: '2026-09-24',
+      writeCount: 7,
+      contentBytes: 123,
+      docCount: 2,
+      blockedAt: null,
+      warnedAt: null,
+    })
   })
 
   it('U18 getUser 는 연장하지 않는다', async () => {
@@ -317,7 +402,7 @@ describe('F-2033 U17~U21 better-auth 세션', () => {
     const before = expiresAt(db)
     const env = sessionEnv(db)
     const first = await getUserRefreshing(apiRequest(cookie, '/api/me'), env)
-    expect(first.user).toEqual({ id: expect.any(String), email: 'me@example.org' })
+    expect(first.user).toEqual({ id: expect.any(String), email: 'me@example.org', usage: expect.any(Object) })
     expect(first.setCookies.length).toBe(1)
     expect(first.setCookies[0]).toContain('session_token=')
     expect(first.setCookies[0]).toContain('Max-Age=2592000')

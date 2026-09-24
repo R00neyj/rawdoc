@@ -43,11 +43,17 @@ function makeEnv(initial: LockRow[] = []): Env {
                 if (existing && existing.session_id === sessionId) locks.delete(docId)
                 return { meta: { changes: 0 } }
               }
+              if (sql.startsWith('UPDATE users SET')) return { meta: { changes: 1 } }
               throw new Error(`unhandled sql: ${sql}`)
             },
           }
         },
       }
+    },
+    async batch(statements: { run(): Promise<unknown> }[]) {
+      const results = []
+      for (const statement of statements) results.push(await statement.run())
+      return results
     },
   }
 

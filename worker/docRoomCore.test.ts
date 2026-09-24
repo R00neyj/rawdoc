@@ -17,6 +17,9 @@ const DOC_ID = '11111111-1111-4111-8111-111111111111'
 const CLIENT = { client: true }
 const ROW_UPDATE_SQL = 'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ?'
 const ROOM_UPDATE_SQL = 'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND version = ?'
+// F-2025 5.1 — 하루·누계 문장 (보낸 사람 = 소유자)
+const DAY_AND_TOTAL_SQL =
+  'UPDATE users SET write_count = CASE WHEN write_day = ?1 THEN write_count + 1 ELSE 1 END, write_day = ?1, content_bytes = content_bytes + CASE WHEN changes() = 1 THEN ?2 ELSE 0 END, doc_count = doc_count + CASE WHEN changes() = 1 THEN ?3 ELSE 0 END WHERE id = ?4'
 
 type D1Doc = {
   id: string
@@ -96,11 +99,17 @@ function makeD1(initial: Partial<D1Doc> | null) {
                 state.row = { ...state.row, title, content, version, updated_at: updatedAt }
                 return { meta: { changes: 1 } }
               }
+              if (sql.startsWith('UPDATE users SET')) return { meta: { changes: 1 } }
               throw new Error(`unhandled run sql: ${sql}`)
             },
           }
         },
       }
+    },
+    async batch(statements: { run(): Promise<unknown> }[]) {
+      const results = []
+      for (const statement of statements) results.push(await statement.run())
+      return results
     },
   }
   const updates = () => state.calls.filter((c) => c.sql.startsWith('UPDATE docs'))
@@ -699,7 +708,7 @@ describe('F-308 A10·A11 idle 경로', () => {
     expect(room.counts.ensureLoaded).toBe(0)
     expect(room.store.log.filter((l) => l.startsWith('INSERT INTO ydoc_'))).toHaveLength(0)
     expect(updates).toHaveLength(0)
-    expect(d1.state.calls.map((c) => c.sql)).toEqual(['SELECT * FROM docs WHERE id = ?', ROW_UPDATE_SQL])
+    expect(d1.state.calls.map((c) => c.sql)).toEqual(['SELECT * FROM docs WHERE id = ?', ROW_UPDATE_SQL, DAY_AND_TOTAL_SQL])
     expect(d1.state.calls[1].args).toEqual(['t', 'L1\nX\nL3\n', 6, 1_000_000, DOC_ID, 'owner', 5])
     expect(d1.state.row!.content).toBe('L1\nX\nL3\n')
     expect(vi.getTimerCount()).toBe(0)

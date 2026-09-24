@@ -1,10 +1,11 @@
-// 초대(권한 부여) 라우트 — owner 전용 (specs/features/F-212.md 2.3)
+// 초대(권한 부여) 라우트 — owner 전용 (specs/features/F-212.md 2.3. 사용량 줄은 F-2025.md 6.4)
 import { errorResponse, jsonResponse } from './http'
 import { requireUser, type AuthUser } from './auth'
 import { badBody, readJsonLimited } from './docs'
 import { MAX_BODY_BYTES } from './validate'
 import { higherRole, resolveDocAccess, type GrantRole, type Role } from './access'
 import { notifyRevalidate } from './docRoomRpc'
+import { dayUsageStatement } from './usage'
 
 type TargetType = 'doc' | 'folder'
 
@@ -99,13 +100,15 @@ async function handlePutGrant(
   const { role } = body as Record<string, unknown>
   if (!isValidRole(role)) return jsonResponse({ error: 'invalid', field: 'role' }, 400)
 
-  await env.DB.prepare(
-    `INSERT INTO grants (target_type, target_id, owner_id, grantee_email, role, created_at)
-     VALUES (?,?,?,?,?,?)
-     ON CONFLICT(target_type, target_id, grantee_email) DO UPDATE SET role = excluded.role`,
-  )
-    .bind(targetType, params.id, user.id, email, role, Date.now())
-    .run()
+  const now = Date.now()
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO grants (target_type, target_id, owner_id, grantee_email, role, created_at)
+       VALUES (?,?,?,?,?,?)
+       ON CONFLICT(target_type, target_id, grantee_email) DO UPDATE SET role = excluded.role`,
+    ).bind(targetType, params.id, user.id, email, role, now),
+    dayUsageStatement(env.DB, user.id, now),
+  ])
 
   const response = jsonResponse({ email, role })
   // 보기로 낮추면 열린 편집 연결을 다시 본다. 폴더 초대는 주기 점검이 잡는다 (F-304 9.1)
@@ -125,9 +128,14 @@ async function handleDeleteGrant(
   if (!check.ok) return errorResponse(check.status === 403 ? 'forbidden' : 'not_found', check.status)
 
   const email = params.email.toLowerCase()
-  await env.DB.prepare('DELETE FROM grants WHERE target_type = ? AND target_id = ? AND grantee_email = ?')
-    .bind(targetType, params.id, email)
-    .run()
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM grants WHERE target_type = ? AND target_id = ? AND grantee_email = ?').bind(
+      targetType,
+      params.id,
+      email,
+    ),
+    dayUsageStatement(env.DB, user.id, Date.now()),
+  ])
   const response = new Response(null, { status: 204 })
   if (targetType === 'doc') await notifyRevalidate(env, ctx, params.id, email)
   return response

@@ -54,11 +54,17 @@ function makeEnv(folders: FolderRow[]) {
                 if (row) Object.assign(row, { name, parent_id: parentId, updated_at: updatedAt })
                 return {}
               }
+              if (sql.startsWith('UPDATE users SET')) return { meta: { changes: 1 } }
               throw new Error(`unhandled run sql: ${sql}`)
             },
           }
         },
       }
+    },
+    async batch(statements: { run(): Promise<unknown> }[]) {
+      const results = []
+      for (const statement of statements) results.push(await statement.run())
+      return results
     },
   }
   return { DB } as unknown as Env

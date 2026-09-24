@@ -13,6 +13,7 @@ import { MAX_ATTACHMENT_BYTES, generateAttachmentId, storeAttachment } from './a
 import { buildImageBlock } from '../src/lib/imageBlock'
 import { fromEditorText, toEditorText } from '../src/lib/lineEnding'
 import { MAX_BODY_BYTES, MAX_CONTENT_BYTES, isContentTooLarge, isValidLineEnding, isValidTitle } from './validate'
+import { checkDocGrow, readUsage, usageOf, utf8Bytes } from './usage'
 
 // 헤더는 그대로(Authorization 포함), 몸통만 새 JSON 으로 바꿔 아래 핸들러에 넘긴다
 function jsonRequest(request: Request, bodyObj: unknown, dropHeaders: string[] = []): Request {
@@ -94,6 +95,16 @@ export async function handleUpdateDocV1(
   const nextContent = typeof content === 'string' ? fromEditorText(toEditorText(content), row.line_ending) : undefined
   if (nextContent !== undefined && isContentTooLarge(nextContent)) {
     return jsonResponse({ error: 'too_large', limit: MAX_CONTENT_BYTES }, 413)
+  }
+
+  // 총량 413 — 5번(줄바꿈 맞춤·1MB) 뒤, 6번(빠른 409) 앞 (F-2025 6.3)
+  if (nextContent !== undefined) {
+    const deltaBytes = utf8Bytes(nextContent) - utf8Bytes(row.content)
+    if (deltaBytes > 0) {
+      const ownerUsage = row.owner_id === user.id ? await usageOf(env, user) : await readUsage(env, row.owner_id)
+      const quota = checkDocGrow(ownerUsage, deltaBytes)
+      if (quota) return jsonResponse(quota, 413)
+    }
   }
 
   // 낡은 baseVersion 은 DO 안에서도 409 다 — 깨우지 않는다. 같은 값은 DO 가 200 으로 끝낸다 (7.3·7.4)

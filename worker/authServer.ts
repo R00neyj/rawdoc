@@ -15,8 +15,15 @@ type ValidateUserInfo = NonNullable<NonNullable<BetterAuthOptions['user']>['vali
 export type ValidateUserInfoData = Parameters<ValidateUserInfo>[0]
 export type AdmitNewUser = (env: Env, data: ValidateUserInfoData) => Promise<ValidateUserInfoResult | undefined>
 
-// F-2025 가 사용량 열을 선언할 자리 (2.5)
-export const USER_ADDITIONAL_FIELDS: Record<string, DBFieldAttribute> = {}
+// 사용량 열 — better-auth 는 쓰지 않는다(input: false). 스키마 검사가 0010 을 요구하고, getSession 결과에 실린다 (F-2025 4.2)
+export const USER_ADDITIONAL_FIELDS: Record<string, DBFieldAttribute> = {
+  writeDay: { type: 'string', fieldName: 'write_day', input: false, required: false },
+  writeCount: { type: 'number', fieldName: 'write_count', input: false, required: false },
+  contentBytes: { type: 'number', fieldName: 'content_bytes', input: false, required: false },
+  docCount: { type: 'number', fieldName: 'doc_count', input: false, required: false },
+  blockedAt: { type: 'number', fieldName: 'blocked_at', input: false, required: false },
+  warnedAt: { type: 'number', fieldName: 'warned_at', input: false, required: false },
+}
 
 // F-2028 가입 관문 자리 — 지금은 모든 새 사용자를 받는다 (2.5)
 export const admitNewUser: AdmitNewUser = async () => undefined

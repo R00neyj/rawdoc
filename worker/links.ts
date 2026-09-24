@@ -1,5 +1,5 @@
 // 공유 링크 라우트 — 관리(/api, 로그인) + 공개 조회(/pub, 로그인 없음) (specs/features/F-210.md 2.2, 2.3)
-// 위키링크로 묶인 문서 묶음 공유는 F-252 2.3~2.5
+// 위키링크로 묶인 문서 묶음 공유는 F-252 2.3~2.5. 사용량 줄은 F-2025.md 6.4
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { generateToken, isValidToken } from './token'
@@ -7,6 +7,7 @@ import { stripComments } from '../src/lib/comments'
 import { buildWikiLinkTable, collectWikiSet, type LoadDoc } from './shareSet'
 import { descendantFolderIds } from '../src/lib/folderTree'
 import { createWikiResolver, type WikiFolderRef } from '../src/lib/wikiResolve'
+import { dayUsageStatement } from './usage'
 
 type LinkRow = {
   token: string
@@ -170,19 +171,19 @@ async function readDocIds(request: Request): Promise<string[] | 'bad_request' | 
   return docIds
 }
 
-async function insertLink(env: Env, token: string, ownerId: string, targetId: string): Promise<void> {
-  await env.DB.prepare(
+// 실행하지 않고 문장만 만든다 — 부르는 쪽이 사용량 줄과 한 batch 로 묶는다 (F-2025 6.4)
+function insertLink(env: Env, token: string, ownerId: string, targetId: string): D1PreparedStatement {
+  return env.DB.prepare(
     'INSERT INTO share_links (token, owner_id, target_type, target_id, created_at, revoked_at) VALUES (?,?,?,?,?,NULL)',
-  )
-    .bind(token, ownerId, 'doc', targetId, Date.now())
-    .run()
+  ).bind(token, ownerId, 'doc', targetId, Date.now())
 }
 
-async function replaceShareLinkDocs(env: Env, token: string, docIds: string[]): Promise<void> {
-  await env.DB.prepare('DELETE FROM share_link_docs WHERE token = ?').bind(token).run()
+function replaceShareLinkDocs(env: Env, token: string, docIds: string[]): D1PreparedStatement[] {
+  const statements = [env.DB.prepare('DELETE FROM share_link_docs WHERE token = ?').bind(token)]
   for (const id of docIds) {
-    await env.DB.prepare('INSERT INTO share_link_docs (token, doc_id) VALUES (?,?)').bind(token, id).run()
+    statements.push(env.DB.prepare('INSERT INTO share_link_docs (token, doc_id) VALUES (?,?)').bind(token, id))
   }
+  return statements
 }
 
 // 살아있는 링크가 있으면 토큰은 유지하고 share_link_docs 만 갱신한다 — 주소는 살아있는 링크가 있는 한 유지(F-259 2장). 새 토큰 발급은 살아있는 링크가 없을 때만
@@ -205,7 +206,7 @@ export async function handleCreateDocLink(
   if (docIds === undefined) {
     if (existing) return jsonResponse({ token: existing.token })
     const token = generateToken()
-    await insertLink(env, token, user.id, params.id)
+    await env.DB.batch([insertLink(env, token, user.id, params.id), dayUsageStatement(env.DB, user.id, Date.now())])
     return jsonResponse({ token }, 201)
   }
 
@@ -218,13 +219,17 @@ export async function handleCreateDocLink(
   if (existing) {
     const existingIds = new Set(await fetchShareLinkDocIds(env, existing.token))
     const sameSet = existingIds.size === uniqueIds.length && uniqueIds.every((id) => existingIds.has(id))
-    if (!sameSet) await replaceShareLinkDocs(env, existing.token, uniqueIds)
+    if (!sameSet) {
+      await env.DB.batch([...replaceShareLinkDocs(env, existing.token, uniqueIds), dayUsageStatement(env.DB, user.id, Date.now())])
+    }
     return jsonResponse({ token: existing.token })
   }
 
   const token = generateToken()
-  await insertLink(env, token, user.id, params.id)
-  if (uniqueIds.length > 0) await replaceShareLinkDocs(env, token, uniqueIds)
+  const statements = [insertLink(env, token, user.id, params.id)]
+  if (uniqueIds.length > 0) statements.push(...replaceShareLinkDocs(env, token, uniqueIds))
+  statements.push(dayUsageStatement(env.DB, user.id, Date.now()))
+  await env.DB.batch(statements)
   return jsonResponse({ token }, 201)
 }
 
@@ -238,11 +243,13 @@ export async function handleDeleteDocLink(
   const doc = await findOwnedDoc(env, params.id, user.id)
   if (!doc) return errorResponse('not_found', 404)
 
-  await env.DB.prepare(
-    'UPDATE share_links SET revoked_at = ? WHERE target_type = ? AND target_id = ? AND revoked_at IS NULL',
-  )
-    .bind(Date.now(), 'doc', params.id)
-    .run()
+  const now = Date.now()
+  await env.DB.batch([
+    env.DB.prepare(
+      'UPDATE share_links SET revoked_at = ? WHERE target_type = ? AND target_id = ? AND revoked_at IS NULL',
+    ).bind(now, 'doc', params.id),
+    dayUsageStatement(env.DB, user.id, now),
+  ])
   return new Response(null, { status: 204 })
 }
 
@@ -385,11 +392,13 @@ export async function handleCreateFolderLink(
   if (existing) return jsonResponse({ token: existing.token })
 
   const token = generateToken()
-  await env.DB.prepare(
-    'INSERT INTO share_links (token, owner_id, target_type, target_id, created_at, revoked_at) VALUES (?,?,?,?,?,NULL)',
-  )
-    .bind(token, user.id, 'folder', params.id, Date.now())
-    .run()
+  const now = Date.now()
+  await env.DB.batch([
+    env.DB.prepare(
+      'INSERT INTO share_links (token, owner_id, target_type, target_id, created_at, revoked_at) VALUES (?,?,?,?,?,NULL)',
+    ).bind(token, user.id, 'folder', params.id, now),
+    dayUsageStatement(env.DB, user.id, now),
+  ])
   return jsonResponse({ token }, 201)
 }
 
@@ -403,11 +412,13 @@ export async function handleDeleteFolderLink(
   const folder = await findOwnedFolder(env, params.id, user.id)
   if (!folder) return errorResponse('not_found', 404)
 
-  await env.DB.prepare(
-    'UPDATE share_links SET revoked_at = ? WHERE target_type = ? AND target_id = ? AND revoked_at IS NULL',
-  )
-    .bind(Date.now(), 'folder', params.id)
-    .run()
+  const now = Date.now()
+  await env.DB.batch([
+    env.DB.prepare(
+      'UPDATE share_links SET revoked_at = ? WHERE target_type = ? AND target_id = ? AND revoked_at IS NULL',
+    ).bind(now, 'folder', params.id),
+    dayUsageStatement(env.DB, user.id, now),
+  ])
   return new Response(null, { status: 204 })
 }
 
