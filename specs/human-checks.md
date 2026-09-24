@@ -459,6 +459,7 @@
 | H445 | F-2026 9장 ① | 배포 직후 Workers Builds 로그의 바인딩 목록에 `WRITE_LIMITER` 가 있는지 | 대기 |
 | H446 | F-2026 9장 ② | 배포 직후 CLI 토큰으로 쓰기를 빠르게 반복해 429 `minute` 로 바뀌는 시점 확인(근사) | 대기 |
 | H447 | F-2026 9장 ③ | 배포 뒤 첫 주 `wrangler tail` 에 `write_limiter_failed`·`write_limiter_missing` 이 안 나오는지 | 대기 |
+| H448 | F-2029 10장 ① | 배포 직전(F-2025 3.1 1·2번 뒤) 첫 원격 실행 `node scripts/admin-usage.mjs` 가 읽기만으로 돌고 원격 `--json` 출력 모양이 로컬과 같은지. recount(H442)·warn/block 왕복(H439)은 기존 항목에서 본다 | 대기 |
 
 - F-306 19.3 L1~L4 — `npm run dev:worker` 로컬 확인(구현 에이전트가 `.dev.vars` 없어 미실행)
 - 원격 커서 hover 로 라벨 다시 보이기는 2px 폭 위에서만 됨(P5 와 함께 볼 것)
