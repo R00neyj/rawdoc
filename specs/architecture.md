@@ -111,6 +111,10 @@ src/
   - `app/`: `usePeers.ts`(F-307), `PeerAvatars.tsx`(F-307)
   - `styles/`: `peers.css`(F-307)
 
+- 오프라인 영속과 outbox 정리(F-306, 2026-09-24)로 추가
+  - `storage/`: `yjsStore.ts`(F-306 — IndexedDB `md-yjs`, `yjs`·`idb` 만 import. 스키마는 2장 끝)
+  - `app/`: `liveMerge.ts`(F-306 — 방 Doc 을 보고 끊긴 동안 편집·재연결 시 병합을 판정하는 순수 모듈), `yjsFlush.ts`(F-306 — 열지 않은 문서의 밀린 편집을 올리는 러너)
+
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
 - **`site → src`, `site → brand.config` 도 한 방향이다** — `src/` 는 `site/` 를 import 하지 않는다 (F-272 3.3). `site/helpPage.ts` 가 `src/app/helpDoc.ts` 를 읽는 것이 그 예다 — 도움말 글은 앱과 사이트가 같아야 해서 원본을 하나로 둔다 (F-274). `site/guidesIndex.ts` 는 `src/lib/frontmatter.ts` 만 읽는다 (F-276)
@@ -153,6 +157,23 @@ store.removeAttachment(id)    // Promise<void>
 - 지도(F-292)도 넓히지 않는다. `list()` 하나로 문서 원문을 읽어 위키링크를 뽑는다
 - 검색은 이 인터페이스를 넓히지 않는다. `list()`·`listFolders()` 만 쓰고, F-286 의 `SearchSource` 타입이 그 둘만 받는다(`Pick<Store, 'list' | 'listFolders'>`)
 
+**IndexedDB `md-yjs`(F-306, 2026-09-24)** — 실시간 문서의 Yjs 업데이트 기록. 서버 저장소(`md-remote`)와 별도 DB, 버전 1
+
+```ts
+// 스토어 updates — keyPath 'key'(자동 증가). 색인 byDoc = ['userId', 'docId']
+type YjsUpdateRow = { key: number; userId: string; docId: string; update: Uint8Array }
+// 스토어 meta — keyPath ['userId', 'docId']. 색인 byUser = 'userId'
+type YjsMetaRow = {
+  userId: string
+  docId: string
+  unsyncedLocal: boolean   // 연결이 live 가 아닐 때 내 편집이 들어왔고 아직 synced 를 못 봤다
+  lastOpenedAt: number     // 세션이 붙은 시각(ms). 30일 나이 정리가 본다
+}
+```
+
+- `y-indexeddb` 를 쓰지 않고 직접 짠다(F-301 3.6 결정, F-306 2장 근거). 압축은 500행이 되고 입력이 2,000ms 멈췄을 때만, 그 세션이 아는 키만 지운다
+- 로그아웃해도 지우지 않는다. `md-remote`·`md-docs` 와 같은 규칙
+
 ## 3. 문서 상태 흐름
 
 - 열린 문서 본문의 원본은 에디터마다 만드는 `Y.Doc` 의 `Y.Text`(`content`) 하나다. CM6 `EditorState` 는 `y-codemirror.next` 로 이어진 투영이다. React state 에 본문 문자열을 두지 않는다 (F-302)
@@ -161,6 +182,7 @@ store.removeAttachment(id)    // Promise<void>
 - 에디터 → 저장소: 입력이 멈추면 스냅샷 저장. 문서 전환·새로고침 적용 전에는 대기 중 저장을 먼저 끝낸다
 - 문서 목록(제목·수정 시각)은 `App` 의 React state 로 둔다. 본문은 넣지 않는다
 - **서버 문서, 실시간 경로(M3, F-305)**: 위 흐름과 다르다 — 방 Doc(App 층 `useLiveDoc` 가 만드는 빈 `Y.Doc`) → 게이트(F-303 `remoteGate`, `sharedDoc` 옵션으로 방 Doc 을 그대로 씀) → 편집기 Doc(첫 동기화 뒤 방 Doc 에서 `createYBindingFromState` 로 복제) → `EditorState`. 본문 자동 저장(`PUT`)은 경로가 `pending`(outbox 대기) 또는 `fallback`(연결 실패) 일 때만 돈다 — `realtime` 경로에서는 꺼진다(F-305 4장·10장)
+- **오프라인 영속(F-306, 2026-09-24)**: 방 Doc 은 provider 를 붙이기 전에 `md-yjs`(`yjsStore.ts`) 를 먼저 불러와 적용한다 — 이 순서라야 오프라인에서 새로고침해도 로컬 편집이 남는다. 경로 판정에 `offline-view` 가 더해졌다 — 이 브라우저에 그 문서 기록이 없는 채 오프라인으로 열면 캐시 본문을 읽기 전용으로 띄우고(방 Doc 을 만들지 않는다), 기록이 있으면 폴백 대신 재개 가능한 `realtime` 으로 로컬 기록을 이어 편집한다(`docPath.ts` 5장, F-306 5장)
 - awareness(`useLiveDoc`, 방 Doc 에 매임) → 상단바 아바타(`usePeers`)·원격 커서(`remoteCursors`) (F-307)
 
 ## 4. 설정 (localStorage)
@@ -237,6 +259,7 @@ worker/
 - R2 키 `att/{owner_id}/{id}.{ext}`, 공개 버킷·서명 URL 없음 (F-209)
 - 안 쓰는 첨부 정리: 매일 UTC 18시 Cron `scheduled` → 모든 문서 원문에 없고 24시간 지난 첨부 R2·D1 삭제 (F-219)
 - `DocRoom` DO SQLite 표 `ydoc_updates`·`ydoc_meta` — Yjs 업데이트 로그와 메타(F-304 6.1). D1 `docs` 는 DO 도 쓴다 — 조용해지면 5초, 편집이 계속되면 최대 30초 뒤, `version` 조건부 `UPDATE` 로 (F-304 6.2·8.2)
+- **DocRoom 저장소를 지우거나 클래스를 바꾸는 변경은 브라우저 `md-yjs` 기록과 두 벌이 된다**(F-306 L7) — 클라이언트는 서버 Doc 이 "같은 역사" 인지 알 수 없어 기록을 먼저 적용한 뒤 provider 를 붙이므로, DO 가 새 씨앗으로 다시 시작하면 본문이 중복될 수 있다. DO 저장소를 지우는 배포를 하는 명세는 이 위험을 다뤄야 한다
 - `DocRoom` 은 awareness 를 도장 찍어 중계하고 연결이 닫히면 그 연결의 상태를 지운다(F-307 4장)
 - 경로 접두사 4개: `/api/*` Access 로그인(브라우저), `/pub/*` 로그인 없음(공유 링크), `/v1/*` Access 밖·`Authorization: Bearer rd_…` 개인 토큰만(스크립트, F-222·F-223). `/v1` 은 쿠키를 보지 않는다. 토큰은 D1 `api_tokens` 에 SHA-256 해시만 (0007). `/ws/*` Access 밖 — Worker 가 Origin·`CF_Authorization` 쿠키로 인증하고 edit 이상만 `DocRoom` DO(`/ws/doc/:id`)로 넘긴다. 거절은 닫기 코드 4401·4403·4404 (F-304)
 - `GET /v1/me` → `{ id, email }`(토큰 없음·틀림·폐기는 401). `handleMe` 를 그대로 붙인 라우트 한 줄, 명령줄 도구의 `whoami`·`--with-token` 확인에 쓴다 (F-2021 7.1)

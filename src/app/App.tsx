@@ -20,6 +20,8 @@ import { createMemoryStore } from '../storage/memoryStore'
 import { createIdbStore } from '../storage/idbStore'
 import { openStore } from '../storage/openStore'
 import type { ServerStore } from '../storage/serverStore'
+import { openYjsStore, type YjsStore } from '../storage/yjsStore'
+import { openLiveSocket } from '../storage/liveSocket'
 import { migrateLocalIfNeeded } from './migrateLocal'
 import { ancestorsOfDoc, resolveTargetFolderId, canMoveFolder } from '../lib/folderTree'
 import type { SelectionItem } from './sidebarSelection'
@@ -45,7 +47,8 @@ import { decideDocPath, type DocPathKind, type FallbackReason } from './docPath'
 import { useLiveDoc } from './useLiveDoc'
 import { usePeers } from './usePeers'
 import type { Peer } from '../lib/peers'
-import type { LiveSnapshot } from './liveDoc'
+import { createLiveDocController, type LiveSnapshot } from './liveDoc'
+import { flushUnsyncedDocs } from './yjsFlush'
 import { withTabBroadcast, newTabId } from './tabSync'
 import { useTabSync } from './useTabSync'
 import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from './exportDoc'
@@ -144,6 +147,10 @@ type DocSession = {
   fallbackReason: FallbackReason | null
   // 첫 동기화 전 4403 으로 보기로 연 세션 — N1 을 띄우고 본문은 서버에서 먼저 읽는다 (8장)
   forbiddenClose: boolean
+  // realtime 일 때만 뜻이 있다 — md-yjs 기록으로 재개하는가, 오프라인으로 시작하는가, 쓸 md-yjs (F-306 5.1·6.4)
+  resume: boolean
+  startOffline: boolean
+  persist: YjsStore | null
 }
 
 // 실시간 알림 띠 문구 (F-305 11.2)
@@ -152,7 +159,11 @@ const LIVE_NOTICE = {
   revoked: '편집 권한이 없어져 읽기만 할 수 있습니다.',
   gone: '이 문서가 삭제되었거나 접근할 수 없게 되었습니다. 지금 화면의 내용은 저장되지 않습니다.',
   signedOut: '로그인이 만료되어 실시간 편집을 멈췄습니다. 지금 화면의 내용은 새 문서로 저장할 수 있습니다.',
-  disconnected: '서버와 연결이 끊겼습니다. 다시 연결되면 이어서 저장됩니다. 그 전에 창을 닫으면 끊긴 뒤의 편집은 사라집니다.',
+  // N5 는 F-301 9.2 원래 문구 그대로, N5′ 는 영속이 없는 세션 — F-305 N5 (F-306 11.2)
+  disconnected: '서버와 연결이 끊겼습니다. 편집은 이 브라우저에 저장되고 다시 연결되면 합쳐집니다',
+  disconnectedVolatile: '서버와 연결이 끊겼습니다. 다시 연결되면 이어서 저장됩니다. 그 전에 창을 닫으면 끊긴 뒤의 편집은 사라집니다.',
+  offlineView: '오프라인에서는 이 문서를 읽기만 할 수 있습니다. 연결되면 편집할 수 있습니다.',
+  merged: '연결이 끊긴 동안 한 편집을 합쳤습니다. 같은 곳을 다른 사람도 고쳤다면 문장이 섞였을 수 있습니다',
   tooLarge: '문서가 1MB 를 넘어 서버에 저장되지 않습니다. 내용을 줄이거나 문서를 나눠 주세요',
 } as const
 
@@ -388,6 +399,8 @@ export default function App() {
   const docsRef = useRef(docs)
   // 가져오기 같은 비동기 흐름이 지금 문서의 경로를 최신으로 읽는다 (F-305 10.1)
   const docPathRef = useRef<{ docId: string | null; path: DocPathKind | null }>({ docId: null, path: null })
+  // 서버 저장소일 때 부팅이 여는 md-yjs — 열기에 실패하거나 서버가 아니면 null (F-306 9.2)
+  const yjsStoreRef = useRef<Promise<YjsStore | null>>(Promise.resolve(null))
   // 알림 버튼이 만들 때의 클로저가 아니라 최신 saveCurrentAsNewDoc 을 부르게 한다
   const saveCurrentAsNewDocRef = useRef<() => Promise<void>>(async () => {})
   const currentDocIdRef = useRef(currentDocId)
@@ -487,6 +500,9 @@ export default function App() {
     path: null,
     fallbackReason: null,
     forbiddenClose: false,
+    resume: false,
+    startOffline: false,
+    persist: null,
   }))
   if (docSession.docId !== currentDocId || docSession.store !== store) {
     const quick = decideDocPath({
@@ -496,6 +512,7 @@ export default function App() {
       forbidden: currentDocId != null && forbiddenDocIds.has(currentDocId),
       hasPendingChanges: false,
       online: true,
+      hasLocalState: false,
     })
     setDocSession({
       seq: docSession.seq + 1,
@@ -504,6 +521,9 @@ export default function App() {
       path: quick.kind === 'local' || quick.kind === 'view' ? quick.kind : null,
       fallbackReason: null,
       forbiddenClose: false,
+      resume: false,
+      startOffline: false,
+      persist: null,
     })
     // 옛 세션의 본문 스냅샷으로 편집기가 먼저 뜨지 않게 비운다 — 실시간이면 첫 동기화 뒤에 채운다 (5.1)
     setOpenDoc(null)
@@ -524,9 +544,13 @@ export default function App() {
     let cancelled = false
     const pendingCheck =
       typeof sessionStore.hasPendingChanges === 'function' ? sessionStore.hasPendingChanges(id) : Promise.resolve(false)
-    pendingCheck
-      .catch(() => true)
-      .then((pending) => {
+    // outbox 와 md-yjs 기록을 함께 기다린다. 기록 확인이 실패하면 없음으로 (F-306 5.1)
+    const persistCheck = yjsStoreRef.current.then(async (persist) => ({
+      persist,
+      hasLocalState: persist ? await persist.hasState(id).catch(() => false) : false,
+    }))
+    Promise.all([pendingCheck.catch(() => true), persistCheck.catch(() => ({ persist: null, hasLocalState: false }))]).then(
+      ([pending, { persist, hasLocalState }]) => {
         if (cancelled) return
         const createdHere = createdHereRef.current.delete(id)
         const decided = decideDocPath({
@@ -536,27 +560,53 @@ export default function App() {
           forbidden: false,
           hasPendingChanges: pending || createdHere,
           online: navigator.onLine,
+          hasLocalState,
         })
+        const realtime = decided.kind === 'realtime' ? decided : null
         setDocSession((cur) =>
           cur.seq === docSession.seq && cur.path === null
-            ? { ...cur, path: decided.kind, fallbackReason: decided.kind === 'fallback' ? decided.reason : null }
+            ? {
+                ...cur,
+                path: decided.kind,
+                fallbackReason: null,
+                resume: realtime?.resume ?? false,
+                startOffline: realtime?.startOffline ?? false,
+                persist,
+              }
             : cur,
         )
-      })
+      },
+    )
     return () => {
       cancelled = true
     }
   }, [bootPhase, docSession])
 
-  const liveSession = useLiveDoc(isRealtime ? currentDocId : null)
+  // 기록을 못 불러온 재개 세션 — 기록 없음으로 다시 판정한다. 오프라인이면 offline-view, 온라인이면 비재개 실시간 (F-306 6.4 4번)
+  const handleResumeFailed = useCallback((docId: string) => {
+    setDocSession((cur) => {
+      if (cur.docId !== docId || cur.path !== 'realtime' || !cur.resume) return cur
+      return navigator.onLine
+        ? { ...cur, resume: false, startOffline: false }
+        : { ...cur, path: 'offline-view', resume: false, startOffline: false }
+    })
+  }, [])
+  const liveSession = useLiveDoc(isRealtime ? currentDocId : null, {
+    store: docSession.persist,
+    resume: docSession.resume,
+    startOffline: docSession.startOffline,
+    onResumeFailed: handleResumeFailed,
+  })
   const liveSnapshot = liveSession?.snapshot
   // 접속자 — 편집기가 아니라 방 Doc 의 awareness 에서 온다. 첫 동기화 전·편집기 다시 마운트에도 흔들리지 않는다 (F-307 7.4)
   const liveAwareness = liveSession?.awareness ?? null
   const livePeers = usePeers(liveAwareness)
 
-  // 첫 동기화 전에 끝난 경우 — 폴백으로 가거나(7.2), 4403 이면 보기로 연다(8장). 렌더 중 상태를 맞추는 패턴
-  if (isRealtime && liveSnapshot && !liveSnapshot.everSynced) {
-    if (liveSnapshot.phase === 'fallback') {
+  // ready 전에 끝난 경우 — 폴백으로 가거나(7.2), 4403 이면 보기로 연다(8장). 오프라인 폴백은 잠금·PUT 대신 offline-view (F-306 9.1). 렌더 중 상태를 맞추는 패턴
+  if (isRealtime && liveSnapshot && !liveSnapshot.ready) {
+    if (liveSnapshot.phase === 'fallback' && liveSnapshot.fallbackReason === 'offline') {
+      setDocSession({ ...docSession, path: 'offline-view', fallbackReason: null })
+    } else if (liveSnapshot.phase === 'fallback') {
       setDocSession({ ...docSession, path: 'fallback', fallbackReason: liveSnapshot.fallbackReason })
     } else if (liveSnapshot.phase === 'stopped' && liveSnapshot.stopReason === 'forbidden') {
       setDocSession({ ...docSession, path: 'view', forbiddenClose: true })
@@ -564,13 +614,15 @@ export default function App() {
     }
   }
 
-  // 첫 synced — 한 렌더 안에서 방 Doc 본문으로 편집기 스냅샷·제목·글자 수를 맞춘다 (5.2)
+  // 첫 ready — 한 렌더 안에서 방 Doc 본문으로 편집기 스냅샷·제목·글자 수를 맞춘다 (5.2). 재개 세션은 synced 전에도 로컬 기록으로 (F-306 9.1)
   const [liveOpenedDoc, setLiveOpenedDoc] = useState<Y.Doc | null>(null)
-  if (isRealtime && liveSession && liveSnapshot?.everSynced && liveOpenedDoc !== liveSession.roomDoc) {
+  if (isRealtime && liveSession && liveSnapshot?.everSynced && !everLiveIds.has(liveSession.docId)) {
+    setEverLiveIds(new Set(everLiveIds).add(liveSession.docId))
+  }
+  if (isRealtime && liveSession && liveSnapshot?.ready && liveOpenedDoc !== liveSession.roomDoc) {
     const content = liveSession.roomDoc.getText(Y_CONTENT_NAME).toString()
     const title = liveSession.roomDoc.getText(Y_TITLE_NAME).toString()
     setLiveOpenedDoc(liveSession.roomDoc)
-    if (!everLiveIds.has(liveSession.docId)) setEverLiveIds(new Set(everLiveIds).add(liveSession.docId))
     setOpenDoc({ id: liveSession.docId, content, lineEnding: currentDoc?.lineEnding ?? 'lf' })
     setDocs(docs.map((d) => (d.id === liveSession.docId ? { ...d, title } : d)))
     setStats({ line: 1, col: 1, charCount: countChars(content), wordCount: countWords(content) })
@@ -593,14 +645,25 @@ export default function App() {
   // N2·N3·N4 — 멈춘 방 Doc 마다 한 번. N5·N6 — 조건이 풀리면 그 알림이 아직 떠 있을 때만 걷는다
   const liveStopNoticeDocRef = useRef<Y.Doc | null>(null)
   const liveNoticeIdsRef = useRef<{ disconnected: number | null; tooLarge: number | null }>({ disconnected: null, tooLarge: null })
+  // 이 방 Doc 에서 이미 알린 병합 수 (F-306 7.3)
+  const mergedSeenRef = useRef<{ doc: Y.Doc | null; count: number }>({ doc: null, count: 0 })
   useEffect(() => {
     const snap = liveSession?.snapshot
     const ids = liveNoticeIdsRef.current
     if (snap?.disconnectedLong && ids.disconnected === null) {
-      ids.disconnected = showNotice({ type: 'warn', message: LIVE_NOTICE.disconnected })
+      const message = liveSession?.persistBroken ? LIVE_NOTICE.disconnectedVolatile : LIVE_NOTICE.disconnected
+      ids.disconnected = showNotice({ type: 'warn', message })
     } else if (!snap?.disconnectedLong && ids.disconnected !== null) {
       dismissNotice(ids.disconnected)
       ids.disconnected = null
+    }
+    // N8 — N5 를 걷은 뒤에 띄운다 (F-306 7.3)
+    if (liveSession) {
+      if (mergedSeenRef.current.doc !== liveSession.roomDoc) mergedSeenRef.current = { doc: liveSession.roomDoc, count: 0 }
+      if (liveSession.merged > mergedSeenRef.current.count) {
+        mergedSeenRef.current.count = liveSession.merged
+        showNotice({ type: 'info', message: LIVE_NOTICE.merged })
+      }
     }
     if (snap?.tooLarge && ids.tooLarge === null) {
       ids.tooLarge = showNotice({ type: 'error', message: LIVE_NOTICE.tooLarge })
@@ -616,8 +679,38 @@ export default function App() {
     else if (reason === 'signed-out') showNotice({ type: 'error', message: LIVE_NOTICE.signedOut, action: saveAsNewAction })
   }, [liveSession, showNotice, dismissNotice, saveAsNewAction])
 
+  // N7 — offline-view 세션마다 한 번. 그 세션이 끝나면 아직 떠 있을 때만 걷는다 (F-306 11.2)
+  const offlineViewNoticeRef = useRef<{ seq: number; id: number } | null>(null)
+  const isOfflineView = docPath === 'offline-view'
+  useEffect(() => {
+    const shown = offlineViewNoticeRef.current
+    if (isOfflineView && shown?.seq !== docSession.seq) {
+      if (shown) dismissNotice(shown.id)
+      offlineViewNoticeRef.current = { seq: docSession.seq, id: showNotice({ type: 'warn', message: LIVE_NOTICE.offlineView }) }
+    } else if (!isOfflineView && shown) {
+      dismissNotice(shown.id)
+      offlineViewNoticeRef.current = null
+    }
+  }, [isOfflineView, docSession.seq, showNotice, dismissNotice])
+
+  // offline-view 에서 온라인이 되면 그 문서 열기 세션을 새로 시작한다 — 아무것도 쓰지 않은 세션이라 이중 쓰기가 없다 (F-306 5.2)
+  useEffect(() => {
+    if (!isOfflineView) return
+    const seq = docSession.seq
+    const handleOnline = () => {
+      setDocSession((cur) =>
+        cur.seq === seq
+          ? { ...cur, seq: cur.seq + 1, path: null, fallbackReason: null, forbiddenClose: false, resume: false, startOffline: false, persist: null }
+          : cur,
+      )
+      setOpenDoc(null)
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [isOfflineView, docSession.seq])
+
   // 동기화 뒤 방 Doc 이 바뀌면(내 편집·상대 편집) 700ms 뒤 사이드바 updatedAt 을 지금으로 — D1 은 DO 가 늦게 쓴다 (F-305 10.1)
-  const liveRoomDoc = isRealtime && liveSnapshot?.everSynced ? liveSession?.roomDoc ?? null : null
+  const liveRoomDoc = isRealtime && liveSnapshot?.ready ? liveSession?.roomDoc ?? null : null
   const liveRoomDocId = liveSession?.docId ?? null
   useEffect(() => {
     if (!liveRoomDoc || !liveRoomDocId) return
@@ -729,7 +822,7 @@ export default function App() {
   })
 
   const isDeletedElsewhere = currentDocId != null && deletedElsewhereId === currentDocId
-  const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly || claimReadOnly || isDeletedElsewhere || liveStopped
+  const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly || claimReadOnly || isDeletedElsewhere || liveStopped || isOfflineView
   // 본문 맨 위 제목 읽기 전용 — 상단바 옛 제목 입력의 disabled·readOnly 조건을 하나로 합친다 (F-217.md 2.4)
   const titleReadOnly = isReadOnlyDoc || viewMode === 'view' || Boolean(sharedDoc)
 
@@ -978,6 +1071,8 @@ export default function App() {
         },
       })
       setDbBlockedMessage(null)
+      // 서버 저장소면 md-yjs 를 페이지 수명 동안 한 번 연다 — 오프라인 부팅도 저장소가 아는 사용자 id 로 (F-306 9.2)
+      if (resolvedStore.kind === 'server') yjsStoreRef.current = openYjsStore((resolvedStore as ServerStore).userId)
       // 이 한 곳만 감싸면 App.tsx 의 모든 저장 경로가 자동으로 다른 탭에 신호를 보낸다 (F-296.md 6.2)
       const broadcastStore = withTabBroadcast(resolvedStore, postTabMessage, tabIdRef.current)
       setStore({
@@ -1085,12 +1180,13 @@ export default function App() {
       setDocs(metaList)
 
       // 안 쓰는 첨부 정리 (F-156.md 2.7) — server 저장소는 kind 만 idb 로 보이게 해 캐시 문서 기준으로 돈다 (F-207.md 2.5)
+      // 아직 안 올린 첨부는 빼고 넘긴다 — 오프라인 편집은 캐시 본문이 아니라 md-yjs 에만 있다 (F-306 10장)
       const gcStore =
         resolvedStore.kind === 'server'
           ? {
               kind: 'idb',
               list: () => resolvedStore.list(),
-              listAttachments: () => resolvedStore.listAttachments(),
+              listAttachments: async () => (await resolvedStore.listAttachments()).filter((a) => a.uploaded !== false),
               removeAttachment: (id: string) => resolvedStore.removeAttachment(id),
             }
           : resolvedStore
@@ -1159,6 +1255,55 @@ export default function App() {
     boot()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // md-yjs 나이 정리 뒤 밀린 편집 러너 — 부팅 뒤 idle 에 한 번, online 마다 한 번. 한 페이지에 러너 하나 (F-306 8.2·9.2)
+  const flushRunningRef = useRef(false)
+  useEffect(() => {
+    if (bootPhase !== 'ready' || store.kind !== 'server') return
+    let cancelled = false
+    const runFlush = (persist: YjsStore) => {
+      if (flushRunningRef.current || cancelled) return
+      flushRunningRef.current = true
+      flushUnsyncedDocs({
+        store: persist,
+        isOpenDoc: (id) => id === currentDocIdRef.current,
+        createController: (options) =>
+          createLiveDocController({
+            ...options,
+            openSocket: openLiveSocket,
+            host: location.host,
+            secure: location.protocol === 'https:',
+            setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+            clearTimeout: (handle) => window.clearTimeout(handle as number),
+            random: Math.random,
+          }),
+        setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+        clearTimeout: (handle) => window.clearTimeout(handle as number),
+      })
+        .catch(() => {})
+        .finally(() => {
+          flushRunningRef.current = false
+        })
+    }
+    const cancelIdle = scheduleAttachmentGc(() => {
+      void yjsStoreRef.current.then(async (persist) => {
+        if (!persist || cancelled) return
+        await persist.collectGarbage(Date.now()).catch(() => {})
+        if (navigator.onLine) runFlush(persist)
+      })
+    })
+    const handleOnline = () => {
+      void yjsStoreRef.current.then((persist) => {
+        if (persist) runFlush(persist)
+      })
+    }
+    window.addEventListener('online', handleOnline)
+    return () => {
+      cancelled = true
+      cancelIdle()
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [bootPhase, store.kind])
 
   // 부팅 스켈레톤 인계 — ready·공개 보기·F-136 막힘 중 하나라도 되면 겹침을 걷는다 (specs/features/F-2015.md 5.3)
   useLayoutEffect(() => {
@@ -1421,7 +1566,7 @@ export default function App() {
   // openDoc.id 가 currentDocId 와 다르면(문서 없음 포함) 렌더링에서 에디터를 그리지
   // 않는 것으로 처리하므로, 여기서 별도로 null 로 되돌리지 않는다
   // (react-hooks: effect 본문에서 동기 setState 를 피한다)
-  const notFoundBeforeSync = isRealtime && liveSnapshot?.stopReason === 'not-found'
+  const notFoundBeforeSync = isRealtime && liveSnapshot?.stopReason === 'not-found' && !liveSnapshot.ready
   // 실시간은 첫 synced 에서 채우고 첫 동기화 전 4404 만 캐시를 읽는다. 실시간이었던 폴백·4403 보기는 서버 본문 먼저 (F-305 5.2·8장)
   const openLoad =
     !currentDocId || docPath === null || (isRealtime && !notFoundBeforeSync)
@@ -1661,7 +1806,7 @@ export default function App() {
     onSaveError: handleSaveError,
     // 저장해 봤자 해로운 두 경우에만 막는다 — 잠금을 뺏긴 서버 문서는 그대로 내보내 423 충돌 사본을 만드는 게 설계다 (F-296.md 7.4)
     // 실시간 경로는 본문을 방 Doc 으로 보낸다 — PUT 하면 DO 가 올린 version 과 갈려 409 사본이 생긴다 (F-305 10.1)
-    blocked: isDeletedElsewhere || claimReadOnly || isRealtime,
+    blocked: isDeletedElsewhere || claimReadOnly || isRealtime || isOfflineView,
   })
 
   // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후 최신 flush·notifyChange·handlePrintDoc·openSearch 를 반영한다

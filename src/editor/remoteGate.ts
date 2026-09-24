@@ -32,6 +32,11 @@ const RELAY_FROM_EDITOR = { relay: 'from-editor' }
 const RELAY_FROM_SHARED = { relay: 'from-shared' }
 const REMOTE = { relay: 'remote' }
 
+// 방 Doc 에 들어온 업데이트가 이 편집기의 내 편집인가 — 상수 자체는 내보내지 않는다 (F-306 7.1)
+export function isEditorRelay(origin: unknown): boolean {
+  return origin === RELAY_FROM_EDITOR
+}
+
 export type RemoteGateOptions = {
   docId: string
   isComposing?: () => boolean

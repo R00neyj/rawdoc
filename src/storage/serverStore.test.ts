@@ -733,3 +733,23 @@ describe('F-305 U20 hasPendingChanges', () => {
     expect(await store.hasPendingChanges(created.id)).toBe(true)
   })
 })
+
+describe('F-306 U26 첨부 uploaded·userId', () => {
+  it('막 넣은 첨부는 uploaded false, 올린 뒤 true. userId 가 생성 인자와 같다', async () => {
+    const server = makeFakeServer()
+    server.setNetworkDown(true)
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u-306', { dbName: freshDbName() })
+    expect(store.userId).toBe('u-306')
+
+    const blob = new Blob([new Uint8Array(100)])
+    const result = await store.putAttachment({ blob, mime: 'image/png', ext: 'png', width: 1, height: 1 })
+    await tick(20)
+    expect(await store.listAttachments()).toEqual([expect.objectContaining({ id: result.id, uploaded: false })])
+
+    server.setNetworkDown(false)
+    await store.create({ title: 'T', content: 'a', lineEnding: 'lf' }) // 다음 쓰기 — 재시도 트리거
+    await tick(50)
+    expect(await store.listAttachments()).toEqual([expect.objectContaining({ id: result.id, uploaded: true })])
+  })
+})

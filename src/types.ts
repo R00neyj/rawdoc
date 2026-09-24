@@ -43,7 +43,10 @@ export type Attachment = {
   blob: Blob
 }
 
-export type AttachmentMeta = Pick<Attachment, 'id' | 'ext' | 'size' | 'createdAt'>
+export type AttachmentMeta = Pick<Attachment, 'id' | 'ext' | 'size' | 'createdAt'> & {
+  // 서버 저장소만 채운다 — 아직 안 올린 첨부는 첨부 GC 에서 뺀다 (F-306 10장)
+  uploaded?: boolean
+}
 
 // 서버 저장소 동기화 표시 (specs/features/F-207.md 2.5)
 export type SyncState = { pending: number; online: boolean; signedOut: boolean }

@@ -1,4 +1,4 @@
-// 실시간 연결 제어기 — 단계·닫기 분류·재연결·첫 동기화 시간 제한·keepalive. 소켓·타이머·난수는 주입받고 window 를 읽지 않는다 (F-305 7장)
+// 실시간 연결 제어기 — 단계·닫기 분류·재연결·첫 동기화 시간 제한·keepalive. 소켓·타이머·난수는 주입받고 window 를 읽지 않는다 (F-305 7장, 재개 가능 세션 F-306 6장)
 import type * as Y from 'yjs'
 
 import { SOCKET_CLOSE, parseDocRoomMessage } from '../lib/docRoomProtocol'
@@ -25,6 +25,8 @@ export type LiveSnapshot = {
   stopReason: StopReason | null
   tooLarge: boolean
   disconnectedLong: boolean
+  // 편집기를 방 Doc 으로 띄워도 된다. 비재개 세션은 everSynced 와 같다 (F-306 6.1)
+  ready: boolean
 }
 
 export type LiveDocDeps = {
@@ -37,6 +39,10 @@ export type LiveDocDeps = {
   clearTimeout: (handle: unknown) => void
   random: () => number
   keepaliveMs?: number | null
+  // 방 Doc 에 md-yjs 기록을 불러왔다 — 폴백하지 않고 로컬 기록으로 편집하며 다시 붙는다 (F-306 6.2)
+  resumable?: boolean
+  // 시작할 때 오프라인이다. resumable 일 때만 뜻이 있다
+  startOffline?: boolean
 }
 
 export type LiveDocController = {
@@ -57,6 +63,7 @@ export function backoffDelay(failures: number, random: number): number {
 
 export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
   const keepaliveMs = deps.keepaliveMs === undefined ? KEEPALIVE_INTERVAL_MS : deps.keepaliveMs
+  const resumable = deps.resumable === true
 
   let snap: LiveSnapshot = {
     phase: 'connecting',
@@ -65,6 +72,7 @@ export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
     stopReason: null,
     tooLarge: false,
     disconnectedLong: false,
+    ready: false,
   }
   const listeners = new Set<(s: LiveSnapshot) => void>()
   const timers = new Map<TimerName, unknown>()
@@ -158,7 +166,7 @@ export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
     disarm('firstSync')
     disarm('hardSync')
     disarm('notice')
-    update({ phase: 'live', everSynced: true, disconnectedLong: false })
+    update({ phase: 'live', everSynced: true, ready: true, disconnectedLong: false })
     scheduleKeepalive()
   }
 
@@ -191,7 +199,12 @@ export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
   function onClose(code: number, opened: boolean) {
     disarm('keepalive')
     disarm('pong')
-    const synced = snap.everSynced
+    // 재개 가능 세션은 ready 뒤를 동기화 뒤처럼 다룬다 — 비재개는 ready === everSynced (F-306 6.3)
+    const synced = snap.ready
+    if (resumable && !synced) {
+      onCloseBeforeReady(code, opened)
+      return
+    }
     if (code === SOCKET_CLOSE.unauthenticated) {
       if (synced) finish({ phase: 'stopped', stopReason: 'signed-out' })
       else finish({ phase: 'fallback', fallbackReason: 'signed-out' })
@@ -218,6 +231,25 @@ export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
     scheduleRetry()
   }
 
+  // 재개 가능 세션의 ready 전 닫기 — 폴백 대신 로컬 기록으로 띄우고 다시 붙는다 (F-306 6.3 둘째 열)
+  function onCloseBeforeReady(code: number, opened: boolean) {
+    if (code === SOCKET_CLOSE.unauthenticated) finish({ phase: 'stopped', stopReason: 'signed-out', ready: true })
+    else if (code === SOCKET_CLOSE.forbidden) finish({ phase: 'stopped', stopReason: 'forbidden' })
+    else if (code === SOCKET_CLOSE.notFound) finish({ phase: 'stopped', stopReason: 'not-found', ready: true })
+    else if (!opened) {
+      becomeReadyReconnecting()
+      scheduleRetry()
+    } else scheduleRetry()
+  }
+
+  // 첫 동기화 시간 제한은 더 걸지 않는다 — 남은 소켓·재시도 타이머는 그대로 둔다
+  function becomeReadyReconnecting() {
+    disarm('firstSync')
+    disarm('hardSync')
+    update({ phase: 'reconnecting', ready: true })
+    armDisconnectNotice()
+  }
+
   function armDisconnectNotice() {
     if (timers.has('notice') || snap.disconnectedLong) return
     arm('notice', DISCONNECT_NOTICE_MS, () => {
@@ -237,21 +269,33 @@ export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
   }
 
   function onFirstSyncTimeout() {
-    if (ended() || snap.everSynced) return
+    if (ended() || snap.ready) return
     // 서버가 받아 줬고 큰 첫 상태를 보내는 중일 수 있다 — 30초까지 기다린다 (7.5)
     if (socket && socketOpened) {
       arm('hardSync', FIRST_SYNC_HARD_TIMEOUT_MS - FIRST_SYNC_TIMEOUT_MS, () => {
-        if (!ended() && !snap.everSynced) finish({ phase: 'fallback', fallbackReason: 'timeout' })
+        if (!ended() && !snap.ready) giveUpFirstSync()
       })
       return
     }
-    finish({ phase: 'fallback', fallbackReason: 'timeout' })
+    giveUpFirstSync()
+  }
+
+  // 재개 가능 세션은 열린 소켓을 끊지 않는다 — 늦게라도 synced 가 오면 live (F-306 6.3)
+  function giveUpFirstSync() {
+    if (resumable) becomeReadyReconnecting()
+    else finish({ phase: 'fallback', fallbackReason: 'timeout' })
   }
 
   return {
     start() {
       if (started || destroyed) return
       started = true
+      // 오프라인 시작 — 소켓을 열지 않고 로컬 기록으로 띄운다. wake 가 첫 시도를 연다 (F-306 6.2)
+      if (resumable && deps.startOffline) {
+        update({ phase: 'reconnecting', ready: true })
+        armDisconnectNotice()
+        return
+      }
       arm('firstSync', FIRST_SYNC_TIMEOUT_MS, onFirstSyncTimeout)
       openAttempt()
     },
@@ -274,7 +318,13 @@ export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
 
     goOffline() {
       if (!started || ended()) return
-      if (!snap.everSynced) {
+      if (resumable && !snap.ready) {
+        dropSocket()
+        disarm('retry')
+        becomeReadyReconnecting()
+        return
+      }
+      if (!snap.ready) {
         finish({ phase: 'fallback', fallbackReason: 'offline' })
         return
       }

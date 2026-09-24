@@ -56,7 +56,7 @@ type Attempt = {
   pong(): void
 }
 
-function setup(extra: { random?: () => number; keepaliveMs?: number | null } = {}) {
+function setup(extra: { random?: () => number; keepaliveMs?: number | null; resumable?: boolean; startOffline?: boolean } = {}) {
   const clock = fakeClock()
   const attempts: Attempt[] = []
   const openSocket = (options: LiveSocketOptions): LiveSocket => {
@@ -102,6 +102,8 @@ function setup(extra: { random?: () => number; keepaliveMs?: number | null } = {
     clearTimeout: clock.clearTimeout,
     random: extra.random ?? (() => 0.5),
     ...(extra.keepaliveMs !== undefined ? { keepaliveMs: extra.keepaliveMs } : {}),
+    ...(extra.resumable !== undefined ? { resumable: extra.resumable } : {}),
+    ...(extra.startOffline !== undefined ? { startOffline: extra.startOffline } : {}),
   })
   const last = () => attempts[attempts.length - 1]
   return { clock, attempts, controller, last }
@@ -527,4 +529,247 @@ describe('F-305 U11 끝 단계·destroy 뒤', () => {
       expect(notified).toBe(0)
     }
   })
+})
+
+const stateOf = (c: LiveDocController) => {
+  const s = c.snapshot()
+  return { phase: s.phase, ready: s.ready, fallbackReason: s.fallbackReason, stopReason: s.stopReason }
+}
+
+describe('F-306 U18 재개 가능 + 오프라인 시작', () => {
+  it('소켓 0개, reconnecting·ready, 30초가 지나도 폴백 아님, 10초에 disconnectedLong, wake 가 연다', () => {
+    const ctx = setup({ resumable: true, startOffline: true })
+    ctx.controller.start()
+    expect(ctx.attempts).toHaveLength(0)
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'reconnecting', ready: true, fallbackReason: null, stopReason: null })
+    expect(ctx.controller.snapshot().everSynced).toBe(false)
+    ctx.clock.advance(DISCONNECT_NOTICE_MS - 1)
+    expect(ctx.controller.snapshot().disconnectedLong).toBe(false)
+    ctx.clock.advance(1)
+    expect(ctx.controller.snapshot().disconnectedLong).toBe(true)
+    ctx.clock.advance(FIRST_SYNC_HARD_TIMEOUT_MS)
+    expect(ctx.controller.snapshot().phase).toBe('reconnecting')
+    expect(ctx.attempts).toHaveLength(0)
+    ctx.controller.wake()
+    expect(ctx.attempts).toHaveLength(1)
+    ctx.last().open()
+    ctx.last().synced()
+    expect(ctx.controller.snapshot()).toMatchObject({ phase: 'live', ready: true, everSynced: true, disconnectedLong: false })
+  })
+})
+
+describe('F-306 U19 재개 가능 세션의 닫기 분류', () => {
+  const before: [number, object][] = [
+    [4401, { phase: 'stopped', ready: true, fallbackReason: null, stopReason: 'signed-out' }],
+    [4403, { phase: 'stopped', ready: false, fallbackReason: null, stopReason: 'forbidden' }],
+    [4404, { phase: 'stopped', ready: true, fallbackReason: null, stopReason: 'not-found' }],
+  ]
+  for (const [code, expected] of before) {
+    for (const opened of [false, true]) {
+      it(`ready 전 ${code}(열림 ${opened}) → ${JSON.stringify(expected)}, 다시 시도 없음`, () => {
+        const ctx = setup({ resumable: true })
+        ctx.controller.start()
+        if (opened) ctx.last().open()
+        ctx.last().close(code, 'x')
+        expect(stateOf(ctx.controller)).toEqual(expected)
+        ctx.clock.advance(120_000)
+        expect(ctx.attempts).toHaveLength(1)
+      })
+    }
+  }
+
+  for (const code of [1006, 1011, 1013]) {
+    it(`ready 전 열린 적 없이 ${code} → reconnecting·ready, 백오프`, () => {
+      const ctx = setup({ resumable: true })
+      ctx.controller.start()
+      ctx.last().close(code)
+      expect(stateOf(ctx.controller)).toEqual({ phase: 'reconnecting', ready: true, fallbackReason: null, stopReason: null })
+      ctx.clock.advance(999)
+      expect(ctx.attempts).toHaveLength(1)
+      ctx.clock.advance(1)
+      expect(ctx.attempts).toHaveLength(2)
+      ctx.last().close(1006)
+      ctx.clock.advance(2000)
+      expect(ctx.attempts).toHaveLength(3)
+      expect(ctx.controller.snapshot().phase).toBe('reconnecting')
+    })
+  }
+
+  it('ready 전 열린 뒤 닫힘 → connecting 에 머물고 백오프(시간 제한 안에서)', () => {
+    const ctx = setup({ resumable: true })
+    ctx.controller.start()
+    ctx.last().open()
+    ctx.last().close(1013)
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'connecting', ready: false, fallbackReason: null, stopReason: null })
+    ctx.clock.advance(1000)
+    expect(ctx.attempts).toHaveLength(2)
+  })
+
+  it('ready 전 첫 동기화 시간 제한 → reconnecting·ready, 이어서 백오프', () => {
+    const ctx = setup({ resumable: true })
+    ctx.controller.start()
+    ctx.clock.advance(FIRST_SYNC_TIMEOUT_MS)
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'reconnecting', ready: true, fallbackReason: null, stopReason: null })
+    ctx.last().close(1006)
+    ctx.clock.advance(1000)
+    expect(ctx.attempts).toHaveLength(2)
+  })
+
+  it('ready 전 열린 채 시간 제한 → 30초에 reconnecting·ready', () => {
+    const ctx = setup({ resumable: true })
+    ctx.controller.start()
+    ctx.last().open()
+    ctx.clock.advance(FIRST_SYNC_TIMEOUT_MS)
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'connecting', ready: false, fallbackReason: null, stopReason: null })
+    ctx.clock.advance(FIRST_SYNC_HARD_TIMEOUT_MS - FIRST_SYNC_TIMEOUT_MS)
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'reconnecting', ready: true, fallbackReason: null, stopReason: null })
+    ctx.last().synced()
+    expect(ctx.controller.snapshot()).toMatchObject({ phase: 'live', everSynced: true })
+  })
+
+  it('ready 전 goOffline → reconnecting·ready, 대기 타이머 없음', () => {
+    const ctx = setup({ resumable: true })
+    ctx.controller.start()
+    ctx.controller.goOffline()
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'reconnecting', ready: true, fallbackReason: null, stopReason: null })
+    expect(ctx.attempts[0].closedByController).toBe(true)
+    ctx.clock.advance(120_000)
+    expect(ctx.attempts).toHaveLength(1)
+    ctx.controller.wake()
+    expect(ctx.attempts).toHaveLength(2)
+  })
+
+  const afterReady: [number, string][] = [
+    [4401, 'signed-out'],
+    [4403, 'revoked'],
+    [4404, 'deleted'],
+  ]
+  for (const [code, reason] of afterReady) {
+    it(`ready 뒤 everSynced 거짓에서 ${code} → stopped/${reason}`, () => {
+      const ctx = setup({ resumable: true, startOffline: true })
+      ctx.controller.start()
+      ctx.controller.wake()
+      ctx.last().open()
+      ctx.last().close(code, 'x')
+      expect(stateOf(ctx.controller)).toEqual({ phase: 'stopped', ready: true, fallbackReason: null, stopReason: reason })
+      expect(ctx.controller.snapshot().everSynced).toBe(false)
+      ctx.clock.advance(120_000)
+      expect(ctx.attempts).toHaveLength(1)
+    })
+  }
+
+  it('ready 뒤 그 밖의 닫힘 → reconnecting, 백오프', () => {
+    const ctx = setup({ resumable: true, startOffline: true })
+    ctx.controller.start()
+    ctx.controller.wake()
+    ctx.last().close(1006)
+    expect(ctx.controller.snapshot().phase).toBe('reconnecting')
+    ctx.clock.advance(1000)
+    expect(ctx.attempts).toHaveLength(2)
+  })
+})
+
+describe('F-306 U20 재개 가능 + 온라인 시작', () => {
+  it('connecting·ready 거짓으로 시작, 열린 소켓 없이 10초 → reconnecting·ready, 폴백 아님, 그 뒤 synced → live', () => {
+    const ctx = setup({ resumable: true })
+    ctx.controller.start()
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'connecting', ready: false, fallbackReason: null, stopReason: null })
+    ctx.clock.advance(FIRST_SYNC_TIMEOUT_MS - 1)
+    expect(ctx.controller.snapshot().ready).toBe(false)
+    ctx.clock.advance(1)
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'reconnecting', ready: true, fallbackReason: null, stopReason: null })
+    ctx.clock.advance(FIRST_SYNC_HARD_TIMEOUT_MS)
+    expect(ctx.controller.snapshot().phase).not.toBe('fallback')
+    ctx.last().open()
+    ctx.last().synced()
+    expect(ctx.controller.snapshot()).toMatchObject({ phase: 'live', ready: true, everSynced: true })
+  })
+
+  it('goOffline → reconnecting·ready, 폴백 아님, wake 뒤 synced → live', () => {
+    const ctx = setup({ resumable: true })
+    ctx.controller.start()
+    ctx.controller.goOffline()
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'reconnecting', ready: true, fallbackReason: null, stopReason: null })
+    ctx.controller.wake()
+    ctx.last().open()
+    ctx.last().synced()
+    expect(ctx.controller.snapshot()).toMatchObject({ phase: 'live', ready: true, everSynced: true })
+  })
+
+  it('startOffline 은 resumable 일 때만 뜻이 있다', () => {
+    const ctx = setup({ startOffline: true })
+    ctx.controller.start()
+    expect(ctx.attempts).toHaveLength(1)
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'connecting', ready: false, fallbackReason: null, stopReason: null })
+  })
+})
+
+describe('F-306 U21 비재개는 ready === everSynced', () => {
+  function record(ctx: ReturnType<typeof setup>) {
+    const seen: [boolean, boolean][] = [[ctx.controller.snapshot().ready, ctx.controller.snapshot().everSynced]]
+    ctx.controller.subscribe((s) => seen.push([s.ready, s.everSynced]))
+    return seen
+  }
+  const scenarios: [string, (ctx: ReturnType<typeof setup>) => void][] = [
+    [
+      'synced 뒤 끊김·재연결',
+      (ctx) => {
+        goLive(ctx)
+        ctx.last().close(1013)
+        ctx.clock.advance(DISCONNECT_NOTICE_MS + 1000)
+        ctx.last().open()
+        ctx.last().synced()
+      },
+    ],
+    [
+      '첫 동기화 전 닫힘들',
+      (ctx) => {
+        ctx.controller.start()
+        ctx.last().open()
+        ctx.last().close(1013)
+        ctx.clock.advance(1000)
+        ctx.last().close(1006)
+      },
+    ],
+    [
+      '시간 제한',
+      (ctx) => {
+        ctx.controller.start()
+        ctx.clock.advance(FIRST_SYNC_HARD_TIMEOUT_MS)
+      },
+    ],
+    [
+      '첫 동기화 전 goOffline',
+      (ctx) => {
+        ctx.controller.start()
+        ctx.controller.goOffline()
+      },
+    ],
+    [
+      '동기화 뒤 4404',
+      (ctx) => {
+        goLive(ctx)
+        ctx.last().close(4404)
+      },
+    ],
+    [
+      'keepalive 끊김',
+      (ctx) => {
+        goLive(ctx)
+        ctx.clock.advance(20_000 + PONG_TIMEOUT_MS)
+        ctx.clock.advance(1000)
+        ctx.last().open()
+        ctx.last().synced()
+      },
+    ],
+  ]
+  for (const [name, run] of scenarios) {
+    it(name, () => {
+      const ctx = setup()
+      const seen = record(ctx)
+      run(ctx)
+      expect(seen.length).toBeGreaterThan(1)
+      for (const [ready, everSynced] of seen) expect(ready).toBe(everSynced)
+    })
+  }
 })

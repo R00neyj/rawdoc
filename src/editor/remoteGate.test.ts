@@ -7,7 +7,7 @@ import { YSyncConfig } from 'y-codemirror.next'
 
 import { createYBinding, undoLocal } from './yBinding'
 import type { YBinding } from './yBinding'
-import { REMOTE_HOLD_CHECK_MS, connectRemote, createRemoteGate } from './remoteGate'
+import { REMOTE_HOLD_CHECK_MS, connectRemote, createRemoteGate, isEditorRelay } from './remoteGate'
 import type { RemoteGate } from './remoteGate'
 
 type Peer = {
@@ -519,6 +519,37 @@ describe('F-305 U17 connectRemote 에 sharedDoc 을 주면 훅을 부르지 않�
     const connection = connectRemote({ view, editorDoc: binding.ydoc, docId: 'doc-1' })
     expect(factory).toHaveBeenCalledTimes(1)
     connection!.destroy()
+    binding.destroy()
+  })
+})
+
+describe('F-306 U15 isEditorRelay', () => {
+  it('편집기 → 공유 Doc 중계 origin 에만 참', () => {
+    const room = new Y.Doc()
+    room.getText('content').insert(0, '방')
+    const binding = createYBinding('')
+    Y.applyUpdate(binding.ydoc, Y.encodeStateAsUpdate(room))
+    const gate = createRemoteGate(binding.ydoc, { docId: 'doc-1', sharedDoc: room })
+    const origins: unknown[] = []
+    room.on('update', (_u: Uint8Array, origin: unknown) => origins.push(origin))
+    binding.ydoc.getText('content').insert(1, '!')
+    binding.ydoc.getText('title').insert(0, '제목')
+    expect(origins).toHaveLength(2)
+    expect(origins.every((origin) => isEditorRelay(origin))).toBe(true)
+
+    const editorOrigins: unknown[] = []
+    binding.ydoc.on('update', (_u: Uint8Array, origin: unknown) => editorOrigins.push(origin))
+    const other = new Y.Doc()
+    Y.applyUpdate(other, Y.encodeStateAsUpdate(room))
+    other.getText('content').insert(0, 'R')
+    const PROVIDER = { provider: true }
+    Y.applyUpdate(room, Y.encodeStateAsUpdate(other, Y.encodeStateVector(room)), PROVIDER)
+    expect(editorOrigins).toHaveLength(1)
+    expect(isEditorRelay(editorOrigins[0])).toBe(false)
+    expect(isEditorRelay(PROVIDER)).toBe(false)
+    expect(isEditorRelay(null)).toBe(false)
+    expect(isEditorRelay({ relay: 'from-editor' })).toBe(false)
+    gate.destroy()
     binding.destroy()
   })
 })

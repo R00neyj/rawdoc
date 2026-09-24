@@ -37,6 +37,8 @@ export type ServerStoreHandlers = {
 
 // server 저장소에만 있는 로컬 이관(F-208 2.2) 진입점 — Store 표준 타입엔 없어 이 타입으로 좁혀 쓴다
 export type ServerStore = Store & {
+  // 오프라인 부팅에서도 md-yjs 를 이 사용자로 연다 (F-306 9.2)
+  readonly userId: string
   importLocal(input: { folders: Folder[]; docs: Doc[] }): Promise<{ importedCount: number }>
   // 잠금을 되찾은 뒤 서버 값을 다시 받아 캐시에 반영한다(에디터 재마운트용) (F-213.md 2.3)
   refreshDocFromServer(id: string): Promise<Doc | null>
@@ -484,6 +486,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
   return {
     kind: 'server',
+    userId,
 
     get syncState() {
       return state
@@ -912,7 +915,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     // 캐시만(서버 삭제·GC 는 범위 밖, 2.5)
     async listAttachments() {
       const all = await cache.listAttachments(userId)
-      return all.map(({ id, ext, size, createdAt }) => ({ id, ext, size, createdAt }))
+      return all.map(({ id, ext, size, createdAt, uploaded }) => ({ id, ext, size, createdAt, uploaded }))
     },
 
     async removeAttachment(id) {
