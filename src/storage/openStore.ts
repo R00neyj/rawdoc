@@ -30,14 +30,16 @@ export async function openStore({
   onNotice,
   onForbidden,
   dbName,
+  onAccountBlocked,
+  now,
   ...idbHandlers
 }: OpenStoreHandlers): Promise<Store> {
   if (account.state === 'in') {
-    return createServerStore(account.id, { onConflict, onNotice, onForbidden, dbName })
+    return createServerStore(account.id, { onConflict, onNotice, onForbidden, dbName, onAccountBlocked, now })
   }
   if (account.state === 'offline') {
     const storedId = readStoredAccountId()
-    if (storedId) return createServerStore(storedId, { onConflict, onNotice, onForbidden, dbName })
+    if (storedId) return createServerStore(storedId, { onConflict, onNotice, onForbidden, dbName, onAccountBlocked, now })
   }
   if (typeof indexedDB === 'undefined') {
     return createMemoryStore()

@@ -128,6 +128,18 @@ describe('HELP_DOC_CONTENT', () => {
     expect(HELP_DOC_CONTENT).not.toContain('파일을 그대로 장기기억으로')
   })
 
+  it('U22: 저장 절 끝에 한도 문단이 있고, ## 한도 절은 없다 (F-2030 8장)', () => {
+    const limitParagraph =
+      '로그인한 계정은 문서 본문을 모두 합쳐 100MB, 문서 10,000개까지 서버에 저장할 수 있습니다. 저장·이동·삭제처럼 서버에 쓰는 일은 계정마다 하루 5,000번까지이고, 한국 시간 오전 9시(UTC 자정)에 다시 셉니다. 한도에 닿아도 편집한 내용은 이 브라우저에 남아 있다가, 공간을 비우거나 시간이 지나면 서버로 올라갑니다.'
+    expect(HELP_DOC_CONTENT).toContain(limitParagraph)
+    const saveIdx = HELP_DOC_CONTENT.indexOf('## 저장')
+    const limitIdx = HELP_DOC_CONTENT.indexOf(limitParagraph)
+    const imageIdx = HELP_DOC_CONTENT.indexOf('## 이미지')
+    expect(limitIdx).toBeGreaterThan(saveIdx)
+    expect(limitIdx).toBeLessThan(imageIdx)
+    expect(HELP_DOC_CONTENT).not.toContain('## 한도')
+  })
+
   it('제품명 문자열을 직접 쓰지 않는다(CLAUDE.md 불변조건)', () => {
     expect(HELP_DOC_CONTENT).not.toContain(brand.name)
     expect(HELP_DOC_CONTENT.toLowerCase()).not.toContain(brand.shortName.toLowerCase())

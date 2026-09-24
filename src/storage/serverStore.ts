@@ -8,6 +8,7 @@ import { uploadAttachment, fetchAttachment, fetchUsage, AttachmentApiError } fro
 import { toWebp } from './toWebp'
 import { extractAttachmentRefs } from '../lib/imageBlock'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
+import { QUOTA_HOLD_MS, RATE_LIMITED_MINUTE_MESSAGE, rateLimitedDayMessage, docQuotaMessage, nextUtcMidnight } from '../lib/usageLimits'
 import type { Attachment, AttachmentExt, Doc, Folder, FolderDeleteMode, LineEnding, Store, SyncState } from '../types'
 
 const RETRY_INTERVAL_MS = 30000
@@ -15,6 +16,7 @@ const TOO_LARGE_MESSAGE = '문서가 너무 커서 서버에 저장하지 못했
 const ATTACHMENT_UPLOAD_FAIL_MESSAGE = '이미지를 서버에 올리지 못했습니다.'
 const ATTACHMENT_QUOTA_MESSAGE = '이미지 저장 공간(300MB)이 가득 찼습니다. 문서에서 지운 이미지는 하루 뒤 정리됩니다.'
 const ATTACHMENT_EXT_RE = '(png|jpg|gif|webp)'
+const FORBIDDEN_DOC_MESSAGE = '이 문서를 편집할 권한이 없어졌습니다.'
 
 type StoreNotice = { type: 'info' | 'error' | 'update' | 'warn'; message: string }
 
@@ -33,6 +35,10 @@ export type ServerStoreHandlers = {
   // 편집 권한이 있어 저장을 대기하던 문서가 서버에서 403 을 받았다 — 앱이 읽기 전용으로 내린다 (F-212.md 2.4)
   onForbidden?: (docId: string) => void
   dbName?: string
+  // 쓰기가 403 account_blocked 를 받아 보내기를 멈췄다 — App 이 /api/me 로 누구의 차단인지 확인한다 (F-2030 4.4)
+  onAccountBlocked?: () => void
+  // 시계 — 단위 테스트가 30초·Retry-After 를 기다리지 않게 주입한다. 기본 Date.now (F-2030 3.3)
+  now?: () => number
 }
 
 // server 저장소에만 있는 로컬 이관(F-208 2.2) 진입점 — Store 표준 타입엔 없어 이 타입으로 좁혀 쓴다
@@ -44,6 +50,8 @@ export type ServerStore = Store & {
   refreshDocFromServer(id: string): Promise<Doc | null>
   // outbox 에 이 문서의 createDoc·updateDoc 이 남았는가 — 남았으면 실시간으로 붙지 않는다 (F-305 4.2)
   hasPendingChanges(docId: string): Promise<boolean>
+  // App 이 /api/me 결과로 부른다. true 면 보내기를 멈추고, false 로 바뀌면 다시 보낸다 (F-2030 4.4)
+  setAccountBlocked(blocked: boolean): void
 }
 
 // 안 보낸 removeFolder(delete-all) 이 지운 폴더 id 들(자신 포함) — 서버 목록 기준 자손 판정 (F-247.md 3.1)
@@ -151,6 +159,15 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   // 507 알림은 한 번 보내기 회차에 한 번만 (F-221.md 2.4)
   let quotaNoticeShownThisRound = false
 
+  // ----- F-2030 4장 — 429 전체 멈춤·413 붙잡기·403 차단 멈춤 상태 -----
+  const now = () => handlers.now?.() ?? Date.now()
+  let rateLimitedUntil: number | null = null // 429 — 이 시각까지 회차를 시작하지 않는다 (4.2)
+  let blockedStop = false // 403 account_blocked — setAccountBlocked(false) 가 불릴 때까지 (4.4)
+  let pendingBlockedDocId: string | null = null // 차단 멈춤을 일으킨 항목의 docId
+  const skipDocIds = new Set<string>() // 남의 막힌 문서로 확인된 뒤 이 페이지 동안 건너뛸 문서 (4.4)
+  const bytesHoldUntil = new Map<number, number>() // 413 bytes — 그 항목만 (4.3)
+  const docsHoldUntil = new Map<number, number>() // 413 docs — outbox 의 모든 createDoc (4.3)
+
   function notify() {
     for (const listener of listeners) listener(state)
   }
@@ -169,15 +186,56 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     if (n !== state.pending) patchState({ pending: n })
   }
 
+  function isHeld(key: number): boolean {
+    const t = now()
+    const b = bytesHoldUntil.get(key)
+    if (b !== undefined && b > t) return true
+    const d = docsHoldUntil.get(key)
+    if (d !== undefined && d > t) return true
+    return false
+  }
+
+  // 붙잡힌 항목·같은 문서의 뒤 항목·건너뛸 문서를 뺀 첫 항목 (4.5)
+  function findSendable(entries: OutboxEntry[]): OutboxEntry | null {
+    const heldDocIds = new Set<string>()
+    for (const e of entries) {
+      if (isHeld(e.key)) {
+        const docId = docIdOf(e)
+        if (docId) heldDocIds.add(docId)
+      }
+    }
+    for (const e of entries) {
+      if (isHeld(e.key)) continue
+      const docId = docIdOf(e)
+      if (docId && heldDocIds.has(docId)) continue
+      if (docId && skipDocIds.has(docId)) continue
+      return e
+    }
+    return null
+  }
+
+  // 이 맵에 이 회차 시점에서 실제로 남아 있는(outbox 에 있는) 붙잡힌 항목이 있는가 — L3·L4 는 없다가 처음 생길 때만 (4.3)
+  function hasActiveHold(map: Map<number, number>, presentKeys: Set<number>): boolean {
+    const t = now()
+    for (const [key, until] of map) {
+      if (until > t && presentKeys.has(key)) return true
+    }
+    return false
+  }
+
   async function kickSend(): Promise<void> {
     if (sending) return
+    if (blockedStop) return
+    if (rateLimitedUntil !== null && now() < rateLimitedUntil) return
     sending = true
     quotaNoticeShownThisRound = false
     try {
       for (;;) {
+        if (blockedStop) break
+        if (rateLimitedUntil !== null && now() < rateLimitedUntil) break
         const entries = await cache.getOutbox(userId)
-        if (entries.length === 0) break
-        const entry = entries[0]
+        const entry = findSendable(entries)
+        if (!entry) break
         inFlightKey = entry.key
         const proceed = await sendOne(entry)
         inFlightKey = null
@@ -220,6 +278,46 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     }
 
     handlers.onConflict?.({ docId: entry.docId, copyId, ...extra })
+  }
+
+  // 429 — outbox 전체를 재개 시각까지 멈춘다. 멈출 때마다 L1·L2 를 한 번만 (F-2030 4.2)
+  function applyRateLimitStop(scope: 'minute' | 'day' | undefined, retryAfter: number | undefined, limit: number | undefined) {
+    const retryMs = (retryAfter ?? 60) * 1000
+    rateLimitedUntil = now() + retryMs
+    if (scope === 'day') {
+      notice({ type: 'error', message: rateLimitedDayMessage(limit, nextUtcMidnight(now())) })
+    } else {
+      notice({ type: 'info', message: RATE_LIMITED_MINUTE_MESSAGE })
+    }
+    // 재개 시각에 한 번 보내기를 시작한다 — 브라우저에서만(탭이 잠들면 30초 재시도가 이어받는다)
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        kickSend()
+      }, retryMs)
+    }
+  }
+
+  // 413 doc_quota_exceeded — bytes 는 그 항목만, docs 는 outbox 의 모든 createDoc 을 30초 붙잡는다 (F-2030 4.3)
+  async function applyQuotaHold(entry: OutboxEntry, resource: 'bytes' | 'docs', limit: number | undefined) {
+    const currentEntries = await cache.getOutbox(userId)
+    const presentKeys = new Set(currentEntries.map((e) => e.key))
+    const until = now() + QUOTA_HOLD_MS
+    if (resource === 'docs') {
+      const had = hasActiveHold(docsHoldUntil, presentKeys)
+      for (const e of currentEntries) if (e.type === 'createDoc') docsHoldUntil.set(e.key, until)
+      if (!had) notice({ type: 'error', message: docQuotaMessage('docs', limit) })
+    } else {
+      const had = hasActiveHold(bytesHoldUntil, presentKeys)
+      bytesHoldUntil.set(entry.key, until)
+      if (!had) notice({ type: 'error', message: docQuotaMessage('bytes', limit) })
+    }
+  }
+
+  // 403 account_blocked — 차단 멈춤. 누구의 차단인지는 App 이 /api/me 로 확인해 setAccountBlocked 를 부른다 (F-2030 4.4)
+  function applyAccountBlockedStop(docId: string | undefined) {
+    blockedStop = true
+    pendingBlockedDocId = docId ?? null
+    handlers.onAccountBlocked?.()
   }
 
   // true 면 계속 보낸다. false 면 이 회차 보내기를 멈춘다(네트워크·5xx·401) (2.3)
@@ -336,6 +434,15 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           notice({ type: 'error', message: ATTACHMENT_UPLOAD_FAIL_MESSAGE })
           return true
         }
+        // 분당·하루 몫은 사용자 하나에 하나 — docsApi 와 같은 규칙 (F-2030 4.2)
+        if (err.kind === 'rate_limited') {
+          applyRateLimitStop(err.scope, err.retryAfter, err.limit)
+          return false
+        }
+        if (err.kind === 'account_blocked') {
+          applyAccountBlockedStop(undefined)
+          return false
+        }
         // server_error·other — 재시도해도 될 수 있으니 이번 회차는 멈춘다
         return false
       }
@@ -352,6 +459,18 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       }
       if (err.kind === 'unauthorized') {
         patchState({ signedOut: true })
+        return false
+      }
+      if (err.kind === 'rate_limited') {
+        applyRateLimitStop(err.scope, err.retryAfter, err.limit)
+        return false
+      }
+      if (err.kind === 'doc_quota_exceeded') {
+        await applyQuotaHold(entry, err.resource ?? 'bytes', err.limit)
+        return true
+      }
+      if (err.kind === 'account_blocked') {
+        applyAccountBlockedStop(docIdOf(entry))
         return false
       }
       if (err.kind === 'too_large') {
@@ -394,7 +513,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         await cache.removeOutboxForDoc(userId, entry.docId, entry.key)
         await cache.removeOutbox(entry.key)
         handlers.onForbidden?.(entry.docId)
-        notice({ type: 'error', message: '이 문서를 편집할 권한이 없어졌습니다.' })
+        notice({ type: 'error', message: FORBIDDEN_DOC_MESSAGE })
         return true
       }
       // id_taken·invalid·other — 재시도해도 성공하지 못하므로 버리고 계속 진행한다
@@ -593,6 +712,26 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     async hasPendingChanges(docId) {
       const entries = await cache.getOutbox(userId)
       return entries.some((e) => (e.type === 'createDoc' || e.type === 'updateDoc') && e.docId === docId)
+    },
+
+    // App 이 /api/me 결과로 부른다 (F-2030 4.4)
+    setAccountBlocked(blocked) {
+      if (blocked) {
+        blockedStop = true
+        return
+      }
+      // 차단 멈춤 중이 아닐 때 불리면 아무것도 하지 않는다 (4.4 4번)
+      if (!blockedStop) return
+      blockedStop = false
+      if (pendingBlockedDocId) {
+        const docId = pendingBlockedDocId
+        pendingBlockedDocId = null
+        // 남의 문서 소유자가 막힌 것으로 확인됐다 — 이 페이지 동안 그 문서만 건너뛴다. 항목은 지우지 않는다
+        skipDocIds.add(docId)
+        handlers.onForbidden?.(docId)
+        notice({ type: 'error', message: FORBIDDEN_DOC_MESSAGE })
+      }
+      kickSend()
     },
 
     async refreshDocFromServer(id) {

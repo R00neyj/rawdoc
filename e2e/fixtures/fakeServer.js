@@ -20,17 +20,45 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
   let loggedIn = true
   let signOutFailureMode = null // null | 'network' | number
   let signOutRequestCount = 0
+  // F-2030 3.6 — /api/me 응답에 합칠 조각(blocked·warned 등), 쓰기 실패 조종, 쓰기 요청 기록
+  let mePatch = {}
+  let writeRule = null // null | { status, body?, headers?, times?, match? }
+  const writeLog = []
 
   function docSummary(d) {
     const { content: _content, ...rest } = d
     return rest
   }
 
+  // 쓰기 경로의 GET 아닌 요청을 기록하고, writeRule 이 걸리면 그 응답으로 route 를 끝낸다 (F-2030 3.6)
+  function recordWrite(route, req) {
+    const path = new URL(req.url()).pathname
+    writeLog.push({ method: req.method(), path, at: Date.now() })
+    if (!writeRule) return false
+    if (writeRule.times !== undefined && writeRule.times <= 0) return false
+    if (writeRule.match && !writeRule.match({ method: req.method(), path, body: safePostDataJSON(req) })) return false
+    const { status, body, headers } = writeRule
+    if (writeRule.times !== undefined) {
+      writeRule.times -= 1
+      if (writeRule.times <= 0) writeRule = null
+    }
+    route.fulfill({ status, contentType: 'application/json', headers, body: JSON.stringify(body ?? {}) })
+    return true
+  }
+
+  function safePostDataJSON(req) {
+    try {
+      return req.postDataJSON()
+    } catch {
+      return undefined
+    }
+  }
+
   await page.route('**/api/me', (route) => {
     if (!loggedIn) {
       return route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' })
     }
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, email }) })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, email, ...mePatch }) })
   })
 
   // POST /api/auth/sign-out — 로그아웃 흉내 (F-2034 7장). GET 등은 다른 경로로 넘긴다
@@ -55,6 +83,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(list) })
     }
     if (req.method() === 'POST') {
+      if (recordWrite(route, req)) return
       const body = req.postDataJSON()
       if (body.id && docs.has(body.id)) {
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(docs.get(body.id)) })
@@ -88,6 +117,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) })
     }
     if (req.method() === 'PUT') {
+      if (recordWrite(route, req)) return
       if (!doc) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
       const body = req.postDataJSON()
       if (typeof body.content === 'string' && Buffer.byteLength(body.content, 'utf-8') > 1_000_000) {
@@ -111,6 +141,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) })
     }
     if (req.method() === 'DELETE') {
+      if (recordWrite(route, req)) return
       docs.delete(id)
       return route.fulfill({ status: 204 })
     }
@@ -120,6 +151,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
   await page.route(/\/api\/docs\/[^/]+\/folder$/, async (route) => {
     if (offline) return route.abort('internetdisconnected')
     const req = route.request()
+    if (recordWrite(route, req)) return
     const id = decodeURIComponent(new URL(req.url()).pathname.split('/').slice(-2, -1)[0])
     const doc = docs.get(id)
     if (!doc) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
@@ -131,6 +163,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
   await page.route(/\/api\/docs\/[^/]+\/pin$/, async (route) => {
     if (offline) return route.abort('internetdisconnected')
     const req = route.request()
+    if (recordWrite(route, req)) return
     const id = decodeURIComponent(new URL(req.url()).pathname.split('/').slice(-2, -1)[0])
     const doc = docs.get(id)
     if (!doc) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
@@ -146,6 +179,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([...folders.values()]) })
     }
     if (req.method() === 'POST') {
+      if (recordWrite(route, req)) return
       const body = req.postDataJSON()
       const now = Date.now()
       const folder = { id: body.id || crypto.randomUUID(), name: body.name, parentId: body.parentId ?? null, createdAt: now, updatedAt: now }
@@ -161,6 +195,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     const id = decodeURIComponent(new URL(req.url()).pathname.split('/').pop())
     const folder = folders.get(id)
     if (req.method() === 'PUT') {
+      if (recordWrite(route, req)) return
       if (!folder) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
       const body = req.postDataJSON()
       if (body.name !== undefined) folder.name = body.name
@@ -169,6 +204,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(folder) })
     }
     if (req.method() === 'DELETE') {
+      if (recordWrite(route, req)) return
       folders.delete(id)
       return route.fulfill({ status: 204 })
     }
@@ -390,6 +426,18 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     // 지금까지 받은 POST /api/auth/sign-out 횟수 (F-2034 7장)
     signOutCount() {
       return signOutRequestCount
+    },
+    // /api/me 200 몸통에 합친다 — setMe({ blocked: true }) 처럼 (F-2030 3.6)
+    setMe(patch) {
+      mePatch = { ...mePatch, ...patch }
+    },
+    // 쓰기 경로(POST·PUT·DELETE)를 조종한다. null 로 해제 (F-2030 3.6)
+    failWrites(rule) {
+      writeRule = rule ? { ...rule } : null
+    },
+    // 쓰기 경로에 온 요청 기록 { method, path, at }[] — 실패시킨 것도 포함 (F-2030 3.6)
+    writeRequests() {
+      return [...writeLog]
     },
   }
 }

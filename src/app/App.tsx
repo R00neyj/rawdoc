@@ -32,6 +32,7 @@ import { insertTemplate as insertTemplateIntoEditor } from '../editor/insertTemp
 import { decodeMarkdown } from '../lib/decodeMarkdown'
 import { getPref, setPref } from './prefs'
 import { fetchAccount, loginUrl, type AccountState } from './account'
+import { planAccountNotices, ACCOUNT_RECHECK_MS, ACCOUNT_BLOCKED_MESSAGE, ACCOUNT_WARNED_MESSAGE, type AccountFlags } from '../lib/usageLimits'
 import type { SyncState } from '../types'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
 import { useEdgeSwipe } from './useEdgeSwipe'
@@ -357,6 +358,17 @@ export default function App() {
   const [account, setAccount] = useState<AccountState>({ state: 'offline' })
   // 서버 저장소 동기화 표시 (F-207.md 2.5) — server 저장소가 아니면 undefined
   const [syncState, setSyncState] = useState<SyncState | undefined>(undefined)
+  // 계정 차단·경고 상태 (F-2030 5.2) — /api/me 의 blocked·warned 를 반영한다. warned 는 화면 렌더에 안 쓰여 ref 로 충분하다
+  const [accountBlocked, setAccountBlockedFlag] = useState(false)
+  const accountWarnedRef = useRef(false)
+  // 이 페이지에서 직전에 반영한 값 — planAccountNotices 의 prev (5.3)
+  const accountFlagsRef = useRef<AccountFlags | null>(null)
+  const warnedShownThisPageRef = useRef(false)
+  const blockedNoticeIdRef = useRef<number | null>(null)
+  const warnedNoticeIdRef = useRef<number | null>(null)
+  // 마지막으로 성공한 /api/me 읽기 시각 — 화면 복귀 10분 스로틀 (5.1 ⑤)
+  const lastAccountCheckOkRef = useRef(0)
+  const accountCheckInFlightRef = useRef<Promise<void> | null>(null)
   // 우클릭 메뉴 상태 (specs/features/F-170.md) — view·container 는 place 에 따라 하나만 쓴다
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   // 명령 팔레트 D-7 열림 상태 (specs/features/F-2022.md)
@@ -452,8 +464,9 @@ export default function App() {
     .filter((d): d is DocMeta & { role: 'edit' | 'view' } => isSharedDoc(d))
     .map((d) => ({ id: d.id, title: d.title, role: d.role as 'edit' | 'view', ownerEmail: d.ownerEmail ?? '', viaFolder: d.viaFolder }))
 
-  // view 권한 문서이거나(F-212.md 2.4), edit 권한 문서가 403 으로 강등됐으면 읽기 전용
-  const isReadOnlyByRole = currentDoc?.role === 'view' || (currentDocId != null && forbiddenDocIds.has(currentDocId))
+  // view 권한 문서이거나(F-212.md 2.4), edit 권한 문서가 403 으로 강등됐거나, 계정이 막혔으면 읽기 전용 (F-2030 5.2)
+  const isReadOnlyByRole =
+    currentDoc?.role === 'view' || (currentDocId != null && forbiddenDocIds.has(currentDocId)) || (store.kind === 'server' && accountBlocked)
   // owner 문서(내 문서, role 없음 또는 'owner')이고 서버 저장소일 때만 초대할 수 있다 (F-212.md 2.5)
   const canInviteCurrentDoc =
     store.kind === 'server' && Boolean(currentDoc) && !isSharedDoc(currentDoc) && !sharedDoc
@@ -492,6 +505,50 @@ export default function App() {
     setNotice((cur) => (cur && cur.id === id ? null : cur))
   }, [])
 
+  // /api/me 결과를 반영 — 계정 상태·blocked·warned·L5·L7 (F-2030 5.2·5.3)
+  const applyAccountFlags = useCallback(
+    (next: AccountState) => {
+      setAccount(next)
+      if (next.state !== 'in') return
+      lastAccountCheckOkRef.current = Date.now()
+      const nextFlags: AccountFlags = { blocked: next.blocked, warned: next.warned }
+      const plan = planAccountNotices(accountFlagsRef.current, nextFlags, warnedShownThisPageRef.current)
+      if (plan.showBlocked) {
+        blockedNoticeIdRef.current = showNotice({ type: 'error', message: ACCOUNT_BLOCKED_MESSAGE })
+      }
+      if (plan.dismissBlocked && blockedNoticeIdRef.current !== null) {
+        dismissNotice(blockedNoticeIdRef.current)
+        blockedNoticeIdRef.current = null
+      }
+      if (plan.showWarned) {
+        warnedNoticeIdRef.current = showNotice({ type: 'warn', message: ACCOUNT_WARNED_MESSAGE })
+        warnedShownThisPageRef.current = true
+      }
+      if (plan.dismissWarned && warnedNoticeIdRef.current !== null) {
+        dismissNotice(warnedNoticeIdRef.current)
+        warnedNoticeIdRef.current = null
+      }
+      accountFlagsRef.current = nextFlags
+      setAccountBlockedFlag(nextFlags.blocked)
+      accountWarnedRef.current = nextFlags.warned
+    },
+    [showNotice, dismissNotice],
+  )
+
+  // 겹치는 계기는 하나만 진행 — 진행 중이면 그 결과를 기다린다 (5.1)
+  const recheckAccount = useCallback((): Promise<void> => {
+    if (accountCheckInFlightRef.current) return accountCheckInFlightRef.current
+    const p = fetchAccount()
+      .then((next) => {
+        applyAccountFlags(next)
+      })
+      .finally(() => {
+        accountCheckInFlightRef.current = null
+      })
+    accountCheckInFlightRef.current = p
+    return p
+  }, [applyAccountFlags])
+
   // ----- 문서 열기 경로 (F-305 4장) — 문서·저장소가 바뀌면 새 세션. local·view 는 여기서, 나머지는 아래 effect 가 outbox 를 읽고 정한다 -----
   const [docSession, setDocSession] = useState<DocSession>(() => ({
     seq: 0,
@@ -509,7 +566,7 @@ export default function App() {
       storeKind: store.kind,
       shareLinkScreen: Boolean(sharedDoc),
       role: currentDoc?.role as 'owner' | 'edit' | 'view' | undefined,
-      forbidden: currentDocId != null && forbiddenDocIds.has(currentDocId),
+      forbidden: (currentDocId != null && forbiddenDocIds.has(currentDocId)) || accountBlocked,
       hasPendingChanges: false,
       online: true,
       hasLocalState: false,
@@ -557,7 +614,7 @@ export default function App() {
           storeKind: docSession.store.kind,
           shareLinkScreen: false,
           role: undefined,
-          forbidden: false,
+          forbidden: accountBlocked,
           hasPendingChanges: pending || createdHere,
           online: navigator.onLine,
           hasLocalState,
@@ -580,7 +637,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [bootPhase, docSession])
+  }, [bootPhase, docSession, accountBlocked])
 
   // 기록을 못 불러온 재개 세션 — 기록 없음으로 다시 판정한다. 오프라인이면 offline-view, 온라인이면 비재개 실시간 (F-306 6.4 4번)
   const handleResumeFailed = useCallback((docId: string) => {
@@ -634,13 +691,19 @@ export default function App() {
     () => ({ label: '새 문서로 저장', icon: IconNoteAdd, onClick: () => void saveCurrentAsNewDocRef.current() }),
     [],
   )
-  // N1 — 첫 동기화 전 4403 으로 보기로 연 세션마다 한 번
+  // N1 — 첫 동기화 전 4403 으로 보기로 연 세션마다 한 번. 내 소유 문서면 계정 차단인지 본다 (F-2030 5.4)
   const forbiddenNoticeSeqRef = useRef(0)
   useEffect(() => {
     if (!docSession.forbiddenClose || forbiddenNoticeSeqRef.current === docSession.seq) return
     forbiddenNoticeSeqRef.current = docSession.seq
+    const ownDoc = store.kind === 'server' && !isSharedDoc(currentDoc) && !sharedDoc
+    if (ownDoc && accountBlocked) {
+      showNotice({ type: 'error', message: ACCOUNT_BLOCKED_MESSAGE })
+      return
+    }
     showNotice({ type: 'info', message: LIVE_NOTICE.forbidden })
-  }, [docSession, showNotice])
+    if (ownDoc) recheckAccount()
+  }, [docSession, showNotice, store, currentDoc, sharedDoc, accountBlocked, recheckAccount])
 
   // N2·N3·N4 — 멈춘 방 Doc 마다 한 번. N5·N6 — 조건이 풀리면 그 알림이 아직 떠 있을 때만 걷는다
   const liveStopNoticeDocRef = useRef<Y.Doc | null>(null)
@@ -674,10 +737,18 @@ export default function App() {
     if (!liveSession || snap?.phase !== 'stopped' || liveStopNoticeDocRef.current === liveSession.roomDoc) return
     liveStopNoticeDocRef.current = liveSession.roomDoc
     const reason = snap.stopReason
-    if (reason === 'revoked') showNotice({ type: 'warn', message: LIVE_NOTICE.revoked, action: saveAsNewAction })
-    else if (reason === 'not-found' || reason === 'deleted') showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: saveAsNewAction })
+    if (reason === 'revoked') {
+      // 내 소유 문서의 4403 — 이미 계정 차단이면 L5, 아니면 N2 를 띄우고 /api/me 를 다시 읽는다 (F-2030 5.4)
+      const ownDoc = store.kind === 'server' && !isSharedDoc(currentDoc) && !sharedDoc
+      if (ownDoc && accountBlocked) {
+        showNotice({ type: 'error', message: ACCOUNT_BLOCKED_MESSAGE })
+      } else {
+        showNotice({ type: 'warn', message: LIVE_NOTICE.revoked, action: saveAsNewAction })
+        if (ownDoc) recheckAccount()
+      }
+    } else if (reason === 'not-found' || reason === 'deleted') showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: saveAsNewAction })
     else if (reason === 'signed-out') showNotice({ type: 'error', message: LIVE_NOTICE.signedOut, action: saveAsNewAction })
-  }, [liveSession, showNotice, dismissNotice, saveAsNewAction])
+  }, [liveSession, showNotice, dismissNotice, saveAsNewAction, store, currentDoc, sharedDoc, accountBlocked, recheckAccount])
 
   // N7 — offline-view 세션마다 한 번. 그 세션이 끝나면 아직 떠 있을 때만 걷는다 (F-306 11.2)
   const offlineViewNoticeRef = useRef<{ seq: number; id: number } | null>(null)
@@ -1004,19 +1075,36 @@ export default function App() {
     wasUpdateAvailableRef.current = updateAvailable
   }, [updateAvailable, applyUpdate, showNotice])
 
-  // 계정 상태 시작 때 1회는 boot() 가 읽는다 — 여기는 online 때 화면 표시만 최신화 (F-207.md 2.6)
+  // 계정 상태 시작 때 1회는 boot() 가 읽는다 — 여기는 online 때 화면 표시만 최신화 (F-207.md 2.6, F-2030 5.1 ②)
   useEffect(() => {
     function load() {
-      fetchAccount().then((next) => setAccount(next))
+      recheckAccount()
     }
     window.addEventListener('online', load)
     return () => window.removeEventListener('online', load)
-  }, [])
+  }, [recheckAccount])
+
+  // 화면이 다시 보일 때 — 마지막 성공한 읽기에서 10분이 지났을 때만 다시 읽는다 (F-2030 5.1 ⑤)
+  useEffect(() => {
+    function handleVisible() {
+      if (document.visibilityState !== 'visible') return
+      if (Date.now() - lastAccountCheckOkRef.current < ACCOUNT_RECHECK_MS) return
+      recheckAccount()
+    }
+    document.addEventListener('visibilitychange', handleVisible)
+    return () => document.removeEventListener('visibilitychange', handleVisible)
+  }, [recheckAccount])
 
   // 서버 저장소 동기화 표시 구독 — server 가 아니면 subscribeSync 가 없어 초기값 그대로다 (F-207.md 2.5)
   useEffect(() => {
     return store.subscribeSync?.((next) => setSyncState(next))
   }, [store])
+
+  // accountBlocked 가 바뀔 때마다 서버 저장소면 outbox 를 멈추거나 다시 연다 (F-2030 4.4, 5.2)
+  useEffect(() => {
+    if (store.kind !== 'server') return
+    ;(store as ServerStore).setAccountBlocked(accountBlocked)
+  }, [accountBlocked, store])
 
   // ----- 부팅 (S-3 → S-1|S-2), 최초 실행 안내 문서 (ia.md 3.1·3.2, F-111 3.1) -----
   useEffect(() => {
@@ -1033,7 +1121,7 @@ export default function App() {
 
       // 저장소는 부팅 때 한 번만 고른다 — 계정 상태를 먼저 읽고 그 결과로 고른다 (F-207.md 2.6)
       const accountState = await fetchAccount()
-      setAccount(accountState)
+      applyAccountFlags(accountState)
 
       // resolvedStore 가 정해지기 전엔 handleServerConflict 를 못 만드므로 자리만 먼저 둔다
       let conflictHandler:
@@ -1069,12 +1157,20 @@ export default function App() {
         onForbidden: (docId) => {
           setForbiddenDocIds((prev) => (prev.has(docId) ? prev : new Set(prev).add(docId)))
         },
+        // 쓰기가 403 account_blocked 를 받았다 — 곧바로 /api/me 를 다시 읽는다 (F-2030 4.4, 5.1 ③)
+        onAccountBlocked: () => {
+          recheckAccount()
+        },
       })
       setDbBlockedMessage(null)
       // 서버 저장소면 md-yjs 를 페이지 수명 동안 한 번 연다 — 오프라인 부팅도 저장소가 아는 사용자 id 로 (F-306 9.2)
       if (resolvedStore.kind === 'server') yjsStoreRef.current = openYjsStore((resolvedStore as ServerStore).userId)
       // 이 한 곳만 감싸면 App.tsx 의 모든 저장 경로가 자동으로 다른 탭에 신호를 보낸다 (F-296.md 6.2)
       const broadcastStore = withTabBroadcast(resolvedStore, postTabMessage, tabIdRef.current)
+      // 부팅에서 먼저 막힘을 알게 된 경우 — 첫 요청을 보내 403 을 받는 일 없이 처음부터 멈춰 있다 (F-2030 4.4 3번)
+      if (resolvedStore.kind === 'server' && accountState.state === 'in' && accountState.blocked) {
+        ;(resolvedStore as ServerStore).setAccountBlocked(true)
+      }
       setStore({
         ...broadcastStore,
         // 이 탭에서 만든 문서를 적어 둔다 — 곧바로 여는 세션은 pending 으로 본다 (F-305 4.1 3번)

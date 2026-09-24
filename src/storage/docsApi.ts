@@ -1,6 +1,7 @@
 // F-206 서버 API 호출 래퍼 — fetch 하나로 감싸고 오류를 종류별로 분류한다 (specs/features/F-207.md 2.3)
 import type { Doc, Folder, LineEnding } from '../types'
 import { getLockSessionId, isLockSessionSettled, lockSessionReady } from './lockSession'
+import { parseRetryAfter } from '../lib/usageLimits'
 
 export type ServerDoc = Doc & { version: number }
 export type ServerDocSummary = Omit<Doc, 'content'> & { version: number }
@@ -18,6 +19,9 @@ export type ApiErrorKind =
   | 'forbidden'
   | 'server_error'
   | 'other'
+  | 'rate_limited' // 429 (F-2030)
+  | 'doc_quota_exceeded' // 413 { error: 'doc_quota_exceeded' } (F-2030)
+  | 'account_blocked' // 403 { error: 'account_blocked' } (F-2030)
 
 export class ApiError extends Error {
   kind: ApiErrorKind
@@ -25,10 +29,25 @@ export class ApiError extends Error {
   doc?: ServerDoc
   email?: string
   expiresAt?: number
+  scope?: 'minute' | 'day'
+  retryAfter?: number
+  limit?: number
+  used?: number
+  resource?: 'bytes' | 'docs'
 
   constructor(
     kind: ApiErrorKind,
-    extra: { status?: number; doc?: ServerDoc; email?: string; expiresAt?: number } = {},
+    extra: {
+      status?: number
+      doc?: ServerDoc
+      email?: string
+      expiresAt?: number
+      scope?: 'minute' | 'day'
+      retryAfter?: number
+      limit?: number
+      used?: number
+      resource?: 'bytes' | 'docs'
+    } = {},
   ) {
     super(kind)
     this.kind = kind
@@ -36,6 +55,11 @@ export class ApiError extends Error {
     this.doc = extra.doc
     this.email = extra.email
     this.expiresAt = extra.expiresAt
+    this.scope = extra.scope
+    this.retryAfter = extra.retryAfter
+    this.limit = extra.limit
+    this.used = extra.used
+    this.resource = extra.resource
   }
 }
 
@@ -63,6 +87,33 @@ async function readJson(res: Response): Promise<unknown> {
 
 function jsonInit(body: unknown, method: string): RequestInit {
   return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+}
+
+// 429 — 쓰기 함수 전부가 기존 갈래보다 먼저 본다 (F-2030 3.1)
+async function rateLimitedError(res: Response): Promise<ApiError> {
+  const data = (await readJson(res)) as { scope?: unknown; limit?: unknown; retryAfter?: unknown } | null
+  const scope: 'minute' | 'day' = data && data.scope === 'day' ? 'day' : 'minute'
+  const retryAfter = parseRetryAfter(res.headers.get('Retry-After'), data?.retryAfter)
+  const limitRaw = data?.limit
+  const limit = typeof limitRaw === 'number' && Number.isInteger(limitRaw) && limitRaw > 0 ? limitRaw : undefined
+  return new ApiError('rate_limited', { scope, retryAfter, limit })
+}
+
+// 413 몸통이 doc_quota_exceeded 일 때만 — 아니면 null(기존 413 갈래로 넘어간다) (F-2030 3.1)
+async function docQuotaError(res: Response): Promise<ApiError | null> {
+  const data = (await readJson(res)) as { error?: unknown; resource?: unknown; used?: unknown; limit?: unknown } | null
+  if (!data || data.error !== 'doc_quota_exceeded') return null
+  const resource: 'bytes' | 'docs' = data.resource === 'docs' ? 'docs' : 'bytes'
+  const used = typeof data.used === 'number' && Number.isFinite(data.used) && data.used >= 0 ? data.used : undefined
+  const limit = typeof data.limit === 'number' && Number.isFinite(data.limit) && data.limit >= 0 ? data.limit : undefined
+  return new ApiError('doc_quota_exceeded', { resource, used, limit })
+}
+
+// 403 몸통이 account_blocked 일 때만 — 아니면 null(기존 403 갈래로 넘어간다) (F-2030 3.1)
+async function accountBlockedError(res: Response): Promise<ApiError | null> {
+  const data = (await readJson(res)) as { error?: unknown } | null
+  if (!data || data.error !== 'account_blocked') return null
+  return new ApiError('account_blocked')
 }
 
 export async function listDocs(): Promise<ServerDocSummary[]> {
@@ -96,7 +147,16 @@ export async function createDoc(body: {
   const res = await send('/api/docs', jsonInit(body, 'POST'))
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
-  if (res.status === 413) throw new ApiError('too_large')
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 413) {
+    const quota = await docQuotaError(res)
+    if (quota) throw quota
+    throw new ApiError('too_large')
+  }
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+  }
   if (res.status === 409) throw new ApiError('id_taken')
   if (res.status === 400) throw new ApiError('invalid')
   if (!res.ok) throw new ApiError('other', { status: res.status })
@@ -115,6 +175,15 @@ export async function updateDoc(
   })
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 413) {
+    const quota = await docQuotaError(res)
+    if (quota) throw quota
+  }
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+  }
   if (res.status === 404) throw new ApiError('not_found')
   if (res.status === 403) throw new ApiError('forbidden')
   if (res.status === 413) throw new ApiError('too_large')
@@ -136,6 +205,15 @@ export async function lockDoc(id: string): Promise<{ expiresAt: number }> {
   const res = await send(`/api/docs/${encodeURIComponent(id)}/lock`, jsonInit({ sessionId: getLockSessionId() }, 'POST'))
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 413) {
+    const quota = await docQuotaError(res)
+    if (quota) throw quota
+  }
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+  }
   if (res.status === 404) throw new ApiError('not_found')
   if (res.status === 403) throw new ApiError('forbidden')
   if (res.status === 423) {
@@ -164,6 +242,15 @@ export async function moveDocFolder(id: string, folderId: string | null): Promis
   const res = await send(`/api/docs/${encodeURIComponent(id)}/folder`, jsonInit({ folderId }, 'PUT'))
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 413) {
+    const quota = await docQuotaError(res)
+    if (quota) throw quota
+  }
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+  }
   if (res.status === 404) throw new ApiError('not_found')
   if (res.status === 400) throw new ApiError('invalid')
   if (!res.ok) throw new ApiError('other', { status: res.status })
@@ -174,6 +261,15 @@ export async function setPinned(id: string, pinned: boolean): Promise<ServerDoc>
   const res = await send(`/api/docs/${encodeURIComponent(id)}/pin`, jsonInit({ pinned }, 'PUT'))
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 413) {
+    const quota = await docQuotaError(res)
+    if (quota) throw quota
+  }
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+  }
   if (res.status === 404) throw new ApiError('not_found')
   if (!res.ok) throw new ApiError('other', { status: res.status })
   return (await readJson(res)) as ServerDoc
@@ -183,6 +279,15 @@ export async function removeDoc(id: string): Promise<void> {
   const res = await send(`/api/docs/${encodeURIComponent(id)}`, { method: 'DELETE' })
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 413) {
+    const quota = await docQuotaError(res)
+    if (quota) throw quota
+  }
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+  }
   if (res.status === 404) throw new ApiError('not_found')
   if (!res.ok && res.status !== 204) throw new ApiError('other', { status: res.status })
 }
@@ -203,6 +308,15 @@ export async function createFolder(body: {
   const res = await send('/api/folders', jsonInit(body, 'POST'))
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 413) {
+    const quota = await docQuotaError(res)
+    if (quota) throw quota
+  }
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+  }
   if (res.status === 409) throw new ApiError('id_taken')
   if (res.status === 400) throw new ApiError('invalid')
   if (!res.ok) throw new ApiError('other', { status: res.status })
@@ -216,6 +330,15 @@ export async function updateFolder(
   const res = await send(`/api/folders/${encodeURIComponent(id)}`, jsonInit(body, 'PUT'))
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 413) {
+    const quota = await docQuotaError(res)
+    if (quota) throw quota
+  }
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+  }
   if (res.status === 404) throw new ApiError('not_found')
   if (res.status === 400) throw new ApiError('invalid')
   if (!res.ok) throw new ApiError('other', { status: res.status })
@@ -226,6 +349,15 @@ export async function removeFolder(id: string, mode: 'move-up' | 'delete-all' = 
   const res = await send(`/api/folders/${encodeURIComponent(id)}?contents=${mode}`, { method: 'DELETE' })
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 413) {
+    const quota = await docQuotaError(res)
+    if (quota) throw quota
+  }
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+  }
   if (res.status === 404) throw new ApiError('not_found')
   if (!res.ok && res.status !== 204) throw new ApiError('other', { status: res.status })
 }
@@ -272,6 +404,15 @@ export async function putGrant(
   const res = await send(`${grantsPath(targetType, targetId)}/${encodeURIComponent(email)}`, jsonInit({ role }, 'PUT'))
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 413) {
+    const quota = await docQuotaError(res)
+    if (quota) throw quota
+  }
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+  }
   if (res.status === 404) throw new ApiError('not_found')
   if (res.status === 400) throw new ApiError('invalid')
   if (!res.ok) throw new ApiError('other', { status: res.status })
@@ -282,6 +423,15 @@ export async function deleteGrant(targetType: GrantTargetType, targetId: string,
   const res = await send(`${grantsPath(targetType, targetId)}/${encodeURIComponent(email)}`, { method: 'DELETE' })
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 413) {
+    const quota = await docQuotaError(res)
+    if (quota) throw quota
+  }
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+  }
   if (res.status === 404) throw new ApiError('not_found')
   if (!res.ok && res.status !== 204) throw new ApiError('other', { status: res.status })
 }

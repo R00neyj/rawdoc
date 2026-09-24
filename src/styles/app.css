@@ -2636,8 +2636,9 @@ body.sidebar-resizing {
   opacity: 0.7;
 }
 
-/* 계정당 이미지 저장 사용량 (F-221.md 2.5) */
-.account-menu-usage {
+/* 계정당 이미지·문서 저장 사용량 (F-221.md 2.5, 문서 줄은 F-2030 7장) */
+.account-menu-usage,
+.account-menu-usage-docs {
   padding: 0 10px 6px;
   font-size: 12px;
   color: var(--muted);

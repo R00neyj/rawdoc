@@ -753,3 +753,215 @@ describe('F-306 U26 첨부 uploaded·userId', () => {
     expect(await store.listAttachments()).toEqual([expect.objectContaining({ id: result.id, uploaded: true })])
   })
 })
+
+// F-2030 4장 — 429·413·403 을 받아도 outbox 항목을 지우지 않는다 (U7~U14)
+describe('F-2030 한도·차단 outbox (U7~U14)', () => {
+  // fakeServer.js 의 failWrites 를 흉내낸 로컬 주입기 — GET 아닌 요청만 가로챈다
+  function makeInjector(server: ReturnType<typeof makeFakeServer>) {
+    type Rule = { status: number; body?: unknown; headers?: Record<string, string>; times?: number; match?: (r: { method: string; path: string }) => boolean }
+    let rule: Rule | null = null
+    const writes: Array<{ method: string; path: string }> = []
+    async function fetchImpl(url: string, init: RequestInit = {}): Promise<Response> {
+      const method = init.method ?? 'GET'
+      const path = new URL(String(url), 'http://local.test').pathname
+      if (method !== 'GET') writes.push({ method, path })
+      if (rule && method !== 'GET' && (!rule.match || rule.match({ method, path }))) {
+        if (rule.times === undefined || rule.times > 0) {
+          if (rule.times !== undefined) rule.times -= 1
+          return new Response(rule.body === undefined ? null : JSON.stringify(rule.body), {
+            status: rule.status,
+            headers: { 'Content-Type': 'application/json', ...(rule.headers ?? {}) },
+          })
+        }
+      }
+      return server.fetchImpl(url, init)
+    }
+    return {
+      fetchImpl,
+      setRule: (r: Rule | null) => {
+        rule = r
+      },
+      writes,
+    }
+  }
+
+  it('U7·U8: 429 — 재개 시각까지 outbox 전체를 멈추고 L1 을 한 번만, 지나면 순서대로 나간다', async () => {
+    const server = makeFakeServer()
+    const injector = makeInjector(server)
+    vi.stubGlobal('fetch', vi.fn(injector.fetchImpl))
+    let fakeNow = Date.now()
+    const notices: Array<{ type: string; message: string }> = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), now: () => fakeNow, onNotice: (n) => notices.push(n) })
+
+    injector.setRule({ status: 429, headers: { 'Retry-After': '30' }, times: 1 })
+    const doc = await store.create({ title: 'T', content: 'a', lineEnding: 'lf' })
+    await tick(20)
+
+    expect(store.syncState?.pending).toBe(1)
+    expect(notices.filter((n) => n.type === 'info').length).toBe(1)
+
+    const writesBefore = injector.writes.length
+    fakeNow += 29_000
+    await store.create({ title: 'T2', content: 'b', lineEnding: 'lf' })
+    await tick(20)
+    expect(injector.writes.length).toBe(writesBefore) // 재개 시각 전엔 새 쓰기도 안 보낸다
+
+    fakeNow += 2_000 // 총 31초 — 재개 시각을 지났다
+    await store.update(doc.id, { content: 'later' })
+    await tick(30)
+
+    expect(server.docs.has(doc.id)).toBe(true) // 막혔던 항목부터 순서대로 나간다
+    expect(store.syncState?.pending).toBe(0)
+    expect(notices.filter((n) => n.type === 'info').length).toBe(1) // 다시 안 뜬다
+  })
+
+  it('U9: 429 day — error 알림이 rateLimitedDayMessage 와 같고 항목이 남는다', async () => {
+    const server = makeFakeServer()
+    const injector = makeInjector(server)
+    vi.stubGlobal('fetch', vi.fn(injector.fetchImpl))
+    const notices: Array<{ type: string; message: string }> = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), onNotice: (n) => notices.push(n) })
+
+    injector.setRule({
+      status: 429,
+      headers: { 'Retry-After': '3600' },
+      body: { error: 'rate_limited', scope: 'day', limit: 5000, retryAfter: 3600 },
+      times: 1,
+    })
+    await store.create({ title: 'T', content: 'a', lineEnding: 'lf' })
+    await tick(20)
+
+    expect(notices.some((n) => n.type === 'error' && n.message.includes('하루 5,000번'))).toBe(true)
+    expect(store.syncState?.pending).toBe(1)
+  })
+
+  it('U10·U11: 413 bytes — 그 문서만(뒤 항목 포함) 붙잡고 나머지는 보낸다, 30초 뒤 다시 나간다', async () => {
+    const server = makeFakeServer()
+    const injector = makeInjector(server)
+    vi.stubGlobal('fetch', vi.fn(injector.fetchImpl))
+    let fakeNow = Date.now()
+    const notices: Array<{ type: string; message: string }> = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), now: () => fakeNow, onNotice: (n) => notices.push(n) })
+
+    const docA = await store.create({ title: 'A', content: 'a', lineEnding: 'lf' })
+    const docB = await store.create({ title: 'B', content: 'b', lineEnding: 'lf' })
+    const docC = await store.create({ title: 'C', content: 'c', lineEnding: 'lf' })
+    await tick(20)
+
+    injector.setRule({
+      status: 413,
+      body: { error: 'doc_quota_exceeded', resource: 'bytes', used: 104857600, limit: 104857600 },
+      match: ({ method, path }) => method === 'PUT' && path === `/api/docs/${docA.id}`,
+    })
+    await store.update(docA.id, { content: 'A 편집' })
+    await store.setPinned(docA.id, true) // 뒤 항목, 같은 문서 — 함께 붙잡힌다
+    await store.update(docB.id, { content: 'B 편집' })
+    await store.remove(docC.id)
+    await tick(30)
+
+    expect(server.docs.get(docB.id)?.content).toBe('B 편집')
+    expect(server.docs.has(docC.id)).toBe(false)
+    expect(server.docs.get(docA.id)?.content).toBe('a') // A 는 서버에 반영 안 됨
+    const cachedA = await store.get(docA.id)
+    expect(cachedA?.content).toBe('A 편집') // 캐시는 내 편집 그대로
+    expect(notices.filter((n) => n.type === 'error' && n.message.includes('100MB')).length).toBe(1)
+    expect(store.syncState?.pending).toBeGreaterThanOrEqual(2)
+
+    // U11 앞부분 — 30초 안에 다시 편집해도 요청이 늘지 않는다
+    const writesBefore = injector.writes.filter((w) => w.path === `/api/docs/${docA.id}` && w.method === 'PUT').length
+    await store.update(docA.id, { content: 'A 다시' })
+    await tick(20)
+    const writesAfter = injector.writes.filter((w) => w.path === `/api/docs/${docA.id}` && w.method === 'PUT').length
+    expect(writesAfter).toBe(writesBefore)
+
+    // U11 뒷부분 — 30초 지나고 서버가 받아주면 나간다
+    injector.setRule(null)
+    fakeNow += 31_000
+    await store.setPinned(docB.id, false) // 다른 쓰기로 kickSend 를 다시 건다
+    await tick(30)
+    expect(server.docs.get(docA.id)?.content).toBe('A 다시')
+  })
+
+  it('U12: 413 docs — outbox 의 모든 createDoc 을 붙잡아 Y 는 시도조차 안 한다', async () => {
+    const server = makeFakeServer()
+    const injector = makeInjector(server)
+    vi.stubGlobal('fetch', vi.fn(injector.fetchImpl))
+    let fakeNow = Date.now()
+    const notices: Array<{ type: string; message: string }> = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), now: () => fakeNow, onNotice: (n) => notices.push(n) })
+
+    const docZ = await store.create({ title: 'Z', content: 'z', lineEnding: 'lf' })
+    await tick(20)
+
+    // 네 항목이 outbox 에 모두 쌓인 뒤에 한 회차로 처리되도록, 쌓는 동안은 429 로 전체를 멈춰 둔다(재시도 왕복 없이)
+    injector.setRule({ status: 429, headers: { 'Retry-After': '30' }, times: 1 })
+    const docX = await store.create({ title: 'X', content: 'x', lineEnding: 'lf' })
+    await tick(20)
+    await store.update(docX.id, { content: 'x2' })
+    const docY = await store.create({ title: 'Y', content: 'y', lineEnding: 'lf' })
+    await store.remove(docZ.id)
+    await tick(20)
+
+    const marker = injector.writes.length
+    injector.setRule({
+      status: 413,
+      body: { error: 'doc_quota_exceeded', resource: 'docs', used: 10000, limit: 10000 },
+      match: ({ method, path }) => method === 'POST' && path === '/api/docs',
+    })
+    fakeNow += 31_000 // 429 재개 시각을 지난다
+    await store.setPinned(docY.id, true) // 다른 쓰기로 kickSend 를 다시 건다
+    await tick(30)
+
+    const postCount = injector.writes.slice(marker).filter((w) => w.method === 'POST' && w.path === '/api/docs').length
+    expect(postCount).toBe(1) // X 만 시도, Y 는 시도조차 안 한다
+    expect(server.docs.has(docX.id)).toBe(false) // 만들기 전에 PUT 이 안 나가 404 가 안 난다
+    expect(await store.get(docX.id)).not.toBeNull() // 캐시엔 X 가 남는다
+    expect(await store.get(docY.id)).not.toBeNull()
+    expect(server.docs.has(docZ.id)).toBe(false) // 무관한 삭제는 나간다
+    expect(notices.filter((n) => n.type === 'error' && n.message.includes('10,000개')).length).toBe(1)
+  })
+
+  it('U13·U14: 403 account_blocked — 차단 멈춤, 재개 뒤 그 문서만 영구히 건너뛰고 나머지는 나간다', async () => {
+    const server = makeFakeServer()
+    const injector = makeInjector(server)
+    vi.stubGlobal('fetch', vi.fn(injector.fetchImpl))
+    const notices: Array<{ type: string; message: string }> = []
+    const forbiddenIds: string[] = []
+    let blockedCalls = 0
+    const store = await createServerStore('u1', {
+      dbName: freshDbName(),
+      onNotice: (n) => notices.push(n),
+      onForbidden: (id) => forbiddenIds.push(id),
+      onAccountBlocked: () => {
+        blockedCalls++
+      },
+    })
+
+    const docA = await store.create({ title: 'A', content: 'a', lineEnding: 'lf' })
+    const docB = await store.create({ title: 'B', content: 'b', lineEnding: 'lf' })
+    await tick(20)
+
+    injector.setRule({ status: 403, body: { error: 'account_blocked' } })
+    await store.update(docA.id, { content: 'A 편집' })
+    await tick(20)
+    expect(blockedCalls).toBe(1)
+
+    const writesBefore = injector.writes.length
+    await store.update(docB.id, { content: 'B 시도' })
+    await tick(20)
+    expect(injector.writes.length).toBe(writesBefore) // U13 — 추가 요청 0
+
+    store.setAccountBlocked(true)
+    await tick(10)
+    expect(injector.writes.length).toBe(writesBefore) // setAccountBlocked(true) 뒤에도 0
+
+    injector.setRule(null) // 이제 서버는 정상 처리
+    store.setAccountBlocked(false)
+    await tick(30)
+
+    expect(forbiddenIds).toEqual([docA.id]) // U14
+    expect(notices.some((n) => n.type === 'error' && n.message === '이 문서를 편집할 권한이 없어졌습니다.')).toBe(true)
+    expect(server.docs.get(docB.id)?.content).toBe('B 시도') // 다른 문서는 나간다
+    expect(server.docs.get(docA.id)?.content).toBe('a') // A 는 다시 보내지 않는다
+  })
+})

@@ -8,14 +8,7 @@ import usePresence from './usePresence'
 import { fetchUsage, type Usage } from '../storage/attachmentsApi'
 import ApiTokensDialog from './ApiTokensDialog'
 import type { Notice } from './notice'
-
-const MB = 1_048_576
-
-// 10MB 미만은 소수 1자리, 이상은 정수 (F-221.md 2.5)
-function formatUsage(bytes: number): string {
-  const mb = bytes / MB
-  return mb < 10 ? `${mb.toFixed(1)}MB` : `${Math.round(mb)}MB`
-}
+import { formatMegabytes, formatCount } from '../lib/usageLimits'
 
 type AccountMenuProps = {
   account: AccountState
@@ -182,9 +175,27 @@ export default function AccountMenu({ account, onBeforeNavigate, onNotice }: Acc
               }
               role="none"
             >
-              이미지 {formatUsage(usage.used)} / 300MB
+              이미지 {formatMegabytes(usage.used)} / 300MB
             </li>
           )}
+          {usage?.docs &&
+            Number.isFinite(usage.docs.bytes) &&
+            Number.isFinite(usage.docs.bytesLimit) &&
+            Number.isFinite(usage.docs.count) &&
+            Number.isFinite(usage.docs.countLimit) &&
+            usage.docs.bytesLimit > 0 &&
+            usage.docs.countLimit > 0 && (
+              <li
+                className={
+                  usage.docs.bytes / usage.docs.bytesLimit >= 0.9 || usage.docs.count / usage.docs.countLimit >= 0.9
+                    ? 'account-menu-usage-docs account-menu-usage-danger'
+                    : 'account-menu-usage-docs'
+                }
+                role="none"
+              >
+                문서 {formatMegabytes(usage.docs.bytes)} / {formatMegabytes(usage.docs.bytesLimit)} · {formatCount(usage.docs.count)}개
+              </li>
+            )}
           {actionItems.map((item, i) => (
             <li key={item.key} role="none">
               <button

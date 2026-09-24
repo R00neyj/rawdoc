@@ -3,7 +3,7 @@ import { getPref, setPref } from './prefs'
 
 export type Account = { id: string; email: string }
 export type AccountState =
-  | { state: 'in'; id: string; email: string }
+  | { state: 'in'; id: string; email: string; blocked: boolean; warned: boolean }
   | { state: 'out' }
   | { state: 'offline' }
 
@@ -31,14 +31,17 @@ export async function fetchAccount(): Promise<AccountState> {
     return { state: 'offline' }
   }
 
-  let account: Account
+  let raw: { id: string; email: string; blocked?: unknown; warned?: unknown }
   try {
-    account = await response.json()
+    raw = await response.json()
   } catch {
     return { state: 'offline' }
   }
+  // md.account 에는 id·email 두 필드만 쓴다 — 응답이 늘어도 저장 값은 그대로 (F-2030 3.4)
+  const account: Account = { id: raw.id, email: raw.email }
   setPref('md.account', JSON.stringify(account))
-  return { state: 'in', id: account.id, email: account.email }
+  // blocked·warned 는 응답 값이 정확히 true 일 때만 true (F-2030 3.4)
+  return { state: 'in', id: account.id, email: account.email, blocked: raw.blocked === true, warned: raw.warned === true }
 }
 
 // 저장된 마지막 in 상태 (offline 일 때 화면에 쓴다)

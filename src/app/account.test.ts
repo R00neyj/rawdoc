@@ -36,8 +36,49 @@ describe('fetchAccount', () => {
       }),
     )
     const result = await fetchAccount()
-    expect(result).toEqual({ state: 'in', id: 'u1', email: 'a@b.com' })
+    // F-2030 3.4 — blocked·warned 가 없으면 둘 다 false
+    expect(result).toEqual({ state: 'in', id: 'u1', email: 'a@b.com', blocked: false, warned: false })
     expect(storedAccount()).toEqual({ id: 'u1', email: 'a@b.com' })
+  })
+
+  it('U20: blocked·warned 가 true 면 그대로, 문자열 "true" 면 false (F-2030 3.4)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        status: 200,
+        ok: true,
+        type: 'basic',
+        json: async () => ({ id: 'u1', email: 'a@b.com', blocked: true, warned: true }),
+      }),
+    )
+    expect(await fetchAccount()).toEqual({ state: 'in', id: 'u1', email: 'a@b.com', blocked: true, warned: true })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        status: 200,
+        ok: true,
+        type: 'basic',
+        json: async () => ({ id: 'u1', email: 'a@b.com', blocked: 'true' }),
+      }),
+    )
+    const result = await fetchAccount()
+    expect(result.state === 'in' && result.blocked).toBe(false)
+  })
+
+  it('U21: md.account 에는 id·email 두 필드만 저장한다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        status: 200,
+        ok: true,
+        type: 'basic',
+        json: async () => ({ id: 'u1', email: 'a@b.com', blocked: true, warned: true }),
+      }),
+    )
+    await fetchAccount()
+    expect(storedAccount()).toEqual({ id: 'u1', email: 'a@b.com' })
+    expect(globalThis.localStorage.getItem('md.account')).toBe(JSON.stringify({ id: 'u1', email: 'a@b.com' }))
   })
 
   it('401 이면 out 상태고 저장값을 지운다', async () => {
