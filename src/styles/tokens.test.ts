@@ -177,6 +177,18 @@ describe('지도 그룹 팔레트 별칭 (F-2008 3장, 13.1 U9~U11)', () => {
   }
 })
 
+describe('접속자 색 별칭 (F-307 3.3, A9)', () => {
+  const EXPECTED = ['note', 'tip', 'success', 'question', 'warning', 'danger', 'example']
+
+  test('A9 --people-1~7 이 차례로 --callout-* 별칭이고 --people-8 은 없다', () => {
+    EXPECTED.forEach((name, i) => {
+      expect(whiteTokens[`people-${i + 1}`]).toBe(`var(--callout-${name})`)
+    })
+    expect(whiteTokens['people-8']).toBeUndefined()
+    expect(css).not.toMatch(/--people-8\s*:/)
+  })
+})
+
 describe('메인 컬러 대비 — 확정 전까지 경고만 (design.md 3.2)', () => {
   test('brand.config.js 값으로 확인 (경고만, 실패 조건 아님)', () => {
     const accentDark = mixWhite(brand.accent, 55)

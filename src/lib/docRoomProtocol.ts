@@ -35,3 +35,23 @@ export function parseDocRoomMessage(text: string): DocRoomMessage | null {
   }
   return null
 }
+
+// awareness 계약 (specs/features/F-307.md 3.1) — 클라이언트는 커서만 싣고 신원은 서버가 찍는다
+export const AWARENESS_STATE_MAX_BYTES = 512
+
+export type RelativePositionJSON = Record<string, unknown>
+export type PeerCursor = { anchor: RelativePositionJSON; head: RelativePositionJSON }
+
+export type ClientAwarenessState = { cursor?: PeerCursor | null }
+
+export type PeerState = { user: { id: string; email: string }; cursor: PeerCursor | null }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+// anchor·head 가 둘 다 객체인 객체만 커서로 친다 — 서버 도장·클라이언트 읽기가 같은 판정을 쓴다
+export function readPeerCursor(value: unknown): PeerCursor | null {
+  if (!isRecord(value) || !isRecord(value.anchor) || !isRecord(value.head)) return null
+  return { anchor: value.anchor, head: value.head }
+}

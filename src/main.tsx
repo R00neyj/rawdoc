@@ -17,6 +17,7 @@ import './styles/image.css'
 import './styles/print.css'
 import './styles/map.css'
 import './styles/palette.css'
+import './styles/peers.css'
 
 import { getPref } from './app/prefs'
 import { resolveTheme } from './app/theme'

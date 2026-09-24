@@ -1,14 +1,38 @@
 // 문서 하나 = DocRoom DO 하나. YServer 생명주기를 docRoomCore 로 잇기만 한다 (specs/features/F-304.md 5장)
 import { YServer } from 'y-partyserver'
-import type { Connection, ConnectionContext } from 'partyserver'
+import type { Connection, ConnectionContext, WSMessage } from 'partyserver'
+import { applyAwarenessUpdate } from 'y-protocols/awareness'
 
-import { DocRoomCore, FLUSH_DEBOUNCE_MS, FLUSH_MAX_WAIT_MS } from './docRoomCore'
+import { AWARENESS_CLOCKS_KEY, closingAwareness, encodeAwarenessMessage, readAwarenessClocks, readAwarenessMessage, relayAwareness } from './awarenessRelay'
+import type { AwarenessClocks, RelayConn } from './awarenessRelay'
+import { DocRoomCore, FLUSH_DEBOUNCE_MS, FLUSH_MAX_WAIT_MS, readConnState } from './docRoomCore'
 import type { RoomConnState } from './docRoomCore'
 import { readForwardedIdentity } from './docSocket'
 import { SOCKET_CLOSE, SOCKET_PING, SOCKET_PONG } from '../src/lib/docRoomProtocol'
 
 // abort 가 닫기 프레임보다 먼저 가면 클라이언트는 4404 대신 1006 을 받는다 (2026-09-24 로컬 확인)
 const PURGE_CLOSE_GRACE_MS = 100
+
+// varUint 1 은 한 바이트 0x01 이다 — y-partyserver messageAwareness
+const MESSAGE_AWARENESS_BYTE = 1
+
+function bytesOf(message: ArrayBuffer | ArrayBufferView): Uint8Array {
+  return message instanceof ArrayBuffer ? new Uint8Array(message) : new Uint8Array(message.buffer, message.byteOffset, message.byteLength)
+}
+
+function relayConnOf(conn: Connection): RelayConn | null {
+  const state = readConnState(conn.state)
+  return state ? { id: conn.id, userId: state.userId, email: state.email, clocks: readAwarenessClocks(conn.state) } : null
+}
+
+// 닫히는 소켓에 보내면 던질 수 있다
+function safeSend(conn: Connection, bytes: Uint8Array) {
+  try {
+    conn.send(bytes)
+  } catch {
+    return
+  }
+}
 
 export class DocRoom extends YServer<Env> {
   static options = { hibernate: true }
@@ -61,13 +85,52 @@ export class DocRoom extends YServer<Env> {
     await this.core.connect(conn, docVersion, () => super.onConnect(conn, ctx))
   }
 
-  async onClose(conn: Connection, code: number, reason: string, wasClean: boolean): Promise<void> {
-    super.onClose(conn, code, reason, wasClean)
+  // awareness 는 YServer 에 넘기지 않고 도장·되돌림 버리기·소유를 거쳐 중계한다 (F-307 4.1·4.2)
+  onMessage(conn: Connection, message: WSMessage): void {
+    if (typeof message !== 'string') {
+      const bytes = bytesOf(message)
+      if (bytes[0] === MESSAGE_AWARENESS_BYTE) {
+        this.relayAwareness(conn, bytes)
+        return
+      }
+    }
+    super.onMessage(conn, message)
+  }
+
+  // super.onClose(서버 awareness 에 있는 것만 지움) 대신 연결 상태에 남은 기록으로 지운다 — hibernation 뒤에도 된다 (F-307 4.3)
+  async onClose(conn: Connection): Promise<void> {
+    this.forgetAwareness(conn)
     const others = [...this.getConnections()].filter((c) => c.id !== conn.id)
     if (others.length === 0) await this.core.roomEmptied()
   }
 
   onCustomMessage(): void {}
+
+  private relayAwareness(conn: Connection, bytes: Uint8Array) {
+    const update = readAwarenessMessage(bytes)
+    const sender = relayConnOf(conn)
+    if (!update || !sender) return
+    const conns = [...this.getConnections()]
+    const relayConns = conns.map(relayConnOf).filter((c): c is RelayConn => c !== null)
+    const result = relayAwareness(update, sender, relayConns)
+    for (const [id, clocks] of result.clocks) {
+      const target = conns.find((c) => c.id === id)
+      target?.setState((prev: unknown) => ({ ...((prev as object | null) ?? {}), [AWARENESS_CLOCKS_KEY]: clocks satisfies AwarenessClocks }))
+    }
+    if (!result.update) return
+    // onConnect 가 새 연결에 서버 awareness 전체를 보낸다 — 깨어 있는 동안 새 사람이 곧바로 모두를 본다
+    applyAwarenessUpdate(this.document.awareness, result.update, conn)
+    const message = encodeAwarenessMessage(result.update)
+    for (const c of conns) safeSend(c, message)
+  }
+
+  private forgetAwareness(conn: Connection) {
+    const update = closingAwareness(readAwarenessClocks(conn.state))
+    if (!update) return
+    applyAwarenessUpdate(this.document.awareness, update, conn)
+    const message = encodeAwarenessMessage(update)
+    for (const c of this.getConnections()) if (c.id !== conn.id) safeSend(c, message)
+  }
 
   isReadOnly(): boolean {
     return false

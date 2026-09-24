@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { Y_TEXT_NAME } from '../editor/yBinding'
-import { Y_CONTENT_NAME, encodeDocRoomMessage, parseDocRoomMessage } from './docRoomProtocol'
+import { AWARENESS_STATE_MAX_BYTES, Y_CONTENT_NAME, encodeDocRoomMessage, parseDocRoomMessage } from './docRoomProtocol'
 import type { DocRoomMessage } from './docRoomProtocol'
 
 describe('F-304 A25 docRoomProtocol', () => {
@@ -25,5 +25,11 @@ describe('F-304 A25 docRoomProtocol', () => {
 
   it('Y_CONTENT_NAME 은 에디터 Y_TEXT_NAME 과 같다', () => {
     expect(Y_CONTENT_NAME).toBe(Y_TEXT_NAME)
+  })
+})
+
+describe('F-307 A10 awareness 계약', () => {
+  it('상태 JSON 최대 512 B', () => {
+    expect(AWARENESS_STATE_MAX_BYTES).toBe(512)
   })
 })

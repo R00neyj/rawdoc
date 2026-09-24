@@ -1,0 +1,129 @@
+/* 접속자 아바타·원격 커서·선택 (specs/features/F-307.md 6.6·7.2). 선택자와 속성 이름이 계약이고 값은 사람 확인 P5·P6 전 기본값 */
+
+[data-people='1'] { --peer: var(--people-1); }
+[data-people='2'] { --peer: var(--people-2); }
+[data-people='3'] { --peer: var(--people-3); }
+[data-people='4'] { --peer: var(--people-4); }
+[data-people='5'] { --peer: var(--people-5); }
+[data-people='6'] { --peer: var(--people-6); }
+[data-people='7'] { --peer: var(--people-7); }
+
+/* ----- 원격 선택·커서 ----- */
+
+.cm-remote-selection {
+  background: color-mix(in srgb, var(--peer) 20%, transparent);
+}
+
+.cm-remote-caret {
+  position: relative;
+  margin: 0 -1px;
+  border-left: 2px solid var(--peer);
+  pointer-events: auto;
+}
+
+/* 커서 위 이름표 — 새로 그려지면 보이고 1.5초 뒤 사라진다. 올리면 다시 보인다 (6.4) */
+.cm-remote-caret-label {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  z-index: 5;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--peer);
+  color: var(--panel);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  font-style: normal;
+  line-height: 1.5;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+  animation: peer-label-hide 150ms var(--ease-out) 1500ms forwards;
+}
+
+.cm-remote-caret:hover .cm-remote-caret-label {
+  animation: none;
+  opacity: 1;
+}
+
+@keyframes peer-label-hide {
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-remote-caret-label {
+    animation-duration: 0s;
+  }
+}
+
+/* ----- 상단바 아바타 ----- */
+
+.peer-avatars {
+  flex: none;
+  display: flex;
+  align-items: center;
+  margin-right: -4px;
+  opacity: 1;
+  transition: opacity var(--transition-fast);
+}
+
+.peer-avatars[data-state='closed'] {
+  opacity: 0;
+}
+
+.peer-avatar-wrap + .peer-avatar-wrap {
+  margin-left: -8px;
+}
+
+.peer-avatar,
+.peer-avatar-more {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid var(--panel);
+  font-family: var(--font-sans);
+  line-height: 1;
+  cursor: default;
+  transition: opacity var(--transition-fast);
+}
+
+@starting-style {
+  .peer-avatar,
+  .peer-avatar-more {
+    opacity: 0;
+  }
+}
+
+.peer-avatar {
+  background: var(--peer);
+  color: var(--panel);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.peer-avatar-more {
+  background: var(--rule-2);
+  color: var(--ink-2);
+  font-size: 11px;
+}
+
+/* 넘침 툴팁 — 숨은 사람 이메일을 한 줄에 하나 */
+.peer-avatar-tooltip-list {
+  white-space: pre-line;
+  text-align: left;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .peer-avatars,
+  .peer-avatar,
+  .peer-avatar-more {
+    transition: none;
+  }
+}

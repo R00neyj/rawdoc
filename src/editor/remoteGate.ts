@@ -167,7 +167,7 @@ export function createRemoteGate(editorDoc: Y.Doc, options: RemoteGateOptions): 
 export type RemoteConnection = { destroy(): void }
 
 // 조합 중인 뷰에 포커스가 있고 창이 보이는 채 앞에 있으면 살아 있는 조합이다 (5.4)
-function compositionAlive(view: EditorView): boolean {
+export function compositionAlive(view: EditorView): boolean {
   return (
     view.dom.contains(document.activeElement) && document.hasFocus() && document.visibilityState === 'visible'
   )

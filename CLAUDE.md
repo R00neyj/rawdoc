@@ -80,7 +80,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | Static + API | Cloudflare Workers (static assets + `worker/`), custom domain `rawdoc.app` (workers.dev disabled) | In use (F-204). Structure in `specs/architecture.md` ch. 6 |
 | Metadata DB / files | D1 `md-editor-db` / R2 `md-editor-attachments` | In use (F-205~) |
 | Auth | Cloudflare Access one-time codes + Worker JWT verification | F-205 (Q5) |
-| CRDT / editor binding | `yjs` + `y-codemirror.next` (local `Y.Doc` per editor, no network) | In use (F-302) |
+| CRDT / editor binding | `yjs` + `y-codemirror.next` (local `Y.Doc` per editor, no network) + `y-protocols` (awareness, F-307, 2026-09-24) | In use (F-302) |
 | Live sync | Durable Object + y-partyserver | In use (server F-304 `worker/docRoom.ts`, client F-305 `src/app/useLiveDoc.ts`). Not deployed until F-306 lands |
 | E2E tests | Playwright (`@playwright/test`), installed Chrome channel | Adopted in F-150 |
 | 3D map | `three` + `d3-force-3d` (plus `@types/three` and a local `src/types/d3-force-3d.d.ts`) | Adopted in the F-292 revision (M2). F-2001 and F-2002 install them; no other spec may add a 3D dependency. `3d-force-graph` was measured and rejected — it statically pulls in `WebGPURenderer` |

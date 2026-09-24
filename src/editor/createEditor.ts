@@ -40,8 +40,10 @@ import type { ResolveAttachment } from './preview/blocks'
 import { enterTableFromKeyboard, setCellContextMenuHandler } from './preview/tableWidget'
 import { wikiComplete } from './wikiComplete'
 import * as Y from 'yjs'
+import type { Awareness } from 'y-protocols/awareness'
 import { createYBinding, createYBindingFromState, undoKeymap } from './yBinding'
 import { connectRemote } from './remoteGate'
+import { attachRemoteCursors, remoteCursors } from './remoteCursors'
 import { observeTitle, writeTitle } from './liveTitle'
 import './searchPanel.css'
 
@@ -316,6 +318,8 @@ type CreateEditorOptions = {
 
 export type LiveEditorOptions = {
   roomDoc: Y.Doc
+  // 방 Doc 에 매인 awareness — 원격 커서를 그리고 내 커서를 보낸다 (F-307 5.1)
+  awareness: Awareness
   onRemoteTitle: (title: string) => void
 }
 
@@ -460,6 +464,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     ),
     keymap.of([...defaultKeymap, ...undoKeymap, indentWithTab]),
     compositionCatchup(() => destroyed),
+    // 원격 커서 — 늘 둔다. 붙은 소스가 없으면 빈 장식이다 (F-307 5.1)
+    remoteCursors(),
     EditorView.updateListener.of((update) => {
       if (update.docChanged && onDocChange) onDocChange(update.state)
       if (update.selectionSet && onSelectionChange) onSelectionChange(update.state)
@@ -487,6 +493,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const remote = connectRemote({ view, editorDoc: binding.ydoc, docId, sharedDoc: live?.roomDoc })
   // 원격 제목은 게이트를 지나 편집기 Doc 에 들어온다 — 조합 중에는 같이 보류된다 (F-305 9.3)
   const unobserveTitle = live ? observeTitle(binding.ydoc, live.onRemoteTitle) : () => {}
+  // 상대 위치는 편집기 Y.Text 로 만들고 푼다 — 화면과 같은 쪽 (F-307 5.1)
+  const detachRemoteCursors = live ? attachRemoteCursors(view, { awareness: live.awareness, ytext: binding.ytext }) : () => {}
 
   return {
     view,
@@ -681,6 +689,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       detachMarginClickGuard()
       detachComposingEnterGuard()
       unobserveTitle()
+      detachRemoteCursors()
       remote?.destroy()
       view.destroy()
       binding.destroy()

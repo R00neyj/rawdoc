@@ -65,6 +65,15 @@
   --map-group-7: var(--callout-example);
   --map-group-8: var(--callout-quote);
 
+  /* 접속자 색 — 콜아웃 일곱 색의 별칭. 받는 쪽이 user.id 해시로 1~7 을 고른다. 회색 quote 는 본문 글자와 안 갈려 뺀다 (F-307 3.3) */
+  --people-1: var(--callout-note);
+  --people-2: var(--callout-tip);
+  --people-3: var(--callout-success);
+  --people-4: var(--callout-question);
+  --people-5: var(--callout-warning);
+  --people-6: var(--callout-danger);
+  --people-7: var(--callout-example);
+
   /* 하이라이트(==…==) 배경 — 편집·보기 모드 공용. 형광펜 노랑 전용 기준색을 두고
      테마별로 그 값만 바꾼다 (F-283.md 5장, 2026-09-21 사용자 요청으로 노란색으로) */
   --highlight-base: #ffd43b;

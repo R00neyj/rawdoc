@@ -43,6 +43,8 @@ import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
 import { decideDocPath, type DocPathKind, type FallbackReason } from './docPath'
 import { useLiveDoc } from './useLiveDoc'
+import { usePeers } from './usePeers'
+import type { Peer } from '../lib/peers'
 import type { LiveSnapshot } from './liveDoc'
 import { withTabBroadcast, newTabId } from './tabSync'
 import { useTabSync } from './useTabSync'
@@ -123,6 +125,8 @@ const SAVE_DEBOUNCE_MS = 700 // useDocSaver 와 같은 박자 — 실시간 경�
 
 const NARROW_QUERY = '(max-width: 1023px)'
 const HEADING_JUMP_MARGIN = 16 // 목차 SELECT_MARGIN 과 같다 (F-2018 7.3)
+// 공유 화면·지도가 떠 있는 동안 상단바에 넘기는 빈 접속자 목록 — 참조가 늘 같아 다시 그리지 않는다 (F-307 7.4)
+const NO_PEERS: Peer[] = []
 
 // lineEnding 은 실시간 경로가 편집기를 열 때 읽는다 — 본문을 store.get 으로 읽지 않기 때문이다 (F-305 5.2)
 type DocMeta = Pick<Doc, 'id' | 'title' | 'updatedAt' | 'folderId' | 'pinnedAt' | 'role' | 'ownerEmail' | 'viaFolder'> & {
@@ -546,6 +550,9 @@ export default function App() {
 
   const liveSession = useLiveDoc(isRealtime ? currentDocId : null)
   const liveSnapshot = liveSession?.snapshot
+  // 접속자 — 편집기가 아니라 방 Doc 의 awareness 에서 온다. 첫 동기화 전·편집기 다시 마운트에도 흔들리지 않는다 (F-307 7.4)
+  const liveAwareness = liveSession?.awareness ?? null
+  const livePeers = usePeers(liveAwareness)
 
   // 첫 동기화 전에 끝난 경우 — 폴백으로 가거나(7.2), 4403 이면 보기로 연다(8장). 렌더 중 상태를 맞추는 패턴
   if (isRealtime && liveSnapshot && !liveSnapshot.everSynced) {
@@ -632,14 +639,15 @@ export default function App() {
   // 편집기에 넘기는 실시간 옵션 — 첫 동기화가 끝난 방 Doc 일 때만. 편집기는 마운트 때 한 번 읽는다 (9.3)
   const liveEditorOption = useMemo(
     () =>
-      liveRoomDoc && liveRoomDocId
+      liveRoomDoc && liveRoomDocId && liveAwareness
         ? {
             roomDoc: liveRoomDoc,
+            awareness: liveAwareness,
             onRemoteTitle: (title: string) =>
               setDocs((prev) => prev.map((d) => (d.id === liveRoomDocId ? { ...d, title } : d))),
           }
         : undefined,
-    [liveRoomDoc, liveRoomDocId],
+    [liveRoomDoc, liveRoomDocId, liveAwareness],
   )
 
   // 편집 잠금(F-213.md 2.3) — 다른 세션이 잡고 있으면 읽기 전용 + 알림, 되찾으면 에디터를 다시 마운트한다
@@ -3260,6 +3268,9 @@ export default function App() {
       onAccountBeforeNavigate={() => docSaverFlushRef.current()}
       showToolbar={showToolbar}
       onRunToolbarCommand={runToolbarCommand}
+      // 공유 화면·지도가 떠 있는 동안은 지금 보는 것이 그 문서가 아니다 (F-307 7.4)
+      peers={sharedDoc || mapRoute ? NO_PEERS : livePeers}
+      selfUserId={account.state === 'in' ? account.id : null}
     />
   )
 

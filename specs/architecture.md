@@ -105,6 +105,11 @@ src/
   - `storage/`: `liveSocket.ts`(F-305 — `y-partyserver/provider` 를 import 하는 유일한 파일, `openLiveSocket`)
   - `editor/`: `liveTitle.ts`(F-305 — 방 Doc `title` `Y.Text` 읽고 쓰기)
   - `lib/`: `textRebase.ts`(F-304 가 `worker/` 에 둔 것을 F-305 가 옮김 — 내용은 그대로. `diffText`·`rebaseExternal`)
+- 접속자 표시·원격 커서(F-307)로 추가
+  - `lib/`: `peers.ts`(F-307)
+  - `editor/`: `remoteCursors.ts`(F-307)
+  - `app/`: `usePeers.ts`(F-307), `PeerAvatars.tsx`(F-307)
+  - `styles/`: `peers.css`(F-307)
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
@@ -156,6 +161,7 @@ store.removeAttachment(id)    // Promise<void>
 - 에디터 → 저장소: 입력이 멈추면 스냅샷 저장. 문서 전환·새로고침 적용 전에는 대기 중 저장을 먼저 끝낸다
 - 문서 목록(제목·수정 시각)은 `App` 의 React state 로 둔다. 본문은 넣지 않는다
 - **서버 문서, 실시간 경로(M3, F-305)**: 위 흐름과 다르다 — 방 Doc(App 층 `useLiveDoc` 가 만드는 빈 `Y.Doc`) → 게이트(F-303 `remoteGate`, `sharedDoc` 옵션으로 방 Doc 을 그대로 씀) → 편집기 Doc(첫 동기화 뒤 방 Doc 에서 `createYBindingFromState` 로 복제) → `EditorState`. 본문 자동 저장(`PUT`)은 경로가 `pending`(outbox 대기) 또는 `fallback`(연결 실패) 일 때만 돈다 — `realtime` 경로에서는 꺼진다(F-305 4장·10장)
+- awareness(`useLiveDoc`, 방 Doc 에 매임) → 상단바 아바타(`usePeers`)·원격 커서(`remoteCursors`) (F-307)
 
 ## 4. 설정 (localStorage)
 
@@ -213,6 +219,7 @@ worker/
   access.ts grants.ts    (F-212)
   locks.ts               (F-213)
   docSocket.ts docRoom.ts docRoomCore.ts yStore.ts textRebase.ts docRoomRpc.ts   (F-304)
+  awarenessRelay.ts        (F-307)
   v1.ts apiTokens.ts       `/v1` 핸들러·개인 토큰 (F-222·F-223)
   v1Contract.ts            `/v1` 응답 타입과 예시 값. 핸들러는 import 하지 않는다 — 서버·CLI 양쪽 테스트가 이 파일에 댄다 (F-2021 7.2)
   tsconfig.json worker-configuration.d.ts(`npm run cf:types` 생성)
@@ -230,6 +237,7 @@ worker/
 - R2 키 `att/{owner_id}/{id}.{ext}`, 공개 버킷·서명 URL 없음 (F-209)
 - 안 쓰는 첨부 정리: 매일 UTC 18시 Cron `scheduled` → 모든 문서 원문에 없고 24시간 지난 첨부 R2·D1 삭제 (F-219)
 - `DocRoom` DO SQLite 표 `ydoc_updates`·`ydoc_meta` — Yjs 업데이트 로그와 메타(F-304 6.1). D1 `docs` 는 DO 도 쓴다 — 조용해지면 5초, 편집이 계속되면 최대 30초 뒤, `version` 조건부 `UPDATE` 로 (F-304 6.2·8.2)
+- `DocRoom` 은 awareness 를 도장 찍어 중계하고 연결이 닫히면 그 연결의 상태를 지운다(F-307 4장)
 - 경로 접두사 4개: `/api/*` Access 로그인(브라우저), `/pub/*` 로그인 없음(공유 링크), `/v1/*` Access 밖·`Authorization: Bearer rd_…` 개인 토큰만(스크립트, F-222·F-223). `/v1` 은 쿠키를 보지 않는다. 토큰은 D1 `api_tokens` 에 SHA-256 해시만 (0007). `/ws/*` Access 밖 — Worker 가 Origin·`CF_Authorization` 쿠키로 인증하고 edit 이상만 `DocRoom` DO(`/ws/doc/:id`)로 넘긴다. 거절은 닫기 코드 4401·4403·4404 (F-304)
 - `GET /v1/me` → `{ id, email }`(토큰 없음·틀림·폐기는 401). `handleMe` 를 그대로 붙인 라우트 한 줄, 명령줄 도구의 `whoami`·`--with-token` 확인에 쓴다 (F-2021 7.1)
 

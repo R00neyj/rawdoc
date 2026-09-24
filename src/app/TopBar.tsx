@@ -9,6 +9,8 @@ import AccountMenu from './AccountMenu'
 import EditorToolbar from './EditorToolbar'
 import { IconEdit, IconRaw, IconView, IconTooltip } from './icons'
 import SidebarHead from './SidebarHead'
+import PeerAvatars from './PeerAvatars'
+import type { Peer } from '../lib/peers'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { WikiResolver } from '../lib/wikiResolve'
 import type { Notice } from './notice'
@@ -50,6 +52,9 @@ type TopBarProps = {
   // 서식·단락·삽입 탭바 (F-233.md 3.1) — App.tsx 가 표시 조건을 계산해 넘긴다
   showToolbar: boolean
   onRunToolbarCommand: (cmd: StateCommand) => void
+  // 접속자 아바타 — 보기 모드 토글 왼쪽, 없으면 요소가 없다 (F-307 7.1)
+  peers: readonly Peer[]
+  selfUserId: string | null
 }
 
 export default function TopBar({
@@ -78,6 +83,8 @@ export default function TopBar({
   onAccountBeforeNavigate,
   showToolbar,
   onRunToolbarCommand,
+  peers,
+  selfUserId,
 }: TopBarProps) {
   return (
     <>
@@ -94,6 +101,7 @@ export default function TopBar({
         <div className="topbar-spacer">
           {showToolbar && !narrow && <EditorToolbar onRunCommand={onRunToolbarCommand} />}
         </div>
+        <PeerAvatars peers={peers} selfUserId={selfUserId} narrow={narrow} />
         <div className="seg view-mode-seg" role="group" aria-label="보기 모드">
           {VIEW_MODES.map((mode) => (
             <span className="icon-btn-wrap" key={mode.value}>
