@@ -79,7 +79,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | PWA | `vite-plugin-pwa` (Workbox) | In use |
 | Static + API | Cloudflare Workers (static assets + `worker/`), custom domain `rawdoc.app` (workers.dev disabled) | In use (F-204). Structure in `specs/architecture.md` ch. 6 |
 | Metadata DB / files | D1 `md-editor-db` / R2 `md-editor-attachments` | In use (F-205~) |
-| Auth | Cloudflare Access one-time codes + Worker JWT verification | F-205 (Q5) |
+| Auth | `better-auth` 1.7.5 (Google·GitHub OAuth, D1 sessions) + `worker/apiTokens.ts` for CLI | F-2033 (replaces Access, F-205). Not deployed yet — deploy steps in `specs/features/F-2033.md` ch. 11 |
 | CRDT / editor binding | `yjs` + `y-codemirror.next` (local `Y.Doc` per editor, no network) + `y-protocols` (awareness, F-307, 2026-09-24) | In use (F-302) |
 | Live sync | Durable Object + y-partyserver | In use (server F-304 `worker/docRoom.ts`, client F-305 `src/app/useLiveDoc.ts`). Not deployed until F-306 lands |
 | E2E tests | Playwright (`@playwright/test`), installed Chrome channel | Adopted in F-150 |
@@ -99,7 +99,7 @@ npm run typecheck    # tsc --noEmit (app)
 npm run typecheck:worker   # tsc -p worker
 npm run build:cli    # vite build --config cli/vite.config.ts → cli/dist/rawdoc.js (F-2021)
 npm run typecheck:cli   # tsc -p cli --noEmit
-npm run dev:worker   # build, then wrangler dev (8790, local D1/R2). DEV_AUTH_EMAIL in .dev.vars bypasses login
+npm run dev:worker   # build, then wrangler dev (8790, local D1/R2). .dev.vars needs BETTER_AUTH_URL=http://localhost:8790 and BETTER_AUTH_SECRET; DEV_AUTH_EMAIL=…@example.com bypasses login (F-2033)
 npm run cf:types     # wrangler.jsonc bindings → worker/worker-configuration.d.ts
 npm run deploy       # build, then wrangler deploy (needs login). Normal deploys push the deploy branch — see "Deployment"
 npm run test:watch   # Vitest watch mode
@@ -174,6 +174,7 @@ How to hold to it:
 - Everything else in that run was load contention under `verify:full` and passed when rerun alone: F-222 A4, F-224 A3, F-225 A5, F-209 A6, F-243 A8, F-227 A3, F-250 A4, F-271 A9, F-272 A12, F-274 A14, F-275 A10, F-276 A14. `e2e/docLock.spec.js` fails 2–3 tests under `--repeat 2` but passes 7/7 at `--workers 1` and `--workers 2` — the lock tests wait 10–20s and lose the race under load. The only constant failures left are **F-271 A6** and **F-146 A2**
 - F-222 A4 (token revocation), F-224 A4 (dialog width in a narrow window), and F-225 A6 (focus after deleting an invite) were found during pre-deploy verification for F-261 on 2026-09-20 — rerunning the three together makes 1–2 of them fail at random each time (`workers` load), and a `git worktree` at the pre-F-261 commit (`f839ecc`) failed at the same rate with the same combination and repeat count, so they are unrelated to F-261. Cause not investigated; listed only
 - Remote D1 migrations are not automated. If there is a new `migrations/000N`, run `npx wrangler d1 migrations apply md-editor-db --remote` before deploying
+- **Login redesign deploy (F-2033 ch. 11) — order matters.** OAuth apps and `wrangler secret put` any time before; delete the Access app `md-editor-api` right before deploy (step 5), *then* apply remote migrations (step 6 — never before 5), then push. Rollback is effectively forward-only: once the Access app is gone the old Worker cannot log anyone in, so fix forward
 - If the build does not run, deploy locally: from a clean worktree `../rawdoc-deploy` (create it with `git worktree add ../rawdoc-deploy deploy` if missing), run `npm run deploy`
 - If the root `.env` (never committed, separate per machine) has `CLOUDFLARE_API_TOKEN`, wrangler uses that token instead of browser login. The token was reissued on 2026-09-18 with Workers Scripts edit, D1 edit, and R2 edit permissions — local deploys and remote migrations both work straight from `.env`. `num_tables: 0` in `wrangler d1 list` is just Cloudflare's aggregation lagging, so read the schema with `d1 migrations list --remote`
 - **CLI publish (F-2021 10.3) — deploy the web first, then the CLI.** `login`'s auth screen (S-9) and `GET /v1/me` must already be live on `rawdoc.app` before the CLI is usable, so publish only after a web deploy has confirmed live. Then, by hand: a person runs `npm login` (2FA), `npm run build:cli` from the repo root, `npm pack --dry-run` inside `cli/` to confirm the tarball holds only `package.json`/`README.md`/`dist/rawdoc.js`, then `npm publish` (`prepublishOnly` rebuilds). Confirm with `npm view rawdoc version`, push tag `cli-v{version}`, and add a `content/changelog.md` line. A release that changes the login address or seal format (F-2023 7.3) adds a check before step 3: build the CLI locally, run `login --no-browser --force`, and open the printed address in a browser to confirm the live site shows the approval screen — only then publish to npm
