@@ -1,6 +1,7 @@
 // 사이트 틀과 글 빌드 (specs/features/F-272.md 12장 A9~A12)
 import { test, expect } from '@playwright/test'
 import { mockLanding, openApp } from './helpers.js'
+import { readdirSync } from 'node:fs'
 
 test('F-272 A9 서비스 워커 precache 에서 사이트 경로가 빠진다', async ({ page }) => {
   const res = await page.request.get('/sw.js')
@@ -148,7 +149,9 @@ test('F-276 A10 /guides 목록 페이지가 뜬다', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: '사용법' })).toBeVisible()
   await expect(page.locator('.site-nav a[href="/guides"]')).toHaveAttribute('aria-current', 'page')
   await expect(page.locator('.site-foot')).toBeVisible()
-  await expect(page.locator('.site-article ul a')).toHaveCount(3)
+  // 글이 늘 때마다 고치지 않도록 content/guides 의 .md 수와 맞춘다
+  const guideCount = readdirSync('content/guides').filter((f) => f.endsWith('.md')).length
+  await expect(page.locator('.site-article ul a')).toHaveCount(guideCount)
 })
 
 test('F-276 A11 글 3편이 각각 뜬다', async ({ page }) => {
