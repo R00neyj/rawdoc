@@ -5,7 +5,7 @@ import { getDocAccess, roleAtLeast } from './access'
 import { isValidUuid } from './validate'
 import { SOCKET_CLOSE } from '../src/lib/docRoomProtocol'
 import type { SocketCloseReason } from '../src/lib/docRoomProtocol'
-import { SITE_URL } from '../src/lib/siteMeta'
+import { isAllowedOrigin } from './origin'
 
 // Worker 와 DocRoom 사이 계약
 export const DOC_ROOM_HEADERS = {
@@ -21,26 +21,6 @@ export type DocSocketDecision =
   | { type: 'reject'; response: Response }
   | { type: 'close'; code: number; reason: SocketCloseReason }
   | { type: 'forward'; request: Request }
-
-// auth.ts 의 DEV_AUTH_EMAIL 우회와 같은 조건 (4.5)
-function isDevBypass(env: Env): boolean {
-  const devEmail = (env as unknown as { DEV_AUTH_EMAIL?: string }).DEV_AUTH_EMAIL
-  return !!devEmail && devEmail.toLowerCase().endsWith('@example.com') && !env.ACCESS_AUD
-}
-
-function isAllowedOrigin(origin: string | null, request: Request, env: Env): boolean {
-  if (!origin) return false
-  if (origin === new URL(SITE_URL).origin) return true
-  if (!isDevBypass(env)) return false
-  // wrangler dev 는 자기 출처로 온 Origin 과 요청 주소를 둘 다 http://{routes 호스트} 로 바꿔 쓴다 (2026-09-24 로컬 확인)
-  if (origin === new URL(request.url).origin) return true
-  try {
-    const url = new URL(origin)
-    return url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')
-  } catch {
-    return false
-  }
-}
 
 export async function resolveDocSocket(request: Request, env: Env, docId: string): Promise<DocSocketDecision> {
   if (request.method !== 'GET' || request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {

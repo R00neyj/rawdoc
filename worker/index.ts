@@ -1,5 +1,8 @@
 import { errorResponse, jsonResponse } from './http'
-import { getUser } from './auth'
+import { getUser, getUserRefreshing, type AuthUser } from './auth'
+import { cleanupExpiredAuth, getAuth } from './authServer'
+import { isAllowedOrigin, needsOriginCheck } from './origin'
+import { loginReturn, renderLoginPage } from './loginPage'
 import {
   handleCreateDoc,
   handleDeleteDoc,
@@ -101,19 +104,102 @@ async function handleMe(request: Request, env: Env): Promise<Response> {
   return jsonResponse({ id: user.id, email: user.email })
 }
 
+// GET /api/me 만 세션을 연장한다 — 만료 세션의 401 에도 쿠키 지우는 줄을 싣는다 (F-2033 3.3)
+async function handleApiMe(request: Request, env: Env): Promise<Response> {
+  const { user, setCookies } = await getUserRefreshing(request, env)
+  const res = user ? jsonResponse({ id: user.id, email: user.email }) : errorResponse('unauthenticated', 401)
+  for (const cookie of setCookies) res.headers.append('Set-Cookie', cookie)
+  return res
+}
+
+function redirect(location: string, status: 302 | 303): Response {
+  return new Response(null, { status, headers: { Location: location, 'Cache-Control': 'no-store' } })
+}
+
+function withError(url: string, code: string): string {
+  return `${url}${url.includes('?') ? '&' : '?'}error=${code}`
+}
+
+// 앱의 로그인 진입 주소 — 세션이 있으면 복귀 주소, 없으면 /login (F-2033 7.3)
 async function handleLogin(request: Request, env: Env): Promise<Response> {
+  const target = loginReturn(new URL(request.url).searchParams.get('return'))
   const user = await getUser(request, env)
-  if (!user) return errorResponse('unauthenticated', 401)
+  return redirect(user ? target.successUrl : target.failureUrl, 302)
+}
+
+const MAX_LOGIN_FORM_BYTES = 4096
+
+// /login 폼 제출 — 서버에서 signInSocial 을 불러 제공자 인증 주소로 보낸다 (F-2033 7.3)
+async function handleLoginStart(request: Request, env: Env): Promise<Response> {
+  const length = request.headers.get('Content-Length')
+  const type = request.headers.get('Content-Type') ?? ''
+  const badRequest = redirect(withError('/login', 'bad_request'), 303)
+  if (!length || !/^\d+$/.test(length) || Number(length) > MAX_LOGIN_FORM_BYTES) return badRequest
+  if (!type.startsWith('application/x-www-form-urlencoded')) return badRequest
+  let form: FormData
+  try {
+    form = await request.formData()
+  } catch {
+    return badRequest
+  }
+  const rawReturn = form.get('return')
+  const target = loginReturn(typeof rawReturn === 'string' ? rawReturn : null)
+  const provider = form.get('provider')
+  if (provider !== 'google' && provider !== 'github') return redirect(withError(target.failureUrl, 'bad_request'), 303)
+  const [clientId, clientSecret] =
+    provider === 'google' ? [env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET] : [env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET]
+  if (!clientId || !clientSecret) {
+    console.error('oauth provider not configured', provider)
+    return redirect(withError(target.failureUrl, 'provider_unavailable'), 303)
+  }
+  try {
+    // 요청 Origin 은 관문이 이미 봤다 — 빈 헤더라야 로컬에서 바뀐 Origin 이 better-auth 검사에 다시 걸리지 않는다
+    const { headers, response } = await getAuth(env).api.signInSocial({
+      body: { provider, callbackURL: target.successUrl, errorCallbackURL: target.failureUrl },
+      headers: new Headers(),
+      returnHeaders: true,
+    })
+    if (!response.url) throw new Error('signInSocial returned no url')
+    const res = redirect(response.url, 303)
+    for (const cookie of headers.getSetCookie()) res.headers.append('Set-Cookie', cookie)
+    return res
+  } catch (err) {
+    console.error(err)
+    return redirect(withError(target.failureUrl, 'internal_server_error'), 303)
+  }
+}
+
+// 세션 판정이 던져도(설정 오류) 페이지는 그린다 — 버튼을 누르면 POST /api/login 이 오류 줄로 돌려보낸다 (F-2033 7.2)
+async function handleLoginPage(request: Request, env: Env): Promise<Response> {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return errorResponse('method_not_allowed', 405)
   const url = new URL(request.url)
-  const returnTo = url.searchParams.get('return') ?? ''
-  const location = returnTo.startsWith('#/') ? `/${returnTo}` : '/'
-  return new Response(null, { status: 302, headers: { Location: location } })
+  const target = loginReturn(url.searchParams.get('return'))
+  let user: AuthUser | null = null
+  try {
+    user = await getUser(request, env)
+  } catch (err) {
+    console.error(err)
+  }
+  if (user) return redirect(target.successUrl, 302)
+  return renderLoginPage({ returnHash: target.hash, error: url.searchParams.get('error') })
+}
+
+// better-auth 가 여는 경로 중 콜백 둘과 로그아웃만 넘긴다 (F-2033 7.4)
+const AUTH_ROUTES = new Set(['GET /api/auth/callback/google', 'GET /api/auth/callback/github', 'POST /api/auth/sign-out'])
+
+async function runQuietly(task: () => Promise<unknown>): Promise<void> {
+  try {
+    await task()
+  } catch (err) {
+    console.error(err)
+  }
 }
 
 const routes: Route[] = [
   { method: 'GET', path: '/api/health', handler: handleHealth },
-  { method: 'GET', path: '/api/me', handler: handleMe },
+  { method: 'GET', path: '/api/me', handler: handleApiMe },
   { method: 'GET', path: '/api/login', handler: handleLogin },
+  { method: 'POST', path: '/api/login', handler: handleLoginStart },
   { method: 'GET', path: '/api/docs', handler: handleListDocs },
   { method: 'POST', path: '/api/docs', handler: handleCreateDoc },
   { method: 'GET', path: '/api/docs/:id', handler: handleGetDoc },
@@ -204,6 +290,9 @@ export default {
         // 토큰 형식 오류·폐기·없는 링크 — 앱을 준다. PublicView 가 "링크를 찾을 수 없습니다" 를 보여준다 (F-272.md 7.1)
         return env.ASSETS.fetch(new URL('/', url))
       }
+      if (url.pathname === '/login') {
+        return handleLoginPage(request, env)
+      }
       if (url.pathname === '/welcome') {
         return welcomeRedirect()
       }
@@ -224,6 +313,20 @@ export default {
     }
 
     try {
+      if (
+        url.pathname.startsWith('/api/') &&
+        needsOriginCheck(request.method) &&
+        !isAllowedOrigin(request.headers.get('Origin'), request, env)
+      ) {
+        return errorResponse('forbidden_origin', 403)
+      }
+      if (url.pathname.startsWith('/api/auth/')) {
+        if (!AUTH_ROUTES.has(`${request.method} ${url.pathname}`)) return errorResponse('not_found', 404)
+        // workerd 는 본문 없는 POST 에도 빈 body 를 붙여 better-call 이 Content-Type 없음 415 를 낸다 — 로그아웃은 본문을 읽지 않는다
+        const forwarded = request.method === 'POST' ? new Request(request.url, { method: 'POST', headers: request.headers }) : request
+        return await getAuth(env).handler(forwarded)
+      }
+
       const matchingPath = routes
         .map((route) => ({ route, params: matchPath(route.path, url.pathname) }))
         .filter((m): m is { route: Route; params: Record<string, string> } => m.params !== null)
@@ -245,6 +348,8 @@ export default {
     }
   },
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(cleanupServerAttachments(env, Date.now()))
+    const now = Date.now()
+    ctx.waitUntil(runQuietly(() => cleanupServerAttachments(env, now)))
+    ctx.waitUntil(runQuietly(() => cleanupExpiredAuth(env, now)))
   },
 } satisfies ExportedHandler<Env>

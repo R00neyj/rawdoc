@@ -3,18 +3,22 @@
   "name": "md-editor-web",
   "main": "worker/index.ts",
   "compatibility_date": "2026-09-14",
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "preview_urls": false,
   "routes": [{ "pattern": "rawdoc.app", "custom_domain": true }],
   "vars": {
-    "ACCESS_TEAM_DOMAIN": "https://fragrant-sky-f428.cloudflareaccess.com",
-    "ACCESS_AUD": "170e394a9d9137e9426d7dab75171a71210b71131ce7cb9eb46a45c88233cc85"
+    "BETTER_AUTH_URL": "https://rawdoc.app",
+    "DEV_AUTH_EMAIL": ""
+  },
+  "secrets": {
+    "required": ["BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"]
   },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/*", "/pub/*", "/v1/*", "/p/*", "/welcome", "/", "/ws/*"]
+    "run_worker_first": ["/api/*", "/pub/*", "/v1/*", "/p/*", "/welcome", "/", "/ws/*", "/login"]
   },
   "d1_databases": [
     { "binding": "DB", "database_name": "md-editor-db", "database_id": "073462f8-7a95-4b0f-8d32-4b07f8c4448e", "migrations_dir": "migrations" }

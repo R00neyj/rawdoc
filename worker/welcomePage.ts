@@ -3,6 +3,7 @@ import brand from '../brand.config'
 import { APP_COOKIE, EARLY_APP_KEYS, LANDING_DONE_KEY, buildAppCookie } from '../src/lib/appEntry'
 import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS } from '../src/lib/siteChrome'
 import { SITE_URL } from '../src/lib/siteMeta'
+import { PAGE_TOKENS_CSS } from './pageTokens'
 
 const siteUrl = SITE_URL
 const pageTitle = `한국어로 쓰는 마크다운 협업 도구 — ${brand.name}`
@@ -96,27 +97,7 @@ export function renderWelcomePage(): Response {
     <style>
       /* 색·서체·형태 값은 앱 화이트 테마(src/styles/tokens.css)와 같다. 워커가 돌려주는
          단일 HTML 이라 CSS 파일을 import 하지 않고 같은 값을 여기 다시 적는다 */
-      :root {
-        color-scheme: light;
-        --accent: ${brand.accent};
-        --paper: #faf8f4;
-        --panel: #fffefb;
-        --ink: #1c1b18;
-        --ink-2: #4a4740;
-        --muted: #8f8b82;
-        --rule: #e8e4db;
-        --rule-2: #f2efe8;
-        --font-sans: 'Pretendard Variable', system-ui, sans-serif;
-        --font-serif: 'Noto Serif KR', serif;
-        --font-mono: 'D2Coding', 'Pretendard Variable', monospace;
-        --font-display: var(--font-serif);
-        --font-body: var(--font-sans);
-        --tracking: -0.02em;
-        --radius-control: 6px;
-        --radius-dialog: 10px;
-        --read-w: 40em;
-        --page: 1060px;
-      }
+      ${PAGE_TOKENS_CSS}
       * { box-sizing: border-box; letter-spacing: var(--tracking); }
       body {
         margin: 0;

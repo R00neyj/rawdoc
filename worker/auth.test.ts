@@ -1,108 +1,131 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { getUser } from './auth'
+// 요청 → 사용자 판정: /v1/ 토큰, 로컬 개발 우회, better-auth 세션 (specs/features/F-2033.md 3장, U14~U21)
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DatabaseSync } from 'node:sqlite'
+import { readdirSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { getUser, getUserRefreshing } from './auth'
+import { AuthConfigError, getAuth } from './authServer'
 
-const DOMAIN = 'https://test.cloudflareaccess.com'
-const AUD = 'test-aud'
-const KID = 'test-kid'
+const MIGRATIONS = fileURLToPath(new URL('../migrations/', import.meta.url))
+const SECRET = 's'.repeat(40)
+const DAY_MS = 24 * 60 * 60 * 1000
 
-function createDb() {
-  const rows = new Map<string, { id: string; email: string }>()
+function openDb(): DatabaseSync {
+  const db = new DatabaseSync(':memory:')
+  for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()) {
+    db.exec(readFileSync(MIGRATIONS + file, 'utf-8'))
+  }
+  return db
+}
+
+function sessionEnv(db: unknown, over: Record<string, unknown> = {}): Env {
   return {
+    DB: db,
+    BETTER_AUTH_URL: 'https://rawdoc.app',
+    BETTER_AUTH_SECRET: SECRET,
+    DEV_AUTH_EMAIL: '',
+    GOOGLE_CLIENT_ID: 'google-id',
+    GOOGLE_CLIENT_SECRET: 'google-secret',
+    GITHUB_CLIENT_ID: 'github-id',
+    GITHUB_CLIENT_SECRET: 'github-secret',
+    ...over,
+  } as unknown as Env
+}
+
+function b64url(value: unknown): string {
+  return btoa(JSON.stringify(value)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function stubGoogle(email: string) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (!url.startsWith('https://oauth2.googleapis.com/token')) throw new Error(`unexpected fetch ${url}`)
+      const now = Math.floor(Date.now() / 1000)
+      const claims = { iss: 'https://accounts.google.com', aud: 'google-id', iat: now, exp: now + 3600, sub: 'g-1', email, email_verified: true }
+      return Response.json({ access_token: 'at', token_type: 'Bearer', expires_in: 3600, id_token: `${b64url({ alg: 'RS256' })}.${b64url(claims)}.sig` })
+    }),
+  )
+}
+
+function cookiePairs(headers: Headers): string[] {
+  return headers
+    .getSetCookie()
+    .map((c) => c.split(';')[0])
+    .filter((c) => !c.endsWith('='))
+}
+
+// U3 방식 — signInSocial → 콜백으로 세션을 만들고 세션 쿠키를 돌려준다
+async function sessionCookie(db: DatabaseSync, email = 'me@example.org'): Promise<string> {
+  stubGoogle(email)
+  const auth = getAuth(sessionEnv(db))
+  const start = await auth.api.signInSocial({
+    body: { provider: 'google', callbackURL: '/#/d/abc', errorCallbackURL: '/login' },
+    headers: new Headers(),
+    returnHeaders: true,
+  })
+  const state = new URL(start.response.url as string).searchParams.get('state')
+  const res = await auth.handler(
+    new Request(`https://rawdoc.app/api/auth/callback/google?code=c&state=${state}`, {
+      headers: { Cookie: cookiePairs(start.headers).join('; ') },
+    }),
+  )
+  vi.unstubAllGlobals()
+  const session = cookiePairs(res.headers).find((c) => c.includes('session_token='))
+  if (!session) throw new Error(`no session cookie (${res.status} ${res.headers.get('Location')})`)
+  return session
+}
+
+function apiRequest(cookie?: string, path = '/api/docs'): Request {
+  return new Request(`https://rawdoc.app${path}`, cookie ? { headers: { Cookie: cookie } } : undefined)
+}
+
+function expiresAt(db: DatabaseSync): string {
+  return (db.prepare('SELECT expires_at FROM auth_sessions').get() as { expires_at: string }).expires_at
+}
+
+function setExpiresAt(db: DatabaseSync, when: number) {
+  db.prepare('UPDATE auth_sessions SET expires_at = ?').run(new Date(when).toISOString())
+}
+
+// 우회 문장만 받는 가짜 D1 — 그 밖의 문장은 던진다
+function bypassDb() {
+  const calls: { sql: string; args: unknown[] }[] = []
+  const users = new Map<string, { id: string; email: string }>()
+  const DB = {
     prepare(sql: string) {
       return {
         bind(...args: unknown[]) {
+          calls.push({ sql, args })
           return {
             async run() {
-              if (sql.startsWith('INSERT')) {
-                const [id, email] = args as [string, string, number]
-                if (!rows.has(email)) rows.set(email, { id, email })
-              }
+              if (!sql.startsWith('INSERT INTO users')) throw new Error(`unhandled sql: ${sql}`)
+              const [id, email] = args as [string, string]
+              if (!users.has(email)) users.set(email, { id, email })
+              return { meta: { changes: 1 } }
             },
             async first<T>() {
-              if (sql.startsWith('SELECT')) {
-                const [email] = args as [string]
-                return (rows.get(email) as T) ?? null
-              }
-              return null
+              if (!sql.startsWith('SELECT id, email FROM users WHERE email = ?')) throw new Error(`unhandled sql: ${sql}`)
+              return (users.get(args[0] as string) as T) ?? null
             },
           }
         },
       }
     },
+    async batch() {
+      throw new Error('unexpected batch')
+    },
+    async exec() {
+      throw new Error('unexpected exec')
+    },
   }
+  return { DB, calls }
 }
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  let binary = ''
-  for (const b of bytes) binary += String.fromCharCode(b)
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-function encodeJson(obj: unknown): string {
-  return base64UrlEncode(new TextEncoder().encode(JSON.stringify(obj)))
-}
-
-async function signJwt(payload: Record<string, unknown>, privateKey: CryptoKey): Promise<string> {
-  const headerB64 = encodeJson({ alg: 'RS256', typ: 'JWT', kid: KID })
-  const payloadB64 = encodeJson(payload)
-  const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`)
-  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', privateKey, data)
-  return `${headerB64}.${payloadB64}.${base64UrlEncode(new Uint8Array(sig))}`
-}
-
-let keyPair: CryptoKeyPair
-let wrongKeyPair: CryptoKeyPair
-let publicJwk: JsonWebKeyWithKid
-
-beforeAll(async () => {
-  keyPair = (await crypto.subtle.generateKey(
-    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
-    true,
-    ['sign', 'verify'],
-  )) as CryptoKeyPair
-  wrongKeyPair = (await crypto.subtle.generateKey(
-    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
-    true,
-    ['sign', 'verify'],
-  )) as CryptoKeyPair
-  publicJwk = { ...(await crypto.subtle.exportKey('jwk', keyPair.publicKey)), kid: KID } as JsonWebKeyWithKid
-})
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
-
-function stubJwksFetch() {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      if (url === `${DOMAIN}/cdn-cgi/access/certs`) {
-        return new Response(JSON.stringify({ keys: [publicJwk] }), { status: 200 })
-      }
-      return new Response('not found', { status: 404 })
-    }),
-  )
-}
-
-function validPayload(overrides: Record<string, unknown> = {}) {
-  return {
-    iss: DOMAIN,
-    aud: AUD,
-    exp: Math.floor(Date.now() / 1000) + 3600,
-    email: 'User@Example.com',
-    ...overrides,
-  }
-}
-
-function requestWithToken(token: string): Request {
-  return new Request('https://app.example.com/api/me', {
-    headers: { 'Cf-Access-Jwt-Assertion': token },
-  })
-}
-
-function testEnv(): Env {
-  return { ACCESS_TEAM_DOMAIN: DOMAIN, ACCESS_AUD: AUD, DB: createDb() } as unknown as Env
-}
 
 async function sha256Hex(input: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input))
@@ -150,7 +173,7 @@ function tokenEnv(tokens: ApiTokenRow[], users: UserRow[]) {
     },
   }
 
-  return { env: { DB } as unknown as Env, updateCalls, tokenById }
+  return { env: sessionEnv(DB), updateCalls, tokenById }
 }
 
 describe('F-222 A2 /v1/ 토큰 판정', () => {
@@ -187,9 +210,12 @@ describe('F-222 A2 /v1/ 토큰 판정', () => {
     expect(await getUser(request, env)).toBeNull()
   })
 
-  it('/v1/ 요청에 Access 쿠키만 있으면 null', async () => {
+  it('/v1/ 요청에 better-auth 세션 쿠키만 있으면 null', async () => {
+    const db = openDb()
+    const cookie = await sessionCookie(db)
+    expect(await getUser(apiRequest(cookie), sessionEnv(db))).not.toBeNull()
     const { env } = tokenEnv([], [])
-    const request = new Request('https://app.example.com/v1/docs', { headers: { Cookie: 'CF_Authorization=whatever' } })
+    const request = new Request('https://rawdoc.app/v1/docs', { headers: { Cookie: cookie } })
     expect(await getUser(request, env)).toBeNull()
   })
 
@@ -230,39 +256,92 @@ describe('F-222 A2 /v1/ 토큰 판정', () => {
   })
 })
 
-describe('F-205 A1 JWT 검증', () => {
-  it('정상 토큰은 통과한다', async () => {
-    stubJwksFetch()
-    const token = await signJwt(validPayload(), keyPair.privateKey)
-    const user = await getUser(requestWithToken(token), testEnv())
-    expect(user).toEqual({ id: expect.any(String), email: 'user@example.com' })
+describe('F-2033 U15·U16 로컬 개발 우회', () => {
+  it('U15 로컬 인증 모드 + @example.com 이면 better-auth 없이 그 이메일 사용자', async () => {
+    const { DB, calls } = bypassDb()
+    const env = { DB, BETTER_AUTH_URL: 'http://localhost:8790', DEV_AUTH_EMAIL: 'Dev@Example.com' } as unknown as Env
+    const user = await getUser(new Request('http://rawdoc.app/api/docs'), env)
+    expect(user).toEqual({ id: expect.any(String), email: 'dev@example.com' })
+    const insert = calls.find((c) => c.sql.startsWith('INSERT INTO users'))!
+    expect(insert.sql).toContain('ON CONFLICT(email) DO NOTHING')
+    const columns = insert.sql.slice(insert.sql.indexOf('(') + 1, insert.sql.indexOf(')')).split(',').map((s) => s.trim())
+    expect(insert.args[columns.indexOf('email_verified')]).toBe(1)
+    expect(String(insert.args[columns.indexOf('updated_at')])).toMatch(/Z$/)
+    expect(await getUserRefreshing(new Request('http://rawdoc.app/api/me'), env)).toEqual({
+      user: { id: user!.id, email: 'dev@example.com' },
+      setCookies: [],
+    })
   })
 
-  it('서명이 틀리면 거부한다', async () => {
-    stubJwksFetch()
-    const token = await signJwt(validPayload(), wrongKeyPair.privateKey)
-    const user = await getUser(requestWithToken(token), testEnv())
-    expect(user).toBeNull()
+  it('U16 운영 주소·예약 도메인이 아닌 이메일·빈 값이면 우회하지 않는다', async () => {
+    const cases = [
+      { BETTER_AUTH_URL: 'https://rawdoc.app', DEV_AUTH_EMAIL: 'dev@example.com' },
+      { BETTER_AUTH_URL: 'http://localhost:8790', DEV_AUTH_EMAIL: 'dev@rawdoc.app' },
+      { BETTER_AUTH_URL: 'http://localhost:8790', DEV_AUTH_EMAIL: '' },
+    ]
+    for (const vars of cases) {
+      const { DB, calls } = bypassDb()
+      const env = sessionEnv(DB, vars)
+      expect(await getUser(apiRequest(), env)).toBeNull()
+      expect(calls).toEqual([])
+    }
+  })
+})
+
+describe('F-2033 U17~U21 better-auth 세션', () => {
+  it('U17 세션 쿠키로 사용자, 없거나 모르는 토큰이면 null', async () => {
+    const db = openDb()
+    const cookie = await sessionCookie(db)
+    const env = sessionEnv(db)
+    const user = await getUser(apiRequest(cookie), env)
+    expect(user).toEqual({ id: expect.any(String), email: 'me@example.org' })
+    expect(Object.keys(user!).sort()).toEqual(['email', 'id'])
+    expect(await getUser(apiRequest(), env)).toBeNull()
+    const name = cookie.slice(0, cookie.indexOf('='))
+    expect(await getUser(apiRequest(`${name}=unknown.token`), env)).toBeNull()
   })
 
-  it('aud 가 틀리면 거부한다', async () => {
-    stubJwksFetch()
-    const token = await signJwt(validPayload({ aud: 'other-aud' }), keyPair.privateKey)
-    const user = await getUser(requestWithToken(token), testEnv())
-    expect(user).toBeNull()
+  it('U18 getUser 는 연장하지 않는다', async () => {
+    const db = openDb()
+    const cookie = await sessionCookie(db)
+    setExpiresAt(db, Date.now() + 28 * DAY_MS)
+    const before = expiresAt(db)
+    expect(await getUser(apiRequest(cookie), sessionEnv(db))).not.toBeNull()
+    expect(expiresAt(db)).toBe(before)
   })
 
-  it('만료된 토큰은 거부한다', async () => {
-    stubJwksFetch()
-    const token = await signJwt(validPayload({ exp: Math.floor(Date.now() / 1000) - 100 }), keyPair.privateKey)
-    const user = await getUser(requestWithToken(token), testEnv())
-    expect(user).toBeNull()
+  it('U19 getUserRefreshing 은 연장하고 쿠키를 돌려준다, 곧바로 다시 부르면 없다', async () => {
+    const db = openDb()
+    const cookie = await sessionCookie(db)
+    setExpiresAt(db, Date.now() + 28 * DAY_MS)
+    const before = expiresAt(db)
+    const env = sessionEnv(db)
+    const first = await getUserRefreshing(apiRequest(cookie, '/api/me'), env)
+    expect(first.user).toEqual({ id: expect.any(String), email: 'me@example.org' })
+    expect(first.setCookies.length).toBe(1)
+    expect(first.setCookies[0]).toContain('session_token=')
+    expect(first.setCookies[0]).toContain('Max-Age=2592000')
+    expect(expiresAt(db) > before).toBe(true)
+    const second = await getUserRefreshing(apiRequest(cookie, '/api/me'), env)
+    expect(second.user).not.toBeNull()
+    expect(second.setCookies).toEqual([])
   })
 
-  it('iss 가 틀리면 거부한다', async () => {
-    stubJwksFetch()
-    const token = await signJwt(validPayload({ iss: 'https://wrong.example' }), keyPair.privateKey)
-    const user = await getUser(requestWithToken(token), testEnv())
-    expect(user).toBeNull()
+  it('U20 만료 세션은 사용자 없음, 연장 조회는 쿠키를 지운다', async () => {
+    const db = openDb()
+    const cookie = await sessionCookie(db)
+    setExpiresAt(db, Date.now() - 1000)
+    const env = sessionEnv(db)
+    expect(await getUser(apiRequest(cookie), env)).toBeNull()
+    const refreshed = await getUserRefreshing(apiRequest(cookie, '/api/me'), env)
+    expect(refreshed.user).toBeNull()
+    expect(refreshed.setCookies.some((c) => c.includes('session_token=') && /Max-Age=0/.test(c))).toBe(true)
+  })
+
+  it('U21 비밀이 없으면 세션 판정은 던지고 /v1/ 은 던지지 않는다', async () => {
+    const env = sessionEnv(openDb(), { BETTER_AUTH_SECRET: undefined })
+    await expect(getUser(apiRequest('__Secure-better-auth.session_token=a.b'), env)).rejects.toBeInstanceOf(AuthConfigError)
+    await expect(getUserRefreshing(apiRequest('__Secure-better-auth.session_token=a.b', '/api/me'), env)).rejects.toBeInstanceOf(AuthConfigError)
+    expect(await getUser(new Request('https://rawdoc.app/v1/docs'), env)).toBeNull()
   })
 })

@@ -226,11 +226,11 @@ export default defineConfig({
         // 여유를 둔다
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: 'index.html',
-        // Access 로그인·로그아웃(/cdn-cgi/access/*)과 공개 API 는 SW 가 index.html 로 가로채면 안 된다
+        // Cloudflare 예약 경로(/cdn-cgi/*)·로그인 페이지(/login)·공개 API 는 SW 가 index.html 로 가로채면 안 된다
         // /welcome 은 워커가 301 로 / 에 보낸다 — SW 가 index.html 로 가로채면 그 301 이 안 나간다 (F-271 6장)
         navigateFallbackDenylist: [
           /^\/api\//, /^\/pub\//, /^\/v1\//, /^\/cdn-cgi\//, /^\/welcome$/, // 지금 것
-          /^\/guides(\/|$)/, /^\/changelog$/, /^\/help$/, /^\/privacy$/, /^\/terms$/,
+          /^\/guides(\/|$)/, /^\/changelog$/, /^\/help$/, /^\/privacy$/, /^\/terms$/, /^\/login$/,
           /^\/sitemap\.xml$/, /^\/robots\.txt$/, /^\/llms\.txt$/, /^\/404(\.html)?$/,
         ],
         cleanupOutdatedCaches: true,

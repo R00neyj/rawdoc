@@ -14,7 +14,9 @@ const SITE_ORIGIN = new URL(SITE_URL).origin
 
 type Grant = { target_type: 'doc' | 'folder'; target_id: string; grantee_email: string; role: 'view' | 'edit' }
 
-function makeEnv(opts: { doc?: { owner_id: string; version: number } | null; grants?: Grant[]; dev?: boolean } = {}) {
+function makeEnv(
+  opts: { doc?: { owner_id: string; version: number } | null; grants?: Grant[]; dev?: boolean; local?: boolean } = {},
+) {
   const sqls: string[] = []
   const doc = opts.doc === undefined ? { owner_id: 'owner', version: 7 } : opts.doc
   const grants = opts.grants ?? []
@@ -43,7 +45,7 @@ function makeEnv(opts: { doc?: { owner_id: string; version: number } | null; gra
   }
   const env = {
     DB,
-    ACCESS_AUD: opts.dev ? '' : 'aud',
+    BETTER_AUTH_URL: opts.dev || opts.local ? 'http://localhost:8790' : 'https://rawdoc.app',
     ...(opts.dev ? { DEV_AUTH_EMAIL: 'dev@example.com' } : {}),
   } as unknown as Env
   return { env, sqls }
@@ -102,7 +104,7 @@ describe('F-304 A21 HTTP 거절', () => {
     expect(await statusOf(upgrade(), env)).toBe('forward')
   })
 
-  it('http://localhost:8791 은 개발 우회 조건일 때만 통과', async () => {
+  it('http://localhost:8791 은 로컬 인증 모드일 때만 통과', async () => {
     const local = { Origin: 'http://localhost:8791' }
     expect(await statusOf(upgrade(local), makeEnv().env)).toBe(403)
     expect(await statusOf(upgrade(local), makeEnv({ dev: true }).env)).toBe('forward')
@@ -111,11 +113,15 @@ describe('F-304 A21 HTTP 거절', () => {
     expect(await statusOf(upgrade({ Origin: 'http://evil.example' }), makeEnv({ dev: true }).env)).toBe(403)
   })
 
-  it('개발 우회 조건이면 wrangler dev 가 바꿔 쓴 요청 출처(http://{routes 호스트})도 통과', async () => {
+  it('로컬 인증 모드면 wrangler dev 가 바꿔 쓴 요청 출처(http://{routes 호스트})도 통과', async () => {
     const rewritten = () =>
       new Request(`http://rawdoc.app/ws/doc/${DOC_ID}`, { headers: { Upgrade: 'websocket', Origin: 'http://rawdoc.app' } })
     expect(await statusOf(rewritten(), makeEnv({ dev: true }).env)).toBe('forward')
     expect(await statusOf(rewritten(), makeEnv().env)).toBe(403)
+  })
+
+  it('F-2033 U22 로컬 인증 모드면 DEV_AUTH_EMAIL 없이도 localhost 출처를 받는다', async () => {
+    expect(await statusOf(upgrade({ Origin: 'http://localhost:8790' }), makeEnv({ local: true }).env)).toBe('forward')
   })
 
   it('UUID 가 아닌 id → HTTP 404', async () => {
