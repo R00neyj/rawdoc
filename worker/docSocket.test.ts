@@ -15,11 +15,18 @@ const SITE_ORIGIN = new URL(SITE_URL).origin
 type Grant = { target_type: 'doc' | 'folder'; target_id: string; grantee_email: string; role: 'view' | 'edit' }
 
 function makeEnv(
-  opts: { doc?: { owner_id: string; version: number } | null; grants?: Grant[]; dev?: boolean; local?: boolean } = {},
+  opts: {
+    doc?: { owner_id: string; version: number } | null
+    grants?: Grant[]
+    users?: { id: string; blocked_at: number | null }[]
+    dev?: boolean
+    local?: boolean
+  } = {},
 ) {
   const sqls: string[] = []
   const doc = opts.doc === undefined ? { owner_id: 'owner', version: 7 } : opts.doc
   const grants = opts.grants ?? []
+  const users = opts.users ?? []
   const DB = {
     prepare(sql: string) {
       sqls.push(sql)
@@ -35,6 +42,11 @@ function makeEnv(
                 const [type, id, email] = args
                 const g = grants.find((x) => x.target_type === type && x.target_id === id && x.grantee_email === email)
                 return (g ? { role: g.role } : null) as T | null
+              }
+              if (sql.startsWith('SELECT write_day')) {
+                const u = users.find((x) => x.id === args[0])
+                if (!u) return null
+                return { write_day: null, write_count: 0, content_bytes: 0, doc_count: 0, blocked_at: u.blocked_at, warned_at: null } as T
               }
               throw new Error(`unhandled sql: ${sql}`)
             },
@@ -211,5 +223,38 @@ describe('F-304 A22 닫기 코드와 넘기기', () => {
         }),
       ),
     ).toBeNull()
+  })
+})
+
+describe('F-2028 DS1~DS3 막힌 계정·막힌 소유자', () => {
+  const usage = (blockedAt: number | null) => ({
+    writeDay: null,
+    writeCount: 0,
+    contentBytes: 0,
+    docCount: 0,
+    blockedAt,
+    warnedAt: null,
+  })
+
+  it('DS1 막힌 소유자 본인 → 4403 forbidden', async () => {
+    vi.mocked(getUser).mockResolvedValue({ id: 'owner', email: 'owner@example.com', usage: usage(123) })
+    expect(await resolveDocSocket(upgrade(), makeEnv().env, DOC_ID)).toEqual({ type: 'close', code: 4403, reason: 'forbidden' })
+  })
+
+  it('DS2 편집 초대 사용자, 소유자 막힘 → 4403 forbidden', async () => {
+    vi.mocked(getUser).mockResolvedValue({ id: 'e', email: 'editor@example.com', usage: usage(null) })
+    const { env } = makeEnv({
+      grants: [{ target_type: 'doc', target_id: DOC_ID, grantee_email: 'editor@example.com', role: 'edit' }],
+      users: [{ id: 'owner', blocked_at: 123 }],
+    })
+    expect(await resolveDocSocket(upgrade(), env, DOC_ID)).toEqual({ type: 'close', code: 4403, reason: 'forbidden' })
+  })
+
+  it('DS3 안 막힌 소유자 → forward, 사용량 문장 0', async () => {
+    vi.mocked(getUser).mockResolvedValue({ id: 'owner', email: 'owner@example.com', usage: usage(null) })
+    const { env, sqls } = makeEnv()
+    const decision = await resolveDocSocket(upgrade(), env, DOC_ID)
+    expect(decision.type).toBe('forward')
+    expect(sqls.filter((s) => s.startsWith('SELECT write_day'))).toEqual([])
   })
 })

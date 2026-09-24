@@ -17,6 +17,7 @@ const UNVERIFIED =
 const CANCELLED = '로그인을 취소했습니다.'
 const STATE = '로그인 시간이 지났거나 다른 창에서 시작한 로그인입니다. 다시 시도해 주세요.'
 const FALLBACK = '로그인하지 못했습니다. 잠시 뒤 다시 시도해 주세요.'
+const SIGNUP_CLOSED = '오늘은 새 가입이 마감됐습니다. 한국 시간 오전 9시(UTC 자정)에 다시 열립니다. 그동안은 로그인 없이 쓸 수 있습니다.'
 
 function count(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1
@@ -121,6 +122,7 @@ describe('F-2033 U28 오류 코드 → 문구', () => {
       ['state_not_found', STATE],
       ['state_invalid', STATE],
       ['state_security_mismatch', STATE],
+      ['signup_closed', SIGNUP_CLOSED],
       ['bad_request', FALLBACK],
       ['provider_unavailable', FALLBACK],
       ['internal_server_error', FALLBACK],
@@ -131,7 +133,15 @@ describe('F-2033 U28 오류 코드 → 문구', () => {
       const { html } = await page('', code)
       expect(html).toContain(`<p class="login-error" role="alert">${message}</p>`)
     }
-    expect(Object.keys(LOGIN_ERROR_MESSAGES).length).toBe(8)
+    expect(Object.keys(LOGIN_ERROR_MESSAGES).length).toBe(9)
+  })
+
+  it('F-2028 L1 가입 마감 문구, validation_failed 는 마지막 줄', async () => {
+    expect(loginErrorMessage('signup_closed')).toBe(SIGNUP_CLOSED)
+    const { html } = await page('', 'signup_closed')
+    expect(count(html, `<p class="login-error" role="alert">${SIGNUP_CLOSED}</p>`)).toBe(1)
+    expect(html).not.toContain('signup_closed')
+    expect(loginErrorMessage('validation_failed')).toBe(LOGIN_ERROR_FALLBACK)
   })
 
   it('error 값 자체는 화면에 넣지 않는다', async () => {

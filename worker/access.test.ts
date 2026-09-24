@@ -5,11 +5,12 @@ type Doc = { id: string; owner_id: string; folder_id: string | null }
 type Folder = { id: string; owner_id: string; parent_id: string | null }
 // owner_id 를 비우면 대상 폴더의 소유자로 본다 — 실제로 handlePutGrant 가 대상 소유자를 넣는다
 type Grant = { target_type: 'doc' | 'folder'; target_id: string; grantee_email: string; role: 'view' | 'edit'; owner_id?: string }
-type UserRow = { id: string; email: string }
+type UserRow = { id: string; email: string; blocked_at?: number | null }
 
 function makeEnv(
   data: { docs?: Doc[]; folders?: Folder[]; grants?: Grant[]; users?: UserRow[] },
   sqlLog: string[] = [],
+  usageIds: string[] = [],
 ): Env {
   const docs = data.docs ?? []
   const folders = data.folders ?? []
@@ -59,6 +60,20 @@ function makeEnv(
               if (sql.startsWith('SELECT * FROM docs')) {
                 const [id] = args as [string]
                 return (docs.find((d) => d.id === id) as T) ?? null
+              }
+              if (sql.startsWith('SELECT write_day')) {
+                const [id] = args as [string]
+                usageIds.push(id)
+                const row = users.find((u) => u.id === id)
+                if (!row) return null
+                return {
+                  write_day: null,
+                  write_count: 0,
+                  content_bytes: 0,
+                  doc_count: 0,
+                  blocked_at: row.blocked_at ?? null,
+                  warned_at: null,
+                } as T
               }
               if (sql.startsWith('SELECT email FROM users')) {
                 const [id] = args as [string]
@@ -288,5 +303,91 @@ describe('F-2017 S1 깊은 폴더 사슬의 초대', () => {
       grants: [{ target_type: 'folder', target_id: 'f1', grantee_email: GRANTEE.email, role: 'edit' }],
     })
     expect(await isDocAttachmentOwner(env, { id: 'd1', owner_id: OWNER.id, folder_id: 'f6' }, GRANTEE.id)).toBe(true)
+  })
+})
+
+describe('F-2028 AC1~AC9 막힘이면 쓰기 역할을 view 로 낮춘다', () => {
+  const DOC = { id: 'd1', owner_id: OWNER.id, folder_id: null }
+  const usage = (blockedAt: number | null) => ({
+    writeDay: null,
+    writeCount: 0,
+    contentBytes: 0,
+    docCount: 0,
+    blockedAt,
+    warnedAt: null,
+  })
+  const editGrant: Grant = { target_type: 'doc', target_id: 'd1', grantee_email: GRANTEE.email, role: 'edit' }
+  const viewGrant: Grant = { target_type: 'doc', target_id: 'd1', grantee_email: GRANTEE.email, role: 'view' }
+  const usageSql = (log: string[]) => log.filter((sql) => sql.startsWith('SELECT write_day'))
+
+  it('AC1 소유자, 안 막힘 — owner, blocked 키 없음, 사용량 문장 0', async () => {
+    const log: string[] = []
+    const access = await resolveDocAccess(makeEnv({}, log), DOC, { ...OWNER, usage: usage(null) })
+    expect(access).toStrictEqual({ role: 'owner', doc: DOC })
+    expect(usageSql(log)).toEqual([])
+  })
+
+  it('AC2 소유자, usage 막힘 — view·blocked, 사용량 문장 0', async () => {
+    const log: string[] = []
+    const access = await resolveDocAccess(makeEnv({}, log), DOC, { ...OWNER, usage: usage(123) })
+    expect(access).toStrictEqual({ role: 'view', doc: DOC, blocked: true })
+    expect(usageSql(log)).toEqual([])
+  })
+
+  it('AC3 소유자, usage 없음(재검증 모양), 행 막힘 — view·blocked, 소유자 사용량 1번', async () => {
+    const log: string[] = []
+    const ids: string[] = []
+    const env = makeEnv({ users: [{ ...OWNER, blocked_at: 123 }] }, log, ids)
+    const access = await resolveDocAccess(env, DOC, OWNER)
+    expect(access).toStrictEqual({ role: 'view', doc: DOC, blocked: true })
+    expect(usageSql(log).length).toBe(1)
+    expect(ids).toEqual([OWNER.id])
+  })
+
+  it('AC4 편집 초대, 본인 안 막힘, 소유자 막힘 — view·blocked, 소유자 사용량 1번', async () => {
+    const log: string[] = []
+    const ids: string[] = []
+    const env = makeEnv({ grants: [editGrant], users: [{ ...OWNER, blocked_at: 123 }] }, log, ids)
+    const access = await resolveDocAccess(env, DOC, { ...GRANTEE, usage: usage(null) })
+    expect(access).toStrictEqual({ role: 'view', doc: DOC, blocked: true })
+    expect(usageSql(log).length).toBe(1)
+    expect(ids).toEqual([OWNER.id])
+  })
+
+  it('AC5 편집 초대, 둘 다 안 막힘 — edit, blocked 키 없음', async () => {
+    const env = makeEnv({ grants: [editGrant], users: [{ ...OWNER }] })
+    const access = await resolveDocAccess(env, DOC, { ...GRANTEE, usage: usage(null) })
+    expect(access).toStrictEqual({ role: 'edit', doc: DOC })
+  })
+
+  it('AC6 보기 초대, 소유자 막힘 — view, blocked 키 없음, 사용량 문장 0', async () => {
+    const log: string[] = []
+    const env = makeEnv({ grants: [viewGrant], users: [{ ...OWNER, blocked_at: 123 }] }, log)
+    const access = await resolveDocAccess(env, DOC, { ...GRANTEE, usage: usage(null) })
+    expect(access).toStrictEqual({ role: 'view', doc: DOC })
+    expect(usageSql(log)).toEqual([])
+  })
+
+  it('AC7 권한 없음, 소유자 막힘 — null, 사용량 문장 0', async () => {
+    const log: string[] = []
+    const env = makeEnv({ users: [{ ...OWNER, blocked_at: 123 }] }, log)
+    expect(await resolveDocAccess(env, DOC, STRANGER)).toBeNull()
+    expect(usageSql(log)).toEqual([])
+  })
+
+  it('AC8 편집 초대, usage 없음, 본인 막힘 — view·blocked, 본인 사용량 1번만', async () => {
+    const log: string[] = []
+    const ids: string[] = []
+    const env = makeEnv({ grants: [editGrant], users: [{ ...GRANTEE, blocked_at: 123 }, { ...OWNER }] }, log, ids)
+    const access = await resolveDocAccess(env, DOC, GRANTEE)
+    expect(access).toStrictEqual({ role: 'view', doc: DOC, blocked: true })
+    expect(usageSql(log).length).toBe(1)
+    expect(ids).toEqual([GRANTEE.id])
+  })
+
+  it('AC9 편집 초대, 소유자 행 없음 — edit', async () => {
+    const env = makeEnv({ grants: [editGrant] })
+    const access = await resolveDocAccess(env, DOC, { ...GRANTEE, usage: usage(null) })
+    expect(access).toStrictEqual({ role: 'edit', doc: DOC })
   })
 })

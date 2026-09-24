@@ -1,6 +1,6 @@
 // 자동 업로드 API '/v1' 전용 핸들러 — 몸통 보정·응답 모양만 여기서 하고, 나머지는 기존 /api 핸들러를 그대로 부른다 (specs/features/F-223.md)
 import { errorResponse, jsonResponse } from './http'
-import { requireUser } from './auth'
+import { rememberUser, requireUser, type AuthUser } from './auth'
 import { getDocAccess, roleAtLeast } from './access'
 import { getActiveLock } from './locks'
 import { badBody, handleCreateDoc, handleUpdateDoc, readJsonLimited } from './docs'
@@ -24,8 +24,15 @@ function jsonRequest(request: Request, bodyObj: unknown, dropHeaders: string[] =
   return new Request(request.url, { method: request.method, headers, body: JSON.stringify(bodyObj ?? {}) })
 }
 
+// 안쪽 핸들러에 새 Request 를 넘기되 인증은 다시 하지 않는다 (F-2028 8장)
+function innerRequest(request: Request, user: AuthUser, bodyObj: unknown, dropHeaders: string[] = []): Request {
+  const inner = jsonRequest(request, bodyObj, dropHeaders)
+  rememberUser(inner, user)
+  return inner
+}
+
 export async function handleCreateDocV1(request: Request, env: Env): Promise<Response> {
-  await requireUser(request, env)
+  const user = await requireUser(request, env)
   const parsed = await readJsonLimited(request, MAX_BODY_BYTES)
   if (!parsed.ok) return badBody(parsed)
 
@@ -46,7 +53,7 @@ export async function handleCreateDocV1(request: Request, env: Env): Promise<Res
   const forwardBody: Record<string, unknown> = { title, content, lineEnding: resolvedLineEnding }
   if (folderId !== undefined) forwardBody.folderId = folderId
 
-  return handleCreateDoc(jsonRequest(request, forwardBody), env)
+  return handleCreateDoc(innerRequest(request, user, forwardBody), env)
 }
 
 // DO 결과 값에 Worker 가 읽은 행의 나머지 열을 붙인다 (F-308 4장)
@@ -83,6 +90,7 @@ export async function handleUpdateDocV1(
 
   const access = await getDocAccess<DocRow>(env, params.id, user)
   if (!access) return errorResponse('not_found', 404)
+  if (access.blocked) return errorResponse('account_blocked', 403) // 쓸 수 있던 사람의 막힘 — 보낸 사람 또는 문서 소유자 (F-2028 4.3)
   if (!roleAtLeast(access.role, 'edit')) return errorResponse('forbidden', 403)
   const row = access.doc
 
@@ -120,7 +128,7 @@ export async function handleUpdateDocV1(
 
   if (!result) {
     const forward = { title, content: nextContent, baseVersion }
-    return handleUpdateDoc(jsonRequest(request, forward, ['X-Lock-Session']), env, ctx, params)
+    return handleUpdateDoc(innerRequest(request, user, forward, ['X-Lock-Session']), env, ctx, params)
   }
   switch (result.type) {
     case 'ok':

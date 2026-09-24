@@ -6,6 +6,7 @@ vi.mock('./auth', () => ({
     const id = request.headers.get('x-test-user') ?? 'u1'
     return { id, email: `${id}@example.com` }
   }),
+  rememberUser: vi.fn(),
 }))
 
 // DO 경유 쓰기(F-308) — 기본은 null 이라 D1 직접 쓰기(폴백)를 탄다. F-308 테스트만 결과를 준다
@@ -548,6 +549,23 @@ describe('F-308 A1~A8 /v1 PUT 을 DO 경유로', () => {
     expect(room).not.toHaveBeenCalled()
   })
 
+  it('F-2028 V3 소유자가 막힌 문서에 편집 권한자가 PUT → 403 account_blocked, DO 를 부르지 않는다. 풀면 200', async () => {
+    room.mockImplementation(async () => okResult)
+    const users: UserRow[] = [{ id: 'u1', blocked_at: 1 }]
+    const edit: GrantRow = { target_type: 'doc', target_id: 'd1', grantee_email: 'u2@example.com', role: 'edit' }
+    const { env, docs } = makeEnv({ docs: [baseDoc({ folder_id: null })], grants: [edit], users })
+    const blocked = await callV1(env, { content: 'new', baseVersion: 3 }, { 'x-test-user': 'u2' })
+    expect(blocked.status).toBe(403)
+    expect(await blocked.json()).toEqual({ error: 'account_blocked' })
+    expect(room).not.toHaveBeenCalled()
+    expect(docs[0]).toEqual(baseDoc({ folder_id: null }))
+
+    users[0].blocked_at = null
+    const ok = await callV1(env, { content: 'new', baseVersion: 3 }, { 'x-test-user': 'u2' })
+    expect(ok.status).toBe(200)
+    expect(room).toHaveBeenCalledTimes(1)
+  })
+
   it('V2 같은 상태 + 낡은 baseVersion + 늘리는 본문 → 413 (409 아님 — 6.3 자리)', async () => {
     room.mockImplementation(async () => okResult)
     const { env } = makeEnv({
@@ -843,7 +861,7 @@ describe('F-2021 U14 GET /v1/me — 실제 auth 로 확인', () => {
       {} as ExecutionContext,
     )
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ id: 'u1', email: 'a@b.com' })
+    expect(await res.json()).toEqual({ id: 'u1', email: 'a@b.com', blocked: false, warned: false })
   })
 })
 

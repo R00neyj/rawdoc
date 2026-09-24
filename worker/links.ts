@@ -9,13 +9,21 @@ import { descendantFolderIds } from '../src/lib/folderTree'
 import { createWikiResolver, type WikiFolderRef } from '../src/lib/wikiResolve'
 import { dayUsageStatement } from './usage'
 
-type LinkRow = {
+export type PublicLinkRow = {
   token: string
   owner_id: string
   target_type: 'doc' | 'folder'
   target_id: string
   created_at: number
   revoked_at: number | null
+}
+
+// 공개 조회는 모두 여기로 — 링크 소유자가 막혔으면 없는 링크와 같다. 행은 지우지 않아 풀면 같은 주소가 돌아온다 (F-2028 5.1)
+const PUBLIC_LINK_SQL =
+  'SELECT * FROM share_links WHERE token = ? AND revoked_at IS NULL AND NOT EXISTS (SELECT 1 FROM users WHERE users.id = share_links.owner_id AND users.blocked_at IS NOT NULL)'
+
+export async function findPublicLink(env: Env, token: string): Promise<PublicLinkRow | null> {
+  return env.DB.prepare(PUBLIC_LINK_SQL).bind(token).first<PublicLinkRow>()
 }
 
 type PublicDocRow = {
@@ -47,10 +55,10 @@ async function findOwnedDoc(env: Env, docId: string, ownerId: string): Promise<{
     .first<{ id: string }>()
 }
 
-async function findActiveLink(env: Env, targetType: 'doc' | 'folder', targetId: string): Promise<LinkRow | null> {
+async function findActiveLink(env: Env, targetType: 'doc' | 'folder', targetId: string): Promise<PublicLinkRow | null> {
   return env.DB.prepare('SELECT * FROM share_links WHERE target_type = ? AND target_id = ? AND revoked_at IS NULL')
     .bind(targetType, targetId)
-    .first<LinkRow>()
+    .first<PublicLinkRow>()
 }
 
 async function findOwnedFolder(env: Env, folderId: string, ownerId: string): Promise<{ id: string } | null> {
@@ -261,9 +269,7 @@ export async function handlePublicGetDoc(
 ): Promise<Response> {
   if (!isValidToken(params.token)) return pubResponse({ error: 'not_found' }, 404)
 
-  const link = await env.DB.prepare('SELECT * FROM share_links WHERE token = ? AND revoked_at IS NULL')
-    .bind(params.token)
-    .first<LinkRow>()
+  const link = await findPublicLink(env, params.token)
   if (!link || link.target_type !== 'doc') return pubResponse({ error: 'not_found' }, 404)
 
   const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at FROM docs WHERE id = ?')
@@ -288,9 +294,7 @@ export async function handlePublicGetDocSet(
 ): Promise<Response> {
   if (!isValidToken(params.token)) return pubResponse({ error: 'not_found' }, 404)
 
-  const link = await env.DB.prepare('SELECT * FROM share_links WHERE token = ? AND revoked_at IS NULL')
-    .bind(params.token)
-    .first<LinkRow>()
+  const link = await findPublicLink(env, params.token)
   if (!link || link.target_type !== 'doc') return pubResponse({ error: 'not_found' }, 404)
 
   const bundledIds = await fetchShareLinkDocIds(env, params.token)
@@ -343,9 +347,7 @@ export async function handlePublicGetDocSetDoc(
 ): Promise<Response> {
   if (!isValidToken(params.token)) return pubResponse({ error: 'not_found' }, 404)
 
-  const link = await env.DB.prepare('SELECT * FROM share_links WHERE token = ? AND revoked_at IS NULL')
-    .bind(params.token)
-    .first<LinkRow>()
+  const link = await findPublicLink(env, params.token)
   if (!link || link.target_type !== 'doc') return pubResponse({ error: 'not_found' }, 404)
 
   if (!(await isDocInLinkSet(env, params.token, link.target_id, params.docId))) return pubResponse({ error: 'not_found' }, 404)
@@ -430,9 +432,7 @@ export async function handlePublicGetFolder(
 ): Promise<Response> {
   if (!isValidToken(params.token)) return pubResponse({ error: 'not_found' }, 404)
 
-  const link = await env.DB.prepare('SELECT * FROM share_links WHERE token = ? AND revoked_at IS NULL')
-    .bind(params.token)
-    .first<LinkRow>()
+  const link = await findPublicLink(env, params.token)
   if (!link || link.target_type !== 'folder') return pubResponse({ error: 'not_found' }, 404)
 
   // 폴더 목록은 요청당 한 번. 트리 id 를 IN (…) 바인딩으로 보내지 않고 소유자 문서를 읽어 메모리에서 거른다 (F-2017 4.1·4.2)
@@ -465,9 +465,7 @@ export async function handlePublicGetFolderDoc(
 ): Promise<Response> {
   if (!isValidToken(params.token)) return pubResponse({ error: 'not_found' }, 404)
 
-  const link = await env.DB.prepare('SELECT * FROM share_links WHERE token = ? AND revoked_at IS NULL')
-    .bind(params.token)
-    .first<LinkRow>()
+  const link = await findPublicLink(env, params.token)
   if (!link || link.target_type !== 'folder') return pubResponse({ error: 'not_found' }, 404)
 
   const treeIds = await folderTreeIds(env, link.target_id, link.owner_id)

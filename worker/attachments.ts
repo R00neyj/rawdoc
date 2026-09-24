@@ -5,7 +5,7 @@ import { requireUser } from './auth'
 import { isValidToken } from './token'
 import { sniffImage, type ImageExt } from './imageSniff'
 import { extractAttachmentRefs } from '../src/lib/imageBlock'
-import { folderTreeIds, isDocInLinkSet } from './links'
+import { findPublicLink, folderTreeIds, isDocInLinkSet } from './links'
 import { getDocAccess, isDocAttachmentOwner } from './access'
 import { DAILY_WRITE_LIMIT, DOC_BYTES_QUOTA, DOC_COUNT_QUOTA, dayUsageStatement, usageOf, writesToday } from './usage'
 
@@ -212,9 +212,7 @@ export async function handlePublicGetAttachment(
   if (!parsedName || !isValidToken(params.token)) return errorResponse('not_found', 404)
   const { id, ext } = parsedName
 
-  const link = await env.DB.prepare('SELECT target_type, target_id FROM share_links WHERE token = ? AND revoked_at IS NULL')
-    .bind(params.token)
-    .first<{ target_type: string; target_id: string }>()
+  const link = await findPublicLink(env, params.token)
   if (!link || link.target_type !== 'doc') return errorResponse('not_found', 404)
 
   const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ?')
@@ -252,9 +250,7 @@ export async function handlePublicGetDocSetAttachment(
   if (!parsedName || !isValidToken(params.token)) return errorResponse('not_found', 404)
   const { id, ext } = parsedName
 
-  const link = await env.DB.prepare('SELECT target_type, target_id FROM share_links WHERE token = ? AND revoked_at IS NULL')
-    .bind(params.token)
-    .first<{ target_type: string; target_id: string }>()
+  const link = await findPublicLink(env, params.token)
   if (!link || link.target_type !== 'doc') return errorResponse('not_found', 404)
 
   if (!(await isDocInLinkSet(env, params.token, link.target_id, params.docId))) return errorResponse('not_found', 404)
@@ -293,9 +289,7 @@ export async function handlePublicGetFolderAttachment(
   if (!parsedName || !isValidToken(params.token)) return errorResponse('not_found', 404)
   const { id, ext } = parsedName
 
-  const link = await env.DB.prepare('SELECT target_type, target_id, owner_id FROM share_links WHERE token = ? AND revoked_at IS NULL')
-    .bind(params.token)
-    .first<{ target_type: string; target_id: string; owner_id: string }>()
+  const link = await findPublicLink(env, params.token)
   if (!link || link.target_type !== 'folder') return errorResponse('not_found', 404)
 
   const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ? AND owner_id = ?')

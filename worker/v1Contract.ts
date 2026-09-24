@@ -21,7 +21,7 @@ export type V1Attachment = {
   markdown: string
 }
 export type V1Link = { token: string; url: string }
-export type V1Me = { id: string; email: string }
+export type V1Me = { id: string; email: string; blocked: boolean; warned: boolean } // blocked·warned 는 F-2028 7장
 export type V1Error = {
   error: string
   field?: string
@@ -75,5 +75,5 @@ export const V1_EXAMPLES: {
     markdown: '![이미지](/api/attachments/0123456789abcdef.png)',
   },
   link: { token: 'abc123', url: 'https://rawdoc.app/#/p/abc123' },
-  me: { id: 'user-1', email: 'a@b.com' },
+  me: { id: 'user-1', email: 'a@b.com', blocked: false, warned: false },
 }

@@ -55,6 +55,7 @@ import { rootTarget, welcomeRedirect, withRootHeaders } from './rootRoute'
 import { handleDocSocket } from './docSocket'
 import { DOC_SOCKET_PREFIX } from '../src/lib/docRoomProtocol'
 import { isWriteRoute, runWriteGate } from './writeGate'
+import { usageOf } from './usage'
 
 export { DocRoom } from './docRoom'
 
@@ -99,16 +100,22 @@ async function handleHealth(_request: Request, env: Env): Promise<Response> {
   }
 }
 
+// /api/me·/v1/me 200 몸통 — warned 는 blocked 와 무관한 원래 값 (F-2028 7.1)
+async function meBody(env: Env, user: AuthUser) {
+  const usage = await usageOf(env, user)
+  return { id: user.id, email: user.email, blocked: usage.blockedAt !== null, warned: usage.warnedAt !== null }
+}
+
 async function handleMe(request: Request, env: Env): Promise<Response> {
   const user = await getUser(request, env)
   if (!user) return errorResponse('unauthenticated', 401)
-  return jsonResponse({ id: user.id, email: user.email })
+  return jsonResponse(await meBody(env, user))
 }
 
 // GET /api/me 만 세션을 연장한다 — 만료 세션의 401 에도 쿠키 지우는 줄을 싣는다 (F-2033 3.3)
 async function handleApiMe(request: Request, env: Env): Promise<Response> {
   const { user, setCookies } = await getUserRefreshing(request, env)
-  const res = user ? jsonResponse({ id: user.id, email: user.email }) : errorResponse('unauthenticated', 401)
+  const res = user ? jsonResponse(await meBody(env, user)) : errorResponse('unauthenticated', 401)
   for (const cookie of setCookies) res.headers.append('Set-Cookie', cookie)
   return res
 }

@@ -110,6 +110,7 @@ describe('F-304 A24 배선', () => {
                 if (sql.startsWith('SELECT id, owner_id FROM folders WHERE id = ?')) {
                   return (args[0] === FOLDER_ID ? { id: FOLDER_ID, owner_id: 'me' } : null) as T | null
                 }
+                if (sql.startsWith('SELECT write_day')) return null
                 throw new Error(`unhandled first sql: ${sql}`)
               },
               async run() {

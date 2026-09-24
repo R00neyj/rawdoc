@@ -1,8 +1,9 @@
-// better-auth 옵션·인스턴스·설정 검사·F-2024 자리·만료 행 정리 (specs/features/F-2033.md 2장, F-2032.md 2.2)
+// better-auth 옵션·인스턴스·설정 검사·가입 관문·만료 행 정리 (specs/features/F-2033.md 2장, F-2032.md 2.2, F-2028.md 3장)
 import { betterAuth } from 'better-auth'
 import type { Auth, BetterAuthOptions, User, ValidateUserInfoResult } from 'better-auth'
 import type { DBFieldAttribute } from 'better-auth/db'
 import { isLocalAuthMode, readVar } from './origin'
+import { utcDay } from './usage'
 
 export const AUTH_SECRET_MIN_LENGTH = 32
 const SESSION_EXPIRES_IN_SEC = 30 * 24 * 60 * 60
@@ -25,8 +26,18 @@ export const USER_ADDITIONAL_FIELDS: Record<string, DBFieldAttribute> = {
   warnedAt: { type: 'number', fieldName: 'warned_at', input: false, required: false },
 }
 
-// F-2028 가입 관문 자리 — 지금은 모든 새 사용자를 받는다 (2.5)
-export const admitNewUser: AdmitNewUser = async () => undefined
+// 앱 하루 신규 가입 상한 (F-2024 4.1)
+export const SIGNUP_DAILY_LIMIT = 20
+
+// 문장 텍스트는 계약 — F-2024 측정표 "가입 관문 한 줄" 과 글자까지 같다 (F-2028 3.1)
+const SIGNUP_GATE_SQL =
+  'UPDATE signup_gate SET count = CASE WHEN day = ?1 THEN count + 1 ELSE 1 END, day = ?1 WHERE id = 1 AND (day <> ?1 OR count < ?2)'
+
+// 한 문장 조건부 UPDATE 라 원자적이다. 던지면 잡지 않는다 — better-auth 가 validation_failed 로 막는다 (F-2028 3.1)
+export const admitNewUser: AdmitNewUser = async (env) => {
+  const result = await env.DB.prepare(SIGNUP_GATE_SQL).bind(utcDay(Date.now()), SIGNUP_DAILY_LIMIT).run()
+  return result.meta.changes === 1 ? undefined : { error: 'signup_closed' }
+}
 
 // admit 는 테스트가 호출 시점을 보려고 바꿔 끼우는 자리다. 운영은 늘 admitNewUser (F-2033 U8·U9)
 export function authOptions(

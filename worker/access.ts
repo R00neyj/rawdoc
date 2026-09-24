@@ -1,6 +1,7 @@
-// 문서·폴더 접근 권한 판정 (specs/features/F-212.md 2.2)
+// 문서·폴더 접근 권한 판정 (specs/features/F-212.md 2.2, 막힌 계정은 F-2028.md 4.2)
 import type { AuthUser } from './auth'
 import { folderAncestors } from '../src/lib/folderTree'
+import { readUsage, usageOf } from './usage'
 
 export type Role = 'owner' | 'edit' | 'view'
 export type GrantRole = 'view' | 'edit'
@@ -87,17 +88,29 @@ export interface DocRowLike {
 export interface DocAccess<T extends DocRowLike> {
   role: Role
   doc: T
+  blocked?: true // 막힘 때문에 role 이 'owner'·'edit' 에서 'view' 로 낮아졌을 때만 있다 (F-2028 4.2)
 }
 
-// 문서 role = 소유자 / 문서 grant·폴더·상위 폴더 grant 중 가장 높은 것 / 없음
+// 보낸 사람 → 소유자 순. 사용량 행이 없으면 안 막힘 (F-2028 4.2 3번)
+async function isWriteBlocked(env: Env, doc: DocRowLike, user: AuthUser): Promise<boolean> {
+  if ((await usageOf(env, user)).blockedAt !== null) return true
+  if (doc.owner_id === user.id) return false
+  return (await readUsage(env, doc.owner_id)).blockedAt !== null
+}
+
+// 문서 role = 소유자 / 문서 grant·폴더·상위 폴더 grant 중 가장 높은 것 / 없음. 쓸 수 있는 role 은 막힘이면 view 로 낮춘다
 export async function resolveDocAccess<T extends DocRowLike>(
   env: Env,
   doc: T,
   user: AuthUser,
 ): Promise<DocAccess<T> | null> {
-  if (doc.owner_id === user.id) return { role: 'owner', doc }
-  const role = higherRole(await grantRole(env, 'doc', doc.id, user.email), await folderChainRole(env, doc.folder_id, doc.owner_id, user.email))
+  const role: Role | null =
+    doc.owner_id === user.id
+      ? 'owner'
+      : higherRole(await grantRole(env, 'doc', doc.id, user.email), await folderChainRole(env, doc.folder_id, doc.owner_id, user.email))
   if (!role) return null
+  if (role === 'view') return { role, doc }
+  if (await isWriteBlocked(env, doc, user)) return { role: 'view', doc, blocked: true }
   return { role, doc }
 }
 

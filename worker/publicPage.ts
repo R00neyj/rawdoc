@@ -1,16 +1,9 @@
 // 공개 공유 링크(/p/:token, /p/f/:token) 요청에 og/twitter 메타를 문서·폴더별로 주입 (F-238.md 3장)
 import { isValidToken } from './token'
+import { findPublicLink } from './links'
 import { stripComments } from '../src/lib/comments'
 import { SITE_DESCRIPTION } from '../src/lib/siteMeta'
 import brand from '../brand.config'
-
-type LinkRow = {
-  token: string
-  owner_id: string
-  target_type: 'doc' | 'folder'
-  target_id: string
-  revoked_at: number | null
-}
 
 const DOC_PATH_RE = /^\/p\/([^/]+)$/
 const FOLDER_PATH_RE = /^\/p\/f\/([^/]+)$/
@@ -61,9 +54,7 @@ export async function renderPublicPage(request: Request, env: Env, pathname: str
     const token = (folderMatch ?? docMatch)![1]
     if (!isValidToken(token)) return null
 
-    const link = await env.DB.prepare('SELECT * FROM share_links WHERE token = ? AND revoked_at IS NULL')
-      .bind(token)
-      .first<LinkRow>()
+    const link = await findPublicLink(env, token)
     if (!link || link.target_type !== targetType) return null
 
     let title: string

@@ -49,6 +49,20 @@ function makeStatement(stmt: StatementSync, boundArgs: unknown[]): TestStatement
   }
 }
 
+const authDbs = new WeakSet<DatabaseSync>()
+
+// 같은 객체에 D1 모양 bind 만 덧붙인다 — better-auth 는 node:sqlite 방언 그대로, 우리 코드는 D1 한 문장 모양. batch 를 두면 D1 방언으로 바뀐다 (F-2028 10.2)
+export function asAuthDb(db: DatabaseSync): DatabaseSync {
+  if (authDbs.has(db)) return db
+  authDbs.add(db)
+  const prepare = db.prepare.bind(db)
+  db.prepare = ((sql: string) => {
+    const stmt = prepare(sql)
+    return Object.assign(stmt, { bind: (...args: unknown[]) => makeStatement(stmt, args) })
+  }) as typeof db.prepare
+  return db
+}
+
 // prepare → bind → first·all·run, prepare 에서 바로 first·all·run, batch
 export function asD1(db: DatabaseSync): D1Database {
   const prepare = (sql: string): TestStatement => makeStatement(db.prepare(sql), [])

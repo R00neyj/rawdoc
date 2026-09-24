@@ -5,6 +5,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { getUser, getUserRefreshing } from './auth'
 import { AuthConfigError, getAuth } from './authServer'
+import { asAuthDb } from './testD1'
 
 const MIGRATIONS = fileURLToPath(new URL('../migrations/', import.meta.url))
 const SECRET = 's'.repeat(40)
@@ -59,7 +60,7 @@ function cookiePairs(headers: Headers): string[] {
 // U3 방식 — signInSocial → 콜백으로 세션을 만들고 세션 쿠키를 돌려준다
 async function sessionCookie(db: DatabaseSync, email = 'me@example.org'): Promise<string> {
   stubGoogle(email)
-  const auth = getAuth(sessionEnv(db))
+  const auth = getAuth(sessionEnv(asAuthDb(db)))
   const start = await auth.api.signInSocial({
     body: { provider: 'google', callbackURL: '/#/d/abc', errorCallbackURL: '/login' },
     headers: new Headers(),

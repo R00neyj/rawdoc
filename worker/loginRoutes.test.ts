@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { SITE_URL } from '../src/lib/siteMeta'
+import { asAuthDb } from './testD1'
 
 const MIGRATIONS = fileURLToPath(new URL('../migrations/', import.meta.url))
 const ORIGIN = new URL(SITE_URL).origin
@@ -37,7 +38,7 @@ function openDb(): DatabaseSync {
   return db
 }
 
-function makeEnv(over: Record<string, unknown> = {}, db: unknown = openDb()): Env {
+function makeEnv(over: Record<string, unknown> = {}, db: unknown = asAuthDb(openDb())): Env {
   return {
     DB: db,
     BETTER_AUTH_URL: 'https://rawdoc.app',
@@ -246,7 +247,7 @@ describe('F-2033 U35~U37 로그인 한 바퀴', () => {
     expect(session).not.toBe('')
     const me = await call(env, '/api/me', { headers: { Cookie: session } })
     expect(me.status).toBe(200)
-    expect(await me.json()).toEqual({ id: expect.any(String), email: 'me@example.org' })
+    expect(await me.json()).toEqual({ id: expect.any(String), email: 'me@example.org', blocked: false, warned: false })
   })
 
   it('U36 /api/me 는 연장 쿠키를 싣고, 만료 세션의 401 에도 지우는 쿠키를 싣는다', async () => {
@@ -292,6 +293,47 @@ describe('F-2033 U35~U37 로그인 한 바퀴', () => {
     const env = makeEnv()
     const { session } = await loginThroughWorker(env)
     expect((await call(env, '/v1/me', { headers: { Cookie: session } })).status).toBe(401)
+  })
+})
+
+describe('F-2028 LR1·LR2', () => {
+  const SIGNUP_CLOSED = '오늘은 새 가입이 마감됐습니다. 한국 시간 오전 9시(UTC 자정)에 다시 열립니다. 그동안은 로그인 없이 쓸 수 있습니다.'
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('LR1 가입 마감이면 콜백이 signup_closed 로 /login 에 보내고, 그 페이지가 마감 문구를 보인다', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(Date.UTC(2026, 8, 24, 12, 0, 0))
+    const env = makeEnv()
+    const db = env.DB as unknown as DatabaseSync
+    db.prepare('UPDATE signup_gate SET day = ?, count = ? WHERE id = 1').run('2026-09-24', 20)
+    const { callback } = await loginThroughWorker(env)
+    expect(callback.status).toBe(302)
+    const location = callback.headers.get('Location')!
+    expect(location).toBe('/login?return=%23%2Fd%2Fabc&error=signup_closed&error_description=signup_closed')
+    const page = await call(env, location)
+    expect(page.status).toBe(200)
+    expect(await page.text()).toContain(`<p class="login-error" role="alert">${SIGNUP_CLOSED}</p>`)
+    expect((db.prepare('SELECT count(*) AS n FROM users').get() as { n: number }).n).toBe(0)
+  })
+
+  it('LR2 /api/me 는 warned_at·blocked_at 을 그때그때 싣는다', async () => {
+    const env = makeEnv()
+    const db = env.DB as unknown as DatabaseSync
+    const { session } = await loginThroughWorker(env)
+    const me = async () => {
+      const res = await call(env, '/api/me', { headers: { Cookie: session } })
+      expect(res.status).toBe(200)
+      return res.json()
+    }
+    const id = expect.any(String)
+    expect(await me()).toEqual({ id, email: 'me@example.org', blocked: false, warned: false })
+    db.prepare('UPDATE users SET warned_at = ?').run(Date.now())
+    expect(await me()).toEqual({ id, email: 'me@example.org', blocked: false, warned: true })
+    db.prepare('UPDATE users SET blocked_at = ?').run(Date.now())
+    expect(await me()).toEqual({ id, email: 'me@example.org', blocked: true, warned: true })
   })
 })
 

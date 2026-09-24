@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { renderPublicPage } from './publicPage'
 import { SITE_DESCRIPTION } from '../src/lib/siteMeta'
 import brand from '../brand.config'
+import { asD1, openTestDb } from './testD1'
 
 type ShareLinkRow = {
   token: string
@@ -183,5 +184,37 @@ describe('F-238 renderPublicPage', () => {
     })
     const res = await renderPublicPage(req(`/p/${token}`), env, `/p/${token}`)
     expect(res!.headers.get('X-Robots-Tag')).toBe('noindex')
+  })
+})
+
+describe('F-2028 P1 막힌 소유자의 링크는 메타를 주입하지 않는다', () => {
+  it('막힘이면 두 주소 모두 null, 풀면 다시 제목·폴더 이름', async () => {
+    const db = openTestDb()
+    db.prepare('INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)').run('u1', 'u1@example.com', 1)
+    db.prepare(
+      "INSERT INTO docs (id, owner_id, title, content, line_ending, folder_id, pinned_at, version, created_at, updated_at) VALUES ('d1', 'u1', '막힌 문서', '본문', 'lf', NULL, NULL, 1, 1, 1)",
+    ).run()
+    db.prepare("INSERT INTO folders (id, owner_id, name, parent_id, created_at, updated_at) VALUES ('f1', 'u1', '막힌 폴더', NULL, 1, 1)").run()
+    const docToken = 'p'.repeat(43)
+    const folderToken = 'q'.repeat(43)
+    const link = db.prepare('INSERT INTO share_links (token, owner_id, target_type, target_id, created_at, revoked_at) VALUES (?, ?, ?, ?, 1, NULL)')
+    link.run(docToken, 'u1', 'doc', 'd1')
+    link.run(folderToken, 'u1', 'folder', 'f1')
+    const ASSETS = { async fetch() { return new Response(SAMPLE_HTML, { status: 200, headers: { 'content-type': 'text/html' } }) } }
+    const env = { DB: asD1(db), ASSETS } as unknown as Env
+    const docPath = `/p/${docToken}`
+    const folderPath = `/p/f/${folderToken}`
+
+    db.prepare('UPDATE users SET blocked_at = ? WHERE id = ?').run(123, 'u1')
+    expect(await renderPublicPage(req(docPath), env, docPath)).toBeNull()
+    expect(await renderPublicPage(req(folderPath), env, folderPath)).toBeNull()
+
+    db.prepare('UPDATE users SET blocked_at = NULL WHERE id = ?').run('u1')
+    const docPage = await renderPublicPage(req(docPath), env, docPath)
+    const folderPage = await renderPublicPage(req(folderPath), env, folderPath)
+    expect(docPage).toBeInstanceOf(Response)
+    expect(folderPage).toBeInstanceOf(Response)
+    expect(await docPage!.text()).toContain(`property="og:title" content="막힌 문서 · ${brand.name}"`)
+    expect(await folderPage!.text()).toContain(`property="og:title" content="막힌 폴더 · ${brand.name}"`)
   })
 })

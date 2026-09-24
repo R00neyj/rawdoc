@@ -1,5 +1,5 @@
 // better-auth 인스턴스·스키마·콜백 흉내·설정 검사 (specs/features/F-2033.md 2장·4장·8장, U1~U13)
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
 import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -7,11 +7,16 @@ import { betterAuth } from 'better-auth'
 import {
   AUTH_SECRET_MIN_LENGTH,
   AuthConfigError,
+  SIGNUP_DAILY_LIMIT,
   admitNewUser,
   authOptions,
   cleanupExpiredAuth,
   getAuth,
 } from './authServer'
+import type { ValidateUserInfoData } from './authServer'
+import { getUser } from './auth'
+import { asAuthDb, asD1 } from './testD1'
+import { utcDay } from './usage'
 
 const MIGRATIONS = fileURLToPath(new URL('../migrations/', import.meta.url))
 const SECRET = 's'.repeat(40)
@@ -152,7 +157,7 @@ describe('F-2033 U1·U2 스키마', () => {
 
 describe('F-2033 U3~U9 콜백 흉내', () => {
   it('U3 Google 인증 이메일 새 사용자 — 저장하지 않는 값은 비운다', async () => {
-    const db = openDb()
+    const db = asAuthDb(openDb())
     stubProviders({ google: verifiedGoogle })
     const res = await signIn(getAuth(makeEnv(db)), 'google')
     expect(res.status).toBe(302)
@@ -196,7 +201,7 @@ describe('F-2033 U3~U9 콜백 흉내', () => {
   })
 
   it('U7 같은 계정으로 두 번째 로그인은 세션만 는다', async () => {
-    const db = openDb()
+    const db = asAuthDb(openDb())
     stubProviders({ google: verifiedGoogle })
     const auth = getAuth(makeEnv(db))
     await signIn(auth, 'google')
@@ -207,7 +212,7 @@ describe('F-2033 U3~U9 콜백 흉내', () => {
   })
 
   it('U8 admitNewUser 는 인증된 새 사용자에게만 불린다', async () => {
-    const db = openDb()
+    const db = asAuthDb(openDb())
     const admit = vi.fn(admitNewUser)
     const env = makeEnv(db)
     const auth = betterAuth(authOptions(env, db as never, admit))
@@ -234,6 +239,161 @@ describe('F-2033 U3~U9 콜백 흉내', () => {
     expect(res.status).toBe(302)
     expect(res.location.startsWith(`${FAILURE}&error=x_test`)).toBe(true)
     expect(rows(db, 'users')).toBe(0)
+  })
+})
+
+describe('F-2028 S1~S8 가입 관문', () => {
+  const NOW = Date.UTC(2026, 8, 24, 12, 0, 0)
+  const TODAY = '2026-09-24'
+  const YESTERDAY = '2026-09-23'
+  const GATE_SQL =
+    'UPDATE signup_gate SET count = CASE WHEN day = ?1 THEN count + 1 ELSE 1 END, day = ?1 WHERE id = 1 AND (day <> ?1 OR count < ?2)'
+  const CLOSED = `${FAILURE}&error=signup_closed&error_description=signup_closed`
+  const googleA = { sub: 'g-a', email: 'a@example.org', email_verified: true }
+  const googleB = { sub: 'g-b', email: 'b@example.org', email_verified: true }
+  const githubA = { id: 11, email: 'a@example.org', emails: [{ email: 'a@example.org', primary: true, verified: true }] }
+
+  function setGate(db: DatabaseSync, day: string, count: number) {
+    db.prepare('UPDATE signup_gate SET day = ?, count = ? WHERE id = 1').run(day, count)
+  }
+
+  function gate(db: DatabaseSync) {
+    return { ...(db.prepare('SELECT day, count FROM signup_gate WHERE id = 1').get() as { day: string; count: number }) }
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(NOW)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('S1 문장·바인딩·한 번 실행, changes 1 이면 통과 0 이면 signup_closed', async () => {
+    for (const [changes, expected] of [
+      [1, undefined],
+      [0, { error: 'signup_closed' }],
+    ] as const) {
+      const calls = { prepare: [] as string[], bind: [] as unknown[][], run: 0, batch: 0 }
+      const DB = {
+        prepare(sql: string) {
+          calls.prepare.push(sql)
+          return {
+            bind(...args: unknown[]) {
+              calls.bind.push(args)
+              return {
+                async run() {
+                  calls.run++
+                  return { success: true, meta: { changes } }
+                },
+              }
+            },
+          }
+        },
+        async batch() {
+          calls.batch++
+          return []
+        },
+      }
+      const result = await admitNewUser({ DB } as unknown as Env, {} as ValidateUserInfoData)
+      expect(calls.prepare).toEqual([GATE_SQL])
+      expect(calls.bind).toEqual([[utcDay(NOW), 20]])
+      expect(calls.run).toBe(1)
+      expect(calls.batch).toBe(0)
+      expect(result).toStrictEqual(expected)
+    }
+  })
+
+  it('S2 20번째는 통과, 21번째는 signup_closed 로 /login 에 돌아가고 아무 행도 만들지 않는다', async () => {
+    const db = asAuthDb(openDb())
+    setGate(db, TODAY, 19)
+    const auth = getAuth(makeEnv(db))
+    stubProviders({ google: googleA })
+    const a = await signIn(auth, 'google')
+    expect([a.status, a.location]).toEqual([302, SUCCESS])
+    expect(gate(db)).toEqual({ day: TODAY, count: 20 })
+
+    stubProviders({ google: googleB })
+    const b = await signIn(auth, 'google')
+    expect(b.status).toBe(302)
+    expect(b.location).toBe(CLOSED)
+    expect([rows(db, 'users'), rows(db, 'auth_accounts'), rows(db, 'auth_sessions')]).toEqual([1, 1, 1])
+    expect(gate(db)).toEqual({ day: TODAY, count: 20 })
+  })
+
+  it('S3 마감 뒤에도 기존 사용자 다시 로그인·둘째 제공자 연결은 된다, 관문 그대로', async () => {
+    const db = asAuthDb(openDb())
+    setGate(db, TODAY, 19)
+    const auth = getAuth(makeEnv(db))
+    stubProviders({ google: googleA })
+    await signIn(auth, 'google')
+    stubProviders({ google: googleB })
+    expect((await signIn(auth, 'google')).location).toBe(CLOSED)
+
+    stubProviders({ google: googleA, github: githubA })
+    const again = await signIn(auth, 'google')
+    expect([again.status, again.location]).toEqual([302, SUCCESS])
+    const linked = await signIn(auth, 'github')
+    expect([linked.status, linked.location]).toEqual([302, SUCCESS])
+    expect([rows(db, 'users'), rows(db, 'auth_accounts')]).toEqual([1, 2])
+    expect(gate(db)).toEqual({ day: TODAY, count: 20 })
+  })
+
+  it('S4 인증 안 된 이메일은 관문보다 먼저 거절, 자리를 쓰지 않는다', async () => {
+    const db = asAuthDb(openDb())
+    setGate(db, TODAY, 0)
+    stubProviders({ github: { id: 7, email: null, emails: [{ email: 'gh@example.org', primary: true, verified: false }] } })
+    const res = await signIn(getAuth(makeEnv(db)), 'github')
+    expect(res.location.startsWith(`${FAILURE}&error=email_not_verified`)).toBe(true)
+    expect(gate(db)).toEqual({ day: TODAY, count: 0 })
+  })
+
+  it('S5 어제 20명이면 오늘 첫 가입은 통과, 관문 (오늘, 1)', async () => {
+    const db = asAuthDb(openDb())
+    setGate(db, YESTERDAY, 20)
+    stubProviders({ google: googleA })
+    const res = await signIn(getAuth(makeEnv(db)), 'google')
+    expect([res.status, res.location]).toEqual([302, SUCCESS])
+    expect(gate(db)).toEqual({ day: TODAY, count: 1 })
+  })
+
+  it('S6 관문 D1 이 던지면 validation_failed, 사용자 없음, 오류 기록', async () => {
+    const db = openDb()
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const DB = {
+      prepare() {
+        throw new Error('d1 down')
+      },
+    }
+    const auth = betterAuth(authOptions(makeEnv(DB), db as never))
+    stubProviders({ google: googleA })
+    const res = await signIn(auth, 'google')
+    expect(res.status).toBe(302)
+    expect(res.location.startsWith(`${FAILURE}&error=validation_failed`)).toBe(true)
+    expect(rows(db, 'users')).toBe(0)
+    expect(errorLog.mock.calls.length).toBeGreaterThanOrEqual(1)
+    errorLog.mockRestore()
+  })
+
+  it('S7 씨앗 그대로에서 첫 가입, 상한 20', async () => {
+    expect(SIGNUP_DAILY_LIMIT).toBe(20)
+    const db = asAuthDb(openDb())
+    expect(gate(db)).toEqual({ day: '', count: 0 })
+    stubProviders({ google: googleA })
+    const res = await signIn(getAuth(makeEnv(db)), 'google')
+    expect([res.status, res.location]).toEqual([302, SUCCESS])
+    expect(gate(db)).toEqual({ day: TODAY, count: 1 })
+  })
+
+  it('S8 로컬 개발 우회는 관문을 보지 않는다', async () => {
+    const db = openDb()
+    setGate(db, TODAY, 20)
+    const env = makeEnv(asD1(db), { BETTER_AUTH_URL: 'http://localhost:8790', DEV_AUTH_EMAIL: 'dev@example.com' })
+    const user = await getUser(new Request('http://localhost:8790/api/docs'), env)
+    expect(user?.email).toBe('dev@example.com')
+    expect(rows(db, 'users')).toBe(1)
+    expect(gate(db)).toEqual({ day: TODAY, count: 20 })
   })
 })
 

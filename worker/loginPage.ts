@@ -20,7 +20,6 @@ const UNVERIFIED =
   '이메일 주소가 인증되지 않은 계정이라 로그인하지 못했습니다. Google 또는 GitHub 계정 설정에서 이메일을 인증한 뒤 다시 시도해 주세요.'
 const STATE_LOST = '로그인 시간이 지났거나 다른 창에서 시작한 로그인입니다. 다시 시도해 주세요.'
 
-// F-2028 이 signup_closed 한 줄을 더할 자리 (2.5)
 export const LOGIN_ERROR_MESSAGES: Record<string, string> = {
   email_not_verified: UNVERIFIED,
   account_not_linked: UNVERIFIED,
@@ -30,6 +29,8 @@ export const LOGIN_ERROR_MESSAGES: Record<string, string> = {
   state_not_found: STATE_LOST,
   state_invalid: STATE_LOST,
   state_security_mismatch: STATE_LOST,
+  // F-2024 5.1 L6 — /login 은 스크립트가 없어 현지 시각을 쓰지 않는다 (F-2028 3.4)
+  signup_closed: '오늘은 새 가입이 마감됐습니다. 한국 시간 오전 9시(UTC 자정)에 다시 열립니다. 그동안은 로그인 없이 쓸 수 있습니다.',
 }
 
 export const LOGIN_ERROR_FALLBACK = '로그인하지 못했습니다. 잠시 뒤 다시 시도해 주세요.'

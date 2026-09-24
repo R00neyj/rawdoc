@@ -215,6 +215,7 @@ export async function handleUpdateDoc(
 
   const access = await getDocAccess<DocRow>(env, params.id, user)
   if (!access) return errorResponse('not_found', 404)
+  if (access.blocked) return errorResponse('account_blocked', 403) // 쓸 수 있던 사람의 막힘 — 보낸 사람 또는 문서 소유자 (F-2028 4.3)
   if (!roleAtLeast(access.role, 'edit')) return errorResponse('forbidden', 403)
   const existing = access.doc
 
