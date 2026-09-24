@@ -13,6 +13,7 @@ import {
   humanUploadLine,
   humanUrlLine,
   isoUtcSeconds,
+  remainingTimeText,
   stripControlChars,
   type CliErrorCode,
 } from './output'
@@ -42,6 +43,9 @@ describe('F-2021 U5 종료 코드', () => {
     ['locked', 6],
     ['too_large', 7],
     ['quota_exceeded', 7],
+    ['rate_limited', 8],
+    ['doc_quota_exceeded', 7],
+    ['account_blocked', 4],
   ]
   it.each(table)('%s → %i', (code, expected) => {
     expect(exitCodeFor(code)).toBe(expected)
@@ -129,5 +133,133 @@ describe('F-2021 U6 output.ts', () => {
     expect(humanIdVersionLine('doc-1', 3)).toBe('doc-1\t3\n')
     expect(humanUploadLine('![이미지](x)')).toBe('![이미지](x)\n')
     expect(humanUrlLine('https://rawdoc.app/#/p/x')).toBe('https://rawdoc.app/#/p/x\n')
+  })
+})
+
+describe('F-2031 A2 rate_limited 문구 — 분당', () => {
+  it('분당 문구는 retryAfter 초를 그대로 넣는다', () => {
+    const msg = errorMessage(new CliError('rate_limited', { scope: 'minute', retryAfter: 60 }), CLI, CLI_ENV)
+    expect(msg).toBe('요청이 너무 많습니다. 60초 뒤 다시 시도하세요.')
+  })
+})
+
+describe('F-2031 A3 rate_limited 문구 — 하루', () => {
+  it('limit 있음', () => {
+    const msg = errorMessage(new CliError('rate_limited', { scope: 'day', limit: 5000, retryAfter: 32400 }), CLI, CLI_ENV)
+    expect(msg).toBe('오늘 쓰기 한도(5000번)를 다 썼습니다. 약 9시간 뒤 풀립니다.')
+  })
+
+  it('limit 없음', () => {
+    const msg = errorMessage(new CliError('rate_limited', { scope: 'day', retryAfter: 32400 }), CLI, CLI_ENV)
+    expect(msg).toBe('오늘 쓰기 한도를 다 썼습니다. 약 9시간 뒤 풀립니다.')
+  })
+})
+
+describe('F-2031 A4 남은 시간 문구', () => {
+  const table: [number, string][] = [
+    [1, '1분'],
+    [30, '1분'],
+    [60, '1분'],
+    [61, '2분'],
+    [3600, '1시간'],
+    [3601, '1시간 1분'],
+    [5000, '1시간 24분'],
+    [32400, '9시간'],
+    [86400, '24시간'],
+  ]
+  it.each(table)('retryAfter=%i → %s', (retryAfter, expected) => {
+    expect(remainingTimeText(retryAfter)).toBe(expected)
+  })
+})
+
+describe('F-2031 A5 doc_quota_exceeded·account_blocked 문구', () => {
+  it('resource bytes', () => {
+    const msg = errorMessage(new CliError('doc_quota_exceeded', { resource: 'bytes', used: 1, limit: 104857600 }), CLI, CLI_ENV)
+    expect(msg).toBe('계정의 문서 저장 공간이 부족합니다 (1 / 104857600 바이트).')
+  })
+
+  it('resource docs', () => {
+    const msg = errorMessage(new CliError('doc_quota_exceeded', { resource: 'docs', used: 10000, limit: 10000 }), CLI, CLI_ENV)
+    expect(msg).toBe('문서 수가 한도에 이르렀습니다 (10000 / 10000개).')
+  })
+
+  it('account_blocked', () => {
+    const msg = errorMessage(new CliError('account_blocked', {}), CLI, CLI_ENV)
+    expect(msg).toBe('이 계정은 운영자가 쓰기를 막았습니다. 읽기만 할 수 있습니다.')
+  })
+
+  it('used 없는 bytes → 괄호째 뺀다', () => {
+    const msg = errorMessage(new CliError('doc_quota_exceeded', { resource: 'bytes' }), CLI, CLI_ENV)
+    expect(msg).toBe('계정의 문서 저장 공간이 부족합니다.')
+  })
+
+  it('limit 없는 docs → 괄호째 뺀다', () => {
+    const msg = errorMessage(new CliError('doc_quota_exceeded', { resource: 'docs', used: 10000 }), CLI, CLI_ENV)
+    expect(msg).toBe('문서 수가 한도에 이르렀습니다.')
+  })
+})
+
+describe('F-2031 A6 errorToJson — 새 코드', () => {
+  it('rate_limited 분당, limit 있음', () => {
+    const json = errorToJson(new CliError('rate_limited', { status: 429, scope: 'minute', limit: 120, retryAfter: 60 }), CLI, CLI_ENV)
+    expect(json).toEqual({
+      error: 'rate_limited',
+      status: 429,
+      message: '요청이 너무 많습니다. 60초 뒤 다시 시도하세요.',
+      limit: 120,
+      scope: 'minute',
+      retryAfter: 60,
+    })
+  })
+
+  it('rate_limited 분당, limit 없음(몸통 없음)', () => {
+    const json = errorToJson(new CliError('rate_limited', { status: 429, scope: 'minute', retryAfter: 60 }), CLI, CLI_ENV)
+    expect(json).toEqual({
+      error: 'rate_limited',
+      status: 429,
+      message: '요청이 너무 많습니다. 60초 뒤 다시 시도하세요.',
+      scope: 'minute',
+      retryAfter: 60,
+    })
+  })
+
+  it('rate_limited 하루', () => {
+    const json = errorToJson(new CliError('rate_limited', { status: 429, scope: 'day', limit: 5000, retryAfter: 32400 }), CLI, CLI_ENV)
+    expect(json).toEqual({
+      error: 'rate_limited',
+      status: 429,
+      message: '오늘 쓰기 한도(5000번)를 다 썼습니다. 약 9시간 뒤 풀립니다.',
+      limit: 5000,
+      scope: 'day',
+      retryAfter: 32400,
+    })
+  })
+
+  it('doc_quota_exceeded', () => {
+    const json = errorToJson(
+      new CliError('doc_quota_exceeded', { status: 413, resource: 'docs', used: 10000, limit: 10000 }),
+      CLI,
+      CLI_ENV,
+    )
+    expect(json).toEqual({
+      error: 'doc_quota_exceeded',
+      status: 413,
+      message: '문서 수가 한도에 이르렀습니다 (10000 / 10000개).',
+      limit: 10000,
+      used: 10000,
+      resource: 'docs',
+    })
+  })
+
+  it('account_blocked — scope·retryAfter·resource 키가 없다', () => {
+    const json = errorToJson(new CliError('account_blocked', { status: 403 }), CLI, CLI_ENV)
+    expect(json).toEqual({
+      error: 'account_blocked',
+      status: 403,
+      message: '이 계정은 운영자가 쓰기를 막았습니다. 읽기만 할 수 있습니다.',
+    })
+    expect('scope' in json).toBe(false)
+    expect('retryAfter' in json).toBe(false)
+    expect('resource' in json).toBe(false)
   })
 })

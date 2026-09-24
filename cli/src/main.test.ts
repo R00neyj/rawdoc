@@ -198,4 +198,30 @@ describe('F-2021 U16 main()', () => {
     expect(deps.writeFile).not.toHaveBeenCalled()
     expect(deps.readFile).not.toHaveBeenCalled()
   })
+
+  it('F-2031 A13 진입점 — 429 하루 한도 → 종료 8, --json 오류 한 줄', async () => {
+    const deps = baseDeps({
+      argv: ['mkdir', 'x', '--json'],
+      env: { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) },
+      fetchImpl: (async () => jsonResponse({ error: 'rate_limited', scope: 'day', limit: 5000, retryAfter: 32400 }, 429)) as unknown as typeof fetch,
+    })
+    const code = await main(deps)
+    expect(code).toBe(8)
+    expect(deps.stdoutLog.join('')).toBe('')
+    const parsed = JSON.parse(deps.stderrLog.join(''))
+    expect(parsed.error).toBe('rate_limited')
+    expect(typeof parsed.retryAfter).toBe('number')
+  })
+
+  it('F-2031 A14 진입점 — 403 account_blocked 사람용 문구', async () => {
+    const deps = baseDeps({
+      argv: ['new', 'a.md'],
+      env: { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) },
+      readFile: vi.fn(async () => new TextEncoder().encode('내용')),
+      fetchImpl: (async () => jsonResponse({ error: 'account_blocked' }, 403)) as unknown as typeof fetch,
+    })
+    const code = await main(deps)
+    expect(code).toBe(4)
+    expect(deps.stderrLog.join('')).toBe('이 계정은 운영자가 쓰기를 막았습니다. 읽기만 할 수 있습니다.\n')
+  })
 })

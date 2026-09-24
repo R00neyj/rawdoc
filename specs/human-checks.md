@@ -437,6 +437,9 @@
 | H423 | F-2032 ⑬ / F-2033 | 배포 뒤 1주: Workers 대시보드 CPU 시간(p50·p99), "exceeded CPU" 오류 수, "Worker Startup Time"(로컬 check startup 46~50ms, 첫 요청 인스턴스 생성 11ms). 넘치면 F-2033 12장 Q1 | 대기 (배포 뒤 1주) |
 | H424 | F-2032 ⑭ / F-2033 | Google·GitHub 공식 로고 SVG 를 받아 `worker/providerLogos.ts` 에 넣기(지금 빈 문자열) — 사용 조건·Google 버튼 모양 규칙, 받은 URL·날짜 | 대기 (배포 전) |
 | H425 | F-2033 ⑮ | 로컬 OAuth 앱으로 실제 Google·GitHub 로그인이 `http://localhost:8790` 으로 돌아오는지(`wrangler dev` 가 요청 주소를 바꿔 씀 — 돌려 보지 않음) | 대기 |
+| H426 | F-2031 9.3 S1 | F-2026 구현 뒤 로컬 `dev:worker` 에서 `rawdoc mkdir` 130번 연속 — 종료 코드 8 과 한도 문구가 나오는지 | 대기 (F-2026 뒤) |
+| H427 | F-2031 9.3 S2 | 0.2.0 게시 뒤 `npx -y rawdoc@latest --version` 이 0.2.0, `login --force` 가 짧은 주소를 내는지 | 대기 (게시 뒤) |
+| H428 | F-2031 9.3 S3 | 게시 뒤 npm 패키지 페이지 README 에 종료 코드 8 행과 "한도에 걸리면" 절이 보이는지 | 대기 (게시 뒤) |
 
 - F-306 19.3 L1~L4 — `npm run dev:worker` 로컬 확인(구현 에이전트가 `.dev.vars` 없어 미실행)
 - 원격 커서 hover 로 라벨 다시 보이기는 2px 폭 위에서만 됨(P5 와 함께 볼 것)

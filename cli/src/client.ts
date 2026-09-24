@@ -1,6 +1,6 @@
 // '/v1' HTTP 클라이언트. fetch 주입 (specs/features/F-2021.md 4.1)
 import type { V1Attachment, V1Doc, V1DocSummary, V1Folder, V1Link, V1Me } from '../../worker/v1Contract'
-import { CliError } from './output'
+import { CliError, type CliErrorDetails } from './output'
 
 export type ClientConfig = {
   origin: string
@@ -16,25 +16,60 @@ function isTimeoutError(err: unknown): boolean {
   return err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
 }
 
+function bodyRecord(json: unknown): Record<string, unknown> {
+  if (json && typeof json === 'object' && !Array.isArray(json)) return json as Record<string, unknown>
+  return {}
+}
+
+// F-2031 3.2 — retryAfter(초): ① 몸통 수 값 올림 ② Retry-After 헤더(숫자만) ③ 60. 마지막에 1보다 작으면 1
+function rateLimitRetryAfter(body: Record<string, unknown>, res: Response): number {
+  const bodyValue = body.retryAfter
+  let retryAfter: number
+  if (typeof bodyValue === 'number' && Number.isFinite(bodyValue) && bodyValue >= 0) {
+    retryAfter = Math.ceil(bodyValue)
+  } else {
+    const header = res.headers.get('Retry-After')
+    retryAfter = header && /^\d+$/.test(header) ? Number(header) : 60
+  }
+  return Math.max(1, retryAfter)
+}
+
 async function handleResponse(res: Response, opts: RequestOptions): Promise<unknown> {
   if (res.status === 204) return undefined
 
   const text = await res.text()
   let json: unknown = null
+  let parseFailed = false
   if (text) {
     try {
       json = JSON.parse(text)
     } catch {
-      if (res.status >= 200 && res.status < 300) return null
-      throw new CliError('bad_response', { status: res.status })
+      parseFailed = true
     }
   }
 
-  if (res.status >= 200 && res.status < 300) return json
+  if (res.status >= 200 && res.status < 300) return parseFailed ? null : json
+
+  // 429 는 몸통을 해석하지 못해도(WAF 등) rate_limited 다 — bad_response 보다 먼저 판정한다 (3.2 1번)
+  if (res.status === 429) {
+    const body = bodyRecord(json)
+    const scope: 'minute' | 'day' = body.scope === 'day' ? 'day' : 'minute'
+    throw new CliError('rate_limited', {
+      status: 429,
+      scope,
+      retryAfter: rateLimitRetryAfter(body, res),
+      limit: typeof body.limit === 'number' ? body.limit : undefined,
+    })
+  }
+
+  if (parseFailed) throw new CliError('bad_response', { status: res.status })
 
   const body = (json ?? {}) as Record<string, unknown>
   if (res.status === 401) throw new CliError('unauthenticated', { status: 401 })
-  if (res.status === 403) throw new CliError('forbidden', { status: 403 })
+  if (res.status === 403) {
+    if (body.error === 'account_blocked') throw new CliError('account_blocked', { status: 403 })
+    throw new CliError('forbidden', { status: 403 })
+  }
   if (res.status === 404) throw new CliError('not_found', { status: 404, id: opts.notFoundId })
   if (res.status === 409) {
     const doc = body.doc as { version?: number } | undefined
@@ -47,7 +82,16 @@ async function handleResponse(res: Response, opts: RequestOptions): Promise<unkn
       expiresAt: body.expiresAt as number | undefined,
     })
   }
-  if (res.status === 413) throw new CliError('too_large', { status: 413, limit: body.limit as number | undefined })
+  if (res.status === 413) {
+    if (body.error === 'doc_quota_exceeded') {
+      const details: CliErrorDetails = { status: 413 }
+      if (body.resource === 'bytes' || body.resource === 'docs') details.resource = body.resource
+      if (typeof body.used === 'number') details.used = body.used
+      if (typeof body.limit === 'number') details.limit = body.limit
+      throw new CliError('doc_quota_exceeded', details)
+    }
+    throw new CliError('too_large', { status: 413, limit: body.limit as number | undefined })
+  }
   if (res.status === 507) {
     throw new CliError('quota_exceeded', {
       status: 507,

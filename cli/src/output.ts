@@ -22,6 +22,9 @@ export type CliErrorCode =
   | 'locked'
   | 'too_large'
   | 'quota_exceeded'
+  | 'rate_limited'
+  | 'doc_quota_exceeded'
+  | 'account_blocked'
 
 export type CliErrorDetails = {
   status?: number | null
@@ -35,6 +38,9 @@ export type CliErrorDetails = {
   currentVersion?: number
   id?: string
   usageMessage?: string
+  scope?: 'minute' | 'day'
+  retryAfter?: number
+  resource?: 'bytes' | 'docs'
 }
 
 const EXIT_CODES: Record<CliErrorCode, number> = {
@@ -58,6 +64,9 @@ const EXIT_CODES: Record<CliErrorCode, number> = {
   locked: 6,
   too_large: 7,
   quota_exceeded: 7,
+  rate_limited: 8,
+  doc_quota_exceeded: 7,
+  account_blocked: 4,
 }
 
 export class CliError extends Error {
@@ -72,6 +81,16 @@ export class CliError extends Error {
 
 export function exitCodeFor(code: CliErrorCode): number {
   return EXIT_CODES[code]
+}
+
+// 3.3 — retryAfter(초) → "{h}시간 {m}분" 모양. 0 인 자리는 뺀다
+export function remainingTimeText(retryAfterSeconds: number): string {
+  const totalMinutes = Math.max(1, Math.ceil(retryAfterSeconds / 60))
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours > 0 && minutes > 0) return `${hours}시간 ${minutes}분`
+  if (hours > 0) return `${hours}시간`
+  return `${minutes}분`
 }
 
 // 4.5 표의 한국어 문구
@@ -122,6 +141,27 @@ export function errorMessage(err: CliError, cli: string, cliEnvPrefix: string): 
       return `너무 큽니다 (한도 ${d.limit} 바이트).`
     case 'quota_exceeded':
       return `이미지 저장 공간이 부족합니다 (${d.used} / ${d.limit} 바이트).`
+    case 'rate_limited': {
+      const retryAfter = d.retryAfter ?? 60
+      if (d.scope === 'day') {
+        const remaining = remainingTimeText(retryAfter)
+        return d.limit !== undefined
+          ? `오늘 쓰기 한도(${d.limit}번)를 다 썼습니다. 약 ${remaining} 뒤 풀립니다.`
+          : `오늘 쓰기 한도를 다 썼습니다. 약 ${remaining} 뒤 풀립니다.`
+      }
+      return `요청이 너무 많습니다. ${retryAfter}초 뒤 다시 시도하세요.`
+    }
+    case 'doc_quota_exceeded': {
+      const hasCounts = typeof d.used === 'number' && typeof d.limit === 'number'
+      if (d.resource === 'docs') {
+        return hasCounts ? `문서 수가 한도에 이르렀습니다 (${d.used} / ${d.limit}개).` : '문서 수가 한도에 이르렀습니다.'
+      }
+      return hasCounts
+        ? `계정의 문서 저장 공간이 부족합니다 (${d.used} / ${d.limit} 바이트).`
+        : '계정의 문서 저장 공간이 부족합니다.'
+    }
+    case 'account_blocked':
+      return '이 계정은 운영자가 쓰기를 막았습니다. 읽기만 할 수 있습니다.'
     default:
       return err.message
   }
@@ -137,6 +177,9 @@ export type CliErrorJson = {
   email?: string
   expiresAt?: number
   currentVersion?: number
+  scope?: 'minute' | 'day'
+  retryAfter?: number
+  resource?: 'bytes' | 'docs'
 }
 
 export function errorToJson(err: CliError, cli: string, cliEnvPrefix: string): CliErrorJson {
@@ -152,6 +195,9 @@ export function errorToJson(err: CliError, cli: string, cliEnvPrefix: string): C
   if (d.email !== undefined) json.email = d.email
   if (d.expiresAt !== undefined) json.expiresAt = d.expiresAt
   if (d.currentVersion !== undefined) json.currentVersion = d.currentVersion
+  if (d.scope !== undefined) json.scope = d.scope
+  if (d.retryAfter !== undefined) json.retryAfter = d.retryAfter
+  if (d.resource !== undefined) json.resource = d.resource
   return json
 }
 

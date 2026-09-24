@@ -21,6 +21,10 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
+function rawResponse(body: string | null, status: number, headers: Record<string, string> = {}): Response {
+  return new Response(body, { status, headers })
+}
+
 function fakeFetch(handler: (url: string, init: RequestInit) => Response | Promise<Response>) {
   return vi.fn((url: string, init: RequestInit) => Promise.resolve(handler(url, init)))
 }
@@ -179,6 +183,187 @@ describe('F-2021 U4 client.ts — 오류', () => {
         error = err
       }
       expect((error as CliError).code).toBe(code)
+    }
+  })
+})
+
+describe('F-2031 A7~A12 새 오류 분기', () => {
+  it('A7 429 JSON 몸통(분당)', async () => {
+    const fetchImpl = fakeFetch(() => jsonResponse({ error: 'rate_limited', scope: 'minute', limit: 120, retryAfter: 60 }, 429))
+    const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+    let error: unknown
+    try {
+      await apiListDocs(cfg)
+    } catch (err) {
+      error = err
+    }
+    expect((error as CliError).code).toBe('rate_limited')
+    expect((error as CliError).details).toMatchObject({ status: 429, scope: 'minute', retryAfter: 60, limit: 120 })
+  })
+
+  it('A8 429 몸통이 HTML · 빈 몸통 — bad_response 가 아니다', async () => {
+    const htmlFetch = fakeFetch(() => rawResponse('<html>waf</html>', 429))
+    const htmlCfg = baseCfg(htmlFetch as unknown as typeof fetch)
+    let htmlErr: unknown
+    try {
+      await apiListDocs(htmlCfg)
+    } catch (err) {
+      htmlErr = err
+    }
+    expect((htmlErr as CliError).code).toBe('rate_limited')
+    expect((htmlErr as CliError).details.scope).toBe('minute')
+    expect((htmlErr as CliError).details.retryAfter).toBe(60)
+
+    const emptyFetch = fakeFetch(() => rawResponse(null, 429))
+    const emptyCfg = baseCfg(emptyFetch as unknown as typeof fetch)
+    let emptyErr: unknown
+    try {
+      await apiListDocs(emptyCfg)
+    } catch (err) {
+      emptyErr = err
+    }
+    expect((emptyErr as CliError).code).toBe('rate_limited')
+    expect((emptyErr as CliError).details.retryAfter).toBe(60)
+
+    const headerFetch = fakeFetch(() => rawResponse('<html>waf</html>', 429, { 'Retry-After': '17' }))
+    const headerCfg = baseCfg(headerFetch as unknown as typeof fetch)
+    let headerErr: unknown
+    try {
+      await apiListDocs(headerCfg)
+    } catch (err) {
+      headerErr = err
+    }
+    expect((headerErr as CliError).details.retryAfter).toBe(17)
+  })
+
+  it('A9 429 retryAfter 우선순위', async () => {
+    const bodyOverHeaderFetch = (async () =>
+      new Response(JSON.stringify({ retryAfter: 30 }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': '90' },
+      })) as unknown as typeof fetch
+    const cfg1 = baseCfg(bodyOverHeaderFetch)
+    let err1: unknown
+    try {
+      await apiListDocs(cfg1)
+    } catch (err) {
+      err1 = err
+    }
+    expect((err1 as CliError).details.retryAfter).toBe(30)
+
+    const httpDateFetch = (async () =>
+      new Response(null, { status: 429, headers: { 'Retry-After': 'Wed, 21 Oct 2026 07:28:00 GMT' } })) as unknown as typeof fetch
+    const cfg2 = baseCfg(httpDateFetch)
+    let err2: unknown
+    try {
+      await apiListDocs(cfg2)
+    } catch (err) {
+      err2 = err
+    }
+    expect((err2 as CliError).details.retryAfter).toBe(60)
+
+    const zeroFetch = fakeFetch(() => jsonResponse({ retryAfter: 0 }, 429))
+    const cfg3 = baseCfg(zeroFetch as unknown as typeof fetch)
+    let err3: unknown
+    try {
+      await apiListDocs(cfg3)
+    } catch (err) {
+      err3 = err
+    }
+    expect((err3 as CliError).details.retryAfter).toBe(1)
+
+    const dayFetch = fakeFetch(() => jsonResponse({ scope: 'day' }, 429))
+    const cfg4 = baseCfg(dayFetch as unknown as typeof fetch)
+    let err4: unknown
+    try {
+      await apiListDocs(cfg4)
+    } catch (err) {
+      err4 = err
+    }
+    expect((err4 as CliError).details.scope).toBe('day')
+
+    const hourFetch = fakeFetch(() => jsonResponse({ scope: 'hour' }, 429))
+    const cfg5 = baseCfg(hourFetch as unknown as typeof fetch)
+    let err5: unknown
+    try {
+      await apiListDocs(cfg5)
+    } catch (err) {
+      err5 = err
+    }
+    expect((err5 as CliError).details.scope).toBe('minute')
+  })
+
+  it('A10 413 가르기', async () => {
+    const bytesFetch = fakeFetch(() => jsonResponse({ error: 'doc_quota_exceeded', resource: 'bytes', used: 1, limit: 2 }, 413))
+    const cfg1 = baseCfg(bytesFetch as unknown as typeof fetch)
+    let err1: unknown
+    try {
+      await apiListDocs(cfg1)
+    } catch (err) {
+      err1 = err
+    }
+    expect((err1 as CliError).code).toBe('doc_quota_exceeded')
+    expect((err1 as CliError).details).toMatchObject({ resource: 'bytes', used: 1, limit: 2 })
+
+    const tooLargeFetch = fakeFetch(() => jsonResponse({ error: 'too_large', limit: 1000000 }, 413))
+    const cfg2 = baseCfg(tooLargeFetch as unknown as typeof fetch)
+    let err2: unknown
+    try {
+      await apiListDocs(cfg2)
+    } catch (err) {
+      err2 = err
+    }
+    expect((err2 as CliError).code).toBe('too_large')
+
+    const unknownResourceFetch = fakeFetch(() => jsonResponse({ error: 'doc_quota_exceeded', resource: 'x' }, 413))
+    const cfg3 = baseCfg(unknownResourceFetch as unknown as typeof fetch)
+    let err3: unknown
+    try {
+      await apiListDocs(cfg3)
+    } catch (err) {
+      err3 = err
+    }
+    expect((err3 as CliError).code).toBe('doc_quota_exceeded')
+    expect('resource' in (err3 as CliError).details).toBe(false)
+  })
+
+  it('A11 403 가르기', async () => {
+    const blockedFetch = fakeFetch(() => jsonResponse({ error: 'account_blocked' }, 403))
+    const cfg1 = baseCfg(blockedFetch as unknown as typeof fetch)
+    let err1: unknown
+    try {
+      await apiListDocs(cfg1)
+    } catch (err) {
+      err1 = err
+    }
+    expect((err1 as CliError).code).toBe('account_blocked')
+
+    const forbiddenFetch = fakeFetch(() => jsonResponse({ error: 'forbidden' }, 403))
+    const cfg2 = baseCfg(forbiddenFetch as unknown as typeof fetch)
+    let err2: unknown
+    try {
+      await apiListDocs(cfg2)
+    } catch (err) {
+      err2 = err
+    }
+    expect((err2 as CliError).code).toBe('forbidden')
+  })
+
+  it('A12 재시도 없음 — 새 분기도 fetchImpl 1회', async () => {
+    const cases = [
+      () => jsonResponse({ error: 'rate_limited', scope: 'minute', retryAfter: 60 }, 429),
+      () => jsonResponse({ error: 'doc_quota_exceeded', resource: 'bytes', used: 1, limit: 2 }, 413),
+      () => jsonResponse({ error: 'account_blocked' }, 403),
+    ]
+    for (const handler of cases) {
+      const fetchImpl = fakeFetch(handler)
+      const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+      try {
+        await apiListDocs(cfg)
+      } catch {
+        // 오류는 기대한 것
+      }
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
     }
   })
 })
