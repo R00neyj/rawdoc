@@ -435,7 +435,7 @@
 | H421 | F-2032 ⑪ / F-2033 | 브라우저를 닫았다 열어도 로그인 유지 | 대기 (배포 뒤) |
 | H422 | F-2032 ⑫ / F-2033 | `/login` 모양 — 사이트 머리·꼬리, 다크 모드 사용자도 밝은 화면, 로고 크기·정렬, 오류 줄(`/login?error=access_denied`). 버튼 CSS 는 임시 값 | 대기 |
 | H423 | F-2032 ⑬ / F-2033 | 배포 뒤 1주: Workers 대시보드 CPU 시간(p50·p99), "exceeded CPU" 오류 수, "Worker Startup Time"(로컬 check startup 46~50ms, 첫 요청 인스턴스 생성 11ms). 넘치면 F-2033 12장 Q1 | 대기 (배포 뒤 1주) |
-| H424 | F-2032 ⑭ / F-2033 | Google·GitHub 공식 로고 SVG 를 받아 `worker/providerLogos.ts` 에 넣기(지금 빈 문자열) — 사용 조건·Google 버튼 모양 규칙, 받은 URL·날짜 | 대기 (배포 전) |
+| H424 | F-2032 ⑭ / F-2033 | Google·GitHub 공식 로고 SVG 를 받아 `worker/providerLogos.ts` 에 넣기(지금 빈 문자열) — 사용 조건·Google 버튼 모양 규칙, 받은 URL·날짜 | 넣음 2026-09-24 (메인이 공식 묶음에서 받음 — 받은 곳은 파일 머리 주석). Google 은 버튼 틀을 빼고 viewBox 를 G 영역으로 좁힘. 로컬 `/login` 에서 모양 확인 남음 |
 | H425 | F-2033 ⑮ | 로컬 OAuth 앱으로 실제 Google·GitHub 로그인이 `http://localhost:8790` 으로 돌아오는지(`wrangler dev` 가 요청 주소를 바꿔 씀 — 돌려 보지 않음) | 통과 (2026-09-24 사용자 "로그아웃/로그인 둘다 잘됨" — Google, 로컬 dev:worker. 로그아웃 뒤 재로그인은 SW 거부 목록 수정 71fbb4d 뒤) |
 | H426 | F-2031 9.3 S1 | F-2026 구현 뒤 로컬 `dev:worker` 에서 `rawdoc mkdir` 250번 연속(또는 분이 바뀐 직후 130번 — 로컬 창은 벽시계 분마다 0으로 돌아감, F-2026 5.4) — 종료 코드 8 과 한도 문구가 나오는지 | 대기 (F-2026 뒤) |
 | H427 | F-2031 9.3 S2 | 0.2.0 게시 뒤 `npx -y rawdoc@latest --version` 이 0.2.0, `login --force` 가 짧은 주소를 내는지 | 대기 (게시 뒤) |
