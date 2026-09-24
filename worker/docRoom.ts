@@ -58,6 +58,7 @@ export class DocRoom extends YServer<Env> {
       // RPC 는 partyserver 초기화를 거치지 않는다 — getServerByName 이 RPC 앞에 쓰는 공개 입구 (F-308 5.3)
       ensureLoaded: () => this.setName(this.name),
       exclusive: <T,>(fn: () => Promise<T>) => ctx.blockConcurrencyWhile(fn),
+      setAlarm: (at) => ctx.storage.setAlarm(at),
     })
   }
 
@@ -75,6 +76,11 @@ export class DocRoom extends YServer<Env> {
 
   async onSave(): Promise<void> {
     await this.core.flush()
+  }
+
+  // partyserver 가 초기화(onLoad) 뒤 부른다 — 느린 저장 중 미룬 스냅숏 (F-2027 5.5)
+  async onAlarm(): Promise<void> {
+    await this.core.alarm()
   }
 
   async onConnect(conn: Connection, ctx: ConnectionContext): Promise<void> {
@@ -151,6 +157,7 @@ export class DocRoom extends YServer<Env> {
 
   async purgeRoom(): Promise<void> {
     this.core.purge()
+    await this.ctx.storage.deleteAlarm()
     await this.ctx.storage.deleteAll()
     await new Promise((resolve) => setTimeout(resolve, PURGE_CLOSE_GRACE_MS))
     this.ctx.abort('purged')

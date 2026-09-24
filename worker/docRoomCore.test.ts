@@ -35,6 +35,14 @@ type D1Doc = {
 }
 
 type SqlCall = { sql: string; args: unknown[] }
+type UsageRow = {
+  write_day: string | null
+  write_count: number
+  content_bytes: number
+  doc_count: number
+  blocked_at: number | null
+  warned_at: number | null
+}
 
 function makeD1(initial: Partial<D1Doc> | null) {
   const state = {
@@ -54,6 +62,8 @@ function makeD1(initial: Partial<D1Doc> | null) {
         } as D1Doc)
       : null,
     calls: [] as SqlCall[],
+    batches: [] as SqlCall[][],
+    usage: { write_day: '1970-01-01', write_count: 1, content_bytes: 0, doc_count: 0, blocked_at: null, warned_at: null } as UsageRow | null,
     failUpdate: false,
     beforeUpdate: null as (() => unknown) | null,
   }
@@ -62,12 +72,17 @@ function makeD1(initial: Partial<D1Doc> | null) {
       return {
         bind(...args: unknown[]) {
           return {
+            sql,
+            args,
             async first<T>() {
               state.calls.push({ sql, args })
-              if (sql.startsWith('SELECT title, content, line_ending, version FROM docs WHERE id = ?')) {
+              if (sql === 'SELECT title, content, line_ending, version, owner_id FROM docs WHERE id = ?') {
                 if (!state.row || args[0] !== state.row.id) return null
-                const { title, content, line_ending, version } = state.row
-                return { title, content, line_ending, version } as T
+                const { title, content, line_ending, version, owner_id } = state.row
+                return { title, content, line_ending, version, owner_id } as T
+              }
+              if (sql === 'SELECT blocked_at FROM users WHERE id = ?') {
+                return (state.usage ? { blocked_at: state.usage.blocked_at } : null) as T
               }
               if (sql.startsWith('SELECT id, owner_id, folder_id FROM docs WHERE id = ?')) {
                 if (!state.row || args[0] !== state.row.id) return null
@@ -99,6 +114,9 @@ function makeD1(initial: Partial<D1Doc> | null) {
                 state.row = { ...state.row, title, content, version, updated_at: updatedAt }
                 return { meta: { changes: 1 } }
               }
+              if (sql.startsWith('UPDATE users SET') && sql.includes(' RETURNING ')) {
+                return { results: state.usage ? [{ ...state.usage }] : [], meta: { changes: 1 } }
+              }
               if (sql.startsWith('UPDATE users SET')) return { meta: { changes: 1 } }
               throw new Error(`unhandled run sql: ${sql}`)
             },
@@ -106,7 +124,8 @@ function makeD1(initial: Partial<D1Doc> | null) {
         },
       }
     },
-    async batch(statements: { run(): Promise<unknown> }[]) {
+    async batch(statements: { sql: string; args: unknown[]; run(): Promise<unknown> }[]) {
+      state.batches.push(statements.map((s) => ({ sql: s.sql, args: s.args })))
       const results = []
       for (const statement of statements) results.push(await statement.run())
       return results
@@ -191,6 +210,7 @@ function makeRoom(d1: ReturnType<typeof makeD1>, store = makeStorage(), opts: { 
   const doc = new Y.Doc()
   const conns: FakeConn[] = []
   const counts = { ensureLoaded: 0, exclusive: 0, load: 0 }
+  const alarms: number[] = []
   const host: DocRoomHost<FakeConn> = {
     docId: DOC_ID,
     env: { DB: d1.DB } as unknown as Env,
@@ -209,6 +229,9 @@ function makeRoom(d1: ReturnType<typeof makeD1>, store = makeStorage(), opts: { 
       counts.exclusive++
       return fn()
     },
+    setAlarm: async (at: number) => {
+      alarms.push(at)
+    },
   }
   const core = new DocRoomCore(host)
   const load = core.load.bind(core)
@@ -220,7 +243,7 @@ function makeRoom(d1: ReturnType<typeof makeD1>, store = makeStorage(), opts: { 
     conns.push(c)
     return core.connect(c, version, () => onSync?.())
   }
-  return { core, doc, conns, add, store, counts }
+  return { core, doc, conns, add, store, counts, alarms }
 }
 
 const text = (doc: Y.Doc, name = 'content') => doc.getText(name).toString()
@@ -981,5 +1004,316 @@ describe('F-308 A22 따라잡기·사라진 방', () => {
     d1.state.row = null
     await expect(room.core.writeText({ content: 'x', baseVersion: 5, docVersion: 6 })).resolves.toEqual({ type: 'not_found' })
     expect(c.closed).toEqual({ code: 4404, reason: 'deleted' })
+  })
+})
+
+// F-2027 실시간 방 사용량 합산과 느린 저장 (specs/features/F-2027.md 8.1 C1~C16)
+const SNAPSHOT_USAGE_SQL = `${DAY_AND_TOTAL_SQL} RETURNING write_day, write_count, content_bytes, doc_count, blocked_at, warned_at`
+const BLOCKED_SQL = 'SELECT blocked_at FROM users WHERE id = ?'
+const SLOW_WARN = `docRoom: owner over daily write limit, slow snapshots (${DOC_ID})`
+const BLOCK_WARN = `docRoom: owner blocked, snapshots paused (${DOC_ID})`
+
+function warnCount(warn: { mock: { calls: unknown[][] } }, message: string) {
+  return warn.mock.calls.filter((c) => c[0] === message).length
+}
+
+// 시각 1,000,000 의 스냅숏 한 번으로 느린 저장에 든 방 (본문 'ab', v2)
+async function slowRoom(usage: Partial<UsageRow> = {}) {
+  const d1 = makeD1({ content: 'a', version: 1 })
+  d1.state.usage = { ...d1.state.usage!, write_count: 5000, ...usage }
+  const room = makeRoom(d1)
+  await room.core.load()
+  edit(room.doc, (c) => c.insert(c.length, 'b'))
+  await room.core.flush()
+  return { d1, ...room }
+}
+
+describe('F-2027 C1~C5 스냅숏 사용량 줄', () => {
+  it('C1 batch 1번, 스냅숏 문장 + 사용량 문장, 단독 run 없음', async () => {
+    const d1 = makeD1({ content: 'a', version: 1 })
+    const { core, doc } = makeRoom(d1)
+    await core.load()
+    edit(doc, (c) => c.insert(1, 'b'))
+    await core.flush()
+    expect(d1.state.batches).toEqual([
+      [
+        { sql: ROOM_UPDATE_SQL, args: ['', 'ab', 2, 1_000_000, DOC_ID, 1] },
+        { sql: SNAPSHOT_USAGE_SQL, args: ['1970-01-01', 1, 0, 'owner'] },
+      ],
+    ])
+    expect(d1.updates()).toHaveLength(1)
+  })
+
+  it('C2 증감 — 같은 줄바꿈', async () => {
+    const d1 = makeD1({ content: 'a\r\n', line_ending: 'crlf', version: 3 })
+    const { core, doc } = makeRoom(d1)
+    await core.load()
+    edit(doc, (c) => c.insert(2, 'b\n'))
+    await core.flush()
+    expect(d1.state.batches[0][1].args[1]).toBe(3)
+  })
+
+  it('C3 증감 — 섞인 줄바꿈 D1 행의 실제 바이트 기준', async () => {
+    const d1 = makeD1({ content: 'a\r\nb\nc', line_ending: 'crlf', version: 1 })
+    const { core, doc } = makeRoom(d1)
+    await core.load()
+    edit(doc, (c) => c.insert(c.length, 'd'))
+    await core.flush()
+    expect(d1.state.row!.content).toBe('a\r\nb\r\ncd')
+    expect(d1.state.batches[0][1].args[1]).toBe(2)
+  })
+
+  it('C4 증감 — 흡수 뒤 두 번째 시도는 흡수한 행 바이트 기준', async () => {
+    const d1 = makeD1({ content: 'L1\nL2\nL3\n', line_ending: 'lf', version: 5 })
+    const { core, doc } = makeRoom(d1)
+    await core.load()
+    edit(doc, (c) => c.insert(2, 'x'))
+    d1.state.row = { ...d1.state.row!, content: 'L1\nL2\nL3yyy\n', version: 6 }
+    await core.flush()
+    expect(d1.state.batches).toHaveLength(2)
+    expect(d1.state.batches[0][1].args[1]).toBe(1)
+    expect(d1.state.row!.content).toBe('L1x\nL2\nL3yyy\n')
+    expect(d1.state.batches[1][1].args[1]).toBe(1)
+  })
+
+  it('C5 소유자는 D1 owner_id — 편집자 연결만 있어도', async () => {
+    const d1 = makeD1({ content: 'a', version: 1 })
+    const { core, doc, add } = makeRoom(d1)
+    await core.load()
+    await add(conn('u1', 'u1@example.com'), 1)
+    edit(doc, (c) => c.insert(1, 'b'))
+    await core.flush()
+    expect(d1.state.batches[0][1].args[3]).toBe('owner')
+  })
+})
+
+describe('F-2027 C6~C10 느린 저장', () => {
+  it('C6 진입 — 60초 안의 flush 는 D1 없이 SQLite 에만, 알람은 한 번', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { d1, core, doc, store, alarms } = await slowRoom()
+    expect(d1.state.batches).toHaveLength(1)
+
+    vi.setSystemTime(1_030_000)
+    const rows = store.seqCount()
+    edit(doc, (c) => c.insert(c.length, 'c'))
+    await core.flush()
+    expect(d1.state.batches).toHaveLength(1)
+    expect(store.seqCount()).toBe(rows + 1)
+    expect(alarms).toEqual([1_060_000])
+
+    vi.setSystemTime(1_050_000)
+    edit(doc, (c) => c.insert(c.length, 'd'))
+    await core.flush()
+    expect(d1.state.batches).toHaveLength(1)
+    expect(alarms).toEqual([1_060_000])
+    expect(warnCount(warn, SLOW_WARN)).toBe(1)
+  })
+
+  it('C7 알람 — 미룬 편집을 한 번에 쓴다', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { d1, core, doc } = await slowRoom()
+    vi.setSystemTime(1_030_000)
+    edit(doc, (c) => c.insert(c.length, 'c'))
+    await core.flush()
+    vi.setSystemTime(1_050_000)
+    edit(doc, (c) => c.insert(c.length, 'd'))
+    await core.flush()
+
+    vi.setSystemTime(1_060_000)
+    await core.alarm()
+    expect(d1.state.batches).toHaveLength(2)
+    expect(d1.state.row!.content).toBe('abcd')
+  })
+
+  it('C8 방이 비어도 60초 안이면 쓰지 않고 알람, 타이머 없음', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { d1, core, doc, store, alarms } = await slowRoom()
+    vi.setSystemTime(1_030_000)
+    const rows = store.seqCount()
+    edit(doc, (c) => c.insert(c.length, 'c'))
+    await core.roomEmptied()
+    expect(d1.state.batches).toHaveLength(1)
+    expect(store.seqCount()).toBe(rows + 1)
+    expect(alarms).toEqual([1_060_000])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('C9 자정이 지나면 60초 전이어도 쓴다, 날짜는 새 날', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.setSystemTime(86_390_000)
+    const { d1, core, doc } = await slowRoom()
+    vi.setSystemTime(86_405_000)
+    edit(doc, (c) => c.insert(c.length, 'c'))
+    await core.flush()
+    expect(d1.state.batches).toHaveLength(2)
+    expect(d1.state.batches[1][1].args[0]).toBe('1970-01-02')
+  })
+
+  it('C10 결과 행이 한도 밑이면 풀린다', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { d1, core, doc } = await slowRoom()
+    vi.setSystemTime(1_030_000)
+    edit(doc, (c) => c.insert(c.length, 'c'))
+    await core.flush()
+    d1.state.usage!.write_count = 10
+    vi.setSystemTime(1_060_000)
+    await core.alarm()
+    expect(d1.state.batches).toHaveLength(2)
+
+    vi.setSystemTime(1_070_000)
+    edit(doc, (c) => c.insert(c.length, 'd'))
+    await core.flush()
+    expect(d1.state.batches).toHaveLength(3)
+  })
+})
+
+describe('F-2027 C11·C12 writeText 는 느린 저장을 건너뛴다', () => {
+  async function slowLiveRoom() {
+    const d1 = liveD1()
+    d1.state.usage = { ...d1.state.usage!, write_count: 5000 }
+    const room = makeRoom(d1)
+    await room.core.load()
+    edit(room.doc, (c) => c.insert(c.length, 'z'))
+    await room.core.flush()
+    return { d1, ...room }
+  }
+
+  it('C11 flush(후) 가 곧바로 쓴다', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { d1, core } = await slowLiveRoom()
+    expect(d1.state.batches).toHaveLength(1)
+    vi.setSystemTime(1_010_000)
+    const result = await core.writeText({ content: 'L1\nL2x\nL3\nz', baseVersion: 6, docVersion: 6 })
+    expect(result).toMatchObject({ type: 'ok', doc: { content: 'L1\nL2x\nL3\nz', version: 7 } })
+    expect(d1.state.batches).toHaveLength(2)
+  })
+
+  it('C11 못 나간 편집이 있으면 flush(선)·flush(후) 가 각각 쓴다', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { d1, core, doc } = await slowLiveRoom()
+    vi.setSystemTime(1_010_000)
+    edit(doc, (c) => c.insert(2, 'a'))
+    const first = await core.writeText({ content: 'L1a\nL2x\nL3\nz', baseVersion: 6, docVersion: 6 })
+    expect(first).toMatchObject({ type: 'conflict', doc: { content: 'L1a\nL2\nL3\nz', version: 7 } })
+    expect(d1.state.batches).toHaveLength(2)
+    const again = await core.writeText({ content: 'L1a\nL2x\nL3\nz', baseVersion: 7, docVersion: 7 })
+    expect(again).toMatchObject({ type: 'ok', doc: { content: 'L1a\nL2x\nL3\nz', version: 8 } })
+    expect(d1.state.batches).toHaveLength(3)
+  })
+
+  it('C12 도는 일반 flush 에 합쳐진 강제 flush — 뒤이은 한 번이 강제로 돈다', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { d1, core, doc } = await slowLiveRoom()
+    vi.setSystemTime(1_070_000)
+    edit(doc, (c) => c.insert(2, 'a'))
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    d1.state.beforeUpdate = () => {
+      d1.state.beforeUpdate = null
+      return gate
+    }
+    const normal = core.flush()
+    await settle()
+    expect(d1.state.batches).toHaveLength(2)
+    edit(doc, (c) => c.insert(0, 'y'))
+    const write = core.writeText({ content: 'yL1a\nL2x\nL3\nz', baseVersion: 8, docVersion: 6 })
+    await settle()
+    release()
+    await normal
+    expect(await write).toMatchObject({ type: 'ok', doc: { content: 'yL1a\nL2x\nL3\nz', version: 9 } })
+    expect(d1.state.row!.content).toBe('yL1a\nL2x\nL3\nz')
+  })
+})
+
+describe('F-2027 C13·C14 막힌 소유자', () => {
+  it('C13 막힘을 안 뒤로는 쓰지 않고 풀리면 쓴다', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const d1 = makeD1({ content: 'a', version: 1 })
+    d1.state.usage = { ...d1.state.usage!, blocked_at: 123 }
+    const { core, doc, store, alarms } = makeRoom(d1)
+    await core.load()
+    edit(doc, (c) => c.insert(1, 'b'))
+    await core.flush()
+    expect(d1.state.batches).toHaveLength(1)
+    expect(warnCount(warn, BLOCK_WARN)).toBe(1)
+
+    const rows = store.seqCount()
+    edit(doc, (c) => c.insert(2, 'c'))
+    await core.flush()
+    const blockedReads = d1.state.calls.filter((c) => c.sql === BLOCKED_SQL)
+    expect(blockedReads).toEqual([{ sql: BLOCKED_SQL, args: ['owner'] }])
+    expect(d1.state.batches).toHaveLength(1)
+    expect(alarms).toHaveLength(0)
+    expect(store.seqCount()).toBe(rows + 1)
+    expect(vi.getTimerCount()).toBe(0)
+
+    d1.state.usage!.blocked_at = null
+    await core.flush()
+    expect(d1.state.batches).toHaveLength(2)
+    expect(d1.state.row!.content).toBe('abc')
+    expect(warnCount(warn, BLOCK_WARN)).toBe(1)
+  })
+
+  it('C14 막힘 + writeText → unavailable, 본문은 요청 값, batch 0', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const d1 = liveD1()
+    d1.state.usage = { ...d1.state.usage!, blocked_at: 123 }
+    const room = makeRoom(d1)
+    await room.core.load()
+    edit(room.doc, (_c, t) => t.insert(1, '2'))
+    await room.core.flush()
+    const before = d1.state.batches.length
+    const result = await room.core.writeText({ content: 'L1\nL2x\nL3\n', baseVersion: 6, docVersion: 6 })
+    expect(result).toEqual({ type: 'unavailable' })
+    expect(text(room.doc)).toBe('L1\nL2x\nL3\n')
+    expect(d1.state.batches).toHaveLength(before)
+  })
+})
+
+describe('F-2027 C15·C16', () => {
+  it('C15 사용량 행이 없으면 판정하지 않는다 — 던지지 않고 다음 flush 도 쓴다', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const d1 = makeD1({ content: 'a', version: 1 })
+    d1.state.usage = null
+    const { core, doc } = makeRoom(d1)
+    await core.load()
+    edit(doc, (c) => c.insert(1, 'b'))
+    await core.flush()
+    edit(doc, (c) => c.insert(2, 'c'))
+    await core.flush()
+    expect(d1.state.batches).toHaveLength(2)
+    expect(d1.state.row!.content).toBe('abc')
+    expect(warn).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('C16 purge 뒤 alarm 은 D1·SQLite 호출이 없다', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { d1, core, doc, store } = await slowRoom()
+    vi.setSystemTime(1_030_000)
+    edit(doc, (c) => c.insert(c.length, 'c'))
+    await core.flush()
+    core.purge()
+    const calls = d1.state.calls.length
+    const logs = store.log.length
+    vi.setSystemTime(1_060_000)
+    await core.alarm()
+    expect(d1.state.calls.length).toBe(calls)
+    expect(store.log.length).toBe(logs)
+  })
+
+  it('C16 쫓겨난 뒤 새 인스턴스는 느린 저장을 잊고 첫 flush 에 쓴다', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { d1, core, doc, store } = await slowRoom()
+    vi.setSystemTime(1_010_000)
+    edit(doc, (c) => c.insert(c.length, 'c'))
+    await core.flush()
+    expect(d1.state.batches).toHaveLength(1)
+
+    const again = makeRoom(d1, store)
+    await again.core.load()
+    await again.core.flush()
+    expect(d1.state.batches).toHaveLength(2)
+    expect(d1.state.row!.content).toBe('abc')
   })
 })

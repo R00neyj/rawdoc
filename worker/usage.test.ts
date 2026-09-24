@@ -14,6 +14,7 @@ import {
   readUsage,
   rowToUsage,
   secondsUntilUtcMidnight,
+  snapshotUsageStatement,
   utcDay,
   utf8Bytes,
   writesToday,
@@ -386,6 +387,47 @@ describe('U12 삭제 빼기 (SQL 의미)', () => {
     expect(row.doc_count).toBe(1)
     const remaining = sqlDb.prepare('SELECT content FROM docs').all() as { content: string }[]
     expect(remaining.map((r) => r.content)).toEqual(['outside'])
+  })
+})
+
+// F-2027 4.1 — 하루 + 누계 문장 + RETURNING 사용량 열 여섯
+const SNAPSHOT_USAGE_SQL = `${DAY_AND_TOTAL_SQL} RETURNING write_day, write_count, content_bytes, doc_count, blocked_at, warned_at`
+
+describe('F-2027 U14 snapshotUsageStatement', () => {
+  it('문장 글자·바인딩', () => {
+    const { db, calls } = spySqlDb()
+    snapshotUsageStatement(db, 'owner', 1_000_000, 7)
+    expect(calls[0].sql).toBe(SNAPSHOT_USAGE_SQL)
+    expect(calls[0].args).toEqual(['1970-01-01', 7, 0, 'owner'])
+  })
+
+  // 어댑터 batch 는 run() 을 불러 RETURNING 행을 버린다 — 같은 트랜잭션 안에서 all() 로 받아 본다
+  it('문서 UPDATE 1행 뒤 → 갱신 뒤 값, 0행 뒤 → 누계 그대로·write_count +1', async () => {
+    const sqlDb = openTestDb()
+    sqlDb.exec("INSERT INTO users (id, email, created_at) VALUES ('owner', 'a@b.com', 1)")
+    sqlDb.exec(
+      "INSERT INTO docs (id, owner_id, title, content, line_ending, version, created_at, updated_at) VALUES ('d1','owner','t','hello','lf',1,1,1)",
+    )
+    sqlDb.exec("UPDATE users SET content_bytes = 5, doc_count = 1 WHERE id = 'owner'")
+    const db = asD1(sqlDb)
+    const docUpdate = 'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND version = ?'
+    const now = 1_000_000
+
+    const once = async (cond: number) => {
+      sqlDb.exec('BEGIN')
+      await (db.prepare(docUpdate).bind('t', 'hello!!', cond + 1, now, 'd1', cond) as unknown as RunResult).run()
+      const stmt = snapshotUsageStatement(db, 'owner', now, 2) as unknown as { all(): Promise<{ results: unknown[] }> }
+      const { results } = await stmt.all()
+      sqlDb.exec('COMMIT')
+      return results
+    }
+
+    expect(await once(1)).toEqual([
+      { write_day: '1970-01-01', write_count: 1, content_bytes: 7, doc_count: 1, blocked_at: null, warned_at: null },
+    ])
+    expect(await once(1)).toEqual([
+      { write_day: '1970-01-01', write_count: 2, content_bytes: 7, doc_count: 1, blocked_at: null, warned_at: null },
+    ])
   })
 })
 

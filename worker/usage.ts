@@ -98,6 +98,8 @@ const DELETE_DOC_SQL =
 const DELETE_FOLDERS_SQL =
   'UPDATE users SET write_count = CASE WHEN write_day = ?1 THEN write_count + 1 ELSE 1 END, write_day = ?1, (content_bytes, doc_count) = (SELECT users.content_bytes - COALESCE(SUM(length(CAST(content AS BLOB))), 0), users.doc_count - COUNT(*) FROM docs WHERE owner_id = ?2 AND folder_id IN (SELECT value FROM json_each(?3))) WHERE id = ?2'
 const READ_USAGE_SQL = `SELECT ${USAGE_COLUMNS} FROM users WHERE id = ?`
+// F-2027 4.1 — 하루 + 누계 문장 그대로에 RETURNING 만
+const SNAPSHOT_USAGE_SQL = `${DAY_AND_TOTAL_SQL} RETURNING ${USAGE_COLUMNS}`
 
 // D1 문장 만들기 — prepare·bind 만 하고 실행하지 않는다
 
@@ -117,6 +119,11 @@ export function docUsageStatements(
     db.prepare(TOTAL_ONLY_SQL).bind(p.deltaBytes, p.deltaDocs, p.ownerId),
     db.prepare(DAY_ONLY_SQL).bind(day, p.actorId),
   ]
+}
+
+// 스냅숏 한 번 = 소유자 하루 +1, 누계 += deltaBytes (앞 문장이 1행을 바꿨을 때만). 문서 수는 바꾸지 않는다
+export function snapshotUsageStatement(db: D1Database, ownerId: string, now: number, deltaBytes: number): D1PreparedStatement {
+  return db.prepare(SNAPSHOT_USAGE_SQL).bind(utcDay(now), deltaBytes, 0, ownerId)
 }
 
 export function deleteDocUsageStatement(db: D1Database, ownerId: string, docId: string, now: number): D1PreparedStatement {
