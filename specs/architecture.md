@@ -10,7 +10,7 @@
 brand.config.js          제품명·짧은 이름·메인 컬러. 유일한 정의 위치 (design.md 3.2)
 scripts/                 검증 도구 (F-160). measure·verify·e2e-one. src/ 가 import 하지 않는다
 content/                 공개 사이트 글 원본 `.md` (F-272). 글은 F-273~F-276 이 넣는다
-site/                    공개 사이트 빌드 (F-272). build·pages·guard·render·helpPage·guidesIndex. 순수 문자열만 다루고 DOM·React·node:fs 를 import 하지 않는다
+site/                    공개 사이트 빌드 (F-272). build·pages·guard·render·helpPage·guidesIndex·pageNav(F-2036 — 제목 id·문서 목록·목차). 순수 문자열만 다루고 DOM·React·node:fs 를 import 하지 않는다
 index.html               <title>·theme-color·--accent 는 빌드 시 brand.config.js 에서 주입. 첫 페인트 전 테마·사이드바 값을 <html> 에 넣는 인라인 스크립트(%BOOT_PAINT_SCRIPT%)와 부팅 스켈레톤 마크업 (F-2015)
 vite.config.js           React, brand 주입 플러그인, 부팅 스크립트 주입 플러그인(F-2015), Vitest, (F-115) PWA
 public/                  아이콘 등 정적 파일
@@ -184,6 +184,7 @@ type YjsMetaRow = {
 - **서버 문서, 실시간 경로(M3, F-305)**: 위 흐름과 다르다 — 방 Doc(App 층 `useLiveDoc` 가 만드는 빈 `Y.Doc`) → 게이트(F-303 `remoteGate`, `sharedDoc` 옵션으로 방 Doc 을 그대로 씀) → 편집기 Doc(첫 동기화 뒤 방 Doc 에서 `createYBindingFromState` 로 복제) → `EditorState`. 본문 자동 저장(`PUT`)은 경로가 `pending`(outbox 대기) 또는 `fallback`(연결 실패) 일 때만 돈다 — `realtime` 경로에서는 꺼진다(F-305 4장·10장)
 - **오프라인 영속(F-306, 2026-09-24)**: 방 Doc 은 provider 를 붙이기 전에 `md-yjs`(`yjsStore.ts`) 를 먼저 불러와 적용한다 — 이 순서라야 오프라인에서 새로고침해도 로컬 편집이 남는다. 경로 판정에 `offline-view` 가 더해졌다 — 이 브라우저에 그 문서 기록이 없는 채 오프라인으로 열면 캐시 본문을 읽기 전용으로 띄우고(방 Doc 을 만들지 않는다), 기록이 있으면 폴백 대신 재개 가능한 `realtime` 으로 로컬 기록을 이어 편집한다(`docPath.ts` 5장, F-306 5장)
 - awareness(`useLiveDoc`, 방 Doc 에 매임) → 상단바 아바타(`usePeers`)·원격 커서(`remoteCursors`) (F-307)
+- `accountBlocked`(`/api/me` 의 `blocked`) → 모든 서버 문서 읽기 전용, `decideDocPath` 입력 `forbidden` 을 참으로 넘겨 소켓 없이 `view` 경로 (F-2030 5.2)
 
 ## 4. 설정 (localStorage)
 
@@ -229,40 +230,56 @@ type YjsMetaRow = {
 ## 6. 서버 (M2, 2026-09-15)
 
 ```
-wrangler.jsonc           Worker 스크립트·D1(DB)·R2(BUCKET)·정적 자산(ASSETS) 바인딩 (F-204), Durable Object `DOC_ROOM`(클래스 `DocRoom`) 바인딩·마이그레이션 (F-304)
-migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213)
+wrangler.jsonc           Worker 스크립트·D1(DB)·R2(BUCKET)·정적 자산(ASSETS) 바인딩 (F-204), Durable Object `DOC_ROOM`(클래스 `DocRoom`) 바인딩·마이그레이션 (F-304), Rate Limiting `WRITE_LIMITER` (F-2026)
+migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025)
 worker/
   index.ts               fetch 진입점, 라우트 표 { method, path, handler }
   http.ts                JSON 응답 도우미
-  auth.ts                Access JWT 검증, requireUser (F-205)
+  auth.ts                better-auth 세션으로 사용자 판정, 개발 우회, requireUser (F-205, F-2033)
+  authServer.ts          better-auth 옵션·인스턴스·설정 검사·가입 관문·만료 행 정리 (F-2033, F-2028)
+  origin.ts              로컬 인증 모드·개발 우회·`Origin` 판정 (F-2033)
+  loginPage.ts providerLogos.ts   `/login` 페이지, 제공자 공식 로고 (F-2033)
+  pageTokens.ts          랜딩·로그인 페이지 공통 색 변수 (F-2033)
   docs.ts folders.ts validate.ts   (F-206)
   links.ts token.ts      (F-210·F-211)
   attachments.ts imageSniff.ts     (F-209)
   access.ts grants.ts    (F-212)
   locks.ts               (F-213)
   docSocket.ts docRoom.ts docRoomCore.ts yStore.ts textRebase.ts docRoomRpc.ts   (F-304)
+  docWrite.ts            문서 행 조건부 쓰기 한 벌 — `/api`·`/v1` 폴백 PUT 과 DocRoom idle 경로가 같이 씀 (F-308)
+  usage.ts               사용량 열·한도·사용량 줄 (F-2025)
+  writeGate.ts           쓰기 관문 — 401·403 account_blocked·429 day·429 minute (F-2026)
+  testD1.ts              테스트 전용 node:sqlite D1 어댑터 (F-2025)
   awarenessRelay.ts        (F-307)
   v1.ts apiTokens.ts       `/v1` 핸들러·개인 토큰 (F-222·F-223)
   v1Contract.ts            `/v1` 응답 타입과 예시 값. 핸들러는 import 하지 않는다 — 서버·CLI 양쪽 테스트가 이 파일에 댄다 (F-2021 7.2)
   tsconfig.json worker-configuration.d.ts(`npm run cf:types` 생성)
+scripts/admin-{usage,block,unblock,warn,recount}.mjs   원격 D1 관리 (F-2029)
+scripts/lib/admin.mjs d1.mjs                          관리 스크립트 공용 도우미·`wrangler d1 execute` 호출 (F-2029)
 ```
 
 - 배포: GitHub `deploy` 브랜치에 올리면 Cloudflare Workers Builds 가 `npm run build` → `npx wrangler deploy`. `deploy` 는 로컬 `verify:full` 을 통과한 main 커밋만 가리킨다(`git push origin <sha>:deploy`). main push 는 GitHub Actions `ci.yml`(린트·타입·단위·빌드)만. D1 원격 마이그레이션은 자동화하지 않고 배포 전에 손으로 (2026-09-15)
 - 배포 주소: `rawdoc.app` 하나 (커스텀 도메인). `workers_dev`·`preview_urls` 는 끈다 — IndexedDB·서비스 워커가 출처별로 갈라지지 않게
-- 경로: `/api/*` 는 로그인(Access 가 경로를 보호, Worker 가 JWT 재검증). `/pub/*` 는 로그인 없이 읽기만(쓰기 메서드 405). 나머지는 정적 자산, 없는 경로는 `404.html` (`wrangler.jsonc` 의 `not_found_handling: "404-page"`, F-272 7장. 그전에는 `index.html` 이었다). 사이트 페이지(`/changelog`·`/help`·`/privacy`·`/terms`·`/guides/*`)는 빌드가 낸 평평한 `{경로}.html` 정적 자산이다
+- 경로: `/api/*` 는 로그인(better-auth 세션 쿠키, Worker 가 판정 — F-2033). `/login` 은 Worker 가 만드는 로그인 페이지(스크립트 없음, F-2033). 비`GET` `/api/*` 는 라우트 표 앞에서 `Origin` 을 검사한다(403 `forbidden_origin`, F-2033 5.4). `/pub/*` 는 로그인 없이 읽기만(쓰기 메서드 405). 나머지는 정적 자산, 없는 경로는 `404.html` (`wrangler.jsonc` 의 `not_found_handling: "404-page"`, F-272 7장. 그전에는 `index.html` 이었다). 사이트 페이지(`/changelog`·`/help`·`/privacy`·`/terms`·`/guides/*`)는 빌드가 낸 평평한 `{경로}.html` 정적 자산이다
 - `GET /pub/docs/:token/set` 응답에 문서마다 위키링크 해석 결과 표 `links` 가 붙는다(문서 1개뿐이어도 `links: {}`, 추가 질의 없음) — F-2018 (2026-09-23)
 - API 응답 헤더: `Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`. 오류 본문에 내부 정보 없음
 - 남의 자원은 404, 권한은 있으나 동작이 막히면 403 (F-206·F-212)
 - Worker 는 `src/lib/**` 순수 함수와 `src/types.ts` 만 import 한다
-- 로컬 개발: `.dev.vars` 의 `DEV_AUTH_EMAIL` 은 localhost 요청에서만 로그인으로 본다. 포트는 `dev:worker` 8790, 에이전트 병렬 슬롯 8791~
+- 로컬 개발: `.dev.vars` 키 — `BETTER_AUTH_URL=http://localhost:8790`, `BETTER_AUTH_SECRET`(32바이트 난수 base64), `DEV_AUTH_EMAIL=…@example.com`(우회를 쓸 때), 실제 OAuth 를 로컬에서 시험할 때만 `GOOGLE_CLIENT_ID`·`GOOGLE_CLIENT_SECRET`·`GITHUB_CLIENT_ID`·`GITHUB_CLIENT_SECRET`(로컬 앱 값). 우회는 `BETTER_AUTH_URL` 이 `http:` localhost 이고 `DEV_AUTH_EMAIL` 이 `@example.com` 으로 끝날 때만 켜진다(`origin.ts` `isDevBypass`). `wrangler.jsonc` `vars` 의 `DEV_AUTH_EMAIL` 은 빈 값 — `.dev.vars` 가 덮는다 (F-2033 5.2·8.1·11장 3번). 포트는 `dev:worker` 8790, 에이전트 병렬 슬롯 8791~
 - 클라이언트: 로그인 상태면 `store.kind === 'server'` (F-207). IndexedDB `md-remote` 에 캐시·보낼 목록·첨부. 로컬 `md-docs` 는 로그아웃 상태와 이관(F-208)에 쓴다
 - R2 키 `att/{owner_id}/{id}.{ext}`, 공개 버킷·서명 URL 없음 (F-209)
-- 안 쓰는 첨부 정리: 매일 UTC 18시 Cron `scheduled` → 모든 문서 원문에 없고 24시간 지난 첨부 R2·D1 삭제 (F-219)
-- `DocRoom` DO SQLite 표 `ydoc_updates`·`ydoc_meta` — Yjs 업데이트 로그와 메타(F-304 6.1). D1 `docs` 는 DO 도 쓴다 — 조용해지면 5초, 편집이 계속되면 최대 30초 뒤, `version` 조건부 `UPDATE` 로 (F-304 6.2·8.2)
+- 안 쓰는 첨부 정리: 매일 UTC 18시 Cron `scheduled` → 모든 문서 원문에 없고 24시간 지난 첨부 R2·D1 삭제 (F-219). 같은 Cron 이 만료된 `auth_sessions`·`auth_verifications` 행도 따로 지운다 (F-2033 2.6)
+- `/v1` PUT → `DocRoom` RPC `writeText`(idle: DO 안 D1 조건부 쓰기, 실시간: `Y.Text` 차이 적용 + 즉시 스냅숏). 실패하면 D1 직접 (F-308)
+- 쓰기 요청의 D1 쓰기는 사용량 줄(`users` 한 행)과 한 batch. 문서 행을 바꾸면 소유자 누계도 (F-2025)
+- 쓰기 라우트(`GET` 아닌 `/api`·`/v1`, `POST /api/login` 제외)는 `Origin` 검사·라우트 찾기 뒤, 핸들러 앞에 관문 하나(`writeGate.ts`). 분당 바인딩 `WRITE_LIMITER` 가 던지면 통과 (F-2026)
+- 공개 조회는 `links.ts` `findPublicLink` 하나를 거친다. 링크 소유자가 막힌 계정이면 없는 링크와 같이 404 (F-2028 5장)
+- 문서 권한 판정 `resolveDocAccess` 는 보낸 사람 또는 소유자가 막힌 계정이면 `owner`·`edit` 를 `view` 로 낮춘다. 쓰기 핸들러 셋(`handleUpdateDoc`·`handleUpdateDocV1`·`handleLockDoc`)은 그때 403 `account_blocked` (F-2028 4.2·4.3)
+- 가입 관문: better-auth `validateUserInfo` 의 `create-user` 에서 `signup_gate` 한 줄 조건부 `UPDATE`. 마감이면 `/login?error=signup_closed` (F-2028 3장)
+- `DocRoom` DO SQLite 표 `ydoc_updates`·`ydoc_meta` — Yjs 업데이트 로그와 메타(F-304 6.1). D1 `docs` 는 DO 도 쓴다 — 조용해지면 5초, 편집이 계속되면 최대 30초 뒤, `version` 조건부 `UPDATE` 로 (F-304 6.2·8.2). 소유자 사용량 줄과 한 batch. 소유자가 하루 한도에 닿으면 60초에 한 번(DO 알람), 막힌 소유자는 쓰지 않음 — 막은 뒤 첫 스냅숏 한 번은 들어간다 (F-2027)
 - **DocRoom 저장소를 지우거나 클래스를 바꾸는 변경은 브라우저 `md-yjs` 기록과 두 벌이 된다**(F-306 L7) — 클라이언트는 서버 Doc 이 "같은 역사" 인지 알 수 없어 기록을 먼저 적용한 뒤 provider 를 붙이므로, DO 가 새 씨앗으로 다시 시작하면 본문이 중복될 수 있다. DO 저장소를 지우는 배포를 하는 명세는 이 위험을 다뤄야 한다
 - `DocRoom` 은 awareness 를 도장 찍어 중계하고 연결이 닫히면 그 연결의 상태를 지운다(F-307 4장)
-- 경로 접두사 4개: `/api/*` Access 로그인(브라우저), `/pub/*` 로그인 없음(공유 링크), `/v1/*` Access 밖·`Authorization: Bearer rd_…` 개인 토큰만(스크립트, F-222·F-223). `/v1` 은 쿠키를 보지 않는다. 토큰은 D1 `api_tokens` 에 SHA-256 해시만 (0007). `/ws/*` Access 밖 — Worker 가 Origin·`CF_Authorization` 쿠키로 인증하고 edit 이상만 `DocRoom` DO(`/ws/doc/:id`)로 넘긴다. 거절은 닫기 코드 4401·4403·4404 (F-304)
-- `GET /v1/me` → `{ id, email }`(토큰 없음·틀림·폐기는 401). `handleMe` 를 그대로 붙인 라우트 한 줄, 명령줄 도구의 `whoami`·`--with-token` 확인에 쓴다 (F-2021 7.1)
+- 경로 접두사 4개: `/api/*` better-auth 세션 쿠키(브라우저), `/pub/*` 로그인 없음(공유 링크), `/v1/*` `Authorization: Bearer rd_…` 개인 토큰만(스크립트, F-222·F-223). `/v1` 은 쿠키를 보지 않는다. 토큰은 D1 `api_tokens` 에 SHA-256 해시만 (0007). `/ws/*` — Worker 가 Origin·better-auth 세션 쿠키로 인증하고 edit 이상만 `DocRoom` DO(`/ws/doc/:id`)로 넘긴다. 거절은 닫기 코드 4401·4403·4404 (F-304)
+- `GET /api/me`·`GET /v1/me` → `{ id, email, blocked, warned }`(F-2028 7.1. 토큰 없음·틀림·폐기는 401). `/v1/me` 는 `handleMe` 를 그대로 붙인 라우트 한 줄, 명령줄 도구의 `whoami`·`--with-token` 확인에 쓴다 (F-2021 7.1)
 
 ## 5. 브랜드 주입
 
