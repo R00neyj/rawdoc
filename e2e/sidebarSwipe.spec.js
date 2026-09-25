@@ -26,16 +26,7 @@ async function touchSwipe(page, { startX, startY, endX, endY, steps = 5 }) {
 test.describe('F-227 터치 사이드바 여닫기 (412×915, 터치)', () => {
   test.use({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true })
 
-  test('F-227 A2 사이드바 열기 버튼 44×44 이상, 상단바 높이는 그대로', async ({ page }) => {
-    await openApp(page)
-    const topbarBefore = await rectOf(page.locator('.topbar'))
-    const toggle = page.getByRole('button', { name: '사이드바 열기' })
-    const rect = await rectOf(toggle)
-    expect(rect.width).toBeGreaterThanOrEqual(44)
-    expect(rect.height).toBeGreaterThanOrEqual(44)
-    const topbarAfter = await rectOf(page.locator('.topbar'))
-    expect(topbarAfter.height).toBe(topbarBefore.height)
-  })
+  // F-227 A2 열기 버튼 44×44 는 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
 
   test('F-227 A3 화면 어디서든 오른쪽으로 밀면 사이드바가 열린다', async ({ page }) => {
     await openApp(page)

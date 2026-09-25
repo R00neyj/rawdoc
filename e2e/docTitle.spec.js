@@ -1,6 +1,6 @@
 // 본문 맨 위 제목 (specs/features/F-217.md)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, readSavedContent, resizeWindow, rectOf, setViewMode, openExportMenu } from './helpers.js'
+import { openApp, importMarkdown, readSavedContent, rectOf, setViewMode, openExportMenu } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 async function fillTitle(page, text) {
@@ -169,21 +169,7 @@ async function moveCurrentDocToFolder(page, folderName) {
   await dialog.getByRole('button', { name: '이동', exact: true }).click()
 }
 
-test.describe('F-234 A1 제목 크기', () => {
-  test('20px 고정, 글자 크기 설정을 바꿔도 그대로', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await expect(page.locator('.doc-title')).toHaveCSS('font-size', '20px')
-
-    await page.getByRole('button', { name: '설정', exact: true }).click()
-    await page.locator('#font-size-label').locator('..').getByRole('radio', { name: '크게', exact: true }).click()
-    await page.getByRole('button', { name: '닫기', exact: true }).click()
-    await expect(page.locator('.doc-title')).toHaveCSS('font-size', '20px')
-
-    await setViewMode(page, 'view')
-    await expect(page.locator('.doc-title-view')).toHaveCSS('font-size', '20px')
-  })
-})
+// F-234 A1 제목 20px 고정은 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
 
 test.describe('F-234 A2 폴더 밖', () => {
   test('편집·원문은 "제목" 표시, 보기는 경로 줄이 없다', async ({ page }) => {
@@ -317,25 +303,7 @@ test.describe('F-234 A9 접근성', () => {
   })
 })
 
-test.describe('F-217 A7 긴 제목', () => {
-  test('좁은 창에서 긴 제목은 가로 스크롤 없이 여러 줄로 보인다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await resizeWindow(page, 400)
-    const longTitle = '아주 아주 아주 아주 아주 아주 아주 아주 긴 제목이 줄바꿈 되는지 확인합니다'
-    await fillTitle(page, longTitle)
-
-    const scrollWidth = await page.evaluate(() => document.scrollingElement.scrollWidth)
-    const clientWidth = await page.evaluate(() => document.scrollingElement.clientWidth)
-    expect(scrollWidth).toBeLessThanOrEqual(clientWidth)
-
-    const box = await page.locator('.doc-title').evaluate((el) => ({
-      scrollHeight: el.scrollHeight,
-      lineHeight: parseFloat(getComputedStyle(el).lineHeight),
-    }))
-    expect(box.scrollHeight).toBeGreaterThan(box.lineHeight * 1.5)
-  })
-})
+// F-217 A7 좁은 창 긴 제목 가로 넘침은 e2e/dialogLayout.spec.js 의 합친 테스트로 옮겼다 (2026-09-25 e2e 경량화)
 
 // 폴더 메뉴 새 문서 뒤 최상위 새 문서에서 제목 포커스가 비던 버그 (2026-09-24, F-2022 구현 중 발견)
 test.describe('F-217 A5b 폴더 메뉴 새 문서', () => {

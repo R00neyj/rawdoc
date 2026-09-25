@@ -161,33 +161,6 @@ async function listAttachmentIds(page) {
   )
 }
 
-async function seedAttachment(page, { id, createdAt }) {
-  await page.evaluate(
-    ({ id, createdAt }) =>
-      new Promise((resolve, reject) => {
-        const req = indexedDB.open('md-docs')
-        req.onerror = () => reject(req.error)
-        req.onsuccess = () => {
-          const db = req.result
-          const tx = db.transaction('attachments', 'readwrite')
-          tx.objectStore('attachments').put({
-            id,
-            mime: 'image/png',
-            ext: 'png',
-            size: 1,
-            width: 1,
-            height: 1,
-            createdAt,
-            blob: new Blob([new Uint8Array([1])]),
-          })
-          tx.oncomplete = () => resolve()
-          tx.onerror = () => reject(tx.error)
-        }
-      }),
-    { id, createdAt },
-  )
-}
-
 async function deleteAttachment(page, id) {
   await page.evaluate(
     (id) =>
@@ -433,24 +406,7 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
     expect(after.content).toBe(before.content)
   })
 
-  test('F-156 A10 정리 — 25시간 지나고 참조 없는 첨부만 지운다', async ({ page }) => {
-    await openApp(page)
-    const refId = 'aaaaaaaaaaaaaaaa'
-    await importMarkdown(page, { content: `본문 attachments/${refId}.png 참조\n` })
-
-    const HOUR = 60 * 60 * 1000
-    const now = Date.now()
-    await seedAttachment(page, { id: 'bbbbbbbbbbbbbbbb', createdAt: now - 25 * HOUR }) // 참조 없음·오래됨
-    await seedAttachment(page, { id: refId, createdAt: now - 25 * HOUR }) // 참조 있음
-    await seedAttachment(page, { id: 'cccccccccccccccc', createdAt: now - 1 * HOUR }) // 방금·참조 없음
-
-    await page.reload()
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-
-    await expect
-      .poll(async () => (await listAttachmentIds(page)).sort(), { timeout: 8000 })
-      .toEqual(['cccccccccccccccc', refId].sort())
-  })
+  // F-156 A10 첨부 정리는 src/app/attachmentGc.test.ts 가 같은 입력(25시간·참조 유무)·기대값으로 본다 (2026-09-25 e2e 경량화)
 
   test('F-156 A11 원문 보존 — 붙여넣은 3줄이 내보내기 안 .md 바이트와 같다(CRLF 문서)', async ({ page }) => {
     // F-156 A11 은 "F-158 전" 조건부라 이제 zip 으로 내보낸다 — 풀어서 안의 .md 항목으로 비교한다
@@ -503,22 +459,7 @@ test.describe('F-220 이미지 넣을 때 자동 축소', () => {
     expect(attachment.height).toBe(1500)
   })
 
-  test('F-220 A3 작은 PNG — 400x200 유지(F-157 A2 회귀 없음)', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
-    await pasteFiles(page, { files: [{ bytes: decodablePngBytes(400, 200), name: 'small.png', mime: 'image/png' }] })
-
-    await expect(page.locator('.md-image-box')).toBeVisible()
-    await waitSaved(page)
-    const saved = await readSavedContent(page)
-    const width = Number(/width="(\d+)"/.exec(saved.content)[1])
-    expect(width).toBe(400)
-    const id = /attachments\/([0-9a-f]{16})\./.exec(saved.content)[1]
-    const attachment = await readAttachment(page, id)
-    expect(attachment.width).toBe(400)
-    expect(attachment.height).toBe(200)
-  })
+  // F-220 A3 작은 PNG 400x200 유지는 src/lib/shrinkImage.test.ts 가 같은 입력·기대값으로 본다 (2026-09-25 e2e 경량화)
 
   test('F-220 A4 GIF — .gif 그대로, 3000x100', async ({ page }) => {
     await openApp(page)
@@ -561,7 +502,7 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
     return Number(/width="(\d+)"/.exec(content)[1])
   }
 
-  test('F-157 A2 모양 — 폭·높이·모서리·가운데 정렬', async ({ page }) => {
+  test('F-157 A2 편집 모드에서 이미지가 뜨고 디코드된다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '본문\n' })
     await pasteImage(page, { width: 400, height: 200, afterText: '본문', bytes: decodablePngBytes(400, 200) })
@@ -569,22 +510,7 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
     const img = page.locator('.md-image-img')
     await expect(img).toBeVisible()
     expect(await img.evaluate((el) => el.naturalWidth)).toBeGreaterThan(0)
-
-    const boxRect = await page.locator('.md-image-box').boundingBox()
-    expect(Math.abs(boxRect.width - 400)).toBeLessThanOrEqual(1)
-    const frameRect = await page.locator('.md-image-frame').boundingBox()
-    expect(Math.abs(frameRect.height - 200)).toBeLessThanOrEqual(1)
-
-    const radius = await page.locator('.md-image-frame').evaluate((el) => getComputedStyle(el).borderRadius)
-    const tokenRadius = await page.evaluate(() =>
-      getComputedStyle(document.documentElement).getPropertyValue('--radius-image').trim(),
-    )
-    expect(radius).toBe(tokenRadius)
-
-    const contentRect = await page.locator('.cm-content').boundingBox()
-    const leftGap = boxRect.x - contentRect.x
-    const rightGap = contentRect.x + contentRect.width - (boxRect.x + boxRect.width)
-    expect(Math.abs(leftGap - rightGap)).toBeLessThanOrEqual(1)
+    // 폭·높이·모서리·가운데 정렬은 시각 값이라 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
   })
 
   test('F-157 A3 정렬 버튼 — align 값만 원문 변경, aria-pressed, 위치, Ctrl+Z', async ({ page }) => {
@@ -902,7 +828,7 @@ test.describe('F-218 편집 모드 이미지 삭제 버튼', () => {
 })
 
 test.describe('F-158 이미지 보기·공유·내보내기', () => {
-  test('F-158 A2 보기 모드 — 폭·정렬·모서리가 편집 모드와 같다', async ({ page }) => {
+  test('F-158 A2 보기 모드에서도 이미지가 뜨고 디코드된다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '본문\n' })
     await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
@@ -910,26 +836,12 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
     await waitSaved(page)
     await expect(page.locator('.md-image-box')).toBeVisible()
 
-    const editBox = await page.locator('.md-image-box').boundingBox()
-    const editRadius = await page.locator('.md-image-frame').evaluate((el) => getComputedStyle(el).borderRadius)
-
     await setViewMode(page, 'view')
     // .content-area 안으로 좁힌다 — 인쇄 전용 영역(.print-root)도 .viewer 클래스를 쓴다(F-279.md 4.2)
     const viewImg = page.locator('.content-area .viewer img[data-attachment]')
     await expect(viewImg).toBeVisible()
     expect(await viewImg.evaluate((el) => el.naturalWidth)).toBeGreaterThan(0)
-
-    const viewBox = await page.locator('.content-area .viewer .md-image').boundingBox()
-    expect(Math.abs(viewBox.width - editBox.width)).toBeLessThanOrEqual(1)
-
-    const viewRadius = await page.locator('.content-area .viewer .md-image').evaluate((el) => getComputedStyle(el).borderRadius)
-    expect(viewRadius).toBe(editRadius)
-
-    // 가운데 정렬 — 뷰어 안 좌우 여백 차
-    const viewerRect = await page.locator('.content-area .viewer').boundingBox()
-    const leftGap = viewBox.x - viewerRect.x
-    const rightGap = viewerRect.x + viewerRect.width - (viewBox.x + viewBox.width)
-    expect(Math.abs(leftGap - rightGap)).toBeLessThanOrEqual(1)
+    // 폭·정렬·모서리가 편집 모드와 같은지는 시각 값이라 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
   })
 
   test('F-158 A3 보기 자리 표시 — 없는 id 블록, img 요청 없음', async ({ page }) => {

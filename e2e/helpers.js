@@ -142,24 +142,6 @@ export async function waitTransitionEnd(locator) {
   )
 }
 
-/** getComputedStyle 값 하나를 읽는다 */
-export async function computedStyle(locator, prop) {
-  return locator.evaluate((el, p) => getComputedStyle(el).getPropertyValue(p), prop)
-}
-
-/** --panel·--paper 같은 토큰 값을 실제 계산된 rgb() 로 바꿔 background-color 와 직접 비교할 수 있게 한다 */
-export async function tokenAsRgb(page, tokenName) {
-  return page.evaluate((name) => {
-    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-    const probe = document.createElement('div')
-    probe.style.backgroundColor = value
-    document.body.appendChild(probe)
-    const rgb = getComputedStyle(probe).backgroundColor
-    probe.remove()
-    return rgb
-  }, tokenName)
-}
-
 // 랜딩 HTML 을 '/' 에 한 번만 물린다 — preview 는 워커가 없어 '/' 가 항상 앱이다(F-271 9.2). 되돌이 확인처럼 두 번째 요청도 랜딩이어야 하면 두 번 부른다
 export async function mockLanding(page) {
   const { renderWelcomePage } = await import('../worker/welcomePage.ts')

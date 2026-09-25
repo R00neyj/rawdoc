@@ -54,21 +54,7 @@ test.describe('F-210 A5 공개 보기 화면', () => {
   })
 })
 
-test.describe('F-210 A6 코드블록 복사 버튼', () => {
-  test('누르면 클립보드에 원문이 담기고 아이콘이 바뀐다', async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-    await mockPublicDoc(page)
-    await page.goto('/#/p/tok123')
-
-    const btn = page.locator('.code-copy-btn')
-    await expect(btn).toBeVisible()
-    await btn.click()
-
-    const clip = await page.evaluate(() => navigator.clipboard.readText())
-    expect(clip.trim()).toBe('console.log(1)')
-    await expect(btn.locator('svg')).toBeVisible()
-  })
-})
+// F-210 A6 코드블록 복사는 F-293 A9 와 같은 확인이라 그쪽 하나로 합쳤다 (2026-09-25 e2e 경량화)
 
 test.describe('F-210 A7 오류', () => {
   test('404 — 링크가 없거나 끊겼습니다', async ({ page }) => {
@@ -97,23 +83,7 @@ test.describe('F-210 A7 오류', () => {
   })
 })
 
-test.describe('F-210 A8 내보내기', () => {
-  test('.md 내보내기 — 응답 content 바이트 그대로', async ({ page }) => {
-    await mockPublicDoc(page)
-    await page.goto('/#/p/tok123')
-    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
-
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByRole('button', { name: '.md 내보내기' }).click(),
-    ])
-    expect(download.suggestedFilename()).toBe(`${DOC.title}.md`)
-    const stream = await download.createReadStream()
-    const chunks = []
-    for await (const chunk of stream) chunks.push(chunk)
-    expect(Buffer.concat(chunks).toString('utf-8')).toBe(DOC.content)
-  })
-})
+// F-210 A8 .md 내보내기 바이트·파일 이름은 F-293 A6 에 합쳤다 (2026-09-25 e2e 경량화)
 
 // 폴더 공개 보기 (specs/features/F-211.md 2.3)
 const FOLDER = {
@@ -502,79 +472,12 @@ test.describe('F-293 A2 머리줄 버튼 모양', () => {
   })
 })
 
-test.describe('F-293 A3 툴팁', () => {
-  test('호버는 400ms 지연 뒤, 포커스는 지연 없이 뜬다', async ({ page }) => {
-    await mockPublicDoc(page)
-    await page.goto('/#/p/tok123')
-    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
+// F-293 A3(툴팁 400ms 지연)·A4(툴팁이 창 안)는 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
 
-    for (const label of ['설정', '.md 내보내기']) {
-      const btn = page.locator(`.public-view-header .icon-btn[aria-label="${label}"]`)
-      const wrap = page.locator(`.public-view-header .icon-btn-wrap:has(.icon-btn[aria-label="${label}"])`)
-      const tooltip = wrap.locator('.icon-tooltip')
-
-      await btn.hover()
-      const hoverDelay = await tooltip.evaluate((el) => getComputedStyle(el).transitionDelay)
-      expect(hoverDelay).toBe('0.4s')
-      await page.waitForTimeout(600)
-      await expect(tooltip).toHaveCSS('opacity', '1')
-      await expect(tooltip).toHaveText(label)
-
-      await page.mouse.move(10, 10)
-      await expect(tooltip).toHaveCSS('opacity', '0')
-
-      await btn.focus()
-      const focusDelay = await tooltip.evaluate((el) => getComputedStyle(el).transitionDelay)
-      expect(focusDelay).toBe('0s')
-      await expect(tooltip).toHaveCSS('opacity', '1', { timeout: 300 })
-      await btn.blur()
-    }
-  })
-})
-
-test.describe('F-293 A4 좁은 창에서 툴팁이 창 밖으로 안 나감', () => {
-  test('1280×800·400×800 두 버튼 모두', async ({ page }) => {
-    await mockPublicDoc(page)
-    for (const width of [1280, 400]) {
-      await page.setViewportSize({ width, height: 800 })
-      await page.goto('/#/p/tok123')
-      await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
-
-      for (const label of ['설정', '.md 내보내기']) {
-        const btn = page.locator(`.public-view-header .icon-btn[aria-label="${label}"]`)
-        const wrap = page.locator(`.public-view-header .icon-btn-wrap:has(.icon-btn[aria-label="${label}"])`)
-        const tooltip = wrap.locator('.icon-tooltip')
-        await btn.hover()
-        await page.waitForTimeout(600)
-        const box = await tooltip.evaluate((el) => {
-          const r = el.getBoundingClientRect()
-          return { left: r.left, right: r.right }
-        })
-        expect(box.right).toBeLessThanOrEqual(width)
-        expect(box.left).toBeGreaterThanOrEqual(0)
-        await page.mouse.move(10, 10)
-      }
-
-      const scrollWidth = await page.evaluate(() => document.scrollingElement.scrollWidth)
-      const clientWidth = await page.evaluate(() => document.scrollingElement.clientWidth)
-      expect(scrollWidth).toBe(clientWidth)
-    }
-  })
-})
-
-test.describe('F-293 A5 설정 동작 (회귀)', () => {
-  test('새 설정 버튼 클릭 — 대화상자가 뜬다', async ({ page }) => {
-    await mockPublicDoc(page)
-    await page.goto('/#/p/tok123')
-    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
-
-    await page.getByRole('button', { name: '설정', exact: true }).click()
-    await expect(page.locator('dialog[aria-labelledby="settings-title"]')).toBeVisible()
-  })
-})
+// F-293 A5 설정 버튼 → 대화상자는 F-230 A1 이 같은 조작으로 본다 (2026-09-25 e2e 경량화)
 
 test.describe('F-293 A6 내보내기 동작·비활성 (회귀)', () => {
-  test('문서 로딩 중엔 비활성, 뜬 뒤 클릭하면 응답 바이트 그대로 받는다', async ({ page }) => {
+  test('문서 로딩 중엔 비활성, 뜬 뒤 클릭하면 응답 바이트 그대로·제목.md 로 받는다', async ({ page }) => {
     let resolveRoute
     await page.route('**/pub/docs/tok123/set', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ docs: [] }) }),
@@ -597,6 +500,7 @@ test.describe('F-293 A6 내보내기 동작·비활성 (회귀)', () => {
     await expect(exportBtn).toBeEnabled()
 
     const [download] = await Promise.all([page.waitForEvent('download'), exportBtn.click()])
+    expect(download.suggestedFilename()).toBe(`${DOC.title}.md`)
     const stream = await download.createReadStream()
     const chunks = []
     for await (const chunk of stream) chunks.push(chunk)

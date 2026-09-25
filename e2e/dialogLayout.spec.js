@@ -1,4 +1,6 @@
-// 대화상자 뒤 흐림·고정 폭 (specs/features/F-224.md)
+// 좁은 창 가로 넘침 (specs/features/F-224.md A4, F-225 A7, F-217 A7)
+// 대화상자 폭 420/520/368, 뒤 막 blur 같은 시각 값은 e2e 로 고정하지 않는다 (CLAUDE.md "How we work", 2026-09-25 e2e 경량화).
+// 세 파일에 흩어져 있던 좁은 창 넘침 확인을 이 테스트 하나로 합쳤다
 import { test, expect } from '@playwright/test'
 import { openApp, importMarkdown, resizeWindow, waitTransitionEnd } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
@@ -14,17 +16,6 @@ async function ensureSidebarOpen(page) {
   await waitTransitionEnd(sidebar)
 }
 
-async function openDeleteDialog(page) {
-  await ensureSidebarOpen(page)
-  const row = page.locator('.tree-row').first()
-  await row.hover()
-  await row.locator('.item-menu-btn').click()
-  await page.getByRole('menuitem', { name: /삭제/ }).first().click()
-  const dialog = page.locator('.dialog[open]')
-  await waitTransitionEnd(dialog)
-  return dialog
-}
-
 async function openSettingsDialog(page) {
   await ensureSidebarOpen(page)
   await page.getByRole('button', { name: '설정', exact: true }).first().click()
@@ -33,29 +24,9 @@ async function openSettingsDialog(page) {
   return dialog
 }
 
-async function openMoveDialog(page) {
-  await ensureSidebarOpen(page)
-  const row = page.locator('.tree-row').first()
-  await row.hover()
-  await row.locator('.item-menu-btn').click()
-  await page.getByRole('menuitem', { name: '폴더로 이동…' }).first().click()
-  const dialog = page.locator('.dialog[open]')
-  await waitTransitionEnd(dialog)
-  return dialog
-}
-
 async function openInviteDialog(page) {
   await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).first().click()
   await page.getByRole('menuitem', { name: '사람 초대…' }).click()
-  const dialog = page.locator('.dialog[open]')
-  await waitTransitionEnd(dialog)
-  return dialog
-}
-
-async function openApiTokensDialog(page) {
-  await ensureSidebarOpen(page)
-  await page.getByRole('button', { name: '계정' }).first().click()
-  await page.getByRole('menuitem', { name: 'API 토큰' }).click()
   const dialog = page.locator('.dialog[open]')
   await waitTransitionEnd(dialog)
   return dialog
@@ -79,95 +50,30 @@ async function fakeGrants(page) {
   })
 }
 
-test.describe('F-224 A1 뒤 막 흐림', () => {
-  test('설정 대화상자를 연 상태에서 ::backdrop 에 blur(6px)', async ({ page }) => {
-    await openApp(page)
-    await openSettingsDialog(page)
-    const backdropFilter = await page.evaluate(() => getComputedStyle(document.querySelector('dialog.dialog[open]'), '::backdrop').backdropFilter)
-    expect(backdropFilter).toBe('blur(6px)')
-  })
-})
+async function expectNoHorizontalOverflow(page, where) {
+  const sizes = await page.evaluate(() => ({
+    scrollWidth: document.scrollingElement.scrollWidth,
+    clientWidth: document.scrollingElement.clientWidth,
+  }))
+  expect(sizes.scrollWidth, where).toBeLessThanOrEqual(sizes.clientWidth)
+}
 
-test.describe('F-224 A2 기본 폭', () => {
-  test('D-1(짧은/긴 제목)·D-3 모두 420(±1)', async ({ page }) => {
-    await resizeWindow(page, 1280, 800)
-    await openApp(page)
-    await importMarkdown(page, { name: '짧은.md', content: '내용\n' })
-
-    const deleteDialog = await openDeleteDialog(page)
-    await expect(deleteDialog).toBeVisible()
-    let box = await deleteDialog.evaluate((el) => ({ width: el.offsetWidth }))
-    expect(box.width).toBeCloseTo(420, 0)
-    await page.keyboard.press('Escape')
-
-    const longTitle = '긴'.repeat(120)
-    await importMarkdown(page, { name: `${longTitle}.md`, content: '내용\n' })
-    const deleteDialog2 = await openDeleteDialog(page)
-    await expect(deleteDialog2).toBeVisible()
-    box = await deleteDialog2.evaluate((el) => ({ width: el.offsetWidth }))
-    expect(box.width).toBeCloseTo(420, 0)
-    await page.keyboard.press('Escape')
-
-    const moveDialog = await openMoveDialog(page)
-    await expect(moveDialog).toBeVisible()
-    box = await moveDialog.evaluate((el) => ({ width: el.offsetWidth }))
-    expect(box.width).toBeCloseTo(420, 0)
-    await page.keyboard.press('Escape')
-  })
-})
-
-test.describe('F-224 A3 넓은 폭', () => {
-  test('D-2·D-4(초대 0명/긴 이메일 1명)·D-5(토큰 0개/원문 표시 중) 모두 520(±1)', async ({ page }) => {
-    await resizeWindow(page, 1280, 800)
+test.describe('좁은 창 가로 넘침 (F-224 A4·F-225 A7·F-217 A7)', () => {
+  test('400px 창 — 긴 제목, 설정 대화상자, 초대 대화상자 모두 가로 스크롤 없음', async ({ page }) => {
     await fakeServer(page)
     await fakeGrants(page)
     await openApp(page)
-
-    // D-2 — 설정 대화상자는 F-290 이 넓은 폭(520px)으로 바꿨다
-    const settingsDialog = await openSettingsDialog(page)
-    await expect(settingsDialog).toBeVisible()
-    let box = await settingsDialog.evaluate((el) => ({ width: el.offsetWidth }))
-    expect(box.width).toBeCloseTo(520, 0)
-    await page.keyboard.press('Escape')
-
-    const inviteDialog = await openInviteDialog(page)
-    await expect(inviteDialog).toBeVisible()
-    box = await inviteDialog.evaluate((el) => ({ width: el.offsetWidth }))
-    expect(box.width).toBeCloseTo(520, 0)
-
-    const longEmail = `${'긴'.repeat(60)}@example.com`
-    await inviteDialog.locator('.invite-email-input').fill(longEmail)
-    await inviteDialog.getByRole('button', { name: '초대' }).click()
-    await expect(inviteDialog.locator('.invite-grant-row')).toHaveCount(1)
-    box = await inviteDialog.evaluate((el) => ({ width: el.offsetWidth }))
-    expect(box.width).toBeCloseTo(520, 0)
-    await page.keyboard.press('Escape')
-
-    const tokensDialog = await openApiTokensDialog(page)
-    await expect(tokensDialog).toBeVisible()
-    box = await tokensDialog.evaluate((el) => ({ width: el.offsetWidth }))
-    expect(box.width).toBeCloseTo(520, 0)
-
-    await tokensDialog.locator('.api-token-name-input').fill('원문 표시 중 토큰')
-    await tokensDialog.getByRole('button', { name: '토큰 만들기' }).click()
-    await expect(tokensDialog.locator('.api-token-value')).toBeVisible()
-    box = await tokensDialog.evaluate((el) => ({ width: el.offsetWidth }))
-    expect(box.width).toBeCloseTo(520, 0)
-  })
-})
-
-test.describe('F-224 A4 좁은 창', () => {
-  test('400x800 에서 D-2·D-4 모두 368(±1)', async ({ page }) => {
-    await fakeServer(page)
-    await fakeGrants(page)
-    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
     await resizeWindow(page, 400, 800)
     await expect(page.locator('.sidebar')).toHaveClass(/sidebar--overlay/)
 
+    await page.locator('.doc-title').fill('아주 아주 아주 아주 아주 아주 아주 아주 긴 제목이 줄바꿈 되는지 확인합니다')
+    await expectNoHorizontalOverflow(page, '긴 제목')
+
     const settingsDialog = await openSettingsDialog(page)
     await expect(settingsDialog).toBeVisible()
-    let box = await settingsDialog.evaluate((el) => ({ width: el.offsetWidth }))
-    expect(box.width).toBeCloseTo(368, 0)
+    await expectNoHorizontalOverflow(page, '설정 대화상자')
+    expect(await settingsDialog.evaluate((el) => el.offsetWidth)).toBeLessThanOrEqual(400)
     await page.keyboard.press('Escape')
     // 겹침 사이드바가 열린 채면 배경 막이 공유 버튼 클릭을 가로챈다 — 먼저 닫는다
     const backdrop = page.locator('.sidebar-backdrop')
@@ -178,7 +84,7 @@ test.describe('F-224 A4 좁은 창', () => {
 
     const inviteDialog = await openInviteDialog(page)
     await expect(inviteDialog).toBeVisible()
-    box = await inviteDialog.evaluate((el) => ({ width: el.offsetWidth }))
-    expect(box.width).toBeCloseTo(368, 0)
+    await expectNoHorizontalOverflow(page, '초대 대화상자')
+    expect(await inviteDialog.evaluate((el) => el.offsetWidth)).toBeLessThanOrEqual(400)
   })
 })

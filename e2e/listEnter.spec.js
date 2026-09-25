@@ -123,202 +123,51 @@ test.describe('F-245 A6 비조합 회귀', () => {
   })
 })
 
-// 6장 재조사 — 진짜 원인은 IME 가 아니라 항목 2개짜리 목록의 빈 항목 Enter (specs/features/F-245.md 6.2)
-test.describe('F-245 A11 항목 2개 — 빈 항목 Enter', () => {
-  test('- 하나 + - 끝에서 Enter → 빈 줄도 기호도 없이 목록이 끝난다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n- 하나\n- ' })
-    await placeCursorAtEnd(page)
+// F-245 A11~A16·F-253 B2~B9 (조합 없는 Enter) 는 src/editor/listEnter.test.ts runEnter 가 같은 입력·기대값으로 본다 (2026-09-25 e2e 경량화)
 
+async function exportMdText(page) {
+  await openExportMenu(page)
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('menuitem', { name: '.md', exact: true }).click(),
+  ])
+  const stream = await download.createReadStream()
+  const chunks = []
+  for await (const chunk of stream) chunks.push(chunk)
+  return Buffer.concat(chunks).toString('utf-8')
+}
+
+// F-245 A7·A19, F-253 B10 세 내보내기 확인을 하나로 합쳤다 (2026-09-25 e2e 경량화)
+test.describe('F-245 A7·A19 / F-253 B10 원문 불변', () => {
+  test('.md 내보내기 결과가 화면에서 본 줄 수와 같다 — 조합 Enter·빈 항목 Enter·loose 목록 Enter', async ({ page }) => {
+    await openApp(page)
+
+    // F-245 A7 — 조합 중 Enter 뒤 빈 줄이 몰래 들어가지 않는다
+    await importMarkdown(page, { content: '\n- ' })
+    await placeCursorAtEnd(page)
+    await fakeImeCompose(page, '테스트')
     await page.keyboard.press('Enter')
     await page.keyboard.type('X')
+    let text = await exportMdText(page)
+    expect(text).toBe('\n- 테스트\n- X')
+    expect(text.split('\n')).toHaveLength(3)
 
-    const saved = await readSavedContent(page, docId)
-    expect(saved.content).toBe('\n- 하나\nX')
-  })
-})
-
-test.describe('F-245 A12 항목 2개 — 체크박스', () => {
-  test('- [x] test + - [ ] 끝에서 Enter → 목록이 끝난다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n- [x] test\n- [ ] ' })
-    await placeCursorAtEnd(page)
-
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-
-    const saved = await readSavedContent(page, docId)
-    expect(saved.content).toBe('\n- [x] test\nX')
-  })
-})
-
-test.describe('F-245 A14 항목 1개·3개 — 회귀', () => {
-  test('항목 1개', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n- ' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    expect((await readSavedContent(page, docId)).content).toBe('\n')
-  })
-
-  test('항목 3개', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n- 하나\n- 둘\n- ' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    expect((await readSavedContent(page, docId)).content).toBe('\n- 하나\n- 둘\n')
-  })
-})
-
-// F-245 6.5 A15 를 뒤집는다 — loose 목록 이어쓰기가 빈 줄을 새로 만들지 않는다 (specs/features/F-253.md)
-test.describe('F-253 B2 loose 글머리', () => {
-  test('- 하나\\n\\n- 둘 끝에서 Enter → 새 빈 줄 없이 바로 다음 줄, 원래 빈 줄은 그대로', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n- 하나\n\n- 둘' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-    expect((await readSavedContent(page, docId)).content).toBe('\n- 하나\n\n- 둘\n- X')
-  })
-})
-
-test.describe('F-253 B3 loose 체크박스', () => {
-  test('- [x] 완료\\n\\n- 테스트 끝에서 Enter', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n- [x] 완료\n\n- 테스트' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-    expect((await readSavedContent(page, docId)).content).toBe('\n- [x] 완료\n\n- 테스트\n- X')
-  })
-})
-
-test.describe('F-253 B4 loose 순서 목록', () => {
-  test('1. 하나\\n\\n2. 둘 끝에서 Enter → 번호 증가 유지', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n1. 하나\n\n2. 둘' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-    expect((await readSavedContent(page, docId)).content).toBe('\n1. 하나\n\n2. 둘\n3. X')
-  })
-})
-
-test.describe('F-253 B5 loose 중첩', () => {
-  test('- 하나\\n\\n  - 둘 끝에서 Enter → 들여쓰기 유지한 채 바로 다음 줄', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n- 하나\n\n  - 둘' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-    expect((await readSavedContent(page, docId)).content).toBe('\n- 하나\n\n  - 둘\n  - X')
-  })
-})
-
-test.describe('F-253 B8 loose 목록 빈 항목 Enter', () => {
-  test('- 하나\\n\\n- 끝에서 Enter → 목록이 끝난다, 앞의 빈 줄은 그대로', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n- 하나\n\n- ' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-    expect((await readSavedContent(page, docId)).content).toBe('\n- 하나\n\nX')
-  })
-})
-
-test.describe('F-253 B9 인용문 안 목록', () => {
-  test('> - 하나\\n>\\n> - 둘 끝에서 Enter → 바로 다음 줄에 인용·목록 기호', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n> - 하나\n>\n> - 둘' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-    expect((await readSavedContent(page, docId)).content).toBe('\n> - 하나\n>\n> - 둘\n> - X')
-  })
-})
-
-test.describe('F-253 B10 원문 불변', () => {
-  test('B2 결과를 .md 로 내보내기 — 화면에서 본 줄 수와 같다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '\n- 하나\n\n- 둘' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-
-    await openExportMenu(page)
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
-    ])
-    const stream = await download.createReadStream()
-    const chunks = []
-    for await (const chunk of stream) chunks.push(chunk)
-    const text = Buffer.concat(chunks).toString('utf-8')
-    expect(text).toBe('\n- 하나\n\n- 둘\n- X')
-    expect(text.split('\n')).toHaveLength(5)
-  })
-})
-
-test.describe('F-245 A16 순서 목록·중첩', () => {
-  test('순서 목록 — 목록이 끝난다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n1. 하나\n2. ' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    expect((await readSavedContent(page, docId)).content).toBe('\n1. 하나\n')
-  })
-
-  test('중첩 목록 — 목록이 끝난다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n  - 하나\n  - ' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    expect((await readSavedContent(page, docId)).content).toBe('\n  - 하나\n')
-  })
-})
-
-test.describe('F-245 A19 원문 불변', () => {
-  test('A11 결과를 .md 로 내보내기 — 화면에서 본 줄 수와 같다', async ({ page }) => {
-    await openApp(page)
+    // F-245 A19 — 항목 2개 빈 항목 Enter
     await importMarkdown(page, { content: '\n- 하나\n- ' })
     await placeCursorAtEnd(page)
     await page.keyboard.press('Enter')
     await page.keyboard.type('X')
-
-    await openExportMenu(page)
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
-    ])
-    const stream = await download.createReadStream()
-    const chunks = []
-    for await (const chunk of stream) chunks.push(chunk)
-    const text = Buffer.concat(chunks).toString('utf-8')
+    text = await exportMdText(page)
     expect(text).toBe('\n- 하나\nX')
     expect(text.split('\n')).toHaveLength(3)
-  })
-})
 
-test.describe('F-245 A7 원문 불변', () => {
-  test('.md 내보내기 결과가 화면에서 본 줄 수와 같다 — 빈 줄이 몰래 들어가지 않는다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '\n- ' })
+    // F-253 B10 — loose 목록 이어쓰기
+    await importMarkdown(page, { content: '\n- 하나\n\n- 둘' })
     await placeCursorAtEnd(page)
-
-    await fakeImeCompose(page, '테스트')
     await page.keyboard.press('Enter')
     await page.keyboard.type('X')
-
-    await openExportMenu(page)
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
-    ])
-    const stream = await download.createReadStream()
-    const chunks = []
-    for await (const chunk of stream) chunks.push(chunk)
-    const text = Buffer.concat(chunks).toString('utf-8')
-    expect(text).toBe('\n- 테스트\n- X')
-    expect(text.split('\n')).toHaveLength(3)
+    text = await exportMdText(page)
+    expect(text).toBe('\n- 하나\n\n- 둘\n- X')
+    expect(text.split('\n')).toHaveLength(5)
   })
 })

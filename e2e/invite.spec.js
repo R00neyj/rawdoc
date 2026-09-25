@@ -1,6 +1,6 @@
 // 초대와 권한 — 공유받음 묶음·읽기 전용·초대 대화상자 (specs/features/F-212.md 3장 A5·A6, F-225 다시 그리기)
 import { test, expect } from '@playwright/test'
-import { openApp, waitSaved, importMarkdown, resizeWindow, tokenAsRgb } from './helpers.js'
+import { openApp, waitSaved, importMarkdown } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 async function typeIntoEditor(page, text) {
@@ -159,27 +159,6 @@ async function inviteOne(dialog, email, role) {
   await expect(dialog.locator('.invite-grant-row').filter({ hasText: email })).toBeVisible()
 }
 
-test.describe('F-225 A1 한 줄 초대', () => {
-  test('입력·세그먼트·초대 버튼이 한 줄, 입력과 세그먼트가 같은 묶음 안', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 })
-    await fakeServer(page)
-    await fakeGrants(page)
-    await openApp(page)
-    const dialog = await openInviteDialogFromShare(page)
-
-    const group = dialog.locator('.invite-input-group')
-    await expect(group.locator('.invite-email-input')).toHaveCount(1)
-    await expect(group.locator('.invite-role-seg')).toHaveCount(1)
-
-    const inputBox = await group.locator('.invite-email-input').boundingBox()
-    const segBox = await group.locator('.invite-role-seg').boundingBox()
-    const submitBox = await dialog.locator('.invite-submit').boundingBox()
-
-    expect(Math.abs(inputBox.y - submitBox.y)).toBeLessThanOrEqual(2)
-    expect(Math.abs(segBox.y - submitBox.y)).toBeLessThanOrEqual(2)
-  })
-})
-
 test.describe('F-225 A2 대상 이름', () => {
   test('문서면 문서 이름, 폴더면 이름 뒤 폴더', async ({ page }) => {
     await fakeServer(page)
@@ -230,7 +209,7 @@ test.describe('F-225 A3 초대·강조', () => {
 })
 
 test.describe('F-225 A4 오류', () => {
-  test('형식이 틀리면 묶음 테두리가 --danger, 요청 없음', async ({ page }) => {
+  test('형식이 틀리면 묶음이 aria-invalid, 오류 문구, 요청 없음', async ({ page }) => {
     await fakeServer(page)
     await fakeGrants(page)
     await openApp(page)
@@ -247,10 +226,6 @@ test.describe('F-225 A4 오류', () => {
     const group = dialog.locator('.invite-input-group')
     await expect(group).toHaveAttribute('aria-invalid', 'true')
     await expect(dialog.getByText('이메일 주소를 확인하세요.')).toBeVisible()
-    const danger = await tokenAsRgb(page, '--danger')
-    await expect
-      .poll(() => group.evaluate((el) => getComputedStyle(el).borderColor))
-      .toBe(danger)
     expect(putCount).toBe(0)
   })
 })
@@ -303,19 +278,4 @@ test.describe('F-225 A6 삭제 포커스', () => {
   })
 })
 
-test.describe('F-225 A7 좁은 창', () => {
-  test('400 폭에서 초대가 입력 묶음 아래 줄, 가로 넘침 없음', async ({ page }) => {
-    await fakeServer(page)
-    await fakeGrants(page)
-    await resizeWindow(page, 400, 800)
-    await openApp(page)
-    const dialog = await openInviteDialogFromShare(page)
-
-    const groupBox = await dialog.locator('.invite-input-group').boundingBox()
-    const submitBox = await dialog.locator('.invite-submit').boundingBox()
-    expect(submitBox.y).toBeGreaterThan(groupBox.y + groupBox.height - 2)
-
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
-    expect(overflow).toBe(false)
-  })
-})
+// F-225 A7 좁은 창 가로 넘침은 e2e/dialogLayout.spec.js 의 합친 테스트로 옮겼다 (2026-09-25 e2e 경량화)

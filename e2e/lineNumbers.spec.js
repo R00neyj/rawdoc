@@ -1,6 +1,6 @@
 // 설정: 줄 번호(거터) 켜기·끄기 (specs/features/F-147.md)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, readSavedContent, setViewMode, resizeWindow, rectOf } from './helpers.js'
+import { openApp, importMarkdown, readSavedContent, setViewMode } from './helpers.js'
 import { longDoc } from './fixtures/docs.js'
 
 const LINE_NUMBERS_LABEL_SCOPE = '#line-numbers-label'
@@ -130,25 +130,4 @@ test.describe('F-147 A3 유지', () => {
   })
 })
 
-test.describe('F-147 A4 폭', () => {
-  test('창 1600px, 숨김 상태 — 내용 칸 800px 가운데, 첫 글자가 칸 왼쪽 끝', async ({ page }) => {
-    await resizeWindow(page, 1600, 900)
-    await openApp(page)
-    await importMarkdown(page, { content: '문단 글자\n' })
-    await setLineNumbers(page, '숨김')
-    await expect(page.locator('.cm-gutters')).toHaveCount(0)
-
-    const scrollerRect = await rectOf(page.locator('.cm-scroller'))
-    const contentRect = await rectOf(page.locator('.cm-content'))
-    expect(contentRect.width).toBeGreaterThanOrEqual(799)
-    expect(contentRect.width).toBeLessThanOrEqual(801)
-
-    const scrollerCenter = scrollerRect.left + scrollerRect.width / 2
-    const contentCenter = contentRect.left + contentRect.width / 2
-    expect(Math.abs(scrollerCenter - contentCenter)).toBeLessThanOrEqual(2)
-
-    const line = page.locator('.cm-line').first()
-    const lineRect = await rectOf(line)
-    expect(Math.abs(lineRect.left - contentRect.left)).toBeLessThanOrEqual(1)
-  })
-})
+// F-147 A4 내용 칸 800px 가운데는 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)

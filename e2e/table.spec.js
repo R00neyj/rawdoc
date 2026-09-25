@@ -8,8 +8,6 @@ import {
   rectOf,
   fakeImeCompose,
   fakeImeCommit,
-  setPrefBeforeLoad,
-  tokenAsRgb,
 } from './helpers.js'
 
 // 문서 첫 줄에 표를 바로 두지 않는다 — 가져오기 직후 커서가 문서 맨 앞(0)에 있는데,
@@ -30,25 +28,7 @@ function wideTable(cols) {
 }
 
 test.describe('F-140 표 추가 버튼 위치와 칸 인라인 표시', () => {
-  test('F-140 A2 열 추가 버튼이 표 오른쪽 테두리 세로 가운데에 온다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: NARROW_TABLE })
-    const wrap = page.locator('.md-table-widget')
-    await wrap.hover()
-    const colBtn = wrap.locator('.md-table-add-col')
-    const rowBtn = wrap.locator('.md-table-add-row')
-    const table = wrap.locator('table')
-    const [colRect, rowRect, tableRect] = await Promise.all([rectOf(colBtn), rectOf(rowBtn), rectOf(table)])
-
-    const colCenterY = colRect.top + colRect.height / 2
-    const tableCenterY = tableRect.top + tableRect.height / 2
-    expect(Math.abs(colRect.x + colRect.width / 2 - tableRect.right)).toBeLessThanOrEqual(2)
-    expect(Math.abs(colCenterY - tableCenterY)).toBeLessThanOrEqual(2)
-
-    const rowCenterX = rowRect.x + rowRect.width / 2
-    const tableCenterX = tableRect.x + tableRect.width / 2
-    expect(Math.abs(rowCenterX - tableCenterX)).toBeLessThanOrEqual(2)
-  })
+  // F-140 A2(버튼 위치)·A11(칸 크기 불변)·A13(빈 칸 높이)은 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
 
   for (const [label, content] of [
     ['좁은 표', NARROW_TABLE],
@@ -127,38 +107,6 @@ test.describe('F-140 표 추가 버튼 위치와 칸 인라인 표시', () => {
     const doc = await readSavedContent(page, docId)
     expect(doc.content).toContain('**굵게**')
     expect(doc.content).toContain('[링크](https://example.com)')
-  })
-
-  test('F-140 A11 칸 편집 시작 전후로 글자·칸 크기가 바뀌지 않는다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: NARROW_TABLE })
-    const cell = page.locator('.md-table-widget td, .md-table-widget th').first()
-    const before = await rectOf(cell)
-    await cell.click()
-    const after = await rectOf(cell)
-    expect(Math.abs(before.width - after.width)).toBeLessThanOrEqual(1)
-    expect(Math.abs(before.height - after.height)).toBeLessThanOrEqual(1)
-    expect(Math.abs(before.x - after.x)).toBeLessThanOrEqual(1)
-    expect(Math.abs(before.y - after.y)).toBeLessThanOrEqual(1)
-  })
-
-  test('F-140 A13 빈 칸 높이는 글자 든 행과 같다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: NARROW_TABLE })
-    const rows = page.locator('.md-table-widget table tr')
-    const filledHeight = (await rectOf(rows.nth(2))).height
-
-    // 행 추가 직후 — 모든 칸이 빈 행
-    const rowBtn = page.locator('.md-table-add-row')
-    await page.locator('.md-table-widget').hover()
-    await rowBtn.click()
-    const emptyHeight = (await rectOf(rows.nth(3))).height
-    expect(Math.abs(filledHeight - emptyHeight)).toBeLessThanOrEqual(1)
-
-    // 빈 칸 편집 중에도 같다
-    await rows.nth(3).locator('td').first().click()
-    const editingHeight = (await rectOf(rows.nth(3))).height
-    expect(Math.abs(filledHeight - editingHeight)).toBeLessThanOrEqual(1)
   })
 
   test('F-140 A14 마지막 행에서 Enter — 글자 있으면 행 추가, 비어 있으면 표 밖으로', async ({ page }) => {
@@ -457,39 +405,7 @@ test.describe('F-162 표 칸 안 줄바꿈 (Alt+Enter → <br>)', () => {
 })
 
 // 머리 행 + 본문 4행 (F-164 A1 "본문 4행 표")
-const STRIPE_TABLE = `${LEAD}| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n| 5 | 6 |\n| 7 | 8 |\n`
-
-test.describe('F-164 표 줄무늬·칸 강조 제거 (편집 모드)', () => {
-  for (const theme of ['white', 'sepia', 'dark']) {
-    test(`F-164 A1 ${theme} 모든 행 바탕이 문서 칸 바탕과 같다`, async ({ page }) => {
-      await setPrefBeforeLoad(page, 'md.theme', theme)
-      await openApp(page)
-      await importMarkdown(page, { content: STRIPE_TABLE })
-      const panelBg = await tokenAsRgb(page, '--panel')
-      const rows = page.locator('.md-table-widget table tr')
-      const count = await rows.count()
-      expect(count).toBe(5) // 머리 1 + 본문 4
-      for (let i = 0; i < count; i++) {
-        const bg = await rows.nth(i).evaluate((el) => getComputedStyle(el).backgroundColor)
-        expect(bg).toBe(panelBg)
-      }
-    })
-  }
-
-  test('F-164 A3 칸 편집 중 강조 요소가 보이지 않는다, Tab 으로 옆 칸도 마찬가지', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: NARROW_TABLE })
-    const firstCell = page.locator('.md-table-widget td, .md-table-widget th').first()
-    await firstCell.click()
-
-    const highlight = page.locator('.md-table-cell-highlight')
-    await expect(highlight).toHaveCount(1) // 요소 자체는 남는다 — F-165 범위 선택이 다시 쓴다
-    expect(await highlight.evaluate((el) => getComputedStyle(el).display)).toBe('none')
-
-    await page.keyboard.press('Tab')
-    expect(await highlight.evaluate((el) => getComputedStyle(el).display)).toBe('none')
-  })
-})
+// F-164 A1(행 바탕 = 문서 칸 바탕, 세 테마)·A3(칸 편집 중 강조 숨김)은 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
 
 // 머리 + 본문 2행, 3열 (F-165 드래그 범위 선택용)
 const GRID_TABLE = `${LEAD}| a | b | c |\n| --- | --- | --- |\n| 1 | 2 | 3 |\n| 4 | 5 | 6 |\n`

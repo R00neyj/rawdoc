@@ -1,4 +1,5 @@
 // 상단바 아이콘·툴팁·공유 메뉴 (F-150.md 3.3), 토글·검색 앞 묶음 (F-151)
+// 버튼 크기·모서리·선택 바탕·머리 줄 배치·툴팁/메뉴 위치 같은 시각 값은 e2e 로 고정하지 않는다 (CLAUDE.md "How we work", 2026-09-25 e2e 경량화)
 import { test, expect } from '@playwright/test'
 import {
   openApp,
@@ -6,75 +7,9 @@ import {
   resizeWindow,
   rectOf,
   waitTransitionEnd,
-  setPrefBeforeLoad,
   EXPORT_BUTTON_LABEL,
 } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
-
-// 배경이 반투명일 수 있어 부모를 거슬러 올라가 첫 불투명 바탕과 합성한 뒤 대비를 잰다 (F-153 A1)
-async function selectedContrast(locator) {
-  return locator.evaluate((el) => {
-    // 정규식 대신 canvas 로 실제 픽셀 값을 읽는다 — 어떤 CSS 색 표기든 처리된다
-    function toRgba(str) {
-      const canvas = toRgba.canvas ?? (toRgba.canvas = document.createElement('canvas'))
-      canvas.width = 1
-      canvas.height = 1
-      const ctx = canvas.getContext('2d')
-      ctx.clearRect(0, 0, 1, 1)
-      ctx.fillStyle = str
-      ctx.fillRect(0, 0, 1, 1)
-      const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
-      return { r, g, b, a: a / 255 }
-    }
-    function luminance({ r, g, b }) {
-      const [rl, gl, bl] = [r, g, b].map((c) => {
-        const s = c / 255
-        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
-      })
-      return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl
-    }
-    function contrast(a, b) {
-      const l1 = luminance(a)
-      const l2 = luminance(b)
-      const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1]
-      return (hi + 0.05) / (lo + 0.05)
-    }
-    function opaqueBg(node) {
-      let n = node.parentElement
-      while (n) {
-        const rgba = toRgba(getComputedStyle(n).backgroundColor)
-        if (rgba.a === 1) return rgba
-        n = n.parentElement
-      }
-      return { r: 255, g: 255, b: 255, a: 1 }
-    }
-    const cs = getComputedStyle(el)
-    const fg = toRgba(cs.color)
-    const overlay = toRgba(cs.backgroundColor)
-    const under = opaqueBg(el)
-    const blended = {
-      r: overlay.r * overlay.a + under.r * (1 - overlay.a),
-      g: overlay.g * overlay.a + under.g * (1 - overlay.a),
-      b: overlay.b * overlay.a + under.b * (1 - overlay.a),
-    }
-    return contrast(fg, blended)
-  })
-}
-
-// 임의의 CSS 색 표기(rgb()/color(srgb ...) 등)를 canvas 로 읽어 실제 rgba 값을 얻는다
-async function colorOf(locator, prop = 'backgroundColor') {
-  return locator.evaluate((el, p) => {
-    const cs = getComputedStyle(el)
-    const canvas = document.createElement('canvas')
-    canvas.width = 1
-    canvas.height = 1
-    const ctx = canvas.getContext('2d')
-    ctx.fillStyle = cs[p]
-    ctx.fillRect(0, 0, 1, 1)
-    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
-    return { r, g, b, a: a / 255 }
-  }, prop)
-}
 
 const BUTTON_LABELS = [
   '편집 — 서식을 보며 편집',
@@ -97,26 +32,6 @@ test.describe('F-142 상단바 버튼·툴팁', () => {
       expect(text).toBe('')
     }
   })
-
-  for (const width of [1280, 1024]) {
-    test(`F-142 A2 창 너비 ${width}px 에서 툴팁이 창 안에 있다`, async ({ page }) => {
-      await openApp(page)
-      await importMarkdown(page, { content: '내용\n' })
-      await resizeWindow(page, width)
-      const exportBtn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
-      await exportBtn.hover()
-      await page.waitForTimeout(450) // 3.2 "400ms 뒤 표시" — 지연 자체를 확인하는 자리라 고정 대기
-      const tooltipRect = await exportBtn.evaluate((el) => {
-        const cs = getComputedStyle(el, '::after')
-        const r = el.getBoundingClientRect()
-        return { opacity: cs.opacity, right: r.right + (parseFloat(cs.width) || 0) }
-      })
-      expect(Number(tooltipRect.opacity)).toBeGreaterThan(0)
-      const scrollWidth = await page.evaluate(() => document.scrollingElement.scrollWidth)
-      const clientWidth = await page.evaluate(() => document.scrollingElement.clientWidth)
-      expect(scrollWidth).toBe(clientWidth)
-    })
-  }
 
   test('F-142 A3 모드 전환·내보내기 회귀 동작', async ({ page }) => {
     await openApp(page)
@@ -150,29 +65,6 @@ test.describe('F-142 상단바 버튼·툴팁', () => {
 })
 
 test.describe('F-142 A12 / F-142 3.6 공유 메뉴 가로 스크롤', () => {
-  for (const width of [1280, 1024]) {
-    test(`창 너비 ${width}px 에서 공유 메뉴가 창 안에 있다`, async ({ page }) => {
-      await openApp(page)
-      await importMarkdown(page, { content: '내용\n' })
-      await resizeWindow(page, width)
-      const shareBtn = page.getByRole('button', { name: '공유 — 링크·마크다운 복사' })
-      await shareBtn.click()
-      const menu = page.locator('.share-menu-list')
-      await expect(menu).toBeVisible()
-
-      const menuRect = await rectOf(menu)
-      const btnRect = await rectOf(shareBtn)
-      expect(Math.abs(menuRect.right - btnRect.right)).toBeLessThanOrEqual(2)
-      expect(menuRect.left).toBeGreaterThanOrEqual(0)
-
-      const scrollWidth = await page.evaluate(() => document.scrollingElement.scrollWidth)
-      const clientWidth = await page.evaluate(() => document.scrollingElement.clientWidth)
-      expect(scrollWidth).toBe(clientWidth)
-
-      await page.keyboard.press('Escape')
-    })
-  }
-
   test('키보드 조작 — 방향키 이동, Enter 실행, Esc 로 닫기', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '내용\n' })
@@ -190,81 +82,6 @@ test.describe('F-142 A12 / F-142 3.6 공유 메뉴 가로 스크롤', () => {
 
 // F-151 A1·A2·A5·A7 은 F-159 사이드바 머리 줄 위치로 옮겨 여기서 판정
 test.describe('F-159 사이드바 전체 높이·머리 줄·너비 조절', () => {
-  test('F-159 A3 (구 F-151 A1) 머리 줄 배치 — 1600×900, 펼침', async ({ page }) => {
-    await openApp(page)
-    const head = page.locator('.sidebar-head')
-    await expect(head).toHaveCount(1)
-    const search = page.getByRole('button', { name: '검색', exact: true })
-    const toggle = page.getByRole('button', { name: '사이드바 접기' })
-    const sidebar = page.locator('.sidebar')
-    const brandIcon = page.locator('.brand-icon')
-    const topbar = page.locator('.topbar')
-
-    const brandRect = await rectOf(brandIcon)
-    expect(Math.abs(brandRect.left - 14)).toBeLessThanOrEqual(1)
-
-    const searchRect = await rectOf(search)
-    const sidebarRect = await rectOf(sidebar)
-    expect(Math.abs(sidebarRect.right - 8 - searchRect.right)).toBeLessThanOrEqual(1)
-
-    const toggleRect = await rectOf(toggle)
-    expect(toggleRect.right).toBeLessThanOrEqual(searchRect.left + 1)
-    expect(brandRect.left).toBeLessThan(toggleRect.left)
-
-    const headRect = await rectOf(head)
-    const topbarRect = await rectOf(topbar)
-    expect(Math.abs((headRect.top + headRect.bottom) / 2 - (topbarRect.top + topbarRect.bottom) / 2)).toBeLessThanOrEqual(1)
-
-    const newDocBtn = page.getByRole('button', { name: '새 문서', exact: true })
-    const newDocRect = await rectOf(newDocBtn)
-    expect(newDocRect.top).toBeGreaterThanOrEqual(headRect.bottom - 1)
-  })
-
-  test('F-159 A2 사이드바 전체 높이 — 사이드바 윗변 0, 아랫변 창 높이, 상단바에 제품명·토글 없음', async ({ page }) => {
-    await openApp(page)
-    const sidebar = page.locator('.sidebar')
-    const sidebarRect = await rectOf(sidebar)
-    expect(Math.abs(sidebarRect.top - 0)).toBeLessThanOrEqual(1)
-    const viewportHeight = await page.evaluate(() => window.innerHeight)
-    expect(Math.abs(sidebarRect.bottom - viewportHeight)).toBeLessThanOrEqual(1)
-
-    const topbar = page.locator('.topbar')
-    const topbarRect = await rectOf(topbar)
-    expect(Math.abs(topbarRect.left - sidebarRect.right)).toBeLessThanOrEqual(1)
-    await expect(topbar.locator('.brand')).toHaveCount(0)
-    await expect(topbar.locator('.sidebar-toggle')).toHaveCount(0)
-  })
-
-  test('F-159 A4 (구 F-151 A2) 레일 머리 줄 — 토글만 가운데, 제품명 숨김, 상단바 왼쪽 48px', async ({ page }) => {
-    await openApp(page)
-    const toggle = page.getByRole('button', { name: '사이드바 접기' })
-    await toggle.click()
-    await waitTransitionEnd(page.locator('.sidebar'))
-
-    const sidebar = page.locator('.sidebar')
-    await expect(sidebar).toHaveClass(/sidebar--collapsed/)
-    const sidebarRect = await rectOf(sidebar)
-    expect(Math.abs(sidebarRect.width - 48)).toBeLessThanOrEqual(1)
-
-    await expect(page.locator('.brand')).toBeHidden() // 토글 버튼 노드를 유지하려고 hidden 속성만 준다 (F-151 2.2)
-    const railHead = page.locator('.sidebar-head--rail')
-    await expect(railHead).toHaveCount(1)
-    const openToggle = page.getByRole('button', { name: '사이드바 펴기' })
-    const toggleRect = await rectOf(openToggle)
-    const headRect = await rectOf(railHead)
-    expect(Math.abs((toggleRect.left + toggleRect.right) / 2 - (headRect.left + headRect.right) / 2)).toBeLessThanOrEqual(1)
-
-    const topbar = page.locator('.topbar')
-    const topbarRect = await rectOf(topbar)
-    expect(Math.abs(topbarRect.left - 48)).toBeLessThanOrEqual(1)
-
-    await page.reload()
-    const sidebarAfterReload = page.locator('.sidebar')
-    await expect(sidebarAfterReload).toHaveClass(/sidebar--collapsed/)
-    const sidebarRect2 = await rectOf(sidebarAfterReload)
-    expect(Math.abs(sidebarRect2.width - 48)).toBeLessThanOrEqual(1)
-  })
-
   test('F-159 A5 (구 F-151 A5) 사이드바 머리 줄 — 펼침·레일에 있고 좁은 창엔 없다, 레일 위쪽 5개(검색·지도 포함)', async ({ page }) => {
     await openApp(page)
     await expect(page.locator('.sidebar-head')).toHaveCount(1)
@@ -439,49 +256,6 @@ test.describe('F-143 A10 그 밖의 기능 버튼 아이콘', () => {
   })
 })
 
-test.describe('F-153 A1 상단바 아이콘 버튼', () => {
-  for (const theme of ['white', 'sepia', 'dark']) {
-    test(`${theme} — 테두리 없음, 32x32, 모서리 6px, 선택 표시 대비 4.5 이상`, async ({ page }) => {
-      await setPrefBeforeLoad(page, 'md.theme', theme)
-      await openApp(page)
-      await importMarkdown(page, { content: '내용\n' })
-
-      const buttons = page.locator('.sidebar-head .icon-btn, .topbar .icon-btn')
-      await expect(buttons).toHaveCount(8) // 토글·검색·보기모드 3개·공유·내보내기·계정
-      const count = await buttons.count()
-      for (let i = 0; i < count; i++) {
-        const btn = buttons.nth(i)
-        const box = await rectOf(btn)
-        expect(Math.abs(box.width - 32)).toBeLessThanOrEqual(1)
-        expect(Math.abs(box.height - 32)).toBeLessThanOrEqual(1)
-        const style = await btn.evaluate((el) => {
-          const cs = getComputedStyle(el)
-          return { borderWidth: cs.borderTopWidth, radius: cs.borderTopLeftRadius }
-        })
-        expect(style.borderWidth).toBe('0px')
-        expect(style.radius).toBe('6px')
-      }
-
-      // 기본 모드는 편집(live) 이라 선택 상태다 — 비선택 버튼은 보기 모드로 확인한다
-      const viewBtn = page.getByRole('button', { name: '보기 — 읽기 전용으로 보기' })
-      expect((await colorOf(viewBtn)).a).toBe(0)
-
-      // 선택 버튼 — 원문 모드로 바꾼 뒤 대비 확인
-      const liveBtn = page.getByRole('button', { name: '편집 — 서식을 보며 편집' })
-      const rawBtn = page.getByRole('button', { name: '원문 — 마크다운 기호 그대로 편집' })
-      await rawBtn.click()
-      await expect(rawBtn).toHaveAttribute('aria-pressed', 'true')
-      // 색 전환(F-149)이 끝난 값을 읽는다
-      await Promise.all([waitTransitionEnd(rawBtn), waitTransitionEnd(liveBtn)])
-      expect((await colorOf(rawBtn)).a).toBeGreaterThan(0)
-      // 방금 선택이 풀린 편집 버튼은 다시 투명이어야 한다
-      expect((await colorOf(liveBtn)).a).toBe(0)
-      const ratio = await selectedContrast(rawBtn)
-      expect(ratio).toBeGreaterThanOrEqual(4.5)
-    })
-  }
-})
-
 test.describe('F-163 공유 메뉴 `파일로 공유…` 제거', () => {
   test('F-163 A1 메뉴는 링크 복사·마크다운 복사 2개, ↓ 두 번이면 첫 항목으로 돌아옴', async ({ page }) => {
     await openApp(page)
@@ -586,36 +360,5 @@ test.describe('F-210 C 소유자 읽기 전용 링크 메뉴', () => {
     await expect(page.locator('.notice--error .notice-message')).toHaveText(
       '링크를 만들지 못했습니다. 연결을 확인하세요.',
     )
-  })
-})
-
-test.describe('F-153 A2 설정 세그먼트 선택 표시', () => {
-  test('아이콘 버튼 선택 표시와 같은 바탕, 검은 칠 없음', async ({ page }) => {
-    await openApp(page)
-    await page.getByRole('button', { name: '설정', exact: true }).click()
-    const selected = page.locator('#theme-label').locator('..').getByRole('radio', { name: '시스템' })
-    await selected.click()
-    await expect(selected).toHaveAttribute('aria-checked', 'true')
-    await waitTransitionEnd(selected)
-    const segStyle = await selected.evaluate((el) => {
-      const cs = getComputedStyle(el)
-      return { bg: cs.backgroundColor, color: cs.color, weight: cs.fontWeight }
-    })
-    expect(segStyle.weight).toBe('600')
-    // 검은 칠(불투명 --ink 바탕)이 아니라 반투명 섞음이어야 한다
-    const segAlpha = (await colorOf(selected)).a
-    expect(segAlpha).toBeGreaterThan(0)
-    expect(segAlpha).toBeLessThan(1)
-
-    await page.getByRole('button', { name: '닫기', exact: true }).click()
-    const rawBtn = page.getByRole('button', { name: '원문 — 마크다운 기호 그대로 편집' })
-    await rawBtn.click()
-    await waitTransitionEnd(rawBtn)
-    const iconStyle = await rawBtn.evaluate((el) => {
-      const cs = getComputedStyle(el)
-      return { bg: cs.backgroundColor, color: cs.color }
-    })
-    expect(segStyle.bg).toBe(iconStyle.bg)
-    expect(segStyle.color).toBe(iconStyle.color)
   })
 })

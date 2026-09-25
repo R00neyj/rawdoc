@@ -184,28 +184,7 @@ test.describe('F-144 A8 키보드', () => {
 test.describe('F-229 좁은 화면 목차 버튼 (412×915, 터치)', () => {
   test.use({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true })
 
-  test('F-229 A2 버튼 위치·크기, 스크롤 전후 위치 같음', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: longDoc() })
-
-    const btn = page.getByRole('button', { name: '목차' })
-    const before = await rectOf(btn)
-    expect(before.width).toBeGreaterThanOrEqual(43)
-    expect(before.width).toBeLessThanOrEqual(45)
-    expect(before.height).toBeGreaterThanOrEqual(43)
-    expect(before.height).toBeLessThanOrEqual(45)
-
-    const contentArea = await rectOf(page.locator('.content-area'))
-    expect(Math.abs(before.right - (contentArea.right - 16))).toBeLessThanOrEqual(2)
-    expect(Math.abs(before.top - (contentArea.top + 12))).toBeLessThanOrEqual(2)
-
-    await page.locator('.cm-scroller').evaluate((el) => {
-      el.scrollTop = el.scrollHeight
-    })
-    const after = await rectOf(btn)
-    expect(after.x).toBeCloseTo(before.x, 0)
-    expect(after.y).toBeCloseTo(before.y, 0)
-  })
+  // F-229 A2 버튼 위치·크기(44px, 오른쪽 16·위 12)는 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
 
   test('F-229 A3 열기 — 카드가 화면 안에 보이고 현재 위치 항목이 보인다', async ({ page }) => {
     await openApp(page)

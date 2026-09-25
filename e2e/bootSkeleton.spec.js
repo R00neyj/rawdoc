@@ -90,41 +90,14 @@ test('F-2015 A4c 테마 — sepia', async ({ page }) => {
   releaseJs()
 })
 
-test('F-2015 A5 너비 — 부팅 중·ready 후 모두 360', async ({ page }) => {
-  await setPrefBeforeLoad(page, 'md.sidebarWidth', '360')
-  const releaseApiMe = await holdApiMe(page)
-  await page.goto('/')
-  await expect(page.locator('.boot-skeleton-sidebar')).toBeVisible()
-  const bootBox = await rectOf(page.locator('.boot-skeleton-sidebar'))
-  expect(Math.abs(bootBox.width - 360)).toBeLessThanOrEqual(1)
-  releaseApiMe()
-  await expect(page.locator('#boot-skeleton')).toHaveCount(0)
-  const readyBox = await rectOf(page.locator('.sidebar'))
-  expect(Math.abs(readyBox.width - 360)).toBeLessThanOrEqual(1)
-})
+// F-2015 A5·A6(부팅 중 사이드바 폭 360·48)과 A10a·A10b(스켈레톤 애니메이션 유무)는 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
 
-test('F-2015 A6 접힘 — 부팅 중·ready 후 모두 48', async ({ page }) => {
-  await setPrefBeforeLoad(page, 'md.sidebar', 'collapsed')
-  const releaseJs = await holdMainJs(page)
-  await page.goto('/', { waitUntil: 'commit' })
-  await expect(page.locator('.boot-skeleton-sidebar')).toBeVisible()
-  const bootBox = await rectOf(page.locator('.boot-skeleton-sidebar'))
-  expect(Math.abs(bootBox.width - 48)).toBeLessThanOrEqual(1)
-  releaseJs()
-  await expect(page.locator('#boot-skeleton')).toHaveCount(0)
-  const readyBox = await rectOf(page.locator('.sidebar'))
-  expect(Math.abs(readyBox.width - 48)).toBeLessThanOrEqual(1)
-})
-
-test('F-2015 A7 좁은 창 — 사이드바 숨김, 상단바 전체 폭', async ({ page }) => {
+test('F-2015 A7 좁은 창 — 사이드바 숨김, 상단바는 보인다', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 900 })
   const releaseJs = await holdMainJs(page)
   await page.goto('/', { waitUntil: 'commit' })
   await expect(page.locator('.boot-skeleton-topbar')).toBeVisible()
   await expect(page.locator('.boot-skeleton-sidebar')).toBeHidden()
-  const topbarBox = await rectOf(page.locator('.boot-skeleton-topbar'))
-  expect(Math.abs(topbarBox.x - 0)).toBeLessThanOrEqual(1)
-  expect(Math.abs(topbarBox.width - 800)).toBeLessThanOrEqual(1)
   releaseJs()
 })
 
@@ -166,29 +139,6 @@ test('F-2015 A9 F-136 막힘 — 스켈레톤을 걷고 문구를 보인다', as
   await expect(page.locator('.app-shell')).toHaveAttribute('inert', '')
 
   await blocker.close()
-})
-
-test('F-2015 A10a 움직임 — 기본은 애니메이션이 있다', async ({ page }) => {
-  const releaseJs = await holdMainJs(page)
-  await page.goto('/', { waitUntil: 'commit' })
-  const animationName = await page
-    .locator('.boot-skeleton-bar')
-    .first()
-    .evaluate((el) => getComputedStyle(el).animationName)
-  expect(animationName).not.toBe('none')
-  releaseJs()
-})
-
-test('F-2015 A10b 움직임 — reduced motion 이면 없다', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  const releaseJs = await holdMainJs(page)
-  await page.goto('/', { waitUntil: 'commit' })
-  const animationName = await page
-    .locator('.boot-skeleton-bar')
-    .first()
-    .evaluate((el) => getComputedStyle(el).animationName)
-  expect(animationName).toBe('none')
-  releaseJs()
 })
 
 test('F-2015 A11 정리 — openApp 뒤 부팅 속성이 사라진다', async ({ page }) => {

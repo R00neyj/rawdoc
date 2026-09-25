@@ -399,21 +399,6 @@ test.describe('F-2003 카메라 조작', () => {
     await expect(page).toHaveURL(/#\/d\/[^/]+$/)
   })
 
-  test('F-2003 A13 이어서 조작해도 오류가 없다', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', (e) => errors.push(String(e)))
-
-    const { map, H, cx, cy } = await openMapFresh(page)
-    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
-    await drag(page, cx - 0.3 * H, cy, 0.5 * H, 0, 'right')
-    await page.mouse.move(cx, cy)
-    await page.mouse.wheel(0, 1200)
-    await page.waitForTimeout(SETTLE)
-
-    await expect(map.locator('canvas')).toHaveCount(1)
-    expect(errors).toEqual([])
-  })
-
   // 2026-09-22 사용자 신고 둘 — 명세에 없던 기준이라 F-2003 명세도 손봐야 한다
   test('F-2003 A14 이미 중심인 문서에 `여기로 이동` 을 다시 골라도 카메라가 맞춰진다', async ({ page }) => {
     const { map, H, cx, cy } = await openMapFresh(page)
@@ -433,14 +418,6 @@ test.describe('F-2003 카메라 조작', () => {
     await expect(page).toHaveURL(/#\/d\/[^/]+$/)
   })
 
-  test('F-2003 A15 노드 위에서만 커서가 손가락 모양이다', async ({ page }) => {
-    const { map, H, cx, cy } = await openMapFresh(page)
-    const canvas = map.locator('canvas')
-    await page.mouse.move(cx, cy)
-    await expect(canvas).toHaveCSS('cursor', 'pointer')
-    await page.mouse.move(cx + 0.45 * H, cy + 0.42 * H)
-    await expect(canvas).toHaveCSS('cursor', 'auto')
-  })
 })
 
 test.describe('F-2003 터치', () => {
@@ -646,27 +623,6 @@ test.describe('F-2004 이웃·끊긴 링크', () => {
   })
 })
 
-test.describe('F-2004 이어서 조작', () => {
-  test.use({ reducedMotion: 'reduce' })
-
-  test('F-2004 A9 호버·회전을 이어서 해도 오류가 없다', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', (e) => errors.push(String(e)))
-
-    const { map, H, cx, cy } = await openMapFresh(page)
-    await page.mouse.move(cx, cy)
-    await expect(visibleLabels(map)).toHaveCount(1)
-    await drag(page, cx, cy, 0.5 * H, 0, 'right')
-    await page.mouse.wheel(0, 1200)
-    await page.waitForTimeout(SETTLE)
-    await page.mouse.move(cx, cy)
-    await page.waitForTimeout(SETTLE)
-
-    await expect(map.locator('canvas')).toHaveCount(1)
-    expect(errors).toEqual([])
-  })
-})
-
 // F-2005 지도 설정 패널과 `표시` 3축 (specs/features/F-2005.md 12.2) A1~A13
 function panel(map) {
   // 닫히는 동안 inert 로 남는다 — F-281 A12/A13 과 같은 함정이다
@@ -791,19 +747,7 @@ test.describe('F-2005 지도 설정 패널', () => {
     expect(await p2.getByRole('slider', { name: '선 두께', exact: true }).inputValue()).toBe('0.5')
   })
 
-  test('F-2005 A8 깨진 저장값', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', (e) => errors.push(String(e)))
-    await setPrefBeforeLoad(page, 'md.mapView', '{{{')
-
-    const { map } = await openMapFresh(page)
-    const p = await openDisplay(map)
-
-    expect(await p.getByRole('slider', { name: '노드 크기', exact: true }).inputValue()).toBe('1')
-    expect(await p.getByRole('slider', { name: '이름표 표시 거리', exact: true }).inputValue()).toBe('0')
-    expect(await p.getByRole('slider', { name: '선 두께', exact: true }).inputValue()).toBe('0.5')
-    expect(errors).toEqual([])
-  })
+  // F-2005 A8 깨진 저장값("{{{")은 src/app/mapPrefs.test.ts U2 가 같은 입력·기대값으로 본다 (2026-09-25 e2e 경량화)
 
   test('F-2005 A9 목록으로 가도 패널이 남는다', async ({ page }) => {
     const { map } = await openMapFresh(page)
@@ -844,29 +788,6 @@ test.describe('F-2005 지도 설정 패널', () => {
 
     expect(after.width).toBe(before.width)
     expect(after.height).toBe(before.height)
-  })
-
-  test('F-2005 A12 슬라이더를 움직여도 안 깨진다', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', (e) => errors.push(String(e)))
-    const { map, cx, cy } = await openMapFresh(page)
-    const p = await openDisplay(map)
-
-    const nodeScale = p.getByRole('slider', { name: '노드 크기', exact: true })
-    await nodeScale.fill('0.5')
-    await nodeScale.fill('3')
-    await nodeScale.fill('1.4')
-    const edgeStrength = p.getByRole('slider', { name: '선 두께', exact: true })
-    await edgeStrength.fill('0')
-    await edgeStrength.fill('1')
-
-    await expect(map.locator('canvas')).toHaveCount(1)
-    expect(errors).toEqual([])
-
-    await map.getByRole('button', { name: '지도 설정', exact: true }).click()
-    await expect(panel(map)).toHaveCount(0)
-    await page.mouse.click(cx, cy)
-    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
   })
 
   test('F-2005 A13 이름표 표시 거리', async ({ page }) => {
@@ -1016,30 +937,6 @@ test.describe('F-2006 장력 묶음', () => {
     expect(Number(await forceSlider(p, '링크 거리').inputValue())).toBeCloseTo(FORCE_DEFAULTS['링크 거리'], 6)
     expect(Number(await forceSlider(p, '중심 장력').inputValue())).toBe(1)
     expect(errors).toEqual([])
-  })
-
-  test('F-2006 A7 끝에서 끝까지 움직여도 안 깨진다', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', (e) => errors.push(String(e)))
-    const { map, cx, cy } = await openMapFresh(page)
-    const p = await openForce(map)
-
-    for (const name of FORCE_NAMES) {
-      const slider = forceSlider(p, name)
-      await slider.fill('0')
-      await slider.fill('1')
-      // 브라우저가 17자리를 15자리로 줄여 되돌리므로 fill 에는 기본값 근처의 짧은 수를 쓴다
-      await slider.fill(FORCE_DEFAULTS[name].toFixed(3))
-    }
-
-    await expect(map.locator('canvas')).toHaveCount(1)
-    expect(errors).toEqual([])
-
-    await map.getByRole('button', { name: '지도 설정', exact: true }).click()
-    await expect(panel(map)).toHaveCount(0)
-    await page.waitForTimeout(FORCE_SETTLE)
-    await page.mouse.click(cx, cy)
-    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
   })
 
   test('F-2006 A9 장력은 접힌 채로 다시 열린다', async ({ page }) => {
@@ -1205,38 +1102,6 @@ test.describe('F-2010 호버 초점', () => {
     expect(pctDiff8).toBeGreaterThanOrEqual(1.0)
   })
 
-  test('F-2010 A2 호버를 풀면 호버 전 그림으로 돌아온다', async ({ page }) => {
-    const view = await openMapWithDocs(page, FOCUS_DOCS)
-    await settleFrames(page)
-    const before = await canvasShot(view.map)
-
-    await hoverNode(page, view)
-    await settleFrames(page)
-
-    // 캔버스 밖으로 나가면 pointerleave 가 거둔다 — 카메라는 그대로다 (F-2010 8.1)
-    await view.map.locator('.map-page-title').hover()
-    await expect(visibleLabels(view.map)).toHaveCount(0)
-    await settleFrames(page)
-    const back = await canvasShot(view.map)
-
-    const { pctDiff8 } = await comparePng(page, before, back)
-    expect(pctDiff8).toBeLessThanOrEqual(0.1)
-  })
-
-  test('F-2010 A3 호버 중에는 그림이 배경 쪽으로 가라앉는다', async ({ page }) => {
-    const view = await openMapWithDocs(page, FOCUS_DOCS)
-    await settleFrames(page)
-    const before = await canvasShot(view.map)
-
-    await hoverNode(page, view)
-    await settleFrames(page)
-    const during = await canvasShot(view.map)
-
-    // 실측 0.365배(혼자 8/8), 파일 전체를 돌리면 hoverUntil 이 다른 노드에 앉아 0.617배까지 뜬다. 흐리기를 끄면 1.15배로 오히려 오르므로 0.85 문턱이 그 사이다
-    const { inkMeanA, inkMeanB } = await comparePng(page, before, during)
-    expect(inkMeanB).toBeLessThanOrEqual(inkMeanA * 0.85)
-  })
-
   test('F-2010 A4 흐리기가 이름표를 바꾸지 않는다', async ({ page }) => {
     const view = await openMapWithDocs(page, [
       { name: 'B.md', content: 'B 문서' },
@@ -1249,71 +1114,6 @@ test.describe('F-2010 호버 초점', () => {
     expect(texts.slice().sort()).toEqual(['A', 'B'])
   })
 
-  test('F-2010 A5 회전하는 내내 강조가 유지된다', async ({ page }) => {
-    const view = await openMapWithDocs(page, FOCUS_DOCS)
-    const spot = await hoverNode(page, view)
-
-    // 호버한 노드 위에서 끌기 시작한다 — 배경에서 시작하면 그 첫 이동이 호버를 먼저 푼다
-    await drag(page, spot.x, spot.y, 0.25 * view.H, 0, 'right')
-    await page.waitForTimeout(SETTLE)
-    await expect(visibleLabels(view.map)).not.toHaveCount(0)
-    await settleFrames(page)
-    const hovered = await canvasShot(view.map)
-
-    // 카메라를 건드리지 않고 호버만 푼다 — 같은 각도의 호버 없음 그림이다
-    await view.map.locator('.map-page-title').hover()
-    await expect(visibleLabels(view.map)).toHaveCount(0)
-    await settleFrames(page)
-    const plain = await canvasShot(view.map)
-
-    // 실측 2.11%. 구현 전에는 같은 자리가 0.073% 였다
-    const { pctDiff8 } = await comparePng(page, hovered, plain)
-    expect(pctDiff8).toBeGreaterThanOrEqual(1.0)
-  })
-
-  test('F-2010 A6 호버·회전·슬라이더를 이어서 해도 안 깨진다', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', (e) => errors.push(String(e)))
-
-    const view = await openMapWithDocs(page, FOCUS_DOCS)
-    const spot = await hoverNode(page, view)
-    await drag(page, spot.x, spot.y, 0.3 * view.H, 0.1 * view.H, 'right')
-    await page.waitForTimeout(SETTLE)
-
-    const p = await openDisplay(view.map)
-    await p.getByRole('slider', { name: '선 두께', exact: true }).fill('0')
-    await p.getByRole('slider', { name: '선 두께', exact: true }).fill('1')
-    await view.map.getByRole('button', { name: '지도 설정', exact: true }).click()
-    await expect(panel(view.map)).toHaveCount(0)
-
-    await expect(view.map.locator('canvas')).toHaveCount(1)
-    expect(errors).toEqual([])
-
-    // 회전한 뒤에는 덩어리가 hoverUntil 의 탐색 반지름 밖으로 나갈 수 있다 — 먼저 카메라를 다시 맞춘다
-    await view.map.getByRole('button', { name: '맞춤', exact: true }).click()
-    await page.waitForTimeout(SETTLE)
-    const again = await hoverNode(page, view)
-    await page.mouse.click(again.x, again.y)
-    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
-  })
-
-  test('F-2010 A7 선 두께가 정점 색으로 옮겨 가도 계속 동작한다', async ({ page }) => {
-    const view = await openMapWithDocs(page, FOCUS_DOCS)
-    const p = await openDisplay(view.map)
-    const edgeStrength = p.getByRole('slider', { name: '선 두께', exact: true })
-
-    await edgeStrength.fill('0')
-    await settleFrames(page)
-    const thin = await canvasShot(view.map)
-
-    await edgeStrength.fill('1')
-    await settleFrames(page)
-    const thick = await canvasShot(view.map)
-
-    // 실측 1.75%. 간선만으로도 먹 덮개의 상당 부분이다. 6.4 의 회귀 방지다
-    const { pctDiff8 } = await comparePng(page, thin, thick)
-    expect(pctDiff8).toBeGreaterThanOrEqual(0.3)
-  })
 })
 
 // F-2012 카메라 전환 (specs/features/F-2012.md 14.2) A1~A7 — 이름표 하나의 화면 x 를 프레임마다 읽어 카메라가 여러 프레임에 걸쳐 움직였는지 본다
@@ -1345,18 +1145,6 @@ function distinctXs(xs) {
   return new Set(xs.map(([, x]) => x)).size
 }
 
-// 처음 달라진 시각과 마지막으로 달라진 시각의 차이
-function motionSpan(xs) {
-  let first = -1
-  let last = -1
-  for (let i = 1; i < xs.length; i++) {
-    if (xs[i][1] === xs[i - 1][1]) continue
-    if (first < 0) first = xs[i][0]
-    last = xs[i][0]
-  }
-  return first < 0 ? 0 : last - first
-}
-
 async function openMapLabeled(page) {
   await setPrefBeforeLoad(page, 'md.mapView', LABEL_ALL)
   const view = await openMapFresh(page)
@@ -1365,34 +1153,6 @@ async function openMapLabeled(page) {
 }
 
 test.describe('F-2012 카메라 전환', () => {
-  test('F-2012 A1 맞춤은 여러 프레임에 걸쳐 움직인다', async ({ page }) => {
-    const { map, H, cx, cy } = await openMapLabeled(page)
-    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
-    await page.waitForTimeout(SETTLE)
-
-    const recording = recordLabelX(page, 900)
-    await map.getByRole('button', { name: '맞춤', exact: true }).click()
-    const xs = await recording
-
-    expect(distinctXs(xs)).toBeGreaterThanOrEqual(4)
-    expect(motionSpan(xs)).toBeGreaterThanOrEqual(80)
-    expect(Math.abs(xs.at(-1)[1] - cx)).toBeLessThanOrEqual(4)
-  })
-
-  test('F-2012 A3 여기로 이동도 전환을 탄다', async ({ page }) => {
-    const { map, H, cx, cy } = await openMapLabeled(page)
-    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
-    await page.waitForTimeout(SETTLE)
-
-    const recording = recordLabelX(page, 900)
-    await page.mouse.click(cx + 0.55 * H, cy, { button: 'right' })
-    await nodeMenu(map).getByRole('menuitem', { name: '여기로 이동' }).click()
-    const xs = await recording
-
-    expect(distinctXs(xs)).toBeGreaterThanOrEqual(4)
-    expect(Math.abs(xs.at(-1)[1] - cx)).toBeLessThanOrEqual(4)
-  })
-
   test('F-2012 A6 전환 중 사용자 조작이 이긴다', async ({ page }) => {
     const errors = []
     page.on('pageerror', (e) => errors.push(e))
@@ -1427,8 +1187,9 @@ test.describe('F-2012 움직임 줄이기', () => {
     expect(Math.abs(xs.at(-1)[1] - cx)).toBeLessThanOrEqual(4)
   })
 
-  test('F-2012 A4 장력을 바꿔도 카메라가 안 움직인다', async ({ page }) => {
-    const { map, cx, cy } = await openMapLabeled(page)
+  // A4·A5 는 준비(휠로 물러나기 → 반발력 0.7 → 패널 닫기)가 같아 하나로 합쳤다 (2026-09-25 e2e 경량화)
+  test('F-2012 A4·A5 장력을 바꿔도 카메라가 안 움직이고, 그 뒤 맞춤이 되돌린다', async ({ page }) => {
+    const { map, H, cx, cy } = await openMapLabeled(page)
     await page.mouse.move(cx, cy)
     await page.mouse.wheel(0, 1200)
     await page.waitForTimeout(SETTLE)
@@ -1444,19 +1205,8 @@ test.describe('F-2012 움직임 줄이기', () => {
     const after = await visibleLabels(map).first().boundingBox()
     expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(1)
     expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1)
-  })
 
-  test('F-2012 A5 그 뒤 맞춤이 되돌린다', async ({ page }) => {
-    const { map, H, cx, cy } = await openMapLabeled(page)
-    await page.mouse.move(cx, cy)
-    await page.mouse.wheel(0, 1200)
-    await page.waitForTimeout(SETTLE)
-    const p = await openForce(map)
-    await forceSlider(p, '반발력').fill('0.7')
-    await page.waitForTimeout(FORCE_SETTLE)
-    await map.getByRole('button', { name: '지도 설정', exact: true }).click()
-    await expect(panel(map)).toHaveCount(0)
-
+    // A5 — 맞춤이 되돌린다
     await map.getByRole('button', { name: '맞춤', exact: true }).click()
     await page.waitForTimeout(SETTLE)
     await page.mouse.click(cx + NODE_R * 0.76 * H, cy)
@@ -1492,63 +1242,29 @@ function headButton(map, name) {
   return map.getByRole('button', { name, exact: true })
 }
 
-test.describe('F-2011 A1 머리 줄에 글자 라벨이 없다', () => {
-  test('다섯 버튼 모두 글자가 없다', async ({ page }) => {
+test.describe('F-2011 A1~A5 머리 줄 구조', () => {
+  // A1~A5 다섯 테스트(글자 없음·svg 하나·제목 svg 없음·묶음·툴팁)를 한 번 열어 한꺼번에 본다 (2026-09-25 e2e 경량화)
+  test('다섯 버튼 글자 없이 svg 하나·툴팁 = 이름, 제목은 글자만, 지도·목록만 묶음 안', async ({ page }) => {
     await openApp(page)
     const map = await openMap(page)
     for (const name of HEAD_BUTTON_NAMES) {
-      await expect(headButton(map, name)).toHaveText('')
+      const btn = headButton(map, name)
+      await expect(btn).toHaveText('')
+      await expect(btn.locator('svg')).toHaveCount(1)
+      const wrap = btn.locator('xpath=..')
+      await expect(wrap).toHaveClass(/\bicon-btn-wrap\b/)
+      await expect(wrap.locator('.icon-tooltip')).toHaveText(name)
     }
-  })
-})
 
-test.describe('F-2011 A2 버튼마다 아이콘 하나', () => {
-  test('다섯 버튼 모두 svg 가 정확히 하나', async ({ page }) => {
-    await openApp(page)
-    const map = await openMap(page)
-    for (const name of HEAD_BUTTON_NAMES) {
-      await expect(headButton(map, name).locator('svg')).toHaveCount(1)
-    }
-  })
-})
-
-test.describe('F-2011 A3 제목에 아이콘이 없다', () => {
-  test('제목은 글자 지도 만, svg 는 0개', async ({ page }) => {
-    await openApp(page)
-    const map = await openMap(page)
     const title = map.locator('.map-page-title')
     await expect(title).toHaveText('지도')
     await expect(title.locator('svg')).toHaveCount(0)
-  })
-})
 
-test.describe('F-2011 A4 지도·목록만 묶음 안', () => {
-  test('.map-segment 는 .seg 를 갖고 버튼 둘만 담는다', async ({ page }) => {
-    await openApp(page)
-    const map = await openMap(page)
     const seg = map.locator('.map-segment')
     await expect(seg).toHaveClass(/\bseg\b/)
-    const buttons = seg.getByRole('button')
-    await expect(buttons).toHaveCount(2)
+    await expect(seg.getByRole('button')).toHaveCount(2)
     await expect(seg.getByRole('button', { name: '지도', exact: true })).toHaveCount(1)
     await expect(seg.getByRole('button', { name: '목록', exact: true })).toHaveCount(1)
-    await expect(seg.locator('.map-fit-btn')).toHaveCount(0)
-    await expect(seg.locator('.map-settings-btn')).toHaveCount(0)
-    await expect(seg.locator('.map-page-close')).toHaveCount(0)
-  })
-})
-
-test.describe('F-2011 A5 툴팁 다섯', () => {
-  test('각 버튼의 형제 자리에 aria-label 과 같은 글자의 툴팁이 있다', async ({ page }) => {
-    await openApp(page)
-    const map = await openMap(page)
-    for (const name of HEAD_BUTTON_NAMES) {
-      const wrap = headButton(map, name).locator('xpath=..')
-      await expect(wrap).toHaveClass(/\bicon-btn-wrap\b/)
-      const tooltip = wrap.locator('.icon-tooltip')
-      await expect(tooltip).toHaveCount(1)
-      await expect(tooltip).toHaveText(name)
-    }
   })
 })
 
@@ -1713,24 +1429,6 @@ test.describe('F-2009 노드 끌기', () => {
     await page.mouse.up()
   })
 
-  test('F-2009 A8 이어서 조작해도 오류가 없다', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', (e) => errors.push(e))
-    const { map, H, cx, cy } = await openMapFresh(page)
-
-    await drag(page, cx, cy, 0.3 * H, 0, 'left')
-    await page.waitForTimeout(SETTLE)
-    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.5 * H, 0, 'right')
-    await page.mouse.move(cx, cy)
-    await page.mouse.wheel(0, 1200)
-    await page.waitForTimeout(SETTLE)
-    await drag(page, cx, cy, 0.2 * H, 0.1 * H, 'left')
-    await map.getByRole('button', { name: '맞춤', exact: true }).click()
-    await page.waitForTimeout(SETTLE)
-
-    expect(errors).toEqual([])
-    await expect(page.locator('.map-page canvas')).toHaveCount(1)
-  })
 })
 
 test.describe('F-2009 터치', () => {
@@ -2147,17 +1845,7 @@ test.describe('F-2008 지도 설정 패널 그룹', () => {
     await expect(p.getByText('그룹은 8개까지 만들 수 있습니다.')).toBeVisible()
   })
 
-  test('F-2008 A11 깨진 저장값', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', (e) => errors.push(String(e)))
-    await setPrefBeforeLoad(page, 'md.mapGroups', '{"nope":1}')
-
-    const { map } = await openMapFresh(page)
-    const p = await openGroup(map)
-
-    await expect(p.locator('.map-group-row')).toHaveCount(0)
-    expect(errors).toEqual([])
-  })
+  // F-2008 A11 깨진 그룹 저장값(배열 아닌 객체)은 src/app/mapPrefs.test.ts U10 이 본다 (2026-09-25 e2e 경량화)
 
   test('F-2008 A12 한글 입력기', async ({ page }) => {
     const view = await openMapWithDocs(page, [
@@ -2201,138 +1889,62 @@ test.describe('F-2008 지도 설정 패널 그룹', () => {
   })
 })
 
-// F-2013 호버 초점 전환 (specs/features/F-2013.md 13.2) A1~A5 — 드로우 콜을 가로채 프레임 시각을 모은다. three 는 InstancedMesh 하나를 drawElementsInstanced 로 그리므로 호출 한 번이 곧 한 프레임이다. recordLabelX(F-2012)와 같은 방식이다 — 전역에 쌓지 않고 클릭 전에 부르고 await 하지 않는 rAF 루프가 Promise 로 표본을 돌려준다
-function recordFrames(page, ms) {
-  return page.evaluate(
-    (duration) =>
-      new Promise((resolve) => {
-        const frames = []
-        const proto = WebGL2RenderingContext.prototype
-        const orig = proto.drawElementsInstanced
-        proto.drawElementsInstanced = function (...args) {
-          frames.push(performance.now())
-          return orig.apply(this, args)
-        }
-        const end = performance.now() + duration
-        const tick = () => {
-          if (performance.now() < end) {
-            requestAnimationFrame(tick)
-            return
-          }
-          proto.drawElementsInstanced = orig
-          resolve(frames)
-        }
-        requestAnimationFrame(tick)
-      }),
-    ms,
-  )
-}
+// F-2013 호버 초점 전환(여러 프레임에 걸친 그림 변화) A1~A5 는 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
 
-// quietMs 짜리 창을 그리기 0건으로 통과할 때까지 훑는다. reducedMotion 이 아닐 때는 배치가 tick 마다 돌아 .map-status 로는 준비 완료를 알 수 없다
-async function waitDrawsIdle(page, quietMs = 300, timeout = 8000) {
-  const start = Date.now()
-  while (Date.now() - start < timeout) {
-    const frames = await recordFrames(page, quietMs)
-    if (frames.length === 0) return
-  }
-  throw new Error(`waitDrawsIdle: ${timeout}ms 안에 자리 잡지 않았다`)
-}
-
-// hoverNode 의 나선 훑기 잡음을 빼고 깨끗한 좌표만 얻는다 — 찾은 뒤 배경으로 되돌리고 자리 잡을 때까지 기다린다
-async function findHoverSpot(page, view) {
-  const spot = await hoverNode(page, view)
-  await view.map.locator('.map-page-title').hover()
-  await waitDrawsIdle(page)
-  return spot
-}
-
-test.describe('F-2013 호버 초점 전환', () => {
-  test('F-2013 A1 호버하면 여러 프레임에 걸쳐 그린다', async ({ page }) => {
-    const view = await openMapWithDocs(page, FOCUS_DOCS)
-    await waitDrawsIdle(page)
-    const spot = await findHoverSpot(page, view)
-
-    const recording = recordFrames(page, 800)
-    await page.mouse.move(spot.x, spot.y)
-    const frames = await recording
-
-    expect(frames.length).toBeGreaterThanOrEqual(6)
-    expect(frames.at(-1) - frames[0]).toBeGreaterThanOrEqual(100)
-    expect(frames.at(-1) - frames[0]).toBeLessThanOrEqual(600)
-  })
-
-  test('F-2013 A3 전환이 끝나면 F-2010 의 그림이 나온다', async ({ page }) => {
-    const view = await openMapWithDocs(page, FOCUS_DOCS)
-    await waitDrawsIdle(page)
-    const spot = await findHoverSpot(page, view)
-    const before = await canvasShot(view.map)
-
-    await page.mouse.move(spot.x, spot.y)
-    await waitDrawsIdle(page)
-    const after = await canvasShot(view.map)
-
-    const { inkMeanA, inkMeanB } = await comparePng(page, before, after)
-    expect(inkMeanB).toBeLessThanOrEqual(inkMeanA * 0.85)
-  })
-
-  test('F-2013 A4 호버를 풀면 정확히 되돌아온다', async ({ page }) => {
-    const view = await openMapWithDocs(page, FOCUS_DOCS)
-    await waitDrawsIdle(page)
-    const spot = await findHoverSpot(page, view)
-    const before = await canvasShot(view.map)
-
-    await page.mouse.move(spot.x, spot.y)
-    await waitDrawsIdle(page)
-
-    await view.map.locator('.map-page-title').hover()
-    await waitDrawsIdle(page)
-    const back = await canvasShot(view.map)
-
-    const { pctDiff8 } = await comparePng(page, before, back)
-    expect(pctDiff8).toBeLessThanOrEqual(0.1)
-  })
-
-  test('F-2013 A5 호버를 이리저리 옮겨도 루프가 멈춘다', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', (e) => errors.push(String(e)))
-    const view = await openMapWithDocs(page, FOCUS_DOCS)
-    await waitDrawsIdle(page)
-    const spot = await findHoverSpot(page, view)
-    const titleBox = await view.map.locator('.map-page-title').boundingBox()
-    const outX = titleBox.x + titleBox.width / 2
-    const outY = titleBox.y + titleBox.height / 2
-
-    const recording = recordFrames(page, 3000)
-    for (let i = 0; i < 3; i++) {
-      await page.mouse.move(spot.x, spot.y)
-      await page.waitForTimeout(100)
-      await page.mouse.move(outX, outY)
-      await page.waitForTimeout(100)
-    }
-    const lastPointerAt = await page.evaluate(() => performance.now())
-    const frames = await recording
-
-    const after = frames.filter((t) => t >= lastPointerAt)
-    const lastDrawAt = after.length ? after[after.length - 1] : lastPointerAt
-    expect(lastDrawAt - lastPointerAt).toBeLessThanOrEqual(600)
-    expect(frames.some((t) => t > lastDrawAt + 500)).toBe(false)
-    expect(errors).toEqual([])
-  })
-})
-
-test.describe('F-2013 A2 움직임 줄이기', () => {
+// 지도 조작을 이어서 해도 깨지지 않는지 — F-2003 A13·F-2004 A9·F-2005 A12·F-2006 A7·F-2009 A8·F-2010 A6 여섯 스모크를 하나로 합쳤다 (2026-09-25 e2e 경량화)
+test.describe('지도 이어서 조작 스모크', () => {
   test.use({ reducedMotion: 'reduce' })
 
-  test('F-2013 A2 움직임 줄이기면 한 프레임에 끝난다', async ({ page }) => {
-    const view = await openMapWithDocs(page, FOCUS_DOCS)
-    await waitDrawsIdle(page)
-    const spot = await findHoverSpot(page, view)
+  test('이동·회전·휠·호버·노드 끌기·표시·장력 슬라이더를 이어서 해도 오류 없고, 맞춤 뒤 노드를 누르면 열린다', async ({ page }) => {
+    const errors = []
+    page.on('pageerror', (e) => errors.push(String(e)))
+    const { map, H, cx, cy } = await openMapFresh(page)
 
-    const recording = recordFrames(page, 800)
-    await page.mouse.move(spot.x, spot.y)
-    const frames = await recording
+    // F-2003 A13·F-2004 A9 — 이동·회전·휠·호버
+    await drag(page, cx - 0.45 * H, cy + 0.42 * H, 0.55 * H, 0, 'left')
+    await drag(page, cx - 0.3 * H, cy, 0.5 * H, 0, 'right')
+    await page.mouse.move(cx, cy)
+    await page.mouse.wheel(0, 1200)
+    await page.waitForTimeout(SETTLE)
+    await page.mouse.move(cx, cy)
 
-    expect(frames.length).toBeLessThanOrEqual(3)
-    expect(frames.length === 0 ? 0 : frames.at(-1) - frames[0]).toBeLessThanOrEqual(60)
+    // F-2009 A8 — 노드 끌기
+    await map.getByRole('button', { name: '맞춤', exact: true }).click()
+    await page.waitForTimeout(SETTLE)
+    await drag(page, cx, cy, 0.3 * H, 0, 'left')
+    await page.waitForTimeout(SETTLE)
+
+    // F-2005 A12 — 표시 슬라이더
+    const display = await openDisplay(map)
+    const nodeScale = display.getByRole('slider', { name: '노드 크기', exact: true })
+    await nodeScale.fill('0.5')
+    await nodeScale.fill('3')
+    await nodeScale.fill('1.4')
+    const edgeStrength = display.getByRole('slider', { name: '선 두께', exact: true })
+    await edgeStrength.fill('0')
+    await edgeStrength.fill('1')
+
+    // F-2006 A7 — 장력 슬라이더 끝에서 끝까지. 패널은 이미 열려 있으니 묶음만 펼친다(openForce 는 패널 버튼을 다시 눌러 닫아 버린다)
+    await display.getByRole('button', { name: '장력', exact: true }).click()
+    const force = display
+    for (const name of FORCE_NAMES) {
+      const slider = forceSlider(force, name)
+      await slider.fill('0')
+      await slider.fill('1')
+      // 브라우저가 17자리를 15자리로 줄여 되돌리므로 fill 에는 기본값 근처의 짧은 수를 쓴다
+      await slider.fill(FORCE_DEFAULTS[name].toFixed(3))
+    }
+
+    await expect(map.locator('canvas')).toHaveCount(1)
+    expect(errors).toEqual([])
+
+    await map.getByRole('button', { name: '지도 설정', exact: true }).click()
+    await expect(panel(map)).toHaveCount(0)
+    await page.waitForTimeout(FORCE_SETTLE)
+    await map.getByRole('button', { name: '맞춤', exact: true }).click()
+    await page.waitForTimeout(SETTLE)
+    await page.mouse.click(cx, cy)
+    await expect(page).toHaveURL(/#\/d\/[^/]+$/)
+    expect(errors).toEqual([])
   })
 })

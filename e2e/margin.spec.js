@@ -303,44 +303,4 @@ test.describe('F-146 A8 회귀', () => {
   })
 })
 
-test.describe('F-146 A11 자동완성 목록 여백', () => {
-  test('ul 6px, li 7px 9px, 글자 위치가 그 여백대로, 종류 아이콘 자리 없음', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '# 나의 문서\n\n본문\n' })
-
-    await page.locator('.cm-content').click()
-    await page.keyboard.press('Control+End')
-    await page.keyboard.type('\n[[')
-
-    const list = page.locator('.cm-tooltip-autocomplete ul')
-    await expect(list).toBeVisible()
-
-    const ulPad = await page.evaluate(() => {
-      const el = document.querySelector('.cm-tooltip-autocomplete ul')
-      const cs = getComputedStyle(el)
-      return { top: parseFloat(cs.paddingTop), left: parseFloat(cs.paddingLeft) }
-    })
-    expect(ulPad.top).toBeCloseTo(6, 0)
-    expect(ulPad.left).toBeCloseTo(6, 0)
-
-    const li = list.locator('li').first()
-    const liPad = await page.evaluate((el) => {
-      const cs = getComputedStyle(el)
-      return { top: parseFloat(cs.paddingTop), bottom: parseFloat(cs.paddingBottom), left: parseFloat(cs.paddingLeft), right: parseFloat(cs.paddingRight) }
-    }, await li.elementHandle())
-    expect(liPad.top).toBeCloseTo(7, 0)
-    expect(liPad.bottom).toBeCloseTo(7, 0)
-    expect(liPad.left).toBeCloseTo(9, 0)
-    expect(liPad.right).toBeCloseTo(9, 0)
-
-    const icon = li.locator('.cm-completionIcon')
-    if (await icon.count()) {
-      const iconBox = await icon.first().boundingBox()
-      expect(iconBox === null || iconBox.width === 0).toBe(true)
-    }
-
-    const [liRect, labelRect] = await Promise.all([rectOf(li), rectOf(li.locator('.cm-completionLabel').first())])
-    expect(Math.abs(labelRect.left - liRect.left - 9)).toBeLessThanOrEqual(1)
-    expect(Math.abs(labelRect.top - liRect.top - 7)).toBeLessThanOrEqual(2)
-  })
-})
+// F-146 A11 자동완성 목록 여백(ul 6px, li 7·9px)은 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
