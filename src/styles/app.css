@@ -2528,6 +2528,25 @@ body.sidebar-resizing {
   color: var(--ink);
 }
 
+/* 금고 문서 — 공유할 수 없는 항목. disabled 가 아니라 aria-disabled 라 초점은 받는다 (F-409 6.2·6.3) */
+.share-menu-list button[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: default;
+}
+
+.share-menu-list button[aria-disabled='true']:hover,
+.share-menu-list button[aria-disabled='true']:focus-visible {
+  background: none;
+  color: var(--muted);
+}
+
+/* 공유 메뉴 맨 아래 설명 줄 — 금고 문서일 때만, 메뉴 항목이 아니다 (F-409 6.3) */
+.share-menu-note {
+  padding: 8px 10px 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 /* 편집기·표 칸·보기 모드 우클릭 메뉴 — 공유 메뉴와 같은 모양, 클릭 지점에 고정으로 연다 (F-170.md 5장) */
 .context-menu-list {
   position: fixed;

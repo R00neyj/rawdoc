@@ -1,7 +1,9 @@
 // specs/features/F-292.md 10장 A6
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createMemoryStore } from '../storage/memoryStore'
-import { buildMapIndex, mapIndexScope, resetMapIndexCache } from './mapIndex'
+import { buildMapIndex, mapIndexCacheSize, mapIndexScope, resetMapIndexCache } from './mapIndex'
+import type { Doc } from '../types'
+import type { MapSource } from './mapIndex'
 
 describe('buildMapIndex — A6', () => {
   beforeEach(() => {
@@ -91,5 +93,70 @@ describe('buildMapIndex — A6', () => {
     expect(second.reusedCount).toBe(1)
     expect(second.entries[0].targets).toBe(first.entries[0].targets)
     expect(second.entries[0].folderId).toBe(folder.id)
+  })
+})
+
+function makeDoc(overrides: Partial<Doc> & { id: string }): Doc {
+  return {
+    title: '제목',
+    content: '',
+    lineEnding: 'lf',
+    createdAt: 1,
+    updatedAt: 1,
+    folderId: null,
+    pinnedAt: null,
+    ...overrides,
+  }
+}
+
+describe('F-409 U4~U5 금고 문서', () => {
+  beforeEach(() => {
+    resetMapIndexCache()
+  })
+
+  it('U4 잠긴 문서는 entries·unreadable 어디에도 없다, lockedCount, 캐시가 준다', async () => {
+    const store = createMemoryStore()
+    const a = await store.create({ title: 'A', content: '[[B]]', lineEnding: 'lf' })
+    const scope = mapIndexScope('memory', null)
+    const source: MapSource = {
+      async list() {
+        return [
+          { ...(await store.get(a.id))!, e2ee: 'open' },
+          makeDoc({ id: 'shared', content: '', role: 'view' }), // 공유받은 문서 — 지금처럼 unreadable
+          makeDoc({ id: 'locked1', title: '', content: '', e2ee: 'locked' }),
+          makeDoc({ id: 'locked2', title: '', content: '', e2ee: 'locked' }),
+        ]
+      },
+      async listFolders() {
+        return []
+      },
+    }
+    const first = await buildMapIndex({ store: source, scope })
+    expect(first.entries.map((e) => e.id).sort()).toEqual([a.id, 'shared'])
+    expect(first.lockedCount).toBe(2)
+    expect(first.entries.find((e) => e.id === 'shared')!.unreadable).toBe(true)
+    expect(mapIndexCacheSize()).toBe(2)
+  })
+
+  it('U5 세대 표지 — 기다리는 동안 리셋되면 캐시를 건드리지 않는다', async () => {
+    let resolveList: (docs: Doc[]) => void
+    const pending = new Promise<Doc[]>((resolve) => {
+      resolveList = resolve
+    })
+    const source: MapSource = {
+      async list() {
+        return pending
+      },
+      async listFolders() {
+        return []
+      },
+    }
+    const scope = 's'
+    const promise = buildMapIndex({ store: source, scope })
+    resetMapIndexCache()
+    resolveList!([makeDoc({ id: 'a' })])
+    const result = await promise
+    expect(result.entries.map((e) => e.id)).toEqual(['a'])
+    expect(mapIndexCacheSize()).toBe(0)
   })
 })

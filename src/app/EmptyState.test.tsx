@@ -63,6 +63,20 @@ describe('F-241 A3 클릭', () => {
   })
 })
 
+describe('F-409 U11 잠긴 금고 문서', () => {
+  it('e2ee locked 면 제목 자리에 잠긴 문서, open·없음은 지금 규칙', () => {
+    const docs = [
+      { id: 'a', title: '비밀 제목', updatedAt: 1, e2ee: 'locked' as const },
+      { id: 'b', title: '열린 금고', updatedAt: 2, e2ee: 'open' as const },
+      { id: 'c', title: '일반 문서', updatedAt: 3 },
+      { id: 'd', title: '', updatedAt: 4 },
+    ]
+    const tree = EmptyState({ ...baseProps, recentDocs: docs })
+    const titles = collect(tree, 'empty-state-recent-title').map((n) => (n as { props?: { children?: unknown } }).props?.children)
+    expect(titles).toEqual(['잠긴 문서', '열린 금고', '일반 문서', '제목 없음'])
+  })
+})
+
 describe('F-257 G12 도움말 줄', () => {
   it('누르면 onOpenHelp 가 불린다', () => {
     const onOpenHelp = vi.fn()

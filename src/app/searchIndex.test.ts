@@ -346,6 +346,94 @@ describe('A1·A25 기타', () => {
   })
 })
 
+describe('F-409 U1~U3 금고 문서', () => {
+  it('U1 잠긴 문서는 빼고 lockedCount 로만 센다', async () => {
+    const store = createMemoryStore()
+    await store.create({ title: 'a', content: '1', lineEnding: 'lf' })
+    await store.create({ title: 'b', content: '2', lineEnding: 'lf' })
+    const open = await store.create({ title: '열린금고', content: '금고본문', lineEnding: 'lf' })
+    const source = stubSource([
+      ...(await store.list()).map((d) => (d.id === open.id ? { ...d, e2ee: 'open' as const } : d)),
+      makeDoc({ id: 'locked1', title: '', content: '', e2ee: 'locked' }),
+      makeDoc({ id: 'locked2', title: '', content: '', e2ee: 'locked' }),
+    ])
+    const idx = await buildSearchIndex({ store: source, scope: 's' })
+    expect(idx.entries.map((e) => e.id).sort()).toEqual((await store.list()).map((d) => d.id).sort())
+    expect(idx.lockedCount).toBe(2)
+    expect(idx.sharedCount).toBe(0)
+    const openEntry = idx.entries.find((e) => e.id === open.id)!
+    expect(openEntry.title).toBe('열린금고')
+    expect(openEntry.body).toBe('금고본문')
+  })
+
+  it('U2 열림→잠김→다시 열림', async () => {
+    const store = createMemoryStore()
+    const d = await store.create({ title: 't', content: '본문', lineEnding: 'lf' })
+    let docs: Doc[] = [{ ...d, e2ee: 'open' }]
+    const source: SearchSource = {
+      async list() {
+        return docs
+      },
+      async listFolders() {
+        return []
+      },
+    }
+    const scope = 's'
+    await buildSearchIndex({ store: source, scope })
+    expect(searchIndexCacheSize()).toBe(1)
+
+    docs = [{ ...d, title: '', content: '', e2ee: 'locked' }]
+    await buildSearchIndex({ store: source, scope })
+    expect(searchIndexCacheSize()).toBe(0)
+
+    docs = [{ ...d, e2ee: 'open' }]
+    const third = await buildSearchIndex({ store: source, scope })
+    expect(third.rebuiltCount).toBe(1)
+  })
+
+  it('U3 세대 표지 — 기다리는 동안 리셋되면 캐시를 건드리지 않는다', async () => {
+    let resolveList: (docs: Doc[]) => void
+    const pending = new Promise<Doc[]>((resolve) => {
+      resolveList = resolve
+    })
+    const source: SearchSource = {
+      async list() {
+        return pending
+      },
+      async listFolders() {
+        return []
+      },
+    }
+    const scope = 's'
+    const promise = buildSearchIndex({ store: source, scope })
+    resetSearchIndexCache()
+    resolveList!([makeDoc({ id: 'a' })])
+    const idx = await promise
+    expect(idx.entries.map((e) => e.id)).toEqual(['a'])
+    expect(searchIndexCacheSize()).toBe(0)
+  })
+
+  it('U3 대조 — 표지가 없을 때(리셋 없이)는 크기가 문서 수', async () => {
+    let resolveList: (docs: Doc[]) => void
+    const pending = new Promise<Doc[]>((resolve) => {
+      resolveList = resolve
+    })
+    const source: SearchSource = {
+      async list() {
+        return pending
+      },
+      async listFolders() {
+        return []
+      },
+    }
+    const scope = 's2'
+    const promise = buildSearchIndex({ store: source, scope })
+    resolveList!([makeDoc({ id: 'a' })])
+    await promise
+    expect(searchIndexCacheSize()).toBe(1)
+  })
+})
+
 describe('U19 docs·folders 선택 인자 (F-2007 5.2)', () => {
   it('둘 다 주면 list()·listFolders() 를 안 부른다', async () => {
     let listCalls = 0

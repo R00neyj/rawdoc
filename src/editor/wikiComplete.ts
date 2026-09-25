@@ -57,8 +57,9 @@ export function wikiCompletionSource(context: CompletionContext): CompletionResu
   const query = match.text.slice(2)
   const wiki = context.state.field(wikiContextField, false)
   if (!wiki) return null
-  const { resolver, sourceFolderId } = wiki
-  const nonEmpty = resolver.docs.filter((d) => d.title.trim() !== '')
+  const { resolver, sourceFolderId, sourceE2ee } = wiki
+  // 일반 문서에서는 금고 문서 후보를 거른다 — 금고 문서 안에서만 금고·일반 모두 띄운다 (F-409 4.1)
+  const nonEmpty = resolver.docs.filter((d) => d.title.trim() !== '' && (sourceE2ee || !d.e2ee))
   const candidates = query === '' ? nonEmpty : nonEmpty.filter((d) => titleMatches(d.title, query))
 
   if (candidates.length === 0) return null

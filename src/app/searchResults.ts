@@ -84,8 +84,9 @@ export function buildSearchNotes(input: {
   sharedCount: number
   offline: boolean
   loading: boolean
+  lockedCount?: number // 없으면 0 — 잠긴 금고 문서 수 (F-409 3.4)
 }): string[] {
-  const { query, outcome, sharedCount, offline, loading } = input
+  const { query, outcome, sharedCount, offline, loading, lockedCount = 0 } = input
   const notes: string[] = []
 
   if (loading) notes.push('목록을 새로 읽는 중…')
@@ -95,6 +96,10 @@ export function buildSearchNotes(input: {
   }
   if (sharedCount > 0 && query.terms.length > 0) {
     notes.push(`공유받은 문서 ${sharedCount.toLocaleString('ko-KR')}개는 제목만 찾았습니다`)
+  }
+  // 검색어만·필터만·둘 다 — 쿼리가 비어 있지 않을 때만. 자리는 안내 줄들의 맨 끝 (F-409 3.4)
+  if (lockedCount > 0 && !query.isEmpty) {
+    notes.push(`금고가 잠겨 있어 금고 문서 ${lockedCount.toLocaleString('ko-KR')}개는 찾지 않았습니다`)
   }
 
   return notes

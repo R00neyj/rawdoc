@@ -29,9 +29,13 @@ type ShareMenuProps = {
   onInvite?: () => void
   // 위키링크 대상 판정용 문서 제목 목록 — D-6 을 열지 결정한다 (F-252.md 3.1)
   wikiResolver: WikiResolver
+  // 지금 문서가 금고 문서(열림)인가 — 없으면 거짓, 지금 동작 그대로 (F-409 6.1)
+  e2eeDoc?: boolean
 }
 
-type ShareMenuItem = { key: string; label: string; icon: ComponentType<{ size?: number }>; onSelect: () => Promise<void> }
+type ShareMenuItem = { key: string; label: string; icon: ComponentType<{ size?: number }>; onSelect: () => Promise<void>; disabled?: boolean }
+
+const E2EE_SHARE_NOTE_ID = 'share-menu-e2ee-note'
 
 export default function ShareMenu({
   disabled,
@@ -41,6 +45,7 @@ export default function ShareMenu({
   onBeforeLinkAction,
   onInvite,
   wikiResolver,
+  e2eeDoc = false,
 }: ShareMenuProps) {
   const [open, setOpen] = useState(false)
   const [hasLink, setHasLink] = useState(false)
@@ -63,8 +68,9 @@ export default function ShareMenu({
   }, [open])
 
   // 메뉴를 열 때마다 링크 유무를 다시 확인 — `끊기` 항목 노출 조건 (F-210.md 2.6)
+  // 금고 문서는 GET 조차 보내지 않는다 — 끊기 항목을 보일 일이 없다 (F-409 6.2)
   useEffect(() => {
-    if (!open || !linkDocId) return
+    if (!open || !linkDocId || e2eeDoc) return
     let cancelled = false
     getShareLink(linkDocId)
       .then((info) => {
@@ -76,7 +82,7 @@ export default function ShareMenu({
     return () => {
       cancelled = true
     }
-  }, [open, linkDocId])
+  }, [open, linkDocId, e2eeDoc])
 
   useEffect(() => {
     if (open) {
@@ -202,8 +208,9 @@ export default function ShareMenu({
     await handleCopyReadOnlyLink()
   }
 
+  // 비활성 항목도 보이는 조건은 지금 그대로 — 누르거나 Enter 를 쳐도 동작을 부르지 않는다 (F-409 6.2)
   const items: ShareMenuItem[] = [
-    { key: 'link', label: '링크 복사', icon: IconLink, onSelect: handleCopyLink },
+    { key: 'link', label: '링크 복사', icon: IconLink, onSelect: handleCopyLink, disabled: e2eeDoc },
     { key: 'markdown', label: '마크다운 복사', icon: IconCopy, onSelect: handleCopyMarkdown },
     ...(linkDocId
       ? [
@@ -212,14 +219,15 @@ export default function ShareMenu({
             label: hasWikiTargets ? '읽기 전용 링크 복사…' : '읽기 전용 링크 복사',
             icon: IconLink,
             onSelect: handleReadOnlyLinkSelect,
+            disabled: e2eeDoc,
           },
         ]
       : []),
-    ...(linkDocId && hasLink
+    ...(linkDocId && hasLink && !e2eeDoc
       ? [{ key: 'readonly-link-off', label: '읽기 전용 링크 끊기', icon: IconLinkOff, onSelect: handleRevokeReadOnlyLink }]
       : []),
     ...(onInvite
-      ? [{ key: 'invite', label: '사람 초대…', icon: IconPersonAdd, onSelect: async () => onInvite() }]
+      ? [{ key: 'invite', label: '사람 초대…', icon: IconPersonAdd, onSelect: async () => onInvite(), disabled: e2eeDoc }]
       : []),
   ]
 
@@ -279,16 +287,29 @@ export default function ShareMenu({
               <button
                 type="button"
                 role="menuitem"
+                aria-disabled={item.disabled || undefined}
+                aria-describedby={item.disabled ? E2EE_SHARE_NOTE_ID : undefined}
                 ref={(el) => {
                   itemRefs.current[i] = el
                 }}
-                onClick={() => runAndClose(item.onSelect)}
+                onClick={() => {
+                  if (item.disabled) return
+                  runAndClose(item.onSelect)
+                }}
               >
                 <item.icon size={16} />
                 {item.label}
               </button>
             </li>
           ))}
+          {/* 메뉴 항목이 아니라 방향키가 여기서 멈추지 않는다 (F-409 6.2) */}
+          {e2eeDoc && (
+            <li role="none">
+              <p className="share-menu-note" id={E2EE_SHARE_NOTE_ID}>
+                금고 문서는 공유할 수 없습니다.
+              </p>
+            </li>
+          )}
         </ul>
       )}
       <ShareSetDialog

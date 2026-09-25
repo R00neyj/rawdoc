@@ -18,6 +18,8 @@ type CachedEntry = Omit<MapIndexEntry, 'folderId'> & { __key: string }
 
 let cache = new Map<string, CachedEntry>()
 let cachedScope: string | null = null
+// resetMapIndexCache 가 올리는 세대 표지 — 기다리는 동안 잠기면(F-405 c7) 캐시를 다시 쓰지 않는다 (F-409 3.3)
+let generation = 0
 
 // 인덱스를 만든 저장소 표시 — store.kind + 계정 id. 다르면 통째로 버린다 (5.3)
 export function mapIndexScope(kind: Store['kind'], accountId: string | null): string {
@@ -33,10 +35,23 @@ export type MapIndexResult = {
   entries: MapIndexEntry[]
   rebuiltCount: number
   reusedCount: number
+  lockedCount: number // e2ee === 'locked' 이라 넣지 않은 문서 수 (MapPage 발 안내, F-409 3.2)
+}
+
+function buildFreshEntry(doc: Doc): CachedEntry {
+  return {
+    id: doc.id,
+    title: doc.title,
+    targets: extractWikiTargets(doc.content),
+    unreadable: doc.content === '',
+    updatedAt: doc.updatedAt,
+    __key: changeKey(doc),
+  }
 }
 
 export async function buildMapIndex(args: { store: MapSource; scope: string; docs?: Doc[] }): Promise<MapIndexResult> {
   const { store, scope } = args
+  const startGeneration = generation
 
   if (scope !== cachedScope) {
     cache.clear()
@@ -46,10 +61,31 @@ export async function buildMapIndex(args: { store: MapSource; scope: string; doc
 
   let rebuiltCount = 0
   let reusedCount = 0
+  let lockedCount = 0
   const entries: MapIndexEntry[] = []
+
+  // 목록을 기다리는 동안 잠기면(세대가 바뀌면) 캐시를 읽지도 쓰지도 지우지도 않는다 — 이미 취소된 호출이라 이번 목록만 계산해 돌려준다 (F-409 3.3)
+  if (generation !== startGeneration) {
+    for (const doc of docs) {
+      if (doc.e2ee === 'locked') {
+        lockedCount++
+        continue
+      }
+      const fresh = buildFreshEntry(doc)
+      rebuiltCount++
+      entries.push({ id: fresh.id, title: fresh.title, targets: fresh.targets, unreadable: fresh.unreadable, updatedAt: fresh.updatedAt, folderId: doc.folderId ?? null })
+    }
+    return { entries, rebuiltCount, reusedCount, lockedCount }
+  }
+
   const seenIds = new Set<string>()
 
   for (const doc of docs) {
+    // 잠긴 금고 문서는 항목·unreadable 어디에도 안 넣는다 — seenIds 에서도 빠져 지우기 단계가 캐시의 평문을 스스로 지운다 (F-409 3.2)
+    if (doc.e2ee === 'locked') {
+      lockedCount++
+      continue
+    }
     seenIds.add(doc.id)
     const key = changeKey(doc)
     const hit = cache.get(doc.id)
@@ -59,14 +95,7 @@ export async function buildMapIndex(args: { store: MapSource; scope: string; doc
       cached = hit
       reusedCount++
     } else {
-      cached = {
-        id: doc.id,
-        title: doc.title,
-        targets: extractWikiTargets(doc.content),
-        unreadable: doc.content === '',
-        updatedAt: doc.updatedAt,
-        __key: key,
-      }
+      cached = buildFreshEntry(doc)
       rebuiltCount++
     }
 
@@ -88,11 +117,17 @@ export async function buildMapIndex(args: { store: MapSource; scope: string; doc
 
   cachedScope = scope
 
-  return { entries, rebuiltCount, reusedCount }
+  return { entries, rebuiltCount, reusedCount, lockedCount }
 }
 
-// 모듈 수준 캐시를 비운다. 테스트가 매번 부른다
+// 모듈 수준 캐시를 비운다. 테스트가 매번 부른다. 세대를 올려, 이미 기다리던 buildMapIndex 가 이 리셋 뒤 평문을 캐시에 다시 쓰지 못하게 한다 (F-409 3.3)
 export function resetMapIndexCache(): void {
   cache = new Map()
   cachedScope = null
+  generation++
+}
+
+// 캐시에 든 항목 수. 테스트·계측용 (F-409 3.2)
+export function mapIndexCacheSize(): number {
+  return cache.size
 }

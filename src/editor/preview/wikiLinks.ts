@@ -84,7 +84,8 @@ function wikiLinksOnLine(state: EditorState, line: Line): WikiLinkOnLine[] {
 }
 
 // 위키링크 해석 문맥 — 해석기와 지금 연 문서의 폴더 (specs/features/F-2018.md 5.1)
-export type WikiContext = { resolver: WikiResolver; sourceFolderId: string | null }
+// sourceE2ee: 편집 중인 문서가 금고 문서인가 — [[ 자동완성이 후보를 거르는 데만 쓴다, 해석 자체는 바꾸지 않는다 (F-409 4.1)
+export type WikiContext = { resolver: WikiResolver; sourceFolderId: string | null; sourceE2ee?: boolean }
 
 // 있음 판정은 문서만, [[#헤딩]] 은 지금 문서라 언제나 있음. title 속성은 있으면 대상 원문 조각, 없으면 대상 (5.4)
 function visibleMark(target: string, shown: string, context: WikiContext): Decoration {

@@ -271,3 +271,21 @@ describe('U8 — findLinkFolder·shortestWikiTarget·folderNames', () => {
     expect(createWikiResolver(docs, []).docs).toBe(docs)
   })
 })
+
+describe('F-409 U12 금고 문서 — 해석에 e2ee 를 쓰지 않는다(회귀 고정, c4)', () => {
+  it('잠긴 모양(제목 "")은 해석되지 않지만 docs 에는 남는다', () => {
+    const docs: WikiDocRef[] = [{ id: 'secret', title: '', folderId: null, e2ee: true }]
+    const r = createWikiResolver(docs, [])
+    expect(r.resolve('비밀 제목', null)).toBeNull()
+    expect(r.docs).toBe(docs)
+  })
+
+  it('열린 모양은 돌려주고, docs 의 그 항목에 e2ee: true 가 그대로 있다', () => {
+    const docs: WikiDocRef[] = [{ id: 'secret', title: '비밀 제목', folderId: null, e2ee: true }]
+    const r = createWikiResolver(docs, [])
+    const found = r.resolve('비밀 제목', null)
+    expect(found?.id).toBe('secret')
+    expect(found?.e2ee).toBe(true)
+    expect(r.docs[0].e2ee).toBe(true)
+  })
+})

@@ -113,6 +113,17 @@ export function useE2ee(options: UseE2eeOptions): UseE2ee | null {
     }
   }, [keyring])
 
+  // open 에서 다른 값으로 바뀐 뒤 한 번 더 비운다 — ④와 ⑥ 사이에 시작한 색인 만들기는 세대 표지로 못 막는 구멍이 있다(F-405 c7, F-409 3.3)
+  const prevStatusRef = useRef(status)
+  useEffect(() => {
+    const prev = prevStatusRef.current
+    prevStatusRef.current = status
+    if (prev === 'open' && status !== 'open') {
+      resetSearchIndexCache()
+      resetMapIndexCache()
+    }
+  }, [status])
+
   // 잠글 때 금고 첨부 blob: 주소를 모두 거둔다 (F-406 3.4)
   useEffect(() => {
     if (!keyring) return undefined

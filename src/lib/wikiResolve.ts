@@ -1,7 +1,8 @@
 // 위키링크 대상 → 문서 해석기. 순수 함수, DOM·CM6·markdown-it·React·저장소를 import 하지 않는다. worker 도 import 한다 (specs/features/F-2018.md 4장)
 import { screenParentResolver } from './folderTree'
 
-export type WikiDocRef = { id: string; title: string; folderId: string | null }
+// e2ee: 금고 문서(잠김·열림 무관). 해석에는 쓰지 않는다 — 받은 그대로 docs 에 둔다 (F-409 4.1)
+export type WikiDocRef = { id: string; title: string; folderId: string | null; e2ee?: true }
 export type WikiFolderRef = { id: string; name: string; parentId: string | null }
 
 export type WikiResolver = {

@@ -1,9 +1,12 @@
 // F-281.md 5장 A1~A9 — 전체·폴더 내보내기 계획·스트리밍 zip 단위 테스트
-import { describe, it, expect } from 'vitest'
+// F-409 9.1 U7~U9·U14 — 금고 문서 빼기·알림·금고 첨부 거르기
+import { describe, it, expect, vi } from 'vitest'
 import { unzipSync } from 'fflate'
-import { planWorkspaceExport, exportWorkspace, type WorkspaceExportStore } from './exportWorkspace'
+import { planWorkspaceExport, exportWorkspace, selectExportScope, downloadWorkspaceExport, type WorkspaceExportStore, type WorkspaceExportSourceStore } from './exportWorkspace'
 import { fromEditorText } from '../lib/lineEnding'
 import type { Doc, Folder } from '../types'
+
+vi.mock('./exportDoc', () => ({ downloadBlob: vi.fn() }))
 
 const NOW = 1789000000000
 
@@ -202,6 +205,174 @@ describe('planWorkspaceExport (F-281 A8) 폴더 범위', () => {
     expect(paths.get('d1')).toBe('루트문서.md')
     expect(paths.get('d2')).toBe('하위/하위문서.md')
     expect(paths.has('outDoc')).toBe(false)
+  })
+})
+
+describe('F-409 U7 selectExportScope 잠긴 문서 빼기', () => {
+  it('전체 범위 — 잠긴 내 문서만 빠지고 lockedCount, 공유받은 잠긴 문서는 세지 않는다', () => {
+    const docs = [
+      doc({ id: 'd1', title: '내문서' }),
+      doc({ id: 'locked', title: '', content: '', e2ee: 'locked' }),
+      doc({ id: 'sharedLocked', title: '', content: '', e2ee: 'locked', role: 'view' }),
+    ]
+    const result = selectExportScope(docs, [], { kind: 'all' })
+    expect(result.docs.map((d) => d.id)).toEqual(['d1'])
+    expect(result.lockedCount).toBe(1)
+  })
+
+  it('폴더 범위 — 범위 밖 잠긴 문서는 안 센다, 금고 폴더는 folders 에 남는다', () => {
+    const folders = [
+      folder({ id: 'vault', name: '금고폴더', e2ee: true }),
+      folder({ id: 'other', name: '다른폴더' }),
+    ]
+    const docs = [
+      doc({ id: 'locked-in', title: '', content: '', e2ee: 'locked', folderId: 'vault' }),
+      doc({ id: 'locked-out', title: '', content: '', e2ee: 'locked', folderId: 'other' }),
+    ]
+    const result = selectExportScope(docs, folders, { kind: 'folder', folderId: 'vault' })
+    expect(result.docs).toEqual([])
+    expect(result.lockedCount).toBe(1)
+    expect(result.folders.map((f) => f.id)).toEqual([])
+  })
+})
+
+describe('F-409 U8 planWorkspaceExport·exportWorkspace 열린 금고 문서', () => {
+  it('평문으로 들어가고 manifest 에도 있다. 잠긴 문서는 어디에도 없다', async () => {
+    const docs = [
+      doc({ id: 'open', title: '비밀 제목', content: '비밀 본문', lineEnding: 'crlf', e2ee: 'open' }),
+      doc({ id: 'locked', title: '', content: '', e2ee: 'locked' }),
+    ]
+    const plan = planWorkspaceExport({ docs, folders: [], scope: { kind: 'all' }, now: NOW })
+    expect(plan.lockedCount).toBe(1)
+    expect(plan.manifest.docs.map((d) => d.id)).toEqual(['open'])
+
+    const store: WorkspaceExportStore = { getAttachment: async () => null }
+    const result = await exportWorkspace({ plan, store })
+    const unzipped = unzipSync(result.bytes)
+    expect(unzipped['비밀 제목.md']).toEqual(new TextEncoder().encode(fromEditorText('비밀 본문', 'crlf')))
+    expect(Object.keys(unzipped)).not.toContain('제목 없음.md')
+  })
+})
+
+describe('F-409 U9 downloadWorkspaceExport 알림', () => {
+  function storeOf(docs: Doc[], folders: Folder[] = []): WorkspaceExportSourceStore {
+    return {
+      list: async () => docs,
+      listFolders: async () => folders,
+      getAttachment: async () => null,
+    }
+  }
+
+  it('0개 + 잠김 → E32 하나만', async () => {
+    const notices: Array<{ type: string; message: string }> = []
+    await downloadWorkspaceExport({
+      store: storeOf([doc({ id: 'locked', title: '', content: '', e2ee: 'locked' })]),
+      scope: { kind: 'all' },
+      now: NOW,
+      onNotice: (n) => notices.push(n),
+    })
+    expect(notices).toEqual([{ type: 'warn', message: '금고가 잠겨 있어 내보낼 문서가 없습니다. 금고를 연 뒤 다시 해 주세요.' }])
+  })
+
+  it('0개, 잠김 없음 → 지금 그대로 info', async () => {
+    const notices: Array<{ type: string; message: string }> = []
+    await downloadWorkspaceExport({
+      store: storeOf([]),
+      scope: { kind: 'all' },
+      now: NOW,
+      onNotice: (n) => notices.push(n),
+    })
+    expect(notices).toEqual([{ type: 'info', message: '내보낼 문서가 없습니다.' }])
+  })
+
+  it('내보냄, 잠김 있음, 누락 0 → 성공 info 뒤 warn S3', async () => {
+    const notices: Array<{ type: string; message: string }> = []
+    await downloadWorkspaceExport({
+      store: storeOf([
+        doc({ id: 'd1', title: '문서' }),
+        doc({ id: 'locked', title: '', content: '', e2ee: 'locked' }),
+      ]),
+      scope: { kind: 'all' },
+      now: NOW,
+      onNotice: (n) => notices.push(n),
+    })
+    expect(notices).toEqual([
+      { type: 'info', message: '문서 1개를 내보냈습니다.' },
+      { type: 'warn', message: '금고가 잠겨 있어 금고 문서 1개는 빼고 내보냈습니다.' },
+    ])
+  })
+
+  it('내보냄, 잠김 있음, 누락 K>0 → warn 하나로 합친다(E31)', async () => {
+    const notices: Array<{ type: string; message: string }> = []
+    const id = '0f3a9c2e7b1d4a58'
+    await downloadWorkspaceExport({
+      store: {
+        list: async () => [
+          doc({ id: 'd1', title: '문서', content: `<div align="center">\n  <img src="attachments/${id}.png" alt="a">\n</div>\n` }),
+          doc({ id: 'locked', title: '', content: '', e2ee: 'locked' }),
+        ],
+        listFolders: async () => [],
+        getAttachment: async () => null,
+      },
+      scope: { kind: 'all' },
+      now: NOW,
+      onNotice: (n) => notices.push(n),
+    })
+    expect(notices).toEqual([
+      { type: 'info', message: '문서 1개를 내보냈습니다.' },
+      { type: 'warn', message: '금고가 잠겨 있어 금고 문서 1개는 빼고 내보냈습니다. 이미지 1개를 찾을 수 없어 빼고 내보냈습니다.' },
+    ])
+  })
+
+  it('잠김 0 → 지금 알림 배열과 같다(이미지 누락 warn 따로)', async () => {
+    const notices: Array<{ type: string; message: string }> = []
+    const id = '0f3a9c2e7b1d4a58'
+    await downloadWorkspaceExport({
+      store: {
+        list: async () => [doc({ id: 'd1', title: '문서', content: `<div align="center">\n  <img src="attachments/${id}.png" alt="a">\n</div>\n` })],
+        listFolders: async () => [],
+        getAttachment: async () => null,
+      },
+      scope: { kind: 'all' },
+      now: NOW,
+      onNotice: (n) => notices.push(n),
+    })
+    expect(notices).toEqual([
+      { type: 'info', message: '문서 1개를 내보냈습니다.' },
+      { type: 'warn', message: '이미지 1개를 찾을 수 없어 빼고 내보냈습니다.' },
+    ])
+  })
+})
+
+describe('F-409 U14 exportWorkspace 금고 첨부 거르기', () => {
+  const id = '0f3a9c2e7b1d4a58'
+  const imgText = `<div align="center">\n  <img src="attachments/${id}.png" alt="a">\n</div>\n`
+
+  it('① 일반 문서만 참조하면 빠지고 missingCount 1', async () => {
+    const docs = [doc({ id: 'd1', title: '문서1', content: imgText })]
+    const plan = planWorkspaceExport({ docs, folders: [], scope: { kind: 'all' }, now: NOW })
+    const store: WorkspaceExportStore = {
+      getAttachment: async (attId) => (attId === id ? { id, ext: 'png', blob: new Blob([new Uint8Array([1])]), e2ee: true } : null),
+    }
+    const result = await exportWorkspace({ plan, store })
+    const unzipped = unzipSync(result.bytes)
+    expect(unzipped[`attachments/${id}.png`]).toBeUndefined()
+    expect(result.missingCount).toBe(1)
+  })
+
+  it('② 같은 디렉터리의 열린 금고 문서도 참조하면 들어간다', async () => {
+    const docs = [
+      doc({ id: 'd1', title: '문서1', content: imgText }),
+      doc({ id: 'd2', title: '금고문서', content: imgText, e2ee: 'open' }),
+    ]
+    const plan = planWorkspaceExport({ docs, folders: [], scope: { kind: 'all' }, now: NOW })
+    const store: WorkspaceExportStore = {
+      getAttachment: async (attId) => (attId === id ? { id, ext: 'png', blob: new Blob([new Uint8Array([1])]), e2ee: true } : null),
+    }
+    const result = await exportWorkspace({ plan, store })
+    const unzipped = unzipSync(result.bytes)
+    expect(unzipped[`attachments/${id}.png`]).toBeTruthy()
+    expect(result.missingCount).toBe(0)
   })
 })
 

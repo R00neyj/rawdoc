@@ -287,6 +287,79 @@ describe('buildSearchNotes', () => {
   })
 })
 
+describe('F-409 U6 buildSearchNotes 금고 안내', () => {
+  it('검색어가 있으면 lockedCount 를 마지막 줄에 넣는다', () => {
+    const notes = buildSearchNotes({
+      query: parseSearchQuery('회고'),
+      outcome: null,
+      sharedCount: 0,
+      offline: false,
+      loading: false,
+      lockedCount: 3,
+    })
+    expect(notes).toEqual(['금고가 잠겨 있어 금고 문서 3개는 찾지 않았습니다'])
+  })
+
+  it('필터만이어도 뜬다(!query.isEmpty)', () => {
+    const notes = buildSearchNotes({
+      query: parseSearchQuery('tag:a'),
+      outcome: null,
+      sharedCount: 0,
+      offline: false,
+      loading: false,
+      lockedCount: 3,
+    })
+    expect(notes).toEqual(['금고가 잠겨 있어 금고 문서 3개는 찾지 않았습니다'])
+  })
+
+  it('빈 쿼리면 뜨지 않는다', () => {
+    const notes = buildSearchNotes({
+      query: parseSearchQuery(''),
+      outcome: null,
+      sharedCount: 0,
+      offline: false,
+      loading: false,
+      lockedCount: 3,
+    })
+    expect(notes).toEqual([])
+  })
+
+  it('lockedCount 를 안 주면 지금 결과와 같다', () => {
+    const notes = buildSearchNotes({
+      query: parseSearchQuery('회고'),
+      outcome: null,
+      sharedCount: 2,
+      offline: false,
+      loading: false,
+    })
+    expect(notes).toEqual(['공유받은 문서 2개는 제목만 찾았습니다'])
+  })
+
+  it('공유받은 문서 줄과 함께면 그 뒤', () => {
+    const notes = buildSearchNotes({
+      query: parseSearchQuery('회고'),
+      outcome: null,
+      sharedCount: 2,
+      offline: false,
+      loading: false,
+      lockedCount: 1,
+    })
+    expect(notes).toEqual(['공유받은 문서 2개는 제목만 찾았습니다', '금고가 잠겨 있어 금고 문서 1개는 찾지 않았습니다'])
+  })
+
+  it('1,234 는 자릿점을 찍는다', () => {
+    const notes = buildSearchNotes({
+      query: parseSearchQuery('회고'),
+      outcome: null,
+      sharedCount: 0,
+      offline: false,
+      loading: false,
+      lockedCount: 1234,
+    })
+    expect(notes).toEqual(['금고가 잠겨 있어 금고 문서 1,234개는 찾지 않았습니다'])
+  })
+})
+
 describe('formatResultCount', () => {
   it('U27 상한', () => {
     const result = formatResultCount(makeOutcome({ total: 1204, truncated: true }), RESULT_LIMIT)

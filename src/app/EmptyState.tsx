@@ -8,6 +8,8 @@ type RecentDoc = {
   id: string
   title: string
   updatedAt: number
+  // F-405 DocMeta 그대로 따라온다 — 'locked' 면 제목 자리에 대체 문구 (F-409 4.3)
+  e2ee?: 'locked' | 'open'
 }
 
 type EmptyStateProps = {
@@ -63,7 +65,7 @@ export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDo
                   draggable={false}
                   onClick={(e) => { e.preventDefault(); onSelectDoc(doc.id) }}
                 >
-                  <span className="empty-state-recent-title">{doc.title || '제목 없음'}</span>
+                  <span className="empty-state-recent-title">{doc.e2ee === 'locked' ? '잠긴 문서' : doc.title || '제목 없음'}</span>
                   <span className="empty-state-recent-date">{formatDate(doc.updatedAt)}</span>
                 </a>
               </li>

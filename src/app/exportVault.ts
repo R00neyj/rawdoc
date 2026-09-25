@@ -24,6 +24,7 @@ export type VaultPlan = {
   zipFilename: string
   docs: VaultPlanDoc[] // zip 에 넣는 순서
   links: VaultLinkContext
+  lockedCount: number // e2ee === 'locked' 이라 뺀 문서 수 (F-409.md 5.1)
 }
 
 function formatLocalDate(ts: number): string {
@@ -128,7 +129,7 @@ export function planVaultExport({
   scope: ExportScope
   now: number
 }): VaultPlan {
-  const { docs: scopedDocs, folders: scopedFolders, rootFolderId } = selectExportScope(docs, folders, scope)
+  const { docs: scopedDocs, folders: scopedFolders, rootFolderId, lockedCount } = selectExportScope(docs, folders, scope)
   const { orderedFolders, docPaths } = planExportPaths(scopedDocs, scopedFolders, rootFolderId, {
     fileName: toObsidianFileName,
     folderName: toObsidianFolderName,
@@ -157,7 +158,7 @@ export function planVaultExport({
   const links: VaultLinkContext = { resolver, exportedIds, vaultPathOf }
   suffixCountsCache.set(links, buildSuffixCounts(vaultPathOf))
 
-  return { zipFilename, docs: vaultDocs, links }
+  return { zipFilename, docs: vaultDocs, links, lockedCount }
 }
 
 // 줄 시작 위치와 함께 훑는다 — wikiGraph.ts 의 것과 같은 규칙, 이미지 블록의 줄 범위를 원문 문자 위치로 바꾸는 데 쓴다 (F-2020.md 5.3)
@@ -308,12 +309,17 @@ export async function exportVault({
   let done = 0
   let rewrittenLinks = 0
   const usedIds = new Set<string>() // 문서 순서대로 처음 나온 순서 (4장)
+  // zip 전체에서 열린 금고 문서가 참조하는 id — 금고 첨부는 이 안에 있을 때만 넣는다 (F-409.md 5.4)
+  const vaultRefIds = new Set<string>()
 
   for (const { doc, path } of plan.docs) {
     const { text, rewrittenLinks: n } = toVaultMarkdown(doc.content, doc.folderId, plan.links)
     rewrittenLinks += n
     addFile(path, new TextEncoder().encode(fromEditorText(text, doc.lineEnding)))
-    for (const id of extractAttachmentRefs(doc.content)) usedIds.add(id)
+    for (const id of extractAttachmentRefs(doc.content)) {
+      usedIds.add(id)
+      if (doc.e2ee === 'open') vaultRefIds.add(id)
+    }
 
     done += 1
     onProgress?.({ done, total })
@@ -323,7 +329,7 @@ export async function exportVault({
   const missingIds = new Set<string>()
   for (const id of usedIds) {
     const record = await store.getAttachment(id)
-    if (!record) {
+    if (!record || (record.e2ee && !vaultRefIds.has(id))) {
       missingIds.add(id)
       continue
     }
@@ -361,7 +367,11 @@ export async function downloadVaultExport({
 
   const plan = planVaultExport({ docs, folders, scope, now })
   if (plan.docs.length === 0) {
-    onNotice?.({ type: 'info', message: '내보낼 문서가 없습니다.' })
+    if (plan.lockedCount > 0) {
+      onNotice?.({ type: 'warn', message: '금고가 잠겨 있어 내보낼 문서가 없습니다. 금고를 연 뒤 다시 해 주세요.' })
+    } else {
+      onNotice?.({ type: 'info', message: '내보낼 문서가 없습니다.' })
+    }
     return
   }
 
@@ -375,7 +385,19 @@ export async function downloadVaultExport({
           ? `옵시디언 볼트로 내보냈습니다. 위키링크 ${result.rewrittenLinks}개에 경로를 붙였습니다.`
           : '옵시디언 볼트로 내보냈습니다.',
     })
-    if (result.missingCount > 0) {
+    // 알림 띠는 한 칸이라 잠긴 문서·이미지 누락을 warn 하나로 합쳐 보낸다 (F-409.md 5.2)
+    if (plan.lockedCount > 0) {
+      const lockedN = plan.lockedCount.toLocaleString('ko-KR')
+      if (result.missingCount > 0) {
+        const missingK = result.missingCount.toLocaleString('ko-KR')
+        onNotice?.({
+          type: 'warn',
+          message: `금고가 잠겨 있어 금고 문서 ${lockedN}개는 빼고 내보냈습니다. 이미지 ${missingK}개를 찾을 수 없어 빼고 내보냈습니다.`,
+        })
+      } else {
+        onNotice?.({ type: 'warn', message: `금고가 잠겨 있어 금고 문서 ${lockedN}개는 빼고 내보냈습니다.` })
+      }
+    } else if (result.missingCount > 0) {
       onNotice?.({ type: 'warn', message: `이미지 ${result.missingCount}개를 찾을 수 없어 빼고 내보냈습니다.` })
     }
   } catch {

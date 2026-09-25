@@ -117,3 +117,41 @@ describe('F-2018 U14 — 같은 제목이면 폴더 경로, 가장 짧은 형태
     expect(applyOption('[[1주', 0, ']]')).toBe('[[과제/1주차]]')
   })
 })
+
+describe('F-409 U13 — 일반 문서에서는 금고 문서 후보를 거른다 (4.1)', () => {
+  const docs: WikiDocRef[] = [
+    { id: 'plain', title: '메모', folderId: null },
+    { id: 'secretTitle', title: '비밀 제목', folderId: 'g', e2ee: true },
+    { id: 'secretMemo', title: '메모', folderId: 'g', e2ee: true },
+  ]
+  const resolver = createWikiResolver(docs, [{ id: 'g', name: '금고폴더', parentId: null }])
+
+  function optionsFor(doc: string, sourceE2ee?: boolean) {
+    const context: WikiContext = { resolver, sourceFolderId: null, sourceE2ee }
+    const state = makeState(doc, { context })
+    return wikiCompletionSource(new CompletionContext(state, doc.length, false))
+  }
+
+  it('sourceE2ee 없음/거짓 — 후보 라벨이 메모 하나, detail 없음(걸러진 풀에서 같은 제목이 하나)', () => {
+    const result = optionsFor('[[')
+    expect(result!.options.map((o) => o.label)).toEqual(['메모'])
+    expect(result!.options[0].detail).toBeUndefined()
+  })
+
+  it('sourceE2ee: false 도 같다', () => {
+    const result = optionsFor('[[', false)
+    expect(result!.options.map((o) => o.label)).toEqual(['메모'])
+  })
+
+  it('sourceE2ee: true — 셋 다, 두 메모에 폴더 detail', () => {
+    const result = optionsFor('[[', true)
+    const byLabel = result!.options.map((o) => [o.label, o.detail])
+    expect(byLabel).toHaveLength(3)
+    expect(byLabel.filter(([label]) => label === '메모').every(([, detail]) => detail !== undefined)).toBe(true)
+    expect(byLabel.some(([label]) => label === '비밀 제목')).toBe(true)
+  })
+
+  it('원본이 일반 문서여도 본문에 [[비밀 제목]] 을 직접 넣으면 resolve 는 그 문서를 돌려준다', () => {
+    expect(resolver.resolve('비밀 제목', null)?.id).toBe('secretTitle')
+  })
+})

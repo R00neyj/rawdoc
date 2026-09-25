@@ -41,6 +41,8 @@ type TopBarProps = {
   onInvite?: () => void
   // 위키링크 해석기 — ShareMenu 의 D-6 여닫는 조건 (F-252.md 3.1, F-2018 8.4)
   wikiResolver: WikiResolver
+  // ShareMenu 의 e2eeDoc 으로 그대로 넘긴다 (F-409 6.1)
+  shareE2ee?: boolean
   exportDisabled: boolean
   onExportMd: () => void
   onExportTxt: () => void
@@ -76,6 +78,7 @@ export default function TopBar({
   onBeforeShareLinkAction,
   onInvite,
   wikiResolver,
+  shareE2ee,
   exportDisabled,
   onExportMd,
   onExportTxt,
@@ -132,6 +135,7 @@ export default function TopBar({
           onBeforeLinkAction={onBeforeShareLinkAction}
           onInvite={onInvite}
           wikiResolver={wikiResolver}
+          e2eeDoc={shareE2ee}
         />
         <ExportMenu
           disabled={exportDisabled}

@@ -22,6 +22,8 @@ type SearchDialogProps = {
   selectQueryRef: RefObject<() => void>
   // 서버 저장소이면서 온라인이 아니다 — 대화상자 안내 줄에 쓴다 (F-288.md 7.5)
   offline: boolean
+  // 이 탭에서 금고가 열려 있는가 — 바뀌면 인덱스를 버리고 다시 만든다 (F-409 3.5)
+  e2eeOpen: boolean
 }
 
 function renderParts(parts: SnippetPart[]) {
@@ -36,7 +38,7 @@ function renderParts(parts: SnippetPart[]) {
   )
 }
 
-export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDoc, onClose, selectQueryRef, offline }: SearchDialogProps) {
+export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDoc, onClose, selectQueryRef, offline, e2eeOpen }: SearchDialogProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const resultRefs = useRef<(HTMLLIElement | null)[]>([])
 
@@ -64,6 +66,13 @@ export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDo
     }
   }
 
+  // 금고 상태가 바뀌면(열림↔그 밖) — 대화상자가 열려 있을 때만 — 같은 렌더에서 인덱스를 버린다 (F-409 3.5)
+  const [trackedE2eeOpen, setTrackedE2eeOpen] = useState(e2eeOpen)
+  if (e2eeOpen !== trackedE2eeOpen) {
+    setTrackedE2eeOpen(e2eeOpen)
+    if (open) setIndex(null)
+  }
+
   // 여는 순서가 이 명세에서 가장 중요한 결정이다: setState(이미 열림, 위) → flush → 인덱스 (4.2)
   useEffect(() => {
     if (!open) return
@@ -85,7 +94,7 @@ export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDo
     return () => {
       cancelled = true
     }
-  }, [open, store, scope, beforeIndex])
+  }, [open, store, scope, beforeIndex, e2eeOpen])
 
   // 디바운스는 검색 실행에만 건다 — 인덱스 만들기는 열 때 한 번이라 걸 곳이 없다 (4.3)
   useEffect(() => {
@@ -145,7 +154,7 @@ export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDo
 
   // 해석 줄·안내 줄·꼬리 줄 (F-288.md 5장)
   const querySummary = formatQuerySummary(parsed)
-  const notes = buildSearchNotes({ query: parsed, outcome, sharedCount: index?.sharedCount ?? 0, offline, loading })
+  const notes = buildSearchNotes({ query: parsed, outcome, sharedCount: index?.sharedCount ?? 0, offline, loading, lockedCount: index?.lockedCount ?? 0 })
   const hasNotes = querySummary !== null || notes.length > 0
   const foot = formatResultCount(outcome, rows.length)
 

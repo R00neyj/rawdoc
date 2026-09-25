@@ -1042,8 +1042,8 @@ export default function App() {
     !mapRoute &&
     !helpOpen &&
     !sharesOpen
-  // printDisabledRef 와 같은 조건 (F-279.md 6.1) — 인쇄 가능 범위는 이 명세에서 바꾸지 않는다
-  const canPrint = bootPhase === 'ready' && currentDocId !== null && !sharedDoc
+  // printDisabledRef 와 같은 조건 (F-279.md 6.1). 잠긴 금고 문서는 인쇄를 뺀다 — 팔레트 `인쇄` 가 안 보인다 (F-409 7.2)
+  const canPrint = bootPhase === 'ready' && currentDocId !== null && !sharedDoc && currentDoc?.e2ee !== 'locked'
   // 최상위 '템플릿'·'templates' 폴더 하위 문서 + 내장 4개 (F-2022.md 4.2)
   const templateEntries: TemplateEntry[] = useMemo(
     () => listTemplates({ folders, docs: docs.map((d) => ({ id: d.id, title: d.title, folderId: d.folderId ?? null, role: d.role })) }),
@@ -1899,12 +1899,19 @@ export default function App() {
 
   // 위키링크 해석기 (specs/features/F-2018.md 8.1). docs·folders 가 바뀔 때만 새로 만든다 — 입력마다 만들지 않는다 (5.2)
   const wikiResolver = useMemo(
-    () => createWikiResolver(docs.map((d) => ({ id: d.id, title: d.title, folderId: d.folderId ?? null })), folders),
+    () =>
+      createWikiResolver(
+        docs.map((d) => ({ id: d.id, title: d.title, folderId: d.folderId ?? null, ...(d.e2ee !== undefined ? { e2ee: true as const } : {}) })),
+        folders,
+      ),
     [docs, folders],
   )
   const currentFolderId = currentDoc?.folderId ?? null
-  // 편집기 문맥 — 해석기나 원본 폴더가 바뀔 때만 새 객체 (5.2)
-  const wikiContext = useMemo(() => ({ resolver: wikiResolver, sourceFolderId: currentFolderId }), [wikiResolver, currentFolderId])
+  // 편집기 문맥 — 해석기나 원본 폴더가 바뀔 때만 새 객체 (5.2). sourceE2ee — 편집 중인 문서가 금고 문서인가, [[ 자동완성만 거른다 (F-409 4.1)
+  const wikiContext = useMemo(
+    () => ({ resolver: wikiResolver, sourceFolderId: currentFolderId, sourceE2ee: currentDoc?.e2ee !== undefined }),
+    [wikiResolver, currentFolderId, currentDoc?.e2ee],
+  )
 
   // 위키링크 href 판정 — 보기 모드·인쇄가 함께 쓴다(F-279.md 4.3). 이 화면은 항상 #/d/{id}, '' 는 지금 문서 (F-252.md 4.1, F-2018 8.2)
   const resolveWikiHref = useCallback(
@@ -2523,6 +2530,17 @@ export default function App() {
     openWikiLinkRef.current(target, heading ?? null)
   }, [])
 
+  // 지금 문서가 금고 문서(열림)가 아니면 금고 첨부를 이미지 누락으로 돌린다 — F-406 3.1 을 내보내기에도 건다 (F-409 5.4)
+  function e2eeScopedExportStore(isE2eeDoc: boolean) {
+    return {
+      getAttachment: async (id: string) => {
+        const record = await store.getAttachment(id)
+        if (record?.e2ee && !isE2eeDoc) return null
+        return record
+      },
+    }
+  }
+
   // ----- .md 내보내기 (specs/features/F-112.md 2.2, F-158.md 2.3) -----
   function handleExportDoc() {
     if (!currentDoc || !openDoc || openDoc.id !== currentDocId) return
@@ -2531,7 +2549,7 @@ export default function App() {
       doc: currentDoc,
       lineEnding: openDoc.lineEnding,
       saver: { flush: () => docSaverFlushRef.current() },
-      store,
+      store: e2eeScopedExportStore(currentDoc.e2ee === 'open'),
       onNotice: showNotice,
     })
   }
@@ -2555,7 +2573,7 @@ export default function App() {
       doc: currentDoc,
       lineEnding: openDoc.lineEnding,
       saver: { flush: () => docSaverFlushRef.current() },
-      store,
+      store: e2eeScopedExportStore(currentDoc.e2ee === 'open'),
       onNotice: showNotice,
     })
   }
@@ -2568,7 +2586,7 @@ export default function App() {
       doc: currentDoc,
       lineEnding: openDoc.lineEnding,
       saver: { flush: () => docSaverFlushRef.current() },
-      store,
+      store: e2eeScopedExportStore(currentDoc.e2ee === 'open'),
       onNotice: showNotice,
     })
   }
@@ -2602,6 +2620,17 @@ export default function App() {
     })
   }
 
+  // 금고 폴더인데 안 열려 있으면 먼저 열어 달라고 한다(D-11) — 닫으면 아무 일도 안 하고, unavailable 이면 열기 없이 그대로 내보낸다 (F-409 5.3)
+  async function ensureE2eeOpenForFolderExport(id: string): Promise<boolean> {
+    if (!foldersRef.current.some((f) => f.id === id && f.e2ee === true)) return true
+    const ring = e2eeRef.current
+    if (!ring) return true
+    if (ring.keyring.getStatus() === 'open') return true
+    const ok = await ring.requestOpen()
+    if (ok) return true
+    return ring.keyring.getStatus() === 'unavailable'
+  }
+
   // ----- 폴더 내보내기 — 사이드바 폴더 `⋯` 메뉴 (specs/features/F-281.md 3.7) -----
   function handleExportFolder(id: string) {
     if (exportOffline) {
@@ -2609,6 +2638,7 @@ export default function App() {
       return
     }
     void (async () => {
+      if (!(await ensureE2eeOpenForFolderExport(id))) return
       await docSaverFlushRef.current()
       await downloadWorkspaceExport({
         store: store as WorkspaceExportSourceStore,
@@ -2637,6 +2667,7 @@ export default function App() {
       return
     }
     void (async () => {
+      if (!(await ensureE2eeOpenForFolderExport(id))) return
       await docSaverFlushRef.current()
       await downloadVaultExport({
         store: store as WorkspaceExportSourceStore,
@@ -3834,7 +3865,8 @@ export default function App() {
       }}
       onInvite={canInviteCurrentDoc ? requestInviteCurrentDoc : undefined}
       wikiResolver={wikiResolver}
-      exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
+      shareE2ee={currentDoc?.e2ee !== undefined}
+      exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc) || currentDoc?.e2ee === 'locked'}
       onExportMd={handleExportDoc}
       onExportTxt={handleExportDocAsText}
       onPrintDoc={handlePrintDoc}
@@ -3973,6 +4005,7 @@ export default function App() {
                   onRecenter={recenterMap}
                   onClose={closeMap}
                   onCreateDoc={() => createNewDoc()}
+                  e2eeOpen={e2ee?.status === 'open'}
                 />
               </Suspense>
             </div>
@@ -4165,6 +4198,7 @@ export default function App() {
         onClose={closeSearch}
         selectQueryRef={selectSearchQueryRef}
         offline={searchOffline}
+        e2eeOpen={e2ee?.status === 'open'}
       />
       <CommandPalette open={paletteOpen} context={paletteContext} onClose={closePalette} selectQueryRef={selectPaletteQueryRef} />
       <ImportPreviewDialog

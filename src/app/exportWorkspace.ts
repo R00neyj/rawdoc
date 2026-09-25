@@ -41,6 +41,7 @@ export type WorkspacePlan = {
   zipFilename: string
   manifest: WorkspaceManifest
   directories: PlanDirectory[] // 루트 먼저, 그다음 폴더가 부모 → 자식 순 (3.5 스트리밍 순서와 같다)
+  lockedCount: number // e2ee === 'locked' 이라 뺀 문서 수 (F-409.md 5.1)
 }
 
 function compareId(a: string, b: string): number {
@@ -151,22 +152,26 @@ function buildDocPaths(
   return result
 }
 
-// 대상 고르기 — 내 소유(owner 이거나 role 없음) 문서만, 폴더 범위면 그 하위(자기 자신은 빼고) (F-281.md 3.1, F-2020.md 3.2)
+// 대상 고르기 — 내 소유 문서만, 폴더 범위면 그 하위, 잠긴 금고 문서는 뺀 뒤 그 수를 lockedCount 로 (F-281.md 3.1, F-2020.md 3.2, F-409.md 5.1)
 export function selectExportScope(
   docs: Doc[],
   folders: Folder[],
   scope: ExportScope,
-): { docs: Doc[]; folders: Folder[]; rootFolderId: string | null } {
+): { docs: Doc[]; folders: Folder[]; rootFolderId: string | null; lockedCount: number } {
   const ownedDocs = docs.filter((d) => d.role === 'owner' || d.role === undefined)
   const rootFolderId = scope.kind === 'folder' ? scope.folderId : null
 
   if (scope.kind === 'all') {
-    return { docs: ownedDocs, folders, rootFolderId }
+    const lockedCount = ownedDocs.filter((d) => d.e2ee === 'locked').length
+    const filteredDocs = ownedDocs.filter((d) => d.e2ee !== 'locked')
+    return { docs: filteredDocs, folders, rootFolderId, lockedCount }
   }
   const ids = new Set(descendantFolderIds(folders as FolderLike[], scope.folderId))
   const scopedFolders = folders.filter((f) => ids.has(f.id) && f.id !== scope.folderId)
-  const scopedDocs = ownedDocs.filter((d) => d.folderId != null && ids.has(d.folderId))
-  return { docs: scopedDocs, folders: scopedFolders, rootFolderId }
+  const scopedAll = ownedDocs.filter((d) => d.folderId != null && ids.has(d.folderId))
+  const lockedCount = scopedAll.filter((d) => d.e2ee === 'locked').length
+  const filteredDocs = scopedAll.filter((d) => d.e2ee !== 'locked')
+  return { docs: filteredDocs, folders: scopedFolders, rootFolderId, lockedCount }
 }
 
 // 경로 계획 — 폴더·문서 이름 충돌 해소, 이름 함수만 인자로 받는다 (F-281.md 3.2, F-2020.md 3.2)
@@ -201,7 +206,7 @@ export function planWorkspaceExport({
   scope: ExportScope
   now: number
 }): WorkspacePlan {
-  const { docs: scopedDocs, folders: scopedFolders, rootFolderId } = selectExportScope(docs, folders, scope)
+  const { docs: scopedDocs, folders: scopedFolders, rootFolderId, lockedCount } = selectExportScope(docs, folders, scope)
   const { folderPaths, orderedFolders, docPaths } = planExportPaths(scopedDocs, scopedFolders, rootFolderId, {
     fileName: toFileName,
     folderName: toFolderName,
@@ -259,11 +264,12 @@ export function planWorkspaceExport({
     docs: manifestDocs,
   }
 
-  return { zipFilename, manifest, directories }
+  return { zipFilename, manifest, directories, lockedCount }
 }
 
 export type WorkspaceExportStore = {
-  getAttachment(id: string): Promise<{ id: string; ext: string; blob: { arrayBuffer(): Promise<ArrayBuffer> } } | null>
+  // e2ee — 금고 첨부(암호화된 원본). 그 디렉터리에 참조하는 열린 금고 문서가 없으면 넣지 않는다 (F-409.md 5.4)
+  getAttachment(id: string): Promise<{ id: string; ext: string; blob: { arrayBuffer(): Promise<ArrayBuffer> }; e2ee?: true } | null>
 }
 
 function concatChunks(chunks: Uint8Array[]): Uint8Array<ArrayBuffer> {
@@ -311,16 +317,21 @@ export async function exportWorkspace({
 
   for (const dir of plan.directories) {
     const usedIds = new Set<string>()
+    // 그 디렉터리의 열린 금고 문서가 참조하는 id — 금고 첨부는 이 안에 있을 때만 넣는다 (F-409.md 5.4)
+    const vaultRefIds = new Set<string>()
     for (const { doc, path } of dir.docs) {
       const bytes = new TextEncoder().encode(fromEditorText(doc.content, doc.lineEnding))
       addFile(path, bytes)
       done += 1
       onProgress?.({ done, total })
-      for (const id of extractAttachmentRefs(doc.content)) usedIds.add(id)
+      for (const id of extractAttachmentRefs(doc.content)) {
+        usedIds.add(id)
+        if (doc.e2ee === 'open') vaultRefIds.add(id)
+      }
     }
     for (const id of usedIds) {
       const record = await store.getAttachment(id)
-      if (!record) {
+      if (!record || (record.e2ee && !vaultRefIds.has(id))) {
         missingIds.add(id)
         continue
       }
@@ -366,7 +377,11 @@ export async function downloadWorkspaceExport({
   const plan = planWorkspaceExport({ docs, folders, scope, now })
   const total = plan.directories.reduce((sum, d) => sum + d.docs.length, 0)
   if (total === 0) {
-    onNotice?.({ type: 'info', message: '내보낼 문서가 없습니다.' })
+    if (plan.lockedCount > 0) {
+      onNotice?.({ type: 'warn', message: '금고가 잠겨 있어 내보낼 문서가 없습니다. 금고를 연 뒤 다시 해 주세요.' })
+    } else {
+      onNotice?.({ type: 'info', message: '내보낼 문서가 없습니다.' })
+    }
     return
   }
 
@@ -374,7 +389,19 @@ export async function downloadWorkspaceExport({
     const result = await exportWorkspace({ plan, store, onProgress })
     downloadBlob(new Blob([result.bytes], { type: 'application/zip' }), plan.zipFilename)
     onNotice?.({ type: 'info', message: `문서 ${result.docCount}개를 내보냈습니다.` })
-    if (result.missingCount > 0) {
+    // 알림 띠는 한 칸이라 잠긴 문서·이미지 누락을 warn 하나로 합쳐 보낸다 (F-409.md 5.2)
+    if (plan.lockedCount > 0) {
+      const lockedN = plan.lockedCount.toLocaleString('ko-KR')
+      if (result.missingCount > 0) {
+        const missingK = result.missingCount.toLocaleString('ko-KR')
+        onNotice?.({
+          type: 'warn',
+          message: `금고가 잠겨 있어 금고 문서 ${lockedN}개는 빼고 내보냈습니다. 이미지 ${missingK}개를 찾을 수 없어 빼고 내보냈습니다.`,
+        })
+      } else {
+        onNotice?.({ type: 'warn', message: `금고가 잠겨 있어 금고 문서 ${lockedN}개는 빼고 내보냈습니다.` })
+      }
+    } else if (result.missingCount > 0) {
       onNotice?.({ type: 'warn', message: `이미지 ${result.missingCount}개를 찾을 수 없어 빼고 내보냈습니다.` })
     }
   } catch {
