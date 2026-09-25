@@ -3,6 +3,7 @@ import { EditorView, WidgetType } from '@codemirror/view'
 
 import type { ImageAlign, ParsedImageBlock } from '../../lib/imageBlock'
 import { imageAlignChange, imageWidthChange, imageBlockDeleteRange } from '../../lib/imageBlock'
+import { createAttachmentUrl, revokeAttachmentUrl } from '../../lib/attachmentUrls'
 import { observeHeight, stopObservingHeight } from './blocks'
 
 import formatAlignLeftSvg from '@material-symbols/svg-400/outlined/format_align_left.svg?raw'
@@ -13,7 +14,7 @@ import brokenImageSvg from '@material-symbols/svg-400/outlined/broken_image.svg?
 
 const MIN_WIDTH = 48
 
-export type AttachmentRecord = { blob: Blob; width: number; height: number }
+export type AttachmentRecord = { blob: Blob; width: number; height: number; e2ee?: true }
 export type ResolveAttachment = (id: string) => Promise<AttachmentRecord | null>
 type CacheEntry = { url: string | null; promise: Promise<{ url: string; width: number; height: number } | null> }
 
@@ -35,7 +36,7 @@ export function destroyImageCache(view: EditorView | null | undefined): void {
   const cache = cacheByView.get(view)
   if (!cache) return
   for (const entry of cache.values()) {
-    if (entry.url) URL.revokeObjectURL(entry.url)
+    if (entry.url) revokeAttachmentUrl(entry.url)
   }
   cacheByView.delete(view)
 }
@@ -54,7 +55,7 @@ function loadAttachment(
     .then(() => resolveAttachment?.(id))
     .then((record) => {
       if (!record) return null
-      const url = URL.createObjectURL(record.blob)
+      const url = createAttachmentUrl(record)
       entry.url = url
       return { url, width: record.width, height: record.height }
     })

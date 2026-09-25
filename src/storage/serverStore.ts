@@ -145,7 +145,22 @@ function randomAttachmentId(): string {
 }
 
 function cachedToAttachment(record: CachedAttachment): Attachment {
-  return { id: record.id, mime: record.mime, ext: record.ext, size: record.size, width: record.width, height: record.height, createdAt: record.createdAt, blob: record.blob }
+  return {
+    id: record.id,
+    mime: record.mime,
+    ext: record.ext,
+    size: record.size,
+    width: record.width,
+    height: record.height,
+    createdAt: record.createdAt,
+    blob: record.blob,
+    ...(record.e2ee ? { e2ee: record.e2ee } : {}),
+  }
+}
+
+// 확장자의 평문 이미지 mime — 금고 첨부 응답(octet-stream)의 형식을 정하는 데 쓴다 (F-406 3.3 7번·4.3, F-402 11장 ③)
+function imageMimeOf(ext: AttachmentExt): string {
+  return `image/${ext === 'jpg' ? 'jpeg' : ext}`
 }
 
 // 캐시에 있는 문서 원문에서 이 id 의 확장자를 찾는다 — GET 은 원문 없이 id 만으로는 확장자를 모른다 (2.5)
@@ -187,6 +202,9 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   const skipDocIds = new Set<string>() // 남의 막힌 문서로 확인된 뒤 이 페이지 동안 건너뛸 문서 (4.4)
   const bytesHoldUntil = new Map<number, number>() // 413 bytes — 그 항목만 (4.3)
   const docsHoldUntil = new Map<number, number>() // 413 docs — outbox 의 모든 createDoc (4.3)
+
+  // 진행 중인 첨부 원격 GET — id 별로 하나만, 끝나면(성공·실패 모두) Map 에서 뺀다. 위젯이 파괴·재생성돼 같은 id 를 거의 동시에 두 번 부르는 경우를 흡수한다 (F-406 E5)
+  const inFlightAttachmentGets = new Map<string, Promise<Attachment | null>>()
 
   // ----- F-405 5.2·5.3 — 금고 문서 10초 간격·잠긴 동안 충돌 대기 -----
   const e2eeLastResponseAt = new Map<string, number>() // 문서 id → 마지막 응답 시각(페이지 메모리만)
@@ -609,7 +627,13 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
             await cache.removeOutbox(entry.key)
             break
           }
-          await uploadAttachment(entry.attachmentId, entry.ext, cachedAttachment.blob)
+          // 금고 여부·가로세로는 보낼 때 캐시 행에서 읽는다 (F-406 4.2)
+          await uploadAttachment(
+            entry.attachmentId,
+            entry.ext,
+            cachedAttachment.blob,
+            cachedAttachment.e2ee ? { width: cachedAttachment.width, height: cachedAttachment.height } : undefined,
+          )
           await cache.markAttachmentUploaded(userId, entry.attachmentId)
           await cache.removeOutbox(entry.key)
           break
@@ -640,7 +664,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           }
           return true
         }
-        if (err.kind === 'too_large' || err.kind === 'unsupported' || err.kind === 'type_mismatch') {
+        // invalid·e2ee_mismatch 는 클라이언트가 막았어야 하는 경우라 다시 보내도 같은 답이다 (F-406 4.2)
+        if (err.kind === 'too_large' || err.kind === 'unsupported' || err.kind === 'type_mismatch' || err.kind === 'invalid' || err.kind === 'e2ee_mismatch') {
           await cache.removeOutbox(entry.key)
           notice({ type: 'error', message: ATTACHMENT_UPLOAD_FAIL_MESSAGE })
           return true
@@ -1219,12 +1244,13 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     // GIF·이미 WebP 면 변환을 건너뛴다(이중 인코딩 방지, F-220.md 2.3). 그 외는 WebP 로 변환해 본다(더 커지거나 실패하면 원본). 캐시에 먼저 넣고 즉시 반환, 올리기는 보낼 목록으로 (2.5)
     // 넣기 전 사전 검사(F-221.md 2.3) — used + 아직 안 올린 캐시 합 + 새 크기 > limit 면 던진다. 조회 실패(오프라인 등)면 건너뛴다(서버가 최종 판정)
     // id 를 주면 그 id 로 저장하고 WebP 변환을 건너뛴다(원문 attachments/{id}.{ext} 를 고치지 않으려면 ext 가 그대로여야 한다). 이미 있으면 덮지 않고 그대로 돌려준다 (F-282.md 3.11)
-    async putAttachment({ blob, mime, ext, width, height, id: givenId }) {
+    async putAttachment({ blob, mime, ext, width, height, id: givenId, e2ee }) {
       if (givenId !== undefined) {
         const existing = await cache.getAttachment(userId, givenId)
         if (existing) return { id: existing.id, ext: existing.ext }
       }
 
+      // e2ee 는 늘 id 와 함께 온다 — id 갈래라 변환을 건너뛴다(지금 규칙 그대로, F-406 4.2)
       const converted = givenId !== undefined || ext === 'gif' || ext === 'webp' ? blob : await toWebp(blob)
       const finalExt: AttachmentExt = converted === blob ? ext : 'webp'
       const finalMime = converted === blob ? mime : 'image/webp'
@@ -1251,40 +1277,67 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         }
       }
 
-      await cache.putAttachment(userId, { id, ext: finalExt, mime: finalMime, size: converted.size, width, height, blob: converted, uploaded: false, createdAt: Date.now() })
+      await cache.putAttachment(userId, {
+        id,
+        ext: finalExt,
+        mime: finalMime,
+        size: converted.size,
+        width,
+        height,
+        blob: converted,
+        uploaded: false,
+        createdAt: Date.now(),
+        ...(e2ee ? { e2ee } : {}),
+      })
       await cache.addOutbox(userId, { type: 'upload', attachmentId: id, ext: finalExt })
       await refreshPending()
       kickSend()
       return { id, ext: finalExt }
     },
 
-    async getAttachment(id) {
+    async getAttachment(id, hint) {
       const cached = await cache.getAttachment(userId, id)
       if (cached) return cachedToAttachment(cached)
 
-      const docs = await cache.getDocs(userId)
-      const found = findExtInDocs(docs, id)
-      if (!found) return null
-      const { ext, docId } = found
+      const running = inFlightAttachmentGets.get(id)
+      if (running) return running
 
-      try {
-        const blob = await fetchAttachment(id, ext, docId)
-        const { width, height } = await decodeDims(blob)
-        const record: Omit<CachedAttachment, 'userId'> = {
-          id,
-          ext,
-          mime: blob.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`,
-          size: blob.size,
-          width,
-          height,
-          blob,
-          uploaded: true,
-          createdAt: Date.now(),
+      const promise = (async (): Promise<Attachment | null> => {
+        const docs = await cache.getDocs(userId)
+        const found = findExtInDocs(docs, id)
+        // 캐시 본문에서 못 찾으면 힌트(withE2ee 가 금고 원문에서 찾아 준 확장자)로 — ?doc= 없이 소유자 받기 (F-406 4.3)
+        const ext = found?.ext ?? hint?.ext
+        const docId = found?.docId
+        if (!ext) return null
+
+        try {
+          const blob = await fetchAttachment(id, ext, docId)
+          const isEnvelope = blob.type === 'application/octet-stream'
+          const { width, height } = isEnvelope ? { width: 0, height: 0 } : await decodeDims(blob)
+          const record: Omit<CachedAttachment, 'userId'> = {
+            id,
+            ext,
+            mime: isEnvelope ? imageMimeOf(ext) : blob.type || imageMimeOf(ext),
+            size: blob.size,
+            width,
+            height,
+            blob,
+            uploaded: true,
+            createdAt: Date.now(),
+            ...(isEnvelope ? { e2ee: true as const } : {}),
+          }
+          await cache.putAttachment(userId, record)
+          return cachedToAttachment({ ...record, userId })
+        } catch {
+          return null
         }
-        await cache.putAttachment(userId, record)
-        return cachedToAttachment({ ...record, userId })
-      } catch {
-        return null
+      })()
+
+      inFlightAttachmentGets.set(id, promise)
+      try {
+        return await promise
+      } finally {
+        inFlightAttachmentGets.delete(id)
       }
     },
 

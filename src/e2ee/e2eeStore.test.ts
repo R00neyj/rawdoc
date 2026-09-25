@@ -1,11 +1,13 @@
 // F-405 U1~U12 (specs/features/F-405.md 9.1) — 아래 저장소는 createIdbStore, MK 는 PBKDF2 없이 바로 만든다
+// F-406 U1~U9 (specs/features/F-406.md 7.1) — 첨부, 이름 머리 F-406 U…
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { openDB } from 'idb'
 import { createIdbStore } from '../storage/idbStore'
-import { decryptDocField, E2eeError, openDocKey } from './crypto'
+import { decryptAttachment, decryptDocField, E2eeError, encryptAttachment, openDocKey } from './crypto'
 import { attachmentRefsOf, isE2eeStoreError, lockDocMetas, makeE2eeConflictCopy, planE2eeReset, withE2ee } from './e2eeStore'
-import type { Doc, Store } from '../types'
+import * as toWebpModule from '../storage/toWebp'
+import type { AttachmentExt, Doc, Store } from '../types'
 
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/
 
@@ -19,7 +21,23 @@ function newMasterKey(): Promise<CryptoKey> {
   return crypto.subtle.generateKey({ name: 'AES-KW', length: 256 }, false, ['wrapKey', 'unwrapKey']) as Promise<CryptoKey>
 }
 
-async function readRow(dbName: string, storeName: 'docs' | 'folders', id: string): Promise<Record<string, unknown> | undefined> {
+// PNG 헤더 24 B(서명 + IHDR + 가로·세로) — inspectImageBytes 가 읽기에 충분하다 (F-406 7.1)
+function pngHeader(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(24)
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0)
+  bytes.set([0x49, 0x48, 0x44, 0x52], 12) // 'IHDR'
+  const dv = new DataView(bytes.buffer)
+  dv.setUint32(16, width)
+  dv.setUint32(20, height)
+  return bytes
+}
+
+// WebCrypto·Blob 이 Uint8Array<ArrayBuffer> 를 요구한다 — crypto.ts asBuffer 와 같은 사정 (F-406 7.1)
+function blobOf(bytes: Uint8Array): Blob {
+  return new Blob([bytes as Uint8Array<ArrayBuffer>])
+}
+
+async function readRow(dbName: string, storeName: 'docs' | 'folders' | 'attachments', id: string): Promise<Record<string, unknown> | undefined> {
   const db = await openDB(dbName)
   try {
     return (await db.get(storeName, id)) as Record<string, unknown> | undefined
@@ -333,6 +351,192 @@ describe('attachmentRefsOf', () => {
   it('정렬한 배열, 빈 본문이면 []', () => {
     expect(attachmentRefsOf('')).toEqual([])
     expect(attachmentRefsOf('attachments/00000000000000bb.webp attachments/00000000000000aa.png')).toEqual(['00000000000000aa', '00000000000000bb'])
+  })
+})
+
+describe('F-406 U1 금고 첨부 올리기', () => {
+  it('반환 id·ext, 아래 행은 봉투. decryptAttachment 로 풀면 평문', async () => {
+    const { dbName, store, getMk } = await setup()
+    const plain = pngHeader(640, 480)
+    const { id, ext } = await store.putAttachment({ blob: blobOf(plain), mime: 'image/png', ext: 'png', width: 640, height: 480, e2ee: true })
+    expect(id).toMatch(/^[0-9a-f]{16}$/)
+    expect(ext).toBe('png')
+
+    const row = (await readRow(dbName, 'attachments', id))!
+    expect(row.e2ee).toBe(true)
+    expect(row.mime).toBe('image/png')
+    expect(row.width).toBe(640)
+    expect(row.height).toBe(480)
+    expect(row.size).toBe(plain.length + 69)
+
+    const envelope = new Uint8Array(await (row.blob as Blob).arrayBuffer())
+    expect(envelope[0]).toBe(1)
+    expect(Array.from(envelope.slice(1, 9))).not.toEqual(Array.from(plain.slice(0, 8)))
+
+    const decrypted = await decryptAttachment(getMk()!, id, envelope)
+    expect(Array.from(decrypted)).toEqual(Array.from(plain))
+  })
+})
+
+describe('F-406 U2 MK 없이 올리기 / e2ee 없는 올리기', () => {
+  it('MK 없음은 locked 이고 아무것도 안 쓴다. e2ee 없으면 MK 와 무관하게 된다', async () => {
+    const { store, setMk } = await setup()
+    const plain = pngHeader(10, 10)
+
+    setMk(null)
+    const before = (await store.listAttachments()).length
+    await expectStoreError(
+      store.putAttachment({ blob: blobOf(plain), mime: 'image/png', ext: 'png', width: 10, height: 10, e2ee: true }),
+      'locked',
+    )
+    expect((await store.listAttachments()).length).toBe(before)
+
+    const plainResult = await store.putAttachment({ blob: blobOf(plain), mime: 'image/png', ext: 'png', width: 10, height: 10 })
+    const record = await store.getAttachment(plainResult.id)
+    expect('e2ee' in record!).toBe(false)
+  })
+})
+
+describe('F-406 U3 크기 경계 (평문 5,242,811 B)', () => {
+  it('5,242,811 통과(봉투 5,242,880), 5,242,812 는 too-large 이고 행이 늘지 않는다', async () => {
+    const { dbName, store } = await setup()
+    const ok = new Uint8Array(5_242_811)
+    const putOk = await store.putAttachment({ blob: blobOf(ok), mime: 'image/png', ext: 'png', width: 1, height: 1, e2ee: true })
+    const row = (await readRow(dbName, 'attachments', putOk.id))!
+    expect(row.size).toBe(5_242_880)
+
+    const before = (await store.listAttachments()).length
+    const big = new Uint8Array(5_242_812)
+    await expectStoreError(
+      store.putAttachment({ blob: blobOf(big), mime: 'image/png', ext: 'png', width: 1, height: 1, e2ee: true }),
+      'too-large',
+    )
+    expect((await store.listAttachments()).length).toBe(before)
+  })
+})
+
+describe('F-406 U4 getAttachment', () => {
+  it('금고 첨부는 복호화한 평문, 일반 첨부는 아래 저장소 값과 같다', async () => {
+    const { store, inner } = await setup()
+    const plain = pngHeader(640, 480)
+    const { id } = await store.putAttachment({ blob: blobOf(plain), mime: 'image/png', ext: 'png', width: 640, height: 480, e2ee: true })
+
+    const got = await store.getAttachment(id)
+    expect(got!.blob.type).toBe('image/png')
+    expect(Array.from(new Uint8Array(await got!.blob.arrayBuffer()))).toEqual(Array.from(plain))
+    expect(got!.size).toBe(plain.length)
+    expect(got!.width).toBe(640)
+    expect(got!.height).toBe(480)
+    expect(got!.e2ee).toBe(true)
+
+    const plainAtt = await inner.putAttachment({ blob: blobOf(new Uint8Array([1, 2, 3])), mime: 'image/png', ext: 'png', width: 1, height: 1 })
+    const viaInner = await inner.getAttachment(plainAtt.id)
+    const viaStore = await store.getAttachment(plainAtt.id)
+    expect(viaStore).toStrictEqual(viaInner)
+  })
+})
+
+describe('F-406 U5 getAttachment — MK 없음·다른 MK', () => {
+  it('둘 다 null. 다른 MK 로 두 번 불러도 console.error 한 번', async () => {
+    const { store, setMk, getMk } = await setup()
+    const plain = pngHeader(10, 10)
+    const { id } = await store.putAttachment({ blob: blobOf(plain), mime: 'image/png', ext: 'png', width: 10, height: 10, e2ee: true })
+
+    const mk = getMk()
+    setMk(null)
+    expect(await store.getAttachment(id)).toBeNull()
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    setMk(await newMasterKey())
+    expect(await store.getAttachment(id)).toBeNull()
+    expect(await store.getAttachment(id)).toBeNull()
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    expect(errorSpy).toHaveBeenCalledWith('e2ee_attachment_decrypt_failed', id)
+    setMk(mk)
+  })
+})
+
+describe('F-406 U6 평문이 이미지가 아님', () => {
+  it('getAttachment → null + console.error 한 번', async () => {
+    const { store, inner, getMk } = await setup()
+    const id = 'aaaaaaaaaaaaaaaa'
+    const envelope = await encryptAttachment(getMk()!, id, new TextEncoder().encode('hello'))
+    await inner.putAttachment({ blob: blobOf(envelope), mime: 'image/png', ext: 'png', width: 1, height: 1, id, e2ee: true })
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await store.getAttachment(id)).toBeNull()
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    expect(errorSpy).toHaveBeenCalledWith('e2ee_attachment_decrypt_failed', id)
+  })
+})
+
+describe('F-406 U7 세대 값', () => {
+  it('부르고 기다리기 전에 clearPlainCache 하면 null, 다시 부르면 평문', async () => {
+    const { store } = await setup()
+    const plain = pngHeader(10, 10)
+    const { id } = await store.putAttachment({ blob: blobOf(plain), mime: 'image/png', ext: 'png', width: 10, height: 10, e2ee: true })
+
+    const pending = store.getAttachment(id)
+    store.clearPlainCache()
+    expect(await pending).toBeNull()
+    expect((await store.getAttachment(id))?.e2ee).toBe(true)
+  })
+})
+
+describe('F-406 U8 확장자 힌트', () => {
+  it('본문에 있으면 힌트와 함께, 없으면 둘째 인자 undefined', async () => {
+    const dbName = freshDbName()
+    const rawInner = await createIdbStore(dbName)
+    const calls: Array<[string, { ext: AttachmentExt } | undefined]> = []
+    const inner: Store = {
+      ...rawInner,
+      getAttachment: async (id: string, hint?: { ext: AttachmentExt }) => {
+        calls.push([id, hint])
+        return rawInner.getAttachment(id, hint)
+      },
+    }
+    const mk = await newMasterKey()
+    const store = withE2ee(inner, { getMasterKey: () => mk })
+    const vaultFolder = await rawInner.createFolder({ name: '금고' })
+    await markFolderE2ee(dbName, vaultFolder.id)
+    const vault = await store.create({ title: 'T', content: '![](attachments/00000000000000aa.webp)', lineEnding: 'lf', folderId: vaultFolder.id })
+    await store.get(vault.id)
+
+    calls.length = 0
+    await store.getAttachment('00000000000000aa')
+    expect(calls.at(-1)).toEqual(['00000000000000aa', { ext: 'webp' }])
+
+    calls.length = 0
+    await store.getAttachment('ffffffffffffffff')
+    expect(calls.at(-1)).toEqual(['ffffffffffffffff', undefined])
+  })
+})
+
+describe('F-406 U9 서버 저장소 쪽 변환', () => {
+  it('png 는 toWebp 를 한 번 거치고, gif 는 부르지 않는다', async () => {
+    const spy = vi.spyOn(toWebpModule, 'toWebp')
+    spy.mockClear()
+    const calls: Array<Record<string, unknown>> = []
+    const inner = {
+      kind: 'server',
+      getAttachment: async () => null,
+      putAttachment: async (input: Record<string, unknown>) => {
+        calls.push(input)
+        return { id: input.id, ext: input.ext }
+      },
+    } as unknown as Store
+    const mk = await newMasterKey()
+    const store = withE2ee(inner, { getMasterKey: () => mk })
+
+    const png = pngHeader(10, 10)
+    await store.putAttachment({ blob: blobOf(png), mime: 'image/png', ext: 'png', width: 10, height: 10, e2ee: true })
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(calls[0]).toMatchObject({ e2ee: true, id: expect.stringMatching(/^[0-9a-f]{16}$/) })
+
+    spy.mockClear()
+    const gif = new Uint8Array([...'GIF89a'.split('').map((c) => c.charCodeAt(0)), 10, 0, 10, 0])
+    await store.putAttachment({ blob: blobOf(gif), mime: 'image/gif', ext: 'gif', width: 10, height: 10, e2ee: true })
+    expect(spy).not.toHaveBeenCalled()
   })
 })
 

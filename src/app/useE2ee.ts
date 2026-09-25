@@ -16,6 +16,7 @@ import {
 import { getPref } from './prefs'
 import { resetMapIndexCache } from './mapIndex'
 import { resetSearchIndexCache } from './searchIndex'
+import { revokeE2eeAttachmentUrls } from '../lib/attachmentUrls'
 import type { TabMessage } from './tabSync'
 import E2eeDialogs, { type E2eeDialogMode } from './E2eeDialogs'
 
@@ -110,6 +111,14 @@ export function useE2ee(options: UseE2eeOptions): UseE2ee | null {
       un1()
       un2()
     }
+  }, [keyring])
+
+  // 잠글 때 금고 첨부 blob: 주소를 모두 거둔다 (F-406 3.4)
+  useEffect(() => {
+    if (!keyring) return undefined
+    return keyring.registerLockStep('blobs', () => {
+      revokeE2eeAttachmentUrls()
+    })
   }, [keyring])
 
   // 조합 판정 (4.2) — compositionstart 로 표지를 켜고, compositionend·blur·visibilitychange 에서 미룬 잠그기를 다시 시도한다

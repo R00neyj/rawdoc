@@ -51,6 +51,9 @@ function makeFakeServer() {
   // 금고 판정 흉내 (F-405 S1~S8) — worker/docs.ts·folders.ts 와 같은 409 몸통
   let hasVault = true
   const deleteFolderCalls: Array<{ id: string; contents: string | null }> = []
+  // F-406 S1~S3 — 금고 첨부 PUT 요청 URL 기록, GET 응답을 조종한다
+  const attachmentPutUrls: string[] = []
+  const attachmentGetResponses = new Map<string, { contentType: string; bytes: number[] }>()
 
   function jsonResponse(status: number, data?: unknown): Response {
     return new Response(data === undefined ? null : JSON.stringify(data), {
@@ -195,9 +198,17 @@ function makeFakeServer() {
     // F-221 흉내: PUT /api/attachments/:idext — forceUploadQuota 면 507 (fakeServer.js 와 같은 형식)
     const attMatch = /^\/api\/attachments\/([0-9a-f]{16})\.(png|jpg|gif|webp)$/.exec(path)
     if (attMatch && method === 'PUT') {
+      attachmentPutUrls.push(String(url))
       if (forceUploadQuota) return jsonResponse(507, { error: 'quota_exceeded', used: usage.used, limit: usage.limit })
       const [, id, ext] = attMatch
       return jsonResponse(201, { id, ext, mime: 'image/png', size: 1, width: 1, height: 1 })
+    }
+    // F-406 S2·S3 — GET /api/attachments/:idext, 응답은 attachmentGetResponses 로 미리 정한다
+    if (attMatch && method === 'GET') {
+      const key = `${attMatch[1]}.${attMatch[2]}`
+      const rec = attachmentGetResponses.get(key)
+      if (!rec) return jsonResponse(404, { error: 'not_found' })
+      return new Response(new Uint8Array(rec.bytes), { status: 200, headers: { 'Content-Type': rec.contentType } })
     }
 
     return jsonResponse(404, { error: 'not_found' })
@@ -231,6 +242,10 @@ function makeFakeServer() {
         d.version += 1
         d.updatedAt = Date.now()
       }
+    },
+    attachmentPutUrls,
+    setAttachmentGetResponse: (idExt: string, contentType: string, bytes: number[]) => {
+      attachmentGetResponses.set(idExt, { contentType, bytes })
     },
     fetchImpl,
   }
@@ -1325,5 +1340,140 @@ describe('F-405 S8 createFolder e2ee·flushOutbox', () => {
     expect(deletesDone).toBe(0)
     await store.flushOutbox()
     expect(deletesDone).toBe(2)
+  })
+})
+
+describe('F-406 S1 putAttachment e2ee', () => {
+  it('캐시 행 e2ee:true, 변환 없이 같은 바이트, 요청 URL 에 e2ee=1&w=640&h=480. 일반 putAttachment 는 쿼리 없음', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const envelopeBytes = new Uint8Array([1, 2, 3, 4, 5])
+    const blob = new Blob([envelopeBytes])
+    const id = 'aaaaaaaaaaaaaaaa'
+    const result = await store.putAttachment({ blob, mime: 'image/png', ext: 'png', width: 640, height: 480, id, e2ee: true })
+    expect(result).toEqual({ id, ext: 'png' })
+
+    const record = await store.getAttachment(id)
+    expect(record!.e2ee).toBe(true)
+    expect(new Uint8Array(await record!.blob.arrayBuffer())).toEqual(envelopeBytes)
+
+    await tick(30)
+    expect(server.attachmentPutUrls.at(-1)).toBe(`/api/attachments/${id}.png?e2ee=1&w=640&h=480`)
+
+    const plain = await store.putAttachment({ blob: new Blob([new Uint8Array([9])]), mime: 'image/png', ext: 'png', width: 1, height: 1 })
+    await tick(30)
+    const plainUrl = server.attachmentPutUrls.find((u) => u.includes(plain.id))
+    expect(plainUrl).toBe(`/api/attachments/${plain.id}.png`)
+  })
+})
+
+describe('F-406 S2·S3 getAttachment(id, hint) — 다른 기기 금고 이미지', () => {
+  it('캐시·문서 어디에도 없는 id — application/octet-stream 은 봉투, 이미지 mime 은 지금 그대로, 힌트 없으면 요청 없이 null', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store1 = await createServerStore('u1', { dbName: freshDbName() })
+    const id1 = 'bbbbbbbbbbbbbbbb'
+    server.setAttachmentGetResponse(`${id1}.webp`, 'application/octet-stream', [1, 2, 3, 4, 5])
+    const got1 = await store1.getAttachment(id1, { ext: 'webp' })
+    expect(got1).toMatchObject({ e2ee: true, mime: 'image/webp', width: 0, height: 0 })
+
+    const store2 = await createServerStore('u2', { dbName: freshDbName() })
+    const id2 = 'cccccccccccccccc'
+    server.setAttachmentGetResponse(`${id2}.png`, 'image/png', [1, 2, 3])
+    const got2 = await store2.getAttachment(id2, { ext: 'png' })
+    expect(got2).not.toBeNull()
+    expect('e2ee' in got2!).toBe(false)
+
+    const store3 = await createServerStore('u3', { dbName: freshDbName() })
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockClear()
+    expect(await store3.getAttachment('dddddddddddddddd')).toBeNull()
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('dddddddddddddddd'))).toBe(false)
+  })
+
+  it('캐시 문서 본문에 참조가 있으면 힌트를 줘도 ?doc= 로 받는다(본문이 힌트보다 앞)', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const id = 'eeeeeeeeeeeeeeee'
+    await store.create({ title: 'D', content: `![](attachments/${id}.png)`, lineEnding: 'lf' })
+    await tick(30)
+    server.setAttachmentGetResponse(`${id}.png`, 'image/png', [1, 2, 3])
+
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    await store.getAttachment(id, { ext: 'webp' })
+    const call = fetchMock.mock.calls.find((c) => String(c[0]).includes(`${id}.png`))
+    expect(String(call![0])).toContain(`?doc=`)
+  })
+})
+
+describe('F-406 S7 진행 중인 같은 id 요청 합치기', () => {
+  it('동시에 두 번 부르면 fetch 는 한 번, 끝난 뒤 다시 부르면 캐시에서(추가 fetch 없이)', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const id = '1111111111111111'
+    server.setAttachmentGetResponse(`${id}.png`, 'image/png', [1, 2, 3])
+    fetchMock.mockClear()
+
+    const [a, b] = await Promise.all([store.getAttachment(id, { ext: 'png' }), store.getAttachment(id, { ext: 'png' })])
+    expect(a).not.toBeNull()
+    expect(b).not.toBeNull()
+    const attCallsFirst = fetchMock.mock.calls.filter((c) => String(c[0]).includes(`${id}.png`))
+    expect(attCallsFirst).toHaveLength(1)
+
+    fetchMock.mockClear()
+    const c = await store.getAttachment(id, { ext: 'png' })
+    expect(c).not.toBeNull()
+    expect(fetchMock.mock.calls.filter((call) => String(call[0]).includes(`${id}.png`))).toHaveLength(0)
+  })
+
+  it('실패해도 Map 에서 빠져, 다음 호출은 새로 시도한다', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const id = '2222222222222222'
+    fetchMock.mockClear()
+
+    const first = await store.getAttachment(id, { ext: 'png' }) // 응답 준비 전 — 404 로 실패
+    expect(first).toBeNull()
+
+    server.setAttachmentGetResponse(`${id}.png`, 'image/png', [1, 2, 3])
+    const second = await store.getAttachment(id, { ext: 'png' })
+    expect(second).not.toBeNull()
+  })
+})
+
+describe('F-406 S4 금고 올리기 400 invalid·409 e2ee_mismatch', () => {
+  it('둘 다 outbox 에서 항목이 빠지고 알림이 한 번', async () => {
+    for (const failure of [
+      { status: 400, body: { error: 'invalid', field: 'body' } },
+      { status: 409, body: { error: 'e2ee_mismatch' } },
+    ]) {
+      const server = makeFakeServer()
+      const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+        const path = new URL(String(url), 'http://local.test').pathname
+        if (/^\/api\/attachments\//.test(path) && init.method === 'PUT') {
+          return new Response(JSON.stringify(failure.body), { status: failure.status, headers: { 'Content-Type': 'application/json' } })
+        }
+        return server.fetchImpl(url, init)
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      const notices: Array<{ type: string; message: string }> = []
+      const store = await createServerStore('u1', { dbName: freshDbName(), onNotice: (n) => notices.push(n) })
+
+      const id = 'ffffffffffffffff'
+      await store.putAttachment({ blob: new Blob([new Uint8Array([1, 2, 3])]), mime: 'image/png', ext: 'png', width: 1, height: 1, id, e2ee: true })
+      await tick(30)
+
+      expect(store.syncState?.pending).toBe(0)
+      expect(notices.filter((n) => n.message === '이미지를 서버에 올리지 못했습니다.').length).toBe(1)
+    }
   })
 })

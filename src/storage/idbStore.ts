@@ -347,6 +347,7 @@ export async function createIdbStore(
       width,
       height,
       id: givenId,
+      e2ee,
     }: {
       blob: Blob
       mime: string
@@ -354,11 +355,12 @@ export async function createIdbStore(
       width: number
       height: number
       id?: string
+      e2ee?: true
     }) {
       if (givenId !== undefined) {
         const existing: Attachment | undefined = await db.get(ATTACHMENTS_STORE, givenId)
         if (existing) return { id: existing.id, ext: existing.ext }
-        const record: Attachment = { id: givenId, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob }
+        const record: Attachment = { id: givenId, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob, ...(e2ee ? { e2ee } : {}) }
         await db.put(ATTACHMENTS_STORE, record)
         return { id: givenId, ext }
       }
@@ -366,7 +368,7 @@ export async function createIdbStore(
       while (await db.get(ATTACHMENTS_STORE, id)) {
         id = randomAttachmentId()
       }
-      const record: Attachment = { id, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob }
+      const record: Attachment = { id, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob, ...(e2ee ? { e2ee } : {}) }
       await db.put(ATTACHMENTS_STORE, record)
       return { id, ext }
     },

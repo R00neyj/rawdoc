@@ -1,9 +1,11 @@
-// 저장소 위 한 겹 — 금고 문서의 제목·본문을 봉투로 쓰고 읽을 때 푼다 (specs/features/F-405.md 4장)
-import type { Doc, Folder, Store } from '../types'
+// 저장소 위 한 겹 — 금고 문서의 제목·본문을 봉투로 쓰고 읽을 때 푼다 (specs/features/F-405.md 4장, F-406.md 2·3·4장 첨부)
+import type { Attachment, AttachmentExt, Doc, Folder, Store } from '../types'
 import type { E2eeCopyResult, E2eeCopySource, ServerStore } from '../storage/serverStore'
-import { E2EE_MAX_ATTACHMENT_REFS, isPlainContentTooLarge } from '../lib/e2eeLimits'
+import { toWebp } from '../storage/toWebp'
+import { E2EE_MAX_ATTACHMENT_REFS, isPlainAttachmentTooLarge, isPlainContentTooLarge } from '../lib/e2eeLimits'
 import { extractAttachmentRefs } from '../lib/imageBlock'
-import { createDocKey, decryptDocField, encryptDocField, openDocKey } from './crypto'
+import { inspectImageBytes } from '../lib/imageFile'
+import { createDocKey, decryptDocField, encryptDocField, openDocKey, decryptAttachment, encryptAttachment } from './crypto'
 
 export type E2eeStoreErrorCode = 'locked' | 'too-large' | 'too-many-refs' | 'e2ee-folder'
 
@@ -92,16 +94,33 @@ function checkPlainContent(content: string): string[] {
 
 type PlainMemo = { e2eeKey: string; titleEnvelope: string; contentEnvelope: string; title: string; content: string }
 
+// 소문자 16진수 16자 (F-156 2.1·F-406 2.2 4번과 같은 형식)
+function randomAttachmentId(): string {
+  const bytes = new Uint8Array(8)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+// 평문 이미지 mime (F-402 11장 ③, F-406 3.3 7번)
+function imageMimeOf(ext: AttachmentExt): string {
+  return `image/${ext === 'jpg' ? 'jpeg' : ext}`
+}
+
 export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2eeStore {
   // 메모리에만 둔다 (4.4) — 문서 키는 감싼 키마다, 평문은 문서마다 한 벌
   const docKeys = new Map<string, Promise<CryptoKey>>()
   const plainMemo = new Map<string, PlainMemo>()
   const failureLogged = new Set<string>()
+  // 첨부 복호화 실패 로그는 페이지 수명에 첨부 id 당 한 번 (F-406 3.3 4번)
+  const attachmentFailureLogged = new Set<string>()
   let lastMasterKey: CryptoKey | null = null
+  // indexes 단계가 clearPlainCache 로 올린다 — indexes 뒤에 끝난 복호화는 버린다 (F-406 3.3, 3.4)
+  let generation = 0
 
   function clearPlainCache() {
     docKeys.clear()
     plainMemo.clear()
+    generation++
   }
 
   // 전에 쓴 MK 와 다른 객체(또는 null)면 기억을 버린다 (4.4)
@@ -255,6 +274,94 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
     return makeE2eeConflictCopy(mk, source, copyId)
   })
 
+  function logAttachmentFailure(id: string) {
+    if (attachmentFailureLogged.has(id)) return
+    attachmentFailureLogged.add(id)
+    console.error('e2ee_attachment_decrypt_failed', id)
+  }
+
+  // 기억 속 금고 문서 평문에서 attachments/{id}.{ext} 를 찾는다 — 못 찾으면 힌트 없이 (4.3, 3.3 1번)
+  function findAttachmentExtHint(id: string): { ext: AttachmentExt } | undefined {
+    const re = new RegExp(`attachments/${id}\\.(png|jpg|gif|webp)`)
+    for (const memo of plainMemo.values()) {
+      const m = re.exec(memo.content)
+      if (m) return { ext: m[1] as AttachmentExt }
+    }
+    return undefined
+  }
+
+  // 금고 첨부 올리기 — 판정 순서는 2.2, 계약은 2.1
+  const putAttachment: Store['putAttachment'] = async (input) => {
+    if (!input.e2ee) return inner.putAttachment(input)
+    const mk = currentMasterKey()
+    if (!mk) throw new E2eeStoreError('locked')
+
+    let blob = input.blob
+    let ext = input.ext
+    let mime = input.mime
+    // 아래 저장소가 server 이고 png·jpg 면 암호화 전에 WebP 로 — 서버 저장소 평문 경로와 같은 규칙 (2.2 4번 2단계)
+    if (inner.kind === 'server' && (ext === 'png' || ext === 'jpg')) {
+      const converted = await toWebp(blob)
+      if (converted !== blob) {
+        blob = converted
+        ext = 'webp'
+        mime = 'image/webp'
+      }
+    }
+
+    const plainBytes = new Uint8Array(await blob.arrayBuffer())
+    if (isPlainAttachmentTooLarge(plainBytes.length)) throw new E2eeStoreError('too-large')
+
+    // 첨부 id 를 여기서 정한다 — AAD 에 id 가 들어가므로 아래 저장소가 정하게 두지 않는다 (2.2 4번 4단계)
+    let id = randomAttachmentId()
+    while (await inner.getAttachment(id)) {
+      id = randomAttachmentId()
+    }
+
+    const envelope = await encryptAttachment(mk, id, plainBytes)
+    const envelopeBlob = new Blob([envelope as BlobPart], { type: 'application/octet-stream' })
+    await inner.putAttachment({ blob: envelopeBlob, mime, ext, width: input.width, height: input.height, id, e2ee: true })
+    return { id, ext }
+  }
+
+  // 금고 첨부 받기 — 계약은 3.3
+  const getAttachment: Store['getAttachment'] = async (id, hint) => {
+    // 시작할 때의 MK 와 세대 값을 적는다 — 부르고 기다리는 동안 clearPlainCache 가 끼어들 수 있다 (3.3 3번·7.1 U7)
+    const startGeneration = generation
+    const startMk = currentMasterKey()
+    const record = await inner.getAttachment(id, hint ?? findAttachmentExtHint(id))
+    if (!record || !record.e2ee) return record
+    if (!startMk) return null
+
+    let plainBytes: Uint8Array
+    try {
+      const envelopeBytes = new Uint8Array(await record.blob.arrayBuffer())
+      plainBytes = await decryptAttachment(startMk, id, envelopeBytes)
+    } catch {
+      logAttachmentFailure(id)
+      return null
+    }
+
+    const info = inspectImageBytes(plainBytes)
+    if (!info) {
+      logAttachmentFailure(id)
+      return null
+    }
+
+    // 끝날 때 다시 본다 — indexes 단계 뒤 끝난 복호화는 버린다 (3.3 6번)
+    if (generation !== startGeneration || deps.getMasterKey() !== startMk) return null
+
+    const result: Attachment = {
+      ...record,
+      blob: new Blob([plainBytes as BlobPart], { type: imageMimeOf(record.ext) }),
+      size: plainBytes.length,
+      width: info.width,
+      height: info.height,
+      e2ee: true,
+    }
+    return result
+  }
+
   const wrapped = {
     ...inner,
     list: async () => Promise.all((await inner.list()).map(decode)),
@@ -269,6 +376,8 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
     createFolder,
     moveFolder,
     removeFolder,
+    putAttachment,
+    getAttachment,
     clearPlainCache,
     resumeAfterUnlock: () => {
       serverInner.resumeE2eeConflicts?.()

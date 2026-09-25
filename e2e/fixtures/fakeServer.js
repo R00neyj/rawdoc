@@ -224,25 +224,67 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     return route.fallback()
   })
 
-  // PUT·GET /api/attachments/:id.:ext — 실제 서버 판정 없이 확장자를 그대로 믿는다(F-209 2.3·2.4 흉내)
-  await page.route(/\/api\/attachments\/[0-9a-f]{16}\.(png|jpg|gif|webp)$/, async (route) => {
+  // PUT·GET·DELETE /api/attachments/:id.:ext — 실제 서버 판정 없이 확장자를 그대로 믿는다(F-209 2.3·2.4 흉내). 경로 정규식은 쿼리(?e2ee=1&w=&h=)도 허용한다(F-406 7.3)
+  await page.route(/\/api\/attachments\/[0-9a-f]{16}\.(png|jpg|gif|webp)(\?.*)?$/, async (route) => {
     if (offline) return route.abort('internetdisconnected')
     const req = route.request()
-    const name = new URL(req.url()).pathname.split('/').pop()
+    const reqUrl = new URL(req.url())
+    const name = reqUrl.pathname.split('/').pop()
     const m = /^([0-9a-f]{16})\.(png|jpg|gif|webp)$/.exec(name)
     const [, attId, ext] = m
     const key = `${attId}.${ext}`
 
     if (req.method() === 'PUT') {
+      const e2ee = reqUrl.searchParams.get('e2ee') === '1'
       const existing = attachments.get(key)
       if (existing) {
+        if (Boolean(existing.e2ee) !== e2ee) {
+          return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'e2ee_mismatch' }) })
+        }
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ id: attId, ext, mime: existing.mime, size: existing.bytes.length, width: existing.width, height: existing.height }),
+          body: JSON.stringify({
+            id: attId,
+            ext,
+            mime: existing.mime,
+            size: existing.bytes.length,
+            width: existing.width,
+            height: existing.height,
+            ...(existing.e2ee ? { e2ee: true } : {}),
+          }),
         })
       }
       const bytes = req.postDataBuffer() ?? Buffer.alloc(0)
+      if (e2ee) {
+        const wRaw = reqUrl.searchParams.get('w')
+        const hRaw = reqUrl.searchParams.get('h')
+        const dimRe = /^[1-9][0-9]{0,7}$/
+        if (!dimRe.test(wRaw ?? '') || !dimRe.test(hRaw ?? '')) {
+          return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'invalid', field: !dimRe.test(wRaw ?? '') ? 'w' : 'h' }) })
+        }
+        if (bytes.length < 69 || bytes[0] !== 1) {
+          return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'invalid', field: 'body' }) })
+        }
+        if (usage.used + bytes.length > usage.limit) {
+          return route.fulfill({
+            status: 507,
+            contentType: 'application/json',
+            body: JSON.stringify({ error: 'quota_exceeded', used: usage.used, limit: usage.limit }),
+          })
+        }
+        const mime = ATTACHMENT_MIME[ext]
+        const width = Number(wRaw)
+        const height = Number(hRaw)
+        const record = { mime, bytes, width, height, e2ee: true }
+        attachments.set(key, record)
+        usage = { ...usage, used: usage.used + bytes.length }
+        return route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify({ id: attId, ext, mime, size: bytes.length, width, height, e2ee: true }),
+        })
+      }
       if (usage.used + bytes.length > usage.limit) {
         return route.fulfill({
           status: 507,
@@ -263,7 +305,18 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     if (req.method() === 'GET') {
       const record = attachments.get(key)
       if (!record) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
-      return route.fulfill({ status: 200, contentType: record.mime, body: record.bytes })
+      return route.fulfill({ status: 200, contentType: record.e2ee ? 'application/octet-stream' : record.mime, body: record.bytes })
+    }
+    if (req.method() === 'DELETE') {
+      if (!attachments.has(key)) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+      const inUse = [...docs.values()].some(
+        (d) => d.content.includes(`attachments/${attId}.`) || (Array.isArray(d.attachmentRefs) && d.attachmentRefs.includes(attId)),
+      )
+      if (inUse) return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'in_use' }) })
+      const removed = attachments.get(key)
+      attachments.delete(key)
+      usage = { ...usage, used: Math.max(0, usage.used - removed.bytes.length) }
+      return route.fulfill({ status: 204 })
     }
     return route.fallback()
   })

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { attachImages, type AttachImagesStore } from './attachImages'
 import type { ImageExt } from '../lib/imageBlock'
 import * as shrinkImageModule from '../lib/shrinkImage'
+import { E2eeStoreError } from '../e2ee/e2eeStore'
 
 function u32be(n: number): number[] {
   return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff]
@@ -23,6 +24,14 @@ function pngBytes(width: number, height: number): Uint8Array<ArrayBuffer> {
 
 function pngFile(name: string, width = 200, height = 100): File {
   return new File([pngBytes(width, height)], name, { type: 'image/png' })
+}
+
+function gifBytes(width: number, height: number): Uint8Array<ArrayBuffer> {
+  return Uint8Array.from([...ascii('GIF89a'), width & 0xff, (width >> 8) & 0xff, height & 0xff, (height >> 8) & 0xff])
+}
+
+function gifFile(name: string, width = 10, height = 10): File {
+  return new File([gifBytes(width, height)], name, { type: 'image/gif' })
 }
 
 function fakeStore(overrides: Partial<AttachImagesStore> = {}): AttachImagesStore {
@@ -159,5 +168,57 @@ describe('attachImages', () => {
     expect(inserted).toHaveLength(0)
     expect(notice).toEqual({ type: 'warn', message: '이미지는 줄인 뒤에도 5MB 를 넘어 넣지 못했습니다.' })
     spy.mockRestore()
+  })
+})
+
+describe('F-406 A1 금고 붙여넣기 — 평문 상한 5,242,811 B', () => {
+  it('5,242,812 B 는 GIF 문구·저장 안 함, 5,242,811 B 는 e2ee:true 로 저장, e2ee 없으면 5,242,880 상한', async () => {
+    const over = new Blob([new Uint8Array(5_242_812)])
+    let spy = vi
+      .spyOn(shrinkImageModule, 'shrinkImage')
+      .mockResolvedValue({ blob: over, mime: 'image/gif', ext: 'gif' as ImageExt, width: 10, height: 10 })
+    const store1 = fakeStore()
+    const r1 = await attachImages([gifFile('a.gif')], { store: store1, source: 'paste', e2ee: true })
+    expect(r1.inserted).toHaveLength(0)
+    expect(r1.notice).toEqual({ type: 'warn', message: 'GIF 는 한 장에 5MB 까지 넣을 수 있습니다.' })
+    expect(store1.putAttachment).not.toHaveBeenCalled()
+    spy.mockRestore()
+
+    const ok = new Blob([new Uint8Array(5_242_811)])
+    spy = vi
+      .spyOn(shrinkImageModule, 'shrinkImage')
+      .mockResolvedValue({ blob: ok, mime: 'image/gif', ext: 'gif' as ImageExt, width: 10, height: 10 })
+    const store2 = fakeStore()
+    const r2 = await attachImages([gifFile('b.gif')], { store: store2, source: 'paste', e2ee: true })
+    expect(r2.inserted).toHaveLength(1)
+    expect(store2.putAttachment).toHaveBeenCalledWith(expect.objectContaining({ e2ee: true }))
+    spy.mockRestore()
+
+    // e2ee 없이 같은 5,242,812 B 는 지금 상한(5,242,880) 아래라 그대로 저장되고 e2ee 가 안 실린다
+    spy = vi
+      .spyOn(shrinkImageModule, 'shrinkImage')
+      .mockResolvedValue({ blob: over, mime: 'image/gif', ext: 'gif' as ImageExt, width: 10, height: 10 })
+    const store3 = fakeStore()
+    const r3 = await attachImages([gifFile('c.gif')], { store: store3, source: 'paste' })
+    expect(r3.inserted).toHaveLength(1)
+    expect(store3.putAttachment).toHaveBeenCalled()
+    const input = (store3.putAttachment as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect('e2ee' in input).toBe(false)
+    spy.mockRestore()
+  })
+})
+
+describe('F-406 A2 금고 붙여넣기 — 잠김·형식', () => {
+  it('locked 오류는 E20 문구(error), 가로 0 인 GIF 머리는 형식 문구·putAttachment 안 불림', async () => {
+    const store1 = fakeStore({ putAttachment: vi.fn().mockRejectedValue(new E2eeStoreError('locked')) })
+    const r1 = await attachImages([gifFile('a.gif')], { store: store1, source: 'paste', e2ee: true })
+    expect(r1.inserted).toHaveLength(0)
+    expect(r1.notice).toEqual({ type: 'error', message: '금고가 잠겨 있어 저장하지 못했습니다. 금고를 연 뒤 다시 해 주세요.' })
+
+    const store2 = fakeStore()
+    const r2 = await attachImages([gifFile('b.gif', 0, 10)], { store: store2, source: 'paste', e2ee: true })
+    expect(r2.inserted).toHaveLength(0)
+    expect(r2.notice).toEqual({ type: 'warn', message: 'PNG·JPEG·GIF·WebP 이미지만 넣을 수 있습니다.' })
+    expect(store2.putAttachment).not.toHaveBeenCalled()
   })
 })

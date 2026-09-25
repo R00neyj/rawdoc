@@ -2931,7 +2931,7 @@ export default function App() {
     }
   }
 
-  // 이미지 붙여넣기·끌어놓기(F-156.md 2.2·2.4·2.5·2.6) — 위치 계산·삽입은 imageInsert.js 가 하고, 여기는 검사·저장·알림만. blocked:true 면 저장을 시도하지 않는다
+  // 이미지 붙여넣기·끌어놓기(F-156.md 2.2·2.4·2.5·2.6, F-406.md 2.2) — 위치 계산·삽입은 imageInsert.js 가 하고, 여기는 검사·저장·알림만. blocked:true 면 저장을 시도하지 않는다
   const handleImageFiles = useCallback(
     async (
       files: FileList | File[],
@@ -2941,21 +2941,23 @@ export default function App() {
         showNotice({ type: 'info', message: '이 위치에는 이미지를 넣을 수 없습니다.' })
         return []
       }
-      const { inserted, notice } = await attachImages(files, { store, source })
+      const { inserted, notice } = await attachImages(files, { store, source, ...(currentDoc?.e2ee ? { e2ee: true as const } : {}) })
       if (notice) showNotice(notice)
       return inserted
     },
-    [store, showNotice],
+    [store, showNotice, currentDoc?.e2ee],
   )
 
-  // 편집 모드 이미지 블록 위젯이 첨부를 읽는 콜백 (F-157.md 2.2) — {blob,width,height} 만 추려서 준다
-  const resolveAttachment = useCallback(
-    async (id: string) => {
+  // 편집 모드 이미지 블록 위젯·보기 화면·인쇄가 첨부를 읽는 콜백 — 금고 첨부는 금고 문서에서만 그리고, 일반 문서면 null(자리 표시)을 돌려준다 (F-157.md 2.2, F-406.md 3.1)
+  const resolveAttachment = useMemo(() => {
+    const forE2eeDoc = Boolean(currentDoc?.e2ee)
+    return async (id: string) => {
       const record = await store.getAttachment(id)
-      return record ? { blob: record.blob, width: record.width, height: record.height } : null
-    },
-    [store],
-  )
+      if (!record) return null
+      if (record.e2ee && !forE2eeDoc) return null
+      return { blob: record.blob, width: record.width, height: record.height, ...(record.e2ee ? { e2ee: record.e2ee } : {}) }
+    }
+  }, [store, currentDoc?.e2ee])
 
   // ----- 공유 (specs/features/F-130.md 2·4장) -----
   // 저장 대기 중인 입력이 있어도 현재 에디터 원문을 그대로 쓴다. 저장소를 다시 읽지 않는다

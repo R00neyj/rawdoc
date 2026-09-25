@@ -393,6 +393,17 @@ describe('idbStore', () => {
       await store.removeAttachment(id)
       expect(await store.getAttachment(id)).toBeNull()
     })
+
+    it('F-406 U10 e2ee 를 주면 행·응답에 e2ee: true, 안 주면 키 자체가 없다', async () => {
+      const store = await freshStore()
+      const { id } = await store.putAttachment({ blob: blob(), mime: 'application/octet-stream', ext: 'png', width: 10, height: 20, e2ee: true })
+      const record = await store.getAttachment(id)
+      expect(record!.e2ee).toBe(true)
+
+      const { id: plainId } = await store.putAttachment({ blob: blob(), mime: 'image/png', ext: 'png', width: 1, height: 1 })
+      const plainRecord = await store.getAttachment(plainId)
+      expect('e2ee' in plainRecord!).toBe(false)
+    })
   })
 
   describe('버전 2 → 3 마이그레이션 (F-156)', () => {

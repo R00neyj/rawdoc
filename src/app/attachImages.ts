@@ -1,7 +1,9 @@
-// 이미지 파일 검사 → 축소 → 저장 → 알림 (specs/features/F-156.md 2.2, F-220.md 2.2). F-114 importFiles.js 와 같은 자리
+// 이미지 파일 검사 → 축소 → 저장 → 알림 (specs/features/F-156.md 2.2, F-220.md 2.2, F-406.md 2.2). F-114 importFiles.js 와 같은 자리
 import { inspectImageBytes } from '../lib/imageFile'
 import { shrinkImage } from '../lib/shrinkImage'
 import type { ImageExt } from '../lib/imageBlock'
+import { E2EE_MAX_PLAIN_ATTACHMENT_BYTES } from '../lib/e2eeLimits'
+import { isE2eeStoreError } from '../e2ee/e2eeStore'
 import type { Notice } from './notice'
 
 const MAX_INPUT_BYTES = 20 * 1024 * 1024
@@ -17,6 +19,8 @@ const MESSAGES = {
   resultTooLarge: '이미지는 줄인 뒤에도 5MB 를 넘어 넣지 못했습니다.',
   save: '저장 공간이 부족해 이미지를 넣지 못했습니다.',
   quota: '이미지 저장 공간(300MB)이 가득 찼습니다. 문서에서 지운 이미지는 하루 뒤 정리됩니다.',
+  // 금고가 잠긴 채 저장을 시도함 (F-405 E20, F-406 2.2)
+  locked: '금고가 잠겨 있어 저장하지 못했습니다. 금고를 연 뒤 다시 해 주세요.',
 }
 
 export type AttachImagesSource = 'paste' | 'drop'
@@ -27,6 +31,7 @@ export type AttachImagesStore = {
     ext: ImageExt
     width: number
     height: number
+    e2ee?: true
   }): Promise<{ id: string; ext: ImageExt }>
 }
 type InsertedImage = { id: string; ext: ImageExt; width: number; height: number; alt: string; file: File }
@@ -40,14 +45,15 @@ function altFromFile(file: File, source: AttachImagesSource): string {
   return stripped === '' ? name : stripped
 }
 
-// files 를 검사·저장한다(deps.store.putAttachment) → {inserted, notice}
+// files 를 검사·저장한다(deps.store.putAttachment) → {inserted, notice}. e2ee 면 금고 문서로 암호 첨부한다 (F-406 2.2)
 export async function attachImages(
   files: FileList | File[] | null | undefined,
-  { store, source = 'paste' }: { store: AttachImagesStore; source?: AttachImagesSource },
+  { store, source = 'paste', e2ee }: { store: AttachImagesStore; source?: AttachImagesSource; e2ee?: true },
 ): Promise<{ inserted: InsertedImage[]; notice: Notice | null }> {
   const fileArray = Array.from(files ?? [])
   const inserted: InsertedImage[] = []
   const failures: Failure[] = []
+  const maxResultBytes = e2ee ? E2EE_MAX_PLAIN_ATTACHMENT_BYTES : MAX_RESULT_BYTES
 
   for (const file of fileArray) {
     if (file.size > MAX_INPUT_BYTES) {
@@ -75,8 +81,14 @@ export async function attachImages(
     }
 
     const shrunk = await shrinkImage(new Blob([bytes], { type: info.mime }), info)
-    if (shrunk.blob.size > MAX_RESULT_BYTES) {
+    if (shrunk.blob.size > maxResultBytes) {
       failures.push({ message: shrunk.ext === 'gif' ? MESSAGES.resultTooLargeGif : MESSAGES.resultTooLarge, isError: false })
+      continue
+    }
+
+    // 서버가 w·h 를 1 이상 정수로만 받는다 — 올리기에서 400 을 받아 이미지가 사라지는 것보다 넣을 때 막는다 (F-406 2.2 3번)
+    if (e2ee && (!Number.isInteger(shrunk.width) || shrunk.width < 1 || !Number.isInteger(shrunk.height) || shrunk.height < 1)) {
+      failures.push({ message: MESSAGES.format, isError: false })
       continue
     }
 
@@ -87,9 +99,18 @@ export async function attachImages(
         ext: shrunk.ext,
         width: shrunk.width,
         height: shrunk.height,
+        ...(e2ee ? { e2ee } : {}),
       })
       inserted.push({ id, ext, width: shrunk.width, height: shrunk.height, alt: altFromFile(file, source), file })
     } catch (err) {
+      if (isE2eeStoreError(err, 'locked')) {
+        failures.push({ message: MESSAGES.locked, isError: true })
+        continue
+      }
+      if (isE2eeStoreError(err, 'too-large')) {
+        failures.push({ message: shrunk.ext === 'gif' ? MESSAGES.resultTooLargeGif : MESSAGES.resultTooLarge, isError: false })
+        continue
+      }
       // 계정당 300MB 한도 초과는 다른 문구 (F-221.md 2.3)
       const isQuota = err instanceof Error && err.name === 'quota_exceeded'
       failures.push({ message: isQuota ? MESSAGES.quota : MESSAGES.save, isError: true })

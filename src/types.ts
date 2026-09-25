@@ -48,6 +48,8 @@ export type Attachment = {
   width: number
   height: number
   createdAt: number
+  // 저장소 층: blob 이 봉투(바이너리 그대로)다 / 앱 층(withE2ee 가 돌려준 것): 금고 첨부를 복호화한 평문이다 (F-406 2.1)
+  e2ee?: true
   blob: Blob
 }
 
@@ -107,8 +109,11 @@ export type Store = {
     height: number
     // 주면 이 id 로 저장한다. 이미 있으면 덮지 않고 기존 것을 그대로 돌려준다. serverStore 는 WebP 변환을 건너뛴다 (F-282.md 3.11)
     id?: string
+    // 앱 층: "이 이미지를 금고 첨부로 암호화해 넣어라" / 저장소 층: "blob 은 이미 봉투다" (F-406 2.1)
+    e2ee?: true
   }): Promise<{ id: string; ext: AttachmentExt }>
-  getAttachment(id: string): Promise<Attachment | null>
+  // 둘째 인자: 캐시·원문에서 확장자를 못 찾을 때 서버 저장소가 쓸 확장자. idb·메모리 저장소는 무시한다 (F-406 2.1)
+  getAttachment(id: string, hint?: { ext: AttachmentExt }): Promise<Attachment | null>
   listAttachments(): Promise<AttachmentMeta[]>
   removeAttachment(id: string): Promise<void>
   // idb 저장소에만 있다 (둘 다 있을 때만 OS 파일 열기 재중복 판정을 한다, F-231.md 3.3)

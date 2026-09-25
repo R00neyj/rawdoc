@@ -16,6 +16,8 @@ export type AttachmentApiErrorKind =
   | 'other'
   | 'rate_limited' // 429 (F-2030)
   | 'account_blocked' // 403 { error: 'account_blocked' } (F-2030)
+  | 'invalid' // 400 { error: 'invalid', field } (F-406 4.1, F-402 3.1 4·7번)
+  | 'e2ee_mismatch' // 409 { error: 'e2ee_mismatch' } (F-406 4.1, F-402 3.1 5번)
 
 export class AttachmentApiError extends Error {
   kind: AttachmentApiErrorKind
@@ -49,8 +51,17 @@ function classifyStatus(status: number): AttachmentApiErrorKind | null {
   return null
 }
 
-export async function uploadAttachment(id: string, ext: AttachmentExt, blob: Blob): Promise<UploadedAttachment> {
-  const res = await send(`/api/attachments/${id}.${ext}`, { method: 'PUT', body: blob })
+// e2ee 를 주면 ?e2ee=1&w={width}&h={height} 를 붙인다 (F-406 4.1)
+export async function uploadAttachment(
+  id: string,
+  ext: AttachmentExt,
+  blob: Blob,
+  e2ee?: { width: number; height: number },
+): Promise<UploadedAttachment> {
+  const path = e2ee
+    ? `/api/attachments/${id}.${ext}?e2ee=1&w=${e2ee.width}&h=${e2ee.height}`
+    : `/api/attachments/${id}.${ext}`
+  const res = await send(path, { method: 'PUT', body: blob })
   if (res.status === 507) throw new AttachmentApiError('quota_exceeded')
   const kind = classifyStatus(res.status)
   if (kind) throw new AttachmentApiError(kind)
@@ -68,12 +79,47 @@ export async function uploadAttachment(id: string, ext: AttachmentExt, blob: Blo
     if (data?.error === 'account_blocked') throw new AttachmentApiError('account_blocked')
   }
   if (res.status === 413) throw new AttachmentApiError('too_large')
+  if (res.status === 409) {
+    const data = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new AttachmentApiError(data?.error === 'e2ee_mismatch' ? 'e2ee_mismatch' : 'other')
+  }
   if (res.status === 400) {
     const data = (await res.json().catch(() => null)) as { error?: string } | null
-    throw new AttachmentApiError(data?.error === 'type_mismatch' ? 'type_mismatch' : 'unsupported')
+    if (data?.error === 'type_mismatch') throw new AttachmentApiError('type_mismatch')
+    if (data?.error === 'invalid') throw new AttachmentApiError('invalid')
+    throw new AttachmentApiError('unsupported')
   }
   if (!res.ok) throw new AttachmentApiError('other')
   return (await res.json()) as UploadedAttachment
+}
+
+// F-407 이 옮기기·빼기에서 쓴다 (F-406 4.1)
+export async function deleteAttachment(id: string, ext: AttachmentExt): Promise<'deleted' | 'not_found' | 'in_use'> {
+  const res = await send(`/api/attachments/${id}.${ext}`, { method: 'DELETE' })
+  if (res.status === 204) return 'deleted'
+  if (res.status === 404) return 'not_found'
+  if (res.status === 409) {
+    const data = (await res.json().catch(() => null)) as { error?: string } | null
+    if (data?.error === 'in_use') return 'in_use'
+    throw new AttachmentApiError('other')
+  }
+  if (res.status === 507) throw new AttachmentApiError('quota_exceeded')
+  const kind = classifyStatus(res.status)
+  if (kind) throw new AttachmentApiError(kind)
+  if (res.status === 429) {
+    const data = (await res.json().catch(() => null)) as { scope?: unknown; limit?: unknown; retryAfter?: unknown } | null
+    const scope: 'minute' | 'day' = data && data.scope === 'day' ? 'day' : 'minute'
+    const retryAfter = parseRetryAfter(res.headers.get('Retry-After'), data?.retryAfter)
+    const limitRaw = data?.limit
+    const limit = typeof limitRaw === 'number' && Number.isInteger(limitRaw) && limitRaw > 0 ? limitRaw : undefined
+    throw new AttachmentApiError('rate_limited', { scope, retryAfter, limit })
+  }
+  if (res.status === 403) {
+    const data = (await res.json().catch(() => null)) as { error?: unknown } | null
+    if (data?.error === 'account_blocked') throw new AttachmentApiError('account_blocked')
+  }
+  if (!res.ok) throw new AttachmentApiError('other')
+  return 'deleted'
 }
 
 export type Usage = {

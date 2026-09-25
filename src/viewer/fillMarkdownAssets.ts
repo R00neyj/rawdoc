@@ -1,10 +1,11 @@
 // 그려 둔 마크다운 HTML 안 첨부 이미지·Mermaid 를 채운다 — Viewer 보기 모드와 인쇄(printDoc.ts)가 같은 함수를 쓴다 (specs/features/F-279.md 4.6)
 import brokenImageSvg from '@material-symbols/svg-400/outlined/broken_image.svg?raw'
 import { renderMermaid } from '../lib/mermaidRender'
+import { createAttachmentUrl } from '../lib/attachmentUrls'
 
 const DEFAULT_MISSING_TEXT = '이미지를 찾을 수 없습니다' // F-157 2.2 자리 표시와 같은 문구
 
-export type AttachmentRecord = { blob: Blob; width: number; height: number }
+export type AttachmentRecord = { blob: Blob; width: number; height: number; e2ee?: true }
 export type ResolveAttachment = (id: string) => Promise<AttachmentRecord | null>
 
 // 자리 표시로 바꾼다 (F-157 2.2 와 같은 모양, F-158 2.1)
@@ -56,7 +57,7 @@ export async function fillAttachmentImages(root: HTMLElement, resolveAttachment?
           showPlaceholder(container, alt, DEFAULT_MISSING_TEXT)
           return
         }
-        const url = URL.createObjectURL(record.blob)
+        const url = createAttachmentUrl(record)
         urls.push(url)
         showImage(container, img, url, record.width, record.height)
         await img.decode().catch(() => {})

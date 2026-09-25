@@ -4,7 +4,7 @@ import { cleanupUnusedAttachments, type GcStore } from './attachmentGc'
 const HOUR = 60 * 60 * 1000
 const NOW = 10_000_000_000
 
-type FakeDoc = { content: string }
+type FakeDoc = { content: string; attachmentRefs?: string[] }
 type FakeAttachment = { id: string; createdAt: number }
 
 function fakeStore({
@@ -57,5 +57,32 @@ describe('cleanupUnusedAttachments', () => {
 
   it('store 가 없으면 아무 일도 하지 않는다', async () => {
     await expect(cleanupUnusedAttachments({ store: null })).resolves.toBeUndefined()
+  })
+})
+
+describe('F-406 G1 참조 = 본문 참조 ∪ attachmentRefs', () => {
+  it('attachmentRefs 에 있으면 본문이 비어도 남고, 없는 것만 지워진다', async () => {
+    const store = fakeStore({
+      docs: [{ content: '', attachmentRefs: ['aaaaaaaaaaaaaaaa'] }],
+      attachments: [
+        { id: 'aaaaaaaaaaaaaaaa', createdAt: NOW - 25 * HOUR },
+        { id: 'bbbbbbbbbbbbbbbb', createdAt: NOW - 25 * HOUR },
+      ],
+    })
+
+    await cleanupUnusedAttachments({ store, now: () => NOW })
+
+    expect(store.removed).toEqual(['bbbbbbbbbbbbbbbb'])
+  })
+
+  it('attachmentRefs 가 배열이 아니면 던지지 않고 본문 참조만으로 판정한다', async () => {
+    const store = fakeStore({
+      docs: [{ content: '' }],
+      attachments: [{ id: 'cccccccccccccccc', createdAt: NOW - 25 * HOUR }],
+    })
+    store.list = vi.fn(async () => [{ content: '', attachmentRefs: 'not-array' }] as unknown as { content: string; attachmentRefs?: string[] }[])
+
+    await expect(cleanupUnusedAttachments({ store, now: () => NOW })).resolves.toBeUndefined()
+    expect(store.removed).toEqual(['cccccccccccccccc'])
   })
 })

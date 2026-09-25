@@ -8,11 +8,12 @@ import './viewer.css'
 import { createCodeCopyButton } from '../lib/codeCopyButton'
 import { displayLangFromClass } from '../lib/codeLang'
 import { renderMermaid } from '../lib/mermaidRender'
+import { createAttachmentUrl, revokeAttachmentUrl } from '../lib/attachmentUrls'
 import { showPlaceholder, showImage } from './fillMarkdownAssets'
 
 const DEFAULT_MISSING_TEXT = '이미지를 찾을 수 없습니다' // F-157 2.2 자리 표시와 같은 문구
 
-export type AttachmentRecord = { blob: Blob; width: number; height: number }
+export type AttachmentRecord = { blob: Blob; width: number; height: number; e2ee?: true }
 export type ResolveAttachment = (id: string) => Promise<AttachmentRecord | null>
 
 type BreadcrumbEntry = { id: string; name: string }
@@ -69,7 +70,7 @@ export default function Viewer({
     const root = containerRef.current
     if (!root) return
 
-    for (const url of urlsRef.current) URL.revokeObjectURL(url)
+    for (const url of urlsRef.current) revokeAttachmentUrl(url)
     urlsRef.current = []
 
     let cancelled = false
@@ -94,7 +95,7 @@ export default function Viewer({
             showPlaceholder(container, alt, DEFAULT_MISSING_TEXT)
             return
           }
-          const url = URL.createObjectURL(record.blob)
+          const url = createAttachmentUrl(record)
           urlsRef.current.push(url)
           showImage(container, img, url, record.width, record.height)
         })
@@ -110,7 +111,7 @@ export default function Viewer({
 
   useEffect(() => {
     return () => {
-      for (const url of urlsRef.current) URL.revokeObjectURL(url)
+      for (const url of urlsRef.current) revokeAttachmentUrl(url)
       urlsRef.current = []
     }
   }, [])

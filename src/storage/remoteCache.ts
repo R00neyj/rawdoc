@@ -19,6 +19,8 @@ export type CachedAttachment = {
   blob: Blob
   uploaded: boolean
   createdAt: number
+  // 금고 첨부만 — 값이 있을 때만 싣는다 (F-406 2.3)
+  e2ee?: true
 }
 
 export type OutboxItem =
