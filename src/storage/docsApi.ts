@@ -26,6 +26,7 @@ export type ApiErrorKind =
   | 'not_e2ee' // 409 — 일반 문서에 금고 표지 PUT
   | 'e2ee_folder' // 409 — 금고 폴더 규칙 위반
   | 'no_vault' // 409 — 키 묶음 없이 금고 문서 만들기
+  | 'e2ee_folder_not_ready' // 409 { error: 'e2ee_folder_not_ready', docs, folders } — 바로 아래에 일반 문서·폴더가 있다 (F-407 3.2)
 
 export class ApiError extends Error {
   kind: ApiErrorKind
@@ -342,7 +343,7 @@ export async function createFolder(body: {
 
 export async function updateFolder(
   id: string,
-  body: { name?: string; parentId?: string | null },
+  body: { name?: string; parentId?: string | null; e2ee?: boolean },
 ): Promise<ServerFolder> {
   const res = await send(`/api/folders/${encodeURIComponent(id)}`, jsonInit(body, 'PUT'))
   const kind = classifyStatus(res.status)
@@ -358,9 +359,42 @@ export async function updateFolder(
   }
   if (res.status === 404) throw new ApiError('not_found')
   if (res.status === 400) throw new ApiError('invalid')
-  if (res.status === 409) throw new ApiError(e2eeConflictKind(await readJson(res), ['e2ee_folder']) ?? 'other', { status: 409 })
+  if (res.status === 409) throw new ApiError(e2eeConflictKind(await readJson(res), ['e2ee_folder', 'e2ee_folder_not_ready']) ?? 'other', { status: 409 })
   if (!res.ok) throw new ApiError('other', { status: res.status })
   return (await readJson(res)) as ServerFolder
+}
+
+// 금고로 옮기기·빼기 — 편집 잠금을 보지 않으므로 X-Lock-Session 을 싣지 않는다. 분류 차례는 updateDoc 과 같다 (F-407 3.2)
+export async function setDocE2ee(
+  id: string,
+  body: { e2eeKey: string | null; title: string; content: string; attachmentRefs: string[] | null; baseVersion: number },
+): Promise<ServerDoc & { purged: boolean }> {
+  const res = await send(`/api/docs/${encodeURIComponent(id)}/e2ee`, jsonInit(body, 'PUT'))
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 413) {
+    const quota = await docQuotaError(res)
+    if (quota) throw quota
+  }
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+  }
+  if (res.status === 404) throw new ApiError('not_found')
+  if (res.status === 403) throw new ApiError('forbidden')
+  if (res.status === 413) throw new ApiError('too_large')
+  if (res.status === 409) {
+    const data = (await readJson(res)) as { doc?: ServerDoc } | null
+    const e2eeKind = e2eeConflictKind(data, ['e2ee_doc', 'not_e2ee', 'e2ee_folder', 'no_vault'])
+    if (e2eeKind) throw new ApiError(e2eeKind)
+    throw new ApiError('conflict', { doc: data?.doc })
+  }
+  if (res.status === 400) throw new ApiError('invalid')
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  const data = (await readJson(res)) as ServerDoc & { purged?: unknown }
+  // 옛 서버는 purged 를 싣지 않는다 — 불리언이 아니면 지운 것으로 본다
+  return { ...data, purged: typeof data.purged === 'boolean' ? data.purged : true }
 }
 
 export async function removeFolder(id: string, mode: 'move-up' | 'delete-all' = 'move-up'): Promise<void> {

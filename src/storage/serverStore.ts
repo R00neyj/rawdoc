@@ -4,7 +4,7 @@ import { createIdbStore } from './idbStore'
 import { createRemoteCache, docIdOf, folderIdOf, type CachedAttachment, type CachedDoc, type CachedFolder, type OutboxEntry, type OutboxItem, type RemoteCache } from './remoteCache'
 import * as api from './docsApi'
 import { ApiError, type ServerDoc } from './docsApi'
-import { uploadAttachment, fetchAttachment, fetchUsage, AttachmentApiError } from './attachmentsApi'
+import { uploadAttachment, fetchAttachment, fetchUsage, deleteAttachment, AttachmentApiError } from './attachmentsApi'
 import { toWebp } from './toWebp'
 import { extractAttachmentRefs } from '../lib/imageBlock'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
@@ -34,6 +34,14 @@ export class QuotaExceededError extends Error {
   constructor() {
     super('quota_exceeded')
     this.name = 'quota_exceeded'
+  }
+}
+
+// 옮기기 전에 서버로 보내야 할 것이 남았다 — 서버에 아직 없는 문서·폴더는 옮길 수 없다 (F-407 5.2)
+export class PendingSyncError extends Error {
+  constructor() {
+    super('pending_sync')
+    this.name = 'pending_sync'
   }
 }
 
@@ -214,6 +222,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   let e2eeReleaseTimer: ReturnType<typeof setTimeout> | null = null
   let e2eeFolderNoticeShownThisRound = false
   let e2eeRuleNoticeShownThisRound = false
+  const convertingDocIds = new Set<string>() // 금고로 옮기는·빼는 중인 문서 — 그 문서의 outbox 항목을 건너뛴다 (F-407 5.2 3번)
 
   function notify() {
     for (const listener of listeners) listener(state)
@@ -270,6 +279,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       if (docId && heldDocIds.has(docId)) continue
       if (docId && skipDocIds.has(docId)) continue
       if (docId && e2eeConflictWaiting.has(docId)) continue
+      if (docId && convertingDocIds.has(docId)) continue
       return e
     }
     return null
@@ -307,6 +317,12 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       if (until > t && presentKeys.has(key)) return true
     }
     return false
+  }
+
+  // 진행 중인 회차를 기다린 뒤 한 회차를 더 돌린다 — flushOutbox·옮기기가 쓴다 (F-405 5.4, F-407 5.2)
+  async function flushOnce() {
+    if (sendingRound) await sendingRound
+    await kickSend()
   }
 
   // 진행 중인 회차가 있으면 그 약속을 돌려준다 — flushOutbox 가 기다린다 (F-405 5.4)
@@ -984,8 +1000,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     },
 
     async flushOutbox() {
-      if (sendingRound) await sendingRound
-      await kickSend()
+      await flushOnce()
     },
 
     async refreshDocFromServer(id) {
@@ -1349,6 +1364,107 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
     async removeAttachment(id) {
       await cache.deleteAttachment(userId, id)
+    },
+
+    // 금고로 옮기기·빼기 — outbox 를 거치지 않고 곧바로 PUT /api/docs/:id/e2ee (F-407 5.2, 번호가 계약)
+    async setDocE2ee(id, input) {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new ApiError('network')
+      const blocksMove = (entries: OutboxEntry[]) => entries.some((e) => (e.type === 'createDoc' || e.type === 'removeDoc') && e.docId === id)
+      if (blocksMove(await cache.getOutbox(userId))) {
+        await flushOnce()
+        if (blocksMove(await cache.getOutbox(userId))) throw new PendingSyncError()
+      }
+      convertingDocIds.add(id)
+      try {
+        if (sendingRound) await sendingRound
+        const cached = await cache.getDoc(userId, id)
+        const response = await api.setDocE2ee(id, {
+          e2eeKey: input.e2ee ? (input.e2eeKey ?? null) : null,
+          title: input.title,
+          content: input.content,
+          attachmentRefs: input.e2ee ? (input.attachmentRefs ?? []) : null,
+          baseVersion: cached?.version ?? 0,
+        })
+        const { purged, ...rest } = response
+        const serverDoc: ServerDoc = { ...rest }
+        if (serverDoc.e2eeKey == null) delete serverDoc.e2eeKey
+        if (serverDoc.attachmentRefs == null) delete serverDoc.attachmentRefs
+        await cache.putDoc(userId, serverDoc)
+        for (const e of await cache.getOutbox(userId)) {
+          if (e.type === 'updateDoc' && e.docId === id) await cache.removeOutbox(e.key)
+        }
+        if (input.e2ee) e2eeLastResponseAt.set(id, now())
+        else e2eeLastResponseAt.delete(id)
+        await refreshPending()
+        return { doc: toDoc(serverDoc), purged }
+      } finally {
+        convertingDocIds.delete(id)
+        kickSend()
+      }
+    },
+
+    // 폴더 표지 켜기·끄기 — 곧바로 PUT /api/folders/:id { e2ee } (F-407 5.2)
+    async setFolderE2ee(id, on) {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new ApiError('network')
+      const pendingCreate = (entries: OutboxEntry[]) => entries.some((e) => e.type === 'createFolder' && e.folderId === id)
+      if (pendingCreate(await cache.getOutbox(userId))) {
+        await flushOnce()
+        if (pendingCreate(await cache.getOutbox(userId))) throw new PendingSyncError()
+      }
+      const updated = await api.updateFolder(id, { e2ee: on })
+      const folder: Folder = { ...updated }
+      if (!on || folder.e2ee !== true) delete folder.e2ee
+      await cache.putFolder(userId, folder)
+      return toFolder({ ...folder, userId })
+    },
+
+    // 첨부 한 장을 지금 올린다 — outbox·WebP 변환 없음. 캐시에 같은 id 가 있으면 다시 올리지 않는다 (F-407 5.2)
+    async putAttachmentNow({ blob, mime, ext, width, height, id: givenId, e2ee }) {
+      if (givenId !== undefined) {
+        const existing = await cache.getAttachment(userId, givenId)
+        if (existing) return { id: existing.id, ext: existing.ext }
+      }
+      let usage: { used: number; limit: number } | null = null
+      try {
+        usage = await fetchUsage()
+      } catch {
+        usage = null
+      }
+      if (usage) {
+        const cachedAttachments = await cache.listAttachments(userId)
+        const unsent = cachedAttachments.reduce((sum, a) => sum + (a.uploaded ? 0 : a.size), 0)
+        if (usage.used + unsent + blob.size > usage.limit) throw new QuotaExceededError()
+      }
+      let id = givenId
+      if (id === undefined) {
+        id = randomAttachmentId()
+        while (await cache.getAttachment(userId, id)) id = randomAttachmentId()
+      }
+      await uploadAttachment(id, ext, blob, e2ee ? { width, height } : undefined)
+      await cache.putAttachment(userId, {
+        id,
+        ext,
+        mime,
+        size: blob.size,
+        width,
+        height,
+        blob,
+        uploaded: true,
+        createdAt: Date.now(),
+        ...(e2ee ? { e2ee } : {}),
+      })
+      return { id, ext }
+    },
+
+    // 서버에서 첨부를 지운다 — 남은 upload 항목을 먼저 지워 지운 뒤 다시 올라가지 않게 (F-407 5.2)
+    async discardAttachment(id, ext) {
+      for (const e of await cache.getOutbox(userId)) {
+        if (e.type === 'upload' && e.attachmentId === id) await cache.removeOutbox(e.key)
+      }
+      await refreshPending()
+      const result = await deleteAttachment(id, ext)
+      if (result !== 'in_use') await cache.deleteAttachment(userId, id)
+      return result
     },
 
     // 로컬 → 계정 이관 (F-208 2.2) — id 를 그대로 캐시에 쓰고 보낼 목록에 넣는다.

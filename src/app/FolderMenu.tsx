@@ -9,6 +9,8 @@ export type FolderMenuItem = {
   label: string
   icon?: ComponentType<{ size?: number }>
   danger?: boolean
+  // 모양·접근성만 바꾼다(aria-disabled) — 눌러도 onSelect 를 부르고, 부르는 쪽이 이유 알림을 띄운다 (F-407 3.4)
+  disabled?: boolean
   onSelect: () => void
 }
 
@@ -234,6 +236,7 @@ export default function FolderMenu({
                   itemRefs.current[i] = el
                 }}
                 className={item.danger ? 'danger' : undefined}
+                aria-disabled={item.disabled ? 'true' : undefined}
                 onClick={() => selectItem(item)}
               >
                 {item.icon && <item.icon size={16} />}

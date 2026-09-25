@@ -94,3 +94,11 @@ describe('prefs', () => {
     expect(() => setPref('md.headingFont', 'sans')).not.toThrow()
   })
 })
+
+describe('F-407 U23 md.e2eeBackupNotice', () => {
+  it("setPref '1' 이 던지지 않고 getPref 가 '1'", () => {
+    expect(getPref('md.e2eeBackupNotice', '' as '1')).toBe('')
+    expect(() => setPref('md.e2eeBackupNotice', '1')).not.toThrow()
+    expect(getPref('md.e2eeBackupNotice', '' as '1')).toBe('1')
+  })
+})

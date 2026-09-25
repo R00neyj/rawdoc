@@ -960,6 +960,12 @@ body.sidebar-resizing {
   color: var(--danger);
 }
 
+/* 비활성 항목 — 색만 흐리게, 눌러도 이유 알림이 뜨므로 초점·눌림은 그대로 (F-407 7.6) */
+.item-menu-list [role="menuitem"][aria-disabled="true"],
+.item-menu-list [role="menuitem"][aria-disabled="true"]:hover {
+  color: var(--muted);
+}
+
 /* ===== 메인 열 ===== */
 .main-column {
   flex: 1;
@@ -1421,6 +1427,23 @@ body.sidebar-resizing {
 
 .e2ee-locked-panel .dialog-note {
   text-align: left;
+}
+
+/* 금고로 옮기기·빼기 D-9·D-10 — 덧붙임 줄과 백업 안내 (F-407 7.6) */
+.e2ee-convert-dialog .e2ee-convert-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.e2ee-convert-dialog .e2ee-backup-notice {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.e2ee-convert-dialog .dialog-actions {
+  margin-top: 16px;
 }
 
 /* 폴더 삭제 대화상자, 버튼 3개(취소·위로 옮기기·전부 삭제) 아래 보조 문구 (F-242.md 3.5) */

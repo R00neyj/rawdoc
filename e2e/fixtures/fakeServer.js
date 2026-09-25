@@ -26,6 +26,8 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
   const writeLog = []
   // 금고 키 묶음 흉내 (F-404 10.3) — 없으면 null, 있으면 { bundle, rev }
   let e2eeKeys = null
+  // 옮기기 응답의 purged 를 false 로 (F-407 9.3)
+  let purgeFails = false
 
   function docSummary(d) {
     const { content: _content, ...rest } = d
@@ -158,6 +160,41 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     return route.fallback()
   })
 
+  // PUT /api/docs/:id/e2ee — 금고로 옮기기·빼기 (F-401 3.4 판정, F-407 9.3)
+  await page.route(/\/api\/docs\/[^/]+\/e2ee$/, async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() !== 'PUT') return route.fallback()
+    if (recordWrite(route, req)) return
+    const id = decodeURIComponent(new URL(req.url()).pathname.split('/').slice(-2, -1)[0])
+    const doc = docs.get(id)
+    if (!doc) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+    const body = req.postDataJSON()
+    const conflict = (error) => route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error }) })
+    const toE2ee = typeof body.e2eeKey === 'string'
+    if (toE2ee && doc.e2eeKey) return conflict('e2ee_doc')
+    if (!toE2ee && !doc.e2eeKey) return conflict('not_e2ee')
+    if (!toE2ee && doc.folderId && folders.get(doc.folderId)?.e2ee) return conflict('e2ee_folder')
+    if (toE2ee && !e2eeKeys) return conflict('no_vault')
+    if (body.baseVersion !== doc.version) {
+      return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'conflict', doc }) })
+    }
+    doc.title = body.title
+    doc.content = body.content
+    if (toE2ee) {
+      doc.e2eeKey = body.e2eeKey
+      doc.attachmentRefs = Array.isArray(body.attachmentRefs) ? body.attachmentRefs : []
+      const link = shareLinks.get(`doc:${id}`)
+      if (link && !link.revokedAt) link.revokedAt = Date.now()
+    } else {
+      delete doc.e2eeKey
+      delete doc.attachmentRefs
+    }
+    doc.version += 1
+    doc.updatedAt = Date.now()
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...doc, purged: !purgeFails }) })
+  })
+
   await page.route(/\/api\/docs\/[^/]+\/folder$/, async (route) => {
     if (offline) return route.abort('internetdisconnected')
     const req = route.request()
@@ -211,6 +248,18 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       if (!folder) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
       const body = req.postDataJSON()
       if (!folder.e2ee && body.parentId && folders.get(body.parentId)?.e2ee) return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'e2ee_folder' }) })
+      // 금고 표지 켜기·끄기 (F-401 5.2, F-407 9.3)
+      if (body.e2ee === true && !folder.e2ee) {
+        const plainDocs = [...docs.values()].filter((d) => d.folderId === id && !d.e2eeKey).length
+        const plainFolders = [...folders.values()].filter((f) => f.parentId === id && !f.e2ee).length
+        if (plainDocs > 0 || plainFolders > 0) {
+          return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'e2ee_folder_not_ready', docs: plainDocs, folders: plainFolders }) })
+        }
+        folder.e2ee = true
+      } else if (body.e2ee === false && folder.e2ee) {
+        if (folder.parentId && folders.get(folder.parentId)?.e2ee) return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'e2ee_folder' }) })
+        delete folder.e2ee
+      }
       if (body.name !== undefined) folder.name = body.name
       if (body.parentId !== undefined) folder.parentId = body.parentId
       folder.updatedAt = Date.now()
@@ -546,6 +595,10 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       return e2eeKeys
     },
     // 폴더를 금고 폴더로 켜고 끈다 — 금고 폴더를 만드는 화면은 F-407 (F-405 9.3)
+    // PUT /api/docs/:id/e2ee 응답의 purged 를 false 로 (F-407 9.3)
+    setPurgeFails(on) {
+      purgeFails = Boolean(on)
+    },
     setFolderE2ee(folderId, on) {
       const folder = folders.get(folderId)
       if (!folder) return

@@ -551,3 +551,95 @@ describe('그대로 넘기기', () => {
     expect(doc.e2ee).toBeUndefined()
   })
 })
+
+// ----- F-407 U17~U20 (specs/features/F-407.md 9.1) — 옮기기·빼기, 곧바로 올리기 -----
+
+describe('F-407 U17 setDocE2ee 옮기기', () => {
+  it('아래 행은 봉투·56자 키·본문에서 만든 첨부 id, 반환은 열린 평문, 이 id AAD 로 풀린다', async () => {
+    const { dbName, inner, store, getMk } = await setup()
+    const plain = await inner.create({ title: '비밀', content: '본문 ![](attachments/00000000000000aa.png)', lineEnding: 'lf' })
+    const res = await store.setDocE2ee!(plain.id, { e2ee: true, title: '비밀', content: '본문 ![](attachments/00000000000000aa.png)' })
+    expect(res.doc.e2ee).toBe('open')
+    expect(res.doc.title).toBe('비밀')
+    expect(res.doc.content).toContain('본문')
+    expect(res.purged).toBe(true)
+
+    const row = (await readRow(dbName, 'docs', plain.id)) as Record<string, string | string[]>
+    expect(row.title).toMatch(BASE64_RE)
+    expect(row.content).toMatch(BASE64_RE)
+    expect(String(row.title)).not.toContain('비밀')
+    expect(String(row.e2eeKey)).toHaveLength(56)
+    expect(row.attachmentRefs).toEqual(['00000000000000aa'])
+
+    const key = await openDocKey(getMk()!, String(row.e2eeKey))
+    expect(await decryptDocField(key, plain.id, 'title', String(row.title))).toBe('비밀')
+    expect(await decryptDocField(key, plain.id, 'content', String(row.content))).toBe('본문 ![](attachments/00000000000000aa.png)')
+  })
+})
+
+describe('F-407 U18 setDocE2ee 옮기기 — 잠김·크기', () => {
+  it('MK 없음 locked, 749,972 B too-large, 행은 그대로', async () => {
+    const { dbName, inner, store, setMk } = await setup()
+    const plain = await inner.create({ title: 't', content: 'c', lineEnding: 'lf' })
+    setMk(null)
+    await expect(store.setDocE2ee!(plain.id, { e2ee: true, title: 't', content: 'c' })).rejects.toSatisfy((e) => isE2eeStoreError(e, 'locked'))
+    setMk(await newMasterKey())
+    await expect(store.setDocE2ee!(plain.id, { e2ee: true, title: 't', content: 'a'.repeat(749_972) })).rejects.toSatisfy((e) => isE2eeStoreError(e, 'too-large'))
+    const row = await readRow(dbName, 'docs', plain.id)
+    expect(row?.content).toBe('c')
+    expect(row && 'e2eeKey' in row).toBe(false)
+  })
+})
+
+describe('F-407 U19 setDocE2ee 빼기', () => {
+  it('행에서 두 키가 없어지고 평문, 반환 doc 에 e2ee 없음, MK 없어도 된다', async () => {
+    const { dbName, inner, store, setMk } = await setup()
+    const plain = await inner.create({ title: 't', content: 'c', lineEnding: 'lf' })
+    await store.setDocE2ee!(plain.id, { e2ee: true, title: 't', content: 'c' })
+    setMk(null)
+    const res = await store.setDocE2ee!(plain.id, { e2ee: false, title: '평문 제목', content: '평문 본문' })
+    expect(res.doc.e2ee).toBeUndefined()
+    expect(res.doc.title).toBe('평문 제목')
+    const row = (await readRow(dbName, 'docs', plain.id))!
+    expect('e2eeKey' in row).toBe(false)
+    expect('attachmentRefs' in row).toBe(false)
+    expect(row.content).toBe('평문 본문')
+  })
+})
+
+describe('F-407 U20 putAttachmentNow e2ee — 변환 없음', () => {
+  it('서버 아래 저장소에서도 toWebp 를 부르지 않고 봉투·id·e2ee 로 넘기며 ext 그대로', async () => {
+    const spy = vi.spyOn(toWebpModule, 'toWebp')
+    spy.mockClear()
+    const calls: Array<Record<string, unknown>> = []
+    const inner = {
+      kind: 'server',
+      getAttachment: async () => null,
+      putAttachment: async () => {
+        throw new Error('putAttachment 를 부르면 안 된다')
+      },
+      putAttachmentNow: async (input: Record<string, unknown>) => {
+        calls.push(input)
+        return { id: input.id, ext: input.ext }
+      },
+    } as unknown as Store
+    const mk = await newMasterKey()
+    const store = withE2ee(inner, { getMasterKey: () => mk })
+    const png = pngHeader(10, 10)
+    const res = await store.putAttachmentNow!({ blob: blobOf(png), mime: 'image/png', ext: 'png', width: 10, height: 10, e2ee: true })
+    expect(spy).not.toHaveBeenCalled()
+    expect(res.ext).toBe('png')
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({ e2ee: true, ext: 'png', id: res.id })
+    const envelope = new Uint8Array(await (calls[0].blob as Blob).arrayBuffer())
+    expect(envelope[0]).toBe(1)
+    expect(await decryptAttachment(mk, res.id, envelope)).toEqual(png)
+  })
+
+  it('아래 저장소에 없으면 withE2ee 도 두지 않는다', async () => {
+    const inner = { kind: 'memory', getAttachment: async () => null, putAttachment: async () => ({ id: 'x', ext: 'png' }) } as unknown as Store
+    const store = withE2ee(inner, { getMasterKey: () => null })
+    expect('putAttachmentNow' in store).toBe(false)
+    expect('setDocE2ee' in store).toBe(false)
+  })
+})

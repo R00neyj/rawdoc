@@ -52,7 +52,9 @@ import {
   IconOpenInNew,
   IconMap,
   IconLock,
+  IconLockOpen,
 } from './icons'
+import { e2eeMenuForDoc, e2eeMenuForFolder, type E2eeConvertDirection, type E2eeConvertTarget, type E2eeMenuState } from '../e2ee/convert'
 import { formatHash } from './hashRoute'
 import { GUIDES_PATH } from '../lib/siteChrome'
 import type { Notice } from './notice'
@@ -135,6 +137,44 @@ type SidebarCtx = {
   // 금고 문서 id → 잠김·열림, 금고 폴더 id (F-405 6.1)
   e2eeDocs: Map<string, E2eeDocState>
   e2eeFolderIds: Set<string>
+  // 금고로 옮기기·빼기 (F-407 7.1) — 없으면 항목을 만들지 않는다. 판정에 전체 목록이 든다
+  e2eeConvert?: E2eeConvertMenu
+  allDocs: Array<DocLike & { e2ee?: E2eeDocState }>
+  allFolders: Array<FolderLike & { e2ee?: true }>
+}
+
+export type E2eeConvertMenu = {
+  online: boolean
+  busy: boolean
+  onRequest(direction: E2eeConvertDirection, target: E2eeConvertTarget, name: string): void
+  onUnavailable(reason: 'offline' | 'busy' | 'inside-e2ee-folder'): void
+}
+
+// 금고 항목 — 비활성 판정은 busy → offline → 금고 폴더 안 차례, 눌러도 이유 알림만 (F-407 7.1)
+function e2eeConvertItems(ctx: SidebarCtx, state: E2eeMenuState, target: E2eeConvertTarget, name: string): FolderMenuItem[] {
+  const menu = ctx.e2eeConvert
+  if (!menu) return []
+  const common = menu.busy ? 'busy' : !menu.online ? 'offline' : null
+  const items: FolderMenuItem[] = []
+  const add = (key: string, label: string, icon: FolderMenuItem['icon'], direction: E2eeConvertDirection, inside: boolean) => {
+    const reason = common ?? (inside ? 'inside-e2ee-folder' : null)
+    items.push({
+      key,
+      label,
+      icon,
+      disabled: reason !== null,
+      onSelect: () => (reason ? menu.onUnavailable(reason) : menu.onRequest(direction, target, name)),
+    })
+  }
+  if (state.convert === 'enabled') add('e2ee-convert', '금고로 옮기기…', IconLock, 'to-e2ee', false)
+  if (state.unconvert !== 'hidden') add('e2ee-unconvert', '금고에서 빼기…', IconLockOpen, 'from-e2ee', state.unconvert === 'inside-e2ee-folder')
+  return items
+}
+
+function docE2eeItems(ctx: SidebarCtx, doc: { id: string; folderId: string | null }, title: string): FolderMenuItem[] {
+  if (!ctx.e2eeConvert) return []
+  const state = e2eeMenuForDoc({ folderId: doc.folderId, e2ee: ctx.e2eeDocs.get(doc.id) }, ctx.allFolders)
+  return e2eeConvertItems(ctx, state, { kind: 'doc', id: doc.id }, title || '제목 없음')
 }
 
 function dropKeyOf(target: DropTarget): string {
@@ -212,6 +252,10 @@ function FolderRow({
     icon: IconDownload,
     onSelect: () => ctx.onExportFolderVault(node.id),
   })
+  if (ctx.e2eeConvert) {
+    const state = e2eeMenuForFolder(node.id, ctx.allDocs, ctx.allFolders)
+    ownItems.push(...e2eeConvertItems(ctx, state, { kind: 'folder', id: node.id }, node.name))
+  }
   ownItems.push({
     key: 'delete',
     label: '삭제',
@@ -309,6 +353,7 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
       icon: IconMove,
       onSelect: () => ctx.onRequestMoveDoc({ id: node.id, title, folderId: node.folderId }),
     },
+    ...docE2eeItems(ctx, node, title),
     {
       key: 'delete',
       label: '삭제',
@@ -377,6 +422,7 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
       icon: IconMove,
       onSelect: () => ctx.onRequestMoveDoc({ id: doc.id, title, folderId: doc.folderId }),
     },
+    ...docE2eeItems(ctx, doc, title),
     {
       key: 'delete',
       label: '삭제',
@@ -694,6 +740,8 @@ type SidebarProps = {
   onRequestInviteFolder: (id: string, name: string) => void
   onExportFolder: (id: string) => void
   onExportFolderVault: (id: string) => void
+  // 금고로 옮기기·빼기 메뉴 (F-407 7.1) — 금고 기능이 있을 때만 App 이 준다
+  e2eeConvert?: E2eeConvertMenu
 }
 
 export default function Sidebar({
@@ -734,6 +782,7 @@ export default function Sidebar({
   onRequestInviteFolder,
   onExportFolder,
   onExportFolderVault,
+  e2eeConvert,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
@@ -1016,6 +1065,9 @@ export default function Sidebar({
     onExportFolderVault,
     e2eeDocs,
     e2eeFolderIds,
+    e2eeConvert,
+    allDocs: docs,
+    allFolders: folders,
   }
 
   const rootTarget: DropTarget = { type: 'root' }

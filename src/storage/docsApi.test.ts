@@ -1,6 +1,6 @@
 // F-2030 3.1 — 429·413 doc_quota_exceeded·403 account_blocked 분류 규칙 (U1~U5)
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { ApiError, createDoc, updateDoc, removeDoc, createFolder } from './docsApi'
+import { ApiError, createDoc, updateDoc, removeDoc, createFolder, setDocE2ee, updateFolder } from './docsApi'
 
 function jsonResponse(status: number, data: unknown, headers: Record<string, string> = {}): Response {
   return new Response(data === undefined ? null : JSON.stringify(data), {
@@ -188,5 +188,77 @@ describe('F-405 S9 409 분류', () => {
     expect(bodies[0]).toMatchObject({ e2eeKey: 'K', attachmentRefs: [] })
     expect(bodies[1]).toMatchObject({ e2ee: true, attachmentRefs: ['00000000000000aa'] })
     expect(bodies[2]).toMatchObject({ e2ee: true })
+  })
+})
+
+// ----- F-407 S1·S2 (specs/features/F-407.md 3.2, 9.1) -----
+
+describe('F-407 S1 setDocE2ee 분류', () => {
+  it('요청 PUT /api/docs/{id}/e2ee, 몸통 다섯 필드, X-Lock-Session 없음, purged 없으면 true', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { id: 'a', title: 't', content: 'c', version: 3 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const body = { e2eeKey: 'K'.repeat(56), title: 't', content: 'c', attachmentRefs: ['00000000000000aa'], baseVersion: 2 }
+    const res = await setDocE2ee('a b', body)
+    expect(res.purged).toBe(true)
+    expect(res.version).toBe(3)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/docs/a%20b/e2ee')
+    expect(init.method).toBe('PUT')
+    expect(JSON.parse(String(init.body))).toEqual(body)
+    expect(new Headers(init.headers).has('X-Lock-Session')).toBe(false)
+  })
+
+  it('200 purged false 는 그대로', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { id: 'a', version: 3, purged: false })))
+    expect((await setDocE2ee('a', { e2eeKey: null, title: '', content: '', attachmentRefs: null, baseVersion: 1 })).purged).toBe(false)
+  })
+
+  const call = () => setDocE2ee('a', { e2eeKey: null, title: '', content: '', attachmentRefs: null, baseVersion: 1 })
+
+  it.each([
+    [409, { error: 'e2ee_doc' }, 'e2ee_doc'],
+    [409, { error: 'not_e2ee' }, 'not_e2ee'],
+    [409, { error: 'e2ee_folder' }, 'e2ee_folder'],
+    [409, { error: 'no_vault' }, 'no_vault'],
+    [400, { error: 'invalid', field: 'title' }, 'invalid'],
+    [413, { error: 'too_large' }, 'too_large'],
+    [404, { error: 'not_found' }, 'not_found'],
+    [403, { error: 'forbidden' }, 'forbidden'],
+    [403, { error: 'account_blocked' }, 'account_blocked'],
+    [401, { error: 'unauthenticated' }, 'unauthorized'],
+    [500, { error: 'internal' }, 'server_error'],
+  ])('%s %j → %s', async (status, data, kind) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(status, data)))
+    await expect(call()).rejects.toMatchObject({ kind })
+  })
+
+  it('409 conflict 는 몸통 doc 을 싣는다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(409, { error: 'conflict', doc: { id: 'a', version: 9 } })))
+    await expect(call()).rejects.toMatchObject({ kind: 'conflict', doc: { id: 'a', version: 9 } })
+  })
+
+  it('413 doc_quota_exceeded, 429 rate_limited', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(413, { error: 'doc_quota_exceeded', resource: 'bytes', used: 1, limit: 2 })))
+    await expect(call()).rejects.toMatchObject({ kind: 'doc_quota_exceeded', resource: 'bytes', limit: 2 })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(429, { error: 'rate_limited', scope: 'minute', retryAfter: 60 }, { 'Retry-After': '60' })))
+    await expect(call()).rejects.toMatchObject({ kind: 'rate_limited', scope: 'minute', retryAfter: 60 })
+  })
+})
+
+describe('F-407 S2 updateFolder e2ee', () => {
+  it('몸통에 e2ee:true', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { id: 'f', name: 'F', parentId: null, e2ee: true }))
+    vi.stubGlobal('fetch', fetchMock)
+    await updateFolder('f', { e2ee: true })
+    expect(JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body))).toEqual({ e2ee: true })
+  })
+
+  it.each([
+    [{ error: 'e2ee_folder_not_ready', docs: 1, folders: 0 }, 'e2ee_folder_not_ready'],
+    [{ error: 'e2ee_folder' }, 'e2ee_folder'],
+    [{ error: 'something' }, 'other'],
+  ])('409 %j → %s', async (data, kind) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(409, data)))
+    await expect(updateFolder('f', { e2ee: true })).rejects.toMatchObject({ kind })
   })
 })

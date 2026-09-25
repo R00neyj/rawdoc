@@ -25,8 +25,13 @@ function wrap<A extends unknown[], R>(fn: (...args: A) => Promise<R>, notify: ()
 // 쓰기 메서드가 성공(resolve)한 뒤에만 "바뀌었다" 신호를 보낸다 (6.2). 읽기·첨부·kind 등은 그대로 통과한다
 export function withTabBroadcast(store: Store, post: (m: TabMessage) => void, tabId: string): Store {
   const notify = () => post({ kind: 'docs-changed', tabId })
+  // 금고로 옮기기·빼기 (F-407 5.4) — 저장소에 있을 때만 감싼다. 없으면 키도 만들지 않는다
+  const e2eeWrites: Partial<Pick<Store, 'setDocE2ee' | 'setFolderE2ee'>> = {}
+  if (store.setDocE2ee) e2eeWrites.setDocE2ee = wrap(store.setDocE2ee, notify)
+  if (store.setFolderE2ee) e2eeWrites.setFolderE2ee = wrap(store.setFolderE2ee, notify)
   return {
     ...store,
+    ...e2eeWrites,
     create: wrap(store.create, notify),
     update: wrap(store.update, notify),
     remove: wrap(store.remove, notify),

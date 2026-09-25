@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { createServerStore, QuotaExceededError, E2EE_SERVER_SAVE_INTERVAL_MS } from './serverStore'
+import { createServerStore, QuotaExceededError, E2EE_SERVER_SAVE_INTERVAL_MS, PendingSyncError } from './serverStore'
 import { createRemoteCache } from './remoteCache'
 import { descendantFolderIds } from '../lib/folderTree'
 
@@ -1475,5 +1475,217 @@ describe('F-406 S4 금고 올리기 400 invalid·409 e2ee_mismatch', () => {
       expect(store.syncState?.pending).toBe(0)
       expect(notices.filter((n) => n.message === '이미지를 서버에 올리지 못했습니다.').length).toBe(1)
     }
+  })
+})
+
+// ----- F-407 S3~S8 (specs/features/F-407.md 5.2, 9.1) — 옮기기 라우트·폴더 표지·곧바로 올리기·첨부 지우기 -----
+
+type ConvertLog = { method: string; path: string; search: string; body?: unknown }
+
+// makeFakeServer 위에 옮기기 라우트·폴더 e2ee·첨부 DELETE 를 더한다 (F-401 3.4 판정 중 이 테스트가 쓰는 것만)
+function withConvertRoutes(server: ReturnType<typeof makeFakeServer>) {
+  const log: ConvertLog[] = []
+  const deleteStatus = new Map<string, number>()
+  let putRateLimited = false
+  let holdE2ee: Promise<void> | null = null
+  const fetchImpl = async (url: string, init: RequestInit = {}): Promise<Response> => {
+    const method = init.method ?? 'GET'
+    const u = new URL(String(url), 'http://local.test')
+    let body: unknown
+    try {
+      body = init.body && typeof init.body === 'string' ? JSON.parse(init.body) : undefined
+    } catch {
+      body = undefined
+    }
+    log.push({ method, path: u.pathname, search: u.search, body })
+    const e2eeMatch = /^\/api\/docs\/([^/]+)\/e2ee$/.exec(u.pathname)
+    if (e2eeMatch && method === 'PUT') {
+      if (holdE2ee) await holdE2ee
+      const doc = server.docs.get(e2eeMatch[1])
+      if (!doc) return new Response(JSON.stringify({ error: 'not_found' }), { status: 404 })
+      const b = body as { e2eeKey: string | null; title: string; content: string; attachmentRefs: string[] | null; baseVersion: number }
+      if (b.baseVersion !== doc.version) return new Response(JSON.stringify({ error: 'conflict', doc }), { status: 409 })
+      doc.title = b.title
+      doc.content = b.content
+      doc.version += 1
+      if (b.e2eeKey) {
+        doc.e2eeKey = b.e2eeKey
+        doc.attachmentRefs = b.attachmentRefs ?? []
+      } else {
+        delete doc.e2eeKey
+        delete doc.attachmentRefs
+      }
+      return new Response(JSON.stringify({ ...doc, purged: false }), { status: 200 })
+    }
+    const folderMatch = /^\/api\/folders\/([^/]+)$/.exec(u.pathname)
+    if (folderMatch && method === 'PUT' && body && typeof (body as { e2ee?: unknown }).e2ee === 'boolean') {
+      const folder = server.folders.get(folderMatch[1])
+      if (!folder) return new Response(JSON.stringify({ error: 'not_found' }), { status: 404 })
+      if ((body as { e2ee: boolean }).e2ee) folder.e2ee = true
+      else delete folder.e2ee
+      return new Response(JSON.stringify(folder), { status: 200 })
+    }
+    const attMatch = /^\/api\/attachments\/([0-9a-f]{16})\.(png|jpg|gif|webp)$/.exec(u.pathname)
+    if (attMatch && method === 'DELETE') {
+      const status = deleteStatus.get(attMatch[1]) ?? 204
+      if (status === 409) return new Response(JSON.stringify({ error: 'in_use' }), { status })
+      return new Response(status === 204 ? null : JSON.stringify({ error: 'not_found' }), { status })
+    }
+    if (attMatch && method === 'PUT' && putRateLimited) {
+      return new Response(JSON.stringify({ error: 'rate_limited', scope: 'minute', limit: 120, retryAfter: 60 }), { status: 429, headers: { 'Retry-After': '60' } })
+    }
+    return server.fetchImpl(url, init)
+  }
+  return {
+    log,
+    fetchImpl,
+    setDeleteStatus: (id: string, status: number) => deleteStatus.set(id, status),
+    setPutRateLimited: (v: boolean) => {
+      putRateLimited = v
+    },
+    hold: () => {
+      let release = () => {}
+      holdE2ee = new Promise<void>((resolve) => {
+        release = () => {
+          holdE2ee = null
+          resolve()
+        }
+      })
+      return release
+    },
+  }
+}
+
+async function convertSetup() {
+  const server = makeFakeServer()
+  const routes = withConvertRoutes(server)
+  vi.stubGlobal('fetch', vi.fn(routes.fetchImpl))
+  const dbName = freshDbName()
+  const store = await createServerStore('u1', { dbName })
+  const cache = await createRemoteCache(dbName)
+  return { server, routes, store, cache }
+}
+
+describe('F-407 S3 setDocE2ee 성공', () => {
+  it('PUT 한 번(baseVersion = 캐시 version), 그 문서 updateDoc 둘이 사라지고 캐시 = 응답, purged 그대로', async () => {
+    const { server, routes, store, cache } = await convertSetup()
+    const doc = await store.create({ title: 't', content: 'c', lineEnding: 'lf' })
+    await tick()
+    expect(server.docs.get(doc.id)?.version).toBe(1)
+    await cache.addOutbox('u1', { type: 'updateDoc', docId: doc.id, patch: { content: 'x' } })
+    await cache.addOutbox('u1', { type: 'updateDoc', docId: doc.id, patch: { content: 'y' } })
+
+    const res = await store.setDocE2ee!(doc.id, { e2ee: true, title: 'ENV-T', content: 'ENV-C', e2eeKey: 'K'.repeat(56), attachmentRefs: [] })
+    const puts = routes.log.filter((r) => r.method === 'PUT' && r.path === `/api/docs/${doc.id}/e2ee`)
+    expect(puts).toHaveLength(1)
+    expect(puts[0].body).toEqual({ e2eeKey: 'K'.repeat(56), title: 'ENV-T', content: 'ENV-C', attachmentRefs: [], baseVersion: 1 })
+    expect(res.purged).toBe(false)
+    expect(res.doc.e2eeKey).toBe('K'.repeat(56))
+    expect((await cache.getOutbox('u1')).filter((e) => e.type === 'updateDoc' && e.docId === doc.id)).toHaveLength(0)
+    const row = await cache.getDoc('u1', doc.id)
+    expect(row).toMatchObject({ title: 'ENV-T', content: 'ENV-C', version: 2, e2eeKey: 'K'.repeat(56) })
+    expect(row && 'purged' in row).toBe(false)
+    expect(routes.log.filter((r) => r.method === 'PUT' && r.path === `/api/docs/${doc.id}`)).toHaveLength(0)
+  })
+})
+
+describe('F-407 S4 옮기는 중 건너뛰기', () => {
+  it('PUT /e2ee 가 붙잡힌 동안 그 문서의 PUT 은 나가지 않고, 다른 문서는 나간다', async () => {
+    const { routes, store } = await convertSetup()
+    const a = await store.create({ title: 'a', content: 'a', lineEnding: 'lf' })
+    const b = await store.create({ title: 'b', content: 'b', lineEnding: 'lf' })
+    await tick()
+    const release = routes.hold()
+    const moving = store.setDocE2ee!(a.id, { e2ee: true, title: 'E', content: 'E', e2eeKey: 'K'.repeat(56), attachmentRefs: [] })
+    await tick()
+    await store.update(a.id, { content: 'a2' })
+    await store.update(b.id, { content: 'b2' })
+    await tick(30)
+    expect(routes.log.filter((r) => r.method === 'PUT' && r.path === `/api/docs/${a.id}`)).toHaveLength(0)
+    expect(routes.log.filter((r) => r.method === 'PUT' && r.path === `/api/docs/${b.id}`)).toHaveLength(1)
+    release()
+    await moving
+  })
+})
+
+describe('F-407 S5 서버에 아직 없는 문서', () => {
+  it('createDoc 이 남아 있으면 PendingSyncError, PUT 0번', async () => {
+    const { server, routes, store } = await convertSetup()
+    server.setNetworkDown(true)
+    const doc = await store.create({ title: 't', content: 'c', lineEnding: 'lf' })
+    await tick()
+    await expect(store.setDocE2ee!(doc.id, { e2ee: true, title: 'E', content: 'E', e2eeKey: 'K'.repeat(56), attachmentRefs: [] })).rejects.toBeInstanceOf(PendingSyncError)
+    expect(routes.log.filter((r) => r.path.endsWith('/e2ee'))).toHaveLength(0)
+  })
+})
+
+describe('F-407 S6 putAttachmentNow', () => {
+  it('outbox upload 없이 곧바로 PUT 한 번(금고면 쿼리), 캐시 행 uploaded', async () => {
+    const { routes, store, cache } = await convertSetup()
+    const blob = new Blob([new Uint8Array([1, 2, 3])])
+    const plain = await store.putAttachmentNow!({ blob, mime: 'image/png', ext: 'png', width: 4, height: 3 })
+    const vault = await store.putAttachmentNow!({ blob, mime: 'image/png', ext: 'png', width: 4, height: 3, id: '00000000000000ee', e2ee: true })
+    expect(plain.ext).toBe('png')
+    expect(vault).toEqual({ id: '00000000000000ee', ext: 'png' })
+    const puts = routes.log.filter((r) => r.method === 'PUT' && r.path.startsWith('/api/attachments/'))
+    expect(puts.map((r) => `${r.path}${r.search}`)).toEqual([`/api/attachments/${plain.id}.png`, '/api/attachments/00000000000000ee.png?e2ee=1&w=4&h=3'])
+    expect((await cache.getOutbox('u1')).filter((e) => e.type === 'upload')).toHaveLength(0)
+    expect((await cache.getAttachment('u1', plain.id))?.uploaded).toBe(true)
+    expect((await cache.getAttachment('u1', '00000000000000ee'))?.e2ee).toBe(true)
+
+    await store.putAttachmentNow!({ blob, mime: 'image/png', ext: 'png', width: 4, height: 3, id: '00000000000000ee', e2ee: true })
+    expect(routes.log.filter((r) => r.method === 'PUT' && r.path.startsWith('/api/attachments/'))).toHaveLength(2)
+  })
+
+  it('429 는 AttachmentApiError rate_limited 로 던지고 캐시 행이 없다', async () => {
+    const { routes, store, cache } = await convertSetup()
+    routes.setPutRateLimited(true)
+    await expect(
+      store.putAttachmentNow!({ blob: new Blob([new Uint8Array([1])]), mime: 'image/png', ext: 'png', width: 1, height: 1, id: '00000000000000dd' }),
+    ).rejects.toMatchObject({ kind: 'rate_limited' })
+    expect(await cache.getAttachment('u1', '00000000000000dd')).toBeNull()
+  })
+})
+
+describe('F-407 S7 discardAttachment', () => {
+  it('204·404 는 캐시 행이 사라지고 in_use 는 남는다. 남은 upload 는 DELETE 전에 지운다', async () => {
+    const { server, routes, store, cache } = await convertSetup()
+    const blob = new Blob([new Uint8Array([1, 2])])
+    server.setNetworkDown(true)
+    const pending = await store.putAttachment({ blob, mime: 'image/gif', ext: 'gif', width: 1, height: 1 })
+    await tick()
+    server.setNetworkDown(false)
+    expect((await cache.getOutbox('u1')).filter((e) => e.type === 'upload')).toHaveLength(1)
+    const logBefore = routes.log.length
+    expect(await store.discardAttachment!(pending.id, 'gif')).toBe('deleted')
+    expect((await cache.getOutbox('u1')).filter((e) => e.type === 'upload')).toHaveLength(0)
+    expect(routes.log.slice(logBefore).map((r) => r.method)).toEqual(['DELETE'])
+    expect(await cache.getAttachment('u1', pending.id)).toBeNull()
+
+    const gone = await store.putAttachmentNow!({ blob, mime: 'image/gif', ext: 'gif', width: 1, height: 1 })
+    routes.setDeleteStatus(gone.id, 404)
+    expect(await store.discardAttachment!(gone.id, 'gif')).toBe('not_found')
+    expect(await cache.getAttachment('u1', gone.id)).toBeNull()
+
+    const used = await store.putAttachmentNow!({ blob, mime: 'image/gif', ext: 'gif', width: 1, height: 1 })
+    routes.setDeleteStatus(used.id, 409)
+    expect(await store.discardAttachment!(used.id, 'gif')).toBe('in_use')
+    expect(await cache.getAttachment('u1', used.id)).not.toBeNull()
+  })
+})
+
+describe('F-407 S8 setFolderE2ee', () => {
+  it('PUT /api/folders/{id} 몸통 {"e2ee":true}, 캐시 폴더 행 e2ee', async () => {
+    const { routes, store, cache } = await convertSetup()
+    const folder = await store.createFolder({ name: 'F' })
+    await tick()
+    const res = await store.setFolderE2ee!(folder.id, true)
+    expect(res.e2ee).toBe(true)
+    const put = routes.log.find((r) => r.method === 'PUT' && r.path === `/api/folders/${folder.id}`)
+    expect(put?.body).toEqual({ e2ee: true })
+    expect((await cache.getFolder('u1', folder.id))?.e2ee).toBe(true)
+    const off = await store.setFolderE2ee!(folder.id, false)
+    expect('e2ee' in off).toBe(false)
+    expect((await cache.getFolder('u1', folder.id))?.e2ee).toBeUndefined()
   })
 })

@@ -39,7 +39,7 @@ import { insertTemplate as insertTemplateIntoEditor } from '../editor/insertTemp
 import { decodeMarkdown } from '../lib/decodeMarkdown'
 import { getPref, setPref } from './prefs'
 import { fetchAccount, loginUrl, storedAccount, type AccountState } from './account'
-import { planAccountNotices, ACCOUNT_RECHECK_MS, ACCOUNT_BLOCKED_MESSAGE, ACCOUNT_WARNED_MESSAGE, type AccountFlags } from '../lib/usageLimits'
+import { planAccountNotices, ACCOUNT_RECHECK_MS, ACCOUNT_BLOCKED_MESSAGE, ACCOUNT_WARNED_MESSAGE, formatCount, formatResetTime, type AccountFlags } from '../lib/usageLimits'
 import type { SyncState } from '../types'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
 import { useEdgeSwipe } from './useEdgeSwipe'
@@ -52,7 +52,7 @@ import { resolveInitialDoc } from './resolveInitialDoc'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
 import { decideDocPath, type DocPathKind, type FallbackReason } from './docPath'
-import { useLiveDoc } from './useLiveDoc'
+import { useLiveDoc, type LiveDocSession } from './useLiveDoc'
 import { usePeers } from './usePeers'
 import type { Peer } from '../lib/peers'
 import { createLiveDocController, type LiveSnapshot } from './liveDoc'
@@ -61,6 +61,22 @@ import { withTabBroadcast, newTabId } from './tabSync'
 import { useTabSync } from './useTabSync'
 import { useE2ee } from './useE2ee'
 import { isE2eeStoreError, lockDocMetas, planE2eeReset, withE2ee, type E2eeStore } from '../e2ee/e2eeStore'
+import {
+  buildE2eeConvertDialogText,
+  createE2eeConvertMemory,
+  estimateE2eeConvertCost,
+  planE2eeConvert,
+  runE2eeConvert,
+  type E2eeConvertDialogText,
+  type E2eeConvertDirection,
+  type E2eeConvertOutcome,
+  type E2eeConvertPlan,
+  type E2eeConvertProgress,
+  type E2eeConvertStopReason,
+  type E2eeConvertTarget,
+} from '../e2ee/convert'
+import { fetchUsage } from '../storage/attachmentsApi'
+import E2eeConvertDialog from './E2eeConvertDialog'
 import E2eeLockedPanel from './E2eeLockedPanel'
 import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from './exportDoc'
 import { downloadWorkspaceExport, type WorkspaceExportSourceStore } from './exportWorkspace'
@@ -187,6 +203,76 @@ const E2EE_NOTICE = {
   createTooLarge: '문서가 너무 커서 금고에 넣을 수 없습니다(금고 문서는 약 750KB까지).',
   saveTooLarge: '금고 문서가 약 750KB를 넘어 저장하지 못했습니다. 내용을 줄이거나 문서를 나눠 주세요.',
 } as const
+
+// 금고로 옮기기·빼기 알림 (F-407 8장)
+const E2EE_CONVERT_NOTICE = {
+  offline: '금고로 옮기거나 빼려면 인터넷에 연결해야 합니다.',
+  busy: '금고 옮기기가 진행 중입니다. 끝나거나 멈춘 뒤 다시 누르세요.',
+  insideFolder: '금고 폴더 안의 문서는 폴더째 빼야 합니다. 폴더의 ⋯ 메뉴에서 금고에서 빼기…를 고르세요.',
+} as const
+
+const E2EE_CONVERT_STOP_REASON: Record<Exclude<E2eeConvertStopReason, 'cancelled' | 'day-limit' | 'account-blocked'>, string> = {
+  offline: '인터넷 연결이 끊겼습니다.',
+  'rate-limited': '요청이 계속 거절되었습니다. 잠시 뒤 다시 누르세요.',
+  'doc-quota': '계정의 문서 저장 공간이 모자랍니다. 금고 문서는 암호화로 약 1.34배 커집니다.',
+  'attachment-quota': '이미지 저장 공간(300MB)이 모자랍니다.',
+  locked: '금고가 잠겼습니다. 금고를 연 뒤 다시 누르세요.',
+  conflict: '다른 곳에서 먼저 바뀐 문서가 있습니다.',
+  'pending-sync': '아직 서버에 올리지 못한 편집이 있는 문서가 있습니다. 저장이 끝난 뒤 다시 누르세요.',
+  'attachment-too-large': '암호화하면 5MB를 넘는 이미지가 있습니다. 그 이미지를 줄여 다시 넣은 뒤 다시 누르세요.',
+  'not-ready': '다른 곳에서 폴더에 새 문서가 생겼습니다.',
+  'too-large': '약 750KB를 넘는 문서가 있습니다.',
+  failed: '저장하지 못했습니다.',
+}
+
+function e2eeConvertProgressText(direction: E2eeConvertDirection, done: number, total: number): string {
+  return `${direction === 'to-e2ee' ? '금고로 옮기는 중…' : '금고에서 빼는 중…'} ${formatCount(done)}/${formatCount(total)}`
+}
+
+// 끝·멈춤 알림 — 문장을 한 칸에 이어 붙인다(알림 띠가 한 칸이라서, F-407 7.5)
+function e2eeConvertResultNotice(outcome: E2eeConvertOutcome, direction: E2eeConvertDirection, targetKind: 'doc' | 'folder', name: string): Notice {
+  const toE2ee = direction === 'to-e2ee'
+  const parts: string[] = []
+  let warn = false
+  if (outcome.kind === 'done') {
+    const count = formatCount(outcome.done)
+    if (toE2ee) parts.push(targetKind === 'doc' ? `"${name}"을(를) 금고로 옮겼습니다.` : `"${name}" 폴더를 금고로 옮겼습니다(문서 ${count}개).`)
+    else parts.push(targetKind === 'doc' ? `"${name}"을(를) 금고에서 뺐습니다.` : `"${name}" 폴더를 금고에서 뺐습니다(문서 ${count}개).`)
+    if (outcome.keptAttachments > 0) {
+      const k = formatCount(outcome.keptAttachments)
+      parts.push(toE2ee ? `다른 문서가 쓰는 이미지 ${k}개는 암호화하지 않은 원본도 서버에 남아 있습니다.` : `다른 금고 문서가 쓰는 이미지 ${k}개는 암호화한 원본도 남겨 두었습니다.`)
+      warn = true
+    }
+  } else {
+    const n = formatCount(outcome.done)
+    const total = formatCount(outcome.total)
+    parts.push(toE2ee ? `${n}/${total}개를 옮기고 멈췄습니다. 다시 누르면 남은 것부터 이어 옮깁니다.` : `${n}/${total}개를 빼고 멈췄습니다. 다시 누르면 남은 것부터 이어 뺍니다.`)
+    if (outcome.reason === 'day-limit') parts.push(`오늘 저장 한도에 닿았습니다. ${formatResetTime(outcome.resetAt ?? Date.now())}부터 다시 누를 수 있습니다.`)
+    else if (outcome.reason === 'account-blocked') parts.push(ACCOUNT_BLOCKED_MESSAGE)
+    else if (outcome.reason !== 'cancelled') parts.push(E2EE_CONVERT_STOP_REASON[outcome.reason])
+    warn = outcome.reason !== 'cancelled'
+  }
+  if (outcome.purgeFailed > 0) {
+    const k = formatCount(outcome.purgeFailed)
+    parts.push(toE2ee ? `서버의 실시간 편집 기록 ${k}건을 지우지 못해, 옮기기 전 내용이 그 기록에 남아 있을 수 있습니다.` : `서버의 옛 실시간 편집 기록 ${k}건을 지우지 못했습니다.`)
+    warn = true
+  }
+  return { type: warn ? 'warn' : 'info', message: parts.join(' ') }
+}
+
+// 멈추기를 누르면 곧바로 풀리는 기다림 (F-407 2.2)
+function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) return resolve()
+    const done = () => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', done)
+      resolve()
+    }
+    const timer = setTimeout(done, ms)
+    signal.addEventListener('abort', done)
+  })
+}
 
 // 새 금고 문서를 만들다 난 오류 → 알림 문구, 금고 오류가 아니면 null (F-405 7.6)
 function e2eeCreateErrorMessage(err: unknown): string | null {
@@ -525,13 +611,15 @@ export default function App() {
   const { updateAvailable, applyUpdate } = useAppUpdate({ beforeReload: beforeLeaveDoc })
 
   // 만든 알림 id 를 돌려준다 — 조건이 풀리면 dismissNotice(id) 로 그 알림만 걷는다 (F-305 11.2)
-  const showNotice = useCallback((input: NoticeWithAction): number => {
+  // sticky 면 info 도 4초 뒤 사라지지 않는다 — 금고 옮기기 진행 알림만 쓴다 (F-407 6장)
+  const showNotice = useCallback((input: NoticeWithAction, options?: { sticky?: boolean }): number => {
     const { type, message, action } = input
     const id = ++noticeIdRef.current
     const candidate: AppNotice = { id, type, message, action }
+    const sticky = options?.sticky === true
     setNotice((current) => {
       const result = pushNotice(current, candidate) as AppNotice
-      if (result === candidate && type === 'info') {
+      if (result === candidate && type === 'info' && !sticky) {
         setTimeout(() => {
           setNotice((cur) => (cur && cur.id === id ? null : cur))
         }, 4000)
@@ -595,6 +683,21 @@ export default function App() {
     accountCheckInFlightRef.current = p
     return p
   }, [applyAccountFlags])
+
+  // 금고로 옮기는 중인 지금 문서 — 읽기 전용이고 실시간 세션을 닫는다 (F-407 7.4)
+  const [convertingDocId, setConvertingDocId] = useState<string | null>(null)
+  // 이 탭에서 옮기기·빼기가 도는 중 — 메뉴 비활성(E41)과 다른 탭 신호의 다시 열기 판정에 쓴다
+  const [e2eeConvertBusy, setE2eeConvertBusy] = useState(false)
+  const e2eeConvertBusyRef = useRef(false)
+  // 올려 둔 첨부 짝·못 지운 첨부 — 페이지 수명 (F-407 2.1)
+  const e2eeConvertMemoryRef = useRef(createE2eeConvertMemory())
+  // 앞 실행의 끝·멈춤 알림 — 다시 누르면 걷는다(warn 이 남아 있으면 진행 info 가 가려진다)
+  const e2eeConvertResultIdRef = useRef<number | null>(null)
+  const liveSessionRef = useRef<LiveDocSession | null>(null)
+  const openDocLineEndingRef = useRef<LineEnding | undefined>(undefined)
+  // D-9·D-10 — 글과 답을 기다리는 함수. 닫힘(close 이벤트)이 확인 뒤에도 오므로 답은 한 번만 쓴다
+  const [e2eeConvertText, setE2eeConvertText] = useState<E2eeConvertDialogText | null>(null)
+  const e2eeConvertAnswerRef = useRef<((ok: boolean) => void) | null>(null)
 
   // ----- 문서 열기 경로 (F-305 4장) — 문서·저장소가 바뀌면 새 세션. local·view 는 여기서, 나머지는 아래 effect 가 outbox 를 읽고 정한다 -----
   const [docSession, setDocSession] = useState<DocSession>(() => ({
@@ -700,7 +803,12 @@ export default function App() {
         : { ...cur, path: 'offline-view', resume: false, startOffline: false }
     })
   }, [])
-  const liveSession = useLiveDoc(isRealtime ? currentDocId : null, {
+  // 같은 문서의 열기 세션을 새로 시작한다 — 경로 판정이 지금 금고 여부로 다시 고른다 (F-407 7.4)
+  const restartDocSession = useCallback(() => {
+    setDocSession((cur) => ({ ...cur, seq: cur.seq + 1, path: null, fallbackReason: null, forbiddenClose: false, resume: false, startOffline: false, persist: null }))
+    setOpenDoc(null)
+  }, [])
+  const liveSession = useLiveDoc(isRealtime && convertingDocId !== currentDocId ? currentDocId : null, {
     store: docSession.persist,
     resume: docSession.resume,
     startOffline: docSession.startOffline,
@@ -798,9 +906,21 @@ export default function App() {
         showNotice({ type: 'warn', message: LIVE_NOTICE.revoked, action: saveAsNewAction })
         if (ownDoc) recheckAccount()
       }
-    } else if (reason === 'not-found' || reason === 'deleted') showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: saveAsNewAction })
-    else if (reason === 'signed-out') showNotice({ type: 'error', message: LIVE_NOTICE.signedOut, action: saveAsNewAction })
-  }, [liveSession, showNotice, dismissNotice, saveAsNewAction, store, currentDoc, sharedDoc, accountBlocked, recheckAccount])
+    } else if (reason === 'not-found' || reason === 'deleted') {
+      // 다른 탭·기기가 금고로 옮겨 방이 닫혔으면 알리지 않고 새 세션으로 다시 연다 (F-407 7.4)
+      const goneDocId = liveSession.docId
+      const refresh = (store as Partial<ServerStore>).refreshDocFromServer
+      if (store.kind === 'server' && typeof refresh === 'function') {
+        void refresh(goneDocId).then((fresh) => {
+          if (fresh?.e2ee) {
+            if (goneDocId === currentDocIdRef.current) restartDocSession()
+            return
+          }
+          showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: saveAsNewAction })
+        })
+      } else showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: saveAsNewAction })
+    } else if (reason === 'signed-out') showNotice({ type: 'error', message: LIVE_NOTICE.signedOut, action: saveAsNewAction })
+  }, [liveSession, showNotice, dismissNotice, saveAsNewAction, store, currentDoc, sharedDoc, accountBlocked, recheckAccount, restartDocSession])
 
   // N7 — offline-view 세션마다 한 번. 그 세션이 끝나면 아직 떠 있을 때만 걷는다 (F-306 11.2)
   const offlineViewNoticeRef = useRef<{ seq: number; id: number } | null>(null)
@@ -915,7 +1035,14 @@ export default function App() {
     setDocs(stripped)
     const openId = currentDocIdRef.current
     if (openId && !stripped.some((d) => d.id === openId)) setDeletedElsewhereId(openId)
-  }, [store, keepLiveTitle])
+    // 다른 탭이 지금 문서를 금고로 옮기거나 뺐으면 새 세션으로 다시 연다 — 옛 실시간 세션에 머물지 않게 (F-407 7.4)
+    const opened = openId ? stripped.find((d) => d.id === openId) : undefined
+    const session = docPathRef.current
+    const syncedPath = session.path === 'realtime' || session.path === 'pending' || session.path === 'fallback' || session.path === 'e2ee'
+    if (store.kind === 'server' && opened && session.docId === openId && syncedPath && !e2eeConvertBusyRef.current) {
+      if (Boolean(opened.e2ee) !== (session.path === 'e2ee')) restartDocSession()
+    }
+  }, [store, keepLiveTitle, restartDocSession])
 
   // 로컬 편집권을 되찾으면 서버 잠금 재획득(handleLockReacquired)과 같은 방식으로 다시 읽어 다시 마운트한다 (F-296.md 6.4)
   const handleClaimRegained = useCallback(() => {
@@ -1027,7 +1154,8 @@ export default function App() {
   }, [e2ee?.status, bootPhase, store, keepLiveTitle])
 
   const isDeletedElsewhere = currentDocId != null && deletedElsewhereId === currentDocId
-  const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly || claimReadOnly || isDeletedElsewhere || liveStopped || isOfflineView
+  const isConvertingDoc = convertingDocId !== null && convertingDocId === currentDocId
+  const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly || claimReadOnly || isDeletedElsewhere || liveStopped || isOfflineView || isConvertingDoc
   // 본문 맨 위 제목 읽기 전용 — 상단바 옛 제목 입력의 disabled·readOnly 조건을 하나로 합친다 (F-217.md 2.4)
   const titleReadOnly = isReadOnlyDoc || viewMode === 'view' || Boolean(sharedDoc)
 
@@ -2130,6 +2258,7 @@ export default function App() {
     docSaverFlushRef.current = docSaver.flush
     notifyChangeRef.current = docSaver.notifyChange
     openDocIdRef.current = openDoc?.id ?? null
+    openDocLineEndingRef.current = openDoc?.lineEnding
     e2eeResetStepRef.current = runE2eeReset
     printDocRef.current = handlePrintDoc
     // exportDisabled 와 같은 조건 (F-279.md 6.1) — bootPhase !== 'ready' 면 isEmpty 자체가 false 라 첫 항으로 충분하다
@@ -2145,6 +2274,7 @@ export default function App() {
     docsRef.current = docs
     currentDocIdRef.current = currentDocId
     docPathRef.current = { docId: currentDocId, path: docPath }
+    liveSessionRef.current = liveSession
     liveTitleDocIdRef.current = liveRoomDoc ? liveRoomDocId : null
     saveCurrentAsNewDocRef.current = saveCurrentAsNewDoc
     foldersRef.current = folders
@@ -2308,6 +2438,185 @@ export default function App() {
     const ok = await ring.requestOpen()
     if (!ok && ring.keyring.getStatus() === 'unavailable') showNotice({ type: 'error', message: E2EE_NOTICE.unavailable })
     return ok
+  }
+
+  // ----- 금고로 옮기기·빼기 (F-407 7.3~7.5) -----
+  const e2eeConvertOnline = store.kind !== 'server' || (syncState?.online ?? true)
+
+  // 7.4 — 지금 문서면 읽기 전용으로 두고 대기 저장을 끝낸다. 실시간이면 편집기 글을 잡고 세션을 닫는다
+  async function prepareConvertDoc(docId: string): Promise<{ text?: string; title?: string } | null | 'blocked'> {
+    if (docId !== currentDocIdRef.current) return null
+    const path = docPathRef.current.docId === docId ? docPathRef.current.path : null
+    setConvertingDocId(docId)
+    const saved = await docSaverFlushRef.current()
+    const titleSaving = titleSavingRef.current
+    if (titleSaving) await titleSaving
+    if (!saved) return 'blocked'
+    if (path !== 'realtime') return {}
+    const session = liveSessionRef.current
+    const editor = editorRef.current
+    if (!session || session.docId !== docId || !session.snapshot.ready || !editor) return 'blocked'
+    const text = editor.getText(openDocLineEndingRef.current ?? 'lf')
+    const title = session.roomDoc.getText(Y_TITLE_NAME).toString()
+    // 세션이 닫힐 때까지(렌더 뒤 정리) 기다린다 — 닫힌 소켓의 정지 알림은 뜨지 않는다
+    for (let i = 0; i < 100 && liveSessionRef.current !== null; i++) await abortableSleep(20, new AbortController().signal)
+    return { text, title }
+  }
+
+  // 7.4 — 읽기 전용을 풀고 같은 문서를 새 세션으로 다시 연다(멈춤이면 원래 경로로)
+  function finishConvertDoc(docId: string) {
+    setConvertingDocId((cur) => (cur === docId ? null : cur))
+    if (docId === currentDocIdRef.current) restartDocSession()
+  }
+
+  function answerE2eeConvertDialog(ok: boolean) {
+    const answer = e2eeConvertAnswerRef.current
+    e2eeConvertAnswerRef.current = null
+    setE2eeConvertText(null)
+    answer?.(ok)
+  }
+
+  // 7.1 비활성 항목을 눌렀을 때의 이유 알림
+  function handleE2eeConvertUnavailable(reason: 'offline' | 'busy' | 'inside-e2ee-folder') {
+    if (reason === 'busy') showNotice({ type: 'info', message: E2EE_CONVERT_NOTICE.busy })
+    else if (reason === 'offline') showNotice({ type: 'error', message: E2EE_CONVERT_NOTICE.offline })
+    else showNotice({ type: 'info', message: E2EE_CONVERT_NOTICE.insideFolder })
+  }
+
+  // 7.3 흐름 — 확인·금고 열기·실행·결과 알림
+  async function requestE2eeConvert(direction: E2eeConvertDirection, target: E2eeConvertTarget, menuName: string) {
+    if (e2eeConvertBusyRef.current) {
+      showNotice({ type: 'info', message: E2EE_CONVERT_NOTICE.busy })
+      return
+    }
+    if (store.kind === 'server' && !(syncState?.online ?? navigator.onLine)) {
+      showNotice({ type: 'error', message: E2EE_CONVERT_NOTICE.offline })
+      return
+    }
+    const convertStore = store
+    const scope: 'local' | 'account' = convertStore.kind === 'server' ? 'account' : 'local'
+    const makePlan = async () => {
+      const [list, folderList] = await Promise.all([convertStore.list(), convertStore.listFolders()])
+      const owned = list.filter((d) => !isSharedDoc(d))
+      return { plan: planE2eeConvert({ direction, target, docs: owned, folders: folderList }), docs: owned }
+    }
+    let { plan, docs: planDocs } = await makePlan()
+    if (direction === 'to-e2ee') {
+      const { tooLarge, tooManyRefs } = plan.blocked
+      if (target.kind === 'doc' && tooLarge.length > 0) return void showNotice({ type: 'error', message: E2EE_NOTICE.createTooLarge })
+      if (target.kind === 'doc' && tooManyRefs.length > 0) return void showNotice({ type: 'error', message: E2EE_NOTICE.tooManyRefs })
+      if (tooLarge.length + tooManyRefs.length > 0) {
+        const n = formatCount(tooLarge.length + tooManyRefs.length)
+        return void showNotice({
+          type: 'error',
+          message: `금고에 넣을 수 없는 문서가 ${n}개 있어 폴더를 옮기지 않았습니다. 약 750KB를 넘거나 이미지가 1,000개를 넘는 문서는 나누거나 폴더 밖으로 옮긴 뒤 다시 누르세요.`,
+        })
+      }
+    } else {
+      // 빼기는 D-10 보다 먼저 연다 — 잠긴 문서 이름이 풀려야 D-10 본문이 뜻을 갖는다 (2.3 1번)
+      if (!(await requestE2eeOpen())) return
+      ;({ plan, docs: planDocs } = await makePlan())
+    }
+    const name = target.kind === 'doc' ? planDocs.find((d) => d.id === target.id)?.title || (menuName === '잠긴 문서' ? '제목 없음' : menuName) : menuName
+    if (plan.steps.length === 0) {
+      showNotice(e2eeConvertResultNotice({ kind: 'done', done: 0, keptAttachments: 0, purgeFailed: 0 }, direction, target.kind, name))
+      return
+    }
+
+    const showBackupNotice = scope === 'account' && direction === 'to-e2ee' && getPref('md.e2eeBackupNotice', '') !== '1'
+    const cost = estimateE2eeConvertCost({ plan, docs: planDocs })
+    const textInput = { direction, scope, name, targetKind: target.kind, docCount: plan.docCount, folderCount: plan.folderCount, showBackupNotice, cost }
+    const answered = new Promise<boolean>((resolve) => {
+      e2eeConvertAnswerRef.current = resolve
+    })
+    const answer = e2eeConvertAnswerRef.current
+    setE2eeConvertText(buildE2eeConvertDialogText({ ...textInput, usage: { writesLeft: null, bytesLeft: null } }))
+    // 한도는 기다리지 않는다 — 결과가 오면 줄을 더한다 (7.2)
+    if (scope === 'account') {
+      fetchUsage()
+        .then((usage) => {
+          if (e2eeConvertAnswerRef.current !== answer) return
+          const writesLeft = usage.writes ? usage.writes.limit - usage.writes.today : null
+          const bytesLeft = usage.docs ? usage.docs.bytesLimit - usage.docs.bytes : null
+          setE2eeConvertText(buildE2eeConvertDialogText({ ...textInput, usage: { writesLeft, bytesLeft } }))
+        })
+        .catch(() => {})
+    }
+    if (!(await answered)) return
+    if (showBackupNotice) setPref('md.e2eeBackupNotice', '1')
+    if (direction === 'to-e2ee' && !(await requestE2eeOpen())) return
+    await runE2eeConvertFlow(plan, convertStore, scope, name)
+  }
+
+  async function runE2eeConvertFlow(plan: E2eeConvertPlan, convertStore: Store, scope: 'local' | 'account', name: string) {
+    const ring = e2eeRef.current
+    if (!ring || e2eeConvertBusyRef.current) return
+    e2eeConvertBusyRef.current = true
+    setE2eeConvertBusy(true)
+    if (e2eeConvertResultIdRef.current !== null) dismissNotice(e2eeConvertResultIdRef.current)
+    const controller = new AbortController()
+    const stopAction = { label: '멈추기', onClick: () => controller.abort() }
+    let progressId: number | null = null
+    let countdown: ReturnType<typeof setInterval> | null = null
+    const onProgress = (p: E2eeConvertProgress) => {
+      if (countdown) clearInterval(countdown)
+      countdown = null
+      const base = e2eeConvertProgressText(plan.direction, p.done, p.total)
+      if (p.phase === 'running') {
+        progressId = showNotice({ type: 'info', message: base, action: stopAction }, { sticky: true })
+        return
+      }
+      let left = p.secondsLeft
+      const show = () => {
+        progressId = showNotice({ type: 'info', message: `${base} — 요청이 많아 ${formatCount(left)}초 쉬었다가 이어 갑니다.`, action: stopAction }, { sticky: true })
+      }
+      show()
+      countdown = setInterval(() => {
+        left -= 1
+        if (left >= 1) show()
+        else if (countdown) clearInterval(countdown)
+      }, 1000)
+    }
+    const yjs = convertStore.kind === 'server' ? yjsStoreRef.current : null
+    let outcome: E2eeConvertOutcome
+    try {
+      outcome = await runE2eeConvert(
+        plan,
+        {
+          store: convertStore,
+          scope,
+          memory: e2eeConvertMemoryRef.current,
+          signal: controller.signal,
+          now: () => Date.now(),
+          sleep: abortableSleep,
+          isOnline: () => convertStore.kind !== 'server' || navigator.onLine,
+          noteActivity: () => ring.keyring.noteActivity(),
+          isOpen: () => ring.keyring.getMasterKey() !== null,
+          prepareDoc: prepareConvertDoc,
+          finishDoc: finishConvertDoc,
+          ...(yjs
+            ? {
+                hasUnsyncedYjs: async (id: string) => {
+                  const persist = await yjs
+                  return persist ? (await persist.unsyncedDocIds()).includes(id) : false
+                },
+                removeYjsRecord: async (id: string) => {
+                  const persist = await yjs
+                  if (persist) await persist.removeDoc(id)
+                },
+              }
+            : {}),
+        },
+        onProgress,
+      )
+    } finally {
+      if (countdown) clearInterval(countdown)
+      if (progressId !== null) dismissNotice(progressId)
+    }
+    await resyncFromStore().catch(() => {})
+    e2eeConvertBusyRef.current = false
+    setE2eeConvertBusy(false)
+    e2eeConvertResultIdRef.current = showNotice(e2eeConvertResultNotice(outcome, plan.direction, plan.target.kind, name))
   }
 
   // 대상이 금고 폴더면 금고가 열려 있어야 만든다 (F-405 7.6)
@@ -3952,6 +4261,16 @@ export default function App() {
           onRequestInviteFolder={requestInviteFolder}
           onExportFolder={handleExportFolder}
           onExportFolderVault={handleExportFolderVault}
+          e2eeConvert={
+            e2ee && (store.kind === 'idb' || store.kind === 'server')
+              ? {
+                  online: e2eeConvertOnline,
+                  busy: e2eeConvertBusy,
+                  onRequest: (direction, target, name) => void requestE2eeConvert(direction, target, name),
+                  onUnavailable: handleE2eeConvertUnavailable,
+                }
+              : undefined
+          }
         />
         {narrow && sidebarOpen && (
           <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
@@ -4114,6 +4433,12 @@ export default function App() {
         />
       )}
       <ConfirmDeleteDialog target={deleteTarget} onCancel={cancelDelete} onConfirm={confirmDelete} />
+      <E2eeConvertDialog
+        open={e2eeConvertText !== null}
+        text={e2eeConvertText}
+        onCancel={() => answerE2eeConvertDialog(false)}
+        onConfirm={() => answerE2eeConvertDialog(true)}
+      />
       <Dialog
         open={Boolean(bulkDeleteItems)}
         onClose={cancelBulkDelete}

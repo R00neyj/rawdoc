@@ -177,3 +177,28 @@ describe('F-296 U8~U14 reduceClaim', () => {
     expect(reduceClaim({ ...base, held: false }, msg)).toBeNull()
   })
 })
+
+describe('F-407 U22 withTabBroadcast — 옮기기·폴더 표지', () => {
+  it('있으면 각 1번 docs-changed, 곧바로 올리기·지우기는 0번', async () => {
+    const setDocE2ee = vi.fn(async () => ({ doc: { id: 'd1' }, purged: true }) as never)
+    const setFolderE2ee = vi.fn(async () => ({ id: 'f1' }) as never)
+    const putAttachmentNow = vi.fn(async () => ({ id: 'a', ext: 'png' }) as never)
+    const discardAttachment = vi.fn(async () => 'deleted' as const)
+    const store = makeFakeStore({ setDocE2ee, setFolderE2ee, putAttachmentNow, discardAttachment })
+    const post = vi.fn()
+    const wrapped = withTabBroadcast(store, post, 'tab-1')
+    await wrapped.setDocE2ee!('d1', { e2ee: true, title: '', content: '' })
+    expect(post).toHaveBeenCalledTimes(1)
+    await wrapped.setFolderE2ee!('f1', true)
+    expect(post).toHaveBeenCalledTimes(2)
+    await wrapped.putAttachmentNow!({ blob: new Blob(), mime: 'image/png', ext: 'png', width: 1, height: 1 })
+    await wrapped.discardAttachment!('a', 'png')
+    expect(post).toHaveBeenCalledTimes(2)
+  })
+
+  it('없으면 키도 만들지 않는다', () => {
+    const wrapped = withTabBroadcast(makeFakeStore(), vi.fn(), 'tab-1')
+    expect('setDocE2ee' in wrapped).toBe(false)
+    expect('setFolderE2ee' in wrapped).toBe(false)
+  })
+})

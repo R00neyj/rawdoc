@@ -77,6 +77,7 @@ import listSvg from '@material-symbols/svg-400/outlined/list.svg?raw'
 // 지도 머리 줄 `맞춤` (F-2011.md 2.1)
 import fitScreenSvg from '@material-symbols/svg-400/outlined/fit_screen.svg?raw'
 import lockSvg from '@material-symbols/svg-400/outlined/lock.svg?raw'
+import lockOpenSvg from '@material-symbols/svg-400/outlined/lock_open.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -197,6 +198,8 @@ export const IconList = makeIcon(listSvg)
 export const IconFit = makeIcon(fitScreenSvg)
 // 금고 문서·폴더 표시 (F-405 6.1)
 export const IconLock = makeIcon(lockSvg)
+// 금고에서 빼기 메뉴 (F-407 7.1)
+export const IconLockOpen = makeIcon(lockOpenSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

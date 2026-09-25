@@ -2,6 +2,7 @@
 // 이름에 제품명을 쓰지 않는다. 제품명이 바뀌어도 사용자 문서가 남아야 한다 (CLAUDE.md 불변조건)
 import { openDB, type IDBPDatabase, type IDBPTransaction } from 'idb'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
+import { extractAttachmentRefs } from '../lib/imageBlock'
 import type { Store, Doc, Folder, Attachment, AttachmentExt, FolderDeleteMode } from '../types'
 
 const DEFAULT_DB_NAME = 'md-docs'
@@ -128,6 +129,40 @@ export async function createIdbStore(
         })
     },
   })
+
+  // 첨부는 문서와 연결 필드가 없다 — id 만으로 찾는다. id 를 주면 그 id 로, 없으면 자동 채번(F-156.md 2.1·2.3). 이미 있는 id 면 덮지 않고 기존 것을 그대로 돌려준다 (F-282.md 3.11)
+  async function putAttachmentRecord({
+    blob,
+    mime,
+    ext,
+    width,
+    height,
+    id: givenId,
+    e2ee,
+  }: {
+    blob: Blob
+    mime: string
+    ext: AttachmentExt
+    width: number
+    height: number
+    id?: string
+    e2ee?: true
+  }) {
+    if (givenId !== undefined) {
+      const existing: Attachment | undefined = await db.get(ATTACHMENTS_STORE, givenId)
+      if (existing) return { id: existing.id, ext: existing.ext }
+      const record: Attachment = { id: givenId, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob, ...(e2ee ? { e2ee } : {}) }
+      await db.put(ATTACHMENTS_STORE, record)
+      return { id: givenId, ext }
+    }
+    let id = randomAttachmentId()
+    while (await db.get(ATTACHMENTS_STORE, id)) {
+      id = randomAttachmentId()
+    }
+    const record: Attachment = { id, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob, ...(e2ee ? { e2ee } : {}) }
+    await db.put(ATTACHMENTS_STORE, record)
+    return { id, ext }
+  }
 
   return {
     kind: 'idb',
@@ -339,39 +374,7 @@ export async function createIdbStore(
       await tx.done
     },
 
-    // 첨부는 문서와 연결 필드가 없다 — id 만으로 찾는다. id 를 주면 그 id 로, 없으면 자동 채번(F-156.md 2.1·2.3). 이미 있는 id 면 덮지 않고 기존 것을 그대로 돌려준다 (F-282.md 3.11)
-    async putAttachment({
-      blob,
-      mime,
-      ext,
-      width,
-      height,
-      id: givenId,
-      e2ee,
-    }: {
-      blob: Blob
-      mime: string
-      ext: AttachmentExt
-      width: number
-      height: number
-      id?: string
-      e2ee?: true
-    }) {
-      if (givenId !== undefined) {
-        const existing: Attachment | undefined = await db.get(ATTACHMENTS_STORE, givenId)
-        if (existing) return { id: existing.id, ext: existing.ext }
-        const record: Attachment = { id: givenId, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob, ...(e2ee ? { e2ee } : {}) }
-        await db.put(ATTACHMENTS_STORE, record)
-        return { id: givenId, ext }
-      }
-      let id = randomAttachmentId()
-      while (await db.get(ATTACHMENTS_STORE, id)) {
-        id = randomAttachmentId()
-      }
-      const record: Attachment = { id, mime, ext, size: blob.size, width, height, createdAt: Date.now(), blob, ...(e2ee ? { e2ee } : {}) }
-      await db.put(ATTACHMENTS_STORE, record)
-      return { id, ext }
-    },
+    putAttachment: putAttachmentRecord,
 
     async getAttachment(id) {
       const record: Attachment | undefined = await db.get(ATTACHMENTS_STORE, id)
@@ -385,6 +388,82 @@ export async function createIdbStore(
 
     async removeAttachment(id) {
       await db.delete(ATTACHMENTS_STORE, id)
+    },
+
+    // 금고로 옮기기·빼기 로컬 판 — 빼기면 두 키를 행에서 없앤다 (F-407 5.3)
+    async setDocE2ee(id, input) {
+      const tx = db.transaction(DOCS_STORE, 'readwrite')
+      const store = tx.objectStore(DOCS_STORE)
+      const existing: StoredDoc | undefined = await store.get(id)
+      if (!existing) {
+        await tx.done
+        throw new Error(`문서를 찾을 수 없음: ${id}`)
+      }
+      const { e2eeKey: _oldKey, attachmentRefs: _oldRefs, ...rest } = normalizeDoc(existing)
+      const updated: Doc = {
+        ...rest,
+        title: input.title,
+        content: input.content,
+        updatedAt: Date.now(),
+        ...(input.e2ee && input.e2eeKey ? { e2eeKey: input.e2eeKey, attachmentRefs: input.attachmentRefs ?? [] } : {}),
+      }
+      await store.put(updated)
+      await tx.done
+      return { doc: updated, purged: true }
+    },
+
+    // 켜기는 바로 아래가 모두 금고일 때만, 끄기는 부모가 금고면 막는다 — 서버 규칙을 기기에서 똑같이 (F-407 5.3)
+    async setFolderE2ee(id, on) {
+      const tx = db.transaction([DOCS_STORE, FOLDERS_STORE], 'readwrite')
+      const folderStore = tx.objectStore(FOLDERS_STORE)
+      const docStore = tx.objectStore(DOCS_STORE)
+      const folders: Folder[] = await folderStore.getAll()
+      const existing = folders.find((f) => f.id === id)
+      if (!existing) {
+        await tx.done
+        throw new Error(`폴더를 찾을 수 없음: ${id}`)
+      }
+      if (on) {
+        const docs: StoredDoc[] = await docStore.getAll()
+        const plainChild = docs.some((d) => d.folderId === id && d.e2eeKey === undefined) || folders.some((f) => f.parentId === id && f.e2ee !== true)
+        if (plainChild) {
+          await tx.done
+          throw new Error('e2ee_folder_not_ready')
+        }
+      } else if (existing.parentId && folders.some((f) => f.id === existing.parentId && f.e2ee === true)) {
+        await tx.done
+        throw new Error('e2ee_folder')
+      }
+      const { e2ee: _old, ...rest } = existing
+      const updated: Folder = on ? { ...rest, e2ee: true } : rest
+      await folderStore.put(updated)
+      await tx.done
+      return updated
+    },
+
+    // 로컬은 원래 변환하지 않는다 — putAttachment 와 같다 (F-407 5.3)
+    async putAttachmentNow(input) {
+      return putAttachmentRecord(input)
+    },
+
+    // 다른 문서 행의 본문이나 attachmentRefs 가 쓰면 in_use (F-407 5.3)
+    async discardAttachment(id) {
+      const tx = db.transaction([DOCS_STORE, ATTACHMENTS_STORE], 'readwrite')
+      const attachmentStore = tx.objectStore(ATTACHMENTS_STORE)
+      const existing = await attachmentStore.get(id)
+      if (!existing) {
+        await tx.done
+        return 'not_found' as const
+      }
+      const docs: StoredDoc[] = await tx.objectStore(DOCS_STORE).getAll()
+      const inUse = docs.some((d) => (d.attachmentRefs ?? []).includes(id) || extractAttachmentRefs(d.content).has(id))
+      if (inUse) {
+        await tx.done
+        return 'in_use' as const
+      }
+      await attachmentStore.delete(id)
+      await tx.done
+      return 'deleted' as const
     },
 
     // 저장된 handle 을 돌며 isSameEntry 로 첫 매치를 찾는다 — 지워진 문서면 정리하고 계속, 예외면 건너뛴다 (F-231.md 3.1)

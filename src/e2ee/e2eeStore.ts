@@ -362,8 +362,53 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
     return result
   }
 
+  // 금고로 옮기기·빼기 — 옮기기는 이 id 를 AAD 로 봉투, 빼기는 평문 그대로 (F-407 5.1)
+  const setDocE2ee: NonNullable<Store['setDocE2ee']> = async (id, input) => {
+    const innerSet = inner.setDocE2ee!
+    if (!input.e2ee) {
+      const res = await innerSet(id, { e2ee: false, title: input.title, content: input.content, e2eeKey: null, attachmentRefs: null })
+      plainMemo.delete(id)
+      return { doc: await decode(res.doc), purged: res.purged }
+    }
+    const mk = currentMasterKey()
+    if (!mk) throw new E2eeStoreError('locked')
+    const refs = checkPlainContent(input.content)
+    const { docKey, wrappedDocKey } = await createDocKey(mk)
+    const titleEnvelope = await encryptDocField(docKey, id, 'title', input.title)
+    const contentEnvelope = await encryptDocField(docKey, id, 'content', input.content)
+    const res = await innerSet(id, { e2ee: true, title: titleEnvelope, content: contentEnvelope, e2eeKey: wrappedDocKey, attachmentRefs: refs })
+    docKeys.set(wrappedDocKey, Promise.resolve(docKey))
+    plainMemo.set(id, { e2eeKey: wrappedDocKey, titleEnvelope, contentEnvelope, title: input.title, content: input.content })
+    return { doc: await decode(res.doc), purged: res.purged }
+  }
+
+  // 곧바로 올리기 — 금고면 암호화하되 WebP 로 바꾸지 않는다, 바이트·확장자 그대로 (F-407 5.1)
+  const putAttachmentNow: NonNullable<Store['putAttachmentNow']> = async (input) => {
+    const innerPut = inner.putAttachmentNow!
+    if (!input.e2ee) return innerPut(input)
+    const mk = currentMasterKey()
+    if (!mk) throw new E2eeStoreError('locked')
+    const plainBytes = new Uint8Array(await input.blob.arrayBuffer())
+    if (isPlainAttachmentTooLarge(plainBytes.length)) throw new E2eeStoreError('too-large')
+    let { width, height } = input
+    if (!(width >= 1 && height >= 1)) {
+      const info = inspectImageBytes(plainBytes)
+      if (info) ({ width, height } = info)
+    }
+    let id = randomAttachmentId()
+    while (await inner.getAttachment(id)) {
+      id = randomAttachmentId()
+    }
+    const envelope = await encryptAttachment(mk, id, plainBytes)
+    const envelopeBlob = new Blob([envelope as BlobPart], { type: 'application/octet-stream' })
+    await innerPut({ blob: envelopeBlob, mime: input.mime, ext: input.ext, width, height, id, e2ee: true })
+    return { id, ext: input.ext }
+  }
+
   const wrapped = {
     ...inner,
+    ...(inner.setDocE2ee ? { setDocE2ee } : {}),
+    ...(inner.putAttachmentNow ? { putAttachmentNow } : {}),
     list: async () => Promise.all((await inner.list()).map(decode)),
     get: async (id: string) => {
       const row = await inner.get(id)

@@ -119,4 +119,26 @@ export type Store = {
   // idb 저장소에만 있다 (둘 다 있을 때만 OS 파일 열기 재중복 판정을 한다, F-231.md 3.3)
   findDocByFileHandle?(handle: FileSystemFileHandle): Promise<string | null>
   linkFileHandle?(docId: string, handle: FileSystemFileHandle): Promise<void>
+  // 금고로 옮기기·빼기 (F-407 3.1) — 앱 층은 평문만, 저장소 층은 옮기기면 봉투·e2eeKey·attachmentRefs, 빼기면 평문·둘 다 null
+  setDocE2ee?(id: string, input: {
+    e2ee: boolean
+    title: string
+    content: string
+    e2eeKey?: string | null
+    attachmentRefs?: string[] | null
+  }): Promise<{ doc: Doc; purged: boolean }>
+  // 폴더 표지 켜기·끄기. 서버 저장소는 곧바로 PUT /api/folders/:id (outbox 를 거치지 않는다)
+  setFolderE2ee?(id: string, on: boolean): Promise<Folder>
+  // 첨부 한 장을 곧바로 저장한다 — 바이트·확장자를 바꾸지 않는다(WebP 변환 없음). 앱 층 e2ee = 암호화해 넣어라, 저장소 층 e2ee = blob 은 이미 봉투
+  putAttachmentNow?(input: {
+    blob: Blob
+    mime: string
+    ext: AttachmentExt
+    width: number
+    height: number
+    id?: string
+    e2ee?: true
+  }): Promise<{ id: string; ext: AttachmentExt }>
+  // 첨부를 서버(와 기기 캐시)에서 지운다. 다른 문서가 쓰면 'in_use' 로 남긴다
+  discardAttachment?(id: string, ext: AttachmentExt): Promise<'deleted' | 'not_found' | 'in_use'>
 }

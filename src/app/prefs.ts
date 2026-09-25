@@ -24,6 +24,7 @@ type PrefMap = {
   'md.mapGroups': string
   'md.newDocTemplate': string
   'md.e2eeLockMinutes': '5' | '15' | '30' | '60' | '240'
+  'md.e2eeBackupNotice': '1'
 }
 
 type PrefKey = keyof PrefMap
@@ -51,6 +52,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.mapGroups',
   'md.newDocTemplate',
   'md.e2eeLockMinutes',
+  'md.e2eeBackupNotice',
 ])
 
 function assertAllowed(key: string) {
