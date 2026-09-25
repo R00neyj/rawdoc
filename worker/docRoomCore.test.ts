@@ -32,6 +32,7 @@ type D1Doc = {
   pinned_at: number | null
   created_at: number
   updated_at: number
+  e2ee_key?: string | null
 }
 
 type SqlCall = { sql: string; args: unknown[] }
@@ -76,8 +77,10 @@ function makeD1(initial: Partial<D1Doc> | null) {
             args,
             async first<T>() {
               state.calls.push({ sql, args })
-              if (sql === 'SELECT title, content, line_ending, version, owner_id FROM docs WHERE id = ?') {
-                if (!state.row || args[0] !== state.row.id) return null
+              // F-401 X16 — 금고 행은 AND e2ee_key IS NULL 에 걸려 없는 행이 된다
+              const hidden = !!state.row?.e2ee_key && sql.endsWith(' AND e2ee_key IS NULL')
+              if (sql.startsWith('SELECT title, content, line_ending, version, owner_id FROM docs WHERE id = ?')) {
+                if (!state.row || args[0] !== state.row.id || hidden) return null
                 const { title, content, line_ending, version, owner_id } = state.row
                 return { title, content, line_ending, version, owner_id } as T
               }
@@ -85,12 +88,12 @@ function makeD1(initial: Partial<D1Doc> | null) {
                 return (state.usage ? { blocked_at: state.usage.blocked_at } : null) as T
               }
               if (sql.startsWith('SELECT id, owner_id, folder_id FROM docs WHERE id = ?')) {
-                if (!state.row || args[0] !== state.row.id) return null
+                if (!state.row || args[0] !== state.row.id || hidden) return null
                 const { id, owner_id, folder_id } = state.row
                 return { id, owner_id, folder_id } as T
               }
               if (sql.startsWith('SELECT * FROM docs WHERE id = ?')) {
-                if (!state.row || args[0] !== state.row.id) return null
+                if (!state.row || args[0] !== state.row.id || hidden) return null
                 return { ...state.row } as T
               }
               throw new Error(`unhandled first sql: ${sql}`)
@@ -731,7 +734,7 @@ describe('F-308 A10·A11 idle 경로', () => {
     expect(room.counts.ensureLoaded).toBe(0)
     expect(room.store.log.filter((l) => l.startsWith('INSERT INTO ydoc_'))).toHaveLength(0)
     expect(updates).toHaveLength(0)
-    expect(d1.state.calls.map((c) => c.sql)).toEqual(['SELECT * FROM docs WHERE id = ?', ROW_UPDATE_SQL, DAY_AND_TOTAL_SQL])
+    expect(d1.state.calls.map((c) => c.sql)).toEqual(['SELECT * FROM docs WHERE id = ? AND e2ee_key IS NULL', ROW_UPDATE_SQL, DAY_AND_TOTAL_SQL])
     expect(d1.state.calls[1].args).toEqual(['t', 'L1\nX\nL3\n', 6, 1_000_000, DOC_ID, 'owner', 5])
     expect(d1.state.row!.content).toBe('L1\nX\nL3\n')
     expect(vi.getTimerCount()).toBe(0)
@@ -1315,5 +1318,55 @@ describe('F-2027 C15·C16', () => {
     await again.core.flush()
     expect(d1.state.batches).toHaveLength(2)
     expect(d1.state.row!.content).toBe('abc')
+  })
+})
+
+describe('F-401 E11 DO 는 금고 문서를 없는 문서로 본다 (X16)', () => {
+  const E2EE_ROW = { e2ee_key: 'A'.repeat(55) + '=', content: 'Ym9keQ==', title: 'dGl0bGU=' }
+
+  it('① 금고 행으로 불러오면 저장소를 비우고 연결은 4404 deleted', async () => {
+    const d1 = makeD1({ content: 'a', version: 1 })
+    const first = makeRoom(d1)
+    await first.core.load()
+    expect(first.store.seqCount()).toBe(1)
+    d1.state.row = { ...d1.state.row!, ...E2EE_ROW, version: 2 }
+    const again = makeRoom(d1, first.store)
+    await again.core.load()
+    expect(first.store.seqCount()).toBe(0)
+    expect(first.store.meta().size).toBe(0)
+    const c = conn('owner', 'owner@example.com', 'owner')
+    expect(await again.add(c, 2)).toBe(false)
+    expect(c.closed).toEqual({ code: 4404, reason: 'deleted' })
+  })
+
+  it('② 옮기기 순간 살아 있던 방의 flush 는 금고 행에 쓰지 않는다', async () => {
+    const d1 = makeD1({ content: L, version: 5 })
+    const { core, doc, add } = makeRoom(d1)
+    await core.load()
+    const c = conn('owner', 'owner@example.com', 'owner')
+    await add(c, 5)
+    edit(doc, (t) => t.insert(0, '평문 '))
+    d1.state.row = { ...d1.state.row!, ...E2EE_ROW, version: 6 }
+    await core.flush()
+    expect(d1.state.row!.content).toBe(E2EE_ROW.content)
+    expect(d1.state.row!.version).toBe(6)
+    expect(c.closed).toEqual({ code: 4404, reason: 'deleted' })
+  })
+
+  it('③ 금고 행에 idle writeText 는 not_found, UPDATE 없음', async () => {
+    const d1 = makeD1({ ...E2EE_ROW, version: 3 })
+    const room = makeRoom(d1)
+    await expect(room.core.writeText({ content: '평문', baseVersion: 3, docVersion: 3 })).resolves.toEqual({ type: 'not_found' })
+    expect(d1.updates()).toHaveLength(0)
+  })
+
+  it('④ revalidateConnections 는 금고 행에서 4404', async () => {
+    const d1 = makeD1({ ...E2EE_ROW, version: 3 })
+    const { core, conns } = makeRoom(d1)
+    const c = conn('owner', 'owner@example.com', 'owner')
+    conns.push(c)
+    await core.revalidateConnections()
+    expect(c.closed).toEqual({ code: 4404, reason: 'deleted' })
+    expect(resolveDocAccess).not.toHaveBeenCalled()
   })
 })

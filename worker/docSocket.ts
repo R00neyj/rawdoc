@@ -33,13 +33,15 @@ export async function resolveDocSocket(request: Request, env: Env, docId: string
 
   const user = await getUser(request, env)
   if (!user) return { type: 'close', code: SOCKET_CLOSE.unauthenticated, reason: 'unauthenticated' }
-  const access = await getDocAccess<{ id: string; owner_id: string; folder_id: string | null; version: number }>(
+  const access = await getDocAccess<{ id: string; owner_id: string; folder_id: string | null; version: number; e2ee_key?: string | null }>(
     env,
     docId,
     user,
     'id, owner_id, folder_id, version',
   )
   if (!access) return { type: 'close', code: SOCKET_CLOSE.notFound, reason: 'not_found' }
+  // 금고 문서는 실시간 방을 열지 않는다 — 소유자도 (F-401 X15). 비소유자는 위에서 not_found
+  if (access.doc.e2ee_key) return { type: 'close', code: SOCKET_CLOSE.forbidden, reason: 'forbidden' }
   if (!roleAtLeast(access.role, 'edit')) return { type: 'close', code: SOCKET_CLOSE.forbidden, reason: 'forbidden' }
 
   const headers = new Headers(request.headers)

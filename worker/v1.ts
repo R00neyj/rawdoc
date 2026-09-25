@@ -3,7 +3,8 @@ import { errorResponse, jsonResponse } from './http'
 import { rememberUser, requireUser, type AuthUser } from './auth'
 import { getDocAccess, roleAtLeast } from './access'
 import { getActiveLock } from './locks'
-import { badBody, handleCreateDoc, handleUpdateDoc, readJsonLimited } from './docs'
+import { badBody, handleCreateDoc, handleListDocs, handleUpdateDoc, readJsonLimited } from './docs'
+import { handleCreateFolder } from './folders'
 import { rowToDoc } from './docWrite'
 import type { DocRow } from './docWrite'
 import { writeTextInRoom } from './docRoomRpc'
@@ -39,7 +40,8 @@ export async function handleCreateDocV1(request: Request, env: Env): Promise<Res
   const body = parsed.data
   if (typeof body !== 'object' || body === null) return errorResponse('invalid', 400)
   const record = body as Record<string, unknown>
-  for (const field of ['id', 'createdAt', 'updatedAt', 'pinnedAt']) {
+  // 금고 필드는 조용히 빼지 않는다 — CLI 사용자가 암호화된 줄 아는 평문 문서가 생긴다 (F-401 X21)
+  for (const field of ['id', 'createdAt', 'updatedAt', 'pinnedAt', 'e2eeKey', 'attachmentRefs']) {
     if (field in record) return jsonResponse({ error: 'invalid', field }, 400)
   }
 
@@ -54,6 +56,49 @@ export async function handleCreateDocV1(request: Request, env: Env): Promise<Res
   if (folderId !== undefined) forwardBody.folderId = folderId
 
   return handleCreateDoc(innerRequest(request, user, forwardBody), env)
+}
+
+type DocSummaryBody = { title: string; e2eeKey?: string; attachmentRefs?: string[] }
+
+// 금고 문서는 목록에 남기되 제목은 비우고 표지만 — 봉투·감싼 키는 주지 않는다 (F-401 X18, F-400 10장 Q8)
+export async function handleListDocsV1(request: Request, env: Env): Promise<Response> {
+  const res = await handleListDocs(request, env)
+  if (res.status !== 200) return res
+  const list = (await res.json()) as DocSummaryBody[]
+  return jsonResponse(
+    list.map((doc) => {
+      if (doc.e2eeKey === undefined) return doc
+      const summary: Partial<DocSummaryBody> = { ...doc }
+      delete summary.e2eeKey
+      delete summary.attachmentRefs
+      return { ...summary, title: '', e2ee: true }
+    }),
+  )
+}
+
+// 금고 문서 본문은 CLI 로 받지 않는다 (F-401 X19)
+export async function handleGetDocV1(
+  request: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  const access = await getDocAccess<DocRow>(env, params.id, user)
+  if (!access) return errorResponse('not_found', 404)
+  if (access.doc.e2ee_key) return errorResponse('e2ee_doc', 403)
+  return jsonResponse(rowToDoc(access.doc))
+}
+
+// CLI 는 금고 폴더를 만들지 않는다 — 금고 부모 아래는 handleCreateFolder 가 409 (F-401 X22)
+export async function handleCreateFolderV1(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const parsed = await readJsonLimited(request, MAX_BODY_BYTES)
+  if (!parsed.ok) return badBody(parsed)
+  const body = parsed.data
+  if (typeof body !== 'object' || body === null) return errorResponse('invalid', 400)
+  if ('e2ee' in body) return jsonResponse({ error: 'invalid', field: 'e2ee' }, 400)
+  return handleCreateFolder(innerRequest(request, user, body), env)
 }
 
 // DO 결과 값에 Worker 가 읽은 행의 나머지 열을 붙인다 (F-308 4장)
@@ -90,6 +135,8 @@ export async function handleUpdateDocV1(
 
   const access = await getDocAccess<DocRow>(env, params.id, user)
   if (!access) return errorResponse('not_found', 404)
+  // writeTextInRoom 전에 — 평문이 금고 행에 쓰이지 않게 (F-401 X20)
+  if (access.doc.e2ee_key) return errorResponse('e2ee_doc', 403)
   if (access.blocked) return errorResponse('account_blocked', 403) // 쓸 수 있던 사람의 막힘 — 보낸 사람 또는 문서 소유자 (F-2028 4.3)
   if (!roleAtLeast(access.role, 'edit')) return errorResponse('forbidden', 403)
   const row = access.doc

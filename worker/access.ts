@@ -83,6 +83,7 @@ export interface DocRowLike {
   id: string
   owner_id: string
   folder_id: string | null
+  e2ee_key?: string | null // 없으면 일반 문서로 본다 — resolveDocAccess 에 행을 직접 넘기는 곳은 이 열을 함께 읽어야 한다 (F-401 6.1)
 }
 
 export interface DocAccess<T extends DocRowLike> {
@@ -104,6 +105,8 @@ export async function resolveDocAccess<T extends DocRowLike>(
   doc: T,
   user: AuthUser,
 ): Promise<DocAccess<T> | null> {
+  // 금고 문서는 소유자만 — 초대를 읽기 전에 끝낸다 (F-401 X1)
+  if (doc.e2ee_key && doc.owner_id !== user.id) return null
   const role: Role | null =
     doc.owner_id === user.id
       ? 'owner'
@@ -121,7 +124,9 @@ export async function getDocAccess<T extends DocRowLike>(
   user: AuthUser,
   columns = '*',
 ): Promise<DocAccess<T> | null> {
-  const doc = await env.DB.prepare(`SELECT ${columns} FROM docs WHERE id = ?`).bind(docId).first<T>()
+  // 열을 골라 읽어도 금고 판정 열은 늘 읽는다 (F-401 X2)
+  const selected = columns === '*' || columns.includes('e2ee_key') ? columns : `${columns}, e2ee_key`
+  const doc = await env.DB.prepare(`SELECT ${selected} FROM docs WHERE id = ?`).bind(docId).first<T>()
   if (!doc) return null
   return resolveDocAccess(env, doc, user)
 }

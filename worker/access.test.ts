@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDocAccess, getOwnedFolder, isDocAttachmentOwner, resolveDocAccess, roleAtLeast } from './access'
 
-type Doc = { id: string; owner_id: string; folder_id: string | null }
+type Doc = { id: string; owner_id: string; folder_id: string | null; e2ee_key?: string | null }
 type Folder = { id: string; owner_id: string; parent_id: string | null }
 // owner_id 를 비우면 대상 폴더의 소유자로 본다 — 실제로 handlePutGrant 가 대상 소유자를 넣는다
 type Grant = { target_type: 'doc' | 'folder'; target_id: string; grantee_email: string; role: 'view' | 'edit'; owner_id?: string }
@@ -57,7 +57,7 @@ function makeEnv(
                 const [id] = args as [string]
                 return (folders.find((f) => f.id === id) as T) ?? null
               }
-              if (sql.startsWith('SELECT * FROM docs')) {
+              if (sql.startsWith('SELECT * FROM docs') || sql.endsWith(' FROM docs WHERE id = ?')) {
                 const [id] = args as [string]
                 return (docs.find((d) => d.id === id) as T) ?? null
               }
@@ -389,5 +389,36 @@ describe('F-2028 AC1~AC9 막힘이면 쓰기 역할을 view 로 낮춘다', () =
     const env = makeEnv({ grants: [editGrant] })
     const access = await resolveDocAccess(env, DOC, { ...GRANTEE, usage: usage(null) })
     expect(access).toStrictEqual({ role: 'edit', doc: DOC })
+  })
+})
+
+describe('F-401 E1 금고 문서는 소유자만 (X1)', () => {
+  const E2EE_DOC = { id: 'doc-v', owner_id: OWNER.id, folder_id: 'folder-v', e2ee_key: 'A'.repeat(55) + '=' }
+  const folders = [{ id: 'folder-v', owner_id: OWNER.id, parent_id: 'folder-top' }, { id: 'folder-top', owner_id: OWNER.id, parent_id: null }]
+
+  it('문서 초대 edit — null, grants 를 읽지 않는다', async () => {
+    const log: string[] = []
+    const env = makeEnv({ folders, grants: [{ target_type: 'doc', target_id: 'doc-v', grantee_email: GRANTEE.email, role: 'edit', owner_id: OWNER.id }] }, log)
+    expect(await resolveDocAccess(env, E2EE_DOC, GRANTEE)).toBeNull()
+    expect(log.filter((s) => s.includes('FROM grants'))).toEqual([])
+  })
+
+  it('상위 폴더 초대 edit — null, grants 를 읽지 않는다', async () => {
+    const log: string[] = []
+    const env = makeEnv({ folders, grants: [{ target_type: 'folder', target_id: 'folder-top', grantee_email: GRANTEE.email, role: 'edit' }] }, log)
+    expect(await resolveDocAccess(env, E2EE_DOC, GRANTEE)).toBeNull()
+    expect(log.filter((s) => s.includes('FROM grants'))).toEqual([])
+  })
+
+  it('소유자 — owner', async () => {
+    const env = makeEnv({ folders })
+    expect((await resolveDocAccess(env, E2EE_DOC, OWNER))?.role).toBe('owner')
+  })
+
+  it('getDocAccess 가 열을 골라도 e2ee_key 를 함께 읽는다 (X2)', async () => {
+    const log: string[] = []
+    const env = makeEnv({ docs: [E2EE_DOC], folders, grants: [{ target_type: 'doc', target_id: 'doc-v', grantee_email: GRANTEE.email, role: 'edit', owner_id: OWNER.id }] }, log)
+    expect(await getDocAccess(env, 'doc-v', GRANTEE, 'id, owner_id, folder_id')).toBeNull()
+    expect(log.find((s) => s.includes('FROM docs'))).toBe('SELECT id, owner_id, folder_id, e2ee_key FROM docs WHERE id = ?')
   })
 })

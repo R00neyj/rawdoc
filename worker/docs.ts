@@ -1,10 +1,10 @@
-// 문서 라우트 (specs/features/F-206.md 2.3, 접근 판정은 F-212.md 2.2. 사용량 줄·413 은 F-2025.md 6.2)
+// 문서 라우트 (specs/features/F-206.md 2.3, 접근 판정은 F-212.md 2.2. 사용량 줄·413 은 F-2025.md 6.2, 금고 분기는 F-401.md 3.2·3.3)
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
-import { getDocAccess, roleAtLeast } from './access'
+import { getDocAccess, getOwnedFolder, roleAtLeast } from './access'
 import { getActiveLock } from './locks'
 import { notifyPurge } from './docRoomRpc'
-import { rowToDoc, updateDocRow } from './docWrite'
+import { e2eeDocFields, rowToDoc, updateDocRow, updateE2eeDocRow } from './docWrite'
 import type { DocRow } from './docWrite'
 import {
   checkDocCreate,
@@ -19,13 +19,17 @@ import {
 import {
   MAX_BODY_BYTES,
   MAX_CONTENT_BYTES,
+  isBase64Text,
   isContentTooLarge,
+  isValidAttachmentRefs,
   isValidLineEnding,
   isValidPinnedAt,
   isValidTimestamp,
   isValidTitle,
   isValidUuid,
+  isValidWrappedKey,
 } from './validate'
+import { E2EE_MAX_TITLE_CHARS } from '../src/lib/e2eeLimits'
 
 type ReadJsonResult =
   | { ok: true; data: unknown }
@@ -78,7 +82,31 @@ function rowToDocSummary(row: Omit<DocRow, 'content' | 'owner_id'>) {
     version: row.version,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ...e2eeDocFields(row),
   }
+}
+
+export type FieldError = { field: string } | { tooLarge: true }
+
+// 제목·본문 — 금고면 봉투 base64(제목 2,040자), 아니면 지금 규칙. required 가 아니면 없는 필드는 건너뛴다 (F-401 3.2 3번)
+export function checkTitleContent(title: unknown, content: unknown, e2ee: boolean, required: boolean): FieldError | null {
+  if (title !== undefined || required) {
+    if (e2ee ? !isBase64Text(title, E2EE_MAX_TITLE_CHARS) : !isValidTitle(title)) return { field: 'title' }
+  }
+  if (content !== undefined || required) {
+    if (e2ee ? !isBase64Text(content, Infinity) : typeof content !== 'string') return { field: 'content' }
+    if (isContentTooLarge(content as string)) return { tooLarge: true }
+  }
+  return null
+}
+
+export function fieldErrorResponse(error: FieldError): Response {
+  if ('tooLarge' in error) return jsonResponse({ error: 'too_large', limit: MAX_CONTENT_BYTES }, 413)
+  return jsonResponse({ error: 'invalid', field: error.field }, 400)
+}
+
+export async function hasE2eeKeys(env: Env, userId: string): Promise<boolean> {
+  return (await env.DB.prepare('SELECT 1 AS found FROM e2ee_keys WHERE user_id = ?').bind(userId).first()) !== null
 }
 
 export function badBody(parsed: { reason: 'too_large' | 'invalid_json' }): Response {
@@ -91,7 +119,7 @@ export function badBody(parsed: { reason: 'too_large' | 'invalid_json' }): Respo
 export async function handleListDocs(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   const { results } = await env.DB.prepare(
-    'SELECT id, title, line_ending, folder_id, pinned_at, version, created_at, updated_at FROM docs WHERE owner_id = ? ORDER BY updated_at DESC',
+    'SELECT id, title, line_ending, folder_id, pinned_at, version, created_at, updated_at, e2ee_key, attachment_refs FROM docs WHERE owner_id = ? ORDER BY updated_at DESC',
   )
     .bind(user.id)
     .all<Omit<DocRow, 'content' | 'owner_id'>>()
@@ -117,14 +145,13 @@ export async function handleCreateDoc(request: Request, env: Env): Promise<Respo
 
   const body = parsed.data
   if (typeof body !== 'object' || body === null) return errorResponse('invalid', 400)
-  const { id: bodyId, title, content, lineEnding, folderId, createdAt, updatedAt, pinnedAt } =
+  const { id: bodyId, title, content, lineEnding, folderId, createdAt, updatedAt, pinnedAt, e2eeKey, attachmentRefs } =
     body as Record<string, unknown>
 
+  // 판정 순서가 계약이다 (F-401 3.2)
   if (bodyId !== undefined && !isValidUuid(bodyId)) {
     return jsonResponse({ error: 'invalid', field: 'id' }, 400)
   }
-  if (!isValidTitle(title)) return jsonResponse({ error: 'invalid', field: 'title' }, 400)
-  if (typeof content !== 'string') return jsonResponse({ error: 'invalid', field: 'content' }, 400)
   if (!isValidLineEnding(lineEnding)) {
     return jsonResponse({ error: 'invalid', field: 'lineEnding' }, 400)
   }
@@ -140,8 +167,12 @@ export async function handleCreateDoc(request: Request, env: Env): Promise<Respo
   if (pinnedAt !== undefined && !isValidPinnedAt(pinnedAt)) {
     return jsonResponse({ error: 'invalid', field: 'pinnedAt' }, 400)
   }
-  if (isContentTooLarge(content)) {
-    return jsonResponse({ error: 'too_large', limit: MAX_CONTENT_BYTES }, 413)
+  const e2ee = e2eeKey !== undefined
+  if (e2ee && !isValidWrappedKey(e2eeKey)) return jsonResponse({ error: 'invalid', field: 'e2eeKey' }, 400)
+  const fieldError = checkTitleContent(title, content, e2ee, true)
+  if (fieldError) return fieldErrorResponse(fieldError)
+  if (attachmentRefs !== undefined && (!e2ee || !isValidAttachmentRefs(attachmentRefs))) {
+    return jsonResponse({ error: 'invalid', field: 'attachmentRefs' }, 400)
   }
 
   if (typeof bodyId === 'string') {
@@ -152,7 +183,14 @@ export async function handleCreateDoc(request: Request, env: Env): Promise<Respo
     }
   }
 
-  const newBytes = utf8Bytes(content)
+  // 없는 폴더·남의 폴더는 지금처럼 통과 — 오프라인에서 폴더보다 문서가 먼저 올라갈 수 있다 (F-401 3.2 6번)
+  if (typeof folderId === 'string' && !e2ee) {
+    const folder = await getOwnedFolder<{ id: string; owner_id: string; e2ee?: number }>(env, folderId, user)
+    if (folder?.e2ee === 1) return jsonResponse({ error: 'e2ee_folder' }, 409)
+  }
+  if (e2ee && !(await hasE2eeKeys(env, user.id))) return jsonResponse({ error: 'no_vault' }, 409)
+
+  const newBytes = utf8Bytes(content as string)
   const quota = checkDocCreate(await usageOf(env, user), newBytes)
   if (quota) return jsonResponse(quota, 413)
 
@@ -162,10 +200,12 @@ export async function handleCreateDoc(request: Request, env: Env): Promise<Respo
   const resolvedCreatedAt = typeof createdAt === 'number' ? createdAt : now
   const resolvedUpdatedAt = typeof updatedAt === 'number' ? updatedAt : now
   const resolvedPinnedAt = pinnedAt === undefined ? null : (pinnedAt as number | null)
+  const e2eeKeyValue = e2ee ? (e2eeKey as string) : null
+  const refsValue = e2ee ? JSON.stringify(attachmentRefs ?? []) : null
   await env.DB.batch([
     env.DB.prepare(
-      'INSERT INTO docs (id, owner_id, title, content, line_ending, folder_id, pinned_at, version, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
-    ).bind(id, user.id, title, content, lineEnding, resolvedFolderId, resolvedPinnedAt, 1, resolvedCreatedAt, resolvedUpdatedAt),
+      'INSERT INTO docs (id, owner_id, title, content, line_ending, folder_id, pinned_at, version, created_at, updated_at, e2ee_key, attachment_refs) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+    ).bind(id, user.id, title, content, lineEnding, resolvedFolderId, resolvedPinnedAt, 1, resolvedCreatedAt, resolvedUpdatedAt, e2eeKeyValue, refsValue),
     ...docUsageStatements(env.DB, { actorId: user.id, ownerId: user.id, now, deltaBytes: newBytes, deltaDocs: 1 }),
   ])
 
@@ -174,13 +214,15 @@ export async function handleCreateDoc(request: Request, env: Env): Promise<Respo
       id,
       owner_id: user.id,
       title: title as string,
-      content,
+      content: content as string,
       line_ending: lineEnding as 'crlf' | 'lf',
       folder_id: resolvedFolderId,
       pinned_at: resolvedPinnedAt,
       version: 1,
       created_at: resolvedCreatedAt,
       updated_at: resolvedUpdatedAt,
+      e2ee_key: e2eeKeyValue,
+      attachment_refs: refsValue,
     }),
     201,
   )
@@ -198,16 +240,17 @@ export async function handleUpdateDoc(
 
   const body = parsed.data
   if (typeof body !== 'object' || body === null) return errorResponse('invalid', 400)
-  const { title, content, baseVersion } = body as Record<string, unknown>
+  const { title, content, baseVersion, e2ee: e2eeMark, attachmentRefs } = body as Record<string, unknown>
 
-  if (title !== undefined && !isValidTitle(title)) {
-    return jsonResponse({ error: 'invalid', field: 'title' }, 400)
+  // 판정 순서가 계약이다 (F-401 3.3)
+  if (e2eeMark !== undefined && typeof e2eeMark !== 'boolean') {
+    return jsonResponse({ error: 'invalid', field: 'e2ee' }, 400)
   }
-  if (content !== undefined && typeof content !== 'string') {
-    return jsonResponse({ error: 'invalid', field: 'content' }, 400)
-  }
-  if (typeof content === 'string' && isContentTooLarge(content)) {
-    return jsonResponse({ error: 'too_large', limit: MAX_CONTENT_BYTES }, 413)
+  const e2ee = e2eeMark === true
+  const fieldError = checkTitleContent(title, content, e2ee, false)
+  if (fieldError) return fieldErrorResponse(fieldError)
+  if (attachmentRefs !== undefined && (!e2ee || !isValidAttachmentRefs(attachmentRefs))) {
+    return jsonResponse({ error: 'invalid', field: 'attachmentRefs' }, 400)
   }
   if (!Number.isInteger(baseVersion)) {
     return jsonResponse({ error: 'invalid', field: 'baseVersion' }, 400)
@@ -219,9 +262,17 @@ export async function handleUpdateDoc(
   if (!roleAtLeast(access.role, 'edit')) return errorResponse('forbidden', 403)
   const existing = access.doc
 
-  const activeLock = await getActiveLock(env, params.id)
-  if (activeLock && activeLock.session_id !== request.headers.get('X-Lock-Session')) {
-    return jsonResponse({ error: 'locked', email: activeLock.email, expiresAt: activeLock.expires_at }, 423)
+  // 표지 대조가 버전 검사보다 먼저 — 옛 탭은 버전이 맞아도 봉투를 평문으로 덮을 수 있다 (F-401 3.3 7번)
+  const rowIsE2ee = typeof existing.e2ee_key === 'string'
+  if (rowIsE2ee && !e2ee) return jsonResponse({ error: 'e2ee_doc' }, 409)
+  if (!rowIsE2ee && e2ee) return jsonResponse({ error: 'not_e2ee' }, 409)
+
+  // 금고 문서는 편집 잠금을 보지 않는다 (F-401 3.3 8번)
+  if (!rowIsE2ee) {
+    const activeLock = await getActiveLock(env, params.id)
+    if (activeLock && activeLock.session_id !== request.headers.get('X-Lock-Session')) {
+      return jsonResponse({ error: 'locked', email: activeLock.email, expiresAt: activeLock.expires_at }, 423)
+    }
   }
 
   if (existing.version !== baseVersion) {
@@ -237,15 +288,10 @@ export async function handleUpdateDoc(
     }
   }
 
-  const written = await updateDocRow(
-    env,
-    existing,
-    {
-      title: title as string | undefined,
-      content: content as string | undefined,
-    },
-    user.id,
-  )
+  const patch = { title: title as string | undefined, content: content as string | undefined }
+  const written = rowIsE2ee
+    ? await updateE2eeDocRow(env, existing, { ...patch, attachmentRefs: attachmentRefs as string[] | undefined })
+    : await updateDocRow(env, existing, patch, user.id)
   if (!written.ok) {
     const latest = await env.DB.prepare('SELECT * FROM docs WHERE id = ? AND owner_id = ?')
       .bind(params.id, existing.owner_id)
@@ -280,10 +326,9 @@ export async function handleMoveDocFolder(
   const existing = access.doc
 
   if (folderId !== null) {
-    const folder = await env.DB.prepare('SELECT id FROM folders WHERE id = ? AND owner_id = ?')
-      .bind(folderId, user.id)
-      .first<{ id: string }>()
+    const folder = await getOwnedFolder<{ id: string; owner_id: string; e2ee?: number }>(env, folderId as string, user)
     if (!folder) return jsonResponse({ error: 'invalid', field: 'folderId' }, 400)
+    if (folder.e2ee === 1 && typeof existing.e2ee_key !== 'string') return jsonResponse({ error: 'e2ee_folder' }, 409)
   }
 
   await env.DB.batch([

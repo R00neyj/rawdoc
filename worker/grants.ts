@@ -33,25 +33,26 @@ function isValidRole(value: unknown): value is 'view' | 'edit' {
   return value === 'view' || value === 'edit'
 }
 
-type OwnerCheck = { ok: true } | { ok: false; status: 404 | 403 }
+type OwnerCheck = { ok: true; e2ee: boolean } | { ok: false; status: 404 | 403 }
 
 // 초대·이동·삭제·링크는 owner 만. 권한이 전혀 없으면 404, 있지만(view·edit) owner 가 아니면 403 (F-212 2.2)
+// 금고 판정 열을 함께 읽는다 — resolveDocAccess 가 금고 비소유자를 null 로 본다 (F-401 X3)
 async function checkOwnedTarget(env: Env, targetType: TargetType, targetId: string, user: AuthUser): Promise<OwnerCheck> {
   if (targetType === 'doc') {
-    const doc = await env.DB.prepare('SELECT id, owner_id, folder_id FROM docs WHERE id = ?')
+    const doc = await env.DB.prepare('SELECT id, owner_id, folder_id, e2ee_key FROM docs WHERE id = ?')
       .bind(targetId)
-      .first<{ id: string; owner_id: string; folder_id: string | null }>()
+      .first<{ id: string; owner_id: string; folder_id: string | null; e2ee_key?: string | null }>()
     if (!doc) return { ok: false, status: 404 }
-    if (doc.owner_id === user.id) return { ok: true }
+    if (doc.owner_id === user.id) return { ok: true, e2ee: typeof doc.e2ee_key === 'string' }
     const access = await resolveDocAccess(env, doc, user)
     return { ok: false, status: access ? 403 : 404 }
   }
 
-  const folder = await env.DB.prepare('SELECT id, owner_id FROM folders WHERE id = ?')
+  const folder = await env.DB.prepare('SELECT id, owner_id, e2ee FROM folders WHERE id = ?')
     .bind(targetId)
-    .first<{ id: string; owner_id: string }>()
+    .first<{ id: string; owner_id: string; e2ee?: number }>()
   if (!folder) return { ok: false, status: 404 }
-  if (folder.owner_id === user.id) return { ok: true }
+  if (folder.owner_id === user.id) return { ok: true, e2ee: folder.e2ee === 1 }
   const grant = await env.DB.prepare(
     "SELECT role FROM grants WHERE target_type = 'folder' AND target_id = ? AND grantee_email = ?",
   )
@@ -88,6 +89,8 @@ async function handlePutGrant(
   const user = await requireUser(request, env)
   const check = await checkOwnedTarget(env, targetType, params.id, user)
   if (!check.ok) return errorResponse(check.status === 403 ? 'forbidden' : 'not_found', check.status)
+  // 금고 문서·폴더에는 초대 행이 생기지 않는다 (F-401 X4)
+  if (check.e2ee) return jsonResponse({ error: targetType === 'doc' ? 'e2ee_doc' : 'e2ee_folder' }, 409)
 
   const email = params.email.toLowerCase()
   if (!isValidEmail(email)) return jsonResponse({ error: 'invalid', field: 'email' }, 400)
@@ -215,7 +218,7 @@ export async function handleGetShared(request: Request, env: Env): Promise<Respo
       .bind(ownerId)
       .all<{ id: string; name: string; parent_id: string | null }>()
     const { results: docs } = await env.DB.prepare(
-      `SELECT ${SHARED_DOC_COLUMNS} FROM docs WHERE owner_id = ? ORDER BY updated_at DESC`,
+      `SELECT ${SHARED_DOC_COLUMNS} FROM docs WHERE owner_id = ? AND e2ee_key IS NULL ORDER BY updated_at DESC`,
     )
       .bind(ownerId)
       .all<SharedDocRow>()
@@ -244,7 +247,7 @@ export async function handleGetShared(request: Request, env: Env): Promise<Respo
   for (let i = 0; i < docOnlyIds.length; i += BATCH_ID_LIMIT) {
     const batch = docOnlyIds.slice(i, i + BATCH_ID_LIMIT)
     const { results: docs } = await env.DB.prepare(
-      `SELECT ${SHARED_DOC_COLUMNS} FROM docs WHERE id IN (${batch.map(() => '?').join(',')})`,
+      `SELECT ${SHARED_DOC_COLUMNS} FROM docs WHERE id IN (${batch.map(() => '?').join(',')}) AND e2ee_key IS NULL`,
     )
       .bind(...batch)
       .all<SharedDocRow>()

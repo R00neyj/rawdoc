@@ -74,10 +74,10 @@ function makeEnv(data: {
                 const [id, ownerId] = args as [string, string]
                 return (docs.find((d) => d.id === id && d.owner_id === ownerId) as T) ?? null
               }
-              if (sql.startsWith('SELECT id FROM docs WHERE id = ? AND owner_id = ?')) {
+              if (sql.startsWith('SELECT id, e2ee_key FROM docs WHERE id = ? AND owner_id = ?')) {
                 const [id, ownerId] = args as [string, string]
                 const row = docs.find((d) => d.id === id && d.owner_id === ownerId)
-                return (row ? { id: row.id } : null) as T | null
+                return (row ? { id: row.id, e2ee_key: null } : null) as T | null
               }
               if (sql.startsWith('SELECT * FROM docs WHERE id = ?')) {
                 const [id] = args as [string]
@@ -126,7 +126,7 @@ function makeEnv(data: {
               throw new Error(`unhandled first sql: ${sql}`)
             },
             async all<T>() {
-              if (sql.startsWith('SELECT id, title, line_ending, folder_id, pinned_at, version, created_at, updated_at FROM docs')) {
+              if (sql.startsWith('SELECT id, title, line_ending, folder_id, pinned_at, version, created_at, updated_at, e2ee_key, attachment_refs FROM docs')) {
                 const [ownerId] = args as [string]
                 return { results: docs.filter((d) => d.owner_id === ownerId) as T[] }
               }

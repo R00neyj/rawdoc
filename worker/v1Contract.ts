@@ -8,9 +8,10 @@ export type V1DocSummary = {
   version: number
   createdAt: number
   updatedAt: number
+  e2ee?: true // 금고 문서일 때만 — 그때 title 은 '' (F-401 X18)
 }
 export type V1Doc = V1DocSummary & { content: string }
-export type V1Folder = { id: string; name: string; parentId: string | null; createdAt: number; updatedAt: number }
+export type V1Folder = { id: string; name: string; parentId: string | null; createdAt: number; updatedAt: number; e2ee?: true }
 export type V1Attachment = {
   id: string
   ext: 'png' | 'jpg' | 'gif' | 'webp'

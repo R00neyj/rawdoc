@@ -1,9 +1,16 @@
-// 요청 본문 검사 — 순수 함수 (specs/features/F-206.md 2.2)
+// 요청 본문 검사 — 순수 함수 (specs/features/F-206.md 2.2, 금고 검사는 F-401.md 4장)
+import {
+  E2EE_MAX_ATTACHMENT_REFS,
+  E2EE_MAX_PLAIN_TITLE_CHARS,
+  E2EE_SERVER_MAX_CONTENT_BYTES,
+} from '../src/lib/e2eeLimits'
 
-export const MAX_CONTENT_BYTES = 1_000_000
+// 두 상한의 원본은 src/lib/e2eeLimits.ts — 부르는 곳이 많아 이름만 다시 내보낸다
+export const MAX_CONTENT_BYTES = E2EE_SERVER_MAX_CONTENT_BYTES
 export const MAX_BODY_BYTES = 1_100_000
-export const MAX_TITLE_CHARS = 500
+export const MAX_TITLE_CHARS = E2EE_MAX_PLAIN_TITLE_CHARS
 export const MAX_FOLDER_NAME_CHARS = 200
+export const E2EE_WRAPPED_KEY_MAX_CHARS = 128
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -39,4 +46,25 @@ export function isValidTimestamp(value: unknown): value is number {
 
 export function isValidPinnedAt(value: unknown): value is number | null {
   return value === null || isValidTimestamp(value)
+}
+
+const NON_BASE64_RE = /[^A-Za-z0-9+/=]/
+const ATTACHMENT_REF_RE = /^[0-9a-f]{16}$/
+
+// 표준 base64 — 허용 밖 글자 찾기 + 길이·패딩 위치. 끝까지 맞추는 정규식보다 1MB 에서 4배 빠르다 (F-401 r8)
+export function isBase64Text(value: unknown, maxChars: number): value is string {
+  if (typeof value !== 'string') return false
+  const n = value.length
+  if (n > maxChars || n % 4 !== 0 || NON_BASE64_RE.test(value)) return false
+  const pad = value.indexOf('=')
+  return pad === -1 || pad === n - 1 || (pad === n - 2 && value[n - 1] === '=')
+}
+
+export function isValidWrappedKey(value: unknown): value is string {
+  return isBase64Text(value, E2EE_WRAPPED_KEY_MAX_CHARS) && value.length >= 4
+}
+
+export function isValidAttachmentRefs(value: unknown): value is string[] {
+  if (!Array.isArray(value) || value.length > E2EE_MAX_ATTACHMENT_REFS) return false
+  return value.every((ref) => typeof ref === 'string' && ATTACHMENT_REF_RE.test(ref))
 }

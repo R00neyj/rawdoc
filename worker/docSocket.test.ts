@@ -16,7 +16,7 @@ type Grant = { target_type: 'doc' | 'folder'; target_id: string; grantee_email: 
 
 function makeEnv(
   opts: {
-    doc?: { owner_id: string; version: number } | null
+    doc?: { owner_id: string; version: number; e2ee_key?: string | null } | null
     grants?: Grant[]
     users?: { id: string; blocked_at: number | null }[]
     dev?: boolean
@@ -36,7 +36,7 @@ function makeEnv(
             async first<T>() {
               if (sql.includes('FROM docs WHERE id = ?')) {
                 if (!doc || args[0] !== DOC_ID) return null
-                return { id: DOC_ID, owner_id: doc.owner_id, folder_id: null, version: doc.version } as T
+                return { id: DOC_ID, owner_id: doc.owner_id, folder_id: null, version: doc.version, e2ee_key: sql.includes('e2ee_key') ? (doc.e2ee_key ?? null) : undefined } as T
               }
               if (sql.startsWith('SELECT role FROM grants')) {
                 const [type, id, email] = args
@@ -256,5 +256,20 @@ describe('F-2028 DS1~DS3 막힌 계정·막힌 소유자', () => {
     const decision = await resolveDocSocket(upgrade(), env, DOC_ID)
     expect(decision.type).toBe('forward')
     expect(sqls.filter((s) => s.startsWith('SELECT write_day'))).toEqual([])
+  })
+})
+
+describe('F-401 E10 금고 문서 소켓 (X15)', () => {
+  const e2eeDoc = { owner_id: 'owner', version: 7, e2ee_key: 'A'.repeat(55) + '=' }
+
+  it('소유자여도 4403 forbidden', async () => {
+    const { env } = makeEnv({ doc: e2eeDoc })
+    expect(await resolveDocSocket(upgrade(), env, DOC_ID)).toEqual({ type: 'close', code: 4403, reason: 'forbidden' })
+  })
+
+  it('edit 초대자는 4404 not_found', async () => {
+    vi.mocked(getUser).mockResolvedValue({ id: 'e', email: 'editor@example.com' })
+    const { env } = makeEnv({ doc: e2eeDoc, grants: [{ target_type: 'doc', target_id: DOC_ID, grantee_email: 'editor@example.com', role: 'edit' }] })
+    expect(await resolveDocSocket(upgrade(), env, DOC_ID)).toEqual({ type: 'close', code: 4404, reason: 'not_found' })
   })
 })

@@ -104,11 +104,11 @@ describe('F-304 A24 배선', () => {
           bind(...args: unknown[]) {
             return {
               async first<T>() {
-                if (sql.startsWith('SELECT id, owner_id, folder_id FROM docs WHERE id = ?') || sql.startsWith('SELECT * FROM docs WHERE id = ?')) {
-                  return (args[0] === DOC_ID ? { id: DOC_ID, owner_id: 'me', folder_id: null } : null) as T | null
+                if (sql.startsWith('SELECT id, owner_id, folder_id, e2ee_key FROM docs WHERE id = ?') || sql.startsWith('SELECT * FROM docs WHERE id = ?')) {
+                  return (args[0] === DOC_ID ? { id: DOC_ID, owner_id: 'me', folder_id: null, e2ee_key: null } : null) as T | null
                 }
-                if (sql.startsWith('SELECT id, owner_id FROM folders WHERE id = ?')) {
-                  return (args[0] === FOLDER_ID ? { id: FOLDER_ID, owner_id: 'me' } : null) as T | null
+                if (sql.startsWith('SELECT id, owner_id, e2ee FROM folders WHERE id = ?')) {
+                  return (args[0] === FOLDER_ID ? { id: FOLDER_ID, owner_id: 'me', e2ee: 0 } : null) as T | null
                 }
                 if (sql.startsWith('SELECT write_day')) return null
                 throw new Error(`unhandled first sql: ${sql}`)

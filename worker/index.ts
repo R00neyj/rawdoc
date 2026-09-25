@@ -48,7 +48,17 @@ import {
 import { handleListShares } from './shares'
 import { cleanupServerAttachments } from './attachmentGc'
 import { handleCreateToken, handleDeleteToken, handleListTokens } from './apiTokens'
-import { handleCreateAttachmentV1, handleCreateDocLinkV1, handleCreateDocV1, handleUpdateDocV1 } from './v1'
+import {
+  handleCreateAttachmentV1,
+  handleCreateDocLinkV1,
+  handleCreateDocV1,
+  handleCreateFolderV1,
+  handleGetDocV1,
+  handleListDocsV1,
+  handleUpdateDocV1,
+} from './v1'
+import { handleDeleteE2eeKeys, handleGetE2eeKeys, handlePutE2eeKeys } from './e2eeKeys'
+import { handleSetDocE2ee } from './e2eeDocs'
 import { renderPublicPage } from './publicPage'
 import { renderWelcomePage } from './welcomePage'
 import { rootTarget, welcomeRedirect, withRootHeaders } from './rootRoute'
@@ -215,6 +225,10 @@ const routes: Route[] = [
   { method: 'DELETE', path: '/api/docs/:id', handler: handleDeleteDoc },
   { method: 'PUT', path: '/api/docs/:id/folder', handler: handleMoveDocFolder },
   { method: 'PUT', path: '/api/docs/:id/pin', handler: handleSetPinned },
+  { method: 'PUT', path: '/api/docs/:id/e2ee', handler: handleSetDocE2ee },
+  { method: 'GET', path: '/api/e2ee/keys', handler: handleGetE2eeKeys },
+  { method: 'PUT', path: '/api/e2ee/keys', handler: handlePutE2eeKeys },
+  { method: 'DELETE', path: '/api/e2ee/keys', handler: handleDeleteE2eeKeys },
   { method: 'POST', path: '/api/docs/:id/lock', handler: handleLockDoc },
   { method: 'DELETE', path: '/api/docs/:id/lock', handler: handleUnlockDoc },
   { method: 'GET', path: '/api/docs/:id/link', handler: handleGetDocLink },
@@ -258,12 +272,12 @@ const routes: Route[] = [
     path: '/pub/folders/:token/docs/:docId/attachments/:idext',
     handler: handlePublicGetFolderAttachment,
   },
-  { method: 'GET', path: '/v1/docs', handler: handleListDocs },
+  { method: 'GET', path: '/v1/docs', handler: handleListDocsV1 },
   { method: 'POST', path: '/v1/docs', handler: handleCreateDocV1 },
-  { method: 'GET', path: '/v1/docs/:id', handler: handleGetDoc },
+  { method: 'GET', path: '/v1/docs/:id', handler: handleGetDocV1 },
   { method: 'PUT', path: '/v1/docs/:id', handler: handleUpdateDocV1 },
   { method: 'GET', path: '/v1/folders', handler: handleListFolders },
-  { method: 'POST', path: '/v1/folders', handler: handleCreateFolder },
+  { method: 'POST', path: '/v1/folders', handler: handleCreateFolderV1 },
   { method: 'POST', path: '/v1/attachments', handler: handleCreateAttachmentV1 },
   { method: 'POST', path: '/v1/docs/:id/link', handler: handleCreateDocLinkV1 },
   { method: 'GET', path: '/v1/me', handler: handleMe },

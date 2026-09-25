@@ -72,11 +72,12 @@ type D1DocRow = { title: string; content: string; line_ending: LineEnding; versi
 type Base = { content: string; title: string; version: number; lineEnding: LineEnding; updatedAt: number | null; rowBytes: number }
 type SnapshotResult = 'ok' | 'retry' | 'gone'
 
-const READ_ROW_SQL = 'SELECT title, content, line_ending, version, owner_id FROM docs WHERE id = ?'
+// D1 읽기 셋은 금고 행을 거른다 — DO 는 금고 문서를 없는 문서로 본다 (F-401 X16)
+const READ_ROW_SQL = 'SELECT title, content, line_ending, version, owner_id FROM docs WHERE id = ? AND e2ee_key IS NULL'
 const BLOCKED_SQL = 'SELECT blocked_at FROM users WHERE id = ?'
-const ACCESS_ROW_SQL = 'SELECT id, owner_id, folder_id FROM docs WHERE id = ?'
+const ACCESS_ROW_SQL = 'SELECT id, owner_id, folder_id FROM docs WHERE id = ? AND e2ee_key IS NULL'
 const UPDATE_SQL = 'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND version = ?'
-const FULL_ROW_SQL = 'SELECT * FROM docs WHERE id = ?'
+const FULL_ROW_SQL = 'SELECT * FROM docs WHERE id = ? AND e2ee_key IS NULL'
 
 // 빈 Doc 의 encodeStateAsUpdate 길이
 const EMPTY_UPDATE_BYTES = 2

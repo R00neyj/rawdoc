@@ -32,10 +32,10 @@ function makeEnv({ docs = [], links = [], folders = [] }: { docs?: DocRow[]; lin
         bind(...args: unknown[]) {
           return {
             async first<T>() {
-              if (sql.startsWith('SELECT id FROM docs WHERE id = ? AND owner_id = ?')) {
+              if (sql.startsWith('SELECT id, e2ee_key FROM docs WHERE id = ? AND owner_id = ?')) {
                 const [id, ownerId] = args as [string, string]
                 const row = docs.find((d) => d.id === id && d.owner_id === ownerId)
-                return (row ? { id: row.id } : null) as T
+                return (row ? { id: row.id, e2ee_key: null } : null) as T
               }
               if (sql.startsWith('SELECT * FROM share_links WHERE target_type = ? AND target_id = ? AND revoked_at IS NULL')) {
                 const [targetType, targetId] = args as ['doc' | 'folder', string]

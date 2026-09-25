@@ -11,7 +11,17 @@ import {
   isValidTitle,
   isValidUuid,
   utf8ByteLength,
+  E2EE_WRAPPED_KEY_MAX_CHARS,
+  isBase64Text,
+  isValidAttachmentRefs,
+  isValidWrappedKey,
 } from './validate'
+import { MAX_ATTACHMENT_BYTES } from './attachments'
+import {
+  E2EE_MAX_PLAIN_TITLE_CHARS,
+  E2EE_SERVER_MAX_ATTACHMENT_BYTES,
+  E2EE_SERVER_MAX_CONTENT_BYTES,
+} from '../src/lib/e2eeLimits'
 
 describe('isValidUuid', () => {
   it('accepts a well-formed uuid', () => {
@@ -143,5 +153,49 @@ describe('isValidPinnedAt', () => {
     expect(isValidPinnedAt(0)).toBe(false)
     expect(isValidPinnedAt(undefined)).toBe(false)
     expect(isValidPinnedAt('1000')).toBe(false)
+  })
+})
+
+// F-401 V1~V4 금고 검사 함수·상수 (specs/features/F-401.md 4장, 10.6)
+describe('F-401 V1 isBase64Text', () => {
+  it('패딩·길이·글자·maxChars', () => {
+    for (const ok of ['', 'QQ==', 'QUJD']) expect(isBase64Text(ok, 2_040), ok).toBe(true)
+    for (const bad of ['QQ=', 'Q=Q=', 'QQ===', 'a b=', '가나다라']) expect(isBase64Text(bad, 2_040), bad).toBe(false)
+    expect(isBase64Text('A'.repeat(2_040), 2_040)).toBe(true)
+    expect(isBase64Text('A'.repeat(2_044), 2_040)).toBe(false)
+    expect(isBase64Text(12, 2_040)).toBe(false)
+  })
+})
+
+describe('F-401 V2 isValidWrappedKey', () => {
+  it('4~128자 base64', () => {
+    expect(isValidWrappedKey('A'.repeat(55) + '=')).toBe(true)
+    expect(isValidWrappedKey('A'.repeat(128))).toBe(true)
+    expect(E2EE_WRAPPED_KEY_MAX_CHARS).toBe(128)
+    expect(isValidWrappedKey('A'.repeat(132))).toBe(false)
+    expect(isValidWrappedKey('')).toBe(false)
+    expect(isValidWrappedKey(56)).toBe(false)
+  })
+})
+
+describe('F-401 V3 isValidAttachmentRefs', () => {
+  it('배열, 1,000개까지, 16진 소문자 16자', () => {
+    const ref = '0123456789abcdef'
+    expect(isValidAttachmentRefs([])).toBe(true)
+    expect(isValidAttachmentRefs(Array(1_000).fill(ref))).toBe(true)
+    expect(isValidAttachmentRefs(Array(1_001).fill(ref))).toBe(false)
+    expect(isValidAttachmentRefs(['0123456789ABCDEF'])).toBe(false)
+    expect(isValidAttachmentRefs(ref)).toBe(false)
+  })
+})
+
+describe('F-401 V4 상수는 src/lib/e2eeLimits.ts 한 곳에서', () => {
+  it('worker 이름이 같은 값', () => {
+    expect(MAX_CONTENT_BYTES).toBe(E2EE_SERVER_MAX_CONTENT_BYTES)
+    expect(MAX_CONTENT_BYTES).toBe(1_000_000)
+    expect(MAX_TITLE_CHARS).toBe(E2EE_MAX_PLAIN_TITLE_CHARS)
+    expect(MAX_TITLE_CHARS).toBe(500)
+    expect(MAX_ATTACHMENT_BYTES).toBe(E2EE_SERVER_MAX_ATTACHMENT_BYTES)
+    expect(MAX_ATTACHMENT_BYTES).toBe(5_242_880)
   })
 })

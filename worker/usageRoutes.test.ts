@@ -100,7 +100,7 @@ function pngBytes(): Uint8Array {
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
 describe('F-2025 R1 쓰기 라우트마다 write_count +1', () => {
-  it('/api 21개 + 폴더 delete-all 변형 + /v1 5개', async () => {
+  it('/api 21개 + 폴더 delete-all 변형 + /v1 5개 + 금고 3개 (F-401 G2)', async () => {
     const { sqlDb, env } = makeEnv()
 
     async function expectPlusOne(label: string, run: () => Promise<Response>, okStatuses: number[]) {
@@ -267,6 +267,23 @@ describe('F-2025 R1 쓰기 라우트마다 write_count +1', () => {
 
     insertDoc(sqlDb, uuid(19), owner)
     await expectPlusOne('POST /v1/docs/:id/link', () => call(env, `/v1/docs/${uuid(19)}/link`, bearerInit('POST', plainToken)), [201])
+
+    // 금고 3 (F-401 G2) — 묶음 만들기, 금고로 옮기기, 빈 금고의 묶음 지우기
+    await expectPlusOne('PUT /api/e2ee/keys', () => call(env, '/api/e2ee/keys', jsonInit('PUT', { bundle: 'B1', baseRev: 0 })), [200])
+
+    insertDoc(sqlDb, uuid(20), owner)
+    await expectPlusOne(
+      'PUT /api/docs/:id/e2ee',
+      () =>
+        call(
+          env,
+          `/api/docs/${uuid(20)}/e2ee`,
+          jsonInit('PUT', { e2eeKey: 'A'.repeat(55) + '=', title: 'dA==', content: 'Yw==', attachmentRefs: [], baseVersion: 1 }),
+        ),
+      [200],
+    )
+    sqlDb.prepare('DELETE FROM docs WHERE id = ?').run(uuid(20))
+    await expectPlusOne('DELETE /api/e2ee/keys', () => call(env, '/api/e2ee/keys', { method: 'DELETE' }), [204])
 
     void createdTokenId
   })
