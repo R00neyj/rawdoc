@@ -60,6 +60,8 @@ import { flushUnsyncedDocs } from './yjsFlush'
 import { withTabBroadcast, newTabId } from './tabSync'
 import { useTabSync } from './useTabSync'
 import { useE2ee } from './useE2ee'
+import { isE2eeStoreError, lockDocMetas, planE2eeReset, withE2ee, type E2eeStore } from '../e2ee/e2eeStore'
+import E2eeLockedPanel from './E2eeLockedPanel'
 import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from './exportDoc'
 import { downloadWorkspaceExport, type WorkspaceExportSourceStore } from './exportWorkspace'
 import { downloadVaultExport } from './exportVault'
@@ -141,7 +143,7 @@ const HEADING_JUMP_MARGIN = 16 // 목차 SELECT_MARGIN 과 같다 (F-2018 7.3)
 const NO_PEERS: Peer[] = []
 
 // lineEnding 은 실시간 경로가 편집기를 열 때 읽는다 — 본문을 store.get 으로 읽지 않기 때문이다 (F-305 5.2)
-type DocMeta = Pick<Doc, 'id' | 'title' | 'updatedAt' | 'folderId' | 'pinnedAt' | 'role' | 'ownerEmail' | 'viaFolder'> & {
+type DocMeta = Pick<Doc, 'id' | 'title' | 'updatedAt' | 'folderId' | 'pinnedAt' | 'role' | 'ownerEmail' | 'viaFolder' | 'e2ee'> & {
   lineEnding?: LineEnding
 }
 type OpenDoc = { id: string; content: string; lineEnding: LineEnding }
@@ -175,6 +177,24 @@ const LIVE_NOTICE = {
   merged: '연결이 끊긴 동안 한 편집을 합쳤습니다. 같은 곳을 다른 사람도 고쳤다면 문장이 섞였을 수 있습니다',
   tooLarge: '문서가 1MB 를 넘어 서버에 저장되지 않습니다. 내용을 줄이거나 문서를 나눠 주세요',
 } as const
+
+// 금고 문서 알림 (F-405 8장)
+const E2EE_NOTICE = {
+  folderRule: '금고 폴더에는 금고 문서와 금고 폴더만 넣을 수 있습니다.',
+  locked: '금고가 잠겨 있어 저장하지 못했습니다. 금고를 연 뒤 다시 해 주세요.',
+  unavailable: '금고 정보를 불러오지 못해 금고 폴더에 문서를 만들지 못했습니다.',
+  tooManyRefs: '금고 문서 하나에는 이미지를 1,000개까지 넣을 수 있습니다. 이미지를 줄여야 저장됩니다.',
+  createTooLarge: '문서가 너무 커서 금고에 넣을 수 없습니다(금고 문서는 약 750KB까지).',
+  saveTooLarge: '금고 문서가 약 750KB를 넘어 저장하지 못했습니다. 내용을 줄이거나 문서를 나눠 주세요.',
+} as const
+
+// 새 금고 문서를 만들다 난 오류 → 알림 문구, 금고 오류가 아니면 null (F-405 7.6)
+function e2eeCreateErrorMessage(err: unknown): string | null {
+  if (isE2eeStoreError(err, 'locked')) return E2EE_NOTICE.locked
+  if (isE2eeStoreError(err, 'too-large')) return E2EE_NOTICE.createTooLarge
+  if (isE2eeStoreError(err, 'too-many-refs')) return E2EE_NOTICE.tooManyRefs
+  return null
+}
 
 // 제어기 단계 → 상태바 표시 (F-305 11.1)
 function liveStatusOf(snapshot: LiveSnapshot | undefined): LiveStatus {
@@ -211,6 +231,7 @@ function stripContent(doc: Doc): DocMeta {
     ownerEmail: doc.ownerEmail,
     viaFolder: doc.viaFolder ?? null,
     lineEnding: doc.lineEnding,
+    ...(doc.e2ee ? { e2ee: doc.e2ee } : {}), // F-405 7.3
   }
 }
 
@@ -408,7 +429,15 @@ export default function App() {
   const importFileRef = useRef<File | null>(null)
   const importPlanRef = useRef<ImportPlan | null>(null)
   const importCancelRef = useRef(false)
-  const docSaverFlushRef = useRef(async () => {})
+  const docSaverFlushRef = useRef(async (): Promise<boolean> => true)
+  // 금고 한 겹 (F-405 7.1) — 잠그기·초기화 단계와 금고 상태 변화가 쓴다
+  const e2eeStoreRef = useRef<E2eeStore | null>(null)
+  // 진행 중인 제목 저장 — 잠그기 flush 단계가 기다린다 (F-405 7.2)
+  const titleSavingRef = useRef<Promise<unknown> | null>(null)
+  // 지금 편집기에 올라간 문서 id — 금고 상태가 바뀌어 본문 읽기를 다시 돌 때 이미 열린 편집기를 다시 만들지 않는다
+  const openDocIdRef = useRef<string | null>(null)
+  // E7·E26 을 띄운 문서 — 저장이 한 번 성공할 때까지 다시 띄우지 않는다 (F-405 7.8)
+  const e2eeSaveNoticeShownRef = useRef<Set<string>>(new Set())
   const notifyChangeRef = useRef(() => {})
   const printRootRef = useRef<HTMLDivElement | null>(null) // 인쇄 전용 영역 (F-279.md 4.2)
   const printDocRef = useRef(() => {}) // Ctrl+P 가 매 커밋 최신 handlePrintDoc 을 읽게 한다 (F-279.md 6.1)
@@ -588,12 +617,13 @@ export default function App() {
       hasPendingChanges: false,
       online: true,
       hasLocalState: false,
+      e2ee: Boolean(currentDoc?.e2ee), // F-405 7.5
     })
     setDocSession({
       seq: docSession.seq + 1,
       docId: currentDocId,
       store,
-      path: quick.kind === 'local' || quick.kind === 'view' ? quick.kind : null,
+      path: quick.kind === 'local' || quick.kind === 'view' || quick.kind === 'e2ee' ? quick.kind : null,
       fallbackReason: null,
       forbiddenClose: false,
       resume: false,
@@ -624,8 +654,11 @@ export default function App() {
       persist,
       hasLocalState: persist ? await persist.hasState(id).catch(() => false) : false,
     }))
-    Promise.all([pendingCheck.catch(() => true), persistCheck.catch(() => ({ persist: null, hasLocalState: false }))]).then(
-      ([pending, { persist, hasLocalState }]) => {
+    // 목록에 아직 없는 금고 문서(해시로 바로 연 문서)가 실시간으로 잘못 판정되지 않게 한 번 더 본다 (F-405 7.5)
+    const e2eeCheck =
+      docSession.store.kind === 'server' ? docSession.store.get(id).then((d) => Boolean(d?.e2ee)).catch(() => false) : Promise.resolve(false)
+    Promise.all([pendingCheck.catch(() => true), persistCheck.catch(() => ({ persist: null, hasLocalState: false })), e2eeCheck]).then(
+      ([pending, { persist, hasLocalState }, isE2eeDoc]) => {
         if (cancelled) return
         const createdHere = createdHereRef.current.delete(id)
         const decided = decideDocPath({
@@ -636,6 +669,7 @@ export default function App() {
           hasPendingChanges: pending || createdHere,
           online: navigator.onLine,
           hasLocalState,
+          e2ee: isE2eeDoc,
         })
         const realtime = decided.kind === 'realtime' ? decided : null
         setDocSession((cur) =>
@@ -888,7 +922,8 @@ export default function App() {
     const docId = currentDocIdRef.current
     if (!docId) return
     store.get(docId).then((fresh) => {
-      if (!fresh || docId !== currentDocIdRef.current) return
+      // 잠긴 금고 문서는 빈 본문으로 편집기를 올리지 않는다 (F-405 7.4)
+      if (!fresh || docId !== currentDocIdRef.current || fresh.e2ee === 'locked') return
       setOpenDoc({ id: fresh.id, content: fresh.content, lineEnding: fresh.lineEnding })
       setDocs((prev) =>
         sortByUpdatedAtDesc(prev.map((d) => (d.id === fresh.id ? { ...d, title: fresh.title, updatedAt: fresh.updatedAt } : d))),
@@ -900,7 +935,8 @@ export default function App() {
 
   // 편집권은 로컬(idb) 문서에만 켠다 — 서버는 useDocLock(F-213)이, 메모리는 저장소가 탭마다 따로라 겹칠 일이 없다 (F-296.md 6.4)
   // 개발 빌드 ?ysync 두 탭 연결에서는 두 탭 모두 편집해야 해 편집권을 잡지 않는다 (F-303 9.4)
-  const claimDocId = store.kind === 'idb' && !sharedDoc && !DEV_YSYNC ? currentDocId : null
+  // 서버 저장소의 금고 문서도 잠금·실시간 병합이 없어 편집권을 켠다 (F-405 7.5)
+  const claimDocId = (store.kind === 'idb' || docPath === 'e2ee') && !sharedDoc && !DEV_YSYNC ? currentDocId : null
   // useTabSync 가 e2ee 열쇠고리보다 먼저 만들어지므로, 다른 탭 잠그기 신호는 ref 로 늦게 잇는다 (F-404.md 6장)
   const e2eeOtherTabLockRef = useRef<() => void>(() => {})
   const { post: postTabMessage, claimReadOnly } = useTabSync({
@@ -926,6 +962,69 @@ export default function App() {
     e2eeOtherTabLockRef.current = () => e2ee?.handleOtherTabLock()
     e2eeRef.current = e2ee
   }, [e2ee])
+
+  // 잠겨서 P1 이 뜬 문서 — 초점을 옮기지 않는다. 다른 문서로 가면 되돌린다 (F-405 6.2)
+  const [e2eeUnmountedDocId, setE2eeUnmountedDocId] = useState<string | null>(null)
+  const [e2eeUnmountTrackedDocId, setE2eeUnmountTrackedDocId] = useState(currentDocId)
+  if (e2eeUnmountTrackedDocId !== currentDocId) {
+    setE2eeUnmountTrackedDocId(currentDocId)
+    setE2eeUnmountedDocId(null)
+  }
+  // 금고 초기화 단계 본체 — 등록은 열쇠고리마다 한 번이고 매 커밋 최신 store 를 쓴다 (F-405 7.9)
+  const e2eeResetStepRef = useRef<() => Promise<void>>(async () => {})
+  // 잠그기·초기화 단계 (F-405 2.2 표, 7.2)
+  const e2eeKeyring = e2ee?.keyring ?? null
+  useEffect(() => {
+    if (!e2eeKeyring) return undefined
+    const currentE2eeMeta = () => {
+      const id = currentDocIdRef.current
+      return id ? docsRef.current.find((d) => d.id === id) : undefined
+    }
+    const unFlush = e2eeKeyring.registerLockStep('flush', async () => {
+      if (currentE2eeMeta()?.e2ee !== 'open') return
+      const saved = await docSaverFlushRef.current()
+      const titleSaving = titleSavingRef.current
+      if (titleSaving) await titleSaving
+      if (!saved) throw new Error('e2ee_flush_failed')
+    })
+    const unUnmount = e2eeKeyring.registerLockStep('unmount', () => {
+      const meta = currentE2eeMeta()
+      if (meta?.e2ee === 'open') {
+        setE2eeUnmountedDocId(meta.id)
+        setOpenDoc(null)
+        setViewerHtml('')
+      }
+      setDocs((prev) => lockDocMetas(prev))
+    })
+    const unIndexes = e2eeKeyring.registerLockStep('indexes', () => e2eeStoreRef.current?.clearPlainCache())
+    const unReset = e2eeKeyring.registerResetStep(() => e2eeResetStepRef.current())
+    return () => {
+      unFlush()
+      unUnmount()
+      unIndexes()
+      unReset()
+    }
+  }, [e2eeKeyring])
+
+  // 금고 상태가 바뀌면 목록을 다시 읽는다 — 열리면 멈춘 충돌부터 다시 보낸다 (F-405 7.4)
+  const [e2eeListSyncedFor, setE2eeListSyncedFor] = useState<string | null>(null)
+  const prevE2eeStatusRef = useRef(e2ee?.status ?? null)
+  useEffect(() => {
+    const next = e2ee?.status ?? null
+    const prev = prevE2eeStatusRef.current
+    if (prev === next || bootPhase !== 'ready') return
+    prevE2eeStatusRef.current = next
+    if (next === 'open') e2eeStoreRef.current?.resumeAfterUnlock()
+    if (next !== 'open' && prev !== 'open') return
+    // 금고를 열며 곧바로 만든 새 문서가 이 목록보다 늦게 들어올 수 있다 — 목록에 없는 문서는 지우지 않고 둔다
+    void Promise.all([store.listFolders(), store.list()]).then(([newFolders, newDocs]) => {
+      setFolders(newFolders)
+      const stripped = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
+      const listed = new Set(stripped.map((d) => d.id))
+      setDocs((prevDocs) => sortByUpdatedAtDesc([...stripped, ...prevDocs.filter((d) => !listed.has(d.id))]))
+      setE2eeListSyncedFor(next)
+    })
+  }, [e2ee?.status, bootPhase, store, keepLiveTitle])
 
   const isDeletedElsewhere = currentDocId != null && deletedElsewhereId === currentDocId
   const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly || claimReadOnly || isDeletedElsewhere || liveStopped || isOfflineView
@@ -1248,8 +1347,13 @@ export default function App() {
       setDbBlockedMessage(null)
       // 서버 저장소면 md-yjs 를 페이지 수명 동안 한 번 연다 — 오프라인 부팅도 저장소가 아는 사용자 id 로 (F-306 9.2)
       if (resolvedStore.kind === 'server') yjsStoreRef.current = openYjsStore((resolvedStore as ServerStore).userId)
+      // 금고 한 겹을 탭 신호 안쪽에 둔다 — 암호화 뒤의 쓰기에도 신호가 붙는다. MK 는 열쇠고리가 생긴 뒤 ref 로 읽는다 (F-405 7.1)
+      const appStore: Store =
+        resolvedStore.kind === 'memory'
+          ? resolvedStore
+          : (e2eeStoreRef.current = withE2ee(resolvedStore, { getMasterKey: () => e2eeRef.current?.keyring.getMasterKey() ?? null }))
       // 이 한 곳만 감싸면 App.tsx 의 모든 저장 경로가 자동으로 다른 탭에 신호를 보낸다 (F-296.md 6.2)
-      const broadcastStore = withTabBroadcast(resolvedStore, postTabMessage, tabIdRef.current)
+      const broadcastStore = withTabBroadcast(appStore, postTabMessage, tabIdRef.current)
       // 부팅에서 먼저 막힘을 알게 된 경우 — 첫 요청을 보내 403 을 받는 일 없이 처음부터 멈춰 있다 (F-2030 4.4 3번)
       if (resolvedStore.kind === 'server' && accountState.state === 'in' && accountState.blocked) {
         ;(resolvedStore as ServerStore).setAccountBlocked(true)
@@ -1276,7 +1380,7 @@ export default function App() {
         reason?: 'locked'
         email?: string
       }) {
-        const [orig, copy] = await Promise.all([resolvedStore.get(docId), resolvedStore.get(copyId)])
+        const [orig, copy] = await Promise.all([appStore.get(docId), appStore.get(copyId)])
         setDocs((prev) => {
           let next = prev
           if (orig) {
@@ -1331,7 +1435,7 @@ export default function App() {
           importLocal: (input) => serverStore.importLocal(input),
           notice: showNotice,
           afterImport: async () => {
-            const [freshDocs, freshFolders] = await Promise.all([resolvedStore.list(), resolvedStore.listFolders()])
+            const [freshDocs, freshFolders] = await Promise.all([appStore.list(), appStore.listFolders()])
             setDocs(sortByUpdatedAtDesc(freshDocs.map(stripContent)))
             setFolders(freshFolders)
           },
@@ -1339,17 +1443,17 @@ export default function App() {
       }
 
       // 폴더를 문서와 함께 받아 먼저 반영한다 — 폴더가 늦으면 그 안의 문서가 잠깐 루트에 보인다
-      const foldersPromise = resolvedStore.listFolders()
-      let list = await resolvedStore.list()
+      const foldersPromise = appStore.listFolders()
+      let list = await appStore.list()
 
       if (list.length === 0 && getPref('md.firstRunDone', '') === '') {
-        await resolvedStore.create({
+        await appStore.create({
           title: GUIDE_DOC_TITLE,
           content: GUIDE_DOC_CONTENT_CRLF,
           lineEnding: 'crlf',
         })
         setPref('md.firstRunDone', '1')
-        list = await resolvedStore.list()
+        list = await appStore.list()
       }
 
       const folderList = await foldersPromise
@@ -1360,15 +1464,20 @@ export default function App() {
 
       // 안 쓰는 첨부 정리 (F-156.md 2.7) — server 저장소는 kind 만 idb 로 보이게 해 캐시 문서 기준으로 돈다 (F-207.md 2.5)
       // 아직 안 올린 첨부는 빼고 넘긴다 — 오프라인 편집은 캐시 본문이 아니라 md-yjs 에만 있다 (F-306 10장)
+      // 금고 문서 본문은 봉투라 참조를 못 찾는다 — attachmentRefs 를 참조 글자로 바꿔 넘긴다 (F-405 4.3, F-406 이 이어받는다)
+      const gcList = async () =>
+        (await resolvedStore.list()).map((d) =>
+          d.e2eeKey !== undefined ? { content: (d.attachmentRefs ?? []).map((id) => `attachments/${id}.png`).join('\n') } : d,
+        )
       const gcStore =
         resolvedStore.kind === 'server'
           ? {
               kind: 'idb',
-              list: () => resolvedStore.list(),
+              list: gcList,
               listAttachments: async () => (await resolvedStore.listAttachments()).filter((a) => a.uploaded !== false),
               removeAttachment: (id: string) => resolvedStore.removeAttachment(id),
             }
-          : resolvedStore
+          : { ...resolvedStore, list: gcList }
       scheduleAttachmentGc(() => cleanupUnusedAttachments({ store: gcStore }))
 
       const parsedHash = parseHash(location.hash)
@@ -1753,6 +1862,9 @@ export default function App() {
       : (docPath === 'fallback' && everLiveIds.has(currentDocId)) || (docPath === 'view' && docSession.forbiddenClose)
         ? 'server-first'
         : 'store'
+  // 금고 문서는 금고가 열리고 잠길 때 본문 읽기를 다시 돈다 (F-405 7.4)
+  const e2eeStatus = e2ee?.status ?? null
+  const openLoadE2eeKey = currentDoc?.e2ee ? e2eeStatus : null
   useEffect(() => {
     if (bootPhase !== 'ready' || !currentDocId || openLoad === null) return
     let cancelled = false
@@ -1763,6 +1875,8 @@ export default function App() {
         : store.get(currentDocId)
     load.then((doc) => {
       if (cancelled || !doc) return
+      // 잠긴 금고 문서는 빈 본문으로 편집기를 올리지 않는다 — P1 이 그 자리에 뜬다. 이미 열린 금고 편집기는 다시 만들지 않는다
+      if (doc.e2ee === 'locked' || (doc.e2ee && openDocIdRef.current === doc.id)) return
       setOpenDoc({ id: doc.id, content: doc.content, lineEnding: doc.lineEnding })
       setStats({
         line: 1,
@@ -1774,7 +1888,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [store, bootPhase, currentDocId, openLoad])
+  }, [store, bootPhase, currentDocId, openLoad, openLoadE2eeKey])
 
   // 문서를 전환하면 이전 문서의 대기 중인 글자·단어 수 재계산은 버린다
   useEffect(() => {
@@ -1962,6 +2076,7 @@ export default function App() {
   // Editor 는 마운트 시점의 onDocChange 클로저만 계속 쓰므로(위 주석 참고), 여기서 부르는
   // 콜백들은 항상 참조가 그대로여야 한다. 최신 구현은 ref 로 우회한다
   const handleDocSaved = useCallback((updated: Doc) => {
+    e2eeSaveNoticeShownRef.current.delete(updated.id)
     setDocs((prev) =>
       sortByUpdatedAtDesc(
         prev.map((d) => (d.id === updated.id ? { ...d, updatedAt: updated.updatedAt } : d)),
@@ -1969,12 +2084,27 @@ export default function App() {
     )
   }, [])
 
-  const handleSaveError = useCallback(() => {
-    showNotice({
-      type: 'error',
-      message: '저장하지 못했습니다. 중요한 내용은 .md 내보내기로 백업하십시오.',
-    })
-  }, [showNotice])
+  // 금고 문서 저장 실패는 이유별 문구 — E7·E26 은 문서마다 저장이 성공할 때까지 한 번 (F-405 7.8)
+  const handleSaveError = useCallback(
+    (error: unknown) => {
+      if (isE2eeStoreError(error, 'too-large') || isE2eeStoreError(error, 'too-many-refs')) {
+        const docId = currentDocIdRef.current ?? ''
+        if (e2eeSaveNoticeShownRef.current.has(docId)) return
+        e2eeSaveNoticeShownRef.current.add(docId)
+        showNotice({ type: 'error', message: error.code === 'too-large' ? E2EE_NOTICE.saveTooLarge : E2EE_NOTICE.tooManyRefs })
+        return
+      }
+      if (isE2eeStoreError(error, 'locked')) {
+        showNotice({ type: 'error', message: E2EE_NOTICE.locked })
+        return
+      }
+      showNotice({
+        type: 'error',
+        message: '저장하지 못했습니다. 중요한 내용은 .md 내보내기로 백업하십시오.',
+      })
+    },
+    [showNotice],
+  )
 
   const docSaver = useDocSaver({
     store,
@@ -1992,6 +2122,8 @@ export default function App() {
   useEffect(() => {
     docSaverFlushRef.current = docSaver.flush
     notifyChangeRef.current = docSaver.notifyChange
+    openDocIdRef.current = openDoc?.id ?? null
+    e2eeResetStepRef.current = runE2eeReset
     printDocRef.current = handlePrintDoc
     // exportDisabled 와 같은 조건 (F-279.md 6.1) — bootPhase !== 'ready' 면 isEmpty 자체가 false 라 첫 항으로 충분하다
     printDisabledRef.current = bootPhase !== 'ready' || currentDocId === null || Boolean(sharedDoc)
@@ -2159,14 +2291,49 @@ export default function App() {
 
   // folderId 를 생략하면 현재 문서가 속한 폴더 안에 만든다(없으면 최상위). 사이드바
   // 폴더 메뉴의 `새 문서` 는 그 폴더 id 를 명시로 넘긴다 (F-126.md 5.3)
+  // 금고를 열어 달라고 한다. 닫으면 false, 금고 정보를 못 읽으면 E25 뒤 false (F-405 2.4)
+  async function requestE2eeOpen(): Promise<boolean> {
+    const ring = e2eeRef.current
+    if (!ring) {
+      showNotice({ type: 'error', message: E2EE_NOTICE.unavailable })
+      return false
+    }
+    const ok = await ring.requestOpen()
+    if (!ok && ring.keyring.getStatus() === 'unavailable') showNotice({ type: 'error', message: E2EE_NOTICE.unavailable })
+    return ok
+  }
+
+  // 대상이 금고 폴더면 금고가 열려 있어야 만든다 (F-405 7.6)
+  async function ensureE2eeOpenForFolder(folderId: string | null): Promise<boolean> {
+    if (!folderId || !foldersRef.current.some((f) => f.id === folderId && f.e2ee === true)) return true
+    return requestE2eeOpen()
+  }
+
+  // 금고 초기화 단계 — 금고 문서·폴더를 지우고 서버에 닿기를 기다린다. 실패는 던진다 (F-405 7.9)
+  async function runE2eeReset() {
+    const [list, folderList] = await Promise.all([store.list(), store.listFolders()])
+    const plan = planE2eeReset({ docs: list, folders: folderList })
+    const openId = currentDocIdRef.current
+    if (openId && list.some((d) => d.id === openId && d.e2ee)) {
+      currentDocIdRef.current = null
+      setCurrentDocId(null)
+      replaceHashUrl(null)
+    }
+    for (const id of plan.folderIds) await store.removeFolder(id, 'delete-all')
+    for (const id of plan.docIds) await store.remove(id)
+    await (e2eeStoreRef.current as Partial<ServerStore> | null)?.flushOutbox?.()
+    await resyncFromStore()
+  }
+
   async function createNewDoc(folderId?: string | null) {
+    const targetFolderId = folderId !== undefined ? folderId : newDocFolderId()
+    if (!(await ensureE2eeOpenForFolder(targetFolderId))) return
     // 보기 모드에서 새 문서 를 누르면 먼저 편집 모드로 바꾼다 — 제목 입력 포커스가
     // 필요하기 때문이다 (ia.md 3.3, F-123.md 3.3)
     if (viewMode === 'view') changeViewMode('live')
     await beforeLeaveDoc()
     setSharedDoc(null) // 공유 화면에서 새 문서 를 눌러도 화면을 떠난다 (F-130.md 4장, 자체 결정)
     setMapRoute(null) // 지도의 "문서가 없습니다" 빈 상태에서 새 문서 를 눌러도 지도를 떠난다 (F-292.md 6.5)
-    const targetFolderId = folderId !== undefined ? folderId : newDocFolderId()
     // 새 문서 버튼은 {{title}} 이 빈 글자다 — 사용자 결정, F-2037.md 4.4
     const { content, failed } = await buildNewDocContent({ title: '', emptyTitle: 'keep-empty' })
     let doc: Doc
@@ -2177,10 +2344,10 @@ export default function App() {
         lineEnding: 'crlf',
         folderId: targetFolderId,
       })
-    } catch {
+    } catch (err) {
       // 저장소가 folderId 를 거부하면(F-136.md 3.1) 처리되지 않은 rejection 으로 두지
       // 않고 기존 오류 알림 경로로 보여준다 (F-138 3.4, 문구는 스스로 정함)
-      showNotice({ type: 'error', message: '새 문서를 만들지 못했습니다. 다시 시도하세요.' })
+      showNotice({ type: 'error', message: e2eeCreateErrorMessage(err) ?? '새 문서를 만들지 못했습니다. 다시 시도하세요.' })
       return
     }
     // 목록에 없는 템플릿(3.4)과 달리, 설정은 맞는데 이번만 못 읽은 것은 알린다 (4.2-4)
@@ -2312,6 +2479,8 @@ export default function App() {
     }
 
     const place = wikiResolver.findLinkFolder(target, currentFolderId)
+    const wikiFolderId = place ? place.folderId : newDocFolderId()
+    if (!(await ensureE2eeOpenForFolder(wikiFolderId))) return
 
     if (viewMode === 'view') changeViewMode('live') // 제목 입력 포커스가 필요하다 (ia.md 3.3)
     await beforeLeaveDoc()
@@ -2327,11 +2496,11 @@ export default function App() {
         title: newTitle,
         content,
         lineEnding: 'crlf',
-        folderId: place ? place.folderId : newDocFolderId(),
+        folderId: wikiFolderId,
       })
-    } catch {
+    } catch (err) {
       // F-138 3.4 — 3.4 참고 주석과 같은 이유·같은 알림 경로
-      showNotice({ type: 'error', message: '새 문서를 만들지 못했습니다. 다시 시도하세요.' })
+      showNotice({ type: 'error', message: e2eeCreateErrorMessage(err) ?? '새 문서를 만들지 못했습니다. 다시 시도하세요.' })
       return
     }
     if (failed) showNotice({ type: 'error', message: '새 문서 템플릿을 읽지 못해 빈 문서로 만들었습니다.' })
@@ -2490,14 +2659,22 @@ export default function App() {
   async function runImportFiles(files: File[]): Promise<Doc | null> { // 마지막으로 만든 문서를 돌려준다 — OS 파일 열기 재중복 방지(F-231)가 handle 연결에 쓴다
     if (files.length === 0) return null
 
+    const targetFolderId = newDocFolderId() // F-138 3.4 — 끊긴 folderId 는 최상위로
+    // 금고 폴더면 여러 파일이어도 한 번만 묻는다 (F-405 7.6)
+    if (!(await ensureE2eeOpenForFolder(targetFolderId))) return null
+
     await beforeLeaveDoc()
     setSharedDoc(null) // 공유 화면에서 가져와도 화면을 떠난다 (F-130.md 4장, 자체 결정)
 
-    const targetFolderId = newDocFolderId() // F-138 3.4 — 끊긴 folderId 는 최상위로
+    // 금고 한 겹이 거절한 이유는 가져오기 알림 대신 금고 문구로 보인다 (F-405 7.6)
+    let lastE2eeError: unknown = null
     const scopedStore = {
       ...store,
       create: (args: { title: string; content: string; lineEnding: LineEnding }) =>
-        store.create({ ...args, folderId: targetFolderId }),
+        store.create({ ...args, folderId: targetFolderId }).catch((err: unknown) => {
+          if (e2eeCreateErrorMessage(err)) lastE2eeError = err
+          throw err
+        }),
     }
 
     const createdMetas: DocMeta[] = []
@@ -2510,7 +2687,9 @@ export default function App() {
         if (isLast) lastCreatedDoc = doc
       },
       notify: (notice) => {
-        if (notice) showNotice(notice)
+        const e2eeMessage = notice?.type === 'error' ? e2eeCreateErrorMessage(lastE2eeError) : null
+        if (e2eeMessage) showNotice({ type: 'error', message: e2eeMessage })
+        else if (notice) showNotice(notice)
       },
     })
 
@@ -2662,7 +2841,7 @@ export default function App() {
       !(docPathRef.current.docId === openBeforeId && docPathRef.current.path === 'realtime')
     ) {
       const fresh = await store.get(openBeforeId)
-      if (fresh && fresh.id === currentDocIdRef.current) {
+      if (fresh && fresh.id === currentDocIdRef.current && fresh.e2ee !== 'locked') {
         setOpenDoc({ id: fresh.id, content: fresh.content, lineEnding: fresh.lineEnding })
         focusEditorRef.current = false
         setEditorRemountNonce((n) => n + 1)
@@ -2828,14 +3007,26 @@ export default function App() {
     }
     const requestId = ++titleRequestIdRef.current
     const docId = currentDocId
-    store.update(docId!, { title: value }).then((updated) => {
-      if (requestId !== titleRequestIdRef.current) return // 마지막 값만 반영 (F-111 3.4)
-      setDocs((prev) =>
-        sortByUpdatedAtDesc(
-          prev.map((d) => (d.id === updated.id ? { ...d, updatedAt: updated.updatedAt } : d)),
-        ),
-      )
-    })
+    const saving = store.update(docId!, { title: value })
+    // 잠그기 flush 단계가 기다린다 — 끝나면 비운다 (F-405 7.2)
+    titleSavingRef.current = saving
+    const clearSaving = () => {
+      if (titleSavingRef.current === saving) titleSavingRef.current = null
+    }
+    saving.then(clearSaving, clearSaving)
+    saving
+      .then((updated) => {
+        if (requestId !== titleRequestIdRef.current) return // 마지막 값만 반영 (F-111 3.4)
+        setDocs((prev) =>
+          sortByUpdatedAtDesc(
+            prev.map((d) => (d.id === updated.id ? { ...d, updatedAt: updated.updatedAt } : d)),
+          ),
+        )
+      })
+      .catch((err: unknown) => {
+        if (!isE2eeStoreError(err, 'locked')) throw err
+        showNotice({ type: 'error', message: E2EE_NOTICE.locked })
+      })
   }
 
   // 본문 맨 위 제목 위젯은 마운트 시점 클로저만 계속 쓰므로 ref 로 우회해 최신 commitTitle 을 쓰게 한다 (F-217.md 2.2)
@@ -2907,13 +3098,28 @@ export default function App() {
 
   // `새 문서로 저장` — 다른 탭에서 지워짐(F-296.md 7.3)·실시간 멈춤(F-305 8장) 공용. 원래 폴더도 지워졌을 수 있어 최상위에 만든다
   async function saveCurrentAsNewDoc() {
+    // 금고 문서면 새 문서도 금고 문서다. 편집기가 내려가 있으면(잠김) 아무것도 만들지 않는다 (F-405 7.6)
+    const asE2ee = Boolean(currentDoc?.e2ee)
+    if (asE2ee) {
+      if (!editorRef.current || openDoc?.id !== currentDocId) return
+      if (!(await requestE2eeOpen())) return
+    }
     const text = editorRef.current?.getText(openDoc?.lineEnding ?? 'crlf') ?? ''
-    const doc = await store.create({
-      title: currentDoc?.title ?? '제목 없는 문서',
-      content: text,
-      lineEnding: openDoc?.lineEnding ?? 'crlf',
-      folderId: null,
-    })
+    let doc: Doc
+    try {
+      doc = await store.create({
+        title: currentDoc?.title ?? '제목 없는 문서',
+        content: text,
+        lineEnding: openDoc?.lineEnding ?? 'crlf',
+        folderId: null,
+        ...(asE2ee ? { e2ee: true as const } : {}),
+      })
+    } catch (err) {
+      const e2eeMessage = e2eeCreateErrorMessage(err)
+      if (!e2eeMessage) throw err
+      showNotice({ type: 'error', message: e2eeMessage })
+      return
+    }
     setDocs((prev) => sortByUpdatedAtDesc([...prev, stripContent(doc)]))
     setDeletedElsewhereId(null)
     setCurrentDocId(doc.id)
@@ -2943,24 +3149,35 @@ export default function App() {
     }
   }
 
-  async function handleMoveFolder(id: string, parentId: string | null) {
+  // 금고 폴더 규칙에 막히면 true — quiet 면 E19 를 부른 쪽이 한 번만 띄운다 (F-405 7.7)
+  async function handleMoveFolder(id: string, parentId: string | null, quiet = false): Promise<boolean> {
     try {
       const updated = await store.moveFolder(id, parentId)
       setFolders((prev) => prev.map((f) => (f.id === id ? updated : f)))
-    } catch {
+    } catch (err) {
       // 깊이 초과·자기 자신 등은 Sidebar 가 드롭 전에 걸러내지만, 방어적으로 무시한다
+      if (isE2eeStoreError(err, 'e2ee-folder')) {
+        if (!quiet) showNotice({ type: 'error', message: E2EE_NOTICE.folderRule })
+        return true
+      }
     }
+    return false
   }
 
   // moveDoc 은 folderId 만 바꾼다. updatedAt 은 그대로라 목록 순서를 흔들지 않는다
   // (F-126.md 3장, I6)
-  async function handleMoveDoc(id: string, folderId: string | null) {
+  async function handleMoveDoc(id: string, folderId: string | null, quiet = false): Promise<boolean> {
     try {
       const updated = await store.moveDoc(id, folderId)
       setDocs((prev) => prev.map((d) => (d.id === id ? { ...d, folderId: updated.folderId } : d)))
-    } catch {
+    } catch (err) {
       // 문서가 그 사이 삭제된 경우 등은 조용히 무시한다
+      if (isE2eeStoreError(err, 'e2ee-folder')) {
+        if (!quiet) showNotice({ type: 'error', message: E2EE_NOTICE.folderRule })
+        return true
+      }
     }
+    return false
   }
 
   // ----- 여러 항목 삭제·이동 (specs/features/F-255.md 3.3) -----
@@ -3007,17 +3224,20 @@ export default function App() {
   // canMoveFolder 가 막는 항목(제 자손 등)은 건너뛰고 몇 개인지 알린다 (F-255.md 2·3.3)
   async function handleBulkMove(items: SelectionItem[], targetFolderId: string | null) {
     let skipped = 0
+    let e2eeBlocked = false
     for (const item of items) {
       if (item.kind === 'doc') {
-        await handleMoveDoc(item.id, targetFolderId)
+        if (await handleMoveDoc(item.id, targetFolderId, true)) e2eeBlocked = true
         continue
       }
       if (!canMoveFolder({ folders, id: item.id, parentId: targetFolderId })) {
         skipped++
         continue
       }
-      await handleMoveFolder(item.id, targetFolderId)
+      if (await handleMoveFolder(item.id, targetFolderId, true)) e2eeBlocked = true
     }
+    // 여러 항목 이동에서도 E19 는 한 번만 (F-405 7.7)
+    if (e2eeBlocked) showNotice({ type: 'error', message: E2EE_NOTICE.folderRule })
     if (skipped > 0) {
       showNotice({ type: 'error', message: `${skipped}개 폴더는 옮길 수 없어 건너뛰었습니다.` })
     }
@@ -3562,6 +3782,12 @@ export default function App() {
   // 홈 화면(빈 상태 재사용) 표시 조건 — 부팅 완료 후 문서를 선택하지 않은 상태 (F-232 3.2)
   const isEmpty = bootPhase === 'ready' && currentDocId === null
   const showEditor = bootPhase === 'ready' && !isEmpty
+  // 잠긴 금고 문서 — 편집기 자리에 P1 (F-405 6.2)
+  const showE2eeLockedPanel = currentDoc?.e2ee === 'locked' && openDoc?.id !== currentDocId
+  // P1 에서 열면 편집기가 새로 생기며 초점을 받는다 (F-405 6.2)
+  const handleE2eePanelOpened = () => {
+    focusEditorRef.current = true
+  }
 
   // 검색 인덱스 재사용 범위 (specs/features/F-287.md 4.2) — searchIndex.ts 는 localStorage 를 읽지 않는다
   const searchDialogScope = searchScope(store.kind, account.state === 'in' ? account.id : null)
@@ -3601,7 +3827,9 @@ export default function App() {
       getShareDoc={getShareDoc}
       onShareNotice={showNotice}
       shareLinkDocId={store.kind === 'server' && currentDoc && !sharedDoc && !isSharedDoc(currentDoc) ? currentDoc.id : null}
-      onBeforeShareLinkAction={() => docSaverFlushRef.current()}
+      onBeforeShareLinkAction={async () => {
+        await docSaverFlushRef.current()
+      }}
       onInvite={canInviteCurrentDoc ? requestInviteCurrentDoc : undefined}
       wikiResolver={wikiResolver}
       exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
@@ -3611,7 +3839,9 @@ export default function App() {
       onExportHtml={handleExportDocAsHtml}
       onCopyRich={handleCopyDocAsRichText}
       account={account}
-      onAccountBeforeNavigate={() => docSaverFlushRef.current()}
+      onAccountBeforeNavigate={async () => {
+        await docSaverFlushRef.current()
+      }}
       onAccountNotice={showNotice}
       onAccountLoggedOut={() => e2ee?.broadcastLogoutLock()}
       showToolbar={showToolbar}
@@ -3784,6 +4014,16 @@ export default function App() {
                   />
                 )}
               </div>
+              {showE2eeLockedPanel && e2ee && (
+                <E2eeLockedPanel
+                  key={currentDocId}
+                  keyring={e2ee.keyring}
+                  damaged={e2ee.status === 'open' && e2eeListSyncedFor === 'open'}
+                  autoFocus={e2eeUnmountedDocId !== currentDocId}
+                  onOpened={handleE2eePanelOpened}
+                  onForgotPassword={e2ee.openSettingsDialogs.recover}
+                />
+              )}
               {viewMode === 'view' && openDoc?.id === currentDocId && (
                 <Viewer
                   key={currentDocId}

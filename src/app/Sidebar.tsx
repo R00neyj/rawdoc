@@ -51,6 +51,7 @@ import {
   IconDownload,
   IconOpenInNew,
   IconMap,
+  IconLock,
 } from './icons'
 import { formatHash } from './hashRoute'
 import { GUIDES_PATH } from '../lib/siteChrome'
@@ -67,6 +68,22 @@ type ContextMenuState = { key: string; point: { x: number; y: number } } | null
 type DeleteDocTarget = { id: string; title: string }
 type DeleteFolderTarget = { id: string; name: string }
 type MoveDocTarget = { id: string; title: string; folderId: string | null }
+
+// 금고 표시 (F-405 6.1) — 트리 노드는 buildTree 가 새로 만들어 e2ee 가 없으므로 id 로 찾는다
+type E2eeDocState = 'locked' | 'open'
+const LOCKED_DOC_TITLE = '잠긴 문서'
+
+function displayTitleOf(id: string, title: string, e2eeDocs: Map<string, E2eeDocState>): string {
+  return e2eeDocs.get(id) === 'locked' ? LOCKED_DOC_TITLE : title
+}
+
+function E2eeIcon() {
+  return (
+    <span className="tree-e2ee-icon" role="img" aria-label="금고">
+      <IconLock size={16} />
+    </span>
+  )
+}
 
 // 공유받은 문서 한 항목 — 끌어 옮기기·⋯ 메뉴 없이 열기만 한다 (specs/features/F-212.md 2.4)
 export type SharedDocLike = {
@@ -115,6 +132,9 @@ type SidebarCtx = {
   onExportFolder: (id: string) => void
   // 폴더 `⋯` 메뉴 `옵시디언 볼트로 내보내기` (F-2020.md 6.2)
   onExportFolderVault: (id: string) => void
+  // 금고 문서 id → 잠김·열림, 금고 폴더 id (F-405 6.1)
+  e2eeDocs: Map<string, E2eeDocState>
+  e2eeFolderIds: Set<string>
 }
 
 function dropKeyOf(target: DropTarget): string {
@@ -170,6 +190,9 @@ function FolderRow({
   const isMulti = isSelected && ctx.selection.ids.length > 1
   const row: SelectionRow = { kind: 'folder', id: node.id, key: rowKey('tree', node.id) }
   const menuOpenHere = ctx.contextMenu?.key === row.key
+  const isE2eeFolder = ctx.e2eeFolderIds.has(node.id)
+  // 금고 폴더는 읽기 전용 링크·사람 초대를 보이지 않는다 (F-405 6.1)
+  const canShare = !isMulti && ctx.isServerStore && !isE2eeFolder
 
   // `하위 폴더` 는 모든 폴더에 — 깊이 제한 없음 (F-2017 5.1)
   const ownItems: FolderMenuItem[] = [
@@ -236,13 +259,14 @@ function FolderRow({
             {node.name}
           </button>
         )}
+        {!isEditing && isE2eeFolder && <E2eeIcon />}
         {!isEditing && (
           <FolderMenu
             label={node.name}
             items={items}
-            shareFolderId={!isMulti && ctx.isServerStore ? node.id : undefined}
+            shareFolderId={canShare ? node.id : undefined}
             onNotice={ctx.onNotice}
-            onInvite={!isMulti && ctx.isServerStore ? () => ctx.onRequestInviteFolder(node.id, node.name) : undefined}
+            onInvite={canShare ? () => ctx.onRequestInviteFolder(node.id, node.name) : undefined}
             open={menuOpenHere ? true : undefined}
             onOpenChange={menuOpenHere ? (v) => { if (!v) ctx.onCloseContextMenu() } : undefined}
             anchorPoint={menuOpenHere ? ctx.contextMenu!.point : undefined}
@@ -267,6 +291,8 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
   const isMulti = isSelected && ctx.selection.ids.length > 1
   const row: SelectionRow = { kind: 'doc', id: node.id, key: rowKey('tree', node.id) }
   const menuOpenHere = ctx.contextMenu?.key === row.key
+  const e2eeState = ctx.e2eeDocs.get(node.id)
+  const title = displayTitleOf(node.id, node.title, ctx.e2eeDocs)
 
   const ownItems: FolderMenuItem[] = [
     {
@@ -281,14 +307,14 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
       key: 'move',
       label: '폴더로 이동…',
       icon: IconMove,
-      onSelect: () => ctx.onRequestMoveDoc({ id: node.id, title: node.title, folderId: node.folderId }),
+      onSelect: () => ctx.onRequestMoveDoc({ id: node.id, title, folderId: node.folderId }),
     },
     {
       key: 'delete',
       label: '삭제',
       icon: IconDelete,
       danger: true,
-      onSelect: () => ctx.onRequestDeleteDoc({ id: node.id, title: node.title }),
+      onSelect: () => ctx.onRequestDeleteDoc({ id: node.id, title }),
     },
   ]
   const items = isMulti ? ctx.multiMenuItems : ownItems
@@ -307,16 +333,17 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
       >
         <span className="tree-toggle-spacer" aria-hidden="true" />
         <a
-          className="tree-label doc-item-btn"
+          className={`tree-label doc-item-btn${e2eeState === 'locked' ? ' doc-item-btn--locked' : ''}`}
           href={formatHash(node.id)}
           draggable={false}
           aria-current={node.id === ctx.currentDocId ? 'page' : undefined}
           onClick={(e) => { e.preventDefault(); ctx.onItemClick(e, row, () => ctx.onSelectDoc(node.id)) }}
         >
-          {node.title}
+          {title}
         </a>
+        {e2eeState && <E2eeIcon />}
         <FolderMenu
-          label={node.title}
+          label={title}
           items={items}
           open={menuOpenHere ? true : undefined}
           onOpenChange={menuOpenHere ? (v) => { if (!v) ctx.onCloseContextMenu() } : undefined}
@@ -333,6 +360,8 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
   const isMulti = isSelected && ctx.selection.ids.length > 1
   const row: SelectionRow = { kind: 'doc', id: doc.id, key: rowKey('pinned', doc.id) }
   const menuOpenHere = ctx.contextMenu?.key === row.key
+  const e2eeState = ctx.e2eeDocs.get(doc.id)
+  const title = displayTitleOf(doc.id, doc.title, ctx.e2eeDocs)
 
   const ownItems: FolderMenuItem[] = [
     {
@@ -346,14 +375,14 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
       key: 'move',
       label: '폴더로 이동…',
       icon: IconMove,
-      onSelect: () => ctx.onRequestMoveDoc({ id: doc.id, title: doc.title, folderId: doc.folderId }),
+      onSelect: () => ctx.onRequestMoveDoc({ id: doc.id, title, folderId: doc.folderId }),
     },
     {
       key: 'delete',
       label: '삭제',
       icon: IconDelete,
       danger: true,
-      onSelect: () => ctx.onRequestDeleteDoc({ id: doc.id, title: doc.title }),
+      onSelect: () => ctx.onRequestDeleteDoc({ id: doc.id, title }),
     },
   ]
   const items = isMulti ? ctx.multiMenuItems : ownItems
@@ -365,16 +394,17 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
           <IconPin size={16} className="pinned-row-icon" />
         </span>
         <a
-          className="tree-label doc-item-btn"
+          className={`tree-label doc-item-btn${e2eeState === 'locked' ? ' doc-item-btn--locked' : ''}`}
           href={formatHash(doc.id)}
           draggable={false}
           aria-current={doc.id === ctx.currentDocId ? 'page' : undefined}
           onClick={(e) => { e.preventDefault(); ctx.onItemClick(e, row, () => ctx.onSelectDoc(doc.id)) }}
         >
-          {doc.title}
+          {title}
         </a>
+        {e2eeState && <E2eeIcon />}
         <FolderMenu
-          label={doc.title}
+          label={title}
           items={items}
           open={menuOpenHere ? true : undefined}
           onOpenChange={menuOpenHere ? (v) => { if (!v) ctx.onCloseContextMenu() } : undefined}
@@ -630,8 +660,9 @@ type SidebarProps = {
   open: boolean
   collapsed: boolean
   onToggleCollapse: () => void
-  docs: DocLike[]
-  folders: FolderLike[]
+  // e2ee 는 금고 문서·폴더만 (F-405 6.1)
+  docs: Array<DocLike & { e2ee?: E2eeDocState }>
+  folders: Array<FolderLike & { e2ee?: true }>
   sharedDocs: SharedDocLike[]
   currentDocId: string | null
   openFolderIds: string[]
@@ -946,6 +977,10 @@ export default function Sidebar({
     onBulkMove(dedupeDescendants(wasDragged.items, docs, folders), targetParentId)
   }
 
+  const e2eeDocs = new Map<string, E2eeDocState>()
+  for (const d of docs) if (d.e2ee) e2eeDocs.set(d.id, d.e2ee)
+  const e2eeFolderIds = new Set(folders.filter((f) => f.e2ee === true).map((f) => f.id))
+
   const ctx: SidebarCtx = {
     currentDocId,
     openFolderIds,
@@ -979,6 +1014,8 @@ export default function Sidebar({
     onRequestInviteFolder,
     onExportFolder,
     onExportFolderVault,
+    e2eeDocs,
+    e2eeFolderIds,
   }
 
   const rootTarget: DropTarget = { type: 'root' }

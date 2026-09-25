@@ -21,9 +21,9 @@ export function useDocSaver({
   lineEnding?: LineEnding
   getText: (lineEnding: LineEnding | undefined) => string
   onSaved?: (doc: Doc) => void
-  onSaveError?: () => void
+  onSaveError?: (error: unknown) => void
   blocked?: boolean
-}): { status: SaverStatus; notifyChange: () => void; flush: () => Promise<void> } {
+}): { status: SaverStatus; notifyChange: () => void; flush: () => Promise<boolean> } {
   const isMemory = store.kind === 'memory'
 
   const [status, setStatus] = useState<SaverStatus>(() => (isMemory ? 'memory' : 'saved'))
@@ -43,6 +43,8 @@ export function useDocSaver({
   const lineEndingRef = useRef(lineEnding)
   const getTextRef = useRef(getText)
   const blockedRef = useRef(Boolean(blocked))
+  // 마지막 저장이 실패했고 그 뒤 성공한 저장이 없으면 true — flush 가 돌려준다 (F-405 6.5)
+  const failedRef = useRef(false)
 
   // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후(effect) 최신 값을 반영한다
   useEffect(() => {
@@ -56,6 +58,7 @@ export function useDocSaver({
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current)
     dirtyRef.current = false
+    failedRef.current = false
   }, [docId])
 
   const runSave = useCallback((): Promise<void> => {
@@ -76,10 +79,12 @@ export function useDocSaver({
           const updated = await store.update(id!, { content: text })
           // memory 모드는 새로고침하면 사라지지만, 같은 세션 안에서 문서를 오갈 때는 저장소에 반영돼야 한다 — status 표시만 'memory' 로 고정한다
           if (docIdRef.current === id) setStatus(isMemory ? 'memory' : 'saved')
+          failedRef.current = false
           onSaved?.(updated)
-        } catch {
+        } catch (error) {
           if (docIdRef.current === id) setStatus(isMemory ? 'memory' : 'error')
-          onSaveError?.()
+          failedRef.current = true
+          onSaveError?.(error)
         }
       }
     })()
@@ -101,11 +106,12 @@ export function useDocSaver({
     }, SAVE_DEBOUNCE_MS)
   }, [isMemory, runSave])
 
-  const flush = useCallback(async () => {
+  const flush = useCallback(async (): Promise<boolean> => {
     if (timerRef.current) clearTimeout(timerRef.current)
     if (dirtyRef.current || savingRef.current) {
       await runSave()
     }
+    return !failedRef.current
   }, [runSave])
 
   return { status, notifyChange, flush }

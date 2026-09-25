@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { createServerStore, QuotaExceededError } from './serverStore'
+import { createServerStore, QuotaExceededError, E2EE_SERVER_SAVE_INTERVAL_MS } from './serverStore'
+import { createRemoteCache } from './remoteCache'
 import { descendantFolderIds } from '../lib/folderTree'
 
 let dbCounter = 0
@@ -25,6 +26,8 @@ type FakeDoc = {
   version: number
   createdAt: number
   updatedAt: number
+  e2eeKey?: string
+  attachmentRefs?: string[]
 }
 
 type FakeFolder = {
@@ -33,6 +36,7 @@ type FakeFolder = {
   parentId: string | null
   createdAt: number
   updatedAt: number
+  e2ee?: true
 }
 
 // 최소 F-206 흉내 — GET/POST /api/docs, GET/PUT/DELETE /api/docs/:id (specs/features/F-207.md 2.3)
@@ -44,6 +48,8 @@ function makeFakeServer() {
   let usage = { used: 0, limit: 314_572_800 }
   let forceUploadQuota = false
   let forceIdTaken = false
+  // 금고 판정 흉내 (F-405 S1~S8) — worker/docs.ts·folders.ts 와 같은 409 몸통
+  let hasVault = true
   const deleteFolderCalls: Array<{ id: string; contents: string | null }> = []
 
   function jsonResponse(status: number, data?: unknown): Response {
@@ -67,6 +73,8 @@ function makeFakeServer() {
       if (forceIdTaken) return jsonResponse(409, { error: 'id_taken' })
       const body = JSON.parse(String(init.body)) as Partial<FakeDoc>
       if (body.id && docs.has(body.id)) return jsonResponse(200, docs.get(body.id))
+      if (typeof body.folderId === 'string' && !body.e2eeKey && folders.get(body.folderId)?.e2ee) return jsonResponse(409, { error: 'e2ee_folder' })
+      if (body.e2eeKey && !hasVault) return jsonResponse(409, { error: 'no_vault' })
       const now = Date.now()
       const doc: FakeDoc = {
         id: body.id ?? crypto.randomUUID(),
@@ -78,6 +86,7 @@ function makeFakeServer() {
         version: 1,
         createdAt: typeof body.createdAt === 'number' ? body.createdAt : now,
         updatedAt: typeof body.updatedAt === 'number' ? body.updatedAt : now,
+        ...(body.e2eeKey ? { e2eeKey: body.e2eeKey, attachmentRefs: body.attachmentRefs ?? [] } : {}),
       }
       docs.set(doc.id, doc)
       return jsonResponse(201, doc)
@@ -91,10 +100,13 @@ function makeFakeServer() {
       }
       if (method === 'PUT') {
         if (!doc) return jsonResponse(404, { error: 'not_found' })
-        const body = JSON.parse(String(init.body)) as { title?: string; content?: string; baseVersion: number }
+        const body = JSON.parse(String(init.body)) as { title?: string; content?: string; baseVersion: number; e2ee?: boolean; attachmentRefs?: string[] }
         if (typeof body.content === 'string' && new TextEncoder().encode(body.content).length > 1_000_000) {
           return jsonResponse(413, { error: 'too_large', limit: 1_000_000 })
         }
+        if (doc.e2eeKey && body.e2ee !== true) return jsonResponse(409, { error: 'e2ee_doc' })
+        if (!doc.e2eeKey && body.e2ee === true) return jsonResponse(409, { error: 'not_e2ee' })
+        if (body.attachmentRefs !== undefined) doc.attachmentRefs = body.attachmentRefs
         if (body.baseVersion !== doc.version) {
           return jsonResponse(409, { error: 'conflict', doc })
         }
@@ -115,6 +127,7 @@ function makeFakeServer() {
       const doc = docs.get(folderLinkMatch[1])
       if (!doc) return jsonResponse(404, { error: 'not_found' })
       const body = JSON.parse(String(init.body)) as { folderId: string | null }
+      if (body.folderId && folders.get(body.folderId)?.e2ee && !doc.e2eeKey) return jsonResponse(409, { error: 'e2ee_folder' })
       doc.folderId = body.folderId
       return jsonResponse(200, doc)
     }
@@ -134,6 +147,7 @@ function makeFakeServer() {
     if (path === '/api/folders' && method === 'POST') {
       const body = JSON.parse(String(init.body)) as Partial<FakeFolder>
       if (body.id && folders.has(body.id)) return jsonResponse(200, folders.get(body.id))
+      if (body.parentId && folders.get(body.parentId)?.e2ee && body.e2ee !== true) return jsonResponse(409, { error: 'e2ee_folder' })
       const now = Date.now()
       const folder: FakeFolder = {
         id: body.id ?? crypto.randomUUID(),
@@ -141,6 +155,7 @@ function makeFakeServer() {
         parentId: body.parentId ?? null,
         createdAt: now,
         updatedAt: now,
+        ...(body.e2ee === true ? { e2ee: true as const } : {}),
       }
       folders.set(folder.id, folder)
       return jsonResponse(201, folder)
@@ -152,6 +167,7 @@ function makeFakeServer() {
       if (method === 'PUT') {
         if (!folder) return jsonResponse(404, { error: 'not_found' })
         const body = JSON.parse(String(init.body)) as { name?: string; parentId?: string | null }
+        if (body.parentId && folders.get(body.parentId)?.e2ee && !folder.e2ee) return jsonResponse(409, { error: 'e2ee_folder' })
         if (body.name !== undefined) folder.name = body.name
         if (body.parentId !== undefined) folder.parentId = body.parentId
         folder.updatedAt = Date.now()
@@ -205,6 +221,9 @@ function makeFakeServer() {
     },
     setForceIdTaken: (v: boolean) => {
       forceIdTaken = v
+    },
+    setHasVault: (v: boolean) => {
+      hasVault = v
     },
     bumpVersion: (id: string) => {
       const d = docs.get(id)
@@ -963,5 +982,348 @@ describe('F-2030 한도·차단 outbox (U7~U14)', () => {
     expect(notices.some((n) => n.type === 'error' && n.message === '이 문서를 편집할 권한이 없어졌습니다.')).toBe(true)
     expect(server.docs.get(docB.id)?.content).toBe('B 시도') // 다른 문서는 나간다
     expect(server.docs.get(docA.id)?.content).toBe('a') // A 는 다시 보내지 않는다
+  })
+})
+
+// ----- F-405 S1~S8 금고 문서 보내기 (specs/features/F-405.md 5장, 9.1) -----
+const VAULT_KEY = 'K'.repeat(56)
+const E21 = '다른 곳에서 먼저 바뀐 금고 문서가 있습니다. 금고를 열면 이 기기의 편집을 충돌 사본으로 저장합니다.'
+const E22 = '다른 곳에서 이 문서를 금고로 옮겨, 이 기기에서 아직 올리지 못한 편집은 저장하지 않았습니다.'
+const E23 = '금고 폴더로 바뀐 폴더에 만든 문서·폴더를 맨 위로 옮겨 저장했습니다.'
+const E24 = '금고가 초기화되어 이 기기에서 만든 금고 문서를 올리지 못했습니다.'
+
+type FetchMock = ReturnType<typeof vi.fn>
+
+function requestsOf(fetchMock: FetchMock, method: string, path: string | RegExp): Array<Record<string, unknown>> {
+  return fetchMock.mock.calls
+    .filter(([url, init]) => {
+      const m = ((init as RequestInit | undefined)?.method ?? 'GET') === method
+      const p = new URL(String(url), 'http://local.test').pathname
+      return m && (typeof path === 'string' ? p === path : path.test(p))
+    })
+    .map(([, init]) => ((init as RequestInit | undefined)?.body ? JSON.parse(String((init as RequestInit).body)) : {}))
+}
+
+function seedDoc(server: ReturnType<typeof makeFakeServer>, id: string, extra: Partial<FakeDoc> = {}) {
+  server.docs.set(id, {
+    id,
+    title: `${id}-t`,
+    content: `${id}-c`,
+    lineEnding: 'lf',
+    folderId: null,
+    pinnedAt: null,
+    version: 1,
+    createdAt: 1,
+    updatedAt: 1,
+    ...extra,
+  })
+}
+
+describe('F-405 S1 금고 표지', () => {
+  it('금고 캐시 행 update 는 outbox e2ee:true, PUT 몸통 e2ee·attachmentRefs. 일반 PUT 에는 e2ee 키가 없다', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const dbName = freshDbName()
+    let fakeNow = 0
+    const store = await createServerStore('u1', { dbName, now: () => fakeNow })
+
+    const vault = await store.create({ title: 'env-t', content: 'env-c', lineEnding: 'lf', e2eeKey: VAULT_KEY, attachmentRefs: [] })
+    const plain = await store.create({ title: 'P', content: 'p', lineEnding: 'lf' })
+    await tick(30)
+    const posts = requestsOf(fetchMock, 'POST', '/api/docs')
+    expect(posts.find((b) => b.id === vault.id)).toMatchObject({ e2eeKey: VAULT_KEY, attachmentRefs: [] })
+    expect('e2eeKey' in posts.find((b) => b.id === plain.id)!).toBe(false)
+
+    fakeNow = 20_000
+    server.setNetworkDown(true)
+    await store.update(vault.id, { content: 'env-c2', attachmentRefs: ['00000000000000aa'] })
+    await tick()
+    const cache = await createRemoteCache(dbName)
+    const item = (await cache.getOutbox('u1')).find((e) => e.type === 'updateDoc' && e.docId === vault.id)
+    expect(item).toMatchObject({ e2ee: true })
+
+    server.setNetworkDown(false)
+    await store.update(plain.id, { content: 'p2' })
+    await tick(30)
+    const vaultPut = requestsOf(fetchMock, 'PUT', `/api/docs/${vault.id}`).at(-1)!
+    expect(vaultPut).toMatchObject({ e2ee: true, attachmentRefs: ['00000000000000aa'], content: 'env-c2' })
+    const plainPut = requestsOf(fetchMock, 'PUT', `/api/docs/${plain.id}`).at(-1)!
+    expect('e2ee' in plainPut).toBe(false)
+    expect('attachmentRefs' in plainPut).toBe(false)
+  })
+})
+
+describe('F-405 S2 10초 간격 (주입 시계)', () => {
+  it('응답 뒤 10,000ms 전에는 그 문서 PUT 을 보내지 않고 합친다. 다른 문서는 나간다', async () => {
+    expect(E2EE_SERVER_SAVE_INTERVAL_MS).toBe(10_000)
+    const server = makeFakeServer()
+    seedDoc(server, 'v', { e2eeKey: VAULT_KEY, attachmentRefs: [] })
+    seedDoc(server, 'p')
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    let fakeNow = 0
+    const store = await createServerStore('u1', { dbName: freshDbName(), now: () => fakeNow })
+    await store.list()
+    const putsOf = (id: string) => requestsOf(fetchMock, 'PUT', `/api/docs/${id}`)
+
+    await store.update('v', { content: 'c0' })
+    await tick(30)
+    expect(putsOf('v').length).toBe(1)
+
+    fakeNow = 1_000
+    await store.update('v', { content: 'c1' })
+    await tick(30)
+    fakeNow = 5_000
+    await store.update('v', { content: 'c5' })
+    await store.update('p', { content: 'p5' })
+    await tick(30)
+    expect(putsOf('v').length).toBe(1)
+    expect(putsOf('p').length).toBe(1)
+    expect(store.syncState?.pending).toBe(1)
+
+    fakeNow = 9_999
+    await store.update('p', { content: 'p9' })
+    await tick(30)
+    expect(putsOf('v').length).toBe(1)
+
+    fakeNow = 10_000
+    await store.update('p', { content: 'p10' })
+    await tick(30)
+    expect(putsOf('v').length).toBe(2)
+    expect(putsOf('v').at(-1)).toMatchObject({ content: 'c5', e2ee: true })
+  })
+})
+
+describe('F-405 S3 금고 409 — 사본 함수가 값을 준다', () => {
+  it('주입 함수의 봉투로 createDoc, onConflict 한 번, 원본 캐시는 서버 값', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'v', { e2eeKey: VAULT_KEY, attachmentRefs: [], folderId: 'F' })
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const conflicts: Array<{ docId: string; copyId: string }> = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), onConflict: (e) => conflicts.push(e) })
+    await store.list()
+    const copyResult = { title: 'CT', content: 'CC', e2eeKey: 'N'.repeat(56), attachmentRefs: ['00000000000000aa'] }
+    const maker = vi.fn(async () => copyResult)
+    store.setE2eeCopyMaker(maker)
+
+    server.bumpVersion('v')
+    await store.update('v', { content: 'mine' })
+    await tick(40)
+
+    expect(maker).toHaveBeenCalledTimes(1)
+    expect((maker.mock.calls[0] as unknown[])[0]).toEqual({ id: 'v', title: 'v-t', content: 'mine', e2eeKey: VAULT_KEY })
+    expect(conflicts).toHaveLength(1)
+    expect(conflicts[0].docId).toBe('v')
+    expect((maker.mock.calls[0] as unknown[])[1]).toBe(conflicts[0].copyId)
+    const copyPost = requestsOf(fetchMock, 'POST', '/api/docs').find((b) => b.id === conflicts[0].copyId)
+    expect(copyPost).toMatchObject({ title: 'CT', content: 'CC', e2eeKey: 'N'.repeat(56), attachmentRefs: ['00000000000000aa'], folderId: 'F' })
+    expect((await store.get('v'))?.content).toBe('v-c')
+  })
+})
+
+describe('F-405 S4 금고 409 — 잠겨 있어 사본 함수가 null', () => {
+  it('항목을 두고 그 문서만 멈춘다, E21 한 번, 풀리면 S3 과 같다', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'v', { e2eeKey: VAULT_KEY, attachmentRefs: [] })
+    seedDoc(server, 'p')
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const conflicts: Array<{ docId: string; copyId: string }> = []
+    const notices: Array<{ type: string; message: string }> = []
+    let fakeNow = 0
+    const store = await createServerStore('u1', {
+      dbName: freshDbName(),
+      now: () => fakeNow,
+      onConflict: (e) => conflicts.push(e),
+      onNotice: (n) => notices.push(n),
+    })
+    await store.list()
+    let give = false
+    const maker = vi.fn(async () => (give ? { title: 'CT', content: 'CC', e2eeKey: 'N'.repeat(56), attachmentRefs: [] } : null))
+    store.setE2eeCopyMaker(maker)
+
+    server.bumpVersion('v')
+    await store.update('v', { content: 'mine' })
+    await tick(30)
+    expect(requestsOf(fetchMock, 'POST', '/api/docs')).toHaveLength(0)
+    expect(conflicts).toHaveLength(0)
+    expect(notices.filter((n) => n.message === E21)).toHaveLength(1)
+    expect(store.syncState?.pending).toBe(1)
+
+    fakeNow = 30_000
+    await store.update('v', { content: 'mine2' })
+    await store.update('p', { content: 'p1' })
+    await tick(30)
+    expect(requestsOf(fetchMock, 'PUT', '/api/docs/v')).toHaveLength(1)
+    expect(requestsOf(fetchMock, 'PUT', '/api/docs/p')).toHaveLength(1)
+    await store.update('p', { content: 'p2' })
+    await tick(30)
+    expect(notices.filter((n) => n.message === E21)).toHaveLength(1)
+
+    give = true
+    fakeNow = 60_000
+    store.resumeE2eeConflicts()
+    await tick(40)
+    expect(conflicts).toHaveLength(1)
+    expect((maker.mock.calls.at(-1) as unknown[])[0]).toMatchObject({ id: 'v', content: 'mine2' })
+    expect(requestsOf(fetchMock, 'POST', '/api/docs').find((b) => b.id === conflicts[0].copyId)).toMatchObject({ title: 'CT', e2eeKey: 'N'.repeat(56) })
+  })
+
+  it('not_e2ee 409 도 같은 길 — 서버 값은 GET 으로', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'w')
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const dbName = freshDbName()
+    const conflicts: Array<{ docId: string; copyId: string }> = []
+    const store = await createServerStore('u1', { dbName, onConflict: (e) => conflicts.push(e) })
+    const cache = await createRemoteCache(dbName)
+    await cache.putDoc('u1', { ...server.docs.get('w')!, lineEnding: 'lf', e2eeKey: VAULT_KEY, attachmentRefs: [] })
+    store.setE2eeCopyMaker(async () => ({ title: 'CT', content: 'CC', e2eeKey: 'N'.repeat(56), attachmentRefs: [] }))
+
+    await store.update('w', { content: 'env' })
+    await tick(40)
+    expect(conflicts).toHaveLength(1)
+    expect(requestsOf(fetchMock, 'GET', '/api/docs/w').length).toBeGreaterThan(0)
+    const orig = await cache.getDoc('u1', 'w')
+    expect(orig?.content).toBe('w-c')
+    expect(orig?.e2eeKey).toBeUndefined()
+  })
+})
+
+describe('F-405 S5 일반 updateDoc 이 409 e2ee_doc', () => {
+  it('사본 없이 그 문서 항목을 모두 빼고 캐시는 GET 값, E22', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'x', { e2eeKey: VAULT_KEY, attachmentRefs: [] })
+    seedDoc(server, 'p')
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const dbName = freshDbName()
+    const notices: Array<{ type: string; message: string }> = []
+    const store = await createServerStore('u1', { dbName, onNotice: (n) => notices.push(n) })
+    await store.list()
+    const cache = await createRemoteCache(dbName)
+    const { e2eeKey: _k, attachmentRefs: _r, ...plainRow } = (await cache.getDoc('u1', 'x'))!
+    await cache.putDoc('u1', plainRow)
+
+    server.setNetworkDown(true)
+    await store.update('x', { content: '옛 평문 편집' })
+    await store.setPinned('x', true)
+    await tick()
+    server.setNetworkDown(false)
+    await store.update('p', { content: 'p1' })
+    await tick(40)
+
+    expect(requestsOf(fetchMock, 'POST', '/api/docs')).toHaveLength(0)
+    expect(requestsOf(fetchMock, 'PUT', '/api/docs/x/pin')).toHaveLength(0)
+    expect(store.syncState?.pending).toBe(0)
+    expect((await cache.getDoc('u1', 'x'))?.e2eeKey).toBe(VAULT_KEY)
+    expect(server.docs.get('x')?.content).toBe('x-c')
+    expect(notices.filter((n) => n.message === E22)).toHaveLength(1)
+  })
+})
+
+describe('F-405 S6 createDoc 409', () => {
+  it('e2ee_folder — folderId 를 null 로 바꿔 다시 보낸다, E23', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const notices: Array<{ type: string; message: string }> = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), onNotice: (n) => notices.push(n) })
+    server.folders.set('F', { id: 'F', name: 'F', parentId: null, createdAt: 1, updatedAt: 1 })
+    await store.listFolders()
+    server.folders.get('F')!.e2ee = true
+
+    const doc = await store.create({ title: 'N', content: '', lineEnding: 'lf', folderId: 'F' })
+    await tick(40)
+    const posts = requestsOf(fetchMock, 'POST', '/api/docs').filter((b) => b.id === doc.id)
+    expect(posts).toHaveLength(2)
+    expect(posts[1].folderId).toBeNull()
+    expect(server.docs.get(doc.id)?.folderId).toBeNull()
+    expect((await store.get(doc.id))?.folderId).toBeNull()
+    expect(notices.filter((n) => n.message === E23 && n.type === 'info')).toHaveLength(1)
+  })
+
+  it('no_vault — 캐시 행·항목이 사라지고 E24', async () => {
+    const server = makeFakeServer()
+    server.setHasVault(false)
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const dbName = freshDbName()
+    const notices: Array<{ type: string; message: string }> = []
+    const store = await createServerStore('u1', { dbName, onNotice: (n) => notices.push(n) })
+
+    const doc = await store.create({ title: 'env', content: 'env', lineEnding: 'lf', e2eeKey: VAULT_KEY, attachmentRefs: [] })
+    await tick(40)
+    const cache = await createRemoteCache(dbName)
+    expect(await cache.getDoc('u1', doc.id)).toBeNull()
+    expect(store.syncState?.pending).toBe(0)
+    expect(notices.filter((n) => n.message === E24 && n.type === 'error')).toHaveLength(1)
+  })
+})
+
+describe('F-405 S7 importLocal 은 금고를 건너뛴다', () => {
+  it('일반 것만 outbox 에, importedCount 도 일반 것만', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const base = { lineEnding: 'lf' as const, pinnedAt: null, createdAt: 1, updatedAt: 1 }
+    const result = await store.importLocal({
+      folders: [
+        { id: 'f1', name: 'F1', parentId: null, createdAt: 1, updatedAt: 1 },
+        { id: 'fv', name: 'FV', parentId: null, createdAt: 1, updatedAt: 1, e2ee: true },
+      ],
+      docs: [
+        { id: 'd1', title: 'D1', content: '보통', folderId: 'f1', ...base },
+        { id: 'dv', title: 'env', content: 'env', folderId: 'fv', e2eeKey: VAULT_KEY, attachmentRefs: [], ...base },
+      ],
+    })
+    expect(result.importedCount).toBe(1)
+    await tick(40)
+    expect(server.docs.has('d1')).toBe(true)
+    expect(server.docs.has('dv')).toBe(false)
+    expect(server.folders.has('f1')).toBe(true)
+    expect(server.folders.has('fv')).toBe(false)
+  })
+})
+
+describe('F-405 S8 createFolder e2ee·flushOutbox', () => {
+  it('POST 몸통 e2ee:true', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const folder = await store.createFolder({ name: 'V', e2ee: true })
+    await tick(30)
+    expect(requestsOf(fetchMock, 'POST', '/api/folders').at(-1)).toMatchObject({ id: folder.id, e2ee: true })
+    expect(server.folders.get(folder.id)?.e2ee).toBe(true)
+  })
+
+  it('remove 두 개 뒤 flushOutbox 가 끝나면 DELETE 두 번이 이미 나갔다', async () => {
+    const server = makeFakeServer()
+    let deletesDone = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        if (init.method === 'DELETE') {
+          await new Promise((resolve) => setTimeout(resolve, 20))
+          const res = await server.fetchImpl(url, init)
+          deletesDone += 1
+          return res
+        }
+        return server.fetchImpl(url, init)
+      }),
+    )
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const a = await store.create({ title: 'A', content: '', lineEnding: 'lf' })
+    const b = await store.create({ title: 'B', content: '', lineEnding: 'lf' })
+    await tick(30)
+    await store.remove(a.id)
+    await store.remove(b.id)
+    expect(deletesDone).toBe(0)
+    await store.flushOutbox()
+    expect(deletesDone).toBe(2)
   })
 })

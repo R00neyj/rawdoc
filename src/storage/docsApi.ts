@@ -22,6 +22,10 @@ export type ApiErrorKind =
   | 'rate_limited' // 429 (F-2030)
   | 'doc_quota_exceeded' // 413 { error: 'doc_quota_exceeded' } (F-2030)
   | 'account_blocked' // 403 { error: 'account_blocked' } (F-2030)
+  | 'e2ee_doc' // 409 — 금고 문서에 표지 없는 PUT (F-405 5.1)
+  | 'not_e2ee' // 409 — 일반 문서에 금고 표지 PUT
+  | 'e2ee_folder' // 409 — 금고 폴더 규칙 위반
+  | 'no_vault' // 409 — 키 묶음 없이 금고 문서 만들기
 
 export class ApiError extends Error {
   kind: ApiErrorKind
@@ -89,6 +93,12 @@ function jsonInit(body: unknown, method: string): RequestInit {
   return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
 }
 
+// 409 몸통의 error 가 allowed 안에 있으면 그 종류, 아니면 null (F-405 5.1)
+function e2eeConflictKind(data: unknown, allowed: ApiErrorKind[]): ApiErrorKind | null {
+  const error = data && typeof data === 'object' ? (data as { error?: unknown }).error : undefined
+  return typeof error === 'string' && (allowed as string[]).includes(error) ? (error as ApiErrorKind) : null
+}
+
 // 429 — 쓰기 함수 전부가 기존 갈래보다 먼저 본다 (F-2030 3.1)
 async function rateLimitedError(res: Response): Promise<ApiError> {
   const data = (await readJson(res)) as { scope?: unknown; limit?: unknown; retryAfter?: unknown } | null
@@ -143,6 +153,9 @@ export async function createDoc(body: {
   createdAt?: number
   updatedAt?: number
   pinnedAt?: number | null
+  // 금고 문서만 (F-405 5.1)
+  e2eeKey?: string
+  attachmentRefs?: string[]
 }): Promise<ServerDoc> {
   const res = await send('/api/docs', jsonInit(body, 'POST'))
   const kind = classifyStatus(res.status)
@@ -157,7 +170,7 @@ export async function createDoc(body: {
     const blocked = await accountBlockedError(res)
     if (blocked) throw blocked
   }
-  if (res.status === 409) throw new ApiError('id_taken')
+  if (res.status === 409) throw new ApiError(e2eeConflictKind(await readJson(res), ['e2ee_folder', 'no_vault']) ?? 'id_taken')
   if (res.status === 400) throw new ApiError('invalid')
   if (!res.ok) throw new ApiError('other', { status: res.status })
   return (await readJson(res)) as ServerDoc
@@ -165,7 +178,7 @@ export async function createDoc(body: {
 
 export async function updateDoc(
   id: string,
-  body: { title?: string; content?: string; baseVersion: number },
+  body: { title?: string; content?: string; baseVersion: number; e2ee?: true; attachmentRefs?: string[] },
 ): Promise<ServerDoc> {
   if (!isLockSessionSettled()) await lockSessionReady() // 탭 복제로 회전할지 정해지기 전엔 세션 id 를 싣는 요청을 안 보낸다 (F-297.md 4.2)
   const res = await send(`/api/docs/${encodeURIComponent(id)}`, {
@@ -193,6 +206,8 @@ export async function updateDoc(
   }
   if (res.status === 409) {
     const data = (await readJson(res)) as { doc?: ServerDoc } | null
+    const e2eeKind = e2eeConflictKind(data, ['e2ee_doc', 'not_e2ee'])
+    if (e2eeKind) throw new ApiError(e2eeKind)
     throw new ApiError('conflict', { doc: data?.doc })
   }
   if (!res.ok) throw new ApiError('other', { status: res.status })
@@ -253,6 +268,7 @@ export async function moveDocFolder(id: string, folderId: string | null): Promis
   }
   if (res.status === 404) throw new ApiError('not_found')
   if (res.status === 400) throw new ApiError('invalid')
+  if (res.status === 409) throw new ApiError(e2eeConflictKind(await readJson(res), ['e2ee_folder']) ?? 'other', { status: 409 })
   if (!res.ok) throw new ApiError('other', { status: res.status })
   return (await readJson(res)) as ServerDoc
 }
@@ -304,6 +320,7 @@ export async function createFolder(body: {
   id: string
   name: string
   parentId: string | null
+  e2ee?: true
 }): Promise<ServerFolder> {
   const res = await send('/api/folders', jsonInit(body, 'POST'))
   const kind = classifyStatus(res.status)
@@ -317,7 +334,7 @@ export async function createFolder(body: {
     const blocked = await accountBlockedError(res)
     if (blocked) throw blocked
   }
-  if (res.status === 409) throw new ApiError('id_taken')
+  if (res.status === 409) throw new ApiError(e2eeConflictKind(await readJson(res), ['e2ee_folder']) ?? 'id_taken')
   if (res.status === 400) throw new ApiError('invalid')
   if (!res.ok) throw new ApiError('other', { status: res.status })
   return (await readJson(res)) as ServerFolder
@@ -341,6 +358,7 @@ export async function updateFolder(
   }
   if (res.status === 404) throw new ApiError('not_found')
   if (res.status === 400) throw new ApiError('invalid')
+  if (res.status === 409) throw new ApiError(e2eeConflictKind(await readJson(res), ['e2ee_folder']) ?? 'other', { status: 409 })
   if (!res.ok) throw new ApiError('other', { status: res.status })
   return (await readJson(res)) as ServerFolder
 }

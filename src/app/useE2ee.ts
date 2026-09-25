@@ -39,7 +39,8 @@ export type UseE2ee = {
   lockForAccountChange(): Promise<void>
   // 이 탭 로그아웃 직후 다른 탭에 잠그기 신호만 보낸다. 이 탭은 곧 떠난다 (F-404.md 4.5)
   broadcastLogoutLock(): void
-  openSettingsDialogs: { create(): void; unlock(): void; changePassword(): void; reset(): void; lockNow(): void }
+  // recover 는 P1 의 암호를 잊었나요? — D-11 을 복구 1 모드로 연다 (F-405 6.2)
+  openSettingsDialogs: { create(): void; unlock(): void; recover(): void; changePassword(): void; reset(): void; lockNow(): void }
 }
 
 const LOCK_MINUTES_LABEL: Record<E2eeLockMinutes, string> = {
@@ -310,6 +311,7 @@ export function useE2ee(options: UseE2eeOptions): UseE2ee | null {
     openSettingsDialogs: {
       create: () => setDialogMode('create'),
       unlock: () => setDialogMode('unlock'),
+      recover: () => setDialogMode('recover'),
       changePassword: () => setDialogMode('changePassword'),
       reset: () => setDialogMode('reset'),
       lockNow: () => void lockManual(),

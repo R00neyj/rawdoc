@@ -106,3 +106,26 @@ describe('F-306 U17 role 이 없으면 소유자와 같다 (새 입력 조합)',
     }
   })
 })
+
+// F-405 U14 — 금고 문서는 local 다음, view 보다 앞 (specs/features/F-405.md 6.3)
+describe('F-405 U14 e2ee 경로', () => {
+  it('금고 문서면 e2ee', () => {
+    expect(decideDocPath(input({ e2ee: true }))).toEqual({ kind: 'e2ee' })
+  })
+
+  it('view·forbidden·outbox·오프라인과 겹쳐도 e2ee', () => {
+    expect(decideDocPath(input({ e2ee: true, role: 'view' }))).toEqual({ kind: 'e2ee' })
+    expect(decideDocPath(input({ e2ee: true, forbidden: true }))).toEqual({ kind: 'e2ee' })
+    expect(decideDocPath(input({ e2ee: true, hasPendingChanges: true }))).toEqual({ kind: 'e2ee' })
+    expect(decideDocPath(input({ e2ee: true, online: false }))).toEqual({ kind: 'e2ee' })
+  })
+
+  it('idb 저장소·공유 링크 화면이면 local 이 이긴다', () => {
+    expect(decideDocPath(input({ e2ee: true, storeKind: 'idb' }))).toEqual({ kind: 'local' })
+    expect(decideDocPath(input({ e2ee: true, shareLinkScreen: true }))).toEqual({ kind: 'local' })
+  })
+
+  it('e2ee 가 거짓이면 지금 판정 그대로', () => {
+    expect(decideDocPath(input({ e2ee: false }))).toEqual({ kind: 'realtime', resume: false, startOffline: false })
+  })
+})

@@ -90,6 +90,9 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       if (body.id && docs.has(body.id)) {
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(docs.get(body.id)) })
       }
+      // 금고 판정 (F-405 9.3, worker/docs.ts handleCreateDoc 과 같은 409)
+      if (body.e2eeKey && !e2eeKeys) return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'no_vault' }) })
+      if (!body.e2eeKey && body.folderId && folders.get(body.folderId)?.e2ee) return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'e2ee_folder' }) })
       const now = Date.now()
       // createdAt·updatedAt·pinnedAt 이 오면 그대로 쓴다 — 로컬 이관이 원본 시각을 유지한다 (F-208 2.3, worker/docs.ts 와 동일)
       const doc = {
@@ -102,6 +105,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
         version: 1,
         createdAt: typeof body.createdAt === 'number' ? body.createdAt : now,
         updatedAt: typeof body.updatedAt === 'number' ? body.updatedAt : now,
+        ...(body.e2eeKey ? { e2eeKey: body.e2eeKey, attachmentRefs: body.attachmentRefs ?? [] } : {}),
       }
       docs.set(doc.id, doc)
       return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(doc) })
@@ -129,6 +133,10 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
           body: JSON.stringify({ error: 'too_large', limit: 1_000_000 }),
         })
       }
+      // 표지 대조는 버전 검사보다 앞 (F-401 3.3 7번)
+      if (doc.e2eeKey && body.e2ee !== true) return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'e2ee_doc' }) })
+      if (!doc.e2eeKey && body.e2ee === true) return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'not_e2ee' }) })
+      if (doc.e2eeKey && Array.isArray(body.attachmentRefs)) doc.attachmentRefs = body.attachmentRefs
       if (body.baseVersion !== doc.version) {
         return route.fulfill({
           status: 409,
@@ -158,6 +166,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     const doc = docs.get(id)
     if (!doc) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
     const body = req.postDataJSON()
+    if (!doc.e2eeKey && body.folderId && folders.get(body.folderId)?.e2ee) return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'e2ee_folder' }) })
     doc.folderId = body.folderId
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) })
   })
@@ -183,8 +192,9 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     if (req.method() === 'POST') {
       if (recordWrite(route, req)) return
       const body = req.postDataJSON()
+      if (body.e2ee !== true && body.parentId && folders.get(body.parentId)?.e2ee) return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'e2ee_folder' }) })
       const now = Date.now()
-      const folder = { id: body.id || crypto.randomUUID(), name: body.name, parentId: body.parentId ?? null, createdAt: now, updatedAt: now }
+      const folder = { id: body.id || crypto.randomUUID(), name: body.name, parentId: body.parentId ?? null, createdAt: now, updatedAt: now, ...(body.e2ee === true ? { e2ee: true } : {}) }
       folders.set(folder.id, folder)
       return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(folder) })
     }
@@ -200,6 +210,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       if (recordWrite(route, req)) return
       if (!folder) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
       const body = req.postDataJSON()
+      if (!folder.e2ee && body.parentId && folders.get(body.parentId)?.e2ee) return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'e2ee_folder' }) })
       if (body.name !== undefined) folder.name = body.name
       if (body.parentId !== undefined) folder.parentId = body.parentId
       folder.updatedAt = Date.now()
@@ -392,6 +403,12 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     }
     if (req.method() === 'DELETE') {
       if (recordWrite(route, req)) return
+      // 금고 문서·폴더가 남았으면 지우지 않는다 (F-405 9.3, F-404 10.3 이 미룬 것)
+      const vaultDocs = [...docs.values()].filter((d) => d.e2eeKey).length
+      const vaultFolders = [...folders.values()].filter((f) => f.e2ee).length
+      if (vaultDocs > 0 || vaultFolders > 0) {
+        return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'vault_not_empty', docs: vaultDocs, folders: vaultFolders }) })
+      }
       e2eeKeys = null
       return route.fulfill({ status: 204 })
     }
@@ -474,6 +491,13 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     },
     getE2eeKeys() {
       return e2eeKeys
+    },
+    // 폴더를 금고 폴더로 켜고 끈다 — 금고 폴더를 만드는 화면은 F-407 (F-405 9.3)
+    setFolderE2ee(folderId, on) {
+      const folder = folders.get(folderId)
+      if (!folder) return
+      if (on) folder.e2ee = true
+      else delete folder.e2ee
     },
   }
 }

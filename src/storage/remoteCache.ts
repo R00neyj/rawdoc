@@ -33,12 +33,16 @@ export type OutboxItem =
       createdAt?: number
       updatedAt?: number
       pinnedAt?: number | null
+      // 금고 문서만 (F-405 3.3)
+      e2eeKey?: string
+      attachmentRefs?: string[]
     }
-  | { type: 'updateDoc'; docId: string; patch: { title?: string; content?: string } }
+  // e2ee 는 넣을 때 정한다 — 캐시 행에 e2eeKey 가 있으면 true (F-405 3.3)
+  | { type: 'updateDoc'; docId: string; patch: { title?: string; content?: string; attachmentRefs?: string[] }; e2ee?: true }
   | { type: 'removeDoc'; docId: string }
   | { type: 'moveDoc'; docId: string; folderId: string | null }
   | { type: 'setPinned'; docId: string; pinned: boolean }
-  | { type: 'createFolder'; folderId: string; name: string; parentId: string | null }
+  | { type: 'createFolder'; folderId: string; name: string; parentId: string | null; e2ee?: true }
   | { type: 'renameFolder'; folderId: string; name: string }
   | { type: 'moveFolder'; folderId: string; parentId: string | null }
   // mode 가 없는 옛 항목(이전 버전이 남긴 것)은 'move-up' 으로 읽는다 (F-242.md 3.3)

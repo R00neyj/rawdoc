@@ -17,6 +17,12 @@ export type Doc = {
   ownerEmail?: string
   // 공유받은 문서가 폴더 권한으로 보이는 것이면 그 폴더 (F-212.md 2.3·2.4)
   viaFolder?: { id: string; name: string } | null
+  // 앱 층만 — withE2ee 가 채운다. 'locked' 면 title·content 가 빈 문자열 (F-405 3.1)
+  e2ee?: 'locked' | 'open'
+  // 저장소 층만 — 감싼 문서 키 base64. withE2ee 는 앱에 넘기기 전에 뺀다 (F-405 3.2)
+  e2eeKey?: string
+  // 금고 문서만 — 본문이 쓰는 첨부 id, 정렬·중복 없음 (F-405 4.3)
+  attachmentRefs?: string[]
 }
 
 // 폴더 삭제 방식 — 안의 문서·하위 폴더를 위로 옮기거나 전부 함께 지운다 (specs/features/F-242.md 3.1)
@@ -28,6 +34,8 @@ export type Folder = {
   parentId: string | null
   createdAt: number
   updatedAt: number
+  // 금고 폴더 — 잠겨 있어도 이름은 평문 (F-405 3.1)
+  e2ee?: true
 }
 
 export type AttachmentExt = 'png' | 'jpg' | 'gif' | 'webp'
@@ -68,8 +76,13 @@ export type Store = {
     createdAt?: number
     updatedAt?: number
     pinnedAt?: number | null
+    // 앱 층 요청 — 폴더와 상관없이 금고 문서로 만든다. 아래 저장소는 무시한다 (F-405 3.1)
+    e2ee?: true
+    // 저장소 층 — withE2ee 가 채워 아래로 보낸다
+    e2eeKey?: string
+    attachmentRefs?: string[]
   }): Promise<Doc>
-  update(id: string, patch: { title?: string; content?: string }): Promise<Doc>
+  update(id: string, patch: { title?: string; content?: string; attachmentRefs?: string[] }): Promise<Doc>
   remove(id: string): Promise<void>
   moveDoc(id: string, folderId: string | null): Promise<Doc>
   setPinned(id: string, pinned: boolean): Promise<Doc>
@@ -81,6 +94,7 @@ export type Store = {
     id?: string
     createdAt?: number
     updatedAt?: number
+    e2ee?: true
   }): Promise<Folder>
   renameFolder(id: string, name: string): Promise<Folder>
   moveFolder(id: string, parentId: string | null): Promise<Folder>

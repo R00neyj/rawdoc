@@ -127,3 +127,66 @@ describe('기존 회귀 — 401·5xx·network 는 그대로', () => {
     })
   })
 })
+
+// F-405 S9 — 409 몸통의 error 로 금고 갈래를 가른다. 몸통이 JSON 이 아니면 지금 분류 (specs/features/F-405.md 5.1)
+describe('F-405 S9 409 분류', () => {
+  async function kindOf(call: () => Promise<unknown>, response: Response): Promise<string | undefined> {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response))
+    try {
+      await call()
+    } catch (err) {
+      return (err as ApiError).kind
+    }
+    return undefined
+  }
+  const text409 = () => new Response('not json', { status: 409 })
+  const create = () => createDoc({ id: 'a', title: 'T', content: '', lineEnding: 'lf', folderId: null })
+  const update = () => updateDoc('a', { content: 'x', baseVersion: 0 })
+  const folder = () => createFolder({ id: 'f', name: 'F', parentId: null })
+
+  it('createDoc', async () => {
+    expect(await kindOf(create, jsonResponse(409, { error: 'e2ee_folder' }))).toBe('e2ee_folder')
+    expect(await kindOf(create, jsonResponse(409, { error: 'no_vault' }))).toBe('no_vault')
+    expect(await kindOf(create, jsonResponse(409, { error: 'id_taken' }))).toBe('id_taken')
+    expect(await kindOf(create, text409())).toBe('id_taken')
+  })
+
+  it('updateDoc', async () => {
+    expect(await kindOf(update, jsonResponse(409, { error: 'e2ee_doc' }))).toBe('e2ee_doc')
+    expect(await kindOf(update, jsonResponse(409, { error: 'not_e2ee' }))).toBe('not_e2ee')
+    const doc = { id: 'a', title: 'T', content: 'c', version: 3 }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(409, { error: 'conflict', doc })))
+    await expect(update()).rejects.toMatchObject({ kind: 'conflict', doc })
+    expect(await kindOf(update, text409())).toBe('conflict')
+  })
+
+  it('moveDocFolder', async () => {
+    const { moveDocFolder } = await import('./docsApi')
+    expect(await kindOf(() => moveDocFolder('a', 'f'), jsonResponse(409, { error: 'e2ee_folder' }))).toBe('e2ee_folder')
+    expect(await kindOf(() => moveDocFolder('a', 'f'), text409())).toBe('other')
+  })
+
+  it('createFolder', async () => {
+    expect(await kindOf(folder, jsonResponse(409, { error: 'e2ee_folder' }))).toBe('e2ee_folder')
+    expect(await kindOf(folder, jsonResponse(409, { error: 'id_taken' }))).toBe('id_taken')
+    expect(await kindOf(folder, text409())).toBe('id_taken')
+  })
+
+  it('updateFolder', async () => {
+    const { updateFolder } = await import('./docsApi')
+    expect(await kindOf(() => updateFolder('f', { parentId: 'g' }), jsonResponse(409, { error: 'e2ee_folder' }))).toBe('e2ee_folder')
+    expect(await kindOf(() => updateFolder('f', { parentId: 'g' }), text409())).toBe('other')
+  })
+
+  it('몸통 필드 — 있을 때만 싣는다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, {}))
+    vi.stubGlobal('fetch', fetchMock)
+    await createDoc({ id: 'a', title: 'T', content: '', lineEnding: 'lf', folderId: null, e2eeKey: 'K', attachmentRefs: [] })
+    await updateDoc('a', { content: 'x', baseVersion: 1, e2ee: true, attachmentRefs: ['00000000000000aa'] })
+    await createFolder({ id: 'f', name: 'F', parentId: null, e2ee: true })
+    const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse(String((init as RequestInit).body)))
+    expect(bodies[0]).toMatchObject({ e2eeKey: 'K', attachmentRefs: [] })
+    expect(bodies[1]).toMatchObject({ e2ee: true, attachmentRefs: ['00000000000000aa'] })
+    expect(bodies[2]).toMatchObject({ e2ee: true })
+  })
+})

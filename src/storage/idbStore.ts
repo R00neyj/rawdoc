@@ -33,11 +33,12 @@ function randomAttachmentId(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-function applyPatch(existing: Doc, patch: { title?: string; content?: string }): Doc {
+function applyPatch(existing: Doc, patch: { title?: string; content?: string; attachmentRefs?: string[] }): Doc {
   return {
     ...existing,
     ...('title' in patch ? { title: patch.title as string } : {}),
     ...('content' in patch ? { content: patch.content as string } : {}),
+    ...(patch.attachmentRefs !== undefined ? { attachmentRefs: patch.attachmentRefs } : {}),
     updatedAt: Date.now(),
   }
 }
@@ -142,7 +143,7 @@ export async function createIdbStore(
     },
 
     // id 가 이미 있으면 던진다(덮지 않는다). 가져오기(F-282)가 id·시각·고정을 유지할 때만 준다 (F-282.md 3.11)
-    async create({ title, content, lineEnding, folderId = null, id, createdAt, updatedAt, pinnedAt }) {
+    async create({ title, content, lineEnding, folderId = null, id, createdAt, updatedAt, pinnedAt, e2eeKey, attachmentRefs }) {
       // folderId 가 null 또는 존재하는 폴더가 아니면 문서를 만들지 않는다 (F-136.md 3.1·3.2)
       const folders: Folder[] = await db.getAll(FOLDERS_STORE)
       if (!isValidFolderId(folders, folderId)) {
@@ -162,6 +163,9 @@ export async function createIdbStore(
         updatedAt: updatedAt ?? now,
         folderId,
         pinnedAt: pinnedAt ?? null,
+        // 금고 문서만 — 값이 있을 때만 싣는다 (F-405 3.3)
+        ...(e2eeKey !== undefined ? { e2eeKey } : {}),
+        ...(attachmentRefs !== undefined ? { attachmentRefs } : {}),
       }
       await db.put(DOCS_STORE, doc)
       return doc
@@ -235,7 +239,7 @@ export async function createIdbStore(
     },
 
     // id 가 이미 있으면 던진다. 가져오기(F-282)가 id·시각을 유지할 때만 준다 (F-282.md 3.11)
-    async createFolder({ name, parentId = null, id, createdAt, updatedAt }) {
+    async createFolder({ name, parentId = null, id, createdAt, updatedAt, e2ee }) {
       const folders: Folder[] = await db.getAll(FOLDERS_STORE)
       if (!canCreateFolder({ folders, parentId })) {
         throw new Error(`상위 폴더가 될 수 없음: ${parentId}`)
@@ -251,6 +255,7 @@ export async function createIdbStore(
         parentId,
         createdAt: createdAt ?? now,
         updatedAt: updatedAt ?? now,
+        ...(e2ee === true ? { e2ee: true as const } : {}),
       }
       await db.put(FOLDERS_STORE, folder)
       return folder

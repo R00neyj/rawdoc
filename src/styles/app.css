@@ -790,6 +790,19 @@ body.sidebar-resizing {
   font-weight: 600;
 }
 
+/* 금고 문서·폴더 자물쇠, 잠긴 문서 제목 (F-405 6.6) — 자리·색은 design.md 가 정한다 */
+.tree-e2ee-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.doc-item-btn--locked {
+  color: var(--muted);
+  font-style: italic;
+}
+
 .tree-rename-input {
   flex: 1;
   min-width: 0;
@@ -1390,6 +1403,24 @@ body.sidebar-resizing {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* P1 잠긴 금고 문서 패널 — 편집 영역 가운데 (F-405 6.2) */
+.e2ee-locked-panel {
+  width: 100%;
+  max-width: 420px;
+  margin: 15vh auto 0;
+  padding: 0 24px;
+}
+
+.e2ee-locked-panel h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  color: var(--ink-2);
+}
+
+.e2ee-locked-panel .dialog-note {
+  text-align: left;
 }
 
 /* 폴더 삭제 대화상자, 버튼 3개(취소·위로 옮기기·전부 삭제) 아래 보조 문구 (F-242.md 3.5) */

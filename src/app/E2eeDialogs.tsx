@@ -1,5 +1,5 @@
 // 금고 대화상자 — D-8 만들기, D-11 열기(+복구), D-12 암호 바꾸기, D-13 초기화, 잠금 해제 폼 (specs/features/F-404.md 7장)
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import Dialog from './Dialog'
 import { downloadBlob } from './exportDoc'
 import { isE2eePasswordLongEnough } from '../lib/e2eeLimits'
@@ -136,18 +136,25 @@ export type E2eeUnlockFormProps = {
   keyring: Keyring
   onOpened: () => void
   onForgotPassword: () => void
+  // 잠겨서 뜬 P1 은 초점을 옮기지 않는다 — 기본 true (F-405 6.2)
+  autoFocus?: boolean
+  // P1 과 D-11 이 한 화면에 같이 있을 수 있어 기본은 useId. D-11 은 고정 id 를 준다 (F-405 6.2)
+  labelId?: string
 }
 
 // D-11 암호 모드와 F-405 의 P1 패널이 함께 쓰는 폼 (F-404.md 7.2)
-export function E2eeUnlockForm({ keyring, onOpened, onForgotPassword }: E2eeUnlockFormProps) {
+export function E2eeUnlockForm({ keyring, onOpened, onForgotPassword, autoFocus = true, labelId }: E2eeUnlockFormProps) {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<E2eeActionError | null>(null)
   const [gone, setGone] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const generatedLabelId = useId()
+  const passwordLabelId = labelId ?? generatedLabelId
+  const autoFocusRef = useRef(autoFocus)
 
   useEffect(() => {
-    inputRef.current?.focus()
+    if (autoFocusRef.current) inputRef.current?.focus()
   }, [])
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -168,12 +175,12 @@ export function E2eeUnlockForm({ keyring, onOpened, onForgotPassword }: E2eeUnlo
   return (
     <form className="e2ee-unlock-form" onSubmit={handleSubmit}>
       <div className="dialog-field">
-        <span id="e2ee-unlock-password-label">금고 암호</span>
+        <span id={passwordLabelId}>금고 암호</span>
         <input
           ref={inputRef}
           type="password"
           autoComplete="current-password"
-          aria-labelledby="e2ee-unlock-password-label"
+          aria-labelledby={passwordLabelId}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
@@ -195,7 +202,8 @@ export function E2eeUnlockForm({ keyring, onOpened, onForgotPassword }: E2eeUnlo
   )
 }
 
-export type E2eeDialogMode = 'create' | 'unlock' | 'changePassword' | 'reset' | null
+// 'recover' 는 D-11 을 복구 1 모드로 연다 — P1 의 암호를 잊었나요? (F-405 6.2)
+export type E2eeDialogMode = 'create' | 'unlock' | 'recover' | 'changePassword' | 'reset' | null
 
 export type E2eeDialogsProps = {
   mode: E2eeDialogMode
@@ -219,7 +227,8 @@ export default function E2eeDialogs({ mode, keyring, scope, accountEmail, onClos
     <>
       <CreateDialog open={mode === 'create'} keyring={keyring} scope={scope} accountEmail={accountEmail} onClose={onClose} onCreated={onCreated} />
       <UnlockDialog
-        open={mode === 'unlock'}
+        open={mode === 'unlock' || mode === 'recover'}
+        initialMode={mode === 'recover' ? 'recovery1' : 'password'}
         keyring={keyring}
         scope={scope}
         accountEmail={accountEmail}
@@ -389,6 +398,7 @@ type UnlockMode = 'password' | 'recovery1' | 'recovery2' | 'recovery3'
 
 function UnlockDialog({
   open,
+  initialMode,
   keyring,
   scope,
   accountEmail,
@@ -397,6 +407,7 @@ function UnlockDialog({
   onRecovered,
 }: {
   open: boolean
+  initialMode: UnlockMode
   keyring: Keyring | null
   scope: E2eeScope | null
   accountEmail: string | null
@@ -419,7 +430,7 @@ function UnlockDialog({
   if (open !== trackedOpen) {
     setTrackedOpen(open)
     if (open) {
-      setMode('password')
+      setMode(initialMode)
       setCode('')
       setPassword('')
       setConfirm('')
@@ -495,7 +506,7 @@ function UnlockDialog({
           <>
             <h2 id={titleId}>금고 열기</h2>
             <p>금고 암호를 입력하면 이 탭에서 금고 문서를 열 수 있습니다.</p>
-            <E2eeUnlockForm keyring={keyring} onOpened={onOpened} onForgotPassword={() => setMode('recovery1')} />
+            <E2eeUnlockForm keyring={keyring} onOpened={onOpened} onForgotPassword={() => setMode('recovery1')} labelId="e2ee-unlock-password-label" />
           </>
         )}
         {mode === 'recovery1' && (

@@ -17,6 +17,15 @@ const ATTACHMENT_UPLOAD_FAIL_MESSAGE = '이미지를 서버에 올리지 못했�
 const ATTACHMENT_QUOTA_MESSAGE = '이미지 저장 공간(300MB)이 가득 찼습니다. 문서에서 지운 이미지는 하루 뒤 정리됩니다.'
 const ATTACHMENT_EXT_RE = '(png|jpg|gif|webp)'
 const FORBIDDEN_DOC_MESSAGE = '이 문서를 편집할 권한이 없어졌습니다.'
+// 금고 문서 알림 E19·E21~E24 (specs/features/F-405.md 8장)
+const E2EE_FOLDER_RULE_MESSAGE = '금고 폴더에는 금고 문서와 금고 폴더만 넣을 수 있습니다.'
+const E2EE_CONFLICT_LOCKED_MESSAGE = '다른 곳에서 먼저 바뀐 금고 문서가 있습니다. 금고를 열면 이 기기의 편집을 충돌 사본으로 저장합니다.'
+const E2EE_DOC_ELSEWHERE_MESSAGE = '다른 곳에서 이 문서를 금고로 옮겨, 이 기기에서 아직 올리지 못한 편집은 저장하지 않았습니다.'
+const E2EE_FOLDER_MOVED_UP_MESSAGE = '금고 폴더로 바뀐 폴더에 만든 문서·폴더를 맨 위로 옮겨 저장했습니다.'
+const E2EE_NO_VAULT_MESSAGE = '금고가 초기화되어 이 기기에서 만든 금고 문서를 올리지 못했습니다.'
+
+// 금고 문서 하나의 createDoc·updateDoc 응답 뒤 다음 updateDoc 까지 최소 간격 (F-405 5.2)
+export const E2EE_SERVER_SAVE_INTERVAL_MS = 10_000
 
 type StoreNotice = { type: 'info' | 'error' | 'update' | 'warn'; message: string }
 
@@ -41,6 +50,11 @@ export type ServerStoreHandlers = {
   now?: () => number
 }
 
+// 금고 충돌 사본 — storage 는 e2ee 를 import 하지 않으므로 withE2ee 가 함수를 주입한다 (F-405 5.4)
+export type E2eeCopySource = { id: string; title: string; content: string; e2eeKey: string }
+export type E2eeCopyResult = { title: string; content: string; e2eeKey: string; attachmentRefs: string[] }
+export type E2eeCopyMaker = (source: E2eeCopySource, copyId: string) => Promise<E2eeCopyResult | null>
+
 // server 저장소에만 있는 로컬 이관(F-208 2.2) 진입점 — Store 표준 타입엔 없어 이 타입으로 좁혀 쓴다
 export type ServerStore = Store & {
   // 오프라인 부팅에서도 md-yjs 를 이 사용자로 연다 (F-306 9.2)
@@ -52,6 +66,12 @@ export type ServerStore = Store & {
   hasPendingChanges(docId: string): Promise<boolean>
   // App 이 /api/me 결과로 부른다. true 면 보내기를 멈추고, false 로 바뀌면 다시 보낸다 (F-2030 4.4)
   setAccountBlocked(blocked: boolean): void
+  // withE2ee 가 만들 때 한 번 부른다. 없으면 금고 충돌은 늘 대기 (F-405 5.4)
+  setE2eeCopyMaker(maker: E2eeCopyMaker | null): void
+  // 금고가 열리면 대기 중인 금고 충돌을 다시 보낸다 (5.3)
+  resumeE2eeConflicts(): void
+  // 진행 중인 보내기 회차를 기다린 뒤 한 회차를 더 돌린다 (5.4)
+  flushOutbox(): Promise<void>
 }
 
 // 안 보낸 removeFolder(delete-all) 이 지운 폴더 id 들(자신 포함) — 서버 목록 기준 자손 판정 (F-247.md 3.1)
@@ -154,7 +174,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   const cache: RemoteCache = await createRemoteCache(handlers.dbName)
   const listeners = new Set<(state: SyncState) => void>()
   let state: SyncState = { pending: 0, online: typeof navigator === 'undefined' ? true : navigator.onLine, signedOut: false }
-  let sending = false
+  let sendingRound: Promise<void> | null = null
   let inFlightKey: number | null = null
   // 507 알림은 한 번 보내기 회차에 한 번만 (F-221.md 2.4)
   let quotaNoticeShownThisRound = false
@@ -167,6 +187,15 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   const skipDocIds = new Set<string>() // 남의 막힌 문서로 확인된 뒤 이 페이지 동안 건너뛸 문서 (4.4)
   const bytesHoldUntil = new Map<number, number>() // 413 bytes — 그 항목만 (4.3)
   const docsHoldUntil = new Map<number, number>() // 413 docs — outbox 의 모든 createDoc (4.3)
+
+  // ----- F-405 5.2·5.3 — 금고 문서 10초 간격·잠긴 동안 충돌 대기 -----
+  const e2eeLastResponseAt = new Map<string, number>() // 문서 id → 마지막 응답 시각(페이지 메모리만)
+  const e2eeConflictWaiting = new Set<string>() // 사본 함수가 null 이라 멈춘 문서
+  const e2eeConflictNoticed = new Set<string>() // E21 을 이미 띄운 문서
+  let e2eeCopyMaker: E2eeCopyMaker | null = null
+  let e2eeReleaseTimer: ReturnType<typeof setTimeout> | null = null
+  let e2eeFolderNoticeShownThisRound = false
+  let e2eeRuleNoticeShownThisRound = false
 
   function notify() {
     for (const listener of listeners) listener(state)
@@ -195,23 +224,62 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     return false
   }
 
-  // 붙잡힌 항목·같은 문서의 뒤 항목·건너뛸 문서를 뺀 첫 항목 (4.5)
+  // 금고 updateDoc 이 10초 간격에 걸렸으면 풀리는 시각, 아니면 null (F-405 5.2)
+  function e2eeReleaseAt(e: OutboxEntry): number | null {
+    if (e.type !== 'updateDoc' || !e.e2ee) return null
+    const last = e2eeLastResponseAt.get(e.docId)
+    if (last === undefined) return null
+    const until = last + E2EE_SERVER_SAVE_INTERVAL_MS
+    return now() < until ? until : null
+  }
+
+  function isEntryHeld(e: OutboxEntry): boolean {
+    return isHeld(e.key) || e2eeReleaseAt(e) !== null
+  }
+
+  // 붙잡힌 항목·같은 문서의 뒤 항목·건너뛸 문서·금고 충돌 대기 문서를 뺀 첫 항목 (4.5, F-405 5.2·5.3)
   function findSendable(entries: OutboxEntry[]): OutboxEntry | null {
     const heldDocIds = new Set<string>()
     for (const e of entries) {
-      if (isHeld(e.key)) {
+      if (isEntryHeld(e)) {
         const docId = docIdOf(e)
         if (docId) heldDocIds.add(docId)
       }
     }
     for (const e of entries) {
-      if (isHeld(e.key)) continue
+      if (isEntryHeld(e)) continue
       const docId = docIdOf(e)
       if (docId && heldDocIds.has(docId)) continue
       if (docId && skipDocIds.has(docId)) continue
+      if (docId && e2eeConflictWaiting.has(docId)) continue
       return e
     }
     return null
+  }
+
+  // 10초 간격에 걸린 금고 항목이 있으면 가장 이른 풀림 시각에 보내기를 한 번 다시 시작한다 — 브라우저에서만 (F-405 5.2)
+  function scheduleE2eeRelease(entries: OutboxEntry[]) {
+    if (typeof window === 'undefined') return
+    let earliest: number | null = null
+    for (const e of entries) {
+      if (e2eeConflictWaiting.has(docIdOf(e) ?? '')) continue
+      const until = e2eeReleaseAt(e)
+      if (until !== null && (earliest === null || until < earliest)) earliest = until
+    }
+    if (earliest === null) return
+    if (e2eeReleaseTimer) clearTimeout(e2eeReleaseTimer)
+    e2eeReleaseTimer = setTimeout(() => {
+      e2eeReleaseTimer = null
+      kickSend()
+    }, Math.max(0, earliest - now()))
+  }
+
+  function isE2eeWrite(entry: OutboxEntry): boolean {
+    return (entry.type === 'createDoc' && entry.e2eeKey !== undefined) || (entry.type === 'updateDoc' && entry.e2ee === true)
+  }
+
+  function recordE2eeResponse(entry: OutboxEntry) {
+    if (isE2eeWrite(entry)) e2eeLastResponseAt.set(docIdOf(entry)!, now())
   }
 
   // 이 맵에 이 회차 시점에서 실제로 남아 있는(outbox 에 있는) 붙잡힌 항목이 있는가 — L3·L4 는 없다가 처음 생길 때만 (4.3)
@@ -223,28 +291,37 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     return false
   }
 
-  async function kickSend(): Promise<void> {
-    if (sending) return
-    if (blockedStop) return
-    if (rateLimitedUntil !== null && now() < rateLimitedUntil) return
-    sending = true
+  // 진행 중인 회차가 있으면 그 약속을 돌려준다 — flushOutbox 가 기다린다 (F-405 5.4)
+  function kickSend(): Promise<void> {
+    if (sendingRound) return sendingRound
+    if (blockedStop) return Promise.resolve()
+    if (rateLimitedUntil !== null && now() < rateLimitedUntil) return Promise.resolve()
     quotaNoticeShownThisRound = false
-    try {
-      for (;;) {
-        if (blockedStop) break
-        if (rateLimitedUntil !== null && now() < rateLimitedUntil) break
-        const entries = await cache.getOutbox(userId)
-        const entry = findSendable(entries)
-        if (!entry) break
-        inFlightKey = entry.key
-        const proceed = await sendOne(entry)
-        inFlightKey = null
-        if (!proceed) break
+    e2eeFolderNoticeShownThisRound = false
+    e2eeRuleNoticeShownThisRound = false
+    const round = (async () => {
+      try {
+        for (;;) {
+          if (blockedStop) break
+          if (rateLimitedUntil !== null && now() < rateLimitedUntil) break
+          const entries = await cache.getOutbox(userId)
+          const entry = findSendable(entries)
+          if (!entry) {
+            scheduleE2eeRelease(entries)
+            break
+          }
+          inFlightKey = entry.key
+          const proceed = await sendOne(entry)
+          inFlightKey = null
+          if (!proceed) break
+        }
+      } finally {
+        sendingRound = null
+        await refreshPending()
       }
-    } finally {
-      sending = false
-      await refreshPending()
-    }
+    })()
+    sendingRound = round
+    return round
   }
 
   async function handleConflict(
@@ -278,6 +355,136 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     }
 
     handlers.onConflict?.({ docId: entry.docId, copyId, ...extra })
+  }
+
+  // 금고 충돌 사본 — 주입된 함수로 새 id·새 문서 키로 다시 암호화한다. 값이 없으면 그 문서만 대기(E21) (F-405 5.3)
+  async function handleE2eeConflict(entry: Extract<OutboxEntry, { type: 'updateDoc' }>, serverDoc: ServerDoc | undefined): Promise<boolean> {
+    const myDoc = await cache.getDoc(userId, entry.docId)
+    if (!myDoc?.e2eeKey) {
+      if (serverDoc) await cache.putDoc(userId, { ...serverDoc, id: entry.docId })
+      return true
+    }
+    const copyId = crypto.randomUUID()
+    let result: E2eeCopyResult | null = null
+    try {
+      result = e2eeCopyMaker ? await e2eeCopyMaker({ id: myDoc.id, title: myDoc.title, content: myDoc.content, e2eeKey: myDoc.e2eeKey }, copyId) : null
+    } catch {
+      result = null
+    }
+    if (!result) {
+      e2eeConflictWaiting.add(entry.docId)
+      if (!e2eeConflictNoticed.has(entry.docId)) {
+        e2eeConflictNoticed.add(entry.docId)
+        notice({ type: 'warn', message: E2EE_CONFLICT_LOCKED_MESSAGE })
+      }
+      return false
+    }
+    const t = Date.now()
+    const copyDoc: Omit<CachedDoc, 'userId'> = {
+      id: copyId,
+      title: result.title,
+      content: result.content,
+      lineEnding: myDoc.lineEnding,
+      folderId: myDoc.folderId,
+      pinnedAt: null,
+      createdAt: t,
+      updatedAt: t,
+      version: 0,
+      e2eeKey: result.e2eeKey,
+      attachmentRefs: result.attachmentRefs,
+    }
+    await cache.putDoc(userId, copyDoc)
+    await cache.addOutbox(userId, {
+      type: 'createDoc',
+      docId: copyId,
+      title: result.title,
+      content: result.content,
+      lineEnding: myDoc.lineEnding,
+      folderId: myDoc.folderId,
+      e2eeKey: result.e2eeKey,
+      attachmentRefs: result.attachmentRefs,
+    })
+    if (serverDoc) await cache.putDoc(userId, { ...serverDoc, id: entry.docId })
+    handlers.onConflict?.({ docId: entry.docId, copyId })
+    return true
+  }
+
+  async function fetchDocIntoCache(docId: string): Promise<void> {
+    try {
+      const full = await api.getDoc(docId)
+      await cache.putDoc(userId, full)
+    } catch {
+      // 다음 list() 때 다시 맞춰진다
+    }
+  }
+
+  function noticeE2eeFolderMovedUp() {
+    if (e2eeFolderNoticeShownThisRound) return
+    e2eeFolderNoticeShownThisRound = true
+    notice({ type: 'info', message: E2EE_FOLDER_MOVED_UP_MESSAGE })
+  }
+
+  function noticeE2eeFolderRule() {
+    if (e2eeRuleNoticeShownThisRound) return
+    e2eeRuleNoticeShownThisRound = true
+    notice({ type: 'error', message: E2EE_FOLDER_RULE_MESSAGE })
+  }
+
+  // 금고 409 갈래 (F-405 5.3 표). 처리했으면 계속 보낼지(true), 해당 없으면 null
+  async function handleE2eeApiError(entry: OutboxEntry, err: ApiError): Promise<boolean | null> {
+    const kind = err.kind
+    if (entry.type === 'updateDoc' && entry.e2ee && (kind === 'conflict' || kind === 'not_e2ee')) {
+      recordE2eeResponse(entry)
+      let serverDoc = kind === 'conflict' ? err.doc : undefined
+      if (kind === 'not_e2ee') {
+        try {
+          serverDoc = await api.getDoc(entry.docId)
+        } catch {
+          serverDoc = undefined
+        }
+      }
+      if (await handleE2eeConflict(entry, serverDoc)) await cache.removeOutbox(entry.key)
+      return true
+    }
+    if (entry.type === 'updateDoc' && !entry.e2ee && kind === 'e2ee_doc') {
+      // 평문 사본을 만들지 않는다 — 그 문서의 남은 항목을 모두 버리고 서버 값(봉투)을 캐시에 (12장 Q3)
+      await cache.removeOutboxForDoc(userId, entry.docId)
+      await fetchDocIntoCache(entry.docId)
+      notice({ type: 'warn', message: E2EE_DOC_ELSEWHERE_MESSAGE })
+      return true
+    }
+    if (entry.type === 'createDoc' && kind === 'e2ee_folder') {
+      const row = await cache.getDoc(userId, entry.docId)
+      if (row) await cache.putDoc(userId, { ...row, folderId: null })
+      await cache.putOutboxEntry({ ...entry, folderId: null })
+      noticeE2eeFolderMovedUp()
+      return true
+    }
+    if (entry.type === 'createDoc' && kind === 'no_vault') {
+      await cache.deleteDoc(userId, entry.docId)
+      await cache.removeOutboxForDoc(userId, entry.docId)
+      notice({ type: 'error', message: E2EE_NO_VAULT_MESSAGE })
+      return true
+    }
+    if (entry.type === 'createFolder' && kind === 'e2ee_folder') {
+      const row = await cache.getFolder(userId, entry.folderId)
+      if (row) await cache.putFolder(userId, { ...row, parentId: null })
+      await cache.putOutboxEntry({ ...entry, parentId: null })
+      noticeE2eeFolderMovedUp()
+      return true
+    }
+    if (entry.type === 'moveDoc' && kind === 'e2ee_folder') {
+      await cache.removeOutbox(entry.key)
+      await fetchDocIntoCache(entry.docId)
+      noticeE2eeFolderRule()
+      return true
+    }
+    if ((entry.type === 'moveFolder' || entry.type === 'renameFolder') && kind === 'e2ee_folder') {
+      await cache.removeOutbox(entry.key)
+      noticeE2eeFolderRule()
+      return true
+    }
+    return null
   }
 
   // 429 — outbox 전체를 재개 시각까지 멈춘다. 멈출 때마다 L1·L2 를 한 번만 (F-2030 4.2)
@@ -335,7 +542,10 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
             ...(entry.createdAt !== undefined ? { createdAt: entry.createdAt } : {}),
             ...(entry.updatedAt !== undefined ? { updatedAt: entry.updatedAt } : {}),
             ...(entry.pinnedAt !== undefined ? { pinnedAt: entry.pinnedAt } : {}),
+            // 금고 문서만 (F-405 5.1)
+            ...(entry.e2eeKey !== undefined ? { e2eeKey: entry.e2eeKey, attachmentRefs: entry.attachmentRefs ?? [] } : {}),
           })
+          recordE2eeResponse(entry)
           await cache.putDoc(userId, created)
           await cache.removeOutbox(entry.key)
           break
@@ -343,7 +553,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         case 'updateDoc': {
           const cachedDoc = await cache.getDoc(userId, entry.docId)
           const baseVersion = cachedDoc?.version ?? 0
-          const updated = await api.updateDoc(entry.docId, { ...entry.patch, baseVersion })
+          const updated = await api.updateDoc(entry.docId, { ...entry.patch, baseVersion, ...(entry.e2ee ? { e2ee: true as const } : {}) })
+          recordE2eeResponse(entry)
           await cache.putDoc(userId, updated)
           await cache.removeOutbox(entry.key)
           break
@@ -368,7 +579,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           break
         }
         case 'createFolder': {
-          const created = await api.createFolder({ id: entry.folderId, name: entry.name, parentId: entry.parentId })
+          const created = await api.createFolder({ id: entry.folderId, name: entry.name, parentId: entry.parentId, ...(entry.e2ee ? { e2ee: true as const } : {}) })
           await cache.putFolder(userId, created)
           await cache.removeOutbox(entry.key)
           break
@@ -473,6 +684,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         applyAccountBlockedStop(docIdOf(entry))
         return false
       }
+      const e2eeHandled = await handleE2eeApiError(entry, err)
+      if (e2eeHandled !== null) return e2eeHandled
       if (err.kind === 'too_large') {
         await cache.removeOutbox(entry.key)
         notice({ type: 'error', message: TOO_LARGE_MESSAGE })
@@ -496,7 +709,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         await cache.removeOutbox(entry.key)
         return true
       }
-      if (err.kind === 'locked' && entry.type === 'updateDoc') {
+      if (err.kind === 'locked' && entry.type === 'updateDoc' && !entry.e2ee) {
         // 423 에는 문서 본문이 없다 — 서버 값을 따로 받아 원본 캐시에 반영한다 (F-213.md 2.4)
         let serverDoc: ServerDoc | undefined
         try {
@@ -579,13 +792,14 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   kickSend()
   migrateLocalAttachments()
 
-  async function enqueueUpdateDoc(docId: string, patch: { title?: string; content?: string }) {
+  // e2ee 표지는 넣을 때 정하고 합칠 때는 앞 항목 것을 유지한다 (F-405 3.3)
+  async function enqueueUpdateDoc(docId: string, patch: { title?: string; content?: string; attachmentRefs?: string[] }, e2ee: boolean) {
     const entries = await cache.getOutbox(userId)
     const existing = entries.find((e): e is OutboxEntry & { type: 'updateDoc' } => e.type === 'updateDoc' && e.docId === docId && e.key !== inFlightKey)
     if (existing) {
       await cache.putOutboxEntry({ ...existing, patch: { ...existing.patch, ...patch } })
     } else {
-      await cache.addOutbox(userId, { type: 'updateDoc', docId, patch })
+      await cache.addOutbox(userId, { type: 'updateDoc', docId, patch, ...(e2ee ? { e2ee: true as const } : {}) })
     }
     await refreshPending()
     kickSend()
@@ -734,6 +948,21 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       kickSend()
     },
 
+    setE2eeCopyMaker(maker) {
+      e2eeCopyMaker = maker
+    },
+
+    resumeE2eeConflicts() {
+      if (e2eeConflictWaiting.size === 0) return
+      e2eeConflictWaiting.clear()
+      kickSend()
+    },
+
+    async flushOutbox() {
+      if (sendingRound) await sendingRound
+      await kickSend()
+    },
+
     async refreshDocFromServer(id) {
       try {
         const full = await api.getDoc(id)
@@ -745,7 +974,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     },
 
     // id 가 이미 있으면 던진다(덮지 않는다). 가져오기(F-282)가 id·시각·고정을 유지할 때만 준다 (F-282.md 3.11)
-    async create({ title, content, lineEnding, folderId = null, id: givenId, createdAt, updatedAt, pinnedAt }) {
+    async create({ title, content, lineEnding, folderId = null, id: givenId, createdAt, updatedAt, pinnedAt, e2eeKey, attachmentRefs }) {
       const folders = await cache.getFolders(userId)
       if (!isValidFolderId(folders, folderId)) {
         throw new Error(`유효하지 않은 folderId: ${String(folderId)}`)
@@ -766,6 +995,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         createdAt: createdAt ?? now,
         updatedAt: updatedAt ?? now,
         version: 0,
+        ...(e2eeKey !== undefined ? { e2eeKey, attachmentRefs: attachmentRefs ?? [] } : {}),
       }
       await cache.putDoc(userId, doc)
       await cache.addOutbox(userId, {
@@ -778,6 +1008,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         ...(createdAt !== undefined ? { createdAt } : {}),
         ...(updatedAt !== undefined ? { updatedAt } : {}),
         ...(pinnedAt !== undefined ? { pinnedAt } : {}),
+        ...(e2eeKey !== undefined ? { e2eeKey, attachmentRefs: attachmentRefs ?? [] } : {}),
       })
       await refreshPending()
       kickSend()
@@ -787,14 +1018,19 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     async update(id, patch) {
       const existing = await cache.getDoc(userId, id)
       if (!existing) throw new Error(`문서를 찾을 수 없음: ${id}`)
+      const isE2ee = existing.e2eeKey !== undefined
+      // attachmentRefs 는 금고 문서만 싣는다 (F-405 3.1)
+      const { attachmentRefs, ...textPatch } = patch
+      const sendPatch = isE2ee && attachmentRefs !== undefined ? { ...textPatch, attachmentRefs } : textPatch
       const updated: CachedDoc = {
         ...existing,
         ...('title' in patch ? { title: patch.title as string } : {}),
         ...('content' in patch ? { content: patch.content as string } : {}),
+        ...(isE2ee && attachmentRefs !== undefined ? { attachmentRefs } : {}),
         updatedAt: Date.now(),
       }
       await cache.putDoc(userId, updated)
-      await enqueueUpdateDoc(id, patch)
+      await enqueueUpdateDoc(id, sendPatch, isE2ee)
       return toDoc(updated)
     },
 
@@ -883,7 +1119,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     },
 
     // id 가 이미 있으면 던진다. createdAt·updatedAt 은 서버가 받지 않는다 — 캐시에만 쓴다(F-282.md 3.11·3.12)
-    async createFolder({ name, parentId = null, id: givenId, createdAt, updatedAt }) {
+    async createFolder({ name, parentId = null, id: givenId, createdAt, updatedAt, e2ee }) {
       const existingFolders = await cache.getFolders(userId)
       if (!canCreateFolder({ folders: existingFolders, parentId })) {
         throw new Error(`상위 폴더가 될 수 없음: ${parentId}`)
@@ -900,9 +1136,10 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         parentId,
         createdAt: createdAt ?? now,
         updatedAt: updatedAt ?? now,
+        ...(e2ee === true ? { e2ee: true as const } : {}),
       }
       await cache.putFolder(userId, folder)
-      await cache.addOutbox(userId, { type: 'createFolder', folderId: id, name: folder.name, parentId })
+      await cache.addOutbox(userId, { type: 'createFolder', folderId: id, name: folder.name, parentId, ...(e2ee === true ? { e2ee: true as const } : {}) })
       await refreshPending()
       kickSend()
       return toFolder({ ...folder, userId })
@@ -1063,7 +1300,10 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
     // 로컬 → 계정 이관 (F-208 2.2) — id 를 그대로 캐시에 쓰고 보낼 목록에 넣는다.
     // 캐시에 같은 id 가 이미 있으면(서버에 이미 있음) 건너뛴다
-    async importLocal({ folders, docs }) {
+    // 로컬 금고 폴더·문서는 건너뛴다 — 키 없이 일반 문서로 올라가면 봉투가 본문이 된다 (F-405 5.5)
+    async importLocal({ folders: allFolders, docs: allDocs }) {
+      const folders = allFolders.filter((f) => f.e2ee !== true)
+      const docs = allDocs.filter((d) => d.e2eeKey === undefined)
       for (const folder of sortFoldersParentFirst(folders)) {
         const existing = await cache.getFolder(userId, folder.id)
         if (existing) continue
