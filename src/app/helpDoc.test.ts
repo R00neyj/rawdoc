@@ -12,6 +12,7 @@ const SECTION_ORDER = [
   '저장',
   '이미지',
   '위키링크',
+  '템플릿',
   '공유',
   '내보내기·가져오기',
   '설치와 오프라인',
@@ -147,5 +148,16 @@ describe('HELP_DOC_CONTENT', () => {
 
   it('이미지 캡션에 ![설명](주소) 표준 이미지 문법을 그대로 쓰지 않는다 (F-274.md 4.2 — 빌드 가드 G4 회피)', () => {
     expect(HELP_DOC_CONTENT).not.toMatch(/!\[[^\]]*\]\([^)]*\)/)
+  })
+
+  // F-2037.md 8.1 U6
+  it('U6: ## 템플릿 절이 새 문서 템플릿·회의록·템플릿 폴더 문구를 담고, {{ 를 쓰지 않는다', () => {
+    const idx = HELP_DOC_CONTENT.indexOf('## 템플릿')
+    expect(idx).toBeGreaterThan(-1)
+    const section = HELP_DOC_CONTENT.slice(idx, HELP_DOC_CONTENT.indexOf('## 공유'))
+    expect(section).toContain('새 문서 템플릿')
+    expect(section).toContain('회의록')
+    expect(section).toContain('템플릿')
+    expect(HELP_DOC_CONTENT).not.toMatch(/\{\{/)
   })
 })

@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { listTemplates, formatTemplateDate, expandTemplateVariables, planTemplateInsert, isTemplateFolderName } from './templates'
+import {
+  listTemplates,
+  formatTemplateDate,
+  expandTemplateVariables,
+  planTemplateInsert,
+  isTemplateFolderName,
+  resolveNewDocTemplate,
+  newDocContentFromTemplate,
+  newDocTemplateOptions,
+  type TemplateEntry,
+} from './templates'
 import { BUILTIN_TEMPLATES } from './builtinTemplates'
 import type { FolderLike } from './folderTree'
 
@@ -131,5 +141,114 @@ describe('planTemplateInsert — U7', () => {
   it('⑦ 마지막 줄 끝 공백은 다듬지 않는다', () => {
     const plan = planTemplateInsert('본문', '- [ ] ')
     expect(plan.body).toBe('- [ ] ')
+  })
+})
+
+// F-2037.md 8.1 U1~U3, U7
+describe('resolveNewDocTemplate — F-2037 U1', () => {
+  const entries: TemplateEntry[] = [
+    { id: 'doc:1', title: '주간 보고', detail: '템플릿', source: { kind: 'doc', docId: '1' } },
+    ...BUILTIN_TEMPLATES.map((t) => ({ id: `builtin:${t.key}`, title: t.title, detail: '내장', source: { kind: 'builtin' as const, body: t.body } })),
+  ]
+
+  it.each([
+    ['none', { kind: 'none' }],
+    ['builtin:meeting', { kind: 'found', title: '회의록' }],
+    ['doc:1', { kind: 'found', title: '주간 보고' }],
+    ['doc:9', { kind: 'missing' }],
+    ['builtin:nope', { kind: 'missing' }],
+    ['', { kind: 'missing' }],
+    ['xyz', { kind: 'missing' }],
+  ])('pref=%s', (pref, expected) => {
+    const result = resolveNewDocTemplate(pref, entries)
+    expect(result.kind).toBe(expected.kind)
+    if (result.kind === 'found') expect(result.entry.title).toBe((expected as { title: string }).title)
+  })
+})
+
+describe('newDocContentFromTemplate — F-2037 U2 (2026-09-25 09:05:07 기준)', () => {
+  const now = new Date(2026, 8, 25, 9, 5, 7)
+  const meetingBody = BUILTIN_TEMPLATES.find((t) => t.key === 'meeting')!.body
+
+  it('① 내장 meeting body, 제목 빈 글자·keep-empty, crlf', () => {
+    expect(newDocContentFromTemplate(meetingBody, { title: '', now, emptyTitle: 'keep-empty' }, 'crlf')).toBe(
+      '## 회의 — 2026-09-25\r\n\r\n- 참석:\r\n- 안건:\r\n\r\n### 논의\r\n\r\n### 결정\r\n\r\n### 할 일\r\n\r\n- [ ] ',
+    )
+  })
+
+  it('② 프론트매터 있는 사용자 템플릿, 제목 팀 회의, lf', () => {
+    const tpl = '\r\n\r\n---\r\ntitle: {{title}}\r\n---\r\n\r\n## {{title}}\r\n\r\n- \r\n\r\n'
+    expect(newDocContentFromTemplate(tpl, { title: '팀 회의', now }, 'lf')).toBe('---\ntitle: 팀 회의\n---\n\n## 팀 회의\n\n- ')
+  })
+
+  it('③ 공백뿐인 템플릿 — 빈 문서', () => {
+    expect(newDocContentFromTemplate('  \n \n', { title: '', now, emptyTitle: 'keep-empty' }, 'crlf')).toBe('')
+  })
+
+  it('④ 빈 템플릿 — 빈 문서', () => {
+    expect(newDocContentFromTemplate('', { title: '', now, emptyTitle: 'keep-empty' }, 'crlf')).toBe('')
+  })
+
+  it('⑤ {{title}} 빈 글자로, crlf', () => {
+    expect(newDocContentFromTemplate('## {{title}}\n\n- ', { title: '', now, emptyTitle: 'keep-empty' }, 'crlf')).toBe('## \r\n\r\n- ')
+  })
+
+  it('⑥ 템플릿이 {{title}} 하나뿐 — 빈 글자로 바뀌면 빈 문서', () => {
+    expect(newDocContentFromTemplate('{{title}}', { title: '', now, emptyTitle: 'keep-empty' }, 'crlf')).toBe('')
+  })
+
+  it('⑦ 프론트매터 + {{title}}, keep-empty, crlf', () => {
+    const tpl = '---\ntitle: {{title}}\n---\n\n## {{title}}'
+    expect(newDocContentFromTemplate(tpl, { title: '', now, emptyTitle: 'keep-empty' }, 'crlf')).toBe('---\r\ntitle: \r\n---\r\n\r\n## ')
+  })
+
+  it('⑧ emptyTitle 없음 — 기본은 제목 없는 문서로 대체', () => {
+    expect(newDocContentFromTemplate('## {{title}}', { title: '   ', now }, 'crlf')).toBe('## 제목 없는 문서')
+  })
+})
+
+describe('newDocTemplateOptions — F-2037 U3', () => {
+  const builtinOnly: TemplateEntry[] = BUILTIN_TEMPLATES.map((t) => ({
+    id: `builtin:${t.key}`,
+    title: t.title,
+    detail: '내장',
+    source: { kind: 'builtin' as const, body: t.body },
+  }))
+
+  it('ⓐ pref none, 내장만', () => {
+    const options = newDocTemplateOptions('none', builtinOnly)
+    expect(options.map((o) => o.label)).toEqual(['없음', '회의록', '일일 노트', '버그 보고', '주간 회고'])
+    expect(options.map((o) => o.group)).toEqual(['none', 'builtin', 'builtin', 'builtin', 'builtin'])
+  })
+
+  it('ⓑ pref doc:1, 사용자 템플릿 둘 + 내장', () => {
+    const entries: TemplateEntry[] = [
+      { id: 'doc:2', title: '가', detail: '템플릿 / 회의', source: { kind: 'doc', docId: '2' } },
+      { id: 'doc:1', title: '주간 보고', detail: '템플릿', source: { kind: 'doc', docId: '1' } },
+      ...builtinOnly,
+    ]
+    const options = newDocTemplateOptions('doc:1', entries)
+    expect(options.map((o) => o.label)).toEqual(['없음', '회의록', '일일 노트', '버그 보고', '주간 회고', '가 (템플릿 / 회의)', '주간 보고 (템플릿)'])
+    expect(options.map((o) => o.group)).toEqual(['none', 'builtin', 'builtin', 'builtin', 'builtin', 'user', 'user'])
+  })
+
+  it('ⓒ pref doc:9(없음) — 맨 끝에 찾을 수 없는 템플릿', () => {
+    const options = newDocTemplateOptions('doc:9', builtinOnly)
+    expect(options.at(-1)).toEqual({ value: 'doc:9', label: '찾을 수 없는 템플릿', group: 'missing' })
+    expect(options).toHaveLength(6)
+  })
+})
+
+describe('expandTemplateVariables — emptyTitle 옵션 (F-2037 U7)', () => {
+  const now = new Date(2026, 8, 25, 9, 5, 7)
+
+  it.each([
+    [undefined, '', '[제목 없는 문서]'],
+    ['fallback', '', '[제목 없는 문서]'],
+    ['keep-empty', '', '[]'],
+    ['keep-empty', '   ', '[]'],
+    ['keep-empty', '가', '[가]'],
+  ] as const)('emptyTitle=%s title=%s', (emptyTitle, title, expected) => {
+    expect(expandTemplateVariables('[{{title}}]', { title, now, emptyTitle })).toBe(expected)
   })
 })

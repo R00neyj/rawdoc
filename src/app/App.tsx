@@ -27,7 +27,14 @@ import { ancestorsOfDoc, resolveTargetFolderId, canMoveFolder } from '../lib/fol
 import type { SelectionItem } from './sidebarSelection'
 import { createWikiResolver } from '../lib/wikiResolve'
 import { fromEditorText, toEditorText } from '../lib/lineEnding'
-import { listTemplates, expandTemplateVariables, type TemplateEntry } from '../lib/templates'
+import {
+  listTemplates,
+  expandTemplateVariables,
+  resolveNewDocTemplate,
+  newDocContentFromTemplate,
+  NEW_DOC_TEMPLATE_NONE,
+  type TemplateEntry,
+} from '../lib/templates'
 import { insertTemplate as insertTemplateIntoEditor } from '../editor/insertTemplate'
 import { decodeMarkdown } from '../lib/decodeMarkdown'
 import { getPref, setPref } from './prefs'
@@ -300,6 +307,7 @@ export default function App() {
   const [indentPref, setIndentPref] = useState(() => getPref('md.indent', '4')) // F-154 2.3
   const [startScreenPref, setStartScreenPref] = useState(() => getPref('md.startScreen', 'home')) // F-232 3.4
   const [toolbarPref, setToolbarPref] = useState(() => getPref('md.toolbar', 'on')) // F-233 3.5
+  const [newDocTemplatePref, setNewDocTemplatePref] = useState(() => getPref('md.newDocTemplate', NEW_DOC_TEMPLATE_NONE)) // F-2037 3.1
   const [settingsOpen, setSettingsOpen] = useState(false)
   // 검색 대화상자 D-6 (specs/features/F-287.md 3장)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -915,6 +923,54 @@ export default function App() {
     () => listTemplates({ folders, docs: docs.map((d) => ({ id: d.id, title: d.title, folderId: d.folderId ?? null, role: d.role })) }),
     [folders, docs],
   )
+
+  // 사용자 템플릿(문서) 원문 읽기 — 명령 팔레트 insertTemplate 과 새 문서 만들기가 함께 쓴다 (F-2037.md 4.2)
+  async function readTemplateDocText(docId: string): Promise<string | null> {
+    try {
+      if (docId === currentDocIdRef.current && editorRef.current) {
+        return editorRef.current.getText('lf')
+      }
+      const doc = await store.get(docId)
+      return doc?.content ?? null
+    } catch {
+      return null
+    }
+  }
+
+  const TEMPLATE_READ_TIMEOUT_MS = 3000
+
+  // 3,000ms 를 넘기면 실패로 본다(4.2-3) — 정한 값, 잰 값이 아니다
+  function withTemplateReadTimeout(promise: Promise<string | null>): Promise<string | null> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), TEMPLATE_READ_TIMEOUT_MS)
+      promise.then(
+        (v) => {
+          clearTimeout(timer)
+          resolve(v)
+        },
+        () => {
+          clearTimeout(timer)
+          resolve(null)
+        },
+      )
+    })
+  }
+
+  // 새 문서 본문 만들기 — createNewDoc·openWikiLinkTarget 공용 (F-2037.md 4.2·4.3)
+  async function buildNewDocContent(vars: { title: string; emptyTitle?: 'fallback' | 'keep-empty' }): Promise<{ content: string; failed: boolean }> {
+    const pref = getPref('md.newDocTemplate', NEW_DOC_TEMPLATE_NONE)
+    const resolution = resolveNewDocTemplate(pref, templateEntries)
+    if (resolution.kind !== 'found') return { content: '', failed: false }
+
+    const now = new Date()
+    if (resolution.entry.source.kind === 'builtin') {
+      return { content: newDocContentFromTemplate(resolution.entry.source.body, { ...vars, now }, 'crlf'), failed: false }
+    }
+
+    const rawText = await withTemplateReadTimeout(readTemplateDocText(resolution.entry.source.docId))
+    if (rawText === null) return { content: '', failed: true }
+    return { content: newDocContentFromTemplate(rawText, { ...vars, now }, 'crlf'), failed: false }
+  }
 
   // 문서를 바꾸면 지워짐 상태를 되돌린다 — 렌더 중 상태를 맞추는 공식 패턴 (F-296.md 7.3, useDocSaver.ts trackedDocId 와 같은 방식)
   const [deletedElsewhereTrackedDocId, setDeletedElsewhereTrackedDocId] = useState(currentDocId)
@@ -2084,11 +2140,13 @@ export default function App() {
     setSharedDoc(null) // 공유 화면에서 새 문서 를 눌러도 화면을 떠난다 (F-130.md 4장, 자체 결정)
     setMapRoute(null) // 지도의 "문서가 없습니다" 빈 상태에서 새 문서 를 눌러도 지도를 떠난다 (F-292.md 6.5)
     const targetFolderId = folderId !== undefined ? folderId : newDocFolderId()
+    // 새 문서 버튼은 {{title}} 이 빈 글자다 — 사용자 결정, F-2037.md 4.4
+    const { content, failed } = await buildNewDocContent({ title: '', emptyTitle: 'keep-empty' })
     let doc: Doc
     try {
       doc = await store.create({
         title: '제목 없는 문서',
-        content: '',
+        content,
         lineEnding: 'crlf',
         folderId: targetFolderId,
       })
@@ -2098,6 +2156,8 @@ export default function App() {
       showNotice({ type: 'error', message: '새 문서를 만들지 못했습니다. 다시 시도하세요.' })
       return
     }
+    // 목록에 없는 템플릿(3.4)과 달리, 설정은 맞는데 이번만 못 읽은 것은 알린다 (4.2-4)
+    if (failed) showNotice({ type: 'error', message: '새 문서 템플릿을 읽지 못해 빈 문서로 만들었습니다.' })
     const meta = stripContent(doc)
     setDocs((prev) => sortByUpdatedAtDesc([...prev, meta]))
     addOpenFolders(ancestorsOfDoc({ folders, doc: meta }))
@@ -2231,11 +2291,14 @@ export default function App() {
     setSharedDoc(null)
     // 지도의 끊긴 링크 노드를 눌러도 이 흐름을 그대로 타므로(F-292.md 6.4), 새 문서를 만들며 지도를 닫는다
     setMapRoute(null)
+    const newTitle = place ? place.title : target
+    // 위키링크는 {{title}} = 만드는 문서 제목 그대로 (F-2037.md 4.1)
+    const { content, failed } = await buildNewDocContent({ title: newTitle })
     let doc: Doc
     try {
       doc = await store.create({
-        title: place ? place.title : target,
-        content: '',
+        title: newTitle,
+        content,
         lineEnding: 'crlf',
         folderId: place ? place.folderId : newDocFolderId(),
       })
@@ -2244,6 +2307,7 @@ export default function App() {
       showNotice({ type: 'error', message: '새 문서를 만들지 못했습니다. 다시 시도하세요.' })
       return
     }
+    if (failed) showNotice({ type: 'error', message: '새 문서 템플릿을 읽지 못해 빈 문서로 만들었습니다.' })
     const meta = stripContent(doc)
     setDocs((prev) => sortByUpdatedAtDesc([...prev, meta]))
     addOpenFolders(ancestorsOfDoc({ folders, doc: meta }))
@@ -3018,12 +3082,8 @@ export default function App() {
       if (template?.source.kind === 'builtin') {
         rawText = template.source.body
       } else if (template?.source.kind === 'doc') {
-        if (template.source.docId === startDocId) {
-          rawText = editorRef.current?.getText('lf') ?? null
-        } else {
-          const doc = await store.get(template.source.docId)
-          rawText = doc?.content ?? null
-        }
+        // 새 문서 템플릿 읽기(4.2)와 한 함수를 같이 쓴다(F-2037.md 4.2) — 팔레트 동작은 바뀌지 않는다
+        rawText = await readTemplateDocText(template.source.docId)
       }
     } catch {
       rawText = null
@@ -3197,6 +3257,12 @@ export default function App() {
     const v = value as 'on' | 'off'
     setToolbarPref(v)
     setPref('md.toolbar', v)
+  }
+
+  // 새 문서 템플릿 — 고르면 곧바로 반영(F-2037.md 3.2). 이 값 자체를 화면에 즉시 적용할 문서는 없다
+  function changeNewDocTemplate(value: string) {
+    setNewDocTemplatePref(value)
+    setPref('md.newDocTemplate', value)
   }
 
   // 탭바 아이콘 버튼이 명령을 실행하고 포커스를 에디터로 돌려준다 (F-233 3.2)
@@ -3779,6 +3845,9 @@ export default function App() {
         onChangeIndent={changeIndent}
         lineNumbers={lineNumbersPref}
         onChangeLineNumbers={changeLineNumbers}
+        newDocTemplate={newDocTemplatePref}
+        onChangeNewDocTemplate={changeNewDocTemplate}
+        templateEntries={templateEntries}
         onExportAll={handleExportAll}
         exportAllDisabled={exportOffline}
         onExportVault={handleExportVault}

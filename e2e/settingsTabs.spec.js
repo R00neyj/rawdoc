@@ -47,7 +47,7 @@ test.describe('F-290 A4 탭별 항목', () => {
     await expect(dialog.locator('#indent-label')).toHaveCount(0)
 
     await dialog.getByRole('tab', { name: '편집기' }).click()
-    await expect(panel.locator('.dialog-field > span')).toHaveText(['탭바', '들여쓰기', '줄 번호'])
+    await expect(panel.locator('.dialog-field > span')).toHaveText(['탭바', '들여쓰기', '줄 번호', '새 문서 템플릿'])
     await expect(dialog.locator('#theme-label')).toHaveCount(0)
 
     await dialog.getByRole('tab', { name: '데이터' }).click()

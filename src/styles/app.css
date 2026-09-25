@@ -1564,6 +1564,23 @@ body.sidebar-resizing {
   margin-bottom: 0;
 }
 
+/* 새 문서 템플릿 선택칸 — 앱의 첫 <select> (specs/features/F-2037.md 3.2) */
+.settings-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  transition: var(--transition-colors);
+}
+
+.settings-select:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
 @media (max-width: 459px) {
   .settings-body {
     flex-direction: column;

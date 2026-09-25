@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import Dialog from './Dialog'
 import { visibleSettingsTabs, nextTabIndex, type SettingsTabId } from './settingsTabs'
+import { newDocTemplateOptions, type TemplateEntry } from '../lib/templates'
 
 // 설정 대화상자 D-2 (specs/ia.md 3.15, specs/features/F-121.md, F-141.md 3.2, F-290.md 왼쪽 탭)
 const THEME_OPTIONS = [
@@ -116,6 +117,63 @@ function Segment<T extends string>({
   )
 }
 
+// 새 문서 템플릿 선택칸 — 세그먼트가 아니라 네이티브 <select> 다(F-2037.md 3.2)
+function NewDocTemplateField({
+  value,
+  entries,
+  onChange,
+}: {
+  value: string
+  entries: readonly TemplateEntry[]
+  onChange: (value: string) => void
+}) {
+  const options = newDocTemplateOptions(value, entries)
+  const noneOpt = options.find((o) => o.group === 'none')
+  const builtinOpts = options.filter((o) => o.group === 'builtin')
+  const userOpts = options.filter((o) => o.group === 'user')
+  const missingOpt = options.find((o) => o.group === 'missing')
+
+  return (
+    <>
+      <div className="dialog-field">
+        <span id="new-doc-template-label">새 문서 템플릿</span>
+        <select
+          id="new-doc-template-select"
+          className="settings-select"
+          aria-labelledby="new-doc-template-label"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          {noneOpt && <option value={noneOpt.value}>{noneOpt.label}</option>}
+          <optgroup label="내장">
+            {builtinOpts.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </optgroup>
+          {userOpts.length > 0 && (
+            <optgroup label="템플릿 폴더">
+              {userOpts.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {missingOpt && (
+            <option value={missingOpt.value} disabled>
+              {missingOpt.label}
+            </option>
+          )}
+        </select>
+      </div>
+      {/* .dialog-field 밖에 둔다 — .dialog-field > span 은 각 설정 라벨을 세는 선택자라(F-290.md A4) 안에 두면 겹친다 */}
+      {userOpts.length === 0 && <p className="dialog-note">최상위에 '템플릿' 폴더를 만들고 문서를 넣으면 여기에 함께 나옵니다.</p>}
+    </>
+  )
+}
+
 type SettingsDialogProps = {
   open: boolean
   theme: string
@@ -134,6 +192,10 @@ type SettingsDialogProps = {
   onChangeIndent?: (value: string) => void
   lineNumbers?: string
   onChangeLineNumbers?: (value: string) => void
+  // `편집기` 탭 끝 — 새 문서 템플릿 (F-2037.md 3.2). 안 주면 선택칸을 그리지 않는다(공개 보기 화면)
+  newDocTemplate?: string
+  onChangeNewDocTemplate?: (value: string) => void
+  templateEntries?: readonly TemplateEntry[]
   // `데이터` 절 — 전체 내보내기 (F-281.md 3.6). 안 주면 절을 그리지 않는다(공개 보기 화면)
   onExportAll?: () => void
   exportAllDisabled?: boolean
@@ -162,6 +224,9 @@ export default function SettingsDialog({
   onChangeIndent,
   lineNumbers,
   onChangeLineNumbers,
+  newDocTemplate,
+  onChangeNewDocTemplate,
+  templateEntries,
   onExportAll,
   exportAllDisabled,
   onExportVault,
@@ -284,6 +349,10 @@ export default function SettingsDialog({
                 onChange={onChangeLineNumbers}
               />
             </>
+          )}
+          {/* 새 문서 템플릿 — 편집기 탭 맨 끝 (F-2037.md 3.2) */}
+          {newDocTemplate !== undefined && onChangeNewDocTemplate !== undefined && (
+            <NewDocTemplateField value={newDocTemplate} entries={templateEntries ?? []} onChange={onChangeNewDocTemplate} />
           )}
         </>
       )

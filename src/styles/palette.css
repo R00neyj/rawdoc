@@ -59,4 +59,5 @@
   margin: 8px 4px 0;
   font-size: 12px;
   color: var(--muted);
+  white-space: pre-line; /* 안내 줄이 여러 줄이다 (F-2037.md 5.2) */
 }

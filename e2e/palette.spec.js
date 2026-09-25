@@ -121,9 +121,11 @@ test.describe('F-2022 A3 2단계와 내장 목록', () => {
     for (let i = 0; i < 4; i++) {
       await expect(options.nth(i).locator('.command-palette-item-detail')).toHaveText('내장')
     }
-    await expect(palette(page).locator('.command-palette-hint')).toHaveText(
-      "최상위에 '템플릿' 폴더를 만들고 문서를 넣으면 여기에 함께 나옵니다.",
-    )
+    // 안내 줄이 늘 보인다(F-2037.md 5.1) — 폴더 규칙 + 변수·도움말 줄
+    const hint = palette(page).locator('.command-palette-hint')
+    await expect(hint).toContainText("최상위에 '템플릿' 폴더를 만들고 문서를 넣으면 여기에 함께 나옵니다.")
+    await expect(hint).toContainText('{{date}}·{{time}}·{{title}}은')
+    await expect(hint).toContainText("도움말의 '템플릿' 절")
   })
 })
 
@@ -239,7 +241,11 @@ test.describe('F-2022 A8 사용자 템플릿', () => {
     const options = paletteOptions(page)
     await expect(options.first()).toHaveText(/주간 보고/)
     await expect(options.first().locator('.command-palette-item-detail')).toHaveText('템플릿')
-    await expect(palette(page).locator('.command-palette-hint')).toHaveCount(0)
+    // 사용자 템플릿이 있으면 폴더 줄만 빠지고 변수·도움말 줄은 그대로 (F-2037.md 5.1)
+    const hint = palette(page).locator('.command-palette-hint')
+    await expect(hint).toHaveCount(1)
+    await expect(hint).not.toContainText('폴더를 만들고')
+    await expect(hint).toContainText('{{date}}·{{time}}·{{title}}은')
 
     await options.first().click()
     // 대상 문서("팀 회의")는 새로 만든 문서라 기본 줄바꿈이 CRLF 다(App.tsx createNewDoc) — 저장된 원문은 그대로 CRLF

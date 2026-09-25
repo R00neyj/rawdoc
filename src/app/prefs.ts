@@ -22,6 +22,7 @@ type PrefMap = {
   'md.landingDone': '1'
   'md.mapView': string
   'md.mapGroups': string
+  'md.newDocTemplate': string
 }
 
 type PrefKey = keyof PrefMap
@@ -47,6 +48,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.landingDone',
   'md.mapView',
   'md.mapGroups',
+  'md.newDocTemplate',
 ])
 
 function assertAllowed(key: string) {

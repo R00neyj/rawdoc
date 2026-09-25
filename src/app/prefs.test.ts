@@ -56,6 +56,12 @@ describe('prefs', () => {
     expect(getPref('md.startScreen', 'home')).toBe('last')
   })
 
+  it('md.newDocTemplate 읽기·쓰기, 저장값 없으면 기본값(none) (F-2037 U4)', () => {
+    expect(getPref('md.newDocTemplate', 'none')).toBe('none')
+    expect(() => setPref('md.newDocTemplate', 'builtin:daily')).not.toThrow()
+    expect(getPref('md.newDocTemplate', 'none')).toBe('builtin:daily')
+  })
+
   it('허용되지 않은 키는 getPref 에서 예외', () => {
     expect(() => getPref('md.unknown', 'x')).toThrow()
   })

@@ -1,8 +1,9 @@
-// 템플릿 폴더 판정·목록, 변수 치환, 삽입 계획 — 순수 함수 (specs/features/F-2022.md 4장)
+// 템플릿 폴더 판정·목록, 변수 치환, 삽입 계획 — 순수 함수 (specs/features/F-2022.md 4장, F-2037.md 2.2)
 import { normalizeForSearch, foldCase } from './docSearch'
 import { screenParentResolver, descendantFolderIds, type FolderLike } from './folderTree'
 import { findFrontmatter, textAfterFrontmatter, parseSimpleProperties } from './frontmatter'
 import { BUILTIN_TEMPLATES } from './builtinTemplates'
+import { toEditorText, fromEditorText, type LineEnding } from './lineEnding'
 
 export type TemplateEntry = {
   id: string // 사용자: 'doc:{docId}', 내장: 'builtin:{key}'
@@ -121,8 +122,13 @@ const TIME_VAR_RE = /\{\{time(?::([^}]*))?\}\}/g
 const TITLE_VAR_RE = /\{\{title\}\}/g
 
 // {{date}}·{{time}}·{{date:형식}}·{{time:형식}}·{{title}} 만 받는다. 그 밖(공백·대문자 섞임·모르는 이름)은 글자 그대로 둔다 (5.2)
-export function expandTemplateVariables(text: string, vars: { title: string; now: Date }): string {
-  const title = vars.title.trim() === '' ? '제목 없는 문서' : vars.title.trim()
+// emptyTitle 기본은 'fallback'(제목 없는 문서로 바꾼다). 'keep-empty' 는 빈 제목을 빈 글자 그대로 둔다 (F-2037.md 4.4)
+export function expandTemplateVariables(
+  text: string,
+  vars: { title: string; now: Date; emptyTitle?: 'fallback' | 'keep-empty' },
+): string {
+  const trimmed = vars.title.trim()
+  const title = trimmed === '' ? (vars.emptyTitle === 'keep-empty' ? '' : '제목 없는 문서') : trimmed
   let out = text.replace(DATE_VAR_RE, (_m, fmt: string | undefined) => formatTemplateDate(vars.now, fmt ?? 'YYYY-MM-DD'))
   out = out.replace(TIME_VAR_RE, (_m, fmt: string | undefined) => formatTemplateDate(vars.now, fmt ?? 'HH:mm'))
   out = out.replace(TITLE_VAR_RE, title)
@@ -211,4 +217,48 @@ export function planTemplateInsert(docText: string, templateText: string): Templ
   const lineMap = extractPropertyLines(tplContent)
   const insert = missing.map((p) => `${(lineMap.get(p.key) ?? [`${p.key}: `]).join('\n')}\n`).join('')
   return { frontmatterChange: { from: docFm.contentTo, to: docFm.contentTo, insert }, body, frontmatterSkipped: false }
+}
+
+// 새 문서 템플릿 설정 — 순수 함수 (specs/features/F-2037.md 2.2)
+export const NEW_DOC_TEMPLATE_NONE = 'none'
+
+export type NewDocTemplateResolution =
+  | { kind: 'none' }
+  | { kind: 'missing' }
+  | { kind: 'found'; entry: TemplateEntry }
+
+// entries 에서 id === pref 를 찾기만 한다. 'none' 만 none, 그 밖(모르는 값 포함)은 missing (3.4)
+export function resolveNewDocTemplate(pref: string, entries: readonly TemplateEntry[]): NewDocTemplateResolution {
+  if (pref === NEW_DOC_TEMPLATE_NONE) return { kind: 'none' }
+  const entry = entries.find((e) => e.id === pref)
+  return entry ? { kind: 'found', entry } : { kind: 'missing' }
+}
+
+// 원문(줄바꿈 무엇이든) → 새 문서 content. 공백·줄바꿈뿐이면 '' (4.3)
+export function newDocContentFromTemplate(
+  rawText: string,
+  vars: { title: string; now: Date; emptyTitle?: 'fallback' | 'keep-empty' },
+  lineEnding: LineEnding,
+): string {
+  const substituted = expandTemplateVariables(toEditorText(rawText), vars)
+  if (substituted.trim() === '') return ''
+  const body = planTemplateInsert('', substituted).body
+  return fromEditorText(body, lineEnding)
+}
+
+export type NewDocTemplateOption = { value: string; label: string; group: 'none' | 'builtin' | 'user' | 'missing' }
+
+// 위에서부터 없음 → 내장 → 템플릿 폴더 문서, 설정값이 목록에 없으면 맨 끝에 찾을 수 없는 템플릿 하나 (3.3)
+export function newDocTemplateOptions(pref: string, entries: readonly TemplateEntry[]): NewDocTemplateOption[] {
+  const builtinEntries = entries.filter((e) => e.source.kind === 'builtin')
+  const userEntries = entries.filter((e) => e.source.kind === 'doc')
+
+  const options: NewDocTemplateOption[] = [{ value: NEW_DOC_TEMPLATE_NONE, label: '없음', group: 'none' }]
+  for (const e of builtinEntries) options.push({ value: e.id, label: e.title, group: 'builtin' })
+  for (const e of userEntries) options.push({ value: e.id, label: `${e.title} (${e.detail})`, group: 'user' })
+
+  if (resolveNewDocTemplate(pref, entries).kind === 'missing') {
+    options.push({ value: pref, label: '찾을 수 없는 템플릿', group: 'missing' })
+  }
+  return options
 }

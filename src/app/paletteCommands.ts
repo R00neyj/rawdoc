@@ -11,7 +11,16 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     stageTitle: '템플릿 삽입',
     placeholder: '템플릿 이름',
     emptyText: '맞는 템플릿이 없습니다',
-    hint: (ctx) => (ctx.templates.some((t) => t.source.kind === 'doc') ? null : "최상위에 '템플릿' 폴더를 만들고 문서를 넣으면 여기에 함께 나옵니다."),
+    // 늘 문자열을 돌려준다 — 폴더 규칙 줄은 사용자 템플릿이 0개일 때만, 변수·도움말 안내 줄은 늘 (F-2037.md 5.1)
+    hint: (ctx) => {
+      const lines: string[] = []
+      if (!ctx.templates.some((t) => t.source.kind === 'doc')) {
+        lines.push("최상위에 '템플릿' 폴더를 만들고 문서를 넣으면 여기에 함께 나옵니다.")
+      }
+      lines.push('{{date}}·{{time}}·{{title}}은 넣을 때 오늘 날짜·지금 시각·문서 제목으로 바뀝니다. {{date:YYYY.MM.DD}}처럼 형식을 붙일 수도 있습니다.')
+      lines.push("자세한 내용은 도움말의 '템플릿' 절에 있습니다.")
+      return lines.join('\n')
+    },
     items: (ctx) => ctx.templates.map((t) => ({ id: t.id, label: t.title, detail: t.detail })),
     pick: (item, ctx, signal) => ctx.insertTemplate(item.id, signal),
   },
