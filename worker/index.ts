@@ -29,6 +29,7 @@ import {
   handlePublicGetFolderDoc,
 } from './links'
 import {
+  handleDeleteAttachment,
   handleGetAttachment,
   handleGetUsage,
   handlePublicGetAttachment,
@@ -264,6 +265,7 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/usage', handler: handleGetUsage },
   { method: 'PUT', path: '/api/attachments/:idext', handler: handleUploadAttachment },
   { method: 'GET', path: '/api/attachments/:idext', handler: handleGetAttachment },
+  { method: 'DELETE', path: '/api/attachments/:idext', handler: handleDeleteAttachment },
   { method: 'GET', path: '/pub/docs/:token/attachments/:idext', handler: handlePublicGetAttachment },
   { method: 'GET', path: '/pub/folders/:token', handler: handlePublicGetFolder },
   { method: 'GET', path: '/pub/folders/:token/docs/:docId', handler: handlePublicGetFolderDoc },

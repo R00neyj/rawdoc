@@ -126,6 +126,7 @@ const WRITE_ROUTES: [string, string][] = [
   ['PUT', '/api/e2ee/keys'],
   ['DELETE', '/api/e2ee/keys'],
   ['PUT', '/api/docs/:id/e2ee'],
+  ['DELETE', '/api/attachments/:idext'],
 ]
 
 const PUB_GET_ROUTES = [
@@ -140,7 +141,7 @@ const PUB_GET_ROUTES = [
 ]
 
 describe('G1 isWriteRoute — 3장 표', () => {
-  it('29개만 참, 나머지 전부 거짓 (F-401 G1 금고 셋 포함)', () => {
+  it('30개만 참, 나머지 전부 거짓 (F-401 금고 셋 + F-402 첨부 지우기 포함)', () => {
     for (const [method, path] of WRITE_ROUTES) {
       expect(isWriteRoute(method, path), `${method} ${path}`).toBe(true)
     }
@@ -154,7 +155,7 @@ describe('G1 isWriteRoute — 3장 표', () => {
     }
     expect(isWriteRoute('GET', '/v1/me')).toBe(false)
     expect(isWriteRoute('GET', '/api/e2ee/keys')).toBe(false)
-    expect(WRITE_ROUTES).toHaveLength(29)
+    expect(WRITE_ROUTES).toHaveLength(30)
   })
 })
 

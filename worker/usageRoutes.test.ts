@@ -26,7 +26,7 @@ function makeEnv() {
     DB: asD1(sqlDb),
     BETTER_AUTH_URL: ORIGIN,
     DEV_AUTH_EMAIL: EMAIL,
-    BUCKET: { async put(key: string) { putCalls.push(key) } },
+    BUCKET: { async put(key: string) { putCalls.push(key) }, async delete() {} },
   } as unknown as Env
   return { sqlDb, env, putCalls }
 }
@@ -94,6 +94,12 @@ function pngBytes(): Uint8Array {
   bytes.set([0x49, 0x48, 0x44, 0x52], 12)
   bytes.set([0, 0, 0, 2], 16)
   bytes.set([0, 0, 0, 2], 20)
+  return bytes
+}
+
+function envelopeBytes(): Uint8Array {
+  const bytes = new Uint8Array(100)
+  bytes[0] = 1 // E2EE_FORMAT_VERSION (F-402.md 7장)
   return bytes
 }
 
@@ -284,6 +290,23 @@ describe('F-2025 R1 쓰기 라우트마다 write_count +1', () => {
     )
     sqlDb.prepare('DELETE FROM docs WHERE id = ?').run(uuid(20))
     await expectPlusOne('DELETE /api/e2ee/keys', () => call(env, '/api/e2ee/keys', { method: 'DELETE' }), [204])
+
+    // 첨부 2 (F-402 G2) — 암호 첨부 올리기·지우기
+    await expectPlusOne(
+      'PUT /api/attachments/:idext?e2ee=1',
+      () =>
+        call(env, '/api/attachments/bbbbbbbbbbbbbbbb.png?e2ee=1&w=1&h=1', {
+          method: 'PUT',
+          headers: { 'Content-Length': String(envelopeBytes().length) },
+          body: envelopeBytes(),
+        }),
+      [201],
+    )
+    await expectPlusOne(
+      'DELETE /api/attachments/:idext',
+      () => call(env, '/api/attachments/bbbbbbbbbbbbbbbb.png', { method: 'DELETE' }),
+      [204],
+    )
 
     void createdTokenId
   })

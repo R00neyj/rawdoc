@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { cleanupServerAttachments } from './attachmentGc'
 
-type DocRow = { id: string; content: string }
+type DocRow = { id: string; content: string; e2ee_key?: string }
 type AttachmentRow = { owner_id: string; id: string; ext: string; created_at: number }
 
 function makeEnv(docs: DocRow[], attachments: AttachmentRow[], opts: { failR2Keys?: Set<string> } = {}) {
@@ -9,6 +9,7 @@ function makeEnv(docs: DocRow[], attachments: AttachmentRow[], opts: { failR2Key
   const attachmentRows = new Map(attachments.map((a) => [`${a.owner_id}:${a.id}`, a]))
   const failR2Keys = opts.failR2Keys ?? new Set<string>()
   const deletedKeys: string[] = []
+  const plainPageCalls: [string, number][] = []
 
   const DB = {
     prepare(sql: string) {
@@ -16,10 +17,17 @@ function makeEnv(docs: DocRow[], attachments: AttachmentRow[], opts: { failR2Key
         bind(...args: unknown[]) {
           return {
             async all<T>() {
-              if (sql.startsWith('SELECT content FROM docs')) {
-                const [limit, offset] = args as [number, number]
-                const page = docList.slice(offset, offset + limit).map((d) => ({ content: d.content }))
+              if (sql.startsWith('SELECT id, content FROM docs')) {
+                const [afterId, limit] = args as [string, number]
+                plainPageCalls.push([afterId, limit])
+                const page = docList
+                  .filter((d) => !d.e2ee_key && d.id > afterId)
+                  .slice(0, limit)
+                  .map((d) => ({ id: d.id, content: d.content }))
                 return { results: page as unknown as T[] }
+              }
+              if (sql.startsWith('SELECT id, owner_id, attachment_refs FROM docs')) {
+                return { results: [] as unknown as T[] }
               }
               if (sql.startsWith('SELECT owner_id, id, ext, created_at FROM attachments')) {
                 const [threshold] = args as [number]
@@ -49,7 +57,7 @@ function makeEnv(docs: DocRow[], attachments: AttachmentRow[], opts: { failR2Key
     },
   }
 
-  return { env: { DB, BUCKET } as unknown as Env, attachmentRows, deletedKeys }
+  return { env: { DB, BUCKET } as unknown as Env, attachmentRows, deletedKeys, plainPageCalls }
 }
 
 const NOW = Date.parse('2026-09-15T00:00:00Z')
@@ -132,5 +140,15 @@ describe('F-219 A1 cleanupServerAttachments', () => {
     const result = await cleanupServerAttachments(env, NOW)
     expect(result).toEqual({ deleted: 0, failed: 0 })
     expect(attachmentRows.size).toBe(1)
+  })
+})
+
+describe('F-402 F2 (A) 문장 쪽 나누기 — OFFSET 이 아니라 id 기준', () => {
+  it('첫 쪽은 afterId 빈 문자열, 둘째 쪽은 앞 쪽 마지막 id', async () => {
+    const docs: DocRow[] = Array.from({ length: 250 }, (_, i) => ({ id: `d${String(i).padStart(3, '0')}`, content: '' }))
+    const { env, plainPageCalls } = makeEnv(docs, [])
+    await cleanupServerAttachments(env, NOW)
+    expect(plainPageCalls[0]).toEqual(['', 200])
+    expect(plainPageCalls[1]).toEqual(['d199', 200])
   })
 })

@@ -9,9 +9,10 @@ export type SniffResult = {
   height: number
 }
 
-const MAX_PIXELS = 40_000_000
+// 금고 올리기(?e2ee=1)의 w×h 상한과도 같다 (specs/features/F-402.md 3.1)
+export const MAX_PIXELS = 40_000_000
 
-const MIME: Record<ImageExt, string> = {
+export const IMAGE_MIME: Record<ImageExt, string> = {
   png: 'image/png',
   jpg: 'image/jpeg',
   gif: 'image/gif',
@@ -106,7 +107,7 @@ function finalize(ext: ImageExt, dims: { width: number; height: number } | null)
   const { width, height } = dims
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null
   if (width * height > MAX_PIXELS) return null
-  return { ext, mime: MIME[ext], width, height }
+  return { ext, mime: IMAGE_MIME[ext], width, height }
 }
 
 // 앞부분 바이트로 실제 형식·가로세로를 판정한다. 판정 실패·가로세로 0·픽셀 수 초과는 null (2.2, 2.4)

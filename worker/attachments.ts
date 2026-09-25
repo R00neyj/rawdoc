@@ -2,18 +2,21 @@
 // 공유 문서의 첨부 열람 판정은 F-212.md 2.2 로 넓힌다. 사용량 줄·GET /api/usage 확장은 F-2025.md 6.4·6.5
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
+import type { AuthUser } from './auth'
 import { isValidToken } from './token'
-import { sniffImage, type ImageExt } from './imageSniff'
+import { sniffImage, MAX_PIXELS, IMAGE_MIME, type ImageExt } from './imageSniff'
 import { extractAttachmentRefs } from '../src/lib/imageBlock'
 import { findPublicLink, folderTreeIds, isDocInLinkSet } from './links'
 import { getDocAccess, isDocAttachmentOwner } from './access'
 import { DAILY_WRITE_LIMIT, DOC_BYTES_QUOTA, DOC_COUNT_QUOTA, dayUsageStatement, usageOf, writesToday } from './usage'
-import { E2EE_SERVER_MAX_ATTACHMENT_BYTES } from '../src/lib/e2eeLimits'
+import { E2EE_ATTACHMENT_OVERHEAD, E2EE_FORMAT_VERSION, E2EE_SERVER_MAX_ATTACHMENT_BYTES } from '../src/lib/e2eeLimits'
 
 export const MAX_ATTACHMENT_BYTES = E2EE_SERVER_MAX_ATTACHMENT_BYTES
 // 계정당 첨부 저장 한도 300MB (specs/features/F-221.md 2.1)
 export const ATTACHMENT_QUOTA_BYTES = 314_572_800
 const ID_EXT_RE = /^([0-9a-f]{16})\.(png|jpg|gif|webp)$/
+// w·h 쿼리 — 10진 정수 1 이상, 앞에 0 없음 (F-402.md 3.1)
+const DIMENSION_RE = /^[1-9][0-9]{0,7}$/
 
 type AttachmentRow = {
   owner_id: string
@@ -24,6 +27,7 @@ type AttachmentRow = {
   width: number
   height: number
   created_at: number
+  e2ee?: number
 }
 
 
@@ -34,7 +38,12 @@ function parseIdExt(idext: string): { id: string; ext: 'png' | 'jpg' | 'gif' | '
 }
 
 function rowToAttachment(row: AttachmentRow) {
-  return { id: row.id, ext: row.ext, mime: row.mime, size: row.size, width: row.width, height: row.height }
+  const base = { id: row.id, ext: row.ext, mime: row.mime, size: row.size, width: row.width, height: row.height }
+  return row.e2ee === 1 ? { ...base, e2ee: true as const } : base
+}
+
+function invalidField(field: string): Response {
+  return jsonResponse({ error: 'invalid', field }, 400)
 }
 
 async function getUsedBytes(env: Env, ownerId: string): Promise<number> {
@@ -117,14 +126,56 @@ export async function handleUploadAttachment(
     return jsonResponse({ error: 'too_large', limit: MAX_ATTACHMENT_BYTES }, 413)
   }
 
+  // 금고 올리기 — ?e2ee=1&w=&h=, 없으면 평문 경로(나머지 쿼리는 보지 않는다) (F-402.md 3.1)
+  const url = new URL(request.url)
+  const e2eeParam = url.searchParams.get('e2ee')
+  const isE2ee = e2eeParam !== null
+  if (isE2ee && e2eeParam !== '1') return invalidField('e2ee')
+
+  let width = 0
+  let height = 0
+  if (isE2ee) {
+    const wRaw = url.searchParams.get('w')
+    if (!wRaw || !DIMENSION_RE.test(wRaw)) return invalidField('w')
+    const hRaw = url.searchParams.get('h')
+    if (!hRaw || !DIMENSION_RE.test(hRaw)) return invalidField('h')
+    width = Number(wRaw)
+    height = Number(hRaw)
+    if (width * height > MAX_PIXELS) return jsonResponse({ error: 'unsupported' }, 400)
+  }
+
   const existing = await env.DB.prepare('SELECT * FROM attachments WHERE owner_id = ? AND id = ?')
     .bind(user.id, id)
     .first<AttachmentRow>()
-  if (existing) return jsonResponse(rowToAttachment(existing), 200)
+  if (existing) {
+    if ((existing.e2ee === 1) !== isE2ee) return jsonResponse({ error: 'e2ee_mismatch' }, 409)
+    return jsonResponse(rowToAttachment(existing), 200)
+  }
 
   const buffer = new Uint8Array(await request.arrayBuffer())
   if (buffer.length > MAX_ATTACHMENT_BYTES) {
     return jsonResponse({ error: 'too_large', limit: MAX_ATTACHMENT_BYTES }, 413)
+  }
+
+  if (isE2ee) {
+    if (buffer.length < E2EE_ATTACHMENT_OVERHEAD || buffer[0] !== E2EE_FORMAT_VERSION) {
+      return invalidField('body')
+    }
+    const used = await getUsedBytes(env, user.id)
+    if (used + buffer.length > ATTACHMENT_QUOTA_BYTES) {
+      return jsonResponse({ error: 'quota_exceeded', used, limit: ATTACHMENT_QUOTA_BYTES }, 507)
+    }
+    const mime = IMAGE_MIME[ext]
+    const key = `att/${user.id}/${id}.${ext}`
+    await env.BUCKET.put(key, buffer, { httpMetadata: { contentType: 'application/octet-stream' } })
+    const now = Date.now()
+    await env.DB.batch([
+      env.DB.prepare(
+        'INSERT INTO attachments (owner_id, id, ext, mime, size, width, height, created_at, e2ee) VALUES (?,?,?,?,?,?,?,?,1)',
+      ).bind(user.id, id, ext, mime, buffer.length, width, height, now),
+      dayUsageStatement(env.DB, user.id, now),
+    ])
+    return jsonResponse({ id, ext, mime, size: buffer.length, width, height, e2ee: true as const }, 201)
   }
 
   const result = await storeAttachment(env, user.id, id, buffer, ext)
@@ -170,7 +221,8 @@ export async function handleGetAttachment(
     if (own.ext !== ext) return errorResponse('not_found', 404)
     const object = await env.BUCKET.get(`att/${user.id}/${id}.${ext}`)
     if (!object) return errorResponse('not_found', 404)
-    return attachmentResponse(object, own.mime, 'private, max-age=31536000, immutable')
+    const mime = own.e2ee === 1 ? 'application/octet-stream' : own.mime
+    return attachmentResponse(object, mime, 'private, max-age=31536000, immutable')
   }
 
   // 내 것이 아니면 문서 조회 권한 + 그 문서 원문의 참조가 있어야 한다 (F-212 2.2, ?doc= 로 문서를 지정)
@@ -185,7 +237,8 @@ export async function handleGetAttachment(
   if (!access) return errorResponse('not_found', 404)
   if (!extractAttachmentRefs(access.doc.content).has(id)) return errorResponse('not_found', 404)
 
-  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ?')
+  // 금고 첨부는 남에게 절대 내주지 않는다 — 일반 문서가 금고 첨부를 참조해도 404 (F-402.md 3.2)
+  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
     .bind(id, ext)
     .all<AttachmentRow>()
   let row: AttachmentRow | null = null
@@ -222,7 +275,7 @@ export async function handlePublicGetAttachment(
   if (!doc) return errorResponse('not_found', 404)
   if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)
 
-  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ?')
+  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
     .bind(id, ext)
     .all<AttachmentRow>()
   let row: AttachmentRow | null = null
@@ -262,7 +315,7 @@ export async function handlePublicGetDocSetAttachment(
   if (!doc) return errorResponse('not_found', 404)
   if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)
 
-  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ?')
+  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
     .bind(id, ext)
     .all<AttachmentRow>()
   let row: AttachmentRow | null = null
@@ -302,7 +355,7 @@ export async function handlePublicGetFolderAttachment(
   if (!doc.folder_id || !treeIds.includes(doc.folder_id)) return errorResponse('not_found', 404)
   if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)
 
-  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ?')
+  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
     .bind(id, ext)
     .all<AttachmentRow>()
   let row: AttachmentRow | null = null
@@ -318,4 +371,66 @@ export async function handlePublicGetFolderAttachment(
   if (!object) return errorResponse('not_found', 404)
 
   return attachmentResponse(object, row.mime, 'private, max-age=300')
+}
+
+// "쓰는 중" 판정 — 내 문서(또는 나에게 편집 초대를 준 사람의 문서) 본문이 참조하거나, 내 금고 문서 attachment_refs 에 있으면 참 (F-402.md 3.3)
+async function isAttachmentInUse(env: Env, user: AuthUser, id: string): Promise<boolean> {
+  const { results: granters } = await env.DB.prepare(
+    "SELECT DISTINCT owner_id FROM grants WHERE grantee_email = ? AND role = 'edit'",
+  )
+    .bind(user.email)
+    .all<{ owner_id: string }>()
+  const ownerIds = [user.id, ...granters.map((g) => g.owner_id)]
+  const needle = `attachments/${id}.`
+  const { results: candidateDocs } = await env.DB.prepare(
+    'SELECT content FROM docs WHERE e2ee_key IS NULL AND owner_id IN (SELECT value FROM json_each(?)) AND instr(content, ?) > 0',
+  )
+    .bind(JSON.stringify(ownerIds), needle)
+    .all<{ content: string }>()
+  for (const doc of candidateDocs) {
+    if (extractAttachmentRefs(doc.content).has(id)) return true
+  }
+
+  const refHit = await env.DB.prepare(
+    'SELECT 1 as hit FROM docs, json_each(docs.attachment_refs) refs WHERE docs.owner_id = ? AND docs.e2ee_key IS NOT NULL AND refs.value = ? LIMIT 1',
+  )
+    .bind(user.id, id)
+    .first<{ hit: number }>()
+  return refHit !== null
+}
+
+export async function handleDeleteAttachment(
+  request: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  const parsedName = parseIdExt(params.idext)
+  if (!parsedName) return errorResponse('not_found', 404)
+  const { id, ext } = parsedName
+
+  const row = await env.DB.prepare('SELECT * FROM attachments WHERE owner_id = ? AND id = ?')
+    .bind(user.id, id)
+    .first<AttachmentRow>()
+  if (!row || row.ext !== ext) return errorResponse('not_found', 404)
+
+  if (await isAttachmentInUse(env, user, id)) {
+    return jsonResponse({ error: 'in_use' }, 409)
+  }
+
+  try {
+    await env.BUCKET.delete(`att/${user.id}/${id}.${ext}`)
+  } catch (err) {
+    console.error(err)
+    return errorResponse('internal', 500)
+  }
+
+  const now = Date.now()
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM attachments WHERE owner_id = ? AND id = ?').bind(user.id, id),
+    dayUsageStatement(env.DB, user.id, now),
+  ])
+
+  return new Response(null, { status: 204 })
 }
