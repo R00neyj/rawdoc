@@ -230,8 +230,8 @@ test.describe('F-2037 A7b 팔레트는 그대로', () => {
     await palette(page).locator('.command-palette-input').fill('노트 틀')
     await page.keyboard.press('Enter')
 
-    const saved = await readSavedContent(page)
-    expect(saved.content).toContain('## 제목 없는 문서')
+    // 팔레트 삽입은 템플릿 문서를 비동기로 읽은 뒤라, 저장 표시가 먼저 '저장됨' 일 수 있다 — 저장값이 바뀔 때까지 기다린다
+    await expect.poll(async () => (await readSavedContent(page)).content).toContain('## 제목 없는 문서')
   })
 })
 
