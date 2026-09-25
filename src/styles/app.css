@@ -1446,6 +1446,14 @@ body.sidebar-resizing {
   margin-top: 16px;
 }
 
+/* 로그인 전 금고 옮기기 D-14 — 계정에 금고가 있는지에 따라 다른 안내 (F-408 5.4) */
+.e2ee-migrate-dialog .e2ee-migrate-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ink-2);
+  text-align: left;
+}
+
 /* 폴더 삭제 대화상자, 버튼 3개(취소·위로 옮기기·전부 삭제) 아래 보조 문구 (F-242.md 3.5) */
 .dialog-note {
   margin: 8px 0 0;

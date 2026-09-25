@@ -8,6 +8,7 @@ import {
   E2EE_DEFAULT_LOCK_MINUTES,
   E2EE_IDLE_CHECK_MS,
   parseLockMinutes,
+  type E2eeActionError,
   type E2eeLockMinutes,
   type E2eeScope,
   type E2eeStatus,
@@ -42,6 +43,10 @@ export type UseE2ee = {
   broadcastLogoutLock(): void
   // recover 는 P1 의 암호를 잊었나요? — D-11 을 복구 1 모드로 연다 (F-405 6.2)
   openSettingsDialogs: { create(): void; unlock(): void; recover(): void; changePassword(): void; reset(): void; lockNow(): void }
+  // 계정(또는 로컬) 금고 상태를 새로 읽어 돌려준다 — keyring.load() 뒤 getStatus() (F-408 D-14)
+  refreshStatus(): Promise<E2eeStatus>
+  // 받은 암호로 이 탭의 금고를 연다. 성공이면 null. 대화상자를 띄우지 않고 알림도 없다 (F-408 2.1)
+  openWithPassword(password: string): Promise<E2eeActionError | null>
 }
 
 const LOCK_MINUTES_LABEL: Record<E2eeLockMinutes, string> = {
@@ -278,6 +283,21 @@ export function useE2ee(options: UseE2eeOptions): UseE2ee | null {
     })
   }
 
+  // 금고 상태를 새로 읽는다 — D-14 를 열 때 계정(또는 로컬) 금고 상태로 덧붙임 줄을 고른다 (F-408 3.5)
+  async function refreshStatus(): Promise<E2eeStatus> {
+    if (!keyring) return 'unknown'
+    await keyring.load()
+    return keyring.getStatus()
+  }
+
+  // 받은 암호로 이 탭의 금고를 연다 — 대화상자를 띄우지 않고 알림도 없다 (F-408 3.5)
+  async function openWithPasswordDirect(password: string): Promise<E2eeActionError | null> {
+    if (!keyring) return 'failed'
+    const err = await keyring.open(password)
+    if (err === null) handleOpened()
+    return err
+  }
+
   function handleOtherTabLock() {
     if (!keyring) return
     if (keyring.getStatus() !== 'open') return
@@ -336,5 +356,7 @@ export function useE2ee(options: UseE2eeOptions): UseE2ee | null {
       reset: () => setDialogMode('reset'),
       lockNow: () => void lockManual(),
     },
+    refreshStatus,
+    openWithPassword: openWithPasswordDirect,
   }
 }

@@ -6,6 +6,7 @@ import type { Notice } from './notice'
 
 export type NoticeWithAction = Notice & {
   action?: { label: string; onClick: () => void; icon?: ComponentType<{ size?: number }> }
+  secondaryAction?: { label: string; onClick: () => void } // 두 번째 버튼 — action 뒤, 닫기 앞 (F-408 E9 `나중에`)
 }
 
 type NoticeBarProps = {
@@ -36,6 +37,11 @@ export default function NoticeBar({ notice, onDismiss }: NoticeBarProps) {
         <button type="button" onClick={shown.action.onClick}>
           {shown.action.icon && <shown.action.icon size={18} />}
           {shown.action.label}
+        </button>
+      )}
+      {shown.secondaryAction && (
+        <button type="button" onClick={shown.secondaryAction.onClick}>
+          {shown.secondaryAction.label}
         </button>
       )}
       <span className="icon-btn-wrap">

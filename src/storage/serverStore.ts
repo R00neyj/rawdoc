@@ -68,6 +68,8 @@ export type ServerStore = Store & {
   // 오프라인 부팅에서도 md-yjs 를 이 사용자로 연다 (F-306 9.2)
   readonly userId: string
   importLocal(input: { folders: Folder[]; docs: Doc[] }): Promise<{ importedCount: number }>
+  // 로그인 이관(F-408) — 로컬 금고를 이미 만든 봉투 그대로 캐시에 쓰고 보낼 목록에 넣는다. 같은 id 가 캐시에 있으면 건너뛴다. 표지(e2ee·e2eeKey) 없는 값이 섞이면 아무것도 쓰지 않고 던진다
+  importLocalE2ee(input: { folders?: Folder[]; docs?: Doc[]; attachments?: Attachment[] }): Promise<{ folders: number; docs: number; attachments: number }>
   // 잠금을 되찾은 뒤 서버 값을 다시 받아 캐시에 반영한다(에디터 재마운트용) (F-213.md 2.3)
   refreshDocFromServer(id: string): Promise<Doc | null>
   // outbox 에 이 문서의 createDoc·updateDoc 이 남았는가 — 남았으면 실시간으로 붙지 않는다 (F-305 4.2)
@@ -1513,6 +1515,95 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       await refreshPending()
       kickSend()
       return { importedCount }
+    },
+
+    // 로그인 이관(F-408 3.4) — 이미 만든 봉투를 id 그대로 캐시에 쓰고 보낼 목록에 넣는다. 같은 id 가 캐시에 있으면 건너뛴다
+    async importLocalE2ee({ folders: inputFolders, docs: inputDocs, attachments: inputAttachments }) {
+      // 표지 검사 — 평문이 이 길로 올라가는 실수를 저장소 층에서 막는다. 하나라도 걸리면 아무것도 쓰지 않는다
+      for (const folder of inputFolders ?? []) {
+        if (folder.e2ee !== true) throw new Error('not_e2ee')
+      }
+      for (const att of inputAttachments ?? []) {
+        if (att.e2ee !== true) throw new Error('not_e2ee')
+      }
+      for (const doc of inputDocs ?? []) {
+        if (doc.e2eeKey === undefined) throw new Error('not_e2ee')
+      }
+
+      let foldersCount = 0
+      for (const folder of inputFolders ?? []) {
+        const existing = await cache.getFolder(userId, folder.id)
+        if (existing) continue
+        await cache.putFolder(userId, {
+          id: folder.id,
+          name: folder.name,
+          parentId: folder.parentId,
+          createdAt: folder.createdAt,
+          updatedAt: folder.updatedAt,
+          e2ee: true,
+        })
+        await cache.addOutbox(userId, { type: 'createFolder', folderId: folder.id, name: folder.name, parentId: folder.parentId, e2ee: true })
+        foldersCount++
+      }
+
+      let attachmentsCount = 0
+      for (const att of inputAttachments ?? []) {
+        const existing = await cache.getAttachment(userId, att.id)
+        if (existing) continue
+        await cache.putAttachment(userId, {
+          id: att.id,
+          ext: att.ext,
+          mime: att.mime,
+          size: att.size,
+          width: att.width,
+          height: att.height,
+          blob: att.blob,
+          uploaded: false,
+          createdAt: att.createdAt,
+          e2ee: true,
+        })
+        await cache.addOutbox(userId, { type: 'upload', attachmentId: att.id, ext: att.ext })
+        attachmentsCount++
+      }
+
+      let docsCount = 0
+      for (const doc of inputDocs ?? []) {
+        const existing = await cache.getDoc(userId, doc.id)
+        if (existing) continue
+        const attachmentRefs = doc.attachmentRefs ?? []
+        const cachedDoc: Omit<CachedDoc, 'userId'> = {
+          id: doc.id,
+          title: doc.title,
+          content: doc.content,
+          lineEnding: doc.lineEnding,
+          folderId: doc.folderId,
+          pinnedAt: doc.pinnedAt,
+          createdAt: doc.createdAt,
+          updatedAt: doc.updatedAt,
+          version: 0,
+          e2eeKey: doc.e2eeKey,
+          attachmentRefs,
+        }
+        await cache.putDoc(userId, cachedDoc)
+        await cache.addOutbox(userId, {
+          type: 'createDoc',
+          docId: doc.id,
+          title: doc.title,
+          content: doc.content,
+          lineEnding: doc.lineEnding,
+          folderId: doc.folderId,
+          createdAt: doc.createdAt,
+          updatedAt: doc.updatedAt,
+          pinnedAt: doc.pinnedAt,
+          e2eeKey: doc.e2eeKey,
+          attachmentRefs,
+        })
+        docsCount++
+      }
+
+      await refreshPending()
+      kickSend()
+      return { folders: foldersCount, docs: docsCount, attachments: attachmentsCount }
     },
   }
 }

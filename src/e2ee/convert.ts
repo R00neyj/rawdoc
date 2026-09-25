@@ -1,11 +1,14 @@
 // 금고로 옮기기·빼기 — 계획·비용·대화상자 글·메뉴 판정(순수)과 실행기 (specs/features/F-407.md 2~4·6장)
-import type { AttachmentExt, Doc, Folder, Store } from '../types'
+// 로그인 이관 — 계획·다시 감싸기·평문 첨부 암호화 (specs/features/F-408.md 3.2)
+import type { Attachment, AttachmentExt, Doc, Folder, Store } from '../types'
 import { ApiError } from '../storage/docsApi'
 import { AttachmentApiError } from '../storage/attachmentsApi'
 import { E2EE_MAX_ATTACHMENT_REFS, envelopeBase64Length, isPlainAttachmentTooLarge, isPlainContentTooLarge, utf8ByteLength } from '../lib/e2eeLimits'
 import { extractAttachmentRefs } from '../lib/imageBlock'
+import { inspectImageBytes } from '../lib/imageFile'
 import { formatCount, nextUtcMidnight } from '../lib/usageLimits'
-import { isE2eeStoreError } from './e2eeStore'
+import { isE2eeStoreError, attachmentRefsOf } from './e2eeStore'
+import { decryptDocField, encryptAttachment, encryptDocField, openDocKey, rewrapAttachment, rewrapDocKey } from './crypto'
 
 export const E2EE_CONVERT_WRITE_GAP_MS = 600
 export const E2EE_CONVERT_MAX_RATE_RETRIES = 5
@@ -599,4 +602,123 @@ export async function runE2eeConvert(
     }
     return { kind: 'stopped', done, total, reason: stop.reason, ...(stop.resetAt !== undefined ? { resetAt: stop.resetAt } : {}), purgeFailed }
   }
+}
+
+// ---- 로그인 이관 (F-408 3.2) ----
+
+// adopt: 계정 MK = 로컬 MK (같은 CryptoKey 를 둘 다에 넣는다) / rewrap: 서로 다른 키
+export type LocalE2eeKeys = { mode: 'adopt' | 'rewrap'; localKey: CryptoKey; accountKey: CryptoKey }
+
+export type LocalE2eeMigrationPlan = {
+  folders: Folder[] // 계정에 만들 금고 폴더. 부모 먼저
+  docs: Doc[] // 옮길 금고 문서 (저장소 층 그대로)
+  skippedDocIds: string[] // 계정에 같은 id 가 이미 있어 건너뛴 로컬 금고 문서
+}
+
+function randomE2eeAttachmentId(): string {
+  const bytes = new Uint8Array(8)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+// 순수 — md-docs 저장소 층 값과 계정의 id 로 계획을 세운다 (F-408 4.2)
+export function planLocalE2eeMigration(input: {
+  local: { folders: Folder[]; docs: Doc[] }
+  account: { docIds: ReadonlySet<string>; folderIds: ReadonlySet<string> }
+}): LocalE2eeMigrationPlan {
+  const { local, account } = input
+  const e2eeFolders = local.folders.filter((f) => f.e2ee === true)
+  const e2eeFolderIds = new Set(e2eeFolders.map((f) => f.id))
+  const byId = new Map(e2eeFolders.map((f) => [f.id, f]))
+
+  function depthOf(folder: Folder): number {
+    let depth = 0
+    let cur: Folder | undefined = folder
+    const seen = new Set<string>()
+    while (cur?.parentId && byId.has(cur.parentId) && !seen.has(cur.id)) {
+      seen.add(cur.id)
+      cur = byId.get(cur.parentId)
+      depth++
+    }
+    return depth
+  }
+
+  function fixParentId(id: string | null): string | null {
+    if (id === null) return null
+    return e2eeFolderIds.has(id) || account.folderIds.has(id) ? id : null
+  }
+
+  const orderedFolders = e2eeFolders
+    .map((f, i) => ({ f, i, depth: depthOf(f) }))
+    .sort((a, b) => a.depth - b.depth || a.i - b.i)
+
+  const folders: Folder[] = []
+  for (const { f } of orderedFolders) {
+    if (account.folderIds.has(f.id)) continue
+    folders.push({ ...f, parentId: fixParentId(f.parentId) })
+  }
+
+  const skippedDocIds: string[] = []
+  const docs: Doc[] = []
+  for (const d of local.docs) {
+    if (d.e2eeKey === undefined) continue
+    if (account.docIds.has(d.id)) {
+      skippedDocIds.push(d.id)
+      continue
+    }
+    docs.push({ ...d, folderId: fixParentId(d.folderId) })
+  }
+
+  return { folders, docs, skippedDocIds }
+}
+
+// 금고 첨부 봉투 하나. adopt 면 같은 바이트, rewrap 이면 머리 40 B 만 바뀐다. id·ext·가로세로 그대로 (F-408 3.2)
+export async function rekeyLocalE2eeAttachment(attachment: Attachment, keys: LocalE2eeKeys): Promise<Attachment> {
+  if (keys.mode === 'adopt') return attachment
+  const envelope = new Uint8Array(await attachment.blob.arrayBuffer())
+  const rewrapped = await rewrapAttachment(envelope, keys.localKey, keys.accountKey)
+  return { ...attachment, blob: new Blob([rewrapped as BlobPart], { type: attachment.mime }) }
+}
+
+// 섞인 평문 첨부 하나를 새 id 로 계정 키에 암호화한다 — 바이트·확장자 그대로. 암호화할 수 없으면 null (F-408 4.3)
+export async function encryptLocalPlainAttachment(attachment: Attachment, keys: LocalE2eeKeys): Promise<Attachment | null> {
+  const plainBytes = new Uint8Array(await attachment.blob.arrayBuffer())
+  if (isPlainAttachmentTooLarge(plainBytes.length)) return null
+  let { width, height } = attachment
+  if (!(Number.isInteger(width) && width >= 1 && Number.isInteger(height) && height >= 1)) {
+    const info = inspectImageBytes(plainBytes)
+    if (!info) return null
+    ;({ width, height } = info)
+  }
+  const id = randomE2eeAttachmentId()
+  const envelope = await encryptAttachment(keys.accountKey, id, plainBytes)
+  return {
+    id,
+    mime: attachment.mime,
+    ext: attachment.ext,
+    size: envelope.length,
+    width,
+    height,
+    createdAt: attachment.createdAt,
+    e2ee: true,
+    blob: new Blob([envelope as BlobPart], { type: 'application/octet-stream' }),
+  }
+}
+
+// 문서 하나. title 봉투는 늘 그대로. links 가 비었으면 content 봉투도 그대로, 있으면 같은 DEK 로 다시 암호화하고 attachmentRefs 를 다시 만든다 (F-408 3.2)
+export async function rekeyLocalE2eeDoc(
+  doc: Doc,
+  keys: LocalE2eeKeys,
+  links: ReadonlyMap<string, { id: string; ext: AttachmentExt }>,
+): Promise<Doc> {
+  const oldWrappedKey = doc.e2eeKey as string
+  const e2eeKey = keys.mode === 'adopt' ? oldWrappedKey : await rewrapDocKey(oldWrappedKey, keys.localKey, keys.accountKey)
+  if (links.size === 0) {
+    return { ...doc, e2eeKey }
+  }
+  const localDocKey = await openDocKey(keys.localKey, oldWrappedKey)
+  const plainContent = await decryptDocField(localDocKey, doc.id, 'content', doc.content)
+  const newPlainContent = rewriteAttachmentLinks(plainContent, links)
+  const newContentEnvelope = await encryptDocField(localDocKey, doc.id, 'content', newPlainContent)
+  return { ...doc, e2eeKey, content: newContentEnvelope, attachmentRefs: attachmentRefsOf(newPlainContent) }
 }

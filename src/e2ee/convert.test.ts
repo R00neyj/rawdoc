@@ -8,16 +8,22 @@ import {
   createE2eeConvertMemory,
   e2eeMenuForDoc,
   e2eeMenuForFolder,
+  encryptLocalPlainAttachment,
   estimateE2eeConvertCost,
   planE2eeConvert,
+  planLocalE2eeMigration,
+  rekeyLocalE2eeAttachment,
+  rekeyLocalE2eeDoc,
   rewriteAttachmentLinks,
   runE2eeConvert,
   type E2eeConvertDeps,
   type E2eeConvertMemory,
   type E2eeConvertPlan,
   type E2eeConvertProgress,
+  type LocalE2eeKeys,
 } from './convert'
 import { ApiError } from '../storage/docsApi'
+import { createDocKey, decryptAttachment, decryptDocField, encryptAttachment, encryptDocField, openDocKey } from './crypto'
 import { envelopeBase64Length, utf8ByteLength } from '../lib/e2eeLimits'
 import { nextUtcMidnight } from '../lib/usageLimits'
 import type { Attachment, AttachmentExt, Doc, Folder, Store } from '../types'
@@ -604,5 +610,163 @@ describe('F-407 실행기 — 빼기 (4.5)', () => {
     expect((run.writeCalls()[1].args[0] as { e2ee?: true }).e2ee).toBeUndefined()
     expect(run.docs.get('v1')?.e2ee).toBeUndefined()
     expect(run.yjsRemoved).toHaveLength(0)
+  })
+})
+
+// ---- F-408 로그인 이관 — planLocalE2eeMigration·rekeyLocalE2eeDoc·rekeyLocalE2eeAttachment·encryptLocalPlainAttachment ----
+
+function vFolder(id: string, parentId: string | null): Folder {
+  return { id, name: id, parentId, createdAt: 1, updatedAt: 1, e2ee: true }
+}
+function plainFolder(id: string, parentId: string | null): Folder {
+  return { id, name: id, parentId, createdAt: 1, updatedAt: 1 }
+}
+function vDoc(id: string, folderId: string | null, updatedAt = 1): Doc {
+  return { id, title: 't', content: 'c', lineEnding: 'lf', createdAt: 1, updatedAt, folderId, pinnedAt: null, e2eeKey: 'k' }
+}
+
+async function genMk(): Promise<CryptoKey> {
+  return crypto.subtle.generateKey({ name: 'AES-KW', length: 256 }, false, ['wrapKey', 'unwrapKey'])
+}
+
+describe('F-408 V1~V2 planLocalE2eeMigration', () => {
+  it('V1: 계정에 같은 id 가 있는 문서는 건너뛰고, 폴더는 부모 먼저', () => {
+    const A = vFolder('A', null)
+    const B = vFolder('B', 'A')
+    const C = plainFolder('C', null)
+    const a1 = vDoc('a1', 'A')
+    const b1 = vDoc('b1', 'B')
+    const c1 = vDoc('c1', 'C')
+    const r1 = vDoc('r1', null)
+    const n1: Doc = { id: 'n1', title: 't', content: 'c', lineEnding: 'lf', createdAt: 1, updatedAt: 1, folderId: null, pinnedAt: null }
+    const plan = planLocalE2eeMigration({
+      local: { folders: [A, B, C], docs: [a1, b1, c1, r1, n1] },
+      account: { docIds: new Set(['r1']), folderIds: new Set(['C']) },
+    })
+    expect(plan.folders.map((f) => f.id)).toEqual(['A', 'B'])
+    expect(plan.docs.map((d) => d.id)).toEqual(['a1', 'b1', 'c1'])
+    expect(plan.skippedDocIds).toEqual(['r1'])
+    expect(plan.docs.find((d) => d.id === 'c1')?.folderId).toBe('C')
+  })
+
+  it('V2: 부모 고치기 — 계정 폴더 id 가 빈 집합이면 밖의 부모를 null 로', () => {
+    const D = plainFolder('D', null) // 로컬 일반 폴더
+    const A = vFolder('A', 'D')
+    const B = vFolder('B', 'A')
+    const C = plainFolder('C', null)
+    const c1 = vDoc('c1', 'C')
+    const plan = planLocalE2eeMigration({
+      local: { folders: [D, A, B, C], docs: [c1] },
+      account: { docIds: new Set(), folderIds: new Set() },
+    })
+    expect(plan.docs.find((d) => d.id === 'c1')?.folderId).toBeNull()
+    expect(plan.folders.find((f) => f.id === 'A')?.parentId).toBeNull()
+  })
+})
+
+describe('F-408 V3~V5 rekeyLocalE2eeDoc', () => {
+  it('V3: adopt, 짝 없음 — title·content·e2eeKey 가 입력과 ===', async () => {
+    const mk = await genMk()
+    const { docKey, wrappedDocKey } = await createDocKey(mk)
+    const title = await encryptDocField(docKey, 'd1', 'title', '제목')
+    const content = await encryptDocField(docKey, 'd1', 'content', '본문')
+    const doc: Doc = { id: 'd1', title, content, lineEnding: 'lf', createdAt: 1, updatedAt: 1, folderId: null, pinnedAt: null, e2eeKey: wrappedDocKey }
+    const keys: LocalE2eeKeys = { mode: 'adopt', localKey: mk, accountKey: mk }
+    const out = await rekeyLocalE2eeDoc(doc, keys, new Map())
+    expect(out.title).toBe(title)
+    expect(out.content).toBe(content)
+    expect(out.e2eeKey).toBe(wrappedDocKey)
+  })
+
+  it('V4: rewrap, 짝 없음 — e2eeKey 만 바뀐다', async () => {
+    const localMk = await genMk()
+    const accountMk = await genMk()
+    const { docKey, wrappedDocKey } = await createDocKey(localMk)
+    const title = await encryptDocField(docKey, 'd1', 'title', '제목')
+    const content = await encryptDocField(docKey, 'd1', 'content', '본문')
+    const doc: Doc = { id: 'd1', title, content, lineEnding: 'lf', createdAt: 1, updatedAt: 1, folderId: null, pinnedAt: null, e2eeKey: wrappedDocKey }
+    const keys: LocalE2eeKeys = { mode: 'rewrap', localKey: localMk, accountKey: accountMk }
+    const out = await rekeyLocalE2eeDoc(doc, keys, new Map())
+    expect(out.title).toBe(title)
+    expect(out.content).toBe(content)
+    expect(out.e2eeKey).not.toBe(wrappedDocKey)
+    expect(out.e2eeKey).toHaveLength(56)
+    const accountDocKey = await openDocKey(accountMk, out.e2eeKey as string)
+    expect(await decryptDocField(accountDocKey, 'd1', 'title', out.title)).toBe('제목')
+    expect(await decryptDocField(accountDocKey, 'd1', 'content', out.content)).toBe('본문')
+    await expect(openDocKey(localMk, out.e2eeKey as string)).rejects.toThrow()
+  })
+
+  it('V5: 짝 있음(평문 aa.png → 새 cc.png), rewrap — CRLF 를 포함한 나머지 글자는 같다', async () => {
+    const localMk = await genMk()
+    const accountMk = await genMk()
+    const { docKey, wrappedDocKey } = await createDocKey(localMk)
+    const AA = '00000000000000aa'
+    const CC = '00000000000000cc'
+    const plainContent = `이미지\r\n![](attachments/${AA}.png)\r\n끝`
+    const title = await encryptDocField(docKey, 'd1', 'title', '제목')
+    const content = await encryptDocField(docKey, 'd1', 'content', plainContent)
+    const doc: Doc = {
+      id: 'd1', title, content, lineEnding: 'crlf', createdAt: 1, updatedAt: 1, folderId: null, pinnedAt: null,
+      e2eeKey: wrappedDocKey, attachmentRefs: [AA],
+    }
+    const keys: LocalE2eeKeys = { mode: 'rewrap', localKey: localMk, accountKey: accountMk }
+    const links = new Map([[AA, { id: CC, ext: 'png' as AttachmentExt }]])
+    const out = await rekeyLocalE2eeDoc(doc, keys, links)
+    expect(out.title).toBe(title)
+    expect(out.content).not.toBe(content)
+    const accountDocKey = await openDocKey(accountMk, out.e2eeKey as string)
+    const newPlain = await decryptDocField(accountDocKey, 'd1', 'content', out.content)
+    expect(newPlain).toBe(`이미지\r\n![](attachments/${CC}.png)\r\n끝`)
+    expect(out.attachmentRefs).toContain(CC)
+    expect(out.attachmentRefs).not.toContain(AA)
+  })
+})
+
+describe('F-408 V6 rekeyLocalE2eeAttachment·encryptLocalPlainAttachment', () => {
+  it('rewrap 은 머리 40B 만 바뀌고, adopt 는 바이트가 같다. 평문 암호화는 새 id·같은 ext', async () => {
+    const localMk = await genMk()
+    const accountMk = await genMk()
+    const id = '00000000000000aa'
+    const plain = new TextEncoder().encode('hello world')
+    const envelope = await encryptAttachment(localMk, id, plain)
+    const attachment: Attachment = {
+      id, mime: 'application/octet-stream', ext: 'png', size: envelope.length, width: 1, height: 1, createdAt: 1, e2ee: true,
+      blob: new Blob([envelope as BlobPart]),
+    }
+
+    const rewrapKeys: LocalE2eeKeys = { mode: 'rewrap', localKey: localMk, accountKey: accountMk }
+    const rewrapped = await rekeyLocalE2eeAttachment(attachment, rewrapKeys)
+    const rewrappedBytes = new Uint8Array(await rewrapped.blob.arrayBuffer())
+    expect(rewrappedBytes[0]).toBe(envelope[0])
+    expect(rewrappedBytes.slice(41)).toEqual(envelope.slice(41))
+    expect(rewrappedBytes.slice(1, 41)).not.toEqual(envelope.slice(1, 41))
+    const decrypted = await decryptAttachment(accountMk, id, rewrappedBytes)
+    expect(new TextDecoder().decode(decrypted)).toBe('hello world')
+
+    const adoptKeys: LocalE2eeKeys = { mode: 'adopt', localKey: localMk, accountKey: localMk }
+    const adopted = await rekeyLocalE2eeAttachment(attachment, adoptKeys)
+    const adoptedBytes = new Uint8Array(await adopted.blob.arrayBuffer())
+    expect(adoptedBytes).toEqual(envelope)
+
+    const plainAttachment: Attachment = {
+      id: 'ignored', mime: 'image/png', ext: 'png', size: plain.length, width: 2, height: 3, createdAt: 1,
+      blob: new Blob([plain as BlobPart]),
+    }
+    const encrypted = await encryptLocalPlainAttachment(plainAttachment, rewrapKeys)
+    expect(encrypted).not.toBeNull()
+    expect(encrypted!.id).toHaveLength(16)
+    expect(encrypted!.id).not.toBe('ignored')
+    expect(encrypted!.e2ee).toBe(true)
+    expect(encrypted!.ext).toBe('png')
+    const decryptedPlain = await decryptAttachment(accountMk, encrypted!.id, new Uint8Array(await encrypted!.blob.arrayBuffer()))
+    expect(new TextDecoder().decode(decryptedPlain)).toBe('hello world')
+
+    const bigBytes = new Uint8Array(5_242_812)
+    const bigAttachment: Attachment = {
+      id: 'big', mime: 'image/png', ext: 'png', size: bigBytes.length, width: 2, height: 3, createdAt: 1,
+      blob: new Blob([bigBytes as BlobPart]),
+    }
+    expect(await encryptLocalPlainAttachment(bigAttachment, rewrapKeys)).toBeNull()
   })
 })

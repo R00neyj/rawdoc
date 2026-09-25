@@ -17,12 +17,14 @@ import { openSearchPanel } from '@codemirror/search'
 import { showSearchMatches } from '../editor/showSearchMatches'
 
 import { createMemoryStore } from '../storage/memoryStore'
-import { createIdbStore } from '../storage/idbStore'
+import { createIdbStore, markLocalE2eeMigrated, readE2eeRow } from '../storage/idbStore'
 import { openStore } from '../storage/openStore'
 import type { ServerStore } from '../storage/serverStore'
 import { openYjsStore, type YjsStore } from '../storage/yjsStore'
 import { openLiveSocket } from '../storage/liveSocket'
-import { migrateLocalIfNeeded } from './migrateLocal'
+import { migrateLocalIfNeeded, checkLocalE2eeMigration, runLocalE2eeMigration } from './migrateLocal'
+import type { LocalE2eeKeys } from '../e2ee/convert'
+import E2eeMigrateDialog from './E2eeMigrateDialog'
 import { ancestorsOfDoc, resolveTargetFolderId, canMoveFolder } from '../lib/folderTree'
 import type { SelectionItem } from './sidebarSelection'
 import { createWikiResolver } from '../lib/wikiResolve'
@@ -613,9 +615,9 @@ export default function App() {
   // 만든 알림 id 를 돌려준다 — 조건이 풀리면 dismissNotice(id) 로 그 알림만 걷는다 (F-305 11.2)
   // sticky 면 info 도 4초 뒤 사라지지 않는다 — 금고 옮기기 진행 알림만 쓴다 (F-407 6장)
   const showNotice = useCallback((input: NoticeWithAction, options?: { sticky?: boolean }): number => {
-    const { type, message, action } = input
+    const { type, message, action, secondaryAction } = input
     const id = ++noticeIdRef.current
-    const candidate: AppNotice = { id, type, message, action }
+    const candidate: AppNotice = { id, type, message, action, secondaryAction }
     const sticky = options?.sticky === true
     setNotice((current) => {
       const result = pushNotice(current, candidate) as AppNotice
@@ -698,6 +700,13 @@ export default function App() {
   // D-9·D-10 — 글과 답을 기다리는 함수. 닫힘(close 이벤트)이 확인 뒤에도 오므로 답은 한 번만 쓴다
   const [e2eeConvertText, setE2eeConvertText] = useState<E2eeConvertDialogText | null>(null)
   const e2eeConvertAnswerRef = useRef<((ok: boolean) => void) | null>(null)
+
+  // 로그인 전 금고 이관 (F-408) — 판정은 페이지마다 한 번
+  const e2eeMigrateCheckedRef = useRef(false)
+  const [e2eeMigrateAsk, setE2eeMigrateAsk] = useState<{ count: number; bundle: string } | null>(null)
+  const [e2eeMigrateDialogOpen, setE2eeMigrateDialogOpen] = useState(false)
+  const e2eeMigrateNoticeIdRef = useRef<number | null>(null)
+  const e2eeMigrateRunningRef = useRef(false)
 
   // ----- 문서 열기 경로 (F-305 4장) — 문서·저장소가 바뀌면 새 세션. local·view 는 여기서, 나머지는 아래 effect 가 outbox 를 읽고 정한다 -----
   const [docSession, setDocSession] = useState<DocSession>(() => ({
@@ -1089,6 +1098,126 @@ export default function App() {
     e2eeOtherTabLockRef.current = () => e2ee?.handleOtherTabLock()
     e2eeRef.current = e2ee
   }, [e2ee])
+
+  // 로그인 전 금고 이관(F-408) — 부팅이 끝나고 계정이 in 이고 막히지 않았을 때 페이지마다 한 번 판정한다 (4.1)
+  useEffect(() => {
+    if (bootPhase !== 'ready' || !e2ee || store.kind !== 'server' || account.state !== 'in' || account.blocked) return
+    if (e2eeMigrateCheckedRef.current) return
+    e2eeMigrateCheckedRef.current = true
+    const userId = (store as ServerStore).userId
+    void checkLocalE2eeMigration({
+      userId,
+      localDbExists: async () => {
+        if (typeof indexedDB === 'undefined' || !indexedDB.databases) return true
+        const dbs = await indexedDB.databases()
+        return dbs.some((d) => d.name === 'md-docs')
+      },
+      readLocalRow: () => readE2eeRow('local'),
+      readLocal: async () => {
+        const local = await createIdbStore()
+        const [localFolders, localDocs] = await Promise.all([local.listFolders(), local.list()])
+        return { folders: localFolders, docs: localDocs }
+      },
+      accountIds: () => ({
+        docIds: new Set(docsRef.current.map((d) => d.id)),
+        folderIds: new Set(foldersRef.current.map((f) => f.id)),
+      }),
+      markMigrated: (bundle) => markLocalE2eeMigrated(userId, bundle),
+    })
+      .then((result) => {
+        if (result.kind !== 'ask') return
+        setE2eeMigrateAsk({ count: result.count, bundle: result.bundle })
+        let noticeId = 0
+        noticeId = showNotice(
+          {
+            type: 'info',
+            message: `이 브라우저에 로그인 전 금고 문서 ${result.count.toLocaleString('ko-KR')}개가 있습니다. 금고 암호를 입력하면 계정 금고로 옮깁니다.`,
+            action: {
+              label: '옮기기',
+              onClick: () => {
+                dismissNotice(noticeId)
+                setE2eeMigrateDialogOpen(true)
+              },
+            },
+            secondaryAction: { label: '나중에', onClick: () => dismissNotice(noticeId) },
+          },
+          { sticky: true },
+        )
+        e2eeMigrateNoticeIdRef.current = noticeId
+      })
+      .catch((err) => console.error('e2ee_migrate_check_failed', err))
+  }, [bootPhase, e2ee, store, account, showNotice, dismissNotice])
+
+  // 실행 — D-14 가 키를 얻으면 부른다 (4.4·4.5)
+  async function runE2eeMigrateFlow(keys: LocalE2eeKeys, bundle: string) {
+    if (e2eeMigrateRunningRef.current) return
+    e2eeMigrateRunningRef.current = true
+    setE2eeMigrateDialogOpen(false)
+    const ring = e2eeRef.current
+    const userId = (store as ServerStore).userId
+    let progressId: number | null = null
+    const onProgress = (done: number, total: number) => {
+      if (progressId !== null) dismissNotice(progressId)
+      progressId = showNotice(
+        { type: 'info', message: `로그인 전 금고 문서를 계정 금고로 옮기는 중… ${done.toLocaleString('ko-KR')}/${total.toLocaleString('ko-KR')}` },
+        { sticky: true },
+      )
+    }
+    onProgress(0, e2eeMigrateAsk?.count ?? 0)
+    let outcome: Awaited<ReturnType<typeof runLocalE2eeMigration>>
+    try {
+      outcome = await runLocalE2eeMigration({
+        userId,
+        localDbExists: async () => {
+          if (typeof indexedDB === 'undefined' || !indexedDB.databases) return true
+          const dbs = await indexedDB.databases()
+          return dbs.some((d) => d.name === 'md-docs')
+        },
+        readLocalRow: () => readE2eeRow('local'),
+        readLocal: async () => {
+          const local = await createIdbStore()
+          const [localFolders, localDocs] = await Promise.all([local.listFolders(), local.list()])
+          return { folders: localFolders, docs: localDocs }
+        },
+        accountIds: () => ({
+          docIds: new Set(docsRef.current.map((d) => d.id)),
+          folderIds: new Set(foldersRef.current.map((f) => f.id)),
+        }),
+        markMigrated: (b) => markLocalE2eeMigrated(userId, b),
+        bundle,
+        keys,
+        getLocalAttachment: async (id) => {
+          const local = await createIdbStore()
+          return local.getAttachment(id)
+        },
+        importLocalE2ee: (input) => (store as ServerStore).importLocalE2ee(input),
+        keyAlive: () => (keys.mode === 'adopt' ? true : (ring?.keyring.getMasterKey() ?? null) !== null),
+        noteActivity: () => ring?.keyring.noteActivity(),
+        onProgress,
+      })
+    } finally {
+      if (progressId !== null) dismissNotice(progressId)
+      e2eeMigrateRunningRef.current = false
+    }
+
+    if (outcome.kind === 'done') {
+      showNotice({ type: 'info', message: `로그인 전 금고 문서 ${outcome.count.toLocaleString('ko-KR')}개를 계정 금고에 넣었습니다. 서버로 보내는 중입니다.` })
+      if (outcome.skippedImages > 0) {
+        showNotice({ type: 'warn', message: `암호화할 수 없는 이미지 ${outcome.skippedImages.toLocaleString('ko-KR')}개는 옮기지 않았습니다.` })
+      }
+      await resyncFromStore()
+      return
+    }
+    if (outcome.reason === 'locked') {
+      showNotice({
+        type: 'warn',
+        message: `금고가 잠겨 로그인 전 금고 문서 ${outcome.done.toLocaleString('ko-KR')}/${outcome.total.toLocaleString('ko-KR')}개를 옮기고 멈췄습니다. 다시 누르면 남은 것부터 옮깁니다.`,
+        action: { label: '옮기기', onClick: () => setE2eeMigrateDialogOpen(true) },
+      })
+      return
+    }
+    showNotice({ type: 'error', message: '로그인 전 금고 문서를 옮기지 못했습니다. 다시 시도하려면 새로고침하세요.' })
+  }
 
   // 잠겨서 P1 이 뜬 문서 — 초점을 옮기지 않는다. 다른 문서로 가면 되돌린다 (F-405 6.2)
   const [e2eeUnmountedDocId, setE2eeUnmountedDocId] = useState<string | null>(null)
@@ -4439,6 +4568,16 @@ export default function App() {
         onCancel={() => answerE2eeConvertDialog(false)}
         onConfirm={() => answerE2eeConvertDialog(true)}
       />
+      {e2ee && store.kind === 'server' && account.state === 'in' && (
+        <E2eeMigrateDialog
+          open={e2eeMigrateDialogOpen}
+          count={e2eeMigrateAsk?.count ?? 0}
+          userId={(store as ServerStore).userId}
+          e2ee={e2ee}
+          onClose={() => setE2eeMigrateDialogOpen(false)}
+          onReady={(keys, bundle) => void runE2eeMigrateFlow(keys, bundle)}
+        />
+      )}
       <Dialog
         open={Boolean(bulkDeleteItems)}
         onClose={cancelBulkDelete}

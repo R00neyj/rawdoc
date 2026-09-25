@@ -1689,3 +1689,134 @@ describe('F-407 S8 setFolderE2ee', () => {
     expect((await cache.getFolder('u1', folder.id))?.e2ee).toBeUndefined()
   })
 })
+
+// ----- F-408 S1~S4 importLocalE2ee (specs/features/F-408.md 3.4, 7.1) -----
+
+describe('F-408 S1 importLocalE2ee — 캐시 행과 보낼 목록', () => {
+  it('폴더·첨부·문서를 캐시에 쓰고, 보낼 목록이 createFolder → upload → createDoc 순', async () => {
+    const { server, store, cache } = await convertSetup()
+    server.setNetworkDown(true) // 실제로 보내지 않고 캐시·보낼 목록만 본다 — 백그라운드 보내기가 이 뒤 검사를 흔들지 않게
+    const blob = new Blob([new Uint8Array([1, 2, 3])])
+    const result = await store.importLocalE2ee({
+      folders: [{ id: 'vf', name: 'VF', parentId: null, createdAt: 1, updatedAt: 2, e2ee: true }],
+      attachments: [
+        { id: '00000000000000aa', mime: 'application/octet-stream', ext: 'png', size: 3, width: 1, height: 1, createdAt: 1, e2ee: true, blob },
+      ],
+      docs: [
+        {
+          id: 'vd',
+          title: 'T',
+          content: 'C',
+          lineEnding: 'lf',
+          createdAt: 1,
+          updatedAt: 2,
+          folderId: null,
+          pinnedAt: null,
+          e2eeKey: VAULT_KEY,
+          attachmentRefs: ['00000000000000aa'],
+        },
+      ],
+    })
+    expect(result).toEqual({ folders: 1, docs: 1, attachments: 1 })
+
+    expect(await cache.getFolder('u1', 'vf')).toMatchObject({ id: 'vf', name: 'VF', parentId: null, e2ee: true })
+    expect(await cache.getAttachment('u1', '00000000000000aa')).toMatchObject({ id: '00000000000000aa', e2ee: true, uploaded: false })
+    expect(await cache.getDoc('u1', 'vd')).toMatchObject({
+      id: 'vd',
+      title: 'T',
+      content: 'C',
+      version: 0,
+      e2eeKey: VAULT_KEY,
+      attachmentRefs: ['00000000000000aa'],
+    })
+
+    const outbox = await cache.getOutbox('u1')
+    expect(outbox.map((e) => e.type)).toEqual(['createFolder', 'upload', 'createDoc'])
+  })
+})
+
+describe('F-408 S2 보내기', () => {
+  it('가짜 서버에 폴더 e2ee, 첨부 e2ee=1&w&h, 문서 e2eeKey·attachmentRefs·원래 시각', async () => {
+    const { store, routes } = await convertSetup()
+    const blob = new Blob([new Uint8Array([9, 9])])
+    await store.importLocalE2ee({
+      folders: [{ id: 'vf2', name: 'VF2', parentId: null, createdAt: 1, updatedAt: 2, e2ee: true }],
+      attachments: [
+        { id: '00000000000000bb', mime: 'application/octet-stream', ext: 'png', size: 2, width: 10, height: 20, createdAt: 1, e2ee: true, blob },
+      ],
+      docs: [
+        {
+          id: 'vd2',
+          title: 'T2',
+          content: 'C2',
+          lineEnding: 'lf',
+          createdAt: 100,
+          updatedAt: 200,
+          pinnedAt: 300,
+          folderId: null,
+          e2eeKey: VAULT_KEY,
+          attachmentRefs: ['00000000000000bb'],
+        },
+      ],
+    })
+    await tick(30)
+
+    const folderReq = routes.log.find((r) => r.method === 'POST' && r.path === '/api/folders')
+    expect((folderReq?.body as { e2ee?: boolean } | undefined)?.e2ee).toBe(true)
+
+    const attReq = routes.log.find((r) => r.method === 'PUT' && r.path === '/api/attachments/00000000000000bb.png')
+    expect(attReq?.search).toBe('?e2ee=1&w=10&h=20')
+
+    const docReq = routes.log.find((r) => r.method === 'POST' && r.path === '/api/docs')
+    expect(docReq?.body).toMatchObject({
+      id: 'vd2',
+      title: 'T2',
+      content: 'C2',
+      e2eeKey: VAULT_KEY,
+      attachmentRefs: ['00000000000000bb'],
+      createdAt: 100,
+      updatedAt: 200,
+      pinnedAt: 300,
+    })
+  })
+})
+
+describe('F-408 S3 캐시에 같은 id 가 있으면 건너뛴다', () => {
+  it('그 항목은 쓰지 않고 반환 개수에 들지 않는다, 보낼 목록이 늘지 않는다', async () => {
+    const { server, store, cache } = await convertSetup()
+    server.setNetworkDown(true) // 백그라운드 보내기가 outbox 를 먼저 비우지 않게
+    await store.importLocalE2ee({ docs: [{ id: 'vd3', title: 'T', content: 'C', lineEnding: 'lf', createdAt: 1, updatedAt: 1, folderId: null, pinnedAt: null, e2eeKey: VAULT_KEY, attachmentRefs: [] }] })
+    const beforeOutboxLen = (await cache.getOutbox('u1')).length
+
+    const result = await store.importLocalE2ee({
+      docs: [{ id: 'vd3', title: '다른제목', content: '다른내용', lineEnding: 'lf', createdAt: 1, updatedAt: 1, folderId: null, pinnedAt: null, e2eeKey: VAULT_KEY, attachmentRefs: [] }],
+    })
+    expect(result).toEqual({ folders: 0, docs: 0, attachments: 0 })
+    expect((await cache.getDoc('u1', 'vd3'))?.title).toBe('T')
+    expect((await cache.getOutbox('u1')).length).toBe(beforeOutboxLen)
+  })
+})
+
+describe('F-408 S4 표지 없는 값', () => {
+  it('e2eeKey 없는 문서·e2ee 없는 첨부·e2ee 없는 폴더가 섞이면 아무것도 쓰지 않고 던진다', async () => {
+    const { store, cache } = await convertSetup()
+
+    const plainDoc = { id: 'plain1', title: 'T', content: 'C', lineEnding: 'lf' as const, createdAt: 1, updatedAt: 1, folderId: null, pinnedAt: null }
+    await expect(store.importLocalE2ee({ docs: [plainDoc] })).rejects.toThrow('not_e2ee')
+    expect(await cache.getDoc('u1', 'plain1')).toBeNull()
+
+    const blob = new Blob([new Uint8Array([1])])
+    const plainAttachment = { id: '00000000000000cc', mime: 'image/png', ext: 'png' as const, size: 1, width: 1, height: 1, createdAt: 1, blob }
+    await expect(store.importLocalE2ee({ attachments: [plainAttachment] })).rejects.toThrow('not_e2ee')
+    expect(await cache.getAttachment('u1', '00000000000000cc')).toBeNull()
+
+    const plainFolder = { id: 'plainf1', name: 'F', parentId: null, createdAt: 1, updatedAt: 1 }
+    await expect(store.importLocalE2ee({ folders: [plainFolder] })).rejects.toThrow('not_e2ee')
+    expect(await cache.getFolder('u1', 'plainf1')).toBeNull()
+
+    // 섞인 다른 항목도 쓰지 않는다 — 유효한 문서 옆에 표지 없는 폴더가 있으면 문서도 쓰지 않는다
+    const validDoc = { id: 'vd4', title: 'T', content: 'C', lineEnding: 'lf' as const, createdAt: 1, updatedAt: 1, folderId: null, pinnedAt: null, e2eeKey: VAULT_KEY, attachmentRefs: [] }
+    await expect(store.importLocalE2ee({ folders: [plainFolder], docs: [validDoc] })).rejects.toThrow('not_e2ee')
+    expect(await cache.getDoc('u1', 'vd4')).toBeNull()
+  })
+})

@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, vi } from 'vitest'
 import { openDB } from 'idb'
-import { createIdbStore, readE2eeRow, writeE2eeRow } from './idbStore'
+import { createIdbStore, readE2eeRow, writeE2eeRow, markLocalE2eeMigrated } from './idbStore'
 
 // 테스트마다 새 DB 이름을 써서 격리한다 (fake-indexeddb 는 전역 indexedDB 를 공유)
 let dbCounter = 0
@@ -567,6 +567,47 @@ describe('idbStore', () => {
       expect(await writeE2eeRow({ id: 'local', bundle: 'b2', updatedAt: 2 }, { absent: true }, dbName)).toBe(false)
       expect(await writeE2eeRow({ id: 'local', bundle: 'b3', updatedAt: 3 }, { bundle: 'b1' }, dbName)).toBe(true)
       expect(await readE2eeRow('local', dbName)).toEqual({ id: 'local', bundle: 'b3', updatedAt: 3 })
+    })
+  })
+
+  describe('로그인 이관 표시 (F-408.md 3.1 I1·I2)', () => {
+    it('I1: markLocalE2eeMigrated', async () => {
+      const dbName = freshDbName()
+      expect(await markLocalE2eeMigrated('u1', 'b1', dbName)).toBe(false)
+
+      await writeE2eeRow({ id: 'local', bundle: 'b1', updatedAt: 1 }, null, dbName)
+      expect(await markLocalE2eeMigrated('u1', 'b-다른', dbName)).toBe(false)
+      expect(await readE2eeRow('local', dbName)).toEqual({ id: 'local', bundle: 'b1', updatedAt: 1 })
+
+      expect(await markLocalE2eeMigrated('u1', 'b1', dbName)).toBe(true)
+      expect(await readE2eeRow('local', dbName)).toEqual({ id: 'local', bundle: 'b1', updatedAt: 1, migratedTo: ['u1'] })
+
+      expect(await markLocalE2eeMigrated('u1', 'b1', dbName)).toBe(true)
+      expect(await readE2eeRow('local', dbName)).toEqual({ id: 'local', bundle: 'b1', updatedAt: 1, migratedTo: ['u1'] })
+
+      expect(await markLocalE2eeMigrated('u2', 'b1', dbName)).toBe(true)
+      expect(await readE2eeRow('local', dbName)).toEqual({ id: 'local', bundle: 'b1', updatedAt: 1, migratedTo: ['u1', 'u2'] })
+    })
+
+    it('I2: writeE2eeRow 옮겨 싣기', async () => {
+      const dbName = freshDbName()
+      await writeE2eeRow({ id: 'local', bundle: 'b1', updatedAt: 1 }, null, dbName)
+      await markLocalE2eeMigrated('u1', 'b1', dbName)
+
+      // migratedTo 있는 로컬 행 — 새 값이 migratedTo 를 안 주고, 조건(bundle 옛것)이 맞으면 옮겨 싣는다
+      expect(await writeE2eeRow({ id: 'local', bundle: 'b2', updatedAt: 2 }, { bundle: 'b1' }, dbName)).toBe(true)
+      expect(await readE2eeRow('local', dbName)).toEqual({ id: 'local', bundle: 'b2', updatedAt: 2, migratedTo: ['u1'] })
+
+      // 계정 행은 지금과 같다 — 옮겨 싣지 않는다
+      await writeE2eeRow({ id: 'account:u9', bundle: 'a1', rev: 0, updatedAt: 1 }, null, dbName)
+      await writeE2eeRow({ id: 'account:u9', bundle: 'a2', rev: 1, updatedAt: 2 }, null, dbName)
+      expect(await readE2eeRow('account:u9', dbName)).toEqual({ id: 'account:u9', bundle: 'a2', rev: 1, updatedAt: 2 })
+
+      // migratedTo 없던 로컬 행은 지금과 같다
+      const dbName2 = freshDbName()
+      await writeE2eeRow({ id: 'local', bundle: 'c1', updatedAt: 1 }, null, dbName2)
+      await writeE2eeRow({ id: 'local', bundle: 'c2', updatedAt: 2 }, { bundle: 'c1' }, dbName2)
+      expect(await readE2eeRow('local', dbName2)).toEqual({ id: 'local', bundle: 'c2', updatedAt: 2 })
     })
   })
 

@@ -18,7 +18,7 @@ type StoredFileHandle = { docId: string; handle: FileSystemFileHandle }
 
 // 금고 키 묶음 행 — bundle 은 E2eeKeyBundle 의 JSON 문자열 (F-404.md 5.1)
 export type E2eeRow =
-  | { id: 'local'; bundle: string; updatedAt: number }
+  | { id: 'local'; bundle: string; updatedAt: number; migratedTo?: string[] } // 로그인 이관을 끝낸 계정 id (F-408)
   | { id: `account:${string}`; bundle: string; rev: number; updatedAt: number }
 
 // 저장소에 실제로 든 문서 모양 — 옛 스키마 문서는 folderId·pinnedAt 이 없을 수 있다
@@ -555,7 +555,12 @@ export async function writeE2eeRow(
         return false
       }
     }
-    await store.put(row)
+    // 로컬 행에 이관 표시(migratedTo)가 있는데 새 값이 그 필드를 안 주면 옮겨 싣는다 — 암호 바꾸기·복구가 표시를 지우지 않게 한다 (F-408 3.1)
+    let toWrite: E2eeRow = row
+    if (toWrite.id === 'local' && toWrite.migratedTo === undefined && existing?.id === 'local' && existing.migratedTo) {
+      toWrite = { ...toWrite, migratedTo: existing.migratedTo }
+    }
+    await store.put(toWrite)
     await tx.done
     return true
   } finally {
@@ -567,6 +572,28 @@ export async function deleteE2eeRow(id: string, dbName: string = DEFAULT_DB_NAME
   const db = await openE2eeDb(dbName)
   try {
     await db.delete(E2EE_STORE, id)
+  } finally {
+    db.close()
+  }
+}
+
+// 로컬 행의 migratedTo 에 userId 를 더한다. 행의 bundle 이 expectedBundle 과 같을 때만(한 트랜잭션). 행이 없거나 다르면 false (F-408 3.1)
+export async function markLocalE2eeMigrated(userId: string, expectedBundle: string, dbName: string = DEFAULT_DB_NAME): Promise<boolean> {
+  const db = await openE2eeDb(dbName)
+  try {
+    const tx = db.transaction(E2EE_STORE, 'readwrite')
+    const store = tx.objectStore(E2EE_STORE)
+    const existing: E2eeRow | undefined = await store.get('local')
+    if (!existing || existing.id !== 'local' || existing.bundle !== expectedBundle) {
+      await tx.done
+      return false
+    }
+    const migratedTo = existing.migratedTo ?? []
+    if (!migratedTo.includes(userId)) {
+      await store.put({ ...existing, migratedTo: [...migratedTo, userId] })
+    }
+    await tx.done
+    return true
   } finally {
     db.close()
   }
