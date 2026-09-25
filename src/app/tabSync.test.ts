@@ -169,4 +169,11 @@ describe('F-296 U8~U14 reduceClaim', () => {
     expect(reduceClaim(base, sessionQuery)).toBeNull()
     expect(reduceClaim(base, sessionHold)).toBeNull()
   })
+
+  // F-404.md 10.1 U16 — e2ee-lock 은 편집권 상태와 무관하게 null
+  it('U16 e2ee-lock 을 받으면 held 여부와 무관하게 아무 일도 하지 않는다', () => {
+    const msg: TabMessage = { kind: 'e2ee-lock', tabId: '다른' }
+    expect(reduceClaim(base, msg)).toBeNull()
+    expect(reduceClaim({ ...base, held: false }, msg)).toBeNull()
+  })
 })

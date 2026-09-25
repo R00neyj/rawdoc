@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, vi } from 'vitest'
 import { openDB } from 'idb'
-import { createIdbStore } from './idbStore'
+import { createIdbStore, readE2eeRow, writeE2eeRow } from './idbStore'
 
 // 테스트마다 새 DB 이름을 써서 격리한다 (fake-indexeddb 는 전역 indexedDB 를 공유)
 let dbCounter = 0
@@ -463,7 +463,7 @@ describe('idbStore', () => {
       const onBlocked = vi.fn(() => {
         v1db.close()
       })
-      // createIdbStore 는 항상 DB_VERSION(4)으로 연다 — v1 이 열려 있으므로 이 열기는
+      // createIdbStore 는 항상 DB_VERSION(5)으로 연다 — v1 이 열려 있으므로 이 열기는
       // v1 이 닫힐 때까지 막힌다(blocked)
       const store = await createIdbStore(dbName, { onBlocked })
 
@@ -481,11 +481,11 @@ describe('idbStore', () => {
         order.push('closed')
       })
 
-      // 이 창의 연결(F-231 코드 기준 버전 4)
+      // 이 창의 연결(F-404 코드 기준 버전 5)
       await createIdbStore(dbName, { onBlocking, onClosed })
 
-      // "새 버전 창" 이 더 높은 버전(5)을 열려고 하면 위 연결의 blocking 이 불린다
-      const v5db = await openDB(dbName, 5, {
+      // "새 버전 창" 이 더 높은 버전(6)을 열려고 하면 위 연결의 blocking 이 불린다
+      const v6db = await openDB(dbName, 6, {
         upgrade(database, oldVersion) {
           if (oldVersion < 1) {
             database.createObjectStore('docs', { keyPath: 'id' })
@@ -500,6 +500,9 @@ describe('idbStore', () => {
           if (oldVersion < 4) {
             database.createObjectStore('fileHandles', { keyPath: 'docId' })
           }
+          if (oldVersion < 5) {
+            database.createObjectStore('e2ee', { keyPath: 'id' })
+          }
         },
       })
 
@@ -508,7 +511,51 @@ describe('idbStore', () => {
       // 정리(flush 시늉)가 끝난 뒤에 닫힘 콜백이 불려야 한다 (F-136.md 3.3 순서)
       expect(order).toEqual(['blocking', 'closed'])
 
-      v5db.close()
+      v6db.close()
+    })
+  })
+
+  describe('버전 4 → 5 마이그레이션, 금고 키 묶음 행 (F-404.md 5.1 U12)', () => {
+    it('v4 DB 의 문서가 그대로 남고, e2ee 스토어가 생기고, writeE2eeRow 의 세 조건이 맞게 판정한다', async () => {
+      const dbName = freshDbName()
+
+      const v4db = await openDB(dbName, 4, {
+        upgrade(database) {
+          database.createObjectStore('docs', { keyPath: 'id' })
+          database.createObjectStore('meta', { keyPath: 'key' })
+          database.createObjectStore('folders', { keyPath: 'id' })
+          database.createObjectStore('attachments', { keyPath: 'id' })
+          database.createObjectStore('fileHandles', { keyPath: 'docId' })
+        },
+      })
+      await v4db.put('docs', {
+        id: 'legacy-doc',
+        title: '옛 문서',
+        content: '내용',
+        lineEnding: 'lf',
+        createdAt: 1,
+        updatedAt: 1,
+        folderId: null,
+        pinnedAt: null,
+      })
+      await v4db.put('meta', { key: 'schema', version: 4 })
+      v4db.close()
+
+      const store = await createIdbStore(dbName)
+      const list = await store.list()
+      expect(list).toHaveLength(1)
+      expect(list[0].id).toBe('legacy-doc')
+
+      const raw = await openDB(dbName, 5)
+      expect([...raw.objectStoreNames]).toContain('e2ee')
+      const meta = await raw.get('meta', 'schema')
+      expect(meta.version).toBe(5)
+      raw.close()
+
+      expect(await writeE2eeRow({ id: 'local', bundle: 'b1', updatedAt: 1 }, null, dbName)).toBe(true)
+      expect(await writeE2eeRow({ id: 'local', bundle: 'b2', updatedAt: 2 }, { absent: true }, dbName)).toBe(false)
+      expect(await writeE2eeRow({ id: 'local', bundle: 'b3', updatedAt: 3 }, { bundle: 'b1' }, dbName)).toBe(true)
+      expect(await readE2eeRow('local', dbName)).toEqual({ id: 'local', bundle: 'b3', updatedAt: 3 })
     })
   })
 

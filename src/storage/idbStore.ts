@@ -1,18 +1,24 @@
 // IndexedDB 저장소 (specs/architecture.md 2장, specs/features/F-110.md 3.1, F-126.md 3장)
 // 이름에 제품명을 쓰지 않는다. 제품명이 바뀌어도 사용자 문서가 남아야 한다 (CLAUDE.md 불변조건)
-import { openDB } from 'idb'
+import { openDB, type IDBPDatabase, type IDBPTransaction } from 'idb'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
 import type { Store, Doc, Folder, Attachment, AttachmentExt, FolderDeleteMode } from '../types'
 
 const DEFAULT_DB_NAME = 'md-docs'
-const DB_VERSION = 4
+const DB_VERSION = 5
 const DOCS_STORE = 'docs'
 const META_STORE = 'meta'
 const FOLDERS_STORE = 'folders'
 const ATTACHMENTS_STORE = 'attachments' // F-156.md 2.3, 버전 3
 const FILE_HANDLES_STORE = 'fileHandles' // F-231.md 2장, 버전 4 — docId ↔ FileSystemFileHandle
+const E2EE_STORE = 'e2ee' // F-404.md 5.1, 버전 5 — 로컬 금고 행 local·계정 금고 캐시 행 account:{userId}
 
 type StoredFileHandle = { docId: string; handle: FileSystemFileHandle }
+
+// 금고 키 묶음 행 — bundle 은 E2eeKeyBundle 의 JSON 문자열 (F-404.md 5.1)
+export type E2eeRow =
+  | { id: 'local'; bundle: string; updatedAt: number }
+  | { id: `account:${string}`; bundle: string; rev: number; updatedAt: number }
 
 // 저장소에 실제로 든 문서 모양 — 옛 스키마 문서는 folderId·pinnedAt 이 없을 수 있다
 type StoredDoc = Omit<Doc, 'folderId' | 'pinnedAt'> & {
@@ -72,6 +78,31 @@ export type IdbStoreHandlers = {
   onClosed?: () => void
 }
 
+// 스토어를 만드는 곳 한 곳 — createIdbStore 와 금고 행 함수(F-404.md 5.1)가 같이 쓴다
+function upgradeMdDocs(
+  database: IDBPDatabase,
+  oldVersion: number,
+  transaction: IDBPTransaction<unknown, string[], 'versionchange'>,
+) {
+  if (oldVersion < 1) {
+    database.createObjectStore(DOCS_STORE, { keyPath: 'id' })
+    database.createObjectStore(META_STORE, { keyPath: 'key' })
+  }
+  if (oldVersion < 2) {
+    database.createObjectStore(FOLDERS_STORE, { keyPath: 'id' })
+  }
+  if (oldVersion < 3) {
+    database.createObjectStore(ATTACHMENTS_STORE, { keyPath: 'id' })
+  }
+  if (oldVersion < 4) {
+    database.createObjectStore(FILE_HANDLES_STORE, { keyPath: 'docId' })
+  }
+  if (oldVersion < 5) {
+    database.createObjectStore(E2EE_STORE, { keyPath: 'id' })
+  }
+  transaction.objectStore(META_STORE).put({ key: 'schema', version: DB_VERSION })
+}
+
 // dbName 기본값 md-docs. 테스트에서만 다른 이름을 넘겨 DB 를 격리한다
 export async function createIdbStore(
   dbName: string = DEFAULT_DB_NAME,
@@ -79,20 +110,7 @@ export async function createIdbStore(
 ): Promise<Store> {
   const db = await openDB(dbName, DB_VERSION, {
     upgrade(database, oldVersion, _newVersion, transaction) {
-      if (oldVersion < 1) {
-        database.createObjectStore(DOCS_STORE, { keyPath: 'id' })
-        database.createObjectStore(META_STORE, { keyPath: 'key' })
-      }
-      if (oldVersion < 2) {
-        database.createObjectStore(FOLDERS_STORE, { keyPath: 'id' })
-      }
-      if (oldVersion < 3) {
-        database.createObjectStore(ATTACHMENTS_STORE, { keyPath: 'id' })
-      }
-      if (oldVersion < 4) {
-        database.createObjectStore(FILE_HANDLES_STORE, { keyPath: 'docId' })
-      }
-      transaction.objectStore(META_STORE).put({ key: 'schema', version: DB_VERSION })
+      upgradeMdDocs(database, oldVersion, transaction)
     },
     blocked(currentVersion, blockedVersion, event) {
       onBlocked?.(currentVersion, blockedVersion, event)
@@ -397,5 +415,73 @@ export async function createIdbStore(
       const record: StoredFileHandle = { docId, handle }
       await db.put(FILE_HANDLES_STORE, record)
     },
+  }
+}
+
+// 금고 키 묶음 행 함수 — 부를 때마다 연결을 열고 끝나면 닫는다. 로그인 사용자에 md-docs 가 없으면 이 열기가 v1~v5 를 모두 만든다 (F-404.md 5.1)
+const E2EE_ROW_OPEN_TIMEOUT_MS = 5_000
+
+async function openE2eeDb(dbName: string): Promise<IDBPDatabase> {
+  let opened: IDBPDatabase | undefined
+  const openPromise = openDB(dbName, DB_VERSION, {
+    upgrade(database, oldVersion, _newVersion, transaction) {
+      upgradeMdDocs(database, oldVersion, transaction)
+    },
+    // 다른 창이 이 연결보다 새 버전을 열려 한다 — 대기 없이 곧바로 닫는다
+    blocking() {
+      opened?.close()
+    },
+  }).then((db) => {
+    opened = db
+    return db
+  })
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('e2ee row: idb open timed out')), E2EE_ROW_OPEN_TIMEOUT_MS)
+  })
+  return Promise.race([openPromise, timeout])
+}
+
+export async function readE2eeRow(id: string, dbName: string = DEFAULT_DB_NAME): Promise<E2eeRow | null> {
+  const db = await openE2eeDb(dbName)
+  try {
+    const row: E2eeRow | undefined = await db.get(E2EE_STORE, id)
+    return row ?? null
+  } finally {
+    db.close()
+  }
+}
+
+// condition: null = 그냥 덮기, { absent: true } = 행이 없을 때만, { bundle } = 저장된 bundle 이 같을 때만. 안 맞으면 false
+export async function writeE2eeRow(
+  row: E2eeRow,
+  condition: null | { absent: true } | { bundle: string },
+  dbName: string = DEFAULT_DB_NAME,
+): Promise<boolean> {
+  const db = await openE2eeDb(dbName)
+  try {
+    const tx = db.transaction(E2EE_STORE, 'readwrite')
+    const store = tx.objectStore(E2EE_STORE)
+    const existing: E2eeRow | undefined = await store.get(row.id)
+    if (condition !== null) {
+      const ok = 'absent' in condition ? !existing : existing !== undefined && existing.bundle === condition.bundle
+      if (!ok) {
+        await tx.done
+        return false
+      }
+    }
+    await store.put(row)
+    await tx.done
+    return true
+  } finally {
+    db.close()
+  }
+}
+
+export async function deleteE2eeRow(id: string, dbName: string = DEFAULT_DB_NAME): Promise<void> {
+  const db = await openE2eeDb(dbName)
+  try {
+    await db.delete(E2EE_STORE, id)
+  } finally {
+    db.close()
   }
 }

@@ -51,6 +51,9 @@ type StatusBarProps = {
   live?: LiveStatus | null
   // 폴백 경로일 때 true — .statusbar-save 는 그대로 두고 옆에 형제 요소를 더한다
   fallback?: boolean
+  // 금고가 이 탭에서 열려 있을 때만 `금고 열림` 버튼을 보인다 (F-404.md 7.7)
+  e2eeOpen?: boolean
+  onLockE2ee?: () => void
 }
 
 export default function StatusBar({
@@ -63,6 +66,8 @@ export default function StatusBar({
   syncState,
   live = null,
   fallback = false,
+  e2eeOpen = false,
+  onLockE2ee,
 }: StatusBarProps) {
   const text = SAVE_STATUS_TEXT[saveStatus] ?? ''
   const liveEntry = live ? LIVE_STATUS[live] : null
@@ -85,6 +90,11 @@ export default function StatusBar({
         </span>
       )}
       {!liveEntry && fallback && <span className="statusbar-live">{LIVE_FALLBACK_TEXT}</span>}
+      {e2eeOpen && (
+        <button type="button" className="statusbar-e2ee" title="눌러서 금고를 잠급니다" onClick={onLockE2ee}>
+          금고 열림
+        </button>
+      )}
     </div>
   )
 }

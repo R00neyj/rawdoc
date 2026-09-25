@@ -24,6 +24,8 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
   let mePatch = {}
   let writeRule = null // null | { status, body?, headers?, times?, match? }
   const writeLog = []
+  // 금고 키 묶음 흉내 (F-404 10.3) — 없으면 null, 있으면 { bundle, rev }
+  let e2eeKeys = null
 
   function docSummary(d) {
     const { content: _content, ...rest } = d
@@ -369,6 +371,33 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     return route.fallback()
   })
 
+  // GET·PUT·DELETE /api/e2ee/keys — 금고 키 묶음 (F-401 3.1 판정, F-404 10.3)
+  await page.route('**/api/e2ee/keys', async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() === 'GET') {
+      if (!e2eeKeys) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"no_vault"}' })
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(e2eeKeys) })
+    }
+    if (req.method() === 'PUT') {
+      if (recordWrite(route, req)) return
+      const body = req.postDataJSON()
+      const currentRev = e2eeKeys?.rev ?? 0
+      if (body.baseRev !== currentRev) {
+        return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'conflict', rev: currentRev }) })
+      }
+      const rev = currentRev + 1
+      e2eeKeys = { bundle: body.bundle, rev }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rev }) })
+    }
+    if (req.method() === 'DELETE') {
+      if (recordWrite(route, req)) return
+      e2eeKeys = null
+      return route.fulfill({ status: 204 })
+    }
+    return route.fallback()
+  })
+
   // GET /api/shares — 공유 관리 페이지 목록 (F-243 3.1)
   await page.route('**/api/shares', async (route) => {
     if (offline) return route.abort('internetdisconnected')
@@ -438,6 +467,13 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     // 쓰기 경로에 온 요청 기록 { method, path, at }[] — 실패시킨 것도 포함 (F-2030 3.6)
     writeRequests() {
       return [...writeLog]
+    },
+    // 금고 키 묶음을 직접 넣거나 뺀다 — { bundle, rev } | null (F-404 10.3)
+    setE2eeKeys(value) {
+      e2eeKeys = value
+    },
+    getE2eeKeys() {
+      return e2eeKeys
     },
   }
 }

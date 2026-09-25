@@ -1,10 +1,10 @@
 // 설정 대화상자 왼쪽 탭 — 순수 함수만 (specs/features/F-290.md 3.2). DOM 을 쓰지 않는다
-export type SettingsTabId = 'screen' | 'editor' | 'data'
+export type SettingsTabId = 'screen' | 'editor' | 'data' | 'e2ee'
 
-// 각 탭에 그릴 항목이 하나라도 있는지
-export type SettingsTabAvailability = { screen: boolean; editor: boolean; data: boolean }
+// 각 탭에 그릴 항목이 하나라도 있는지. e2ee 는 선택 — 없으면 거짓(F-404.md 7.5)
+export type SettingsTabAvailability = { screen: boolean; editor: boolean; data: boolean; e2ee?: boolean }
 
-const TAB_ORDER: SettingsTabId[] = ['screen', 'editor', 'data']
+const TAB_ORDER: SettingsTabId[] = ['screen', 'editor', 'data', 'e2ee']
 
 // 보일 탭을 화면 → 편집기 → 데이터 순서로 돌려준다
 export function visibleSettingsTabs(has: SettingsTabAvailability): SettingsTabId[] {

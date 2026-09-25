@@ -62,6 +62,12 @@ describe('prefs', () => {
     expect(getPref('md.newDocTemplate', 'none')).toBe('builtin:daily')
   })
 
+  it('md.e2eeLockMinutes 읽기·쓰기, 기본값 30 (F-404.md 10.1 U15)', () => {
+    expect(getPref('md.e2eeLockMinutes', '30')).toBe('30')
+    expect(() => setPref('md.e2eeLockMinutes', '240')).not.toThrow()
+    expect(getPref('md.e2eeLockMinutes', '30')).toBe('240')
+  })
+
   it('허용되지 않은 키는 getPref 에서 예외', () => {
     expect(() => getPref('md.unknown', 'x')).toThrow()
   })

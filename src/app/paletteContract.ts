@@ -1,6 +1,7 @@
 // 명령 팔레트 등록 계약·거르기 — 순수 함수, DOM·React 없음 (specs/features/F-2022.md 3장)
 import { normalizeForSearch, foldCase } from '../lib/docSearch'
 import type { TemplateEntry } from '../lib/templates'
+import type { E2eeStatus } from '../e2ee/keyring'
 
 // 목록 한 줄 — 명령이든 2단계 항목(템플릿)이든 같은 모양 (3.1)
 export type PaletteItem = {
@@ -17,6 +18,8 @@ export type PaletteContext = {
   templates: readonly TemplateEntry[]
   insertTemplate: (templateId: string, signal: AbortSignal) => Promise<void>
   printDoc: () => void
+  // 금고 잠그기·열기 — 선택 필드. 없으면 두 명령이 안 보인다 (F-404.md 7.6)
+  e2ee?: { status: E2eeStatus; lock: () => void; openUnlock: () => void }
 }
 
 type PaletteCommandBase = PaletteItem & {

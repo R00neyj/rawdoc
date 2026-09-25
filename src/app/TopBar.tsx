@@ -51,6 +51,7 @@ type TopBarProps = {
   onAccountBeforeNavigate: () => Promise<void>
   // 로그아웃 실패 알림 (F-2034 3.2)
   onAccountNotice: (notice: Notice) => void
+  onAccountLoggedOut?: () => void
   // 서식·단락·삽입 탭바 (F-233.md 3.1) — App.tsx 가 표시 조건을 계산해 넘긴다
   showToolbar: boolean
   onRunToolbarCommand: (cmd: StateCommand) => void
@@ -84,6 +85,7 @@ export default function TopBar({
   account,
   onAccountBeforeNavigate,
   onAccountNotice,
+  onAccountLoggedOut,
   showToolbar,
   onRunToolbarCommand,
   peers,
@@ -139,7 +141,7 @@ export default function TopBar({
           onExportHtml={onExportHtml}
           onCopyRich={onCopyRich}
         />
-        <AccountMenu account={account} onBeforeNavigate={onAccountBeforeNavigate} onNotice={onAccountNotice} />
+        <AccountMenu account={account} onBeforeNavigate={onAccountBeforeNavigate} onNotice={onAccountNotice} onLoggedOut={onAccountLoggedOut} />
       </header>
       {/* 좁은 창은 탭바를 상단바 밑 줄로 뺀다 — 아이콘 줄이 세로로도 접혀(2줄) 가로 스크롤 없이 다 보인다 (사용자 2026-09-16 "모바일일때가 툴바 더 필요할거임") */}
       {narrow && showToolbar && (

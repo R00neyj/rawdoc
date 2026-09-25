@@ -2797,6 +2797,30 @@ body.sidebar-resizing {
   background: var(--danger);
 }
 
+/* 금고 상태바 버튼 — 1차는 기존 토큰만 쓴다(F-404.md 7.8, 아이콘·간격은 design.md 갱신 뒤) */
+.statusbar-e2ee {
+  white-space: nowrap;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.statusbar-e2ee:hover {
+  color: inherit;
+}
+
+.e2ee-recovery-code {
+  display: block;
+  font-family: var(--font-mono);
+  word-break: break-all;
+  user-select: all;
+}
+
+.e2ee-error {
+  color: var(--danger);
+}
+
 /* 외부 .md 파일 끌어놓기 덮개(F-145.md 2.4) — 입력을 막는 용도만, 포커스는 가져가지 않는다 */
 .drop-overlay {
   position: fixed;

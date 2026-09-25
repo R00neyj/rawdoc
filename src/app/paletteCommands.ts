@@ -32,4 +32,20 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     when: (ctx) => ctx.canPrint,
     run: (ctx) => ctx.printDoc(),
   },
+  {
+    id: 'e2ee.lock',
+    kind: 'action',
+    label: '금고 잠그기',
+    keywords: ['금고', '잠그기', '잠금', 'lock', '암호'],
+    when: (ctx) => ctx.e2ee?.status === 'open',
+    run: (ctx) => ctx.e2ee?.lock(),
+  },
+  {
+    id: 'e2ee.unlock',
+    kind: 'action',
+    label: '금고 열기',
+    keywords: ['금고', '열기', 'unlock', '암호'],
+    when: (ctx) => ctx.e2ee?.status === 'locked',
+    run: (ctx) => ctx.e2ee?.openUnlock(),
+  },
 ]

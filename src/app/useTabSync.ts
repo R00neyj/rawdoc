@@ -9,6 +9,8 @@ export type UseTabSyncOptions = {
   onDocsChanged: () => void // 디바운스된 뒤 1회 — App 의 resyncFromStore
   onNotice: (notice: { type: 'info'; message: string }) => void
   onClaimRegained: () => void // 편집권을 되찾았을 때 — 저장소에서 다시 읽어 에디터를 다시 마운트
+  // 다른 탭이 금고를 잠갔다는 신호를 받았을 때(자기 tabId 는 걸러진 뒤) — 선택 (F-404.md 4.4)
+  onE2eeLock?: () => void
 }
 
 const hasBroadcastChannel = typeof BroadcastChannel !== 'undefined'
@@ -20,6 +22,7 @@ export function useTabSync({
   onDocsChanged,
   onNotice,
   onClaimRegained,
+  onE2eeLock,
 }: UseTabSyncOptions): { post: (m: TabMessage) => void; claimReadOnly: boolean } {
   const [claimReadOnly, setClaimReadOnly] = useState(false)
 
@@ -39,10 +42,12 @@ export function useTabSync({
   const onDocsChangedRef = useRef(onDocsChanged)
   const onNoticeRef = useRef(onNotice)
   const onClaimRegainedRef = useRef(onClaimRegained)
+  const onE2eeLockRef = useRef(onE2eeLock)
   useEffect(() => {
     onDocsChangedRef.current = onDocsChanged
     onNoticeRef.current = onNotice
     onClaimRegainedRef.current = onClaimRegained
+    onE2eeLockRef.current = onE2eeLock
   })
 
   // 채널이 없으면(폴백 없음, 5.4) 아무 것도 하지 않는다 — channelRef 를 매번 최신으로 읽는다
@@ -111,6 +116,11 @@ export function useTabSync({
         if (msg.tabId === tabId) return
         if (resyncTimerRef.current) clearTimeout(resyncTimerRef.current)
         resyncTimerRef.current = setTimeout(() => onDocsChangedRef.current(), RESYNC_DEBOUNCE_MS)
+        return
+      }
+      if (msg.kind === 'e2ee-lock') {
+        if (msg.tabId === tabId) return
+        onE2eeLockRef.current?.()
         return
       }
       const state = claimStateRef.current

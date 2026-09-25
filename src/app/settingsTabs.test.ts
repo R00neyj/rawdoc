@@ -19,6 +19,21 @@ describe('visibleSettingsTabs (F-290 A1)', () => {
   })
 })
 
+describe('visibleSettingsTabs — U13 (F-404.md 10.1)', () => {
+  test('전부 참(e2ee 포함) → 화면·편집기·데이터·금고 순', () => {
+    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, e2ee: true })).toEqual([
+      'screen',
+      'editor',
+      'data',
+      'e2ee',
+    ])
+  })
+
+  test('e2ee 없음 → 기존 셋', () => {
+    expect(visibleSettingsTabs({ screen: true, editor: true, data: true })).toEqual(['screen', 'editor', 'data'])
+  })
+})
+
 describe('nextTabIndex (F-290 A2)', () => {
   test.each([
     [0, 3, 'ArrowDown', 1],

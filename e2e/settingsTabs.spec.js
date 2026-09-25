@@ -21,19 +21,21 @@ async function ensureSidebarOpen(page) {
 }
 
 test.describe('F-290 A3 탭 목록과 기본 탭', () => {
-  test('탭 3개, 화면이 기본 선택', async ({ page }) => {
+  test('탭 4개, 화면이 기본 선택 (F-404 9장)', async ({ page }) => {
     await openApp(page)
     const dialog = await openSettings(page)
     await expect(dialog.locator('[role="tablist"]')).toHaveCount(1)
 
     const tabs = dialog.locator('[role="tab"]')
-    await expect(tabs).toHaveCount(3)
+    await expect(tabs).toHaveCount(4)
     await expect(tabs.nth(0)).toHaveText('화면')
     await expect(tabs.nth(1)).toHaveText('편집기')
     await expect(tabs.nth(2)).toHaveText('데이터')
+    await expect(tabs.nth(3)).toHaveText('금고')
     await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'false')
     await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'false')
+    await expect(tabs.nth(3)).toHaveAttribute('aria-selected', 'false')
   })
 })
 
@@ -58,7 +60,7 @@ test.describe('F-290 A4 탭별 항목', () => {
 })
 
 test.describe('F-290 A5 자동 활성화', () => {
-  test('방향키로 Enter 없이 바로 전환, 순환, Home/End', async ({ page }) => {
+  test('방향키로 Enter 없이 바로 전환, 순환, Home/End (F-404 9장 — 금고 포함 4탭)', async ({ page }) => {
     await openApp(page)
     const dialog = await openSettings(page)
     const tabs = dialog.locator('[role="tab"]')
@@ -72,12 +74,16 @@ test.describe('F-290 A5 자동 활성화', () => {
     await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true')
     await expect(tabs.nth(2)).toBeFocused()
 
+    await page.keyboard.press('ArrowDown')
+    await expect(tabs.nth(3)).toHaveAttribute('aria-selected', 'true')
+    await expect(tabs.nth(3)).toBeFocused()
+
     await page.keyboard.press('ArrowDown') // 순환
     await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
     await expect(tabs.nth(0)).toBeFocused()
 
     await page.keyboard.press('End')
-    await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true')
+    await expect(tabs.nth(3)).toHaveAttribute('aria-selected', 'true')
 
     await page.keyboard.press('Home')
     await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
@@ -91,7 +97,7 @@ test.describe('F-290 A5 자동 활성화', () => {
 })
 
 test.describe('F-290 A6 ARIA 연결과 로빙 tabindex', () => {
-  test('aria-controls·aria-labelledby, 활성 탭만 tabindex 0', async ({ page }) => {
+  test('aria-controls·aria-labelledby, 활성 탭만 tabindex 0 (F-404 9장 — 금고 포함 4탭)', async ({ page }) => {
     await openApp(page)
     const dialog = await openSettings(page)
     const tabs = dialog.locator('[role="tab"]')
@@ -99,9 +105,11 @@ test.describe('F-290 A6 ARIA 연결과 로빙 tabindex', () => {
     await expect(tabs.nth(0)).toHaveAttribute('aria-controls', 'settings-panel-screen')
     await expect(tabs.nth(1)).toHaveAttribute('aria-controls', 'settings-panel-editor')
     await expect(tabs.nth(2)).toHaveAttribute('aria-controls', 'settings-panel-data')
+    await expect(tabs.nth(3)).toHaveAttribute('aria-controls', 'settings-panel-e2ee')
     await expect(tabs.nth(0)).toHaveAttribute('tabindex', '0')
     await expect(tabs.nth(1)).toHaveAttribute('tabindex', '-1')
     await expect(tabs.nth(2)).toHaveAttribute('tabindex', '-1')
+    await expect(tabs.nth(3)).toHaveAttribute('tabindex', '-1')
 
     const panel = dialog.locator('[role="tabpanel"]')
     await expect(panel).toHaveAttribute('id', 'settings-panel-screen')
@@ -190,7 +198,7 @@ test.describe('F-290 A11 좁은 창 (스모크)', () => {
 
     const dialog = await openSettings(page)
     const tabs = dialog.locator('[role="tab"]')
-    await expect(tabs).toHaveCount(3)
+    await expect(tabs).toHaveCount(4)
     await expect(dialog.locator('[role="tablist"]')).toHaveAttribute('aria-orientation', 'horizontal')
 
     await dialog.getByRole('tab', { name: '데이터' }).click()

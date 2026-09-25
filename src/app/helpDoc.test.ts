@@ -14,6 +14,7 @@ const SECTION_ORDER = [
   '위키링크',
   '템플릿',
   '공유',
+  '금고',
   '내보내기·가져오기',
   '설치와 오프라인',
   '단축키',
@@ -159,5 +160,20 @@ describe('HELP_DOC_CONTENT', () => {
     expect(section).toContain('회의록')
     expect(section).toContain('템플릿')
     expect(HELP_DOC_CONTENT).not.toMatch(/\{\{/)
+  })
+
+  // F-404.md 10.1 U17
+  it('U17: ## 금고 절이 ## 공유 뒤·## 내보내기·가져오기 앞에 있고, 네 문단을 담는다', () => {
+    const shareIdx = HELP_DOC_CONTENT.indexOf('## 공유')
+    const vaultIdx = HELP_DOC_CONTENT.indexOf('## 금고')
+    const exportIdx = HELP_DOC_CONTENT.indexOf('## 내보내기·가져오기')
+    expect(vaultIdx).toBeGreaterThan(shareIdx)
+    expect(vaultIdx).toBeLessThan(exportIdx)
+
+    const section = HELP_DOC_CONTENT.slice(vaultIdx, exportIdx)
+    expect(section).toContain('제목·본문·이미지는 서버와 운영자도 읽을 수 없습니다.')
+    expect(section).toContain('복구 코드')
+    expect(section).toContain('자동 잠금')
+    expect(section).toContain('금고로 옮기기…')
   })
 })

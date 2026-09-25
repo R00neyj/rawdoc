@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject, type Keybo
 import Dialog from './Dialog'
 import { visibleSettingsTabs, nextTabIndex, type SettingsTabId } from './settingsTabs'
 import { newDocTemplateOptions, type TemplateEntry } from '../lib/templates'
+import { E2EE_LOCK_MINUTES, type E2eeStatus } from '../e2ee/keyring'
 
 // 설정 대화상자 D-2 (specs/ia.md 3.15, specs/features/F-121.md, F-141.md 3.2, F-290.md 왼쪽 탭)
 const THEME_OPTIONS = [
@@ -48,11 +49,41 @@ const TOOLBAR_OPTIONS = [
   { value: 'off', label: '숨김' },
 ] as const
 
-// 탭 3개 — 순서·구성은 F-290.md 3.1
+// 탭 — 순서·구성은 F-290.md 3.1, 금고 탭은 F-404.md 7.5
 const TAB_LABELS: Record<SettingsTabId, string> = {
   screen: '화면',
   editor: '편집기',
   data: '데이터',
+  e2ee: '금고',
+}
+
+// 자동 잠금 세그먼트 — 값은 분 문자열 (F-404.md 7.5·8.1)
+const E2EE_LOCK_MINUTES_OPTIONS = E2EE_LOCK_MINUTES.map((m) => ({
+  value: String(m),
+  label: m === 60 ? '1시간' : m === 240 ? '4시간' : `${m}분`,
+}))
+
+const E2EE_STATUS_TEXT: Record<E2eeStatus, string> = {
+  unknown: '불러오는 중…',
+  loading: '불러오는 중…',
+  unavailable: '금고 정보를 불러오지 못했습니다.',
+  none: '아직 금고가 없습니다.',
+  locked: '금고가 잠겨 있습니다.',
+  open: '이 탭에서 금고가 열려 있습니다.',
+}
+
+export type SettingsE2ee = {
+  status: E2eeStatus
+  isLocal: boolean
+  lockMinutes: string
+  onChangeLockMinutes: (value: string) => void
+  onShown: () => void
+  onCreate: () => void
+  onUnlock: () => void
+  onChangePassword: () => void
+  onReset: () => void
+  onLockNow: () => void
+  onRetry: () => void
 }
 
 // 대화상자 폭이 460px 아래로 줄면 탭 목록을 가로로 눕힌다 (F-290.md 3.5). app.css 의 같은 값과 맞춘다
@@ -203,6 +234,8 @@ type SettingsDialogProps = {
   onExportVault?: () => void
   // `데이터` 절 — 가져오기 (F-282.md 3.1). onExportAll 이 있을 때만 의미가 있다(같은 절)
   onImport?: () => void
+  // `금고` 탭 — 3.1 범위가 있을 때만 준다. 안 주면 탭이 안 보인다 (F-404.md 7.5)
+  e2ee?: SettingsE2ee
   onClose: () => void
 }
 
@@ -231,6 +264,7 @@ export default function SettingsDialog({
   exportAllDisabled,
   onExportVault,
   onImport,
+  e2ee,
   onClose,
 }: SettingsDialogProps) {
   const titleId = 'settings-title'
@@ -247,6 +281,7 @@ export default function SettingsDialog({
     screen: true,
     editor: hasToolbar || showEditorSettings,
     data: onExportAll !== undefined,
+    e2ee: e2ee !== undefined,
   })
 
   const [activeTab, setActiveTab] = useState<SettingsTabId>(tabs[0])
@@ -270,6 +305,12 @@ export default function SettingsDialog({
     setActiveTab(tabs[next])
     tabRefs.current[next]?.focus()
   }
+
+  // 금고 탭이 보이게 될 때마다(누르거나 방향키로 옮겨 올 때) 3.2 ① 읽기를 부른다 (F-404.md 7.5)
+  useEffect(() => {
+    if (open && resolvedActiveTab === 'e2ee') e2ee?.onShown()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, resolvedActiveTab])
 
   function fieldsForTab(id: SettingsTabId): ReactNode {
     if (id === 'screen') {
@@ -357,24 +398,81 @@ export default function SettingsDialog({
         </>
       )
     }
-    // data — 로컬 앱·로그인 계정 전용, PublicView 는 안 준다 (F-281.md 3.6, F-282.md 3.1)
+    if (id === 'data') {
+      // 로컬 앱·로그인 계정 전용, PublicView 는 안 준다 (F-281.md 3.6, F-282.md 3.1)
+      return (
+        <div className="dialog-btn-row">
+          <button type="button" className="dialog-btn" onClick={onExportAll} disabled={exportAllDisabled}>
+            전체 내보내기
+          </button>
+          {onExportVault && (
+            <button type="button" className="dialog-btn" onClick={onExportVault} disabled={exportAllDisabled}>
+              옵시디언 볼트로 내보내기
+            </button>
+          )}
+          {exportAllDisabled && <span className="dialog-note">온라인일 때 내보낼 수 있습니다</span>}
+          {onImport && (
+            <button type="button" className="dialog-btn" onClick={onImport}>
+              가져오기…
+            </button>
+          )}
+        </div>
+      )
+    }
+    // e2ee — 금고 (F-404.md 7.5)
+    if (!e2ee) return null
     return (
-      <div className="dialog-btn-row">
-        <button type="button" className="dialog-btn" onClick={onExportAll} disabled={exportAllDisabled}>
-          전체 내보내기
-        </button>
-        {onExportVault && (
-          <button type="button" className="dialog-btn" onClick={onExportVault} disabled={exportAllDisabled}>
-            옵시디언 볼트로 내보내기
-          </button>
+      <>
+        <Segment
+          labelId="e2ee-lock-minutes-label"
+          label="자동 잠금"
+          value={e2ee.lockMinutes}
+          options={E2EE_LOCK_MINUTES_OPTIONS}
+          onChange={e2ee.onChangeLockMinutes}
+        />
+        <p className="dialog-note settings-e2ee-state">{E2EE_STATUS_TEXT[e2ee.status]}</p>
+        {e2ee.isLocal && e2ee.status !== 'none' && (
+          <p className="dialog-note">이 금고는 이 브라우저에만 있습니다. 로그인하면 계정 금고로 옮길 수 있습니다.</p>
         )}
-        {exportAllDisabled && <span className="dialog-note">온라인일 때 내보낼 수 있습니다</span>}
-        {onImport && (
-          <button type="button" className="dialog-btn" onClick={onImport}>
-            가져오기…
-          </button>
-        )}
-      </div>
+        <div className="dialog-btn-row">
+          {e2ee.status === 'unavailable' && (
+            <button type="button" className="dialog-btn" onClick={e2ee.onRetry}>
+              다시 시도
+            </button>
+          )}
+          {e2ee.status === 'none' && (
+            <button type="button" className="dialog-btn" onClick={e2ee.onCreate}>
+              금고 만들기…
+            </button>
+          )}
+          {e2ee.status === 'locked' && (
+            <>
+              <button type="button" className="dialog-btn" onClick={e2ee.onUnlock}>
+                금고 열기…
+              </button>
+              <button type="button" className="dialog-btn" onClick={e2ee.onChangePassword}>
+                암호 바꾸기…
+              </button>
+              <button type="button" className="dialog-btn" onClick={e2ee.onReset}>
+                금고 초기화…
+              </button>
+            </>
+          )}
+          {e2ee.status === 'open' && (
+            <>
+              <button type="button" className="dialog-btn" onClick={e2ee.onLockNow}>
+                지금 잠그기
+              </button>
+              <button type="button" className="dialog-btn" onClick={e2ee.onChangePassword}>
+                암호 바꾸기…
+              </button>
+              <button type="button" className="dialog-btn" onClick={e2ee.onReset}>
+                금고 초기화…
+              </button>
+            </>
+          )}
+        </div>
+      </>
     )
   }
 

@@ -38,7 +38,7 @@ import {
 import { insertTemplate as insertTemplateIntoEditor } from '../editor/insertTemplate'
 import { decodeMarkdown } from '../lib/decodeMarkdown'
 import { getPref, setPref } from './prefs'
-import { fetchAccount, loginUrl, type AccountState } from './account'
+import { fetchAccount, loginUrl, storedAccount, type AccountState } from './account'
 import { planAccountNotices, ACCOUNT_RECHECK_MS, ACCOUNT_BLOCKED_MESSAGE, ACCOUNT_WARNED_MESSAGE, type AccountFlags } from '../lib/usageLimits'
 import type { SyncState } from '../types'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
@@ -59,6 +59,7 @@ import { createLiveDocController, type LiveSnapshot } from './liveDoc'
 import { flushUnsyncedDocs } from './yjsFlush'
 import { withTabBroadcast, newTabId } from './tabSync'
 import { useTabSync } from './useTabSync'
+import { useE2ee } from './useE2ee'
 import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from './exportDoc'
 import { downloadWorkspaceExport, type WorkspaceExportSourceStore } from './exportWorkspace'
 import { downloadVaultExport } from './exportVault'
@@ -308,6 +309,7 @@ export default function App() {
   const [startScreenPref, setStartScreenPref] = useState(() => getPref('md.startScreen', 'home')) // F-232 3.4
   const [toolbarPref, setToolbarPref] = useState(() => getPref('md.toolbar', 'on')) // F-233 3.5
   const [newDocTemplatePref, setNewDocTemplatePref] = useState(() => getPref('md.newDocTemplate', NEW_DOC_TEMPLATE_NONE)) // F-2037 3.1
+  const [e2eeLockMinutesPref, setE2eeLockMinutesPref] = useState(() => getPref('md.e2eeLockMinutes', '30')) // F-404 8.1
   const [settingsOpen, setSettingsOpen] = useState(false)
   // 검색 대화상자 D-6 (specs/features/F-287.md 3장)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -377,6 +379,8 @@ export default function App() {
   // 마지막으로 성공한 /api/me 읽기 시각 — 화면 복귀 10분 스로틀 (5.1 ⑤)
   const lastAccountCheckOkRef = useRef(0)
   const accountCheckInFlightRef = useRef<Promise<void> | null>(null)
+  // e2ee 훅은 store 가 정해진 뒤에야 만들어진다 — applyAccountFlags 가 먼저 정의되므로 ref 로 늦게 잇는다 (F-404.md 4.5)
+  const e2eeRef = useRef<ReturnType<typeof useE2ee>>(null)
   // 우클릭 메뉴 상태 (specs/features/F-170.md) — view·container 는 place 에 따라 하나만 쓴다
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   // 명령 팔레트 D-7 열림 상태 (specs/features/F-2022.md)
@@ -517,6 +521,12 @@ export default function App() {
   const applyAccountFlags = useCallback(
     (next: AccountState) => {
       setAccount(next)
+      // 다른 이유로 계정이 바뀜 — offline 은 바뀜으로 보지 않는다. 로컬 범위에는 해당 없다 (F-404.md 4.5)
+      const e2eeScope = e2eeRef.current?.keyring.scope
+      if (e2eeScope?.kind === 'account' && next.state !== 'offline') {
+        const nextId = next.state === 'in' ? next.id : undefined
+        if (nextId !== e2eeScope.userId) void e2eeRef.current?.lockForAccountChange()
+      }
       if (next.state !== 'in') return
       lastAccountCheckOkRef.current = Date.now()
       const nextFlags: AccountFlags = { blocked: next.blocked, warned: next.warned }
@@ -891,6 +901,8 @@ export default function App() {
   // 편집권은 로컬(idb) 문서에만 켠다 — 서버는 useDocLock(F-213)이, 메모리는 저장소가 탭마다 따로라 겹칠 일이 없다 (F-296.md 6.4)
   // 개발 빌드 ?ysync 두 탭 연결에서는 두 탭 모두 편집해야 해 편집권을 잡지 않는다 (F-303 9.4)
   const claimDocId = store.kind === 'idb' && !sharedDoc && !DEV_YSYNC ? currentDocId : null
+  // useTabSync 가 e2ee 열쇠고리보다 먼저 만들어지므로, 다른 탭 잠그기 신호는 ref 로 늦게 잇는다 (F-404.md 6장)
+  const e2eeOtherTabLockRef = useRef<() => void>(() => {})
   const { post: postTabMessage, claimReadOnly } = useTabSync({
     enabled: bootPhase === 'ready',
     tabId: tabIdRef.current,
@@ -898,7 +910,22 @@ export default function App() {
     onDocsChanged: resyncFromStore,
     onNotice: showNotice,
     onClaimRegained: handleClaimRegained,
+    onE2eeLock: () => e2eeOtherTabLockRef.current(),
   })
+
+  // 금고 키 상태·화면 (F-404.md 6장) — 범위(local·account)가 있을 때만 값을 돌려준다
+  const e2ee = useE2ee({
+    store,
+    bootPhase,
+    tabId: tabIdRef.current,
+    postTabMessage,
+    accountEmail: account.state === 'in' ? account.email : (storedAccount()?.email ?? null),
+    showNotice,
+  })
+  useEffect(() => {
+    e2eeOtherTabLockRef.current = () => e2ee?.handleOtherTabLock()
+    e2eeRef.current = e2ee
+  }, [e2ee])
 
   const isDeletedElsewhere = currentDocId != null && deletedElsewhereId === currentDocId
   const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly || claimReadOnly || isDeletedElsewhere || liveStopped || isOfflineView
@@ -3062,6 +3089,8 @@ export default function App() {
     setContextMenu(null)
     closeSidebarIfNarrow()
     setPaletteOpen(true)
+    // 상태가 unknown 이면 한 번 읽는다 — 읽는 동안은 금고 명령이 안 보인다 (F-404.md 7.6)
+    if (e2ee?.status === 'unknown') void e2ee.keyring.load()
   }
 
   function closePalette() {
@@ -3120,6 +3149,9 @@ export default function App() {
     templates: templateEntries,
     insertTemplate,
     printDoc: handlePrintDoc,
+    e2ee: e2ee
+      ? { status: e2ee.status, lock: e2ee.openSettingsDialogs.lockNow, openUnlock: e2ee.openSettingsDialogs.unlock }
+      : undefined,
   }
 
   // 검색 결과에서 문서 열기 (F-287.md 4.6) — 지금 문서를 그대로 두지 않고 그 문서로 이동한다
@@ -3236,6 +3268,13 @@ export default function App() {
     setFontSizePref(v)
     document.documentElement.dataset.fontSize = v
     setPref('md.fontSize', v)
+  }
+
+  // 자동 잠금 — 검사할 때마다 새로 읽으므로 다음 검사(최대 15초 뒤)부터 반영된다 (F-404.md 4.3)
+  function changeE2eeLockMinutes(value: string) {
+    const v = value as '5' | '15' | '30' | '60' | '240'
+    setE2eeLockMinutesPref(v)
+    setPref('md.e2eeLockMinutes', v)
   }
 
   // 들여쓰기 — 실제 에디터 반영은 아래 useLayoutEffect 가 한다 (F-154 2.3)
@@ -3574,6 +3613,7 @@ export default function App() {
       account={account}
       onAccountBeforeNavigate={() => docSaverFlushRef.current()}
       onAccountNotice={showNotice}
+      onAccountLoggedOut={() => e2ee?.broadcastLogoutLock()}
       showToolbar={showToolbar}
       onRunToolbarCommand={runToolbarCommand}
       // 공유 화면·지도가 떠 있는 동안은 지금 보는 것이 그 문서가 아니다 (F-307 7.4)
@@ -3780,6 +3820,8 @@ export default function App() {
               syncState={syncState}
               live={isRealtime ? liveStatusOf(liveSnapshot) : null}
               fallback={docPath === 'fallback'}
+              e2eeOpen={e2ee?.status === 'open'}
+              onLockE2ee={e2ee?.openSettingsDialogs.lockNow}
             />
           )}
         </div>
@@ -3852,8 +3894,26 @@ export default function App() {
         exportAllDisabled={exportOffline}
         onExportVault={handleExportVault}
         onImport={requestImportZip}
+        e2ee={
+          e2ee
+            ? {
+                status: e2ee.status,
+                isLocal: e2ee.keyring.scope.kind === 'local',
+                lockMinutes: e2eeLockMinutesPref,
+                onChangeLockMinutes: changeE2eeLockMinutes,
+                onShown: () => void e2ee.keyring.load(),
+                onCreate: e2ee.openSettingsDialogs.create,
+                onUnlock: e2ee.openSettingsDialogs.unlock,
+                onChangePassword: e2ee.openSettingsDialogs.changePassword,
+                onReset: e2ee.openSettingsDialogs.reset,
+                onLockNow: e2ee.openSettingsDialogs.lockNow,
+                onRetry: () => void e2ee.keyring.load(),
+              }
+            : undefined
+        }
         onClose={closeSettings}
       />
+      {e2ee?.dialogs}
       <SearchDialog
         open={searchOpen}
         store={store}

@@ -3,22 +3,23 @@ import { PALETTE_COMMANDS } from './paletteCommands'
 import type { PaletteContext } from './paletteContract'
 import type { TemplateEntry } from '../lib/templates'
 
-function ctx(templates: readonly TemplateEntry[]): PaletteContext {
+function ctx(templates: readonly TemplateEntry[], e2ee?: PaletteContext['e2ee']): PaletteContext {
   return {
     canInsertTemplate: true,
     canPrint: true,
     templates,
     insertTemplate: async () => {},
     printDoc: () => {},
+    e2ee,
   }
 }
 
-describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1)', () => {
-  it('id 가 순서대로, 겹치지 않고, 영역.동작 모양', () => {
+describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀)', () => {
+  it('id 가 순서대로, 겹치지 않고, 영역.동작 모양(숫자 허용, F-404.md 11장 Q3)', () => {
     const ids = PALETTE_COMMANDS.map((c) => c.id)
-    expect(ids).toEqual(['template.insert', 'doc.print'])
+    expect(ids).toEqual(['template.insert', 'doc.print', 'e2ee.lock', 'e2ee.unlock'])
     expect(new Set(ids).size).toBe(ids.length)
-    for (const id of ids) expect(id).toMatch(/^[a-z]+(\.[a-z-]+)+$/)
+    for (const id of ids) expect(id).toMatch(/^[a-z][a-z0-9]*(\.[a-z-]+)+$/)
   })
 
   // F-2037.md 9장 — 폴더 줄은 사용자 템플릿이 없을 때만, 변수·도움말 줄은 늘(U5)
@@ -42,5 +43,57 @@ describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1)', () => {
     const withDocHint = cmd.hint(ctx(withDocTemplate))
     expect(withDocHint).toBe([varsLine, helpLine].join('\n'))
     expect(withDocHint).not.toBeNull()
+  })
+})
+
+describe('e2ee.lock·e2ee.unlock — U14 (F-404.md 10.1)', () => {
+  function findWhen(id: string) {
+    const cmd = PALETTE_COMMANDS.find((c) => c.id === id)
+    if (!cmd) throw new Error(`${id} not found`)
+    return cmd.when
+  }
+
+  it('ctx.e2ee 가 없으면 둘 다 when 이 거짓', () => {
+    expect(findWhen('e2ee.lock')(ctx([]))).toBe(false)
+    expect(findWhen('e2ee.unlock')(ctx([]))).toBe(false)
+  })
+
+  it("status 'open' 이면 잠그기만, 'locked' 면 열기만, 'none'·'unknown' 이면 둘 다 거짓", () => {
+    const open = ctx([], { status: 'open', lock: () => {}, openUnlock: () => {} })
+    expect(findWhen('e2ee.lock')(open)).toBe(true)
+    expect(findWhen('e2ee.unlock')(open)).toBe(false)
+
+    const locked = ctx([], { status: 'locked', lock: () => {}, openUnlock: () => {} })
+    expect(findWhen('e2ee.lock')(locked)).toBe(false)
+    expect(findWhen('e2ee.unlock')(locked)).toBe(true)
+
+    const none = ctx([], { status: 'none', lock: () => {}, openUnlock: () => {} })
+    expect(findWhen('e2ee.lock')(none)).toBe(false)
+    expect(findWhen('e2ee.unlock')(none)).toBe(false)
+
+    const unknown = ctx([], { status: 'unknown', lock: () => {}, openUnlock: () => {} })
+    expect(findWhen('e2ee.lock')(unknown)).toBe(false)
+    expect(findWhen('e2ee.unlock')(unknown)).toBe(false)
+  })
+
+  it('실행 — e2ee.lock 은 lock(), e2ee.unlock 은 openUnlock() 을 부른다', () => {
+    const lock = () => {
+      lockCalled = true
+    }
+    const openUnlock = () => {
+      openUnlockCalled = true
+    }
+    let lockCalled = false
+    let openUnlockCalled = false
+    const context = ctx([], { status: 'open', lock, openUnlock })
+    const lockCmd = PALETTE_COMMANDS.find((c) => c.id === 'e2ee.lock')
+    if (!lockCmd || lockCmd.kind !== 'action') throw new Error('e2ee.lock not found')
+    lockCmd.run(context)
+    expect(lockCalled).toBe(true)
+
+    const unlockCmd = PALETTE_COMMANDS.find((c) => c.id === 'e2ee.unlock')
+    if (!unlockCmd || unlockCmd.kind !== 'action') throw new Error('e2ee.unlock not found')
+    unlockCmd.run(context)
+    expect(openUnlockCalled).toBe(true)
   })
 })

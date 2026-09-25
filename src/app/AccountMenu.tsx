@@ -14,9 +14,11 @@ type AccountMenuProps = {
   account: AccountState
   onBeforeNavigate: () => Promise<void>
   onNotice: (notice: Notice) => void
+  // 로그아웃 성공 직후, 주소를 옮기기 전에 부른다 — 이 탭에서 금고를 잠그는 신호를 보낸다 (F-404.md 4.5)
+  onLoggedOut?: () => void
 }
 
-export default function AccountMenu({ account, onBeforeNavigate, onNotice }: AccountMenuProps) {
+export default function AccountMenu({ account, onBeforeNavigate, onNotice, onLoggedOut }: AccountMenuProps) {
   const [open, setOpen] = useState(false)
   const [usage, setUsage] = useState<Usage | null>(null)
   const [apiTokensOpen, setApiTokensOpen] = useState(false)
@@ -76,6 +78,7 @@ export default function AccountMenu({ account, onBeforeNavigate, onNotice }: Acc
     await onBeforeNavigate()
     const ok = await logout()
     if (ok) {
+      onLoggedOut?.()
       location.replace(AFTER_LOGOUT_URL)
     } else {
       onNotice({ type: 'error', message: LOGOUT_FAILED_MESSAGE })
