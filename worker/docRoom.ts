@@ -159,7 +159,7 @@ export class DocRoom extends YServer<Env> {
     this.core.purge()
     await this.ctx.storage.deleteAlarm()
     await this.ctx.storage.deleteAll()
-    await new Promise((resolve) => setTimeout(resolve, PURGE_CLOSE_GRACE_MS))
-    this.ctx.abort('purged')
+    // RPC 안에서 abort 하면 호출한 쪽이 매번 'purged' 로 reject 된다 — 응답 뒤로 미룬다 (2026-09-25 로컬 workerd 확인)
+    setTimeout(() => this.ctx.abort('purged'), PURGE_CLOSE_GRACE_MS)
   }
 }
