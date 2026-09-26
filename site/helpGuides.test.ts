@@ -24,6 +24,7 @@ import { MAX_INPUT_BYTES, MAX_RESULT_BYTES, MAX_DIM, MAX_AREA } from '../src/app
 import { MAX_SIDE } from '../src/lib/shrinkImage'
 import { GRACE_MS } from '../src/app/attachmentGc'
 import { RESULT_LIMIT, SNIPPET_BEFORE, SNIPPET_AFTER } from '../src/lib/docSearch'
+import { ACCOUNT_DELETE_FRESH_MS } from '../src/lib/accountDeletion'
 
 const GUIDES_DIR = fileURLToPath(new URL('../content/guides', import.meta.url))
 
@@ -322,6 +323,25 @@ describe('search 글', () => {
 
   it('글에 제품명이 없다 (R6)', () => {
     const body = guideBody(readGuide('search')).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+// 사용법 글 account (write-guide, 2026-09-27)
+describe('account 글', () => {
+  it('글의 앱 쪽 수치가 상수·화면 글자와 같다 (R5)', () => {
+    const raw = readGuide('account')
+    expect(raw).toContain(`로그인한 지 ${ACCOUNT_DELETE_FRESH_MS / 60_000}분`)
+    // 백업 보관 기간은 계정 삭제 창 안내 문구가 원천이다 — 문구가 모듈 밖으로 나오지 않아 원문에서 읽는다
+    const dialogSource = readFileSync(fileURLToPath(new URL('../src/app/AccountDeleteDialog.tsx', import.meta.url)), 'utf-8')
+    const days = /자동 백업에 최대 (\d+)일/.exec(dialogSource)?.[1]
+    expect(days).toBeTruthy()
+    expect(raw).toContain(`최대 ${days}일`)
+  })
+
+  it('글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(readGuide('account')).toLowerCase()
     expect(body).not.toContain(brand.name.toLowerCase())
     expect(body).not.toContain(brand.shortName.toLowerCase())
   })

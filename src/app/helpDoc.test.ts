@@ -28,6 +28,7 @@ const SECTION_ORDER = [
   '내보내기·가져오기',
   '옵시디언 볼트',
   '설치와 오프라인',
+  '계정',
   '단축키',
   '마크다운 문법',
 ]
@@ -291,6 +292,22 @@ describe('도움말 ## 검색 절', () => {
     expect(section.body).toContain('`Ctrl+H`')
     expect(section.body).toContain('`검색`')
     expect(section.body).toContain('`tag:일기`')
+  })
+})
+
+// 사용법 글 account (write-guide, 2026-09-27)
+describe('도움말 ## 계정 절', () => {
+  it('## 설치와 오프라인 바로 뒤에 있고, 사용법 글 줄로 끝나며, 화면 글자가 들어 있다', () => {
+    const names = appSections().map((s) => s.name)
+    expect(names[names.indexOf('설치와 오프라인') + 1]).toBe('계정')
+    expect(names[names.indexOf('계정') + 1]).toBe('단축키')
+    const section = appSections().find((s) => s.name === '계정')!
+    const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [계정과 로그인](/guides/account)')
+    expect(section.body).toContain('`로그인`')
+    expect(section.body).toContain('`API 토큰`')
+    expect(section.body).toContain('`로그아웃`')
+    expect(section.body).toContain('`계정 삭제…`')
   })
 })
 

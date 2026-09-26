@@ -6,7 +6,7 @@ import { isLocalAuthMode, readVar } from './origin'
 import { utcDay } from './usage'
 
 export const AUTH_SECRET_MIN_LENGTH = 32
-const SESSION_EXPIRES_IN_SEC = 30 * 24 * 60 * 60
+export const SESSION_EXPIRES_IN_SEC = 30 * 24 * 60 * 60
 const SESSION_UPDATE_AGE_SEC = 24 * 60 * 60
 
 // 비밀이 없거나 짧다 — 인증이 필요한 요청은 500 (4.1)
