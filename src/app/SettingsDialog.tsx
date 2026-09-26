@@ -547,7 +547,7 @@ export default function SettingsDialog({
                   <button type="button" className="dialog-btn" onClick={onImport}>
                     가져오기…
                   </button>
-                  <p className="data-row-desc">전체 내보내기 zip, 옵시디언 볼트 zip, .md 파일을 모은 zip 을 불러옵니다</p>
+                  <p className="data-row-desc">전체 내보내기 zip, 옵시디언 볼트 zip, .md 파일을 모은 zip 을 가져옵니다</p>
                 </div>
               )}
               {onImportFolder && (
@@ -555,7 +555,7 @@ export default function SettingsDialog({
                   <button type="button" className="dialog-btn" onClick={onImportFolder}>
                     폴더 가져오기…
                   </button>
-                  <p className="data-row-desc">옵시디언 볼트 같은 폴더를 골라 폴더 구조 그대로 불러옵니다</p>
+                  <p className="data-row-desc">옵시디언 볼트 같은 폴더를 골라 폴더 구조 그대로 가져옵니다</p>
                 </div>
               )}
             </section>
