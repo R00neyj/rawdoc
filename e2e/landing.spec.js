@@ -5,8 +5,11 @@ import { mockLanding, setPrefBeforeLoad } from './helpers.js'
 test('F-271 A6 첫 방문 — 랜딩만 보이고 앱으로 넘어가지 않는다', async ({ page }) => {
   await mockLanding(page)
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: /원문 그대로 쓰는/ })).toBeVisible()
-  await expect(page.locator('.cm-host')).toHaveCount(0)
+  // 히어로(#demo)는 F-239 §2.1 에 따라 assets/welcome-demo.js 가 뜨면 실제 편집기로 바꿔 낀다(demo-host).
+  // 그 결과 정적 <h1> 은 사라지지만 같은 문구가 편집기 첫 줄로 그대로 보이므로, 역할이 아니라 텍스트로 확인한다
+  await expect(page.getByText(/원문 그대로 쓰는/).first()).toBeVisible({ timeout: 10_000 })
+  // 실제 앱 에디터(.cm-host)와 랜딩 데모(.cm-host.demo-host)는 같은 클래스를 쓴다 — demo-host 를 뺀 쪽으로 앱 미전환을 확인한다
+  await expect(page.locator('.cm-host:not(.demo-host)')).toHaveCount(0)
   await expect(page.locator('.empty-state')).toHaveCount(0)
   await expect(page.locator('.cookie-escape a[href="/?app=1"]')).toBeHidden()
 })
