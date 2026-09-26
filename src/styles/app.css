@@ -3971,3 +3971,51 @@ body.sidebar-resizing {
 .cli-login-signin:hover {
   background: var(--rule-2);
 }
+
+/* 설정 `계정` 탭·계정 삭제 대화상자 D-15 (F-2038.md 6.1·6.3) — 모양은 사람 확인 H1 */
+.settings-panel .settings-account-email {
+  margin: 0 0 12px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.settings-panel .settings-account-note {
+  text-align: left;
+}
+
+.dialog-btn.danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--rule));
+}
+
+.dialog-btn.danger:disabled {
+  color: var(--muted);
+  border-color: var(--rule);
+}
+
+.account-delete-dialog p {
+  margin: 0 0 10px;
+}
+
+.account-delete-summary,
+.account-delete-notes {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.account-delete-notes {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.account-delete-dialog .account-delete-shared {
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--rule));
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--danger) 8%, var(--panel));
+}
+
+.account-delete-error {
+  color: var(--danger);
+}

@@ -101,6 +101,7 @@ body {
   line-height: 1.3;
 }
 .login-lead { margin: 0 0 24px; color: var(--ink-2); font-size: 15px; }
+.login-reauth { margin: 0 0 16px; color: var(--ink); font-size: 15px; font-weight: 600; }
 .login-error {
   margin: 0 0 20px;
   padding: 10px 14px;
@@ -138,9 +139,13 @@ body {
 }
 `
 
-export function renderLoginPage(args: { returnHash: string; error: string | null }): Response {
+const REAUTH_LINE = '계정 삭제를 계속하려면 다시 로그인하세요. 삭제할 계정의 Google 또는 GitHub 로 로그인해야 합니다.'
+
+// reauth — 계정 삭제의 다시 로그인에서 제목 아래 안내 줄 하나 (F-2038 4.4)
+export function renderLoginPage(args: { returnHash: string; error: string | null; reauth?: boolean }): Response {
   const message = loginErrorMessage(args.error)
   const errorLine = message ? `\n    <p class="login-error" role="alert">${message}</p>` : ''
+  const reauthLine = args.reauth ? `\n    <p class="login-reauth">${REAUTH_LINE}</p>` : ''
   const html = `<!doctype html>
 <html lang="ko">
   <head>
@@ -158,7 +163,7 @@ ${LOGIN_CSS}
   <body>
 ${renderSiteHeader({ brandName: brand.name, brandIcon: brand.icon, appCta: 'link' })}
   <main class="login">
-    <h1>로그인</h1>
+    <h1>로그인</h1>${reauthLine}
     <p class="login-lead">Google 또는 GitHub 계정으로 로그인하면 문서가 서버에 저장되고 다른 기기에서 이어서 쓸 수 있습니다.</p>${errorLine}
     <form class="login-form" method="post" action="/api/login">
       <input type="hidden" name="return" value="${escapeAttr(args.returnHash)}">

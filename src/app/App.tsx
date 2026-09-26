@@ -17,10 +17,11 @@ import { openSearchPanel } from '@codemirror/search'
 import { showSearchMatches } from '../editor/showSearchMatches'
 
 import { createMemoryStore } from '../storage/memoryStore'
-import { createIdbStore, markLocalE2eeMigrated, readE2eeRow } from '../storage/idbStore'
+import { createIdbStore, deleteE2eeRow, markLocalE2eeMigrated, readE2eeRow } from '../storage/idbStore'
 import { openStore } from '../storage/openStore'
 import type { ServerStore } from '../storage/serverStore'
-import { openYjsStore, type YjsStore } from '../storage/yjsStore'
+import { deleteYjsUserRows, openYjsStore, type YjsStore } from '../storage/yjsStore'
+import { deleteRemoteCacheUserRows } from '../storage/remoteCache'
 import { openLiveSocket } from '../storage/liveSocket'
 import { migrateLocalIfNeeded, checkLocalE2eeMigration, runLocalE2eeMigration } from './migrateLocal'
 import type { LocalE2eeKeys } from '../e2ee/convert'
@@ -152,6 +153,15 @@ import ConfirmDeleteDialog, { type DeleteTarget } from './ConfirmDeleteDialog'
 import Dialog from './Dialog'
 import MoveDocDialog, { type MoveDocTarget } from './MoveDocDialog'
 import SettingsDialog from './SettingsDialog'
+import AccountDeleteDialog from './AccountDeleteDialog'
+import {
+  ACCOUNT_DELETE_MARKER_KEY,
+  cleanUpAfterAccountDelete,
+  decideAccountDeleteMarker,
+  hasUnsyncedChanges,
+  reauthLoginUrl,
+  resumeMarker,
+} from './accountDelete'
 import SearchDialog from './SearchDialog'
 import { searchScope } from './searchIndex'
 import HelpPage from './HelpPage'
@@ -434,6 +444,9 @@ export default function App() {
   const [newDocTemplatePref, setNewDocTemplatePref] = useState(() => getPref('md.newDocTemplate', NEW_DOC_TEMPLATE_NONE)) // F-2037 3.1
   const [e2eeLockMinutesPref, setE2eeLockMinutesPref] = useState(() => getPref('md.e2eeLockMinutes', '30')) // F-404 8.1
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // 계정 삭제 D-15 (specs/features/F-2038.md 6장) — 연 계정 id 와 안 올린 변경 여부
+  const [accountDeleteUserId, setAccountDeleteUserId] = useState<string | null>(null)
+  const [accountDeleteUnsynced, setAccountDeleteUnsynced] = useState(false)
   // 검색 대화상자 D-6 (specs/features/F-287.md 3장)
   const [searchOpen, setSearchOpen] = useState(false)
   // 검색 결과로 연 문서에 넣어 줄 검색어 예약 — 본문이 도착하고 에디터가 만들어질 때까지 기다린다 (specs/features/F-294.md 4.3)
@@ -4191,6 +4204,77 @@ export default function App() {
     setSettingsOpen(false)
   }
 
+  // 계정 삭제 D-15 (F-2038 6장) — 안 올린 변경(6.4)을 먼저 센 뒤 연다. outbox 수는 서버 저장소의 syncState.pending(countOutbox) — 모르면 안내를 보인다
+  const openAccountDelete = useCallback((userId: string, pendingOutbox: number | undefined) => {
+    const unknownAfter = new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 1_000))
+    const counted = hasUnsyncedChanges({
+      outboxCount: async () => {
+        if (pendingOutbox === undefined) throw new Error('outbox 수 모름')
+        return pendingOutbox
+      },
+      unsyncedDocCount: async () => {
+        const persist = await yjsStoreRef.current
+        if (!persist) throw new Error('md-yjs 없음')
+        return (await persist.unsyncedDocIds()).length
+      },
+    })
+    void Promise.race([counted, unknownAfter]).then((unsynced) => {
+      setAccountDeleteUnsynced(unsynced)
+      setAccountDeleteUserId(userId)
+    })
+  }, [])
+
+  // 다시 열기 표지 (6.5) — 부팅이 계정 상태를 정한 뒤 읽고, 읽은 즉시 지운다. offline 이면 resume 을 남겨 다음 in 을 기다린다
+  useEffect(() => {
+    if (bootPhase !== 'ready') return
+    let raw: string | null
+    try {
+      raw = sessionStorage.getItem(ACCOUNT_DELETE_MARKER_KEY)
+    } catch {
+      return
+    }
+    const decision = decideAccountDeleteMarker(raw, account, Date.now())
+    if (decision.clear) sessionStorage.removeItem(ACCOUNT_DELETE_MARKER_KEY)
+    if (decision.action === 'open' && account.state === 'in') openAccountDelete(account.id, syncState?.pending)
+    else if (decision.action === 'warn') {
+      showNotice({ type: 'warn', message: '다른 계정으로 로그인해 계정 삭제 창을 열지 않았습니다. 지우려던 계정으로 다시 로그인하세요.' })
+    } else if (decision.action === 'done') showNotice({ type: 'info', message: '계정을 삭제했습니다.' })
+  }, [bootPhase, account, syncState?.pending, openAccountDelete, showNotice])
+
+  function closeAccountDelete() {
+    setAccountDeleteUserId(null)
+  }
+
+  async function reauthForAccountDelete() {
+    const userId = accountDeleteUserId
+    if (!userId) return
+    await docSaverFlushRef.current()
+    sessionStorage.setItem(ACCOUNT_DELETE_MARKER_KEY, resumeMarker(userId, Date.now()))
+    location.href = reauthLoginUrl(location.hash)
+  }
+
+  async function finishAccountDelete() {
+    const userId = accountDeleteUserId
+    if (!userId) return
+    await cleanUpAfterAccountDelete({
+      lockVault: () => e2ee?.broadcastLogoutLock(),
+      clearRemoteCache: () => deleteRemoteCacheUserRows(userId),
+      clearYjs: () => deleteYjsUserRows(userId),
+      clearE2eeRow: () => deleteE2eeRow(`account:${userId}`),
+      setPref: (key, value) => setPref(key, value),
+      writeMarker: (value) => sessionStorage.setItem(ACCOUNT_DELETE_MARKER_KEY, value),
+      navigate: (url) => location.replace(url),
+    })
+  }
+
+  const storedAccountForSettings = account.state === 'offline' ? storedAccount() : null
+  const settingsAccount =
+    account.state === 'in'
+      ? { email: account.email, online: syncState?.online !== false, onDelete: () => openAccountDelete(account.id, syncState?.pending) }
+      : storedAccountForSettings
+        ? { email: storedAccountForSettings.email, online: false, onDelete: () => {} }
+        : undefined
+
   // 검색 대화상자 D-6 (specs/features/F-287.md 3.5)
   function openSearch() {
     if (bootPhase !== 'ready') return // 부팅 중 store 는 임시 memoryStore 라 인덱스가 빈다
@@ -5237,9 +5321,21 @@ export default function App() {
               }
             : undefined
         }
+        account={settingsAccount}
         onClose={closeSettings}
       />
       {e2ee?.dialogs}
+      <AccountDeleteDialog
+        open={accountDeleteUserId !== null}
+        unsynced={accountDeleteUnsynced}
+        onClose={closeAccountDelete}
+        onSignedOut={() => {
+          closeAccountDelete()
+          void recheckAccount()
+        }}
+        onReauth={reauthForAccountDelete}
+        onDeleted={finishAccountDelete}
+      />
       <SearchDialog
         open={searchOpen}
         store={store}

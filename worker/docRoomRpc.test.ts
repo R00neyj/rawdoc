@@ -17,7 +17,7 @@ import { handleDeleteFolder } from './folders'
 import { asD1, openTestDb } from './testD1'
 import type { DatabaseSync } from 'node:sqlite'
 
-const { notifyPurge, notifyRevalidate, writeTextInRoom } = await vi.importActual<typeof import('./docRoomRpc')>('./docRoomRpc')
+const { notifyPurge, notifyRevalidate, purgeRoomNow, writeTextInRoom } = await vi.importActual<typeof import('./docRoomRpc')>('./docRoomRpc')
 
 const DOC_ID = '33333333-3333-4333-8333-333333333333'
 
@@ -93,6 +93,21 @@ describe('F-304 A23 notifyRevalidate·notifyPurge', () => {
     await notifyPurge(env, { waitUntil } as unknown as ExecutionContext, DOC_ID)
     await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined()
     expect(error).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('F-2038 P6 결과를 돌려주는 방 비우기', () => {
+  it('stub resolve → 참, reject → 거짓, stub 없음 → 참', async () => {
+    const ok = stubEnv({ purgeRoom: vi.fn(async () => {}) })
+    await expect(purgeRoomNow(ok.env, DOC_ID)).resolves.toBe(true)
+    expect(ok.getByName).toHaveBeenCalledWith(DOC_ID)
+    const bad = stubEnv({
+      purgeRoom: vi.fn(async () => {
+        throw new Error('aborted')
+      }),
+    })
+    await expect(purgeRoomNow(bad.env, DOC_ID)).resolves.toBe(false)
+    await expect(purgeRoomNow({} as Env, DOC_ID)).resolves.toBe(true)
   })
 })
 

@@ -33,5 +33,5 @@
   "ratelimits": [
     { "name": "WRITE_LIMITER", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } }
   ],
-  "triggers": { "crons": ["0 18 * * *"] }
+  "triggers": { "crons": ["0 18 * * *", "*/10 * * * *"] }
 }

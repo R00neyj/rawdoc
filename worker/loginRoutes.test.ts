@@ -361,6 +361,24 @@ describe('F-2033 U38 GET /login', () => {
   })
 })
 
+describe('F-2038 L1 /login?reauth=1', () => {
+  it('세션이 있어도 reauth=1 이면 페이지를 그리고, 0·없음이면 지금처럼 302', async () => {
+    const env = makeEnv()
+    const { session } = await loginThroughWorker(env)
+    const page = await call(env, '/login?return=%23%2Fd%2Fabc&reauth=1', { headers: { Cookie: session } })
+    expect(page.status).toBe(200)
+    const html = await page.text()
+    expect(html).toContain('class="login-reauth"')
+    expect(html).toContain('<input type="hidden" name="return" value="#/d/abc">')
+
+    for (const q of ['&reauth=0', '']) {
+      const back = await call(env, `/login?return=%23%2Fd%2Fabc${q}`, { headers: { Cookie: session } })
+      expect([q, back.status]).toEqual([q, 302])
+      expect(back.headers.get('Location')).toBe('/#/d/abc')
+    }
+  })
+})
+
 describe('F-2033 U39 비밀이 없을 때', () => {
   it('로그인 페이지는 그리고, 로그인 시작은 오류 줄로, 세션 판정은 500', async () => {
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})

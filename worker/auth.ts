@@ -82,6 +82,27 @@ export async function getUser(request: Request, env: Env, ctx?: ExecutionContext
   }
 }
 
+// 계정 삭제 전용 — getUser 와 같은 순서로 찾고 세션 만든 시각(ms)을 같이 준다. 개발 우회면 null (F-2038 4.2)
+export async function getUserWithSessionStart(
+  request: Request,
+  env: Env,
+): Promise<{ user: AuthUser; sessionCreatedAt: number | null } | null> {
+  if (isDevBypass(env)) {
+    const user = await devUser(env)
+    return user ? { user, sessionCreatedAt: null } : null
+  }
+
+  const auth = getAuth(env)
+  try {
+    const result = await auth.api.getSession({ headers: request.headers, query: { disableRefresh: true } })
+    if (!result) return null
+    const createdAt = new Date(result.session.createdAt).getTime()
+    return { user: toAuthUser(result.user), sessionCreatedAt: Number.isFinite(createdAt) ? createdAt : 0 }
+  } catch {
+    return null
+  }
+}
+
 // GET /api/me 전용 — 연장이 일어나면 better-auth 가 준 Set-Cookie 를 응답에 싣는다 (3.3)
 export async function getUserRefreshing(
   request: Request,

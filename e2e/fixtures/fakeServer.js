@@ -544,6 +544,40 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ links, grants: grantList }) })
   })
 
+  // F-2038 9.3 — 계정 삭제 미리 보기·삭제. accountDeleteRule 이 null 이면 204 + 로그아웃, 아니면 { status, body } 또는 'network'
+  let accountPreview = {
+    email,
+    docs: 3,
+    e2eeDocs: 0,
+    sharedDocs: 1,
+    folders: 1,
+    attachments: { count: 2, bytes: 1_572_864 },
+    tokens: 0,
+    fresh: true,
+    freshUntil: Date.now() + 600_000,
+  }
+  let accountDeleteRule = null
+  const accountRequestCounts = { get: 0, delete: 0 }
+  await page.route('**/api/account', (route) => {
+    const req = route.request()
+    if (offline) return route.abort('internetdisconnected')
+    if (req.method() === 'GET') {
+      accountRequestCounts.get += 1
+      if (!loggedIn) return route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' })
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(accountPreview) })
+    }
+    if (req.method() === 'DELETE') {
+      accountRequestCounts.delete += 1
+      if (accountDeleteRule === 'network') return route.abort('failed')
+      if (accountDeleteRule) {
+        return route.fulfill({ status: accountDeleteRule.status, contentType: 'application/json', body: JSON.stringify(accountDeleteRule.body ?? {}) })
+      }
+      loggedIn = false
+      return route.fulfill({ status: 204 })
+    }
+    return route.fallback()
+  })
+
   // F-2042 8.1 — 이후 모든 /api/** 응답을 latencyMs 만큼 늦춘다. 마지막에 걸어 다른 경로보다 먼저 가로챈 뒤 route.fallback() 한다
   let latencyMs = 0
   const getRequestLog = [] // GET 요청만 기록 — 동시성 확인용 { path, startedAt, endedAt }
@@ -625,6 +659,18 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     // 받은 GET 요청 기록 { path, startedAt, endedAt }[] — 동시성 확인용 (F-2042 8.1)
     readRequests() {
       return [...getRequestLog]
+    },
+    // GET /api/account 200 몸통에 합친다 (F-2038 9.3)
+    setAccountPreview(patch) {
+      accountPreview = { ...accountPreview, ...patch }
+    },
+    // DELETE /api/account 응답 — null = 204 + 로그아웃, { status, body } 또는 'network' (F-2038 9.3)
+    setAccountDeleteRule(rule) {
+      accountDeleteRule = rule
+    },
+    // 지금까지 받은 /api/account 요청 수 { get, delete } (F-2038 9.3)
+    accountRequests() {
+      return { ...accountRequestCounts }
     },
   }
 }

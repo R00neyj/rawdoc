@@ -107,6 +107,23 @@ async function openCacheDb(dbName: string): Promise<IDBPDatabase> {
   })
 }
 
+// 계정 삭제 뒤 — 네 스토어에서 그 사용자의 행만 지운다. RemoteCache 타입에는 넣지 않는다 (F-2038 7.1)
+export async function deleteRemoteCacheUserRows(userId: string, dbName: string = DEFAULT_DB_NAME): Promise<void> {
+  const db = await openCacheDb(dbName)
+  try {
+    const stores = ['docs', 'folders', 'outbox', 'attachments'] as const
+    const tx = db.transaction([...stores], 'readwrite')
+    const deletes = stores.map(async (name) => {
+      const store = tx.objectStore(name)
+      const keys = await store.index('byUser').getAllKeys(userId)
+      await Promise.all(keys.map((key) => store.delete(key)))
+    })
+    await Promise.all([...deletes, tx.done])
+  } finally {
+    db.close()
+  }
+}
+
 export async function createRemoteCache(dbName: string = DEFAULT_DB_NAME): Promise<RemoteCache> {
   const db = await openCacheDb(dbName)
 

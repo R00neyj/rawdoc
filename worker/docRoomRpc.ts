@@ -43,6 +43,18 @@ export async function notifyPurge(env: Env, ctx: ExecutionContext | undefined, d
   await dispatch(ctx, () => stub.purgeRoom())
 }
 
+// 정리 작업 (F-2038 5.4) — 결과를 돌려받는다. 바인딩이 없으면 비울 것이 없는 것으로 본다
+export async function purgeRoomNow(env: Env, docId: string): Promise<boolean> {
+  const stub = roomStub(env, docId)
+  if (!stub) return true
+  try {
+    await stub.purgeRoom()
+    return true
+  } catch {
+    return false
+  }
+}
+
 // /v1 PUT (F-308 5.4) — 결과가 응답을 바꾸므로 기다린다. 던지면 null — Worker 가 D1 직접 쓰기로 넘긴다(9장)
 export async function writeTextInRoom(env: Env, docId: string, input: RoomTextWrite): Promise<RoomTextWriteResult | null> {
   const stub = roomStub(env, docId)

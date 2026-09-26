@@ -34,18 +34,39 @@ export type YjsAttachment = {
   detach(): void
 }
 
+function openYjsDb(dbName: string): Promise<IDBPDatabase> {
+  return openDB(dbName, DB_VERSION, {
+    upgrade(upgradeDb) {
+      const updates = upgradeDb.createObjectStore('updates', { keyPath: 'key', autoIncrement: true })
+      updates.createIndex('byDoc', ['userId', 'docId'])
+      const meta = upgradeDb.createObjectStore('meta', { keyPath: ['userId', 'docId'] })
+      meta.createIndex('byUser', 'userId')
+    },
+  })
+}
+
+// 계정 삭제 뒤 — 그 사용자의 updates·meta 행만 지운다. 문자열 docId 는 [] 보다 앞에 정렬된다 (F-2038 7.1)
+export async function deleteYjsUserRows(userId: string, dbName: string = YJS_DB_NAME): Promise<void> {
+  const db = await openYjsDb(dbName)
+  try {
+    const tx = db.transaction(['updates', 'meta'], 'readwrite')
+    const updates = tx.objectStore('updates')
+    const meta = tx.objectStore('meta')
+    const [updateKeys, metaKeys] = await Promise.all([
+      updates.index('byDoc').getAllKeys(IDBKeyRange.bound([userId], [userId, []])),
+      meta.index('byUser').getAllKeys(userId),
+    ])
+    await Promise.all([...updateKeys.map((key) => updates.delete(key)), ...metaKeys.map((key) => meta.delete(key)), tx.done])
+  } finally {
+    db.close()
+  }
+}
+
 // 열기에 실패하면 null — 앱은 영속 없이 F-305 처럼 돈다 (4.5)
 export async function openYjsStore(userId: string, dbName: string = YJS_DB_NAME): Promise<YjsStore | null> {
   let db: IDBPDatabase
   try {
-    db = await openDB(dbName, DB_VERSION, {
-      upgrade(upgradeDb) {
-        const updates = upgradeDb.createObjectStore('updates', { keyPath: 'key', autoIncrement: true })
-        updates.createIndex('byDoc', ['userId', 'docId'])
-        const meta = upgradeDb.createObjectStore('meta', { keyPath: ['userId', 'docId'] })
-        meta.createIndex('byUser', 'userId')
-      },
-    })
+    db = await openYjsDb(dbName)
   } catch {
     return null
   }

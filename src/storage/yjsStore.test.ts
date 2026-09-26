@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { openDB } from 'idb'
 import * as Y from 'yjs'
 
-import { COMPACT_IDLE_MS, COMPACT_ROWS, RETAIN_MS, YJS_DB_NAME, YJS_LOAD_ORIGIN, openYjsStore } from './yjsStore'
+import { COMPACT_IDLE_MS, COMPACT_ROWS, RETAIN_MS, YJS_DB_NAME, YJS_LOAD_ORIGIN, deleteYjsUserRows, openYjsStore } from './yjsStore'
 import type { YjsStore } from './yjsStore'
 
 let dbCounter = 0
@@ -337,5 +337,30 @@ describe('F-306 U10 쓰기 실패·detach', () => {
     await tick()
     expect(await rawRows(dbName, 'u1', 'd1')).toHaveLength(1)
     expect(attachment.broken).toBe(false)
+  })
+})
+
+describe('F-2038 C6 한 사용자의 행만 지우기', () => {
+  it('A·B 의 updates·meta 중 A 만 0, B 그대로', async () => {
+    const dbName = freshDbName()
+    for (const user of ['A', 'B']) {
+      const store = await open(user, dbName)
+      for (const docId of ['d1', 'd2']) {
+        const doc = new Y.Doc()
+        const attachment = await store.attach(docId, doc)
+        doc.getText('content').insert(0, `${user}${docId}`)
+        await tick()
+        attachment.setUnsyncedLocal(true)
+        await tick()
+        attachment.detach()
+      }
+    }
+    await deleteYjsUserRows('A', dbName)
+    for (const docId of ['d1', 'd2']) {
+      expect(await rawRows(dbName, 'A', docId)).toHaveLength(0)
+      expect(await rawMeta(dbName, 'A', docId)).toBeUndefined()
+      expect(await rawRows(dbName, 'B', docId)).toHaveLength(1)
+      expect((await rawMeta(dbName, 'B', docId))?.unsyncedLocal).toBe(true)
+    }
   })
 })

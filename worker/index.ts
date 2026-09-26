@@ -69,6 +69,8 @@ import { rootTarget, welcomeRedirect, withRootHeaders } from './rootRoute'
 import { handleDocSocket } from './docSocket'
 import { DOC_SOCKET_PREFIX } from '../src/lib/docRoomProtocol'
 import { isWriteRoute, runWriteGate } from './writeGate'
+import { handleDeleteAccount, handleGetAccount } from './account'
+import { PURGE_CALLS_ON_CRON, PURGE_CRON, runPurgeJobs } from './purgeJobs'
 import { usageOf } from './usage'
 
 export { DocRoom } from './docRoom'
@@ -202,8 +204,10 @@ async function handleLoginPage(request: Request, env: Env): Promise<Response> {
   } catch (err) {
     console.error(err)
   }
-  if (user) return redirect(target.successUrl, 302)
-  return renderLoginPage({ returnHash: target.hash, error: url.searchParams.get('error') })
+  // 계정 삭제의 다시 로그인 — 세션이 있어도 페이지를 그린다 (F-2038 4.4)
+  const reauth = url.searchParams.get('reauth') === '1'
+  if (user && !reauth) return redirect(target.successUrl, 302)
+  return renderLoginPage({ returnHash: target.hash, error: url.searchParams.get('error'), reauth })
 }
 
 // better-auth 가 여는 경로 중 콜백 둘과 로그아웃만 넘긴다 (F-2033 7.4)
@@ -221,6 +225,8 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/health', handler: handleHealth },
   { method: 'GET', path: '/api/me', handler: handleApiMe },
   { method: 'GET', path: '/api/login', handler: handleLogin },
+  { method: 'GET', path: '/api/account', handler: handleGetAccount },
+  { method: 'DELETE', path: '/api/account', handler: handleDeleteAccount },
   { method: 'POST', path: '/api/login', handler: handleLoginStart },
   { method: 'GET', path: '/api/docs', handler: handleListDocs },
   { method: 'POST', path: '/api/docs', handler: handleCreateDoc },
@@ -384,8 +390,13 @@ export default {
       return errorResponse('internal', 500)
     }
   },
-  async scheduled(_event, env, ctx) {
+  async scheduled(event, env, ctx) {
     const now = Date.now()
+    // 10분 Cron 은 정리 작업만, 그 밖(매일 Cron·빈 객체)은 지금 셋 (F-2038 5.5)
+    if (event?.cron === PURGE_CRON) {
+      ctx.waitUntil(runQuietly(() => runPurgeJobs(env, now, PURGE_CALLS_ON_CRON)))
+      return
+    }
     ctx.waitUntil(runQuietly(() => cleanupServerAttachments(env, now)))
     ctx.waitUntil(runQuietly(() => cleanupExpiredAuth(env, now)))
     ctx.waitUntil(runQuietly(() => cleanupComments(env, now)))

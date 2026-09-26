@@ -111,6 +111,26 @@ describe('F-2033 U27 로그인 페이지 틀', () => {
   })
 })
 
+describe('F-2038 L2 다시 로그인 안내 줄', () => {
+  const REAUTH = '<p class="login-reauth">계정 삭제를 계속하려면 다시 로그인하세요. 삭제할 계정의 Google 또는 GitHub 로 로그인해야 합니다.</p>'
+
+  it('reauth 참이면 4.4 문장 그대로, 오류 줄보다 먼저. 스크립트 없음', async () => {
+    const html = await renderLoginPage({ returnHash: '', error: null, reauth: true }).text()
+    expect(html).toContain(REAUTH)
+    expect(html.toLowerCase()).not.toContain('<script')
+    const withError = await renderLoginPage({ returnHash: '#/d/a', error: 'access_denied', reauth: true }).text()
+    expect(withError.indexOf('class="login-reauth"')).toBeLessThan(withError.indexOf('class="login-error"'))
+    expect(withError.indexOf('<h1>')).toBeLessThan(withError.indexOf('class="login-reauth"'))
+  })
+
+  it('reauth 를 안 주면 login-reauth 가 없다', async () => {
+    const { html } = await page('', null)
+    expect(html).not.toContain('class="login-reauth"')
+    const off = await renderLoginPage({ returnHash: '', error: null, reauth: false }).text()
+    expect(off).not.toContain('class="login-reauth"')
+  })
+})
+
 describe('F-2033 U28 오류 코드 → 문구', () => {
   it('표대로 옮기고 모르는 값은 마지막 줄', async () => {
     const table: [string, string][] = [

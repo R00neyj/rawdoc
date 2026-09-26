@@ -49,3 +49,20 @@ describe('nextTabIndex (F-290 A2)', () => {
     expect(nextTabIndex(current, count, key)).toBe(expected)
   })
 })
+
+describe('visibleSettingsTabs — C1 (F-2038.md 9.2)', () => {
+  test('계정 포함 전부 참 → 화면·편집기·데이터·금고·계정 순', () => {
+    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, e2ee: true, account: true })).toEqual([
+      'screen',
+      'editor',
+      'data',
+      'e2ee',
+      'account',
+    ])
+  })
+
+  test('account 거짓·없음 → 지금 결과', () => {
+    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, e2ee: true, account: false })).toEqual(['screen', 'editor', 'data', 'e2ee'])
+    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, e2ee: true })).toEqual(['screen', 'editor', 'data', 'e2ee'])
+  })
+})

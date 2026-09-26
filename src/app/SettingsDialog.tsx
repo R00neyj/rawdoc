@@ -68,6 +68,14 @@ const TAB_LABELS: Record<SettingsTabId, string> = {
   editor: '편집기',
   data: '데이터',
   e2ee: '금고',
+  account: '계정',
+}
+
+// `계정` 탭 — 로그인(또는 오프라인이고 저장된 계정)일 때만 App 이 준다 (F-2038.md 6.1)
+export type SettingsAccount = {
+  email: string
+  online: boolean
+  onDelete: () => void
 }
 
 // 자동 잠금 세그먼트 — 값은 분 문자열 (F-404.md 7.5·8.1)
@@ -321,6 +329,8 @@ type SettingsDialogProps = {
   onImportFolder?: () => void
   // `금고` 탭 — 3.1 범위가 있을 때만 준다. 안 주면 탭이 안 보인다 (F-404.md 7.5)
   e2ee?: SettingsE2ee
+  // `계정` 탭 — 안 주면 탭이 안 보인다 (F-2038.md 6.1)
+  account?: SettingsAccount
   onClose: () => void
 }
 
@@ -355,6 +365,7 @@ export default function SettingsDialog({
   onImport,
   onImportFolder,
   e2ee,
+  account,
   onClose,
 }: SettingsDialogProps) {
   const titleId = 'settings-title'
@@ -372,6 +383,7 @@ export default function SettingsDialog({
     editor: hasToolbar || showEditorSettings,
     data: onExportAll !== undefined,
     e2ee: e2ee !== undefined,
+    account: account !== undefined,
   })
 
   const [activeTab, setActiveTab] = useState<SettingsTabId>(tabs[0])
@@ -549,6 +561,22 @@ export default function SettingsDialog({
             </section>
           )}
         </div>
+      )
+    }
+    // account — 계정 (F-2038.md 6.1). .dialog-field 를 쓰지 않는다 — 설정 라벨을 세는 선택자에 걸린다
+    if (id === 'account') {
+      if (!account) return null
+      return (
+        <>
+          <p className="dialog-note settings-account-email">{account.email} 로 로그인했습니다.</p>
+          <div className="dialog-btn-row">
+            <button type="button" className="dialog-btn danger" onClick={account.onDelete} disabled={!account.online}>
+              계정 삭제…
+            </button>
+            {!account.online && <span className="dialog-note">온라인일 때 계정을 삭제할 수 있습니다</span>}
+          </div>
+          <p className="dialog-note settings-account-note">계정과 서버에 저장한 문서·폴더·이미지·공유 링크·API 토큰을 모두 지웁니다. 되돌릴 수 없습니다.</p>
+        </>
       )
     }
     // e2ee — 금고 (F-404.md 7.5)
