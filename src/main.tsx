@@ -1,11 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
-import 'pretendard/dist/web/variable/pretendardvariable.css'
-import '@fontsource/noto-serif-kr/korean-400.css'
-import '@fontsource/noto-serif-kr/latin-400.css'
-import '@fontsource/noto-serif-kr/korean-700.css'
-import '@fontsource/noto-serif-kr/latin-700.css'
+// 쓰는 글자의 조각만 받는다 (specs/features/F-2040.md 3.1)
+import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
+import '@fontsource/noto-serif-kr/400.css'
+import '@fontsource/noto-serif-kr/700.css'
 import './styles/tokens.css'
 import './styles/boot.css'
 import './styles/app.css'

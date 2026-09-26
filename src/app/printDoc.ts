@@ -34,6 +34,8 @@ export async function printDoc(args: {
 
   const urls = await fillAttachmentImages(root, resolveAttachment)
   await fillMermaidBlocks(root)
+  // 레이아웃을 먼저 일으켜 새 글자의 서체 조각 받기가 시작된 뒤 ready 를 읽는다 (F-2040 5.3)
+  void root.offsetHeight
   try {
     await document.fonts.ready
   } catch {

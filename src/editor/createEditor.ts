@@ -46,6 +46,7 @@ import { connectRemote } from './remoteGate'
 import { attachRemoteCursors, remoteCursors } from './remoteCursors'
 import { observeTitle, writeTitle } from './liveTitle'
 import { commentGutter, commentMarks, createEditorComments } from './commentMarks'
+import { fontRemeasure } from './fontRemeasure'
 import './searchPanel.css'
 import './commentMarks.css'
 
@@ -469,6 +470,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     ),
     keymap.of([...defaultKeymap, ...undoKeymap, indentWithTab]),
     compositionCatchup(() => destroyed),
+    // 서체 조각이 늦게 오면 다시 잰다 — 표 칸 하위 편집기에는 넣지 않는다 (F-2040 5.2)
+    fontRemeasure,
     // 원격 커서 — 늘 둔다. 붙은 소스가 없으면 빈 장식이다 (F-307 5.1)
     remoteCursors(),
     // 댓글 앵커 장식·거터·레일 좌표 — 늘 둔다. 붙기 전에는 아무것도 그리지 않는다 (F-504 3장)

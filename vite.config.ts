@@ -166,6 +166,18 @@ function bootPaintPlugin(): Plugin {
   }
 }
 
+// @fontsource CSS 의 .woff 대체 줄을 지운다 — 쓰지 않는 woff 가 dist 에 실리지 않게 (specs/features/F-2040.md 3.2)
+function stripFontsourceWoffPlugin(): Plugin {
+  return {
+    name: 'strip-fontsource-woff',
+    enforce: 'pre',
+    transform(code: string, id: string) {
+      if (!/[\\/]@fontsource[\\/]noto-serif-kr[\\/][^?]*\.css(\?|$)/.test(id)) return null
+      return { code: code.replace(/,\s*url\([^)]*\.woff\)\s*format\(['"]woff['"]\)/g, ''), map: null }
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   build: {
@@ -184,6 +196,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    stripFontsourceWoffPlugin(),
     brandHtmlPlugin(),
     bootPaintPlugin(),
     VitePWA({
@@ -218,13 +231,25 @@ export default defineConfig({
         file_handlers: [{ action: '/', accept: { 'text/markdown': ['.md'] } }],
       },
       workbox: {
-        // 서체(woff2)까지 precache 한다 (specs/features/F-116.md)
-        globPatterns: ['**/*.{js,css,html,woff2,png,svg,webmanifest}'],
+        // 서체는 KaTeX 만 precache 하고 나머지는 쓸 때 받아 fonts 캐시에 둔다 (F-2040)
+        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}', 'assets/KaTeX_*.woff2'],
         // 링크 미리보기 이미지는 오프라인 동작에 필요 없다
         globIgnores: ['og-image.png'],
-        // Workbox 기본 상한은 2MiB. PretendardVariable.woff2 가 2,057,688바이트라
-        // 여유를 둔다
+        // Workbox 기본 상한은 2MiB. 가장 큰 precache 파일 createEditor-*.js 가 약 1.7MB 라 여유를 둔다 — 넘으면 precache 에서 조용히 빠진다 (F-2040 4.1)
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+        // precache 에 없는 서체 조각(같은 출처 /assets/*.woff2)은 쓸 때 받아 둔다 (F-2040 4.1)
+        runtimeCaching: [
+          {
+            urlPattern: ({ url, sameOrigin }) =>
+              sameOrigin && url.pathname.startsWith('/assets/') && url.pathname.endsWith('.woff2'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'fonts',
+              expiration: { maxEntries: 400 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+        ],
         navigateFallback: 'index.html',
         // Cloudflare 예약 경로(/cdn-cgi/*)·로그인 페이지(/login)·공개 API 는 SW 가 index.html 로 가로채면 안 된다
         // /welcome 은 워커가 301 로 / 에 보낸다 — SW 가 index.html 로 가로채면 그 301 이 안 나간다 (F-271 6장)
