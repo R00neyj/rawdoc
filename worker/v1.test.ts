@@ -138,6 +138,14 @@ function makeEnv(data: {
                 const [ownerId] = args as [string]
                 return { results: folders.filter((f) => f.owner_id === ownerId) as T[] }
               }
+              if (sql.startsWith('SELECT id FROM docs WHERE owner_id = ? AND folder_id IN')) {
+                const [ownerId, ...ids] = args as string[]
+                return {
+                  results: docs
+                    .filter((d) => d.owner_id === ownerId && ids.includes(d.folder_id as string))
+                    .map((d) => ({ id: d.id })) as T[],
+                }
+              }
               throw new Error(`unhandled all sql: ${sql}`)
             },
             async run() {
@@ -204,6 +212,7 @@ function makeEnv(data: {
                 }
                 return { meta: { changes } }
               }
+              if (sql.startsWith('DELETE FROM share_link_docs WHERE doc_id IN')) return { meta: { changes: 0 } }
               if (sql.startsWith('DELETE FROM folders WHERE owner_id = ? AND id IN')) {
                 const [ownerId, ...ids] = args as string[]
                 let changes = 0

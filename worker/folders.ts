@@ -6,6 +6,7 @@ import { MAX_BODY_BYTES, isValidFolderName, isValidUuid } from './validate'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../src/lib/folderTree'
 import { getOwnedFolder } from './access'
 import { dayUsageStatement, deleteFoldersUsageStatement } from './usage'
+import { notifyPurge } from './docRoomRpc'
 
 const BATCH_ID_LIMIT = 100
 
@@ -209,7 +210,7 @@ export async function handleUpdateFolder(
 export async function handleDeleteFolder(
   request: Request,
   env: Env,
-  _ctx: ExecutionContext,
+  ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
@@ -230,8 +231,27 @@ export async function handleDeleteFolder(
     const folderLikes = ownFolders.map((f) => ({ id: f.id, name: f.name, parentId: f.parent_id }))
     const ids = descendantFolderIds(folderLikes, params.id)
 
+    // 지울 문서 id 를 먼저 모은다 — share_link_docs 정리(FK, 버그 수정 F-2038.md 12장 X1)와
+    // DO 방 비우기(notifyPurge, 문서 단건 삭제와 같게, X2) 둘 다 문서 id 가 있어야 한다
+    const docIds: string[] = []
+    for (let i = 0; i < ids.length; i += BATCH_ID_LIMIT) {
+      const chunk = ids.slice(i, i + BATCH_ID_LIMIT)
+      const placeholders = chunk.map(() => '?').join(',')
+      const { results } = await env.DB.prepare(
+        `SELECT id FROM docs WHERE owner_id = ? AND folder_id IN (${placeholders})`,
+      )
+        .bind(user.id, ...chunk)
+        .all<{ id: string }>()
+      docIds.push(...results.map((r) => r.id))
+    }
+
     const statements = []
     if (ids.length > 0) statements.push(deleteFoldersUsageStatement(env.DB, user.id, ids, Date.now()))
+    for (let i = 0; i < docIds.length; i += BATCH_ID_LIMIT) {
+      const chunk = docIds.slice(i, i + BATCH_ID_LIMIT)
+      const placeholders = chunk.map(() => '?').join(',')
+      statements.push(env.DB.prepare(`DELETE FROM share_link_docs WHERE doc_id IN (${placeholders})`).bind(...chunk))
+    }
     for (let i = 0; i < ids.length; i += BATCH_ID_LIMIT) {
       const chunk = ids.slice(i, i + BATCH_ID_LIMIT)
       const placeholders = chunk.map(() => '?').join(',')
@@ -247,6 +267,8 @@ export async function handleDeleteFolder(
       )
     }
     if (statements.length > 0) await env.DB.batch(statements)
+    // 열린 연결을 닫고 DO 저장소를 비운다 — 문서 단건 삭제와 같게 (F-304 9.4, 버그 수정 X2)
+    for (const docId of docIds) await notifyPurge(env, ctx, docId)
     return new Response(null, { status: 204 })
   }
 

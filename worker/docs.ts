@@ -381,6 +381,8 @@ export async function handleDeleteDoc(
 
   await env.DB.batch([
     deleteDocUsageStatement(env.DB, user.id, params.id, Date.now()),
+    // share_link_docs.doc_id REFERENCES docs(id) — docs 를 지우기 전에 묶음 행부터 지운다 (버그 수정, F-2038.md 12장 X1)
+    env.DB.prepare('DELETE FROM share_link_docs WHERE doc_id = ?').bind(params.id),
     env.DB.prepare('DELETE FROM docs WHERE id = ? AND owner_id = ?').bind(params.id, user.id),
   ])
   // 열린 연결을 닫고 DO 저장소를 비운다 (F-304 9.4)

@@ -200,3 +200,34 @@ describe('F-2025 D1~D8 /api 문서 만들기·PUT 총량', () => {
     expect(owner.doc_count).toBe(2)
   })
 })
+
+// 버그 수정(명세 없음) — share_link_docs.doc_id REFERENCES docs(id) 인데 handleDeleteDoc 이 그 행을 먼저 지우지 않아
+// D1(외래 키 강제)에서 FK 오류가 날 것으로 보임(F-2038.md 12장 X1). node:sqlite 도 기본 foreign_keys = 1
+describe('버그 수정 — 공유 링크 묶음에 든 문서 삭제', () => {
+  function insertShareLink(sqlDb: DatabaseSync, token: string, ownerId: string, targetId: string) {
+    sqlDb
+      .prepare('INSERT INTO share_links (token, owner_id, target_type, target_id, created_at, revoked_at) VALUES (?,?,?,?,?,NULL)')
+      .run(token, ownerId, 'doc', targetId, 1)
+  }
+  function insertShareLinkDoc(sqlDb: DatabaseSync, token: string, docId: string) {
+    sqlDb.prepare('INSERT INTO share_link_docs (token, doc_id) VALUES (?,?)').run(token, docId)
+  }
+
+  it('묶음에 든 문서를 지워도 FK 오류 없이 204, share_link_docs 행도 사라진다', async () => {
+    const { sqlDb, env } = setup()
+    insertUser(sqlDb, 'u1', 'u1@example.com')
+    insertDoc(sqlDb, { id: 'd1', ownerId: 'u1', content: 'a' })
+    insertDoc(sqlDb, { id: 'd2', ownerId: 'u1', content: 'b' })
+    insertShareLink(sqlDb, 'tok1', 'u1', 'd1')
+    insertShareLinkDoc(sqlDb, 'tok1', 'd2')
+
+    const res = await handleDeleteDoc(req('DELETE', '/api/docs/d2'), env, ctx, { id: 'd2' })
+    expect(res.status).toBe(204)
+    expect(countDocs(sqlDb)).toBe(1)
+    const bundleRow = sqlDb.prepare('SELECT * FROM share_link_docs WHERE doc_id = ?').get('d2')
+    expect(bundleRow).toBeUndefined()
+    // 링크 자체(시작 문서 d1)는 남아 있어야 한다 — 이 버그 수정의 규칙 밖
+    const link = sqlDb.prepare('SELECT * FROM share_links WHERE token = ?').get('tok1')
+    expect(link).toBeTruthy()
+  })
+})

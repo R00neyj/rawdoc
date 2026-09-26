@@ -13,6 +13,9 @@ vi.mock('./auth', () => ({
 import * as rpc from './docRoomRpc'
 import { handleDeleteDocGrant, handleDeleteFolderGrant, handlePutDocGrant } from './grants'
 import { handleDeleteDoc } from './docs'
+import { handleDeleteFolder } from './folders'
+import { asD1, openTestDb } from './testD1'
+import type { DatabaseSync } from 'node:sqlite'
 
 const { notifyPurge, notifyRevalidate, writeTextInRoom } = await vi.importActual<typeof import('./docRoomRpc')>('./docRoomRpc')
 
@@ -115,6 +118,7 @@ describe('F-304 A24 배선', () => {
               },
               async run() {
                 if (sql.startsWith('INSERT INTO grants') || sql.startsWith('DELETE FROM grants')) return { meta: { changes: 1 } }
+                if (sql.startsWith('DELETE FROM share_link_docs')) return { meta: { changes: 0 } }
                 if (sql.startsWith('DELETE FROM docs')) {
                   order.push('delete-docs')
                   return { meta: { changes: 1 } }
@@ -188,6 +192,58 @@ describe('F-304 A24 배선', () => {
     expect(rpc.notifyPurge).toHaveBeenCalledTimes(1)
     expect(rpc.notifyPurge).toHaveBeenCalledWith(env, ctx, DOC_ID)
     expect(order).toEqual(['delete-docs', 'purge'])
+  })
+})
+
+// 버그 수정(명세 없음) — 폴더 `전부 삭제` 는 지운 문서들의 DO 방을 비우지 않았다(notifyPurge 없음, F-2038.md 12장 X2).
+// 문서 단건 삭제가 하는 것과 같게, 지운 문서마다 notifyPurge 를 부른다
+describe('버그 수정 X2 — 폴더 전부 삭제 notifyPurge 배선', () => {
+  const ctx = { waitUntil: () => {} } as unknown as ExecutionContext
+
+  function setup() {
+    const sqlDb = openTestDb()
+    const env = { DB: asD1(sqlDb) } as unknown as Env
+    return { sqlDb, env }
+  }
+  function insertUser(sqlDb: DatabaseSync, id: string, email: string) {
+    sqlDb.prepare('INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)').run(id, email, 1)
+  }
+  function insertFolder(sqlDb: DatabaseSync, id: string, ownerId: string) {
+    sqlDb
+      .prepare('INSERT INTO folders (id, owner_id, name, parent_id, created_at, updated_at, e2ee) VALUES (?,?,?,?,?,?,0)')
+      .run(id, ownerId, id, null, 1, 1)
+  }
+  function insertDoc(sqlDb: DatabaseSync, id: string, ownerId: string, folderId: string | null) {
+    sqlDb
+      .prepare(
+        'INSERT INTO docs (id, owner_id, title, content, line_ending, folder_id, version, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
+      )
+      .run(id, ownerId, 't', 'c', 'lf', folderId, 1, 1, 1)
+  }
+
+  beforeEach(() => {
+    vi.mocked(rpc.notifyPurge).mockClear()
+  })
+
+  it('폴더 전부 삭제 → 지운 문서마다 notifyPurge(env, ctx, docId) 1번씩, 204', async () => {
+    const { sqlDb, env } = setup()
+    insertUser(sqlDb, 'me', 'me@example.com')
+    insertFolder(sqlDb, 'f1', 'me')
+    insertDoc(sqlDb, 'd1', 'me', 'f1')
+    insertDoc(sqlDb, 'd2', 'me', 'f1')
+    insertDoc(sqlDb, 'd3', 'me', null) // 폴더 밖 — 지워지지 않는다
+
+    const res = await handleDeleteFolder(
+      new Request('https://x/api/folders/f1?contents=delete-all', { method: 'DELETE' }),
+      env,
+      ctx,
+      { id: 'f1' },
+    )
+    expect(res.status).toBe(204)
+    expect(rpc.notifyPurge).toHaveBeenCalledTimes(2)
+    const purgedIds = vi.mocked(rpc.notifyPurge).mock.calls.map((call) => call[2]).sort()
+    expect(purgedIds).toEqual(['d1', 'd2'])
+    expect(sqlDb.prepare('SELECT id FROM docs WHERE id = ?').get('d3')).toBeTruthy()
   })
 })
 
