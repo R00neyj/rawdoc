@@ -263,3 +263,21 @@ describe('F-2039 도움말 ↔ 사용법 글 분담 규칙', () => {
     expect(section.body).toContain('위키링크 미리보기')
   })
 })
+
+// F-2045.md 6.1 U1
+describe('F-2045 도움말 ## 공유 절', () => {
+  it('U1: 마지막 문단이 사용법 글 줄이고, 화면 글자가 들어 있고, 옛 문구가 없다', () => {
+    const section = appSections().find((s) => s.name === '공유')!
+    const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(paragraphs[paragraphs.length - 1]).toBe(
+      '사용법 글: [문서를 공유하고 함께 편집하기](/guides/sharing)',
+    )
+    expect(section.body).toContain('`사람 초대…`')
+    expect(section.body).toContain('`공유받음`')
+    expect(section.body).toContain('`실시간 연결 실패 · 한 명씩 편집`')
+    expect(section.body).toContain('`공유 관리`')
+    expect(section.body).toContain('`보기`')
+    expect(section.body).toContain('`편집`')
+    expect(section.body).not.toContain('읽기·편집 권한')
+  })
+})

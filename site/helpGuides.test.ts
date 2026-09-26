@@ -15,6 +15,8 @@ import { E2EE_LOCK_MINUTES, E2EE_DEFAULT_LOCK_MINUTES } from '../src/e2ee/keyrin
 import { E2EE_SERVER_SAVE_INTERVAL_MS } from '../src/storage/serverStore'
 import { RECOVERY_CODE_BYTES } from '../src/e2ee/recoveryCode'
 import { buildE2eeConvertDialogText } from '../src/e2ee/convert'
+import { PEER_AVATARS_MAX, PEER_AVATARS_MAX_NARROW } from '../src/lib/peers'
+import { DISCONNECT_NOTICE_MS } from '../src/app/liveDoc'
 
 const GUIDES_DIR = fileURLToPath(new URL('../content/guides', import.meta.url))
 
@@ -226,5 +228,38 @@ describe('U7 금고 글의 수치 (R5)', () => {
     const ratio = /약 ([\d.]+)배/.exec(text.notes.join(' '))?.[1]
     expect(ratio).toBeTruthy()
     expect(raw).toContain(`약 ${ratio}배`)
+  })
+})
+
+// F-2045.md 6.2 U2~U4
+describe('F-2045 공유 글', () => {
+  it('U2: 공유 글의 수치가 상수에서 만든 문자열과 같다 (R5)', () => {
+    const raw = readGuide('sharing')
+    expect(raw).toContain(`넓은 창에서는 ${PEER_AVATARS_MAX}명까지`)
+    expect(raw).toContain(`좁은 창에서는 ${PEER_AVATARS_MAX_NARROW}명까지`)
+    expect(raw).toContain(`${DISCONNECT_NOTICE_MS / 1000}초 넘게`)
+  })
+
+  it('U3: 공유 글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(readGuide('sharing')).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+describe('U4 글 사이 링크 대상 (R8)', () => {
+  it('모든 content/guides/*.md 본문의 (/guides/{slug}) 링크마다 content/guides/{slug}.md 가 있다', () => {
+    const files = readdirSync(GUIDES_DIR).filter((f) => f.endsWith('.md'))
+    const linkRe = /\]\(\/guides\/([a-z0-9]([a-z0-9-]*[a-z0-9])?)\)/g
+    let checked = 0
+    for (const file of files) {
+      const body = guideBody(readGuide(file.replace(/\.md$/, '')))
+      for (const m of body.matchAll(linkRe)) {
+        const slug = m[1]
+        expect(files, `${file} → ${slug}`).toContain(`${slug}.md`)
+        checked += 1
+      }
+    }
+    expect(checked).toBeGreaterThan(0)
   })
 })
