@@ -243,6 +243,9 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   let e2eeRuleNoticeShownThisRound = false
   const convertingDocIds = new Set<string>() // 금고로 옮기는·빼는 중인 문서 — 그 문서의 outbox 항목을 건너뛴다 (F-407 5.2 3번)
 
+  // 공유받은(내 소유가 아닌) 문서 id — 마지막 list() 의 /api/shared 응답으로 갱신한다. get()·refreshDocFromServer·fetchDocIntoCache 가 이 문서를 캐시에 넣지 않는 판정 근거다 (버그 수정 2026-09-26)
+  const knownSharedIds = new Set<string>()
+
   function notify() {
     for (const listener of listeners) listener(state)
   }
@@ -465,7 +468,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   async function fetchDocIntoCache(docId: string): Promise<void> {
     try {
       const full = await api.getDoc(docId)
-      await cache.putDoc(userId, full)
+      // 공유받은(내 소유가 아닌) 문서는 캐시에 넣지 않는다(F-212.md 2.4, 버그 수정 2026-09-26)
+      if (!knownSharedIds.has(docId)) await cache.putDoc(userId, full)
     } catch {
       // 다음 list() 때 다시 맞춰진다
     }
@@ -1031,8 +1035,10 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         await refreshPending()
         const owned = cached.map((d) => ({ ...toDoc(d), role: 'owner' as const }))
 
-        // 공유받은 문서(F-212.md 2.4) — 캐시하지 않고 매번 새로 읽는다. 오프라인·오류면 빈 목록으로 조용히 건너뛴다
+        // 공유받은 문서(F-212.md 2.4) — 목록은 캐시하지 않고 매번 새로 읽고, id 는 get()·refreshDocFromServer·fetchDocIntoCache 가 캐시 안 함을 판정할 근거로 남긴다(오프라인·오류면 빈 목록)
         const shared = await sharedPromise
+        knownSharedIds.clear()
+        for (const d of shared) knownSharedIds.add(d.id)
 
         return sortByUpdatedAtDesc([...owned, ...shared])
       } finally {
@@ -1063,7 +1069,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       if (cached) return toDoc(cached)
       try {
         const full = await api.getDoc(id)
-        await cache.putDoc(userId, full)
+        // 공유받은(내 소유가 아닌) 문서는 캐시에 넣지 않는다 — role 없이 저장하면 다음 list() 전까지 내 문서로 보인다(F-212.md 2.4, 버그 수정 2026-09-26)
+        if (!knownSharedIds.has(id)) await cache.putDoc(userId, full)
         return toDoc(full)
       } catch {
         return null
@@ -1123,7 +1130,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     async refreshDocFromServer(id) {
       try {
         const full = await api.getDoc(id)
-        await cache.putDoc(userId, full)
+        // 공유받은(내 소유가 아닌) 문서는 캐시에 넣지 않는다(F-212.md 2.4, 버그 수정 2026-09-26)
+        if (!knownSharedIds.has(id)) await cache.putDoc(userId, full)
         return toDoc(full)
       } catch {
         return null
@@ -1173,7 +1181,13 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     },
 
     async update(id, patch) {
-      const existing = await cache.getDoc(userId, id)
+      let existing = await cache.getDoc(userId, id)
+      if (!existing) {
+        // 공유받은(edit 권한) 문서는 열 때 캐시하지 않는다(F-212.md 2.4) — 첫 편집을 보내려면 버전 추적을 위해 지금 캐시한다
+        const full = await api.getDoc(id).catch(() => null)
+        if (full) await cache.putDoc(userId, full)
+        existing = await cache.getDoc(userId, id)
+      }
       if (!existing) throw new Error(`문서를 찾을 수 없음: ${id}`)
       const isE2ee = existing.e2eeKey !== undefined
       // attachmentRefs 는 금고 문서만 싣는다 (F-405 3.1)

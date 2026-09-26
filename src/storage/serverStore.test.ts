@@ -2057,3 +2057,78 @@ describe('F-2042 U1~U6 부팅 목록 읽기 — 병렬화·캐시 먼저 셸', (
     expect(result.folders).toEqual([])
   })
 })
+
+// makeFakeServer 는 소유자를 구분하지 않는 하나의 docs 맵이라, /api/docs(목록)에도 공유 문서가 그대로 섞여 나온다.
+// 실제 worker(GET /api/docs) 는 owner_id 로 걸러 남의 문서를 절대 내려주지 않으므로(worker/docs.ts:123), 그 걸러내기만 흉내낸다
+function fetchWithSharedExcludedFromList(server: ReturnType<typeof makeFakeServer>, sharedIds: string[]) {
+  return vi.fn(async (url: string, init: RequestInit = {}) => {
+    const method = init.method ?? 'GET'
+    const path = new URL(String(url), 'http://local.test').pathname
+    if (method === 'GET' && path === '/api/docs') {
+      const res = await server.fetchImpl(url, init)
+      const list = (await res.json()) as Array<{ id: string }>
+      return new Response(JSON.stringify(list.filter((d) => !sharedIds.includes(d.id))), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    return server.fetchImpl(url, init)
+  })
+}
+
+// 버그 수정 2026-09-26 — 공유받은(내 소유가 아닌) 문서를 get() 으로 열어도 md-remote 캐시에 남지 않아야 한다 (F-212.md 2.4)
+describe('버그 수정 2026-09-26 — 공유받은 문서는 캐시에 넣지 않는다', () => {
+  it('공유 문서를 get() 으로 열어도 캐시에 안 남고 listCached() 에도 안 보인다', async () => {
+    const server = makeFakeServer()
+    server.docs.set('sh1', { id: 'sh1', title: '공유문서', content: '공유 내용', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1 })
+    server.setShared([
+      { id: 'sh1', title: '공유문서', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1, role: 'view' },
+    ])
+    vi.stubGlobal('fetch', fetchWithSharedExcludedFromList(server, ['sh1']))
+    const dbName = freshDbName()
+    const store = await createServerStore('u1', { dbName })
+
+    // list() 가 먼저 돌아야 store 가 sh1 이 공유 문서임을 안다 (사이드바가 보여준 뒤 클릭해서 여는 실제 흐름과 같다)
+    await store.list()
+    const got = await store.get('sh1')
+    expect(got?.content).toBe('공유 내용')
+
+    const cache = await createRemoteCache(dbName)
+    expect(await cache.getDoc('u1', 'sh1')).toBeNull()
+
+    const cachedResult = await store.listCached()
+    expect(cachedResult.docs.some((d) => d.id === 'sh1')).toBe(false)
+  })
+
+  it('내 문서는 그대로 get() 으로 캐시된다(기존 동작 유지)', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const dbName = freshDbName()
+    const store = await createServerStore('u1', { dbName })
+    const doc = await store.create({ title: 'T', content: '내용', lineEnding: 'lf' })
+    await tick(20)
+
+    const cache = await createRemoteCache(dbName)
+    await cache.deleteDoc('u1', doc.id) // 캐시에서 지우고 get() 이 다시 채우는지만 본다
+    const got = await store.get(doc.id)
+    expect(got?.content).toBe('내용')
+    expect(await cache.getDoc('u1', doc.id)).not.toBeNull()
+  })
+
+  it('공유 문서(edit 권한)는 캐시 없이 열어도 편집을 보낼 수 있다', async () => {
+    const server = makeFakeServer()
+    server.docs.set('ed1', { id: 'ed1', title: '편집 가능', content: '원본', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1 })
+    server.setShared([
+      { id: 'ed1', title: '편집 가능', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1, role: 'edit' },
+    ])
+    vi.stubGlobal('fetch', fetchWithSharedExcludedFromList(server, ['ed1']))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    await store.list()
+    await store.get('ed1') // 캐시에 안 남는다(위 테스트) — update() 가 스스로 채워 보낼 수 있어야 한다
+    await store.update('ed1', { content: '수정됨' })
+    await tick(30)
+
+    expect(server.docs.get('ed1')?.content).toBe('수정됨')
+  })
+})
