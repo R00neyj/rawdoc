@@ -119,6 +119,8 @@ src/
 - 위키링크 미리보기(F-2044)로 추가
   - `app/`: `wikiPreview.ts`(F-2044 — 자르기·위치·판정·호버 타이머, 순수 함수), `WikiLinkPreview.tsx`(F-2044 — 위키링크 미리보기 창)
   - `styles/`: `wikiPreview.css`(F-2044)
+- 사이드바 안 읽은 알림 표시(F-510)로 추가
+  - `app/`: `docNotifications.ts`(F-510 — 안 읽은 알림 문서 id 집합·폴더 집합 판정, 순수 함수)
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
