@@ -49,6 +49,7 @@ import { commentGutter, commentMarks, createEditorComments } from './commentMark
 import { fontRemeasure } from './fontRemeasure'
 import './searchPanel.css'
 import './commentMarks.css'
+import { isTouchContextMenu } from '../lib/touchContextMenu'
 
 // 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
 const HEADINGS_DEBOUNCE_MS = 150
@@ -231,11 +232,11 @@ function resolveContextMenuTarget(view: EditorView, event: MouseEvent): { pos: n
   return { pos, x, y }
 }
 
-// 주 에디터(.cm-content) 우클릭 — Shift+우클릭·한글 조합 중은 기본 메뉴 그대로 둔다(F-170.md 2장)
+// 주 에디터(.cm-content) 우클릭 — Shift+우클릭·한글 조합 중·터치 길게 누르기는 기본 동작 그대로 둔다(F-170.md 2장)
 function editorContextMenuHandler(notify: (info: EditorContextMenuInfo) => void): Extension {
   return EditorView.domEventHandlers({
     contextmenu(event, view) {
-      if (event.shiftKey || isComposing(view)) return false
+      if (event.shiftKey || isComposing(view) || isTouchContextMenu(event)) return false
       event.preventDefault()
       const { x, y } = resolveContextMenuTarget(view, event)
       notify({ x, y, place: 'editor', view, mainView: view })

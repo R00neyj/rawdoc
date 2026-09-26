@@ -306,3 +306,31 @@ test.describe('F-170 A12 조합 중', () => {
     await expect(root(page)).toHaveCount(0)
   })
 })
+
+// 안드로이드 길게 누르기는 contextmenu(pointerType touch) 로 온다 — 막으면 글자 선택과 OS 복사·붙여넣기 도구상자가 사라진다 (2026-09-27 버그)
+test.describe('터치 길게 누르기', () => {
+  async function touchContextMenu(page, selector) {
+    return page.evaluate((sel) => {
+      const el = document.querySelector(sel)
+      const r = el.getBoundingClientRect()
+      const ev = new PointerEvent('contextmenu', {
+        pointerType: 'touch', bubbles: true, cancelable: true, clientX: r.x + 5, clientY: r.y + 5, button: 2,
+      })
+      el.dispatchEvent(ev)
+      return ev.defaultPrevented
+    }, selector)
+  }
+
+  test('편집기·보기 모드 — 앱 메뉴 없이 기본 동작을 막지 않는다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문 글자\n' })
+    await page.locator('.cm-line').first().click()
+    expect(await touchContextMenu(page, '.cm-content .cm-line')).toBe(false)
+    await expect(root(page)).toHaveCount(0)
+
+    await setViewMode(page, 'view')
+    await expect(page.locator('.viewer .markdown-body')).toBeVisible()
+    expect(await touchContextMenu(page, '.viewer .markdown-body p')).toBe(false)
+    await expect(root(page)).toHaveCount(0)
+  })
+})

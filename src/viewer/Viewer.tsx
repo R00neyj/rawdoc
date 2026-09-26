@@ -10,6 +10,7 @@ import { displayLangFromClass } from '../lib/codeLang'
 import { renderMermaid } from '../lib/mermaidRender'
 import { createAttachmentUrl, revokeAttachmentUrl } from '../lib/attachmentUrls'
 import { showPlaceholder, showImage } from './fillMarkdownAssets'
+import { isTouchContextMenu } from '../lib/touchContextMenu'
 
 const DEFAULT_MISSING_TEXT = '이미지를 찾을 수 없습니다' // F-157 2.2 자리 표시와 같은 문구
 
@@ -189,7 +190,7 @@ export default function Viewer({
 
   // 우클릭 메뉴 (F-170.md 2·3.3장) — Shift+우클릭은 브라우저 기본 메뉴 그대로 둔다
   function handleContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
-    if (!onContextMenu || event.shiftKey) return
+    if (!onContextMenu || event.shiftKey || isTouchContextMenu(event.nativeEvent)) return
     event.preventDefault()
     const root = containerRef.current
     const sel = window.getSelection()

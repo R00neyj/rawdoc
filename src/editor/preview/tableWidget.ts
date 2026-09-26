@@ -33,6 +33,7 @@ import { parseCellInline } from './cellInline'
 import { insertLink, toggleEmphasis, toggleStrong } from '../commands'
 import { forceRecalc, isComposing } from '../composition'
 import { redoLocal, undoLocal } from '../yBinding'
+import { isTouchContextMenu } from '../../lib/touchContextMenu'
 
 type CellRange = { from: number; to: number }
 
@@ -592,7 +593,7 @@ function cellKeydown(mainView: EditorView, wrap: HTMLElement, cellView: EditorVi
 function cellContextMenu(mainView: EditorView, cellView: EditorView, event: MouseEvent): boolean {
   const handler = cellContextMenuHandlers.get(mainView)
   if (!handler) return false
-  if (event.shiftKey || isComposing(cellView)) return false
+  if (event.shiftKey || isComposing(cellView) || isTouchContextMenu(event)) return false
   event.preventDefault()
 
   const fromKeyboard = event.button !== 2
