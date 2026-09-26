@@ -35,3 +35,63 @@ export function isImageOnlyDrag(dataTransfer: DataTransfer | null | undefined): 
   if (!items || items.length === 0) return false
   return Array.from(items).every((item) => item.kind === 'file' && (item.type ?? '').startsWith('image/'))
 }
+
+// ---------- F-2019.md 4.3 — 폴더 끌어놓기 판정·읽기 ----------
+export type DropClass = { kind: 'none' } | { kind: 'folder'; entry: FileSystemDirectoryEntry } | { kind: 'too-many' }
+
+// drop 이벤트 안에서 동기로 items 마다 webkitGetAsEntry() 를 부른 결과를 받는다. null 은 파일로 센다(합성 드롭은 전부 null)
+export function classifyDroppedEntries(entries: ReadonlyArray<FileSystemEntry | null>): DropClass {
+  const dirs = entries.filter((e): e is FileSystemDirectoryEntry => e !== null && e.isDirectory)
+  const files = entries.filter((e) => e === null || e.isFile)
+
+  if (dirs.length === 0) return { kind: 'none' }
+  if (dirs.length === 1 && files.length === 0) return { kind: 'folder', entry: dirs[0] }
+  return { kind: 'too-many' }
+}
+
+function isNoiseDirName(name: string): boolean {
+  return name.startsWith('.') || name === '__MACOSX'
+}
+
+function readAllEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
+  return new Promise((resolve, reject) => {
+    const all: FileSystemEntry[] = []
+    function readBatch() {
+      reader.readEntries((batch) => {
+        if (batch.length === 0) {
+          resolve(all)
+          return
+        }
+        all.push(...batch)
+        readBatch()
+      }, reject)
+    }
+    readBatch()
+  })
+}
+
+function readEntryFile(entry: FileSystemFileEntry): Promise<File> {
+  return new Promise((resolve, reject) => entry.file(resolve, reject))
+}
+
+// 루트 디렉터리 항목을 재귀로 읽는다. 이름이 '.' 으로 시작하거나 '__MACOSX' 인 디렉터리는 들어가지 않는다 (4.3)
+export async function readDroppedDirectory(root: FileSystemDirectoryEntry): Promise<Array<{ path: string; file: File }>> {
+  const result: Array<{ path: string; file: File }> = []
+
+  async function walk(dir: FileSystemDirectoryEntry) {
+    const entries = await readAllEntries(dir.createReader())
+    for (const entry of entries) {
+      if (entry.isDirectory) {
+        if (isNoiseDirName(entry.name)) continue
+        await walk(entry as FileSystemDirectoryEntry)
+        continue
+      }
+      const file = await readEntryFile(entry as FileSystemFileEntry)
+      const path = entry.fullPath.replace(/^\/+/, '')
+      result.push({ path, file })
+    }
+  }
+
+  await walk(root)
+  return result
+}

@@ -2,9 +2,10 @@ import { useRef } from 'react'
 import Dialog from './Dialog'
 import type { ImportPlan } from './importWorkspace'
 
-// D-? 가져오기 미리보기·진행·결과 대화상자 (specs/features/F-282.md 3.8)
+// D-? 가져오기 미리보기·진행·결과 대화상자 (specs/features/F-282.md 3.8, 넣을 폴더 선택은 F-2019.md 10.2)
+export type ImportTargetPicker = { options: ReadonlyArray<{ value: string; label: string }>; value: string }
 export type ImportDialogState =
-  | { stage: 'preview'; fileName: string; plan: ImportPlan }
+  | { stage: 'preview'; fileName: string; plan: Pick<ImportPlan, 'counts' | 'warnings'>; target?: ImportTargetPicker }
   | { stage: 'progress'; fileName: string; done: number; total: number }
   | { stage: 'result'; fileName: string; createdCount: number; updatedCount: number; failures: string[] }
 
@@ -13,9 +14,10 @@ type ImportPreviewDialogProps = {
   onCancel: () => void
   onConfirm: () => void
   onClose: () => void
+  onTargetChange?: (value: string) => void
 }
 
-export default function ImportPreviewDialog({ state, onCancel, onConfirm, onClose }: ImportPreviewDialogProps) {
+export default function ImportPreviewDialog({ state, onCancel, onConfirm, onClose, onTargetChange }: ImportPreviewDialogProps) {
   const titleId = 'import-preview-title'
   const cancelRef = useRef<HTMLButtonElement | null>(null)
 
@@ -31,7 +33,23 @@ export default function ImportPreviewDialog({ state, onCancel, onConfirm, onClos
       {state?.stage === 'preview' && (
         <>
           <p className="dialog-field">{state.fileName}</p>
-          <p className="dialog-field">
+          {state.target && (
+            <label className="dialog-field">
+              <span>넣을 폴더</span>
+              <select
+                className="import-target"
+                value={state.target.value}
+                onChange={(e) => onTargetChange?.(e.target.value)}
+              >
+                {state.target.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <p className="dialog-field" aria-live="polite">
             새로 {state.plan.counts.created}개 · 갱신 {state.plan.counts.updated}개 · 건너뜀 {state.plan.counts.skipped}개 · 이미지{' '}
             {state.plan.counts.images}개
           </p>

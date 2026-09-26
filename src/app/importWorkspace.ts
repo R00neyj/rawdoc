@@ -79,8 +79,8 @@ export async function* readZipEntries(
   while (queue.length) yield queue.shift() as ZipEntry
 }
 
-// ---------- 경로 정규화·잡음 항목 (3.7) ----------
-function isNoiseEntry(path: string): boolean {
+// ---------- 경로 정규화·잡음 항목 (3.7). 볼트 가져오기(F-2019)도 같은 규칙을 쓴다 ----------
+export function isNoiseEntry(path: string): boolean {
   if (path.startsWith('__MACOSX/')) return true
   const base = path.split('/').pop() ?? ''
   if (/^thumbs\.db$/i.test(base) || /^desktop\.ini$/i.test(base)) return true
@@ -166,7 +166,8 @@ function isPositiveInt(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v) && v > 0
 }
 
-function titleFromPath(path: string): string {
+// 볼트 가져오기(F-2019)도 같은 규칙을 쓴다 (11장)
+export function titleFromPath(path: string): string {
   const base = path.split('/').pop() ?? path
   const withoutExt = base.replace(/\.(md|markdown)$/i, '')
   return withoutExt || '제목 없는 문서'
@@ -379,158 +380,6 @@ export function planWorkspaceImport({
   }
 }
 
-// ---------- 3.7 일반 zip 계획 ----------
-export type PlainEntryInput = { name: string; content?: string }
-
-function isDocPath(path: string): boolean {
-  return /\.(md|markdown)$/i.test(path)
-}
-
-const PLAIN_ATTACHMENT_RE = /(?:^|\/)attachments\/[0-9a-f]{16}\.(?:png|jpg|gif|webp)$/
-
-function isAttachmentShapedPath(path: string): boolean {
-  return PLAIN_ATTACHMENT_RE.test(path)
-}
-
-const WIKILINK_IMG_RE = /!\[\[[^\]]+\.(?:png|jpe?g|gif|webp|bmp|svg)\]\]/gi
-const MD_IMG_RE = /!\[[^\]]*\]\([^)\s]+\.(?:png|jpe?g|gif|webp|bmp|svg)(?:\s+"[^"]*")?\)/gi
-
-function countForeignImageRefs(content: string): number {
-  const a = content.match(WIKILINK_IMG_RE)?.length ?? 0
-  const b = content.match(MD_IMG_RE)?.length ?? 0
-  return a + b
-}
-
-const PLAIN_ATTACHMENT_REF_RE = /attachments\/([0-9a-f]{16})\.(png|jpg|gif|webp)/g
-
-function extractAttachmentRefPairs(content: string): Array<{ id: string; ext: AttachmentExt }> {
-  const pairs = new Map<string, AttachmentExt>()
-  let m: RegExpExecArray | null
-  PLAIN_ATTACHMENT_REF_RE.lastIndex = 0
-  while ((m = PLAIN_ATTACHMENT_REF_RE.exec(content))) pairs.set(m[1], m[2] as AttachmentExt)
-  return [...pairs].map(([id, ext]) => ({ id, ext }))
-}
-
-function buildPlainFolders(docPaths: string[]): { folders: PlanFolder[]; folderIdForDoc: Map<string, string | null> } {
-  const folders: PlanFolder[] = []
-  const keySeen = new Set<string>()
-  const folderIdForDoc = new Map<string, string | null>()
-
-  for (const docPath of docPaths) {
-    const segs = docPath.split('/')
-    const dirSegs = segs.slice(0, -1)
-    if (dirSegs.length === 0) {
-      folderIdForDoc.set(docPath, null)
-      continue
-    }
-    let parentId: string | null = null
-    let keyAcc = ''
-    for (const seg of dirSegs) {
-      keyAcc = keyAcc ? `${keyAcc}/${seg}` : seg
-      if (!keySeen.has(keyAcc)) {
-        keySeen.add(keyAcc)
-        folders.push({ id: keyAcc, name: seg, parentId, action: 'create', preserveId: false })
-      }
-      parentId = keyAcc
-    }
-    folderIdForDoc.set(docPath, parentId)
-  }
-
-  return { folders, folderIdForDoc }
-}
-
-function planImagesForDoc(
-  docPath: string,
-  content: string,
-  allPaths: Set<string>,
-): { attachments: PlanAttachment[]; missingRefCount: number; foreignRefCount: number } {
-  const dir = docPath.includes('/') ? docPath.slice(0, docPath.lastIndexOf('/')) : ''
-  const refs = extractAttachmentRefPairs(content)
-  const attachments: PlanAttachment[] = []
-  let missingRefCount = 0
-  for (const { id, ext } of refs) {
-    const expected = dir ? `${dir}/attachments/${id}.${ext}` : `attachments/${id}.${ext}`
-    if (allPaths.has(expected)) {
-      attachments.push({ id, ext, path: expected })
-    } else {
-      missingRefCount++
-    }
-  }
-  const foreignRefCount = countForeignImageRefs(content)
-  return { attachments, missingRefCount, foreignRefCount }
-}
-
-// zip 항목 이름 목록(디코딩된, 원본 순서) → 계획. .md 문서는 content 를 같이 준다(이미지 참조 추출용). 전부 순수 함수 (3.7)
-export function planPlainImport({ entries, now }: { entries: PlainEntryInput[]; now: number }): ImportPlan {
-  let traversalCount = 0
-  const stripped0: Array<{ raw: PlainEntryInput; path: string }> = []
-
-  for (const e of entries) {
-    let p = e.name.replace(/\\/g, '/')
-    p = p.replace(/^(\.\/|\/)+/, '')
-    if (p === '') continue
-    if (p.split('/').includes('..')) {
-      traversalCount++
-      continue
-    }
-    if (p.endsWith('/')) continue // 디렉터리 항목
-    if (isNoiseEntry(p)) continue
-    stripped0.push({ raw: e, path: p })
-  }
-
-  // 공통 최상위 벗기기 — 모두 같은 첫 디렉터리 아래고 루트에 파일이 없을 때만
-  const firstSegs = new Set(stripped0.map((n) => n.path.split('/')[0]))
-  const hasRootFile = stripped0.some((n) => !n.path.includes('/'))
-  let strip = ''
-  if (stripped0.length > 0 && !hasRootFile && firstSegs.size === 1) {
-    strip = `${[...firstSegs][0]}/`
-  }
-  const stripped = stripped0.map((n) => ({ raw: n.raw, path: strip ? n.path.slice(strip.length) : n.path }))
-
-  const allPaths = new Set(stripped.map((n) => n.path))
-  const docEntries = stripped.filter((n) => isDocPath(n.path))
-  const { folders, folderIdForDoc } = buildPlainFolders(docEntries.map((d) => d.path))
-
-  const docs: PlanDoc[] = docEntries.map((d) => ({
-    action: 'create',
-    path: d.path,
-    title: titleFromPath(d.path),
-    lineEnding: 'auto',
-    folderId: folderIdForDoc.get(d.path) ?? null,
-    createdAt: now,
-    updatedAt: now,
-    pinnedAt: null,
-  }))
-
-  const attachmentMap = new Map<string, PlanAttachment>()
-  let missingRefTotal = 0
-  let foreignRefTotal = 0
-  for (const d of docEntries) {
-    if (d.raw.content === undefined) continue
-    const { attachments, missingRefCount, foreignRefCount } = planImagesForDoc(d.path, d.raw.content, allPaths)
-    missingRefTotal += missingRefCount
-    foreignRefTotal += foreignRefCount
-    for (const a of attachments) if (!attachmentMap.has(a.id)) attachmentMap.set(a.id, a)
-  }
-
-  const nonMdCount = stripped.filter((n) => !isDocPath(n.path) && !isAttachmentShapedPath(n.path)).length
-
-  const warnings: string[] = []
-  if (traversalCount > 0) warnings.push(`경로가 이상해 건너뛴 파일 ${traversalCount}개`)
-  if (nonMdCount > 0) warnings.push(`.md 가 아니라 건너뛴 파일 ${nonMdCount}개`)
-  if (missingRefTotal > 0) warnings.push(`가져오지 못한 이미지 참조 ${missingRefTotal}개`)
-  if (foreignRefTotal > 0) warnings.push(`이 앱 형식이 아니라 가져오지 못한 이미지 ${foreignRefTotal}개`)
-
-  return {
-    kind: 'plain',
-    folders,
-    docs,
-    attachments: [...attachmentMap.values()],
-    warnings,
-    counts: { created: docs.length, updated: 0, skipped: 0, images: attachmentMap.size },
-  }
-}
-
 // ---------- 3.9 적용 ----------
 export type ApplyStore = {
   get(id: string): Promise<Doc | null>
@@ -571,7 +420,8 @@ function utf8ByteLength(text: string): number {
   return new TextEncoder().encode(text).length
 }
 
-function truncatedCopyTitle(originalTitle: string): string {
+// 볼트 가져오기(F-2019)도 같은 규칙을 쓴다 (11장, F-282.md 3.9)
+export function truncatedCopyTitle(originalTitle: string): string {
   const suffix = ' (가져오기 전)'
   const full = `${originalTitle}${suffix}`
   const chars = Array.from(full)

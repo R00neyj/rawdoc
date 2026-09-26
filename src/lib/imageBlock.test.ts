@@ -262,3 +262,29 @@ describe('imageBlockDeleteRange — 블록 삭제 범위 계산 (F-218 2.2)', ()
     expect(full.slice(0, range.from) + full.slice(range.to)).toBe('위\r\n\r\n\r\n아래')
   })
 })
+
+describe('width 선택 (F-2019.md 5.4 U4)', () => {
+  it('width 를 안 주면 width 속성이 없다', () => {
+    const text = buildImageBlock({ id: ID, ext: 'png', alt: 'x' })
+    expect(text).not.toContain('width=')
+    expect(text).toBe(['<div align="center">', `  <img src="attachments/${ID}.png" alt="x">`, '</div>'].join('\n'))
+  })
+
+  it('width 가 null 이어도 width 속성이 없다', () => {
+    const text = buildImageBlock({ id: ID, ext: 'png', alt: 'x', width: null })
+    expect(text).not.toContain('width=')
+  })
+
+  it('되읽으면 width: null', () => {
+    const text = buildImageBlock({ id: ID, ext: 'png', alt: 'x' })
+    expect(parseImageBlock(text)?.width).toBeNull()
+  })
+
+  it('width 없는 블록에 align 만 바꿔도 width 속성이 여전히 없다', () => {
+    const built = buildImageBlock({ id: ID, ext: 'png', alt: 'x' })
+    const changed = setImageBlockAttrs(built, { align: 'right' })
+    expect(changed).not.toBeNull()
+    expect(changed).not.toContain('width=')
+    expect(parseImageBlock(changed!)?.align).toBe('right')
+  })
+})

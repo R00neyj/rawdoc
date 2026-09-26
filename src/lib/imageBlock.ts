@@ -42,7 +42,7 @@ function sanitizeAlt(raw: string): string {
   return escapeAlt(flattened.slice(0, 100))
 }
 
-// 이미지 블록 원문 3줄을 만든다 → '\n' 으로 이은 3줄
+// 이미지 블록 원문 3줄을 만든다 → '\n' 으로 이은 3줄. width 가 없거나 null 이면 width 속성을 쓰지 않는다 (F-2019.md 5.4)
 export function buildImageBlock({
   id,
   ext,
@@ -53,14 +53,14 @@ export function buildImageBlock({
   id: string
   ext: ImageExt
   alt: string
-  width: number
+  width?: number | null
   align?: ImageAlign
 }): string {
   const safeAlt = sanitizeAlt(alt)
-  const safeWidth = Math.max(1, Math.round(width))
+  const widthAttr = typeof width === 'number' ? ` width="${Math.max(1, Math.round(width))}"` : ''
   return [
     `<div align="${align}">`,
-    `${INDENT}<img src="attachments/${id}.${ext}" alt="${safeAlt}" width="${safeWidth}">`,
+    `${INDENT}<img src="attachments/${id}.${ext}" alt="${safeAlt}"${widthAttr}>`,
     '</div>',
   ].join('\n')
 }
@@ -204,7 +204,7 @@ export function setImageBlockAttrs(
     id: parsed.id,
     ext: parsed.ext,
     alt: 'alt' in patch ? (patch.alt as string) : parsed.alt,
-    width: 'width' in patch ? (patch.width as number) : (parsed.width ?? 1),
+    width: 'width' in patch ? (patch.width as number) : parsed.width,
     align: 'align' in patch ? (patch.align as ImageAlign) : parsed.align,
   })
 }

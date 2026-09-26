@@ -25,7 +25,7 @@ import { openLiveSocket } from '../storage/liveSocket'
 import { migrateLocalIfNeeded, checkLocalE2eeMigration, runLocalE2eeMigration } from './migrateLocal'
 import type { LocalE2eeKeys } from '../e2ee/convert'
 import E2eeMigrateDialog from './E2eeMigrateDialog'
-import { ancestorsOfDoc, resolveTargetFolderId, canMoveFolder } from '../lib/folderTree'
+import { ancestorsOfDoc, resolveTargetFolderId, canMoveFolder, folderAncestors } from '../lib/folderTree'
 import type { SelectionItem } from './sidebarSelection'
 import { createWikiResolver } from '../lib/wikiResolve'
 import { fromEditorText, toEditorText } from '../lib/lineEnding'
@@ -38,7 +38,6 @@ import {
   type TemplateEntry,
 } from '../lib/templates'
 import { insertTemplate as insertTemplateIntoEditor } from '../editor/insertTemplate'
-import { decodeMarkdown } from '../lib/decodeMarkdown'
 import { getPref, setPref } from './prefs'
 import { fetchAccount, loginUrl, storedAccount, type AccountState } from './account'
 import { planAccountNotices, ACCOUNT_RECHECK_MS, ACCOUNT_BLOCKED_MESSAGE, ACCOUNT_WARNED_MESSAGE, formatCount, formatResetTime, type AccountFlags } from '../lib/usageLimits'
@@ -87,16 +86,30 @@ import {
   readZipEntries,
   detectZipKind,
   planWorkspaceImport,
-  planPlainImport,
   applyImportPlan,
   ZIP_UNREADABLE_MESSAGE,
   type ApplyStore,
   type ImportPlan,
-  type PlainEntryInput,
 } from './importWorkspace'
-import ImportPreviewDialog, { type ImportDialogState } from './ImportPreviewDialog'
+import {
+  scanVault,
+  vaultWantsBytes,
+  filesAsEntries,
+  defaultVaultTarget,
+  vaultTargetOptions,
+  planVaultImport,
+  applyVaultImport,
+  vaultUploadNames,
+  type VaultEntry,
+  type VaultScan,
+  type VaultTarget,
+  type VaultPlan,
+  type ApplyVaultStore,
+} from './importVault'
+import ImportPreviewDialog, { type ImportDialogState, type ImportTargetPicker } from './ImportPreviewDialog'
 import { importFiles } from './importFiles'
-import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag } from './fileDrop'
+import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag, classifyDroppedEntries, readDroppedDirectory } from './fileDrop'
+import { toWebp } from '../storage/toWebp'
 import { attachImages } from './attachImages'
 import { cleanupUnusedAttachments, scheduleAttachmentGc } from './attachmentGc'
 import DropOverlay from './DropOverlay'
@@ -148,7 +161,7 @@ import { deleteGrant } from '../storage/docsApi'
 // three 가 초기 로드에 붙지 않게 지연 경계를 여기 긋는다 (specs/features/F-292.md 3.3, F-2002 4장)
 const MapPage = lazy(() => import('./MapPage'))
 import { mapIndexScope } from './mapIndex'
-import type { Doc, Folder, FolderDeleteMode, LineEnding, Store } from '../types'
+import type { AttachmentExt, Doc, Folder, FolderDeleteMode, LineEnding, Store } from '../types'
 import type * as Y from 'yjs'
 import { Y_CONTENT_NAME, Y_TITLE_NAME } from '../lib/docRoomProtocol'
 
@@ -517,6 +530,22 @@ export default function App() {
   const importFileRef = useRef<File | null>(null)
   const importPlanRef = useRef<ImportPlan | null>(null)
   const importCancelRef = useRef(false)
+  // 폴더 가져오기(볼트) — 선택 input, 1차 훑기 결과·원천·계획 (F-2019.md 4.2·12장)
+  const importFolderInputRef = useRef<HTMLInputElement | null>(null)
+  type VaultSource = { kind: 'zip'; file: File } | { kind: 'folder'; files: Array<{ path: string; file: File }> }
+  const importVaultContextRef = useRef<{
+    scan: VaultScan
+    source: VaultSource
+    docs: Doc[]
+    folders: Folder[]
+    attachments: Map<string, AttachmentExt>
+    remainingBytes: number | null
+    target: VaultTarget
+    fileName: string
+  } | null>(null)
+  const importVaultPlanRef = useRef<VaultPlan | null>(null)
+  // 창 전체 폴더 끌어놓기 — 매 커밋 최신 previewImportFolder 를 읽는다(runImportFilesRef 와 같은 이유)
+  const previewImportFolderRef = useRef<(files: Array<{ path: string; file: File }>, fileName: string) => Promise<void>>(async () => {})
   const docSaverFlushRef = useRef(async (): Promise<boolean> => true)
   // 금고 한 겹 (F-405 7.1) — 잠그기·초기화 단계와 금고 상태 변화가 쓴다
   const e2eeStoreRef = useRef<E2eeStore | null>(null)
@@ -2431,6 +2460,7 @@ export default function App() {
   useEffect(() => {
     runImportFilesRef.current = runImportFiles
     openOrImportLaunchedFilesRef.current = openOrImportLaunchedFiles
+    previewImportFolderRef.current = previewImportFolder
   })
 
   // 창 전체 .md 파일 끌어놓기(F-145.md 2장) — 외부 파일만 반응, depth 로 진입 횟수를 센다
@@ -2465,6 +2495,26 @@ export default function App() {
       setDropActive(false)
       // 대화상자·공유 화면에서는 이미지도 md 도 다 막는다 (F-145.md 2.1, F-156.md 2.5)
       if (imageDropBlockedRef.current) return
+
+      // 폴더 판정을 pickMarkdownFiles 보다 먼저 — 이벤트가 끝나면 dataTransfer.items 에 못 닿는다 (F-2019.md 4.3·12장)
+      const droppedEntries = e.dataTransfer ? Array.from(e.dataTransfer.items).filter((it) => it.kind === 'file').map((it) => it.webkitGetAsEntry()) : []
+      const dropClass = classifyDroppedEntries(droppedEntries)
+      if (dropClass.kind === 'folder') {
+        if (dropBlockedRef.current) return // 메모리 저장소는 .md 처럼 조용히 무시
+        readDroppedDirectory(dropClass.entry)
+          .then(async (files) => {
+            const fileName = files[0]?.path.split('/')[0] ?? dropClass.entry.name
+            await docSaverFlushRef.current()
+            await previewImportFolderRef.current(files, fileName)
+          })
+          .catch(() => showNotice({ type: 'error', message: '가져오지 못했습니다.' }))
+        return
+      }
+      if (dropClass.kind === 'too-many') {
+        if (dropBlockedRef.current) return
+        showNotice({ type: 'info', message: '폴더는 한 번에 하나만 가져올 수 있습니다.' })
+        return
+      }
 
       const files = Array.from(e.dataTransfer!.files)
       const { mdFiles, allNonMd } = pickMarkdownFiles(files)
@@ -3199,26 +3249,44 @@ export default function App() {
     await previewImportZip(file)
   }
 
-  // 1차 훑기 — manifest.json 은 판별에, .md·.markdown 은 일반 zip 미리보기의 이미지 참조·경고 집계에 쓴다. 3.3 은 "want 가 manifest.json 만" 이라 적었지만, 일반 zip 요약을 미리보기에서 보이려면 텍스트가 필요해 넣었다 — 이미지 바이트는 여전히 2차에서만 읽는다
+  // ----- 폴더 가져오기(볼트) — 설정 `데이터` 절 (F-2019.md 4.2·10.1) -----
+  function requestImportFolder() {
+    closeSettings() // 설정 위에 미리보기를 겹쳐 열지 않는다 (F-282.md 3.1 과 같은 이유)
+    importFolderInputRef.current?.click()
+  }
+
+  async function handleImportFolderInputChange(e: ChangeEvent<HTMLInputElement>) {
+    // e.target.files 는 살아있는 참조라 value 를 비우면 같이 비워진다 — 배열로 먼저 떠 둔다
+    const files = Array.from(e.target.files ?? []).map((file) => ({ path: file.webkitRelativePath, file }))
+    e.target.value = '' // 같은 폴더를 연달아 고를 수 있게
+    if (files.length === 0) return // 빈 폴더 — 이름조차 알 수 없다 (4.2)
+    const fileName = files[0]?.path.split('/')[0] ?? ''
+    await docSaverFlushRef.current()
+    await previewImportFolder(files, fileName)
+  }
+
+  // 폴더 선택·폴더 끌어놓기 공통 — 1차 훑기 뒤 볼트 미리보기로 (F-2019.md 4.2·4.3)
+  async function previewImportFolder(files: Array<{ path: string; file: File }>, fileName: string) {
+    if (files.length === 0) return
+    const scan = await scanVault({ root: { kind: 'folder' }, entries: filesAsEntries(files, vaultWantsBytes) })
+    await startVaultPreview({ kind: 'folder', files }, scan, fileName)
+  }
+
+  // 1차 훑기 — manifest.json 은 판별에, .md·.markdown·이미지는 워크스페이스 zip 요약(존재만)이나 볼트 훑기(5.1 이하)에 쓴다 (F-2019.md 4.1)
   async function previewImportZip(file: File) {
     const names: string[] = []
     let manifestBytes: Uint8Array | null = null
-    const mdContent = new Map<string, string>()
+    const vaultEntries: VaultEntry[] = []
     try {
       for await (const entry of readZipEntries(file.stream(), {
-        want: (name) => name === 'manifest.json' || /\.(md|markdown)$/i.test(name),
+        want: (name) => name === 'manifest.json' || vaultWantsBytes(name),
       })) {
         names.push(entry.name)
-        if (entry.bytes === null) continue
         if (entry.name === 'manifest.json') {
           manifestBytes = entry.bytes
           continue
         }
-        try {
-          mdContent.set(entry.name, decodeMarkdown(entry.bytes).text)
-        } catch {
-          // UTF-8 이 아니면 미리보기에서는 참조를 못 찾고 넘어간다 — 적용 때 실패 목록에 들어간다 (3.7)
-        }
+        vaultEntries.push(entry)
       }
     } catch {
       showNotice({ type: 'error', message: ZIP_UNREADABLE_MESSAGE })
@@ -3235,32 +3303,85 @@ export default function App() {
       return
     }
 
+    if (kindResult.kind === 'plain') {
+      // manifest.json 없는 zip 은 전부 볼트 가져오기다 — F-282 3.7 을 대신한다(개요 4장 "한다" 4, 17장)
+      const scan = await scanVault({
+        root: { kind: 'zip', fileName: file.name },
+        entries: (async function* () {
+          for (const e of vaultEntries) yield e
+        })(),
+      })
+      await startVaultPreview({ kind: 'zip', file }, scan, file.name)
+      return
+    }
+
     const now = Date.now()
     const zipPaths = new Set(names)
-    let plan: ImportPlan
-    if (kindResult.kind === 'workspace') {
-      const attachmentMetas = await store.listAttachments()
-      plan = planWorkspaceImport({
-        manifest: kindResult.manifest,
-        existingDocs: docsRef.current.map((d) => ({ id: d.id, updatedAt: d.updatedAt, role: d.role })),
-        existingFolders: foldersRef.current.map((f) => ({ id: f.id, parentId: f.parentId })),
-        zipPaths,
-        existingAttachmentIds: new Set(attachmentMetas.map((a) => a.id)),
-        now,
-      })
-    } else {
-      const entries: PlainEntryInput[] = names.map((name) => ({ name, content: mdContent.get(name) }))
-      plan = planPlainImport({ entries, now })
-    }
+    const attachmentMetas = await store.listAttachments()
+    const plan: ImportPlan = planWorkspaceImport({
+      manifest: kindResult.manifest,
+      existingDocs: docsRef.current.map((d) => ({ id: d.id, updatedAt: d.updatedAt, role: d.role })),
+      existingFolders: foldersRef.current.map((f) => ({ id: f.id, parentId: f.parentId })),
+      zipPaths,
+      existingAttachmentIds: new Set(attachmentMetas.map((a) => a.id)),
+      now,
+    })
 
     importFileRef.current = file
     importPlanRef.current = plan
     setImportState({ stage: 'preview', fileName: file.name, plan })
   }
 
+  // 볼트 가져오기 — 1차 훑기 결과로 store.list() 등을 한 번 읽고 넣을 폴더 기본값으로 첫 계획을 세운다 (F-2019.md 3장·7.1)
+  async function startVaultPreview(source: VaultSource, scan: VaultScan, fileName: string) {
+    const [vaultDocs, vaultFolders, attachmentMetas] = await Promise.all([store.list(), store.listFolders(), store.listAttachments()])
+    const attachments = new Map(attachmentMetas.map((a) => [a.id, a.ext]))
+    let remainingBytes: number | null = null
+    if (store.kind === 'server') {
+      try {
+        const usage = await fetchUsage()
+        remainingBytes = usage.limit - usage.used
+      } catch {
+        remainingBytes = null
+      }
+    }
+    const target = defaultVaultTarget(scan, vaultFolders)
+    importVaultContextRef.current = { scan, source, docs: vaultDocs, folders: vaultFolders, attachments, remainingBytes, target, fileName }
+    planAndShowVault()
+  }
+
+  // 계획을 (다시) 세워 미리보기 대화상자를 그린다 — 넣을 폴더를 바꿀 때도 이 함수 하나로 (F-2019.md 7.6 마지막 줄·10.2)
+  function planAndShowVault() {
+    const ctx = importVaultContextRef.current
+    if (!ctx) return
+    const plan = planVaultImport({
+      scan: ctx.scan,
+      target: ctx.target,
+      docs: ctx.docs,
+      folders: ctx.folders,
+      attachments: ctx.attachments,
+      storeKind: store.kind,
+      remainingBytes: ctx.remainingBytes,
+    })
+    importVaultPlanRef.current = plan
+    const options = vaultTargetOptions(ctx.scan, ctx.folders)
+    const value = ctx.target.kind === 'new' ? 'new' : ctx.target.kind === 'top' ? 'top' : `folder:${ctx.target.folderId}`
+    const target: ImportTargetPicker = { options, value }
+    setImportState({ stage: 'preview', fileName: ctx.fileName, plan: { counts: plan.counts, warnings: [...plan.warnings] }, target })
+  }
+
+  function handleImportTargetChange(value: string) {
+    const ctx = importVaultContextRef.current
+    if (!ctx) return
+    ctx.target = value === 'new' ? { kind: 'new' } : value === 'top' ? { kind: 'top' } : { kind: 'folder', folderId: value.slice('folder:'.length) }
+    planAndShowVault()
+  }
+
   function cancelImportPreview() {
     importFileRef.current = null
     importPlanRef.current = null
+    importVaultContextRef.current = null
+    importVaultPlanRef.current = null
     setImportState(null)
   }
 
@@ -3272,7 +3393,104 @@ export default function App() {
     setImportState(null)
   }
 
+  // 볼트 적용 — 넣을 새 폴더 → 폴더 → 이미지(2차 훑기) → 문서, F-282 3.9 와 같은 결과 화면 (F-2019.md 9장·12장)
+  async function confirmVaultImport() {
+    const ctx = importVaultContextRef.current
+    const plan = importVaultPlanRef.current
+    if (!ctx || !plan) return
+
+    const uploadNames = vaultUploadNames(plan)
+    const total = plan.uploadImages.size + plan.judgements.filter((j) => j.action !== 'skip').length
+    const updatedIds = new Set(plan.judgements.filter((j) => j.action === 'update').map((j) => j.id))
+    const openBeforeId = currentDocIdRef.current
+    const fileName = ctx.fileName
+
+    importCancelRef.current = false
+    setImportState({ stage: 'progress', fileName, done: 0, total })
+
+    const entries: AsyncIterable<VaultEntry> =
+      ctx.source.kind === 'zip'
+        ? readZipEntries(ctx.source.file.stream(), { want: (name) => uploadNames.has(name) })
+        : filesAsEntries(ctx.source.files, (name) => uploadNames.has(name))
+
+    const result = await applyVaultImport({
+      plan,
+      scan: ctx.scan,
+      entries,
+      store: store as ApplyVaultStore,
+      encode: store.kind === 'server' ? toWebp : undefined,
+      isCancelled: () => importCancelRef.current,
+      onProgress: ({ done, total }) => setImportState({ stage: 'progress', fileName, done, total }),
+    })
+
+    importVaultContextRef.current = null
+    importVaultPlanRef.current = null
+
+    const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
+    setFolders(newFolders)
+    const strippedDocs = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
+    setDocs(strippedDocs)
+
+    if (
+      openBeforeId &&
+      updatedIds.has(openBeforeId) &&
+      openBeforeId === currentDocIdRef.current &&
+      !(docPathRef.current.docId === openBeforeId && docPathRef.current.path === 'realtime')
+    ) {
+      const fresh = await store.get(openBeforeId)
+      if (fresh && fresh.id === currentDocIdRef.current && fresh.e2ee !== 'locked') {
+        setOpenDoc({ id: fresh.id, content: fresh.content, lineEnding: fresh.lineEnding })
+        focusEditorRef.current = false
+        setEditorRemountNonce((n) => n + 1)
+      }
+    }
+
+    // 넣을 폴더와 그 조상을 편다 — T 가 최상위면 targetFolderId 가 null 이라 펼칠 것이 없다 (17장 Q4)
+    if (result.targetFolderId !== null) addOpenFolders(folderAncestors(newFolders, result.targetFolderId))
+
+    if (result.cancelled) {
+      showNotice({
+        type: 'warn',
+        message: `가져오기를 멈췄습니다. 문서 ${result.createdCount + result.updatedCount}개를 들였습니다.`,
+      })
+      setImportState(null)
+    } else if (result.failures.length === 0) {
+      showNotice({
+        type: 'info',
+        message:
+          result.updatedCount > 0
+            ? `문서 ${result.createdCount}개를 가져오고 ${result.updatedCount}개를 갱신했습니다.`
+            : `문서 ${result.createdCount}개를 가져왔습니다.`,
+      })
+      setImportState(null)
+    } else {
+      const allFailed = result.createdCount + result.updatedCount === 0
+      showNotice({
+        type: allFailed ? 'error' : 'warn',
+        message: allFailed ? '가져오지 못했습니다.' : `${result.failures.length}개를 가져오지 못했습니다.`,
+      })
+      setImportState({
+        stage: 'result',
+        fileName,
+        createdCount: result.createdCount,
+        updatedCount: result.updatedCount,
+        failures: result.failures,
+      })
+    }
+
+    if (result.quotaSkippedCount > 0) {
+      showNotice({
+        type: 'error',
+        message: `이미지 저장 공간(300MB)이 가득 차 이미지 ${result.quotaSkippedCount}개를 넣지 못했습니다.`,
+      })
+    }
+  }
+
   async function confirmImport() {
+    if (importVaultContextRef.current) {
+      await confirmVaultImport()
+      return
+    }
     const file = importFileRef.current
     const plan = importPlanRef.current
     if (!file || !plan) return
@@ -4351,6 +4569,17 @@ export default function App() {
         hidden
         onChange={handleImportZipInputChange}
       />
+      <input
+        ref={(el) => {
+          importFolderInputRef.current = el
+          // webkitdirectory 는 React 19 JSX 타입에 없다 — ref 콜백에서 켠다 (F-2019.md 4.2)
+          if (el) el.webkitdirectory = true
+        }}
+        type="file"
+        data-import="folder"
+        hidden
+        onChange={handleImportFolderInputChange}
+      />
       <div className="app-body">
         <Sidebar
           sidebarRef={sidebarRef}
@@ -4633,6 +4862,7 @@ export default function App() {
         exportAllDisabled={exportOffline}
         onExportVault={handleExportVault}
         onImport={requestImportZip}
+        onImportFolder={requestImportFolder}
         e2ee={
           e2ee
             ? {
@@ -4670,6 +4900,7 @@ export default function App() {
         onCancel={importState?.stage === 'progress' ? cancelImportProgress : cancelImportPreview}
         onConfirm={confirmImport}
         onClose={closeImportResult}
+        onTargetChange={handleImportTargetChange}
       />
       {/* 인쇄 전용 영역 — printDoc() 이 채운다. .app-shell 의 마지막 직계 자식이어야 한다 (F-279.md 4.2) */}
       <div className="viewer print-root" ref={printRootRef} aria-hidden="true" inert />

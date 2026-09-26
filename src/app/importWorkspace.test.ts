@@ -6,7 +6,6 @@ import {
   readZipEntries,
   detectZipKind,
   planWorkspaceImport,
-  planPlainImport,
   applyImportPlan,
   MAX_CONTENT_BYTES,
   MAX_ATTACHMENT_BYTES,
@@ -373,81 +372,7 @@ describe('planWorkspaceImport 폴더 판정 (F-282 A5)', () => {
 })
 
 // ---------- A6 일반 zip 계획 ----------
-describe('planPlainImport (F-282 A6)', () => {
-  it('공통 최상위를 벗기고, 문서·폴더·잡음·경로 이상을 규칙대로 판정한다', () => {
-    const entries = [
-      { name: 'Vault/a.md', content: '내용' },
-      { name: 'Vault/폴더/b.markdown', content: '내용' },
-      { name: 'Vault/A/B/C/c.md', content: '내용' },
-      { name: 'Vault/note.txt' },
-      { name: '__MACOSX/x' },
-      { name: 'Vault/.obsidian/y' },
-      { name: 'Vault/../evil.md', content: '악' },
-    ]
-    const plan = planPlainImport({ entries, now: 1000 })
-
-    const titles = plan.docs.map((d) => d.title).sort()
-    expect(titles).toEqual(['a', 'b', 'c'])
-
-    const cDoc = plan.docs.find((d) => d.title === 'c')!
-    // c 는 C 폴더 안, C → B → A 부모 사슬 (F-2017 6장)
-    const cFolder = plan.folders.find((f) => f.id === cDoc.folderId)!
-    expect(cFolder.name).toBe('C')
-    const bFolder = plan.folders.find((f) => f.id === cFolder.parentId)!
-    expect(bFolder.name).toBe('B')
-    const aFolder = plan.folders.find((f) => f.id === bFolder.parentId)!
-    expect(aFolder.name).toBe('A')
-    expect(aFolder.parentId).toBeNull()
-
-    expect(plan.warnings.some((w) => w === '.md 가 아니라 건너뛴 파일 1개')).toBe(true)
-    expect(plan.warnings.some((w) => w.includes('2단계로 합친 폴더'))).toBe(false)
-    expect(plan.warnings.some((w) => w.includes('경로가 이상해 건너뛴 파일'))).toBe(true)
-    expect(plan.docs.every((d) => d.action === 'create')).toBe(true)
-  })
-
-  it('V/a/b/c/d/e.md 는 폴더 a~d 사슬, e 는 d 안, 합친 폴더 경고 없음 (F-2017 U12)', () => {
-    const plan = planPlainImport({ entries: [{ name: 'V/a/b/c/d/e.md', content: '내용' }], now: 1000 })
-    expect(plan.folders.map((f) => f.name)).toEqual(['a', 'b', 'c', 'd'])
-    const byId = new Map(plan.folders.map((f) => [f.id, f]))
-    const chainNames: string[] = []
-    let current = plan.docs[0].folderId
-    while (current) {
-      const f = byId.get(current)!
-      chainNames.unshift(f.name)
-      current = f.parentId
-    }
-    expect(chainNames).toEqual(['a', 'b', 'c', 'd'])
-    expect(plan.warnings.some((w) => w.includes('2단계로 합친 폴더'))).toBe(false)
-  })
-})
-
-// ---------- A7 일반 zip 이미지 ----------
-describe('planPlainImport 이미지 (F-282 A7)', () => {
-  it('앱 형식 참조만 zip 에 있으면 계획에 넣고, 원문은 안 바뀌며, 다른 형식 참조·없는 참조는 경고만', () => {
-    const id = '0f3a9c2e7b1d4a58'
-    const content = `본문\n<div align="center">\n  <img src="attachments/${id}.png" alt="a">\n</div>\n![[그림.png]]\n`
-    const entries = [
-      { name: '폴더/문서.md', content },
-      { name: '폴더/attachments/' + id + '.png' },
-    ]
-    const plan = planPlainImport({ entries, now: 1000 })
-    expect(plan.attachments.length).toBe(1)
-    expect(plan.attachments[0].id).toBe(id)
-    expect(plan.docs[0].title).toBe('문서')
-    // 원문을 바꾸지 않는다 — planPlainImport 는 content 를 계획에 넣지 않고 path 만 넣는다(적용 때 원본 바이트 그대로 읽는다)
-    expect((plan.docs[0] as { content?: unknown }).content).toBeUndefined()
-    expect(plan.warnings.some((w) => w.includes('이 앱 형식이 아니라'))).toBe(true)
-  })
-
-  it('참조는 있는데 zip 에 파일이 없으면 경고', () => {
-    const id = '1111111111111111'
-    const content = `<div align="center">\n  <img src="attachments/${id}.png" alt="a">\n</div>\n`
-    const entries = [{ name: '문서.md', content }]
-    const plan = planPlainImport({ entries, now: 1000 })
-    expect(plan.attachments.length).toBe(0)
-    expect(plan.warnings.some((w) => w.includes('가져오지 못한 이미지 참조'))).toBe(true)
-  })
-})
+// planPlainImport (F-282 A6·A7) 는 F-2019 로 지워졌다 — 같은 입력은 importVault.test.ts U7·U8·U12 로 옮겼다 (F-2019.md 14장)
 
 // ---------- A8 적용 ----------
 function fakeStore(overrides: Partial<ApplyStore> = {}): ApplyStore & { calls: Record<string, unknown[][]> } {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag } from './fileDrop'
+import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag, classifyDroppedEntries, readDroppedDirectory } from './fileDrop'
 
 function file(name: string): File {
   return { name } as unknown as File
@@ -107,5 +107,129 @@ describe('isImageOnlyDrag (F-156.md 2.5)', () => {
     expect(isImageOnlyDrag(dataTransfer({ items: [] as unknown as DataTransferItemList }))).toBe(false)
     expect(isImageOnlyDrag(dataTransfer({}))).toBe(false)
     expect(isImageOnlyDrag(null)).toBe(false)
+  })
+})
+
+// ---------- F-2019.md 4.3 U15 ----------
+function fakeFile(name: string): File {
+  return { name } as unknown as File
+}
+
+function dirEntry(name: string, fullPath: string, reader: FileSystemDirectoryReader): FileSystemDirectoryEntry {
+  return {
+    isFile: false,
+    isDirectory: true,
+    name,
+    fullPath,
+    createReader: () => reader,
+  } as unknown as FileSystemDirectoryEntry
+}
+
+function fileEntry(name: string, fullPath: string, file: File): FileSystemFileEntry {
+  return {
+    isFile: true,
+    isDirectory: false,
+    name,
+    fullPath,
+    file: (success: (f: File) => void) => success(file),
+  } as unknown as FileSystemFileEntry
+}
+
+function batchedReader(entries: FileSystemEntry[], batchSizes: number[]): FileSystemDirectoryReader {
+  let idx = 0
+  let call = 0
+  return {
+    readEntries(success: (entries: FileSystemEntry[]) => void) {
+      const size = batchSizes[call] ?? 0
+      const batch = entries.slice(idx, idx + size)
+      idx += size
+      call++
+      Promise.resolve().then(() => success(batch))
+    },
+  } as unknown as FileSystemDirectoryReader
+}
+
+function errorReader(): FileSystemDirectoryReader {
+  return {
+    readEntries(_success: unknown, error: (err: unknown) => void) {
+      Promise.resolve().then(() => error(new Error('읽기 실패')))
+    },
+  } as unknown as FileSystemDirectoryReader
+}
+
+describe('classifyDroppedEntries (F-2019.md 4.3 U15)', () => {
+  it('빈 목록·null·파일만 → none', () => {
+    expect(classifyDroppedEntries([])).toEqual({ kind: 'none' })
+    expect(classifyDroppedEntries([null])).toEqual({ kind: 'none' })
+    expect(classifyDroppedEntries([fileEntry('a.md', '/a.md', fakeFile('a.md'))])).toEqual({ kind: 'none' })
+  })
+
+  it('디렉터리 하나 → folder', () => {
+    const dir = dirEntry('내 볼트', '/내 볼트', batchedReader([], [0]))
+    const result = classifyDroppedEntries([dir])
+    expect(result).toEqual({ kind: 'folder', entry: dir })
+  })
+
+  it('디렉터리 둘 → too-many', () => {
+    const a = dirEntry('a', '/a', batchedReader([], [0]))
+    const b = dirEntry('b', '/b', batchedReader([], [0]))
+    expect(classifyDroppedEntries([a, b])).toEqual({ kind: 'too-many' })
+  })
+
+  it('디렉터리 + 파일 → too-many', () => {
+    const dir = dirEntry('a', '/a', batchedReader([], [0]))
+    expect(classifyDroppedEntries([dir, fileEntry('x.md', '/x.md', fakeFile('x.md'))])).toEqual({ kind: 'too-many' })
+  })
+
+  it('디렉터리 + null → too-many (null 은 파일)', () => {
+    const dir = dirEntry('a', '/a', batchedReader([], [0]))
+    expect(classifyDroppedEntries([dir, null])).toEqual({ kind: 'too-many' })
+  })
+})
+
+describe('readDroppedDirectory (F-2019.md 4.3 U15)', () => {
+  it('readEntries 가 100·37·0 개로 나눠 줘도 137개, 경로가 루트/하위/a.md', () => {
+    const files: FileSystemEntry[] = Array.from({ length: 137 }, (_, i) =>
+      fileEntry(`f${i}.md`, `/내 볼트/하위/f${i}.md`, fakeFile(`f${i}.md`)),
+    )
+    const root = dirEntry('내 볼트', '/내 볼트', batchedReader(files, [100, 37, 0]))
+    return readDroppedDirectory(root).then((result) => {
+      expect(result).toHaveLength(137)
+      expect(result[0].path).toBe('내 볼트/하위/f0.md')
+    })
+  })
+
+  it('하위 디렉터리를 재귀로 읽는다', () => {
+    const innerFile = fileEntry('b.md', '/루트/하위/b.md', fakeFile('b.md'))
+    const inner = dirEntry('하위', '/루트/하위', batchedReader([innerFile], [1, 0]))
+    const topFile = fileEntry('a.md', '/루트/a.md', fakeFile('a.md'))
+    const root = dirEntry('루트', '/루트', batchedReader([topFile, inner], [2, 0]))
+    return readDroppedDirectory(root).then((result) => {
+      const paths = result.map((r) => r.path).sort()
+      expect(paths).toEqual(['루트/a.md', '루트/하위/b.md'])
+    })
+  })
+
+  it('.git·__MACOSX 디렉터리의 createReader 를 부르지 않는다', () => {
+    let calledInnerReader = false
+    const innerFile = fileEntry('x', '/루트/.git/x', fakeFile('x'))
+    const gitReader: FileSystemDirectoryReader = {
+      readEntries(success: (entries: FileSystemEntry[]) => void) {
+        calledInnerReader = true
+        Promise.resolve().then(() => success([innerFile]))
+      },
+    } as unknown as FileSystemDirectoryReader
+    const gitDir = dirEntry('.git', '/루트/.git', gitReader)
+    const macDir = dirEntry('__MACOSX', '/루트/__MACOSX', gitReader)
+    const root = dirEntry('루트', '/루트', batchedReader([gitDir, macDir], [2, 0]))
+    return readDroppedDirectory(root).then((result) => {
+      expect(result).toHaveLength(0)
+      expect(calledInnerReader).toBe(false)
+    })
+  })
+
+  it('오류 콜백이면 거부한다', async () => {
+    const root = dirEntry('루트', '/루트', errorReader())
+    await expect(readDroppedDirectory(root)).rejects.toThrow()
   })
 })

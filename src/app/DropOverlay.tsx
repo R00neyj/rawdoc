@@ -10,7 +10,7 @@ export default function DropOverlay({ visible }: DropOverlayProps) {
     <div className="drop-overlay">
       <div className="drop-overlay-box">
         <IconUpload size={32} />
-        <p>여기에 놓아 .md 파일 가져오기</p>
+        <p>여기에 놓아 .md 파일·폴더 가져오기</p>
       </div>
     </div>
   )

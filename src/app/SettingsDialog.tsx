@@ -234,6 +234,8 @@ type SettingsDialogProps = {
   onExportVault?: () => void
   // `데이터` 절 — 가져오기 (F-282.md 3.1). onExportAll 이 있을 때만 의미가 있다(같은 절)
   onImport?: () => void
+  // `데이터` 절 — 폴더 가져오기(볼트) (F-2019.md 10.1). 있을 때만 버튼을 그린다
+  onImportFolder?: () => void
   // `금고` 탭 — 3.1 범위가 있을 때만 준다. 안 주면 탭이 안 보인다 (F-404.md 7.5)
   e2ee?: SettingsE2ee
   onClose: () => void
@@ -264,6 +266,7 @@ export default function SettingsDialog({
   exportAllDisabled,
   onExportVault,
   onImport,
+  onImportFolder,
   e2ee,
   onClose,
 }: SettingsDialogProps) {
@@ -414,6 +417,11 @@ export default function SettingsDialog({
           {onImport && (
             <button type="button" className="dialog-btn" onClick={onImport}>
               가져오기…
+            </button>
+          )}
+          {onImportFolder && (
+            <button type="button" className="dialog-btn" onClick={onImportFolder}>
+              폴더 가져오기…
             </button>
           )}
         </div>

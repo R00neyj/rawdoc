@@ -1431,6 +1431,18 @@ body.sidebar-resizing {
   gap: 8px;
 }
 
+/* 가져오기 미리보기의 넣을 폴더 select (F-2019.md 10.2) */
+.import-target {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
 /* P1 잠긴 금고 문서 패널 — 편집 영역 가운데 (F-405 6.2) */
 .e2ee-locked-panel {
   width: 100%;
