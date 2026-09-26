@@ -1,10 +1,12 @@
 // F-407 U1~U16 (specs/features/F-407.md 9.1) — 계획·비용·글·메뉴 판정은 순수, 실행기는 가짜 저장소·가짜 시계로 돈다
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  E2EE_COMMENT_COUNT_CONCURRENCY,
   E2EE_CONVERT_MAX_RATE_RETRIES,
   E2EE_CONVERT_WRITE_GAP_MS,
   attachmentLinksOf,
   buildE2eeConvertDialogText,
+  countE2eeConvertComments,
   createE2eeConvertMemory,
   e2eeMenuForDoc,
   e2eeMenuForFolder,
@@ -768,5 +770,202 @@ describe('F-408 V6 rekeyLocalE2eeAttachment·encryptLocalPlainAttachment', () =>
       blob: new Blob([bigBytes as BlobPart]),
     }
     expect(await encryptLocalPlainAttachment(bigAttachment, rewrapKeys)).toBeNull()
+  })
+})
+
+// F-509 2.1·3.1 — 금고로 옮길 때 댓글 D-9 문장·수 세기
+describe('F-509 U1 D-9 comments 없음 — F-407 U10 과 같다', () => {
+  it('그대로', () => {
+    const text = buildE2eeConvertDialogText({
+      direction: 'to-e2ee',
+      scope: 'account',
+      name: '메모',
+      targetKind: 'doc',
+      docCount: 1,
+      folderCount: 0,
+      showBackupNotice: true,
+      usage: NO_USAGE,
+      cost: { writes: 1, deltaBytes: 10 },
+    })
+    expect(text).toEqual({ title: '금고로 옮기기', body: D9_BODY, notes: [], backupNotice: D9_BACKUP, confirmLabel: '옮기기' })
+  })
+})
+
+describe('F-509 U2 D-9 comments 있음', () => {
+  const base = {
+    direction: 'to-e2ee' as const,
+    scope: 'account' as const,
+    name: '메모',
+    targetKind: 'doc' as const,
+    docCount: 1,
+    folderCount: 0,
+    showBackupNotice: true,
+    usage: NO_USAGE,
+    cost: { writes: 1, deltaBytes: 10 },
+  }
+
+  it('known 0 — 줄 없음', () => {
+    expect(buildE2eeConvertDialogText({ ...base, comments: { kind: 'known', total: 0 } }).notes).toEqual([])
+  })
+
+  it('known 3', () => {
+    expect(buildE2eeConvertDialogText({ ...base, comments: { kind: 'known', total: 3 } }).notes).toEqual(['댓글 3개도 함께 지워집니다.'])
+  })
+
+  it('known 1234 — 천 단위 구분', () => {
+    expect(buildE2eeConvertDialogText({ ...base, comments: { kind: 'known', total: 1234 } }).notes).toEqual(['댓글 1,234개도 함께 지워집니다.'])
+  })
+
+  it('unknown — 세다 실패 문장', () => {
+    expect(buildE2eeConvertDialogText({ ...base, comments: { kind: 'unknown' } }).notes).toEqual(['댓글이 있다면 함께 지워집니다.'])
+  })
+})
+
+describe('F-509 U3 D-9 폴더 + 쓰기 모자람 + comments — 댓글 줄이 맨 끝', () => {
+  it('notes 가 [N1, N3, 댓글줄]', () => {
+    const text = buildE2eeConvertDialogText({
+      direction: 'to-e2ee',
+      scope: 'account',
+      name: '큰 폴더',
+      targetKind: 'folder',
+      docCount: 1000,
+      folderCount: 9,
+      showBackupNotice: false,
+      usage: { writesLeft: 100, bytesLeft: null },
+      cost: { writes: 1010, deltaBytes: 0 },
+      comments: { kind: 'known', total: 5 },
+    })
+    expect(text.notes).toEqual([
+      '폴더 안 문서 1,000개와 하위 폴더 9개를 함께 옮깁니다.',
+      '오늘 남은 저장 횟수(100번)보다 옮기는 데 드는 횟수(약 1,010번)가 많아 중간에 멈출 수 있습니다. 멈추면 다음 날 다시 눌러 이어 옮길 수 있습니다.',
+      '댓글 5개도 함께 지워집니다.',
+    ])
+  })
+})
+
+describe('F-509 U4 from-e2ee 는 comments 를 보지 않는다, 로컬 to-e2ee 는 맨 끝', () => {
+  it('from-e2ee — 댓글 줄 없음', () => {
+    const text = buildE2eeConvertDialogText({
+      direction: 'from-e2ee',
+      scope: 'account',
+      name: '메모',
+      targetKind: 'doc',
+      docCount: 1,
+      folderCount: 0,
+      showBackupNotice: false,
+      usage: NO_USAGE,
+      cost: { writes: 1, deltaBytes: 0 },
+      comments: { kind: 'known', total: 5 },
+    })
+    expect(text.notes).toEqual([])
+  })
+
+  it('로컬 to-e2ee — 맨 끝에 댓글 줄', () => {
+    const text = buildE2eeConvertDialogText({
+      direction: 'to-e2ee',
+      scope: 'local',
+      name: '메모',
+      targetKind: 'doc',
+      docCount: 1,
+      folderCount: 0,
+      showBackupNotice: true,
+      usage: NO_USAGE,
+      cost: { writes: 1, deltaBytes: 0 },
+      comments: { kind: 'known', total: 2 },
+    })
+    expect(text.notes.at(-1)).toBe('댓글 2개도 함께 지워집니다.')
+  })
+})
+
+describe('F-509 U5 countE2eeConvertComments — max(storedCount, liveCount) 의 합', () => {
+  it('a 3·b max(0,4)·c 2 → known 9', async () => {
+    const stored: Record<string, number> = { a: 3, b: 0, c: 2 }
+    const live: Record<string, number | null> = { b: 4 }
+    const result = await countE2eeConvertComments({
+      docIds: ['a', 'b', 'c'],
+      liveCount: (id) => live[id] ?? null,
+      storedCount: async (id) => stored[id],
+      signal: new AbortController().signal,
+    })
+    expect(result).toEqual({ kind: 'known', total: 9 })
+  })
+
+  it('docIds 가 비었으면 known 0, storedCount 를 부르지 않는다', async () => {
+    const storedCount = vi.fn()
+    const result = await countE2eeConvertComments({ docIds: [], liveCount: () => null, storedCount, signal: new AbortController().signal })
+    expect(result).toEqual({ kind: 'known', total: 0 })
+    expect(storedCount).not.toHaveBeenCalled()
+  })
+})
+
+describe('F-509 U6 countE2eeConvertComments — not_found·e2ee_doc 는 0, 그 밖은 unknown', () => {
+  it('ApiError not_found·e2ee_doc → 그 문서 0, 결과 known', async () => {
+    const result = await countE2eeConvertComments({
+      docIds: ['a', 'b'],
+      liveCount: () => null,
+      storedCount: async (id) => {
+        if (id === 'a') throw new ApiError('not_found')
+        throw new ApiError('e2ee_doc')
+      },
+      signal: new AbortController().signal,
+    })
+    expect(result).toEqual({ kind: 'known', total: 0 })
+  })
+
+  it('ApiError server_error → unknown', async () => {
+    const result = await countE2eeConvertComments({
+      docIds: ['a'],
+      liveCount: () => null,
+      storedCount: async () => {
+        throw new ApiError('server_error')
+      },
+      signal: new AbortController().signal,
+    })
+    expect(result).toEqual({ kind: 'unknown' })
+  })
+
+  it('0 이상 정수가 아닌 값(1.5·-1) → unknown', async () => {
+    const r1 = await countE2eeConvertComments({ docIds: ['a'], liveCount: () => null, storedCount: async () => 1.5, signal: new AbortController().signal })
+    expect(r1).toEqual({ kind: 'unknown' })
+    const r2 = await countE2eeConvertComments({ docIds: ['a'], liveCount: () => null, storedCount: async () => -1, signal: new AbortController().signal })
+    expect(r2).toEqual({ kind: 'unknown' })
+  })
+})
+
+describe('F-509 U7 countE2eeConvertComments — 동시 4개, 실패 뒤 새 호출 없음', () => {
+  it('문서 10개, 셋째가 던진다 — calls 는 4 그대로, 결과 unknown', async () => {
+    const docIds = Array.from({ length: 10 }, (_, i) => `d${i}`)
+    const calls: string[] = []
+    async function storedCount(id: string): Promise<number> {
+      calls.push(id)
+      if (id === docIds[2]) throw new Error('boom')
+      await Promise.resolve()
+      await Promise.resolve()
+      return 1
+    }
+    const result = await countE2eeConvertComments({ docIds, liveCount: () => null, storedCount, signal: new AbortController().signal })
+    expect(result).toEqual({ kind: 'unknown' })
+    expect(calls.length).toBeLessThanOrEqual(E2EE_COMMENT_COUNT_CONCURRENCY)
+    expect(calls).toEqual([docIds[0], docIds[1], docIds[2], docIds[3]])
+  })
+})
+
+describe('F-509 U8 countE2eeConvertComments — 끊기면 null', () => {
+  it('문서 10개 중 둘을 센 뒤 abort — 결과 null, abort 뒤 새 호출 없음', async () => {
+    const docIds = Array.from({ length: 10 }, (_, i) => `d${i}`)
+    const controller = new AbortController()
+    const calls: string[] = []
+    let settled = 0
+    async function storedCount(id: string): Promise<number> {
+      calls.push(id)
+      await Promise.resolve()
+      await Promise.resolve()
+      settled++
+      if (settled === 2) controller.abort()
+      return 1
+    }
+    const result = await countE2eeConvertComments({ docIds, liveCount: () => null, storedCount, signal: controller.signal })
+    expect(result).toBeNull()
+    expect(calls.length).toBeLessThanOrEqual(E2EE_COMMENT_COUNT_CONCURRENCY)
   })
 })

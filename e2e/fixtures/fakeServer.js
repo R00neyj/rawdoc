@@ -563,6 +563,25 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ imported: records.length, orphaned: 0 }) })
   })
 
+  // GET /api/docs/:id/comments/count — D-9 댓글 수 (F-509.md 3.3·6.3)
+  const commentCounts = new Map() // docId -> number | { status, body }
+  const commentCountLog = [] // 물은 문서 id, 순서대로
+  await page.route(/\/api\/docs\/[^/]+\/comments\/count$/, async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() !== 'GET') return route.fallback()
+    const id = decodeURIComponent(new URL(req.url()).pathname.split('/').slice(-3, -2)[0])
+    commentCountLog.push(id)
+    const rule = commentCounts.get(id)
+    if (rule && typeof rule === 'object') {
+      return route.fulfill({ status: rule.status, contentType: 'application/json', body: JSON.stringify(rule.body ?? {}) })
+    }
+    if (!docs.has(id)) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+    if (docs.get(id).e2eeKey) return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'e2ee_doc' }) })
+    const n = typeof rule === 'number' ? rule : 0
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ total: n, open: n }) })
+  })
+
   // F-2038 9.3 — 계정 삭제 미리 보기·삭제. accountDeleteRule 이 null 이면 204 + 로그아웃, 아니면 { status, body } 또는 'network'
   let accountPreview = {
     email,
@@ -794,6 +813,14 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     // 그 문서로 받은 GET /people 수 (F-507 3.8)
     peopleRequests(docId) {
       return peopleRequestLog.get(docId) ?? 0
+    },
+    // GET /api/docs/:id/comments/count 응답을 조종한다 — 숫자(total·open 둘 다) | { status, body } (F-509.md 3.3)
+    setCommentCount(docId, value) {
+      commentCounts.set(docId, value)
+    },
+    // 지금까지 count 를 물은 문서 id, 순서대로 (F-509.md 3.3)
+    commentCountRequests() {
+      return [...commentCountLog]
     },
   }
 }

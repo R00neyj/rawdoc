@@ -1,6 +1,6 @@
 // F-2030 3.1 — 429·413 doc_quota_exceeded·403 account_blocked 분류 규칙 (U1~U5)
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { ApiError, createDoc, updateDoc, removeDoc, createFolder, setDocE2ee, updateFolder, importDocComments } from './docsApi'
+import { ApiError, createDoc, updateDoc, removeDoc, createFolder, setDocE2ee, updateFolder, importDocComments, fetchCommentCount } from './docsApi'
 
 function jsonResponse(status: number, data: unknown, headers: Record<string, string> = {}): Response {
   return new Response(data === undefined ? null : JSON.stringify(data), {
@@ -321,5 +321,39 @@ describe('U11: importDocComments', () => {
   it('200 이면 CommentImportResponse 를 그대로 돌려준다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { imported: 2, orphaned: 1 })))
     await expect(importDocComments('a', { records })).resolves.toEqual({ imported: 2, orphaned: 1 })
+  })
+})
+
+describe('F-509 U9: fetchCommentCount', () => {
+  it('200 정상 — 몸통 그대로, 경로 인코딩, 몸통 없음, signal 그대로 전달', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { total: 5, open: 1 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const controller = new AbortController()
+    const result = await fetchCommentCount('a/b', { signal: controller.signal })
+    expect(result).toEqual({ total: 5, open: 1 })
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/docs/a%2Fb/comments/count')
+    expect(init.body).toBeUndefined()
+    expect(init.signal).toBe(controller.signal)
+  })
+
+  it.each([
+    [200, { total: -1, open: 0 }, 'invalid'],
+    [200, { total: 1.5, open: 0 }, 'invalid'],
+    [200, {}, 'invalid'],
+    [401, { error: 'unauthenticated' }, 'unauthorized'],
+    [500, { error: 'internal' }, 'server_error'],
+    [404, { error: 'not_found' }, 'not_found'],
+    [409, { error: 'e2ee_doc' }, 'e2ee_doc'],
+    [409, {}, 'other'],
+    [400, { error: 'invalid' }, 'other'],
+  ])('%s %j → %s', async (status, data, kind) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(status, data)))
+    await expect(fetchCommentCount('a')).rejects.toMatchObject({ kind })
+  })
+
+  it('네트워크 실패 → network', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('failed')))
+    await expect(fetchCommentCount('a')).rejects.toMatchObject({ kind: 'network' })
   })
 })

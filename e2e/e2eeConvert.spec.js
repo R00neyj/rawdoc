@@ -1,7 +1,7 @@
 // 금고로 옮기기·빼기 — 메뉴·D-9·D-10·진행 알림·쓰기 순서 (specs/features/F-407.md 9.2) — 금고는 F-404 화면, 서버는 fakeServer, 실시간은 fakeDocRoom
 import { test, expect } from '@playwright/test'
 import zlib from 'node:zlib'
-import { openApp as openAppRaw, setPrefBeforeLoad, currentDocId, importMarkdown, setViewMode } from './helpers.js'
+import { openApp as openAppRaw, setPrefBeforeLoad, currentDocId, importMarkdown, setViewMode, waitSaved } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
 
@@ -670,5 +670,181 @@ test.describe('F-407 실시간 문서 옮기기', () => {
     }
     await expect(notice(page)).toHaveText('"실시간 메모2"을(를) 금고로 옮겼습니다.')
     expect(requests.filter((r) => r.method === 'PUT' && r.path === '/api/docs/live2/e2ee')).toHaveLength(1)
+  })
+})
+
+// F-509 — 금고로 옮길 때 댓글 (댓글 수 D-9 문장, 옮긴 뒤 댓글 UI 없음)
+const F509_CONTENT = '첫째 줄\n둘째 줄 고양이\n셋째 줄\n'
+
+function f509Line(page, text) {
+  return page.locator('.cm-content').first().locator('.cm-line', { hasText: text }).first()
+}
+
+async function f509SelectCat(page) {
+  await f509Line(page, '고양이').click()
+  await page.keyboard.press('Home')
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight')
+  for (let i = 0; i < 3; i++) await page.keyboard.press('Shift+ArrowRight')
+}
+
+async function f509AddComment(page, body) {
+  await page.keyboard.press('Control+Alt+m')
+  await expect(page.locator('.comment-composer textarea')).toBeFocused()
+  await page.locator('.comment-composer textarea').fill(body)
+  await page.keyboard.press('Control+Enter')
+  await expect(page.locator('.comment-composer textarea')).toHaveCount(0)
+}
+
+// 5장 판정표 — 옮긴 뒤 금고 문서에 댓글 UI 가 없는지 (F-505 3.8·4장, F-509 2.4·5장)
+async function expectNoCommentUi(page) {
+  await expect(page.locator('.comment-rail-toggle')).toHaveCount(0)
+  await expect(page.locator('.comment-rail')).toHaveCount(0)
+  await expect(page.locator('.comment-sheet')).toHaveCount(0)
+  await expect(page.locator('.comment-thread')).toHaveCount(0)
+  await expect(page.locator('.cm-comment-anchor')).toHaveCount(0)
+  await expect(page.locator('.cm-comment-gutter-marker:visible')).toHaveCount(0)
+
+  await page.locator('.cm-content').first().click()
+  await page.keyboard.press('Control+Home')
+  for (let i = 0; i < 5; i++) await page.keyboard.press('Shift+ArrowRight')
+  await expect(page.locator('.comment-add-button')).toHaveCount(0)
+
+  const box = await page.locator('.cm-content').first().boundingBox()
+  await page.mouse.click(box.x + 5, box.y + 5, { button: 'right' })
+  await expect(page.getByRole('menuitem', { name: '댓글 달기' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+
+  await page.keyboard.press('Control+p')
+  await page.locator('.command-palette-input').fill('댓글')
+  await expect(page.getByRole('option')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+
+  await page.keyboard.press('Control+Alt+m')
+  await expect(page.locator('.notice-message')).toHaveText('금고 문서에는 댓글을 달 수 없습니다.')
+}
+
+test.describe('F-509 서버 — D-9 댓글 수', () => {
+  test('F-509 E1 폴더 — d1·d2 수를 물어 합, 쓰기 기록에 섞이지 않는다', async ({ page }) => {
+    const { server } = await openServerApp(page, {
+      folders: [serverFolder('fa', 'A')],
+      docs: [serverDoc('d1', { title: '메모1', folderId: 'fa' }), serverDoc('d2', { title: '메모2', folderId: 'fa' })],
+    })
+    server.setCommentCount('d1', 3)
+    server.setCommentCount('d2', 2)
+    await convertFromMenu(page, folderRow(page, 'A'))
+    await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글 5개도 함께 지워집니다.')
+    expect(server.commentCountRequests().sort()).toEqual(['d1', 'd2'])
+
+    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+    await completeCreateVault(page)
+    await expect(notice(page)).toHaveText('"A" 폴더를 금고로 옮겼습니다(문서 2개).', { timeout: 20_000 })
+    expect(server.writeRequests().some((w) => /\/comments\/count$/.test(w.path))).toBe(false)
+  })
+
+  test('F-509 E2 세기 0·실패 — 옮기기를 막지 않는다', async ({ page }) => {
+    const { server } = await openServerApp(page, { docs: [serverDoc('sd1', { title: '메모', content: '본문\n' })] })
+    server.setCommentCount('sd1', 0)
+    await convertFromMenu(page, docRow(page, 'sd1'))
+    await expect.poll(() => server.commentCountRequests()).toContain('sd1')
+    await expect(convertDialog(page).locator('.e2ee-convert-note', { hasText: '댓글' })).toHaveCount(0)
+    await convertDialog(page).getByRole('button', { name: '취소', exact: true }).click()
+    await expect(convertDialog(page)).toBeHidden()
+
+    server.setCommentCount('sd1', { status: 500, body: { error: 'internal' } })
+    await convertFromMenu(page, docRow(page, 'sd1'))
+    await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글이 있다면 함께 지워집니다.')
+    await expect(convertDialog(page).getByRole('button', { name: '옮기기', exact: true })).toBeEnabled()
+    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+    await completeCreateVault(page)
+    await expect(notice(page)).toHaveText('"메모"을(를) 금고로 옮겼습니다.')
+  })
+
+  test('F-509 E3 실시간 — 편집기 수(첫 댓글 + 답글)가 쓰이고, 옮긴 뒤 댓글 UI 없음', async ({ page }) => {
+    const DOC = 'commented-doc'
+    const room = createFakeDocRoom()
+    const server = await fakeServer(page)
+    await room.install(page.context())
+    server.docs.set(DOC, serverDoc(DOC, { title: '함께 쓰는 문서', content: F509_CONTENT }))
+    room.seed(DOC, { content: F509_CONTENT, title: '함께 쓰는 문서' })
+    const cat = F509_CONTENT.indexOf('고양이')
+    room.putComment(DOC, 't1', { from: cat, to: cat + 3, body: '서버 댓글' })
+    room.putComment(DOC, 'r1', { from: cat, to: cat + 3, body: '답글', parent: 't1' })
+    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await setPrefBeforeLoad(page, 'md.commentRail', 'open')
+    await recordNotices(page)
+    await page.goto(`/#/d/${DOC}`)
+    await expect(page.locator('.comment-thread[data-thread-id="t1"]')).toBeVisible()
+
+    await convertFromMenu(page, docRow(page, DOC))
+    await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글 2개도 함께 지워집니다.')
+    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+    await completeCreateVault(page)
+    await expect(notice(page)).toHaveText('"함께 쓰는 문서"을(를) 금고로 옮겼습니다.')
+    await expect(docRow(page, DOC).locator('.tree-e2ee-icon')).toBeVisible()
+
+    await expectNoCommentUi(page)
+    const log = await noticeLog(page)
+    expect(log.some((m) => m.startsWith(LIVE_GONE))).toBe(false)
+  })
+})
+
+test.describe('F-509 로컬 — 댓글 달린 문서를 옮기기·빼기', () => {
+  test('F-509 E4 로컬 문서 — 댓글 1개, 옮긴 뒤 기록 없음·댓글 UI 없음', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.commentRail', 'open')
+    await openApp(page)
+    const id = await importMarkdown(page, { name: '댓글 문서.md', content: F509_CONTENT })
+    await f509SelectCat(page)
+    await f509AddComment(page, '댓글')
+    await waitSaved(page)
+
+    await convertFromMenu(page, docRow(page, id))
+    await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글 1개도 함께 지워집니다.')
+    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+    await completeCreateVault(page)
+    await expect(notice(page)).toHaveText('"댓글 문서"을(를) 금고로 옮겼습니다.')
+
+    expect(await readIdb(page, 'md-docs', 'comments', id)).toBeNull()
+    await expect(page.locator('.comment-rail')).toHaveCount(0)
+    await expect(page.locator('.comment-thread')).toHaveCount(0)
+    await expect(page.locator('.cm-comment-anchor')).toHaveCount(0)
+    const box = await page.locator('.cm-content').first().boundingBox()
+    await page.mouse.click(box.x + 5, box.y + 5, { button: 'right' })
+    await expect(page.getByRole('menuitem', { name: '댓글 달기' })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+
+    // F-509 E5 — 금고에서 빼면 댓글이 돌아오지 않는다(빈 레일), 다시 불러와도 같다
+    const menu = await openMenuOf(page, docRow(page, id))
+    await menu.getByRole('menuitem', { name: '금고에서 빼기…', exact: true }).click()
+    if (await unlockDialog(page).isVisible()) {
+      await unlockDialog(page).locator('input[type="password"]').fill(PASSWORD)
+      await unlockDialog(page).getByRole('button', { name: '열기', exact: true }).click()
+    }
+    await expect(convertDialog(page)).toBeVisible()
+    await convertDialog(page).getByRole('button', { name: '빼기', exact: true }).click()
+    await expect(notice(page)).toHaveText('"댓글 문서"을(를) 금고에서 뺐습니다.')
+
+    await page.reload()
+    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+    await expect(page.locator('.comment-rail-empty')).toHaveText('이 문서에 댓글이 없습니다. 본문을 선택하고 댓글을 달아 보세요.', { timeout: 10_000 })
+    await expect(page.locator('.comment-thread')).toHaveCount(0)
+  })
+
+  test('F-509 E6 로컬 — 열지 않은 문서는 기록 수로 센다, 옮긴 뒤 그 문서의 기록 없음', async ({ page }) => {
+    await openApp(page)
+    const x = await importMarkdown(page, { name: 'X.md', content: F509_CONTENT })
+    await f509SelectCat(page)
+    await f509AddComment(page, '댓글')
+    await waitSaved(page)
+    const y = await importMarkdown(page, { name: 'Y.md', content: '다른 문서\n' })
+    expect(await currentDocId(page)).toBe(y)
+
+    await convertFromMenu(page, docRow(page, x))
+    await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글 1개도 함께 지워집니다.')
+    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+    await completeCreateVault(page)
+    await expect(notice(page)).toHaveText('"X"을(를) 금고로 옮겼습니다.')
+
+    expect(await readIdb(page, 'md-docs', 'comments', x)).toBeNull()
   })
 })

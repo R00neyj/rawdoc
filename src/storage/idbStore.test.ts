@@ -940,3 +940,37 @@ describe('F-508 로컬 문서 댓글 저장소', () => {
     expect(all.has(c.id)).toBe(false)
   })
 })
+
+// F-509 2.3·4.2·4.3 — 금고로 옮길 때 댓글 기록 지우기
+describe('F-509 로컬 금고로 옮길 때 댓글 기록', () => {
+  it('U10: setDocE2ee(e2ee: true) 는 같은 트랜잭션에서 그 문서 기록을 지운다. false·없는 id 는 손대지 않는다', async () => {
+    const store = await freshStore()
+    const a = await store.create({ title: 'a', content: '원본a', lineEnding: 'lf' })
+    const b = await store.create({ title: 'b', content: '원본b', lineEnding: 'lf' })
+    await store.update(a.id, { comments: [makeRecord('ca')] })
+    await store.update(b.id, { comments: [makeRecord('cb')] })
+
+    const moved = await store.setDocE2ee!(a.id, { e2ee: true, title: 'env-t', content: 'env-c', e2eeKey: 'K'.repeat(56), attachmentRefs: [] })
+    expect(moved.doc.e2eeKey).toBe('K'.repeat(56))
+    expect(await store.getCommentRecords!(a.id)).toEqual([])
+    expect(await store.getCommentRecords!(b.id)).toEqual([makeRecord('cb')])
+
+    // 빼기는 기록을 건드리지 않는다 — 되살아나지 않는다
+    await store.setDocE2ee!(a.id, { e2ee: false, title: 't2', content: 'c2', e2eeKey: null, attachmentRefs: null })
+    expect(await store.getCommentRecords!(a.id)).toEqual([])
+
+    // 없는 id — 던지고 b 기록은 그대로
+    await expect(store.setDocE2ee!('없는-id', { e2ee: true, title: '', content: '' })).rejects.toThrow()
+    expect(await store.getCommentRecords!(b.id)).toEqual([makeRecord('cb')])
+  })
+
+  it('U11: 금고 행에는 F-508 쓰기 자리에서 기록이 생기지 않는다, 일반 행은 생긴다', async () => {
+    const store = await freshStore()
+    const vault = await store.create({ title: 'v', content: 'env', lineEnding: 'lf', e2eeKey: 'K'.repeat(56), attachmentRefs: [] })
+    const plain = await store.create({ title: 'p', content: 'p', lineEnding: 'lf' })
+    await store.update(vault.id, { content: 'env2', comments: [makeRecord('c1')] })
+    await store.update(plain.id, { content: 'p2', comments: [makeRecord('c2')] })
+    expect(await store.getCommentRecords!(vault.id)).toEqual([])
+    expect(await store.getCommentRecords!(plain.id)).toEqual([makeRecord('c2')])
+  })
+})

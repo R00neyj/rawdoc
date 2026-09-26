@@ -2,7 +2,7 @@
 import type { Doc, Folder, LineEnding } from '../types'
 import { getLockSessionId, isLockSessionSettled, lockSessionReady } from './lockSession'
 import { parseRetryAfter } from '../lib/usageLimits'
-import type { CommentImportBody, CommentImportResponse } from '../lib/docComments'
+import type { CommentCountResponse, CommentImportBody, CommentImportResponse } from '../lib/docComments'
 
 export type ServerDoc = Doc & { version: number }
 export type ServerDocSummary = Omit<Doc, 'content'> & { version: number }
@@ -215,6 +215,26 @@ export async function updateDoc(
   }
   if (!res.ok) throw new ApiError('other', { status: res.status })
   return (await readJson(res)) as ServerDoc
+}
+
+// 금고로 옮기기 D-9 문구용 — 그 문서의 서버 저장 댓글 수 (F-509.md 3.2, F-503 6.3)
+export async function fetchCommentCount(id: string, opts?: { signal?: AbortSignal }): Promise<CommentCountResponse> {
+  const res = await send(`/api/docs/${encodeURIComponent(id)}/comments/count`, opts?.signal ? { signal: opts.signal } : undefined)
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 404) throw new ApiError('not_found')
+  if (res.status === 409) {
+    const e2eeKind = e2eeConflictKind(await readJson(res), ['e2ee_doc'])
+    throw new ApiError(e2eeKind ?? 'other', { status: 409 })
+  }
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  const data = (await readJson(res)) as { total?: unknown; open?: unknown } | null
+  const total = data?.total
+  const open = data?.open
+  if (!(typeof total === 'number' && Number.isInteger(total) && total >= 0 && typeof open === 'number' && Number.isInteger(open) && open >= 0)) {
+    throw new ApiError('invalid')
+  }
+  return { total, open }
 }
 
 // 로그인 이관 — 로컬 댓글 기록을 서버 방으로 옮긴다 (F-508.md 3.4)

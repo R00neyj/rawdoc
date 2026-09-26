@@ -67,10 +67,12 @@ import { useE2ee } from './useE2ee'
 import { isE2eeStoreError, lockDocMetas, planE2eeReset, withE2ee, type E2eeStore } from '../e2ee/e2eeStore'
 import {
   buildE2eeConvertDialogText,
+  countE2eeConvertComments,
   createE2eeConvertMemory,
   estimateE2eeConvertCost,
   planE2eeConvert,
   runE2eeConvert,
+  type E2eeCommentCount,
   type E2eeConvertDialogText,
   type E2eeConvertDirection,
   type E2eeConvertOutcome,
@@ -180,7 +182,7 @@ import InviteDialog, { type InviteTarget } from './InviteDialog'
 import SharesPage from './SharesPage'
 import { listShares, type ShareLinkRow, type ShareGrantRow } from './sharesApi'
 import { revokeShareLink, revokeFolderShareLink } from './linkApi'
-import { deleteGrant } from '../storage/docsApi'
+import { deleteGrant, fetchCommentCount } from '../storage/docsApi'
 // three 가 초기 로드에 붙지 않게 지연 경계를 여기 긋는다 (specs/features/F-292.md 3.3, F-2002 4장)
 const MapPage = lazy(() => import('./MapPage'))
 import { mapIndexScope } from './mapIndex'
@@ -765,6 +767,8 @@ export default function App() {
   // D-9·D-10 — 글과 답을 기다리는 함수. 닫힘(close 이벤트)이 확인 뒤에도 오므로 답은 한 번만 쓴다
   const [e2eeConvertText, setE2eeConvertText] = useState<E2eeConvertDialogText | null>(null)
   const e2eeConvertAnswerRef = useRef<((ok: boolean) => void) | null>(null)
+  // D-9 댓글 수 세기 — 대화상자가 닫히면 끊는다 (F-509 4.1 5번)
+  const e2eeCommentCountAbortRef = useRef<AbortController | null>(null)
 
   // 로그인 전 금고 이관 (F-408) — 판정은 페이지마다 한 번
   const e2eeMigrateCheckedRef = useRef(false)
@@ -2991,6 +2995,8 @@ export default function App() {
     const answer = e2eeConvertAnswerRef.current
     e2eeConvertAnswerRef.current = null
     setE2eeConvertText(null)
+    e2eeCommentCountAbortRef.current?.abort()
+    e2eeCommentCountAbortRef.current = null
     answer?.(ok)
   }
 
@@ -3048,17 +3054,51 @@ export default function App() {
       e2eeConvertAnswerRef.current = resolve
     })
     const answer = e2eeConvertAnswerRef.current
-    setE2eeConvertText(buildE2eeConvertDialogText({ ...textInput, usage: { writesLeft: null, bytesLeft: null } }))
+    let usageForText: { writesLeft: number | null; bytesLeft: number | null } = { writesLeft: null, bytesLeft: null }
+    let commentsForText: E2eeCommentCount | undefined
+    const rebuildConvertText = () =>
+      setE2eeConvertText(buildE2eeConvertDialogText({ ...textInput, usage: usageForText, ...(commentsForText ? { comments: commentsForText } : {}) }))
+    rebuildConvertText()
     // 한도는 기다리지 않는다 — 결과가 오면 줄을 더한다 (7.2)
     if (scope === 'account') {
       fetchUsage()
         .then((usage) => {
           if (e2eeConvertAnswerRef.current !== answer) return
-          const writesLeft = usage.writes ? usage.writes.limit - usage.writes.today : null
-          const bytesLeft = usage.docs ? usage.docs.bytesLimit - usage.docs.bytes : null
-          setE2eeConvertText(buildE2eeConvertDialogText({ ...textInput, usage: { writesLeft, bytesLeft } }))
+          usageForText = {
+            writesLeft: usage.writes ? usage.writes.limit - usage.writes.today : null,
+            bytesLeft: usage.docs ? usage.docs.bytesLimit - usage.docs.bytes : null,
+          }
+          rebuildConvertText()
         })
         .catch(() => {})
+    }
+    // 댓글 수 — 대화상자를 기다리게 하지 않는다, 닫히면 끊는다 (F-509 2.1·4.1)
+    if (direction === 'to-e2ee') {
+      const countController = new AbortController()
+      e2eeCommentCountAbortRef.current = countController
+      const docIds = plan.steps.filter((s) => s.kind === 'doc').map((s) => s.id)
+      const liveHandle = editorRef.current
+      const liveCounts = new Map<string, number | null>(
+        docIds.map((id) => [
+          id,
+          id === currentDocIdRef.current && liveHandle && (commentAccessValue.kind === 'read' || commentAccessValue.kind === 'write')
+            ? liveHandle.comments.map.size
+            : null,
+        ]),
+      )
+      countE2eeConvertComments({
+        docIds,
+        liveCount: (id) => liveCounts.get(id) ?? null,
+        storedCount: async (id, signal) => {
+          if (scope === 'account') return (await fetchCommentCount(id, { signal })).total
+          return convertStore.getCommentRecords ? (await convertStore.getCommentRecords(id)).length : 0
+        },
+        signal: countController.signal,
+      }).then((result) => {
+        if (e2eeConvertAnswerRef.current !== answer || result === null) return
+        commentsForText = result
+        rebuildConvertText()
+      })
     }
     if (!(await answered)) return
     if (showBackupNotice) setPref('md.e2eeBackupNotice', '1')

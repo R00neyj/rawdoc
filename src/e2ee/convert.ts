@@ -12,6 +12,7 @@ import { decryptDocField, encryptAttachment, encryptDocField, openDocKey, rewrap
 
 export const E2EE_CONVERT_WRITE_GAP_MS = 600
 export const E2EE_CONVERT_MAX_RATE_RETRIES = 5
+export const E2EE_COMMENT_COUNT_CONCURRENCY = 4
 
 export type E2eeConvertDirection = 'to-e2ee' | 'from-e2ee'
 export type E2eeConvertTarget = { kind: 'doc'; id: string } | { kind: 'folder'; id: string }
@@ -177,6 +178,9 @@ export type E2eeConvertDialogText = {
   confirmLabel: string
 }
 
+// 계획의 문서들 댓글 수 — 세는 중이면 buildE2eeConvertDialogText 에 comments 를 아예 넘기지 않는다 (F-509 2.1)
+export type E2eeCommentCount = { kind: 'known'; total: number } | { kind: 'unknown' }
+
 const BACKUP_NOTICE = '옮기기 전의 내용은 서버의 자동 백업(장애 복구용)에 최대 30일 남았다가 사라집니다. 백업은 화면에서 볼 수 없고 서버 장애를 되돌릴 때만 씁니다.'
 
 // 순수 — D-9·D-10 의 글 (7.2). notes 순서가 계약이다
@@ -190,6 +194,7 @@ export function buildE2eeConvertDialogText(input: {
   showBackupNotice: boolean
   usage: { writesLeft: number | null; bytesLeft: number | null }
   cost: { writes: number; deltaBytes: number }
+  comments?: E2eeCommentCount // to-e2ee 에서만 본다. 없으면 아직 세는 중 — 줄 없음 (F-509 2.1)
 }): E2eeConvertDialogText {
   const { direction, scope, name, targetKind, docCount, folderCount, usage, cost } = input
   const toE2ee = direction === 'to-e2ee'
@@ -217,6 +222,14 @@ export function buildE2eeConvertDialogText(input: {
       `오늘 남은 저장 횟수(${formatCount(usage.writesLeft)}번)보다 ${ing} 데 드는 횟수(약 ${formatCount(cost.writes)}번)가 많아 중간에 멈출 수 있습니다. 멈추면 다음 날 다시 눌러 이어 ${will} 수 있습니다.`,
     )
   }
+  // 댓글 줄 — notes 맨 끝 (F-509 2.1·5장)
+  if (toE2ee && input.comments) {
+    if (input.comments.kind === 'known') {
+      if (input.comments.total > 0) notes.push(`댓글 ${formatCount(input.comments.total)}개도 함께 지워집니다.`)
+    } else {
+      notes.push('댓글이 있다면 함께 지워집니다.')
+    }
+  }
   return {
     title: toE2ee ? '금고로 옮기기' : '금고에서 빼기',
     body,
@@ -224,6 +237,56 @@ export function buildE2eeConvertDialogText(input: {
     backupNotice: toE2ee && !local && input.showBackupNotice ? BACKUP_NOTICE : null,
     confirmLabel: toE2ee ? '옮기기' : '빼기',
   }
+}
+
+// 계획의 문서들 댓글 수를 합한다 — 문서마다 max(storedCount, liveCount), 동시 4개, 첫 실패면 unknown, 끊기면 null (F-509 3.1)
+export async function countE2eeConvertComments(input: {
+  docIds: readonly string[]
+  liveCount(docId: string): number | null
+  storedCount(docId: string, signal: AbortSignal): Promise<number>
+  signal: AbortSignal
+}): Promise<E2eeCommentCount | null> {
+  const { docIds, liveCount, storedCount, signal } = input
+  if (docIds.length === 0) return { kind: 'known', total: 0 }
+  let total = 0
+  let unknown = false
+  let stopped = false
+  let nextIndex = 0
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      if (signal.aborted || stopped) return
+      const i = nextIndex++
+      if (i >= docIds.length) return
+      const id = docIds[i]
+      let stored: number
+      try {
+        stored = await storedCount(id, signal)
+      } catch (err) {
+        if (signal.aborted) return
+        if (err instanceof ApiError && (err.kind === 'not_found' || err.kind === 'e2ee_doc')) {
+          stored = 0
+        } else {
+          unknown = true
+          stopped = true
+          return
+        }
+      }
+      if (signal.aborted) return
+      if (!(Number.isInteger(stored) && stored >= 0)) {
+        unknown = true
+        stopped = true
+        return
+      }
+      total += Math.max(stored, liveCount(id) ?? 0)
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(E2EE_COMMENT_COUNT_CONCURRENCY, docIds.length) }, () => worker()))
+
+  if (signal.aborted) return null
+  if (unknown) return { kind: 'unknown' }
+  return { kind: 'known', total }
 }
 
 export type E2eeConvertMemory = {

@@ -452,8 +452,10 @@ export async function createIdbStore(
     },
 
     // 금고로 옮기기·빼기 로컬 판 — 빼기면 두 키를 행에서 없앤다 (F-407 5.3)
+    // 옮기기(e2ee: true)는 그 문서의 댓글 기록도 같은 트랜잭션에서 지운다 — 봉투와 평문 기록이 함께 남는 틈이 없게 (F-509.md 2.3·4.3)
     async setDocE2ee(id, input) {
-      const tx = db.transaction(DOCS_STORE, 'readwrite')
+      const storeNames = input.e2ee ? [DOCS_STORE, COMMENTS_STORE] : [DOCS_STORE]
+      const tx = db.transaction(storeNames, 'readwrite')
       const store = tx.objectStore(DOCS_STORE)
       const existing: StoredDoc | undefined = await store.get(id)
       if (!existing) {
@@ -469,6 +471,7 @@ export async function createIdbStore(
         ...(input.e2ee && input.e2eeKey ? { e2eeKey: input.e2eeKey, attachmentRefs: input.attachmentRefs ?? [] } : {}),
       }
       await store.put(updated)
+      if (input.e2ee) await tx.objectStore(COMMENTS_STORE).delete(id)
       await tx.done
       return { doc: updated, purged: true }
     },
