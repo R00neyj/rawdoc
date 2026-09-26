@@ -7,6 +7,7 @@ import { Awareness } from 'y-protocols/awareness'
 import { isEditorRelay } from '../editor/remoteGate'
 import { openLiveSocket } from '../storage/liveSocket'
 import { YJS_LOAD_ORIGIN, type YjsAttachment, type YjsStore } from '../storage/yjsStore'
+import { createCommentCommandClient, type CommentCommandClient } from './commentOps'
 import { createLiveDocController, type LiveSnapshot } from './liveDoc'
 import { createMergeTracker } from './liveMerge'
 
@@ -20,12 +21,16 @@ export type LiveDocSession = {
   merged: number
   // 이 세션에 영속이 없다 — md-yjs 를 못 열었거나 쓰기가 실패했다 (F-306 4.5)
   persistBroken: boolean
+  // 보기 권한자의 읽기 전용 세션 — md-yjs 없음, 내 awareness null, 댓글은 명령으로 (F-506 4장)
+  readOnly: boolean
+  commands: CommentCommandClient | null
 }
 
 export type LiveDocOptions = {
   store: YjsStore | null
   resume: boolean
   startOffline: boolean
+  readOnly?: boolean
   // 재개로 판정됐는데 기록을 불러오지 못했다 — App 이 기록 없음으로 다시 판정한다 (F-306 6.4 4번)
   onResumeFailed?: (docId: string) => void
 }
@@ -54,6 +59,7 @@ export function useLiveDoc(docId: string | null, options: LiveDocOptions): LiveD
   const [sessions] = useState(createSessionStore)
   const session = useSyncExternalStore(sessions.subscribe, sessions.get, sessions.get)
   const { store, resume, startOffline } = options
+  const readOnly = options.readOnly === true
   const onResumeFailedRef = useRef(options.onResumeFailed)
   useEffect(() => {
     onResumeFailedRef.current = options.onResumeFailed
@@ -67,6 +73,8 @@ export function useLiveDoc(docId: string | null, options: LiveDocOptions): LiveD
     // 원격 상태는 명시적 지우기로만 사라진다 — 30초 만료 타이머를 끈다. 첫 내 상태 {} 는 둔다 (F-307 5.1)
     const awareness = new Awareness(roomDoc)
     clearInterval((awareness as unknown as { _checkInterval: ReturnType<typeof setInterval> })._checkInterval)
+    // 읽기 전용 세션은 커서를 한 통도 보내지 않는다 — 남의 awareness 는 받는다 (F-506 4장, k3)
+    if (readOnly) awareness.setLocalState(null)
 
     // 기록을 다 불러온 뒤에 제어기를 만든다 — ready 가 빈 방 Doc 으로 먼저 참이 되지 않게 (6.4 3번)
     const begin = (attachment: YjsAttachment | null) => {
@@ -99,7 +107,17 @@ export function useLiveDoc(docId: string | null, options: LiveDocOptions): LiveD
         startOffline: resumable && startOffline,
         // 온라인으로 여는 재개 세션은 소켓을 여는 것과 동시에 ready — 기록으로 편집기를 곧바로 띄운다 (F-2041 3.1)
         readyAtStart: resumable,
+        readOnly,
       })
+      const commands = readOnly
+        ? createCommentCommandClient({
+            send: (text) => controller.send(text),
+            now: () => Date.now(),
+            setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+            clearTimeout: (handle) => window.clearTimeout(handle as number),
+          })
+        : null
+      const unsubscribeCustom = commands ? controller.subscribeCustom((text) => commands.receive(text)) : null
 
       let wasLive = false
       let merged = 0
@@ -109,6 +127,8 @@ export function useLiveDoc(docId: string | null, options: LiveDocOptions): LiveD
         if (live !== wasLive) {
           wasLive = live
           if (tracker.setLive(live)) merged++
+          // 한 소켓에서 보낸 명령은 다음 소켓의 응답을 기다리지 않는다 (F-506 6.3)
+          if (!live) commands?.connectionLost()
         }
         // 문서가 사라졌다 — 기록을 곧바로 지운다. 편집기는 이미 방 Doc 으로 떠 있어 새 문서로 저장이 로컬 편집까지 건진다 (4.6, 6.3)
         const gone = snapshot.phase === 'stopped' && (snapshot.stopReason === 'not-found' || snapshot.stopReason === 'deleted')
@@ -117,7 +137,7 @@ export function useLiveDoc(docId: string | null, options: LiveDocOptions): LiveD
           attachment.detach()
           void store.removeDoc(docId).catch(() => {})
         }
-        sessions.set({ docId, roomDoc, awareness, snapshot, merged, persistBroken: !attachment || attachment.broken })
+        sessions.set({ docId, roomDoc, awareness, snapshot, merged, persistBroken: !attachment || attachment.broken, readOnly, commands })
       }
       const unsubscribe = controller.subscribe(publish)
 
@@ -139,13 +159,15 @@ export function useLiveDoc(docId: string | null, options: LiveDocOptions): LiveD
         window.removeEventListener('offline', handleOffline)
         document.removeEventListener('visibilitychange', handleVisibility)
         unsubscribe()
+        unsubscribeCustom?.()
+        commands?.dispose()
         attachment?.detach()
         tracker.destroy()
         controller.destroy()
       }
     }
 
-    if (store) store.attach(docId, roomDoc).then(begin, () => begin(null))
+    if (store && !readOnly) store.attach(docId, roomDoc).then(begin, () => begin(null))
     else begin(null)
 
     return () => {
@@ -154,7 +176,7 @@ export function useLiveDoc(docId: string | null, options: LiveDocOptions): LiveD
       roomDoc.destroy()
       if (sessions.get()?.roomDoc === roomDoc) sessions.set(null)
     }
-  }, [docId, store, resume, startOffline, sessions])
+  }, [docId, store, resume, startOffline, readOnly, sessions])
 
   return session && session.docId === docId ? session : null
 }

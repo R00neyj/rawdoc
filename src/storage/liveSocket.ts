@@ -7,6 +7,9 @@ import { DOC_SOCKET_PREFIX, SOCKET_PING, SOCKET_PONG } from '../lib/docRoomProto
 
 type Awareness = YProvider['awareness']
 
+// y-partyserver 가 문자열 커스텀 메시지에 붙이는 머리 — YProvider.sendMessage 와 같다
+const CUSTOM_MESSAGE_PREFIX = '__YPS:'
+
 export type LiveSocketHandlers = {
   onOpen(): void
   onSynced(): void
@@ -28,6 +31,8 @@ export type LiveSocketOptions = LiveSocketHandlers & {
 export type LiveSocket = {
   ping(): void
   close(): void
+  // __YPS: 를 붙여 보낸다. 소켓이 OPEN 이 아니거나 끝났으면 보내지 않고 false (F-506 6.1)
+  send(text: string): boolean
 }
 
 export function openLiveSocket(options: LiveSocketOptions): LiveSocket {
@@ -109,6 +114,13 @@ export function openLiveSocket(options: LiveSocketOptions): LiveSocket {
       const ws = provider.ws
       if (finished || !ws || ws.readyState !== ws.OPEN) return
       ws.send(SOCKET_PING)
+    },
+    // provider.sendMessage 는 소켓 상태를 보지 않는다 — CONNECTING 에서 브라우저가 던진다 (F-506 k2)
+    send(text) {
+      const ws = provider.ws
+      if (finished || !ws || ws.readyState !== ws.OPEN) return false
+      ws.send(`${CUSTOM_MESSAGE_PREFIX}${text}`)
+      return true
     },
     close() {
       if (finished) return

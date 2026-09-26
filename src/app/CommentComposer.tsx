@@ -1,8 +1,8 @@
 // 새 댓글 입력 카드 (specs/features/F-505.md 3장·7.1, F-500 5.1). F-507 이 멘션 후보를 더한다
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { COMMENT_BODY_COUNTER_FROM } from './commentRail'
 import { COMMENT_BODY_MAX, normalizeCommentBody } from '../lib/docComments'
-import { COMMENT_TEXT, type CommentWriteFailure } from './useDocComments'
+import { COMMENT_TEXT, CommentCommandContext, type CommentWriteFailure } from './useDocComments'
 
 function failureMessage(reason: CommentWriteFailure): string {
   switch (reason) {
@@ -32,6 +32,7 @@ type CommentComposerProps = {
 export default function CommentComposer({ sending, error, mentionable, onSend, onCancel }: CommentComposerProps) {
   const [value, setValue] = useState('')
   const ref = useRef<HTMLTextAreaElement | null>(null)
+  const { disconnected } = useContext(CommentCommandContext)
 
   useEffect(() => {
     ref.current?.focus()
@@ -39,7 +40,17 @@ export default function CommentComposer({ sending, error, mentionable, onSend, o
 
   const normalized = normalizeCommentBody(value)
   const len = normalized.length
-  const disabled = len === 0 || len > COMMENT_BODY_MAX || sending
+  const disabled = len === 0 || len > COMMENT_BODY_MAX || sending || disconnected
+  // 입력칸 아래 줄은 하나만 — 보내는 중 > C4 > F-505 의 것 (F-506 7.2)
+  const note = sending
+    ? COMMENT_TEXT.sending
+    : disconnected
+      ? COMMENT_TEXT.offline
+      : len > COMMENT_BODY_MAX
+        ? COMMENT_TEXT.tooLong
+        : error && error !== 'offline'
+          ? failureMessage(error)
+          : null
   const placeholder = mentionable ? '댓글을 입력하세요. @로 사람을 멘션할 수 있습니다.' : '댓글을 입력하세요.'
 
   function send() {
@@ -54,9 +65,15 @@ export default function CommentComposer({ sending, error, mentionable, onSend, o
         className="comment-composer-input"
         placeholder={placeholder}
         value={value}
+        readOnly={sending}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
           if (e.nativeEvent.isComposing) return
+          if (sending && (e.key === 'Escape' || e.key === 'Enter')) {
+            e.preventDefault()
+            e.stopPropagation()
+            return
+          }
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault()
             send()
@@ -74,7 +91,7 @@ export default function CommentComposer({ sending, error, mentionable, onSend, o
           </span>
         )}
         <span className="comment-composer-buttons">
-          <button type="button" className="comment-composer-cancel" onClick={onCancel}>
+          <button type="button" className="comment-composer-cancel" disabled={sending} onClick={onCancel}>
             취소
           </button>
           <button type="button" className="comment-composer-send" disabled={disabled} onClick={send}>
@@ -82,8 +99,8 @@ export default function CommentComposer({ sending, error, mentionable, onSend, o
           </button>
         </span>
       </div>
-      {(len > COMMENT_BODY_MAX || error) && (
-        <p className="comment-composer-error">{len > COMMENT_BODY_MAX ? COMMENT_TEXT.tooLong : failureMessage(error!)}</p>
+      {note !== null && (
+        <p className={sending || disconnected ? 'comment-composer-error comment-composer-note' : 'comment-composer-error'}>{note}</p>
       )}
     </div>
   )

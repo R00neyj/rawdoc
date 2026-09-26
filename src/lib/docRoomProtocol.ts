@@ -17,7 +17,10 @@ export const SOCKET_CLOSE = {
 
 export type SocketCloseReason = 'unauthenticated' | 'forbidden' | 'revoked' | 'not_found' | 'deleted' | 'unavailable'
 
-export type DocRoomMessage = { type: 'too-large'; limit: number; bytes: number } | { type: 'size-ok' }
+export type DocRoomMessage =
+  | { type: 'too-large'; limit: number; bytes: number }
+  | { type: 'size-ok' }
+  | { type: 'read-only' } // 이 연결은 읽기 전용이다 (F-506 6.8)
 
 export function encodeDocRoomMessage(message: DocRoomMessage): string {
   return JSON.stringify(message)
@@ -33,6 +36,7 @@ export function parseDocRoomMessage(text: string): DocRoomMessage | null {
   if (typeof value !== 'object' || value === null) return null
   const record = value as Record<string, unknown>
   if (record.type === 'size-ok') return { type: 'size-ok' }
+  if (record.type === 'read-only') return { type: 'read-only' }
   if (record.type === 'too-large' && typeof record.limit === 'number' && typeof record.bytes === 'number') {
     return { type: 'too-large', limit: record.limit, bytes: record.bytes }
   }

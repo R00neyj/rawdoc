@@ -389,3 +389,26 @@ describe('F-307 A8 awareness 를 받은 시도는 내 clientID 만 보낸다', (
     expect(bc.created).toBe(before)
   })
 })
+
+describe('F-506 W1 send', () => {
+  it('OPEN 이면 __YPS: 를 붙여 한 통, CONNECTING 이면 false·보낸 것 0·던지지 않음, close() 뒤 false', async () => {
+    const { socket } = open()
+    await ticks()
+    const ws = FakeWebSocket.instances[0]
+    const texts = () => ws.sent.filter((m) => typeof m === 'string')
+    // 브라우저 WebSocket 처럼 OPEN 이 아니면 던진다
+    const realSend = ws.send.bind(ws)
+    ws.send = (data) => {
+      if (ws.readyState !== ws.OPEN) throw new Error('InvalidStateError')
+      realSend(data)
+    }
+    expect(socket.send('x')).toBe(false)
+    expect(texts()).toEqual([])
+    ws.serverOpen()
+    expect(socket.send('x')).toBe(true)
+    expect(texts()).toEqual(['__YPS:x'])
+    socket.close()
+    expect(socket.send('x')).toBe(false)
+    expect(texts()).toEqual(['__YPS:x'])
+  })
+})

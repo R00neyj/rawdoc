@@ -110,3 +110,16 @@ describe('F-503 P1~P4 댓글 명령 계약', () => {
     expect(parseDocRoomMessage(encodeCommentOpReply({ type: 'comment-reject', id: ID, reason: 'invalid' }))).toBeNull()
   })
 })
+
+describe('F-506 P5 read-only 메시지', () => {
+  it('encode → parse 로 같은 값, parseCommentOpReply 에는 null', () => {
+    const message: DocRoomMessage = { type: 'read-only' }
+    const text = encodeDocRoomMessage(message)
+    expect(parseDocRoomMessage(text)).toEqual(message)
+    expect(parseCommentOpReply(text)).toBeNull()
+  })
+
+  it('다른 키가 더 있어도 type 만 본다', () => {
+    expect(parseDocRoomMessage('{"type":"read-only","x":1}')).toEqual({ type: 'read-only' })
+  })
+})

@@ -1,5 +1,6 @@
 // context.routeWebSocket 으로 도는 Node 쪽 가짜 DocRoom — 방마다 Y.Doc 하나, 보낸 쪽 포함 모두에게 되돌린다 (F-305 19.2, F-304 11.2)
 // awareness 는 서버 규칙 중 도장·되돌림 버리기·닫힐 때 지우기만 흉내 낸다 (F-307 12.2)
+// 역할이 view 인 연결은 읽기 전용 — read-only 를 먼저 보내고 Yjs 쓰기·awareness 중계를 버린다. 댓글 명령은 F-503 4.4 정상 길만 흉내 낸다 (F-506 9.1)
 import * as Y from 'yjs'
 // y-protocols 는 F-307 로 직접 의존이다. lib0 는 yjs·y-partyserver 의 의존으로 최상위에 있다 (F-305 22장 Q9)
 import * as syncProtocol from 'y-protocols/sync'
@@ -13,6 +14,8 @@ const DEFAULT_IDENTITY = { id: 'u1', email: 'a@b.com' }
 const FAKE_PEER_CLIENT_BASE = 2_000_000_000
 const COMMENTS_MAP_NAME = 'comments' // src/lib/docRoomProtocol.ts Y_COMMENTS_NAME 과 같은 문자열 (e2e 는 src/ 를 import 하지 않는다, F-505 3.9)
 const COMMENT_QUOTE_MAX = 200
+const CUSTOM_PREFIX = '__YPS:'
+const READ_ONLY_MESSAGE = `${CUSTOM_PREFIX}${JSON.stringify({ type: 'read-only' })}`
 
 // src/lib/docComments.ts commentQuote 와 같은 규칙 — 200자 넘으면 199자(대리쌍 걸치면 198) + '…'
 function quoteOf(text) {
@@ -127,16 +130,102 @@ export function createFakeDocRoom() {
     if (entries.length > 0) broadcastAwareness(room, entries)
   }
 
+  function reply(conn, message) {
+    if (!conn.closed) conn.ws.send(`${CUSTOM_PREFIX}${JSON.stringify(message)}`)
+  }
+
+  function entryOf(room, id) {
+    const value = room.doc.getMap(COMMENTS_MAP_NAME).get(id)
+    return isObject(value) ? value : null
+  }
+
+  // F-503 4.4 정상 길 — 쓰기는 방 Doc 트랜잭션 하나(update 처리기가 모두에게 보냄) → 보낸 연결에만 응답
+  function applyCommentOp(room, conn, op) {
+    if (room.commentReject) return room.commentReject
+    const map = room.doc.getMap(COMMENTS_MAP_NAME)
+    const author = { id: conn.identity.id, email: conn.identity.email }
+    if (op.type === 'comment-delete') {
+      const target = entryOf(room, op.id)
+      if (!target) return null
+      if (target.author?.id !== author.id) return 'forbidden'
+      room.doc.transact(() => {
+        if (target.parent === null) {
+          for (const [key, value] of [...map.entries()]) if (isObject(value) && value.parent === op.id) map.delete(key)
+        }
+        map.delete(op.id)
+      })
+      return null
+    }
+    if (op.type === 'comment-resolve') {
+      const root = entryOf(room, op.id)
+      if (!root || root.parent !== null) return 'not_found'
+      room.doc.transact(() => map.set(op.id, { ...root, resolved: op.resolved ? { by: author, at: Date.now() } : null }))
+      return null
+    }
+    if (map.has(op.id)) return null
+    if (op.type === 'comment-add') {
+      const ytext = room.doc.getText('content')
+      const start = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(op.start), room.doc)
+      const end = Y.createAbsolutePositionFromRelativePosition(Y.createRelativePositionFromJSON(op.end), room.doc)
+      if (!start || !end || start.index >= end.index) return 'invalid'
+      const quote = quoteOf(ytext.toString().slice(start.index, end.index))
+      const entry = { v: 1, parent: null, anchor: { start: op.start, end: op.end }, quote, body: op.body, mentions: op.mentions, author, createdAt: Date.now(), resolved: null }
+      room.doc.transact(() => map.set(op.id, entry))
+      return null
+    }
+    if (op.type === 'comment-reply') {
+      const parent = entryOf(room, op.parent)
+      if (!parent || parent.parent !== null) return 'not_found'
+      const entry = { v: 1, parent: op.parent, anchor: null, quote: '', body: op.body, mentions: op.mentions, author, createdAt: Date.now(), resolved: null }
+      room.doc.transact(() => {
+        map.set(op.id, entry)
+        if (parent.resolved !== null) map.set(op.parent, { ...parent, resolved: null })
+      })
+      return null
+    }
+    return 'invalid'
+  }
+
+  function runCommentOp(room, conn, record) {
+    if (conn.closed) return
+    let op = null
+    try {
+      op = JSON.parse(record.text)
+    } catch {
+      return
+    }
+    if (!isObject(op) || typeof op.id !== 'string') return
+    const reason = applyCommentOp(room, conn, op)
+    const message = reason === null ? { type: 'comment-ack', id: op.id } : { type: 'comment-reject', id: op.id, reason }
+    record.reply = JSON.stringify(message)
+    reply(conn, message)
+  }
+
+  function onCommentOp(room, conn, text) {
+    const record = { userId: conn.identity.id, text, reply: null }
+    room.commentOps.push(record)
+    if (room.commentsPaused) room.heldComments.push({ conn, record })
+    else runCommentOp(room, conn, record)
+  }
+
   function onMessage(room, conn, message) {
     if (typeof message === 'string') {
       if (message === 'ping') conn.ws.send('pong')
+      else if (message.startsWith(CUSTOM_PREFIX)) onCommentOp(room, conn, message.slice(CUSTOM_PREFIX.length))
       return
     }
     const decoder = decoding.createDecoder(new Uint8Array(message))
     const type = decoding.readVarUint(decoder)
     if (type === MESSAGE_AWARENESS) {
       room.awarenessMessages++
-      relayAwareness(room, conn, readAwarenessEntries(decoder))
+      const entries = readAwarenessEntries(decoder)
+      if (conn.readOnly) {
+        const log = room.awarenessByUser.get(conn.identity.id) ?? []
+        log.push(entries)
+        room.awarenessByUser.set(conn.identity.id, log)
+        return
+      }
+      relayAwareness(room, conn, entries)
       return
     }
     if (type !== MESSAGE_SYNC) return
@@ -149,6 +238,7 @@ export function createFakeDocRoom() {
       return
     }
     if (sub === syncProtocol.messageYjsSyncStep2 || sub === syncProtocol.messageYjsUpdate) {
+      if (conn.readOnly) return
       Y.applyUpdate(room.doc, decoding.readVarUint8Array(decoder), conn)
     }
   }
@@ -168,7 +258,7 @@ export function createFakeDocRoom() {
       ws.close({ code: room.reject.code, reason: room.reject.reason ?? '' })
       return
     }
-    const conn = { ws, closed: false, identity }
+    const conn = { ws, closed: false, identity, readOnly: room.roles.get(identity.id) === 'view' }
     room.conns.add(conn)
     ws.onMessage((message) => onMessage(room, conn, message))
     ws.onClose((code, reason) => {
@@ -176,6 +266,8 @@ export function createFakeDocRoom() {
       forgetConn(room, conn)
       ws.close({ code, reason }).catch(() => {})
     })
+    // 읽기 전용 연결에는 step 1 보다 먼저 (F-506 6.8)
+    if (conn.readOnly) ws.send(READ_ONLY_MESSAGE)
     // 서버가 먼저 step 1 을 보내야 클라이언트가 끊긴 동안의 편집을 step 2 로 올린다 (y-partyserver 와 같다)
     send(conn, syncMessage((e) => syncProtocol.writeSyncStep1(e, room.doc)))
     // 깨어 있는 YServer.onConnect 처럼 지금 상태 전체를 새 연결에 보낸다
@@ -210,6 +302,11 @@ export function createFakeDocRoom() {
         states: new Map(),
         awarenessByUser: new Map(),
         fakePeers: 0,
+        roles: new Map(),
+        commentOps: [],
+        commentsPaused: false,
+        heldComments: [],
+        commentReject: null,
       }
       doc.on('update', (update) => {
         const bytes = syncMessage((e) => syncProtocol.writeUpdate(e, update))
@@ -309,6 +406,31 @@ export function createFakeDocRoom() {
     // 방 Doc 에서 지운다 — 모든 연결에 퍼진다
     deleteComment(docId, id) {
       roomOf(docId).doc.getMap(COMMENTS_MAP_NAME).delete(id)
+    },
+
+    // 'view' | 'edit'. 없으면 edit. 이후 연결부터 (F-506 9.1)
+    setRole(docId, userId, role) {
+      roomOf(docId).roles.set(userId, role)
+    },
+
+    // 받은 명령 문자열과 보낸 응답 문자열(없으면 null), 받은 차례
+    commentOps: (docId) => roomOf(docId).commentOps.map((r) => ({ ...r })),
+
+    // 이후 받은 명령을 처리하지 않고 쌓는다
+    pauseComments(docId) {
+      roomOf(docId).commentsPaused = true
+    },
+
+    // 쌓인 것을 차례로 처리한다. 이미 닫힌 연결의 것은 버린다
+    resumeComments(docId) {
+      const room = roomOf(docId)
+      room.commentsPaused = false
+      for (const { conn, record } of room.heldComments.splice(0)) runCommentOp(room, conn, record)
+    },
+
+    // 이후 명령을 쓰지 않고 그 사유로 거절한다. null 이면 푼다
+    rejectComments(docId, reason) {
+      roomOf(docId).commentReject = reason
     },
   }
 }

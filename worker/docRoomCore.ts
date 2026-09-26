@@ -396,6 +396,8 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
       safeClose(conn, SOCKET_CLOSE.notFound, 'deleted')
       return false
     }
+    // 첫 메시지로 — 클라이언트가 방 Doc 에 서버 상태를 적용하기 전에 안다 (F-506 6.8)
+    if (isReadOnlyState(conn.state)) this.host.sendCustom(conn, encodeDocRoomMessage({ type: 'read-only' }))
     await sendSyncStep1()
     if (this.tooLarge) this.host.sendCustom(conn, this.tooLargeMessage())
     return true

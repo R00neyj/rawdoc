@@ -48,6 +48,8 @@ function fakeClock() {
 type Attempt = {
   options: LiveSocketOptions
   pings: number
+  sent: string[]
+  sendResult: boolean
   closedByController: boolean
   opened: boolean
   open(): void
@@ -64,6 +66,7 @@ function setup(
     resumable?: boolean
     startOffline?: boolean
     readyAtStart?: boolean
+    readOnly?: boolean
   } = {},
 ) {
   const clock = fakeClock()
@@ -72,6 +75,8 @@ function setup(
     const attempt: Attempt = {
       options,
       pings: 0,
+      sent: [],
+      sendResult: true,
       closedByController: false,
       opened: false,
       open() {
@@ -99,6 +104,10 @@ function setup(
       close() {
         attempt.closedByController = true
       },
+      send(text) {
+        attempt.sent.push(text)
+        return attempt.sendResult
+      },
     }
   }
   const controller = createLiveDocController({
@@ -114,6 +123,7 @@ function setup(
     ...(extra.resumable !== undefined ? { resumable: extra.resumable } : {}),
     ...(extra.startOffline !== undefined ? { startOffline: extra.startOffline } : {}),
     ...(extra.readyAtStart !== undefined ? { readyAtStart: extra.readyAtStart } : {}),
+    ...(extra.readOnly !== undefined ? { readOnly: extra.readOnly } : {}),
   })
   const last = () => attempts[attempts.length - 1]
   return { clock, attempts, controller, last }
@@ -924,3 +934,199 @@ describe('F-2041 U9 liveStatusOf', () => {
 })
 
 // U10 — 기존 F-306 U18~U21·F-305 U3~U11 을 한 줄도 고치지 않고 그대로 둔 채 이 파일 전체를 돌려 확인한다(위 describe 들)
+
+// F-506 L1~L6 — 서버 read-only 메시지·읽기 전용 세션·send·subscribeCustom (specs/features/F-506.md 5장·6.2)
+const READ_ONLY_TEXT = encodeDocRoomMessage({ type: 'read-only' })
+
+describe('F-506 L1 비재개 편집 세션이 첫 메시지로 read-only 를 받음', () => {
+  it('stopped/read-only, ready 거짓, 소켓 닫힘, 120초 뒤에도 새 시도 없음', () => {
+    const ctx = setup()
+    ctx.controller.start()
+    ctx.last().open()
+    ctx.last().custom(READ_ONLY_TEXT)
+    expect(phaseOf(ctx.controller)).toEqual({ phase: 'stopped', fallbackReason: null, stopReason: 'read-only' })
+    expect(ctx.controller.snapshot().ready).toBe(false)
+    expect(ctx.last().closedByController).toBe(true)
+    ctx.clock.advance(120_000)
+    expect(ctx.attempts).toHaveLength(1)
+    expect(ctx.clock.pending()).toBe(0)
+  })
+})
+
+describe('F-506 L2 ready 뒤의 read-only 는 revoked', () => {
+  it('readyAtStart 세션, 첫 동기화 전 read-only → stopped/revoked, ready 참', () => {
+    const ctx = setup({ resumable: true, readyAtStart: true })
+    ctx.controller.start()
+    ctx.last().open()
+    ctx.last().custom(READ_ONLY_TEXT)
+    expect(phaseOf(ctx.controller)).toEqual({ phase: 'stopped', fallbackReason: null, stopReason: 'revoked' })
+    expect(ctx.controller.snapshot().ready).toBe(true)
+    expect(ctx.last().closedByController).toBe(true)
+  })
+
+  it('readyAtStart 세션, 동기화 뒤 재연결의 첫 메시지로 read-only → stopped/revoked, ready 참', () => {
+    const ctx = setup({ resumable: true, readyAtStart: true })
+    goLive(ctx)
+    ctx.last().close(1013)
+    ctx.clock.advance(1000)
+    ctx.last().open()
+    ctx.last().custom(READ_ONLY_TEXT)
+    expect(phaseOf(ctx.controller)).toEqual({ phase: 'stopped', fallbackReason: null, stopReason: 'revoked' })
+    expect(ctx.controller.snapshot().ready).toBe(true)
+    ctx.clock.advance(120_000)
+    expect(ctx.attempts).toHaveLength(2)
+  })
+
+  it('비재개 세션, 동기화 뒤 재연결의 첫 메시지로 read-only → stopped/revoked', () => {
+    const ctx = setup()
+    goLive(ctx)
+    ctx.last().close(1013)
+    ctx.clock.advance(1000)
+    ctx.last().open()
+    ctx.last().custom(READ_ONLY_TEXT)
+    expect(phaseOf(ctx.controller)).toEqual({ phase: 'stopped', fallbackReason: null, stopReason: 'revoked' })
+    expect(ctx.controller.snapshot().ready).toBe(true)
+  })
+})
+
+describe('F-506 L3 읽기 전용 세션은 read-only 를 무시', () => {
+  it('단계 그대로, 이어 synced → live', () => {
+    const ctx = setup({ readOnly: true })
+    ctx.controller.start()
+    ctx.last().open()
+    ctx.last().custom(READ_ONLY_TEXT)
+    expect(phaseOf(ctx.controller)).toEqual({ phase: 'connecting', fallbackReason: null, stopReason: null })
+    ctx.last().synced()
+    expect(ctx.controller.snapshot().phase).toBe('live')
+    ctx.last().custom(READ_ONLY_TEXT)
+    expect(ctx.controller.snapshot().phase).toBe('live')
+  })
+})
+
+describe('F-506 L4 읽기 전용 세션의 닫기 분류는 비재개 편집 세션과 같다', () => {
+  const scenarios: [string, (ctx: ReturnType<typeof setup>) => void][] = []
+  for (const code of [4401, 4403, 4404, 1006, 1011, 1013]) {
+    for (const opened of [false, true]) {
+      scenarios.push([
+        `첫 동기화 전 ${code}(열림 ${opened})`,
+        (ctx) => {
+          ctx.controller.start()
+          if (opened) ctx.last().open()
+          ctx.last().close(code)
+        },
+      ])
+      scenarios.push([
+        `첫 동기화 뒤 ${code}(열림 ${opened})`,
+        (ctx) => {
+          goLive(ctx)
+          ctx.last().close(code)
+        },
+      ])
+    }
+  }
+  scenarios.push([
+    '한 번도 안 열린 채 시간 제한',
+    (ctx) => {
+      ctx.controller.start()
+      ctx.clock.advance(FIRST_SYNC_TIMEOUT_MS)
+    },
+  ])
+  scenarios.push([
+    '열린 채 30초 시간 제한',
+    (ctx) => {
+      ctx.controller.start()
+      ctx.last().open()
+      ctx.clock.advance(FIRST_SYNC_HARD_TIMEOUT_MS)
+    },
+  ])
+  scenarios.push([
+    '첫 동기화 전 goOffline',
+    (ctx) => {
+      ctx.controller.start()
+      ctx.controller.goOffline()
+    },
+  ])
+  scenarios.push([
+    'live 에서 goOffline 뒤 10초',
+    (ctx) => {
+      goLive(ctx)
+      ctx.controller.goOffline()
+      ctx.clock.advance(DISCONNECT_NOTICE_MS)
+    },
+  ])
+  scenarios.push([
+    'keepalive 끊김 뒤 재연결',
+    (ctx) => {
+      goLive(ctx)
+      ctx.clock.advance(20_000 + PONG_TIMEOUT_MS)
+      ctx.clock.advance(1000)
+      ctx.last().open()
+      ctx.last().synced()
+    },
+  ])
+  for (const [name, run] of scenarios) {
+    it(name, () => {
+      const edit = setup()
+      const view = setup({ readOnly: true })
+      run(edit)
+      run(view)
+      expect(view.controller.snapshot()).toEqual(edit.controller.snapshot())
+      expect(view.attempts.length).toBe(edit.attempts.length)
+    })
+  }
+})
+
+describe('F-506 L5 send·subscribeCustom', () => {
+  it('connecting 거짓 / live 는 소켓 send 결과 / reconnecting 거짓 / stopped 거짓', () => {
+    const ctx = setup({ readOnly: true })
+    ctx.controller.start()
+    ctx.last().open()
+    expect(ctx.controller.send('a')).toBe(false)
+    expect(ctx.last().sent).toEqual([])
+    ctx.last().synced()
+    expect(ctx.controller.send('b')).toBe(true)
+    ctx.last().sendResult = false
+    expect(ctx.controller.send('c')).toBe(false)
+    expect(ctx.last().sent).toEqual(['b', 'c'])
+    ctx.last().close(1013)
+    expect(ctx.controller.snapshot().phase).toBe('reconnecting')
+    expect(ctx.controller.send('d')).toBe(false)
+    ctx.clock.advance(1000)
+    ctx.last().close(4403)
+    expect(ctx.controller.snapshot().phase).toBe('stopped')
+    expect(ctx.controller.send('e')).toBe(false)
+    expect(ctx.attempts.flatMap((a) => a.sent)).toEqual(['b', 'c'])
+  })
+
+  it('구독자는 too-large·size-ok·read-only 가 아닌 문자열만 받는다, 끊으면 받지 않는다', () => {
+    const ctx = setup({ readOnly: true })
+    const got: string[] = []
+    const unsubscribe = ctx.controller.subscribeCustom((text) => got.push(text))
+    goLive(ctx)
+    ctx.last().custom(encodeDocRoomMessage({ type: 'too-large', limit: 1, bytes: 2 }))
+    ctx.last().custom(encodeDocRoomMessage({ type: 'size-ok' }))
+    ctx.last().custom(READ_ONLY_TEXT)
+    ctx.last().custom('{"type":"comment-ack","id":"x"}')
+    ctx.last().custom('아무 글')
+    expect(got).toEqual(['{"type":"comment-ack","id":"x"}', '아무 글'])
+    unsubscribe()
+    ctx.last().custom('더')
+    expect(got).toHaveLength(2)
+  })
+})
+
+describe('F-506 L6 liveStatusOf', () => {
+  it('stopped/read-only → revoked', () => {
+    expect(
+      liveStatusOf({
+        phase: 'stopped',
+        ready: false,
+        everSynced: false,
+        fallbackReason: null,
+        stopReason: 'read-only',
+        tooLarge: false,
+        disconnectedLong: false,
+      }),
+    ).toBe('revoked')
+  })
+})

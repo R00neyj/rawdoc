@@ -1,5 +1,5 @@
 // 댓글 훅 — 편집기 핸들 붙이기·떼기, 스레드·레일 좌표·활성·입력 카드 상태, 해시 이동 대기 (specs/features/F-505.md 3.2, 5~8장)
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { createContext, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { EditorView } from '@codemirror/view'
 import type * as Y from 'yjs'
 
@@ -16,6 +16,7 @@ import {
   type CommentThread,
 } from '../lib/docComments'
 import { observeCommentKeys, type CommentDraft, type CommentLayout, type EditorComments } from '../editor/commentMarks'
+import { createCommandCommentWriter, type CommandCommentWriter, type CommentCommandClient } from './commentOps'
 import { commentAccess as computeCommentAccess, commentRailMode, initialCommentRailOpen, type CommentAccess } from './commentRail'
 import { getPref, setPref } from './prefs'
 import type { NoticeWithAction } from './NoticeBar'
@@ -33,6 +34,7 @@ export type CommentWriteFailure =
   | 'forbidden'
   | 'rate_limited'
   | 'offline' // 명령 경로 전용 — F-506 (C6·C5·C4)
+  | 'no_response' // 명령에 10초 동안 서버 응답이 없음 (C12, F-506)
 export type CommentWriteResult = { ok: true; id: string } | { ok: false; reason: CommentWriteFailure }
 
 export type CommentWriter = {
@@ -165,7 +167,25 @@ export const COMMENT_TEXT = {
   notFound: '댓글을 찾지 못했습니다. 지워졌을 수 있습니다.', // C9
   gone: '댓글을 달 부분이 지워졌습니다. 본문을 다시 선택하세요.', // C10
   invalid: '댓글을 달지 못했습니다.', // C11
+  sending: '보내는 중…', // F-506 7.2
+  offline: '연결되면 댓글을 달 수 있습니다.', // C4
+  rateLimited: '댓글을 너무 빨리 달고 있습니다. 잠시 뒤 다시 시도하세요.', // C5
+  forbidden: '댓글을 달 권한이 없습니다.', // C6
+  noResponse: '서버가 응답하지 않아 반영하지 못했습니다. 잠시 뒤 다시 시도하세요.', // C12
 }
+
+// 명령 경로의 실패 중 알림 띠로 뜨는 것 (F-506 7.2). 해결·삭제는 입력칸이 없어 offline 도 띠로
+function commandFailureNotice(reason: CommentWriteFailure, withInput: boolean): NoticeWithAction | null {
+  if (reason === 'rate_limited') return { type: 'info', message: COMMENT_TEXT.rateLimited }
+  if (reason === 'forbidden') return { type: 'error', message: COMMENT_TEXT.forbidden }
+  if (reason === 'no_response') return { type: 'error', message: COMMENT_TEXT.noResponse }
+  if (reason === 'offline' && !withInput) return { type: 'info', message: COMMENT_TEXT.offline }
+  return null
+}
+
+// 명령 경로 상태 — 입력 카드·카드가 CommentRailPanel 을 거치지 않고 읽는다 (F-506 7.2)
+export type CommentCommandState = { disconnected: boolean; busy: ReadonlySet<string> }
+export const CommentCommandContext = createContext<CommentCommandState>({ disconnected: false, busy: new Set() })
 
 // ----- 훅 -----
 
@@ -185,6 +205,8 @@ export type UseDocCommentsInput = {
   everSynced: boolean
   showNotice: (notice: NoticeWithAction) => void
   changeViewModeToEdit: () => void
+  // 읽기 전용 세션의 명령 클라이언트 (F-506 6.3). 없으면 null
+  commands: CommentCommandClient | null
 }
 
 export type UseDocCommentsResult = {
@@ -217,6 +239,7 @@ export type UseDocCommentsResult = {
   reveal: (id: string) => void
   actorFor: CommentActor | null
   setPendingTarget: (target: PendingCommentTarget) => void
+  commandState: CommentCommandState
 }
 
 function readRailPref(): 'open' | 'closed' | null {
@@ -231,7 +254,7 @@ export function scrollTopOf(view: EditorView, pos: number): number {
 }
 
 export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult {
-  const { containerRef, handle, mountKey, access, viewMode, everSynced, showNotice, changeViewModeToEdit } = input
+  const { containerRef, handle, mountKey, access, viewMode, everSynced, showNotice, changeViewModeToEdit, commands } = input
 
   const canView = access.kind === 'read' || access.kind === 'write'
   const canWrite = access.kind === 'write'
@@ -360,19 +383,50 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
   const actorFor: CommentActor | null = access.kind === 'write' ? access.actor : null
 
   const writerRef = useRef<CommentWriter | null>(null)
+  // 쓰기 수단은 경로·작성자·편집기가 바뀔 때만 새로 — 명령 쓰기 수단의 같은 id 기억(F-506 6.7)이 렌더마다 사라지지 않게
+  const writeVia = access.kind === 'write' ? access.via : null
+  const authorId = access.kind === 'write' ? access.author.id : null
+  const authorEmail = access.kind === 'write' ? access.author.email : null
   useEffect(() => {
-    if (!handle || access.kind !== 'write' || access.via !== 'direct') {
+    if (!handle || writeVia === null) {
       writerRef.current = null
       return
+    }
+    if (writeVia === 'command') {
+      if (!commands) {
+        writerRef.current = null
+        return
+      }
+      const writer: CommandCommentWriter = createCommandCommentWriter({ client: commands, map: handle.comments.map, newId: () => crypto.randomUUID() })
+      writerRef.current = writer
+      return () => {
+        writer.dispose()
+        if (writerRef.current === writer) writerRef.current = null
+      }
     }
     writerRef.current = createDirectCommentWriter({
       doc: handle.comments.doc,
       map: handle.comments.map,
-      author: access.author,
+      author: authorId === null ? { id: null, email: null } : { id: authorId, email: authorEmail! },
       now: () => Date.now(),
       newId: () => crypto.randomUUID(),
     })
-  }, [handle, access])
+  }, [handle, writeVia, authorId, authorEmail, commands])
+
+  // 명령 add 가 잠깐의 실패로 끝났을 때 꺼낸 후보 — 다음 보내기가 takeDraft 대신 쓴다 (F-506 7.3)
+  const heldDraftRef = useRef<CommentDraft | null>(null)
+  const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set())
+  const markBusy = useCallback((id: string, on: boolean) => {
+    setBusy((prev) => {
+      if (prev.has(id) === on) return prev
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+  const disconnected = access.kind === 'write' && access.via === 'command' && !access.connected
+  const commandState = useMemo(() => ({ disconnected, busy }), [disconnected, busy])
 
   const reveal = useCallback(
     (id: string) => {
@@ -444,12 +498,14 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
       showNotice({ type: 'info', message: COMMENT_TEXT.selectFirst })
       return
     }
+    heldDraftRef.current = null
     setReply(null)
     setComposer({ anchorTop: scrollTopOf(handle.view, range.from), sending: false, error: null })
     setOpen(true, false)
   }, [access, handle, viewMode, threads, showNotice, setOpen])
 
   const cancelComposer = useCallback(() => {
+    heldDraftRef.current = null
     handle?.comments.clearDraft()
     setComposer(null)
     handle?.focus()
@@ -461,7 +517,8 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
       const writer = writerRef.current
       if (!writer) return
       setComposer((c) => (c ? { ...c, sending: true, error: null } : c))
-      const draft = handle.comments.takeDraft()
+      const draft = heldDraftRef.current ?? handle.comments.takeDraft()
+      heldDraftRef.current = null
       if (!draft) {
         setComposer((c) => (c ? { ...c, sending: false, error: 'gone' } : c))
         return
@@ -471,12 +528,16 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
           setComposer(null)
           setActive(result.id)
           handle.focus()
-        } else {
-          setComposer((c) => (c ? { ...c, sending: false, error: result.reason } : c))
+          return
         }
+        const reason = result.reason
+        if (reason === 'offline' || reason === 'no_response' || reason === 'rate_limited') heldDraftRef.current = draft
+        const notice = commandFailureNotice(reason, true)
+        if (notice) showNotice(notice)
+        setComposer((c) => (c ? { ...c, sending: false, error: notice ? null : reason } : c))
       })
     },
-    [composer, handle, setActive],
+    [composer, handle, setActive, showNotice],
   )
 
   // ----- 7.2 답글 -----
@@ -496,12 +557,14 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
       void writer.reply({ parent: threadId, body, mentions: [] }).then((result) => {
         if (result.ok) {
           setReply(null)
-        } else {
-          setReply((r) => (r && r.threadId === threadId ? { ...r, sending: false, error: result.reason } : r))
+          return
         }
+        const notice = commandFailureNotice(result.reason, true)
+        if (notice) showNotice(notice)
+        setReply((r) => (r && r.threadId === threadId ? { ...r, sending: false, error: notice ? null : result.reason } : r))
       })
     },
-    [],
+    [showNotice],
   )
 
   // ----- 7.3 해결·다시 열기 -----
@@ -509,11 +572,15 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
     (threadId: string, resolved: boolean) => {
       const writer = writerRef.current
       if (!writer) return
+      markBusy(threadId, true)
       void writer.resolve(threadId, resolved).then((result) => {
+        markBusy(threadId, false)
         if (result.ok && resolved && activeId === threadId) setActive(null)
+        const notice = result.ok ? null : commandFailureNotice(result.reason, false)
+        if (notice) showNotice(notice)
       })
     },
-    [activeId, setActive],
+    [activeId, setActive, markBusy, showNotice],
   )
 
   // ----- 7.4 삭제 -----
@@ -521,11 +588,15 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
     (id: string) => {
       const writer = writerRef.current
       if (!writer) return
+      markBusy(id, true)
       void writer.remove(id).then((result) => {
+        markBusy(id, false)
         if (result.ok && activeId === id) setActive(null)
+        const notice = result.ok ? null : commandFailureNotice(result.reason, false)
+        if (notice) showNotice(notice)
       })
     },
-    [activeId, setActive],
+    [activeId, setActive, markBusy, showNotice],
   )
 
   return {
@@ -558,6 +629,7 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
     reveal,
     actorFor,
     setPendingTarget,
+    commandState,
   }
 }
 

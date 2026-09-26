@@ -1,5 +1,5 @@
 // 댓글 카드 하나 — 첫 댓글·답글·해결 버튼·`⋯` 메뉴·답글 입력칸 (specs/features/F-505.md 3장·7.2~7.4)
-import { useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import { useContext, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import FolderMenu from './FolderMenu'
 import Dialog from './Dialog'
 import {
@@ -11,7 +11,7 @@ import {
   type CommentThread as CommentThreadData,
 } from '../lib/docComments'
 import { formatCommentTime } from './commentRail'
-import { COMMENT_TEXT, type CommentWriteFailure } from './useDocComments'
+import { COMMENT_TEXT, CommentCommandContext, type CommentWriteFailure } from './useDocComments'
 
 function authorLabel(author: { id: string | null; email: string | null }): string {
   return author.id === null ? '나' : (author.email ?? '나')
@@ -62,6 +62,13 @@ export default function CommentThread({
   const [replyValue, setReplyValue] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; replyCount: number } | null>(null)
   const cancelRef = useRef<HTMLButtonElement | null>(null)
+  const { disconnected, busy } = useContext(CommentCommandContext)
+  // 명령 삭제는 응답을 기다린다 — 대화상자는 끝날 때 닫힌다 (F-506 7.2)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  if (deletingId !== null && !busy.has(deletingId)) {
+    setDeletingId(null)
+    setConfirmDelete(null)
+  }
 
   // 렌더 중 상태 조정(react-hooks/set-state-in-effect 회피) — active 가 꺼지거나 답글 전송이 성공하면 입력칸을 비운다
   const [priorActive, setPriorActive] = useState(active)
@@ -78,7 +85,24 @@ export default function CommentThread({
 
   const normalizedReply = normalizeCommentBody(replyValue)
   const replySendDisabled =
-    normalizedReply.length === 0 || normalizedReply.length > COMMENT_BODY_MAX || Boolean(replyPending?.sending) || replyCapacity !== null
+    normalizedReply.length === 0 ||
+    normalizedReply.length > COMMENT_BODY_MAX ||
+    Boolean(replyPending?.sending) ||
+    replyCapacity !== null ||
+    disconnected
+  // 입력칸 아래 줄은 하나만 — 보내는 중 > C4 > F-505 의 것 (F-506 7.2)
+  const replyNote = replyPending?.sending
+    ? COMMENT_TEXT.sending
+    : disconnected
+      ? COMMENT_TEXT.offline
+      : normalizedReply.length > COMMENT_BODY_MAX
+        ? COMMENT_TEXT.tooLong
+        : replyCapacity
+          ? capacityMessage(replyCapacity)
+          : replyPending?.error && replyPending.error !== 'offline'
+            ? COMMENT_TEXT.invalid
+            : null
+  const replyNoteIsStatus = Boolean(replyPending?.sending) || disconnected
 
   function submitReply() {
     if (replySendDisabled) return
@@ -115,7 +139,7 @@ export default function CommentThread({
         <span className="comment-thread-author">{authorLabel(thread.root.author)}</span>
         <span className="comment-thread-time">{formatCommentTime(thread.root.createdAt, now)}</span>
         {canWrite && (
-          <button type="button" className="comment-thread-resolve" onClick={onToggleResolve}>
+          <button type="button" className="comment-thread-resolve" disabled={disconnected || busy.has(thread.id)} onClick={onToggleResolve}>
             {resolved ? '다시 열기' : '해결'}
           </button>
         )}
@@ -127,7 +151,10 @@ export default function CommentThread({
                 key: 'delete',
                 label: '삭제',
                 danger: true,
-                onSelect: () => setConfirmDelete({ id: thread.id, replyCount: thread.replies.length }),
+                disabled: disconnected,
+                onSelect: () => {
+                  if (!disconnected) setConfirmDelete({ id: thread.id, replyCount: thread.replies.length })
+                },
               },
             ]}
           />
@@ -161,7 +188,17 @@ export default function CommentThread({
               {canDeleteReply && (
                 <FolderMenu
                   label="답글"
-                  items={[{ key: 'delete', label: '삭제', danger: true, onSelect: () => setConfirmDelete({ id: r.id, replyCount: 0 }) }]}
+                  items={[
+                    {
+                      key: 'delete',
+                      label: '삭제',
+                      danger: true,
+                      disabled: disconnected,
+                      onSelect: () => {
+                        if (!disconnected) setConfirmDelete({ id: r.id, replyCount: 0 })
+                      },
+                    },
+                  ]}
                 />
               )}
             </div>
@@ -173,6 +210,7 @@ export default function CommentThread({
             className="comment-reply-input"
             placeholder="답글을 입력하세요."
             value={replyValue}
+            readOnly={sending}
             onChange={(e) => setReplyValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return
@@ -190,18 +228,17 @@ export default function CommentThread({
           <button type="button" className="comment-reply-send" disabled={replySendDisabled} onClick={submitReply}>
             답글
           </button>
-          {(normalizedReply.length > COMMENT_BODY_MAX || replyPending?.error || replyCapacity) && (
-            <p className="comment-reply-error">
-              {normalizedReply.length > COMMENT_BODY_MAX
-                ? COMMENT_TEXT.tooLong
-                : replyCapacity
-                  ? capacityMessage(replyCapacity)
-                  : COMMENT_TEXT.invalid}
-            </p>
-          )}
+          {replyNote !== null && <p className={replyNoteIsStatus ? 'comment-reply-error comment-reply-note' : 'comment-reply-error'}>{replyNote}</p>}
         </div>
       )}
-      <Dialog open={confirmDelete !== null} onClose={() => setConfirmDelete(null)} titleId={`comment-delete-title-${thread.id}`} initialFocusRef={cancelRef}>
+      <Dialog
+        open={confirmDelete !== null}
+        onClose={() => {
+          if (deletingId === null) setConfirmDelete(null)
+        }}
+        titleId={`comment-delete-title-${thread.id}`}
+        initialFocusRef={cancelRef}
+      >
         <h2 id={`comment-delete-title-${thread.id}`}>댓글 삭제</h2>
         <p>
           {confirmDelete && confirmDelete.id === thread.id && confirmDelete.replyCount >= 1
@@ -215,9 +252,11 @@ export default function CommentThread({
           <button
             type="button"
             className="danger"
+            disabled={deletingId !== null}
             onClick={() => {
-              if (confirmDelete) onDelete(confirmDelete.id)
-              setConfirmDelete(null)
+              if (!confirmDelete) return
+              setDeletingId(confirmDelete.id)
+              onDelete(confirmDelete.id)
             }}
           >
             삭제

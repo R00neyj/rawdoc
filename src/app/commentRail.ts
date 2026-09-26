@@ -1,6 +1,7 @@
 // 댓글 레일·판 순수 함수 — 권한·정렬·판정·시각. DOM·React 없음 (specs/features/F-505.md 3.1)
 import type { CommentActor, CommentAuthor } from '../lib/docComments'
 import type { DocPathKind } from './docPath'
+import type { LivePhase } from './liveDoc'
 
 export const COMMENT_RAIL_WIDTH = 280 // px (F-500 4.3)
 export const COMMENT_RAIL_MIN_MAIN = 968 // px, 메인 열 폭이 이 값 이상이면 레일 (640 + 280 + 48)
@@ -15,7 +16,8 @@ export type CommentAccess =
   | { kind: 'unavailable' } // 이 경로에서는 못 본다 — 레일에 C8
   | { kind: 'read' } // 보기만 — 달기·답글·해결·삭제 없음
   | { kind: 'write'; via: 'direct'; actor: CommentActor; author: CommentAuthor }
-// F-506 이 { kind: 'write'; via: 'command'; … } 갈래를 더한다
+  // 보기 권한자의 읽기 전용 실시간 세션 — 서버 명령으로 쓴다. 끊겨 있으면 입력은 되고 보내기만 막힌다 (F-506 7.1)
+  | { kind: 'write'; via: 'command'; actor: CommentActor; author: CommentAuthor; connected: boolean }
 
 export type CommentAccessInput = {
   storeKind: 'idb' | 'memory' | 'server'
@@ -25,6 +27,8 @@ export type CommentAccessInput = {
   role: 'owner' | 'edit' | 'view' | undefined
   account: { id: string; email: string; blocked: boolean } | null
   readOnly: boolean // App 의 isReadOnlyDoc
+  liveReadOnly: boolean // App 의 docSession.readOnly (F-506)
+  livePhase: LivePhase | null // liveSnapshot?.phase ?? null
 }
 
 // 4장 표와 같은 내용 — 위에서부터 처음 맞는 줄
@@ -34,6 +38,17 @@ export function commentAccess(input: CommentAccessInput): CommentAccess {
   if (input.docPath === 'local') {
     if (input.readOnly) return { kind: 'read' }
     return { kind: 'write', via: 'direct', actor: { kind: 'local', canEdit: true }, author: { id: null, email: null } }
+  }
+  if (input.docPath === 'realtime' && input.liveReadOnly) {
+    if (!input.account || input.account.blocked) return { kind: 'unavailable' }
+    if (input.livePhase === 'stopped') return { kind: 'read' }
+    return {
+      kind: 'write',
+      via: 'command',
+      actor: { kind: 'server', userId: input.account.id, role: 'view', blocked: false },
+      author: { id: input.account.id, email: input.account.email },
+      connected: input.livePhase === 'live',
+    }
   }
   if (input.docPath === 'realtime' && input.role !== 'view' && input.account && !input.account.blocked) {
     if (input.readOnly) return { kind: 'read' }

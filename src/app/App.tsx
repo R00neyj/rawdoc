@@ -135,7 +135,7 @@ import Outline from './Outline'
 import ContextMenu from './ContextMenu'
 import { buildEditorContextMenu, buildViewContextMenu, type ContextMenuNode, type MenuItemNode } from './contextMenuItems'
 import CommentRailPanel from './CommentRailPanel'
-import { useDocComments, computeCommentAccess, scrollTopOf, COMMENT_TEXT } from './useDocComments'
+import { useDocComments, computeCommentAccess, scrollTopOf, COMMENT_TEXT, CommentCommandContext } from './useDocComments'
 import { IconAddComment } from './icons'
 import CommandPalette from './CommandPalette'
 import type { PaletteContext } from './paletteContract'
@@ -206,11 +206,22 @@ type DocSession = {
   fallbackReason: FallbackReason | null
   // 첫 동기화 전 4403 으로 보기로 연 세션 — N1 을 띄우고 본문은 서버에서 먼저 읽는다 (8장)
   forbiddenClose: boolean
+  // 읽기 전용 세션이 첫 동기화 전 4403 으로 보기로 내려감 — N1 없이 /api/me 만 한 번 다시 읽는다 (F-506 3.3)
+  quietForbidden: boolean
   // realtime 일 때만 뜻이 있다 — md-yjs 기록으로 재개하는가, 오프라인으로 시작하는가, 쓸 md-yjs (F-306 5.1·6.4)
   resume: boolean
   startOffline: boolean
+  // 보기 권한자의 읽기 전용 실시간 세션 — md-yjs 없음, 댓글은 명령으로 (F-506 3.2·4장)
+  readOnly: boolean
   persist: YjsStore | null
 }
+
+// 읽기 전용 세션의 알림 띠 문구 — N9·N10·N5v (F-506 5.2)
+const READ_ONLY_LIVE_NOTICE = {
+  revoked: '이 문서를 볼 수 없게 되어 실시간 연결을 멈췄습니다.',
+  signedOut: '로그인이 만료되어 실시간 연결을 멈췄습니다.',
+  disconnected: '서버와 연결이 끊겼습니다. 다시 연결되면 최신 내용을 받습니다.',
+} as const
 
 // 실시간 알림 띠 문구 (F-305 11.2)
 const LIVE_NOTICE = {
@@ -763,8 +774,10 @@ export default function App() {
     path: null,
     fallbackReason: null,
     forbiddenClose: false,
+    quietForbidden: false,
     resume: false,
     startOffline: false,
+    readOnly: false,
     persist: null,
   }))
   if (docSession.docId !== currentDocId || docSession.store !== store) {
@@ -785,8 +798,10 @@ export default function App() {
       path: quick.kind === 'local' || quick.kind === 'view' || quick.kind === 'e2ee' ? quick.kind : null,
       fallbackReason: null,
       forbiddenClose: false,
+      quietForbidden: false,
       resume: false,
       startOffline: false,
+      readOnly: false,
       persist: null,
     })
     // 옛 세션의 본문 스냅샷으로 편집기가 먼저 뜨지 않게 비운다 — 실시간이면 첫 동기화 뒤에 채운다 (5.1)
@@ -801,6 +816,9 @@ export default function App() {
   // 이 페이지에서 실시간으로 동기화한 적 있는 문서 — 폴백으로 다시 열 때 캐시 대신 서버 본문을 먼저 읽는다 (8장)
   const [everLiveIds, setEverLiveIds] = useState<Set<string>>(() => new Set())
 
+  // 두 판정 자리에 같은 role·forbidden 을 넘긴다 — 빠른 판정이 온라인 view 를 realtime 으로 내므로 effect 가 다시 가린다 (F-506 3.2)
+  const decideRole = currentDoc?.role as 'owner' | 'edit' | 'view' | undefined
+  const decideForbidden = (currentDocId != null && forbiddenDocIds.has(currentDocId)) || accountBlocked
   useEffect(() => {
     if (bootPhase !== 'ready' || docSession.path !== null || !docSession.docId) return
     const id = docSession.docId
@@ -820,26 +838,30 @@ export default function App() {
       ([pending, { persist, hasLocalState }, isE2eeDoc]) => {
         if (cancelled) return
         const createdHere = createdHereRef.current.delete(id)
+        const online = navigator.onLine
         const decided = decideDocPath({
           storeKind: docSession.store.kind,
           shareLinkScreen: false,
-          role: undefined,
-          forbidden: accountBlocked,
+          role: decideRole,
+          forbidden: decideForbidden,
           hasPendingChanges: pending || createdHere,
-          online: navigator.onLine,
+          online,
           hasLocalState,
           e2ee: isE2eeDoc,
         })
         const realtime = decided.kind === 'realtime' ? decided : null
+        const readOnly = realtime?.readOnly === true
         setDocSession((cur) =>
           cur.seq === docSession.seq && cur.path === null
             ? {
                 ...cur,
                 path: decided.kind,
-                fallbackReason: null,
+                // 오프라인에서 연 view 는 online 에 다시 시작한다 (F-506 3.4)
+                fallbackReason: decided.kind === 'view' && decideRole === 'view' && !online ? 'offline' : null,
                 resume: realtime?.resume ?? false,
                 startOffline: realtime?.startOffline ?? false,
-                persist,
+                readOnly,
+                persist: readOnly ? null : persist,
               }
             : cur,
         )
@@ -848,7 +870,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [bootPhase, docSession, accountBlocked])
+  }, [bootPhase, docSession, decideRole, decideForbidden])
 
   // 기록을 못 불러온 재개 세션 — 기록 없음으로 다시 판정한다. 오프라인이면 offline-view, 온라인이면 비재개 실시간 (F-306 6.4 4번)
   const handleResumeFailed = useCallback((docId: string) => {
@@ -861,13 +883,14 @@ export default function App() {
   }, [])
   // 같은 문서의 열기 세션을 새로 시작한다 — 경로 판정이 지금 금고 여부로 다시 고른다 (F-407 7.4)
   const restartDocSession = useCallback(() => {
-    setDocSession((cur) => ({ ...cur, seq: cur.seq + 1, path: null, fallbackReason: null, forbiddenClose: false, resume: false, startOffline: false, persist: null }))
+    setDocSession((cur) => ({ ...cur, seq: cur.seq + 1, path: null, fallbackReason: null, forbiddenClose: false, quietForbidden: false, resume: false, startOffline: false, readOnly: false, persist: null }))
     setOpenDoc(null)
   }, [])
   const liveSession = useLiveDoc(isRealtime && convertingDocId !== currentDocId ? currentDocId : null, {
-    store: docSession.persist,
+    store: docSession.readOnly ? null : docSession.persist,
     resume: docSession.resume,
     startOffline: docSession.startOffline,
+    readOnly: docSession.readOnly,
     onResumeFailed: handleResumeFailed,
   })
   const liveSnapshot = liveSession?.snapshot
@@ -876,8 +899,21 @@ export default function App() {
   const livePeers = usePeers(liveAwareness)
 
   // ready 전에 끝난 경우 — 폴백으로 가거나(7.2), 4403 이면 보기로 연다(8장). 오프라인 폴백은 잠금·PUT 대신 offline-view (F-306 9.1). 렌더 중 상태를 맞추는 패턴
-  if (isRealtime && liveSnapshot && !liveSnapshot.ready) {
-    if (liveSnapshot.phase === 'fallback' && liveSnapshot.fallbackReason === 'offline') {
+  if (isRealtime && liveSnapshot && !liveSnapshot.ready && docSession.readOnly) {
+    // 읽기 전용 세션 — 폴백은 모두 view, 4403 은 조용히 view, 4404 는 편집 세션과 같다 (F-506 8.2)
+    if (liveSnapshot.phase === 'fallback') {
+      setDocSession({ ...docSession, path: 'view', fallbackReason: liveSnapshot.fallbackReason })
+    } else if (liveSnapshot.phase === 'stopped' && liveSnapshot.stopReason === 'forbidden') {
+      setDocSession({ ...docSession, path: 'view', quietForbidden: true })
+      if (currentDocId && !forbiddenDocIds.has(currentDocId)) setForbiddenDocIds(new Set(forbiddenDocIds).add(currentDocId))
+    }
+  } else if (isRealtime && liveSnapshot && !liveSnapshot.ready) {
+    if (liveSnapshot.phase === 'stopped' && liveSnapshot.stopReason === 'read-only') {
+      // 서버는 이 연결을 읽기 전용으로 받았다 — 목록 역할이 낡았다. 편집기가 없어 잃을 글이 없으니 view 로 다시 연다 (F-506 5.3)
+      const readOnlyDocId = liveSession?.docId
+      if (readOnlyDocId) setDocs(docs.map((d) => (d.id === readOnlyDocId ? { ...d, role: 'view' } : d)))
+      restartDocSession()
+    } else if (liveSnapshot.phase === 'fallback' && liveSnapshot.fallbackReason === 'offline') {
       setDocSession({ ...docSession, path: 'offline-view', fallbackReason: null })
     } else if (liveSnapshot.phase === 'fallback') {
       setDocSession({ ...docSession, path: 'fallback', fallbackReason: liveSnapshot.fallbackReason })
@@ -907,6 +943,14 @@ export default function App() {
     () => ({ label: '새 문서로 저장', icon: IconNoteAdd, onClick: () => void saveCurrentAsNewDocRef.current() }),
     [],
   )
+  // 읽기 전용 세션의 첫 동기화 전 4403 — 알림 없이 /api/me 만 한 번 (F-506 3.3)
+  const quietForbiddenSeqRef = useRef(0)
+  useEffect(() => {
+    if (!docSession.quietForbidden || quietForbiddenSeqRef.current === docSession.seq) return
+    quietForbiddenSeqRef.current = docSession.seq
+    void recheckAccount()
+  }, [docSession, recheckAccount])
+
   // N1 — 첫 동기화 전 4403 으로 보기로 연 세션마다 한 번. 내 소유 문서면 계정 차단인지 본다 (F-2030 5.4)
   const forbiddenNoticeSeqRef = useRef(0)
   useEffect(() => {
@@ -929,8 +973,13 @@ export default function App() {
   useEffect(() => {
     const snap = liveSession?.snapshot
     const ids = liveNoticeIdsRef.current
+    const readOnlySession = liveSession?.readOnly === true
     if (snap?.disconnectedLong && ids.disconnected === null) {
-      const message = liveSession?.persistBroken ? LIVE_NOTICE.disconnectedVolatile : LIVE_NOTICE.disconnected
+      const message = readOnlySession
+        ? READ_ONLY_LIVE_NOTICE.disconnected
+        : liveSession?.persistBroken
+          ? LIVE_NOTICE.disconnectedVolatile
+          : LIVE_NOTICE.disconnected
       ids.disconnected = showNotice({ type: 'warn', message })
     } else if (!snap?.disconnectedLong && ids.disconnected !== null) {
       dismissNotice(ids.disconnected)
@@ -944,7 +993,8 @@ export default function App() {
         showNotice({ type: 'info', message: LIVE_NOTICE.merged })
       }
     }
-    if (snap?.tooLarge && ids.tooLarge === null) {
+    // N6 — 읽기 전용 세션은 할 수 있는 것이 없어 띄우지 않는다 (F-506 5.2)
+    if (snap?.tooLarge && ids.tooLarge === null && !readOnlySession) {
       ids.tooLarge = showNotice({ type: 'error', message: LIVE_NOTICE.tooLarge })
     } else if (!snap?.tooLarge && ids.tooLarge !== null) {
       dismissNotice(ids.tooLarge)
@@ -953,7 +1003,14 @@ export default function App() {
     if (!liveSession || snap?.phase !== 'stopped' || liveStopNoticeDocRef.current === liveSession.roomDoc) return
     liveStopNoticeDocRef.current = liveSession.roomDoc
     const reason = snap.stopReason
-    if (reason === 'revoked') {
+    // 읽기 전용 세션에는 내 편집이 없다 — 새 문서로 저장 없이 N9·N3·N10 (F-506 5.2)
+    const stopAction = readOnlySession ? undefined : saveAsNewAction
+    if (readOnlySession && reason === 'revoked') {
+      showNotice({ type: 'warn', message: READ_ONLY_LIVE_NOTICE.revoked })
+      recheckAccount()
+    } else if (readOnlySession && reason === 'signed-out') {
+      showNotice({ type: 'error', message: READ_ONLY_LIVE_NOTICE.signedOut })
+    } else if (reason === 'revoked') {
       // 내 소유 문서의 4403 — 이미 계정 차단이면 L5, 아니면 N2 를 띄우고 /api/me 를 다시 읽는다 (F-2030 5.4)
       const ownDoc = store.kind === 'server' && !isSharedDoc(currentDoc) && !sharedDoc
       if (ownDoc && accountBlocked) {
@@ -972,9 +1029,9 @@ export default function App() {
             if (goneDocId === currentDocIdRef.current) restartDocSession()
             return
           }
-          showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: saveAsNewAction })
+          showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: stopAction })
         })
-      } else showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: saveAsNewAction })
+      } else showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: stopAction })
     } else if (reason === 'signed-out') showNotice({ type: 'error', message: LIVE_NOTICE.signedOut, action: saveAsNewAction })
   }, [liveSession, showNotice, dismissNotice, saveAsNewAction, store, currentDoc, sharedDoc, accountBlocked, recheckAccount, restartDocSession])
 
@@ -993,20 +1050,22 @@ export default function App() {
   }, [isOfflineView, docSession.seq, showNotice, dismissNotice])
 
   // offline-view 에서 온라인이 되면 그 문서 열기 세션을 새로 시작한다 — 아무것도 쓰지 않은 세션이라 이중 쓰기가 없다 (F-306 5.2)
+  // 오프라인에서 연 view 도 같다 — 읽기 전용 실시간 세션이 된다 (F-506 3.4)
+  const restartsOnOnline = isOfflineView || (docPath === 'view' && docSession.fallbackReason === 'offline')
   useEffect(() => {
-    if (!isOfflineView) return
+    if (!restartsOnOnline) return
     const seq = docSession.seq
     const handleOnline = () => {
       setDocSession((cur) =>
         cur.seq === seq
-          ? { ...cur, seq: cur.seq + 1, path: null, fallbackReason: null, forbiddenClose: false, resume: false, startOffline: false, persist: null }
+          ? { ...cur, seq: cur.seq + 1, path: null, fallbackReason: null, forbiddenClose: false, quietForbidden: false, resume: false, startOffline: false, readOnly: false, persist: null }
           : cur,
       )
       setOpenDoc(null)
     }
     window.addEventListener('online', handleOnline)
     return () => window.removeEventListener('online', handleOnline)
-  }, [isOfflineView, docSession.seq])
+  }, [restartsOnOnline, docSession.seq])
 
   // 동기화 뒤 방 Doc 이 바뀌면(내 편집·상대 편집) 700ms 뒤 사이드바 updatedAt 을 지금으로 — D1 은 DO 가 늦게 쓴다 (F-305 10.1)
   const liveRoomDoc = isRealtime && liveSnapshot?.ready ? liveSession?.roomDoc ?? null : null
@@ -1345,7 +1404,15 @@ export default function App() {
 
   const isDeletedElsewhere = currentDocId != null && deletedElsewhereId === currentDocId
   const isConvertingDoc = convertingDocId !== null && convertingDocId === currentDocId
-  const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly || claimReadOnly || isDeletedElsewhere || liveStopped || isOfflineView || isConvertingDoc
+  const isReadOnlyDoc =
+    isReadOnlyByRole ||
+    isLockedReadOnly ||
+    claimReadOnly ||
+    isDeletedElsewhere ||
+    liveStopped ||
+    isOfflineView ||
+    isConvertingDoc ||
+    (isRealtime && docSession.readOnly)
   // 본문 맨 위 제목 읽기 전용 — 상단바 옛 제목 입력의 disabled·readOnly 조건을 하나로 합친다 (F-217.md 2.4)
   const titleReadOnly = isReadOnlyDoc || viewMode === 'view' || Boolean(sharedDoc)
 
@@ -1358,6 +1425,8 @@ export default function App() {
     role: currentDoc?.role,
     account: account.state === 'in' ? { id: account.id, email: account.email, blocked: accountBlocked } : null,
     readOnly: isReadOnlyDoc,
+    liveReadOnly: isRealtime && docSession.readOnly,
+    livePhase: liveSnapshot?.phase ?? null,
   })
   const commentsMountKey = currentDocId !== null && openDoc?.id === currentDocId ? `${currentDocId}:${editorRemountNonce}` : null
   const comments = useDocComments({
@@ -1369,6 +1438,7 @@ export default function App() {
     everSynced: liveSnapshot?.everSynced ?? false,
     showNotice,
     changeViewModeToEdit: () => changeViewMode('live'),
+    commands: liveSession?.commands ?? null,
   })
   const commentsRef = useRef(comments)
   useEffect(() => {
@@ -2300,7 +2370,13 @@ export default function App() {
         return
       }
       const view = editorRef.current?.view
-      if (!view || !view.dom.contains(document.activeElement) || view.composing) return
+      if (!view || view.composing) return
+      // 읽기 전용 편집기는 포커스를 받지 못한다 — 다른 곳에 포커스가 없고 편집기에 선택이 있으면 편집기에서 누른 것으로 본다 (F-506 7.1)
+      const readOnlySelection =
+        view.contentDOM.getAttribute('contenteditable') === 'false' &&
+        (document.activeElement === null || document.activeElement === document.body) &&
+        !view.state.selection.main.empty
+      if (!view.dom.contains(document.activeElement) && !readOnlySelection) return
       e.preventDefault()
       if (access.kind === 'write') commentsRef.current?.beginComment()
       else if (access.kind === 'unavailable') commentsRef.current?.setOpen(true, false)
@@ -5121,39 +5197,41 @@ export default function App() {
                 />
               )}
               {(commentRailVisible || commentSheetVisible) && (
-                <CommentRailPanel
-                  mode={comments.mode}
-                  open={comments.open}
-                  onClose={() => {
-                    comments.setOpen(false, false)
-                    editorRef.current?.focus()
-                  }}
-                  access={comments.access}
-                  ready={comments.ready}
-                  canWrite={comments.canWrite}
-                  threads={comments.threads}
-                  threadById={comments.threadById}
-                  layout={comments.layout}
-                  activeId={comments.activeId}
-                  setActive={comments.setActive}
-                  showResolved={comments.showResolved}
-                  setShowResolved={comments.setShowResolved}
-                  orphansOpen={comments.orphansOpen}
-                  setOrphansOpen={comments.setOrphansOpen}
-                  composer={comments.composer}
-                  sendComposer={comments.sendComposer}
-                  cancelComposer={comments.cancelComposer}
-                  reply={comments.reply}
-                  startReply={comments.startReply}
-                  sendReply={comments.sendReply}
-                  toggleResolve={comments.toggleResolve}
-                  removeComment={comments.removeComment}
-                  reveal={comments.reveal}
-                  actorFor={comments.actorFor}
-                  scrollElement={editorRef.current?.view.scrollDOM ?? null}
-                  focusEditor={() => editorRef.current?.focus()}
-                  onRailExtraChange={setCommentRailExtra}
-                />
+                <CommentCommandContext.Provider value={comments.commandState}>
+                  <CommentRailPanel
+                    mode={comments.mode}
+                    open={comments.open}
+                    onClose={() => {
+                      comments.setOpen(false, false)
+                      editorRef.current?.focus()
+                    }}
+                    access={comments.access}
+                    ready={comments.ready}
+                    canWrite={comments.canWrite}
+                    threads={comments.threads}
+                    threadById={comments.threadById}
+                    layout={comments.layout}
+                    activeId={comments.activeId}
+                    setActive={comments.setActive}
+                    showResolved={comments.showResolved}
+                    setShowResolved={comments.setShowResolved}
+                    orphansOpen={comments.orphansOpen}
+                    setOrphansOpen={comments.setOrphansOpen}
+                    composer={comments.composer}
+                    sendComposer={comments.sendComposer}
+                    cancelComposer={comments.cancelComposer}
+                    reply={comments.reply}
+                    startReply={comments.startReply}
+                    sendReply={comments.sendReply}
+                    toggleResolve={comments.toggleResolve}
+                    removeComment={comments.removeComment}
+                    reveal={comments.reveal}
+                    actorFor={comments.actorFor}
+                    scrollElement={editorRef.current?.view.scrollDOM ?? null}
+                    focusEditor={() => editorRef.current?.focus()}
+                    onRailExtraChange={setCommentRailExtra}
+                  />
+                </CommentCommandContext.Provider>
               )}
               {commentAvailable &&
                 comments.canWrite &&

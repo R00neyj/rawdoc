@@ -17,7 +17,8 @@ export const KEEPALIVE_INTERVAL_MS: number | null = 20_000
 export const PONG_TIMEOUT_MS = 10_000
 
 export type LivePhase = 'connecting' | 'live' | 'reconnecting' | 'fallback' | 'stopped'
-export type StopReason = 'signed-out' | 'forbidden' | 'not-found' | 'revoked' | 'deleted'
+// read-only — 편집 세션이 ready 전에 서버의 read-only 메시지를 받음 (F-506 5.3)
+export type StopReason = 'signed-out' | 'forbidden' | 'not-found' | 'revoked' | 'deleted' | 'read-only'
 
 export type LiveSnapshot = {
   phase: LivePhase
@@ -46,6 +47,8 @@ export type LiveDocDeps = {
   startOffline?: boolean
   // 재개 가능 세션에서, 소켓을 여는 것과 동시에 ready 를 참으로 낸다. resumable 이 아니면 뜻이 없다 (F-2041 3.1)
   readyAtStart?: boolean
+  // 읽기 전용 세션 — 서버의 read-only 메시지를 무시한다. 닫기 분류는 비재개 편집 세션과 같다 (F-506 5.1)
+  readOnly?: boolean
 }
 
 export type LiveDocController = {
@@ -55,6 +58,14 @@ export type LiveDocController = {
   wake(): void
   goOffline(): void
   destroy(): void
+}
+
+// 명령 채널 (F-506 5.1) — LiveDocController 를 흉내 내는 기존 가짜(yjsFlush.test)가 그대로 맞게 따로 둔다
+export type LiveDocChannel = {
+  // 단계가 live 이고 소켓이 있을 때만 보낸다. 보냈으면 true (F-506 6.2)
+  send(text: string): boolean
+  // DocRoomMessage 가 아닌 문자열 메시지를 받는다
+  subscribeCustom(listener: (text: string) => void): () => void
 }
 
 type TimerName = 'retry' | 'firstSync' | 'hardSync' | 'keepalive' | 'pong' | 'notice'
@@ -71,14 +82,14 @@ export function liveStatusOf(snapshot: LiveSnapshot | undefined): LiveStatus {
   if (snapshot.phase === 'reconnecting') return 'reconnecting'
   if (snapshot.phase === 'stopped') {
     if (snapshot.stopReason === 'signed-out') return 'signed-out'
-    if (snapshot.stopReason === 'forbidden' || snapshot.stopReason === 'revoked') return 'revoked'
+    if (snapshot.stopReason === 'forbidden' || snapshot.stopReason === 'revoked' || snapshot.stopReason === 'read-only') return 'revoked'
     return 'gone'
   }
   if (snapshot.phase === 'connecting') return snapshot.ready ? 'syncing' : 'connecting'
   return 'connecting'
 }
 
-export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
+export function createLiveDocController(deps: LiveDocDeps): LiveDocController & LiveDocChannel {
   const keepaliveMs = deps.keepaliveMs === undefined ? KEEPALIVE_INTERVAL_MS : deps.keepaliveMs
   const resumable = deps.resumable === true
   // resumable 이 아니면 뜻이 없다 (3.5)
@@ -94,6 +105,7 @@ export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
     ready: false,
   }
   const listeners = new Set<(s: LiveSnapshot) => void>()
+  const customListeners = new Set<(text: string) => void>()
   const timers = new Map<TimerName, unknown>()
 
   let started = false
@@ -285,6 +297,14 @@ export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
     const parsed = parseDocRoomMessage(message)
     if (parsed?.type === 'too-large') update({ tooLarge: true })
     else if (parsed?.type === 'size-ok') update({ tooLarge: false })
+    else if (parsed?.type === 'read-only') onReadOnly()
+    else if (!parsed) customListeners.forEach((listener) => listener(message))
+  }
+
+  // 서버가 이 연결을 읽기 전용으로 받았다 — ready 전이면 잃을 편집이 없어 App 이 읽기 전용으로 다시 연다 (F-506 5.3)
+  function onReadOnly() {
+    if (deps.readOnly) return
+    finish({ phase: 'stopped', stopReason: snap.ready ? 'revoked' : 'read-only' })
   }
 
   // readyAtStart 세션은 처음부터 ready 라 ready 로는 "이미 끝남" 을 볼 수 없다 (F-2041 3.4)
@@ -367,6 +387,17 @@ export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
       destroyed = true
       teardown()
       listeners.clear()
+      customListeners.clear()
+    },
+
+    send(text) {
+      if (ended() || snap.phase !== 'live' || !socket) return false
+      return socket.send(text)
+    },
+
+    subscribeCustom(listener) {
+      customListeners.add(listener)
+      return () => customListeners.delete(listener)
     },
   }
 }

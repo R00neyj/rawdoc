@@ -411,8 +411,10 @@ test.describe('F-305 실시간이 아닌 경로', () => {
     await expect(page.locator('.statusbar-live')).toHaveCount(0)
   })
 
-  test('F-305 E14 보기 권한 문서는 연결하지 않고 읽기 전용', async ({ page }) => {
+  test('F-305 E14 보기 권한 문서는 읽기 전용으로 연결하고 본문 입력은 방에 가지 않는다', async ({ page }) => {
     const room = createFakeDocRoom()
+    room.seed('view-doc', { content: '방 본문\n', title: '보기 전용 문서' })
+    room.setRole('view-doc', 'u1', 'view')
     await fakeServer(page)
     await room.install(page.context())
     const now = Date.now()
@@ -431,10 +433,13 @@ test.describe('F-305 실시간이 아닌 경로', () => {
     await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
     await page.goto('/#/d/view-doc')
 
-    await expect(mainContent(page)).toContainText('원본 내용')
+    await expect(mainContent(page)).toContainText('방 본문')
     await expect(mainContent(page)).toHaveAttribute('contenteditable', 'false')
-    await page.waitForTimeout(500)
-    expect(room.totalAttempts()).toBe(0)
+    await expect(saveStatus(page)).toHaveText('저장됨')
+    expect(room.connections('view-doc')).toBe(1)
+    await typeAtEnd(page, '방 본문', '끼어든 글')
+    await page.waitForTimeout(300)
+    expect(room.content('view-doc')).toBe('방 본문\n')
     await expect(page.locator('.statusbar-live')).toHaveCount(0)
   })
 })

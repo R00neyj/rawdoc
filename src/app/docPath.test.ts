@@ -28,7 +28,7 @@ describe('F-305 U1 표의 다섯 줄', () => {
   })
 
   it('2 — 보기 권한이거나 403 으로 내려간 문서면 view', () => {
-    expect(decideDocPath(input({ role: 'view' }))).toEqual({ kind: 'view' })
+    expect(decideDocPath(input({ role: 'view' }))).toEqual({ kind: 'realtime', resume: false, startOffline: false, readOnly: true })
     expect(decideDocPath(input({ role: 'edit', forbidden: true }))).toEqual({ kind: 'view' })
   })
 
@@ -49,7 +49,7 @@ describe('F-305 U1 표의 다섯 줄', () => {
   it('겹치면 위 줄이 이긴다', () => {
     expect(decideDocPath(input({ storeKind: 'idb', role: 'view', hasPendingChanges: true, online: false }))).toEqual({ kind: 'local' })
     expect(decideDocPath(input({ shareLinkScreen: true, forbidden: true }))).toEqual({ kind: 'local' })
-    expect(decideDocPath(input({ role: 'view', hasPendingChanges: true }))).toEqual({ kind: 'view' })
+    expect(decideDocPath(input({ role: 'view', hasPendingChanges: true }))).toEqual({ kind: 'realtime', resume: false, startOffline: false, readOnly: true })
     expect(decideDocPath(input({ role: 'view', online: false }))).toEqual({ kind: 'view' })
     expect(decideDocPath(input({ forbidden: true, online: false }))).toEqual({ kind: 'view' })
     expect(decideDocPath(input({ hasPendingChanges: true, online: false }))).toEqual({ kind: 'pending' })
@@ -76,7 +76,7 @@ describe('F-306 U16 기록 입력', () => {
     for (const online of [true, false]) {
       for (const hasLocalState of [true, false]) {
         expect(decideDocPath(input({ online, hasLocalState, hasPendingChanges: true }))).toEqual({ kind: 'pending' })
-        expect(decideDocPath(input({ online, hasLocalState, role: 'view' }))).toEqual({ kind: 'view' })
+        expect(decideDocPath(input({ online, hasLocalState, role: 'view' }))).toEqual(online ? { kind: 'realtime', resume: false, startOffline: false, readOnly: true } : { kind: 'view' })
         expect(decideDocPath(input({ online, hasLocalState, forbidden: true }))).toEqual({ kind: 'view' })
         expect(decideDocPath(input({ online, hasLocalState, storeKind: 'idb' }))).toEqual({ kind: 'local' })
         expect(decideDocPath(input({ online, hasLocalState, shareLinkScreen: true }))).toEqual({ kind: 'local' })
@@ -127,5 +127,45 @@ describe('F-405 U14 e2ee 경로', () => {
 
   it('e2ee 가 거짓이면 지금 판정 그대로', () => {
     expect(decideDocPath(input({ e2ee: false }))).toEqual({ kind: 'realtime', resume: false, startOffline: false })
+  })
+})
+
+// F-506 V1~V3 — 온라인 view 는 읽기 전용 realtime (specs/features/F-506.md 3.1)
+describe('F-506 V1 보기 권한 온라인·오프라인', () => {
+  it('온라인이면 읽기 전용 realtime, 오프라인이면 view', () => {
+    expect(decideDocPath(input({ role: 'view' }))).toEqual({ kind: 'realtime', resume: false, startOffline: false, readOnly: true })
+    expect(decideDocPath(input({ role: 'view', online: false }))).toEqual({ kind: 'view' })
+  })
+})
+
+describe('F-506 V2 보기 권한이 겹칠 때', () => {
+  it('온라인 view 는 outbox·기록 어떤 조합이든 읽기 전용 realtime', () => {
+    for (const hasPendingChanges of [true, false]) {
+      for (const hasLocalState of [true, false]) {
+        expect(decideDocPath(input({ role: 'view', hasPendingChanges, hasLocalState }))).toEqual({ kind: 'realtime', resume: false, startOffline: false, readOnly: true })
+      }
+    }
+  })
+
+  it('forbidden 과 겹치면 view, e2ee 와 겹치면 e2ee', () => {
+    expect(decideDocPath(input({ role: 'view', forbidden: true }))).toEqual({ kind: 'view' })
+    expect(decideDocPath(input({ role: 'view', e2ee: true }))).toEqual({ kind: 'e2ee' })
+  })
+})
+
+describe('F-506 V3 view 가 아니면 readOnly 키가 없다', () => {
+  it('owner·edit·undefined 의 모든 입력 조합', () => {
+    for (const role of ['owner', 'edit', undefined] as const) {
+      for (const online of [true, false]) {
+        for (const hasLocalState of [true, false]) {
+          for (const hasPendingChanges of [true, false]) {
+            for (const forbidden of [true, false]) {
+              const r = decideDocPath(input({ role, online, hasLocalState, hasPendingChanges, forbidden }))
+              expect('readOnly' in r).toBe(false)
+            }
+          }
+        }
+      }
+    }
   })
 })

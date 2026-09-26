@@ -19,6 +19,8 @@ function baseInput(overrides: Partial<CommentAccessInput>): CommentAccessInput {
     role: undefined,
     account: null,
     readOnly: false,
+    liveReadOnly: false,
+    livePhase: null,
     ...overrides,
   }
 }
@@ -223,5 +225,35 @@ describe('commentRailExtra — 5.6 레일 여분 (F-505.md 5.6)', () => {
   it('소수는 올림, 카드가 없으면(아랫변 0) 0', () => {
     expect(commentRailExtra(1000.4, 1000, 0)).toBe(9)
     expect(commentRailExtra(0, 0, 0)).toBe(0)
+  })
+})
+
+// F-506 C1 — realtime + 읽기 전용 세션은 명령 갈래 (specs/features/F-506.md 7.1)
+describe('commentAccess — F-506 C1 명령 갈래', () => {
+  const account = { id: 'u1', email: 'a@b.com', blocked: false }
+  const ro = (overrides: Partial<CommentAccessInput>) =>
+    commentAccess(baseInput({ storeKind: 'server', docPath: 'realtime', role: 'view', account, readOnly: true, liveReadOnly: true, ...overrides }))
+  const write = (connected: boolean) => ({
+    kind: 'write',
+    via: 'command',
+    actor: { kind: 'server', userId: 'u1', role: 'view', blocked: false },
+    author: { id: 'u1', email: 'a@b.com' },
+    connected,
+  })
+
+  it('live → 연결됨, reconnecting·connecting → 끊김, stopped → read', () => {
+    expect(ro({ livePhase: 'live' })).toEqual(write(true))
+    expect(ro({ livePhase: 'reconnecting' })).toEqual(write(false))
+    expect(ro({ livePhase: 'connecting' })).toEqual(write(false))
+    expect(ro({ livePhase: 'stopped' })).toEqual({ kind: 'read' })
+  })
+
+  it('계정 없음·막힌 계정 → unavailable', () => {
+    expect(ro({ livePhase: 'live', account: null })).toEqual({ kind: 'unavailable' })
+    expect(ro({ livePhase: 'live', account: { ...account, blocked: true } })).toEqual({ kind: 'unavailable' })
+  })
+
+  it('liveReadOnly 여도 realtime 이 아니면 기존 판정', () => {
+    expect(ro({ docPath: 'view', livePhase: null })).toEqual({ kind: 'unavailable' })
   })
 })

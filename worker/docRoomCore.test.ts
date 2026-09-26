@@ -202,7 +202,7 @@ type FakeConn = RoomConnection & {
   sent: string[]
 }
 
-function conn(userId: string, email: string, role: 'owner' | 'edit' = 'edit'): FakeConn {
+function conn(userId: string, email: string, role: 'owner' | 'edit' | 'view' = 'edit'): FakeConn {
   const c: FakeConn = {
     state: { userId, email, role },
     open: true,
@@ -1375,5 +1375,46 @@ describe('F-401 E11 DO 는 금고 문서를 없는 문서로 본다 (X16)', () =
     await core.revalidateConnections()
     expect(c.closed).toEqual({ code: 4404, reason: 'deleted' })
     expect(resolveDocAccess).not.toHaveBeenCalled()
+  })
+})
+
+// F-506 K1 — 읽기 전용 연결에 step 1 앞에 read-only 를 한 번 (specs/features/F-506.md 6.8)
+describe('F-506 K1 read-only 메시지', () => {
+  const READ_ONLY = encodeDocRoomMessage({ type: 'read-only' })
+
+  it('view 상태 연결 — sendSyncStep1 보다 먼저 한 번', async () => {
+    const d1 = makeD1({ content: 'a', version: 2 })
+    const room = makeRoom(d1)
+    await room.core.load()
+    const c = conn('v', 'viewer@example.com', 'view')
+    let sentAtStep1: string[] | null = null
+    expect(await room.add(c, 2, () => (sentAtStep1 = [...c.sent]))).toBe(true)
+    expect(sentAtStep1).toEqual([READ_ONLY])
+    expect(c.sent.filter((m) => m === READ_ONLY)).toHaveLength(1)
+  })
+
+  it('edit·owner 상태 연결 — read-only 0번', async () => {
+    const d1 = makeD1({ content: 'a', version: 2 })
+    const room = makeRoom(d1)
+    await room.core.load()
+    const e = conn('e', 'editor@example.com', 'edit')
+    const o = conn('owner', 'owner@example.com', 'owner')
+    await room.add(e, 2)
+    await room.add(o, 2)
+    expect(e.sent).not.toContain(READ_ONLY)
+    expect(o.sent).not.toContain(READ_ONLY)
+  })
+
+  it('gone 인 방의 view 연결 — 4404 로 닫고 read-only 0번', async () => {
+    const d1 = makeD1({ content: 'a', version: 2 })
+    const room = makeRoom(d1)
+    await room.core.load()
+    d1.state.row = null
+    const c = conn('v', 'viewer@example.com', 'view')
+    const step1 = vi.fn()
+    expect(await room.add(c, 3, step1)).toBe(false)
+    expect(c.closed?.code).toBe(4404)
+    expect(step1).not.toHaveBeenCalled()
+    expect(c.sent).not.toContain(READ_ONLY)
   })
 })
