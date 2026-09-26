@@ -21,16 +21,12 @@ async function setLineNumbers(page, label) {
 }
 
 test.describe('F-147 A1 설정', () => {
-  test('마지막 항목 줄 번호, 표시/숨김 두 버튼, 기본 표시', async ({ page }) => {
+  test('표시/숨김 두 버튼, 기본 표시', async ({ page }) => {
     await openApp(page)
     await openSettings(page)
     await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '편집기' }).click() // F-290 — 줄 번호는 편집기 탭
 
-    // F-2037·F-2043 이 편집기 탭 맨 끝에 `새 문서 템플릿`·`본문 너비` 를 더해 줄 번호는 끝에서 셋째다
-    const labels = page.locator('.settings-panel .dialog-field > span, .settings-panel .dialog-field [id]:not(select)')
-    const count = await labels.count()
-    await expect(labels.nth(count - 1)).toHaveText('새 문서 템플릿')
-    await expect(labels.nth(count - 3)).toHaveText('줄 번호')
+    // 항목 순서는 e2e/settingsTabs.spec.js 의 편집기 탭 라벨 목록 검사가 본다
 
     const seg = page.locator(LINE_NUMBERS_LABEL_SCOPE).locator('..').locator('[role="radio"]')
     await expect(seg).toHaveCount(2)

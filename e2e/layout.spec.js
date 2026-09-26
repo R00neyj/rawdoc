@@ -6,16 +6,14 @@ import { openApp, importMarkdown, resizeWindow, rectOf, waitTransitionEnd } from
 // F-143 A3·A6 은 토글·검색이 상단바로 옮겨가 (F-151) e2e/topbar.spec.js 의
 // F-151 A2·A3·A5·A6 테스트로 옮겼다. 레일 폭·유지만 여기 남긴다
 test.describe('F-143 사이드바 접기', () => {
-  test('F-143 A3 접으면 48px 레일이 되고 새로고침 뒤에도 유지된다', async ({ page }) => {
+  // 레일 폭 48px 는 시각 값이라 뺐다 (CLAUDE.md "Design does not get TDD")
+  test('F-143 A3 접으면 레일이 되고 새로고침 뒤에도 유지된다', async ({ page }) => {
     await openApp(page)
     const toggle = page.getByRole('button', { name: '사이드바 접기' })
     await toggle.click()
 
     const sidebar = page.locator('.sidebar')
     await expect(sidebar).toHaveClass(/sidebar--collapsed/)
-    await waitTransitionEnd(sidebar)
-    const width = (await rectOf(sidebar)).width
-    expect(Math.abs(width - 48)).toBeLessThanOrEqual(1)
 
     await expect(page.getByRole('button', { name: '사이드바 펴기' })).toBeVisible()
     await expect(page.getByRole('button', { name: '새 문서' })).toBeVisible()
@@ -33,28 +31,7 @@ test.describe('F-143 사이드바 접기', () => {
   })
 })
 
-test.describe('F-143 A5 좁은 창(900px)', () => {
-  test('상단바 토글로 사이드바를 열고 닫을 수 있고, 넓히면 저장된 상태로 돌아간다', async ({ page }) => {
-    await openApp(page)
-    await resizeWindow(page, 900)
-    await expect(page.locator('.sidebar')).toBeHidden()
-
-    const openToggle = page.locator('.sidebar-toggle')
-    await expect(openToggle).toHaveAttribute('aria-label', '사이드바 열기')
-    await openToggle.click()
-    await expect(page.locator('.sidebar')).toBeVisible()
-    await expect(page.locator('.sidebar')).not.toHaveClass(/sidebar--collapsed/)
-
-    // 바깥 클릭으로 닫힌다 — 사이드바가 화면 왼쪽 일부를 덮으므로 그 밖(오른쪽)을 클릭한다
-    await page.mouse.click(700, 400)
-    await expect(page.locator('.sidebar')).toBeHidden()
-
-    await resizeWindow(page, 1280)
-    await expect(page.locator('.sidebar')).toBeVisible()
-    await expect(page.locator('.sidebar')).not.toHaveClass(/sidebar--collapsed/)
-  })
-})
-
+// F-143 A5 좁은 창 토글·바깥 클릭·넓히면 복귀는 e2e/topbar.spec.js F-151 A4 로 합쳤다
 test.describe('F-159 사이드바 너비 조절', () => {
   async function dragHandleBy(page, dx) {
     const handle = page.locator('.sidebar-resize-handle')

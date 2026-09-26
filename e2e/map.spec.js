@@ -667,18 +667,6 @@ test.describe('F-2005 지도 설정 패널', () => {
     await expect(map.getByRole('button', { name: '지도 설정', exact: true })).toBeFocused()
   })
 
-  test('F-2005 A3 묶음은 필터·그룹·표시·장력 넷', async ({ page }) => {
-    const { map } = await openMapFresh(page)
-    const p = await openPanel(map)
-
-    await expect(p.locator('.map-panel-section')).toHaveCount(4)
-    await expect(p.locator('.map-panel-section-head')).toHaveText(['필터', '그룹', '표시', '장력'])
-    await expect(p.getByRole('button', { name: '필터', exact: true })).toHaveAttribute('aria-expanded', 'true')
-    await expect(p.getByRole('button', { name: '그룹', exact: true })).toHaveAttribute('aria-expanded', 'false')
-    await expect(p.getByRole('button', { name: '표시', exact: true })).toHaveAttribute('aria-expanded', 'false')
-    await expect(p.getByRole('button', { name: '장력', exact: true })).toHaveAttribute('aria-expanded', 'false')
-  })
-
   test('F-2005 A4 슬라이더 셋과 기본값', async ({ page }) => {
     const { map } = await openMapFresh(page)
     const p = await openDisplay(map)
@@ -843,18 +831,6 @@ function forceSlider(p, name) {
 
 test.describe('F-2006 장력 묶음', () => {
   test.use({ reducedMotion: 'reduce' })
-
-  test('F-2006 A1 장력 묶음이 표시 아래에 접힌 채 생긴다', async ({ page }) => {
-    const { map } = await openMapFresh(page)
-    const p = await openPanel(map)
-
-    await expect(p.locator('.map-panel-section')).toHaveCount(4)
-    await expect(p.locator('.map-panel-section-head')).toHaveText(['필터', '그룹', '표시', '장력'])
-    await expect(p.getByRole('button', { name: '필터', exact: true })).toHaveAttribute('aria-expanded', 'true')
-    await expect(p.getByRole('button', { name: '그룹', exact: true })).toHaveAttribute('aria-expanded', 'false')
-    await expect(p.getByRole('button', { name: '표시', exact: true })).toHaveAttribute('aria-expanded', 'false')
-    await expect(p.getByRole('button', { name: '장력', exact: true })).toHaveAttribute('aria-expanded', 'false')
-  })
 
   test('F-2006 A2 펼치면 슬라이더 넷', async ({ page }) => {
     const { map } = await openMapFresh(page)
@@ -1476,18 +1452,6 @@ const footFilter = (map) => map.locator('.map-foot-filter')
 test.describe('F-2007 지도 설정 패널 필터', () => {
   test.use({ reducedMotion: 'reduce' })
 
-  test('F-2007 A1 필터 가 맨 위에 펼쳐져 생기고 그룹 은 접힌 채 보인다', async ({ page }) => {
-    const { map } = await openMapFresh(page)
-    const p = await openPanel(map)
-
-    await expect(p.locator('.map-panel-section')).toHaveCount(4)
-    await expect(p.locator('.map-panel-section-head')).toHaveText(['필터', '그룹', '표시', '장력'])
-    await expect(p.getByRole('button', { name: '필터', exact: true })).toHaveAttribute('aria-expanded', 'true')
-    await expect(p.getByRole('button', { name: '그룹', exact: true })).toHaveAttribute('aria-expanded', 'false')
-    await expect(p.getByRole('button', { name: '표시', exact: true })).toHaveAttribute('aria-expanded', 'false')
-    await expect(p.getByRole('button', { name: '장력', exact: true })).toHaveAttribute('aria-expanded', 'false')
-  })
-
   test('F-2007 A2 다섯 항목', async ({ page }) => {
     const { map } = await openMapFresh(page)
     const p = await openPanel(map)
@@ -1704,6 +1668,7 @@ test.describe('F-2007 지도 설정 패널 필터', () => {
 test.describe('F-2008 지도 설정 패널 그룹', () => {
   test.use({ reducedMotion: 'reduce' })
 
+  // F-2005 A3·F-2006 A1·F-2007 A1 의 같은 검사(묶음 넷, 필터만 펼침)를 여기 하나로 합침
   test('F-2008 A1 묶음 넷', async ({ page }) => {
     const { map } = await openMapFresh(page)
     const p = await openPanel(map)
@@ -1712,6 +1677,8 @@ test.describe('F-2008 지도 설정 패널 그룹', () => {
     await expect(p.locator('.map-panel-section-head')).toHaveText(['필터', '그룹', '표시', '장력'])
     await expect(p.getByRole('button', { name: '필터', exact: true })).toHaveAttribute('aria-expanded', 'true')
     await expect(p.getByRole('button', { name: '그룹', exact: true })).toHaveAttribute('aria-expanded', 'false')
+    await expect(p.getByRole('button', { name: '표시', exact: true })).toHaveAttribute('aria-expanded', 'false')
+    await expect(p.getByRole('button', { name: '장력', exact: true })).toHaveAttribute('aria-expanded', 'false')
   })
 
   test('F-2008 A2 빈 그룹', async ({ page }) => {

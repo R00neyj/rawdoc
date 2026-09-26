@@ -261,16 +261,7 @@ test.describe('F-146 A7 조합 중 여백 클릭', () => {
 })
 
 test.describe('F-146 A8 회귀', () => {
-  test('F-124 A2d — 거터 숫자가 옮겨진 줄도 클릭 위치가 그대로다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '### 제목3\n\n문단\n' })
-
-    await page.locator('.cm-line.md-h3').click()
-    await page.keyboard.press('End')
-    await page.keyboard.type('X')
-    const doc = await readSavedContent(page, docId)
-    expect(doc.content).toContain('### 제목3X')
-  })
+  // F-124 A2d(거터 숫자가 옮겨진 제목 줄 클릭 위치)는 e2e/editor.spec.js F-152 A2 의 같은 test 가 본다
 
   test('F-129 — 기호 숨김 링크 클릭은 여전히 새 탭을 가로챈다(내비게이션 없음)', async ({ page }) => {
     await openApp(page)

@@ -20,19 +20,7 @@ const BUTTON_LABELS = [
 ]
 
 test.describe('F-142 상단바 버튼·툴팁', () => {
-  test('F-142 A1 다섯 버튼 모두 아이콘만, 보이는 글자 없음', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '내용\n' })
-    for (const label of BUTTON_LABELS) {
-      const btn = page.getByRole('button', { name: label, exact: true })
-      await expect(btn).toBeVisible()
-      const svgCount = await btn.locator('svg').count()
-      expect(svgCount).toBe(1)
-      const text = (await btn.innerText()).trim()
-      expect(text).toBe('')
-    }
-  })
-
+  // F-142 A1(아이콘만·글자 없음)은 시각 값이라 뺐다 — 버튼 접근성 이름은 A3·A5 와 공유·내보내기 test 들이 쓴다
   test('F-142 A3 모드 전환·내보내기 회귀 동작', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '# 제목\n' })
@@ -61,22 +49,6 @@ test.describe('F-142 상단바 버튼·툴팁', () => {
 
     await expect(page.getByRole('button', { name: '공유 — 링크·마크다운 복사' })).toBeDisabled()
     await expect(page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })).toBeDisabled()
-  })
-})
-
-test.describe('F-142 A12 / F-142 3.6 공유 메뉴 가로 스크롤', () => {
-  test('키보드 조작 — 방향키 이동, Enter 실행, Esc 로 닫기', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '내용\n' })
-    const shareBtn = page.getByRole('button', { name: '공유 — 링크·마크다운 복사' })
-    await shareBtn.click()
-    const items = page.locator('.share-menu-list [role="menuitem"]')
-    await expect(items.first()).toBeFocused()
-    await page.keyboard.press('ArrowDown')
-    await expect(items.nth(1)).toBeFocused()
-    await page.keyboard.press('Escape')
-    await expect(page.locator('.share-menu-list')).toBeHidden()
-    await expect(shareBtn).toBeFocused()
   })
 })
 
@@ -198,7 +170,7 @@ test.describe('F-151 상단바 앞 묶음(토글·검색)', () => {
     await expect(tooltip).toHaveText('사이드바 닫기')
   })
 
-  test('F-151 A4 좁은 창(900px) — 토글 하나로 열고 닫기, 바깥 클릭·Esc, md.sidebar 안 바뀜', async ({ page }) => {
+  test('F-151 A4 좁은 창(900px) — 토글 하나로 열고 닫기, 바깥 클릭·Esc, md.sidebar 안 바뀜, 넓히면 복귀', async ({ page }) => {
     await openApp(page)
     await resizeWindow(page, 900)
 
@@ -227,37 +199,20 @@ test.describe('F-151 상단바 앞 묶음(토글·검색)', () => {
 
     const prefAfter = await page.evaluate(() => window.localStorage.getItem('md.sidebar'))
     expect(prefAfter).toBe(prefBefore)
+
+    // 넓히면 저장된 상태(펼침)로 돌아간다 (옛 layout.spec.js F-143 A5)
+    await resizeWindow(page, 1280)
+    await expect(page.locator('.sidebar')).toBeVisible()
+    await expect(page.locator('.sidebar')).not.toHaveClass(/sidebar--collapsed/)
   })
 
   // F-151 A6(검색 버튼 — 준비 중)은 F-287 로 대체됐다. 검색 버튼 동작은 e2e/docSearch.spec.js
 })
 
-test.describe('F-143 A10 그 밖의 기능 버튼 아이콘', () => {
-  test('⋯ 메뉴·공유 메뉴 항목마다 아이콘 + 글자가 있다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { name: '문서.md', content: '내용\n' })
-
-    const row = page.locator('.tree-row').filter({ hasText: '문서' }).first()
-    await row.hover()
-    await row.locator('.item-menu-btn').click()
-    const docMenuItems = page.locator('.item-menu-list [role="menuitem"]')
-    const docCount = await docMenuItems.count()
-    for (let i = 0; i < docCount; i++) {
-      await expect(docMenuItems.nth(i).locator('svg')).toHaveCount(1)
-    }
-    await page.keyboard.press('Escape')
-
-    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
-    const shareItems = page.locator('.share-menu-list [role="menuitem"]')
-    const shareCount = await shareItems.count()
-    for (let i = 0; i < shareCount; i++) {
-      await expect(shareItems.nth(i).locator('svg')).toHaveCount(1)
-    }
-  })
-})
+// F-143 A10(메뉴 항목마다 아이콘)은 시각 값이라 뺐다 (CLAUDE.md "Design does not get TDD")
 
 test.describe('F-163 공유 메뉴 `파일로 공유…` 제거', () => {
-  test('F-163 A1 메뉴는 링크 복사·마크다운 복사 2개, ↓ 두 번이면 첫 항목으로 돌아옴', async ({ page }) => {
+  test('F-163 A1 메뉴는 링크 복사·마크다운 복사 2개, ↓ 두 번이면 첫 항목으로 돌아옴, Esc 로 닫고 버튼 포커스', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '내용\n' })
     await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
@@ -272,6 +227,11 @@ test.describe('F-163 공유 메뉴 `파일로 공유…` 제거', () => {
     await expect(items.nth(1)).toBeFocused()
     await page.keyboard.press('ArrowDown')
     await expect(items.first()).toBeFocused()
+
+    // Esc 로 닫히고 공유 버튼으로 포커스 복귀 (옛 F-142 A12·F-172 A5 를 합침)
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.share-menu-list')).toBeHidden()
+    await expect(page.getByRole('button', { name: '공유 — 링크·마크다운 복사' })).toBeFocused()
   })
 
   test('F-163 A2 10,000자 무작위 문서 링크 복사 — .md 내보내기 권장 문구', async ({ page, context }) => {

@@ -36,38 +36,30 @@ test.describe('F-155 A3·A4 커서 보정·원문 불변', () => {
     expect(doc.content).toContain('과목: 웹\n차시: 3\n---') // 프론트매터 바이트 불변
   })
 
-  test('Ctrl+Home 도 본문 첫 줄로 보낸다', async ({ page }) => {
+  // Ctrl+Home·위젯 클릭·위 화살표 세 경로를 test 하나로 합쳤다 — 칠 때마다 본문 첫 줄 맨 앞에 쌓인다
+  test('Ctrl+Home·위젯 클릭·위젯 아래 줄에서 위 화살표 모두 본문 첫 줄 맨 앞으로 보낸다', async ({ page }) => {
     await openApp(page)
     const docId = await importMarkdown(page, { content: DOC })
 
     await page.locator('.cm-content').click()
     await page.keyboard.press('Control+End')
     await page.keyboard.press('Control+Home')
-    await page.keyboard.type('X')
-    const doc = await readSavedContent(page, docId)
-    expect(doc.content).toContain('---\nX본문 문단')
-  })
+    await page.keyboard.type('A')
+    expect((await readSavedContent(page, docId)).content).toContain('---\nA본문 문단')
 
-  test('위젯을 클릭해도 본문 첫 줄로 보낸다, 그 밖의 동작은 없다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: DOC })
-
+    // 위젯을 클릭해도 본문 첫 줄로 보낸다, 그 밖의 동작은 없다
     await page.locator('.md-frontmatter-widget table').click()
-    await page.keyboard.type('X')
-    const doc = await readSavedContent(page, docId)
-    expect(doc.content).toContain('---\nX본문 문단')
-  })
+    await page.keyboard.type('B')
+    expect((await readSavedContent(page, docId)).content).toContain('---\nBA본문 문단')
 
-  test('위젯 아래 줄에서 위 화살표를 눌러도 그 자리에 남는다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: DOC })
-
+    // 위젯 아래 줄에서 위 화살표를 눌러도 그 자리에 남는다
     await page.locator('.cm-content .cm-line', { hasText: '본문 문단' }).click()
     await page.keyboard.press('Home')
     await page.keyboard.press('ArrowUp')
-    await page.keyboard.type('X')
+    await page.keyboard.type('C')
     const doc = await readSavedContent(page, docId)
-    expect(doc.content).toContain('---\nX본문 문단')
+    expect(doc.content).toContain('---\nCBA본문 문단')
+    expect(doc.content).toContain('과목: 웹\n차시: 3\n---') // 프론트매터 바이트 불변
   })
 })
 

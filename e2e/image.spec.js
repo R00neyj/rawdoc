@@ -513,7 +513,7 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
     // 폭·높이·모서리·가운데 정렬은 시각 값이라 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
   })
 
-  test('F-157 A3 정렬 버튼 — align 값만 원문 변경, aria-pressed, 위치, Ctrl+Z', async ({ page }) => {
+  test('F-157 A3 정렬 버튼 — align 값만 원문 변경, aria-pressed, Ctrl+Z', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '본문\n' })
     await pasteImage(page, { width: 200, height: 100, afterText: '본문' })
@@ -530,11 +530,7 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
     expect(afterLeft).toBe(before.replace('align="center"', 'align="left"')) // align 값 글자만 바뀜
     await expect(leftBtn).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByRole('button', { name: '가운데 정렬' })).toHaveAttribute('aria-pressed', 'false')
-
-    const contentRect = await page.locator('.cm-content').boundingBox()
-    const padLeft = parseFloat(await page.locator('.cm-content').evaluate((el) => getComputedStyle(el).paddingLeft))
-    let boxRect = await box.boundingBox()
-    expect(Math.abs(boxRect.x - (contentRect.x + padLeft))).toBeLessThanOrEqual(2) // 왼쪽 = 글자 칸 왼쪽
+    // 정렬별 화면 위치(글자 칸 왼쪽·오른쪽 ±2px)는 시각 값이라 뺐다 (CLAUDE.md "Design does not get TDD")
 
     await box.hover()
     const rightBtn = page.getByRole('button', { name: '오른쪽 정렬' })
@@ -542,10 +538,6 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
     await waitSaved(page)
     const afterRight = (await readSavedContent(page)).content
     expect(afterRight).toBe(before.replace('align="center"', 'align="right"'))
-
-    const padRight = parseFloat(await page.locator('.cm-content').evaluate((el) => getComputedStyle(el).paddingRight))
-    boxRect = await box.boundingBox()
-    expect(Math.abs(boxRect.x + boxRect.width - (contentRect.x + contentRect.width - padRight))).toBeLessThanOrEqual(2) // 오른쪽 = 글자 칸 오른쪽
 
     await page.locator('.cm-content .cm-line', { hasText: '본문' }).click() // 편집기로 포커스 복귀(Ctrl+Z 는 CM6 키맵)
     await page.keyboard.press('Control+z')
@@ -938,16 +930,7 @@ test.describe('F-158 이미지 보기·공유·내보내기', () => {
     expect(Array.from(unzipped[`attachments/${ids[1]}.png`])).toEqual(png2)
   })
 
-  test('F-158 A7 이미지 없음 — F-112 와 같게 .md', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { name: '일반문서.md', content: '본문\n' })
-    await openExportMenu(page)
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
-    ])
-    expect(download.suggestedFilename()).toBe('일반문서.md')
-  })
+  // F-158 A7(이미지 없는 문서는 .md 그대로)은 e2e/export.spec.js F-278 A18 과 아래 A8 끝(전부 지우면 .md)이 본다
 
   test('F-158 A8 없는 첨부 — 2장 중 1장 삭제 / 전부 삭제', async ({ page }) => {
     await skipPersistNotice(page)

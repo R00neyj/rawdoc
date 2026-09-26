@@ -3,49 +3,20 @@
 import { test, expect } from '@playwright/test'
 import { openApp, importMarkdown, setPrefBeforeLoad, setViewMode, readSavedContent } from './helpers.js'
 
-test.describe('F-141 설정 대화상자', () => {
-  test('테마 / 제목 서체 / 본문 서체 순서, 버튼 순서 동일', async ({ page }) => {
-    await openApp(page)
-    await page.getByRole('button', { name: '설정', exact: true }).click()
-    // 초대 대화상자(F-212)도 닫힌 채 DOM 에 있어 설정 대화상자로 좁힌다
-    const labels = page.locator('dialog[aria-labelledby="settings-title"]').locator('.dialog-field > span, .dialog-field [id]')
-    await expect(labels.nth(0)).toHaveText('테마')
-    await expect(labels.nth(1)).toHaveText('제목 서체')
-    await expect(labels.nth(2)).toHaveText('본문 서체')
-
-    const headingSeg = page.locator('#heading-font-label').locator('..').locator('[role="radio"]')
-    const bodySeg = page.locator('#body-font-label').locator('..').locator('[role="radio"]')
-    await expect(headingSeg.nth(0)).toHaveText('세리프')
-    await expect(headingSeg.nth(1)).toHaveText('산세리프')
-    await expect(bodySeg.nth(0)).toHaveText('세리프')
-    await expect(bodySeg.nth(1)).toHaveText('산세리프')
-  })
-})
-
+// F-141 설정 항목 순서·F-154 A7 항목 순서는 e2e/settingsTabs.spec.js 의 화면·편집기 탭 라벨 목록 검사가 대신한다 — 여기엔 기본 선택만 남긴다
 test.describe('F-154 A7 설정 항목 — 글자 크기·들여쓰기', () => {
-  test('테마/제목 서체/본문 서체/글자 크기/들여쓰기/줄 번호 순서, 기본 선택 표시', async ({ page }) => {
+  test('글자 크기 기본 보통, 들여쓰기 기본 4칸', async ({ page }) => {
     await openApp(page)
     await page.getByRole('button', { name: '설정', exact: true }).click()
     const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
-    const screenLabels = dialog.locator('.settings-panel .dialog-field > span, .settings-panel .dialog-field [id]')
-    await expect(screenLabels.nth(3)).toHaveText('글자 크기')
-    await expect(screenLabels.nth(4)).toHaveText('시작 화면') // F-232 — 화면 탭 맨 아래 (F-290 3.1)
 
     const fontSizeSeg = page.locator('#font-size-label').locator('..').locator('[role="radio"]')
-    await expect(fontSizeSeg.nth(0)).toHaveText('작게')
-    await expect(fontSizeSeg.nth(1)).toHaveText('보통')
-    await expect(fontSizeSeg.nth(2)).toHaveText('크게')
+    await expect(fontSizeSeg).toHaveText(['작게', '보통', '크게'])
     await expect(fontSizeSeg.nth(1)).toHaveAttribute('aria-checked', 'true') // 기본 medium(보통)
 
-    await dialog.getByRole('tab', { name: '편집기' }).click() // F-290 — 탭바·들여쓰기·줄 번호는 편집기 탭
-    const editorLabels = dialog.locator('.settings-panel .dialog-field > span, .settings-panel .dialog-field [id]')
-    await expect(editorLabels.nth(0)).toHaveText('탭바') // F-233
-    await expect(editorLabels.nth(1)).toHaveText('들여쓰기')
-    await expect(editorLabels.nth(2)).toHaveText('줄 번호')
-
+    await dialog.getByRole('tab', { name: '편집기' }).click() // F-290 — 들여쓰기는 편집기 탭
     const indentSeg = page.locator('#indent-label').locator('..').locator('[role="radio"]')
-    await expect(indentSeg.nth(0)).toHaveText('2칸')
-    await expect(indentSeg.nth(1)).toHaveText('4칸')
+    await expect(indentSeg).toHaveText(['2칸', '4칸'])
     await expect(indentSeg.nth(1)).toHaveAttribute('aria-checked', 'true') // 기본 4칸
   })
 })

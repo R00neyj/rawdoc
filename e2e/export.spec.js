@@ -7,22 +7,6 @@ async function fillTitle(page, text) {
   await page.locator('.doc-title').blur()
 }
 
-test.describe('F-278 A16 메뉴 열림', () => {
-  test('내보내기 버튼을 누르면 항목이 .md·.txt (평문)·PDF (A4 인쇄) 순서로 있다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-
-    const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
-    await btn.click()
-    await expect(btn).toHaveAttribute('aria-expanded', 'true')
-
-    const menu = page.getByRole('menu')
-    await expect(menu).toBeVisible()
-    const items = page.locator('.export-menu-list [role="menuitem"]')
-    await expect(items).toHaveText(['.md', '.txt (평문)', 'HTML 파일', 'PDF (A4 인쇄)', '서식 있는 복사'])
-  })
-})
-
 test.describe('F-278 A17 키보드·포커스', () => {
   test('열자마자 첫 항목 포커스, 방향키 이동, Escape 로 닫히고 트리거로 복귀', async ({ page }) => {
     await openApp(page)

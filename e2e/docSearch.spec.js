@@ -58,7 +58,6 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('회고')
-    await page.waitForTimeout(250)
 
     const options = page.getByRole('option')
     await expect(options).toHaveCount(2)
@@ -74,7 +73,6 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('회고')
-    await page.waitForTimeout(250)
 
     const first = page.getByRole('option').first()
     await expect(first.locator('.search-result-title')).toContainText('회고노트')
@@ -88,7 +86,6 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('tag:일기')
-    await page.waitForTimeout(250)
 
     await expect(page.getByRole('option')).toHaveCount(1)
   })
@@ -101,7 +98,6 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
     await page.keyboard.press('Control+Shift+F')
     const input = page.locator('.search-input')
     await input.fill('찾기')
-    await page.waitForTimeout(250)
     await expect(page.getByRole('option')).toHaveCount(2)
 
     await page.keyboard.press('ArrowDown')
@@ -124,7 +120,6 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('특이단어')
-    await page.waitForTimeout(250)
     await expect(page.getByRole('option')).toHaveCount(1)
     await page.keyboard.press('Enter')
 
@@ -140,7 +135,7 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('특이단어2')
-    await page.waitForTimeout(250)
+    await expect(page.getByRole('option')).toHaveCount(1)
     await page.getByRole('option').first().click()
 
     await expect(page.locator('dialog[open]')).toHaveCount(0)
@@ -168,7 +163,6 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
     // 700ms 저장 디바운스를 기다리지 않고 곧바로 검색을 연다
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('해달별특이어')
-    await page.waitForTimeout(250)
 
     await expect(page.getByRole('option')).toHaveCount(1)
   })
@@ -187,7 +181,6 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
     await importMarkdown(page, { content: '내용\n' })
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('zzzz없는말')
-    await page.waitForTimeout(250)
 
     await expect(page.getByText('찾는 문서가 없습니다')).toBeVisible()
   })
@@ -247,7 +240,6 @@ test.describe('F-288 안내 문구와 공백 표시', () => {
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('tag:일기 하루')
-    await page.waitForTimeout(250)
 
     await expect(page.locator('dialog[open] .search-summary')).toHaveText('필터 tag=일기 · 검색어 "하루"')
   })
@@ -267,7 +259,6 @@ test.describe('F-288 안내 문구와 공백 표시', () => {
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('tag:일기')
-    await page.waitForTimeout(250)
 
     await expect(page.locator('dialog[open] .search-note')).toContainText('속성이 없거나 읽지 못한 문서 2개는 필터에서 빠졌습니다')
   })
@@ -277,7 +268,6 @@ test.describe('F-288 안내 문구와 공백 표시', () => {
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('tagg:일기')
-    await page.waitForTimeout(250)
 
     await expect(page.getByText("'tagg' 속성을 가진 문서가 없습니다")).toBeVisible()
     await expect(page.getByText('찾는 문서가 없습니다')).toHaveCount(0)
@@ -291,7 +281,6 @@ test.describe('F-288 안내 문구와 공백 표시', () => {
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('회고')
-    await page.waitForTimeout(250)
 
     await expect(page.locator('dialog[open] .search-foot')).toHaveText('결과 2개')
   })
@@ -319,7 +308,6 @@ test.describe('F-288 안내 문구와 공백 표시', () => {
     await expect(page.locator('dialog[open] .search-note')).toContainText('오프라인 — 이 기기에 저장된 문서에서 찾습니다')
 
     await page.locator('.search-input').fill('회고')
-    await page.waitForTimeout(250)
     await expect(page.getByRole('option')).not.toHaveCount(0)
   })
 
@@ -363,7 +351,6 @@ test.describe('F-288 안내 문구와 공백 표시', () => {
     await importMarkdown(page, { content: '내용\n' })
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('zzzz없는말')
-    await page.waitForTimeout(250)
 
     await expect(page.locator('dialog[open] .search-status')).toHaveAttribute('role', 'status')
   })

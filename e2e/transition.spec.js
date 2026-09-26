@@ -104,26 +104,7 @@ test.describe('F-172 A4 닫힌 뒤 300ms', () => {
   })
 })
 
-test.describe('F-172 A5 키보드 회귀', () => {
-  test('공유 메뉴 열기 → 첫 항목 포커스, Esc 로 닫기 → 버튼 포커스로 복귀한다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '내용\n' })
-    const shareBtn = page.getByRole('button', { name: '공유 — 링크·마크다운 복사' })
-    await shareBtn.click()
-    const items = page.locator('.share-menu-list [role="menuitem"]')
-    await expect(items.first()).toBeFocused()
-    await page.keyboard.press('Escape')
-    await expect(shareBtn).toBeFocused()
-  })
-
-  test('대화상자는 Esc 로 닫힌다', async ({ page }) => {
-    await openApp(page)
-    await openDeleteDialog(page)
-    await expect(page.locator('dialog.dialog[open]')).toBeVisible()
-    await page.keyboard.press('Escape')
-    await expect(page.locator('dialog.dialog[open]')).toHaveCount(0)
-  })
-})
+// F-172 A5 키보드 회귀는 e2e/topbar.spec.js F-163 A1(공유 메뉴 첫 항목 포커스·Esc 뒤 버튼 포커스)과 위 F-172 A4(대화상자 Esc 닫힘)가 대신한다
 
 // 움직임 줄이기 — F-149 A6·F-172 A6·F-173 A3·F-228 A6 을 하나로 합쳤다 (2026-09-25 e2e 경량화)
 test.describe('움직임 줄이기 (F-149 A6·F-172 A6·F-173 A3·F-228 A6)', () => {

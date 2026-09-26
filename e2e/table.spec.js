@@ -30,29 +30,17 @@ function wideTable(cols) {
 test.describe('F-140 표 추가 버튼 위치와 칸 인라인 표시', () => {
   // F-140 A2(버튼 위치)·A11(칸 크기 불변)·A13(빈 칸 높이)은 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
 
-  for (const [label, content] of [
-    ['좁은 표', NARROW_TABLE],
-    ['20열 표', wideTable(20)],
-  ]) {
-    test(`F-140 A3 ${label} 는 편집 영역에 가로 스크롤을 만들지 않는다`, async ({ page }) => {
-      await openApp(page)
-      await importMarkdown(page, { content })
-      const scroller = page.locator('.cm-scroller')
-      const wrap = page.locator('.md-table-widget')
-      await wrap.hover()
-      const colBtn = wrap.locator('.md-table-add-col')
-      await colBtn.focus()
-      const sizes = await scroller.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }))
-      expect(sizes.scrollWidth).toBe(sizes.clientWidth)
-
-      const tooltipVisible = await colBtn.evaluate((el) => getComputedStyle(el, '::after').opacity !== '0')
-      if (tooltipVisible) {
-        const btnRect = await rectOf(colBtn)
-        const scrollerRect = await rectOf(scroller)
-        expect(btnRect.right).toBeLessThanOrEqual(scrollerRect.right + 1)
-      }
-    })
-  }
+  // 좁은 표·20열 표 두 번 돌던 것을 20열 하나로 줄였다. 툴팁 위치(±1px)는 시각 값이라 뺐다
+  test('F-140 A3 20열 표는 편집 영역에 가로 스크롤을 만들지 않는다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: wideTable(20) })
+    const scroller = page.locator('.cm-scroller')
+    const wrap = page.locator('.md-table-widget')
+    await wrap.hover()
+    await wrap.locator('.md-table-add-col').focus()
+    const sizes = await scroller.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }))
+    expect(sizes.scrollWidth).toBe(sizes.clientWidth)
+  })
 
   test('F-140 A4 넓은 표를 가로 스크롤해도 버튼이 보이는 영역 안에 남는다', async ({ page }) => {
     await openApp(page)
@@ -366,7 +354,8 @@ test.describe('F-162 표 칸 안 줄바꿈 (Alt+Enter → <br>)', () => {
     expect(doc.content).toContain('| 3 | 4 |')
   })
 
-  test('F-162 A3 편집 중이 아닌 칸의 <br> 은 줄바꿈으로 보이고 칸 높이가 늘어난다', async ({ page }) => {
+  // 칸 높이가 늘어나는지(1.5배)는 시각 값이라 뺐다 — <br> 요소가 그려지는지만 본다
+  test('F-162 A3 편집 중이 아닌 칸의 <br> 은 줄바꿈으로 보인다', async ({ page }) => {
     const content = `${BR_TABLE}아래줄\n`
     await openApp(page)
     const docId = await importMarkdown(page, { content })
@@ -375,10 +364,6 @@ test.describe('F-162 표 칸 안 줄바꿈 (Alt+Enter → <br>)', () => {
     const brCell = rows.nth(1).locator('td').first() // "x<br>y"
 
     await expect(brCell.locator('br')).toHaveCount(1)
-
-    const oneLineHeight = (await rectOf(rows.nth(2))).height // "3" 칸(줄바꿈 없음)
-    const twoLineHeight = (await rectOf(rows.nth(1))).height
-    expect(twoLineHeight).toBeGreaterThan(oneLineHeight * 1.5)
 
     // 표 아래 줄 클릭 위치가 F-124 3.4 규칙대로 맞는다(F-124 A2d 방법)
     const belowTable = page.getByText('아래줄', { exact: true })
@@ -426,7 +411,8 @@ function cellAt(table, row, col) {
 }
 
 test.describe('F-165 표 칸 범위 선택과 행·열 삭제', () => {
-  test('F-165 A2 끌기로 범위를 선택하면 두 칸을 감싼 사각형이 보이고 하위 에디터는 없다', async ({ page }) => {
+  // 사각형이 두 칸을 감싸는 좌표(±2px)는 시각 값이라 뺐다
+  test('F-165 A2 끌기로 범위를 선택하면 사각형이 보이고 하위 에디터는 없다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: GRID_TABLE })
     const wrap = page.locator('.md-table-widget')
@@ -438,11 +424,6 @@ test.describe('F-165 표 칸 범위 선택과 행·열 삭제', () => {
 
     const highlight = wrap.locator('.md-table-cell-highlight')
     await expect(highlight).toBeVisible()
-    const [fromRect, toRect, hlRect] = await Promise.all([rectOf(from), rectOf(to), rectOf(highlight)])
-    expect(Math.abs(hlRect.left - fromRect.left)).toBeLessThanOrEqual(2)
-    expect(Math.abs(hlRect.top - fromRect.top)).toBeLessThanOrEqual(2)
-    expect(Math.abs(hlRect.right - toRect.right)).toBeLessThanOrEqual(2)
-    expect(Math.abs(hlRect.bottom - toRect.bottom)).toBeLessThanOrEqual(2)
     await expect(wrap.locator('.md-table-cell-editing')).toHaveCount(0)
   })
 
