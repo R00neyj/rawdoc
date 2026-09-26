@@ -15,6 +15,7 @@ const SECTION_ORDER = [
   '화면',
   '글쓰기',
   '문서 관리',
+  '검색',
   '저장',
   '이미지',
   '위키링크',
@@ -274,6 +275,22 @@ describe('F-2048 도움말 ## 이미지 절', () => {
     expect(section.body).toContain(`${MAX_RESULT_BYTES / 1024 / 1024}MB가 넘으면`)
     expect(section.body).toContain('`이미지 삭제`')
     expect(section.body).not.toContain('한 장에 20MB까지 넣을 수 있고')
+  })
+})
+
+// 사용법 글 search (write-guide, 2026-09-27)
+describe('도움말 ## 검색 절', () => {
+  it('## 문서 관리 바로 뒤에 있고, 사용법 글 줄로 끝나며, 단축키·화면 글자가 들어 있다', () => {
+    const names = appSections().map((s) => s.name)
+    expect(names[names.indexOf('문서 관리') + 1]).toBe('검색')
+    const section = appSections().find((s) => s.name === '검색')!
+    const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [검색과 찾기·바꾸기](/guides/search)')
+    expect(section.body).toContain('`Ctrl+Shift+F`')
+    expect(section.body).toContain('`Ctrl+F`')
+    expect(section.body).toContain('`Ctrl+H`')
+    expect(section.body).toContain('`검색`')
+    expect(section.body).toContain('`tag:일기`')
   })
 })
 

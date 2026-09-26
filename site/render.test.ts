@@ -36,7 +36,7 @@ describe('F-2036 A6 페이지 markup', () => {
 
     const tocMatch = /<nav class="site-toc" aria-label="목차">([\s\S]*?)<\/nav>/.exec(html)![1]
     const items = [...tocMatch.matchAll(/<li data-level="(\d)"><a class="outline-item" href="#([^"]+)">/g)]
-    expect(items).toHaveLength(42)
+    expect(items).toHaveLength(43)
 
     const idAttrs = [...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1])
     for (const [, , id] of items) {

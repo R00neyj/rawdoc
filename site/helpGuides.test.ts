@@ -23,6 +23,7 @@ import { RETAIN_MS } from '../src/storage/yjsStore'
 import { MAX_INPUT_BYTES, MAX_RESULT_BYTES, MAX_DIM, MAX_AREA } from '../src/app/attachImages'
 import { MAX_SIDE } from '../src/lib/shrinkImage'
 import { GRACE_MS } from '../src/app/attachmentGc'
+import { RESULT_LIMIT, SNIPPET_BEFORE, SNIPPET_AFTER } from '../src/lib/docSearch'
 
 const GUIDES_DIR = fileURLToPath(new URL('../content/guides', import.meta.url))
 
@@ -304,6 +305,23 @@ describe('F-2048 이미지 글', () => {
 
   it('U3: 글에 제품명이 없다 (R6)', () => {
     const body = guideBody(readGuide('images')).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+// 사용법 글 search (write-guide, 2026-09-27)
+describe('search 글', () => {
+  it('글의 앱 쪽 수치가 상수에서 만든 문자열과 같다 (R5)', () => {
+    const raw = readGuide('search')
+    expect(raw).toContain(`맞은 글자 앞 ${SNIPPET_BEFORE}자와 뒤 ${SNIPPET_AFTER}자`)
+    expect(raw).toContain(`목록에는 ${RESULT_LIMIT}개까지`)
+    expect(raw).toContain(`앞 ${RESULT_LIMIT}개만 보입니다`)
+    expect(raw).toContain(`${RESULT_LIMIT}개까지 보입니다`)
+  })
+
+  it('글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(readGuide('search')).toLowerCase()
     expect(body).not.toContain(brand.name.toLowerCase())
     expect(body).not.toContain(brand.shortName.toLowerCase())
   })
