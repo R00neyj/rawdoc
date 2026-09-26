@@ -276,13 +276,13 @@ export default function CommentRailPanel({
   const orphanCount = orphanThreads.length
   const containerRef = useRef<HTMLElement | null>(null)
 
-  // 6장 — 판 바깥 pointerdown 으로 닫기. 앵커·거터·상단바 댓글 버튼은 예외
+  // 6장 — 판 바깥 pointerdown 으로 닫기. 앵커·거터·상단바 댓글 버튼·떠 있는 댓글 달기 버튼(태블릿 서랍 옆에 남는다)은 예외
   useEffect(() => {
     if (mode !== 'sheet' || !open) return
     function handlePointerDown(e: PointerEvent) {
       const target = e.target as HTMLElement
       if (containerRef.current?.contains(target)) return
-      if (target.closest('.cm-comment-anchor, .cm-comment-gutter-marker, .comment-rail-toggle')) return
+      if (target.closest('.cm-comment-anchor, .cm-comment-gutter-marker, .comment-rail-toggle, .comment-add-button')) return
       onClose()
     }
     document.addEventListener('pointerdown', handlePointerDown)

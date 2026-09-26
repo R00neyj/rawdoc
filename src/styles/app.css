@@ -1184,6 +1184,7 @@ body.sidebar-resizing {
 /* 5.6 레일 여분 — 마지막 카드가 문서 끝을 넘으면 App.tsx 가 인라인으로 덮는다. 기본 0. .cm-content 아래 패딩에 더해진다 */
 .content-area {
   --comment-rail-extra: 0px;
+  --comment-drawer-width: 320px; /* 태블릿 폭 오른쪽 서랍 (.comment-sheet, 601px 이상) */
 }
 
 .comment-rail {
@@ -1249,6 +1250,30 @@ body.sidebar-resizing {
   opacity: 0;
   transform: translateY(24px);
   pointer-events: none;
+}
+
+/* 태블릿 폭(창 601px 이상인데 메인 열이 레일 기준 미만) — 아래 판 대신 오른쪽 서랍. 편집기를 밀지 않고 위에 겹친다.
+   아래 판(60dvh)은 가로 태블릿에서 본문을 거의 다 가렸다 (2026-09-27 tweak) */
+@media (min-width: 601px) {
+  .comment-sheet {
+    top: 0;
+    left: auto;
+    width: min(var(--comment-drawer-width), 100%);
+    height: auto;
+    border-top: none;
+    border-left: 1px solid var(--rule);
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.12);
+  }
+
+  .comment-sheet[data-state='closed'] {
+    transform: translateX(24px);
+  }
+
+  @starting-style {
+    .comment-sheet {
+      transform: translateX(24px);
+    }
+  }
 }
 
 .comment-rail-head {
@@ -1821,6 +1846,17 @@ body.sidebar-resizing {
   right: calc(16px + 280px);
 }
 
+/* 판이 열려 있으면 — 태블릿 서랍은 서랍 왼쪽으로 비키고, 폰 아래 판은 판 그림자 위에 걸리지 않게 숨긴다 (2026-09-27 tweak) */
+.content-area[data-comment-sheet-open] .comment-add-button {
+  right: calc(16px + min(var(--comment-drawer-width), 100%));
+}
+
+@media (max-width: 600px) {
+  .content-area[data-comment-sheet-open] .comment-add-button {
+    display: none;
+  }
+}
+
 .comment-add-button:hover {
   background: var(--rule-2);
   color: var(--ink);
@@ -1890,6 +1926,7 @@ body.sidebar-resizing {
   width: 100%;
   max-width: var(--content-max);
   margin: 10px auto 0;
+  padding: 0 10px; /* 항목 글자(.empty-state-recent-item 좌우 10px)와 같은 선 */
   font-size: 12px;
   color: var(--muted);
   text-align: left;
@@ -1899,6 +1936,8 @@ body.sidebar-resizing {
   width: 100%;
   max-width: var(--content-max);
   margin: 0 auto;
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
   gap: 2px;

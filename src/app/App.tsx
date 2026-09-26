@@ -5281,6 +5281,7 @@ export default function App() {
               ref={contentAreaRef}
               hidden={Boolean(sharedDoc) || Boolean(mapRoute)}
               data-comment-rail-open={commentRailVisible || undefined}
+              data-comment-sheet-open={commentSheetVisible || undefined}
               style={commentRailVisible && commentRailExtra > 0 ? ({ '--comment-rail-extra': `${commentRailExtra}px` } as CSSProperties) : undefined}
             >
               <div className="editor-slot" hidden={viewMode === 'view'}>
