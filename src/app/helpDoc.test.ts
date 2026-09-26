@@ -323,6 +323,20 @@ describe('도움말 ## 글쓰기 절', () => {
   })
 })
 
+// 사용법 글 comments (write-guide, 2026-09-27)
+describe('도움말 ## 댓글·## 알림 절', () => {
+  it('두 절 모두 comments 글 사용법 글 줄로 끝나고, 알림 절이 스레드 참여자 답글 알림을 적는다', () => {
+    for (const name of ['댓글', '알림']) {
+      const section = appSections().find((s) => s.name === name)!
+      const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+      expect(paragraphs[paragraphs.length - 1], name).toBe('사용법 글: [댓글과 알림](/guides/comments)')
+    }
+    const notices = appSections().find((s) => s.name === '알림')!
+    expect(notices.body).toContain('내가 댓글·답글을 쓴 스레드에 답글을 달면')
+    expect(notices.body).toContain('`알림 열기`')
+  })
+})
+
 // F-2045.md 6.1 U1
 describe('F-2045 도움말 ## 공유 절', () => {
   it('U1: 마지막 문단이 사용법 글 줄이고, 화면 글자가 들어 있고, 옛 문구가 없다', () => {

@@ -532,3 +532,41 @@ test('guide tables E3 앱 도움말의 링크', async ({ page }) => {
   await expect(link).toHaveText('표 넣고 고치기')
   await expect(link).toHaveAttribute('target', '_blank')
 })
+
+test('guide comments E1 글이 뜨고 완결된 정적 페이지다', async ({ page }) => {
+  await page.goto('/guides/comments')
+  await expect(page.getByRole('heading', { level: 1, name: '댓글과 알림' })).toBeVisible()
+  await expect(page.locator('.site-foot')).toBeVisible()
+
+  const res = await page.request.get('/guides/comments')
+  expect(res.status()).toBe(200)
+  const body = await res.text()
+  expect(body).toContain('<title>댓글과 알림 · Rawdoc</title>')
+  expect(body).toContain('rel="canonical"')
+  expect(body).toContain('https://rawdoc.app/guides/comments')
+  expect(body).not.toContain('<script')
+})
+
+test('guide comments E2 목록·색인', async ({ page }) => {
+  await page.goto('/guides')
+  const link = page.locator('.site-article .markdown-body > ul a[href="/guides/comments"]')
+  await expect(link).toBeVisible()
+  await expect(link).toHaveText('댓글과 알림')
+
+  const sitemap = await page.request.get('/sitemap.xml')
+  const sitemapBody = await sitemap.text()
+  expect(sitemapBody).toContain('<loc>https://rawdoc.app/guides/comments</loc>')
+})
+
+test('guide comments E3 앱 도움말의 링크 — ## 댓글·## 알림 두 절', async ({ page }) => {
+  await openApp(page)
+  await page.getByRole('button', { name: '도움말' }).first().click()
+  await expect(page.locator('.help-page')).toBeVisible()
+
+  const link = page.locator('.help-page a[href="/guides/comments"]')
+  await expect(link).toHaveCount(2)
+  for (const one of await link.all()) {
+    await expect(one).toHaveText('댓글과 알림')
+    await expect(one).toHaveAttribute('target', '_blank')
+  }
+})

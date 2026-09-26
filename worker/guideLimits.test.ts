@@ -8,11 +8,13 @@ import { ATTACHMENT_QUOTA_BYTES } from './attachments'
 import { GRACE_MS } from './attachmentGc'
 import { SESSION_EXPIRES_IN_SEC } from './authServer'
 import { MAX_TOKENS } from './apiTokens'
+import { NOTIFICATION_EXCERPT_CHARS } from './commentRows'
 import { HELP_DOC_CONTENT } from '../src/app/helpDoc'
 
 const GUIDE_PATH = fileURLToPath(new URL('../content/guides/offline-sync.md', import.meta.url))
 const IMAGES_GUIDE_PATH = fileURLToPath(new URL('../content/guides/images.md', import.meta.url))
 const ACCOUNT_GUIDE_PATH = fileURLToPath(new URL('../content/guides/account.md', import.meta.url))
+const COMMENTS_GUIDE_PATH = fileURLToPath(new URL('../content/guides/comments.md', import.meta.url))
 
 function readGuide(): string {
   return readFileSync(GUIDE_PATH, 'utf-8')
@@ -70,5 +72,13 @@ describe('account 글의 서버 수치 (R5)', () => {
     expect(raw).toContain(`계정마다 ${MAX_TOKENS}개까지`)
     expect(raw).toContain(`/ ${ATTACHMENT_QUOTA_BYTES / 1024 / 1024}MB\``)
     expect(raw).toContain(`/ ${DOC_BYTES_QUOTA / 1024 / 1024}MB · `)
+  })
+})
+
+// 사용법 글 comments (write-guide, 2026-09-27)
+describe('comments 글의 서버 수치 (R5)', () => {
+  it('알림에 담기는 댓글 앞부분 길이가 상수 그대로 들어 있다', () => {
+    const raw = readFileSync(COMMENTS_GUIDE_PATH, 'utf-8')
+    expect(raw).toContain(`댓글 앞 ${NOTIFICATION_EXCERPT_CHARS}자`)
   })
 })

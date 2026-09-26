@@ -25,6 +25,18 @@ import { MAX_SIDE } from '../src/lib/shrinkImage'
 import { GRACE_MS } from '../src/app/attachmentGc'
 import { RESULT_LIMIT, SNIPPET_BEFORE, SNIPPET_AFTER } from '../src/lib/docSearch'
 import { ACCOUNT_DELETE_FRESH_MS } from '../src/lib/accountDeletion'
+import {
+  COMMENT_BODY_MAX,
+  REPLIES_PER_THREAD_MAX,
+  MENTIONS_PER_COMMENT_MAX,
+  NOTIFICATIONS_LIST_DEFAULT,
+  NOTIFICATION_RETAIN_DAYS,
+  NOTIFICATIONS_PER_RECIPIENT_MAX,
+} from '../src/lib/docComments'
+import { COMMENT_BODY_COUNTER_FROM } from '../src/app/commentRail'
+import { MENTION_CANDIDATES_MAX } from '../src/app/mentionCandidates'
+import { NOTIFICATIONS_POLL_MS, notificationText } from '../src/app/notificationsApi'
+import { COMMENT_TEXT } from '../src/app/useDocComments'
 import { EditorState } from '@codemirror/state'
 import { insertTable } from '../src/editor/insertCommands'
 import { parseTable } from '../src/editor/preview/tableModel'
@@ -363,6 +375,43 @@ describe('tables 글', () => {
 
   it('글에 제품명이 없다 (R6)', () => {
     const body = guideBody(readGuide('tables')).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+// 사용법 글 comments (write-guide, 2026-09-27)
+describe('comments 글', () => {
+  it('글의 앱 쪽 수치가 상수와 같다 (R5)', () => {
+    const raw = readGuide('comments')
+    expect(raw).toContain(`한 댓글은 ${COMMENT_BODY_MAX.toLocaleString('en-US')}자까지`)
+    expect(raw).toContain(`${COMMENT_BODY_COUNTER_FROM}자에 이르면`)
+    expect(raw).toContain(`/${COMMENT_BODY_MAX}\``)
+    expect(raw).toContain(`한 스레드에 ${REPLIES_PER_THREAD_MAX}개까지`)
+    expect(raw).toContain(`한 번에 ${MENTION_CANDIDATES_MAX}명까지`)
+    expect(raw).toContain(`${MENTIONS_PER_COMMENT_MAX}명까지 멘션`)
+    expect(raw).toContain(`최근 ${NOTIFICATIONS_LIST_DEFAULT}개가 새것부터`)
+    expect(raw).toContain(`${NOTIFICATIONS_POLL_MS / 60_000}분마다`)
+    expect(raw).toContain(`${NOTIFICATION_RETAIN_DAYS}일이 지났거나 사람마다 최근 ${NOTIFICATIONS_PER_RECIPIENT_MAX}개`)
+  })
+
+  it('글이 인용한 화면 글자가 코드 문구와 같다', () => {
+    const raw = readGuide('comments')
+    for (const text of [COMMENT_TEXT.selectFirst, COMMENT_TEXT.unavailable, COMMENT_TEXT.offline, COMMENT_TEXT.notFound]) {
+      expect(raw).toContain(`\`${text}\``)
+    }
+    expect(raw).toContain(`\`멘션은 한 댓글에 ${MENTIONS_PER_COMMENT_MAX}명까지 할 수 있습니다.\``)
+    const sample = { id: 'n', docId: 'd', commentId: 'c', threadId: 't', actorEmail: '…', docTitle: '회의록', excerpt: '', createdAt: 0, readAt: null }
+    expect(raw).toContain(`\`${notificationText({ ...sample, kind: 'mention' })}\``)
+    expect(raw).toContain(`\`${notificationText({ ...sample, kind: 'reply' })}\``)
+    // 금고로 옮기기 확인 창 댓글 줄 — buildE2eeConvertDialogText 의 문구 틀
+    const convertSource = readFileSync(fileURLToPath(new URL('../src/e2ee/convert.ts', import.meta.url)), 'utf-8')
+    expect(convertSource).toContain('개도 함께 지워집니다.')
+    expect(raw).toContain('`댓글 3개도 함께 지워집니다.`')
+  })
+
+  it('글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(readGuide('comments')).toLowerCase()
     expect(body).not.toContain(brand.name.toLowerCase())
     expect(body).not.toContain(brand.shortName.toLowerCase())
   })
