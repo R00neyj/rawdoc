@@ -1,3 +1,4 @@
+import usePresence from './usePresence'
 // 레일·판 — 파일 이름은 스펙의 CommentRail.tsx 대신 CommentRailPanel — commentRail.ts 와 대소문자만 달라 tsc 가 막음(F-505 5·6장)
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
@@ -11,6 +12,8 @@ import { COMMENT_TEXT, type CommentWriteFailure, type ComposerState, type ReplyS
 type CommentRailProps = {
   mode: 'rail' | 'sheet'
   open: boolean
+  // 여닫힘 전환 상태 — 루트의 data-state (usePresence)
+  presence?: 'open' | 'closed'
   onClose: () => void
   access: CommentAccess
   ready: boolean
@@ -45,6 +48,7 @@ const HEAD_ID = 'comment-rail-head-title'
 export default function CommentRailPanel({
   mode,
   open,
+  presence = 'open',
   onClose,
   access,
   ready,
@@ -335,7 +339,7 @@ export default function CommentRailPanel({
 
   if (mode === 'rail') {
     return (
-      <aside className="comment-rail" aria-label="댓글" ref={containerRef as RefObject<HTMLElement>}>
+      <aside className="comment-rail" data-state={presence} aria-label="댓글" ref={containerRef as RefObject<HTMLElement>}>
         {content}
       </aside>
     )
@@ -343,6 +347,7 @@ export default function CommentRailPanel({
   return (
     <section
       className="comment-sheet"
+      data-state={presence}
       role="dialog"
       aria-modal="false"
       aria-label="댓글"
@@ -357,4 +362,10 @@ export default function CommentRailPanel({
       {content}
     </section>
   )
+}
+
+// 레일·판 여닫힘 전환 틀 — open 이 거짓이 된 뒤에도 전환 시간만큼 children 을 'closed' 로 남긴다
+export function CommentPanelPresence({ open, children }: { open: boolean; children: (state: 'open' | 'closed') => ReactNode }) {
+  const { mounted, state } = usePresence(open)
+  return mounted ? children(state) : null
 }

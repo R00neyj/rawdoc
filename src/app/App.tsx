@@ -136,7 +136,7 @@ import type { ScrollAnchor } from '../lib/scrollAnchor'
 import Outline from './Outline'
 import ContextMenu from './ContextMenu'
 import { buildEditorContextMenu, buildViewContextMenu, type ContextMenuNode, type MenuItemNode } from './contextMenuItems'
-import CommentRailPanel from './CommentRailPanel'
+import CommentRailPanel, { CommentPanelPresence } from './CommentRailPanel'
 import { useDocComments, computeCommentAccess, scrollTopOf, COMMENT_TEXT, CommentCommandContext } from './useDocComments'
 import { IconAddComment } from './icons'
 import CommandPalette from './CommandPalette'
@@ -5318,44 +5318,50 @@ export default function App() {
                   onContextMenu={handleViewContextMenu}
                 />
               )}
-              {(commentRailVisible || commentSheetVisible) && (
-                <CommentCommandContext.Provider value={comments.commandState}>
-                  <MentionSourceContext.Provider value={mentionSource}>
-                    <CommentRailPanel
-                      mode={comments.mode}
-                      open={comments.open}
-                      onClose={() => {
-                        comments.setOpen(false, false)
-                        editorRef.current?.focus()
-                      }}
-                      access={comments.access}
-                      ready={comments.ready}
-                      canWrite={comments.canWrite}
-                      threads={comments.threads}
-                      threadById={comments.threadById}
-                      layout={comments.layout}
-                      activeId={comments.activeId}
-                      setActive={comments.setActive}
-                      showResolved={comments.showResolved}
-                      setShowResolved={comments.setShowResolved}
-                      orphansOpen={comments.orphansOpen}
-                      setOrphansOpen={comments.setOrphansOpen}
-                      composer={comments.composer}
-                      sendComposer={comments.sendComposer}
-                      cancelComposer={comments.cancelComposer}
-                      reply={comments.reply}
-                      startReply={comments.startReply}
-                      sendReply={comments.sendReply}
-                      toggleResolve={comments.toggleResolve}
-                      removeComment={comments.removeComment}
-                      reveal={comments.reveal}
-                      actorFor={comments.actorFor}
-                      scrollElement={editorRef.current?.view.scrollDOM ?? null}
-                      focusEditor={() => editorRef.current?.focus()}
-                      onRailExtraChange={setCommentRailExtra}
-                    />
-                  </MentionSourceContext.Provider>
-                </CommentCommandContext.Provider>
+              {/* 레일·판 여닫힘 전환 — 닫힌 뒤에도 전환 시간만큼 남긴다. 편집기가 사라지면(commentAvailable 거짓) 곧바로 뗀다 */}
+              {commentAvailable && (
+                <CommentPanelPresence open={commentRailVisible || commentSheetVisible}>
+                  {(presence) => (
+                    <CommentCommandContext.Provider value={comments.commandState}>
+                      <MentionSourceContext.Provider value={mentionSource}>
+                        <CommentRailPanel
+                          presence={presence}
+                          mode={comments.mode}
+                          open={comments.open}
+                          onClose={() => {
+                            comments.setOpen(false, false)
+                            editorRef.current?.focus()
+                          }}
+                          access={comments.access}
+                          ready={comments.ready}
+                          canWrite={comments.canWrite}
+                          threads={comments.threads}
+                          threadById={comments.threadById}
+                          layout={comments.layout}
+                          activeId={comments.activeId}
+                          setActive={comments.setActive}
+                          showResolved={comments.showResolved}
+                          setShowResolved={comments.setShowResolved}
+                          orphansOpen={comments.orphansOpen}
+                          setOrphansOpen={comments.setOrphansOpen}
+                          composer={comments.composer}
+                          sendComposer={comments.sendComposer}
+                          cancelComposer={comments.cancelComposer}
+                          reply={comments.reply}
+                          startReply={comments.startReply}
+                          sendReply={comments.sendReply}
+                          toggleResolve={comments.toggleResolve}
+                          removeComment={comments.removeComment}
+                          reveal={comments.reveal}
+                          actorFor={comments.actorFor}
+                          scrollElement={editorRef.current?.view.scrollDOM ?? null}
+                          focusEditor={() => editorRef.current?.focus()}
+                          onRailExtraChange={setCommentRailExtra}
+                        />
+                      </MentionSourceContext.Provider>
+                    </CommentCommandContext.Provider>
+                  )}
+                </CommentPanelPresence>
               )}
               {commentAvailable &&
                 comments.canWrite &&
