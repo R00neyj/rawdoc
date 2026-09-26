@@ -2285,7 +2285,7 @@ export default function App() {
         showNotice({
           type: 'warn',
           message:
-            '브라우저가 저장 공간 보호를 허락하지 않았습니다. 저장 공간이 부족해지면 문서가 지워질 수 있으니 중요한 문서는 .md 내보내기로 백업하십시오.',
+            '브라우저가 저장 공간 보호를 허락하지 않았습니다. 저장 공간이 부족해지면 문서가 지워질 수 있으니 중요한 문서는 설정 데이터 탭의 전체 내보내기로 백업해 두세요.',
         })
         setPref('md.persistNoticeShown', '1')
       }
@@ -2725,7 +2725,7 @@ export default function App() {
       }
       showNotice({
         type: 'error',
-        message: '저장하지 못했습니다. 중요한 내용은 .md 내보내기로 백업하십시오.',
+        message: '저장하지 못했습니다. 중요한 내용은 .md 내보내기로 백업해 두세요.',
       })
     },
     [showNotice],
