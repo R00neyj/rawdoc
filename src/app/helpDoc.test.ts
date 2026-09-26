@@ -4,6 +4,7 @@ import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
 import brand from '../../brand.config'
 import { E2EE_DEFAULT_LOCK_MINUTES } from '../e2ee/keyring'
 import { E2EE_MAX_PLAIN_CONTENT_BYTES } from '../lib/e2eeLimits'
+import { WIKI_PREVIEW_OPEN_DELAY_MS } from './wikiPreview'
 
 // F-257.md 2장 표의 절 순서 그대로
 const SECTION_ORDER = [
@@ -231,5 +232,12 @@ describe('F-2039 도움말 ↔ 사용법 글 분담 규칙', () => {
     const section = appSections().find((s) => s.name === '금고')!
     expect(section.body).toContain(`기본 ${E2EE_DEFAULT_LOCK_MINUTES}분`)
     expect(section.body).toContain(`약 ${Math.round(E2EE_MAX_PLAIN_CONTENT_BYTES / 1000)}KB`)
+  })
+
+  it('U7: ## 위키링크 절에 미리보기 문단이 있고 열기 지연 수치가 상수 그대로 들어 있다 (F-2044 R5)', () => {
+    const section = appSections().find((s) => s.name === '위키링크')!
+    expect(section.body).toContain(`${WIKI_PREVIEW_OPEN_DELAY_MS / 1000}초`)
+    expect(section.body).toContain('문서 열기')
+    expect(section.body).toContain('위키링크 미리보기')
   })
 })

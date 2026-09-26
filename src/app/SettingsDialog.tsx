@@ -56,6 +56,12 @@ const TOOLBAR_OPTIONS = [
   { value: 'off', label: '숨김' },
 ] as const
 
+// 위키링크 미리보기 켜기·끄기 (F-2044 8.2)
+const WIKI_PREVIEW_OPTIONS = [
+  { value: 'on', label: '표시' },
+  { value: 'off', label: '숨김' },
+] as const
+
 // 탭 — 순서·구성은 F-290.md 3.1, 금고 탭은 F-404.md 7.5
 const TAB_LABELS: Record<SettingsTabId, string> = {
   screen: '화면',
@@ -288,6 +294,9 @@ type SettingsDialogProps = {
   onChangeFontSize: (value: string) => void
   startScreen?: string
   onChangeStartScreen?: (value: string) => void
+  // `화면` 탭 맨 끝 — 위키링크 미리보기 (F-2044.md 8.2). 둘 다 있을 때만 그린다
+  wikiPreview?: string
+  onChangeWikiPreview?: (value: string) => void
   toolbar?: string
   onChangeToolbar?: (value: string) => void
   indent?: string
@@ -327,6 +336,8 @@ export default function SettingsDialog({
   onChangeFontSize,
   startScreen,
   onChangeStartScreen,
+  wikiPreview,
+  onChangeWikiPreview,
   toolbar,
   onChangeToolbar,
   indent,
@@ -434,6 +445,16 @@ export default function SettingsDialog({
               value={startScreen}
               options={START_SCREEN_OPTIONS}
               onChange={onChangeStartScreen}
+            />
+          )}
+          {/* 화면 탭 맨 끝 — 위키링크 미리보기 (F-2044.md 8.2) */}
+          {wikiPreview !== undefined && onChangeWikiPreview !== undefined && (
+            <Segment
+              labelId="wiki-preview-label"
+              label="위키링크 미리보기"
+              value={wikiPreview}
+              options={WIKI_PREVIEW_OPTIONS}
+              onChange={onChangeWikiPreview}
             />
           )}
         </>

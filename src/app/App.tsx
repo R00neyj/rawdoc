@@ -122,6 +122,7 @@ import { insertTable } from '../editor/insertCommands'
 import { countChars, countWords, cursorInfo } from '../editor/stats'
 import { isEditorRelay } from '../editor/remoteGate'
 import Viewer, { type ViewContextMenuInfo } from '../viewer/Viewer'
+import WikiLinkPreview from './WikiLinkPreview'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { findHeadingLine } from '../viewer/headingTarget'
 import { findViewerHeadingElByLine, topInScroller } from './outlinePosition'
@@ -425,6 +426,8 @@ export default function App() {
   const [indentPref, setIndentPref] = useState(() => getPref('md.indent', '4')) // F-154 2.3
   const [startScreenPref, setStartScreenPref] = useState(() => getPref('md.startScreen', 'home')) // F-232 3.4
   const [toolbarPref, setToolbarPref] = useState(() => getPref('md.toolbar', 'on')) // F-233 3.5
+  // 위키링크 미리보기 켜짐(기본 켬) — 모르는 값은 켬으로 다룬다(F-2044 8.1)
+  const [wikiPreviewPref, setWikiPreviewPref] = useState(() => (getPref('md.wikiPreview', 'on') === 'off' ? 'off' : 'on'))
   const [newDocTemplatePref, setNewDocTemplatePref] = useState(() => getPref('md.newDocTemplate', NEW_DOC_TEMPLATE_NONE)) // F-2037 3.1
   const [e2eeLockMinutesPref, setE2eeLockMinutesPref] = useState(() => getPref('md.e2eeLockMinutes', '30')) // F-404 8.1
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -2275,9 +2278,15 @@ export default function App() {
   )
   const currentFolderId = currentDoc?.folderId ?? null
   // 편집기 문맥 — 해석기나 원본 폴더가 바뀔 때만 새 객체 (5.2). sourceE2ee — 편집 중인 문서가 금고 문서인가, [[ 자동완성만 거른다 (F-409 4.1)
+  // hoverPreview — 위키링크 미리보기가 켜져 있으면 있는 문서 링크의 title 을 뺀다(F-2044 4.5)
   const wikiContext = useMemo(
-    () => ({ resolver: wikiResolver, sourceFolderId: currentFolderId, sourceE2ee: currentDoc?.e2ee !== undefined }),
-    [wikiResolver, currentFolderId, currentDoc?.e2ee],
+    () => ({
+      resolver: wikiResolver,
+      sourceFolderId: currentFolderId,
+      sourceE2ee: currentDoc?.e2ee !== undefined,
+      hoverPreview: wikiPreviewPref === 'on',
+    }),
+    [wikiResolver, currentFolderId, currentDoc?.e2ee, wikiPreviewPref],
   )
 
   // 위키링크 href 판정 — 보기 모드·인쇄가 함께 쓴다(F-279.md 4.3). 이 화면은 항상 #/d/{id}, '' 는 지금 문서 (F-252.md 4.1, F-2018 8.2)
@@ -3039,12 +3048,28 @@ export default function App() {
   // 자리에서 빈 문서를 새로 만들어 연다 — 새 문서 는 현재 문서와 같은 폴더에 만든다
   // (F-126.md 5.3 의 folderId 생략 규칙과 같다)
   // F-2018 8.3 — '' 또는 지금 문서면 제목 이동(기록 없음), 다른 문서면 연 뒤 이동, 없으면 새 문서(헤딩 버림, 경로식은 그 폴더)
-  async function openWikiLinkTarget(target: string, heading: string | null = null) {
+  // source 는 위키링크 미리보기 창 안 링크가 넘긴다(F-2044 5.3) — 주면 해석 기준이 currentFolderId 대신 source.folderId, 대상 '' 은 source.docId
+  async function openWikiLinkTarget(
+    target: string,
+    heading: string | null = null,
+    source?: { docId: string; folderId: string | null },
+  ) {
     if (target === '') {
+      if (source) {
+        const onDocScreen = !sharedDoc && !sharesOpen && !helpOpen && !mapRoute
+        if (source.docId === currentDocId && onDocScreen) {
+          if (heading) jumpToHeading(heading)
+          return
+        }
+        pendingHeadingRef.current = heading ? { docId: source.docId, heading } : null
+        await selectDoc(source.docId)
+        return
+      }
       if (heading) jumpToHeading(heading)
       return
     }
-    const match = wikiResolver.resolve(target, currentFolderId)
+    const folderId = source ? source.folderId : currentFolderId
+    const match = wikiResolver.resolve(target, folderId)
     const onDocScreen = !sharedDoc && !sharesOpen && !helpOpen && !mapRoute
     if (match && match.id === currentDocId && onDocScreen) {
       if (heading) jumpToHeading(heading)
@@ -3056,8 +3081,8 @@ export default function App() {
       return
     }
 
-    const place = wikiResolver.findLinkFolder(target, currentFolderId)
-    const wikiFolderId = place ? place.folderId : newDocFolderId()
+    const place = wikiResolver.findLinkFolder(target, folderId)
+    const wikiFolderId = place ? place.folderId : source ? resolveTargetFolderId({ folders, folderId: source.folderId }) : newDocFolderId()
     if (!(await ensureE2eeOpenForFolder(wikiFolderId))) return
 
     if (viewMode === 'view') changeViewMode('live') // 제목 입력 포커스가 필요하다 (ia.md 3.3)
@@ -3718,16 +3743,22 @@ export default function App() {
     [store, showNotice, currentDoc?.e2ee],
   )
 
-  // 편집 모드 이미지 블록 위젯·보기 화면·인쇄가 첨부를 읽는 콜백 — 금고 첨부는 금고 문서에서만 그리고, 일반 문서면 null(자리 표시)을 돌려준다 (F-157.md 2.2, F-406.md 3.1)
-  const resolveAttachment = useMemo(() => {
-    const forE2eeDoc = Boolean(currentDoc?.e2ee)
-    return async (id: string) => {
+  // 첨부 해석(F-157.md 2.2, F-406.md 3.1) — 문서의 금고 여부를 받는 모양으로 빼서 resolveAttachment·위키링크 미리보기(F-2044 5.5)가 함께 쓴다
+  const attachmentResolverFor = useCallback(
+    (forE2eeDoc: boolean) => async (id: string) => {
       const record = await store.getAttachment(id)
       if (!record) return null
       if (record.e2ee && !forE2eeDoc) return null
       return { blob: record.blob, width: record.width, height: record.height, ...(record.e2ee ? { e2ee: record.e2ee } : {}) }
-    }
-  }, [store, currentDoc?.e2ee])
+    },
+    [store],
+  )
+
+  // 편집 모드 이미지 블록 위젯·보기 화면·인쇄가 첨부를 읽는 콜백 — 지금 문서 기준
+  const resolveAttachment = useMemo(
+    () => attachmentResolverFor(Boolean(currentDoc?.e2ee)),
+    [attachmentResolverFor, currentDoc?.e2ee],
+  )
 
   // ----- 공유 (specs/features/F-130.md 2·4장) -----
   // 저장 대기 중인 입력이 있어도 현재 에디터 원문을 그대로 쓴다. 저장소를 다시 읽지 않는다
@@ -4290,6 +4321,13 @@ export default function App() {
     setPref('md.toolbar', v)
   }
 
+  // 위키링크 미리보기 표시·숨김 — 즉시 반영, 끄면 열린 창이 닫힌다(F-2044 8.2, 4.1)
+  function changeWikiPreview(value: string) {
+    const v = value === 'off' ? 'off' : 'on'
+    setWikiPreviewPref(v)
+    setPref('md.wikiPreview', v)
+  }
+
   // 새 문서 템플릿 — 고르면 곧바로 반영(F-2037.md 3.2). 이 값 자체를 화면에 즉시 적용할 문서는 없다
   function changeNewDocTemplate(value: string) {
     setNewDocTemplatePref(value)
@@ -4564,6 +4602,15 @@ export default function App() {
   const showEditor = bootPhase === 'ready' && !isEmpty
   // 잠긴 금고 문서 — 편집기 자리에 P1 (F-405 6.2)
   const showE2eeLockedPanel = currentDoc?.e2ee === 'locked' && openDoc?.id !== currentDocId
+  // 위키링크 미리보기 켜짐 조건 — 문서가 열려 있고 공유 화면·지도·도움말·공유 관리가 안 떠 있다 (F-2044 4.1)
+  const wikiPreviewEnabled =
+    wikiPreviewPref === 'on' &&
+    showEditor &&
+    openDoc?.id === currentDocId &&
+    !sharedDoc &&
+    !sharesOpen &&
+    !helpOpen &&
+    !mapRoute
   // P1 에서 열면 편집기가 새로 생기며 초점을 받는다 (F-405 6.2)
   const handleE2eePanelOpened = () => {
     focusEditorRef.current = true
@@ -4851,6 +4898,20 @@ export default function App() {
                   contentWidth={contentWidthPref}
                 />
               )}
+              <WikiLinkPreview
+                enabled={wikiPreviewEnabled}
+                containerRef={contentAreaRef}
+                editorRef={editorRef}
+                viewMode={viewMode}
+                theme={resolvedTheme}
+                currentDocId={currentDocId}
+                currentFolderId={currentFolderId}
+                wikiResolver={wikiResolver}
+                docs={docs}
+                readDoc={(id) => store.get(id)}
+                resolveAttachmentFor={attachmentResolverFor}
+                onOpenWikiLink={(target, heading, source) => void openWikiLinkTarget(target, heading, source)}
+              />
             </div>
           )}
           {!sharedDoc && !mapRoute && showEditor && (
@@ -4941,6 +5002,8 @@ export default function App() {
         onChangeFontSize={changeFontSize}
         startScreen={startScreenPref}
         onChangeStartScreen={changeStartScreen}
+        wikiPreview={wikiPreviewPref}
+        onChangeWikiPreview={changeWikiPreview}
         toolbar={toolbarPref}
         onChangeToolbar={changeToolbar}
         indent={indentPref}

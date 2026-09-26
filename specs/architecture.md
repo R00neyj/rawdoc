@@ -116,6 +116,9 @@ src/
 - 오프라인 영속과 outbox 정리(F-306, 2026-09-24)로 추가
   - `storage/`: `yjsStore.ts`(F-306 — IndexedDB `md-yjs`, `yjs`·`idb` 만 import. 스키마는 2장 끝)
   - `app/`: `liveMerge.ts`(F-306 — 방 Doc 을 보고 끊긴 동안 편집·재연결 시 병합을 판정하는 순수 모듈), `yjsFlush.ts`(F-306 — 열지 않은 문서의 밀린 편집을 올리는 러너)
+- 위키링크 미리보기(F-2044)로 추가
+  - `app/`: `wikiPreview.ts`(F-2044 — 자르기·위치·판정·호버 타이머, 순수 함수), `WikiLinkPreview.tsx`(F-2044 — 위키링크 미리보기 창)
+  - `styles/`: `wikiPreview.css`(F-2044)
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
@@ -213,6 +216,7 @@ type YjsMetaRow = {
 | `md.mapGroups` | JSON — 그룹 쿼리 + 팔레트 인덱스 `1`~`8` | 없음 | F-292 개정판 6.5 (F-2008) |
 | `md.toolbar` | `on` \| `off` | `on` | F-233 3.5 |
 | `md.landingDone` | `1` | 없음 | F-271 |
+| `md.wikiPreview` | `on` \| `off` | `on` | F-2044 8.1 |
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
   - 예외: `md.theme`·`md.sidebar`·`md.sidebarWidth`·`md.startScreen`·`md.contentWidth` 는 `BOOT_PAINT_SCRIPT` 도 읽는다 — 첫 페인트 전이라 `prefs.ts` 를 쓸 수 없다 (F-2015, F-2043)

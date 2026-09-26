@@ -1,0 +1,77 @@
+/* 위키링크 미리보기 창 모양 (specs/features/F-2044.md 9장). hex 금지 — 색은 토큰만 쓴다 */
+
+.wiki-preview {
+  position: fixed;
+  z-index: 35; /* 목차 팝업·겹침 사이드바 20, 메뉴 목록 30 위 — 아이콘 툴팁 40·우클릭 메뉴 50 아래 */
+  width: var(--wiki-preview-size);
+  max-height: var(--wiki-preview-size);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-dialog);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  padding: 4px;
+  box-sizing: border-box;
+  opacity: 1;
+  scale: 1;
+  transition: opacity var(--transition-pop-fade), scale var(--transition-pop);
+  transform-origin: top center;
+}
+
+.wiki-preview[data-side='above'] {
+  transform-origin: bottom center;
+}
+
+/* 나타남만 투명→불투명 + 살짝 커지며(design.md 4장), 사라짐은 React 가 즉시 떼어낸다 — 전환 없음 (F-172.md 2.2 와 같은 처리) */
+@starting-style {
+  .wiki-preview {
+    opacity: 0;
+    scale: 0.92;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wiki-preview {
+    transition-duration: 0ms;
+  }
+}
+
+.wiki-preview .viewer {
+  flex: 1;
+  min-height: 0;
+  padding: 8px 12px;
+  overscroll-behavior: contain;
+}
+
+.wiki-preview .doc-title-view {
+  font-size: 15px;
+}
+
+.wiki-preview-note {
+  margin: 8px 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.wiki-preview-more {
+  flex: none;
+  margin: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.wiki-preview-more button {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+@media print {
+  .wiki-preview {
+    display: none;
+  }
+}

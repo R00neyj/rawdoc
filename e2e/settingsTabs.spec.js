@@ -45,7 +45,7 @@ test.describe('F-290 A4 탭별 항목', () => {
     const dialog = await openSettings(page)
     const panel = dialog.locator('.settings-panel')
 
-    await expect(panel.locator('.dialog-field > span')).toHaveText(['테마', '제목 서체', '본문 서체', '글자 크기', '시작 화면'])
+    await expect(panel.locator('.dialog-field > span')).toHaveText(['테마', '제목 서체', '본문 서체', '글자 크기', '시작 화면', '위키링크 미리보기'])
     await expect(dialog.locator('#indent-label')).toHaveCount(0)
 
     await dialog.getByRole('tab', { name: '편집기' }).click()

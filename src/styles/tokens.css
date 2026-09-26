@@ -109,6 +109,8 @@
   --content-max: var(--content-width);
   /* 줄 번호 오른쪽 끝~본문 첫 글자 왼쪽 끝 거리 (F-122 2.2) */
   --gutter-gap: 20px;
+  /* 위키링크 미리보기 폭과 최대 높이 (F-2044). 값은 사람 확인 H1 */
+  --wiki-preview-size: 400px;
   /* 문서 위아래 여백 — 편집·원문·보기 모드·공유 화면 공통 (F-143 3.10) */
   --doc-pad-top: 48px;
   --doc-pad-bottom: 50dvh;

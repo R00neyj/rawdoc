@@ -202,3 +202,33 @@ describe('F-2018 U13 — 해석 문맥으로 표시', () => {
     expect(findWikiLinkAt(state, 21)).toMatchObject({ target: 'a', heading: null })
   })
 })
+
+// F-2044 U5 — hoverPreview 문맥이면 있는 문서 링크에서 title 을 뺀다(4.5)
+describe('F-2044 U5 — hoverPreview 문맥의 title 생략', () => {
+  it('있는 문서 링크는 title 속성이 없다', () => {
+    const doc = '[[a]] x'
+    const state = makeState(doc, {
+      anchor: doc.length,
+      context: { resolver: createWikiResolver([{ id: '0', title: 'a', folderId: null }], []), sourceFolderId: null, hoverPreview: true },
+    })
+    const visible = build(state).find((r) => r.value.spec.class === 'md-wikilink')!
+    expect(visible.value.spec.attributes).toBeUndefined()
+  })
+
+  it('없는 문서 링크는 title 이 그대로 "새 문서 만들기: …" 다', () => {
+    const doc = '[[없는 제목]] x'
+    const state = makeState(doc, {
+      anchor: doc.length,
+      context: { resolver: createWikiResolver([], []), sourceFolderId: null, hoverPreview: true },
+    })
+    const visible = build(state).find((r) => r.value.spec.class?.includes('md-wikilink'))!
+    expect(visible.value.spec.attributes.title).toBe('새 문서 만들기: 없는 제목')
+  })
+
+  it('hoverPreview 를 안 주면 기존과 같이 title 이 붙는다', () => {
+    const doc = '[[a]] x'
+    const state = makeState(doc, { anchor: doc.length, titles: ['a'] })
+    const visible = build(state).find((r) => r.value.spec.class === 'md-wikilink')!
+    expect(visible.value.spec.attributes.title).toBe('a')
+  })
+})

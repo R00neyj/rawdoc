@@ -73,6 +73,12 @@ describe('prefs', () => {
     expect(getPref('md.contentWidth', '')).toBe('1200')
   })
 
+  it('md.wikiPreview 읽기·쓰기, 저장값 없으면 기본값(on) (F-2044 U6)', () => {
+    expect(getPref('md.wikiPreview', 'on')).toBe('on')
+    expect(() => setPref('md.wikiPreview', 'off')).not.toThrow()
+    expect(getPref('md.wikiPreview', 'on')).toBe('off')
+  })
+
   it('허용되지 않은 키는 getPref 에서 예외', () => {
     expect(() => getPref('md.unknown', 'x')).toThrow()
   })

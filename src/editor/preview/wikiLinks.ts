@@ -85,12 +85,14 @@ function wikiLinksOnLine(state: EditorState, line: Line): WikiLinkOnLine[] {
 
 // 위키링크 해석 문맥 — 해석기와 지금 연 문서의 폴더 (specs/features/F-2018.md 5.1)
 // sourceE2ee: 편집 중인 문서가 금고 문서인가 — [[ 자동완성이 후보를 거르는 데만 쓴다, 해석 자체는 바꾸지 않는다 (F-409 4.1)
-export type WikiContext = { resolver: WikiResolver; sourceFolderId: string | null; sourceE2ee?: boolean }
+// hoverPreview: 위키링크 미리보기가 켜져 있나 — 참이면 있는 문서 링크에서 title 속성을 뺀다(F-2044 4.5, 미리보기와 겹치지 않게)
+export type WikiContext = { resolver: WikiResolver; sourceFolderId: string | null; sourceE2ee?: boolean; hoverPreview?: boolean }
 
-// 있음 판정은 문서만, [[#헤딩]] 은 지금 문서라 언제나 있음. title 속성은 있으면 대상 원문 조각, 없으면 대상 (5.4)
+// 있음 판정은 문서만, [[#헤딩]] 은 언제나 있음. title 은 있으면 대상 원문 조각(5.4), hoverPreview 켜짐이면 있는 링크는 아예 안 단다(F-2044 4.5)
 function visibleMark(target: string, shown: string, context: WikiContext): Decoration {
   const exists = target === '' || context.resolver.resolve(target, context.sourceFolderId) !== null
   const cls = exists ? 'md-wikilink' : 'md-wikilink md-wikilink--missing'
+  if (exists && context.hoverPreview) return Decoration.mark({ class: cls })
   const titleAttr = exists ? shown : `새 문서 만들기: ${target}`
   return Decoration.mark({ class: cls, attributes: { title: titleAttr } })
 }
