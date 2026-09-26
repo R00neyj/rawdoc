@@ -1475,6 +1475,12 @@ body.sidebar-resizing {
   color: var(--danger);
 }
 
+/* `보내는 중…`·끊김 안내(F-506 C4)는 오류가 아니라 상태 — 흐린 글자 */
+.comment-reply-error.comment-reply-note,
+.comment-composer-error.comment-composer-note {
+  color: var(--muted);
+}
+
 /* 멘션 후보 목록 — 입력 바로 아래에 붙는다(뜨지 않음) (F-507 3.5·5.5) */
 .mention-candidates {
   list-style: none;
