@@ -23,6 +23,7 @@ const SECTION_ORDER = [
   '알림',
   '금고',
   '내보내기·가져오기',
+  '옵시디언 볼트',
   '설치와 오프라인',
   '단축키',
   '마크다운 문법',
@@ -279,5 +280,29 @@ describe('F-2045 도움말 ## 공유 절', () => {
     expect(section.body).toContain('`보기`')
     expect(section.body).toContain('`편집`')
     expect(section.body).not.toContain('읽기·편집 권한')
+  })
+})
+
+// F-2046.md 6.1 U1
+describe('F-2046 도움말 두 절 (## 내보내기·가져오기 / ## 옵시디언 볼트)', () => {
+  it('U1: 옵시디언 볼트 절이 화면 글자를 담고 사용법 글 줄로 끝나며, 내보내기·가져오기 절이 고쳐졌다', () => {
+    const vaultSection = appSections().find((s) => s.name === '옵시디언 볼트')!
+    const vaultParagraphs = vaultSection.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(vaultParagraphs[vaultParagraphs.length - 1]).toBe(
+      '사용법 글: [옵시디언 볼트와 오가기](/guides/obsidian-vault)',
+    )
+    expect(vaultSection.body).toContain('`옵시디언 볼트로 내보내기`')
+    expect(vaultSection.body).toContain('`폴더 가져오기…`')
+    expect(vaultSection.body).toContain('`넣을 폴더`')
+    expect(vaultSection.body).toContain('`(가져오기 전)`')
+
+    const exportSection = appSections().find((s) => s.name === '내보내기·가져오기')!
+    const exportParagraphs = exportSection.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(exportParagraphs[exportParagraphs.length - 1]).toBe(
+      '사용법 글: [한 번 쓴 글을 다른 도구로 옮기기](/guides/markdown-portability)',
+    )
+    expect(exportSection.body).not.toContain('옵시디언')
+    expect(exportSection.body).not.toContain('불러오')
+    expect(exportSection.body).toContain('`전체 내보내기`')
   })
 })

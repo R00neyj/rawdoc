@@ -17,6 +17,7 @@ import { RECOVERY_CODE_BYTES } from '../src/e2ee/recoveryCode'
 import { buildE2eeConvertDialogText } from '../src/e2ee/convert'
 import { PEER_AVATARS_MAX, PEER_AVATARS_MAX_NARROW } from '../src/lib/peers'
 import { DISCONNECT_NOTICE_MS } from '../src/app/liveDoc'
+import { MAX_CONTENT_BYTES, MAX_ATTACHMENT_BYTES } from '../src/app/importWorkspace'
 
 const GUIDES_DIR = fileURLToPath(new URL('../content/guides', import.meta.url))
 
@@ -244,6 +245,26 @@ describe('F-2045 공유 글', () => {
     const body = guideBody(readGuide('sharing')).toLowerCase()
     expect(body).not.toContain(brand.name.toLowerCase())
     expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+// F-2046.md 6.2 U2~U4
+describe('F-2046 옵시디언 볼트 글', () => {
+  it('U2: 옵시디언 볼트 글의 수치가 상수에서 만든 문자열과 같다 (R5)', () => {
+    const raw = readGuide('obsidian-vault')
+    expect(raw).toContain(`${MAX_CONTENT_BYTES / 1_000_000}MB를 넘는 문서`)
+    expect(raw).toContain(`한 장에 ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB를 넘는 그림`)
+  })
+
+  it('U3: 옵시디언 볼트 글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(readGuide('obsidian-vault')).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+
+  it('U4: markdown-portability 가 이 글을 가리킨다 (R8)', () => {
+    const raw = readGuide('markdown-portability')
+    expect(raw).toContain('](/guides/obsidian-vault)')
   })
 })
 

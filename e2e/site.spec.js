@@ -314,3 +314,39 @@ test('F-2045 E3 앱 도움말에 링크가 있다', async ({ page }) => {
   await expect(link).toHaveText('문서를 공유하고 함께 편집하기')
   await expect(link).toHaveAttribute('target', '_blank')
 })
+
+test('F-2046 E1 글이 뜨고 완결된 정적 페이지다', async ({ page }) => {
+  await page.goto('/guides/obsidian-vault')
+  await expect(page.getByRole('heading', { level: 1, name: '옵시디언 볼트와 오가기' })).toBeVisible()
+  await expect(page.locator('.site-foot')).toBeVisible()
+
+  const res = await page.request.get('/guides/obsidian-vault')
+  expect(res.status()).toBe(200)
+  const body = await res.text()
+  expect(body).toContain('<title>옵시디언 볼트와 오가기 · Rawdoc</title>')
+  expect(body).toContain('rel="canonical"')
+  expect(body).toContain('https://rawdoc.app/guides/obsidian-vault')
+  expect(body).not.toContain('<script')
+})
+
+test('F-2046 E2 목록·색인', async ({ page }) => {
+  await page.goto('/guides')
+  const link = page.locator('.site-article .markdown-body > ul a[href="/guides/obsidian-vault"]')
+  await expect(link).toBeVisible()
+  await expect(link).toHaveText('옵시디언 볼트와 오가기')
+
+  const sitemap = await page.request.get('/sitemap.xml')
+  const sitemapBody = await sitemap.text()
+  expect(sitemapBody).toContain('<loc>https://rawdoc.app/guides/obsidian-vault</loc>')
+})
+
+test('F-2046 E3 앱 도움말에 링크가 있다', async ({ page }) => {
+  await openApp(page)
+  await page.getByRole('button', { name: '도움말' }).first().click()
+  await expect(page.locator('.help-page')).toBeVisible()
+
+  const link = page.locator('.help-page a[href="/guides/obsidian-vault"]')
+  await expect(link).toBeVisible()
+  await expect(link).toHaveText('옵시디언 볼트와 오가기')
+  await expect(link).toHaveAttribute('target', '_blank')
+})
