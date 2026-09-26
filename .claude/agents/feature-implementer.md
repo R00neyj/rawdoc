@@ -16,10 +16,10 @@ Korean copy of this file: `.claude/ko/agents/feature-implementer.ko.md` (snapsho
 
 ## Implementation order (TDD — CLAUDE.md "How we work")
 1. Write the spec's **behavioral** acceptance criteria as tests first — unit tests as `*.test.ts` beside the target file, browser behavior as `F-xxx A*` in `e2e/`
-2. Run them and **confirm they fail**. If one passes right away you transcribed the criterion wrong; rewrite it
+2. Run the **unit** tests and **confirm they fail**. If one passes right away you transcribed the criterion wrong; rewrite it. **Do not run the new e2e red** — that costs an extra build; its first run is after implementing (user, 2026-09-26: "테스트 코드가 너무 많은것같아 … 병목")
 3. Implement only enough to pass. 4. Run again, confirm green, then clean up
 - Visual criteria (color, spacing, alignment, typeface, motion) do not get TDD. Cover only the interaction — opens, closes, responds — with a smoke test and hand the value judgment to "사람 확인 필요". Otherwise every value change forces a test change and subpixel rendering makes it flaky
-- For criteria you could not write first, check whether the test you added afterward **fails against the pre-implementation code**, and say so in your report
+- For criteria you could not write first, check whether the **unit** test you added afterward fails against the pre-implementation code, and say so in your report. Do not build a worktree (`e2e:before`) to see an e2e fail
 - **"The structural change was entangled with it" is not a reason to write tests later** (user instruction, 2026-09-21). E2E selectors, DOM structure, and state names are already fixed by the spec, so you can write them without looking at the implementation. Building first and writing tests to match verifies the implementation rather than the spec. If the spec has no selector, do not invent one — stop and report
 
 ## Forbidden
@@ -41,7 +41,7 @@ Korean copy of this file: `.claude/ko/agents/feature-implementer.ko.md` (snapsho
 ## Tools (reach for these before writing a new throwaway script. Options are in `specs/features/F-160.md` ch. 2)
 - Measuring on-screen position, size, style: `node scripts/measure.mjs --doc … --mode … --select … --style … --action …` (port and build folder come from your slot)
 - Test documents: `e2e/fixtures/docs.js` (`longDoc`, `headingsDoc`, `listDoc`, `mixedDoc`)
-- Running e2e: `node scripts/e2e-one.mjs "F-xxx" --workers 2` — takes several targets (files and search terms), passes unknown flags through to playwright, and prints the raw tail when something fails. Add `--repeat 3` to check flakiness. **Do not call `npx playwright test` directly**; the past transcripts show half the agents doing that only because this script used to drop the extra arguments
+- Running e2e: `node scripts/e2e-one.mjs "F-xxx" --workers 2` — takes several targets (files and search terms), passes unknown flags through to playwright, and prints the raw tail when something fails. **Do not call `npx playwright test` directly**; the past transcripts show half the agents doing that only because this script used to drop the extra arguments
 - Telling "my change broke it" from "it was already broken": `npm run e2e:before -- "F-xxx A3" --ref <sha>` — builds a throwaway `git worktree` at that commit and runs the same test there. **Never `git stash`**: several agents share one working tree, so a stash sweeps up everyone else's uncommitted work
 - Self-review: `node scripts/review-diff.mjs F-xxx` — fix until there are zero violations
 
@@ -49,7 +49,7 @@ Korean copy of this file: `.claude/ko/agents/feature-implementer.ko.md` (snapsho
 1. `npx eslint <changed files>`
 2. Only the related unit tests: `npx vitest run <test file>`
 3. One e2e pass for this spec: `E2E_PORT=… E2E_DIST=… npx playwright test -g "F-xxx" --workers=2` (the webServer handles the build)
-- Do not run the full e2e suite, `verify.mjs --e2e`, or repeat runs (only when main asks separately)
+- **Stop at green on these three.** No other specs' e2e "for regression", no `--repeat`, no `e2e:before`, no full `npm test`, no full e2e suite or `verify.mjs --e2e` — regressions are caught by `verify:full` before a deploy (user, 2026-09-26). Only when main asks separately
 - Other agents may be working in the same repo at the same time. Do not fix lint, build, or test failures caused by files outside your ownership — just report them. Re-Read even your own files right before each Edit
 - Write a throwaway script in the scratchpad only for measurements the tools cannot do. When you do, label it "도구에 없던 측정" in your report
 

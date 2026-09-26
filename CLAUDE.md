@@ -19,7 +19,7 @@ A source-preserving Markdown collaboration tool. Typing `##` does not make the m
 
 Logic gets TDD; design gets a fast human-review loop.
 
-- **Logic is TDD.** Write the acceptance criteria as failing tests first (unit `*.test.ts`, browser behavior in `e2e/F-xxx`), confirm red, then implement. Write only as much as it takes to pass
+- **Logic is TDD.** Write the acceptance criteria as failing tests first (unit `*.test.ts`, browser behavior in `e2e/F-xxx`), confirm red (unit tests only — e2e are written first but their first run is after implementing, 2026-09-26), then implement. Write only as much as it takes to pass
 - If a test could not come first (unknown shape of an external response, bug fixes, etc.), check whether the test you added afterward **fails against the pre-fix code**, decide whether it works as a regression test, and say so in your report
 - **Design does not get TDD.** Smoke e2e only covers whether interactive elements — buttons, menus, dialogs — open, close, and respond. Do not pin visual values (color, spacing, alignment, typeface) in e2e: every value change would force a test change, and subpixel rendering makes them flaky (see F-146, F-166, F-225 in the `deploy` skill)
 - **Build design fast and let the user look at it.** Keep the loop short: implement → `npm run dev` / deploy → user checks → fix. Hand visual judgment to `specs/human-checks.md` instead of having an agent sit on it
@@ -187,7 +187,7 @@ A Sonnet subagent implements one small spec at a time.
 - **Write the tests first.** Turn that spec's behavioral acceptance criteria into tests, confirm they fail, then implement (see "How we work")
 - Do not edit spec files (`specs/**`) or this file. If a spec is wrong or incomplete, stop and report
 - Install only the dependencies the spec names
-- When done, run lint and smoke tests only, and report the results verbatim: eslint on changed files, the related unit tests, and one e2e pass for that spec (`-g "F-xxx" --workers=2`). Full e2e only on user request or right before a deploy (user, 2026-09-15: "프로토타입인데 너무 엄격")
+- When done, run lint and smoke tests only, and report the results verbatim: eslint on changed files, the related unit tests, and one e2e pass for that spec (`-g "F-xxx" --workers=2`). Full e2e only on user request or right before a deploy (user, 2026-09-15: "프로토타입인데 너무 엄격"). **Stop there**: no other specs' e2e for regression, no `--repeat`, no `e2e:before`, and new e2e are not run red first — red confirmation is for unit tests only; `verify:full` before a deploy catches regressions (user, 2026-09-26: "테스트 코드가 너무 많은것같아 … 병목")
 - **Never run `git stash` (or `git checkout -- <path>`) to check what the code did before your change.** Several agents share one working tree, so a stash sweeps up everyone else's uncommitted work — it nearly cost an agent its files on 2026-09-15. Use `npm run e2e:before -- "<test>" --ref <sha>`, which builds a throwaway `git worktree` and never touches the working tree
 - For measurements and partial e2e, use the tools in `scripts/` (measure, e2e-one, e2e-before, verify, review-diff) instead of temporary scripts. Work proceeds through the `ship-feature` skill + `feature-implementer` agent (F-160)
 - A spec's **behavioral** acceptance criteria become Playwright tests named `e2e/F-xxx`, judged automatically (F-150 onward; do not substitute manual claude-in-chrome operation). Visual criteria get smoke coverage only — see "How we work"

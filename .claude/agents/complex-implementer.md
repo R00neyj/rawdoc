@@ -39,7 +39,7 @@ The tell is the same in all five: **the acceptance criteria are clear, but the w
 The TDD rule holds: behavioral criteria become failing tests first. The adjustment is where the spike sits.
 
 1. Spike in the scratchpad until the shape is settled — what the API returns, what the DOM ends up as, which selector exists
-2. **Then** write the test against that settled shape, run it, confirm it fails
+2. **Then** write the test against that settled shape; run the unit tests and confirm they fail (e2e are written first but not run red — same rule as `feature-implementer`)
 3. Implement
 
 Step 1 does not excuse step 2. A test written after the implementation verifies the implementation, not the spec. If you could not test-first, say so per criterion and say whether you confirmed it fails against the pre-implementation code.
@@ -60,9 +60,9 @@ The line is whether a person would have to re-approve it. Picking a damping cons
 Run `feature-implementer`'s three steps, then:
 
 - **`npm run build`** whenever you touched a dependency or an import graph, and report the delta: initial-load gzip, the chunk your code landed in, and the PWA precache total (`dist/sw.js` / the Workbox manifest). A spec with a bundle budget is judged by these numbers
-- **`--repeat 3`** on any e2e that involves animation, a simulation, a camera, or a timer. One green run on timing-dependent work is not evidence
+- **`--repeat 3`** only on this spec's own e2e that involve animation, a simulation, a camera, or a timer. One green run on timing-dependent work is not evidence
 - `npm run typecheck` when you added types or a local `.d.ts`
-- Still no full e2e suite and no `verify.mjs --e2e` unless main asks
+- Still no full e2e suite, no `verify.mjs --e2e`, no other specs' e2e for regression, and no `e2e:before` unless main asks (user, 2026-09-26)
 
 ## 6. Also forbidden
 
