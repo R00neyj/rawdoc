@@ -1,0 +1,52 @@
+/* 댓글 앵커·후보·거터 표시 (specs/features/F-504.md 4.5). 선택자가 계약이고 값은 사람 확인 H1·H2 전 기본값 */
+
+/* 반투명 배경만으로는 선택 영역·==하이라이트== 와 갈리지 않아 밑줄을 함께 둔다 */
+.cm-comment-anchor {
+  background: var(--comment-anchor);
+  border-bottom: 2px solid var(--comment-anchor-line);
+}
+
+.cm-comment-anchor-active {
+  background: var(--comment-anchor-active);
+}
+
+.cm-comment-anchor-draft {
+  background: var(--comment-anchor-active);
+  border-bottom: 2px dashed var(--comment-anchor-line);
+}
+
+/* ----- 거터 — 줄 번호 오른쪽 한 칸. initialSpacer 가 폭을 늘 잡아 둔다 ----- */
+
+.cm-comment-gutter .cm-gutterElement {
+  display: flex;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 2px;
+}
+
+.cm-comment-gutter-marker {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 14px;
+  height: 12px;
+  margin-top: 0.35em;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--panel);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 12px;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* 말풍선 꼬리 */
+.cm-comment-gutter-marker::before {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 3px;
+  border-top: 3px solid var(--accent);
+  border-right: 3px solid transparent;
+}

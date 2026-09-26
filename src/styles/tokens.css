@@ -33,6 +33,10 @@
   --accent-ring: color-mix(in srgb, var(--accent) 55%, transparent);
   /* 글자 선택 바탕 — 앱 전체 ::selection 이 쓴다 (design.md 3.2, F-164) */
   --selection-bg: color-mix(in srgb, var(--accent) 24%, transparent);
+  /* 댓글 앵커 배경·활성·밑줄 — 기본값, 사람 확인 H1 뒤 design.md 가 정한다 (F-504 4.5) */
+  --comment-anchor: color-mix(in srgb, var(--accent) 14%, transparent);
+  --comment-anchor-active: color-mix(in srgb, var(--accent) 30%, transparent);
+  --comment-anchor-line: color-mix(in srgb, var(--accent) 60%, transparent);
 
   /* GitHub 마크다운 스타일 대응 토큰 (F-124 2장). 편집·보기 모드가 함께 참조한다.
      이름은 나중에 사용자 CSS 가 편집 모드를 바꿀 창구이므로 바꾸지 않는다 */

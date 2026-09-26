@@ -45,7 +45,9 @@ import { createYBinding, createYBindingFromState, undoKeymap } from './yBinding'
 import { connectRemote } from './remoteGate'
 import { attachRemoteCursors, remoteCursors } from './remoteCursors'
 import { observeTitle, writeTitle } from './liveTitle'
+import { commentGutter, commentMarks, createEditorComments } from './commentMarks'
 import './searchPanel.css'
+import './commentMarks.css'
 
 // 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
 const HEADINGS_DEBOUNCE_MS = 150
@@ -70,8 +72,9 @@ function attributesExtensionFor(mode: ViewMode): Extension {
 }
 
 // 줄 번호(거터) 켜기·끄기 — 끈 상태는 data-gutters='off' 로 표시해 app.css 가 반응한다 (F-147 2장)
-function lineNumbersExtensionFor(on: boolean): Extension {
-  return on ? lineNumbers() : []
+// 댓글 거터는 줄 번호 바로 뒤 — 줄 번호를 끄면 댓글 거터도 없다 (F-504 4.3)
+function lineNumbersExtensionFor(on: boolean, commentGutterOn: boolean): Extension {
+  return on ? [lineNumbers(), commentGutterOn ? commentGutter() : []] : []
 }
 
 function gutterAttributesExtensionFor(on: boolean): Extension {
@@ -353,6 +356,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   // 현재 모드·테마 — setViewMode·setTheme 이 서로의 최신 값을 유지한 채 previewCompartment 를 다시 구성하도록 클로저에 기억해 둔다(F-260.md 2.3)
   let currentMode: ViewMode = viewMode
   let currentTheme = initialTheme
+  let lineNumbersOn = showLineNumbers
+  let commentGutterOn = false
 
   // 목차 갱신은 조합 중 보류, 조합 종료(forceRecalc) 시 즉시 따라잡음 (F-144 3.3)
   const headingsListeners = new Set<(headings: Heading[]) => void>()
@@ -389,7 +394,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       breadcrumb,
       onNavigateFolder,
     }),
-    lineNumbersCompartment.of(lineNumbersExtensionFor(showLineNumbers)),
+    lineNumbersCompartment.of(lineNumbersExtensionFor(showLineNumbers, false)),
     gutterAttributesCompartment.of(gutterAttributesExtensionFor(showLineNumbers)),
     readOnlyCompartment.of(readOnlyExtensionsFor(initialReadOnly)),
     // compartment 밖에 둔다 — 재구성에 다시 만들어지면 묶음 상태·선택 저장이 끊긴다 (F-302 5.2)
@@ -466,6 +471,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     compositionCatchup(() => destroyed),
     // 원격 커서 — 늘 둔다. 붙은 소스가 없으면 빈 장식이다 (F-307 5.1)
     remoteCursors(),
+    // 댓글 앵커 장식·거터·레일 좌표 — 늘 둔다. 붙기 전에는 아무것도 그리지 않는다 (F-504 3장)
+    commentMarks(),
     EditorView.updateListener.of((update) => {
       if (update.docChanged && onDocChange) onDocChange(update.state)
       if (update.selectionSet && onSelectionChange) onSelectionChange(update.state)
@@ -495,9 +502,24 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const unobserveTitle = live ? observeTitle(binding.ydoc, live.onRemoteTitle) : () => {}
   // 상대 위치는 편집기 Y.Text 로 만들고 푼다 — 화면과 같은 쪽 (F-307 5.1)
   const detachRemoteCursors = live ? attachRemoteCursors(view, { awareness: live.awareness, ytext: binding.ytext }) : () => {}
+  // 댓글 UI 는 편집기 Y.Doc 의 comments 를 읽고 쓴다 — 방 Doc 이 아니다 (F-504 3장)
+  const { comments, detach: detachComments } = createEditorComments({
+    view,
+    doc: binding.ydoc,
+    ytext: binding.ytext,
+    isDestroyed: () => destroyed,
+    setGutter(on) {
+      commentGutterOn = on
+      if (destroyed || !lineNumbersOn) return
+      view.dispatch({
+        effects: [lineNumbersCompartment.reconfigure(lineNumbersExtensionFor(true, on)), ...scrollSnapshotIfVisible(view)],
+      })
+    },
+  })
 
   return {
     view,
+    comments,
 
     getText(lineEnding: LineEnding): string {
       const sep = lineEnding === 'crlf' ? '\r\n' : '\n'
@@ -538,9 +560,10 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
 
     // on(boolean) — 재마운트하지 않는다. 커서·선택·실행 취소 기록·스크롤 위치 유지 (F-147 2장)
     setLineNumbers(on: boolean) {
+      lineNumbersOn = on
       view.dispatch({
         effects: [
-          lineNumbersCompartment.reconfigure(lineNumbersExtensionFor(on)),
+          lineNumbersCompartment.reconfigure(lineNumbersExtensionFor(on, commentGutterOn)),
           gutterAttributesCompartment.reconfigure(gutterAttributesExtensionFor(on)),
           ...scrollSnapshotIfVisible(view),
         ],
@@ -689,6 +712,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       detachMarginClickGuard()
       detachComposingEnterGuard()
       unobserveTitle()
+      detachComments()
       detachRemoteCursors()
       remote?.destroy()
       view.destroy()
