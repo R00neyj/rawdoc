@@ -23,11 +23,12 @@ export async function shrinkImage(blob: Blob, info: ShrinkImageInfo): Promise<Sh
   const original: ShrinkImageResult = { blob, mime: info.mime, ext: info.ext, width: info.width, height: info.height }
   if (info.ext === 'gif') return original
 
-  const target = fitWithin(info.width, info.height, MAX_SIDE)
-  const needsShrink = target.width !== info.width || target.height !== info.height
-
   try {
+    // 크기는 헤더(info)가 아니라 bitmap 에서 — createImageBitmap 은 EXIF 방향을 적용한 크기를 준다(헤더 크기면 세로 사진이 찌그러졌다, 2026-09-27)
     const bitmap = await createImageBitmap(blob)
+    const source = { width: bitmap.width, height: bitmap.height }
+    const target = fitWithin(source.width, source.height, MAX_SIDE)
+    const needsShrink = target.width !== source.width || target.height !== source.height
     const canvas = new OffscreenCanvas(target.width, target.height)
     const ctx = canvas.getContext('2d')
     if (!ctx) return original
@@ -40,9 +41,9 @@ export async function shrinkImage(blob: Blob, info: ShrinkImageInfo): Promise<Sh
       return { blob: encoded, mime: 'image/webp', ext: 'webp', width: target.width, height: target.height }
     }
     if (encoded.size < blob.size) {
-      return { blob: encoded, mime: 'image/webp', ext: 'webp', width: info.width, height: info.height }
+      return { blob: encoded, mime: 'image/webp', ext: 'webp', ...source }
     }
-    return original
+    return { ...original, ...source }
   } catch {
     return original
   }
