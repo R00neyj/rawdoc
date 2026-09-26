@@ -411,6 +411,12 @@ function toPublicRoute(route: HashRoute): PublicRoute {
   return null
 }
 
+// 떠 있는 `댓글 달기` 버튼 — 선택이 화면 위로 지나가면 위 끝, 아래에 있으면 아래 끝에 붙인다(버튼 32px + 여백 8px)
+function clampFabY(y: number, viewportH: number): number {
+  if (viewportH <= 0) return y
+  return Math.min(Math.max(y, 8), Math.max(8, viewportH - 40))
+}
+
 export default function App() {
   const [publicRoute, setPublicRoute] = useState<PublicRoute>(() => {
     const pathRoute = toPublicRoute(parsePathRoute(location.pathname))
@@ -2932,18 +2938,25 @@ export default function App() {
   // 떠 있는 `댓글 달기` 버튼 — 선택 시작 줄 높이(문서 좌표)를 스크롤에 맞춰 화면 좌표로 (F-505 7.1 10번)
   const [floatingCommentAnchor, setFloatingCommentAnchor] = useState<number | null>(null)
   const [editorScrollTop, setEditorScrollTop] = useState(0)
+  const [editorViewportH, setEditorViewportH] = useState(0) // FAB 을 화면 안에 붙잡아 두는 데 쓴다
   // 레일 여분(px) — 레일이 보이는 동안만 .content-area 의 --comment-rail-extra 로 (F-505 5.6)
   const [commentRailExtra, setCommentRailExtra] = useState(0)
+  // 편집기는 이 effect 보다 늦게 붙을 수 있다 — ref 가 아니라 editorHandle 상태를 따라가야 스크롤·크기를 놓치지 않는다
   useEffect(() => {
-    const scroller = editorRef.current?.view.scrollDOM
+    const scroller = editorHandle?.view.scrollDOM
     if (!scroller) return
     function onScroll() {
       setEditorScrollTop(scroller!.scrollTop)
     }
     onScroll()
     scroller.addEventListener('scroll', onScroll, { passive: true })
-    return () => scroller.removeEventListener('scroll', onScroll)
-  }, [openDoc?.id, currentDocId, editorRemountNonce])
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => setEditorViewportH(scroller.clientHeight))
+    ro?.observe(scroller) // observe 직후 한 번 불린다
+    return () => {
+      scroller.removeEventListener('scroll', onScroll)
+      ro?.disconnect()
+    }
+  }, [editorHandle])
 
   // 새 문서 대상 폴더 (F-138 3.4): 사이드바 새 문서(폴더 생략)·없는 위키링크 클릭·가져오기
   // 세 경로가 이 함수로 통일한다. 현재 문서의 folderId 가 존재하는 폴더일 때만 그 값,
@@ -5372,7 +5385,7 @@ export default function App() {
                     className="comment-add-button"
                     aria-label="댓글 달기"
                     title="댓글 달기 (Ctrl+Alt+M)"
-                    style={{ transform: `translateY(${floatingCommentAnchor - editorScrollTop}px)` }}
+                    style={{ transform: `translateY(${clampFabY(floatingCommentAnchor - editorScrollTop, editorViewportH)}px)` }}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => comments.beginComment()}
                   >

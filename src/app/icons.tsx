@@ -84,6 +84,9 @@ import forumSvg from '@material-symbols/svg-400/outlined/forum.svg?raw'
 import addCommentSvg from '@material-symbols/svg-400/outlined/add_comment.svg?raw'
 // 상단바 `알림` 버튼 (F-507 3.4)
 import notificationsSvg from '@material-symbols/svg-400/outlined/notifications.svg?raw'
+// 댓글 카드 해결 버튼·답글 보내기 (2026-09-26 댓글 UI tweak)
+import checkCircleSvg from '@material-symbols/svg-400/outlined/check_circle.svg?raw'
+import arrowUpwardSvg from '@material-symbols/svg-400/outlined/arrow_upward.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -213,6 +216,9 @@ export const IconForum = makeIcon(forumSvg)
 export const IconAddComment = makeIcon(addCommentSvg)
 // 상단바 `알림` 버튼 (F-507 3.4)
 export const IconNotifications = makeIcon(notificationsSvg)
+// 댓글 카드 해결 버튼·답글 보내기 (2026-09-26 댓글 UI tweak)
+export const IconCheckCircle = makeIcon(checkCircleSvg)
+export const IconArrowUp = makeIcon(arrowUpwardSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

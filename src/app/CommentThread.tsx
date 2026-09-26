@@ -14,9 +14,22 @@ import {
 import { formatCommentTime } from './commentRail'
 import { COMMENT_TEXT, CommentCommandContext, type CommentWriteFailure } from './useDocComments'
 import MentionField from './MentionField'
+import { IconArrowUp, IconCheckCircle } from './icons'
 
 function authorLabel(author: { id: string | null; email: string | null }): string {
   return author.id === null ? '나' : (author.email ?? '나')
+}
+
+// 글쓴이 동그라미 — 첫 글자와, 이메일에서 고른 색 칸(0~5). 색은 CSS 가 강조색 색상환을 돌려 만든다
+function CommentAvatar({ author }: { author: { id: string | null; email: string | null } }) {
+  const label = authorLabel(author)
+  let hash = 0
+  for (const ch of author.email ?? '') hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
+  return (
+    <span className="comment-avatar" data-hue={author.email ? hash % 6 : 'me'} aria-hidden="true">
+      {label.charAt(0).toUpperCase()}
+    </span>
+  )
 }
 
 function capacityMessage(err: CommentCapacityError): string {
@@ -145,29 +158,42 @@ export default function CommentThread({
       onKeyDown={handleCardKeyDown}
     >
       <header id={headId} className="comment-thread-head">
-        <span className="comment-thread-author">{authorLabel(thread.root.author)}</span>
-        <span className="comment-thread-time">{formatCommentTime(thread.root.createdAt, now)}</span>
-        {canWrite && (
-          <button type="button" className="comment-thread-resolve" disabled={disconnected || busy.has(thread.id)} onClick={onToggleResolve}>
-            {resolved ? '다시 열기' : '해결'}
-          </button>
-        )}
-        {canDeleteRoot && (
-          <FolderMenu
-            label="댓글"
-            items={[
-              {
-                key: 'delete',
-                label: '삭제',
-                danger: true,
-                disabled: disconnected,
-                onSelect: () => {
-                  if (!disconnected) setConfirmDelete({ id: thread.id, replyCount: thread.replies.length })
+        <CommentAvatar author={thread.root.author} />
+        <span className="comment-thread-meta">
+          <span className="comment-thread-author">{authorLabel(thread.root.author)}</span>
+          <span className="comment-thread-time">{formatCommentTime(thread.root.createdAt, now)}</span>
+        </span>
+        <span className="comment-thread-actions">
+          {canWrite && (
+            <button
+              type="button"
+              className="comment-thread-resolve"
+              aria-label={resolved ? '다시 열기' : '해결'}
+              title={resolved ? '다시 열기' : '해결'}
+              aria-pressed={resolved}
+              disabled={disconnected || busy.has(thread.id)}
+              onClick={onToggleResolve}
+            >
+              <IconCheckCircle size={18} />
+            </button>
+          )}
+          {canDeleteRoot && (
+            <FolderMenu
+              label="댓글"
+              items={[
+                {
+                  key: 'delete',
+                  label: '삭제',
+                  danger: true,
+                  disabled: disconnected,
+                  onSelect: () => {
+                    if (!disconnected) setConfirmDelete({ id: thread.id, replyCount: thread.replies.length })
+                  },
                 },
-              },
-            ]}
-          />
-        )}
+              ]}
+            />
+          )}
+        </span>
       </header>
       {resolved && (
         <p className="comment-thread-resolved-by">
@@ -191,9 +217,14 @@ export default function CommentThread({
           const canDeleteReply = actor !== null && commentAllowed(actor, 'delete', r.entry)
           return (
             <div className="comment-reply" data-comment-id={r.id} key={r.id}>
-              <span className="comment-reply-author">{authorLabel(r.entry.author)}</span>
-              <span className="comment-reply-time">{formatCommentTime(r.entry.createdAt, now)}</span>
-              <p className="comment-reply-text">{r.entry.body}</p>
+              <CommentAvatar author={r.entry.author} />
+              <div className="comment-reply-main">
+                <span className="comment-reply-meta">
+                  <span className="comment-reply-author">{authorLabel(r.entry.author)}</span>
+                  <span className="comment-reply-time">{formatCommentTime(r.entry.createdAt, now)}</span>
+                </span>
+                <p className="comment-reply-text">{r.entry.body}</p>
+              </div>
               {canDeleteReply && (
                 <FolderMenu
                   label="답글"
@@ -215,30 +246,32 @@ export default function CommentThread({
         })}
       {active && canWrite && (
         <div className="comment-reply-composer">
-          <MentionField
-            className="comment-reply-input"
-            placeholder="답글을 입력하세요."
-            value={replyValue}
-            onChange={setReplyValue}
-            picked={replyPicked}
-            onPickedChange={setReplyPicked}
-            disabled={sending}
-            onKeyDown={(e) => {
-              if (e.nativeEvent.isComposing) return
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault()
-                submitReply()
-              } else if (e.key === 'Escape') {
-                e.preventDefault()
-                e.stopPropagation()
-                setReplyValue('')
-                setReplyPicked([])
-                ;(e.currentTarget.closest('.comment-thread') as HTMLElement | null)?.focus()
-              }
-            }}
-          />
-          <button type="button" className="comment-reply-send" disabled={replySendDisabled} onClick={submitReply}>
-            답글
+          <div className="comment-reply-field">
+            <MentionField
+              className="comment-reply-input"
+              placeholder="답글을 입력하세요."
+              value={replyValue}
+              onChange={setReplyValue}
+              picked={replyPicked}
+              onPickedChange={setReplyPicked}
+              disabled={sending}
+              onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault()
+                  submitReply()
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setReplyValue('')
+                  setReplyPicked([])
+                  ;(e.currentTarget.closest('.comment-thread') as HTMLElement | null)?.focus()
+                }
+              }}
+            />
+          </div>
+          <button type="button" className="comment-reply-send" aria-label="답글" title="답글 (Ctrl+Enter)" disabled={replySendDisabled} onClick={submitReply}>
+            <IconArrowUp size={16} />
           </button>
           {replyNote !== null && <p className={replyNoteIsStatus ? 'comment-reply-error comment-reply-note' : 'comment-reply-error'}>{replyNote}</p>}
         </div>

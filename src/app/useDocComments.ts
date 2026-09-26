@@ -1,6 +1,6 @@
 // 댓글 훅 — 편집기 핸들 붙이기·떼기, 스레드·레일 좌표·활성·입력 카드 상태, 해시 이동 대기 (specs/features/F-505.md 3.2, 5~8장)
 import { createContext, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import type { EditorView } from '@codemirror/view'
+import { EditorView } from '@codemirror/view'
 import type * as Y from 'yjs'
 
 import {
@@ -625,6 +625,8 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
       showNotice({ type: 'info', message: COMMENT_TEXT.selectFirst })
       return
     }
+    // 선택이 화면 밖이면 그 자리로 스크롤한다 — 화면 안이면 그대로(nearest)
+    handle.view.dispatch({ effects: EditorView.scrollIntoView(range.from, { y: 'nearest', yMargin: 80 }) })
     heldDraftRef.current = null
     setReply(null)
     setComposer({ anchorTop: scrollTopOf(handle.view, range.from), sending: false, error: null })
