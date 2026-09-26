@@ -3,6 +3,13 @@ import Dialog from './Dialog'
 import { visibleSettingsTabs, nextTabIndex, type SettingsTabId } from './settingsTabs'
 import { newDocTemplateOptions, type TemplateEntry } from '../lib/templates'
 import { E2EE_LOCK_MINUTES, type E2eeStatus } from '../e2ee/keyring'
+import {
+  MIN_CONTENT_WIDTH,
+  MAX_CONTENT_WIDTH,
+  CONTENT_WIDTH_STEP,
+  parseContentWidthInput,
+  exactContentWidthInput,
+} from './contentWidth'
 
 // 설정 대화상자 D-2 (specs/ia.md 3.15, specs/features/F-121.md, F-141.md 3.2, F-290.md 왼쪽 탭)
 const THEME_OPTIONS = [
@@ -205,6 +212,70 @@ function NewDocTemplateField({
   )
 }
 
+// 본문 너비 — 슬라이더 + 숫자 입력, 서로 동기. 입력에 id 가 없는 이유는 라벨 세기 선택자 때문이다 (F-2043 4장)
+function ContentWidthField({ value, onChange }: { value: number; onChange: (px: number) => void }) {
+  const [draft, setDraft] = useState(String(value))
+  // 밖(슬라이더)에서 값이 바뀌면 초안도 그 값의 문자열로 — 렌더 중 조정(F-290 의 openSeen 방식과 같다, F-2043 4.3)
+  const [valueSeen, setValueSeen] = useState(value)
+  if (value !== valueSeen) {
+    setValueSeen(value)
+    setDraft(String(value))
+  }
+
+  function commit(raw: string) {
+    const parsed = parseContentWidthInput(raw)
+    if (parsed === null) {
+      setDraft(String(value)) // 빈 값·숫자 아님 — 되돌린다(저장 안 함)
+      return
+    }
+    onChange(parsed)
+    setDraft(String(parsed))
+  }
+
+  return (
+    <div className="dialog-field">
+      <span id="content-width-label">본문 너비</span>
+      <div className="settings-range">
+        <input
+          type="range"
+          min={MIN_CONTENT_WIDTH}
+          max={MAX_CONTENT_WIDTH}
+          step={CONTENT_WIDTH_STEP}
+          aria-labelledby="content-width-label"
+          aria-valuetext={`${value}px`}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+        />
+        <input
+          type="number"
+          min={MIN_CONTENT_WIDTH}
+          max={MAX_CONTENT_WIDTH}
+          step={CONTENT_WIDTH_STEP}
+          inputMode="numeric"
+          aria-labelledby="content-width-label"
+          value={draft}
+          onChange={(e) => {
+            const raw = e.target.value
+            setDraft(raw)
+            const exact = exactContentWidthInput(raw)
+            if (exact !== null) onChange(exact)
+          }}
+          onBlur={(e) => commit(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              commit(e.currentTarget.value)
+            } else if (e.key === 'Escape') {
+              // 이벤트를 막지 않는다 — 대화상자는 평소대로 닫힌다 (F-2043 4.3)
+              setDraft(String(value))
+            }
+          }}
+        />
+        <span aria-hidden="true">px</span>
+      </div>
+    </div>
+  )
+}
+
 type SettingsDialogProps = {
   open: boolean
   theme: string
@@ -223,6 +294,9 @@ type SettingsDialogProps = {
   onChangeIndent?: (value: string) => void
   lineNumbers?: string
   onChangeLineNumbers?: (value: string) => void
+  // `편집기` 탭 — 본문 너비, `줄 번호` 다음·`새 문서 템플릿` 앞 (F-2043.md 4장). 둘 다 있을 때만 그린다
+  contentWidth?: number
+  onChangeContentWidth?: (px: number) => void
   // `편집기` 탭 끝 — 새 문서 템플릿 (F-2037.md 3.2). 안 주면 선택칸을 그리지 않는다(공개 보기 화면)
   newDocTemplate?: string
   onChangeNewDocTemplate?: (value: string) => void
@@ -259,6 +333,8 @@ export default function SettingsDialog({
   onChangeIndent,
   lineNumbers,
   onChangeLineNumbers,
+  contentWidth,
+  onChangeContentWidth,
   newDocTemplate,
   onChangeNewDocTemplate,
   templateEntries,
@@ -393,6 +469,10 @@ export default function SettingsDialog({
                 onChange={onChangeLineNumbers}
               />
             </>
+          )}
+          {/* 본문 너비 — 줄 번호 다음·새 문서 템플릿 앞 (F-2043.md 4.1) */}
+          {contentWidth !== undefined && onChangeContentWidth !== undefined && (
+            <ContentWidthField value={contentWidth} onChange={onChangeContentWidth} />
           )}
           {/* 새 문서 템플릿 — 편집기 탭 맨 끝 (F-2037.md 3.2) */}
           {newDocTemplate !== undefined && onChangeNewDocTemplate !== undefined && (

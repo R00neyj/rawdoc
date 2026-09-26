@@ -28,10 +28,12 @@ type OutlineProps = {
   viewerRef?: RefObject<HTMLElement | null>
   docId: string | null
   viewMode: string
+  // 주면 이 값으로 여백을 판정하고, 값이 바뀌면 다시 판정한다. 안 주면 --content-max 를 읽는다 (F-2043 3.4)
+  contentWidth?: number
 }
 
 // 보기 모드에서도 Editor 는 hidden 으로 마운트돼 있어 editorRef 의 view.state 를 쓴다 (F-123.md 3.3)
-export default function Outline({ editorRef, containerRef, viewerRef, docId, viewMode }: OutlineProps) {
+export default function Outline({ editorRef, containerRef, viewerRef, docId, viewMode, contentWidth }: OutlineProps) {
   const [headings, setHeadings] = useState<Heading[]>([])
   const [fits, setFits] = useState(false)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
@@ -58,7 +60,8 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
     if (!el || typeof ResizeObserver === 'undefined') return
     function compute() {
       const contentMax =
-        parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--content-max')) || 800
+        contentWidth ??
+        (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--content-max')) || 800)
       setFits((el!.clientWidth - contentMax) / 2 >= MIN_MARGIN)
       setContainerSize({ width: el!.clientWidth, height: el!.clientHeight })
     }
@@ -66,7 +69,7 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
     const ro = new ResizeObserver(compute)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [containerRef])
+  }, [containerRef, contentWidth])
 
   const visible = headings.length > 0
 

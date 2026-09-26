@@ -1658,6 +1658,30 @@ body.sidebar-resizing {
   margin-bottom: 0;
 }
 
+/* 본문 너비 — 슬라이더 + 숫자 입력 한 줄, 슬라이더가 남는 폭을 가진다 (F-2043 4.2) */
+.settings-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-range input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.settings-range input[type='number'] {
+  display: block;
+  width: 88px;
+  flex: 0 0 auto;
+}
+
+.settings-range span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
 /* 새 문서 템플릿 선택칸 — 앱의 첫 <select> (specs/features/F-2037.md 3.2) */
 .settings-select {
   width: 100%;

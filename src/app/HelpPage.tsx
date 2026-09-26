@@ -16,9 +16,11 @@ const viewerRef: RefObject<HTMLElement | null> = { current: null }
 type HelpPageProps = {
   onClose: () => void
   onCopy: () => void
+  // Outline 에 그대로 넘긴다 — 도움말 화면에서도 사이드바 설정으로 폭을 바꿀 수 있다 (F-2043 3.4)
+  contentWidth?: number
 }
 
-export default function HelpPage({ onClose, onCopy }: HelpPageProps) {
+export default function HelpPage({ onClose, onCopy, contentWidth }: HelpPageProps) {
   return (
     <div className="help-page">
       <div className="help-page-head">
@@ -34,7 +36,14 @@ export default function HelpPage({ onClose, onCopy }: HelpPageProps) {
       </div>
       <div className="help-page-body" ref={containerRef as RefObject<HTMLDivElement | null>}>
         <Viewer ref={viewerRef as RefObject<HTMLDivElement | null>} html={HELP_HTML} codeCopy />
-        <Outline editorRef={helpEditorRef} containerRef={containerRef} viewerRef={viewerRef} docId="help" viewMode="view" />
+        <Outline
+          editorRef={helpEditorRef}
+          containerRef={containerRef}
+          viewerRef={viewerRef}
+          docId="help"
+          viewMode="view"
+          contentWidth={contentWidth}
+        />
       </div>
     </div>
   )

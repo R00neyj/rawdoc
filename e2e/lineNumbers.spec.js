@@ -26,11 +26,11 @@ test.describe('F-147 A1 설정', () => {
     await openSettings(page)
     await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '편집기' }).click() // F-290 — 줄 번호는 편집기 탭
 
-    // F-2037 이 편집기 탭 맨 끝에 `새 문서 템플릿` 을 더해 줄 번호는 끝에서 둘째다
+    // F-2037·F-2043 이 편집기 탭 맨 끝에 `새 문서 템플릿`·`본문 너비` 를 더해 줄 번호는 끝에서 셋째다
     const labels = page.locator('.settings-panel .dialog-field > span, .settings-panel .dialog-field [id]:not(select)')
     const count = await labels.count()
     await expect(labels.nth(count - 1)).toHaveText('새 문서 템플릿')
-    await expect(labels.nth(count - 2)).toHaveText('줄 번호')
+    await expect(labels.nth(count - 3)).toHaveText('줄 번호')
 
     const seg = page.locator(LINE_NUMBERS_LABEL_SCOPE).locator('..').locator('[role="radio"]')
     await expect(seg).toHaveCount(2)

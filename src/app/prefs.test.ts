@@ -68,6 +68,11 @@ describe('prefs', () => {
     expect(getPref('md.e2eeLockMinutes', '30')).toBe('240')
   })
 
+  it('md.contentWidth 읽기·쓰기 (F-2043 U5)', () => {
+    expect(() => setPref('md.contentWidth', '1200')).not.toThrow()
+    expect(getPref('md.contentWidth', '')).toBe('1200')
+  })
+
   it('허용되지 않은 키는 getPref 에서 예외', () => {
     expect(() => getPref('md.unknown', 'x')).toThrow()
   })

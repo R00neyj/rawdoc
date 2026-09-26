@@ -43,6 +43,7 @@ import { fetchAccount, loginUrl, storedAccount, type AccountState } from './acco
 import { planAccountNotices, ACCOUNT_RECHECK_MS, ACCOUNT_BLOCKED_MESSAGE, ACCOUNT_WARNED_MESSAGE, formatCount, formatResetTime, type AccountFlags } from '../lib/usageLimits'
 import type { SyncState } from '../types'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
+import { resolveStoredContentWidth, CONTENT_WIDTH_VAR } from './contentWidth'
 import { useEdgeSwipe } from './useEdgeSwipe'
 import { IconRefresh, IconNoteAdd } from './icons'
 import { resolveTheme } from './theme'
@@ -456,6 +457,8 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getPref('md.sidebar', 'expanded') === 'collapsed')
   // 사이드바 너비(원 저장값) — 끄는 동안은 실시간으로, 놓으면 md.sidebarWidth 에 저장한다 (F-159 2.5)
   const [sidebarWidth, setSidebarWidth] = useState(() => resolveStoredSidebarWidth(getPref('md.sidebarWidth', '')))
+  // 본문 최대 너비(설정 → 편집기 탭) — 저장값은 창 폭과 무관, 값마다 바로 반영·저장한다 (F-2043 2.1·4.3)
+  const [contentWidthPref, setContentWidthPref] = useState(() => resolveStoredContentWidth(getPref('md.contentWidth', '')))
   const [windowWidth, setWindowWidth] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1600,
   )
@@ -4293,6 +4296,14 @@ export default function App() {
     setPref('md.newDocTemplate', value)
   }
 
+  // 본문 너비 — 슬라이더는 끄는 동안마다, 숫자 입력은 확정될 때마다 부른다. 들어오는 값은 늘 정확한 값이다 (F-2043 4.3)
+  function changeContentWidth(px: number) {
+    if (px === contentWidthPref) return
+    setContentWidthPref(px)
+    document.documentElement.style.setProperty(CONTENT_WIDTH_VAR, `${px}px`)
+    setPref('md.contentWidth', String(px))
+  }
+
   // 탭바 아이콘 버튼이 명령을 실행하고 포커스를 에디터로 돌려준다 (F-233 3.2)
   const runToolbarCommand = useCallback((cmd: StateCommand) => {
     const view = editorRef.current?.view
@@ -4745,7 +4756,7 @@ export default function App() {
           )}
           {!sharedDoc && !sharesOpen && helpOpen && (
             <div className="content-area">
-              <HelpPage onClose={goHome} onCopy={copyHelpToDoc} />
+              <HelpPage onClose={goHome} onCopy={copyHelpToDoc} contentWidth={contentWidthPref} />
             </div>
           )}
           {!sharedDoc && !sharesOpen && !helpOpen && mapRoute && (
@@ -4837,6 +4848,7 @@ export default function App() {
                   viewerRef={viewerRef}
                   docId={currentDocId}
                   viewMode={viewMode}
+                  contentWidth={contentWidthPref}
                 />
               )}
             </div>
@@ -4938,6 +4950,8 @@ export default function App() {
         newDocTemplate={newDocTemplatePref}
         onChangeNewDocTemplate={changeNewDocTemplate}
         templateEntries={templateEntries}
+        contentWidth={contentWidthPref}
+        onChangeContentWidth={changeContentWidth}
         onExportAll={handleExportAll}
         exportAllDisabled={exportOffline}
         onExportVault={handleExportVault}

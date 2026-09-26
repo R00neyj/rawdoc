@@ -104,7 +104,9 @@
   /* 사이드바 접힘 폭 — 아이콘 레일 (F-143 3.3) */
   --sidebar-rail-w: 48px;
   --statusbar-h: 26px;
-  --content-max: 800px;
+  /* 사용자 값(설정) — 실제 쓰는 값은 --content-max, 순환 참조를 피하려고 이름을 나눈다 (F-2043 3.1) */
+  --content-width: 800px;
+  --content-max: var(--content-width);
   /* 줄 번호 오른쪽 끝~본문 첫 글자 왼쪽 끝 거리 (F-122 2.2) */
   --gutter-gap: 20px;
   /* 문서 위아래 여백 — 편집·원문·보기 모드·공유 화면 공통 (F-143 3.10) */

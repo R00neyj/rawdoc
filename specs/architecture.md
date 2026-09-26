@@ -201,6 +201,7 @@ type YjsMetaRow = {
 | `md.theme` | `system` \| `white` \| `sepia` \| `dark` | `system` | F-141 |
 | `md.sidebar` | `expanded` \| `collapsed` | `expanded` | F-143 |
 | `md.sidebarWidth` | 정수 px, 200~480 | `300` | F-159 |
+| `md.contentWidth` | 정수 px, 600~1600, 20의 배수 | `800` | F-2043 |
 | `md.lineNumbers` | `on` \| `off` | `on` | F-147 |
 | `md.fontSize` | `small` \| `medium` \| `large` | `medium` | F-154 |
 | `md.indent` | `2` \| `4` | `4` | F-154 |
@@ -214,7 +215,7 @@ type YjsMetaRow = {
 | `md.landingDone` | `1` | 없음 | F-271 |
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
-  - 예외: `md.theme`·`md.sidebar`·`md.sidebarWidth`·`md.startScreen` 은 `BOOT_PAINT_SCRIPT` 도 읽는다 — 첫 페인트 전이라 `prefs.ts` 를 쓸 수 없다 (F-2015)
+  - 예외: `md.theme`·`md.sidebar`·`md.sidebarWidth`·`md.startScreen`·`md.contentWidth` 는 `BOOT_PAINT_SCRIPT` 도 읽는다 — 첫 페인트 전이라 `prefs.ts` 를 쓸 수 없다 (F-2015, F-2043)
 
 ## 4.1 M2 추가 설정 키 (2026-09-15)
 

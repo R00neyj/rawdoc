@@ -20,6 +20,7 @@ import './styles/peers.css'
 
 import { getPref } from './app/prefs'
 import { resolveTheme } from './app/theme'
+import { resolveStoredContentWidth, CONTENT_WIDTH_VAR } from './app/contentWidth'
 import { markAppEntry } from './app/markAppEntry'
 import App from './app/App'
 import { DEV_YSYNC } from './editor/devSyncFlag'
@@ -33,6 +34,11 @@ document.documentElement.dataset.indent = getPref('md.indent', '4') // F-154 2.3
 document.documentElement.dataset.theme = resolveTheme(
   getPref('md.theme', 'system'),
   window.matchMedia('(prefers-color-scheme: dark)').matches,
+)
+// 머리 스크립트가 실패했을 때의 안전망 — 같은 결과를 다시 넣는다 (F-2043 3.2)
+document.documentElement.style.setProperty(
+  CONTENT_WIDTH_VAR,
+  `${resolveStoredContentWidth(getPref('md.contentWidth', ''))}px`,
 )
 
 // 서비스 워커로 들어온 기존 사용자·설치한 PWA 도 다음 요청부터 서버 판정이 맞게 한다 (F-271 5장)

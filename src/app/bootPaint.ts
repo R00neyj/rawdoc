@@ -5,6 +5,13 @@ import {
   MAX_SIDEBAR_WIDTH_MARGIN,
   DEFAULT_SIDEBAR_WIDTH,
 } from './sidebarWidth'
+import {
+  MIN_CONTENT_WIDTH,
+  MAX_CONTENT_WIDTH,
+  CONTENT_WIDTH_STEP,
+  DEFAULT_CONTENT_WIDTH,
+  CONTENT_WIDTH_VAR,
+} from './contentWidth'
 
 export const BOOT_SKELETON_ID = 'boot-skeleton'
 export const BOOT_VIEW_ATTR = 'data-boot-view'
@@ -15,18 +22,25 @@ const THEME_KEY = 'md.theme'
 const SIDEBAR_KEY = 'md.sidebar'
 const SIDEBAR_WIDTH_KEY = 'md.sidebarWidth'
 const START_SCREEN_KEY = 'md.startScreen'
+const CONTENT_WIDTH_KEY = 'md.contentWidth'
 
 const themeKeyJson = JSON.stringify(THEME_KEY)
 const sidebarKeyJson = JSON.stringify(SIDEBAR_KEY)
 const sidebarWidthKeyJson = JSON.stringify(SIDEBAR_WIDTH_KEY)
 const startScreenKeyJson = JSON.stringify(START_SCREEN_KEY)
+const contentWidthKeyJson = JSON.stringify(CONTENT_WIDTH_KEY)
 const viewAttrJson = JSON.stringify(BOOT_VIEW_ATTR)
 const sidebarAttrJson = JSON.stringify(BOOT_SIDEBAR_ATTR)
 const sidebarWidthVarJson = JSON.stringify(BOOT_SIDEBAR_WIDTH_VAR)
+const contentWidthVarJson = JSON.stringify(CONTENT_WIDTH_VAR)
 const minJson = JSON.stringify(MIN_SIDEBAR_WIDTH)
 const maxCapJson = JSON.stringify(MAX_SIDEBAR_WIDTH_CAP)
 const maxMarginJson = JSON.stringify(MAX_SIDEBAR_WIDTH_MARGIN)
 const defaultJson = JSON.stringify(DEFAULT_SIDEBAR_WIDTH)
+const contentMinJson = JSON.stringify(MIN_CONTENT_WIDTH)
+const contentMaxJson = JSON.stringify(MAX_CONTENT_WIDTH)
+const contentStepJson = JSON.stringify(CONTENT_WIDTH_STEP)
+const contentDefaultJson = JSON.stringify(DEFAULT_CONTENT_WIDTH)
 
 // 클래식 스크립트(모듈 아님) — document·localStorage·matchMedia·location·innerWidth 다섯 전역만 쓴다 (4.3)
 export const BOOT_PAINT_SCRIPT = `(function () {
@@ -62,6 +76,25 @@ export const BOOT_PAINT_SCRIPT = `(function () {
 
     try {
       if (readPref(${sidebarKeyJson}) === 'collapsed') el.setAttribute(${sidebarAttrJson}, 'collapsed')
+    } catch (e) {}
+
+    try {
+      var storedContentWidth = readPref(${contentWidthKeyJson})
+      var contentWidth
+      if (storedContentWidth === null || storedContentWidth === undefined || storedContentWidth === '') {
+        contentWidth = ${contentDefaultJson}
+      } else {
+        var cn = Number(storedContentWidth)
+        contentWidth =
+          !isFinite(cn) ||
+          Math.floor(cn) !== cn ||
+          cn < ${contentMinJson} ||
+          cn > ${contentMaxJson} ||
+          cn % ${contentStepJson} !== 0
+            ? ${contentDefaultJson}
+            : cn
+      }
+      el.style.setProperty(${contentWidthVarJson}, contentWidth + 'px')
     } catch (e) {}
 
     try {

@@ -4,6 +4,7 @@ import { describe, expect, test } from 'vitest'
 import { BOOT_PAINT_SCRIPT, BOOT_SKELETON_ID, BOOT_VIEW_ATTR, BOOT_SIDEBAR_ATTR, BOOT_SIDEBAR_WIDTH_VAR, removeBootSkeleton } from './bootPaint'
 import { resolveTheme } from './theme'
 import { resolveStoredSidebarWidth, clampSidebarWidth } from './sidebarWidth'
+import { resolveStoredContentWidth, CONTENT_WIDTH_VAR } from './contentWidth'
 import { parseHash, parsePathRoute } from './hashRoute'
 import brand from '../../brand.config'
 
@@ -155,6 +156,31 @@ describe('BOOT_PAINT_SCRIPT', () => {
     expect(el.getAttribute('data-boot-view')).toBe('doc')
   })
 
+  test('F-2043 U6 본문 너비 — resolveStoredContentWidth 와 모두 같다', () => {
+    const values: (string | undefined)[] = [undefined, '', '600', '1200', '1600', '1210', '1620', 'abc']
+    for (const stored of values) {
+      const store: Record<string, string> = {}
+      if (stored !== undefined) store['md.contentWidth'] = stored
+      const el = run({ store })
+      expect(el.style.getPropertyValue(CONTENT_WIDTH_VAR)).toBe(`${resolveStoredContentWidth(stored)}px`)
+    }
+  })
+
+  test('F-2043 U7 md.contentWidth 읽기만 던짐 — 그 값만 기본값, 나머지는 저장값대로', () => {
+    const store = { 'md.sidebarWidth': '360', 'md.sidebar': 'collapsed', 'md.startScreen': 'last' }
+    const el = run({ store, throwFor: (key) => key === 'md.contentWidth', dark: true, innerWidth: 1600 })
+    expect(el.style.getPropertyValue(CONTENT_WIDTH_VAR)).toBe('800px')
+    expect(el.getAttribute('data-theme')).toBe('dark')
+    expect(el.style.getPropertyValue('--boot-sidebar-w')).toBe('360px')
+    expect(el.getAttribute('data-boot-sidebar')).toBe('collapsed')
+    expect(el.getAttribute('data-boot-view')).toBe('doc')
+  })
+
+  test('F-2043 U7 모든 읽기가 던짐 — --content-width 도 800px', () => {
+    const el = run({ throwFor: () => true, dark: false, innerWidth: 1600 })
+    expect(el.style.getPropertyValue(CONTENT_WIDTH_VAR)).toBe('800px')
+  })
+
   test('U6 index.html 정적 마크업', () => {
     const html = readIndexHtml()
     const viewportIdx = html.indexOf('<meta name="viewport"')
@@ -191,6 +217,7 @@ describe('BOOT_PAINT_SCRIPT', () => {
     el.setAttribute(BOOT_VIEW_ATTR, 'doc')
     el.setAttribute(BOOT_SIDEBAR_ATTR, 'collapsed')
     el.style.setProperty(BOOT_SIDEBAR_WIDTH_VAR, '300px')
+    el.style.setProperty(CONTENT_WIDTH_VAR, '1200px')
     el.setAttribute('data-theme', 'dark')
     const doc = {
       getElementById: (id: string) => (id === BOOT_SKELETON_ID ? skeletonNode : null),
@@ -202,6 +229,8 @@ describe('BOOT_PAINT_SCRIPT', () => {
     expect(el.getAttribute(BOOT_SIDEBAR_ATTR)).toBeNull()
     expect(el.style.getPropertyValue(BOOT_SIDEBAR_WIDTH_VAR)).toBe('')
     expect(el.getAttribute('data-theme')).toBe('dark')
+    // F-2043 3.2 — 본문 너비 인라인 값은 removeBootSkeleton 이 지우지 않는다
+    expect(el.style.getPropertyValue(CONTENT_WIDTH_VAR)).toBe('1200px')
 
     expect(() => removeBootSkeleton(doc as unknown as Document)).not.toThrow()
     const emptyDoc = { getElementById: () => null, documentElement: makeEl() }
