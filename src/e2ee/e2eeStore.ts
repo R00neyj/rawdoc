@@ -435,6 +435,14 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
       return row ? decode(row) : null
     }
   }
+  // 캐시 먼저 셸 — listCached 는 문서를 decode 로 풀어 내보낸다. 폴더는 그대로 넘긴다 (F-2042 3.6)
+  if (serverInner.listCached) {
+    const listCached = serverInner.listCached
+    ;(wrapped as unknown as ServerStore).listCached = async () => {
+      const { docs, folders } = await listCached()
+      return { docs: await Promise.all(docs.map(decode)), folders }
+    }
+  }
   // 펼치면 게터가 값이 되므로 syncState 는 아래 저장소를 계속 읽게 둔다
   if ('syncState' in inner) {
     Object.defineProperty(wrapped, 'syncState', { get: () => inner.syncState, enumerable: true, configurable: true })

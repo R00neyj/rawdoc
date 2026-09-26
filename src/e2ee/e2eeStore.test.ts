@@ -4,7 +4,7 @@ import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { openDB } from 'idb'
 import { createIdbStore } from '../storage/idbStore'
-import { decryptAttachment, decryptDocField, E2eeError, encryptAttachment, openDocKey } from './crypto'
+import { createDocKey, decryptAttachment, decryptDocField, E2eeError, encryptAttachment, encryptDocField, openDocKey } from './crypto'
 import { attachmentRefsOf, isE2eeStoreError, lockDocMetas, makeE2eeConflictCopy, planE2eeReset, withE2ee } from './e2eeStore'
 import * as toWebpModule from '../storage/toWebp'
 import type { AttachmentExt, Doc, Store } from '../types'
@@ -641,5 +641,56 @@ describe('F-407 U20 putAttachmentNow e2ee — 변환 없음', () => {
     const store = withE2ee(inner, { getMasterKey: () => null })
     expect('putAttachmentNow' in store).toBe(false)
     expect('setDocE2ee' in store).toBe(false)
+  })
+})
+
+describe('F-2042 U7 listCached — decode 로 감싸 내보내기', () => {
+  it('안쪽에 listCached 가 있으면 문서를 decode 로 풀어 내보낸다 — MK 없으면 locked, 있으면 open. 폴더는 그대로', async () => {
+    const mk = await newMasterKey()
+    const { docKey, wrappedDocKey } = await createDocKey(mk)
+    const docId = 'vd-listcached-1'
+    const titleEnvelope = await encryptDocField(docKey, docId, 'title', '비밀 제목')
+    const contentEnvelope = await encryptDocField(docKey, docId, 'content', '비밀 본문')
+    const cachedRow: Doc = {
+      id: docId,
+      title: titleEnvelope,
+      content: contentEnvelope,
+      lineEnding: 'lf',
+      createdAt: 1,
+      updatedAt: 2,
+      folderId: null,
+      pinnedAt: null,
+      role: 'owner',
+      e2eeKey: wrappedDocKey,
+      attachmentRefs: [],
+    }
+    const folderRow = { id: 'f1', name: '폴더', parentId: null, createdAt: 1, updatedAt: 1 }
+    const inner = {
+      kind: 'server',
+      listCached: async () => ({ docs: [cachedRow], folders: [folderRow] }),
+    } as unknown as Store
+
+    let currentMk: CryptoKey | null = mk
+    const store = withE2ee(inner, { getMasterKey: () => currentMk })
+    const serverStore = store as unknown as { listCached: () => Promise<{ docs: Doc[]; folders: typeof folderRow[] }> }
+
+    const openResult = await serverStore.listCached()
+    expect(openResult.docs).toHaveLength(1)
+    expect(openResult.docs[0].title).toBe('비밀 제목')
+    expect(openResult.docs[0].content).toBe('비밀 본문')
+    expect(openResult.docs[0].e2ee).toBe('open')
+    expect(openResult.folders).toEqual([folderRow])
+
+    currentMk = null
+    const lockedResult = await serverStore.listCached()
+    expect(lockedResult.docs[0].title).toBe('')
+    expect(lockedResult.docs[0].content).toBe('')
+    expect(lockedResult.docs[0].e2ee).toBe('locked')
+  })
+
+  it('안쪽에 listCached 가 없으면 withE2ee 결과에도 없다', async () => {
+    const inner = { kind: 'memory' } as unknown as Store
+    const store = withE2ee(inner, { getMasterKey: () => null })
+    expect('listCached' in store).toBe(false)
   })
 })

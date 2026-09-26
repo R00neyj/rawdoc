@@ -544,6 +544,19 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ links, grants: grantList }) })
   })
 
+  // F-2042 8.1 — 이후 모든 /api/** 응답을 latencyMs 만큼 늦춘다. 마지막에 걸어 다른 경로보다 먼저 가로챈 뒤 route.fallback() 한다
+  let latencyMs = 0
+  const getRequestLog = [] // GET 요청만 기록 — 동시성 확인용 { path, startedAt, endedAt }
+  await page.route('**/api/**', async (route) => {
+    const req = route.request()
+    const isGet = req.method() === 'GET'
+    const path = new URL(req.url()).pathname
+    const startedAt = Date.now()
+    if (latencyMs > 0) await new Promise((resolve) => setTimeout(resolve, latencyMs))
+    if (isGet) getRequestLog.push({ path, startedAt, endedAt: Date.now() })
+    return route.fallback()
+  })
+
   return {
     docs,
     folders,
@@ -604,6 +617,14 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       if (!folder) return
       if (on) folder.e2ee = true
       else delete folder.e2ee
+    },
+    // 이후 모든 /api/** 응답을 ms 만큼 늦춘다. 0 이면 끈다 (F-2042 8.1)
+    setLatency(ms) {
+      latencyMs = ms
+    },
+    // 받은 GET 요청 기록 { path, startedAt, endedAt }[] — 동시성 확인용 (F-2042 8.1)
+    readRequests() {
+      return [...getRequestLog]
     },
   }
 }

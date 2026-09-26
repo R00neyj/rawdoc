@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { createServerStore, QuotaExceededError, E2EE_SERVER_SAVE_INTERVAL_MS, PendingSyncError } from './serverStore'
+import { createServerStore, QuotaExceededError, E2EE_SERVER_SAVE_INTERVAL_MS, PendingSyncError, BODY_FETCH_CONCURRENCY } from './serverStore'
 import { createRemoteCache } from './remoteCache'
 import { descendantFolderIds } from '../lib/folderTree'
 
@@ -43,6 +43,8 @@ type FakeFolder = {
 function makeFakeServer() {
   const docs = new Map<string, FakeDoc>()
   const folders = new Map<string, FakeFolder>()
+  // F-2042 U1 — GET /api/shared 흉내 (F-212.md 2.4). 문서 그대로 담아 두고 content 는 뺀다
+  let shared: Array<Omit<FakeDoc, 'content'> & { role: 'edit' | 'view'; ownerEmail?: string; viaFolder?: unknown }> = []
   let networkDown = false
   let serverError = false
   let usage = { used: 0, limit: 314_572_800 }
@@ -193,6 +195,8 @@ function makeFakeServer() {
       }
     }
 
+    if (path === '/api/shared' && method === 'GET') return jsonResponse(200, shared)
+
     if (path === '/api/usage' && method === 'GET') return jsonResponse(200, usage)
 
     // F-221 흉내: PUT /api/attachments/:idext — forceUploadQuota 면 507 (fakeServer.js 와 같은 형식)
@@ -235,6 +239,9 @@ function makeFakeServer() {
     },
     setHasVault: (v: boolean) => {
       hasVault = v
+    },
+    setShared: (list: typeof shared) => {
+      shared = list
     },
     bumpVersion: (id: string) => {
       const d = docs.get(id)
@@ -1818,5 +1825,235 @@ describe('F-408 S4 표지 없는 값', () => {
     const validDoc = { id: 'vd4', title: 'T', content: 'C', lineEnding: 'lf' as const, createdAt: 1, updatedAt: 1, folderId: null, pinnedAt: null, e2eeKey: VAULT_KEY, attachmentRefs: [] }
     await expect(store.importLocalE2ee({ folders: [plainFolder], docs: [validDoc] })).rejects.toThrow('not_e2ee')
     expect(await cache.getDoc('u1', 'vd4')).toBeNull()
+  })
+})
+
+// F-2042 7.1 U1~U6 — 부팅 목록 읽기 병렬화·캐시 먼저 셸의 저장소 계약
+describe('F-2042 U1~U6 부팅 목록 읽기 — 병렬화·캐시 먼저 셸', () => {
+  it('U1 /api/shared 는 /api/docs 와 동시에 시작한다', async () => {
+    const server = makeFakeServer()
+    server.setShared([
+      { id: 'sh1', title: '공유문서', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1, role: 'view' },
+    ])
+    let releaseDocs = () => {}
+    const gate = new Promise<void>((resolve) => {
+      releaseDocs = resolve
+    })
+    const seen: string[] = []
+    const fetchSpy = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const method = init.method ?? 'GET'
+      const path = new URL(String(url), 'http://local.test').pathname
+      if (method === 'GET' && path === '/api/shared') seen.push('shared')
+      if (method === 'GET' && path === '/api/docs') {
+        seen.push('docs-start')
+        await gate
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const listPromise = store.list()
+    await tick(10)
+    // /api/docs 가 아직 붙잡혀 있는데도 /api/shared 는 이미 나가 있다
+    expect(seen).toContain('shared')
+    expect(seen).toContain('docs-start')
+
+    releaseDocs()
+    const result = await listPromise
+    expect(result.some((d) => d.id === 'sh1')).toBe(true)
+  })
+
+  it('U2 본문은 최대 6개씩 동시에 받고, 끝나면 20개 모두 캐시에 새 본문', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const ids: string[] = []
+    for (let i = 0; i < 20; i++) {
+      const doc = await store.create({ title: `T${i}`, content: `c${i}`, lineEnding: 'lf' })
+      ids.push(doc.id)
+    }
+    await tick(30)
+    ids.forEach((id, i) => {
+      const d = server.docs.get(id)!
+      d.content = `new${i}`
+      d.version += 1
+      d.updatedAt = Date.now()
+    })
+
+    let inFlight = 0
+    let maxInFlight = 0
+    const pending: Array<() => void> = []
+    const fetchSpy = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const method = init.method ?? 'GET'
+      const path = new URL(String(url), 'http://local.test').pathname
+      if (method === 'GET' && /^\/api\/docs\/[^/]+$/.test(path)) {
+        inFlight++
+        maxInFlight = Math.max(maxInFlight, inFlight)
+        await new Promise<void>((resolve) => pending.push(resolve))
+        inFlight--
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const listPromise = store.list()
+    await tick(10)
+    expect(inFlight).toBe(BODY_FETCH_CONCURRENCY)
+    expect(maxInFlight).toBe(BODY_FETCH_CONCURRENCY)
+
+    for (let guard = 0; guard < 100 && (pending.length > 0 || inFlight > 0); guard++) {
+      const release = pending.shift()
+      release?.()
+      await tick(5)
+    }
+    await listPromise
+
+    expect(maxInFlight).toBe(BODY_FETCH_CONCURRENCY)
+    for (let i = 0; i < 20; i++) {
+      const got = await store.get(ids[i])
+      expect(got?.content).toBe(`new${i}`)
+    }
+  })
+
+  it('U3 list() 를 동시에 두 번 불러도 바뀐 문서의 본문은 한 번만 받는다', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const doc = await store.create({ title: 'T', content: 'a', lineEnding: 'lf' })
+    await tick(20)
+    server.docs.get(doc.id)!.content = 'b'
+    server.docs.get(doc.id)!.version += 1
+
+    let bodyGetCount = 0
+    const fetchSpy = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const method = init.method ?? 'GET'
+      const path = new URL(String(url), 'http://local.test').pathname
+      if (method === 'GET' && path === `/api/docs/${doc.id}`) bodyGetCount++
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await Promise.all([store.list(), store.list()])
+    expect(bodyGetCount).toBe(1)
+    expect((await store.get(doc.id))?.content).toBe('b')
+  })
+
+  it('U4 본문을 받는 사이 편집하면 받은 서버 본문이 캐시를 덮지 않는다(3.4)', async () => {
+    const dbName = freshDbName()
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName })
+    const doc = await store.create({ title: 'T', content: 'a', lineEnding: 'lf' })
+    await tick(20)
+    server.docs.get(doc.id)!.content = 'server-new'
+    server.docs.get(doc.id)!.version += 1
+
+    let releaseBody = () => {}
+    const bodyGate = new Promise<void>((resolve) => {
+      releaseBody = resolve
+    })
+    const putGate = new Promise<void>(() => {}) // 이 테스트 동안은 절대 풀리지 않는다 — updateDoc 이 안 나간 상태를 흉내낸다
+    const fetchSpy = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const method = init.method ?? 'GET'
+      const path = new URL(String(url), 'http://local.test').pathname
+      if (path === `/api/docs/${doc.id}` && method === 'GET') await bodyGate
+      if (path === `/api/docs/${doc.id}` && method === 'PUT') await putGate
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const listPromise = store.list()
+    await tick(10)
+    await store.update(doc.id, { content: '내 편집' })
+    await tick(10)
+
+    releaseBody()
+    await listPromise
+    await tick(10)
+
+    const got = await store.get(doc.id)
+    expect(got?.content).toBe('내 편집')
+
+    const cache = await createRemoteCache(dbName)
+    const outbox = await cache.getOutbox('u1')
+    expect(outbox.some((e) => e.type === 'updateDoc' && e.docId === doc.id)).toBe(true)
+  })
+
+  it('U5 진행 중인 list() 가 있으면 get(X) 는 서버의 새 본문을 기다렸다가 돌려준다', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const doc = await store.create({ title: 'T', content: 'a', lineEnding: 'lf' })
+    await tick(20)
+    server.docs.get(doc.id)!.content = 'server-new'
+    server.docs.get(doc.id)!.version += 1
+
+    let releaseBody = () => {}
+    const bodyGate = new Promise<void>((resolve) => {
+      releaseBody = resolve
+    })
+    const fetchSpy = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const method = init.method ?? 'GET'
+      const path = new URL(String(url), 'http://local.test').pathname
+      if (path === `/api/docs/${doc.id}` && method === 'GET') await bodyGate
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const listPromise = store.list()
+    await tick(10)
+    const getPromise = store.get(doc.id)
+    await tick(10)
+    releaseBody()
+
+    const got = await getPromise
+    expect(got?.content).toBe('server-new')
+    await listPromise
+  })
+
+  // 실제 3초를 기다린다 — fake-indexeddb 가 내부 스케줄링에 쓰는 setImmediate 가 vi.useFakeTimers() 와 함께 쓰면 멈춰 죽는다(구현이 정하는 시계, 7.1 U5)
+  it('U5 GET_WAIT_FOR_LIST_MS 를 넘기면 get() 은 기다리지 않고 캐시 본문을 돌려준다', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const doc = await store.create({ title: 'T', content: 'cached', lineEnding: 'lf' })
+    await tick(20)
+
+    const listGate = new Promise<void>(() => {}) // 이 테스트 동안 절대 풀리지 않는다
+    const fetchSpy = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const method = init.method ?? 'GET'
+      const path = new URL(String(url), 'http://local.test').pathname
+      if (method === 'GET' && path === '/api/docs') await listGate
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    void store.list().catch(() => {})
+    const got = await store.get(doc.id)
+    expect(got?.content).toBe('cached')
+  }, 8000)
+
+  it('U6 listCached 는 네트워크 없이 캐시 문서·폴더만 읽는다 — 공유받은 문서는 없다', async () => {
+    const server = makeFakeServer()
+    server.setShared([
+      { id: 'sh1', title: '공유', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1, role: 'view' },
+    ])
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    await store.create({ title: 'A', content: 'a', lineEnding: 'lf', createdAt: 1, updatedAt: 1 })
+    await store.create({ title: 'B', content: 'b', lineEnding: 'lf', createdAt: 2, updatedAt: 2 })
+    await tick(20)
+    await store.list()
+    await tick(10)
+
+    const fetchSpy = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchSpy)
+    const result = await store.listCached()
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(result.docs.map((d) => d.title)).toEqual(['B', 'A'])
+    expect(result.docs.every((d) => d.role === 'owner')).toBe(true)
+    expect(result.docs.some((d) => d.id === 'sh1')).toBe(false)
+    expect(result.folders).toEqual([])
   })
 })

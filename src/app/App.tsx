@@ -50,6 +50,7 @@ import { removeBootSkeleton } from './bootPaint'
 import { parseHash, formatHash, formatMapHash, parsePathRoute, type HashRoute } from './hashRoute'
 import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
+import { canShowCachedShell, mergeBootList, shouldApplyListResult } from './bootList'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
 import { decideDocPath, type DocPathKind, type FallbackReason } from './docPath'
@@ -405,6 +406,11 @@ export default function App() {
   const [currentDocId, setCurrentDocId] = useState<string | null>(null)
   // 지금 연 문서가 다른 탭에서 지워졌을 때의 그 문서 id (F-296.md 7.3) — currentDocId 가 바뀌면 되돌린다
   const [deletedElsewhereId, setDeletedElsewhereId] = useState<string | null>(null)
+  // deletedElsewhereId 를 어디서 찾았나 — 문구 갈래에 쓴다(6장). 기본은 다른 탭 신호(F-296) (F-2042 6장)
+  const deletedElsewhereSourceRef = useRef<'tab' | 'bootMerge'>('tab')
+  // 부팅 캐시 먼저 셸의 뒤 맞추기·금고 열림 목록이 서로 늦게 도착해 엇갈리지 않게 순번을 매긴다 (F-2042 4.3)
+  const bootListSeqRef = useRef(0)
+  const lastAppliedListSeqRef = useRef(0)
   const [notice, setNotice] = useState<AppNotice | null>(null)
   const [headingFont, setHeadingFont] = useState(() => getPref('md.headingFont', 'serif'))
   const [bodyFont, setBodyFont] = useState(() => getPref('md.bodyFont', 'sans')) // F-141 3.3
@@ -1064,7 +1070,10 @@ export default function App() {
     const stripped = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
     setDocs(stripped)
     const openId = currentDocIdRef.current
-    if (openId && !stripped.some((d) => d.id === openId)) setDeletedElsewhereId(openId)
+    if (openId && !stripped.some((d) => d.id === openId)) {
+      deletedElsewhereSourceRef.current = 'tab'
+      setDeletedElsewhereId(openId)
+    }
     // 다른 탭이 지금 문서를 금고로 옮기거나 뺐으면 새 세션으로 다시 연다 — 옛 실시간 세션에 머물지 않게 (F-407 7.4)
     const opened = openId ? stripped.find((d) => d.id === openId) : undefined
     const session = docPathRef.current
@@ -1294,7 +1303,11 @@ export default function App() {
     if (next === 'open') e2eeStoreRef.current?.resumeAfterUnlock()
     if (next !== 'open' && prev !== 'open') return
     // 금고를 열며 곧바로 만든 새 문서가 이 목록보다 늦게 들어올 수 있다 — 목록에 없는 문서는 지우지 않고 둔다
+    // 부팅의 뒤 맞추기와 순번을 공유한다 — 늦게 시작한 쪽만 반영한다(F-2042 4.3)
+    const seq = ++bootListSeqRef.current
     void Promise.all([store.listFolders(), store.list()]).then(([newFolders, newDocs]) => {
+      if (!shouldApplyListResult({ seq, lastAppliedSeq: lastAppliedListSeqRef.current })) return
+      lastAppliedListSeqRef.current = seq
       setFolders(newFolders)
       const stripped = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
       const listed = new Set(stripped.map((d) => d.id))
@@ -1383,14 +1396,17 @@ export default function App() {
     setDeletedElsewhereId(null)
   }
 
-  // 다른 탭에서 지워졌을 때 오류 알림 + `새 문서로 저장` — 같은 문서로는 1회만 (F-296.md 7.3)
+  // 다른 탭에서 지워졌을 때·부팅 뒤 맞추기로 찾았을 때 오류 알림 + `새 문서로 저장` — 같은 문서로는 1회만 (F-296.md 7.3, F-2042 6장)
   const notifiedDeletedElsewhereRef = useRef<string | null>(null)
   useEffect(() => {
     if (!deletedElsewhereId || notifiedDeletedElsewhereRef.current === deletedElsewhereId) return
     notifiedDeletedElsewhereRef.current = deletedElsewhereId
     showNotice({
       type: 'error',
-      message: '이 문서가 다른 탭에서 삭제되었습니다. 지금 화면의 내용은 저장되지 않습니다.',
+      message:
+        deletedElsewhereSourceRef.current === 'bootMerge'
+          ? '이 문서가 다른 곳에서 삭제되었습니다. 지금 화면의 내용은 저장되지 않습니다.'
+          : '이 문서가 다른 탭에서 삭제되었습니다. 지금 화면의 내용은 저장되지 않습니다.',
       action: {
         label: '새 문서로 저장',
         icon: IconNoteAdd,
@@ -1720,102 +1736,172 @@ export default function App() {
         })
       }
 
-      // 폴더를 문서와 함께 받아 먼저 반영한다 — 폴더가 늦으면 그 안의 문서가 잠깐 루트에 보인다
-      const foldersPromise = appStore.listFolders()
-      let list = await appStore.list()
-
-      if (list.length === 0 && getPref('md.firstRunDone', '') === '') {
-        await appStore.create({
-          title: GUIDE_DOC_TITLE,
-          content: GUIDE_DOC_CONTENT_CRLF,
-          lineEnding: 'crlf',
-        })
-        setPref('md.firstRunDone', '1')
-        list = await appStore.list()
-      }
-
-      const folderList = await foldersPromise
-      setFolders(folderList)
-
-      const metaList = sortByUpdatedAtDesc(list.map(stripContent))
-      setDocs(metaList)
-
-      // 안 쓰는 첨부 정리 (F-156.md 2.7) — server 저장소는 kind 만 idb 로 보이게 해 캐시 문서 기준으로 돈다 (F-207.md 2.5)
-      // 아직 안 올린 첨부는 빼고 넘긴다 — 오프라인 편집은 캐시 본문이 아니라 md-yjs 에만 있다 (F-306 10장)
-      // 금고 문서 본문은 봉투라 참조를 못 찾는다 — attachmentRefs 를 참조 글자로 바꿔 넘긴다 (F-405 4.3, F-406 이 이어받는다)
-      const gcList = async () =>
-        (await resolvedStore.list()).map((d) =>
-          d.e2eeKey !== undefined ? { content: (d.attachmentRefs ?? []).map((id) => `attachments/${id}.png`).join('\n') } : d,
-        )
-      const gcStore =
-        resolvedStore.kind === 'server'
-          ? {
-              kind: 'idb',
-              list: gcList,
-              listAttachments: async () => (await resolvedStore.listAttachments()).filter((a) => a.uploaded !== false),
-              removeAttachment: (id: string) => resolvedStore.removeAttachment(id),
-            }
-          : { ...resolvedStore, list: gcList }
-      scheduleAttachmentGc(() => cleanupUnusedAttachments({ store: gcStore }))
-
       const parsedHash = parseHash(location.hash)
 
-      // 공유 링크(#/s/{조각})는 저장소에서 문서를 찾지 않고 곧바로 S-4 를 보여준다
-      // (specs/features/F-130.md 4장)
-      if (parsedHash.type === 'share') {
-        await openSharedFragment(parsedHash.fragment, metaList)
-        setBootPhase('ready')
-        return
-      }
+      // 첫 화면을 고르고 ready 한다 — 캐시 먼저 길·기다리는 길이 함께 쓴다 (F-2042 4.2)
+      async function finishBootRouting(metaList: DocMeta[], folderList: Folder[]) {
+        // 공유 링크(#/s/{조각})는 저장소에서 문서를 찾지 않고 곧바로 S-4 를 보여준다 (specs/features/F-130.md 4장)
+        if (parsedHash.type === 'share') {
+          await openSharedFragment(parsedHash.fragment, metaList)
+          setBootPhase('ready')
+          return
+        }
 
-      // 공유 관리 페이지(#/shares) — 문서를 열지 않는다 (F-243.md 3.4)
-      if (parsedHash.type === 'shares') {
-        setSharesOpen(true)
-        setBootPhase('ready')
-        return
-      }
+        // 공유 관리 페이지(#/shares) — 문서를 열지 않는다 (F-243.md 3.4)
+        if (parsedHash.type === 'shares') {
+          setSharesOpen(true)
+          setBootPhase('ready')
+          return
+        }
 
-      // 도움말 페이지(#/help) — 문서를 열지 않는다 (F-244.md 3.3)
-      if (parsedHash.type === 'help') {
-        setHelpOpen(true)
-        setBootPhase('ready')
-        return
-      }
+        // 도움말 페이지(#/help) — 문서를 열지 않는다 (F-244.md 3.3)
+        if (parsedHash.type === 'help') {
+          setHelpOpen(true)
+          setBootPhase('ready')
+          return
+        }
 
-      // 위키링크 지도(#/map·#/map/{id}) — currentDocId 는 비우지 않고 유지한다 (F-292.md 6.1, A15)
-      if (parsedHash.type === 'map') {
-        const anchorId = parsedHash.docId && metaList.some((d) => d.id === parsedHash.docId) ? parsedHash.docId : null
-        setCurrentDocId(anchorId)
-        if (anchorId) setPref('md.lastDocId', anchorId)
-        setMapRoute({ centerDocId: anchorId, returnDocId: anchorId })
-        setBootPhase('ready')
-        return
-      }
+        // 위키링크 지도(#/map·#/map/{id}) — currentDocId 는 비우지 않고 유지한다 (F-292.md 6.1, A15)
+        if (parsedHash.type === 'map') {
+          const anchorId = parsedHash.docId && metaList.some((d) => d.id === parsedHash.docId) ? parsedHash.docId : null
+          setCurrentDocId(anchorId)
+          if (anchorId) setPref('md.lastDocId', anchorId)
+          setMapRoute({ centerDocId: anchorId, returnDocId: anchorId })
+          setBootPhase('ready')
+          return
+        }
 
-      const hashDocId = parsedHash.type === 'doc' ? parsedHash.docId : null
-      const lastDocId = getPref('md.lastDocId', '') || null
-      // 해시가 특정 문서를 안 가리키면 시작 화면 설정을 따른다 — 기본(home)은 자동으로 안 연다 (F-232 3.1)
-      const shouldAutoOpen = Boolean(hashDocId) || getPref('md.startScreen', 'home') === 'last'
+        const hashDocId = parsedHash.type === 'doc' ? parsedHash.docId : null
+        const lastDocId = getPref('md.lastDocId', '') || null
+        // 해시가 특정 문서를 안 가리키면 시작 화면 설정을 따른다 — 기본(home)은 자동으로 안 연다 (F-232 3.1)
+        const shouldAutoOpen = Boolean(hashDocId) || getPref('md.startScreen', 'home') === 'last'
 
-      if (shouldAutoOpen) {
-        const resolved = resolveInitialDoc({ hashDocId, lastDocId, docs: metaList })
-        if (resolved.docId) {
-          setCurrentDocId(resolved.docId)
-          setPref('md.lastDocId', resolved.docId)
-          replaceHashUrl(resolved.docId)
-          if (resolved.notFound) {
-            showNotice({ type: 'info', message: '문서를 찾을 수 없습니다.' })
+        if (shouldAutoOpen) {
+          const resolved = resolveInitialDoc({ hashDocId, lastDocId, docs: metaList })
+          if (resolved.docId) {
+            setCurrentDocId(resolved.docId)
+            setPref('md.lastDocId', resolved.docId)
+            replaceHashUrl(resolved.docId)
+            if (resolved.notFound) {
+              showNotice({ type: 'info', message: '문서를 찾을 수 없습니다.' })
+            }
+            const openedDoc = metaList.find((d) => d.id === resolved.docId)
+            addOpenFolders(ancestorsOfDoc({ folders: folderList, doc: openedDoc }))
+          } else {
+            replaceHashUrl(null)
           }
-          const openedDoc = metaList.find((d) => d.id === resolved.docId)
-          addOpenFolders(ancestorsOfDoc({ folders: folderList, doc: openedDoc }))
         } else {
           replaceHashUrl(null)
         }
-      } else {
-        replaceHashUrl(null)
+
+        setBootPhase('ready')
       }
 
-      setBootPhase('ready')
+      // 안 쓰는 첨부 정리 예약 — 금고 문서는 attachmentRefs 를 참조 글자로 바꿔 넘긴다 (F-156.md 2.7, F-207.md 2.5, F-306 10장, F-405 4.3, F-406)
+      function scheduleGc() {
+        const gcList = async () =>
+          (await resolvedStore.list()).map((d) =>
+            d.e2eeKey !== undefined ? { content: (d.attachmentRefs ?? []).map((id) => `attachments/${id}.png`).join('\n') } : d,
+          )
+        const gcStore =
+          resolvedStore.kind === 'server'
+            ? {
+                kind: 'idb',
+                list: gcList,
+                listAttachments: async () => (await resolvedStore.listAttachments()).filter((a) => a.uploaded !== false),
+                removeAttachment: (id: string) => resolvedStore.removeAttachment(id),
+              }
+            : { ...resolvedStore, list: gcList }
+        scheduleAttachmentGc(() => cleanupUnusedAttachments({ store: gcStore }))
+      }
+
+      // 뒤 맞추기 결과를 지금 목록에 합친다 — 스냅샷 뒤 생긴 문서는 남기고, 늦게 시작한 결과는 버린다 (F-2042 4.3)
+      function applyBootMerge(seq: number, snapshotIds: ReadonlySet<string>, newFolders: Folder[], newDocs: Doc[]) {
+        if (!shouldApplyListResult({ seq, lastAppliedSeq: lastAppliedListSeqRef.current })) return
+        lastAppliedListSeqRef.current = seq
+        setFolders(newFolders)
+        const resultMetaList = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
+        setDocs((prevDocs) => {
+          const merged = mergeBootList({ snapshotIds, current: prevDocs, result: resultMetaList })
+          const openId = currentDocIdRef.current
+          if (openId && merged.removedIds.includes(openId)) {
+            deletedElsewhereSourceRef.current = 'bootMerge'
+            setDeletedElsewhereId(openId)
+          }
+          // 다른 곳이 지금 문서를 금고로 옮기거나 뺐으면 새 세션으로 다시 연다 (F-407 7.4, resyncFromStore 와 같은 조건)
+          const opened = openId ? merged.docs.find((d) => d.id === openId) : undefined
+          const session = docPathRef.current
+          const syncedPath = session.path === 'realtime' || session.path === 'pending' || session.path === 'fallback' || session.path === 'e2ee'
+          if (resolvedStore.kind === 'server' && opened && session.docId === openId && syncedPath && !e2eeConvertBusyRef.current) {
+            if (Boolean(opened.e2ee) !== (session.path === 'e2ee')) restartDocSession()
+          }
+          return merged.docs
+        })
+      }
+
+      let usedCachedShell = false
+      if (resolvedStore.kind === 'server' && accountState.state === 'in') {
+        try {
+          const cachedList = await (appStore as ServerStore).listCached()
+          const cachedDocIds = new Set(cachedList.docs.map((d) => d.id))
+          if (
+            canShowCachedShell({
+              storeKind: resolvedStore.kind,
+              accountState: accountState.state,
+              hash: parsedHash,
+              cachedDocIds,
+            })
+          ) {
+            usedCachedShell = true
+            const cachedFolders = cachedList.folders
+            const cachedMetaList = sortByUpdatedAtDesc(cachedList.docs.map(stripContent))
+            setFolders(cachedFolders)
+            setDocs(cachedMetaList)
+            scheduleGc()
+
+            const snapshotIds = new Set(cachedMetaList.map((d) => d.id))
+            const seq = ++bootListSeqRef.current
+
+            await finishBootRouting(cachedMetaList, cachedFolders)
+
+            // 뒤 맞추기 — 서버 목록으로 캐시 목록을 맞춘다. 실패해도 새 알림은 없다(캐시를 그대로 둔다) (F-2042 4.2·4.7)
+            Promise.all([appStore.listFolders(), appStore.list()])
+              .then(([newFolders, newDocs]) => applyBootMerge(seq, snapshotIds, newFolders, newDocs))
+              .catch((err) => {
+                console.error('boot_resync_failed', err)
+              })
+          }
+        } catch (err) {
+          // listCached()가 던지면 캐시 먼저를 포기하고 지금 순서로 간다 (F-2042 4.7)
+          console.error('boot_resync_failed', err)
+        }
+      }
+
+      if (!usedCachedShell) {
+        // 폴더를 문서와 함께 받아 먼저 반영한다 — 폴더가 늦으면 그 안의 문서가 잠깐 루트에 보인다
+        const foldersPromise = appStore.listFolders()
+        let list = await appStore.list()
+
+        if (list.length === 0 && getPref('md.firstRunDone', '') === '') {
+          await appStore.create({
+            title: GUIDE_DOC_TITLE,
+            content: GUIDE_DOC_CONTENT_CRLF,
+            lineEnding: 'crlf',
+          })
+          setPref('md.firstRunDone', '1')
+          list = await appStore.list()
+        }
+
+        const folderList = await foldersPromise
+        setFolders(folderList)
+
+        const metaList = sortByUpdatedAtDesc(list.map(stripContent))
+        setDocs(metaList)
+
+        scheduleGc()
+
+        await finishBootRouting(metaList, folderList)
+      }
     }
 
     boot()

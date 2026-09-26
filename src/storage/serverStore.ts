@@ -27,6 +27,11 @@ const E2EE_NO_VAULT_MESSAGE = '금고가 초기화되어 이 기기에서 만든
 // 금고 문서 하나의 createDoc·updateDoc 응답 뒤 다음 updateDoc 까지 최소 간격 (F-405 5.2)
 export const E2EE_SERVER_SAVE_INTERVAL_MS = 10_000
 
+// list() 안에서 바뀐 문서 본문을 동시에 받는 최대 개수 (F-2042 3.2)
+export const BODY_FETCH_CONCURRENCY = 6
+// get(id) 가 진행 중인 list() 의 /api/docs 요약을 기다리는 상한 — 넘으면 캐시를 돌려준다 (F-2042 3.5)
+export const GET_WAIT_FOR_LIST_MS = 3_000
+
 type StoreNotice = { type: 'info' | 'error' | 'update' | 'warn'; message: string }
 
 // putAttachment 사전 검사가 한도 초과를 알릴 때 던진다 — attachImages 가 name 으로 구분한다 (F-221.md 2.3)
@@ -82,6 +87,8 @@ export type ServerStore = Store & {
   resumeE2eeConflicts(): void
   // 진행 중인 보내기 회차를 기다린 뒤 한 회차를 더 돌린다 (5.4)
   flushOutbox(): Promise<void>
+  // 네트워크 없이 캐시 문서·폴더만 읽는다 — 부팅 캐시 먼저 셸이 쓴다 (F-2042 3.6)
+  listCached(): Promise<{ docs: Doc[]; folders: Folder[] }>
 }
 
 // 안 보낸 removeFolder(delete-all) 이 지운 폴더 id 들(자신 포함) — 서버 목록 기준 자손 판정 (F-247.md 3.1)
@@ -215,6 +222,16 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
   // 진행 중인 첨부 원격 GET — id 별로 하나만, 끝나면(성공·실패 모두) Map 에서 뺀다. 위젯이 파괴·재생성돼 같은 id 를 거의 동시에 두 번 부르는 경우를 흡수한다 (F-406 E5)
   const inFlightAttachmentGets = new Map<string, Promise<Attachment | null>>()
+
+  // F-2042 3.2·3.3·3.5 — list() 본문 병렬 받기(키는 "문서id\u0000서버버전")·같은 문서 합치기·get() 이 진행 중인 list() 를 기다림
+  const inFlightBodyFetches = new Map<string, Promise<void>>()
+  type ListSession = {
+    // /api/docs 요약 — 실패하면 null (get() 이 3.5 대로 기다릴 대상)
+    summariesPromise: Promise<api.ServerDocSummary[] | null>
+    // 이번 list() 가 받기로 한 문서 id → 서버 버전. summaries 처리 뒤 채워진다
+    targetsPromise: Promise<Map<string, number>>
+  }
+  const activeListSessions = new Set<ListSession>()
 
   // ----- F-405 5.2·5.3 — 금고 문서 10초 간격·잠긴 동안 충돌 대기 -----
   const e2eeLastResponseAt = new Map<string, number>() // 문서 id → 마지막 응답 시각(페이지 메모리만)
@@ -452,6 +469,72 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     } catch {
       // 다음 list() 때 다시 맞춰진다
     }
+  }
+
+  // 공유받은 문서 — 실패해도 던지지 않는다(빈 배열), 호출한 즉시 시작해 /api/docs 와 동시에 나간다 (F-2042 3.1, D2)
+  async function fetchShared(): Promise<Doc[]> {
+    try {
+      const sharedMeta = await api.getShared()
+      return sharedMeta.map((d) => ({
+        id: d.id,
+        title: d.title,
+        content: '',
+        lineEnding: d.lineEnding,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
+        folderId: d.folderId,
+        pinnedAt: d.pinnedAt,
+        role: d.role,
+        ownerEmail: d.ownerEmail,
+        viaFolder: d.viaFolder ?? null,
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  // 항목을 최대 limit 개씩 동시에, items 순서대로 시작한다 (F-2042 3.2)
+  async function runPool<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
+    let idx = 0
+    async function runner(): Promise<void> {
+      for (;;) {
+        const i = idx++
+        if (i >= items.length) return
+        await worker(items[i])
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runner))
+  }
+
+  function bodyFetchKey(docId: string, version: number): string {
+    return `${docId}\u0000${version}`
+  }
+
+  // 본문을 받아 캐시에 쓴다 — 쓰기 직전 보낼 목록·캐시 버전을 다시 봐 내 편집을 덮지 않는다 (F-2042 3.4)
+  async function fetchAndCacheBody(docId: string, beforeVersion: number | undefined): Promise<void> {
+    try {
+      const full = await api.getDoc(docId)
+      const outboxNow = await cache.getOutbox(userId)
+      if (outboxNow.some((e) => docIdOf(e) === docId)) return
+      const cachedNow = await cache.getDoc(userId, docId)
+      if ((cachedNow?.version ?? undefined) !== beforeVersion) return
+      await cache.putDoc(userId, full)
+    } catch {
+      // 다음 기회에 다시 시도한다
+    }
+  }
+
+  // 같은 문서·같은 서버 버전으로 진행 중인 받기가 있으면 그것을 같이 기다린다 (F-2042 3.3)
+  function ensureBodyFetch(docId: string, targetVersion: number, beforeVersion: number | undefined): Promise<void> {
+    const key = bodyFetchKey(docId, targetVersion)
+    let pending = inFlightBodyFetches.get(key)
+    if (!pending) {
+      pending = fetchAndCacheBody(docId, beforeVersion).finally(() => {
+        if (inFlightBodyFetches.get(key) === pending) inFlightBodyFetches.delete(key)
+      })
+      inFlightBodyFetches.set(key, pending)
+    }
+    return pending
   }
 
   function noticeE2eeFolderMovedUp() {
@@ -875,86 +958,108 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     },
 
     async list() {
-      let summaries: api.ServerDocSummary[] | null = null
+      // 공유받은 문서 — /api/docs 와 동시에 시작해 마지막에 기다린다. 절대 던지지 않는다 (F-2042 3.1, D2)
+      const sharedPromise = fetchShared()
+
+      const summariesPromise: Promise<api.ServerDocSummary[] | null> = (async () => {
+        try {
+          const s = await api.listDocs()
+          patchState({ online: true })
+          return s
+        } catch (err) {
+          if (!(err instanceof ApiError)) throw err
+          if (err.kind === 'unauthorized') patchState({ signedOut: true })
+          if (err.kind === 'network') patchState({ online: false })
+          return null
+        }
+      })()
+
+      let resolveTargets!: (m: Map<string, number>) => void
+      const targetsPromise = new Promise<Map<string, number>>((resolve) => {
+        resolveTargets = resolve
+      })
+      const session: ListSession = { summariesPromise, targetsPromise }
+      activeListSessions.add(session)
+
       try {
-        summaries = await api.listDocs()
-        patchState({ online: true })
-      } catch (err) {
-        if (!(err instanceof ApiError)) throw err
-        if (err.kind === 'unauthorized') patchState({ signedOut: true })
-        if (err.kind === 'network') patchState({ online: false })
-        summaries = null
-      }
+        const summaries = await summariesPromise
 
-      if (summaries) {
-        const outbox = await cache.getOutbox(userId)
-        const pendingDocIds = new Set(outbox.map(docIdOf).filter((v): v is string => Boolean(v)))
+        if (summaries) {
+          const outbox = await cache.getOutbox(userId)
+          const pendingDocIds = new Set(outbox.map(docIdOf).filter((v): v is string => Boolean(v)))
 
-        // 아직 안 보낸 delete-all 이 있으면 그 하위 폴더의 문서를 재조정에서 제외한다 — 자손 판정은 서버 폴더 목록 기준 (F-247.md 3.1)
-        const hasPendingDeleteAll = outbox.some((e) => e.type === 'removeFolder' && e.mode === 'delete-all')
-        let excludedDocIds = new Set<string>()
-        if (hasPendingDeleteAll) {
-          let serverFolders: api.ServerFolder[] = []
-          try {
-            serverFolders = await api.listFolders()
-          } catch {
-            serverFolders = []
+          // 아직 안 보낸 delete-all 이 있으면 그 하위 폴더의 문서를 재조정에서 제외한다 — 자손 판정은 서버 폴더 목록 기준 (F-247.md 3.1)
+          const hasPendingDeleteAll = outbox.some((e) => e.type === 'removeFolder' && e.mode === 'delete-all')
+          let excludedDocIds = new Set<string>()
+          if (hasPendingDeleteAll) {
+            let serverFolders: api.ServerFolder[] = []
+            try {
+              serverFolders = await api.listFolders()
+            } catch {
+              serverFolders = []
+            }
+            const excludedFolderIds = excludedByPendingDeleteAll(outbox, serverFolders)
+            excludedDocIds = new Set(
+              summaries.filter((d) => d.folderId && excludedFolderIds.has(d.folderId)).map((d) => d.id),
+            )
           }
-          const excludedFolderIds = excludedByPendingDeleteAll(outbox, serverFolders)
-          excludedDocIds = new Set(
-            summaries.filter((d) => d.folderId && excludedFolderIds.has(d.folderId)).map((d) => d.id),
-          )
+
+          const serverIds = new Set(summaries.map((d) => d.id))
+          const keepIds = new Set([...serverIds, ...pendingDocIds])
+          for (const id of excludedDocIds) keepIds.delete(id)
+          await cache.deleteDocsNotIn(userId, keepIds)
+
+          const targets = new Map<string, number>()
+          const toFetch: Array<{ id: string; version: number; beforeVersion: number | undefined }> = []
+          for (const summary of summaries) {
+            if (pendingDocIds.has(summary.id)) continue
+            if (excludedDocIds.has(summary.id)) continue
+            const cached = await cache.getDoc(userId, summary.id)
+            if (cached && cached.version === summary.version) continue
+            targets.set(summary.id, summary.version)
+            toFetch.push({ id: summary.id, version: summary.version, beforeVersion: cached?.version })
+          }
+          resolveTargets(targets)
+
+          // 최근 문서(서버 응답 순서)부터, 최대 BODY_FETCH_CONCURRENCY 개씩 동시에 (F-2042 3.2)
+          await runPool(toFetch, BODY_FETCH_CONCURRENCY, (item) => ensureBodyFetch(item.id, item.version, item.beforeVersion))
+        } else {
+          resolveTargets(new Map())
         }
 
-        const serverIds = new Set(summaries.map((d) => d.id))
-        const keepIds = new Set([...serverIds, ...pendingDocIds])
-        for (const id of excludedDocIds) keepIds.delete(id)
-        await cache.deleteDocsNotIn(userId, keepIds)
+        const cached = await cache.getDocs(userId)
+        await refreshPending()
+        const owned = cached.map((d) => ({ ...toDoc(d), role: 'owner' as const }))
 
-        for (const summary of summaries) {
-          if (pendingDocIds.has(summary.id)) continue
-          if (excludedDocIds.has(summary.id)) continue
-          const cached = await cache.getDoc(userId, summary.id)
-          if (cached && cached.version === summary.version) continue
-          try {
-            const full = await api.getDoc(summary.id)
-            await cache.putDoc(userId, full)
-          } catch {
-            // 네트워크 문제 등은 다음 기회에 다시 시도한다
-          }
-        }
+        // 공유받은 문서(F-212.md 2.4) — 캐시하지 않고 매번 새로 읽는다. 오프라인·오류면 빈 목록으로 조용히 건너뛴다
+        const shared = await sharedPromise
+
+        return sortByUpdatedAtDesc([...owned, ...shared])
+      } finally {
+        activeListSessions.delete(session)
       }
-
-      const cached = await cache.getDocs(userId)
-      await refreshPending()
-      const owned = cached.map((d) => ({ ...toDoc(d), role: 'owner' as const }))
-
-      // 공유받은 문서(F-212.md 2.4) — 캐시하지 않고 매번 새로 읽는다. 오프라인·오류면 빈 목록으로 조용히 건너뛴다
-      let shared: Doc[] = []
-      try {
-        const sharedMeta = await api.getShared()
-        shared = sharedMeta.map((d) => ({
-          id: d.id,
-          title: d.title,
-          content: '',
-          lineEnding: d.lineEnding,
-          createdAt: d.createdAt,
-          updatedAt: d.updatedAt,
-          folderId: d.folderId,
-          pinnedAt: d.pinnedAt,
-          role: d.role,
-          ownerEmail: d.ownerEmail,
-          viaFolder: d.viaFolder ?? null,
-        }))
-      } catch {
-        shared = []
-      }
-
-      return sortByUpdatedAtDesc([...owned, ...shared])
     },
 
     async get(id) {
-      const cached = await cache.getDoc(userId, id)
+      let cached = await cache.getDoc(userId, id)
+
+      // 진행 중인 list() 가 있으면 그 요약을 기다린다 — 최대 GET_WAIT_FOR_LIST_MS (F-2042 3.5)
+      const session = [...activeListSessions].pop()
+      if (session) {
+        const TIMEOUT = Symbol('timeout')
+        const outcome = await Promise.race([
+          (async () => ({ summaries: await session.summariesPromise, targets: await session.targetsPromise }))(),
+          new Promise<typeof TIMEOUT>((resolve) => setTimeout(() => resolve(TIMEOUT), GET_WAIT_FOR_LIST_MS)),
+        ])
+        if (outcome !== TIMEOUT) {
+          const targetVersion = outcome.targets.get(id)
+          if (targetVersion !== undefined) {
+            await ensureBodyFetch(id, targetVersion, cached?.version)
+            cached = await cache.getDoc(userId, id)
+          }
+        }
+      }
+
       if (cached) return toDoc(cached)
       try {
         const full = await api.getDoc(id)
@@ -962,6 +1067,16 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         return toDoc(full)
       } catch {
         return null
+      }
+    },
+
+    // 네트워크 없이 캐시만 읽는다 — 부팅 캐시 먼저 셸이 쓴다. refreshPending 은 부르지 않는다(읽기 전용) (F-2042 3.6)
+    async listCached() {
+      const cachedDocs = await cache.getDocs(userId)
+      const cachedFolders = await cache.getFolders(userId)
+      return {
+        docs: sortByUpdatedAtDesc(cachedDocs.map((d) => ({ ...toDoc(d), role: 'owner' as const }))),
+        folders: cachedFolders.map(toFolder),
       }
     },
 
