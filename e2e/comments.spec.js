@@ -367,18 +367,17 @@ test.describe('F-505 E10 .md 내보내기 바이트 불변(V7)', () => {
   })
 })
 
-function serverDoc(id, { title, content }) {
-  const now = Date.now()
-  return { id, title, content, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: now, updatedAt: now }
+function serverDoc(id, { title, content, updatedAt = Date.now() }) {
+  return { id, title, content, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: updatedAt, updatedAt }
 }
 
-async function openServerDoc(page, room, user = { id: 'u1', email: 'a@b.com' }, docs = [{ id: DOC, title: '함께 쓰는 문서', content: CONTENT }]) {
+async function openServerDoc(page, room, user = { id: 'u1', email: 'a@b.com' }, docs = [{ id: DOC, title: '함께 쓰는 문서', content: CONTENT }], hash = `#/d/${DOC}`) {
   const server = await fakeServer(page, user)
   await room.install(page.context(), user)
   for (const d of docs) server.docs.set(d.id, serverDoc(d.id, d))
   await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
   await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
-  await page.goto(`/#/d/${DOC}`)
+  await page.goto(`/${hash}`)
   await expect(page.locator('.cm-content').first()).toContainText('셋째 줄')
   return server
 }
@@ -390,12 +389,19 @@ test.describe('F-505 E11 주소로 이동', () => {
     const cat = CONTENT.indexOf('고양이')
     room.putComment(DOC, 't1', { from: cat, to: cat + 3, body: '서버 댓글' })
 
-    await openServerDoc(page, room)
-    await page.goto(`/#/d/${DOC}/c/t1`)
+    // 부팅 해시로 들어감
+    await openServerDoc(page, room, undefined, undefined, `#/d/${DOC}/c/t1`)
 
     await expect(railOrSheet(page)).toBeVisible()
     await expect(page.locator('.comment-thread[data-active="true"]')).toHaveAttribute('data-thread-id', 't1')
     await expect(page.locator('.cm-comment-anchor')).toBeInViewport()
+    await expect(page).toHaveURL(/#\/d\/comment-doc-1$/)
+
+    // 이미 그 문서를 보는 중에 해시만 바뀜(handleHashChange 같은 문서 분기) — 활성을 끈 뒤 다시 들어간다
+    await line(page, '첫째 줄').click()
+    await expect(page.locator('.comment-thread[data-active="true"]')).toHaveCount(0)
+    await page.goto(`/#/d/${DOC}/c/t1`)
+    await expect(page.locator('.comment-thread[data-active="true"]')).toHaveAttribute('data-thread-id', 't1')
     await expect(page).toHaveURL(/#\/d\/comment-doc-1$/)
 
     await page.goto(`/#/d/${DOC}/c/없는id`)
@@ -410,8 +416,9 @@ test.describe('F-505 E12 두 창', () => {
     const OTHER = 'comment-doc-2'
     room.seed(DOC, { content: CONTENT, title: '함께 쓰는 문서' })
     room.seed(OTHER, { content: '다른 본문', title: '다른 문서' })
+    // 다른 문서를 더 최근에 고쳐 둔다 — 댓글이 DOC 의 updatedAt 을 올리면 사이드바 순서가 뒤집힌다(11.1)
     const docs = [
-      { id: DOC, title: '함께 쓰는 문서', content: CONTENT },
+      { id: DOC, title: '함께 쓰는 문서', content: CONTENT, updatedAt: Date.now() - 60_000 },
       { id: OTHER, title: '다른 문서', content: '다른 본문' },
     ]
 
@@ -424,6 +431,11 @@ test.describe('F-505 E12 두 창', () => {
       await openServerDoc(b, room, { id: 'u2', email: 'b2@example.com' }, docs)
 
       const orderBefore = await a.locator('.sidebar .doc-item-btn').allTextContents()
+      expect(orderBefore[0]).toContain('다른 문서')
+
+      // 열린 스레드 없이 연 문서라 B 의 레일은 닫혀 있다(5.1 initialCommentRailOpen(null, 0)) — 먼저 연다
+      await commentToggle(b).click()
+      await expect(rail(b)).toBeVisible()
 
       await selectCat(a)
       await addCommentViaShortcut(a, 'A 의 댓글')
@@ -441,6 +453,8 @@ test.describe('F-505 E12 두 창', () => {
       await threadCards(a).first().getByRole('button', { name: '해결' }).click()
       await expect(threadCards(b)).toHaveCount(1)
 
+      // 사이드바 updatedAt 은 방 Doc 트랜잭션 700ms 뒤에 바뀐다(SAVE_DEBOUNCE_MS) — 그보다 오래 기다려 안 바뀜을 본다
+      await a.waitForTimeout(1_000)
       const orderAfter = await a.locator('.sidebar .doc-item-btn').allTextContents()
       expect(orderAfter).toEqual(orderBefore)
     } finally {
@@ -661,7 +675,8 @@ test.describe('F-505 E18 상단바 배지', () => {
     await expect(commentToggle(page)).toHaveAttribute('aria-label', '댓글 1개')
     await expect(page.locator('.comment-badge')).toHaveText('1')
 
-    await commentToggle(page).click()
+    // 열린 스레드가 있고 md.commentRail 이 없어 레일이 이미 열려 있다(5.1) — 토글을 누르면 닫힌다
+    await expect(rail(page)).toBeVisible()
     await threadCards(page).first().getByRole('button', { name: '해결' }).click()
 
     await expect(commentToggle(page)).toHaveAttribute('aria-label', '댓글 0개')

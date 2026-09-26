@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import CommentThread from './CommentThread'
 import CommentComposer from './CommentComposer'
-import { layoutRailCards, COMMENT_CARD_GAP, type CommentAccess } from './commentRail'
+import { layoutRailCards, commentRailExtra, COMMENT_CARD_GAP, type CommentAccess } from './commentRail'
 import { checkCommentCapacity, type CommentActor, type CommentThread as CommentThreadData } from '../lib/docComments'
 import type { CommentLayout } from '../editor/commentMarks'
 import { COMMENT_TEXT, type CommentWriteFailure, type ComposerState, type ReplyState } from './useDocComments'
@@ -36,6 +36,8 @@ type CommentRailProps = {
   actorFor: CommentActor | null
   scrollElement: HTMLElement | null
   focusEditor: () => void
+  // 5.6 레일 여분(px) — App 이 .content-area 의 --comment-rail-extra 로 넣는다
+  onRailExtraChange: (px: number) => void
 }
 
 const HEAD_ID = 'comment-rail-head-title'
@@ -68,6 +70,7 @@ export default function CommentRailPanel({
   actorFor,
   scrollElement,
   focusEditor,
+  onRailExtraChange,
 }: CommentRailProps) {
   const headRef = useRef<HTMLDivElement | null>(null)
   const trackRef = useRef<HTMLDivElement | null>(null)
@@ -122,9 +125,10 @@ export default function CommentRailPanel({
     return layoutRailCards(inputs, activeForLayout, COMMENT_CARD_GAP, 0)
   }, [cards, activeId, composer, mode, cardHeights])
 
+  // offsetHeight — 정수이고 transform 과 무관하다. getBoundingClientRect 는 translateY 소수 자리에 따라 높이가 1e-5 쯤 흔들려 높이 → 위치 → 높이 고리로 렌더가 멈추지 않았다
   function measureCard(id: string, el: HTMLElement | null) {
     if (!el) return
-    const h = el.getBoundingClientRect().height
+    const h = el.offsetHeight
     setCardHeights((prev) => {
       if (prev.get(id) === h) return prev
       const next = new Map(prev)
@@ -141,9 +145,10 @@ export default function CommentRailPanel({
       setCardHeights((prev) => {
         let next: Map<string, number> | null = null
         for (const entry of entries) {
-          const id = (entry.target as HTMLElement).dataset.cardId
+          const target = entry.target as HTMLElement
+          const id = target.dataset.cardId
           if (!id) continue
-          const h = entry.contentRect.height
+          const h = target.offsetHeight
           if (prev.get(id) !== h) {
             if (!next) next = new Map(prev)
             next.set(id, h)
@@ -169,6 +174,23 @@ export default function CommentRailPanel({
     scrollElement.addEventListener('scroll', apply, { passive: true })
     return () => scrollElement.removeEventListener('scroll', apply)
   }, [mode, scrollElement, tops])
+
+  // ----- 5.6 레일 여분 — 마지막 카드가 문서 끝을 넘으면 본문 아래 여백을 늘린다. 적용된 값은 DOM 에서 읽어 여분을 뺀 높이와 비교한다 -----
+  useLayoutEffect(() => {
+    if (mode !== 'rail' || !scrollElement) {
+      onRailExtraChange(0)
+      return
+    }
+    let bottom = 0
+    cards.forEach((card, i) => {
+      const height = cardHeights.get(card.id)
+      if (height !== undefined) bottom = Math.max(bottom, (tops[i] ?? card.anchorTop) + height)
+    })
+    const applied = parseFloat(getComputedStyle(scrollElement).getPropertyValue('--comment-rail-extra')) || 0
+    onRailExtraChange(commentRailExtra(bottom, scrollElement.scrollHeight, applied))
+  }, [mode, scrollElement, cards, tops, cardHeights, onRailExtraChange])
+
+  useEffect(() => () => onRailExtraChange(0), [onRailExtraChange])
 
   // 카드 영역이 스스로 스크롤하지 않게 — 포커스 이동으로 생기는 스크롤을 되돌린다 (5.3 끝)
   useEffect(() => {

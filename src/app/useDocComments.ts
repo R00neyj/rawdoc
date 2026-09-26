@@ -383,8 +383,11 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
   )
 
   // ----- 7.6 해시 이동 -----
+  // 이미 준비된 문서에 대상을 잡으면 아래 effect 의 다른 의존성이 안 바뀌어 판정이 돌지 않는다 — 잡을 때마다 올려 다시 돌린다
+  const [pendingSeq, setPendingSeq] = useState(0)
   const setPendingTarget = useCallback((target: PendingCommentTarget) => {
     pendingTargetRef.current = target
+    setPendingSeq((n) => n + 1)
   }, [])
 
   useEffect(() => {
@@ -421,7 +424,7 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
       showNotice({ type: 'info', message: COMMENT_TEXT.notFound })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mountKey, access, everSynced, layout, threads])
+  }, [mountKey, access, everSynced, layout, threads, pendingSeq])
 
   // ----- 7.1 달기 -----
   const beginComment = useCallback(() => {

@@ -117,3 +117,14 @@ export function commentBadgeText(openThreadCount: number): string | null {
   if (openThreadCount <= 99) return String(openThreadCount)
   return '99+'
 }
+
+// 5.6 레일 여분 — 카드 아랫변 + 간격이 지금 여분을 뺀 스크롤 높이를 넘는 만큼(px, 올림). 카드가 없으면 0
+export function commentRailExtra(
+  cardsBottom: number,
+  scrollHeight: number,
+  appliedExtra: number,
+  gap: number = COMMENT_CARD_GAP,
+): number {
+  if (cardsBottom <= 0) return 0
+  return Math.max(0, Math.ceil(cardsBottom + gap - (scrollHeight - appliedExtra)))
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   commentAccess,
   commentBadgeText,
+  commentRailExtra,
   commentRailMode,
   formatCommentTime,
   initialCommentRailOpen,
@@ -203,5 +204,24 @@ describe('commentBadgeText — U8b', () => {
     expect(commentBadgeText(1)).toBe('1')
     expect(commentBadgeText(99)).toBe('99')
     expect(commentBadgeText(100)).toBe('99+')
+  })
+})
+
+describe('commentRailExtra — 5.6 레일 여분 (F-505.md 5.6)', () => {
+  it('마지막 카드 아랫변 + 간격이 스크롤 높이 안이면 0', () => {
+    expect(commentRailExtra(500, 1000, 0)).toBe(0)
+    expect(commentRailExtra(992, 1000, 0)).toBe(0)
+  })
+  it('넘으면 넘는 만큼 + 간격(8px)', () => {
+    expect(commentRailExtra(1000, 1000, 0)).toBe(8)
+    expect(commentRailExtra(1100, 1000, 0)).toBe(108)
+  })
+  it('비교할 높이는 지금 여분을 뺀 스크롤 높이 — 여분이 여분을 부르지 않는다', () => {
+    expect(commentRailExtra(1100, 1108, 108)).toBe(108)
+    expect(commentRailExtra(900, 1108, 108)).toBe(0)
+  })
+  it('소수는 올림, 카드가 없으면(아랫변 0) 0', () => {
+    expect(commentRailExtra(1000.4, 1000, 0)).toBe(9)
+    expect(commentRailExtra(0, 0, 0)).toBe(0)
   })
 })

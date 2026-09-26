@@ -1179,7 +1179,7 @@ body.sidebar-resizing {
   --content-max: min(var(--content-width), calc(100% - 280px - 48px));
 }
 
-/* 5.6 레일 여분 — 마지막 카드가 문서 끝을 넘으면 App.tsx 가 이 값을 채운다. 기본 0 (미구현, 5.6 참고) */
+/* 5.6 레일 여분 — 마지막 카드가 문서 끝을 넘으면 App.tsx 가 인라인으로 덮는다. 기본 0. .cm-content 아래 패딩에 더해진다 */
 .content-area {
   --comment-rail-extra: 0px;
 }
@@ -2983,7 +2983,7 @@ body.sidebar-resizing {
 /* 문서 위아래 여백 — 편집·원문·보기·공유 화면 공통 토큰 (F-143 3.10) */
 .cm-host .cm-editor .cm-content {
   caret-color: var(--accent);
-  padding: var(--doc-pad-top) 0 var(--doc-pad-bottom);
+  padding: var(--doc-pad-top) 0 calc(var(--doc-pad-bottom) + var(--comment-rail-extra, 0px));
 }
 
 /* CM6 기본 테마는 커서 테두리를 black 고정값으로 준다 — 테마를 따르게 덮는다

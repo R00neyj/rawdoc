@@ -2770,6 +2770,8 @@ export default function App() {
   // 떠 있는 `댓글 달기` 버튼 — 선택 시작 줄 높이(문서 좌표)를 스크롤에 맞춰 화면 좌표로 (F-505 7.1 10번)
   const [floatingCommentAnchor, setFloatingCommentAnchor] = useState<number | null>(null)
   const [editorScrollTop, setEditorScrollTop] = useState(0)
+  // 레일 여분(px) — 레일이 보이는 동안만 .content-area 의 --comment-rail-extra 로 (F-505 5.6)
+  const [commentRailExtra, setCommentRailExtra] = useState(0)
   useEffect(() => {
     const scroller = editorRef.current?.view.scrollDOM
     if (!scroller) return
@@ -4984,6 +4986,7 @@ export default function App() {
               ref={contentAreaRef}
               hidden={Boolean(sharedDoc) || Boolean(mapRoute)}
               data-comment-rail-open={commentRailVisible || undefined}
+              style={commentRailVisible && commentRailExtra > 0 ? ({ '--comment-rail-extra': `${commentRailExtra}px` } as CSSProperties) : undefined}
             >
               <div className="editor-slot" hidden={viewMode === 'view'}>
                 {openDoc?.id === currentDocId && (
@@ -5065,6 +5068,7 @@ export default function App() {
                   actorFor={comments.actorFor}
                   scrollElement={editorRef.current?.view.scrollDOM ?? null}
                   focusEditor={() => editorRef.current?.focus()}
+                  onRailExtraChange={setCommentRailExtra}
                 />
               )}
               {commentAvailable &&
