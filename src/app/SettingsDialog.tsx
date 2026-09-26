@@ -403,26 +403,49 @@ export default function SettingsDialog({
     }
     if (id === 'data') {
       // 로컬 앱·로그인 계정 전용, PublicView 는 안 준다 (F-281.md 3.6, F-282.md 3.1)
+      // 내보내기·가져오기 두 묶음, 버튼마다 한 줄 설명 (tweak 2026-09-26).
+      // .dialog-field 를 쓰지 않는다 — 설정 라벨을 세는 선택자(settingsTabs.spec 데이터 탭 0개)에 걸린다
+      // 두 묶음이 한 격자를 같이 쓴다 — 버튼 칸·설명 칸이 묶음을 넘어 맞춰진다
       return (
-        <div className="dialog-btn-row">
-          <button type="button" className="dialog-btn" onClick={onExportAll} disabled={exportAllDisabled}>
-            전체 내보내기
-          </button>
-          {onExportVault && (
-            <button type="button" className="dialog-btn" onClick={onExportVault} disabled={exportAllDisabled}>
-              옵시디언 볼트로 내보내기
-            </button>
-          )}
-          {exportAllDisabled && <span className="dialog-note">온라인일 때 내보낼 수 있습니다</span>}
-          {onImport && (
-            <button type="button" className="dialog-btn" onClick={onImport}>
-              가져오기…
-            </button>
-          )}
-          {onImportFolder && (
-            <button type="button" className="dialog-btn" onClick={onImportFolder}>
-              폴더 가져오기…
-            </button>
+        <div className="data-grid">
+          <section className="data-section" aria-labelledby="data-export-title">
+            <h3 id="data-export-title" className="data-section-title">내보내기</h3>
+            <div className="data-row">
+              <button type="button" className="dialog-btn" onClick={onExportAll} disabled={exportAllDisabled}>
+                전체 내보내기
+              </button>
+              <p className="data-row-desc">모든 문서·폴더·이미지를 zip 하나로 받습니다. 이 앱의 가져오기로 다시 들일 수 있습니다</p>
+            </div>
+            {onExportVault && (
+              <div className="data-row">
+                <button type="button" className="dialog-btn" onClick={onExportVault} disabled={exportAllDisabled}>
+                  옵시디언 볼트로 내보내기
+                </button>
+                <p className="data-row-desc">옵시디언에서 바로 열 수 있는 폴더 구조의 zip 으로 받습니다</p>
+              </div>
+            )}
+            {exportAllDisabled && <p className="dialog-note data-row-note">온라인일 때 내보낼 수 있습니다</p>}
+          </section>
+          {(onImport || onImportFolder) && (
+            <section className="data-section" aria-labelledby="data-import-title">
+              <h3 id="data-import-title" className="data-section-title">가져오기</h3>
+              {onImport && (
+                <div className="data-row">
+                  <button type="button" className="dialog-btn" onClick={onImport}>
+                    가져오기…
+                  </button>
+                  <p className="data-row-desc">전체 내보내기 zip, 옵시디언 볼트 zip, .md 파일을 모은 zip 을 불러옵니다</p>
+                </div>
+              )}
+              {onImportFolder && (
+                <div className="data-row">
+                  <button type="button" className="dialog-btn" onClick={onImportFolder}>
+                    폴더 가져오기…
+                  </button>
+                  <p className="data-row-desc">옵시디언 볼트 같은 폴더를 골라 폴더 구조 그대로 불러옵니다</p>
+                </div>
+              )}
+            </section>
           )}
         </div>
       )

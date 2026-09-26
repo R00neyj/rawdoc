@@ -1728,6 +1728,55 @@ body.sidebar-resizing {
   text-align: left;
 }
 
+/* 설정 데이터 탭 — 내보내기·가져오기 묶음, 버튼 + 한 줄 설명 (tweak 2026-09-26) */
+/* 격자 하나 — 묶음·행은 display: contents 로 풀어 버튼 칸(가장 넓은 버튼 폭)과 설명 칸을 모든 행이 같이 쓴다 */
+.data-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.data-section,
+.data-row {
+  display: contents;
+}
+
+.data-section-title {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: normal;
+  color: var(--muted);
+}
+
+.data-section + .data-section .data-section-title {
+  margin-top: 12px;
+}
+
+.data-row .dialog-btn {
+  width: 100%;
+}
+
+.data-grid .data-row-desc {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.data-grid .data-row-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  text-align: left;
+}
+
+@media (max-width: 459px) {
+  .data-grid {
+    grid-template-columns: 1fr;
+    row-gap: 4px;
+  }
+}
+
 .dialog-actions button,
 .dialog-btn {
   border: 1px solid var(--rule);
