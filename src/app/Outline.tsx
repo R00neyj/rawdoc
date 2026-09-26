@@ -30,12 +30,12 @@ type OutlineProps = {
   viewMode: string
   // 주면 이 값으로 여백을 판정하고, 값이 바뀌면 다시 판정한다. 안 주면 --content-max 를 읽는다 (F-2043 3.4)
   contentWidth?: number
-  // 참이면 여백과 무관하게 목차 버튼 모드 — 댓글 레일이 보이는 동안 (F-505 3.6)
-  buttonOnly?: boolean
+  // 참이면 여백 판정 없이 선 목차 — 레일이 있으면 편집기 오른쪽 여백이 늘 164px 이상이다 (F-505 3.6, 2026-09-27 tweak)
+  railOpen?: boolean
 }
 
 // 보기 모드에서도 Editor 는 hidden 으로 마운트돼 있어 editorRef 의 view.state 를 쓴다 (F-123.md 3.3)
-export default function Outline({ editorRef, containerRef, viewerRef, docId, viewMode, contentWidth, buttonOnly }: OutlineProps) {
+export default function Outline({ editorRef, containerRef, viewerRef, docId, viewMode, contentWidth, railOpen }: OutlineProps) {
   const [headings, setHeadings] = useState<Heading[]>([])
   const [fits, setFits] = useState(false)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
@@ -198,7 +198,7 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
     setCardOpen(false) // F-229 2.4 — 포커스는 버튼으로 돌아가지 않는다
   }
 
-  if (buttonOnly || !fits) {
+  if (!railOpen && !fits) {
     const cardWidth = containerSize.width > 0 ? Math.min(280, containerSize.width - POPUP_CARD_MARGIN.width) : 280
     const cardMaxHeight =
       containerSize.height > 0 ? Math.min(window.innerHeight * 0.6, containerSize.height - POPUP_CARD_MARGIN.height) : undefined

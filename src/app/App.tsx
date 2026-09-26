@@ -5401,7 +5401,7 @@ export default function App() {
                   docId={currentDocId}
                   viewMode={viewMode}
                   contentWidth={contentWidthPref}
-                  buttonOnly={commentRailVisible}
+                  railOpen={commentRailVisible}
                 />
               )}
               <WikiLinkPreview

@@ -643,7 +643,7 @@ test.describe('F-505 E16 IME 조합 중', () => {
 })
 
 test.describe('F-505 E17 md.commentRail 처음값', () => {
-  test('open 을 미리 넣고 댓글 없는 문서 — 빈 문구·목차 버튼 모드. 닫으면 closed·목차 선 모드로', async ({ page }) => {
+  test('open 을 미리 넣고 댓글 없는 문서 — 빈 문구·목차 선 모드 그대로. 닫으면 closed·목차 선 모드 (선 모드는 2026-09-27 tweak)', async ({ page }) => {
     await setPrefBeforeLoad(page, 'md.commentRail', 'open')
     await openApp(page)
     await importMarkdown(page, { content: '# 제목\n\n## 부제목\n\n본문\n' })
@@ -652,8 +652,8 @@ test.describe('F-505 E17 md.commentRail 처음값', () => {
     await expect(rail(page).locator('.comment-rail-empty')).toHaveText(
       '이 문서에 댓글이 없습니다. 본문을 선택하고 댓글을 달아 보세요.',
     )
-    await expect(page.locator('.outline-popup')).toBeVisible()
-    await expect(page.locator('.outline')).toHaveCount(0)
+    await expect(page.locator('.outline')).toBeVisible()
+    await expect(page.locator('.outline-popup')).toHaveCount(0)
 
     await commentToggle(page).click()
     await expect(rail(page)).toHaveCount(0)
