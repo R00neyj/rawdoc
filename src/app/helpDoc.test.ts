@@ -6,6 +6,7 @@ import { E2EE_DEFAULT_LOCK_MINUTES } from '../e2ee/keyring'
 import { E2EE_MAX_PLAIN_CONTENT_BYTES } from '../lib/e2eeLimits'
 import { WIKI_PREVIEW_OPEN_DELAY_MS } from './wikiPreview'
 import { COMMENT_BODY_MAX, COMMENTS_PER_DOC_MAX } from '../lib/docComments'
+import { RETAIN_MS } from '../storage/yjsStore'
 
 // F-257.md 2장 표의 절 순서 그대로
 const SECTION_ORDER = [
@@ -138,15 +139,12 @@ describe('HELP_DOC_CONTENT', () => {
     expect(HELP_DOC_CONTENT).not.toContain('파일을 그대로 장기기억으로')
   })
 
-  it('U22: 저장 절 끝에 한도 문단이 있고, ## 한도 절은 없다 (F-2030 8장)', () => {
-    const limitParagraph =
-      '로그인한 계정은 문서 본문을 모두 합쳐 100MB, 문서 10,000개까지 서버에 저장할 수 있습니다. 저장·이동·삭제처럼 서버에 쓰는 일은 계정마다 하루 5,000번까지이고, 한국 시간 오전 9시(UTC 자정)에 다시 셉니다. 한도에 닿아도 편집한 내용은 이 브라우저에 남아 있다가, 공간을 비우거나 시간이 지나면 서버로 올라갑니다.'
-    expect(HELP_DOC_CONTENT).toContain(limitParagraph)
+  it('U22: 저장 절 본문에 로그인한 계정은 으로 시작하는 한도 문단이 정확히 하나 있고, ## 이미지 앞이며, ## 한도 절은 없다 (수치는 worker/guideLimits.test.ts F-2047 U5)', () => {
     const saveIdx = HELP_DOC_CONTENT.indexOf('## 저장')
-    const limitIdx = HELP_DOC_CONTENT.indexOf(limitParagraph)
     const imageIdx = HELP_DOC_CONTENT.indexOf('## 이미지')
-    expect(limitIdx).toBeGreaterThan(saveIdx)
-    expect(limitIdx).toBeLessThan(imageIdx)
+    const section = HELP_DOC_CONTENT.slice(saveIdx, imageIdx)
+    const limitParagraphs = section.split(/\n\n+/).filter((p) => p.startsWith('로그인한 계정은 '))
+    expect(limitParagraphs.length).toBe(1)
     expect(HELP_DOC_CONTENT).not.toContain('## 한도')
   })
 
@@ -304,5 +302,26 @@ describe('F-2046 도움말 두 절 (## 내보내기·가져오기 / ## 옵시디
     expect(exportSection.body).not.toContain('옵시디언')
     expect(exportSection.body).not.toContain('불러오')
     expect(exportSection.body).toContain('`전체 내보내기`')
+  })
+})
+
+// F-2047.md 6.1 U1
+describe('F-2047 도움말 두 절 (## 저장 / ## 설치와 오프라인)', () => {
+  it('U1: 두 절 모두 사용법 글 줄로 끝나고, 수치·화면 글자가 상수와 맞으며, 어긋난 문구가 없다', () => {
+    const save = appSections().find((s) => s.name === '저장')!
+    const install = appSections().find((s) => s.name === '설치와 오프라인')!
+
+    const saveParagraphs = save.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    const installParagraphs = install.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(saveParagraphs[saveParagraphs.length - 1]).toBe('사용법 글: [오프라인과 동기화](/guides/offline-sync)')
+    expect(installParagraphs[installParagraphs.length - 1]).toBe('사용법 글: [오프라인과 동기화](/guides/offline-sync)')
+
+    expect(install.body).toContain('`앱 설치`')
+    expect(install.body).toContain('`새로고침`')
+    expect(install.body).toContain(`최근 ${RETAIN_MS / 86_400_000}일`)
+    expect(install.body).not.toContain('설치해 두면')
+
+    expect(save.body).toContain('상태바')
+    expect(save.body).not.toContain('오프라인이어도 편집을 계속할 수 있습니다')
   })
 })

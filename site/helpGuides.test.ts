@@ -18,6 +18,8 @@ import { buildE2eeConvertDialogText } from '../src/e2ee/convert'
 import { PEER_AVATARS_MAX, PEER_AVATARS_MAX_NARROW } from '../src/lib/peers'
 import { DISCONNECT_NOTICE_MS } from '../src/app/liveDoc'
 import { MAX_CONTENT_BYTES, MAX_ATTACHMENT_BYTES } from '../src/app/importWorkspace'
+import { E2EE_SERVER_MAX_CONTENT_BYTES } from '../src/lib/e2eeLimits'
+import { RETAIN_MS } from '../src/storage/yjsStore'
 
 const GUIDES_DIR = fileURLToPath(new URL('../content/guides', import.meta.url))
 
@@ -64,13 +66,15 @@ function helpLinks(): Array<{ slug: string; label: string }> {
   return out
 }
 
-// 링크가 들어 있는 도움말 절 하나의 본문 — 절 제목 줄과 사용법 글 줄 자신은 뺀다
+// 그 글을 링크하는 도움말 절 모두의 본문 — 절 제목 줄과 사용법 글 줄 자신은 떼고 빈 줄 두 개로 이어 붙인다 (F-2047 R4)
 function helpSectionBodyFor(slug: string): string {
   const needle = `/guides/${slug})`
-  const sections = HELP_DOC_CONTENT.split(/\n(?=## )/)
-  const section = sections.find((s) => s.includes(needle))
-  if (!section) return ''
-  return section.replace(/^## .+\n\n?/, '').replace(/(?:\n\n)?사용법 글: \[[^\]]+\]\([^)]+\)\s*$/, '')
+  const sections = HELP_DOC_CONTENT.split(/\n(?=## )/).filter((s) => s.includes(needle))
+  return sections
+    .map((section) =>
+      section.replace(/^## .+\n\n?/, '').replace(/(?:\n\n)?사용법 글: \[[^\]]+\]\([^)]+\)\s*$/, ''),
+    )
+    .join('\n\n')
 }
 
 describe('U4 링크 대상 (R3)', () => {
@@ -265,6 +269,21 @@ describe('F-2046 옵시디언 볼트 글', () => {
   it('U4: markdown-portability 가 이 글을 가리킨다 (R8)', () => {
     const raw = readGuide('markdown-portability')
     expect(raw).toContain('](/guides/obsidian-vault)')
+  })
+})
+
+// F-2047.md 6.2 U2·U3
+describe('F-2047 오프라인과 동기화 글', () => {
+  it('U2: 글의 앱 쪽 수치가 상수에서 만든 문자열과 같다 (R5)', () => {
+    const raw = readGuide('offline-sync')
+    expect(raw).toContain(`문서 하나 ${E2EE_SERVER_MAX_CONTENT_BYTES / 1_000_000}MB`)
+    expect(raw).toContain(`최근 ${RETAIN_MS / 86_400_000}일`)
+  })
+
+  it('U3: 글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(readGuide('offline-sync')).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
   })
 })
 
