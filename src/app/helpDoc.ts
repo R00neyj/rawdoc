@@ -264,7 +264,7 @@ const APP_SECTIONS = `## 이 앱은
 ## 단축키
 
 - \`Ctrl+P\` 명령 팔레트 — 템플릿 삽입, 인쇄, 금고 잠그기·열기
-- \`Ctrl+Shift+F\` 여러 문서에서 찾기, \`Ctrl+F\` 이 문서에서 찾기, \`Ctrl+H\` 이 문서에서 바꾸기
+- \`Ctrl+Shift+F\` 모든 문서 검색, \`Ctrl+F\` 이 문서에서 찾기, \`Ctrl+H\` 이 문서에서 바꾸기
 - \`Ctrl+B\` 굵게, \`Ctrl+I\` 기울임, \`Ctrl+K\` 링크
 - \`Ctrl+Alt+M\` 댓글 달기, 댓글 입력 칸에서 \`Ctrl+Enter\` 보내기
 - \`Esc\` 다음 \`Tab\`: 편집 영역에서 빠져나가기
