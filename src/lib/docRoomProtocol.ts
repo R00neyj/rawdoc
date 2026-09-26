@@ -1,6 +1,7 @@
 // 서버(DocRoom)·클라이언트가 같이 쓰는 소켓 계약 (specs/features/F-304.md 11.1). 이름은 저장소 식별자라 제품명과 무관하게 고정
 export const Y_CONTENT_NAME = 'content'
 export const Y_TITLE_NAME = 'title'
+export const Y_COMMENTS_NAME = 'comments'
 export const DOC_SOCKET_PREFIX = '/ws/doc/'
 export const SOCKET_PING = 'ping'
 export const SOCKET_PONG = 'pong'
