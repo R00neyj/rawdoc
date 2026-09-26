@@ -260,7 +260,7 @@ describe('F-2046 옵시디언 볼트 글', () => {
   it('U2: 옵시디언 볼트 글의 수치가 상수에서 만든 문자열과 같다 (R5)', () => {
     const raw = readGuide('obsidian-vault')
     expect(raw).toContain(`${MAX_CONTENT_BYTES / 1_000_000}MB를 넘는 문서`)
-    expect(raw).toContain(`한 장에 ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB를 넘는 그림`)
+    expect(raw).toContain(`한 장에 ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB를 넘는 이미지`)
   })
 
   it('U3: 옵시디언 볼트 글에 제품명이 없다 (R6)', () => {
