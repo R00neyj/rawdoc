@@ -1,10 +1,11 @@
 // 다른 핸들러가 DocRoom 에 알리는 도우미 — 원래 응답은 알림 성공과 무관하게 나간다 (specs/features/F-304.md 9.3)
-import type { RoomTextWrite, RoomTextWriteResult } from './docRoomCore'
+import type { RoomCommentImport, RoomCommentImportResult, RoomTextWrite, RoomTextWriteResult } from './docRoomCore'
 
 type RoomStub = {
   revalidateConnections(email?: string): Promise<void>
   purgeRoom(): Promise<void>
   writeText(input: RoomTextWrite): Promise<RoomTextWriteResult>
+  importComments(input: RoomCommentImport): Promise<RoomCommentImportResult>
 }
 
 function roomStub(env: Env, docId: string): RoomStub | null {
@@ -50,6 +51,18 @@ export async function writeTextInRoom(env: Env, docId: string, input: RoomTextWr
     return await stub.writeText(input)
   } catch (err) {
     console.error('docRoom writeText failed', err)
+    return null
+  }
+}
+
+// 로그인 이관 (F-503 5장) — 던지면 null. API 는 503 으로 답하고 outbox 가 다시 보낸다
+export async function importCommentsInRoom(env: Env, docId: string, input: RoomCommentImport): Promise<RoomCommentImportResult | null> {
+  const stub = roomStub(env, docId)
+  if (!stub) return null
+  try {
+    return await stub.importComments(input)
+  } catch (err) {
+    console.error('docRoom importComments failed', err)
     return null
   }
 }

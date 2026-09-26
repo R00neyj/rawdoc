@@ -47,6 +47,8 @@ import {
   handlePutFolderGrant,
 } from './grants'
 import { handleListShares } from './shares'
+import { handleGetCommentCount, handleGetDocPeople, handleImportComments } from './commentsApi'
+import { handleListNotifications, handleReadNotifications } from './notifications'
 import { cleanupServerAttachments } from './attachmentGc'
 import { cleanupComments } from './commentGc'
 import { handleCreateToken, handleDeleteToken, handleListTokens } from './apiTokens'
@@ -237,6 +239,11 @@ const routes: Route[] = [
   { method: 'POST', path: '/api/docs/:id/link', handler: handleCreateDocLink },
   { method: 'DELETE', path: '/api/docs/:id/link', handler: handleDeleteDocLink },
   { method: 'GET', path: '/api/docs/:id/share-set', handler: handleGetDocShareSet },
+  { method: 'GET', path: '/api/docs/:id/people', handler: handleGetDocPeople },
+  { method: 'GET', path: '/api/docs/:id/comments/count', handler: handleGetCommentCount },
+  { method: 'POST', path: '/api/docs/:id/comments/import', handler: handleImportComments },
+  { method: 'GET', path: '/api/notifications', handler: handleListNotifications },
+  { method: 'POST', path: '/api/notifications/read', handler: handleReadNotifications },
   { method: 'GET', path: '/api/folders', handler: handleListFolders },
   { method: 'POST', path: '/api/folders', handler: handleCreateFolder },
   { method: 'PUT', path: '/api/folders/:id', handler: handleUpdateFolder },

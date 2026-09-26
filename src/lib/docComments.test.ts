@@ -10,7 +10,10 @@ import {
   COMMENT_OPS_PER_MINUTE,
   COMMENT_QUOTE_MAX,
   MENTIONS_PER_COMMENT_MAX,
+  NOTIFICATIONS_LIST_DEFAULT,
+  NOTIFICATIONS_LIST_MAX,
   NOTIFICATIONS_PER_RECIPIENT_MAX,
+  NOTIFICATIONS_READ_IDS_MAX,
   NOTIFICATION_RETAIN_DAYS,
   REANCHOR_CANDIDATES_MAX,
   REPLIES_PER_THREAD_MAX,
@@ -698,5 +701,13 @@ describe('F-501 B21 isCommentId', () => {
     expect(isCommentId('a b')).toBe(false)
     expect(isCommentId('가')).toBe(false)
     expect(isCommentId(123)).toBe(false)
+  })
+})
+
+describe('F-503 B22 알림 API 상수', () => {
+  it('30·50·50', () => {
+    expect(NOTIFICATIONS_LIST_DEFAULT).toBe(30)
+    expect(NOTIFICATIONS_LIST_MAX).toBe(50)
+    expect(NOTIFICATIONS_READ_IDS_MAX).toBe(50)
   })
 })

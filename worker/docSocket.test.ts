@@ -16,7 +16,7 @@ type Grant = { target_type: 'doc' | 'folder'; target_id: string; grantee_email: 
 
 function makeEnv(
   opts: {
-    doc?: { owner_id: string; version: number; e2ee_key?: string | null } | null
+    doc?: { owner_id: string; version: number; e2ee_key?: string | null; folder_id?: string | null } | null
     grants?: Grant[]
     users?: { id: string; blocked_at: number | null }[]
     dev?: boolean
@@ -36,7 +36,7 @@ function makeEnv(
             async first<T>() {
               if (sql.includes('FROM docs WHERE id = ?')) {
                 if (!doc || args[0] !== DOC_ID) return null
-                return { id: DOC_ID, owner_id: doc.owner_id, folder_id: null, version: doc.version, e2ee_key: sql.includes('e2ee_key') ? (doc.e2ee_key ?? null) : undefined } as T
+                return { id: DOC_ID, owner_id: doc.owner_id, folder_id: doc.folder_id ?? null, version: doc.version, e2ee_key: sql.includes('e2ee_key') ? (doc.e2ee_key ?? null) : undefined } as T
               }
               if (sql.startsWith('SELECT role FROM grants')) {
                 const [type, id, email] = args
@@ -49,6 +49,17 @@ function makeEnv(
                 return { write_day: null, write_count: 0, content_bytes: 0, doc_count: 0, blocked_at: u.blocked_at, warned_at: null } as T
               }
               throw new Error(`unhandled sql: ${sql}`)
+            },
+            async all<T>() {
+              if (sql.startsWith('SELECT target_id, role FROM grants')) {
+                const [email] = args
+                const rows = grants.filter((g) => g.target_type === 'folder' && g.grantee_email === email)
+                return { results: rows.map((g) => ({ target_id: g.target_id, role: g.role })) as T[] }
+              }
+              if (sql.startsWith('WITH RECURSIVE chain')) {
+                return { results: [{ id: args[0], parent_id: null }] as T[] }
+              }
+              throw new Error(`unhandled all sql: ${sql}`)
             },
           }
         },
@@ -163,10 +174,12 @@ describe('F-304 A22 닫기 코드와 넘기기', () => {
     })
   })
 
-  it('보기 → 4403 forbidden', async () => {
+  it('보기 → 넘기기, X-WS-Role: view (F-503 S1)', async () => {
     vi.mocked(getUser).mockResolvedValue({ id: 'v', email: 'viewer@example.com' })
     const { env } = makeEnv({ grants: [{ target_type: 'doc', target_id: DOC_ID, grantee_email: 'viewer@example.com', role: 'view' }] })
-    expect(await resolveDocSocket(upgrade(), env, DOC_ID)).toEqual({ type: 'close', code: 4403, reason: 'forbidden' })
+    const decision = await resolveDocSocket(upgrade(), env, DOC_ID)
+    expect(decision.type).toBe('forward')
+    if (decision.type === 'forward') expect(decision.request.headers.get(DOC_ROOM_HEADERS.role)).toBe('view')
   })
 
   it('편집·소유 → 넘기기에 네 헤더, 클라이언트가 보낸 같은 이름 헤더는 우리 값으로 바뀐다', async () => {
@@ -208,7 +221,7 @@ describe('F-304 A22 닫기 코드와 넘기기', () => {
         new Headers({
           [DOC_ROOM_HEADERS.userId]: 'u',
           [DOC_ROOM_HEADERS.email]: 'u@example.com',
-          [DOC_ROOM_HEADERS.role]: 'view',
+          [DOC_ROOM_HEADERS.role]: 'viewer',
           [DOC_ROOM_HEADERS.docVersion]: '1',
         }),
       ),
@@ -270,6 +283,60 @@ describe('F-401 E10 금고 문서 소켓 (X15)', () => {
   it('edit 초대자는 4404 not_found', async () => {
     vi.mocked(getUser).mockResolvedValue({ id: 'e', email: 'editor@example.com' })
     const { env } = makeEnv({ doc: e2eeDoc, grants: [{ target_type: 'doc', target_id: DOC_ID, grantee_email: 'editor@example.com', role: 'edit' }] })
+    expect(await resolveDocSocket(upgrade(), env, DOC_ID)).toEqual({ type: 'close', code: 4404, reason: 'not_found' })
+  })
+})
+
+describe('F-503 S1~S5 view 초대자 소켓', () => {
+  const VIEWER = { id: 'v', email: 'viewer@example.com' }
+  const viewGrant: Grant = { target_type: 'doc', target_id: DOC_ID, grantee_email: VIEWER.email, role: 'view' }
+  const usage = (blockedAt: number | null) => ({ writeDay: null, writeCount: 0, contentBytes: 0, docCount: 0, blockedAt, warnedAt: null })
+
+  it('S1 문서 view 초대자 / 폴더 view 초대자 → forward, X-WS-Role: view, readForwardedIdentity role view', async () => {
+    vi.mocked(getUser).mockResolvedValue(VIEWER)
+    const envs = [
+      makeEnv({ grants: [viewGrant] }).env,
+      makeEnv({
+        doc: { owner_id: 'owner', version: 7, folder_id: 'f1' },
+        grants: [{ target_type: 'folder', target_id: 'f1', grantee_email: VIEWER.email, role: 'view' }],
+      }).env,
+    ]
+    for (const env of envs) {
+      const decision = await resolveDocSocket(upgrade(), env, DOC_ID)
+      expect(decision.type).toBe('forward')
+      if (decision.type !== 'forward') continue
+      expect(decision.request.headers.get(DOC_ROOM_HEADERS.role)).toBe('view')
+      expect(readForwardedIdentity(decision.request.headers)).toEqual({ userId: 'v', email: VIEWER.email, role: 'view', docVersion: 7 })
+    }
+  })
+
+  it('S2 view 초대자 본인 막힘 / 소유자 막힘 → 4403 forbidden', async () => {
+    vi.mocked(getUser).mockResolvedValue({ ...VIEWER, usage: usage(123) })
+    expect(await resolveDocSocket(upgrade(), makeEnv({ grants: [viewGrant] }).env, DOC_ID)).toEqual({ type: 'close', code: 4403, reason: 'forbidden' })
+    vi.mocked(getUser).mockResolvedValue({ ...VIEWER, usage: usage(null) })
+    const { env } = makeEnv({ grants: [viewGrant], users: [{ id: 'owner', blocked_at: 123 }] })
+    expect(await resolveDocSocket(upgrade(), env, DOC_ID)).toEqual({ type: 'close', code: 4403, reason: 'forbidden' })
+  })
+
+  it('S3 안 막힌 view 초대자, 세션에 usage 없음 → forward, 사용량 질의 본인 1 + 소유자 1', async () => {
+    vi.mocked(getUser).mockResolvedValue(VIEWER)
+    const { env, sqls } = makeEnv({ grants: [viewGrant], users: [{ id: 'v', blocked_at: null }, { id: 'owner', blocked_at: null }] })
+    const decision = await resolveDocSocket(upgrade(), env, DOC_ID)
+    expect(decision.type).toBe('forward')
+    expect(sqls.filter((s) => s.startsWith('SELECT write_day'))).toHaveLength(2)
+  })
+
+  it('S4 readForwardedIdentity — viewer / 빈 role / view + version x → null', () => {
+    const headers = (role: string, version: string) =>
+      new Headers({ [DOC_ROOM_HEADERS.userId]: 'u', [DOC_ROOM_HEADERS.email]: 'u@example.com', [DOC_ROOM_HEADERS.role]: role, [DOC_ROOM_HEADERS.docVersion]: version })
+    expect(readForwardedIdentity(headers('viewer', '1'))).toBeNull()
+    expect(readForwardedIdentity(headers('', '1'))).toBeNull()
+    expect(readForwardedIdentity(headers('view', 'x'))).toBeNull()
+  })
+
+  it('S5 금고 문서의 view 초대자 → 4404 not_found', async () => {
+    vi.mocked(getUser).mockResolvedValue(VIEWER)
+    const { env } = makeEnv({ doc: { owner_id: 'owner', version: 7, e2ee_key: 'A'.repeat(55) + '=' }, grants: [viewGrant] })
     expect(await resolveDocSocket(upgrade(), env, DOC_ID)).toEqual({ type: 'close', code: 4404, reason: 'not_found' })
   })
 })

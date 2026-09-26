@@ -5,8 +5,8 @@ import { applyAwarenessUpdate } from 'y-protocols/awareness'
 
 import { AWARENESS_CLOCKS_KEY, closingAwareness, encodeAwarenessMessage, readAwarenessClocks, readAwarenessMessage, relayAwareness } from './awarenessRelay'
 import type { AwarenessClocks, RelayConn } from './awarenessRelay'
-import { DocRoomCore, FLUSH_DEBOUNCE_MS, FLUSH_MAX_WAIT_MS, readConnState } from './docRoomCore'
-import type { RoomConnState, RoomTextWrite, RoomTextWriteResult } from './docRoomCore'
+import { DocRoomCore, FLUSH_DEBOUNCE_MS, FLUSH_MAX_WAIT_MS, isReadOnlyState, mayRelayAwareness, readConnState } from './docRoomCore'
+import type { RoomCommentImport, RoomCommentImportResult, RoomConnState, RoomTextWrite, RoomTextWriteResult } from './docRoomCore'
 import { readForwardedIdentity } from './docSocket'
 import { SOCKET_CLOSE, SOCKET_PING, SOCKET_PONG } from '../src/lib/docRoomProtocol'
 
@@ -94,12 +94,12 @@ export class DocRoom extends YServer<Env> {
     await this.core.connect(conn, docVersion, () => super.onConnect(conn, ctx))
   }
 
-  // awareness 는 YServer 에 넘기지 않고 도장·되돌림 버리기·소유를 거쳐 중계한다 (F-307 4.1·4.2)
+  // awareness 는 YServer 에 넘기지 않고 도장·되돌림 버리기·소유를 거쳐 중계한다 (F-307 4.1·4.2). view 연결이 보낸 것은 버린다 (F-503 2.4)
   onMessage(conn: Connection, message: WSMessage): void {
     if (typeof message !== 'string') {
       const bytes = bytesOf(message)
       if (bytes[0] === MESSAGE_AWARENESS_BYTE) {
-        this.relayAwareness(conn, bytes)
+        if (mayRelayAwareness(conn.state)) this.relayAwareness(conn, bytes)
         return
       }
     }
@@ -113,7 +113,10 @@ export class DocRoom extends YServer<Env> {
     if (others.length === 0) await this.core.roomEmptied()
   }
 
-  onCustomMessage(): void {}
+  // 댓글 명령 (F-503 4장) — y-partyserver 가 __YPS: 를 떼고 부른다
+  onCustomMessage(conn: Connection, message: string): void {
+    this.core.handleCommentOp(conn, message)
+  }
 
   private relayAwareness(conn: Connection, bytes: Uint8Array) {
     const update = readAwarenessMessage(bytes)
@@ -141,8 +144,9 @@ export class DocRoom extends YServer<Env> {
     for (const c of this.getConnections()) if (c.id !== conn.id) safeSend(c, message)
   }
 
-  isReadOnly(): boolean {
-    return false
+  // y-partyserver 가 sync step 2·update 를 적용하기 전에 묻는다. 연결 상태는 WebSocket 첨부라 hibernation 을 넘긴다 (F-503 2.3)
+  isReadOnly(conn: Connection): boolean {
+    return isReadOnlyState(conn.state)
   }
 
   // Worker 가 부르는 RPC — onLoad 를 거치지 않는다 (5.2, 10.2 R7)
@@ -153,6 +157,11 @@ export class DocRoom extends YServer<Env> {
   // /v1 PUT (F-308 5.4) — idle 경로는 onLoad 를 거치지 않는다. 규칙은 전부 core 에
   async writeText(input: RoomTextWrite): Promise<RoomTextWriteResult> {
     return this.core.writeText(input)
+  }
+
+  // 로그인 이관 (F-503 5장) — 규칙은 전부 core 에
+  async importComments(input: RoomCommentImport): Promise<RoomCommentImportResult> {
+    return this.core.importComments(input)
   }
 
   async purgeRoom(): Promise<void> {

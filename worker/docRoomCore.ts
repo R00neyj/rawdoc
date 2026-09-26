@@ -1,9 +1,27 @@
 // DocRoom 규칙 (specs/features/F-304.md 6~9장). partyserver·cloudflare:workers 를 import 하지 않는다 — node 테스트가 통째로 부른다
 import * as Y from 'yjs'
 
-import { SOCKET_CLOSE, Y_COMMENTS_NAME, Y_CONTENT_NAME, Y_TITLE_NAME, encodeDocRoomMessage } from '../src/lib/docRoomProtocol'
-import { commentSig, groupCommentThreads } from '../src/lib/docComments'
-import type { CommentEntry, CommentThread } from '../src/lib/docComments'
+import {
+  SOCKET_CLOSE,
+  Y_COMMENTS_NAME,
+  Y_CONTENT_NAME,
+  Y_TITLE_NAME,
+  encodeCommentOpReply,
+  encodeDocRoomMessage,
+  parseCommentOp,
+} from '../src/lib/docRoomProtocol'
+import type { CommentOp, CommentOpRejectReason } from '../src/lib/docRoomProtocol'
+import {
+  COMMENT_OPS_PER_MINUTE,
+  checkCommentCapacity,
+  commentAllowed,
+  commentQuote,
+  commentRejectReason,
+  commentSig,
+  groupCommentThreads,
+  validateCommentEntry,
+} from '../src/lib/docComments'
+import type { CommentActor, CommentEntry, CommentRecord, CommentThread } from '../src/lib/docComments'
 import { resolveCommentAnchor, resolveCommentAnchors, restoreCommentEntries } from '../src/lib/commentAnchor'
 import { planCommentFixes } from './commentGuard'
 import type { CommentChange } from './commentGuard'
@@ -20,7 +38,7 @@ import type { CommentRow, DocCommentDbRow, NotificationDraft } from './commentRo
 import { loadDocPeople } from './docPeople'
 import { fromEditorText, toEditorText } from '../src/lib/lineEnding'
 import type { LineEnding } from '../src/lib/lineEnding'
-import { resolveDocAccess, roleAtLeast } from './access'
+import { isWriteBlocked, resolveDocAccess, roleAtLeast } from './access'
 import { rebaseExternal } from '../src/lib/textRebase'
 import type { TextEdit } from '../src/lib/textRebase'
 import { MAX_CONTENT_BYTES, MAX_TITLE_CHARS, utf8ByteLength } from './validate'
@@ -39,13 +57,20 @@ export const SNAPSHOT_RETRY_MAX = 3
 export const REVALIDATE_INTERVAL_MS = 60_000
 export const SLOW_SNAPSHOT_MS = 60_000
 
-export type RoomRole = 'owner' | 'edit'
+export const COMMENT_RATE_WINDOW_MS = 60_000
+
+export type RoomRole = 'owner' | 'edit' | 'view'
 export type RoomConnState = { userId: string; email: string; role: RoomRole }
 
 export interface RoomConnection {
   readonly state: unknown
   close(code: number, reason: string): void
 }
+
+// 명령 속도 칸을 연결 상태(WebSocket 첨부)에 쓴다 — hibernation 을 넘긴다 (F-503 4.3)
+export type StatefulConnection = RoomConnection & { setState(update: (prev: unknown) => unknown): unknown }
+export const COMMENT_RATE_KEY = 'commentRate'
+export type CommentRateState = { start: number; count: number }
 
 export interface DocRoomHost<C extends RoomConnection = RoomConnection> {
   docId: string
@@ -83,6 +108,14 @@ export type RoomTextWriteResult =
   | { type: 'not_found' }
   | { type: 'unavailable' }
 
+// 로그인 이관 (F-503 5장) — 검사는 Worker 가 끝냈다
+export type RoomCommentImport = { records: CommentRecord[]; user: { id: string; email: string }; docVersion: number }
+export type RoomCommentImportResult =
+  | { type: 'ok'; imported: number; orphaned: number }
+  | { type: 'exists' }
+  | { type: 'not_found' }
+  | { type: 'unavailable' }
+
 type D1DocRow = { title: string; content: string; line_ending: LineEnding; version: number; owner_id: string }
 // rowBytes — base 가 가리키는 D1 행 본문의 실제 UTF-8 바이트 (F-2027 4.4)
 type Base = { content: string; title: string; version: number; lineEnding: LineEnding; updatedAt: number | null; rowBytes: number }
@@ -107,8 +140,10 @@ const ABSORB_ORIGIN = { absorb: true }
 const WRITE_ORIGIN = { v1Write: true }
 // 사후 검사가 고치는 트랜잭션의 origin (F-502 3.1)
 export const COMMENT_FIX_ORIGIN = { commentFix: true }
-// 사후 검사를 건너뛰는 서버 origin. F-503 이 명령·이관 origin 을 여기에 더한다 (F-502 11.1)
-export const SERVER_ORIGINS: ReadonlySet<unknown> = new Set<unknown>([ABSORB_ORIGIN, WRITE_ORIGIN, COMMENT_FIX_ORIGIN])
+// 댓글 명령·이관이 검사를 끝내고 쓰는 트랜잭션의 origin (F-503 4.2) — 클라이언트와 공유하지 않는다
+export const COMMENT_SERVER_ORIGIN = { commentServer: true }
+// 사후 검사를 건너뛰는 서버 origin (F-502 11.1)
+export const SERVER_ORIGINS: ReadonlySet<unknown> = new Set<unknown>([ABSORB_ORIGIN, WRITE_ORIGIN, COMMENT_FIX_ORIGIN, COMMENT_SERVER_ORIGIN])
 
 function applyEdit(text: Y.Text, edit: TextEdit | null | 'conflict') {
   if (!edit || edit === 'conflict') return
@@ -124,8 +159,36 @@ export function readConnState(state: unknown): RoomConnState | null {
   if (typeof state !== 'object' || state === null) return null
   const s = state as Record<string, unknown>
   if (typeof s.userId !== 'string' || typeof s.email !== 'string') return null
-  if (s.role !== 'owner' && s.role !== 'edit') return null
+  if (s.role !== 'owner' && s.role !== 'edit' && s.role !== 'view') return null
   return { userId: s.userId, email: s.email, role: s.role }
+}
+
+// 닫힌 쪽으로 — 상태를 읽을 수 없는 연결도 읽기 전용이다 (F-503 2.3)
+export function isReadOnlyState(state: unknown): boolean {
+  const role = readConnState(state)?.role
+  return role !== 'owner' && role !== 'edit'
+}
+
+// view 연결의 awareness 는 중계하지 않는다 (F-503 2.4)
+export function mayRelayAwareness(state: unknown): boolean {
+  return !isReadOnlyState(state)
+}
+
+function readCommentRate(state: unknown): CommentRateState | null {
+  if (typeof state !== 'object' || state === null) return null
+  const rate = (state as Record<string, unknown>)[COMMENT_RATE_KEY] as Record<string, unknown> | null | undefined
+  if (typeof rate !== 'object' || rate === null) return null
+  if (!Number.isFinite(rate.start) || !Number.isFinite(rate.count)) return null
+  return { start: rate.start as number, count: rate.count as number }
+}
+
+function validEntry(value: unknown): CommentEntry | null {
+  const result = validateCommentEntry(value)
+  return result.ok ? result.entry : null
+}
+
+function parentOf(value: unknown): unknown {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>).parent : undefined
 }
 
 // 이미 닫힌 소켓의 close 는 던질 수 있다
@@ -680,11 +743,131 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
       return
     }
     for (const conn of targets) {
-      const state = readConnState(conn.state)
-      const access = state ? await resolveDocAccess(this.host.env, row, { id: state.userId, email: state.email }) : null
-      if (!access || !roleAtLeast(access.role, 'edit')) safeClose(conn, SOCKET_CLOSE.forbidden, 'revoked')
+      if (!(await this.stillAllowed(conn, row))) safeClose(conn, SOCKET_CLOSE.forbidden, 'revoked')
     }
     this.lastRevalidate = Date.now()
+  }
+
+  // F-503 3장 — 연결 상태의 역할로 가른다. 승격된 view 연결은 view 그대로 둔다
+  private async stillAllowed(conn: C, row: { id: string; owner_id: string; folder_id: string | null }): Promise<boolean> {
+    const state = readConnState(conn.state)
+    if (!state) return false
+    const user = { id: state.userId, email: state.email }
+    const access = await resolveDocAccess(this.host.env, row, user)
+    if (!access) return false
+    if (state.role !== 'view') return roleAtLeast(access.role, 'edit')
+    if (access.blocked) return false
+    if (access.role === 'view') return !(await isWriteBlocked(this.host.env, row, user))
+    return true
+  }
+
+  // F-503 4장 — 동기. await 가 없어 한 연결의 응답은 보낸 순서대로 간다
+  handleCommentOp(conn: C & StatefulConnection, text: string): void {
+    if (this.gone || !this.loaded) return
+    const parsed = parseCommentOp(text)
+    const id = parsed.ok ? parsed.op.id : parsed.id
+    if (id === null) return
+    const reply = (reason: CommentOpRejectReason | null) =>
+      this.host.sendCustom(conn, encodeCommentOpReply(reason === null ? { type: 'comment-ack', id } : { type: 'comment-reject', id, reason }))
+    const state = readConnState(conn.state)
+    if (!state) return reply('forbidden')
+    if (!this.takeCommentRate(conn)) return reply('rate_limited')
+    if (!parsed.ok) return reply('invalid')
+    reply(this.applyCommentOp(parsed.op, state))
+  }
+
+  // 고정 창 — 거절된 메시지도 센다 (F-503 4.3)
+  private takeCommentRate(conn: StatefulConnection): boolean {
+    const now = Date.now()
+    const prev = readCommentRate(conn.state)
+    const fresh = !prev || now - prev.start >= COMMENT_RATE_WINDOW_MS || now < prev.start
+    const next: CommentRateState = fresh ? { start: now, count: 1 } : { start: prev.start, count: prev.count + 1 }
+    conn.setState((old: unknown) => ({ ...((old as object | null) ?? {}), [COMMENT_RATE_KEY]: next }))
+    return next.count <= COMMENT_OPS_PER_MINUTE
+  }
+
+  // 4.4 표 순서 그대로. null 이면 ack
+  private applyCommentOp(op: CommentOp, state: RoomConnState): CommentOpRejectReason | null {
+    const actor: CommentActor = { kind: 'server', userId: state.userId, role: state.role, blocked: false }
+    const author = { id: state.userId, email: state.email }
+    const comments = this.comments
+    if (op.type === 'comment-delete') {
+      if (!comments.has(op.id)) return null
+      const target = validEntry(comments.get(op.id))
+      if (!target) return 'invalid'
+      if (!commentAllowed(actor, 'delete', target)) return 'forbidden'
+      this.host.doc.transact(() => {
+        if (target.parent === null) {
+          for (const [key, value] of [...comments.entries()]) if (parentOf(value) === op.id) comments.delete(key)
+        }
+        comments.delete(op.id)
+      }, COMMENT_SERVER_ORIGIN)
+      return null
+    }
+    const action = op.type === 'comment-add' ? 'add' : op.type === 'comment-reply' ? 'reply' : 'resolve'
+    if (!commentAllowed(actor, action)) return 'forbidden'
+
+    if (op.type !== 'comment-resolve' && comments.has(op.id)) {
+      const existing = validEntry(comments.get(op.id))
+      return existing && existing.author.id === state.userId ? null : 'invalid'
+    }
+    const { threads } = groupCommentThreads(comments.entries())
+    // 첫 댓글이 아니면 — 올바른 답글이면 invalid, 없거나 깨졌으면 not_found
+    const rootOf = (key: string): CommentThread | CommentOpRejectReason => {
+      const thread = threads.find((t) => t.id === key)
+      if (thread) return thread
+      return validEntry(comments.get(key))?.parent != null ? 'invalid' : 'not_found'
+    }
+
+    if (op.type === 'comment-resolve') {
+      const thread = rootOf(op.id)
+      if (typeof thread === 'string') return thread
+      if (op.resolved === (thread.root.resolved !== null)) return null
+      const next = validEntry({ ...thread.root, resolved: op.resolved ? { by: author, at: Date.now() } : null })
+      if (!next) return 'invalid'
+      this.host.doc.transact(() => comments.set(op.id, next), COMMENT_SERVER_ORIGIN)
+      return null
+    }
+
+    let draft: unknown
+    let reopen: CommentEntry | null = null
+    if (op.type === 'comment-add') {
+      if (checkCommentCapacity(threads, null)) return 'too_many'
+      const anchor = { start: op.start, end: op.end }
+      const range = resolveCommentAnchor(this.content, anchor)
+      if (!range) return 'invalid'
+      const quote = commentQuote(this.content.toString().slice(range.from, range.to))
+      draft = { v: 1, parent: null, anchor, quote, body: op.body, mentions: op.mentions, author, createdAt: Date.now(), resolved: null }
+    } else {
+      const thread = rootOf(op.parent)
+      if (typeof thread === 'string') return thread
+      if (checkCommentCapacity(threads, op.parent)) return 'too_many'
+      draft = { v: 1, parent: op.parent, anchor: null, quote: '', body: op.body, mentions: op.mentions, author, createdAt: Date.now(), resolved: null }
+      if (thread.root.resolved !== null) reopen = { ...thread.root, resolved: null }
+    }
+    const checked = validateCommentEntry(draft)
+    if (!checked.ok) return commentRejectReason(checked.error)
+    this.host.doc.transact(() => {
+      comments.set(op.id, checked.entry)
+      if (reopen && op.type === 'comment-reply') comments.set(op.parent, reopen)
+    }, COMMENT_SERVER_ORIGIN)
+    return null
+  }
+
+  // F-503 5장 — writeLive 와 같은 틀. 4번(비었나)과 5번(쓰기) 사이에 await 가 없다
+  async importComments(input: RoomCommentImport): Promise<RoomCommentImportResult> {
+    await this.host.ensureLoaded()
+    if (this.gone) return { type: 'not_found' }
+    if (!this.loaded) return { type: 'unavailable' }
+    if (!(await this.catchUp(input.docVersion))) return { type: 'not_found' }
+    if (this.comments.size !== 0) return { type: 'exists' }
+    const { entries, orphaned } = restoreCommentEntries(this.content, input.records, { id: input.user.id, email: input.user.email })
+    this.host.doc.transact(() => {
+      for (const [id, entry] of entries) this.comments.set(id, entry)
+    }, COMMENT_SERVER_ORIGIN)
+    // 스냅숏이 실패해도 갱신은 DO 저장소에 남았다 — 다시 시도·다음 스냅숏이 D1 을 맞춘다
+    await this.runFlush(false, true)
+    return { type: 'ok', imported: entries.length, orphaned }
   }
 
   // /v1 PUT (F-308 5·6장) — 한 번에 하나씩 (6.8)

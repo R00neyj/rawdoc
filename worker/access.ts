@@ -93,7 +93,7 @@ export interface DocAccess<T extends DocRowLike> {
 }
 
 // 보낸 사람 → 소유자 순. 사용량 행이 없으면 안 막힘 (F-2028 4.2 3번)
-async function isWriteBlocked(env: Env, doc: DocRowLike, user: AuthUser): Promise<boolean> {
+export async function isWriteBlocked(env: Env, doc: DocRowLike, user: AuthUser): Promise<boolean> {
   if ((await usageOf(env, user)).blockedAt !== null) return true
   if (doc.owner_id === user.id) return false
   return (await readUsage(env, doc.owner_id)).blockedAt !== null

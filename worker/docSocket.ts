@@ -1,7 +1,7 @@
 // /ws/doc/:id — 업그레이드 요청 판정, 거절 소켓, DocRoom 으로 넘기기 (specs/features/F-304.md 4장)
 import { errorResponse } from './http'
 import { getUser } from './auth'
-import { getDocAccess, roleAtLeast } from './access'
+import { getDocAccess, isWriteBlocked } from './access'
 import { isValidUuid } from './validate'
 import { SOCKET_CLOSE } from '../src/lib/docRoomProtocol'
 import type { SocketCloseReason } from '../src/lib/docRoomProtocol'
@@ -15,7 +15,7 @@ export const DOC_ROOM_HEADERS = {
   docVersion: 'X-WS-Doc-Version',
 } as const
 
-export type ForwardedIdentity = { userId: string; email: string; role: 'owner' | 'edit'; docVersion: number }
+export type ForwardedIdentity = { userId: string; email: string; role: 'owner' | 'edit' | 'view'; docVersion: number }
 
 export type DocSocketDecision =
   | { type: 'reject'; response: Response }
@@ -42,7 +42,11 @@ export async function resolveDocSocket(request: Request, env: Env, docId: string
   if (!access) return { type: 'close', code: SOCKET_CLOSE.notFound, reason: 'not_found' }
   // 금고 문서는 실시간 방을 열지 않는다 — 소유자도 (F-401 X15). 비소유자는 위에서 not_found
   if (access.doc.e2ee_key) return { type: 'close', code: SOCKET_CLOSE.forbidden, reason: 'forbidden' }
-  if (!roleAtLeast(access.role, 'edit')) return { type: 'close', code: SOCKET_CLOSE.forbidden, reason: 'forbidden' }
+  // view 는 읽기 전용으로 넘긴다. 막힌 계정·막힌 소유자 문서는 view 도 입구에서 막는다 (F-503 2.2)
+  if (access.blocked) return { type: 'close', code: SOCKET_CLOSE.forbidden, reason: 'forbidden' }
+  if (access.role === 'view' && (await isWriteBlocked(env, access.doc, user))) {
+    return { type: 'close', code: SOCKET_CLOSE.forbidden, reason: 'forbidden' }
+  }
 
   const headers = new Headers(request.headers)
   for (const name of [...headers.keys()]) {
@@ -60,7 +64,7 @@ export function readForwardedIdentity(headers: Headers): ForwardedIdentity | nul
   const email = headers.get(DOC_ROOM_HEADERS.email)
   const role = headers.get(DOC_ROOM_HEADERS.role)
   const version = Number(headers.get(DOC_ROOM_HEADERS.docVersion) ?? '')
-  if (!userId || !email || (role !== 'owner' && role !== 'edit')) return null
+  if (!userId || !email || (role !== 'owner' && role !== 'edit' && role !== 'view')) return null
   if (!Number.isInteger(version)) return null
   return { userId, email, role, docVersion: version }
 }

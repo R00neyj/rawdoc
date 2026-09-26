@@ -623,3 +623,28 @@ export function commentQuote(text: string): string {
   if (code >= 0xd800 && code <= 0xdbff) cut = 198
   return text.slice(0, cut) + '…'
 }
+
+// ----- F-503 6.1 API 계약 (specs/features/F-503.md 6장) -----
+
+export const NOTIFICATIONS_LIST_DEFAULT = 30
+export const NOTIFICATIONS_LIST_MAX = 50
+export const NOTIFICATIONS_READ_IDS_MAX = 50
+
+export type DocPeopleResponse = { people: { email: string; role: 'owner' | 'edit' | 'view' }[] }
+export type CommentCountResponse = { total: number; open: number }
+export type CommentImportBody = { records: CommentRecord[] }
+export type CommentImportResponse = { imported: number; orphaned: number }
+export type NotificationItem = {
+  id: string
+  kind: 'mention' | 'reply'
+  docId: string
+  commentId: string
+  threadId: string
+  actorEmail: string
+  docTitle: string
+  excerpt: string
+  createdAt: number
+  readAt: number | null
+}
+export type NotificationsResponse = { items: NotificationItem[]; unread: number }
+export type NotificationsReadBody = { ids: string[] } | { all: true }

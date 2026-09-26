@@ -243,5 +243,7 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.{js,jsx,ts,tsx}', 'worker/**/*.test.ts', 'site/**/*.test.ts', 'cli/**/*.test.ts'],
     environment: 'node',
+    // vi.mock('partyserver') 가 진짜 y-partyserver 안까지 먹게 한다 (F-503 Y1)
+    server: { deps: { inline: ['y-partyserver'] } },
   },
 })
