@@ -92,8 +92,8 @@ test.describe('F-243 A10 해제', () => {
   })
 })
 
-test.describe('F-243 A11 내보내기', () => {
-  test('초대 줄 내보내기 — 줄이 사라진다', async ({ page }) => {
+test.describe('F-243 A11 초대 삭제', () => {
+  test('초대 줄 초대 삭제 — 줄이 사라진다', async ({ page }) => {
     const server = await fakeServer(page)
     seedDoc(server, { id: 'd1', title: '회의록' })
     seedGrant(server, { targetType: 'doc', targetId: 'd1', email: 'a@b.com', role: 'view' })

@@ -109,7 +109,7 @@ describe('F-243 A6 로그인 필요', () => {
   })
 })
 
-describe('F-243 A6 해제·내보내기 콜백', () => {
+describe('F-243 A6 해제·초대 삭제 콜백', () => {
   it('링크 해제 버튼을 누르면 onRevokeLink 가 그 링크로 불린다', () => {
     const onRevokeLink = vi.fn().mockResolvedValue(undefined)
     const tree = SharesPage({ ...baseProps, links: [link1], onRevokeLink })
@@ -119,7 +119,7 @@ describe('F-243 A6 해제·내보내기 콜백', () => {
     expect(onRevokeLink).toHaveBeenCalledWith(link1)
   })
 
-  it('초대 내보내기 버튼을 누르면 onRevokeGrant 가 그 초대로 불린다', () => {
+  it('초대 삭제 버튼을 누르면 onRevokeGrant 가 그 초대로 불린다', () => {
     const onRevokeGrant = vi.fn().mockResolvedValue(undefined)
     const tree = SharesPage({ ...baseProps, grants: [grant1], onRevokeGrant })
     const buttons = collect(tree, 'shares-grant-revoke')

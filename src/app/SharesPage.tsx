@@ -167,7 +167,7 @@ export default function SharesPage({
                     </div>
                     <div className="shares-row-actions">
                       <button type="button" className="shares-grant-revoke danger" onClick={() => revokeGrant(grant)}>
-                        내보내기
+                        초대 삭제
                       </button>
                     </div>
                   </li>
