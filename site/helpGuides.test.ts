@@ -25,6 +25,9 @@ import { MAX_SIDE } from '../src/lib/shrinkImage'
 import { GRACE_MS } from '../src/app/attachmentGc'
 import { RESULT_LIMIT, SNIPPET_BEFORE, SNIPPET_AFTER } from '../src/lib/docSearch'
 import { ACCOUNT_DELETE_FRESH_MS } from '../src/lib/accountDeletion'
+import { EditorState } from '@codemirror/state'
+import { insertTable } from '../src/editor/insertCommands'
+import { parseTable } from '../src/editor/preview/tableModel'
 
 const GUIDES_DIR = fileURLToPath(new URL('../content/guides', import.meta.url))
 
@@ -342,6 +345,24 @@ describe('account 글', () => {
 
   it('글에 제품명이 없다 (R6)', () => {
     const body = guideBody(readGuide('account')).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+// 사용법 글 tables (write-guide, 2026-09-27)
+describe('tables 글', () => {
+  it('삽입 ▸ 표 가 넣는 표의 크기가 글과 같다 (R5)', () => {
+    let state = EditorState.create({ doc: '' })
+    const ran = insertTable({ state, dispatch: (tr) => (state = tr.state) })
+    expect(ran).toBe(true)
+    const table = parseTable(state.doc.toString(), 0)
+    const bodyRows = table.rows.length - 1
+    expect(guideBody(readGuide('tables'))).toContain(`머리 행과 빈 행 ${bodyRows}개로 된 ${table.columnCount}열 빈 표`)
+  })
+
+  it('글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(readGuide('tables')).toLowerCase()
     expect(body).not.toContain(brand.name.toLowerCase())
     expect(body).not.toContain(brand.shortName.toLowerCase())
   })

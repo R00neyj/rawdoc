@@ -311,6 +311,18 @@ describe('도움말 ## 계정 절', () => {
   })
 })
 
+// 사용법 글 tables (write-guide, 2026-09-27)
+describe('도움말 ## 글쓰기 절', () => {
+  it('사용법 글 줄로 끝나고, 표 문단의 화면 글자·키가 들어 있다', () => {
+    const section = appSections().find((s) => s.name === '글쓰기')!
+    const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [표 넣고 고치기](/guides/tables)')
+    expect(section.body).toContain('`삽입` ▸ `표`')
+    expect(section.body).toContain('`Alt+Enter`')
+    expect(section.body).toContain('`Delete`')
+  })
+})
+
 // F-2045.md 6.1 U1
 describe('F-2045 도움말 ## 공유 절', () => {
   it('U1: 마지막 문단이 사용법 글 줄이고, 화면 글자가 들어 있고, 옛 문구가 없다', () => {

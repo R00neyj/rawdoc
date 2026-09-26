@@ -496,3 +496,39 @@ test('guide account E3 앱 도움말의 링크', async ({ page }) => {
   await expect(link).toHaveText('계정과 로그인')
   await expect(link).toHaveAttribute('target', '_blank')
 })
+
+test('guide tables E1 글이 뜨고 완결된 정적 페이지다', async ({ page }) => {
+  await page.goto('/guides/tables')
+  await expect(page.getByRole('heading', { level: 1, name: '표 넣고 고치기' })).toBeVisible()
+  await expect(page.locator('.site-foot')).toBeVisible()
+
+  const res = await page.request.get('/guides/tables')
+  expect(res.status()).toBe(200)
+  const body = await res.text()
+  expect(body).toContain('<title>표 넣고 고치기 · Rawdoc</title>')
+  expect(body).toContain('rel="canonical"')
+  expect(body).toContain('https://rawdoc.app/guides/tables')
+  expect(body).not.toContain('<script')
+})
+
+test('guide tables E2 목록·색인', async ({ page }) => {
+  await page.goto('/guides')
+  const link = page.locator('.site-article .markdown-body > ul a[href="/guides/tables"]')
+  await expect(link).toBeVisible()
+  await expect(link).toHaveText('표 넣고 고치기')
+
+  const sitemap = await page.request.get('/sitemap.xml')
+  const sitemapBody = await sitemap.text()
+  expect(sitemapBody).toContain('<loc>https://rawdoc.app/guides/tables</loc>')
+})
+
+test('guide tables E3 앱 도움말의 링크', async ({ page }) => {
+  await openApp(page)
+  await page.getByRole('button', { name: '도움말' }).first().click()
+  await expect(page.locator('.help-page')).toBeVisible()
+
+  const link = page.locator('.help-page a[href="/guides/tables"]')
+  await expect(link).toHaveCount(1)
+  await expect(link).toHaveText('표 넣고 고치기')
+  await expect(link).toHaveAttribute('target', '_blank')
+})
