@@ -26,9 +26,9 @@ describe('F-2036 A2 중복 처리', () => {
     expect(headings.map((h) => h.id)).toEqual(['가', '가-1', '가-2'])
   })
 
-  it('도움말 38개, 첫 항목은 h1 도움말, id 가 모두 다르고 중복 글자는 -1 이 붙는다', () => {
+  it('도움말 39개, 첫 항목은 h1 도움말, id 가 모두 다르고 중복 글자는 -1 이 붙는다', () => {
     const headings = siteHeadings(HELP_DOC_CONTENT)
-    expect(headings).toHaveLength(38)
+    expect(headings).toHaveLength(39)
     expect(headings[0]).toEqual({ level: 1, text: '도움말', id: '도움말', line: headings[0].line })
     const ids = headings.map((h) => h.id)
     expect(new Set(ids).size).toBe(ids.length)

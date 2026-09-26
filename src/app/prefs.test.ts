@@ -106,6 +106,16 @@ describe('prefs', () => {
   })
 })
 
+describe('F-505 U19 md.commentRail', () => {
+  it("open·closed 를 쓰고 읽는다, 던지지 않는다", () => {
+    expect(getPref('md.commentRail', '')).toBe('')
+    expect(() => setPref('md.commentRail', 'open')).not.toThrow()
+    expect(getPref('md.commentRail', '')).toBe('open')
+    expect(() => setPref('md.commentRail', 'closed')).not.toThrow()
+    expect(getPref('md.commentRail', '')).toBe('closed')
+  })
+})
+
 describe('F-407 U23 md.e2eeBackupNotice', () => {
   it("setPref '1' 이 던지지 않고 getPref 가 '1'", () => {
     expect(getPref('md.e2eeBackupNotice', '' as '1')).toBe('')

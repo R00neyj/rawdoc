@@ -11,6 +11,17 @@ const MESSAGE_SYNC = 0
 const MESSAGE_AWARENESS = 1
 const DEFAULT_IDENTITY = { id: 'u1', email: 'a@b.com' }
 const FAKE_PEER_CLIENT_BASE = 2_000_000_000
+const COMMENTS_MAP_NAME = 'comments' // src/lib/docRoomProtocol.ts Y_COMMENTS_NAME 과 같은 문자열 (e2e 는 src/ 를 import 하지 않는다, F-505 3.9)
+const COMMENT_QUOTE_MAX = 200
+
+// src/lib/docComments.ts commentQuote 와 같은 규칙 — 200자 넘으면 199자(대리쌍 걸치면 198) + '…'
+function quoteOf(text) {
+  if (text.length <= COMMENT_QUOTE_MAX) return text
+  let cut = 199
+  const code = text.charCodeAt(cut - 1)
+  if (code >= 0xd800 && code <= 0xdbff) cut = 198
+  return text.slice(0, cut) + '…'
+}
 
 function readAwarenessEntries(decoder) {
   const inner = decoding.createDecoder(decoding.readVarUint8Array(decoder))
@@ -265,6 +276,39 @@ export function createFakeDocRoom() {
       const room = roomOf(docId)
       room.paused = false
       for (const reply of room.held.splice(0)) reply()
+    },
+
+    // 방 Doc 의 comments Y.Map 을 toJSON() 으로 (F-505 3.9)
+    comments: (docId) => roomOf(docId).doc.getMap(COMMENTS_MAP_NAME).toJSON(),
+
+    // 첫 댓글(parent === null)이면 anchor·quote 를 content Y.Text 기준으로 만든다. 답글은 anchor: null, quote: ''
+    putComment(docId, id, { from, to, body, author = DEFAULT_IDENTITY, parent = null, resolved = null, createdAt = Date.now() }) {
+      const room = roomOf(docId)
+      let anchor = null
+      let quote = ''
+      if (parent === null) {
+        const ytext = room.doc.getText('content')
+        const start = Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(ytext, from, 0))
+        const end = Y.relativePositionToJSON(Y.createRelativePositionFromTypeIndex(ytext, to, -1))
+        anchor = { start, end }
+        quote = quoteOf(ytext.toString().slice(from, to))
+      }
+      room.doc.getMap(COMMENTS_MAP_NAME).set(id, {
+        v: 1,
+        parent,
+        anchor,
+        quote,
+        body,
+        mentions: [],
+        author: { id: author.id, email: author.email },
+        createdAt,
+        resolved,
+      })
+    },
+
+    // 방 Doc 에서 지운다 — 모든 연결에 퍼진다
+    deleteComment(docId, id) {
+      roomOf(docId).doc.getMap(COMMENTS_MAP_NAME).delete(id)
     },
   }
 }

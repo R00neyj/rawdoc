@@ -7,7 +7,8 @@ import ShareMenu from './ShareMenu'
 import ExportMenu from './ExportMenu'
 import AccountMenu from './AccountMenu'
 import EditorToolbar from './EditorToolbar'
-import { IconEdit, IconRaw, IconView, IconTooltip } from './icons'
+import { IconEdit, IconRaw, IconView, IconTooltip, IconForum } from './icons'
+import { commentBadgeText } from './commentRail'
 import SidebarHead from './SidebarHead'
 import PeerAvatars from './PeerAvatars'
 import type { Peer } from '../lib/peers'
@@ -60,6 +61,8 @@ type TopBarProps = {
   // 접속자 아바타 — 보기 모드 토글 왼쪽, 없으면 요소가 없다 (F-307 7.1)
   peers: readonly Peer[]
   selfUserId: string | null
+  // 댓글 레일(판) 여닫기 — 없으면 버튼이 없다(금고 문서, 공유 화면, 문서 없음) (F-505 3.6)
+  comments?: { openCount: number; open: boolean; disabled: boolean; onToggle: () => void }
 }
 
 export default function TopBar({
@@ -93,6 +96,7 @@ export default function TopBar({
   onRunToolbarCommand,
   peers,
   selfUserId,
+  comments,
 }: TopBarProps) {
   return (
     <>
@@ -127,6 +131,26 @@ export default function TopBar({
             </span>
           ))}
         </div>
+        {comments && (
+          <span className="icon-btn-wrap">
+            <button
+              type="button"
+              className="icon-btn comment-rail-toggle"
+              aria-label={`댓글 ${comments.openCount}개`}
+              aria-expanded={comments.open}
+              disabled={comments.disabled}
+              onClick={comments.onToggle}
+            >
+              <IconForum size={18} />
+              {commentBadgeText(comments.openCount) !== null && (
+                <span className="comment-badge" aria-hidden="true">
+                  {commentBadgeText(comments.openCount)}
+                </span>
+              )}
+            </button>
+            <IconTooltip text="댓글" />
+          </span>
+        )}
         <ShareMenu
           disabled={shareDisabled}
           getShareDoc={getShareDoc}

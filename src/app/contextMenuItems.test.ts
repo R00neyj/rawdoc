@@ -139,3 +139,45 @@ describe('명령 팔레트 항목 — F-2022 7.1', () => {
     expect(nodes).toHaveLength(2)
   })
 })
+
+// U20·U21 (F-505.md 3.5)
+describe('댓글 달기 — F-505 3.5', () => {
+  it('U20 — comment 를 넘기면 select-all 뒤 구분선 다음에 댓글 달기, 그 뒤 구분선 + 명령 팔레트…', () => {
+    const state = makeState('abc', EditorSelection.cursor(0))
+    const nodes = buildEditorContextMenu({ place: 'editor', state, hasSelection: false, comment: { disabled: false } })
+    const item = findItem(nodes, 'comment-add')
+    expect(item).toEqual({
+      kind: 'item',
+      id: 'comment-add',
+      label: '댓글 달기',
+      shortcut: 'Ctrl+Alt+M',
+      action: 'comment-add',
+      disabled: false,
+    })
+    const selectAllIndex = nodes.findIndex((n) => n.kind === 'item' && n.id === 'select-all')
+    expect(nodes[selectAllIndex + 1]).toEqual({ kind: 'separator' })
+    expect(nodes[selectAllIndex + 2]).toBe(item)
+    expect(nodes[selectAllIndex + 3]).toEqual({ kind: 'separator' })
+    expect(nodes[nodes.length - 1]).toEqual({ kind: 'item', id: 'palette', label: '명령 팔레트…', shortcut: 'Ctrl+P', action: 'open-palette', disabled: false })
+
+    const disabled = buildEditorContextMenu({ place: 'editor', state, hasSelection: false, comment: { disabled: true } })
+    expect(findItem(disabled, 'comment-add').disabled).toBe(true)
+  })
+
+  it('U20 — comment 를 넘기지 않으면 항목이 없다', () => {
+    const state = makeState('abc', EditorSelection.cursor(0))
+    const nodes = buildEditorContextMenu({ place: 'editor', state, hasSelection: false })
+    expect(nodes.some((n) => n.kind === 'item' && n.id === 'comment-add')).toBe(false)
+  })
+
+  it('U21 — comment 를 넘겨도 끝 두 노드는 [구분선, 명령 팔레트…] 그대로 (F-2022 U10 과 같은 단언)', () => {
+    for (const place of ['editor', 'cell'] as const) {
+      const state = makeState('abc', EditorSelection.cursor(0))
+      const nodes = buildEditorContextMenu({ place, state, hasSelection: false, comment: { disabled: false } })
+      const last = nodes[nodes.length - 1]
+      const beforeLast = nodes[nodes.length - 2]
+      expect(last).toEqual({ kind: 'item', id: 'palette', label: '명령 팔레트…', shortcut: 'Ctrl+P', action: 'open-palette', disabled: false })
+      expect(beforeLast).toEqual({ kind: 'separator' })
+    }
+  })
+})

@@ -1,4 +1,6 @@
 // 해시 URL 해석·생성 — 순수 함수 (specs/ia.md 3.10, specs/architecture.md 1장, F-130.md 3.1, F-211.md 1장)
+// 댓글 주소 `#/d/{id}/c/{threadId}` (F-505 3.3) — HASH_DOC_PATTERN 이 전체를 문서 id 로 먹으므로 그보다 앞에 둔다
+const HASH_DOC_THREAD_PATTERN = /^#\/d\/([^/]+)\/c\/([^/]+)$/
 const HASH_DOC_PATTERN = /^#\/d\/(.+)$/
 const HASH_SHARE_PATTERN = /^#\/s\/(.+)$/
 const HASH_SHARES_PATTERN = /^#\/shares$/
@@ -9,7 +11,7 @@ const HASH_MAP_PATTERN = /^#\/map$/
 const HASH_MAP_DOC_PATTERN = /^#\/map\/([^/]+)$/
 
 export type HashRoute =
-  | { type: 'doc'; docId: string }
+  | { type: 'doc'; docId: string; threadId?: string }
   | { type: 'share'; fragment: string }
   | { type: 'shares' }
   | { type: 'help' }
@@ -55,6 +57,10 @@ export function parseHash(hash: string | undefined): HashRoute {
       ? { type: 'public', token: publicMatch[1], docId: publicMatch[2] }
       : { type: 'public', token: publicMatch[1] }
   }
+  const docThreadMatch = HASH_DOC_THREAD_PATTERN.exec(hash)
+  if (docThreadMatch) {
+    return { type: 'doc', docId: docThreadMatch[1], threadId: docThreadMatch[2] }
+  }
   const docMatch = HASH_DOC_PATTERN.exec(hash)
   if (docMatch) {
     return { type: 'doc', docId: docMatch[1] }
@@ -70,6 +76,11 @@ export function formatHash(docId: string | null | undefined): string {
 // `#/s/{조각}` (F-130.md 3.1)
 export function formatShareHash(fragment: string): string {
   return `#/s/${fragment}`
+}
+
+// `#/d/{docId}/c/{threadId}` (F-505 3.3, F-507 알림 항목이 쓴다)
+export function formatCommentHash(docId: string, threadId: string): string {
+  return `#/d/${docId}/c/${threadId}`
 }
 
 // `#/p/f/{토큰}` 또는 `#/p/f/{토큰}/{문서id}` (F-211.md 2.3)

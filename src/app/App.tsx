@@ -133,6 +133,9 @@ import type { ScrollAnchor } from '../lib/scrollAnchor'
 import Outline from './Outline'
 import ContextMenu from './ContextMenu'
 import { buildEditorContextMenu, buildViewContextMenu, type ContextMenuNode, type MenuItemNode } from './contextMenuItems'
+import CommentRailPanel from './CommentRailPanel'
+import { useDocComments, computeCommentAccess, scrollTopOf, COMMENT_TEXT } from './useDocComments'
+import { IconAddComment } from './icons'
 import CommandPalette from './CommandPalette'
 import type { PaletteContext } from './paletteContract'
 
@@ -998,18 +1001,23 @@ export default function App() {
   useEffect(() => {
     if (!liveRoomDoc || !liveRoomDocId) return
     let timer: ReturnType<typeof setTimeout> | null = null
+    const contentText = liveRoomDoc.getText(Y_CONTENT_NAME)
+    const titleText = liveRoomDoc.getText(Y_TITLE_NAME)
     // everSynced 가 거짓인 동안(기록으로 먼저 뜬 채 첫 동기화 전)의 따라잡기는 내 편집 중계일 때만 올린다 (F-2041 5.3)
-    const handleUpdate = (_update: Uint8Array, origin: unknown) => {
-      if (!liveEverSyncedRef.current && !isEditorRelay(origin)) return
+    // 댓글만 바꾼 트랜잭션은 content·title 이 changed 에 없어 세지 않는다 (F-505 11.1)
+    const handleTransaction = (tr: Y.Transaction) => {
+      if (!liveEverSyncedRef.current && !isEditorRelay(tr.origin)) return
+      const changed = tr.changed as Map<unknown, unknown>
+      if (!changed.has(contentText) && !changed.has(titleText)) return
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
         const now = Date.now()
         setDocs((prev) => sortByUpdatedAtDesc(prev.map((d) => (d.id === liveRoomDocId ? { ...d, updatedAt: now } : d))))
       }, SAVE_DEBOUNCE_MS)
     }
-    liveRoomDoc.on('update', handleUpdate)
+    liveRoomDoc.on('afterTransaction', handleTransaction)
     return () => {
-      liveRoomDoc.off('update', handleUpdate)
+      liveRoomDoc.off('afterTransaction', handleTransaction)
       if (timer) clearTimeout(timer)
     }
   }, [liveRoomDoc, liveRoomDocId])
@@ -1327,6 +1335,32 @@ export default function App() {
   const isReadOnlyDoc = isReadOnlyByRole || isLockedReadOnly || claimReadOnly || isDeletedElsewhere || liveStopped || isOfflineView || isConvertingDoc
   // 본문 맨 위 제목 읽기 전용 — 상단바 옛 제목 입력의 disabled·readOnly 조건을 하나로 합친다 (F-217.md 2.4)
   const titleReadOnly = isReadOnlyDoc || viewMode === 'view' || Boolean(sharedDoc)
+
+  // ----- 댓글 (F-505 3장·4장·11.1) -----
+  const commentAccessValue = computeCommentAccess({
+    storeKind: store.kind,
+    docPath,
+    e2ee: currentDoc?.e2ee !== undefined || docPath === 'e2ee',
+    sharedScreen: Boolean(sharedDoc),
+    role: currentDoc?.role,
+    account: account.state === 'in' ? { id: account.id, email: account.email, blocked: accountBlocked } : null,
+    readOnly: isReadOnlyDoc,
+  })
+  const commentsMountKey = currentDocId !== null && openDoc?.id === currentDocId ? `${currentDocId}:${editorRemountNonce}` : null
+  const comments = useDocComments({
+    containerRef: contentAreaRef,
+    handle: editorRef.current,
+    mountKey: commentsMountKey,
+    access: commentAccessValue,
+    viewMode,
+    everSynced: liveSnapshot?.everSynced ?? false,
+    showNotice,
+    changeViewModeToEdit: () => changeViewMode('live'),
+  })
+  const commentsRef = useRef(comments)
+  useEffect(() => {
+    commentsRef.current = comments
+  })
 
   // 명령 팔레트 D-7 — 템플릿 삽입이 보이는 조건 (specs/features/F-2022.md 6.3)
   const canInsertTemplate =
@@ -1778,6 +1812,7 @@ export default function App() {
         }
 
         const hashDocId = parsedHash.type === 'doc' ? parsedHash.docId : null
+        const hashThreadId = parsedHash.type === 'doc' ? (parsedHash.threadId ?? null) : null
         const lastDocId = getPref('md.lastDocId', '') || null
         // 해시가 특정 문서를 안 가리키면 시작 화면 설정을 따른다 — 기본(home)은 자동으로 안 연다 (F-232 3.1)
         const shouldAutoOpen = Boolean(hashDocId) || getPref('md.startScreen', 'home') === 'last'
@@ -1790,6 +1825,9 @@ export default function App() {
             replaceHashUrl(resolved.docId)
             if (resolved.notFound) {
               showNotice({ type: 'info', message: '문서를 찾을 수 없습니다.' })
+            } else if (hashThreadId && resolved.docId === hashDocId) {
+              // 댓글 주소로 들어온 경우 — 댓글이 준비되면 그 카드로 이동한다(7.6)
+              commentsRef.current?.setPendingTarget({ docId: resolved.docId, threadId: hashThreadId })
             }
             const openedDoc = metaList.find((d) => d.id === resolved.docId)
             addOpenFolders(ancestorsOfDoc({ folders: folderList, doc: openedDoc }))
@@ -2035,8 +2073,16 @@ export default function App() {
       }
 
       const docId = parsedHash.type === 'doc' ? parsedHash.docId : null
+      const threadId = parsedHash.type === 'doc' ? (parsedHash.threadId ?? null) : null
       // 해시가 문서 경로·문서 없음으로 바뀌면 문서 id 가 같아도 공유 화면·공유 관리 페이지·도움말 페이지·지도를 닫는다 (F-138 3.3, F-243 3.4, F-244 3.3, F-292 6.1)
-      if (docId === currentDocIdRef.current && !sharedDocRef.current && !sharesOpenRef.current && !helpOpenRef.current && !mapRouteRef.current) return
+      if (docId === currentDocIdRef.current && !sharedDocRef.current && !sharesOpenRef.current && !helpOpenRef.current && !mapRouteRef.current) {
+        // 알림함 링크를 눌렀는데 이미 그 문서를 보고 있는 경우 — 돌아가기 전에 대상을 잡는다(7.6)
+        if (docId && threadId) {
+          commentsRef.current?.setPendingTarget({ docId, threadId })
+          replaceHashUrl(docId)
+        }
+        return
+      }
 
       ;(async () => {
         await beforeLeaveDoc()
@@ -2049,6 +2095,10 @@ export default function App() {
         if (docId && latestDocs.some((d) => d.id === docId)) {
           setCurrentDocId(docId)
           setPref('md.lastDocId', docId)
+          if (threadId) {
+            commentsRef.current?.setPendingTarget({ docId, threadId })
+            replaceHashUrl(docId)
+          }
           const openedDoc = latestDocs.find((d) => d.id === docId)
           addOpenFolders(ancestorsOfDoc({ folders: foldersRef.current, doc: openedDoc }))
         } else {
@@ -2219,6 +2269,32 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [publicRoute])
+
+  // ----- Ctrl+Alt+M(Cmd+Option+M) → 댓글 달기, 편집기 키맵이 아니라 창 keydown 하나 (F-505 8.1) -----
+  useEffect(() => {
+    if (publicRoute) return
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || !e.altKey || e.shiftKey) return
+      if (e.code !== 'KeyM') return
+      if (bootPhaseRef.current !== 'ready') return
+      if (document.querySelector('dialog[open]')) return
+      if (e.isComposing) return
+      const access = commentsRef.current?.access
+      if (!access) return
+      if (access.kind === 'none') {
+        e.preventDefault()
+        showNotice({ type: 'info', message: COMMENT_TEXT.vaultForbidden })
+        return
+      }
+      const view = editorRef.current?.view
+      if (!view || !view.dom.contains(document.activeElement) || view.composing) return
+      e.preventDefault()
+      if (access.kind === 'write') commentsRef.current?.beginComment()
+      else if (access.kind === 'unavailable') commentsRef.current?.setOpen(true, false)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [publicRoute, showNotice])
 
   // ----- 문서를 열 때 저장소 본문을 1회 읽어 에디터에 넘긴다 (architecture.md 3장) -----
   // openDoc.id 가 currentDocId 와 다르면(문서 없음 포함) 렌더링에서 에디터를 그리지
@@ -2686,7 +2762,24 @@ export default function App() {
 
   const handleSelectionChange = useCallback((state: EditorState) => {
     setStats((prev) => ({ ...prev, ...cursorInfo(state) }))
+    const view = editorRef.current?.view
+    const sel = state.selection.main
+    setFloatingCommentAnchor(view && !sel.empty ? scrollTopOf(view, sel.from) : null)
   }, [])
+
+  // 떠 있는 `댓글 달기` 버튼 — 선택 시작 줄 높이(문서 좌표)를 스크롤에 맞춰 화면 좌표로 (F-505 7.1 10번)
+  const [floatingCommentAnchor, setFloatingCommentAnchor] = useState<number | null>(null)
+  const [editorScrollTop, setEditorScrollTop] = useState(0)
+  useEffect(() => {
+    const scroller = editorRef.current?.view.scrollDOM
+    if (!scroller) return
+    function onScroll() {
+      setEditorScrollTop(scroller!.scrollTop)
+    }
+    onScroll()
+    scroller.addEventListener('scroll', onScroll, { passive: true })
+    return () => scroller.removeEventListener('scroll', onScroll)
+  }, [openDoc?.id, currentDocId, editorRemountNonce])
 
   // 새 문서 대상 폴더 (F-138 3.4): 사이드바 새 문서(폴더 생략)·없는 위키링크 클릭·가져오기
   // 세 경로가 이 함수로 통일한다. 현재 문서의 folderId 가 존재하는 폴더일 때만 그 값,
@@ -4175,6 +4268,15 @@ export default function App() {
     e2ee: e2ee
       ? { status: e2ee.status, lock: e2ee.openSettingsDialogs.lockNow, openUnlock: e2ee.openSettingsDialogs.unlock }
       : undefined,
+    comments:
+      commentAccessValue.kind === 'none' || !currentDoc
+        ? undefined
+        : {
+            canAdd: comments.canWrite && (viewMode === 'live' || viewMode === 'raw'),
+            railOpen: comments.open,
+            add: comments.beginComment,
+            toggleRail: () => comments.setOpen(!comments.open, true),
+          },
   }
 
   // 검색 결과에서 문서 열기 (F-287.md 4.6) — 지금 문서를 그대로 두지 않고 그 문서로 이동한다
@@ -4353,11 +4455,19 @@ export default function App() {
   // ----- 우클릭 메뉴 (specs/features/F-170.md) -----
 
   // 주 에디터·표 칸 하위 에디터 우클릭 — createEditor.ts handle.onContextMenu() 구독으로 온다
-  const handleEditorContextMenu = useCallback((info: EditorContextMenuInfo) => {
-    const hasSelection = !info.view.state.selection.main.empty
-    const nodes = buildEditorContextMenu({ place: info.place, state: info.view.state, hasSelection })
-    setContextMenu({ x: info.x, y: info.y, place: info.place, view: info.view, mainView: info.mainView, container: null, nodes })
-  }, [])
+  const handleEditorContextMenu = useCallback(
+    (info: EditorContextMenuInfo) => {
+      const hasSelection = !info.view.state.selection.main.empty
+      // 금고·none 이면 항목이 없다(3.5, 사용자 결정 Q2) — write 가 아니면 비활성으로 둔다
+      const comment =
+        commentsRef.current && commentsRef.current.access.kind !== 'none'
+          ? { disabled: !commentsRef.current.canWrite || info.place === 'cell' }
+          : undefined
+      const nodes = buildEditorContextMenu({ place: info.place, state: info.view.state, hasSelection, comment })
+      setContextMenu({ x: info.x, y: info.y, place: info.place, view: info.view, mainView: info.mainView, container: null, nodes })
+    },
+    [],
+  )
 
   // 보기 모드·공유 화면 우클릭 (3.3) — Viewer.tsx 가 넘긴다
   const handleViewContextMenu = useCallback((info: ViewContextMenuInfo) => {
@@ -4529,6 +4639,12 @@ export default function App() {
       openPalette()
       return
     }
+    if (node.action === 'comment-add') {
+      // 칸 메뉴에서는 이미 비활성이라 여기로 오지 않는다(3.5)
+      cm.view?.focus()
+      comments.beginComment()
+      return
+    }
     if (node.action === 'clipboard-cut') await cutContextMenuSelection(cm)
     else if (node.action === 'clipboard-copy') await copyContextMenuSelection(cm)
     else if (node.action === 'clipboard-paste') await pasteContextMenuClipboard(cm)
@@ -4616,6 +4732,11 @@ export default function App() {
     focusEditorRef.current = true
   }
 
+  // 댓글 레일·판 보이는 조건 — 편집기가 보이고 접근이 none 이 아니고 편집·원문 모드일 때만 (F-505 5.1·6장)
+  const commentAvailable = showEditor && openDoc?.id === currentDocId && commentAccessValue.kind !== 'none' && (viewMode === 'live' || viewMode === 'raw')
+  const commentRailVisible = commentAvailable && comments.mode === 'rail' && comments.open
+  const commentSheetVisible = commentAvailable && comments.mode === 'sheet' && comments.open
+
   // 검색 인덱스 재사용 범위 (specs/features/F-287.md 4.2) — searchIndex.ts 는 localStorage 를 읽지 않는다
   const searchDialogScope = searchScope(store.kind, account.state === 'in' ? account.id : null)
   // 지도 인덱스 재사용 범위 — 같은 방식(specs/features/F-292.md 5.3)
@@ -4677,6 +4798,25 @@ export default function App() {
       // 공유 화면·지도가 떠 있는 동안은 지금 보는 것이 그 문서가 아니다 (F-307 7.4)
       peers={sharedDoc || mapRoute ? NO_PEERS : livePeers}
       selfUserId={account.state === 'in' ? account.id : null}
+      comments={
+        commentAccessValue.kind === 'none' || !currentDoc
+          ? undefined
+          : {
+              openCount: comments.openThreadCount,
+              open: comments.open,
+              disabled: bootPhase !== 'ready' || isEmpty,
+              onToggle: () => {
+                // 보기 모드에서 누르면 편집 모드로 바꾸고 연다(4장 끝 행)
+                if (viewMode === 'view') {
+                  changeViewMode('live')
+                  comments.setOpen(true, false)
+                  return
+                }
+                // 판은 화면을 덮어서 열림 상태를 저장하지 않는다(md.commentRail 은 레일만, F-505 5.1·E13)
+                comments.setOpen(!comments.open, comments.mode === 'rail')
+              },
+            }
+      }
     />
   )
 
@@ -4839,7 +4979,12 @@ export default function App() {
           )}
           {showEditor && (
             // 공유 화면·지도가 떠 있는 동안 편집 영역을 언마운트하지 않고 hidden 으로만 숨긴다 — 언마운트하면 EditorView 가 새로 만들어져 저장된 편집을 덮어쓴다(F-138 3.2, F-292.md 6.1)
-            <div className="content-area" ref={contentAreaRef} hidden={Boolean(sharedDoc) || Boolean(mapRoute)}>
+            <div
+              className="content-area"
+              ref={contentAreaRef}
+              hidden={Boolean(sharedDoc) || Boolean(mapRoute)}
+              data-comment-rail-open={commentRailVisible || undefined}
+            >
               <div className="editor-slot" hidden={viewMode === 'view'}>
                 {openDoc?.id === currentDocId && (
                   <Editor
@@ -4888,6 +5033,56 @@ export default function App() {
                   onContextMenu={handleViewContextMenu}
                 />
               )}
+              {(commentRailVisible || commentSheetVisible) && (
+                <CommentRailPanel
+                  mode={comments.mode}
+                  open={comments.open}
+                  onClose={() => {
+                    comments.setOpen(false, false)
+                    editorRef.current?.focus()
+                  }}
+                  access={comments.access}
+                  ready={comments.ready}
+                  canWrite={comments.canWrite}
+                  threads={comments.threads}
+                  threadById={comments.threadById}
+                  layout={comments.layout}
+                  activeId={comments.activeId}
+                  setActive={comments.setActive}
+                  showResolved={comments.showResolved}
+                  setShowResolved={comments.setShowResolved}
+                  orphansOpen={comments.orphansOpen}
+                  setOrphansOpen={comments.setOrphansOpen}
+                  composer={comments.composer}
+                  sendComposer={comments.sendComposer}
+                  cancelComposer={comments.cancelComposer}
+                  reply={comments.reply}
+                  startReply={comments.startReply}
+                  sendReply={comments.sendReply}
+                  toggleResolve={comments.toggleResolve}
+                  removeComment={comments.removeComment}
+                  reveal={comments.reveal}
+                  actorFor={comments.actorFor}
+                  scrollElement={editorRef.current?.view.scrollDOM ?? null}
+                  focusEditor={() => editorRef.current?.focus()}
+                />
+              )}
+              {commentAvailable &&
+                comments.canWrite &&
+                !comments.composer &&
+                floatingCommentAnchor !== null && (
+                  <button
+                    type="button"
+                    className="comment-add-button"
+                    aria-label="댓글 달기"
+                    title="댓글 달기 (Ctrl+Alt+M)"
+                    style={{ transform: `translateY(${floatingCommentAnchor - editorScrollTop}px)` }}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => comments.beginComment()}
+                  >
+                    <IconAddComment size={18} />
+                  </button>
+                )}
               {openDoc?.id === currentDocId && (
                 <Outline
                   editorRef={editorRef}
@@ -4896,6 +5091,7 @@ export default function App() {
                   docId={currentDocId}
                   viewMode={viewMode}
                   contentWidth={contentWidthPref}
+                  buttonOnly={commentRailVisible}
                 />
               )}
               <WikiLinkPreview

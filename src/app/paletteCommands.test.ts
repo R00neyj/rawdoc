@@ -3,7 +3,11 @@ import { PALETTE_COMMANDS } from './paletteCommands'
 import type { PaletteContext } from './paletteContract'
 import type { TemplateEntry } from '../lib/templates'
 
-function ctx(templates: readonly TemplateEntry[], e2ee?: PaletteContext['e2ee']): PaletteContext {
+function ctx(
+  templates: readonly TemplateEntry[],
+  e2ee?: PaletteContext['e2ee'],
+  comments?: PaletteContext['comments'],
+): PaletteContext {
   return {
     canInsertTemplate: true,
     canPrint: true,
@@ -11,15 +15,28 @@ function ctx(templates: readonly TemplateEntry[], e2ee?: PaletteContext['e2ee'])
     insertTemplate: async () => {},
     printDoc: () => {},
     e2ee,
+    comments,
   }
 }
 
-describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀)', () => {
-  it('id 가 순서대로, 겹치지 않고, 영역.동작 모양(숫자 허용, F-404.md 11장 Q3)', () => {
+// 완화한 id 정규식(F-505 3.4, 사용자 결정 Q1) — 영역은 소문자·숫자, 동작은 소문자로 시작해 대문자·숫자·하이픈을 더 받는다
+const PALETTE_ID_RE = /^[a-z][a-z0-9]*(\.[a-z][a-zA-Z0-9-]*)+$/
+
+describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀, F-505 U24)', () => {
+  it('id 가 순서대로, 겹치지 않고, 완화한 정규식을 통과한다', () => {
     const ids = PALETTE_COMMANDS.map((c) => c.id)
-    expect(ids).toEqual(['template.insert', 'doc.print', 'e2ee.lock', 'e2ee.unlock'])
+    expect(ids).toEqual(['template.insert', 'doc.print', 'e2ee.lock', 'e2ee.unlock', 'comment.add', 'comment.toggleRail'])
     expect(new Set(ids).size).toBe(ids.length)
-    for (const id of ids) expect(id).toMatch(/^[a-z][a-z0-9]*(\.[a-z-]+)+$/)
+    for (const id of ids) expect(id).toMatch(PALETTE_ID_RE)
+  })
+
+  it('U24 — 완화한 정규식은 camelCase 세그먼트를 받고, 잘못된 모양은 걸러낸다 (r5)', () => {
+    for (const ok of ['comment.add', 'comment.toggleRail', 'notifications.open', 'template.insert', 'doc.print', 'e2ee.lock', 'e2ee.unlock']) {
+      expect(ok).toMatch(PALETTE_ID_RE)
+    }
+    for (const bad of ['Comment.add', 'comment.Toggle', 'comment', 'comment.toggle_rail', 'comment.-x']) {
+      expect(bad).not.toMatch(PALETTE_ID_RE)
+    }
   })
 
   // F-2037.md 9장 — 폴더 줄은 사용자 템플릿이 없을 때만, 변수·도움말 줄은 늘(U5)
@@ -95,5 +112,40 @@ describe('e2ee.lock·e2ee.unlock — U14 (F-404.md 10.1)', () => {
     if (!unlockCmd || unlockCmd.kind !== 'action') throw new Error('e2ee.unlock not found')
     unlockCmd.run(context)
     expect(openUnlockCalled).toBe(true)
+  })
+})
+
+describe('comment.add·comment.toggleRail — U22 (F-505 3.4)', () => {
+  function visibleIds(comments?: PaletteContext['comments']) {
+    const context = ctx([], undefined, comments)
+    return PALETTE_COMMANDS.filter((c) => c.when(context)).map((c) => c.id)
+  }
+
+  it('comments 없으면 댓글 명령 0개', () => {
+    expect(visibleIds(undefined)).not.toContain('comment.add')
+    expect(visibleIds(undefined)).not.toContain('comment.toggleRail')
+  })
+
+  it('canAdd 거짓이면 comment.toggleRail 만', () => {
+    const ids = visibleIds({ canAdd: false, railOpen: false, add: () => {}, toggleRail: () => {} })
+    expect(ids).not.toContain('comment.add')
+    expect(ids).toContain('comment.toggleRail')
+  })
+
+  it('canAdd 참·railOpen 참이면 둘 다, 토글 라벨은 댓글 닫기', () => {
+    const context = ctx([], undefined, { canAdd: true, railOpen: true, add: () => {}, toggleRail: () => {} })
+    const visible = PALETTE_COMMANDS.filter((c) => c.when(context))
+    expect(visible.map((c) => c.id)).toEqual(expect.arrayContaining(['comment.add', 'comment.toggleRail']))
+    const toggle = visible.find((c) => c.id === 'comment.toggleRail')
+    expect(toggle?.label).toBe('댓글 닫기')
+    const add = PALETTE_COMMANDS.find((c) => c.id === 'comment.add')
+    expect(add?.shortcut).toBe('Ctrl+Alt+M')
+  })
+
+  it('railOpen 거짓이면 토글 라벨은 댓글 열기', () => {
+    const context = ctx([], undefined, { canAdd: true, railOpen: false, add: () => {}, toggleRail: () => {} })
+    const visible = PALETTE_COMMANDS.filter((c) => c.when(context))
+    const toggle = visible.find((c) => c.id === 'comment.toggleRail')
+    expect(toggle?.label).toBe('댓글 열기')
   })
 })

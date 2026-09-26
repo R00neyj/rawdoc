@@ -39,6 +39,7 @@ export type MenuActionKind =
   | 'clipboard-paste-text'
   | 'select-all'
   | 'open-palette'
+  | 'comment-add'
 
 export type MenuItemNode = {
   kind: 'item'
@@ -126,10 +127,12 @@ export type EditorMenuInput = {
   place: EditorMenuPlace
   state: EditorState
   hasSelection: boolean
+  // 없으면 항목이 없다 — 금고 문서·댓글 UI 가 없는 경로 (F-505 3.5)
+  comment?: { disabled: boolean }
 }
 
 // 편집·원문 모드(3.1) / 표 칸 편집 중(3.2) 메뉴 트리
-export function buildEditorContextMenu({ place, state, hasSelection }: EditorMenuInput): ContextMenuNode[] {
+export function buildEditorContextMenu({ place, state, hasSelection, comment }: EditorMenuInput): ContextMenuNode[] {
   const isCell = place === 'cell'
   const paragraphDisabled = isCell || paragraphGroupDisabled(state)
   const insertDisabled = isCell || insertGroupDisabled(state)
@@ -164,6 +167,14 @@ export function buildEditorContextMenu({ place, state, hasSelection }: EditorMen
     item('mathblock', '수식 블럭', undefined, insertMathBlock, insertDisabled),
   ]
 
+  // 댓글 달기 — select-all 뒤 구분선 다음, 그 뒤에 구분선을 하나 더 두고 palette (F-505 3.5)
+  const tail: ContextMenuNode[] = [{ kind: 'separator' }]
+  if (comment) {
+    tail.push({ kind: 'item', id: 'comment-add', label: '댓글 달기', shortcut: 'Ctrl+Alt+M', action: 'comment-add', disabled: comment.disabled })
+    tail.push({ kind: 'separator' })
+  }
+  tail.push(PALETTE_ITEM)
+
   return [
     item('wikilink', '링크 추가', undefined, insertWikiLink),
     item('link', '외부 링크 추가', 'Ctrl+K', insertLink),
@@ -178,8 +189,7 @@ export function buildEditorContextMenu({ place, state, hasSelection }: EditorMen
     clipboardItem('paste-text', '일반 텍스트로 붙여넣기', 'Ctrl+Shift+V', 'clipboard-paste-text', false),
     { kind: 'separator' },
     clipboardItem('select-all', '모두 선택', 'Ctrl+A', 'select-all', false),
-    { kind: 'separator' },
-    PALETTE_ITEM,
+    ...tail,
   ]
 }
 

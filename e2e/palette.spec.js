@@ -72,7 +72,8 @@ test.describe('F-2022 A1 Ctrl+P 로 열기', () => {
     await expect(palette(page).locator('h2')).toHaveText('명령 팔레트')
     await expect(palette(page).locator('.command-palette-input')).toBeFocused()
     const options = paletteOptions(page)
-    await expect(options).toHaveCount(2)
+    // 댓글 명령 둘(comment.add·comment.toggleRail)이 F-505 로 뒤에 더해져 2개 → 4개(3.4)
+    await expect(options).toHaveCount(4)
     await expect(options.nth(0)).toHaveText(/템플릿 삽입/)
     await expect(options.nth(1)).toHaveText(/PDF \(A4 인쇄\)/)
     await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true')
@@ -329,9 +330,10 @@ test.describe('F-2022 A12 키보드', () => {
     await page.locator('.cm-content').click()
     await page.keyboard.press('Control+p')
 
-    await page.keyboard.press('ArrowUp') // nextResultIndex(0,2,'ArrowUp') = 1
-    await expect(paletteOptions(page).nth(1)).toHaveAttribute('aria-selected', 'true')
-    await page.keyboard.press('ArrowDown') // nextResultIndex(1,2,'ArrowDown') = 0
+    // 댓글 명령 둘이 F-505 로 더해져 옵션이 4개(3.4) — nextResultIndex(0,4,'ArrowUp') = 3
+    await page.keyboard.press('ArrowUp')
+    await expect(paletteOptions(page).nth(3)).toHaveAttribute('aria-selected', 'true')
+    await page.keyboard.press('ArrowDown') // nextResultIndex(3,4,'ArrowDown') = 0
     await expect(paletteOptions(page).nth(0)).toHaveAttribute('aria-selected', 'true')
 
     await page.keyboard.press('Enter') // 템플릿 삽입 2단계로
@@ -352,7 +354,8 @@ test.describe('F-2022 A13 보기 모드', () => {
     await setViewMode(page, 'view')
 
     await page.keyboard.press('Control+p')
-    await expect(paletteOptions(page)).toHaveCount(1)
+    // 보기 모드도 댓글 접근이 'none' 이 아니라 comment.toggleRail 이 보인다(F-505 3.4) — PDF·댓글 열기 2개
+    await expect(paletteOptions(page)).toHaveCount(2)
     await expect(paletteOptions(page).first()).toHaveText(/PDF/)
     await page.keyboard.press('Enter')
 

@@ -48,4 +48,30 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     when: (ctx) => ctx.e2ee?.status === 'locked',
     run: (ctx) => ctx.e2ee?.openUnlock(),
   },
+  {
+    id: 'comment.add',
+    kind: 'action',
+    label: '댓글 달기',
+    shortcut: 'Ctrl+Alt+M',
+    keywords: ['댓글', 'comment', '달기', '코멘트', '메모'],
+    when: (ctx) => Boolean(ctx.comments?.canAdd),
+    run: (ctx) => ctx.comments?.add(),
+  },
+  {
+    id: 'comment.toggleRail',
+    kind: 'action',
+    // 상태 따라 라벨이 바뀌는 명령 — when() 이 저장한 railOpen 을 라벨 getter 가 읽는다(3.4)
+    get label() {
+      return toggleRailOpen ? '댓글 닫기' : '댓글 열기'
+    },
+    keywords: ['댓글', 'comment', '레일', '열기', '닫기'],
+    when: (ctx) => {
+      toggleRailOpen = Boolean(ctx.comments?.railOpen)
+      return Boolean(ctx.comments)
+    },
+    run: (ctx) => ctx.comments?.toggleRail(),
+  },
 ]
+
+// comment.toggleRail 라벨 getter 가 읽는 값 — visibleCommands() 가 when() 을 부른 뒤 같은 렌더에서 라벨을 읽는다
+let toggleRailOpen = false

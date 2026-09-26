@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { parseHash, formatHash, formatShareHash, formatPublicFolderHash, formatPublicHash, formatMapHash, parsePathRoute } from './hashRoute'
+import {
+  parseHash,
+  formatHash,
+  formatShareHash,
+  formatCommentHash,
+  formatPublicFolderHash,
+  formatPublicHash,
+  formatMapHash,
+  parsePathRoute,
+} from './hashRoute'
 
 describe('parseHash', () => {
   it('#/d/{id} 형식이면 type doc, docId 를 돌려준다', () => {
@@ -84,6 +93,30 @@ describe('parseHash', () => {
 
   it('#/mapping 은 map 이 아니라 none', () => {
     expect(parseHash('#/mapping')).toEqual({ type: 'none' })
+  })
+})
+
+describe('parseHash — 댓글 주소 U17 (F-505.md 3.3)', () => {
+  it('#/d/{id}/c/{tid} 는 type doc, docId·threadId 를 돌려준다', () => {
+    expect(parseHash('#/d/abc/c/t1')).toEqual({ type: 'doc', docId: 'abc', threadId: 't1' })
+  })
+
+  it('#/d/{id}/c/ 는(빈 threadId) 지금 규칙대로 문서 id 전체를 먹는다', () => {
+    expect(parseHash('#/d/abc/c/')).toEqual({ type: 'doc', docId: 'abc/c/' })
+  })
+
+  it('#/d/{id} 는 threadId 키 자체가 없다', () => {
+    const r = parseHash('#/d/abc')
+    expect(r).toEqual({ type: 'doc', docId: 'abc' })
+    expect('threadId' in r).toBe(false)
+  })
+})
+
+describe('formatCommentHash — U18 (F-505.md 3.3)', () => {
+  it('#/d/{docId}/c/{threadId} 를 만들고 parseHash 로 되돌아온다', () => {
+    const hash = formatCommentHash('abc', 't1')
+    expect(hash).toBe('#/d/abc/c/t1')
+    expect(parseHash(hash)).toEqual({ type: 'doc', docId: 'abc', threadId: 't1' })
   })
 })
 

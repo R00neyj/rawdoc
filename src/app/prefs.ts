@@ -27,6 +27,8 @@ type PrefMap = {
   'md.e2eeBackupNotice': '1'
   'md.contentWidth': string
   'md.wikiPreview': 'on' | 'off'
+  // 없으면 문서를 열 때 열린 스레드가 있으면 연다 — '' 은 "저장한 적 없음"(F-505 3.7)
+  'md.commentRail': string
 }
 
 type PrefKey = keyof PrefMap
@@ -57,6 +59,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.e2eeBackupNotice',
   'md.contentWidth',
   'md.wikiPreview',
+  'md.commentRail',
 ])
 
 function assertAllowed(key: string) {

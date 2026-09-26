@@ -78,6 +78,10 @@ import listSvg from '@material-symbols/svg-400/outlined/list.svg?raw'
 import fitScreenSvg from '@material-symbols/svg-400/outlined/fit_screen.svg?raw'
 import lockSvg from '@material-symbols/svg-400/outlined/lock.svg?raw'
 import lockOpenSvg from '@material-symbols/svg-400/outlined/lock_open.svg?raw'
+// 상단바 `댓글` 버튼 (F-505 3.6) — IconComment 는 툴바 `주석` 이 이미 쓴다
+import forumSvg from '@material-symbols/svg-400/outlined/forum.svg?raw'
+// 떠 있는 `댓글 달기` 버튼 (F-505 7.1)
+import addCommentSvg from '@material-symbols/svg-400/outlined/add_comment.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -200,6 +204,11 @@ export const IconFit = makeIcon(fitScreenSvg)
 export const IconLock = makeIcon(lockSvg)
 // 금고에서 빼기 메뉴 (F-407 7.1)
 export const IconLockOpen = makeIcon(lockOpenSvg)
+
+// 상단바 `댓글` 버튼 (F-505 3.6)
+export const IconForum = makeIcon(forumSvg)
+// 떠 있는 `댓글 달기` 버튼 (F-505 7.1)
+export const IconAddComment = makeIcon(addCommentSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

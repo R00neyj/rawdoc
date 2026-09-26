@@ -5,6 +5,7 @@ import brand from '../../brand.config'
 import { E2EE_DEFAULT_LOCK_MINUTES } from '../e2ee/keyring'
 import { E2EE_MAX_PLAIN_CONTENT_BYTES } from '../lib/e2eeLimits'
 import { WIKI_PREVIEW_OPEN_DELAY_MS } from './wikiPreview'
+import { COMMENT_BODY_MAX, COMMENTS_PER_DOC_MAX } from '../lib/docComments'
 
 // F-257.md 2장 표의 절 순서 그대로
 const SECTION_ORDER = [
@@ -18,6 +19,7 @@ const SECTION_ORDER = [
   '지도',
   '템플릿',
   '공유',
+  '댓글',
   '금고',
   '내보내기·가져오기',
   '설치와 오프라인',
@@ -179,6 +181,25 @@ describe('HELP_DOC_CONTENT', () => {
     expect(section).toContain('복구 코드')
     expect(section).toContain('자동 잠금')
     expect(section).toContain('금고로 옮기기…')
+  })
+
+  // F-505.md 10장 U23
+  it('U23: ## 댓글 절이 ## 공유 뒤·## 금고 앞에 있고, 수치가 상수와 맞는다', () => {
+    const shareIdx = HELP_DOC_CONTENT.indexOf('## 공유')
+    const commentIdx = HELP_DOC_CONTENT.indexOf('## 댓글')
+    const vaultIdx = HELP_DOC_CONTENT.indexOf('## 금고')
+    expect(commentIdx).toBeGreaterThan(shareIdx)
+    expect(commentIdx).toBeLessThan(vaultIdx)
+
+    const section = HELP_DOC_CONTENT.slice(commentIdx, vaultIdx)
+    expect(section).toContain('Ctrl+Alt+M')
+    expect(section).toContain('본문이 지워진 댓글')
+    expect(section).toContain('해결된 댓글 보기')
+    expect(section).toContain(`${COMMENT_BODY_MAX.toLocaleString('en-US')}자까지`)
+    expect(section).toContain(`${COMMENTS_PER_DOC_MAX}개까지`)
+    expect(section).not.toContain('코멘트')
+    expect(section).not.toContain('대댓글')
+    expect(section).not.toContain('고아')
   })
 })
 

@@ -1084,6 +1084,11 @@ body.sidebar-resizing {
   z-index: 20;
 }
 
+/* 레일이 보이는 동안 목차 버튼을 레일 폭만큼 왼쪽으로 (F-505 5.1) */
+.content-area[data-comment-rail-open] .outline-popup {
+  right: calc(16px + 280px);
+}
+
 .outline-btn {
   width: 40px;
   height: 40px;
@@ -1165,6 +1170,438 @@ body.sidebar-resizing {
 
 .outline-popup-card li[data-level='3'] .outline-item {
   padding-left: 32px;
+}
+
+/* ===== 댓글 레일·판 (specs/features/F-505.md 5·6·7장) ===== */
+
+/* 레일이 있는 동안 본문 최대 폭 = min(--content-width, 메인 열 − 280px − 48px) — 순환을 피해 --content-width 를 쓴다(F-2043 3.5) */
+.content-area[data-comment-rail-open] {
+  --content-max: min(var(--content-width), calc(100% - 280px - 48px));
+}
+
+/* 5.6 레일 여분 — 마지막 카드가 문서 끝을 넘으면 App.tsx 가 이 값을 채운다. 기본 0 (미구현, 5.6 참고) */
+.content-area {
+  --comment-rail-extra: 0px;
+}
+
+.comment-rail {
+  position: relative;
+  flex: none;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--rule);
+  background: var(--panel);
+}
+
+.comment-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  height: 60dvh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--rule);
+  background: var(--panel);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.16);
+}
+
+.comment-rail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.comment-rail-head h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.comment-rail-resolved-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.comment-sheet-close {
+  border-radius: var(--radius-control);
+  padding: 4px 10px;
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.comment-sheet-close:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+.comment-rail-empty {
+  padding: 16px 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.comment-rail-track-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.comment-sheet .comment-rail-track-wrap {
+  overflow-y: auto;
+}
+
+.comment-rail-track {
+  position: relative;
+}
+
+.comment-sheet .comment-rail-track {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+
+.comment-card-slot {
+  box-sizing: border-box;
+  padding: 0 8px;
+}
+
+.comment-rail .comment-card-slot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+}
+
+.comment-sheet .comment-card-slot {
+  position: static;
+  padding: 0;
+}
+
+/* 카드 하나 — 첫 댓글·답글·해결·삭제 (F-505 7.5) */
+.comment-thread {
+  margin: 4px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  transition: var(--transition-colors);
+}
+
+.comment-sheet .comment-thread {
+  margin: 0;
+}
+
+.comment-thread[data-active='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+
+.comment-thread[data-resolved='true'] {
+  opacity: 0.6;
+}
+
+.comment-thread:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 2px;
+}
+
+.comment-thread-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comment-thread-author {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.comment-thread-time {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.comment-thread-resolve {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-2);
+  border-radius: var(--radius-control);
+  padding: 2px 8px;
+  transition: var(--transition-colors);
+}
+
+.comment-thread-resolve:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+.comment-thread-resolved-by {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.comment-thread-body {
+  margin-top: 4px;
+}
+
+.comment-thread-quote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.comment-thread-orphan-note {
+  margin: 2px 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.comment-thread-text {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.comment-thread-text--clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+
+.comment-thread-reply-count {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.comment-reply {
+  margin-top: 8px;
+  padding-left: 10px;
+  border-left: 2px solid var(--rule);
+}
+
+.comment-reply-author {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.comment-reply-time {
+  margin-left: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.comment-reply-text {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.comment-reply-composer,
+.comment-composer {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comment-reply-input,
+.comment-composer-input {
+  width: 100%;
+  min-height: 56px;
+  resize: vertical;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--panel);
+}
+
+.comment-reply-input:focus-visible,
+.comment-composer-input:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: -1px;
+}
+
+.comment-reply-send {
+  align-self: flex-end;
+  border-radius: var(--radius-control);
+  padding: 4px 12px;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--rule-2);
+  transition: var(--transition-colors);
+}
+
+.comment-reply-send:hover:not(:disabled) {
+  background: var(--rule);
+}
+
+.comment-reply-send:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.comment-reply-error,
+.comment-composer-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.comment-composer {
+  margin: 4px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+}
+
+.comment-sheet .comment-composer {
+  margin: 0;
+}
+
+.comment-composer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.comment-composer-counter {
+  margin-right: auto;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.comment-composer-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.comment-composer-cancel {
+  border-radius: var(--radius-control);
+  padding: 4px 12px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.comment-composer-cancel:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+.comment-composer-send {
+  border-radius: var(--radius-control);
+  padding: 4px 12px;
+  font-size: 12.5px;
+  color: var(--panel);
+  background: var(--accent);
+  transition: var(--transition-colors);
+}
+
+.comment-composer-send:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+}
+
+.comment-composer-send:disabled {
+  color: var(--muted);
+  background: var(--rule-2);
+  cursor: default;
+}
+
+.comment-orphans {
+  flex: none;
+  border-top: 1px solid var(--rule);
+}
+
+.comment-orphans-head {
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.comment-orphans-head:hover {
+  background: var(--rule-2);
+}
+
+.comment-orphans-list {
+  max-height: 50%;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+/* 떠 있는 댓글 달기 버튼 (F-505 7.1 10번) */
+.comment-add-button {
+  position: absolute;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
+  z-index: 20;
+  transition: var(--transition-colors);
+}
+
+.comment-add-button:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+/* 상단바 댓글 배지 — 열린 스레드 수 (F-505 3.1 commentBadgeText) */
+.comment-rail-toggle {
+  position: relative;
+}
+
+.comment-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--panel);
+  font-size: 9.5px;
+  line-height: 14px;
+  text-align: center;
 }
 
 .empty-state {
