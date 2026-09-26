@@ -7,6 +7,7 @@ import { E2EE_MAX_PLAIN_CONTENT_BYTES } from '../lib/e2eeLimits'
 import { WIKI_PREVIEW_OPEN_DELAY_MS } from './wikiPreview'
 import { COMMENT_BODY_MAX, COMMENTS_PER_DOC_MAX } from '../lib/docComments'
 import { RETAIN_MS } from '../storage/yjsStore'
+import { MAX_INPUT_BYTES, MAX_RESULT_BYTES } from './attachImages'
 
 // F-257.md 2장 표의 절 순서 그대로
 const SECTION_ORDER = [
@@ -260,6 +261,19 @@ describe('F-2039 도움말 ↔ 사용법 글 분담 규칙', () => {
     expect(section.body).toContain(`${WIKI_PREVIEW_OPEN_DELAY_MS / 1000}초`)
     expect(section.body).toContain('문서 열기')
     expect(section.body).toContain('위키링크 미리보기')
+  })
+})
+
+// F-2048.md 6.1 U1
+describe('F-2048 도움말 ## 이미지 절', () => {
+  it('U1: 마지막 문단이 사용법 글 줄이고, 수치·화면 글자가 상수와 맞으며, 옛 문장이 없다', () => {
+    const section = appSections().find((s) => s.name === '이미지')!
+    const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [문서에 이미지 넣기](/guides/images)')
+    expect(section.body).toContain(`한 장에 ${MAX_INPUT_BYTES / 1024 / 1024}MB까지`)
+    expect(section.body).toContain(`${MAX_RESULT_BYTES / 1024 / 1024}MB가 넘으면`)
+    expect(section.body).toContain('`이미지 삭제`')
+    expect(section.body).not.toContain('한 장에 20MB까지 넣을 수 있고')
   })
 })
 

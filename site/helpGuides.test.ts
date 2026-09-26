@@ -20,6 +20,9 @@ import { DISCONNECT_NOTICE_MS } from '../src/app/liveDoc'
 import { MAX_CONTENT_BYTES, MAX_ATTACHMENT_BYTES } from '../src/app/importWorkspace'
 import { E2EE_SERVER_MAX_CONTENT_BYTES } from '../src/lib/e2eeLimits'
 import { RETAIN_MS } from '../src/storage/yjsStore'
+import { MAX_INPUT_BYTES, MAX_RESULT_BYTES, MAX_DIM, MAX_AREA } from '../src/app/attachImages'
+import { MAX_SIDE } from '../src/lib/shrinkImage'
+import { GRACE_MS } from '../src/app/attachmentGc'
 
 const GUIDES_DIR = fileURLToPath(new URL('../content/guides', import.meta.url))
 
@@ -282,6 +285,25 @@ describe('F-2047 오프라인과 동기화 글', () => {
 
   it('U3: 글에 제품명이 없다 (R6)', () => {
     const body = guideBody(readGuide('offline-sync')).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+// F-2048.md 6.2 U2·U3
+describe('F-2048 이미지 글', () => {
+  it('U2: 글의 앱 쪽 수치가 상수에서 만든 문자열과 같다 (R5)', () => {
+    const raw = readGuide('images')
+    expect(raw).toContain(`고른 파일이 ${MAX_INPUT_BYTES / 1024 / 1024}MB를`)
+    expect(raw).toContain(`한 변이 ${MAX_DIM.toLocaleString('en-US')}px`)
+    expect(raw).toContain(`화소 수가 ${(MAX_AREA / 10_000).toLocaleString('en-US')}만`)
+    expect(raw).toContain(`긴 변이 ${MAX_SIDE.toLocaleString('en-US')}px`)
+    expect(raw).toContain(`결과가 ${MAX_RESULT_BYTES / 1024 / 1024}MB를`)
+    expect(raw).toContain(`넣은 지 ${GRACE_MS / 3_600_000}시간`)
+  })
+
+  it('U3: 글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(readGuide('images')).toLowerCase()
     expect(body).not.toContain(brand.name.toLowerCase())
     expect(body).not.toContain(brand.shortName.toLowerCase())
   })

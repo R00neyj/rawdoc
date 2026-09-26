@@ -3,7 +3,7 @@ import { extractAttachmentRefs } from '../src/lib/imageBlock'
 
 const PAGE_SIZE = 200
 const MAX_DELETE = 500
-const GRACE_MS = 24 * 60 * 60 * 1000
+export const GRACE_MS = 24 * 60 * 60 * 1000
 const REF_ID_RE = /^[0-9a-f]{16}$/
 
 type AttachmentRow = { owner_id: string; id: string; ext: string; created_at: number }

@@ -1,7 +1,7 @@
 // 이미지 자동 축소 — 긴 변 2000px 초과면 줄이고 WebP 로 인코딩한다 (F-220.md 2.1)
 import type { ImageExt } from './imageBlock'
 
-const MAX_SIDE = 2000
+export const MAX_SIDE = 2000
 const QUALITY = 0.85
 
 export type ShrinkImageInfo = { mime: string; ext: ImageExt; width: number; height: number }

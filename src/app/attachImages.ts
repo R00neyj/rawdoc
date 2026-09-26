@@ -6,10 +6,10 @@ import { E2EE_MAX_PLAIN_ATTACHMENT_BYTES } from '../lib/e2eeLimits'
 import { isE2eeStoreError } from '../e2ee/e2eeStore'
 import type { Notice } from './notice'
 
-const MAX_INPUT_BYTES = 20 * 1024 * 1024
-const MAX_RESULT_BYTES = 5 * 1024 * 1024
-const MAX_DIM = 10000
-const MAX_AREA = 40_000_000
+export const MAX_INPUT_BYTES = 20 * 1024 * 1024
+export const MAX_RESULT_BYTES = 5 * 1024 * 1024
+export const MAX_DIM = 10000
+export const MAX_AREA = 40_000_000
 
 const MESSAGES = {
   size: '이미지는 한 장에 20MB 까지 넣을 수 있습니다.',

@@ -1,7 +1,7 @@
 // 안 쓰는 첨부 정리 (specs/features/F-156.md 2.7, F-406.md 5장)
 import { extractAttachmentRefs } from '../lib/imageBlock'
 
-const GRACE_MS = 24 * 60 * 60 * 1000
+export const GRACE_MS = 24 * 60 * 60 * 1000
 const IDLE_TIMEOUT_MS = 2000
 
 export type GcStore = {

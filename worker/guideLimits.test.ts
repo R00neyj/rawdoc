@@ -5,12 +5,18 @@ import { fileURLToPath } from 'node:url'
 import { DAILY_WRITE_LIMIT, DOC_BYTES_QUOTA, DOC_COUNT_QUOTA } from './usage'
 import { MINUTE_WRITE_LIMIT } from './writeGate'
 import { ATTACHMENT_QUOTA_BYTES } from './attachments'
+import { GRACE_MS } from './attachmentGc'
 import { HELP_DOC_CONTENT } from '../src/app/helpDoc'
 
 const GUIDE_PATH = fileURLToPath(new URL('../content/guides/offline-sync.md', import.meta.url))
+const IMAGES_GUIDE_PATH = fileURLToPath(new URL('../content/guides/images.md', import.meta.url))
 
 function readGuide(): string {
   return readFileSync(GUIDE_PATH, 'utf-8')
+}
+
+function readImagesGuide(): string {
+  return readFileSync(IMAGES_GUIDE_PATH, 'utf-8')
 }
 
 describe('U4 글의 서버 한도 (R5)', () => {
@@ -32,5 +38,23 @@ describe('U5 도움말 ## 저장 의 서버 한도 (R5, U22 가 넘긴 것)', ()
     expect(section).toContain(`합쳐 ${DOC_BYTES_QUOTA / 1024 / 1024}MB`)
     expect(section).toContain(`문서 ${DOC_COUNT_QUOTA.toLocaleString('en-US')}개`)
     expect(section).toContain(`하루 ${DAILY_WRITE_LIMIT.toLocaleString('en-US')}번`)
+  })
+})
+
+// F-2048.md 6.3 U4·U5
+describe('F-2048 U4 이미지 글의 서버 수치 (R5)', () => {
+  it('images.md 에 저장 공간·정리 여유 수치가 상수 그대로 들어 있다', () => {
+    const raw = readImagesGuide()
+    expect(raw).toContain(`저장 공간은 ${ATTACHMENT_QUOTA_BYTES / 1024 / 1024}MB`)
+    expect(raw).toContain(`넣은 지 ${GRACE_MS / 3_600_000}시간`)
+  })
+})
+
+describe('F-2048 U5 도움말 ## 이미지 의 서버 수치 (R5)', () => {
+  it('## 이미지 부터 ## 위키링크 앞까지에 저장 공간 수치가 상수 그대로 들어 있다', () => {
+    const imageIdx = HELP_DOC_CONTENT.indexOf('## 이미지')
+    const wikiIdx = HELP_DOC_CONTENT.indexOf('## 위키링크')
+    const section = HELP_DOC_CONTENT.slice(imageIdx, wikiIdx)
+    expect(section).toContain(`이미지를 ${ATTACHMENT_QUOTA_BYTES / 1024 / 1024}MB까지`)
   })
 })
