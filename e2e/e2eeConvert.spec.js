@@ -552,6 +552,26 @@ test.describe('F-407 서버 금고로 옮기기', () => {
   })
 })
 
+// md-yjs 가 아직 없으면 -1 (offlineDoc.spec.js 와 같은 준비, F-2041 9.2)
+async function yjsRowCount(page, docId) {
+  return page.evaluate(async (id) => {
+    const names = (await indexedDB.databases()).map((d) => d.name)
+    if (!names.includes('md-yjs')) return -1
+    return new Promise((resolve) => {
+      const req = indexedDB.open('md-yjs')
+      req.onsuccess = () => {
+        const db = req.result
+        const all = db.transaction('updates').objectStore('updates').getAll()
+        all.onsuccess = () => {
+          resolve(all.result.filter((row) => row.docId === id).length)
+          db.close()
+        }
+      }
+      req.onerror = () => resolve(-1)
+    })
+  }, docId)
+}
+
 test.describe('F-407 실시간 문서 옮기기', () => {
   test('F-407 E13 지금 열린 실시간 문서 — 친 글까지 봉투에 담기고, 사라짐 알림·새 소켓 없이 다시 열린다', async ({ page }) => {
     const room = createFakeDocRoom()
@@ -592,5 +612,63 @@ test.describe('F-407 실시간 문서 옮기기', () => {
     expect(room.attempts('live1')).toBe(attempts)
     const log = await noticeLog(page)
     expect(log.some((m) => m.startsWith(LIVE_GONE))).toBe(false)
+  })
+
+  test('F-2041 E7 연결 중… 에서는 금고로 옮기기가 멈추고(pending-sync), resume 뒤 다시 누르면 옮겨진다', async ({ page }) => {
+    const room = createFakeDocRoom()
+    const server = await fakeServer(page)
+    await room.install(page.context())
+    await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) =>
+      route.request().method() === 'POST'
+        ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
+        : route.fulfill({ status: 204 }),
+    )
+    const base = '첫 줄\n'
+    server.docs.set('live2', serverDoc('live2', { title: '실시간 메모2', content: base }))
+    room.seed('live2', { title: '실시간 메모2', content: base })
+    const requests = collectRequests(page)
+    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await recordNotices(page)
+    await page.goto('/#/d/live2')
+    await expect(page.locator('.cm-content').first()).toContainText('첫 줄')
+    await expect(page.locator('.statusbar-save')).toHaveText('저장됨')
+    await expect.poll(() => yjsRowCount(page, 'live2')).toBeGreaterThanOrEqual(1)
+
+    room.pause('live2')
+    await page.reload()
+    await expect(page.locator('.cm-content').first()).toContainText('첫 줄')
+    await expect(page.locator('.statusbar-save')).toHaveText('연결 중…')
+
+    await convertFromMenu(page, docRow(page, 'live2'))
+    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+    await completeCreateVault(page)
+    await expect(notice(page)).toContainText('아직 서버에 올리지 못한 편집이 있는 문서가 있습니다. 저장이 끝난 뒤 다시 누르세요.')
+    expect(requests.filter((r) => r.method === 'PUT' && r.path === '/api/docs/live2/e2ee')).toHaveLength(0)
+
+    room.resume('live2')
+    await expect(page.locator('.statusbar-save')).toHaveText('저장됨', { timeout: 10_000 })
+
+    // 곧바로 재시도는 F-407 재연결 경합과 겹쳐 새로고침한 안정된 세션에서 다시 누른다 (사람 확인 필요)
+    await page.reload()
+    await expect(page.locator('.cm-content').first()).toContainText('첫 줄')
+    await expect(page.locator('.statusbar-save')).toHaveText('저장됨', { timeout: 10_000 })
+
+    // 새로고침 뒤 금고가 잠겨 있으면(D-9 전에) 먼저 푼다
+    const menu = await openMenuOf(page, docRow(page, 'live2'))
+    await menu.getByRole('menuitem', { name: '금고로 옮기기…', exact: true }).click()
+    if (await unlockDialog(page).isVisible()) {
+      await unlockDialog(page).locator('input[type="password"]').fill(PASSWORD)
+      await unlockDialog(page).getByRole('button', { name: '열기', exact: true }).click()
+    }
+    await expect(convertDialog(page)).toBeVisible()
+    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+    // 새로고침으로 금고 키가 사라진 채라 확인 뒤에도 한 번 더 열기를 묻는다
+    if (await unlockDialog(page).isVisible()) {
+      await unlockDialog(page).locator('input[type="password"]').fill(PASSWORD)
+      await unlockDialog(page).getByRole('button', { name: '열기', exact: true }).click()
+    }
+    await expect(notice(page)).toHaveText('"실시간 메모2"을(를) 금고로 옮겼습니다.')
+    expect(requests.filter((r) => r.method === 'PUT' && r.path === '/api/docs/live2/e2ee')).toHaveLength(1)
   })
 })

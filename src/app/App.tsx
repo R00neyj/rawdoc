@@ -56,7 +56,7 @@ import { decideDocPath, type DocPathKind, type FallbackReason } from './docPath'
 import { useLiveDoc, type LiveDocSession } from './useLiveDoc'
 import { usePeers } from './usePeers'
 import type { Peer } from '../lib/peers'
-import { createLiveDocController, type LiveSnapshot } from './liveDoc'
+import { createLiveDocController, liveStatusOf, type LiveSnapshot } from './liveDoc'
 import { flushUnsyncedDocs } from './yjsFlush'
 import { withTabBroadcast, newTabId } from './tabSync'
 import { useTabSync } from './useTabSync'
@@ -118,6 +118,7 @@ import { DEV_YSYNC } from '../editor/devSyncFlag'
 import type { EditorContextMenuInfo } from '../editor/createEditor'
 import { insertTable } from '../editor/insertCommands'
 import { countChars, countWords, cursorInfo } from '../editor/stats'
+import { isEditorRelay } from '../editor/remoteGate'
 import Viewer, { type ViewContextMenuInfo } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { findHeadingLine } from '../viewer/headingTarget'
@@ -150,7 +151,7 @@ import { searchScope } from './searchIndex'
 import HelpPage from './HelpPage'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
 import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
-import StatusBar, { type LiveStatus } from './StatusBar'
+import StatusBar from './StatusBar'
 import SharedView from './SharedView'
 import PublicView from './PublicView'
 import InviteDialog, { type InviteTarget } from './InviteDialog'
@@ -295,19 +296,6 @@ function e2eeCreateErrorMessage(err: unknown): string | null {
   if (isE2eeStoreError(err, 'too-large')) return E2EE_NOTICE.createTooLarge
   if (isE2eeStoreError(err, 'too-many-refs')) return E2EE_NOTICE.tooManyRefs
   return null
-}
-
-// 제어기 단계 → 상태바 표시 (F-305 11.1)
-function liveStatusOf(snapshot: LiveSnapshot | undefined): LiveStatus {
-  if (!snapshot) return 'connecting'
-  if (snapshot.phase === 'live') return 'live'
-  if (snapshot.phase === 'reconnecting') return 'reconnecting'
-  if (snapshot.phase === 'stopped') {
-    if (snapshot.stopReason === 'signed-out') return 'signed-out'
-    if (snapshot.stopReason === 'forbidden' || snapshot.stopReason === 'revoked') return 'revoked'
-    return 'gone'
-  }
-  return 'connecting'
 }
 
 // 우클릭 메뉴 상태 (specs/features/F-170.md) — 'editor'|'cell' 은 view·mainView, 'view' 는 container 를 쓴다
@@ -725,6 +713,8 @@ export default function App() {
   // 앞 실행의 끝·멈춤 알림 — 다시 누르면 걷는다(warn 이 남아 있으면 진행 info 가 가려진다)
   const e2eeConvertResultIdRef = useRef<number | null>(null)
   const liveSessionRef = useRef<LiveDocSession | null>(null)
+  // 사이드바 updatedAt 거르개가 "업데이트 순간의" everSynced 를 읽는다 (F-2041 5.3)
+  const liveEverSyncedRef = useRef(false)
   const openDocLineEndingRef = useRef<LineEnding | undefined>(undefined)
   // D-9·D-10 — 글과 답을 기다리는 함수. 닫힘(close 이벤트)이 확인 뒤에도 오므로 답은 한 번만 쓴다
   const [e2eeConvertText, setE2eeConvertText] = useState<E2eeConvertDialogText | null>(null)
@@ -996,7 +986,9 @@ export default function App() {
   useEffect(() => {
     if (!liveRoomDoc || !liveRoomDocId) return
     let timer: ReturnType<typeof setTimeout> | null = null
-    const handleUpdate = () => {
+    // everSynced 가 거짓인 동안(기록으로 먼저 뜬 채 첫 동기화 전)의 따라잡기는 내 편집 중계일 때만 올린다 (F-2041 5.3)
+    const handleUpdate = (_update: Uint8Array, origin: unknown) => {
+      if (!liveEverSyncedRef.current && !isEditorRelay(origin)) return
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
         const now = Date.now()
@@ -2433,6 +2425,7 @@ export default function App() {
     currentDocIdRef.current = currentDocId
     docPathRef.current = { docId: currentDocId, path: docPath }
     liveSessionRef.current = liveSession
+    liveEverSyncedRef.current = liveSnapshot?.everSynced ?? false
     liveTitleDocIdRef.current = liveRoomDoc ? liveRoomDocId : null
     saveCurrentAsNewDocRef.current = saveCurrentAsNewDoc
     foldersRef.current = folders
@@ -2634,7 +2627,8 @@ export default function App() {
     if (path !== 'realtime') return {}
     const session = liveSessionRef.current
     const editor = editorRef.current
-    if (!session || session.docId !== docId || !session.snapshot.ready || !editor) return 'blocked'
+    // live 가 아니면(첫 동기화 전·재연결 중) 편집기 글이 서버보다 낡았을 수 있다 (F-2041 5.5)
+    if (!session || session.docId !== docId || session.snapshot.phase !== 'live' || !editor) return 'blocked'
     const text = editor.getText(openDocLineEndingRef.current ?? 'lf')
     const title = session.roomDoc.getText(Y_TITLE_NAME).toString()
     // 세션이 닫힐 때까지(렌더 뒤 정리) 기다린다 — 닫힌 소켓의 정지 알림은 뜨지 않는다

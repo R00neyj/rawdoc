@@ -8,8 +8,9 @@ import {
   FIRST_SYNC_TIMEOUT_MS,
   PONG_TIMEOUT_MS,
   createLiveDocController,
+  liveStatusOf,
 } from './liveDoc'
-import type { LiveDocController } from './liveDoc'
+import type { LiveDocController, LiveSnapshot } from './liveDoc'
 import type { LiveSocket, LiveSocketOptions } from '../storage/liveSocket'
 import { encodeDocRoomMessage } from '../lib/docRoomProtocol'
 
@@ -56,7 +57,15 @@ type Attempt = {
   pong(): void
 }
 
-function setup(extra: { random?: () => number; keepaliveMs?: number | null; resumable?: boolean; startOffline?: boolean } = {}) {
+function setup(
+  extra: {
+    random?: () => number
+    keepaliveMs?: number | null
+    resumable?: boolean
+    startOffline?: boolean
+    readyAtStart?: boolean
+  } = {},
+) {
   const clock = fakeClock()
   const attempts: Attempt[] = []
   const openSocket = (options: LiveSocketOptions): LiveSocket => {
@@ -104,6 +113,7 @@ function setup(extra: { random?: () => number; keepaliveMs?: number | null; resu
     ...(extra.keepaliveMs !== undefined ? { keepaliveMs: extra.keepaliveMs } : {}),
     ...(extra.resumable !== undefined ? { resumable: extra.resumable } : {}),
     ...(extra.startOffline !== undefined ? { startOffline: extra.startOffline } : {}),
+    ...(extra.readyAtStart !== undefined ? { readyAtStart: extra.readyAtStart } : {}),
   })
   const last = () => attempts[attempts.length - 1]
   return { clock, attempts, controller, last }
@@ -773,3 +783,144 @@ describe('F-306 U21 비재개는 ready === everSynced', () => {
     })
   }
 })
+
+// readyAtStart — 재개 세션이 소켓을 여는 것과 동시에 ready 를 낸다 (specs/features/F-2041.md 3장)
+describe('F-2041 U1 readyAtStart 시작', () => {
+  it('소켓 1개, 스냅샷 connecting·ready 참·everSynced 거짓, 구독자가 start() 안에서 ready 를 받는다', () => {
+    const ctx = setup({ resumable: true, readyAtStart: true })
+    const seen: boolean[] = []
+    ctx.controller.subscribe((s) => seen.push(s.ready))
+    ctx.controller.start()
+    expect(ctx.attempts).toHaveLength(1)
+    expect(ctx.controller.snapshot()).toMatchObject({ phase: 'connecting', ready: true, everSynced: false })
+    expect(seen).toEqual([true])
+  })
+})
+
+describe('F-2041 U2 readyAtStart 뒤 synced', () => {
+  it('open → synced → live·ready·everSynced 모두 참', () => {
+    const ctx = setup({ resumable: true, readyAtStart: true })
+    ctx.controller.start()
+    ctx.last().open()
+    ctx.last().synced()
+    expect(ctx.controller.snapshot()).toMatchObject({ phase: 'live', ready: true, everSynced: true })
+  })
+})
+
+describe('F-2041 U3 readyAtStart 세션의 닫기 분류', () => {
+  const cases: [number, string][] = [
+    [4401, 'signed-out'],
+    [4403, 'revoked'],
+    [4404, 'deleted'],
+  ]
+  for (const [code, reason] of cases) {
+    for (const opened of [false, true]) {
+      it(`${code}(열림 ${opened}) → stopped/${reason}, ready:true, 120초 뒤에도 소켓 1개`, () => {
+        const ctx = setup({ resumable: true, readyAtStart: true })
+        ctx.controller.start()
+        if (opened) ctx.last().open()
+        ctx.last().close(code, 'x')
+        expect(stateOf(ctx.controller)).toEqual({ phase: 'stopped', ready: true, fallbackReason: null, stopReason: reason })
+        ctx.clock.advance(120_000)
+        expect(ctx.attempts).toHaveLength(1)
+      })
+    }
+  }
+})
+
+describe('F-2041 U4 readyAtStart 세션의 그 밖 닫힘', () => {
+  it('열린 적 없이 1011 → reconnecting, 백오프 1,000ms 에 둘째 시도. 열린 뒤 1013 → reconnecting, DISCONNECT_NOTICE_MS 뒤 disconnectedLong', () => {
+    const ctx = setup({ resumable: true, readyAtStart: true })
+    ctx.controller.start()
+    ctx.last().close(1011)
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'reconnecting', ready: true, fallbackReason: null, stopReason: null })
+    ctx.clock.advance(999)
+    expect(ctx.attempts).toHaveLength(1)
+    ctx.clock.advance(1)
+    expect(ctx.attempts).toHaveLength(2)
+    ctx.last().open()
+    ctx.last().close(1013)
+    expect(ctx.controller.snapshot().phase).toBe('reconnecting')
+    ctx.clock.advance(DISCONNECT_NOTICE_MS - 1000 - 1)
+    expect(ctx.controller.snapshot().disconnectedLong).toBe(false)
+    ctx.clock.advance(1)
+    expect(ctx.controller.snapshot().disconnectedLong).toBe(true)
+  })
+})
+
+describe('F-2041 U5 readyAtStart 첫 동기화 시간 제한', () => {
+  it('소켓 없이 FIRST_SYNC_TIMEOUT_MS → reconnecting, 폴백 아님', () => {
+    const ctx = setup({ resumable: true, readyAtStart: true })
+    ctx.controller.start()
+    ctx.clock.advance(FIRST_SYNC_TIMEOUT_MS)
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'reconnecting', ready: true, fallbackReason: null, stopReason: null })
+  })
+
+  it('소켓이 열린 채면 10초에는 connecting, 30초에 reconnecting, 그 뒤 synced → live', () => {
+    const ctx = setup({ resumable: true, readyAtStart: true })
+    ctx.controller.start()
+    ctx.last().open()
+    ctx.clock.advance(FIRST_SYNC_TIMEOUT_MS)
+    expect(ctx.controller.snapshot().phase).toBe('connecting')
+    ctx.clock.advance(FIRST_SYNC_HARD_TIMEOUT_MS - FIRST_SYNC_TIMEOUT_MS)
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'reconnecting', ready: true, fallbackReason: null, stopReason: null })
+    ctx.last().synced()
+    expect(ctx.controller.snapshot()).toMatchObject({ phase: 'live', ready: true, everSynced: true })
+  })
+})
+
+describe('F-2041 U6 readyAtStart goOffline', () => {
+  it('소켓을 제어기가 닫고 reconnecting, 120초 동안 새 시도 없음, wake 가 연다', () => {
+    const ctx = setup({ resumable: true, readyAtStart: true })
+    ctx.controller.start()
+    ctx.controller.goOffline()
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'reconnecting', ready: true, fallbackReason: null, stopReason: null })
+    expect(ctx.attempts[0].closedByController).toBe(true)
+    ctx.clock.advance(120_000)
+    expect(ctx.attempts).toHaveLength(1)
+    ctx.controller.wake()
+    expect(ctx.attempts).toHaveLength(2)
+  })
+})
+
+describe('F-2041 U7 readyAtStart 는 resumable 없이 뜻이 없다', () => {
+  it('connecting, ready 거짓, 10초 뒤 fallback/timeout — F-305 그대로', () => {
+    const ctx = setup({ readyAtStart: true })
+    ctx.controller.start()
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'connecting', ready: false, fallbackReason: null, stopReason: null })
+    ctx.clock.advance(FIRST_SYNC_TIMEOUT_MS)
+    expect(phaseOf(ctx.controller)).toEqual({ phase: 'fallback', fallbackReason: 'timeout', stopReason: null })
+  })
+})
+
+describe('F-2041 U8 startOffline 이 readyAtStart 를 이긴다', () => {
+  it('소켓 0개, reconnecting, ready:true(F-306 U18 과 같다)', () => {
+    const ctx = setup({ resumable: true, readyAtStart: true, startOffline: true })
+    ctx.controller.start()
+    expect(ctx.attempts).toHaveLength(0)
+    expect(stateOf(ctx.controller)).toEqual({ phase: 'reconnecting', ready: true, fallbackReason: null, stopReason: null })
+  })
+})
+
+describe('F-2041 U9 liveStatusOf', () => {
+  const base: Omit<LiveSnapshot, 'phase' | 'ready' | 'stopReason'> = {
+    everSynced: false,
+    fallbackReason: null,
+    tooLarge: false,
+    disconnectedLong: false,
+  }
+  it('스냅샷 단계·ready·stopReason → LiveStatus', () => {
+    expect(liveStatusOf(undefined)).toBe('connecting')
+    expect(liveStatusOf({ ...base, phase: 'connecting', ready: false, stopReason: null })).toBe('connecting')
+    expect(liveStatusOf({ ...base, phase: 'connecting', ready: true, stopReason: null })).toBe('syncing')
+    expect(liveStatusOf({ ...base, phase: 'live', ready: true, everSynced: true, stopReason: null })).toBe('live')
+    expect(liveStatusOf({ ...base, phase: 'reconnecting', ready: true, stopReason: null })).toBe('reconnecting')
+    expect(liveStatusOf({ ...base, phase: 'stopped', ready: true, stopReason: 'signed-out' })).toBe('signed-out')
+    expect(liveStatusOf({ ...base, phase: 'stopped', ready: true, stopReason: 'forbidden' })).toBe('revoked')
+    expect(liveStatusOf({ ...base, phase: 'stopped', ready: true, stopReason: 'revoked' })).toBe('revoked')
+    expect(liveStatusOf({ ...base, phase: 'stopped', ready: true, stopReason: 'not-found' })).toBe('gone')
+    expect(liveStatusOf({ ...base, phase: 'stopped', ready: true, stopReason: 'deleted' })).toBe('gone')
+  })
+})
+
+// U10 — 기존 F-306 U18~U21·F-305 U3~U11 을 한 줄도 고치지 않고 그대로 둔 채 이 파일 전체를 돌려 확인한다(위 describe 들)

@@ -4,6 +4,7 @@ import type * as Y from 'yjs'
 import { SOCKET_CLOSE, parseDocRoomMessage } from '../lib/docRoomProtocol'
 import type { LiveSocket, LiveSocketOptions } from '../storage/liveSocket'
 import type { FallbackReason } from './docPath'
+import type { LiveStatus } from './StatusBar'
 
 export const FIRST_SYNC_TIMEOUT_MS = 10_000
 export const FIRST_SYNC_HARD_TIMEOUT_MS = 30_000
@@ -43,6 +44,8 @@ export type LiveDocDeps = {
   resumable?: boolean
   // 시작할 때 오프라인이다. resumable 일 때만 뜻이 있다
   startOffline?: boolean
+  // 재개 가능 세션에서, 소켓을 여는 것과 동시에 ready 를 참으로 낸다. resumable 이 아니면 뜻이 없다 (F-2041 3.1)
+  readyAtStart?: boolean
 }
 
 export type LiveDocController = {
@@ -61,9 +64,25 @@ export function backoffDelay(failures: number, random: number): number {
   return base * (1 - RECONNECT_JITTER + 2 * RECONNECT_JITTER * random)
 }
 
+// 제어기 단계 → 상태바 표시 (F-305 11.1, syncing 은 F-2041 6장)
+export function liveStatusOf(snapshot: LiveSnapshot | undefined): LiveStatus {
+  if (!snapshot) return 'connecting'
+  if (snapshot.phase === 'live') return 'live'
+  if (snapshot.phase === 'reconnecting') return 'reconnecting'
+  if (snapshot.phase === 'stopped') {
+    if (snapshot.stopReason === 'signed-out') return 'signed-out'
+    if (snapshot.stopReason === 'forbidden' || snapshot.stopReason === 'revoked') return 'revoked'
+    return 'gone'
+  }
+  if (snapshot.phase === 'connecting') return snapshot.ready ? 'syncing' : 'connecting'
+  return 'connecting'
+}
+
 export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
   const keepaliveMs = deps.keepaliveMs === undefined ? KEEPALIVE_INTERVAL_MS : deps.keepaliveMs
   const resumable = deps.resumable === true
+  // resumable 이 아니면 뜻이 없다 (3.5)
+  const readyAtStart = resumable && deps.readyAtStart === true
 
   let snap: LiveSnapshot = {
     phase: 'connecting',
@@ -268,12 +287,17 @@ export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
     else if (parsed?.type === 'size-ok') update({ tooLarge: false })
   }
 
+  // readyAtStart 세션은 처음부터 ready 라 ready 로는 "이미 끝남" 을 볼 수 없다 (F-2041 3.4)
+  function firstSyncAlreadyDone() {
+    return readyAtStart ? snap.everSynced || snap.phase !== 'connecting' : snap.ready
+  }
+
   function onFirstSyncTimeout() {
-    if (ended() || snap.ready) return
+    if (ended() || firstSyncAlreadyDone()) return
     // 서버가 받아 줬고 큰 첫 상태를 보내는 중일 수 있다 — 30초까지 기다린다 (7.5)
     if (socket && socketOpened) {
       arm('hardSync', FIRST_SYNC_HARD_TIMEOUT_MS - FIRST_SYNC_TIMEOUT_MS, () => {
-        if (!ended() && !snap.ready) giveUpFirstSync()
+        if (!ended() && !firstSyncAlreadyDone()) giveUpFirstSync()
       })
       return
     }
@@ -296,6 +320,8 @@ export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
         armDisconnectNotice()
         return
       }
+      // 소켓을 열기 전에 ready 를 낸다 — 구독자는 start() 안에서 ready: true 를 받는다 (F-2041 3.2)
+      if (readyAtStart) update({ ready: true })
       arm('firstSync', FIRST_SYNC_TIMEOUT_MS, onFirstSyncTimeout)
       openAttempt()
     },
@@ -318,7 +344,8 @@ export function createLiveDocController(deps: LiveDocDeps): LiveDocController {
 
     goOffline() {
       if (!started || ended()) return
-      if (resumable && !snap.ready) {
+      // readyAtStart 세션은 ready 가 처음부터 참이라 phase 로 "동기화 전" 을 본다 (F-2041 3.4)
+      if (resumable && snap.phase === 'connecting') {
         dropSocket()
         disarm('retry')
         becomeReadyReconnecting()

@@ -13,13 +13,14 @@ const SAVE_STATUS_TEXT: Record<SaveStatus, string> = {
   memory: '메모리 모드 — 새로고침하면 사라집니다',
 }
 
-export type LiveStatus = 'connecting' | 'live' | 'reconnecting' | 'signed-out' | 'revoked' | 'gone'
+export type LiveStatus = 'connecting' | 'syncing' | 'live' | 'reconnecting' | 'signed-out' | 'revoked' | 'gone'
 
 type DotStatus = 'saved' | 'dirty' | 'error'
 
-// 실시간 경로는 저장 상태 글자 대신 이 표로 .statusbar-save 를 채운다 (F-305.md 11.1)
+// 실시간 경로는 저장 상태 글자 대신 이 표로 .statusbar-save 를 채운다 (F-305.md 11.1, syncing 은 F-2041.md 6장)
 const LIVE_STATUS: Record<LiveStatus, { text: string; dot: DotStatus }> = {
   connecting: { text: '불러오는 중…', dot: 'dirty' },
+  syncing: { text: '연결 중…', dot: 'dirty' },
   live: { text: '저장됨', dot: 'saved' },
   reconnecting: { text: '연결 끊김 · 다시 연결 중', dot: 'error' },
   'signed-out': { text: '다시 로그인 필요', dot: 'error' },

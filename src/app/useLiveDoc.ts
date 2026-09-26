@@ -97,6 +97,8 @@ export function useLiveDoc(docId: string | null, options: LiveDocOptions): LiveD
         random: Math.random,
         resumable,
         startOffline: resumable && startOffline,
+        // 온라인으로 여는 재개 세션은 소켓을 여는 것과 동시에 ready — 기록으로 편집기를 곧바로 띄운다 (F-2041 3.1)
+        readyAtStart: resumable,
       })
 
       let wasLive = false
