@@ -110,6 +110,8 @@ src/
   - `editor/`: `remoteCursors.ts`(F-307)
   - `app/`: `usePeers.ts`(F-307), `PeerAvatars.tsx`(F-307)
   - `styles/`: `peers.css`(F-307)
+- 댓글 코어(F-501)로 추가
+  - `lib/`: `docComments.ts`(F-501 — 댓글 타입·한도·모양 검사·권한·스레드·멘션·짧은 해시, `yjs` 없음), `commentAnchor.ts`(F-501 — 앵커·기록·`reanchor`, `yjs`). 기존 `comments.ts` 는 F-214 `주석` 문법 제거 전용 그대로
 
 - 오프라인 영속과 outbox 정리(F-306, 2026-09-24)로 추가
   - `storage/`: `yjsStore.ts`(F-306 — IndexedDB `md-yjs`, `yjs`·`idb` 만 import. 스키마는 2장 끝)
