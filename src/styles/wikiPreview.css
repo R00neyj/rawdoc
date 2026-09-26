@@ -1,4 +1,4 @@
-/* 위키링크 미리보기 창 모양 (specs/features/F-2044.md 9장). hex 금지 — 색은 토큰만 쓴다 */
+/* 위키링크 미리보기 창 모양 (specs/features/F-2044.md 9장). hex 금지 — 색은 토큰만 쓴다. 창은 body 에 붙어 .app-shell 밖이라 markdown·callout·frontmatter.css 의 :is(…) 에 .wiki-preview 를 함께 둔다 (2026-09-27 tweak) */
 
 .wiki-preview {
   position: fixed;

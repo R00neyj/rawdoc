@@ -35,7 +35,7 @@
    github-markdown-css 의 `.markdown-body table` 은 가로 스크롤용 display:block·
    width:max-content 를 준다(F-124 3.4) — 프론트매터 표는 스크롤 대상이 아니므로
    되돌린다. 클래스를 더한 선택자라 F-124 의 markdown.css 규칙보다 우선한다 */
-:is(.app-shell, .public-view) .markdown-body table.markdown-frontmatter {
+:is(.app-shell, .public-view, .wiki-preview) .markdown-body table.markdown-frontmatter {
   display: table;
   width: 100%;
   max-width: 100%;
@@ -45,13 +45,13 @@
   margin-bottom: 1rem;
 }
 
-:is(.app-shell, .public-view) .markdown-body table.markdown-frontmatter th,
-:is(.app-shell, .public-view) .markdown-body table.markdown-frontmatter td {
+:is(.app-shell, .public-view, .wiki-preview) .markdown-body table.markdown-frontmatter th,
+:is(.app-shell, .public-view, .wiki-preview) .markdown-body table.markdown-frontmatter td {
   border: 1px solid var(--md-border);
   padding: 6px 13px;
 }
 
-:is(.app-shell, .public-view) .markdown-body table.markdown-frontmatter th {
+:is(.app-shell, .public-view, .wiki-preview) .markdown-body table.markdown-frontmatter th {
   width: 30%;
   color: var(--ink-2);
   font-weight: 600;
@@ -59,11 +59,11 @@
 }
 
 /* F-124 표의 짝수 행 바탕(--md-bg-muted)을 프론트매터 표에는 적용하지 않는다 (F-133 3.3) */
-:is(.app-shell, .public-view) .markdown-body table.markdown-frontmatter tr:nth-child(2n) {
+:is(.app-shell, .public-view, .wiki-preview) .markdown-body table.markdown-frontmatter tr:nth-child(2n) {
   background-color: var(--panel);
 }
 
-:is(.app-shell, .public-view) .markdown-body pre.markdown-frontmatter-raw {
+:is(.app-shell, .public-view, .wiki-preview) .markdown-body pre.markdown-frontmatter-raw {
   margin-bottom: 1rem;
 }
 
