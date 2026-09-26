@@ -25,11 +25,11 @@ type CommentRailProps = {
   orphansOpen: boolean
   setOrphansOpen: (v: boolean) => void
   composer: ComposerState | null
-  sendComposer: (body: string) => void
+  sendComposer: (body: string, mentions: string[]) => void
   cancelComposer: () => void
   reply: ReplyState | null
   startReply: (threadId: string) => void
-  sendReply: (threadId: string, body: string) => void
+  sendReply: (threadId: string, body: string, mentions: string[]) => void
   toggleResolve: (threadId: string, resolved: boolean) => void
   removeComment: (id: string) => void
   reveal: (id: string) => void
@@ -247,7 +247,7 @@ export default function CommentRailPanel({
                   onActivate={() => activateAndMaybeClose(card.id)}
                   onToggleResolve={() => toggleResolve(card.id, card.thread!.root.resolved === null)}
                   onStartReply={() => startReply(card.id)}
-                  onSendReply={(body) => sendReply(card.id, body)}
+                  onSendReply={(body, mentions) => sendReply(card.id, body, mentions)}
                   onDelete={removeComment}
                   onEscapeToEditor={focusEditor}
                 />
@@ -321,7 +321,7 @@ export default function CommentRailPanel({
                   onActivate={() => setActive(t.id)}
                   onToggleResolve={() => toggleResolve(t.id, t.root.resolved === null)}
                   onStartReply={() => startReply(t.id)}
-                  onSendReply={(body) => sendReply(t.id, body)}
+                  onSendReply={(body, mentions) => sendReply(t.id, body, mentions)}
                   onDelete={removeComment}
                   onEscapeToEditor={focusEditor}
                 />

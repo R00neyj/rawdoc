@@ -1,10 +1,11 @@
-// 댓글 카드 하나 — 첫 댓글·답글·해결 버튼·`⋯` 메뉴·답글 입력칸 (specs/features/F-505.md 3장·7.2~7.4)
+// 댓글 카드 하나 — 첫 댓글·답글·해결 버튼·`⋯` 메뉴·답글 입력칸 (specs/features/F-505.md 3장·7.2~7.4). 답글칸 멘션 후보는 F-507 MentionField
 import { useContext, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import FolderMenu from './FolderMenu'
 import Dialog from './Dialog'
 import {
   commentAllowed,
   COMMENT_BODY_MAX,
+  finalizeMentions,
   normalizeCommentBody,
   type CommentActor,
   type CommentCapacityError,
@@ -12,6 +13,7 @@ import {
 } from '../lib/docComments'
 import { formatCommentTime } from './commentRail'
 import { COMMENT_TEXT, CommentCommandContext, type CommentWriteFailure } from './useDocComments'
+import MentionField from './MentionField'
 
 function authorLabel(author: { id: string | null; email: string | null }): string {
   return author.id === null ? '나' : (author.email ?? '나')
@@ -35,7 +37,7 @@ type CommentThreadProps = {
   onActivate: () => void
   onToggleResolve: () => void
   onStartReply: () => void
-  onSendReply: (body: string) => void
+  onSendReply: (body: string, mentions: string[]) => void
   onDelete: (id: string) => void
   onEscapeToEditor: () => void
 }
@@ -60,6 +62,7 @@ export default function CommentThread({
   const resolved = thread.root.resolved !== null
   const canDeleteRoot = actor !== null && commentAllowed(actor, 'delete', thread.root)
   const [replyValue, setReplyValue] = useState('')
+  const [replyPicked, setReplyPicked] = useState<string[]>([])
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; replyCount: number } | null>(null)
   const cancelRef = useRef<HTMLButtonElement | null>(null)
   const { disconnected, busy } = useContext(CommentCommandContext)
@@ -76,11 +79,17 @@ export default function CommentThread({
   const sending = Boolean(replyPending?.sending)
   if (priorActive !== active) {
     setPriorActive(active)
-    if (!active) setReplyValue('')
+    if (!active) {
+      setReplyValue('')
+      setReplyPicked([])
+    }
   }
   if (wasSending !== sending) {
     setWasSending(sending)
-    if (wasSending && !sending && replyPending === null) setReplyValue('')
+    if (wasSending && !sending && replyPending === null) {
+      setReplyValue('')
+      setReplyPicked([])
+    }
   }
 
   const normalizedReply = normalizeCommentBody(replyValue)
@@ -107,7 +116,7 @@ export default function CommentThread({
   function submitReply() {
     if (replySendDisabled) return
     onStartReply()
-    onSendReply(replyValue)
+    onSendReply(replyValue, finalizeMentions(replyValue, replyPicked))
   }
 
   function handleCardClick(e: ReactMouseEvent) {
@@ -206,12 +215,14 @@ export default function CommentThread({
         })}
       {active && canWrite && (
         <div className="comment-reply-composer">
-          <textarea
+          <MentionField
             className="comment-reply-input"
             placeholder="답글을 입력하세요."
             value={replyValue}
-            readOnly={sending}
-            onChange={(e) => setReplyValue(e.target.value)}
+            onChange={setReplyValue}
+            picked={replyPicked}
+            onPickedChange={setReplyPicked}
+            disabled={sending}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -221,6 +232,7 @@ export default function CommentThread({
                 e.preventDefault()
                 e.stopPropagation()
                 setReplyValue('')
+                setReplyPicked([])
                 ;(e.currentTarget.closest('.comment-thread') as HTMLElement | null)?.focus()
               }
             }}

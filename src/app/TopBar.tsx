@@ -6,6 +6,7 @@ import type { StateCommand } from '@codemirror/state'
 import ShareMenu from './ShareMenu'
 import ExportMenu from './ExportMenu'
 import AccountMenu from './AccountMenu'
+import NotificationsMenu, { type NotificationsMenuProps } from './NotificationsMenu'
 import EditorToolbar from './EditorToolbar'
 import { IconEdit, IconRaw, IconView, IconTooltip, IconForum } from './icons'
 import { commentBadgeText } from './commentRail'
@@ -63,6 +64,8 @@ type TopBarProps = {
   selfUserId: string | null
   // 댓글 레일(판) 여닫기 — 없으면 버튼이 없다(금고 문서, 공유 화면, 문서 없음) (F-505 3.6)
   comments?: { openCount: number; open: boolean; disabled: boolean; onToggle: () => void }
+  // 알림함 — 없으면 버튼이 없다(로그인 안 함·로컬 저장소) (F-507 3.4)
+  notifications?: NotificationsMenuProps
 }
 
 export default function TopBar({
@@ -97,6 +100,7 @@ export default function TopBar({
   peers,
   selfUserId,
   comments,
+  notifications,
 }: TopBarProps) {
   return (
     <>
@@ -169,6 +173,7 @@ export default function TopBar({
           onExportHtml={onExportHtml}
           onCopyRich={onCopyRich}
         />
+        {notifications && <NotificationsMenu {...notifications} />}
         <AccountMenu account={account} onBeforeNavigate={onAccountBeforeNavigate} onNotice={onAccountNotice} onLoggedOut={onAccountLoggedOut} />
       </header>
       {/* 좁은 창은 탭바를 상단바 밑 줄로 뺀다 — 아이콘 줄이 세로로도 접혀(2줄) 가로 스크롤 없이 다 보인다 (사용자 2026-09-16 "모바일일때가 툴바 더 필요할거임") */}

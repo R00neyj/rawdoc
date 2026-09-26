@@ -82,6 +82,8 @@ import lockOpenSvg from '@material-symbols/svg-400/outlined/lock_open.svg?raw'
 import forumSvg from '@material-symbols/svg-400/outlined/forum.svg?raw'
 // 떠 있는 `댓글 달기` 버튼 (F-505 7.1)
 import addCommentSvg from '@material-symbols/svg-400/outlined/add_comment.svg?raw'
+// 상단바 `알림` 버튼 (F-507 3.4)
+import notificationsSvg from '@material-symbols/svg-400/outlined/notifications.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -209,6 +211,8 @@ export const IconLockOpen = makeIcon(lockOpenSvg)
 export const IconForum = makeIcon(forumSvg)
 // 떠 있는 `댓글 달기` 버튼 (F-505 7.1)
 export const IconAddComment = makeIcon(addCommentSvg)
+// 상단바 `알림` 버튼 (F-507 3.4)
+export const IconNotifications = makeIcon(notificationsSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

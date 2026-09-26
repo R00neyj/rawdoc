@@ -22,6 +22,8 @@ export type PaletteContext = {
   e2ee?: { status: E2eeStatus; lock: () => void; openUnlock: () => void }
   // 댓글 달기·레일 열기/닫기 — 선택 필드. 없으면 댓글 명령 둘이 안 보인다 (F-505 3.4)
   comments?: { canAdd: boolean; railOpen: boolean; add: () => void; toggleRail: () => void }
+  // 알림함 열기 — 선택 필드. 없으면 명령이 안 보인다 (F-507 3.6)
+  notifications?: { open: () => void }
 }
 
 type PaletteCommandBase = PaletteItem & {

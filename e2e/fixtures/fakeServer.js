@@ -597,6 +597,79 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     return route.fallback()
   })
 
+  // F-507 3.8 — 알림함(/api/notifications*) + 멘션 후보(/api/docs/:id/people) 흉내
+  let notificationItems = [] // NotificationItem[] — setNotifications 로 통째로 바꾼다
+  let notificationsFailMode = null // null | 'network' | number — /api/notifications* 전용
+  const notificationLog = [] // { method, path, search, body, at }[]
+  const docPeopleOverrides = new Map() // docId -> { email, role }[] — 없으면 기본 규칙
+  const peopleRequestLog = new Map() // docId -> count
+
+  function logNotificationRequest(req) {
+    const url = new URL(req.url())
+    notificationLog.push({ method: req.method(), path: url.pathname, search: url.search, body: safePostDataJSON(req) ?? null, at: Date.now() })
+  }
+
+  await page.route('**/api/notifications', async (route) => {
+    const req = route.request()
+    if (req.method() !== 'GET') return route.fallback()
+    logNotificationRequest(req)
+    if (offline) return route.abort('internetdisconnected')
+    if (notificationsFailMode === 'network') return route.abort('failed')
+    if (typeof notificationsFailMode === 'number') {
+      return route.fulfill({ status: notificationsFailMode, contentType: 'application/json', body: '{"error":"internal"}' })
+    }
+    const sorted = [...notificationItems].sort((a, b) => b.createdAt - a.createdAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
+    const items = sorted.slice(0, 30)
+    const unread = notificationItems.filter((n) => n.readAt === null).length
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items, unread }) })
+  })
+
+  await page.route('**/api/notifications/read', async (route) => {
+    const req = route.request()
+    if (req.method() !== 'POST') return route.fallback()
+    logNotificationRequest(req)
+    if (offline) return route.abort('internetdisconnected')
+    if (notificationsFailMode === 'network') return route.abort('failed')
+    if (typeof notificationsFailMode === 'number') {
+      return route.fulfill({ status: notificationsFailMode, contentType: 'application/json', body: '{"error":"internal"}' })
+    }
+    if (recordWrite(route, req)) return
+    const body = req.postDataJSON()
+    const keys = body ? Object.keys(body) : []
+    const isAll = keys.length === 1 && body.all === true
+    const isIds = keys.length === 1 && Array.isArray(body.ids) && body.ids.length >= 1 && body.ids.length <= 50 && body.ids.every((id) => typeof id === 'string')
+    if (!isAll && !isIds) {
+      return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'invalid' }) })
+    }
+    const now = Date.now()
+    if (isAll) {
+      for (const item of notificationItems) if (item.readAt === null) item.readAt = now
+    } else {
+      const idSet = new Set(body.ids)
+      for (const item of notificationItems) if (idSet.has(item.id) && item.readAt === null) item.readAt = now
+    }
+    return route.fulfill({ status: 204 })
+  })
+
+  await page.route(/\/api\/docs\/[^/]+\/people$/, async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() !== 'GET') return route.fallback()
+    const docId = decodeURIComponent(new URL(req.url()).pathname.split('/').slice(-2, -1)[0])
+    peopleRequestLog.set(docId, (peopleRequestLog.get(docId) ?? 0) + 1)
+    if (docPeopleOverrides.has(docId)) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ people: docPeopleOverrides.get(docId) }) })
+    }
+    if (!docs.has(docId)) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+    const prefix = `doc:${docId}:`
+    const granted = [...grants.entries()]
+      .filter(([k]) => k.startsWith(prefix))
+      .map(([k, v]) => ({ email: k.slice(prefix.length), role: v.role }))
+      .sort((a, b) => a.email.localeCompare(b.email))
+    const people = [{ email, role: 'owner' }, ...granted]
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ people }) })
+  })
+
   // F-2042 8.1 — 이후 모든 /api/** 응답을 latencyMs 만큼 늦춘다. 마지막에 걸어 다른 경로보다 먼저 가로챈 뒤 route.fallback() 한다
   let latencyMs = 0
   const getRequestLog = [] // GET 요청만 기록 — 동시성 확인용 { path, startedAt, endedAt }
@@ -696,6 +769,31 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     // 이관을 이미 받은 것으로 만들어 다음 요청이 409 comments_exist 가 되게 한다 (F-508.md 3.5)
     setCommentsExist(docId) {
       commentsExistIds.add(docId)
+    },
+    // 알림 목록을 통째로 바꾼다 — id 없으면 UUID 를 붙인다 (F-507 3.8)
+    setNotifications(items) {
+      notificationItems = items.map((item) => ({ id: item.id ?? crypto.randomUUID(), readAt: null, ...item }))
+    },
+    // 지금 목록 — 읽음 반영된 값의 사본 (F-507 3.8)
+    notifications() {
+      return notificationItems.map((item) => ({ ...item }))
+    },
+    // GET·POST 모두, 실패시킨 것 포함 (F-507 3.8)
+    notificationRequests() {
+      return notificationLog.map((r) => ({ ...r }))
+    },
+    // null | 'network' | number — /api/notifications* 에만 (F-507 3.8)
+    failNotifications(mode) {
+      notificationsFailMode = mode
+    },
+    // { email, role }[] | null — null 이면 기본 규칙으로 되돌린다 (F-507 3.8)
+    setDocPeople(docId, people) {
+      if (people === null) docPeopleOverrides.delete(docId)
+      else docPeopleOverrides.set(docId, people)
+    },
+    // 그 문서로 받은 GET /people 수 (F-507 3.8)
+    peopleRequests(docId) {
+      return peopleRequestLog.get(docId) ?? 0
     },
   }
 }

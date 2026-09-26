@@ -1,8 +1,9 @@
-// 새 댓글 입력 카드 (specs/features/F-505.md 3장·7.1, F-500 5.1). F-507 이 멘션 후보를 더한다
+// 새 댓글 입력 카드 (specs/features/F-505.md 3장·7.1, F-500 5.1). 멘션 후보는 F-507 MentionField
 import { useContext, useEffect, useRef, useState } from 'react'
 import { COMMENT_BODY_COUNTER_FROM } from './commentRail'
-import { COMMENT_BODY_MAX, normalizeCommentBody } from '../lib/docComments'
+import { COMMENT_BODY_MAX, finalizeMentions, normalizeCommentBody } from '../lib/docComments'
 import { COMMENT_TEXT, CommentCommandContext, type CommentWriteFailure } from './useDocComments'
+import MentionField from './MentionField'
 
 function failureMessage(reason: CommentWriteFailure): string {
   switch (reason) {
@@ -25,12 +26,13 @@ type CommentComposerProps = {
   sending: boolean
   error: CommentWriteFailure | null
   mentionable: boolean
-  onSend: (body: string) => void
+  onSend: (body: string, mentions: string[]) => void
   onCancel: () => void
 }
 
 export default function CommentComposer({ sending, error, mentionable, onSend, onCancel }: CommentComposerProps) {
   const [value, setValue] = useState('')
+  const [picked, setPicked] = useState<string[]>([])
   const ref = useRef<HTMLTextAreaElement | null>(null)
   const { disconnected } = useContext(CommentCommandContext)
 
@@ -55,18 +57,20 @@ export default function CommentComposer({ sending, error, mentionable, onSend, o
 
   function send() {
     if (disabled) return
-    onSend(value)
+    onSend(value, finalizeMentions(value, picked))
   }
 
   return (
     <div className="comment-composer">
-      <textarea
-        ref={ref}
+      <MentionField
+        textareaRef={ref}
         className="comment-composer-input"
         placeholder={placeholder}
         value={value}
-        readOnly={sending}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={setValue}
+        picked={picked}
+        onPickedChange={setPicked}
+        disabled={sending}
         onKeyDown={(e) => {
           if (e.nativeEvent.isComposing) return
           if (sending && (e.key === 'Escape' || e.key === 'Enter')) {

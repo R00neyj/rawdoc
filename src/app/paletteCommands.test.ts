@@ -7,6 +7,7 @@ function ctx(
   templates: readonly TemplateEntry[],
   e2ee?: PaletteContext['e2ee'],
   comments?: PaletteContext['comments'],
+  notifications?: PaletteContext['notifications'],
 ): PaletteContext {
   return {
     canInsertTemplate: true,
@@ -16,6 +17,7 @@ function ctx(
     printDoc: () => {},
     e2ee,
     comments,
+    notifications,
   }
 }
 
@@ -25,7 +27,7 @@ const PALETTE_ID_RE = /^[a-z][a-z0-9]*(\.[a-z][a-zA-Z0-9-]*)+$/
 describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀, F-505 U24)', () => {
   it('id 가 순서대로, 겹치지 않고, 완화한 정규식을 통과한다', () => {
     const ids = PALETTE_COMMANDS.map((c) => c.id)
-    expect(ids).toEqual(['template.insert', 'doc.print', 'e2ee.lock', 'e2ee.unlock', 'comment.add', 'comment.toggleRail'])
+    expect(ids).toEqual(['template.insert', 'doc.print', 'e2ee.lock', 'e2ee.unlock', 'comment.add', 'comment.toggleRail', 'notifications.open'])
     expect(new Set(ids).size).toBe(ids.length)
     for (const id of ids) expect(id).toMatch(PALETTE_ID_RE)
   })
@@ -147,5 +149,26 @@ describe('comment.add·comment.toggleRail — U22 (F-505 3.4)', () => {
     const visible = PALETTE_COMMANDS.filter((c) => c.when(context))
     const toggle = visible.find((c) => c.id === 'comment.toggleRail')
     expect(toggle?.label).toBe('댓글 열기')
+  })
+})
+
+describe('notifications.open — U19 (F-507 3.6)', () => {
+  it('ctx.notifications 없으면 안 보인다, 있으면 보이고 라벨이 알림 열기', () => {
+    const withoutIt = ctx([], undefined, undefined, undefined)
+    expect(PALETTE_COMMANDS.filter((c) => c.when(withoutIt)).map((c) => c.id)).not.toContain('notifications.open')
+
+    const withIt = ctx([], undefined, undefined, { open: () => {} })
+    const visible = PALETTE_COMMANDS.filter((c) => c.when(withIt))
+    const cmd = visible.find((c) => c.id === 'notifications.open')
+    expect(cmd?.label).toBe('알림 열기')
+  })
+
+  it('실행 — ctx.notifications.open() 을 부른다', () => {
+    let opened = false
+    const context = ctx([], undefined, undefined, { open: () => { opened = true } })
+    const cmd = PALETTE_COMMANDS.find((c) => c.id === 'notifications.open')
+    if (!cmd || cmd.kind !== 'action') throw new Error('notifications.open not found')
+    cmd.run(context)
+    expect(opened).toBe(true)
   })
 })

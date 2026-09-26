@@ -276,11 +276,11 @@ export type UseDocCommentsResult = {
   setOrphansOpen: (v: boolean) => void
   composer: ComposerState | null
   beginComment: () => void
-  sendComposer: (body: string) => void
+  sendComposer: (body: string, mentions: string[]) => void
   cancelComposer: () => void
   reply: ReplyState | null
   startReply: (threadId: string) => void
-  sendReply: (threadId: string, body: string) => void
+  sendReply: (threadId: string, body: string, mentions: string[]) => void
   cancelReply: () => void
   toggleResolve: (threadId: string, resolved: boolean) => void
   removeComment: (id: string) => void
@@ -639,7 +639,7 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
   }, [handle])
 
   const sendComposer = useCallback(
-    (body: string) => {
+    (body: string, mentions: string[]) => {
       if (!composer || !handle) return
       const writer = writerRef.current
       if (!writer) return
@@ -650,7 +650,7 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
         setComposer((c) => (c ? { ...c, sending: false, error: 'gone' } : c))
         return
       }
-      void writer.add({ draft, body, mentions: [] }).then((result) => {
+      void writer.add({ draft, body, mentions }).then((result) => {
         if (result.ok) {
           setComposer(null)
           setActive(result.id)
@@ -677,11 +677,11 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
   }, [])
 
   const sendReply = useCallback(
-    (threadId: string, body: string) => {
+    (threadId: string, body: string, mentions: string[]) => {
       const writer = writerRef.current
       if (!writer) return
       setReply((r) => (r && r.threadId === threadId ? { ...r, sending: true, error: null } : r))
-      void writer.reply({ parent: threadId, body, mentions: [] }).then((result) => {
+      void writer.reply({ parent: threadId, body, mentions }).then((result) => {
         if (result.ok) {
           setReply(null)
           return

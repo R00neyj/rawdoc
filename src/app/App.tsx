@@ -49,7 +49,7 @@ import { useEdgeSwipe } from './useEdgeSwipe'
 import { IconRefresh, IconNoteAdd } from './icons'
 import { resolveTheme } from './theme'
 import { removeBootSkeleton } from './bootPaint'
-import { parseHash, formatHash, formatMapHash, parsePathRoute, type HashRoute } from './hashRoute'
+import { parseHash, formatHash, formatMapHash, formatCommentHash, parsePathRoute, type HashRoute } from './hashRoute'
 import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { canShowCachedShell, mergeBootList, shouldApplyListResult } from './bootList'
@@ -139,6 +139,12 @@ import { useDocComments, computeCommentAccess, scrollTopOf, COMMENT_TEXT, Commen
 import { IconAddComment } from './icons'
 import CommandPalette from './CommandPalette'
 import type { PaletteContext } from './paletteContract'
+import NotificationsMenu from './NotificationsMenu'
+import { useNotifications } from './useNotifications'
+import { fetchDocPeople } from './notificationsApi'
+import { createPeopleCache } from './mentionCandidates'
+import { MentionSourceContext, type MentionSource } from './MentionField'
+import type { NotificationItem } from '../lib/docComments'
 
 import { useInstallPrompt } from '../pwa/useInstallPrompt'
 import { useAppUpdate } from '../pwa/useAppUpdate'
@@ -1453,6 +1459,52 @@ export default function App() {
   useEffect(() => {
     commentsRef.current = comments
   })
+
+  // ----- 알림함 (F-507 3.3·4장) -----
+  const notificationsEnabled = bootPhase === 'ready' && store.kind === 'server' && account.state === 'in'
+  const notifications = useNotifications({ enabled: notificationsEnabled, blocked: account.state === 'in' && account.blocked })
+  const [notificationsOpen, setNotificationsOpenState] = useState(false)
+  // 렌더 중 조정 — enabled 가 꺼지면 알림함을 닫는다(useDocComments 의 resetFor 와 같은 패턴)
+  const [wasNotificationsEnabled, setWasNotificationsEnabled] = useState(notificationsEnabled)
+  if (wasNotificationsEnabled !== notificationsEnabled) {
+    setWasNotificationsEnabled(notificationsEnabled)
+    if (!notificationsEnabled) setNotificationsOpenState(false)
+  }
+  const setNotificationsOpen = useCallback(
+    (open: boolean) => {
+      setNotificationsOpenState(open)
+      if (open) notifications.refresh('open')
+    },
+    [notifications],
+  )
+  // 항목 → 문서·스레드 이동 (4.5)
+  const handleOpenNotification = useCallback(
+    async (item: NotificationItem) => {
+      setNotificationsOpen(false)
+      notifications.markRead(item.id)
+      if (!docsRef.current.some((d) => d.id === item.docId) && navigator.onLine) {
+        await resyncFromStore().catch(() => {})
+      }
+      location.hash = formatCommentHash(item.docId, item.threadId)
+    },
+    [setNotificationsOpen, notifications, resyncFromStore],
+  )
+
+  // ----- 멘션 후보 원천 (F-507 5.1, 8.1) -----
+  const [peopleCache] = useState(() =>
+    createPeopleCache({
+      load: async (docId: string) => {
+        const result = await fetchDocPeople(docId)
+        return result.ok ? result.people : null
+      },
+      now: () => Date.now(),
+      online: () => navigator.onLine,
+    }),
+  )
+  const mentionSource: MentionSource | null =
+    notificationsEnabled && currentDocId && commentAccessValue.kind === 'write' && account.state === 'in'
+      ? { docId: currentDocId, selfEmail: account.email, people: peopleCache }
+      : null
 
   // 명령 팔레트 D-7 — 템플릿 삽입이 보이는 조건 (specs/features/F-2022.md 6.3)
   const canInsertTemplate =
@@ -4450,6 +4502,7 @@ export default function App() {
             add: comments.beginComment,
             toggleRail: () => comments.setOpen(!comments.open, true),
           },
+    notifications: notificationsEnabled ? { open: () => setNotificationsOpen(true) } : undefined,
   }
 
   // 검색 결과에서 문서 열기 (F-287.md 4.6) — 지금 문서를 그대로 두지 않고 그 문서로 이동한다
@@ -4990,6 +5043,18 @@ export default function App() {
               },
             }
       }
+      notifications={
+        notificationsEnabled
+          ? {
+              state: notifications,
+              blocked: account.state === 'in' && account.blocked,
+              open: notificationsOpen,
+              onOpenChange: setNotificationsOpen,
+              onReadAll: notifications.markAllRead,
+              onOpenItem: handleOpenNotification,
+            }
+          : undefined
+      }
     />
   )
 
@@ -5209,39 +5274,41 @@ export default function App() {
               )}
               {(commentRailVisible || commentSheetVisible) && (
                 <CommentCommandContext.Provider value={comments.commandState}>
-                  <CommentRailPanel
-                    mode={comments.mode}
-                    open={comments.open}
-                    onClose={() => {
-                      comments.setOpen(false, false)
-                      editorRef.current?.focus()
-                    }}
-                    access={comments.access}
-                    ready={comments.ready}
-                    canWrite={comments.canWrite}
-                    threads={comments.threads}
-                    threadById={comments.threadById}
-                    layout={comments.layout}
-                    activeId={comments.activeId}
-                    setActive={comments.setActive}
-                    showResolved={comments.showResolved}
-                    setShowResolved={comments.setShowResolved}
-                    orphansOpen={comments.orphansOpen}
-                    setOrphansOpen={comments.setOrphansOpen}
-                    composer={comments.composer}
-                    sendComposer={comments.sendComposer}
-                    cancelComposer={comments.cancelComposer}
-                    reply={comments.reply}
-                    startReply={comments.startReply}
-                    sendReply={comments.sendReply}
-                    toggleResolve={comments.toggleResolve}
-                    removeComment={comments.removeComment}
-                    reveal={comments.reveal}
-                    actorFor={comments.actorFor}
-                    scrollElement={editorRef.current?.view.scrollDOM ?? null}
-                    focusEditor={() => editorRef.current?.focus()}
-                    onRailExtraChange={setCommentRailExtra}
-                  />
+                  <MentionSourceContext.Provider value={mentionSource}>
+                    <CommentRailPanel
+                      mode={comments.mode}
+                      open={comments.open}
+                      onClose={() => {
+                        comments.setOpen(false, false)
+                        editorRef.current?.focus()
+                      }}
+                      access={comments.access}
+                      ready={comments.ready}
+                      canWrite={comments.canWrite}
+                      threads={comments.threads}
+                      threadById={comments.threadById}
+                      layout={comments.layout}
+                      activeId={comments.activeId}
+                      setActive={comments.setActive}
+                      showResolved={comments.showResolved}
+                      setShowResolved={comments.setShowResolved}
+                      orphansOpen={comments.orphansOpen}
+                      setOrphansOpen={comments.setOrphansOpen}
+                      composer={comments.composer}
+                      sendComposer={comments.sendComposer}
+                      cancelComposer={comments.cancelComposer}
+                      reply={comments.reply}
+                      startReply={comments.startReply}
+                      sendReply={comments.sendReply}
+                      toggleResolve={comments.toggleResolve}
+                      removeComment={comments.removeComment}
+                      reveal={comments.reveal}
+                      actorFor={comments.actorFor}
+                      scrollElement={editorRef.current?.view.scrollDOM ?? null}
+                      focusEditor={() => editorRef.current?.focus()}
+                      onRailExtraChange={setCommentRailExtra}
+                    />
+                  </MentionSourceContext.Provider>
                 </CommentCommandContext.Provider>
               )}
               {commentAvailable &&

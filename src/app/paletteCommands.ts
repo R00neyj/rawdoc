@@ -71,6 +71,14 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     },
     run: (ctx) => ctx.comments?.toggleRail(),
   },
+  {
+    id: 'notifications.open',
+    kind: 'action',
+    label: '알림 열기',
+    keywords: ['알림', 'notification', '멘션', '답글', '받은'],
+    when: (ctx) => Boolean(ctx.notifications),
+    run: (ctx) => ctx.notifications?.open(),
+  },
 ]
 
 // comment.toggleRail 라벨 getter 가 읽는 값 — visibleCommands() 가 when() 을 부른 뒤 같은 렌더에서 라벨을 읽는다
