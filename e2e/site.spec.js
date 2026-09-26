@@ -224,3 +224,57 @@ test('F-275 A10 랜딩 꼬리에도 보인다', async ({ page }) => {
   await expect(page.locator('.site-foot a[href="/privacy"]')).toBeVisible()
   await expect(page.locator('.site-foot a[href="/terms"]')).toBeVisible()
 })
+
+test('F-2039 E1 금고 글이 뜬다', async ({ page }) => {
+  await page.goto('/guides/encryption')
+  await expect(page.getByRole('heading', { level: 1, name: '금고로 문서 암호화하기' })).toBeVisible()
+  await expect(page.locator('.site-foot')).toBeVisible()
+})
+
+test('F-2039 E2 완결된 정적 페이지', async ({ page }) => {
+  const res = await page.request.get('/guides/encryption')
+  expect(res.status()).toBe(200)
+  const body = await res.text()
+  expect(body).toContain('<title>금고로 문서 암호화하기 · Rawdoc</title>')
+  expect(body).toContain('rel="canonical"')
+  expect(body).toContain('https://rawdoc.app/guides/encryption')
+  expect(body).not.toContain('<script')
+})
+
+test('F-2039 E3 목록·색인·서비스 워커', async ({ page }) => {
+  await page.goto('/guides')
+  const link = page.locator('.site-article .markdown-body > ul a[href="/guides/encryption"]')
+  await expect(link).toBeVisible()
+  await expect(link).toHaveText('금고로 문서 암호화하기')
+
+  const sitemap = await page.request.get('/sitemap.xml')
+  const sitemapBody = await sitemap.text()
+  expect(sitemapBody).toContain('<loc>https://rawdoc.app/guides/encryption</loc>')
+
+  const sw = await page.request.get('/sw.js')
+  const swBody = await sw.text()
+  expect(swBody).not.toContain('guides/encryption.html')
+})
+
+test('F-2039 E4 앱 도움말에서 새 탭으로 연다', async ({ page }) => {
+  await openApp(page)
+  await page.getByRole('button', { name: '도움말' }).first().click()
+  await expect(page.locator('.help-page')).toBeVisible()
+
+  const link = page.locator('.help-page a[href="/guides/encryption"]')
+  await expect(link).toBeVisible()
+  await expect(link).toHaveText('금고로 문서 암호화하기')
+  await expect(link).toHaveAttribute('target', '_blank')
+  await expect(link).toHaveAttribute('rel', /noopener/)
+
+  const [popup] = await Promise.all([page.waitForEvent('popup'), link.click()])
+  await popup.waitForLoadState()
+  expect(popup.url()).toMatch(/\/guides\/encryption$/)
+  await expect(popup.getByRole('heading', { level: 1, name: '금고로 문서 암호화하기' })).toBeVisible()
+  await expect(page).toHaveURL(/#\/help$/)
+})
+
+test('F-2039 E5 사이트 도움말에도 있다', async ({ page }) => {
+  await page.goto('/help')
+  await expect(page.getByRole('article').getByRole('link', { name: '금고로 문서 암호화하기' })).toBeVisible()
+})

@@ -57,5 +57,5 @@ export function guidesIndexContent(entries: readonly GuideEntry[]): string {
           })
           .join('\n')
 
-  return `---\ntitle: 사용법\nsummary: 위키링크·제텔카스텐·마크다운 내보내기를 다룬 사용법 글 모음입니다.\n---\n# 사용법\n\n문서를 잇고 쌓고 옮기는 방법을 주제별로 정리했습니다. 처음이라면 \`위키링크로 문서 잇기\` 부터 보세요.\n\n${list}\n`
+  return `---\ntitle: 사용법\nsummary: 기능을 목적별로 풀어 쓴 사용법 글 모음입니다.\n---\n# 사용법\n\n기능이 어디에 있고 무엇을 하는지는 \`도움말\`에 짧게 적었습니다. 여기에는 목적에 따라 쓰는 순서와 한도, 그렇게 동작하는 이유를 적습니다. 처음이라면 \`위키링크로 문서 잇기\` 부터 보세요.\n\n${list}\n`
 }

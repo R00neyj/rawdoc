@@ -65,3 +65,13 @@ describe('F-276 A4 guidesIndexContent 빈 목록', () => {
     expect(content.split('\n').some((line) => line.startsWith('- ['))).toBe(false)
   })
 })
+
+describe('F-2039 U9 7장 문구', () => {
+  it('summary 줄과 안내 문단이 7장 after 문구다', () => {
+    const content = guidesIndexContent([])
+    expect(content).toContain('summary: 기능을 목적별로 풀어 쓴 사용법 글 모음입니다.')
+    expect(content).toContain(
+      '기능이 어디에 있고 무엇을 하는지는 `도움말`에 짧게 적었습니다. 여기에는 목적에 따라 쓰는 순서와 한도, 그렇게 동작하는 이유를 적습니다. 처음이라면 `위키링크로 문서 잇기` 부터 보세요.',
+    )
+  })
+})

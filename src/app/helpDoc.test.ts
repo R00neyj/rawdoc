@@ -2,6 +2,8 @@
 import { describe, it, expect } from 'vitest'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
 import brand from '../../brand.config'
+import { E2EE_DEFAULT_LOCK_MINUTES } from '../e2ee/keyring'
+import { E2EE_MAX_PLAIN_CONTENT_BYTES } from '../lib/e2eeLimits'
 
 // F-257.md 2장 표의 절 순서 그대로
 const SECTION_ORDER = [
@@ -175,5 +177,58 @@ describe('HELP_DOC_CONTENT', () => {
     expect(section).toContain('복구 코드')
     expect(section).toContain('자동 잠금')
     expect(section).toContain('금고로 옮기기…')
+  })
+})
+
+// F-2039.md 2장 R2·R3, 8.1 U1~U3·U8
+const LINK_LINE_RE = /^사용법 글: \[[^\]\n]+\]\(\/guides\/[a-z0-9]([a-z0-9-]*[a-z0-9])?\)$/
+
+function appSections(): Array<{ name: string; body: string }> {
+  const start = HELP_DOC_CONTENT.indexOf('## 이 앱은')
+  const end = HELP_DOC_CONTENT.indexOf('## 마크다운 문법')
+  const text = HELP_DOC_CONTENT.slice(start, end)
+  return text
+    .split(/\n(?=## )/)
+    .filter((s) => s.trim() !== '')
+    .map((section) => {
+      const name = /^## (.+)$/m.exec(section)?.[1] ?? ''
+      const body = section.replace(/^## .+\n\n?/, '').trimEnd()
+      return { name, body }
+    })
+}
+
+describe('F-2039 도움말 ↔ 사용법 글 분담 규칙', () => {
+  it('U1: 앱 사용법 절마다 사용법 글 줄을 뺀 본문이 600자 이하·4문단 이하다 (R2)', () => {
+    for (const { name, body } of appSections()) {
+      const paragraphs = body.split(/\n\n+/).filter((p) => p.trim() !== '' && !p.startsWith('사용법 글:'))
+      const text = paragraphs.join('\n\n')
+      expect([...text].length, `## ${name} 본문 길이`).toBeLessThanOrEqual(600)
+      expect(paragraphs.length, `## ${name} 문단 수`).toBeLessThanOrEqual(4)
+    }
+  })
+
+  it('U2: 사용법 글 줄은 모양이 R3 정규식에 맞고, 절의 마지막 문단이며, 절마다 0~1개다 (R3)', () => {
+    for (const { name, body } of appSections()) {
+      const paragraphs = body.split(/\n\n+/).filter((p) => p.trim() !== '')
+      const linkParagraphs = paragraphs.filter((p) => p.startsWith('사용법 글:'))
+      expect(linkParagraphs.length, `## ${name} 사용법 글 줄 개수`).toBeLessThanOrEqual(1)
+      for (const link of linkParagraphs) {
+        expect(link, `## ${name} 사용법 글 줄 모양`).toMatch(LINK_LINE_RE)
+        expect(paragraphs[paragraphs.length - 1], `## ${name} 사용법 글 줄이 마지막 문단이어야 한다`).toBe(link)
+      }
+    }
+  })
+
+  it('U3: ## 금고 절의 마지막 문단이 정확히 encryption 글 링크이고, 복구 문장이 들어 있다', () => {
+    const section = appSections().find((s) => s.name === '금고')!
+    const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [금고로 문서 암호화하기](/guides/encryption)')
+    expect(section.body).toContain('금고 암호를 잊으면 `암호를 잊었나요?`를 눌러 복구 코드로 새 암호를 정합니다.')
+  })
+
+  it('U8: ## 금고 절에 기본 자동 잠금 분·최대 크기 수치가 상수 그대로 들어 있다 (R5)', () => {
+    const section = appSections().find((s) => s.name === '금고')!
+    expect(section.body).toContain(`기본 ${E2EE_DEFAULT_LOCK_MINUTES}분`)
+    expect(section.body).toContain(`약 ${Math.round(E2EE_MAX_PLAIN_CONTENT_BYTES / 1000)}KB`)
   })
 })
