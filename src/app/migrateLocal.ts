@@ -1,4 +1,4 @@
-// 로컬 → 계정 이관 (specs/features/F-208.md 2장) — 브라우저당 한 번, md.localMigrated 로 기록한다
+// 로컬 → 계정 이관 (specs/features/F-208.md 2장) — 계정마다 한 번, 옮긴 계정 id 를 md.localMigrated 로 기록한다
 // 로컬 금고 로그인 이관 (specs/features/F-408.md 3.3·4장) — checkLocalE2eeMigration·runLocalE2eeMigration
 import type { Attachment, AttachmentExt, Doc, Folder } from '../types'
 import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
@@ -25,7 +25,7 @@ const MIGRATED_KEY = 'md.localMigrated'
 export async function migrateLocalIfNeeded(deps: MigrateLocalDeps): Promise<void> {
   const { userId, getPref, setPref, readLocal, importLocal, notice, afterImport } = deps
 
-  // 브라우저당 한 번 — 다른 계정으로 로그인해도 다시 옮기지 않는다 (2.1)
+  // 이 브라우저에서 이미 옮긴 계정이면 건너뛴다 — 다른 계정으로 로그인하면 다시 옮긴다 (2.1)
   if (getPref(MIGRATED_KEY, '') === userId) return
 
   const local = await readLocal()
