@@ -3,6 +3,28 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createServerStore, QuotaExceededError, E2EE_SERVER_SAVE_INTERVAL_MS, PendingSyncError, BODY_FETCH_CONCURRENCY } from './serverStore'
 import { createRemoteCache } from './remoteCache'
 import { descendantFolderIds } from '../lib/folderTree'
+import type { CommentRecord } from '../lib/docComments'
+
+function makeRecord(id: string, over: Partial<CommentRecord> = {}): CommentRecord {
+  return {
+    id,
+    parent: null,
+    body: `본문 ${id}`,
+    mentions: [],
+    authorId: null,
+    authorEmail: null,
+    createdAt: 1,
+    resolvedAt: null,
+    resolvedById: null,
+    resolvedBy: null,
+    quote: '고양이',
+    prefix: '',
+    suffix: '',
+    anchorFrom: 0,
+    anchorLength: 3,
+    ...over,
+  }
+}
 
 let dbCounter = 0
 function freshDbName() {
@@ -53,6 +75,10 @@ function makeFakeServer() {
   // 금고 판정 흉내 (F-405 S1~S8) — worker/docs.ts·folders.ts 와 같은 409 몸통
   let hasVault = true
   const deleteFolderCalls: Array<{ id: string; contents: string | null }> = []
+  // F-508.md 3.4·7.2 — POST /api/docs/:id/comments/import 흉내
+  const commentImports = new Map<string, unknown[]>()
+  const commentsExistIds = new Set<string>()
+  const commentImportOverrides = new Map<string, { status: number; body?: unknown } | null>()
   // F-406 S1~S3 — 금고 첨부 PUT 요청 URL 기록, GET 응답을 조종한다
   const attachmentPutUrls: string[] = []
   const attachmentGetResponses = new Map<string, { contentType: string; bytes: number[] }>()
@@ -125,6 +151,18 @@ function makeFakeServer() {
         docs.delete(docMatch[1])
         return jsonResponse(204)
       }
+    }
+
+    const commentImportMatch = /^\/api\/docs\/([^/]+)\/comments\/import$/.exec(path)
+    if (commentImportMatch && method === 'POST') {
+      const id = decodeURIComponent(commentImportMatch[1])
+      const override = commentImportOverrides.get(id)
+      if (override) return jsonResponse(override.status, override.body)
+      if (!docs.has(id)) return jsonResponse(404, { error: 'not_found' })
+      if (commentsExistIds.has(id)) return jsonResponse(409, { error: 'comments_exist' })
+      const body = JSON.parse(String(init.body)) as { records: unknown[] }
+      commentImports.set(id, body.records)
+      return jsonResponse(200, { imported: body.records.length, orphaned: 0 })
     }
 
     const folderLinkMatch = /^\/api\/docs\/([^/]+)\/folder$/.exec(path)
@@ -253,6 +291,14 @@ function makeFakeServer() {
     attachmentPutUrls,
     setAttachmentGetResponse: (idExt: string, contentType: string, bytes: number[]) => {
       attachmentGetResponses.set(idExt, { contentType, bytes })
+    },
+    commentImports,
+    setCommentsExist: (id: string) => {
+      commentsExistIds.add(id)
+    },
+    setCommentImportOverride: (id: string, override: { status: number; body?: unknown } | null) => {
+      if (override) commentImportOverrides.set(id, override)
+      else commentImportOverrides.delete(id)
     },
     fetchImpl,
   }
@@ -2130,5 +2176,233 @@ describe('버그 수정 2026-09-26 — 공유받은 문서는 캐시에 넣지 �
     await tick(30)
 
     expect(server.docs.get('ed1')?.content).toBe('수정됨')
+  })
+})
+
+// ----- F-508 U12~U16 — 로컬 댓글 이관 outbox (specs/features/F-508.md 7장) -----
+
+describe('F-508 U12 importLocal 이 comments 를 받으면 createDoc 바로 뒤에 importComments 를 넣는다', () => {
+  it('outbox 순서 createDoc a → importComments a → createDoc b → createDoc c. 캐시에 이미 있던 문서·금고 문서는 둘 다 없음', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const base = { lineEnding: 'lf' as const, pinnedAt: null, createdAt: 1, updatedAt: 1 }
+
+    // 캐시에 이미 있는 문서 — importLocal 이 건너뛴다
+    await store.create({ title: 'cached', content: '', lineEnding: 'lf', id: 'cachedDoc' })
+    await tick(30)
+    fetchMock.mockClear()
+
+    const r1 = makeRecord('r1')
+    const r2 = makeRecord('r2')
+    const result = await store.importLocal({
+      folders: [],
+      docs: [
+        { id: 'a', title: 'A', content: 'ca', folderId: null, ...base },
+        { id: 'b', title: 'B', content: 'cb', folderId: null, ...base },
+        { id: 'c', title: 'C', content: 'cc', folderId: null, ...base },
+        { id: 'cachedDoc', title: 'X', content: 'x', folderId: null, ...base },
+        { id: 'vault', title: 'V', content: 'v', folderId: null, e2eeKey: VAULT_KEY, attachmentRefs: [], ...base },
+      ],
+      comments: new Map([
+        ['a', [r1, r2]],
+        ['c', []],
+        ['vault', [makeRecord('rv')]],
+      ]),
+    })
+    expect(result.importedCount).toBe(3)
+    await tick(80)
+
+    const seq = fetchMock.mock.calls
+      .map(([url, init]) => ({
+        method: (init as RequestInit | undefined)?.method ?? 'GET',
+        path: new URL(String(url), 'http://local.test').pathname,
+        body: (init as RequestInit | undefined)?.body ? JSON.parse(String((init as RequestInit).body)) : undefined,
+      }))
+      .filter((c) => (c.method === 'POST' && c.path === '/api/docs') || /\/comments\/import$/.test(c.path))
+      .map((c) => {
+        if (c.path === '/api/docs') return `createDoc ${c.body.id}`
+        const m = /^\/api\/docs\/([^/]+)\/comments\/import$/.exec(c.path)!
+        return `importComments ${decodeURIComponent(m[1])}`
+      })
+    expect(seq).toEqual(['createDoc a', 'importComments a', 'createDoc b', 'createDoc c'])
+
+    expect(server.docs.has('vault')).toBe(false)
+    expect(server.commentImports.get('a')).toEqual([r1, r2])
+    expect(server.commentImports.has('b')).toBe(false)
+    expect(server.commentImports.has('c')).toBe(false)
+  })
+})
+
+describe('F-508 U13 importComments 응답 — 버려지는 경우', () => {
+  it.each([
+    [200, { imported: 1, orphaned: 0 }],
+    [409, { error: 'comments_exist' }],
+    [409, { error: 'e2ee_doc' }],
+    [404, { error: 'not_found' }],
+    [403, { error: 'forbidden' }],
+    [400, { error: 'invalid' }],
+    [413, { error: 'too_many' }],
+  ])('%s %j → 모두 항목이 사라지고 다음 항목을 보낸다, onNotice 호출 0', async (status, body) => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const notices: unknown[] = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), onNotice: (n) => notices.push(n) })
+    const base = { lineEnding: 'lf' as const, pinnedAt: null, createdAt: 1, updatedAt: 1 }
+    server.setCommentImportOverride('a', { status, body })
+
+    await store.importLocal({
+      folders: [],
+      docs: [{ id: 'a', title: 'A', content: 'ca', folderId: null, ...base }],
+      comments: new Map([['a', [makeRecord('r1')]]]),
+    })
+    await tick(60)
+
+    expect(await store.hasPendingChanges('a')).toBe(false)
+    expect(notices).toEqual([])
+    // 404 뒤에도 캐시의 그 문서 행이 남는다
+    if (status === 404) expect(await store.get('a')).not.toBeNull()
+  })
+})
+
+describe('F-508 U14 importComments 503·네트워크 실패 — 항목이 남고 그 회차가 멈춘다', () => {
+  it('503 → pending 1, 다음 회차에 200 이면 사라진다', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const base = { lineEnding: 'lf' as const, pinnedAt: null, createdAt: 1, updatedAt: 1 }
+    server.setCommentImportOverride('a', { status: 503, body: { error: 'internal' } })
+
+    await store.importLocal({
+      folders: [],
+      docs: [{ id: 'a', title: 'A', content: 'ca', folderId: null, ...base }],
+      comments: new Map([['a', [makeRecord('r1')]]]),
+    })
+    await tick(60)
+    expect(await store.hasPendingChanges('a')).toBe(true)
+
+    server.setCommentImportOverride('a', null)
+    await store.flushOutbox()
+    expect(await store.hasPendingChanges('a')).toBe(false)
+    expect(server.commentImports.get('a')).toEqual([makeRecord('r1')])
+  })
+
+  it('네트워크 실패 → pending 1', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(String(url), 'http://local.test').pathname
+      if (/\/comments\/import$/.test(path)) throw new TypeError('network down')
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const base = { lineEnding: 'lf' as const, pinnedAt: null, createdAt: 1, updatedAt: 1 }
+
+    await store.importLocal({
+      folders: [],
+      docs: [{ id: 'a', title: 'A', content: 'ca', folderId: null, ...base }],
+      comments: new Map([['a', [makeRecord('r1')]]]),
+    })
+    await tick(60)
+    expect(await store.hasPendingChanges('a')).toBe(true)
+  })
+})
+
+describe('F-508 U15 createDoc 이 막히면 importComments 도 같이 막힌다', () => {
+  it('createDoc 503 → 같은 회차에 importComments 요청이 없다', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(String(url), 'http://local.test').pathname
+      const method = init.method ?? 'GET'
+      if (path === '/api/docs' && method === 'POST') {
+        return new Response(JSON.stringify({ error: 'internal' }), { status: 503, headers: { 'Content-Type': 'application/json' } })
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const base = { lineEnding: 'lf' as const, pinnedAt: null, createdAt: 1, updatedAt: 1 }
+
+    await store.importLocal({
+      folders: [],
+      docs: [{ id: 'a', title: 'A', content: 'ca', folderId: null, ...base }],
+      comments: new Map([['a', [makeRecord('r1')]]]),
+    })
+    await tick(60)
+
+    const importCalls = fetchMock.mock.calls.filter(([url]) => /\/comments\/import$/.test(new URL(String(url), 'http://local.test').pathname))
+    expect(importCalls.length).toBe(0)
+    expect(await store.hasPendingChanges('a')).toBe(true)
+  })
+
+  it('createDoc 413 docs 로 붙잡힘 → importComments 도 보내지 않는다', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(String(url), 'http://local.test').pathname
+      const method = init.method ?? 'GET'
+      if (path === '/api/docs' && method === 'POST') {
+        return new Response(JSON.stringify({ error: 'doc_quota_exceeded', resource: 'docs', used: 1, limit: 1 }), {
+          status: 413,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const base = { lineEnding: 'lf' as const, pinnedAt: null, createdAt: 1, updatedAt: 1 }
+
+    await store.importLocal({
+      folders: [],
+      docs: [{ id: 'a', title: 'A', content: 'ca', folderId: null, ...base }],
+      comments: new Map([['a', [makeRecord('r1')]]]),
+    })
+    await tick(60)
+
+    const importCalls = fetchMock.mock.calls.filter(([url]) => /\/comments\/import$/.test(new URL(String(url), 'http://local.test').pathname))
+    expect(importCalls.length).toBe(0)
+  })
+})
+
+describe('F-508 U16 hasPendingChanges·update 이 comments 를 버린다', () => {
+  it('importComments a 만 남았을 때 true, 없을 때 false', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    expect(await store.hasPendingChanges('a')).toBe(false)
+
+    const base = { lineEnding: 'lf' as const, pinnedAt: null, createdAt: 1, updatedAt: 1 }
+    server.setCommentImportOverride('a', { status: 503, body: { error: 'internal' } })
+    await store.importLocal({
+      folders: [],
+      docs: [{ id: 'a', title: 'A', content: 'ca', folderId: null, ...base }],
+      comments: new Map([['a', [makeRecord('r1')]]]),
+    })
+    await tick(60)
+    // createDoc 은 성공, importComments 만 503 로 남는다
+    expect(await store.hasPendingChanges('a')).toBe(true)
+
+    server.setCommentImportOverride('a', null)
+    await store.flushOutbox()
+    expect(await store.hasPendingChanges('a')).toBe(false)
+  })
+
+  it('update(a, { content, comments }) 뒤 outbox updateDoc 패치·캐시 행에 comments 키가 없다', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const doc = await store.create({ title: 'A', content: '', lineEnding: 'lf' })
+    await tick(30)
+    fetchMock.mockClear()
+
+    await store.update(doc.id, { content: 'x', comments: [makeRecord('r1')] })
+    await tick(60)
+
+    const putCalls = requestsOf(fetchMock, 'PUT', `/api/docs/${doc.id}`)
+    expect(putCalls.length).toBeGreaterThan(0)
+    for (const body of putCalls) expect('comments' in body).toBe(false)
+    expect((await store.get(doc.id))?.content).toBe('x')
   })
 })

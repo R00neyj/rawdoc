@@ -1,6 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createMemoryStore } from './memoryStore'
 import type { Store } from '../types'
+import type { CommentRecord } from '../lib/docComments'
+
+function makeRecord(id: string, over: Partial<CommentRecord> = {}): CommentRecord {
+  return {
+    id,
+    parent: null,
+    body: `본문 ${id}`,
+    mentions: [],
+    authorId: null,
+    authorEmail: null,
+    createdAt: 1,
+    resolvedAt: null,
+    resolvedById: null,
+    resolvedBy: null,
+    quote: '고양이',
+    prefix: '',
+    suffix: '',
+    anchorFrom: 0,
+    anchorLength: 3,
+    ...over,
+  }
+}
 
 describe('memoryStore', () => {
   let store: Store
@@ -291,6 +313,72 @@ describe('memoryStore', () => {
       expect(dup).toEqual({ id: 'fixed-att', ext: 'png' })
       const record = await store.getAttachment('fixed-att')
       expect(record!.size).toBe(3)
+    })
+  })
+
+  // U10 (F-508.md 3.1) — idbStore U2·U3·U4·U5·U7 을 메모리 저장소로
+  describe('로컬 문서 댓글 기록 (F-508.md 3.1)', () => {
+    it('U2: update(a, { content, comments: [r1, r2] }) — docs 갱신, getCommentRecords 깊은 같음', async () => {
+      const doc = await store.create({ title: 'A', content: '원본', lineEnding: 'lf' })
+      const r1 = makeRecord('c1')
+      const r2 = makeRecord('c2')
+      const updated = await store.update(doc.id, { content: 'x', comments: [r1, r2] })
+      expect(updated.content).toBe('x')
+      expect(await store.getCommentRecords!(doc.id)).toEqual([r1, r2])
+    })
+
+    it('U3: comments 만 다시 update — docs 행 그대로, 기록만 바뀜', async () => {
+      const doc = await store.create({ title: 'A', content: '원본', lineEnding: 'lf' })
+      const first = await store.update(doc.id, { content: 'x', comments: [makeRecord('c1'), makeRecord('c2')] })
+      const r1 = makeRecord('c1', { body: '고침' })
+      const commentsOnly = await store.update(doc.id, { comments: [r1] })
+      expect(commentsOnly).toEqual(first)
+      expect(await store.getCommentRecords!(doc.id)).toEqual([r1])
+    })
+
+    it('U4: comments 빈 배열이면 지움, 필드 없으면 그대로', async () => {
+      const doc = await store.create({ title: 'A', content: '원본', lineEnding: 'lf' })
+      await store.update(doc.id, { comments: [makeRecord('c1')] })
+      await store.update(doc.id, { comments: [] })
+      expect(await store.getCommentRecords!(doc.id)).toEqual([])
+      await store.update(doc.id, { comments: [makeRecord('c1')] })
+      await store.update(doc.id, { content: 'y' })
+      expect(await store.getCommentRecords!(doc.id)).toEqual([makeRecord('c1')])
+    })
+
+    it('U5: 없는 id 에 update(comments 포함) — 던짐, 기록 없음', async () => {
+      await expect(store.update('없음', { content: 'x', comments: [makeRecord('c1')] })).rejects.toThrow()
+      expect(await store.getCommentRecords!('없음')).toEqual([])
+    })
+
+    it('U7: remove·removeFolder(delete-all)·removeFolder(move-up)', async () => {
+      const a = await store.create({ title: 'a', content: '', lineEnding: 'lf' })
+      const folderF = await store.createFolder({ name: 'F' })
+      const b = await store.create({ title: 'b', content: '', lineEnding: 'lf', folderId: folderF.id })
+      const folderG = await store.createFolder({ name: 'G' })
+      const c = await store.create({ title: 'c', content: '', lineEnding: 'lf', folderId: folderG.id })
+      await store.update(a.id, { comments: [makeRecord('ca')] })
+      await store.update(b.id, { comments: [makeRecord('cb')] })
+      await store.update(c.id, { comments: [makeRecord('cc')] })
+
+      await store.remove(a.id)
+      expect(await store.getCommentRecords!(a.id)).toEqual([])
+      expect(await store.getCommentRecords!(b.id)).toEqual([makeRecord('cb')])
+
+      await store.removeFolder(folderF.id, 'delete-all')
+      expect(await store.getCommentRecords!(b.id)).toEqual([])
+
+      await store.removeFolder(folderG.id, 'move-up')
+      expect(await store.getCommentRecords!(c.id)).toEqual([makeRecord('cc')])
+    })
+
+    it('꺼낸 배열을 고쳐도 저장된 값이 바뀌지 않는다', async () => {
+      const doc = await store.create({ title: 'A', content: '', lineEnding: 'lf' })
+      const r1 = makeRecord('c1')
+      await store.update(doc.id, { comments: [r1] })
+      const fetched = await store.getCommentRecords!(doc.id)
+      fetched[0].body = '고침'
+      expect((await store.getCommentRecords!(doc.id))[0].body).toBe(r1.body)
     })
   })
 })

@@ -2,10 +2,19 @@
 import { describe, expect, it } from 'vitest'
 import * as Y from 'yjs'
 
-import { writeDelete, writeNewThread, writeReply, writeResolved, type WriteTarget } from './useDocComments'
+import {
+  writeDelete,
+  writeNewThread,
+  writeReply,
+  writeResolved,
+  buildLocalCommentRecords,
+  restoreLocalComments,
+  LOCAL_COMMENT_RESTORE_ORIGIN,
+  type WriteTarget,
+} from './useDocComments'
 import { createCommentAnchor } from '../lib/commentAnchor'
 import { resolveCommentAnchor } from '../lib/commentAnchor'
-import { groupCommentThreads, validateCommentEntry, type CommentAuthor, type CommentEntry } from '../lib/docComments'
+import { groupCommentThreads, parseCommentRecords, validateCommentEntry, type CommentAuthor, type CommentEntry } from '../lib/docComments'
 
 const AUTHOR: CommentAuthor = { id: 'u1', email: 'a@b.com' }
 
@@ -273,5 +282,170 @@ describe('본문 검사 — U15·U16', () => {
     expect(crlf.ok).toBe(true)
     const crlfEntry = validateCommentEntry(map.get(crlf.ok ? crlf.id : ''))
     expect(crlfEntry.ok && crlfEntry.entry.body).toBe('a\nb')
+  })
+})
+
+// U17~U20 — 로컬 문서 댓글 저장·되살리기 순수 함수 (specs/features/F-508.md 3.3)
+const LOCAL_AUTHOR: CommentAuthor = { id: null, email: null }
+
+describe('buildLocalCommentRecords — U17·U18', () => {
+  it('U17 — 스레드 둘(첫 스레드는 답글 하나 + 해결), ranges 는 첫 스레드만', () => {
+    const { target, ytext, map } = makeTarget({ author: LOCAL_AUTHOR })
+    ytext.insert(0, 'hello world foo bar')
+
+    const anchor1 = createCommentAnchor(ytext, 6, 11)! // 'world'
+    const t1 = writeNewThread(target, { draft: { anchor: anchor1, range: { from: 6, to: 11 }, quote: 'world' }, body: '첫 스레드', mentions: [] })
+    expect(t1.ok).toBe(true)
+    const t1Id = t1.ok ? t1.id : ''
+    const reply = writeReply(target, { parent: t1Id, body: '답글', mentions: [] })
+    expect(reply.ok).toBe(true)
+    const replyId = reply.ok ? reply.id : ''
+    writeResolved(target, t1Id, true)
+
+    const anchor2 = createCommentAnchor(ytext, 12, 15)! // 'foo'
+    const t2 = writeNewThread(target, { draft: { anchor: anchor2, range: { from: 12, to: 15 }, quote: 'foo' }, body: '둘째 스레드', mentions: [] })
+    expect(t2.ok).toBe(true)
+    const t2Id = t2.ok ? t2.id : ''
+
+    // ranges 값을 실제 앵커 위치와 다르게 줘서 "ranges 를 그대로 쓴다"를 확인한다
+    const ranges = new Map([[t1Id, { from: 106, to: 111 }]])
+    const text = ytext.toString()
+    const records = buildLocalCommentRecords({ map, ytext, text, ranges })
+
+    expect(records.map((r) => r.id)).toEqual([t1Id, replyId, t2Id])
+
+    const r1 = records[0]
+    expect(r1.anchorFrom).toBe(106)
+    expect(r1.anchorLength).toBe(5)
+    expect(r1.resolvedAt).not.toBeNull()
+
+    const r2 = records[1]
+    expect(r2.parent).toBe(t1Id)
+    expect(r2.anchorFrom).toBeNull()
+    expect(r2.anchorLength).toBeNull()
+
+    const r3 = records[2]
+    expect(r3.anchorFrom).toBe(12)
+    expect(r3.anchorLength).toBe(3)
+
+    for (const r of records) {
+      expect(r.authorId).toBeNull()
+      expect(r.mentions).toEqual([])
+    }
+    expect(records[0].resolvedById).toBeNull()
+  })
+
+  it('U18 — U17 결과와 첫 댓글 500개 맵의 결과 모두 parseCommentRecords 를 통과한다', () => {
+    const { target, ytext, map } = makeTarget({ author: LOCAL_AUTHOR })
+    ytext.insert(0, 'hello world')
+    const anchor = createCommentAnchor(ytext, 0, 5)!
+    const t1 = writeNewThread(target, { draft: { anchor, range: { from: 0, to: 5 }, quote: 'hello' }, body: '첫', mentions: [] })
+    writeReply(target, { parent: t1.ok ? t1.id : '', body: '답', mentions: [] })
+    const records17 = buildLocalCommentRecords({ map, ytext, text: ytext.toString(), ranges: new Map() })
+    expect(parseCommentRecords(records17).ok).toBe(true)
+
+    const { target: target2, ytext: ytext2, map: map2 } = makeTarget({ author: LOCAL_AUTHOR })
+    ytext2.insert(0, 'x'.repeat(10))
+    for (let i = 0; i < 500; i++) {
+      const a = createCommentAnchor(ytext2, 0, 1)!
+      writeNewThread(target2, { draft: { anchor: a, range: { from: 0, to: 1 }, quote: 'x' }, body: `본문${i}`, mentions: [] })
+    }
+    const records500 = buildLocalCommentRecords({ map: map2, ytext: ytext2, text: ytext2.toString(), ranges: new Map() })
+    expect(records500).toHaveLength(500)
+    expect(parseCommentRecords(records500).ok).toBe(true)
+  })
+})
+
+describe('restoreLocalComments — U19·U20', () => {
+  it('U19 — 같은 본문을 심은 새 Y.Doc 에 되살리기 — 트랜잭션 1개, origin 표시, 범위·해결·부모 그대로, orphaned 0', () => {
+    const { target, ytext, map } = makeTarget({ author: LOCAL_AUTHOR })
+    ytext.insert(0, 'hello world foo bar')
+    const anchor1 = createCommentAnchor(ytext, 6, 11)! // 'world'
+    const t1 = writeNewThread(target, { draft: { anchor: anchor1, range: { from: 6, to: 11 }, quote: 'world' }, body: '첫 스레드', mentions: [] })
+    const t1Id = t1.ok ? t1.id : ''
+    writeReply(target, { parent: t1Id, body: '답글', mentions: [] })
+    writeResolved(target, t1Id, true)
+    const text = ytext.toString()
+    const records = buildLocalCommentRecords({ map, ytext, text, ranges: new Map() })
+
+    const newDoc = new Y.Doc()
+    const newYtext = newDoc.getText('content')
+    newYtext.insert(0, text)
+    const newMap = newDoc.getMap('comments')
+
+    let txCount = 0
+    let lastOrigin: unknown
+    newDoc.on('afterTransaction', (tr) => {
+      txCount++
+      lastOrigin = tr.origin
+    })
+    const result = restoreLocalComments({ doc: newDoc, map: newMap, ytext: newYtext }, records)
+    expect(txCount).toBe(1)
+    expect(lastOrigin).toBe(LOCAL_COMMENT_RESTORE_ORIGIN)
+    expect(result).toEqual({ restored: 2, orphaned: 0 })
+
+    const threads = groupCommentThreads(newMap.entries()).threads
+    expect(threads).toHaveLength(1)
+    const restoredThread = threads[0]
+    expect(resolveCommentAnchor(newYtext, restoredThread.root.anchor)).toEqual({ from: 6, to: 11 })
+    expect(restoredThread.root.resolved).not.toBeNull()
+    expect(restoredThread.replies).toHaveLength(1)
+    expect(restoredThread.replies[0].entry.parent).toBe(t1Id)
+
+    // 비어 있지 않은 맵에는 아무것도 넣지 않는다
+    const again = restoreLocalComments({ doc: newDoc, map: newMap, ytext: newYtext }, records)
+    expect(again).toEqual({ restored: 0, orphaned: 0 })
+  })
+
+  it('U20 — 본문에 없는 인용문 기록(고아) + 앞에 글이 더해진 본문(힌트 어긋남) 기록', () => {
+    const { target, ytext, map } = makeTarget({ author: LOCAL_AUTHOR })
+    ytext.insert(0, 'hello world foo bar')
+    const anchorGood = createCommentAnchor(ytext, 12, 15)! // 'foo'
+    writeNewThread(target, { draft: { anchor: anchorGood, range: { from: 12, to: 15 }, quote: 'foo' }, body: '옮겨질 것', mentions: [] })
+    const text = ytext.toString()
+    const recordsGood = buildLocalCommentRecords({ map, ytext, text, ranges: new Map() })
+
+    // 본문에 없는 인용문을 가진 고아 기록을 손으로 만든다
+    const orphanRecord = {
+      id: 'orphan1',
+      parent: null,
+      body: '고아',
+      mentions: [],
+      authorId: null,
+      authorEmail: null,
+      createdAt: 1,
+      resolvedAt: null,
+      resolvedById: null,
+      resolvedBy: null,
+      quote: '없는인용문',
+      prefix: '',
+      suffix: '',
+      anchorFrom: 0,
+      anchorLength: 5,
+    }
+
+    const shifted = `추가 줄\n${text}` // 힌트가 앞으로 15자 밀림
+    const newDoc = new Y.Doc()
+    const newYtext = newDoc.getText('content')
+    newYtext.insert(0, shifted)
+    const newMap = newDoc.getMap('comments')
+
+    const result = restoreLocalComments({ doc: newDoc, map: newMap, ytext: newYtext }, [orphanRecord, ...recordsGood])
+    expect(result.orphaned).toBe(1)
+
+    const threads = groupCommentThreads(newMap.entries()).threads
+    const orphanThread = threads.find((t) => t.id === 'orphan1')!
+    expect(orphanThread.root.anchor).toBeNull()
+    expect(orphanThread.root.quote).toBe('없는인용문')
+
+    const movedThread = threads.find((t) => t.id !== 'orphan1')!
+    const movedRange = resolveCommentAnchor(newYtext, movedThread.root.anchor)
+    expect(movedRange).not.toBeNull()
+    expect(shifted.slice(movedRange!.from, movedRange!.to)).toBe('foo')
+
+    // 다시 buildLocalCommentRecords 하면 고아 기록의 anchorFrom 은 null
+    const rebuilt = buildLocalCommentRecords({ map: newMap, ytext: newYtext, text: shifted, ranges: new Map() })
+    const rebuiltOrphan = rebuilt.find((r) => r.id === 'orphan1')!
+    expect(rebuiltOrphan.anchorFrom).toBeNull()
   })
 })

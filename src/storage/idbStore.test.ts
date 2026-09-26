@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto'
 import { describe, it, expect, vi } from 'vitest'
 import { openDB } from 'idb'
 import { createIdbStore, readE2eeRow, writeE2eeRow, markLocalE2eeMigrated } from './idbStore'
+import type { CommentRecord } from '../lib/docComments'
 
 // 테스트마다 새 DB 이름을 써서 격리한다 (fake-indexeddb 는 전역 indexedDB 를 공유)
 let dbCounter = 0
@@ -474,7 +475,7 @@ describe('idbStore', () => {
       const onBlocked = vi.fn(() => {
         v1db.close()
       })
-      // createIdbStore 는 항상 DB_VERSION(5)으로 연다 — v1 이 열려 있으므로 이 열기는
+      // createIdbStore 는 항상 DB_VERSION(6)으로 연다 — v1 이 열려 있으므로 이 열기는
       // v1 이 닫힐 때까지 막힌다(blocked)
       const store = await createIdbStore(dbName, { onBlocked })
 
@@ -492,11 +493,11 @@ describe('idbStore', () => {
         order.push('closed')
       })
 
-      // 이 창의 연결(F-404 코드 기준 버전 5)
+      // 이 창의 연결(F-508 코드 기준 버전 6)
       await createIdbStore(dbName, { onBlocking, onClosed })
 
-      // "새 버전 창" 이 더 높은 버전(6)을 열려고 하면 위 연결의 blocking 이 불린다
-      const v6db = await openDB(dbName, 6, {
+      // "새 버전 창" 이 더 높은 버전(7)을 열려고 하면 위 연결의 blocking 이 불린다
+      const v7db = await openDB(dbName, 7, {
         upgrade(database, oldVersion) {
           if (oldVersion < 1) {
             database.createObjectStore('docs', { keyPath: 'id' })
@@ -514,6 +515,9 @@ describe('idbStore', () => {
           if (oldVersion < 5) {
             database.createObjectStore('e2ee', { keyPath: 'id' })
           }
+          if (oldVersion < 6) {
+            database.createObjectStore('comments', { keyPath: 'docId' })
+          }
         },
       })
 
@@ -522,7 +526,7 @@ describe('idbStore', () => {
       // 정리(flush 시늉)가 끝난 뒤에 닫힘 콜백이 불려야 한다 (F-136.md 3.3 순서)
       expect(order).toEqual(['blocking', 'closed'])
 
-      v6db.close()
+      v7db.close()
     })
   })
 
@@ -557,10 +561,10 @@ describe('idbStore', () => {
       expect(list).toHaveLength(1)
       expect(list[0].id).toBe('legacy-doc')
 
-      const raw = await openDB(dbName, 5)
+      const raw = await openDB(dbName)
       expect([...raw.objectStoreNames]).toContain('e2ee')
       const meta = await raw.get('meta', 'schema')
-      expect(meta.version).toBe(5)
+      expect(meta.version).toBe(6)
       raw.close()
 
       expect(await writeE2eeRow({ id: 'local', bundle: 'b1', updatedAt: 1 }, null, dbName)).toBe(true)
@@ -715,13 +719,13 @@ describe('F-405 U13 금고 필드', () => {
     expect('attachmentRefs' in plainRow).toBe(false)
     expect(vaultFolderRow.e2ee).toBe(true)
     expect('e2ee' in folderRow).toBe(false)
-    expect(meta.version).toBe(5)
+    expect(meta.version).toBe(6)
   })
 })
 
 // F-407 U21 — 옮기기·빼기·폴더 표지·첨부 지우기 로컬 판 (specs/features/F-407.md 5.3, 9.1)
 describe('F-407 U21 금고로 옮기기·빼기 로컬 판', () => {
-  it('setDocE2ee 옮기기 뒤 빼기 — 두 키가 행에서 없어진다, 버전 5 그대로', async () => {
+  it('setDocE2ee 옮기기 뒤 빼기 — 두 키가 행에서 없어진다, 버전 6 그대로', async () => {
     const dbName = freshDbName()
     const store = await createIdbStore(dbName)
     const doc = await store.create({ title: 't', content: 'c', lineEnding: 'lf' })
@@ -738,7 +742,7 @@ describe('F-407 U21 금고로 옮기기·빼기 로컬 판', () => {
     expect('e2eeKey' in row).toBe(false)
     expect('attachmentRefs' in row).toBe(false)
     expect(row.content).toBe('c2')
-    expect(meta.version).toBe(5)
+    expect(meta.version).toBe(6)
     await expect(store.setDocE2ee!('없는-id', { e2ee: false, title: '', content: '' })).rejects.toThrow()
   })
 
@@ -772,5 +776,167 @@ describe('F-407 U21 금고로 옮기기·빼기 로컬 판', () => {
     expect(await store.discardAttachment!(a.id, 'png')).toBe('deleted')
     expect(await store.getAttachment(a.id)).toBeNull()
     expect(await store.getAttachment(b.id)).not.toBeNull()
+  })
+})
+
+// F-508 3.1·4장·5장·8장 — 로컬 문서 댓글 저장소
+function makeRecord(id: string, over: Partial<CommentRecord> = {}): CommentRecord {
+  return {
+    id,
+    parent: null,
+    body: `본문 ${id}`,
+    mentions: [],
+    authorId: null,
+    authorEmail: null,
+    createdAt: 1,
+    resolvedAt: null,
+    resolvedById: null,
+    resolvedBy: null,
+    quote: '고양이',
+    prefix: '',
+    suffix: '',
+    anchorFrom: 0,
+    anchorLength: 3,
+    ...over,
+  }
+}
+
+describe('F-508 로컬 문서 댓글 저장소', () => {
+  it('U1: 버전 5 DB(문서 둘·폴더 하나·e2ee 행 local)를 만든 뒤 createIdbStore — 문서·폴더·e2ee 행 그대로, comments 스토어 생김, 메타 버전 6', async () => {
+    const dbName = freshDbName()
+    const v5db = await openDB(dbName, 5, {
+      upgrade(database) {
+        database.createObjectStore('docs', { keyPath: 'id' })
+        database.createObjectStore('meta', { keyPath: 'key' })
+        database.createObjectStore('folders', { keyPath: 'id' })
+        database.createObjectStore('attachments', { keyPath: 'id' })
+        database.createObjectStore('fileHandles', { keyPath: 'docId' })
+        database.createObjectStore('e2ee', { keyPath: 'id' })
+      },
+    })
+    await v5db.put('docs', { id: 'd1', title: 'A', content: 'a', lineEnding: 'lf', createdAt: 1, updatedAt: 1, folderId: null, pinnedAt: null })
+    await v5db.put('docs', { id: 'd2', title: 'B', content: 'b', lineEnding: 'lf', createdAt: 1, updatedAt: 1, folderId: null, pinnedAt: null })
+    await v5db.put('folders', { id: 'f1', name: 'F', parentId: null, createdAt: 1, updatedAt: 1 })
+    await v5db.put('e2ee', { id: 'local', bundle: 'b1', updatedAt: 1 })
+    await v5db.put('meta', { key: 'schema', version: 5 })
+    v5db.close()
+
+    const store = await createIdbStore(dbName)
+    const list = await store.list()
+    expect(list.map((d) => d.id).sort()).toEqual(['d1', 'd2'])
+    expect(await store.listFolders()).toEqual([{ id: 'f1', name: 'F', parentId: null, createdAt: 1, updatedAt: 1 }])
+    expect(await readE2eeRow('local', dbName)).toEqual({ id: 'local', bundle: 'b1', updatedAt: 1 })
+
+    const raw = await openDB(dbName)
+    expect([...raw.objectStoreNames]).toContain('comments')
+    const meta = await raw.get('meta', 'schema')
+    expect(meta.version).toBe(6)
+    raw.close()
+  })
+
+  it('U2: update(a, { content, comments: [r1, r2] }) — docs 행 갱신, getCommentRecords 가 깊은 같음, 행의 v 1', async () => {
+    const store = await freshStore()
+    const doc = await store.create({ title: 'A', content: '원본', lineEnding: 'lf' })
+    const r1 = makeRecord('c1')
+    const r2 = makeRecord('c2')
+    const updated = await store.update(doc.id, { content: 'x', comments: [r1, r2] })
+    expect(updated.content).toBe('x')
+    expect(updated.updatedAt).toBeGreaterThanOrEqual(doc.updatedAt)
+    expect(await store.getCommentRecords!(doc.id)).toEqual([r1, r2])
+  })
+
+  it('U3: 같은 문서에 comments 만 다시 update — docs 행 그대로(updatedAt 포함), 기록만 바뀜', async () => {
+    const store = await freshStore()
+    const doc = await store.create({ title: 'A', content: '원본', lineEnding: 'lf' })
+    const first = await store.update(doc.id, { content: 'x', comments: [makeRecord('c1'), makeRecord('c2')] })
+    const r1 = makeRecord('c1', { body: '고침' })
+    const commentsOnly = await store.update(doc.id, { comments: [r1] })
+    expect(commentsOnly).toEqual(first)
+    expect(await store.getCommentRecords!(doc.id)).toEqual([r1])
+  })
+
+  it('U4: comments 빈 배열이면 행 지움, 필드 없으면 그대로', async () => {
+    const store = await freshStore()
+    const doc = await store.create({ title: 'A', content: '원본', lineEnding: 'lf' })
+    await store.update(doc.id, { comments: [makeRecord('c1')] })
+    await store.update(doc.id, { comments: [] })
+    expect(await store.getCommentRecords!(doc.id)).toEqual([])
+    await store.update(doc.id, { comments: [makeRecord('c1')] })
+    await store.update(doc.id, { content: 'y' })
+    expect(await store.getCommentRecords!(doc.id)).toEqual([makeRecord('c1')])
+  })
+
+  it('U5: 없는 id 에 update(comments 포함) — 던짐, comments 스토어에 행 없음', async () => {
+    const store = await freshStore()
+    await expect(store.update('없음', { content: 'x', comments: [makeRecord('c1')] })).rejects.toThrow()
+    expect(await store.getCommentRecords!('없음')).toEqual([])
+  })
+
+  it('U6: 금고 행에는 update(comments 포함) 해도 기록 행이 생기지 않는다, 일반 행은 생긴다', async () => {
+    const store = await freshStore()
+    const vault = await store.create({ title: 'v', content: 'env', lineEnding: 'lf', e2eeKey: 'K'.repeat(56), attachmentRefs: [] })
+    const plain = await store.create({ title: 'p', content: 'p', lineEnding: 'lf' })
+    const updatedVault = await store.update(vault.id, { content: 'env2', comments: [makeRecord('c1')] })
+    expect(updatedVault.content).toBe('env2')
+    expect(await store.getCommentRecords!(vault.id)).toEqual([])
+    await store.update(plain.id, { content: 'p2', comments: [makeRecord('c2')] })
+    expect(await store.getCommentRecords!(plain.id)).toEqual([makeRecord('c2')])
+  })
+
+  it('U7: remove·removeFolder(delete-all)·removeFolder(move-up) 이 기록에 하는 것', async () => {
+    const store = await freshStore()
+    const a = await store.create({ title: 'a', content: '', lineEnding: 'lf' })
+    const folderF = await store.createFolder({ name: 'F' })
+    const b = await store.create({ title: 'b', content: '', lineEnding: 'lf', folderId: folderF.id })
+    const folderG = await store.createFolder({ name: 'G' })
+    const c = await store.create({ title: 'c', content: '', lineEnding: 'lf', folderId: folderG.id })
+    await store.update(a.id, { comments: [makeRecord('ca')] })
+    await store.update(b.id, { comments: [makeRecord('cb')] })
+    await store.update(c.id, { comments: [makeRecord('cc')] })
+
+    await store.remove(a.id)
+    expect(await store.getCommentRecords!(a.id)).toEqual([])
+    expect(await store.getCommentRecords!(b.id)).toEqual([makeRecord('cb')])
+
+    await store.removeFolder(folderF.id, 'delete-all')
+    expect(await store.getCommentRecords!(b.id)).toEqual([])
+
+    await store.removeFolder(folderG.id, 'move-up')
+    expect(await store.getCommentRecords!(c.id)).toEqual([makeRecord('cc')])
+  })
+
+  it('U8: 원시 comments 행이 모양 틀리면 getCommentRecords 는 던지고, listCommentRecords 는 그 행만 뺀다', async () => {
+    const dbName = freshDbName()
+    const store = await createIdbStore(dbName)
+    const good = await store.create({ title: 'good', content: '', lineEnding: 'lf' })
+    await store.update(good.id, { comments: [makeRecord('c1')] })
+
+    const raw = await openDB(dbName)
+    await raw.put('comments', { docId: 'bad-shape', v: 1, records: [{ id: 'x' }], updatedAt: 1 })
+    await raw.put('comments', { docId: 'bad-version', v: 2, records: [makeRecord('c2')], updatedAt: 1 })
+    raw.close()
+
+    await expect(store.getCommentRecords!('bad-shape')).rejects.toThrow('comments_row_invalid')
+    await expect(store.getCommentRecords!('bad-version')).rejects.toThrow('comments_row_invalid')
+
+    const all = await store.listCommentRecords!()
+    expect(all.has('bad-shape')).toBe(false)
+    expect(all.has('bad-version')).toBe(false)
+    expect(all.get(good.id)).toEqual([makeRecord('c1')])
+  })
+
+  it('U9: listCommentRecords() — 기록 있는 문서 둘·없는 문서 하나', async () => {
+    const store = await freshStore()
+    const a = await store.create({ title: 'a', content: '', lineEnding: 'lf' })
+    const b = await store.create({ title: 'b', content: '', lineEnding: 'lf' })
+    const c = await store.create({ title: 'c', content: '', lineEnding: 'lf' })
+    await store.update(a.id, { comments: [makeRecord('ca')] })
+    await store.update(b.id, { comments: [makeRecord('cb')] })
+
+    const all = await store.listCommentRecords!()
+    expect(all.size).toBe(2)
+    expect(all.get(a.id)).toEqual([makeRecord('ca')])
+    expect(all.get(b.id)).toEqual([makeRecord('cb')])
+    expect(all.has(c.id)).toBe(false)
   })
 })

@@ -544,6 +544,25 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ links, grants: grantList }) })
   })
 
+  // POST /api/docs/:id/comments/import — 로컬 댓글 이관 흉내 (F-508.md 3.5)
+  const commentImports = new Map() // docId -> records
+  const commentsExistIds = new Set()
+  await page.route(/\/api\/docs\/[^/]+\/comments\/import$/, async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() !== 'POST') return route.fallback()
+    if (recordWrite(route, req)) return
+    const id = decodeURIComponent(new URL(req.url()).pathname.split('/').slice(-3, -2)[0])
+    if (!docs.has(id)) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+    if (commentsExistIds.has(id) || commentImports.has(id)) {
+      return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'comments_exist' }) })
+    }
+    const body = req.postDataJSON()
+    const records = Array.isArray(body.records) ? body.records : []
+    commentImports.set(id, records)
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ imported: records.length, orphaned: 0 }) })
+  })
+
   // F-2038 9.3 — 계정 삭제 미리 보기·삭제. accountDeleteRule 이 null 이면 204 + 로그아웃, 아니면 { status, body } 또는 'network'
   let accountPreview = {
     email,
@@ -671,6 +690,12 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     // 지금까지 받은 /api/account 요청 수 { get, delete } (F-2038 9.3)
     accountRequests() {
       return { ...accountRequestCounts }
+    },
+    // POST /api/docs/:id/comments/import 로 받은 기록 — docId -> records (F-508.md 3.5)
+    commentImports,
+    // 이관을 이미 받은 것으로 만들어 다음 요청이 409 comments_exist 가 되게 한다 (F-508.md 3.5)
+    setCommentsExist(docId) {
+      commentsExistIds.add(docId)
     },
   }
 }

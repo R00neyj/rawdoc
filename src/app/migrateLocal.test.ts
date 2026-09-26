@@ -147,6 +147,33 @@ describe('migrateLocalIfNeeded', () => {
     await migrateLocalIfNeeded(deps)
     expect(calls).toEqual(['notice:info', 'importLocal', 'setPref', 'afterImport', 'notice:info'])
   })
+
+  // U21 (F-508.md 7.1) — readLocal 이 comments 를 돌려주면 importLocal 에 그대로 간다
+  it('U21: readLocal 의 comments 가 importLocal 로 그대로 간다', async () => {
+    const commentsMap = new Map([['d1', [{ id: 'c1' }]]]) as unknown as Map<string, import('../lib/docComments').CommentRecord[]>
+    const { deps, importLocal } = makeDeps({
+      readLocal: vi.fn(async () => ({ folders: [], docs: [makeDoc()], comments: commentsMap })),
+    })
+    await migrateLocalIfNeeded(deps)
+    expect(importLocal).toHaveBeenCalledWith({ folders: [], docs: [makeDoc()], comments: commentsMap })
+  })
+
+  // U22 (F-508.md 7.1 Q5) — 손대지 않은 안내 문서라도 댓글 기록이 있으면 옮긴다
+  it('U22: 손대지 않은 안내 문서 — 기록 없으면 빠지고, 기록 1개면 옮긴다', async () => {
+    const untouched = makeDoc({ id: 'g1', title: GUIDE_DOC_TITLE, content: GUIDE_DOC_CONTENT_CRLF })
+    const { deps: depsNoComments, importLocal: importNoComments } = makeDeps({
+      readLocal: vi.fn(async () => ({ folders: [], docs: [untouched], comments: new Map() })),
+    })
+    await migrateLocalIfNeeded(depsNoComments)
+    expect(importNoComments).not.toHaveBeenCalled()
+
+    const commentsMap = new Map([['g1', [{ id: 'c1' }]]]) as unknown as Map<string, import('../lib/docComments').CommentRecord[]>
+    const { deps: depsWithComments, importLocal: importWithComments } = makeDeps({
+      readLocal: vi.fn(async () => ({ folders: [], docs: [untouched], comments: commentsMap })),
+    })
+    await migrateLocalIfNeeded(depsWithComments)
+    expect(importWithComments.mock.calls[0][0].docs.map((d: Doc) => d.id)).toEqual(['g1'])
+  })
 })
 
 // ---- F-408 로그인 금고 이관 ----

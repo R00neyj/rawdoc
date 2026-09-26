@@ -1,6 +1,6 @@
 // F-2030 3.1 — 429·413 doc_quota_exceeded·403 account_blocked 분류 규칙 (U1~U5)
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { ApiError, createDoc, updateDoc, removeDoc, createFolder, setDocE2ee, updateFolder } from './docsApi'
+import { ApiError, createDoc, updateDoc, removeDoc, createFolder, setDocE2ee, updateFolder, importDocComments } from './docsApi'
 
 function jsonResponse(status: number, data: unknown, headers: Record<string, string> = {}): Response {
   return new Response(data === undefined ? null : JSON.stringify(data), {
@@ -260,5 +260,66 @@ describe('F-407 S2 updateFolder e2ee', () => {
   ])('409 %j → %s', async (data, kind) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(409, data)))
     await expect(updateFolder('f', { e2ee: true })).rejects.toMatchObject({ kind })
+  })
+})
+
+// U11 (F-508.md 3.4·11.1) — importDocComments 응답 분류
+describe('U11: importDocComments', () => {
+  const records = [
+    {
+      id: 'c1',
+      parent: null,
+      body: '메모',
+      mentions: [],
+      authorId: null,
+      authorEmail: null,
+      createdAt: 1,
+      resolvedAt: null,
+      resolvedById: null,
+      resolvedBy: null,
+      quote: '고양이',
+      prefix: '',
+      suffix: '',
+      anchorFrom: 0,
+      anchorLength: 3,
+    },
+  ]
+
+  it('요청은 POST /api/docs/{id}/comments/import, 몸통은 { records } 키 하나', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { imported: 1, orphaned: 0 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const result = await importDocComments('doc a', { records })
+    expect(result).toEqual({ imported: 1, orphaned: 0 })
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/docs/doc%20a/comments/import')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(String(init.body))).toEqual({ records })
+    expect(Object.keys(JSON.parse(String(init.body)))).toEqual(['records'])
+  })
+
+  it.each([
+    [409, { error: 'comments_exist' }, 'comments_exist'],
+    [409, { error: 'e2ee_doc' }, 'e2ee_doc'],
+    [409, {}, 'other'],
+    [404, { error: 'not_found' }, 'not_found'],
+    [403, { error: 'forbidden' }, 'forbidden'],
+    [403, { error: 'account_blocked' }, 'account_blocked'],
+    [413, { error: 'too_many' }, 'too_large'],
+    [400, { error: 'invalid' }, 'invalid'],
+    [429, { error: 'rate_limited', scope: 'minute', retryAfter: 60 }, 'rate_limited'],
+    [503, { error: 'internal' }, 'server_error'],
+  ])('%s %j → %s', async (status, data, kind) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(status, data)))
+    await expect(importDocComments('a', { records })).rejects.toMatchObject({ kind })
+  })
+
+  it('네트워크 실패 → network', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('failed')))
+    await expect(importDocComments('a', { records })).rejects.toMatchObject({ kind: 'network' })
+  })
+
+  it('200 이면 CommentImportResponse 를 그대로 돌려준다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { imported: 2, orphaned: 1 })))
+    await expect(importDocComments('a', { records })).resolves.toEqual({ imported: 2, orphaned: 1 })
   })
 })

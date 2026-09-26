@@ -1,6 +1,7 @@
 // 메모리 저장소 — 저장소를 못 쓸 때의 대체 (specs/architecture.md 2장, specs/features/F-126.md 3장)
 // B1 은 IndexedDB 가 없으므로 이 저장소로만 동작한다 (F-110 이 idbStore 로 교체)
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
+import type { CommentRecord } from '../lib/docComments'
 import type { Store, Doc, Folder, Attachment, AttachmentExt, LineEnding, FolderDeleteMode } from '../types'
 
 function clone<T extends object>(doc: T): T {
@@ -49,6 +50,7 @@ export function createMemoryStore(): Store {
   const docs = new Map<string, Doc>()
   const folders = new Map<string, Folder>()
   const attachments = new Map<string, Attachment>() // F-156.md 2.3 — 새로고침하면 사라진다(메모리 저장소 특성 그대로)
+  const comments = new Map<string, CommentRecord[]>() // F-508.md 3.1 — idbStore 의 comments 스토어와 같은 계약. 메모리 저장소에는 금고 문서가 없다
 
   return {
     kind: 'memory',
@@ -104,23 +106,47 @@ export function createMemoryStore(): Store {
       return clone(doc)
     },
 
+    // comments 만 있으면 docs 행·updatedAt 을 건드리지 않는다 — idbStore 와 같은 규칙 (F-508.md 5.1)
     async update(id, patch) {
       const existing = docs.get(id)
       if (!existing) {
         throw new Error(`문서를 찾을 수 없음: ${id}`)
       }
-      const updated: Doc = {
-        ...normalizeDoc(existing),
-        ...('title' in patch ? { title: patch.title as string } : {}),
-        ...('content' in patch ? { content: patch.content as string } : {}),
-        updatedAt: Date.now(),
+      const normalized = normalizeDoc(existing)
+      const hasContentFields = 'title' in patch || 'content' in patch || patch.attachmentRefs !== undefined
+      let updated: Doc = normalized
+      if (hasContentFields) {
+        updated = {
+          ...normalized,
+          ...('title' in patch ? { title: patch.title as string } : {}),
+          ...('content' in patch ? { content: patch.content as string } : {}),
+          ...(patch.attachmentRefs !== undefined ? { attachmentRefs: patch.attachmentRefs } : {}),
+          updatedAt: Date.now(),
+        }
+        docs.set(id, updated)
       }
-      docs.set(id, updated)
+      if ('comments' in patch) {
+        const records = patch.comments as CommentRecord[]
+        if (records.length === 0) comments.delete(id)
+        else comments.set(id, records.map((r) => ({ ...r })))
+      }
       return clone(updated)
     },
 
     async remove(id) {
       docs.delete(id)
+      comments.delete(id)
+    },
+
+    async getCommentRecords(docId) {
+      const records = comments.get(docId)
+      return records ? records.map((r) => ({ ...r })) : []
+    },
+
+    async listCommentRecords() {
+      const result = new Map<string, CommentRecord[]>()
+      for (const [docId, records] of comments) result.set(docId, records.map((r) => ({ ...r })))
+      return result
     },
 
     // moveDoc 은 folderId 만 바꾼다. updatedAt 은 바꾸지 않는다 (F-126.md 3장)
@@ -228,6 +254,7 @@ export function createMemoryStore(): Store {
           const normalized = normalizeDoc(doc)
           if (normalized.folderId && ids.has(normalized.folderId)) {
             docs.delete(doc.id)
+            comments.delete(doc.id)
           }
         }
         for (const fid of ids) folders.delete(fid)

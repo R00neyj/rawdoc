@@ -1,4 +1,5 @@
 // 저장소 데이터 모양 (specs/architecture.md 2장)
+import type { CommentRecord } from './lib/docComments'
 
 export type LineEnding = 'crlf' | 'lf'
 
@@ -84,7 +85,8 @@ export type Store = {
     e2eeKey?: string
     attachmentRefs?: string[]
   }): Promise<Doc>
-  update(id: string, patch: { title?: string; content?: string; attachmentRefs?: string[] }): Promise<Doc>
+  // comments — 없으면 기록 행을 건드리지 않는다. [] 면 지운다. 1개 이상이면 통째로 바꾼다. 댓글만 바뀐 저장은 title·content·attachmentRefs 가 없으므로 updatedAt 을 올리지 않는다 (F-508 3.1·5.1)
+  update(id: string, patch: { title?: string; content?: string; attachmentRefs?: string[]; comments?: CommentRecord[] }): Promise<Doc>
   remove(id: string): Promise<void>
   moveDoc(id: string, folderId: string | null): Promise<Doc>
   setPinned(id: string, pinned: boolean): Promise<Doc>
@@ -141,4 +143,8 @@ export type Store = {
   }): Promise<{ id: string; ext: AttachmentExt }>
   // 첨부를 서버(와 기기 캐시)에서 지운다. 다른 문서가 쓰면 'in_use' 로 남긴다
   discardAttachment?(id: string, ext: AttachmentExt): Promise<'deleted' | 'not_found' | 'in_use'>
+  // 로컬 문서 댓글 기록 — idb·memory 저장소만 채운다. 행이 있는데 검사를 통과 못 하면 던진다(Error('comments_row_invalid')) (F-508 3.1)
+  getCommentRecords?(docId: string): Promise<CommentRecord[]>
+  // 로그인 이관용 — 검사를 통과한 행만 docId → 기록 (F-508 3.1)
+  listCommentRecords?(): Promise<Map<string, CommentRecord[]>>
 }

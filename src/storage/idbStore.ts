@@ -3,16 +3,21 @@
 import { openDB, type IDBPDatabase, type IDBPTransaction } from 'idb'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
 import { extractAttachmentRefs } from '../lib/imageBlock'
+import { parseCommentRecords, type CommentRecord } from '../lib/docComments'
 import type { Store, Doc, Folder, Attachment, AttachmentExt, FolderDeleteMode } from '../types'
 
 const DEFAULT_DB_NAME = 'md-docs'
-const DB_VERSION = 5
+const DB_VERSION = 6
 const DOCS_STORE = 'docs'
 const META_STORE = 'meta'
 const FOLDERS_STORE = 'folders'
 const ATTACHMENTS_STORE = 'attachments' // F-156.md 2.3, 버전 3
 const FILE_HANDLES_STORE = 'fileHandles' // F-231.md 2장, 버전 4 — docId ↔ FileSystemFileHandle
 const E2EE_STORE = 'e2ee' // F-404.md 5.1, 버전 5 — 로컬 금고 행 local·계정 금고 캐시 행 account:{userId}
+const COMMENTS_STORE = 'comments' // F-508.md 3.1·4장, 버전 6 — keyPath docId, 문서 하나에 행 하나
+
+// 로컬 문서 댓글 기록 행 — 본문과 같은 트랜잭션에 쓴다 (F-508.md 3.1)
+export type LocalCommentsRow = { docId: string; v: 1; records: CommentRecord[]; updatedAt: number }
 
 type StoredFileHandle = { docId: string; handle: FileSystemFileHandle }
 
@@ -101,6 +106,9 @@ function upgradeMdDocs(
   }
   if (oldVersion < 5) {
     database.createObjectStore(E2EE_STORE, { keyPath: 'id' })
+  }
+  if (oldVersion < 6) {
+    database.createObjectStore(COMMENTS_STORE, { keyPath: 'docId' })
   }
   transaction.objectStore(META_STORE).put({ key: 'schema', version: DB_VERSION })
 }
@@ -206,25 +214,75 @@ export async function createIdbStore(
       return doc
     },
 
-    // 한 트랜잭션 안에서 읽고 쓴다 (architecture.md 2장)
+    // 한 트랜잭션 안에서 읽고 쓴다 (architecture.md 2장). comments 가 있으면 트랜잭션 범위에 comments 스토어도 더한다 (F-508.md 5.1)
     async update(id, patch) {
-      const tx = db.transaction(DOCS_STORE, 'readwrite')
+      const storeNames = 'comments' in patch ? [DOCS_STORE, COMMENTS_STORE] : [DOCS_STORE]
+      const tx = db.transaction(storeNames, 'readwrite')
       const store = tx.objectStore(DOCS_STORE)
       const existing: StoredDoc | undefined = await store.get(id)
       if (!existing) {
         await tx.done
         throw new Error(`문서를 찾을 수 없음: ${id}`)
       }
-      const updated = applyPatch(normalizeDoc(existing), patch)
-      await store.put(updated)
+      const normalized = normalizeDoc(existing)
+      // 본문 필드가 하나도 없으면(comments 만) docs 행을 쓰지 않는다 — 사이드바 순서가 댓글로 흔들리지 않게 (F-508.md 5.1)
+      const hasContentFields = 'title' in patch || 'content' in patch || patch.attachmentRefs !== undefined
+      let updated: Doc = normalized
+      if (hasContentFields) {
+        updated = applyPatch(normalized, patch)
+        await store.put(updated)
+      }
+      // 금고 행에는 기록을 쓰지 않는다 — 행에 평문 인용이 남는 자리가 없다 (F-509.md 4.2)
+      if ('comments' in patch && normalized.e2eeKey === undefined) {
+        const commentsStore = tx.objectStore(COMMENTS_STORE)
+        const records = patch.comments as CommentRecord[]
+        if (records.length === 0) {
+          await commentsStore.delete(id)
+        } else {
+          const row: LocalCommentsRow = { docId: id, v: 1, records, updatedAt: Date.now() }
+          await commentsStore.put(row)
+        }
+      }
       await tx.done
       return updated
     },
 
-    // 연결된 fileHandles 항목도 함께 지운다 — 고아 방지 (F-231.md 3.1)
+    // 연결된 fileHandles·댓글 기록도 함께 지운다 — 고아 방지 (F-231.md 3.1, F-508.md 8장)
     async remove(id) {
-      await db.delete(DOCS_STORE, id)
-      await db.delete(FILE_HANDLES_STORE, id)
+      const tx = db.transaction([DOCS_STORE, FILE_HANDLES_STORE, COMMENTS_STORE], 'readwrite')
+      await Promise.all([
+        tx.objectStore(DOCS_STORE).delete(id),
+        tx.objectStore(FILE_HANDLES_STORE).delete(id),
+        tx.objectStore(COMMENTS_STORE).delete(id),
+      ])
+      await tx.done
+    },
+
+    async getCommentRecords(docId) {
+      const row: LocalCommentsRow | undefined = await db.get(COMMENTS_STORE, docId)
+      if (!row) return []
+      if (row.v !== 1) throw new Error('comments_row_invalid')
+      const parsed = parseCommentRecords(row.records)
+      if (!parsed.ok) throw new Error('comments_row_invalid')
+      return parsed.records
+    },
+
+    async listCommentRecords() {
+      const rows: LocalCommentsRow[] = await db.getAll(COMMENTS_STORE)
+      const result = new Map<string, CommentRecord[]>()
+      for (const row of rows) {
+        if (row.v !== 1) {
+          console.error('local_comments_row_invalid', row.docId)
+          continue
+        }
+        const parsed = parseCommentRecords(row.records)
+        if (!parsed.ok) {
+          console.error('local_comments_row_invalid', row.docId)
+          continue
+        }
+        result.set(row.docId, parsed.records)
+      }
+      return result
     },
 
     // moveDoc 은 folderId 만 바꾼다. updatedAt 은 바꾸지 않는다 — 편집이 아니므로 최근
@@ -331,11 +389,12 @@ export async function createIdbStore(
       return updated
     },
 
-    // move-up: 문서·하위 폴더를 부모로 옮기고 폴더만 삭제. delete-all: 하위 폴더·그 안 문서까지 삭제 (F-126.md 3장, F-242.md 3.1·3.2)
+    // move-up: 문서·하위 폴더를 부모로 옮기고 폴더만 삭제. delete-all: 하위 폴더·그 안 문서까지 삭제 (F-126.md 3장, F-242.md 3.1·3.2). delete-all 은 지워지는 문서의 댓글 기록도 같은 트랜잭션에서 지운다 (F-508.md 8장)
     async removeFolder(id, mode: FolderDeleteMode = 'move-up') {
-      const tx = db.transaction([DOCS_STORE, FOLDERS_STORE], 'readwrite')
+      const tx = db.transaction([DOCS_STORE, FOLDERS_STORE, COMMENTS_STORE], 'readwrite')
       const folderStore = tx.objectStore(FOLDERS_STORE)
       const docStore = tx.objectStore(DOCS_STORE)
+      const commentsStore = tx.objectStore(COMMENTS_STORE)
 
       const existing: Folder | undefined = await folderStore.get(id)
       if (!existing) {
@@ -348,10 +407,12 @@ export async function createIdbStore(
         const ids = new Set(descendantFolderIds(allFolders, id))
 
         const allDocs: StoredDoc[] = await docStore.getAll()
-        await Promise.all(
-          allDocs.filter((d) => d.folderId !== undefined && d.folderId !== null && ids.has(d.folderId)).map((d) => docStore.delete(d.id)),
-        )
+        const deletedDocIds = allDocs
+          .filter((d) => d.folderId !== undefined && d.folderId !== null && ids.has(d.folderId))
+          .map((d) => d.id)
+        await Promise.all(deletedDocIds.map((did) => docStore.delete(did)))
         await Promise.all([...ids].map((fid) => folderStore.delete(fid)))
+        await Promise.all(deletedDocIds.map((did) => commentsStore.delete(did)))
         await tx.done
         return
       }
@@ -504,7 +565,7 @@ export async function createIdbStore(
   }
 }
 
-// 금고 키 묶음 행 함수 — 부를 때마다 연결을 열고 끝나면 닫는다. 로그인 사용자에 md-docs 가 없으면 이 열기가 v1~v5 를 모두 만든다 (F-404.md 5.1)
+// 금고 키 묶음 행 함수 — 부를 때마다 연결을 열고 끝나면 닫는다. 로그인 사용자에 md-docs 가 없으면 이 열기가 v1~v6 를 모두 만든다 (F-404.md 5.1)
 const E2EE_ROW_OPEN_TIMEOUT_MS = 5_000
 
 async function openE2eeDb(dbName: string): Promise<IDBPDatabase> {

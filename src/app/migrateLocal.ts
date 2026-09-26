@@ -4,8 +4,10 @@ import type { Attachment, AttachmentExt, Doc, Folder } from '../types'
 import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
 import { encryptLocalPlainAttachment, planLocalE2eeMigration, rekeyLocalE2eeAttachment, rekeyLocalE2eeDoc, type LocalE2eeKeys } from '../e2ee/convert'
 import type { ServerStore } from '../storage/serverStore'
+import type { CommentRecord } from '../lib/docComments'
 
-export type LocalSnapshot = { folders: Folder[]; docs: Doc[] }
+// comments — 문서 id → 로컬 댓글 기록. 없으면 빈 것으로 본다 (F-508.md 3.1·7.1)
+export type LocalSnapshot = { folders: Folder[]; docs: Doc[]; comments?: Map<string, CommentRecord[]> }
 
 export type MigrateLocalDeps = {
   userId: string
@@ -28,8 +30,14 @@ export async function migrateLocalIfNeeded(deps: MigrateLocalDeps): Promise<void
 
   const local = await readLocal()
   const folders = local.folders
+  const comments = local.comments
   // 손대지 않은 첫 실행 안내 문서는 옮기지 않는다 — 기기마다 새 id 로 만들어져 계정에 쌓인다 (2.2)
-  const docs = local.docs.filter((d) => !(d.title === GUIDE_DOC_TITLE && d.content === GUIDE_DOC_CONTENT_CRLF))
+  // 단, 댓글 기록이 1개 이상이면 사용자가 쓴 것이니 옮긴다 (F-508.md 7.1 Q5)
+  const docs = local.docs.filter((d) => {
+    const isUntouchedGuide = d.title === GUIDE_DOC_TITLE && d.content === GUIDE_DOC_CONTENT_CRLF
+    if (!isUntouchedGuide) return true
+    return Boolean(comments?.get(d.id)?.length)
+  })
 
   // 문서도 폴더도 없으면 옮길 게 없다 — 폴더만 있는 경우(문서 없이 폴더만 만든 사용자)는 아래에서 folders 를 계속 옮긴다
   if (docs.length === 0 && folders.length === 0) {
@@ -43,7 +51,7 @@ export async function migrateLocalIfNeeded(deps: MigrateLocalDeps): Promise<void
 
   let result: { importedCount: number }
   try {
-    result = await importLocal({ folders, docs })
+    result = await importLocal({ folders, docs, comments })
   } catch {
     // 캐시 쓰기 자체가 실패하면 기록하지 않는다 (2.2 5단계)
     notice({ type: 'error', message: '로컬 문서를 옮기지 못했습니다. 다시 시도하려면 새로고침하세요.' })

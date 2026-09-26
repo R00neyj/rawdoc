@@ -2,6 +2,7 @@
 // 버전 2(F-209 2.5): 첨부 blob 캐시 스토어 추가
 import { openDB, type IDBPDatabase } from 'idb'
 import type { AttachmentExt, Doc, Folder, FolderDeleteMode, LineEnding } from '../types'
+import type { CommentRecord } from '../lib/docComments'
 
 const DEFAULT_DB_NAME = 'md-remote'
 const DB_VERSION = 2
@@ -50,6 +51,8 @@ export type OutboxItem =
   // mode 가 없는 옛 항목(이전 버전이 남긴 것)은 'move-up' 으로 읽는다 (F-242.md 3.3)
   | { type: 'removeFolder'; folderId: string; mode?: FolderDeleteMode }
   | { type: 'upload'; attachmentId: string; ext: AttachmentExt }
+  // 로그인 이관 — createDoc 바로 뒤에 넣는다. records 는 그 문서의 로컬 댓글 기록 (F-508.md 3.4·7.1)
+  | { type: 'importComments'; docId: string; records: CommentRecord[] }
 
 export type OutboxEntry = OutboxItem & { key: number; userId: string }
 

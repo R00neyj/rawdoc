@@ -2,6 +2,7 @@
 import type { Doc, Folder, LineEnding } from '../types'
 import { getLockSessionId, isLockSessionSettled, lockSessionReady } from './lockSession'
 import { parseRetryAfter } from '../lib/usageLimits'
+import type { CommentImportBody, CommentImportResponse } from '../lib/docComments'
 
 export type ServerDoc = Doc & { version: number }
 export type ServerDocSummary = Omit<Doc, 'content'> & { version: number }
@@ -27,6 +28,7 @@ export type ApiErrorKind =
   | 'e2ee_folder' // 409 — 금고 폴더 규칙 위반
   | 'no_vault' // 409 — 키 묶음 없이 금고 문서 만들기
   | 'e2ee_folder_not_ready' // 409 { error: 'e2ee_folder_not_ready', docs, folders } — 바로 아래에 일반 문서·폴더가 있다 (F-407 3.2)
+  | 'comments_exist' // 409 { error: 'comments_exist' } — 방에 이미 댓글이 있다 (F-503 6.4, F-508 3.4)
 
 export class ApiError extends Error {
   kind: ApiErrorKind
@@ -213,6 +215,28 @@ export async function updateDoc(
   }
   if (!res.ok) throw new ApiError('other', { status: res.status })
   return (await readJson(res)) as ServerDoc
+}
+
+// 로그인 이관 — 로컬 댓글 기록을 서버 방으로 옮긴다 (F-508.md 3.4)
+export async function importDocComments(id: string, body: CommentImportBody): Promise<CommentImportResponse> {
+  const res = await send(`/api/docs/${encodeURIComponent(id)}/comments/import`, jsonInit(body, 'POST'))
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+    throw new ApiError('forbidden')
+  }
+  if (res.status === 404) throw new ApiError('not_found')
+  if (res.status === 409) {
+    const kind2 = e2eeConflictKind(await readJson(res), ['comments_exist', 'e2ee_doc'])
+    throw new ApiError(kind2 ?? 'other', { status: 409 })
+  }
+  if (res.status === 413) throw new ApiError('too_large')
+  if (res.status === 400) throw new ApiError('invalid')
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as CommentImportResponse
 }
 
 // 잡기·연장 — edit 이상 권한 필요, 200 이면 잡음/연장, 423 이면 다른 세션이 쥐고 있음 (F-213.md 2.2)

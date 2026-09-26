@@ -583,6 +583,7 @@ export default function App() {
   // E7·E26 을 띄운 문서 — 저장이 한 번 성공할 때까지 다시 띄우지 않는다 (F-405 7.8)
   const e2eeSaveNoticeShownRef = useRef<Set<string>>(new Set())
   const notifyChangeRef = useRef(() => {})
+  const notifyCommentsChangeRef = useRef(() => {}) // useDocComments 의 localComments.onChange 가 부른다 (F-508.md 3.3)
   const printRootRef = useRef<HTMLDivElement | null>(null) // 인쇄 전용 영역 (F-279.md 4.2)
   const printDocRef = useRef(() => {}) // Ctrl+P 가 매 커밋 최신 handlePrintDoc 을 읽게 한다 (F-279.md 6.1)
   const openSearchRef = useRef(() => {}) // Ctrl+Shift+F 가 매 커밋 최신 openSearch 를 읽게 한다 (F-287.md 3.4)
@@ -1439,6 +1440,14 @@ export default function App() {
     showNotice,
     changeViewModeToEdit: () => changeViewMode('live'),
     commands: liveSession?.commands ?? null,
+    // 경로가 local 일 때만 넘긴다 (F-508.md 3.3·6장)
+    localComments:
+      docPath === 'local'
+        ? {
+            load: (docId) => store.getCommentRecords?.(docId) ?? Promise.resolve([]),
+            onChange: () => notifyCommentsChangeRef.current(),
+          }
+        : undefined,
   })
   const commentsRef = useRef(comments)
   useEffect(() => {
@@ -1846,8 +1855,8 @@ export default function App() {
           setPref,
           readLocal: async () => {
             const local = await createIdbStore()
-            const [folders, docs] = await Promise.all([local.listFolders(), local.list()])
-            return { folders, docs }
+            const [folders, docs, comments] = await Promise.all([local.listFolders(), local.list(), local.listCommentRecords?.() ?? Promise.resolve(undefined)])
+            return { folders, docs, comments }
           },
           importLocal: (input) => serverStore.importLocal(input),
           notice: showNotice,
@@ -2659,6 +2668,7 @@ export default function App() {
     docId: currentDocId,
     lineEnding: openDoc?.lineEnding,
     getText: (lineEnding: LineEnding | undefined) => editorRef.current?.getText(lineEnding ?? 'crlf') ?? '',
+    getComments: () => comments.localCommentRecords(),
     onSaved: handleDocSaved,
     onSaveError: handleSaveError,
     // 저장해 봤자 해로운 두 경우에만 막는다 — 잠금을 뺏긴 서버 문서는 그대로 내보내 423 충돌 사본을 만드는 게 설계다 (F-296.md 7.4)
@@ -2670,6 +2680,7 @@ export default function App() {
   useEffect(() => {
     docSaverFlushRef.current = docSaver.flush
     notifyChangeRef.current = docSaver.notifyChange
+    notifyCommentsChangeRef.current = docSaver.notifyCommentsChange
     openDocIdRef.current = openDoc?.id ?? null
     openDocLineEndingRef.current = openDoc?.lineEnding
     e2eeResetStepRef.current = runE2eeReset

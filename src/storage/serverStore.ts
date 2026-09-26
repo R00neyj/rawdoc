@@ -10,6 +10,7 @@ import { extractAttachmentRefs } from '../lib/imageBlock'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
 import { QUOTA_HOLD_MS, RATE_LIMITED_MINUTE_MESSAGE, rateLimitedDayMessage, docQuotaMessage, nextUtcMidnight } from '../lib/usageLimits'
 import type { Attachment, AttachmentExt, Doc, Folder, FolderDeleteMode, LineEnding, Store, SyncState } from '../types'
+import type { CommentRecord } from '../lib/docComments'
 
 const RETRY_INTERVAL_MS = 30000
 const TOO_LARGE_MESSAGE = '문서가 너무 커서 서버에 저장하지 못했습니다(1MB 초과).'
@@ -72,7 +73,8 @@ export type E2eeCopyMaker = (source: E2eeCopySource, copyId: string) => Promise<
 export type ServerStore = Store & {
   // 오프라인 부팅에서도 md-yjs 를 이 사용자로 연다 (F-306 9.2)
   readonly userId: string
-  importLocal(input: { folders: Folder[]; docs: Doc[] }): Promise<{ importedCount: number }>
+  // comments — 문서 id → 그 문서의 로컬 댓글 기록. 넣으면 그 문서의 createDoc 바로 뒤에 outbox importComments 를 넣는다 (F-508.md 7.1)
+  importLocal(input: { folders: Folder[]; docs: Doc[]; comments?: Map<string, CommentRecord[]> }): Promise<{ importedCount: number }>
   // 로그인 이관(F-408) — 로컬 금고를 이미 만든 봉투 그대로 캐시에 쓰고 보낼 목록에 넣는다. 같은 id 가 캐시에 있으면 건너뛴다. 표지(e2ee·e2eeKey) 없는 값이 섞이면 아무것도 쓰지 않고 던진다
   importLocalE2ee(input: { folders?: Folder[]; docs?: Doc[]; attachments?: Attachment[] }): Promise<{ folders: number; docs: number; attachments: number }>
   // 잠금을 되찾은 뒤 서버 값을 다시 받아 캐시에 반영한다(에디터 재마운트용) (F-213.md 2.3)
@@ -726,6 +728,11 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           await cache.removeOutbox(entry.key)
           break
         }
+        case 'importComments': {
+          await api.importDocComments(entry.docId, { records: entry.records })
+          await cache.removeOutbox(entry.key)
+          break
+        }
         case 'upload': {
           const cachedAttachment = await cache.getAttachment(userId, entry.attachmentId)
           if (!cachedAttachment) {
@@ -813,6 +820,14 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       if (err.kind === 'account_blocked') {
         applyAccountBlockedStop(docIdOf(entry))
         return false
+      }
+      // 이관 응답 — 항상 그 항목만 지운다. 캐시 문서·다른 항목은 건드리지 않는다(공통 갈래보다 뒤, 금고·일반 not_found 갈래보다 앞) (F-508.md 7.2)
+      if (entry.type === 'importComments') {
+        await cache.removeOutbox(entry.key)
+        if (err.kind !== 'comments_exist' && err.kind !== 'e2ee_doc' && err.kind !== 'not_found' && err.kind !== 'forbidden') {
+          console.error('comments_import_dropped', entry.docId, err.kind)
+        }
+        return true
       }
       const e2eeHandled = await handleE2eeApiError(entry, err)
       if (e2eeHandled !== null) return e2eeHandled
@@ -1088,9 +1103,10 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     },
 
     // setPinned·moveDoc 은 세지 않는다 — baseVersion 을 보내지 않아 실시간과 부딪치지 않는다 (F-305 4.2)
+    // importComments 도 센다 — 이관 전에 실시간으로 붙으면 그 사이 댓글이 하나라도 생겨 이관이 통째로 버려진다 (F-508.md 7.3)
     async hasPendingChanges(docId) {
       const entries = await cache.getOutbox(userId)
-      return entries.some((e) => (e.type === 'createDoc' || e.type === 'updateDoc') && e.docId === docId)
+      return entries.some((e) => (e.type === 'createDoc' || e.type === 'updateDoc' || e.type === 'importComments') && e.docId === docId)
     },
 
     // App 이 /api/me 결과로 부른다 (F-2030 4.4)
@@ -1191,7 +1207,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       if (!existing) throw new Error(`문서를 찾을 수 없음: ${id}`)
       const isE2ee = existing.e2eeKey !== undefined
       // attachmentRefs 는 금고 문서만 싣는다 (F-405 3.1)
-      const { attachmentRefs, ...textPatch } = patch
+      // comments 는 버린다 — 서버 문서 댓글은 방 Doc·md-yjs 에 있다. 실수로 실리면 서버가 모르는 키로 400 을 돌려줘 본문 저장까지 버려진다 (F-508.md 5.1)
+      const { attachmentRefs, comments: _comments, ...textPatch } = patch
       const sendPatch = isE2ee && attachmentRefs !== undefined ? { ...textPatch, attachmentRefs } : textPatch
       const updated: CachedDoc = {
         ...existing,
@@ -1601,7 +1618,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     // 로컬 → 계정 이관 (F-208 2.2) — id 를 그대로 캐시에 쓰고 보낼 목록에 넣는다.
     // 캐시에 같은 id 가 이미 있으면(서버에 이미 있음) 건너뛴다
     // 로컬 금고 폴더·문서는 건너뛴다 — 키 없이 일반 문서로 올라가면 봉투가 본문이 된다 (F-405 5.5)
-    async importLocal({ folders: allFolders, docs: allDocs }) {
+    // comments 에 그 문서의 기록이 1개 이상 있으면 createDoc 바로 뒤에 outbox importComments 를 넣는다 (F-508.md 7.1)
+    async importLocal({ folders: allFolders, docs: allDocs, comments: allComments }) {
       const folders = allFolders.filter((f) => f.e2ee !== true)
       const docs = allDocs.filter((d) => d.e2eeKey === undefined)
       for (const folder of sortFoldersParentFirst(folders)) {
@@ -1639,6 +1657,10 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           pinnedAt: doc.pinnedAt,
         })
         importedCount++
+        const records = allComments?.get(doc.id)
+        if (records && records.length > 0) {
+          await cache.addOutbox(userId, { type: 'importComments', docId: doc.id, records })
+        }
       }
 
       await refreshPending()

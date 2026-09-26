@@ -10,16 +10,20 @@ import {
   groupCommentThreads,
   normalizeCommentBody,
   validateCommentEntry,
+  type AnchorRange,
   type CommentActor,
   type CommentAuthor,
   type CommentEntry,
+  type CommentRecord,
   type CommentThread,
 } from '../lib/docComments'
+import { restoreCommentEntries, resolveCommentAnchor, toCommentRecord } from '../lib/commentAnchor'
 import { observeCommentKeys, type CommentDraft, type CommentLayout, type EditorComments } from '../editor/commentMarks'
 import { createCommandCommentWriter, type CommandCommentWriter, type CommentCommandClient } from './commentOps'
 import { commentAccess as computeCommentAccess, commentRailMode, initialCommentRailOpen, type CommentAccess } from './commentRail'
 import { getPref, setPref } from './prefs'
 import type { NoticeWithAction } from './NoticeBar'
+import type { LineEnding } from '../types'
 
 // ----- 3.2 쓰기 실패 사유·결과 -----
 
@@ -155,6 +159,44 @@ export function createDirectCommentWriter(t: WriteTarget): CommentWriter {
   }
 }
 
+// ----- 로컬 문서 댓글 저장·되살리기 (specs/features/F-508.md 3.3) — React 없이 도는 순수 함수 -----
+
+// 되살리기 트랜잭션의 origin — 이 origin 의 변화는 저장을 부르지 않는다
+export const LOCAL_COMMENT_RESTORE_ORIGIN: object = {}
+
+// 저장 때 기록 만들기 — 스레드마다 첫 댓글 → 답글 순. 첫 댓글 범위는 ranges 에 있으면 그 값, 없으면 그 자리에서 푼다
+export function buildLocalCommentRecords(input: {
+  map: Y.Map<unknown>
+  ytext: Y.Text
+  text: string
+  ranges: ReadonlyMap<string, AnchorRange | null>
+}): CommentRecord[] {
+  const { map, ytext, text, ranges } = input
+  const { threads } = groupCommentThreads(map.entries())
+  const records: CommentRecord[] = []
+  for (const thread of threads) {
+    const range = ranges.has(thread.id) ? (ranges.get(thread.id) ?? null) : resolveCommentAnchor(ytext, thread.root.anchor)
+    records.push(toCommentRecord(thread.id, thread.root, text, range))
+    for (const reply of thread.replies) {
+      records.push(toCommentRecord(reply.id, reply.entry, text, null))
+    }
+  }
+  return records
+}
+
+// 다시 열 때 기록에서 새 Y.Doc 에 심는다. map 이 비어 있지 않으면 두 번 심기를 막기 위해 아무것도 하지 않는다
+export function restoreLocalComments(
+  target: { doc: Y.Doc; map: Y.Map<unknown>; ytext: Y.Text },
+  records: readonly CommentRecord[],
+): { restored: number; orphaned: number } {
+  if (target.map.size > 0) return { restored: 0, orphaned: 0 }
+  const { entries, orphaned } = restoreCommentEntries(target.ytext, records)
+  target.doc.transact(() => {
+    for (const [id, entry] of entries) target.map.set(id, entry)
+  }, LOCAL_COMMENT_RESTORE_ORIGIN)
+  return { restored: entries.length, orphaned }
+}
+
 // ----- 화면 문구 (F-500 5.1, F-505 9장) -----
 
 export const COMMENT_TEXT = {
@@ -172,6 +214,7 @@ export const COMMENT_TEXT = {
   rateLimited: '댓글을 너무 빨리 달고 있습니다. 잠시 뒤 다시 시도하세요.', // C5
   forbidden: '댓글을 달 권한이 없습니다.', // C6
   noResponse: '서버가 응답하지 않아 반영하지 못했습니다. 잠시 뒤 다시 시도하세요.', // C12
+  localReadFailed: '이 문서의 댓글을 불러오지 못했습니다. 새로고침하면 다시 읽습니다.', // L1 (F-508)
 }
 
 // 명령 경로의 실패 중 알림 띠로 뜨는 것 (F-506 7.2). 해결·삭제는 입력칸이 없어 offline 도 띠로
@@ -189,7 +232,7 @@ export const CommentCommandContext = createContext<CommentCommandState>({ discon
 
 // ----- 훅 -----
 
-type CommentsHandle = { comments: EditorComments; view: EditorView; focus(): void }
+type CommentsHandle = { comments: EditorComments; view: EditorView; focus(): void; getText(lineEnding: LineEnding): string }
 
 export type ComposerState = { anchorTop: number; sending: boolean; error: string | null }
 export type ReplyState = { threadId: string; sending: boolean; error: string | null }
@@ -207,6 +250,11 @@ export type UseDocCommentsInput = {
   changeViewModeToEdit: () => void
   // 읽기 전용 세션의 명령 클라이언트 (F-506 6.3). 없으면 null
   commands: CommentCommandClient | null
+  // 경로가 local 일 때만 App 이 넘긴다 (F-508.md 3.3·6장)
+  localComments?: {
+    load(docId: string): Promise<CommentRecord[]> // store.getCommentRecords
+    onChange(): void // docSaver.notifyCommentsChange
+  }
 }
 
 export type UseDocCommentsResult = {
@@ -240,6 +288,8 @@ export type UseDocCommentsResult = {
   actorFor: CommentActor | null
   setPendingTarget: (target: PendingCommentTarget) => void
   commandState: CommentCommandState
+  // useDocSaver 의 getComments 로 넘긴다 — 되살리기를 마친 로컬 마운트일 때만 값, 그 밖은 null (F-508.md 3.3)
+  localCommentRecords(): CommentRecord[] | null
 }
 
 function readRailPref(): 'open' | 'closed' | null {
@@ -254,10 +304,30 @@ export function scrollTopOf(view: EditorView, pos: number): number {
 }
 
 export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult {
-  const { containerRef, handle, mountKey, access, viewMode, everSynced, showNotice, changeViewModeToEdit, commands } = input
+  const { containerRef, handle, mountKey, access: rawAccess, viewMode, everSynced, showNotice, changeViewModeToEdit, commands, localComments } = input
+
+  // 되살리기 상태 — 로컬 경로에서만 쓴다. 읽기 실패면 이 마운트 동안 접근을 read 로 낮춘다 (F-508.md 6.1·6.3)
+  const [localRestore, setLocalRestore] = useState<{ mountKey: string | null; status: 'pending' | 'ready' | 'failed' }>({
+    mountKey: null,
+    status: 'pending',
+  })
+  const localReadOnly =
+    rawAccess.kind === 'write' &&
+    rawAccess.via === 'direct' &&
+    Boolean(localComments) &&
+    localRestore.mountKey === mountKey &&
+    localRestore.status === 'failed'
+  // localReadOnly 일 때마다 새 객체를 만들면 아래 useCallback 들의 deps 가 매 렌더 바뀐다 — 값으로 메모한다
+  const access: CommentAccess = useMemo(() => (localReadOnly ? { kind: 'read' } : rawAccess), [localReadOnly, rawAccess])
 
   const canView = access.kind === 'read' || access.kind === 'write'
   const canWrite = access.kind === 'write'
+
+  // App 이 매 렌더 새 객체를 넘겨도 붙이기·관찰 effect 가 덩달아 다시 돌지 않게 ref 로 받는다
+  const localCommentsRef = useRef(localComments)
+  useEffect(() => {
+    localCommentsRef.current = localComments
+  })
 
   const [mainWidth, setMainWidth] = useState(0)
   useEffect(() => {
@@ -332,23 +402,80 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
     return () => dom.removeEventListener('pointerdown', onPointerDown)
   }, [canView, handle])
 
-  // ----- 붙이기·떼기 (2장) -----
+  // ----- 붙이기·떼기, 로컬은 되살리기 먼저(2장, F-508.md 6.1) -----
+  const detachRef = useRef<(() => void) | null>(null)
   useEffect(() => {
-    if (!canView || !handle) return
-    const detach = handle.comments.attach({
-      onActivate: (id) => {
-        setActiveIdState(id)
-        handle.comments.setActive(id)
-        setOpen(true, false)
-      },
-      onLayout: (l) => setLayout(l),
-    })
+    if (!canView || !handle || !mountKey) return
+    let cancelled = false
+
+    function doAttach() {
+      if (cancelled) return
+      const detach = handle!.comments.attach({
+        onActivate: (id) => {
+          setActiveIdState(id)
+          handle!.comments.setActive(id)
+          setOpen(true, false)
+        },
+        onLayout: (l) => setLayout(l),
+      })
+      detachRef.current = detach
+    }
+
+    const localOpt = localCommentsRef.current
+    if (localOpt) {
+      const docId = mountKey.split(':')[0]
+      setLocalRestore({ mountKey, status: 'pending' })
+      localOpt
+        .load(docId)
+        .then((records) => {
+          if (cancelled) return
+          restoreLocalComments(handle.comments, records)
+          setLocalRestore({ mountKey, status: 'ready' })
+          doAttach()
+        })
+        .catch((err) => {
+          if (cancelled) return
+          console.error('local_comments_read_failed', docId, err)
+          showNotice({ type: 'error', message: COMMENT_TEXT.localReadFailed })
+          setLocalRestore({ mountKey, status: 'failed' })
+          doAttach()
+        })
+    } else {
+      doAttach()
+    }
+
     return () => {
-      detach()
+      cancelled = true
+      detachRef.current?.()
+      detachRef.current = null
       setLayout(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canView, handle, mountKey])
+
+  // ----- 로컬 저장 알리기 — 되살리기 origin 이 아닌 변화마다(5.2 끝) -----
+  useEffect(() => {
+    if (!localCommentsRef.current || !handle) return
+    if (localRestore.mountKey !== mountKey || localRestore.status === 'pending') return
+    const { map, doc } = handle.comments
+    let touched = false
+    let restoreOnly = true
+    const onMap = (event: Y.YMapEvent<unknown>) => {
+      touched = true
+      if (event.transaction.origin !== LOCAL_COMMENT_RESTORE_ORIGIN) restoreOnly = false
+    }
+    const onAfter = () => {
+      if (touched && !restoreOnly) localCommentsRef.current?.onChange()
+      touched = false
+      restoreOnly = true
+    }
+    map.observe(onMap)
+    doc.on('afterTransaction', onAfter)
+    return () => {
+      map.unobserve(onMap)
+      doc.off('afterTransaction', onAfter)
+    }
+  }, [handle, mountKey, localRestore])
 
   // ----- 스레드 읽기 (2장) -----
   useEffect(() => {
@@ -599,6 +726,18 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
     [activeId, setActive, markBusy, showNotice],
   )
 
+  // useDocSaver 의 getComments 로 넘긴다 — 되살리기를 마친 로컬 마운트일 때만 값 (F-508.md 3.3)
+  const localCommentRecords = useCallback((): CommentRecord[] | null => {
+    if (!localCommentsRef.current || !handle) return null
+    if (localRestore.mountKey !== mountKey || localRestore.status !== 'ready') return null
+    return buildLocalCommentRecords({
+      map: handle.comments.map,
+      ytext: handle.comments.ytext,
+      text: handle.getText('lf'),
+      ranges: handle.comments.ranges(),
+    })
+  }, [handle, localRestore, mountKey])
+
   return {
     access,
     canWrite,
@@ -630,6 +769,7 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
     actorFor,
     setPendingTarget,
     commandState,
+    localCommentRecords,
   }
 }
 
