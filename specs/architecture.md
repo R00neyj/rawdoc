@@ -238,7 +238,7 @@ type YjsMetaRow = {
 
 ```
 wrangler.jsonc           Worker 스크립트·D1(DB)·R2(BUCKET)·정적 자산(ASSETS) 바인딩 (F-204), Durable Object `DOC_ROOM`(클래스 `DocRoom`) 바인딩·마이그레이션 (F-304), Rate Limiting `WRITE_LIMITER` (F-2026)
-migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025)
+migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038)
 worker/
   index.ts               fetch 진입점, 라우트 표 { method, path, handler }
   http.ts                JSON 응답 도우미
@@ -256,6 +256,8 @@ worker/
   docWrite.ts            문서 행 조건부 쓰기 한 벌 — `/api`·`/v1` 폴백 PUT 과 DocRoom idle 경로가 같이 씀 (F-308)
   usage.ts               사용량 열·한도·사용량 줄 (F-2025)
   writeGate.ts           쓰기 관문 — 401·403 account_blocked·429 day·429 minute (F-2026)
+  account.ts             `GET`·`DELETE /api/account` — 삭제 미리 보기, 최근 로그인 10분 판정, 계정 행 전부를 지우는 D1 batch 하나 (F-2038)
+  purgeJobs.ts           `purge_jobs` 비우기 — 지운 계정의 DO 방·R2 접두사를 호출 예산 안에서 차례로. Cron 문자열 상수 (F-2038)
   testD1.ts              테스트 전용 node:sqlite D1 어댑터 (F-2025)
   awarenessRelay.ts        (F-307)
   v1.ts apiTokens.ts       `/v1` 핸들러·개인 토큰 (F-222·F-223)
@@ -276,9 +278,10 @@ scripts/lib/admin.mjs d1.mjs                          관리 스크립트 공용
 - 클라이언트: 로그인 상태면 `store.kind === 'server'` (F-207). IndexedDB `md-remote` 에 캐시·보낼 목록·첨부. 로컬 `md-docs` 는 로그아웃 상태와 이관(F-208)에 쓴다
 - R2 키 `att/{owner_id}/{id}.{ext}`, 공개 버킷·서명 URL 없음 (F-209)
 - 안 쓰는 첨부 정리: 매일 UTC 18시 Cron `scheduled` → 모든 문서 원문에 없고 24시간 지난 첨부 R2·D1 삭제 (F-219). 같은 Cron 이 만료된 `auth_sessions`·`auth_verifications` 행도 따로 지운다 (F-2033 2.6)
+- 10분 Cron `*/10 * * * *` — `purge_jobs` 비우기(DO 방 먼저, 그다음 R2 접두사, 호출 예산 40). 계정 삭제 요청도 204 뒤 `waitUntil` 로 예산 15 만큼 먼저 비운다. `scheduled` 는 `event.cron` 이 이 문자열일 때만 정리를 돌리고, 그 밖에는 매일 정리만 (F-2038 5.4·5.5)
 - `/v1` PUT → `DocRoom` RPC `writeText`(idle: DO 안 D1 조건부 쓰기, 실시간: `Y.Text` 차이 적용 + 즉시 스냅숏). 실패하면 D1 직접 (F-308)
 - 쓰기 요청의 D1 쓰기는 사용량 줄(`users` 한 행)과 한 batch. 문서 행을 바꾸면 소유자 누계도 (F-2025)
-- 쓰기 라우트(`GET` 아닌 `/api`·`/v1`, `POST /api/login` 제외)는 `Origin` 검사·라우트 찾기 뒤, 핸들러 앞에 관문 하나(`writeGate.ts`). 분당 바인딩 `WRITE_LIMITER` 가 던지면 통과 (F-2026)
+- 쓰기 라우트(`GET` 아닌 `/api`·`/v1`, `POST /api/login`·`/api/account` 제외)는 `Origin` 검사·라우트 찾기 뒤, 핸들러 앞에 관문 하나(`writeGate.ts`). 분당 바인딩 `WRITE_LIMITER` 가 던지면 통과 (F-2026)
 - 공개 조회는 `links.ts` `findPublicLink` 하나를 거친다. 링크 소유자가 막힌 계정이면 없는 링크와 같이 404 (F-2028 5장)
 - 문서 권한 판정 `resolveDocAccess` 는 보낸 사람 또는 소유자가 막힌 계정이면 `owner`·`edit` 를 `view` 로 낮춘다. 쓰기 핸들러 셋(`handleUpdateDoc`·`handleUpdateDocV1`·`handleLockDoc`)은 그때 403 `account_blocked` (F-2028 4.2·4.3)
 - 가입 관문: better-auth `validateUserInfo` 의 `create-user` 에서 `signup_gate` 한 줄 조건부 `UPDATE`. 마감이면 `/login?error=signup_closed` (F-2028 3장)
