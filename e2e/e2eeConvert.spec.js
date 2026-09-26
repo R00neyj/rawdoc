@@ -830,6 +830,30 @@ test.describe('F-509 로컬 — 댓글 달린 문서를 옮기기·빼기', () =
     await expect(page.locator('.comment-thread')).toHaveCount(0)
   })
 
+  test('F-509 회귀 로컬 — 옮긴 뒤 같은 세션에서 빼면 새로고침 없이 레일이 빈 목록으로 뜬다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.commentRail', 'open')
+    await openApp(page)
+    const id = await importMarkdown(page, { name: '댓글 문서.md', content: F509_CONTENT })
+    await f509SelectCat(page)
+    await f509AddComment(page, '댓글')
+    await waitSaved(page)
+
+    await convertFromMenu(page, docRow(page, id))
+    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+    await completeCreateVault(page)
+    await expect(notice(page)).toHaveText('"댓글 문서"을(를) 금고로 옮겼습니다.')
+    await expect(page.locator('.comment-rail')).toHaveCount(0)
+
+    const menu = await openMenuOf(page, docRow(page, id))
+    await menu.getByRole('menuitem', { name: '금고에서 빼기…', exact: true }).click()
+    await expect(convertDialog(page)).toBeVisible()
+    await convertDialog(page).getByRole('button', { name: '빼기', exact: true }).click()
+    await expect(notice(page)).toHaveText('"댓글 문서"을(를) 금고에서 뺐습니다.')
+
+    await expect(page.locator('.comment-rail-empty')).toHaveText('이 문서에 댓글이 없습니다. 본문을 선택하고 댓글을 달아 보세요.', { timeout: 10_000 })
+    await expect(page.locator('.comment-thread')).toHaveCount(0)
+  })
+
   test('F-509 E6 로컬 — 열지 않은 문서는 기록 수로 센다, 옮긴 뒤 그 문서의 기록 없음', async ({ page }) => {
     await openApp(page)
     const x = await importMarkdown(page, { name: 'X.md', content: F509_CONTENT })

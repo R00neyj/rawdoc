@@ -552,6 +552,12 @@ export default function App() {
   const focusTitleRef = useRef(false)
   const focusEditorRef = useRef(false)
   const editorRef = useRef<EditorHandle | null>(null)
+  // 댓글 훅에는 상태로 넘긴다 — 렌더 중 editorRef.current 를 읽으면 bail-out 렌더가 새 핸들을 effect 없이 deps 에 남긴다
+  const [editorHandle, setEditorHandle] = useState<EditorHandle | null>(null)
+  const setEditorRefs = useCallback((handle: EditorHandle | null) => {
+    editorRef.current = handle
+    setEditorHandle(handle)
+  }, [])
   const contentAreaRef = useRef<HTMLDivElement | null>(null) // 오른쪽 목차 여백 측정용 (F-144.md 2장)
   const viewerRef = useRef<HTMLDivElement | null>(null) // 오른쪽 목차가 보기 모드에서 스크롤할 대상 (F-144.md 3.4)
   // 모드 전환 직전 화면 맨 위 원문 줄 — 문서가 바뀌면(docId 불일치) 버린다 (F-295.md 5.1·5.6)
@@ -1442,7 +1448,7 @@ export default function App() {
   const commentsMountKey = currentDocId !== null && openDoc?.id === currentDocId ? `${currentDocId}:${editorRemountNonce}` : null
   const comments = useDocComments({
     containerRef: contentAreaRef,
-    handle: editorRef.current,
+    handle: editorHandle,
     mountKey: commentsMountKey,
     access: commentAccessValue,
     viewMode,
@@ -5268,7 +5274,7 @@ export default function App() {
                 {openDoc?.id === currentDocId && (
                   <Editor
                     key={`${currentDocId}:${editorRemountNonce}`}
-                    ref={editorRef}
+                    ref={setEditorRefs}
                     text={openDoc.content}
                     viewMode={viewMode}
                     readOnly={isReadOnlyDoc}
