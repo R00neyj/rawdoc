@@ -7,6 +7,7 @@ import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../src/lib/
 import { getOwnedFolder } from './access'
 import { dayUsageStatement, deleteFoldersUsageStatement } from './usage'
 import { notifyPurge } from './docRoomRpc'
+import { folderCommentDeleteStatements } from './commentRows'
 
 const BATCH_ID_LIMIT = 100
 
@@ -246,7 +247,10 @@ export async function handleDeleteFolder(
     }
 
     const statements = []
-    if (ids.length > 0) statements.push(deleteFoldersUsageStatement(env.DB, user.id, ids, Date.now()))
+    if (ids.length > 0) {
+      // 댓글 문장은 문서 행으로 폴더 안 문서를 찾으므로 문서 지우기 앞이다 (F-502 8.2)
+      statements.push(deleteFoldersUsageStatement(env.DB, user.id, ids, Date.now()), ...folderCommentDeleteStatements(env.DB, user.id, ids))
+    }
     for (let i = 0; i < docIds.length; i += BATCH_ID_LIMIT) {
       const chunk = docIds.slice(i, i + BATCH_ID_LIMIT)
       const placeholders = chunk.map(() => '?').join(',')

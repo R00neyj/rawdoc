@@ -570,18 +570,27 @@ export function commentRejectReason(error: CommentShapeError | CommentCapacityEr
 
 // ----- 7.1 짧은 해시 — FNV-1a 64, UTF-8, 소문자 16진수 16자 -----
 
-const FNV_OFFSET_BASIS = 0xcbf29ce484222325n
-const FNV_PRIME = 0x100000001b3n
-const U64_MASK = 0xffffffffffffffffn
+const hex4 = (n: number) => n.toString(16).padStart(4, '0')
 
+// 64비트를 16비트 칸 넷(h0 이 아래)으로. 소수 0x100000001b3 = 2^40 + 0x1b3 이라 곱하기가 칸마다 0x1b3 과 0x100 뿐이다 (F-502 4.7)
 export function shortHash(input: string): string {
   const bytes = new TextEncoder().encode(input)
-  let hash = FNV_OFFSET_BASIS
+  let h0 = 0x2325
+  let h1 = 0x8422
+  let h2 = 0x9ce4
+  let h3 = 0xcbf2
   for (const byte of bytes) {
-    hash ^= BigInt(byte)
-    hash = (hash * FNV_PRIME) & U64_MASK
+    h0 ^= byte
+    const t0 = h0 * 0x1b3
+    const t1 = h1 * 0x1b3 + (t0 >>> 16)
+    const t2 = h2 * 0x1b3 + h0 * 0x100 + (t1 >>> 16)
+    const t3 = h3 * 0x1b3 + h1 * 0x100 + (t2 >>> 16)
+    h0 = t0 & 0xffff
+    h1 = t1 & 0xffff
+    h2 = t2 & 0xffff
+    h3 = t3 & 0xffff
   }
-  return hash.toString(16).padStart(16, '0')
+  return hex4(h3) + hex4(h2) + hex4(h1) + hex4(h0)
 }
 
 export function commentSig(entry: CommentEntry): string {

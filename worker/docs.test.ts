@@ -9,6 +9,7 @@ vi.mock('./auth', () => ({
 }))
 
 import { handleCreateDoc, handleDeleteDoc, handleUpdateDoc } from './docs'
+import { handleDeleteFolder } from './folders'
 import { asD1, openTestDb } from './testD1'
 import { DOC_BYTES_QUOTA, DOC_COUNT_QUOTA, utf8Bytes } from './usage'
 import type { DatabaseSync } from 'node:sqlite'
@@ -229,5 +230,76 @@ describe('버그 수정 — 공유 링크 묶음에 든 문서 삭제', () => {
     // 링크 자체(시작 문서 d1)는 남아 있어야 한다 — 이 버그 수정의 규칙 밖
     const link = sqlDb.prepare('SELECT * FROM share_links WHERE token = ?').get('tok1')
     expect(link).toBeTruthy()
+  })
+})
+
+// F-502 8.1·8.2 지우는 자리 — 댓글 행·알림·누계 (13.5 X1·X2)
+describe('F-502 X1·X2 문서·폴더 삭제가 댓글 복사본을 지운다', () => {
+  function insertComment(sqlDb: DatabaseSync, docId: string, id: string, bytes: number) {
+    sqlDb
+      .prepare("INSERT INTO doc_comments (doc_id, id, body, created_at, bytes, sig, anchor_sig) VALUES (?, ?, 'b', 1, ?, 's', 'a')")
+      .run(docId, id, bytes)
+  }
+  function insertNotification(sqlDb: DatabaseSync, docId: string, commentId: string) {
+    sqlDb
+      .prepare(
+        "INSERT INTO notifications (id, recipient_email, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at) VALUES (?, 'x@example.com', 'mention', ?, ?, ?, 'y@example.com', 't', 'e', 1)",
+      )
+      .run(`${docId}-${commentId}`, docId, commentId, commentId)
+  }
+  function insertFolder(sqlDb: DatabaseSync, id: string, parentId: string | null) {
+    sqlDb.prepare('INSERT INTO folders (id, owner_id, name, parent_id, created_at, updated_at) VALUES (?,?,?,?,?,?)').run(id, 'u1', id, parentId, 1, 1)
+  }
+  const rows = (sqlDb: DatabaseSync, table: string, docId: string) =>
+    (sqlDb.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE doc_id = ?`).get(docId) as { n: number }).n
+
+  it('X1 handleDeleteDoc — 204, 두 표에서 그 문서 행 0, content_bytes = 본문 + 댓글 바이트만큼 준다', async () => {
+    const { sqlDb, env } = setup()
+    insertUser(sqlDb, 'u1', 'u1@example.com')
+    insertDoc(sqlDb, { id: 'd1', ownerId: 'u1', content: '가나다' })
+    insertDoc(sqlDb, { id: 'd2', ownerId: 'u1', content: 'x' })
+    insertComment(sqlDb, 'd1', 'c1', 10)
+    insertComment(sqlDb, 'd1', 'c2', 5)
+    insertComment(sqlDb, 'd2', 'c3', 7)
+    insertNotification(sqlDb, 'd1', 'c1')
+    insertNotification(sqlDb, 'd2', 'c3')
+    setUserUsage(sqlDb, 'u1', { contentBytes: 1000, docCount: 2 })
+
+    const res = await handleDeleteDoc(req('DELETE', '/api/docs/d1'), env, ctx, { id: 'd1' })
+    expect(res.status).toBe(204)
+    expect(rows(sqlDb, 'doc_comments', 'd1')).toBe(0)
+    expect(rows(sqlDb, 'notifications', 'd1')).toBe(0)
+    expect(rows(sqlDb, 'doc_comments', 'd2')).toBe(1)
+    expect(rows(sqlDb, 'notifications', 'd2')).toBe(1)
+    expect(getUserRow(sqlDb, 'u1').content_bytes).toBe(1000 - utf8Bytes('가나다') - 15)
+  })
+
+  it('X2 handleDeleteFolder delete-all — 하위 폴더 문서의 댓글·알림 0, 폴더 밖 문서 것은 그대로, 누계 맞음', async () => {
+    const { sqlDb, env } = setup()
+    insertUser(sqlDb, 'u1', 'u1@example.com')
+    insertFolder(sqlDb, 'top', null)
+    insertFolder(sqlDb, 'sub', 'top')
+    insertDoc(sqlDb, { id: 'd-top', ownerId: 'u1', content: 'ab' })
+    insertDoc(sqlDb, { id: 'd-sub', ownerId: 'u1', content: 'cde' })
+    insertDoc(sqlDb, { id: 'd-out', ownerId: 'u1', content: 'f' })
+    sqlDb.prepare("UPDATE docs SET folder_id = 'top' WHERE id = 'd-top'").run()
+    sqlDb.prepare("UPDATE docs SET folder_id = 'sub' WHERE id = 'd-sub'").run()
+    insertComment(sqlDb, 'd-top', 'c1', 3)
+    insertComment(sqlDb, 'd-sub', 'c2', 4)
+    insertComment(sqlDb, 'd-out', 'c3', 9)
+    insertNotification(sqlDb, 'd-sub', 'c2')
+    insertNotification(sqlDb, 'd-out', 'c3')
+    setUserUsage(sqlDb, 'u1', { contentBytes: 2 + 3 + 1 + 3 + 4 + 9, docCount: 3 })
+
+    const res = await handleDeleteFolder(req('DELETE', '/api/folders/top?contents=delete-all'), env, ctx, { id: 'top' })
+    expect(res.status).toBe(204)
+    for (const id of ['d-top', 'd-sub']) {
+      expect(rows(sqlDb, 'doc_comments', id)).toBe(0)
+      expect(rows(sqlDb, 'notifications', id)).toBe(0)
+    }
+    expect(rows(sqlDb, 'doc_comments', 'd-out')).toBe(1)
+    expect(rows(sqlDb, 'notifications', 'd-out')).toBe(1)
+    expect(getUserRow(sqlDb, 'u1').content_bytes).toBe(1 + 9)
+    expect(getUserRow(sqlDb, 'u1').doc_count).toBe(1)
   })
 })

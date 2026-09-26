@@ -1,7 +1,23 @@
 // DocRoom 규칙 (specs/features/F-304.md 6~9장). partyserver·cloudflare:workers 를 import 하지 않는다 — node 테스트가 통째로 부른다
 import * as Y from 'yjs'
 
-import { SOCKET_CLOSE, Y_CONTENT_NAME, Y_TITLE_NAME, encodeDocRoomMessage } from '../src/lib/docRoomProtocol'
+import { SOCKET_CLOSE, Y_COMMENTS_NAME, Y_CONTENT_NAME, Y_TITLE_NAME, encodeDocRoomMessage } from '../src/lib/docRoomProtocol'
+import { commentSig, groupCommentThreads } from '../src/lib/docComments'
+import type { CommentEntry, CommentThread } from '../src/lib/docComments'
+import { resolveCommentAnchor, resolveCommentAnchors, restoreCommentEntries } from '../src/lib/commentAnchor'
+import { planCommentFixes } from './commentGuard'
+import type { CommentChange } from './commentGuard'
+import {
+  ALL_COMMENTS_SQL,
+  KNOWN_COMMENTS_SQL,
+  NOTIFICATIONS_PER_BATCH_MAX,
+  commentBundleStatements,
+  commentRowOf,
+  notificationTargets,
+  rowToCommentRecord,
+} from './commentRows'
+import type { CommentRow, DocCommentDbRow, NotificationDraft } from './commentRows'
+import { loadDocPeople } from './docPeople'
 import { fromEditorText, toEditorText } from '../src/lib/lineEnding'
 import type { LineEnding } from '../src/lib/lineEnding'
 import { resolveDocAccess, roleAtLeast } from './access'
@@ -71,6 +87,9 @@ type D1DocRow = { title: string; content: string; line_ending: LineEnding; versi
 // rowBytes — base 가 가리키는 D1 행 본문의 실제 UTF-8 바이트 (F-2027 4.4)
 type Base = { content: string; title: string; version: number; lineEnding: LineEnding; updatedAt: number | null; rowBytes: number }
 type SnapshotResult = 'ok' | 'retry' | 'gone'
+// 한 스냅숏이 D1 댓글 복사본에 쓸 것 (F-502 4.2). keys = dirty 에서 떼어 온 키
+type CommentPlan = { keys: string[]; full: boolean; upserts: CommentRow[]; deletes: string[]; drafts: NotificationDraft[] }
+type KnownComment = { sig: string; anchorSig: string }
 
 // D1 읽기 셋은 금고 행을 거른다 — DO 는 금고 문서를 없는 문서로 본다 (F-401 X16)
 const READ_ROW_SQL = 'SELECT title, content, line_ending, version, owner_id FROM docs WHERE id = ? AND e2ee_key IS NULL'
@@ -86,6 +105,10 @@ const EMPTY_UPDATE_BYTES = 2
 const ABSORB_ORIGIN = { absorb: true }
 // /v1 PUT 이 얹는 트랜잭션의 origin — 클라이언트와 공유하지 않는다
 const WRITE_ORIGIN = { v1Write: true }
+// 사후 검사가 고치는 트랜잭션의 origin (F-502 3.1)
+export const COMMENT_FIX_ORIGIN = { commentFix: true }
+// 사후 검사를 건너뛰는 서버 origin. F-503 이 명령·이관 origin 을 여기에 더한다 (F-502 11.1)
+export const SERVER_ORIGINS: ReadonlySet<unknown> = new Set<unknown>([ABSORB_ORIGIN, WRITE_ORIGIN, COMMENT_FIX_ORIGIN])
 
 function applyEdit(text: Y.Text, edit: TextEdit | null | 'conflict') {
   if (!edit || edit === 'conflict') return
@@ -139,6 +162,12 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private loadFlushTimer: ReturnType<typeof setTimeout> | null = null
   private writeQueue: Promise<unknown> = Promise.resolve()
+  // F-502 4.1 — D1 에 있는 댓글, D1 과 대조할 키, 마지막 전체 다시 적기 뒤 바뀌었나, 접근 집합 보관
+  private known = new Map<string, KnownComment>()
+  private dirty = new Set<string>()
+  private anchorsDirty = false
+  private fullAnchorsNext = false
+  private people: { at: number; emails: Set<string> | null } | null = null
 
   constructor(host: DocRoomHost<C>) {
     this.host = host
@@ -155,6 +184,10 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
 
   private get title(): Y.Text {
     return this.host.doc.getText(Y_TITLE_NAME)
+  }
+
+  private get comments(): Y.Map<unknown> {
+    return this.host.doc.getMap(Y_COMMENTS_NAME)
   }
 
   private async readRow(): Promise<D1DocRow | null> {
@@ -182,12 +215,18 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
       return
     }
     const external = { content: toEditorText(row.content), title: row.title }
+    // D1 댓글 복사본 — 씨앗 가지는 되살릴 전체 행, 그 밖은 대조할 표지만. document 를 건드리기 전에 읽는다 (F-502 4.1·5장)
+    const seeding = rows.length === 0
+    const known = seeding
+      ? (await this.host.env.DB.prepare(ALL_COMMENTS_SQL).bind(this.host.docId).all<DocCommentDbRow>()).results
+      : (await this.host.env.DB.prepare(KNOWN_COMMENTS_SQL).bind(this.host.docId).all<{ id: string; sig: string; anchor_sig: string }>()).results
 
-    if (rows.length === 0) {
+    if (seeding) {
       doc.transact(() => {
         this.content.insert(0, external.content)
         this.title.insert(0, external.title)
       }, ABSORB_ORIGIN)
+      if (known.length > 0) this.restoreComments(known as DocCommentDbRow[])
       this.store.writeBase(Y.encodeStateAsUpdate(doc), { schema: '1', d1_version: String(row.version) })
     } else if (this.store.getMeta('d1_version') !== String(row.version)) {
       // 기준점을 모른다 — 지금 document 를 기준으로 본다 (7.2 알려진 손실)
@@ -204,11 +243,19 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     this.ownerId = row.owner_id
     this.base = { ...external, version: row.version, lineEnding: row.line_ending, updatedAt: null, rowBytes: utf8ByteLength(row.content) }
     this.loaded = true
+    this.known = new Map(known.map((r) => [r.id, { sig: r.sig, anchorSig: r.anchor_sig }]))
+    this.dirty = new Set([...this.comments.keys(), ...this.known.keys()])
+    // 깨어나기 전 인스턴스가 전체 다시 적기를 못 했을 수 있다 — 댓글이 있으면 다음 한 번은 돈다
+    this.anchorsDirty = this.comments.size > 0
     doc.on('update', (update: Uint8Array) => {
-      if (!this.gone) this.pending.push(update)
+      if (this.gone) return
+      this.pending.push(update)
+      this.anchorsDirty = true
     })
+    this.comments.observe((event, tr) => this.onComments(event, tr))
 
-    if (this.content.toString() !== this.base.content || this.clippedTitle() !== this.base.title) {
+    const commentsToCheck = this.comments.size > 0 || this.known.size > 0
+    if (this.content.toString() !== this.base.content || this.clippedTitle() !== this.base.title || commentsToCheck) {
       this.loadFlushTimer = setTimeout(() => {
         this.loadFlushTimer = null
         void this.flush()
@@ -218,6 +265,34 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
 
   private clippedTitle(): string {
     return this.title.toString().slice(0, MAX_TITLE_CHARS)
+  }
+
+  // F-502 5장 — 씨앗 가지에서만. F-301 3.3 이 허락한 최초 씨앗 심기와 같은 자리다
+  private restoreComments(rows: DocCommentDbRow[]) {
+    const { entries } = restoreCommentEntries(this.content, rows.map(rowToCommentRecord))
+    this.host.doc.transact(() => {
+      for (const [id, entry] of entries) this.comments.set(id, entry)
+    }, ABSORB_ORIGIN)
+  }
+
+  // F-502 3.1 — 모든 origin 에서 바뀐 키를 적고, 연결에서 온 트랜잭션만 검사·고친다
+  private onComments(event: Y.YMapEvent<unknown>, tr: Y.Transaction) {
+    if (this.gone) return
+    for (const key of event.keysChanged) this.dirty.add(key)
+    if (SERVER_ORIGINS.has(tr.origin)) return
+    // y-partyserver 는 받은 갱신을 그 Connection 을 origin 으로 적용한다
+    const origin = tr.origin as { state?: unknown } | null
+    const state = readConnState(typeof origin === 'object' && origin !== null ? origin.state : null)
+    const changes: CommentChange[] = []
+    event.changes.keys.forEach((change, key) => changes.push({ key, action: change.action, oldValue: change.oldValue }))
+    const fixes = planCommentFixes(new Map(this.comments.entries()), changes, state)
+    if (fixes.length === 0) return
+    this.host.doc.transact(() => {
+      for (const fix of fixes) {
+        if (fix.op === 'set') this.comments.set(fix.key, fix.value)
+        else this.comments.delete(fix.key)
+      }
+    }, COMMENT_FIX_ORIGIN)
   }
 
   // base → external 변화를 지금 document 에 얹는다. 겹치면 DO 가 이긴다 (7.3)
@@ -286,8 +361,9 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
   }
 
   // 합쳐지면 강제 표시는 뒤이은 한 번에 실린다 (F-2027 5.4)
-  private runFlush(fromRetry: boolean, bypassSlow = false): Promise<void> {
+  private runFlush(fromRetry: boolean, bypassSlow = false, fullAnchors = false): Promise<void> {
     if (bypassSlow) this.bypassNext = true
+    if (fullAnchors) this.fullAnchorsNext = true
     if (this.flushing) {
       this.flushAgain = true
       return this.flushing
@@ -299,7 +375,9 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
           this.flushAgain = false
           const bypass = this.bypassNext
           this.bypassNext = false
-          await this.flushOnce(retry, bypass)
+          const full = this.fullAnchorsNext
+          this.fullAnchorsNext = false
+          await this.flushOnce(retry, bypass, full)
           retry = false
         } while (this.flushAgain)
       } finally {
@@ -309,16 +387,16 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     return this.flushing
   }
 
-  // 마지막 연결이 닫혔다 — 타이머를 기다리지 않고 곧바로 (6.2, 10.2 R4)
+  // 마지막 연결이 닫혔다 — 타이머를 기다리지 않고 곧바로 (6.2, 10.2 R4). 댓글 앵커 전체 다시 적기 한 번 (F-502 4.5)
   roomEmptied(): Promise<void> {
-    return this.flush()
+    return this.runFlush(false, false, true)
   }
 
-  // DO 알람 (F-2027 5.5) — 60초 검사만 건너뛴 flush 하나
+  // DO 알람 (F-2027 5.5) — 60초 검사만 건너뛴 flush 하나. 댓글 앵커 전체 다시 적기 한 번 (F-502 4.5)
   async alarm(): Promise<void> {
     this.alarmAt = null
     if (this.gone || !this.loaded) return
-    await this.runFlush(false, true)
+    await this.runFlush(false, true, true)
   }
 
   private persistPending() {
@@ -334,7 +412,7 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     }
   }
 
-  private async flushOnce(fromRetry: boolean, bypassSlow: boolean) {
+  private async flushOnce(fromRetry: boolean, bypassSlow: boolean, fullAnchors: boolean) {
     if (!this.loaded || this.gone) return
     if (this.loadFlushTimer) {
       clearTimeout(this.loadFlushTimer)
@@ -352,9 +430,11 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
 
     let result: SnapshotResult
     try {
-      result = await this.snapshot(bypassSlow)
+      result = await this.snapshot(bypassSlow, fullAnchors)
     } catch (err) {
       console.warn(`docRoom: snapshot failed (${this.host.docId})`, err)
+      // 전체 다시 적기 요청은 다시 시도에 실린다
+      if (fullAnchors) this.fullAnchorsNext = true
       result = 'retry'
     }
     if (result === 'gone') return
@@ -424,31 +504,61 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
   }
 
   // 8.2 — 조건부 UPDATE, 0행이면 흡수 후 한 번만 다시. 소유자 사용량 줄과 한 batch (F-2027 4.2)
-  private async snapshot(bypassSlow: boolean): Promise<SnapshotResult> {
+  // 본문 쪽과 댓글 쪽을 따로 판정한다. 댓글 변화가 없으면 batch 는 전과 글자까지 같다 (F-502 4.2·4.3)
+  private async snapshot(bypassSlow: boolean, fullAnchors: boolean): Promise<SnapshotResult> {
     for (let attempt = 0; attempt < 2; attempt++) {
       const base = this.base!
       const content = this.content.toString()
       const title = this.clippedTitle()
-      if (content === base.content && title === base.title) {
-        this.setSizeOk()
-        return 'ok'
+      const bodySame = content === base.content && title === base.title
+      let out = ''
+      let bytes = 0
+      let writeBody = false
+      if (!bodySame) {
+        out = fromEditorText(content, base.lineEnding)
+        bytes = utf8ByteLength(out)
+        if (bytes > MAX_CONTENT_BYTES) this.setTooLarge(bytes)
+        else writeBody = true
       }
-      const out = fromEditorText(content, base.lineEnding)
-      const bytes = utf8ByteLength(out)
-      if (bytes > MAX_CONTENT_BYTES) {
-        this.setTooLarge(bytes)
+      const full = attempt === 0 && fullAnchors && this.anchorsDirty
+      if (!writeBody && this.dirty.size === 0 && !full) {
+        if (bodySame) this.setSizeOk()
         return 'ok'
       }
       if (attempt === 0 && !(await this.mayWrite(bypassSlow))) return 'ok'
-      const version = base.version + 1
       const now = Date.now()
+      const plan = await this.takeCommentPlan(full, now)
+      if (!writeBody && !plan) {
+        if (bodySame) this.setSizeOk()
+        return 'ok'
+      }
+      const version = base.version + 1
       const db = this.host.env.DB
-      const [written, usage] = await db.batch<UsageRow>([
-        db.prepare(UPDATE_SQL).bind(title, out, version, now, this.host.docId, base.version),
-        snapshotUsageStatement(db, this.ownerId!, now, bytes - base.rowBytes),
-      ])
+      const head = writeBody
+        ? [
+            db.prepare(UPDATE_SQL).bind(title, out, version, now, this.host.docId, base.version),
+            snapshotUsageStatement(db, this.ownerId!, now, bytes - base.rowBytes),
+          ]
+        : [snapshotUsageStatement(db, this.ownerId!, now, 0)]
+      const bundle = plan
+        ? commentBundleStatements(db, { docId: this.host.docId, ownerId: this.ownerId!, ...plan, docTitle: title, now })
+        : []
+      let results: D1Result<UsageRow>[]
+      try {
+        results = await db.batch<UsageRow>([...head, ...bundle])
+      } catch (err) {
+        if (plan) this.returnCommentPlan(plan)
+        throw err
+      }
       this.lastBatchAt = Date.now()
-      this.judgeUsage(usage.results?.[0], now)
+      // 던지지 않고 돌아왔으면 댓글 묶음은 커밋됐다 — UPDATE 가 0행이어도
+      if (plan) this.commitCommentPlan(plan)
+      this.judgeUsage(results[writeBody ? 1 : 0].results?.[0], now)
+      if (!writeBody) {
+        if (bodySame) this.setSizeOk()
+        return 'ok'
+      }
+      const written = results[0]
       if (written.meta.changes === 1) {
         this.base = { content, title, version, lineEnding: base.lineEnding, updatedAt: now, rowBytes: bytes }
         this.store.setMeta('d1_version', String(version))
@@ -468,6 +578,93 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
       this.persistPending()
     }
     return 'retry'
+  }
+
+  // F-502 4.2 — 이번에 다룰 키를 dirty 에서 떼어 온다. 실패하면 returnCommentPlan 이 되돌린다
+  private async takeCommentPlan(full: boolean, now: number): Promise<CommentPlan | null> {
+    const keys = [...this.dirty]
+    this.dirty.clear()
+    if (full) this.anchorsDirty = false
+    try {
+      return await this.buildCommentPlan(keys, full, now)
+    } catch (err) {
+      this.returnCommentPlan({ keys, full })
+      throw err
+    }
+  }
+
+  private returnCommentPlan(plan: { keys: string[]; full: boolean }) {
+    for (const key of plan.keys) this.dirty.add(key)
+    if (plan.full) this.anchorsDirty = true
+  }
+
+  private commitCommentPlan(plan: CommentPlan) {
+    for (const row of plan.upserts) this.known.set(row.id, { sig: row.sig, anchorSig: row.anchorSig })
+    for (const id of plan.deletes) this.known.delete(id)
+  }
+
+  private async buildCommentPlan(keys: string[], full: boolean, now: number): Promise<CommentPlan | null> {
+    const text = this.content.toString()
+    const grouped = groupCommentThreads(this.comments.entries())
+    const live = new Map<string, { entry: CommentEntry; thread: CommentThread }>()
+    for (const thread of grouped.threads) {
+      live.set(thread.id, { entry: thread.root, thread })
+      for (const r of thread.replies) live.set(r.id, { entry: r.entry, thread })
+    }
+    const ranges = full ? resolveCommentAnchors(this.content, grouped.threads.map((t) => [t.id, t.root] as const)) : null
+    const rowOf = (id: string, entry: CommentEntry) => {
+      const range = entry.parent !== null ? null : ranges ? (ranges.get(id) ?? null) : resolveCommentAnchor(this.content, entry.anchor)
+      return commentRowOf(id, entry, text, range)
+    }
+
+    const upserts = new Map<string, CommentRow>()
+    const deletes: string[] = []
+    for (const key of keys) {
+      const item = live.get(key)
+      if (item) {
+        if (this.known.get(key)?.sig !== commentSig(item.entry)) upserts.set(key, rowOf(key, item.entry))
+      } else if (this.known.has(key)) {
+        deletes.push(key)
+      }
+    }
+    if (full) {
+      for (const thread of grouped.threads) {
+        if (upserts.has(thread.id)) continue
+        const row = rowOf(thread.id, thread.root)
+        if (this.known.get(thread.id)?.anchorSig !== row.anchorSig) upserts.set(thread.id, row)
+      }
+    }
+    if (upserts.size === 0 && deletes.length === 0) return null
+    const rows = [...upserts.values()]
+    return { keys, full, upserts: rows, deletes, drafts: await this.notificationDrafts(rows, live, now) }
+  }
+
+  // F-502 6장 — D1 에 없던 새 항목만. 접근 집합은 멘션이나 답글이 있을 때만 읽는다
+  private async notificationDrafts(
+    rows: CommentRow[],
+    live: Map<string, { entry: CommentEntry; thread: CommentThread }>,
+    now: number,
+  ): Promise<NotificationDraft[]> {
+    const fresh = rows
+      .filter((r) => !this.known.has(r.id))
+      .map((r) => ({ id: r.id, ...live.get(r.id)! }))
+      .sort((a, b) => a.entry.createdAt - b.entry.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    if (!fresh.some((f) => f.entry.mentions.length > 0 || f.entry.parent !== null)) return []
+    const people = await this.docPeople(now)
+    if (!people) return []
+    const drafts = fresh.flatMap((f) => notificationTargets({ id: f.id, entry: f.entry }, f.entry.parent !== null ? f.thread : null, people))
+    if (drafts.length <= NOTIFICATIONS_PER_BATCH_MAX) return drafts
+    console.warn(`docRoom: notifications capped (${this.host.docId})`)
+    return drafts.slice(0, NOTIFICATIONS_PER_BATCH_MAX)
+  }
+
+  // 60초(REVALIDATE_INTERVAL_MS) 안에 읽은 것이 있으면 그것을 쓴다 (F-502 6.3)
+  private async docPeople(now: number): Promise<Set<string> | null> {
+    if (this.people && now - this.people.at < REVALIDATE_INTERVAL_MS) return this.people.emails
+    const list = await loadDocPeople(this.host.env, this.host.docId)
+    const emails = list ? new Set(list.map((p) => p.email)) : null
+    this.people = { at: now, emails }
+    return emails
   }
 
   // 9.3 — 불러오기 없이 연결 상태와 D1 한 줄만으로
@@ -580,6 +777,11 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     if (this.loadFlushTimer) clearTimeout(this.loadFlushTimer)
     this.retryTimer = null
     this.loadFlushTimer = null
+    this.known = new Map()
+    this.dirty = new Set()
+    this.anchorsDirty = false
+    this.fullAnchorsNext = false
+    this.people = null
   }
 
   // 사라진 방 (9.4) — 연결 4404 deleted, 저장소 비우기, 이후 flush 는 아무것도 안 한다

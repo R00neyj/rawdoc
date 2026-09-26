@@ -6,7 +6,11 @@ import {
   DAILY_WRITE_LIMIT,
   checkDocCreate,
   checkDocGrow,
+  commentBytesInStatement,
+  commentBytesOutStatement,
   dayUsageStatement,
+  deleteFolderCommentBytesStatement,
+  e2eeCommentBytesOutStatement,
   deleteDocUsageStatement,
   deleteFoldersUsageStatement,
   docUsageStatements,
@@ -212,6 +216,38 @@ describe('U8 다섯 문장 — 글자까지 같다', () => {
     await readUsage({ DB: db } as unknown as Env, 'u1')
     expect(calls[0].sql).toBe('SELECT write_day, write_count, content_bytes, doc_count, blocked_at, warned_at FROM users WHERE id = ?')
     expect(calls[0].args).toEqual(['u1'])
+  })
+})
+
+describe('F-502 9.1 댓글 바이트 문장 넷 — 글자까지 같다', () => {
+  const SUM = '(SELECT COALESCE(SUM(bytes), 0) FROM doc_comments WHERE doc_id = ?1)'
+
+  it('빼기·더하기', () => {
+    const { db, calls } = spySqlDb()
+    commentBytesOutStatement(db, 'owner', 'doc1')
+    commentBytesInStatement(db, 'owner', 'doc1')
+    expect(calls[0].sql).toBe(`UPDATE users SET content_bytes = content_bytes - ${SUM} WHERE id = ?2`)
+    expect(calls[1].sql).toBe(`UPDATE users SET content_bytes = content_bytes + ${SUM} WHERE id = ?2`)
+    expect(calls[0].args).toEqual(['doc1', 'owner'])
+    expect(calls[1].args).toEqual(['doc1', 'owner'])
+  })
+
+  it('폴더 삭제', () => {
+    const { db, calls } = spySqlDb()
+    deleteFolderCommentBytesStatement(db, 'owner', ['f1', 'f2'])
+    expect(calls[0].sql).toBe(
+      'UPDATE users SET content_bytes = content_bytes - (SELECT COALESCE(SUM(bytes), 0) FROM doc_comments WHERE doc_id IN (SELECT id FROM docs WHERE owner_id = ?1 AND folder_id IN (SELECT value FROM json_each(?2)))) WHERE id = ?1',
+    )
+    expect(calls[0].args).toEqual(['owner', JSON.stringify(['f1', 'f2'])])
+  })
+
+  it('금고로 옮기기', () => {
+    const { db, calls } = spySqlDb()
+    e2eeCommentBytesOutStatement(db, 'owner', 'doc1', 'KEY')
+    expect(calls[0].sql).toBe(
+      `UPDATE users SET content_bytes = content_bytes - ${SUM} WHERE id = ?2 AND EXISTS (SELECT 1 FROM docs WHERE id = ?1 AND e2ee_key = ?3)`,
+    )
+    expect(calls[0].args).toEqual(['doc1', 'owner', 'KEY'])
   })
 })
 

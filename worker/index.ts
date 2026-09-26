@@ -48,6 +48,7 @@ import {
 } from './grants'
 import { handleListShares } from './shares'
 import { cleanupServerAttachments } from './attachmentGc'
+import { cleanupComments } from './commentGc'
 import { handleCreateToken, handleDeleteToken, handleListTokens } from './apiTokens'
 import {
   handleCreateAttachmentV1,
@@ -380,5 +381,6 @@ export default {
     const now = Date.now()
     ctx.waitUntil(runQuietly(() => cleanupServerAttachments(env, now)))
     ctx.waitUntil(runQuietly(() => cleanupExpiredAuth(env, now)))
+    ctx.waitUntil(runQuietly(() => cleanupComments(env, now)))
   },
 } satisfies ExportedHandler<Env>

@@ -212,6 +212,25 @@ describe('recount 의미 (S8)', () => {
     assert.equal(one.length, 1)
     assert.equal(one[0].email, 'a@example.com')
   })
+
+  it('F-502 S9 댓글 행이 있으면 real_bytes = 본문 + 댓글 bytes 합, recount 도 같은 값', async () => {
+    const db = openDb()
+    insertUser(db, { id: 'u1', email: 'a@example.com', created_at: 0, content_bytes: 0, doc_count: 0 })
+    insertUser(db, { id: 'u2', email: 'b@example.com', created_at: 0 })
+    insertDoc(db, { id: 'd1', owner_id: 'u1', content: '가나다' })
+    insertDoc(db, { id: 'd2', owner_id: 'u2', content: 'x' })
+    const comment = db.prepare("INSERT INTO doc_comments (doc_id, id, body, created_at, bytes, sig, anchor_sig) VALUES (?, ?, 'b', 1, ?, 's', 'a')")
+    comment.run('d1', 'c1', 11)
+    comment.run('d1', 'c2', 4)
+    comment.run('d2', 'c3', 100)
+    const exec = execOn(db)
+    const preview = await exec(SQL.recountPreview({ email: 'a@example.com' }))
+    assert.equal(preview[0].real_bytes, Buffer.byteLength('가나다', 'utf-8') + 15)
+    assert.equal(preview[0].real_docs, 1)
+    const changed = await exec(SQL.recount({ email: 'a@example.com' }))
+    assert.equal(changed[0].content_bytes, Buffer.byteLength('가나다', 'utf-8') + 15)
+    assert.equal(changed[0].doc_count, 1)
+  })
 })
 
 describe('usageTop·usageSummary 의미 (S9)', () => {

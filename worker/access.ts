@@ -34,7 +34,7 @@ async function grantRole(
 }
 
 // 위로 올라가는 재귀 — 기본키로 찾고 UNION 이라 순환에서도 끝난다 (F-2017 4.3)
-const FOLDER_CHAIN_SQL = `WITH RECURSIVE chain(id, parent_id) AS (
+export const FOLDER_CHAIN_SQL = `WITH RECURSIVE chain(id, parent_id) AS (
   SELECT id, parent_id FROM folders WHERE id = ? AND owner_id = ?
   UNION
   SELECT f.id, f.parent_id FROM folders f JOIN chain c ON f.id = c.parent_id WHERE f.owner_id = ?

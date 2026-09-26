@@ -119,6 +119,8 @@ describe('F-304 A24 배선', () => {
               async run() {
                 if (sql.startsWith('INSERT INTO grants') || sql.startsWith('DELETE FROM grants')) return { meta: { changes: 1 } }
                 if (sql.startsWith('DELETE FROM share_link_docs')) return { meta: { changes: 0 } }
+                // F-502 8.1 — 댓글 행·알림 지우기
+                if (sql.startsWith('DELETE FROM doc_comments') || sql.startsWith('DELETE FROM notifications')) return { meta: { changes: 0 } }
                 if (sql.startsWith('DELETE FROM docs')) {
                   order.push('delete-docs')
                   return { meta: { changes: 1 } }

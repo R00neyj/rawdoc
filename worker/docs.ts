@@ -4,6 +4,7 @@ import { requireUser } from './auth'
 import { getDocAccess, getOwnedFolder, roleAtLeast } from './access'
 import { getActiveLock } from './locks'
 import { notifyPurge } from './docRoomRpc'
+import { docCommentDeleteStatements } from './commentRows'
 import { e2eeDocFields, rowToDoc, updateDocRow, updateE2eeDocRow } from './docWrite'
 import type { DocRow } from './docWrite'
 import {
@@ -384,6 +385,8 @@ export async function handleDeleteDoc(
     // share_link_docs.doc_id REFERENCES docs(id) — docs 를 지우기 전에 묶음 행부터 지운다 (버그 수정, F-2038.md 12장 X1)
     env.DB.prepare('DELETE FROM share_link_docs WHERE doc_id = ?').bind(params.id),
     env.DB.prepare('DELETE FROM docs WHERE id = ? AND owner_id = ?').bind(params.id, user.id),
+    // 댓글 복사본·알림과 그 바이트 (F-502 8.1)
+    ...docCommentDeleteStatements(env.DB, user.id, params.id),
   ])
   // 열린 연결을 닫고 DO 저장소를 비운다 (F-304 9.4)
   await notifyPurge(env, ctx, params.id)

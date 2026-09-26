@@ -98,6 +98,13 @@ function makeD1(initial: Partial<D1Doc> | null) {
               }
               throw new Error(`unhandled first sql: ${sql}`)
             },
+            // F-502 — 불러오기의 댓글 복사본 읽기. 이 파일의 문서에는 댓글이 없다
+            async all() {
+              if (sql.startsWith('SELECT id, sig, anchor_sig FROM doc_comments') || sql.startsWith('SELECT * FROM doc_comments')) {
+                return { results: [] }
+              }
+              throw new Error(`unhandled all sql: ${sql}`)
+            },
             async run() {
               state.calls.push({ sql, args })
               if (sql.startsWith('UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND version = ?')) {

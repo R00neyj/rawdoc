@@ -50,8 +50,10 @@ function dayLiteral(day) {
   return `'${day}'`
 }
 
-const RECOUNT_S =
-  'SELECT COALESCE(SUM(length(CAST(docs.content AS BLOB))), 0), COUNT(*) FROM docs WHERE docs.owner_id = users.id'
+// 댓글 복사본 바이트는 문서 소유자 몫이다 (F-502 9.3)
+const COMMENT_BYTES_S =
+  '(SELECT COALESCE(SUM(doc_comments.bytes), 0) FROM doc_comments JOIN docs AS cd ON cd.id = doc_comments.doc_id WHERE cd.owner_id = users.id)'
+const RECOUNT_S = `SELECT COALESCE(SUM(length(CAST(docs.content AS BLOB))), 0) + ${COMMENT_BYTES_S}, COUNT(*) FROM docs WHERE docs.owner_id = users.id`
 
 export const SQL = {
   findUser(email) {
@@ -78,8 +80,7 @@ export const SQL = {
     return `SELECT (SELECT CASE WHEN day = ${day} THEN count ELSE 0 END FROM signup_gate WHERE id = 1) AS gate_today, (SELECT COUNT(*) FROM users WHERE created_at >= ${day0}) AS created_today, (SELECT COUNT(*) FROM users) AS users, (SELECT COALESCE(SUM(content_bytes), 0) FROM users) AS bytes, (SELECT COALESCE(SUM(doc_count), 0) FROM users) AS docs, (SELECT COUNT(*) FROM users WHERE blocked_at IS NOT NULL) AS blocked, (SELECT COUNT(*) FROM users WHERE warned_at IS NOT NULL) AS warned`
   },
   recountPreview(target) {
-    const base =
-      'SELECT id, email, content_bytes, doc_count, (SELECT COALESCE(SUM(length(CAST(docs.content AS BLOB))), 0) FROM docs WHERE docs.owner_id = users.id) AS real_bytes, (SELECT COUNT(*) FROM docs WHERE docs.owner_id = users.id) AS real_docs FROM users'
+    const base = `SELECT id, email, content_bytes, doc_count, (SELECT COALESCE(SUM(length(CAST(docs.content AS BLOB))), 0) FROM docs WHERE docs.owner_id = users.id) + ${COMMENT_BYTES_S} AS real_bytes, (SELECT COUNT(*) FROM docs WHERE docs.owner_id = users.id) AS real_docs FROM users`
     return target.all ? base : `${base} WHERE users.email = ${sqlText(target.email)}`
   },
   recount(target) {

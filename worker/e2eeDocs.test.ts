@@ -132,6 +132,21 @@ function linkRevoked(sqlDb: DatabaseSync, token: string): number | null {
   return (sqlDb.prepare('SELECT revoked_at FROM share_links WHERE token = ?').get(token) as { revoked_at: number | null }).revoked_at
 }
 
+// F-502 댓글 행·알림
+function insertComment(sqlDb: DatabaseSync, docId: string, id: string, bytes: number) {
+  sqlDb
+    .prepare("INSERT INTO doc_comments (doc_id, id, body, created_at, bytes, sig, anchor_sig) VALUES (?, ?, 'b', 1, ?, 's', 'a')")
+    .run(docId, id, bytes)
+}
+
+function insertNotification(sqlDb: DatabaseSync, docId: string, commentId: string) {
+  sqlDb
+    .prepare(
+      "INSERT INTO notifications (id, recipient_email, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at) VALUES (?, 'x@example.com', 'mention', ?, ?, ?, 'y@example.com', 't', 'e', 1)",
+    )
+    .run(`${docId}-${commentId}`, docId, commentId, commentId)
+}
+
 function count(sqlDb: DatabaseSync, sql: string, ...args: string[]): number {
   return (sqlDb.prepare(sql).get(...args) as { n: number }).n
 }
@@ -517,6 +532,10 @@ describe('F-401 C9·C10 batch 조건·purge 재시도', () => {
     insertLink(sqlDb, 'L7', id, 'doc', uuid(51))
     sqlDb.prepare('INSERT INTO share_link_docs (token, doc_id) VALUES (?,?)').run('L7', uuid(50))
     insertGrant(sqlDb, 'doc', uuid(50), id, FRIEND, 'edit')
+    insertComment(sqlDb, uuid(50), 'c1', 7)
+    insertNotification(sqlDb, uuid(50), 'c1')
+    sqlDb.prepare('UPDATE users SET content_bytes = content_bytes + 7 WHERE id = ?').run(id)
+    const bytesBefore = usage(sqlDb).content_bytes
     const DB = (owner as unknown as { DB: D1Database }).DB
     const statements = setDocE2eeStatements(DB, {
       docId: uuid(50),
@@ -535,6 +554,33 @@ describe('F-401 C9·C10 batch 조건·purge 재시도', () => {
     expect(linkRevoked(sqlDb, 'L6')).toBeNull()
     expect(count(sqlDb, "SELECT COUNT(*) AS n FROM share_link_docs WHERE token = 'L7'")).toBe(1)
     expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM grants WHERE target_id = ?', uuid(50))).toBe(1)
+    // F-502 X4 — 댓글 행·알림·누계 그대로
+    expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM doc_comments WHERE doc_id = ?', uuid(50))).toBe(1)
+    expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM notifications WHERE doc_id = ?', uuid(50))).toBe(1)
+    expect(usage(sqlDb).content_bytes).toBe(bytesBefore)
+    expect(statements).toHaveLength(8)
+  })
+
+  it('F-502 X3 금고로 옮기면 그 문서 댓글·알림 0, 누계에서 댓글 바이트 빠짐', async () => {
+    const { sqlDb, owner } = makeWorld()
+    await withKeys(owner)
+    const id = await userId(owner, sqlDb)
+    insertDoc(sqlDb, uuid(53), id, { content: '가나다' })
+    insertDoc(sqlDb, uuid(54), id)
+    insertComment(sqlDb, uuid(53), 'c1', 11)
+    insertComment(sqlDb, uuid(53), 'c2', 4)
+    insertComment(sqlDb, uuid(54), 'c3', 5)
+    insertNotification(sqlDb, uuid(53), 'c1')
+    insertNotification(sqlDb, uuid(54), 'c3')
+    sqlDb.prepare('UPDATE users SET content_bytes = content_bytes + 20 WHERE id = ?').run(id)
+    const before = usage(sqlDb)
+    const res = await call(owner, `/api/docs/${uuid(53)}/e2ee`, json('PUT', moveBody()))
+    expect(res.status).toBe(200)
+    expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM doc_comments WHERE doc_id = ?', uuid(53))).toBe(0)
+    expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM notifications WHERE doc_id = ?', uuid(53))).toBe(0)
+    expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM doc_comments WHERE doc_id = ?', uuid(54))).toBe(1)
+    expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM notifications WHERE doc_id = ?', uuid(54))).toBe(1)
+    expect(usage(sqlDb).content_bytes - before.content_bytes).toBe('QUJDREVG'.length - 9 - 15)
   })
 
   it('C10 purge 가 한 번 던지면 다시 불러 purged true', async () => {

@@ -540,6 +540,27 @@ describe('F-501 B15 shortHash', () => {
   })
 })
 
+// ----- F-502 H1 shortHash 가 BigInt 참조 구현과 같다 -----
+
+function bigIntFnv(input: string): string {
+  let hash = 0xcbf29ce484222325n
+  for (const byte of new TextEncoder().encode(input)) {
+    hash ^= BigInt(byte)
+    hash = (hash * 0x100000001b3n) & 0xffffffffffffffffn
+  }
+  return hash.toString(16).padStart(16, '0')
+}
+
+describe('F-502 H1 shortHash 참조 구현', () => {
+  it('B15 넷 + 한글 1,000자 + 제어 문자 섞인 글', () => {
+    const korean = Array.from({ length: 1_000 }, (_, i) => String.fromCharCode(0xac00 + ((i * 37) % 11_172))).join('')
+    const mixed = Array.from({ length: 600 }, (_, i) => String.fromCharCode(i % 40) + 'x가😀'[i % 4]).join('')
+    for (const v of ['', 'a', 'foobar', '댓글', korean, mixed, '￿'.repeat(300)]) {
+      expect(shortHash(v)).toBe(bigIntFnv(v))
+    }
+  })
+})
+
 // ----- B16 commentSig -----
 
 describe('F-501 B16 commentSig', () => {
