@@ -5,7 +5,15 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
 
 import { frontmatterExtension } from '../editor/frontmatter'
-import { buildEditorContextMenu, buildViewContextMenu, type ContextMenuNode, type MenuSubmenuNode } from './contextMenuItems'
+import {
+  buildEditorContextMenu,
+  buildViewContextMenu,
+  EDITOR_COMMANDS,
+  editorCommandGates,
+  type ContextMenuNode,
+  type MenuItemNode,
+  type MenuSubmenuNode,
+} from './contextMenuItems'
 
 const extensions: Extension[] = [markdown({ base: markdownLanguage, extensions: [frontmatterExtension()] })]
 
@@ -179,5 +187,56 @@ describe('댓글 달기 — F-505 3.5', () => {
       expect(last).toEqual({ kind: 'item', id: 'palette', label: '명령 팔레트…', shortcut: 'Ctrl+P', action: 'open-palette', disabled: false })
       expect(beforeLast).toEqual({ kind: 'separator' })
     }
+  })
+})
+
+// F-2055 3.1 — 우클릭 메뉴와 팔레트가 같이 쓰는 한 목록
+function commandItems(nodes: ContextMenuNode[]): MenuItemNode[] {
+  const out: MenuItemNode[] = []
+  for (const n of nodes) {
+    if (n.kind === 'item' && n.action === 'command') out.push(n)
+    else if (n.kind === 'submenu') out.push(...n.items.filter((i) => i.action === 'command'))
+  }
+  return out
+}
+
+describe('EDITOR_COMMANDS — F-2055 U1', () => {
+  it('메뉴 트리의 명령 항목과 순서·id·글자·단축키·함수가 같다', () => {
+    const state = makeState('본문 줄', EditorSelection.cursor(0))
+    const items = commandItems(buildEditorContextMenu({ place: 'editor', state, hasSelection: false }))
+    expect(items).toHaveLength(27)
+    expect(items.map((i) => [i.id, i.label, i.shortcut, i.run])).toEqual(EDITOR_COMMANDS.map((c) => [c.id, c.label, c.shortcut, c.run]))
+  })
+
+  it('id 가 겹치지 않고 keywords 가 있으며 묶음별 개수가 맞다', () => {
+    const ids = EDITOR_COMMANDS.map((c) => c.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    for (const c of EDITOR_COMMANDS) expect(c.keywords.length).toBeGreaterThanOrEqual(1)
+    const count = (g: string) => EDITOR_COMMANDS.filter((c) => c.group === g).length
+    expect([count('link'), count('format'), count('paragraph'), count('insert')]).toEqual([2, 8, 11, 6])
+  })
+})
+
+describe('editorCommandGates — F-2055 U2', () => {
+  const cases: Array<[string, string, number, 'editor' | 'cell', { clear: boolean; paragraph: boolean; insert: boolean }]> = [
+    ['일반 줄', '본문 줄', 0, 'editor', { clear: false, paragraph: false, insert: false }],
+    ['펜스 코드 안', '```\ncode\n```', 6, 'editor', { clear: false, paragraph: true, insert: true }],
+    ['일반 줄 칸', '본문 줄', 0, 'cell', { clear: true, paragraph: true, insert: true }],
+  ]
+  for (const [name, doc, pos, place, expected] of cases) {
+    it(`${name} — 메뉴의 비활성 값과 같다`, () => {
+      const state = makeState(doc, EditorSelection.cursor(pos))
+      const gates = editorCommandGates(state, place)
+      expect(gates).toEqual(expected)
+      const nodes = buildEditorContextMenu({ place, state, hasSelection: false })
+      expect(findSubmenu(nodes, 'paragraph').disabled).toBe(gates.paragraph)
+      expect(findSubmenu(nodes, 'insert').disabled).toBe(gates.insert)
+      expect(findItem(findSubmenu(nodes, 'format').items, 'clear').disabled).toBe(gates.clear)
+    })
+  }
+
+  it('표 줄 — 삽입 비활성', () => {
+    const state = makeState('| a | b |\n| --- | --- |\n| c | d |', EditorSelection.cursor(2))
+    expect(editorCommandGates(state, 'editor').insert).toBe(true)
   })
 })

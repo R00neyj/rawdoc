@@ -135,7 +135,15 @@ import { readViewerAnchor, scrollViewerToAnchor } from './viewerScroll'
 import type { ScrollAnchor } from '../lib/scrollAnchor'
 import Outline from './Outline'
 import ContextMenu from './ContextMenu'
-import { buildEditorContextMenu, buildViewContextMenu, type ContextMenuNode, type MenuItemNode } from './contextMenuItems'
+import {
+  buildEditorContextMenu,
+  buildViewContextMenu,
+  editorCommandGates,
+  type ContextMenuNode,
+  type EditorCommandGates,
+  type MenuItemNode,
+} from './contextMenuItems'
+import { isComposing } from '../editor/composition'
 import CommentRailPanel, { CommentPanelPresence } from './CommentRailPanel'
 import { useDocComments, computeCommentAccess, scrollTopOf, COMMENT_TEXT, CommentCommandContext } from './useDocComments'
 import { IconAddComment } from './icons'
@@ -556,6 +564,8 @@ export default function App() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   // 명령 팔레트 D-7 열림 상태 (specs/features/F-2022.md)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  // 본문에서 연 팔레트만 서식·단락·삽입을 보인다 — 연 순간의 문서와 가능 여부 (F-2055 4.1)
+  const [paletteEditor, setPaletteEditor] = useState<{ docId: string | null; disabled: EditorCommandGates } | null>(null)
   // 단축키 판 열림 상태 — 새로고침하면 닫힌다, 저장하지 않는다 (specs/features/F-2052.md 4.3)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   // zip 가져오기 미리보기·진행·결과 대화상자 (F-282.md 3.8)
@@ -4606,8 +4616,17 @@ export default function App() {
   }
 
   // 명령 팔레트 D-7 (specs/features/F-2022.md 6.1) — 열려 있던 우클릭 메뉴를 닫고, 좁은 창 사이드바를 닫는다
+  // 버튼 onClick 이 이벤트를 넘겨도 무시한다 — 연 곳은 activeElement 로 판정 (F-2055 4.1)
   function openPalette() {
+    openPaletteFrom(undefined)
+  }
+
+  // fromEditor: 우클릭 갈래만 명시한다. 없으면 여는 순간 주 에디터에 포커스가 있었는지로 판정 (F-2055 4.1)
+  function openPaletteFrom(fromEditor: boolean | undefined) {
     if (bootPhase !== 'ready') return // 부팅 중 store 는 임시 memoryStore 라 여기서 만든 문서가 사라진다 (F-2053 10.3)
+    const mainView = editorRef.current?.view
+    const fromBody = fromEditor ?? (mainView ? document.activeElement === mainView.contentDOM : false)
+    setPaletteEditor(fromBody && canInsertTemplate && mainView ? { docId: currentDocId, disabled: editorCommandGates(mainView.state, 'editor') } : null)
     setContextMenu(null)
     closeSidebarIfNarrow()
     setPaletteOpen(true)
@@ -4779,8 +4798,23 @@ export default function App() {
         }
       : undefined
 
+  // 서식 명령 — 글은 바로, 포커스는 Dialog 복귀 뒤(F-2055 4.3). 표는 칸 편집 없이 원문으로 남는다(F-139 3.1, 툴바와 같음)
+  function runPaletteEditorCommand(command: StateCommand) {
+    const startDocId = paletteEditor?.docId
+    const view = editorRef.current?.view
+    if (!view || currentDocIdRef.current !== startDocId || readOnlyDocRef.current || isComposing(view)) return
+    command(view)
+    runAfterPaletteClose(() => {
+      const v = editorRef.current?.view
+      if (!v || currentDocIdRef.current !== startDocId) return
+      v.focus()
+      v.dispatch({ effects: EditorView.scrollIntoView(v.state.selection.main.head) })
+    })
+  }
+
   const paletteContext: PaletteContext = {
     canInsertTemplate,
+    editor: paletteEditor && canInsertTemplate ? { disabled: paletteEditor.disabled, run: runPaletteEditorCommand } : undefined,
     canPrint,
     templates: templateEntries,
     insertTemplate,
@@ -5227,7 +5261,8 @@ export default function App() {
       }
       // 메뉴가 이미 사라져 Dialog 가 기억할 "연 순간의 요소" 가 없다 — 먼저 포커스를 돌려 놓는다(칸 메뉴면 주 에디터, F-2022.md 7.3)
       ;(cm.mainView ?? cm.view)?.focus()
-      openPalette()
+      // 칸 갈래는 팔레트 전에 주 에디터에 포커스를 주므로 activeElement 로 판정하면 틀린다 — 연 곳을 넘긴다 (F-2055 4.1)
+      openPaletteFrom(cm.place === 'editor')
       return
     }
     if (node.action === 'comment-add') {

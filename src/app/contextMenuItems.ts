@@ -123,6 +123,78 @@ function insertGroupDisabled(state: EditorState): boolean {
 
 export type EditorMenuPlace = 'editor' | 'cell'
 
+// 서식·단락·삽입 명령 한 목록 — 우클릭 메뉴와 명령 팔레트(F-2055)가 같이 쓴다 (specs/features/F-2055.md 3.1)
+export type EditorCommandGroup = 'link' | 'format' | 'paragraph' | 'insert'
+// 이 명령을 비활성으로 만드는 조건 — 'none' 은 늘 활성
+export type EditorCommandGate = 'none' | 'clear' | 'paragraph' | 'insert'
+
+export type EditorCommandSpec = {
+  // 메뉴 항목 id. 팔레트 id 는 'editor.' + id 이고 최근·고정 목록에 저장되므로 바꾸지 않는다(F-2053 3.4)
+  id: string
+  group: EditorCommandGroup
+  label: string
+  shortcut?: string
+  run: StateCommand
+  gate: EditorCommandGate
+  keywords: readonly string[] // 팔레트 거르기용. 메뉴는 쓰지 않는다
+}
+
+function spec(
+  id: string,
+  group: EditorCommandGroup,
+  label: string,
+  run: StateCommand,
+  gate: EditorCommandGate,
+  keywords: readonly string[],
+  shortcut?: string,
+): EditorCommandSpec {
+  return { id, group, label, shortcut, run, gate, keywords }
+}
+
+// 5장 표 순서 = 메뉴 순서. setHeading(n) 은 여기서 한 번만 만든다 — 메뉴와 팔레트의 run 이 같은 함수여야 한다(U1)
+export const EDITOR_COMMANDS: readonly EditorCommandSpec[] = [
+  spec('wikilink', 'link', '링크 추가', insertWikiLink, 'none', ['위키링크', 'wikilink', 'wiki', '[[', '내부 링크']),
+  spec('link', 'link', '외부 링크 추가', insertLink, 'none', ['링크 넣기', 'link', 'url', '하이퍼링크', '주소'], 'Ctrl+K'),
+  spec('bold', 'format', '볼드체', toggleStrong, 'none', ['굵게', 'bold', 'strong', '**'], 'Ctrl+B'),
+  spec('italic', 'format', '기울이기', toggleEmphasis, 'none', ['기울임', 'italic', 'emphasis', '이탤릭'], 'Ctrl+I'),
+  spec('strike', 'format', '취소선', toggleStrike, 'none', ['strikethrough', 'strike', '~~']),
+  spec('highlight', 'format', '하이라이트', toggleHighlight, 'none', ['형광펜', 'highlight', 'mark', '==']),
+  spec('code', 'format', '코드', toggleInlineCode, 'none', ['인라인 코드', 'inline code', 'code', '`']),
+  spec('math', 'format', '수식', toggleMath, 'none', ['인라인 수식', 'math', 'latex', 'katex', '$']),
+  spec('comment', 'format', '주석', toggleComment, 'none', ['%%', '숨은 글']),
+  spec('clear', 'format', '서식 지우기', clearFormatting, 'clear', ['clear', '초기화', 'remove formatting']),
+  spec('bullet', 'paragraph', '글머리 목록', setBulletList, 'paragraph', ['불릿', 'bullet', 'list', '-']),
+  spec('ordered', 'paragraph', '숫자 목록', setOrderedList, 'paragraph', ['번호 목록', 'ordered', 'numbered', 'list', '1.']),
+  spec('task', 'paragraph', '체크박스', setTaskList, 'paragraph', ['할 일', 'task', 'todo', 'checkbox', '체크리스트', '[ ]']),
+  ...[1, 2, 3, 4, 5, 6].map((level) =>
+    spec(`heading${level}`, 'paragraph', `제목 ${level}`, setHeading(level), 'paragraph', ['heading', `h${level}`, '#'.repeat(level)]),
+  ),
+  spec('paragraph', 'paragraph', '본문', setParagraph, 'paragraph', ['문단', 'paragraph', '제목 해제']),
+  spec('quote', 'paragraph', '인용', toggleQuote, 'paragraph', ['인용문', 'quote', 'blockquote']),
+  spec('footnote', 'insert', '각주', insertFootnote, 'insert', ['footnote', '[^]']),
+  spec('table', 'insert', '표', insertTable, 'insert', ['테이블', 'table']),
+  spec('callout', 'insert', '콜아웃', insertCallout, 'insert', ['callout', 'admonition', '상자']),
+  spec('hr', 'insert', '수평선', insertHorizontalRule, 'insert', ['구분선', 'horizontal rule', 'hr', '---']),
+  spec('codeblock', 'insert', '코드 블럭', insertCodeBlock, 'insert', ['코드 블록', 'code block', 'fence', '```']),
+  spec('mathblock', 'insert', '수식 블럭', insertMathBlock, 'insert', ['수식 블록', 'math block', '$$']),
+]
+
+// true = 비활성. 우클릭 메뉴 계산 규칙 그대로 (F-170.md 3.1·3.2)
+export type EditorCommandGates = { clear: boolean; paragraph: boolean; insert: boolean }
+
+export function editorCommandGates(state: EditorState, place: EditorMenuPlace): EditorCommandGates {
+  const isCell = place === 'cell'
+  return {
+    paragraph: isCell || paragraphGroupDisabled(state),
+    insert: isCell || insertGroupDisabled(state),
+    clear: isCell, // 3.2 "비활성: 서식 지우기" — clearFormatting 도 언어 없는 상태면 false 를 돌려준다(F-167 4장)
+  }
+}
+
+export function isEditorCommandDisabled(command: EditorCommandSpec, gates: EditorCommandGates): boolean {
+  return command.gate !== 'none' && gates[command.gate]
+}
+
 export type EditorMenuInput = {
   place: EditorMenuPlace
   state: EditorState
@@ -133,39 +205,9 @@ export type EditorMenuInput = {
 
 // 편집·원문 모드(3.1) / 표 칸 편집 중(3.2) 메뉴 트리
 export function buildEditorContextMenu({ place, state, hasSelection, comment }: EditorMenuInput): ContextMenuNode[] {
-  const isCell = place === 'cell'
-  const paragraphDisabled = isCell || paragraphGroupDisabled(state)
-  const insertDisabled = isCell || insertGroupDisabled(state)
-  const clearDisabled = isCell // 3.2 "비활성: 서식 지우기" — clearFormatting 도 언어 없는 상태면 false 를 돌려준다(F-167 4장)
-
-  const formatItems: MenuItemNode[] = [
-    item('bold', '볼드체', 'Ctrl+B', toggleStrong),
-    item('italic', '기울이기', 'Ctrl+I', toggleEmphasis),
-    item('strike', '취소선', undefined, toggleStrike),
-    item('highlight', '하이라이트', undefined, toggleHighlight),
-    item('code', '코드', undefined, toggleInlineCode),
-    item('math', '수식', undefined, toggleMath),
-    item('comment', '주석', undefined, toggleComment),
-    item('clear', '서식 지우기', undefined, clearFormatting, clearDisabled),
-  ]
-
-  const paragraphItems: MenuItemNode[] = [
-    item('bullet', '글머리 목록', undefined, setBulletList, paragraphDisabled),
-    item('ordered', '숫자 목록', undefined, setOrderedList, paragraphDisabled),
-    item('task', '체크박스', undefined, setTaskList, paragraphDisabled),
-    ...[1, 2, 3, 4, 5, 6].map((level) => item(`heading${level}`, `제목 ${level}`, undefined, setHeading(level), paragraphDisabled)),
-    item('paragraph', '본문', undefined, setParagraph, paragraphDisabled),
-    item('quote', '인용', undefined, toggleQuote, paragraphDisabled),
-  ]
-
-  const insertItems: MenuItemNode[] = [
-    item('footnote', '각주', undefined, insertFootnote, insertDisabled),
-    item('table', '표', undefined, insertTable, insertDisabled),
-    item('callout', '콜아웃', undefined, insertCallout, insertDisabled),
-    item('hr', '수평선', undefined, insertHorizontalRule, insertDisabled),
-    item('codeblock', '코드 블럭', undefined, insertCodeBlock, insertDisabled),
-    item('mathblock', '수식 블럭', undefined, insertMathBlock, insertDisabled),
-  ]
+  const gates = editorCommandGates(state, place)
+  const itemsOf = (group: EditorCommandGroup): MenuItemNode[] =>
+    EDITOR_COMMANDS.filter((c) => c.group === group).map((c) => item(c.id, c.label, c.shortcut, c.run, isEditorCommandDisabled(c, gates)))
 
   // 댓글 달기 — select-all 뒤 구분선 다음, 그 뒤에 구분선을 하나 더 두고 palette (F-505 3.5)
   const tail: ContextMenuNode[] = [{ kind: 'separator' }]
@@ -176,12 +218,11 @@ export function buildEditorContextMenu({ place, state, hasSelection, comment }: 
   tail.push(PALETTE_ITEM)
 
   return [
-    item('wikilink', '링크 추가', undefined, insertWikiLink),
-    item('link', '외부 링크 추가', 'Ctrl+K', insertLink),
+    ...itemsOf('link'),
     { kind: 'separator' },
-    submenu('format', '서식', formatItems),
-    submenu('paragraph', '단락', paragraphItems, paragraphDisabled),
-    submenu('insert', '삽입', insertItems, insertDisabled),
+    submenu('format', '서식', itemsOf('format')),
+    submenu('paragraph', '단락', itemsOf('paragraph'), gates.paragraph),
+    submenu('insert', '삽입', itemsOf('insert'), gates.insert),
     { kind: 'separator' },
     clipboardItem('cut', '잘라내기', 'Ctrl+X', 'clipboard-cut', !hasSelection),
     clipboardItem('copy', '복사', 'Ctrl+C', 'clipboard-copy', !hasSelection),

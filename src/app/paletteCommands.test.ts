@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PALETTE_COMMANDS } from './paletteCommands'
+import { EDITOR_COMMANDS } from './contextMenuItems'
 import { filterPaletteItems } from './paletteContract'
 import type { PaletteContext } from './paletteContract'
 import type { TemplateEntry } from '../lib/templates'
@@ -72,6 +73,8 @@ describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀, F-505 U
       'view.lineNumbers',
       'view.toolbar',
       'view.wikiPreview',
+      // F-2055 — 서식·단락·삽입 27개가 끝에
+      ...EDITOR_COMMANDS.map((c) => `editor.${c.id}`),
     ])
     expect(new Set(ids).size).toBe(ids.length)
     for (const id of ids) expect(id).toMatch(PALETTE_ID_RE)

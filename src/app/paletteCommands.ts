@@ -1,6 +1,7 @@
 // 등록된 명령 목록 — 1차는 템플릿 삽입·인쇄 두 개 (specs/features/F-2022.md 3.3). 명령을 더할 때 고치는 곳이 여기다
 import type { PaletteCommand, PaletteItem } from './paletteContract'
 import { THEME_OPTIONS, type ThemePref } from './theme'
+import { EDITOR_PALETTE_COMMANDS } from './paletteEditorCommands'
 
 // 테마 2단계 각 줄의 keywords (F-2054 3.5)
 const THEME_ITEM_KEYWORDS: Record<ThemePref, readonly string[]> = {
@@ -379,6 +380,8 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     },
     run: (ctx) => ctx.view?.toggleWikiPreview(),
   },
+  // 서식·단락·삽입 27개 — 앱 명령 뒤, 마지막 (F-2055 3.3)
+  ...EDITOR_PALETTE_COMMANDS,
 ]
 
 // comment.toggleRail 라벨 getter 가 읽는 값 — visibleCommands() 가 when() 을 부른 뒤 같은 렌더에서 라벨을 읽는다

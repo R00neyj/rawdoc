@@ -5,6 +5,8 @@ import type { E2eeStatus } from '../e2ee/keyring'
 import { filterPaletteDocs, PALETTE_DOC_LIMIT, type PaletteDocIndex } from './paletteDocs'
 import { PALETTE_RECENT_COMMAND_LIMIT } from './paletteMemory'
 import type { ThemePref } from './theme'
+import type { StateCommand } from '@codemirror/state'
+import type { EditorCommandGates } from './contextMenuItems'
 
 // 목록 한 줄 — 명령이든 2단계 항목(템플릿)이든 같은 모양 (3.1)
 export type PaletteItem = {
@@ -87,6 +89,11 @@ export type PaletteContext = {
     copyLink: () => void
     copyMarkdown: () => void
     invite?: () => void
+  }
+  // 본문에서 연 팔레트의 서식·단락·삽입 — 선택 필드. 없으면 27개 명령이 안 보인다 (F-2055 3.2)
+  editor?: {
+    disabled: EditorCommandGates // 팔레트를 연 순간 주 에디터 상태로 한 번 계산 (4.1)
+    run: (command: StateCommand) => void // 4.3
   }
 }
 

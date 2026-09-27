@@ -178,6 +178,10 @@ describe('U9 — 우클릭 메뉴·팔레트 키 문자열이 카탈로그와 �
       'comment.toggleRail': 'comment.toggleRail',
       'shortcuts.open': 'nav.shortcuts',
       'search.open': 'find.search',
+      // F-2055 서식 명령 — 우클릭 메뉴와 같은 글
+      'editor.link': 'format.link',
+      'editor.bold': 'format.bold',
+      'editor.italic': 'format.italic',
     } as Record<string, string>
     for (const { id, shortcut } of items) {
       const catalogId = MENU[id]
