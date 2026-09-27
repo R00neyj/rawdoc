@@ -2,7 +2,7 @@
 title: 터미널에서 문서 읽고 쓰기
 summary: 명령줄 도구 rawdoc 으로 문서를 받아 보고, 파일을 올리고, 스크립트나 AI 도구에 연결합니다.
 date: 2026-09-24
-updated: 2026-09-24
+updated: 2026-09-28
 ---
 
 # 터미널에서 문서 읽고 쓰기
@@ -39,12 +39,17 @@ rawdoc login --with-token < token.txt
 | 명령 | 하는 일 |
 | --- | --- |
 | `rawdoc ls` | 내 문서 목록 |
+| `rawdoc ls --shared` | 공유받은 문서 목록 |
 | `rawdoc get <id> -o 노트.md` | 문서 원문을 파일로 받기 |
 | `rawdoc new 노트.md --title 회의록` | 파일로 새 문서 만들기 |
 | `rawdoc put <id> 노트.md --base-version <n>` | 문서 고치기 |
 | `rawdoc folders` · `rawdoc mkdir <이름>` | 폴더 보기·만들기 |
 | `rawdoc upload 그림.png` | 이미지를 올리고 붙일 마크다운 받기 |
 | `rawdoc link <id>` | 읽기 전용 링크 만들기 |
+| `rawdoc mv <id> --folder <폴더id>` | 문서 옮기기(`--root` 면 맨 위로) |
+| `rawdoc rm <id> --yes` · `rawdoc rmdir <id> --yes` | 문서·폴더 지우기(되돌릴 수 없음. `rmdir` 은 안의 것을 위 폴더로 올리고, `--all` 이면 모두 지움) |
+
+금고 문서나 금고 폴더가 걸린 지우기·옮기기는 웹에서 합니다.
 
 모든 명령은 `--json`을 받습니다. 스크립트에서 결과를 다룰 때 씁니다.
 
