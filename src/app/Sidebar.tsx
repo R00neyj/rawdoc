@@ -11,6 +11,7 @@ import {
   type RefObject,
 } from 'react'
 import { buildTree, canMoveFolder, pinnedDocs, type DocLike, type DocNode, type FolderLike, type FolderNode, type TreeNode as TreeNodeType } from '../lib/folderTree'
+import { foldersWithUnreadDocs } from './docNotifications'
 import FolderMenu, { type FolderMenuItem } from './FolderMenu'
 import SidebarHead, { SIDEBAR_ID, SEARCH_LABEL } from './SidebarHead'
 import { clampSidebarWidth, maxSidebarWidth, MIN_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, ARROW_KEY_STEP } from './sidebarWidth'
@@ -141,7 +142,22 @@ type SidebarCtx = {
   e2eeConvert?: E2eeConvertMenu
   allDocs: Array<DocLike & { e2ee?: E2eeDocState }>
   allFolders: Array<FolderLike & { e2ee?: true }>
+  // 안 읽은 알림이 있는 문서 id·(접혔을 때만 보이는) 그 조상 폴더 id (F-510 3.3)
+  unreadDocIds: ReadonlySet<string>
+  unreadFolderIds: ReadonlySet<string>
 }
+
+// 눈에 보이는 안 읽음 점 — 알림함 안 읽음 점과 같은 값 (F-510 3.3)
+function TreeUnreadDot() {
+  return <span className="tree-unread-dot" aria-hidden="true" />
+}
+
+// 화면엔 안 보이고 스크린리더에만 읽히는 안 읽음 글자 (F-510 3.3)
+function TreeUnreadSr() {
+  return <span className="tree-unread-sr">, 안 읽은 알림</span>
+}
+
+const EMPTY_UNREAD_SET: ReadonlySet<string> = new Set()
 
 export type E2eeConvertMenu = {
   online: boolean
@@ -233,6 +249,8 @@ function FolderRow({
   const isE2eeFolder = ctx.e2eeFolderIds.has(node.id)
   // 금고 폴더는 읽기 전용 링크·사람 초대를 보이지 않는다 (F-405 6.1)
   const canShare = !isMulti && ctx.isServerStore && !isE2eeFolder
+  // 접혀 있을 때만 — 펼치면 그 아래 행으로 점이 옮겨간다 (F-510 3.3)
+  const isUnread = !isOpen && ctx.unreadFolderIds.has(node.id)
 
   // `하위 폴더` 는 모든 폴더에 — 깊이 제한 없음 (F-2017 5.1)
   const ownItems: FolderMenuItem[] = [
@@ -270,6 +288,7 @@ function FolderRow({
       <div
         className={`tree-row${isDropTarget ? ' tree-row--drop' : ''}${isSelected ? ' tree-row--selected' : ''}`}
         style={{ '--depth': depth } as CSSProperties}
+        data-unread={isUnread ? 'true' : undefined}
         draggable={!isEditing}
         onDragStart={(e) => ctx.onDragStart(e, 'folder', node.id)}
         onDragEnd={ctx.onDragEnd}
@@ -301,8 +320,10 @@ function FolderRow({
             onClick={(e) => ctx.onItemClick(e, row, () => ctx.onToggleFolder(node.id))}
           >
             {node.name}
+            {isUnread && <TreeUnreadSr />}
           </button>
         )}
+        {!isEditing && isUnread && <TreeUnreadDot />}
         {!isEditing && isE2eeFolder && <E2eeIcon />}
         {!isEditing && (
           <FolderMenu
@@ -337,6 +358,7 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
   const menuOpenHere = ctx.contextMenu?.key === row.key
   const e2eeState = ctx.e2eeDocs.get(node.id)
   const title = displayTitleOf(node.id, node.title, ctx.e2eeDocs)
+  const isUnread = ctx.unreadDocIds.has(node.id)
 
   const ownItems: FolderMenuItem[] = [
     {
@@ -369,6 +391,7 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
       <div
         className={`tree-row${isDropTarget ? ' tree-row--drop' : ''}${isSelected ? ' tree-row--selected' : ''}`}
         style={{ '--depth': depth } as CSSProperties}
+        data-unread={isUnread ? 'true' : undefined}
         draggable
         onDragStart={(e) => ctx.onDragStart(e, 'doc', node.id)}
         onDragEnd={ctx.onDragEnd}
@@ -385,7 +408,9 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
           onClick={(e) => { e.preventDefault(); ctx.onItemClick(e, row, () => ctx.onSelectDoc(node.id)) }}
         >
           {title}
+          {isUnread && <TreeUnreadSr />}
         </a>
+        {isUnread && <TreeUnreadDot />}
         {e2eeState && <E2eeIcon />}
         <FolderMenu
           label={title}
@@ -407,6 +432,7 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
   const menuOpenHere = ctx.contextMenu?.key === row.key
   const e2eeState = ctx.e2eeDocs.get(doc.id)
   const title = displayTitleOf(doc.id, doc.title, ctx.e2eeDocs)
+  const isUnread = ctx.unreadDocIds.has(doc.id)
 
   const ownItems: FolderMenuItem[] = [
     {
@@ -435,7 +461,11 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
 
   return (
     <li role="listitem" className="tree-item">
-      <div className={`tree-row${isSelected ? ' tree-row--selected' : ''}`} onContextMenu={(e) => ctx.onRowContextMenu(e, row, false)}>
+      <div
+        className={`tree-row${isSelected ? ' tree-row--selected' : ''}`}
+        data-unread={isUnread ? 'true' : undefined}
+        onContextMenu={(e) => ctx.onRowContextMenu(e, row, false)}
+      >
         <span className="tree-toggle-spacer" aria-hidden="true">
           <IconPin size={16} className="pinned-row-icon" />
         </span>
@@ -447,7 +477,9 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
           onClick={(e) => { e.preventDefault(); ctx.onItemClick(e, row, () => ctx.onSelectDoc(doc.id)) }}
         >
           {title}
+          {isUnread && <TreeUnreadSr />}
         </a>
+        {isUnread && <TreeUnreadDot />}
         {e2eeState && <E2eeIcon />}
         <FolderMenu
           label={title}
@@ -464,9 +496,10 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
 // 공유받음 묶음의 문서 한 줄 — 끌어 옮기기·⋯ 메뉴가 없다. 오른쪽에 소유자 이메일 앞부분 (F-212.md 2.4)
 function SharedDocRow({ doc, ctx }: { doc: SharedDocLike; ctx: SidebarCtx }) {
   const emailPrefix = doc.ownerEmail.split('@')[0] || doc.ownerEmail
+  const isUnread = ctx.unreadDocIds.has(doc.id)
   return (
     <li role="listitem" className="tree-item">
-      <div className="tree-row shared-doc-row">
+      <div className="tree-row shared-doc-row" data-unread={isUnread ? 'true' : undefined}>
         <span className="tree-toggle-spacer" aria-hidden="true" />
         <a
           className="tree-label doc-item-btn"
@@ -476,7 +509,9 @@ function SharedDocRow({ doc, ctx }: { doc: SharedDocLike; ctx: SidebarCtx }) {
           onClick={(e) => { e.preventDefault(); ctx.onSelectDoc(doc.id) }}
         >
           {doc.title}
+          {isUnread && <TreeUnreadSr />}
         </a>
+        {isUnread && <TreeUnreadDot />}
         <span className="shared-doc-owner">{emailPrefix}</span>
       </div>
     </li>
@@ -500,13 +535,23 @@ function SharedGroup({ sharedDocs, ctx }: { sharedDocs: SharedDocLike[]; ctx: Si
     }
   }
 
+  // 닫혀 있을 때만 — 열면 그 안의 문서 행으로 점이 옮겨간다 (F-510 3.3)
+  const isUnread = !open && sharedDocs.some((doc) => ctx.unreadDocIds.has(doc.id))
+
   return (
     <>
       <h2>
-        <button type="button" className="shared-group-toggle" onClick={() => setOpen((v) => !v)}>
+        <button
+          type="button"
+          className="shared-group-toggle"
+          data-unread={isUnread ? 'true' : undefined}
+          onClick={() => setOpen((v) => !v)}
+        >
           <IconChevron size={14} className={`tree-toggle-icon${open ? ' tree-toggle-icon--open' : ''}`} />
           <IconGroup size={14} />
           공유받음
+          {isUnread && <TreeUnreadSr />}
+          {isUnread && <TreeUnreadDot />}
         </button>
       </h2>
       {open && (
@@ -742,6 +787,8 @@ type SidebarProps = {
   onExportFolderVault: (id: string) => void
   // 금고로 옮기기·빼기 메뉴 (F-407 7.1) — 금고 기능이 있을 때만 App 이 준다
   e2eeConvert?: E2eeConvertMenu
+  // 안 읽은 F-507 알림이 있는 문서 id — 없거나 빈 집합이면 점이 하나도 없다 (F-510 3.3)
+  unreadNotificationDocIds?: ReadonlySet<string>
 }
 
 export default function Sidebar({
@@ -783,6 +830,7 @@ export default function Sidebar({
   onExportFolder,
   onExportFolderVault,
   e2eeConvert,
+  unreadNotificationDocIds,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
@@ -838,6 +886,8 @@ export default function Sidebar({
 
   const tree = buildTree({ folders, docs })
   const pinned = pinnedDocs(docs) // F-132.md 2장, 3장
+  const unreadDocIds = unreadNotificationDocIds ?? EMPTY_UNREAD_SET
+  const unreadFolderIds = foldersWithUnreadDocs(tree, unreadDocIds) // F-510 3.1·3.3
 
   function startRename(id: string, name: string) {
     skipBlurCommitRef.current = false
@@ -1068,6 +1118,8 @@ export default function Sidebar({
     e2eeConvert,
     allDocs: docs,
     allFolders: folders,
+    unreadDocIds,
+    unreadFolderIds,
   }
 
   const rootTarget: DropTarget = { type: 'root' }

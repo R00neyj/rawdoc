@@ -803,6 +803,28 @@ body.sidebar-resizing {
   font-style: italic;
 }
 
+/* 사이드바 문서 행·접힌 폴더 행·닫힌 공유받음 머리의 안 읽은 알림 점 — 알림함 안 읽음 점과 같은 값 (F-510 3.3, H1) */
+.tree-unread-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* 화면엔 안 보이고 스크린리더에만 읽히는 글자 — .notification-item-sr 과 같은 규칙 (F-510 3.3) */
+.tree-unread-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .tree-rename-input {
   flex: 1;
   min-width: 0;

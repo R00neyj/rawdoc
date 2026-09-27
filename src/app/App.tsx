@@ -144,6 +144,7 @@ import type { PaletteContext } from './paletteContract'
 import NotificationsMenu from './NotificationsMenu'
 import { useNotifications } from './useNotifications'
 import { fetchDocPeople } from './notificationsApi'
+import { unreadNotificationDocIds } from './docNotifications'
 import { createPeopleCache } from './mentionCandidates'
 import { MentionSourceContext, type MentionSource } from './MentionField'
 import type { NotificationItem } from '../lib/docComments'
@@ -1505,6 +1506,19 @@ export default function App() {
     },
     [setNotificationsOpen, notifications, resyncFromStore],
   )
+
+  // ----- 사이드바 안 읽은 알림 점 (F-510 2·3.3) -----
+  const unreadNotificationDocIdsValue = useMemo(() => unreadNotificationDocIds(notifications.items), [notifications.items])
+
+  // 문서를 열면 그 문서의 알림을 읽음으로 (F-510 4.2 1번, 5장) — "문서 화면" 은 부팅이 끝나고 문서가 있고 공유 링크·공유 관리·도움말·지도가 모두 없을 때다
+  const docScreenId =
+    bootPhase === 'ready' && currentDocId !== null && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute ? currentDocId : null
+  const [prevDocScreenId, setPrevDocScreenId] = useState(docScreenId)
+  if (prevDocScreenId !== docScreenId) {
+    setPrevDocScreenId(docScreenId)
+    // 상태가 바뀐 것만으로는 부르지 않는다 — 전환된 순간 notifications.status 가 ready 여야 한다(r4, 부팅 직후 문서는 idle)
+    if (docScreenId !== null && notifications.status === 'ready') notifications.markDocRead(docScreenId)
+  }
 
   // ----- 멘션 후보 원천 (F-507 5.1, 8.1) -----
   const [peopleCache] = useState(() =>
@@ -3260,7 +3274,10 @@ export default function App() {
 
   async function selectDoc(id: string) {
     // sharedDoc·공유 관리 페이지·도움말 페이지·지도가 있으면 currentDocId 가 우연히 같아도 화면을 떠나야 한다 (ia.md 3.19, F-243.md 3.4, F-244.md 3.3, F-292.md 6.4 "노드 클릭 → 문서 열고 지도 닫기")
-    if (id === currentDocId && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute) return
+    if (id === currentDocId && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute) {
+      notifications.markDocRead(id) // 이미 보이는 문서를 다시 고르면 전환이 아니라도 읽음 처리 (F-510 4.2 2번)
+      return
+    }
     await beforeLeaveDoc()
     setSharedDoc(null)
     setSharesOpen(false)
@@ -5204,6 +5221,7 @@ export default function App() {
                 }
               : undefined
           }
+          unreadNotificationDocIds={unreadNotificationDocIdsValue}
         />
         {narrow && sidebarOpen && (
           <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />

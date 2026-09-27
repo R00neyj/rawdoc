@@ -625,3 +625,330 @@ test.describe('F-507 E20 로컬 문서 — 멘션 없음', () => {
     await expect(composerTextarea(page)).toHaveValue('@zz')
   })
 })
+
+// ----- F-510 사이드바 문서 행의 안 읽은 알림 표시 (specs/features/F-510.md 8.2 E1~E13) -----
+
+const OTHER = 'notif-doc-2'
+const OTHER_TITLE = '다른 문서'
+const OTHER_CONTENT = '다른 문서 본문\n'
+
+function unreadDot(row) {
+  return row.locator('.tree-unread-dot')
+}
+
+function folderRow(page, id) {
+  return page.locator(`li[data-folder-id="${id}"] > .tree-row`).first()
+}
+
+function folderToggle(page, id) {
+  return page.locator(`li[data-folder-id="${id}"] > .tree-row > .tree-toggle`).first()
+}
+
+// .tree-row 자체를 거른다 — .tree-item(li) 은 펼친 폴더의 하위 트리까지 담아 조상 폴더도 함께 걸린다
+function docRowByTitle(page, title) {
+  return page.locator('.sidebar .doc-list .tree-row').filter({ has: page.locator('.doc-item-btn', { hasText: title }) })
+}
+
+function pinnedRowByTitle(page, title) {
+  return page.locator('.sidebar .pinned-list .tree-row').filter({ has: page.locator('.doc-item-btn', { hasText: title }) })
+}
+
+function sharedRowByTitle(page, title) {
+  return page.locator('.sidebar .shared-doc-list .tree-row').filter({ has: page.locator('.doc-item-btn', { hasText: title }) })
+}
+
+function sharedGroupToggle(page) {
+  return page.locator('.shared-group-toggle')
+}
+
+function docLink(page, title) {
+  return page.locator('.doc-item-btn', { hasText: title })
+}
+
+// DOC·OTHER 두 문서를 room 에 심고 hash 로 부팅한다 — F-507 E5 와 같은 모양(room+openServerDoc), 도우미는 고치지 않는다
+async function openTwoDocs(page, { hash = `#/d/${OTHER}`, notifications = [], beforeGoto } = {}) {
+  const room = createFakeDocRoom()
+  room.seed(DOC, { content: CONTENT, title: '함께 쓰는 문서' })
+  room.seed(OTHER, { content: OTHER_CONTENT, title: OTHER_TITLE })
+  const server = await openServerDoc(
+    page,
+    room,
+    USER,
+    [
+      { id: DOC, title: '함께 쓰는 문서', content: CONTENT },
+      { id: OTHER, title: OTHER_TITLE, content: OTHER_CONTENT },
+    ],
+    hash,
+    (s) => {
+      s.setNotifications(notifications)
+      if (beforeGoto) beforeGoto(s)
+    },
+  )
+  return { server, room }
+}
+
+test.describe('F-510 E1 문서 행 점', () => {
+  test('안 읽은 알림 있는 문서만 점, 부팅 뒤 POST 없음', async ({ page }) => {
+    const { server } = await openTwoDocs(page, {
+      notifications: [
+        notif({ id: 'd1', docId: DOC, createdAt: 5000, readAt: null }),
+        notif({ id: 'd2', docId: DOC, createdAt: 4000, readAt: null }),
+        notif({ id: 'o1', docId: OTHER, createdAt: 3000, readAt: 500 }),
+      ],
+    })
+
+    const docRow = docRowByTitle(page, '함께 쓰는 문서')
+    await expect(docRow).toHaveAttribute('data-unread', 'true')
+    await expect(unreadDot(docRow)).toHaveCount(1)
+    await expect(docRow).not.toContainText(/[0-9]/)
+    // 제목과 sr 글자가 서로 다른 DOM 노드라 접근성 이름 계산이 둘 사이에 공백을 하나 더 끼워 넣는다(측정으로 확인)
+    await expect(page.getByRole('link', { name: '함께 쓰는 문서 , 안 읽은 알림' })).toBeVisible()
+
+    const otherRow = docRowByTitle(page, OTHER_TITLE)
+    await expect(otherRow).not.toHaveAttribute('data-unread', 'true')
+    await expect(unreadDot(otherRow)).toHaveCount(0)
+
+    expect(server.notificationRequests().filter((r) => r.method === 'POST')).toHaveLength(0)
+  })
+})
+
+test.describe('F-510 E2 접힌 폴더·모두 접기', () => {
+  test('P만 점 → 펼치면 F로 → 펼치면 문서로 → 모두 접기로 되돌아옴', async ({ page }) => {
+    await openServerApp(page, USER, (s) => {
+      s.folders.set('P', { id: 'P', name: 'P', parentId: null, createdAt: 1, updatedAt: 1 })
+      s.folders.set('F', { id: 'F', name: 'F', parentId: 'P', createdAt: 2, updatedAt: 2 })
+      s.docs.set(DOC, { ...serverDoc(DOC, { title: '함께 쓰는 문서', content: CONTENT, updatedAt: 1000 }), folderId: 'F' })
+      // 부팅이 DOC 를 자동으로 열면 그 조상 폴더가 강제로 펼쳐진다 — 더 최근인 최상위 문서를 하나 두어 그걸 열게 한다
+      s.docs.set(OTHER, serverDoc(OTHER, { title: OTHER_TITLE, content: OTHER_CONTENT, updatedAt: 2000 }))
+      s.setNotifications([notif({ id: 'd1', docId: DOC, readAt: null })])
+    })
+
+    await expect(folderRow(page, 'P')).toHaveAttribute('data-unread', 'true')
+
+    await folderToggle(page, 'P').click()
+    await expect(folderRow(page, 'P')).not.toHaveAttribute('data-unread', 'true')
+    await expect(folderRow(page, 'F')).toHaveAttribute('data-unread', 'true')
+
+    await folderToggle(page, 'F').click()
+    await expect(folderRow(page, 'F')).not.toHaveAttribute('data-unread', 'true')
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+
+    await page.locator('.sidebar').getByRole('button', { name: '모두 접기', exact: true }).click()
+    await expect(folderRow(page, 'P')).toHaveAttribute('data-unread', 'true')
+    await expect(page.locator('[data-unread="true"]')).toHaveCount(1)
+  })
+})
+
+test.describe('F-510 E3 고정 문서', () => {
+  test('고정됨 목록 행과 트리 행 둘 다 점', async ({ page }) => {
+    await openServerApp(page, USER, (s) => {
+      s.docs.set(DOC, { ...serverDoc(DOC, { title: '함께 쓰는 문서', content: CONTENT }), pinnedAt: 1000 })
+      s.setNotifications([notif({ id: 'd1', docId: DOC, readAt: null })])
+    })
+
+    await expect(pinnedRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+  })
+})
+
+test.describe('F-510 E4 공유받음 묶음', () => {
+  test('열려 있을 때 문서 행 점, 닫으면 머리로 옮김', async ({ page }) => {
+    const SH = 'notif-shared-1'
+    const sharedList = [{ ...serverDoc(SH, { title: '공유 문서', content: undefined, updatedAt: 1000 }), content: undefined, role: 'edit', ownerEmail: 'owner@x.com' }]
+    await page.route('**/api/shared', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sharedList) }))
+
+    await openServerApp(page, USER, (s) => {
+      // 내 문서를 하나 두어(더 최근) 부팅이 이 공유 문서를 자동으로 열지 않게 한다(fallbackDocId 가 updatedAt 내림차순 첫 문서를 연다)
+      s.docs.set(DOC, serverDoc(DOC, { title: '함께 쓰는 문서', content: CONTENT, updatedAt: 2000 }))
+      s.setNotifications([notif({ id: 's1', docId: SH, readAt: null })])
+    })
+
+    await expect(sharedRowByTitle(page, '공유 문서')).toHaveAttribute('data-unread', 'true')
+    await expect(sharedGroupToggle(page)).not.toHaveAttribute('data-unread', 'true')
+
+    await sharedGroupToggle(page).click() // 기본값이 열림이므로 눌러서 닫는다
+    await expect(sharedGroupToggle(page)).toHaveAttribute('data-unread', 'true')
+
+    await sharedGroupToggle(page).click() // 다시 연다
+    await expect(sharedGroupToggle(page)).not.toHaveAttribute('data-unread', 'true')
+  })
+})
+
+test.describe('F-510 E5 문서 행 눌러 읽음', () => {
+  test('POST ids 두 개(새것부터), 점·배지 사라짐, 서버 값 반영', async ({ page }) => {
+    const { server } = await openTwoDocs(page, {
+      notifications: [
+        notif({ id: 'd1', docId: DOC, createdAt: 5000, readAt: null }),
+        notif({ id: 'd2', docId: DOC, createdAt: 4000, readAt: null }),
+      ],
+    })
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+
+    await docLink(page, '함께 쓰는 문서').click()
+    await expect(page.locator('.cm-content').first()).toContainText('셋째 줄')
+
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).not.toHaveAttribute('data-unread', 'true')
+    await expect(page.locator('.notifications-badge')).toHaveCount(0)
+
+    const posts = server.notificationRequests().filter((r) => r.method === 'POST')
+    expect(posts).toHaveLength(1)
+    expect(posts[0].body).toEqual({ ids: ['d1', 'd2'] })
+    expect(server.notifications().filter((n) => n.docId === DOC).every((n) => n.readAt !== null)).toBe(true)
+  })
+})
+
+test.describe('F-510 E6 부팅 때 열린 문서', () => {
+  test('전환이 아니라 읽지 않는다, 현재 문서를 다시 누르면 읽는다', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed(DOC, { content: CONTENT, title: '함께 쓰는 문서' })
+    const server = await openServerDoc(page, room, USER, undefined, `#/d/${DOC}`, (s) =>
+      s.setNotifications([notif({ id: 'd1', docId: DOC, readAt: null })]),
+    )
+
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+    await expect(page.locator('.notifications-badge')).toHaveText('1')
+    expect(server.notificationRequests().filter((r) => r.method === 'POST')).toHaveLength(0)
+
+    await docLink(page, '함께 쓰는 문서').click() // 이미 보이는 문서를 다시 고름
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).not.toHaveAttribute('data-unread', 'true')
+    expect(server.notificationRequests().filter((r) => r.method === 'POST')).toHaveLength(1)
+  })
+})
+
+test.describe('F-510 E7 보는 동안 새로 온 알림', () => {
+  test('점은 생기지만 POST 없음', async ({ page }) => {
+    await page.clock.install()
+    const { server } = await openTwoDocs(page, { notifications: [] })
+
+    await docLink(page, '함께 쓰는 문서').click()
+    await expect(page.locator('.cm-content').first()).toContainText('셋째 줄')
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).not.toHaveAttribute('data-unread', 'true')
+
+    server.setNotifications([notif({ id: 'd1', docId: DOC, readAt: null })])
+    await page.clock.fastForward('01:00')
+
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+    expect(server.notificationRequests().filter((r) => r.method === 'POST')).toHaveLength(0)
+  })
+})
+
+test.describe('F-510 E8 막힌 계정', () => {
+  test('점 보임, 문서를 열어도 POST 없이 점 그대로', async ({ page }) => {
+    const { server } = await openTwoDocs(page, {
+      notifications: [notif({ id: 'd1', docId: DOC, readAt: null })],
+      beforeGoto: (s) => s.setMe({ blocked: true }),
+    })
+
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+    await docLink(page, '함께 쓰는 문서').click()
+    await expect(page.locator('.cm-content').first()).toContainText('셋째 줄')
+
+    expect(server.notificationRequests().filter((r) => r.method === 'POST')).toHaveLength(0)
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+  })
+})
+
+test.describe('F-510 E9 오프라인', () => {
+  test('POST 없음, 점 그대로', async ({ page }) => {
+    const { server } = await openTwoDocs(page, {
+      notifications: [notif({ id: 'd1', docId: DOC, readAt: null })],
+    })
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+
+    await page.context().setOffline(true)
+    server.setOffline(true)
+
+    await docLink(page, '함께 쓰는 문서').click()
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+    expect(server.notificationRequests().filter((r) => r.method === 'POST')).toHaveLength(0)
+  })
+})
+
+test.describe('F-510 E10 알림 항목 눌러 이동', () => {
+  test('n1 눌러 이동 — POST 두 번, n1 이 두 번 담기지 않는다', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed(DOC, { content: CONTENT, title: '함께 쓰는 문서' })
+    room.seed(OTHER, { content: OTHER_CONTENT, title: OTHER_TITLE })
+    const cat = CONTENT.indexOf('고양이')
+    room.putComment(DOC, 't1', { from: cat, to: cat + 3, body: '서버 댓글' })
+
+    const server = await openServerDoc(
+      page,
+      room,
+      USER,
+      [
+        { id: DOC, title: '함께 쓰는 문서', content: CONTENT },
+        { id: OTHER, title: OTHER_TITLE, content: OTHER_CONTENT },
+      ],
+      `#/d/${OTHER}`,
+      (s) =>
+        s.setNotifications([
+          notif({ id: 'n1', docId: DOC, commentId: 't1', threadId: 't1', createdAt: 2000, readAt: null }),
+          notif({ id: 'n2', docId: DOC, commentId: 't1', threadId: 't1', createdAt: 1000, readAt: null }),
+        ]),
+    )
+
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+
+    await notifBtn(page).click()
+    await notifItems(page).first().click() // 새것부터이므로 n1
+
+    await expect(page.locator('.comment-thread[data-thread-id="t1"]')).toHaveAttribute('data-active', 'true')
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).not.toHaveAttribute('data-unread', 'true')
+
+    const posts = server.notificationRequests().filter((r) => r.method === 'POST')
+    expect(posts).toHaveLength(2)
+    expect(posts[0].body).toEqual({ ids: ['n1'] })
+    expect(posts[1].body).toEqual({ ids: ['n2'] })
+  })
+})
+
+test.describe('F-510 E11 읽음 요청 실패', () => {
+  test('POST 1번, 점이 되돌아옴, 알림 띠 없음', async ({ page }) => {
+    const { server } = await openTwoDocs(page, {
+      notifications: [
+        notif({ id: 'd1', docId: DOC, createdAt: 5000, readAt: null }),
+        notif({ id: 'd2', docId: DOC, createdAt: 4000, readAt: null }),
+      ],
+      beforeGoto: (s) => s.failWrites({ status: 500, match: ({ path }) => path === '/api/notifications/read' }),
+    })
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+
+    await docLink(page, '함께 쓰는 문서').click()
+    await expect(page.locator('.cm-content').first()).toContainText('셋째 줄')
+
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+    const posts = server.notificationRequests().filter((r) => r.method === 'POST')
+    expect(posts).toHaveLength(1)
+    await expect(page.locator('.notice-message')).toHaveCount(0)
+  })
+})
+
+test.describe('F-510 E12 모두 읽음', () => {
+  test('사이드바 점이 전부 사라진다', async ({ page }) => {
+    await openTwoDocs(page, {
+      notifications: [
+        notif({ id: 'd1', docId: DOC, createdAt: 5000, readAt: null }),
+        notif({ id: 'o1', docId: OTHER, createdAt: 4000, readAt: null }),
+      ],
+    })
+    await expect(page.locator('[data-unread="true"]')).toHaveCount(2)
+
+    await notifBtn(page).click()
+    await page.locator('.notifications-read-all').click()
+
+    await expect(page.locator('[data-unread="true"]')).toHaveCount(0)
+  })
+})
+
+test.describe('F-510 E13 30개로 잘린 목록', () => {
+  test('가장 오래된 안 읽음이 목록 밖이면 점을 빠뜨린다, 배지는 전체를 센다', async ({ page }) => {
+    const otherNotifs = Array.from({ length: 30 }, (_, i) => notif({ id: `o${i}`, docId: OTHER, createdAt: 100 + i, readAt: 1 }))
+    const docNotif = notif({ id: 'd1', docId: DOC, createdAt: 1, readAt: null }) // 가장 오래됨 — 30개 밖으로 밀려난다
+
+    await openTwoDocs(page, { notifications: [...otherNotifs, docNotif] })
+
+    await expect(page.locator('.notifications-badge')).toHaveText('1')
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).not.toHaveAttribute('data-unread', 'true')
+  })
+})

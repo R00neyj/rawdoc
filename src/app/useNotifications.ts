@@ -11,6 +11,7 @@ import {
   type PendingRead,
   type PollReason,
 } from './notificationsApi'
+import { unreadNotificationIdsForDoc } from './docNotifications'
 
 export type NotificationsState = {
   status: 'idle' | 'loading' | 'ready' | 'failed' // idle = 꺼짐, loading = 첫 응답 전, failed = 한 번도 못 받음
@@ -22,6 +23,7 @@ export type UseNotificationsResult = NotificationsState & {
   refresh: (reason: 'open') => void
   markRead: (id: string) => void
   markAllRead: () => void
+  markDocRead: (docId: string) => void
 }
 
 export function useNotifications(input: { enabled: boolean; blocked: boolean }): UseNotificationsResult {
@@ -164,6 +166,32 @@ export function useNotifications(input: { enabled: boolean; blocked: boolean }):
     [blocked, items, recomputeFromServer],
   )
 
+  // 문서를 열면 그 문서의 안 읽은 알림을 읽음으로 (F-510 3.2) — 렌더 사이 상태가 아니라 ref 의 마지막 서버 값 + 지금 대기에서 계산한다
+  const markDocRead = useCallback(
+    (docId: string) => {
+      if (blocked) return
+      if (!navigator.onLine) return
+      const server = lastServerRef.current
+      if (!server) return
+      const applied = applyPendingReads(server, pendingRef.current)
+      const ids = unreadNotificationIdsForDoc(applied.items, docId)
+      if (ids.length === 0) return
+      const at = Date.now()
+      const pending: PendingRead = { kind: 'ids', ids, at, settledAt: null }
+      pendingRef.current = [...pendingRef.current, pending]
+      recomputeFromServer()
+      void markNotificationsRead({ ids }).then((ok) => {
+        if (ok) {
+          pendingRef.current = pendingRef.current.map((p) => (p === pending ? { ...p, settledAt: Date.now() } : p))
+        } else {
+          pendingRef.current = pendingRef.current.filter((p) => p !== pending)
+        }
+        recomputeFromServer()
+      })
+    },
+    [blocked, recomputeFromServer],
+  )
+
   const markAllRead = useCallback(() => {
     if (blocked) return
     if (unread === null || unread === 0) return
@@ -181,5 +209,5 @@ export function useNotifications(input: { enabled: boolean; blocked: boolean }):
     })
   }, [blocked, unread, recomputeFromServer])
 
-  return { status, items, unread, refresh, markRead, markAllRead }
+  return { status, items, unread, refresh, markRead, markAllRead, markDocRead }
 }
