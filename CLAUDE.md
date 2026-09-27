@@ -85,6 +85,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | Live sync | Durable Object + y-partyserver | In use (server F-304 `worker/docRoom.ts`, client F-305 `src/app/useLiveDoc.ts`). Not deployed until F-306 lands |
 | E2E tests | Playwright (`@playwright/test`), installed Chrome channel | Adopted in F-150 |
 | 3D map | `three` + `d3-force-3d` (plus `@types/three` and a local `src/types/d3-force-3d.d.ts`) | Adopted in the F-292 revision (M2). F-2001 and F-2002 install them; no other spec may add a 3D dependency. `3d-force-graph` was measured and rejected — it statically pulls in `WebGPURenderer` |
+| Landing animation | gsap 3.15.0 (ScrollTrigger only), exact pin | Adopted in F-2049. Only src/welcome/ may import it; the app, worker/, site/, cli/ never do (src/welcome/gsapBoundary.test.ts). Not open source — Standard "No Charge" license, gsap.com/standard-license |
 | CLI | Node 22+, zero runtime dependencies, npm `rawdoc` | In use (F-2021) |
 | Rate limiting | Workers Rate Limiting binding `WRITE_LIMITER` | In use (F-2026) |
 

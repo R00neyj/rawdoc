@@ -81,3 +81,24 @@ describe('F-272 A12 renderWelcomePage — 사이트 공통 머리·꼬리', () =
     expect(footMatch![0]).toContain(brand.name)
   })
 })
+
+describe('F-2049 renderWelcomePage — 외부 요청·없는 기능 문구', () => {
+  it('W1 스크립트·링크 주소는 모두 같은 출처(/ 로 시작, // 아님)', async () => {
+    const html = await renderWelcomePage().text()
+    const urls = [...html.matchAll(/<script[^>]*\ssrc="([^"]+)"/g), ...html.matchAll(/<link[^>]*\shref="([^"]+)"/g)].map(
+      (match) => match[1],
+    )
+    const canonical = /<link rel="canonical" href="([^"]+)"/.exec(html)?.[1]
+    const loaded = urls.filter((url) => url !== canonical)
+    expect(loaded.length).toBeGreaterThan(0)
+    for (const url of loaded) {
+      expect(url.startsWith('/')).toBe(true)
+      expect(url.startsWith('//')).toBe(false)
+    }
+  })
+
+  it('W2 아직 없는 MCP 를 적지 않는다', async () => {
+    const html = await renderWelcomePage().text()
+    expect(html).not.toContain('MCP')
+  })
+})

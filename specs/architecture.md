@@ -121,6 +121,8 @@ src/
   - `styles/`: `wikiPreview.css`(F-2044)
 - 사이드바 안 읽은 알림 표시(F-510)로 추가
   - `app/`: `docNotifications.ts`(F-510 — 안 읽은 알림 문서 id 집합·폴더 집합 판정, 순수 함수)
+- 랜딩 스크롤 스토리(F-2049)로 추가
+  - `welcome/`: 랜딩 번들(`assets/welcome-demo.js`, 고정 이름). 편집기 데모·스크롤 스토리. gsap 은 여기서만 import(F-2049). `worker/welcomePage.ts` 가 여기의 순수 데이터 모듈을 import 한다
 
 - 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
@@ -272,6 +274,7 @@ scripts/lib/admin.mjs d1.mjs                          관리 스크립트 공용
 - 배포: GitHub `deploy` 브랜치에 올리면 Cloudflare Workers Builds 가 `npm run build` → `npx wrangler deploy`. `deploy` 는 로컬 `verify:full` 을 통과한 main 커밋만 가리킨다(`git push origin <sha>:deploy`). main push 는 GitHub Actions `ci.yml`(린트·타입·단위·빌드)만. D1 원격 마이그레이션은 자동화하지 않고 배포 전에 손으로 (2026-09-15)
 - 배포 주소: `rawdoc.app` 하나 (커스텀 도메인). `workers_dev`·`preview_urls` 는 끈다 — IndexedDB·서비스 워커가 출처별로 갈라지지 않게
 - 경로: `/api/*` 는 로그인(better-auth 세션 쿠키, Worker 가 판정 — F-2033). `/login` 은 Worker 가 만드는 로그인 페이지(스크립트 없음, F-2033). 비`GET` `/api/*` 는 라우트 표 앞에서 `Origin` 을 검사한다(403 `forbidden_origin`, F-2033 5.4). `/pub/*` 는 로그인 없이 읽기만(쓰기 메서드 405). 나머지는 정적 자산, 없는 경로는 `404.html` (`wrangler.jsonc` 의 `not_found_handling: "404-page"`, F-272 7장. 그전에는 `index.html` 이었다). 사이트 페이지(`/changelog`·`/help`·`/privacy`·`/terms`·`/guides/*`)는 빌드가 낸 평평한 `{경로}.html` 정적 자산이다
+- `/assets/*` 는 1년 immutable, 단 이름이 고정인 `assets/welcome-demo.js` 만 `no-cache`(`public/_headers`, F-2049 4.1). 랜딩 번들은 precache 에 넣지 않는다(F-2049 4.2)
 - `GET /pub/docs/:token/set` 응답에 문서마다 위키링크 해석 결과 표 `links` 가 붙는다(문서 1개뿐이어도 `links: {}`, 추가 질의 없음) — F-2018 (2026-09-23)
 - API 응답 헤더: `Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`. 오류 본문에 내부 정보 없음
 - 남의 자원은 404, 권한은 있으나 동작이 막히면 403 (F-206·F-212)

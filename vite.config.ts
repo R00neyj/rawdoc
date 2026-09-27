@@ -180,6 +180,8 @@ function stripFontsourceWoffPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
+  // GSAP 등 서드파티 저작권 주석을 청크 끝에 남긴다 — Vite 기본값은 지운다 (specs/features/F-2049.md 3.3)
+  esbuild: { legalComments: 'eof' },
   build: {
     rollupOptions: {
       // 랜딩(/welcome)이 불러올 편집기 데모. 워커가 정적 HTML 에 경로를 직접 적으므로
@@ -233,8 +235,8 @@ export default defineConfig({
       workbox: {
         // 서체는 KaTeX 만 precache 하고 나머지는 쓸 때 받아 fonts 캐시에 둔다 (F-2040)
         globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}', 'assets/KaTeX_*.woff2'],
-        // 링크 미리보기 이미지는 오프라인 동작에 필요 없다
-        globIgnores: ['og-image.png'],
+        // 링크 미리보기 이미지는 오프라인 동작에 필요 없다. 랜딩 번들은 서비스 워커가 제어하는 앱 사용자가 볼 일이 없다 (F-2049 4.2)
+        globIgnores: ['og-image.png', 'assets/welcome-demo.js'],
         // Workbox 기본 상한은 2MiB. 가장 큰 precache 파일 createEditor-*.js 가 약 1.7MB 라 여유를 둔다 — 넘으면 precache 에서 조용히 빠진다 (F-2040 4.1)
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         // precache 에 없는 서체 조각(같은 출처 /assets/*.woff2)은 쓸 때 받아 둔다 (F-2040 4.1)
