@@ -117,7 +117,7 @@ test.describe('F-282 A12 왕복', () => {
   test('전체 내보내기 → 전부 지움 → 가져오기 — 같은 구조·같은 제목·같은 바이트', async ({ page }) => {
     await skipPersistNotice(page)
     await openApp(page)
-    // 첫 실행 안내 문서("사용법")가 이미 하나 있다 — 지운 뒤 남는 행 수 기준으로 삼는다
+    // openApp 이 빈 저장소에서 만든 문서("제목 없는 문서")가 이미 하나 있다 — 지운 뒤 남는 행 수 기준으로 삼는다 (F-257 7.3)
     const baselineRows = await page.locator('.tree-row').count()
     const rootId = await importMarkdown(page, { name: 'root.md', content: '루트 본문\n' })
     await page.locator('.doc-title').fill('루트문서')

@@ -1,7 +1,7 @@
 // 전체·폴더 내보내기 (specs/features/F-281.md) — A11~A15
 import { test, expect } from '@playwright/test'
 import { unzipSync } from 'fflate'
-import { openApp, openAppHome, importMarkdown, setPrefBeforeLoad } from './helpers.js'
+import { openApp, openAppHome, importMarkdown } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 async function openSettings(page) {
@@ -151,8 +151,7 @@ test.describe('F-281 A14 오프라인', () => {
 
 test.describe('F-281 A15 내보낼 것 없음', () => {
   test('문서·폴더가 없는 빈 상태 — 다운로드 없이 안내 알림', async ({ page }) => {
-    // 첫 실행이면 앱이 `사용법` 문서를 하나 만든다(App.tsx md.firstRunDone) — 그 시드를 막아야 진짜 빈 상태다
-    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+    // 빈 저장소로 openAppHome 을 열면 문서가 0개다(F-257 7장 — 첫 실행 문서 생성 분기 제거) — 진짜 빈 상태
     await openAppHome(page)
 
     // e2e 브라우저는 저장 공간 보호를 거부해 그 경고가 알림 자리를 차지한다 — 설정을 열기 전에 닫아야 한다(대화상자가 덮는다)

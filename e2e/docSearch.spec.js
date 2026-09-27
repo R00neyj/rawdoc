@@ -1,7 +1,7 @@
 // 검색 대화상자와 진입점 (specs/features/F-287.md 8장 A1~A17)
 // F-288 A1~A11 은 안내 문구·공백 표시 (specs/features/F-288.md 8장)
 import { test, expect } from '@playwright/test'
-import { openApp, openAppHome, setPrefBeforeLoad, importMarkdown, resizeWindow, currentDocId, setViewMode } from './helpers.js'
+import { openApp, openAppHome, importMarkdown, resizeWindow, currentDocId, setViewMode } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 test.describe('F-287 검색 대화상자와 진입점', () => {
@@ -227,7 +227,6 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
 
 // 세 문서(1개는 tag:일기 프론트매터, 2개는 속성 없음) — A1~A4 공용 (F-288.md 8.2)
 async function seedThreeDocs(page) {
-  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
   await openAppHome(page)
   await importMarkdown(page, { name: '일기1.md', content: '---\ntag: 일기\n---\n오늘 하루\n' })
   await importMarkdown(page, { name: '일반문서.md', content: '태그 없는 문서\n' })

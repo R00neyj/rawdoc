@@ -1,6 +1,6 @@
 // 도움말 전용 페이지 (specs/features/F-244.md), 오른쪽 목차 (F-249.md)
 import { test, expect } from '@playwright/test'
-import { openApp, resizeWindow } from './helpers.js'
+import { openApp, openAppHome, resizeWindow, importMarkdown, waitSaved } from './helpers.js'
 
 // 그룹 순서 — F-244.md 3.1 이 명시한 순서 그대로(helpSyntax.ts 와 같다)
 const EXPECTED_GROUP_ORDER = [
@@ -176,5 +176,37 @@ test.describe('F-257 G6 목차에 새 절 반영', () => {
 
     await page.locator('nav.outline').hover()
     await expect(page.locator('.outline-item', { hasText: '문서 관리' })).toBeVisible()
+  })
+})
+
+// 첫 실행 안내 문서 생성 분기 제거 (F-257.md 7장)
+test.describe('F-257 G11 첫 실행 0개', () => {
+  test('빈 저장소로 열면 문서가 0개고 홈 화면이 뜬다', async ({ page }) => {
+    await openAppHome(page)
+    await expect(page.locator('.empty-state p')).toHaveText('문서가 없습니다.')
+    await expect(page.locator('.tree-row')).toHaveCount(0)
+  })
+})
+
+test.describe('F-257 G12 홈의 도움말 줄', () => {
+  test('처음이신가요? 도움말 보기 를 누르면 #/help 로 간다', async ({ page }) => {
+    await openAppHome(page)
+    await page.getByRole('button', { name: '처음이신가요? 도움말 보기' }).click()
+    await expect(page).toHaveURL(/#\/help$/)
+    await expect(page.locator('.help-page')).toBeVisible()
+  })
+})
+
+test.describe('F-257 G14 기존 사용법 문서 보존', () => {
+  test('이미 사용법 문서가 있는 저장소를 열면 그 문서가 그대로 남는다', async ({ page }) => {
+    await openAppHome(page)
+    await importMarkdown(page, { name: '사용법.md', content: '# 사용법\n예전 안내\n' })
+    await page.locator('.doc-title').fill('사용법')
+    await page.locator('.doc-title').blur()
+    await waitSaved(page)
+
+    await page.reload()
+
+    await expect(page.locator('.tree-row').filter({ hasText: /^사용법$/ })).toHaveCount(1)
   })
 })

@@ -1,4 +1,4 @@
-// 최초 실행 안내 문서 제목·본문 상수 (specs/features/F-111.md 3.7)
+// 더 이상 새로 만들지 않는다 — migrateLocal.ts 가 기존 기기에 남은 이 문서를 계정으로 옮기지 않으려고 제목·본문을 비교하는 데만 쓰는 과거 상수다. 한 글자도 바꾸지 않는다 (F-257 7.2)
 // 줄은 \n 으로 두고, 저장소에 넣을 CRLF 본문은 lineEnding.js 로 잇는다 (F-110.md 2장 파일 목록)
 import { fromEditorText } from '../lib/lineEnding'
 

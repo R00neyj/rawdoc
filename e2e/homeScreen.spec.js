@@ -1,7 +1,7 @@
 // 시작 화면 홈, 설정에서 마지막 문서 토글 (specs/features/F-232.md)
 import { test, expect } from '@playwright/test'
 import brand from '../brand.config.ts'
-import { openApp, openAppHome, setPrefBeforeLoad, importMarkdown, currentDocId, waitSaved } from './helpers.js'
+import { openApp, openAppHome, importMarkdown, currentDocId, waitSaved } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 async function goHome(page) {
@@ -20,7 +20,7 @@ async function mockPublicDoc(page) {
 
 test.describe('F-232 A2 첫 진입 — 홈 기본값', () => {
   test('문서가 여러 개 있어도 해시 없이 열면 홈 화면, 특정 문서는 자동으로 안 열린다', async ({ page }) => {
-    await openAppHome(page) // 최초 실행 안내 문서 1개가 자동으로 생긴다
+    await openAppHome(page) // 빈 저장소 — 문서 0개 (F-257 7장)
     await importMarkdown(page, { name: 'a.md', content: '문서 A\n' })
     await importMarkdown(page, { name: 'b.md', content: '문서 B\n' })
 
@@ -30,21 +30,22 @@ test.describe('F-232 A2 첫 진입 — 홈 기본값', () => {
 
     await expect(page.locator('.empty-state p')).toHaveText('문서를 선택하거나 새로 만드세요.')
     expect(await currentDocId(page)).toBeNull()
-    await expect(page.locator('.tree-row')).toHaveCount(3)
+    await expect(page.locator('.tree-row')).toHaveCount(2)
   })
 })
 
 test.describe('F-232 A3 문서 0개 홈', () => {
   test('문서가 하나도 없으면 문구가 다르다', async ({ page }) => {
-    await setPrefBeforeLoad(page, 'md.firstRunDone', '1') // 안내 문서 생성을 막아 진짜 0개로 만든다
-    await openAppHome(page)
+    await openAppHome(page) // 빈 저장소 — 문서 0개 (F-257 7장)
     await expect(page.locator('.empty-state p')).toHaveText('문서가 없습니다.')
   })
 })
 
 test.describe('F-232 A4 문서 있는 홈', () => {
   test('문서가 1개 이상이면 문구가 다르다', async ({ page }) => {
-    await openAppHome(page) // 안내 문서 1개
+    await openAppHome(page)
+    await importMarkdown(page, { name: 'a.md', content: '문서\n' }) // 첫 실행 자동 생성이 없어져 직접 만든다 (F-257 7장)
+    await goHome(page)
     await expect(page.locator('.empty-state p')).toHaveText('문서를 선택하거나 새로 만드세요.')
     await expect(page.locator('.tree-row')).toHaveCount(1)
   })
@@ -67,7 +68,9 @@ test.describe('F-232 A5 마지막 문서 토글', () => {
 
 test.describe('F-232 A6 사이드바 클릭', () => {
   test('홈에서 목록 문서를 클릭하면 그 문서가 열리고 해시가 붙는다', async ({ page }) => {
-    await openAppHome(page) // 안내 문서 1개
+    await openAppHome(page)
+    await importMarkdown(page, { name: 'a.md', content: '문서\n' }) // 첫 실행 자동 생성이 없어져 직접 만든다 (F-257 7장)
+    await goHome(page)
     await page.locator('.doc-item-btn').first().click()
 
     await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
@@ -77,7 +80,9 @@ test.describe('F-232 A6 사이드바 클릭', () => {
 
 test.describe('F-232 A7 로고 → 홈', () => {
   test('문서를 연 상태에서 로고를 누르면 홈으로 돌아간다', async ({ page }) => {
-    await openAppHome(page) // 안내 문서 1개
+    await openAppHome(page)
+    await importMarkdown(page, { name: 'a.md', content: '문서\n' }) // 첫 실행 자동 생성이 없어져 직접 만든다 (F-257 7장)
+    await goHome(page)
     await page.locator('.doc-item-btn').first().click()
     await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
 
@@ -96,6 +101,8 @@ test.describe('F-232 A7 로고 → 홈', () => {
 test.describe('F-232 A8 특정 문서 해시 우선', () => {
   test('startScreen=home 이어도 #/d/{id} 주소로 열면 설정과 무관하게 그 문서가 열린다', async ({ page }) => {
     await openAppHome(page)
+    await importMarkdown(page, { name: 'a.md', content: '문서\n' }) // 첫 실행 자동 생성이 없어져 직접 만든다 (F-257 7장)
+    await goHome(page)
     await page.locator('.doc-item-btn').first().click()
     const docId = await currentDocId(page)
     expect(docId).not.toBeNull()
@@ -130,7 +137,6 @@ test.describe('F-232 A10 공개 화면 설정 대화상자', () => {
 
 test.describe('F-241 A4 홈에 최근 문서', () => {
   test('문서를 3개 만들면 홈 화면에 최근 목록이 최신순으로 보인다', async ({ page }) => {
-    await setPrefBeforeLoad(page, 'md.firstRunDone', '1') // 안내 문서 없이 정확히 3개만 세려고
     await openAppHome(page)
     await importMarkdown(page, { name: 'A.md', content: '문서 A\n' })
     await importMarkdown(page, { name: 'B.md', content: '문서 B\n' })
@@ -145,7 +151,6 @@ test.describe('F-241 A4 홈에 최근 문서', () => {
 
 test.describe('F-241 A5 최근 항목 열기', () => {
   test('최근 목록 항목을 클릭하면 그 문서가 열리고 해시가 바뀐다', async ({ page }) => {
-    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
     await openAppHome(page)
     const docId = await importMarkdown(page, { name: 'A.md', content: '문서 A\n' })
     await goHome(page)
@@ -159,7 +164,6 @@ test.describe('F-241 A5 최근 항목 열기', () => {
 
 test.describe('F-241 A6 최근 목록 5개 제한', () => {
   test('문서가 6개 이상이어도 최근 목록엔 5개만 보인다', async ({ page }) => {
-    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
     await openAppHome(page)
     for (const name of ['A', 'B', 'C', 'D', 'E', 'F']) {
       await importMarkdown(page, { name: `${name}.md`, content: `문서 ${name}\n` })
@@ -172,7 +176,6 @@ test.describe('F-241 A6 최근 목록 5개 제한', () => {
 
 test.describe('F-241 A7 순서 갱신', () => {
   test('목록 아래쪽 문서를 고쳐 저장하면 홈에서 맨 위로 온다', async ({ page }) => {
-    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
     await openAppHome(page)
     await importMarkdown(page, { name: 'A.md', content: '문서 A\n' })
     await importMarkdown(page, { name: 'B.md', content: '문서 B\n' })
@@ -196,7 +199,6 @@ test.describe('F-241 A7 순서 갱신', () => {
 
 test.describe('F-241 A8 공유 문서 제외', () => {
   test('최근 목록에는 내 문서만 보이고 공유받은 문서는 섞이지 않는다', async ({ page }) => {
-    await setPrefBeforeLoad(page, 'md.firstRunDone', '1') // 안내 문서 없이 가져온 문서 1개만 세려고
     await fakeServer(page)
     await page.route('**/api/shared', (route) =>
       route.fulfill({

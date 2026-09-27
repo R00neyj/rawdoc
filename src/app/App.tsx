@@ -175,7 +175,6 @@ import SearchDialog from './SearchDialog'
 import { searchScope } from './searchIndex'
 import HelpPage from './HelpPage'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
-import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
 import StatusBar from './StatusBar'
 import SharedView from './SharedView'
 import PublicView from './PublicView'
@@ -2098,17 +2097,7 @@ export default function App() {
       if (!usedCachedShell) {
         // 폴더를 문서와 함께 받아 먼저 반영한다 — 폴더가 늦으면 그 안의 문서가 잠깐 루트에 보인다
         const foldersPromise = appStore.listFolders()
-        let list = await appStore.list()
-
-        if (list.length === 0 && getPref('md.firstRunDone', '') === '') {
-          await appStore.create({
-            title: GUIDE_DOC_TITLE,
-            content: GUIDE_DOC_CONTENT_CRLF,
-            lineEnding: 'crlf',
-          })
-          setPref('md.firstRunDone', '1')
-          list = await appStore.list()
-        }
+        const list = await appStore.list()
 
         const folderList = await foldersPromise
         setFolders(folderList)

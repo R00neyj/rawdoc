@@ -1,7 +1,7 @@
 // 금고 로그인 이관 — E9 알림·D-14·adopt·rewrap (specs/features/F-408.md 7.2)
 import { test, expect } from '@playwright/test'
 import zlib from 'node:zlib'
-import { openApp as openAppRaw, setPrefBeforeLoad, currentDocId, importMarkdown, waitSaved } from './helpers.js'
+import { openApp as openAppRaw, openAppHome, setPrefBeforeLoad, currentDocId, importMarkdown, waitSaved } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const SETTINGS_DIALOG_SELECTOR = 'dialog[aria-labelledby="settings-title"]'
@@ -11,9 +11,10 @@ const WRONG_PASSWORD = '틀린금고암호입니다요이건'
 const LOGGED_OUT = { status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' }
 
 // 저장 공간 보호 알림(F-118)이 E9 와 같은 한 자리를 두고 경쟁하지 않게 미리 꺼 둔다 (e2eeDocs.spec.js 와 같다)
+// 빈 홈에서 시작한다 — openAppRaw 의 새 문서가 로그인 때 계정으로 옮겨지면 요청·서버 문서 개수가 어긋난다 (F-257 7.1)
 async function openApp(page) {
   await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
-  await openAppRaw(page)
+  await openAppHome(page)
 }
 
 function notice(page) {

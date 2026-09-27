@@ -121,7 +121,7 @@ test.describe('F-2002 A7 Ctrl+클릭 재중심', () => {
 
 test.describe('F-2002 A8 링크가 없을 때', () => {
   test('간선이 없어도 캔버스를 그대로 그리고 안내 줄만 겹친다', async ({ page }) => {
-    await openApp(page) // 첫 실행 — 사용법 문서 하나뿐이고 위키링크가 없다
+    await openApp(page) // 첫 실행 — 문서 하나뿐이고 위키링크가 없다 (F-257 7장)
     const map = await openMap(page)
 
     await expect(map.locator('.map-notice')).toContainText('아직 이어진 문서가 없습니다.')
@@ -194,6 +194,7 @@ test.describe('F-2002 A12 편집 보존 회귀', () => {
 
 test.describe('F-2002 A13 직접 진입', () => {
   test('#/map 주소로 새로 열면 지도와 캔버스가 뜬다', async ({ page }) => {
+    await openApp(page) // 문서가 하나 있어야 한다 — 빈 저장소면 지도도 "문서가 없습니다" (F-257 7장)
     await page.goto('/#/map')
     await expect(page.locator('.map-page')).toBeVisible()
     await expect(page.locator('.map-page canvas')).toHaveCount(1)
@@ -202,7 +203,7 @@ test.describe('F-2002 A13 직접 진입', () => {
 
 test.describe('F-2002 A14 꼬리 줄', () => {
   test('노드 수와 간선 수를 적는다', async ({ page }) => {
-    await openApp(page) // 첫 실행 `사용법` 문서가 하나 있으므로 가져온 둘과 합쳐 3개다
+    await openApp(page) // 첫 실행 문서가 하나 생기므로 가져온 둘과 합쳐 3개다 (F-257 7장)
     await importMarkdown(page, { name: 'B.md', content: 'B 문서' })
     await importMarkdown(page, { name: 'A.md', content: '[[B]]' })
 
@@ -250,6 +251,8 @@ const NODE_R = 0.394
 const SETTLE = 1200
 
 async function openMapFresh(page) {
+  // 빈 저장소로 바로 열면 지도도 "문서가 없습니다" 빈 상태다 — 노드 하나를 만들고 연다 (F-257 7장)
+  await openApp(page)
   await page.goto('/#/map')
   const map = page.locator('.map-page')
   await expect(map).toBeVisible()
@@ -501,7 +504,7 @@ test.describe('F-2004 노드 표현', () => {
 
     await page.mouse.move(cx, cy)
     await expect(visibleLabels(map)).toHaveCount(1)
-    await expect(visibleLabels(map)).toHaveText(['사용법'])
+    await expect(visibleLabels(map)).toHaveText(['제목 없는 문서'])
   })
 
   test('F-2004 A2 호버를 풀면 사라진다', async ({ page }) => {
@@ -531,7 +534,7 @@ test.describe('F-2004 노드 표현', () => {
     await page.mouse.move(cx + 0.25 * H, cy)
     await expect(visibleLabels(map)).toHaveCount(1)
 
-    const after = await labelBox(map, '사용법')
+    const after = await labelBox(map, '제목 없는 문서')
     expect(Math.abs(after.x + after.width / 2 - (cx + 0.25 * H))).toBeLessThanOrEqual(8)
   })
 
@@ -541,7 +544,7 @@ test.describe('F-2004 노드 표현', () => {
     await expect(visibleLabels(map)).toHaveCount(1)
 
     // 이름표 한가운데에서 잡히는 요소가 캔버스여야 한다 — pointer-events: none 이 아니면 span 이 잡힌다
-    const box = await labelBox(map, '사용법')
+    const box = await labelBox(map, '제목 없는 문서')
     const atLabel = await page.evaluate(
       ([x, y]) => document.elementFromPoint(x, y)?.className ?? '',
       [box.x + box.width / 2, box.y + box.height / 2],
@@ -785,7 +788,7 @@ test.describe('F-2005 지도 설정 패널', () => {
 
     await p.getByRole('slider', { name: '이름표 표시 거리', exact: true }).fill('1')
     await expect(visibleLabels(map)).toHaveCount(1)
-    await expect(visibleLabels(map)).toHaveText(['사용법'])
+    await expect(visibleLabels(map)).toHaveText(['제목 없는 문서'])
 
     await p.getByRole('slider', { name: '이름표 표시 거리', exact: true }).fill('0')
     await expect(visibleLabels(map)).toHaveCount(0)

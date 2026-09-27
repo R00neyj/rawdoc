@@ -20,9 +20,6 @@ export async function openExportMenu(page) {
 
 // 앱을 열고 부팅이 끝날 때까지 기다린다(시작 화면은 md.startScreen='last' 로 마지막 문서 자동 열기, 진짜 기본값 확인은 openAppHome). 문서가 없으면 홈의 새 문서로 들어간다(F-2014 3.1)
 export async function openApp(page) {
-  if (process.env.E2E_NO_FIRST_RUN_DOC === '1') {
-    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
-  }
   await setPrefBeforeLoad(page, 'md.startScreen', 'last')
   await page.goto('/')
   const editor = page.locator('.cm-host .cm-editor')

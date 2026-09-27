@@ -391,6 +391,7 @@ test.describe('F-406 서버 금고 첨부', () => {
     const requests = collectRequests(page)
     const attGets = collectAttachmentGets(page)
     await openApp(page)
+    const rootDocId = await currentDocId(page)
     await createVault(page)
     const vaultDocId = await newVaultDoc(page)
 
@@ -432,8 +433,8 @@ test.describe('F-406 서버 금고 첨부', () => {
     await expect(img).toBeVisible()
     await expect.poll(() => img.evaluate((el) => el.naturalWidth)).toBeGreaterThan(0)
 
-    // E6 — 금고가 열린 채로 일반 문서에 같은 이미지를 넣으면 자리 표시만 뜬다(F-157 A8 과 같은 방식). 새 문서는 지금 연 문서의 폴더로 들어가므로 루트 문서(사용법)로 먼저 옮긴다
-    await page.locator('.sidebar').getByRole('tree').getByRole('link', { name: '사용법', exact: true }).click()
+    // E6 — 금고가 열린 채로 일반 문서에 같은 이미지를 넣으면 자리 표시만 뜬다(F-157 A8 과 같은 방식). 새 문서는 지금 연 문서의 폴더로 들어가므로 루트 문서(openApp 이 만든 새 문서)로 먼저 옮긴다
+    await docRow(page, rootDocId).locator(`a[href="#/d/${rootDocId}"]`).click()
     await expect.poll(() => currentDocId(page)).not.toBe(vaultDocId)
     const plainId = await importMarkdown(page, {
       name: '일반.md',

@@ -69,7 +69,8 @@ test.describe('F-247 A7 전부 삭제', () => {
 
     await expect(page.locator('.tree-row').filter({ hasText: '위' })).toHaveCount(0)
     await expect(page.locator('.tree-row').filter({ hasText: '아래' })).toHaveCount(0)
-    await expect(page.locator('.tree-row').filter({ hasText: '문서' })).toHaveCount(0)
+    // hasText 부분열이면 openApp 이 빈 저장소에서 만든 "제목 없는 문서" 줄까지 걸린다 — 제목 정확 일치로 좁힌다 (F-257 7.3)
+    await expect(page.locator('.tree-row').filter({ hasText: /^문서$/ })).toHaveCount(0)
 
     // DELETE 가 실제로 서버에 닿을 때까지 기다린 뒤 새로 고침해도 그대로다
     await page.waitForTimeout(700)
@@ -77,7 +78,7 @@ test.describe('F-247 A7 전부 삭제', () => {
     await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible()
     await expect(page.locator('.tree-row').filter({ hasText: '위' })).toHaveCount(0)
     await expect(page.locator('.tree-row').filter({ hasText: '아래' })).toHaveCount(0)
-    await expect(page.locator('.tree-row').filter({ hasText: '문서' })).toHaveCount(0)
+    await expect(page.locator('.tree-row').filter({ hasText: /^문서$/ })).toHaveCount(0)
   })
 })
 
