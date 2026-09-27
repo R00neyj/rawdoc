@@ -116,6 +116,14 @@ describe('F-505 U19 md.commentRail', () => {
   })
 })
 
+describe('F-2052 U10 md.shortcutsUsed', () => {
+  it('읽기·쓰기, 저장값 없으면 기본값 빈 문자열', () => {
+    expect(getPref('md.shortcutsUsed', '')).toBe('')
+    expect(() => setPref('md.shortcutsUsed', '["format.bold"]')).not.toThrow()
+    expect(getPref('md.shortcutsUsed', '')).toBe('["format.bold"]')
+  })
+})
+
 describe('F-407 U23 md.e2eeBackupNotice', () => {
   it("setPref '1' 이 던지지 않고 getPref 가 '1'", () => {
     expect(getPref('md.e2eeBackupNotice', '' as '1')).toBe('')

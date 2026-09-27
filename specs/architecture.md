@@ -221,6 +221,11 @@ type YjsMetaRow = {
 | `md.toolbar` | `on` \| `off` | `on` | F-233 3.5 |
 | `md.landingDone` | `1` | 없음 | F-271 |
 | `md.wikiPreview` | `on` \| `off` | `on` | F-2044 8.1 |
+| `md.shortcutsUsed` | 사용한 단축키 id 배열(JSON, 카탈로그 순서) | 없음 | F-2052 4.7 |
+| `md.newDocTemplate` | `none` \| `builtin:{key}` \| `doc:{docId}`(= `TemplateEntry.id`) | `none` | F-2037 |
+| `md.e2eeLockMinutes` | `5` \| `15` \| `30` \| `60` \| `240` | `30` | F-404 8.1 |
+| `md.e2eeBackupNotice` | `1` | 없음 | F-407 |
+| `md.commentRail` | `open` \| `closed` | 없으면 열린 스레드가 있을 때 열림 | F-505 |
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
   - 예외: `md.theme`·`md.sidebar`·`md.sidebarWidth`·`md.startScreen`·`md.contentWidth` 는 `BOOT_PAINT_SCRIPT` 도 읽는다 — 첫 페인트 전이라 `prefs.ts` 를 쓸 수 없다 (F-2015, F-2043)

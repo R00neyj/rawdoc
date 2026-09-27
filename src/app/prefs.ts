@@ -29,6 +29,8 @@ type PrefMap = {
   'md.wikiPreview': 'on' | 'off'
   // 없으면 문서를 열 때 열린 스레드가 있으면 연다 — '' 은 "저장한 적 없음"(F-505 3.7)
   'md.commentRail': string
+  // 사용한 단축키 id 배열(JSON, 카탈로그 순서), 브라우저별 (F-2052 4.7)
+  'md.shortcutsUsed': string
 }
 
 type PrefKey = keyof PrefMap
@@ -60,6 +62,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.contentWidth',
   'md.wikiPreview',
   'md.commentRail',
+  'md.shortcutsUsed',
 ])
 
 function assertAllowed(key: string) {

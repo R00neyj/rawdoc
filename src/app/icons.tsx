@@ -87,6 +87,8 @@ import notificationsSvg from '@material-symbols/svg-400/outlined/notifications.s
 // 댓글 카드 해결 버튼·답글 보내기 (2026-09-26 댓글 UI tweak)
 import checkCircleSvg from '@material-symbols/svg-400/outlined/check_circle.svg?raw'
 import arrowUpwardSvg from '@material-symbols/svg-400/outlined/arrow_upward.svg?raw'
+// 상태바 `단축키` 버튼 — 사이드바 `도움말`의 help(동그라미 `?`)와 구별되는 동그라미 없는 `?` (F-2052 12장 Q3)
+import questionMarkSvg from '@material-symbols/svg-400/outlined/question_mark.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -219,6 +221,7 @@ export const IconNotifications = makeIcon(notificationsSvg)
 // 댓글 카드 해결 버튼·답글 보내기 (2026-09-26 댓글 UI tweak)
 export const IconCheckCircle = makeIcon(checkCircleSvg)
 export const IconArrowUp = makeIcon(arrowUpwardSvg)
+export const IconShortcuts = makeIcon(questionMarkSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

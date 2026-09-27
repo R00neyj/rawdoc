@@ -8,6 +8,7 @@ import { WIKI_PREVIEW_OPEN_DELAY_MS } from './wikiPreview'
 import { COMMENT_BODY_MAX, COMMENTS_PER_DOC_MAX } from '../lib/docComments'
 import { RETAIN_MS } from '../storage/yjsStore'
 import { MAX_INPUT_BYTES, MAX_RESULT_BYTES } from './attachImages'
+import { SHORTCUT_CATALOG, formatChord } from './shortcutCatalog'
 
 // F-257.md 2장 표의 절 순서 그대로
 const SECTION_ORDER = [
@@ -455,5 +456,16 @@ describe('F-2047 도움말 두 절 (## 저장 / ## 설치와 오프라인)', () 
 
     expect(save.body).toContain('상태바')
     expect(save.body).not.toContain('오프라인이어도 편집을 계속할 수 있습니다')
+  })
+})
+
+// F-2052.md 7장 U11
+describe('F-2052 단축키 판 도움말 한 줄', () => {
+  it('U11: ## 단축키 절 목록 첫 줄이 nav.shortcuts 표시 문자열로 시작하고 `?` 를 담는다', () => {
+    const section = appSections().find((s) => s.name === '단축키')!
+    const firstLine = section.body.split('\n')[0]
+    const entry = SHORTCUT_CATALOG.find((e) => e.id === 'nav.shortcuts')!
+    expect(firstLine.startsWith(`- \`${formatChord(entry.keys[0], false)}\``)).toBe(true)
+    expect(section.body).toContain('`?`')
   })
 })

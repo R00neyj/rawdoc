@@ -79,6 +79,15 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     when: (ctx) => Boolean(ctx.notifications),
     run: (ctx) => ctx.notifications?.open(),
   },
+  {
+    id: 'shortcuts.open',
+    kind: 'action',
+    label: '단축키 보기',
+    shortcut: 'Ctrl+Shift+/',
+    keywords: ['단축키', 'shortcut', 'keyboard', '키보드', 'hotkey', '키 목록'],
+    when: (ctx) => Boolean(ctx.shortcuts),
+    run: (ctx) => ctx.shortcuts?.open(),
+  },
 ]
 
 // comment.toggleRail 라벨 getter 가 읽는 값 — visibleCommands() 가 when() 을 부른 뒤 같은 렌더에서 라벨을 읽는다

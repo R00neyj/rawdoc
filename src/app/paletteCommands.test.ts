@@ -8,6 +8,7 @@ function ctx(
   e2ee?: PaletteContext['e2ee'],
   comments?: PaletteContext['comments'],
   notifications?: PaletteContext['notifications'],
+  shortcuts?: PaletteContext['shortcuts'],
 ): PaletteContext {
   return {
     canInsertTemplate: true,
@@ -18,6 +19,7 @@ function ctx(
     e2ee,
     comments,
     notifications,
+    shortcuts,
   }
 }
 
@@ -27,7 +29,16 @@ const PALETTE_ID_RE = /^[a-z][a-z0-9]*(\.[a-z][a-zA-Z0-9-]*)+$/
 describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀, F-505 U24)', () => {
   it('id 가 순서대로, 겹치지 않고, 완화한 정규식을 통과한다', () => {
     const ids = PALETTE_COMMANDS.map((c) => c.id)
-    expect(ids).toEqual(['template.insert', 'doc.print', 'e2ee.lock', 'e2ee.unlock', 'comment.add', 'comment.toggleRail', 'notifications.open'])
+    expect(ids).toEqual([
+      'template.insert',
+      'doc.print',
+      'e2ee.lock',
+      'e2ee.unlock',
+      'comment.add',
+      'comment.toggleRail',
+      'notifications.open',
+      'shortcuts.open',
+    ])
     expect(new Set(ids).size).toBe(ids.length)
     for (const id of ids) expect(id).toMatch(PALETTE_ID_RE)
   })
@@ -170,5 +181,26 @@ describe('notifications.open — U19 (F-507 3.6)', () => {
     if (!cmd || cmd.kind !== 'action') throw new Error('notifications.open not found')
     cmd.run(context)
     expect(opened).toBe(true)
+  })
+})
+
+describe('shortcuts.open — U12 (F-2052 6.3)', () => {
+  it('ctx.shortcuts 없으면 안 보이고, 있으면 보이며 라벨 단축키 보기', () => {
+    const withoutIt = ctx([], undefined, undefined, undefined, undefined)
+    expect(PALETTE_COMMANDS.filter((c) => c.when(withoutIt)).map((c) => c.id)).not.toContain('shortcuts.open')
+
+    const withIt = ctx([], undefined, undefined, undefined, { open: () => {} })
+    const visible = PALETTE_COMMANDS.filter((c) => c.when(withIt))
+    const cmd = visible.find((c) => c.id === 'shortcuts.open')
+    expect(cmd?.label).toBe('단축키 보기')
+  })
+
+  it('실행 — ctx.shortcuts.open() 을 한 번 부른다', () => {
+    let openCount = 0
+    const context = ctx([], undefined, undefined, undefined, { open: () => { openCount += 1 } })
+    const cmd = PALETTE_COMMANDS.find((c) => c.id === 'shortcuts.open')
+    if (!cmd || cmd.kind !== 'action') throw new Error('shortcuts.open not found')
+    cmd.run(context)
+    expect(openCount).toBe(1)
   })
 })

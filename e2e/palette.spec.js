@@ -72,8 +72,8 @@ test.describe('F-2022 A1 Ctrl+P 로 열기', () => {
     await expect(palette(page).locator('h2')).toHaveText('명령 팔레트')
     await expect(palette(page).locator('.command-palette-input')).toBeFocused()
     const options = paletteOptions(page)
-    // 댓글 명령 둘(comment.add·comment.toggleRail)이 F-505 로 뒤에 더해져 2개 → 4개(3.4)
-    await expect(options).toHaveCount(4)
+    // 댓글 명령 둘(comment.add·comment.toggleRail)이 F-505 로 뒤에 더해져 2개 → 4개(3.4), F-2052 `단축키 보기` 가 끝에 더해져 4 → 5
+    await expect(options).toHaveCount(5)
     await expect(options.nth(0)).toHaveText(/템플릿 삽입/)
     await expect(options.nth(1)).toHaveText(/PDF \(A4 인쇄\)/)
     await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true')
@@ -330,10 +330,10 @@ test.describe('F-2022 A12 키보드', () => {
     await page.locator('.cm-content').click()
     await page.keyboard.press('Control+p')
 
-    // 댓글 명령 둘이 F-505 로 더해져 옵션이 4개(3.4) — nextResultIndex(0,4,'ArrowUp') = 3
+    // 댓글 명령 둘(F-505 3.4) + 단축키 보기(F-2052 9.1)가 더해져 옵션이 5개 — ArrowUp 은 순환해 마지막으로 간다
     await page.keyboard.press('ArrowUp')
-    await expect(paletteOptions(page).nth(3)).toHaveAttribute('aria-selected', 'true')
-    await page.keyboard.press('ArrowDown') // nextResultIndex(3,4,'ArrowDown') = 0
+    await expect(paletteOptions(page).last()).toHaveAttribute('aria-selected', 'true')
+    await page.keyboard.press('ArrowDown') // 마지막에서 ArrowDown 은 처음으로 순환한다
     await expect(paletteOptions(page).nth(0)).toHaveAttribute('aria-selected', 'true')
 
     await page.keyboard.press('Enter') // 템플릿 삽입 2단계로
@@ -354,8 +354,8 @@ test.describe('F-2022 A13 보기 모드', () => {
     await setViewMode(page, 'view')
 
     await page.keyboard.press('Control+p')
-    // 보기 모드도 댓글 접근이 'none' 이 아니라 comment.toggleRail 이 보인다(F-505 3.4) — PDF·댓글 열기 2개
-    await expect(paletteOptions(page)).toHaveCount(2)
+    // 보기 모드도 댓글 접근이 'none' 이 아니라 comment.toggleRail 이 보인다(F-505 3.4) — PDF·댓글 열기 2개, 보기 모드도 상태바가 있어 단축키 보기까지 3개(F-2052 9.1)
+    await expect(paletteOptions(page)).toHaveCount(3)
     await expect(paletteOptions(page).first()).toHaveText(/PDF/)
     await page.keyboard.press('Enter')
 

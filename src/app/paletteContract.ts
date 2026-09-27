@@ -24,6 +24,8 @@ export type PaletteContext = {
   comments?: { canAdd: boolean; railOpen: boolean; add: () => void; toggleRail: () => void }
   // 알림함 열기 — 선택 필드. 없으면 명령이 안 보인다 (F-507 3.6)
   notifications?: { open: () => void }
+  // 단축키 판 열기 — 선택 필드. 없으면 명령이 안 보인다 (F-2052 6.3)
+  shortcuts?: { open: () => void }
 }
 
 type PaletteCommandBase = PaletteItem & {

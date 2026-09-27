@@ -2,7 +2,13 @@
 // 보기 모드에서 줄·열을 숨기는 것은 F-123.md 3.3
 // 서버 저장소 동기화 표시는 F-207.md 2.5
 // 실시간 단계·폴백 표시는 F-305.md 11.1
+import type { RefObject } from 'react'
 import type { SyncState } from '../types'
+import { IconShortcuts } from './icons'
+import { SHORTCUT_CATALOG, formatChord } from './shortcutCatalog'
+
+// 판 밖에서는 맥에서도 Ctrl+… 로 적는다(F-2052 결정 8) — formatChord(..., false)
+const SHORTCUTS_HINT = formatChord(SHORTCUT_CATALOG.find((e) => e.id === 'nav.shortcuts')!.keys[0], false)
 
 type SaveStatus = 'saved' | 'dirty' | 'error' | 'memory'
 
@@ -55,6 +61,10 @@ type StatusBarProps = {
   // 금고가 이 탭에서 열려 있을 때만 `금고 열림` 버튼을 보인다 (F-404.md 7.7)
   e2eeOpen?: boolean
   onLockE2ee?: () => void
+  // 단축키 판 여닫기 버튼 — 둘 다 없으면 그리지 않는다 (F-2052 4.1)
+  shortcutsOpen?: boolean
+  onToggleShortcuts?: () => void
+  shortcutsButtonRef?: RefObject<HTMLButtonElement | null>
 }
 
 export default function StatusBar({
@@ -69,6 +79,9 @@ export default function StatusBar({
   fallback = false,
   e2eeOpen = false,
   onLockE2ee,
+  shortcutsOpen,
+  onToggleShortcuts,
+  shortcutsButtonRef,
 }: StatusBarProps) {
   const text = SAVE_STATUS_TEXT[saveStatus] ?? ''
   const liveEntry = live ? LIVE_STATUS[live] : null
@@ -78,24 +91,40 @@ export default function StatusBar({
         {viewMode !== 'view' && <>줄 {line}, 열 {col} · </>}
         {charCount.toLocaleString('ko-KR')}자 · {wordCount.toLocaleString('ko-KR')}단어
       </span>
-      {liveEntry ? (
-        <span className="statusbar-save">
-          <span className={`statusbar-save-dot statusbar-save-dot--${liveEntry.dot}`} aria-hidden="true" />
-          {liveEntry.text}
-        </span>
-      ) : (
-        <span className={`statusbar-save${saveStatus === 'error' ? ' statusbar-save--danger' : ''}`}>
-          <span className={`statusbar-save-dot statusbar-save-dot--${saveStatus}`} aria-hidden="true" />
-          {text}
-          {syncSuffix(syncState)}
-        </span>
-      )}
-      {!liveEntry && fallback && <span className="statusbar-live">{LIVE_FALLBACK_TEXT}</span>}
-      {e2eeOpen && (
-        <button type="button" className="statusbar-e2ee" title="눌러서 금고를 잠급니다" onClick={onLockE2ee}>
-          금고 열림
-        </button>
-      )}
+      <div className="statusbar-right">
+        {liveEntry ? (
+          <span className="statusbar-save">
+            <span className={`statusbar-save-dot statusbar-save-dot--${liveEntry.dot}`} aria-hidden="true" />
+            {liveEntry.text}
+          </span>
+        ) : (
+          <span className={`statusbar-save${saveStatus === 'error' ? ' statusbar-save--danger' : ''}`}>
+            <span className={`statusbar-save-dot statusbar-save-dot--${saveStatus}`} aria-hidden="true" />
+            {text}
+            {syncSuffix(syncState)}
+          </span>
+        )}
+        {!liveEntry && fallback && <span className="statusbar-live">{LIVE_FALLBACK_TEXT}</span>}
+        {e2eeOpen && (
+          <button type="button" className="statusbar-e2ee" title="눌러서 금고를 잠급니다" onClick={onLockE2ee}>
+            금고 열림
+          </button>
+        )}
+        {onToggleShortcuts && (
+          <button
+            type="button"
+            className="statusbar-shortcuts"
+            aria-label="단축키"
+            aria-expanded={shortcutsOpen}
+            aria-controls="shortcut-panel"
+            title={`단축키 (${SHORTCUTS_HINT})`}
+            onClick={onToggleShortcuts}
+            ref={shortcutsButtonRef}
+          >
+            <IconShortcuts size={16} />
+          </button>
+        )}
+      </div>
     </div>
   )
 }

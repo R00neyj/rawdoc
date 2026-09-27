@@ -176,6 +176,9 @@ import { searchScope } from './searchIndex'
 import HelpPage from './HelpPage'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
 import StatusBar from './StatusBar'
+import ShortcutPanel from './ShortcutPanel'
+import { useShortcutUsage } from './useShortcutUsage'
+import { isMacPlatform } from './shortcutCatalog'
 import SharedView from './SharedView'
 import PublicView from './PublicView'
 import InviteDialog, { type InviteTarget } from './InviteDialog'
@@ -548,6 +551,8 @@ export default function App() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   // 명령 팔레트 D-7 열림 상태 (specs/features/F-2022.md)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  // 단축키 판 열림 상태 — 새로고침하면 닫힌다, 저장하지 않는다 (specs/features/F-2052.md 4.3)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   // zip 가져오기 미리보기·진행·결과 대화상자 (F-282.md 3.8)
   const [importState, setImportState] = useState<ImportDialogState | null>(null)
 
@@ -611,6 +616,9 @@ export default function App() {
   const printDisabledRef = useRef(true) // exportDisabled 와 같은 조건 (F-279.md 6.1)
   const openPaletteRef = useRef(() => {}) // Ctrl+P 가 매 커밋 최신 openPalette 를 읽게 한다 (F-2022.md 6.1)
   const selectPaletteQueryRef = useRef(() => {}) // 팔레트가 이미 열려 있을 때 입력칸 전체 선택 — CommandPalette 가 채운다 (F-2022.md 6.1)
+  const toggleShortcutsRef = useRef(() => {}) // Ctrl+Shift+/ 가 매 커밋 최신 toggleShortcuts 를 읽게 한다 (F-2052.md 6.1)
+  const shortcutsButtonRef = useRef<HTMLButtonElement | null>(null) // 상태바 `?` 버튼 — 판이 닫힐 때 포커스를 돌려준다 (F-2052 5.3)
+  const pendingShortcutsScrollFixRef = useRef(false) // 판을 열기 직전 커서가 보였는지 (F-2052 5.5)
   const bootPhaseRef = useRef(bootPhase) // Ctrl+P 가 매 커밋 최신 bootPhase 를 읽게 한다 (F-2022.md 6.1)
   // hashchange 핸들러가 낡은 클로저의 docs·currentDocId 를 읽지 않도록 매 렌더 후 갱신한다
   // (0단계 버그 수정)
@@ -1475,6 +1483,13 @@ export default function App() {
   useEffect(() => {
     commentsRef.current = comments
   })
+
+  // ----- 단축키 판 사용 감지 — 판에서만 맥 표기(결정 8), isMacPlatform 은 DOM 을 읽지 않아 여기서 문자열을 넘긴다 (F-2052 3.3·4.6) -----
+  const isMac = useMemo(() => {
+    const nav = navigator as Navigator & { userAgentData?: { platform?: string } }
+    return isMacPlatform(nav.userAgentData?.platform ?? nav.platform)
+  }, [])
+  const { used: shortcutsUsed } = useShortcutUsage(!publicRoute, isMac)
 
   // ----- 알림함 (F-507 3.3·4장) -----
   const notificationsEnabled = bootPhase === 'ready' && store.kind === 'server' && account.state === 'in'
@@ -2465,6 +2480,25 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [publicRoute, showNotice])
 
+  // ----- Ctrl+Shift+/(Cmd+Shift+/) → 단축키 판 여닫기, Ctrl+/ 는 CM6 toggleComment 가 쓴다(specs/features/F-2052.md 6.1) -----
+  useEffect(() => {
+    if (publicRoute) return // 공개 보기(S-5)에는 상태바가 없다
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return
+      if (e.code !== 'Slash') return
+      if (e.isComposing) return
+      if (bootPhaseRef.current !== 'ready') return
+      // 상태바 표시 조건과 같다(4.3) — 상태바가 없으면 판 자리도 없다
+      const statusBarVisible = currentDocIdRef.current !== null && !sharedDocRef.current && !mapRouteRef.current
+      if (!statusBarVisible) return
+      if (document.querySelector('dialog[open]')) return // 판은 대화상자가 아니라 "다시 누름" 경우가 없다(결정 9)
+      e.preventDefault()
+      toggleShortcutsRef.current()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [publicRoute])
+
   // ----- 문서를 열 때 저장소 본문을 1회 읽어 에디터에 넘긴다 (architecture.md 3장) -----
   // openDoc.id 가 currentDocId 와 다르면(문서 없음 포함) 렌더링에서 에디터를 그리지
   // 않는 것으로 처리하므로, 여기서 별도로 null 로 되돌리지 않는다
@@ -2760,6 +2794,7 @@ export default function App() {
     printDisabledRef.current = bootPhase !== 'ready' || currentDocId === null || Boolean(sharedDoc)
     openSearchRef.current = openSearch
     openPaletteRef.current = openPalette
+    toggleShortcutsRef.current = toggleShortcuts
     bootPhaseRef.current = bootPhase
   })
 
@@ -4503,6 +4538,52 @@ export default function App() {
     setPaletteOpen(false)
   }
 
+  // 단축키 판 — 상태바가 보이는 조건과 같다(4.3). 팔레트 context·판 렌더 자리가 함께 쓴다
+  const statusBarVisible = bootPhase === 'ready' && currentDocId !== null && !sharedDoc && !mapRoute
+
+  // 열기 직전 본문 커서가 편집 영역에 보였으면 판이 자리를 잡은 뒤에도 보이게 한다(5.5) — 팔레트·`?`·단축키 세 진입점이 함께 쓴다(6.2)
+  function openShortcuts() {
+    if (shortcutsOpen) return // 팔레트는 열기만 한다 — 이미 열려 있으면 그대로(6.1)
+    const view = editorRef.current?.view
+    if (view && viewMode !== 'view') {
+      const head = view.state.selection.main.head
+      const coords = view.coordsAtPos(head)
+      const scrollerRect = view.scrollDOM.getBoundingClientRect()
+      pendingShortcutsScrollFixRef.current = Boolean(
+        coords && coords.top >= scrollerRect.top && coords.bottom <= scrollerRect.bottom,
+      )
+    } else {
+      pendingShortcutsScrollFixRef.current = false
+    }
+    setShortcutsOpen(true)
+  }
+
+  // 닫힐 때 포커스가 판 안에 있었던 모든 경우 `?` 버튼으로 되돌린다 — 사라진 요소에 남지 않게(5.3)
+  function closeShortcuts() {
+    const panel = document.getElementById('shortcut-panel')
+    const hadFocusInside = panel !== null && panel.contains(document.activeElement)
+    setShortcutsOpen(false)
+    if (hadFocusInside) {
+      requestAnimationFrame(() => shortcutsButtonRef.current?.focus())
+    }
+  }
+
+  function toggleShortcuts() {
+    if (shortcutsOpen) closeShortcuts()
+    else openShortcuts()
+  }
+
+  // 판이 자리를 잡은 뒤(레이아웃 갱신) 커서 줄을 보이게 한다 — 판을 닫을 때는 하지 않는다(5.5)
+  useEffect(() => {
+    if (!shortcutsOpen || !pendingShortcutsScrollFixRef.current) return
+    pendingShortcutsScrollFixRef.current = false
+    const view = editorRef.current?.view
+    if (!view) return
+    requestAnimationFrame(() => {
+      view.dispatch({ effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: 'nearest' }) })
+    })
+  }, [shortcutsOpen])
+
   // 명령 팔레트 `템플릿 삽입` — 원문 읽기 → 치환 → 자리에 넣기 (F-2022.md 5.7)
   async function insertTemplate(templateId: string, signal: AbortSignal) {
     if (!canInsertTemplate) {
@@ -4568,6 +4649,8 @@ export default function App() {
             toggleRail: () => comments.setOpen(!comments.open, true),
           },
     notifications: notificationsEnabled ? { open: () => setNotificationsOpen(true) } : undefined,
+    // 상태바를 그릴 때만 넘긴다 — 홈·도움말·공유 관리·지도의 팔레트에는 안 보인다(6.3)
+    shortcuts: statusBarVisible ? { open: openShortcuts } : undefined,
   }
 
   // 검색 결과에서 문서 열기 (F-287.md 4.6) — 지금 문서를 그대로 두지 않고 그 문서로 이동한다
@@ -5427,6 +5510,7 @@ export default function App() {
               />
             </div>
           )}
+          {statusBarVisible && shortcutsOpen && <ShortcutPanel mac={isMac} used={shortcutsUsed} onClose={closeShortcuts} />}
           {!sharedDoc && !mapRoute && showEditor && (
             <StatusBar
               line={stats.line}
@@ -5440,6 +5524,9 @@ export default function App() {
               fallback={docPath === 'fallback'}
               e2eeOpen={e2ee?.status === 'open'}
               onLockE2ee={e2ee?.openSettingsDialogs.lockNow}
+              shortcutsOpen={shortcutsOpen}
+              onToggleShortcuts={toggleShortcuts}
+              shortcutsButtonRef={shortcutsButtonRef}
             />
           )}
         </div>
