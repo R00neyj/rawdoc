@@ -1,6 +1,6 @@
 // F-271 루트 랜딩과 첫 방문 판정 — preview 는 워커가 없어 mockLanding 으로 '/' 첫 요청만 랜딩으로 바꿔친다 (10장, 9.2)
 import { test, expect } from '@playwright/test'
-import { mockLanding, setPrefBeforeLoad } from './helpers.js'
+import { mockLanding, mockWelcome, setPrefBeforeLoad } from './helpers.js'
 
 test('F-271 A6 첫 방문 — 랜딩만 보이고 앱으로 넘어가지 않는다', async ({ page }) => {
   await mockLanding(page)
@@ -162,4 +162,44 @@ test('F-2049 E6 끝까지 스크롤해도 서버 연결·다른 출처 스크립
   const origin = new URL(page.url()).origin
   expect(requests.filter((r) => /\/(ws|api)\//.test(new URL(r.url).pathname))).toEqual([])
   expect(requests.filter((r) => r.type === 'script' && new URL(r.url).origin !== origin)).toEqual([])
+})
+
+// F-2051 랜딩 고정 주소 — /welcome 은 쿠키·기존 사용자 키와 무관하게 언제나 랜딩이다 (2장)
+test('F-2051 E1 기존 사용자도 /welcome 은 랜딩', async ({ page }) => {
+  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+  await mockWelcome(page)
+  await page.goto('/welcome')
+  await expect(page.getByText(/원문 그대로 쓰는/).first()).toBeVisible({ timeout: 10_000 })
+  await page.waitForTimeout(2000)
+  await expect(page).toHaveURL(/\/welcome$/)
+  await expect(page.locator('.cm-host:not(.demo-host)')).toHaveCount(0)
+  await expect(page.locator('.empty-state')).toHaveCount(0)
+  const reloaded = await page.evaluate(() => sessionStorage.getItem('md.landingReloaded'))
+  expect(reloaded).toBeNull()
+})
+
+test('F-2051 E2 /welcome 에서 로그인 없이 사용', async ({ page }) => {
+  await mockWelcome(page)
+  await page.goto('/welcome')
+  await page.locator('[data-cta="enter"]').first().click()
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible({ timeout: 10_000 })
+
+  const landingDone = await page.evaluate(() => localStorage.getItem('md.landingDone'))
+  expect(landingDone).toBe('1')
+  const cookies = await page.context().cookies()
+  expect(cookies.find((c) => c.name === 'md_app')?.value).toBe('1')
+})
+
+test('F-2051 E3 /welcome 머리글 앱 열기', async ({ page }) => {
+  await mockWelcome(page)
+  await page.goto('/welcome')
+  await page.locator('.site-head [data-cta="enter"]').click()
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible({ timeout: 10_000 })
+
+  const landingDone = await page.evaluate(() => localStorage.getItem('md.landingDone'))
+  expect(landingDone).toBe('1')
+  const cookies = await page.context().cookies()
+  expect(cookies.find((c) => c.name === 'md_app')?.value).toBe('1')
 })

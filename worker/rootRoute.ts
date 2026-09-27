@@ -15,8 +15,11 @@ export function rootTarget(request: Request): 'app' | 'landing' {
   return hasAppCookie(request.headers.get('Cookie')) ? 'app' : 'landing'
 }
 
-export function welcomeRedirect(): Response {
-  return new Response(null, { status: 301, headers: { Location: '/' } })
+// /welcome 은 쿠키와 무관해 private, no-store 가 필요 없다 — 배포마다 HTML 이 바뀌니 no-cache 로 매번 확인시킨다 (F-2051 2.3)
+export function withWelcomeHeaders(response: Response): Response {
+  const headers = new Headers(response.headers)
+  headers.set('Cache-Control', 'no-cache')
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 
 // 같은 주소 / 가 쿠키에 따라 두 응답을 주므로 중간 캐시·브라우저가 엉뚱한 쪽을 다시 쓰지 않게 한다 (2.2)

@@ -102,3 +102,46 @@ describe('F-2049 renderWelcomePage — 외부 요청·없는 기능 문구', () 
     expect(html).not.toContain('MCP')
   })
 })
+
+describe('F-2051 A1 renderWelcomePage — /welcome 판', () => {
+  it('조기 판정 스크립트 문자열 세 개가 없다. CTA 쓰기는 남는다. canonical·og:url 은 /', async () => {
+    const html = await renderWelcomePage({ path: '/welcome' }).text()
+    expect(html).not.toContain('md.firstRunDone')
+    expect(html).not.toContain('md.account')
+    expect(html).not.toContain('md.landingReloaded')
+    expect(html).toContain('로그인 없이 사용')
+    expect(html).toContain('로그인')
+    expect(html).toContain(LANDING_DONE_KEY)
+    expect(html).toContain(APP_COOKIE)
+    expect(html).toMatch(/<link rel="canonical" href="https:\/\/rawdoc\.app\/" \/>/)
+    expect(html).toMatch(/property="og:url" content="https:\/\/rawdoc\.app\/"/)
+  })
+})
+
+describe('F-2051 A2 renderWelcomePage — / 판 불변', () => {
+  it('인자 없음과 path: "/" 는 같은 본문이고 md.landingReloaded 가 들어 있다 (F-271 A5 유지)', async () => {
+    const noArgHtml = await renderWelcomePage().text()
+    const slashHtml = await renderWelcomePage({ path: '/' }).text()
+    expect(slashHtml).toBe(noArgHtml)
+    expect(noArgHtml).toContain('md.landingReloaded')
+  })
+})
+
+describe('F-2051 A3 renderWelcomePage — 두 판의 차이', () => {
+  it('차이는 조기 판정 스크립트 유무와 enter 동작 부분뿐이다 — 본문·머리글·꼬리는 같다', async () => {
+    const slashHtml = await renderWelcomePage({ path: '/' }).text()
+    const welcomeHtml = await renderWelcomePage({ path: '/welcome' }).text()
+
+    const mainSlash = /<main>[\s\S]*?<\/main>/.exec(slashHtml)![0]
+    const mainWelcome = /<main>[\s\S]*?<\/main>/.exec(welcomeHtml)![0]
+    expect(mainWelcome).toBe(mainSlash)
+
+    const headSlash = /<header class="site-head">[\s\S]*?<\/header>/.exec(slashHtml)![0]
+    const headWelcome = /<header class="site-head">[\s\S]*?<\/header>/.exec(welcomeHtml)![0]
+    expect(headWelcome).toBe(headSlash)
+
+    const footSlash = /<footer class="site-foot">[\s\S]*?<\/footer>/.exec(slashHtml)![0]
+    const footWelcome = /<footer class="site-foot">[\s\S]*?<\/footer>/.exec(welcomeHtml)![0]
+    expect(footWelcome).toBe(footSlash)
+  })
+})

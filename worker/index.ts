@@ -69,7 +69,8 @@ import { handleDeleteE2eeKeys, handleGetE2eeKeys, handlePutE2eeKeys } from './e2
 import { handleSetDocE2ee } from './e2eeDocs'
 import { renderPublicPage } from './publicPage'
 import { renderWelcomePage } from './welcomePage'
-import { rootTarget, welcomeRedirect, withRootHeaders } from './rootRoute'
+import { rootTarget, withRootHeaders, withWelcomeHeaders } from './rootRoute'
+import { WELCOME_PATH } from '../src/lib/siteChrome'
 import { handleDocSocket } from './docSocket'
 import { DOC_SOCKET_PREFIX } from '../src/lib/docRoomProtocol'
 import { isWriteRoute, runWriteGate } from './writeGate'
@@ -340,7 +341,7 @@ export default {
         return handleLoginPage(request, env)
       }
       if (url.pathname === '/welcome') {
-        return welcomeRedirect()
+        return withWelcomeHeaders(renderWelcomePage({ path: WELCOME_PATH }))
       }
       if (url.pathname === '/') {
         if (rootTarget(request) === 'landing') {

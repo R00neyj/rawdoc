@@ -1,7 +1,7 @@
 // 랜딩 페이지 / — GEO 대응을 위해 React 번들 대신 완결된 정적 HTML 문자열을 반환한다 (F-239.md 2장, F-271.md 4장, F-272.md 5.4)
 import brand from '../brand.config'
 import { EARLY_APP_KEYS, LANDING_DONE_KEY, buildAppCookie } from '../src/lib/appEntry'
-import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS } from '../src/lib/siteChrome'
+import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS, WELCOME_PATH } from '../src/lib/siteChrome'
 import { SITE_URL } from '../src/lib/siteMeta'
 import {
   STORY_BASE_LINES,
@@ -59,8 +59,10 @@ const earlyScript = `<script>
       })()
     </script>`
 
-// CTA 클릭(4.3) — 두 값을 쓴 뒤 로그인 없이 사용은 reload, 로그인은 기존 로그인 흐름으로
-const ctaScript = `<script>
+// CTA 클릭(4.3) — 두 값을 쓴 뒤 로그인 없이 사용은 '/' 판 reload·'/welcome' 판 '/' 이동, 로그인은 기존 로그인 흐름으로 (F-2051 2.2 — /welcome 을 다시 받으면 또 랜딩이라 reload 로는 앱에 못 간다)
+function buildCtaScript(welcome: boolean): string {
+  const enterRun = welcome ? "location.href = '/'" : 'location.reload()'
+  return `<script>
       (function () {
         ${writeAppEntryJs}
         function bind(selector, run) {
@@ -73,13 +75,14 @@ const ctaScript = `<script>
             })
           }
         }
-        bind('[data-cta="enter"]', function () { location.reload() })
+        bind('[data-cta="enter"]', function () { ${enterRun} })
         bind('[data-cta="login"]', function () { location.href = '/api/login?return=' })
       })()
     </script>`
+}
 
-// 사이트 페이지와 같은 머리·꼬리 (F-272.md 5.4). appCta:'enter' 는 data-cta="enter" 를 붙여 기존 CTA 클릭 스크립트(4.3)가 두 값을 쓰고 reload 하게 한다
-const siteHeader = renderSiteHeader({ brandName: brand.name, brandIcon: brand.icon, appCta: 'enter' })
+// 사이트 페이지와 같은 머리·꼬리 (F-272.md 5.4). current: WELCOME_PATH — 랜딩 두 판 모두 소개 페이지라 그 링크에 aria-current 가 붙는다 (F-2051 2.2·3.2)
+const siteHeader = renderSiteHeader({ brandName: brand.name, brandIcon: brand.icon, appCta: 'enter', current: WELCOME_PATH })
 const siteFooter = renderSiteFooter({ brandName: brand.name })
 
 // JS 가 켜졌다는 표시 — 등장 전에 숨길 글자(.tw)는 이 표시가 있을 때만 숨긴다. 크롤러·JS 꺼짐에는 완성 글자가 보인다 (F-239 2.1)
@@ -228,11 +231,15 @@ const featureItems = features
   })
   .join('')
 
-export function renderWelcomePage(): Response {
+export type LandingPath = '/' | '/welcome'
+
+// path 별 차이는 렌더 인자로 준다 — location.pathname 분기가 아니라 문자열로 "조기 판정이 없다" 를 판정할 수 있다 (F-2051 2.2 Q6, A1)
+export function renderWelcomePage(options?: { path?: LandingPath }): Response {
+  const welcome = options?.path === WELCOME_PATH
   const html = `<!doctype html>
 <html lang="ko">
   <head>
-    ${earlyScript}
+    ${welcome ? '' : earlyScript}
     ${jsFlagScript}
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -821,7 +828,7 @@ export function renderWelcomePage(): Response {
         }, { passive: true })
       })()
     </script>
-    ${ctaScript}
+    ${buildCtaScript(welcome)}
     <script type="module" src="/assets/welcome-demo.js"></script>
   </body>
 </html>`

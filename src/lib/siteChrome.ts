@@ -3,6 +3,8 @@
 export type SiteLink = { path: string; label: string }
 
 export const GUIDES_PATH = '/guides'
+// 랜딩 고정 주소 — 언제나 랜딩을 준다 (F-2051.md 2.2). 사이드바·머리글·워커 분기가 같은 상수를 본다
+export const WELCOME_PATH = '/welcome'
 
 // F-273~F-276 이 자기 페이지를 만들면서 한 줄씩 더한다. 최종 순서: 사용법(F-276)·체인지로그(F-273)·도움말(F-274)
 export const SITE_NAV: SiteLink[] = [
@@ -231,6 +233,10 @@ export const SITE_CHROME_CSS = `
   .site-app { white-space: nowrap; padding: 8px 14px; }
   .site-foot { background-position: 16px 0; background-size: calc(100% - 32px) 1px; flex-wrap: wrap; }
 }
+/* 소개 하나로 머리글이 가로로 넘친다(390·360px 실측) — 폰 폭 경계(≤600px)에서 숨긴다. 로고가 같은 곳으로 가서 좁은 창에도 갈 길이 남는다 (F-2051 3.3) */
+@media (max-width: 600px) {
+  .site-nav-intro { display: none; }
+}
 `
 
 export function renderSiteHeader(args: {
@@ -239,6 +245,9 @@ export function renderSiteHeader(args: {
   current?: string
   appCta: 'link' | 'enter'
 }): string {
+  // 소개 는 SITE_NAV 에 넣지 않고 맨 앞에 직접 그린다 — 넣으면 build 의 링크 목록 검사가 깨지고 문서 목록에도 섞인다 (F-2051 3.1)
+  const introCurrent = args.current === WELCOME_PATH ? ' aria-current="page"' : ''
+  const intro = `<a class="site-nav-intro" href="${WELCOME_PATH}"${introCurrent}>소개</a>`
   const nav = SITE_NAV.map((link) => {
     const current = link.path === args.current ? ' aria-current="page"' : ''
     return `<a href="${escapeHtml(link.path)}"${current}>${escapeHtml(link.label)}</a>`
@@ -246,8 +255,8 @@ export function renderSiteHeader(args: {
   const ctaAttr = args.appCta === 'enter' ? ' data-cta="enter"' : ''
 
   return `<header class="site-head">
-  <a class="site-brand" href="/"><img src="${escapeHtml(args.brandIcon)}" alt="" width="20" height="20" />${escapeHtml(args.brandName)}</a>
-  <nav class="site-nav">${nav}</nav>
+  <a class="site-brand" href="${WELCOME_PATH}"><img src="${escapeHtml(args.brandIcon)}" alt="" width="20" height="20" />${escapeHtml(args.brandName)}</a>
+  <nav class="site-nav">${intro}${nav}</nav>
   <a class="site-app" href="/"${ctaAttr}>앱 열기</a>
 </header>`
 }

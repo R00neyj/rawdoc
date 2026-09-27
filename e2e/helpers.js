@@ -153,6 +153,16 @@ export async function mockLanding(page) {
   )
 }
 
+// /welcome 판 랜딩 HTML 을 times 제한 없이 물린다 — preview 는 워커가 없다(F-2051 8.2). target 은 Page 또는 BrowserContext(새 탭에도 적용)
+export async function mockWelcome(target) {
+  const { renderWelcomePage } = await import('../worker/welcomePage.ts')
+  const html = await renderWelcomePage({ path: '/welcome' }).text()
+  await target.route(
+    (url) => url.pathname === '/welcome',
+    (route) => route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html }),
+  )
+}
+
 /** 요소의 rect 를 읽는다 (JSON 으로 안전하게 직렬화) */
 export async function rectOf(locator) {
   return locator.evaluate((el) => {

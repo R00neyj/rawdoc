@@ -71,6 +71,8 @@ describe('F-272 A6 404·sitemap·robots', () => {
   it('sitemap.xml 에 / 만 있고 404 는 없다', () => {
     expect(out['sitemap.xml']).toContain('<loc>https://rawdoc.app/</loc>')
     expect(out['sitemap.xml']).not.toContain('404')
+    // /welcome 은 F-2051 부터 언제나 랜딩이지만 대표 주소(canonical)는 / 하나다 — sitemap 에도 자동으로 안 들어간다 (A7)
+    expect(out['sitemap.xml']).not.toContain('/welcome')
   })
 
   it('robots.txt 에 Disallow 네 줄과 Sitemap 줄이 있다', () => {

@@ -1,6 +1,6 @@
 // 사이트 틀과 글 빌드 (specs/features/F-272.md 12장 A9~A12)
 import { test, expect } from '@playwright/test'
-import { mockLanding, openApp } from './helpers.js'
+import { mockLanding, mockWelcome, openApp } from './helpers.js'
 import { readdirSync } from 'node:fs'
 
 // 서비스 워커 precache 확인 — F-272 A9·F-273 A8·F-274 A13·F-276 A17·F-275 A9 를 하나로 합쳤다 (2026-09-25 e2e 경량화)
@@ -190,6 +190,55 @@ test('F-276 A16 접힌 레일에도 있다', async ({ page }) => {
   const settingsIdx = labels.indexOf('설정')
   expect(guideIdx).toBeGreaterThan(helpIdx)
   expect(guideIdx).toBeLessThan(settingsIdx)
+})
+
+// F-2051 앱 안·사이트 머리글의 소개 링크 (4장·3장)
+test('F-2051 E4 사이드바 소개', async ({ page, context }) => {
+  await openApp(page)
+  const link = page.locator('.sidebar-bottom a[href="/welcome"]')
+  await expect(link).toHaveAttribute('target', '_blank')
+  await expect(link).toHaveAttribute('rel', /noopener/)
+  await expect(link).toHaveAccessibleName('소개')
+
+  await mockWelcome(context)
+  const [popup] = await Promise.all([page.waitForEvent('popup'), link.click()])
+  await popup.waitForLoadState()
+  expect(popup.url()).toMatch(/\/welcome$/)
+  await expect(popup.getByText(/원문 그대로 쓰는/).first()).toBeVisible({ timeout: 10_000 })
+  await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible()
+})
+
+test('F-2051 E5 접힌 레일 순서', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await openApp(page)
+  await page.locator('.sidebar-toggle').click()
+
+  const link = page.locator('.sidebar-rail-bottom a[href="/welcome"]')
+  await expect(link).toBeVisible()
+  await expect(link).toHaveAccessibleName('소개')
+
+  const labels = await page
+    .locator('.sidebar-rail-bottom [aria-label]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
+  const helpIdx = labels.indexOf('도움말')
+  const guideIdx = labels.indexOf('사용법')
+  const introIdx = labels.indexOf('소개')
+  const settingsIdx = labels.indexOf('설정')
+  expect(introIdx).toBeGreaterThan(helpIdx)
+  expect(introIdx).toBeGreaterThan(guideIdx)
+  expect(introIdx).toBeLessThan(settingsIdx)
+})
+
+test('F-2051 E6 사이트 머리글', async ({ page }) => {
+  await page.goto('/guides')
+  const intro = page.locator('.site-head a.site-nav-intro[href="/welcome"]')
+  await expect(intro).toHaveText('소개')
+  await expect(page.locator('.site-brand')).toHaveAttribute('href', '/welcome')
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(intro).toBeHidden()
+  const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
+  expect(scrollWidth).toBeLessThanOrEqual(390)
 })
 
 test('F-275 A4 처리방침 페이지가 뜬다', async ({ page }) => {

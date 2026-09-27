@@ -1,6 +1,6 @@
 // / 분기 판정·301·헤더 (specs/features/F-271.md 2.1·2.2)
 import { describe, expect, it } from 'vitest'
-import { rootTarget, welcomeRedirect, withRootHeaders } from './rootRoute'
+import { rootTarget, withRootHeaders, withWelcomeHeaders } from './rootRoute'
 import { renderWelcomePage } from './welcomePage'
 
 function req(url: string, cookie?: string): Request {
@@ -33,11 +33,14 @@ describe('F-271 A1 rootTarget', () => {
   })
 })
 
-describe('F-271 A2 welcomeRedirect', () => {
-  it('301, Location: /', () => {
-    const res = welcomeRedirect()
-    expect(res.status).toBe(301)
-    expect(res.headers.get('Location')).toBe('/')
+describe('F-2051 A4 withWelcomeHeaders', () => {
+  it('200, Cache-Control: no-cache, Vary 없음, X-Robots-Tag 없음, content-type', async () => {
+    const res = withWelcomeHeaders(renderWelcomePage({ path: '/welcome' }))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Cache-Control')).toBe('no-cache')
+    expect(res.headers.get('Vary')).toBeNull()
+    expect(res.headers.get('X-Robots-Tag')).toBeNull()
+    expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8')
   })
 })
 

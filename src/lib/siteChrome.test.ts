@@ -1,6 +1,6 @@
 // 사이트 공통 머리·꼬리 (specs/features/F-272.md 5.1, A1)
 import { describe, expect, it, beforeEach } from 'vitest'
-import { SITE_NAV, SITE_FOOTER_LINKS, GUIDES_PATH, renderSiteHeader, renderSiteFooter } from './siteChrome'
+import { SITE_NAV, SITE_FOOTER_LINKS, GUIDES_PATH, WELCOME_PATH, renderSiteHeader, renderSiteFooter } from './siteChrome'
 
 const INITIAL_NAV = [...SITE_NAV]
 const INITIAL_FOOTER = [...SITE_FOOTER_LINKS]
@@ -72,11 +72,12 @@ describe('F-272 A1 renderSiteHeader/renderSiteFooter', () => {
     expect(bMatch?.[0]).not.toContain('aria-current="page"')
   })
 
-  it('SITE_NAV 가 비면 nav 안에 링크가 없다', () => {
+  it('SITE_NAV 가 비면 nav 안 링크는 소개 하나뿐이다', () => {
     const html = renderSiteHeader({ brandName: 'X', brandIcon: '/i.svg', appCta: 'link' })
     const navMatch = /<nav[^>]*>([\s\S]*?)<\/nav>/.exec(html)
     expect(navMatch).not.toBeNull()
-    expect(navMatch![1]).not.toContain('<a')
+    expect((navMatch![1].match(/<a/g) ?? []).length).toBe(1)
+    expect(navMatch![1]).toContain('소개')
   })
 
   it('꼬리는 제품명 + SITE_FOOTER_LINKS 항목을 포함한다', () => {
@@ -85,5 +86,54 @@ describe('F-272 A1 renderSiteHeader/renderSiteFooter', () => {
     expect(html).toContain('X')
     expect(html).toContain('href="/privacy"')
     expect(html).toContain('개인정보 처리방침')
+  })
+})
+
+describe('F-2051 A5 renderSiteHeader — 소개 링크와 로고', () => {
+  beforeEach(() => {
+    SITE_NAV.length = 0
+    SITE_FOOTER_LINKS.length = 0
+  })
+
+  it('nav 첫 자식이 소개, SITE_NAV 항목은 그 뒤에 원래 순서대로. 로고는 WELCOME_PATH, 앱 열기는 /', () => {
+    SITE_NAV.push({ path: '/guides', label: '사용법' }, { path: '/changelog', label: '체인지로그' })
+    const html = renderSiteHeader({ brandName: 'X', brandIcon: '/i.svg', appCta: 'link' })
+    const navMatch = /<nav[^>]*>([\s\S]*?)<\/nav>/.exec(html)
+    expect(navMatch).not.toBeNull()
+    const links = [...navMatch![1].matchAll(/<a[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/g)]
+    expect(links.map((m) => [m[1], m[2]])).toEqual([
+      [WELCOME_PATH, '소개'],
+      ['/guides', '사용법'],
+      ['/changelog', '체인지로그'],
+    ])
+    expect(navMatch![1]).toContain(`class="site-nav-intro" href="${WELCOME_PATH}"`)
+    const brandMatch = /<a class="site-brand" href="([^"]+)"/.exec(html)
+    expect(brandMatch?.[1]).toBe(WELCOME_PATH)
+    const appMatch = /<a class="site-app" href="([^"]+)"/.exec(html)
+    expect(appMatch?.[1]).toBe('/')
+  })
+})
+
+describe('F-2051 A6 renderSiteHeader — current', () => {
+  beforeEach(() => {
+    SITE_NAV.length = 0
+    SITE_FOOTER_LINKS.length = 0
+    SITE_NAV.push({ path: '/guides', label: '사용법' })
+  })
+
+  it("current: WELCOME_PATH 면 소개 에만 aria-current='page' 가 붙는다", () => {
+    const html = renderSiteHeader({ brandName: 'X', brandIcon: '/i.svg', appCta: 'link', current: WELCOME_PATH })
+    const introMatch = /<a class="site-nav-intro"[^>]*>/.exec(html)
+    const guidesMatch = /<a href="\/guides"[^>]*>/.exec(html)
+    expect(introMatch?.[0]).toContain('aria-current="page"')
+    expect(guidesMatch?.[0]).not.toContain('aria-current="page"')
+  })
+
+  it("current: '/guides' 면 소개 에는 aria-current 가 없다", () => {
+    const html = renderSiteHeader({ brandName: 'X', brandIcon: '/i.svg', appCta: 'link', current: '/guides' })
+    const introMatch = /<a class="site-nav-intro"[^>]*>/.exec(html)
+    const guidesMatch = /<a href="\/guides"[^>]*>/.exec(html)
+    expect(introMatch?.[0]).not.toContain('aria-current="page"')
+    expect(guidesMatch?.[0]).toContain('aria-current="page"')
   })
 })

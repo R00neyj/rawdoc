@@ -67,6 +67,8 @@ import subjectSvg from '@material-symbols/svg-400/outlined/subject.svg?raw'
 import addSvg from '@material-symbols/svg-400/outlined/add.svg?raw'
 import helpSvg from '@material-symbols/svg-400/outlined/help.svg?raw'
 import menuBookSvg from '@material-symbols/svg-400/outlined/menu_book.svg?raw'
+// 사이드바 `소개` 항목 — 사이트 /welcome 으로 나가는 링크 (F-2051.md 4.3). info 는 바로 위 도움말(help)과 모양이 비슷해 뺐다
+import webSvg from '@material-symbols/svg-400/outlined/web.svg?raw'
 import collapseAllSvg from '@material-symbols/svg-400/outlined/collapse_all.svg?raw'
 // 내보내기 메뉴 `PDF (A4 인쇄)` (F-279.md 3.1)
 import printSvg from '@material-symbols/svg-400/outlined/print.svg?raw'
@@ -191,6 +193,9 @@ export const IconHelp = makeIcon(helpSvg)
 
 // 사이드바 `사용법` 항목 — 사이트 /guides 로 나가는 링크 (F-276.md 4.4)
 export const IconGuide = makeIcon(menuBookSvg)
+
+// 사이드바 `소개` 항목 (F-2051.md 4.3)
+export const IconIntro = makeIcon(webSvg)
 
 // 사이드바 `모두 접기` (2026-09-20 사용자 요청)
 export const IconCollapseAll = makeIcon(collapseAllSvg)
