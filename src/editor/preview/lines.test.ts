@@ -5,7 +5,7 @@ import { EditorState } from '@codemirror/state'
 import { Decoration } from '@codemirror/view'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
-import { buildLines, fenceLineRanges, listAncestorMarks, mapDecorationsOnHold } from './lines'
+import { buildLines, fenceLineRanges, listAncestorMarks, mapDecorationsOnHold, sameListIndent } from './lines'
 import { frontmatterExtension } from '../frontmatter'
 
 function makeState(doc: string, anchor = 0, head = anchor): EditorState {
@@ -512,5 +512,14 @@ describe('buildLines — 프론트매터 (F-133 3.2·F-155 2.1, A3)', () => {
     const classes = lineClasses(build(state))
     expect(classes.some((c) => c.includes('md-frontmatter'))).toBe(false)
     expect(classes).toContain('md-hr')
+  })
+})
+
+describe('sameListIndent — 원문 모드로 바뀐 뒤 늦게 도착한 측정', () => {
+  it('들여쓰기 필드가 빠진 상태에서는 던지지 않고 쓸 것이 없다고 답한다', () => {
+    // 측정을 요청한 뒤 같은 프레임에 모드가 바뀌면 write 가 필드 없는 state 를 본다 — RangeError 가 났다
+    const view = { state: EditorState.create({ doc: '- 가\n- 나' }) } as unknown as Parameters<typeof sameListIndent>[0]
+    expect(() => sameListIndent(view, [{ lineFrom: 0, px: 12 }])).not.toThrow()
+    expect(sameListIndent(view, [{ lineFrom: 0, px: 12 }])).toBe(true)
   })
 })

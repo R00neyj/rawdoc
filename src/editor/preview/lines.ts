@@ -666,10 +666,12 @@ const listIndentField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 })
 
-// results 가 view 에 이미 반영된 값과 같으면 true — 같으면 쓰지 않는다 (F-166 3장)
-function sameListIndent(view: EditorView, results: ListIndentResult[]): boolean {
+// results 가 view 에 이미 반영된 값과 같으면 true — 같으면 쓰지 않는다 (F-166 3장). 원문 모드로 바뀌어 필드가 빠졌으면 쓸 곳이 없으니 true
+export function sameListIndent(view: EditorView, results: ListIndentResult[]): boolean {
   const current: string[] = []
-  view.state.field(listIndentField).between(0, view.state.doc.length, (from, _to, deco) => {
+  const field = view.state.field(listIndentField, false)
+  if (!field) return true
+  field.between(0, view.state.doc.length, (from, _to, deco) => {
     const style = (deco.spec.attributes as { style: string }).style
     current.push(`${from}:${style}`)
   })
