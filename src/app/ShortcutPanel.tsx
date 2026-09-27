@@ -1,7 +1,7 @@
 // 단축키 판 UI — 대화상자가 아니다, role="dialog"·aria-modal 을 쓰지 않는다 (specs/features/F-2052.md 5장)
 import { useRef, type KeyboardEvent } from 'react'
 import { SHORTCUT_GROUPS, visibleShortcuts, formatEntryKeys } from './shortcutCatalog'
-import { IconClose, IconCheck } from './icons'
+import { IconClose } from './icons'
 
 type ShortcutPanelProps = {
   mac: boolean
@@ -63,12 +63,7 @@ export default function ShortcutPanel({ mac, used, onClose }: ShortcutPanelProps
                           <kbd key={k}>{k}</kbd>
                         ))}
                       </span>
-                      {isUsed && (
-                        <span className="shortcut-row-used">
-                          <IconCheck size={12} />
-                          <span className="shortcut-row-used-sr">사용함</span>
-                        </span>
-                      )}
+                      {isUsed && <span className="shortcut-row-used-sr">사용함</span>}
                     </li>
                   )
                 })}

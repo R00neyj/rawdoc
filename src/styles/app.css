@@ -1033,7 +1033,7 @@ body.sidebar-resizing {
 .shortcut-panel-head {
   flex: none;
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 10px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--rule);
@@ -1054,6 +1054,11 @@ body.sidebar-resizing {
 
 .shortcut-panel-close {
   margin-left: auto;
+  align-self: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1087,7 +1092,7 @@ body.sidebar-resizing {
 .shortcut-group-title {
   margin: 0 0 4px;
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
@@ -1130,11 +1135,10 @@ body.sidebar-resizing {
   color: var(--muted);
 }
 
-.shortcut-row-used {
-  flex: none;
-  display: flex;
-  align-items: center;
-  color: var(--callout-success);
+.shortcut-row[data-used] kbd {
+  border-color: color-mix(in srgb, var(--callout-success) 45%, var(--rule));
+  background: color-mix(in srgb, var(--callout-success) 20%, var(--panel));
+  color: var(--ink);
 }
 
 .shortcut-row-used-sr {
