@@ -93,6 +93,9 @@ src/
   - `lib/`: `templates.ts`(F-2022 — 템플릿 폴더 판정·목록·변수 치환·삽입 계획, 순수 함수), `builtinTemplates.ts`(F-2022 — 내장 템플릿 4개 원문)
   - `editor/`: `insertTemplate.ts`(F-2022 — 본문 자리 계산 + 트랜잭션 1개 dispatch)
   - `styles/`: `palette.css`(F-2022)
+- 명령 팔레트 확장(2026-09-28)으로 추가
+  - `lib/`: `hangulMatch.ts`(F-2053 — 초성·받침 느슨한 비교가 든 조각 매칭, 순수 함수)
+  - `app/`: `paletteDocs.ts`(F-2053 — 문서 목록 준비·거르기·새 문서 만들기 계획, 순수 함수), `paletteMemory.ts`(F-2053 — 팔레트 최근·고정 명령 id 목록 읽기·정리·토글, 순수 함수)
 - DO 서버·`/ws` 인증(2026-09-24)으로 추가
   - `lib/`: `docRoomProtocol.ts`(F-304 — 서버·클라이언트 공용 소켓 계약. 앱은 F-304 에서 import 하지 않는다)
 - 명령줄 도구(2026-09-24)로 추가
@@ -226,6 +229,8 @@ type YjsMetaRow = {
 | `md.e2eeLockMinutes` | `5` \| `15` \| `30` \| `60` \| `240` | `30` | F-404 8.1 |
 | `md.e2eeBackupNotice` | `1` | 없음 | F-407 |
 | `md.commentRail` | `open` \| `closed` | 없으면 열린 스레드가 있을 때 열림 | F-505 |
+| `md.paletteRecent` | 명령 id JSON 배열, 최근 쓴 것부터, 최대 10 | 없음(`[]` 로 읽는다) | F-2053 7.1·7.3 |
+| `md.palettePinned` | 명령 id JSON 배열, 고정한 순서 | 없음(`[]` 로 읽는다) | F-2053 7.2·7.3 |
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
   - 예외: `md.theme`·`md.sidebar`·`md.sidebarWidth`·`md.startScreen`·`md.contentWidth` 는 `BOOT_PAINT_SCRIPT` 도 읽는다 — 첫 페인트 전이라 `prefs.ts` 를 쓸 수 없다 (F-2015, F-2043)
