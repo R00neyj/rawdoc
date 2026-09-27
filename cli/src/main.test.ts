@@ -224,4 +224,85 @@ describe('F-2021 U16 main()', () => {
     expect(code).toBe(4)
     expect(deps.stderrLog.join('')).toBe('이 계정은 운영자가 쓰기를 막았습니다. 읽기만 할 수 있습니다.\n')
   })
+
+  it('F-2050 C10 --yes 없으면 요청 0, 종료 2', async () => {
+    for (const argv of [['rm', 'd1'], ['rmdir', 'f1'], ['rmdir', 'f1', '--all']]) {
+      const fetchImpl = vi.fn(async () => jsonResponse({}))
+      const deps = baseDeps({ argv, fetchImpl: fetchImpl as unknown as typeof fetch })
+      const code = await main(deps)
+      expect(code, argv.join(' ')).toBe(2)
+      expect(fetchImpl, argv.join(' ')).not.toHaveBeenCalled()
+      expect(deps.stderrLog.join(''), argv.join(' ')).toContain('--help 를 보세요.')
+    }
+  })
+
+  it('F-2050 C11 rm --yes 성공 경로', async () => {
+    const deps = baseDeps({
+      argv: ['rm', 'd1', '--yes'],
+      env: { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) },
+      fetchImpl: (async () => jsonResponse({ id: 'd1', title: '내 문서' })) as unknown as typeof fetch,
+    })
+    const code = await main(deps)
+    expect(code).toBe(0)
+    expect(deps.stdoutLog.join('')).toBe('d1\n')
+    expect(deps.stderrLog.join('')).toBe('문서를 지웠습니다: 내 문서\n')
+  })
+
+  it('F-2050 C11 rm --yes --json', async () => {
+    const deps = baseDeps({
+      argv: ['rm', 'd1', '--yes', '--json'],
+      env: { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) },
+      fetchImpl: (async () => jsonResponse({ id: 'd1', title: '내 문서' })) as unknown as typeof fetch,
+    })
+    const code = await main(deps)
+    expect(code).toBe(0)
+    expect(JSON.parse(deps.stdoutLog.join(''))).toEqual({ id: 'd1', title: '내 문서' })
+  })
+
+  it('F-2050 C11 rmdir --yes --json 은 표준 출력이 V1DeletedFolder 한 줄, 표준 오류에 안내', async () => {
+    const deps = baseDeps({
+      argv: ['rmdir', 'f1', '--yes', '--json'],
+      env: { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) },
+      fetchImpl: (async () => jsonResponse({ id: 'f1', contents: 'move-up', parentId: null, docs: 2, folders: 0 })) as unknown as typeof fetch,
+    })
+    const code = await main(deps)
+    expect(code).toBe(0)
+    expect(JSON.parse(deps.stdoutLog.join(''))).toEqual({ id: 'f1', contents: 'move-up', parentId: null, docs: 2, folders: 0 })
+    expect(deps.stderrLog.join('')).toBe('폴더를 지웠습니다. 문서 2개는 맨 위로 옮겼습니다.\n')
+  })
+
+  it('F-2050 C11 ls --shared 빈 목록', async () => {
+    const deps = baseDeps({
+      argv: ['ls', '--shared'],
+      env: { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) },
+      fetchImpl: (async () => jsonResponse([])) as unknown as typeof fetch,
+    })
+    const code = await main(deps)
+    expect(code).toBe(0)
+    expect(deps.stdoutLog.join('')).toBe('')
+    expect(deps.stderrLog.join('')).toBe('공유받은 문서가 없습니다.\n')
+  })
+
+  it('F-2050 C12 진입점 금고 — mv --root + 403 e2ee_doc', async () => {
+    const deps = baseDeps({
+      argv: ['mv', 'd1', '--root'],
+      env: { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) },
+      fetchImpl: (async () => jsonResponse({ error: 'e2ee_doc' }, 403)) as unknown as typeof fetch,
+    })
+    const code = await main(deps)
+    expect(code).toBe(4)
+    expect(deps.stderrLog.join('')).toBe('금고 문서는 명령줄 도구로 다룰 수 없습니다. 웹에서 하세요.\n')
+    expect(deps.stdoutLog.join('')).toBe('')
+  })
+
+  it('F-2050 C13 도움말에 mv·rm·rmdir 줄이 순서대로', async () => {
+    const deps = baseDeps({ argv: ['--help'] })
+    const code = await main(deps)
+    expect(code).toBe(0)
+    const text = deps.stdoutLog.join('')
+    const order = ['put', 'mv', 'rm', 'folders', 'mkdir', 'rmdir', 'upload', 'link'].map((name) => text.indexOf(`  ${name}\t`))
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1], `${order}`).toBeLessThan(order[i])
+    }
+  })
 })

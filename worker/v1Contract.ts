@@ -22,6 +22,19 @@ export type V1Attachment = {
   markdown: string
 }
 export type V1Link = { token: string; url: string }
+export type V1SharedDoc = V1DocSummary & {
+  role: 'edit' | 'view'
+  ownerEmail: string
+  viaFolder?: { id: string; name: string } // 폴더 초대로 받았을 때만 — 가장 가까운 초대 폴더
+}
+export type V1DeletedDoc = { id: string; title: string }
+export type V1DeletedFolder = {
+  id: string
+  contents: 'move-up' | 'delete-all'
+  parentId: string | null // 지운 폴더의 부모. move-up 이면 안의 것이 여기로 갔다
+  docs: number // F-2050 3.5 표
+  folders: number // F-2050 3.5 표
+}
 export type V1Me = { id: string; email: string; blocked: boolean; warned: boolean } // blocked·warned 는 F-2028 7장
 export type V1Error = {
   error: string
@@ -43,6 +56,9 @@ export const V1_EXAMPLES: {
   attachment: V1Attachment
   link: V1Link
   me: V1Me
+  sharedDoc: V1SharedDoc
+  deletedDoc: V1DeletedDoc
+  deletedFolder: V1DeletedFolder
 } = {
   docSummary: {
     id: 'doc-1',
@@ -77,4 +93,18 @@ export const V1_EXAMPLES: {
   },
   link: { token: 'abc123', url: 'https://rawdoc.app/#/p/abc123' },
   me: { id: 'user-1', email: 'a@b.com', blocked: false, warned: false },
+  sharedDoc: {
+    id: 'doc-1',
+    title: '예시 문서',
+    lineEnding: 'lf',
+    folderId: null,
+    pinnedAt: null,
+    version: 1,
+    createdAt: 0,
+    updatedAt: 0,
+    role: 'edit',
+    ownerEmail: 'owner@example.com',
+  },
+  deletedDoc: { id: 'doc-1', title: '예시 문서' },
+  deletedFolder: { id: 'folder-1', contents: 'move-up', parentId: null, docs: 0, folders: 0 },
 }

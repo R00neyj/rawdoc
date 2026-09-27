@@ -26,7 +26,10 @@ describe('F-2021 U1 args.ts — 명령마다 해석', () => {
 
   it('ls --folder', () => {
     const r = parseArgs(['ls', '--folder', 'f1'])
-    expect(r).toEqual({ kind: 'run', command: { name: 'ls', global: { server: null, json: false }, folder: 'f1' } })
+    expect(r).toEqual({
+      kind: 'run',
+      command: { name: 'ls', global: { server: null, json: false }, folder: 'f1', shared: false },
+    })
   })
 
   it('get <id> -o out.md', () => {
@@ -127,6 +130,88 @@ describe('F-2021 U1 args.ts — 명령마다 해석', () => {
   it('link <id>', () => {
     const r = parseArgs(['link', 'd1'])
     expect(r).toEqual({ kind: 'run', command: { name: 'link', global: { server: null, json: false }, id: 'd1' } })
+  })
+})
+
+describe('F-2050 5.1 args.ts — rm·mv·rmdir·ls --shared', () => {
+  it('rm <id> --yes', () => {
+    const r = parseArgs(['rm', 'd1', '--yes'])
+    expect(r).toEqual({ kind: 'run', command: { name: 'rm', global: { server: null, json: false }, id: 'd1' } })
+  })
+
+  it('mv <id> --folder <폴더id>', () => {
+    const r = parseArgs(['mv', 'd1', '--folder', 'f1'])
+    expect(r).toEqual({
+      kind: 'run',
+      command: { name: 'mv', global: { server: null, json: false }, id: 'd1', folderId: 'f1' },
+    })
+  })
+
+  it('mv <id> --root', () => {
+    const r = parseArgs(['mv', 'd1', '--root'])
+    expect(r).toEqual({
+      kind: 'run',
+      command: { name: 'mv', global: { server: null, json: false }, id: 'd1', folderId: null },
+    })
+  })
+
+  it('rmdir <id> --yes', () => {
+    const r = parseArgs(['rmdir', 'f1', '--yes'])
+    expect(r).toEqual({
+      kind: 'run',
+      command: { name: 'rmdir', global: { server: null, json: false }, id: 'f1', all: false },
+    })
+  })
+
+  it('rmdir <id> --yes --all', () => {
+    const r = parseArgs(['rmdir', 'f1', '--yes', '--all'])
+    expect(r).toEqual({
+      kind: 'run',
+      command: { name: 'rmdir', global: { server: null, json: false }, id: 'f1', all: true },
+    })
+  })
+
+  it('ls --shared', () => {
+    const r = parseArgs(['ls', '--shared'])
+    expect(r).toEqual({
+      kind: 'run',
+      command: { name: 'ls', global: { server: null, json: false }, folder: null, shared: true },
+    })
+  })
+
+  it('사용법 오류 여덟 줄', () => {
+    const cases: [string[], string][] = [
+      [['rm'], '문서 id 가 필요합니다.'],
+      [['rm', 'd1', 'd2'], '문서 id 가 필요합니다.'],
+      [['rm', 'd1'], '문서를 영구 삭제하려면 --yes 를 붙이세요. 되돌릴 수 없습니다.'],
+      [['mv'], '문서 id 가 필요합니다.'],
+      [['mv', 'd1'], '--folder <폴더id> 또는 --root 중 하나가 필요합니다.'],
+      [['mv', 'd1', '--folder', 'f1', '--root'], '--folder <폴더id> 또는 --root 중 하나가 필요합니다.'],
+      [['rmdir'], '폴더 id 가 필요합니다.'],
+      [['rmdir', 'f1'], '폴더를 지우려면 --yes 를 붙이세요. 안의 문서와 폴더는 위 폴더로 옮겨집니다.'],
+      [['rmdir', 'f1', '--all'], '폴더와 안의 문서·폴더를 모두 영구 삭제하려면 --yes 를 붙이세요. 되돌릴 수 없습니다.'],
+      [['ls', '--shared', '--folder', 'f1'], '--shared 와 --folder 는 함께 쓸 수 없습니다.'],
+    ]
+    for (const [argv, message] of cases) {
+      const r = parseArgs(argv)
+      expect(r.kind, argv.join(' ')).toBe('usage')
+      if (r.kind === 'usage') expect(r.message, argv.join(' ')).toBe(message)
+    }
+  })
+
+  it('rm d1 -y 는 usage(모르는 옵션)', () => {
+    expect(parseArgs(['rm', 'd1', '-y']).kind).toBe('usage')
+  })
+
+  it('ls·ls --folder 는 지금과 같다(shared: false 가 더해지는 것 외)', () => {
+    expect(parseArgs(['ls'])).toEqual({
+      kind: 'run',
+      command: { name: 'ls', global: { server: null, json: false }, folder: null, shared: false },
+    })
+    expect(parseArgs(['ls', '--folder', 'f1'])).toEqual({
+      kind: 'run',
+      command: { name: 'ls', global: { server: null, json: false }, folder: 'f1', shared: false },
+    })
   })
 })
 

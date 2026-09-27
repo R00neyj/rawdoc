@@ -36,6 +36,9 @@ import {
   humanFolderList,
   humanIdLine,
   humanIdVersionLine,
+  humanRemoveDocLine,
+  humanRemoveFolderNotice,
+  humanSharedList,
   humanUploadLine,
   humanUrlLine,
 } from './output'
@@ -46,12 +49,15 @@ const COMMAND_DESCRIPTIONS: Record<CommandName, string> = {
   login: '브라우저로 로그인해 토큰을 저장합니다',
   logout: '이 컴퓨터에 저장한 토큰을 지웁니다',
   whoami: '로그인한 계정을 보여 줍니다',
-  ls: '내 문서 목록',
+  ls: '내 문서 목록 (--shared: 공유받은 문서)',
   get: '문서 원문을 출력합니다',
   new: '새 문서를 만듭니다',
   put: '문서를 고칩니다',
+  mv: '문서를 다른 폴더로 옮깁니다',
+  rm: '문서를 영구 삭제합니다 (--yes 필요)',
   folders: '폴더 목록',
   mkdir: '폴더를 만듭니다',
+  rmdir: '폴더를 지웁니다. 안의 것은 위 폴더로 (--all: 모두 영구 삭제, --yes 필요)',
   upload: '이미지를 올리고 붙일 마크다운을 출력합니다',
   link: '읽기 전용 링크를 만듭니다',
 }
@@ -342,6 +348,15 @@ export async function main(deps: MainDeps): Promise<number> {
         return 0
       }
       case 'ls': {
+        if (command.shared) {
+          const shared = await commands.lsShared(cfg)
+          if (command.global.json) deps.out.stdout(`${JSON.stringify(shared)}\n`)
+          else {
+            deps.out.stdout(humanSharedList(shared))
+            if (shared.length === 0) deps.out.stderr('공유받은 문서가 없습니다.\n')
+          }
+          return 0
+        }
         const docs = await commands.ls(cfg, command.folder)
         if (command.global.json) deps.out.stdout(`${JSON.stringify(docs)}\n`)
         else {
@@ -403,6 +418,17 @@ export async function main(deps: MainDeps): Promise<number> {
         emitResult(deps, command.global.json, doc, () => humanIdVersionLine(doc.id, doc.version))
         return 0
       }
+      case 'mv': {
+        const doc = await commands.moveDoc(cfg, { id: command.id, folderId: command.folderId })
+        emitResult(deps, command.global.json, doc, () => humanIdLine(doc.id))
+        return 0
+      }
+      case 'rm': {
+        const result = await commands.removeDoc(cfg, command.id)
+        emitResult(deps, command.global.json, result, () => humanIdLine(result.id))
+        deps.out.stderr(humanRemoveDocLine(result.title))
+        return 0
+      }
       case 'folders': {
         const list = await commands.folders(cfg)
         if (command.global.json) deps.out.stdout(`${JSON.stringify(list)}\n`)
@@ -415,6 +441,12 @@ export async function main(deps: MainDeps): Promise<number> {
       case 'mkdir': {
         const folder = await commands.mkdir(cfg, command.folderName, command.parent)
         emitResult(deps, command.global.json, folder, () => humanIdLine(folder.id))
+        return 0
+      }
+      case 'rmdir': {
+        const result = await commands.removeFolder(cfg, { id: command.id, all: command.all })
+        emitResult(deps, command.global.json, result, () => humanIdLine(result.id))
+        deps.out.stderr(humanRemoveFolderNotice(result))
         return 0
       }
       case 'upload': {

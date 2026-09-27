@@ -1,4 +1,4 @@
-// 문서 라우트 (specs/features/F-206.md 2.3, 접근 판정은 F-212.md 2.2. 사용량 줄·413 은 F-2025.md 6.2, 금고 분기는 F-401.md 3.2·3.3)
+// 문서 라우트 (specs/features/F-206.md 2.3, 접근 판정은 F-212.md 2.2. 사용량 줄·413 은 F-2025.md 6.2, 금고 분기는 F-401.md 3.2·3.3. 삭제·이동 쓰기는 F-2050.md 3.2·3.3 이 /v1 과 같이 쓴다)
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { getDocAccess, getOwnedFolder, roleAtLeast } from './access'
@@ -304,6 +304,15 @@ export async function handleUpdateDoc(
   return jsonResponse(rowToDoc(written.row))
 }
 
+// folderId 검사·권한 판정 뒤의 D1 쓰기 한 벌 — /api·/v1 이 같이 쓴다 (F-2050 3.3)
+export async function writeMoveDocFolder(env: Env, existing: DocRow, folderId: string | null): Promise<DocRow> {
+  await env.DB.batch([
+    env.DB.prepare('UPDATE docs SET folder_id = ? WHERE id = ? AND owner_id = ?').bind(folderId, existing.id, existing.owner_id),
+    dayUsageStatement(env.DB, existing.owner_id, Date.now()),
+  ])
+  return { ...existing, folder_id: folderId }
+}
+
 export async function handleMoveDocFolder(
   request: Request,
   env: Env,
@@ -332,12 +341,8 @@ export async function handleMoveDocFolder(
     if (folder.e2ee === 1 && typeof existing.e2ee_key !== 'string') return jsonResponse({ error: 'e2ee_folder' }, 409)
   }
 
-  await env.DB.batch([
-    env.DB.prepare('UPDATE docs SET folder_id = ? WHERE id = ? AND owner_id = ?').bind(folderId, params.id, user.id),
-    dayUsageStatement(env.DB, user.id, Date.now()),
-  ])
-
-  return jsonResponse(rowToDoc({ ...existing, folder_id: folderId as string | null }))
+  const updated = await writeMoveDocFolder(env, existing, folderId as string | null)
+  return jsonResponse(rowToDoc(updated))
 }
 
 export async function handleSetPinned(
@@ -369,6 +374,20 @@ export async function handleSetPinned(
   return jsonResponse(rowToDoc({ ...existing, pinned_at: pinnedAt }))
 }
 
+// 권한 판정 뒤의 D1 쓰기 한 벌 — /api·/v1 이 같이 쓴다 (F-2050 3.2)
+export async function deleteDocRows(env: Env, ctx: ExecutionContext, docId: string, ownerId: string): Promise<void> {
+  await env.DB.batch([
+    deleteDocUsageStatement(env.DB, ownerId, docId, Date.now()),
+    // share_link_docs.doc_id REFERENCES docs(id) — docs 를 지우기 전에 묶음 행부터 지운다 (버그 수정, F-2038.md 12장 X1)
+    env.DB.prepare('DELETE FROM share_link_docs WHERE doc_id = ?').bind(docId),
+    env.DB.prepare('DELETE FROM docs WHERE id = ? AND owner_id = ?').bind(docId, ownerId),
+    // 댓글 복사본·알림과 그 바이트 (F-502 8.1)
+    ...docCommentDeleteStatements(env.DB, ownerId, docId),
+  ])
+  // 열린 연결을 닫고 DO 저장소를 비운다 (F-304 9.4)
+  await notifyPurge(env, ctx, docId)
+}
+
 export async function handleDeleteDoc(
   request: Request,
   env: Env,
@@ -380,15 +399,6 @@ export async function handleDeleteDoc(
   if (!access) return errorResponse('not_found', 404)
   if (access.role !== 'owner') return errorResponse('forbidden', 403)
 
-  await env.DB.batch([
-    deleteDocUsageStatement(env.DB, user.id, params.id, Date.now()),
-    // share_link_docs.doc_id REFERENCES docs(id) — docs 를 지우기 전에 묶음 행부터 지운다 (버그 수정, F-2038.md 12장 X1)
-    env.DB.prepare('DELETE FROM share_link_docs WHERE doc_id = ?').bind(params.id),
-    env.DB.prepare('DELETE FROM docs WHERE id = ? AND owner_id = ?').bind(params.id, user.id),
-    // 댓글 복사본·알림과 그 바이트 (F-502 8.1)
-    ...docCommentDeleteStatements(env.DB, user.id, params.id),
-  ])
-  // 열린 연결을 닫고 DO 저장소를 비운다 (F-304 9.4)
-  await notifyPurge(env, ctx, params.id)
+  await deleteDocRows(env, ctx, params.id, user.id)
   return new Response(null, { status: 204 })
 }

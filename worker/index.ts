@@ -57,8 +57,12 @@ import {
   handleCreateDocLinkV1,
   handleCreateDocV1,
   handleCreateFolderV1,
+  handleDeleteDocV1,
+  handleDeleteFolderV1,
   handleGetDocV1,
   handleListDocsV1,
+  handleListSharedV1,
+  handleMoveDocFolderV1,
   handleUpdateDocV1,
 } from './v1'
 import { handleDeleteE2eeKeys, handleGetE2eeKeys, handlePutE2eeKeys } from './e2eeKeys'
@@ -296,6 +300,10 @@ const routes: Route[] = [
   { method: 'POST', path: '/v1/folders', handler: handleCreateFolderV1 },
   { method: 'POST', path: '/v1/attachments', handler: handleCreateAttachmentV1 },
   { method: 'POST', path: '/v1/docs/:id/link', handler: handleCreateDocLinkV1 },
+  { method: 'DELETE', path: '/v1/docs/:id', handler: handleDeleteDocV1 },
+  { method: 'PUT', path: '/v1/docs/:id/folder', handler: handleMoveDocFolderV1 },
+  { method: 'DELETE', path: '/v1/folders/:id', handler: handleDeleteFolderV1 },
+  { method: 'GET', path: '/v1/shared', handler: handleListSharedV1 },
   { method: 'GET', path: '/v1/me', handler: handleMe },
 ]
 

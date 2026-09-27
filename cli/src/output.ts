@@ -25,6 +25,8 @@ export type CliErrorCode =
   | 'rate_limited'
   | 'doc_quota_exceeded'
   | 'account_blocked'
+  | 'e2ee_doc'
+  | 'e2ee_folder'
 
 export type CliErrorDetails = {
   status?: number | null
@@ -67,6 +69,8 @@ const EXIT_CODES: Record<CliErrorCode, number> = {
   rate_limited: 8,
   doc_quota_exceeded: 7,
   account_blocked: 4,
+  e2ee_doc: 4,
+  e2ee_folder: 4,
 }
 
 export class CliError extends Error {
@@ -162,6 +166,10 @@ export function errorMessage(err: CliError, cli: string, cliEnvPrefix: string): 
     }
     case 'account_blocked':
       return '이 계정은 운영자가 쓰기를 막았습니다. 읽기만 할 수 있습니다.'
+    case 'e2ee_doc':
+      return '금고 문서는 명령줄 도구로 다룰 수 없습니다. 웹에서 하세요.'
+    case 'e2ee_folder':
+      return '금고 폴더나 금고 문서가 걸려 있어 명령줄 도구로는 할 수 없습니다. 웹에서 하세요.'
     default:
       return err.message
   }
@@ -252,4 +260,38 @@ export function humanUploadLine(markdown: string): string {
 
 export function humanUrlLine(url: string): string {
   return `${url}\n`
+}
+
+const ROLE_LABEL: Record<'edit' | 'view', string> = { edit: '편집', view: '보기' } // 웹과 같은 낱말 (F-2050 5.2)
+
+type SharedDocListItem = { id: string; updatedAt: number; role: 'edit' | 'view'; ownerEmail: string; title: string }
+
+export function humanSharedList(docs: SharedDocListItem[]): string {
+  return docs
+    .map(
+      (d) =>
+        `${d.id}\t${isoUtcSeconds(d.updatedAt)}\t${ROLE_LABEL[d.role]}\t${stripControlChars(d.ownerEmail)}\t${stripControlChars(d.title)}\n`,
+    )
+    .join('')
+}
+
+export function humanRemoveDocLine(title: string): string {
+  return `문서를 지웠습니다: ${stripControlChars(title)}\n`
+}
+
+function removedItemsPhrase(docs: number, folders: number): string {
+  if (docs > 0 && folders > 0) return `문서 ${docs}개와 폴더 ${folders}개`
+  if (docs > 0) return `문서 ${docs}개`
+  return `폴더 ${folders}개`
+}
+
+type RemoveFolderResult = { contents: 'move-up' | 'delete-all'; docs: number; folders: number; parentId: string | null }
+
+export function humanRemoveFolderNotice(result: RemoveFolderResult): string {
+  if (result.contents === 'delete-all') {
+    return `폴더 ${result.folders}개와 문서 ${result.docs}개를 영구 삭제했습니다.\n`
+  }
+  if (result.docs === 0 && result.folders === 0) return '폴더를 지웠습니다.\n'
+  const where = result.parentId === null ? '맨 위' : '위 폴더'
+  return `폴더를 지웠습니다. ${removedItemsPhrase(result.docs, result.folders)}는 ${where}로 옮겼습니다.\n`
 }

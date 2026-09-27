@@ -106,7 +106,7 @@ function envelopeBytes(): Uint8Array {
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
 describe('F-2025 R1 쓰기 라우트마다 write_count +1', () => {
-  it('/api 21개 + 폴더 delete-all 변형 + /v1 5개 + 금고 3개 (F-401 G2)', async () => {
+  it('/api 21개 + 폴더 delete-all 변형 + /v1 5개 + /v1 삭제·이동·폴더 삭제 4개(F-2050) + 금고 3개 (F-401 G2)', async () => {
     const { sqlDb, env } = makeEnv()
 
     async function expectPlusOne(label: string, run: () => Promise<Response>, okStatuses: number[]) {
@@ -274,6 +274,32 @@ describe('F-2025 R1 쓰기 라우트마다 write_count +1', () => {
     insertDoc(sqlDb, uuid(19), owner)
     await expectPlusOne('POST /v1/docs/:id/link', () => call(env, `/v1/docs/${uuid(19)}/link`, bearerInit('POST', plainToken)), [201])
 
+    // /v1 삭제·이동·폴더 삭제 4개 (F-2050 3.6)
+    insertDoc(sqlDb, uuid(50), owner)
+    await expectPlusOne('DELETE /v1/docs/:id', () => call(env, `/v1/docs/${uuid(50)}`, bearerInit('DELETE', plainToken)), [200])
+
+    insertDoc(sqlDb, uuid(51), owner)
+    await expectPlusOne(
+      'PUT /v1/docs/:id/folder (v1)',
+      () =>
+        call(
+          env,
+          `/v1/docs/${uuid(51)}/folder`,
+          bearerInit('PUT', plainToken, JSON.stringify({ folderId: null }), { 'Content-Type': 'application/json' }),
+        ),
+      [200],
+    )
+
+    insertFolder(sqlDb, uuid(52), owner)
+    await expectPlusOne('DELETE /v1/folders/:id (move-up)', () => call(env, `/v1/folders/${uuid(52)}`, bearerInit('DELETE', plainToken)), [200])
+
+    insertFolder(sqlDb, uuid(53), owner)
+    await expectPlusOne(
+      'DELETE /v1/folders/:id (delete-all, v1)',
+      () => call(env, `/v1/folders/${uuid(53)}?contents=delete-all`, bearerInit('DELETE', plainToken)),
+      [200],
+    )
+
     // 금고 3 (F-401 G2) — 묶음 만들기, 금고로 옮기기, 빈 금고의 묶음 지우기
     await expectPlusOne('PUT /api/e2ee/keys', () => call(env, '/api/e2ee/keys', jsonInit('PUT', { bundle: 'B1', baseRev: 0 })), [200])
 
@@ -343,6 +369,7 @@ describe('F-2025 R2 GET 라우트는 write_count 그대로', () => {
       [`/v1/docs/${uuid(30)}`, bearerInit('GET', token)],
       ['/v1/folders', bearerInit('GET', token)],
       ['/v1/me', bearerInit('GET', token)],
+      ['/v1/shared', bearerInit('GET', token)],
     ]
 
     for (const [path, init] of gets) {

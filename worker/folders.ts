@@ -11,7 +11,7 @@ import { folderCommentDeleteStatements } from './commentRows'
 
 const BATCH_ID_LIMIT = 100
 
-type FolderRow = {
+export type FolderRow = {
   id: string
   owner_id: string
   name: string
@@ -207,22 +207,18 @@ export async function handleUpdateFolder(
   )
 }
 
-// contents 질의 문자열 — 'move-up'(기본) 또는 'delete-all' (specs/features/F-242.md 3.4)
-export async function handleDeleteFolder(
-  request: Request,
+export type FolderDeleteOutcome =
+  | { ok: true; docs: number; folders: number }
+  | { ok: false; error: 'e2ee_folder' }
+
+// 폴더 지우기의 D1 쓰기 — /api·/v1 이 같이 쓴다. contents 검사는 호출부가 먼저 끝낸다 (F-2050 3.5)
+export async function deleteFolderContents(
   env: Env,
   ctx: ExecutionContext,
-  params: Record<string, string>,
-): Promise<Response> {
-  const user = await requireUser(request, env)
-  const existing = await getOwnedFolder<FolderRow>(env, params.id, user)
-  if (!existing) return errorResponse('not_found', 404)
-
-  const contents = new URL(request.url).searchParams.get('contents') ?? 'move-up'
-  if (contents !== 'move-up' && contents !== 'delete-all') {
-    return jsonResponse({ error: 'invalid', field: 'contents' }, 400)
-  }
-
+  user: AuthUser,
+  existing: FolderRow,
+  contents: 'move-up' | 'delete-all',
+): Promise<FolderDeleteOutcome> {
   if (contents === 'delete-all') {
     const { results: ownFolders } = await env.DB.prepare(
       'SELECT id, name, parent_id FROM folders WHERE owner_id = ?',
@@ -230,7 +226,7 @@ export async function handleDeleteFolder(
       .bind(user.id)
       .all<{ id: string; name: string; parent_id: string | null }>()
     const folderLikes = ownFolders.map((f) => ({ id: f.id, name: f.name, parentId: f.parent_id }))
-    const ids = descendantFolderIds(folderLikes, params.id)
+    const ids = descendantFolderIds(folderLikes, existing.id)
 
     // 지울 문서 id 를 먼저 모은다 — share_link_docs 정리(FK, 버그 수정 F-2038.md 12장 X1)와
     // DO 방 비우기(notifyPurge, 문서 단건 삭제와 같게, X2) 둘 다 문서 id 가 있어야 한다
@@ -273,29 +269,75 @@ export async function handleDeleteFolder(
     if (statements.length > 0) await env.DB.batch(statements)
     // 열린 연결을 닫고 DO 저장소를 비운다 — 문서 단건 삭제와 같게 (F-304 9.4, 버그 수정 X2)
     for (const docId of docIds) await notifyPurge(env, ctx, docId)
-    return new Response(null, { status: 204 })
+    return { ok: true, docs: docIds.length, folders: ids.length }
   }
 
   const parentId = existing.parent_id
   // 올라가는 평문이 금고 폴더에 들어가지 않게 (5.2)
   if (await isE2eeParent(env, parentId, user)) {
-    const children = await plainChildren(env, params.id, user.id)
-    if (children.docs > 0 || children.folders > 0) return jsonResponse({ error: 'e2ee_folder' }, 409)
+    const children = await plainChildren(env, existing.id, user.id)
+    if (children.docs > 0 || children.folders > 0) return { ok: false, error: 'e2ee_folder' }
   }
-  await env.DB.batch([
+  const [docsResult, foldersResult] = await env.DB.batch([
     env.DB.prepare('UPDATE docs SET folder_id = ? WHERE folder_id = ? AND owner_id = ?').bind(
       parentId,
-      params.id,
+      existing.id,
       user.id,
     ),
     env.DB.prepare('UPDATE folders SET parent_id = ? WHERE parent_id = ? AND owner_id = ?').bind(
       parentId,
-      params.id,
+      existing.id,
       user.id,
     ),
-    env.DB.prepare('DELETE FROM folders WHERE id = ? AND owner_id = ?').bind(params.id, user.id),
+    env.DB.prepare('DELETE FROM folders WHERE id = ? AND owner_id = ?').bind(existing.id, user.id),
     dayUsageStatement(env.DB, user.id, Date.now()),
   ])
 
+  return { ok: true, docs: docsResult.meta.changes, folders: foldersResult.meta.changes }
+}
+
+// 대상 폴더와 그 아래 모든 폴더(대상 포함) 가운데 금고 폴더가 있거나 그 안에 금고 문서가 있으면 참 (F-2050 3.4 3번)
+export async function folderSubtreeHasE2ee(env: Env, user: AuthUser, folderId: string): Promise<boolean> {
+  const { results: ownFolders } = await env.DB.prepare(
+    'SELECT id, name, parent_id, e2ee FROM folders WHERE owner_id = ?',
+  )
+    .bind(user.id)
+    .all<{ id: string; name: string; parent_id: string | null; e2ee?: number }>()
+  const folderLikes = ownFolders.map((f) => ({ id: f.id, name: f.name, parentId: f.parent_id }))
+  const ids = descendantFolderIds(folderLikes, folderId)
+  const e2eeById = new Map(ownFolders.map((f) => [f.id, f.e2ee === 1]))
+  if (ids.some((id) => e2eeById.get(id))) return true
+
+  for (let i = 0; i < ids.length; i += BATCH_ID_LIMIT) {
+    const chunk = ids.slice(i, i + BATCH_ID_LIMIT)
+    const placeholders = chunk.map(() => '?').join(',')
+    const row = await env.DB.prepare(
+      `SELECT COUNT(*) AS c FROM docs WHERE owner_id = ? AND folder_id IN (${placeholders}) AND e2ee_key IS NOT NULL`,
+    )
+      .bind(user.id, ...chunk)
+      .first<{ c: number }>()
+    if ((row?.c ?? 0) > 0) return true
+  }
+  return false
+}
+
+// contents 질의 문자열 — 'move-up'(기본) 또는 'delete-all' (specs/features/F-242.md 3.4)
+export async function handleDeleteFolder(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  const existing = await getOwnedFolder<FolderRow>(env, params.id, user)
+  if (!existing) return errorResponse('not_found', 404)
+
+  const contents = new URL(request.url).searchParams.get('contents') ?? 'move-up'
+  if (contents !== 'move-up' && contents !== 'delete-all') {
+    return jsonResponse({ error: 'invalid', field: 'contents' }, 400)
+  }
+
+  const result = await deleteFolderContents(env, ctx, user, existing, contents)
+  if (!result.ok) return jsonResponse({ error: result.error }, 409)
   return new Response(null, { status: 204 })
 }

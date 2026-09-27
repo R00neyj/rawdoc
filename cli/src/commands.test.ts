@@ -1,6 +1,6 @@
 // F-2021 U8 (specs/features/F-2021.md 13.1, 4.2). ls 필터는 4.2 명령별 규칙
 import { describe, expect, it, vi } from 'vitest'
-import { ls, putDoc } from './commands'
+import { ls, lsShared, moveDoc, putDoc, removeDoc, removeFolder } from './commands'
 import type { ClientConfig } from './client'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -56,6 +56,45 @@ describe('F-2021 U8 putDoc', () => {
       code: 'conflict',
       details: { currentVersion: 9 },
     })
+  })
+})
+
+describe('F-2050 5.4 commands.ts — 새 명령 함수', () => {
+  it('lsShared 는 GET /v1/shared 를 그대로 돌려준다', async () => {
+    const shared = [{ id: 'd1', role: 'edit' }]
+    const fetchImpl = fakeFetch(() => jsonResponse(shared))
+    const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+    const result = await lsShared(cfg)
+    expect(result).toEqual(shared)
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://rawdoc.app/v1/shared')
+  })
+
+  it('moveDoc 은 apiMoveDoc 을 부른다', async () => {
+    const fetchImpl = fakeFetch(() => jsonResponse({ id: 'd1', folderId: 'f1' }))
+    const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+    const result = await moveDoc(cfg, { id: 'd1', folderId: 'f1' })
+    expect(result.folderId).toBe('f1')
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://rawdoc.app/v1/docs/d1/folder')
+  })
+
+  it('removeDoc 은 apiDeleteDoc 을 부른다', async () => {
+    const fetchImpl = fakeFetch(() => jsonResponse({ id: 'd1', title: 't' }))
+    const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+    const result = await removeDoc(cfg, 'd1')
+    expect(result).toEqual({ id: 'd1', title: 't' })
+    expect(fetchImpl.mock.calls[0][1].method).toBe('DELETE')
+  })
+
+  it('removeFolder 는 all 이 delete-all 로, 아니면 move-up 으로', async () => {
+    const fetchImpl = fakeFetch(() => jsonResponse({ id: 'f1', contents: 'delete-all', parentId: null, docs: 0, folders: 0 }))
+    const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+    await removeFolder(cfg, { id: 'f1', all: true })
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://rawdoc.app/v1/folders/f1?contents=delete-all')
+
+    const fetchImpl2 = fakeFetch(() => jsonResponse({ id: 'f1', contents: 'move-up', parentId: null, docs: 0, folders: 0 }))
+    const cfg2 = baseCfg(fetchImpl2 as unknown as typeof fetch)
+    await removeFolder(cfg2, { id: 'f1', all: false })
+    expect(fetchImpl2.mock.calls[0][0]).toBe('https://rawdoc.app/v1/folders/f1?contents=move-up')
   })
 })
 

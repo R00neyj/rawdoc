@@ -10,6 +10,9 @@ import {
   humanFolderList,
   humanIdLine,
   humanIdVersionLine,
+  humanRemoveDocLine,
+  humanRemoveFolderNotice,
+  humanSharedList,
   humanUploadLine,
   humanUrlLine,
   isoUtcSeconds,
@@ -46,6 +49,8 @@ describe('F-2021 U5 종료 코드', () => {
     ['rate_limited', 8],
     ['doc_quota_exceeded', 7],
     ['account_blocked', 4],
+    ['e2ee_doc', 4],
+    ['e2ee_folder', 4],
   ]
   it.each(table)('%s → %i', (code, expected) => {
     expect(exitCodeFor(code)).toBe(expected)
@@ -196,6 +201,63 @@ describe('F-2031 A5 doc_quota_exceeded·account_blocked 문구', () => {
   it('limit 없는 docs → 괄호째 뺀다', () => {
     const msg = errorMessage(new CliError('doc_quota_exceeded', { resource: 'docs', used: 10000 }), CLI, CLI_ENV)
     expect(msg).toBe('문서 수가 한도에 이르렀습니다.')
+  })
+})
+
+describe('F-2050 6.1 e2ee_doc·e2ee_folder 문구', () => {
+  it('종료 코드 4 문구 둘', () => {
+    expect(errorMessage(new CliError('e2ee_doc'), CLI, CLI_ENV)).toBe(
+      '금고 문서는 명령줄 도구로 다룰 수 없습니다. 웹에서 하세요.',
+    )
+    expect(errorMessage(new CliError('e2ee_folder'), CLI, CLI_ENV)).toBe(
+      '금고 폴더나 금고 문서가 걸려 있어 명령줄 도구로는 할 수 없습니다. 웹에서 하세요.',
+    )
+  })
+
+  it('errorToJson 은 { error, status, message } 만', () => {
+    const json = errorToJson(new CliError('e2ee_doc', { status: 403 }), CLI, CLI_ENV)
+    expect(json).toEqual({ error: 'e2ee_doc', status: 403, message: expect.any(String) })
+  })
+})
+
+describe('F-2050 5.2 humanSharedList — ls --shared 사람용', () => {
+  it('두 원소(edit·view), 이메일에 탭 포함', () => {
+    const docs = [
+      { id: 'd1', updatedAt: 0, role: 'edit' as const, ownerEmail: 'a\tb@example.com', title: '제목1' },
+      { id: 'd2', updatedAt: 60_000, role: 'view' as const, ownerEmail: 'c@example.com', title: '제목2' },
+    ]
+    const text = humanSharedList(docs)
+    expect(text).toBe(
+      'd1\t1970-01-01T00:00:00Z\t편집\ta b@example.com\t제목1\n' + 'd2\t1970-01-01T00:01:00Z\t보기\tc@example.com\t제목2\n',
+    )
+  })
+
+  it('빈 목록이면 빈 문자열', () => {
+    expect(humanSharedList([])).toBe('')
+  })
+})
+
+describe('F-2050 5.2 humanRemoveDocLine', () => {
+  it('문서를 지웠습니다: {title}', () => {
+    expect(humanRemoveDocLine('내 문서')).toBe('문서를 지웠습니다: 내 문서\n')
+  })
+})
+
+describe('F-2050 5.2 humanRemoveFolderNotice — rmdir 안내', () => {
+  it('모든 조합', () => {
+    expect(humanRemoveFolderNotice({ contents: 'move-up', docs: 3, folders: 0, parentId: 'p1' })).toBe(
+      '폴더를 지웠습니다. 문서 3개는 위 폴더로 옮겼습니다.\n',
+    )
+    expect(humanRemoveFolderNotice({ contents: 'move-up', docs: 0, folders: 2, parentId: null })).toBe(
+      '폴더를 지웠습니다. 폴더 2개는 맨 위로 옮겼습니다.\n',
+    )
+    expect(humanRemoveFolderNotice({ contents: 'move-up', docs: 2, folders: 1, parentId: 'p1' })).toBe(
+      '폴더를 지웠습니다. 문서 2개와 폴더 1개는 위 폴더로 옮겼습니다.\n',
+    )
+    expect(humanRemoveFolderNotice({ contents: 'move-up', docs: 0, folders: 0, parentId: 'p1' })).toBe('폴더를 지웠습니다.\n')
+    expect(humanRemoveFolderNotice({ contents: 'delete-all', docs: 4, folders: 3, parentId: null })).toBe(
+      '폴더 3개와 문서 4개를 영구 삭제했습니다.\n',
+    )
   })
 })
 

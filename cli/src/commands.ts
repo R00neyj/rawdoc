@@ -1,13 +1,17 @@
-// 명령마다 결과 데이터를 돌려주는 함수. 출력하지 않는다. 입력은 이미 해석된 값이다 — 파일 읽기는 main 쪽 층에서 끝낸다 (specs/features/F-2021.md 4.7)
-import type { V1Attachment, V1Doc, V1DocSummary, V1Folder, V1Link, V1Me } from '../../worker/v1Contract'
+// 명령마다 결과 데이터를 돌려주는 함수. 출력하지 않는다. 입력은 이미 해석된 값이다 — 파일 읽기는 main 쪽 층에서 끝낸다 (specs/features/F-2021.md 4.7, 삭제·이동·공유 목록은 F-2050.md 5.4)
+import type { V1Attachment, V1DeletedDoc, V1DeletedFolder, V1Doc, V1DocSummary, V1Folder, V1Link, V1Me, V1SharedDoc } from '../../worker/v1Contract'
 import {
   apiCreateDoc,
   apiCreateFolder,
   apiCreateLink,
+  apiDeleteDoc,
+  apiDeleteFolder,
   apiGetDoc,
   apiListDocs,
   apiListFolders,
+  apiListShared,
   apiMe,
+  apiMoveDoc,
   apiUpdateDoc,
   apiUploadAttachment,
   type ClientConfig,
@@ -70,4 +74,20 @@ export function upload(cfg: ClientConfig, bytes: Uint8Array): Promise<V1Attachme
 
 export function link(cfg: ClientConfig, id: string): Promise<V1Link> {
   return apiCreateLink(cfg, id)
+}
+
+export function lsShared(cfg: ClientConfig): Promise<V1SharedDoc[]> {
+  return apiListShared(cfg)
+}
+
+export function moveDoc(cfg: ClientConfig, input: { id: string; folderId: string | null }): Promise<V1DocSummary> {
+  return apiMoveDoc(cfg, input.id, input.folderId)
+}
+
+export function removeDoc(cfg: ClientConfig, id: string): Promise<V1DeletedDoc> {
+  return apiDeleteDoc(cfg, id)
+}
+
+export function removeFolder(cfg: ClientConfig, input: { id: string; all: boolean }): Promise<V1DeletedFolder> {
+  return apiDeleteFolder(cfg, input.id, input.all ? 'delete-all' : 'move-up')
 }

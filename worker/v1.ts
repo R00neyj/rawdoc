@@ -1,10 +1,11 @@
 // 자동 업로드 API '/v1' 전용 핸들러 — 몸통 보정·응답 모양만 여기서 하고, 나머지는 기존 /api 핸들러를 그대로 부른다 (specs/features/F-223.md)
 import { errorResponse, jsonResponse } from './http'
 import { rememberUser, requireUser, type AuthUser } from './auth'
-import { getDocAccess, roleAtLeast } from './access'
+import { getDocAccess, getOwnedFolder, roleAtLeast } from './access'
 import { getActiveLock } from './locks'
-import { badBody, handleCreateDoc, handleListDocs, handleUpdateDoc, readJsonLimited } from './docs'
-import { handleCreateFolder } from './folders'
+import { badBody, deleteDocRows, handleCreateDoc, handleListDocs, handleUpdateDoc, readJsonLimited, writeMoveDocFolder } from './docs'
+import { deleteFolderContents, folderSubtreeHasE2ee, handleCreateFolder, type FolderRow } from './folders'
+import { handleGetShared } from './grants'
 import { rowToDoc } from './docWrite'
 import type { DocRow } from './docWrite'
 import { writeTextInRoom } from './docRoomRpc'
@@ -13,8 +14,9 @@ import { handleCreateDocLink } from './links'
 import { MAX_ATTACHMENT_BYTES, generateAttachmentId, storeAttachment } from './attachments'
 import { buildImageBlock } from '../src/lib/imageBlock'
 import { fromEditorText, toEditorText } from '../src/lib/lineEnding'
-import { MAX_BODY_BYTES, MAX_CONTENT_BYTES, isContentTooLarge, isValidLineEnding, isValidTitle } from './validate'
+import { MAX_BODY_BYTES, MAX_CONTENT_BYTES, isContentTooLarge, isValidLineEnding, isValidTitle, isValidUuid } from './validate'
 import { checkDocGrow, readUsage, usageOf, utf8Bytes } from './usage'
+import type { V1SharedDoc } from './v1Contract'
 
 // 헤더는 그대로(Authorization 포함), 몸통만 새 JSON 으로 바꿔 아래 핸들러에 넘긴다
 function jsonRequest(request: Request, bodyObj: unknown, dropHeaders: string[] = []): Request {
@@ -233,4 +235,90 @@ export async function handleCreateDocLinkV1(
   const { token } = (await res.json()) as { token: string }
   const url = `${new URL(request.url).origin}/#/p/${token}`
   return jsonResponse({ token, url }, res.status)
+}
+
+// 판정 순서는 F-2050.md 3.2 — 2번(금고)이 3번(소유자)보다 앞이지만 금고 비소유자는 1번에서 이미 404 다
+export async function handleDeleteDocV1(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  const access = await getDocAccess<DocRow>(env, params.id, user)
+  if (!access) return errorResponse('not_found', 404)
+  if (access.doc.e2ee_key) return errorResponse('e2ee_doc', 403)
+  if (access.role !== 'owner') return errorResponse('forbidden', 403)
+
+  const title = access.doc.title
+  await deleteDocRows(env, ctx, params.id, user.id)
+  return jsonResponse({ id: params.id, title })
+}
+
+// 판정 순서는 F-2050.md 3.3 — 5번에서 목적지 금고 폴더를 403 으로 먼저 끝낸다(/api 의 409 는 여기서 나오지 않는다)
+export async function handleMoveDocFolderV1(
+  request: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  const parsed = await readJsonLimited(request, MAX_BODY_BYTES)
+  if (!parsed.ok) return badBody(parsed)
+
+  const body = parsed.data
+  if (typeof body !== 'object' || body === null) return errorResponse('invalid', 400)
+  const { folderId } = body as Record<string, unknown>
+  if (folderId !== null && !isValidUuid(folderId)) {
+    return jsonResponse({ error: 'invalid', field: 'folderId' }, 400)
+  }
+
+  const access = await getDocAccess<DocRow>(env, params.id, user)
+  if (!access) return errorResponse('not_found', 404)
+  if (access.doc.e2ee_key) return errorResponse('e2ee_doc', 403)
+  if (access.role !== 'owner') return errorResponse('forbidden', 403)
+  const existing = access.doc
+
+  if (folderId !== null) {
+    const folder = await getOwnedFolder<{ id: string; owner_id: string; e2ee?: number }>(env, folderId as string, user)
+    if (!folder) return jsonResponse({ error: 'invalid', field: 'folderId' }, 400)
+    if (folder.e2ee === 1) return jsonResponse({ error: 'e2ee_folder' }, 403)
+  }
+
+  const updated = await writeMoveDocFolder(env, existing, folderId as string | null)
+  const { content: _content, ...summary } = rowToDoc(updated)
+  return jsonResponse(summary)
+}
+
+// 판정 순서는 F-2050.md 3.4 — 금고가 낀 하위는 전부 403 (결정 9)
+export async function handleDeleteFolderV1(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  const existing = await getOwnedFolder<FolderRow>(env, params.id, user)
+  if (!existing) return errorResponse('not_found', 404)
+
+  const contents = new URL(request.url).searchParams.get('contents') ?? 'move-up'
+  if (contents !== 'move-up' && contents !== 'delete-all') {
+    return jsonResponse({ error: 'invalid', field: 'contents' }, 400)
+  }
+
+  if (await folderSubtreeHasE2ee(env, user, existing.id)) return jsonResponse({ error: 'e2ee_folder' }, 403)
+
+  const result = await deleteFolderContents(env, ctx, user, existing, contents)
+  // 금고가 낀 폴더는 이미 위에서 걸렀으니 여기서는 늘 ok — 방어적으로만 403 에 맞춘다
+  if (!result.ok) return jsonResponse({ error: result.error }, 403)
+  return jsonResponse({ id: existing.id, contents, parentId: existing.parent_id, docs: result.docs, folders: result.folders })
+}
+
+// 출처는 handleGetShared 하나 — 정렬만 다시 한다 (F-2050 3.7)
+export async function handleListSharedV1(request: Request, env: Env): Promise<Response> {
+  const res = await handleGetShared(request, env)
+  if (res.status !== 200) return res
+  const list = (await res.json()) as V1SharedDoc[]
+  list.sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  return jsonResponse(list)
 }

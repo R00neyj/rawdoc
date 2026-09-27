@@ -4,9 +4,13 @@ import {
   apiCreateDoc,
   apiCreateFolder,
   apiCreateLink,
+  apiDeleteDoc,
+  apiDeleteFolder,
   apiGetDoc,
   apiListDocs,
+  apiListShared,
   apiMe,
+  apiMoveDoc,
   apiUpdateDoc,
   apiUploadAttachment,
   type ClientConfig,
@@ -100,6 +104,145 @@ describe('F-2021 U4 client.ts — 요청 모양', () => {
     const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
     const me = await apiMe(cfg)
     expect(me).toEqual({ id: 'u1', email: 'a@b.com' })
+  })
+})
+
+describe('F-2050 5.3 client.ts — 요청 모양', () => {
+  it('GET /v1/shared', async () => {
+    const fetchImpl = fakeFetch(() => jsonResponse([]))
+    const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+    await apiListShared(cfg)
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://rawdoc.app/v1/shared')
+    expect(fetchImpl.mock.calls[0][1].method).toBe('GET')
+  })
+
+  it('PUT /v1/docs/:id/folder — folderId 명시(null 포함)', async () => {
+    const fetchImpl = fakeFetch(() => jsonResponse({ id: 'd1', folderId: null }))
+    const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+    await apiMoveDoc(cfg, 'd', null)
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://rawdoc.app/v1/docs/d/folder')
+    const init = fetchImpl.mock.calls[0][1]
+    expect(init.method).toBe('PUT')
+    expect(init.body).toBe('{"folderId":null}')
+  })
+
+  it('PUT /v1/docs/:id/folder — folderId 문자열, encodeURIComponent', async () => {
+    const fetchImpl = fakeFetch(() => jsonResponse({ id: 'd1', folderId: 'f1' }))
+    const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+    await apiMoveDoc(cfg, 'a b', 'f1')
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://rawdoc.app/v1/docs/a%20b/folder')
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body as string)).toEqual({ folderId: 'f1' })
+  })
+
+  it('DELETE /v1/docs/:id', async () => {
+    const fetchImpl = fakeFetch(() => jsonResponse({ id: 'd1', title: 't' }))
+    const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+    await apiDeleteDoc(cfg, 'a b')
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://rawdoc.app/v1/docs/a%20b')
+    expect(fetchImpl.mock.calls[0][1].method).toBe('DELETE')
+  })
+
+  it('DELETE /v1/folders/:id — contents 는 늘 명시(move-up 도)', async () => {
+    const fetchImpl = fakeFetch(() => jsonResponse({ id: 'f1', contents: 'move-up', parentId: null, docs: 0, folders: 0 }))
+    const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+    await apiDeleteFolder(cfg, 'f1', 'move-up')
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://rawdoc.app/v1/folders/f1?contents=move-up')
+
+    const fetchImpl2 = fakeFetch(() => jsonResponse({ id: 'f1', contents: 'delete-all', parentId: null, docs: 0, folders: 0 }))
+    const cfg2 = baseCfg(fetchImpl2 as unknown as typeof fetch)
+    await apiDeleteFolder(cfg2, 'f1', 'delete-all')
+    expect(fetchImpl2.mock.calls[0][0]).toBe('https://rawdoc.app/v1/folders/f1?contents=delete-all')
+  })
+})
+
+describe('F-2050 6.1 client.ts — 금고 분류', () => {
+  it('403 e2ee_doc·e2ee_folder, 그 밖 forbidden, account_blocked 그대로', async () => {
+    const cases: [Record<string, unknown>, string][] = [
+      [{ error: 'e2ee_doc' }, 'e2ee_doc'],
+      [{ error: 'e2ee_folder' }, 'e2ee_folder'],
+      [{ error: 'x' }, 'forbidden'],
+      [{ error: 'account_blocked' }, 'account_blocked'],
+    ]
+    for (const [body, code] of cases) {
+      const fetchImpl = fakeFetch(() => jsonResponse(body, 403))
+      const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+      let error: unknown
+      try {
+        await apiListDocs(cfg)
+      } catch (err) {
+        error = err
+      }
+      expect((error as CliError).code, JSON.stringify(body)).toBe(code)
+    }
+  })
+
+  it('409 e2ee_doc·e2ee_folder(conflict 아님), 그 밖 conflict', async () => {
+    const doc = fakeFetch(() => jsonResponse({ error: 'e2ee_doc' }, 409))
+    const cfgDoc = baseCfg(doc as unknown as typeof fetch)
+    let e1: unknown
+    try {
+      await apiListDocs(cfgDoc)
+    } catch (err) {
+      e1 = err
+    }
+    expect((e1 as CliError).code).toBe('e2ee_doc')
+
+    const folder = fakeFetch(() => jsonResponse({ error: 'e2ee_folder' }, 409))
+    const cfgFolder = baseCfg(folder as unknown as typeof fetch)
+    let e2: unknown
+    try {
+      await apiListDocs(cfgFolder)
+    } catch (err) {
+      e2 = err
+    }
+    expect((e2 as CliError).code).toBe('e2ee_folder')
+
+    const conflict = fakeFetch(() => jsonResponse({ error: 'conflict', doc: { version: 3 } }, 409))
+    const cfgConflict = baseCfg(conflict as unknown as typeof fetch)
+    let e3: unknown
+    try {
+      await apiListDocs(cfgConflict)
+    } catch (err) {
+      e3 = err
+    }
+    expect((e3 as CliError).code).toBe('conflict')
+    expect((e3 as CliError).details.currentVersion).toBe(3)
+  })
+
+  it('404 id — apiDeleteDoc·apiDeleteFolder', async () => {
+    const docFetch = fakeFetch(() => jsonResponse({ error: 'not_found' }, 404))
+    const cfgDoc = baseCfg(docFetch as unknown as typeof fetch)
+    let e1: unknown
+    try {
+      await apiDeleteDoc(cfgDoc, 'd9')
+    } catch (err) {
+      e1 = err
+    }
+    expect((e1 as CliError).details.id).toBe('d9')
+
+    const folderFetch = fakeFetch(() => jsonResponse({ error: 'not_found' }, 404))
+    const cfgFolder = baseCfg(folderFetch as unknown as typeof fetch)
+    let e2: unknown
+    try {
+      await apiDeleteFolder(cfgFolder, 'f9', 'move-up')
+    } catch (err) {
+      e2 = err
+    }
+    expect((e2 as CliError).details.id).toBe('f9')
+  })
+
+  it('429 — apiDeleteDoc 도 rate_limited, fetchImpl 1회', async () => {
+    const fetchImpl = fakeFetch(() => jsonResponse({ error: 'rate_limited', scope: 'day', limit: 5000, retryAfter: 32400 }, 429))
+    const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+    let error: unknown
+    try {
+      await apiDeleteDoc(cfg, 'd1')
+    } catch (err) {
+      error = err
+    }
+    expect((error as CliError).code).toBe('rate_limited')
+    expect((error as CliError).details.scope).toBe('day')
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 })
 

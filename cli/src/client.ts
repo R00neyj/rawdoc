@@ -1,5 +1,15 @@
-// '/v1' HTTP 클라이언트. fetch 주입 (specs/features/F-2021.md 4.1)
-import type { V1Attachment, V1Doc, V1DocSummary, V1Folder, V1Link, V1Me } from '../../worker/v1Contract'
+// '/v1' HTTP 클라이언트. fetch 주입 (specs/features/F-2021.md 4.1, 삭제·이동·공유 목록은 F-2050.md 5.3)
+import type {
+  V1Attachment,
+  V1DeletedDoc,
+  V1DeletedFolder,
+  V1Doc,
+  V1DocSummary,
+  V1Folder,
+  V1Link,
+  V1Me,
+  V1SharedDoc,
+} from '../../worker/v1Contract'
 import { CliError, type CliErrorDetails } from './output'
 
 export type ClientConfig = {
@@ -68,10 +78,14 @@ async function handleResponse(res: Response, opts: RequestOptions): Promise<unkn
   if (res.status === 401) throw new CliError('unauthenticated', { status: 401 })
   if (res.status === 403) {
     if (body.error === 'account_blocked') throw new CliError('account_blocked', { status: 403 })
+    if (body.error === 'e2ee_doc') throw new CliError('e2ee_doc', { status: 403 })
+    if (body.error === 'e2ee_folder') throw new CliError('e2ee_folder', { status: 403 })
     throw new CliError('forbidden', { status: 403 })
   }
   if (res.status === 404) throw new CliError('not_found', { status: 404, id: opts.notFoundId })
   if (res.status === 409) {
+    if (body.error === 'e2ee_doc') throw new CliError('e2ee_doc', { status: 409 })
+    if (body.error === 'e2ee_folder') throw new CliError('e2ee_folder', { status: 409 })
     const doc = body.doc as { version?: number } | undefined
     throw new CliError('conflict', { status: 409, currentVersion: doc?.version })
   }
@@ -182,4 +196,26 @@ export function apiCreateLink(cfg: ClientConfig, id: string): Promise<V1Link> {
   return request(cfg, 'POST', `/v1/docs/${encodeURIComponent(id)}/link`, undefined, {
     notFoundId: id,
   }) as Promise<V1Link>
+}
+
+export function apiListShared(cfg: ClientConfig): Promise<V1SharedDoc[]> {
+  return request(cfg, 'GET', '/v1/shared', undefined) as Promise<V1SharedDoc[]>
+}
+
+export function apiMoveDoc(cfg: ClientConfig, id: string, folderId: string | null): Promise<V1DocSummary> {
+  return request(cfg, 'PUT', `/v1/docs/${encodeURIComponent(id)}/folder`, { folderId }, {
+    notFoundId: id,
+  }) as Promise<V1DocSummary>
+}
+
+export function apiDeleteDoc(cfg: ClientConfig, id: string): Promise<V1DeletedDoc> {
+  return request(cfg, 'DELETE', `/v1/docs/${encodeURIComponent(id)}`, undefined, {
+    notFoundId: id,
+  }) as Promise<V1DeletedDoc>
+}
+
+export function apiDeleteFolder(cfg: ClientConfig, id: string, contents: 'move-up' | 'delete-all'): Promise<V1DeletedFolder> {
+  return request(cfg, 'DELETE', `/v1/folders/${encodeURIComponent(id)}?contents=${contents}`, undefined, {
+    notFoundId: id,
+  }) as Promise<V1DeletedFolder>
 }

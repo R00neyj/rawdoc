@@ -8,7 +8,7 @@ export type RunCommand =
   | { name: 'login'; global: GlobalOptions; force: boolean; withToken: boolean; noBrowser: boolean }
   | { name: 'logout'; global: GlobalOptions }
   | { name: 'whoami'; global: GlobalOptions }
-  | { name: 'ls'; global: GlobalOptions; folder: string | null }
+  | { name: 'ls'; global: GlobalOptions; folder: string | null; shared: boolean }
   | { name: 'get'; global: GlobalOptions; id: string; output: string | null }
   | { name: 'new'; global: GlobalOptions; source: string | null; title: string | null; folder: string | null }
   | {
@@ -20,8 +20,11 @@ export type RunCommand =
       baseVersion: number | null
       force: boolean
     }
+  | { name: 'mv'; global: GlobalOptions; id: string; folderId: string | null }
+  | { name: 'rm'; global: GlobalOptions; id: string }
   | { name: 'folders'; global: GlobalOptions }
   | { name: 'mkdir'; global: GlobalOptions; folderName: string; parent: string | null }
+  | { name: 'rmdir'; global: GlobalOptions; id: string; all: boolean }
   | { name: 'upload'; global: GlobalOptions; file: string }
   | { name: 'link'; global: GlobalOptions; id: string }
 
@@ -42,8 +45,11 @@ export const COMMAND_NAMES: CommandName[] = [
   'get',
   'new',
   'put',
+  'mv',
+  'rm',
   'folders',
   'mkdir',
+  'rmdir',
   'upload',
   'link',
 ]
@@ -110,16 +116,15 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       return { kind: 'run', command: { name: command, global: globalsOf(parsed.values) } }
     }
     case 'ls': {
-      const options: OptionSchema = { ...GLOBAL_OPTIONS, folder: { type: 'string' } }
+      const options: OptionSchema = { ...GLOBAL_OPTIONS, folder: { type: 'string' }, shared: { type: 'boolean' } }
       const parsed = runParseArgs(rest, options, false)
       if (!parsed) return usage('알 수 없는 옵션입니다.', command)
+      const folder = typeof parsed.values.folder === 'string' ? parsed.values.folder : null
+      const shared = parsed.values.shared === true
+      if (folder !== null && shared) return usage('--shared 와 --folder 는 함께 쓸 수 없습니다.', command)
       return {
         kind: 'run',
-        command: {
-          name: 'ls',
-          global: globalsOf(parsed.values),
-          folder: typeof parsed.values.folder === 'string' ? parsed.values.folder : null,
-        },
+        command: { name: 'ls', global: globalsOf(parsed.values), folder, shared },
       }
     }
     case 'get': {
@@ -189,6 +194,50 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
         kind: 'run',
         command: { name: 'put', global: globalsOf(parsed.values), id, source, title, baseVersion, force },
       }
+    }
+    case 'mv': {
+      const options: OptionSchema = { ...GLOBAL_OPTIONS, folder: { type: 'string' }, root: { type: 'boolean' } }
+      const parsed = runParseArgs(rest, options, true)
+      if (!parsed) return usage('알 수 없는 옵션입니다.', command)
+      if (parsed.positionals.length !== 1) return usage('문서 id 가 필요합니다.', command)
+      const hasFolder = typeof parsed.values.folder === 'string'
+      const hasRoot = parsed.values.root === true
+      if (hasFolder === hasRoot) return usage('--folder <폴더id> 또는 --root 중 하나가 필요합니다.', command)
+      return {
+        kind: 'run',
+        command: {
+          name: 'mv',
+          global: globalsOf(parsed.values),
+          id: parsed.positionals[0],
+          folderId: hasRoot ? null : (parsed.values.folder as string),
+        },
+      }
+    }
+    case 'rm': {
+      const options: OptionSchema = { ...GLOBAL_OPTIONS, yes: { type: 'boolean' } }
+      const parsed = runParseArgs(rest, options, true)
+      if (!parsed) return usage('알 수 없는 옵션입니다.', command)
+      if (parsed.positionals.length !== 1) return usage('문서 id 가 필요합니다.', command)
+      if (parsed.values.yes !== true) {
+        return usage('문서를 영구 삭제하려면 --yes 를 붙이세요. 되돌릴 수 없습니다.', command)
+      }
+      return { kind: 'run', command: { name: 'rm', global: globalsOf(parsed.values), id: parsed.positionals[0] } }
+    }
+    case 'rmdir': {
+      const options: OptionSchema = { ...GLOBAL_OPTIONS, yes: { type: 'boolean' }, all: { type: 'boolean' } }
+      const parsed = runParseArgs(rest, options, true)
+      if (!parsed) return usage('알 수 없는 옵션입니다.', command)
+      if (parsed.positionals.length !== 1) return usage('폴더 id 가 필요합니다.', command)
+      const all = parsed.values.all === true
+      if (parsed.values.yes !== true) {
+        return usage(
+          all
+            ? '폴더와 안의 문서·폴더를 모두 영구 삭제하려면 --yes 를 붙이세요. 되돌릴 수 없습니다.'
+            : '폴더를 지우려면 --yes 를 붙이세요. 안의 문서와 폴더는 위 폴더로 옮겨집니다.',
+          command,
+        )
+      }
+      return { kind: 'run', command: { name: 'rmdir', global: globalsOf(parsed.values), id: parsed.positionals[0], all } }
     }
     case 'mkdir': {
       const options: OptionSchema = { ...GLOBAL_OPTIONS, parent: { type: 'string' } }
