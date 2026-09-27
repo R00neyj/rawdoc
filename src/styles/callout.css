@@ -50,7 +50,8 @@
   border-bottom-right-radius: 6px;
 }
 
-/* "[!type]" 자리 (F-128 4.1) — 기호는 숨기지 않고 색 묶음 색·굵기 600·0.85em 로 보인다.
+/* "[!type]" 자리 (F-128 4.1) — 기호는 숨기지 않고 색 묶음 색·굵기 600 으로 보인다. 글자 크기는 본문 그대로 —
+   0.85em 은 span 이 겹치면 두 번 곱해져 11px 까지 작아졌다 (tweak 2026-09-28).
    같은 범위에 highlight.js 의 tags.link → .md-link(색 --md-link, cursor:pointer)가
    같이 붙는다(lezer 가 이 자리를 URL 없는 Link 로 읽는다, F-128 4.1) — 어느 쪽 span 이
    더 안쪽에 오든 이기도록 두 방향 선택자에 모두 적용한다. 콜아웃 머리는 열 수 있는
@@ -61,7 +62,6 @@
 .md-link .md-callout-type {
   color: var(--callout-color) !important;
   font-weight: 600;
-  font-size: 0.85em;
   cursor: text;
 }
 
