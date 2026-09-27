@@ -570,3 +570,44 @@ test('guide comments E3 앱 도움말의 링크 — ## 댓글·## 알림 두 절
     await expect(one).toHaveAttribute('target', '_blank')
   }
 })
+
+test('guide callouts-math-diagrams E1 글이 뜨고 완결된 정적 페이지다', async ({ page }) => {
+  await page.goto('/guides/callouts-math-diagrams')
+  await expect(page.getByRole('heading', { level: 1, name: '콜아웃·수식·다이어그램 쓰기' })).toBeVisible()
+  await expect(page.locator('.site-foot')).toBeVisible()
+  // 예시는 코드블록 원문으로만 보인다 — 사이트에는 KaTeX·Mermaid 가 없다
+  await expect(page.locator('.site-article .katex')).toHaveCount(0)
+  await expect(page.locator('.site-article .md-mermaid')).toHaveCount(0)
+
+  const res = await page.request.get('/guides/callouts-math-diagrams')
+  expect(res.status()).toBe(200)
+  const body = await res.text()
+  expect(body).toContain('<title>콜아웃·수식·다이어그램 쓰기 · Rawdoc</title>')
+  expect(body).toContain('rel="canonical"')
+  expect(body).toContain('https://rawdoc.app/guides/callouts-math-diagrams')
+  expect(body).not.toContain('<script')
+})
+
+test('guide callouts-math-diagrams E2 목록·색인', async ({ page }) => {
+  await page.goto('/guides')
+  const link = page.locator('.site-article .markdown-body > ul a[href="/guides/callouts-math-diagrams"]')
+  await expect(link).toBeVisible()
+  await expect(link).toHaveText('콜아웃·수식·다이어그램 쓰기')
+
+  const sitemap = await page.request.get('/sitemap.xml')
+  const sitemapBody = await sitemap.text()
+  expect(sitemapBody).toContain('<loc>https://rawdoc.app/guides/callouts-math-diagrams</loc>')
+})
+
+test('guide callouts-math-diagrams E3 앱 도움말의 링크 — ## 콜아웃·## 수식 두 절', async ({ page }) => {
+  await openApp(page)
+  await page.getByRole('button', { name: '도움말' }).first().click()
+  await expect(page.locator('.help-page')).toBeVisible()
+
+  const link = page.locator('.help-page a[href="/guides/callouts-math-diagrams"]')
+  await expect(link).toHaveCount(2)
+  for (const one of await link.all()) {
+    await expect(one).toHaveText('콜아웃·수식·다이어그램 쓰기')
+    await expect(one).toHaveAttribute('target', '_blank')
+  }
+})

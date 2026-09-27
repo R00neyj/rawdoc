@@ -11,7 +11,10 @@ type HelpItem = {
   showResult?: boolean
 }
 
-type HelpGroup = { group: string; items: HelpItem[] }
+// guide: 이 문법을 다룬 사용법 글 — 절 끝에 `사용법 글:` 줄 하나를 붙인다 (specs/ia.md 6.1 R3)
+type HelpGroup = { group: string; items: HelpItem[]; guide?: { title: string; slug: string } }
+
+const CALLOUTS_MATH_DIAGRAMS_GUIDE = { title: '콜아웃·수식·다이어그램 쓰기', slug: 'callouts-math-diagrams' }
 
 const GROUPS: HelpGroup[] = [
   {
@@ -77,6 +80,21 @@ const GROUPS: HelpGroup[] = [
   {
     group: '콜아웃',
     items: [{ name: '콜아웃', source: '> [!note] 제목\n> 내용' }],
+    guide: CALLOUTS_MATH_DIAGRAMS_GUIDE,
+  },
+  {
+    group: '수식',
+    items: [
+      {
+        name: '수식',
+        source: '넓이는 $\\pi r^2$ 입니다.\n\n$$\n\\frac{a+b}{2}\n$$',
+        caption:
+          '문장 속 수식은 `$` 한 쌍으로, 따로 세우는 수식은 `$$` 줄 두 개 사이에 씁니다. 그린 모습은 `편집`·`보기` 모드에서 봅니다.',
+        // 사이트 /help 페이지에는 KaTeX 스타일시트가 없어 결과를 그리면 글자가 겹친다 — 원문만 둔다
+        showResult: false,
+      },
+    ],
+    guide: CALLOUTS_MATH_DIAGRAMS_GUIDE,
   },
   {
     group: '구분선',
@@ -113,7 +131,8 @@ function renderItem(item: HelpItem, withSubheading: boolean): string {
 function renderGroup(group: HelpGroup): string {
   const withSubheading = group.items.length > 1
   const body = group.items.map((item) => renderItem(item, withSubheading)).join('\n\n')
-  return `## ${group.group}\n\n${body}`
+  const guideLine = group.guide ? `\n\n사용법 글: [${group.guide.title}](/guides/${group.guide.slug})` : ''
+  return `## ${group.group}\n\n${body}${guideLine}`
 }
 
 // 앱 사용법 절 — guideDoc.ts 의 말투(존댓말, 짧은 문장, 화면 그대로의 이름은 인라인코드)를 따른다 (F-257.md 1장)

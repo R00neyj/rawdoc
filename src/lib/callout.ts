@@ -15,7 +15,7 @@ export type CalloutHeader = {
 const HEADER_RE = /^\[!([^\]\s]+)\]([+-]?)(?:[ \t]+(.*))?$/
 
 // 종류(별칭, 소문자) → 색 묶음 (F-128 2.1). 별칭은 모두 소문자로 등록한다
-const KIND_ALIASES: Record<string, string> = {
+export const KIND_ALIASES: Record<string, string> = {
   note: 'note',
   info: 'note',
   todo: 'note',

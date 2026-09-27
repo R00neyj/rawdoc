@@ -337,6 +337,54 @@ describe('도움말 ## 댓글·## 알림 절', () => {
   })
 })
 
+// 사용법 글 callouts-math-diagrams (write-guide, 2026-09-27) — 문법 절(GROUPS)은 appSections() 밖이라 U2 가 훑지 않는다. 같은 R3 규칙을 여기서 본다
+function syntaxSections(): Array<{ name: string; body: string }> {
+  const start = HELP_DOC_CONTENT.indexOf('## 마크다운 문법')
+  return HELP_DOC_CONTENT.slice(start)
+    .split(/\n(?=## )/)
+    .filter((s) => s.trim() !== '')
+    .map((section) => {
+      const name = /^## (.+)$/m.exec(section)?.[1] ?? ''
+      const body = section.replace(/^## .+\n\n?/, '').trimEnd()
+      return { name, body }
+    })
+}
+
+describe('도움말 문법 절의 사용법 글 줄 (R3)', () => {
+  it('문법 절마다 사용법 글 줄이 0~1개이고, 있으면 모양이 R3 정규식에 맞으며 절의 마지막 문단이다', () => {
+    const sections = syntaxSections()
+    expect(sections.length).toBeGreaterThan(1)
+    for (const { name, body } of sections) {
+      // 코드펜스 안의 빈 줄로 잘린 조각도 문단으로 세지만, 사용법 글 줄 판정에는 영향이 없다
+      const paragraphs = body.split(/\n\n+/).filter((p) => p.trim() !== '')
+      const linkParagraphs = paragraphs.filter((p) => p.startsWith('사용법 글:'))
+      expect(linkParagraphs.length, `## ${name} 사용법 글 줄 개수`).toBeLessThanOrEqual(1)
+      for (const link of linkParagraphs) {
+        expect(link, `## ${name} 사용법 글 줄 모양`).toMatch(LINK_LINE_RE)
+        expect(paragraphs[paragraphs.length - 1], `## ${name} 사용법 글 줄이 마지막 문단이어야 한다`).toBe(link)
+      }
+    }
+  })
+
+  it('## 콜아웃·## 수식 절이 callouts-math-diagrams 글 줄로 끝나고, ## 수식 절은 원문 코드블록만 두고 결과를 그리지 않는다', () => {
+    const line = '사용법 글: [콜아웃·수식·다이어그램 쓰기](/guides/callouts-math-diagrams)'
+    for (const name of ['콜아웃', '수식']) {
+      const section = syntaxSections().find((s) => s.name === name)!
+      expect(section, name).toBeTruthy()
+      const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+      expect(paragraphs[paragraphs.length - 1], name).toBe(line)
+    }
+    const names = syntaxSections().map((s) => s.name)
+    expect(names[names.indexOf('콜아웃') + 1]).toBe('수식')
+
+    const math = syntaxSections().find((s) => s.name === '수식')!
+    expect(math.body).toContain(fence('넓이는 $\\pi r^2$ 입니다.\n\n$$\n\\frac{a+b}{2}\n$$'))
+    // 사이트 /help 는 KaTeX 스타일시트를 싣지 않는다 — 코드펜스 밖에 $ 가 있으면 사이트에서 수식이 스타일 없이 그려진다
+    const outsideFence = math.body.replace(/```[\s\S]*?```/g, '').replace(/`[^`]*`/g, '')
+    expect(outsideFence).not.toContain('$')
+  })
+})
+
 // F-510.md 6장 U6
 describe('F-510 도움말 ## 알림 절', () => {
   it('U6: 사이드바 점·열면 읽음 문장을 글자 그대로 담는다', () => {

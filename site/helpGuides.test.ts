@@ -38,8 +38,16 @@ import { MENTION_CANDIDATES_MAX } from '../src/app/mentionCandidates'
 import { NOTIFICATIONS_POLL_MS, notificationText } from '../src/app/notificationsApi'
 import { COMMENT_TEXT } from '../src/app/useDocComments'
 import { EditorState } from '@codemirror/state'
-import { insertTable } from '../src/editor/insertCommands'
+import { insertTable, insertCallout, insertMathBlock } from '../src/editor/insertCommands'
 import { parseTable } from '../src/editor/preview/tableModel'
+import { KIND_ALIASES, parseCalloutHeader, defaultCalloutTitle } from '../src/lib/callout'
+import { findInlineMath, parseMathBlock } from '../src/lib/mathSyntax'
+import { renderMath } from '../src/lib/mathRender'
+import { isMermaidInfo } from '../src/lib/codeLang'
+import { toggleMath } from '../src/editor/formatCommands'
+import { toPlainText } from '../src/viewer/toPlainText'
+import { renderMarkdown } from '../src/viewer/renderMarkdown'
+import { checkContentFile } from './guard'
 
 const GUIDES_DIR = fileURLToPath(new URL('../content/guides', import.meta.url))
 
@@ -431,5 +439,78 @@ describe('U4 글 사이 링크 대상 (R8)', () => {
       }
     }
     expect(checked).toBeGreaterThan(0)
+  })
+})
+
+// 사용법 글 callouts-math-diagrams (write-guide, 2026-09-27)
+describe('callouts-math-diagrams 글', () => {
+  const raw = readGuide('callouts-math-diagrams')
+  const body = guideBody(raw)
+
+  // 명령을 문서에 한 번 돌린 결과 원문
+  function run(command: typeof insertCallout, doc = '', selection?: { anchor: number; head: number }): string {
+    let state = EditorState.create({ doc, selection })
+    command({ state, dispatch: (tr) => (state = tr.state) })
+    return state.doc.toString()
+  }
+
+  it('콜아웃 종류 목록이 별칭 표와 같고, 한 줄 안은 같은 색 묶음·줄끼리는 다른 묶음이다', () => {
+    const lines = body.split('\n').filter((l) => /^- `[a-z]+`( · `[a-z]+`)*$/.test(l))
+    const groups = lines.map((l) => [...l.matchAll(/`([a-z]+)`/g)].map((m) => m[1]))
+    expect(groups.flat().sort()).toEqual(Object.keys(KIND_ALIASES).sort())
+    const kinds = groups.map((names) => {
+      const set = new Set(names.map((n) => parseCalloutHeader(`[!${n}]`)!.kind))
+      expect(set.size, names.join(',')).toBe(1)
+      return [...set][0]
+    })
+    expect(new Set(kinds).size).toBe(groups.length)
+    // 목록에 없는 이름은 note 묶음
+    expect(parseCalloutHeader('[!할일]')!.kind).toBe('note')
+  })
+
+  it('콜아웃 머리 줄 규칙·기본 제목이 코드와 같다', () => {
+    expect(body).toContain(`\`[!warning]\`은 \`${defaultCalloutTitle('warning')}\``)
+    expect(body).toContain(`\`[!NOTE]\`는 \`${defaultCalloutTitle('NOTE')}\``)
+    expect(parseCalloutHeader('[!tip]알아 둘 것')).toBeNull()
+    expect(parseCalloutHeader('[!tip]-')!.fold).toBe('-')
+  })
+
+  it('삽입 명령이 넣는 원문이 글과 같다', () => {
+    expect(run(insertCallout)).toBe('> [!note]\n> ')
+    expect(run(insertMathBlock)).toBe('$$\n\n$$')
+    expect(run(toggleMath)).toBe('$$')
+    expect(run(insertCallout, '가\n나', { anchor: 0, head: 3 })).toBe('> [!note]\n> 가\n> 나')
+  })
+
+  it('수식 감지 규칙이 글의 예와 같다', () => {
+    expect(findInlineMath('$5와 $10')).toEqual([])
+    expect(findInlineMath('$ x$')).toEqual([])
+    expect(findInlineMath('\\$x$')).toEqual([])
+    expect(findInlineMath('$\\pi r^2$')).toHaveLength(1)
+    expect(parseMathBlock('$$x^2$$')).not.toBeNull()
+    expect(parseMathBlock('앞 줄\n$$\nx\n$$')).toBeNull()
+    const result = renderMath('\\badcommand', { display: true })
+    expect('error' in result && result.error.startsWith('KaTeX parse error: Undefined control sequence')).toBe(true)
+  })
+
+  it('다이어그램·평문 내보내기 규칙이 글과 같다', () => {
+    expect(isMermaidInfo('Mermaid')).toBe(true)
+    const plain = toPlainText('> [!warning]\n> 본문\n\n~~~mermaid\ngraph TD\n~~~\n\n$$\nx^2\n$$', 'lf')
+    expect(plain).toBe('> Warning\n>\n> 본문\n\n[다이어그램]\n\nx^2\n')
+    expect(body).toContain('`[다이어그램]` 한 줄')
+  })
+
+  it('글 안 예시가 사이트에서 수식·다이어그램으로 바뀌지 않고 가드를 통과한다', () => {
+    const html = renderMarkdown(body)
+    expect(html).not.toContain('class="katex')
+    expect(html).not.toContain('class="md-mermaid"')
+    expect(html).toContain('~~~mermaid')
+    expect(() => checkContentFile('guides/callouts-math-diagrams.md', raw)).not.toThrow()
+  })
+
+  it('글에 제품명이 없다 (R6)', () => {
+    const lower = body.toLowerCase()
+    expect(lower).not.toContain(brand.name.toLowerCase())
+    expect(lower).not.toContain(brand.shortName.toLowerCase())
   })
 })
