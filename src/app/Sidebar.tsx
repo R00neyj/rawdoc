@@ -47,7 +47,6 @@ import {
   IconGroup,
   IconHelp,
   IconGuide,
-  IconIntro,
   IconExternalLink,
   IconCollapseAll,
   IconDownload,
@@ -58,7 +57,7 @@ import {
 } from './icons'
 import { e2eeMenuForDoc, e2eeMenuForFolder, type E2eeConvertDirection, type E2eeConvertTarget, type E2eeMenuState } from '../e2ee/convert'
 import { formatHash } from './hashRoute'
-import { GUIDES_PATH, WELCOME_PATH } from '../lib/siteChrome'
+import { GUIDES_PATH } from '../lib/siteChrome'
 import type { Notice } from './notice'
 
 export { SIDEBAR_ID }
@@ -1220,14 +1219,12 @@ export default function Sidebar({
             <>
               <RailButton icon={IconHelp} label="도움말" onClick={onOpenHelp} />
               <RailButton icon={IconGuide} label="사용법" href={GUIDES_PATH} />
-              <RailButton icon={IconIntro} label="소개" href={WELCOME_PATH} />
               <RailButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
             </>
           ) : (
             <>
               <SidebarButton icon={IconHelp} label="도움말" onClick={onOpenHelp} />
               <SidebarButton icon={IconGuide} label="사용법" href={GUIDES_PATH} />
-              <SidebarButton icon={IconIntro} label="소개" href={WELCOME_PATH} />
               <SidebarButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
             </>
           )}

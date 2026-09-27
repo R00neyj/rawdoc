@@ -32,7 +32,7 @@ flowchart LR
   pub["/p/{토큰}<br/>OG 메타 붙인 공개 보기 F-238"] --> app
   login["/login<br/>Google·GitHub F-2033"] -- "로그인 후 원래 해시로" --> app
   app -- "사이드바 사용법 (새 탭)" --> guides
-  app -- "사이드바 소개 (새 탭)" --> welcome
+  app -- "설정 소개 보기 (새 탭)" --> welcome
   cli(["터미널 rawdoc login"]) --> clilogin["앱 #/cli-login/…<br/>S-9 F-2021"]
   clilogin -. "로그아웃 상태" .-> login
 ```
@@ -80,7 +80,7 @@ flowchart LR
     B1["머리: 로고·토글·검색"]
     B2["새 문서·새 폴더·가져오기·지도"]
     B3["고정됨 / 문서 트리 / 공유받음<br/>행 ⋯ 메뉴·우클릭·여러 선택 F-255"]
-    B4["앱 설치·도움말·사용법·소개·설정"]
+    B4["앱 설치·도움말·사용법·설정"]
   end
   subgraph D["D 편집 영역"]
     D1["본문 맨 위 제목 F-217"]

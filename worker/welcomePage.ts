@@ -119,29 +119,30 @@ const storyWikiNodes = STORY_WIKI_NODES.map(
     `<g class="node${n.id === 'meeting' ? ' is-root' : ''}" data-step="${n.step}" transform="translate(${n.x} ${n.y})"><circle r="${n.id === 'meeting' ? 9 : 6}" /><text y="${n.y > 150 ? 24 : -16}">${escapeHtml(n.label)}</text></g>`,
 ).join('')
 
+// body 의 \n 은 사용자가 정한 줄바꿈 자리 — <br> 로 낸다
 type Chapter = { title: string; body: string }
 
 // 스토리 장면 — 순서가 곧 스크롤 순서다. 문장은 도움말·사용법 글·체인지로그에 적힌 사실만
 const chapters: Chapter[] = [
   {
     title: '기호는 커서가 닿은 줄에만',
-    body: '나머지 줄은 다듬어진 모습으로 보입니다. 기호는 숨었을 뿐, 지워지지 않습니다.',
+    body: '나머지 줄은 다듬어진 모습으로 보입니다.\n기호는 숨었을 뿐, 지워지지 않습니다.',
   },
   {
     title: '한글은 조합되는 그대로',
-    body: '초성, 중성, 받침이 차례로 붙습니다. 한국어로 쓰는 사람을 위해 만든 편집기입니다.',
+    body: '초성, 중성, 받침이 차례로 붙습니다.\n한국어로 쓰는 사람을 위해 만든 편집기입니다.',
   },
   {
     title: '초대한 사람과 한 문서를 같이',
-    body: '서로 고친 내용과 커서가 바로 보입니다. 링크만 받은 사람은 로그인 없이 읽습니다.',
+    body: '서로 고친 내용과 커서가 바로 보입니다.\n링크만 받은 사람은 로그인 없이 읽습니다.',
   },
   {
     title: '댓글은 문장에 붙습니다',
-    body: '위에 줄이 늘어나도 댓글은 원래 문장을 따라갑니다. `@` 로 부르면 그 사람에게 알림이 갑니다.',
+    body: '위에 줄이 늘어나도 댓글은 원래 문장을 따라갑니다.\n`@` 로 부르면 그 사람에게 알림이 갑니다.',
   },
   {
     title: '뒤집어 보면, 친 그대로',
-    body: '원문 모드와 내보낸 `.md` 파일에는 입력한 글자가 한 바이트도 바뀌지 않고 남습니다.',
+    body: '원문 모드와 내보낸 `.md` 파일에는\n입력한 글자가 한 바이트도 바뀌지 않고 남습니다.',
   },
   {
     title: 'AI 에게 위키를 맡기기',
@@ -159,7 +160,7 @@ const storyChapters = chapters
     (ch, i) => `
             <article class="chapter" data-step="${i}">
               <h2>${ch.title}</h2>
-              <p>${renderInline(ch.body)}</p>${
+              <p>${ch.body.split('\n').map(renderInline).join('<br>')}</p>${
                 i === chapters.length - 1
                   ? '\n              <a class="guide" href="/guides/cli">터미널에서 문서 읽고 쓰기</a>'
                   : ''
@@ -177,7 +178,11 @@ const features: Feature[] = [
     body: '칸을 눌러 한 칸씩 고치고 `Tab`·`Enter` 로 옆 칸과 아래 칸으로 갑니다',
     guide: { slug: 'tables', title: '표 넣고 고치기' },
   },
-  { title: '콜아웃·수식·다이어그램', body: '`> [!note]` 콜아웃, 수식, Mermaid 다이어그램을 문서 안에서 그립니다' },
+  {
+    title: '콜아웃·수식·다이어그램',
+    body: '`> [!note]` 콜아웃, 수식, Mermaid 다이어그램을 문서 안에서 그립니다',
+    guide: { slug: 'callouts-math-diagrams', title: '콜아웃·수식·다이어그램 쓰기' },
+  },
   {
     title: '이미지',
     body: '붙여넣거나 끌어 놓아 넣고, 정렬과 크기를 조절합니다',
@@ -225,7 +230,7 @@ const featureItems = features
     const guide = item.guide ? `\n              <a class="guide" href="/guides/${item.guide.slug}">${item.guide.title}</a>` : ''
     return `
             <li>
-              <h3>${item.title}</h3>
+              <h3><span class="tw" data-tw="timeline">${item.title}</span></h3>
               <p>${renderInline(item.body)}</p>${guide}
             </li>`
   })
@@ -306,7 +311,8 @@ export function renderWelcomePage(options?: { path?: LandingPath }): Response {
       /* 등장 전 글자 숨김 — 스크립트가 칸으로 쪼갠 뒤 .tw-on 을 붙인다. 스크립트가 끝내 안 돌면 3.5초 뒤 보인다 */
       .js .tw { visibility: hidden; animation: tw-fallback 0s linear 3.5s forwards; }
       .js .tw.tw-on { visibility: visible; animation: none; }
-      .js.tw-ready .tw { animation: none; } /* 타이핑 스크립트가 돌기 시작했으면 3.5초 대비책을 끈다 — 화면에 들어올 때까지 기다린다 */
+      .js.tw-ready .tw:not([data-tw='timeline']) { animation: none; } /* 타이핑 스크립트가 돌기 시작했으면 3.5초 대비책을 끈다 — 화면에 들어올 때까지 기다린다 */
+      /* timeline 제목의 대비책은 스크립트 번들이 돌 때 끈다(features.ts) — 번들이 못 뜨면 3.5초 뒤 그대로 보인다 */
       @keyframes tw-fallback { to { visibility: visible; } }
 
       /* 히어로 — 제목 한 줄이 곧 문서 첫 줄이다. # 은 지우지 않고 여백에 건다 */
@@ -341,6 +347,7 @@ export function renderWelcomePage(options?: { path?: LandingPath }): Response {
       }
       @media (prefers-reduced-motion: no-preference) {
         .caret { animation: rd-blink 1.1s steps(1) infinite; }
+        .caret.is-typing { animation: none; }
         @keyframes rd-blink { 0% { opacity: 0; } 50% { opacity: 1; } }
       }
       .hero .sub {
@@ -567,8 +574,11 @@ export function renderWelcomePage(options?: { path?: LandingPath }): Response {
 
       /* 스토리 뒤 — 나머지 기능 */
       .sec { margin-top: 136px; }
+      /* flex 로 ## 를 따로 세운다 — 제목이 접혀도 둘째 줄이 ## 아래가 아니라 글자 첫머리에 맞는다 */
       .sec h2 {
         position: relative;
+        display: flex;
+        align-items: baseline;
         margin: 0 0 40px;
         font-family: var(--font-display);
         font-size: clamp(1.6rem, 1.2rem + 1.2vw, 2.2rem);
@@ -578,6 +588,7 @@ export function renderWelcomePage(options?: { path?: LandingPath }): Response {
       }
       .sec h2::before {
         content: '##' / '';
+        flex-shrink: 0;
         margin-right: 0.35em;
         font-family: var(--font-mono);
         font-weight: 400;
@@ -647,14 +658,17 @@ export function renderWelcomePage(options?: { path?: LandingPath }): Response {
         .story.is-live .stage { align-items: stretch; }
         .story.is-live .stage-grid { align-items: stretch; }
         .hero { min-height: auto; padding-top: 88px; padding-bottom: 72px; }
-        .story.is-live .stage-grid { display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: 20px; padding-top: 72px; padding-bottom: 24px; }
-        .story.is-live .rail { margin-bottom: 16px; }
+        .story.is-live .stage-grid { display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: 40px; padding-top: 72px; padding-bottom: 24px; }
+        .story.is-live .rail { justify-content: center; margin-bottom: 28px; }
         .chapter h2 { font-size: min(1.45rem, 6.2vw); }
         .story.is-live .chapter h2 { margin-bottom: 8px; }
         .story.is-live .chapter p { font-size: 0.98rem; }
         .story.is-live .chapter .guide { display: none; }
         .story.is-live .story-static, .story.is-live #story-editor { font-size: 14px; }
-        .story.is-live .wiki { align-content: start; }
+        /* 터미널 아래 남은 높이만 지도에 준다 — 지도가 무대 밖으로 잘리지 않고 viewBox 비율대로 줄어든다 */
+        .story.is-live .wiki { grid-template-rows: auto minmax(0, 1fr); align-content: stretch; gap: 12px; }
+        .story.is-live .map-box { min-height: 0; }
+        .story.is-live .map { height: 100%; max-height: none; }
         .sec { margin-top: 96px; }
         .items { grid-template-columns: minmax(0, 1fr); row-gap: 28px; }
         .close { margin-top: 112px; margin-bottom: 72px; }
@@ -713,7 +727,7 @@ export function renderWelcomePage(options?: { path?: LandingPath }): Response {
       </section>
 
       <section class="wrap sec">
-        <h2><span class="tw" data-tw="scroll">그 밖에 되는 것</span></h2>
+        <h2><span class="tw" data-tw="timeline">그 밖에 되는 것</span></h2>
         <ul class="items">${featureItems}
         </ul>
       </section>
@@ -768,7 +782,8 @@ export function renderWelcomePage(options?: { path?: LandingPath }): Response {
           return cells
         }
 
-        function type(cells, stageMs, charMs, after) {
+        // caret 을 주면 친 칸 바로 뒤로 옮겨 가며 따라온다 — 숨은 칸도 폭을 차지해서, 그대로 두면 처음부터 줄 끝에서 깜박인다
+        function type(cells, stageMs, charMs, after, caret) {
           var ci = 0
           function nextCell() {
             if (ci >= cells.length) return after && after()
@@ -777,6 +792,7 @@ export function renderWelcomePage(options?: { path?: LandingPath }): Response {
             var forms = stages(done)
             var si = 0
             cell.style.visibility = 'visible'
+            if (caret) cell.parentNode.insertBefore(caret, cell.nextSibling)
             function nextStage() {
               cell.textContent = forms[si]
               si += 1
@@ -792,6 +808,8 @@ export function renderWelcomePage(options?: { path?: LandingPath }): Response {
 
         var targets = [].slice.call(document.querySelectorAll('.tw'))
         document.documentElement.classList.add('tw-ready')
+        // data-tw="timeline" 제목은 스크립트 번들(src/welcome/features.ts)의 섹션 타임라인이 이 함수로 친다
+        window.rdType = function (el) { type(split(el), 40, 36) }
         if (reduce) {
           targets.forEach(function (el) { el.classList.add('tw-on') })
           hero.classList.add('is-ready')
@@ -799,7 +817,16 @@ export function renderWelcomePage(options?: { path?: LandingPath }): Response {
         }
 
         var heroTitle = document.querySelector('[data-tw="hero"]')
-        type(split(heroTitle), 34, 26)
+        var heroCells = split(heroTitle)
+        var heroCaret = document.querySelector('.hero .caret')
+        if (heroCaret && heroCells.length) {
+          // 치는 동안은 깜박이지 않는다 — 칸마다 옮기면 깜박임 애니메이션이 처음(투명)부터 다시 돈다
+          heroCaret.classList.add('is-typing')
+          heroCells[0].parentNode.insertBefore(heroCaret, heroCells[0])
+          type(heroCells, 34, 26, function () { heroCaret.classList.remove('is-typing') }, heroCaret)
+        } else {
+          type(heroCells, 34, 26)
+        }
         setTimeout(function () { hero.classList.add('is-ready') }, 900)
 
         var scrolled = targets.filter(function (el) { return el.getAttribute('data-tw') === 'scroll' })

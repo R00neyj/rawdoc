@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import Dialog from './Dialog'
+import { WELCOME_PATH } from '../lib/siteChrome'
 import { visibleSettingsTabs, nextTabIndex, type SettingsTabId } from './settingsTabs'
 import { newDocTemplateOptions, type TemplateEntry } from '../lib/templates'
 import { E2EE_LOCK_MINUTES, type E2eeStatus } from '../e2ee/keyring'
@@ -689,6 +690,10 @@ export default function SettingsDialog({
         fieldsForTab(tabs[0])
       )}
       <div className="dialog-actions">
+        {/* 사이트 /welcome 을 새 탭으로 — 사이드바에서 옮겨 옴 (F-2051, tweak 2026-09-28) */}
+        <a className="dialog-btn settings-intro" href={WELCOME_PATH} target="_blank" rel="noopener noreferrer">
+          소개 보기
+        </a>
         <button type="button" onClick={onClose}>
           닫기
         </button>
