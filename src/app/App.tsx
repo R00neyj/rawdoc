@@ -5400,7 +5400,8 @@ export default function App() {
               data-comment-sheet-open={commentSheetVisible || undefined}
               style={commentRailVisible && commentRailExtra > 0 ? ({ '--comment-rail-extra': `${commentRailExtra}px` } as CSSProperties) : undefined}
             >
-              <div className="editor-slot" hidden={viewMode === 'view'}>
+              {/* 잠긴 문서는 편집기가 없다 — 빈 슬롯이 flex: 1 로 자리를 차지하면 잠김 패널이 오른쪽으로 밀린다 */}
+              <div className="editor-slot" hidden={viewMode === 'view' || showE2eeLockedPanel}>
                 {openDoc?.id === currentDocId && (
                   <Editor
                     key={`${currentDocId}:${editorRemountNonce}`}
