@@ -9,6 +9,7 @@ export type ShortcutScope = 'body' | 'cell' | 'editor' | 'comment' | 'app' | 'do
 
 export type KeyChord = {
   mod?: boolean
+  ctrl?: boolean // 맥에서도 Cmd 가 아니라 Control 키 그대로 (⌘M 은 macOS 창 최소화)
   shift?: boolean
   alt?: boolean
   key: string
@@ -119,6 +120,7 @@ export const SHORTCUT_CATALOG: readonly ShortcutEntry[] = [
   { id: 'table.exit', label: '표에서 나가기', group: '표', keys: [{ key: 'Escape' }], scopes: ['cell'] },
   // 댓글
   { id: 'comment.add', label: '댓글 달기', group: '댓글', keys: [{ mod: true, alt: true, key: 'KeyM' }], scopes: ['body', 'cell'] },
+  { id: 'comment.toggleRail', label: '댓글창 열기·닫기', group: '댓글', keys: [{ ctrl: true, key: 'KeyM' }], scopes: ['doc'] },
   { id: 'comment.send', label: '댓글·답글 보내기', group: '댓글', keys: [{ mod: true, key: 'Enter' }], scopes: ['comment'] },
 ]
 
@@ -150,12 +152,13 @@ export function formatChord(chord: KeyChord, mac: boolean): string {
   const keyLabel = formatKeyName(chord.key)
   if (!mac) {
     const parts: string[] = []
-    if (chord.mod) parts.push(MODIFIER_LABEL_NON_MAC.mod)
+    if (chord.mod || chord.ctrl) parts.push(MODIFIER_LABEL_NON_MAC.mod)
     if (chord.shift) parts.push(MODIFIER_LABEL_NON_MAC.shift)
     if (chord.alt) parts.push(MODIFIER_LABEL_NON_MAC.alt)
     return [...parts, keyLabel].join('+')
   }
   let prefix = ''
+  if (chord.ctrl) prefix += '⌃'
   if (chord.alt) prefix += MODIFIER_LABEL_MAC.alt
   if (chord.shift) prefix += MODIFIER_LABEL_MAC.shift
   if (chord.mod) prefix += MODIFIER_LABEL_MAC.mod

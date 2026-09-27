@@ -617,6 +617,7 @@ export default function App() {
   const openPaletteRef = useRef(() => {}) // Ctrl+P 가 매 커밋 최신 openPalette 를 읽게 한다 (F-2022.md 6.1)
   const selectPaletteQueryRef = useRef(() => {}) // 팔레트가 이미 열려 있을 때 입력칸 전체 선택 — CommandPalette 가 채운다 (F-2022.md 6.1)
   const toggleShortcutsRef = useRef(() => {}) // Ctrl+Shift+/ 가 매 커밋 최신 toggleShortcuts 를 읽게 한다 (F-2052.md 6.1)
+  const toggleCommentsRef = useRef<(() => void) | null>(null) // Ctrl+M — 상단바 `댓글` 버튼을 누를 수 없으면 null (tweak 2026-09-28)
   const shortcutsButtonRef = useRef<HTMLButtonElement | null>(null) // 상태바 `?` 버튼 — 판이 닫힐 때 포커스를 돌려준다 (F-2052 5.3)
   const pendingShortcutsScrollFixRef = useRef(false) // 판을 열기 직전 커서가 보였는지 (F-2052 5.5)
   const bootPhaseRef = useRef(bootPhase) // Ctrl+P 가 매 커밋 최신 bootPhase 를 읽게 한다 (F-2022.md 6.1)
@@ -2480,6 +2481,26 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [publicRoute, showNotice])
 
+  // ----- Ctrl+M → 댓글창 여닫기, 상단바 `댓글` 버튼과 같다 (tweak 2026-09-28) -----
+  // 맥도 Control 그대로(⌘M 은 창 최소화). 편집기 기본 키맵의 Ctrl-m(Tab 포커스 모드)보다 먼저 받도록 캡처 단계에서 멈춘다
+  useEffect(() => {
+    if (publicRoute) return
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+      if (e.code !== 'KeyM') return
+      if (e.isComposing) return
+      if (sharedDocRef.current || mapRouteRef.current) return
+      if (document.querySelector('dialog[open]')) return
+      const toggle = toggleCommentsRef.current
+      if (!toggle) return
+      e.preventDefault()
+      e.stopPropagation() // 같은 window 의 사용 기록 관찰자는 그대로 본다(stopImmediatePropagation 아님)
+      toggle()
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [publicRoute])
+
   // ----- Ctrl+Shift+/(Cmd+Shift+/) → 단축키 판 여닫기, Ctrl+/ 는 CM6 toggleComment 가 쓴다(specs/features/F-2052.md 6.1) -----
   useEffect(() => {
     if (publicRoute) return // 공개 보기(S-5)에는 상태바가 없다
@@ -2795,6 +2816,8 @@ export default function App() {
     openSearchRef.current = openSearch
     openPaletteRef.current = openPalette
     toggleShortcutsRef.current = toggleShortcuts
+    toggleCommentsRef.current =
+      commentAccessValue.kind === 'none' || !currentDoc || bootPhase !== 'ready' || isEmpty ? null : toggleCommentsPanel
     bootPhaseRef.current = bootPhase
   })
 
@@ -5028,6 +5051,18 @@ export default function App() {
   }
 
   // 스크롤 위치 유지 (F-295.md 5.2) — 기준값은 맨 앞에서 읽는다. 이 시점의 DOM 은 아직 "떠나는 화면" 이다(React 19 커밋 지연, 4.1)
+  // 상단바 `댓글` 버튼과 Ctrl+M 이 같이 쓴다
+  function toggleCommentsPanel() {
+    // 보기 모드에서 누르면 편집 모드로 바꾸고 연다(4장 끝 행)
+    if (viewMode === 'view') {
+      changeViewMode('live')
+      comments.setOpen(true, false)
+      return
+    }
+    // 판은 화면을 덮어서 열림 상태를 저장하지 않는다(md.commentRail 은 레일만, F-505 5.1·E13)
+    comments.setOpen(!comments.open, comments.mode === 'rail')
+  }
+
   function changeViewMode(mode: string) {
     const v = mode as 'live' | 'raw' | 'view'
     if (v === viewMode) return // 5.7 — 같은 모드면 기준값만 갱신되고 복원 effect 는 안 돈다
@@ -5179,16 +5214,7 @@ export default function App() {
               openCount: comments.openThreadCount,
               open: comments.open,
               disabled: bootPhase !== 'ready' || isEmpty,
-              onToggle: () => {
-                // 보기 모드에서 누르면 편집 모드로 바꾸고 연다(4장 끝 행)
-                if (viewMode === 'view') {
-                  changeViewMode('live')
-                  comments.setOpen(true, false)
-                  return
-                }
-                // 판은 화면을 덮어서 열림 상태를 저장하지 않는다(md.commentRail 은 레일만, F-505 5.1·E13)
-                comments.setOpen(!comments.open, comments.mode === 'rail')
-              },
+              onToggle: toggleCommentsPanel,
             }
       }
       notifications={

@@ -64,6 +64,7 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     get label() {
       return toggleRailOpen ? '댓글 닫기' : '댓글 열기'
     },
+    shortcut: 'Ctrl+M',
     keywords: ['댓글', 'comment', '레일', '열기', '닫기'],
     when: (ctx) => {
       toggleRailOpen = Boolean(ctx.comments?.railOpen)

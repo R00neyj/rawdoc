@@ -92,6 +92,13 @@ describe('matchShortcut — U6', () => {
     expect(r.id).toBe('format.bold')
   })
 
+  it('Ctrl+M@doc → comment.toggleRail, Meta+M@doc → null (맥에서도 Control 그대로)', () => {
+    const r1 = matchShortcut(ev({ key: 'm', code: 'KeyM', ctrlKey: true }), new Set(['doc']), freshState, true)
+    expect(r1.id).toBe('comment.toggleRail')
+    const r2 = matchShortcut(ev({ key: 'm', code: 'KeyM', metaKey: true }), new Set(['doc']), freshState, true)
+    expect(r2.id).toBeNull()
+  })
+
   it('Ctrl+Shift+Alt+B@body → null', () => {
     const r = matchShortcut(
       ev({ key: 'B', code: 'KeyB', ctrlKey: true, shiftKey: true, altKey: true }),

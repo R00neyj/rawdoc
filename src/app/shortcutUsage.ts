@@ -39,9 +39,10 @@ export type MatchState = { escapeAt: number | null }
 const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta'])
 const ESCAPE_WINDOW_MS = 2000
 
-function chordMatches(chord: { mod?: boolean; shift?: boolean; alt?: boolean; key: string }, ev: KeyEventLike): boolean {
-  const mod = ev.ctrlKey || ev.metaKey
-  if (Boolean(chord.mod) !== mod) return false
+function chordMatches(chord: { mod?: boolean; ctrl?: boolean; shift?: boolean; alt?: boolean; key: string }, ev: KeyEventLike): boolean {
+  if (chord.ctrl) {
+    if (!ev.ctrlKey || ev.metaKey) return false
+  } else if (Boolean(chord.mod) !== (ev.ctrlKey || ev.metaKey)) return false
   if (Boolean(chord.shift) !== ev.shiftKey) return false
   if (Boolean(chord.alt) !== ev.altKey) return false
   const isCodeKey = /^Key[A-Z]$/.test(chord.key) || chord.key === 'Slash'

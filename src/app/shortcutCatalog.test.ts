@@ -20,8 +20,8 @@ import { PALETTE_COMMANDS } from './paletteCommands'
 const ID_RE = /^[a-z][a-z0-9]*\.[a-z][a-zA-Z0-9]*$/
 
 describe('SHORTCUT_CATALOG — U1', () => {
-  it('22개, id 겹치지 않고 모양을 지킨다', () => {
-    expect(SHORTCUT_CATALOG.length).toBe(22)
+  it('23개, id 겹치지 않고 모양을 지킨다', () => {
+    expect(SHORTCUT_CATALOG.length).toBe(23)
     const ids = SHORTCUT_CATALOG.map((e) => e.id)
     expect(new Set(ids).size).toBe(ids.length)
     for (const id of ids) expect(id).toMatch(ID_RE)
@@ -70,6 +70,7 @@ describe('formatChord — U2 (맥 아님)', () => {
     [{ key: 'Escape' }, 'Esc'],
     [{ key: 'ContextMenu' }, '메뉴 키'],
     [{ shift: true, key: 'F10' }, 'Shift+F10'],
+    [{ ctrl: true, key: 'KeyM' }, 'Ctrl+M'],
   ])('%o → %s', (chord, expected) => {
     expect(formatChord(chord, false)).toBe(expected)
   })
@@ -85,6 +86,7 @@ describe('formatChord — U3 (맥)', () => {
     [{ mod: true, alt: true, key: 'KeyM' }, '⌥⌘M'],
     [{ alt: true, key: 'Enter' }, '⌥Enter'],
     [{ shift: true, alt: true, key: 'ArrowUp' }, '⌥⇧↑'],
+    [{ ctrl: true, key: 'KeyM' }, '⌃M'],
   ])('%o → %s', (chord, expected) => {
     expect(formatChord(chord, true)).toBe(expected)
   })
@@ -94,9 +96,9 @@ describe('formatChord — U3 (맥)', () => {
     expect(formatEntryKeys(entry('edit.redo'), false)).toEqual(['Ctrl+Y', 'Ctrl+Shift+Z'])
   })
 
-  it('visibleShortcuts(true).length === 21, visibleShortcuts(false).length === 22', () => {
-    expect(visibleShortcuts(true).length).toBe(21)
-    expect(visibleShortcuts(false).length).toBe(22)
+  it('visibleShortcuts(true).length === 22, visibleShortcuts(false).length === 23', () => {
+    expect(visibleShortcuts(true).length).toBe(22)
+    expect(visibleShortcuts(false).length).toBe(23)
   })
 })
 
@@ -171,7 +173,7 @@ describe('U9 — 우클릭 메뉴·팔레트 키 문자열이 카탈로그와 �
 
   it('PALETTE_COMMANDS', () => {
     const items = PALETTE_COMMANDS.filter((c) => c.shortcut).map((c) => ({ id: c.id, shortcut: c.shortcut as string }))
-    const MENU = { 'comment.add': 'comment.add', 'shortcuts.open': 'nav.shortcuts' } as Record<string, string>
+    const MENU = { 'comment.add': 'comment.add', 'comment.toggleRail': 'comment.toggleRail', 'shortcuts.open': 'nav.shortcuts' } as Record<string, string>
     for (const { id, shortcut } of items) {
       const catalogId = MENU[id]
       expect(catalogId, `팔레트 명령 ${id} 이 대응표에 없다`).toBeDefined()
