@@ -4,6 +4,7 @@ import { WELCOME_PATH } from '../lib/siteChrome'
 import { visibleSettingsTabs, nextTabIndex, type SettingsTabId } from './settingsTabs'
 import { newDocTemplateOptions, type TemplateEntry } from '../lib/templates'
 import { E2EE_LOCK_MINUTES, type E2eeStatus } from '../e2ee/keyring'
+import { THEME_OPTIONS } from './theme'
 import {
   MIN_CONTENT_WIDTH,
   MAX_CONTENT_WIDTH,
@@ -13,12 +14,6 @@ import {
 } from './contentWidth'
 
 // 설정 대화상자 D-2 (specs/ia.md 3.15, specs/features/F-121.md, F-141.md 3.2, F-290.md 왼쪽 탭)
-const THEME_OPTIONS = [
-  { value: 'system', label: '시스템' },
-  { value: 'white', label: '화이트' },
-  { value: 'sepia', label: '세피아' },
-  { value: 'dark', label: '다크' },
-] as const
 
 // 제목·본문 서체가 같은 버튼 순서를 쓴다 (F-141 3.2)
 const FONT_OPTIONS = [

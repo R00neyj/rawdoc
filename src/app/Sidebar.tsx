@@ -791,7 +791,12 @@ type SidebarProps = {
   e2eeConvert?: E2eeConvertMenu
   // 안 읽은 F-507 알림이 있는 문서 id — 없거나 빈 집합이면 점이 하나도 없다 (F-510 3.3)
   unreadNotificationDocIds?: ReadonlySet<string>
+  // 명령 팔레트 `새 폴더` 가 사이드바 안 동작(레일 펼치기·이름 칸 열기)을 부르는 자리 (F-2054 6.1)
+  commandRef?: RefObject<SidebarCommands | null>
 }
+
+// 명령 팔레트가 부르는 사이드바 동작 (F-2054 6.1)
+export type SidebarCommands = { createTopFolder: () => void }
 
 export default function Sidebar({
   sidebarRef,
@@ -834,6 +839,7 @@ export default function Sidebar({
   onExportFolderVault,
   e2eeConvert,
   unreadNotificationDocIds,
+  commandRef,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
@@ -938,6 +944,16 @@ export default function Sidebar({
     onToggleCollapse()
     handleCreateFolder(null)
   }
+
+  // 명령 팔레트 `새 폴더` — 레일(collapsed)이면 먼저 펼친 뒤 최상위에 만든다 (F-2054 6.1)
+  function createTopFolder() {
+    if (collapsed) handleRailCreateFolder()
+    else handleCreateFolder(null)
+  }
+
+  useEffect(() => {
+    if (commandRef) commandRef.current = { createTopFolder }
+  })
 
   function kindOf(id: string): 'doc' | 'folder' | null {
     if (docs.some((d) => d.id === id)) return 'doc'

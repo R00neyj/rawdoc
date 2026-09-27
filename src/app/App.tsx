@@ -140,8 +140,12 @@ import CommentRailPanel, { CommentPanelPresence } from './CommentRailPanel'
 import { useDocComments, computeCommentAccess, scrollTopOf, COMMENT_TEXT, CommentCommandContext } from './useDocComments'
 import { IconAddComment } from './icons'
 import CommandPalette from './CommandPalette'
-import type { PaletteContext, PaletteCreatePlan } from './paletteContract'
+import type { PaletteContext, PaletteCreatePlan, PaletteViewMode } from './paletteContract'
+import { paletteScreen } from './paletteContract'
 import { toPaletteDocs, planPaletteCreate } from './paletteDocs'
+import { copyShareLink, copyShareMarkdown } from './shareCopy'
+import type { ThemePref } from './theme'
+import { GUIDES_PATH } from '../lib/siteChrome'
 import NotificationsMenu from './NotificationsMenu'
 import { useNotifications } from './useNotifications'
 import { fetchDocPeople } from './notificationsApi'
@@ -156,7 +160,7 @@ import { ensurePersist } from '../pwa/persistStorage'
 import { setupFileLaunch } from '../pwa/fileLaunch'
 
 import TopBar from './TopBar'
-import Sidebar, { type SharedDocLike } from './Sidebar'
+import Sidebar, { type SharedDocLike, type SidebarCommands } from './Sidebar'
 import NoticeBar, { type NoticeWithAction } from './NoticeBar'
 import EmptyState from './EmptyState'
 import ConfirmDeleteDialog, { type DeleteTarget } from './ConfirmDeleteDialog'
@@ -617,6 +621,12 @@ export default function App() {
   const printDisabledRef = useRef(true) // exportDisabled 와 같은 조건 (F-279.md 6.1)
   const openPaletteRef = useRef(() => {}) // Ctrl+P 가 매 커밋 최신 openPalette 를 읽게 한다 (F-2022.md 6.1)
   const selectPaletteQueryRef = useRef(() => {}) // 팔레트가 이미 열려 있을 때 입력칸 전체 선택 — CommandPalette 가 채운다 (F-2022.md 6.1)
+  // 팔레트 close() 호출 중 어디쯘인지 구분 — runAction() 이 부르는 첫 번째 호출인지, Dialog 의 실제 close 이벤트가 부르는 두 번째 호출인지 (F-2054 5.1)
+  const paletteClosingRef = useRef(false)
+  // 늦춤 명령(F-2054 3장) 이 쟁여 둔 일 — 팔레트가 실제로 닫히고 포커스가 돌아온 뒤 0ms 타이머로 돈다
+  const deferredAfterPaletteCloseRef = useRef<(() => void) | null>(null)
+  // 명령 팔레트 `새 폴더` 가 사이드바 안 동작을 부르는 자리 (F-2054 6.1)
+  const sidebarCommandRef = useRef<SidebarCommands | null>(null)
   const toggleShortcutsRef = useRef(() => {}) // Ctrl+Shift+/ 가 매 커밋 최신 toggleShortcuts 를 읽게 한다 (F-2052.md 6.1)
   const toggleCommentsRef = useRef<(() => void) | null>(null) // Ctrl+M — 상단바 `댓글` 버튼을 누를 수 없으면 null (tweak 2026-09-28)
   const shortcutsButtonRef = useRef<HTMLButtonElement | null>(null) // 상태바 `?` 버튼 — 판이 닫힐 때 포커스를 돌려준다 (F-2052 5.3)
@@ -3296,6 +3306,8 @@ export default function App() {
     if (viewMode === 'view') changeViewMode('live')
     await beforeLeaveDoc()
     setSharedDoc(null) // 공유 화면에서 새 문서 를 눌러도 화면을 떠난다 (F-130.md 4장, 자체 결정)
+    setSharesOpen(false) // 공유 관리·도움말 화면에서도 화면을 떠난다 (F-2054 6.4, 확인 (c))
+    setHelpOpen(false)
     setMapRoute(null) // 지도의 "문서가 없습니다" 빈 상태에서 새 문서 를 눌러도 지도를 떠난다 (F-292.md 6.5)
     // 새 문서 버튼은 {{title}} 이 빈 글자다 — 사용자 결정, F-2037.md 4.4
     const { content, failed } = await buildNewDocContent({ title: '', emptyTitle: 'keep-empty' })
@@ -3704,6 +3716,9 @@ export default function App() {
 
     await beforeLeaveDoc()
     setSharedDoc(null) // 공유 화면에서 가져와도 화면을 떠난다 (F-130.md 4장, 자체 결정)
+    setSharesOpen(false) // 공유 관리·도움말·지도 화면에서도 화면을 떠난다 (F-2054 6.4, 확인 (c))
+    setHelpOpen(false)
+    setMapRoute(null)
 
     // 금고 한 겹이 거절한 이유는 가져오기 알림 대신 금고 문구로 보인다 (F-405 7.6)
     let lastE2eeError: unknown = null
@@ -4596,12 +4611,29 @@ export default function App() {
     setContextMenu(null)
     closeSidebarIfNarrow()
     setPaletteOpen(true)
+    // 이번 열기·닫기 한 판을 새로 센다 (F-2054 5.1)
+    paletteClosingRef.current = false
+    deferredAfterPaletteCloseRef.current = null
     // 상태가 unknown 이면 한 번 읽는다 — 읽는 동안은 금고 명령이 안 보인다 (F-404.md 7.6)
     if (e2ee?.status === 'unknown') void e2ee.keyring.load()
   }
 
+  // closePalette 는 한 판에 두 번 불린다 — 두 번째(Dialog 의 실제 close 이벤트) 호출에서만 늦춤 명령을 0ms 타이머로 건다(F-2054 5.1)
   function closePalette() {
     setPaletteOpen(false)
+    if (!paletteClosingRef.current) {
+      paletteClosingRef.current = true
+      return
+    }
+    paletteClosingRef.current = false
+    const fn = deferredAfterPaletteCloseRef.current
+    deferredAfterPaletteCloseRef.current = null
+    if (fn) setTimeout(fn, 0)
+  }
+
+  // 늦춤 명령(3장 표 "늦춤 ✓")이 여는 대화상자·포커스 이동을 쟁여 둔다 — closePalette 참고 (F-2054 5.1)
+  function runAfterPaletteClose(fn: () => void) {
+    deferredAfterPaletteCloseRef.current = fn
   }
 
   // 단축키 판 — 상태바가 보이는 조건과 같다(4.3). 팔레트 context·판 렌더 자리가 함께 쓴다
@@ -4716,6 +4748,37 @@ export default function App() {
     })
   }
 
+  // 지금 문서를 가리키는 팔레트 명령이 대화상자에 보일 이름 — 사이드바 displayTitleOf 와 같은 규칙(F-2054 3.3)
+  const paletteCurrentDocTitle = currentDoc ? (currentDoc.e2ee === 'locked' ? '잠긴 문서' : currentDoc.title) : ''
+
+  const palettePresentDocScreen = docScreenId !== null && Boolean(currentDoc)
+
+  const paletteOutputCtx: PaletteContext['output'] =
+    docScreenId !== null && openDoc?.id === currentDocId && currentDoc?.e2ee !== 'locked'
+      ? {
+          e2ee: currentDoc?.e2ee !== undefined,
+          exportMd: () => handleExportDoc(),
+          exportTxt: () => handleExportDocAsText(),
+          exportHtml: () => handleExportDocAsHtml(),
+          copyRich: () => handleCopyDocAsRichText(),
+          copyLink: () =>
+            void copyShareLink({
+              getShareDoc,
+              onNotice: showNotice,
+              writeText: (text) => navigator.clipboard.writeText(text),
+              baseUrl: `${location.origin}${location.pathname}`,
+            }),
+          copyMarkdown: () =>
+            void copyShareMarkdown({
+              getShareDoc,
+              onNotice: showNotice,
+              writeText: (text) => navigator.clipboard.writeText(text),
+              baseUrl: `${location.origin}${location.pathname}`,
+            }),
+          invite: canInviteCurrentDoc ? () => runAfterPaletteClose(() => requestInviteCurrentDoc()) : undefined,
+        }
+      : undefined
+
   const paletteContext: PaletteContext = {
     canInsertTemplate,
     canPrint,
@@ -4746,6 +4809,65 @@ export default function App() {
           create: (plan) => void createDocFromPalette(plan),
         }
       : undefined,
+    // ----- F-2054 4.3 -----
+    nav: {
+      screen: paletteScreen({
+        sharedLink: Boolean(sharedDoc),
+        shares: sharesOpen,
+        help: helpOpen,
+        map: Boolean(mapRoute),
+        currentDocId,
+      }),
+      openSearch: () => runAfterPaletteClose(() => openSearch()),
+      goHome: () => void goHome(),
+      openMap: () => void openMap(),
+      openHelp: () => void openHelp(),
+      openGuides: () => window.open(GUIDES_PATH, '_blank', 'noopener,noreferrer'),
+      openSettings: () => runAfterPaletteClose(() => openSettings()),
+      openShares: account.state === 'in' ? () => { location.hash = '#/shares' } : undefined,
+    },
+    docActions: {
+      newDoc: () => runAfterPaletteClose(() => void createNewDoc()),
+      newFolder: () =>
+        runAfterPaletteClose(() => {
+          if (narrow) setSidebarOpen(true)
+          sidebarCommandRef.current?.createTopFolder()
+        }),
+      importDoc: () => requestImport(),
+      current:
+        palettePresentDocScreen && currentDoc
+          ? {
+              owned: !isSharedDoc(currentDoc),
+              pinned: currentDoc.pinnedAt != null,
+              openNewTab: () => window.open(formatHash(currentDoc.id), '_blank', 'noopener'),
+              togglePin: () => void handleTogglePin(currentDoc.id, currentDoc.pinnedAt == null),
+              move: () =>
+                runAfterPaletteClose(() =>
+                  requestMoveDoc({ id: currentDoc.id, title: paletteCurrentDocTitle, folderId: currentDoc.folderId }),
+                ),
+              remove: () =>
+                runAfterPaletteClose(() => requestDeleteDoc({ id: currentDoc.id, title: paletteCurrentDocTitle })),
+            }
+          : undefined,
+    },
+    view: {
+      mode: docScreenId !== null ? (viewMode as PaletteViewMode) : null,
+      setMode: (mode) => {
+        changeViewMode(mode)
+        if (mode !== 'view') runAfterPaletteClose(() => editorRef.current?.focus())
+      },
+      sidebar: narrow ? (sidebarOpen ? 'narrowOpen' : 'narrowClosed') : sidebarCollapsed ? 'collapsed' : 'expanded',
+      toggleSidebar: () => toggleSidebar(),
+      theme: themePref as ThemePref,
+      setTheme: (theme) => changeTheme(theme),
+      lineNumbers: lineNumbersPref === 'on',
+      toolbar: toolbarPref === 'on',
+      wikiPreview: wikiPreviewPref === 'on',
+      toggleLineNumbers: () => changeLineNumbers(lineNumbersPref === 'on' ? 'off' : 'on'),
+      toggleToolbar: () => changeToolbar(toolbarPref === 'on' ? 'off' : 'on'),
+      toggleWikiPreview: () => changeWikiPreview(wikiPreviewPref === 'on' ? 'off' : 'on'),
+    },
+    output: paletteOutputCtx,
   }
 
   // 검색 결과에서 문서 열기 (F-287.md 4.6) — 지금 문서를 그대로 두지 않고 그 문서로 이동한다
@@ -5373,6 +5495,7 @@ export default function App() {
           onOpenMap={openMap}
           onOpenSearch={openSearch}
           onOpenPalette={openPalette}
+          commandRef={sidebarCommandRef}
           canInstall={canInstall}
           onInstall={install}
           width={displaySidebarWidth}

@@ -4,6 +4,7 @@ import {
   filterPaletteItems,
   parsePaletteQuery,
   buildPaletteSections,
+  paletteScreen,
   type PaletteCommand,
   type PaletteContext,
   type PaletteItem,
@@ -258,5 +259,31 @@ describe('buildPaletteSections — U4 (F-2053.md 11.1)', () => {
     expect(map.get('recentDocs')!.rows.map((r) => r.key)).toEqual(['doc:r1', 'doc:r2'])
     expect(map.has('docs')).toBe(false)
     expect(map.has('create')).toBe(false)
+  })
+})
+
+describe('paletteScreen — U8 (F-2054 4.2)', () => {
+  it('전부 거짓 + id 있음 → doc', () => {
+    expect(paletteScreen({ sharedLink: false, shares: false, help: false, map: false, currentDocId: 'd1' })).toBe('doc')
+  })
+
+  it('전부 거짓 + id 없음 → home', () => {
+    expect(paletteScreen({ sharedLink: false, shares: false, help: false, map: false, currentDocId: null })).toBe('home')
+  })
+
+  it('map + id 있음 → map', () => {
+    expect(paletteScreen({ sharedLink: false, shares: false, help: false, map: true, currentDocId: 'd1' })).toBe('map')
+  })
+
+  it('help + map → help (help 가 먼저)', () => {
+    expect(paletteScreen({ sharedLink: false, shares: false, help: true, map: true, currentDocId: 'd1' })).toBe('help')
+  })
+
+  it('shares + help → shares (shares 가 먼저)', () => {
+    expect(paletteScreen({ sharedLink: false, shares: true, help: true, map: false, currentDocId: null })).toBe('shares')
+  })
+
+  it('sharedLink + shares + id → sharedLink (sharedLink 가 먼저)', () => {
+    expect(paletteScreen({ sharedLink: true, shares: true, help: false, map: false, currentDocId: 'd1' })).toBe('sharedLink')
   })
 })

@@ -4,6 +4,7 @@ import type { TemplateEntry } from '../lib/templates'
 import type { E2eeStatus } from '../e2ee/keyring'
 import { filterPaletteDocs, PALETTE_DOC_LIMIT, type PaletteDocIndex } from './paletteDocs'
 import { PALETTE_RECENT_COMMAND_LIMIT } from './paletteMemory'
+import type { ThemePref } from './theme'
 
 // 목록 한 줄 — 명령이든 2단계 항목(템플릿)이든 같은 모양 (3.1)
 export type PaletteItem = {
@@ -36,6 +37,76 @@ export type PaletteContext = {
     open: (id: string, target: 'here' | 'newTab') => void
     create: (plan: PaletteCreatePlan) => void
   }
+  // 화면 이동 — 선택 필드. 없으면 이동 명령들이 안 보인다 (F-2054 4.1)
+  nav?: {
+    screen: PaletteScreen
+    openSearch: () => void
+    goHome: () => void
+    openMap: () => void
+    openHelp: () => void
+    openGuides: () => void
+    openSettings: () => void
+    openShares?: () => void
+  }
+  // 문서 조작 — 선택 필드. 없으면 만들기·지금 문서 명령들이 안 보인다 (F-2054 4.1)
+  docActions?: {
+    newDoc: () => void
+    newFolder: () => void
+    importDoc: () => void
+    current?: {
+      owned: boolean
+      pinned: boolean
+      openNewTab: () => void
+      togglePin: () => void
+      move: () => void
+      remove: () => void
+    }
+  }
+  // 보기 설정 — 선택 필드. 없으면 모드·사이드바·테마·토글 명령들이 안 보인다 (F-2054 4.1)
+  view?: {
+    mode: PaletteViewMode | null
+    setMode: (mode: PaletteViewMode) => void
+    sidebar: 'expanded' | 'collapsed' | 'narrowOpen' | 'narrowClosed'
+    toggleSidebar: () => void
+    theme: ThemePref
+    setTheme: (theme: ThemePref) => void
+    lineNumbers: boolean
+    toolbar: boolean
+    wikiPreview: boolean
+    toggleLineNumbers: () => void
+    toggleToolbar: () => void
+    toggleWikiPreview: () => void
+  }
+  // 지금 문서 내보내기·공유 — 선택 필드. 없으면 내보내기·복사·초대 명령들이 안 보인다 (F-2054 4.1)
+  output?: {
+    e2ee: boolean
+    exportMd: () => void
+    exportTxt: () => void
+    exportHtml: () => void
+    copyRich: () => void
+    copyLink: () => void
+    copyMarkdown: () => void
+    invite?: () => void
+  }
+}
+
+export type PaletteScreen = 'doc' | 'home' | 'help' | 'map' | 'shares' | 'sharedLink'
+export type PaletteViewMode = 'live' | 'raw' | 'view'
+
+// 화면 하나로 정하기 — App 렌더 우선순위와 같다 (F-2054 4.2)
+export function paletteScreen(s: {
+  sharedLink: boolean
+  shares: boolean
+  help: boolean
+  map: boolean
+  currentDocId: string | null
+}): PaletteScreen {
+  if (s.sharedLink) return 'sharedLink'
+  if (s.shares) return 'shares'
+  if (s.help) return 'help'
+  if (s.map) return 'map'
+  if (s.currentDocId === null) return 'home'
+  return 'doc'
 }
 
 // 문서 한 줄의 재료 — App 이 docs·folders 로 만든다 (F-2053 4.2)

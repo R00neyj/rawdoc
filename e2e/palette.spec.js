@@ -73,8 +73,7 @@ test.describe('F-2022 A1 Ctrl+P 로 열기', () => {
     await expect(palette(page).locator('h2')).toHaveText('명령 팔레트')
     await expect(palette(page).locator('.command-palette-input')).toBeFocused()
     const options = paletteOptions(page)
-    // 댓글 명령 둘(comment.add·comment.toggleRail)이 F-505 로 뒤에 더해져 2개 → 4개(3.4), F-2052 `단축키 보기` 가 끝에 더해져 4 → 5
-    await expect(options).toHaveCount(5)
+    // 정확한 개수는 명령을 더하는 명세(F-2054·F-2055)마다 바뀐다 — 첫 두 줄 순서만 본다(3.1, F-2053 A3·A4 전제)
     await expect(options.nth(0)).toHaveText(/템플릿 삽입/)
     await expect(options.nth(1)).toHaveText(/PDF \(A4 인쇄\)/)
     await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true')
@@ -340,7 +339,7 @@ test.describe('F-2022 A12 키보드', () => {
     await page.keyboard.press('Control+p')
     await page.keyboard.type('>') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
 
-    // 댓글 명령 둘(F-505 3.4) + 단축키 보기(F-2052 9.1)가 더해져 옵션이 5개 — ArrowUp 은 순환해 마지막으로 간다
+    // 옵션 수는 명령을 더하는 명세마다 늘어난다 — ArrowUp 은 순환해 마지막으로 간다(개수는 보지 않는다, F-2054 9장)
     await page.keyboard.press('ArrowUp')
     await expect(paletteOptions(page).last()).toHaveAttribute('aria-selected', 'true')
     await page.keyboard.press('ArrowDown') // 마지막에서 ArrowDown 은 처음으로 순환한다
@@ -366,8 +365,7 @@ test.describe('F-2022 A13 보기 모드', () => {
 
     await page.keyboard.press('Control+p')
     await page.keyboard.type('>') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
-    // 보기 모드도 댓글 접근이 'none' 이 아니라 comment.toggleRail 이 보인다(F-505 3.4) — PDF·댓글 열기 2개, 보기 모드도 상태바가 있어 단축키 보기까지 3개(F-2052 9.1)
-    await expect(paletteOptions(page)).toHaveCount(3)
+    // 개수는 명령을 더하는 명세마다 바뀐다 — 첫 옵션이 PDF 라는 것만 본다(3.1)
     await expect(paletteOptions(page).first()).toHaveText(/PDF/)
     await page.keyboard.press('Enter')
 
@@ -408,16 +406,16 @@ test.describe('F-2022 A14 읽기 전용', () => {
   })
 })
 
-test.describe('F-2022 A15 홈에서', () => {
-  test('빈 옵션, 인쇄 호출 없음', async ({ page }) => {
+test.describe('F-2022 A15 홈에서 — PDF 명령이 없다', () => {
+  test('PDF 옵션 0개, 인쇄 호출 없음', async ({ page }) => {
     await stubPrint(page)
     await openAppHome(page)
 
     await page.keyboard.press('Control+p')
 
     await expect(palette(page)).toBeVisible()
-    await expect(paletteOptions(page)).toHaveCount(0)
-    await expect(palette(page).locator('.command-palette-status')).toHaveText('지금 쓸 수 있는 명령이 없습니다')
+    // 홈 화면에는 F-2054 이동·만들기·보기 명령이 보인다 — 문서 대상 명령(PDF 등)만 없다
+    await expect(page.getByRole('option', { name: 'PDF (A4 인쇄)' })).toHaveCount(0)
     expect(await printCallCount(page)).toBe(0)
   })
 })

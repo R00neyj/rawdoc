@@ -239,7 +239,7 @@ test.describe('F-279 A11 Ctrl+P', () => {
     await expect(page.locator('.print-root .markdown-body h2')).toHaveText('소개')
   })
 
-  test('빈 상태에서는 인쇄를 부르지 않고 팔레트에 명령이 없다', async ({ page }) => {
+  test('빈 상태에서는 인쇄를 부르지 않고 팔레트에 PDF 명령이 없다', async ({ page }) => {
     await stubPrint(page)
     await openApp(page)
     await deleteFirstDoc(page) // 첫 실행 안내 문서를 지워 빈 상태를 만든다
@@ -248,6 +248,7 @@ test.describe('F-279 A11 Ctrl+P', () => {
     await page.waitForTimeout(300)
 
     expect(await printCallCount(page)).toBe(0)
-    await expect(page.locator('dialog[open] .command-palette .command-palette-status')).toHaveText('지금 쓸 수 있는 명령이 없습니다')
+    // 홈 화면에는 F-2054 이동·만들기·보기 명령이 보인다 — PDF (A4 인쇄) 만 없다
+    await expect(page.getByRole('option', { name: 'PDF (A4 인쇄)' })).toHaveCount(0)
   })
 })

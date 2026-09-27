@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } from 'react'
 
-import { encodeShare, type ShareDoc } from '../lib/shareCodec'
-import { extractAttachmentRefs } from '../lib/imageBlock'
-import { stripComments } from '../lib/comments'
+import type { ShareDoc } from '../lib/shareCodec'
 import { findWikiLinks } from '../lib/wikiLink'
 import type { WikiResolver } from '../lib/wikiResolve'
-import { formatShareHash } from './hashRoute'
 import { getShareLink, createShareLink, revokeShareLink } from './linkApi'
+import { copyShareLink, copyShareMarkdown } from './shareCopy'
 import { IconShare, IconTooltip, IconLink, IconLinkOff, IconCopy, IconPersonAdd } from './icons'
 import usePresence from './usePresence'
 import ShareSetDialog from './ShareSetDialog'
@@ -14,8 +12,7 @@ import type { Notice } from './notice'
 
 // 상단바 `공유` 메뉴 (specs/ia.md 2장 A·3.19, specs/features/F-130.md 2장)
 // FolderMenu(F-126.md 5.2)와 같은 패턴 — 라이브러리 없이 방향키·Enter·Esc·바깥 클릭을 직접 구현
-const MAX_LINK_LENGTH = 2_000_000 // Chromium url::kMaxURLChars 기준 (F-130.md 3.2)
-const WARN_LINK_LENGTH = 8_000 // 보수적으로 잡은 경고 기준 (F-130.md 3.2)
+// 링크·마크다운 복사 본문은 shareCopy.ts 로 옮겼다 — 명령 팔레트와 같이 쓴다 (F-2054 6.2)
 
 type ShareMenuProps = {
   disabled: boolean // 문서가 없을 때(S-1) 비활성 (F-130.md 2장)
@@ -108,56 +105,23 @@ export default function ShareMenu({
   }
 
   // ----- 링크 복사 (F-130.md 2·3장) -----
-  async function handleCopyLink() {
-    const rawDoc = getShareDoc()
-    // 공유 링크 주소에는 주석을 담지 않는다 (F-214.md 2.2)
-    const doc: ShareDoc = { ...rawDoc, content: stripComments(rawDoc.content) }
-    const fragment = await encodeShare(doc)
-    const link = `${location.origin}${location.pathname}${formatShareHash(fragment)}`
-
-    if (link.length > MAX_LINK_LENGTH) {
-      onNotice({
-        type: 'error',
-        message: '문서가 너무 커서 링크로 공유할 수 없습니다. .md 내보내기를 이용하세요.',
-      })
-      return
-    }
-
-    try {
-      await navigator.clipboard.writeText(link)
-    } catch {
-      onNotice({ type: 'error', message: '복사하지 못했습니다. 브라우저 권한을 확인하세요.' })
-      return
-    }
-
-    if (link.length > WARN_LINK_LENGTH) {
-      const kb = Math.ceil(link.length / 1024)
-      onNotice({
-        type: 'warn',
-        message: `링크가 깁니다(약 ${kb}KB). 일부 메신저에서 잘릴 수 있어 .md 내보내기를 권장합니다.`,
-      })
-      return
-    }
-
-    // 이미지 첨부가 있으면 링크에 담기지 않는다는 사실을 알린다 (F-158.md 2.2)
-    const hasAttachments = extractAttachmentRefs(doc.content).size > 0
-    onNotice({
-      type: 'info',
-      message: hasAttachments
-        ? '공유 링크를 복사했습니다. 이미지는 링크에 담기지 않습니다.'
-        : '공유 링크를 복사했습니다. 문서 내용이 링크 주소에 담깁니다.',
+  function handleCopyLink() {
+    return copyShareLink({
+      getShareDoc,
+      onNotice,
+      writeText: (text) => navigator.clipboard.writeText(text),
+      baseUrl: `${location.origin}${location.pathname}`,
     })
   }
 
   // ----- 마크다운 복사 (F-130.md 2장) -----
-  async function handleCopyMarkdown() {
-    const doc = getShareDoc()
-    try {
-      await navigator.clipboard.writeText(doc.content)
-      onNotice({ type: 'info', message: '마크다운을 복사했습니다.' })
-    } catch {
-      onNotice({ type: 'error', message: '복사하지 못했습니다. 브라우저 권한을 확인하세요.' })
-    }
+  function handleCopyMarkdown() {
+    return copyShareMarkdown({
+      getShareDoc,
+      onNotice,
+      writeText: (text) => navigator.clipboard.writeText(text),
+      baseUrl: `${location.origin}${location.pathname}`,
+    })
   }
 
   // ----- 읽기 전용 링크 (F-210.md 2.6) -----

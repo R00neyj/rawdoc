@@ -173,7 +173,12 @@ describe('U9 — 우클릭 메뉴·팔레트 키 문자열이 카탈로그와 �
 
   it('PALETTE_COMMANDS', () => {
     const items = PALETTE_COMMANDS.filter((c) => c.shortcut).map((c) => ({ id: c.id, shortcut: c.shortcut as string }))
-    const MENU = { 'comment.add': 'comment.add', 'comment.toggleRail': 'comment.toggleRail', 'shortcuts.open': 'nav.shortcuts' } as Record<string, string>
+    const MENU = {
+      'comment.add': 'comment.add',
+      'comment.toggleRail': 'comment.toggleRail',
+      'shortcuts.open': 'nav.shortcuts',
+      'search.open': 'find.search',
+    } as Record<string, string>
     for (const { id, shortcut } of items) {
       const catalogId = MENU[id]
       expect(catalogId, `팔레트 명령 ${id} 이 대응표에 없다`).toBeDefined()
