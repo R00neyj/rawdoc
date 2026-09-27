@@ -1,10 +1,11 @@
 // 사이드바 머리 줄·좁은 창 상단바 앞 묶음 공용. 레일은 hidden 만 바꿔 토글 포커스 유지 (F-159 2.2~2.4)
 import type { RefObject } from 'react'
 import brand from '../brand'
-import { IconPanelOpen, IconPanelClose, IconSearch, IconTooltip } from './icons'
+import { IconPanelOpen, IconPanelClose, IconSearch, IconCommandPalette, IconTooltip } from './icons'
 
 export const SIDEBAR_ID = 'sidebar-nav'
 export const SEARCH_LABEL = '검색'
+export const PALETTE_LABEL = '명령 팔레트'
 
 type SidebarHeadProps = {
   variant: 'topbar' | 'sidebar'
@@ -13,6 +14,7 @@ type SidebarHeadProps = {
   onToggleSidebar: () => void
   toggleButtonRef?: RefObject<HTMLButtonElement | null>
   onOpenSearch: () => void
+  onOpenPalette: () => void
 }
 
 export default function SidebarHead({
@@ -22,6 +24,7 @@ export default function SidebarHead({
   onToggleSidebar,
   toggleButtonRef,
   onOpenSearch,
+  onOpenPalette,
 }: SidebarHeadProps) {
   const ToggleIcon = expanded ? IconPanelClose : IconPanelOpen
   const toggleLabel =
@@ -62,6 +65,12 @@ export default function SidebarHead({
             <IconSearch size={18} />
           </button>
           <IconTooltip text={SEARCH_LABEL} />
+        </span>
+        <span className="icon-btn-wrap" hidden={rail}>
+          <button type="button" className="icon-btn topbar-palette-btn" aria-label={PALETTE_LABEL} onClick={onOpenPalette}>
+            <IconCommandPalette size={18} />
+          </button>
+          <IconTooltip text={PALETTE_LABEL} />
         </span>
       </div>
     </div>

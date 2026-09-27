@@ -13,7 +13,7 @@ import {
 import { buildTree, canMoveFolder, pinnedDocs, type DocLike, type DocNode, type FolderLike, type FolderNode, type TreeNode as TreeNodeType } from '../lib/folderTree'
 import { foldersWithUnreadDocs } from './docNotifications'
 import FolderMenu, { type FolderMenuItem } from './FolderMenu'
-import SidebarHead, { SIDEBAR_ID, SEARCH_LABEL } from './SidebarHead'
+import SidebarHead, { SIDEBAR_ID, SEARCH_LABEL, PALETTE_LABEL } from './SidebarHead'
 import { clampSidebarWidth, maxSidebarWidth, MIN_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, ARROW_KEY_STEP } from './sidebarWidth'
 import {
   EMPTY_SELECTION,
@@ -36,6 +36,7 @@ import {
   IconFolderAdd,
   IconUpload,
   IconSearch,
+  IconCommandPalette,
   IconSettings,
   IconInstall,
   IconPin,
@@ -775,6 +776,7 @@ type SidebarProps = {
   onOpenHelp: () => void
   onOpenMap: () => void
   onOpenSearch: () => void
+  onOpenPalette: () => void
   canInstall: boolean
   onInstall: () => void
   width: number
@@ -819,6 +821,7 @@ export default function Sidebar({
   onOpenHelp,
   onOpenMap,
   onOpenSearch,
+  onOpenPalette,
   canInstall,
   onInstall,
   width,
@@ -1147,12 +1150,14 @@ export default function Sidebar({
           collapsed={isRail}
           onToggleSidebar={onToggleCollapse}
           onOpenSearch={onOpenSearch}
+          onOpenPalette={onOpenPalette}
         />
       )}
       <div className="sidebar-inner">
         {isRail ? (
           <div className="sidebar-rail-scroll">
             <RailButton icon={IconSearch} label={SEARCH_LABEL} onClick={onOpenSearch} />
+            <RailButton icon={IconCommandPalette} label={PALETTE_LABEL} onClick={onOpenPalette} />
             <RailButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
             <RailButton icon={IconFolderAdd} label="새 폴더" onClick={handleRailCreateFolder} />
             <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
@@ -1165,6 +1170,7 @@ export default function Sidebar({
             <div className="sidebar-fixed">
               <div className="sidebar-actions">
                 <SidebarIconButton icon={IconSearch} label="검색" btnClassName="sidebar-search-btn" onClick={onOpenSearch} />
+                <SidebarIconButton icon={IconCommandPalette} label={PALETTE_LABEL} btnClassName="sidebar-palette-btn" onClick={onOpenPalette} />
                 <SidebarIconButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
                 <SidebarIconButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
                 <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />

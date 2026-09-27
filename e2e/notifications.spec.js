@@ -80,7 +80,7 @@ test.describe('F-507 E1 로그인 없음', () => {
     await openApp(page)
     await expect(notifBtn(page)).toHaveCount(0)
     await page.keyboard.press('Control+p')
-    await page.locator('.command-palette-input').fill('알림')
+    await page.locator('.command-palette-input').fill('>알림') // F-2053 — 만들기 줄이 안 붙게 명령 모드로
     await expect(page.getByRole('option')).toHaveCount(0)
   })
 })
@@ -398,7 +398,7 @@ test.describe('F-507 E14 키보드', () => {
     await expect(notifBtn(page)).toBeFocused()
 
     await page.keyboard.press('Control+p')
-    await page.locator('.command-palette-input').fill('알림 열기')
+    await page.locator('.command-palette-input').fill('>알림 열기') // F-2053 — 만들기 줄이 안 붙게 명령 모드로
     await page.keyboard.press('Enter')
     await expect(notifPanel(page)).toBeVisible()
     await expect(notifItems(page).first()).toBeFocused()

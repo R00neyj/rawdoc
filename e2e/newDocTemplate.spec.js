@@ -226,6 +226,7 @@ test.describe('F-2037 A7b 팔레트는 그대로', () => {
     await page.locator('.cm-content').click()
     await page.keyboard.press('Control+End')
     await page.keyboard.press('Control+p')
+    await page.keyboard.type('>') // F-2053 — 빈 입력이 최근 문서 먼저일 수 있어 명령 모드로 연다
     await page.keyboard.press('Enter')
     await palette(page).locator('.command-palette-input').fill('노트 틀')
     await page.keyboard.press('Enter')
@@ -348,6 +349,7 @@ test.describe('F-2037 A14 팔레트 안내 줄 — 사용자 템플릿 없음', 
     await openApp(page)
     await page.locator('.cm-content').click()
     await page.keyboard.press('Control+p')
+    await page.keyboard.type('>') // F-2053 — 빈 입력이 최근 문서 먼저일 수 있어 명령 모드로 연다
     await page.keyboard.press('Enter')
 
     const hint = palette(page).locator('.command-palette-hint')
@@ -363,6 +365,7 @@ test.describe('F-2037 A14 팔레트 안내 줄 — 사용자 템플릿 있음', 
     await setupUserTemplate(page)
     await page.locator('.cm-content').click()
     await page.keyboard.press('Control+p')
+    await page.keyboard.type('>') // F-2053 — 빈 입력이 최근 문서 먼저일 수 있어 명령 모드로 연다
     await page.keyboard.press('Enter')
 
     const hint = palette(page).locator('.command-palette-hint')

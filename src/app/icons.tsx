@@ -89,6 +89,8 @@ import checkCircleSvg from '@material-symbols/svg-400/outlined/check_circle.svg?
 import arrowUpwardSvg from '@material-symbols/svg-400/outlined/arrow_upward.svg?raw'
 // 상태바 `단축키` 버튼 — 사이드바 `도움말`의 help(동그라미 `?`)와 구별되는 동그라미 없는 `?` (F-2052 12장 Q3)
 import questionMarkSvg from '@material-symbols/svg-400/outlined/question_mark.svg?raw'
+// 사이드바 `명령 팔레트` 버튼 — > 명령 모드와 모양이 이어지는 터미널 아이콘 (F-2053 10.2)
+import terminalSvg from '@material-symbols/svg-400/outlined/terminal.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -222,6 +224,8 @@ export const IconNotifications = makeIcon(notificationsSvg)
 export const IconCheckCircle = makeIcon(checkCircleSvg)
 export const IconArrowUp = makeIcon(arrowUpwardSvg)
 export const IconShortcuts = makeIcon(questionMarkSvg)
+// 사이드바 `명령 팔레트` 버튼 (F-2053 10.2)
+export const IconCommandPalette = makeIcon(terminalSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

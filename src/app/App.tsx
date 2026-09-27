@@ -140,7 +140,8 @@ import CommentRailPanel, { CommentPanelPresence } from './CommentRailPanel'
 import { useDocComments, computeCommentAccess, scrollTopOf, COMMENT_TEXT, CommentCommandContext } from './useDocComments'
 import { IconAddComment } from './icons'
 import CommandPalette from './CommandPalette'
-import type { PaletteContext } from './paletteContract'
+import type { PaletteContext, PaletteCreatePlan } from './paletteContract'
+import { toPaletteDocs, planPaletteCreate } from './paletteDocs'
 import NotificationsMenu from './NotificationsMenu'
 import { useNotifications } from './useNotifications'
 import { fetchDocPeople } from './notificationsApi'
@@ -172,7 +173,7 @@ import {
   resumeMarker,
 } from './accountDelete'
 import SearchDialog from './SearchDialog'
-import { searchScope } from './searchIndex'
+import { searchScope, folderPathMap } from './searchIndex'
 import HelpPage from './HelpPage'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
 import StatusBar from './StatusBar'
@@ -2577,6 +2578,14 @@ export default function App() {
     [docs, folders],
   )
   const currentFolderId = currentDoc?.folderId ?? null
+
+  // 폴더 경로 — 팔레트 문서 목록·새 문서 만들기 계획이 함께 쓴다(같은 걸 두 번 계산하지 않는다, F-2053 9장)
+  const palettePathMap = useMemo(() => folderPathMap(folders), [folders])
+  // 팔레트 문서 목록 — 팔레트가 열려 있을 때만 만들고, docs·palettePathMap·currentDocId 가 바뀔 때만 다시 만든다 (F-2053 3.2)
+  const paletteDocsData = useMemo(
+    () => (paletteOpen ? toPaletteDocs({ docs, folderPaths: palettePathMap, currentDocId }) : null),
+    [paletteOpen, docs, palettePathMap, currentDocId],
+  )
   // 편집기 문맥 — 해석기나 원본 폴더가 바뀔 때만 새 객체 (5.2). sourceE2ee — 편집 중인 문서가 금고 문서인가, [[ 자동완성만 거른다 (F-409 4.1)
   // hoverPreview — 위키링크 미리보기가 켜져 있으면 있는 문서 링크의 title 을 뺀다(F-2044 4.5)
   const wikiContext = useMemo(
@@ -3317,6 +3326,39 @@ export default function App() {
     setPref('md.lastDocId', doc.id)
     pushHashUrl(doc.id)
     closeSidebarIfNarrow()
+  }
+
+  // 명령 팔레트 `'{제목}' 새 문서 만들기` 줄 — openWikiLinkTarget 만들기 갈래와 같은 순서, selectDoc 이 떠나는 네 화면을 같이 떠난다 (F-2053 6.2·6.3)
+  async function createDocFromPalette(plan: PaletteCreatePlan) {
+    closePalette()
+    if (!(await ensureE2eeOpenForFolder(plan.folderId))) return
+    if (viewMode === 'view') changeViewMode('live')
+    await beforeLeaveDoc()
+    setSharedDoc(null)
+    setSharesOpen(false)
+    setHelpOpen(false)
+    setMapRoute(null)
+    const { content, failed } = await buildNewDocContent({ title: plan.title })
+    let doc: Doc
+    try {
+      doc = await store.create({ title: plan.title, content, lineEnding: 'crlf', folderId: plan.folderId })
+    } catch (err) {
+      showNotice({ type: 'error', message: e2eeCreateErrorMessage(err) ?? '새 문서를 만들지 못했습니다. 다시 시도하세요.' })
+      return
+    }
+    if (failed) showNotice({ type: 'error', message: '새 문서 템플릿을 읽지 못해 빈 문서로 만들었습니다.' })
+    const meta = stripContent(doc)
+    setDocs((prev) => sortByUpdatedAtDesc([...prev, meta]))
+    addOpenFolders(ancestorsOfDoc({ folders, doc: meta }))
+    // 포커스는 본문 에디터다(제목 입력이 아니다) — 사용자가 방금 제목을 쳤다 (F-2053 6.3 Q8)
+    focusTitleRef.current = false
+    focusEditorRef.current = true
+    setCurrentDocId(doc.id)
+    setPref('md.lastDocId', doc.id)
+    pushHashUrl(doc.id)
+    closeSidebarIfNarrow()
+    // Dialog(팔레트)가 닫는 요소로 포커스를 돌리는 비동기 처리를 이겨야 한다 — openDocFromSearch 와 같은 방식
+    setTimeout(() => editorRef.current?.focus(), 0)
   }
 
   async function selectDoc(id: string) {
@@ -4550,6 +4592,7 @@ export default function App() {
 
   // 명령 팔레트 D-7 (specs/features/F-2022.md 6.1) — 열려 있던 우클릭 메뉴를 닫고, 좁은 창 사이드바를 닫는다
   function openPalette() {
+    if (bootPhase !== 'ready') return // 부팅 중 store 는 임시 memoryStore 라 여기서 만든 문서가 사라진다 (F-2053 10.3)
     setContextMenu(null)
     closeSidebarIfNarrow()
     setPaletteOpen(true)
@@ -4653,6 +4696,26 @@ export default function App() {
     setTimeout(() => editorRef.current?.focus(), 0)
   }
 
+  // 팔레트 문서 열기 — 'here' 는 openDocFromSearch 와 같은 순서, 'newTab' 은 사이드바 새 탭에서 열기와 같다 (F-2053 8.5)
+  function paletteOpenDoc(id: string, target: 'here' | 'newTab') {
+    closePalette()
+    if (target === 'newTab') {
+      window.open(formatHash(id), '_blank', 'noopener')
+      return
+    }
+    void openDocFromSearch(id, null)
+  }
+
+  // 팔레트 `'{제목}' 새 문서 만들기` 줄이 뜨는 조건 (F-2053 6.1)
+  function palettePlanCreate(text: string): PaletteCreatePlan | null {
+    return planPaletteCreate(text, {
+      resolver: wikiResolver,
+      sourceFolderId: currentFolderId,
+      fallbackFolderId: newDocFolderId(),
+      folderPathOf: (folderId) => (folderId ? palettePathMap.get(folderId) ?? '' : ''),
+    })
+  }
+
   const paletteContext: PaletteContext = {
     canInsertTemplate,
     canPrint,
@@ -4674,6 +4737,15 @@ export default function App() {
     notifications: notificationsEnabled ? { open: () => setNotificationsOpen(true) } : undefined,
     // 상태바를 그릴 때만 넘긴다 — 홈·도움말·공유 관리·지도의 팔레트에는 안 보인다(6.3)
     shortcuts: statusBarVisible ? { open: openShortcuts } : undefined,
+    docs: paletteDocsData
+      ? {
+          all: paletteDocsData.all,
+          recent: paletteDocsData.recent,
+          planCreate: palettePlanCreate,
+          open: paletteOpenDoc,
+          create: (plan) => void createDocFromPalette(plan),
+        }
+      : undefined,
   }
 
   // 검색 결과에서 문서 열기 (F-287.md 4.6) — 지금 문서를 그대로 두지 않고 그 문서로 이동한다
@@ -5170,6 +5242,7 @@ export default function App() {
       onToggleSidebar={toggleSidebar}
       toggleButtonRef={toggleButtonRef}
       onOpenSearch={openSearch}
+      onOpenPalette={openPalette}
       viewMode={viewMode}
       viewModeDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
       onChangeViewMode={changeViewMode}
@@ -5299,6 +5372,7 @@ export default function App() {
           onOpenHelp={openHelp}
           onOpenMap={openMap}
           onOpenSearch={openSearch}
+          onOpenPalette={openPalette}
           canInstall={canInstall}
           onInstall={install}
           width={displaySidebarWidth}

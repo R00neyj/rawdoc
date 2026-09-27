@@ -715,7 +715,7 @@ async function expectNoCommentUi(page) {
   await page.keyboard.press('Escape')
 
   await page.keyboard.press('Control+p')
-  await page.locator('.command-palette-input').fill('댓글')
+  await page.locator('.command-palette-input').fill('>댓글') // F-2053 — 만들기 줄이 안 붙게 명령 모드로
   await expect(page.getByRole('option')).toHaveCount(0)
   await page.keyboard.press('Escape')
 

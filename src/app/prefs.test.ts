@@ -124,6 +124,18 @@ describe('F-2052 U10 md.shortcutsUsed', () => {
   })
 })
 
+describe('F-2053 U10 md.paletteRecent·md.palettePinned', () => {
+  it('읽기·쓰기, 저장값 없으면 기본값', () => {
+    expect(getPref('md.paletteRecent', '[]')).toBe('[]')
+    expect(() => setPref('md.paletteRecent', '["doc.print"]')).not.toThrow()
+    expect(getPref('md.paletteRecent', '[]')).toBe('["doc.print"]')
+
+    expect(getPref('md.palettePinned', '[]')).toBe('[]')
+    expect(() => setPref('md.palettePinned', '["doc.print"]')).not.toThrow()
+    expect(getPref('md.palettePinned', '[]')).toBe('["doc.print"]')
+  })
+})
+
 describe('F-407 U23 md.e2eeBackupNotice', () => {
   it("setPref '1' 이 던지지 않고 getPref 가 '1'", () => {
     expect(getPref('md.e2eeBackupNotice', '' as '1')).toBe('')

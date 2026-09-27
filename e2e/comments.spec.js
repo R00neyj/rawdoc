@@ -101,7 +101,7 @@ test.describe('F-505 E2 세 가지 시작', () => {
 
     await selectCat(page)
     await page.keyboard.press('Control+p')
-    await page.locator('.command-palette-input').fill('댓글 달기')
+    await page.locator('.command-palette-input').fill('>댓글 달기') // F-2053 — 명령 모드로 문서 결과와 안 섞이게
     await expect(page.getByRole('option', { name: '댓글 달기' }).first()).toBeVisible()
     await page.keyboard.press('Enter')
     await composerTextarea(page).fill('팔레트로 달기')
@@ -112,7 +112,7 @@ test.describe('F-505 E2 세 가지 시작', () => {
     await page.locator('.cm-content').click()
     await page.keyboard.press('Control+Home')
     await page.keyboard.press('Control+p')
-    await page.locator('.command-palette-input').fill('댓글 달기')
+    await page.locator('.command-palette-input').fill('>댓글 달기') // F-2053 — 명령 모드로 문서 결과와 안 섞이게
     await expect(page.getByRole('option', { name: '댓글 달기' }).first()).toBeVisible()
     await page.keyboard.press('Enter')
     await expect(page.locator('.notice-message')).toHaveText('댓글을 달 부분을 먼저 선택하세요.')
@@ -263,7 +263,7 @@ test.describe('F-505 E7 해결·다시 열기(V6)', () => {
     await expect(page.locator('.cm-comment-anchor')).toHaveCount(1)
 
     await page.keyboard.press('Control+p')
-    await page.locator('.command-palette-input').fill('댓글 닫기')
+    await page.locator('.command-palette-input').fill('>댓글 닫기') // F-2053 — 명령 모드로 문서 결과와 안 섞이게
     await page.keyboard.press('Enter')
     await expect(rail(page)).toHaveCount(0)
     const stored = await page.evaluate(() => localStorage.getItem('md.commentRail'))
@@ -619,7 +619,7 @@ test.describe('F-505 E15 금고 문서', () => {
     await page.keyboard.press('Escape')
 
     await page.keyboard.press('Control+p')
-    await page.locator('.command-palette-input').fill('댓글')
+    await page.locator('.command-palette-input').fill('>댓글') // F-2053 — 만들기 줄이 안 붙게 명령 모드로
     await expect(page.getByRole('option')).toHaveCount(0)
     await page.keyboard.press('Escape')
 

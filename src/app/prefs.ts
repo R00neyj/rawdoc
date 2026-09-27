@@ -31,6 +31,10 @@ type PrefMap = {
   'md.commentRail': string
   // 사용한 단축키 id 배열(JSON, 카탈로그 순서), 브라우저별 (F-2052 4.7)
   'md.shortcutsUsed': string
+  // 팔레트 최근 쓴 명령 id 배열(JSON, 최근 순), 기기별 (F-2053 7.3)
+  'md.paletteRecent': string
+  // 팔레트 고정한 명령 id 배열(JSON, 고정한 순서), 기기별 (F-2053 7.3)
+  'md.palettePinned': string
 }
 
 type PrefKey = keyof PrefMap
@@ -63,6 +67,8 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.wikiPreview',
   'md.commentRail',
   'md.shortcutsUsed',
+  'md.paletteRecent',
+  'md.palettePinned',
 ])
 
 function assertAllowed(key: string) {

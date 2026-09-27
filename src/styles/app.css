@@ -321,7 +321,8 @@ svg {
   }
 
   .topbar .brand,
-  .topbar .icon-btn-wrap:has(> .topbar-search-btn) {
+  .topbar .icon-btn-wrap:has(> .topbar-search-btn),
+  .topbar .icon-btn-wrap:has(> .topbar-palette-btn) {
     display: none;
   }
 }
@@ -488,13 +489,15 @@ body.sidebar-resizing {
   margin: 2px 0 8px;
 }
 
-/* 휴대폰 폭 검색 진입점(F-287 3.3) — 상단바 검색이 숨는(F-216) 그 600px 미디어 쿼리를 그대로 쓴다 */
-.icon-btn-wrap:has(> .sidebar-search-btn) {
+/* 휴대폰 폭 검색·팔레트 진입점(F-287 3.3, F-2053 10.1) — 상단바 검색이 숨는(F-216) 그 600px 미디어 쿼리를 그대로 쓴다 */
+.icon-btn-wrap:has(> .sidebar-search-btn),
+.icon-btn-wrap:has(> .sidebar-palette-btn) {
   display: none;
 }
 
 @media (max-width: 600px) {
-  .icon-btn-wrap:has(> .sidebar-search-btn) {
+  .icon-btn-wrap:has(> .sidebar-search-btn),
+  .icon-btn-wrap:has(> .sidebar-palette-btn) {
     display: flex;
   }
 }

@@ -1,4 +1,4 @@
-/* 명령 팔레트 D-7 (specs/features/F-2022.md 8장) — 색은 토큰만, 새 토큰 없음 */
+/* 명령 팔레트 D-7 (specs/features/F-2022.md 8장, specs/features/F-2053.md 8.6) — 색은 토큰만, 새 토큰 없음 */
 
 /* 창 위쪽에 고정 — 가운데 정렬이면 거를 때마다 목록 높이가 바뀌어 입력칸이 움직인다 (8.1, 사람 확인 H1) */
 .dialog:has(> .command-palette) {
@@ -19,6 +19,20 @@
   padding: 0;
   max-height: min(360px, 60vh);
   overflow-y: auto;
+}
+
+/* 구역 머리글 — 사이드바 섹션 제목과 같은 결. 값은 사람 확인 (F-2053 8.6, H1) */
+.command-palette-section {
+  padding: 10px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.command-palette-group {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .command-palette-item {
@@ -53,6 +67,29 @@
   flex: none;
   font-size: 11.5px;
   color: var(--muted);
+}
+
+/* 핀 버튼 — 고정된 줄은 늘, 나머지는 호버·선택 줄에서만 (F-2053 8.3) */
+.command-palette-pin {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  opacity: 0;
+  transition: var(--transition-colors);
+}
+
+.command-palette-item:hover .command-palette-pin,
+.command-palette-item--on .command-palette-pin,
+.command-palette-item--pinned .command-palette-pin {
+  opacity: 1;
+}
+
+.command-palette-pin:hover {
+  background: var(--rule);
 }
 
 .command-palette-hint {
