@@ -27,16 +27,16 @@ updated: 2026-09-27
 
 ## 콜아웃 종류
 
-종류 이름은 대소문자를 가리지 않습니다. 아래 한 줄에 있는 이름끼리는 같은 색이고, 아이콘은 이름마다 다를 수 있습니다.
+종류 이름은 대소문자를 가리지 않습니다. 아래 한 줄에 있는 이름끼리는 같은 색이고, 아이콘은 이름마다 다를 수 있습니다. 이름 앞의 그림이 그 종류의 아이콘입니다.
 
-- `note` · `info` · `todo`
-- `abstract` · `summary` · `tldr` · `tip` · `hint` · `important`
-- `success` · `check` · `done`
-- `question` · `help` · `faq`
-- `warning` · `caution` · `attention`
-- `failure` · `fail` · `missing` · `danger` · `error` · `bug`
-- `example`
-- `quote` · `cite`
+- `[!note]` · `[!info]` · `[!todo]`
+- `[!abstract]` · `[!summary]` · `[!tldr]` · `[!tip]` · `[!hint]` · `[!important]`
+- `[!success]` · `[!check]` · `[!done]`
+- `[!question]` · `[!help]` · `[!faq]`
+- `[!warning]` · `[!caution]` · `[!attention]`
+- `[!failure]` · `[!fail]` · `[!missing]` · `[!danger]` · `[!error]` · `[!bug]`
+- `[!example]`
+- `[!quote]` · `[!cite]`
 
 목록에 없는 이름도 콜아웃이 되고, `note`와 같은 색과 아이콘으로 보입니다. `[!할일]`처럼 한글 이름을 지어 써도 됩니다.
 

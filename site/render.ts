@@ -3,8 +3,25 @@ import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from '..
 import { renderMarkdown } from '../src/viewer/renderMarkdown'
 import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS } from '../src/lib/siteChrome'
 import { SITE_URL, SITE_DESCRIPTION } from '../src/lib/siteMeta'
+import { KIND_ALIASES } from '../src/lib/callout'
+import { calloutIconSvg } from '../src/lib/calloutIcons'
 import brand from '../brand.config'
 import { siteHeadings, addHeadingIds, renderDocNav, renderToc, renderFold, insertFoldIntoBody, type DocNav } from './pageNav'
+
+// 인라인 코드가 `[!종류]` 하나뿐이고 그 이름이 별칭 표에 있으면 앞에 앱과 같은 콜아웃 아이콘을 붙인다.
+// 사이트 글에만 — 앱 보기 모드(renderMarkdown)는 사용자 문서를 그리므로 건드리지 않는다 (tweak 2026-09-28)
+export function addCalloutKindIcons(html: string): string {
+  return html.replace(/<code>\[!([A-Za-z]+)\]<\/code>/g, (whole, type: string) => {
+    const kind = KIND_ALIASES[type.toLowerCase()]
+    if (!kind) return whole
+    return `<span class="site-callout-kind md-callout--${kind}"><span class="markdown-callout-icon" aria-hidden="true">${calloutIconSvg(type)}</span>${whole}</span>`
+  })
+}
+
+// 아이콘은 색 묶음 색, 글자(코드)는 본문 코드 모양 그대로
+const SITE_DOC_CSS =
+  '.site-callout-kind{white-space:nowrap}' +
+  '.public-view .site-callout-kind .markdown-callout-icon{margin-right:4px;color:var(--callout-color)}'
 
 function escapeHtml(value: string): string {
   return value
@@ -50,7 +67,7 @@ export function renderSitePage(input: { url: string; raw: string; appCssHref: st
   // 제목 id·문서 목록·목차·접는 목차 (F-2036 3~6장)
   const headings = siteHeadings(body)
   const showToc = headings.some((h) => h.level >= 2)
-  const bodyHtml = addHeadingIds(renderMarkdown(body), headings)
+  const bodyHtml = addHeadingIds(addCalloutKindIcons(renderMarkdown(body)), headings)
   const hasFold = Boolean(input.docNav) || showToc
   const foldHtml = hasFold ? renderFold({ docNav: input.docNav, currentUrl: input.url, headings, showToc }) : ''
   const articleHtml = insertFoldIntoBody(bodyHtml, foldHtml)
@@ -88,7 +105,7 @@ export function renderSitePage(input: { url: string; raw: string; appCssHref: st
     <meta property="og:locale" content="ko_KR" />
     <style>:root{--brand-accent:${brand.accent}}</style>
     <link rel="stylesheet" href="${input.appCssHref}" />
-    <style>${SITE_CHROME_CSS}</style>
+    <style>${SITE_CHROME_CSS}${SITE_DOC_CSS}</style>
   </head>
   <body>
     ${header}

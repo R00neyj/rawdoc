@@ -1,6 +1,8 @@
 // 글 1개 → 완결된 HTML (specs/features/F-272.md 5.3, A2·A3; F-2036.md 8.1 A6·A7·A10)
 import { describe, expect, it } from 'vitest'
 import { renderSitePage } from './render'
+import { renderMarkdown } from '../src/viewer/renderMarkdown'
+import { calloutIconSvg } from '../src/lib/calloutIcons'
 import brand from '../brand.config'
 import { SITE_DESCRIPTION } from '../src/lib/siteMeta'
 import { helpContent } from './helpPage'
@@ -126,5 +128,27 @@ code
     expect(html).toContain('<pre><code>')
     expect(html).toContain('wikilink--plain')
     expect(summary).toBe(SITE_DESCRIPTION)
+  })
+})
+
+// 사용법 글의 `[!종류]` 인라인 코드 앞 콜아웃 아이콘 — 사이트에만 (tweak 2026-09-28, 사용자: "콜아웃 종류 옆에 아이콘 예시")
+describe('콜아웃 종류 인라인 코드 아이콘', () => {
+  const page = (body: string) => renderSitePage({ url: '/guides/x', raw: `---\ntitle: X\n---\n\n${body}\n`, appCssHref: '/a.css' }).html
+  const icon = (type: string) => `<span class="markdown-callout-icon" aria-hidden="true">${calloutIconSvg(type)}</span>`
+
+  it('별칭 표에 있는 이름이면 앱과 같은 아이콘과 색 묶음 클래스를 붙인다', () => {
+    const html = page('- `[!tip]` · `[!Warning]` · `[!bug]`')
+    expect(html).toContain(`<span class="site-callout-kind md-callout--tip">${icon('tip')}<code>[!tip]</code></span>`)
+    expect(html).toContain(`<span class="site-callout-kind md-callout--warning">${icon('Warning')}<code>[!Warning]</code></span>`)
+    expect(html).toContain(`<span class="site-callout-kind md-callout--danger">${icon('bug')}<code>[!bug]</code></span>`)
+  })
+
+  it('별칭이 아니거나 [!종류] 만으로 된 코드가 아니면 그대로 둔다', () => {
+    const html = page('`[!할일]` `[!종류]` `[!tip]-` `[!tip]알아 둘 것` `> [!note]`')
+    expect(html).not.toContain('class="site-callout-kind')
+  })
+
+  it('앱 보기 모드 렌더러(renderMarkdown)는 아이콘을 붙이지 않는다', () => {
+    expect(renderMarkdown('`[!tip]`')).not.toContain('markdown-callout-icon')
   })
 })
