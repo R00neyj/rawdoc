@@ -9,7 +9,7 @@ import {
   loginReturn,
   renderLoginPage,
 } from './loginPage'
-import { PAGE_TOKENS_CSS } from './pageTokens'
+import { PAGE_DARK_VARS, PAGE_TOKENS_CSS } from './pageTokens'
 import { renderWelcomePage } from './welcomePage'
 
 const UNVERIFIED =
@@ -40,7 +40,9 @@ describe('F-2033 U25 색 변수 한 벌', () => {
     expect(PAGE_TOKENS_CSS).toContain('--paper:')
     for (const html of [welcome, login]) {
       expect(count(html, PAGE_TOKENS_CSS)).toBe(1)
-      expect(count(html, '--paper:')).toBe(1)
+      // 랜딩 스토리 구간의 다크 사본(F-2049 5.3)은 따로 센다 — 라이트 변수는 여전히 한 벌
+      expect(count(html, PAGE_DARK_VARS)).toBeLessThanOrEqual(1)
+      expect(count(html.replace(PAGE_DARK_VARS, ''), '--paper:')).toBe(1)
     }
   })
 })
