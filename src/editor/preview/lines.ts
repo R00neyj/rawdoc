@@ -514,8 +514,15 @@ type GutterAlignResult = { gutterEl: Element; shift: number }
 export function gutterAlignPreview(): Extension {
   return ViewPlugin.fromClass(
     class {
-      constructor(view: EditorView) {
+      constructor(private readonly view: EditorView) {
         this.scheduleMeasure(view)
+      }
+
+      // 원문 모드로 바뀌어 플러그인이 빠져도 거터 칸은 재사용된다 — 남은 translateY 가 줄 번호를 어긋나게 하니 걷는다
+      destroy() {
+        for (const el of this.view.dom.querySelectorAll('.cm-lineNumbers .cm-gutterElement')) {
+          ;(el as HTMLElement).style.removeProperty('transform')
+        }
       }
 
       update(update: ViewUpdate) {
