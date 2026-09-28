@@ -467,6 +467,25 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     return true
   }
 
+  // 보낸 항목의 응답을 캐시에 쓴다. 보내는 사이 update() 가 같은 문서에 새 updateDoc 을 쌓았으면
+  // 캐시의 제목·본문(·첨부 목록)이 그 더 새 편집이므로 지키고, 버전 등 나머지만 서버 값을 따른다 (리뷰 S1)
+  async function putDocFromResponse(serverDoc: ServerDoc, sentKey: number): Promise<void> {
+    const outbox = await cache.getOutbox(userId)
+    const hasLaterEdit = outbox.some((e) => e.type === 'updateDoc' && e.docId === serverDoc.id && e.key !== sentKey)
+    const local = hasLaterEdit ? await cache.getDoc(userId, serverDoc.id) : null
+    if (!local) {
+      await cache.putDoc(userId, serverDoc)
+      return
+    }
+    await cache.putDoc(userId, {
+      ...serverDoc,
+      title: local.title,
+      content: local.content,
+      updatedAt: local.updatedAt,
+      ...(local.attachmentRefs !== undefined ? { attachmentRefs: local.attachmentRefs } : {}),
+    })
+  }
+
   async function fetchDocIntoCache(docId: string): Promise<void> {
     try {
       const full = await api.getDoc(docId)
@@ -671,7 +690,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
             ...(entry.e2eeKey !== undefined ? { e2eeKey: entry.e2eeKey, attachmentRefs: entry.attachmentRefs ?? [] } : {}),
           })
           recordE2eeResponse(entry)
-          await cache.putDoc(userId, created)
+          await putDocFromResponse(created, entry.key)
           await cache.removeOutbox(entry.key)
           break
         }
@@ -680,19 +699,19 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           const baseVersion = cachedDoc?.version ?? 0
           const updated = await api.updateDoc(entry.docId, { ...entry.patch, baseVersion, ...(entry.e2ee ? { e2ee: true as const } : {}) })
           recordE2eeResponse(entry)
-          await cache.putDoc(userId, updated)
+          await putDocFromResponse(updated, entry.key)
           await cache.removeOutbox(entry.key)
           break
         }
         case 'moveDoc': {
           const updated = await api.moveDocFolder(entry.docId, entry.folderId)
-          await cache.putDoc(userId, updated)
+          await putDocFromResponse(updated, entry.key)
           await cache.removeOutbox(entry.key)
           break
         }
         case 'setPinned': {
           const updated = await api.setPinned(entry.docId, entry.pinned)
-          await cache.putDoc(userId, updated)
+          await putDocFromResponse(updated, entry.key)
           await cache.removeOutbox(entry.key)
           break
         }
