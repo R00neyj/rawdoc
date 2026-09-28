@@ -2218,6 +2218,9 @@ export default function App() {
     function handleHashChange() {
       const parsedHash = parseHash(location.hash)
 
+      // 공개 링크(#/p/…)는 위 handlePublicHashChange 가 publicRoute 로 그린다 — 여기서 첫 문서로 해시를 바꾸지 않는다 (리뷰 A1)
+      if (parsedHash.type === 'public' || parsedHash.type === 'publicFolder') return
+
       // 공유 링크(F-130.md 4장)는 currentDocId 와 비교하지 않고 매번 새로 연다 —
       // currentDocId 는 공유 화면 동안 건드리지 않으므로 같은 값일 수 있다
       if (parsedHash.type === 'share') {
@@ -2845,8 +2848,12 @@ export default function App() {
     openSearchRef.current = openSearch
     openPaletteRef.current = openPalette
     toggleShortcutsRef.current = toggleShortcuts
+    // isEmpty(아래 조기 반환 뒤에 선언) 대신 currentDocId 로 직접 판정한다 — 공개 보기로 조기 반환한 렌더에서는
+    // isEmpty 가 초기화되지 않아 읽으면 TDZ ReferenceError 로 앱이 죽는다 (리뷰 A1)
     toggleCommentsRef.current =
-      commentAccessValue.kind === 'none' || !currentDoc || bootPhase !== 'ready' || isEmpty ? null : toggleCommentsPanel
+      commentAccessValue.kind === 'none' || !currentDoc || bootPhase !== 'ready' || currentDocId === null
+        ? null
+        : toggleCommentsPanel
     bootPhaseRef.current = bootPhase
   })
 
