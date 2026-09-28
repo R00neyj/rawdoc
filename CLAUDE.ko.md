@@ -141,7 +141,7 @@ npm run dev:spike    # for checking spikes
 
 - **커밋 단위는 "커밋 단위" 아래 절을 따른다.** 다음 서브에이전트는 커밋 뒤에만 띄운다. 파일이 겹치지 않는 명세만 병렬로 돌린다
 - **명세 작성은 `spec-writer` 에이전트**(Opus)다. `model` 을 따로 주지 않는다
-- **구현은 기본이 `feature-implementer`**(Opus, medium effort)다. Sonnet 5.5 가 나오면 모델을 다시 본다
+- **구현은 기본이 `feature-implementer`**(Sonnet, medium effort)다
 - **3D 지도 재작업은 `specs/features/F-292.md` 9장의 `누가` 열을 따라 소명세마다 갈린다**: F-2002~F-2004 는 메인이 직접 구현하고, F-2006 은 `complex-implementer`, 나머지는 평범하게 맡긴다
 - **`complex-implementer`(Opus)** 는 수용 기준은 분명한데 거기 닿는 길이 분명하지 않은 명세용이다 — 그래픽·3D, CM6 내부, 프레임·번들 예산, 여러 소유 표를 가로지르는 리팩터, 아무도 돌려 본 적 없는 외부 API. 만들기 전에 조사·측정하고, 기준 안쪽의 빈틈을 스스로 정하며, 빌드·precache 증분을 보고한다. 메인이 명시적으로 이쪽을 고르며, 기본은 여전히 `feature-implementer` 다
 - **에이전트를 직접 띄우지 말고 스킬을 거친다.** 아이디어를 따져보는 건 `grill`, 명세 작성은 `write-spec`, 구현은 `ship-feature`, 명세 없는 디자인·상호작용 수정은 `tweak`, 가이드 글은 `write-guide`. 범용 `grilling` 스킬이 아니라 `grill` 을 쓴다 — 열린 결정 하나하나가 `AskUserQuestion` 으로 사용자에게 간다

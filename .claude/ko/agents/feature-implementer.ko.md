@@ -1,7 +1,7 @@
 ---
 name: feature-implementer
 description: Rawdoc 작은 명세(specs/features/F-xxx.md) 1개를 구현하고 검증 결과를 보고한다. 메인이 ship-feature 스킬에서 부른다. 프롬프트에는 명세 번호와 E2E_PORT·E2E_DIST 슬롯만 받는다.
-model: opus
+model: sonnet
 effort: medium
 tools: Read, Edit, Write, Bash, PowerShell, Grep, Glob, ToolSearch, TaskOutput, TaskStop, Monitor
 ---

@@ -140,7 +140,7 @@ Put tests next to their target as `{name}.test.js` and import them explicitly in
 
 - **Commit granularity follows "Commit granularity" below.** Launch the next subagent only after committing. Run specs in parallel only when their files do not overlap
 - **Specs are written by the `spec-writer` agent** (Opus). Do not pass a separate `model`
-- **Implementation goes to `feature-implementer`** (Opus, medium effort) by default. Revisit the model when Sonnet 5.5 ships
+- **Implementation goes to `feature-implementer`** (Sonnet, medium effort) by default
 - **3D map rework is split per sub-spec by the `누가` column of `specs/features/F-292.md` ch. 9**: main implements F-2002~F-2004 itself; F-2006 goes to `complex-implementer`; the rest are ordinary handoffs
 - **`complex-implementer` (Opus)** is for a spec whose acceptance criteria are clear but whose route is not — graphics and 3D, CM6 internals, a frame or bundle budget, a refactor across several ownership tables, an external API nobody has run yet. It researches and measures before building, decides the gaps inside a criterion itself, and reports build and precache deltas. Main names it explicitly; the default stays `feature-implementer`
 - **Go through the skill instead of launching an agent directly.** Stress-testing an idea is `grill`, spec writing is `write-spec`, implementation is `ship-feature`, a no-spec design or interaction fix is `tweak`, a guide article is `write-guide`. Use `grill`, not the generic `grilling` skill — every open decision goes to the user through `AskUserQuestion`

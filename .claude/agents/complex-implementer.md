@@ -14,7 +14,7 @@ Korean copy of this file: `.claude/ko/agents/complex-implementer.ko.md` (snapsho
 
 ## 1. Why main picked you
 
-`feature-implementer` (Opus, medium effort) is the default and handles most specs. Main sends a spec here only when the spec **cannot** contain the judgment the work needs:
+`feature-implementer` (Sonnet, medium effort) is the default and handles most specs. Main sends a spec here only when the spec **cannot** contain the judgment the work needs:
 
 - Graphics and 3D — three.js, WebGL, projection, hit-testing, a force simulation
 - CodeMirror 6 internals — StateField/ViewPlugin lifecycle, decoration ranges, IME composition timing
