@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import Dialog from './Dialog'
 import type { ImportPlan } from './importWorkspace'
 
@@ -21,14 +21,22 @@ export default function ImportPreviewDialog({ state, onCancel, onConfirm, onClos
   const titleId = 'import-preview-title'
   const cancelRef = useRef<HTMLButtonElement | null>(null)
 
+  // Esc·바깥 클릭으로 네이티브 dialog 가 닫힌 단계. open 을 그대로 true 로 두면 다음 단계·다음 가져오기에서
+  // Dialog 가 showModal 을 다시 부르지 않아 대화상자가 안 뜬다 — 단계가 바뀌면 다시 연다 (리뷰 U4)
+  const stage = state?.stage ?? null
+  const [dismissedStage, setDismissedStage] = useState<ImportDialogState['stage'] | null>(null)
+  if (dismissedStage !== null && dismissedStage !== stage) setDismissedStage(null)
+
   function handleClose() {
     if (!state) return
     if (state.stage === 'preview') onCancel()
-    // 진행 단계는 Dialog 자체에 닫힘을 막는 기능이 없다 — 닫혀도 가져오기는 이어진다 (3.8, 4장 Q6)
+    else if (state.stage === 'result') onClose()
+    // 진행 단계는 Dialog 자체에 닫힘을 막는 기능이 없다 — 닫혀도 가져오기는 이어진다 (3.8, 4장 Q6). 결과 단계가 되면 다시 뜬다
+    else setDismissedStage('progress')
   }
 
   return (
-    <Dialog open={Boolean(state)} onClose={handleClose} titleId={titleId} initialFocusRef={cancelRef}>
+    <Dialog open={Boolean(state) && dismissedStage !== stage} onClose={handleClose} titleId={titleId} initialFocusRef={cancelRef}>
       <h2 id={titleId}>가져오기</h2>
       {state?.stage === 'preview' && (
         <>
