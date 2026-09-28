@@ -12,7 +12,6 @@ import {
 } from 'react'
 import { flushSync } from 'react-dom'
 import type { EditorState, StateCommand } from '@codemirror/state'
-import { EditorView } from '@codemirror/view'
 
 import { createMemoryStore } from '../storage/memoryStore'
 import { deleteE2eeRow } from '../storage/idbStore'
@@ -22,16 +21,7 @@ import { deleteRemoteCacheUserRows } from '../storage/remoteCache'
 import E2eeMigrateDialog from './E2eeMigrateDialog'
 import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree'
 import type { SelectionItem } from './sidebarSelection'
-import { fromEditorText, toEditorText } from '../lib/lineEnding'
-import {
-  listTemplates,
-  expandTemplateVariables,
-  resolveNewDocTemplate,
-  newDocContentFromTemplate,
-  NEW_DOC_TEMPLATE_NONE,
-  type TemplateEntry,
-} from '../lib/templates'
-import { insertTemplate as insertTemplateIntoEditor } from '../editor/insertTemplate'
+import { fromEditorText } from '../lib/lineEnding'
 import { getPref, setPref } from './prefs'
 import { fetchAccount, storedAccount, type AccountState } from './account'
 import { planAccountNotices, ACCOUNT_RECHECK_MS, ACCOUNT_BLOCKED_MESSAGE, ACCOUNT_WARNED_MESSAGE, type AccountFlags } from '../lib/usageLimits'
@@ -39,7 +29,7 @@ import type { SyncState } from '../types'
 import { IconRefresh } from './icons'
 import { useAppearancePrefs } from './useAppearancePrefs'
 import { removeBootSkeleton } from './bootPaint'
-import { parseHash, formatHash, formatMapHash, parsePathRoute } from './hashRoute'
+import { parseHash, formatMapHash, parsePathRoute } from './hashRoute'
 import { toPublicRoute, type PublicRoute } from './hashNav'
 import { pushNotice } from './notice'
 import { E2EE_NOTICE, e2eeCreateErrorMessage } from './appNotices'
@@ -69,7 +59,6 @@ import ImportPreviewDialog from './ImportPreviewDialog'
 import DropOverlay from './DropOverlay'
 import Editor, { type EditorHandle } from '../editor/Editor'
 import { DEV_YSYNC } from '../editor/devSyncFlag'
-import { insertTable } from '../editor/insertCommands'
 import { countChars, countWords, cursorInfo } from '../editor/stats'
 import Viewer from '../viewer/Viewer'
 import WikiLinkPreview from './WikiLinkPreview'
@@ -79,19 +68,12 @@ import { readViewerAnchor } from './viewerScroll'
 import type { ScrollAnchor } from '../lib/scrollAnchor'
 import Outline from './Outline'
 import ContextMenu from './ContextMenu'
-import { editorCommandGates, type EditorCommandGates } from './contextMenuItems'
 import { useContextMenu } from './useContextMenu'
-import { isComposing } from '../editor/composition'
 import CommentRailPanel, { CommentPanelPresence } from './CommentRailPanel'
 import { useDocComments, computeCommentAccess, scrollTopOf, CommentCommandContext } from './useDocComments'
 import { IconAddComment } from './icons'
 import CommandPalette from './CommandPalette'
-import type { PaletteContext, PaletteCreatePlan, PaletteViewMode } from './paletteContract'
-import { paletteScreen } from './paletteContract'
-import { toPaletteDocs, planPaletteCreate } from './paletteDocs'
-import { copyShareLink, copyShareMarkdown } from './shareCopy'
-import type { ThemePref } from './theme'
-import { GUIDES_PATH } from '../lib/siteChrome'
+import type { PaletteCreatePlan } from './paletteContract'
 import { useNotificationsGlue } from './useNotificationsGlue'
 import { MentionSourceContext } from './MentionField'
 
@@ -117,13 +99,17 @@ import {
   resumeMarker,
 } from './accountDelete'
 import SearchDialog from './SearchDialog'
-import { searchScope, folderPathMap } from './searchIndex'
+import { searchScope } from './searchIndex'
 import HelpPage from './HelpPage'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
 import StatusBar from './StatusBar'
 import ShortcutPanel from './ShortcutPanel'
 import { useShortcutUsage } from './useShortcutUsage'
 import { useGlobalShortcuts } from './useGlobalShortcuts'
+import { usePaletteOpen } from './usePaletteOpen'
+import { useCommandPalette } from './useCommandPalette'
+import { useShortcutsPanel } from './useShortcutsPanel'
+import { useNewDocTemplate } from './useNewDocTemplate'
 import { useSidebarLayout } from './useSidebarLayout'
 import { useFolderActions } from './useFolderActions'
 import { useImportFlow } from './useImportFlow'
@@ -244,12 +230,8 @@ export default function App() {
   const accountCheckInFlightRef = useRef<Promise<void> | null>(null)
   // e2ee 훅은 store 가 정해진 뒤에야 만들어진다 — applyAccountFlags 가 먼저 정의되므로 ref 로 늦게 잇는다 (F-404.md 4.5)
   const e2eeRef = useRef<ReturnType<typeof useE2ee>>(null)
-  // 명령 팔레트 D-7 열림 상태 (specs/features/F-2022.md)
-  const [paletteOpen, setPaletteOpen] = useState(false)
-  // 본문에서 연 팔레트만 서식·단락·삽입을 보인다 — 연 순간의 문서와 가능 여부 (F-2055 4.1)
-  const [paletteEditor, setPaletteEditor] = useState<{ docId: string | null; disabled: EditorCommandGates } | null>(null)
-  // 단축키 판 열림 상태 — 새로고침하면 닫힌다, 저장하지 않는다 (specs/features/F-2052.md 4.3)
-  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  // ----- 명령 팔레트 열림·닫기·늦춤 명령 (F-2078) -----
+  const { paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose } = usePaletteOpen()
 
   const sidebarRef = useRef<HTMLElement | null>(null)
   const appShellRef = useRef<HTMLDivElement | null>(null)
@@ -290,16 +272,11 @@ export default function App() {
   const selectSearchQueryRef = useRef(() => {}) // 검색 대화상자가 이미 열려 있을 때 검색어를 전체 선택 — SearchDialog 가 채운다 (F-287.md 3.4)
   const openPaletteRef = useRef(() => {}) // Ctrl+P 가 매 커밋 최신 openPalette 를 읽게 한다 (F-2022.md 6.1)
   const selectPaletteQueryRef = useRef(() => {}) // 팔레트가 이미 열려 있을 때 입력칸 전체 선택 — CommandPalette 가 채운다 (F-2022.md 6.1)
-  // 팔레트 close() 호출 중 어디쯘인지 구분 — runAction() 이 부르는 첫 번째 호출인지, Dialog 의 실제 close 이벤트가 부르는 두 번째 호출인지 (F-2054 5.1)
-  const paletteClosingRef = useRef(false)
-  // 늦춤 명령(F-2054 3장) 이 쟁여 둔 일 — 팔레트가 실제로 닫히고 포커스가 돌아온 뒤 0ms 타이머로 돈다
-  const deferredAfterPaletteCloseRef = useRef<(() => void) | null>(null)
   // 명령 팔레트 `새 폴더` 가 사이드바 안 동작을 부르는 자리 (F-2054 6.1)
   const sidebarCommandRef = useRef<SidebarCommands | null>(null)
   const toggleShortcutsRef = useRef(() => {}) // Ctrl+Shift+/ 가 매 커밋 최신 toggleShortcuts 를 읽게 한다 (F-2052.md 6.1)
   const toggleCommentsRef = useRef<(() => void) | null>(null) // Ctrl+M — 상단바 `댓글` 버튼을 누를 수 없으면 null (tweak 2026-09-28)
   const shortcutsButtonRef = useRef<HTMLButtonElement | null>(null) // 상태바 `?` 버튼 — 판이 닫힐 때 포커스를 돌려준다 (F-2052 5.3)
-  const pendingShortcutsScrollFixRef = useRef(false) // 판을 열기 직전 커서가 보였는지 (F-2052 5.5)
   const bootPhaseRef = useRef(bootPhase) // Ctrl+P 가 매 커밋 최신 bootPhase 를 읽게 한다 (F-2022.md 6.1)
   // hashchange 핸들러가 낡은 클로저의 docs·currentDocId 를 읽지 않도록 매 렌더 후 갱신한다 (0단계 버그 수정)
   const docsRef = useRef(docs)
@@ -763,72 +740,8 @@ export default function App() {
     mentionSource,
   } = useNotificationsGlue({ bootPhase, store, account, currentDocId, docScreenId, commentAccessValue, docsRef, resyncFromStore })
 
-  // 명령 팔레트 D-7 — 템플릿 삽입이 보이는 조건 (specs/features/F-2022.md 6.3)
-  const canInsertTemplate =
-    bootPhase === 'ready' &&
-    !sharedDoc &&
-    openDoc?.id === currentDocId &&
-    editorRef.current !== null &&
-    (viewMode === 'live' || viewMode === 'raw') &&
-    !isReadOnlyDoc &&
-    !mapRoute &&
-    !helpOpen &&
-    !sharesOpen
-  // 인쇄 가능 조건 (F-279.md 6.1). 잠긴 금고 문서는 인쇄를 뺀다 — 팔레트 `인쇄` 가 안 보인다 (F-409 7.2)
-  const canPrint = bootPhase === 'ready' && currentDocId !== null && !sharedDoc && currentDoc?.e2ee !== 'locked'
-  // 최상위 '템플릿'·'templates' 폴더 하위 문서 + 내장 4개 (F-2022.md 4.2)
-  const templateEntries: TemplateEntry[] = useMemo(
-    () => listTemplates({ folders, docs: docs.map((d) => ({ id: d.id, title: d.title, folderId: d.folderId ?? null, role: d.role })) }),
-    [folders, docs],
-  )
-
-  // 사용자 템플릿(문서) 원문 읽기 — 명령 팔레트 insertTemplate 과 새 문서 만들기가 함께 쓴다 (F-2037.md 4.2)
-  async function readTemplateDocText(docId: string): Promise<string | null> {
-    try {
-      if (docId === currentDocIdRef.current && editorRef.current) {
-        return editorRef.current.getText('lf')
-      }
-      const doc = await store.get(docId)
-      return doc?.content ?? null
-    } catch {
-      return null
-    }
-  }
-
-  const TEMPLATE_READ_TIMEOUT_MS = 3000
-
-  // 3,000ms 를 넘기면 실패로 본다(4.2-3) — 정한 값, 잰 값이 아니다
-  function withTemplateReadTimeout(promise: Promise<string | null>): Promise<string | null> {
-    return new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(null), TEMPLATE_READ_TIMEOUT_MS)
-      promise.then(
-        (v) => {
-          clearTimeout(timer)
-          resolve(v)
-        },
-        () => {
-          clearTimeout(timer)
-          resolve(null)
-        },
-      )
-    })
-  }
-
-  // 새 문서 본문 만들기 — createNewDoc·openWikiLinkTarget 공용 (F-2037.md 4.2·4.3)
-  async function buildNewDocContent(vars: { title: string; emptyTitle?: 'fallback' | 'keep-empty' }): Promise<{ content: string; failed: boolean }> {
-    const pref = getPref('md.newDocTemplate', NEW_DOC_TEMPLATE_NONE)
-    const resolution = resolveNewDocTemplate(pref, templateEntries)
-    if (resolution.kind !== 'found') return { content: '', failed: false }
-
-    const now = new Date()
-    if (resolution.entry.source.kind === 'builtin') {
-      return { content: newDocContentFromTemplate(resolution.entry.source.body, { ...vars, now }, 'crlf'), failed: false }
-    }
-
-    const rawText = await withTemplateReadTimeout(readTemplateDocText(resolution.entry.source.docId))
-    if (rawText === null) return { content: '', failed: true }
-    return { content: newDocContentFromTemplate(rawText, { ...vars, now }, 'crlf'), failed: false }
-  }
+  // ----- 템플릿 목록·원문 읽기·새 문서 본문 (F-2078) -----
+  const { templateEntries, readTemplateDocText, buildNewDocContent } = useNewDocTemplate({ store, docs, folders, currentDocIdRef, editorRef })
 
   // 문서를 바꾸면 지워짐 상태를 되돌린다 — 렌더 중 상태를 맞추는 공식 패턴 (F-296.md 7.3, useDocSaver.ts trackedDocId 와 같은 방식)
   const [deletedElsewhereTrackedDocId, setDeletedElsewhereTrackedDocId] = useState(currentDocId)
@@ -1030,14 +943,6 @@ export default function App() {
       if (statsTimerRef.current) clearTimeout(statsTimerRef.current)
     }
   }, [currentDocId])
-
-  // 폴더 경로 — 팔레트 문서 목록·새 문서 만들기 계획이 함께 쓴다(같은 걸 두 번 계산하지 않는다, F-2053 9장)
-  const palettePathMap = useMemo(() => folderPathMap(folders), [folders])
-  // 팔레트 문서 목록 — 팔레트가 열려 있을 때만 만들고, docs·palettePathMap·currentDocId 가 바뀔 때만 다시 만든다 (F-2053 3.2)
-  const paletteDocsData = useMemo(
-    () => (paletteOpen ? toPaletteDocs({ docs, folderPaths: palettePathMap, currentDocId }) : null),
-    [paletteOpen, docs, palettePathMap, currentDocId],
-  )
 
   // ----- 문서 전환 후 포커스 요청 플래그 정리 (ia.md 3.4, F-103 3.4) -----
   // 실제 포커스 이동은 Editor 의 layout effect 가 autoFocus prop 으로 한다 (Editor.jsx) — StrictMode 재마운트에도 그 effect 가 다시 실행돼 최종 뷰가 받는다
@@ -1696,299 +1601,25 @@ export default function App() {
     setSearchOpen(false)
   }
 
-  // 명령 팔레트 D-7 (specs/features/F-2022.md 6.1) — 열려 있던 우클릭 메뉴를 닫고, 좁은 창 사이드바를 닫는다
-  // 버튼 onClick 이 이벤트를 넘겨도 무시한다 — 연 곳은 activeElement 로 판정 (F-2055 4.1)
-  function openPalette() {
-    openPaletteFrom(undefined)
-  }
-
-  // fromEditor: 우클릭 갈래만 명시한다. 없으면 여는 순간 주 에디터에 포커스가 있었는지로 판정 (F-2055 4.1)
-  function openPaletteFrom(fromEditor: boolean | undefined) {
-    if (bootPhase !== 'ready') return // 부팅 중 store 는 임시 memoryStore 라 여기서 만든 문서가 사라진다 (F-2053 10.3)
-    const mainView = editorRef.current?.view
-    const fromBody = fromEditor ?? (mainView ? document.activeElement === mainView.contentDOM : false)
-    setPaletteEditor(fromBody && canInsertTemplate && mainView ? { docId: currentDocId, disabled: editorCommandGates(mainView.state, 'editor') } : null)
-    closeContextMenu()
-    closeSidebarIfNarrow()
-    setPaletteOpen(true)
-    // 이번 열기·닫기 한 판을 새로 센다 (F-2054 5.1)
-    paletteClosingRef.current = false
-    deferredAfterPaletteCloseRef.current = null
-    // 상태가 unknown 이면 한 번 읽는다 — 읽는 동안은 금고 명령이 안 보인다 (F-404.md 7.6)
-    if (e2ee?.status === 'unknown') void e2ee.keyring.load()
-  }
-
-  // closePalette 는 한 판에 두 번 불린다 — 두 번째(Dialog 의 실제 close 이벤트) 호출에서만 늦춤 명령을 0ms 타이머로 건다(F-2054 5.1)
-  function closePalette() {
-    setPaletteOpen(false)
-    if (!paletteClosingRef.current) {
-      paletteClosingRef.current = true
-      return
-    }
-    paletteClosingRef.current = false
-    const fn = deferredAfterPaletteCloseRef.current
-    deferredAfterPaletteCloseRef.current = null
-    if (fn) setTimeout(fn, 0)
-  }
-
-  // 늦춤 명령(3장 표 "늦춤 ✓")이 여는 대화상자·포커스 이동을 쟁여 둔다 — closePalette 참고 (F-2054 5.1)
-  function runAfterPaletteClose(fn: () => void) {
-    deferredAfterPaletteCloseRef.current = fn
-  }
-
   // 단축키 판 — 상태바가 보이는 조건과 같다(4.3). 팔레트 context·판 렌더 자리가 함께 쓴다
   const statusBarVisible = bootPhase === 'ready' && currentDocId !== null && !sharedDoc && !mapRoute
 
-  // 열기 직전 본문 커서가 편집 영역에 보였으면 판이 자리를 잡은 뒤에도 보이게 한다(5.5) — 팔레트·`?`·단축키 세 진입점이 함께 쓴다(6.2)
-  function openShortcuts() {
-    if (shortcutsOpen) return // 팔레트는 열기만 한다 — 이미 열려 있으면 그대로(6.1)
-    const view = editorRef.current?.view
-    if (view && viewMode !== 'view') {
-      const head = view.state.selection.main.head
-      const coords = view.coordsAtPos(head)
-      const scrollerRect = view.scrollDOM.getBoundingClientRect()
-      pendingShortcutsScrollFixRef.current = Boolean(
-        coords && coords.top >= scrollerRect.top && coords.bottom <= scrollerRect.bottom,
-      )
-    } else {
-      pendingShortcutsScrollFixRef.current = false
-    }
-    setShortcutsOpen(true)
-  }
+  // ----- 단축키 판 열림·커서 스크롤 (F-2078) -----
+  const { shortcutsOpen, openShortcuts, closeShortcuts, toggleShortcuts } = useShortcutsPanel({ editorRef, viewMode, shortcutsButtonRef })
 
-  // 닫힐 때 포커스가 판 안에 있었던 모든 경우 `?` 버튼으로 되돌린다 — 사라진 요소에 남지 않게(5.3)
-  function closeShortcuts() {
-    const panel = document.getElementById('shortcut-panel')
-    const hadFocusInside = panel !== null && panel.contains(document.activeElement)
-    setShortcutsOpen(false)
-    if (hadFocusInside) {
-      requestAnimationFrame(() => shortcutsButtonRef.current?.focus())
-    }
-  }
-
-  function toggleShortcuts() {
-    if (shortcutsOpen) closeShortcuts()
-    else openShortcuts()
-  }
-
-  // 판이 자리를 잡은 뒤(레이아웃 갱신) 커서 줄을 보이게 한다 — 판을 닫을 때는 하지 않는다(5.5)
-  useEffect(() => {
-    if (!shortcutsOpen || !pendingShortcutsScrollFixRef.current) return
-    pendingShortcutsScrollFixRef.current = false
-    const view = editorRef.current?.view
-    if (!view) return
-    requestAnimationFrame(() => {
-      view.dispatch({ effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: 'nearest' }) })
-    })
-  }, [shortcutsOpen])
-
-  // 명령 팔레트 `템플릿 삽입` — 원문 읽기 → 치환 → 자리에 넣기 (F-2022.md 5.7)
-  async function insertTemplate(templateId: string, signal: AbortSignal) {
-    if (!canInsertTemplate) {
-      showNotice({ type: 'info', message: '읽기 전용이라 템플릿을 넣지 못했습니다.' })
-      return
-    }
-    const startDocId = currentDocId
-    const template = templateEntries.find((t) => t.id === templateId)
-
-    let rawText: string | null = null
-    try {
-      if (template?.source.kind === 'builtin') {
-        rawText = template.source.body
-      } else if (template?.source.kind === 'doc') {
-        // 새 문서 템플릿 읽기(4.2)와 한 함수를 같이 쓴다(F-2037.md 4.2) — 팔레트 동작은 바뀌지 않는다
-        rawText = await readTemplateDocText(template.source.docId)
-      }
-    } catch {
-      rawText = null
-    }
-
-    if (rawText === null) {
-      showNotice({ type: 'error', message: '템플릿을 읽지 못했습니다.' })
-      return
-    }
-
-    if (signal.aborted) return
-    if (currentDocIdRef.current !== startDocId || !canInsertTemplate) return
-
-    closePalette()
-
-    const view = editorRef.current?.view
-    if (!view) return
-    const substituted = expandTemplateVariables(toEditorText(rawText), { title: currentDoc?.title ?? '', now: new Date() })
-    const result = insertTemplateIntoEditor({ state: view.state, dispatch: (tr) => view.dispatch(tr) }, substituted)
-
-    if (!result.inserted) {
-      showNotice({ type: 'info', message: '템플릿이 비어 있습니다.' })
-    } else if (result.frontmatterSkipped) {
-      showNotice({ type: 'info', message: '템플릿 속성을 문서 속성에 합치지 못해 본문만 넣었습니다.' })
-    }
-
-    // Dialog 가 닫는 요소로 포커스를 돌리는 비동기 처리(close 이벤트)를 이겨야 한다 — openDocFromSearch 와 같은 방식 (5.7-7)
-    setTimeout(() => editorRef.current?.focus(), 0)
-  }
-
-  // 팔레트 문서 열기 — 'here' 는 openDocFromSearch 와 같은 순서, 'newTab' 은 사이드바 새 탭에서 열기와 같다 (F-2053 8.5)
-  function paletteOpenDoc(id: string, target: 'here' | 'newTab') {
-    closePalette()
-    if (target === 'newTab') {
-      window.open(formatHash(id), '_blank', 'noopener')
-      return
-    }
-    void openDocFromSearch(id, null)
-  }
-
-  // 팔레트 `'{제목}' 새 문서 만들기` 줄이 뜨는 조건 (F-2053 6.1)
-  function palettePlanCreate(text: string): PaletteCreatePlan | null {
-    return planPaletteCreate(text, {
-      resolver: wikiResolver,
-      sourceFolderId: currentFolderId,
-      fallbackFolderId: newDocFolderId(),
-      folderPathOf: (folderId) => (folderId ? palettePathMap.get(folderId) ?? '' : ''),
-    })
-  }
-
-  // 지금 문서를 가리키는 팔레트 명령이 대화상자에 보일 이름 — 사이드바 displayTitleOf 와 같은 규칙(F-2054 3.3)
-  const paletteCurrentDocTitle = currentDoc ? (currentDoc.e2ee === 'locked' ? '잠긴 문서' : currentDoc.title) : ''
-
-  const palettePresentDocScreen = docScreenId !== null && Boolean(currentDoc)
-
-  const paletteOutputCtx: PaletteContext['output'] =
-    docScreenId !== null && openDoc?.id === currentDocId && currentDoc?.e2ee !== 'locked'
-      ? {
-          e2ee: currentDoc?.e2ee !== undefined,
-          exportMd: () => handleExportDoc(),
-          exportTxt: () => handleExportDocAsText(),
-          exportHtml: () => handleExportDocAsHtml(),
-          copyRich: () => handleCopyDocAsRichText(),
-          copyLink: () =>
-            void copyShareLink({
-              getShareDoc,
-              onNotice: showNotice,
-              writeText: (text) => navigator.clipboard.writeText(text),
-              baseUrl: `${location.origin}${location.pathname}`,
-            }),
-          copyMarkdown: () =>
-            void copyShareMarkdown({
-              getShareDoc,
-              onNotice: showNotice,
-              writeText: (text) => navigator.clipboard.writeText(text),
-              baseUrl: `${location.origin}${location.pathname}`,
-            }),
-          invite: canInviteCurrentDoc && currentDoc?.e2ee === undefined ? () => runAfterPaletteClose(() => requestInviteCurrentDoc()) : undefined,
-        }
-      : undefined
-
-  // 서식 명령 — 글은 바로, 포커스는 Dialog 복귀 뒤. 편집 모드 표는 우클릭처럼 첫 칸 편집으로(F-2055 4.3)
-  function runPaletteEditorCommand(command: StateCommand) {
-    const startDocId = paletteEditor?.docId
-    const view = editorRef.current?.view
-    if (!view || currentDocIdRef.current !== startDocId || readOnlyDocRef.current || isComposing(view)) return
-    const entersTable = command(view) && command === insertTable && view.dom.dataset.view === 'live'
-    runAfterPaletteClose(() => {
-      const v = editorRef.current?.view
-      if (!v || currentDocIdRef.current !== startDocId) return
-      // Dialog 가 돌려준 본문 포커스를 CM 이 10ms 뒤 반영하면 표가 원문이 돼 칸 편집이 끝난다 — 먼저 푼다
-      if (entersTable) {
-        v.contentDOM.blur()
-        if (editorRef.current?.enterTableAtCursor()) return
-      }
-      v.focus()
-      v.dispatch({ effects: EditorView.scrollIntoView(v.state.selection.main.head) })
-    })
-  }
-
-  const paletteContext: PaletteContext = {
-    canInsertTemplate,
-    editor: paletteEditor && canInsertTemplate ? { disabled: paletteEditor.disabled, run: runPaletteEditorCommand } : undefined,
-    canPrint,
-    templates: templateEntries,
-    insertTemplate,
-    printDoc: handlePrintDoc,
-    e2ee: e2ee
-      ? { status: e2ee.status, lock: e2ee.openSettingsDialogs.lockNow, openUnlock: e2ee.openSettingsDialogs.unlock }
-      : undefined,
-    comments:
-      commentAccessValue.kind === 'none' || !currentDoc
-        ? undefined
-        : {
-            canAdd: comments.canWrite && (viewMode === 'live' || viewMode === 'raw'),
-            railOpen: comments.open,
-            add: comments.beginComment,
-            toggleRail: () => comments.setOpen(!comments.open, true),
-          },
-    notifications: notificationsEnabled ? { open: () => setNotificationsOpen(true) } : undefined,
-    // 상태바를 그릴 때만 넘긴다 — 홈·도움말·공유 관리·지도의 팔레트에는 안 보인다(6.3)
-    shortcuts: statusBarVisible ? { open: openShortcuts } : undefined,
-    docs: paletteDocsData
-      ? {
-          all: paletteDocsData.all,
-          recent: paletteDocsData.recent,
-          planCreate: palettePlanCreate,
-          open: paletteOpenDoc,
-          create: (plan) => void createDocFromPalette(plan),
-        }
-      : undefined,
-    // ----- F-2054 4.3 -----
-    nav: {
-      screen: paletteScreen({
-        sharedLink: Boolean(sharedDoc),
-        shares: sharesOpen,
-        help: helpOpen,
-        map: Boolean(mapRoute),
-        currentDocId,
-      }),
-      openSearch: () => runAfterPaletteClose(() => openSearch()),
-      goHome: () => void goHome(),
-      openMap: () => void openMap(),
-      openHelp: () => void openHelp(),
-      openGuides: () => window.open(GUIDES_PATH, '_blank', 'noopener,noreferrer'),
-      openSettings: () => runAfterPaletteClose(() => openSettings()),
-      openShares: account.state === 'in' ? () => { location.hash = '#/shares' } : undefined,
-    },
-    docActions: {
-      newDoc: () => runAfterPaletteClose(() => void createNewDoc()),
-      newFolder: () =>
-        runAfterPaletteClose(() => {
-          if (narrow) setSidebarOpen(true)
-          sidebarCommandRef.current?.createTopFolder()
-        }),
-      importDoc: () => requestImport(),
-      current:
-        palettePresentDocScreen && currentDoc
-          ? {
-              owned: !isSharedDoc(currentDoc),
-              pinned: currentDoc.pinnedAt != null,
-              openNewTab: () => window.open(formatHash(currentDoc.id), '_blank', 'noopener'),
-              togglePin: () => void handleTogglePin(currentDoc.id, currentDoc.pinnedAt == null),
-              move: () =>
-                runAfterPaletteClose(() =>
-                  requestMoveDoc({ id: currentDoc.id, title: paletteCurrentDocTitle, folderId: currentDoc.folderId }),
-                ),
-              remove: () =>
-                runAfterPaletteClose(() => requestDeleteDoc({ id: currentDoc.id, title: paletteCurrentDocTitle })),
-            }
-          : undefined,
-    },
-    view: {
-      mode: docScreenId !== null && currentDoc?.e2ee !== 'locked' ? (viewMode as PaletteViewMode) : null,
-      setMode: (mode) => {
-        changeViewMode(mode)
-        if (mode !== 'view') runAfterPaletteClose(() => editorRef.current?.focus())
-      },
-      sidebar: narrow ? (sidebarOpen ? 'narrowOpen' : 'narrowClosed') : sidebarCollapsed ? 'collapsed' : 'expanded',
-      toggleSidebar: () => toggleSidebar(),
-      theme: themePref as ThemePref,
-      setTheme: (theme) => changeTheme(theme),
-      lineNumbers: lineNumbersPref === 'on',
-      toolbar: toolbarPref === 'on',
-      wikiPreview: wikiPreviewPref === 'on',
-      toggleLineNumbers: () => changeLineNumbers(lineNumbersPref === 'on' ? 'off' : 'on'),
-      toggleToolbar: () => changeToolbar(toolbarPref === 'on' ? 'off' : 'on'),
-      toggleWikiPreview: () => changeWikiPreview(wikiPreviewPref === 'on' ? 'off' : 'on'),
-    },
-    output: paletteOutputCtx,
-  }
+  // ----- 명령 팔레트 열기·템플릿 넣기·context 조립 (F-2078) -----
+  const closeContextMenuRef = useRef<() => void>(() => {})
+  const { openPalette, openPaletteFrom, paletteContext } = useCommandPalette({
+    paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose, closeContextMenuRef,
+    bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
+    account, e2ee, statusBarVisible, canInviteCurrentDoc, commentAccessValue, comments, editorRef, currentDocIdRef, readOnlyDocRef, sidebarCommandRef,
+    showNotice, templateEntries, readTemplateDocText, openShortcuts, notificationsEnabled, setNotificationsOpen, wikiResolver, currentFolderId,
+    narrow, sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebar, closeSidebarIfNarrow, themePref, lineNumbersPref, toolbarPref,
+    wikiPreviewPref, changeTheme, changeLineNumbers, changeToolbar, changeWikiPreview, handleExportDoc, handleExportDocAsText,
+    handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, handleTogglePin, requestMoveDoc, requestDeleteDoc,
+    getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createDocFromPalette,
+    openDocFromSearch, newDocFolderId, changeViewMode,
+  })
 
   // 검색 결과에서 문서 열기 (F-287.md 4.6) — 지금 문서를 그대로 두지 않고 그 문서로 이동한다
   // term 이 있으면 그 문서의 찾기 패널에 검색어를 넣는다 (specs/features/F-294.md 4.3)
@@ -2075,6 +1706,11 @@ export default function App() {
   // ----- 우클릭 메뉴 (specs/features/F-170.md) -----
   const { contextMenu, handleViewContextMenu, handleContextMenuSelect, closeContextMenu } = useContextMenu({
     editorRef, commentsRef, beginComment: comments.beginComment, openDoc, currentDocId, showNotice, openPaletteFrom,
+  })
+
+  // useContextMenu 가 openPaletteFrom 을 받아 호출 순서가 거꾸로다 — 팔레트는 ref 로 최신 closeContextMenu 를 부른다 (F-2078)
+  useEffect(() => {
+    closeContextMenuRef.current = closeContextMenu
   })
 
   // 스크롤 위치 유지 (F-295.md 5.2) — 기준값은 맨 앞에서 읽는다. 이 시점의 DOM 은 아직 "떠나는 화면" 이다(React 19 커밋 지연, 4.1)

@@ -1571,3 +1571,19 @@ test.describe('F-2077 세션 핵 절', () => {
     await expect(page.getByText(notice)).toHaveCount(0)
   })
 })
+
+test.describe('F-2078 명령 팔레트 절', () => {
+  test('F-2078 C1 우클릭 메뉴가 열린 채 Ctrl+P — 메뉴가 닫히고 팔레트가 열린다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문 줄\n' })
+    const line = page.locator('.cm-line', { hasText: '본문 줄' }).first()
+    await rightClick(page, line)
+    await expect(root(page)).toBeVisible()
+    await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('.context-menu-root'))).toBe(true)
+
+    await page.keyboard.press('Control+p')
+    await expect(page.locator('dialog[open] .command-palette')).toBeVisible()
+    await expect(root(page)).toHaveCount(0)
+    await expect(page.locator('.command-palette-input')).toBeFocused()
+  })
+})
