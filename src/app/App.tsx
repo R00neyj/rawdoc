@@ -4912,7 +4912,7 @@ export default function App() {
           : undefined,
     },
     view: {
-      mode: docScreenId !== null ? (viewMode as PaletteViewMode) : null,
+      mode: docScreenId !== null && currentDoc?.e2ee !== 'locked' ? (viewMode as PaletteViewMode) : null,
       setMode: (mode) => {
         changeViewMode(mode)
         if (mode !== 'view') runAfterPaletteClose(() => editorRef.current?.focus())
