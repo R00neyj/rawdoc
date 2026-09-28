@@ -103,6 +103,41 @@ test.describe('F-2054 A3 만들기 — 도움말에서 새 문서(6.4)', () => {
   })
 })
 
+test.describe('F-2054 6.4 실패하면 도움말에 남는다', () => {
+  test('가져온 파일이 0개면 도움말 화면과 #/help 가 그대로다', async ({ page }) => {
+    await prepareDoc(page)
+    await runCommand(page, '>도움말')
+    await expect(page.locator('.help-page-title')).toBeVisible()
+
+    await page.locator('input[data-import="md"]').setInputFiles({
+      name: '깨진 글.md',
+      mimeType: 'text/markdown',
+      buffer: Buffer.from([0x80, 0x81, 0x82]),
+    })
+    await expect(page.getByText('UTF-8 텍스트 파일이 아닙니다', { exact: false })).toBeVisible()
+    await expect(page.locator('.help-page-title')).toBeVisible()
+    expect(await page.evaluate(() => location.hash)).toBe('#/help')
+  })
+
+  test('새 문서 만들기가 실패하면 도움말 화면과 #/help 가 그대로다', async ({ page }) => {
+    await prepareDoc(page)
+    await runCommand(page, '>도움말')
+    await expect(page.locator('.help-page-title')).toBeVisible()
+    await page.evaluate(() => {
+      const put = IDBObjectStore.prototype.put
+      IDBObjectStore.prototype.put = function (...args) {
+        if (this.name === 'docs') throw new DOMException('막힘', 'UnknownError')
+        return put.apply(this, args)
+      }
+    })
+
+    await page.getByRole('button', { name: '새 문서', exact: true }).click()
+    await expect(page.getByText('새 문서를 만들지 못했습니다', { exact: false })).toBeVisible()
+    await expect(page.locator('.help-page-title')).toBeVisible()
+    expect(await page.evaluate(() => location.hash)).toBe('#/help')
+  })
+})
+
 test.describe('F-2054 A4 지금 문서 — 삭제 확인(사용자 결정 2)', () => {
   test('취소하면 남고, 삭제하면 없어진다', async ({ page }) => {
     await openApp(page)

@@ -3382,10 +3382,6 @@ export default function App() {
     // 필요하기 때문이다 (ia.md 3.3, F-123.md 3.3)
     if (viewMode === 'view') changeViewMode('live')
     await beforeLeaveDoc()
-    setSharedDoc(null) // 공유 화면에서 새 문서 를 눌러도 화면을 떠난다 (F-130.md 4장, 자체 결정)
-    setSharesOpen(false) // 공유 관리·도움말 화면에서도 화면을 떠난다 (F-2054 6.4, 확인 (c))
-    setHelpOpen(false)
-    setMapRoute(null) // 지도의 "문서가 없습니다" 빈 상태에서 새 문서 를 눌러도 지도를 떠난다 (F-292.md 6.5)
     // 새 문서 버튼은 {{title}} 이 빈 글자다 — 사용자 결정, F-2037.md 4.4
     const { content, failed } = await buildNewDocContent({ title: '', emptyTitle: 'keep-empty' })
     let doc: Doc
@@ -3411,6 +3407,11 @@ export default function App() {
     // 새 문서는 에디터가 아니라 제목 입력에 포커스한다 (ia.md 3.3, F-103 3.4) — 이전
     // 문서 전환 요청이 아직 소비되지 않았을 가능성에 대비해 명시적으로 내려둔다
     focusEditorRef.current = false
+    // 공유 보기(F-130 4장)·공유 관리·도움말(F-2054 6.4)·지도 빈 상태(F-292 6.5)를 떠난다 — 만든 뒤에만, 실패하면 화면과 주소가 어긋난다
+    setSharedDoc(null)
+    setSharesOpen(false)
+    setHelpOpen(false)
+    setMapRoute(null)
     setCurrentDocId(doc.id)
     setPref('md.lastDocId', doc.id)
     pushHashUrl(doc.id)
@@ -3423,10 +3424,6 @@ export default function App() {
     if (!(await ensureE2eeOpenForFolder(plan.folderId))) return
     if (viewMode === 'view') changeViewMode('live')
     await beforeLeaveDoc()
-    setSharedDoc(null)
-    setSharesOpen(false)
-    setHelpOpen(false)
-    setMapRoute(null)
     const { content, failed } = await buildNewDocContent({ title: plan.title })
     let doc: Doc
     try {
@@ -3442,6 +3439,11 @@ export default function App() {
     // 포커스는 본문 에디터다(제목 입력이 아니다) — 사용자가 방금 제목을 쳤다 (F-2053 6.3 Q8)
     focusTitleRef.current = false
     focusEditorRef.current = true
+    // 화면 떠나기는 만든 뒤에만 — 실패하면 지금 화면과 주소가 그대로 남는다
+    setSharedDoc(null)
+    setSharesOpen(false)
+    setHelpOpen(false)
+    setMapRoute(null)
     setCurrentDocId(doc.id)
     setPref('md.lastDocId', doc.id)
     pushHashUrl(doc.id)
@@ -3592,9 +3594,6 @@ export default function App() {
 
     if (viewMode === 'view') changeViewMode('live') // 제목 입력 포커스가 필요하다 (ia.md 3.3)
     await beforeLeaveDoc()
-    setSharedDoc(null)
-    // 지도의 끊긴 링크 노드를 눌러도 이 흐름을 그대로 타므로(F-292.md 6.4), 새 문서를 만들며 지도를 닫는다
-    setMapRoute(null)
     const newTitle = place ? place.title : target
     // 위키링크는 {{title}} = 만드는 문서 제목 그대로 (F-2037.md 4.1)
     const { content, failed } = await buildNewDocContent({ title: newTitle })
@@ -3617,6 +3616,9 @@ export default function App() {
     addOpenFolders(ancestorsOfDoc({ folders, doc: meta }))
     focusTitleRef.current = true
     focusEditorRef.current = false
+    // 지도의 끊긴 링크 노드도 이 흐름을 탄다(F-292 6.4) — 만든 뒤에만 떠나야 실패 때 화면과 주소가 맞는다
+    setSharedDoc(null)
+    setMapRoute(null)
     setCurrentDocId(doc.id)
     setPref('md.lastDocId', doc.id)
     pushHashUrl(doc.id)
@@ -3796,10 +3798,6 @@ export default function App() {
     if (!(await ensureE2eeOpenForFolder(targetFolderId))) return null
 
     await beforeLeaveDoc()
-    setSharedDoc(null) // 공유 화면에서 가져와도 화면을 떠난다 (F-130.md 4장, 자체 결정)
-    setSharesOpen(false) // 공유 관리·도움말·지도 화면에서도 화면을 떠난다 (F-2054 6.4, 확인 (c))
-    setHelpOpen(false)
-    setMapRoute(null)
 
     // 금고 한 겹이 거절한 이유는 가져오기 알림 대신 금고 문구로 보인다 (F-405 7.6)
     let lastE2eeError: unknown = null
@@ -3836,6 +3834,11 @@ export default function App() {
     // 대입을 못 보고 never 로 좁힌다 — 단언으로 실제 타입을 되돌린다
     const createdDoc = lastCreatedDoc as Doc | null
     if (createdDoc) {
+      // 공유 보기(F-130 4장)·공유 관리·도움말·지도(F-2054 6.4)를 떠난다 — 가져온 게 없으면 화면과 주소를 그대로 둔다
+      setSharedDoc(null)
+      setSharesOpen(false)
+      setHelpOpen(false)
+      setMapRoute(null)
       focusEditorRef.current = true
       setCurrentDocId(createdDoc.id)
       setPref('md.lastDocId', createdDoc.id)
