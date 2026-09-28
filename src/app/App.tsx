@@ -3415,7 +3415,11 @@ export default function App() {
     pushHashUrl(doc.id)
     closeSidebarIfNarrow()
     // Dialog(팔레트)가 닫는 요소로 포커스를 돌리는 비동기 처리를 이겨야 한다 — openDocFromSearch 와 같은 방식
-    setTimeout(() => editorRef.current?.focus(), 0)
+    // 새 문서의 편집기가 아직 안 떴으면 editorRef 는 이전 문서 편집기다 — 거기로 포커스를 주면 글자가 이전 문서에 들어간다.
+    // 그때는 새 편집기가 마운트하며 autoFocus(focusEditorRef)로 스스로 포커스한다 (리뷰 P3)
+    setTimeout(() => {
+      if (openDocIdRef.current === doc.id) editorRef.current?.focus()
+    }, 0)
   }
 
   async function selectDoc(id: string) {
