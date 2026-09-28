@@ -1,77 +1,22 @@
 // 주석 문법(%% …%%, <!-- … -->) 제거 — 공유 화면 노출 방지, 펜스·인라인코드 안은 제외, 줄 수·CRLF 유지 (F-214.md 2.1)
+//
+// "코드 안" 판정은 보기 화면과 같은 markdown-it 해석에 맡긴다 (리뷰 L1·L2). 줄 첫 칸 기준 자체 스캐너는
+// 목록·인용 안 펜스, 이스케이프한 백틱, 정보 문자열의 백틱, 한 줄짜리 제목 경계를 몰라서 뒤쪽 주석을 남겼다.
+// 방법: 주석 여는 기호 앞마다 사용자 영역(PUA) 문자 표지를 끼워 파싱하고, 코드 토큰(fence·code_block·
+// code_inline) 내용에 든 표지만 "코드 안"으로 본다. 표지는 `%`·`<` 앞에만 들어가므로 블록 구조와
+// 코드 스팬 경계를 바꾸지 않는다
+import MarkdownIt from 'markdown-it'
+import type { Token } from 'markdown-it'
+import { findFrontmatter, textAfterFrontmatter } from './frontmatter'
 
-function matchFenceAtLineStart(text: string, i: number): { char: string; len: number } | null {
-  let j = i
-  let spaces = 0
-  while (spaces < 3 && text[j] === ' ') {
-    j++
-    spaces++
-  }
-  const ch = text[j]
-  if (ch !== '`' && ch !== '~') return null
-  let len = 0
-  while (text[j] === ch) {
-    len++
-    j++
-  }
-  if (len < 3) return null
-  return { char: ch, len }
-}
+// 보기 화면(src/viewer/renderMarkdown.ts)과 같은 옵션. 그쪽 플러그인은 코드 토큰 경계를 만들지 않아 넣지 않는다
+const md = new MarkdownIt({ html: false, linkify: true, typographer: false, breaks: false })
 
-function isClosingFenceLine(text: string, i: number, fenceChar: string, fenceLen: number): boolean {
-  let j = i
-  let spaces = 0
-  while (spaces < 3 && text[j] === ' ') {
-    j++
-    spaces++
-  }
-  let len = 0
-  while (text[j] === fenceChar) {
-    len++
-    j++
-  }
-  if (len < fenceLen) return false
-  while (j < text.length && text[j] !== '\n' && text[j] !== '\r') {
-    if (text[j] !== ' ' && text[j] !== '\t') return false
-    j++
-  }
-  return true
-}
-
-function findEol(text: string, i: number): number {
-  let j = i
-  while (j < text.length && text[j] !== '\n' && text[j] !== '\r') j++
-  if (text[j] === '\r' && text[j + 1] === '\n') return j + 2
-  if (j < text.length) return j + 1
-  return j
-}
-
-function findBacktickClose(text: string, from: number, count: number): number {
-  let j = from
-  while (j < text.length) {
-    if (text[j] === '`') {
-      const runStart = j
-      let runLen = 0
-      while (text[j] === '`') {
-        runLen++
-        j++
-      }
-      if (runLen === count) return runStart
-    } else if (text[j] === '\n' && isBlankLineAt(text, j + 1)) {
-      return -1 // 인라인코드는 문단(빈 줄)을 넘지 않는다 — 넘겨 찾으면 사이 주석이 새어 나간다
-    } else {
-      j++
-    }
-  }
-  return -1
-}
-
-const BLANK_LINE_RE = /[ \t]*\r?(?:\n|$)/y
-
-function isBlankLineAt(text: string, i: number): boolean {
-  BLANK_LINE_RE.lastIndex = i
-  return BLANK_LINE_RE.test(text)
-}
+const CODE_TOKEN_TYPES = new Set(['fence', 'code_block', 'code_inline'])
+// 표지 = base(열기) + 10진수 자리들(base+0x10…+0x19) + base+1(닫기). 문서에 그 범위 문자가 있으면 다음 후보로
+const MARK_BASES = [0xe000, 0xe100, 0xe200, 0xe300, 0xf000]
+// 지운 결과를 다시 해석해 더 지울 것이 없을 때까지 되풀이하는 횟수 상한
+const MAX_PASSES = 8
 
 function keepNewlinesOnly(s: string): string {
   let out = ''
@@ -81,84 +26,99 @@ function keepNewlinesOnly(s: string): string {
   return out
 }
 
-export function stripComments(text: string): string {
+function isOpenerAt(text: string, i: number): boolean {
+  return (text[i] === '%' && text[i + 1] === '%') || text.startsWith('<!--', i)
+}
+
+function pickMarkBase(text: string): number | null {
+  for (const base of MARK_BASES) {
+    let clash = false
+    for (let j = 0; j < text.length; j++) {
+      const c = text.charCodeAt(j)
+      if (c >= base && c <= base + 0x1f) {
+        clash = true
+        break
+      }
+    }
+    if (!clash) return base
+  }
+  return null
+}
+
+function collectCodeContent(tokens: Token[], out: string[]): void {
+  for (const t of tokens) {
+    if (CODE_TOKEN_TYPES.has(t.type)) out.push(t.content)
+    if (t.children) collectCodeContent(t.children, out)
+  }
+}
+
+// 여는 기호 위치 가운데 markdown-it 이 코드 안으로 읽는 위치들. 표지 문자를 고를 수 없으면 null
+function codeOpenerPositions(text: string): Set<number> | null {
+  const base = pickMarkBase(text)
+  if (base === null) return null
+  const open = String.fromCharCode(base)
+  const close = String.fromCharCode(base + 1)
+  const digit = (d: number) => String.fromCharCode(base + 0x10 + d)
+
+  let marked = ''
+  for (let i = 0; i < text.length; i++) {
+    if (isOpenerAt(text, i)) {
+      marked += open
+      for (const d of String(i)) marked += digit(Number(d))
+      marked += close
+    }
+    marked += text[i]
+  }
+
+  // 보기 화면처럼 프론트매터는 떼고 본문만 파싱한다. 프론트매터 안은 코드가 아니다
+  const frontmatter = findFrontmatter(marked)
+  const body = frontmatter ? textAfterFrontmatter(marked, frontmatter) : marked
+
+  const contents: string[] = []
+  collectCodeContent(md.parse(body, {}), contents)
+  const inCode = new Set<number>()
+  const markRe = new RegExp(`${open}([${digit(0)}-${digit(9)}]+)${close}`, 'g')
+  for (const c of contents) {
+    for (const m of c.matchAll(markRe)) {
+      let i = 0
+      for (const ch of m[1]) i = i * 10 + (ch.charCodeAt(0) - base - 0x10)
+      inCode.add(i)
+    }
+  }
+  return inCode
+}
+
+function stripOnce(text: string, inCode: Set<number>): string {
   let out = ''
   let i = 0
   const n = text.length
-  let atLineStart = true
-  let fenceChar: string | null = null
-  let fenceLen = 0
-
   while (i < n) {
-    if (atLineStart) {
-      if (fenceChar === null) {
-        const fence = matchFenceAtLineStart(text, i)
-        if (fence) {
-          fenceChar = fence.char
-          fenceLen = fence.len
-          const eol = findEol(text, i)
-          out += text.slice(i, eol)
-          i = eol
-          continue
-        }
-      } else {
-        if (isClosingFenceLine(text, i, fenceChar, fenceLen)) {
-          fenceChar = null
-          fenceLen = 0
-        }
-        const eol = findEol(text, i)
-        out += text.slice(i, eol)
-        i = eol
+    if (isOpenerAt(text, i) && !inCode.has(i)) {
+      const isHtml = text[i] === '<'
+      const closeIdx = isHtml ? text.indexOf('-->', i + 4) : text.indexOf('%%', i + 2)
+      if (closeIdx !== -1) {
+        out += keepNewlinesOnly(text.slice(i + (isHtml ? 4 : 2), closeIdx))
+        i = closeIdx + (isHtml ? 3 : 2)
         continue
       }
-      atLineStart = false
     }
-
-    if (text[i] === '`') {
-      const tickStart = i
-      let tickCount = 0
-      while (text[i] === '`') {
-        tickCount++
-        i++
-      }
-      const closeIdx = findBacktickClose(text, i, tickCount)
-      if (closeIdx === -1) {
-        out += text.slice(tickStart, i)
-      } else {
-        out += text.slice(tickStart, closeIdx + tickCount)
-        i = closeIdx + tickCount
-      }
-      continue
-    }
-
-    if (text[i] === '%' && text[i + 1] === '%') {
-      const closeIdx = text.indexOf('%%', i + 2)
-      if (closeIdx === -1) {
-        out += text[i]
-        i++
-      } else {
-        out += keepNewlinesOnly(text.slice(i + 2, closeIdx))
-        i = closeIdx + 2
-      }
-      continue
-    }
-
-    if (text.startsWith('<!--', i)) {
-      const closeIdx = text.indexOf('-->', i + 4)
-      if (closeIdx === -1) {
-        out += text[i]
-        i++
-      } else {
-        out += keepNewlinesOnly(text.slice(i + 4, closeIdx))
-        i = closeIdx + 3
-      }
-      continue
-    }
-
-    if (text[i] === '\n') atLineStart = true
     out += text[i]
     i++
   }
-
   return out
+}
+
+export function stripComments(text: string): string {
+  if (!text.includes('%%') && !text.includes('<!--')) return text
+  // 주석을 지우면 블록 구조가 바뀔 수 있다(예: 주석이 펜스 여는 줄을 삼킴). 받는 사람이 보는 것은 결과 문서의
+  // 해석이므로, 결과를 다시 해석해 더 지울 것이 없을 때까지 되풀이한다
+  let current = text
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    const inCode = codeOpenerPositions(current)
+    // 표지 문자를 고를 수 없으면 코드 구분 없이 지운다 — 코드 속 글자가 빠지는 편이 주석 노출보다 낫다
+    const next = stripOnce(current, inCode ?? new Set())
+    if (next === current) return current
+    current = next
+  }
+  return stripOnce(current, new Set())
 }
