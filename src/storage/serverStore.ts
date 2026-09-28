@@ -494,6 +494,22 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     })
   }
 
+  // 캐시 문서 행 읽고-고쳐-쓰기(update·moveDoc·setPinned)와 보낸 응답 반영을 한 줄로 세운다 — 사이에 끼면 버전이 되돌아간다 (리뷰 S2 후속)
+  let docWriteChain: Promise<unknown> = Promise.resolve()
+  function withDocWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+    const run = docWriteChain.then(fn)
+    docWriteChain = run.catch(() => {})
+    return run
+  }
+
+  async function commitResponse(serverDoc: ServerDoc, entry: OutboxEntry): Promise<void> {
+    await withDocWriteLock(async () => {
+      await putDocFromResponse(serverDoc, entry.key)
+      if (entry.type === 'createDoc') for (const session of activeListSessions) session.createdDocIds.add(entry.docId)
+      await cache.removeOutbox(entry.key)
+    })
+  }
+
   // 충돌 사본은 캐시 본문(= 남은 편집까지 담은 값)으로 만든다 — 같은 문서의 남은 updateDoc 이 새 서버 버전 위로 원본을 덮지 않게 버린다 (리뷰 S3)
   async function dropLaterEdits(docId: string, sentKey: number): Promise<void> {
     const outbox = await cache.getOutbox(userId)
@@ -717,9 +733,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
             ...(entry.e2eeKey !== undefined ? { e2eeKey: entry.e2eeKey, attachmentRefs: entry.attachmentRefs ?? [] } : {}),
           })
           recordE2eeResponse(entry)
-          await putDocFromResponse(created, entry.key)
-          for (const session of activeListSessions) session.createdDocIds.add(entry.docId)
-          await cache.removeOutbox(entry.key)
+          await commitResponse(created, entry)
           break
         }
         case 'updateDoc': {
@@ -727,20 +741,17 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           const baseVersion = cachedDoc?.version ?? 0
           const updated = await api.updateDoc(entry.docId, { ...entry.patch, baseVersion, ...(entry.e2ee ? { e2ee: true as const } : {}) })
           recordE2eeResponse(entry)
-          await putDocFromResponse(updated, entry.key)
-          await cache.removeOutbox(entry.key)
+          await commitResponse(updated, entry)
           break
         }
         case 'moveDoc': {
           const updated = await api.moveDocFolder(entry.docId, entry.folderId)
-          await putDocFromResponse(updated, entry.key)
-          await cache.removeOutbox(entry.key)
+          await commitResponse(updated, entry)
           break
         }
         case 'setPinned': {
           const updated = await api.setPinned(entry.docId, entry.pinned)
-          await putDocFromResponse(updated, entry.key)
-          await cache.removeOutbox(entry.key)
+          await commitResponse(updated, entry)
           break
         }
         case 'removeDoc': {
@@ -1248,31 +1259,33 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       return toDoc({ ...doc, userId })
     },
 
-    async update(id, patch) {
-      let existing = await cache.getDoc(userId, id)
-      if (!existing) {
-        // 공유받은(edit 권한) 문서는 열 때 캐시하지 않는다(F-212.md 2.4) — 첫 편집을 보내려면 버전 추적을 위해 지금 캐시한다
-        const full = await api.getDoc(id).catch(() => null)
-        if (full) await cache.putDoc(userId, full)
-        existing = await cache.getDoc(userId, id)
-      }
-      if (!existing) throw new Error(`문서를 찾을 수 없음: ${id}`)
-      const isE2ee = existing.e2eeKey !== undefined
-      // attachmentRefs 는 금고 문서만 싣는다 (F-405 3.1)
-      // comments 는 버린다 — 서버 문서 댓글은 방 Doc·md-yjs 에 있다. 실수로 실리면 서버가 모르는 키로 400 을 돌려줘 본문 저장까지 버려진다 (F-508.md 5.1)
-      const { attachmentRefs, comments: _comments, ...textPatch } = patch
-      const sendPatch = isE2ee && attachmentRefs !== undefined ? { ...textPatch, attachmentRefs } : textPatch
-      const updated: CachedDoc = {
-        ...existing,
-        ...('title' in patch ? { title: patch.title as string } : {}),
-        ...('content' in patch ? { content: patch.content as string } : {}),
-        ...(isE2ee && attachmentRefs !== undefined ? { attachmentRefs } : {}),
-        updatedAt: Date.now(),
-      }
-      await cache.putDoc(userId, updated)
-      if (await isLocalOnly(existing)) return toDoc(updated)
-      await enqueueUpdateDoc(id, sendPatch, isE2ee)
-      return toDoc(updated)
+    update(id, patch) {
+      return withDocWriteLock(async () => {
+        let existing = await cache.getDoc(userId, id)
+        if (!existing) {
+          // 공유받은(edit 권한) 문서는 열 때 캐시하지 않는다(F-212.md 2.4) — 첫 편집을 보내려면 버전 추적을 위해 지금 캐시한다
+          const full = await api.getDoc(id).catch(() => null)
+          if (full) await cache.putDoc(userId, full)
+          existing = await cache.getDoc(userId, id)
+        }
+        if (!existing) throw new Error(`문서를 찾을 수 없음: ${id}`)
+        const isE2ee = existing.e2eeKey !== undefined
+        // attachmentRefs 는 금고 문서만 싣는다 (F-405 3.1)
+        // comments 는 버린다 — 서버 문서 댓글은 방 Doc·md-yjs 에 있다. 실수로 실리면 서버가 모르는 키로 400 을 돌려줘 본문 저장까지 버려진다 (F-508.md 5.1)
+        const { attachmentRefs, comments: _comments, ...textPatch } = patch
+        const sendPatch = isE2ee && attachmentRefs !== undefined ? { ...textPatch, attachmentRefs } : textPatch
+        const updated: CachedDoc = {
+          ...existing,
+          ...('title' in patch ? { title: patch.title as string } : {}),
+          ...('content' in patch ? { content: patch.content as string } : {}),
+          ...(isE2ee && attachmentRefs !== undefined ? { attachmentRefs } : {}),
+          updatedAt: Date.now(),
+        }
+        await cache.putDoc(userId, updated)
+        if (await isLocalOnly(existing)) return toDoc(updated)
+        await enqueueUpdateDoc(id, sendPatch, isE2ee)
+        return toDoc(updated)
+      })
     },
 
     async remove(id) {
@@ -1289,35 +1302,39 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       kickSend()
     },
 
-    async moveDoc(id, folderId) {
-      const existing = await cache.getDoc(userId, id)
-      if (!existing) throw new Error(`문서를 찾을 수 없음: ${id}`)
-      const resolvedFolderId = folderId ?? null
-      const folders = await cache.getFolders(userId)
-      if (!isValidFolderId(folders, resolvedFolderId)) {
-        throw new Error(`유효하지 않은 folderId: ${resolvedFolderId}`)
-      }
-      const updated = { ...existing, folderId: resolvedFolderId }
-      await cache.putDoc(userId, updated)
-      if (await isLocalOnly(existing)) return toDoc(updated)
-      await enqueueCoalesced(
-        { type: 'moveDoc', docId: id, folderId: resolvedFolderId },
-        (e) => e.type === 'moveDoc' && e.docId === id,
-      )
-      return toDoc(updated)
+    moveDoc(id, folderId) {
+      return withDocWriteLock(async () => {
+        const existing = await cache.getDoc(userId, id)
+        if (!existing) throw new Error(`문서를 찾을 수 없음: ${id}`)
+        const resolvedFolderId = folderId ?? null
+        const folders = await cache.getFolders(userId)
+        if (!isValidFolderId(folders, resolvedFolderId)) {
+          throw new Error(`유효하지 않은 folderId: ${resolvedFolderId}`)
+        }
+        const updated = { ...existing, folderId: resolvedFolderId }
+        await cache.putDoc(userId, updated)
+        if (await isLocalOnly(existing)) return toDoc(updated)
+        await enqueueCoalesced(
+          { type: 'moveDoc', docId: id, folderId: resolvedFolderId },
+          (e) => e.type === 'moveDoc' && e.docId === id,
+        )
+        return toDoc(updated)
+      })
     },
 
-    async setPinned(id, pinned) {
-      const existing = await cache.getDoc(userId, id)
-      if (!existing) throw new Error(`문서를 찾을 수 없음: ${id}`)
-      const updated = { ...existing, pinnedAt: pinned ? Date.now() : null }
-      await cache.putDoc(userId, updated)
-      if (await isLocalOnly(existing)) return toDoc(updated)
-      await enqueueCoalesced(
-        { type: 'setPinned', docId: id, pinned },
-        (e) => e.type === 'setPinned' && e.docId === id,
-      )
-      return toDoc(updated)
+    setPinned(id, pinned) {
+      return withDocWriteLock(async () => {
+        const existing = await cache.getDoc(userId, id)
+        if (!existing) throw new Error(`문서를 찾을 수 없음: ${id}`)
+        const updated = { ...existing, pinnedAt: pinned ? Date.now() : null }
+        await cache.putDoc(userId, updated)
+        if (await isLocalOnly(existing)) return toDoc(updated)
+        await enqueueCoalesced(
+          { type: 'setPinned', docId: id, pinned },
+          (e) => e.type === 'setPinned' && e.docId === id,
+        )
+        return toDoc(updated)
+      })
     },
 
     // list() 와 같은 방식 — 서버 목록으로 캐시를 맞추고 캐시에서 돌려준다 (F-207.md 2.2)

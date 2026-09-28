@@ -5,6 +5,28 @@ import { createRemoteCache } from './remoteCache'
 import { descendantFolderIds } from '../lib/folderTree'
 import type { CommentRecord } from '../lib/docComments'
 
+// 캐시 getDoc 이 값을 돌려주기 직전에 한 번 끼어드는 갈고리 — 비어 있으면 원래 함수 그대로 (리뷰 S2 후속)
+const cacheHooks = vi.hoisted(() => ({ afterGetDoc: null as null | ((docId: string) => Promise<void>) }))
+vi.mock('./remoteCache', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('./remoteCache')>()
+  const createRemoteCache: typeof mod.createRemoteCache = async (...args) => {
+    const c = await mod.createRemoteCache(...args)
+    return {
+      ...c,
+      getDoc: (u, id) => {
+        const hook = cacheHooks.afterGetDoc
+        if (!hook) return c.getDoc(u, id)
+        cacheHooks.afterGetDoc = null
+        return c.getDoc(u, id).then(async (row) => {
+          await hook(id)
+          return row
+        })
+      },
+    }
+  }
+  return { ...mod, createRemoteCache }
+})
+
 function makeRecord(id: string, over: Partial<CommentRecord> = {}): CommentRecord {
   return {
     id,
@@ -306,6 +328,7 @@ function makeFakeServer() {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  cacheHooks.afterGetDoc = null
 })
 
 describe('serverStore', () => {
@@ -2505,6 +2528,85 @@ describe('리뷰 S2 서버가 거절한 새 문서', () => {
     await tick(30)
     await store.list()
     expect((await store.get('clashing-id'))?.content).toBe('mine 2')
+    expect(store.syncState?.pending).toBe(0)
+  })
+
+  // update·setPinned 가 캐시를 읽고 쓰는 사이에 보낸 응답이 끝나면 버전이 되돌아가던 경합 (리뷰 S2 후속)
+  function gatedFetch(server: ReturnType<typeof makeFakeServer>, gated: (method: string, path: string) => boolean) {
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      if (gated(init.method ?? 'GET', path)) await gate
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    // 다음 캐시 getDoc 이 값을 읽은 직후, 막아 둔 요청을 풀고 그 응답 반영이 끝날 때까지 기다린다
+    const releaseInsideNextRead = () => {
+      cacheHooks.afterGetDoc = async () => {
+        release()
+        await tick(30)
+      }
+    }
+    return { fetchMock, releaseInsideNextRead }
+  }
+
+  it('새 문서 createDoc 이 update 의 읽기·쓰기 사이에 끝나도 편집이 로컬 전용이 되지 않고 서버로 간다', async () => {
+    const server = makeFakeServer()
+    const { releaseInsideNextRead } = gatedFetch(server, (m, p) => m === 'POST' && p === '/api/docs')
+    const conflicts: unknown[] = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), onConflict: (e) => conflicts.push(e) })
+
+    const doc = await store.create({ title: 'T', content: 'A', lineEnding: 'lf' })
+    await tick()
+    releaseInsideNextRead()
+    await store.update(doc.id, { content: 'B' })
+    await tick(30)
+    await store.flushOutbox()
+
+    expect(server.docs.get(doc.id)?.content).toBe('B')
+    expect(store.syncState?.pending).toBe(0)
+    expect(conflicts).toHaveLength(0)
+    await store.list()
+    expect((await store.get(doc.id))?.content).toBe('B')
+  })
+
+  it('setPinned 도 같다 — createDoc 이 사이에 끝나도 고정이 서버로 간다', async () => {
+    const server = makeFakeServer()
+    const { releaseInsideNextRead } = gatedFetch(server, (m, p) => m === 'POST' && p === '/api/docs')
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const doc = await store.create({ title: 'T', content: 'A', lineEnding: 'lf' })
+    await tick()
+    releaseInsideNextRead()
+    await store.setPinned(doc.id, true)
+    await tick(30)
+    await store.flushOutbox()
+
+    expect(server.docs.get(doc.id)?.pinnedAt).not.toBeNull()
+    expect(store.syncState?.pending).toBe(0)
+  })
+
+  it('보내던 PUT 이 update 의 읽기·쓰기 사이에 끝나도 캐시 버전이 되돌아가 거짓 충돌 사본을 만들지 않는다', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'p')
+    let putCount = 0
+    const { releaseInsideNextRead } = gatedFetch(server, (m, p) => m === 'PUT' && p === '/api/docs/p' && ++putCount === 1)
+    const conflicts: unknown[] = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), onConflict: (e) => conflicts.push(e) })
+    await store.list()
+
+    await store.update('p', { content: 'A' })
+    await tick()
+    releaseInsideNextRead()
+    await store.update('p', { content: 'B' })
+    await tick(30)
+    await store.flushOutbox()
+
+    expect(conflicts).toHaveLength(0)
+    expect(server.docs.get('p')?.content).toBe('B')
     expect(store.syncState?.pending).toBe(0)
   })
 })
