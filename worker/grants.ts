@@ -175,6 +175,23 @@ function storedChain(folderById: Map<string, { parent_id: string | null }>, fold
 const SHARED_DOC_COLUMNS = 'id, title, line_ending, folder_id, pinned_at, version, created_at, updated_at, owner_id'
 const BATCH_ID_LIMIT = 100
 
+// 내 폴더 초대(?1 이메일, ?2 내 id)를 기점으로 같은 소유자의 하위 폴더만. UNION 이라 순환에서 멈춘다 (F-2058 3.2)
+const SHARED_SUBTREE_CTE = `WITH RECURSIVE sub(id, owner_id) AS (
+  SELECT f.id, f.owner_id FROM grants g JOIN folders f ON f.id = g.target_id AND f.owner_id = g.owner_id
+   WHERE g.grantee_email = ?1 AND g.target_type = 'folder' AND g.owner_id <> ?2
+  UNION
+  SELECT f.id, f.owner_id FROM folders f JOIN sub s ON f.parent_id = s.id AND f.owner_id = s.owner_id
+)`
+
+// CROSS JOIN 은 고리 순서 고정 — 그냥 JOIN 이면 docs 를 바깥에 두고 훑는다 (F-2058 머리 (e))
+export const SHARED_FOLDERS_SQL = `${SHARED_SUBTREE_CTE}
+SELECT f.id, f.name, f.parent_id, f.owner_id FROM sub s CROSS JOIN folders f ON f.id = s.id`
+
+export const SHARED_DOCS_SQL = `${SHARED_SUBTREE_CTE}
+SELECT d.id, d.title, d.line_ending, d.folder_id, d.pinned_at, d.version, d.created_at, d.updated_at, d.owner_id
+  FROM sub s CROSS JOIN docs d ON d.owner_id = s.owner_id AND d.folder_id = s.id
+ WHERE d.e2ee_key IS NULL`
+
 type SharedItem = {
   id: string
   title: string
@@ -189,7 +206,7 @@ type SharedItem = {
   viaFolder?: { id: string; name: string }
 }
 
-// 내 소유가 아닌 공유받은 문서 목록 — 문서 grant + 저장된 조상 사슬의 폴더 grant. 질의 수는 폴더 깊이·문서 수와 무관하다 (F-2017 4.4)
+// 내 소유가 아닌 공유받은 문서 목록 — 초대 폴더 하위만 재귀로 + 문서 초대. 질의 수는 폴더 깊이·문서 수와 무관하다 (F-2017 4.4, F-2058)
 export async function handleGetShared(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
 
@@ -218,23 +235,27 @@ export async function handleGetShared(request: Request, env: Env): Promise<Respo
   }
 
   const picked: Array<{ doc: SharedDocRow; role: GrantRole; viaFolder?: { id: string; name: string } }> = []
+  const pickedIds = new Set<string>()
 
-  for (const [ownerId, folderGrants] of folderGrantsByOwner) {
-    if (ownerId === user.id) continue
-    const { results: folders } = await env.DB.prepare('SELECT id, name, parent_id FROM folders WHERE owner_id = ?')
-      .bind(ownerId)
-      .all<{ id: string; name: string; parent_id: string | null }>()
-    const { results: docs } = await env.DB.prepare(
-      `SELECT ${SHARED_DOC_COLUMNS} FROM docs WHERE owner_id = ? AND e2ee_key IS NULL ORDER BY updated_at DESC`,
-    )
-      .bind(ownerId)
-      .all<SharedDocRow>()
+  if (folderGrantsByOwner.size > 0) {
+    const { results: folders } = await env.DB.prepare(SHARED_FOLDERS_SQL)
+      .bind(user.email, user.id)
+      .all<{ id: string; name: string; parent_id: string | null; owner_id: string }>()
+    const { results: docs } = await env.DB.prepare(SHARED_DOCS_SQL).bind(user.email, user.id).all<SharedDocRow>()
 
-    const folderById = new Map(folders.map((f) => [f.id, f]))
+    // 하위 폴더만 든 표로 걸어도 사슬 앞부분에 초대 폴더가 모두 있다 (F-2058 5장)
+    const foldersByOwner = new Map<string, Map<string, { name: string; parent_id: string | null }>>()
+    for (const f of folders) {
+      const byId = foldersByOwner.get(f.owner_id) ?? new Map<string, { name: string; parent_id: string | null }>()
+      byId.set(f.id, f)
+      foldersByOwner.set(f.owner_id, byId)
+    }
     for (const doc of docs) {
+      const folderById = foldersByOwner.get(doc.owner_id)
+      const folderGrants = folderGrantsByOwner.get(doc.owner_id)
       let folderRole: GrantRole | null = null
       let viaFolder: { id: string; name: string } | undefined
-      if (doc.folder_id) {
+      if (doc.folder_id && folderById && folderGrants) {
         for (const id of storedChain(folderById, doc.folder_id)) {
           const role = folderGrants.get(id)
           if (!role) continue
@@ -243,13 +264,15 @@ export async function handleGetShared(request: Request, env: Env): Promise<Respo
         }
       }
       const role = higherRole(folderRole, docGrantRole(doc))
-      if (role) picked.push({ doc, role, viaFolder })
+      if (!role) continue
+      picked.push({ doc, role, viaFolder })
+      pickedIds.add(doc.id)
     }
   }
 
-  // 폴더 초대를 주지 않은 소유자의 문서 초대 — 바인딩 한도 때문에 100개씩 나눈다
+  // 하위 CTE 에서 뽑히지 않은 문서 초대 — 바인딩 한도 때문에 100개씩 나눈다
   const docOnlyIds = myGrants
-    .filter((g) => g.target_type === 'doc' && !folderGrantsByOwner.has(g.owner_id))
+    .filter((g) => g.target_type === 'doc' && !pickedIds.has(g.target_id))
     .map((g) => g.target_id)
   for (let i = 0; i < docOnlyIds.length; i += BATCH_ID_LIMIT) {
     const batch = docOnlyIds.slice(i, i + BATCH_ID_LIMIT)
