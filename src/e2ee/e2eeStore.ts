@@ -160,10 +160,14 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
     if (memo && memo.e2eeKey === e2eeKey && memo.titleEnvelope === row.title && memo.contentEnvelope === row.content) {
       return { ...rest, title: memo.title, content: memo.content, e2ee: 'open', attachmentRefs: refs }
     }
+    // 시작할 때의 세대 값 — currentMasterKey() 가 올린 뒤에 적는다. 풀던 사이 잠그기(clearPlainCache)나 MK 교체가
+    // 끼어들면 열린 평문을 돌려주지도 기억하지도 않는다 (리뷰 S7, 첨부의 3.3 6번과 같은 규칙)
+    const startGeneration = generation
     try {
       const key = await docKeyFor(mk, e2eeKey)
       const title = await decryptDocField(key, row.id, 'title', row.title)
       const content = await decryptDocField(key, row.id, 'content', row.content)
+      if (generation !== startGeneration || deps.getMasterKey() !== mk) return lockedShape(rest, refs)
       plainMemo.set(row.id, { e2eeKey, titleEnvelope: row.title, contentEnvelope: row.content, title, content })
       return { ...rest, title, content, e2ee: 'open', attachmentRefs: refs }
     } catch {
