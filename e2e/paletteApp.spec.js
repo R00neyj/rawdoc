@@ -297,7 +297,7 @@ test.describe('F-2054 A11 공유 — 마크다운 복사', () => {
 
     await expect(page.locator('.notice--info .notice-message')).toHaveText('마크다운을 복사했습니다.')
     const clip = await page.evaluate(() => navigator.clipboard.readText())
-    // 줄바꿈은 기존 getShareDoc 의 lineEnding 폴백(crlf) 때문에 CRLF 로 나온다 — 공유 메뉴에서도 같은 F-2054 밖 기존 버그(H 항목)
+    // 앱은 LF 로 쓰고 Windows 클립보드 왕복이 CRLF 로 바꾼다 — 줄바꿈은 비교에서 뺀다 (H656 오탐, editor.spec.js 205행과 같은 현상)
     expect(clip.replace(/\r\n/g, '\n')).toBe('# 가\n본문\n')
   })
 })
