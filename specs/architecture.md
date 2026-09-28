@@ -30,6 +30,7 @@ src/
     contextMenuActions.ts 우클릭 메뉴 상태 타입과 순수 판정 (F-2061)
     useGlobalShortcuts.ts 전역 단축키 창 keydown 6개 (F-2062)
     globalShortcuts.ts   그 키 판정 (순수 함수, F-2062)
+    useAppearancePrefs.ts 설정값(서체·테마·줄 번호·폭 등) 상태·change*·시스템 테마 구독 (F-2063)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)

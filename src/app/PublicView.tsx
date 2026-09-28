@@ -129,7 +129,7 @@ function usePublicSettings(): PublicSettings {
   const [bodyFont, setBodyFont] = useState(() => getPref('md.bodyFont', 'sans'))
   const [fontSize, setFontSize] = useState(() => getPref('md.fontSize', 'medium'))
 
-  // 시스템 테마를 따르는 동안은 OS 설정 변화도 즉시 반영한다 (App.tsx 와 같은 방식, F-141 3.1)
+  // 시스템 테마를 따르는 동안은 OS 설정 변화도 즉시 반영한다 (useAppearancePrefs.ts 와 같은 방식, F-141 3.1)
   useEffect(() => {
     if (theme !== 'system') return
     const mql = window.matchMedia('(prefers-color-scheme: dark)')

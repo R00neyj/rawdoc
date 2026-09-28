@@ -1122,7 +1122,7 @@ function buildScene(
   })
   ro.observe(wrapper)
 
-  // App.tsx 가 'system' 일 때도 해석된 값을 dataset.theme 에 쓰므로 prefers-color-scheme 을 따로 듣지 않아도 된다 (6.3)
+  // useAppearancePrefs.ts 가 'system' 일 때도 해석된 값을 dataset.theme 에 쓰므로 prefers-color-scheme 을 따로 듣지 않아도 된다 (6.3)
   const mo = new MutationObserver(() => {
     applyColors()
     requestDraw()

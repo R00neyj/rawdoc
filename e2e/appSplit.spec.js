@@ -184,3 +184,94 @@ test.describe('F-2062 전역 단축키 절', () => {
     await expect(page.locator('.cm-search')).toHaveCount(0)
   })
 })
+
+test.describe('F-2063 설정값·시스템 테마 절', () => {
+  const SETTINGS = 'dialog[aria-labelledby="settings-title"]'
+
+  async function openSettings(page, tab) {
+    await page.getByRole('button', { name: '설정', exact: true }).click()
+    const dialog = page.locator(SETTINGS)
+    await expect(dialog).toBeVisible()
+    if (tab) await dialog.getByRole('tab', { name: tab }).click()
+    return dialog
+  }
+
+  const radio = (dialog, group, name) =>
+    dialog.getByRole('radiogroup', { name: group }).getByRole('radio', { name, exact: true })
+  const htmlData = (page, key) => page.evaluate((k) => document.documentElement.dataset[k], key)
+  const stored = (page, key) => page.evaluate((k) => window.localStorage.getItem(k), key)
+  const twoFrames = (page) =>
+    page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))
+
+  test('F-2063 C1 제목 서체 — 즉시 반영·저장·새로고침 유지', async ({ page }) => {
+    await openApp(page)
+    let dialog = await openSettings(page, '화면')
+    await radio(dialog, '제목 서체', '산세리프').click()
+    expect(await htmlData(page, 'headingFont')).toBe('sans')
+    expect(await stored(page, 'md.headingFont')).toBe('sans')
+    await dialog.getByRole('button', { name: '닫기', exact: true }).click()
+    await expect(dialog).toBeHidden()
+
+    await page.reload()
+    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+    dialog = await openSettings(page, '화면')
+    await expect(radio(dialog, '제목 서체', '산세리프')).toHaveAttribute('aria-checked', 'true')
+  })
+
+  test('F-2063 C2 명시 테마는 시스템 변화를 따르지 않고, 시스템으로 되돌리면 다시 따른다', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' })
+    await openApp(page)
+    const dialog = await openSettings(page, '화면')
+    await radio(dialog, '테마', '다크').click()
+    expect(await htmlData(page, 'theme')).toBe('dark')
+    expect(await stored(page, 'md.theme')).toBe('dark')
+
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await page.emulateMedia({ colorScheme: 'light' })
+    await twoFrames(page)
+    expect(await htmlData(page, 'theme')).toBe('dark')
+
+    await radio(dialog, '테마', '시스템').click()
+    expect(await htmlData(page, 'theme')).toBe('white')
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await expect.poll(() => htmlData(page, 'theme')).toBe('dark')
+  })
+
+  test('F-2063 C3 탭바 숨김 저장 — 새로고침 뒤에도 숨김', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '한 줄\n' })
+    await expect(page.locator('.editor-toolbar')).toBeVisible()
+    const dialog = await openSettings(page, '편집기')
+    await radio(dialog, '탭바', '숨김').click()
+    await dialog.getByRole('button', { name: '닫기', exact: true }).click()
+    await expect(dialog).toBeHidden()
+    await expect(page.locator('.editor-toolbar')).toHaveCount(0)
+    expect(await stored(page, 'md.toolbar')).toBe('off')
+
+    await page.reload()
+    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+    await expect(page.locator('.editor-toolbar')).toHaveCount(0)
+  })
+
+  test('F-2063 C4 자동 잠금 선택 저장', async ({ page }) => {
+    await openApp(page)
+    let dialog = await openSettings(page, '금고')
+    await radio(dialog, '자동 잠금', '15분').click()
+    await expect(radio(dialog, '자동 잠금', '15분')).toHaveAttribute('aria-checked', 'true')
+    expect(await stored(page, 'md.e2eeLockMinutes')).toBe('15')
+    await dialog.getByRole('button', { name: '닫기', exact: true }).click()
+    await expect(dialog).toBeHidden()
+
+    dialog = await openSettings(page, '금고')
+    await expect(radio(dialog, '자동 잠금', '15분')).toHaveAttribute('aria-checked', 'true')
+    await expect(radio(dialog, '자동 잠금', '30분')).toHaveAttribute('aria-checked', 'false')
+  })
+
+  test('F-2063 C5 시작 화면 선택 저장', async ({ page }) => {
+    await openApp(page)
+    const dialog = await openSettings(page, '화면')
+    await radio(dialog, '시작 화면', '홈').click()
+    await expect(radio(dialog, '시작 화면', '홈')).toHaveAttribute('aria-checked', 'true')
+    expect(await stored(page, 'md.startScreen')).toBe('home')
+  })
+})
