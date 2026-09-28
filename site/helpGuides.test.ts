@@ -455,7 +455,7 @@ describe('callouts-math-diagrams 글', () => {
   }
 
   it('콜아웃 종류 목록이 별칭 표와 같고, 한 줄 안은 같은 색 묶음·줄끼리는 다른 묶음이다', () => {
-    const lines = body.split('\n').filter((l) => /^- `\[![a-z]+\]`( · `\[![a-z]+\]`)*$/.test(l))
+    const lines = body.split(/\r?\n/).filter((l) => /^- `\[![a-z]+\]`( · `\[![a-z]+\]`)*$/.test(l))
     const groups = lines.map((l) => [...l.matchAll(/`\[!([a-z]+)\]`/g)].map((m) => m[1]))
     expect(groups.flat().sort()).toEqual(Object.keys(KIND_ALIASES).sort())
     const kinds = groups.map((names) => {
