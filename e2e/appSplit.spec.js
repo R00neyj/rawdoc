@@ -515,7 +515,8 @@ test.describe('F-2065 내보내기 구역', () => {
     await page.locator('.item-menu-list:not([inert])').getByRole('menuitem', { name: '폴더 내보내기' }).click()
     await expect(errorMessage).toHaveText('온라인일 때 내보낼 수 있습니다.')
     await page.getByRole('button', { name: '알림 닫기' }).click()
-    await expect(errorMessage).toHaveCount(0)
+    // 오프라인 뒤 늦게 뜬 다른 알림이 자리를 채울 수 있다 — 개수 0 대신 이 문구가 사라졌는지만 본다
+    await expect(errorMessage.filter({ hasText: '온라인일 때 내보낼 수 있습니다.' })).toHaveCount(0)
 
     await openFolderMenu(folderRow)
     await page.locator('.item-menu-list:not([inert])').getByRole('menuitem', { name: '옵시디언 볼트로 내보내기' }).click()
