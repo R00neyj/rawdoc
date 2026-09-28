@@ -53,6 +53,7 @@ import { parseHash, formatHash, formatMapHash, formatCommentHash, parsePathRoute
 import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { canShowCachedShell, mergeBootList, shouldApplyListResult } from './bootList'
+import { mergeResyncList } from './resyncList'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
 import { decideDocPath, type DocPathKind, type FallbackReason } from './docPath'
@@ -1203,18 +1204,24 @@ export default function App() {
   }, [])
 
   // 다른 탭 신호를 받으면 목록만 다시 읽는다. 열린 문서 본문은 건드리지 않는다(불변조건, F-296.md 7.2)
+  // 부팅 뒤 맞추기·금고 목록과 순번을 공유해 늦게 시작한 결과만 반영하고, 요청 전 목록에 있던 문서만 지운 것으로 본다 (리뷰 A3)
   const resyncFromStore = useCallback(async () => {
+    const seq = ++bootListSeqRef.current
+    const snapshot = docsRef.current
     const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
+    if (!shouldApplyListResult({ seq, lastAppliedSeq: lastAppliedListSeqRef.current })) return
+    lastAppliedListSeqRef.current = seq
     setFolders(newFolders)
-    const stripped = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
-    setDocs(stripped)
+    const result = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
+    setDocs((prev) => mergeResyncList({ snapshot, current: prev, result }).docs)
+    const merged = mergeResyncList({ snapshot, current: docsRef.current, result })
     const openId = currentDocIdRef.current
-    if (openId && !stripped.some((d) => d.id === openId)) {
+    if (openId && merged.removedIds.includes(openId)) {
       deletedElsewhereSourceRef.current = 'tab'
       setDeletedElsewhereId(openId)
     }
     // 다른 탭이 지금 문서를 금고로 옮기거나 뺐으면 새 세션으로 다시 연다 — 옛 실시간 세션에 머물지 않게 (F-407 7.4)
-    const opened = openId ? stripped.find((d) => d.id === openId) : undefined
+    const opened = openId ? merged.docs.find((d) => d.id === openId) : undefined
     const session = docPathRef.current
     const syncedPath = session.path === 'realtime' || session.path === 'pending' || session.path === 'fallback' || session.path === 'e2ee'
     if (store.kind === 'server' && opened && session.docId === openId && syncedPath && !e2eeConvertBusyRef.current) {
