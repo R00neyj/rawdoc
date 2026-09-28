@@ -1654,3 +1654,69 @@ test.describe('F-2081 JSX 컴포넌트 다섯 절', () => {
     await expect(page.locator('.app-shell > .print-root:last-child')).toHaveCount(1)
   })
 })
+
+// F-2074 C1 과 같은 길로 공유 화면을 열고 가져온 문서 id 를 돌려준다
+async function openSharedView2082(page, context, name, content) {
+  await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await openApp(page)
+  const docId = await importMarkdown(page, { name, content })
+  await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+  await page.getByRole('menuitem', { name: '링크 복사' }).click()
+  const link = await page.evaluate(() => navigator.clipboard.readText())
+  const hash = new URL(link).hash
+  await page.goto('about:blank')
+  await page.goto('/' + hash)
+  await expect(page.locator('.shared-view')).toBeVisible()
+  return docId
+}
+
+test.describe('F-2082 문서 이동 절', () => {
+  test.use({ viewport: { width: 1280, height: 900 } })
+
+  test('F-2082 C1 공유 화면 내 문서로 가져오기 — 새 문서로 열고 주소를 바꾼다', async ({ page, context }) => {
+    const importedId = await openSharedView2082(page, context, '가져올.md', '가져올 본문\n')
+    const historyLenBefore = await page.evaluate(() => history.length)
+
+    await page.locator('.shared-view-notice').getByRole('button', { name: '내 문서로 가져오기' }).click()
+
+    await expect(page.locator('.shared-view')).toHaveCount(0)
+    await expect(page.locator('.notice-message')).toHaveText('내 문서로 가져왔습니다.')
+    await expect(page.locator('.cm-content')).toContainText('가져올 본문')
+    const newId = await currentDocId(page)
+    expect(newId).not.toBe(importedId)
+    expect(await page.evaluate(() => location.hash)).toBe(`#/d/${newId}`)
+    expect(await page.evaluate(() => history.length)).toBe(historyLenBefore)
+  })
+
+  test('F-2082 C2 공유 화면 닫기 — 마지막으로 연 문서로 돌아간다', async ({ page, context }) => {
+    const importedId = await openSharedView2082(page, context, '돌아갈.md', '돌아갈 본문\n')
+
+    await page.locator('.shared-view-notice').getByRole('button', { name: '닫기' }).click()
+
+    await expect(page.locator('.shared-view')).toHaveCount(0)
+    await expect(page.locator('.cm-content')).toContainText('돌아갈 본문')
+    expect(await currentDocId(page)).toBe(importedId)
+  })
+
+  test('F-2082 C3 공유 관리에서 폴더 이름 클릭 — 홈으로 가며 그 폴더를 펼친다', async ({ page }) => {
+    const server = await fakeServer(page)
+    seedFolder(server, { id: 'f2082', name: '업무' })
+    seedDoc(server, { id: 'd2082', title: '폴더 안 문서', folderId: 'f2082' })
+    seedDoc(server, { id: 'd2082top', title: '밖 문서' })
+    seedLink(server, { targetType: 'folder', targetId: 'f2082', token: 'tok-f2082' })
+    await setPrefBeforeLoad(page, 'md.lastDocId', 'd2082top')
+
+    await openApp(page)
+    expect((await readOpenFolders(page)) ?? []).not.toContain('f2082')
+    await openShares(page)
+
+    await page.locator('.shares-target-btn').click()
+
+    await expect(page.locator('.shares-page-head')).toHaveCount(0)
+    await expect(page.locator('.empty-state')).toBeVisible()
+    expect(await page.evaluate(() => location.hash)).toBe('#/')
+    await expect.poll(() => readOpenFolders(page)).toContain('f2082')
+    await expect(page.locator('.sidebar .tree-label').filter({ hasText: '폴더 안 문서' })).toBeVisible()
+  })
+})

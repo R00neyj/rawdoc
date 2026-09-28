@@ -158,7 +158,7 @@ test.describe('F-2052 A8 상태바가 없는 화면', () => {
     await page.keyboard.press('Control+Shift+Slash')
     await expect(panel(page)).toHaveCount(0)
 
-    // 도움말 닫기 → 홈으로 되돌아가도 여전히 없다(goHome, App.tsx)
+    // 도움말 닫기 → 홈으로 되돌아가도 여전히 없다(goHome, useDocNavigation.ts)
     await page.locator('.help-page').getByRole('button', { name: '닫기', exact: true }).click()
     await expect(page.locator('.empty-state')).toBeVisible()
     await expect(shortcutsButton(page)).toHaveCount(0)

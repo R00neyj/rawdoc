@@ -255,7 +255,7 @@ test.describe('F-2022 A8 사용자 템플릿', () => {
     await expect(hint).toContainText('{{date}}·{{time}}·{{title}}은')
 
     await options.first().click()
-    // 대상 문서("팀 회의")는 새로 만든 문서라 기본 줄바꿈이 CRLF 다(App.tsx createNewDoc) — 저장된 원문은 그대로 CRLF
+    // 대상 문서("팀 회의")는 새로 만든 문서라 기본 줄바꿈이 CRLF 다(useDocNavigation.ts createNewDoc) — 저장된 원문은 그대로 CRLF
     await expect.poll(async () => (await readSavedContent(page)).content).toBe('## 팀 회의\r\n\r\n- ')
   })
 })
