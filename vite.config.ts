@@ -270,6 +270,9 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.{js,jsx,ts,tsx}', 'worker/**/*.test.ts', 'site/**/*.test.ts', 'cli/**/*.test.ts'],
     environment: 'node',
+    // e2e 와 동시에 돌면 worker 테스트의 beforeAll import('./index')가 기본 10초를 넘겨 99개가 skipped 됨 (2026-09-28 측정)
+    hookTimeout: 30_000,
+    testTimeout: 15_000,
     // vi.mock('partyserver') 가 진짜 y-partyserver 안까지 먹게 한다 (F-503 Y1)
     server: { deps: { inline: ['y-partyserver'] } },
   },
