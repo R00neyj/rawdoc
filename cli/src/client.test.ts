@@ -510,3 +510,24 @@ describe('F-2031 A7~A12 새 오류 분기', () => {
     }
   })
 })
+
+// 리뷰 C4 — try 가 fetch 만 감싸서 헤더를 받은 뒤 본문 읽기 실패가 CliError 가 아닌 날 오류로 샜다
+describe('응답 본문 읽기 실패 (리뷰 C4)', () => {
+  function bodyFails(err: Error): Response {
+    const res = new Response('{}', { status: 200 })
+    Object.defineProperty(res, 'text', { value: () => Promise.reject(err) })
+    return res
+  }
+
+  it('본문 읽다 연결이 끊기면 network', async () => {
+    const cfg = baseCfg(fakeFetch(() => bodyFails(new TypeError('terminated'))) as unknown as typeof fetch)
+    await expect(apiListDocs(cfg)).rejects.toMatchObject({ code: 'network' })
+  })
+
+  it('본문 읽다 시간 제한에 걸리면 timeout', async () => {
+    const cfg = baseCfg(
+      fakeFetch(() => bodyFails(new DOMException('The operation timed out.', 'TimeoutError'))) as unknown as typeof fetch,
+    )
+    await expect(apiListDocs(cfg)).rejects.toMatchObject({ code: 'timeout' })
+  })
+})

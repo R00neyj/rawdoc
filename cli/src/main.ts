@@ -559,5 +559,9 @@ export function isEntryScript(argv1: string | undefined, selfPath: string, realp
 
 // 이 파일이 실제 실행 스크립트일 때만 돈다 — 테스트가 main() 을 직접 부를 때는 여기가 실행되지 않는다
 if (isEntryScript(process.argv[1], import.meta.filename, realpathSync)) {
-  void run()
+  // CliError 로 바꾸지 못한 오류(자격 증명 파일 쓰기 실패 등)도 스택 대신 한 줄로 알린다 (리뷰 C4)
+  run().catch((err: unknown) => {
+    process.stderr.write(`오류: ${err instanceof Error ? err.message : String(err)}\n`)
+    process.exitCode = 1
+  })
 }
