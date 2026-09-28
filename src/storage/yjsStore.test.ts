@@ -13,8 +13,11 @@ function freshDbName() {
   return `test-md-yjs-${Date.now()}-${dbCounter}`
 }
 
+// fake-indexeddb 가 setImmediate 로 돌아 같은 큐에서 한 칸씩 넘긴다 — setTimeout(0) 은 Windows 에서 1회 약 15ms
+const nextMacrotask = (globalThis as unknown as { setImmediate: (cb: () => void) => void }).setImmediate
+
 async function tick(n = 20) {
-  for (let i = 0; i < n; i++) await new Promise((resolve) => setImmediate(resolve))
+  for (let i = 0; i < n; i++) await new Promise<void>((resolve) => nextMacrotask(() => resolve()))
 }
 
 function fakeClock() {
