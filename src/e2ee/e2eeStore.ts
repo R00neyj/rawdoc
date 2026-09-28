@@ -216,7 +216,11 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
       next.attachmentRefs = refs
     }
     const updated = await inner.update(id, next)
-    if (before.e2ee === 'open' && updated.e2eeKey === row.e2eeKey) {
+    // 받은 봉투가 이 호출이 쓴 값(바꾼 필드)·처음 읽은 값(안 바꾼 필드)과 같을 때만 기억한다. 제목 저장과 본문 저장이
+    // 겹쳐 다른 호출이 쓴 봉투가 섞였으면 기억하지 않고 decode 가 다시 풀게 둔다 (리뷰 S4)
+    const ownEnvelopes =
+      updated.title === (next.title ?? row.title) && updated.content === (next.content ?? row.content)
+    if (before.e2ee === 'open' && updated.e2eeKey === row.e2eeKey && ownEnvelopes) {
       plainMemo.set(id, {
         e2eeKey: row.e2eeKey,
         titleEnvelope: updated.title,

@@ -694,3 +694,42 @@ describe('F-2042 U7 listCached — decode 로 감싸 내보내기', () => {
     expect('listCached' in store).toBe(false)
   })
 })
+
+// 코드 리뷰 S4 — 제목 저장과 본문 저장이 겹치면 기억에 옛 제목이 새 봉투와 짝지어 남았다
+describe('리뷰 S4 제목·본문 저장 겹침', () => {
+  it('본문 저장이 아래 저장소를 기다리는 사이 제목이 바뀌어도 새 제목이 보인다', async () => {
+    const inner = await createIdbStore(freshDbName())
+    const mk = await newMasterKey()
+    let reached = () => {}
+    const reachedGate = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let holdContent = false
+    const gated: Store = {
+      ...inner,
+      update: async (id, patch) => {
+        if (holdContent && patch.content !== undefined) {
+          reached()
+          await gate
+        }
+        return inner.update(id, patch)
+      },
+    }
+    const store = withE2ee(gated, { getMasterKey: () => mk })
+    const doc = await store.create({ title: 'T1', content: 'C1', lineEnding: 'lf', folderId: null, e2ee: true })
+
+    holdContent = true
+    const bodySave = store.update(doc.id, { content: 'C2' })
+    await reachedGate
+    await store.update(doc.id, { title: 'T2' })
+    release()
+    await bodySave
+
+    expect(await store.get(doc.id)).toMatchObject({ title: 'T2', content: 'C2', e2ee: 'open' })
+    expect((await store.list()).find((d) => d.id === doc.id)?.title).toBe('T2')
+  })
+})
