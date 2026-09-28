@@ -47,6 +47,7 @@ src/
     useEditorSync.ts 편집기 연동 — 본문 1회 읽기·위키 문맥·보기 HTML·편집기 layout effect (F-123, F-144, F-295, F-2018, F-2072)
     useE2eeConvert.ts 문서·폴더 금고로 옮기기·빼기 (F-405, F-407, F-2073)
     useE2eeMigrate.ts 금고 이관 판정·실행·잠그기·초기화 (F-404, F-408, F-2073)
+    bootFlow.ts      부팅(저장소 열기·목록·첫 화면 판정)·밀린 편집 러너 (F-110, F-111, F-207, F-2015, F-2042, F-306, F-2074)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
