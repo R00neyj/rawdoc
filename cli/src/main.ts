@@ -90,8 +90,10 @@ export type MainDeps = {
   stdinIsTTY: boolean
   openBrowserFn: (url: string) => void
   now: () => number
-  wait: (ms: number) => Promise<void>
-  sigint?: Promise<void>
+  // signal 이 abort 되면 타이머를 풀어야 한다 — 남은 타이머가 프로세스 종료를 막는다 (리뷰 C2)
+  wait: (ms: number, signal?: AbortSignal) => Promise<void>
+  // 브라우저 로그인을 기다리는 동안에만 SIGINT 를 가로챈다. 그 밖에는 Node 기본 동작(즉시 종료)을 둔다 (리뷰 C3)
+  watchSigint?: () => { interrupted: Promise<void>; stop: () => void }
   packageVersion: string
   nodeVersion: string
 }
@@ -262,12 +264,20 @@ async function runLoginCommand(
   if (!command.noBrowser) deps.openBrowserFn(url)
 
   const TIMEOUT_MS = 5 * 60 * 1000
-  const outcome = await Promise.race<{ kind: 'result'; r: Awaited<typeof handle.result> } | { kind: 'timeout' } | { kind: 'sigint' }>([
-    handle.result.then((r) => ({ kind: 'result', r })),
-    deps.wait(TIMEOUT_MS).then(() => ({ kind: 'timeout' })),
-    (deps.sigint ?? new Promise<void>(() => {})).then(() => ({ kind: 'sigint' })),
-  ])
-  handle.close()
+  const waitAbort = new AbortController()
+  const sigint = deps.watchSigint?.()
+  let outcome: { kind: 'result'; r: Awaited<typeof handle.result> } | { kind: 'timeout' } | { kind: 'sigint' }
+  try {
+    outcome = await Promise.race<typeof outcome>([
+      handle.result.then((r) => ({ kind: 'result', r })),
+      deps.wait(TIMEOUT_MS, waitAbort.signal).then(() => ({ kind: 'timeout' })),
+      (sigint?.interrupted ?? new Promise<void>(() => {})).then(() => ({ kind: 'sigint' })),
+    ])
+  } finally {
+    waitAbort.abort()
+    sigint?.stop()
+    handle.close()
+  }
 
   if (outcome.kind === 'sigint') return 130
   if (outcome.kind === 'timeout') return emitError(deps, false, new CliError('login_timeout'))
@@ -499,12 +509,6 @@ async function run(): Promise<void> {
   const pkgText = await readFileReal(new URL('../package.json', import.meta.url), 'utf-8')
   const pkg = JSON.parse(pkgText) as { version: string }
 
-  let sigintResolve: (() => void) | undefined
-  const sigint = new Promise<void>((resolve) => {
-    sigintResolve = resolve
-  })
-  process.on('SIGINT', () => sigintResolve?.())
-
   const exitCode = await main({
     argv: process.argv.slice(2),
     env: process.env,
@@ -522,8 +526,19 @@ async function run(): Promise<void> {
     stdinIsTTY: process.stdin.isTTY === true,
     openBrowserFn: (url) => openBrowser(process.platform, url),
     now: () => Date.now(),
-    wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    sigint,
+    wait: (ms, signal) =>
+      new Promise((resolve) => {
+        const timer = setTimeout(resolve, ms)
+        signal?.addEventListener('abort', () => clearTimeout(timer), { once: true })
+      }),
+    watchSigint: () => {
+      let onSigint = () => {}
+      const interrupted = new Promise<void>((resolve) => {
+        onSigint = () => resolve()
+      })
+      process.on('SIGINT', onSigint)
+      return { interrupted, stop: () => process.off('SIGINT', onSigint) }
+    },
     packageVersion: pkg.version,
     nodeVersion: process.version,
   })

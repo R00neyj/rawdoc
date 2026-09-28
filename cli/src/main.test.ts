@@ -332,3 +332,62 @@ describe('isEntryScript (리뷰 C1)', () => {
   })
 })
 
+// 리뷰 C2·C3 — 로그인 대기 타이머를 풀지 않아 최대 5분간 프로세스가 남았고, SIGINT 를 늘 가로채 Ctrl+C 가 안 먹었다
+describe('로그인 대기 정리 (리뷰 C2·C3)', () => {
+  function deniedLoginDeps(overrides: Partial<MainDeps>) {
+    return baseDeps({
+      argv: ['login'],
+      openBrowserFn: vi.fn((url: string) => {
+        const parsed = parseCliLoginHash(new URL(url).hash)
+        if (parsed && parsed.version === 2) {
+          void fetch(cliCallbackUrl(parsed.port, { state: parsed.publicKey, error: 'denied' }))
+        }
+      }),
+      ...overrides,
+    })
+  }
+
+  it('로그인이 끝나면 시간 제한 대기를 취소한다 (C2)', async () => {
+    let waitSignal: AbortSignal | undefined
+    const deps = deniedLoginDeps({
+      wait: (_ms: number, signal?: AbortSignal) => {
+        waitSignal = signal
+        return new Promise(() => {})
+      },
+    })
+    expect(await main(deps)).toBe(1)
+    expect(waitSignal?.aborted).toBe(true)
+  })
+
+  it('SIGINT 는 브라우저 로그인을 기다리는 동안에만 가로챈다 (C3)', async () => {
+    const stop = vi.fn()
+    const watchSigint = vi.fn(() => ({ interrupted: new Promise<void>(() => {}), stop }))
+    const deps = deniedLoginDeps({ watchSigint })
+    expect(await main(deps)).toBe(1)
+    expect(watchSigint).toHaveBeenCalledTimes(1)
+    expect(stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('브라우저 로그인 중 SIGINT → 종료 130, 대기·가로채기 정리 (C2·C3)', async () => {
+    const stop = vi.fn()
+    let waitSignal: AbortSignal | undefined
+    const deps = baseDeps({
+      argv: ['login', '--no-browser'],
+      wait: (_ms: number, signal?: AbortSignal) => {
+        waitSignal = signal
+        return new Promise(() => {})
+      },
+      watchSigint: () => ({ interrupted: Promise.resolve(), stop }),
+    })
+    expect(await main(deps)).toBe(130)
+    expect(stop).toHaveBeenCalledTimes(1)
+    expect(waitSignal?.aborted).toBe(true)
+  })
+
+  it('다른 명령은 SIGINT 를 가로채지 않는다 (C3)', async () => {
+    const watchSigint = vi.fn(() => ({ interrupted: new Promise<void>(() => {}), stop: () => {} }))
+    const deps = baseDeps({ argv: ['ls'], env: { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) }, watchSigint })
+    expect(await main(deps)).toBe(0)
+    expect(watchSigint).not.toHaveBeenCalled()
+  })
+})

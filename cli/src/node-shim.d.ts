@@ -107,4 +107,5 @@ declare const process: {
     resume(): void
   }
   on(event: 'SIGINT', listener: () => void): void
+  off(event: 'SIGINT', listener: () => void): void
 }
