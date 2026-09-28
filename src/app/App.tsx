@@ -453,10 +453,8 @@ export default function App() {
   const notifyChangeRef = useRef(() => {})
   const notifyCommentsChangeRef = useRef(() => {}) // useDocComments 의 localComments.onChange 가 부른다 (F-508.md 3.3)
   const printRootRef = useRef<HTMLDivElement | null>(null) // 인쇄 전용 영역 (F-279.md 4.2)
-  const printDocRef = useRef(() => {}) // Ctrl+P 가 매 커밋 최신 handlePrintDoc 을 읽게 한다 (F-279.md 6.1)
   const openSearchRef = useRef(() => {}) // Ctrl+Shift+F 가 매 커밋 최신 openSearch 를 읽게 한다 (F-287.md 3.4)
   const selectSearchQueryRef = useRef(() => {}) // 검색 대화상자가 이미 열려 있을 때 검색어를 전체 선택 — SearchDialog 가 채운다 (F-287.md 3.4)
-  const printDisabledRef = useRef(true) // exportDisabled 와 같은 조건 (F-279.md 6.1)
   const openPaletteRef = useRef(() => {}) // Ctrl+P 가 매 커밋 최신 openPalette 를 읽게 한다 (F-2022.md 6.1)
   const selectPaletteQueryRef = useRef(() => {}) // 팔레트가 이미 열려 있을 때 입력칸 전체 선택 — CommandPalette 가 채운다 (F-2022.md 6.1)
   // 팔레트 close() 호출 중 어디쯘인지 구분 — runAction() 이 부르는 첫 번째 호출인지, Dialog 의 실제 close 이벤트가 부르는 두 번째 호출인지 (F-2054 5.1)
@@ -1519,7 +1517,7 @@ export default function App() {
     !mapRoute &&
     !helpOpen &&
     !sharesOpen
-  // printDisabledRef 와 같은 조건 (F-279.md 6.1). 잠긴 금고 문서는 인쇄를 뺀다 — 팔레트 `인쇄` 가 안 보인다 (F-409 7.2)
+  // 인쇄 가능 조건 (F-279.md 6.1). 잠긴 금고 문서는 인쇄를 뺀다 — 팔레트 `인쇄` 가 안 보인다 (F-409 7.2)
   const canPrint = bootPhase === 'ready' && currentDocId !== null && !sharedDoc && currentDoc?.e2ee !== 'locked'
   // 최상위 '템플릿'·'templates' 폴더 하위 문서 + 내장 4개 (F-2022.md 4.2)
   const templateEntries: TemplateEntry[] = useMemo(
@@ -2642,9 +2640,6 @@ export default function App() {
     openDocIdRef.current = openDoc?.id ?? null
     openDocLineEndingRef.current = openDoc?.lineEnding
     e2eeResetStepRef.current = runE2eeReset
-    printDocRef.current = handlePrintDoc
-    // exportDisabled 와 같은 조건 (F-279.md 6.1) — bootPhase !== 'ready' 면 isEmpty 자체가 false 라 첫 항으로 충분하다
-    printDisabledRef.current = bootPhase !== 'ready' || currentDocId === null || Boolean(sharedDoc)
     openSearchRef.current = openSearch
     openPaletteRef.current = openPalette
     toggleShortcutsRef.current = toggleShortcuts
