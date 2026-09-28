@@ -29,7 +29,8 @@ function replaceMetaContent(html: string, attrName: string, attrValue: string, n
   const match = tagRe.exec(html)
   if (!match) return html
   const tag = match[0]
-  const newTag = tag.replace(/content="[^"]*"/, `content="${newContent}"`)
+  // 함수로 치환한다 — 문자열이면 제목의 $`·$'·$& 가 치환 패턴으로 풀려 태그 조각이 끼어든다 (리뷰 W3)
+  const newTag = tag.replace(/content="[^"]*"/, () => `content="${newContent}"`)
   return html.slice(0, match.index) + newTag + html.slice(match.index + tag.length)
 }
 
