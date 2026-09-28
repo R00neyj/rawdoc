@@ -51,7 +51,7 @@ A spec decides **what and why**. The implementer decides **how**. So a code bloc
 ## Product rules to honor
 - **Invariants** (CLAUDE.md): decorations never change document content / the one source of truth for document state is the CM6 `EditorState` / `src/` never imports `spike/` / recomputation deferred during IME composition must catch up when composition ends / the product-name string and color hex live only in `brand.config.ts` and `tokens.css` / no product name in storage identifiers (IndexedDB, localStorage, cache names)
 - **The test environment is `node`** — there is no jsdom or happy-dom. Design so unit tests work without a DOM, by splitting out pure functions. Precedent: `F-278` choosing markdown-it token traversal over `DOMParser`
-- **Behavior goes in `e2e/F-xxx` Playwright tests, pure logic in unit tests, and visual values (color, spacing, alignment, typeface) go to human checks rather than being pinned in e2e.** Otherwise every value change forces a test change and subpixel rendering makes it flaky
+- **Behavior only a browser shows goes in `e2e/F-xxx` Playwright tests (at most 3 per spec — more needs a stated reason), pure logic in unit tests only (never also in e2e), and visual values (color, spacing, alignment, typeface) go to human checks rather than being pinned in e2e.** Otherwise every value change forces a test change and subpixel rendering makes it flaky
 - **Do not settle on a new dependency by yourself.** To propose one, include a comparison table of alternatives and mark it "사람 결정 필요". The default is implementing it directly with no dependency. See how `F-258` justified bringing in `mermaid`
 
 ## Forbidden
