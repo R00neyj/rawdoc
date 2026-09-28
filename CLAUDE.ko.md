@@ -95,7 +95,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | 메타 DB / 파일 | D1 `md-editor-db` / R2 `md-editor-attachments` | 사용 중 (F-205~) |
 | 인증 | `better-auth` 1.7.5 (Google·GitHub OAuth, D1 세션) + CLI 용 `worker/apiTokens.ts` | F-2033 (Access 대체, F-205). 아직 배포 안 함 — 배포 단계는 `specs/features/F-2033.md` 11장 |
 | CRDT / 에디터 연결 | `yjs` + `y-codemirror.next` (에디터마다 로컬 `Y.Doc`, 네트워크 없음) + `y-protocols` (awareness, F-307) | 사용 중 (F-302) |
-| 실시간 동기화 | Durable Object + y-partyserver | 사용 중 (서버 F-304 `worker/docRoom.ts`, 클라이언트 F-305 `src/app/useLiveDoc.ts`). F-306 이 되기 전까지 배포 안 함 |
+| 실시간 동기화 | Durable Object + y-partyserver | 사용 중 (서버 F-304 `worker/docRoom.ts`, 클라이언트 F-305 `src/app/useLiveDoc.ts`). 2026-09-24 배포(F-305~F-308). 편집 잠금(F-213)은 F-309 까지 폴백으로 남음 |
 | E2E 테스트 | Playwright (`@playwright/test`), 설치된 Chrome 채널 | 사용 중 (F-150) |
 | 3D 지도 | `three` + `d3-force-3d` (더해서 `@types/three` 와 로컬 `src/types/d3-force-3d.d.ts`) | 사용 중 (F-292 개정판). 설치는 F-2001·F-2002 뿐이고, 다른 명세는 3D 의존성을 더하지 않는다. `3d-force-graph` 는 쓰지 않는다 |
 | 랜딩 애니메이션 | gsap 3.15.0 (ScrollTrigger 만), exact pin | 사용 중 (F-2049). `src/welcome/` 만 import 할 수 있다 — 앱·`worker/`·`site/`·`cli/` 는 하지 않는다 (`src/welcome/gsapBoundary.test.ts`). Standard "No Charge" 라이선스, 오픈소스 아님 |

@@ -94,7 +94,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | Metadata DB / files | D1 `md-editor-db` / R2 `md-editor-attachments` | In use (F-205~) |
 | Auth | `better-auth` 1.7.5 (Google·GitHub OAuth, D1 sessions) + `worker/apiTokens.ts` for CLI | F-2033 (replaces Access, F-205). Not deployed yet — deploy steps in `specs/features/F-2033.md` ch. 11 |
 | CRDT / editor binding | `yjs` + `y-codemirror.next` (local `Y.Doc` per editor, no network) + `y-protocols` (awareness, F-307) | In use (F-302) |
-| Live sync | Durable Object + y-partyserver | In use (server F-304 `worker/docRoom.ts`, client F-305 `src/app/useLiveDoc.ts`). Not deployed until F-306 lands |
+| Live sync | Durable Object + y-partyserver | In use (server F-304 `worker/docRoom.ts`, client F-305 `src/app/useLiveDoc.ts`). Deployed 2026-09-24 (F-305~F-308). Edit locks (F-213) stay as fallback until F-309 |
 | E2E tests | Playwright (`@playwright/test`), installed Chrome channel | In use (F-150) |
 | 3D map | `three` + `d3-force-3d` (plus `@types/three` and a local `src/types/d3-force-3d.d.ts`) | In use (F-292 revision). Only F-2001 and F-2002 install them; no other spec may add a 3D dependency. Never use `3d-force-graph` |
 | Landing animation | gsap 3.15.0 (ScrollTrigger only), exact pin | In use (F-2049). Only `src/welcome/` may import it; the app, `worker/`, `site/`, `cli/` never do (`src/welcome/gsapBoundary.test.ts`). Standard "No Charge" license, not open source |
