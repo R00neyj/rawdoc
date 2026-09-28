@@ -478,22 +478,30 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     return true
   }
 
-  // 보낸 항목의 응답을 캐시에 쓴다. 보내는 사이 update() 가 같은 문서에 새 updateDoc 을 쌓았으면
-  // 캐시의 제목·본문(·첨부 목록)이 그 더 새 편집이므로 지키고, 버전 등 나머지만 서버 값을 따른다 (리뷰 S1)
+  // 같은 문서에 아직 안 보낸 항목이 남았으면 그 항목이 바꾼 필드는 캐시가 더 새 값이라 지키고, 버전 등 나머지만 서버 값을 따른다 (리뷰 S1)
   async function putDocFromResponse(serverDoc: ServerDoc, sentKey: number): Promise<void> {
     const outbox = await cache.getOutbox(userId)
-    const hasLaterEdit = outbox.some((e) => e.type === 'updateDoc' && e.docId === serverDoc.id && e.key !== sentKey)
-    const local = hasLaterEdit ? await cache.getDoc(userId, serverDoc.id) : null
+    const later = new Set(outbox.filter((e) => 'docId' in e && e.docId === serverDoc.id && e.key !== sentKey).map((e) => e.type))
+    const keepEdit = later.has('updateDoc')
+    const keepFolder = later.has('moveDoc')
+    const keepPin = later.has('setPinned')
+    const local = keepEdit || keepFolder || keepPin ? await cache.getDoc(userId, serverDoc.id) : null
     if (!local) {
       await cache.putDoc(userId, serverDoc)
       return
     }
     await cache.putDoc(userId, {
       ...serverDoc,
-      title: local.title,
-      content: local.content,
-      updatedAt: local.updatedAt,
-      ...(local.attachmentRefs !== undefined ? { attachmentRefs: local.attachmentRefs } : {}),
+      ...(keepEdit
+        ? {
+            title: local.title,
+            content: local.content,
+            updatedAt: local.updatedAt,
+            ...(local.attachmentRefs !== undefined ? { attachmentRefs: local.attachmentRefs } : {}),
+          }
+        : {}),
+      ...(keepFolder ? { folderId: local.folderId } : {}),
+      ...(keepPin ? { pinnedAt: local.pinnedAt } : {}),
     })
   }
 

@@ -2506,6 +2506,98 @@ describe('리뷰 S1 보내는 중 쌓인 편집', () => {
     await store.flushOutbox()
     expect(server.docs.get(doc.id)?.content).toBe('B')
   })
+
+  // 첫 요청은 풀릴 때까지 막고, 뒤에 쌓인 요청은 laterFail 동안 네트워크 오류로 남긴다 (리뷰 S1)
+  function gateFirstThenFail(server: ReturnType<typeof makeFakeServer>, first: (m: string, p: string) => boolean, later: (m: string, p: string) => boolean) {
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const state = { laterFail: true, gated: false }
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
+      const method = init.method ?? 'GET'
+      const path = new URL(url, 'http://local.test').pathname
+      if (!state.gated && first(method, path)) {
+        state.gated = true
+        await gate
+      } else if (state.laterFail && later(method, path)) throw new TypeError('network down')
+      return server.fetchImpl(url, init)
+    }))
+    return { release, state }
+  }
+
+  it('본문 PUT 응답이 뒤에 쌓인 moveDoc 의 캐시 folderId 를 덮지 않는다', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'p')
+    server.folders.set('F', { id: 'F', name: 'F', parentId: null, createdAt: 1, updatedAt: 1 })
+    const { release, state } = gateFirstThenFail(server, (m, p) => m === 'PUT' && p === '/api/docs/p', (m, p) => m === 'PUT' && p === '/api/docs/p/folder')
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    await store.list()
+    await store.listFolders()
+
+    await store.update('p', { content: 'A' })
+    await tick()
+    await store.moveDoc('p', 'F')
+    release()
+    await tick(30)
+
+    expect(server.docs.get('p')?.content).toBe('A')
+    expect(store.syncState?.pending).toBe(1)
+    expect((await store.get('p'))?.folderId).toBe('F')
+    expect((await store.listCached()).docs.find((d) => d.id === 'p')?.folderId).toBe('F')
+
+    state.laterFail = false
+    await store.flushOutbox()
+    expect(server.docs.get('p')?.folderId).toBe('F')
+  })
+
+  it('본문 PUT 응답이 뒤에 쌓인 setPinned 의 캐시 pinnedAt 을 덮지 않는다', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'p')
+    const { release, state } = gateFirstThenFail(server, (m, p) => m === 'PUT' && p === '/api/docs/p', (m, p) => m === 'PUT' && p === '/api/docs/p/pin')
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    await store.list()
+
+    await store.update('p', { content: 'A' })
+    await tick()
+    await store.setPinned('p', true)
+    release()
+    await tick(30)
+
+    expect(store.syncState?.pending).toBe(1)
+    expect((await store.get('p'))?.pinnedAt).not.toBeNull()
+
+    state.laterFail = false
+    await store.flushOutbox()
+    expect(server.docs.get('p')?.pinnedAt).not.toBeNull()
+  })
+
+  it.each(['folder', 'pin'] as const)('%s 응답도 뒤에 쌓인 편집의 캐시 제목·본문을 덮지 않는다', async (kind) => {
+    const server = makeFakeServer()
+    seedDoc(server, 'p')
+    server.folders.set('F', { id: 'F', name: 'F', parentId: null, createdAt: 1, updatedAt: 1 })
+    const { release, state } = gateFirstThenFail(server, (m, p) => m === 'PUT' && p === `/api/docs/p/${kind}`, (m, p) => m === 'PUT' && p === '/api/docs/p')
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    await store.list()
+    await store.listFolders()
+
+    if (kind === 'folder') await store.moveDoc('p', 'F')
+    else await store.setPinned('p', true)
+    await tick()
+    await store.update('p', { title: 'T2', content: 'B' })
+    release()
+    await tick(30)
+
+    const cached = await store.get('p')
+    expect(cached?.title).toBe('T2')
+    expect(cached?.content).toBe('B')
+    if (kind === 'folder') expect(cached?.folderId).toBe('F')
+    else expect(cached?.pinnedAt).not.toBeNull()
+
+    state.laterFail = false
+    await store.flushOutbox()
+    expect(server.docs.get('p')?.content).toBe('B')
+  })
 })
 
 describe('리뷰 S2 서버가 거절한 새 문서', () => {
