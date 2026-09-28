@@ -26,6 +26,8 @@ src/
                          App.tsx 분할(F-2059) — 구역별 훅·순수 모듈은 아래 파일로 나뉜다. 매핑은 F-2059 5.4
     appNotices.ts        실시간·금고·옮기기 알림 문구, 금고 옮기기 결과 알림 (F-2060)
     docMeta.ts           DocMeta·OpenDoc 타입, stripContent·isSharedDoc·sortByUpdatedAtDesc (F-2060)
+    useContextMenu.ts    우클릭 메뉴 상태·열기·닫기·실행 (F-170, F-2061)
+    contextMenuActions.ts 우클릭 메뉴 상태 타입과 순수 판정 (F-2061)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
