@@ -50,6 +50,10 @@ src/
     bootFlow.ts      부팅(저장소 열기·목록·첫 화면 판정)·밀린 편집 러너 (F-110, F-111, F-207, F-2015, F-2042, F-306, F-2074)
     useDocSession.ts 문서 세션(Y.Doc·편집기 연결·경로 판정)·실시간 방 연결 (F-305, F-306, F-2077)
     useLiveRoomDoc.ts 실시간 방 온라인 재시작·사이드바 updatedAt·편집기 옵션 (F-305, F-506, F-2077)
+    usePaletteOpen.ts 명령 팔레트 열림·닫기 뒤 실행 (F-2022, F-2078)
+    useCommandPalette.ts 팔레트 열기·템플릿 넣기·context 조립 (F-2053, F-2054, F-2055, F-2078)
+    useShortcutsPanel.ts 단축키 판 열기·닫기·커서 스크롤 (F-2037, F-2078)
+    useNewDocTemplate.ts newDocTemplate.ts 새 문서 템플릿 목록·원문 읽기·본문 (F-2052, F-2078)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
