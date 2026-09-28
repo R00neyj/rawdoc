@@ -42,6 +42,8 @@ src/
     useNotificationsGlue.ts 알림함 여닫기·항목 이동·안 읽은 점·멘션 후보 원천 (F-507, F-510, F-2069)
     useLiveNotices.ts 실시간 알림 띠 N1~N10·오프라인 보기 알림 (F-305, F-306, F-2070)
     liveNotices.ts   알림 띠 판정 순수 함수 — 자기 서버 문서 여부·끊김 문구·멈춤 갈래 (F-2070)
+    useHashRouting.ts hashchange 처리·해시 주소 쓰기 (F-210, F-243, F-244, F-292, F-2071)
+    hashNav.ts       해시 이동 갈래 판정 순수 함수·공개 보기 경로 (F-2071)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
