@@ -2406,3 +2406,251 @@ describe('F-508 U16 hasPendingChanges·update 이 comments 를 버린다', () =>
     expect((await store.get(doc.id))?.content).toBe('x')
   })
 })
+
+// 코드 리뷰 S1·S2·S3·S6 — 보내는 중·거절·충돌·목록 경합에서 편집·문서가 사라지던 버그
+describe('리뷰 S1 보내는 중 쌓인 편집', () => {
+  it('앞 PUT 응답이 뒤에 쌓인 편집의 캐시 본문을 덮지 않는다(버전만 따른다)', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'p')
+    let putCount = 0
+    let laterPutsFail = true
+    let releaseFirst = () => {}
+    const gate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      if (init.method === 'PUT' && path === '/api/docs/p') {
+        putCount += 1
+        if (putCount === 1) {
+          await gate
+          return server.fetchImpl(url, init)
+        }
+        if (laterPutsFail) throw new TypeError('network down')
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const conflicts: unknown[] = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), onConflict: (e) => conflicts.push(e) })
+    await store.list()
+
+    await store.update('p', { content: 'A' })
+    await tick()
+    await store.update('p', { content: 'B' })
+    releaseFirst()
+    await tick(30)
+
+    expect(server.docs.get('p')?.content).toBe('A')
+    expect(store.syncState?.pending).toBe(1)
+    expect((await store.get('p'))?.content).toBe('B')
+    expect((await store.listCached()).docs.find((d) => d.id === 'p')?.content).toBe('B')
+
+    laterPutsFail = false
+    await store.flushOutbox()
+    expect(server.docs.get('p')?.content).toBe('B')
+    expect(conflicts).toHaveLength(0)
+  })
+
+  it('createDoc 응답도 뒤에 쌓인 편집을 덮지 않는다', async () => {
+    const server = makeFakeServer()
+    let releaseCreate = () => {}
+    const gate = new Promise<void>((resolve) => {
+      releaseCreate = resolve
+    })
+    let putsFail = true
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      if (init.method === 'POST' && path === '/api/docs') {
+        const res = await server.fetchImpl(url, init)
+        await gate
+        return res
+      }
+      if (init.method === 'PUT' && putsFail) throw new TypeError('network down')
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const doc = await store.create({ title: 'T', content: 'A', lineEnding: 'lf' })
+    await tick()
+    await store.update(doc.id, { content: 'B' })
+    releaseCreate()
+    await tick(30)
+
+    expect((await store.get(doc.id))?.content).toBe('B')
+    putsFail = false
+    await store.flushOutbox()
+    expect(server.docs.get(doc.id)?.content).toBe('B')
+  })
+})
+
+describe('리뷰 S2 서버가 거절한 새 문서', () => {
+  it('id_taken 으로 버린 문서는 list() 뒤에도 캐시에 남고, 이어 편집해도 지워지지 않는다', async () => {
+    const server = makeFakeServer()
+    server.setForceIdTaken(true)
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    await store.create({ title: 'T', content: 'mine', lineEnding: 'lf', id: 'clashing-id' })
+    await tick(20)
+    expect(store.syncState?.pending).toBe(0)
+
+    const listed = await store.list()
+    expect(listed.some((d) => d.id === 'clashing-id')).toBe(true)
+    expect((await store.get('clashing-id'))?.content).toBe('mine')
+
+    await store.update('clashing-id', { content: 'mine 2' })
+    await store.setPinned('clashing-id', true)
+    await tick(30)
+    await store.list()
+    expect((await store.get('clashing-id'))?.content).toBe('mine 2')
+    expect(store.syncState?.pending).toBe(0)
+  })
+})
+
+describe('리뷰 S3 충돌 뒤 남은 편집', () => {
+  it('409 를 받으면 같은 문서의 남은 updateDoc 은 보내지 않는다 — 사본이 그 내용을 담는다', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'p')
+    let putCount = 0
+    let releaseFirst = () => {}
+    const gate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      if (init.method === 'PUT' && path === '/api/docs/p') {
+        putCount += 1
+        if (putCount === 1) await gate
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const conflicts: Array<{ docId: string; copyId: string }> = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), onConflict: (e) => conflicts.push(e) })
+    await store.list()
+
+    await store.update('p', { content: 'E1' })
+    await tick()
+    // 다른 기기가 먼저 고쳤다
+    server.docs.get('p')!.content = 'other'
+    server.bumpVersion('p')
+    await store.update('p', { content: 'E2' })
+    releaseFirst()
+    await tick(40)
+
+    expect(conflicts).toHaveLength(1)
+    expect(putCount).toBe(1)
+    expect(server.docs.get('p')?.content).toBe('other')
+    expect(server.docs.get(conflicts[0].copyId)?.content).toBe('E2')
+    expect(store.syncState?.pending).toBe(0)
+  })
+
+  it('금고 409 도 같다 — 사본을 만들었으면 남은 금고 updateDoc 을 보내지 않는다', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'v', { e2eeKey: VAULT_KEY, attachmentRefs: [] })
+    let putCount = 0
+    let releaseFirst = () => {}
+    const gate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      if (init.method === 'PUT' && path === '/api/docs/v') {
+        putCount += 1
+        if (putCount === 1) await gate
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    let fakeNow = 0
+    const store = await createServerStore('u1', { dbName: freshDbName(), now: () => fakeNow })
+    await store.list()
+    store.setE2eeCopyMaker(async (source) => ({ title: 'CT', content: source.content, e2eeKey: 'N'.repeat(56), attachmentRefs: [] }))
+
+    await store.update('v', { content: 'E1' })
+    await tick()
+    server.docs.get('v')!.content = 'other'
+    server.bumpVersion('v')
+    await store.update('v', { content: 'E2' })
+    releaseFirst()
+    await tick(40)
+    // 10초 간격이 지나도 남은 편집이 원본에 올라가지 않는다
+    fakeNow = 20_000
+    await store.flushOutbox()
+    await tick(20)
+
+    expect(putCount).toBe(1)
+    expect(server.docs.get('v')?.content).toBe('other')
+    expect([...server.docs.values()].some((d) => d.id !== 'v' && d.content === 'E2')).toBe(true)
+    expect(store.syncState?.pending).toBe(0)
+  })
+})
+
+describe('리뷰 S6 목록 요청 중 만들어진 문서·폴더', () => {
+  it('서버 목록을 받는 사이에 createDoc 이 성공해도 list() 가 그 문서를 캐시에서 지우지 않는다', async () => {
+    const server = makeFakeServer()
+    let releaseList = () => {}
+    let gateList = true
+    const gate = new Promise<void>((resolve) => {
+      releaseList = resolve
+    })
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      if ((init.method ?? 'GET') === 'GET' && path === '/api/docs' && gateList) {
+        gateList = false
+        // 서버는 이 시점의 목록을 답한다 — 응답이 늦게 도착할 뿐
+        const res = await server.fetchImpl(url, init)
+        await gate
+        return res
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const listing = store.list()
+    await tick()
+    const doc = await store.create({ title: 'N', content: 'new', lineEnding: 'lf' })
+    await tick(20)
+    expect(server.docs.has(doc.id)).toBe(true)
+    expect(store.syncState?.pending).toBe(0)
+    releaseList()
+    const listed = await listing
+
+    expect(listed.some((d) => d.id === doc.id)).toBe(true)
+    expect((await store.listCached()).docs.some((d) => d.id === doc.id)).toBe(true)
+  })
+
+  it('listFolders 도 같다 — 요청 중에 성공한 createFolder 는 지우지 않는다', async () => {
+    const server = makeFakeServer()
+    let releaseList = () => {}
+    let gateList = true
+    const gate = new Promise<void>((resolve) => {
+      releaseList = resolve
+    })
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      if ((init.method ?? 'GET') === 'GET' && path === '/api/folders' && gateList) {
+        gateList = false
+        const res = await server.fetchImpl(url, init)
+        await gate
+        return res
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const listing = store.listFolders()
+    await tick()
+    const folder = await store.createFolder({ name: 'F' })
+    await tick(20)
+    expect(server.folders.has(folder.id)).toBe(true)
+    releaseList()
+    const folders = await listing
+
+    expect(folders.some((f) => f.id === folder.id)).toBe(true)
+  })
+})

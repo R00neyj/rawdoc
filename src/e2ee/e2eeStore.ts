@@ -160,10 +160,14 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
     if (memo && memo.e2eeKey === e2eeKey && memo.titleEnvelope === row.title && memo.contentEnvelope === row.content) {
       return { ...rest, title: memo.title, content: memo.content, e2ee: 'open', attachmentRefs: refs }
     }
+    // 시작할 때의 세대 값 — currentMasterKey() 가 올린 뒤에 적는다. 풀던 사이 잠그기(clearPlainCache)나 MK 교체가
+    // 끼어들면 열린 평문을 돌려주지도 기억하지도 않는다 (리뷰 S7, 첨부의 3.3 6번과 같은 규칙)
+    const startGeneration = generation
     try {
       const key = await docKeyFor(mk, e2eeKey)
       const title = await decryptDocField(key, row.id, 'title', row.title)
       const content = await decryptDocField(key, row.id, 'content', row.content)
+      if (generation !== startGeneration || deps.getMasterKey() !== mk) return lockedShape(rest, refs)
       plainMemo.set(row.id, { e2eeKey, titleEnvelope: row.title, contentEnvelope: row.content, title, content })
       return { ...rest, title, content, e2ee: 'open', attachmentRefs: refs }
     } catch {
@@ -216,7 +220,11 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
       next.attachmentRefs = refs
     }
     const updated = await inner.update(id, next)
-    if (before.e2ee === 'open' && updated.e2eeKey === row.e2eeKey) {
+    // 받은 봉투가 이 호출이 쓴 값(바꾼 필드)·처음 읽은 값(안 바꾼 필드)과 같을 때만 기억한다. 제목 저장과 본문 저장이
+    // 겹쳐 다른 호출이 쓴 봉투가 섞였으면 기억하지 않고 decode 가 다시 풀게 둔다 (리뷰 S4)
+    const ownEnvelopes =
+      updated.title === (next.title ?? row.title) && updated.content === (next.content ?? row.content)
+    if (before.e2ee === 'open' && updated.e2eeKey === row.e2eeKey && ownEnvelopes) {
       plainMemo.set(id, {
         e2eeKey: row.e2eeKey,
         titleEnvelope: updated.title,

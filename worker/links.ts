@@ -57,9 +57,10 @@ async function findOwnedDoc(env: Env, docId: string, ownerId: string): Promise<O
     .first<OwnedDoc>()
 }
 
-async function findActiveLink(env: Env, targetType: 'doc' | 'folder', targetId: string): Promise<PublicLinkRow | null> {
-  return env.DB.prepare('SELECT * FROM share_links WHERE target_type = ? AND target_id = ? AND revoked_at IS NULL')
-    .bind(targetType, targetId)
+// 링크 주인 것만 — 지운 id 를 남이 다시 만들어도 옛 토큰을 돌려주거나 폐기하지 않는다 (리뷰 W2)
+async function findActiveLink(env: Env, targetType: 'doc' | 'folder', targetId: string, ownerId: string): Promise<PublicLinkRow | null> {
+  return env.DB.prepare('SELECT * FROM share_links WHERE target_type = ? AND target_id = ? AND owner_id = ? AND revoked_at IS NULL')
+    .bind(targetType, targetId, ownerId)
     .first<PublicLinkRow>()
 }
 
@@ -123,7 +124,7 @@ export async function handleGetDocLink(
   const doc = await findOwnedDoc(env, params.id, user.id)
   if (!doc) return errorResponse('not_found', 404)
 
-  const link = await findActiveLink(env, 'doc', params.id)
+  const link = await findActiveLink(env, 'doc', params.id, user.id)
   if (!link) return jsonResponse({ error: 'no_link' }, 404)
   const docIds = await fetchShareLinkDocIds(env, link.token)
   return jsonResponse({ token: link.token, docIds })
@@ -213,7 +214,7 @@ export async function handleCreateDocLink(
   const docIds = await readDocIds(request)
   if (docIds === 'bad_request') return errorResponse('bad_request', 400)
 
-  const existing = await findActiveLink(env, 'doc', params.id)
+  const existing = await findActiveLink(env, 'doc', params.id, user.id)
 
   // 묶음 정보 없이 호출(예: ShareMenu 단순 링크 복사) — 기존 링크가 있으면 묶음을 건드리지 않고 그대로 반환
   if (docIds === undefined) {
@@ -279,8 +280,9 @@ export async function handlePublicGetDoc(
   const link = await findPublicLink(env, params.token)
   if (!link || link.target_type !== 'doc') return pubResponse({ error: 'not_found' }, 404)
 
-  const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at FROM docs WHERE id = ?')
-    .bind(link.target_id)
+  // 공개 조회는 링크 주인의 문서만 (리뷰 W2)
+  const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at FROM docs WHERE id = ? AND owner_id = ?')
+    .bind(link.target_id, link.owner_id)
     .first<PublicDocRow>()
   if (!doc) return pubResponse({ error: 'not_found' }, 404)
 
@@ -308,8 +310,8 @@ export async function handlePublicGetDocSet(
   const orderedIds = [link.target_id, ...bundledIds]
   const placeholders = orderedIds.map(() => '?').join(',')
   // 금고 문서 거르기는 두 번째 벽 — 옮기기 batch 가 묶음 행을 이미 지운다 (F-401 X14)
-  const { results: docs } = await env.DB.prepare(`SELECT id, title FROM docs WHERE id IN (${placeholders}) AND e2ee_key IS NULL`)
-    .bind(...orderedIds)
+  const { results: docs } = await env.DB.prepare(`SELECT id, title FROM docs WHERE id IN (${placeholders}) AND owner_id = ? AND e2ee_key IS NULL`)
+    .bind(...orderedIds, link.owner_id)
     .all<{ id: string; title: string }>()
 
   const byId = new Map(docs.map((d) => [d.id, d]))
@@ -322,8 +324,8 @@ export async function handlePublicGetDocSet(
 
   const setIds = ordered.map((d) => d.id)
   const [{ results: bodies }, { results: ownerDocs }, folders] = await Promise.all([
-    env.DB.prepare(`SELECT id, content, folder_id FROM docs WHERE id IN (${setIds.map(() => '?').join(',')}) AND e2ee_key IS NULL`)
-      .bind(...setIds)
+    env.DB.prepare(`SELECT id, content, folder_id FROM docs WHERE id IN (${setIds.map(() => '?').join(',')}) AND owner_id = ? AND e2ee_key IS NULL`)
+      .bind(...setIds, link.owner_id)
       .all<{ id: string; content: string; folder_id: string | null }>(),
     env.DB.prepare('SELECT id, title, folder_id FROM docs WHERE owner_id = ? ORDER BY updated_at DESC')
       .bind(link.owner_id)
@@ -360,8 +362,8 @@ export async function handlePublicGetDocSetDoc(
 
   if (!(await isDocInLinkSet(env, params.token, link.target_id, params.docId))) return pubResponse({ error: 'not_found' }, 404)
 
-  const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at FROM docs WHERE id = ? AND e2ee_key IS NULL')
-    .bind(params.docId)
+  const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL')
+    .bind(params.docId, link.owner_id)
     .first<PublicDocRow>()
   if (!doc) return pubResponse({ error: 'not_found' }, 404)
 
@@ -383,7 +385,7 @@ export async function handleGetFolderLink(
   const folder = await findOwnedFolder(env, params.id, user.id)
   if (!folder) return errorResponse('not_found', 404)
 
-  const link = await findActiveLink(env, 'folder', params.id)
+  const link = await findActiveLink(env, 'folder', params.id, user.id)
   if (!link) return jsonResponse({ error: 'no_link' }, 404)
   return jsonResponse({ token: link.token })
 }
@@ -399,7 +401,7 @@ export async function handleCreateFolderLink(
   if (!folder) return errorResponse('not_found', 404)
   if (folder.e2ee === 1) return jsonResponse({ error: 'e2ee_folder' }, 409)
 
-  const existing = await findActiveLink(env, 'folder', params.id)
+  const existing = await findActiveLink(env, 'folder', params.id, user.id)
   if (existing) return jsonResponse({ token: existing.token })
 
   const token = generateToken()

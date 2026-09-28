@@ -44,10 +44,9 @@ function rateLimitRetryAfter(body: Record<string, unknown>, res: Response): numb
   return Math.max(1, retryAfter)
 }
 
-async function handleResponse(res: Response, opts: RequestOptions): Promise<unknown> {
+function handleResponse(res: Response, text: string, opts: RequestOptions): unknown {
   if (res.status === 204) return undefined
 
-  const text = await res.text()
   let json: unknown = null
   let parseFailed = false
   if (text) {
@@ -137,7 +136,9 @@ async function request(
     payload = JSON.stringify(body)
   }
 
+  // 헤더를 받은 뒤의 본문 읽기도 시간 제한·연결 끊김으로 실패할 수 있어 같은 try 로 감싼다 (리뷰 C4)
   let res: Response
+  let text: string
   try {
     res = await cfg.fetchImpl(`${cfg.origin}${path}`, {
       method,
@@ -145,12 +146,13 @@ async function request(
       body: payload,
       signal: AbortSignal.timeout(cfg.timeoutMs ?? 60_000),
     })
+    text = res.status === 204 ? '' : await res.text()
   } catch (err) {
     if (isTimeoutError(err)) throw new CliError('timeout')
     throw new CliError('network', { origin: cfg.origin })
   }
 
-  return handleResponse(res, opts)
+  return handleResponse(res, text, opts)
 }
 
 export function apiMe(cfg: ClientConfig): Promise<V1Me> {

@@ -3,7 +3,6 @@ import { Zip, ZipPassThrough } from 'fflate'
 
 import { toFileName, toFolderName } from '../lib/filename'
 import { extractAttachmentRefs } from '../lib/imageBlock'
-import { fromEditorText } from '../lib/lineEnding'
 import { descendantFolderIds, type FolderLike } from '../lib/folderTree'
 import { downloadBlob } from './exportDoc'
 import type { Doc, Folder } from '../types'
@@ -320,7 +319,8 @@ export async function exportWorkspace({
     // 그 디렉터리의 열린 금고 문서가 참조하는 id — 금고 첨부는 이 안에 있을 때만 넣는다 (F-409.md 5.4)
     const vaultRefIds = new Set<string>()
     for (const { doc, path } of dir.docs) {
-      const bytes = new TextEncoder().encode(fromEditorText(doc.content, doc.lineEnding))
+      // 저장소 본문은 이미 lineEnding 대로 줄이 나뉘어 있다 — 그대로 인코딩해야 바이트가 보존된다(다시 변환하면 CRLF 가 \r\r\n 이 된다, 리뷰 U1)
+      const bytes = new TextEncoder().encode(doc.content)
       addFile(path, bytes)
       done += 1
       onProgress?.({ done, total })

@@ -252,3 +252,12 @@ describe('expandTemplateVariables — emptyTitle 옵션 (F-2037 U7)', () => {
     expect(expandTemplateVariables('[{{title}}]', { title, now, emptyTitle })).toBe(expected)
   })
 })
+
+// 리뷰 L4 — 문자열 치환이라 제목의 $&·$$·$`·$' 가 특수 패턴으로 풀렸다
+describe('expandTemplateVariables — 제목의 $ 패턴 (리뷰 L4)', () => {
+  const now = new Date(2026, 8, 25, 9, 5, 7)
+
+  it.each(['비용 $& 정리', '$$ 수식', "A$'B", 'x$`y', '$1 달러'])('제목 %s 를 글자 그대로 넣는다', (title) => {
+    expect(expandTemplateVariables('# {{title}}\n본문', { title, now })).toBe(`# ${title}\n본문`)
+  })
+})

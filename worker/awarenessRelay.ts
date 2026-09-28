@@ -3,7 +3,8 @@ import { AWARENESS_STATE_MAX_BYTES, readPeerCursor } from '../src/lib/docRoomPro
 import type { PeerState } from '../src/lib/docRoomProtocol'
 
 export const AWARENESS_CLOCKS_KEY = 'awarenessClocks'
-const MESSAGE_AWARENESS = 1
+export const MESSAGE_SYNC = 0
+export const MESSAGE_AWARENESS = 1
 
 // clientID(문자열 키) → 마지막으로 받아 준 clock. 연결 상태에 둬 hibernation 을 넘긴다 (4.2)
 export type AwarenessClocks = Record<string, number>
@@ -81,6 +82,15 @@ export function encodeAwarenessEntries(entries: readonly AwarenessEntry[]): Uint
     writeBytes(out, textEncoder.encode(JSON.stringify(state)))
   }
   return new Uint8Array(out)
+}
+
+// 첫 varUint(y-partyserver 가 종류를 가르는 값). 깨졌으면 null — 0x81 0x00 같은 비정규 인코딩도 같은 수로 읽는다 (리뷰 W1)
+export function readMessageType(message: Uint8Array): number | null {
+  try {
+    return new Reader(message).varUint()
+  } catch {
+    return null
+  }
 }
 
 // 첫 varUint 가 awareness(1)면 안의 업데이트를, 아니거나 깨졌으면 null

@@ -144,6 +144,22 @@ describe('F-238 renderPublicPage', () => {
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;&amp;&quot;')
   })
 
+  it('리뷰 W3: 제목·본문의 $ 치환 패턴($`·$\'·$&)은 풀리지 않고 글자 그대로 들어간다', async () => {
+    const token = 'j'.repeat(43)
+    const title = "$`$' $` http-equiv=refresh content=0;url=https://evil.example x=$&"
+    const { env } = makeEnv({
+      links: [{ token, owner_id: 'u1', target_type: 'doc', target_id: 'd1', revoked_at: null }],
+      docs: [{ id: 'd1', title, content: "본문 $' $` $&" }],
+    })
+    const res = await renderPublicPage(req(`/p/${token}`), env, `/p/${token}`)
+    const html = await res!.text()
+    const escaped = title.replace('&', '&amp;')
+    expect(html).toContain(`property="og:title" content="${escaped} · ${brand.name}"`)
+    expect(html).toContain(`name="twitter:title" content="${escaped} · ${brand.name}"`)
+    expect(html).toContain(`property="og:description" content="본문 $' $\` $&amp;"`)
+    expect(html.match(/<meta /g)).toHaveLength(SAMPLE_HTML.match(/<meta /g)!.length)
+  })
+
   it('A5: 본문이 100자 초과면 100자로 자르고 말줄임표', async () => {
     const token = 'f'.repeat(43)
     const long = 'a'.repeat(150)

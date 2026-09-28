@@ -1,6 +1,7 @@
 // 이미지 블록 → 옵시디언 임베드 문자열 (specs/features/F-2020.md 5.3). markdown-it 을 import 하지 않는다 — F-2019 가 뒤에 임베드→블록 함수를 덧붙인다
 import { buildImageBlock, parseImageBlock, type ImageAlign, type ImageExt, type ParsedImageBlock } from './imageBlock'
 import { findFrontmatter } from './frontmatter'
+import { toEditorText } from './lineEnding'
 
 export function imageBlockToEmbed(block: Pick<ParsedImageBlock, 'id' | 'ext' | 'width'>): string {
   const suffix = typeof block.width === 'number' ? `|${block.width}` : ''
@@ -310,8 +311,9 @@ export function embedsToImageBlocks(markdown: string, blocks: ReadonlyMap<VaultE
 }
 
 // 원문 안 F-156 블록(줄 첫 칸 <div align= 줄 + 뒤 두 줄)을 문서 순서로. 3줄 뒤가 문서 끝이거나 빈 줄이어야 블록으로 본다 — 아니면 4줄째까지 이어지는 html_block 이라 보기 모드에서는 블록이 아니다 (F-2019.md 5.4)
+// 저장소 원문은 CRLF 일 수 있어 줄바꿈을 먼저 '\n' 으로 맞춘다 (리뷰 L3). line 은 맞춘 뒤 기준
 export function listImageBlocks(markdown: string): Array<{ line: number; block: ParsedImageBlock }> {
-  const lines = markdown.split('\n')
+  const lines = toEditorText(markdown).split('\n')
   const result: Array<{ line: number; block: ParsedImageBlock }> = []
   for (let i = 0; i < lines.length; i++) {
     if (!lines[i].startsWith('<div align=')) continue

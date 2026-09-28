@@ -23,7 +23,7 @@ function readStoredAccountId(): string | null {
   }
 }
 
-// handlers 는 createIdbStore·createServerStore 에 그대로 전달한다
+// handlers 는 createIdbStore·createServerStore 에 그대로 전달한다 — 버전 엇갈림 세 콜백(onBlocked·onBlocking·onClosed)은 둘 다 받는다 (리뷰 S8)
 export async function openStore({
   account,
   onConflict,
@@ -35,11 +35,11 @@ export async function openStore({
   ...idbHandlers
 }: OpenStoreHandlers): Promise<Store> {
   if (account.state === 'in') {
-    return createServerStore(account.id, { onConflict, onNotice, onForbidden, dbName, onAccountBlocked, now })
+    return createServerStore(account.id, { onConflict, onNotice, onForbidden, dbName, onAccountBlocked, now, ...idbHandlers })
   }
   if (account.state === 'offline') {
     const storedId = readStoredAccountId()
-    if (storedId) return createServerStore(storedId, { onConflict, onNotice, onForbidden, dbName, onAccountBlocked, now })
+    if (storedId) return createServerStore(storedId, { onConflict, onNotice, onForbidden, dbName, onAccountBlocked, now, ...idbHandlers })
   }
   if (typeof indexedDB === 'undefined') {
     return createMemoryStore()

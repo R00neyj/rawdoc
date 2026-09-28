@@ -343,3 +343,51 @@ describe('U8 — 자동 잠금 함수', () => {
     expect(ring.getStatus()).toBe('locked')
   })
 })
+
+// 코드 리뷰 S5 — 다른 기기가 금고를 초기화했는데 잠그기가 미뤄지면 상태만 none 이 되고 MK·평문이 남았다
+describe('리뷰 S5 — 초기화를 알아챘지만 잠그기가 미뤄짐', () => {
+  it('조합 중이면 open 그대로 두고, 조합이 끝나 잠기면 그때 none. MK 도 그때 사라진다', async () => {
+    const password = '충분히긴금고암호입니다'
+    const bundle = await makeBundle(password)
+    const { source } = makeMemorySource({ bundle, rev: 0 })
+    let composing = false
+    const ring = createKeyring({ scope: SCOPE, source, isComposing: () => composing })
+    await ring.open(password)
+    let unmountCalls = 0
+    ring.registerLockStep('unmount', () => {
+      unmountCalls += 1
+    })
+
+    await source.remove() // 다른 기기에서 초기화
+    composing = true
+    await ring.load()
+    expect(ring.getStatus()).toBe('open')
+    expect(unmountCalls).toBe(0)
+
+    composing = false
+    expect(await ring.retryDeferredLock()).toBe('locked')
+    expect(unmountCalls).toBe(1)
+    expect(ring.getMasterKey()).toBeNull()
+    expect(ring.getStatus()).toBe('none')
+  })
+
+  it('flush 가 실패해 잠그지 못하면 open 그대로 — 다음 load 가 다시 시도한다', async () => {
+    const password = '충분히긴금고암호입니다'
+    const bundle = await makeBundle(password)
+    const { source } = makeMemorySource({ bundle, rev: 0 })
+    const ring = createKeyring({ scope: SCOPE, source })
+    await ring.open(password)
+    let failFlush = true
+    ring.registerLockStep('flush', () => (failFlush ? Promise.reject(new Error('offline')) : undefined))
+
+    await source.remove()
+    await ring.load()
+    expect(ring.getStatus()).toBe('open')
+    expect(ring.getMasterKey()).not.toBeNull()
+
+    failFlush = false
+    await ring.load()
+    expect(ring.getStatus()).toBe('none')
+    expect(ring.getMasterKey()).toBeNull()
+  })
+})

@@ -29,7 +29,8 @@ function replaceMetaContent(html: string, attrName: string, attrValue: string, n
   const match = tagRe.exec(html)
   if (!match) return html
   const tag = match[0]
-  const newTag = tag.replace(/content="[^"]*"/, `content="${newContent}"`)
+  // 함수로 치환한다 — 문자열이면 제목의 $`·$'·$& 가 치환 패턴으로 풀려 태그 조각이 끼어든다 (리뷰 W3)
+  const newTag = tag.replace(/content="[^"]*"/, () => `content="${newContent}"`)
   return html.slice(0, match.index) + newTag + html.slice(match.index + tag.length)
 }
 
@@ -60,16 +61,17 @@ export async function renderPublicPage(request: Request, env: Env, pathname: str
     let title: string
     let description: string
     if (targetType === 'doc') {
-      const doc = await env.DB.prepare('SELECT title, content FROM docs WHERE id = ?')
-        .bind(link.target_id)
+      // 링크 주인의 문서일 때만 — 지운 id 를 남이 다시 만들면 옛 링크가 따라가지 않는다 (리뷰 W2)
+      const doc = await env.DB.prepare('SELECT title, content FROM docs WHERE id = ? AND owner_id = ?')
+        .bind(link.target_id, link.owner_id)
         .first<{ title: string; content: string }>()
       if (!doc) return null
       title = `${doc.title} · ${brand.name}`
       const excerptText = excerpt(stripComments(doc.content))
       description = excerptText || SITE_DESCRIPTION
     } else {
-      const folder = await env.DB.prepare('SELECT name FROM folders WHERE id = ?')
-        .bind(link.target_id)
+      const folder = await env.DB.prepare('SELECT name FROM folders WHERE id = ? AND owner_id = ?')
+        .bind(link.target_id, link.owner_id)
         .first<{ name: string }>()
       if (!folder) return null
       title = `${folder.name} · ${brand.name}`

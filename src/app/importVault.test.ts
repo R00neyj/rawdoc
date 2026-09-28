@@ -566,6 +566,49 @@ describe('applyVaultImport (F-2019.md 9장 U14)', () => {
     })
     expect(result.cancelled).toBe(true)
   })
+
+  // 리뷰 U2 — 명세 F-2019: 올리기 실패·quota 초과면 그 임베드는 원문 그대로
+  it('리뷰 U2 이미지 올리기가 실패하면 임베드를 블록으로 바꾸지 않고 원문 그대로 둔다', async () => {
+    for (const failure of [new Error('network'), Object.assign(new Error('quota'), { name: 'quota_exceeded' })]) {
+      const scan = await scanFrom({ kind: 'zip', fileName: 'v.zip' }, [
+        { name: 'v/a.md', text: '앞\n\n![[그림.png]]\n\n뒤\n' },
+        { name: 'v/그림.png', bytes: PNG_1PX },
+      ])
+      const plan = planVaultImport({ scan, target: { kind: 'top' }, docs: [], folders: [], attachments: new Map(), storeKind: 'idb' })
+      const store = fakeStore()
+      store.putAttachment = async () => {
+        throw failure
+      }
+      const result = await applyVaultImport({ plan, scan, entries: entriesOf([{ name: 'v/그림.png', bytes: PNG_1PX }]), store })
+      expect(result.createdCount).toBe(1)
+      const created = [...store.docs.values()][0]
+      expect(created.content).toBe('앞\n\n![[그림.png]]\n\n뒤\n')
+    }
+  })
+
+  // 리뷰 U3 — Windows PowerShell 5 Compress-Archive 처럼 항목 이름이 \ 로 나뉜 zip
+  it('리뷰 U3 zip 항목 이름이 \\ 나 ./ 로 시작해도 적용 단계에서 이미지를 찾아 올린다', async () => {
+    for (const [mdName, pngName] of [
+      ['v\\a.md', 'v\\img\\그림.png'],
+      ['./v/a.md', './v/img/그림.png'],
+    ]) {
+      const list = [
+        { name: mdName, text: '![[그림.png]]\n' },
+        { name: pngName, bytes: PNG_1PX },
+      ]
+      const scan = await scanFrom({ kind: 'zip', fileName: 'v.zip' }, list)
+      const plan = planVaultImport({ scan, target: { kind: 'top' }, docs: [], folders: [], attachments: new Map(), storeKind: 'idb' })
+      const names = vaultUploadNames(plan)
+      // App 은 zip 에서 읽은 가공 전 이름으로 want 를 묻는다
+      expect(names.has(pngName)).toBe(true)
+      const store = fakeStore()
+      await applyVaultImport({ plan, scan, entries: entriesOf(list.filter((e) => names.has(e.name))), store })
+      expect(store.calls).toContain('putAttachment')
+      const created = [...store.docs.values()][0]
+      expect(created.content).not.toContain('![[')
+      expect(created.content).toContain('attachments/')
+    }
+  })
 })
 
 describe('vaultUploadNames', () => {

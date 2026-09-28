@@ -54,4 +54,58 @@ describe('stripComments', () => {
     const result = stripComments(text)
     expect(result).toBe('앞\r\n\r\n\r\n\r\n뒤')
   })
+
+  // 리뷰 L1 — 줄 첫 칸 펜스만 보던 스캐너가 목록·인용 안 펜스를 놓쳐 뒤쪽 주석을 통째로 남겼다
+  it('목록 안 펜스 뒤의 주석을 지운다 (리뷰 L1)', () => {
+    const text = '- ```sh\n  npm i\n\n  npm run dev\n  ```\n\n본문 %%작성자 비밀 메모%% 끝\n'
+    expect(stripComments(text)).toBe('- ```sh\n  npm i\n\n  npm run dev\n  ```\n\n본문  끝\n')
+  })
+
+  it('목록 안 펜스 속 주석 문법은 그대로 둔다 (리뷰 L1)', () => {
+    const text = '- ```\n  %%코드%%\n  ```\n'
+    expect(stripComments(text)).toBe(text)
+  })
+
+  it('닫는 줄 없이 목록이 끝난 펜스 뒤의 주석을 지운다 (리뷰 L1)', () => {
+    expect(stripComments('- ```\n  코드\n\n본문 %%비밀%% 끝')).toBe('- ```\n  코드\n\n본문  끝')
+  })
+
+  it('인용 안 펜스가 인용과 함께 끝나면 뒤 주석을 지운다 (리뷰 L1)', () => {
+    expect(stripComments('> ```\n> 코드\n\n본문 %%비밀%% 끝')).toBe('> ```\n> 코드\n\n본문  끝')
+  })
+
+  it('들여쓴 코드블록의 닫는 펜스 모양 줄을 여는 펜스로 보지 않는다 (리뷰 L1)', () => {
+    expect(stripComments('    ```\n\n본문 %%비밀%% 끝')).toBe('    ```\n\n본문  끝')
+  })
+
+  it('제목 줄의 짝 없는 백틱이 다음 줄 백틱과 짝지어 주석을 살리지 않는다 (리뷰 L1)', () => {
+    expect(stripComments('# 제목 `\n%%비밀%% `x')).toBe('# 제목 `\n `x')
+  })
+
+  it('주석을 지워 펜스가 사라지면 그 뒤 주석도 지운다 (리뷰 L1)', () => {
+    expect(stripComments('%%\n```\n%%\n%%비밀%%\n')).toBe('\n\n\n\n')
+  })
+
+  it('프론트매터 안 주석도 지운다', () => {
+    expect(stripComments('---\ntitle: a %%비밀%%\n---\n본문')).toBe('---\ntitle: a \n---\n본문')
+  })
+
+  it('CRLF 문서의 목록 안 펜스도 같게 다룬다 (리뷰 L1)', () => {
+    const text = '- ```\r\n  %%코드%%\r\n  ```\r\n\r\n본문 %%비밀%%\r\n'
+    expect(stripComments(text)).toBe('- ```\r\n  %%코드%%\r\n  ```\r\n\r\n본문 \r\n')
+  })
+
+  // 리뷰 L2 — 역슬래시로 이스케이프한 백틱·백틱 든 정보 문자열
+  it('이스케이프한 백틱을 코드 시작으로 보지 않는다 (리뷰 L2)', () => {
+    expect(stripComments('가격 \\`%%비밀 메모%%` 끝')).toBe('가격 \\`` 끝')
+  })
+
+  it('정보 문자열에 백틱이 든 줄은 펜스가 아니다 (리뷰 L2)', () => {
+    expect(stripComments('```foo`bar\n\n본문 %%비밀%% 끝')).toBe('```foo`bar\n\n본문  끝')
+  })
+
+  it('역슬래시 두 개 뒤 백틱은 코드 시작이다', () => {
+    const text = '경로 \\\\`%%코드%%` 끝'
+    expect(stripComments(text)).toBe(text)
+  })
 })

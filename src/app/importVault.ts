@@ -211,7 +211,8 @@ export async function scanVault(input: {
 }): Promise<VaultScan> {
   const digest = input.digest ?? sha256Hex16
 
-  const cleaned: Array<{ path: string; bytes: Uint8Array | null }> = []
+  // raw — 2차 훑기(applyVaultImport)의 항목 이름은 가공 전 그대로다. \·./ 를 고친 path 로는 다시 찾지 못한다 (리뷰 U3)
+  const cleaned: Array<{ path: string; raw: string; bytes: Uint8Array | null }> = []
   let traversalSkipped = 0
   for await (const e of input.entries) {
     const p = e.name.replace(/\\/g, '/').replace(/^(\.\/|\/)+/, '')
@@ -221,7 +222,7 @@ export async function scanVault(input: {
       continue
     }
     if (isNoiseEntry(p)) continue
-    cleaned.push({ path: p, bytes: e.bytes })
+    cleaned.push({ path: p, raw: e.name, bytes: e.bytes })
   }
 
   let vaultName: string
@@ -232,14 +233,14 @@ export async function scanVault(input: {
     const withFirst = cleaned.filter((e) => e.path.includes('/'))
     const first = withFirst[0]?.path.split('/')[0] ?? ''
     vaultName = first
-    stripped = withFirst.map((e) => ({ raw: e.path, rel: e.path.slice(first.length + 1), bytes: e.bytes }))
+    stripped = withFirst.map((e) => ({ raw: e.raw, rel: e.path.slice(first.length + 1), bytes: e.bytes }))
   } else {
     const firstSegs = new Set(cleaned.map((e) => e.path.split('/')[0]))
     const hasRootFile = cleaned.some((e) => !e.path.includes('/'))
     let strip = ''
     if (cleaned.length > 0 && !hasRootFile && firstSegs.size === 1) strip = `${[...firstSegs][0]}/`
     vaultName = strip ? strip.slice(0, -1) : input.root.fileName.replace(/\.zip$/i, '')
-    stripped = cleaned.map((e) => ({ raw: e.path, rel: strip ? e.path.slice(strip.length) : e.path, bytes: e.bytes }))
+    stripped = cleaned.map((e) => ({ raw: e.raw, rel: strip ? e.path.slice(strip.length) : e.path, bytes: e.bytes }))
   }
   vaultName = stripVaultSuffix(nfc(vaultName))
 
@@ -919,6 +920,8 @@ export async function applyVaultImport(input: {
     if (j.blocksMap.size === 0) return j.linkRewrittenText
     const corrected = new Map<VaultEmbed, EmbedBlock>()
     for (const [embed, block] of j.blocksMap) {
+      // 이번에 올릴 이미지인데 올리지 못했으면(실패·quota·항목 없음) 그 임베드는 원문 그대로 둔다 (F-2019.md, 리뷰 U2)
+      if (plan.uploadImages.has(block.id) && !uploadedExtById.has(block.id)) continue
       corrected.set(embed, { ...block, ext: uploadedExtById.get(block.id) ?? block.ext })
     }
     return embedsToImageBlocks(j.linkRewrittenText, corrected)

@@ -90,9 +90,11 @@ describe('planWorkspaceExport (F-281 A3) 이름 충돌', () => {
 })
 
 describe('exportWorkspace (F-281 A4) .md 바이트', () => {
-  it('CRLF·LF 문서 바이트가 fromEditorText 인코딩과 같다. BOM 없음', async () => {
+  // 저장소 본문은 이미 실제 줄바꿈을 담는다 — crlf 문서의 content 는 CRLF, 섞인 문서는 섞인 그대로다 (리뷰 U1)
+  it('CRLF·LF·섞인 문서 바이트가 저장된 본문 바이트와 같다. BOM 없음', async () => {
     const docs = [
-      doc({ id: 'd1', title: '문서1', content: '첫\n\n둘\n', lineEnding: 'crlf', createdAt: 1 }),
+      doc({ id: 'd1', title: '문서1', content: '첫\r\n\r\n둘\r\n', lineEnding: 'crlf', createdAt: 1 }),
+      doc({ id: 'd3', title: '문서3', content: '가\r\n나\n다\r\n', lineEnding: 'crlf', createdAt: 3 }),
       doc({ id: 'd2', title: '문서2', content: '셋\n넷\n', lineEnding: 'lf', createdAt: 2 }),
     ]
     const plan = planWorkspaceExport({ docs, folders: [], scope: { kind: 'all' }, now: NOW })
@@ -100,8 +102,9 @@ describe('exportWorkspace (F-281 A4) .md 바이트', () => {
     const result = await exportWorkspace({ plan, store })
     const unzipped = unzipSync(result.bytes)
 
-    expect(unzipped['문서1.md']).toEqual(new TextEncoder().encode(fromEditorText('첫\n\n둘\n', 'crlf')))
-    expect(unzipped['문서2.md']).toEqual(new TextEncoder().encode(fromEditorText('셋\n넷\n', 'lf')))
+    expect(unzipped['문서1.md']).toEqual(new TextEncoder().encode('첫\r\n\r\n둘\r\n'))
+    expect(unzipped['문서2.md']).toEqual(new TextEncoder().encode('셋\n넷\n'))
+    expect(unzipped['문서3.md']).toEqual(new TextEncoder().encode('가\r\n나\n다\r\n'))
     // BOM 없음
     expect(unzipped['문서1.md'][0]).not.toBe(0xef)
   })

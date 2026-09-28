@@ -19,16 +19,18 @@ export function roleAtLeast(role: Role, min: GrantRole): boolean {
   return RANK[role] >= RANK[min]
 }
 
+// 초대 행의 owner_id 가 지금 대상 소유자와 같을 때만 — 지운 id 를 남이 다시 만들면 옛 초대가 붙지 않는다 (리뷰 W2·W4)
 async function grantRole(
   env: Env,
   targetType: 'doc' | 'folder',
   targetId: string,
+  ownerId: string,
   email: string,
 ): Promise<GrantRole | null> {
   const row = await env.DB.prepare(
-    'SELECT role FROM grants WHERE target_type = ? AND target_id = ? AND grantee_email = ?',
+    'SELECT role FROM grants WHERE target_type = ? AND target_id = ? AND owner_id = ? AND grantee_email = ?',
   )
-    .bind(targetType, targetId, email)
+    .bind(targetType, targetId, ownerId, email)
     .first<{ role: GrantRole }>()
   return row?.role ?? null
 }
@@ -110,7 +112,7 @@ export async function resolveDocAccess<T extends DocRowLike>(
   const role: Role | null =
     doc.owner_id === user.id
       ? 'owner'
-      : higherRole(await grantRole(env, 'doc', doc.id, user.email), await folderChainRole(env, doc.folder_id, doc.owner_id, user.email))
+      : higherRole(await grantRole(env, 'doc', doc.id, doc.owner_id, user.email), await folderChainRole(env, doc.folder_id, doc.owner_id, user.email))
   if (!role) return null
   if (role === 'view') return { role, doc }
   if (await isWriteBlocked(env, doc, user)) return { role: 'view', doc, blocked: true }
@@ -154,6 +156,30 @@ export async function isDocAttachmentOwner(env: Env, doc: DocRowLike, attachment
     .bind(attachmentOwnerId)
     .first<{ email: string }>()
   if (!owner) return false
-  const role = higherRole(await grantRole(env, 'doc', doc.id, owner.email), await folderChainRole(env, doc.folder_id, doc.owner_id, owner.email))
+  const role = higherRole(await grantRole(env, 'doc', doc.id, doc.owner_id, owner.email), await folderChainRole(env, doc.folder_id, doc.owner_id, owner.email))
   return role === 'edit'
+}
+
+// 문서·폴더를 지울 때 같은 batch 에 넣는다 — 공개 링크는 폐기, 초대는 삭제. 같은 id 가 다시 생겨도 따라가지 않는다 (리뷰 W2·W4)
+// D1 바인딩 한도(100) 안에 들게 나눈다
+const CLEANUP_CHUNK = 90
+
+export function targetShareCleanupStatements(
+  db: D1Database,
+  targetType: 'doc' | 'folder',
+  ids: readonly string[],
+  now: number,
+): D1PreparedStatement[] {
+  const out: D1PreparedStatement[] = []
+  for (let i = 0; i < ids.length; i += CLEANUP_CHUNK) {
+    const chunk = ids.slice(i, i + CLEANUP_CHUNK)
+    const placeholders = chunk.map(() => '?').join(',')
+    out.push(
+      db
+        .prepare(`UPDATE share_links SET revoked_at = ? WHERE target_type = '${targetType}' AND target_id IN (${placeholders}) AND revoked_at IS NULL`)
+        .bind(now, ...chunk),
+      db.prepare(`DELETE FROM grants WHERE target_type = '${targetType}' AND target_id IN (${placeholders})`).bind(...chunk),
+    )
+  }
+  return out
 }

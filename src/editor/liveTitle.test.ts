@@ -63,6 +63,35 @@ describe('F-305 U18 writeTitle', () => {
   })
 })
 
+// 제목 입력 중(포커스라 textarea 가 원격 값을 받지 않음) 들어온 원격 변경을 다음 입력이 지우지 않는다 (리뷰 E4)
+describe('writeTitle — 직전 textarea 값 기준 (리뷰 E4)', () => {
+  it("원격이 앞에 X 를 넣은 뒤 'Hello' → 'Hello!' 는 X 를 남긴다", () => {
+    const doc = docWithTitle('Hello')
+    doc.getText('title').insert(0, 'X') // 원격 변경 — textarea 는 여전히 'Hello'
+    expect(writeTitle(doc, 'Hello!', 'Hello')).toBe(true)
+    expect(doc.getText('title').toString()).toBe('XHello!')
+  })
+
+  it('원격이 뒤를 지운 뒤 앞에 친 글자도 제자리에 들어간다', () => {
+    const doc = docWithTitle('Hello')
+    doc.getText('title').delete(4, 1) // 원격: 'Hell'
+    expect(writeTitle(doc, 'AHello', 'Hello')).toBe(true)
+    expect(doc.getText('title').toString()).toBe('AHell')
+  })
+
+  it('직전 값이 Y.Text 와 같으면 그대로 바뀐 구간만', () => {
+    const doc = docWithTitle('Hello')
+    expect(writeTitle(doc, 'Hell', 'Hello')).toBe(true)
+    expect(doc.getText('title').toString()).toBe('Hell')
+  })
+
+  it('직전 값과 새 값이 같으면 false', () => {
+    const doc = docWithTitle('XHello')
+    expect(writeTitle(doc, 'Hello', 'Hello')).toBe(false)
+    expect(doc.getText('title').toString()).toBe('XHello')
+  })
+})
+
 describe('F-305 U19 observeTitle', () => {
   it('다른 origin 의 변경에만 불리고 LOCAL_TITLE 에는 안 불린다', () => {
     const doc = docWithTitle('제목')

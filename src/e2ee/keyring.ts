@@ -164,6 +164,8 @@ export function createKeyring(deps: KeyringDeps): Keyring {
   let actionInFlight: Promise<unknown> | null = null
   let lockInFlight: Promise<E2eeLockOutcome> | null = null
   let deferredReason: E2eeLockReason | null = null
+  // load() 가 금고 초기화를 알아챘지만 잠그기가 미뤄졌다 — 그 잠그기가 끝나면 locked 대신 none 으로 (리뷰 S5)
+  let noneAfterLock = false
 
   let pendingCreate: PendingCreate | null = null
   let pendingRecoveryVerify: PendingRecoveryVerify | null = null
@@ -172,6 +174,7 @@ export function createKeyring(deps: KeyringDeps): Keyring {
   function setStatus(next: E2eeStatus) {
     if (status === next) return
     status = next
+    if (next === 'open') noneAfterLock = false
     for (const listener of listeners) listener()
   }
 
@@ -203,7 +206,12 @@ export function createKeyring(deps: KeyringDeps): Keyring {
       }
     }
     masterKey = null
-    setStatus('locked')
+    if (noneAfterLock) {
+      noneAfterLock = false
+      setStatus('none')
+    } else {
+      setStatus('locked')
+    }
     if (reason === 'manual' || reason === 'idle' || reason === 'reset') {
       onBroadcastLock?.()
     }
@@ -238,8 +246,12 @@ export function createKeyring(deps: KeyringDeps): Keyring {
     if (status === 'open') {
       const result = await source.read()
       if (result.kind === 'none') {
-        await lock('reset')
-        setStatus('none')
+        // 잠그기가 끝난 뒤에만 none — 미뤄졌으면(IME 조합) 미룬 잠그기가 none 전이를 이어받고,
+        // 멈췄으면(flush 실패) open 그대로 두어 다음 load 가 다시 시도한다. MK·평문이 남은 채 none 이 되지 않게 (리뷰 S5)
+        noneAfterLock = true
+        const outcome = await lock('reset')
+        if (outcome === 'aborted' || outcome === 'not-open') noneAfterLock = false
+        if (outcome === 'not-open' && masterKey === null) setStatus('none')
       }
       return
     }

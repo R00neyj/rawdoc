@@ -131,7 +131,7 @@ export function expandTemplateVariables(
   const title = trimmed === '' ? (vars.emptyTitle === 'keep-empty' ? '' : '제목 없는 문서') : trimmed
   let out = text.replace(DATE_VAR_RE, (_m, fmt: string | undefined) => formatTemplateDate(vars.now, fmt ?? 'YYYY-MM-DD'))
   out = out.replace(TIME_VAR_RE, (_m, fmt: string | undefined) => formatTemplateDate(vars.now, fmt ?? 'HH:mm'))
-  out = out.replace(TITLE_VAR_RE, title)
+  out = out.replace(TITLE_VAR_RE, () => title) // 함수로 넘겨야 제목의 $&·$$ 등이 치환 패턴으로 풀리지 않는다 (리뷰 L4)
   return out
 }
 

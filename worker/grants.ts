@@ -54,9 +54,9 @@ async function checkOwnedTarget(env: Env, targetType: TargetType, targetId: stri
   if (!folder) return { ok: false, status: 404 }
   if (folder.owner_id === user.id) return { ok: true, e2ee: folder.e2ee === 1 }
   const grant = await env.DB.prepare(
-    "SELECT role FROM grants WHERE target_type = 'folder' AND target_id = ? AND grantee_email = ?",
+    "SELECT role FROM grants WHERE target_type = 'folder' AND target_id = ? AND owner_id = ? AND grantee_email = ?",
   )
-    .bind(targetId, user.email)
+    .bind(targetId, folder.owner_id, user.email)
     .first<{ role: 'view' | 'edit' }>()
   return { ok: false, status: grant ? 403 : 404 }
 }
@@ -71,10 +71,11 @@ async function handleListGrants(
   const check = await checkOwnedTarget(env, targetType, params.id, user)
   if (!check.ok) return errorResponse(check.status === 403 ? 'forbidden' : 'not_found', check.status)
 
+  // 지금 소유자가 준 초대만 — 지운 id 를 남이 다시 만들면 옛 초대 이메일이 보이지 않는다 (리뷰 W2)
   const { results } = await env.DB.prepare(
-    'SELECT grantee_email, role, created_at FROM grants WHERE target_type = ? AND target_id = ? ORDER BY created_at ASC',
+    'SELECT grantee_email, role, created_at FROM grants WHERE target_type = ? AND target_id = ? AND owner_id = ? ORDER BY created_at ASC',
   )
-    .bind(targetType, params.id)
+    .bind(targetType, params.id, user.id)
     .all<GrantRow>()
   return jsonResponse(results.map((r) => ({ email: r.grantee_email, role: r.role, createdAt: r.created_at })))
 }
@@ -108,7 +109,7 @@ async function handlePutGrant(
     env.DB.prepare(
       `INSERT INTO grants (target_type, target_id, owner_id, grantee_email, role, created_at)
        VALUES (?,?,?,?,?,?)
-       ON CONFLICT(target_type, target_id, grantee_email) DO UPDATE SET role = excluded.role`,
+       ON CONFLICT(target_type, target_id, grantee_email) DO UPDATE SET role = excluded.role, owner_id = excluded.owner_id`,
     ).bind(targetType, params.id, user.id, email, role, now),
     dayUsageStatement(env.DB, user.id, now),
   ])
@@ -132,9 +133,10 @@ async function handleDeleteGrant(
 
   const email = params.email.toLowerCase()
   await env.DB.batch([
-    env.DB.prepare('DELETE FROM grants WHERE target_type = ? AND target_id = ? AND grantee_email = ?').bind(
+    env.DB.prepare('DELETE FROM grants WHERE target_type = ? AND target_id = ? AND owner_id = ? AND grantee_email = ?').bind(
       targetType,
       params.id,
+      user.id,
       email,
     ),
     dayUsageStatement(env.DB, user.id, Date.now()),
@@ -198,11 +200,16 @@ export async function handleGetShared(request: Request, env: Env): Promise<Respo
     .all<{ target_type: TargetType; target_id: string; role: GrantRole; owner_id: string }>()
   if (myGrants.length === 0) return jsonResponse([])
 
-  const docGrants = new Map<string, GrantRole>()
+  // 문서 초대는 준 소유자와 함께 — 같은 id 로 남의 문서가 생겨도 옛 초대가 붙지 않는다 (리뷰 W2)
+  const docGrants = new Map<string, { role: GrantRole; ownerId: string }>()
+  const docGrantRole = (doc: SharedDocRow): GrantRole | null => {
+    const g = docGrants.get(doc.id)
+    return g && g.ownerId === doc.owner_id ? g.role : null
+  }
   const folderGrantsByOwner = new Map<string, Map<string, GrantRole>>()
   for (const g of myGrants) {
     if (g.target_type === 'doc') {
-      docGrants.set(g.target_id, g.role)
+      docGrants.set(g.target_id, { role: g.role, ownerId: g.owner_id })
       continue
     }
     const byFolder = folderGrantsByOwner.get(g.owner_id) ?? new Map<string, GrantRole>()
@@ -235,7 +242,7 @@ export async function handleGetShared(request: Request, env: Env): Promise<Respo
           if (!viaFolder) viaFolder = { id, name: folderById.get(id)?.name ?? '' }
         }
       }
-      const role = higherRole(folderRole, docGrants.get(doc.id) ?? null)
+      const role = higherRole(folderRole, docGrantRole(doc))
       if (role) picked.push({ doc, role, viaFolder })
     }
   }
@@ -252,7 +259,7 @@ export async function handleGetShared(request: Request, env: Env): Promise<Respo
       .bind(...batch)
       .all<SharedDocRow>()
     for (const doc of docs) {
-      const role = docGrants.get(doc.id)
+      const role = docGrantRole(doc)
       if (role) picked.push({ doc, role })
     }
   }

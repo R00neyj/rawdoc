@@ -302,18 +302,31 @@ describe('planVaultExport (F-2020 U7)', () => {
 })
 
 describe('exportVault (F-2020 U8)', () => {
-  it('manifest.json 이 없고, .md 바이트가 fromEditorText 인코딩과 같다 (CRLF·LF)', async () => {
+  // 저장소 본문은 이미 실제 줄바꿈을 담는다 — crlf 문서의 content 는 CRLF 다 (리뷰 U1)
+  it('manifest.json 이 없고, .md 바이트가 저장된 본문 바이트와 같다 (CRLF·LF)', async () => {
     const docs = [
-      doc({ id: 'd1', title: '문서1', content: '첫\n\n둘\n', lineEnding: 'crlf', createdAt: 1 }),
+      doc({ id: 'd1', title: '문서1', content: '첫\r\n\r\n둘\r\n', lineEnding: 'crlf', createdAt: 1 }),
       doc({ id: 'd2', title: '문서2', content: '셋\n넷\n', lineEnding: 'lf', createdAt: 2 }),
     ]
     const plan = planVaultExport({ docs, folders: [], scope: { kind: 'all' }, now: NOW })
     const result = await exportVault({ plan, store: { getAttachment: async () => null } })
     const unzipped = unzipSync(result.bytes)
     expect(unzipped['manifest.json']).toBeUndefined()
-    expect(unzipped['문서1.md']).toEqual(new TextEncoder().encode(fromEditorText('첫\n\n둘\n', 'crlf')))
-    expect(unzipped['문서2.md']).toEqual(new TextEncoder().encode(fromEditorText('셋\n넷\n', 'lf')))
+    expect(unzipped['문서1.md']).toEqual(new TextEncoder().encode('첫\r\n\r\n둘\r\n'))
+    expect(unzipped['문서2.md']).toEqual(new TextEncoder().encode('셋\n넷\n'))
     expect(unzipped['문서1.md'][0]).not.toBe(0xef)
+  })
+
+  it('리뷰 U1 CRLF 문서의 이미지 블록도 LF 문서와 같게 바뀌고 줄바꿈은 CRLF 로 남는다', async () => {
+    const id = '0f3a9c2e7b1d4a58'
+    const lf = `앞\n\n<div align="center">\n  <img src="attachments/${id}.png" alt="a">\n</div>\n\n뒤\n`
+    const docs = [doc({ id: 'd1', title: '문서1', content: fromEditorText(lf, 'crlf'), lineEnding: 'crlf', createdAt: 1 })]
+    const plan = planVaultExport({ docs, folders: [], scope: { kind: 'all' }, now: NOW })
+    const expected = fromEditorText(toVaultMarkdown(lf, null, plan.links).text, 'crlf')
+    expect(expected).toContain(`![[${id}.png]]`)
+    const result = await exportVault({ plan, store: { getAttachment: async () => null } })
+    const bytes = unzipSync(result.bytes)['문서1.md']
+    expect(new TextDecoder().decode(bytes)).toBe(expected)
   })
 
   it('같은 첨부를 두 폴더 문서가 쓰면 attachments/ 루트에 한 번, {폴더}/attachments/ 는 없다', async () => {

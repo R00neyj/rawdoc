@@ -25,12 +25,12 @@ function targetTable(targetType: TargetType): { table: string; nameCol: string }
   return targetType === 'doc' ? { table: 'docs', nameCol: 'title' } : { table: 'folders', nameCol: 'name' }
 }
 
-// 대상이 지워졌으면 JOIN 이 걸러낸다 — 대상마다 따로 조회하지 않고 target_type 별 JOIN 하나로 끝낸다
+// 대상이 지워졌거나 같은 id 로 남의 것이 생겼으면 JOIN 이 걸러낸다 (리뷰 W2) — 대상마다 따로 조회하지 않고 target_type 별 JOIN 하나로 끝낸다
 async function listLinksForTarget(env: Env, ownerId: string, targetType: TargetType): Promise<LinkListItem[]> {
   const { table, nameCol } = targetTable(targetType)
   const { results } = await env.DB.prepare(
     `SELECT sl.token AS token, sl.target_id AS target_id, sl.created_at AS created_at, t.${nameCol} AS target_name
-     FROM share_links sl JOIN ${table} t ON t.id = sl.target_id
+     FROM share_links sl JOIN ${table} t ON t.id = sl.target_id AND t.owner_id = sl.owner_id
      WHERE sl.owner_id = ? AND sl.target_type = ? AND sl.revoked_at IS NULL`,
   )
     .bind(ownerId, targetType)
@@ -48,7 +48,7 @@ async function listGrantsForTarget(env: Env, ownerId: string, targetType: Target
   const { table, nameCol } = targetTable(targetType)
   const { results } = await env.DB.prepare(
     `SELECT g.target_id AS target_id, g.grantee_email AS email, g.role AS role, g.created_at AS created_at, t.${nameCol} AS target_name
-     FROM grants g JOIN ${table} t ON t.id = g.target_id
+     FROM grants g JOIN ${table} t ON t.id = g.target_id AND t.owner_id = g.owner_id
      WHERE g.owner_id = ? AND g.target_type = ?`,
   )
     .bind(ownerId, targetType)

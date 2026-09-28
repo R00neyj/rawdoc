@@ -53,6 +53,8 @@ import { parseHash, formatHash, formatMapHash, formatCommentHash, parsePathRoute
 import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { canShowCachedShell, mergeBootList, shouldApplyListResult } from './bootList'
+import { mergeResyncList } from './resyncList'
+import { guardForDoc, staleDocBoundNotices } from './docBoundNotice'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
 import { decideDocPath, type DocPathKind, type FallbackReason } from './docPath'
@@ -695,10 +697,15 @@ export default function App() {
   }, [currentDoc, folders])
 
   // 공유받음 묶음(F-212.md 2.4)과 내 트리를 나눈다 — role 이 없거나 'owner' 면 내 것
-  const ownedDocs = docs.filter((d) => !isSharedDoc(d))
-  const sharedDocsList: SharedDocLike[] = docs
-    .filter((d): d is DocMeta & { role: 'edit' | 'view' } => isSharedDoc(d))
-    .map((d) => ({ id: d.id, title: d.title, role: d.role as 'edit' | 'view', ownerEmail: d.ownerEmail ?? '', viaFolder: d.viaFolder }))
+  // docs 가 그대로면 같은 배열을 넘긴다 — 렌더마다 새 배열이면 받는 쪽의 memo·effect deps 가 매번 풀린다 (리뷰 A14)
+  const ownedDocs = useMemo(() => docs.filter((d) => !isSharedDoc(d)), [docs])
+  const sharedDocsList: SharedDocLike[] = useMemo(
+    () =>
+      docs
+        .filter((d): d is DocMeta & { role: 'edit' | 'view' } => isSharedDoc(d))
+        .map((d) => ({ id: d.id, title: d.title, role: d.role as 'edit' | 'view', ownerEmail: d.ownerEmail ?? '', viaFolder: d.viaFolder })),
+    [docs],
+  )
 
   // view 권한 문서이거나(F-212.md 2.4), edit 권한 문서가 403 으로 강등됐거나, 계정이 막혔으면 읽기 전용 (F-2030 5.2)
   const isReadOnlyByRole =
@@ -992,10 +999,24 @@ export default function App() {
   const liveStopped = isRealtime && liveSnapshot?.phase === 'stopped'
 
   // ----- 실시간 알림 띠 N1~N6 (F-305 11.2) -----
-  const saveAsNewAction = useMemo(
-    () => ({ label: '새 문서로 저장', icon: IconNoteAdd, onClick: () => void saveCurrentAsNewDocRef.current() }),
-    [],
+  // `새 문서로 저장` 알림은 만든 문서에 묶는다 — 다른 문서로 옮기면 걷고, 옮긴 뒤 누르면 아무것도 하지 않는다 (리뷰 A5)
+  const docBoundNoticesRef = useRef(new Map<number, string>())
+  const showSaveAsNewNotice = useCallback(
+    (docId: string, input: { type: 'error' | 'warn'; message: string }): number => {
+      const onClick = guardForDoc(docId, () => currentDocIdRef.current, () => void saveCurrentAsNewDocRef.current())
+      const id = showNotice({ ...input, action: { label: '새 문서로 저장', icon: IconNoteAdd, onClick } })
+      docBoundNoticesRef.current.set(id, docId)
+      return id
+    },
+    [showNotice],
   )
+  useEffect(() => {
+    const bound = docBoundNoticesRef.current
+    for (const id of staleDocBoundNotices(bound, currentDocId)) {
+      dismissNotice(id)
+      bound.delete(id)
+    }
+  }, [currentDocId, dismissNotice])
   // 읽기 전용 세션의 첫 동기화 전 4403 — 알림 없이 /api/me 만 한 번 (F-506 3.3)
   const quietForbiddenSeqRef = useRef(0)
   useEffect(() => {
@@ -1057,7 +1078,10 @@ export default function App() {
     liveStopNoticeDocRef.current = liveSession.roomDoc
     const reason = snap.stopReason
     // 읽기 전용 세션에는 내 편집이 없다 — 새 문서로 저장 없이 N9·N3·N10 (F-506 5.2)
-    const stopAction = readOnlySession ? undefined : saveAsNewAction
+    const stopDocId = liveSession.docId
+    // 읽기 전용 세션이면 버튼 없이 띄운다
+    const showStopNotice = (input: { type: 'error' | 'warn'; message: string }) =>
+      readOnlySession ? showNotice(input) : showSaveAsNewNotice(stopDocId, input)
     if (readOnlySession && reason === 'revoked') {
       showNotice({ type: 'warn', message: READ_ONLY_LIVE_NOTICE.revoked })
       recheckAccount()
@@ -1069,7 +1093,7 @@ export default function App() {
       if (ownDoc && accountBlocked) {
         showNotice({ type: 'error', message: ACCOUNT_BLOCKED_MESSAGE })
       } else {
-        showNotice({ type: 'warn', message: LIVE_NOTICE.revoked, action: saveAsNewAction })
+        showSaveAsNewNotice(stopDocId, { type: 'warn', message: LIVE_NOTICE.revoked })
         if (ownDoc) recheckAccount()
       }
     } else if (reason === 'not-found' || reason === 'deleted') {
@@ -1082,11 +1106,13 @@ export default function App() {
             if (goneDocId === currentDocIdRef.current) restartDocSession()
             return
           }
-          showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: stopAction })
+          // 확인하는 동안 다른 문서로 옮겼으면 띄우지 않는다 (리뷰 A5)
+          if (goneDocId !== currentDocIdRef.current) return
+          showStopNotice({ type: 'error', message: LIVE_NOTICE.gone })
         })
-      } else showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: stopAction })
-    } else if (reason === 'signed-out') showNotice({ type: 'error', message: LIVE_NOTICE.signedOut, action: saveAsNewAction })
-  }, [liveSession, showNotice, dismissNotice, saveAsNewAction, store, currentDoc, sharedDoc, accountBlocked, recheckAccount, restartDocSession])
+      } else showStopNotice({ type: 'error', message: LIVE_NOTICE.gone })
+    } else if (reason === 'signed-out') showSaveAsNewNotice(stopDocId, { type: 'error', message: LIVE_NOTICE.signedOut })
+  }, [liveSession, showNotice, dismissNotice, showSaveAsNewNotice, store, currentDoc, sharedDoc, accountBlocked, recheckAccount, restartDocSession])
 
   // N7 — offline-view 세션마다 한 번. 그 세션이 끝나면 아직 떠 있을 때만 걷는다 (F-306 11.2)
   const offlineViewNoticeRef = useRef<{ seq: number; id: number } | null>(null)
@@ -1203,18 +1229,24 @@ export default function App() {
   }, [])
 
   // 다른 탭 신호를 받으면 목록만 다시 읽는다. 열린 문서 본문은 건드리지 않는다(불변조건, F-296.md 7.2)
+  // 부팅 뒤 맞추기·금고 목록과 순번을 공유해 늦게 시작한 결과만 반영하고, 요청 전 목록에 있던 문서만 지운 것으로 본다 (리뷰 A3)
   const resyncFromStore = useCallback(async () => {
+    const seq = ++bootListSeqRef.current
+    const snapshot = docsRef.current
     const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
+    if (!shouldApplyListResult({ seq, lastAppliedSeq: lastAppliedListSeqRef.current })) return
+    lastAppliedListSeqRef.current = seq
     setFolders(newFolders)
-    const stripped = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
-    setDocs(stripped)
+    const result = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
+    setDocs((prev) => mergeResyncList({ snapshot, current: prev, result }).docs)
+    const merged = mergeResyncList({ snapshot, current: docsRef.current, result })
     const openId = currentDocIdRef.current
-    if (openId && !stripped.some((d) => d.id === openId)) {
+    if (openId && merged.removedIds.includes(openId)) {
       deletedElsewhereSourceRef.current = 'tab'
       setDeletedElsewhereId(openId)
     }
     // 다른 탭이 지금 문서를 금고로 옮기거나 뺐으면 새 세션으로 다시 연다 — 옛 실시간 세션에 머물지 않게 (F-407 7.4)
-    const opened = openId ? stripped.find((d) => d.id === openId) : undefined
+    const opened = openId ? merged.docs.find((d) => d.id === openId) : undefined
     const session = docPathRef.current
     const syncedPath = session.path === 'realtime' || session.path === 'pending' || session.path === 'fallback' || session.path === 'e2ee'
     if (store.kind === 'server' && opened && session.docId === openId && syncedPath && !e2eeConvertBusyRef.current) {
@@ -1567,10 +1599,13 @@ export default function App() {
       online: () => navigator.onLine,
     }),
   )
-  const mentionSource: MentionSource | null =
-    notificationsEnabled && currentDocId && commentAccessValue.kind === 'write' && account.state === 'in'
-      ? { docId: currentDocId, selfEmail: account.email, people: peopleCache }
-      : null
+  // 렌더마다 새 객체면 MentionField 의 후보 불러오기 effect 가 App 렌더마다 다시 돌아, 실패 중에는 요청이 반복된다 (리뷰 U5)
+  const mentionDocId = notificationsEnabled && currentDocId && commentAccessValue.kind === 'write' && account.state === 'in' ? currentDocId : null
+  const mentionSelfEmail = account.state === 'in' ? account.email : null
+  const mentionSource: MentionSource | null = useMemo(
+    () => (mentionDocId && mentionSelfEmail !== null ? { docId: mentionDocId, selfEmail: mentionSelfEmail, people: peopleCache } : null),
+    [mentionDocId, mentionSelfEmail, peopleCache],
+  )
 
   // 명령 팔레트 D-7 — 템플릿 삽입이 보이는 조건 (specs/features/F-2022.md 6.3)
   const canInsertTemplate =
@@ -1651,22 +1686,14 @@ export default function App() {
   useEffect(() => {
     if (!deletedElsewhereId || notifiedDeletedElsewhereRef.current === deletedElsewhereId) return
     notifiedDeletedElsewhereRef.current = deletedElsewhereId
-    showNotice({
+    showSaveAsNewNotice(deletedElsewhereId, {
       type: 'error',
       message:
         deletedElsewhereSourceRef.current === 'bootMerge'
           ? '이 문서가 다른 곳에서 삭제되었습니다. 지금 화면의 내용은 저장되지 않습니다.'
           : '이 문서가 다른 탭에서 삭제되었습니다. 지금 화면의 내용은 저장되지 않습니다.',
-      action: {
-        label: '새 문서로 저장',
-        icon: IconNoteAdd,
-        onClick: () => {
-          void saveCurrentAsNewDoc()
-        },
-      },
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- saveCurrentAsNewDoc 는 아래(hoisted function)에서 항상 최신 store·currentDoc·openDoc 을 읽는다
-  }, [deletedElsewhereId, showNotice])
+  }, [deletedElsewhereId, showSaveAsNewNotice])
 
   const closeSidebarIfNarrow = useCallback(() => {
     setSidebarOpen(false)
@@ -2218,6 +2245,11 @@ export default function App() {
     function handleHashChange() {
       const parsedHash = parseHash(location.hash)
 
+      // 공개 링크(#/p/…)는 위 handlePublicHashChange 가 publicRoute 로 그린다 — 여기서 첫 문서로 해시를 바꾸지 않는다 (리뷰 A1)
+      if (parsedHash.type === 'public' || parsedHash.type === 'publicFolder') return
+      // 경로형 공개 링크(/p/…)도 같다 — 해시가 비어 있어도 홈으로 돌리거나 해시를 바꾸지 않는다 (리뷰 A4)
+      if (toPublicRoute(parsePathRoute(location.pathname))) return
+
       // 공유 링크(F-130.md 4장)는 currentDocId 와 비교하지 않고 매번 새로 연다 —
       // currentDocId 는 공유 화면 동안 건드리지 않으므로 같은 값일 수 있다
       if (parsedHash.type === 'share') {
@@ -2290,6 +2322,11 @@ export default function App() {
         setSharesOpen(false) // 공유 관리 페이지를 보고 있었으면 떠난다 (F-243.md 3.4)
         setHelpOpen(false) // 도움말 페이지를 보고 있었으면 떠난다 (F-244.md 3.3)
         setMapRoute(null) // 지도를 보고 있었으면 떠난다 — 뒤로 가기로 지도를 나갈 때가 그렇다 (F-292.md 6.1)
+        // `#/`·빈 해시처럼 대상이 없으면 홈 — 뒤로 가기로 홈에 돌아왔을 때 첫 문서를 열지 않는다 (F-232 3.2, 리뷰 A4)
+        if (parsedHash.type === 'none') {
+          setCurrentDocId(null)
+          return
+        }
         focusEditorRef.current = true
         const latestDocs = docsRef.current
         if (docId && latestDocs.some((d) => d.id === docId)) {
@@ -2828,7 +2865,9 @@ export default function App() {
     onSaveError: handleSaveError,
     // 저장해 봤자 해로운 두 경우에만 막는다 — 잠금을 뺏긴 서버 문서는 그대로 내보내 423 충돌 사본을 만드는 게 설계다 (F-296.md 7.4)
     // 실시간 경로는 본문을 방 Doc 으로 보낸다 — PUT 하면 DO 가 올린 version 과 갈려 409 사본이 생긴다 (F-305 10.1)
-    blocked: isDeletedElsewhere || claimReadOnly || isRealtime || isOfflineView,
+    // 편집기가 내려가 있으면(세션 재시작·온라인 복귀·금고 잠금으로 openDoc 이 비었을 때) getText 가 '' 를 돌려준다 —
+    // 대기 중이던 저장이 빈 본문으로 서버 본문을 지우지 않게 막는다. 편집기는 openDoc 이 지금 문서일 때만 뜬다 (리뷰 A2)
+    blocked: isDeletedElsewhere || claimReadOnly || isRealtime || isOfflineView || openDoc?.id !== currentDocId,
   })
 
   // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후 최신 flush·notifyChange·handlePrintDoc·openSearch 를 반영한다
@@ -2845,8 +2884,12 @@ export default function App() {
     openSearchRef.current = openSearch
     openPaletteRef.current = openPalette
     toggleShortcutsRef.current = toggleShortcuts
+    // isEmpty(아래 조기 반환 뒤에 선언) 대신 currentDocId 로 직접 판정한다 — 공개 보기로 조기 반환한 렌더에서는
+    // isEmpty 가 초기화되지 않아 읽으면 TDZ ReferenceError 로 앱이 죽는다 (리뷰 A1)
     toggleCommentsRef.current =
-      commentAccessValue.kind === 'none' || !currentDoc || bootPhase !== 'ready' || isEmpty ? null : toggleCommentsPanel
+      commentAccessValue.kind === 'none' || !currentDoc || bootPhase !== 'ready' || currentDocId === null
+        ? null
+        : toggleCommentsPanel
     bootPhaseRef.current = bootPhase
   })
 
@@ -3032,20 +3075,24 @@ export default function App() {
   // 레일 여분(px) — 레일이 보이는 동안만 .content-area 의 --comment-rail-extra 로 (F-505 5.6)
   const [commentRailExtra, setCommentRailExtra] = useState(0)
   // 편집기는 이 effect 보다 늦게 붙을 수 있다 — ref 가 아니라 editorHandle 상태를 따라가야 스크롤·크기를 놓치지 않는다
+  // 스크롤 위치는 버튼 자리에만 쓴다 — 선택이 있을 때만 따라간다. 늘 따라가면 스크롤 프레임마다 App 전체가 다시 그려진다 (리뷰 A14)
+  const trackFabScroll = floatingCommentAnchor !== null
   useEffect(() => {
     const scroller = editorHandle?.view.scrollDOM
-    if (!scroller) return
+    if (!scroller || !trackFabScroll) return
     function onScroll() {
       setEditorScrollTop(scroller!.scrollTop)
     }
     onScroll()
     scroller.addEventListener('scroll', onScroll, { passive: true })
+    return () => scroller.removeEventListener('scroll', onScroll)
+  }, [editorHandle, trackFabScroll])
+  useEffect(() => {
+    const scroller = editorHandle?.view.scrollDOM
+    if (!scroller) return
     const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => setEditorViewportH(scroller.clientHeight))
     ro?.observe(scroller) // observe 직후 한 번 불린다
-    return () => {
-      scroller.removeEventListener('scroll', onScroll)
-      ro?.disconnect()
-    }
+    return () => ro?.disconnect()
   }, [editorHandle])
 
   // 새 문서 대상 폴더 (F-138 3.4): 사이드바 새 문서(폴더 생략)·없는 위키링크 클릭·가져오기
@@ -3380,7 +3427,11 @@ export default function App() {
     pushHashUrl(doc.id)
     closeSidebarIfNarrow()
     // Dialog(팔레트)가 닫는 요소로 포커스를 돌리는 비동기 처리를 이겨야 한다 — openDocFromSearch 와 같은 방식
-    setTimeout(() => editorRef.current?.focus(), 0)
+    // 새 문서의 편집기가 아직 안 떴으면 editorRef 는 이전 문서 편집기다 — 거기로 포커스를 주면 글자가 이전 문서에 들어간다.
+    // 그때는 새 편집기가 마운트하며 autoFocus(focusEditorRef)로 스스로 포커스한다 (리뷰 P3)
+    setTimeout(() => {
+      if (openDocIdRef.current === doc.id) editorRef.current?.focus()
+    }, 0)
   }
 
   async function selectDoc(id: string) {

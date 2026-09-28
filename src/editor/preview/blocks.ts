@@ -7,6 +7,7 @@
 import { Prec, StateField } from '@codemirror/state'
 import type { EditorState, Extension, Range as CMRange } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap } from '@codemirror/view'
+import type { DecorationSet } from '@codemirror/view'
 import { syntaxTree } from '@codemirror/language'
 import type { SyntaxNode } from '@lezer/common'
 
@@ -256,13 +257,36 @@ function tableWidget(state: EditorState, _node: SyntaxNode, blockFrom: number, b
 type BlockMaker = (state: EditorState, node: SyntaxNode, blockFrom: number, blockTo: number, theme: string) => WidgetType
 const TARGET: Record<string, BlockMaker> = { Table: tableWidget, FencedCode: codeWidget }
 
-// 목록·인용 안인가 (F-157 2.1 "문서 최상위"). 이미지 블록만 검사한다 — 표·코드블록은 F-106 그대로 목록·인용 안에서도 위젯이 된다
+// 목록·인용 안인가 (F-157 2.1 "문서 최상위"). 이미지 블록·수식 블록·표가 검사한다 — 코드블록은 F-106 그대로 목록·인용 안에서도 위젯이 된다.
+// 표는 tableModel 이 줄 앞 `>`·`-`·들여쓰기를 모르고 칸으로 읽거나 행 추가에서 빠뜨려 구조를 깨므로 원문으로 둔다 (리뷰 E2)
 const LIST_OR_QUOTE = new Set(['Blockquote', 'BulletList', 'OrderedList', 'ListItem'])
 function isInsideListOrQuote(node: SyntaxNode): boolean {
   for (let n = node.parent; n; n = n.parent) {
     if (LIST_OR_QUOTE.has(n.name)) return true
   }
   return false
+}
+
+// 선택에 따라 위젯↔원문이 바뀔 수 있는 블록 하나 (리뷰 E6). table 이면 F-139 3.1 규칙을 탄다
+export type BlockSpan = { from: number; to: number; table: boolean }
+
+// 이 블록을 위젯으로 보이는가 — buildBlocks 와 선택만 바뀐 갱신의 건너뛰기 판정이 같은 규칙을 쓴다
+function showsWidget(state: EditorState, hasFocus: boolean, span: BlockSpan): boolean {
+  const showsSource = hasFocus && overlaps(state, span.from, span.to)
+  if (span.table) {
+    // 표는 커서·선택이 걸쳐 있어도 항상 위젯이다(F-125 2.1). 예외(F-139 3.1): 포커스가 있고
+    // 빈 커서가 표 원문 범위 안이면 "겹치면 원문" 규칙을 탄다
+    const alwaysWidget = !hasFocus || !emptyCursorInside(state, span.from, span.to)
+    return alwaysWidget || !showsSource
+  }
+  return !showsSource
+}
+
+// 블록마다 위젯이면 1, 원문이면 0 — 같으면 선택이 바뀌어도 decoration 이 같다 (리뷰 E6)
+export function blockVisibilityKey(state: EditorState, hasFocus: boolean, spans: readonly BlockSpan[]): string {
+  let key = hasFocus ? 'f' : 'n'
+  for (const span of spans) key += showsWidget(state, hasFocus, span) ? '1' : '0'
+  return key
 }
 
 // 표·코드블록·이미지 블록을 위젯 decoration 으로 치환한다. DOM 없이 동작한다.
@@ -277,6 +301,7 @@ export function buildBlocks(
   hasFocus = true,
   resolveAttachment: ResolveAttachment | undefined,
   theme: string,
+  spans?: BlockSpan[],
 ): CMRange<Decoration>[] {
   const out: CMRange<Decoration>[] = []
   syntaxTree(state).iterate({
@@ -288,8 +313,9 @@ export function buildBlocks(
         const to = state.doc.lineAt(node.to).to
         const parsed = parseImageBlock(state.doc.sliceString(from, to))
         if (!parsed) return
-        const showsSource = hasFocus && overlaps(state, from, to)
-        if (!showsSource) {
+        const span = { from, to, table: false }
+        spans?.push(span)
+        if (showsWidget(state, hasFocus, span)) {
           out.push(
             Decoration.replace({ widget: new ImageWidget(parsed, resolveAttachment), block: true }).range(from, to),
           )
@@ -297,15 +323,20 @@ export function buildBlocks(
         return false
       }
 
-      // 수식 블록 $$…$$ (F-291 4.2) — 문서 최상위 문단만(B3). 대상 아니면(null) 자식으로 내려간다(인라인 수식이 계속 동작해야 한다)
+      // 수식 블록 $$…$$ (F-291 4.2) — 문서 최상위 문단만(B3). 문단 자식은 인라인 노드뿐이라 대상이 아니어도 내려가지 않는다
+      // (인라인 수식은 이 순회가 아니라 mathPreview 가 그린다)
       if (node.name === 'Paragraph') {
-        if (isInsideListOrQuote(node.node)) return
+        if (isInsideListOrQuote(node.node)) return false
         const from = state.doc.lineAt(node.from).from
+        // 수식 블록은 문단 첫 두 글자가 `$$` 여야 한다(parseMathBlock) — 아닌 문단은 원문을 잘라 파싱하지 않는다.
+        // 문단 자식은 인라인 노드뿐이라 여기서 찾을 블록이 없다 — 내려가지 않는다 (리뷰 E6)
+        if (state.doc.sliceString(from, from + 2) !== '$$') return false
         const to = state.doc.lineAt(node.to).to
         const parsed = parseMathBlock(state.doc.sliceString(from, to))
-        if (!parsed) return
-        const showsSource = hasFocus && overlaps(state, from, to)
-        if (!showsSource) {
+        if (!parsed) return false
+        const span = { from, to, table: false }
+        spans?.push(span)
+        if (showsWidget(state, hasFocus, span)) {
           out.push(Decoration.replace({ widget: new MathBlockWidget(parsed.tex), block: true }).range(from, to))
         }
         return false
@@ -313,6 +344,7 @@ export function buildBlocks(
 
       const make = TARGET[node.name]
       if (!make) return
+      if (node.name === 'Table' && isInsideListOrQuote(node.node)) return false
 
       // block decoration 은 줄 경계에 놓여야 한다. 표·코드블록은 이미 줄 단위지만
       // 파서가 주는 범위를 그대로 믿지 않고 줄로 확장한다.
@@ -326,9 +358,9 @@ export function buildBlocks(
       // 않는다 — emptyCursorInside 가 참이면 overlaps 도 항상 참이라(같은 조건이라
       // 부분집합) 아래 `!overlaps` 분기로 자연히 원문이 노출된다.
       // 포커스가 없으면(F-146 3.2) 이 예외를 적용하지 않는다 — 항상 위젯이다
-      const alwaysWidget = node.name === 'Table' && (!hasFocus || !emptyCursorInside(state, from, to))
-      const showsSource = hasFocus && overlaps(state, from, to)
-      if (alwaysWidget || !showsSource) {
+      const span = { from, to, table: node.name === 'Table' }
+      spans?.push(span)
+      if (showsWidget(state, hasFocus, span)) {
         out.push(Decoration.replace({ widget: make(state, node.node, from, to, theme), block: true }).range(from, to))
       }
       // 어느 쪽이든 블록 내부는 더 볼 것이 없다. 표 안 인라인·코드블록 강조는 하지 않는다.
@@ -446,9 +478,18 @@ export function blockPreview({ resolveAttachment, theme }: { resolveAttachment?:
     },
   )
 
-  const field = StateField.define({
+  // deco 와 함께, 그 deco 를 만든 문서·트리에서의 블록 목록(spans)과 위젯/원문 상태(key)를 든다.
+  // stale: 조합 중 map 만 해 spans 가 낡았다 — 선택만 바뀐 갱신에서 건너뛰지 않는다 (리뷰 E6)
+  type FieldValue = { deco: DecorationSet; spans: BlockSpan[]; key: string; stale: boolean }
+  function build(state: EditorState, hasFocus: boolean): FieldValue {
+    const spans: BlockSpan[] = []
+    const deco = Decoration.set(buildBlocks(state, hasFocus, resolveAttachment, theme, spans), true)
+    return { deco, spans, key: blockVisibilityKey(state, hasFocus, spans), stale: false }
+  }
+
+  const field = StateField.define<FieldValue>({
     // EditorState.create 시점엔 view 가 없어 포커스를 알 수 없다 — false 가 맞다(autoFocus 의 focus() 가 곧 focusin·forceRecalc 로 다시 그린다, F-146 3.2)
-    create: (state) => Decoration.set(buildBlocks(state, false, resolveAttachment, theme), true),
+    create: (state) => build(state, false),
     update(value, tr) {
       // F-135 3.2: 편집 중인 칸이 있으면 모든 주 문서 트랜잭션마다(칸 자신의 입력
       // 포함) 세션이 든 칸 범위를 옮긴다. 이 재계산 함수 자체와 무관하게, 아래에서
@@ -464,12 +505,16 @@ export function blockPreview({ resolveAttachment, theme }: { resolveAttachment?:
         const treeChanged = syntaxTree(tr.startState) !== syntaxTree(tr.state)
         if (!tr.docChanged && !tr.selection && !treeChanged) return value
         if (isComposing(viewRef.current) || isCellComposing(viewRef.current)) {
-          return tr.docChanged ? value.map(tr.changes) : value
+          return tr.docChanged ? { ...value, deco: value.deco.map(tr.changes), stale: true } : value
+        }
+        // 선택만 바뀌었고 어느 블록도 위젯↔원문이 바뀌지 않으면 다시 만들어도 같은 결과다 — 문서 전체 순회·파싱을 건너뛴다 (리뷰 E6)
+        if (!tr.docChanged && !treeChanged && !value.stale) {
+          if (blockVisibilityKey(tr.state, isEditorFocused(viewRef.current), value.spans) === value.key) return value
         }
       }
-      return Decoration.set(buildBlocks(tr.state, isEditorFocused(viewRef.current), resolveAttachment, theme), true)
+      return build(tr.state, isEditorFocused(viewRef.current))
     },
-    provide: (f) => EditorView.decorations.from(f),
+    provide: (f) => EditorView.decorations.from(f, (v) => v.deco),
   })
 
   return [blockKeymap, tracker, field]

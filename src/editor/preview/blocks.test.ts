@@ -6,7 +6,8 @@ import { EditorState } from '@codemirror/state'
 import { Decoration, EditorView } from '@codemirror/view'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
-import { blockPreview, buildBlocks, codeBlockText, observeHeight, stopObservingHeight } from './blocks'
+import { blockPreview, blockVisibilityKey, buildBlocks, codeBlockText, observeHeight, stopObservingHeight } from './blocks'
+import type { BlockSpan } from './blocks'
 import type { EditorState as CMState } from '@codemirror/state'
 import type { TableModel } from './tableModel'
 
@@ -94,6 +95,34 @@ describe('buildBlocks — 생성 여부', () => {
     const state = makeState(MIXED_DOC, MIXED_DOC.length - 1, MIXED_DOC.length)
     const widgets = widgetsOf(state)
     expect(widgets).toHaveLength(2)
+  })
+})
+
+// 인용·목록 안 표는 줄 앞 `>`·`-`·들여쓰기가 표 원문에 섞여, tableModel 이 `>` 를 첫 열 칸으로
+// 읽거나 행 추가가 접두 없이 들어가 구조를 깬다 — 위젯으로 만들지 않고 원문으로 둔다 (리뷰 E2)
+describe('buildBlocks — 인용·목록 안 표 (리뷰 E2)', () => {
+  it('인용 안 표는 위젯을 만들지 않는다', () => {
+    const doc = '> | a | b |\n> |---|---|\n> | 1 | 2 |\n\nx'
+    const state = makeState(doc, doc.length)
+    expect(widgetsOf(state).some((w) => w.table)).toBe(false)
+  })
+
+  it('목록 항목 첫 줄에서 시작하는 표는 위젯을 만들지 않는다', () => {
+    const doc = '- | a | b |\n  |---|---|\n  | 1 | 2 |\n\nx'
+    const state = makeState(doc, doc.length)
+    expect(widgetsOf(state).some((w) => w.table)).toBe(false)
+  })
+
+  it('목록 안 들여쓴 표도 위젯을 만들지 않는다', () => {
+    const doc = '- x\n\n  | a | b |\n  |---|---|\n  | 1 | 2 |\n\nx'
+    const state = makeState(doc, doc.length)
+    expect(widgetsOf(state).some((w) => w.table)).toBe(false)
+  })
+
+  it('문서 최상위 표는 그대로 위젯이다', () => {
+    const doc = TABLE_DOC + '\nx'
+    const state = makeState(doc, doc.length)
+    expect(widgetsOf(state).some((w) => w.table)).toBe(true)
   })
 })
 
@@ -612,5 +641,36 @@ describe('blockPreview — 구문 트리만 바뀐 갱신 (F-134 3.8)', () => {
     // 트리만 바뀐 이 갱신도 재계산 조건에 넣어야(F-134 3.8) 뒤늦게 파싱된 코드블록의
     // 위젯이 생긴다. 넣지 않으면 다음 문서·선택 변화가 올 때까지 위젯이 안 보인다
     expect(widgetCount(noop.state)).toBe(1)
+  })
+})
+
+// 선택만 바뀐 트랜잭션은 위젯↔원문 전환이 생길 때만 다시 만든다 (리뷰 E6) — 방향키마다 문서 전체를
+// 다시 순회·파싱하지 않는다
+describe('blockPreview — 선택만 바뀐 갱신 (리뷰 E6)', () => {
+  const DOC = '문단 하나\n\n' + CODE_DOC + '\n문단 둘\n'
+
+  it('위젯 전환이 없는 선택 이동은 이전 decoration 을 그대로 쓴다', () => {
+    const state = EditorState.create({
+      doc: DOC,
+      extensions: [markdown({ base: markdownLanguage }), blockPreview({ theme: TEST_THEME })],
+    })
+    ensureSyntaxTree(state, DOC.length, 5000)
+    const parsed = state.update({}).state
+    const before = parsed.facet(EditorView.decorations).find((e) => typeof e !== 'function')
+    const moved = parsed.update({ selection: { anchor: 2 } }).state
+    const after = moved.facet(EditorView.decorations).find((e) => typeof e !== 'function')
+    expect(after).toBe(before)
+  })
+
+  it('blockVisibilityKey 는 커서가 코드블록에 들어가면 바뀌고, 문단 안 이동에는 그대로다', () => {
+    const state = makeState(DOC, 1)
+    const spans: BlockSpan[] = []
+    buildBlocks(state, true, undefined, TEST_THEME, spans)
+    expect(spans).toHaveLength(1)
+    const key = blockVisibilityKey(state, true, spans)
+    const inPara = state.update({ selection: { anchor: 3 } }).state
+    expect(blockVisibilityKey(inPara, true, spans)).toBe(key)
+    const inCode = state.update({ selection: { anchor: DOC.indexOf('console') } }).state
+    expect(blockVisibilityKey(inCode, true, spans)).not.toBe(key)
   })
 })

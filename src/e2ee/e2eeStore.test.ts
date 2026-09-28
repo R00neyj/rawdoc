@@ -694,3 +694,70 @@ describe('F-2042 U7 listCached — decode 로 감싸 내보내기', () => {
     expect('listCached' in store).toBe(false)
   })
 })
+
+// 코드 리뷰 S4 — 제목 저장과 본문 저장이 겹치면 기억에 옛 제목이 새 봉투와 짝지어 남았다
+describe('리뷰 S4 제목·본문 저장 겹침', () => {
+  it('본문 저장이 아래 저장소를 기다리는 사이 제목이 바뀌어도 새 제목이 보인다', async () => {
+    const inner = await createIdbStore(freshDbName())
+    const mk = await newMasterKey()
+    let reached = () => {}
+    const reachedGate = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let holdContent = false
+    const gated: Store = {
+      ...inner,
+      update: async (id, patch) => {
+        if (holdContent && patch.content !== undefined) {
+          reached()
+          await gate
+        }
+        return inner.update(id, patch)
+      },
+    }
+    const store = withE2ee(gated, { getMasterKey: () => mk })
+    const doc = await store.create({ title: 'T1', content: 'C1', lineEnding: 'lf', folderId: null, e2ee: true })
+
+    holdContent = true
+    const bodySave = store.update(doc.id, { content: 'C2' })
+    await reachedGate
+    await store.update(doc.id, { title: 'T2' })
+    release()
+    await bodySave
+
+    expect(await store.get(doc.id)).toMatchObject({ title: 'T2', content: 'C2', e2ee: 'open' })
+    expect((await store.list()).find((d) => d.id === doc.id)?.title).toBe('T2')
+  })
+})
+
+// 코드 리뷰 S7 — 잠그기(clearPlainCache) 전에 시작해 뒤에 끝난 문서 복호화가 열린 평문을 돌려줬다
+describe('리뷰 S7 잠근 뒤 끝난 복호화', () => {
+  it('풀던 중 잠그면 잠긴 모양을 돌려준다', async () => {
+    const inner = await createIdbStore(freshDbName())
+    let mk: CryptoKey | null = await newMasterKey()
+    let lockOnNextRead = false
+    const store = withE2ee(inner, {
+      getMasterKey: () => {
+        const current = mk
+        if (lockOnNextRead) {
+          lockOnNextRead = false
+          // 복호화가 await 에 걸린 사이 잠그기 indexes 단계가 끼어든다
+          queueMicrotask(() => {
+            store.clearPlainCache()
+            mk = null
+          })
+        }
+        return current
+      },
+    })
+    const doc = await store.create({ title: '비밀', content: '본문', lineEnding: 'lf', folderId: null, e2ee: true })
+    store.clearPlainCache()
+
+    lockOnNextRead = true
+    expect(await store.get(doc.id)).toMatchObject({ e2ee: 'locked', title: '', content: '' })
+  })
+})

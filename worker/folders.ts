@@ -4,7 +4,7 @@ import { requireUser, type AuthUser } from './auth'
 import { badBody, readJsonLimited } from './docs'
 import { MAX_BODY_BYTES, isValidFolderName, isValidUuid } from './validate'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../src/lib/folderTree'
-import { getOwnedFolder } from './access'
+import { getOwnedFolder, targetShareCleanupStatements } from './access'
 import { dayUsageStatement, deleteFoldersUsageStatement } from './usage'
 import { notifyPurge } from './docRoomRpc'
 import { folderCommentDeleteStatements } from './commentRows'
@@ -243,10 +243,13 @@ export async function deleteFolderContents(
     }
 
     const statements = []
+    const now = Date.now()
     if (ids.length > 0) {
       // 댓글 문장은 문서 행으로 폴더 안 문서를 찾으므로 문서 지우기 앞이다 (F-502 8.2)
-      statements.push(deleteFoldersUsageStatement(env.DB, user.id, ids, Date.now()), ...folderCommentDeleteStatements(env.DB, user.id, ids))
+      statements.push(deleteFoldersUsageStatement(env.DB, user.id, ids, now), ...folderCommentDeleteStatements(env.DB, user.id, ids))
     }
+    // 같은 id 로 다시 생겨도 옛 공개 링크·초대가 따라가지 않게 (리뷰 W2·W4)
+    statements.push(...targetShareCleanupStatements(env.DB, 'doc', docIds, now), ...targetShareCleanupStatements(env.DB, 'folder', ids, now))
     for (let i = 0; i < docIds.length; i += BATCH_ID_LIMIT) {
       const chunk = docIds.slice(i, i + BATCH_ID_LIMIT)
       const placeholders = chunk.map(() => '?').join(',')
@@ -291,6 +294,8 @@ export async function deleteFolderContents(
     ),
     env.DB.prepare('DELETE FROM folders WHERE id = ? AND owner_id = ?').bind(existing.id, user.id),
     dayUsageStatement(env.DB, user.id, Date.now()),
+    // 지운 폴더 것만 — 위로 올라간 문서·폴더의 링크·초대는 그대로 (리뷰 W4)
+    ...targetShareCleanupStatements(env.DB, 'folder', [existing.id], Date.now()),
   ])
 
   return { ok: true, docs: docsResult.meta.changes, folders: foldersResult.meta.changes }

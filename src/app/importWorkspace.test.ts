@@ -501,6 +501,40 @@ describe('applyImportPlan (F-282 A8)', () => {
   })
 })
 
+// 리뷰 U6 — 저장하는 본문의 줄바꿈이 문서의 lineEnding 과 어긋나면 편집기에서 한 번 저장할 때 조용히 바뀐다
+describe('applyImportPlan 줄바꿈 (리뷰 U6)', () => {
+  it('update 는 zip 본문을 기존 문서의 lineEnding 으로, create 는 계획의 lineEnding 으로 맞춘다', async () => {
+    const store = fakeStore()
+    await store.create({ title: '기존', content: '기존\n내용\n', lineEnding: 'lf', id: 'upd-1', createdAt: 1, updatedAt: 1 })
+    store.calls.create.length = 0
+    const plan: ImportPlan = {
+      kind: 'workspace',
+      folders: [],
+      docs: [
+        { action: 'create', id: 'c-lf', path: 'c-lf.md', title: '엘에프', lineEnding: 'lf', folderId: null, createdAt: 1, updatedAt: 1, pinnedAt: null },
+        { action: 'create', id: 'c-crlf', path: 'c-crlf.md', title: '씨알엘에프', lineEnding: 'crlf', folderId: null, createdAt: 1, updatedAt: 1, pinnedAt: null },
+        { action: 'update', id: 'upd-1', path: 'upd.md', title: '갱신됨', lineEnding: 'crlf', folderId: null },
+      ],
+      attachments: [],
+      warnings: [],
+      counts: { created: 2, updated: 1, skipped: 0, images: 0 },
+    }
+    await applyImportPlan({
+      plan,
+      entries: entriesFrom([
+        { name: 'c-lf.md', text: '가\r\n나\r\n' },
+        { name: 'c-crlf.md', text: '다\n라\n' },
+        { name: 'upd.md', text: '마\r\n바\r\n' },
+      ]),
+      store,
+    })
+    const created = new Map(store.calls.create.map((c) => [(c[0] as { id?: string }).id, c[0] as { content: string; lineEnding: string }]))
+    expect(created.get('c-lf')).toMatchObject({ content: '가\n나\n', lineEnding: 'lf' })
+    expect(created.get('c-crlf')).toMatchObject({ content: '다\r\n라\r\n', lineEnding: 'crlf' })
+    expect(store.calls.update[0][1]).toMatchObject({ content: '마\n바\n' })
+  })
+})
+
 // ---------- A9 실패·취소 ----------
 describe('applyImportPlan 실패·취소 (F-282 A9)', () => {
   function basePlan(): ImportPlan {

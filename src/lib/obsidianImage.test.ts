@@ -198,4 +198,16 @@ describe('listImageBlocks (F-2019.md 5.4 U3)', () => {
     const md = `${indented}\n\n`
     expect(listImageBlocks(md)).toHaveLength(0)
   })
+
+  // 리뷰 L3 — 저장소 원문은 CRLF 일 수 있다. '\n' 으로만 나누면 빈 줄이 '\r' 이 되고 후보가 '\r\n' 으로 이어져 하나도 못 찾았다
+  it('CRLF 문서에서도 블록을 찾는다 (리뷰 L3)', () => {
+    const b1 = buildImageBlock({ id: '0000000000000001', ext: 'png', alt: '설명', width: 10, align: 'center' })
+    const b2 = buildImageBlock({ id: '0000000000000002', ext: 'jpg', alt: 'b', align: 'right' })
+    const md = `${b1}\n\n글\n\n${b2}`.replace(/\n/g, '\r\n') + '\r\n'
+    const found = listImageBlocks(md)
+    expect(found.map((f) => [f.line, f.block.id, f.block.align, f.block.alt])).toEqual([
+      [0, '0000000000000001', 'center', '설명'],
+      [6, '0000000000000002', 'right', 'b'],
+    ])
+  })
 })

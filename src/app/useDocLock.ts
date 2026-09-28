@@ -49,11 +49,17 @@ export function createDocLockController(
     }
   }
 
+  // dispose 뒤에 잡기·연장이 성공했다 — 그대로 두면 서버 잠금이 만료(60초)까지 남아 남이 읽기 전용이 된다 (리뷰 Y3)
+  function releaseLate() {
+    api.unlockDoc(docId).catch(() => {})
+  }
+
   function startExtend() {
     stopExtend()
     extendTimer = setInterval(async () => {
       try {
         await api.lockDoc(docId)
+        if (disposed) releaseLate() // 연장이 dispose 의 unlock 보다 늦게 처리돼 잠금을 다시 잡았을 수 있다
       } catch (err) {
         if (err instanceof ApiError && err.kind === 'locked') loseLock(err.email)
         // 네트워크 등 다른 오류는 다음 연장 때 다시 시도한다
@@ -66,7 +72,10 @@ export function createDocLockController(
     retryTimer = setInterval(async () => {
       try {
         await api.lockDoc(docId)
-        if (disposed) return
+        if (disposed) {
+          releaseLate()
+          return
+        }
         stopRetry()
         holding = true
         callbacks.onReadOnlyChange(false)
@@ -91,7 +100,10 @@ export function createDocLockController(
   async function start() {
     try {
       await api.lockDoc(docId)
-      if (disposed) return
+      if (disposed) {
+        releaseLate()
+        return
+      }
       holding = true
       callbacks.onReadOnlyChange(false)
       startExtend()

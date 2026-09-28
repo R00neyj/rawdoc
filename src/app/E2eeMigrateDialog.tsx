@@ -59,6 +59,9 @@ export default function E2eeMigrateDialog({ open, count, userId, e2ee, onClose, 
       setPassword('')
       setError(null)
       setBusy(false)
+    } else {
+      // 닫히면 2단계를 벗어난다 — 닫힌 뒤 열쇠고리가 열려도 옮기기를 시작하지 않게 (pendingRef 는 열릴 때 비운다)
+      setStep(1)
     }
   }
 
@@ -81,6 +84,8 @@ export default function E2eeMigrateDialog({ open, count, userId, e2ee, onClose, 
     const pending = pendingRef.current
     const accountKey = e2ee.keyring.getMasterKey()
     if (!pending || !accountKey) return
+    // 한 번만 넘긴다 — onReady 는 App 렌더마다 새 함수라 deps 가 바뀌어 이 effect 가 다시 돈다. 비워 두지 않으면 옮기기가 끝없이 반복된다
+    pendingRef.current = null
     onReady({ mode: 'rewrap', localKey: pending.localKey, accountKey }, pending.bundle)
   }, [step, e2ee.status, e2ee.keyring, onReady])
 

@@ -93,12 +93,14 @@ function currentBlockText(view: EditorView, wrap: HTMLElement): { blockFrom: num
 }
 
 function dispatchAlign(view: EditorView, wrap: HTMLElement, align: ImageAlign): void {
+  if (view.state.readOnly) return // 읽기 전용이면 위젯도 문서를 바꾸지 않는다 (리뷰 E1)
   const { blockFrom, text } = currentBlockText(view, wrap)
   const change = imageAlignChange(text, blockFrom, align)
   if (change) view.dispatch({ changes: change, userEvent: 'input.image' })
 }
 
 function dispatchWidth(view: EditorView, wrap: HTMLElement, width: number): void {
+  if (view.state.readOnly) return
   const { blockFrom, text } = currentBlockText(view, wrap)
   const change = imageWidthChange(text, blockFrom, width)
   if (change) view.dispatch({ changes: change, userEvent: 'input.image' })
@@ -106,6 +108,7 @@ function dispatchWidth(view: EditorView, wrap: HTMLElement, width: number): void
 
 // 이미지 블록 3줄(+줄바꿈 1개) 을 지우는 트랜잭션 1개, 커서는 지운 자리(F-218 2.2)
 function dispatchDelete(view: EditorView, wrap: HTMLElement): void {
+  if (view.state.readOnly) return
   const { blockFrom, blockTo } = currentBlockRange(view, wrap)
   const range = imageBlockDeleteRange(view.state.doc.toString(), blockFrom, blockTo)
   view.dispatch({
@@ -226,6 +229,7 @@ function attachHandle(handleEl: HandleEl, view: EditorView, wrap: HTMLElement, b
 
   handleEl.addEventListener('pointerdown', (event) => {
     if (event.button !== 0 && event.pointerType === 'mouse') return
+    if (view.state.readOnly) return // 끌어도 저장되지 않을 크기를 화면에만 바꾸지 않는다 (리뷰 E1)
     event.preventDefault()
     event.stopPropagation()
     handleEl.setPointerCapture(event.pointerId)

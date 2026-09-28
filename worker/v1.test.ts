@@ -84,7 +84,7 @@ function makeEnv(data: {
                 return (docs.find((d) => d.id === id) as T) ?? null
               }
               if (sql.startsWith('SELECT role FROM grants')) {
-                const [targetType, targetId, email] = args as [string, string, string]
+                const [targetType, targetId, , email] = args as [string, string, string, string]
                 const row = grants.find((g) => g.target_type === targetType && g.target_id === targetId && g.grantee_email === email)
                 return (row ? { role: row.role } : null) as T | null
               }
@@ -101,9 +101,9 @@ function makeEnv(data: {
                 const [docId] = args as [string]
                 return (locks.find((l) => l.doc_id === docId) as T) ?? null
               }
-              if (sql.startsWith('SELECT * FROM share_links WHERE target_type = ? AND target_id = ? AND revoked_at IS NULL')) {
-                const [targetType, targetId] = args as [string, string]
-                return (links.find((l) => l.target_type === targetType && l.target_id === targetId && !l.revoked_at) as T) ?? null
+              if (sql.startsWith('SELECT * FROM share_links WHERE target_type = ? AND target_id = ? AND owner_id = ? AND revoked_at IS NULL')) {
+                const [targetType, targetId, ownerId] = args as [string, string, string]
+                return (links.find((l) => l.target_type === targetType && l.target_id === targetId && l.owner_id === ownerId && !l.revoked_at) as T) ?? null
               }
               if (sql.startsWith('SELECT COALESCE(SUM(size),0)')) {
                 const [ownerId] = args as [string]
@@ -226,6 +226,8 @@ function makeEnv(data: {
                 }
                 return { meta: { changes } }
               }
+              // 리뷰 W2·W4 — 지운 문서·폴더의 링크 폐기·초대 삭제
+              if (sql.startsWith('UPDATE share_links SET revoked_at') || sql.startsWith('DELETE FROM grants WHERE target_type')) return { meta: { changes: 0 } }
               if (sql.startsWith('UPDATE users SET')) return { meta: { changes: 1 } }
               throw new Error(`unhandled run sql: ${sql}`)
             },
