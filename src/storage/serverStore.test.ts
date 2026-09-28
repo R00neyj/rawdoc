@@ -2587,3 +2587,70 @@ describe('리뷰 S3 충돌 뒤 남은 편집', () => {
     expect(store.syncState?.pending).toBe(0)
   })
 })
+
+describe('리뷰 S6 목록 요청 중 만들어진 문서·폴더', () => {
+  it('서버 목록을 받는 사이에 createDoc 이 성공해도 list() 가 그 문서를 캐시에서 지우지 않는다', async () => {
+    const server = makeFakeServer()
+    let releaseList = () => {}
+    let gateList = true
+    const gate = new Promise<void>((resolve) => {
+      releaseList = resolve
+    })
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      if ((init.method ?? 'GET') === 'GET' && path === '/api/docs' && gateList) {
+        gateList = false
+        // 서버는 이 시점의 목록을 답한다 — 응답이 늦게 도착할 뿐
+        const res = await server.fetchImpl(url, init)
+        await gate
+        return res
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const listing = store.list()
+    await tick()
+    const doc = await store.create({ title: 'N', content: 'new', lineEnding: 'lf' })
+    await tick(20)
+    expect(server.docs.has(doc.id)).toBe(true)
+    expect(store.syncState?.pending).toBe(0)
+    releaseList()
+    const listed = await listing
+
+    expect(listed.some((d) => d.id === doc.id)).toBe(true)
+    expect((await store.listCached()).docs.some((d) => d.id === doc.id)).toBe(true)
+  })
+
+  it('listFolders 도 같다 — 요청 중에 성공한 createFolder 는 지우지 않는다', async () => {
+    const server = makeFakeServer()
+    let releaseList = () => {}
+    let gateList = true
+    const gate = new Promise<void>((resolve) => {
+      releaseList = resolve
+    })
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      if ((init.method ?? 'GET') === 'GET' && path === '/api/folders' && gateList) {
+        gateList = false
+        const res = await server.fetchImpl(url, init)
+        await gate
+        return res
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const listing = store.listFolders()
+    await tick()
+    const folder = await store.createFolder({ name: 'F' })
+    await tick(20)
+    expect(server.folders.has(folder.id)).toBe(true)
+    releaseList()
+    const folders = await listing
+
+    expect(folders.some((f) => f.id === folder.id)).toBe(true)
+  })
+})

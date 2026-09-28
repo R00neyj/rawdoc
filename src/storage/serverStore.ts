@@ -232,8 +232,12 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     summariesPromise: Promise<api.ServerDocSummary[] | null>
     // 이번 list() 가 받기로 한 문서 id → 서버 버전. summaries 처리 뒤 채워진다
     targetsPromise: Promise<Map<string, number>>
+    // 요청이 나간 뒤 createDoc 이 성공한 문서 — 서버 목록에도 outbox 에도 없어 지워지지 않게 지킨다 (리뷰 S6)
+    createdDocIds: Set<string>
   }
   const activeListSessions = new Set<ListSession>()
+  // listFolders() 마다 하나 — 요청이 나간 뒤 createFolder 가 성공한 폴더 (리뷰 S6)
+  const activeFolderListCreated = new Set<Set<string>>()
 
   // ----- F-405 5.2·5.3 — 금고 문서 10초 간격·잠긴 동안 충돌 대기 -----
   const e2eeLastResponseAt = new Map<string, number>() // 문서 id → 마지막 응답 시각(페이지 메모리만)
@@ -710,6 +714,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           })
           recordE2eeResponse(entry)
           await putDocFromResponse(created, entry.key)
+          for (const session of activeListSessions) session.createdDocIds.add(entry.docId)
           await cache.removeOutbox(entry.key)
           break
         }
@@ -744,6 +749,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         case 'createFolder': {
           const created = await api.createFolder({ id: entry.folderId, name: entry.name, parentId: entry.parentId, ...(entry.e2ee ? { e2ee: true as const } : {}) })
           await cache.putFolder(userId, created)
+          for (const createdIds of activeFolderListCreated) createdIds.add(entry.folderId)
           await cache.removeOutbox(entry.key)
           break
         }
@@ -1037,7 +1043,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       const targetsPromise = new Promise<Map<string, number>>((resolve) => {
         resolveTargets = resolve
       })
-      const session: ListSession = { summariesPromise, targetsPromise }
+      const session: ListSession = { summariesPromise, targetsPromise, createdDocIds: new Set() }
       activeListSessions.add(session)
 
       try {
@@ -1066,7 +1072,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           const serverIds = new Set(summaries.map((d) => d.id))
           // 버전 0 인 캐시 행은 서버에 간 적이 없다 — 거절된 새 문서도 "이 기기에는 남아 있습니다" 대로 지키고 (리뷰 S2)
           const localOnlyIds = (await cache.getDocs(userId)).filter((d) => d.version === 0).map((d) => d.id)
-          const keepIds = new Set([...serverIds, ...pendingDocIds, ...localOnlyIds])
+          const keepIds = new Set([...serverIds, ...pendingDocIds, ...localOnlyIds, ...session.createdDocIds])
           for (const id of excludedDocIds) keepIds.delete(id)
           await cache.deleteDocsNotIn(userId, keepIds)
 
@@ -1313,10 +1319,13 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     // list() 와 같은 방식 — 서버 목록으로 캐시를 맞추고 캐시에서 돌려준다 (F-207.md 2.2)
     async listFolders() {
       let serverFolders: api.ServerFolder[] | null = null
+      const createdDuringRequest = new Set<string>()
+      activeFolderListCreated.add(createdDuringRequest)
       try {
         serverFolders = await api.listFolders()
         patchState({ online: true })
       } catch (err) {
+        activeFolderListCreated.delete(createdDuringRequest)
         if (!(err instanceof ApiError)) throw err
         if (err.kind === 'unauthorized') patchState({ signedOut: true })
         if (err.kind === 'network') patchState({ online: false })
@@ -1331,7 +1340,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         const moveUpParentIds = pendingMoveUpParentIds(outbox)
 
         const serverIds = new Set(serverFolders.map((f) => f.id))
-        const keepIds = new Set([...serverIds, ...pendingFolderIds])
+        const keepIds = new Set([...serverIds, ...pendingFolderIds, ...createdDuringRequest])
+        activeFolderListCreated.delete(createdDuringRequest)
         for (const id of excludedFolderIds) keepIds.delete(id)
         await cache.deleteFoldersNotIn(userId, keepIds)
 
