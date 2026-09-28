@@ -5,7 +5,7 @@ import type { ShareDoc } from '../lib/shareCodec'
 import type { DocMeta } from './docMeta'
 import type { NoticeWithAction } from './NoticeBar'
 import type { UseDocCommentsResult } from './useDocComments'
-import { formatHash } from './hashRoute'
+import { formatHash, formatMapHash } from './hashRoute'
 import { decideHashNav } from './hashNav'
 import { setPref } from './prefs'
 import { ancestorsOfDoc } from '../lib/folderTree'
@@ -115,6 +115,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
           const anchorId = nextCenterId && docsRef.current.some((d) => d.id === nextCenterId) ? nextCenterId : null
           setCurrentDocId(anchorId)
           if (anchorId) setPref('md.lastDocId', anchorId)
+          else if (nextCenterId) history.replaceState(null, '', `${location.pathname}${location.search}${formatMapHash(null)}`) // 없는 중심 id 를 주소에 남기지 않는다 (F-2059 D13)
           setMapRoute({ centerDocId: anchorId, returnDocId: anchorId })
         })()
         return

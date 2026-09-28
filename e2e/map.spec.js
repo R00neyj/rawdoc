@@ -1865,3 +1865,13 @@ test.describe('지도 이어서 조작 스모크', () => {
     expect(errors).toEqual([])
   })
 })
+
+test.describe('F-2059 D13 지도 중심 없음', () => {
+  test('목록에 없는 문서 id 로 #/map/{id} — 지도는 중심 없이 열리고 주소는 #/map', async ({ page }) => {
+    await openApp(page)
+    await page.evaluate(() => {
+      location.hash = '#/map/없는-문서'
+    })
+    await expect(page).toHaveURL(/#\/map$/)
+  })
+})

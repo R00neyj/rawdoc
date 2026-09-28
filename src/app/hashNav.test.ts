@@ -116,9 +116,9 @@ describe('decideHashNav (F-2071 7.1)', () => {
     })
   })
 
-  it('U20 인식 못 한 해시', () => {
+  it('U20 인식 못 한 해시 — 홈에서도 첫 문서 + 알림 갈래 (F-2059 D13)', () => {
     expect(nav({ hash: '#abc' })).toEqual({ kind: 'open', home: false, docId: null, threadId: null })
-    expect(nav({ hash: '#abc', currentDocId: null })).toEqual(IGNORE)
+    expect(nav({ hash: '#abc', currentDocId: null })).toEqual({ kind: 'open', home: false, docId: null, threadId: null })
   })
 })
 
