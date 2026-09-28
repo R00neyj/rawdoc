@@ -35,6 +35,8 @@ src/
     exportActions.ts     문서·작업공간·볼트 내보내기와 인쇄 배선, 매 렌더 부르는 팩토리 (F-2065)
     useSidebarLayout.ts   사이드바 접힘·좁은 창·너비·폴더 펼침(md.openFolders) (F-126, F-159, F-2066)
     useFolderActions.ts   삭제 확인·폴더 만들기/이름/이동·여러 항목 삭제·이동·상단 고정·폴더로 이동 (F-126, F-132, F-242, F-255, F-2067)
+    useImportFlow.ts     .md·zip·볼트 가져오기, OS 파일 열기, 창 전체 끌어놓기, 이미지 붙여넣기·끌어놓기 저장 (F-114, F-119, F-145, F-156, F-231, F-282, F-2019, F-2068)
+    importResult.ts      가져오기 뒤 편집기 다시 마운트 판정 — 실시간 경로는 건너뜀 (F-305 10.1, F-2068)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
