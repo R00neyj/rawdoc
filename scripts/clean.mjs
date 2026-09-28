@@ -1,7 +1,7 @@
 // 빌드 찌꺼기 청소 — e2e 슬롯(dist-f153, dist-probe …)이 세션마다 쌓인다.
 // 2026-09-21 에 43개 548MB 가 모여 있었다. 전부 .gitignore 대상이라 지워도 다시 빌드하면 된다.
 //
-//   npm run clean            dist-* 슬롯 + test-results/ + playwright-report/
+//   npm run clean            dist-* 슬롯 + test-results(-*)/ + playwright-report/
 //   npm run clean -- --all   위에 더해 dist/ 와 dist-spike/ 까지
 //   npm run clean -- --force 최근 10분 안에 바뀐 것도 지운다 (기본은 건너뛴다)
 //
@@ -23,7 +23,7 @@ const KEEP = all ? [] : ['dist', 'dist-spike']
 const targets = readdirSync('.', { withFileTypes: true })
   .filter((e) => e.isDirectory())
   .map((e) => e.name)
-  .filter((n) => (/^dist(-|$)/.test(n) || n === 'test-results' || n === 'playwright-report') && !KEEP.includes(n))
+  .filter((n) => (/^dist(-|$)/.test(n) || /^test-results(-|$)/.test(n) || n === 'playwright-report') && !KEEP.includes(n))
   .sort()
 
 let freed = 0

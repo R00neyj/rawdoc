@@ -12,6 +12,8 @@ export default defineConfig({
   testDir: 'e2e',
   fullyParallel: true,
   reporter: 'list',
+  // 슬롯마다 따로 — 공유 test-results/ 는 실행 시작 때 지워져 다른 슬롯의 trace 복사가 ENOENT 로 실패함
+  outputDir: dist === 'dist' ? 'test-results' : `test-results-${dist}`,
   timeout: 30_000,
   use: {
     baseURL,
