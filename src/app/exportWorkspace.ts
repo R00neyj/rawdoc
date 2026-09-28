@@ -351,7 +351,7 @@ export type WorkspaceExportSourceStore = WorkspaceExportStore & {
   listFolders(): Promise<Folder[]>
 }
 
-// 진입점 — 목록 읽기 → 계획 → zip → 내려받기 → 알림. App.tsx 는 flush 대기·오프라인 판정만 하고 이 함수를 부른다 (3.1·3.8)
+// 진입점 — 목록 읽기 → 계획 → zip → 내려받기 → 알림. exportActions.ts 는 flush 대기·오프라인 판정만 하고 이 함수를 부른다 (3.1·3.8)
 export async function downloadWorkspaceExport({
   store,
   scope,

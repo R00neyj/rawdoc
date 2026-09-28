@@ -474,3 +474,50 @@ test.describe('F-2064 공유 관리 절', () => {
     await expect(page).toHaveURL(/\/api\/login\?return=%23%2Fshares$/)
   })
 })
+
+// exportWorkspace.spec.js 의 createFolder 와 같은 절차
+async function createFolder(page, name) {
+  await page.getByRole('button', { name: '새 폴더', exact: true }).click()
+  const renameInput = page.locator('.tree-rename-input')
+  await expect(renameInput).toBeFocused()
+  await renameInput.fill(name)
+  await page.keyboard.press('Enter')
+  return page.locator('.tree-row').filter({ has: page.locator('.tree-toggle') }).first()
+}
+
+async function openFolderMenu(folderRow) {
+  const menuBtn = folderRow.locator('.item-menu-btn')
+  await menuBtn.focus()
+  await menuBtn.click()
+}
+
+test.describe('F-2065 내보내기 구역', () => {
+  test('F-2065 C1 오프라인에서 폴더 ⋯ 내보내기 두 개는 error 알림만 띄운다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    const server = await fakeServer(page)
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    const folderRow = await createFolder(page, '오프라인폴더')
+    await expect(folderRow).toContainText('오프라인폴더')
+
+    let downloads = 0
+    page.on('download', () => {
+      downloads++
+    })
+    server.setOffline(true)
+    // setOffline 만으로는 syncState.online 이 false 가 되지 않는다 (F-281 A14 와 같은 이유)
+    await page.evaluate(() => window.dispatchEvent(new Event('offline')))
+
+    const errorMessage = page.locator('.notice--error .notice-message')
+    await openFolderMenu(folderRow)
+    await page.locator('.item-menu-list:not([inert])').getByRole('menuitem', { name: '폴더 내보내기' }).click()
+    await expect(errorMessage).toHaveText('온라인일 때 내보낼 수 있습니다.')
+    await page.getByRole('button', { name: '알림 닫기' }).click()
+    await expect(errorMessage).toHaveCount(0)
+
+    await openFolderMenu(folderRow)
+    await page.locator('.item-menu-list:not([inert])').getByRole('menuitem', { name: '옵시디언 볼트로 내보내기' }).click()
+    await expect(errorMessage).toHaveText('온라인일 때 내보낼 수 있습니다.')
+    expect(downloads).toBe(0)
+  })
+})
