@@ -8,6 +8,7 @@
 // 보정 참고) 열 추가·칸 편집 계산에 쓰기 불편하다. 여기 파서는 빈 칸도 항상
 // cells 배열의 자리를 차지하게 만들어(from===to, text='') 그 불편을 없앤다.
 import type { ChangeSpec } from '@codemirror/state'
+import { diffText } from '../../lib/textRebase'
 
 export type Cell = {
   from: number
@@ -390,4 +391,13 @@ export function deleteTable(table: TableModel): ChangeSpec[] {
   const lastRow = bodyRows.length > 0 ? bodyRows[bodyRows.length - 1] : table.delimiterRow
   if (!lastRow) return []
   return [{ from: header.line, to: lastRow.to, insert: '' }]
+}
+
+// 칸 원문 current(문서 from 에서 시작)를 next 로 바꾸는 최소 변경 — 공통 앞뒤를 빼고 바뀐
+// 구간만 돌려준다(같으면 null). 칸 전체를 갈아 끼우면 Yjs 병합에서 상대의 같은 칸 삽입이
+// 칸 앞으로 밀리거나 상대가 지운 글자가 되살아난다 (리뷰 E3)
+export function cellWriteChange(current: string, from: number, next: string): { from: number; to: number; insert: string } | null {
+  const edit = diffText(current, next)
+  if (!edit) return null
+  return { from: from + edit.from, to: from + edit.to, insert: edit.insert }
 }

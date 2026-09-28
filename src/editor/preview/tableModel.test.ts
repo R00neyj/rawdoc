@@ -6,6 +6,7 @@ import {
   addRow,
   advanceCellRange,
   cellEdit,
+  cellWriteChange,
   classifySelection,
   clearCells,
   deleteColumns,
@@ -17,6 +18,7 @@ import {
   unescapeCell,
 } from './tableModel'
 import type { ChangeSpec } from '@codemirror/state'
+import * as Y from 'yjs'
 
 // ChangeSpec[] 를 실제 문서에 적용해 결과 문자열을 얻는다
 function apply(doc: string, changes: ChangeSpec[]): string {
@@ -534,5 +536,53 @@ describe('deleteTable — 표 전체 삭제 (F-165 2.2 #1)', () => {
     const table = parseTable(tableText, prefix.length)
     const result = apply(fullDoc, deleteTable(table))
     expect(result).toBe(prefix + suffix)
+  })
+})
+
+// 칸 입력을 주 문서에 쓸 때 칸 전체가 아니라 바뀐 구간만 바꾼다 (리뷰 E3) — 칸 전체를
+// 지우고 다시 넣으면 실시간 동시 편집에서 상대의 같은 칸 삽입·삭제가 사라지거나 섞인다
+describe('cellWriteChange (리뷰 E3)', () => {
+  it('끝에 한 글자를 치면 그 자리 삽입 하나다', () => {
+    expect(cellWriteChange('abc', 10, 'abcd')).toEqual({ from: 13, to: 13, insert: 'd' })
+  })
+
+  it('가운데 글자를 지우면 그 글자만 지운다', () => {
+    expect(cellWriteChange('abc', 10, 'ac')).toEqual({ from: 11, to: 12, insert: '' })
+  })
+
+  it('같으면 null', () => {
+    expect(cellWriteChange('abc', 10, 'abc')).toBeNull()
+  })
+
+  it('빈 칸에 쓰면 전체 삽입', () => {
+    expect(cellWriteChange('', 4, 'x')).toEqual({ from: 4, to: 4, insert: 'x' })
+  })
+
+  // Y.Text 두 개로 동시 편집을 흉내 낸다 — 상대가 b 뒤에 X 를 넣는 동안 내가 끝에 d 를 친다
+  function mergeWith(mine: (t: Y.Text) => void, theirs: (t: Y.Text) => void): string {
+    const a = new Y.Doc()
+    a.getText().insert(0, '| abc |')
+    const b = new Y.Doc()
+    Y.applyUpdate(b, Y.encodeStateAsUpdate(a))
+    mine(a.getText())
+    theirs(b.getText())
+    Y.applyUpdate(a, Y.encodeStateAsUpdate(b))
+    Y.applyUpdate(b, Y.encodeStateAsUpdate(a))
+    expect(a.getText().toString()).toBe(b.getText().toString())
+    return a.getText().toString()
+  }
+
+  function applyMine(t: Y.Text): void {
+    const change = cellWriteChange('abc', 2, 'abcd')!
+    t.delete(change.from, change.to - change.from)
+    t.insert(change.from, change.insert)
+  }
+
+  it('상대의 같은 칸 삽입과 섞이지 않는다', () => {
+    expect(mergeWith(applyMine, (t) => t.insert(4, 'X'))).toBe('| abXcd |')
+  })
+
+  it('상대의 같은 칸 삭제가 되살아나지 않는다', () => {
+    expect(mergeWith(applyMine, (t) => t.delete(3, 1))).toBe('| acd |')
   })
 })

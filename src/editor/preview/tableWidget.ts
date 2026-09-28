@@ -16,6 +16,7 @@ import {
   addColumn,
   addRow,
   advanceCellRange,
+  cellWriteChange,
   cellEdit,
   classifySelection,
   clearCells,
@@ -183,8 +184,10 @@ function pushCellEdit(mainView: EditorView, row: number, col: number, value: str
     if (trailingBackslashes % 2 === 1 && mainView.state.doc.sliceString(to, to + 1) === '|') {
       insert += ' '
     }
-    if (mainView.state.doc.sliceString(from, to) !== insert) {
-      mainView.dispatch({ changes: { from, to, insert }, userEvent: 'input.table' })
+    // 칸 전체가 아니라 바뀐 구간만 보낸다 — 실시간 동시 편집에서 상대의 같은 칸 편집을 지키려고 (리뷰 E3)
+    const change = cellWriteChange(mainView.state.doc.sliceString(from, to), from, insert)
+    if (change) {
+      mainView.dispatch({ changes: change, userEvent: 'input.table' })
       entry.range = advanceCellRange(entry.range, insert)
     }
   } else {
