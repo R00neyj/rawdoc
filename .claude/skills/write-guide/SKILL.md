@@ -5,6 +5,8 @@ description: Writes one Rawdoc guide article (content/guides/{slug}.md) and its 
 
 # write-guide
 
+Korean copy: `.claude/ko/skills/write-guide/SKILL.ko.md` (snapshot, for humans). This file is the source of truth.
+
 Guide articles get no spec (`specs/ia.md` 6.1 R9, user instruction 2026-09-27: "명세 없이 바로 쓰는 걸로 바꿔"). Four articles written with specs (F-2045~F-2048) showed the quality came from the automatic tests and from checking every sentence against the code, not from the spec document.
 
 ## 1. Main decides first

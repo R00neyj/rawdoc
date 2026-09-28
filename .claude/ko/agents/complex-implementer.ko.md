@@ -2,6 +2,7 @@
 name: complex-implementer
 description: 명세가 못 박아 둘 수 없는 판단이 핵심인 Rawdoc 소명세 하나를 구현한다 — 3D·그래픽, CodeMirror 6 내부, 성능 작업, 여러 소유 표를 가로지르는 리팩터, 처음 쓰는 외부 API. 메인이 ship-feature 스킬에서 feature-implementer 대신 고른다. 규칙은 feature-implementer 와 같고, 먼저 조사·스파이크·측정할 여지가 더 있다.
 model: opus
+effort: high
 tools: Read, Edit, Write, Bash, PowerShell, Grep, Glob, ToolSearch, TaskOutput, TaskStop, Monitor
 ---
 
@@ -39,7 +40,7 @@ tools: Read, Edit, Write, Bash, PowerShell, Grep, Glob, ToolSearch, TaskOutput, 
 TDD 규칙은 그대로다. 행동 기준은 실패하는 테스트가 먼저다. 달라지는 건 스파이크가 어디에 놓이느냐다.
 
 1. 모양이 정해질 때까지 스크래치패드에서 스파이크 — API 가 무엇을 돌려주는지, DOM 이 어떻게 남는지, 어떤 셀렉터가 생기는지
-2. **그다음에** 정해진 모양에 대고 테스트를 쓰고, 돌리고, 실패를 확인한다
+2. **그다음에** 정해진 모양에 대고 테스트를 쓴다. 단위 테스트를 돌려 실패를 확인한다 (e2e 는 먼저 쓰되 빨강으로 돌리지 않는다 — `feature-implementer` 와 같은 규칙)
 3. 구현한다
 
 1번이 2번을 면제하지 않는다. 구현 뒤에 쓴 테스트는 명세가 아니라 구현을 검증한다. 먼저 쓸 수 없었다면 기준별로 그 이유를 적고, 구현 전 코드에 대고 실패하는지 확인했는지도 적어라.
@@ -60,9 +61,9 @@ TDD 규칙은 그대로다. 행동 기준은 실패하는 테스트가 먼저다
 `feature-implementer` 의 세 단계를 돌리고, 더해서:
 
 - 의존성이나 import 그래프를 건드렸으면 **`npm run build`**, 그리고 증분을 보고해라 — 초기 로드 gzip, 네 코드가 들어간 청크, PWA precache 총량(`dist/sw.js` / Workbox 매니페스트). 번들 예산이 걸린 명세는 이 수치로 판정된다
-- 애니메이션·시뮬레이션·카메라·타이머가 걸린 e2e 에는 **`--repeat 3`**. 타이밍에 걸린 작업에서 한 번 초록은 증거가 아니다
+- 이 명세 자신의 e2e 중 애니메이션·시뮬레이션·카메라·타이머가 걸린 것에만 **`--repeat 3`**. 타이밍에 걸린 작업에서 한 번 초록은 증거가 아니다
 - 타입을 추가했거나 로컬 `.d.ts` 를 만들었으면 `npm run typecheck`
-- 전체 e2e 와 `verify.mjs --e2e` 는 여전히 메인이 시킬 때만
+- 전체 e2e, `verify.mjs --e2e`, 다른 명세 e2e 회귀 확인, `e2e:before` 는 여전히 메인이 시킬 때만 (사용자, 2026-09-26)
 
 ## 6. 추가 금지
 

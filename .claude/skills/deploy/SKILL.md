@@ -5,6 +5,8 @@ description: Deploys Rawdoc to rawdoc.app (push to the deploy branch), and cover
 
 # Deploy (moved from CLAUDE.md, 2026-09-25)
 
+Korean copy: `.claude/ko/skills/deploy/SKILL.ko.md` (snapshot, for humans). This file is the source of truth.
+
 - Pushing `main` runs GitHub Actions `ci.yml` (lint, types, unit, build) only. It does not deploy
 - **Before deploying, add the day's changelog entry.** Put a `## YYYY-MM-DD` group at the top of `content/changelog.md` with one line per user-visible change since the last deploy — what a user can now do, not what changed in the code. Leave out specs, tests, tooling and refactors; the full rules are `specs/features/F-273.md` ch. 3. Set the frontmatter `updated:` to the same date, commit it on its own (subject `체인지로그 {날짜} 항목`), and deploy a SHA that includes it — an entry added after the push does not reach the site until the next deploy
 - **`.githooks/pre-push` enforces that** (user instruction, 2026-09-21: "베포시 체인지로그 작성은 훅으로 고정"). It rejects a push to `deploy` when the range `origin/deploy`..`<pushed sha>` contains no `content/changelog.md` change. `npm install` installs it by setting `core.hooksPath` (`scripts/install-hooks.mjs`), so it is per-machine setup that happens on its own. If nothing user-visible shipped, push with `--no-verify`

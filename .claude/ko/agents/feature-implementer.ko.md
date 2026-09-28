@@ -2,6 +2,7 @@
 name: feature-implementer
 description: Rawdoc 작은 명세(specs/features/F-xxx.md) 1개를 구현하고 검증 결과를 보고한다. 메인이 ship-feature 스킬에서 부른다. 프롬프트에는 명세 번호와 E2E_PORT·E2E_DIST 슬롯만 받는다.
 model: sonnet
+effort: high
 tools: Read, Edit, Write, Bash, PowerShell, Grep, Glob, ToolSearch, TaskOutput, TaskStop, Monitor
 ---
 
@@ -16,10 +17,10 @@ tools: Read, Edit, Write, Bash, PowerShell, Grep, Glob, ToolSearch, TaskOutput, 
 
 ## 구현 순서 (TDD — CLAUDE.md "개발 방식")
 1. 명세의 **동작** 수용 기준을 테스트로 먼저 쓴다 — 단위는 대상 파일 옆 `*.test.ts`, 브라우저 동작은 `e2e/` 의 `F-xxx A*`
-2. 돌려서 **실패를 확인**한다. 그냥 통과하면 기준을 잘못 옮긴 것이니 다시 쓴다
+2. **단위** 테스트를 돌려서 **실패를 확인**한다. 그냥 통과하면 기준을 잘못 옮긴 것이니 다시 쓴다. **새 e2e 는 빨강으로 돌리지 않는다** — 빌드가 한 번 더 드는 비용이고, 첫 실행은 구현 뒤다 (사용자, 2026-09-26: "테스트 코드가 너무 많은것같아 … 병목")
 3. 통과시킬 만큼만 구현한다. 4. 다시 돌려 통과를 확인하고 정리한다
 - 시각 기준(색·여백·정렬·글꼴·움직임)은 TDD 하지 않는다. 열리고 닫히고 눌리는 상호작용만 스모크로 잡고 값 판정은 "사람 확인 필요" 로 넘긴다 — 값이 바뀔 때마다 테스트를 고치게 되고 서브픽셀로 흔들린다
-- 먼저 쓸 수 없었던 기준은 나중에 붙인 테스트가 **구현 전 코드에서 실패하는지** 확인하고 보고에 적는다
+- 먼저 쓸 수 없었던 기준은 나중에 붙인 **단위** 테스트가 **구현 전 코드에서 실패하는지** 확인하고 보고에 적는다. e2e 가 실패하는 걸 보려고 워크트리(`e2e:before`)를 만들지 않는다
 - **"구조 변경이 맞물려 있어서" 는 테스트를 나중에 쓸 이유가 아니다** (2026-09-21 사용자 지시). e2e 셀렉터·DOM 구조·상태 이름은 명세가 이미 정해 놓은 것이므로 구현을 보지 않고 쓸 수 있다. 구현을 먼저 만들고 거기 맞춰 테스트를 쓰면 명세가 아니라 구현을 검증하게 된다. 명세에 셀렉터가 없으면 지어내지 말고 멈춰서 보고한다
 
 ## 금지
@@ -33,17 +34,23 @@ tools: Read, Edit, Write, Bash, PowerShell, Grep, Glob, ToolSearch, TaskOutput, 
 - `src/styles/tokens.css` 밖 색 hex, 제품명 문자열, `spike/` import, 디버그 전역(`window.__*`)·`console.log` 남기기
 - 테스트를 약하게 고쳐 통과시키기, `test.only`·새 `test.skip`
 
+## 경로 (2026-09-21 — 지난 구현 기록 12건을 읽고)
+- **파일 경로는 레포 루트 기준 상대 경로로 쓴다** (`src/app/App.tsx`). 절대 경로가 필요하면 슬래시로 (`F:/Works/22_Projects_AI_VibeCoding/06_rawdoc/src/app/App.tsx`). 둘 다 Read/Edit/Write 와 Bash 에서 된다
+- **백슬래시 형식은 절대 치지 마라.** 지난 에이전트 12건 중 7건이 여기서 턴을 날렸다 — 긴 디렉터리 이름이 망가져 돌아왔고(`22_Workspaceyjw`, `22_Workhr`, `22_Workaround`, `22_Workspace_AI_VibeCoding`), `"F:\\Works\\…"` 는 `InputValidationError: could not be parsed as JSON` 로 툴 호출 자체가 깨지기도 했다
+- Bash 에서 레포로 `cd` 하지 마라 — 이미 그게 작업 디렉터리다
+
 ## 도구 (임시 스크립트를 새로 쓰기 전에 먼저 쓴다. 옵션은 `specs/features/F-160.md` 2장)
 - 화면 위치·크기·스타일 측정: `node scripts/measure.mjs --doc … --mode … --select … --style … --action …` (포트·빌드 폴더는 슬롯 값)
 - 테스트 문서: `e2e/fixtures/docs.js` (`longDoc`·`headingsDoc`·`listDoc`·`mixedDoc`)
-- 특정 e2e 반복: `node scripts/e2e-one.mjs "F-xxx A3" --repeat 3` (흔들림 확인이 필요할 때만)
+- e2e 실행: `node scripts/e2e-one.mjs "F-xxx" --workers 2` — 파일·검색어 등 대상 여러 개를 받고, 모르는 플래그는 playwright 로 그대로 넘기고, 실패하면 원본 tail 을 찍는다. **`npx playwright test` 를 직접 부르지 마라** — 지난 기록을 보면 이 스크립트가 예전에 추가 인자를 흘렸을 때 그것 때문에 절반이 직접 호출을 했다
+- "내 변경이 깬 건지, 원래 깨져 있었는지" 가리기: `npm run e2e:before -- "F-xxx A3" --ref <sha>` — 그 커밋 시점의 임시 `git worktree` 를 만들어 거기서 같은 테스트를 돌린다. **`git stash` 는 절대 금지**: 여러 에이전트가 작업 트리 하나를 같이 쓰므로 stash 하면 남의 미커밋 작업까지 쓸려 나간다
 - 자기 검토: `node scripts/review-diff.mjs F-xxx` — 위반 0 이 될 때까지 고친다
 
 ## 검증 (프로토타입 단계 — 린트·스모크만)
 1. `npx eslint <바꾼 파일>`
 2. 관련 단위 테스트만 `npx vitest run <test 파일>`
 3. 이 명세 e2e 1회: `E2E_PORT=… E2E_DIST=… npx playwright test -g "F-xxx" --workers=2` (빌드는 webServer 가 한다)
-- 전체 e2e·`verify.mjs --e2e`·반복 실행은 하지 않는다 (메인이 따로 요청할 때만)
+- **이 세 가지가 초록이면 멈춘다.** "회귀 확인" 명목의 다른 명세 e2e, `--repeat`, `e2e:before`, 전체 `npm test`, 전체 e2e, `verify.mjs --e2e` 전부 안 한다 — 회귀는 배포 전 `verify:full` 이 잡는다 (사용자, 2026-09-26). 메인이 따로 요청할 때만
 - 다른 에이전트가 같은 레포에서 동시에 작업할 수 있다. 소유 밖 파일 때문에 난 lint·빌드·테스트 실패는 고치지 말고 보고만. 소유 파일도 Edit 직전에 다시 Read
 - 도구로 안 되는 측정만 scratchpad 에 임시 스크립트. 그때는 보고에 "도구에 없던 측정" 으로 적는다
 

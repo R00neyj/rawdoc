@@ -2,7 +2,7 @@
 
 A source-preserving Markdown collaboration tool. Typing `##` does not make the marks disappear, and exporting to `.md` gives back the exact bytes the user typed.
 
-> Korean translation: `CLAUDE.ko.md` (snapshot as of 2026-09-21, for humans to read).
+> Korean translation: `CLAUDE.ko.md` (snapshot as of 2026-09-28, for humans to read).
 > **This file is the source of truth.** Edit rules here; the Korean copy does not follow automatically.
 > UI strings, user quotes, and test selectors stay in Korean everywhere — they are product text, not prose.
 
@@ -55,7 +55,7 @@ This overrides "match the surrounding code" — older multi-line blocks are not 
 | `src/` | The web app itself | Per spec |
 | `cli/` | npm-published CLI (F-2021). `src/`·`worker/` never import from here | Per spec |
 | `.claude/agents/`, `.claude/skills/` | Agent and skill definitions. **English is the source of truth** | As rules change |
-| `.claude/ko/` | Korean snapshots of the above (2026-09-21). Not scanned as agents or skills, so they never register twice | Never auto-synced |
+| `.claude/ko/` | Korean snapshots of the above (2026-09-28). Not scanned as agents or skills, so they never register twice | Never auto-synced |
 
 Reading order before starting work: this file → `specs/product.md` → `specs/ia.md` → `specs/design.md` → the relevant `specs/features/F-xxx.md`
 
