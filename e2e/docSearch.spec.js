@@ -208,7 +208,7 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
     await expect(searchBtn()).toHaveCount(1)
   })
 
-  test('F-287 A16 좁은 창 Esc 회귀 — 검색만 닫히고 사이드바는 열린 채', async ({ page }) => {
+  test('F-287 A16 좁은 창 Esc 회귀 — 검색을 열면 사이드바가 닫히고 Esc 뒤에도 닫힌 채', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '내용\n' })
     await resizeWindow(page, 900)
@@ -218,10 +218,13 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
 
     await page.keyboard.press('Control+Shift+F')
     await expect(page.locator('dialog[open]')).toHaveCount(1)
+    await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'closed')
+    await expect(page.locator('.sidebar')).toBeHidden()
 
     await page.keyboard.press('Escape')
     await expect(page.locator('dialog[open]')).toHaveCount(0)
-    await expect(page.locator('.sidebar')).toBeVisible()
+    await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'closed')
+    await expect(page.locator('.sidebar')).toBeHidden()
   })
 })
 
