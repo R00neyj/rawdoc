@@ -28,7 +28,7 @@ Korean copy: `.claude/ko/skills/ship-feature/SKILL.ko.md` (snapshot, for humans)
 
 For every other spec, hand off as below.
 
-**Pick the agent first.** `feature-implementer` (Sonnet) is the default. Use **`complex-implementer` (Opus)** when the spec's acceptance criteria are clear but the route to them is not — graphics and 3D, CM6 internals, a frame or bundle budget, a refactor crossing several ownership tables, an external API nobody has run yet. It costs more and it researches, spikes and measures before building, so do not reach for it just because a spec is long. A spec with many files but no unknowns is still `feature-implementer` work.
+**Pick the agent first.** `feature-implementer` (Opus, medium effort) is the default. Use **`complex-implementer` (Opus)** when the spec's acceptance criteria are clear but the route to them is not — graphics and 3D, CM6 internals, a frame or bundle budget, a refactor crossing several ownership tables, an external API nobody has run yet. It costs more and it researches, spikes and measures before building, so do not reach for it just because a spec is long. A spec with many files but no unknowns is still `feature-implementer` work.
 
 Use the `Agent` tool with the chosen `subagent_type` and `run_in_background: true`. Keep the prompt short:
 ```

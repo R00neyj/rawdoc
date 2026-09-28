@@ -29,7 +29,7 @@ description: Rawdoc 작은 명세 F-xxx 를 구현 에이전트에 맡기고 자
 
 나머지 명세는 아래처럼 맡긴다.
 
-**먼저 에이전트를 고른다.** `feature-implementer`(Sonnet) 가 기본이다. 명세의 수용 기준은 분명한데 거기 닿는 길이 분명하지 않을 때 **`complex-implementer`(Opus)** 를 쓴다 — 그래픽·3D, CM6 내부, 프레임·번들 예산, 소유 표 여러 개를 가로지르는 리팩터, 아무도 돌려 본 적 없는 외부 API. 비싸고, 만들기 전에 조사·스파이크·측정을 하므로 명세가 길다는 이유만으로 부르지 마라. 파일은 많지만 모르는 게 없는 명세는 여전히 `feature-implementer` 의 일이다.
+**먼저 에이전트를 고른다.** `feature-implementer`(Opus, medium effort) 가 기본이다. 명세의 수용 기준은 분명한데 거기 닿는 길이 분명하지 않을 때 **`complex-implementer`(Opus)** 를 쓴다 — 그래픽·3D, CM6 내부, 프레임·번들 예산, 소유 표 여러 개를 가로지르는 리팩터, 아무도 돌려 본 적 없는 외부 API. 비싸고, 만들기 전에 조사·스파이크·측정을 하므로 명세가 길다는 이유만으로 부르지 마라. 파일은 많지만 모르는 게 없는 명세는 여전히 `feature-implementer` 의 일이다.
 
 `Agent` 도구, `subagent_type` 에 고른 에이전트, `run_in_background: true`. 프롬프트는 짧게:
 ```

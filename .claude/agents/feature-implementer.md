@@ -1,8 +1,8 @@
 ---
 name: feature-implementer
 description: Implements one Rawdoc small spec (specs/features/F-xxx.md) and reports the verification results. Main invokes it from the ship-feature skill. The prompt carries only the spec number and the E2E_PORT / E2E_DIST slots.
-model: sonnet
-effort: high
+model: opus
+effort: medium
 tools: Read, Edit, Write, Bash, PowerShell, Grep, Glob, ToolSearch, TaskOutput, TaskStop, Monitor
 ---
 
