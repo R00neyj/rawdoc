@@ -91,8 +91,23 @@ export type RemoteCache = {
   deleteAttachment(userId: string, id: string): Promise<void>
 }
 
-async function openCacheDb(dbName: string): Promise<IDBPDatabase> {
+// 다른 탭과 버전이 엇갈릴 때 — idbStore 의 IdbStoreHandlers 와 같은 모양·순서 (F-136.md 3.3, 리뷰 S8)
+export type RemoteCacheHandlers = {
+  // 새 버전 창: 다른 창이 옛 버전 연결을 쥐고 있어 이 열기가 막혔을 때
+  onBlocked?: (currentVersion: number, blockedVersion: number | null, event: IDBVersionChangeEvent) => void
+  // 옛 버전 창: 연결을 닫기 전에 — 저장 대기 중인 내용을 먼저 저장하는 데 쓴다
+  onBlocking?: () => void | Promise<void>
+  // 옛 버전 창: 위 정리가 끝나고 연결을 닫은 뒤
+  onClosed?: () => void
+}
+
+async function openCacheDb(
+  dbName: string,
+  versionHooks: { blocked?: RemoteCacheHandlers['onBlocked']; blocking?: () => void } = {},
+): Promise<IDBPDatabase> {
   return openDB(dbName, DB_VERSION, {
+    blocked: versionHooks.blocked,
+    blocking: versionHooks.blocking,
     upgrade(db, oldVersion) {
       if (oldVersion < 1) {
         const docs = db.createObjectStore('docs', { keyPath: ['userId', 'id'] })
@@ -127,8 +142,25 @@ export async function deleteRemoteCacheUserRows(userId: string, dbName: string =
   }
 }
 
-export async function createRemoteCache(dbName: string = DEFAULT_DB_NAME): Promise<RemoteCache> {
-  const db = await openCacheDb(dbName)
+export async function createRemoteCache(
+  dbName: string = DEFAULT_DB_NAME,
+  { onBlocked, onBlocking, onClosed }: RemoteCacheHandlers = {},
+): Promise<RemoteCache> {
+  const db = await openCacheDb(dbName, {
+    blocked(currentVersion, blockedVersion, event) {
+      onBlocked?.(currentVersion, blockedVersion, event)
+    },
+    // 이 연결이 다른 탭의 새 버전 열기를 막고 있다 — 정리를 기다린 뒤 닫는다. 닫지 않으면 새 탭 부팅이 무기한 멈춘다 (리뷰 S8)
+    blocking() {
+      Promise.resolve()
+        .then(() => onBlocking?.())
+        .catch(() => {})
+        .finally(() => {
+          db.close()
+          onClosed?.()
+        })
+    },
+  })
 
   async function readOutbox(userId: string): Promise<OutboxEntry[]> {
     const all: OutboxEntry[] = await db.getAllFromIndex('outbox', 'byUser', userId)

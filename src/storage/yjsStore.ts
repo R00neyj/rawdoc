@@ -34,8 +34,9 @@ export type YjsAttachment = {
   detach(): void
 }
 
-function openYjsDb(dbName: string): Promise<IDBPDatabase> {
+function openYjsDb(dbName: string, blocking?: () => void): Promise<IDBPDatabase> {
   return openDB(dbName, DB_VERSION, {
+    blocking,
     upgrade(upgradeDb) {
       const updates = upgradeDb.createObjectStore('updates', { keyPath: 'key', autoIncrement: true })
       updates.createIndex('byDoc', ['userId', 'docId'])
@@ -66,7 +67,8 @@ export async function deleteYjsUserRows(userId: string, dbName: string = YJS_DB_
 export async function openYjsStore(userId: string, dbName: string = YJS_DB_NAME): Promise<YjsStore | null> {
   let db: IDBPDatabase
   try {
-    db = await openYjsDb(dbName)
+    // 다른 탭이 새 버전을 열려 하면 곧바로 닫는다 — 닫힌 뒤의 쓰기는 attach 의 fail() 이 받는다 (리뷰 S8, idbStore openE2eeDb 와 같은 규칙)
+    db = await openYjsDb(dbName, () => db.close())
   } catch {
     return null
   }

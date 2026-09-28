@@ -1,4 +1,5 @@
 // md-remote 에서 한 사용자의 행만 지우기 (specs/features/F-2038.md 7.1, C5)
+// 다른 탭이 더 높은 버전을 열 때 (코드 리뷰 S8, idbStore 의 F-136.md 3.3 과 같은 규칙)
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
 import { openDB } from 'idb'
@@ -58,5 +59,62 @@ describe('F-2038 C5 deleteRemoteCacheUserRows', () => {
       attachments: { B: 1 },
     })
     expect(await cache.countOutbox('B')).toBe(2)
+  })
+})
+
+let dbCounter = 0
+function freshDbName() {
+  dbCounter += 1
+  return `test-md-remote-cache-${Date.now()}-${dbCounter}`
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${ms}ms 안에 열리지 않음`)), ms)),
+  ])
+}
+
+describe('리뷰 S8 versionchange — 옛 연결이 새 버전 열기를 막지 않는다', () => {
+  it('더 높은 버전 열기가 오면 정리 콜백 → 연결 닫기 → 닫힘 콜백 순으로 돌고, 새 열기가 끝난다', async () => {
+    const dbName = freshDbName()
+    const order: string[] = []
+    await createRemoteCache(dbName, {
+      onBlocking: () => {
+        order.push('blocking')
+      },
+      onClosed: () => {
+        order.push('closed')
+      },
+    })
+
+    const newer = await withTimeout(openDB(dbName, 99), 1_000)
+    expect(order).toEqual(['blocking', 'closed'])
+    newer.close()
+  })
+
+  it('콜백 없이 만들어도 닫는다', async () => {
+    const dbName = freshDbName()
+    await createRemoteCache(dbName)
+    const newer = await withTimeout(openDB(dbName, 99), 1_000)
+    newer.close()
+  })
+
+  it('새 버전 쪽: 옛 연결이 막고 있으면 onBlocked 가 불린다', async () => {
+    const dbName = freshDbName()
+    const old = await openDB(dbName, 1, {
+      upgrade(db) {
+        db.createObjectStore('placeholder')
+      },
+    })
+    let blockedCalls = 0
+    const opening = createRemoteCache(dbName, {
+      onBlocked: () => {
+        blockedCalls += 1
+        old.close()
+      },
+    })
+    await withTimeout(opening, 1_000)
+    expect(blockedCalls).toBe(1)
   })
 })

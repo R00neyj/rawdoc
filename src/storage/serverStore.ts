@@ -1,7 +1,7 @@
 // F-207 서버 저장소 — 캐시에 먼저 쓰고 즉시 resolve, 보낼 목록(outbox)을 순서대로 보낸다 (2.3)
 // F-209 2.5: 첨부는 캐시에 blob 을 두고 서버로 올린다(변환은 toWebp)
 import { createIdbStore } from './idbStore'
-import { createRemoteCache, docIdOf, folderIdOf, type CachedAttachment, type CachedDoc, type CachedFolder, type OutboxEntry, type OutboxItem, type RemoteCache } from './remoteCache'
+import { createRemoteCache, docIdOf, folderIdOf, type CachedAttachment, type CachedDoc, type CachedFolder, type OutboxEntry, type OutboxItem, type RemoteCache, type RemoteCacheHandlers } from './remoteCache'
 import * as api from './docsApi'
 import { ApiError, type ServerDoc } from './docsApi'
 import { uploadAttachment, fetchAttachment, fetchUsage, deleteAttachment, AttachmentApiError } from './attachmentsApi'
@@ -62,7 +62,7 @@ export type ServerStoreHandlers = {
   onAccountBlocked?: () => void
   // 시계 — 단위 테스트가 30초·Retry-After 를 기다리지 않게 주입한다. 기본 Date.now (F-2030 3.3)
   now?: () => number
-}
+} & RemoteCacheHandlers // md-remote 버전이 다른 탭과 엇갈릴 때 — idbStore 와 같은 세 콜백 (리뷰 S8)
 
 // 금고 충돌 사본 — storage 는 e2ee 를 import 하지 않으므로 withE2ee 가 함수를 주입한다 (F-405 5.4)
 export type E2eeCopySource = { id: string; title: string; content: string; e2eeKey: string }
@@ -205,7 +205,11 @@ async function decodeDims(blob: Blob): Promise<{ width: number; height: number }
 }
 
 export async function createServerStore(userId: string, handlers: ServerStoreHandlers = {}): Promise<ServerStore> {
-  const cache: RemoteCache = await createRemoteCache(handlers.dbName)
+  const cache: RemoteCache = await createRemoteCache(handlers.dbName, {
+    onBlocked: handlers.onBlocked,
+    onBlocking: handlers.onBlocking,
+    onClosed: handlers.onClosed,
+  })
   const listeners = new Set<(state: SyncState) => void>()
   let state: SyncState = { pending: 0, online: typeof navigator === 'undefined' ? true : navigator.onLine, signedOut: false }
   let sendingRound: Promise<void> | null = null

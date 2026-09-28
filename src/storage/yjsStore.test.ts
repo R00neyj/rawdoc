@@ -364,3 +364,17 @@ describe('F-2038 C6 한 사용자의 행만 지우기', () => {
     }
   })
 })
+
+// 코드 리뷰 S8 — 다른 탭이 md-yjs 의 더 높은 버전을 열면 옛 연결을 닫아 그 열기를 막지 않는다
+describe('리뷰 S8 versionchange', () => {
+  it('열어 둔 저장소가 더 높은 버전 열기를 막지 않는다', async () => {
+    const dbName = freshDbName()
+    const store = await openYjsStore('A', dbName)
+    expect(store).not.toBeNull()
+    const newer = await Promise.race([
+      openDB(dbName, 2),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('1000ms 안에 열리지 않음')), 1_000)),
+    ])
+    newer.close()
+  })
+})
