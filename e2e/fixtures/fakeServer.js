@@ -619,45 +619,69 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
   // F-507 3.8 — 알림함(/api/notifications*) + 멘션 후보(/api/docs/:id/people) 흉내
   let notificationItems = [] // NotificationItem[] — setNotifications 로 통째로 바꾼다
   let notificationsFailMode = null // null | 'network' | number — /api/notifications* 전용
-  const notificationLog = [] // { method, path, search, body, at }[]
+  const notificationLog = [] // { method, path, search, body, at, ifNoneMatch, status }[] — status 0 = 연결 끊음
+  let notificationsRev = 0 // F-2057 6.3 — setNotifications·성공한 읽음 POST 마다 +1
   const docPeopleOverrides = new Map() // docId -> { email, role }[] — 없으면 기본 규칙
   const peopleRequestLog = new Map() // docId -> count
 
   function logNotificationRequest(req) {
     const url = new URL(req.url())
-    notificationLog.push({ method: req.method(), path: url.pathname, search: url.search, body: safePostDataJSON(req) ?? null, at: Date.now() })
+    const entry = {
+      method: req.method(),
+      path: url.pathname,
+      search: url.search,
+      body: safePostDataJSON(req) ?? null,
+      at: Date.now(),
+      ifNoneMatch: req.headers()['if-none-match'] ?? null,
+      status: 0,
+    }
+    notificationLog.push(entry)
+    return entry
   }
 
   await page.route('**/api/notifications', async (route) => {
     const req = route.request()
     if (req.method() !== 'GET') return route.fallback()
-    logNotificationRequest(req)
+    const entry = logNotificationRequest(req)
     if (offline) return route.abort('internetdisconnected')
     if (notificationsFailMode === 'network') return route.abort('failed')
     if (typeof notificationsFailMode === 'number') {
+      entry.status = notificationsFailMode
       return route.fulfill({ status: notificationsFailMode, contentType: 'application/json', body: '{"error":"internal"}' })
+    }
+    const etag = `W/"fake-${notificationsRev}"`
+    if (entry.ifNoneMatch === etag) {
+      entry.status = 304
+      return route.fulfill({ status: 304, headers: { ETag: etag } })
     }
     const sorted = [...notificationItems].sort((a, b) => b.createdAt - a.createdAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
     const items = sorted.slice(0, 30)
     const unread = notificationItems.filter((n) => n.readAt === null).length
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items, unread }) })
+    entry.status = 200
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: { ETag: etag }, body: JSON.stringify({ items, unread }) })
   })
 
   await page.route('**/api/notifications/read', async (route) => {
     const req = route.request()
     if (req.method() !== 'POST') return route.fallback()
-    logNotificationRequest(req)
+    const entry = logNotificationRequest(req)
     if (offline) return route.abort('internetdisconnected')
     if (notificationsFailMode === 'network') return route.abort('failed')
     if (typeof notificationsFailMode === 'number') {
+      entry.status = notificationsFailMode
       return route.fulfill({ status: notificationsFailMode, contentType: 'application/json', body: '{"error":"internal"}' })
     }
-    if (recordWrite(route, req)) return
+    const ruleStatus = writeRule?.status
+    if (recordWrite(route, req)) {
+      entry.status = ruleStatus
+      return
+    }
     const body = req.postDataJSON()
     const keys = body ? Object.keys(body) : []
     const isAll = keys.length === 1 && body.all === true
     const isIds = keys.length === 1 && Array.isArray(body.ids) && body.ids.length >= 1 && body.ids.length <= 50 && body.ids.every((id) => typeof id === 'string')
     if (!isAll && !isIds) {
+      entry.status = 400
       return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'invalid' }) })
     }
     const now = Date.now()
@@ -667,6 +691,8 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       const idSet = new Set(body.ids)
       for (const item of notificationItems) if (idSet.has(item.id) && item.readAt === null) item.readAt = now
     }
+    notificationsRev += 1
+    entry.status = 204
     return route.fulfill({ status: 204 })
   })
 
@@ -792,6 +818,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     // 알림 목록을 통째로 바꾼다 — id 없으면 UUID 를 붙인다 (F-507 3.8)
     setNotifications(items) {
       notificationItems = items.map((item) => ({ id: item.id ?? crypto.randomUUID(), readAt: null, ...item }))
+      notificationsRev += 1
     },
     // 지금 목록 — 읽음 반영된 값의 사본 (F-507 3.8)
     notifications() {

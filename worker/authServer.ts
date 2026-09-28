@@ -24,6 +24,7 @@ export const USER_ADDITIONAL_FIELDS: Record<string, DBFieldAttribute> = {
   docCount: { type: 'number', fieldName: 'doc_count', input: false, required: false },
   blockedAt: { type: 'number', fieldName: 'blocked_at', input: false, required: false },
   warnedAt: { type: 'number', fieldName: 'warned_at', input: false, required: false },
+  notifRev: { type: 'number', fieldName: 'notif_rev', input: false, required: false }, // F-2057 3.2
 }
 
 // 앱 하루 신규 가입 상한 (F-2024 4.1)

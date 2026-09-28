@@ -328,6 +328,15 @@ describe('F-2033 U15·U16 로컬 개발 우회', () => {
     })
   })
 
+  it('F-2057 U12 개발 우회 결과에 notifRev 가 users.notif_rev 로 실린다', async () => {
+    const db = asAuthDb(openDb())
+    const env = { DB: db, BETTER_AUTH_URL: 'http://localhost:8790', DEV_AUTH_EMAIL: 'dev@example.com' } as unknown as Env
+    const user = await getUser(new Request('http://rawdoc.app/api/docs'), env)
+    expect(user).toEqual({ id: expect.any(String), email: 'dev@example.com', usage: expect.any(Object), notifRev: 0 })
+    db.prepare('UPDATE users SET notif_rev = 2 WHERE id = ?').run(user!.id)
+    expect((await getUser(new Request('http://rawdoc.app/api/docs'), env))?.notifRev).toBe(2)
+  })
+
   it('U16 운영 주소·예약 도메인이 아닌 이메일·빈 값이면 우회하지 않는다', async () => {
     const cases = [
       { BETTER_AUTH_URL: 'https://rawdoc.app', DEV_AUTH_EMAIL: 'dev@example.com' },
@@ -349,8 +358,8 @@ describe('F-2033 U17~U21 better-auth 세션', () => {
     const cookie = await sessionCookie(db)
     const env = sessionEnv(db)
     const user = await getUser(apiRequest(cookie), env)
-    expect(user).toEqual({ id: expect.any(String), email: 'me@example.org', usage: expect.any(Object) })
-    expect(Object.keys(user!).sort()).toEqual(['email', 'id', 'usage'])
+    expect(user).toEqual({ id: expect.any(String), email: 'me@example.org', usage: expect.any(Object), notifRev: 0 })
+    expect(Object.keys(user!).sort()).toEqual(['email', 'id', 'notifRev', 'usage'])
     expect(await getUser(apiRequest(), env)).toBeNull()
     const name = cookie.slice(0, cookie.indexOf('='))
     expect(await getUser(apiRequest(`${name}=unknown.token`), env)).toBeNull()
@@ -387,6 +396,16 @@ describe('F-2033 U17~U21 better-auth 세션', () => {
     })
   })
 
+  it('F-2057 U12 세션 사용자 notifRev 는 users.notif_rev 를 따른다', async () => {
+    const db = openDb()
+    const cookie = await sessionCookie(db)
+    const env = sessionEnv(db)
+    const user = await getUser(apiRequest(cookie), env)
+    expect(user?.notifRev).toBe(0)
+    db.prepare('UPDATE users SET notif_rev = 4 WHERE id = ?').run(user!.id)
+    expect((await getUser(apiRequest(cookie), env))?.notifRev).toBe(4)
+  })
+
   it('U18 getUser 는 연장하지 않는다', async () => {
     const db = openDb()
     const cookie = await sessionCookie(db)
@@ -403,7 +422,7 @@ describe('F-2033 U17~U21 better-auth 세션', () => {
     const before = expiresAt(db)
     const env = sessionEnv(db)
     const first = await getUserRefreshing(apiRequest(cookie, '/api/me'), env)
-    expect(first.user).toEqual({ id: expect.any(String), email: 'me@example.org', usage: expect.any(Object) })
+    expect(first.user).toEqual({ id: expect.any(String), email: 'me@example.org', usage: expect.any(Object), notifRev: 0 })
     expect(first.setCookies.length).toBe(1)
     expect(first.setCookies[0]).toContain('session_token=')
     expect(first.setCookies[0]).toContain('Max-Age=2592000')

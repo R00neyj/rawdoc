@@ -15,6 +15,7 @@ import {
   deleteFoldersUsageStatement,
   docUsageStatements,
   isDailyLimitReached,
+  readNotificationsUsageStatement,
   readUsage,
   rowToUsage,
   secondsUntilUtcMidnight,
@@ -125,6 +126,13 @@ describe('U7 rowToUsage·toAuthUser', () => {
     expect(Object.keys(toAuthUser({ id: 'u1', email: 'a@b.com' })).sort()).toEqual(['email', 'id'])
   })
 
+  it('F-2057 U12 notifRev 는 숫자일 때만 싣는다', () => {
+    expect(toAuthUser({ id: 'u1', email: 'a@b.com', notifRev: 3 }).notifRev).toBe(3)
+    expect(toAuthUser({ id: 'u1', email: 'a@b.com', notifRev: 0 })).toEqual({ id: 'u1', email: 'a@b.com', notifRev: 0 })
+    expect('notifRev' in toAuthUser({ id: 'u1', email: 'a@b.com', notifRev: null })).toBe(false)
+    expect('notifRev' in toAuthUser({ id: 'u1', email: 'a@b.com', notifRev: '1' })).toBe(false)
+  })
+
   it('better-auth 모양을 넣으면 usage 가 여섯 필드', () => {
     const result = toAuthUser({
       id: 'u1',
@@ -168,6 +176,18 @@ const DELETE_DOC_SQL =
   'UPDATE users SET write_count = CASE WHEN write_day = ?1 THEN write_count + 1 ELSE 1 END, write_day = ?1, (content_bytes, doc_count) = (SELECT users.content_bytes - COALESCE(SUM(length(CAST(content AS BLOB))), 0), users.doc_count - COUNT(*) FROM docs WHERE id = ?2 AND owner_id = ?3) WHERE id = ?3'
 const DELETE_FOLDERS_SQL =
   'UPDATE users SET write_count = CASE WHEN write_day = ?1 THEN write_count + 1 ELSE 1 END, write_day = ?1, (content_bytes, doc_count) = (SELECT users.content_bytes - COALESCE(SUM(length(CAST(content AS BLOB))), 0), users.doc_count - COUNT(*) FROM docs WHERE owner_id = ?2 AND folder_id IN (SELECT value FROM json_each(?3))) WHERE id = ?2'
+
+const READ_NOTIFICATIONS_USAGE_SQL =
+  'UPDATE users SET notif_rev = notif_rev + CASE WHEN changes() > 0 THEN 1 ELSE 0 END, write_count = CASE WHEN write_day = ?1 THEN write_count + 1 ELSE 1 END, write_day = ?1 WHERE id = ?2'
+
+describe('F-2057 U10 읽음 표시 문장 — 글자까지 같다', () => {
+  it('하루 + 알림 리비전, 바인딩 [utcDay, actorId]', () => {
+    const { db, calls } = spySqlDb()
+    readNotificationsUsageStatement(db, 'u1', Date.parse('2026-09-24T10:00:00Z'))
+    expect(calls[0].sql).toBe(READ_NOTIFICATIONS_USAGE_SQL)
+    expect(calls[0].args).toEqual(['2026-09-24', 'u1'])
+  })
+})
 
 describe('U8 다섯 문장 — 글자까지 같다', () => {
   it('하루만', () => {

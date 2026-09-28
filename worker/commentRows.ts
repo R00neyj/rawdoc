@@ -50,7 +50,7 @@ const UPSERT_SQL =
   `FROM json_each(?2) WHERE ${DOC_WRITABLE} ` +
   'ON CONFLICT (doc_id, id) DO UPDATE SET parent_id = excluded.parent_id, author_id = excluded.author_id, author_email = excluded.author_email, body = excluded.body, mentions = excluded.mentions, quote = excluded.quote, prefix = excluded.prefix, suffix = excluded.suffix, anchor_from = excluded.anchor_from, anchor_length = excluded.anchor_length, resolved_at = excluded.resolved_at, resolved_by = excluded.resolved_by, resolved_by_id = excluded.resolved_by_id, created_at = excluded.created_at, bytes = excluded.bytes, sig = excluded.sig, anchor_sig = excluded.anchor_sig'
 const DELETE_ROWS_SQL = 'DELETE FROM doc_comments WHERE doc_id = ?1 AND id IN (SELECT value FROM json_each(?2))'
-const DELETE_ROW_NOTIFICATIONS_SQL = 'DELETE FROM notifications WHERE doc_id = ?1 AND comment_id IN (SELECT value FROM json_each(?2))'
+const ROW_NOTIFICATIONS_WHERE = 'doc_id = ?1 AND comment_id IN (SELECT value FROM json_each(?2))'
 const INSERT_NOTIFICATIONS_SQL =
   'INSERT OR IGNORE INTO notifications (id, recipient_email, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at) ' +
   `SELECT ${field('id')}, ${field('recipient')}, ${field('kind')}, ?1, ${field('commentId')}, ${field('threadId')}, ${field('actor')}, ?2, ${field('excerpt')}, ?3 ` +
@@ -59,12 +59,28 @@ const INSERT_NOTIFICATIONS_SQL =
 export const TRIM_NOTIFICATIONS_WHERE =
   `id NOT IN (SELECT n.id FROM notifications n WHERE n.recipient_email = notifications.recipient_email ORDER BY n.created_at DESC, n.id DESC LIMIT ${NOTIFICATIONS_PER_RECIPIENT_MAX})`
 const TRIM_NOTIFICATIONS_SQL = `DELETE FROM notifications WHERE recipient_email IN (SELECT value FROM json_each(?1)) AND ${TRIM_NOTIFICATIONS_WHERE}`
+// F-2057 3.5 ① — 넣기 문장의 DOC_WRITABLE 과 같은 조건이라 금고 문서면 0행
+const INSERT_NOTIF_REV_SQL =
+  'UPDATE users SET notif_rev = notif_rev + 1 WHERE email IN (SELECT value FROM json_each(?1)) AND EXISTS (SELECT 1 FROM docs WHERE id = ?2 AND e2ee_key IS NULL)'
+
+// F-2057 3.5 — 지운 뒤에는 받는 사람을 알 수 없어, 같은 WHERE 로 DELETE 바로 앞에 둔다
+export function notifRevBeforeDeleteSql(where: string): string {
+  return `UPDATE users SET notif_rev = notif_rev + 1 WHERE email IN (SELECT recipient_email FROM notifications WHERE ${where})`
+}
 
 const DOC_COMMENTS_DELETE_SQL = 'DELETE FROM doc_comments WHERE doc_id = ?'
-const DOC_NOTIFICATIONS_DELETE_SQL = 'DELETE FROM notifications WHERE doc_id = ?'
+const DOC_NOTIFICATIONS_WHERE = 'doc_id = ?'
 const FOLDER_DOCS = 'SELECT id FROM docs WHERE owner_id = ?1 AND folder_id IN (SELECT value FROM json_each(?2))'
 const WROTE_KEY = 'EXISTS (SELECT 1 FROM docs WHERE id = ?1 AND e2ee_key = ?2)'
 const OWNER_DOCS = 'SELECT id FROM docs WHERE owner_id = ?1'
+const FOLDER_NOTIFICATIONS_WHERE = `doc_id IN (${FOLDER_DOCS})`
+const E2EE_NOTIFICATIONS_WHERE = `doc_id = ?1 AND ${WROTE_KEY}`
+const ACCOUNT_NOTIFICATIONS_WHERE = `doc_id IN (${OWNER_DOCS}) OR recipient_email = ?2`
+
+// 받는 사람 리비전 → 알림 지우기, 같은 WHERE·같은 바인딩
+function deleteNotificationsStatements(db: D1Database, where: string, ...args: unknown[]): D1PreparedStatement[] {
+  return [db.prepare(notifRevBeforeDeleteSql(where)).bind(...args), db.prepare(`DELETE FROM notifications WHERE ${where}`).bind(...args)]
+}
 
 // ----- 행 만들기·읽기 -----
 
@@ -134,10 +150,11 @@ export function notificationStatements(
 ): D1PreparedStatement[] {
   if (p.drafts.length === 0) return []
   const rows = p.drafts.map((d) => ({ id: crypto.randomUUID(), ...d }))
-  const recipients = [...new Set(p.drafts.map((d) => d.recipient))]
+  const recipients = JSON.stringify([...new Set(p.drafts.map((d) => d.recipient))])
   return [
     ...chunkJsonRows(rows).map((json) => db.prepare(INSERT_NOTIFICATIONS_SQL).bind(p.docId, p.docTitle, p.now, json)),
-    db.prepare(TRIM_NOTIFICATIONS_SQL).bind(JSON.stringify(recipients)),
+    db.prepare(TRIM_NOTIFICATIONS_SQL).bind(recipients),
+    db.prepare(INSERT_NOTIF_REV_SQL).bind(recipients, p.docId),
   ]
 }
 
@@ -148,7 +165,7 @@ export function commentBundleStatements(
   const statements = [commentBytesOutStatement(db, p.ownerId, p.docId), ...upsertCommentStatements(db, p.docId, p.upserts)]
   if (p.deletes.length > 0) {
     const ids = JSON.stringify(p.deletes)
-    statements.push(db.prepare(DELETE_ROWS_SQL).bind(p.docId, ids), db.prepare(DELETE_ROW_NOTIFICATIONS_SQL).bind(p.docId, ids))
+    statements.push(db.prepare(DELETE_ROWS_SQL).bind(p.docId, ids), ...deleteNotificationsStatements(db, ROW_NOTIFICATIONS_WHERE, p.docId, ids))
   }
   statements.push(...notificationStatements(db, p), commentBytesInStatement(db, p.ownerId, p.docId))
   return statements
@@ -205,7 +222,7 @@ export function docCommentDeleteStatements(db: D1Database, ownerId: string, docI
   return [
     commentBytesOutStatement(db, ownerId, docId),
     db.prepare(DOC_COMMENTS_DELETE_SQL).bind(docId),
-    db.prepare(DOC_NOTIFICATIONS_DELETE_SQL).bind(docId),
+    ...deleteNotificationsStatements(db, DOC_NOTIFICATIONS_WHERE, docId),
   ]
 }
 
@@ -214,7 +231,7 @@ export function folderCommentDeleteStatements(db: D1Database, ownerId: string, f
   return [
     deleteFolderCommentBytesStatement(db, ownerId, folderIds),
     db.prepare(`DELETE FROM doc_comments WHERE doc_id IN (${FOLDER_DOCS})`).bind(ownerId, ids),
-    db.prepare(`DELETE FROM notifications WHERE doc_id IN (${FOLDER_DOCS})`).bind(ownerId, ids),
+    ...deleteNotificationsStatements(db, FOLDER_NOTIFICATIONS_WHERE, ownerId, ids),
   ]
 }
 
@@ -222,7 +239,7 @@ export function e2eeCommentDeleteStatements(db: D1Database, ownerId: string, doc
   return [
     e2eeCommentBytesOutStatement(db, ownerId, docId, e2eeKey),
     db.prepare(`DELETE FROM doc_comments WHERE doc_id = ?1 AND ${WROTE_KEY}`).bind(docId, e2eeKey),
-    db.prepare(`DELETE FROM notifications WHERE doc_id = ?1 AND ${WROTE_KEY}`).bind(docId, e2eeKey),
+    ...deleteNotificationsStatements(db, E2EE_NOTIFICATIONS_WHERE, docId, e2eeKey),
   ]
 }
 
@@ -230,6 +247,6 @@ export function e2eeCommentDeleteStatements(db: D1Database, ownerId: string, doc
 export function accountCommentDeleteStatements(db: D1Database, userId: string, email: string): D1PreparedStatement[] {
   return [
     db.prepare(`DELETE FROM doc_comments WHERE doc_id IN (${OWNER_DOCS})`).bind(userId),
-    db.prepare(`DELETE FROM notifications WHERE doc_id IN (${OWNER_DOCS}) OR recipient_email = ?2`).bind(userId, email.toLowerCase()),
+    ...deleteNotificationsStatements(db, ACCOUNT_NOTIFICATIONS_WHERE, userId, email.toLowerCase()),
   ]
 }

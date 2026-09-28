@@ -89,6 +89,9 @@ export function checkDocGrow(usage: UserUsage, deltaBytes: number): DocQuotaBody
 // D1 문장 — 5.1 표와 글자까지 같다. 상수 이름은 재량, 문장 텍스트는 계약
 const DAY_ONLY_SQL =
   'UPDATE users SET write_count = CASE WHEN write_day = ?1 THEN write_count + 1 ELSE 1 END, write_day = ?1 WHERE id = ?2'
+// F-2057 3.5 ② — 읽음 UPDATE 바로 뒤에 둬야 changes() 가 그 문장을 본다
+const READ_NOTIFICATIONS_SQL =
+  'UPDATE users SET notif_rev = notif_rev + CASE WHEN changes() > 0 THEN 1 ELSE 0 END, write_count = CASE WHEN write_day = ?1 THEN write_count + 1 ELSE 1 END, write_day = ?1 WHERE id = ?2'
 const DAY_AND_TOTAL_SQL =
   'UPDATE users SET write_count = CASE WHEN write_day = ?1 THEN write_count + 1 ELSE 1 END, write_day = ?1, content_bytes = content_bytes + CASE WHEN changes() = 1 THEN ?2 ELSE 0 END, doc_count = doc_count + CASE WHEN changes() = 1 THEN ?3 ELSE 0 END WHERE id = ?4'
 const TOTAL_ONLY_SQL =
@@ -112,6 +115,10 @@ const SNAPSHOT_USAGE_SQL = `${DAY_AND_TOTAL_SQL} RETURNING ${USAGE_COLUMNS}`
 
 export function dayUsageStatement(db: D1Database, actorId: string, now: number): D1PreparedStatement {
   return db.prepare(DAY_ONLY_SQL).bind(utcDay(now), actorId)
+}
+
+export function readNotificationsUsageStatement(db: D1Database, actorId: string, now: number): D1PreparedStatement {
+  return db.prepare(READ_NOTIFICATIONS_SQL).bind(utcDay(now), actorId)
 }
 
 export function docUsageStatements(

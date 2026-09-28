@@ -64,33 +64,86 @@ describe('fetchNotifications — U3', () => {
 
   it('연결 실패 → network', async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error('fail'))
-    expect(await fetchNotifications()).toEqual({ ok: false, reason: 'network' })
+    expect(await fetchNotifications(null)).toEqual({ ok: false, reason: 'network' })
   })
 
   it('401 → unauthorized', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 401 }))
-    expect(await fetchNotifications()).toEqual({ ok: false, reason: 'unauthorized' })
+    expect(await fetchNotifications(null)).toEqual({ ok: false, reason: 'unauthorized' })
   })
 
   it('503 → server', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 503 }))
-    expect(await fetchNotifications()).toEqual({ ok: false, reason: 'server' })
+    expect(await fetchNotifications(null)).toEqual({ ok: false, reason: 'server' })
   })
 
   it('200 HTML(json 파싱 실패) → invalid', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } }))
-    expect(await fetchNotifications()).toEqual({ ok: false, reason: 'invalid' })
+    expect(await fetchNotifications(null)).toEqual({ ok: false, reason: 'invalid' })
   })
 
   it('200 모양 틀림 → invalid', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [] }), { status: 200 }))
-    expect(await fetchNotifications()).toEqual({ ok: false, reason: 'invalid' })
+    expect(await fetchNotifications(null)).toEqual({ ok: false, reason: 'invalid' })
   })
 
   it('200 올바름 → ok', async () => {
     const data: NotificationsResponse = { items: [item()], unread: 1 }
     globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(data), { status: 200 }))
-    expect(await fetchNotifications()).toEqual({ ok: true, data })
+    expect(await fetchNotifications(null)).toEqual({ ok: true, data, etag: null })
+  })
+})
+
+describe('fetchNotifications 조건부 — F-2057 U13', () => {
+  const originalFetch = globalThis.fetch
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+  const data: NotificationsResponse = { items: [item()], unread: 1 }
+  const sentHeaders = (mock: ReturnType<typeof vi.fn>) => new Headers((mock.mock.calls[0][1] as RequestInit).headers)
+
+  it('etag 를 주면 If-None-Match 가 그 값, cache no-store', async () => {
+    const mock = vi.fn().mockResolvedValue(new Response(JSON.stringify(data), { status: 200 }))
+    globalThis.fetch = mock
+    await fetchNotifications('W/"n1-u1-3-30"')
+    expect(sentHeaders(mock).get('If-None-Match')).toBe('W/"n1-u1-3-30"')
+    expect((mock.mock.calls[0][1] as RequestInit).cache).toBe('no-store')
+  })
+
+  it('null 이면 If-None-Match 없음', async () => {
+    const mock = vi.fn().mockResolvedValue(new Response(JSON.stringify(data), { status: 200 }))
+    globalThis.fetch = mock
+    await fetchNotifications(null)
+    expect(sentHeaders(mock).has('If-None-Match')).toBe(false)
+  })
+
+  it('304 → notModified', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 304, headers: { ETag: 'W/"a"' } }))
+    expect(await fetchNotifications('W/"a"')).toEqual({ ok: true, notModified: true })
+  })
+
+  it('null 로 보냈는데 304 → invalid', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 304 }))
+    expect(await fetchNotifications(null)).toEqual({ ok: false, reason: 'invalid' })
+  })
+
+  it('200 + ETag → 그 값, 200자 넘으면 null', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(data), { status: 200, headers: { ETag: 'W/"n1-u1-4-30"' } }))
+    expect(await fetchNotifications(null)).toEqual({ ok: true, data, etag: 'W/"n1-u1-4-30"' })
+    const exact = 'x'.repeat(200)
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(data), { status: 200, headers: { ETag: exact } }))
+    expect(await fetchNotifications(null)).toEqual({ ok: true, data, etag: exact })
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(data), { status: 200, headers: { ETag: 'x'.repeat(201) } }))
+    expect(await fetchNotifications(null)).toEqual({ ok: true, data, etag: null })
+  })
+
+  it('401·5xx·HTML 200 은 조건부여도 지금과 같다', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 401 }))
+    expect(await fetchNotifications('W/"a"')).toEqual({ ok: false, reason: 'unauthorized' })
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 502 }))
+    expect(await fetchNotifications('W/"a"')).toEqual({ ok: false, reason: 'server' })
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response('<html></html>', { status: 200, headers: { 'Content-Type': 'text/html' } }))
+    expect(await fetchNotifications('W/"a"')).toEqual({ ok: false, reason: 'invalid' })
   })
 })
 

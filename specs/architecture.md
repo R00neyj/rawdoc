@@ -129,6 +129,8 @@ src/
   - `styles/`: `wikiPreview.css`(F-2044)
 - 사이드바 안 읽은 알림 표시(F-510)로 추가
   - `app/`: `docNotifications.ts`(F-510 — 안 읽은 알림 문서 id 집합·폴더 집합 판정, 순수 함수)
+- 알림 폴링 줄이기(F-2057)로 추가
+  - `app/`: `notificationsShare.ts`(F-2057 — 탭 사이 알림 결과 채널 `md-notifications`, 순수 함수)
 - 랜딩 스크롤 스토리(F-2049)로 추가
   - `welcome/`: 랜딩 번들(`assets/welcome-demo.js`, 고정 이름). 편집기 데모·스크롤 스토리. gsap 은 여기서만 import(F-2049). `worker/welcomePage.ts` 가 여기의 순수 데이터 모듈을 import 한다
 
@@ -257,7 +259,7 @@ type YjsMetaRow = {
 
 ```
 wrangler.jsonc           Worker 스크립트·D1(DB)·R2(BUCKET)·정적 자산(ASSETS) 바인딩 (F-204), Durable Object `DOC_ROOM`(클래스 `DocRoom`) 바인딩·마이그레이션 (F-304), Rate Limiting `WRITE_LIMITER` (F-2026)
-migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038)
+migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057)
 worker/
   index.ts               fetch 진입점, 라우트 표 { method, path, handler }
   http.ts                JSON 응답 도우미
@@ -291,7 +293,7 @@ scripts/lib/admin.mjs d1.mjs                          관리 스크립트 공용
 - 경로: `/api/*` 는 로그인(better-auth 세션 쿠키, Worker 가 판정 — F-2033). `/login` 은 Worker 가 만드는 로그인 페이지(스크립트 없음, F-2033). `/` 는 쿠키로 갈리는 워커 분기(F-271), `/welcome` 은 언제나 랜딩(F-2051, canonical 은 `/`). 비`GET` `/api/*` 는 라우트 표 앞에서 `Origin` 을 검사한다(403 `forbidden_origin`, F-2033 5.4). `/pub/*` 는 로그인 없이 읽기만(쓰기 메서드 405). 나머지는 정적 자산, 없는 경로는 `404.html` (`wrangler.jsonc` 의 `not_found_handling: "404-page"`, F-272 7장. 그전에는 `index.html` 이었다). 사이트 페이지(`/changelog`·`/help`·`/privacy`·`/terms`·`/guides/*`)는 빌드가 낸 평평한 `{경로}.html` 정적 자산이다
 - `/assets/*` 는 1년 immutable, 단 이름이 고정인 `assets/welcome-demo.js` 만 `no-cache`(`public/_headers`, F-2049 4.1). 랜딩 번들은 precache 에 넣지 않는다(F-2049 4.2)
 - `GET /pub/docs/:token/set` 응답에 문서마다 위키링크 해석 결과 표 `links` 가 붙는다(문서 1개뿐이어도 `links: {}`, 추가 질의 없음) — F-2018 (2026-09-23)
-- API 응답 헤더: `Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`. 오류 본문에 내부 정보 없음
+- API 응답 헤더: `Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`. 오류 본문에 내부 정보 없음. `GET /api/notifications` 는 `ETag` 를 싣고 같은 `If-None-Match` 면 304 (F-2057)
 - 남의 자원은 404, 권한은 있으나 동작이 막히면 403 (F-206·F-212)
 - Worker 는 `src/lib/**` 순수 함수와 `src/types.ts` 만 import 한다
 - 로컬 개발: `.dev.vars` 키 — `BETTER_AUTH_URL=http://localhost:8790`, `BETTER_AUTH_SECRET`(32바이트 난수 base64), `DEV_AUTH_EMAIL=…@example.com`(우회를 쓸 때), 실제 OAuth 를 로컬에서 시험할 때만 `GOOGLE_CLIENT_ID`·`GOOGLE_CLIENT_SECRET`·`GITHUB_CLIENT_ID`·`GITHUB_CLIENT_SECRET`(로컬 앱 값). 우회는 `BETTER_AUTH_URL` 이 `http:` localhost 이고 `DEV_AUTH_EMAIL` 이 `@example.com` 으로 끝날 때만 켜진다(`origin.ts` `isDevBypass`). `wrangler.jsonc` `vars` 의 `DEV_AUTH_EMAIL` 은 빈 값 — `.dev.vars` 가 덮는다 (F-2033 5.2·8.1·11장 3번). 포트는 `dev:worker` 8790, 에이전트 병렬 슬롯 8791~
@@ -311,6 +313,7 @@ scripts/lib/admin.mjs d1.mjs                          관리 스크립트 공용
 - 경로 접두사 4개: `/api/*` better-auth 세션 쿠키(브라우저), `/pub/*` 로그인 없음(공유 링크), `/v1/*` `Authorization: Bearer rd_…` 개인 토큰만(스크립트, F-222·F-223). `/v1` 은 쿠키를 보지 않는다. 토큰은 D1 `api_tokens` 에 SHA-256 해시만 (0007). `/ws/*` — Worker 가 Origin·better-auth 세션 쿠키로 인증하고 edit 이상만 `DocRoom` DO(`/ws/doc/:id`)로 넘긴다. 거절은 닫기 코드 4401·4403·4404 (F-304)
 - `GET /api/me`·`GET /v1/me` → `{ id, email, blocked, warned }`(F-2028 7.1. 토큰 없음·틀림·폐기는 401). `/v1/me` 는 `handleMe` 를 그대로 붙인 라우트 한 줄, 명령줄 도구의 `whoami`·`--with-token` 확인에 쓴다 (F-2021 7.1)
 - `/v1` 문서 삭제·이동·폴더 삭제는 `/api` 본체와 같은 쓰기 문장을 쓰고, 금고가 끼면 403. `GET /v1/shared` 는 `handleGetShared` 를 `updatedAt` 내림차순으로만 바꿔 쓴다 (F-2050)
+- 알림 리비전: 알림 행을 넣고·읽고·지우는 batch 는 받는 사람 `users.notif_rev` 를 같은 batch 에서 올린다 (F-2057 3.5)
 
 ## 5. 브랜드 주입
 

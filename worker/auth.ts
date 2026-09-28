@@ -11,15 +11,20 @@ export interface AuthUser {
   id: string
   email: string
   usage?: UserUsage // getUser 세 경로가 채운다. vi.mock('./auth') 테스트는 비워 둔다 (F-2024 2.1)
+  notifRev?: number // 세션·개발 우회 경로가 채운다. /v1 토큰 경로와 vi.mock('./auth') 테스트는 비워 둔다 (F-2057 3.2)
 }
 
-// better-auth 세션(getUser·getUserRefreshing) 전용 — writeCount 가 숫자일 때만 usage 를 싣는다
-export function toAuthUser(user: { id: string; email: string } & Partial<Record<keyof UserUsage, unknown>>): AuthUser {
-  const { id, email, writeCount } = user
-  if (typeof writeCount !== 'number') return { id, email }
+// better-auth 세션(getUser·getUserRefreshing) 전용 — writeCount·notifRev 가 숫자일 때만 usage·notifRev 를 싣는다
+export function toAuthUser(
+  user: { id: string; email: string } & Partial<Record<keyof UserUsage | 'notifRev', unknown>>,
+): AuthUser {
+  const { id, email, writeCount, notifRev } = user
+  const rev = typeof notifRev === 'number' ? { notifRev } : {}
+  if (typeof writeCount !== 'number') return { id, email, ...rev }
   return {
     id,
     email,
+    ...rev,
     usage: {
       writeDay: (user.writeDay as string | null | undefined) ?? null,
       writeCount,
@@ -40,11 +45,13 @@ async function findOrCreateDevUser(env: Env, email: string): Promise<AuthUser> {
   )
     .bind(crypto.randomUUID(), lower, now, 1, new Date(now).toISOString())
     .run()
-  const row = await env.DB.prepare(`SELECT id, email, ${USAGE_COLUMNS} FROM users WHERE email = ?`)
+  const row = await env.DB.prepare(`SELECT id, email, ${USAGE_COLUMNS}, notif_rev FROM users WHERE email = ?`)
     .bind(lower)
-    .first<{ id: string; email: string } & UsageRow>()
+    .first<{ id: string; email: string; notif_rev?: number } & UsageRow>()
   if (!row) throw new Error('user_lookup_failed')
-  return { id: row.id, email: row.email, usage: rowToUsage(row) }
+  const user: AuthUser = { id: row.id, email: row.email, usage: rowToUsage(row) }
+  if (typeof row.notif_rev === 'number') user.notifRev = row.notif_rev
+  return user
 }
 
 async function devUser(env: Env): Promise<AuthUser | null> {

@@ -5,7 +5,12 @@ export const NOTIFICATIONS_POLL_MS = 60_000 // F-500 4.8
 export const NOTIFICATIONS_MIN_GAP_MS = 5_000 // 자동 가져오기끼리의 최소 간격
 export const NOTIFICATION_TITLE_MAX = 40 // 문구 안 문서 제목 (코드 포인트)
 
-export type NotificationsFetchResult = { ok: true; data: NotificationsResponse } | { ok: false; reason: 'network' | 'unauthorized' | 'server' | 'invalid' }
+export const NOTIFICATIONS_ETAG_MAX = 200 // 이보다 긴 ETag 는 쥐지 않는다 (F-2057 4.1)
+
+export type NotificationsFetchResult =
+  | { ok: true; data: NotificationsResponse; etag: string | null }
+  | { ok: true; notModified: true }
+  | { ok: false; reason: 'network' | 'unauthorized' | 'server' | 'invalid' }
 export type DocPeopleFetchResult = { ok: true; people: DocPeopleResponse['people'] } | { ok: false }
 
 const NOTIFICATION_ITEM_KEYS = [
@@ -70,13 +75,19 @@ export function readDocPeopleResponse(json: unknown): DocPeopleResponse | null {
   return { people: json.people as DocPeopleResponse['people'] }
 }
 
-export async function fetchNotifications(): Promise<NotificationsFetchResult> {
+// 조건부 요청 — 304 는 !res.ok 판정보다 먼저 가른다 (F-2057 4.1)
+export async function fetchNotifications(etag: string | null): Promise<NotificationsFetchResult> {
   let res: Response
   try {
-    res = await fetch('/api/notifications', { credentials: 'same-origin' })
+    res = await fetch('/api/notifications', {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: etag !== null ? { 'If-None-Match': etag } : {},
+    })
   } catch {
     return { ok: false, reason: 'network' }
   }
+  if (res.status === 304) return etag !== null ? { ok: true, notModified: true } : { ok: false, reason: 'invalid' }
   if (res.status === 401) return { ok: false, reason: 'unauthorized' }
   if (res.status >= 500) return { ok: false, reason: 'server' }
   if (!res.ok) return { ok: false, reason: 'invalid' }
@@ -88,7 +99,8 @@ export async function fetchNotifications(): Promise<NotificationsFetchResult> {
   }
   const data = readNotificationsResponse(json)
   if (!data) return { ok: false, reason: 'invalid' }
-  return { ok: true, data }
+  const header = res.headers.get('ETag')
+  return { ok: true, data, etag: header !== null && header.length <= NOTIFICATIONS_ETAG_MAX ? header : null }
 }
 
 export async function markNotificationsRead(target: { ids: string[] } | { all: true }): Promise<boolean> {

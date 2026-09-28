@@ -558,7 +558,7 @@ describe('F-401 C9·C10 batch 조건·purge 재시도', () => {
     expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM doc_comments WHERE doc_id = ?', uuid(50))).toBe(1)
     expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM notifications WHERE doc_id = ?', uuid(50))).toBe(1)
     expect(usage(sqlDb).content_bytes).toBe(bytesBefore)
-    expect(statements).toHaveLength(8)
+    expect(statements).toHaveLength(9) // F-2057 3.5 ⑤ 리비전 문장 포함
   })
 
   it('F-502 X3 금고로 옮기면 그 문서 댓글·알림 0, 누계에서 댓글 바이트 빠짐', async () => {

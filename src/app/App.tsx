@@ -1554,7 +1554,7 @@ export default function App() {
 
   // ----- 알림함 (F-507 3.3·4장) -----
   const notificationsEnabled = bootPhase === 'ready' && store.kind === 'server' && account.state === 'in'
-  const notifications = useNotifications({ enabled: notificationsEnabled, blocked: account.state === 'in' && account.blocked })
+  const notifications = useNotifications({ enabled: notificationsEnabled, blocked: account.state === 'in' && account.blocked, accountId: account.state === 'in' ? account.id : null })
   const [notificationsOpen, setNotificationsOpenState] = useState(false)
   // 렌더 중 조정 — enabled 가 꺼지면 알림함을 닫는다(useDocComments 의 resetFor 와 같은 패턴)
   const [wasNotificationsEnabled, setWasNotificationsEnabled] = useState(notificationsEnabled)

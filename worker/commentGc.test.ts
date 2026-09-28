@@ -101,3 +101,24 @@ describe('F-502 K4 scheduled', () => {
     vi.restoreAllMocks()
   })
 })
+
+describe('F-2057 U9 알림 리비전', () => {
+  it('91일 된 알림·고아 알림의 받는 사람 +1, 89일만 가진 사람 그대로, 돌려주는 객체는 같다', async () => {
+    const { sqlDb, env } = setup()
+    for (const [id, email] of [['a', 'a@example.com'], ['b', 'b@example.com'], ['c', 'c@example.com']]) {
+      sqlDb.prepare('INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)').run(id, email, 1)
+    }
+    note(sqlDb, 'old', 'a@example.com', 'live', NOW - 91 * DAY)
+    note(sqlDb, 'orphan', 'b@example.com', 'gone', NOW)
+    note(sqlDb, 'young', 'c@example.com', 'live', NOW - 89 * DAY)
+    const result = await cleanupComments(env, NOW)
+    expect(result).toEqual({ orphanRows: 0, oldNotifications: 1, orphanNotifications: 1, overflowNotifications: 0 })
+    const revs = sqlDb.prepare('SELECT email, notif_rev FROM users ORDER BY email').all() as { email: string; notif_rev: number }[]
+    expect(Object.fromEntries(revs.map((r) => [r.email, r.notif_rev]))).toEqual({
+      'a@example.com': 1,
+      'b@example.com': 1,
+      'c@example.com': 0,
+      'u1@example.com': 0,
+    })
+  })
+})

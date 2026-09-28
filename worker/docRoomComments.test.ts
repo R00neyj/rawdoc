@@ -179,6 +179,7 @@ function label(sql: string): string {
   if (sql.startsWith('DELETE FROM doc_comments')) return 'c3'
   if (sql.startsWith('DELETE FROM notifications')) return sql.includes('LIMIT') ? 'c6' : 'c4'
   if (sql.startsWith('INSERT OR IGNORE INTO notifications')) return 'c5'
+  if (sql.startsWith('UPDATE users SET notif_rev')) return 'rev' // F-2057 3.5
   if (sql.startsWith('UPDATE users SET content_bytes = content_bytes + (')) return 'c7'
   return sql
 }
@@ -466,7 +467,7 @@ describe('F-502 D14 D1 에만 있는 행', () => {
     await again.core.load()
     expect(state.batches).toHaveLength(0)
     await vi.advanceTimersByTimeAsync(LOAD_FLUSH_DELAY_MS)
-    expect(labels(state.batches[0])).toEqual(['usage', 'c1', 'c3', 'c4', 'c7'])
+    expect(labels(state.batches[0])).toEqual(['usage', 'c1', 'c3', 'rev', 'c4', 'c7'])
     expect(dbRows(sqlDb)).toHaveLength(0)
     expect(ownerBytes(sqlDb)).toBe(0)
   })

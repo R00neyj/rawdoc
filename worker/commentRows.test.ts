@@ -7,6 +7,9 @@ import {
   COMMENT_JSON_CHUNK_BYTES,
   accountCommentDeleteStatements,
   commentBundleStatements,
+  docCommentDeleteStatements,
+  e2eeCommentDeleteStatements,
+  folderCommentDeleteStatements,
   notificationExcerpt,
   notificationStatements,
   notificationTargets,
@@ -302,5 +305,133 @@ describe('F-502 8.4 계정 삭제 문장 (X5 는 F-2038 몫 — 문장만)', () 
     expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM doc_comments WHERE doc_id = ?', 'other-doc')).toBe(1)
     expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM notifications WHERE doc_id = ?', DOC)).toBe(0)
     expect(all<{ recipient_email: string }>(sqlDb, 'SELECT recipient_email FROM notifications')).toEqual([{ recipient_email: 'z@example.com' }])
+  })
+})
+
+// ----- F-2057 3.5 알림 리비전 -----
+
+function addUser(sqlDb: DatabaseSync, id: string, email: string) {
+  sqlDb.prepare('INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)').run(id, email, 1)
+}
+
+function revs(sqlDb: DatabaseSync): Record<string, number> {
+  const rows = sqlDb.prepare('SELECT email, notif_rev FROM users ORDER BY email').all() as { email: string; notif_rev: number }[]
+  return Object.fromEntries(rows.map((r) => [r.email, r.notif_rev]))
+}
+
+function putNote(sqlDb: DatabaseSync, id: string, recipient: string, docId: string, commentId: string) {
+  sqlDb
+    .prepare(
+      "INSERT INTO notifications (id, recipient_email, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at) VALUES (?, ?, 'mention', ?, ?, ?, 'x@example.com', 't', 'e', 1)",
+    )
+    .run(id, recipient, docId, commentId, commentId)
+}
+
+// 문장 순서만 본다 — 실행하지 않는다
+function sqlOrder(build: (db: D1Database) => D1PreparedStatement[]): string[] {
+  const sqls: string[] = []
+  const db = {
+    prepare(sql: string) {
+      sqls.push(sql)
+      return { bind: () => ({}) }
+    },
+  } as unknown as D1Database
+  build(db)
+  return sqls
+}
+
+function expectRevBeforeDelete(sqls: string[]) {
+  const rev = sqls.findIndex((s) => s.startsWith('UPDATE users SET notif_rev'))
+  const del = sqls.findIndex((s) => s.startsWith('DELETE FROM notifications'))
+  expect(rev).toBeGreaterThanOrEqual(0)
+  expect(del).toBeGreaterThan(rev)
+}
+
+describe('F-2057 U6 알림 넣기', () => {
+  it('가입한 받는 사람 각 +1, 가입 안 한 이메일은 행 없음, 금고 문서면 아무도 안 오름', async () => {
+    const { sqlDb, db } = setup()
+    addUser(sqlDb, 'b', 'b@example.com')
+    addUser(sqlDb, 'c', 'c@example.com')
+    await db.batch(
+      notificationStatements(db, {
+        docId: DOC,
+        docTitle: 't',
+        now: 1,
+        drafts: [draft('b@example.com', 'c1'), draft('c@example.com', 'c1'), draft('nobody@example.com', 'c1'), draft('b@example.com', 'c2')],
+      }),
+    )
+    expect(revs(sqlDb)).toEqual({ 'b@example.com': 1, 'c@example.com': 1, 'u1@example.com': 0 })
+    insertDoc(sqlDb, 'vault', OWNER_ID, 'KEY')
+    await db.batch(notificationStatements(db, { docId: 'vault', docTitle: 't', now: 2, drafts: [draft('b@example.com', 'c3')] }))
+    expect(revs(sqlDb)).toEqual({ 'b@example.com': 1, 'c@example.com': 1, 'u1@example.com': 0 })
+  })
+})
+
+describe('F-2057 U7 댓글 지우기', () => {
+  it('지운 댓글 알림의 받는 사람만 +1, 다른 문서·다른 댓글은 그대로, 지울 알림 없으면 아무도', async () => {
+    const { sqlDb, db } = setup()
+    addUser(sqlDb, 'b', 'b@example.com')
+    addUser(sqlDb, 'c', 'c@example.com')
+    addUser(sqlDb, 'd', 'd@example.com')
+    insertDoc(sqlDb, 'doc-2', OWNER_ID)
+    putNote(sqlDb, 'n1', 'b@example.com', DOC, 'c1')
+    putNote(sqlDb, 'n2', 'c@example.com', DOC, 'c2')
+    putNote(sqlDb, 'n3', 'd@example.com', 'doc-2', 'c1')
+    const bundle = (deletes: string[]) =>
+      commentBundleStatements(db, { docId: DOC, ownerId: OWNER_ID, upserts: [], deletes, drafts: [], docTitle: 't', now: 1 })
+    await db.batch(bundle(['c1']))
+    expect(revs(sqlDb)).toEqual({ 'b@example.com': 1, 'c@example.com': 0, 'd@example.com': 0, 'u1@example.com': 0 })
+    await db.batch(bundle(['c9']))
+    expect(revs(sqlDb)).toEqual({ 'b@example.com': 1, 'c@example.com': 0, 'd@example.com': 0, 'u1@example.com': 0 })
+    expectRevBeforeDelete(
+      sqlOrder((spy) => commentBundleStatements(spy, { docId: DOC, ownerId: OWNER_ID, upserts: [], deletes: ['c1'], drafts: [], docTitle: 't', now: 1 })),
+    )
+  })
+})
+
+describe('F-2057 U8 문서·폴더·금고·계정 지우기', () => {
+  function world() {
+    const { sqlDb, db } = setup()
+    addUser(sqlDb, 'b', 'b@example.com')
+    addUser(sqlDb, 'c', 'c@example.com')
+    addUser(sqlDb, 'u2', 'u2@example.com')
+    insertDoc(sqlDb, 'doc-2', 'u2')
+    putNote(sqlDb, 'n1', 'b@example.com', DOC, 'c1')
+    putNote(sqlDb, 'n2', 'c@example.com', 'doc-2', 'c2')
+    return { sqlDb, db }
+  }
+  const untouched = { 'b@example.com': 1, 'c@example.com': 0, 'u1@example.com': 0, 'u2@example.com': 0 }
+
+  it('문서 삭제', async () => {
+    const { sqlDb, db } = world()
+    await db.batch(docCommentDeleteStatements(db, OWNER_ID, DOC))
+    expect(revs(sqlDb)).toEqual(untouched)
+    expectRevBeforeDelete(sqlOrder((spy) => docCommentDeleteStatements(spy, OWNER_ID, DOC)))
+  })
+
+  it('폴더 삭제', async () => {
+    const { sqlDb, db } = world()
+    sqlDb.prepare("UPDATE docs SET folder_id = 'f1' WHERE id = ?").run(DOC)
+    await db.batch(folderCommentDeleteStatements(db, OWNER_ID, ['f1']))
+    expect(revs(sqlDb)).toEqual(untouched)
+    expectRevBeforeDelete(sqlOrder((spy) => folderCommentDeleteStatements(spy, OWNER_ID, ['f1'])))
+  })
+
+  it('금고 전환 — 이 요청의 키를 쓴 때만', async () => {
+    const { sqlDb, db } = world()
+    await db.batch(e2eeCommentDeleteStatements(db, OWNER_ID, DOC, 'KEY'))
+    expect(revs(sqlDb)).toEqual({ ...untouched, 'b@example.com': 0 })
+    sqlDb.prepare("UPDATE docs SET e2ee_key = 'KEY' WHERE id = ?").run(DOC)
+    await db.batch(e2eeCommentDeleteStatements(db, OWNER_ID, DOC, 'KEY'))
+    expect(revs(sqlDb)).toEqual(untouched)
+    expectRevBeforeDelete(sqlOrder((spy) => e2eeCommentDeleteStatements(spy, OWNER_ID, DOC, 'KEY')))
+  })
+
+  it('계정 삭제 — 내 문서 알림의 받는 사람 +1, 남의 문서의 남 알림은 그대로', async () => {
+    const { sqlDb, db } = world()
+    putNote(sqlDb, 'n3', 'u1@example.com', 'doc-2', 'c3')
+    await db.batch(accountCommentDeleteStatements(db, OWNER_ID, 'U1@example.com'))
+    expect(revs(sqlDb)).toEqual({ ...untouched, 'u1@example.com': 1 })
+    expectRevBeforeDelete(sqlOrder((spy) => accountCommentDeleteStatements(spy, OWNER_ID, 'u1@example.com')))
   })
 })

@@ -150,3 +150,123 @@ describe('F-503 A6 막힌 계정', () => {
     expect((await call(w.env, '/api/notifications')).status).toBe(200)
   })
 })
+
+// ----- F-2057 ETag·304·리비전 -----
+
+type NotificationsModule = typeof import('./notifications')
+let notificationsMod: NotificationsModule
+
+beforeAll(async () => {
+  notificationsMod = await import('./notifications')
+})
+
+const myId = (sqlDb: DatabaseSync) => (sqlDb.prepare('SELECT id FROM users WHERE email = ?').get(ME) as { id: string }).id
+const myRev = (sqlDb: DatabaseSync) => (sqlDb.prepare('SELECT notif_rev AS n FROM users WHERE email = ?').get(ME) as { n: number }).n
+const myWrites = (sqlDb: DatabaseSync) => (sqlDb.prepare('SELECT write_count AS n FROM users WHERE email = ?').get(ME) as { n: number }).n
+
+async function worldWithMe() {
+  const w = makeWorld()
+  await call(w.env, '/api/me')
+  return { ...w, id: myId(w.sqlDb) }
+}
+
+function countNotificationQueries(env: Env): { n: number } {
+  const counter = { n: 0 }
+  const prepare = env.DB.prepare.bind(env.DB)
+  env.DB.prepare = ((sql: string) => {
+    if (sql.includes('notifications')) counter.n++
+    return prepare(sql)
+  }) as typeof env.DB.prepare
+  return counter
+}
+
+const ifNoneMatch = (value: string): RequestInit => ({ headers: { 'If-None-Match': value } })
+
+describe('F-2057 U1 ETag 싣기', () => {
+  it('200 에 W/"n1-{id}-{rev}-30", ?limit=5 면 -5, Cache-Control no-store 유지', async () => {
+    const w = await worldWithMe()
+    note(w.sqlDb, 1, ME, 100)
+    const res = await call(w.env, '/api/notifications')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('ETag')).toBe(`W/"n1-${w.id}-0-30"`)
+    expect(res.headers.get('Cache-Control')).toBe('no-store')
+    const five = await call(w.env, '/api/notifications?limit=5')
+    expect(five.headers.get('ETag')).toBe(`W/"n1-${w.id}-0-5"`)
+    w.sqlDb.prepare('UPDATE users SET notif_rev = 7 WHERE email = ?').run(ME)
+    expect((await call(w.env, '/api/notifications')).headers.get('ETag')).toBe(`W/"n1-${w.id}-7-30"`)
+  })
+})
+
+describe('F-2057 U2 304', () => {
+  it('강한 모양·W/ 모양·목록 → 304, 본문 0바이트, ETag·no-store, notifications 질의 0', async () => {
+    const w = await worldWithMe()
+    note(w.sqlDb, 1, ME, 100)
+    const etag = `W/"n1-${w.id}-0-30"`
+    const counter = countNotificationQueries(w.env)
+    for (const value of [`"n1-${w.id}-0-30"`, etag, `"x", ${etag}`]) {
+      const res = await call(w.env, '/api/notifications', ifNoneMatch(value))
+      expect(res.status, value).toBe(304)
+      expect((await res.arrayBuffer()).byteLength).toBe(0)
+      expect(res.headers.get('ETag')).toBe(etag)
+      expect(res.headers.get('Cache-Control')).toBe('no-store')
+    }
+    expect(counter.n).toBe(0)
+  })
+})
+
+describe('F-2057 U3 빗나감', () => {
+  it('* · 다른 리비전 · 다른 limit · 쓰레기 → 200 + 목록', async () => {
+    const w = await worldWithMe()
+    note(w.sqlDb, 1, ME, 100)
+    for (const value of ['*', `W/"n1-${w.id}-1-30"`, `W/"n1-${w.id}-0-5"`, 'garbage', '']) {
+      const res = await call(w.env, '/api/notifications', ifNoneMatch(value))
+      expect(res.status, value).toBe(200)
+      const body = (await res.json()) as { items: unknown[]; unread: number }
+      expect(body.items).toHaveLength(1)
+    }
+  })
+
+  it('다른 사용자 id 는 맞지 않는다 — notificationsEtag·ifNoneMatchHits', () => {
+    const { notificationsEtag, ifNoneMatchHits } = notificationsMod
+    const mine = notificationsEtag({ userId: 'u1', rev: 0, limit: 30 })
+    const theirs = notificationsEtag({ userId: 'u2', rev: 0, limit: 30 })
+    expect(mine).toBe('W/"n1-u1-0-30"')
+    expect(ifNoneMatchHits(theirs, mine)).toBe(false)
+    expect(ifNoneMatchHits(mine, mine)).toBe(true)
+    expect(ifNoneMatchHits(' "a" ,  "n1-u1-0-30" ', mine)).toBe(true)
+    expect(ifNoneMatchHits('*', mine)).toBe(false)
+    expect(ifNoneMatchHits(null, mine)).toBe(false)
+    expect(ifNoneMatchHits('', mine)).toBe(false)
+  })
+})
+
+describe('F-2057 U4 읽음이 바꾼 때만 리비전', () => {
+  it('안 읽은 것 하나 → +1, 같은 ids 다시 → 그대로, 안 읽은 것 없을 때 all → 그대로, 남의 id → 그대로. write_count 는 매번 +1', async () => {
+    const w = await worldWithMe()
+    note(w.sqlDb, 1, ME, 100)
+    note(w.sqlDb, 2, OTHER, 200)
+    const rev0 = myRev(w.sqlDb)
+    const writes0 = myWrites(w.sqlDb)
+    expect((await call(w.env, '/api/notifications/read', post({ ids: [uuid(1)] }))).status).toBe(204)
+    expect([myRev(w.sqlDb), myWrites(w.sqlDb)]).toEqual([rev0 + 1, writes0 + 1])
+    expect((await call(w.env, '/api/notifications/read', post({ ids: [uuid(1)] }))).status).toBe(204)
+    expect([myRev(w.sqlDb), myWrites(w.sqlDb)]).toEqual([rev0 + 1, writes0 + 2])
+    expect((await call(w.env, '/api/notifications/read', post({ all: true }))).status).toBe(204)
+    expect([myRev(w.sqlDb), myWrites(w.sqlDb)]).toEqual([rev0 + 1, writes0 + 3])
+    expect((await call(w.env, '/api/notifications/read', post({ ids: [uuid(2)] }))).status).toBe(204)
+    expect([myRev(w.sqlDb), myWrites(w.sqlDb)]).toEqual([rev0 + 1, writes0 + 4])
+  })
+})
+
+describe('F-2057 U5 읽음 뒤 옛 ETag', () => {
+  it('200 과 새 ETag', async () => {
+    const w = await worldWithMe()
+    note(w.sqlDb, 1, ME, 100)
+    const old = (await call(w.env, '/api/notifications')).headers.get('ETag')!
+    expect((await call(w.env, '/api/notifications/read', post({ all: true }))).status).toBe(204)
+    const res = await call(w.env, '/api/notifications', ifNoneMatch(old))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('ETag')).toBe(`W/"n1-${w.id}-1-30"`)
+    expect(((await res.json()) as { unread: number }).unread).toBe(0)
+  })
+})

@@ -1,5 +1,7 @@
 // 계정 삭제 API — worker/index.ts 를 통째로 (specs/features/F-2038.md 9.1 W1~W8·W10)
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import type { DatabaseSync } from 'node:sqlite'
 import { SITE_URL } from '../src/lib/siteMeta'
 import { asAuthDb, asD1, openTestDb } from './testD1'
@@ -396,6 +398,7 @@ describe('F-2038 W6 최근 로그인', () => {
 describe('F-2038 W7 batch 원자성', () => {
   it('purge_jobs 가 없는 DB 에서 500 internal, 아무것도 안 지움', async () => {
     const sqlDb = openTestDb('0012')
+    sqlDb.exec(readFileSync(fileURLToPath(new URL('../migrations/0014_notif_rev.sql', import.meta.url)), 'utf-8')) // 0013(purge_jobs)만 뺀다 — 인증이 notif_rev 를 읽는다
     seedWorld(sqlDb)
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const res = await call(devEnv(sqlDb), '/api/account', { method: 'DELETE' })
