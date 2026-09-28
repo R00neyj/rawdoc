@@ -76,7 +76,9 @@ function ownedPatterns(featureId) {
       }
     }
   }
-  return patterns
+  // 단위 테스트는 tests/{원본 경로} 로 옮겨졌다 — 옛 명세의 `src/a/b.test.ts` 도 새 위치를 소유로 친다 (2026-09-28)
+  const moved = patterns.filter((p) => /\.test\.[a-z]+$/.test(p) && /^(src|worker|cli|site|scripts)\//.test(p)).map((p) => `tests/${p}`)
+  return [...patterns, ...moved]
 }
 
 function patternToMatcher(pattern) {
@@ -165,7 +167,7 @@ function checkLines(file, lines) {
   if (!isCodeFile && !isCssFile) return violations
 
   // 연속 3줄 이상 // 주석 — "왜" 설명은 두 줄까지 허용, e2e·scripts 는 제외 (CLAUDE.md Code comments, 2026-09-28)
-  const maxCommentRun = /^(e2e|scripts)\//.test(file) ? Infinity : 2
+  const maxCommentRun = /^(tests\/)?(e2e|scripts)\//.test(file) ? Infinity : 2
   let runStart = null
   let runLen = 0
   let prevLine = null
