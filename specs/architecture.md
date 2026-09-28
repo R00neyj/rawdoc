@@ -45,6 +45,8 @@ src/
     useHashRouting.ts hashchange 처리·해시 주소 쓰기 (F-210, F-243, F-244, F-292, F-2071)
     hashNav.ts       해시 이동 갈래 판정 순수 함수·공개 보기 경로 (F-2071)
     useEditorSync.ts 편집기 연동 — 본문 1회 읽기·위키 문맥·보기 HTML·편집기 layout effect (F-123, F-144, F-295, F-2018, F-2072)
+    useE2eeConvert.ts 문서·폴더 금고로 옮기기·빼기 (F-405, F-407, F-2073)
+    useE2eeMigrate.ts 금고 이관 판정·실행·잠그기·초기화 (F-404, F-408, F-2073)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
