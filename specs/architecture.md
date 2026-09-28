@@ -175,6 +175,7 @@ store.removeAttachment(id)    // Promise<void>
 - 저장소 이름·키에 제품명을 쓰지 않는다 (CLAUDE.md 불변조건)
 - 지도(F-292)도 넓히지 않는다. `list()` 하나로 문서 원문을 읽어 위키링크를 뽑는다
 - 검색은 이 인터페이스를 넓히지 않는다. `list()`·`listFolders()` 만 쓰고, F-286 의 `SearchSource` 타입이 그 둘만 받는다(`Pick<Store, 'list' | 'listFolders'>`)
+- 로그인 상태에서는 App 이 캐시 목록 소스(`cachedList.ts` `createCachedListSource`)를 넘긴다 — 캐시 ∪ 마지막 공유 목록, 10분 넘으면 뒤에서 서버 목록(F-2056)
 
 **IndexedDB `md-yjs`(F-306, 2026-09-24)** — 실시간 문서의 Yjs 업데이트 기록. 서버 저장소(`md-remote`)와 별도 DB, 버전 1
 
@@ -199,7 +200,7 @@ type YjsMetaRow = {
 - 원격 연결이 붙으면(F-303 훅, F-305 이후 provider) 공유 `Y.Doc` 이 원본이 되고 편집기 `Y.Doc` 은 IME 게이트 뒤에서 Yjs 업데이트로만 따라간다. `getText`·저장은 계속 `EditorState` 를 읽는다 (F-303 7장)
 - 저장소 → 에디터: 문서를 여는 시점 1회 (`Editor` 를 문서 id 를 `key` 로 다시 마운트) (에디터를 만들 때 `Y.Doc` 을 새로 만들어 저장소 본문을 LF 로 바꿔 심는다. 에디터를 버리면 `Y.Doc` 도 버린다)
 - 에디터 → 저장소: 입력이 멈추면 스냅샷 저장. 문서 전환·새로고침 적용 전에는 대기 중 저장을 먼저 끝낸다
-- 문서 목록(제목·수정 시각)은 `App` 의 React state 로 둔다. 본문은 넣지 않는다
+- 문서 목록(제목·수정 시각)은 `App` 의 React state 로 둔다. 본문은 넣지 않는다. 다른 탭 신호는 `md-remote` 캐시로 맞추고, 마지막 서버 목록이 10분을 넘었으면 뒤에서 서버 목록(F-2056)
 - **서버 문서, 실시간 경로(M3, F-305)**: 위 흐름과 다르다 — 방 Doc(App 층 `useLiveDoc` 가 만드는 빈 `Y.Doc`) → 게이트(F-303 `remoteGate`, `sharedDoc` 옵션으로 방 Doc 을 그대로 씀) → 편집기 Doc(첫 동기화 뒤 방 Doc 에서 `createYBindingFromState` 로 복제) → `EditorState`. 본문 자동 저장(`PUT`)은 경로가 `pending`(outbox 대기) 또는 `fallback`(연결 실패) 일 때만 돈다 — `realtime` 경로에서는 꺼진다(F-305 4장·10장)
 - **오프라인 영속(F-306, 2026-09-24)**: 방 Doc 은 provider 를 붙이기 전에 `md-yjs`(`yjsStore.ts`) 를 먼저 불러와 적용한다 — 이 순서라야 오프라인에서 새로고침해도 로컬 편집이 남는다. 경로 판정에 `offline-view` 가 더해졌다 — 이 브라우저에 그 문서 기록이 없는 채 오프라인으로 열면 캐시 본문을 읽기 전용으로 띄우고(방 Doc 을 만들지 않는다), 기록이 있으면 폴백 대신 재개 가능한 `realtime` 으로 로컬 기록을 이어 편집한다(`docPath.ts` 5장, F-306 5장)
 - awareness(`useLiveDoc`, 방 Doc 에 매임) → 상단바 아바타(`usePeers`)·원격 커서(`remoteCursors`) (F-307)
@@ -298,6 +299,7 @@ scripts/lib/admin.mjs d1.mjs                          관리 스크립트 공용
 - Worker 는 `src/lib/**` 순수 함수와 `src/types.ts` 만 import 한다
 - 로컬 개발: `.dev.vars` 키 — `BETTER_AUTH_URL=http://localhost:8790`, `BETTER_AUTH_SECRET`(32바이트 난수 base64), `DEV_AUTH_EMAIL=…@example.com`(우회를 쓸 때), 실제 OAuth 를 로컬에서 시험할 때만 `GOOGLE_CLIENT_ID`·`GOOGLE_CLIENT_SECRET`·`GITHUB_CLIENT_ID`·`GITHUB_CLIENT_SECRET`(로컬 앱 값). 우회는 `BETTER_AUTH_URL` 이 `http:` localhost 이고 `DEV_AUTH_EMAIL` 이 `@example.com` 으로 끝날 때만 켜진다(`origin.ts` `isDevBypass`). `wrangler.jsonc` `vars` 의 `DEV_AUTH_EMAIL` 은 빈 값 — `.dev.vars` 가 덮는다 (F-2033 5.2·8.1·11장 3번). 포트는 `dev:worker` 8790, 에이전트 병렬 슬롯 8791~
 - 클라이언트: 로그인 상태면 `store.kind === 'server'` (F-207). IndexedDB `md-remote` 에 캐시·보낼 목록·첨부. 로컬 `md-docs` 는 로그아웃 상태와 이관(F-208)에 쓴다
+- 서버 저장소 전용 `lastSharedList()`·`lastServerListAt()`, `list()` 진행 중 합치기(쓰기 세대)가 있다(F-2056)
 - R2 키 `att/{owner_id}/{id}.{ext}`, 공개 버킷·서명 URL 없음 (F-209)
 - 안 쓰는 첨부 정리: 매일 UTC 18시 Cron `scheduled` → 모든 문서 원문에 없고 24시간 지난 첨부 R2·D1 삭제 (F-219). 같은 Cron 이 만료된 `auth_sessions`·`auth_verifications` 행도 따로 지운다 (F-2033 2.6)
 - 10분 Cron `*/10 * * * *` — `purge_jobs` 비우기(DO 방 먼저, 그다음 R2 접두사, 호출 예산 40). 계정 삭제 요청도 204 뒤 `waitUntil` 로 예산 15 만큼 먼저 비운다. `scheduled` 는 `event.cron` 이 이 문자열일 때만 정리를 돌리고, 그 밖에는 매일 정리만 (F-2038 5.4·5.5)

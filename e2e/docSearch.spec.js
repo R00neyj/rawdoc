@@ -319,19 +319,7 @@ test.describe('F-288 안내 문구와 공백 표시', () => {
     await expect(page.locator('dialog[open] .search-note')).toHaveCount(0)
   })
 
-  test('F-288 A9 목록을 새로 읽는 중…', async ({ page }) => {
-    await fakeServer(page)
-    await openApp(page)
-    await importMarkdown(page, { content: '내용\n' })
-    await page.route('**/api/docs', async (route) => {
-      await new Promise((res) => setTimeout(res, 1200))
-      await route.fallback()
-    })
-
-    await page.keyboard.press('Control+Shift+F')
-    await expect(page.locator('dialog[open] .search-note')).toContainText('목록을 새로 읽는 중…')
-    await expect(page.locator('dialog[open] .search-note', { hasText: '목록을 새로 읽는 중…' })).toHaveCount(0, { timeout: 3000 })
-  })
+  // F-288 A9 목록을 새로 읽는 중… — F-2056 A6(뜨지 않음)·A8(실시간 변경으로 기다릴 때 뜸)이 이어받는다
 
   test('F-288 A10 빠르면 안 뜬다', async ({ page }) => {
     await openApp(page)

@@ -57,6 +57,8 @@ test.describe('리뷰 A2 세션 재시작 전 저장', () => {
     await expect(page.locator('.statusbar-save')).toContainText('저장됨')
     await page.clock.fastForward(11_000)
     await expect.poll(() => server.docs.get(docId)?.version).toBe(2)
+    // 목록 신선도 TTL 을 넘겨 탭 신호 뒤 서버 목록을 뒤에서 읽게 한다 (F-2056 11장)
+    await page.clock.fastForward('10:01')
 
     // 700ms 저장 타이머가 돌기 전에 목록 다시 읽기(250ms)가 세션을 다시 시작하도록 시계를 멈춘다
     const now = await page.evaluate(() => Date.now())

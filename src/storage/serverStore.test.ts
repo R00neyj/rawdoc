@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createServerStore, QuotaExceededError, E2EE_SERVER_SAVE_INTERVAL_MS, PendingSyncError, BODY_FETCH_CONCURRENCY } from './serverStore'
 import { createRemoteCache } from './remoteCache'
 import { descendantFolderIds } from '../lib/folderTree'
+import { withE2ee } from '../e2ee/e2eeStore'
 import type { CommentRecord } from '../lib/docComments'
 
 // 캐시 getDoc 이 값을 돌려주기 직전에 한 번 끼어드는 갈고리 — 비어 있으면 원래 함수 그대로 (리뷰 S2 후속)
@@ -1990,6 +1991,7 @@ describe('F-2042 U1~U6 부팅 목록 읽기 — 병렬화·캐시 먼저 셸', (
     vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
     const store = await createServerStore('u1', { dbName: freshDbName() })
     const doc = await store.create({ title: 'T', content: 'a', lineEnding: 'lf' })
+    const other = await store.create({ title: 'O', content: 'o', lineEnding: 'lf' })
     await tick(20)
     server.docs.get(doc.id)!.content = 'b'
     server.docs.get(doc.id)!.version += 1
@@ -2003,7 +2005,10 @@ describe('F-2042 U1~U6 부팅 목록 읽기 — 병렬화·캐시 먼저 셸', (
     })
     vi.stubGlobal('fetch', fetchSpy)
 
-    await Promise.all([store.list(), store.list()])
+    // 두 호출 사이 쓰기 세대를 올려 list() 합치기(F-2056 4.1)가 아니라 본문 받기 모음(3.3)이 막는지 본다
+    const first = store.list()
+    const pinning = store.setPinned(other.id, true)
+    await Promise.all([first, store.list(), pinning])
     expect(bodyGetCount).toBe(1)
     expect((await store.get(doc.id))?.content).toBe('b')
   })
@@ -2869,5 +2874,164 @@ describe('리뷰 A3 공유 목록 읽기 성공 여부', () => {
     failShared = false
     await store.list()
     expect(store.lastListSharedOk()).toBe(true)
+  })
+})
+
+function countingFetch(server: ReturnType<typeof makeFakeServer>, opts: { gateDocs?: Promise<void>; failShared?: () => boolean; failDocs?: () => boolean } = {}) {
+  const counts = { docs: 0, shared: 0, bodies: new Map<string, number>() }
+  const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+    const method = init.method ?? 'GET'
+    const path = new URL(String(url), 'http://local.test').pathname
+    if (method === 'GET' && path === '/api/docs') {
+      counts.docs++
+      if (opts.failDocs?.()) throw new TypeError('network down')
+      if (opts.gateDocs) await opts.gateDocs
+    }
+    if (method === 'GET' && path === '/api/shared') {
+      counts.shared++
+      if (opts.failShared?.()) return new Response(JSON.stringify({ error: 'internal' }), { status: 503, headers: { 'Content-Type': 'application/json' } })
+    }
+    const bodyMatch = /^\/api\/docs\/([^/]+)$/.exec(path)
+    if (method === 'GET' && bodyMatch) counts.bodies.set(bodyMatch[1], (counts.bodies.get(bodyMatch[1]) ?? 0) + 1)
+    return server.fetchImpl(url, init)
+  })
+  return { counts, fetchMock }
+}
+
+describe('F-2056 U1~U7 list() 합치기·마지막 서버 목록', () => {
+  it('U1 /api/docs 를 붙잡은 채 list() 세 번 → 요청 한 번씩, 같은 id·다른 배열', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    await store.create({ title: 'A', content: 'a', lineEnding: 'lf' })
+    await tick(20)
+
+    let release = () => {}
+    const gateDocs = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { counts, fetchMock } = countingFetch(server, { gateDocs })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const p1 = store.list()
+    const p2 = store.list()
+    const p3 = store.list()
+    await tick(5)
+    release()
+    const [r1, r2, r3] = await Promise.all([p1, p2, p3])
+    expect(counts.docs).toBe(1)
+    expect(counts.shared).toBe(1)
+    expect(r2.map((d) => d.id)).toEqual(r1.map((d) => d.id))
+    expect(r3.map((d) => d.id)).toEqual(r1.map((d) => d.id))
+    expect(r1).not.toBe(r2)
+    expect(r2).not.toBe(r3)
+    expect(r1).not.toBe(r3)
+  })
+
+  it('U2 사이에 create() 가 끼면 새로 요청하고 두 번째 결과에 만든 문서가 있다', async () => {
+    const server = makeFakeServer()
+    let release = () => {}
+    const gateDocs = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { counts, fetchMock } = countingFetch(server, { gateDocs })
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const p1 = store.list()
+    const created = await store.create({ title: 'N', content: 'n', lineEnding: 'lf' })
+    const p2 = store.list()
+    await tick(5)
+    release()
+    const [, r2] = await Promise.all([p1, p2])
+    expect(counts.docs).toBe(2)
+    expect(r2.some((d) => d.id === created.id)).toBe(true)
+  })
+
+  it('U3 앞 list() 가 끝난 뒤의 list() 는 새로 요청한다', async () => {
+    const server = makeFakeServer()
+    const { counts, fetchMock } = countingFetch(server)
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    await store.list()
+    await store.list()
+    expect(counts.docs).toBe(2)
+  })
+
+  it('U4 lastServerListAt: null → 성공한 list() 뒤 주입 시각 → /api/docs 네트워크 오류 뒤에도 그대로', async () => {
+    const server = makeFakeServer()
+    let failDocs = false
+    const { fetchMock } = countingFetch(server, { failDocs: () => failDocs })
+    vi.stubGlobal('fetch', fetchMock)
+    let fakeNow = 1_000
+    const store = await createServerStore('u1', { dbName: freshDbName(), now: () => fakeNow })
+    expect(store.lastServerListAt()).toBeNull()
+    fakeNow = 5_000
+    await store.list()
+    expect(store.lastServerListAt()).toBe(5_000)
+    fakeNow = 9_000
+    failDocs = true
+    await store.list()
+    expect(store.lastServerListAt()).toBe(5_000)
+  })
+
+  it('U5 lastSharedList: null → 공유 1개 → 503 뒤 null, 늘 lastListSharedOk 와 맞다', async () => {
+    const server = makeFakeServer()
+    server.setShared([
+      { id: 'sh1', title: '공유', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1, role: 'view' },
+    ])
+    let failShared = false
+    const { fetchMock } = countingFetch(server, { failShared: () => failShared })
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    expect(store.lastSharedList()).toBeNull()
+    expect(store.lastListSharedOk()).toBe(store.lastSharedList() !== null)
+
+    await store.list()
+    const shared = store.lastSharedList()
+    expect(shared).toHaveLength(1)
+    expect(shared![0]).toMatchObject({ id: 'sh1', content: '', role: 'view' })
+    expect(store.lastListSharedOk()).toBe(store.lastSharedList() !== null)
+
+    failShared = true
+    await store.list()
+    expect(store.lastSharedList()).toBeNull()
+    expect(store.lastListSharedOk()).toBe(store.lastSharedList() !== null)
+  })
+
+  it('U6 합류한 호출들의 부수 효과는 한 번 — 공유 목록 한 벌, 바뀐 본문 GET 한 번', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const doc = await store.create({ title: 'T', content: 'a', lineEnding: 'lf' })
+    await tick(20)
+    server.docs.get(doc.id)!.content = 'b'
+    server.docs.get(doc.id)!.version += 1
+    server.setShared([
+      { id: 'sh1', title: '공유', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1, role: 'edit' },
+    ])
+    const { counts, fetchMock } = countingFetch(server)
+    vi.stubGlobal('fetch', fetchMock)
+
+    await Promise.all([store.list(), store.list()])
+    expect(counts.shared).toBe(1)
+    expect(store.lastSharedList()).toHaveLength(1)
+    expect(counts.bodies.get(doc.id)).toBe(1)
+  })
+
+  it('U7 withE2ee 로 감싸도 lastSharedList·lastServerListAt 이 안쪽 값과 같다', async () => {
+    const server = makeFakeServer()
+    server.setShared([
+      { id: 'sh1', title: '공유', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1, role: 'view' },
+    ])
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const inner = await createServerStore('u1', { dbName: freshDbName(), now: () => 7_000 })
+    const wrapped = withE2ee(inner, { getMasterKey: () => null })
+    expect(wrapped.lastServerListAt()).toBeNull()
+    await wrapped.list()
+    expect(wrapped.lastServerListAt()).toBe(7_000)
+    expect(wrapped.lastServerListAt()).toBe(inner.lastServerListAt())
+    expect(wrapped.lastSharedList()).toEqual(inner.lastSharedList())
+    expect(wrapped.lastSharedList()).toHaveLength(1)
   })
 })

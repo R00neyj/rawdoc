@@ -55,6 +55,7 @@ import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { canShowCachedShell, mergeBootList, shouldApplyListResult } from './bootList'
 import { mergeResyncList } from './resyncList'
+import { combineCachedList, createCachedListSource, createListRefresher, hasLiveChangesSince, isListStale } from './cachedList'
 import { guardForDoc, staleDocBoundNotices } from './docBoundNotice'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
@@ -1144,6 +1145,8 @@ export default function App() {
   // 동기화 뒤 방 Doc 이 바뀌면(내 편집·상대 편집) 700ms 뒤 사이드바 updatedAt 을 지금으로 — D1 은 DO 가 늦게 쓴다 (F-305 10.1)
   const liveRoomDoc = isRealtime && liveSnapshot?.ready ? liveSession?.roomDoc ?? null : null
   const liveRoomDocId = liveSession?.docId ?? null
+  // 문서 id → 이 탭이 본 마지막 실시간 변경 시각 — 검색·지도가 서버 목록을 기다릴지 가른다 (F-2056 6.3)
+  const liveChangedAtRef = useRef(new Map<string, number>())
   useEffect(() => {
     if (!liveRoomDoc || !liveRoomDocId) return
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -1158,6 +1161,7 @@ export default function App() {
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
         const now = Date.now()
+        liveChangedAtRef.current.set(liveRoomDocId, now)
         setDocs((prev) => sortByUpdatedAtDesc(prev.map((d) => (d.id === liveRoomDocId ? { ...d, updatedAt: now } : d))))
       }, SAVE_DEBOUNCE_MS)
     }
@@ -1225,42 +1229,101 @@ export default function App() {
 
   // 다른 탭 신호를 받으면 목록만 다시 읽는다. 열린 문서 본문은 건드리지 않는다(불변조건, F-296.md 7.2)
   // 부팅 뒤 맞추기·금고 목록과 순번을 공유해 늦게 시작한 결과만 반영하고, 요청 전 목록에 있던 문서만 지운 것으로 본다 (리뷰 A3)
-  const resyncFromStore = useCallback(async () => {
-    const seq = ++bootListSeqRef.current
-    const snapshot = docsRef.current
-    // 공유 목록 성공 여부는 list() 가 끝난 즉시 읽는다 — 다른 list() 가 끝나며 덮어쓰기 전에 (리뷰 A3)
-    const listDocs = async () => {
-      const docs = await store.list()
-      return { docs, sharedListed: store.kind !== 'server' || (store as ServerStore).lastListSharedOk() }
-    }
-    const [newFolders, listed] = await Promise.all([store.listFolders(), listDocs()])
-    if (!shouldApplyListResult({ seq, lastAppliedSeq: lastAppliedListSeqRef.current })) return
-    lastAppliedListSeqRef.current = seq
-    setFolders(newFolders)
-    const result = keepLiveTitle(sortByUpdatedAtDesc(listed.docs.map(stripContent)))
-    // 병합은 반영되는 prev 기준 한 번만 — flushSync 로 업데이터를 곧바로 돌려 docs 와 removedIds 가 같은 계산에서 나온다 (리뷰 e)
-    const applied: { merged?: { docs: DocMeta[]; removedIds: string[] } } = {}
-    flushSync(() => {
-      setDocs((prev) => {
-        applied.merged = mergeResyncList({ snapshot, current: prev, result, sharedListed: listed.sharedListed })
-        return applied.merged.docs
+  const applyResyncResult = useCallback(
+    (input: { snapshot: DocMeta[]; docs: Doc[]; sharedListed: boolean; deletedSource: 'tab' | 'bootMerge' }) => {
+      const result = keepLiveTitle(sortByUpdatedAtDesc(input.docs.map(stripContent)))
+      // 병합은 반영되는 prev 기준 한 번만 — flushSync 로 업데이터를 곧바로 돌려 docs 와 removedIds 가 같은 계산에서 나온다 (리뷰 e)
+      const applied: { merged?: { docs: DocMeta[]; removedIds: string[] } } = {}
+      flushSync(() => {
+        setDocs((prev) => {
+          applied.merged = mergeResyncList({ snapshot: input.snapshot, current: prev, result, sharedListed: input.sharedListed })
+          return applied.merged.docs
+        })
       })
+      const merged = applied.merged
+      if (!merged) return
+      const openId = currentDocIdRef.current
+      if (openId && merged.removedIds.includes(openId)) {
+        deletedElsewhereSourceRef.current = input.deletedSource
+        setDeletedElsewhereId(openId)
+      }
+      // 다른 탭이 지금 문서를 금고로 옮기거나 뺐으면 새 세션으로 다시 연다 — 옛 실시간 세션에 머물지 않게 (F-407 7.4)
+      const opened = openId ? merged.docs.find((d) => d.id === openId) : undefined
+      const session = docPathRef.current
+      const syncedPath = session.path === 'realtime' || session.path === 'pending' || session.path === 'fallback' || session.path === 'e2ee'
+      if (store.kind === 'server' && opened && session.docId === openId && syncedPath && !e2eeConvertBusyRef.current) {
+        if (Boolean(opened.e2ee) !== (session.path === 'e2ee')) void restartDocSessionAfterFlush()
+      }
+    },
+    [store, keepLiveTitle, restartDocSessionAfterFlush],
+  )
+
+  // 서버가 알려준 삭제는 다른 탭이라고 단정할 수 없어 뒤 새로 읽기는 'bootMerge' 문구를 쓴다 (F-2056 3.2)
+  const resyncFromStore = useCallback(
+    async (deletedSource: 'tab' | 'bootMerge' = 'tab') => {
+      const seq = ++bootListSeqRef.current
+      const snapshot = docsRef.current
+      // 공유 목록 성공 여부는 list() 가 끝난 즉시 읽는다 — 다른 list() 가 끝나며 덮어쓰기 전에 (리뷰 A3)
+      const listDocs = async () => {
+        const docs = await store.list()
+        return { docs, sharedListed: store.kind !== 'server' || (store as ServerStore).lastListSharedOk() }
+      }
+      const [newFolders, listed] = await Promise.all([store.listFolders(), listDocs()])
+      if (!shouldApplyListResult({ seq, lastAppliedSeq: lastAppliedListSeqRef.current })) return
+      lastAppliedListSeqRef.current = seq
+      setFolders(newFolders)
+      applyResyncResult({ snapshot, docs: listed.docs, sharedListed: listed.sharedListed, deletedSource })
+    },
+    [store, applyResyncResult],
+  )
+
+  // 검색·지도·탭 신호가 나눠 쓰는 뒤 새로 읽기 한 줄 — 페이지 수명 동안 하나, 최신 값은 ref 로 읽는다 (F-2056 6.1)
+  const listRefreshDepsRef = useRef({ store, resyncFromStore })
+  useEffect(() => {
+    listRefreshDepsRef.current = { store, resyncFromStore }
+  })
+  const [listRefresher] = useState(() =>
+    createListRefresher({
+      refresh: () => {
+        const deps = listRefreshDepsRef.current
+        return deps.store.kind === 'server' ? deps.resyncFromStore('bootMerge') : Promise.resolve()
+      },
+      isStale: () => {
+        const current = listRefreshDepsRef.current.store
+        return current.kind === 'server' && isListStale({ lastServerListAt: (current as ServerStore).lastServerListAt(), now: Date.now() })
+      },
+    }),
+  )
+
+  // 로그인 상태의 탭 신호는 md-remote 캐시로 맞춘다 — 순번은 올리지도 비교하지도 않는다 (F-2056 6.2)
+  const resyncFromCache = useCallback(async () => {
+    const serverStore = store as ServerStore
+    const snapshot = docsRef.current
+    let cached: { docs: Doc[]; folders: Folder[] }
+    try {
+      cached = await serverStore.listCached()
+    } catch (err) {
+      console.error('tab_resync_failed', err)
+      return
+    }
+    const combined = combineCachedList({ cached: cached.docs, shared: serverStore.lastSharedList() })
+    setFolders(cached.folders)
+    applyResyncResult({ snapshot, docs: combined.docs, sharedListed: combined.sharedListed, deletedSource: 'tab' })
+    listRefresher.maybeRefresh()
+  }, [store, applyResyncResult, listRefresher])
+
+  // 검색·지도에 넘기는 목록 — 로그인 상태면 캐시 목록 소스. store 가 바뀔 때만 새로 만들어 검색 인덱스 재사용을 지킨다 (F-2056 6.4)
+  const listSource = useMemo(() => {
+    if (store.kind !== 'server') return store
+    const serverStore = store as ServerStore
+    return createCachedListSource({
+      listCached: () => serverStore.listCached(),
+      lastSharedList: () => serverStore.lastSharedList(),
+      hasLiveChanges: () => hasLiveChangesSince(liveChangedAtRef.current, serverStore.lastServerListAt()),
+      isOnline: () => navigator.onLine,
+      refresher: listRefresher,
     })
-    const merged = applied.merged
-    if (!merged) return
-    const openId = currentDocIdRef.current
-    if (openId && merged.removedIds.includes(openId)) {
-      deletedElsewhereSourceRef.current = 'tab'
-      setDeletedElsewhereId(openId)
-    }
-    // 다른 탭이 지금 문서를 금고로 옮기거나 뺐으면 새 세션으로 다시 연다 — 옛 실시간 세션에 머물지 않게 (F-407 7.4)
-    const opened = openId ? merged.docs.find((d) => d.id === openId) : undefined
-    const session = docPathRef.current
-    const syncedPath = session.path === 'realtime' || session.path === 'pending' || session.path === 'fallback' || session.path === 'e2ee'
-    if (store.kind === 'server' && opened && session.docId === openId && syncedPath && !e2eeConvertBusyRef.current) {
-      if (Boolean(opened.e2ee) !== (session.path === 'e2ee')) void restartDocSessionAfterFlush()
-    }
-  }, [store, keepLiveTitle, restartDocSessionAfterFlush])
+  }, [store, listRefresher])
 
   // 로컬 편집권을 되찾으면 서버 잠금 재획득(handleLockReacquired)과 같은 방식으로 다시 읽어 다시 마운트한다 (F-296.md 6.4)
   const handleClaimRegained = useCallback(() => {
@@ -1287,7 +1350,7 @@ export default function App() {
     enabled: bootPhase === 'ready',
     tabId: tabIdRef.current,
     claimDocId,
-    onDocsChanged: resyncFromStore,
+    onDocsChanged: store.kind === 'server' ? resyncFromCache : resyncFromStore,
     onNotice: showNotice,
     onClaimRegained: handleClaimRegained,
     onE2eeLock: () => e2eeOtherTabLockRef.current(),
@@ -2077,12 +2140,9 @@ export default function App() {
         setBootPhase('ready')
       }
 
-      // 안 쓰는 첨부 정리 예약 — 금고 문서는 attachmentRefs 를 참조 글자로 바꿔 넘긴다 (F-156.md 2.7, F-207.md 2.5, F-306 10장, F-405 4.3, F-406)
-      function scheduleGc() {
-        const gcList = async () =>
-          (await resolvedStore.list()).map((d) =>
-            d.e2eeKey !== undefined ? { content: (d.attachmentRefs ?? []).map((id) => `attachments/${id}.png`).join('\n') } : d,
-          )
+      // 안 쓰는 첨부 정리 예약 — 부팅이 이미 읽은 앱 층 목록을 한 번 다시 쓴다(따로 list() 하지 않음) (F-156.md 2.7, F-406, F-2056 3.5)
+      function scheduleGc(bootDocs: Doc[]) {
+        const gcList = async () => bootDocs
         const gcStore =
           resolvedStore.kind === 'server'
             ? {
@@ -2137,7 +2197,6 @@ export default function App() {
             const cachedMetaList = sortByUpdatedAtDesc(cachedList.docs.map(stripContent))
             setFolders(cachedFolders)
             setDocs(cachedMetaList)
-            scheduleGc()
 
             const snapshotIds = new Set(cachedMetaList.map((d) => d.id))
             const seq = ++bootListSeqRef.current
@@ -2146,7 +2205,11 @@ export default function App() {
 
             // 뒤 맞추기 — 서버 목록으로 캐시 목록을 맞춘다. 실패해도 새 알림은 없다(캐시를 그대로 둔다) (F-2042 4.2·4.7)
             Promise.all([appStore.listFolders(), appStore.list()])
-              .then(([newFolders, newDocs]) => applyBootMerge(seq, snapshotIds, newFolders, newDocs))
+              .then(([newFolders, newDocs]) => {
+                applyBootMerge(seq, snapshotIds, newFolders, newDocs)
+                // 첨부 정리는 뒤 맞추기 결과로 그 뒤에 예약한다 — 실패하면 이 페이지에서는 하지 않는다 (F-2056 3.5)
+                scheduleGc(newDocs)
+              })
               .catch((err) => {
                 console.error('boot_resync_failed', err)
               })
@@ -2168,7 +2231,7 @@ export default function App() {
         const metaList = sortByUpdatedAtDesc(list.map(stripContent))
         setDocs(metaList)
 
-        scheduleGc()
+        scheduleGc(list)
 
         await finishBootRouting(metaList, folderList)
       }
@@ -5623,7 +5686,7 @@ export default function App() {
               <Suspense fallback={<p className="map-status">연결을 읽는 중…</p>}>
                 <MapPage
                   docCount={docs.length}
-                  store={store}
+                  store={listSource}
                   scope={mapDialogScope}
                   searchScope={searchDialogScope}
                   centerDocId={mapRoute.centerDocId}
@@ -5940,7 +6003,7 @@ export default function App() {
       />
       <SearchDialog
         open={searchOpen}
-        store={store}
+        store={listSource}
         scope={searchDialogScope}
         beforeIndex={beforeLeaveDoc}
         onOpenDoc={openDocFromSearch}
