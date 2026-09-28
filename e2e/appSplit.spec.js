@@ -1267,3 +1267,157 @@ test.describe('F-2072 편집기 연동 절', () => {
     await expect(page.locator('.viewer p', { hasText: /^회의 첫 줄$/ })).not.toBeInViewport()
   })
 })
+
+const PASSWORD2073 = '충분히긴금고암호입니다'
+
+async function waitBooted2073(page) {
+  await expect(page.locator('.cm-host .cm-editor').or(page.locator('.e2ee-locked-panel')).or(page.locator('.empty-state'))).toBeVisible()
+}
+
+async function createVault2073(page) {
+  await page.getByRole('button', { name: '설정', exact: true }).click()
+  const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
+  await dialog.getByRole('tab', { name: '금고' }).click()
+  await dialog.getByRole('button', { name: '금고 만들기…' }).click()
+  const create = page.locator('dialog[aria-labelledby="e2ee-create-title"]')
+  await create.locator('input[aria-labelledby="e2ee-create-password-label"]').fill(PASSWORD2073)
+  await create.locator('input[aria-labelledby="e2ee-create-confirm-label"]').fill(PASSWORD2073)
+  await create.getByRole('button', { name: '다음' }).click()
+  await create.getByLabel('복구 코드를 안전한 곳에 보관했습니다').check()
+  await create.getByRole('button', { name: '금고 만들기' }).click()
+  await expect(create).toBeHidden()
+  await page.getByRole('button', { name: '닫기', exact: true }).click()
+  await expect(dialog).toBeHidden()
+  await expect(page.locator('.statusbar-e2ee')).toHaveText('금고 열림')
+}
+
+function rowOf2073(page, name) {
+  const label = page.getByRole('button', { name, exact: true }).or(page.getByRole('link', { name, exact: true }))
+  return page.locator('.sidebar .tree-row').filter({ has: label })
+}
+
+async function openRowMenu2073(page, name) {
+  const row = rowOf2073(page, name)
+  await row.hover()
+  await row.getByRole('button', { name: `${name} 메뉴` }).click()
+  return page.locator('.item-menu-list:not([inert])')
+}
+
+async function newFolder2073(page, name) {
+  await page.locator('.sidebar').getByRole('button', { name: '새 폴더', exact: true }).click()
+  const input = page.locator('.tree-rename-input')
+  await expect(input).toBeFocused()
+  await input.fill(name)
+  await input.press('Enter')
+  await expect(rowOf2073(page, name)).toBeVisible()
+}
+
+async function clickNewDocInFolder2073(page, folderName) {
+  const menu = await openRowMenu2073(page, folderName)
+  await menu.getByRole('menuitem', { name: '새 문서', exact: true }).click()
+}
+
+async function markLocalFolderE2ee2073(page, folderId) {
+  await page.evaluate(
+    (folderId) =>
+      new Promise((resolve, reject) => {
+        const req = indexedDB.open('md-docs')
+        req.onerror = () => reject(req.error)
+        req.onsuccess = () => {
+          const db = req.result
+          const tx = db.transaction('folders', 'readwrite')
+          const store = tx.objectStore('folders')
+          const get = store.get(folderId)
+          get.onsuccess = () => store.put({ ...get.result, e2ee: true })
+          tx.oncomplete = () => {
+            db.close()
+            resolve()
+          }
+          tx.onerror = () => reject(tx.error)
+        }
+      }),
+    folderId,
+  )
+}
+
+async function folderIdOf2073(page, name) {
+  return page.locator('.sidebar li[data-folder-id]').filter({ has: page.getByRole('button', { name, exact: true }) }).first().getAttribute('data-folder-id')
+}
+
+async function unlockVia2073(container) {
+  await container.locator('input[type="password"]').fill(PASSWORD2073)
+  await container.getByRole('button', { name: '열기', exact: true }).click()
+}
+
+// 로컬 금고 문서 하나를 만들어 제목·본문을 저장해 둔다 (e2eeDocs.spec.js makeLocalVaultDoc 와 같은 절차)
+async function makeLocalVaultDoc2073(page) {
+  await openApp(page)
+  await createVault2073(page)
+  await newFolder2073(page, '비밀함')
+  const folderId = await folderIdOf2073(page, '비밀함')
+  await markLocalFolderE2ee2073(page, folderId)
+  await page.reload()
+  await waitBooted2073(page)
+  await clickNewDocInFolder2073(page, '비밀함')
+  const unlock = page.locator('dialog[aria-labelledby="e2ee-unlock-title"]')
+  await unlockVia2073(unlock)
+  await expect(unlock).toBeHidden()
+  await expect(page.locator('.doc-title')).toBeFocused()
+  const docId = await currentDocId(page)
+  await page.locator('.doc-title').fill('비밀 제목')
+  await page.locator('.doc-title').press('Enter')
+  await page.locator('.cm-content').click()
+  await page.keyboard.type('비밀 본문 한 줄')
+  await expect(page.locator('.statusbar-save')).toContainText('저장됨')
+  return { folderId, docId }
+}
+
+test.describe('F-2073 금고 옮기기·이관·잠그기·초기화 절', () => {
+  test.use({ viewport: { width: 1280, height: 900 } })
+
+  test('F-2073 C1 잠가서 P1 이 뜬 문서는 초점을 주지 않고, 다른 문서에 다녀오면 P1 이 초점을 받는다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    const { docId: vaultId } = await makeLocalVaultDoc2073(page)
+    // 가져오기는 지금 문서의 폴더에 넣는다 — 금고 폴더 밖 문서로 옮겨 가서 가져온다
+    await page.locator('.sidebar .tree-row').filter({ has: page.getByRole('link', { name: '제목 없는 문서', exact: true }) }).getByRole('link').click()
+    await expect.poll(() => currentDocId(page)).not.toBe(vaultId)
+    const plainId = await importMarkdown(page, { name: '일반.md', content: '# 일반\n' })
+
+    await page.locator(`.sidebar a[href="#/d/${vaultId}"]`).click()
+    await expect(page.locator('.cm-content')).toContainText('비밀 본문 한 줄')
+    await page.locator('.cm-content').click()
+    await page.locator('.statusbar-e2ee').click()
+    const panel = page.locator('.e2ee-locked-panel')
+    await expect(panel).toBeVisible()
+    await expect(page.locator('.cm-host .cm-editor')).toHaveCount(0)
+    await expect(panel.locator('input[type="password"]')).not.toBeFocused()
+
+    await page.locator(`.sidebar a[href="#/d/${plainId}"]`).click()
+    await expect(page.locator('.cm-content')).toContainText('일반')
+    await page.locator(`.sidebar a[href="#/d/${vaultId}"]`).click()
+    await expect(panel).toBeVisible()
+    await expect(panel.locator('input[type="password"]')).toBeFocused()
+  })
+
+  test('F-2073 C2 열린 금고 문서가 있을 때 금고를 초기화하면 문서를 닫고 주소가 #/ 가 된다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    const { folderId, docId } = await makeLocalVaultDoc2073(page)
+    await expect.poll(() => currentDocId(page)).toBe(docId)
+
+    await page.getByRole('button', { name: '설정', exact: true }).click()
+    const settings = page.locator('dialog[aria-labelledby="settings-title"]')
+    await settings.getByRole('tab', { name: '금고' }).click()
+    await settings.getByRole('button', { name: '금고 초기화…' }).click()
+    const reset = page.locator('dialog[aria-labelledby="e2ee-reset-title"]')
+    await reset.locator('input[aria-labelledby="e2ee-reset-confirm-label"]').fill('초기화')
+    await reset.getByRole('button', { name: '초기화', exact: true }).click()
+
+    await expect(page.locator('.notice--info .notice-message')).toHaveText('금고를 초기화했습니다.')
+    await expect.poll(() => currentDocId(page)).toBe(null)
+    expect(await page.evaluate(() => location.hash)).toBe('#/')
+
+    await page.getByRole('button', { name: '닫기', exact: true }).click()
+    await expect(page.locator(`.sidebar a[href="#/d/${docId}"]`)).toHaveCount(0)
+    await expect(page.locator(`.sidebar li[data-folder-id="${folderId}"]`)).toHaveCount(0)
+  })
+})

@@ -15,14 +15,13 @@ import type { EditorState, StateCommand } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 
 import { createMemoryStore } from '../storage/memoryStore'
-import { createIdbStore, deleteE2eeRow, markLocalE2eeMigrated, readE2eeRow } from '../storage/idbStore'
+import { createIdbStore, deleteE2eeRow } from '../storage/idbStore'
 import { openStore } from '../storage/openStore'
 import type { ServerStore } from '../storage/serverStore'
 import { deleteYjsUserRows, openYjsStore, type YjsStore } from '../storage/yjsStore'
 import { deleteRemoteCacheUserRows } from '../storage/remoteCache'
 import { openLiveSocket } from '../storage/liveSocket'
-import { migrateLocalIfNeeded, checkLocalE2eeMigration, runLocalE2eeMigration } from './migrateLocal'
-import type { LocalE2eeKeys } from '../e2ee/convert'
+import { migrateLocalIfNeeded } from './migrateLocal'
 import E2eeMigrateDialog from './E2eeMigrateDialog'
 import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree'
 import type { SelectionItem } from './sidebarSelection'
@@ -38,7 +37,7 @@ import {
 import { insertTemplate as insertTemplateIntoEditor } from '../editor/insertTemplate'
 import { getPref, setPref } from './prefs'
 import { fetchAccount, storedAccount, type AccountState } from './account'
-import { planAccountNotices, ACCOUNT_RECHECK_MS, ACCOUNT_BLOCKED_MESSAGE, ACCOUNT_WARNED_MESSAGE, formatCount, type AccountFlags } from '../lib/usageLimits'
+import { planAccountNotices, ACCOUNT_RECHECK_MS, ACCOUNT_BLOCKED_MESSAGE, ACCOUNT_WARNED_MESSAGE, type AccountFlags } from '../lib/usageLimits'
 import type { SyncState } from '../types'
 import { IconRefresh } from './icons'
 import { useAppearancePrefs } from './useAppearancePrefs'
@@ -46,7 +45,7 @@ import { removeBootSkeleton } from './bootPaint'
 import { parseHash, formatHash, formatMapHash, parsePathRoute } from './hashRoute'
 import { toPublicRoute, type PublicRoute } from './hashNav'
 import { pushNotice } from './notice'
-import { E2EE_NOTICE, E2EE_CONVERT_NOTICE, e2eeConvertProgressText, e2eeConvertResultNotice, e2eeCreateErrorMessage } from './appNotices'
+import { E2EE_NOTICE, e2eeCreateErrorMessage } from './appNotices'
 import { stripContent, isSharedDoc, sortByUpdatedAtDesc, type DocMeta, type OpenDoc } from './docMeta'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { canShowCachedShell, mergeBootList, shouldApplyListResult } from './bootList'
@@ -64,23 +63,7 @@ import { flushUnsyncedDocs } from './yjsFlush'
 import { withTabBroadcast, newTabId } from './tabSync'
 import { useTabSync } from './useTabSync'
 import { useE2ee } from './useE2ee'
-import { isE2eeStoreError, lockDocMetas, planE2eeReset, withE2ee, type E2eeStore } from '../e2ee/e2eeStore'
-import {
-  buildE2eeConvertDialogText,
-  countE2eeConvertComments,
-  createE2eeConvertMemory,
-  estimateE2eeConvertCost,
-  planE2eeConvert,
-  runE2eeConvert,
-  type E2eeCommentCount,
-  type E2eeConvertDialogText,
-  type E2eeConvertDirection,
-  type E2eeConvertOutcome,
-  type E2eeConvertPlan,
-  type E2eeConvertProgress,
-  type E2eeConvertTarget,
-} from '../e2ee/convert'
-import { fetchUsage } from '../storage/attachmentsApi'
+import { isE2eeStoreError, withE2ee, type E2eeStore } from '../e2ee/e2eeStore'
 import E2eeConvertDialog from './E2eeConvertDialog'
 import E2eeLockedPanel from './E2eeLockedPanel'
 import { createExportActions } from './exportActions'
@@ -148,6 +131,8 @@ import { useGlobalShortcuts } from './useGlobalShortcuts'
 import { useSidebarLayout } from './useSidebarLayout'
 import { useFolderActions } from './useFolderActions'
 import { useImportFlow } from './useImportFlow'
+import { useE2eeMigrate } from './useE2eeMigrate'
+import { useE2eeConvert } from './useE2eeConvert'
 import { useEditorSync } from './useEditorSync'
 import { useHashRouting, replaceHashUrl, pushHashUrl, pushHelpHash } from './useHashRouting'
 import { useSharesPage } from './useSharesPage'
@@ -156,7 +141,6 @@ import SharedView from './SharedView'
 import PublicView from './PublicView'
 import InviteDialog, { type InviteTarget } from './InviteDialog'
 import SharesPage from './SharesPage'
-import { fetchCommentCount } from '../storage/docsApi'
 // three 가 초기 로드에 붙지 않게 지연 경계를 여기 긋는다 (specs/features/F-292.md 3.3, F-2002 4장)
 const MapPage = lazy(() => import('./MapPage'))
 import { mapIndexScope } from './mapIndex'
@@ -189,20 +173,6 @@ type DocSession = {
   // 보기 권한자의 읽기 전용 실시간 세션 — md-yjs 없음, 댓글은 명령으로 (F-506 3.2·4장)
   readOnly: boolean
   persist: YjsStore | null
-}
-
-// 멈추기를 누르면 곧바로 풀리는 기다림 (F-407 2.2)
-function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    if (signal.aborted) return resolve()
-    const done = () => {
-      clearTimeout(timer)
-      signal.removeEventListener('abort', done)
-      resolve()
-    }
-    const timer = setTimeout(done, ms)
-    signal.addEventListener('abort', done)
-  })
 }
 
 // 떠 있는 `댓글 달기` 버튼 — 선택이 화면 위로 지나가면 위 끝, 아래에 있으면 아래 끝에 붙인다(버튼 32px + 여백 8px)
@@ -498,29 +468,11 @@ export default function App() {
 
   // 금고로 옮기는 중인 지금 문서 — 읽기 전용이고 실시간 세션을 닫는다 (F-407 7.4)
   const [convertingDocId, setConvertingDocId] = useState<string | null>(null)
-  // 이 탭에서 옮기기·빼기가 도는 중 — 메뉴 비활성(E41)과 다른 탭 신호의 다시 열기 판정에 쓴다
-  const [e2eeConvertBusy, setE2eeConvertBusy] = useState(false)
   const e2eeConvertBusyRef = useRef(false)
-  // 올려 둔 첨부 짝·못 지운 첨부 — 페이지 수명 (F-407 2.1)
-  const e2eeConvertMemoryRef = useRef(createE2eeConvertMemory())
-  // 앞 실행의 끝·멈춤 알림 — 다시 누르면 걷는다(warn 이 남아 있으면 진행 info 가 가려진다)
-  const e2eeConvertResultIdRef = useRef<number | null>(null)
   const liveSessionRef = useRef<LiveDocSession | null>(null)
   // 사이드바 updatedAt 거르개가 "업데이트 순간의" everSynced 를 읽는다 (F-2041 5.3)
   const liveEverSyncedRef = useRef(false)
   const openDocLineEndingRef = useRef<LineEnding | undefined>(undefined)
-  // D-9·D-10 — 글과 답을 기다리는 함수. 닫힘(close 이벤트)이 확인 뒤에도 오므로 답은 한 번만 쓴다
-  const [e2eeConvertText, setE2eeConvertText] = useState<E2eeConvertDialogText | null>(null)
-  const e2eeConvertAnswerRef = useRef<((ok: boolean) => void) | null>(null)
-  // D-9 댓글 수 세기 — 대화상자가 닫히면 끊는다 (F-509 4.1 5번)
-  const e2eeCommentCountAbortRef = useRef<AbortController | null>(null)
-
-  // 로그인 전 금고 이관 (F-408) — 판정은 페이지마다 한 번
-  const e2eeMigrateCheckedRef = useRef(false)
-  const [e2eeMigrateAsk, setE2eeMigrateAsk] = useState<{ count: number; bundle: string } | null>(null)
-  const [e2eeMigrateDialogOpen, setE2eeMigrateDialogOpen] = useState(false)
-  const e2eeMigrateNoticeIdRef = useRef<number | null>(null)
-  const e2eeMigrateRunningRef = useRef(false)
 
   // ----- 문서 열기 경로 (F-305 4장) — 문서·저장소가 바뀌면 새 세션. local·view 는 여기서, 나머지는 아래 effect 가 outbox 를 읽고 정한다 -----
   const [docSession, setDocSession] = useState<DocSession>(() => ({
@@ -953,168 +905,13 @@ export default function App() {
     e2eeRef.current = e2ee
   }, [e2ee])
 
-  // 로그인 전 금고 이관(F-408) — 부팅이 끝나고 계정이 in 이고 막히지 않았을 때 페이지마다 한 번 판정한다 (4.1)
-  useEffect(() => {
-    if (bootPhase !== 'ready' || !e2ee || store.kind !== 'server' || account.state !== 'in' || account.blocked) return
-    if (e2eeMigrateCheckedRef.current) return
-    e2eeMigrateCheckedRef.current = true
-    const userId = (store as ServerStore).userId
-    void checkLocalE2eeMigration({
-      userId,
-      localDbExists: async () => {
-        if (typeof indexedDB === 'undefined' || !indexedDB.databases) return true
-        const dbs = await indexedDB.databases()
-        return dbs.some((d) => d.name === 'md-docs')
-      },
-      readLocalRow: () => readE2eeRow('local'),
-      readLocal: async () => {
-        const local = await createIdbStore()
-        const [localFolders, localDocs] = await Promise.all([local.listFolders(), local.list()])
-        return { folders: localFolders, docs: localDocs }
-      },
-      accountIds: () => ({
-        docIds: new Set(docsRef.current.map((d) => d.id)),
-        folderIds: new Set(foldersRef.current.map((f) => f.id)),
-      }),
-      markMigrated: (bundle) => markLocalE2eeMigrated(userId, bundle),
-    })
-      .then((result) => {
-        if (result.kind !== 'ask') return
-        setE2eeMigrateAsk({ count: result.count, bundle: result.bundle })
-        let noticeId = 0
-        noticeId = showNotice(
-          {
-            type: 'info',
-            message: `이 브라우저에 로그인 전 금고 문서 ${result.count.toLocaleString('ko-KR')}개가 있습니다. 금고 암호를 입력하면 계정 금고로 옮깁니다.`,
-            action: {
-              label: '옮기기',
-              onClick: () => {
-                dismissNotice(noticeId)
-                setE2eeMigrateDialogOpen(true)
-              },
-            },
-            secondaryAction: { label: '나중에', onClick: () => dismissNotice(noticeId) },
-          },
-          { sticky: true },
-        )
-        e2eeMigrateNoticeIdRef.current = noticeId
-      })
-      .catch((err) => console.error('e2ee_migrate_check_failed', err))
-  }, [bootPhase, e2ee, store, account, showNotice, dismissNotice])
-
-  // 실행 — D-14 가 키를 얻으면 부른다 (4.4·4.5)
-  async function runE2eeMigrateFlow(keys: LocalE2eeKeys, bundle: string) {
-    if (e2eeMigrateRunningRef.current) return
-    e2eeMigrateRunningRef.current = true
-    setE2eeMigrateDialogOpen(false)
-    const ring = e2eeRef.current
-    const userId = (store as ServerStore).userId
-    let progressId: number | null = null
-    const onProgress = (done: number, total: number) => {
-      if (progressId !== null) dismissNotice(progressId)
-      progressId = showNotice(
-        { type: 'info', message: `로그인 전 금고 문서를 계정 금고로 옮기는 중… ${done.toLocaleString('ko-KR')}/${total.toLocaleString('ko-KR')}` },
-        { sticky: true },
-      )
-    }
-    onProgress(0, e2eeMigrateAsk?.count ?? 0)
-    let outcome: Awaited<ReturnType<typeof runLocalE2eeMigration>>
-    try {
-      outcome = await runLocalE2eeMigration({
-        userId,
-        localDbExists: async () => {
-          if (typeof indexedDB === 'undefined' || !indexedDB.databases) return true
-          const dbs = await indexedDB.databases()
-          return dbs.some((d) => d.name === 'md-docs')
-        },
-        readLocalRow: () => readE2eeRow('local'),
-        readLocal: async () => {
-          const local = await createIdbStore()
-          const [localFolders, localDocs] = await Promise.all([local.listFolders(), local.list()])
-          return { folders: localFolders, docs: localDocs }
-        },
-        accountIds: () => ({
-          docIds: new Set(docsRef.current.map((d) => d.id)),
-          folderIds: new Set(foldersRef.current.map((f) => f.id)),
-        }),
-        markMigrated: (b) => markLocalE2eeMigrated(userId, b),
-        bundle,
-        keys,
-        getLocalAttachment: async (id) => {
-          const local = await createIdbStore()
-          return local.getAttachment(id)
-        },
-        importLocalE2ee: (input) => (store as ServerStore).importLocalE2ee(input),
-        keyAlive: () => (keys.mode === 'adopt' ? true : (ring?.keyring.getMasterKey() ?? null) !== null),
-        noteActivity: () => ring?.keyring.noteActivity(),
-        onProgress,
-      })
-    } finally {
-      if (progressId !== null) dismissNotice(progressId)
-      e2eeMigrateRunningRef.current = false
-    }
-
-    if (outcome.kind === 'done') {
-      showNotice({ type: 'info', message: `로그인 전 금고 문서 ${outcome.count.toLocaleString('ko-KR')}개를 계정 금고에 넣었습니다. 서버로 보내는 중입니다.` })
-      if (outcome.skippedImages > 0) {
-        showNotice({ type: 'warn', message: `암호화할 수 없는 이미지 ${outcome.skippedImages.toLocaleString('ko-KR')}개는 옮기지 않았습니다.` })
-      }
-      await resyncFromStore()
-      return
-    }
-    if (outcome.reason === 'locked') {
-      showNotice({
-        type: 'warn',
-        message: `금고가 잠겨 로그인 전 금고 문서 ${outcome.done.toLocaleString('ko-KR')}/${outcome.total.toLocaleString('ko-KR')}개를 옮기고 멈췄습니다. 다시 누르면 남은 것부터 옮깁니다.`,
-        action: { label: '옮기기', onClick: () => setE2eeMigrateDialogOpen(true) },
-      })
-      return
-    }
-    showNotice({ type: 'error', message: '로그인 전 금고 문서를 옮기지 못했습니다. 다시 시도하려면 새로고침하세요.' })
-  }
-
-  // 잠겨서 P1 이 뜬 문서 — 초점을 옮기지 않는다. 다른 문서로 가면 되돌린다 (F-405 6.2)
-  const [e2eeUnmountedDocId, setE2eeUnmountedDocId] = useState<string | null>(null)
-  const [e2eeUnmountTrackedDocId, setE2eeUnmountTrackedDocId] = useState(currentDocId)
-  if (e2eeUnmountTrackedDocId !== currentDocId) {
-    setE2eeUnmountTrackedDocId(currentDocId)
-    setE2eeUnmountedDocId(null)
-  }
   // 금고 초기화 단계 본체 — 등록은 열쇠고리마다 한 번이고 매 커밋 최신 store 를 쓴다 (F-405 7.9)
   const e2eeResetStepRef = useRef<() => Promise<void>>(async () => {})
-  // 잠그기·초기화 단계 (F-405 2.2 표, 7.2)
-  const e2eeKeyring = e2ee?.keyring ?? null
-  useEffect(() => {
-    if (!e2eeKeyring) return undefined
-    const currentE2eeMeta = () => {
-      const id = currentDocIdRef.current
-      return id ? docsRef.current.find((d) => d.id === id) : undefined
-    }
-    const unFlush = e2eeKeyring.registerLockStep('flush', async () => {
-      if (currentE2eeMeta()?.e2ee !== 'open') return
-      const saved = await docSaverFlushRef.current()
-      const titleSaving = titleSavingRef.current
-      if (titleSaving) await titleSaving
-      if (!saved) throw new Error('e2ee_flush_failed')
-    })
-    const unUnmount = e2eeKeyring.registerLockStep('unmount', () => {
-      const meta = currentE2eeMeta()
-      if (meta?.e2ee === 'open') {
-        setE2eeUnmountedDocId(meta.id)
-        setOpenDoc(null)
-        setViewerHtml('')
-      }
-      setDocs((prev) => lockDocMetas(prev))
-    })
-    const unIndexes = e2eeKeyring.registerLockStep('indexes', () => e2eeStoreRef.current?.clearPlainCache())
-    const unReset = e2eeKeyring.registerResetStep(() => e2eeResetStepRef.current())
-    return () => {
-      unFlush()
-      unUnmount()
-      unIndexes()
-      unReset()
-    }
-  }, [e2eeKeyring])
+  // ----- 금고 이관·잠그기·초기화 (F-2073) -----
+  const { e2eeMigrateAsk, e2eeMigrateDialogOpen, setE2eeMigrateDialogOpen, runE2eeMigrateFlow, e2eeUnmountedDocId, runE2eeReset } = useE2eeMigrate({
+    store, bootPhase, account, e2ee, currentDocId, showNotice, dismissNotice, resyncFromStore, setDocs, setOpenDoc, setViewerHtml, setCurrentDocId,
+    replaceHashUrl, e2eeRef, docsRef, foldersRef, currentDocIdRef, docSaverFlushRef, titleSavingRef, e2eeStoreRef, e2eeResetStepRef,
+  })
 
   // 금고 상태가 바뀌면 목록을 다시 읽는다 — 열리면 멈춘 충돌부터 다시 보낸다 (F-405 7.4)
   const [e2eeListSyncedFor, setE2eeListSyncedFor] = useState<string | null>(null)
@@ -2025,242 +1822,16 @@ export default function App() {
     return ok
   }
 
-  // ----- 금고로 옮기기·빼기 (F-407 7.3~7.5) -----
-  const e2eeConvertOnline = store.kind !== 'server' || (syncState?.online ?? true)
-
-  // 7.4 — 지금 문서면 읽기 전용으로 두고 대기 저장을 끝낸다. 실시간이면 편집기 글을 잡고 세션을 닫는다
-  async function prepareConvertDoc(docId: string): Promise<{ text?: string; title?: string } | null | 'blocked'> {
-    if (docId !== currentDocIdRef.current) return null
-    const path = docPathRef.current.docId === docId ? docPathRef.current.path : null
-    setConvertingDocId(docId)
-    const saved = await docSaverFlushRef.current()
-    const titleSaving = titleSavingRef.current
-    if (titleSaving) await titleSaving
-    if (!saved) return 'blocked'
-    if (path !== 'realtime') return {}
-    const session = liveSessionRef.current
-    const editor = editorRef.current
-    // live 가 아니면(첫 동기화 전·재연결 중) 편집기 글이 서버보다 낡았을 수 있다 (F-2041 5.5)
-    if (!session || session.docId !== docId || session.snapshot.phase !== 'live' || !editor) return 'blocked'
-    const text = editor.getText(openDocLineEndingRef.current ?? 'lf')
-    const title = session.roomDoc.getText(Y_TITLE_NAME).toString()
-    // 세션이 닫힐 때까지(렌더 뒤 정리) 기다린다 — 닫힌 소켓의 정지 알림은 뜨지 않는다
-    for (let i = 0; i < 100 && liveSessionRef.current !== null; i++) await abortableSleep(20, new AbortController().signal)
-    return { text, title }
-  }
-
-  // 7.4 — 읽기 전용을 풀고 같은 문서를 새 세션으로 다시 연다(멈춤이면 원래 경로로)
-  function finishConvertDoc(docId: string) {
-    setConvertingDocId((cur) => (cur === docId ? null : cur))
-    if (docId === currentDocIdRef.current) restartDocSession()
-  }
-
-  function answerE2eeConvertDialog(ok: boolean) {
-    const answer = e2eeConvertAnswerRef.current
-    e2eeConvertAnswerRef.current = null
-    setE2eeConvertText(null)
-    e2eeCommentCountAbortRef.current?.abort()
-    e2eeCommentCountAbortRef.current = null
-    answer?.(ok)
-  }
-
-  // 7.1 비활성 항목을 눌렀을 때의 이유 알림
-  function handleE2eeConvertUnavailable(reason: 'offline' | 'busy' | 'inside-e2ee-folder') {
-    if (reason === 'busy') showNotice({ type: 'info', message: E2EE_CONVERT_NOTICE.busy })
-    else if (reason === 'offline') showNotice({ type: 'error', message: E2EE_CONVERT_NOTICE.offline })
-    else showNotice({ type: 'info', message: E2EE_CONVERT_NOTICE.insideFolder })
-  }
-
-  // 7.3 흐름 — 확인·금고 열기·실행·결과 알림
-  async function requestE2eeConvert(direction: E2eeConvertDirection, target: E2eeConvertTarget, menuName: string) {
-    if (e2eeConvertBusyRef.current) {
-      showNotice({ type: 'info', message: E2EE_CONVERT_NOTICE.busy })
-      return
-    }
-    if (store.kind === 'server' && !(syncState?.online ?? navigator.onLine)) {
-      showNotice({ type: 'error', message: E2EE_CONVERT_NOTICE.offline })
-      return
-    }
-    const convertStore = store
-    const scope: 'local' | 'account' = convertStore.kind === 'server' ? 'account' : 'local'
-    const makePlan = async () => {
-      const [list, folderList] = await Promise.all([convertStore.list(), convertStore.listFolders()])
-      const owned = list.filter((d) => !isSharedDoc(d))
-      return { plan: planE2eeConvert({ direction, target, docs: owned, folders: folderList }), docs: owned }
-    }
-    let { plan, docs: planDocs } = await makePlan()
-    if (direction === 'to-e2ee') {
-      const { tooLarge, tooManyRefs } = plan.blocked
-      if (target.kind === 'doc' && tooLarge.length > 0) return void showNotice({ type: 'error', message: E2EE_NOTICE.createTooLarge })
-      if (target.kind === 'doc' && tooManyRefs.length > 0) return void showNotice({ type: 'error', message: E2EE_NOTICE.tooManyRefs })
-      if (tooLarge.length + tooManyRefs.length > 0) {
-        const n = formatCount(tooLarge.length + tooManyRefs.length)
-        return void showNotice({
-          type: 'error',
-          message: `금고에 넣을 수 없는 문서가 ${n}개 있어 폴더를 옮기지 않았습니다. 약 750KB를 넘거나 이미지가 1,000개를 넘는 문서는 나누거나 폴더 밖으로 옮긴 뒤 다시 누르세요.`,
-        })
-      }
-    } else {
-      // 빼기는 D-10 보다 먼저 연다 — 잠긴 문서 이름이 풀려야 D-10 본문이 뜻을 갖는다 (2.3 1번)
-      if (!(await requestE2eeOpen())) return
-      ;({ plan, docs: planDocs } = await makePlan())
-    }
-    const name = target.kind === 'doc' ? planDocs.find((d) => d.id === target.id)?.title || (menuName === '잠긴 문서' ? '제목 없음' : menuName) : menuName
-    if (plan.steps.length === 0) {
-      showNotice(e2eeConvertResultNotice({ kind: 'done', done: 0, keptAttachments: 0, purgeFailed: 0 }, direction, target.kind, name))
-      return
-    }
-
-    const showBackupNotice = scope === 'account' && direction === 'to-e2ee' && getPref('md.e2eeBackupNotice', '') !== '1'
-    const cost = estimateE2eeConvertCost({ plan, docs: planDocs })
-    const textInput = { direction, scope, name, targetKind: target.kind, docCount: plan.docCount, folderCount: plan.folderCount, showBackupNotice, cost }
-    const answered = new Promise<boolean>((resolve) => {
-      e2eeConvertAnswerRef.current = resolve
-    })
-    const answer = e2eeConvertAnswerRef.current
-    let usageForText: { writesLeft: number | null; bytesLeft: number | null } = { writesLeft: null, bytesLeft: null }
-    let commentsForText: E2eeCommentCount | undefined
-    const rebuildConvertText = () =>
-      setE2eeConvertText(buildE2eeConvertDialogText({ ...textInput, usage: usageForText, ...(commentsForText ? { comments: commentsForText } : {}) }))
-    rebuildConvertText()
-    // 한도는 기다리지 않는다 — 결과가 오면 줄을 더한다 (7.2)
-    if (scope === 'account') {
-      fetchUsage()
-        .then((usage) => {
-          if (e2eeConvertAnswerRef.current !== answer) return
-          usageForText = {
-            writesLeft: usage.writes ? usage.writes.limit - usage.writes.today : null,
-            bytesLeft: usage.docs ? usage.docs.bytesLimit - usage.docs.bytes : null,
-          }
-          rebuildConvertText()
-        })
-        .catch(() => {})
-    }
-    // 댓글 수 — 대화상자를 기다리게 하지 않는다, 닫히면 끊는다 (F-509 2.1·4.1)
-    if (direction === 'to-e2ee') {
-      const countController = new AbortController()
-      e2eeCommentCountAbortRef.current = countController
-      const docIds = plan.steps.filter((s) => s.kind === 'doc').map((s) => s.id)
-      const liveHandle = editorRef.current
-      const liveCounts = new Map<string, number | null>(
-        docIds.map((id) => [
-          id,
-          id === currentDocIdRef.current && liveHandle && (commentAccessValue.kind === 'read' || commentAccessValue.kind === 'write')
-            ? liveHandle.comments.map.size
-            : null,
-        ]),
-      )
-      countE2eeConvertComments({
-        docIds,
-        liveCount: (id) => liveCounts.get(id) ?? null,
-        storedCount: async (id, signal) => {
-          if (scope === 'account') return (await fetchCommentCount(id, { signal })).total
-          return convertStore.getCommentRecords ? (await convertStore.getCommentRecords(id)).length : 0
-        },
-        signal: countController.signal,
-      }).then((result) => {
-        if (e2eeConvertAnswerRef.current !== answer || result === null) return
-        commentsForText = result
-        rebuildConvertText()
-      })
-    }
-    if (!(await answered)) return
-    if (showBackupNotice) setPref('md.e2eeBackupNotice', '1')
-    if (direction === 'to-e2ee' && !(await requestE2eeOpen())) return
-    await runE2eeConvertFlow(plan, convertStore, scope, name)
-  }
-
-  async function runE2eeConvertFlow(plan: E2eeConvertPlan, convertStore: Store, scope: 'local' | 'account', name: string) {
-    const ring = e2eeRef.current
-    if (!ring || e2eeConvertBusyRef.current) return
-    e2eeConvertBusyRef.current = true
-    setE2eeConvertBusy(true)
-    if (e2eeConvertResultIdRef.current !== null) dismissNotice(e2eeConvertResultIdRef.current)
-    const controller = new AbortController()
-    const stopAction = { label: '멈추기', onClick: () => controller.abort() }
-    let progressId: number | null = null
-    let countdown: ReturnType<typeof setInterval> | null = null
-    const onProgress = (p: E2eeConvertProgress) => {
-      if (countdown) clearInterval(countdown)
-      countdown = null
-      const base = e2eeConvertProgressText(plan.direction, p.done, p.total)
-      if (p.phase === 'running') {
-        progressId = showNotice({ type: 'info', message: base, action: stopAction }, { sticky: true })
-        return
-      }
-      let left = p.secondsLeft
-      const show = () => {
-        progressId = showNotice({ type: 'info', message: `${base} — 요청이 많아 ${formatCount(left)}초 쉬었다가 이어 갑니다.`, action: stopAction }, { sticky: true })
-      }
-      show()
-      countdown = setInterval(() => {
-        left -= 1
-        if (left >= 1) show()
-        else if (countdown) clearInterval(countdown)
-      }, 1000)
-    }
-    const yjs = convertStore.kind === 'server' ? yjsStoreRef.current : null
-    let outcome: E2eeConvertOutcome
-    try {
-      outcome = await runE2eeConvert(
-        plan,
-        {
-          store: convertStore,
-          scope,
-          memory: e2eeConvertMemoryRef.current,
-          signal: controller.signal,
-          now: () => Date.now(),
-          sleep: abortableSleep,
-          isOnline: () => convertStore.kind !== 'server' || navigator.onLine,
-          noteActivity: () => ring.keyring.noteActivity(),
-          isOpen: () => ring.keyring.getMasterKey() !== null,
-          prepareDoc: prepareConvertDoc,
-          finishDoc: finishConvertDoc,
-          ...(yjs
-            ? {
-                hasUnsyncedYjs: async (id: string) => {
-                  const persist = await yjs
-                  return persist ? (await persist.unsyncedDocIds()).includes(id) : false
-                },
-                removeYjsRecord: async (id: string) => {
-                  const persist = await yjs
-                  if (persist) await persist.removeDoc(id)
-                },
-              }
-            : {}),
-        },
-        onProgress,
-      )
-    } finally {
-      if (countdown) clearInterval(countdown)
-      if (progressId !== null) dismissNotice(progressId)
-    }
-    await resyncFromStore().catch(() => {})
-    e2eeConvertBusyRef.current = false
-    setE2eeConvertBusy(false)
-    e2eeConvertResultIdRef.current = showNotice(e2eeConvertResultNotice(outcome, plan.direction, plan.target.kind, name))
-  }
+  // ----- 금고로 옮기기·빼기 (F-2073) -----
+  const { e2eeConvertOnline, e2eeConvertBusy, e2eeConvertText, requestE2eeConvert, handleE2eeConvertUnavailable, answerE2eeConvertDialog } = useE2eeConvert({
+    store, syncState, commentAccessValue, showNotice, dismissNotice, resyncFromStore, restartDocSession, requestE2eeOpen, setConvertingDocId,
+    e2eeConvertBusyRef, e2eeRef, currentDocIdRef, docPathRef, docSaverFlushRef, titleSavingRef, liveSessionRef, editorRef, openDocLineEndingRef, yjsStoreRef,
+  })
 
   // 대상이 금고 폴더면 금고가 열려 있어야 만든다 (F-405 7.6)
   async function ensureE2eeOpenForFolder(folderId: string | null): Promise<boolean> {
     if (!folderId || !foldersRef.current.some((f) => f.id === folderId && f.e2ee === true)) return true
     return requestE2eeOpen()
-  }
-
-  // 금고 초기화 단계 — 금고 문서·폴더를 지우고 서버에 닿기를 기다린다. 실패는 던진다 (F-405 7.9)
-  async function runE2eeReset() {
-    const [list, folderList] = await Promise.all([store.list(), store.listFolders()])
-    const plan = planE2eeReset({ docs: list, folders: folderList })
-    const openId = currentDocIdRef.current
-    if (openId && list.some((d) => d.id === openId && d.e2ee)) {
-      currentDocIdRef.current = null
-      setCurrentDocId(null)
-      replaceHashUrl(null)
-    }
-    for (const id of plan.folderIds) await store.removeFolder(id, 'delete-all')
-    for (const id of plan.docIds) await store.remove(id)
-    await (e2eeStoreRef.current as Partial<ServerStore> | null)?.flushOutbox?.()
-    await resyncFromStore()
   }
 
   async function createNewDoc(folderId?: string | null) {
