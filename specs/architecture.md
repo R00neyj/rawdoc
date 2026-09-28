@@ -44,6 +44,7 @@ src/
     liveNotices.ts   알림 띠 판정 순수 함수 — 자기 서버 문서 여부·끊김 문구·멈춤 갈래 (F-2070)
     useHashRouting.ts hashchange 처리·해시 주소 쓰기 (F-210, F-243, F-244, F-292, F-2071)
     hashNav.ts       해시 이동 갈래 판정 순수 함수·공개 보기 경로 (F-2071)
+    useEditorSync.ts 편집기 연동 — 본문 1회 읽기·위키 문맥·보기 HTML·편집기 layout effect (F-123, F-144, F-295, F-2018, F-2072)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
