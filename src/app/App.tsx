@@ -697,10 +697,15 @@ export default function App() {
   }, [currentDoc, folders])
 
   // 공유받음 묶음(F-212.md 2.4)과 내 트리를 나눈다 — role 이 없거나 'owner' 면 내 것
-  const ownedDocs = docs.filter((d) => !isSharedDoc(d))
-  const sharedDocsList: SharedDocLike[] = docs
-    .filter((d): d is DocMeta & { role: 'edit' | 'view' } => isSharedDoc(d))
-    .map((d) => ({ id: d.id, title: d.title, role: d.role as 'edit' | 'view', ownerEmail: d.ownerEmail ?? '', viaFolder: d.viaFolder }))
+  // docs 가 그대로면 같은 배열을 넘긴다 — 렌더마다 새 배열이면 받는 쪽의 memo·effect deps 가 매번 풀린다 (리뷰 A14)
+  const ownedDocs = useMemo(() => docs.filter((d) => !isSharedDoc(d)), [docs])
+  const sharedDocsList: SharedDocLike[] = useMemo(
+    () =>
+      docs
+        .filter((d): d is DocMeta & { role: 'edit' | 'view' } => isSharedDoc(d))
+        .map((d) => ({ id: d.id, title: d.title, role: d.role as 'edit' | 'view', ownerEmail: d.ownerEmail ?? '', viaFolder: d.viaFolder })),
+    [docs],
+  )
 
   // view 권한 문서이거나(F-212.md 2.4), edit 권한 문서가 403 으로 강등됐거나, 계정이 막혔으면 읽기 전용 (F-2030 5.2)
   const isReadOnlyByRole =
@@ -3070,20 +3075,24 @@ export default function App() {
   // 레일 여분(px) — 레일이 보이는 동안만 .content-area 의 --comment-rail-extra 로 (F-505 5.6)
   const [commentRailExtra, setCommentRailExtra] = useState(0)
   // 편집기는 이 effect 보다 늦게 붙을 수 있다 — ref 가 아니라 editorHandle 상태를 따라가야 스크롤·크기를 놓치지 않는다
+  // 스크롤 위치는 버튼 자리에만 쓴다 — 선택이 있을 때만 따라간다. 늘 따라가면 스크롤 프레임마다 App 전체가 다시 그려진다 (리뷰 A14)
+  const trackFabScroll = floatingCommentAnchor !== null
   useEffect(() => {
     const scroller = editorHandle?.view.scrollDOM
-    if (!scroller) return
+    if (!scroller || !trackFabScroll) return
     function onScroll() {
       setEditorScrollTop(scroller!.scrollTop)
     }
     onScroll()
     scroller.addEventListener('scroll', onScroll, { passive: true })
+    return () => scroller.removeEventListener('scroll', onScroll)
+  }, [editorHandle, trackFabScroll])
+  useEffect(() => {
+    const scroller = editorHandle?.view.scrollDOM
+    if (!scroller) return
     const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => setEditorViewportH(scroller.clientHeight))
     ro?.observe(scroller) // observe 직후 한 번 불린다
-    return () => {
-      scroller.removeEventListener('scroll', onScroll)
-      ro?.disconnect()
-    }
+    return () => ro?.disconnect()
   }, [editorHandle])
 
   // 새 문서 대상 폴더 (F-138 3.4): 사이드바 새 문서(폴더 생략)·없는 위키링크 클릭·가져오기
