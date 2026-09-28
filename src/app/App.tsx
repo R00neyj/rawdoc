@@ -1594,10 +1594,13 @@ export default function App() {
       online: () => navigator.onLine,
     }),
   )
-  const mentionSource: MentionSource | null =
-    notificationsEnabled && currentDocId && commentAccessValue.kind === 'write' && account.state === 'in'
-      ? { docId: currentDocId, selfEmail: account.email, people: peopleCache }
-      : null
+  // 렌더마다 새 객체면 MentionField 의 후보 불러오기 effect 가 App 렌더마다 다시 돌아, 실패 중에는 요청이 반복된다 (리뷰 U5)
+  const mentionDocId = notificationsEnabled && currentDocId && commentAccessValue.kind === 'write' && account.state === 'in' ? currentDocId : null
+  const mentionSelfEmail = account.state === 'in' ? account.email : null
+  const mentionSource: MentionSource | null = useMemo(
+    () => (mentionDocId && mentionSelfEmail !== null ? { docId: mentionDocId, selfEmail: mentionSelfEmail, people: peopleCache } : null),
+    [mentionDocId, mentionSelfEmail, peopleCache],
+  )
 
   // 명령 팔레트 D-7 — 템플릿 삽입이 보이는 조건 (specs/features/F-2022.md 6.3)
   const canInsertTemplate =

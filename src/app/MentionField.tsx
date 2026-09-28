@@ -88,12 +88,15 @@ export default function MentionField({
   }
 
   // 후보 불러오기 — 그 문서에서 처음 이 토큰이 열릴 때 한 번 (5.2)
+  // source 객체 대신 문서 id·캐시만 deps 에 둔다 — 부모가 렌더마다 새 source 를 넘겨도 다시 요청하지 않는다 (리뷰 U5)
+  const sourceDocId = source?.docId ?? null
+  const sourcePeople = source?.people ?? null
   useEffect(() => {
-    if (!source || requestedTokenStart === null) return
-    const docId = source.docId
+    if (sourceDocId === null || sourcePeople === null || requestedTokenStart === null) return
+    const docId = sourceDocId
     const tokenStart = requestedTokenStart
     let cancelled = false
-    source.people.get(docId).then((result) => {
+    sourcePeople.get(docId).then((result) => {
       if (cancelled) return
       setLoading(false)
       if (result === null) {
@@ -105,7 +108,7 @@ export default function MentionField({
     return () => {
       cancelled = true
     }
-  }, [source, requestedTokenStart])
+  }, [sourceDocId, sourcePeople, requestedTokenStart])
 
   // 렌더 중 조정 — 토큰(시작·질의)이 바뀌면 강조를 처음으로
   const tokenIdentity = token ? `${token.start}:${token.query}` : null
