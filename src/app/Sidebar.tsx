@@ -947,7 +947,7 @@ export default function Sidebar({
 
   // 명령 팔레트 `새 폴더` — 레일(collapsed)이면 먼저 펼친 뒤 최상위에 만든다 (F-2054 6.1)
   function createTopFolder() {
-    if (collapsed) handleRailCreateFolder()
+    if (collapsed && !narrow) handleRailCreateFolder()
     else handleCreateFolder(null)
   }
 

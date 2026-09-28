@@ -167,6 +167,17 @@ test.describe('F-2054 A6 만들기 — 새 폴더 이름 칸', () => {
     await input2.press('Enter')
     await expect(page.locator('.tree-row', { hasText: '개인' })).toBeVisible()
   })
+
+  test('좁은 창 + 저장된 접힘 설정에서도 이름 칸이 열린다', async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 800 })
+    await setPrefBeforeLoad(page, 'md.sidebar', 'collapsed')
+    await prepareDoc(page)
+
+    await runCommand(page, '>새 폴더')
+    const input = page.locator('.tree-rename-input')
+    await expect(input).toBeFocused()
+    await expect(input).toHaveValue('새 폴더')
+  })
 })
 
 test.describe('F-2054 A7 보기 — 모드 전환', () => {
