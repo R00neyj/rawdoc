@@ -1,5 +1,6 @@
 // 부팅(계정·저장소·첫 목록·첫 화면)과 밀린 편집 러너 — App.tsx 에서 옮김 (F-2074, F-2059)
 import type { Dispatch, RefObject, SetStateAction } from 'react'
+import { flushSync } from 'react-dom'
 import { createIdbStore } from '../storage/idbStore'
 import { openStore } from '../storage/openStore'
 import type { ServerStore } from '../storage/serverStore'
@@ -328,22 +329,28 @@ export async function runBoot(deps: BootDeps): Promise<void> {
     lastAppliedListSeqRef.current = seq
     setFolders(newFolders)
     const resultMetaList = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
-    setDocs((prevDocs) => {
-      const merged = mergeBootList({ snapshotIds, current: prevDocs, result: resultMetaList })
-      const openId = currentDocIdRef.current
-      if (openId && merged.removedIds.includes(openId)) {
-        deletedElsewhereSourceRef.current = 'bootMerge'
-        setDeletedElsewhereId(openId)
-      }
-      // 다른 곳이 지금 문서를 금고로 옮기거나 뺐으면 새 세션으로 다시 연다 (F-407 7.4, resyncFromStore 와 같은 조건)
-      const opened = openId ? merged.docs.find((d) => d.id === openId) : undefined
-      const session = docPathRef.current
-      const syncedPath = session.path === 'realtime' || session.path === 'pending' || session.path === 'fallback' || session.path === 'e2ee'
-      if (resolvedStore.kind === 'server' && opened && session.docId === openId && syncedPath && !e2eeConvertBusyRef.current) {
-        if (Boolean(opened.e2ee) !== (session.path === 'e2ee')) void restartDocSessionAfterFlush()
-      }
-      return merged.docs
+    // 업데이터는 병합만 — 부작용은 flushSync 로 병합을 끝낸 뒤 한 번 (applyResyncResult 와 같음, F-2059 D14)
+    const applied: { merged?: { docs: DocMeta[]; removedIds: string[] } } = {}
+    flushSync(() => {
+      setDocs((prevDocs) => {
+        applied.merged = mergeBootList({ snapshotIds, current: prevDocs, result: resultMetaList })
+        return applied.merged.docs
+      })
     })
+    const merged = applied.merged
+    if (!merged) return
+    const openId = currentDocIdRef.current
+    if (openId && merged.removedIds.includes(openId)) {
+      deletedElsewhereSourceRef.current = 'bootMerge'
+      setDeletedElsewhereId(openId)
+    }
+    // 다른 곳이 지금 문서를 금고로 옮기거나 뺐으면 새 세션으로 다시 연다 (F-407 7.4, resyncFromStore 와 같은 조건)
+    const opened = openId ? merged.docs.find((d) => d.id === openId) : undefined
+    const session = docPathRef.current
+    const syncedPath = session.path === 'realtime' || session.path === 'pending' || session.path === 'fallback' || session.path === 'e2ee'
+    if (resolvedStore.kind === 'server' && opened && session.docId === openId && syncedPath && !e2eeConvertBusyRef.current) {
+      if (Boolean(opened.e2ee) !== (session.path === 'e2ee')) void restartDocSessionAfterFlush()
+    }
   }
 
   let usedCachedShell = false

@@ -194,4 +194,35 @@ describe('runBoot', () => {
     expect(deps.setFolders).toHaveBeenCalledWith([])
     expect(lastCall(deps.setBootPhase)).toBe('ready')
   })
+
+  it('R4 뒤 맞추기 병합 — 업데이터가 두 번 돌아도 지워짐 표시는 한 번 (F-2059 D14)', async () => {
+    stubLocation('')
+    vi.mocked(fetchAccount).mockResolvedValue({ state: 'in', id: 'u1', email: 'a@b.com', blocked: false, warned: false })
+    const cachedDoc = { id: 'a', title: 'A', content: '', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1 }
+    const server = {
+      ...createMemoryStore(),
+      kind: 'server',
+      userId: 'u1',
+      setAccountBlocked: vi.fn(),
+      listCached: vi.fn(async () => ({ docs: [cachedDoc], folders: [] })),
+      list: vi.fn(async () => []),
+      listFolders: vi.fn(async () => []),
+    } as unknown as Store
+    vi.mocked(openStore).mockResolvedValue(server)
+    const deps = makeDeps()
+    let docs: unknown[] = []
+    // StrictMode 처럼 업데이터를 두 번 부른다
+    vi.mocked(deps.setDocs).mockImplementation((next) => {
+      if (typeof next === 'function') {
+        next(docs as never)
+        docs = next(docs as never)
+      } else docs = next
+    })
+    deps.currentDocIdRef.current = 'a'
+    await runBoot(deps)
+    await vi.waitFor(() => expect(deps.setDeletedElsewhereId).toHaveBeenCalled())
+    await new Promise((r) => setTimeout(r, 0))
+    expect(deps.setDeletedElsewhereId).toHaveBeenCalledTimes(1)
+    expect(docs).toEqual([])
+  })
 })
