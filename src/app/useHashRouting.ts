@@ -70,6 +70,8 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
       if (nav.kind === 'share') {
         ;(async () => {
           await beforeLeaveDoc()
+          setSharesOpen(false) // 공유 보기를 닫았을 때 밑에 공유 관리·도움말이 드러나지 않게 (F-2059 D12)
+          setHelpOpen(false)
           setMapRoute(null)
           await openSharedFragment(nav.fragment, docsRef.current)
         })()
@@ -81,6 +83,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
         ;(async () => {
           await beforeLeaveDoc()
           setSharedDoc(null)
+          setHelpOpen(false) // 켜 두면 뒤로 가기의 #/help 가 무시된다 (F-2059 D12)
           setMapRoute(null)
           setCurrentDocId(null)
           setSharesOpen(true)
@@ -93,6 +96,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
         ;(async () => {
           await beforeLeaveDoc()
           setSharedDoc(null)
+          setSharesOpen(false) // (F-2059 D12)
           setMapRoute(null)
           setCurrentDocId(null)
           setHelpOpen(true)

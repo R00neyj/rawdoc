@@ -146,3 +146,24 @@ test.describe('F-243 A14 비로그인', () => {
     expect(sharesRequested).toBe(false)
   })
 })
+
+test.describe('F-2059 D12 해시 갈래 화면 플래그', () => {
+  test('도움말 → 공유 관리 → 뒤로 가기 — 도움말 페이지로 돌아온다', async ({ page }) => {
+    await fakeServer(page)
+    await openApp(page)
+    await page.evaluate(() => {
+      location.hash = '#/help'
+    })
+    await expect(page.locator('.help-page')).toBeVisible()
+
+    await page.evaluate(() => {
+      location.hash = '#/shares'
+    })
+    await expect(page.locator('.shares-page-head h1')).toHaveText('공유 관리')
+
+    await page.goBack()
+    await expect(page).toHaveURL(/#\/help$/)
+    await expect(page.locator('.help-page')).toBeVisible()
+    await expect(page.locator('.shares-page-head')).toHaveCount(0)
+  })
+})
