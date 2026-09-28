@@ -45,7 +45,7 @@ import type { SyncState } from '../types'
 import { IconRefresh, IconNoteAdd } from './icons'
 import { useAppearancePrefs } from './useAppearancePrefs'
 import { removeBootSkeleton } from './bootPaint'
-import { parseHash, formatHash, formatMapHash, formatCommentHash, parsePathRoute, type HashRoute } from './hashRoute'
+import { parseHash, formatHash, formatMapHash, parsePathRoute, type HashRoute } from './hashRoute'
 import { pushNotice } from './notice'
 import { READ_ONLY_LIVE_NOTICE, LIVE_NOTICE, E2EE_NOTICE, E2EE_CONVERT_NOTICE, e2eeConvertProgressText, e2eeConvertResultNotice, e2eeCreateErrorMessage } from './appNotices'
 import { stripContent, isSharedDoc, sortByUpdatedAtDesc, type DocMeta, type OpenDoc } from './docMeta'
@@ -116,13 +116,8 @@ import { toPaletteDocs, planPaletteCreate } from './paletteDocs'
 import { copyShareLink, copyShareMarkdown } from './shareCopy'
 import type { ThemePref } from './theme'
 import { GUIDES_PATH } from '../lib/siteChrome'
-import NotificationsMenu from './NotificationsMenu'
-import { useNotifications } from './useNotifications'
-import { fetchDocPeople } from './notificationsApi'
-import { unreadNotificationDocIds } from './docNotifications'
-import { createPeopleCache } from './mentionCandidates'
-import { MentionSourceContext, type MentionSource } from './MentionField'
-import type { NotificationItem } from '../lib/docComments'
+import { useNotificationsGlue } from './useNotificationsGlue'
+import { MentionSourceContext } from './MentionField'
 
 import { useInstallPrompt } from '../pwa/useInstallPrompt'
 import { useAppUpdate } from '../pwa/useAppUpdate'
@@ -1354,67 +1349,20 @@ export default function App() {
   }, [])
   const { used: shortcutsUsed } = useShortcutUsage(!publicRoute, isMac)
 
-  // ----- 알림함 (F-507 3.3·4장) -----
-  const notificationsEnabled = bootPhase === 'ready' && store.kind === 'server' && account.state === 'in'
-  const notifications = useNotifications({ enabled: notificationsEnabled, blocked: account.state === 'in' && account.blocked, accountId: account.state === 'in' ? account.id : null })
-  const [notificationsOpen, setNotificationsOpenState] = useState(false)
-  // 렌더 중 조정 — enabled 가 꺼지면 알림함을 닫는다(useDocComments 의 resetFor 와 같은 패턴)
-  const [wasNotificationsEnabled, setWasNotificationsEnabled] = useState(notificationsEnabled)
-  if (wasNotificationsEnabled !== notificationsEnabled) {
-    setWasNotificationsEnabled(notificationsEnabled)
-    if (!notificationsEnabled) setNotificationsOpenState(false)
-  }
-  const setNotificationsOpen = useCallback(
-    (open: boolean) => {
-      setNotificationsOpenState(open)
-      if (open) notifications.refresh('open')
-    },
-    [notifications],
-  )
-  // 항목 → 문서·스레드 이동 (4.5)
-  const handleOpenNotification = useCallback(
-    async (item: NotificationItem) => {
-      setNotificationsOpen(false)
-      notifications.markRead(item.id)
-      if (!docsRef.current.some((d) => d.id === item.docId) && navigator.onLine) {
-        await resyncFromStore().catch(() => {})
-      }
-      location.hash = formatCommentHash(item.docId, item.threadId)
-    },
-    [setNotificationsOpen, notifications, resyncFromStore],
-  )
-
-  // ----- 사이드바 안 읽은 알림 점 (F-510 2·3.3) -----
-  const unreadNotificationDocIdsValue = useMemo(() => unreadNotificationDocIds(notifications.items), [notifications.items])
-
   // 문서를 열면 그 문서의 알림을 읽음으로 (F-510 4.2 1번, 5장) — "문서 화면" 은 부팅이 끝나고 문서가 있고 공유 링크·공유 관리·도움말·지도가 모두 없을 때다
   const docScreenId =
     bootPhase === 'ready' && currentDocId !== null && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute ? currentDocId : null
-  const [prevDocScreenId, setPrevDocScreenId] = useState(docScreenId)
-  if (prevDocScreenId !== docScreenId) {
-    setPrevDocScreenId(docScreenId)
-    // 상태가 바뀐 것만으로는 부르지 않는다 — 전환된 순간 notifications.status 가 ready 여야 한다(r4, 부팅 직후 문서는 idle)
-    if (docScreenId !== null && notifications.status === 'ready') notifications.markDocRead(docScreenId)
-  }
 
-  // ----- 멘션 후보 원천 (F-507 5.1, 8.1) -----
-  const [peopleCache] = useState(() =>
-    createPeopleCache({
-      load: async (docId: string) => {
-        const result = await fetchDocPeople(docId)
-        return result.ok ? result.people : null
-      },
-      now: () => Date.now(),
-      online: () => navigator.onLine,
-    }),
-  )
-  // 렌더마다 새 객체면 MentionField 의 후보 불러오기 effect 가 App 렌더마다 다시 돌아, 실패 중에는 요청이 반복된다 (리뷰 U5)
-  const mentionDocId = notificationsEnabled && currentDocId && commentAccessValue.kind === 'write' && account.state === 'in' ? currentDocId : null
-  const mentionSelfEmail = account.state === 'in' ? account.email : null
-  const mentionSource: MentionSource | null = useMemo(
-    () => (mentionDocId && mentionSelfEmail !== null ? { docId: mentionDocId, selfEmail: mentionSelfEmail, people: peopleCache } : null),
-    [mentionDocId, mentionSelfEmail, peopleCache],
-  )
+  // ----- 알림함·멘션·안 읽은 점 (F-507, F-510, F-2069) -----
+  const {
+    notificationsEnabled,
+    notifications,
+    notificationsOpen,
+    setNotificationsOpen,
+    handleOpenNotification,
+    unreadNotificationDocIdsValue,
+    mentionSource,
+  } = useNotificationsGlue({ bootPhase, store, account, currentDocId, docScreenId, commentAccessValue, docsRef, resyncFromStore })
 
   // 명령 팔레트 D-7 — 템플릿 삽입이 보이는 조건 (specs/features/F-2022.md 6.3)
   const canInsertTemplate =

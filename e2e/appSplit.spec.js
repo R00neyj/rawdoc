@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test'
 import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad, resizeWindow, currentDocId, waitSaved } from './helpers.js'
 import { zipSync, unzipSync } from 'fflate'
 import { fakeServer } from './fixtures/fakeServer.js'
+import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
 
 const root = (page) => page.locator('.context-menu-root')
 
@@ -974,5 +975,92 @@ test.describe('F-2068 가져오기·끌어놓기·이미지 절', () => {
     await expect(page.locator('.notice-message')).toHaveText('문서 0개를 가져오고 1개를 갱신했습니다.')
     await expect(page.locator('.cm-line').first()).toHaveText('색인 고침')
     await expect(exactLabel2068(page, '색인')).toBeVisible()
+  })
+})
+
+const GLUE_USER = { id: 'u1', email: 'a@b.com' }
+const GLUE_CONTENT = '첫째 줄\n둘째 줄\n셋째 줄 고양이\n넷째 줄\n'
+
+function glueNotif(overrides) {
+  return {
+    id: 'n',
+    kind: 'mention',
+    docId: 'notif-doc-1',
+    commentId: 't1',
+    threadId: 't1',
+    actorEmail: 'x@y.com',
+    docTitle: '문서',
+    excerpt: '발췌',
+    createdAt: Date.now(),
+    readAt: null,
+    ...overrides,
+  }
+}
+
+function glueServerDoc(id, { title, content, updatedAt = Date.now() }) {
+  return { id, title, content, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: updatedAt, updatedAt }
+}
+
+async function openGlueServerDoc(page, room, docs, hash, beforeGoto) {
+  const server = await fakeServer(page, GLUE_USER)
+  await room.install(page.context(), GLUE_USER)
+  for (const d of docs) server.docs.set(d.id, glueServerDoc(d.id, d))
+  await beforeGoto(server)
+  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+  await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+  await page.goto(`/${hash}`)
+  await expect(page.locator('.cm-content').first()).not.toHaveText('', { timeout: 10_000 })
+  return server
+}
+
+test.describe('F-2069 알림함 절', () => {
+  test('F-2069 C1 계정이 빠지면 알림함이 닫히고, 돌아와도 닫힌 채', async ({ page }) => {
+    const server = await fakeServer(page, GLUE_USER)
+    server.setNotifications([glueNotif({ id: 'n1' })])
+    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+
+    await page.locator('.notifications-btn').click()
+    await expect(page.locator('.notifications-panel')).toBeVisible()
+
+    const handler = (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' })
+    await page.route('**/api/me', handler)
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+    await expect(page.locator('.notifications-btn')).toHaveCount(0)
+
+    await page.unroute('**/api/me', handler)
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+    await expect(page.locator('.notifications-btn')).toBeVisible()
+    await expect(page.locator('.notifications-panel')).toHaveCount(0)
+  })
+
+  test('F-2069 C2 목록에 있는 문서의 알림 — 목록을 다시 읽지 않는다', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed('notif-doc-1', { content: GLUE_CONTENT, title: '함께 쓰는 문서' })
+    room.seed('notif-doc-2', { content: '다른 문서 본문\n', title: '다른 문서' })
+    const cat = GLUE_CONTENT.indexOf('고양이')
+    room.putComment('notif-doc-1', 't1', { from: cat, to: cat + 3, body: '서버 댓글' })
+
+    const server = await openGlueServerDoc(
+      page,
+      room,
+      [
+        { id: 'notif-doc-1', title: '함께 쓰는 문서', content: GLUE_CONTENT },
+        { id: 'notif-doc-2', title: '다른 문서', content: '다른 문서 본문\n' },
+      ],
+      '#/d/notif-doc-2',
+      (s) => s.setNotifications([glueNotif({ id: 'n1', docId: 'notif-doc-1', threadId: 't1' })]),
+    )
+    await expect(page.locator('.notifications-badge')).toHaveText('1')
+    const countDocs = () => server.readRequests().filter((r) => r.path === '/api/docs').length
+    const before = countDocs()
+
+    await page.locator('.notifications-btn').click()
+    await page.locator('.notification-item').first().click()
+
+    await expect(page).toHaveURL(/#\/d\/notif-doc-1$/)
+    await expect(page.locator('.comment-thread[data-thread-id="t1"]')).toHaveAttribute('data-active', 'true')
+    expect(countDocs()).toBe(before)
   })
 })
