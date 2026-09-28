@@ -200,6 +200,7 @@ class CheckboxWidget extends WidgetType {
 
     input.addEventListener('mousedown', (event) => {
       event.preventDefault()
+      if (view.state.readOnly) return // 읽기 전용이면 체크 상태를 바꾸지 않는다 (리뷰 E1)
       const pos = view.posAtDOM(input)
       // TaskMarker 범위는 항상 "[ ]" 또는 "[x]"(3글자) 이고, 위젯은 그 범위 전체를
       // 치환한다. 가운데 글자(대괄호 안)의 위치는 pos + 1 이다

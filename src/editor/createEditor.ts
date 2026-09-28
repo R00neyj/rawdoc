@@ -47,6 +47,7 @@ import { attachRemoteCursors, remoteCursors } from './remoteCursors'
 import { observeTitle, writeTitle } from './liveTitle'
 import { commentGutter, commentMarks, createEditorComments } from './commentMarks'
 import { fontRemeasure } from './fontRemeasure'
+import { readOnlyChangeGuard } from './readOnlyGuard'
 import './searchPanel.css'
 import './commentMarks.css'
 import { isTouchContextMenu } from '../lib/touchContextMenu'
@@ -399,6 +400,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     lineNumbersCompartment.of(lineNumbersExtensionFor(showLineNumbers, false)),
     gutterAttributesCompartment.of(gutterAttributesExtensionFor(showLineNumbers)),
     readOnlyCompartment.of(readOnlyExtensionsFor(initialReadOnly)),
+    // 읽기 전용이면 위젯이 직접 dispatch 하는 로컬 변경도 버린다(리뷰 E1). readOnly 를 트랜잭션마다 읽으므로 compartment 밖에 둔다
+    readOnlyChangeGuard,
     // compartment 밖에 둔다 — 재구성에 다시 만들어지면 묶음 상태·선택 저장이 끊긴다 (F-302 5.2)
     binding.extension,
     EditorView.lineWrapping,

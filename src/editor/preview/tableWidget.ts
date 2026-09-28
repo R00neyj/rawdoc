@@ -388,6 +388,8 @@ function startEdit(
   col: number,
   restore?: ScrollRestore,
 ): void {
+  // 읽기 전용이면 칸 편집기를 띄우지 않는다 — 입력이 문서에 들어가지 못해 칸과 원문이 어긋난다 (리뷰 E1)
+  if (mainView.state.readOnly) return
   if (row < 0 || row >= widget.table.rows.length) return
   if (col < 0 || col >= widget.table.columnCount) return
   const scrollBase = restore || captureScroll(mainView, wrap)
@@ -922,6 +924,7 @@ function finalizeRangeSelection(mainView: EditorView, wrap: HTMLElement, r1: num
 
 // Del·Backspace 규칙 5가지(F-165 2.2)를 실행한다. 결과는 트랜잭션 1개(userEvent: 'delete.table'). 표 전체·열·행·머리 포함 행 삭제 뒤에는 범위 선택을 해제하고 커서를 표 다음 줄 시작으로 옮긴다(표 전체 삭제면 표가 있던 빈 줄). 내용 비우기(cells)는 범위 선택을 유지한다
 function performRangeDelete(mainView: EditorView, wrap: HTMLElement, range: ActiveRangeEntry): void {
+  if (mainView.state.readOnly) return // 리뷰 E1
   const widget = currentWidgetFor(wrap)
   if (!widget) return
   const table = widget.table
@@ -1046,6 +1049,7 @@ function renderTable(wrap: HTMLElement, widget: TableWidget, mainView: EditorVie
 
   wrap.appendChild(
     buildAddButton('md-table-add-row', '뒤에 행 추가하기', () => {
+      if (mainView.state.readOnly) return // 리뷰 E1
       // 클릭 시점의 최신 위젯을 쓴다(renderedWidget) — 클로저로 잡은 widget 은
       // 구조 변화 없는 칸 편집만 있었을 때(updateDOM 의 patch 경로) 갱신되지 않는다
       const latest = currentWidgetFor(wrap)
@@ -1062,6 +1066,7 @@ function renderTable(wrap: HTMLElement, widget: TableWidget, mainView: EditorVie
   )
   wrap.appendChild(
     buildAddButton('md-table-add-col', '뒤에 열 추가하기', () => {
+      if (mainView.state.readOnly) return // 리뷰 E1
       const latest = currentWidgetFor(wrap)
       if (!latest) return
       const blockFrom = mainView.posAtDOM(wrap)
@@ -1189,6 +1194,7 @@ export class TableWidget extends WidgetType {
 // true(머리 행), 아래에서 올라오며 들어오면 false(마지막 행). 반환값: 표 위젯을
 // 찾아 편집을 시작했으면 true
 export function enterTableFromKeyboard(view: EditorView, tableFrom: number, fromAbove: boolean): boolean {
+  if (view.state.readOnly) return false // 칸 편집을 시작하지 않으므로 키를 삼키지 않는다 (리뷰 E1)
   const wraps = view.dom.querySelectorAll<HTMLElement>('.md-table-widget')
   for (const wrap of wraps) {
     if (view.posAtDOM(wrap) !== tableFrom) continue
