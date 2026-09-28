@@ -70,11 +70,23 @@ export function useFolderActions(options: UseFolderActionsOptions): UseFolderAct
     setDeleteTarget(null)
   }
 
+  // 실패하면 대화상자를 닫고 알린다 — 여러 항목 삭제의 실패 알림과 맞춤 (F-2059 D9)
+  async function removeOrNotify(remove: () => Promise<void>): Promise<boolean> {
+    try {
+      await remove()
+      return true
+    } catch {
+      setDeleteTarget(null)
+      showNotice({ type: 'error', message: '삭제하지 못했습니다. 잠시 뒤 다시 시도해 주세요.' })
+      return false
+    }
+  }
+
   async function confirmDelete(target: DeleteTarget | null, mode: FolderDeleteMode = 'move-up') {
     if (!target) return
 
     if (target.type === 'folder') {
-      await store.removeFolder(target.id, mode)
+      if (!(await removeOrNotify(() => store.removeFolder(target.id, mode)))) return
       const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
       setFolders(newFolders)
       const strippedDocs = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
@@ -89,7 +101,7 @@ export function useFolderActions(options: UseFolderActionsOptions): UseFolderAct
       return
     }
 
-    await store.remove(target.id)
+    if (!(await removeOrNotify(() => store.remove(target.id)))) return
     const remaining = docs.filter((d) => d.id !== target.id)
     setDocs(remaining)
     setDeleteTarget(null)
