@@ -256,7 +256,8 @@ function tableWidget(state: EditorState, _node: SyntaxNode, blockFrom: number, b
 type BlockMaker = (state: EditorState, node: SyntaxNode, blockFrom: number, blockTo: number, theme: string) => WidgetType
 const TARGET: Record<string, BlockMaker> = { Table: tableWidget, FencedCode: codeWidget }
 
-// 목록·인용 안인가 (F-157 2.1 "문서 최상위"). 이미지 블록만 검사한다 — 표·코드블록은 F-106 그대로 목록·인용 안에서도 위젯이 된다
+// 목록·인용 안인가 (F-157 2.1 "문서 최상위"). 이미지 블록·수식 블록·표가 검사한다 — 코드블록은 F-106 그대로 목록·인용 안에서도 위젯이 된다.
+// 표는 tableModel 이 줄 앞 `>`·`-`·들여쓰기를 모르고 칸으로 읽거나 행 추가에서 빠뜨려 구조를 깨므로 원문으로 둔다 (리뷰 E2)
 const LIST_OR_QUOTE = new Set(['Blockquote', 'BulletList', 'OrderedList', 'ListItem'])
 function isInsideListOrQuote(node: SyntaxNode): boolean {
   for (let n = node.parent; n; n = n.parent) {
@@ -313,6 +314,7 @@ export function buildBlocks(
 
       const make = TARGET[node.name]
       if (!make) return
+      if (node.name === 'Table' && isInsideListOrQuote(node.node)) return false
 
       // block decoration 은 줄 경계에 놓여야 한다. 표·코드블록은 이미 줄 단위지만
       // 파서가 주는 범위를 그대로 믿지 않고 줄로 확장한다.

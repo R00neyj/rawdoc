@@ -97,6 +97,34 @@ describe('buildBlocks — 생성 여부', () => {
   })
 })
 
+// 인용·목록 안 표는 줄 앞 `>`·`-`·들여쓰기가 표 원문에 섞여, tableModel 이 `>` 를 첫 열 칸으로
+// 읽거나 행 추가가 접두 없이 들어가 구조를 깬다 — 위젯으로 만들지 않고 원문으로 둔다 (리뷰 E2)
+describe('buildBlocks — 인용·목록 안 표 (리뷰 E2)', () => {
+  it('인용 안 표는 위젯을 만들지 않는다', () => {
+    const doc = '> | a | b |\n> |---|---|\n> | 1 | 2 |\n\nx'
+    const state = makeState(doc, doc.length)
+    expect(widgetsOf(state).some((w) => w.table)).toBe(false)
+  })
+
+  it('목록 항목 첫 줄에서 시작하는 표는 위젯을 만들지 않는다', () => {
+    const doc = '- | a | b |\n  |---|---|\n  | 1 | 2 |\n\nx'
+    const state = makeState(doc, doc.length)
+    expect(widgetsOf(state).some((w) => w.table)).toBe(false)
+  })
+
+  it('목록 안 들여쓴 표도 위젯을 만들지 않는다', () => {
+    const doc = '- x\n\n  | a | b |\n  |---|---|\n  | 1 | 2 |\n\nx'
+    const state = makeState(doc, doc.length)
+    expect(widgetsOf(state).some((w) => w.table)).toBe(false)
+  })
+
+  it('문서 최상위 표는 그대로 위젯이다', () => {
+    const doc = TABLE_DOC + '\nx'
+    const state = makeState(doc, doc.length)
+    expect(widgetsOf(state).some((w) => w.table)).toBe(true)
+  })
+})
+
 describe('buildBlocks — 표를 치는 도중 입력 손실 방지 (F-139 3.1)', () => {
   // F-139 3.2 재현: 구분 행을 "| --- | - " 까지만 쳐도 GFM 최소 조건(칸마다
   // ':?-+:?')을 만족해 즉시 Table 로 인식된다 — 사용자가 아직 다 치지 않았어도 그렇다
