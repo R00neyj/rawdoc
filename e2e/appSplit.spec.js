@@ -1159,3 +1159,71 @@ test.describe('F-2070 실시간 알림 띠 절', () => {
     await expect(page.getByRole('button', { name: '새 문서로 저장' })).toHaveCount(0)
   })
 })
+
+test.describe('F-2071 해시 라우팅 절', () => {
+  test.use({ viewport: { width: 1280, height: 900 } })
+
+  test('F-2071 C1 도움말 — 뒤로 가기로 문서, 앞으로 가기로 다시 도움말', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    const A = await importMarkdown(page, { name: '가.md', content: '가 본문\n' })
+    await page.locator('.sidebar').getByRole('button', { name: '도움말' }).first().click()
+    await expect(page.locator('.help-page')).toBeVisible()
+    await expect(page).toHaveURL(/#\/help$/)
+
+    await page.goBack()
+    await expect(page).toHaveURL(new RegExp(`#/d/${A}$`))
+    await expect(page.locator('.help-page')).toHaveCount(0)
+    await expect(page.locator('.doc-title')).toHaveValue('가')
+
+    await page.goForward()
+    await expect(page.locator('.help-page')).toBeVisible()
+    await expect(page).toHaveURL(/#\/help$/)
+
+    await page.goBack()
+    await expect(page.locator('.doc-title')).toHaveValue('가')
+    await expect(page.locator('.help-page')).toHaveCount(0)
+  })
+
+  test('F-2071 C2 지도 — 앞으로 가기로 다시 들어가면 그 문서가 중심이다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    const A = await currentDocId(page)
+    await page.locator('.sidebar').getByRole('button', { name: '지도' }).first().click()
+    await expect(page.locator('.map-page')).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`#/map/${A}$`))
+    await page.goBack()
+    await expect(page).toHaveURL(new RegExp(`#/d/${A}$`))
+    await expect(page.locator('.map-page')).toHaveCount(0)
+
+    await page.goForward()
+    await expect(page.locator('.map-page')).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`#/map/${A}$`))
+    expect(await readPref(page, 'md.lastDocId')).toBe(A)
+
+    await page.locator('.map-page').getByRole('button', { name: '닫기', exact: true }).click()
+    await expect(page).toHaveURL(new RegExp(`#/d/${A}$`))
+    await expect(page.locator('.map-page')).toHaveCount(0)
+  })
+
+  test('F-2071 C3 주소 직접 수정 — 폴더 안 문서는 폴더를 펴고 편집기에 초점, #/ 는 홈', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    const A = await importMarkdown(page, { name: '가.md', content: '가 본문\n' })
+    await createLayoutFolder(page, '폴더')
+    await moveDocToLayoutFolder(page, '폴더')
+    await importMarkdown(page, { name: '나.md', content: '나 본문\n' })
+    await folderToggle(page, '폴더 접기').click()
+    await expect(folderToggle(page, '폴더 펼치기')).toBeVisible()
+
+    await page.evaluate((id) => { location.hash = '#/d/' + id }, A)
+    await expect(page.locator('.doc-title')).toHaveValue('가')
+    await expect(folderToggle(page, '폴더 접기')).toBeVisible()
+    await expect.poll(() => readPref(page, 'md.lastDocId')).toBe(A)
+    await expect(page.locator('.cm-content')).toBeFocused()
+
+    await page.evaluate(() => { location.hash = '#/' })
+    await expect(page.locator('.empty-state')).toBeVisible()
+    await expect(page).toHaveURL(/#\/$/)
+  })
+})

@@ -295,7 +295,7 @@ test.describe('F-252 C4 묶음 이동', () => {
 })
 
 // 버그 수정 회귀 테스트(2026-09-19): 경로 기반 공유 링크(`/p/{token}`, F-238)에서 위키링크로
-// 들어간 뒤 뒤로 가면 App.tsx 의 hashchange 핸들러가 location.hash 만 보고 pathname 을
+// 들어간 뒤 뒤로 가면 useHashRouting.ts 의 hashchange 핸들러가 location.hash 만 보고 pathname 을
 // 안 봐서 앱 홈으로 빠졌다
 test.describe('경로 기반 공유 링크 뒤로 가기', () => {
   test('위키링크 클릭 → 뒤로 가기로 앱 홈이 아니라 시작 문서로', async ({ page }) => {

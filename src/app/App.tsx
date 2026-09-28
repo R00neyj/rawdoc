@@ -45,7 +45,8 @@ import type { SyncState } from '../types'
 import { IconRefresh } from './icons'
 import { useAppearancePrefs } from './useAppearancePrefs'
 import { removeBootSkeleton } from './bootPaint'
-import { parseHash, formatHash, formatMapHash, parsePathRoute, type HashRoute } from './hashRoute'
+import { parseHash, formatHash, formatMapHash, parsePathRoute } from './hashRoute'
+import { toPublicRoute, type PublicRoute } from './hashNav'
 import { pushNotice } from './notice'
 import { E2EE_NOTICE, E2EE_CONVERT_NOTICE, e2eeConvertProgressText, e2eeConvertResultNotice, e2eeCreateErrorMessage } from './appNotices'
 import { stripContent, isSharedDoc, sortByUpdatedAtDesc, type DocMeta, type OpenDoc } from './docMeta'
@@ -151,6 +152,7 @@ import { useGlobalShortcuts } from './useGlobalShortcuts'
 import { useSidebarLayout } from './useSidebarLayout'
 import { useFolderActions } from './useFolderActions'
 import { useImportFlow } from './useImportFlow'
+import { useHashRouting, replaceHashUrl, pushHashUrl, pushHelpHash } from './useHashRouting'
 import { useSharesPage } from './useSharesPage'
 import { isMacPlatform } from './shortcutCatalog'
 import SharedView from './SharedView'
@@ -205,32 +207,6 @@ function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
     const timer = setTimeout(done, ms)
     signal.addEventListener('abort', done)
   })
-}
-
-function replaceHashUrl(docId: string | null) {
-  const url = `${location.pathname}${location.search}${formatHash(docId)}`
-  history.replaceState(null, '', url)
-}
-
-// location.hash 대입과 달리 hashchange 를 일으키지 않아 상태 갱신과 리렌더 사이 경쟁을 없앤다 (0단계 버그 수정, ia.md 3.10)
-function pushHashUrl(docId: string | null) {
-  const url = `${location.pathname}${location.search}${formatHash(docId)}`
-  history.pushState(null, '', url)
-}
-
-// `#/help` 로 들어갈 때 — 같은 이유로 pushState 를 써서 뒤로 가기가 자연스럽게 이전 화면으로 돌아간다 (F-244.md 3.3)
-function pushHelpHash() {
-  const url = `${location.pathname}${location.search}#/help`
-  history.pushState(null, '', url)
-}
-
-// `#/p/{토큰}`·`#/p/f/{토큰}` 이면 저장소를 열지 않고 이 값만으로 PublicView 를 그린다 (F-210.md 2.4, F-211.md 2.3)
-type PublicRoute = { type: 'public'; token: string } | { type: 'publicFolder'; token: string; docId?: string } | null
-
-function toPublicRoute(route: HashRoute): PublicRoute {
-  if (route.type === 'public') return route
-  if (route.type === 'publicFolder') return route
-  return null
 }
 
 // 떠 있는 `댓글 달기` 버튼 — 선택이 화면 위로 지나가면 위 끝, 아래에 있으면 아래 끝에 붙인다(버튼 32px + 여백 8px)
@@ -1779,118 +1755,10 @@ export default function App() {
   }, [bootPhase, publicRoute, dbBlockedMessage])
 
   // ----- 뒤로·앞으로 가기, 주소창 직접 수정 (ia.md 3.10) -----
-  // docs·currentDocId 는 ref 로 읽는다 — bootPhase 변경시만 재구독해 클로저에 담으면 낡은 값을 본다 (0단계 버그 수정)
-  useEffect(() => {
-    if (bootPhase !== 'ready') return
-
-    function handleHashChange() {
-      const parsedHash = parseHash(location.hash)
-
-      // 공개 링크(#/p/…)는 위 handlePublicHashChange 가 publicRoute 로 그린다 — 여기서 첫 문서로 해시를 바꾸지 않는다 (리뷰 A1)
-      if (parsedHash.type === 'public' || parsedHash.type === 'publicFolder') return
-      // 경로형 공개 링크(/p/…)도 같다 — 해시가 비어 있어도 홈으로 돌리거나 해시를 바꾸지 않는다 (리뷰 A4)
-      if (toPublicRoute(parsePathRoute(location.pathname))) return
-
-      // 공유 링크는 currentDocId 와 비교하지 않고 매번 새로 연다 — 공유 화면 동안 건드리지 않아 같은 값일 수 있다 (F-130.md 4장)
-      if (parsedHash.type === 'share') {
-        ;(async () => {
-          await beforeLeaveDoc()
-          setMapRoute(null)
-          await openSharedFragment(parsedHash.fragment, docsRef.current)
-        })()
-        return
-      }
-
-      // 공유 관리 페이지(F-243.md 3.4) — 뒤로·앞으로 가기·주소창 직접 수정으로 드나들 때
-      if (parsedHash.type === 'shares') {
-        if (sharesOpenRef.current) return
-        ;(async () => {
-          await beforeLeaveDoc()
-          setSharedDoc(null)
-          setMapRoute(null)
-          setCurrentDocId(null)
-          setSharesOpen(true)
-        })()
-        return
-      }
-
-      // 도움말 페이지(F-244.md 3.3) — 뒤로·앞으로 가기·주소창 직접 수정으로 드나들 때
-      if (parsedHash.type === 'help') {
-        if (helpOpenRef.current) return
-        ;(async () => {
-          await beforeLeaveDoc()
-          setSharedDoc(null)
-          setMapRoute(null)
-          setCurrentDocId(null)
-          setHelpOpen(true)
-        })()
-        return
-      }
-
-      // 위키링크 지도(F-292.md 6.1) — 뒤로·앞으로 가기·주소창 직접 수정으로 드나들 때
-      if (parsedHash.type === 'map') {
-        const nextCenterId = parsedHash.docId ?? null
-        if (mapRouteRef.current && (mapRouteRef.current.centerDocId ?? null) === nextCenterId) return
-        ;(async () => {
-          await beforeLeaveDoc()
-          setSharedDoc(null)
-          setSharesOpen(false)
-          setHelpOpen(false)
-          const anchorId = nextCenterId && docsRef.current.some((d) => d.id === nextCenterId) ? nextCenterId : null
-          setCurrentDocId(anchorId)
-          if (anchorId) setPref('md.lastDocId', anchorId)
-          setMapRoute({ centerDocId: anchorId, returnDocId: anchorId })
-        })()
-        return
-      }
-
-      const docId = parsedHash.type === 'doc' ? parsedHash.docId : null
-      const threadId = parsedHash.type === 'doc' ? (parsedHash.threadId ?? null) : null
-      // 해시가 문서 경로·문서 없음으로 바뀌면 문서 id 가 같아도 공유 화면·공유 관리 페이지·도움말 페이지·지도를 닫는다 (F-138 3.3, F-243 3.4, F-244 3.3, F-292 6.1)
-      if (docId === currentDocIdRef.current && !sharedDocRef.current && !sharesOpenRef.current && !helpOpenRef.current && !mapRouteRef.current) {
-        // 알림함 링크를 눌렀는데 이미 그 문서를 보고 있는 경우 — 돌아가기 전에 대상을 잡는다(7.6)
-        if (docId && threadId) {
-          commentsRef.current?.setPendingTarget({ docId, threadId })
-          replaceHashUrl(docId)
-        }
-        return
-      }
-
-      ;(async () => {
-        await beforeLeaveDoc()
-        setSharedDoc(null) // 공유 화면을 보고 있었으면 떠난다 (F-130.md 4장)
-        setSharesOpen(false) // 공유 관리 페이지를 보고 있었으면 떠난다 (F-243.md 3.4)
-        setHelpOpen(false) // 도움말 페이지를 보고 있었으면 떠난다 (F-244.md 3.3)
-        setMapRoute(null) // 지도를 보고 있었으면 떠난다 — 뒤로 가기로 지도를 나갈 때가 그렇다 (F-292.md 6.1)
-        // `#/`·빈 해시만 홈 — 인식 못 한 해시는 기존대로 첫 문서 + 알림으로 내려간다 (F-232 3.2, 리뷰 A4)
-        if (parsedHash.type === 'home') {
-          setCurrentDocId(null)
-          return
-        }
-        focusEditorRef.current = true
-        const latestDocs = docsRef.current
-        if (docId && latestDocs.some((d) => d.id === docId)) {
-          setCurrentDocId(docId)
-          setPref('md.lastDocId', docId)
-          if (threadId) {
-            commentsRef.current?.setPendingTarget({ docId, threadId })
-            replaceHashUrl(docId)
-          }
-          const openedDoc = latestDocs.find((d) => d.id === docId)
-          addOpenFolders(ancestorsOfDoc({ folders: foldersRef.current, doc: openedDoc }))
-        } else {
-          const fallbackId = latestDocs[0]?.id ?? null
-          setCurrentDocId(fallbackId)
-          if (fallbackId) setPref('md.lastDocId', fallbackId)
-          replaceHashUrl(fallbackId)
-          showNotice({ type: 'info', message: '문서를 찾을 수 없습니다.' })
-        }
-      })()
-    }
-
-    window.addEventListener('hashchange', handleHashChange)
-    return () => window.removeEventListener('hashchange', handleHashChange)
-  }, [bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment])
+  useHashRouting({
+    bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment, setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute,
+    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, focusEditorRef, commentsRef,
+  })
 
   // ----- 저장소 영속화 요청 (specs/features/F-118.md) -----
   useEffect(() => {

@@ -90,7 +90,7 @@ export default function AccountMenu({ account, onBeforeNavigate, onNotice, onLog
     setApiTokensOpen(true)
   }
 
-  // 로그인 상태에서만, API 토큰 위 (F-243 3.5) — 같은 앱 안 이동이라 onBeforeNavigate 는 부르지 않는다(App.tsx 의 hashchange 처리가 맡는다)
+  // 로그인 상태에서만, API 토큰 위 (F-243 3.5) — 같은 앱 안 이동이라 onBeforeNavigate 는 부르지 않는다(useHashRouting.ts 의 hashchange 처리가 맡는다)
   async function handleOpenShares() {
     setOpen(false)
     location.hash = '#/shares'
