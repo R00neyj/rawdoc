@@ -946,6 +946,12 @@ export default function App() {
     setDocSession((cur) => ({ ...cur, seq: cur.seq + 1, path: null, fallbackReason: null, forbiddenClose: false, quietForbidden: false, resume: false, startOffline: false, readOnly: false, persist: null }))
     setOpenDoc(null)
   }, [])
+  // 편집기를 내리기 전에 대기 저장을 끝낸다 — 기다리는 사이 다른 문서로 옮겼으면 다시 열지 않는다 (리뷰 A2)
+  const restartDocSessionAfterFlush = useCallback(async () => {
+    const docId = currentDocIdRef.current
+    await docSaverFlushRef.current()
+    if (docId === currentDocIdRef.current) restartDocSession()
+  }, [restartDocSession])
   const liveSession = useLiveDoc(isRealtime && convertingDocId !== currentDocId ? currentDocId : null, {
     store: docSession.readOnly ? null : docSession.persist,
     resume: docSession.resume,
@@ -1250,9 +1256,9 @@ export default function App() {
     const session = docPathRef.current
     const syncedPath = session.path === 'realtime' || session.path === 'pending' || session.path === 'fallback' || session.path === 'e2ee'
     if (store.kind === 'server' && opened && session.docId === openId && syncedPath && !e2eeConvertBusyRef.current) {
-      if (Boolean(opened.e2ee) !== (session.path === 'e2ee')) restartDocSession()
+      if (Boolean(opened.e2ee) !== (session.path === 'e2ee')) void restartDocSessionAfterFlush()
     }
-  }, [store, keepLiveTitle, restartDocSession])
+  }, [store, keepLiveTitle, restartDocSessionAfterFlush])
 
   // 로컬 편집권을 되찾으면 서버 잠금 재획득(handleLockReacquired)과 같은 방식으로 다시 읽어 다시 마운트한다 (F-296.md 6.4)
   const handleClaimRegained = useCallback(() => {
@@ -2114,7 +2120,7 @@ export default function App() {
           const session = docPathRef.current
           const syncedPath = session.path === 'realtime' || session.path === 'pending' || session.path === 'fallback' || session.path === 'e2ee'
           if (resolvedStore.kind === 'server' && opened && session.docId === openId && syncedPath && !e2eeConvertBusyRef.current) {
-            if (Boolean(opened.e2ee) !== (session.path === 'e2ee')) restartDocSession()
+            if (Boolean(opened.e2ee) !== (session.path === 'e2ee')) void restartDocSessionAfterFlush()
           }
           return merged.docs
         })
