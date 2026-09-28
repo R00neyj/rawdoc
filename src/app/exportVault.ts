@@ -4,7 +4,7 @@ import { Zip, ZipPassThrough } from 'fflate'
 import { toObsidianFileName, toObsidianFolderName, toFolderName } from '../lib/filename'
 import { extractAttachmentRefs, type ParsedImageBlock } from '../lib/imageBlock'
 import { imageBlockToEmbed } from '../lib/obsidianImage'
-import { fromEditorText } from '../lib/lineEnding'
+import { fromEditorText, toEditorText } from '../lib/lineEnding'
 import { findFrontmatter, textAfterFrontmatter } from '../lib/frontmatter'
 import { parseMarkdownTokens } from '../viewer/renderMarkdown'
 import { scanWikiLinks } from '../lib/wikiGraph'
@@ -313,7 +313,8 @@ export async function exportVault({
   const vaultRefIds = new Set<string>()
 
   for (const { doc, path } of plan.docs) {
-    const { text, rewrittenLinks: n } = toVaultMarkdown(doc.content, doc.folderId, plan.links)
+    // 저장소 본문은 이미 실제 줄바꿈(CRLF 등)을 담는다 — 편집기 텍스트(LF)로 바꿔 고친 뒤 문서의 줄바꿈으로 되돌린다 (리뷰 U1)
+    const { text, rewrittenLinks: n } = toVaultMarkdown(toEditorText(doc.content), doc.folderId, plan.links)
     rewrittenLinks += n
     addFile(path, new TextEncoder().encode(fromEditorText(text, doc.lineEnding)))
     for (const id of extractAttachmentRefs(doc.content)) {

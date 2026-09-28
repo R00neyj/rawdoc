@@ -2,6 +2,7 @@
 import { Unzip, UnzipInflate } from 'fflate'
 
 import { decodeMarkdown } from '../lib/decodeMarkdown'
+import { fromEditorText, toEditorText } from '../lib/lineEnding'
 import { inspectImageBytes } from '../lib/imageFile'
 import type { AttachmentExt, Doc, Folder, LineEnding } from '../types'
 import type { WorkspaceManifest } from './exportWorkspace'
@@ -506,7 +507,9 @@ export async function applyImportPlan({
         failures.push(`${planDoc.title} — 가져오지 못했습니다`)
         return
       }
-      if (isServer && utf8ByteLength(content) > MAX_CONTENT_BYTES) {
+      // update 는 lineEnding 을 바꾸지 않는다 — 본문을 기존 문서의 줄바꿈에 맞춰야 저장소 본문과 lineEnding 이 어긋나지 않는다 (리뷰 U6)
+      const updateContent = fromEditorText(toEditorText(content), existing.lineEnding)
+      if (isServer && utf8ByteLength(updateContent) > MAX_CONTENT_BYTES) {
         failures.push(`${planDoc.title} — 내용이 1MB 를 넘어 건너뛰었습니다`)
         return
       }
@@ -522,7 +525,7 @@ export async function applyImportPlan({
         return
       }
       try {
-        await store.update(planDoc.id, { title: planDoc.title, content })
+        await store.update(planDoc.id, { title: planDoc.title, content: updateContent })
         updatedCount++
       } catch {
         failures.push(`${planDoc.title} — 가져오지 못했습니다`)
@@ -530,16 +533,18 @@ export async function applyImportPlan({
       return
     }
 
-    if (isServer && utf8ByteLength(content) > MAX_CONTENT_BYTES) {
+    const lineEnding: LineEnding = planDoc.lineEnding === 'auto' ? decoded.lineEnding : planDoc.lineEnding
+    // manifest 의 lineEnding 이 .md 바이트 판정과 다를 수 있다 — 본문을 그 lineEnding 에 맞춘다 (리뷰 U6)
+    const createContent = fromEditorText(toEditorText(content), lineEnding)
+    if (isServer && utf8ByteLength(createContent) > MAX_CONTENT_BYTES) {
       failures.push(`${planDoc.title} — 내용이 1MB 를 넘어 건너뛰었습니다`)
       return
     }
 
-    const lineEnding: LineEnding = planDoc.lineEnding === 'auto' ? decoded.lineEnding : planDoc.lineEnding
     try {
       await store.create({
         title: planDoc.title,
-        content,
+        content: createContent,
         lineEnding,
         folderId: resolveFolderId(planDoc.folderId),
         ...(planDoc.id !== undefined ? { id: planDoc.id } : {}),
