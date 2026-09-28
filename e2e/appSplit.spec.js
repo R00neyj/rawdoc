@@ -1065,3 +1065,97 @@ test.describe('F-2069 알림함 절', () => {
     expect(countDocs()).toBe(before)
   })
 })
+
+// ----- F-2070 실시간 알림 띠 절 -----
+function serverDoc2070(id, { title, content }) {
+  const now = Date.now()
+  return { id, title, content, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: now, updatedAt: now }
+}
+
+async function openLive2070(page, room, docs, openId) {
+  const server = await fakeServer(page)
+  await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
+    }
+    return route.fulfill({ status: 204 })
+  })
+  await room.install(page.context())
+  for (const doc of docs) server.docs.set(doc.id, serverDoc2070(doc.id, doc))
+  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+  await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+  await page.goto(`/#/d/${openId}`)
+}
+
+async function openViewLive2070(page, room) {
+  await fakeServer(page)
+  await room.install(page.context())
+  // 서버 본문을 방과 다르게 둬서 방 본문이 보이면 실시간 동기화가 끝난 것으로 본다
+  const viewDoc = serverDoc2070('f2070-view', { title: '보기 문서', content: '서버 본문' })
+  await page.route(/\/api\/docs\/f2070-view$/, (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(viewDoc) })
+  })
+  await page.route('**/api/shared', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{ ...viewDoc, content: undefined, role: 'view', ownerEmail: 'owner@x.com' }]),
+    }),
+  )
+  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+  await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+  await page.goto('/#/d/f2070-view')
+}
+
+test.describe('F-2070 실시간 알림 띠 절', () => {
+  test.use({ viewport: { width: 1600, height: 900 } })
+
+  test('F-2070 C1 동기화 뒤 4401 — N4 와 새 문서로 저장', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed('f2070-live', { content: '본문 가', title: '실시간 가' })
+    await openLive2070(page, room, [{ id: 'f2070-live', title: '실시간 가', content: '본문 가' }], 'f2070-live')
+    await expect(page.locator('.cm-content').first()).toContainText('본문 가')
+
+    room.closeAll('f2070-live', 4401, 'unauthenticated')
+    await expect(page.locator('.notice--error .notice-message')).toHaveText(
+      '로그인이 만료되어 실시간 편집을 멈췄습니다. 지금 화면의 내용은 새 문서로 저장할 수 있습니다.',
+    )
+    await expect(page.locator('.notice').getByRole('button', { name: '새 문서로 저장' })).toBeVisible()
+    await expect(page.locator('.cm-content').first()).toHaveAttribute('contenteditable', 'false')
+  })
+
+  test('F-2070 C2 새 문서로 저장 알림은 다른 문서로 옮기면 걷힌다', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed('f2070-live', { content: '본문 가', title: '실시간 가' })
+    room.seed('f2070-other', { content: '본문 나', title: '실시간 나' })
+    const docs = [
+      { id: 'f2070-live', title: '실시간 가', content: '본문 가' },
+      { id: 'f2070-other', title: '실시간 나', content: '본문 나' },
+    ]
+    await openLive2070(page, room, docs, 'f2070-live')
+    await expect(page.locator('.cm-content').first()).toContainText('본문 가')
+
+    room.closeAll('f2070-live', 4403, 'revoked')
+    await expect(page.locator('.notice-message')).toHaveText('편집 권한이 없어져 읽기만 할 수 있습니다.')
+    await page.locator('.doc-item-btn', { hasText: '실시간 나' }).click()
+
+    await expect(page.locator('.cm-content').first()).toContainText('본문 나')
+    await expect(page.getByText('편집 권한이 없어져 읽기만 할 수 있습니다.')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '새 문서로 저장' })).toHaveCount(0)
+  })
+
+  test('F-2070 C3 읽기 전용 세션 동기화 뒤 4401 — N10, 버튼 없음', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed('f2070-view', { content: '보기 본문', title: '보기 문서' })
+    room.setRole('f2070-view', 'u1', 'view')
+    await openViewLive2070(page, room)
+    await expect(page.locator('.statusbar-save')).toHaveText('저장됨')
+    // 저장됨 은 HTTP 본문으로도 뜬다 — 방 본문이 보여야 닫을 실시간 연결이 있다
+    await expect(page.locator('.cm-content', { hasText: '보기 본문' })).toBeVisible()
+
+    room.closeAll('f2070-view', 4401, 'unauthenticated')
+    await expect(page.locator('.notice--error .notice-message')).toHaveText('로그인이 만료되어 실시간 연결을 멈췄습니다.')
+    await expect(page.getByRole('button', { name: '새 문서로 저장' })).toHaveCount(0)
+  })
+})
