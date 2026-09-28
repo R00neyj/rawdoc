@@ -2484,3 +2484,82 @@ describe('리뷰 S1 보내는 중 쌓인 편집', () => {
     expect(server.docs.get(doc.id)?.content).toBe('B')
   })
 })
+
+describe('리뷰 S3 충돌 뒤 남은 편집', () => {
+  it('409 를 받으면 같은 문서의 남은 updateDoc 은 보내지 않는다 — 사본이 그 내용을 담는다', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'p')
+    let putCount = 0
+    let releaseFirst = () => {}
+    const gate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      if (init.method === 'PUT' && path === '/api/docs/p') {
+        putCount += 1
+        if (putCount === 1) await gate
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const conflicts: Array<{ docId: string; copyId: string }> = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), onConflict: (e) => conflicts.push(e) })
+    await store.list()
+
+    await store.update('p', { content: 'E1' })
+    await tick()
+    // 다른 기기가 먼저 고쳤다
+    server.docs.get('p')!.content = 'other'
+    server.bumpVersion('p')
+    await store.update('p', { content: 'E2' })
+    releaseFirst()
+    await tick(40)
+
+    expect(conflicts).toHaveLength(1)
+    expect(putCount).toBe(1)
+    expect(server.docs.get('p')?.content).toBe('other')
+    expect(server.docs.get(conflicts[0].copyId)?.content).toBe('E2')
+    expect(store.syncState?.pending).toBe(0)
+  })
+
+  it('금고 409 도 같다 — 사본을 만들었으면 남은 금고 updateDoc 을 보내지 않는다', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'v', { e2eeKey: VAULT_KEY, attachmentRefs: [] })
+    let putCount = 0
+    let releaseFirst = () => {}
+    const gate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      if (init.method === 'PUT' && path === '/api/docs/v') {
+        putCount += 1
+        if (putCount === 1) await gate
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    let fakeNow = 0
+    const store = await createServerStore('u1', { dbName: freshDbName(), now: () => fakeNow })
+    await store.list()
+    store.setE2eeCopyMaker(async (source) => ({ title: 'CT', content: source.content, e2eeKey: 'N'.repeat(56), attachmentRefs: [] }))
+
+    await store.update('v', { content: 'E1' })
+    await tick()
+    server.docs.get('v')!.content = 'other'
+    server.bumpVersion('v')
+    await store.update('v', { content: 'E2' })
+    releaseFirst()
+    await tick(40)
+    // 10초 간격이 지나도 남은 편집이 원본에 올라가지 않는다
+    fakeNow = 20_000
+    await store.flushOutbox()
+    await tick(20)
+
+    expect(putCount).toBe(1)
+    expect(server.docs.get('v')?.content).toBe('other')
+    expect([...server.docs.values()].some((d) => d.id !== 'v' && d.content === 'E2')).toBe(true)
+    expect(store.syncState?.pending).toBe(0)
+  })
+})

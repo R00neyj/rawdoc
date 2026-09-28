@@ -486,6 +486,14 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     })
   }
 
+  // 충돌 사본은 캐시 본문(= 남은 편집까지 담은 값)으로 만든다 — 같은 문서의 남은 updateDoc 이 새 서버 버전 위로 원본을 덮지 않게 버린다 (리뷰 S3)
+  async function dropLaterEdits(docId: string, sentKey: number): Promise<void> {
+    const outbox = await cache.getOutbox(userId)
+    for (const e of outbox) {
+      if (e.type === 'updateDoc' && e.docId === docId && e.key !== sentKey) await cache.removeOutbox(e.key)
+    }
+  }
+
   async function fetchDocIntoCache(docId: string): Promise<void> {
     try {
       const full = await api.getDoc(docId)
@@ -587,7 +595,10 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           serverDoc = undefined
         }
       }
-      if (await handleE2eeConflict(entry, serverDoc)) await cache.removeOutbox(entry.key)
+      if (await handleE2eeConflict(entry, serverDoc)) {
+        await dropLaterEdits(entry.docId, entry.key)
+        await cache.removeOutbox(entry.key)
+      }
       return true
     }
     if (entry.type === 'updateDoc' && !entry.e2ee && kind === 'e2ee_doc') {
@@ -870,6 +881,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       }
       if (err.kind === 'conflict' && entry.type === 'updateDoc') {
         await handleConflict(entry, err.doc)
+        await dropLaterEdits(entry.docId, entry.key)
         await cache.removeOutbox(entry.key)
         return true
       }
@@ -882,6 +894,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           // 못 받아도 사본은 만든다 — 원본 캐시는 다음 list() 때 다시 맞춰진다
         }
         await handleConflict(entry, serverDoc, { reason: 'locked', email: err.email })
+        await dropLaterEdits(entry.docId, entry.key)
         await cache.removeOutbox(entry.key)
         return true
       }
