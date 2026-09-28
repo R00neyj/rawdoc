@@ -1,6 +1,6 @@
 // App.tsx 분할 특성 테스트 — 옮기기 전 동작을 고정한다 (specs/features/F-2059.md 5.2)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad } from './helpers.js'
+import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad, resizeWindow } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const root = (page) => page.locator('.context-menu-root')
@@ -519,5 +519,129 @@ test.describe('F-2065 내보내기 구역', () => {
     await page.locator('.item-menu-list:not([inert])').getByRole('menuitem', { name: '옵시디언 볼트로 내보내기' }).click()
     await expect(errorMessage).toHaveText('온라인일 때 내보낼 수 있습니다.')
     expect(downloads).toBe(0)
+  })
+})
+
+async function createLayoutFolder(page, name) {
+  await page.locator('.sidebar-actions').getByRole('button', { name: '새 폴더', exact: true }).click()
+  const input = page.locator('.tree-rename-input')
+  await expect(input).toBeFocused()
+  await input.fill(name)
+  await input.press('Enter')
+  await expect(input).toHaveCount(0)
+  await expect(page.locator('.sidebar .tree-label').filter({ hasText: name })).toBeVisible()
+}
+
+async function moveDocToLayoutFolder(page, folderName) {
+  const docRow = page.locator('.tree-row').filter({ has: page.locator('.doc-item-btn[aria-current="page"]') })
+  await docRow.hover()
+  await docRow.locator('.item-menu-btn').click()
+  await page.getByRole('menuitem', { name: '폴더로 이동…' }).click()
+  const dialog = page.locator('.dialog[open]')
+  await dialog.getByRole('radio', { name: folderName, exact: true }).click()
+  await dialog.getByRole('button', { name: '이동', exact: true }).click()
+}
+
+async function runPaletteCommand(page, query) {
+  await page.keyboard.press('Control+p')
+  await page.locator('.command-palette-input').fill(query)
+  await page.keyboard.press('Enter')
+}
+
+const folderToggle = (page, label) => page.locator('.sidebar').getByRole('button', { name: label, exact: true })
+const readPref = (page, key) => page.evaluate((k) => window.localStorage.getItem(k), key)
+const readOpenFolders = (page) => page.evaluate(() => JSON.parse(window.localStorage.getItem('md.openFolders') ?? 'null'))
+
+test.describe('F-2066 사이드바 레이아웃 절', () => {
+  test('F-2066 C1 폴더 펼침 기록', async ({ page }) => {
+    await openApp(page)
+    await createLayoutFolder(page, '가')
+    await createLayoutFolder(page, '나')
+    await expect(folderToggle(page, '가 접기')).toBeVisible()
+    await expect(folderToggle(page, '나 접기')).toBeVisible()
+
+    const naId = await page
+      .locator('li[data-folder-id]')
+      .filter({ has: page.getByRole('button', { name: '나 접기', exact: true }) })
+      .last()
+      .getAttribute('data-folder-id')
+    await folderToggle(page, '가 접기').click()
+    await expect(folderToggle(page, '가 펼치기')).toBeVisible()
+    await expect.poll(() => readOpenFolders(page)).toEqual([naId])
+
+    await page.reload()
+    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+    await expect(folderToggle(page, '가 펼치기')).toBeVisible()
+    await expect(folderToggle(page, '나 접기')).toBeVisible()
+
+    await page.locator('.sidebar').getByRole('button', { name: '모두 접기', exact: true }).click()
+    await expect(folderToggle(page, '나 펼치기')).toBeVisible()
+    await expect.poll(() => readOpenFolders(page)).toEqual([])
+
+    await page.reload()
+    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+    await expect(folderToggle(page, '가 펼치기')).toBeVisible()
+    await expect(folderToggle(page, '나 펼치기')).toBeVisible()
+  })
+
+  test('F-2066 C2 좁은 창 문서 고르기·창 넓혔다 좁히기', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { name: '첫째.md', content: '첫째\n' })
+    await importMarkdown(page, { name: '둘째.md', content: '둘째\n' })
+    await resizeWindow(page, 900)
+    const sidebar = page.locator('.sidebar')
+    await expect(sidebar).toBeHidden()
+
+    await page.locator('.sidebar-toggle').click()
+    await expect(sidebar).toBeVisible()
+    const hashBefore = await page.evaluate(() => location.hash)
+    await page.locator('.sidebar .doc-item-btn:not([aria-current="page"])').first().click()
+    await expect(sidebar).toBeHidden()
+    await expect.poll(() => page.evaluate(() => location.hash)).not.toBe(hashBefore)
+
+    await page.locator('.sidebar-toggle').click()
+    await expect(sidebar).toBeVisible()
+    await resizeWindow(page, 1280)
+    await expect(sidebar).toBeVisible()
+    await expect(sidebar).not.toHaveClass(/sidebar--overlay/)
+
+    await resizeWindow(page, 900)
+    await expect(sidebar).toHaveClass(/sidebar--overlay/)
+    await expect(sidebar).toBeHidden()
+  })
+
+  test('F-2066 C3 좁은 창 제목 경로 클릭', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await createLayoutFolder(page, '가')
+    await moveDocToLayoutFolder(page, '가')
+    await expect(page.locator('.doc-title-crumb')).toHaveText('가')
+    await resizeWindow(page, 900)
+    const sidebar = page.locator('.sidebar')
+    await expect(sidebar).toBeHidden()
+
+    await page.locator('.doc-title-crumb').click()
+    await expect(sidebar).toBeVisible()
+    const row = page.locator('[data-folder-id] .tree-row').filter({ hasText: '가' }).first()
+    await expect(row).toBeVisible()
+    await expect(row).toHaveClass(/tree-row--highlight-(start|fading)/)
+  })
+
+  test('F-2066 C4 팔레트 사이드바 명령', async ({ page }) => {
+    await openApp(page)
+    const sidebar = page.locator('.sidebar')
+    await runPaletteCommand(page, '>사이드바 접기')
+    await expect(sidebar).toHaveClass(/sidebar--collapsed/)
+    await expect.poll(() => readPref(page, 'md.sidebar')).toBe('collapsed')
+
+    await runPaletteCommand(page, '>사이드바 펴기')
+    await expect(sidebar).not.toHaveClass(/sidebar--collapsed/)
+    await expect.poll(() => readPref(page, 'md.sidebar')).toBe('expanded')
+
+    await resizeWindow(page, 900)
+    await expect(sidebar).toBeHidden()
+    await runPaletteCommand(page, '>사이드바 열기')
+    await expect(sidebar).toBeVisible()
+    expect(await readPref(page, 'md.sidebar')).toBe('expanded')
   })
 })
