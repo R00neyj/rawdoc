@@ -58,6 +58,7 @@ src/
     useAccountDelete.ts 계정 삭제 대화상자 열기·실행 (F-2079)
     useTitleCommit.ts 제목 저장 (F-2079)
     useCommentFab.ts 댓글 달기 버튼 위치 (F-2079)
+    AppTopBar.tsx AppScreens.tsx DocumentArea.tsx AppDialogs.tsx ImportFileInputs.tsx  App JSX 를 나눈 상태 없는 컴포넌트 (F-2081)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
