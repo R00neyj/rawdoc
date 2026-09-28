@@ -70,15 +70,25 @@ export function useTabSync({
   }
 
   // claim-query 를 보내고 CLAIM_WAIT_MS 안에 아무도 응답하지 않으면 편집권을 가진다 (6.4)
+  // 기다리는 동안 남의 claim-hold 나 이기는 대기 탭의 query 를 받으면 cancelWait 로 멈춘다 (리뷰 Y2)
   function requestClaim(docId: string, onIdle: () => void) {
-    post({ kind: 'claim-query', tabId, docId })
+    const current = claimStateRef.current
+    if (!current || current.docId !== docId) return
+    claimStateRef.current = { ...current, waiting: true }
+    post({ kind: 'claim-query', tabId, docId, since: current.since })
     clearWaitTimer()
     waitTimerRef.current = setTimeout(() => {
       waitTimerRef.current = null
       const state = claimStateRef.current
-      if (!state || state.docId !== docId || state.held) return
+      if (!state || state.docId !== docId || state.held || !state.waiting) return
       onIdle()
     }, CLAIM_WAIT_MS)
+  }
+
+  function cancelWait() {
+    clearWaitTimer()
+    const state = claimStateRef.current
+    if (state?.waiting) claimStateRef.current = { ...state, waiting: false }
   }
 
   function takeClaim(docId: string, { announce }: { announce: boolean }) {
@@ -130,6 +140,7 @@ export function useTabSync({
       if (effect.type === 'reply') post(effect.message)
       else if (effect.type === 'yielded') yieldClaim(state.docId)
       else if (effect.type === 'retake') requestClaim(state.docId, () => takeClaim(state.docId, { announce: true }))
+      else if (effect.type === 'cancel-wait') cancelWait()
     }
 
     channel.addEventListener('message', handleMessage)
@@ -151,8 +162,9 @@ export function useTabSync({
     const docId = claimDocId
     clearWaitTimer()
     clearRetryTimer()
-    claimStateRef.current = { tabId, docId, since: Date.now(), held: true }
-    post({ kind: 'claim-query', tabId, docId })
+    const since = Date.now()
+    claimStateRef.current = { tabId, docId, since, held: true }
+    post({ kind: 'claim-query', tabId, docId, since })
 
     // 문서를 떠나거나(claimDocId 변경) 언마운트되면 놓는다 — 비활성 상태로 바뀔 때도 여기를 거친다 (6.3)
     return () => {

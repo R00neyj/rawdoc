@@ -8,7 +8,8 @@ export const CLAIM_RETRY_MS = 15_000 // useDocLock.ts RETRY_INTERVAL_MS 와 같�
 
 export type TabMessage =
   | { kind: 'docs-changed'; tabId: string }
-  | { kind: 'claim-query'; tabId: string; docId: string }
+  // since — 기다리는 탭끼리 누가 가질지 가른다(리뷰 Y2). 예전 탭이 보낸 query 에는 없을 수 있다
+  | { kind: 'claim-query'; tabId: string; docId: string; since?: number }
   | { kind: 'claim-hold'; tabId: string; docId: string; since: number }
   | { kind: 'claim-release'; tabId: string; docId: string }
   // 금고 잠그기만 퍼진다 — 풀기는 탭마다(F-404.md 4.4)
@@ -49,12 +50,14 @@ export function claimWins(a: { since: number; tabId: string }, b: { since: numbe
   return a.since < b.since || (a.since === b.since && a.tabId < b.tabId)
 }
 
-export type ClaimState = { tabId: string; docId: string; since: number; held: boolean }
+// waiting — 읽기 전용 탭이 claim-query 를 보내고 대기 타이머를 돌리는 중 (useTabSync requestClaim)
+export type ClaimState = { tabId: string; docId: string; since: number; held: boolean; waiting?: boolean }
 
 export type ClaimEffect =
   | { type: 'reply'; message: TabMessage }
   | { type: 'yielded' }
   | { type: 'retake' }
+  | { type: 'cancel-wait' } // 누가 이미 가졌거나 다른 대기 탭이 이긴다 — 대기 타이머를 멈춘다
   | null
 
 // 편집권 메시지 하나를 내 상태에 비추어 판정한다 — 채널·타이머는 useTabSync.ts 가 다룬다 (6.4)
@@ -65,12 +68,18 @@ export function reduceClaim(state: ClaimState, message: TabMessage): ClaimEffect
   if (message.docId !== state.docId) return null // 다른 문서의 메시지는 무시한다
 
   if (message.kind === 'claim-query') {
-    if (!state.held) return null
+    if (!state.held) {
+      // 둘 다 기다리는 중이면 한 쪽만 가진다 — 지는 쪽은 멈추고, 이기는 쪽은 자기 query 를 다시 알려 상대가 알게 한다 (리뷰 Y2)
+      if (!state.waiting || message.since === undefined) return null
+      const iWin = claimWins({ since: state.since, tabId: state.tabId }, { since: message.since, tabId: message.tabId })
+      return iWin ? { type: 'reply', message: { kind: 'claim-query', tabId: state.tabId, docId: state.docId, since: state.since } } : { type: 'cancel-wait' }
+    }
     return { type: 'reply', message: { kind: 'claim-hold', tabId: state.tabId, docId: state.docId, since: state.since } }
   }
 
   if (message.kind === 'claim-hold') {
-    if (!state.held) return null
+    // 기다리는 동안 누가 가졌다고 답하면 가져가지 않는다 (리뷰 Y2)
+    if (!state.held) return state.waiting ? { type: 'cancel-wait' } : null
     const otherWins = claimWins({ since: message.since, tabId: message.tabId }, { since: state.since, tabId: state.tabId })
     return otherWins ? { type: 'yielded' } : null
   }

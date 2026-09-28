@@ -178,6 +178,65 @@ describe('F-296 U8~U14 reduceClaim', () => {
   })
 })
 
+// 리뷰 Y2 — 읽기 전용 탭이 기다리는 동안(waiting) 받은 답을 버려 두 탭이 편집권을 갖던 문제
+describe('리뷰 Y2 reduceClaim — 기다리는 탭', () => {
+  const waiting: ClaimState = { tabId: 'b', docId: 'doc-1', since: 2000, held: false, waiting: true }
+
+  it('기다리는 중 내 문서의 claim-hold 를 받으면 기다림을 멈춘다', () => {
+    const msg: TabMessage = { kind: 'claim-hold', tabId: 'a', docId: 'doc-1', since: 1000 }
+    expect(reduceClaim(waiting, msg)).toEqual({ type: 'cancel-wait' })
+  })
+
+  it('기다리는 탭끼리: 지는 쪽은 기다림을 멈추고, 이기는 쪽은 자기 query 를 다시 알린다', () => {
+    const fromEarlier: TabMessage = { kind: 'claim-query', tabId: 'c', docId: 'doc-1', since: 1500 }
+    expect(reduceClaim(waiting, fromEarlier)).toEqual({ type: 'cancel-wait' })
+    const fromLater: TabMessage = { kind: 'claim-query', tabId: 'c', docId: 'doc-1', since: 3000 }
+    expect(reduceClaim(waiting, fromLater)).toEqual({
+      type: 'reply',
+      message: { kind: 'claim-query', tabId: 'b', docId: 'doc-1', since: 2000 },
+    })
+  })
+
+  // 채널·타이머를 흉내 낸 작은 시뮬레이션 — useTabSync 의 배선과 같은 규칙으로 메시지를 돌린다
+  function simulate(tabs: ClaimState[], firstMessages: TabMessage[]) {
+    const byId = new Map(tabs.map((t) => [t.tabId, { ...t }]))
+    const queue: TabMessage[] = [...firstMessages]
+    const startWait = (id: string) => {
+      const s = byId.get(id)!
+      s.waiting = true
+      queue.push({ kind: 'claim-query', tabId: id, docId: s.docId, since: s.since })
+    }
+    while (queue.length) {
+      const msg = queue.shift()!
+      for (const s of byId.values()) {
+        const effect = reduceClaim(s, msg)
+        if (!effect) continue
+        if (effect.type === 'reply') queue.push(effect.message)
+        else if (effect.type === 'cancel-wait') s.waiting = false
+        else if (effect.type === 'yielded') s.held = false
+        else if (effect.type === 'retake') startWait(s.tabId)
+      }
+    }
+    // 대기 타이머가 끝남 — 아직 기다리는 탭은 편집권을 가진다
+    for (const s of byId.values()) if (s.waiting) Object.assign(s, { waiting: false, held: true })
+    return [...byId.values()]
+  }
+
+  it('A 가 잡고 있는 동안 B 의 15초 재시도는 편집권을 가져가지 않는다', () => {
+    const a: ClaimState = { tabId: 'a', docId: 'doc-1', since: 1000, held: true }
+    const b: ClaimState = { tabId: 'b', docId: 'doc-1', since: 2000, held: false, waiting: true }
+    const result = simulate([a, b], [{ kind: 'claim-query', tabId: 'b', docId: 'doc-1', since: 2000 }])
+    expect(result.filter((s) => s.held).map((s) => s.tabId)).toEqual(['a'])
+  })
+
+  it('세 탭: A 가 놓으면 B·C 가운데 한 탭만 편집권을 가진다', () => {
+    const b: ClaimState = { tabId: 'b', docId: 'doc-1', since: 2000, held: false }
+    const c: ClaimState = { tabId: 'c', docId: 'doc-1', since: 3000, held: false }
+    const result = simulate([b, c], [{ kind: 'claim-release', tabId: 'a', docId: 'doc-1' }])
+    expect(result.filter((s) => s.held).map((s) => s.tabId)).toEqual(['b'])
+  })
+})
+
 describe('F-407 U22 withTabBroadcast — 옮기기·폴더 표지', () => {
   it('있으면 각 1번 docs-changed, 곧바로 올리기·지우기는 0번', async () => {
     const setDocE2ee = vi.fn(async () => ({ doc: { id: 'd1' }, purged: true }) as never)
