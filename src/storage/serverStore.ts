@@ -494,6 +494,14 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     }
   }
 
+  // 서버에 없이 이 기기에만 남은 문서 — 버전 0 인데 보낼 createDoc 이 없다(서버가 거절한 새 문서).
+  // list() 가 지우지 않고, 편집·고정·옮기기는 캐시에만 쓴다 — 보내면 404 로 캐시 행까지 지워진다 (리뷰 S2)
+  async function isLocalOnly(doc: CachedDoc): Promise<boolean> {
+    if (doc.version !== 0) return false
+    const outbox = await cache.getOutbox(userId)
+    return !outbox.some((e) => e.type === 'createDoc' && e.docId === doc.id)
+  }
+
   async function fetchDocIntoCache(docId: string): Promise<void> {
     try {
       const full = await api.getDoc(docId)
@@ -1056,7 +1064,9 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           }
 
           const serverIds = new Set(summaries.map((d) => d.id))
-          const keepIds = new Set([...serverIds, ...pendingDocIds])
+          // 버전 0 인 캐시 행은 서버에 간 적이 없다 — 거절된 새 문서도 "이 기기에는 남아 있습니다" 대로 지키고 (리뷰 S2)
+          const localOnlyIds = (await cache.getDocs(userId)).filter((d) => d.version === 0).map((d) => d.id)
+          const keepIds = new Set([...serverIds, ...pendingDocIds, ...localOnlyIds])
           for (const id of excludedDocIds) keepIds.delete(id)
           await cache.deleteDocsNotIn(userId, keepIds)
 
@@ -1250,6 +1260,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         updatedAt: Date.now(),
       }
       await cache.putDoc(userId, updated)
+      if (await isLocalOnly(existing)) return toDoc(updated)
       await enqueueUpdateDoc(id, sendPatch, isE2ee)
       return toDoc(updated)
     },
@@ -1278,6 +1289,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       }
       const updated = { ...existing, folderId: resolvedFolderId }
       await cache.putDoc(userId, updated)
+      if (await isLocalOnly(existing)) return toDoc(updated)
       await enqueueCoalesced(
         { type: 'moveDoc', docId: id, folderId: resolvedFolderId },
         (e) => e.type === 'moveDoc' && e.docId === id,
@@ -1290,6 +1302,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       if (!existing) throw new Error(`문서를 찾을 수 없음: ${id}`)
       const updated = { ...existing, pinnedAt: pinned ? Date.now() : null }
       await cache.putDoc(userId, updated)
+      if (await isLocalOnly(existing)) return toDoc(updated)
       await enqueueCoalesced(
         { type: 'setPinned', docId: id, pinned },
         (e) => e.type === 'setPinned' && e.docId === id,

@@ -2485,6 +2485,30 @@ describe('리뷰 S1 보내는 중 쌓인 편집', () => {
   })
 })
 
+describe('리뷰 S2 서버가 거절한 새 문서', () => {
+  it('id_taken 으로 버린 문서는 list() 뒤에도 캐시에 남고, 이어 편집해도 지워지지 않는다', async () => {
+    const server = makeFakeServer()
+    server.setForceIdTaken(true)
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    await store.create({ title: 'T', content: 'mine', lineEnding: 'lf', id: 'clashing-id' })
+    await tick(20)
+    expect(store.syncState?.pending).toBe(0)
+
+    const listed = await store.list()
+    expect(listed.some((d) => d.id === 'clashing-id')).toBe(true)
+    expect((await store.get('clashing-id'))?.content).toBe('mine')
+
+    await store.update('clashing-id', { content: 'mine 2' })
+    await store.setPinned('clashing-id', true)
+    await tick(30)
+    await store.list()
+    expect((await store.get('clashing-id'))?.content).toBe('mine 2')
+    expect(store.syncState?.pending).toBe(0)
+  })
+})
+
 describe('리뷰 S3 충돌 뒤 남은 편집', () => {
   it('409 를 받으면 같은 문서의 남은 updateDoc 은 보내지 않는다 — 사본이 그 내용을 담는다', async () => {
     const server = makeFakeServer()
