@@ -18,8 +18,6 @@ import type { Notice } from './notice'
 import { findViewerHeadingElByLine, topInScroller } from './outlinePosition'
 import { IconDownload, IconSettings, IconPanelOpen, IconPanelClose, IconRefresh, IconTooltip } from './icons'
 import { buildExportPayload } from './exportDoc'
-import { getPref, setPref } from './prefs'
-import { resolveTheme } from './theme'
 import SettingsDialog from './SettingsDialog'
 import {
   fetchPublicDoc,
@@ -106,8 +104,8 @@ function makeFakeHandle(content: string): FakeEditorHandle {
   }
 }
 
-// 공개 보기 화면 전용 설정 상태 — 테마/서체/글자 크기 4개만(들여쓰기·줄 번호는 없음, F-230 2.1). 그 브라우저의 기존 값을 읽고 쓴다(F-121·F-141·F-154 와 같은 키)
-type PublicSettings = {
+// 공개 보기 설정 4개(테마·서체·글자 크기, F-230 2.1) — App 의 useAppearancePrefs 값을 받는다(테마 구독을 한 벌로, 2026-09-28)
+export type PublicSettings = {
   theme: string
   // 적용된 테마(white|sepia|dark, theme 과 달리 'system' 을 시스템 설정으로 풀어낸 값) — mermaid 렌더링에 쓰인다(F-260 2.4)
   resolvedTheme: 'white' | 'sepia' | 'dark'
@@ -118,63 +116,6 @@ type PublicSettings = {
   changeHeadingFont: (value: string) => void
   changeBodyFont: (value: string) => void
   changeFontSize: (value: string) => void
-}
-
-function usePublicSettings(): PublicSettings {
-  const [theme, setTheme] = useState(() => getPref('md.theme', 'system'))
-  const [resolvedTheme, setResolvedTheme] = useState<'white' | 'sepia' | 'dark'>(() =>
-    resolveTheme(getPref('md.theme', 'system'), typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches),
-  )
-  const [headingFont, setHeadingFont] = useState(() => getPref('md.headingFont', 'serif'))
-  const [bodyFont, setBodyFont] = useState(() => getPref('md.bodyFont', 'sans'))
-  const [fontSize, setFontSize] = useState(() => getPref('md.fontSize', 'medium'))
-
-  // 시스템 테마를 따르는 동안은 OS 설정 변화도 즉시 반영한다 (useAppearancePrefs.ts 와 같은 방식, F-141 3.1)
-  useEffect(() => {
-    if (theme !== 'system') return
-    const mql = window.matchMedia('(prefers-color-scheme: dark)')
-    function apply() {
-      const resolved = resolveTheme('system', mql.matches)
-      document.documentElement.dataset.theme = resolved
-      setResolvedTheme(resolved)
-    }
-    apply()
-    mql.addEventListener('change', apply)
-    return () => mql.removeEventListener('change', apply)
-  }, [theme])
-
-  function changeTheme(value: string) {
-    const v = value as 'system' | 'white' | 'sepia' | 'dark'
-    setTheme(v)
-    setPref('md.theme', v)
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    const resolved = resolveTheme(v, prefersDark)
-    document.documentElement.dataset.theme = resolved
-    setResolvedTheme(resolved)
-  }
-
-  function changeHeadingFont(value: string) {
-    const v = value as 'serif' | 'sans'
-    setHeadingFont(v)
-    document.documentElement.dataset.headingFont = v
-    setPref('md.headingFont', v)
-  }
-
-  function changeBodyFont(value: string) {
-    const v = value as 'sans' | 'serif'
-    setBodyFont(v)
-    document.documentElement.dataset.bodyFont = v
-    setPref('md.bodyFont', v)
-  }
-
-  function changeFontSize(value: string) {
-    const v = value as 'small' | 'medium' | 'large'
-    setFontSize(v)
-    document.documentElement.dataset.fontSize = v
-    setPref('md.fontSize', v)
-  }
-
-  return { theme, resolvedTheme, headingFont, bodyFont, fontSize, changeTheme, changeHeadingFont, changeBodyFont, changeFontSize }
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -189,8 +130,8 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 type PublicViewProps =
-  | { kind: 'doc'; token: string }
-  | { kind: 'folder'; token: string; docId?: string }
+  | { kind: 'doc'; token: string; settings: PublicSettings }
+  | { kind: 'folder'; token: string; docId?: string; settings: PublicSettings }
 
 // 문서 하나를 읽어 머리 줄+본문+목차를 그린다 — attachments 경로는 호출부가 정한다(F-210.md 2.4·2.5, F-211.md 2.3), resolveWikiLink 없으면 위키링크는 wikilink--plain(F-252.md 4.6)
 function DocPane({
@@ -338,8 +279,7 @@ function useNarrow(): boolean {
 }
 
 export default function PublicView(props: PublicViewProps) {
-  // 문서·폴더 화면이 설정 상태를 따로 갖지 않는다 — 여기서 한 번만 관리한다 (F-230 2.3)
-  const settings = usePublicSettings()
+  const { settings } = props
   if (props.kind === 'folder') return <PublicFolderView token={props.token} docId={props.docId} settings={settings} />
   return <PublicDocView token={props.token} settings={settings} />
 }

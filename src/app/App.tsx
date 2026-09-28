@@ -4870,10 +4870,11 @@ export default function App() {
 
   // 공개 보기 화면(F-210.md 2.4) — 위 모든 훅은 매 렌더 그대로 호출되고 여기서 조기 반환만 한다
   if (publicRoute) {
+    const publicSettings = { theme: themePref, resolvedTheme, headingFont, bodyFont, fontSize: fontSizePref, changeTheme, changeHeadingFont, changeBodyFont, changeFontSize }
     return publicRoute.type === 'publicFolder' ? (
-      <PublicView key={`f:${publicRoute.token}`} kind="folder" token={publicRoute.token} docId={publicRoute.docId} />
+      <PublicView key={`f:${publicRoute.token}`} kind="folder" token={publicRoute.token} docId={publicRoute.docId} settings={publicSettings} />
     ) : (
-      <PublicView key={publicRoute.token} kind="doc" token={publicRoute.token} />
+      <PublicView key={publicRoute.token} kind="doc" token={publicRoute.token} settings={publicSettings} />
     )
   }
 

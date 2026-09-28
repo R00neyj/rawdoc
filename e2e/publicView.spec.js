@@ -448,6 +448,25 @@ test.describe('F-230 A2·A3 반영·저장', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     await expect(page.locator('html')).toHaveAttribute('data-body-font', 'serif')
   })
+
+  // 테마 구독이 App·공개 보기 두 벌이던 때는 OS 테마 변화가 고른 다크를 덮었다 (2026-09-28 버그 수정)
+  test('시스템 테마에서 다크를 고른 뒤 OS 테마가 바뀌어도 다크 유지', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' })
+    await mockPublicDoc(page)
+    await page.goto('/#/p/tok123')
+    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'white')
+
+    await page.getByRole('button', { name: '설정', exact: true }).click()
+    const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
+    await dialog.locator('#theme-label').locator('..').getByRole('radio', { name: '다크' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.waitForTimeout(100)
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  })
 })
 
 test.describe('F-230 A4 폴더 화면', () => {
