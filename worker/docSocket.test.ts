@@ -39,7 +39,7 @@ function makeEnv(
                 return { id: DOC_ID, owner_id: doc.owner_id, folder_id: doc.folder_id ?? null, version: doc.version, e2ee_key: sql.includes('e2ee_key') ? (doc.e2ee_key ?? null) : undefined } as T
               }
               if (sql.startsWith('SELECT role FROM grants')) {
-                const [type, id, email] = args
+                const [type, id, , email] = args
                 const g = grants.find((x) => x.target_type === type && x.target_id === id && x.grantee_email === email)
                 return (g ? { role: g.role } : null) as T | null
               }

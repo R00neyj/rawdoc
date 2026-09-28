@@ -269,8 +269,9 @@ export async function handlePublicGetAttachment(
   const link = await findPublicLink(env, params.token)
   if (!link || link.target_type !== 'doc') return errorResponse('not_found', 404)
 
-  const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ?')
-    .bind(link.target_id)
+  // 링크 주인의 문서만 (리뷰 W2)
+  const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ? AND owner_id = ?')
+    .bind(link.target_id, link.owner_id)
     .first<{ id: string; owner_id: string; content: string; folder_id: string | null }>()
   if (!doc) return errorResponse('not_found', 404)
   if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)
@@ -309,8 +310,8 @@ export async function handlePublicGetDocSetAttachment(
 
   if (!(await isDocInLinkSet(env, params.token, link.target_id, params.docId))) return errorResponse('not_found', 404)
 
-  const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ?')
-    .bind(params.docId)
+  const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ? AND owner_id = ?')
+    .bind(params.docId, link.owner_id)
     .first<{ id: string; owner_id: string; content: string; folder_id: string | null }>()
   if (!doc) return errorResponse('not_found', 404)
   if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)

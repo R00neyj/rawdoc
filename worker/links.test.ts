@@ -37,9 +37,9 @@ function makeEnv({ docs = [], links = [], folders = [] }: { docs?: DocRow[]; lin
                 const row = docs.find((d) => d.id === id && d.owner_id === ownerId)
                 return (row ? { id: row.id, e2ee_key: null } : null) as T
               }
-              if (sql.startsWith('SELECT * FROM share_links WHERE target_type = ? AND target_id = ? AND revoked_at IS NULL')) {
-                const [targetType, targetId] = args as ['doc' | 'folder', string]
-                const row = links.find((l) => l.target_type === targetType && l.target_id === targetId && l.revoked_at === null)
+              if (sql.startsWith('SELECT * FROM share_links WHERE target_type = ? AND target_id = ? AND owner_id = ? AND revoked_at IS NULL')) {
+                const [targetType, targetId, ownerId] = args as ['doc' | 'folder', string, string]
+                const row = links.find((l) => l.target_type === targetType && l.target_id === targetId && l.owner_id === ownerId && l.revoked_at === null)
                 return (row ?? null) as T
               }
               if (sql.startsWith('SELECT * FROM share_links WHERE token = ? AND revoked_at IS NULL')) {

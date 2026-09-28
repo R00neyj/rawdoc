@@ -1,7 +1,7 @@
 // 문서 라우트 (specs/features/F-206.md 2.3, 접근 판정은 F-212.md 2.2. 사용량 줄·413 은 F-2025.md 6.2, 금고 분기는 F-401.md 3.2·3.3. 삭제·이동 쓰기는 F-2050.md 3.2·3.3 이 /v1 과 같이 쓴다)
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
-import { getDocAccess, getOwnedFolder, roleAtLeast } from './access'
+import { getDocAccess, getOwnedFolder, roleAtLeast, targetShareCleanupStatements } from './access'
 import { getActiveLock } from './locks'
 import { notifyPurge } from './docRoomRpc'
 import { docCommentDeleteStatements } from './commentRows'
@@ -381,6 +381,8 @@ export async function deleteDocRows(env: Env, ctx: ExecutionContext, docId: stri
     // share_link_docs.doc_id REFERENCES docs(id) — docs 를 지우기 전에 묶음 행부터 지운다 (버그 수정, F-2038.md 12장 X1)
     env.DB.prepare('DELETE FROM share_link_docs WHERE doc_id = ?').bind(docId),
     env.DB.prepare('DELETE FROM docs WHERE id = ? AND owner_id = ?').bind(docId, ownerId),
+    // 같은 id 로 문서가 다시 생겨도 옛 공개 링크·초대가 따라가지 않게 (리뷰 W2)
+    ...targetShareCleanupStatements(env.DB, 'doc', [docId], Date.now()),
     // 댓글 복사본·알림과 그 바이트 (F-502 8.1)
     ...docCommentDeleteStatements(env.DB, ownerId, docId),
   ])

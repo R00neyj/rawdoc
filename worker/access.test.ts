@@ -42,7 +42,7 @@ function makeEnv(
             },
             async first<T>() {
               if (sql.startsWith('SELECT role FROM grants')) {
-                const [targetType, targetId, email] = args as [string, string, string]
+                const [targetType, targetId, , email] = args as [string, string, string, string]
                 const row = grants.find(
                   (g) => g.target_type === targetType && g.target_id === targetId && g.grantee_email === email,
                 )
