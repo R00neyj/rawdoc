@@ -188,6 +188,8 @@ test.describe('F-505 E5 긴 문서 레일 클릭(V4)', () => {
     for (let i = 0; i < 3; i++) await page.keyboard.press('Shift+ArrowRight')
     await addCommentViaShortcut(page, '긴 문서 댓글')
 
+    // 레일 폭 전환(f615378) 중에 누르면 Playwright 가 "not stable" 로 다시 시도하며 .cm-content 를 block:'end' 로 스크롤해 문서 끝을 누른다
+    await rail(page).evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
     // 앵커 줄에서 25줄 아래로 커서를 옮겨 화면 가운데에서 벗어나게 한다(레일 카드는 트랙 안에 그대로 남는 크기)
     await page.locator('.cm-content').click()
     for (let i = 0; i < 25; i++) await page.keyboard.press('ArrowDown')
