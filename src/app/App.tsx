@@ -1,6 +1,4 @@
 import {
-  lazy,
-  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -16,7 +14,6 @@ import type { EditorState, StateCommand } from '@codemirror/state'
 import { createMemoryStore } from '../storage/memoryStore'
 import type { ServerStore } from '../storage/serverStore'
 import type { YjsStore } from '../storage/yjsStore'
-import E2eeMigrateDialog from './E2eeMigrateDialog'
 import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree'
 import type { SelectionItem } from './sidebarSelection'
 import { fromEditorText } from '../lib/lineEnding'
@@ -43,53 +40,39 @@ import type { LiveDocSession } from './useLiveDoc'
 import { useLiveNotices } from './useLiveNotices'
 import { useDocSession } from './useDocSession'
 import { useLiveRoomDoc } from './useLiveRoomDoc'
-import type { Peer } from '../lib/peers'
 import { liveStatusOf, type LiveSnapshot } from './liveDoc'
 import { newTabId } from './tabSync'
 import { useTabSync } from './useTabSync'
 import { useE2ee } from './useE2ee'
 import { isE2eeStoreError, type E2eeStore } from '../e2ee/e2eeStore'
-import E2eeConvertDialog from './E2eeConvertDialog'
-import E2eeLockedPanel from './E2eeLockedPanel'
 import { createExportActions } from './exportActions'
-import ImportPreviewDialog from './ImportPreviewDialog'
 import DropOverlay from './DropOverlay'
-import Editor, { type EditorHandle } from '../editor/Editor'
+import type { EditorHandle } from '../editor/Editor'
 import { DEV_YSYNC } from '../editor/devSyncFlag'
 import { countChars, countWords, cursorInfo } from '../editor/stats'
-import Viewer from '../viewer/Viewer'
-import WikiLinkPreview from './WikiLinkPreview'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { decodeShare, type ShareDoc } from '../lib/shareCodec'
 import { readViewerAnchor } from './viewerScroll'
 import type { ScrollAnchor } from '../lib/scrollAnchor'
-import Outline from './Outline'
-import ContextMenu from './ContextMenu'
 import { useContextMenu } from './useContextMenu'
-import CommentRailPanel, { CommentPanelPresence } from './CommentRailPanel'
-import { useDocComments, computeCommentAccess, scrollTopOf, CommentCommandContext } from './useDocComments'
-import { IconAddComment } from './icons'
-import CommandPalette from './CommandPalette'
+import { useDocComments, computeCommentAccess, scrollTopOf } from './useDocComments'
 import type { PaletteCreatePlan } from './paletteContract'
 import { useNotificationsGlue } from './useNotificationsGlue'
-import { MentionSourceContext } from './MentionField'
 
 import { useInstallPrompt } from '../pwa/useInstallPrompt'
 import { useAppUpdate } from '../pwa/useAppUpdate'
 import { ensurePersist } from '../pwa/persistStorage'
 
-import TopBar from './TopBar'
+import AppTopBar from './AppTopBar'
+import AppScreens from './AppScreens'
+import DocumentArea from './DocumentArea'
+import AppDialogs from './AppDialogs'
+import ImportFileInputs from './ImportFileInputs'
 import Sidebar, { type SharedDocLike, type SidebarCommands } from './Sidebar'
 import NoticeBar, { type NoticeWithAction } from './NoticeBar'
-import EmptyState from './EmptyState'
-import ConfirmDeleteDialog, { type DeleteTarget } from './ConfirmDeleteDialog'
-import Dialog from './Dialog'
-import MoveDocDialog, { type MoveDocTarget } from './MoveDocDialog'
-import SettingsDialog from './SettingsDialog'
-import AccountDeleteDialog from './AccountDeleteDialog'
-import SearchDialog from './SearchDialog'
+import type { DeleteTarget } from './ConfirmDeleteDialog'
+import type { MoveDocTarget } from './MoveDocDialog'
 import { searchScope } from './searchIndex'
-import HelpPage from './HelpPage'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
 import StatusBar from './StatusBar'
 import ShortcutPanel from './ShortcutPanel'
@@ -112,28 +95,15 @@ import { useEditorSync } from './useEditorSync'
 import { useHashRouting, replaceHashUrl, pushHashUrl, pushHelpHash } from './useHashRouting'
 import { useSharesPage } from './useSharesPage'
 import { isMacPlatform } from './shortcutCatalog'
-import SharedView from './SharedView'
 import PublicView from './PublicView'
-import InviteDialog, { type InviteTarget } from './InviteDialog'
-import SharesPage from './SharesPage'
-// three 가 초기 로드에 붙지 않게 지연 경계를 여기 긋는다 (specs/features/F-292.md 3.3, F-2002 4장)
-const MapPage = lazy(() => import('./MapPage'))
+import type { InviteTarget } from './InviteDialog'
 import { mapIndexScope } from './mapIndex'
 import type { Doc, Folder, LineEnding, Store } from '../types'
 
 const STATS_DEBOUNCE_MS = 150
 
-// 공유 화면·지도가 떠 있는 동안 상단바에 넘기는 빈 접속자 목록 — 참조가 늘 같아 다시 그리지 않는다 (F-307 7.4)
-const NO_PEERS: Peer[] = []
-
 type Stats = { line: number; col: number; charCount: number; wordCount: number }
 type AppNotice = NoticeWithAction & { id: number }
-
-// 떠 있는 `댓글 달기` 버튼 — 선택이 화면 위로 지나가면 위 끝, 아래에 있으면 아래 끝에 붙인다(버튼 32px + 여백 8px)
-function clampFabY(y: number, viewportH: number): number {
-  if (viewportH <= 0) return y
-  return Math.min(Math.max(y, 8), Math.max(8, viewportH - 40))
-}
 
 export default function App() {
   const [publicRoute, setPublicRoute] = useState<PublicRoute>(() => {
@@ -1540,113 +1510,20 @@ export default function App() {
   // 홈 화면(빈 상태 재사용) 표시 조건 — 부팅 완료 후 문서를 선택하지 않은 상태 (F-232 3.2)
   const isEmpty = bootPhase === 'ready' && currentDocId === null
   const showEditor = bootPhase === 'ready' && !isEmpty
-  // 잠긴 금고 문서 — 편집기 자리에 P1 (F-405 6.2)
-  const showE2eeLockedPanel = currentDoc?.e2ee === 'locked' && openDoc?.id !== currentDocId
-  // 위키링크 미리보기 켜짐 조건 — 문서가 열려 있고 공유 화면·지도·도움말·공유 관리가 안 떠 있다 (F-2044 4.1)
-  const wikiPreviewEnabled =
-    wikiPreviewPref === 'on' &&
-    showEditor &&
-    openDoc?.id === currentDocId &&
-    !sharedDoc &&
-    !sharesOpen &&
-    !helpOpen &&
-    !mapRoute
-  // P1 에서 열면 편집기가 새로 생기며 초점을 받는다 (F-405 6.2)
-  const handleE2eePanelOpened = () => {
-    focusEditorRef.current = true
-  }
-
-  // 댓글 레일·판 보이는 조건 — 편집기가 보이고 접근이 none 이 아니고 편집·원문 모드일 때만 (F-505 5.1·6장)
-  const commentAvailable = showEditor && openDoc?.id === currentDocId && commentAccessValue.kind !== 'none' && (viewMode === 'live' || viewMode === 'raw')
-  const commentRailVisible = commentAvailable && comments.mode === 'rail' && comments.open
-  const commentSheetVisible = commentAvailable && comments.mode === 'sheet' && comments.open
 
   // 검색 인덱스 재사용 범위 (specs/features/F-287.md 4.2) — searchIndex.ts 는 localStorage 를 읽지 않는다
   const searchDialogScope = searchScope(store.kind, account.state === 'in' ? account.id : null)
   // 지도 인덱스 재사용 범위 — 같은 방식(specs/features/F-292.md 5.3)
   const mapDialogScope = mapIndexScope(store.kind, account.state === 'in' ? account.id : null)
 
-  // 탭바 표시 조건 (F-233 3.1) — 자리는 항상 유지, 조건에 안 맞으면 안 그린다.
-  // 좁은 창도 보여준다(2026-09-16 사용자 "모바일일때가 툴바 더 필요할거임") — TopBar 가 narrow 면 상단바 밑 자기 줄에 그린다
-  const showToolbar =
-    toolbarPref === 'on' &&
-    !isEmpty &&
-    !sharedDoc &&
-    !isReadOnlyDoc &&
-    // 지도는 편집기를 숨기고 그 자리를 통째로 쓴다 — 서식 단추가 누를 대상이 없다 (F-292 6.1)
-    !mapRoute &&
-    (viewMode === 'live' || viewMode === 'raw')
-
   // 상단바 — 좁은 창은 앞 묶음을 담아 창 전체 위에, 넓은 창은 앞 묶음 없이 메인 열 안에만 (F-159 2.1)
-  const topBar = (
-    <TopBar
-      narrow={narrow}
-      sidebarOpen={sidebarOpen}
-      onToggleSidebar={toggleSidebar}
-      toggleButtonRef={toggleButtonRef}
-      onOpenSearch={openSearch}
-      onOpenPalette={openPalette}
-      viewMode={viewMode}
-      viewModeDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
-      onChangeViewMode={changeViewMode}
-      shareDisabled={
-        bootPhase !== 'ready' ||
-        isEmpty ||
-        Boolean(sharedDoc) ||
-        !currentDoc ||
-        !openDoc ||
-        openDoc.id !== currentDocId
-      }
-      getShareDoc={getShareDoc}
-      onShareNotice={showNotice}
-      shareLinkDocId={store.kind === 'server' && currentDoc && !sharedDoc && !isSharedDoc(currentDoc) ? currentDoc.id : null}
-      onBeforeShareLinkAction={async () => {
-        await docSaverFlushRef.current()
-      }}
-      onInvite={canInviteCurrentDoc ? requestInviteCurrentDoc : undefined}
-      wikiResolver={wikiResolver}
-      shareE2ee={currentDoc?.e2ee !== undefined}
-      exportDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc) || currentDoc?.e2ee === 'locked'}
-      onExportMd={handleExportDoc}
-      onExportTxt={handleExportDocAsText}
-      onPrintDoc={handlePrintDoc}
-      onExportHtml={handleExportDocAsHtml}
-      onCopyRich={handleCopyDocAsRichText}
-      account={account}
-      onAccountBeforeNavigate={async () => {
-        await docSaverFlushRef.current()
-      }}
-      onAccountNotice={showNotice}
-      onAccountLoggedOut={() => e2ee?.broadcastLogoutLock()}
-      showToolbar={showToolbar}
-      onRunToolbarCommand={runToolbarCommand}
-      // 공유 화면·지도가 떠 있는 동안은 지금 보는 것이 그 문서가 아니다 (F-307 7.4)
-      peers={sharedDoc || mapRoute ? NO_PEERS : livePeers}
-      selfUserId={account.state === 'in' ? account.id : null}
-      comments={
-        commentAccessValue.kind === 'none' || !currentDoc
-          ? undefined
-          : {
-              openCount: comments.openThreadCount,
-              open: comments.open,
-              disabled: bootPhase !== 'ready' || isEmpty,
-              onToggle: toggleCommentsPanel,
-            }
-      }
-      notifications={
-        notificationsEnabled
-          ? {
-              state: notifications,
-              blocked: account.state === 'in' && account.blocked,
-              open: notificationsOpen,
-              onOpenChange: setNotificationsOpen,
-              onReadAll: notifications.markAllRead,
-              onOpenItem: handleOpenNotification,
-            }
-          : undefined
-      }
-    />
-  )
+  const topBar = <AppTopBar {...{
+    account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef, e2ee,
+    getShareDoc, handleCopyDocAsRichText, handleExportDoc, handleExportDocAsHtml, handleExportDocAsText, handleOpenNotification,
+    handlePrintDoc, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
+    openPalette, openSearch, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, showNotice, sidebarOpen, store,
+    toggleButtonRef, toggleCommentsPanel, toggleSidebar, toolbarPref, viewMode, wikiResolver,
+  }} />
 
   return (
     <div
@@ -1659,33 +1536,10 @@ export default function App() {
     >
       <DropOverlay visible={dropActive} />
       {narrow && topBar}
-      <input
-        ref={importInputRef}
-        type="file"
-        accept=".md,text/markdown"
-        data-import="md"
-        hidden
-        onChange={handleImportInputChange}
-      />
-      <input
-        ref={importZipInputRef}
-        type="file"
-        accept=".zip,application/zip"
-        data-import="zip"
-        hidden
-        onChange={handleImportZipInputChange}
-      />
-      <input
-        ref={(el) => {
-          importFolderInputRef.current = el
-          // webkitdirectory 는 React 19 JSX 타입에 없다 — ref 콜백에서 켠다 (F-2019.md 4.2)
-          if (el) el.webkitdirectory = true
-        }}
-        type="file"
-        data-import="folder"
-        hidden
-        onChange={handleImportFolderInputChange}
-      />
+      <ImportFileInputs {...{
+        handleImportFolderInputChange, handleImportInputChange, handleImportZipInputChange, importFolderInputRef, importInputRef,
+        importZipInputRef,
+      }} />
       <div className="app-body">
         <Sidebar
           sidebarRef={sidebarRef}
@@ -1745,217 +1599,21 @@ export default function App() {
         <div className="main-column">
           {!narrow && topBar}
           <NoticeBar notice={notice} onDismiss={() => setNotice(null)} />
-          {bootPhase === 'booting' && (
-            <div className="content-area" data-editor-slot>
-              {/* 평소엔 부팅 스켈레톤이 가리고(F-2015.md), 다른 창이 옛 버전 연결을 쥐고 있어 막힌 동안만 이 문구를 보인다 (F-136.md 3.3) */}
-              {dbBlockedMessage && <p className="boot-blocked-notice">{dbBlockedMessage}</p>}
-            </div>
-          )}
-          {sharedDoc && (
-            <div className="content-area">
-              <SharedView sharedDoc={sharedDoc} onImport={importSharedDoc} onClose={closeSharedDoc} onContextMenu={handleViewContextMenu} />
-            </div>
-          )}
-          {!sharedDoc && sharesOpen && (
-            <div className="content-area">
-              <SharesPage
-                loggedIn={account.state === 'in'}
-                loading={account.state === 'in' && sharesLoading}
-                links={account.state === 'in' ? sharesLinks : []}
-                grants={account.state === 'in' ? sharesGrants : []}
-                onClose={goHome}
-                onOpenTarget={openSharesTarget}
-                onRevokeLink={revokeShareLinkRow}
-                onRevokeGrant={revokeShareGrantRow}
-                onLogin={loginFromShares}
-                onNotice={showNotice}
-              />
-            </div>
-          )}
-          {!sharedDoc && !sharesOpen && helpOpen && (
-            <div className="content-area">
-              <HelpPage onClose={goHome} onCopy={copyHelpToDoc} contentWidth={contentWidthPref} />
-            </div>
-          )}
-          {!sharedDoc && !sharesOpen && !helpOpen && mapRoute && (
-            <div className="content-area">
-              <Suspense fallback={<p className="map-status">연결을 읽는 중…</p>}>
-                <MapPage
-                  docCount={docs.length}
-                  store={listSource}
-                  scope={mapDialogScope}
-                  searchScope={searchDialogScope}
-                  centerDocId={mapRoute.centerDocId}
-                  onOpenDoc={selectDoc}
-                  onOpenWikiLink={handleOpenWikiLink}
-                  onRecenter={recenterMap}
-                  onClose={closeMap}
-                  onCreateDoc={() => createNewDoc()}
-                  e2eeOpen={e2ee?.status === 'open'}
-                />
-              </Suspense>
-            </div>
-          )}
-          {!sharedDoc && !sharesOpen && !helpOpen && !mapRoute && isEmpty && (
-            <div className="content-area">
-              <EmptyState
-                hasDocs={docs.length > 0}
-                onCreateDoc={createNewDoc}
-                onImportDoc={requestImport}
-                recentDocs={ownedDocs.slice(0, 5)}
-                onSelectDoc={selectDoc}
-                onOpenHelp={openHelp}
-              />
-            </div>
-          )}
-          {showEditor && (
-            // 공유 화면·지도가 떠 있는 동안 편집 영역을 언마운트하지 않고 hidden 으로만 숨긴다 — 언마운트하면 EditorView 가 새로 만들어져 저장된 편집을 덮어쓴다(F-138 3.2, F-292.md 6.1)
-            <div
-              className="content-area"
-              ref={contentAreaRef}
-              hidden={Boolean(sharedDoc) || Boolean(mapRoute)}
-              data-comment-rail-open={commentRailVisible || undefined}
-              data-comment-sheet-open={commentSheetVisible || undefined}
-              style={commentRailVisible && commentRailExtra > 0 ? ({ '--comment-rail-extra': `${commentRailExtra}px` } as CSSProperties) : undefined}
-            >
-              {/* 잠긴 문서는 편집기가 없다 — 빈 슬롯이 flex: 1 로 자리를 차지하면 잠김 패널이 오른쪽으로 밀린다 */}
-              <div className="editor-slot" hidden={viewMode === 'view' || showE2eeLockedPanel}>
-                {openDoc?.id === currentDocId && (
-                  <Editor
-                    key={`${currentDocId}:${editorRemountNonce}`}
-                    ref={setEditorRefs}
-                    text={openDoc.content}
-                    viewMode={viewMode}
-                    readOnly={isReadOnlyDoc}
-                    // eslint-disable-next-line react-hooks/refs -- 포커스 요청 플래그는 마운트 때 한 번 읽고 passive effect 가 소비한다
-                    autoFocus={focusTitleRef.current ? 'title' : focusEditorRef.current}
-                    onDocChange={handleDocChange}
-                    onSelectionChange={handleSelectionChange}
-                    wikiContext={wikiContext}
-                    onOpenWikiLink={handleOpenWikiLink}
-                    onImageFiles={handleImageFiles}
-                    resolveAttachment={resolveAttachment}
-                    title={currentDoc?.title ?? ''}
-                    titleReadOnly={titleReadOnly}
-                    onTitleChange={handleTitleChange}
-                    onTitleCommit={handleTitleCommit}
-                    docId={currentDocId ?? undefined}
-                    live={liveEditorOption}
-                  />
-                )}
-              </div>
-              {showE2eeLockedPanel && e2ee && (
-                <E2eeLockedPanel
-                  key={currentDocId}
-                  keyring={e2ee.keyring}
-                  damaged={e2ee.status === 'open' && e2eeListSyncedFor === 'open'}
-                  autoFocus={e2eeUnmountedDocId !== currentDocId}
-                  onOpened={handleE2eePanelOpened}
-                  onForgotPassword={e2ee.openSettingsDialogs.recover}
-                />
-              )}
-              {viewMode === 'view' && openDoc?.id === currentDocId && (
-                <Viewer
-                  key={currentDocId}
-                  ref={viewerRef}
-                  html={viewerHtml}
-                  theme={resolvedTheme}
-                  title={currentDoc?.title ?? ''}
-                  breadcrumb={currentBreadcrumb}
-                  onNavigateFolder={onNavigateFolder}
-                  onOpenWikiLink={handleOpenWikiLink}
-                  resolveAttachment={resolveAttachment}
-                  onContextMenu={handleViewContextMenu}
-                />
-              )}
-              {/* 레일·판 여닫힘 전환 — 닫힌 뒤에도 전환 시간만큼 남긴다. 편집기가 사라지면(commentAvailable 거짓) 곧바로 뗀다 */}
-              {commentAvailable && (
-                <CommentPanelPresence open={commentRailVisible || commentSheetVisible}>
-                  {(presence) => (
-                    <CommentCommandContext.Provider value={comments.commandState}>
-                      <MentionSourceContext.Provider value={mentionSource}>
-                        <CommentRailPanel
-                          presence={presence}
-                          mode={comments.mode}
-                          open={comments.open}
-                          onClose={() => {
-                            comments.setOpen(false, false)
-                            editorRef.current?.focus()
-                          }}
-                          access={comments.access}
-                          ready={comments.ready}
-                          canWrite={comments.canWrite}
-                          threads={comments.threads}
-                          threadById={comments.threadById}
-                          layout={comments.layout}
-                          activeId={comments.activeId}
-                          setActive={comments.setActive}
-                          showResolved={comments.showResolved}
-                          setShowResolved={comments.setShowResolved}
-                          orphansOpen={comments.orphansOpen}
-                          setOrphansOpen={comments.setOrphansOpen}
-                          composer={comments.composer}
-                          sendComposer={comments.sendComposer}
-                          cancelComposer={comments.cancelComposer}
-                          reply={comments.reply}
-                          startReply={comments.startReply}
-                          sendReply={comments.sendReply}
-                          toggleResolve={comments.toggleResolve}
-                          removeComment={comments.removeComment}
-                          reveal={comments.reveal}
-                          actorFor={comments.actorFor}
-                          scrollElement={editorRef.current?.view.scrollDOM ?? null}
-                          focusEditor={() => editorRef.current?.focus()}
-                          onRailExtraChange={setCommentRailExtra}
-                        />
-                      </MentionSourceContext.Provider>
-                    </CommentCommandContext.Provider>
-                  )}
-                </CommentPanelPresence>
-              )}
-              {commentAvailable &&
-                comments.canWrite &&
-                !comments.composer &&
-                floatingCommentAnchor !== null && (
-                  <button
-                    type="button"
-                    className="comment-add-button"
-                    aria-label="댓글 달기"
-                    title="댓글 달기 (Ctrl+Alt+M)"
-                    style={{ transform: `translateY(${clampFabY(floatingCommentAnchor - editorScrollTop, editorViewportH)}px)` }}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => comments.beginComment()}
-                  >
-                    <IconAddComment size={18} />
-                  </button>
-                )}
-              {openDoc?.id === currentDocId && (
-                <Outline
-                  editorRef={editorRef}
-                  containerRef={contentAreaRef}
-                  viewerRef={viewerRef}
-                  docId={currentDocId}
-                  viewMode={viewMode}
-                  contentWidth={contentWidthPref}
-                  railOpen={commentRailVisible}
-                />
-              )}
-              <WikiLinkPreview
-                enabled={wikiPreviewEnabled}
-                containerRef={contentAreaRef}
-                editorRef={editorRef}
-                viewMode={viewMode}
-                theme={resolvedTheme}
-                currentDocId={currentDocId}
-                currentFolderId={currentFolderId}
-                wikiResolver={wikiResolver}
-                docs={docs}
-                readDoc={(id) => store.get(id)}
-                resolveAttachmentFor={attachmentResolverFor}
-                onOpenWikiLink={(target, heading, source) => void openWikiLinkTarget(target, heading, source)}
-              />
-            </div>
-          )}
+          <AppScreens {...{
+            account, bootPhase, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs, e2ee,
+            goHome, handleOpenWikiLink, handleViewContextMenu, helpOpen, importSharedDoc, isEmpty, listSource, loginFromShares,
+            mapDialogScope, mapRoute, openHelp, openSharesTarget, ownedDocs, recenterMap, requestImport, revokeShareGrantRow,
+            revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc, sharesGrants, sharesLinks, sharesLoading, sharesOpen, showNotice,
+          }} />
+          {showEditor && <DocumentArea {...{
+            attachmentResolverFor, commentAccessValue, commentRailExtra, comments, contentAreaRef, contentWidthPref, currentBreadcrumb,
+            currentDoc, currentDocId, currentFolderId, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorRemountNonce,
+            editorScrollTop, editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles,
+            handleOpenWikiLink, handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc,
+            liveEditorOption, mapRoute, mentionSource, onNavigateFolder, openDoc, openWikiLinkTarget, resolveAttachment, resolvedTheme,
+            setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, showEditor, store, titleReadOnly, viewerHtml, viewerRef, viewMode,
+            wikiContext, wikiPreviewPref, wikiResolver,
+          }} />}
           {statusBarVisible && shortcutsOpen && <ShortcutPanel mac={isMac} used={shortcutsUsed} onClose={closeShortcuts} />}
           {!sharedDoc && !mapRoute && showEditor && (
             <StatusBar
@@ -1978,145 +1636,20 @@ export default function App() {
         </div>
       </div>
 
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          nodes={contextMenu.nodes}
-          onSelect={handleContextMenuSelect}
-          onClose={closeContextMenu}
-          // 표 칸 하위 에디터는 blur 되면 편집을 끝내 버려(tableWidget.ts) 메뉴가 실제 DOM 포커스를 가져가면 안 된다
-          keepSourceFocus={contextMenu.place === 'cell'}
-        />
-      )}
-      <ConfirmDeleteDialog target={deleteTarget} onCancel={cancelDelete} onConfirm={confirmDelete} />
-      <E2eeConvertDialog
-        open={e2eeConvertText !== null}
-        text={e2eeConvertText}
-        onCancel={() => answerE2eeConvertDialog(false)}
-        onConfirm={() => answerE2eeConvertDialog(true)}
-      />
-      {e2ee && store.kind === 'server' && account.state === 'in' && (
-        <E2eeMigrateDialog
-          open={e2eeMigrateDialogOpen}
-          count={e2eeMigrateAsk?.count ?? 0}
-          userId={(store as ServerStore).userId}
-          e2ee={e2ee}
-          onClose={() => setE2eeMigrateDialogOpen(false)}
-          onReady={(keys, bundle) => void runE2eeMigrateFlow(keys, bundle)}
-        />
-      )}
-      <Dialog
-        open={Boolean(bulkDeleteItems)}
-        onClose={cancelBulkDelete}
-        titleId="confirm-bulk-delete-title"
-        initialFocusRef={bulkDeleteCancelRef}
-      >
-        <h2 id="confirm-bulk-delete-title">항목 삭제</h2>
-        <p>선택한 {bulkDeleteItems?.length ?? 0}개 항목을 삭제할까요? 되돌릴 수 없습니다.</p>
-        <div className="dialog-actions">
-          <button type="button" ref={bulkDeleteCancelRef} onClick={cancelBulkDelete}>
-            취소
-          </button>
-          <button
-            type="button"
-            className="danger"
-            onClick={() => {
-              void confirmBulkDelete()
-            }}
-          >
-            삭제
-          </button>
-        </div>
-      </Dialog>
-      <MoveDocDialog
-        doc={moveDocTarget}
-        folders={folders}
-        onCancel={cancelMoveDoc}
-        onConfirm={confirmMoveDoc}
-      />
-      <InviteDialog target={inviteTarget} onClose={cancelInvite} onNotice={showNotice} />
-      <SettingsDialog
-        open={settingsOpen}
-        theme={themePref}
-        onChangeTheme={changeTheme}
-        headingFont={headingFont}
-        onChangeHeadingFont={changeHeadingFont}
-        bodyFont={bodyFont}
-        onChangeBodyFont={changeBodyFont}
-        fontSize={fontSizePref}
-        onChangeFontSize={changeFontSize}
-        startScreen={startScreenPref}
-        onChangeStartScreen={changeStartScreen}
-        wikiPreview={wikiPreviewPref}
-        onChangeWikiPreview={changeWikiPreview}
-        toolbar={toolbarPref}
-        onChangeToolbar={changeToolbar}
-        indent={indentPref}
-        onChangeIndent={changeIndent}
-        lineNumbers={lineNumbersPref}
-        onChangeLineNumbers={changeLineNumbers}
-        newDocTemplate={newDocTemplatePref}
-        onChangeNewDocTemplate={changeNewDocTemplate}
-        templateEntries={templateEntries}
-        contentWidth={contentWidthPref}
-        onChangeContentWidth={changeContentWidth}
-        onExportAll={handleExportAll}
-        exportAllDisabled={exportOffline}
-        onExportVault={handleExportVault}
-        onImport={requestImportZip}
-        onImportFolder={requestImportFolder}
-        e2ee={
-          e2ee
-            ? {
-                status: e2ee.status,
-                isLocal: e2ee.keyring.scope.kind === 'local',
-                lockMinutes: e2eeLockMinutesPref,
-                onChangeLockMinutes: changeE2eeLockMinutes,
-                onShown: () => void e2ee.keyring.load(),
-                onCreate: e2ee.openSettingsDialogs.create,
-                onUnlock: e2ee.openSettingsDialogs.unlock,
-                onChangePassword: e2ee.openSettingsDialogs.changePassword,
-                onReset: e2ee.openSettingsDialogs.reset,
-                onLockNow: e2ee.openSettingsDialogs.lockNow,
-                onRetry: () => void e2ee.keyring.load(),
-              }
-            : undefined
-        }
-        account={settingsAccount}
-        onClose={closeSettings}
-      />
-      {e2ee?.dialogs}
-      <AccountDeleteDialog
-        open={accountDeleteUserId !== null}
-        unsynced={accountDeleteUnsynced}
-        onClose={closeAccountDelete}
-        onSignedOut={() => {
-          closeAccountDelete()
-          void recheckAccount()
-        }}
-        onReauth={reauthForAccountDelete}
-        onDeleted={finishAccountDelete}
-      />
-      <SearchDialog
-        open={searchOpen}
-        store={listSource}
-        scope={searchDialogScope}
-        beforeIndex={beforeLeaveDoc}
-        onOpenDoc={openDocFromSearch}
-        onClose={closeSearch}
-        selectQueryRef={selectSearchQueryRef}
-        offline={searchOffline}
-        e2eeOpen={e2ee?.status === 'open'}
-      />
-      <CommandPalette open={paletteOpen} context={paletteContext} onClose={closePalette} selectQueryRef={selectPaletteQueryRef} />
-      <ImportPreviewDialog
-        state={importState}
-        onCancel={importState?.stage === 'progress' ? cancelImportProgress : cancelImportPreview}
-        onConfirm={confirmImport}
-        onClose={closeImportResult}
-        onTargetChange={handleImportTargetChange}
-      />
+      <AppDialogs {...{
+        account, accountDeleteUnsynced, accountDeleteUserId, answerE2eeConvertDialog, beforeLeaveDoc, bodyFont, bulkDeleteCancelRef,
+        bulkDeleteItems, cancelBulkDelete, cancelDelete, cancelImportPreview, cancelImportProgress, cancelInvite, cancelMoveDoc,
+        changeBodyFont, changeContentWidth, changeE2eeLockMinutes, changeFontSize, changeHeadingFont, changeIndent, changeLineNumbers,
+        changeNewDocTemplate, changeStartScreen, changeTheme, changeToolbar, changeWikiPreview, closeAccountDelete, closeContextMenu,
+        closeImportResult, closePalette, closeSearch, closeSettings, confirmBulkDelete, confirmDelete, confirmImport, confirmMoveDoc,
+        contentWidthPref, contextMenu, deleteTarget, e2ee, e2eeConvertText, e2eeLockMinutesPref, e2eeMigrateAsk, e2eeMigrateDialogOpen,
+        exportOffline, finishAccountDelete, folders, fontSizePref, handleContextMenuSelect, handleExportAll, handleExportVault,
+        handleImportTargetChange, headingFont, importState, indentPref, inviteTarget, lineNumbersPref, listSource, moveDocTarget,
+        newDocTemplatePref, openDocFromSearch, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
+        requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
+        setE2eeMigrateDialogOpen, settingsAccount, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref,
+        toolbarPref, wikiPreviewPref,
+      }} />
       {/* 인쇄 전용 영역 — printDoc() 이 채운다. .app-shell 의 마지막 직계 자식이어야 한다 (F-279.md 4.2) */}
       <div className="viewer print-root" ref={printRootRef} aria-hidden="true" inert />
     </div>

@@ -1639,3 +1639,18 @@ test.describe('F-2079 계정 상태 절', () => {
     await expect(page.locator('.notice--warn .notice-message')).toHaveText(L7)
   })
 })
+
+test.describe('F-2081 JSX 컴포넌트 다섯 절', () => {
+  test('F-2081 C1 숨은 파일 입력 셋과 인쇄 영역 자리', async ({ page }) => {
+    await openApp(page)
+    const inputs = page.locator('.app-shell > input[type="file"][hidden]')
+    await expect(inputs).toHaveCount(3)
+    const attrs = await inputs.evaluateAll((els) => els.map((el) => [el.dataset.import, el.accept, el.webkitdirectory]))
+    expect(attrs).toEqual([
+      ['md', '.md,text/markdown', false],
+      ['zip', '.zip,application/zip', false],
+      ['folder', '', true],
+    ])
+    await expect(page.locator('.app-shell > .print-root:last-child')).toHaveCount(1)
+  })
+})
