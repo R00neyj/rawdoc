@@ -1227,3 +1227,43 @@ test.describe('F-2071 해시 라우팅 절', () => {
     await expect(page).toHaveURL(/#\/$/)
   })
 })
+
+function docItem2072(page, name) {
+  const sidebar = page.locator('.sidebar')
+  return sidebar.getByRole('button', { name, exact: true }).or(sidebar.getByRole('link', { name, exact: true }))
+}
+
+test.describe('F-2072 편집기 연동 절', () => {
+  test.use({ viewport: { width: 1280, height: 900 } })
+
+  test('F-2072 C1 문서를 열면 상태바 글자·단어 수가 그 문서 저장 본문 기준이다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    const A = await importMarkdown(page, { name: '셈가.md', content: '하나 둘 셋\n' })
+    await importMarkdown(page, { name: '셈나.md', content: 'abc def ghij klm\n' })
+    await expect(page.locator('.statusbar-info')).toContainText('16자 · 4단어')
+
+    await docItem2072(page, '셈가').click()
+    await expect.poll(() => currentDocId(page)).toBe(A)
+    await expect(page.locator('.statusbar-info')).toContainText('6자 · 3단어')
+
+    await docItem2072(page, '셈나').click()
+    await expect(page.locator('.statusbar-info')).toContainText('16자 · 4단어')
+  })
+
+  test('F-2072 C2 보기 모드에서 [[문서#제목]] 로 다른 문서를 열면 그 문서 HTML 이 그려진 뒤 제목으로 스크롤한다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    const LONG = Array.from({ length: 60 }, (_, i) => `문단 ${i}`).join('\n\n')
+    const target = await importMarkdown(page, { name: '회의록.md', content: '회의 첫 줄\n\n' + LONG + '\n\n## 결정\n\n결정 내용\n' })
+    await importMarkdown(page, { name: '출발.md', content: '출발 문서\n\n[[회의록#결정]]\n' })
+    await setViewMode(page, 'view')
+    const link = page.locator('.viewer a.wikilink[data-wikilink="회의록"][data-wikilink-heading="결정"]')
+    await expect(link).toBeVisible()
+    await link.click()
+
+    await expect.poll(() => currentDocId(page)).toBe(target)
+    await expect(page.locator('.viewer h2', { hasText: '결정' })).toBeInViewport()
+    await expect(page.locator('.viewer p', { hasText: /^회의 첫 줄$/ })).not.toBeInViewport()
+  })
+})
