@@ -686,7 +686,11 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
       if (matchedId && matchedDoc) {
         if (matchedId !== currentDocIdRef.current || sharedDocRef.current) {
           await beforeLeaveDoc()
+          // runImportFiles 처럼 공유 보기·공유 관리·도움말·지도를 모두 떠난다 (F-2076 7장 D1)
           setSharedDoc(null)
+          setSharesOpen(false)
+          setHelpOpen(false)
+          setMapRoute(null)
           focusEditorRef.current = true
           setCurrentDocId(matchedId)
           setPref('md.lastDocId', matchedId)
