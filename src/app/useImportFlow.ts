@@ -99,6 +99,11 @@ export type UseImportFlowResult = {
   ) => Promise<Awaited<ReturnType<typeof attachImages>>['inserted']>
 }
 
+// 가져오기 대화상자(미리보기·진행·결과)가 떠 있으면 다른 대화상자처럼 md·이미지 끌어놓기를 모두 막는다 (F-2059 D11)
+export function dropBlocks(dropBlocked: boolean, imageDropBlocked: boolean, importOpen: boolean): { md: boolean; image: boolean } {
+  return { md: dropBlocked || importOpen, image: imageDropBlocked || importOpen }
+}
+
 export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResult {
   const {
     store, folders, currentDoc, bootPhase, setDocs, setFolders, setCurrentDocId, setOpenDoc, setEditorRemountNonce, setSharedDoc, setSharesOpen,
@@ -110,6 +115,7 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
   const [dropActive, setDropActive] = useState(false)
   // zip 가져오기 미리보기·진행·결과 대화상자 (F-282.md 3.8)
   const [importState, setImportState] = useState<ImportDialogState | null>(null)
+  const importOpenRef = useRef(false)
   // zip 가져오기 — 선택 input, 확정된 계획, 취소 신호 (F-282.md 3.1·3.9)
   const importFileRef = useRef<File | null>(null)
   const importPlanRef = useRef<ImportPlan | null>(null)
@@ -152,25 +158,27 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
     runImportFilesRef.current = runImportFiles
     openOrImportLaunchedFilesRef.current = openOrImportLaunchedFiles
     previewImportFolderRef.current = previewImportFolder
+    importOpenRef.current = importState !== null
   })
 
   // 창 전체 .md 파일 끌어놓기(F-145.md 2장) — 외부 파일만 반응, depth 로 진입 횟수를 센다
   useEffect(() => {
     let depth = 0
+    const blocks = () => dropBlocks(dropBlockedRef.current, imageDropBlockedRef.current, importOpenRef.current)
 
     function handleDragEnter(e: DragEvent) {
       if (!isExternalFileDrag(e.dataTransfer)) return
       e.preventDefault()
       depth++
       // 이미지 파일만 끌 때는 F-145 덮개를 띄우지 않는다 — 에디터 위 CM6 dropCursor 가 놓을 자리를 보인다 (F-156.md 2.5)
-      if (!dropBlockedRef.current && !isImageOnlyDrag(e.dataTransfer)) setDropActive(true)
+      if (!blocks().md && !isImageOnlyDrag(e.dataTransfer)) setDropActive(true)
     }
 
     function handleDragOver(e: DragEvent) {
       if (!isExternalFileDrag(e.dataTransfer)) return
       // 받지 않는 때에도 브라우저 기본 파일 열기를 막는다 (2.1)
       e.preventDefault()
-      if (e.dataTransfer) e.dataTransfer.dropEffect = dropBlockedRef.current ? 'none' : 'copy'
+      if (e.dataTransfer) e.dataTransfer.dropEffect = blocks().md ? 'none' : 'copy'
     }
 
     function handleDragLeave(e: DragEvent) {
@@ -185,13 +193,13 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
       depth = 0
       setDropActive(false)
       // 대화상자·공유 화면에서는 이미지도 md 도 다 막는다 (F-145.md 2.1, F-156.md 2.5)
-      if (imageDropBlockedRef.current) return
+      if (blocks().image) return
 
       // 폴더 판정을 pickMarkdownFiles 보다 먼저 — 이벤트가 끝나면 dataTransfer.items 에 못 닿는다 (F-2019.md 4.3·12장)
       const droppedEntries = e.dataTransfer ? Array.from(e.dataTransfer.items).filter((it) => it.kind === 'file').map((it) => it.webkitGetAsEntry()) : []
       const dropClass = classifyDroppedEntries(droppedEntries)
       if (dropClass.kind === 'folder') {
-        if (dropBlockedRef.current) return // 메모리 저장소는 .md 처럼 조용히 무시
+        if (blocks().md) return // 메모리 저장소는 .md 처럼 조용히 무시
         readDroppedDirectory(dropClass.entry)
           .then(async (files) => {
             const fileName = files[0]?.path.split('/')[0] ?? dropClass.entry.name
@@ -202,7 +210,7 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
         return
       }
       if (dropClass.kind === 'too-many') {
-        if (dropBlockedRef.current) return
+        if (blocks().md) return
         showNotice({ type: 'info', message: '폴더는 한 번에 하나만 가져올 수 있습니다.' })
         return
       }
@@ -210,7 +218,7 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
       const files = Array.from(e.dataTransfer!.files)
       const { mdFiles, allNonMd } = pickMarkdownFiles(files)
       // 여기선 대화상자·공유 화면은 이미 걸러졌으니 dropBlockedRef 가 true 면 store.kind==='memory' 뿐 — md 는 막고 이미지는 예외로 받는다(F-156.md 2.5)
-      const memoryBlocked = dropBlockedRef.current
+      const memoryBlocked = blocks().md
 
       if (mdFiles.length > 0) {
         if (memoryBlocked) return
