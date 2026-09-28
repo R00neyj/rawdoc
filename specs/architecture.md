@@ -48,6 +48,8 @@ src/
     useE2eeConvert.ts 문서·폴더 금고로 옮기기·빼기 (F-405, F-407, F-2073)
     useE2eeMigrate.ts 금고 이관 판정·실행·잠그기·초기화 (F-404, F-408, F-2073)
     bootFlow.ts      부팅(저장소 열기·목록·첫 화면 판정)·밀린 편집 러너 (F-110, F-111, F-207, F-2015, F-2042, F-306, F-2074)
+    useDocSession.ts 문서 세션(Y.Doc·편집기 연결·경로 판정)·실시간 방 연결 (F-305, F-306, F-2077)
+    useLiveRoomDoc.ts 실시간 방 온라인 재시작·사이드바 updatedAt·편집기 옵션 (F-305, F-506, F-2077)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
