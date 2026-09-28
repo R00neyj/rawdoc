@@ -2220,6 +2220,8 @@ export default function App() {
 
       // 공개 링크(#/p/…)는 위 handlePublicHashChange 가 publicRoute 로 그린다 — 여기서 첫 문서로 해시를 바꾸지 않는다 (리뷰 A1)
       if (parsedHash.type === 'public' || parsedHash.type === 'publicFolder') return
+      // 경로형 공개 링크(/p/…)도 같다 — 해시가 비어 있어도 홈으로 돌리거나 해시를 바꾸지 않는다 (리뷰 A4)
+      if (toPublicRoute(parsePathRoute(location.pathname))) return
 
       // 공유 링크(F-130.md 4장)는 currentDocId 와 비교하지 않고 매번 새로 연다 —
       // currentDocId 는 공유 화면 동안 건드리지 않으므로 같은 값일 수 있다
@@ -2293,6 +2295,11 @@ export default function App() {
         setSharesOpen(false) // 공유 관리 페이지를 보고 있었으면 떠난다 (F-243.md 3.4)
         setHelpOpen(false) // 도움말 페이지를 보고 있었으면 떠난다 (F-244.md 3.3)
         setMapRoute(null) // 지도를 보고 있었으면 떠난다 — 뒤로 가기로 지도를 나갈 때가 그렇다 (F-292.md 6.1)
+        // `#/`·빈 해시처럼 대상이 없으면 홈 — 뒤로 가기로 홈에 돌아왔을 때 첫 문서를 열지 않는다 (F-232 3.2, 리뷰 A4)
+        if (parsedHash.type === 'none') {
+          setCurrentDocId(null)
+          return
+        }
         focusEditorRef.current = true
         const latestDocs = docsRef.current
         if (docId && latestDocs.some((d) => d.id === docId)) {
