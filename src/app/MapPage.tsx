@@ -160,7 +160,7 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
 
   useEffect(() => {
     let cancelled = false
-    // setState 를 effect 본문에서 바로 부르지 않고 async 함수 안에서 부른다(App.tsx loadShares 와 같은 방식)
+    // setState 를 effect 본문에서 바로 부르지 않고 async 함수 안에서 부른다(useSharesPage.ts loadShares 와 같은 방식)
     async function load() {
       setLoading(true)
       // 한 번의 list()·listFolders() 를 지도 인덱스와 검색 인덱스가 나눠 쓴다 — 시점이 어긋나지 않는다 (F-2007 5.2)

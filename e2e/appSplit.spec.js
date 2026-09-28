@@ -1,6 +1,7 @@
 // App.tsx 분할 특성 테스트 — 옮기기 전 동작을 고정한다 (specs/features/F-2059.md 5.2)
 import { test, expect } from '@playwright/test'
 import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad } from './helpers.js'
+import { fakeServer } from './fixtures/fakeServer.js'
 
 const root = (page) => page.locator('.context-menu-root')
 
@@ -273,5 +274,203 @@ test.describe('F-2063 설정값·시스템 테마 절', () => {
     await radio(dialog, '시작 화면', '홈').click()
     await expect(radio(dialog, '시작 화면', '홈')).toHaveAttribute('aria-checked', 'true')
     expect(await stored(page, 'md.startScreen')).toBe('home')
+  })
+})
+
+// shares.spec.js 도우미와 같은 모양 — 그 파일은 F-243 소유라 import 하지 않는다 (F-2064 7.2)
+function seedDoc(server, { id, title, folderId = null }) {
+  const now = Date.now()
+  server.docs.set(id, { id, title, content: '내용', lineEnding: 'lf', folderId, pinnedAt: null, version: 1, createdAt: now, updatedAt: now })
+}
+
+function seedFolder(server, { id, name, parentId = null }) {
+  const now = Date.now()
+  server.folders.set(id, { id, name, parentId, createdAt: now, updatedAt: now })
+}
+
+function seedLink(server, { targetType, targetId, token }) {
+  server.shareLinks.set(`${targetType}:${targetId}`, { token, createdAt: Date.now(), revokedAt: null })
+}
+
+function seedGrant(server, { targetType, targetId, email, role }) {
+  server.grants.set(`${targetType}:${targetId}:${email}`, { role, createdAt: Date.now() })
+}
+
+async function openShares(page) {
+  await page.getByRole('button', { name: '계정' }).click()
+  await page.getByRole('menuitem', { name: '공유 관리' }).click()
+  await expect(page.locator('.shares-page-head h1')).toHaveText('공유 관리')
+}
+
+async function closeShares(page) {
+  await page.locator('.shares-close').click()
+  await expect(page.locator('.shares-page')).toHaveCount(0)
+}
+
+function deferred() {
+  let resolve
+  const promise = new Promise((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
+const isSharesList = (req) => req.method() === 'GET' && new URL(req.url()).pathname === '/api/shares'
+
+test.describe('F-2064 공유 관리 절', () => {
+  const rows = (page) => page.locator('.shares-link-row')
+  const twoFrames = (page) =>
+    page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))
+
+  test('F-2064 C1 불러오는 중 문구', async ({ page }) => {
+    const server = await fakeServer(page)
+    seedDoc(server, { id: 'd1', title: '회의록' })
+    seedLink(server, { targetType: 'doc', targetId: 'd1', token: 'tok-doc' })
+    await openApp(page)
+    const gate = deferred()
+    await page.route('**/api/shares', async (route) => {
+      await gate.promise
+      return route.fallback()
+    })
+
+    await openShares(page)
+    await expect(page.locator('.shares-loading')).toHaveText('불러오는 중…')
+    await expect(rows(page)).toHaveCount(0)
+
+    gate.resolve()
+    await expect(rows(page)).toHaveCount(1)
+    await expect(page.locator('.shares-loading')).toHaveCount(0)
+  })
+
+  test('F-2064 C2 다시 들어오면 새로 부른다', async ({ page }) => {
+    const server = await fakeServer(page)
+    seedDoc(server, { id: 'd1', title: '회의록' })
+    seedLink(server, { targetType: 'doc', targetId: 'd1', token: 'tok-1' })
+    await openApp(page)
+    let listRequests = 0
+    page.on('request', (req) => {
+      if (isSharesList(req)) listRequests++
+    })
+
+    await openShares(page)
+    await expect(rows(page)).toHaveCount(1)
+    await closeShares(page)
+
+    seedDoc(server, { id: 'd2', title: '기획서' })
+    seedLink(server, { targetType: 'doc', targetId: 'd2', token: 'tok-2' })
+    await openShares(page)
+    await expect(rows(page)).toHaveCount(2)
+    expect(listRequests).toBe(2)
+  })
+
+  test('F-2064 C3 목록 실패 — 빈 상태, 앞 목록을 지운다', async ({ page }) => {
+    const server = await fakeServer(page)
+    seedDoc(server, { id: 'd1', title: '회의록' })
+    seedLink(server, { targetType: 'doc', targetId: 'd1', token: 'tok-doc' })
+    await openApp(page)
+
+    await openShares(page)
+    await expect(rows(page)).toHaveCount(1)
+    await closeShares(page)
+
+    await page.route('**/api/shares', (route) =>
+      route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"server"}' }),
+    )
+    await openShares(page)
+    await expect(page.locator('.shares-empty')).toHaveText('공유 중인 문서와 폴더가 없습니다.')
+    await expect(rows(page)).toHaveCount(0)
+  })
+
+  test('F-2064 C4 로그인 상태로 #/shares 바로 열기', async ({ page }) => {
+    const server = await fakeServer(page)
+    seedFolder(server, { id: 'f1', name: '업무' })
+    seedGrant(server, { targetType: 'folder', targetId: 'f1', email: 'a@b.com', role: 'edit' })
+
+    await page.goto('/#/shares')
+    await expect(page.locator('.shares-grant-row')).toHaveCount(1)
+    await expect(page.locator('.shares-grant-row')).toContainText('업무')
+  })
+
+  test('F-2064 C5 떠난 뒤 온 옛 응답은 버린다', async ({ page }) => {
+    const server = await fakeServer(page)
+    seedDoc(server, { id: 'd1', title: '회의록' })
+    seedLink(server, { targetType: 'doc', targetId: 'd1', token: 'tok-doc' })
+    await openApp(page)
+    const gates = [deferred(), deferred()]
+    let arrived = 0
+    await page.route('**/api/shares', async (route) => {
+      const n = arrived++
+      await gates[n].promise
+      if (n === 0) return route.fallback()
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ links: [], grants: [] }) })
+    })
+
+    await openShares(page)
+    await expect.poll(() => arrived).toBe(1)
+    await closeShares(page)
+    await openShares(page)
+    await expect.poll(() => arrived).toBe(2)
+
+    const first = page.waitForResponse((res) => isSharesList(res.request()))
+    gates[0].resolve()
+    const res = await first
+    expect((await res.json()).links).toHaveLength(1)
+    await twoFrames(page)
+    await expect(page.locator('.shares-loading')).toBeVisible()
+    await expect(rows(page)).toHaveCount(0)
+
+    gates[1].resolve()
+    await expect(page.locator('.shares-empty')).toHaveText('공유 중인 문서와 폴더가 없습니다.')
+  })
+
+  test('F-2064 C6 폴더 링크 해제', async ({ page }) => {
+    const server = await fakeServer(page)
+    seedFolder(server, { id: 'f1', name: '업무' })
+    seedLink(server, { targetType: 'folder', targetId: 'f1', token: 'tok-folder' })
+    await openApp(page)
+    const deletes = []
+    page.on('request', (req) => {
+      if (req.method() === 'DELETE' && /\/api\/(docs|folders)\/[^/]+\/link$/.test(new URL(req.url()).pathname)) deletes.push(req.url())
+    })
+
+    await openShares(page)
+    await expect(rows(page)).toHaveCount(1)
+    const revoke = page.waitForRequest((req) => req.method() === 'DELETE' && new URL(req.url()).pathname === '/api/folders/f1/link')
+    await page.locator('.shares-link-revoke').click()
+    await revoke
+    await expect(rows(page)).toHaveCount(0)
+    expect(deletes).toHaveLength(1)
+  })
+
+  test('F-2064 C7 해제 실패 — 줄이 남고 오류 알림', async ({ page }) => {
+    const server = await fakeServer(page)
+    seedDoc(server, { id: 'd1', title: '회의록' })
+    seedLink(server, { targetType: 'doc', targetId: 'd1', token: 'tok-doc' })
+    await openApp(page)
+    await page.route('**/api/docs/d1/link', (route) => {
+      if (route.request().method() === 'DELETE') {
+        return route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"server"}' })
+      }
+      return route.fallback()
+    })
+
+    await openShares(page)
+    await expect(rows(page)).toHaveCount(1)
+    await page.locator('.shares-link-revoke').click()
+    await expect(page.locator('.notice-message')).toHaveText('공유를 해제하지 못했습니다.')
+    await expect(rows(page)).toHaveCount(1)
+  })
+
+  test('F-2064 C8 로그인 버튼 — 돌아올 주소 #/shares', async ({ page }) => {
+    await page.route('**/api/me', (route) =>
+      route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' }),
+    )
+    await page.route('**/api/login**', (route) =>
+      route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>login</title>' }),
+    )
+
+    await page.goto('/#/shares')
+    await page.getByRole('button', { name: '로그인' }).click()
+    await expect(page).toHaveURL(/\/api\/login\?return=%23%2Fshares$/)
   })
 })

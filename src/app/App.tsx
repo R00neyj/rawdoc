@@ -40,7 +40,7 @@ import {
 } from '../lib/templates'
 import { insertTemplate as insertTemplateIntoEditor } from '../editor/insertTemplate'
 import { getPref, setPref } from './prefs'
-import { fetchAccount, loginUrl, storedAccount, type AccountState } from './account'
+import { fetchAccount, storedAccount, type AccountState } from './account'
 import { planAccountNotices, ACCOUNT_RECHECK_MS, ACCOUNT_BLOCKED_MESSAGE, ACCOUNT_WARNED_MESSAGE, formatCount, type AccountFlags } from '../lib/usageLimits'
 import type { SyncState } from '../types'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
@@ -188,14 +188,13 @@ import StatusBar from './StatusBar'
 import ShortcutPanel from './ShortcutPanel'
 import { useShortcutUsage } from './useShortcutUsage'
 import { useGlobalShortcuts } from './useGlobalShortcuts'
+import { useSharesPage } from './useSharesPage'
 import { isMacPlatform } from './shortcutCatalog'
 import SharedView from './SharedView'
 import PublicView from './PublicView'
 import InviteDialog, { type InviteTarget } from './InviteDialog'
 import SharesPage from './SharesPage'
-import { listShares, type ShareLinkRow, type ShareGrantRow } from './sharesApi'
-import { revokeShareLink, revokeFolderShareLink } from './linkApi'
-import { deleteGrant, fetchCommentCount } from '../storage/docsApi'
+import { fetchCommentCount } from '../storage/docsApi'
 // three 가 초기 로드에 붙지 않게 지연 경계를 여기 긋는다 (specs/features/F-292.md 3.3, F-2002 4장)
 const MapPage = lazy(() => import('./MapPage'))
 import { mapIndexScope } from './mapIndex'
@@ -376,9 +375,6 @@ export default function App() {
   const [sharedDoc, setSharedDoc] = useState<ShareDoc | null>(null)
   // 공유 관리 페이지 S-6 (specs/features/F-243.md 3.3·3.4) — currentDocId 는 이 화면 동안 null
   const [sharesOpen, setSharesOpen] = useState(false)
-  const [sharesLoading, setSharesLoading] = useState(false)
-  const [sharesLinks, setSharesLinks] = useState<ShareLinkRow[]>([])
-  const [sharesGrants, setSharesGrants] = useState<ShareGrantRow[]>([])
   // 외부 .md 파일을 창 위로 끄는 동안의 덮개 (F-145.md 2.4)
   const [dropActive, setDropActive] = useState(false)
   const [account, setAccount] = useState<AccountState>({ state: 'offline' })
@@ -3233,33 +3229,8 @@ export default function App() {
     if ((e.target as HTMLElement).closest('[data-go-home]')) goHome()
   }
 
-  // ----- 공유 관리 페이지 (specs/features/F-243.md 3.4) — 들어올 때마다 새로 부른다, 로그인 아니면 요청하지 않는다 -----
-  useEffect(() => {
-    if (!sharesOpen || account.state !== 'in') return
-    let cancelled = false
-
-    async function loadShares() {
-      setSharesLoading(true)
-      try {
-        const data = await listShares()
-        if (cancelled) return
-        setSharesLinks(data.links)
-        setSharesGrants(data.grants)
-      } catch {
-        if (!cancelled) {
-          setSharesLinks([])
-          setSharesGrants([])
-        }
-      } finally {
-        if (!cancelled) setSharesLoading(false)
-      }
-    }
-    loadShares()
-
-    return () => {
-      cancelled = true
-    }
-  }, [sharesOpen, account.state])
+  // ----- 공유 관리 페이지 목록·해제 (F-2064) -----
+  const { sharesLoading, sharesLinks, sharesGrants, revokeShareLinkRow, revokeShareGrantRow, loginFromShares } = useSharesPage({ sharesOpen, account })
 
   // 대상 이름 클릭 — 문서면 열고, 폴더면 홈으로 가며 사이드바에서 펼친다 (F-243.md 3.4)
   function openSharesTarget(targetType: 'doc' | 'folder', targetId: string) {
@@ -3269,26 +3240,6 @@ export default function App() {
     }
     addOpenFolders([targetId])
     goHome()
-  }
-
-  async function revokeShareLinkRow(link: ShareLinkRow) {
-    if (link.targetType === 'doc') {
-      await revokeShareLink(link.targetId)
-    } else {
-      await revokeFolderShareLink(link.targetId)
-    }
-    setSharesLinks((prev) => prev.filter((l) => l.token !== link.token))
-  }
-
-  async function revokeShareGrantRow(grant: ShareGrantRow) {
-    await deleteGrant(grant.targetType, grant.targetId, grant.email)
-    setSharesGrants((prev) =>
-      prev.filter((g) => !(g.targetType === grant.targetType && g.targetId === grant.targetId && g.email === grant.email)),
-    )
-  }
-
-  function loginFromShares() {
-    location.href = loginUrl('#/shares')
   }
 
   // ----- 위키링크 열기 (specs/features/F-131.md 5장) -----

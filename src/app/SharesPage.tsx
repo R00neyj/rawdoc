@@ -1,4 +1,4 @@
-// 공유 관리 페이지 (specs/features/F-243.md 3.3) — 데이터·API 호출은 App.tsx 가 쥐고 순수 표시만 한다
+// 공유 관리 페이지 (specs/features/F-243.md 3.3) — 데이터·API 호출은 useSharesPage.ts 가 쥐고 순수 표시만 한다
 import type { ShareLinkRow, ShareGrantRow } from './sharesApi'
 import type { Notice } from './notice'
 import { IconClose, IconCopy, IconLinkOff } from './icons'
