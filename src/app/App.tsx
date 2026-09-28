@@ -4820,15 +4820,20 @@ export default function App() {
         }
       : undefined
 
-  // 서식 명령 — 글은 바로, 포커스는 Dialog 복귀 뒤(F-2055 4.3). 표는 칸 편집 없이 원문으로 남는다(F-139 3.1, 툴바와 같음)
+  // 서식 명령 — 글은 바로, 포커스는 Dialog 복귀 뒤. 편집 모드 표는 우클릭처럼 첫 칸 편집으로(F-2055 4.3)
   function runPaletteEditorCommand(command: StateCommand) {
     const startDocId = paletteEditor?.docId
     const view = editorRef.current?.view
     if (!view || currentDocIdRef.current !== startDocId || readOnlyDocRef.current || isComposing(view)) return
-    command(view)
+    const entersTable = command(view) && command === insertTable && view.dom.dataset.view === 'live'
     runAfterPaletteClose(() => {
       const v = editorRef.current?.view
       if (!v || currentDocIdRef.current !== startDocId) return
+      // Dialog 가 돌려준 본문 포커스를 CM 이 10ms 뒤 반영하면 표가 원문이 돼 칸 편집이 끝난다 — 먼저 푼다
+      if (entersTable) {
+        v.contentDOM.blur()
+        if (editorRef.current?.enterTableAtCursor()) return
+      }
       v.focus()
       v.dispatch({ effects: EditorView.scrollIntoView(v.state.selection.main.head) })
     })

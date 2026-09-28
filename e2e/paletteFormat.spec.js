@@ -48,8 +48,7 @@ test.describe('F-2055 팔레트 서식 명령', () => {
     await expect(page.locator('.cm-content').first()).toBeFocused()
   })
 
-  // 명세 A3 의 칸 편집 진입은 F-139 3.1 원문 노출과 부딪혀 툴바와 같은 결과만 본다(H657)
-  test('F-2055 A3 표 — 삽입 뒤 본문 포커스', async ({ page }) => {
+  test('F-2055 A3 표 — 편집 모드는 칸 편집으로', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '\n' })
     await page.locator('.cm-line').first().click()
@@ -57,8 +56,10 @@ test.describe('F-2055 팔레트 서식 명령', () => {
     await expect(options(page).first()).toContainText('삽입: 표')
     await page.keyboard.press('Enter')
     await expect(palette(page)).toHaveCount(0)
-    await expect.poll(() => savedText(page)).toContain('| --- | --- |')
-    await expect(page.locator('.cm-content').first()).toBeFocused()
+    await expect(page.locator('.md-table-widget')).toHaveCount(1)
+    await expect(page.locator('.md-table-cell-editing[data-row="0"][data-col="0"]')).toHaveCount(1)
+    await page.keyboard.type('x')
+    await expect.poll(() => savedText(page)).toContain('| x |')
   })
 
   test('F-2055 A4 본문 밖에서 열면 서식 명령이 없다', async ({ page }) => {
