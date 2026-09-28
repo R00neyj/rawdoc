@@ -109,4 +109,62 @@ describe('useDocLock — createDocLockController', () => {
     ctrl.pageHide()
     expect(unlockDoc).toHaveBeenCalledWith('d1', { keepalive: true })
   })
+
+  // 리뷰 Y3 — 요청이 나간 뒤 정리되면 서버 잠금이 60초 동안 남던 문제
+  function deferred<T>() {
+    let resolve!: (v: T) => void
+    const promise = new Promise<T>((r) => {
+      resolve = r
+    })
+    return { promise, resolve }
+  }
+
+  it('Y3 첫 잡기가 dispose 뒤에 성공하면 곧바로 푼다', async () => {
+    const pending = deferred<{ expiresAt: number }>()
+    const lockDoc = vi.fn().mockReturnValueOnce(pending.promise)
+    const unlockDoc = vi.fn().mockResolvedValue(undefined)
+    const { readOnlyChanges, callbacks } = makeCallbacks()
+    const ctrl = createDocLockController('d1', 'me@x.com', { lockDoc, unlockDoc }, callbacks)
+
+    ctrl.start()
+    ctrl.dispose()
+    expect(unlockDoc).not.toHaveBeenCalled()
+    pending.resolve({ expiresAt: 60000 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(unlockDoc).toHaveBeenCalledWith('d1')
+    expect(readOnlyChanges).toEqual([])
+  })
+
+  it('Y3 재시도 잡기가 dispose 뒤에 성공하면 곧바로 푼다', async () => {
+    const pending = deferred<{ expiresAt: number }>()
+    const lockDoc = vi.fn().mockRejectedValueOnce(new ApiError('locked', { email: 'other@x.com' })).mockReturnValueOnce(pending.promise)
+    const unlockDoc = vi.fn().mockResolvedValue(undefined)
+    const { callbacks } = makeCallbacks()
+    const ctrl = createDocLockController('d1', 'me@x.com', { lockDoc, unlockDoc }, callbacks)
+
+    ctrl.start()
+    await vi.advanceTimersByTimeAsync(RETRY_INTERVAL_MS)
+    expect(lockDoc).toHaveBeenCalledTimes(2)
+    ctrl.dispose()
+    pending.resolve({ expiresAt: 60000 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(unlockDoc).toHaveBeenCalledWith('d1')
+  })
+
+  it('Y3 연장 요청이 나간 사이 dispose 되면, 연장 성공 뒤 한 번 더 푼다', async () => {
+    const pending = deferred<{ expiresAt: number }>()
+    const lockDoc = vi.fn().mockResolvedValueOnce({ expiresAt: 60000 }).mockReturnValueOnce(pending.promise)
+    const unlockDoc = vi.fn().mockResolvedValue(undefined)
+    const { callbacks } = makeCallbacks()
+    const ctrl = createDocLockController('d1', 'me@x.com', { lockDoc, unlockDoc }, callbacks)
+
+    ctrl.start()
+    await vi.advanceTimersByTimeAsync(EXTEND_INTERVAL_MS)
+    expect(lockDoc).toHaveBeenCalledTimes(2)
+    ctrl.dispose()
+    expect(unlockDoc).toHaveBeenCalledTimes(1)
+    pending.resolve({ expiresAt: 60000 })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(unlockDoc).toHaveBeenCalledTimes(2)
+  })
 })
