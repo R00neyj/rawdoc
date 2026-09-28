@@ -1,7 +1,7 @@
 // 시작 화면 홈, 설정에서 마지막 문서 토글 (specs/features/F-232.md)
 import { test, expect } from '@playwright/test'
 import brand from '../brand.config.ts'
-import { openApp, openAppHome, importMarkdown, currentDocId, waitSaved } from './helpers.js'
+import { openApp, openAppHome, importMarkdown, currentDocId, waitSaved, setPrefBeforeLoad } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 async function goHome(page) {
@@ -109,6 +109,19 @@ test.describe('F-232 A8 특정 문서 해시 우선', () => {
 
     await page.goto(`/#/d/${docId}`)
     await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+    expect(await currentDocId(page)).toBe(docId)
+  })
+})
+
+test.describe('F-232 리뷰 A4 인식 못 한 해시', () => {
+  test('문서를 연 채로 인식 못 한 해시로 바뀌면 홈이 아니라 첫 문서 + 알림', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1') // 저장 공간 알림이 먼저 뜨면 info 알림이 가려진다(notice.ts)
+    await openAppHome(page)
+    const docId = await importMarkdown(page, { name: 'a.md', content: '문서\n' })
+
+    await page.evaluate(() => { location.hash = '#abc' })
+
+    await expect(page.locator('.notice-message')).toHaveText('문서를 찾을 수 없습니다.')
     expect(await currentDocId(page)).toBe(docId)
   })
 })

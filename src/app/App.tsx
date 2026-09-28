@@ -2342,8 +2342,8 @@ export default function App() {
         setSharesOpen(false) // 공유 관리 페이지를 보고 있었으면 떠난다 (F-243.md 3.4)
         setHelpOpen(false) // 도움말 페이지를 보고 있었으면 떠난다 (F-244.md 3.3)
         setMapRoute(null) // 지도를 보고 있었으면 떠난다 — 뒤로 가기로 지도를 나갈 때가 그렇다 (F-292.md 6.1)
-        // `#/`·빈 해시처럼 대상이 없으면 홈 — 뒤로 가기로 홈에 돌아왔을 때 첫 문서를 열지 않는다 (F-232 3.2, 리뷰 A4)
-        if (parsedHash.type === 'none') {
+        // `#/`·빈 해시만 홈 — 인식 못 한 해시는 기존대로 첫 문서 + 알림으로 내려간다 (F-232 3.2, 리뷰 A4)
+        if (parsedHash.type === 'home') {
           setCurrentDocId(null)
           return
         }

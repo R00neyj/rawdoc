@@ -35,16 +35,25 @@ describe('parseHash', () => {
     expect(parseHash('#/p/f/tok1/doc1')).toEqual({ type: 'publicFolder', token: 'tok1', docId: 'doc1' })
   })
 
-  it('#/ 는 type none', () => {
-    expect(parseHash('#/')).toEqual({ type: 'none' })
+  it('#/ 는 type home (리뷰 A4)', () => {
+    expect(parseHash('#/')).toEqual({ type: 'home' })
   })
 
-  it('빈 문자열은 type none', () => {
-    expect(parseHash('')).toEqual({ type: 'none' })
+  it('빈 문자열은 type home (리뷰 A4)', () => {
+    expect(parseHash('')).toEqual({ type: 'home' })
+  })
+
+  it('# 단독도 type home (리뷰 A4)', () => {
+    expect(parseHash('#')).toEqual({ type: 'home' })
   })
 
   it('#/d/ 형식이 아니면 type none', () => {
     expect(parseHash('#somethingelse')).toEqual({ type: 'none' })
+  })
+
+  it('인식 못 한 해시는 home 이 아니라 none (리뷰 A4)', () => {
+    expect(parseHash('#abc')).toEqual({ type: 'none' })
+    expect(parseHash('#/d')).toEqual({ type: 'none' })
   })
 
   it('#/shares 는 type shares (F-243 A7)', () => {

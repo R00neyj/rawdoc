@@ -18,14 +18,19 @@ export type HashRoute =
   | { type: 'public'; token: string; docId?: string }
   | { type: 'publicFolder'; token: string; docId?: string }
   | { type: 'map'; docId?: string }
+  | { type: 'home' }
   | { type: 'none' }
 
-// `#/d/{id}`·`#/s/{조각}`·`#/p/{토큰}[/{문서id}]`·`#/p/f/{토큰}[/{문서id}]` 만 인정, 나머지는 { type: 'none' } (F-210.md 2.4, F-211.md 2.3, F-252.md 4.2)
+// `#/d/{id}`·`#/s/{조각}`·`#/p/{토큰}[/{문서id}]`·`#/p/f/{토큰}[/{문서id}]` 만 인정, 그 외 인식 못 한 해시는 { type: 'none' } (F-210.md 2.4, F-211.md 2.3, F-252.md 4.2)
 // `#/shares` 는 `#/s/{조각}` 과 헷갈리지 않도록 그 뒤에 검사한다(F-243.md 3.4)
 // `#/help` 는 정확히 그 값만 인정한다(F-244.md 3.3)
+// 홈(`#/`·빈 해시·`#`)은 인식 못 한 해시와 다르게 다뤄야 해서 별도 type 으로 둔다 (F-232 3.2, 리뷰 A4)
 export function parseHash(hash: string | undefined): HashRoute {
   if (typeof hash !== 'string') {
     return { type: 'none' }
+  }
+  if (hash === '' || hash === '#' || hash === '#/') {
+    return { type: 'home' }
   }
   const shareMatch = HASH_SHARE_PATTERN.exec(hash)
   if (shareMatch) {
