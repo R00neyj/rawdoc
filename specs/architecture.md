@@ -28,6 +28,8 @@ src/
     docMeta.ts           DocMeta·OpenDoc 타입, stripContent·isSharedDoc·sortByUpdatedAtDesc (F-2060)
     useContextMenu.ts    우클릭 메뉴 상태·열기·닫기·실행 (F-170, F-2061)
     contextMenuActions.ts 우클릭 메뉴 상태 타입과 순수 판정 (F-2061)
+    useGlobalShortcuts.ts 전역 단축키 창 keydown 6개 (F-2062)
+    globalShortcuts.ts   그 키 판정 (순수 함수, F-2062)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)

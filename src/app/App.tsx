@@ -14,7 +14,6 @@ import {
 import { flushSync } from 'react-dom'
 import type { EditorState, StateCommand } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
-import { openSearchPanel } from '@codemirror/search'
 import { showSearchMatches } from '../editor/showSearchMatches'
 
 import { createMemoryStore } from '../storage/memoryStore'
@@ -143,7 +142,7 @@ import { editorCommandGates, type EditorCommandGates } from './contextMenuItems'
 import { useContextMenu } from './useContextMenu'
 import { isComposing } from '../editor/composition'
 import CommentRailPanel, { CommentPanelPresence } from './CommentRailPanel'
-import { useDocComments, computeCommentAccess, scrollTopOf, COMMENT_TEXT, CommentCommandContext } from './useDocComments'
+import { useDocComments, computeCommentAccess, scrollTopOf, CommentCommandContext } from './useDocComments'
 import { IconAddComment } from './icons'
 import CommandPalette from './CommandPalette'
 import type { PaletteContext, PaletteCreatePlan, PaletteViewMode } from './paletteContract'
@@ -189,6 +188,7 @@ import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
 import StatusBar from './StatusBar'
 import ShortcutPanel from './ShortcutPanel'
 import { useShortcutUsage } from './useShortcutUsage'
+import { useGlobalShortcuts } from './useGlobalShortcuts'
 import { isMacPlatform } from './shortcutCatalog'
 import SharedView from './SharedView'
 import PublicView from './PublicView'
@@ -2367,131 +2367,23 @@ export default function App() {
     }
   }, [narrow, sidebarOpen, settingsOpen, searchOpen, paletteOpen, deleteTarget, moveDocTarget, bulkDeleteItems])
 
-  // ----- 브라우저 기본 찾기(Ctrl/Cmd+F) 비활성화 (2026-09-20 사용자 요청) -----
-  // 에디터 안 포커스는 createEditor.ts 의 Mod-f 키맵이 먼저 처리한다 — 여기는 에디터 밖 포커스일 때만 대신 열어 브라우저 찾기를 막는다
-  useEffect(() => {
-    if (publicRoute) return // 공개 보기에는 대신 열 찾기 창이 없다 — 브라우저 찾기를 남긴다
-    function handleKeyDown(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return
-      if (e.key.toLowerCase() !== 'f') return
-      const view = editorRef.current?.view
-      if (view?.dom.contains(document.activeElement)) return
-      e.preventDefault()
-      if (view) openSearchPanel(view)
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [publicRoute])
-
-  // ----- Ctrl+P(Cmd+P) → 명령 팔레트 D-7, 에디터 안에 포커스가 있어도 가로챈다 (specs/features/F-2022.md 6.1) -----
-  useEffect(() => {
-    if (publicRoute) return // 공개 보기(S-5)에는 저장소가 없다 — 브라우저 인쇄로 남긴다
-    function handleKeyDown(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return
-      if (e.key.toLowerCase() !== 'p') return
-      if (sharedDocRef.current) return // 공유 링크 화면 S-4 — 브라우저 인쇄로 남긴다
-      e.preventDefault()
-      if (bootPhaseRef.current !== 'ready') return // 부팅 중 — 아무것도 하지 않는다
-      const open = document.querySelector('dialog[open]')
-      if (open) {
-        if (open.querySelector('.command-palette')) selectPaletteQueryRef.current() // 이미 열려 있으면 입력칸 전체 선택
-        return // 팔레트 말고 다른 대화상자면 무시
-      }
-      openPaletteRef.current()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [publicRoute])
-
-  // ----- Ctrl+Shift+F(Cmd+Shift+F) → 검색 대화상자 D-6 (specs/features/F-287.md 3.4) -----
-  useEffect(() => {
-    if (publicRoute) return // 공개 보기(S-5)에는 저장소가 없다
-    function handleKeyDown(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return
-      if (e.key.toLowerCase() !== 'f') return
-      const open = document.querySelector('dialog[open]')
-      if (open && !open.querySelector('.search-dialog')) return // 다른 대화상자 위에 겹치지 않는다
-      e.preventDefault()
-      if (open) {
-        selectSearchQueryRef.current()
-        return
-      }
-      openSearchRef.current()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [publicRoute])
-
-  // ----- Ctrl+Alt+M(Cmd+Option+M) → 댓글 달기, 편집기 키맵이 아니라 창 keydown 하나 (F-505 8.1) -----
-  useEffect(() => {
-    if (publicRoute) return
-    function handleKeyDown(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey) || !e.altKey || e.shiftKey) return
-      if (e.code !== 'KeyM') return
-      if (bootPhaseRef.current !== 'ready') return
-      if (document.querySelector('dialog[open]')) return
-      if (e.isComposing) return
-      const access = commentsRef.current?.access
-      if (!access) return
-      if (access.kind === 'none') {
-        e.preventDefault()
-        showNotice({ type: 'info', message: COMMENT_TEXT.vaultForbidden })
-        return
-      }
-      const view = editorRef.current?.view
-      if (!view || view.composing) return
-      // 읽기 전용 편집기는 포커스를 받지 못한다 — 다른 곳에 포커스가 없고 편집기에 선택이 있으면 편집기에서 누른 것으로 본다 (F-506 7.1)
-      const readOnlySelection =
-        view.contentDOM.getAttribute('contenteditable') === 'false' &&
-        (document.activeElement === null || document.activeElement === document.body) &&
-        !view.state.selection.main.empty
-      if (!view.dom.contains(document.activeElement) && !readOnlySelection) return
-      e.preventDefault()
-      if (access.kind === 'write') commentsRef.current?.beginComment()
-      else if (access.kind === 'unavailable') commentsRef.current?.setOpen(true, false)
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [publicRoute, showNotice])
-
-  // ----- Ctrl+M → 댓글창 여닫기, 상단바 `댓글` 버튼과 같다 (tweak 2026-09-28) -----
-  // 맥도 Control 그대로(⌘M 은 창 최소화). 편집기 기본 키맵의 Ctrl-m(Tab 포커스 모드)보다 먼저 받도록 캡처 단계에서 멈춘다
-  useEffect(() => {
-    if (publicRoute) return
-    function handleKeyDown(e: KeyboardEvent) {
-      if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
-      if (e.code !== 'KeyM') return
-      if (e.isComposing) return
-      if (sharedDocRef.current || mapRouteRef.current) return
-      if (document.querySelector('dialog[open]')) return
-      const toggle = toggleCommentsRef.current
-      if (!toggle) return
-      e.preventDefault()
-      e.stopPropagation() // 같은 window 의 사용 기록 관찰자는 그대로 본다(stopImmediatePropagation 아님)
-      toggle()
-    }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [publicRoute])
-
-  // ----- Ctrl+Shift+/(Cmd+Shift+/) → 단축키 판 여닫기, Ctrl+/ 는 CM6 toggleComment 가 쓴다(specs/features/F-2052.md 6.1) -----
-  useEffect(() => {
-    if (publicRoute) return // 공개 보기(S-5)에는 상태바가 없다
-    function handleKeyDown(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return
-      if (e.code !== 'Slash') return
-      if (e.isComposing) return
-      if (bootPhaseRef.current !== 'ready') return
-      // 상태바 표시 조건과 같다(4.3) — 상태바가 없으면 판 자리도 없다
-      const statusBarVisible = currentDocIdRef.current !== null && !sharedDocRef.current && !mapRouteRef.current
-      if (!statusBarVisible) return
-      if (document.querySelector('dialog[open]')) return // 판은 대화상자가 아니라 "다시 누름" 경우가 없다(결정 9)
-      e.preventDefault()
-      toggleShortcutsRef.current()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [publicRoute])
+  // ----- 전역 단축키 6개 — 순서·단계 그대로 (F-2062) -----
+  useGlobalShortcuts({
+    publicRoute,
+    showNotice,
+    editorRef,
+    commentsRef,
+    bootPhaseRef,
+    currentDocIdRef,
+    sharedDocRef,
+    mapRouteRef,
+    openPaletteRef,
+    selectPaletteQueryRef,
+    openSearchRef,
+    selectSearchQueryRef,
+    toggleCommentsRef,
+    toggleShortcutsRef,
+  })
 
   // ----- 문서를 열 때 저장소 본문을 1회 읽어 에디터에 넘긴다 (architecture.md 3장) -----
   // openDoc.id 와 currentDocId 가 다르면 렌더링에서 에디터를 안 그리는 것으로 처리해 여기서 null 로 되돌리지 않는다 (동기 setState 회피)

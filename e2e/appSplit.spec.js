@@ -1,6 +1,6 @@
 // App.tsx 분할 특성 테스트 — 옮기기 전 동작을 고정한다 (specs/features/F-2059.md 5.2)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, setViewMode, readSavedContent } from './helpers.js'
+import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad } from './helpers.js'
 
 const root = (page) => page.locator('.context-menu-root')
 
@@ -107,5 +107,80 @@ test.describe('F-2061 우클릭 메뉴 절', () => {
     await rightClick(page, line)
     await root(page).getByRole('menuitem', { name: /^붙여넣기/ }).click()
     await expect.poll(async () => (await readSavedContent(page)).content).toMatch(/<img src="attachments\//)
+  })
+})
+
+const PUBLIC_DOC = {
+  title: '공개 문서',
+  content: '# 제목1\n\n본문\n',
+  lineEnding: 'lf',
+  updatedAt: 1_700_000_000_000,
+}
+
+test.describe('F-2062 전역 단축키 절', () => {
+  test('F-2062 C1 Ctrl+M 댓글창 여닫기', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.commentRail', 'closed')
+    await openApp(page)
+    await importMarkdown(page, { content: '첫 줄\n둘째 줄\n' })
+    await page.locator('.cm-line').first().click()
+    const rail = page.locator('.comment-rail')
+    const toggle = page.locator('.comment-rail-toggle')
+    const pref = () => page.evaluate(() => localStorage.getItem('md.commentRail'))
+
+    await page.keyboard.press('Control+m')
+    await expect(rail).toBeVisible()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await expect.poll(pref).toBe('open')
+
+    await page.locator('.cm-content').press('Tab')
+    expect(await page.evaluate(() => document.activeElement?.closest('.cm-content') != null)).toBe(true)
+
+    await page.keyboard.press('Control+m')
+    await expect(rail).toHaveCount(0)
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect.poll(pref).toBe('closed')
+
+    await page.getByRole('button', { name: '설정', exact: true }).click()
+    const dialog = page.locator('dialog[open]')
+    await expect(dialog).toBeVisible()
+    await page.keyboard.press('Control+m')
+    await expect(dialog).toBeVisible()
+    await expect(rail).toHaveCount(0)
+  })
+
+  test('F-2062 C2 편집기 밖 Ctrl+F', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '찾을 글\n' })
+    await page.evaluate(() => {
+      document.activeElement?.blur()
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'f' || e.key === 'F') document.documentElement.dataset.findPrevented = String(e.defaultPrevented)
+      })
+    })
+    await page.keyboard.press('Control+f')
+    await expect(page.locator('.cm-search')).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.dataset.findPrevented)).toBe('true')
+  })
+
+  test('F-2062 C3 공개 보기의 Ctrl+F·Ctrl+P', async ({ page }) => {
+    await page.route('**/pub/docs/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PUBLIC_DOC) }),
+    )
+    await page.goto('/#/p/tok123')
+    await expect(page.locator('.public-view-title')).toBeVisible()
+    const results = await page.evaluate(() =>
+      [
+        { key: 'f', code: 'KeyF' },
+        { key: 'p', code: 'KeyP' },
+        { key: 'F', code: 'KeyF', shiftKey: true },
+        { key: 'm', code: 'KeyM' },
+      ].map((init) =>
+        document.body.dispatchEvent(
+          new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ctrlKey: true, ...init }),
+        ),
+      ),
+    )
+    expect(results).toEqual([true, true, true, true])
+    await expect(page.locator('.cm-search')).toHaveCount(0)
   })
 })
