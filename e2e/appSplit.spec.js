@@ -1421,3 +1421,68 @@ test.describe('F-2073 금고 옮기기·이관·잠그기·초기화 절', () =>
     await expect(page.locator(`.sidebar li[data-folder-id="${folderId}"]`)).toHaveCount(0)
   })
 })
+
+async function reboot2074(page, hash) {
+  await page.goto('about:blank')
+  await page.goto('/' + hash)
+}
+
+async function twoDocs2074(page) {
+  await openApp(page)
+  const a = await importMarkdown(page, { name: '가.md', content: '가 문서\n' })
+  const b = await importMarkdown(page, { name: '나.md', content: '나 문서\n' })
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem('md.lastDocId'))).toBe(b)
+  return { a, b }
+}
+
+test.describe('F-2074 부팅 첫 화면 절', () => {
+  test.use({ viewport: { width: 1280, height: 900 } })
+
+  test('F-2074 C1 부팅 해시가 공유 링크면 공유 화면을 연다', async ({ page, context }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await openApp(page)
+    await importMarkdown(page, { name: '공유부팅.md', content: '공유 부팅 본문\n' })
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    await page.getByRole('menuitem', { name: '링크 복사' }).click()
+    const link = await page.evaluate(() => navigator.clipboard.readText())
+    const hash = new URL(link).hash
+
+    await reboot2074(page, hash)
+    await expect(page.locator('.shared-view')).toBeVisible()
+    await expect(page.locator('.shared-view')).toContainText('공유 부팅 본문')
+    expect(await page.evaluate(() => location.hash)).toContain('#/s/')
+    await expect(page.locator('.notice--error')).toHaveCount(0)
+  })
+
+  test('F-2074 C2 부팅 해시의 공유 조각이 깨졌으면 알림 뒤 마지막 문서를 연다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    const { b } = await twoDocs2074(page)
+
+    await reboot2074(page, '#/s/a')
+    await expect(page.locator('.notice-message')).toHaveText('공유 링크를 읽을 수 없습니다. 주소가 잘렸는지 확인하세요.')
+    await expect(page.locator('.cm-content')).toContainText('나 문서')
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`#/d/${b}$`))
+    await expect(page.locator('.shared-view')).toHaveCount(0)
+  })
+
+  test('F-2074 C3 부팅 해시의 문서가 없으면 알림 뒤 마지막 문서를 열고 주소를 바꾼다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    const { b } = await twoDocs2074(page)
+
+    await reboot2074(page, '#/d/f2074-missing')
+    await expect(page.locator('.notice-message')).toHaveText('문서를 찾을 수 없습니다.')
+    await expect(page.locator('.cm-content')).toContainText('나 문서')
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`#/d/${b}$`))
+  })
+
+  test('F-2074 C4 부팅 해시가 지도 기준 문서면 지도를 열고 마지막 문서로 적는다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    const { a } = await twoDocs2074(page)
+
+    await reboot2074(page, `#/map/${a}`)
+    await expect(page.locator('.map-page')).toBeVisible()
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`#/map/${a}$`))
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem('md.lastDocId'))).toBe(a)
+  })
+})
