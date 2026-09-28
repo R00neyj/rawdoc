@@ -54,6 +54,7 @@ import { pushNotice, type Notice } from './notice'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { canShowCachedShell, mergeBootList, shouldApplyListResult } from './bootList'
 import { mergeResyncList } from './resyncList'
+import { guardForDoc, staleDocBoundNotices } from './docBoundNotice'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
 import { decideDocPath, type DocPathKind, type FallbackReason } from './docPath'
@@ -993,10 +994,24 @@ export default function App() {
   const liveStopped = isRealtime && liveSnapshot?.phase === 'stopped'
 
   // ----- 실시간 알림 띠 N1~N6 (F-305 11.2) -----
-  const saveAsNewAction = useMemo(
-    () => ({ label: '새 문서로 저장', icon: IconNoteAdd, onClick: () => void saveCurrentAsNewDocRef.current() }),
-    [],
+  // `새 문서로 저장` 알림은 만든 문서에 묶는다 — 다른 문서로 옮기면 걷고, 옮긴 뒤 누르면 아무것도 하지 않는다 (리뷰 A5)
+  const docBoundNoticesRef = useRef(new Map<number, string>())
+  const showSaveAsNewNotice = useCallback(
+    (docId: string, input: { type: 'error' | 'warn'; message: string }): number => {
+      const onClick = guardForDoc(docId, () => currentDocIdRef.current, () => void saveCurrentAsNewDocRef.current())
+      const id = showNotice({ ...input, action: { label: '새 문서로 저장', icon: IconNoteAdd, onClick } })
+      docBoundNoticesRef.current.set(id, docId)
+      return id
+    },
+    [showNotice],
   )
+  useEffect(() => {
+    const bound = docBoundNoticesRef.current
+    for (const id of staleDocBoundNotices(bound, currentDocId)) {
+      dismissNotice(id)
+      bound.delete(id)
+    }
+  }, [currentDocId, dismissNotice])
   // 읽기 전용 세션의 첫 동기화 전 4403 — 알림 없이 /api/me 만 한 번 (F-506 3.3)
   const quietForbiddenSeqRef = useRef(0)
   useEffect(() => {
@@ -1058,7 +1073,10 @@ export default function App() {
     liveStopNoticeDocRef.current = liveSession.roomDoc
     const reason = snap.stopReason
     // 읽기 전용 세션에는 내 편집이 없다 — 새 문서로 저장 없이 N9·N3·N10 (F-506 5.2)
-    const stopAction = readOnlySession ? undefined : saveAsNewAction
+    const stopDocId = liveSession.docId
+    // 읽기 전용 세션이면 버튼 없이 띄운다
+    const showStopNotice = (input: { type: 'error' | 'warn'; message: string }) =>
+      readOnlySession ? showNotice(input) : showSaveAsNewNotice(stopDocId, input)
     if (readOnlySession && reason === 'revoked') {
       showNotice({ type: 'warn', message: READ_ONLY_LIVE_NOTICE.revoked })
       recheckAccount()
@@ -1070,7 +1088,7 @@ export default function App() {
       if (ownDoc && accountBlocked) {
         showNotice({ type: 'error', message: ACCOUNT_BLOCKED_MESSAGE })
       } else {
-        showNotice({ type: 'warn', message: LIVE_NOTICE.revoked, action: saveAsNewAction })
+        showSaveAsNewNotice(stopDocId, { type: 'warn', message: LIVE_NOTICE.revoked })
         if (ownDoc) recheckAccount()
       }
     } else if (reason === 'not-found' || reason === 'deleted') {
@@ -1083,11 +1101,13 @@ export default function App() {
             if (goneDocId === currentDocIdRef.current) restartDocSession()
             return
           }
-          showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: stopAction })
+          // 확인하는 동안 다른 문서로 옮겼으면 띄우지 않는다 (리뷰 A5)
+          if (goneDocId !== currentDocIdRef.current) return
+          showStopNotice({ type: 'error', message: LIVE_NOTICE.gone })
         })
-      } else showNotice({ type: 'error', message: LIVE_NOTICE.gone, action: stopAction })
-    } else if (reason === 'signed-out') showNotice({ type: 'error', message: LIVE_NOTICE.signedOut, action: saveAsNewAction })
-  }, [liveSession, showNotice, dismissNotice, saveAsNewAction, store, currentDoc, sharedDoc, accountBlocked, recheckAccount, restartDocSession])
+      } else showStopNotice({ type: 'error', message: LIVE_NOTICE.gone })
+    } else if (reason === 'signed-out') showSaveAsNewNotice(stopDocId, { type: 'error', message: LIVE_NOTICE.signedOut })
+  }, [liveSession, showNotice, dismissNotice, showSaveAsNewNotice, store, currentDoc, sharedDoc, accountBlocked, recheckAccount, restartDocSession])
 
   // N7 — offline-view 세션마다 한 번. 그 세션이 끝나면 아직 떠 있을 때만 걷는다 (F-306 11.2)
   const offlineViewNoticeRef = useRef<{ seq: number; id: number } | null>(null)
@@ -1658,22 +1678,14 @@ export default function App() {
   useEffect(() => {
     if (!deletedElsewhereId || notifiedDeletedElsewhereRef.current === deletedElsewhereId) return
     notifiedDeletedElsewhereRef.current = deletedElsewhereId
-    showNotice({
+    showSaveAsNewNotice(deletedElsewhereId, {
       type: 'error',
       message:
         deletedElsewhereSourceRef.current === 'bootMerge'
           ? '이 문서가 다른 곳에서 삭제되었습니다. 지금 화면의 내용은 저장되지 않습니다.'
           : '이 문서가 다른 탭에서 삭제되었습니다. 지금 화면의 내용은 저장되지 않습니다.',
-      action: {
-        label: '새 문서로 저장',
-        icon: IconNoteAdd,
-        onClick: () => {
-          void saveCurrentAsNewDoc()
-        },
-      },
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- saveCurrentAsNewDoc 는 아래(hoisted function)에서 항상 최신 store·currentDoc·openDoc 을 읽는다
-  }, [deletedElsewhereId, showNotice])
+  }, [deletedElsewhereId, showSaveAsNewNotice])
 
   const closeSidebarIfNarrow = useCallback(() => {
     setSidebarOpen(false)
