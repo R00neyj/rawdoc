@@ -147,7 +147,6 @@ Put tests next to their target as `{name}.test.js` and import them explicitly in
 - **Implementation prompts carry only the spec number and the `E2E_PORT` / `E2E_DIST` slots.** Judge with `npm run review -- F-xxx` then the related e2e. Use the tools in `scripts/` instead of ad-hoc scripts; propose a new tool when you see a repeat they do not cover
 - **A spec that leaves no real fork goes straight to implementation.** When every open question has a sound default, commit the spec, say so, and launch `ship-feature` in the same turn. What counts as a fork is in the `write-spec` skill, ch. 5
 - `e2e:one` search terms can be OR'd with `|`, e.g. `"F-225|F-212"`. Slots are `--port`/`--dist` or `E2E_PORT`/`E2E_DIST`
-- **F-2059 App.tsx split in progress** — while a slice is being implemented, `src/app/App.tsx` is frozen for other specs and fixes; operation is F-2059 5.3. Remove this line after F-2074 (or stage 4) is committed
 
 ## Commit granularity
 
