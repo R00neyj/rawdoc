@@ -1587,3 +1587,55 @@ test.describe('F-2078 명령 팔레트 절', () => {
     await expect(page.locator('.command-palette-input')).toBeFocused()
   })
 })
+
+test.describe('F-2079 계정 상태 절', () => {
+  const L5 = '이 계정은 운영자가 쓰기를 막았습니다. 문서 읽기와 내보내기만 할 수 있습니다.'
+  const L7 = '운영자가 이 계정의 사용 방식에 주의를 보냈습니다. 이용약관 제7조(금지 행위)를 확인해 주세요. 계속되면 쓰기가 막힐 수 있습니다.'
+
+  const countMeOnVisible = (page) => page.evaluate(() => {
+    const original = window.fetch
+    let count = 0
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (new URL(url, location.href).pathname === '/api/me') count++
+      return original(input, init)
+    }
+    try {
+      document.dispatchEvent(new Event('visibilitychange'))
+    } finally {
+      window.fetch = original
+    }
+    return count
+  })
+
+  test('F-2079 C1 online 이 오면 /api/me 를 다시 읽어 막힘과 풀림을 반영한다', async ({ page }) => {
+    const server = await fakeServer(page)
+    await openApp(page)
+    await expect(page.locator('.cm-content')).toHaveAttribute('contenteditable', 'true')
+
+    server.setMe({ blocked: true })
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+    await expect(page.locator('.notice-message')).toHaveText(L5)
+    await expect(page.locator('.cm-content')).toHaveAttribute('contenteditable', 'false')
+
+    server.setMe({ blocked: false })
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+    await expect(page.locator('.notice-message')).toHaveCount(0)
+    await expect(page.locator('.cm-content')).toHaveAttribute('contenteditable', 'true')
+  })
+
+  test('F-2079 C2 화면 복귀는 마지막 확인 10분 안이면 /api/me 를 읽지 않고, 지나면 읽는다', async ({ page }) => {
+    await page.clock.install()
+    const server = await fakeServer(page)
+    await openApp(page)
+    await expect(page.locator('.cm-content')).toBeVisible()
+
+    await page.clock.fastForward('09:00')
+    expect(await countMeOnVisible(page)).toBe(0)
+
+    server.setMe({ warned: true })
+    await page.clock.fastForward('01:01')
+    expect(await countMeOnVisible(page)).toBe(1)
+    await expect(page.locator('.notice--warn .notice-message')).toHaveText(L7)
+  })
+})

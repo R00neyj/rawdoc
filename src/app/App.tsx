@@ -14,17 +14,14 @@ import { flushSync } from 'react-dom'
 import type { EditorState, StateCommand } from '@codemirror/state'
 
 import { createMemoryStore } from '../storage/memoryStore'
-import { deleteE2eeRow } from '../storage/idbStore'
 import type { ServerStore } from '../storage/serverStore'
-import { deleteYjsUserRows, type YjsStore } from '../storage/yjsStore'
-import { deleteRemoteCacheUserRows } from '../storage/remoteCache'
+import type { YjsStore } from '../storage/yjsStore'
 import E2eeMigrateDialog from './E2eeMigrateDialog'
 import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree'
 import type { SelectionItem } from './sidebarSelection'
 import { fromEditorText } from '../lib/lineEnding'
 import { getPref, setPref } from './prefs'
-import { fetchAccount, storedAccount, type AccountState } from './account'
-import { planAccountNotices, ACCOUNT_RECHECK_MS, ACCOUNT_BLOCKED_MESSAGE, ACCOUNT_WARNED_MESSAGE, type AccountFlags } from '../lib/usageLimits'
+import { storedAccount } from './account'
 import type { SyncState } from '../types'
 import { IconRefresh } from './icons'
 import { useAppearancePrefs } from './useAppearancePrefs'
@@ -90,14 +87,6 @@ import Dialog from './Dialog'
 import MoveDocDialog, { type MoveDocTarget } from './MoveDocDialog'
 import SettingsDialog from './SettingsDialog'
 import AccountDeleteDialog from './AccountDeleteDialog'
-import {
-  ACCOUNT_DELETE_MARKER_KEY,
-  cleanUpAfterAccountDelete,
-  decideAccountDeleteMarker,
-  hasUnsyncedChanges,
-  reauthLoginUrl,
-  resumeMarker,
-} from './accountDelete'
 import SearchDialog from './SearchDialog'
 import { searchScope } from './searchIndex'
 import HelpPage from './HelpPage'
@@ -110,6 +99,10 @@ import { usePaletteOpen } from './usePaletteOpen'
 import { useCommandPalette } from './useCommandPalette'
 import { useShortcutsPanel } from './useShortcutsPanel'
 import { useNewDocTemplate } from './useNewDocTemplate'
+import { useAccountStatus } from './useAccountStatus'
+import { useAccountDelete } from './useAccountDelete'
+import { useTitleCommit } from './useTitleCommit'
+import { useCommentFab } from './useCommentFab'
 import { useSidebarLayout } from './useSidebarLayout'
 import { useFolderActions } from './useFolderActions'
 import { useImportFlow } from './useImportFlow'
@@ -176,9 +169,6 @@ export default function App() {
   const lastAppliedListSeqRef = useRef(0)
   const [notice, setNotice] = useState<AppNotice | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  // 계정 삭제 D-15 (specs/features/F-2038.md 6장) — 연 계정 id 와 안 올린 변경 여부
-  const [accountDeleteUserId, setAccountDeleteUserId] = useState<string | null>(null)
-  const [accountDeleteUnsynced, setAccountDeleteUnsynced] = useState(false)
   // 검색 대화상자 D-6 (specs/features/F-287.md 3장)
   const [searchOpen, setSearchOpen] = useState(false)
   // 검색 결과로 연 문서에 넣어 줄 검색어 예약 — 본문이 도착하고 에디터가 만들어질 때까지 기다린다 (specs/features/F-294.md 4.3)
@@ -214,20 +204,8 @@ export default function App() {
   const [sharedDoc, setSharedDoc] = useState<ShareDoc | null>(null)
   // 공유 관리 페이지 S-6 (specs/features/F-243.md 3.3·3.4) — currentDocId 는 이 화면 동안 null
   const [sharesOpen, setSharesOpen] = useState(false)
-  const [account, setAccount] = useState<AccountState>({ state: 'offline' })
   // 서버 저장소 동기화 표시 (F-207.md 2.5) — server 저장소가 아니면 undefined
   const [syncState, setSyncState] = useState<SyncState | undefined>(undefined)
-  // 계정 차단·경고 상태 (F-2030 5.2) — /api/me 의 blocked·warned 를 반영한다. warned 는 화면 렌더에 안 쓰여 ref 로 충분하다
-  const [accountBlocked, setAccountBlockedFlag] = useState(false)
-  const accountWarnedRef = useRef(false)
-  // 이 페이지에서 직전에 반영한 값 — planAccountNotices 의 prev (5.3)
-  const accountFlagsRef = useRef<AccountFlags | null>(null)
-  const warnedShownThisPageRef = useRef(false)
-  const blockedNoticeIdRef = useRef<number | null>(null)
-  const warnedNoticeIdRef = useRef<number | null>(null)
-  // 마지막으로 성공한 /api/me 읽기 시각 — 화면 복귀 10분 스로틀 (5.1 ⑤)
-  const lastAccountCheckOkRef = useRef(0)
-  const accountCheckInFlightRef = useRef<Promise<void> | null>(null)
   // e2ee 훅은 store 가 정해진 뒤에야 만들어진다 — applyAccountFlags 가 먼저 정의되므로 ref 로 늦게 잇는다 (F-404.md 4.5)
   const e2eeRef = useRef<ReturnType<typeof useE2ee>>(null)
   // ----- 명령 팔레트 열림·닫기·늦춤 명령 (F-2078) -----
@@ -251,7 +229,6 @@ export default function App() {
   // 모드 전환 직전 화면 맨 위 원문 줄 — 문서가 바뀌면(docId 불일치) 버린다 (F-295.md 5.1·5.6)
   const scrollAnchorRef = useRef<{ docId: string; anchor: ScrollAnchor } | null>(null)
   const statsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const titleRequestIdRef = useRef(0)
   const noticeIdRef = useRef(0)
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const importZipInputRef = useRef<HTMLInputElement | null>(null)
@@ -326,13 +303,6 @@ export default function App() {
     [docs],
   )
 
-  // view 권한 문서이거나(F-212.md 2.4), edit 권한 문서가 403 으로 강등됐거나, 계정이 막혔으면 읽기 전용 (F-2030 5.2)
-  const isReadOnlyByRole =
-    currentDoc?.role === 'view' || (currentDocId != null && forbiddenDocIds.has(currentDocId)) || (store.kind === 'server' && accountBlocked)
-  // owner 문서(내 문서, role 없음 또는 'owner')이고 서버 저장소일 때만 초대할 수 있다 (F-212.md 2.5)
-  const canInviteCurrentDoc =
-    store.kind === 'server' && Boolean(currentDoc) && !isSharedDoc(currentDoc) && !sharedDoc
-
   // 문서 전환·삭제·해시 변경 전에 대기 중인 자동 저장을 끝낸다 — ref 로 최신 flush 를 불러 의존성 없이 안정된 참조를 유지한다 (F-110.md 3.4)
   const beforeLeaveDoc = useCallback(async () => {
     await docSaverFlushRef.current()
@@ -368,55 +338,15 @@ export default function App() {
     setNotice((cur) => (cur && cur.id === id ? null : cur))
   }, [])
 
-  // /api/me 결과를 반영 — 계정 상태·blocked·warned·L5·L7 (F-2030 5.2·5.3)
-  const applyAccountFlags = useCallback(
-    (next: AccountState) => {
-      setAccount(next)
-      // 다른 이유로 계정이 바뀜 — offline 은 바뀜으로 보지 않는다. 로컬 범위에는 해당 없다 (F-404.md 4.5)
-      const e2eeScope = e2eeRef.current?.keyring.scope
-      if (e2eeScope?.kind === 'account' && next.state !== 'offline') {
-        const nextId = next.state === 'in' ? next.id : undefined
-        if (nextId !== e2eeScope.userId) void e2eeRef.current?.lockForAccountChange()
-      }
-      if (next.state !== 'in') return
-      lastAccountCheckOkRef.current = Date.now()
-      const nextFlags: AccountFlags = { blocked: next.blocked, warned: next.warned }
-      const plan = planAccountNotices(accountFlagsRef.current, nextFlags, warnedShownThisPageRef.current)
-      if (plan.showBlocked) {
-        blockedNoticeIdRef.current = showNotice({ type: 'error', message: ACCOUNT_BLOCKED_MESSAGE })
-      }
-      if (plan.dismissBlocked && blockedNoticeIdRef.current !== null) {
-        dismissNotice(blockedNoticeIdRef.current)
-        blockedNoticeIdRef.current = null
-      }
-      if (plan.showWarned) {
-        warnedNoticeIdRef.current = showNotice({ type: 'warn', message: ACCOUNT_WARNED_MESSAGE })
-        warnedShownThisPageRef.current = true
-      }
-      if (plan.dismissWarned && warnedNoticeIdRef.current !== null) {
-        dismissNotice(warnedNoticeIdRef.current)
-        warnedNoticeIdRef.current = null
-      }
-      accountFlagsRef.current = nextFlags
-      setAccountBlockedFlag(nextFlags.blocked)
-      accountWarnedRef.current = nextFlags.warned
-    },
-    [showNotice, dismissNotice],
-  )
+  // ----- 계정 상태·차단·경고 알림·다시 읽기 (F-2079) -----
+  const { account, accountBlocked, applyAccountFlags, recheckAccount } = useAccountStatus({ store, showNotice, dismissNotice, e2eeRef })
 
-  // 겹치는 계기는 하나만 진행 — 진행 중이면 그 결과를 기다린다 (5.1)
-  const recheckAccount = useCallback((): Promise<void> => {
-    if (accountCheckInFlightRef.current) return accountCheckInFlightRef.current
-    const p = fetchAccount()
-      .then((next) => {
-        applyAccountFlags(next)
-      })
-      .finally(() => {
-        accountCheckInFlightRef.current = null
-      })
-    accountCheckInFlightRef.current = p
-    return p
-  }, [applyAccountFlags])
+  // view 권한 문서이거나(F-212.md 2.4), edit 권한 문서가 403 으로 강등됐거나, 계정이 막혔으면 읽기 전용 (F-2030 5.2)
+  const isReadOnlyByRole =
+    currentDoc?.role === 'view' || (currentDocId != null && forbiddenDocIds.has(currentDocId)) || (store.kind === 'server' && accountBlocked)
+  // owner 문서(내 문서, role 없음 또는 'owner')이고 서버 저장소일 때만 초대할 수 있다 (F-212.md 2.5)
+  const canInviteCurrentDoc =
+    store.kind === 'server' && Boolean(currentDoc) && !isSharedDoc(currentDoc) && !sharedDoc
 
   // 금고로 옮기는 중인 지금 문서 — 읽기 전용이고 실시간 세션을 닫는다 (F-407 7.4)
   const [convertingDocId, setConvertingDocId] = useState<string | null>(null)
@@ -809,36 +739,10 @@ export default function App() {
     wasUpdateAvailableRef.current = updateAvailable
   }, [updateAvailable, applyUpdate, showNotice])
 
-  // 계정 상태 시작 때 1회는 boot() 가 읽는다 — 여기는 online 때 화면 표시만 최신화 (F-207.md 2.6, F-2030 5.1 ②)
-  useEffect(() => {
-    function load() {
-      recheckAccount()
-    }
-    window.addEventListener('online', load)
-    return () => window.removeEventListener('online', load)
-  }, [recheckAccount])
-
-  // 화면이 다시 보일 때 — 마지막 성공한 읽기에서 10분이 지났을 때만 다시 읽는다 (F-2030 5.1 ⑤)
-  useEffect(() => {
-    function handleVisible() {
-      if (document.visibilityState !== 'visible') return
-      if (Date.now() - lastAccountCheckOkRef.current < ACCOUNT_RECHECK_MS) return
-      recheckAccount()
-    }
-    document.addEventListener('visibilitychange', handleVisible)
-    return () => document.removeEventListener('visibilitychange', handleVisible)
-  }, [recheckAccount])
-
   // 서버 저장소 동기화 표시 구독 — server 가 아니면 subscribeSync 가 없어 초기값 그대로다 (F-207.md 2.5)
   useEffect(() => {
     return store.subscribeSync?.((next) => setSyncState(next))
   }, [store])
-
-  // accountBlocked 가 바뀔 때마다 서버 저장소면 outbox 를 멈추거나 다시 연다 (F-2030 4.4, 5.2)
-  useEffect(() => {
-    if (store.kind !== 'server') return
-    ;(store as ServerStore).setAccountBlocked(accountBlocked)
-  }, [accountBlocked, store])
 
   // ----- 부팅 (S-3 → S-1|S-2), 최초 실행 안내 문서 (ia.md 3.1·3.2, F-111 3.1) -----
   useEffect(() => {
@@ -1073,6 +977,9 @@ export default function App() {
     }
   }, [])
 
+  // ----- 떠 있는 댓글 달기 버튼 (F-2079) -----
+  const { floatingCommentAnchor, setFloatingCommentAnchor, editorScrollTop, editorViewportH } = useCommentFab({ editorHandle })
+
   const handleDocChange = useCallback((state: EditorState) => {
     notifyChangeRef.current()
     if (statsTimerRef.current) clearTimeout(statsTimerRef.current)
@@ -1087,34 +994,10 @@ export default function App() {
     const view = editorRef.current?.view
     const sel = state.selection.main
     setFloatingCommentAnchor(view && !sel.empty ? scrollTopOf(view, sel.from) : null)
-  }, [])
+  }, [setFloatingCommentAnchor])
 
-  // 떠 있는 `댓글 달기` 버튼 — 선택 시작 줄 높이(문서 좌표)를 스크롤에 맞춰 화면 좌표로 (F-505 7.1 10번)
-  const [floatingCommentAnchor, setFloatingCommentAnchor] = useState<number | null>(null)
-  const [editorScrollTop, setEditorScrollTop] = useState(0)
-  const [editorViewportH, setEditorViewportH] = useState(0) // FAB 을 화면 안에 붙잡아 두는 데 쓴다
   // 레일 여분(px) — 레일이 보이는 동안만 .content-area 의 --comment-rail-extra 로 (F-505 5.6)
   const [commentRailExtra, setCommentRailExtra] = useState(0)
-  // 편집기는 이 effect 보다 늦게 붙을 수 있다 — ref 가 아니라 editorHandle 상태를 따라가야 스크롤·크기를 놓치지 않는다
-  // 스크롤 위치는 버튼 자리에만 쓴다 — 선택이 있을 때만 따라간다. 늘 따라가면 스크롤 프레임마다 App 전체가 다시 그려진다 (리뷰 A14)
-  const trackFabScroll = floatingCommentAnchor !== null
-  useEffect(() => {
-    const scroller = editorHandle?.view.scrollDOM
-    if (!scroller || !trackFabScroll) return
-    function onScroll() {
-      setEditorScrollTop(scroller!.scrollTop)
-    }
-    onScroll()
-    scroller.addEventListener('scroll', onScroll, { passive: true })
-    return () => scroller.removeEventListener('scroll', onScroll)
-  }, [editorHandle, trackFabScroll])
-  useEffect(() => {
-    const scroller = editorHandle?.view.scrollDOM
-    if (!scroller) return
-    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => setEditorViewportH(scroller.clientHeight))
-    ro?.observe(scroller) // observe 직후 한 번 불린다
-    return () => ro?.disconnect()
-  }, [editorHandle])
 
   // 새 문서 대상 폴더 — 사이드바 새 문서·위키링크·가져오기 세 경로가 이 함수로 통일한다 (F-138 3.4)
   // 지운 폴더 등 끊긴 folderId 는 최상위로 — create 의 없는 폴더 id 거부(F-136.md 3.1)가 rejection 으로 새지 않게 한다
@@ -1405,54 +1288,10 @@ export default function App() {
     replaceHashUrl(resolved.docId)
   }
 
-  function commitTitle(value: string) {
-    setDocs((prev) => prev.map((d) => (d.id === currentDocId ? { ...d, title: value } : d)))
-    // 실시간 경로는 편집기 Doc 의 title Y.Text 에 쓴다 — PUT 하지 않는다 (F-305 9.3)
-    if (isRealtime) {
-      editorRef.current?.writeLiveTitle(value)
-      return
-    }
-    const requestId = ++titleRequestIdRef.current
-    const docId = currentDocId
-    const saving = store.update(docId!, { title: value })
-    // 잠그기 flush 단계가 기다린다 — 끝나면 비운다 (F-405 7.2)
-    titleSavingRef.current = saving
-    const clearSaving = () => {
-      if (titleSavingRef.current === saving) titleSavingRef.current = null
-    }
-    saving.then(clearSaving, clearSaving)
-    saving
-      .then((updated) => {
-        if (requestId !== titleRequestIdRef.current) return // 마지막 값만 반영 (F-111 3.4)
-        setDocs((prev) =>
-          sortByUpdatedAtDesc(
-            prev.map((d) => (d.id === updated.id ? { ...d, updatedAt: updated.updatedAt } : d)),
-          ),
-        )
-      })
-      .catch((err: unknown) => {
-        if (!isE2eeStoreError(err, 'locked')) throw err
-        showNotice({ type: 'error', message: E2EE_NOTICE.locked })
-      })
-  }
-
-  // 본문 맨 위 제목 위젯은 마운트 시점 클로저만 계속 쓰므로 ref 로 우회해 최신 commitTitle 을 쓰게 한다 (F-217.md 2.2)
-  const commitTitleRef = useRef(commitTitle)
-  useEffect(() => {
-    commitTitleRef.current = commitTitle
+  // ----- 제목 저장 (F-2079) -----
+  const { handleTitleChange, handleTitleCommit } = useTitleCommit({
+    store, currentDocId, isRealtime, setDocs, showNotice, editorRef, titleSavingRef, docsRef, currentDocIdRef,
   })
-
-  const handleTitleChange = useCallback((value: string) => {
-    commitTitleRef.current(value)
-  }, [])
-
-  // 포커스를 잃을 때 공백만이면 되돌린다 (ia.md 3.5, F-111 3.4)
-  const handleTitleCommit = useCallback(() => {
-    const doc = docsRef.current.find((d) => d.id === currentDocIdRef.current)
-    if (doc && doc.title.trim() === '') {
-      commitTitleRef.current('제목 없는 문서')
-    }
-  }, [])
 
   // ----- 삭제·폴더 CRUD·일괄·고정·이동 (F-2067) -----
   const {
@@ -1519,76 +1358,9 @@ export default function App() {
     setSettingsOpen(false)
   }
 
-  // 계정 삭제 D-15 (F-2038 6장) — 안 올린 변경(6.4)을 먼저 센 뒤 연다. outbox 수는 서버 저장소의 syncState.pending(countOutbox) — 모르면 안내를 보인다
-  const openAccountDelete = useCallback((userId: string, pendingOutbox: number | undefined) => {
-    const unknownAfter = new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 1_000))
-    const counted = hasUnsyncedChanges({
-      outboxCount: async () => {
-        if (pendingOutbox === undefined) throw new Error('outbox 수 모름')
-        return pendingOutbox
-      },
-      unsyncedDocCount: async () => {
-        const persist = await yjsStoreRef.current
-        if (!persist) throw new Error('md-yjs 없음')
-        return (await persist.unsyncedDocIds()).length
-      },
-    })
-    void Promise.race([counted, unknownAfter]).then((unsynced) => {
-      setAccountDeleteUnsynced(unsynced)
-      setAccountDeleteUserId(userId)
-    })
-  }, [])
-
-  // 다시 열기 표지 (6.5) — 부팅이 계정 상태를 정한 뒤 읽고, 읽은 즉시 지운다. offline 이면 resume 을 남겨 다음 in 을 기다린다
-  useEffect(() => {
-    if (bootPhase !== 'ready') return
-    let raw: string | null
-    try {
-      raw = sessionStorage.getItem(ACCOUNT_DELETE_MARKER_KEY)
-    } catch {
-      return
-    }
-    const decision = decideAccountDeleteMarker(raw, account, Date.now())
-    if (decision.clear) sessionStorage.removeItem(ACCOUNT_DELETE_MARKER_KEY)
-    if (decision.action === 'open' && account.state === 'in') openAccountDelete(account.id, syncState?.pending)
-    else if (decision.action === 'warn') {
-      showNotice({ type: 'warn', message: '다른 계정으로 로그인해 계정 삭제 창을 열지 않았습니다. 지우려던 계정으로 다시 로그인하세요.' })
-    } else if (decision.action === 'done') showNotice({ type: 'info', message: '계정을 삭제했습니다.' })
-  }, [bootPhase, account, syncState?.pending, openAccountDelete, showNotice])
-
-  function closeAccountDelete() {
-    setAccountDeleteUserId(null)
-  }
-
-  async function reauthForAccountDelete() {
-    const userId = accountDeleteUserId
-    if (!userId) return
-    await docSaverFlushRef.current()
-    sessionStorage.setItem(ACCOUNT_DELETE_MARKER_KEY, resumeMarker(userId, Date.now()))
-    location.href = reauthLoginUrl(location.hash)
-  }
-
-  async function finishAccountDelete() {
-    const userId = accountDeleteUserId
-    if (!userId) return
-    await cleanUpAfterAccountDelete({
-      lockVault: () => e2ee?.broadcastLogoutLock(),
-      clearRemoteCache: () => deleteRemoteCacheUserRows(userId),
-      clearYjs: () => deleteYjsUserRows(userId),
-      clearE2eeRow: () => deleteE2eeRow(`account:${userId}`),
-      setPref: (key, value) => setPref(key, value),
-      writeMarker: (value) => sessionStorage.setItem(ACCOUNT_DELETE_MARKER_KEY, value),
-      navigate: (url) => location.replace(url),
-    })
-  }
-
-  const storedAccountForSettings = account.state === 'offline' ? storedAccount() : null
-  const settingsAccount =
-    account.state === 'in'
-      ? { email: account.email, online: syncState?.online !== false, onDelete: () => openAccountDelete(account.id, syncState?.pending) }
-      : storedAccountForSettings
-        ? { email: storedAccountForSettings.email, online: false, onDelete: () => {} }
-        : undefined
+  // ----- 계정 삭제 D-15·설정 계정 줄 (F-2079) -----
+  const { accountDeleteUserId, accountDeleteUnsynced, closeAccountDelete, reauthForAccountDelete, finishAccountDelete, settingsAccount } =
+    useAccountDelete({ bootPhase, account, syncState, e2ee, showNotice, yjsStoreRef, docSaverFlushRef })
 
   // 검색 대화상자 D-6 (specs/features/F-287.md 3.5)
   function openSearch() {
