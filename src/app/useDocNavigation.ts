@@ -118,6 +118,9 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     }
     setDocs((prev) => sortByUpdatedAtDesc([...prev, stripContent(doc)]))
     setDeletedElsewhereId(null)
+    // 지도·공유 보기는 currentDocId 를 유지하므로 따로 닫아야 새 문서가 보인다 (F-2059 D1)
+    setSharedDoc(null)
+    setMapRoute(null)
     setCurrentDocId(doc.id)
     setPref('md.lastDocId', doc.id)
     pushHashUrl(doc.id)

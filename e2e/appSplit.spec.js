@@ -1125,6 +1125,24 @@ test.describe('F-2070 실시간 알림 띠 절', () => {
     await expect(page.locator('.cm-content').first()).toHaveAttribute('contenteditable', 'false')
   })
 
+  test('F-2059 D1 지도 위에서 새 문서로 저장 — 지도를 떠나 새 문서를 연다', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed('f2070-live', { content: '본문 가', title: '실시간 가' })
+    await openLive2070(page, room, [{ id: 'f2070-live', title: '실시간 가', content: '본문 가' }], 'f2070-live')
+    await expect(page.locator('.cm-content').first()).toContainText('본문 가')
+
+    room.closeAll('f2070-live', 4401, 'unauthenticated')
+    const saveBtn = page.locator('.notice').getByRole('button', { name: '새 문서로 저장' })
+    await expect(saveBtn).toBeVisible()
+    await page.getByRole('button', { name: '지도' }).first().click()
+    await expect(page.locator('.map-page')).toBeVisible()
+
+    await saveBtn.click()
+    await expect(page).toHaveURL(/#\/d\/(?!f2070-live)[^/]+$/)
+    await expect(page.locator('.map-page')).toHaveCount(0)
+    await expect(page.locator('.cm-content').first()).toContainText('본문 가')
+  })
+
   test('F-2070 C2 새 문서로 저장 알림은 다른 문서로 옮기면 걷힌다', async ({ page }) => {
     const room = createFakeDocRoom()
     room.seed('f2070-live', { content: '본문 가', title: '실시간 가' })
