@@ -163,7 +163,8 @@ function checkLines(file, lines) {
   const isCssFile = /\.css$/.test(file)
   if (!isCodeFile && !isCssFile) return violations
 
-  // 연속 2줄 이상 // 주석
+  // 연속 3줄 이상 // 주석 — "왜" 설명은 두 줄까지 허용, e2e·scripts 는 제외 (CLAUDE.md Code comments, 2026-09-28)
+  const maxCommentRun = /^(e2e|scripts)\//.test(file) ? Infinity : 2
   let runStart = null
   let runLen = 0
   let prevLine = null
@@ -177,13 +178,13 @@ function checkLines(file, lines) {
       runStart = line
       runLen = 1
     } else {
-      if (runLen >= 2) violations.push({ line: runStart, kind: '여러줄주석', text: lineTextAt(lines, runStart) })
+      if (runLen > maxCommentRun) violations.push({ line: runStart, kind: '여러줄주석', text: lineTextAt(lines, runStart) })
       runStart = null
       runLen = 0
     }
     prevLine = line
   }
-  if (runLen >= 2) violations.push({ line: runStart, kind: '여러줄주석', text: lineTextAt(lines, runStart) })
+  if (runLen > maxCommentRun) violations.push({ line: runStart, kind: '여러줄주석', text: lineTextAt(lines, runStart) })
 
   for (const { line, text } of lines) {
     const trimmed = text.trim()
