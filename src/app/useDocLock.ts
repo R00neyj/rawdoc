@@ -23,6 +23,14 @@ function lockedMessage(email: string | undefined, myEmail: string | null): strin
   return `${email ?? ''} 님이 편집 중입니다. 읽기만 할 수 있습니다.`
 }
 
+// 같은 탭 안의 docId 별 살아있는(dispose 안 된) 컨트롤러 수 — 늦은 해제가 새 컨트롤러의 잠금을 지우지 않도록 본다 (리뷰 Y3 회귀)
+const liveControllerCounts = new Map<string, number>()
+
+// 테스트 격리용 — 모듈 상태를 초기화한다 (리뷰 Y3 회귀)
+export function __resetDocLockLiveControllersForTest() {
+  liveControllerCounts.clear()
+}
+
 // 잡기·연장·놓친 뒤 재시도의 상태 기계 — 훅과 분리해 가짜 타이머로 직접 검증한다 (usePresence.ts 와 같은 방식)
 export function createDocLockController(
   docId: string,
@@ -34,6 +42,7 @@ export function createDocLockController(
   let holding = false
   let extendTimer: ReturnType<typeof setInterval> | null = null
   let retryTimer: ReturnType<typeof setInterval> | null = null
+  liveControllerCounts.set(docId, (liveControllerCounts.get(docId) ?? 0) + 1)
 
   function stopExtend() {
     if (extendTimer) {
@@ -51,6 +60,7 @@ export function createDocLockController(
 
   // dispose 뒤에 잡기·연장이 성공했다 — 그대로 두면 서버 잠금이 만료(60초)까지 남아 남이 읽기 전용이 된다 (리뷰 Y3)
   function releaseLate() {
+    if (liveControllerCounts.has(docId)) return // 같은 문서를 잡고 있는 새 컨트롤러가 있다 — 그 잠금을 지우면 안 된다 (리뷰 Y3 회귀)
     api.unlockDoc(docId).catch(() => {})
   }
 
@@ -123,6 +133,11 @@ export function createDocLockController(
   }
 
   function dispose() {
+    if (!disposed) {
+      const next = (liveControllerCounts.get(docId) ?? 1) - 1
+      if (next <= 0) liveControllerCounts.delete(docId)
+      else liveControllerCounts.set(docId, next)
+    }
     disposed = true
     stopExtend()
     stopRetry()

@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { ApiError } from '../storage/docsApi'
-import { createDocLockController, EXTEND_INTERVAL_MS, RETRY_INTERVAL_MS } from './useDocLock'
+import { createDocLockController, EXTEND_INTERVAL_MS, RETRY_INTERVAL_MS, __resetDocLockLiveControllersForTest } from './useDocLock'
 
 // vitest 가 node 환경이라 훅을 직접 렌더링할 수 없어, 잡기·연장·재시도 상태 기계를 가짜 타이머로 검증한다 (specs/features/F-213.md 2.3)
 describe('useDocLock — createDocLockController', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    __resetDocLockLiveControllersForTest() // 테스트마다 d1 을 재사용하므로 살아있는 컨트롤러 수를 초기화한다
   })
 
   afterEach(() => {
@@ -166,5 +167,29 @@ describe('useDocLock — createDocLockController', () => {
     pending.resolve({ expiresAt: 60000 })
     await vi.advanceTimersByTimeAsync(0)
     expect(unlockDoc).toHaveBeenCalledTimes(2)
+  })
+
+  // 리뷰 Y3 수정의 퇴행 — 같은 탭에서 새 컨트롤러가 이미 잡은 잠금을 옛 컨트롤러의 늦은 해제가 지운다
+  it('Y3 회귀 — 늦은 해제는 같은 문서를 잡고 있는 새 컨트롤러가 있으면 건너뛴다', async () => {
+    const pending = deferred<{ expiresAt: number }>()
+    const lockDoc = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValueOnce({ expiresAt: 60000 })
+    const unlockDoc = vi.fn().mockResolvedValue(undefined)
+    const api = { lockDoc, unlockDoc }
+    const { callbacks: callbacksA } = makeCallbacks()
+    const ctrlA = createDocLockController('d1', 'me@x.com', api, callbacksA)
+
+    ctrlA.start()
+    ctrlA.dispose()
+
+    const { readOnlyChanges: readOnlyChangesB, callbacks: callbacksB } = makeCallbacks()
+    const ctrlB = createDocLockController('d1', 'me@x.com', api, callbacksB)
+    ctrlB.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(readOnlyChangesB).toEqual([false])
+
+    pending.resolve({ expiresAt: 60000 })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(unlockDoc).not.toHaveBeenCalled()
   })
 })
