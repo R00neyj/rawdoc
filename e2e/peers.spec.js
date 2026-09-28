@@ -1,6 +1,6 @@
 // 접속자 표시와 원격 커서 — fakeServer + fakeDocRoom (specs/features/F-307.md 12.2, A20~A35)
 import { test, expect } from '@playwright/test'
-import { openApp, setPrefBeforeLoad, fakeImeCompose, fakeImeCommit } from './helpers.js'
+import { openApp, setPrefBeforeLoad, fakeImeCompose, fakeImeCommit, resizeWindow } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
 
@@ -73,53 +73,37 @@ test.describe('F-307 상단바 아바타', () => {
     await expect(page.locator('.cm-remote-caret')).toHaveCount(0)
   })
 
-  test('F-307 A21 가짜 clientID 6개(5명) → 4개와 +1', async ({ page }) => {
+  // A21~A23 은 준비(가짜 접속자 5명)가 같아 하나로 합쳤다. 개수 계산은 src/lib/peers.test.ts A3 visiblePeers 가 본다
+  test('F-307 A21·A22·A23 5명이면 4개와 +1, 좁은 창은 1개와 +4, 빼면 줄고 다 빼면 사라진다', async ({ page }) => {
     const room = seedRoom()
     await openSide(page, room)
     await connected(room)
-    for (const n of [1, 2, 2, 3, 4, 5]) room.addPeer(DOC, { id: `p${n}`, email: `p${n}@example.com` })
+    const ids = [1, 2, 2, 3, 4, 5].map((n) => room.addPeer(DOC, { id: `p${n}`, email: `p${n}@example.com` }))
 
     const group = page.locator('.peer-avatars')
+    const more = page.locator('.peer-avatars .peer-avatar-more')
     await expect(group).toHaveAttribute('aria-label', '접속자 5명')
     await expect(group).toHaveAttribute('role', 'group')
     await expect(avatars(page)).toHaveCount(4)
     const labels = await avatars(page).evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
     expect(labels).toEqual(['p1@example.com', 'p2@example.com', 'p3@example.com', 'p4@example.com'])
     await expect(avatars(page).first()).toHaveText('P')
-    const more = page.locator('.peer-avatars .peer-avatar-more')
     await expect(more).toHaveText('+1')
     await expect(more).toHaveAttribute('aria-label', '외 1명')
-  })
 
-  test('F-307 A22 좁은 창(900px)에서는 1개와 +4', async ({ browser, baseURL }) => {
-    const room = seedRoom()
-    const side = await newSide(browser, baseURL, { width: 900, height: 800 })
-    try {
-      await openSide(side.page, room)
-      await connected(room)
-      for (const n of [1, 2, 2, 3, 4, 5]) room.addPeer(DOC, { id: `p${n}`, email: `p${n}@example.com` })
-      await expect(side.page.locator('.peer-avatars')).toHaveAttribute('aria-label', '접속자 5명')
-      await expect(avatars(side.page)).toHaveCount(1)
-      await expect(side.page.locator('.peer-avatars .peer-avatar-more')).toHaveText('+4')
-    } finally {
-      await side.context.close()
-    }
-  })
-
-  test('F-307 A23 한 명을 빼면 4명·+ 없음, 전부 빼면 묶음이 사라진다', async ({ page }) => {
-    const room = seedRoom()
-    await openSide(page, room)
-    await connected(room)
-    const ids = [1, 2, 2, 3, 4, 5].map((n) => room.addPeer(DOC, { id: `p${n}`, email: `p${n}@example.com` }))
-    await expect(page.locator('.peer-avatars')).toHaveAttribute('aria-label', '접속자 5명')
+    await resizeWindow(page, 900, 800)
+    await expect(avatars(page)).toHaveCount(1)
+    await expect(more).toHaveText('+4')
+    await resizeWindow(page, 1600)
+    await expect(avatars(page)).toHaveCount(4)
 
     room.removePeer(DOC, ids[0])
-    await expect(page.locator('.peer-avatars')).toHaveAttribute('aria-label', '접속자 4명')
+    await expect(group).toHaveAttribute('aria-label', '접속자 4명')
     await expect(avatars(page)).toHaveCount(4)
     await expect(page.locator('.peer-avatar-more')).toHaveCount(0)
 
     for (const id of ids.slice(1)) room.removePeer(DOC, id)
-    await expect(page.locator('.peer-avatars')).toHaveCount(0)
+    await expect(group).toHaveCount(0)
   })
 })
 
@@ -249,28 +233,7 @@ test.describe('F-307 보내기 규칙', () => {
     expect(room.lastAwareness(DOC)[0].state.cursor).not.toBeNull()
   })
 
-  test('F-307 A29 ArrowRight 20번은 8통 이하, 마지막 위치는 반드시 나간다', async ({ browser, baseURL }) => {
-    const room = seedRoom()
-    const a = await newSide(browser, baseURL)
-    const b = await newSide(browser, baseURL)
-    try {
-      await openSide(a.page, room, A_USER)
-      await openSide(b.page, room, B_USER)
-      await line(a.page, '첫째 줄').click()
-      await a.page.keyboard.press('Home')
-      await a.page.waitForTimeout(400)
-
-      const before = room.awarenessCount(DOC, A_USER.id)
-      for (let i = 0; i < 20; i++) await a.page.keyboard.press('ArrowRight')
-      await a.page.waitForTimeout(400)
-      expect(room.awarenessCount(DOC, A_USER.id) - before).toBeLessThanOrEqual(8)
-      // 첫째 줄(4)+1, 둘째 줄(4)+1 을 지나 20번째는 셋째 줄 안이다
-      await expect(line(b.page, '셋째 줄').locator('.cm-remote-caret')).toHaveCount(1)
-    } finally {
-      await a.context.close()
-      await b.context.close()
-    }
-  })
+  // A29(ArrowRight 20번은 8통 이하, 마지막 위치는 나간다)는 src/editor/remoteCursors.test.ts `첫 변화 곧바로 1통, 100ms 안의 변화 5번 → 250ms 에 마지막 값 1통 더` 가 본다
 
   test('F-307 A30 줄 끝 한글 조합·확정은 한 통도 보내지 않는다', async ({ page }) => {
     const room = seedRoom()

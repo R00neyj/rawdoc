@@ -58,8 +58,9 @@ async function deleteTopFolder(page, buttonName) {
   await page.getByRole('button', { name: buttonName, exact: true }).click()
 }
 
-test.describe('F-247 A7 전부 삭제', () => {
-  test('상위 폴더를 전부 삭제하면 하위 폴더·그 안 문서가 되살아나지 않는다', async ({ page }) => {
+// 재조정 경합 논리는 src/storage/serverStore.test.ts F-247 A1·A2(전부 삭제)·A3(위로 옮기기)·A4(outbox 뒤 일치)가 본다. A8 위로 옮기기 화면 동작은 F-242 A9 가 본다
+test.describe('F-247 A7 전부 삭제 스모크', () => {
+  test('DELETE 가 늦어도 전부 삭제한 하위 폴더·그 안 문서가 되살아나지 않는다', async ({ page }) => {
     const server = await fakeServer(page)
     await delayFolderDeletes(page, server)
     await openApp(page)
@@ -67,34 +68,15 @@ test.describe('F-247 A7 전부 삭제', () => {
     await buildTopSubDoc(page)
     await deleteTopFolder(page, '전부 삭제')
 
-    await expect(page.locator('.tree-row').filter({ hasText: '위' })).toHaveCount(0)
-    await expect(page.locator('.tree-row').filter({ hasText: '아래' })).toHaveCount(0)
+    const rows = page.locator('.tree-row')
+    await expect(rows.filter({ hasText: '위' })).toHaveCount(0)
+    await expect(rows.filter({ hasText: '아래' })).toHaveCount(0)
     // hasText 부분열이면 openApp 이 빈 저장소에서 만든 "제목 없는 문서" 줄까지 걸린다 — 제목 정확 일치로 좁힌다 (F-257 7.3)
-    await expect(page.locator('.tree-row').filter({ hasText: /^문서$/ })).toHaveCount(0)
+    await expect(rows.filter({ hasText: /^문서$/ })).toHaveCount(0)
 
-    // DELETE 가 실제로 서버에 닿을 때까지 기다린 뒤 새로 고침해도 그대로다
-    await page.waitForTimeout(700)
-    await page.reload()
-    await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible()
-    await expect(page.locator('.tree-row').filter({ hasText: '위' })).toHaveCount(0)
-    await expect(page.locator('.tree-row').filter({ hasText: '아래' })).toHaveCount(0)
-    await expect(page.locator('.tree-row').filter({ hasText: /^문서$/ })).toHaveCount(0)
-  })
-})
-
-test.describe('F-247 A8 위로 옮기기', () => {
-  test('상위 폴더를 위로 옮기면 하위 폴더·문서가 사라지지 않는다', async ({ page }) => {
-    const server = await fakeServer(page)
-    await delayFolderDeletes(page, server)
-    await openApp(page)
-
-    await buildTopSubDoc(page)
-    await deleteTopFolder(page, '위로 옮기기')
-
-    await expect(page.locator('.tree-row').filter({ hasText: '위' })).toHaveCount(0)
-    await expect(page.locator('.tree-row').filter({ hasText: '아래' })).toHaveCount(1)
-
-    await page.waitForTimeout(700)
+    await expect.poll(() => server.folders.size).toBe(0)
+    await expect(rows.filter({ hasText: '아래' })).toHaveCount(0)
+    await expect(rows.filter({ hasText: /^문서$/ })).toHaveCount(0)
   })
 })
 

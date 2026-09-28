@@ -528,25 +528,7 @@ test.describe('F-507 E18 답글 멘션', () => {
 })
 
 test.describe('F-507 E19 멘션 없음·한계', () => {
-  test('손으로 친 이메일은 멘션이 아니다', async ({ page }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: CONTENT, title: '함께 쓰는 문서' })
-    const server = await openServerDoc(page, room)
-    server.setDocPeople(DOC, [
-      { email: 'a@b.com', role: 'owner' },
-      { email: 'c@x.com', role: 'view' },
-    ])
-
-    await selectCat(page)
-    await openComposer(page)
-    await composerTextarea(page).pressSequentially('@c@x.com 확인')
-    await page.keyboard.press('Control+Enter')
-    await expect(composerTextarea(page)).toHaveCount(0)
-
-    const comments = room.comments(DOC)
-    const entry = Object.values(comments)[0]
-    expect(entry.mentions).toEqual([])
-  })
+  // 손으로 친 이메일은 멘션이 아니다 — src/app/mentionCandidates.test.ts U15 `손으로 친 @c@y.com 만 있는 본문` 이 본다(고른 멘션 배선은 E18)
 
   test('나 혼자인 문서 — 다른 사람이 없습니다', async ({ page }) => {
     const room = createFakeDocRoom()

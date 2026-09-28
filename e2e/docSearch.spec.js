@@ -5,6 +5,7 @@ import { openApp, openAppHome, importMarkdown, resizeWindow, currentDocId, setVi
 import { fakeServer } from './fixtures/fakeServer.js'
 
 test.describe('F-287 검색 대화상자와 진입점', () => {
+  // A5 는 docSearch.test.ts A19·searchResults.test.ts U12, A12 는 U19, A13 은 U22(배선은 F-288 A11)가 본다
   test('F-287 A1 머리 줄 버튼으로 열기', async ({ page }) => {
     await resizeWindow(page, 1600)
     await openApp(page)
@@ -63,19 +64,6 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
     await expect(options).toHaveCount(2)
     const markCount = await options.first().locator('mark').count()
     expect(markCount).toBeGreaterThan(0)
-  })
-
-  test('F-287 A5 제목 매치가 먼저', async ({ page }) => {
-    await openApp(page)
-    // 제목 매치(오래됨) 먼저, 본문 매치(최신) 나중
-    await importMarkdown(page, { name: '회고노트.md', content: '아무 상관 없는 내용\n' })
-    await importMarkdown(page, { name: '오늘일기.md', content: '오늘은 회고를 했다\n' })
-
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('회고')
-
-    const first = page.getByRole('option').first()
-    await expect(first.locator('.search-result-title')).toContainText('회고노트')
   })
 
   test('F-287 A6 필터', async ({ page }) => {
@@ -167,24 +155,6 @@ test.describe('F-287 검색 대화상자와 진입점', () => {
     await expect(page.getByRole('option')).toHaveCount(1)
   })
 
-  test('F-287 A12 빈 쿼리', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '내용\n' })
-    await page.keyboard.press('Control+Shift+F')
-
-    await expect(page.getByText('검색어를 입력하세요')).toBeVisible()
-    await expect(page.getByRole('option')).toHaveCount(0)
-  })
-
-  test('F-287 A13 없는 검색어', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '내용\n' })
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('zzzz없는말')
-
-    await expect(page.getByText('찾는 문서가 없습니다')).toBeVisible()
-  })
-
   test('F-287 A15 진입점 개수 불변식', async ({ page }) => {
     await openApp(page)
     const searchBtn = () => page.getByRole('button', { name: '검색', exact: true })
@@ -237,66 +207,17 @@ async function seedThreeDocs(page) {
 }
 
 test.describe('F-288 안내 문구와 공백 표시', () => {
-  test('F-288 A1 해석 줄', async ({ page }) => {
+  // A1·A2 는 searchResults.test.ts U13·U14, A3 은 U26, A4 는 U21, A5·A6 은 U28·U22 가 본다 — 여기는 배선만
+  test('F-288 A1·A3·A5 해석·안내·꼬리 줄 배선', async ({ page }) => {
     await seedThreeDocs(page)
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('tag:일기 하루')
 
+    await expect(page.getByRole('option')).toHaveCount(1)
     await expect(page.locator('dialog[open] .search-summary')).toHaveText('필터 tag=일기 · 검색어 "하루"')
-  })
-
-  test('F-288 A2 필터가 없으면 해석 줄이 없다', async ({ page }) => {
-    await seedThreeDocs(page)
-
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('하루')
-    await page.waitForTimeout(250)
-
-    await expect(page.locator('dialog[open] .search-summary')).toHaveCount(0)
-  })
-
-  test('F-288 A3 속성 안내 줄', async ({ page }) => {
-    await seedThreeDocs(page)
-
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('tag:일기')
-
     await expect(page.locator('dialog[open] .search-note')).toContainText('속성이 없거나 읽지 못한 문서 2개는 필터에서 빠졌습니다')
-  })
-
-  test('F-288 A4 없는 속성 키', async ({ page }) => {
-    await seedThreeDocs(page)
-
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('tagg:일기')
-
-    await expect(page.getByText("'tagg' 속성을 가진 문서가 없습니다")).toBeVisible()
-    await expect(page.getByText('찾는 문서가 없습니다')).toHaveCount(0)
-  })
-
-  test('F-288 A5 꼬리 줄 결과 수', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { name: '회고1.md', content: '주간 회고를 썼다\n' })
-    await importMarkdown(page, { name: '회고2.md', content: '오늘도 회고\n' })
-    await importMarkdown(page, { name: '상관없음.md', content: '전혀 다른 내용\n' })
-
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('회고')
-
-    await expect(page.locator('dialog[open] .search-foot')).toHaveText('결과 2개')
-  })
-
-  test('F-288 A6 결과가 0개면 꼬리 줄이 없다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '내용\n' })
-
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('zzzz없는말')
-    await page.waitForTimeout(250)
-
-    await expect(page.locator('dialog[open] .search-foot')).toHaveCount(0)
-    await expect(page.getByText('찾는 문서가 없습니다')).toBeVisible()
+    await expect(page.locator('dialog[open] .search-foot')).toHaveText('결과 1개')
   })
 
   test('F-288 A7 오프라인 안내', async ({ page }) => {
@@ -343,10 +264,12 @@ test.describe('F-288 안내 문구와 공백 표시', () => {
     await page.locator('.search-input').fill('zzzz없는말')
 
     await expect(page.locator('dialog[open] .search-status')).toHaveAttribute('role', 'status')
+    await expect(page.locator('dialog[open] .search-status')).toHaveText('찾는 문서가 없습니다')
   })
 })
 
 test.describe('F-294 검색 결과로 연 문서에 검색어 넘기기', () => {
+  // A3 은 showSearchMatches.test.ts U6, A4 는 searchResults.test.ts pickEditorSearchTerm U2, A5·A6 은 U3, A10 은 U4 가 본다
   test('F-294 A1 결과로 열면 패널이 검색어와 함께 열린다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { name: '첫문서.md', content: '내용\n' })
@@ -354,7 +277,7 @@ test.describe('F-294 검색 결과로 연 문서에 검색어 넘기기', () => 
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('특이단어')
-    await page.waitForTimeout(250)
+    await expect(page.getByRole('option')).toHaveCount(1)
     await page.keyboard.press('Enter')
 
     await expect(page.locator('.cm-panel.cm-search')).toHaveCount(1)
@@ -370,63 +293,11 @@ test.describe('F-294 검색 결과로 연 문서에 검색어 넘기기', () => 
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('특이단어')
-    await page.waitForTimeout(250)
+    await expect(page.getByRole('option')).toHaveCount(1)
     await page.keyboard.press('Enter')
 
     await expect(page.locator('.cm-content')).toBeFocused()
     await expect(page.locator('.cm-editor.cm-focused')).toHaveCount(1)
-  })
-
-  test('F-294 A3 첫 매치가 선택된다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { name: '첫문서.md', content: '내용\n' })
-    await importMarkdown(page, { name: '열릴문서.md', content: '앞줄\n특이단어 여기\n특이단어 또\n' })
-
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('특이단어')
-    await page.waitForTimeout(250)
-    await page.keyboard.press('Enter')
-
-    await expect(page.locator('.cm-searchMatch')).toHaveCount(2)
-    await expect(page.locator('.cm-searchMatch-selected')).toHaveCount(1)
-    const selected = await page.evaluate(() => window.getSelection()?.toString())
-    expect(selected).toBe('특이단어')
-  })
-
-  test('F-294 A4 여러 검색어 — 본문에 있는 것을 넣는다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { name: '회고노트.md', content: '오늘 주간 기록을 남겼다\n' })
-
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('회고 주간')
-    await page.waitForTimeout(250)
-    await page.keyboard.press('Enter')
-
-    await expect(page.locator('.cm-panel.cm-search input[name="search"]')).toHaveValue('주간')
-  })
-
-  test('F-294 A5 필터만 친 검색이면 안 연다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { name: '일기1.md', content: '---\ntag: 일기\n---\n오늘 하루\n' })
-
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('tag:일기')
-    await page.waitForTimeout(250)
-    await page.keyboard.press('Enter')
-
-    await expect(page.locator('.cm-panel.cm-search')).toHaveCount(0)
-  })
-
-  test('F-294 A6 본문에 매치가 없으면 안 연다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { name: '특이제목.md', content: '상관없는 내용\n' })
-
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('특이제목')
-    await page.waitForTimeout(250)
-    await page.keyboard.press('Enter')
-
-    await expect(page.locator('.cm-panel.cm-search')).toHaveCount(0)
   })
 
   test('F-294 A7 보기 모드에서는 안 연다', async ({ page }) => {
@@ -437,7 +308,7 @@ test.describe('F-294 검색 결과로 연 문서에 검색어 넘기기', () => 
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('특이단어')
-    await page.waitForTimeout(250)
+    await expect(page.getByRole('option')).toHaveCount(1)
     await page.keyboard.press('Enter')
 
     await expect(page.locator('.cm-panel.cm-search')).toHaveCount(0)
@@ -451,7 +322,7 @@ test.describe('F-294 검색 결과로 연 문서에 검색어 넘기기', () => 
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('특이단어')
-    await page.waitForTimeout(250)
+    await expect(page.getByRole('option')).toHaveCount(1)
     await page.keyboard.press('Enter')
     await expect(page.locator('.cm-panel.cm-search')).toHaveCount(1)
 
@@ -466,7 +337,7 @@ test.describe('F-294 검색 결과로 연 문서에 검색어 넘기기', () => 
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('특이단어')
-    await page.waitForTimeout(250)
+    await expect(page.getByRole('option')).toHaveCount(1)
     await page.keyboard.press('Enter')
     await expect(page.locator('.cm-panel.cm-search')).toHaveCount(1)
 
@@ -476,21 +347,6 @@ test.describe('F-294 검색 결과로 연 문서에 검색어 넘기기', () => 
     await expect(page.locator('dialog[open]')).toHaveCount(0)
   })
 
-  test('F-294 A10 대소문자', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { name: '첫문서.md', content: '내용\n' })
-    await importMarkdown(page, { name: '열릴문서.md', content: 'Hello world\n' })
-
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('Hello')
-    await page.waitForTimeout(250)
-    await page.keyboard.press('Enter')
-
-    await expect(page.locator('.cm-panel.cm-search input[name="search"]')).toHaveValue('hello')
-    const matchCount = await page.locator('.cm-searchMatch').count()
-    expect(matchCount).toBeGreaterThan(0)
-  })
-
   test('F-294 A11 같은 문서를 다시 열면 검색어가 갱신된다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { name: '첫문서.md', content: '내용\n' })
@@ -498,13 +354,13 @@ test.describe('F-294 검색 결과로 연 문서에 검색어 넘기기', () => 
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('특이단어')
-    await page.waitForTimeout(250)
+    await expect(page.getByRole('option')).toHaveCount(1)
     await page.keyboard.press('Enter')
     await expect(page.locator('.cm-panel.cm-search')).toHaveCount(1)
 
     await page.keyboard.press('Control+Shift+F')
     await page.locator('.search-input').fill('찾을내용')
-    await page.waitForTimeout(250)
+    await expect(page.getByRole('option').locator('mark').first()).toHaveText('찾을내용')
     await page.keyboard.press('Enter')
 
     await expect(page.locator('.cm-panel.cm-search')).toHaveCount(1)

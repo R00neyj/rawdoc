@@ -1,20 +1,9 @@
 // 중첩 목록 깊이 안내선 (specs/features/F-236.md, F-251)
 // 안내선 x·두께·색, 단계 간격 px 같은 시각 값은 e2e 로 고정하지 않는다 (CLAUDE.md "How we work", 2026-09-25 e2e 경량화) —
-// 안내선이 그려지는지, 원문이 바뀌지 않는지, 들여쓰기 설정이 원문에 반영되는지만 남긴다
+// 원문이 바뀌지 않는지, 들여쓰기 설정이 원문에 반영되는지만 남긴다
+// F-236 A1 보기 모드 안내선은 CSS ::before 라 H108·H463 사람 확인 몫, 편집 모드 조상 계산은 src/editor/preview/lines.test.ts `listAncestorMarks` 가 본다
 import { test, expect } from '@playwright/test'
 import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad } from './helpers.js'
-
-test.describe('F-236 A1 보기 모드 2단계', () => {
-  test('2단계 항목의 부모 목록에 안내선이 그려진다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '- 가\n  - 나\n' })
-    await setViewMode(page, 'view')
-
-    const nestedUl = page.locator('.markdown-body li ul').first()
-    const content = await nestedUl.evaluate((el) => getComputedStyle(el, '::before').content)
-    expect(content).not.toBe('none')
-  })
-})
 
 test.describe('F-236 A7 원문 불변', () => {
   test('목록 줄 끝에 입력하면 원문이 입력한 글자만큼만 바뀐다', async ({ page }) => {

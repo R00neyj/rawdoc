@@ -151,33 +151,20 @@ test.describe('F-2043 A5 Esc — 되돌리고 대화상자는 평소대로 닫�
   })
 })
 
+// 본문 칸이 몇 px 늘었는지는 시각 값이라 --content-max 가 편집·보기 모드 본문 칸까지 닿는지만 본다
 test.describe('F-2043 A6 화면 반영 — 편집·보기 모드', () => {
-  test('800 → 1200, .cm-content·.viewer 본문 칸이 400±2px 늘어난다', async ({ page }) => {
+  test('800 → 1200, .cm-content·.viewer 에 닿는 --content-max 가 1200px', async ({ page }) => {
     await resizeWindow(page, 1920, 1080)
     await openApp(page)
     await importMarkdown(page, { content: longDoc(30) })
 
-    const before = await page.locator('.cm-content').evaluate((el) => el.getBoundingClientRect().width)
-    await setContentWidthViaSettings(page, 1200)
-    const after = await page.locator('.cm-content').evaluate((el) => el.getBoundingClientRect().width)
-    expect(after - before).toBeGreaterThan(398)
-    expect(after - before).toBeLessThan(402)
+    const contentMaxOf = (locator) => locator.evaluate((el) => getComputedStyle(el).getPropertyValue('--content-max').trim())
 
-    await setContentWidthViaSettings(page, 800)
+    await setContentWidthViaSettings(page, 1200)
+    expect(await contentMaxOf(page.locator('.cm-content'))).toBe('1200px')
+
     await setViewMode(page, 'view')
-
-    function viewerContentWidth() {
-      return page.locator('.viewer:not(.print-root)').evaluate((el) => {
-        const cs = getComputedStyle(el)
-        return el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
-      })
-    }
-
-    const viewerBefore = await viewerContentWidth()
-    await setContentWidthViaSettings(page, 1200)
-    const viewerAfter = await viewerContentWidth()
-    expect(viewerAfter - viewerBefore).toBeGreaterThan(398)
-    expect(viewerAfter - viewerBefore).toBeLessThan(402)
+    expect(await contentMaxOf(page.locator('.viewer:not(.print-root)'))).toBe('1200px')
   })
 })
 
@@ -207,7 +194,7 @@ test.describe('F-2043 A7 저장값으로 열기 — 인라인 값·홈 화면·�
 })
 
 test.describe('F-2043 A8 좁은 창 — 메인 열에 맞춰 줄어든다', () => {
-  test('1024×768, 값 1600 — 가로 스크롤 없음, padding-left 0', async ({ page }) => {
+  test('1024×768, 값 1600 — 가로 스크롤 없음, --content-max 1600px', async ({ page }) => {
     await setPrefBeforeLoad(page, 'md.contentWidth', '1600')
     await resizeWindow(page, 1024, 768)
     await openApp(page)
@@ -216,10 +203,9 @@ test.describe('F-2043 A8 좁은 창 — 메인 열에 맞춰 줄어든다', () =
     const sizes = await page.locator('.cm-scroller').evaluate((el) => ({
       scrollWidth: el.scrollWidth,
       clientWidth: el.clientWidth,
-      paddingLeft: getComputedStyle(el).paddingLeft,
     }))
     expect(sizes.scrollWidth).toBeLessThanOrEqual(sizes.clientWidth)
-    expect(sizes.paddingLeft).toBe('0px')
+    expect(await getContentMax(page)).toBe('1600px')
   })
 })
 

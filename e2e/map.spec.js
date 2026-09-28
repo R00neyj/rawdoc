@@ -670,50 +670,7 @@ test.describe('F-2005 지도 설정 패널', () => {
     await expect(map.getByRole('button', { name: '지도 설정', exact: true })).toBeFocused()
   })
 
-  test('F-2005 A4 슬라이더 셋과 기본값', async ({ page }) => {
-    const { map } = await openMapFresh(page)
-    const p = await openDisplay(map)
-
-    const nodeScale = p.getByRole('slider', { name: '노드 크기', exact: true })
-    const labelDistance = p.getByRole('slider', { name: '이름표 표시 거리', exact: true })
-    const edgeStrength = p.getByRole('slider', { name: '선 두께', exact: true })
-    await expect(nodeScale).toHaveCount(1)
-    await expect(labelDistance).toHaveCount(1)
-    await expect(edgeStrength).toHaveCount(1)
-    expect(await nodeScale.inputValue()).toBe('1')
-    expect(await labelDistance.inputValue()).toBe('0')
-    expect(await edgeStrength.inputValue()).toBe('0.5')
-  })
-
-  test('F-2005 A5 값이 남는다', async ({ page }) => {
-    const { map } = await openMapFresh(page)
-    const p = await openDisplay(map)
-    await p.getByRole('slider', { name: '노드 크기', exact: true }).fill('2.5')
-
-    await map.getByRole('button', { name: '닫기', exact: true }).click()
-    await page.goto('/#/map')
-    const map2 = page.locator('.map-page')
-    await expect(map2).toBeVisible()
-    const p2 = await openDisplay(map2)
-
-    expect(await p2.getByRole('slider', { name: '노드 크기', exact: true }).inputValue()).toBe('2.5')
-  })
-
-  test('F-2005 A6 세 축이 다 남는다', async ({ page }) => {
-    const { map } = await openMapFresh(page)
-    const p = await openDisplay(map)
-    await p.getByRole('slider', { name: '이름표 표시 거리', exact: true }).fill('0.4')
-    await p.getByRole('slider', { name: '선 두께', exact: true }).fill('0.9')
-
-    await map.getByRole('button', { name: '닫기', exact: true }).click()
-    await page.goto('/#/map')
-    const map2 = page.locator('.map-page')
-    await expect(map2).toBeVisible()
-    const p2 = await openDisplay(map2)
-
-    expect(await p2.getByRole('slider', { name: '이름표 표시 거리', exact: true }).inputValue()).toBe('0.4')
-    expect(await p2.getByRole('slider', { name: '선 두께', exact: true }).inputValue()).toBe('0.9')
-  })
+  // F-2005 A4 기본값은 F-2006 A2 에, A5·A6 새로고침 유지는 `지도 설정 새로고침 유지` 하나에 합쳤다 (기본값 판정은 src/app/mapPrefs.test.ts U1)
 
   test('F-2005 A7 기본값으로', async ({ page }) => {
     const { map } = await openMapFresh(page)
@@ -835,7 +792,8 @@ function forceSlider(p, name) {
 test.describe('F-2006 장력 묶음', () => {
   test.use({ reducedMotion: 'reduce' })
 
-  test('F-2006 A2 펼치면 슬라이더 넷', async ({ page }) => {
+  // F-2005 A4·F-2006 A3 기본값을 여기 흡수했다. A4 새로고침 유지는 `지도 설정 새로고침 유지` 가 본다
+  test('F-2006 A2·A3·F-2005 A4 펼치면 슬라이더가 기본값으로 뜬다', async ({ page }) => {
     const { map } = await openMapFresh(page)
     const p = await openPanel(map)
 
@@ -845,33 +803,16 @@ test.describe('F-2006 장력 묶음', () => {
     await p.getByRole('button', { name: '장력', exact: true }).click()
 
     await expect(p.getByRole('button', { name: '장력', exact: true })).toHaveAttribute('aria-expanded', 'true')
-    for (const name of FORCE_NAMES) await expect(forceSlider(p, name)).toHaveCount(1)
-  })
-
-  test('F-2006 A3 기본값', async ({ page }) => {
-    const { map } = await openMapFresh(page)
-    const p = await openForce(map)
-
     for (const name of FORCE_NAMES) {
+      await expect(forceSlider(p, name)).toHaveCount(1)
       // step="any" 라 브라우저가 눈금에 스냅하지 않는다 (F-2006 7.3)
       expect(Number(await forceSlider(p, name).inputValue())).toBeCloseTo(FORCE_DEFAULTS[name], 6)
     }
-  })
 
-  test('F-2006 A4 값이 남는다', async ({ page }) => {
-    const { map } = await openMapFresh(page)
-    const p = await openForce(map)
-    await forceSlider(p, '반발력').fill('0.9')
-    await forceSlider(p, '링크 거리').fill('0.6')
-
-    await map.getByRole('button', { name: '닫기', exact: true }).click()
-    await page.goto('/#/map')
-    const map2 = page.locator('.map-page')
-    await expect(map2).toBeVisible()
-    const p2 = await openForce(map2)
-
-    expect(await forceSlider(p2, '반발력').inputValue()).toBe('0.9')
-    expect(await forceSlider(p2, '링크 거리').inputValue()).toBe('0.6')
+    await p.getByRole('button', { name: '표시', exact: true }).click()
+    await expect(p.getByRole('slider', { name: '노드 크기', exact: true })).toHaveValue('1')
+    await expect(p.getByRole('slider', { name: '이름표 표시 거리', exact: true })).toHaveValue('0')
+    await expect(p.getByRole('slider', { name: '선 두께', exact: true })).toHaveValue('0.5')
   })
 
   test('F-2006 A5 기본값으로가 장력도 되돌린다', async ({ page }) => {
@@ -902,21 +843,7 @@ test.describe('F-2006 장력 묶음', () => {
     }
   })
 
-  test('F-2006 A6 깨진 저장값', async ({ page }) => {
-    const errors = []
-    page.on('pageerror', (e) => errors.push(String(e)))
-    await setPrefBeforeLoad(page, 'md.mapView', '{"force":{"repel":"x","zzz":1,"center":9}}')
-
-    const { map } = await openMapFresh(page)
-    const p = await openForce(map)
-
-    // 문자열은 버려 기본값, 모르는 키는 버림, 유한수 9 는 1 로 잘린다
-    expect(Number(await forceSlider(p, '반발력').inputValue())).toBeCloseTo(FORCE_DEFAULTS['반발력'], 6)
-    expect(Number(await forceSlider(p, '링크 장력').inputValue())).toBeCloseTo(FORCE_DEFAULTS['링크 장력'], 6)
-    expect(Number(await forceSlider(p, '링크 거리').inputValue())).toBeCloseTo(FORCE_DEFAULTS['링크 거리'], 6)
-    expect(Number(await forceSlider(p, '중심 장력').inputValue())).toBe(1)
-    expect(errors).toEqual([])
-  })
+  // F-2006 A6 깨진 장력 저장값은 src/app/mapPrefs.test.ts U2·U8 과 src/lib/mapLayout3d.test.ts `A5 저장값 검증` 이 본다
 
   test('F-2006 A9 장력은 접힌 채로 다시 열린다', async ({ page }) => {
     const { map } = await openMapFresh(page)
@@ -929,7 +856,8 @@ test.describe('F-2006 장력 묶음', () => {
     await expect(p2.getByRole('button', { name: '장력', exact: true })).toHaveAttribute('aria-expanded', 'false')
   })
 
-  test('F-2006 A10 방향키로도 움직이고 저장된다', async ({ page }) => {
+  // 저장되는지(뒷부분)는 `지도 설정 새로고침 유지` 가 본다
+  test('F-2006 A10 방향키로도 움직인다', async ({ page }) => {
     const { map } = await openMapFresh(page)
     const p = await openForce(map)
     const slider = forceSlider(p, '반발력')
@@ -942,13 +870,6 @@ test.describe('F-2006 장력 묶음', () => {
 
     const after = Number(await slider.inputValue())
     expect(after - before).toBeCloseTo(0.03, 6)
-
-    await map.getByRole('button', { name: '닫기', exact: true }).click()
-    await page.goto('/#/map')
-    const map2 = page.locator('.map-page')
-    await expect(map2).toBeVisible()
-    const p2 = await openForce(map2)
-    expect(Number(await forceSlider(p2, '반발력').inputValue())).toBeCloseTo(after, 6)
   })
 
   test('F-2006 A11 링크 거리가 이어진 문서를 실제로 밀어낸다', async ({ page }) => {
@@ -1568,26 +1489,7 @@ test.describe('F-2007 지도 설정 패널 필터', () => {
     await expect(footFilter(view.map)).toHaveText('2개 중 0개 보임')
   })
 
-  test('F-2007 A10 파일 검색 은 안 남고 나머지는 남는다', async ({ page }) => {
-    const view = await openMapCentered(page, [
-      { name: 'B.md', content: 'B 문서' },
-      { name: 'A.md', content: 'A\n\n[[B]]' },
-    ])
-    const p = await openPanel(view.map)
-    await p.getByRole('checkbox', { name: '고립 문서' }).uncheck()
-    await p.getByRole('slider', { name: '링크 단계' }).fill('2')
-    await p.getByRole('searchbox', { name: '파일 검색' }).fill('아무거나')
-
-    await view.map.getByRole('button', { name: '닫기', exact: true }).click()
-    await page.goto(`/#/map/${view.id}`)
-    const map2 = page.locator('.map-page')
-    await expect(map2).toBeVisible()
-    const p2 = await openPanel(map2)
-
-    await expect(p2.getByRole('searchbox', { name: '파일 검색' })).toHaveValue('')
-    await expect(p2.getByRole('checkbox', { name: '고립 문서' })).not.toBeChecked()
-    await expect(p2.getByRole('slider', { name: '링크 단계' })).toHaveValue('2')
-  })
+  // F-2007 A10(파일 검색 은 안 남고 나머지는 남는다)은 `지도 설정 새로고침 유지` 가 본다
 
   test('F-2007 A11 기본값으로가 필터도 되돌린다', async ({ page }) => {
     const view = await openMapCentered(page, [
@@ -1771,23 +1673,7 @@ test.describe('F-2008 지도 설정 패널 그룹', () => {
     await expect(view.map.getByRole('button', { name: '바나나' }).locator('.map-list-dot')).toHaveCount(1)
   })
 
-  test('F-2008 A8 남는다', async ({ page }) => {
-    const { map } = await openMapFresh(page)
-    const p = await openGroup(map)
-    await p.getByRole('button', { name: '새 그룹', exact: true }).click()
-    await p.getByRole('textbox', { name: '그룹 1 조건' }).fill('tag:일기')
-    await p.getByRole('radio', { name: '색 3' }).check()
-
-    await map.getByRole('button', { name: '닫기', exact: true }).click()
-    await page.goto('/#/map')
-    const map2 = page.locator('.map-page')
-    await expect(map2).toBeVisible()
-    const p2 = await openGroup(map2)
-
-    await expect(p2.locator('.map-group-row')).toHaveCount(1)
-    await expect(p2.getByRole('textbox', { name: '그룹 1 조건' })).toHaveValue('tag:일기')
-    await expect(p2.getByRole('radio', { name: '색 3' })).toBeChecked()
-  })
+  // F-2008 A8(남는다)은 `지도 설정 새로고침 유지` 가 본다
 
   test('F-2008 A9 기본값으로 는 그룹을 안 지운다', async ({ page }) => {
     const { map } = await openMapFresh(page)
@@ -1856,6 +1742,67 @@ test.describe('F-2008 지도 설정 패널 그룹', () => {
     await p.getByRole('textbox', { name: '그룹 1 조건' }).fill('A')
 
     await expect(view.map.getByRole('button', { name: 'A' }).locator('.map-list-dot')).toHaveCount(1)
+  })
+})
+
+// F-2005 A5·A6, F-2006 A4·A10 뒷부분, F-2007 A10, F-2008 A8 의 새로고침 유지를 하나로 합쳤다 (저장·적재 왕복은 src/app/mapPrefs.test.ts U9·U13·U17)
+test.describe('지도 설정 새로고침 유지', () => {
+  test.use({ reducedMotion: 'reduce' })
+
+  test('표시·장력·필터·그룹 값이 새로고침 뒤에도 남고 파일 검색 만 비워진다', async ({ page }) => {
+    const view = await openMapCentered(page, [
+      { name: 'B.md', content: 'B 문서' },
+      { name: 'A.md', content: 'A\n\n[[B]]' },
+    ])
+    const p = await openPanel(view.map)
+    await p.getByRole('checkbox', { name: '고립 문서' }).uncheck()
+    await p.getByRole('slider', { name: '링크 단계' }).fill('2')
+    await p.getByRole('searchbox', { name: '파일 검색' }).fill('아무거나')
+
+    await p.getByRole('button', { name: '그룹', exact: true }).click()
+    await p.getByRole('button', { name: '새 그룹', exact: true }).click()
+    await p.getByRole('textbox', { name: '그룹 1 조건' }).fill('tag:일기')
+    await p.getByRole('radio', { name: '색 3' }).check()
+
+    await p.getByRole('button', { name: '표시', exact: true }).click()
+    await p.getByRole('slider', { name: '노드 크기', exact: true }).fill('2.5')
+    await p.getByRole('slider', { name: '이름표 표시 거리', exact: true }).fill('0.4')
+    await p.getByRole('slider', { name: '선 두께', exact: true }).fill('0.9')
+
+    await p.getByRole('button', { name: '장력', exact: true }).click()
+    await forceSlider(p, '반발력').fill('0.9')
+    await forceSlider(p, '링크 거리').fill('0.6')
+    const keyed = forceSlider(p, '링크 장력')
+    await keyed.focus()
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    const keyedValue = Number(await keyed.inputValue())
+
+    await page.reload()
+    const map2 = page.locator('.map-page')
+    await expect(map2).toBeVisible()
+    await expect(map2.locator('canvas')).toHaveCount(1)
+    const p2 = await openPanel(map2)
+
+    await expect(p2.getByRole('searchbox', { name: '파일 검색' })).toHaveValue('')
+    await expect(p2.getByRole('checkbox', { name: '고립 문서' })).not.toBeChecked()
+    await expect(p2.getByRole('slider', { name: '링크 단계' })).toHaveValue('2')
+
+    await p2.getByRole('button', { name: '그룹', exact: true }).click()
+    await expect(p2.locator('.map-group-row')).toHaveCount(1)
+    await expect(p2.getByRole('textbox', { name: '그룹 1 조건' })).toHaveValue('tag:일기')
+    await expect(p2.getByRole('radio', { name: '색 3' })).toBeChecked()
+
+    await p2.getByRole('button', { name: '표시', exact: true }).click()
+    await expect(p2.getByRole('slider', { name: '노드 크기', exact: true })).toHaveValue('2.5')
+    await expect(p2.getByRole('slider', { name: '이름표 표시 거리', exact: true })).toHaveValue('0.4')
+    await expect(p2.getByRole('slider', { name: '선 두께', exact: true })).toHaveValue('0.9')
+
+    await p2.getByRole('button', { name: '장력', exact: true }).click()
+    await expect(forceSlider(p2, '반발력')).toHaveValue('0.9')
+    await expect(forceSlider(p2, '링크 거리')).toHaveValue('0.6')
+    expect(Number(await forceSlider(p2, '링크 장력').inputValue())).toBeCloseTo(keyedValue, 6)
   })
 })
 

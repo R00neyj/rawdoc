@@ -1,5 +1,5 @@
 // 테마 3종·본문 서체·글자 크기·들여쓰기 (F-150.md 3.3)
-// 색·대비·서체·자간 같은 시각 값은 e2e 로 고정하지 않는다 (CLAUDE.md "How we work", 2026-09-25 e2e 경량화) — 설정 동작과 원문 표 정렬만 남긴다
+// 색·대비·서체·자간 같은 시각 값은 e2e 로 고정하지 않는다 (CLAUDE.md "How we work", 2026-09-25 e2e 경량화) — 설정 동작(저장값·루트 data 속성)만 남긴다
 import { test, expect } from '@playwright/test'
 import { openApp, importMarkdown, setPrefBeforeLoad, setViewMode, readSavedContent } from './helpers.js'
 
@@ -23,7 +23,7 @@ test.describe('F-154 A7 설정 항목 — 글자 크기·들여쓰기', () => {
 
 test.describe('F-154 A6 글자 크기', () => {
   // 작게·보통·크게 세 번 돌던 것을 크게 하나로 합쳤다 (2026-09-25 e2e 경량화)
-  test('크게 선택 시 편집·보기 모드 18px, 사이드바 불변, 새로고침 후 유지', async ({ page }) => {
+  test('크게 선택 시 루트 data-font-size 가 large, 사이드바 불변, 새로고침 후 유지', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '문단 글자\n' })
     const sidebarFontBefore = await page.locator('.sidebar').evaluate((el) => getComputedStyle(el).fontSize)
@@ -32,12 +32,7 @@ test.describe('F-154 A6 글자 크기', () => {
     await page.locator('#font-size-label').locator('..').getByRole('radio', { name: '크게', exact: true }).click()
     await page.getByRole('button', { name: '닫기', exact: true }).click()
 
-    const editorFontSize = await page.locator('.cm-line').first().evaluate((el) => getComputedStyle(el).fontSize)
-    expect(editorFontSize).toBe('18px')
-
-    await setViewMode(page, 'view')
-    const viewerFontSize = await page.locator('.markdown-body').first().evaluate((el) => getComputedStyle(el).fontSize)
-    expect(viewerFontSize).toBe('18px')
+    await expect(page.locator('html')).toHaveAttribute('data-font-size', 'large')
 
     const sidebarFontAfter = await page.locator('.sidebar').evaluate((el) => getComputedStyle(el).fontSize)
     expect(sidebarFontAfter).toBe(sidebarFontBefore)
@@ -45,6 +40,7 @@ test.describe('F-154 A6 글자 크기', () => {
     await page.reload()
     const persisted = await page.evaluate(() => localStorage.getItem('md.fontSize'))
     expect(persisted).toBe('large')
+    await expect(page.locator('html')).toHaveAttribute('data-font-size', 'large')
   })
 })
 
@@ -94,47 +90,7 @@ test.describe('F-154 A7a 들여쓰기', () => {
   })
 })
 
-test.describe('F-154 A3 원문 표 정렬', () => {
-  test('한글·영문 섞어 공백으로 맞춘 표의 각 줄 | x 좌표가 일치한다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '| 가나 | ab   |\n| abcd | 가   |\n' })
-    await setViewMode(page, 'raw')
-    const pipeXs = await page.locator('.cm-line').evaluateAll((els) =>
-      els.slice(0, 2).map((el) => {
-        const text = el.textContent
-        const xs = []
-        let idx = text.indexOf('|')
-        while (idx !== -1) {
-          const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
-          let acc = 0
-          let node
-          let offset = 0
-          let n
-          while ((n = walker.nextNode())) {
-            const len = n.textContent.length
-            if (acc + len > idx) {
-              node = n
-              offset = idx - acc
-              break
-            }
-            acc += len
-          }
-          const range = document.createRange()
-          range.setStart(node, offset)
-          range.setEnd(node, offset + 1)
-          xs.push(range.getBoundingClientRect().left)
-          idx = text.indexOf('|', idx + 1)
-        }
-        return xs
-      }),
-    )
-    expect(pipeXs[0].length).toBe(3)
-    expect(pipeXs[0].length).toBe(pipeXs[1].length)
-    for (let i = 0; i < pipeXs[0].length; i++) {
-      expect(Math.abs(pipeXs[0][i] - pipeXs[1][i])).toBeLessThanOrEqual(1)
-    }
-  })
-})
+// F-154 A3 원문 표 `|` 정렬(글자 폭 x 좌표)은 시각 값이라 뺐다 — 사람 확인 몫
 
 test.describe('F-141 A2 첫 화면', () => {
   test('md.theme=dark 저장 후 새로고침하면 렌더 전부터 dark', async ({ page }) => {
@@ -162,19 +118,19 @@ test.describe('F-141 A3 시스템 따라가기', () => {
 })
 
 test.describe('F-141 A7 본문 서체 토글', () => {
-  test('세리프 선택 시 편집·보기 모드 본문이 Noto Serif KR, 원문·사이드바는 그대로', async ({ page }) => {
+  test('세리프 선택 시 루트 data-body-font 가 serif, 새로고침 후 유지', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '문단 글자\n' })
     await page.getByRole('button', { name: '설정', exact: true }).click()
     await page.locator('#body-font-label').locator('..').getByRole('radio', { name: '세리프', exact: true }).click()
     await page.getByRole('button', { name: '닫기', exact: true }).click()
 
-    const editorFont = await page.locator('.cm-line').first().evaluate((el) => getComputedStyle(el).fontFamily)
-    expect(editorFont).toContain('Noto Serif KR')
+    await expect(page.locator('html')).toHaveAttribute('data-body-font', 'serif')
 
     await page.reload()
     const persisted = await page.evaluate(() => localStorage.getItem('md.bodyFont'))
     expect(persisted).toBe('serif')
+    await expect(page.locator('html')).toHaveAttribute('data-body-font', 'serif')
   })
 })
 
