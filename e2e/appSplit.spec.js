@@ -1,6 +1,7 @@
 // App.tsx 분할 특성 테스트 — 옮기기 전 동작을 고정한다 (specs/features/F-2059.md 5.2)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad, resizeWindow, currentDocId } from './helpers.js'
+import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad, resizeWindow, currentDocId, waitSaved } from './helpers.js'
+import { zipSync, unzipSync } from 'fflate'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const root = (page) => page.locator('.context-menu-root')
@@ -803,5 +804,175 @@ test.describe('F-2067 삭제·폴더·고정·이동 절', () => {
     await page.keyboard.press('Escape')
     await expect(page.locator('dialog[open]')).toHaveCount(0)
     await expect(itemButton2067(page, '좁은 문서')).toHaveCount(1)
+  })
+})
+
+async function openSettingsData2068(page) {
+  await page.getByRole('button', { name: '설정', exact: true }).click()
+  const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
+  await dialog.getByRole('tab', { name: '데이터' }).click()
+  return dialog
+}
+
+async function chooseZip2068(page, buffer, name = 'import.zip') {
+  const dialog = await openSettingsData2068(page)
+  await dialog.getByRole('button', { name: '가져오기…', exact: true }).click()
+  await page.locator('input[data-import="zip"]').setInputFiles({ name, mimeType: 'application/zip', buffer })
+}
+
+async function downloadBuffer2068(download) {
+  const stream = await download.createReadStream()
+  const chunks = []
+  for await (const chunk of stream) chunks.push(chunk)
+  return Buffer.concat(chunks)
+}
+
+const importDialog2068 = (page) => page.locator('dialog[aria-labelledby="import-preview-title"]')
+const exactLabel2068 = (page, name) => page.locator('.tree-label').filter({ hasText: new RegExp(`^${name}$`) })
+
+function manifestZip2068(docs, files) {
+  const manifest = { format: 1, exportedAt: Date.now(), scope: 'all', rootFolderId: null, folders: [], docs }
+  return Buffer.from(zipSync({ 'manifest.json': new TextEncoder().encode(JSON.stringify(manifest)), ...files }))
+}
+
+function manifestDoc2068(id, name) {
+  return { id, path: `${name}.md`, title: name, folderId: null, lineEnding: 'lf', createdAt: 1, updatedAt: 1, pinnedAt: null }
+}
+
+function vaultZip2068(files) {
+  const entries = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, new TextEncoder().encode(v)]))
+  return Buffer.from(zipSync(entries))
+}
+
+test.describe('F-2068 가져오기·끌어놓기·이미지 절', () => {
+  test.use({ viewport: { width: 1280, height: 900 } })
+
+  test('F-2068 C1 zip 이 열린 문서를 갱신하면 편집기를 다시 마운트한다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    const docId = await importMarkdown(page, { name: 'doc.md', content: '원본 내용\n' })
+    await page.locator('.doc-title').fill('갱신문서')
+    await page.locator('.doc-title').blur()
+    await waitSaved(page)
+
+    const dialog = await openSettingsData2068(page)
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      dialog.getByRole('button', { name: '전체 내보내기' }).click(),
+    ])
+    const zipBuffer = await downloadBuffer2068(download)
+    await dialog.getByRole('button', { name: '닫기' }).click()
+
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+A')
+    await page.keyboard.type('고친 내용')
+    await waitSaved(page)
+
+    const unzipped = unzipSync(new Uint8Array(zipBuffer))
+    const manifest = JSON.parse(Buffer.from(unzipped['manifest.json']).toString('utf-8'))
+    manifest.docs[0].updatedAt = Date.now() + 10_000_000
+    const rezipped = zipSync({
+      'manifest.json': new TextEncoder().encode(JSON.stringify(manifest)),
+      [manifest.docs[0].path]: unzipped[manifest.docs[0].path],
+    })
+    await chooseZip2068(page, Buffer.from(rezipped))
+
+    const importDialog = importDialog2068(page)
+    await expect(importDialog).toContainText('갱신 1개')
+    await importDialog.getByRole('button', { name: '가져오기' }).click()
+
+    await expect(page.locator('.notice-message')).toHaveText('문서 0개를 가져오고 1개를 갱신했습니다.')
+    await expect(page.locator('.cm-line').first()).toHaveText('원본 내용')
+    expect(await currentDocId(page)).toBe(docId)
+  })
+
+  test('F-2068 C2 zip 일부·전부 실패 — 결과 대화상자와 알림', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    const bad = new Uint8Array([0x80, 0x81, 0x82])
+    await chooseZip2068(
+      page,
+      manifestZip2068([manifestDoc2068('f2068-ok', '가'), manifestDoc2068('f2068-bad', '나')], {
+        '가.md': new TextEncoder().encode('가 내용\n'),
+        '나.md': bad,
+      }),
+    )
+    const importDialog = importDialog2068(page)
+    await expect(importDialog).toContainText('새로 2개')
+    await importDialog.getByRole('button', { name: '가져오기' }).click()
+
+    await expect(page.locator('.notice--warn .notice-message')).toHaveText('1개를 가져오지 못했습니다.')
+    await expect(importDialog).toBeVisible()
+    await expect(importDialog).toContainText('문서 1개를 가져왔습니다.')
+    await expect(importDialog.locator('.import-list li')).toHaveText(['나 — 이 문서는 UTF-8 로 읽을 수 없어 가져오지 못했습니다'])
+    await expect(exactLabel2068(page, '가')).toBeVisible()
+
+    await importDialog.getByRole('button', { name: '닫기' }).click()
+    await chooseZip2068(page, manifestZip2068([manifestDoc2068('f2068-bad2', '다')], { '다.md': bad }))
+    await importDialog.getByRole('button', { name: '가져오기' }).click()
+
+    await expect(page.locator('.notice--error .notice-message')).toHaveText('가져오지 못했습니다.')
+    await expect(importDialog).toContainText('문서 0개를 가져왔습니다.')
+    await expect(importDialog.locator('.import-list li')).toHaveCount(1)
+    await importDialog.getByRole('button', { name: '닫기' }).click()
+    await expect(importDialog).toBeHidden()
+  })
+
+  test('F-2068 C3 OS 파일 열기 — 부팅 뒤 소비자를 등록하고 새 문서로 가져온다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'launchQueue', {
+        configurable: true,
+        value: { consumer: null, setConsumer(c) { this.consumer = c } },
+      })
+    })
+    await openApp(page)
+    const before = await page.locator('.tree-row').count()
+    await expect.poll(() => page.evaluate(() => window.launchQueue.consumer !== null)).toBe(true)
+    await page.evaluate(() => {
+      const handle = (n) => ({
+        kind: 'file',
+        name: `실행${n}.md`,
+        getFile: async () => new File([`# 실행${n}\n`], `실행${n}.md`, { type: 'text/markdown' }),
+      })
+      window.launchQueue.consumer({ files: [handle(1), handle(2)] })
+    })
+
+    await expect(page.locator('.tree-row')).toHaveCount(before + 2)
+    await expect(exactLabel2068(page, '실행1')).toBeVisible()
+    await expect(exactLabel2068(page, '실행2')).toBeVisible()
+    await expect(page.locator('.notice-message')).toHaveText('"실행2.md" 을(를) 가져왔습니다.')
+    await expect(page.locator('.notice--error')).toHaveCount(0)
+    const saved = await readSavedContent(page)
+    expect(saved.content).toBe('# 실행2\n')
+  })
+
+  test('F-2068 C4 볼트 zip 이 열린 문서를 갱신하면 편집기를 다시 마운트하고 넣을 폴더를 편다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    await chooseZip2068(page, vaultZip2068({ '볼트/색인.md': '색인\n' }), 'vault.zip')
+    const importDialog = importDialog2068(page)
+    await expect(importDialog).toContainText('새로 1개')
+    await importDialog.getByRole('button', { name: '가져오기' }).click()
+    await expect(page.locator('.notice-message')).toHaveText('문서 1개를 가져왔습니다.')
+
+    await exactLabel2068(page, '색인').click()
+    await expect(page.locator('.cm-line').first()).toHaveText('색인')
+    await page
+      .locator('.tree-row')
+      .filter({ has: page.locator('.tree-toggle') })
+      .filter({ has: exactLabel2068(page, '볼트') })
+      .locator('.tree-toggle')
+      .click()
+    await expect(exactLabel2068(page, '색인')).toBeHidden()
+
+    await chooseZip2068(page, vaultZip2068({ '볼트/색인.md': '색인 고침\n' }), 'vault.zip')
+    await expect(importDialog.locator('.import-target option:checked')).toHaveText('볼트')
+    await expect(importDialog).toContainText('갱신 1개')
+    await importDialog.getByRole('button', { name: '가져오기' }).click()
+
+    await expect(page.locator('.notice-message')).toHaveText('문서 0개를 가져오고 1개를 갱신했습니다.')
+    await expect(page.locator('.cm-line').first()).toHaveText('색인 고침')
+    await expect(exactLabel2068(page, '색인')).toBeVisible()
   })
 })
