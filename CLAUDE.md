@@ -24,6 +24,15 @@ Logic gets TDD; design gets a fast human-review loop.
 - **Design does not get TDD.** Smoke e2e only covers whether interactive elements — buttons, menus, dialogs — open, close, and respond. Do not pin visual values (color, spacing, alignment, typeface) in e2e: every value change would force a test change, and subpixel rendering makes them flaky (see F-146, F-166, F-225 in the `deploy` skill)
 - **Build design fast and let the user look at it.** Keep the loop short: implement → `npm run dev` / deploy → user checks → fix. Hand visual judgment to `specs/human-checks.md` instead of having an agent sit on it
 
+## Code comments (user instruction, 2026-09-28)
+
+This overrides "match the surrounding code" — older multi-line blocks are not precedent. Applies to `src/`, `worker/`, `cli/`, `site/`; `e2e/` and `scripts/` are exempt.
+
+- **A comment is one line.** If one line cannot say it, fix the code or the naming instead
+- **The one exception is a "why" the code cannot show** — a pitfall, a race, an external constraint. That may take **at most two lines**. Having a spec or review number (`F-xxx`, `리뷰 Y3`) does not make a comment an exception; the number goes at the end of the one line
+- No comments that restate what the code already says. The detailed rationale lives in the spec the number points to
+- Three-line-or-longer blocks are cleaned up whenever that code is touched
+
 ## Document layout
 
 | Location | Contents | Edited |
