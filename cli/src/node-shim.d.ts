@@ -23,6 +23,10 @@ declare module 'node:url' {
   export function fileURLToPath(url: string | URL): string
 }
 
+declare module 'node:fs' {
+  export function realpathSync(path: string): string
+}
+
 declare module 'node:fs/promises' {
   export function readFile(path: string | URL): Promise<Uint8Array>
   export function readFile(path: string | URL, encoding: 'utf-8'): Promise<string>

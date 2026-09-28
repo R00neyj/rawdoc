@@ -1,4 +1,5 @@
 // 진입점. 인자 → 명령 → 출력·종료 코드. 표준 출력에 쓰는 유일한 곳 (specs/features/F-2021.md 4.7)
+import { realpathSync } from 'node:fs'
 import { readFile as readFileReal, writeFile as writeFileReal } from 'node:fs/promises'
 import { hostname as hostnameReal, homedir as homedirReal } from 'node:os'
 import brand from '../../brand.config'
@@ -529,7 +530,19 @@ async function run(): Promise<void> {
   process.exitCode = exitCode
 }
 
+// argv1 이 이 모듈 파일인지. npm/npx 는 POSIX 에서 node_modules/.bin 의 심볼릭 링크로 실행해 argv[1] 이 링크 경로이므로
+// 실제 경로끼리 비교한다 (리뷰 C1)
+export function isEntryScript(argv1: string | undefined, selfPath: string, realpath: (path: string) => string): boolean {
+  if (!argv1) return false
+  if (argv1 === selfPath) return true
+  try {
+    return realpath(argv1) === realpath(selfPath)
+  } catch {
+    return false
+  }
+}
+
 // 이 파일이 실제 실행 스크립트일 때만 돈다 — 테스트가 main() 을 직접 부를 때는 여기가 실행되지 않는다
-if (import.meta.filename === process.argv[1]) {
+if (isEntryScript(process.argv[1], import.meta.filename, realpathSync)) {
   void run()
 }

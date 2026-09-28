@@ -1,6 +1,6 @@
 // F-2021 U16 (specs/features/F-2021.md 13.1, 4.7)
 import { describe, expect, it, vi } from 'vitest'
-import { main, type MainDeps } from './main'
+import { isEntryScript, main, type MainDeps } from './main'
 import { cliCallbackUrl, parseCliLoginHash } from '../../src/lib/cliLoginUrl'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -306,3 +306,29 @@ describe('F-2021 U16 main()', () => {
     }
   })
 })
+
+// 리뷰 C1 — npm/npx 의 .bin 심볼릭 링크로 실행하면 argv[1] 이 링크 경로라 문자열 비교가 거짓이었다
+describe('isEntryScript (리뷰 C1)', () => {
+  const real = '/usr/lib/node_modules/rawdoc/dist/rawdoc.js'
+  const links: Record<string, string> = { '/usr/bin/rawdoc': real, [real]: real, '/usr/bin/other': '/usr/bin/other' }
+  const realpath = (p: string) => {
+    const r = links[p]
+    if (!r) throw new Error('ENOENT')
+    return r
+  }
+
+  it('같은 경로면 참', () => {
+    expect(isEntryScript(real, real, realpath)).toBe(true)
+  })
+
+  it('심볼릭 링크로 실행해도 참', () => {
+    expect(isEntryScript('/usr/bin/rawdoc', real, realpath)).toBe(true)
+  })
+
+  it('다른 파일이거나 argv[1] 이 없거나 경로를 풀 수 없으면 거짓', () => {
+    expect(isEntryScript('/usr/bin/other', real, realpath)).toBe(false)
+    expect(isEntryScript('/nowhere', real, realpath)).toBe(false)
+    expect(isEntryScript(undefined, real, realpath)).toBe(false)
+  })
+})
+
