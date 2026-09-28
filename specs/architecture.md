@@ -40,6 +40,8 @@ src/
     useImportFlow.ts     .md·zip·볼트 가져오기, OS 파일 열기, 창 전체 끌어놓기, 이미지 붙여넣기·끌어놓기 저장 (F-114, F-119, F-145, F-156, F-231, F-282, F-2019, F-2068)
     importResult.ts      가져오기 뒤 편집기 다시 마운트 판정 — 실시간 경로는 건너뜀 (F-305 10.1, F-2068)
     useNotificationsGlue.ts 알림함 여닫기·항목 이동·안 읽은 점·멘션 후보 원천 (F-507, F-510, F-2069)
+    useLiveNotices.ts 실시간 알림 띠 N1~N10·오프라인 보기 알림 (F-305, F-306, F-2070)
+    liveNotices.ts   알림 띠 판정 순수 함수 — 자기 서버 문서 여부·끊김 문구·멈춤 갈래 (F-2070)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
