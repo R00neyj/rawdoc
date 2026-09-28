@@ -1,5 +1,4 @@
-// localStorage 설정 (specs/architecture.md 4장)
-// 키 접두사 md. 로 고정, 제품명을 쓰지 않는다. 접근은 전부 이 파일을 거친다
+// localStorage 설정 — 키 접두사 md. 로 고정하고 제품명을 쓰지 않는다, 접근은 전부 이 파일을 거친다 (architecture.md 4장)
 
 type PrefMap = {
   'md.viewMode': 'live' | 'raw' | 'view'

@@ -27,10 +27,8 @@
   --callout-color: var(--callout-quote);
 }
 
-/* ===== 편집 모드 (F-128 4.1) =====
-   모서리·안쪽 여백은 F-124 3.2 이유(CM6 는 줄 높이를 DOM 에서 재는데 margin 이
-   반영되지 않는다)로 세로는 padding 만 쓴다. 왼쪽 선·바탕은 줄마다 같은 값을 줘서
-   fenceLinePreview()(F-124 3.4 11번)와 같은 방식으로 이어진 박스처럼 보이게 한다 */
+/* ===== 편집 모드 (F-128 4.1) ===== 모서리·안쪽 여백은 F-124 3.2 이유(CM6 는 DOM 에서 줄 높이를 재는데 margin 이 반영 안 된다)로 세로는 padding 만 쓴다 */
+/* 왼쪽 선·바탕은 줄마다 같은 값을 줘서 fenceLinePreview()(F-124 3.4 11번)와 같은 방식으로 이어진 박스처럼 보이게 한다 */
 .cm-host .cm-editor .cm-line.md-callout {
   background: color-mix(in srgb, var(--callout-color) 8%, var(--panel));
   border-left: 4px solid var(--callout-color);
@@ -50,12 +48,8 @@
   border-bottom-right-radius: 6px;
 }
 
-/* "[!type]" 자리 (F-128 4.1) — 기호는 숨기지 않고 색 묶음 색·굵기 600 으로 보인다. 글자 크기는 본문 그대로 —
-   0.85em 은 span 이 겹치면 두 번 곱해져 11px 까지 작아졌다 (tweak 2026-09-28).
-   같은 범위에 highlight.js 의 tags.link → .md-link(색 --md-link, cursor:pointer)가
-   같이 붙는다(lezer 가 이 자리를 URL 없는 Link 로 읽는다, F-128 4.1) — 어느 쪽 span 이
-   더 안쪽에 오든 이기도록 두 방향 선택자에 모두 적용한다. 콜아웃 머리는 열 수 있는
-   링크가 아니므로(URL 없음) cursor 도 되돌린다 */
+/* "[!type]" 자리 (F-128 4.1) — 기호는 숨기지 않고 색 묶음 색·굵기 600, 글자 크기는 본문 그대로(0.85em 은 span 이 겹치면 두 번 곱해져 11px 까지 작아졌다, tweak 2026-09-28) */
+/* 같은 범위에 highlight.js 의 tags.link → .md-link 가 같이 붙어(lezer 가 URL 없는 Link 로 읽는다, F-128 4.1) 두 방향 선택자 모두 적용 — 콜아웃 머리는 링크가 아니므로(URL 없음) cursor 도 되돌린다 */
 .md-callout-type,
 .md-callout-type.md-link,
 .md-callout-type .md-link,

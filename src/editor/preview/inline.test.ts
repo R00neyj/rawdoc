@@ -1,5 +1,4 @@
-// buildInline 단위 테스트 (specs/features/F-104.md 3장 A1, specs/features/F-129.md 4장 A1)
-// EditorState + ensureSyntaxTree 로 계산 함수를 직접 부른다. DOM 은 쓰지 않는다
+// buildInline 단위 테스트(F-104 3장 A1, F-129 4장 A1) — EditorState + ensureSyntaxTree 로 계산 함수를 직접 부른다. DOM 안 씀
 import { describe, expect, it } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
@@ -18,8 +17,7 @@ function makeState(doc: string, anchor = 0, head = anchor) {
   return state
 }
 
-// buildInline 은 F-129 부터 숨김(HIDE) 범위와 표시용 mark(md-link) 범위를 함께 돌려준다.
-// 기존 F-104 테스트는 "숨김 개수·길이" 만 재므로 mark 는 제외하고 센다
+// buildInline 은 F-129 부터 숨김(HIDE)+표시용 mark(md-link) 범위를 함께 돌려준다 — 기존 F-104 테스트는 "숨김 개수·길이"만 재므로 mark 는 제외하고 센다
 function hideRanges(state: CMState) {
   return buildInline(state, [{ from: 0, to: state.doc.length }]).filter((r) => r.value.spec?.class !== 'md-link')
 }
@@ -219,8 +217,7 @@ describe('buildInline — F-128 4.1: 콜아웃 머리는 링크 기호 숨김에
   it('중첩 인용(> > [!tip])은 바깥 판정이라 숨김 대상에서 빠지지 않는다', () => {
     const doc = '> > [!tip] 중첩\nx'
     const state = makeState(doc, doc.length)
-    // 바깥은 콜아웃이 아니고(머리 텍스트가 [ 로 시작하지 않음), 이 파일은 lines.js 와
-    // 같은 "가장 바깥만" 규칙을 쓰므로 안쪽 Link 의 [ ] 는 일반 규칙대로 숨는다
+    // 바깥은 콜아웃이 아니고(머리 텍스트가 [ 로 시작 안 함), 이 파일도 lines.ts 와 같은 "가장 바깥만" 규칙을 쓰므로 안쪽 Link 의 [ ] 는 일반 규칙대로 숨는다
     expect(hiddenCount(state)).toBeGreaterThan(0)
   })
 

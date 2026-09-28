@@ -10,8 +10,7 @@ import usePresence from './usePresence'
 import ShareSetDialog from './ShareSetDialog'
 import type { Notice } from './notice'
 
-// 상단바 `공유` 메뉴 (specs/ia.md 2장 A·3.19, specs/features/F-130.md 2장)
-// FolderMenu(F-126.md 5.2)와 같은 패턴 — 라이브러리 없이 방향키·Enter·Esc·바깥 클릭을 직접 구현
+// 상단바 `공유` 메뉴 — FolderMenu 와 같은 패턴으로 방향키·Enter·Esc·바깥 클릭을 직접 구현한다 (ia.md 2장 A·3.19, F-130.md 2장, F-126.md 5.2)
 // 링크·마크다운 복사 본문은 shareCopy.ts 로 옮겼다 — 명령 팔레트와 같이 쓴다 (F-2054 6.2)
 
 type ShareMenuProps = {
@@ -64,8 +63,7 @@ export default function ShareMenu({
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [open])
 
-  // 메뉴를 열 때마다 링크 유무를 다시 확인 — `끊기` 항목 노출 조건 (F-210.md 2.6)
-  // 금고 문서는 GET 조차 보내지 않는다 — 끊기 항목을 보일 일이 없다 (F-409 6.2)
+  // 메뉴를 열 때마다 링크 유무를 다시 확인한다(끊기 항목 노출 조건, F-210.md 2.6) — 금고 문서는 GET 조차 안 보내 끊기를 보일 일이 없다 (F-409 6.2)
   useEffect(() => {
     if (!open || !linkDocId || e2eeDoc) return
     let cancelled = false

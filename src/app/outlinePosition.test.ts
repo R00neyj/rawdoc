@@ -20,8 +20,7 @@ describe('topInScroller — offsetTop 대신 getBoundingClientRect 차이 (메�
   it('요소·컨테이너 rect 차이에 컨테이너 scrollTop 을 더한다', () => {
     const el = { getBoundingClientRect: () => ({ top: 250 }) }
     const container = { getBoundingClientRect: () => ({ top: 50 }), scrollTop: 400 }
-    // 화면상 el 이 container 보다 200px 아래. container 는 이미 400px 스크롤된 상태이므로
-    // 스크롤 좌표계에서 el 의 top 은 200 + 400 = 600
+    // 화면상 el 이 container 보다 200px 아래, container 는 이미 400px 스크롤된 상태 — 스크롤 좌표계에서 el 의 top 은 200+400=600
     expect(topInScroller(el, container)).toBe(600)
   })
 

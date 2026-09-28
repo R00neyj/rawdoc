@@ -1,6 +1,5 @@
 // 문서 ↔ 공유 링크 조각 인코딩 — 순수 함수, 비동기 (specs/features/F-130.md 3.3)
-// 조각 = base64url(패딩 없음)( deflate-raw( UTF-8( JSON ) ) )
-// JSON: { v:1, t:제목, c:본문(LF 로 이은 원문), e:"crlf"|"lf" }
+// 조각 = base64url(패딩 없음)(deflate-raw(UTF-8(JSON))), JSON: { v:1, t:제목, c:본문(LF 로 이은 원문), e:"crlf"|"lf" }
 import { toEditorText, fromEditorText, type LineEnding } from './lineEnding'
 
 const SHARE_VERSION = 1
@@ -41,10 +40,8 @@ function fromBase64Url(fragment: string): Uint8Array<ArrayBuffer> {
   return bytes
 }
 
-// writer.write/close 가 반환하는 프라미스를 그냥 버리면, 스트림이 오류로 끝날 때
-// (예: decompress 에 잘린 데이터가 들어올 때) 그 프라미스도 함께 거부되어
-// 아래 Response(...).arrayBuffer() 의 거부와 별개로 unhandled rejection 이 발생한다.
-// 실제 오류는 arrayBuffer() 쪽 거부로 propagate 시키고, write/close 쪽은 즉시 catch 해 둔다
+// writer.write/close 프라미스를 버리면 스트림이 오류로 끝날 때(예: 잘린 데이터 decompress) 그것도 거부되어 unhandled rejection 이 난다
+// 실제 오류는 아래 Response(...).arrayBuffer() 쪽 거부로 propagate 시키고, write/close 쪽은 즉시 catch 해 둔다
 async function compress(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
   const cs = new CompressionStream('deflate-raw')
   const writer = cs.writable.getWriter()

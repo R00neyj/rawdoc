@@ -1,6 +1,4 @@
-// 저장소 영속화 요청 (specs/features/F-118.md, specs/architecture.md 4장)
-// 저장소가 이미 허락돼 있으면 그대로, 아니면 navigator.storage.persist() 를 요청한다
-// 허락 여부를 돌려준다. API 가 없으면 null
+// 저장소 영속화 요청 — 이미 허락돼 있으면 그대로, 아니면 persist() 요청, 결과 반환(API 없으면 null) (specs/features/F-118.md, specs/architecture.md 4장)
 export async function ensurePersist(): Promise<boolean | null> {
   if (!navigator.storage?.persist) return null
   const already = await navigator.storage.persisted?.()

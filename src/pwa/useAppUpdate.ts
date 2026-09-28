@@ -1,6 +1,5 @@
 // 새 버전 적용 (specs/features/F-117.md, specs/ia.md 3.13)
-// virtual:pwa-register/react 는 Vitest(node)에서 해석되지 않는다. 이 모듈을 import 하는
-// 파일은 테스트에서 import 하지 않는다 (F-117.md 2장)
+// virtual:pwa-register/react 는 Vitest(node)에서 해석되지 않는다 — 이 모듈을 import 하는 파일은 테스트에서 import 하지 않는다 (F-117.md 2장)
 import { useCallback, useEffect, useRef } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 
@@ -30,9 +29,7 @@ export function useAppUpdate({
     },
   })
 
-  // updateServiceWorker 는 useRegisterSW 내부 구현에 따라 렌더마다 새로 만들어질 수 있다.
-  // applyUpdate 를 렌더 사이에 안정된 참조로 유지하려고(App.jsx effect 의존성 무한 루프 방지)
-  // ref 로만 최신 값을 읽는다
+  // updateServiceWorker 는 useRegisterSW 내부 구현상 렌더마다 새로 만들어질 수 있다 — applyUpdate 를 안정된 참조로 유지하려고(App.jsx effect 의존성 무한 루프 방지) ref 로만 최신 값을 읽는다
   const updateServiceWorkerRef = useRef(updateServiceWorker)
   useEffect(() => {
     updateServiceWorkerRef.current = updateServiceWorker

@@ -75,9 +75,7 @@ describe('extend', () => {
     expect(result).toEqual({ ids: ['b'], anchor: treeDoc('b') })
   })
 
-  // 고정된 문서는 `고정됨` 묶음과 트리에 두 줄로 나온다. 두 줄을 id 로만 가리면
-  // findIndex 가 늘 위쪽(고정됨) 줄을 집어, 트리 쪽 줄을 Shift+클릭했을 때 범위가
-  // 클릭한 자리가 아니라 목록 맨 위까지 거꾸로 번진다 (2026-09-22 사용자 신고)
+  // 고정된 문서는 두 줄로 나와 id 로만 가리면 findIndex 가 늘 위쪽 줄을 집어, 트리 줄 Shift+클릭 시 범위가 목록 맨 위까지 거꾸로 번진다 (2026-09-22 사용자 신고)
   it('고정된 문서의 트리 쪽 줄을 Shift+클릭하면 그 줄 기준으로 범위를 센다', () => {
     const rows: SelectionRow[] = [pinnedDoc('b'), treeDoc('c'), treeDoc('b'), treeDoc('a')]
     const anchored = replace(EMPTY_SELECTION, treeDoc('a'))

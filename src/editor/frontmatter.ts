@@ -1,10 +1,5 @@
-// @lezer/markdown 블록 파서 확장 — YAML 프론트매터 (specs/features/F-133.md 3.2)
-// 문서 첫 줄이 findFrontmatter(lib/frontmatter.js)가 인식하는 범위면, 그 구간을
-// HorizontalRule·SetextHeading 등 다른 블록으로 읽지 않고 Frontmatter 노드(자식:
-// 여는·닫는 FrontmatterMark) 하나로 만든다. 안쪽은 더 이상 블록·인라인으로 나누지
-// 않는다 — 그래서 강조·링크·위키링크 등 인라인 확장이 만들 노드가 애초에 생기지
-// 않고, F-127(자동 짝 기호)·F-129(링크 클릭)는 프론트매터 안인지를 구문 트리로
-// 직접 확인해 동작을 막는다(각 파일 1줄, F-133 3.2)
+// @lezer/markdown 블록 파서 확장 — YAML 프론트매터(F-133 3.2). 인식 범위를 Frontmatter 노드 하나로 만들고 안쪽은 더 안 나눈다
+// 그래서 인라인 확장 노드가 안 생기고, F-127·F-129 는 프론트매터 안인지 구문 트리로 직접 확인해 동작을 막는다
 import { syntaxTree } from '@codemirror/language'
 import type { EditorState as CMState } from '@codemirror/state'
 import { EditorState, StateField } from '@codemirror/state'
@@ -24,19 +19,16 @@ function beforeLineBreak(text: string, pos: number): number {
   return pos
 }
 
-// BlockContext.input 은 전체 문서에 접근할 수 있는 Input 이다(@internal 표시지만
-// 실제 접근 가능한 인스턴스 속성 — @lezer/markdown 소스 BlockContext 생성자 확인).
+// BlockContext.input 은 전체 문서에 접근 가능한 Input(@internal 표시지만 실제 접근 가능한 인스턴스 속성 — @lezer/markdown 소스 BlockContext 생성자 확인)
 // 공개 .d.ts 에는 없어 여기서만 로컬 타입으로 보강한다(third-party 타입 공백)
 type BlockContextWithInput = BlockContext & { input: { read(from: number, to: number): string; length: number } }
 
-// 이 파서는 문서의 절대 첫 줄(cx.lineStart === 0)에서만 동작한다. 이 위치는 파싱
-// 시작 시점이라 다른 블록 컨텍스트(목록·인용)가 열려 있을 수 없으므로 cx.depth
-// 확인은 방어적 보강이다
+// 이 파서는 문서의 절대 첫 줄(cx.lineStart === 0)에서만 동작한다 — 파싱 시작 시점이라 다른 블록 컨텍스트가 열려 있을 수 없다
+// cx.depth 확인은 방어적 보강이다
 function parseFrontmatter(cx: BlockContext): boolean {
   if (cx.lineStart !== 0 || cx.depth !== 1) return false
 
-  // 줄 단위로만 앞을 내다볼 수 있는 cx.peekLine() 으로는 닫는 줄까지 미리 볼 수 없어
-  // input 을 직접 읽는다
+  // 줄 단위로만 내다보는 cx.peekLine() 으로는 닫는 줄까지 미리 볼 수 없어 input 을 직접 읽는다
   const input = (cx as BlockContextWithInput).input
   const text = input.read(0, input.length)
   const fm = findFrontmatter(text)
@@ -89,8 +81,7 @@ export function frontmatterWidgetInfo(state: CMState): FrontmatterWidgetInfo | n
       if (n.name === 'Frontmatter') node = n.node
     },
   })
-  // TS 는 iterate 콜백 안 대입을 이 시점의 narrowing 에 반영하지 못해 node 를
-  // never 로 좁힌다(콜백 경계를 건너는 let 재대입의 알려진 한계) — 명시적으로 되돌린다
+  // TS 는 iterate 콜백 안 대입을 narrowing 에 반영 못 해 node 를 never 로 좁힌다(let 재대입의 알려진 한계) — 명시적으로 되돌린다
   const found = node as SyntaxNode | null
   if (!found) return null
 

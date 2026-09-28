@@ -163,8 +163,7 @@ export default function MapPanel({
 }: MapPanelProps) {
   const idBase = useId()
   const visibleSections = sectionsFor(mode)
-  // 그리는 묶음 중 맨 위 하나만 펼쳐져 있다. 아코디언이 아니라 여러 묶음을 동시에 펼칠 수 있다 (4.2)
-  // 두 모드 다 맨 위가 `필터` 라 펼침 초기값이 같다 — 모드가 바뀌어도 다시 잡을 일이 없다 (F-2007 11.3)
+  // 그리는 묶음 중 맨 위 하나만 펼친다(아코디언 아님, 여러 개 동시 가능, 4.2) — 두 모드 다 맨 위가 `필터` 라 초기값을 공유한다 (F-2007 11.3)
   const [openSections, setOpenSections] = useState<ReadonlySet<SectionId>>(
     () => new Set(sectionsFor(mode).slice(0, 1)),
   )

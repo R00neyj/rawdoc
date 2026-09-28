@@ -192,8 +192,7 @@ type PublicViewProps =
   | { kind: 'doc'; token: string }
   | { kind: 'folder'; token: string; docId?: string }
 
-// 문서 하나를 읽어 머리 줄 + 본문 + 목차를 그린다 — 어떤 attachments 경로로 읽을지만 호출부가 정한다 (F-210.md 2.4·2.5, F-211.md 2.3)
-// resolveWikiLink·onOpenWikiLink 를 주지 않으면 위키링크는 지금처럼 wikilink--plain (F-252.md 4.6)
+// 문서 하나를 읽어 머리 줄+본문+목차를 그린다 — attachments 경로는 호출부가 정한다(F-210.md 2.4·2.5, F-211.md 2.3), resolveWikiLink 없으면 위키링크는 wikilink--plain(F-252.md 4.6)
 function DocPane({
   docKey,
   state,

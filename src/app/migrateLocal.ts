@@ -1,5 +1,4 @@
-// 로컬 → 계정 이관 (specs/features/F-208.md 2장) — 계정마다 한 번, 옮긴 계정 id 를 md.localMigrated 로 기록한다
-// 로컬 금고 로그인 이관 (specs/features/F-408.md 3.3·4장) — checkLocalE2eeMigration·runLocalE2eeMigration
+// 로컬 → 계정 이관(F-208.md 2장, 계정마다 한 번, 옮긴 계정 id 를 md.localMigrated 로 기록) 및 로컬 금고 로그인 이관(F-408.md 3.3·4장, checkLocalE2eeMigration·runLocalE2eeMigration)
 import type { Attachment, AttachmentExt, Doc, Folder } from '../types'
 import { GUIDE_DOC_TITLE, GUIDE_DOC_CONTENT_CRLF } from './guideDoc'
 import { encryptLocalPlainAttachment, planLocalE2eeMigration, rekeyLocalE2eeAttachment, rekeyLocalE2eeDoc, type LocalE2eeKeys } from '../e2ee/convert'
@@ -31,8 +30,7 @@ export async function migrateLocalIfNeeded(deps: MigrateLocalDeps): Promise<void
   const local = await readLocal()
   const folders = local.folders
   const comments = local.comments
-  // 손대지 않은 첫 실행 안내 문서는 옮기지 않는다 — 기기마다 새 id 로 만들어져 계정에 쌓인다 (2.2)
-  // 단, 댓글 기록이 1개 이상이면 사용자가 쓴 것이니 옮긴다 (F-508.md 7.1 Q5)
+  // 손대지 않은 첫 실행 안내 문서는 옮기지 않는다(기기마다 새 id 로 계정에 쌓인다, 2.2) — 댓글 기록이 1개 이상이면 사용자가 쓴 것이니 옮긴다 (F-508.md 7.1 Q5)
   const docs = local.docs.filter((d) => {
     const isUntouchedGuide = d.title === GUIDE_DOC_TITLE && d.content === GUIDE_DOC_CONTENT_CRLF
     if (!isUntouchedGuide) return true

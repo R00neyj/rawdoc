@@ -67,9 +67,8 @@ function normalizeDoc(doc: StoredDoc): Doc {
   return withPinnedAt(withFolderId(doc)) as Doc
 }
 
-// folderId 가 null 이거나 존재하는 폴더를 가리키는 문자열이면 유효하다. 그 외(문자열이
-// 아니거나 없는 폴더)는 무효 — create·moveDoc 이 이 검사를 통과 못 하면 아무것도 바꾸지
-// 않고 오류를 던진다 (F-136.md 3.1·3.2)
+// folderId 가 null 이거나 존재하는 폴더를 가리키는 문자열이면 유효하다 — 그 외(문자열 아니거나 없는 폴더)는 무효
+// create·moveDoc 이 이 검사를 통과 못 하면 아무것도 바꾸지 않고 오류를 던진다 (F-136.md 3.1·3.2)
 function isValidFolderId(folders: Folder[], folderId: unknown): folderId is string | null {
   if (folderId === null) return true
   if (typeof folderId !== 'string') return false
@@ -297,9 +296,8 @@ export async function createIdbStore(
         await tx.done
         throw new Error(`문서를 찾을 수 없음: ${id}`)
       }
-      // folderId 가 null 이 아니고 존재하는 폴더가 아니면 오류를 던지고 아무것도 바꾸지
-      // 않는다 (F-136.md 3.2) — 다른 문서 위에 놓아 그 문서 id 가 folderId 로 들어오는
-      // 경우 등을 저장소 수준에서도 막는다
+      // folderId 가 null 이 아니고 존재하는 폴더가 아니면 오류를 던지고 아무것도 바꾸지 않는다 (F-136.md 3.2)
+      // 다른 문서 위에 놓아 그 문서 id 가 folderId 로 들어오는 경우 등을 저장소 수준에서도 막는다
       const folders: Folder[] = await folderStore.getAll()
       if (!isValidFolderId(folders, resolvedFolderId)) {
         await tx.done

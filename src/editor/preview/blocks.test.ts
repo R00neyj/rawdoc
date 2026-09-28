@@ -1,6 +1,4 @@
-// buildBlocks 단위 테스트 (specs/features/F-106.md 3장 A1)
-// EditorState + ensureSyntaxTree 로 계산 함수를 직접 부른다. DOM 은 쓰지 않는다
-// (widget.toDOM 은 호출하지 않는다 — vite.config.js test.environment 가 'node' 다)
+// buildBlocks 단위 테스트(F-106 3장 A1) — EditorState + ensureSyntaxTree 로 계산 함수를 직접 부른다. DOM 안 씀(widget.toDOM 미호출, test.environment 'node')
 import { describe, expect, it, vi } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import { Decoration, EditorView } from '@codemirror/view'
@@ -35,11 +33,8 @@ function makeState(doc: string, anchor = 0, head = anchor, timeout = 5000) {
     extensions: [markdown({ base: markdownLanguage })],
   })
   ensureSyntaxTree(state, doc.length, timeout)
-  // ensureSyntaxTree 는 내부 ParseContext 를 완전히 파싱시키지만, EditorState 필드에
-  // 박힌 스냅샷(LanguageState.tree)은 문서 생성 시점 뷰포트(기본 3,000자)에 멈춰 있다.
-  // 문서가 그보다 크면(F-106 2.5 성능 문서) syntaxTree(state) 가 이 스냅샷을 읽으므로
-  // 갱신되지 않는다 — no-op 트랜잭션을 한 번 통과시켜 필드를 최신 트리로 맞춘다.
-  // 실제 에디터에서는 ViewPlugin 의 배경 파싱이 이 갱신을 자동으로 해 준다.
+  // ensureSyntaxTree 는 ParseContext 를 완전히 파싱해도 EditorState 필드의 스냅샷(LanguageState.tree)은 생성 시점 뷰포트(3,000자)에 멈춰 있다 — 문서가 크면(F-106 2.5) 갱신 안 됨
+  // no-op 트랜잭션으로 필드를 최신 트리로 맞춘다 — 실제 에디터는 ViewPlugin 배경 파싱이 자동으로 해 준다
   return state.update({}).state
 }
 
@@ -67,8 +62,7 @@ describe('buildBlocks — 생성 여부', () => {
     const cursor = TABLE_DOC.indexOf('1') // 표 본문 행
     const state = makeState(MIXED_DOC, cursor)
     const widgets = widgetsOf(state)
-    // F-125 2.1 의 "항상 위젯" 은 F-139 3.1 로 이 예외가 생겼다 — 표를 치는 도중
-    // 빈 커서가 표 원문 안에 있으면 코드블록과 같은 "겹치면 원문" 규칙을 탄다
+    // F-125 2.1 의 "항상 위젯"은 F-139 3.1 로 예외가 생겼다 — 표 치는 도중 빈 커서가 표 원문 안에 있으면 코드블록과 같은 "겹치면 원문" 규칙을 탄다
     expect(widgets.some((w) => w.table)).toBe(false)
     expect(widgets.some((w) => w.lines !== undefined)).toBe(true)
   })
@@ -98,8 +92,7 @@ describe('buildBlocks — 생성 여부', () => {
   })
 })
 
-// 인용·목록 안 표는 줄 앞 `>`·`-`·들여쓰기가 표 원문에 섞여, tableModel 이 `>` 를 첫 열 칸으로
-// 읽거나 행 추가가 접두 없이 들어가 구조를 깬다 — 위젯으로 만들지 않고 원문으로 둔다 (리뷰 E2)
+// 인용·목록 안 표는 줄 앞 `>`·`-`·들여쓰기가 표 원문에 섞여 tableModel 구조를 깬다 — 위젯으로 만들지 않고 원문으로 둔다(리뷰 E2)
 describe('buildBlocks — 인용·목록 안 표 (리뷰 E2)', () => {
   it('인용 안 표는 위젯을 만들지 않는다', () => {
     const doc = '> | a | b |\n> |---|---|\n> | 1 | 2 |\n\nx'
@@ -127,8 +120,7 @@ describe('buildBlocks — 인용·목록 안 표 (리뷰 E2)', () => {
 })
 
 describe('buildBlocks — 표를 치는 도중 입력 손실 방지 (F-139 3.1)', () => {
-  // F-139 3.2 재현: 구분 행을 "| --- | - " 까지만 쳐도 GFM 최소 조건(칸마다
-  // ':?-+:?')을 만족해 즉시 Table 로 인식된다 — 사용자가 아직 다 치지 않았어도 그렇다
+  // F-139 3.2 재현: 구분 행이 "| --- | - " 까지만 쳐도 GFM 최소 조건(칸마다 ':?-+:?')을 만족해 즉시 Table 로 인식된다
   const PARTIAL_DOC = '앞 문단\n\n| a | b |\n| --- | - '
 
   it('빈 커서가 표 원문 범위 안(문서 끝)이면 표 위젯을 만들지 않는다', () => {
@@ -163,8 +155,7 @@ describe('buildBlocks — 표를 치는 도중 입력 손실 방지 (F-139 3.1)'
 
 describe('buildBlocks — 셀·줄 상대 오프셋', () => {
   it('표 셀의 from/to 는 블록 시작 기준 상대 오프셋이고, 그 위치에 그 셀 원문이 있다', () => {
-    // 표 바로 뒤에 줄바꿈 없이 텍스트가 오면 GFM 파서가 그 줄을 표의 추가 행으로
-    // 흡수한다(단일 셀 행). 표를 확실히 끝내려면 빈 줄이 필요하다
+    // 표 바로 뒤 줄바꿈 없이 텍스트가 오면 GFM 파서가 그 줄을 표의 추가 행(단일 셀)으로 흡수한다 — 표를 확실히 끝내려면 빈 줄 필요
     const doc = TABLE_DOC + '\nx'
     const state = makeState(doc, doc.length)
     const range = buildBlocks(state, true, undefined, TEST_THEME).find((r) => r.value.spec.widget.table)!
@@ -249,8 +240,7 @@ describe('buildBlocks — 성능 기록 (F-106 2.5, 통과 기준 없음)', () =
     let n = 0
     while (lines.length < 4900) {
       lines.push(`문단 ${n++} 내용입니다.`)
-      // 표·코드블록 앞뒤에 빈 줄을 둔다 — 없으면 GFM 표가 바로 뒤 텍스트를
-      // 단일 셀 행으로 흡수해 블록 경계가 뭉개진다 (위 "셀·줄 상대 오프셋" 절 참고)
+      // 표·코드블록 앞뒤에 빈 줄을 둔다 — 없으면 GFM 표가 바로 뒤 텍스트를 단일 셀 행으로 흡수해 블록 경계가 뭉개진다(위 "셀·줄 상대 오프셋" 절 참고)
       if (tables < 50 && lines.length % 49 === 0) {
         lines.push('', '| 이름 | 값 |', '| - | - |', '| 가 | 1 |', '| 나 | 2 |', '')
         tables++
@@ -292,9 +282,8 @@ describe('buildBlocks — widget.eq 는 클릭 위치 계산에 쓰는 offset �
     expect(wa.table.rows.map((r) => r.cells.map((c) => c.text))).toEqual(
       wb.table.rows.map((r) => r.cells.map((c) => c.text)),
     )
-    // 하지만 offset(from) 은 다르다(파싱 확인: probe 로 미리 확인함). 새 TableWidget.eq
-    // 는 칸 단위가 아니라 블록 원문(text) 전체를 비교한다 — 공백 하나만 달라도
-    // text 자체가 달라지므로 이 경우를 자동으로 거짓 처리한다
+    // offset(from) 은 다르다(파싱 확인: probe 로 미리 확인함) — TableWidget.eq 는 칸 단위가 아니라 블록 원문(text) 전체를 비교한다
+    // 공백 하나만 달라도 text 가 달라지므로 이 경우를 자동으로 거짓 처리한다
     expect(wa.table.rows.map((r) => r.cells.map((c) => c.from))).not.toEqual(
       wb.table.rows.map((r) => r.cells.map((c) => c.from)),
     )
@@ -372,9 +361,8 @@ describe('observeHeight/stopObservingHeight — DOM 요소 기준 추적 (F-134 
   })
 
   it('DOM 이 재사용돼(같은 el) 다른 "위젯 인스턴스" 쪽에서 stopObservingHeight 를 불러도 처음 만든 observer 가 해제된다', () => {
-    // observer 를 위젯 인스턴스가 아니라 el 에 묶었으므로, stopObservingHeight 는
-    // "누가 만들었는지" 를 전혀 몰라도(인자로 위젯 인스턴스를 받지 않는다) el 만으로
-    // 해제할 수 있다 — 이 구조 자체가 F-134 3.6 이 요구하는 성질이다
+    // observer 를 위젯 인스턴스가 아니라 el 에 묶었으므로 stopObservingHeight 는 "누가 만들었는지" 몰라도(위젯 인스턴스를 인자로 안 받음) el 만으로 해제 가능
+    // 이 구조 자체가 F-134 3.6 이 요구하는 성질이다
     const disconnect = vi.fn()
     class FakeResizeObserver {
       observe() {}
@@ -387,9 +375,8 @@ describe('observeHeight/stopObservingHeight — DOM 요소 기준 추적 (F-134 
     try {
       const el = {} as HTMLElement // 재사용된 DOM 요소 자리
       observeHeight(el, { requestMeasure: vi.fn() } as unknown as EditorView) // "첫 위젯 인스턴스" 의 toDOM
-      // 이후 재계산에서 eq() 가 참이라 toDOM 이 다시 불리지 않았고(=el 그대로),
-      // 마지막에 destroy(el) 이 불릴 때는 다른(나중에 만들어진) 위젯 인스턴스가
-      // 불렀다고 가정해도 el 기준이라 똑같이 해제된다
+      // 이후 재계산에서 eq() 가 참이라 toDOM 이 다시 안 불렸고(=el 그대로)
+      // destroy(el) 을 다른(나중에 만들어진) 위젯 인스턴스가 불렀다고 가정해도 el 기준이라 똑같이 해제된다
       stopObservingHeight(el)
       expect(disconnect).toHaveBeenCalledTimes(1)
     } finally {
@@ -624,8 +611,7 @@ describe('blockPreview — 구문 트리만 바뀐 갱신 (F-134 3.8)', () => {
   }
 
   it('문서·선택 변화 없이 syntaxTree 만 바뀐 갱신도 위젯을 다시 계산한다', () => {
-    // 뷰포트 기본값(3,000자)을 넘는 위치에 코드블록을 둔다 — state 생성 시점의 첫 파싱은
-    // 거기까지 미치지 못해, 이 시점 field 값에는 위젯이 없다
+    // 뷰포트 기본값(3,000자)을 넘는 위치에 코드블록을 둔다 — state 생성 시점 첫 파싱은 거기까지 못 미쳐 이 시점 field 값엔 위젯이 없다
     const doc = '문단\n'.repeat(3000) + '\n```js\nconst a = 1\n```\n'
     const state = EditorState.create({
       doc,
@@ -638,14 +624,12 @@ describe('blockPreview — 구문 트리만 바뀐 갱신 (F-134 3.8)', () => {
     expect(noop.docChanged).toBe(false)
     expect(!!noop.selection).toBe(false)
 
-    // 트리만 바뀐 이 갱신도 재계산 조건에 넣어야(F-134 3.8) 뒤늦게 파싱된 코드블록의
-    // 위젯이 생긴다. 넣지 않으면 다음 문서·선택 변화가 올 때까지 위젯이 안 보인다
+    // 트리만 바뀐 갱신도 재계산 조건에 넣어야(F-134 3.8) 뒤늦게 파싱된 코드블록 위젯이 생긴다 — 안 넣으면 다음 문서·선택 변화까지 위젯이 안 보인다
     expect(widgetCount(noop.state)).toBe(1)
   })
 })
 
-// 선택만 바뀐 트랜잭션은 위젯↔원문 전환이 생길 때만 다시 만든다 (리뷰 E6) — 방향키마다 문서 전체를
-// 다시 순회·파싱하지 않는다
+// 선택만 바뀐 트랜잭션은 위젯↔원문 전환이 생길 때만 다시 만든다(리뷰 E6) — 방향키마다 문서 전체를 다시 순회·파싱하지 않는다
 describe('blockPreview — 선택만 바뀐 갱신 (리뷰 E6)', () => {
   const DOC = '문단 하나\n\n' + CODE_DOC + '\n문단 둘\n'
 

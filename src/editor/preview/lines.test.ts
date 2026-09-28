@@ -387,8 +387,7 @@ describe('buildLines — 콜아웃 (F-128 5장 A2)', () => {
     const doc = '> > [!tip] 중첩'
     const state = makeState(doc, doc.length)
     const decos = build(state)
-    // 바깥(outer) 자신의 머리 텍스트는 "> [!tip] 중첩" 이라 [ 로 시작하지 않아 콜아웃이 아니다.
-    // "가장 바깥 인용만 콜아웃 판정 대상" 규칙이라 안쪽도 독립적으로 콜아웃이 되지 않는다
+    // 바깥(outer) 머리 텍스트는 "> [!tip] 중첩" 이라 [ 로 시작 안 해 콜아웃이 아니다 — "가장 바깥 인용만 콜아웃 판정 대상" 규칙이라 안쪽도 독립적으로 콜아웃이 안 된다
     expect(lineClasses(decos)).not.toContain('md-callout')
     expect(lineClasses(decos)).toContain('md-quote')
   })
@@ -397,9 +396,8 @@ describe('buildLines — 콜아웃 (F-128 5장 A2)', () => {
     const doc = '> [!tip] 제목\n> 본문\nx'
     const state = makeState(doc, doc.length - 1) // 커서: 3번째 줄('x')
     const decos = build(state)
-    // replaced() 는 class 없는(=replace) decoration 만 남긴다 — md-callout-type mark 는
-    // class 가 있어 여기서 자동으로 빠진다. 두 줄의 QuoteMark(+공백) 숨김 + 비활성 머리
-    // 줄의 아이콘 위젯(F-148 3.1) 1개 = 3개가 남아야 한다
+    // replaced() 는 class 없는(=replace) decoration 만 남긴다 — md-callout-type mark 는 class 가 있어 자동으로 빠진다
+    // 두 줄의 QuoteMark(+공백) 숨김 + 비활성 머리 줄 아이콘 위젯(F-148 3.1) 1개 = 3개가 남아야 한다
     expect(replaced(decos)).toHaveLength(3)
   })
 })

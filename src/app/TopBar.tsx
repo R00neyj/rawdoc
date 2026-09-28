@@ -1,6 +1,4 @@
-// 상단바 (specs/ia.md 2장 A, specs/features/F-102.md 5.3)
-// 보기 모드 토글은 F-107·F-123. .md 내보내기는 F-112. 공유는 F-130
-// 아이콘·툴팁은 F-142 3.2·3.3. 앞 묶음(제품 아이콘·이름·토글·검색)은 좁은 창에만 있다 (F-159 2.1)
+// 상단바 — 보기 모드 토글(F-107·F-123), .md 내보내기(F-112), 공유(F-130), 아이콘·툴팁(F-142 3.2·3.3), 좁은 창 전용 앞 묶음(F-159 2.1) (ia.md 2장 A, F-102.md 5.3)
 import type { RefObject } from 'react'
 import type { StateCommand } from '@codemirror/state'
 import ShareMenu from './ShareMenu'

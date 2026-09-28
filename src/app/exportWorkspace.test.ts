@@ -1,5 +1,4 @@
-// F-281.md 5장 A1~A9 — 전체·폴더 내보내기 계획·스트리밍 zip 단위 테스트
-// F-409 9.1 U7~U9·U14 — 금고 문서 빼기·알림·금고 첨부 거르기
+// F-281.md 5장 A1~A9 전체·폴더 내보내기 계획·스트리밍 zip 단위 테스트, F-409 9.1 U7~U9·U14 금고 문서 빼기·알림·첨부 거르기
 import { describe, it, expect, vi } from 'vitest'
 import { unzipSync } from 'fflate'
 import { planWorkspaceExport, exportWorkspace, selectExportScope, downloadWorkspaceExport, type WorkspaceExportStore, type WorkspaceExportSourceStore } from './exportWorkspace'

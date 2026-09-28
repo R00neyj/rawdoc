@@ -1,10 +1,8 @@
-// 줄·열·글자·단어 수 — 순수 함수 (specs/features/F-113.md 2.1)
-// CM6 EditorState 나 문자열만 받는다. DOM 을 다루지 않는다
+// 줄·열·글자·단어 수 — 순수 함수(F-113 2.1). CM6 EditorState 나 문자열만 받는다, DOM 안 다룬다
 import type { EditorState } from '@codemirror/state'
 
-// 주 선택의 head 기준 줄·열. col 은 줄 시작부터 head 까지의 코드포인트 수 + 1.
-// head 는 CM6 내부에서 UTF-16 코드 유닛 offset 이라 이모지 등 서로게이트 쌍을
-// 코드포인트 1개로 세려면 스프레드로 순회해야 한다
+// 주 선택의 head 기준 줄·열. col 은 줄 시작부터 head 까지의 코드포인트 수 + 1
+// head 는 CM6 내부에서 UTF-16 코드 유닛 offset 이라 이모지 등 서로게이트 쌍을 코드포인트 1개로 세려면 스프레드로 순회해야 한다
 export function cursorInfo(state: EditorState): { line: number; col: number } {
   const head = state.selection.main.head
   const line = state.doc.lineAt(head)

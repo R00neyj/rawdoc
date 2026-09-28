@@ -153,11 +153,8 @@ export const SITE_CHROME_CSS = `
 
 /* app.css 의 .public-view(공개 보기 화면 S-5)는 화면 꽉 채우는 flex 열이다 — 사이트 글은 그 선택자만 빌려 쓰고 배치는 문서 흐름으로 되돌린다 (F-272 5.2) */
 .site-article.public-view { display: block; height: auto; width: auto; background: none; }
-/* 사이트 글은 앱의 문서 칸이 아니라 <body>(--paper) 위에 놓이는데, 본문 바탕(markdown.css
-   .markdown-body·표 tr)과 콜아웃 바탕(callout.css 의 color-mix 기준)은 --panel 을 쓴다.
-   그대로 두면 본문만 다른 색 상자로 떠 보이므로 이 범위에서만 토큰 값을 바꾼다.
-   markdown.css 쪽을 transparent 로 바꾸는 길은 F-164 2.1("문서 칸 바탕과 같은 계산값")과
-   부딪혀 쓰지 않았다 (2026-09-21) */
+/* 사이트 글은 <body>(--paper) 위라 --panel 바탕(markdown.css·callout.css)이 다른 색 상자로 뜬다 — 이 범위에서만 토큰을 바꾼다 */
+/* markdown.css 를 transparent 로 바꾸는 길은 F-164 2.1("문서 칸 바탕과 같은 계산값")과 부딪혀 쓰지 않았다(2026-09-21) */
 .site-article.public-view { --panel: var(--paper); }
 
 /* ===== 왼쪽 문서 목록·오른쪽 목차·좁은 창 접는 목차 (F-2036) ===== */

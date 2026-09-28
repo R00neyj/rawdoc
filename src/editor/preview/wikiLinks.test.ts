@@ -1,6 +1,5 @@
-// wikiLinks.js 단위 테스트 (specs/features/F-131.md 7장 A2)
-// EditorState + ensureSyntaxTree 로 계산 함수를 직접 부른다. DOM 은 쓰지 않는다
-// (클릭 처리 EditorView.domEventHandlers 는 links.js 와 같은 이유로 여기서 테스트하지 않는다)
+// wikiLinks.ts 단위 테스트(F-131 7장 A2) — EditorState + ensureSyntaxTree 로 계산 함수를 직접 부른다. DOM 안 씀
+// (클릭 처리 EditorView.domEventHandlers 는 links.ts 와 같은 이유로 여기서 테스트하지 않는다)
 import { describe, expect, it } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
@@ -105,9 +104,8 @@ describe('buildWikiLinks — 코드블록·인라인코드·표 칸 제외', () 
 
   it('프론트매터 안은 위키링크로 처리하지 않는다 (본문은 그대로 처리)', () => {
     const doc = '---\nrelated: [[사용법]]\n---\n[[사용법]]'
-    // 커서를 0(문서 시작)에 둔다 — 마지막 줄 링크에 커서가 닿으면(F-131 3장) 기호가
-    // 숨겨지지 않아 이 테스트가 보려는 md-wikilink(visible) 클래스가 아닌
-    // md-wikilink-mark 로 나온다
+    // 커서를 0(문서 시작)에 둔다 — 마지막 줄 링크에 커서가 닿으면(F-131 3장) 기호가 숨겨지지 않는다
+    // 그러면 이 테스트가 보려는 md-wikilink(visible) 클래스가 아닌 md-wikilink-mark 로 나온다
     const state = makeState(doc, { anchor: 0, titles: ['사용법'] })
     const ranges = build(state)
     const visible = ranges.filter((r) => r.value.spec.class === 'md-wikilink' || r.value.spec.class === 'md-wikilink md-wikilink--missing')

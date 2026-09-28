@@ -1496,9 +1496,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       kickSend()
     },
 
-    // GIF·이미 WebP 면 변환을 건너뛴다(이중 인코딩 방지, F-220.md 2.3). 그 외는 WebP 로 변환해 본다(더 커지거나 실패하면 원본). 캐시에 먼저 넣고 즉시 반환, 올리기는 보낼 목록으로 (2.5)
-    // 넣기 전 사전 검사(F-221.md 2.3) — used + 아직 안 올린 캐시 합 + 새 크기 > limit 면 던진다. 조회 실패(오프라인 등)면 건너뛴다(서버가 최종 판정)
-    // id 를 주면 그 id 로 저장하고 WebP 변환을 건너뛴다(원문 attachments/{id}.{ext} 를 고치지 않으려면 ext 가 그대로여야 한다). 이미 있으면 덮지 않고 그대로 돌려준다 (F-282.md 3.11)
+    // GIF·이미 WebP 면 변환 건너뜀(이중 인코딩 방지, F-220.md 2.3), 그 외 WebP 변환 시도(실패시 원본) — 캐시에 먼저 넣고 즉시 반환, 올리기는 보낼 목록으로(2.5)
+    // 넣기 전 사전 검사(F-221.md 2.3): used+캐시 합+새 크기 > limit 면 던진다(조회 실패시 건너뜀). id 를 주면 그 id 로 WebP 변환 없이 저장, 이미 있으면 그대로 돌려준다(F-282.md 3.11)
     async putAttachment({ blob, mime, ext, width, height, id: givenId, e2ee }) {
       if (givenId !== undefined) {
         const existing = await cache.getAttachment(userId, givenId)
@@ -1707,10 +1706,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       return result
     },
 
-    // 로컬 → 계정 이관 (F-208 2.2) — id 를 그대로 캐시에 쓰고 보낼 목록에 넣는다.
-    // 캐시에 같은 id 가 이미 있으면(서버에 이미 있음) 건너뛴다
-    // 로컬 금고 폴더·문서는 건너뛴다 — 키 없이 일반 문서로 올라가면 봉투가 본문이 된다 (F-405 5.5)
-    // comments 에 그 문서의 기록이 1개 이상 있으면 createDoc 바로 뒤에 outbox importComments 를 넣는다 (F-508.md 7.1)
+    // 로컬 → 계정 이관(F-208 2.2) — id 그대로 캐시에 쓰고 보낼 목록에 추가, 같은 id 가 이미 있으면(서버에 이미 있음) 건너뛴다
+    // 로컬 금고 폴더·문서는 건너뛴다 — 키 없이 올라가면 봉투가 본문이 된다(F-405 5.5). comments 기록이 있으면 createDoc 뒤 outbox importComments 추가(F-508.md 7.1)
     async importLocal({ folders: allFolders, docs: allDocs, comments: allComments }) {
       const folders = allFolders.filter((f) => f.e2ee !== true)
       const docs = allDocs.filter((d) => d.e2eeKey === undefined)

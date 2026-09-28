@@ -1,7 +1,5 @@
-// 줄 단위 요소 표시 (specs/features/F-105.md)
-// 구조·IME 처리·활성 줄 판정은 F-104 2.1·2.3 과 같다. 계산(buildLines)은 DOM 없이 동작한다.
-// decoration 은 문서를 바꾸지 않는다 — 체크박스 클릭도 위젯이 트랜잭션을 하나 내보낼 뿐,
-// decoration 자체는 표시만 바꾼다 (CLAUDE.md 불변조건)
+// 줄 단위 요소 표시(F-105) — 구조·IME 처리·활성 줄 판정은 F-104 2.1·2.3 과 같다. 계산(buildLines)은 DOM 없이 동작한다
+// decoration 은 문서를 바꾸지 않는다 — 체크박스 클릭도 위젯이 트랜잭션 하나만 내보낼 뿐, decoration 자체는 표시만 바꾼다(CLAUDE.md 불변조건)
 import type { SyntaxNode } from '@lezer/common'
 import { syntaxTree } from '@codemirror/language'
 import type { ChangeDesc, EditorState, Extension, Range as CMRange } from '@codemirror/state'
@@ -67,8 +65,7 @@ function listItemDepth(listMarkNode: SyntaxNode): number {
   return depth
 }
 
-// Blockquote 의 "머리 텍스트" — `>` 와 그 뒤 공백 0~1개를 뗀 첫 줄 나머지, 그리고
-// 그 텍스트가 시작하는 문서 위치. parseCalloutHeader(F-128 2장)에 그대로 적용한다
+// Blockquote 의 "머리 텍스트" — `>` 와 뒤 공백 0~1개를 뗀 첫 줄 나머지, parseCalloutHeader(F-128 2장)에 그대로 적용한다
 function calloutHeadOf(state: EditorState, blockquoteNode: SyntaxNode): { headFrom: number; headText: string } {
   let headFrom = blockquoteNode.from + 1
   if (state.doc.sliceString(headFrom, headFrom + 1) === ' ') headFrom += 1
@@ -76,9 +73,8 @@ function calloutHeadOf(state: EditorState, blockquoteNode: SyntaxNode): { headFr
   return { headFrom, headText: state.doc.sliceString(headFrom, line.to) }
 }
 
-// 이 Blockquote 가 콜아웃 후보인가 — 중첩된 인용(부모가 Blockquote)은 후보가 아니다.
-// 편집 모드는 "가장 바깥 인용만 콜아웃 모양" (F-128 2장) — 인용 안에 인용을 넣어
-// 만든 콜아웃(`> > [!tip]`)은 편집 모드에서 안쪽 그대로 판정하지 않는다
+// 이 Blockquote 가 콜아웃 후보인가 — 중첩된 인용(부모가 Blockquote)은 후보가 아니다
+// 편집 모드는 "가장 바깥 인용만 콜아웃 모양"(F-128 2장) — 인용 안 인용(`> > [!tip]`)은 안쪽 그대로 판정 안 함
 function isCalloutCandidate(blockquoteNode: SyntaxNode): boolean {
   return blockquoteNode.parent?.name !== 'Blockquote'
 }
@@ -91,10 +87,8 @@ function calloutLineClass(kind: string, { isFirst, isLast }: { isFirst: boolean;
   return cls
 }
 
-// 콜아웃 비활성 머리 줄의 종류 아이콘 위젯 (F-148 3.1). `[!type]`(+접기 기호, 제목이
-// 있으면 뒤 공백 1칸까지) 자리를 통째로 이 위젯으로 바꾼다. 제목이 없는 콜아웃은
-// 위젯 안에 보기 모드와 같은 기본 제목 글자를 같이 보인다(defaultTitle). 클릭은 커서
-// 이동만 하도록(F-148 3.1 "다른 동작 없음") BulletWidget 과 같은 방식(ignoreEvent true)을 쓴다
+// 콜아웃 비활성 머리 줄의 종류 아이콘 위젯(F-148 3.1) — `[!type]`(+접기 기호, 제목 있으면 뒤 공백 1칸까지) 자리를 통째로 위젯으로 바꾼다
+// 제목 없는 콜아웃은 위젯 안에 기본 제목(defaultTitle)을 같이 보인다. 클릭은 커서 이동만(F-148 3.1) — BulletWidget 과 같은 방식(ignoreEvent true)
 class CalloutIconWidget extends WidgetType {
   type: string
   defaultTitle: string | null
@@ -176,9 +170,8 @@ class BulletWidget extends WidgetType {
   }
 }
 
-// 체크박스 위젯 (F-105 "체크박스 위젯" 절)
-// eq() 는 checked 값만 비교한다. 클릭하면 대괄호 안 한 글자를 x ↔ 공백으로
-// 바꾸는 트랜잭션 1개만 내보낸다 — 선택은 바꾸지 않는다
+// 체크박스 위젯(F-105 "체크박스 위젯" 절)
+// eq() 는 checked 값만 비교한다. 클릭하면 대괄호 안 한 글자를 x ↔ 공백으로 바꾸는 트랜잭션 1개만 내보낸다 — 선택은 안 바꾼다
 class CheckboxWidget extends WidgetType {
   checked: boolean
 
@@ -202,8 +195,7 @@ class CheckboxWidget extends WidgetType {
       event.preventDefault()
       if (view.state.readOnly) return // 읽기 전용이면 체크 상태를 바꾸지 않는다 (리뷰 E1)
       const pos = view.posAtDOM(input)
-      // TaskMarker 범위는 항상 "[ ]" 또는 "[x]"(3글자) 이고, 위젯은 그 범위 전체를
-      // 치환한다. 가운데 글자(대괄호 안)의 위치는 pos + 1 이다
+      // TaskMarker 범위는 항상 "[ ]" 또는 "[x]"(3글자) — 위젯은 그 범위 전체를 치환, 가운데 글자(대괄호 안) 위치는 pos + 1
       view.dispatch({
         changes: { from: pos + 1, to: pos + 2, insert: this.checked ? ' ' : 'x' },
       })
@@ -217,8 +209,7 @@ class CheckboxWidget extends WidgetType {
   }
 }
 
-// hasFocus 는 편집기 포커스 (F-146 3.2). 기본값 true 는 포커스를 다루지 않는
-// 기존 호출부(테스트 등)의 동작을 그대로 유지한다
+// hasFocus 는 편집기 포커스(F-146 3.2). 기본값 true 는 포커스를 안 다루는 기존 호출부(테스트 등) 동작을 유지한다
 export function buildLines(
   state: EditorState,
   ranges: readonly { from: number; to: number }[],
@@ -226,10 +217,8 @@ export function buildLines(
 ): CMRange<Decoration>[] {
   const active = activeLines(state, hasFocus)
   const out: CMRange<Decoration>[] = []
-  // 콜아웃으로 판정된 줄 번호 — 중첩된 인용(부모 Blockquote 가 콜아웃)이 같은 줄에
-  // md-quote 를 겹쳐 붙이지 않게 막는 데 쓴다 (F-128 4.1 "이 줄들에는 md-quote 를
-  // 붙이지 않는다"). Blockquote 는 바깥에서 안쪽 순서로 방문되므로(tree.iterate),
-  // 바깥이 콜아웃이면 안쪽을 처리할 때 이미 이 집합에 그 줄들이 들어 있다
+  // 콜아웃으로 판정된 줄 번호 — 중첩된 인용(부모 Blockquote 가 콜아웃)이 같은 줄에 md-quote 를 겹쳐 붙이지 않게 막는다(F-128 4.1)
+  // Blockquote 는 바깥→안쪽 순서로 방문되므로(tree.iterate) 바깥이 콜아웃이면 안쪽 처리 때 이미 이 집합에 들어 있다
   const calloutLines = new Set<number>()
 
   for (const { from, to } of ranges) {
@@ -282,8 +271,7 @@ export function buildLines(
                     ),
                   )
                 }
-                // "[!type]" 자리 — 활성 머리 줄은 원문 그대로 색만(F-128 4.1), 비활성 머리
-                // 줄은 접기 기호까지 숨기고 종류 아이콘 위젯으로 바꾼다 (F-148 3.1)
+                // "[!type]" 자리 — 활성 머리 줄은 원문 그대로 색만(F-128 4.1), 비활성 머리 줄은 접기 기호까지 숨기고 종류 아이콘 위젯으로 바꾼다(F-148 3.1)
                 if (active.has(firstLine)) {
                   out.push(
                     Decoration.mark({ class: 'md-callout-type' }).range(
@@ -355,8 +343,7 @@ export function buildLines(
             const mid = state.doc.sliceString(node.from + 1, node.to - 1)
             const checked = mid === 'x' || mid === 'X'
             out.push(Decoration.replace({ widget: new CheckboxWidget(checked) }).range(node.from, node.to))
-            // 끝낸 항목은 글에 취소선 (2026-09-21 사용자 요청). 커서가 그 줄에 있으면 위 active 분기에서
-            // 이미 빠져나가므로, 원문이 드러난 줄에는 취소선도 걸리지 않는다
+            // 끝낸 항목은 글에 취소선(2026-09-21 사용자 요청) — 커서가 그 줄에 있으면 위 active 분기에서 이미 빠져나가 원문이 드러난 줄엔 취소선도 안 걸린다
             if (checked) out.push(lineClassRange(state.doc.lineAt(node.from), 'md-task-done'))
             return
           }
@@ -396,15 +383,13 @@ export function buildLines(
   return out
 }
 
-// 조합 중 보류할 때 문서가 바뀌었으면 decoration 위치를 따라간다 (F-134 3.1).
-// inline.ts 의 같은 이름 함수와 이유가 같다 — 옛 decoration 을 옛 위치 그대로 두면
-// 새 문서에서 다른 글자(줄바꿈 포함)를 가리킬 수 있어 CM 이 RangeError 를 던진다.
+// 조합 중 보류할 때 문서가 바뀌었으면 decoration 위치를 따라간다(F-134 3.1)
+// inline.ts 의 같은 이름 함수와 이유 같음 — 옛 위치 그대로 두면 CM 이 RangeError 를 던진다
 export function mapDecorationsOnHold(decorations: DecorationSet, changes: ChangeDesc): DecorationSet {
   return decorations.map(changes)
 }
 
-// F-104 2.3 과 같은 IME 규칙. 조합 중 보류 시 문서 변경분은 따라간다(F-134 3.1).
-// 구문 트리만 바뀐 갱신도 재계산 조건에 넣는다(F-134 3.8)
+// F-104 2.3 과 같은 IME 규칙 — 조합 중 보류 시 문서 변경분은 따라가고(F-134 3.1), 구문 트리만 바뀐 갱신도 재계산 조건에 넣는다(F-134 3.8)
 export function linePreview(): Extension {
   const viewPlugin = ViewPlugin.fromClass(
     class {
@@ -435,16 +420,8 @@ export function linePreview(): Extension {
   return [viewPlugin, frontmatterWidgetExtension()]
 }
 
-// 펜스 코드블록(```)이 걸친 모든 줄에 md-fence-line 을 붙인다 (F-124 3.4 11번 요청).
-// linePreview()/buildLines() 와 달리 활성(커서) 여부를 보지 않고 항상 켠다 — 편집 모드
-// 위젯이 접혀 있을 때(blocks.ts 의 block:true replace 로 줄 자체가 안 그려질 때)는 이
-// decoration 이 있어도 그릴 줄이 없어 아무 효과가 없고, 원문 모드는 애초에 위젯이 없어
-// 코드블록 줄이 늘 이 클래스를 받는다.
-//
-// 배경(--md-bg-muted)을 잇는 모양은 CSS 에서 편집 모드(`[data-view='live']`)로만
-// 준다 — 원문 모드는 "요소 모양은 바꾸지 않는다"(F-124 1장)는 원칙대로 서체·크기만
-// 따르고, 이 클래스는 `.md-code` 인라인코드 모양만 지우는 데 쓴다(코드블록 본문이
-// 인라인코드와 같은 태그(tags.monospace)를 받아 생기는 문제 — highlight.js 주석 참고)
+// 펜스 코드블록이 걸친 모든 줄에 md-fence-line 을 붙인다(F-124 3.4 11번) — linePreview 와 달리 활성 여부와 무관하게 항상 켠다(위젯 접힘·원문 모드 모두 대응)
+// CSS 는 편집 모드에서만 배경을 잇고, 이 클래스는 `.md-code` 인라인코드 모양만 지우는 데 쓴다(코드블록이 인라인코드와 같은 태그를 받는 문제 — highlight.ts 참고)
 export function fenceLineRanges(state: EditorState, ranges: readonly { from: number; to: number }[]): CMRange<Decoration>[] {
   const out: CMRange<Decoration>[] = []
 
@@ -467,8 +444,7 @@ export function fenceLineRanges(state: EditorState, ranges: readonly { from: num
   return out
 }
 
-// createEditor.ts 확장 목록에 직접(previewCompartment 밖) 넣는다 — 편집·원문 모드 공통.
-// 조합 중 보류·구문 트리 변경 재계산은 linePreview 와 같다(F-134 3.1·3.8)
+// createEditor.ts 확장 목록에 직접(previewCompartment 밖) 넣는다 — 편집·원문 모드 공통, 조합 중 보류·구문 트리 재계산은 linePreview 와 같다(F-134 3.1·3.8)
 export function fenceLinePreview(): Extension {
   return ViewPlugin.fromClass(
     class {

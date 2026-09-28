@@ -193,9 +193,8 @@ describe('3.3 강조 기호 * ~ `', () => {
   })
 
   it('백틱 3개 → 펜스 코드블록 시작 (markdown 확장 활성 — lezer 가 ``|`` 를 이미 FencedCode 로 파싱하는 경우)', () => {
-    // 실제 에디터(마크다운 언어 확장 포함)에서만 재현되던 회귀: 4개짜리 백틱 뭉치
-    // 자체가 FencedCode(CodeMark) 로 파싱되어 insideOpaqueNode 게이트에 먼저 걸리면
-    // 이 규칙이 발동하지 못하고 백틱이 5개까지 늘어난다
+    // 실제 에디터(마크다운 확장 포함)에서만 재현되던 회귀 — 4개짜리 백틱 뭉치가 FencedCode 로 파싱돼 insideOpaqueNode 게이트에 먼저 걸리면
+    // 이 규칙이 발동 못 하고 백틱이 5개까지 늘어난다
     const ext = [markdown({ base: markdownLanguage })]
     let state = typeChar(makeState('', 0, ext), '`')
     expect(state.doc.toString()).toBe('``')

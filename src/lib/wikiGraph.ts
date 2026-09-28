@@ -4,9 +4,7 @@ import { findFrontmatter } from './frontmatter'
 import { createWikiResolver, type WikiDocRef, type WikiFolderRef } from './wikiResolve'
 
 // 펜스 코드블록 여닫기 (3.2). 줄 앞 공백은 몇 칸이든, 목록 항목 안(`2. ```)이어도 펜스로 본다
-// — CommonMark 는 목록 항목 안의 펜스를 인정하는데, 공백 0~3칸만 보면 그 여는 펜스를 놓치고
-// 뒤따르는 닫는 펜스를 여는 펜스로 잡아 그 뒤 문서 전체가 코드블록이 된다
-// (2026-09-21 실제 문서에서 위키링크 5개가 통째로 빠졌다)
+// — 공백 0~3칸만 보면 CommonMark 가 인정하는 목록 안 펜스를 놓쳐 문서 전체가 코드블록이 된다(2026-09-21 위키링크 5개 누락 실사례)
 const FENCE_RE = /^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)?(`{3,}|~{3,})([^\n]*)$/
 
 type Fence = { char: string; len: number; info: string }

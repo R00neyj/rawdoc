@@ -90,9 +90,8 @@ describe('insertLink (Mod-k)', () => {
 
 describe('선택 2개 동시 처리', () => {
   it('toggleStrong 을 두 선택에 동시에 적용한다', () => {
-    // 여러 선택 영역은 EditorState.allowMultipleSelections 가 켜져 있어야
-    // EditorState.create 가 하나로 합치지 않는다 (createEditor.js 의 실제 에디터가
-    // 이 확장을 켜는지와는 별개로, 명령 자체는 여러 range 를 changeByRange 로 처리한다)
+    // 여러 선택 영역은 EditorState.allowMultipleSelections 가 켜져 있어야 EditorState.create 가 하나로 합치지 않는다
+    // (에디터가 이 확장을 켜는지와는 별개로, 명령 자체는 여러 range 를 changeByRange 로 처리한다)
     const { state } = run(
       toggleStrong,
       'x y',

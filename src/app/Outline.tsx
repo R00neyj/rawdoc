@@ -1,5 +1,4 @@
-// 오른쪽 목차 — 편집·원문은 CM6 handle, 보기는 data-source-line 요소 기준 (F-144.md 3.4)
-// 여백 부족(56px 미만)이면 선 목차 대신 목차 버튼 + 같은 목록 카드 (F-229.md 2장)
+// 오른쪽 목차 — 편집·원문은 CM6 handle, 보기는 data-source-line 요소 기준(F-144.md 3.4), 여백 부족(56px 미만)이면 목차 버튼 + 같은 목록 카드(F-229.md 2장)
 import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type RefObject } from 'react'
 import { computeCurrentIndex, findViewerHeadingEl, topInScroller } from './outlinePosition'
 import type { Heading } from '../editor/outline'

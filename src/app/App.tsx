@@ -406,10 +406,7 @@ function replaceHashUrl(docId: string | null) {
   history.replaceState(null, '', url)
 }
 
-// 앱 안에서 문서를 바꿀 때 쓴다. location.hash 대입과 달리 hashchange 를 일으키지
-// 않으므로, 상태 갱신(setDocs/setCurrentDocId)과 리렌더 사이에서 옛 hashchange 핸들러가
-// 끼어드는 경쟁을 없앤다. 뒤로/앞으로 가기·주소창 직접 수정은 여전히 hashchange 로 처리된다
-// (0단계 버그 수정, ia.md 3.10)
+// location.hash 대입과 달리 hashchange 를 일으키지 않아 상태 갱신과 리렌더 사이 경쟁을 없앤다 (0단계 버그 수정, ia.md 3.10)
 function pushHashUrl(docId: string | null) {
   const url = `${location.pathname}${location.search}${formatHash(docId)}`
   history.pushState(null, '', url)
@@ -456,8 +453,7 @@ export default function App() {
   const [store, setStore] = useState<Store>(() => createMemoryStore())
 
   const [bootPhase, setBootPhase] = useState<'booting' | 'ready'>('booting')
-  // 다른 창이 옛 버전 IndexedDB 연결을 쥐고 있어 이 창의 열기가 막혔을 때 부팅 화면에
-  // 보일 문구. 막힘이 풀려 열리면 null 로 되돌린다 (F-136.md 3.3)
+  // 다른 창이 옛 버전 IndexedDB 연결을 쥐고 있어 막혔을 때 부팅 화면에 보일 문구, 풀리면 null 로 되돌린다 (F-136.md 3.3)
   const [dbBlockedMessage, setDbBlockedMessage] = useState<string | null>(null)
   const [docs, setDocs] = useState<DocMeta[]>([])
   const [folders, setFolders] = useState<Folder[]>([]) // F-126
@@ -526,19 +522,16 @@ export default function App() {
     typeof window !== 'undefined' ? window.innerWidth : 1600,
   )
   const [viewMode, setViewMode] = useState(() => getPref('md.viewMode', 'live'))
-  // 문서를 열 때 에디터에 넘기는 용도로만 쓰는 스냅샷. 편집 중 본문을 여기 동기화하지
-  // 않는다 — 원본은 CM6 EditorState 하나다 (architecture.md 3장)
+  // 문서를 열 때 에디터에 넘기는 용도의 스냅샷 — 편집 중 동기화하지 않는다, 원본은 CM6 EditorState 하나다 (architecture.md 3장)
   const [openDoc, setOpenDoc] = useState<OpenDoc | null>(null)
   // 잠금을 되찾은 뒤 서버 값을 다시 받아 에디터를 다시 마운트할 때 올린다 (F-213.md 2.3)
   const [editorRemountNonce, setEditorRemountNonce] = useState(0)
   const [stats, setStats] = useState<Stats>({ line: 1, col: 1, charCount: 0, wordCount: 0 })
-  // 보기 모드 변환 결과 HTML (specs/features/F-123.md 3.3). 편집 중 계속 동기화하는
-  // 본문 사본이 아니라, 변환 시점(전환 시·문서를 열 때)에만 1회 만드는 파생값이다
+  // 보기 모드 변환 결과 HTML — 변환 시점(전환 시·문서를 열 때)에만 1회 만드는 파생값이다 (F-123.md 3.3)
   const [viewerHtml, setViewerHtml] = useState('')
   // viewerHtml 을 만든 문서 — 헤딩 이동이 옛 문서 HTML 에서 요소를 찾지 않게 같이 바꾼다 (F-2018 8.3)
   const [viewerDocId, setViewerDocId] = useState<string | null>(null)
-  // 공유받은 문서 화면 S-4 (specs/features/F-130.md 4장). decodeShare 결과 그대로 —
-  // 저장소 문서가 아니므로 currentDocId 와 무관하게 독립적으로 둔다
+  // 공유받은 문서 화면 S-4, decodeShare 결과 그대로 — 저장소 문서가 아니라 currentDocId 와 무관하다 (F-130.md 4장)
   const [sharedDoc, setSharedDoc] = useState<ShareDoc | null>(null)
   // 공유 관리 페이지 S-6 (specs/features/F-243.md 3.3·3.4) — currentDocId 는 이 화면 동안 null
   const [sharesOpen, setSharesOpen] = useState(false)
@@ -645,8 +638,7 @@ export default function App() {
   const shortcutsButtonRef = useRef<HTMLButtonElement | null>(null) // 상태바 `?` 버튼 — 판이 닫힐 때 포커스를 돌려준다 (F-2052 5.3)
   const pendingShortcutsScrollFixRef = useRef(false) // 판을 열기 직전 커서가 보였는지 (F-2052 5.5)
   const bootPhaseRef = useRef(bootPhase) // Ctrl+P 가 매 커밋 최신 bootPhase 를 읽게 한다 (F-2022.md 6.1)
-  // hashchange 핸들러가 낡은 클로저의 docs·currentDocId 를 읽지 않도록 매 렌더 후 갱신한다
-  // (0단계 버그 수정)
+  // hashchange 핸들러가 낡은 클로저의 docs·currentDocId 를 읽지 않도록 매 렌더 후 갱신한다 (0단계 버그 수정)
   const docsRef = useRef(docs)
   // 가져오기 같은 비동기 흐름이 지금 문서의 경로를 최신으로 읽는다 (F-305 10.1)
   const docPathRef = useRef<{ docId: string | null; path: DocPathKind | null }>({ docId: null, path: null })
@@ -656,8 +648,7 @@ export default function App() {
   const saveCurrentAsNewDocRef = useRef<() => Promise<void>>(async () => {})
   const currentDocIdRef = useRef(currentDocId)
   const foldersRef = useRef(folders)
-  // hashchange 핸들러가 "지금 공유 화면을 보고 있는가" 를 최신으로 읽도록 매 렌더 후
-  // 갱신한다 (F-138 3.3 — 해시가 문서 경로로 바뀌면 문서 id 가 같아도 공유 화면을 닫는다)
+  // hashchange 핸들러가 "지금 공유 화면을 보고 있는가" 를 최신으로 읽도록 매 렌더 후 갱신한다 (F-138 3.3)
   const sharedDocRef = useRef(sharedDoc)
   // hashchange 핸들러가 "지금 공유 관리 페이지를 보고 있는가" 를 최신으로 읽도록 갱신한다 (F-243.md 3.4)
   const sharesOpenRef = useRef(sharesOpen)
@@ -677,8 +668,7 @@ export default function App() {
   const imageDropBlockedRef = useRef(false)
   // 현재 문서가 읽기 전용(view 권한·403 강등)인가 — handleImageFiles 가 이미지 올리기를 막는 데 쓴다 (F-212.md 2.4)
   const readOnlyDocRef = useRef(false)
-  // Editor 는 마운트 시점의 onOpenWikiLink 클로저만 계속 쓰므로(F-131 3·5장), 여기서도
-  // ref 로 우회해 항상 최신 docs·currentDocId·viewMode 를 보게 한다
+  // Editor 는 마운트 시점의 onOpenWikiLink 클로저만 계속 쓰므로 ref 로 우회해 최신 값을 보게 한다 (F-131 3·5장)
   const openWikiLinkRef = useRef<(target: string, heading: string | null) => Promise<void>>(async () => {})
   // 제목 경로 클릭(onNavigateFolder, F-234.md 3.5)이 항상 최신 사이드바 열림 상태를 보도록 갱신한다
   const narrowRef = useRef(narrow)
@@ -697,8 +687,7 @@ export default function App() {
       .filter((entry): entry is { id: string; name: string } => entry.name !== undefined)
   }, [currentDoc, folders])
 
-  // 공유받음 묶음(F-212.md 2.4)과 내 트리를 나눈다 — role 이 없거나 'owner' 면 내 것
-  // docs 가 그대로면 같은 배열을 넘긴다 — 렌더마다 새 배열이면 받는 쪽의 memo·effect deps 가 매번 풀린다 (리뷰 A14)
+  // docs 가 그대로면 같은 배열을 넘긴다 — 새 배열이면 memo·effect deps 가 매번 풀린다 (F-212.md 2.4, 리뷰 A14)
   const ownedDocs = useMemo(() => docs.filter((d) => !isSharedDoc(d)), [docs])
   const sharedDocsList: SharedDocLike[] = useMemo(
     () =>
@@ -715,8 +704,7 @@ export default function App() {
   const canInviteCurrentDoc =
     store.kind === 'server' && Boolean(currentDoc) && !isSharedDoc(currentDoc) && !sharedDoc
 
-  // 문서 전환·삭제·해시 변경 전에 반드시 끝내는 훅 자리. 대기 중인 자동 저장을 끝낸다
-  // (F-110.md 3.4). ref 를 거쳐 항상 최신 flush 를 부르므로 의존성 없이 안정된 참조를 유지한다
+  // 문서 전환·삭제·해시 변경 전에 대기 중인 자동 저장을 끝낸다 — ref 로 최신 flush 를 불러 의존성 없이 안정된 참조를 유지한다 (F-110.md 3.4)
   const beforeLeaveDoc = useCallback(async () => {
     await docSaverFlushRef.current()
   }, [])
@@ -728,7 +716,7 @@ export default function App() {
   const { updateAvailable, applyUpdate } = useAppUpdate({ beforeReload: beforeLeaveDoc })
 
   // 만든 알림 id 를 돌려준다 — 조건이 풀리면 dismissNotice(id) 로 그 알림만 걷는다 (F-305 11.2)
-  // sticky 면 info 도 4초 뒤 사라지지 않는다 — 금고 옮기기 진행 알림만 쓴다 (F-407 6장)
+  // sticky 면 info 도 4초 뒤 사라지지 않는다 — 금고 옮기기 진행 알림 전용 (F-407 6장)
   const showNotice = useCallback((input: NoticeWithAction, options?: { sticky?: boolean }): number => {
     const { type, message, action, secondaryAction } = input
     const id = ++noticeIdRef.current
@@ -1290,9 +1278,8 @@ export default function App() {
     })
   }, [store])
 
-  // 편집권은 로컬(idb) 문서에만 켠다 — 서버는 useDocLock(F-213)이, 메모리는 저장소가 탭마다 따로라 겹칠 일이 없다 (F-296.md 6.4)
-  // 개발 빌드 ?ysync 두 탭 연결에서는 두 탭 모두 편집해야 해 편집권을 잡지 않는다 (F-303 9.4)
-  // 서버 저장소의 금고 문서도 잠금·실시간 병합이 없어 편집권을 켠다 (F-405 7.5)
+  // 편집권은 로컬(idb) 문서에만 켠다 — 서버는 useDocLock(F-213), 메모리는 탭마다 저장소가 달라 안 겹친다 (F-296.md 6.4)
+  // ?ysync 두 탭은 둘 다 편집해야 해 안 켠다(F-303 9.4), 서버 금고 문서는 잠금·병합이 없어 켠다(F-405 7.5)
   const claimDocId = (store.kind === 'idb' || docPath === 'e2ee') && !sharedDoc && !DEV_YSYNC ? currentDocId : null
   // useTabSync 가 e2ee 열쇠고리보다 먼저 만들어지므로, 다른 탭 잠그기 신호는 ref 로 늦게 잇는다 (F-404.md 6장)
   const e2eeOtherTabLockRef = useRef<() => void>(() => {})
@@ -1733,9 +1720,7 @@ export default function App() {
   })
 
   // ----- 공유 링크 조각 해석 (specs/features/F-130.md 4장) -----
-  // 성공하면 S-4 를 보여준다. 실패하면 알림을 띄우고 일반 첫 화면(3.2 규칙)으로 대신
-  // 연다. docsForFallback 은 boot() 의 지역 변수(metaList) 또는 docsRef.current 를
-  // 그대로 받는다 — 이 함수 자신은 store 를 다시 읽지 않는다
+  // 실패하면 알림 뒤 일반 첫 화면(3.2 규칙)으로 대신 연다 — docsForFallback 은 호출부의 metaList/docsRef.current 를 받을 뿐 store 를 다시 읽지 않는다
   const openSharedFragment = useCallback(
     async (fragment: string, docsForFallback: DocMeta[]) => {
       try {
@@ -1831,11 +1816,8 @@ export default function App() {
   )
 
   // ----- 새 버전 알림 (specs/features/F-117.md, ia.md 3.13) -----
-  // 첫 설치(대기 중인 옛 워커 없음)에는 updateAvailable 이 true 가 되지 않아 알림이 뜨지
-  // 않는다. 자동 새로고침은 하지 않는다 — applyUpdate 는 사용자가 버튼을 눌러야 실행된다.
-  // updateAvailable 이 false→true 로 바뀔 때만 1회 띄운다: updateAvailable 이 true 로
-  // 유지되는 동안에는(예: × 로 닫은 뒤 다른 상태 변화로 이 effect 가 재평가되어도) 다시
-  // 띄우지 않는다 — ia.md 4.2, × 는 닫기 전용이고 자동으로 다시 뜨지 않는다
+  // updateAvailable 이 false→true 로 바뀔 때만 1회 띄운다 — true 로 유지되는 동안 다시 띄우지 않는다 (ia.md 4.2)
+  // 자동 새로고침은 하지 않는다 — applyUpdate 는 사용자가 버튼을 눌러야 실행된다
   const wasUpdateAvailableRef = useRef(false)
   useEffect(() => {
     if (updateAvailable && !wasUpdateAvailableRef.current) {
@@ -1903,18 +1885,15 @@ export default function App() {
 
       const resolvedStore = await openStore({
         account: accountState,
-        // 새 버전 창: 다른 창이 옛 버전 연결을 쥐고 있어 열기가 막혔다. 부팅 화면에 문구를
-        // 보이고 계속 기다린다 (F-136.md 3.3)
+        // 새 버전 창: 옛 버전 연결이 열기를 막았을 때 부팅 화면에 문구를 보이고 기다린다 (F-136.md 3.3)
         onBlocked: () => {
           setDbBlockedMessage(
             '다른 창에서 이 앱이 열려 있습니다. 그 창을 닫거나 새로 고치면 계속됩니다.',
           )
         },
-        // 옛 버전 창: 이 창의 연결이 새 버전 열기를 막고 있다. 저장 대기 중인 내용을 먼저
-        // 저장 시도한다(F-110.md 3.4 beforeLeaveDoc) — 연결은 idbStore 가 그 뒤 닫는다
+        // 옛 버전 창: 이 창의 연결이 새 버전 열기를 막는다 — 저장 대기 내용을 먼저 저장 시도한다, 연결은 idbStore 가 닫는다 (F-110.md 3.4)
         onBlocking: () => beforeLeaveDoc(),
-        // 위 정리가 끝나고 연결이 닫힌 뒤. 연결을 닫은 뒤의 저장 시도는 기존 저장 실패
-        // 처리를 따른다(F-136.md 3.3)
+        // 정리가 끝나 연결이 닫힌 뒤의 저장 시도는 기존 저장 실패 처리를 따른다 (F-136.md 3.3)
         onClosed: () => {
           showNotice({
             type: 'error',
@@ -2256,9 +2235,7 @@ export default function App() {
   }, [bootPhase, publicRoute, dbBlockedMessage])
 
   // ----- 뒤로·앞으로 가기, 주소창 직접 수정 (ia.md 3.10) -----
-  // docs·currentDocId 는 ref 로 읽는다: 이 effect 는 bootPhase 가 바뀔 때만 재구독하므로
-  // 클로저에 직접 담으면 이후 문서 목록·현재 문서가 바뀌어도 낡은 값을 보게 된다
-  // (0단계 버그 수정 — 새 문서·가져오기 직후 뜨던 "문서를 찾을 수 없습니다." 오탐)
+  // docs·currentDocId 는 ref 로 읽는다 — bootPhase 변경시만 재구독해 클로저에 담으면 낡은 값을 본다 (0단계 버그 수정)
   useEffect(() => {
     if (bootPhase !== 'ready') return
 
@@ -2270,8 +2247,7 @@ export default function App() {
       // 경로형 공개 링크(/p/…)도 같다 — 해시가 비어 있어도 홈으로 돌리거나 해시를 바꾸지 않는다 (리뷰 A4)
       if (toPublicRoute(parsePathRoute(location.pathname))) return
 
-      // 공유 링크(F-130.md 4장)는 currentDocId 와 비교하지 않고 매번 새로 연다 —
-      // currentDocId 는 공유 화면 동안 건드리지 않으므로 같은 값일 수 있다
+      // 공유 링크는 currentDocId 와 비교하지 않고 매번 새로 연다 — 공유 화면 동안 건드리지 않아 같은 값일 수 있다 (F-130.md 4장)
       if (parsedHash.type === 'share') {
         ;(async () => {
           await beforeLeaveDoc()
@@ -2472,9 +2448,7 @@ export default function App() {
   }, [narrow, sidebarOpen, settingsOpen, searchOpen, paletteOpen, deleteTarget, moveDocTarget, bulkDeleteItems])
 
   // ----- 브라우저 기본 찾기(Ctrl/Cmd+F) 비활성화 (2026-09-20 사용자 요청) -----
-  // 포커스가 에디터 안이면 createEditor.ts 의 Mod-f 키맵(scope 'editor search-panel')이 먼저
-  // 처리해 CM6 검색 패널을 연다 — 여기서는 사이드바·상단바 등 에디터 밖에 포커스가 있을 때만 대신 열어
-  // 브라우저 자체 찾기 창이 뜨지 않게 한다
+  // 에디터 안 포커스는 createEditor.ts 의 Mod-f 키맵이 먼저 처리한다 — 여기는 에디터 밖 포커스일 때만 대신 열어 브라우저 찾기를 막는다
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return
@@ -2599,9 +2573,7 @@ export default function App() {
   }, [publicRoute])
 
   // ----- 문서를 열 때 저장소 본문을 1회 읽어 에디터에 넘긴다 (architecture.md 3장) -----
-  // openDoc.id 가 currentDocId 와 다르면(문서 없음 포함) 렌더링에서 에디터를 그리지
-  // 않는 것으로 처리하므로, 여기서 별도로 null 로 되돌리지 않는다
-  // (react-hooks: effect 본문에서 동기 setState 를 피한다)
+  // openDoc.id 와 currentDocId 가 다르면 렌더링에서 에디터를 안 그리는 것으로 처리해 여기서 null 로 되돌리지 않는다 (동기 setState 회피)
   const notFoundBeforeSync = isRealtime && liveSnapshot?.stopReason === 'not-found' && !liveSnapshot.ready
   // 실시간은 첫 synced 에서 채우고 첫 동기화 전 4404 만 캐시를 읽는다. 실시간이었던 폴백·4403 보기는 서버 본문 먼저 (F-305 5.2·8장)
   const openLoad =
@@ -2719,11 +2691,8 @@ export default function App() {
   )
 
   // ----- 보기 모드 변환 (specs/features/F-123.md 3.3) -----
-  // 변환 시점: 보기 모드로 전환할 때(viewMode 변화), 보기 모드에서 문서를 열 때
-  // (openDoc 변화, Editor 마운트 직후 — 이 effect 는 자식의 layout effect 뒤에 돈다).
-  // 입력은 editorRef.current.getText('lf') 하나뿐이고 별도 본문 사본을 두지 않는다.
-  // resolveWikiLink 는 F-131 4장 위키링크 렌더링에 쓴다 — docs 가 바뀌면(문서 생성·삭제·
-  // 제목 변경) 다시 계산해야 있음/없음 표시가 최신을 반영한다
+  // 입력은 editorRef.current.getText('lf') 하나뿐 — 별도 본문 사본을 두지 않는다
+  // resolveWikiLink 는 docs 가 바뀌면 다시 계산해야 위키링크 있음/없음 표시가 최신을 반영한다 (F-131 4장)
   useEffect(() => {
     if (viewMode !== 'view') return
     if (!editorRef.current || openDoc?.id !== currentDocId) return
@@ -2831,10 +2800,8 @@ export default function App() {
   }, [currentDoc, showNotice])
 
   // ----- 문서 전환 후 포커스 요청 플래그 정리 (ia.md 3.4, F-103 3.4) -----
-  // 실제 포커스 + 커서 맨 앞 이동은 Editor 가 뷰를 만드는 layout effect 안에서
-  // autoFocus prop 으로 직접 적용한다 (Editor.jsx). StrictMode 의 마운트→해제→재마운트
-  // 에서도 그 effect 가 매번 다시 실행되어 최종 뷰가 포커스를 받으므로, 여기 passive
-  // effect 는 이번 전환 요청을 소비 표시(플래그 원복)만 해서 다음 전환에 새지 않게 한다
+  // 실제 포커스 이동은 Editor 의 layout effect 가 autoFocus prop 으로 한다 (Editor.jsx) — StrictMode 재마운트에도 그 effect 가 다시 실행돼 최종 뷰가 받는다
+  // 여기 passive effect 는 전환 요청 플래그를 소비 표시만 해 다음 전환에 새지 않게 한다
   useEffect(() => {
     if (openDoc?.id !== currentDocId) return
     focusEditorRef.current = false
@@ -2842,8 +2809,7 @@ export default function App() {
   }, [openDoc, currentDocId])
 
   // ----- 자동 저장 (specs/features/F-110.md 3.4) -----
-  // Editor 는 마운트 시점의 onDocChange 클로저만 계속 쓰므로(위 주석 참고), 여기서 부르는
-  // 콜백들은 항상 참조가 그대로여야 한다. 최신 구현은 ref 로 우회한다
+  // Editor 는 마운트 시점의 onDocChange 클로저만 계속 쓰므로 콜백 참조가 그대로여야 한다 — 최신 구현은 ref 로 우회한다
   const handleDocSaved = useCallback((updated: Doc) => {
     e2eeSaveNoticeShownRef.current.delete(updated.id)
     setDocs((prev) =>
@@ -2883,10 +2849,8 @@ export default function App() {
     getComments: () => comments.localCommentRecords(),
     onSaved: handleDocSaved,
     onSaveError: handleSaveError,
-    // 저장해 봤자 해로운 두 경우에만 막는다 — 잠금을 뺏긴 서버 문서는 그대로 내보내 423 충돌 사본을 만드는 게 설계다 (F-296.md 7.4)
-    // 실시간 경로는 본문을 방 Doc 으로 보낸다 — PUT 하면 DO 가 올린 version 과 갈려 409 사본이 생긴다 (F-305 10.1)
-    // 편집기가 내려가 있으면(세션 재시작·온라인 복귀·금고 잠금으로 openDoc 이 비었을 때) getText 가 '' 를 돌려준다 —
-    // 대기 중이던 저장이 빈 본문으로 서버 본문을 지우지 않게 막는다. 편집기는 openDoc 이 지금 문서일 때만 뜬다 (리뷰 A2)
+    // 잠금 뺏긴 서버 문서는 그대로 내보내 423 충돌 사본을 만드는 설계다(F-296.md 7.4), 실시간 경로는 방 Doc 으로 보낸다 — PUT 하면 409 사본이 생긴다(F-305 10.1)
+    // 편집기가 내려가 있으면 getText 가 '' 를 돌려줘 대기 저장이 서버 본문을 지우지 않게 막는다 (리뷰 A2)
     blocked: isDeletedElsewhere || claimReadOnly || isRealtime || isOfflineView || openDoc?.id !== currentDocId,
   })
 
@@ -2904,8 +2868,7 @@ export default function App() {
     openSearchRef.current = openSearch
     openPaletteRef.current = openPalette
     toggleShortcutsRef.current = toggleShortcuts
-    // isEmpty(아래 조기 반환 뒤에 선언) 대신 currentDocId 로 직접 판정한다 — 공개 보기로 조기 반환한 렌더에서는
-    // isEmpty 가 초기화되지 않아 읽으면 TDZ ReferenceError 로 앱이 죽는다 (리뷰 A1)
+    // isEmpty 대신 currentDocId 로 판정 — 공개 보기 조기 반환 렌더에서 isEmpty 가 초기화 전이라 읽으면 TDZ 로 죽는다 (리뷰 A1)
     toggleCommentsRef.current =
       commentAccessValue.kind === 'none' || !currentDoc || bootPhase !== 'ready' || currentDocId === null
         ? null
@@ -2913,8 +2876,7 @@ export default function App() {
     bootPhaseRef.current = bootPhase
   })
 
-  // hashchange 핸들러(위)가 항상 최신 docs·currentDocId 를 보도록 매 커밋 후 갱신한다
-  // (0단계 버그 수정)
+  // hashchange 핸들러(위)가 항상 최신 docs·currentDocId 를 보도록 매 커밋 후 갱신한다 (0단계 버그 수정)
   useEffect(() => {
     docsRef.current = docs
     currentDocIdRef.current = currentDocId
@@ -2943,8 +2905,7 @@ export default function App() {
     sidebarCollapsedRef.current = sidebarCollapsed
   })
 
-  // runImportFiles 는 store·showNotice 등을 클로저로 담으므로, 매 커밋 후 최신 참조로
-  // 갱신해야 file launch consumer(F-119)가 낡은 상태를 쓰지 않는다
+  // runImportFiles 는 store·showNotice 를 클로저로 담아 매 커밋 후 갱신해야 file launch consumer 가 낡은 상태를 쓰지 않는다 (F-119)
   useEffect(() => {
     runImportFilesRef.current = runImportFiles
     openOrImportLaunchedFilesRef.current = openOrImportLaunchedFiles
@@ -3115,16 +3076,13 @@ export default function App() {
     return () => ro?.disconnect()
   }, [editorHandle])
 
-  // 새 문서 대상 폴더 (F-138 3.4): 사이드바 새 문서(폴더 생략)·없는 위키링크 클릭·가져오기
-  // 세 경로가 이 함수로 통일한다. 현재 문서의 folderId 가 존재하는 폴더일 때만 그 값,
-  // 그 외(지운 폴더·옛 버그로 끊긴 값)는 최상위(null) — 저장소 create 가 없는 폴더 id 를
-  // 거부해도(F-136.md 3.1) 처리되지 않은 rejection 으로 이어지지 않게 한다
+  // 새 문서 대상 폴더 — 사이드바 새 문서·위키링크·가져오기 세 경로가 이 함수로 통일한다 (F-138 3.4)
+  // 지운 폴더 등 끊긴 folderId 는 최상위로 — create 의 없는 폴더 id 거부(F-136.md 3.1)가 rejection 으로 새지 않게 한다
   function newDocFolderId() {
     return resolveTargetFolderId({ folders, folderId: currentDoc?.folderId ?? null })
   }
 
-  // folderId 를 생략하면 현재 문서가 속한 폴더 안에 만든다(없으면 최상위). 사이드바
-  // 폴더 메뉴의 `새 문서` 는 그 폴더 id 를 명시로 넘긴다 (F-126.md 5.3)
+  // folderId 생략 시 현재 문서가 속한 폴더에 만든다(없으면 최상위) — 사이드바 폴더 메뉴의 새 문서는 폴더 id 를 명시로 넘긴다 (F-126.md 5.3)
   // 금고를 열어 달라고 한다. 닫으면 false, 금고 정보를 못 읽으면 E25 뒤 false (F-405 2.4)
   async function requestE2eeOpen(): Promise<boolean> {
     const ring = e2eeRef.current
@@ -3378,8 +3336,7 @@ export default function App() {
   async function createNewDoc(folderId?: string | null) {
     const targetFolderId = folderId !== undefined ? folderId : newDocFolderId()
     if (!(await ensureE2eeOpenForFolder(targetFolderId))) return
-    // 보기 모드에서 새 문서 를 누르면 먼저 편집 모드로 바꾼다 — 제목 입력 포커스가
-    // 필요하기 때문이다 (ia.md 3.3, F-123.md 3.3)
+    // 보기 모드에서 새 문서 를 누르면 제목 입력 포커스가 필요해 먼저 편집 모드로 바꾼다 (ia.md 3.3, F-123.md 3.3)
     if (viewMode === 'view') changeViewMode('live')
     await beforeLeaveDoc()
     // 새 문서 버튼은 {{title}} 이 빈 글자다 — 사용자 결정, F-2037.md 4.4
@@ -3393,8 +3350,7 @@ export default function App() {
         folderId: targetFolderId,
       })
     } catch (err) {
-      // 저장소가 folderId 를 거부하면(F-136.md 3.1) 처리되지 않은 rejection 으로 두지
-      // 않고 기존 오류 알림 경로로 보여준다 (F-138 3.4, 문구는 스스로 정함)
+      // 저장소가 folderId 를 거부하면(F-136.md 3.1) 처리되지 않은 rejection 으로 두지 않고 기존 오류 알림 경로로 보여준다 (F-138 3.4)
       showNotice({ type: 'error', message: e2eeCreateErrorMessage(err) ?? '새 문서를 만들지 못했습니다. 다시 시도하세요.' })
       return
     }
@@ -3404,8 +3360,7 @@ export default function App() {
     setDocs((prev) => sortByUpdatedAtDesc([...prev, meta]))
     addOpenFolders(ancestorsOfDoc({ folders, doc: meta }))
     focusTitleRef.current = true
-    // 새 문서는 에디터가 아니라 제목 입력에 포커스한다 (ia.md 3.3, F-103 3.4) — 이전
-    // 문서 전환 요청이 아직 소비되지 않았을 가능성에 대비해 명시적으로 내려둔다
+    // 새 문서는 에디터가 아니라 제목 입력에 포커스한다 — 이전 전환 요청이 아직 소비되지 않았을 가능성에 대비해 명시적으로 내려둔다 (ia.md 3.3, F-103 3.4)
     focusEditorRef.current = false
     // 공유 보기(F-130 4장)·공유 관리·도움말(F-2054 6.4)·지도 빈 상태(F-292 6.5)를 떠난다 — 만든 뒤에만, 실패하면 화면과 주소가 어긋난다
     setSharedDoc(null)
@@ -3449,8 +3404,7 @@ export default function App() {
     pushHashUrl(doc.id)
     closeSidebarIfNarrow()
     // Dialog(팔레트)가 닫는 요소로 포커스를 돌리는 비동기 처리를 이겨야 한다 — openDocFromSearch 와 같은 방식
-    // 새 문서의 편집기가 아직 안 떴으면 editorRef 는 이전 문서 편집기다 — 거기로 포커스를 주면 글자가 이전 문서에 들어간다.
-    // 그때는 새 편집기가 마운트하며 autoFocus(focusEditorRef)로 스스로 포커스한다 (리뷰 P3)
+    // 새 편집기가 아직 안 떴으면 editorRef 는 이전 문서 편집기라 포커스를 주면 안 된다 — 마운트 시 autoFocus 로 스스로 포커스한다 (리뷰 P3)
     setTimeout(() => {
       if (openDocIdRef.current === doc.id) editorRef.current?.focus()
     }, 0)
@@ -3551,11 +3505,8 @@ export default function App() {
   }
 
   // ----- 위키링크 열기 (specs/features/F-131.md 5장) -----
-  // 있는 문서면 selectDoc 과 같은 흐름(저장 대기 입력 flush 뒤 전환)을 탄다. 없으면 그
-  // 자리에서 빈 문서를 새로 만들어 연다 — 새 문서 는 현재 문서와 같은 폴더에 만든다
-  // (F-126.md 5.3 의 folderId 생략 규칙과 같다)
-  // F-2018 8.3 — '' 또는 지금 문서면 제목 이동(기록 없음), 다른 문서면 연 뒤 이동, 없으면 새 문서(헤딩 버림, 경로식은 그 폴더)
-  // source 는 위키링크 미리보기 창 안 링크가 넘긴다(F-2044 5.3) — 주면 해석 기준이 currentFolderId 대신 source.folderId, 대상 '' 은 source.docId
+  // 있는 문서면 selectDoc 과 같은 흐름을 탄다, 없으면 새 문서를 만들어 연다(현재 폴더, F-126.md 5.3) — '' 나 지금 문서는 제목 이동(F-2018 8.3)
+  // source 는 위키링크 미리보기 창 링크가 넘긴다 — 주면 해석 기준이 source.folderId/source.docId 가 된다 (F-2044 5.3)
   async function openWikiLinkTarget(
     target: string,
     heading: string | null = null,
@@ -3787,9 +3738,8 @@ export default function App() {
     closeSidebarIfNarrow()
   }
 
-  // 가져오기 실행 (specs/features/F-114.md 2.2). 파일 선택 input 과 OS 파일 열기 연동
-  // (F-119) 이 함께 쓴다. 현재 문서가 속한 폴더 안에 만든다 (F-126.md 5.3) — importFiles.js
-  // 는 F-126 수정 범위 밖이라 store.create 를 감싸 folderId 를 주입한다
+  // 가져오기 실행(F-114.md 2.2) — 파일 선택 input 과 OS 파일 열기 연동(F-119)이 함께 쓴다
+  // 현재 문서가 속한 폴더 안에 만든다(F-126.md 5.3) — importFiles.js 는 범위 밖이라 store.create 를 감싸 folderId 를 주입한다
   async function runImportFiles(files: File[]): Promise<Doc | null> { // 마지막으로 만든 문서를 돌려준다 — OS 파일 열기 재중복 방지(F-231)가 handle 연결에 쓴다
     if (files.length === 0) return null
 
@@ -3830,8 +3780,7 @@ export default function App() {
       setDocs((prev) => sortByUpdatedAtDesc([...prev, ...createdMetas]))
     }
 
-    // lastCreatedDoc 은 onCreated 콜백(중첩 함수) 안에서만 대입돼 TS 흐름분석이
-    // 대입을 못 보고 never 로 좁힌다 — 단언으로 실제 타입을 되돌린다
+    // lastCreatedDoc 은 onCreated 콜백 안에서만 대입돼 TS 가 못 보고 never 로 좁힌다 — 단언으로 실제 타입을 되돌린다
     const createdDoc = lastCreatedDoc as Doc | null
     if (createdDoc) {
       // 공유 보기(F-130 4장)·공유 관리·도움말·지도(F-2054 6.4)를 떠난다 — 가져온 게 없으면 화면과 주소를 그대로 둔다
@@ -4282,8 +4231,7 @@ export default function App() {
     }
   }
 
-  // S-4 `내 문서로 가져오기`: 새 문서로 만들고 편집 모드로 연다. 해시는 교체
-  // (히스토리에 남기지 않는다, F-130.md 4장)
+  // S-4 `내 문서로 가져오기`: 새 문서로 만들고 편집 모드로 연다 — 해시는 교체한다(히스토리에 남기지 않는다, F-130.md 4장)
   async function importSharedDoc() {
     if (!sharedDoc) return
     const doc = await store.create({
@@ -5052,8 +5000,7 @@ export default function App() {
     showNotice({ type: 'info', message: '도움말을 문서로 복사했습니다.' })
   }
 
-  // SettingsDialog 는 여러 설정 종류를 같은 Segment 컴포넌트로 그려 값이 string 으로 온다.
-  // 실제 값은 항상 각 설정의 고정 옵션 목록 중 하나다 (SettingsDialog.tsx 참고)
+  // SettingsDialog 가 여러 설정을 같은 Segment 로 그려 값이 string 으로 오지만, 실제 값은 항상 그 설정의 고정 옵션 중 하나다
   function changeHeadingFont(value: string) {
     const v = value as 'serif' | 'sans'
     setHeadingFont(v)

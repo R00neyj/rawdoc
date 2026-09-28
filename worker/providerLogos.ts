@@ -1,9 +1,5 @@
 // 제공자 공식 로고 — CLAUDE.md Invariants 의 제공자 로고 예외, 이 파일 밖에 색 값을 옮기지 않는다 (specs/features/F-2033.md 6.4)
-// 받은 곳·날짜 (2026-09-24):
-// - Google: https://developers.google.com/static/identity/images/signin-assets.zip (Sign in with Google 브랜딩 가이드 공식 묶음)
-//   Android + Web/SVG/Light/Theme=Light, Show text=No, Shape=Square, Platform=Android+Web.svg 에서 버튼 틀 path 둘(흰 바탕·회색 테두리)을 빼고
-//   viewBox 를 G 가 그려진 10,10,20,20 으로 좁혔다. 우리 버튼이 이미 틀을 그리기 때문이다. G 의 경로·색·필터는 그대로다
-// - GitHub: https://brand.github.com/GitHub_Logos.zip SVG/GitHub_Invertocat_Black.svg 그대로. 로그인 페이지는 밝은 테마뿐이라 검정 표식을 쓴다
+// 받은 곳(2026-09-24) — Google: signin-assets.zip(developers.google.com) 에서 버튼 틀 path 2개 빼고 viewBox 를 10,10,20,20 으로 좁힘(G 그대로). GitHub: GitHub_Invertocat_Black.svg(brand.github.com) 그대로(로그인은 밝은 테마뿐이라 검정 표식)
 
 export const GOOGLE_LOGO_SVG = `<svg viewBox="10 10 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <mask id="mask0_1298_12516" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="10" y="10" width="20" height="20">

@@ -21,8 +21,7 @@ export default function ImportPreviewDialog({ state, onCancel, onConfirm, onClos
   const titleId = 'import-preview-title'
   const cancelRef = useRef<HTMLButtonElement | null>(null)
 
-  // Esc·바깥 클릭으로 네이티브 dialog 가 닫힌 단계. open 을 그대로 true 로 두면 다음 단계·다음 가져오기에서
-  // Dialog 가 showModal 을 다시 부르지 않아 대화상자가 안 뜬다 — 단계가 바뀌면 다시 연다 (리뷰 U4)
+  // Esc·바깥 클릭으로 닫힌 단계에서 open 을 true 로 두면 다음 가져오기에서 showModal 을 다시 안 불러 안 뜬다 — 단계가 바뀌면 다시 연다 (리뷰 U4)
   const stage = state?.stage ?? null
   const [dismissedStage, setDismissedStage] = useState<ImportDialogState['stage'] | null>(null)
   if (dismissedStage !== null && dismissedStage !== stage) setDismissedStage(null)

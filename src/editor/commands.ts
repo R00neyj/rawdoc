@@ -1,6 +1,4 @@
-// 단축키 명령 (specs/features/F-109.md)
-// StateCommand(`({state,dispatch}) => boolean`) 로 만들어 DOM 없이 테스트한다.
-// 서식 적용이 아니라 텍스트 삽입이다. 명령 1회 = dispatch 1회 = 실행 취소 1단계
+// 단축키 명령(F-109). StateCommand 로 만들어 DOM 없이 테스트한다 — 서식 적용이 아니라 텍스트 삽입, 명령 1회 = dispatch 1회 = 실행 취소 1단계
 import { EditorSelection } from '@codemirror/state'
 import type { EditorState, StateCommand } from '@codemirror/state'
 import type { KeyBinding } from '@codemirror/view'
@@ -43,9 +41,8 @@ export const toggleStrong: StateCommand = ({ state, dispatch }) => {
   return true
 }
 
-// Mod-i: 기울임. 양옆이 * 이고 그 바깥이 * 가 아니면(** 의 일부가 아니면) 제거,
-// 아니면 *선택* 으로 감싼다 — **a** 안쪽 a 를 선택하면 바깥의 * 은 ** 의
-// 일부라 제거 대상이 아니라서 ***a*** 가 된다
+// Mod-i: 기울임. 양옆이 * 이고 바깥이 * 아니면(** 일부 아니면) 제거, 아니면 *선택* 으로 감싼다
+// **a** 안쪽 a 선택 시 바깥 * 은 ** 일부라 제거 대상 아님 → ***a*** 가 된다
 export const toggleEmphasis: StateCommand = ({ state, dispatch }) => {
   const tr = state.update(state.changeByRange((range) => {
     if (range.empty) {

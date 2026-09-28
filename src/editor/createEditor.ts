@@ -1,6 +1,4 @@
-// CM6 EditorView 생성·확장 조립 (specs/features/F-103.md 3.1)
-// basicSetup 을 쓰지 않는다 — 자동완성·검색 패널을 넣지 않는다. 괄호·강조 기호 자동
-// 짝은 `@codemirror/autocomplete` 의 closeBrackets() 가 아니라 F-127 의 autoPair() 다
+// CM6 EditorView 생성·확장 조립(F-103 3.1). basicSetup 미사용 — 자동완성·검색 패널 안 넣음, 괄호·강조 자동짝은 closeBrackets() 아닌 F-127 의 autoPair()
 import type { Extension } from '@codemirror/state'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { dropCursor, EditorView, keymap, lineNumbers, ViewPlugin } from '@codemirror/view'
@@ -108,11 +106,8 @@ function openSearchPanelWithReplace(view: EditorView): boolean {
   return true
 }
 
-// 검색 패널의 "모두 선택·대소문자 구분·정규식·단어 단위" 는 일반 사용자가 자주 쓰는 기능이
-// 아니라 기본은 숨기고, "···" 토글을 눌러야 그 아래 별도 팝오버로 뜬다 (2026-09-20 사용자 요청 —
-// 처음엔 같은 줄에 펼치는 방식이었으나 "별도 창으로 아래에 띄웠으면" 요청으로 바꿨다).
-// @codemirror/search 는 이런 UI 를 그리지 않으므로 패널 DOM 이 나타날 때마다 한 번씩 만든다 —
-// 패널은 열 때마다 새로 만들어지므로(SearchPanel 생성자) 매번 다시 넣어야 한다
+// 검색 패널의 부가 옵션(모두 선택·대소문자·정규식·단어 단위)은 기본 숨기고 "···" 토글로 팝오버에 띄운다(2026-09-20 사용자 요청)
+// @codemirror/search 가 이 UI 를 그리지 않아 패널 DOM 이 나타날 때마다(SearchPanel 은 열 때마다 새로 생성) 직접 만들어 넣는다
 const searchMoreToggle = ViewPlugin.fromClass(
   class {
     constructor(view: EditorView) {
@@ -141,29 +136,20 @@ const searchMoreToggle = ViewPlugin.fromClass(
         toggle.setAttribute('aria-label', expanded ? '옵션 접기' : '옵션 더 보기')
       })
 
-      // 모두 선택 버튼 + 대소문자·정규식·단어 단위 라벨을 팝오버 컨테이너로 옮긴다(이동이라
-      // 기존 클릭·:checked 동작·이벤트 리스너는 그대로 유지된다 — append() 는 기존 부모에서 뗀다)
+      // 모두 선택 버튼 + 대소문자·정규식·단어 단위 라벨을 팝오버 컨테이너로 옮긴다 — append() 는 기존 부모에서 떼므로 클릭·:checked 동작·리스너는 유지된다
       const popover = document.createElement('div')
       popover.className = 'cm-search-more-panel'
       popover.append(selectBtn, ...optionLabels)
 
-      // 찾기 줄(입력·다음·이전·더보기)과 바꾸기 줄을 각각 실제 줄(row) 컨테이너로 감싼다 —
-      // 원래 라이브러리는 <br style="flex-basis:100%"> 로 줄을 억지로 나누는데, 퍼센트
-      // flex-basis 를 가진 자식이 있으면 카드의 width:max-content 계산이 브라우저마다
-      // 어긋나 접었을 때도 펼친 폭 그대로 자리를 차지하는 문제가 있었다(2026-09-20 사용자
-      // "더보기를 열지 않아도 공간이 그대로 차지되고 있는데"). 줄마다 독립된 가로 flex 컨테이너로
-      // 감싸고 카드는 세로로만 쌓아(column) 이 계산을 아예 피한다
-      // 닫기 버튼도 이 줄 끝에 넣는다 — 예전엔 position:absolute 로 카드 오른쪽 위에 따로
-      // 띄웠는데 다른 버튼과 세로 정렬이 살짝 어긋나 보였다(2026-09-20 사용자 지적).
-      // margin-left:auto 로 같은 줄 안에서 오른쪽 끝으로 미는 것으로 바꾼다
+      // 찾기·바꾸기 줄을 각각 가로 flex 컨테이너로 감싸고 카드는 세로로만 쌓는다 — <br style=flex-basis:100%> 로 나누면 퍼센트 flex-basis 자식이 width:max-content 계산을 브라우저마다 어긋나게 해 접어도 폭이 그대로였다(2026-09-20)
+      // 닫기 버튼도 같은 줄 끝에 margin-left:auto 로 둔다 — 이전 position:absolute 배치는 다른 버튼과 세로 정렬이 어긋나 보였다(2026-09-20 사용자 지적)
       const searchRow = document.createElement('div')
       searchRow.className = 'cm-search-row'
       searchRow.append(searchField, nextBtn, prevBtn, toggle, closeBtn)
       panel.prepend(searchRow)
       searchRow.insertAdjacentElement('afterend', popover)
-      // 팝오버 위치는 CSS right:0 으로 카드 오른쪽 끝에 맞춘다 — 토글의 offsetLeft 를 그대로
-      // 쓰면 카드가 화면 오른쪽 끝(right:10px)에 붙어 있어 팝오버가 화면 밖으로 나갔다
-      // (2026-09-20 사용자 지적)
+      // 팝오버 위치는 CSS right:0 으로 카드 오른쪽 끝에 맞춘다 — 토글의 offsetLeft 를 쓰면
+      // 카드가 화면 오른쪽 끝(right:10px)에 붙어 있어 팝오버가 화면 밖으로 나갔다(2026-09-20 사용자 지적)
 
       const replaceField = panel.querySelector('input[name="replace"]')
       const replaceBtn = panel.querySelector('button[name="replace"]')
@@ -289,11 +275,9 @@ type CreateEditorOptions = {
   viewMode?: ViewMode
   // 앱 테마(white|sepia|dark), 기본 'white' — mermaid 위젯에 쓰인다. 이후 전환은 handle.setTheme(theme) (F-260.md 2.1·2.3, Editor.tsx 는 아직 이 값을 넘기지 않아 App.tsx 가 마운트 때마다 setTheme 으로 맞춘다)
   theme?: string
-  // 줄 번호(거터) 표시 여부, 기본 true (F-147 2장). 이후 전환은 handle.setLineNumbers(on) 으로
-  // 한다 — 이 값은 최초 생성에만 쓴다
+  // 줄 번호(거터) 표시 여부, 기본 true(F-147 2장) — 이후 전환은 handle.setLineNumbers(on), 이 값은 최초 생성에만 쓴다
   lineNumbers?: boolean
-  // 들여쓰기 칸 수, 기본 4 (F-154 2.3). 이후 전환은 handle.setIndent(n) 으로 한다 —
-  // 이 값은 최초 생성에만 쓴다
+  // 들여쓰기 칸 수, 기본 4(F-154 2.3) — 이후 전환은 handle.setIndent(n), 이 값은 최초 생성에만 쓴다
   indent?: IndentSize
   // 읽기 전용, 기본 false (F-212.md 2.4). 이후 전환은 handle.setReadOnly(on) 으로 한다
   readOnly?: boolean
@@ -421,23 +405,19 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     dropFileGuard,
     focusRelay(),
     editorContextMenuHandler(notifyContextMenu),
-    // autoPair() 의 Backspace 키맵(Prec.high)이 markdown()의 deleteMarkupBackward
-    // (역시 Prec.high)보다 먼저 받으려면 같은 우선순위 안에서 더 앞서 조립해야 한다
+    // autoPair() 의 Backspace 키맵(Prec.high)이 markdown() 의 deleteMarkupBackward(역시 Prec.high)보다 먼저 받으려면 더 앞서 조립해야 한다
     // (@codemirror/view keymap 문서: "specified early... get checked first")
     autoPair(),
-    // base 기본값(commonmarkLanguage)은 GFM 표를 파싱하지 않는다 (spike index.js 86~88행)
-    // extensions: 문서 첫 줄 YAML 프론트매터를 Frontmatter 노드로 만든다 (F-133 3.2) —
-    // 모드(편집·원문) 공통. 이게 없으면 lezer 는 첫 `---` 를 HorizontalRule, 그 다음
-    // 줄을 SetextHeading2 로 잘못 읽는다
-    // addKeymap:false — markdownKeymap 의 기본 Enter(insertNewlineContinueMarkup) 대신 insertNewlineContinueList 를 같은 자리에 쓴다(F-245 6.3)
+    // base: markdownLanguage — commonmark 기본값은 GFM 표를 못 읽는다(spike index.js 86~88행). extensions: frontmatterExtension() 없으면 lezer 가 첫 `---` 를 HorizontalRule 로 잘못 읽는다(F-133 3.2)
+    // addKeymap:false — markdownKeymap 기본 Enter 대신 insertNewlineContinueList 를 같은 자리에 쓴다(F-245 6.3)
     markdown({ base: markdownLanguage, extensions: [frontmatterExtension()], addKeymap: false }),
     Prec.high(keymap.of([{ key: 'Enter', run: insertNewlineContinueList }, { key: 'Backspace', run: deleteMarkupBackward }])),
     indentCompartment.of(indentExtensionsFor(indentSize)),
     highlightExtension(),
     // 찾기·바꾸기 패널(F-261.md 2.1) — 모드와 무관하게 항상 켠다. previewCompartment 밖: fenceLinePreview()·wikiComplete() 와 같은 이유
     search({ top: true }),
-    // 검색 패널 문구 한국어화 (2026-09-20 사용자 요청 "한글로 나와야함") — @codemirror/search 가
-    // view.state.phrase() 로 찾는 원문 문자열을 키로 매핑한다. 키 철자는 라이브러리 원문과 정확히 같아야 한다
+    // 검색 패널 문구 한국어화(2026-09-20 사용자 요청 "한글로 나와야함") — @codemirror/search 가 view.state.phrase() 로 찾는 원문 문자열을 키로 매핑한다
+    // 키 철자는 라이브러리 원문과 정확히 같아야 한다
     EditorState.phrases.of({
       Find: '찾기',
       Replace: '바꾸기',
@@ -459,14 +439,12 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     }),
     // 모두 선택·대소문자 구분·정규식·단어 단위 옵션을 여닫는 "더보기" 토글 (위 searchMoreToggle 주석 참고)
     searchMoreToggle,
-    // 펼친 코드블록 줄 표시 (F-124 3.4 11번) — 모드(편집·원문)와 무관하게 항상 켠다.
-    // highlight.js 의 주석 참고: 태그 자체를 나누는 방법은 실측으로 안 먹히는 것을
-    // 확인해 줄 decoration 으로 바꿨다
+    // 펼친 코드블록 줄 표시(F-124 3.4 11번) — 모드와 무관하게 항상 켠다
+    // highlight.ts 참고: 태그 자체를 나누는 방법은 실측으로 안 먹혀 줄 decoration 으로 바꿨다
     fenceLinePreview(),
     // 하이라이트(==…==) 기호 색 — 편집·원문 모드 모두 켠다. 배경은 편집 모드만 livePreview() 가 준다(F-283.md 4.2)
     highlightMarkStyle(),
-    // 위키링크 해석 문맥(F-2018). 모드와 무관하게 항상 켠다 — wikiComplete() 도
-    // 같은 필드를 읽고, 모드 전환으로 previewCompartment 가 바뀌어도 값을 잃지 않는다
+    // 위키링크 해석 문맥(F-2018). 모드와 무관하게 항상 켠다 — wikiComplete() 도 같은 필드를 읽고, previewCompartment 재구성에도 값을 잃지 않는다
     wikiContext ? wikiContextField.init(() => wikiContext) : wikiContextField,
     wikiComplete(),
     previewCompartment.of(previewExtensionFor(currentMode, currentTheme, { onOpenWikiLink, resolveAttachment })),

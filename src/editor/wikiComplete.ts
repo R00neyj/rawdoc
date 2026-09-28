@@ -7,8 +7,7 @@ import type { EditorView } from '@codemirror/view'
 import { shortestWikiTarget, type WikiDocRef, type WikiResolver } from '../lib/wikiResolve'
 import { isOpaquePosition, wikiContextField } from './preview/wikiLinks'
 
-// [[ 뒤부터 커서까지, 대괄호·파이프·줄바꿈이 없는 구간에서만 튀운다(F-131 3.1 "| 를 친
-// 뒤에는 띄우지 않는다" — 이 문자 클래스가 자연히 그 조건을 만족한다)
+// [[ 뒤부터 커서까지, 대괄호·파이프·줄바꿈이 없는 구간에서만 띄운다(F-131 3.1 "| 를 친 뒤에는 띄우지 않는다" — 이 문자 클래스가 자연히 그 조건을 만족)
 const TRIGGER_RE = /\[\[([^[\]|\n]*)$/
 
 const MAX_OPTIONS = 20
@@ -17,8 +16,7 @@ function titleMatches(title: string, query: string): boolean {
   return title.toLocaleLowerCase('ko').includes(query.toLocaleLowerCase('ko'))
 }
 
-// 선택 적용: [[ 뒤부터 커서까지를 제목으로 바꾼다. 커서 뒤가 이미 ]] 면(F-127 이 넣은 짝)
-// 그 뒤로 커서, 아니면 ]] 를 붙이고 그 뒤로 커서 (F-131 3.1)
+// 선택 적용: [[ 뒤부터 커서까지를 제목으로 바꾼다 — 커서 뒤가 이미 ]] 면(F-127 이 넣은 짝) 그 뒤로 커서, 아니면 ]] 를 붙이고 그 뒤로 커서(F-131 3.1)
 function applyTitle(view: EditorView, from: number, to: number, title: string): void {
   const hasClosing = view.state.doc.sliceString(to, to + 2) === ']]'
   const afterTitle = from + title.length
@@ -45,8 +43,7 @@ function folderDetail(resolver: WikiResolver, doc: WikiDocRef): string {
   return names.length === 0 ? '최상위' : names.join(' / ')
 }
 
-// [[ 자동완성 소스. F-137 3.2 테스트가 구문 트리 판정(FencedCode·InlineCode·
-// Frontmatter 안 제외)을 직접 확인할 수 있도록 내보낸다
+// [[ 자동완성 소스 — F-137 3.2 테스트가 구문 트리 판정(FencedCode·InlineCode·Frontmatter 안 제외)을 직접 확인할 수 있도록 내보낸다
 export function wikiCompletionSource(context: CompletionContext): CompletionResult | null {
   const match = context.matchBefore(TRIGGER_RE)
   if (!match) return null

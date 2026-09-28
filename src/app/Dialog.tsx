@@ -10,9 +10,7 @@ type DialogProps = {
   children: ReactNode
 }
 
-// 대화상자 공통 컴포넌트 — 네이티브 <dialog> + showModal() (specs/features/F-102.md 5.6)
-// 열 때 지정한 요소에 포커스, 닫을 때 연 요소로 포커스 복귀
-// Esc(cancel 이벤트)와 바깥(backdrop) 클릭으로 닫힌다. alert·confirm·prompt 는 쓰지 않는다
+// 대화상자 공통 컴포넌트 — 네이티브 <dialog> + showModal(), 포커스 이동/복귀와 Esc·바깥 클릭 닫기를 담당한다 (F-102.md 5.6)
 export default function Dialog({ open, onClose, titleId, initialFocusRef, size = 'default', describedById, children }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement | null>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)

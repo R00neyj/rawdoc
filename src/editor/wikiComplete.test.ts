@@ -1,6 +1,5 @@
-// wikiComplete.js 단위 테스트 (specs/features/F-137.md 3.2)
-// wikiCompletionSource 를 CompletionContext 로 직접 부른다. autocompletion() 자체
-// (팝업 UI)는 DOM 이 필요해 여기서 테스트하지 않는다 — wikiLinks.js 테스트와 같은 방침
+// wikiComplete.ts 단위 테스트(F-137 3.2) — wikiCompletionSource 를 CompletionContext 로 직접 부른다
+// autocompletion() 자체(팝업 UI)는 DOM 필요해 여기서 테스트 안 함 — wikiLinks.ts 테스트와 같은 방침
 import { describe, expect, it } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'

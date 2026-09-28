@@ -1,5 +1,4 @@
-// 방 Doc 과 연결 제어기를 문서 열기 세션 동안 들고 있는 훅 — 편집기 다시 마운트가 연결을 끊지 않게 App 층에 둔다 (F-305 1장·5장·7.5)
-// md-yjs 기록을 먼저 불러온 뒤 제어기를 시작하고, 병합 판정기를 잇는다 (F-306 6.4)
+// 방 Doc 과 연결 제어기를 문서 열기 세션 동안 들고 있는 훅 — 편집기 재마운트가 연결을 끊지 않게 App 층에 둔다(F-305 1·5·7.5장), md-yjs 기록을 먼저 불러온 뒤 제어기를 시작해 병합 판정기를 잇는다(F-306 6.4)
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import * as Y from 'yjs'
 import { Awareness } from 'y-protocols/awareness'

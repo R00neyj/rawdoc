@@ -1,5 +1,4 @@
-// 라이브 프리뷰 확장 (F-104 인라인·F-105 줄 요소)
-// createEditor.ts 가 보기 모드 Compartment 에 넣을 확장을 여기서 조립해 반환한다
+// 라이브 프리뷰 확장(F-104 인라인·F-105 줄 요소) — createEditor.ts 가 보기 모드 Compartment 에 넣을 확장을 여기서 조립해 반환한다
 import type { Extension } from '@codemirror/state'
 
 import './preview.css'

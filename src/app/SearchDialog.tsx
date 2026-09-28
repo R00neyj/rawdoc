@@ -1,5 +1,4 @@
-// 검색 대화상자 D-6 (specs/features/F-287.md 4장) — 인덱스 만들기·검색 실행·결과 그리기·키보드
-// 해석 줄·안내 줄·꼬리 줄·상태 문구는 F-288.md 4~6장
+// 검색 대화상자 D-6 — 인덱스 만들기·검색 실행·결과 그리기·키보드(F-287.md 4장), 해석·안내·꼬리 줄·상태 문구는 F-288.md 4~6장
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import Dialog from './Dialog'
 import { IconSearch } from './icons'

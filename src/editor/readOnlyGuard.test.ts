@@ -1,5 +1,4 @@
-// 읽기 전용이면 위젯(체크박스·표·이미지)이 직접 보내는 문서 변경도 막는다 (리뷰 E1).
-// EditorState.readOnly 는 기본 명령만 막고 view.dispatch 는 막지 않는다
+// 읽기 전용이면 위젯(체크박스·표·이미지)이 직접 보내는 문서 변경도 막는다(리뷰 E1) — EditorState.readOnly 는 기본 명령만 막고 view.dispatch 는 안 막는다
 import { describe, expect, it } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import { ySyncAnnotation, YSyncConfig } from 'y-codemirror.next'

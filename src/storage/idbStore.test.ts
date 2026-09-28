@@ -459,10 +459,8 @@ describe('idbStore', () => {
     it('v1 연결이 열려 있는 채로 v2 를 열면 새 연결의 onBlocked 가 불린다', async () => {
       const dbName = freshDbName()
 
-      // "다른 창"이 옛 스키마(F-126 이전, 버전 1)로 연결을 쥐고 있는 상태를 흉내낸다.
-      // blocking 콜백을 달지 않아 스스로 닫지 않으므로, 새 연결 쪽에서 blocked 가
-      // 반드시 불린다(fake-indexeddb 는 versionchange 이벤트 처리 뒤에도 연결이 열려
-      // 있어야만 blocked 를 큐에 넣는다)
+      // "다른 창"이 옛 스키마(F-126 이전, 버전 1)로 연결을 쥔 상태를 흉내낸다 — blocking 콜백이 없어 스스로 닫지 않는다
+      // 새 연결 쪽에서 blocked 가 반드시 불린다(fake-indexeddb 는 versionchange 처리 뒤에도 연결이 열려 있어야 blocked 를 큐에 넣는다)
       const v1db = await openDB(dbName, 1, {
         upgrade(database) {
           database.createObjectStore('docs', { keyPath: 'id' })

@@ -1,5 +1,4 @@
-// F-2020.md 4·5장·11.1 U2·U5~U8 — 옵시디언 볼트 내보내기 계획·본문 변환·zip
-// F-409 9.1 U10·U14 — 금고 문서 빼기·알림·금고 첨부 거르기
+// F-2020.md 4·5장·11.1 U2·U5~U8 옵시디언 볼트 내보내기 계획·본문 변환·zip, F-409 9.1 U10·U14 금고 문서 빼기·알림·첨부 거르기
 import { describe, it, expect, vi } from 'vitest'
 import { unzipSync } from 'fflate'
 import { planExportPaths, selectExportScope, type WorkspaceExportSourceStore, type WorkspaceExportStore } from './exportWorkspace'

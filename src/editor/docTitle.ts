@@ -208,8 +208,8 @@ class TitleWidget extends WidgetType {
     stopObservingHeight(dom)
   }
 
-  // 값·읽기 전용·경로가 바뀌어도 textarea 는 다시 만들지 않는다(2.2) — 새 문서를 만든 직후 경로가 뒤늦게 오면
-  // textarea 를 갈아 끼우면서 막 받은 제목 포커스가 사라졌다(폴더 메뉴 새 문서, 2026-09-24). 경로 줄만 바꾼다(F-234.md 3.3)
+  // 값·읽기 전용·경로가 바뀌어도 textarea 는 다시 만들지 않는다(2.2) — 새 문서 직후 경로가 뒤늦게 오면 textarea 를 갈아 끼우며 막 받은 제목 포커스가 사라졌다(폴더 메뉴 새 문서, 2026-09-24)
+  // 경로 줄만 바꾼다(F-234.md 3.3)
   updateDOM(dom: HTMLElement): boolean {
     const textarea = dom.querySelector('textarea.doc-title') as HTMLTextAreaElement | null
     const label = dom.querySelector('.doc-title-label')

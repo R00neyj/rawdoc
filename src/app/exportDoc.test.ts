@@ -1,5 +1,4 @@
-// F-112 수용 기준 A2: Blob 이 만드는 바이트가 TextEncoder 인코딩 결과와 같은지 확인한다
-// (exportDoc 은 new Blob([text]) 로 다운로드 바이트를 만든다)
+// F-112 수용 기준 A2: Blob 이 만드는 바이트가 TextEncoder 인코딩 결과와 같은지 확인한다 (exportDoc 은 new Blob([text]) 로 다운로드 바이트를 만든다)
 import { describe, it, expect } from 'vitest'
 import { unzipSync } from 'fflate'
 import { buildExportPayload, buildPlainPayload, buildHtmlPayload, buildRichCopyPayload, selectExportCss } from './exportDoc'

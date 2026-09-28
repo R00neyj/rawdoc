@@ -1,5 +1,4 @@
-// 자동 저장 훅 — EditorState → 저장소로만 단방향 스냅샷 전송 (specs/features/F-110.md 3.4, architecture.md 3장)
-// 로컬 문서 댓글 기록도 같은 저장에 실어 보낸다 — 본문·댓글 표지를 따로 두고, 댓글 표지는 기다리지 않고 곧바로 저장한다 (F-508.md 3.2)
+// 자동 저장 훅 — EditorState → 저장소 단방향 스냅샷 전송(F-110.md 3.4, architecture.md 3장), 로컬 문서 댓글 기록도 같은 저장에 실어 보낸다(본문·댓글 표지 분리, 댓글 표지는 곧바로 저장, F-508.md 3.2)
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Doc, LineEnding, Store } from '../types'
 import type { CommentRecord } from '../lib/docComments'

@@ -1,10 +1,5 @@
-// 자동 짝 기호 — 괄호·강조 기호 (specs/features/F-127.md)
-// `@codemirror/autocomplete` 의 closeBrackets() 를 쓰지 않는다 — `*` 를 다시 쳐서
-// `**|**` 로 만드는 규칙과 줄머리 목록 기호(`* 항목`) 규칙을 그쪽 API 로는 넣을 수 없다.
-//
-// autoPairInput·autoPairBackspace 는 DOM 없이 EditorState 만으로 계산한다(F-127 4장).
-// 조합 중(view.composing)·읽기 전용 여부 같은 view 필요한 판단은 autoPair() 확장이
-// EditorView.inputHandler/keymap 래퍼에서 하고, 순수 함수엔 넣지 않는다.
+// 자동 짝 기호 — 괄호·강조 기호(F-127). closeBrackets() 미사용 — `*` 재입력으로 `**|**` 만들기, 줄머리 `* 항목` 규칙을 그 API 로 못 넣는다
+// autoPairInput/Backspace 는 EditorState 만으로 계산하는 순수 함수 — 조합 중·읽기전용 같은 view 판단은 autoPair() 확장에서 한다
 import type { SyntaxNode } from '@lezer/common'
 import type { EditorState, TransactionSpec } from '@codemirror/state'
 import { EditorSelection, Prec, StateEffect, StateField } from '@codemirror/state'
@@ -81,11 +76,8 @@ function insideFrontmatter(state: EditorState, pos: number): boolean {
   return false
 }
 
-// "빈 짝" 판정 (F-134 3.5) — 커서 앞뒤 같은 기호(sym) 묶음의 길이가 같고, 그 묶음보다
-// 더 앞의 글자가 3.3 짝 조건의 "앞 글자" 조건(공백·줄 시작·`(`·`[`)을 만족할 때만 참이다.
-// countRun 은 같은 글자가 이어지는 한 계속 세므로, 이 "묶음보다 더 앞" 글자는 이미
-// 구조적으로 sym 과 다른 글자다(같았다면 묶음에 포함됐을 것) — 그래서 같은 기호인지는
-// 따로 확인하지 않는다.
+// "빈 짝" 판정(F-134 3.5) — 커서 앞뒤 같은 기호(sym) 길이가 같고, 그 앞 글자가 3.3 "앞 글자" 조건(공백·줄시작·`(`·`[`)을 만족해야 참
+// countRun 이 이미 그 앞 글자가 sym 과 다름을 보장하므로(같았다면 묶음에 포함됨) 별도로 비교하지 않는다
 function isEmptyPair(state: EditorState, pos: number, sym: string): boolean {
   const leftRun = countRun(state, pos, sym, -1)
   const rightRun = countRun(state, pos, sym, 1)
@@ -94,8 +86,7 @@ function isEmptyPair(state: EditorState, pos: number, sym: string): boolean {
   return isSpaceLike(outerBefore) || EMPHASIS_PREV_EXTRA.has(outerBefore)
 }
 
-// 줄에서 커서 앞이 들여쓰기 뒤 백틱 두 개뿐이고 뒤가 백틱 두 개뿐인 상태(``|``)인가
-// (F-127 3.3 백틱 추가 규칙)
+// 줄에서 커서 앞뒤가 백틱 두 개뿐인 상태(``|``)인가(F-127 3.3 백틱 추가 규칙)
 function isEmptyDoubleBacktickLine(state: EditorState, pos: number): boolean {
   const line = state.doc.lineAt(pos)
   const before = state.doc.sliceString(line.from, pos)
@@ -140,10 +131,8 @@ function spaceInEmptyStarPair(state: EditorState, pos: number): TransactionSpec 
 
 // 강조 기호 `*` `~` `` ` `` 를 커서 위치(선택 없음)에 입력했을 때
 function emphasisRule(state: EditorState, pos: number, sym: string): TransactionSpec | null {
-  // ``|`` 에서 ` → 닫는 백틱을 지우고 ```| (펜스 코드블록 시작). 이 조건을 만족하는
-  // 4개짜리 백틱 뭉치 자체를 lezer-markdown 이 이미 (내용 없는) FencedCode 로 파싱해
-  // 버리므로, insideOpaqueNode 게이트보다 먼저 확인해야 한다 — 아니면 이 규칙이 그
-  // 게이트에 막혀 한 번도 발동하지 못한다
+  // ``|`` 에서 ` → 닫는 백틱 지우고 ```| (펜스 시작). lezer-markdown 이 4개짜리 백틱 뭉치를 이미 FencedCode 로 파싱하므로
+  // insideOpaqueNode 게이트보다 먼저 확인해야 한다 — 아니면 이 규칙이 그 게이트에 막혀 한 번도 발동하지 못한다
   if (sym === '`' && isEmptyDoubleBacktickLine(state, pos)) {
     return {
       changes: { from: pos, to: pos + 2, insert: '`' },
@@ -157,10 +146,8 @@ function emphasisRule(state: EditorState, pos: number, sym: string): Transaction
   const before = charBefore(state, pos)
   const after = charAfter(state, pos)
 
-  // 다음 글자가 같은 기호일 때: 빈 짝을 새로 쌓아 가는 중(양옆이 전부 같은 기호의
-  // 대칭 묶음이고, 그 바깥은 공백·줄 경계)이면 한 겹 더 nest, 아니면(예: 내용 뒤
-  // **굵게|** 나 그 다음 남은 닫는 기호 **굵게*|*) 글자를 넣지 않고 건너뛴다
-  // (추적 여부와 무관)
+  // 다음 글자가 같은 기호일 때: 양옆이 대칭 묶음이고 바깥이 공백·줄 경계면 한 겹 더 nest
+  // 아니면(예: 내용 뒤 **굵게|** 나 남은 닫는 기호 **굵게*|*) 글자를 넣지 않고 건너뛴다(추적 여부 무관)
   if (after === sym) {
     if (before === sym) {
       const leftRun = countRun(state, pos, sym, -1)
@@ -175,13 +162,11 @@ function emphasisRule(state: EditorState, pos: number, sym: string): Transaction
           userEvent: 'input.type',
         }
       }
-      // 앞 글자도 같은 기호지만 빈 짝 nesting 조건은 아니다(예: 남은 닫는 기호
-      // **굵게*|*) — 기존 동작 그대로 건너뛴다
+      // 앞 글자도 같은 기호지만 빈 짝 nesting 조건은 아니다(예: 남은 닫는 기호 **굵게*|*) — 기존 동작 그대로 건너뛴다
       return { selection: EditorSelection.cursor(pos + 1), userEvent: 'input.type' }
     }
-    // F-134 3.5: 앞 글자가 다른 기호(공백·줄 시작 포함)일 때는 "공백이 아닌 글자"일
-    // 때만 건너뛴다. 줄 시작·공백 뒤에서는 건너뛰지 않고 기본 입력으로 넘긴다 — 줄머리
-    // 목록 기호(`* 항목`)나 `단어 * 단어` 를 치는 흐름을 막지 않기 위해서다
+    // F-134 3.5: 앞 글자가 다른 기호일 때 공백 아닌 글자면 건너뛰고, 공백·줄시작이면 기본 입력으로 넘긴다
+    // 줄머리 목록(`* 항목`)이나 `단어 * 단어` 입력 흐름을 막지 않기 위해서다
     if (isSpaceLike(before)) return null
     return { selection: EditorSelection.cursor(pos + 1), userEvent: 'input.type' }
   }
@@ -256,10 +241,8 @@ export function autoPairBackspace(state: EditorState): TransactionSpec | null {
     }
   }
 
-  // 빈 짝 *|* / **|** / ~|~ / `|` 에서 Backspace → 안쪽 한 쌍 지움. "빈 짝" 일 때만
-  // 동작한다(F-134 3.5) — 앞뒤가 같은 기호라고 해서 항상 지우면 `a**|b`, `**굵게*|*`
-  // 처럼 빈 짝이 아닌 자리에서도 두 글자를 지워 버린다. 코드블록·인라인코드 안에서는
-  // 동작하지 않는다
+  // 빈 짝 *|* / **|** / ~|~ / `|` 에서 Backspace → 안쪽 한 쌍 지움(F-134 3.5) — "빈 짝"일 때만 동작
+  // 항상 지우면 `a**|b` 처럼 빈 짝 아닌 자리도 지워버린다. 코드블록·인라인코드 안에서는 동작 안 함
   if (before === after && EMPHASIS_SYMBOLS.has(before) && !insideOpaqueNode(state, pos) && isEmptyPair(state, pos, before)) {
     return {
       changes: { from: pos - 1, to: pos + 1 },
@@ -274,8 +257,7 @@ export function autoPairBackspace(state: EditorState): TransactionSpec | null {
 // 이 확장이 넣은 닫는 괄호 위치를 추적에 더한다
 const addTrackedCloser = StateEffect.define<number>()
 
-// 이 확장이 넣은 닫는 괄호(`)` `]`) 위치 추적. 문서 변경에 맞춰 옮기고,
-// 커서가 그 줄을 떠나거나 그 자리 글자가 더는 닫는 괄호가 아니면 지운다 (F-127 3.2)
+// 이 확장이 넣은 닫는 괄호 위치 추적 — 문서 변경에 맞춰 옮기고, 커서가 줄을 떠나거나 닫는 괄호가 아니게 되면 지운다(F-127 3.2)
 const trackedClosers = StateField.define<number[]>({
   create: () => [],
   update(value, tr) {
@@ -311,8 +293,7 @@ function backspaceCommand(view: EditorView): boolean {
   return true
 }
 
-// 자동 짝 기호 확장. `EditorView.inputHandler`, Backspace 키맵(Prec.high), 추적
-// `StateField` 를 묶는다 (F-127 4장)
+// 자동 짝 기호 확장. inputHandler, Backspace 키맵(Prec.high), 추적 StateField 를 묶는다(F-127 4장)
 export function autoPair() {
   return [
     trackedClosers,

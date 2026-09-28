@@ -13,9 +13,8 @@ import { matchMathAt, parseMathBlock } from '../lib/mathSyntax'
 import { renderMath } from '../lib/mathRender'
 import { isMermaidInfo } from '../lib/codeLang'
 
-// html:false — 원문 HTML 태그는 파싱하지 않고 글자 그대로(이스케이프되어) 보인다.
-// 링크·이미지 주소 검사는 markdown-it 기본 validateLink 를 그대로 쓴다
-// (javascript: vbscript: file: data: 를 막는다)
+// html:false — 원문 HTML 태그는 파싱하지 않고 글자 그대로(이스케이프되어) 보인다
+// 링크·이미지 주소 검사는 markdown-it 기본 validateLink 그대로 — javascript: vbscript: file: data: 를 막는다
 const md = new MarkdownIt({ html: false, linkify: true, typographer: false, breaks: false })
 
 // ----- 작업 목록 (F-123.md 3.2) -----
@@ -69,12 +68,8 @@ function taskListsRule(state: StateCore): void {
 
 md.core.ruler.push('task_lists', taskListsRule)
 
-// ----- 콜아웃 (F-128.md 3.2, 4.2) -----
-// 'inline' 규칙 전에 실행해 blockquote_open 바로 다음(첫 문단)의 raw 텍스트(아직
-// 인라인 파싱 전, token.content)를 직접 검사한다. markdown-it 은 이 content 에
-// 인용의 '>' 와 그 뒤 공백을 이미 떼어 두므로 F-128 2장 정규식을 그대로 적용할 수 있다.
-// 중첩 인용도 blockquote_open 은 전부 이 규칙을 거치므로 "보기 모드는 안쪽도 콜아웃으로
-// 변환한다"(F-128 2장)가 그대로 만족된다 — 편집 모드처럼 "바깥만" 예외를 두지 않는다
+// ----- 콜아웃 (F-128.md 3.2, 4.2) ----- 'inline' 전에 실행해 blockquote_open 다음 raw 텍스트(인라인 파싱 전 token.content)를 직접 검사한다
+// '>' 와 공백을 이미 뗀 content 라 F-128 2장 정규식을 그대로 쓸 수 있고, 중첩 인용도 다 거치므로 안쪽도 콜아웃으로 변환된다 — 편집 모드처럼 바깥만 예외 두지 않는다
 function calloutRule(state: StateCore): void {
   const tokens = state.tokens
 
@@ -119,11 +114,8 @@ function calloutRule(state: StateCore): void {
     open.attrSet('data-callout', type)
     tokens[closeIndex].tag = 'div'
 
-    // 머리 줄의 [!type] 과 접기 기호는 출력하지 않는다 — 제목만 별도 문단으로 뗀다.
-    // 종류 아이콘은 제목 앞 첫 자식(F-148 3.2) — html_inline 토큰으로 titleInline.children
-    // 에 먼저 넣어 둔다. 'inline' 코어 규칙이 titleInline.content 를 파싱해 나온 토큰들을
-    // 이 배열에 이어 붙이므로(비우지 않고 push) 순서가 [아이콘, ...제목 파싱 결과] 가 된다.
-    // svg 는 앱에 들어 있는 파일 원문(calloutIconSvg)이라 사용자 입력이 아니다
+    // 머리 줄의 [!type]·접기 기호는 출력하지 않고 제목만 별도 문단으로 뗀다 — 종류 아이콘은 제목 앞 첫 자식(F-148 3.2)
+    // html_inline 토큰을 titleInline.children 에 먼저 넣어두면 'inline' 규칙이 파싱한 토큰을 이어 붙여(push) [아이콘, ...제목] 순서가 된다. svg 는 앱 파일 원문(calloutIconSvg)이라 사용자 입력이 아니다
     const titleOpen = new state.Token('paragraph_open', 'p', 1)
     titleOpen.attrSet('class', 'markdown-callout-title')
     const iconToken = new state.Token('html_inline', '', 0)
@@ -411,11 +403,8 @@ md.renderer.rules.heading_open = function (tokens, idx, options, env, self) {
   return defaultHeadingOpen(tokens, idx, options, env, self)
 }
 
-// ----- 위키링크 (F-131.md 4장, F-252.md 4.1) -----
-// 'inline' 규칙(코드 span·기존 링크 등을 이미 처리해 각각 code_inline·link_open 등의
-// 토큰으로 나눈 뒤) 다음에 실행해, 남은 'text' 자식 토큰(순수 글자)만 훑는다 — 이렇게
-// 하면 인라인코드·fence(펜스는 애초에 'inline' 토큰이 아니다)는 자연히 대상에서 빠진다.
-// 표 칸은 'inline' 토큰이 따로 생기므로 table_open/close 로 깊이를 세어 건너뛴다
+// ----- 위키링크 (F-131.md 4장, F-252.md 4.1) ----- 'inline' 규칙(code_inline·link_open 등으로 나눈) 다음에 실행해 남은 'text' 자식 토큰만 훑는다
+// 인라인코드·fence 는 'inline' 토큰이 아니라 자연히 빠지고, 표 칸은 table_open/close 로 깊이를 세어 건너뛴다
 
 // 대상 제목 → href 문자열(찾으면) | null(못 찾으면) — href 모양은 호출부가 정한다 (F-252.md 4.1)
 type ResolveWikiLink = (target: string) => string | null
@@ -439,8 +428,7 @@ function wikiLinkTokens(
     return [spanOpen, text, spanClose]
   }
 
-  // 'link_open'/'link_close' 를 그대로 쓰지 않는다 — 그 타입은 위 F-123 규칙이
-  // target="_blank" rel="noopener noreferrer" 를 붙인다(F-131 4장: 새 탭 속성 없음).
+  // 'link_open'/'link_close' 를 그대로 쓰지 않는다 — 그 타입은 위 F-123 규칙이 target="_blank" rel="noopener noreferrer" 를 붙인다(F-131 4장: 새 탭 속성 없음)
   // 다른 타입 이름으로 만들어 그 규칙을 타지 않고 기본 renderToken 으로 렌더한다
   const href = resolveWikiLink(target)
   const open = new state.Token('wikilink_open', 'a', 1)
@@ -506,9 +494,8 @@ function wikiLinkRule(state: StateCore, resolveWikiLink: ResolveWikiLink | undef
   }
 }
 
-// wikilink_open/close·wikilink_span_open/close 는 renderer 규칙이 따로 없어 markdown-it
-// 기본 renderToken(tag·attrs·nesting 기준)으로 렌더된다 — <a class=… href=…>…</a> 또는
-// <span class=…>…</span>. F-123 의 link_open 규칙(target·rel 추가)은 타입이 달라 타지 않는다
+// wikilink_open/close·wikilink_span_open/close 는 renderer 규칙이 없어 markdown-it 기본 renderToken(tag·attrs·nesting)으로 렌더된다
+// <a class=… href=…>…</a> 또는 <span class=…>…</span> — F-123 의 link_open 규칙(target·rel 추가)은 타입이 달라 타지 않는다
 md.core.ruler.after('inline', 'wikilink', (state) =>
   wikiLinkRule(state, (state.env as { resolveWikiLink?: ResolveWikiLink } | undefined)?.resolveWikiLink),
 )
@@ -588,10 +575,8 @@ function sourceLinesRule(state: StateCore): void {
 
 md.core.ruler.push('source_lines', sourceLinesRule)
 
-// ----- 프론트매터 (F-133.md 3.3) -----
-// 변환 전에 findFrontmatter 로 떼어 내고 나머지 본문만 markdown-it 에 넣는다.
-// 성공(속성 있음): 표. 구조를 알아볼 수 없음(null): 원문 그대로 <pre>. 빈 프론트매터
-// (속성 없음): 아무것도 출력하지 않는다
+// ----- 프론트매터 (F-133.md 3.3) ----- 변환 전에 findFrontmatter 로 떼어내고 나머지 본문만 markdown-it 에 넣는다
+// 성공(속성 있음): 표. 구조를 알 수 없음(null): 원문 그대로 <pre>. 빈 프론트매터(속성 없음): 아무것도 출력하지 않는다
 function renderFrontmatter(text: string, frontmatter: { contentFrom: number; contentTo: number }): string {
   const content = text.slice(frontmatter.contentFrom, frontmatter.contentTo)
   const props = parseSimpleProperties(content)

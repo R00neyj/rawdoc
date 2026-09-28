@@ -1,5 +1,4 @@
-// 커서·선택이 걸친 줄 번호 집합 (F-104 2.2, F-105 활성 줄 판정 — 판정 단위는 줄)
-// DOM 없이 EditorState 만으로 계산한다. inline.js·lines.js 가 함께 쓴다
+// 커서·선택이 걸친 줄 번호 집합(F-104 2.2, F-105) — DOM 없이 EditorState 만으로 계산, inline.ts·lines.ts 가 함께 쓴다
 
 import type { EditorState } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
@@ -9,10 +8,8 @@ export function isEditorFocused(view: EditorView | null | undefined): boolean {
   return !!view && view.dom.contains(view.root.activeElement)
 }
 
-// 선택 범위가 여러 줄에 걸치면 걸친 줄 전부를 "활성 줄" 로 본다.
-// 편집기 포커스가 없으면 활성 줄이 없는 것으로 본다(F-146 3.2) — 커서·선택이 남아있는
-// 줄도 숨긴 프리뷰로 보인다. hasFocus 기본값 true 는 포커스를 다루지 않는 기존
-// 호출부(테스트 등)의 동작을 그대로 유지한다. 1부터 시작하는 줄 번호 집합을 돌려준다
+// 선택 범위가 걸친 줄 전부를 "활성 줄"로 본다. 포커스 없으면 활성 줄 없음(F-146 3.2) — 커서·선택 남은 줄도 숨긴 프리뷰로 보인다
+// hasFocus 기본값 true 는 포커스를 안 다루는 기존 호출부(테스트 등) 동작을 유지한다
 export function activeLines(state: EditorState, hasFocus = true): Set<number> {
   if (!hasFocus) return new Set()
   const lines = new Set<number>()
@@ -24,11 +21,8 @@ export function activeLines(state: EditorState, hasFocus = true): Set<number> {
   return lines
 }
 
-// 선택 범위 중 하나라도 [from, to] 에 닿는가 (F-129 3.2·3.4).
-// 줄이 아니라 임의의 범위(주로 Link 노드 [from, to]) 단위 판정이다.
-// 끝 위치 포함 — 커서가 정확히 to 에 있어도(예: ) 바로 뒤) 닿은 것으로 본다.
-// 편집기 포커스가 없으면 닿지 않은 것으로 본다(F-146 3.2). hasFocus 기본값은
-// activeLines 와 같은 이유다
+// 선택 범위 중 하나라도 [from, to] 에 닿는가(F-129 3.2·3.4) — 줄이 아닌 임의 범위(주로 Link 노드) 단위, 끝 위치 포함(커서가 정확히 to 여도 닿은 것으로 봄)
+// 포커스 없으면 닿지 않은 것으로 본다(F-146 3.2). hasFocus 기본값은 activeLines 와 같은 이유
 export function selectionTouches(state: EditorState, from: number, to: number, hasFocus = true): boolean {
   if (!hasFocus) return false
   for (const range of state.selection.ranges) {

@@ -230,9 +230,8 @@ describe('이스케이프 왕복 (F-138 3.1) — F-135 3.1 을 대체. 파이프
   })
 
   it('`a\\|b` 편집기 값은 `a|b` 이고, 끝에 c 를 입력하면 원문은 `a\\|bc`(열 수 그대로)', () => {
-    // 이전 버그: 편집기가 원문 `a\|b` 를 그대로 받아 끝에 c 를 입력하면 전체 값
-    // "a\|bc" 에 escapeCell 을 한 번 더 적용해 "a\\|bc" 가 되어(파이프가 다시
-    // 이스케이프되지 않고 살아나) 칸이 나뉘었다
+    // 이전 버그: 편집기가 원문 `a\|b` 를 그대로 받아 끝에 c 입력 시 전체 값 "a\|bc" 에 escapeCell 을 한 번 더 적용해
+    // "a\\|bc" 가 되어(파이프가 다시 이스케이프되지 않고 살아나) 칸이 나뉘었다
     const doc = '| a\\|b | c |\n| - | - |\n| 1 | 2 |'
     const table = parseTable(doc, 0)
     const raw = table.rows[0].cells[0].text
@@ -247,8 +246,7 @@ describe('이스케이프 왕복 (F-138 3.1) — F-135 3.1 을 대체. 파이프
   })
 
   it('공백 패딩 없는 표 `|a|b|` 첫 칸에 `a\\` 를 입력해도 열 수는 그대로 2다', () => {
-    // 이전 버그: 값 끝의 홀수 개 `\` 를 보정하지 않아 뒤 파이프(칸 구분자)가
-    // 이스케이프돼 칸이 합쳐졌다
+    // 이전 버그: 값 끝의 홀수 개 `\` 를 보정하지 않아 뒤 파이프(칸 구분자)가 이스케이프돼 칸이 합쳐졌다
     const doc = '|a|b|'
     const table = parseTable(doc, 0)
     const changes = cellEdit(table, 0, 0, 'a\\')
@@ -259,10 +257,8 @@ describe('이스케이프 왕복 (F-138 3.1) — F-135 3.1 을 대체. 파이프
 
 describe('mapCellRange/advanceCellRange — 편집 세션이 든 칸 범위 갱신 (F-135 3.2)', () => {
   it('같은 칸에 길이가 다른 값을 연속 3번 쓰면(조합 중 흉내) 최종 원문에 마지막 값만 반영된다', () => {
-    // 이전 버그: 위젯 인스턴스(widget.table)의 옛 칸 위치를 계속 써서, 조합 중
-    // 글자 수가 바뀌면(예: abc → abczho) 원문이 abczhoh 처럼 깨졌다. 세션이 직접
-    // 든 범위를 트랜잭션마다 옮기고(mapCellRange) 자신의 쓰기 뒤 길이로 다시
-    // 잡으면(advanceCellRange) 매번 정확한 범위에 새 값만 반영된다
+    // 이전 버그: 위젯 인스턴스(widget.table)의 옛 칸 위치를 계속 써서 조합 중 글자 수가 바뀌면(abc → abczho) 원문이 깨졌다
+    // 세션이 직접 든 범위를 트랜잭션마다 옮기고(mapCellRange) 쓰기 뒤 길이로 다시 잡으면(advanceCellRange) 정확한 범위에 새 값만 반영된다
     let doc = '| abc | y |\n| - | - |\n| 1 | 2 |'
     let range = { from: 2, to: 5 } // "abc" 위치
     expect(doc.slice(range.from, range.to)).toBe('abc')
@@ -364,11 +360,8 @@ describe('addColumn — 열 추가', () => {
     const { changes, focus } = addColumn(table)
     const result = apply(doc, changes)
     expect(result).toBe('a | b | \n- | - | ---\n1 | 2 | ')
-    // 새 칸은 줄 끝(트레일링 공백)에 자리한다 — 트레일링 공백만 있는 상태는
-    // "닫는 파이프" 형식과 구별할 수 없어(파이프 뒤 공백만 있으면 trailingPipe=true
-    // 로 재해석된다) 다시 파싱해도 3번째 칸으로 복원되지 않는다. 사용자가 그
-    // 자리에 실제 글자를 입력하는 순간 trailingPipe 가 false 로 바뀌며 3칸이
-    // 드러난다 — 표 구문 자체의 한계다(빈 칸+끝 파이프 없음은 표현 불가)
+    // 새 칸은 줄 끝(트레일링 공백)에 자리한다 — 트레일링 공백만 있으면 "닫는 파이프" 형식과 구별 안 돼(trailingPipe=true 로 재해석) 3번째 칸으로 복원 안 됨
+    // 실제 글자를 입력하는 순간 trailingPipe 가 false 로 바뀌며 3칸이 드러난다 — 표 구문 자체의 한계(빈 칸+끝 파이프 없음은 표현 불가)
     expect(focus).toBe(result.indexOf('\n')) // 첫 줄 끝(트레일링 공백 바로 뒤)
     const reparsedAfterTyping = parseTable(result.slice(0, focus) + 'x' + result.slice(focus), 0)
     expect(reparsedAfterTyping.rows[0].cells.map((c) => c.text)).toEqual(['a', 'b', 'x'])
@@ -539,8 +532,7 @@ describe('deleteTable — 표 전체 삭제 (F-165 2.2 #1)', () => {
   })
 })
 
-// 칸 입력을 주 문서에 쓸 때 칸 전체가 아니라 바뀐 구간만 바꾼다 (리뷰 E3) — 칸 전체를
-// 지우고 다시 넣으면 실시간 동시 편집에서 상대의 같은 칸 삽입·삭제가 사라지거나 섞인다
+// 칸 입력을 주 문서에 쓸 때 칸 전체가 아니라 바뀐 구간만 바꾼다(리뷰 E3) — 칸 전체를 지우고 다시 넣으면 실시간 동시 편집에서 상대의 삽입·삭제가 사라지거나 섞인다
 describe('cellWriteChange (리뷰 E3)', () => {
   it('끝에 한 글자를 치면 그 자리 삽입 하나다', () => {
     expect(cellWriteChange('abc', 10, 'abcd')).toEqual({ from: 13, to: 13, insert: 'd' })

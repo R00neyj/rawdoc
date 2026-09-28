@@ -1,12 +1,5 @@
-// 표 원문 해석과 변경 계산 (specs/features/F-125.md 2.5). DOM·EditorView 없음 —
-// tableWidget.js 가 여기 계산 결과로 위젯을 그리고 트랜잭션을 만든다.
-// 문서 상태의 원본은 CM6 EditorState 다(CLAUDE.md 불변조건) — 이 모듈은 그 원문
-// 문자열을 해석·가공만 할 뿐, 별도 사본을 들고 있지 않는다.
-//
-// lezer(@lezer/markdown) 의 TableCell 노드를 쓰지 않고 텍스트를 직접 다시 나눈다 —
-// lezer 는 빈 칸에 TableCell 노드 자체를 만들지 않아(F-106 tableWidget 의 "빈 셀"
-// 보정 참고) 열 추가·칸 편집 계산에 쓰기 불편하다. 여기 파서는 빈 칸도 항상
-// cells 배열의 자리를 차지하게 만들어(from===to, text='') 그 불편을 없앤다.
+// 표 원문 해석과 변경 계산(F-125 2.5). DOM·EditorView 없음 — tableWidget.ts 가 여기 계산 결과로 위젯을 그리고 트랜잭션을 만든다
+// 원본은 CM6 EditorState(CLAUDE.md 불변조건) — lezer TableCell 대신 직접 텍스트를 나눈다(빈 칸도 항상 자리를 차지하게, from===to,text='')
 import type { ChangeSpec } from '@codemirror/state'
 import { diffText } from '../../lib/textRebase'
 
@@ -51,9 +44,8 @@ function unescapedPipePositions(raw: string): number[] {
   return positions
 }
 
-// 세그먼트([segStart,segEnd)) 안에서 앞뒤 공백을 뺀 칸 범위를 구한다.
-// 전부 공백(또는 길이 0)이면 빈 칸 — 삽입 위치는 "앞 파이프 뒤 공백 1개 다음
-// (공백이 없으면 파이프 바로 뒤)" (F-125 2.2)
+// 세그먼트([segStart,segEnd)) 안에서 앞뒤 공백을 뺀 칸 범위를 구한다
+// 전부 공백(또는 길이 0)이면 빈 칸 — 삽입 위치는 "앞 파이프 뒤 공백 1개 다음(없으면 파이프 바로 뒤)"(F-125 2.2)
 function cellFromSegment(
   raw: string,
   segStart: number,
@@ -65,10 +57,8 @@ function cellFromSegment(
   while (s < e && /\s/.test(raw[s])) s++
   while (e > s && /\s/.test(raw[e - 1])) e--
   if (s < e) {
-    // paddingAfter: 칸 글자 뒤(트림된 공백)와 다음 구분자(파이프 또는 줄 끝) 사이에
-    // 공백이 하나라도 남아 있는가. cellEdit 이 F-138 3.1 "칸 끝" 규칙(패딩 없는 칸에
-    // 홀수 개 `\` 로 끝나는 값을 쓰면 뒤 파이프가 이스케이프되지 않도록 공백 1개를
-    // 함께 넣는다)을 적용할지 판단하는 데 쓴다.
+    // paddingAfter: 칸 글자 뒤(트림된 공백)와 다음 구분자 사이 공백이 남아 있는가
+    // cellEdit 이 F-138 3.1 "칸 끝" 규칙(패딩 없는 칸에 홀수 `\` 로 끝나면 공백 1개를 넣어 뒤 파이프 이스케이프 방지) 적용 여부 판단에 쓴다
     return { from: lineStart + s, to: lineStart + e, text: raw.slice(s, e), paddingAfter: e < segEnd }
   }
   const pos = segStart + (raw[segStart] === ' ' ? 1 : 0)
@@ -76,12 +66,8 @@ function cellFromSegment(
   return { from: lineStart + clamped, to: lineStart + clamped, text: '', paddingAfter: clamped < segEnd }
 }
 
-// 한 줄을 칸으로 나눈다. \| 는 구분자가 아니다(F-125 2.5).
-// 각 칸에 pipeBefore·pipeAfter(그 칸을 감싼 실제 파이프의 절대 위치, 없으면
-// null)를 같이 담아 둔다 — F-165 deleteColumns 가 "칸의 앞 파이프부터 다음
-// 파이프 직전까지" 규칙을 계산하는 데 쓴다. 행 원문(raw)도 그대로 들고 있어
-// (F-165 2.3 패딩 공백 1개 확인용) 문서 슬라이스를 따로 하지 않아도 된다.
-// raw: 그 줄 원문(줄바꿈 문자 제외). lineStart: 그 줄의 문서 절대 시작 위치
+// 한 줄을 칸으로 나눈다. \| 는 구분자가 아니다(F-125 2.5). 각 칸에 pipeBefore·pipeAfter(감싼 실제 파이프 절대 위치, 없으면 null)를 담는다 — F-165 deleteColumns 가 쓴다
+// 행 원문(raw)도 그대로 들고 있어(F-165 2.3 패딩 확인용) 문서 슬라이스가 불필요하다. raw: 줄 원문(줄바꿈 제외), lineStart: 줄의 문서 절대 시작 위치
 function parseRow(raw: string, lineStart: number): Row {
   const pipes = unescapedPipePositions(raw)
   const leadingPipe = pipes.length > 0 && raw.slice(0, pipes[0]).trim() === ''
@@ -107,13 +93,11 @@ function parseRow(raw: string, lineStart: number): Row {
     pipeBefore: seg.pipeBefore,
     pipeAfter: seg.pipeAfter,
   }))
-  // `to` 는 그 줄 원문 전체의 끝(절대 위치, 줄바꿈 제외) — 행·열 추가는 항상 이
-  // 위치 뒤에 이어붙인다. trailingPipe 가 있어도 이미 그 파이프를 지난 자리다
+  // `to` 는 그 줄 원문 전체의 끝(절대 위치, 줄바꿈 제외) — 행·열 추가는 항상 이 위치 뒤에 이어붙인다. trailingPipe 가 있어도 이미 그 파이프를 지난 자리
   return { line: lineStart, to: lineStart + raw.length, cells, leadingPipe, trailingPipe, raw }
 }
 
-// 표 원문을 해석한다. text: 표 블록 전체 원문(줄은 \n 으로 이어져 있다고 가정 — CM6
-// doc.sliceString 기본 구분자). from: text 의 문서 절대 시작 위치.
+// 표 원문을 해석한다. text: 표 블록 전체 원문(줄은 \n 으로 이어져 있다고 가정 — CM6 doc.sliceString 기본 구분자), from: 문서 절대 시작 위치
 // rows 는 머리 행 + 본문 행(구분 행 제외). columnCount 는 머리 행 칸 수 기준
 export function parseTable(text: string, from: number): TableModel {
   const lineTexts = text.split('\n')
@@ -131,11 +115,8 @@ export function parseTable(text: string, from: number): TableModel {
   return { rows, delimiterRow, columnCount }
 }
 
-// 사용자가 칸에 입력한 값을 원문에 넣을 형태로 바꾼다 (F-125 2.2, F-138 3.1 — F-135 3.1 을 대체한다).
-// 붙여넣기의 줄바꿈은 공백 1개로, `|` 는 파이프 앞 연속 `\` 묶음만 다뤄 이스케이프한다(그 밖의
-// `\`, 예: `C:\Users`, `a\*b` 는 그대로 둔다). 규칙: `|` 바로 앞 연속 `\` 가 j 개면 `2j+1` 개 +
-// `|` 로 바꾼다. 값 끝 패딩 삽입은 `cellEdit`·`tableWidget.ts` `pushCellEdit`가 한다.
-// `unescapeCell` 의 역함수다: escapeCell(unescapeCell(raw)) === raw.
+// 사용자가 칸에 입력한 값을 원문 형태로 바꾼다(F-125 2.2, F-138 3.1 — F-135 3.1 대체). 줄바꿈은 공백 1개로, `|` 는 앞 연속 `\` 묶음만 이스케이프(그 밖 `\` 는 그대로)
+// 규칙: `|` 앞 연속 `\` 가 j 개면 `2j+1` 개 + `|`. 패딩 삽입은 cellEdit/pushCellEdit 가 한다. unescapeCell 의 역함수: escapeCell(unescapeCell(raw)) === raw
 export function escapeCell(value: string): string {
   const flat = value.replace(/\r\n|\r|\n/g, ' ')
   let out = ''
@@ -152,9 +133,8 @@ export function escapeCell(value: string): string {
   return out
 }
 
-// `escapeCell` 의 역함수 (F-138 3.1 — F-135 3.1 을 대체한다). 칸 원문(파이프 이스케이프 포함)을
-// 칸 편집기에 보여줄 값으로 되돌린다. 파이프 앞 연속 `\` 묶음만 되돌리고 그 밖의 `\` 는 그대로
-// 둔다 — k 개면 `(k-1)/2` 개로 줄이고 `|` 를 남긴다.
+// escapeCell 의 역함수(F-138 3.1 — F-135 3.1 대체) — 칸 원문(파이프 이스케이프 포함)을 편집기 표시 값으로 되돌린다
+// 파이프 앞 연속 `\` 묶음만 되돌리고 그 밖 `\` 는 그대로 둔다 — k 개면 `(k-1)/2` 개로 줄이고 `|` 를 남긴다
 export function unescapeCell(raw: string): string {
   let out = ''
   for (const ch of raw) {
@@ -170,10 +150,8 @@ export function unescapeCell(raw: string): string {
   return out
 }
 
-// 편집 세션이 직접 보관하는 칸 원문 범위를 주 문서 트랜잭션에 맞춰 옮긴다 (F-135 3.2).
-// 위젯 인스턴스(widget.table)의 칸 위치는 조합 중 재계산이 보류되어 낡을 수 있어
-// 편집 중인 칸의 쓰기에 쓰지 않는다 — 세션이 든 이 범위를 대신 쓰고, 모든 주 문서
-// 트랜잭션마다(칸 자신의 입력 포함) 이 함수로 옮긴다.
+// 편집 세션이 직접 보관하는 칸 원문 범위를 주 문서 트랜잭션에 맞춰 옮긴다(F-135 3.2)
+// 위젯 인스턴스(widget.table)의 칸 위치는 조합 중 재계산 보류로 낡을 수 있어 쓰지 않는다 — 세션이 든 범위를 모든 트랜잭션마다 이 함수로 옮긴다
 export function mapCellRange(
   range: { from: number; to: number },
   changes: import('@codemirror/state').ChangeDesc,
@@ -181,17 +159,14 @@ export function mapCellRange(
   return { from: changes.mapPos(range.from, -1), to: changes.mapPos(range.to, 1) }
 }
 
-// 칸 자신의 입력이 mapCellRange 로 옮긴 범위의 시작을 그대로 두고 그 자리에 새
-// 원문(escapeCell 결과)을 써넣었을 때, 세션 범위의 끝을 그 길이에 맞춰 다시 잡는다
+// 칸 자신의 입력이 mapCellRange 로 옮긴 범위 시작에 새 원문(escapeCell 결과)을 써넣었을 때, 세션 범위 끝을 그 길이에 맞춰 다시 잡는다
 // (F-135 3.2 "to = from + 새 원문 길이"). mapCellRange 뒤에 이어 부른다
 export function advanceCellRange(range: { from: number }, escapedValue: string): { from: number; to: number } {
   return { from: range.from, to: range.from + escapedValue.length }
 }
 
-// 행 끝에 빈 칸 하나를 추가하는 삽입 문자열과, 그 칸 편집 시작 위치(절대)를 계산한다
-// (F-125 2.4 열 추가 규칙 + 2.2 빈 칸 삽입 위치 규칙).
-// 끝 파이프가 있는 행: 기존 파이프 뒤에 "  |" 를 잇는다 — 새 칸은 그 사이(2공백)다.
-// 끝 파이프가 없는 행: " | " 를 잇는다 — 새로 연 파이프 뒤 공백이 새 칸이다
+// 행 끝에 빈 칸 하나를 추가하는 삽입 문자열과 그 칸 편집 시작 위치(절대)를 계산한다(F-125 2.4 열 추가 규칙 + 2.2 빈 칸 삽입 위치 규칙)
+// 끝 파이프 있는 행: 기존 파이프 뒤에 "  |"(새 칸은 2공백 사이). 없는 행: " | "(새로 연 파이프 뒤 공백이 새 칸)
 function appendEmptyCell(row: { to: number; trailingPipe: boolean }): { insert: string; focus: number } {
   if (row.trailingPipe) {
     return { insert: '  |', focus: row.to + 1 }
@@ -200,10 +175,8 @@ function appendEmptyCell(row: { to: number; trailingPipe: boolean }): { insert: 
   return { insert, focus: row.to + insert.length }
 }
 
-// 칸 값을 바꾼다. 대상 행이 머리 행보다 칸이 적으면(F-106 이 채워 보여주는 빈 칸)
-// 모자란 칸을 열 추가와 같은 규칙으로 채운 뒤 마지막 칸에 입력한다 (F-125 2.4 마지막 항목).
-// row: 행 인덱스(rows 기준, 0 = 머리 행). col: 칸 인덱스.
-// value: 사용자가 입력한 값(원문 형태가 아니라 화면에 보이는 값 — 이 함수 안에서 escapeCell 을 적용한다)
+// 칸 값을 바꾼다. 대상 행이 머리 행보다 칸이 적으면(F-106 이 채워 보여주는 빈 칸) 열 추가와 같은 규칙으로 채운 뒤 마지막 칸에 입력한다(F-125 2.4)
+// row: 행 인덱스(0=머리 행), col: 칸 인덱스, value: 화면에 보이는 값(이 함수 안에서 escapeCell 적용)
 export function cellEdit(table: TableModel, row: number, col: number, value: string): ChangeSpec[] {
   const rowInfo = table.rows[row]
   if (!rowInfo) return []
@@ -212,10 +185,8 @@ export function cellEdit(table: TableModel, row: number, col: number, value: str
 
   if (col < rowInfo.cells.length) {
     const cell = rowInfo.cells[col]
-    // F-138 3.1 "칸 끝": 값이 홀수 개 `\` 로 끝나고(escapeCell 은 파이프 앞이 아니면
-    // 손대지 않으므로 그 `\` 가 그대로 남아 있다) 이 칸 범위 바로 뒤에 패딩 없이
-    // 파이프가 오면, 그 파이프가 이스케이프되어 칸이 합쳐진다. 원문 뒤에 공백 1개를
-    // 함께 넣어 막는다 — 바뀐 곳은 이 칸뿐이다.
+    // F-138 3.1 "칸 끝": 값이 홀수 개 `\` 로 끝나고 이 칸 바로 뒤 패딩 없이 파이프가 오면 그 파이프가 이스케이프되어 칸이 합쳐진다
+    // 원문 뒤에 공백 1개를 넣어 막는다 — 바뀐 곳은 이 칸뿐이다
     const isLastCell = col === rowInfo.cells.length - 1
     const pipeFollows = !isLastCell || rowInfo.trailingPipe
     const trailingBackslashes = escaped.match(/\\+$/)?.[0].length ?? 0
@@ -239,10 +210,8 @@ export function cellEdit(table: TableModel, row: number, col: number, value: str
   return [{ from: rowInfo.to, insert: text }]
 }
 
-// 표 끝에 새 행을 추가한다 (F-125 2.4). 칸 수·앞뒤 파이프 유무는 머리 행을 따르고 각 칸은
-// 공백 1개(패딩 포함 두 칸 너비)다. lineBreak 는 삽입 문자열 안 줄바꿈 — CM6 트랜잭션은 항상
-// '\n' 을 쓰고 실제 형식(CRLF/LF)은 저장·내보내기 시점에만 적용된다. focus 는 새 행 첫 칸
-// 편집을 시작할 위치(문서 절대 위치)다.
+// 표 끝에 새 행을 추가한다(F-125 2.4). 칸 수·앞뒤 파이프 유무는 머리 행을 따르고 각 칸은 공백 1개(패딩 포함 두 칸 너비)
+// lineBreak 는 삽입 문자열 안 줄바꿈 — CM6 트랜잭션은 항상 '\n', 실제 형식(CRLF/LF)은 저장·내보내기 때 적용. focus 는 새 행 첫 칸 편집 시작 위치
 export function addRow(table: TableModel, lineBreak = '\n'): { changes: ChangeSpec[]; focus: number } {
   const header = table.rows[0]
   if (!header) return { changes: [], focus: 0 }
@@ -258,8 +227,7 @@ export function addRow(table: TableModel, lineBreak = '\n'): { changes: ChangeSp
   const insertPos = lastLineRow.to
   const insert = `${lineBreak}${rowText}`
 
-  // 새 행 첫 칸: leadingPipe 뒤 "  "(공백 2개) 중 첫 공백을 건너뛴 자리
-  // (cellFromSegment 의 빈 칸 규칙과 같다)
+  // 새 행 첫 칸: leadingPipe 뒤 "  "(공백 2개) 중 첫 공백을 건너뛴 자리(cellFromSegment 의 빈 칸 규칙과 같다)
   const prefix = header.leadingPipe ? 1 : 0
   const focus = insertPos + lineBreak.length + prefix + 1
 
@@ -393,9 +361,8 @@ export function deleteTable(table: TableModel): ChangeSpec[] {
   return [{ from: header.line, to: lastRow.to, insert: '' }]
 }
 
-// 칸 원문 current(문서 from 에서 시작)를 next 로 바꾸는 최소 변경 — 공통 앞뒤를 빼고 바뀐
-// 구간만 돌려준다(같으면 null). 칸 전체를 갈아 끼우면 Yjs 병합에서 상대의 같은 칸 삽입이
-// 칸 앞으로 밀리거나 상대가 지운 글자가 되살아난다 (리뷰 E3)
+// 칸 원문 current(문서 from 에서 시작)를 next 로 바꾸는 최소 변경 — 공통 앞뒤를 빼고 바뀐 구간만 돌려준다(같으면 null)
+// 칸 전체를 갈아 끼우면 Yjs 병합에서 상대의 삽입이 밀리거나 지운 글자가 되살아난다(리뷰 E3)
 export function cellWriteChange(current: string, from: number, next: string): { from: number; to: number; insert: string } | null {
   const edit = diffText(current, next)
   if (!edit) return null

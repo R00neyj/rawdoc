@@ -40,9 +40,8 @@ export function useInstallPrompt(): { canInstall: boolean; install: () => Promis
     if (!event) return
     event.prompt()
     await event.userChoice
-    // accepted·dismissed 어느 쪽이든 같은 이벤트는 다시 쓸 수 없다. 보관 이벤트를 비우고
-    // canInstall 을 false 로 되돌린다 — dismissed 라면 다음 beforeinstallprompt 때 다시
-    // 표시된다 (F-115.md 3.3)
+    // accepted·dismissed 어느 쪽이든 같은 이벤트는 다시 쓸 수 없다 — 보관 이벤트를 비우고 canInstall 을 false 로 되돌린다
+    // dismissed 라면 다음 beforeinstallprompt 때 다시 표시된다 (F-115.md 3.3)
     deferredRef.current = null
     setCanInstall(false)
   }

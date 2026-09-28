@@ -1,6 +1,5 @@
 // 위키링크 찾기·해석 (specs/features/F-131.md 2장·2.1)
-// 순수 함수. DOM·CM6·markdown-it 을 다루지 않는다 — editor/preview/wikiLinks.js 와
-// viewer/renderMarkdown.js 가 각자 쓴다 (architecture.md 1장 "editor → lib, viewer → lib")
+// 순수 함수, DOM·CM6·markdown-it 다루지 않음 — editor/preview/wikiLinks.js·viewer/renderMarkdown.js 가 각자 쓴다(architecture.md 1장)
 
 // 한 줄 안 위키링크 정규식 (F-131 2장). 대상·별칭 모두 대괄호·파이프·줄바꿈을 담지 않는다
 const WIKILINK_RE = /\[\[([^[\]|\n]+?)(?:\|([^[\]\n]+?))?\]\]/g

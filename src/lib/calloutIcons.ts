@@ -1,6 +1,5 @@
 // 콜아웃 종류 → 아이콘 (specs/features/F-148.md 2장)
-// 순수 함수 + svg 원문(Material Symbols Outlined 400, ?raw). DOM 없음 — 편집 모드 위젯(lines.js)과
-// 보기 모드 렌더러(renderMarkdown.js)가 함께 쓴다. 색은 쓰는 쪽이 CSS currentColor 로 준다
+// 순수 함수 + svg 원문(?raw). DOM 없음 — 편집 모드 위젯(lines.js)·보기 모드 렌더러(renderMarkdown.js)가 함께 쓴다
 import editSvg from '@material-symbols/svg-400/outlined/edit.svg?raw'
 import summarizeSvg from '@material-symbols/svg-400/outlined/summarize.svg?raw'
 import infoSvg from '@material-symbols/svg-400/outlined/info.svg?raw'

@@ -30,9 +30,7 @@ type FolderMenuProps = {
   hideTrigger?: boolean
 }
 
-// 사이드바 항목 `⋯` 메뉴 — 라이브러리 없이 앱이 그린다 (specs/features/F-126.md 5.2)
-// 마우스 오버·키보드 포커스 시 트리거가 보인다(app.css). 방향키로 항목 이동, Enter 실행,
-// Esc·바깥 클릭으로 닫고 포커스를 트리거(⋯)로 되돌린다
+// 사이드바 항목 `⋯` 메뉴 — 라이브러리 없이 방향키·Enter·Esc·바깥 클릭을 직접 구현한다 (F-126.md 5.2)
 export default function FolderMenu({
   label,
   items,
@@ -59,9 +57,7 @@ export default function FolderMenu({
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLUListElement | null>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
-  // 트리거(⋯) 버튼으로 연 메뉴가 스크롤 영역(.sidebar-scroll 등) 아래쪽 경계 밖으로 넘치면
-  // 위로 열어 잘리지 않게 한다 — 우클릭 메뉴(anchorPoint)는 이미 fixed + 창 기준 clamp 로
-  // 안전하다(아래 useLayoutEffect), 트리거 메뉴만 이 보정이 없었다(2026-09-20 사용자 신고)
+  // 트리거 메뉴가 스크롤 영역 아래쪽 경계를 넘치면 위로 연다 — 우클릭 메뉴는 이미 fixed+clamp 로 안전했지만 트리거만 이 보정이 없었다 (2026-09-20 사용자 신고)
   const [openUp, setOpenUp] = useState(false)
 
   useEffect(() => {
@@ -182,8 +178,7 @@ export default function FolderMenu({
     el.style.top = `${top}px`
   }, [open, anchorPoint])
 
-  // 트리거(⋯) 버튼으로 열렸을 때 — 버튼 아래로 펼치면 스크롤 조상의 아래쪽 경계(또는
-  // 창 아래) 밖으로 넘치는지 재서, 넘치면 위로 연다 (2026-09-20 사용자 신고)
+  // 트리거로 열렸을 때 버튼 아래로 펼치면 스크롤 조상(또는 창) 아래 경계를 넘치는지 재서, 넘치면 위로 연다 (2026-09-20 사용자 신고)
   useLayoutEffect(() => {
     if (!open || anchorPoint || !buttonRef.current || !menuRef.current) {
       setOpenUp(false)

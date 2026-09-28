@@ -1,8 +1,5 @@
-// A2 줄바꿈 보존 (specs/features/F-103.md 3.1·4장)
-// createEditor() 는 EditorView(DOM) 를 만들어 jsdom 없는 환경(vitest environment: node)에서
-// 직접 실행할 수 없다. 이 테스트는 createEditor.ts 의 getText() 가 기대는 전제 —
-// EditorState.lineSeparator 를 지정하지 않으면 CM6 가 \r\n·\r·\n 을 모두 줄 구분으로
-// 읽고, sliceString(0, len, sep) 으로 원하는 구분자로 다시 이을 수 있다는 것 — 을 확인한다
+// A2 줄바꿈 보존(F-103 3.1·4장) — createEditor() 는 EditorView(DOM) 를 만들어 jsdom 없는 환경(vitest environment: node)에서 직접 실행할 수 없다
+// 이 테스트는 createEditor.ts 의 getText() 가 기대는 전제 — lineSeparator 를 안 지정하면 CM6 가 \r\n·\r·\n 을 모두 줄 구분으로 읽고, sliceString(0,len,sep) 으로 원하는 구분자로 다시 이을 수 있다는 것 — 을 확인한다
 import { describe, expect, it } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'

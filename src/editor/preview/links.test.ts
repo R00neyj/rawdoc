@@ -1,8 +1,5 @@
-// links.js 단위 테스트 (specs/features/F-129.md 4장 A1)
-// findLinkAt·isOpenableUrl 은 순수 함수라 EditorState + ensureSyntaxTree 로 직접 부른다.
-// 클릭 처리(linkClicks, EditorView.domEventHandlers)는 DOM 이 필요해 여기서 테스트하지
-// 않는다 — vitest environment 가 'node' 라 EditorView 를 만들 수 없다(createEditor.test.js 참고).
-// 브라우저 확인은 F-129 4장 A2~A6.
+// links.ts 단위 테스트(F-129 4장 A1) — findLinkAt·isOpenableUrl 은 순수 함수라 EditorState + ensureSyntaxTree 로 직접 부른다
+// 클릭 처리(linkClicks)는 DOM 필요해 여기서 테스트 안 함 — vitest environment 'node'(createEditor.test.ts 참고). 브라우저 확인은 F-129 4장 A2~A6
 import { describe, expect, it } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
@@ -69,9 +66,8 @@ describe('isOpenableUrl', () => {
   })
 })
 
-// F-134 3.2: posAtCoords 만으로 판정하면 줄 끝 오른쪽 빈 곳을 눌러도 줄 끝 위치가
-// 나와 링크가 열려버린다. 실제 클릭 좌표가 링크 글자(표시용 mark .md-link) 위인지
-// event.target 기준으로 추가 확인한다
+// F-134 3.2: posAtCoords 만으로 판정하면 줄 끝 오른쪽 빈 곳을 눌러도 줄 끝 위치가 나와 링크가 열려버린다
+// 실제 클릭 좌표가 링크 글자(표시용 mark .md-link) 위인지 event.target 기준으로 추가 확인한다
 describe('clickTargetIsLinkText (F-134 3.2)', () => {
   it('target 이 .md-link 표시 요소 안이면 true', () => {
     const target = { closest: (sel: string) => (sel === '.md-link' ? {} : null) } as unknown as EventTarget

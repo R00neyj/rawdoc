@@ -69,8 +69,7 @@ export function useTabSync({
     }
   }
 
-  // claim-query 를 보내고 CLAIM_WAIT_MS 안에 아무도 응답하지 않으면 편집권을 가진다 (6.4)
-  // 기다리는 동안 남의 claim-hold 나 이기는 대기 탭의 query 를 받으면 cancelWait 로 멈춘다 (리뷰 Y2)
+  // claim-query 를 보내고 CLAIM_WAIT_MS 안에 무응답이면 편집권을 가진다(6.4) — 기다리는 동안 남의 claim-hold 나 이기는 대기 탭의 query 를 받으면 cancelWait 로 멈춘다(리뷰 Y2)
   function requestClaim(docId: string, onIdle: () => void) {
     const current = claimStateRef.current
     if (!current || current.docId !== docId) return

@@ -1,6 +1,5 @@
-// 편집 모드 위키링크 표시·클릭 (specs/features/F-131.md 3장)
-// 계산(buildWikiLinks)은 DOM 없이 동작한다. decoration 은 문서를 바꾸지 않는다
-// (CLAUDE.md 불변조건). 활성(닿음) 판정은 F-129 와 같은 범위 단위(active.js selectionTouches)
+// 편집 모드 위키링크 표시·클릭(F-131 3장) — 계산(buildWikiLinks)은 DOM 없이 동작, decoration 은 문서를 바꾸지 않는다(CLAUDE.md 불변조건)
+// 활성(닿음) 판정은 F-129 와 같은 범위 단위(active.ts selectionTouches)
 import { syntaxTree } from '@codemirror/language'
 import type { EditorState, Extension, Range as CMRange } from '@codemirror/state'
 import { StateEffect, StateField } from '@codemirror/state'
@@ -15,8 +14,7 @@ import { isComposing, isForced } from '../composition'
 
 const HIDE = Decoration.replace({})
 
-// 위키링크가 대상이 아닌 블록 — 구문 트리로 판정한다 (F-131 2장, F-137 3.1)
-// Frontmatter 는 F-133 3.2 "위키링크는 프론트매터 안에서 동작하지 않는다"
+// 위키링크가 대상이 아닌 블록 — 구문 트리로 판정한다(F-131 2장, F-137 3.1). Frontmatter 는 F-133 3.2
 const OPAQUE_NODE = new Set(['FencedCode', 'InlineCode', 'Table', 'Frontmatter'])
 
 // wikiComplete.ts 가 [[ 자동완성 판정에 그대로 재사용한다 (F-137 3.2)
@@ -84,8 +82,7 @@ function wikiLinksOnLine(state: EditorState, line: Line): WikiLinkOnLine[] {
 }
 
 // 위키링크 해석 문맥 — 해석기와 지금 연 문서의 폴더 (specs/features/F-2018.md 5.1)
-// sourceE2ee: 편집 중인 문서가 금고 문서인가 — [[ 자동완성이 후보를 거르는 데만 쓴다, 해석 자체는 바꾸지 않는다 (F-409 4.1)
-// hoverPreview: 위키링크 미리보기가 켜져 있나 — 참이면 있는 문서 링크에서 title 속성을 뺀다(F-2044 4.5, 미리보기와 겹치지 않게)
+// sourceE2ee: 금고 문서 여부, [[ 자동완성 후보만 거른다(F-409 4.1) / hoverPreview: 켜지면 있는 링크에서 title 속성을 뺀다(F-2044 4.5)
 export type WikiContext = { resolver: WikiResolver; sourceFolderId: string | null; sourceE2ee?: boolean; hoverPreview?: boolean }
 
 // 있음 판정은 문서만, [[#헤딩]] 은 언제나 있음. title 은 있으면 대상 원문 조각(5.4), hoverPreview 켜짐이면 있는 링크는 아예 안 단다(F-2044 4.5)
@@ -99,9 +96,8 @@ function visibleMark(target: string, shown: string, context: WikiContext): Decor
 
 const SYNTAX_MARK = Decoration.mark({ class: 'md-wikilink-mark' })
 
-// ranges 는 보통 view.visibleRanges, context 는 해석 문맥.
-// hasFocus 는 편집기 포커스 (F-146 3.2). 기본값 true 는 포커스를
-// 다루지 않는 기존 호출부(테스트 등)의 동작을 그대로 유지한다
+// ranges 는 보통 view.visibleRanges, context 는 해석 문맥
+// hasFocus 는 편집기 포커스(F-146 3.2). 기본값 true 는 포커스를 안 다루는 기존 호출부(테스트 등) 동작을 유지한다
 export function buildWikiLinks(
   state: EditorState,
   ranges: readonly { from: number; to: number }[],
@@ -173,8 +169,7 @@ function hasContextEffect(update: ViewUpdate): boolean {
   return update.transactions.some((tr) => tr.effects.some((e) => e.is(setWikiContextEffect)))
 }
 
-// mapDecorationsOnHold — inline.ts·lines.ts 와 같은 이유(F-134 3.1)로 조합 중 문서
-// 변경분을 decoration 위치에 반영한다
+// mapDecorationsOnHold — inline.ts·lines.ts 와 같은 이유(F-134 3.1)로 조합 중 문서 변경분을 decoration 위치에 반영한다
 export function mapDecorationsOnHold(
   decorations: ReturnType<typeof Decoration.set>,
   changes: ChangeDesc,
@@ -182,8 +177,7 @@ export function mapDecorationsOnHold(
   return decorations.map(changes)
 }
 
-// 편집 모드 위키링크 표시 확장. IME 규칙은 다른 프리뷰 확장과 같다(F-104 2.3·F-134 3.1·3.8).
-// 해석 문맥이 바뀌면(setWikiContext) 재계산 조건에 포함한다 — 조합 중이면 보류, forceRecalc 로 따라잡는다 (F-2018 5.3)
+// 편집 모드 위키링크 표시 확장 — IME 규칙은 다른 프리뷰 확장과 같다(F-104 2.3·F-134 3.1·3.8). 해석 문맥 변경(setWikiContext)도 재계산 조건, 조합 중이면 보류 후 forceRecalc 로 따라잡는다(F-2018 5.3)
 export function wikiLinksPreview(): Extension {
   return ViewPlugin.fromClass(
     class {
@@ -225,8 +219,7 @@ export function wikiLinksPreview(): Extension {
 
 export type OnOpenWikiLink = (target: string, heading?: string | null) => void
 
-// 편집 모드 위키링크 클릭 확장 (F-131 3장). F-129 링크 클릭과 같은 구조 —
-// mousedown 에서 기본 동작을 막아야 여는 클릭에서 커서가 움직이지 않는다
+// 편집 모드 위키링크 클릭 확장(F-131 3장) — F-129 링크 클릭과 같은 구조, mousedown 에서 기본 동작을 막아야 여는 클릭에서 커서가 안 움직인다
 export function wikiLinkClicks(onOpenWikiLink?: OnOpenWikiLink): Extension {
   return EditorView.domEventHandlers({
     mousedown(event, view) {

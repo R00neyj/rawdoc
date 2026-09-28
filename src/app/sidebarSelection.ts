@@ -3,8 +3,7 @@ import { folderAncestors, type DocLike, type FolderLike, type TreeNode } from '.
 
 export type SelectionKind = 'doc' | 'folder'
 export type SelectionItem = { kind: SelectionKind; id: string }
-// 화면의 한 줄. 고정된 문서는 `고정됨` 묶음과 트리 제자리에 두 줄로 나오므로(F-132)
-// id 만으로는 어느 줄을 눌렀는지 가릴 수 없다. key 가 줄을 가린다 (2026-09-22)
+// 화면의 한 줄 — 고정된 문서는 `고정됨` 묶음과 트리 제자리에 두 줄로 나와(F-132) id 만으론 어느 줄인지 못 가린다, key 가 줄을 가린다 (2026-09-22)
 export type SelectionRow = SelectionItem & { key: string }
 export type RowPlace = 'pinned' | 'tree'
 export type Selection = { ids: string[]; anchor: SelectionRow | null }
@@ -56,8 +55,7 @@ export function prune(sel: Selection, visibleIds: string[]): Selection {
   return { ids, anchor }
 }
 
-// 화면에 보이는 줄 순서 — 고정됨 묶음 다음 트리 순, 접힌 폴더 안은 뺀다.
-// 고정된 문서는 트리 제자리에도 그대로 보이므로(F-132) 줄이 둘 다 들어간다
+// 화면에 보이는 줄 순서 — 고정됨 묶음 다음 트리 순, 접힌 폴더 안은 뺀다. 고정된 문서는 트리 제자리에도 보여(F-132) 줄이 둘 다 들어간다
 export function visibleOrder({
   pinnedIds,
   tree,

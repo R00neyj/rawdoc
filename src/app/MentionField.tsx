@@ -87,8 +87,7 @@ export default function MentionField({
     setPeople(null)
   }
 
-  // 후보 불러오기 — 그 문서에서 처음 이 토큰이 열릴 때 한 번 (5.2)
-  // source 객체 대신 문서 id·캐시만 deps 에 둔다 — 부모가 렌더마다 새 source 를 넘겨도 다시 요청하지 않는다 (리뷰 U5)
+  // 후보는 그 문서에서 토큰이 처음 열릴 때 한 번 불러온다(5.2) — source 대신 문서 id·캐시만 deps 에 둬 부모가 매번 새 source 를 넘겨도 다시 요청하지 않는다 (리뷰 U5)
   const sourceDocId = source?.docId ?? null
   const sourcePeople = source?.people ?? null
   useEffect(() => {

@@ -219,8 +219,7 @@ function buildScene(
 
   const sphereGeometry = new SphereGeometry(1, SPHERE_SEGMENTS, SPHERE_RINGS)
   const quadGeometry = new PlaneGeometry(2, 2)
-  // 조명을 넣지 않으므로 Light 를 하나도 가져오지 않는다. 재질 기본 색이 흰색이라 인스턴스 색이 그대로 나온다
-  // 가장자리 반투명을 MSAA 표본으로 바꿔 정렬 없이 매끈하게 한다 — antialias 컨텍스트라서 된다
+  // 조명 없이 Light 를 안 써 재질 기본 흰색이 인스턴스 색 그대로 나온다 — 가장자리 반투명은 MSAA 표본으로 처리해 antialias 컨텍스트에서 정렬 없이 매끈하다
   const nodeMaterial = new MeshBasicMaterial({ alphaToCoverage: true })
   nodeMaterial.onBeforeCompile = shapeNodeImpostor
   // 보이는 노드는 카메라를 보는 사각형에서 원을 오려 그린다(임포스터). 구는 윤곽이 각져 보여서다 (사용자 지시 2026-09-23)
@@ -1201,10 +1200,8 @@ function buildScene(
       nodeMaterial.dispose()
       edgeMaterial.dispose()
       renderer.dispose()
-      // dispose() 는 컨텍스트를 놓지 않아 forceContextLoss 가 따로 필요한데(3.6), 캔버스가
-      // 화면에 남아 있는 동안 부르면 안 된다 — StrictMode 의 두 번째 마운트가 같은 캔버스를
-      // 그대로 물려받아 잃은 컨텍스트를 집고 렌더러 생성이 터진다. 캔버스가 정말 떨어져
-      // 나갔을 때만 놓는다 (2026-09-21 개발 서버에서 재현)
+      // dispose() 는 컨텍스트를 놓지 않아 forceContextLoss 가 따로 필요하다(3.6) — 캔버스가 화면에 남아 있는 동안 부르면 StrictMode 재마운트가 잃은 컨텍스트를 물려받아 렌더러 생성이 터진다
+      // 캔버스가 정말 떨어져 나갔을 때만 놓는다 (2026-09-21 개발 서버에서 재현)
       setTimeout(() => {
         if (!canvas.isConnected) renderer.forceContextLoss()
       }, 0)

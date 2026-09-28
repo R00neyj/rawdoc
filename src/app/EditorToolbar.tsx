@@ -39,8 +39,7 @@ export default function EditorToolbar({ onRunCommand, narrow }: EditorToolbarPro
     if (headingOpen) headingItemRefs.current[0]?.focus()
   }, [headingOpen])
 
-  // 드롭다운이 뜨는 위치 계산 — position: fixed 라 뷰포트 기준 좌표를 직접 준다.
-  // .editor-toolbar 의 overflow-x: auto 가 overflow-y 도 강제로 clip 시켜(CSS 스펙) absolute 로 두면 항상 잘렸다
+  // 드롭다운 위치는 position: fixed 로 직접 계산한다 — absolute 면 .editor-toolbar 의 overflow-x: auto 가 overflow-y 도 clip 시켜(CSS 스펙) 항상 잘렸다
   useEffect(() => {
     if (!headingMounted) return
     const btn = headingBtnRef.current

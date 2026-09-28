@@ -1,13 +1,10 @@
-/* 라이브 프리뷰 전용 스타일 (specs/features/F-105.md 2장 "제목 크기", specs/features/F-124.md —
-   GitHub 마크다운 스타일(크기·굵기·여백·테두리·모서리·줄 간격), CLAUDE.md 불변조건 —
-   제품명·색 hex 를 직접 쓰지 않는다. 토큰만 참조한다) */
+/* 라이브 프리뷰 전용 스타일(F-105 2장 "제목 크기", F-124 — GitHub 마크다운 스타일: 크기·굵기·여백·테두리·모서리·줄 간격) */
+/* CLAUDE.md 불변조건 — 제품명·색 hex 를 직접 쓰지 않는다. 토큰만 참조한다 */
 /* 코드블록 복사 버튼 모양(.code-copy-btn) 공용 CSS (specs/features/F-240.md 3.4) — @import 는 파일 맨 위에 있어야 한다 */
 @import '../../styles/codeCopy.css';
 
-/* ===== 제목 (F-124 3.2) =====
-   CM6 는 줄 높이를 DOM 에서 재는데 margin 은 반영되지 않는다고 알려져 있어(F-124 3.2),
-   세로 여백은 margin 대신 padding 으로 준다. em 단위는 .cm-editor 에 설정된
-   --md-font-size(16px) 를 상속해 계산된다(2em = 32px 등, F-124 A1) */
+/* ===== 제목(F-124 3.2) ===== */
+/* CM6 는 위젯 높이를 DOM 에서 잴 때 margin 을 안 넣어 세로 여백은 padding 으로 준다. em 은 .cm-editor 의 --md-font-size(16px) 상속 계산(2em=32px 등, F-124 A1) */
 .cm-host .cm-editor .cm-line.md-h1,
 .cm-host .cm-editor .cm-line.md-h2,
 .cm-host .cm-editor .cm-line.md-h3,
@@ -23,9 +20,8 @@
 .cm-host .cm-editor .cm-line.md-h1 {
   font-size: 2em;
   font-family: var(--font-display);
-  /* GitHub 은 padding-bottom(.3em) 뒤에 테두리, 그 다음 margin-bottom 이 이어진다.
-     margin 을 쓸 수 없어 두 여백을 padding 하나로 합친다 — 테두리는 합친 padding
-     끝에 그려진다(디자인 명세에 없는 최소 합리적 선택, 보고 참고) */
+  /* GitHub 은 padding-bottom(.3em) 뒤 테두리, 그 다음 margin-bottom 이 이어진다 — margin 을 못 써 두 여백을 padding 하나로 합친다 */
+  /* 테두리는 합친 padding 끝에 그려진다(디자인 명세에 없는 최소 합리적 선택, 보고 참고) */
   padding-bottom: calc(1rem + 0.3em);
   border-bottom: 1px solid var(--md-border-muted);
 }
@@ -142,20 +138,15 @@
   background: none;
 }
 
-/* 펼친 코드블록 줄 (F-124 3.4 11번). lines.js 의 fenceLinePreview() 가 편집·원문
-   모드 공통으로 md-fence-line 을 붙인다 — @lezer/markdown 기본 규칙이 코드블록
-   본문(CodeText)에 인라인코드와 같은 태그(tags.monospace → md-code)를 줘서
-   생기는 "인라인코드 조각처럼 보이는" 문제를, 태그를 나누는 대신(실측 결과 안 먹힘
-   — highlight.js 주석 참고) 이 줄 클래스 아래에서 .md-code 모양만 지워 고친다.
-   모드와 무관하게 적용 — 인라인코드(`x`) 는 이 클래스 밖이라 모양이 그대로다 */
+/* 펼친 코드블록 줄(F-124 3.4 11번) — fenceLinePreview() 가 편집·원문 공통으로 md-fence-line 을 붙인다. 코드블록 본문이 인라인코드와 같은 태그(tags.monospace)를 받아 생기는 문제를 태그 분리 대신(안 먹힘 — highlight.ts 참고) */
+/* 이 줄 클래스 아래에서 .md-code 모양만 지워 고친다 — 모드 무관 적용, 인라인코드(`x`)는 이 클래스 밖이라 모양 그대로 */
 .cm-host .cm-editor .cm-line.md-fence-line .md-code {
   background: none;
   padding: 0;
   border-radius: 0;
 }
 
-/* 이어진 배경(--md-bg-muted)은 편집(라이브) 모드에서만 — 원문 모드는 서체·크기만
-   따르고 요소 모양은 바꾸지 않는다(F-124 1장 원칙) */
+/* 이어진 배경(--md-bg-muted)은 편집(라이브) 모드에서만 — 원문 모드는 서체·크기만 따르고 요소 모양은 안 바꾼다(F-124 1장 원칙) */
 .cm-host .cm-editor[data-view='live'] .cm-line.md-fence-line {
   font-family: var(--font-mono);
   font-size: 85%;
@@ -209,14 +200,8 @@
   background: var(--muted);
 }
 
-/* ===== 블록 위젯 — 코드블록 (F-106 2.4, F-124 3.4) =====
-   테두리는 두지 않는다. 배경은 --md-bg-muted.
-   위아래 간격은 wrap 의 margin 이 아니라 padding 으로 준다 (F-124 3.4 12번 요청) —
-   CM6 는 위젯 높이를 DOM 에서 잴 때 margin 을 포함하지 않아, margin 을 쓰면 그
-   아래 줄의 클릭 위치가 실제보다 아래로 어긋난다(실측: F-124 보고 참고). padding 은
-   wrap 자신의 높이(getBoundingClientRect)에 들어가 CM6 가 올바르게 잰다.
-   배경·모서리는 안쪽 요소(.md-codeblock-inner)에 줘서 간격 자리(padding)가
-   배경색으로 칠해지지 않게 한다 */
+/* ===== 블록 위젯 — 코드블록(F-106 2.4, F-124 3.4) ===== 테두리 없음, 배경은 --md-bg-muted */
+/* 위아래 간격은 margin 대신 padding(F-124 3.4 12번) — CM6 는 위젯 높이 잴 때 margin 을 안 넣어 margin 을 쓰면 아래 줄 클릭 위치가 어긋난다. 배경·모서리는 안쪽 요소(.md-codeblock-inner)에 줘 간격 자리가 칠해지지 않게 한다 */
 .md-block.md-codeblock {
   padding: 4px 0;
   cursor: text;
@@ -243,14 +228,8 @@
   font-family: var(--font-sans);
 }
 
-/* 긴 코드 줄은 코드블록 안에서만 가로 스크롤한다 (F-124 3.4 사용자 요청).
-   .cm-content 는 CM6 의 flex 항목이고 flex-shrink 가 0 이라, 안에 줄바꿈 없는(white-space:pre)
-   내용이 있으면 flex-basis(=content 의 max-content 폭)가 그 내용 폭까지 커지고,
-   줄어들 수 없어 .cm-scroller 전체가 가로로 밀린다(실측: F-124 보고 참고).
-   pre 자체의 overflow-x:auto 만으로는 이 문제를 못 막는다 — overflow 는 이미 정해진
-   폭보다 내용이 넓을 때만 작동하고, 폭 자체(=max-content 계산)에는 영향을 주지 않는다.
-   grid 컬럼(minmax(0, 1fr))으로 감싸면 이 래퍼의 폭 계산이 내용이 아니라 "가진 공간"
-   기준으로 바뀌어, .cm-content 가 더 이상 코드 내용 폭을 물려받지 않는다 */
+/* 긴 코드 줄은 코드블록 안에서만 가로 스크롤한다(F-124 3.4 사용자 요청) — .cm-content 는 flex-shrink:0 이라 줄바꿈 없는 내용의 max-content 폭까지 커져 .cm-scroller 전체가 가로로 밀린다(실측 F-124 보고) */
+/* pre 의 overflow-x:auto 만으로는 안 막힌다(폭 자체엔 영향 없음) — grid 컬럼(minmax(0,1fr))으로 감싸면 래퍼 폭 계산이 "가진 공간" 기준이 되어 .cm-content 가 내용 폭을 안 물려받는다 */
 .md-codeblock-scroll {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -269,17 +248,15 @@
   tab-size: var(--tab-size);
 }
 
-/* ===== 블록 위젯 — 표 (F-106 2.4, F-124 3.4) =====
-   표만 가로 스크롤 — 코드블록과 같은 이유로 grid 래퍼를 쓴다.
-   위아래 간격은 margin 대신 padding — 코드블록과 같은 이유(F-124 3.4 12번 요청) */
+/* ===== 블록 위젯 — 표(F-106 2.4, F-124 3.4) ===== */
+/* 표만 가로 스크롤 — 코드블록과 같은 이유로 grid 래퍼를 쓴다. 위아래 간격도 margin 대신 padding(F-124 3.4 12번, 코드블록과 같은 이유) */
 .md-block.md-table {
   padding: 4px 0;
   cursor: text;
 }
 
-/* position: relative — 편집 중인 칸의 offsetParent 가 되어 강조 요소(F-140 3.3)를
-   그 칸 좌표(offsetLeft·offsetTop)로 놓을 수 있게 한다. 좌표는 스크롤 위치와
-   무관해 스크롤해도 다시 계산할 필요 없이 표 내용과 함께 그대로 움직인다 */
+/* position: relative — 편집 중인 칸의 offsetParent 가 되어 강조 요소(F-140 3.3)를 그 칸 좌표(offsetLeft·offsetTop)로 놓을 수 있게 한다 */
+/* 좌표는 스크롤 위치와 무관해 스크롤해도 다시 계산할 필요 없이 표 내용과 함께 그대로 움직인다 */
 .md-table-scroll {
   position: relative;
   display: grid;
@@ -287,19 +264,15 @@
   overflow-x: auto;
 }
 
-/* max-width:100% 를 주지 않는다(GitHub 원래 값과 다름, 최소 합리적 선택) — 실측 결과
-   .md-table-scroll(grid minmax(0,1fr)) 로 감싼 상태에서 table 에 퍼센트 max-width 를 주면
-   래퍼가 이미 정해진 폭에 맞춰 표가 압축되어(칸이 줄어들 뿐 스크롤이 생기지 않음) "넘치면
-   가로 스크롤"이 되지 않는다. max-width 를 빼면 표는 내용만큼 커지고, 래퍼가 넘친 만큼만
-   스크롤한다 — 코드블록과 같은 방식(F-124 3.4 보고 참고) */
+/* max-width:100% 를 안 준다(GitHub 원래 값과 다름, 최소 합리적 선택) — grid 래퍼에 퍼센트 max-width 를 주면 표가 압축돼(칸만 줄고) "넘치면 가로 스크롤"이 안 된다 */
+/* max-width 를 빼면 표는 내용만큼 커지고 래퍼가 넘친 만큼만 스크롤한다 — 코드블록과 같은 방식(F-124 3.4 보고 참고) */
 .md-table table {
   border-collapse: collapse;
   width: max-content;
 }
 
-/* td·th 는 min-height 가 먹지 않아 height 로 최소 높이를 준다(표 칸의 height 는
-   floor 로 동작) — 빈 행도 글자 든 행과 높이가 같다(F-140 3.4). 1em 은 칸 자신의
-   font-size(--md-font-size 상속)를 쓰므로 하드코딩 없이 줄 높이를 따라간다 */
+/* td·th 는 min-height 가 안 먹혀 height 로 최소 높이를 준다(표 칸의 height 는 floor 로 동작) — 빈 행도 글자 든 행과 높이가 같다(F-140 3.4) */
+/* 1em 은 칸 자신의 font-size(--md-font-size 상속)를 쓰므로 하드코딩 없이 줄 높이를 따라간다 */
 .md-table th,
 .md-table td {
   border: 1px solid var(--md-border);
@@ -318,17 +291,13 @@
   background: var(--panel);
 }
 
-/* ===== 표 칸 편집 (F-125 2.2) =====
-   +버튼을 표 가장자리에 절대 위치로 놓으려고 위젯 최상위 요소를 기준점으로 삼는다 */
+/* ===== 표 칸 편집(F-125 2.2) ===== +버튼을 표 가장자리에 절대 위치로 놓으려고 위젯 최상위 요소를 기준점으로 삼는다 */
 .md-table-widget {
   position: relative;
 }
 
-/* 편집 중인 칸: 하위 EditorView(tableWidget.js 의 startEdit) 가 이 td/th 를 채운다.
-   칸 자체 padding 을 지우고 하위 에디터 안쪽(.cm-content) 에서만 그 여백을 다시 줘서,
-   편집 시작·종료로 글자 위치·칸 크기가 튀지 않게 한다 (F-140 3.3).
-   기본 선택자(`.md-table td` 등, `.cm-host .cm-editor .cm-content` 전역 규칙)보다
-   특정도를 높여야 실제로 이긴다 — 클래스 개수를 늘려 둔다(F-140 3.3 원인) */
+/* 편집 중인 칸: 하위 EditorView(tableWidget.ts 의 startEdit) 가 이 td/th 를 채운다 — 칸 자체 padding 을 지우고 하위 에디터 안쪽(.cm-content)에서만 다시 줘서 편집 시작·종료로 글자 위치·칸 크기가 안 튀게 한다(F-140 3.3) */
+/* 기본 선택자(`.md-table td` 등, 전역 `.cm-content` 규칙)보다 특정도를 높여야 실제로 이겨 클래스 개수를 늘려 둔다(F-140 3.3 원인) */
 .md-table td.md-table-cell-editing,
 .md-table th.md-table-cell-editing {
   padding: 0;
@@ -356,11 +325,8 @@
   background: none;
 }
 
-/* 편집 중인 칸 강조 (F-140 3.3) — 표 위젯 안 요소 하나가 활성 칸 위치로 옮겨 다닌다.
-   칸 테두리(1px) 안쪽에만 그리도록 tableWidget.js 가 1px 씩 안으로 넣어 크기를 준다.
-   마우스 입력을 막지 않고, `.md-table-scroll` 자식이라 가로 스크롤을 그대로 따라간다.
-   F-165: 칸 범위 선택 표시로 재사용한다 — 이때는 끌어 감싼 사각형 크기로 보이고,
-   요소 자신이 범위 선택 전용 포커스 요소다(tabIndex=-1, tableWidget.js 가 focus() 함) */
+/* 편집 중인 칸 강조(F-140 3.3) — 표 위젯 안 요소 하나가 활성 칸 위치로 옮겨 다닌다. tableWidget.ts 가 칸 테두리(1px) 안쪽에만 그리도록 1px 씩 안으로 넣어 크기를 준다. 마우스 입력은 안 막고 `.md-table-scroll` 자식이라 가로 스크롤을 그대로 따라간다 */
+/* F-165: 칸 범위 선택 표시로 재사용 — 이때는 끌어 감싼 사각형 크기로 보이고, 요소 자신이 범위 선택 전용 포커스 요소다(tabIndex=-1, tableWidget.ts 가 focus() 함) */
 .md-table-cell-highlight {
   position: absolute;
   background: var(--accent-soft);
@@ -380,11 +346,8 @@
   }
 }
 
-/* ===== 표 행·열 추가 버튼 (F-125 2.4, 위치는 F-140 3.1) =====
-   평소엔 숨겨 두고 표에 마우스가 올라오거나(hover) 버튼 자체가 키보드 포커스를
-   받으면("키보드 포커스로도 보인다") 나타난다.
-   위치(left·top, px)는 tableWidget.js 가 표 테두리를 실측해 준다 — 버튼은 그
-   점에 중심이 오도록 translate(-50%, -50%) 만 쓴다 */
+/* ===== 표 행·열 추가 버튼(F-125 2.4, 위치는 F-140 3.1) ===== 평소엔 숨기고 표 hover 나 버튼 키보드 포커스 시 나타난다("키보드 포커스로도 보인다") */
+/* 위치(left·top, px)는 tableWidget.ts 가 표 테두리를 실측해 준다 — 버튼은 그 점에 중심이 오도록 translate(-50%,-50%)만 쓴다 */
 .md-table-add {
   position: absolute;
   display: flex;
@@ -418,9 +381,8 @@
   color: var(--accent);
 }
 
-/* 툴팁은 앱이 그린다(F-125 2.4): 배경 --ink, 글자 --panel, 12px, 모서리 6px.
-   버튼의 aria-label 을 그대로 문구로 쓴다 — 접근성 이름과 화면에 보이는 문구가
-   어긋나지 않는다. 행 추가는 버튼 아래, 열 추가는 버튼 위(둘 다 가운데 정렬, F-140 3.1) */
+/* 툴팁은 앱이 그린다(F-125 2.4): 배경 --ink, 글자 --panel, 12px, 모서리 6px — 버튼의 aria-label 을 그대로 문구로 써 접근성 이름과 화면 문구가 안 어긋난다 */
+/* 행 추가는 버튼 아래, 열 추가는 버튼 위(둘 다 가운데 정렬, F-140 3.1) */
 .md-table-add::after {
   content: attr(aria-label);
   position: absolute;
@@ -453,8 +415,7 @@
   transform-origin: bottom center;
 }
 
-/* 가운데 정렬이 편집 영역 밖으로 나가면 툴팁 오른쪽 끝을 버튼 오른쪽 끝에 맞춘다
-   (F-140 3.1, tableWidget.js positionColTooltip 이 판정해 이 클래스를 붙인다) */
+/* 가운데 정렬이 편집 영역 밖으로 나가면 툴팁 오른쪽 끝을 버튼 오른쪽 끝에 맞춘다(F-140 3.1, tableWidget.ts positionColTooltip 이 판정해 이 클래스를 붙인다) */
 .md-table-add-col.md-table-add-col-tooltip-edge::after {
   left: auto;
   right: 0;

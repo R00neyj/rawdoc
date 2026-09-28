@@ -1,6 +1,5 @@
 // OS 에서 .md 파일로 열기 연동 (specs/features/F-119.md, specs/ia.md 3.14)
-// 실험적 기능: Chrome·Edge 데스크톱에서만 launchQueue 가 있을 수 있다 (MDN "Limited
-// availability"). 없으면 아무것도 하지 않는다
+// 실험적 기능: Chrome·Edge 데스크톱에서만 launchQueue 가 있을 수 있다(MDN "Limited availability") — 없으면 아무것도 하지 않는다
 type LaunchParams = { files: FileSystemFileHandle[] }
 type LaunchQueue = { setConsumer(consumer: (params: LaunchParams) => Promise<void>): void }
 

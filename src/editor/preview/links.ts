@@ -1,6 +1,5 @@
-// 편집 모드 링크 클릭 (specs/features/F-129.md)
-// 링크 찾기(findLinkAt), 열 수 있는 주소 판정(isOpenableUrl), 클릭 처리 확장(linkClicks)을 이 파일에 모은다.
-// decoration 은 만들지 않는다 — 기호 숨김·표시용 mark 는 inline.js 몫이다 (F-129 2 파일 소유)
+// 편집 모드 링크 클릭(F-129) — 링크 찾기(findLinkAt), 열 수 있는 주소 판정(isOpenableUrl), 클릭 처리(linkClicks)를 모은다
+// decoration 은 안 만든다 — 기호 숨김·표시용 mark 는 inline.ts 몫이다(F-129 2 파일 소유)
 import { syntaxTree } from '@codemirror/language'
 import type { EditorState, Extension } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
@@ -20,9 +19,8 @@ export function isOpenableUrl(url: unknown): boolean {
 
 export type LinkTarget = { from: number; to: number; url: string }
 
-// Link 노드([글자](URL) 형태, URL 있는 것만)의 "링크 글자" 범위.
-// 구조: LinkMark('[') …글자… LinkMark(']') LinkMark('(') URL [LinkTitle] LinkMark(')')
-// (spike 참고 없음 — @lezer/markdown finishLink 소스 구조 그대로)
+// Link 노드([글자](URL) 형태, URL 있는 것만)의 "링크 글자" 범위
+// 구조: LinkMark('[') …글자… LinkMark(']') LinkMark('(') URL [LinkTitle] LinkMark(')') — @lezer/markdown finishLink 소스 구조 그대로
 function linkTarget(state: EditorState, linkNode: SyntaxNode): LinkTarget | null {
   const urlNode = linkNode.getChild('URL')
   if (!urlNode) return null // `[a][ref]`·`[a]` 처럼 URL 이 없으면 대상이 아니다
@@ -47,8 +45,7 @@ function autolinkTarget(state: EditorState, autolinkNode: SyntaxNode): LinkTarge
   return { from: urlNode.from, to: urlNode.to, url: state.doc.sliceString(urlNode.from, urlNode.to) }
 }
 
-// pos 를 담고 있는 Link 노드(있다면)를 찾는다. 3.2 "드러남" 판정(Link 전체 범위)에 쓴다.
-// findLinkAt 이 돌려주는 범위는 "링크 글자" 범위(괄호·URL 제외)라 이 판정에는 못 쓴다
+// pos 를 담고 있는 Link 노드를 찾는다 — 3.2 "드러남" 판정(Link 전체 범위)에 쓴다. findLinkAt 의 범위는 "링크 글자"(괄호·URL 제외)라 이 판정엔 못 쓴다
 function enclosingLink(state: EditorState, pos: number): SyntaxNode | null {
   const tree = syntaxTree(state)
   for (const side of [1, -1] as const) {
@@ -59,10 +56,7 @@ function enclosingLink(state: EditorState, pos: number): SyntaxNode | null {
   return null
 }
 
-// 구문 트리 기준으로 pos 위치의 "열 수 있는 링크 글자" 를 찾는다 (F-129 3.1·3.4).
-// - [글자](URL) → 글자 범위 (URL 없는 참조·shortcut 링크, Image 는 null)
-// - 맨 주소(부모가 Link 아닌 URL) → 그 글자 범위
-// - <URL>(Autolink) → < > 안 글자 범위
+// 구문 트리 기준 pos 위치의 "열 수 있는 링크 글자"를 찾는다(F-129 3.1·3.4) — [글자](URL)→글자 범위, 맨 주소(부모가 Link 아닌 URL)→그 범위, <URL>(Autolink)→< > 안 범위
 export function findLinkAt(state: EditorState, pos: number): LinkTarget | null {
   const tree = syntaxTree(state)
 
@@ -97,18 +91,14 @@ export function findLinkAt(state: EditorState, pos: number): LinkTarget | null {
   return null
 }
 
-// 클릭 좌표가 실제 링크 글자 위인지 (F-134 3.2). posAtCoords 만 쓰면 줄 끝 오른쪽
-// 빈 곳을 눌러도 줄 끝 위치가 나와, 줄이 링크·맨 URL 로 끝나면 클릭한 자리가 링크
-// 밖인데도 링크가 열려버린다. 표시용 mark(inline.ts 의 .md-link, F-129 3.3)가
-// 링크 글자에만 붙으므로, 실제로 누른 DOM 요소(event.target)가 그 안인지로 판정한다
+// 클릭 좌표가 실제 링크 글자 위인지(F-134 3.2) — posAtCoords 만 쓰면 줄 끝 오른쪽 빈 곳을 눌러도 줄 끝 위치가 나와 링크 밖인데 열려버린다
+// 표시용 mark(inline.ts 의 .md-link, F-129 3.3)가 링크 글자에만 붙으므로 누른 DOM 요소(event.target)가 그 안인지로 판정한다
 export function clickTargetIsLinkText(target: EventTarget | null): boolean {
   return !!(target as Element | null)?.closest?.('.md-link')
 }
 
-// 편집 모드 링크 클릭 확장 (F-129 3.3·3.4).
-// mousedown 에서 처리한다 — 기본 동작을 막아야(preventDefault) 여는 클릭에서 커서가
-// 움직이지 않는다. 원문 모드에는 이 확장 자체가 들어가지 않는다(index.ts 는 live 모드에만
-// 등록) — 3.3 "원문 모드에서는 링크를 열지 않는다" 는 그래서 별도 분기가 필요 없다
+// 편집 모드 링크 클릭 확장(F-129 3.3·3.4) — mousedown 에서 처리, preventDefault 해야 여는 클릭에서 커서가 안 움직인다
+// 원문 모드엔 이 확장 자체가 안 들어가(index.ts 는 live 모드에만 등록) 3.3 "원문 모드에서는 안 연다"는 별도 분기 불필요
 export function linkClicks(): Extension {
   return EditorView.domEventHandlers({
     mousedown(event, view) {

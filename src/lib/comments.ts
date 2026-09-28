@@ -1,10 +1,5 @@
 // 주석 문법(%% …%%, <!-- … -->) 제거 — 공유 화면 노출 방지, 펜스·인라인코드 안은 제외, 줄 수·CRLF 유지 (F-214.md 2.1)
-//
-// "코드 안" 판정은 보기 화면과 같은 markdown-it 해석에 맡긴다 (리뷰 L1·L2). 줄 첫 칸 기준 자체 스캐너는
-// 목록·인용 안 펜스, 이스케이프한 백틱, 정보 문자열의 백틱, 한 줄짜리 제목 경계를 몰라서 뒤쪽 주석을 남겼다.
-// 방법: 주석 여는 기호 앞마다 사용자 영역(PUA) 문자 표지를 끼워 파싱하고, 코드 토큰(fence·code_block·
-// code_inline) 내용에 든 표지만 "코드 안"으로 본다. 표지는 `%`·`<` 앞에만 들어가므로 블록 구조와
-// 코드 스팬 경계를 바꾸지 않는다
+// "코드 안" 판정은 여는 기호 앞마다 끼운 PUA 문자 표지를 markdown-it 코드 토큰 경계로 본다 — 줄 첫 칸 기준 자체 스캐너는 이를 몰라 뒤쪽 주석을 남겼다 (리뷰 L1·L2)
 import MarkdownIt from 'markdown-it'
 import type { Token } from 'markdown-it'
 import { findFrontmatter, textAfterFrontmatter } from './frontmatter'

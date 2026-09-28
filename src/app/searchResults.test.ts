@@ -1,5 +1,4 @@
-// F-287 검색 결과 순수 함수 — U1~U12 (specs/features/F-287.md 9장). DOM·React 를 import 하지 않는다
-// U13~U28 은 안내 문구 순수 함수 (specs/features/F-288.md 9장)
+// F-287 검색 결과 순수 함수 — U1~U12(F-287.md 9장, DOM·React 미import), U13~U28 은 안내 문구 순수 함수(F-288.md 9장)
 import { describe, it, expect } from 'vitest'
 import { nextResultIndex, formatSearchDate, buildResultRows, formatQuerySummary, buildSearchNotes, formatResultCount, searchStatusText, pickEditorSearchTerm } from './searchResults'
 import { parseSearchQuery, RESULT_LIMIT } from '../lib/docSearch'

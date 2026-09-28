@@ -1,7 +1,5 @@
 // YAML 프론트매터 범위 찾기·단순 속성 해석 (specs/features/F-133.md 3.1·3.3)
-// 순수 함수. DOM·CM6·markdown-it 을 다루지 않는다 — editor/frontmatter.js(블록 파서),
-// editor/preview/lines.js(줄 클래스), viewer/renderMarkdown.js(속성 표) 가 각자 쓴다.
-// YAML 해석 라이브러리는 쓰지 않는다 (F-133 2장) — 여기 규칙이 전부다
+// 순수 함수, DOM·CM6·markdown-it 다루지 않음 — 각 소비자가 따로 쓴다. YAML 라이브러리는 쓰지 않는다(F-133 2장) — 여기 규칙이 전부다
 
 const OPEN_RE = /^---[ \t]*$/
 const CLOSE_RE = /^(---|\.\.\.)[ \t]*$/

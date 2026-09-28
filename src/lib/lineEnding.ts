@@ -1,6 +1,5 @@
 // 줄바꿈 형식 판정·변환 — 순수 함수 (specs/product.md Q9, specs/features/F-110.md 3.3, F-114.md 2.1)
-// CM6 는 lineSeparator 를 지정하지 않고 \r\n·\n·\r 을 모두 \n 으로 읽는다. 저장·내보내기
-// 시점에만 이 파일로 lineEnding 을 잇는다
+// CM6 는 lineSeparator 없이 \r\n·\n·\r 을 모두 \n 으로 읽는다 — 저장·내보내기 시점에만 이 파일로 lineEnding 을 잇는다
 
 export type LineEnding = 'crlf' | 'lf'
 

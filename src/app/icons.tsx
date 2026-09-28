@@ -1,13 +1,11 @@
-// 인라인 SVG 아이콘 (Google Material Symbols Outlined 400, specs/design.md 4장, F-142 2장)
-// `?raw` 로 가져온 파일 콘텐츠에서 내부 마크업만 꺼내 쓴다. 색은 CSS `fill: currentColor` 만 쓴다
+// 인라인 SVG 아이콘(Google Material Symbols Outlined 400, design.md 4장, F-142 2장) — `?raw` 로 가져온 내부 마크업만 쓰고, 색은 CSS `fill: currentColor` 만 쓴다
 import editSvg from '@material-symbols/svg-400/outlined/edit.svg?raw'
 import codeSvg from '@material-symbols/svg-400/outlined/code.svg?raw'
 import visibilitySvg from '@material-symbols/svg-400/outlined/visibility.svg?raw'
 import iosShareSvg from '@material-symbols/svg-400/outlined/ios_share.svg?raw'
 import downloadSvg from '@material-symbols/svg-400/outlined/download.svg?raw'
 import chevronRightSvg from '@material-symbols/svg-400/outlined/chevron_right.svg?raw'
-// 사이드바 `새 문서` — note_add(페이지+플러스)는 가져오기(upload_file, 역시 페이지 모양)와
-// 나란히 놓으면 작은 크기에서 헷갈려 note_stack_add(쌓인 노트)로 바꿨다 (2026-09-20 사용자 지적)
+// 사이드바 `새 문서` — note_add 는 가져오기(upload_file)와 나란히 두면 헷갈려 note_stack_add 로 바꿨다 (2026-09-20 사용자 지적)
 import noteAddSvg from '@material-symbols/svg-400/outlined/note_stack_add.svg?raw'
 import createNewFolderSvg from '@material-symbols/svg-400/outlined/create_new_folder.svg?raw'
 import uploadFileSvg from '@material-symbols/svg-400/outlined/upload_file.svg?raw'

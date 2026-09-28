@@ -1,5 +1,4 @@
-// 상단바 계정 메뉴 (specs/features/F-205.md 2.5). 여닫기·키보드는 ShareMenu(F-130)와 같은 패턴
-// 로그아웃은 F-2034
+// 상단바 계정 메뉴 — 여닫기·키보드는 ShareMenu(F-130)와 같은 패턴, 로그아웃은 F-2034 (F-205.md 2.5)
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 
 import { loginUrl, logout, AFTER_LOGOUT_URL, LOGOUT_FAILED_MESSAGE, storedAccount, type AccountState } from './account'

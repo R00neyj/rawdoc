@@ -1,12 +1,5 @@
-// 표 위젯 — 칸 편집·행/열 추가 (specs/features/F-125.md). F-106 의 표 부분을 대체한다
-// (코드블록은 F-106/blocks.js 그대로).
-//
-// 칸 편집은 하위 CM6 EditorView 1개로 한다(F-125 2.2) — 한글 조합을 CM6 가 처리하게
-// 하기 위해서다. 하위 에디터는 "입력 창구" 일 뿐이고, 주 문서(state)가 원본이다
-// (CLAUDE.md 불변조건) — 하위 에디터의 모든 변경은 즉시 주 문서 트랜잭션으로 보낸다.
-//
-// 동시에 1칸만 편집한다 — 모듈 전역이 아니라 "주 EditorView 하나당 활성 칸 하나"
-// 를 WeakMap 으로 추적한다(주 view 는 문서 하나에 하나뿐이라 안전하다).
+// 표 위젯 — 칸 편집·행/열 추가(F-125). F-106 표 부분을 대체(코드블록은 F-106/blocks.ts 그대로). 칸 편집은 하위 CM6 EditorView 1개로 한다(F-125 2.2) — 한글 조합을 CM6 가 처리하게, 주 문서(state)가 원본(CLAUDE.md 불변조건)
+// 동시에 1칸만 편집 — 모듈 전역이 아니라 "주 EditorView 하나당 활성 칸 하나"를 WeakMap 으로 추적한다
 import { EditorSelection, EditorState } from '@codemirror/state'
 import { EditorView, WidgetType } from '@codemirror/view'
 import type { StateCommand, Transaction } from '@codemirror/state'
@@ -57,10 +50,8 @@ type DeferredWrite = { range: CellRange; wasNonEmpty: boolean; value: string }
 type CellHit = { row: number; col: number }
 type TableChange = { from: number; to?: number; insert?: string }
 
-// blocks.js 도 이 모듈의 TableWidget 을 import 한다(순환 import). observeHeight·
-// stopObservingHeight 는 함수 선언(export function)이라 모듈 링크 단계에서 바로
-// 값이 채워지므로 — 실행 순서가 어느 쪽이 먼저든 — 여기서 쓰는 시점(toDOM·destroy,
-// 둘 다 모듈 평가가 끝난 뒤에야 불린다)에는 항상 정상적으로 참조된다.
+// blocks.ts 도 이 모듈의 TableWidget 을 import 한다(순환 import) — observeHeight·stopObservingHeight 는 함수 선언(export function)이라 모듈 링크 단계에서 바로 값이 채워진다
+// 실행 순서가 어느 쪽이 먼저든 여기서 쓰는 시점(toDOM·destroy, 모듈 평가가 끝난 뒤에야 불림)엔 항상 정상 참조된다
 
 // 주 EditorView → 지금 편집 중인 칸 정보. 동시에 1개(F-125 2.2 "동시에 1칸만")
 const activeEdit = new WeakMap<EditorView, ActiveEditEntry>()
@@ -68,8 +59,7 @@ const activeEdit = new WeakMap<EditorView, ActiveEditEntry>()
 // 주 EditorView → 행·열 추가 뒤 편집을 시작할 칸(구조가 바뀌어 위젯을 다시 그릴 때 소비)
 const pendingFocus = new WeakMap<EditorView, PendingFocus>()
 
-// 표 위젯 최상위 요소(wrap) → 그 표가 속한 주 EditorView. destroy(dom) 이 view 를
-// 인자로 받지 못하는 WidgetType API 한계를 메꾼다
+// 표 위젯 최상위 요소(wrap) → 그 표가 속한 주 EditorView. destroy(dom) 이 view 를 인자로 못 받는 WidgetType API 한계를 메꾼다
 const wrapView = new WeakMap<HTMLElement, EditorView>()
 
 // 주 EditorView → 확정된 칸 범위 선택(F-165 2.1). { wrap, r1, c1, r2, c2 }(행·열은 parseTable 행 번호, 이미 정규화됨: r1<=r2, c1<=c2). 표 하나당 하나
@@ -88,11 +78,8 @@ export function setCellContextMenuHandler(mainView: EditorView, handler: CellCon
   else cellContextMenuHandlers.delete(mainView)
 }
 
-// 지금 이 주 view 의 활성 칸이 한글 조합 중인가 (F-125 2.2 "재계산 보류·따라잡기는
-// composition.ts 규칙을 따른다"). 조합은 칸의 하위 EditorView(자기 DOM)에서 일어나서
-// 주 view 의 composing 은 그동안 계속 false 다 — blocks.ts 의 blockPreview 는 주
-// view 만 보므로, 이 함수로 칸 조합 상태를 알려줘야 조합 중 위젯을 다시 그려
-// 편집 중인 하위 EditorView 를 파괴하는 사고를 막을 수 있다
+// 지금 이 주 view 의 활성 칸이 한글 조합 중인가(F-125 2.2, 재계산 보류·따라잡기는 composition.ts 규칙을 따른다) — 조합은 칸의 하위 EditorView(자기 DOM)에서 일어나 주 view.composing 은 계속 false
+// blocks.ts 의 blockPreview 는 주 view 만 보므로 이 함수로 칸 조합 상태를 알려줘야 조합 중 위젯을 다시 그려 하위 EditorView 를 파괴하는 사고를 막는다
 export function isCellComposing(mainView: EditorView | null | undefined): boolean {
   const entry = mainView && activeEdit.get(mainView)
   return !!entry && isComposing(entry.cellView)
@@ -104,9 +91,8 @@ export function isCellCompositionStarted(mainView: EditorView | null | undefined
   return !!entry && entry.cellView.compositionStarted
 }
 
-// 줄바꿈을 공백으로 접는다(F-125 2.2 "붙여넣기의 줄바꿈은 공백 1개로"). 하위 에디터에
-// 줄바꿈이 들어오면(붙여넣기 등) 즉시 다시 써서 한 줄로 되돌린다 — 한 줄 안 keymap
-// (Tab·Enter·화살표)만으로 "한 줄 에디터" 를 보장하기엔 붙여넣기가 새지 않아야 한다
+// 줄바꿈을 공백으로 접는다(F-125 2.2 "붙여넣기의 줄바꿈은 공백 1개로") — 줄바꿈이 들어오면(붙여넣기 등) 즉시 다시 써서 한 줄로 되돌린다
+// 한 줄 안 keymap(Tab·Enter·화살표)만으로는 "한 줄 에디터"를 보장 못 함 — 붙여넣기가 새지 않아야 한다
 const singleLineFilter = EditorState.transactionFilter.of((tr) => {
   if (!tr.docChanged) return tr
   const text = tr.newDoc.toString()
@@ -122,10 +108,8 @@ function guardComposing(command: StateCommand) {
   return (view: EditorView) => (isComposing(view) ? false : command(view))
 }
 
-// 지금 이 주 view 의 활성 칸을 편집 중인 모든 주 문서 트랜잭션(칸 자신의 입력 포함)
-// 마다 세션이 든 칸 범위를 옮긴다 (F-135 3.2). blocks.ts 의 StateField.update 가
-// 모든 트랜잭션마다 이 함수를 부른다 — 실행 취소는 cellKeydown 이 그 전에 이미
-// endEdit 로 세션을 지우므로 여기 들어오지 않는다("실행 취소 제외")
+// 지금 이 주 view 의 활성 칸을 편집 중인 모든 주 문서 트랜잭션(칸 자신의 입력 포함)마다 세션이 든 칸 범위를 옮긴다(F-135 3.2) — blocks.ts 의 StateField.update 가 매번 부른다
+// 실행 취소는 cellKeydown 이 그 전에 이미 endEdit 로 세션을 지우므로 여기 들어오지 않는다("실행 취소 제외")
 export function trackActiveEditRange(mainView: EditorView | null | undefined, tr: Transaction): void {
   const entry = mainView && activeEdit.get(mainView)
   if (!entry) return
@@ -147,15 +131,12 @@ function endEditAfterRemote(mainView: EditorView, entry: ActiveEditEntry): void 
   })
 }
 
-// endEdit 가 뷰 갱신 도중(updateDOM·destroy, F-138 3.5) 당장 dispatch 할 수 없어
-// 마이크로태스크로 미룬 쓰기 항목. 주 EditorView 하나당 배열(짧은 시간 안에 항목이
-// 하나뿐이라 보통이지만 방어적으로 배열로 둔다)
+// endEdit 가 뷰 갱신 도중(updateDOM·destroy, F-138 3.5) 당장 dispatch 할 수 없어 마이크로태스크로 미룬 쓰기 항목
+// 주 EditorView 하나당 배열(짧은 시간엔 항목이 하나뿐이라 보통이지만 방어적으로 배열로 둔다)
 const pendingDeferredWrites = new WeakMap<EditorView, DeferredWrite[]>()
 
-// 모든 주 문서 트랜잭션마다 미뤄둔 쓰기의 범위도 함께 옮긴다 (F-138 3.5). 이유는
-// trackActiveEditRange 와 같다 — endEdit 이 이미 activeEdit 에서 세션을 지운
-// 뒤에도, 마이크로태스크가 실제로 dispatch 하는 시점까지 그 사이 일어난 변경을
-// 계속 따라가야 한다. blocks.ts 의 StateField.update 가 모든 트랜잭션마다 이 함수도 부른다
+// 모든 주 문서 트랜잭션마다 미뤄둔 쓰기의 범위도 함께 옮긴다(F-138 3.5) — trackActiveEditRange 와 같은 이유
+// endEdit 이 세션을 지운 뒤에도 마이크로태스크가 실제 dispatch 할 때까지 그 사이 변경을 계속 따라가야 한다. blocks.ts 의 StateField.update 가 매번 부른다
 export function trackPendingWrites(mainView: EditorView | null | undefined, tr: Transaction): void {
   const items = mainView && pendingDeferredWrites.get(mainView)
   if (!items || items.length === 0) return
@@ -164,9 +145,8 @@ export function trackPendingWrites(mainView: EditorView | null | undefined, tr: 
   }
 }
 
-// 세션이 든 칸 범위(entry.range)를 써서 값을 주 문서 트랜잭션으로 보낸다. 위젯
-// 인스턴스(entry.widget)의 칸 위치는 조합 중 재계산이 보류되어 낡을 수 있어 쓰지
-// 않는다(F-135 3.2) — 세션 자신이 든 범위만 신뢰한다
+// 세션이 든 칸 범위(entry.range)를 써서 값을 주 문서 트랜잭션으로 보낸다
+// 위젯 인스턴스(entry.widget)의 칸 위치는 조합 중 재계산 보류로 낡을 수 있어 안 쓴다(F-135 3.2) — 세션 자신이 든 범위만 신뢰한다
 function pushCellEdit(mainView: EditorView, row: number, col: number, value: string): void {
   const entry = activeEdit.get(mainView)
   if (!entry) return
@@ -174,11 +154,8 @@ function pushCellEdit(mainView: EditorView, row: number, col: number, value: str
 
   if (entry.range) {
     const { from, to } = entry.range
-    // F-138 3.1 "패딩 삽입": 값이 홀수 개 `\` 로 끝나고(escapeCell 은 파이프 앞이
-    // 아니면 손대지 않는다) 이 칸 범위 바로 뒤(주 문서, 아직 이 트랜잭션을 보내기
-    // 전)가 패딩 없이 파이프면, 그 파이프가 이스케이프되어 칸이 합쳐진다. 공백 1개를
-    // 함께 넣어 막는다 — 바뀐 곳은 이 칸뿐이다(tableModel.js cellEdit 의 "칸 끝"
-    // 규칙과 같은 목적, 여기서는 live 문서로 직접 판정한다)
+    // F-138 3.1 "패딩 삽입": 값이 홀수 개 `\` 로 끝나고 이 칸 범위 바로 뒤(주 문서, 트랜잭션 보내기 전)가 패딩 없이 파이프면 그 파이프가 이스케이프되어 칸이 합쳐진다
+    // 공백 1개를 넣어 막는다 — 바뀐 곳은 이 칸뿐(tableModel.ts cellEdit 의 "칸 끝" 규칙과 같은 목적, 여기서는 live 문서로 직접 판정)
     let insert = escaped
     const trailingBackslashes = escaped.match(/\\+$/)?.[0].length ?? 0
     if (trailingBackslashes % 2 === 1 && mainView.state.doc.sliceString(to, to + 1) === '|') {
@@ -191,10 +168,8 @@ function pushCellEdit(mainView: EditorView, row: number, col: number, value: str
       entry.range = advanceCellRange(entry.range, insert)
     }
   } else {
-    // 칸이 아직 실제로 존재하지 않는다(F-106 채움 칸, F-125 2.4 마지막 항목) — 모자란
-    // 칸을 채우는 구조적 삽입은 위젯 데이터(entry.widget.table)로 딱 한 번만 계산한다.
-    // 삽입 직후 그 줄을 다시 파싱해 얻은 진짜 칸 범위를 세션에 저장해, 다음 입력부터는
-    // 위 분기(entry.range)로 처리한다
+    // 칸이 아직 실제로 존재하지 않는다(F-106 채움 칸, F-125 2.4 마지막 항목) — 모자란 칸을 채우는 구조적 삽입은 위젯 데이터(entry.widget.table)로 딱 한 번만 계산한다
+    // 삽입 직후 그 줄을 다시 파싱해 얻은 진짜 칸 범위를 세션에 저장해 다음 입력부터는 위 분기(entry.range)로 처리한다
     const blockFrom = mainView.posAtDOM(entry.wrap)
     const changes = cellEdit(entry.widget.table, row, col, value) as TableChange[]
     if (changes.length === 0) return
@@ -208,42 +183,27 @@ function pushCellEdit(mainView: EditorView, row: number, col: number, value: str
     if (newCell) entry.range = { from: newCell.from, to: newCell.to }
   }
 
-  // 조합 중 여러 트랜잭션에 걸쳐 값이 바뀌면, 편집이 어떤 경로로 끝나든(F-135 3.4)
-  // 끝낼 때 밀린 재계산을 따라잡아야 한다는 것을 기록해 둔다
+  // 조합 중 여러 트랜잭션에 걸쳐 값이 바뀌면, 편집이 어떤 경로로 끝나든(F-135 3.4) 끝낼 때 밀린 재계산을 따라잡아야 한다는 것을 기록해 둔다
   if (isComposing(entry.cellView)) entry.pendingRecalc = true
 }
 
-// 지금 편집 중인 칸을 끝낸다. DOM 을 그 칸의 현재(주 문서 기준) 글자로 되돌린다.
-// 조합 때문에 보류된 재계산이 있으면(F-135 3.4) 편집이 어떤 경로로 끝나든(클릭,
-// 포커스 이탈, Esc, 다른 위젯의 destroy) 여기서 반드시 forceRecalc 를 보낸다 —
-// compositionend 핸들러의 setTimeout 은 그사이 활성 칸이 바뀌면 스스로 건너뛴다.
-//
-// TableWidget.updateDOM·destroy 는 CM6 가 뷰를 갱신하는 도중에 부른다 — 그 안에서
-// mainView.dispatch 를 부르면 CM6 가 예외를 던진다(F-138 3.5,
-// @codemirror/view/dist/index.js:7948). 그 두 경로는 deferDispatch: true 로 불러
-// DOM 정리(activeEdit 삭제·하위 EditorView destroy)는 그대로 하되, 조합 중이던 값을
-// 반영하는 쓰기와 forceRecalc 는 마이크로태스크로 미룬다. 미룬 사이 주 문서가 바뀌면
-// (trackPendingWrites) 그 변경으로 범위를 옮긴 뒤 쓴다. 그 범위가 원래 비어 있지
-// 않았는데(칸이 실재했는데) 마이크로태스크 시점에 빈 범위로 무너졌으면(표·행이
-// 통째로 지워짐) 쓰지 않고 forceRecalc 만 보낸다
+// 지금 편집 중인 칸을 끝낸다 — DOM 을 주 문서 기준 글자로 되돌리고, 보류된 재계산이 있으면(F-135 3.4) 편집이 어떤 경로로 끝나든 forceRecalc 를 반드시 보낸다(compositionend 의 setTimeout 은 활성 칸이 바뀌면 스스로 건너뛴다)
+// updateDOM·destroy 는 뷰 갱신 도중 불려 dispatch 하면 CM6 가 예외를 던진다(F-138 3.5) — 그 두 경로는 deferDispatch:true 로 불러 DOM 정리만 하고 쓰기·forceRecalc 는 마이크로태스크로 미룬다(미룬 사이 바뀐 범위는 trackPendingWrites 로 따라가고, 범위가 무너졌으면 쓰지 않는다)
 function endEdit(mainView: EditorView, { deferDispatch = false }: { deferDispatch?: boolean } = {}): void {
   const entry = activeEdit.get(mainView)
   if (!entry) return
 
   const composing = isComposing(entry.cellView)
-  // 편집기를 없애기 전에 조합 중이던 값을 먼저 주 문서에 반영해야 한다(F-135 3.4) —
-  // 그러지 않으면 조합 중이던 글자가 원문에 반영되지 않고 사라진다. 갱신 중이 아니면
-  // (deferDispatch=false) pushCellEdit 로 지금 바로 보낸다(entry 가 아직 activeEdit 에
-  // 있는 채로 — pushCellEdit 은 entry.range 를 그 자리에서 읽는다).
+  // 편집기를 없애기 전에 조합 중이던 값을 먼저 주 문서에 반영해야 한다(F-135 3.4) — 안 그러면 조합 중이던 글자가 원문에 반영 안 되고 사라진다
+  // 갱신 중이 아니면(deferDispatch=false) pushCellEdit 로 지금 바로 보낸다(entry 가 아직 activeEdit 에 있는 채로 — pushCellEdit 은 entry.range 를 그 자리에서 읽는다)
   if (composing) {
     if (!deferDispatch) {
       pushCellEdit(mainView, entry.row, entry.col, entry.cellView.state.doc.toString())
     }
     entry.pendingRecalc = true
   }
-  // deferDispatch 인데 조합 중이면, activeEdit 에서 지우기 전에 지금 시점의 범위·값을
-  // 붙잡아 둔다 — pushCellEdit 을 나중에 부를 수 없으므로(entry 는 곧 지워진다) 필요한
-  // 정보만 별도로 들고 마이크로태스크에서 직접 dispatch 한다
+  // deferDispatch 인데 조합 중이면, activeEdit 에서 지우기 전에 지금 시점의 범위·값을 붙잡아 둔다
+  // pushCellEdit 을 나중에 부를 수 없으므로(entry 는 곧 지워진다) 필요한 정보만 별도로 들고 마이크로태스크에서 직접 dispatch 한다
   const deferredWrite =
     deferDispatch && composing && entry.range
       ? {
@@ -290,11 +250,8 @@ function endEdit(mainView: EditorView, { deferDispatch = false }: { deferDispatc
   })
 }
 
-// entry.wrap 기준 표 앞 줄 끝(위) / 표 다음 줄 시작(아래) 위치로 주 에디터 커서를 옮긴다.
-// 표 앞뒤에 줄이 없으면(문서 맨 앞·맨 끝이 표) F-125 2.3 의 위치(0, blockTo)가 위젯이
-// 가린 범위 경계라 이어서 친 글자가 표 원문에 들어간다 — F-135 3.5 로 고친다:
-// 위는 나갈 곳이 없으니 편집을 유지하고, 아래는 문서 끝에 줄바꿈 1개를 넣어 진짜
-// "다음 줄"을 만든 뒤 그 줄로 커서를 옮긴다
+// entry.wrap 기준 표 앞 줄 끝(위)/표 다음 줄 시작(아래)으로 주 에디터 커서를 옮긴다 — 표 앞뒤에 줄이 없으면(문서 맨 앞·끝이 표) F-125 2.3 의 위치가 위젯이 가린 범위 경계라 이어 친 글자가 표 원문에 들어간다
+// F-135 3.5 로 고친다: 위는 나갈 곳이 없으니 편집을 유지하고, 아래는 문서 끝에 줄바꿈 1개를 넣어 진짜 "다음 줄"을 만든 뒤 그 줄로 커서를 옮긴다
 function exitToMain(mainView: EditorView, above: boolean): boolean {
   const entry = activeEdit.get(mainView)
   if (!entry) return false
@@ -312,9 +269,8 @@ function exitToMain(mainView: EditorView, above: boolean): boolean {
 
   endEdit(mainView)
   if (blockTo >= doc.length) {
-    // 표 뒤에 줄이 없다 — 문서 끝에 줄바꿈 1개를 넣고 그 새 줄 시작으로 커서를 옮긴다.
-    // CM6 트랜잭션은 항상 '\n' 을 쓴다(tableModel.js addRow 와 같은 관례) — 실제
-    // 줄바꿈 형식(CRLF/LF)은 저장·내보내기 시점에만 적용된다(specs/product.md 5장)
+    // 표 뒤에 줄이 없다 — 문서 끝에 줄바꿈 1개를 넣고 그 새 줄 시작으로 커서를 옮긴다
+    // CM6 트랜잭션은 항상 '\n' 을 쓴다(tableModel.ts addRow 와 같은 관례) — 실제 줄바꿈 형식(CRLF/LF)은 저장·내보내기 시점에만 적용된다(specs/product.md 5장)
     mainView.dispatch({
       changes: { from: doc.length, insert: '\n' },
       selection: { anchor: doc.length + 1 },
@@ -340,20 +296,15 @@ function clampIntoView(container: HTMLElement, targetRect: DOMRect, axis: 'x' | 
   }
 }
 
-// 행·열 추가처럼 구조가 바뀌는 트랜잭션을 보내기 직전의 스크롤 위치를 잡아 둔다(F-171 3장
-// 원인 후보 1 — 표 DOM 을 다시 그리며 주 에디터가 높이 변화에 맞춰 스크롤을 옮길 수 있다는
-// 가설의 방어책). 사용자가 손댄 적 없는 스크롤을 우리가 옮길 근거가 없으니, 트랜잭션을
-// 보내기 직전 그 위치로 되돌려 놓고 clampIntoView 로만 다시 맞춘다
+// 행·열 추가처럼 구조가 바뀌는 트랜잭션을 보내기 직전의 스크롤 위치를 잡아 둔다(F-171 3장 원인 후보 1 — 표 DOM 재렌더로 주 에디터가 높이 변화에 맞춰 스크롤을 옮길 수 있다는 가설의 방어책)
+// 사용자가 손댄 적 없는 스크롤을 우리가 옮길 근거가 없으니, 트랜잭션 보내기 직전 위치로 되돌려 놓고 clampIntoView 로만 다시 맞춘다
 function captureScroll(mainView: EditorView, wrap: HTMLElement): ScrollRestore {
   const hScroll = wrap.querySelector('.md-table-scroll')
   return { scrollTop: mainView.scrollDOM.scrollTop, scrollLeft: hScroll ? hScroll.scrollLeft : 0 }
 }
 
-// 칸에 포커스를 준 뒤 스크롤을 clampIntoView 규칙대로 맞춘다. restore 가 있으면 먼저 그 값으로
-// 되돌린 뒤 맞춘다 — 칸(하위 EditorView)에 포커스·선택을 옮기면 브라우저가 스스로 스크롤을
-// 옮기는 경우가 실측으로 확인됐다(F-171 2장 A1). Selection.collapse·Element.focus·
-// scrollIntoView·scrollTo·scrollBy·scrollTop 대입을 모두 가로채도 그 변화가 잡히지 않는
-// 네이티브 동작이라, 일으킨 원인을 막는 대신 다음 프레임까지 다시 맞춰 덮어써서 없앤다
+// 칸에 포커스를 준 뒤 스크롤을 clampIntoView 규칙대로 맞춘다. restore 가 있으면 먼저 그 값으로 되돌린 뒤 맞춘다 — 칸에 포커스·선택을 옮기면 브라우저가 스스로 스크롤을 옮기는 경우가 실측으로 확인됐다(F-171 2장 A1)
+// Selection.collapse·focus·scrollIntoView 등을 모두 가로채도 안 잡히는 네이티브 동작이라, 원인을 막는 대신 다음 프레임까지 다시 맞춰 덮어써서 없앤다
 function focusCellClamped(
   mainView: EditorView,
   wrap: HTMLElement,
@@ -380,9 +331,8 @@ function focusCellClamped(
   })
 }
 
-// 칸 편집을 시작한다(클릭·키보드 공통 진입점). 같은 칸이면 포커스만 옮긴다.
-// restore: 구조가 바뀌는 트랜잭션 보내기 직전 스크롤 (F-171 3장) — 없으면(클릭·방향키로
-// 바로 부른 경우) 지금 스크롤을 그대로 기준으로 쓴다
+// 칸 편집을 시작한다(클릭·키보드 공통 진입점). 같은 칸이면 포커스만 옮긴다
+// restore: 구조가 바뀌는 트랜잭션 보내기 직전 스크롤(F-171 3장) — 없으면(클릭·방향키로 바로 부른 경우) 지금 스크롤을 그대로 기준으로 쓴다
 function startEdit(
   mainView: EditorView,
   wrap: HTMLElement,
@@ -441,11 +391,8 @@ function startEdit(
           },
           keydown: (event, view) => cellKeydown(mainView, wrap, view, event),
           contextmenu: (event, cv) => cellContextMenu(mainView, cv, event),
-          // 이 칸(하위 EditorView)에서 조합이 끝나면 주 view 에 forceRecalc 를 보낸다
-          // (composition.js 규칙) — 조합 중 blockPreview 가 미뤄뒀던 위젯 재계산을
-          // 여기서 따라잡는다. isCellComposing 이 조합 중임을 주 view 쪽에 알리는
-          // 동안엔 blockPreview 가 이 표 위젯을 다시 그리지 않으므로, 편집 중인 이
-          // 하위 EditorView 의 DOM 은 조합이 끝날 때까지 파괴되지 않는다
+          // 이 칸(하위 EditorView)에서 조합이 끝나면 주 view 에 forceRecalc 를 보낸다(composition.ts 규칙) — 조합 중 blockPreview 가 미뤄뒀던 위젯 재계산을 여기서 따라잡는다
+          // isCellComposing 이 조합 중임을 주 view 쪽에 알리는 동안엔 blockPreview 가 이 표 위젯을 다시 안 그려 편집 중인 하위 EditorView 의 DOM 은 조합이 끝날 때까지 파괴되지 않는다
           compositionend: () => {
             setTimeout(() => {
               const cur = activeEdit.get(mainView)
@@ -632,9 +579,8 @@ const CELL_MARK_CLASS: Record<string, string> = {
   wikilink: 'md-wikilink',
 }
 
-// 칸(td/th) 안쪽을 편집 중이 아닌 표시(인라인 서식)로 채운다. createElement·textContent 만
-// 쓴다 — innerHTML 로 칸 글자를 넣지 않는다(F-140 3.2 보안). el.dataset.rawText 는 구조가
-// 같을 때 "바뀌었는지" 를 표시 글자가 아니라 칸 원문으로 비교하는 데 쓴다(updateDOM patch)
+// 칸(td/th) 안쪽을 편집 중이 아닌 표시(인라인 서식)로 채운다. createElement·textContent 만 쓴다 — innerHTML 로 칸 글자를 안 넣는다(F-140 3.2 보안)
+// el.dataset.rawText 는 구조가 같을 때 "바뀌었는지"를 표시 글자가 아니라 칸 원문으로 비교하는 데 쓴다(updateDOM patch)
 function renderCellText(el: HTMLElement, text: string): void {
   el.textContent = ''
   el.dataset.rawText = text
@@ -713,9 +659,8 @@ function buildCell(
   el.addEventListener('mousedown', (event) => {
     if (event.button !== 0) return
     event.preventDefault()
-    // 칸 안 링크·위키링크 글자를 눌러도 열지 않고 칸 편집을 시작한다(F-140 3.2) —
-    // 전파를 막아 EditorView 의 linkClicks·wikiLinkClicks(mousedown) 가 같은 클릭을
-    // 다시 처리하지 않게 한다
+    // 칸 안 링크·위키링크 글자를 눌러도 열지 않고 칸 편집을 시작한다(F-140 3.2)
+    // 전파를 막아 EditorView 의 linkClicks·wikiLinkClicks(mousedown)가 같은 클릭을 다시 처리하지 않게 한다
     event.stopPropagation()
     beginPointerSelection(mainView, wrap, row, col)
   })
@@ -742,21 +687,15 @@ function currentWidgetFor(wrap: HTMLElement): TableWidget | undefined {
 
 const BUTTON_HALF = 10 // 20px 버튼의 절반
 
-// 열 추가 버튼 툴팁이 가운데 정렬로 편집 영역(.cm-scroller) 밖에 나가면 오른쪽
-// 끝을 버튼 오른쪽 끝에 맞춘다(F-140 3.1). getComputedStyle 의 pseudo-element
-// 인자로 실제 렌더링된 툴팁 폭을 잰다 — opacity:0 이어도 레이아웃은 계산된다
+// 열 추가 버튼 툴팁이 가운데 정렬로 편집 영역(.cm-scroller) 밖에 나가면 오른쪽 끝을 버튼 오른쪽 끝에 맞춘다(F-140 3.1)
+// getComputedStyle 의 pseudo-element 인자로 실제 렌더링된 툴팁 폭을 잰다 — opacity:0 이어도 레이아웃은 계산된다
 function positionColTooltip(colBtn: HTMLElement, colX: number, editRight: number): void {
   const afterWidth = parseFloat(getComputedStyle(colBtn, '::after').width) || 0
   colBtn.classList.toggle('md-table-add-col-tooltip-edge', colX + afterWidth / 2 > editRight)
 }
 
-// 표 테두리 기준으로 두 버튼의 중심 좌표(wrap 기준 px)를 구해 놓는다(F-140 3.1).
-// 표가 편집 영역보다 넓어 가로 스크롤 중이면 열 버튼은 "보이는 스크롤 영역"의
-// 오른쪽 끝에, 행 버튼은 그 가로 가운데에 고정한다 — .md-table-scroll 자신은
-// 스크롤해도 크기가 바뀌지 않는 요소라 스크롤 위치와 무관하게 계산할 수 있다.
-// 열 버튼은 스크롤 여부와 무관하게 .cm-scroller 안에 완전히 들어오도록 clamp 한다 —
-// 스크롤하지 않는 표라도 오른쪽 끝이 편집 영역 끝에 가까우면 버튼이 밖으로 나가 가로
-// 스크롤을 만들 수 있다
+// 표 테두리 기준으로 두 버튼의 중심 좌표(wrap 기준 px)를 구해 놓는다(F-140 3.1) — 표가 가로 스크롤 중이면 열 버튼은 보이는 스크롤 영역 오른쪽 끝에, 행 버튼은 그 가로 가운데에 고정한다
+// .md-table-scroll 자신은 스크롤해도 크기가 안 바뀌어 스크롤 위치와 무관하게 계산 가능. 열 버튼은 스크롤 여부와 무관하게 .cm-scroller 안에 완전히 들어오도록 clamp 한다(안 그러면 버튼이 밖으로 나가 가로 스크롤이 생길 수 있다)
 function positionAddButtons(wrap: HTMLElement): void {
   const scroll = wrap.querySelector<HTMLElement>('.md-table-scroll')
   const table = wrap.querySelector('table')
@@ -785,11 +724,8 @@ function positionAddButtons(wrap: HTMLElement): void {
   positionColTooltip(colBtn, colX, editRight)
 }
 
-// 편집 중인 칸 강조 요소(F-140 3.3). .md-table-scroll 의 자식 하나를 표마다
-// 그 칸 위치로 옮겨 다니게 한다 — .md-table-scroll 이 position: relative 라
-// td 의 offsetParent 가 되고, offsetLeft·offsetTop 은 스크롤 위치와 무관해(3.3
-// 근거 "표 가로 스크롤을 따라 움직인다") 스크롤 이벤트를 따로 볼 필요가 없다.
-// 강조 요소를 만들 때 범위 선택 전용 키(Esc·Delete·Backspace, F-165 2.1·2.2)를 걸어 둔다. 요소 자신이 "범위 선택 전용 포커스 요소" 다 — tabIndex=-1 이라 Tab 순서에는 안 들어가고 finalizeRangeSelection 이 직접 focus() 한다. wrap 은 클로저로 잡고 이벤트 시점에 wrapView 로 최신 mainView 를 찾는다
+// 편집 중인 칸 강조 요소(F-140 3.3) — .md-table-scroll 의 자식 하나를 표마다 그 칸 위치로 옮겨 다니게 한다. .md-table-scroll 이 position:relative 라 td 의 offsetParent 가 되고 offsetLeft·offsetTop 은 스크롤 위치와 무관해(3.3 "표 가로 스크롤을 따라 움직인다") 스크롤 이벤트를 따로 볼 필요가 없다
+// 강조 요소를 만들 때 범위 선택 전용 키(Esc·Delete·Backspace, F-165 2.1·2.2)를 걸어 둔다 — tabIndex=-1 이라 Tab 순서엔 안 들어가고 finalizeRangeSelection 이 직접 focus() 한다. wrap 은 클로저로 잡고 이벤트 시점에 wrapView 로 최신 mainView 를 찾는다
 function getCellHighlight(wrap: HTMLElement): HTMLElement | null {
   const scroll = wrap.querySelector('.md-table-scroll')
   if (!scroll) return null
@@ -984,8 +920,7 @@ function performRangeDelete(mainView: EditorView, wrap: HTMLElement, range: Acti
   mainView.focus()
 }
 
-// wrap → 버튼 위치 재계산용 ResizeObserver. 표(<table>) 크기(칸 편집으로 열 폭이
-// 바뀌는 등)와 스크롤 뷰포트(.md-table-scroll, 창 너비 변화) 둘 다 관찰한다.
+// wrap → 버튼 위치 재계산용 ResizeObserver — 표(<table>) 크기(칸 편집으로 열 폭이 바뀌는 등)와 스크롤 뷰포트(.md-table-scroll, 창 너비 변화) 둘 다 관찰한다
 // 편집 중인 칸이 있으면(칸 글자가 늘어 칸 크기가 바뀌는 경우 등) 강조 위치도 같이 맞춘다
 const positionObservers = new WeakMap<HTMLElement, ResizeObserver>()
 
@@ -1130,9 +1065,8 @@ export class TableWidget extends WidgetType {
     if (pending && pending.wrap === dom) pendingFocus.delete(view)
 
     if (!sameShape(dom, this.table)) {
-      // 행·열 수가 바뀌었다 — 편집 중이던 칸은 다른 칸(추가된 칸)으로 옮겨갈
-      // 참이므로 통째로 다시 그린다. updateDOM 은 뷰 갱신 도중이라(F-138 3.5) 지금
-      // 바로 dispatch 할 수 없다 — deferDispatch 로 미룬다
+      // 행·열 수가 바뀌었다 — 편집 중이던 칸은 다른 칸(추가된 칸)으로 옮겨갈 참이므로 통째로 다시 그린다
+      // updateDOM 은 뷰 갱신 도중이라(F-138 3.5) 지금 바로 dispatch 할 수 없다 — deferDispatch 로 미룬다
       endEdit(view, { deferDispatch: true })
       // 주 에디터 문서 변경으로 표 구조가 바뀌면 범위 선택도 해제한다(F-165 2.1) — 지금 든 행·열 번호가 새 구조에서는 더 이상 유효하지 않다
       clearRangeSelection(view)
@@ -1172,10 +1106,8 @@ export class TableWidget extends WidgetType {
     return true
   }
 
-  // 편집 세션의 표 DOM 이 이 dom 과 같을 때만 편집을 끝낸다(F-135 3.3) — 표 B 를
-  // 편집하는 중 표 A 의 DOM 이 화면 밖으로 나가 destroy 되어도(가상화 등) B 편집이
-  // 끝나지 않아야 한다. dom 은 destroy 를 부른 위젯 인스턴스가 만든 DOM 이 아니라
-  // "지금 실제로 제거되는" DOM 이므로, 그 DOM 이 활성 세션의 wrap 인지로 판정한다.
+  // 편집 세션의 표 DOM 이 이 dom 과 같을 때만 편집을 끝낸다(F-135 3.3) — 표 B 를 편집하는 중 표 A 의 DOM 이 화면 밖으로 나가 destroy 되어도(가상화 등) B 편집이 끝나지 않아야 한다
+  // dom 은 destroy 를 부른 위젯 인스턴스가 만든 DOM 이 아니라 "지금 실제로 제거되는" DOM 이므로, 그 DOM 이 활성 세션의 wrap 인지로 판정한다
   destroy(dom: HTMLElement): void {
     stopObservingHeight(dom)
     stopObservingButtonPosition(dom)
@@ -1189,13 +1121,8 @@ export class TableWidget extends WidgetType {
   }
 }
 
-// 주 에디터 방향키로 표 앞뒤 줄에서 표 안으로 들어올 때 첫 칸 편집을 시작한다
-// (F-125 2.3, F-106 방향키 보조). 표는 항상 위젯이라(2.1) 커서가 그 줄에 닿아도
-// decoration 이 다시 계산되지 않는다(TableWidget.eq 가 텍스트만 보고, 커서 위치는
-// 안 보므로 그대로 참) — 그래서 이미 떠 있는 위젯 DOM 을 직접 찾아 칸 클릭을 흉내 낸다.
-// tableFrom: 표 블록 시작(절대 위치, 줄 경계). fromAbove: 위에서 내려오며 들어오면
-// true(머리 행), 아래에서 올라오며 들어오면 false(마지막 행). 반환값: 표 위젯을
-// 찾아 편집을 시작했으면 true
+// 주 에디터 방향키로 표 앞뒤 줄에서 표 안으로 들어올 때 첫 칸 편집을 시작한다(F-125 2.3, F-106 방향키 보조) — 표는 항상 위젯이라(2.1) 커서가 그 줄에 닿아도 decoration 이 다시 계산 안 된다(TableWidget.eq 는 텍스트만 봄)
+// 그래서 이미 떠 있는 위젯 DOM 을 직접 찾아 칸 클릭을 흉내 낸다. tableFrom: 표 블록 시작(절대 위치, 줄 경계). fromAbove: 위에서 내려오며 들어오면 true(머리 행), 아니면 false(마지막 행). 반환값: 편집 시작 성공 여부
 export function enterTableFromKeyboard(view: EditorView, tableFrom: number, fromAbove: boolean): boolean {
   if (view.state.readOnly) return false // 칸 편집을 시작하지 않으므로 키를 삼키지 않는다 (리뷰 E1)
   const wraps = view.dom.querySelectorAll<HTMLElement>('.md-table-widget')

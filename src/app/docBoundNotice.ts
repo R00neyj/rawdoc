@@ -1,5 +1,4 @@
-// 특정 문서에 대한 알림(`새 문서로 저장` 버튼이 달린 것)을 그 문서에 묶는다 (리뷰 A5)
-// error·warn 알림은 문서를 바꿔도 남아서(notice.ts), 버튼이 지금 열린 다른 문서의 본문으로 새 문서를 만들 수 있었다
+// 특정 문서에 대한 알림(`새 문서로 저장` 버튼이 달린 것)을 그 문서에 묶는다 — error·warn 알림은 문서를 바꿔도 남아 다른 문서 본문으로 새 문서를 만들 수 있었다 (리뷰 A5)
 
 // 누를 때 지금 문서가 알림을 만든 문서일 때만 run 을 부른다
 export function guardForDoc(docId: string, getCurrentDocId: () => string | null, run: () => void): () => void {

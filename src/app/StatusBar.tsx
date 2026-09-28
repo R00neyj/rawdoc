@@ -1,7 +1,4 @@
-// 상태바 E (specs/ia.md 2장 E·4.1, specs/features/F-113.md, F-110.md 3.5)
-// 보기 모드에서 줄·열을 숨기는 것은 F-123.md 3.3
-// 서버 저장소 동기화 표시는 F-207.md 2.5
-// 실시간 단계·폴백 표시는 F-305.md 11.1
+// 상태바 E — 줄·열 숨김(F-123.md 3.3)·서버 동기화(F-207.md 2.5)·실시간 단계·폴백(F-305.md 11.1) 표시 (ia.md 2장 E·4.1, F-113.md, F-110.md 3.5)
 import type { RefObject } from 'react'
 import type { SyncState } from '../types'
 import { IconShortcuts } from './icons'

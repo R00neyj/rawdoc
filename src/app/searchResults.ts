@@ -1,5 +1,4 @@
-// 검색 결과 — DOM 없는 순수 함수 (specs/features/F-287.md 4.4). 선례: settingsTabs.ts(F-290)
-// 안내 문구 4개(formatQuerySummary·buildSearchNotes·formatResultCount·searchStatusText)는 F-288.md 5장
+// 검색 결과 — DOM 없는 순수 함수(F-287.md 4.4, 선례: settingsTabs.ts F-290), 안내 문구 4개(formatQuerySummary 등)는 F-288.md 5장
 import { highlightParts, buildSnippet, foldCase, normalizeForSearch, type ParsedQuery, type SnippetPart, type SearchOutcome } from '../lib/docSearch'
 import type { SearchIndexEntry } from './searchIndex'
 

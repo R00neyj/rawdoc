@@ -647,8 +647,7 @@ function SidebarButton(props: SidebarButtonProps) {
   )
 }
 
-// 펼친 사이드바 위쪽 고정 영역의 새 문서·새 폴더·가져오기·검색 — 가로로 나란히, 아이콘만(아래쪽 툴팁)
-// (2026-09-20 사용자 요청 "새문서, 새폴더, 가져오기는 아이콘 버튼으로 가로로 표시")
+// 펼친 사이드바 위쪽 고정 영역의 새 문서·새 폴더·가져오기·검색 — 가로로 나란히, 아이콘만(아래쪽 툴팁) (2026-09-20 사용자 요청 "새문서, 새폴더, 가져오기는 아이콘 버튼으로 가로로 표시")
 function SidebarIconButton({
   label,
   icon: Icon,
@@ -986,8 +985,7 @@ export default function Sidebar({
     if (!inMultiSelection) {
       setSelection(replaceSelection(EMPTY_SELECTION, row))
     }
-    // 열쇠는 id 가 아니라 줄이다 — 고정된 문서는 두 줄이라 id 로 열면 메뉴가 둘 다 열리고,
-    // 한쪽의 바깥 클릭 감지가 다른 쪽을 클릭 전에 닫아 항목이 안 눌렸다 (2026-09-22 사용자 신고)
+    // 열쇠는 id 가 아니라 줄이다 — 고정된 문서는 두 줄이라 id 로 열면 메뉴가 둘 다 열리고 바깥 클릭 감지가 서로를 닫아 항목이 안 눌렸다 (2026-09-22 사용자 신고)
     setContextMenu({ key: row.key, point })
   }
 

@@ -511,10 +511,8 @@ export default function SettingsDialog({
       )
     }
     if (id === 'data') {
-      // 로컬 앱·로그인 계정 전용, PublicView 는 안 준다 (F-281.md 3.6, F-282.md 3.1)
-      // 내보내기·가져오기 두 묶음, 버튼마다 한 줄 설명 (tweak 2026-09-26).
-      // .dialog-field 를 쓰지 않는다 — 설정 라벨을 세는 선택자(settingsTabs.spec 데이터 탭 0개)에 걸린다
-      // 두 묶음이 한 격자를 같이 쓴다 — 버튼 칸·설명 칸이 묶음을 넘어 맞춰진다
+      // 로컬 앱·로그인 계정 전용, PublicView 는 안 준다(F-281.md 3.6, F-282.md 3.1) — 내보내기·가져오기 두 묶음, 버튼마다 한 줄 설명(tweak 2026-09-26)
+      // .dialog-field 는 쓰지 않는다 — 설정 라벨 세는 선택자에 걸린다, 두 묶음이 한 격자를 같이 써 버튼·설명 칸이 묶음 넘어 맞춰진다
       return (
         <div className="data-grid">
           <section className="data-section" aria-labelledby="data-export-title">
