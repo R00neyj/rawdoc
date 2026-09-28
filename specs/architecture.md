@@ -24,6 +24,8 @@ src/
   app/                   React 화면. CM6·IndexedDB 를 직접 다루지 않는다
     App.jsx              최상위 상태와 흐름
                          App.tsx 분할(F-2059) — 구역별 훅·순수 모듈은 아래 파일로 나뉜다. 매핑은 F-2059 5.4
+    appNotices.ts        실시간·금고·옮기기 알림 문구, 금고 옮기기 결과 알림 (F-2060)
+    docMeta.ts           DocMeta·OpenDoc 타입, stripContent·isSharedDoc·sortByUpdatedAtDesc (F-2060)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
