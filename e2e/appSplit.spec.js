@@ -1486,3 +1486,88 @@ test.describe('F-2074 부팅 첫 화면 절', () => {
     await expect.poll(() => page.evaluate(() => window.localStorage.getItem('md.lastDocId'))).toBe(a)
   })
 })
+
+// ----- F-2077 세션 핵 절 -----
+function serverDoc2077(id, { title, content, updatedAt = Date.now() }) {
+  return { id, title, content, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: updatedAt, updatedAt }
+}
+
+async function openLive2077(page, room, docs, openId) {
+  const server = await fakeServer(page)
+  await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
+    }
+    return route.fulfill({ status: 204 })
+  })
+  await room.install(page.context())
+  for (const doc of docs) server.docs.set(doc.id, serverDoc2077(doc.id, doc))
+  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+  await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+  await page.goto(`/#/d/${openId}`)
+  return server
+}
+
+// context.setOffline 은 navigator.onLine·이벤트만, fakeServer.setOffline 은 요청 실패만 만든다 — 둘을 함께
+async function setOffline2077(page, server, offline) {
+  server.setOffline(offline)
+  await page.context().setOffline(offline)
+}
+
+test.describe('F-2077 세션 핵 절', () => {
+  test.use({ viewport: { width: 1600, height: 900 } })
+
+  test('F-2077 C1 동기화 뒤 상대 편집도 700ms 뒤 사이드바 맨 위로 올린다', async ({ page, browser, baseURL }) => {
+    const room = createFakeDocRoom()
+    room.seed('f2077-x', { content: '엑스 본문', title: '엑스 문서' })
+    room.seed('f2077-y', { content: '와이 본문', title: '와이 문서' })
+    const now = Date.now()
+    const docs = [
+      { id: 'f2077-x', title: '엑스 문서', content: '엑스 본문', updatedAt: now - 10_000 },
+      { id: 'f2077-y', title: '와이 문서', content: '와이 본문', updatedAt: now },
+    ]
+    await openLive2077(page, room, docs, 'f2077-x')
+    await expect(page.locator('.cm-content').first()).toContainText('엑스 본문')
+    await expect(page.locator('.statusbar-save')).toHaveText('저장됨')
+    await page.waitForTimeout(1_000)
+    const before = await page.locator('.doc-item-btn').allTextContents()
+    expect(before.indexOf('와이 문서')).toBeLessThan(before.indexOf('엑스 문서'))
+
+    const context = await browser.newContext({ baseURL, viewport: { width: 1600, height: 900 }, serviceWorkers: 'block' })
+    try {
+      const other = await context.newPage()
+      await openLive2077(other, room, docs, 'f2077-x')
+      await expect(other.locator('.cm-content').first()).toContainText('엑스 본문')
+      await other.locator('.cm-content .cm-line', { hasText: '엑스 본문' }).first().click()
+      await other.keyboard.press('End')
+      await other.keyboard.type(' 원격')
+      await expect.poll(() => room.content('f2077-x')).toContain(' 원격')
+
+      await expect(page.locator('.cm-content').first()).toContainText('엑스 본문 원격')
+      await expect(page.locator('.doc-item-btn').first()).toHaveText('엑스 문서', { timeout: 3_000 })
+    } finally {
+      await context.close()
+    }
+  })
+
+  test('F-2077 C2 첫 동기화 전 오프라인이 되면 읽기 전용으로 내려가고 온라인이 되면 방 본문으로 편집한다', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed('f2077-c', { content: '씨 방 본문', title: '씨 문서' })
+    room.pause('f2077-c')
+    const server = await openLive2077(page, room, [{ id: 'f2077-c', title: '씨 문서', content: '씨 캐시 본문' }], 'f2077-c')
+    await expect(page.locator('.statusbar-save')).toHaveText('불러오는 중…')
+    await expect.poll(() => room.connections('f2077-c')).toBe(1)
+
+    await setOffline2077(page, server, true)
+    const notice = '오프라인에서는 이 문서를 읽기만 할 수 있습니다. 연결되면 편집할 수 있습니다.'
+    await expect(page.locator('.notice-message')).toHaveText(notice)
+    await expect(page.locator('.cm-content').first()).toContainText('씨 캐시 본문')
+    await expect(page.locator('.cm-content').first()).toHaveAttribute('contenteditable', 'false')
+
+    room.resume('f2077-c')
+    await setOffline2077(page, server, false)
+    await expect(page.locator('.cm-content').first()).toContainText('씨 방 본문', { timeout: 5_000 })
+    await expect(page.locator('.cm-content').first()).toHaveAttribute('contenteditable', 'true')
+    await expect(page.getByText(notice)).toHaveCount(0)
+  })
+})
