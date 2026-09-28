@@ -23,6 +23,7 @@ src/
     boot.css             부팅 스켈레톤 (F-2015)
   app/                   React 화면. CM6·IndexedDB 를 직접 다루지 않는다
     App.jsx              최상위 상태와 흐름
+                         App.tsx 분할(F-2059) — 구역별 훅·순수 모듈은 아래 파일로 나뉜다. 매핑은 F-2059 5.4
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)

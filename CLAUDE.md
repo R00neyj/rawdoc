@@ -143,6 +143,7 @@ There are two work machines (laptop and desktop), so this lives here instead of 
 - **Implementation is the `ship-feature` skill + the `feature-implementer` agent.** The prompt carries only the spec number and the `E2E_PORT` / `E2E_DIST` slots. Judge with `npm run review -- F-xxx` then the related e2e. Use the tools in `scripts/` instead of ad-hoc scripts; if you see a repeat the tools do not cover, propose adding one
 - **A spec that leaves no real fork goes straight to implementation.** Do not stop for approval when the only open questions have sound defaults — commit the spec, say so, and launch `ship-feature` in the same turn (user instruction, 2026-09-21: "명세 작성 후 사용자가 검토할 결정이 없으면 바로 구현까지 진행"). What still counts as a fork is listed in the `write-spec` skill, ch. 5
 - `e2e:one` search terms can be OR'd with `|`, e.g. `"F-225|F-212"`. Slots are `--port`/`--dist` or `E2E_PORT`/`E2E_DIST`
+- **F-2059 App.tsx split in progress** — while a slice is being implemented, `src/app/App.tsx` is frozen for other specs and fixes; operation is F-2059 5.3. Remove this line after F-2074 (or stage 4) is committed
 
 ## Commit granularity (user instruction, 2026-09-21)
 
