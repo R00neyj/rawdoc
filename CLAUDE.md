@@ -98,7 +98,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | Live sync | Durable Object + y-partyserver | In use (server F-304 `worker/docRoom.ts`, client F-305 `src/app/useLiveDoc.ts`). Deployed 2026-09-24 (F-305~F-308). Edit locks (F-213) stay as fallback until F-309 |
 | E2E tests | Playwright (`@playwright/test`), installed Chrome channel | In use (F-150) |
 | 3D map | `three` + `d3-force-3d` (plus `@types/three` and a local `src/types/d3-force-3d.d.ts`) | In use (F-292 revision). Only F-2001 and F-2002 install them; no other spec may add a 3D dependency. Never use `3d-force-graph` |
-| Landing animation | gsap 3.15.0 (ScrollTrigger only), exact pin | In use (F-2049). Only `src/welcome/` may import it; the app, `worker/`, `site/`, `cli/` never do (`src/welcome/gsapBoundary.test.ts`). Standard "No Charge" license, not open source |
+| Landing animation | gsap 3.15.0 (ScrollTrigger only), exact pin | In use (F-2049). Only `src/welcome/` may import it; the app, `worker/`, `site/`, `cli/` never do (`tests/src/welcome/gsapBoundary.test.ts`). Standard "No Charge" license, not open source |
 | CLI | Node 22+, zero runtime dependencies, npm `rawdoc` | In use (F-2021) |
 | Rate limiting | Workers Rate Limiting binding `WRITE_LIMITER` | In use (F-2026) |
 
@@ -110,7 +110,7 @@ Do not add a dependency marked "not adopted" until its spec exists.
 npm run dev          # web app dev server
 npm run build        # web app build
 npm run lint         # ESLint (whole repo)
-npm test             # Vitest single run (src/**/*.test.{js,jsx,ts,tsx}, worker/**/*.test.ts)
+npm test             # Vitest single run (tests/{src,worker,site,cli}/**/*.test.{js,jsx,ts,tsx})
 npm run typecheck    # tsc --noEmit (app)
 npm run typecheck:worker   # tsc -p worker
 npm run build:cli    # vite build --config cli/vite.config.ts → cli/dist/rawdoc.js (F-2021)
@@ -128,13 +128,13 @@ npm run measure -- --doc long:300 --select ".cm-line" --style line-height   # on
 npm run review -- F-xxx   # check for out-of-ownership files and forbidden patterns
 npm run specs -- --todo   # remaining specs (--status pending, --milestone M3, --check, --json)
 node scripts/admin-usage.mjs [--top N] [--local]   # view remote D1 usage (F-2029). block/unblock/warn/recount only write with --yes
-node --test "scripts/lib/*.test.mjs"   # admin script tests (F-2029)
+node --test "tests/scripts/lib/*.test.mjs"   # admin script tests (F-2029)
 npm run clean        # delete dist-* e2e slots, test-results/, playwright-report/ (--all also drops dist/, --force ignores the 10-minute in-use guard)
 E2E_PORT=4501 E2E_DIST=dist-a npx playwright test   # parallel e2e slot
 npm run dev:spike    # for checking spikes
 ```
 
-Put tests next to their target as `{name}.test.js` and import them explicitly in `vitest` (`specs/features/F-101.md` 5.3).
+Unit tests live under `tests/`, mirroring the source path: `tests/{source path}/{name}.test.ts` (`src/app/foo.ts` → `tests/src/app/foo.test.ts`, `scripts/lib/a.mjs` → `tests/scripts/lib/a.test.mjs`). Import the target by relative path and `vitest` explicitly (`specs/features/F-101.md` 5.3).
 
 ## Rules for main (the orchestrator)
 

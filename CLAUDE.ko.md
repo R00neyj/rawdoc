@@ -99,7 +99,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | 실시간 동기화 | Durable Object + y-partyserver | 사용 중 (서버 F-304 `worker/docRoom.ts`, 클라이언트 F-305 `src/app/useLiveDoc.ts`). 2026-09-24 배포(F-305~F-308). 편집 잠금(F-213)은 F-309 까지 폴백으로 남음 |
 | E2E 테스트 | Playwright (`@playwright/test`), 설치된 Chrome 채널 | 사용 중 (F-150) |
 | 3D 지도 | `three` + `d3-force-3d` (더해서 `@types/three` 와 로컬 `src/types/d3-force-3d.d.ts`) | 사용 중 (F-292 개정판). 설치는 F-2001·F-2002 뿐이고, 다른 명세는 3D 의존성을 더하지 않는다. `3d-force-graph` 는 쓰지 않는다 |
-| 랜딩 애니메이션 | gsap 3.15.0 (ScrollTrigger 만), exact pin | 사용 중 (F-2049). `src/welcome/` 만 import 할 수 있다 — 앱·`worker/`·`site/`·`cli/` 는 하지 않는다 (`src/welcome/gsapBoundary.test.ts`). Standard "No Charge" 라이선스, 오픈소스 아님 |
+| 랜딩 애니메이션 | gsap 3.15.0 (ScrollTrigger 만), exact pin | 사용 중 (F-2049). `src/welcome/` 만 import 할 수 있다 — 앱·`worker/`·`site/`·`cli/` 는 하지 않는다 (`tests/src/welcome/gsapBoundary.test.ts`). Standard "No Charge" 라이선스, 오픈소스 아님 |
 | CLI | Node 22+, 런타임 의존성 없음, npm `rawdoc` | 사용 중 (F-2021) |
 | 요청 제한 | Workers Rate Limiting 바인딩 `WRITE_LIMITER` | 사용 중 (F-2026) |
 
@@ -111,7 +111,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 npm run dev          # web app dev server
 npm run build        # web app build
 npm run lint         # ESLint (whole repo)
-npm test             # Vitest single run (src/**/*.test.{js,jsx,ts,tsx}, worker/**/*.test.ts)
+npm test             # Vitest single run (tests/{src,worker,site,cli}/**/*.test.{js,jsx,ts,tsx})
 npm run typecheck    # tsc --noEmit (app)
 npm run typecheck:worker   # tsc -p worker
 npm run build:cli    # vite build --config cli/vite.config.ts → cli/dist/rawdoc.js (F-2021)
@@ -129,13 +129,13 @@ npm run measure -- --doc long:300 --select ".cm-line" --style line-height   # on
 npm run review -- F-xxx   # check for out-of-ownership files and forbidden patterns
 npm run specs -- --todo   # remaining specs (--status pending, --milestone M3, --check, --json)
 node scripts/admin-usage.mjs [--top N] [--local]   # view remote D1 usage (F-2029). block/unblock/warn/recount only write with --yes
-node --test "scripts/lib/*.test.mjs"   # admin script tests (F-2029)
+node --test "tests/scripts/lib/*.test.mjs"   # admin script tests (F-2029)
 npm run clean        # delete dist-* e2e slots, test-results/, playwright-report/ (--all also drops dist/, --force ignores the 10-minute in-use guard)
 E2E_PORT=4501 E2E_DIST=dist-a npx playwright test   # parallel e2e slot
 npm run dev:spike    # for checking spikes
 ```
 
-테스트는 대상 옆에 `{name}.test.js` 로 두고, `vitest` 에서 명시적으로 import 한다 (`specs/features/F-101.md` 5.3)
+단위 테스트는 `tests/` 아래, 원본 경로를 그대로 따라 `tests/{원본 경로}/{name}.test.ts` 로 둔다(`src/app/foo.ts` → `tests/src/app/foo.test.ts`, `scripts/lib/a.mjs` → `tests/scripts/lib/a.test.mjs`). 대상은 상대 경로로, `vitest` 는 명시적으로 import 한다 (`specs/features/F-101.md` 5.3)
 
 ## 메인 규칙 (오케스트레이터)
 
