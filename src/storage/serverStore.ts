@@ -91,6 +91,8 @@ export type ServerStore = Store & {
   flushOutbox(): Promise<void>
   // 네트워크 없이 캐시 문서·폴더만 읽는다 — 부팅 캐시 먼저 셸이 쓴다 (F-2042 3.6)
   listCached(): Promise<{ docs: Doc[]; folders: Folder[] }>
+  // 마지막으로 끝난 list() 가 /api/shared 를 읽었는가 — 빈 공유 목록이 실패인지 0개인지 가른다 (리뷰 A3)
+  lastListSharedOk(): boolean
 }
 
 // 안 보낸 removeFolder(delete-all) 이 지운 폴더 id 들(자신 포함) — 서버 목록 기준 자손 판정 (F-247.md 3.1)
@@ -255,6 +257,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
   // 공유받은(내 소유가 아닌) 문서 id — 마지막 list() 의 /api/shared 응답으로 갱신한다. get()·refreshDocFromServer·fetchDocIntoCache 가 이 문서를 캐시에 넣지 않는 판정 근거다 (버그 수정 2026-09-26)
   const knownSharedIds = new Set<string>()
+  let lastListSharedOk = false
 
   function notify() {
     for (const listener of listeners) listener(state)
@@ -536,8 +539,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     }
   }
 
-  // 공유받은 문서 — 실패해도 던지지 않는다(빈 배열), 호출한 즉시 시작해 /api/docs 와 동시에 나간다 (F-2042 3.1, D2)
-  async function fetchShared(): Promise<Doc[]> {
+  // 공유받은 문서 — 실패해도 던지지 않는다(null), 호출한 즉시 시작해 /api/docs 와 동시에 나간다 (F-2042 3.1, D2)
+  async function fetchShared(): Promise<Doc[] | null> {
     try {
       const sharedMeta = await api.getShared()
       return sharedMeta.map((d) => ({
@@ -554,7 +557,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         viaFolder: d.viaFolder ?? null,
       }))
     } catch {
-      return []
+      return null
     }
   }
 
@@ -1115,10 +1118,11 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
         // 공유받은 문서(F-212.md 2.4) — 목록은 캐시하지 않고 매번 새로 읽고, id 는 get()·refreshDocFromServer·fetchDocIntoCache 가 캐시 안 함을 판정할 근거로 남긴다(오프라인·오류면 빈 목록)
         const shared = await sharedPromise
+        lastListSharedOk = shared !== null
         knownSharedIds.clear()
-        for (const d of shared) knownSharedIds.add(d.id)
+        for (const d of shared ?? []) knownSharedIds.add(d.id)
 
-        return sortByUpdatedAtDesc([...owned, ...shared])
+        return sortByUpdatedAtDesc([...owned, ...(shared ?? [])])
       } finally {
         activeListSessions.delete(session)
       }
@@ -1153,6 +1157,10 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       } catch {
         return null
       }
+    },
+
+    lastListSharedOk() {
+      return lastListSharedOk
     },
 
     // 네트워크 없이 캐시만 읽는다 — 부팅 캐시 먼저 셸이 쓴다. refreshPending 은 부르지 않는다(읽기 전용) (F-2042 3.6)

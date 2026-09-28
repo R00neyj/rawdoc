@@ -2756,3 +2756,26 @@ describe('리뷰 S6 목록 요청 중 만들어진 문서·폴더', () => {
     expect(folders.some((f) => f.id === folder.id)).toBe(true)
   })
 })
+
+describe('리뷰 A3 공유 목록 읽기 성공 여부', () => {
+  it('/api/shared 가 실패하면 lastListSharedOk 는 false, 성공하면 공유 문서가 0개여도 true', async () => {
+    const server = makeFakeServer()
+    let failShared = true
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      if ((init.method ?? 'GET') === 'GET' && path === '/api/shared' && failShared) {
+        return new Response(JSON.stringify({ error: 'internal' }), { status: 503, headers: { 'Content-Type': 'application/json' } })
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    expect(store.lastListSharedOk()).toBe(false)
+    await store.list()
+    expect(store.lastListSharedOk()).toBe(false)
+    failShared = false
+    await store.list()
+    expect(store.lastListSharedOk()).toBe(true)
+  })
+})

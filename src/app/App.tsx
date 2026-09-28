@@ -11,6 +11,7 @@ import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
 } from 'react'
+import { flushSync } from 'react-dom'
 import type { EditorState, StateCommand } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { openSearchPanel } from '@codemirror/search'
@@ -1239,13 +1240,26 @@ export default function App() {
   const resyncFromStore = useCallback(async () => {
     const seq = ++bootListSeqRef.current
     const snapshot = docsRef.current
-    const [newFolders, newDocs] = await Promise.all([store.listFolders(), store.list()])
+    // 공유 목록 성공 여부는 list() 가 끝난 즉시 읽는다 — 다른 list() 가 끝나며 덮어쓰기 전에 (리뷰 A3)
+    const listDocs = async () => {
+      const docs = await store.list()
+      return { docs, sharedListed: store.kind !== 'server' || (store as ServerStore).lastListSharedOk() }
+    }
+    const [newFolders, listed] = await Promise.all([store.listFolders(), listDocs()])
     if (!shouldApplyListResult({ seq, lastAppliedSeq: lastAppliedListSeqRef.current })) return
     lastAppliedListSeqRef.current = seq
     setFolders(newFolders)
-    const result = keepLiveTitle(sortByUpdatedAtDesc(newDocs.map(stripContent)))
-    setDocs((prev) => mergeResyncList({ snapshot, current: prev, result }).docs)
-    const merged = mergeResyncList({ snapshot, current: docsRef.current, result })
+    const result = keepLiveTitle(sortByUpdatedAtDesc(listed.docs.map(stripContent)))
+    // 병합은 반영되는 prev 기준 한 번만 — flushSync 로 업데이터를 곧바로 돌려 docs 와 removedIds 가 같은 계산에서 나온다 (리뷰 e)
+    const applied: { merged?: { docs: DocMeta[]; removedIds: string[] } } = {}
+    flushSync(() => {
+      setDocs((prev) => {
+        applied.merged = mergeResyncList({ snapshot, current: prev, result, sharedListed: listed.sharedListed })
+        return applied.merged.docs
+      })
+    })
+    const merged = applied.merged
+    if (!merged) return
     const openId = currentDocIdRef.current
     if (openId && merged.removedIds.includes(openId)) {
       deletedElsewhereSourceRef.current = 'tab'
