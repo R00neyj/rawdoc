@@ -5,7 +5,8 @@ import type { Extension } from '@codemirror/state'
 
 import { observeHeight, stopObservingHeight } from './preview/blocks'
 
-export type OnTitleChange = (value: string) => void
+// prev: 이번 입력 직전의 textarea 값 — 실시간 제목 쓰기가 이 차이만 Y.Text 에 옮겨 쓴다 (리뷰 E4)
+export type OnTitleChange = (value: string, prev: string) => void
 export type OnTitleCommit = () => void
 export type Breadcrumb = { id: string; name: string }[]
 export type OnNavigateFolder = (id: string) => void
@@ -19,6 +20,8 @@ const PLACEHOLDER = '제목 없는 문서'
 const NO_NAVIGATE: OnNavigateFolder = () => {}
 // 위젯 DOM 마다 필드의 최신 제목 — 포커스 중에 원격 제목이 오면 blur 뒤 이 값으로 맞춘다 (F-305 9.3)
 const latestTitle = new WeakMap<HTMLElement, string>()
+// textarea 가 마지막으로 보인 값 — 다음 input 의 직전 값(prev)이 된다 (리뷰 E4)
+const shownValue = new WeakMap<HTMLTextAreaElement, string>()
 
 function breadcrumbEqual(a: Breadcrumb, b: Breadcrumb): boolean {
   if (a.length !== b.length) return false
@@ -144,6 +147,7 @@ class TitleWidget extends WidgetType {
     textarea.setAttribute('aria-label', '문서 제목')
     textarea.rows = 1
     textarea.value = this.title
+    shownValue.set(textarea, textarea.value)
     textarea.placeholder = this.readOnly ? '' : PLACEHOLDER
     textarea.readOnly = this.readOnly
 
@@ -155,7 +159,9 @@ class TitleWidget extends WidgetType {
         textarea.selectionStart = textarea.selectionEnd = pos
       }
       resizeToContent(textarea)
-      this.onChange(textarea.value)
+      const prev = shownValue.get(textarea) ?? ''
+      shownValue.set(textarea, textarea.value)
+      this.onChange(textarea.value, prev)
     })
 
     textarea.addEventListener('blur', () => {
@@ -166,6 +172,7 @@ class TitleWidget extends WidgetType {
         const latest = latestTitle.get(wrap)
         if (latest === undefined || textarea.value === latest) return
         textarea.value = latest
+        shownValue.set(textarea, latest)
         resizeToContent(textarea)
       }, 0)
     })
@@ -218,6 +225,7 @@ class TitleWidget extends WidgetType {
     // 포커스가 없을 때만 값을 바꾼다 — 포커스 중엔 사용자가 입력한 값이 곧 최신 값이다 (2.2)
     if (document.activeElement !== textarea && textarea.value !== this.title) {
       textarea.value = this.title
+      shownValue.set(textarea, this.title)
       resizeToContent(textarea)
     }
     return true

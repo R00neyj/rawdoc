@@ -384,6 +384,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const gutterAttributesCompartment = new Compartment()
   const indentCompartment = new Compartment()
   const readOnlyCompartment = new Compartment()
+  // 지금 처리 중인 제목 input 의 직전 textarea 값(없으면 undefined) — writeLiveTitle 이 읽는다 (리뷰 E4)
+  let titleInputPrev: string | undefined
 
   // 원본 Y.Text(F-302 3.1). 실시간이면 방 Doc 복제 — 여기서 connectRemote 까지 await 가 없어 사이에 원격 업데이트가 끼지 않는다 (F-305 5.3·9.2)
   const binding = live ? createYBindingFromState(Y.encodeStateAsUpdate(live.roomDoc)) : createYBinding(text)
@@ -392,7 +394,15 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     docTitleExtension({
       title,
       readOnly: titleReadOnly,
-      onChange: onTitleChange,
+      // 입력 직전 textarea 값을 잠깐 들고 있다 — App 이 같은 호출 안에서 writeLiveTitle 을 부르면 이 값 기준으로 쓴다 (리뷰 E4)
+      onChange: (value, prev) => {
+        titleInputPrev = prev
+        try {
+          onTitleChange(value, prev)
+        } finally {
+          titleInputPrev = undefined
+        }
+      },
       onCommit: onTitleCommit,
       breadcrumb,
       onNavigateFolder,
@@ -602,7 +612,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // 실시간 경로의 제목 쓰기 — 편집기 Doc 에 쓰고 게이트가 방 Doc 으로 중계한다 (F-305 9.3). live 가 없으면 아무것도 안 한다
     writeLiveTitle(value: string) {
       if (!live || destroyed) return
-      writeTitle(binding.ydoc, value)
+      writeTitle(binding.ydoc, value, titleInputPrev)
     },
 
     // 읽기 전용 전환 (F-217.md 2.4)
