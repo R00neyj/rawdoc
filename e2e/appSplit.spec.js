@@ -1,6 +1,6 @@
 // App.tsx 분할 특성 테스트 — 옮기기 전 동작을 고정한다 (specs/features/F-2059.md 5.2)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad, resizeWindow } from './helpers.js'
+import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad, resizeWindow, currentDocId } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const root = (page) => page.locator('.context-menu-root')
@@ -643,5 +643,165 @@ test.describe('F-2066 사이드바 레이아웃 절', () => {
     await runPaletteCommand(page, '>사이드바 열기')
     await expect(sidebar).toBeVisible()
     expect(await readPref(page, 'md.sidebar')).toBe('expanded')
+  })
+})
+
+function itemButton2067(page, name) {
+  const sidebar = page.locator('.sidebar')
+  return sidebar.getByRole('button', { name, exact: true }).or(sidebar.getByRole('link', { name, exact: true }))
+}
+
+function treeRowOf2067(locator) {
+  return locator.locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " tree-row ")]')
+}
+
+function folderItem2067(page, name) {
+  return page.locator('.tree-item[data-folder-id]').filter({ has: page.getByRole('button', { name, exact: true }) })
+}
+
+async function openRowMenu2067(page, name) {
+  await page.locator('.sidebar').getByRole('button', { name: `${name} 메뉴` }).click()
+  return page.locator('.item-menu-list:not([inert])')
+}
+
+async function importNamed2067(page, name) {
+  return importMarkdown(page, { name: `${name}.md`, content: `${name}\n` })
+}
+
+test.describe('F-2067 삭제·폴더·고정·이동 절', () => {
+  test.use({ viewport: { width: 1280, height: 900 } })
+
+  test('F-2067 C1 지금 문서 삭제 — 남은 첫 문서로, 주소는 바꿔치기', async ({ page }) => {
+    await openApp(page)
+    await importNamed2067(page, '가')
+    const naId = await importNamed2067(page, '나')
+    const daId = await importNamed2067(page, '다')
+    const historyLength = await page.evaluate(() => history.length)
+    const confirmDialog = page.locator('dialog[open]')
+
+    await (await openRowMenu2067(page, '가')).getByRole('menuitem', { name: '삭제' }).click()
+    await confirmDialog.getByRole('button', { name: '삭제', exact: true }).click()
+    await expect(itemButton2067(page, '가')).toHaveCount(0)
+    expect(await currentDocId(page)).toBe(daId)
+    expect(await page.evaluate(() => history.length)).toBe(historyLength)
+
+    await (await openRowMenu2067(page, '다')).getByRole('menuitem', { name: '삭제' }).click()
+    await confirmDialog.getByRole('button', { name: '삭제', exact: true }).click()
+    await expect(itemButton2067(page, '다')).toHaveCount(0)
+    await expect.poll(() => currentDocId(page)).toBe(naId)
+    expect(await page.evaluate(() => window.localStorage.getItem('md.lastDocId'))).toBe(naId)
+    expect(await page.evaluate(() => history.length)).toBe(historyLength)
+  })
+
+  test('F-2067 C2 여러 항목 삭제 — 열린 문서가 들어 있으면 홈', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    await importNamed2067(page, '가')
+    await importNamed2067(page, '나')
+    await importNamed2067(page, '다')
+    await itemButton2067(page, '가').click()
+    await itemButton2067(page, '나').click({ modifiers: ['Control'] })
+    await treeRowOf2067(itemButton2067(page, '가')).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: '삭제' }).click()
+
+    const dialog = page.locator('dialog[aria-labelledby="confirm-bulk-delete-title"]')
+    await expect(dialog).toContainText('2개')
+    await dialog.getByRole('button', { name: '삭제', exact: true }).click()
+
+    await expect(itemButton2067(page, '가')).toHaveCount(0)
+    await expect(itemButton2067(page, '나')).toHaveCount(0)
+    await expect(itemButton2067(page, '다')).toHaveCount(1)
+    await expect(page.locator('.empty-state')).toBeVisible()
+    expect(await currentDocId(page)).toBeNull()
+    expect(await page.evaluate(() => location.hash)).toBe('#/')
+    await expect(page.locator('.notice')).toHaveCount(0)
+  })
+
+  test('F-2067 C3 여러 항목 삭제 일부 실패 — 개수 알림, 나머지는 지워진다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    await createLayoutFolder(page, '갑')
+    await createLayoutFolder(page, '을')
+    await importNamed2067(page, '병')
+    await itemButton2067(page, '갑').click({ modifiers: ['Control'] })
+    await itemButton2067(page, '병').click({ modifiers: ['Control'] })
+    await treeRowOf2067(itemButton2067(page, '병')).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: '삭제' }).click()
+    const dialog = page.locator('dialog[aria-labelledby="confirm-bulk-delete-title"]')
+    await expect(dialog).toContainText('2개')
+
+    const gapId = await folderItem2067(page, '갑').getAttribute('data-folder-id')
+    await page.evaluate(
+      (id) =>
+        new Promise((resolve, reject) => {
+          const req = indexedDB.open('md-docs')
+          req.onerror = () => reject(req.error)
+          req.onsuccess = () => {
+            const db = req.result
+            const tx = db.transaction('folders', 'readwrite')
+            tx.objectStore('folders').delete(id)
+            tx.oncomplete = () => {
+              db.close()
+              resolve(null)
+            }
+            tx.onerror = () => reject(tx.error)
+          }
+        }),
+      gapId,
+    )
+    await dialog.getByRole('button', { name: '삭제', exact: true }).click()
+
+    await expect(page.locator('.notice-message')).toHaveText('1개를 삭제하지 못했습니다.')
+    await expect(itemButton2067(page, '병')).toHaveCount(0)
+    await expect(itemButton2067(page, '갑')).toHaveCount(0)
+    await expect(itemButton2067(page, '을')).toHaveCount(1)
+  })
+
+  test('F-2067 C4 팔레트 고정·해제·폴더로 이동 — 접힌 폴더는 접힌 채', async ({ page }) => {
+    await openApp(page)
+    await createLayoutFolder(page, '가')
+    const gaId = await page.locator('li[data-folder-id]').first().getAttribute('data-folder-id')
+    await importNamed2067(page, '이동할 문서')
+    await page.locator('.cm-content').click()
+
+    await runPaletteCommand(page, '>이 문서 상단 고정')
+    await expect(page.locator('.pinned-list .tree-row')).toHaveCount(1)
+    await runPaletteCommand(page, '>이 문서 고정 해제')
+    await expect(page.locator('.pinned-list')).toHaveCount(0)
+
+    await folderToggle(page, '가 접기').click()
+    await expect(folderToggle(page, '가 펼치기')).toBeVisible()
+    await runPaletteCommand(page, '>이 문서 폴더로 이동…')
+    const dialog = page.locator('.dialog[open]')
+    await dialog.getByRole('radio', { name: '가', exact: true }).click()
+    await dialog.getByRole('button', { name: '이동', exact: true }).click()
+    await expect(dialog).toHaveCount(0)
+    await expect(page.locator('.doc-title-crumb')).toHaveText('가')
+    await expect(folderToggle(page, '가 펼치기')).toBeVisible()
+    expect(await readOpenFolders(page)).not.toContain(gaId)
+  })
+
+  test('F-2067 C5 좁은 창 삭제·이동 요청은 사이드바를 닫는다', async ({ page }) => {
+    await openApp(page)
+    await importNamed2067(page, '좁은 문서')
+    await resizeWindow(page, 900)
+    const sidebar = page.locator('.sidebar')
+    await page.locator('.sidebar-toggle').click()
+    await expect(sidebar).toBeVisible()
+
+    await (await openRowMenu2067(page, '좁은 문서')).getByRole('menuitem', { name: '삭제' }).click()
+    const deleteDialog = page.locator('dialog[open]')
+    await expect(deleteDialog.getByRole('heading', { name: '문서 삭제' })).toBeVisible()
+    await expect(sidebar).toHaveAttribute('data-state', 'closed')
+
+    await deleteDialog.getByRole('button', { name: '취소', exact: true }).click()
+    await page.locator('.sidebar-toggle').click()
+    await expect(sidebar).toBeVisible()
+    await (await openRowMenu2067(page, '좁은 문서')).getByRole('menuitem', { name: '폴더로 이동…' }).click()
+    await expect(page.locator('dialog[open]')).toBeVisible()
+    await expect(sidebar).toHaveAttribute('data-state', 'closed')
+    await page.keyboard.press('Escape')
+    await expect(page.locator('dialog[open]')).toHaveCount(0)
+    await expect(itemButton2067(page, '좁은 문서')).toHaveCount(1)
   })
 })
