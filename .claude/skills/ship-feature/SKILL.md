@@ -18,7 +18,7 @@ Korean copy: `.claude/ko/skills/ship-feature/SKILL.ko.md` (snapshot, for humans)
 3. `git status --short` — if anything besides `.claude/settings.json` changed, find out whose it is and do not mix it in
 4. **Default to maximum parallelism.** Compare the specs' file-ownership tables; if they do not overlap, launch them together regardless of what the prerequisite prose says. Even for the same file, if they touch different regions (say, the callout part vs. the frontmatter part), go parallel and add the note "Edit 직전 다시 Read, 넓은 교체·전체 Write 금지". Only go sequential when one spec needs a file the other creates
    - The ownership heading differs per spec — "파일 소유", "수정 파일", "바꾸는 파일". `npm run review` reads all three, and so should you when comparing by hand
-   - `src/app/App.tsx` is touched by nearly every spec. If that is the overlap, sequential is the safe call
+   - If two specs both wire into `src/app/App.tsx`, sequential is the safe call. A spec that puts feature logic in App.tsx instead of its own component or hook is a spec defect — send it back (CLAUDE.md "How we work", `npm run review` caps App.tsx growth at 30 lines)
 5. At most 4 agents at once (e2e browser load has crashed the machine before)
 6. Slot assignment: the nth agent gets `E2E_PORT=450n`, `E2E_DIST=dist-f{number}`
 

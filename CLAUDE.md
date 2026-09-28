@@ -23,6 +23,7 @@ A source-preserving Markdown collaboration tool. Typing `##` does not make the m
 - **Logic is TDD.** Write the acceptance criteria as failing tests first (unit `*.test.ts`, browser behavior in `e2e/F-xxx`), confirm red for unit tests only (e2e are written first but first run after implementing), then implement. Write only as much as it takes to pass
 - **Each criterion is tested in one place.** A criterion a pure function can decide gets a unit test only, never a second e2e. e2e is for what only a browser shows — wiring, focus, IME, sync between contexts — **at most 3 e2e per spec**; more needs a line in the spec saying why. App.tsx split characterization tests (F-2059) are exempt
 - If a test could not come first (unknown external response shape, bug fixes), check whether the test you added **fails against the pre-fix code**, decide whether it works as a regression test, and say so in your report
+- **A feature lives in its own component or hook file; `src/app/App.tsx` only wires it in.** A spec may grow App.tsx by at most 30 lines net; `npm run review` flags more as a violation. A spec that truly needs more writes `App.tsx 증가 허용: N — {reason}` in its body
 - **Design does not get TDD.** Smoke e2e only covers whether interactive elements — buttons, menus, dialogs — open, close, and respond. Never pin visual values (color, spacing, alignment, typeface) in e2e
 - **Build design fast and let the user look.** Implement → `npm run dev` / deploy → user checks → fix. Visual judgment goes to `specs/human-checks.md`, not to an agent
 

@@ -2,6 +2,7 @@
 // 구현 결과를 파일 소유·금지 패턴 기준으로 자동 검토한다 (F-160 2.6)
 import { readFileSync, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { APP_GROWTH_FILE, appGrowthAllowance, appGrowthViolation, parseNumstat } from './lib/appGrowth.mjs'
 
 function parseArgs(argv) {
   const opts = { feature: null, base: null }
@@ -239,6 +240,12 @@ async function main() {
     }
     const lines = addedLinesFor(file, opts.base)
     violations.push(...checkLines(file, lines).map((v) => ({ file, ...v })))
+  }
+
+  if (files.includes(APP_GROWTH_FILE)) {
+    const numstat = parseNumstat(git(['diff', '--numstat', opts.base ?? 'HEAD', '--', APP_GROWTH_FILE]))
+    const growth = appGrowthViolation(numstat, appGrowthAllowance(readFileSync(`specs/features/${opts.feature}.md`, 'utf-8')))
+    if (growth) violations.push({ file: APP_GROWTH_FILE, line: 0, kind: 'App.tsx 증가', text: `순증가 ${growth.net}줄 > 한도 ${growth.limit}줄 — 새 기능은 자기 컴포넌트·훅에` })
   }
 
   for (const file of warnings) {

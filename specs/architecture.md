@@ -6,6 +6,8 @@
 
 ## 1. 디렉터리
 
+원칙(2026-09-28 사용자): 기능은 자기 컴포넌트·훅 파일에 둔다. `src/app/App.tsx` 는 훅 호출·컴포넌트 조립·배선만 한다 — 명세 하나당 순증가 30줄 한도(`scripts/lib/appGrowth.mjs`, `npm run review`). 컴포넌트 경계는 F-2059 단계 4 개요가 정한다
+
 ```
 brand.config.js          제품명·짧은 이름·메인 컬러. 유일한 정의 위치 (design.md 3.2)
 scripts/                 검증 도구 (F-160). measure·verify·e2e-one. src/ 가 import 하지 않는다
