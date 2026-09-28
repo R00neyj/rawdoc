@@ -2838,7 +2838,9 @@ export default function App() {
     onSaveError: handleSaveError,
     // 저장해 봤자 해로운 두 경우에만 막는다 — 잠금을 뺏긴 서버 문서는 그대로 내보내 423 충돌 사본을 만드는 게 설계다 (F-296.md 7.4)
     // 실시간 경로는 본문을 방 Doc 으로 보낸다 — PUT 하면 DO 가 올린 version 과 갈려 409 사본이 생긴다 (F-305 10.1)
-    blocked: isDeletedElsewhere || claimReadOnly || isRealtime || isOfflineView,
+    // 편집기가 내려가 있으면(세션 재시작·온라인 복귀·금고 잠금으로 openDoc 이 비었을 때) getText 가 '' 를 돌려준다 —
+    // 대기 중이던 저장이 빈 본문으로 서버 본문을 지우지 않게 막는다. 편집기는 openDoc 이 지금 문서일 때만 뜬다 (리뷰 A2)
+    blocked: isDeletedElsewhere || claimReadOnly || isRealtime || isOfflineView || openDoc?.id !== currentDocId,
   })
 
   // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후 최신 flush·notifyChange·handlePrintDoc·openSearch 를 반영한다
