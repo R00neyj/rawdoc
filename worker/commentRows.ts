@@ -55,10 +55,14 @@ const INSERT_NOTIFICATIONS_SQL =
   'INSERT OR IGNORE INTO notifications (id, recipient_email, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at) ' +
   `SELECT ${field('id')}, ${field('recipient')}, ${field('kind')}, ?1, ${field('commentId')}, ${field('threadId')}, ${field('actor')}, ?2, ${field('excerpt')}, ?3 ` +
   `FROM json_each(?4) WHERE ${DOC_WRITABLE}`
-// 받는 사람마다 최근 300개 (NOTIFICATIONS_PER_RECIPIENT_MAX) — 상관 부질의
-export const TRIM_NOTIFICATIONS_WHERE =
-  `id NOT IN (SELECT n.id FROM notifications n WHERE n.recipient_email = notifications.recipient_email ORDER BY n.created_at DESC, n.id DESC LIMIT ${NOTIFICATIONS_PER_RECIPIENT_MAX})`
-const TRIM_NOTIFICATIONS_SQL = `DELETE FROM notifications WHERE recipient_email IN (SELECT value FROM json_each(?1)) AND ${TRIM_NOTIFICATIONS_WHERE}`
+// 받는 사람 식마다 300번째 행 id — 그보다 뒤가 지울 행 (F-2075 3.2)
+export const nthNotificationIdSql = (recipient: string) =>
+  `(SELECT id FROM notifications WHERE recipient_email = ${recipient} ORDER BY created_at DESC, id DESC LIMIT 1 OFFSET ${NOTIFICATIONS_PER_RECIPIENT_MAX - 1})`
+// cut(r, i) 뒤에 붙는 꼬리 — 넣기 정리·매일 정리가 같이 쓴다
+export const TRIM_BY_CUT_DELETE =
+  'DELETE FROM notifications WHERE rowid IN (SELECT n.rowid FROM cut JOIN notifications t ON t.id = cut.i ' +
+  'JOIN notifications n ON n.recipient_email = cut.r AND n.created_at <= t.created_at WHERE (n.created_at, n.id) < (t.created_at, t.id))'
+export const TRIM_NOTIFICATIONS_SQL = `WITH cut(r, i) AS MATERIALIZED (SELECT value, ${nthNotificationIdSql('value')} FROM json_each(?1)) ${TRIM_BY_CUT_DELETE}`
 // F-2057 3.5 ① — 넣기 문장의 DOC_WRITABLE 과 같은 조건이라 금고 문서면 0행
 const INSERT_NOTIF_REV_SQL =
   'UPDATE users SET notif_rev = notif_rev + 1 WHERE email IN (SELECT value FROM json_each(?1)) AND EXISTS (SELECT 1 FROM docs WHERE id = ?2 AND e2ee_key IS NULL)'

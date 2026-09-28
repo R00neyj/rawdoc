@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { DatabaseSync } from 'node:sqlite'
 
 import { asD1, openTestDb } from './testD1'
-import { cleanupComments } from './commentGc'
+import { OVERFLOW_SQL, cleanupComments } from './commentGc'
+import { NOTIFICATIONS_PER_RECIPIENT_MAX } from '../src/lib/docComments'
 
 // index → docRoom → partyserver → cloudflare:workers 는 node 에서 풀리지 않는다 (F-304)
 vi.mock('./docRoom', () => ({ DocRoom: class {} }))
@@ -120,5 +121,47 @@ describe('F-2057 U9 알림 리비전', () => {
       'c@example.com': 0,
       'u1@example.com': 0,
     })
+  })
+})
+
+// 기준: created_at 내림·id 내림(BINARY) 앞 300개
+function top300(rows: readonly { id: string; created_at: number }[]): string[] {
+  return [...rows]
+    .sort((a, b) => b.created_at - a.created_at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
+    .slice(0, NOTIFICATIONS_PER_RECIPIENT_MAX)
+    .map((r) => r.id)
+    .sort()
+}
+
+const rowsOf = (sqlDb: DatabaseSync, recipient: string) =>
+  sqlDb.prepare('SELECT id, created_at FROM notifications WHERE recipient_email = ?').all(recipient) as { id: string; created_at: number }[]
+
+describe('F-2075 A2 매일 정리 — 결과 동일', () => {
+  it('A 305(동점)·B 300·C 1,000·D 5 → A·C 기준 300개, B·D 그대로, 705', async () => {
+    const { sqlDb, env } = setup()
+    const mixed = (tag: string, i: number) => `${String((i * 7919) % 100_003).padStart(6, '0')}-${tag}-${i}`
+    for (let i = 0; i < 305; i++) note(sqlDb, mixed('a', i), 'a@x', 'live', NOW - 10_000 + Math.floor(i / 7))
+    for (let i = 0; i < 300; i++) note(sqlDb, mixed('b', i), 'b@x', 'live', NOW - 10_000 + i)
+    for (let i = 0; i < 1000; i++) note(sqlDb, mixed('c', i), 'c@x', 'live', NOW - 10_000 + Math.floor(i / 3))
+    for (let i = 0; i < 5; i++) note(sqlDb, mixed('d', i), 'd@x', 'live', NOW - 10_000)
+    const expectedA = top300(rowsOf(sqlDb, 'a@x'))
+    const expectedC = top300(rowsOf(sqlDb, 'c@x'))
+    const result = await cleanupComments(env, NOW)
+    expect(ids(sqlDb, "SELECT id FROM notifications WHERE recipient_email = 'a@x'")).toEqual(expectedA)
+    expect(ids(sqlDb, "SELECT id FROM notifications WHERE recipient_email = 'c@x'")).toEqual(expectedC)
+    expect(ids(sqlDb, "SELECT id FROM notifications WHERE recipient_email = 'b@x'")).toHaveLength(300)
+    expect(ids(sqlDb, "SELECT id FROM notifications WHERE recipient_email = 'd@x'")).toHaveLength(5)
+    expect(result.overflowNotifications).toBe(705)
+  })
+})
+
+describe('F-2075 A5 매일 정리 문장 계획', () => {
+  it('MATERIALIZE cut·새 색인, 상관 부질의·임시 B-트리 없음', () => {
+    const { sqlDb } = setup()
+    const detail = (sqlDb.prepare('EXPLAIN QUERY PLAN ' + OVERFLOW_SQL).all() as { detail: string }[]).map((r) => r.detail).join('\n')
+    expect(detail).toContain('MATERIALIZE cut')
+    expect(detail).toContain('notifications_recipient_order')
+    expect(detail).not.toContain('CORRELATED LIST SUBQUERY')
+    expect(detail).not.toContain('USE TEMP B-TREE')
   })
 })

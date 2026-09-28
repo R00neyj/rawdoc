@@ -5,6 +5,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { asD1, openTestDb } from './testD1'
 import {
   COMMENT_JSON_CHUNK_BYTES,
+  TRIM_NOTIFICATIONS_SQL,
   accountCommentDeleteStatements,
   commentBundleStatements,
   docCommentDeleteStatements,
@@ -17,7 +18,7 @@ import {
   upsertCommentStatements,
 } from './commentRows'
 import type { CommentRow, DocCommentDbRow, NotificationDraft } from './commentRows'
-import { groupCommentThreads, parseCommentRecords } from '../src/lib/docComments'
+import { NOTIFICATIONS_PER_RECIPIENT_MAX, groupCommentThreads, parseCommentRecords } from '../src/lib/docComments'
 import type { CommentEntry, CommentRecord } from '../src/lib/docComments'
 
 const DOC = 'doc-1'
@@ -433,5 +434,146 @@ describe('F-2057 U8 문서·폴더·금고·계정 지우기', () => {
     await db.batch(accountCommentDeleteStatements(db, OWNER_ID, 'U1@example.com'))
     expect(revs(sqlDb)).toEqual({ ...untouched, 'u1@example.com': 1 })
     expectRevBeforeDelete(sqlOrder((spy) => accountCommentDeleteStatements(spy, OWNER_ID, 'u1@example.com')))
+  })
+})
+
+// ----- F-2075 알림 300개 정리 문장 -----
+
+type NoteRow = { id: string; recipient_email: string; created_at: number }
+
+const NOTE_SQL =
+  "INSERT INTO notifications (id, recipient_email, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at) VALUES (?, ?, 'mention', ?, ?, ?, 'x@example.com', 't', 'e', ?)"
+
+// 기준: created_at 내림·id 내림(BINARY) 앞 300개
+function keptByReference(rows: readonly NoteRow[], recipients: readonly string[]): Record<string, string[]> {
+  const out: Record<string, string[]> = {}
+  const byRecipient = new Map<string, NoteRow[]>()
+  for (const r of rows) byRecipient.set(r.recipient_email, [...(byRecipient.get(r.recipient_email) ?? []), r])
+  for (const [email, list] of byRecipient) {
+    const sorted = [...list].sort((a, b) => b.created_at - a.created_at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
+    const kept = recipients.includes(email) ? sorted.slice(0, NOTIFICATIONS_PER_RECIPIENT_MAX) : sorted
+    out[email] = kept.map((r) => r.id).sort()
+  }
+  return out
+}
+
+function keptInDb(sqlDb: DatabaseSync): Record<string, string[]> {
+  const out: Record<string, string[]> = {}
+  for (const r of all<NoteRow>(sqlDb, 'SELECT id, recipient_email, created_at FROM notifications ORDER BY id')) {
+    ;(out[r.recipient_email] ??= []).push(r.id)
+  }
+  for (const k of Object.keys(out)) out[k].sort()
+  return out
+}
+
+function seeded(seed: number): () => number {
+  let s = seed >>> 0
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0
+    let t = s
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+// 시각 순서와 섞이는 id — 순번을 뒤집은 문자열에 표식을 붙인다
+const mixedId = (tag: string, i: number) => `${String((i * 7919) % 100_003).padStart(6, '0')}-${tag}-${i}`
+
+function fillNotes(sqlDb: DatabaseSync, recipient: string, n: number, createdAt: (i: number) => number, tag: string) {
+  const insert = sqlDb.prepare(NOTE_SQL)
+  for (let i = 0; i < n; i++) insert.run(mixedId(tag, i), recipient, DOC, `${tag}${i}`, `${tag}${i}`, createdAt(i))
+}
+
+describe('F-2075 A1 넣기 정리 — 결과 동일(고정 표본)', () => {
+  it('A 450(7행 동점 묶음)·B 300·C 299·D 301(같은 시각)·E 400(JSON 밖)', async () => {
+    const { sqlDb, db } = setup()
+    fillNotes(sqlDb, 'a@x', 450, (i) => 1_000 + Math.floor(i / 7), 'a')
+    fillNotes(sqlDb, 'b@x', 300, (i) => 2_000 + i, 'b')
+    fillNotes(sqlDb, 'c@x', 299, (i) => 3_000 + i, 'c')
+    fillNotes(sqlDb, 'd@x', 301, () => 4_000, 'd')
+    fillNotes(sqlDb, 'e@x', 400, (i) => 5_000 + i, 'e')
+    const recipients = ['a@x', 'b@x', 'c@x', 'd@x']
+    const statements = notificationStatements(db, { docId: DOC, docTitle: 't', now: 4_000, drafts: recipients.map((r) => draft(r, 'new-' + r)) })
+    const trimAt = statements.length - 2
+    await db.batch(statements.slice(0, trimAt))
+    const before = all<NoteRow>(sqlDb, 'SELECT id, recipient_email, created_at FROM notifications')
+    await db.batch(statements.slice(trimAt))
+    const expected = keptByReference(before, recipients)
+    expect(keptInDb(sqlDb)).toEqual(expected)
+    expect(expected['e@x']).toHaveLength(400)
+    expect(expected['c@x']).toHaveLength(300)
+  })
+})
+
+describe('F-2075 A3 무작위 대조', () => {
+  it('고정 씨앗 50회 — TRIM_NOTIFICATIONS_SQL 결과가 기준 함수와 같다', () => {
+    const rand = seeded(2075)
+    const pick = <T,>(xs: readonly T[]) => xs[Math.floor(rand() * xs.length)]
+    for (let round = 0; round < 50; round++) {
+      const { sqlDb } = setup()
+      const people = Array.from({ length: 1 + Math.floor(rand() * 4) }, (_, k) => `p${k}@x`)
+      for (const p of people) {
+        const span = pick([1, 3, 100_000])
+        fillNotes(sqlDb, p, pick([0, 299, 300, 301, 450]), () => Math.floor(rand() * span), `${round}${p}`)
+      }
+      const listed = people.filter(() => rand() < 0.6)
+      const before = all<NoteRow>(sqlDb, 'SELECT id, recipient_email, created_at FROM notifications')
+      sqlDb.prepare(TRIM_NOTIFICATIONS_SQL).run(JSON.stringify(listed))
+      expect(keptInDb(sqlDb), `round ${round}`).toEqual(keptByReference(before, listed))
+    }
+  })
+})
+
+describe('F-2075 A4 색인', () => {
+  it('notifications_recipient_order 가 있고 옛 색인은 없다, 키 열 순서·방향', () => {
+    const { sqlDb } = setup()
+    const names = all<{ name: string }>(sqlDb, "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'notifications'").map((r) => r.name)
+    expect(names).toContain('notifications_recipient_order')
+    expect(names).not.toContain('notifications_recipient')
+    const keys = all<{ name: string; desc: number; key: number }>(sqlDb, 'PRAGMA index_xinfo(notifications_recipient_order)')
+      .filter((c) => c.key === 1)
+      .map((c) => [c.name, c.desc])
+    expect(keys).toEqual([
+      ['recipient_email', 0],
+      ['created_at', 1],
+      ['id', 1],
+    ])
+  })
+})
+
+describe('F-2075 A5 넣기 정리 문장 계획', () => {
+  it('MATERIALIZE cut·새 색인, 상관 부질의·임시 B-트리 없음', () => {
+    const { sqlDb } = setup()
+    const detail = all<{ detail: string }>(sqlDb, 'EXPLAIN QUERY PLAN ' + TRIM_NOTIFICATIONS_SQL, '["a@x"]')
+      .map((r) => r.detail)
+      .join('\n')
+    expect(detail).toContain('MATERIALIZE cut')
+    expect(detail).toContain('notifications_recipient_order')
+    expect(detail).not.toContain('CORRELATED LIST SUBQUERY')
+    expect(detail).not.toContain('USE TEMP B-TREE')
+  })
+})
+
+describe('F-2075 A6 넣기 batch 자리', () => {
+  it('넣기 조각 뒤 TRIM 한 문장(받는 사람 JSON 하나), 그 뒤 F-2057 리비전', () => {
+    const calls: { sql: string; args: unknown[] }[] = []
+    const db = {
+      prepare(sql: string) {
+        const call = { sql, args: [] as unknown[] }
+        calls.push(call)
+        return {
+          bind: (...args: unknown[]) => {
+            call.args = args
+            return call
+          },
+        }
+      },
+    } as unknown as D1Database
+    const statements = notificationStatements(db, { docId: DOC, docTitle: 't', now: 1, drafts: [draft('b@x', 'c1'), draft('c@x', 'c1'), draft('b@x', 'c2')] })
+    expect(statements).toHaveLength(1 + 2)
+    expect(calls[1].sql).toBe(TRIM_NOTIFICATIONS_SQL)
+    expect(calls[1].args).toEqual(['["b@x","c@x"]'])
+    expect(calls[2].sql.startsWith('UPDATE users SET notif_rev')).toBe(true)
   })
 })
