@@ -33,6 +33,7 @@ src/
     useAppearancePrefs.ts 설정값(서체·테마·줄 번호·폭 등) 상태·change*·시스템 테마 구독 (F-2063)
     useSharesPage.ts     공유 관리 페이지 목록·해제 (F-243, F-2064)
     exportActions.ts     문서·작업공간·볼트 내보내기와 인쇄 배선, 매 렌더 부르는 팩토리 (F-2065)
+    useSidebarLayout.ts   사이드바 접힘·좁은 창·너비·폴더 펼침(md.openFolders) (F-126, F-159, F-2066)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
