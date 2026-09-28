@@ -412,7 +412,8 @@ export default function App() {
   })
 
   // 탭마다 한 번 — 메모리에만 둔다 (F-296.md 6.1)
-  const tabIdRef = useRef<string>(newTabId())
+  const [tabId] = useState(newTabId)
+  const tabIdRef = useRef(tabId)
 
   // 실시간으로 연 문서의 제목은 편집기 Doc 을 따른다 — 저장소 목록(D1·캐시)은 DO 가 늦게 쓴 옛 제목일 수 있어 지금 값을 둔다 (F-305 9.3)
   const liveTitleDocIdRef = useRef<string | null>(null)
@@ -477,6 +478,7 @@ export default function App() {
   useEffect(() => {
     listRefreshDepsRef.current = { store, resyncFromStore }
   })
+  // eslint-disable-next-line react-hooks/refs -- refresh·isStale 는 뒤 새로 읽기 때만 불려 렌더 중에 ref 를 읽지 않는다
   const [listRefresher] = useState(() =>
     createListRefresher({
       refresh: () => {
@@ -511,6 +513,7 @@ export default function App() {
   const listSource = useMemo(() => {
     if (store.kind !== 'server') return store
     const serverStore = store as ServerStore
+    // eslint-disable-next-line react-hooks/refs -- hasLiveChanges 는 검색·지도가 목록을 읽을 때만 불린다
     return createCachedListSource({
       listCached: () => serverStore.listCached(),
       lastSharedList: () => serverStore.lastSharedList(),
@@ -543,7 +546,7 @@ export default function App() {
   const e2eeOtherTabLockRef = useRef<() => void>(() => {})
   const { post: postTabMessage, claimReadOnly } = useTabSync({
     enabled: bootPhase === 'ready',
-    tabId: tabIdRef.current,
+    tabId,
     claimDocId,
     onDocsChanged: store.kind === 'server' ? resyncFromCache : resyncFromStore,
     onNotice: showNotice,
@@ -555,7 +558,7 @@ export default function App() {
   const e2ee = useE2ee({
     store,
     bootPhase,
-    tabId: tabIdRef.current,
+    tabId,
     postTabMessage,
     accountEmail: account.state === 'in' ? account.email : (storedAccount()?.email ?? null),
     showNotice,
@@ -903,6 +906,51 @@ export default function App() {
     blocked: isDeletedElsewhere || claimReadOnly || isRealtime || isOfflineView || openDoc?.id !== currentDocId,
   })
 
+  // 검색 대화상자 D-6 (specs/features/F-287.md 3.5)
+  function openSearch() {
+    if (bootPhase !== 'ready') return // 부팅 중 store 는 임시 memoryStore 라 인덱스가 빈다
+    setSearchOpen(true) // 먼저 — 대화상자가 먼저 그려져야 한다 (4.2)
+    closeSidebarIfNarrow()
+  }
+
+  function closeSearch() {
+    setSearchOpen(false)
+  }
+
+  // 스크롤 위치 유지 (F-295.md 5.2) — 기준값은 맨 앞에서 읽는다. 이 시점의 DOM 은 아직 "떠나는 화면" 이다(React 19 커밋 지연, 4.1)
+  function changeViewMode(mode: string) {
+    const v = mode as 'live' | 'raw' | 'view'
+    if (v === viewMode) return // 5.7 — 같은 모드면 기준값만 갱신되고 복원 effect 는 안 돈다
+
+    if (currentDocId) {
+      const anchor = viewMode === 'view' ? readViewerAnchor(viewerRef.current) : (editorRef.current?.getScrollAnchor() ?? null)
+      if (anchor !== null) scrollAnchorRef.current = { docId: currentDocId, anchor }
+    }
+    // 5.2a — 보기로 갈 때 변환을 여기서 한다. passive effect(1050행대)에 맡기면 복원 시점에 편집 전 옛 HTML 로 좌표를 잰다
+    if (v === 'view' && editorRef.current) {
+      setViewerHtml(
+        renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true }),
+      )
+      setViewerDocId(currentDocId)
+    }
+
+    setViewMode(v)
+    setPref('md.viewMode', v)
+    editorRef.current?.setViewMode(v)
+  }
+
+  // 상단바 `댓글` 버튼과 Ctrl+M 이 같이 쓴다
+  function toggleCommentsPanel() {
+    // 보기 모드에서 누르면 편집 모드로 바꾸고 연다(4장 끝 행)
+    if (viewMode === 'view') {
+      changeViewMode('live')
+      comments.setOpen(true, false)
+      return
+    }
+    // 판은 화면을 덮어서 열림 상태를 저장하지 않는다(md.commentRail 은 레일만, F-505 5.1·E13)
+    comments.setOpen(!comments.open, comments.mode === 'rail')
+  }
+
   // ref 는 렌더 중에 건드리지 않는다. 매 커밋 후 최신 flush·notifyChange·handlePrintDoc·openSearch 를 반영한다
   useEffect(() => {
     docSaverFlushRef.current = docSaver.flush
@@ -912,8 +960,6 @@ export default function App() {
     openDocLineEndingRef.current = openDoc?.lineEnding
     e2eeResetStepRef.current = runE2eeReset
     openSearchRef.current = openSearch
-    openPaletteRef.current = openPalette
-    toggleShortcutsRef.current = toggleShortcuts
     // isEmpty 대신 currentDocId 로 판정 — 공개 보기 조기 반환 렌더에서 isEmpty 가 초기화 전이라 읽으면 TDZ 로 죽는다 (리뷰 A1)
     toggleCommentsRef.current =
       commentAccessValue.kind === 'none' || !currentDoc || bootPhase !== 'ready' || currentDocId === null
@@ -921,6 +967,50 @@ export default function App() {
         : toggleCommentsPanel
     bootPhaseRef.current = bootPhase
   })
+
+  // 금고를 열어 달라고 한다. 닫으면 false, 금고 정보를 못 읽으면 E25 뒤 false (F-405 2.4)
+  async function requestE2eeOpen(): Promise<boolean> {
+    const ring = e2eeRef.current
+    if (!ring) {
+      showNotice({ type: 'error', message: E2EE_NOTICE.unavailable })
+      return false
+    }
+    const ok = await ring.requestOpen()
+    if (!ok && ring.keyring.getStatus() === 'unavailable') showNotice({ type: 'error', message: E2EE_NOTICE.unavailable })
+    return ok
+  }
+
+  // `새 문서로 저장` — 다른 탭에서 지워짐(F-296.md 7.3)·실시간 멈춤(F-305 8장) 공용. 원래 폴더도 지워졌을 수 있어 최상위에 만든다
+  async function saveCurrentAsNewDoc() {
+    // 금고 문서면 새 문서도 금고 문서다. 편집기가 내려가 있으면(잠김) 아무것도 만들지 않는다 (F-405 7.6)
+    const asE2ee = Boolean(currentDoc?.e2ee)
+    if (asE2ee) {
+      if (!editorRef.current || openDoc?.id !== currentDocId) return
+      if (!(await requestE2eeOpen())) return
+    }
+    const text = editorRef.current?.getText(openDoc?.lineEnding ?? 'crlf') ?? ''
+    let doc: Doc
+    try {
+      doc = await store.create({
+        title: currentDoc?.title ?? '제목 없는 문서',
+        content: text,
+        lineEnding: openDoc?.lineEnding ?? 'crlf',
+        folderId: null,
+        ...(asE2ee ? { e2ee: true as const } : {}),
+      })
+    } catch (err) {
+      const e2eeMessage = e2eeCreateErrorMessage(err)
+      if (!e2eeMessage) throw err
+      showNotice({ type: 'error', message: e2eeMessage })
+      return
+    }
+    setDocs((prev) => sortByUpdatedAtDesc([...prev, stripContent(doc)]))
+    setDeletedElsewhereId(null)
+    setCurrentDocId(doc.id)
+    setPref('md.lastDocId', doc.id)
+    pushHashUrl(doc.id)
+    setNotice(null)
+  }
 
   // hashchange 핸들러(위)가 항상 최신 docs·currentDocId 를 보도록 매 커밋 후 갱신한다 (0단계 버그 수정)
   useEffect(() => {
@@ -1005,19 +1095,6 @@ export default function App() {
     return resolveTargetFolderId({ folders, folderId: currentDoc?.folderId ?? null })
   }
 
-  // folderId 생략 시 현재 문서가 속한 폴더에 만든다(없으면 최상위) — 사이드바 폴더 메뉴의 새 문서는 폴더 id 를 명시로 넘긴다 (F-126.md 5.3)
-  // 금고를 열어 달라고 한다. 닫으면 false, 금고 정보를 못 읽으면 E25 뒤 false (F-405 2.4)
-  async function requestE2eeOpen(): Promise<boolean> {
-    const ring = e2eeRef.current
-    if (!ring) {
-      showNotice({ type: 'error', message: E2EE_NOTICE.unavailable })
-      return false
-    }
-    const ok = await ring.requestOpen()
-    if (!ok && ring.keyring.getStatus() === 'unavailable') showNotice({ type: 'error', message: E2EE_NOTICE.unavailable })
-    return ok
-  }
-
   // ----- 금고로 옮기기·빼기 (F-2073) -----
   const { e2eeConvertOnline, e2eeConvertBusy, e2eeConvertText, requestE2eeConvert, handleE2eeConvertUnavailable, answerE2eeConvertDialog } = useE2eeConvert({
     store, syncState, commentAccessValue, showNotice, dismissNotice, resyncFromStore, restartDocSession, requestE2eeOpen, setConvertingDocId,
@@ -1030,6 +1107,7 @@ export default function App() {
     return requestE2eeOpen()
   }
 
+  // folderId 생략 시 현재 문서가 속한 폴더에 만든다(없으면 최상위) — 사이드바 폴더 메뉴의 새 문서는 폴더 id 를 명시로 넘긴다 (F-126.md 5.3)
   async function createNewDoc(folderId?: string | null) {
     const targetFolderId = folderId !== undefined ? folderId : newDocFolderId()
     if (!(await ensureE2eeOpenForFolder(targetFolderId))) return
@@ -1243,6 +1321,7 @@ export default function App() {
   const {
     handleExportDoc, handleExportDocAsText, handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc,
     exportOffline, handleExportAll, handleExportFolder, handleExportVault, handleExportFolderVault,
+  // eslint-disable-next-line react-hooks/refs -- 넘기는 ref 는 내보내기·인쇄 핸들러 안에서만 읽힌다
   } = createExportActions({
     store, syncState, currentDoc, openDoc, currentDocId, editorRef, docSaverFlushRef, printRootRef,
     foldersRef, e2eeRef, showNotice, resolveWikiHref, resolveAttachment,
@@ -1302,38 +1381,6 @@ export default function App() {
     setMoveDocTarget, keepLiveTitle, showNotice, addOpenFolders, closeSidebarIfNarrow, replaceHashUrl,
   })
 
-  // `새 문서로 저장` — 다른 탭에서 지워짐(F-296.md 7.3)·실시간 멈춤(F-305 8장) 공용. 원래 폴더도 지워졌을 수 있어 최상위에 만든다
-  async function saveCurrentAsNewDoc() {
-    // 금고 문서면 새 문서도 금고 문서다. 편집기가 내려가 있으면(잠김) 아무것도 만들지 않는다 (F-405 7.6)
-    const asE2ee = Boolean(currentDoc?.e2ee)
-    if (asE2ee) {
-      if (!editorRef.current || openDoc?.id !== currentDocId) return
-      if (!(await requestE2eeOpen())) return
-    }
-    const text = editorRef.current?.getText(openDoc?.lineEnding ?? 'crlf') ?? ''
-    let doc: Doc
-    try {
-      doc = await store.create({
-        title: currentDoc?.title ?? '제목 없는 문서',
-        content: text,
-        lineEnding: openDoc?.lineEnding ?? 'crlf',
-        folderId: null,
-        ...(asE2ee ? { e2ee: true as const } : {}),
-      })
-    } catch (err) {
-      const e2eeMessage = e2eeCreateErrorMessage(err)
-      if (!e2eeMessage) throw err
-      showNotice({ type: 'error', message: e2eeMessage })
-      return
-    }
-    setDocs((prev) => sortByUpdatedAtDesc([...prev, stripContent(doc)]))
-    setDeletedElsewhereId(null)
-    setCurrentDocId(doc.id)
-    setPref('md.lastDocId', doc.id)
-    pushHashUrl(doc.id)
-    setNotice(null)
-  }
-
   // ----- D-4 사람 초대 (specs/features/F-212.md 2.5) -----
   function requestInviteCurrentDoc() {
     if (!currentDoc) return
@@ -1362,17 +1409,6 @@ export default function App() {
   const { accountDeleteUserId, accountDeleteUnsynced, closeAccountDelete, reauthForAccountDelete, finishAccountDelete, settingsAccount } =
     useAccountDelete({ bootPhase, account, syncState, e2ee, showNotice, yjsStoreRef, docSaverFlushRef })
 
-  // 검색 대화상자 D-6 (specs/features/F-287.md 3.5)
-  function openSearch() {
-    if (bootPhase !== 'ready') return // 부팅 중 store 는 임시 memoryStore 라 인덱스가 빈다
-    setSearchOpen(true) // 먼저 — 대화상자가 먼저 그려져야 한다 (4.2)
-    closeSidebarIfNarrow()
-  }
-
-  function closeSearch() {
-    setSearchOpen(false)
-  }
-
   // 단축키 판 — 상태바가 보이는 조건과 같다(4.3). 팔레트 context·판 렌더 자리가 함께 쓴다
   const statusBarVisible = bootPhase === 'ready' && currentDocId !== null && !sharedDoc && !mapRoute
 
@@ -1391,6 +1427,12 @@ export default function App() {
     handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, handleTogglePin, requestMoveDoc, requestDeleteDoc,
     getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createDocFromPalette,
     openDocFromSearch, newDocFolderId, changeViewMode,
+  })
+
+  // Ctrl+P·Ctrl+Shift+/ 가 매 커밋 최신 openPalette·toggleShortcuts 를 읽게 한다 (F-2080)
+  useEffect(() => {
+    openPaletteRef.current = openPalette
+    toggleShortcutsRef.current = toggleShortcuts
   })
 
   // 검색 결과에서 문서 열기 (F-287.md 4.6) — 지금 문서를 그대로 두지 않고 그 문서로 이동한다
@@ -1484,40 +1526,6 @@ export default function App() {
   useEffect(() => {
     closeContextMenuRef.current = closeContextMenu
   })
-
-  // 스크롤 위치 유지 (F-295.md 5.2) — 기준값은 맨 앞에서 읽는다. 이 시점의 DOM 은 아직 "떠나는 화면" 이다(React 19 커밋 지연, 4.1)
-  // 상단바 `댓글` 버튼과 Ctrl+M 이 같이 쓴다
-  function toggleCommentsPanel() {
-    // 보기 모드에서 누르면 편집 모드로 바꾸고 연다(4장 끝 행)
-    if (viewMode === 'view') {
-      changeViewMode('live')
-      comments.setOpen(true, false)
-      return
-    }
-    // 판은 화면을 덮어서 열림 상태를 저장하지 않는다(md.commentRail 은 레일만, F-505 5.1·E13)
-    comments.setOpen(!comments.open, comments.mode === 'rail')
-  }
-
-  function changeViewMode(mode: string) {
-    const v = mode as 'live' | 'raw' | 'view'
-    if (v === viewMode) return // 5.7 — 같은 모드면 기준값만 갱신되고 복원 effect 는 안 돈다
-
-    if (currentDocId) {
-      const anchor = viewMode === 'view' ? readViewerAnchor(viewerRef.current) : (editorRef.current?.getScrollAnchor() ?? null)
-      if (anchor !== null) scrollAnchorRef.current = { docId: currentDocId, anchor }
-    }
-    // 5.2a — 보기로 갈 때 변환을 여기서 한다. passive effect(1050행대)에 맡기면 복원 시점에 편집 전 옛 HTML 로 좌표를 잰다
-    if (v === 'view' && editorRef.current) {
-      setViewerHtml(
-        renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true }),
-      )
-      setViewerDocId(currentDocId)
-    }
-
-    setViewMode(v)
-    setPref('md.viewMode', v)
-    editorRef.current?.setViewMode(v)
-  }
 
   // 공개 보기 화면(F-210.md 2.4) — 위 모든 훅은 매 렌더 그대로 호출되고 여기서 조기 반환만 한다
   if (publicRoute) {
@@ -1819,6 +1827,7 @@ export default function App() {
                     text={openDoc.content}
                     viewMode={viewMode}
                     readOnly={isReadOnlyDoc}
+                    // eslint-disable-next-line react-hooks/refs -- 포커스 요청 플래그는 마운트 때 한 번 읽고 passive effect 가 소비한다
                     autoFocus={focusTitleRef.current ? 'title' : focusEditorRef.current}
                     onDocChange={handleDocChange}
                     onSelectionChange={handleSelectionChange}
