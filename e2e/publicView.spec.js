@@ -52,6 +52,19 @@ test.describe('F-210 A5 공개 보기 화면', () => {
 
     expect(await indexedDbDocCount(page)).toBe(0)
   })
+
+  // 앱이 대신 열 찾기 창이 없으니 브라우저 찾기를 막지 않는다 (2026-09-28 버그 수정)
+  test('Ctrl+F 를 막지 않는다', async ({ page }) => {
+    await mockPublicDoc(page)
+    await page.goto('/#/p/tok123')
+    await expect(page.locator('.public-view-title')).toHaveText(DOC.title)
+    const prevented = await page.evaluate(() => {
+      const e = new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true, cancelable: true })
+      document.body.dispatchEvent(e)
+      return e.defaultPrevented
+    })
+    expect(prevented).toBe(false)
+  })
 })
 
 // F-210 A6 코드블록 복사는 F-293 A9 와 같은 확인이라 그쪽 하나로 합쳤다 (2026-09-25 e2e 경량화)

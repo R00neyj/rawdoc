@@ -2450,6 +2450,7 @@ export default function App() {
   // ----- 브라우저 기본 찾기(Ctrl/Cmd+F) 비활성화 (2026-09-20 사용자 요청) -----
   // 에디터 안 포커스는 createEditor.ts 의 Mod-f 키맵이 먼저 처리한다 — 여기는 에디터 밖 포커스일 때만 대신 열어 브라우저 찾기를 막는다
   useEffect(() => {
+    if (publicRoute) return // 공개 보기에는 대신 열 찾기 창이 없다 — 브라우저 찾기를 남긴다
     function handleKeyDown(e: KeyboardEvent) {
       if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return
       if (e.key.toLowerCase() !== 'f') return
@@ -2460,7 +2461,7 @@ export default function App() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [publicRoute])
 
   // ----- Ctrl+P(Cmd+P) → 명령 팔레트 D-7, 에디터 안에 포커스가 있어도 가로챈다 (specs/features/F-2022.md 6.1) -----
   useEffect(() => {
