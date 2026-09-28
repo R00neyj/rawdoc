@@ -568,6 +568,12 @@ describe('output — U6 (F-2054 11.1)', () => {
     expect(ids).toContain('share.copyMarkdown')
   })
 
+  it('e2ee:true 면 invite 가 넘어와도 share.invite 없음 (F-2054 4.3, F-409 6.2)', () => {
+    const output = { e2ee: true, exportMd: noop, exportTxt: noop, exportHtml: noop, copyRich: noop, copyLink: noop, copyMarkdown: noop, invite: noop }
+    const ids = visibleIdsOf(ctx([], undefined, undefined, undefined, undefined, { output }))
+    expect(ids).not.toContain('share.invite')
+  })
+
   it('run 이 각 함수를 1번씩 부른다', () => {
     const calls: Record<string, number> = {}
     const inc = (k: string) => () => {

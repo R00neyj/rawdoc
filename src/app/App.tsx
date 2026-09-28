@@ -4865,7 +4865,7 @@ export default function App() {
               writeText: (text) => navigator.clipboard.writeText(text),
               baseUrl: `${location.origin}${location.pathname}`,
             }),
-          invite: canInviteCurrentDoc ? () => runAfterPaletteClose(() => requestInviteCurrentDoc()) : undefined,
+          invite: canInviteCurrentDoc && currentDoc?.e2ee === undefined ? () => runAfterPaletteClose(() => requestInviteCurrentDoc()) : undefined,
         }
       : undefined
 

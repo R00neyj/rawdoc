@@ -269,7 +269,7 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     kind: 'action',
     label: '사람 초대…',
     keywords: ['초대', 'invite', '공유', 'share', '권한', '이메일', 'email', '함께 편집'],
-    when: (ctx) => Boolean(ctx.output?.invite),
+    when: (ctx) => Boolean(ctx.output?.invite) && !ctx.output?.e2ee,
     run: (ctx) => ctx.output?.invite?.(),
   },
   {
