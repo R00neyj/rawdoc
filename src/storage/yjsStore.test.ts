@@ -14,7 +14,7 @@ function freshDbName() {
 }
 
 async function tick(n = 20) {
-  for (let i = 0; i < n; i++) await new Promise((resolve) => setTimeout(resolve, 0))
+  for (let i = 0; i < n; i++) await new Promise((resolve) => setImmediate(resolve))
 }
 
 function fakeClock() {

@@ -57,7 +57,7 @@ function freshDbName() {
 
 async function tick(n = 15) {
   for (let i = 0; i < n; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setImmediate(resolve))
   }
 }
 
