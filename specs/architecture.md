@@ -54,6 +54,10 @@ src/
     useCommandPalette.ts 팔레트 열기·템플릿 넣기·context 조립 (F-2053, F-2054, F-2055, F-2078)
     useShortcutsPanel.ts 단축키 판 열기·닫기·커서 스크롤 (F-2037, F-2078)
     useNewDocTemplate.ts newDocTemplate.ts 새 문서 템플릿 목록·원문 읽기·본문 (F-2052, F-2078)
+    useAccountStatus.ts 계정 플래그 반영·다시 읽기(online·화면 복귀·10분) (F-2026, F-2079)
+    useAccountDelete.ts 계정 삭제 대화상자 열기·실행 (F-2079)
+    useTitleCommit.ts 제목 저장 (F-2079)
+    useCommentFab.ts 댓글 달기 버튼 위치 (F-2079)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
