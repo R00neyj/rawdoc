@@ -101,3 +101,45 @@ describe('F-503 R1~R4 DocRoom 껍데기', () => {
     expect(room.core.importComments).toHaveBeenCalledWith(input)
   })
 })
+
+// 리뷰 W1 — y-partyserver 는 첫 varUint 로 종류를 가른다. 0x81 0x00 도 awareness(1)라 가로채기를 피하면 안 된다
+describe('DocRoom.onMessage 종류 판정', () => {
+  const EDIT = { userId: 'e', email: 'e@example.com', role: 'edit' }
+  const VIEW = { userId: 'v', email: 'v@example.com', role: 'view' }
+  function route(bytes: number[], state: unknown = EDIT) {
+    superOnMessage.mockClear()
+    const relayAwareness = vi.fn()
+    const room = { relayAwareness }
+    const conn = { id: 'c', state, setState: vi.fn() } as never
+    DocRoom.prototype.onMessage.call(room as unknown as InstanceType<typeof DocRoom>, conn, new Uint8Array(bytes))
+    return { relayed: relayAwareness.mock.calls.length, passed: superOnMessage.mock.calls.length }
+  }
+
+  it('정규 awareness(0x01)는 중계로 간다', () => {
+    expect(route([0x01, 0x00])).toEqual({ relayed: 1, passed: 0 })
+  })
+
+  it('비정규 인코딩 awareness(0x81 0x00)도 중계로 가고 YServer 에 닿지 않는다', () => {
+    expect(route([0x81, 0x00, 0x01, 0x00])).toEqual({ relayed: 1, passed: 0 })
+  })
+
+  it('view 연결의 비정규 인코딩 awareness 는 중계도 YServer 도 거치지 않는다', () => {
+    expect(route([0x81, 0x00, 0x01, 0x00], VIEW)).toEqual({ relayed: 0, passed: 0 })
+  })
+
+  it('sync(0)는 YServer 로 넘긴다', () => {
+    expect(route([0x00, 0x00, 0x00])).toEqual({ relayed: 0, passed: 1 })
+  })
+
+  it('sync·awareness 가 아니거나 깨진 메시지는 버린다', () => {
+    expect(route([0x02, 0x00])).toEqual({ relayed: 0, passed: 0 })
+    expect(route([0x80])).toEqual({ relayed: 0, passed: 0 })
+    expect(route([])).toEqual({ relayed: 0, passed: 0 })
+  })
+
+  it('문자열 메시지는 YServer 로 넘긴다', () => {
+    superOnMessage.mockClear()
+    DocRoom.prototype.onMessage.call({} as unknown as InstanceType<typeof DocRoom>, {} as never, '__YPS:{}')
+    expect(superOnMessage).toHaveBeenCalledTimes(1)
+  })
+})

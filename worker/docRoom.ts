@@ -3,7 +3,17 @@ import { YServer } from 'y-partyserver'
 import type { Connection, ConnectionContext, WSMessage } from 'partyserver'
 import { applyAwarenessUpdate } from 'y-protocols/awareness'
 
-import { AWARENESS_CLOCKS_KEY, closingAwareness, encodeAwarenessMessage, readAwarenessClocks, readAwarenessMessage, relayAwareness } from './awarenessRelay'
+import {
+  AWARENESS_CLOCKS_KEY,
+  MESSAGE_AWARENESS,
+  MESSAGE_SYNC,
+  closingAwareness,
+  encodeAwarenessMessage,
+  readAwarenessClocks,
+  readAwarenessMessage,
+  readMessageType,
+  relayAwareness,
+} from './awarenessRelay'
 import type { AwarenessClocks, RelayConn } from './awarenessRelay'
 import { DocRoomCore, FLUSH_DEBOUNCE_MS, FLUSH_MAX_WAIT_MS, isReadOnlyState, mayRelayAwareness, readConnState } from './docRoomCore'
 import type { RoomCommentImport, RoomCommentImportResult, RoomConnState, RoomTextWrite, RoomTextWriteResult } from './docRoomCore'
@@ -12,9 +22,6 @@ import { SOCKET_CLOSE, SOCKET_PING, SOCKET_PONG } from '../src/lib/docRoomProtoc
 
 // abort 가 닫기 프레임보다 먼저 가면 클라이언트는 4404 대신 1006 을 받는다 (2026-09-24 로컬 확인)
 const PURGE_CLOSE_GRACE_MS = 100
-
-// varUint 1 은 한 바이트 0x01 이다 — y-partyserver messageAwareness
-const MESSAGE_AWARENESS_BYTE = 1
 
 function bytesOf(message: ArrayBuffer | ArrayBufferView): Uint8Array {
   return message instanceof ArrayBuffer ? new Uint8Array(message) : new Uint8Array(message.buffer, message.byteOffset, message.byteLength)
@@ -95,13 +102,16 @@ export class DocRoom extends YServer<Env> {
   }
 
   // awareness 는 YServer 에 넘기지 않고 도장·되돌림 버리기·소유를 거쳐 중계한다 (F-307 4.1·4.2). view 연결이 보낸 것은 버린다 (F-503 2.4)
+  // 종류는 YServer 와 같이 첫 varUint 로 가른다 — 첫 바이트만 보면 0x81 0x00 이 가로채기를 피한다. sync 가 아니면 YServer 에 넘기지 않는다 (리뷰 W1)
   onMessage(conn: Connection, message: WSMessage): void {
     if (typeof message !== 'string') {
       const bytes = bytesOf(message)
-      if (bytes[0] === MESSAGE_AWARENESS_BYTE) {
+      const type = readMessageType(bytes)
+      if (type === MESSAGE_AWARENESS) {
         if (mayRelayAwareness(conn.state)) this.relayAwareness(conn, bytes)
         return
       }
+      if (type !== MESSAGE_SYNC) return
     }
     super.onMessage(conn, message)
   }
