@@ -99,7 +99,7 @@ function innerMarkupOf(raw: string): string {
 }
 
 function makeIcon(raw: string) {
-  const inner = innerMarkupOf(raw)
+  const html = { __html: innerMarkupOf(raw) } // 같은 객체 유지 — 새로 만들면 리렌더마다 path 가 갈아끼워져 누르는 중 click 이 사라짐
   return function Icon({ size = 18, className }: IconProps) {
     return (
       <svg
@@ -110,7 +110,7 @@ function makeIcon(raw: string) {
         aria-hidden="true"
         focusable="false"
         style={{ flexShrink: 0 }}
-        dangerouslySetInnerHTML={{ __html: inner }}
+        dangerouslySetInnerHTML={html}
       />
     )
   }
