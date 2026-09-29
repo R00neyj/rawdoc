@@ -85,5 +85,6 @@ export async function logout(): Promise<boolean> {
   }
 
   setPref('md.account', '')
+  setPref('md.pushSyncedAt', '') // 재로그인 뒤 부팅이 구독을 다시 알리게 (F-2110 7.2)
   return true
 }

@@ -34,6 +34,10 @@ type PrefMap = {
   'md.paletteRecent': string
   // 팔레트 고정한 명령 id 배열(JSON, 고정한 순서), 기기별 (F-2053 7.3)
   'md.palettePinned': string
+  // 이 기기에서 푸시를 켠 계정 사용자 id, 꺼짐은 '' (F-2110 7.1)
+  'md.push': string
+  // 마지막으로 서버에 구독을 알린 때(ms 문자열), 없음은 '' (F-2110 7.1)
+  'md.pushSyncedAt': string
 }
 
 type PrefKey = keyof PrefMap
@@ -68,6 +72,8 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.shortcutsUsed',
   'md.paletteRecent',
   'md.palettePinned',
+  'md.push',
+  'md.pushSyncedAt',
 ])
 
 function assertAllowed(key: string) {

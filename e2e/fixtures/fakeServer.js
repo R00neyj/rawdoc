@@ -715,6 +715,22 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ people }) })
   })
 
+  // F-2110 9.2 — /api/push/* 흉내. 기록은 pushRequests() 로 따로 두고 recordWrite 를 거치지 않는다
+  const pushLog = []
+  let pushKeyStatus = 200
+  const pushKey = Buffer.from([4, ...Array.from({ length: 64 }, (_, i) => i + 1)]).toString('base64url')
+  await page.route('**/api/push/**', async (route) => {
+    const req = route.request()
+    const path = new URL(req.url()).pathname
+    const method = req.method()
+    pushLog.push({ method, path, body: safePostDataJSON(req) })
+    if (method === 'GET' && path === '/api/push/key') {
+      if (pushKeyStatus !== 200) return route.fulfill({ status: pushKeyStatus, contentType: 'application/json', body: '{"error":"push_unavailable"}' })
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ publicKey: pushKey }) })
+    }
+    return route.fulfill({ status: 204 })
+  })
+
   // F-2042 8.1 — 이후 모든 /api/** 응답을 latencyMs 만큼 늦춘다. 마지막에 걸어 다른 경로보다 먼저 가로챈 뒤 route.fallback() 한다
   let latencyMs = 0
   const getRequestLog = [] // GET 요청만 기록 — 동시성 확인용 { path, startedAt, endedAt }
@@ -836,6 +852,14 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     setDocPeople(docId, people) {
       if (people === null) docPeopleOverrides.delete(docId)
       else docPeopleOverrides.set(docId, people)
+    },
+    // /api/push/* 로 받은 요청 { method, path, body } 기록 (F-2110 9.2)
+    pushRequests() {
+      return [...pushLog]
+    },
+    // GET /api/push/key 응답 상태 — 200 이 아니면 그 상태로 (F-2110 9.2)
+    setPushKeyStatus(status) {
+      pushKeyStatus = status
     },
     // 그 문서로 받은 GET /people 수 (F-507 3.8)
     peopleRequests(docId) {

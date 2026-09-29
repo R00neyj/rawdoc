@@ -137,6 +137,8 @@ describe('loginUrl', () => {
 describe('logout', () => {
   beforeEach(() => {
     globalThis.localStorage.setItem('md.account', JSON.stringify({ id: 'u1', email: 'a@b.com' }))
+    globalThis.localStorage.setItem('md.push', 'u1')
+    globalThis.localStorage.setItem('md.pushSyncedAt', '123')
   })
 
   it('A1: 200 이면 true, fetch 인자가 계약과 같고, md.account 를 지운다', async () => {
@@ -151,6 +153,9 @@ describe('logout', () => {
       redirect: 'manual',
     })
     expect(storedAccount()).toBeNull()
+    // F-2110 U10 — 재로그인 때 PUT 을 다시 하게 md.pushSyncedAt 만 비운다
+    expect(globalThis.localStorage.getItem('md.pushSyncedAt')).toBe('')
+    expect(globalThis.localStorage.getItem('md.push')).toBe('u1')
   })
 
   it('A2: 204, 그리고 JSON 이 아닌 200 도 true(본문을 읽지 않는다)', async () => {
@@ -178,6 +183,7 @@ describe('logout', () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status, ok: false, type: 'basic' }))
       expect(await logout()).toBe(false)
       expect(storedAccount()).toEqual({ id: 'u1', email: 'a@b.com' })
+      expect(globalThis.localStorage.getItem('md.pushSyncedAt')).toBe('123')
     }
   })
 

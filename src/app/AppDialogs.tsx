@@ -18,6 +18,7 @@ import type { UseE2ee } from './useE2ee'
 import type { E2eeConvertDialogText, LocalE2eeKeys } from '../e2ee/convert'
 import type { UseAccountStatusResult } from './useAccountStatus'
 import type { UseAccountDeleteResult } from './useAccountDelete'
+import type { UsePushDeviceResult } from './usePushDevice'
 import type { UseAppearancePrefsResult } from './useAppearancePrefs'
 import type { UseContextMenuResult } from './useContextMenu'
 import type { UseFolderActionsResult } from './useFolderActions'
@@ -29,6 +30,7 @@ import type { ExportActions } from './exportActions'
 import type { NoticeWithAction } from './NoticeBar'
 
 export type AppDialogsProps = Pick<UseAccountStatusResult, 'account' | 'recheckAccount'> &
+  Pick<UsePushDeviceResult, 'settingsPush'> &
   Pick<
     UseAccountDeleteResult,
     'accountDeleteUnsynced' | 'accountDeleteUserId' | 'closeAccountDelete' | 'finishAccountDelete' | 'reauthForAccountDelete' | 'settingsAccount'
@@ -90,7 +92,7 @@ export default function AppDialogs({
   handleExportAll, handleExportVault, handleImportTargetChange, headingFont, importState, indentPref, inviteTarget, lineNumbersPref, listSource,
   moveDocTarget, newDocTemplatePref, openDocFromSearch, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
   requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
-  setE2eeMigrateDialogOpen, settingsAccount, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref, toolbarPref,
+  setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref, toolbarPref,
   wikiPreviewPref,
 }: AppDialogsProps) {
   return (
@@ -201,6 +203,7 @@ export default function AppDialogs({
             : undefined
         }
         account={settingsAccount}
+        push={settingsPush}
         onClose={closeSettings}
       />
       {e2ee?.dialogs}

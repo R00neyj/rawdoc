@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import Dialog from './Dialog'
+import PushSettings from './PushSettings'
+import type { PushSettingsView } from './pushClient'
 import { WELCOME_PATH } from '../lib/siteChrome'
 import { visibleSettingsTabs, nextTabIndex, type SettingsTabId } from './settingsTabs'
 import { newDocTemplateOptions, type TemplateEntry } from '../lib/templates'
@@ -72,6 +74,14 @@ export type SettingsAccount = {
   email: string
   online: boolean
   onDelete: () => void
+}
+
+// `계정` 탭 `알림` 묶음 — 안 주면 그리지 않는다 (F-2110 6.1)
+export type SettingsPush = {
+  view: PushSettingsView
+  onShown: () => void
+  onToggle: () => void
+  onTest: () => void
 }
 
 // 자동 잠금 세그먼트 — 값은 분 문자열 (F-404.md 7.5·8.1)
@@ -327,6 +337,8 @@ type SettingsDialogProps = {
   e2ee?: SettingsE2ee
   // `계정` 탭 — 안 주면 탭이 안 보인다 (F-2038.md 6.1)
   account?: SettingsAccount
+  // `계정` 탭 `알림` 묶음 — account 와 함께 있을 때만 그린다 (F-2110 6.1)
+  push?: SettingsPush
   onClose: () => void
 }
 
@@ -362,6 +374,7 @@ export default function SettingsDialog({
   onImportFolder,
   e2ee,
   account,
+  push,
   onClose,
 }: SettingsDialogProps) {
   const titleId = 'settings-title'
@@ -407,6 +420,12 @@ export default function SettingsDialog({
   // 금고 탭이 보이게 될 때마다(누르거나 방향키로 옮겨 올 때) 3.2 ① 읽기를 부른다 (F-404.md 7.5)
   useEffect(() => {
     if (open && resolvedActiveTab === 'e2ee') e2ee?.onShown()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, resolvedActiveTab])
+
+  // 계정 탭이 보일 때마다 푸시 상태를 다시 읽는다 (F-2110 6.1)
+  useEffect(() => {
+    if (open && resolvedActiveTab === 'account') push?.onShown()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, resolvedActiveTab])
 
@@ -563,6 +582,7 @@ export default function SettingsDialog({
       return (
         <>
           <p className="dialog-note settings-account-email">{account.email} 로 로그인했습니다.</p>
+          {push && <PushSettings push={push} />}
           <div className="dialog-btn-row">
             <button type="button" className="dialog-btn danger" onClick={account.onDelete} disabled={!account.online}>
               계정 삭제…

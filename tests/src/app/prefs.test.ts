@@ -79,6 +79,13 @@ describe('prefs', () => {
     expect(getPref('md.wikiPreview', 'on')).toBe('off')
   })
 
+  it('md.push·md.pushSyncedAt 읽기·쓰기 (F-2110 U11)', () => {
+    expect(() => setPref('md.push', 'u1')).not.toThrow()
+    expect(() => setPref('md.pushSyncedAt', '123')).not.toThrow()
+    expect(getPref('md.push', '')).toBe('u1')
+    expect(getPref('md.pushSyncedAt', '')).toBe('123')
+  })
+
   it('허용되지 않은 키는 getPref 에서 예외', () => {
     expect(() => getPref('md.unknown', 'x')).toThrow()
   })
