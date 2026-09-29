@@ -5,6 +5,7 @@ import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from '
 import { downloadWorkspaceExport } from '../../../src/app/exportWorkspace'
 import { downloadVaultExport } from '../../../src/app/exportVault'
 import { printDoc } from '../../../src/app/printDoc'
+import { appliedUserCss } from '../../../src/app/userCssApply'
 import { renderMarkdown } from '../../../src/viewer/renderMarkdown'
 import type { EditorHandle } from '../../../src/editor/Editor'
 import type { E2eeStatus } from '../../../src/e2ee/keyring'
@@ -20,6 +21,7 @@ vi.mock('../../../src/app/exportDoc', () => ({
 vi.mock('../../../src/app/exportWorkspace', () => ({ downloadWorkspaceExport: vi.fn(async () => {}) }))
 vi.mock('../../../src/app/exportVault', () => ({ downloadVaultExport: vi.fn(async () => {}) }))
 vi.mock('../../../src/app/printDoc', () => ({ printDoc: vi.fn(async () => {}) }))
+vi.mock('../../../src/app/userCssApply', () => ({ appliedUserCss: vi.fn(() => []) }))
 vi.mock('../../../src/viewer/renderMarkdown', () => ({ renderMarkdown: vi.fn(() => '<p>렌더</p>') }))
 
 type AnyFn = (...args: never[]) => unknown
@@ -138,6 +140,29 @@ describe('한 문서 내보내기 (U1~U5)', () => {
       const scoped = argOf(exportDoc).store as { getAttachment(id: string): Promise<unknown> }
       expect(await scoped.getAttachment('a2')).toBe(expected)
     }
+  })
+})
+
+describe('사용자 CSS (F-2097 A6·A7)', () => {
+  it('A6 HTML 내보내기는 누를 때 appliedUserCss() 를 읽어 넘긴다', () => {
+    const L = [{ name: 'a', css: 'a{}' }]
+    const L2 = [{ name: 'b', css: 'b{}' }]
+    vi.mocked(appliedUserCss).mockReturnValue(L)
+    const actions = createExportActions(makeDeps())
+    actions.handleExportDocAsHtml()
+    expect(argOf(exportDocAsHtml).userCss).toBe(L)
+    vi.mocked(appliedUserCss).mockReturnValue(L2)
+    actions.handleExportDocAsHtml()
+    expect(argOf(exportDocAsHtml, 1).userCss).toBe(L2)
+  })
+
+  it('A7 다른 핸들러는 userCss 를 넘기지 않고 appliedUserCss 도 안 부른다', () => {
+    const actions = createExportActions(makeDeps())
+    actions.handleExportDoc()
+    actions.handleExportDocAsText()
+    actions.handleCopyDocAsRichText()
+    for (const fn of [exportDoc, exportDocAsText, copyDocAsRichText]) expect(argOf(fn)).not.toHaveProperty('userCss')
+    expect(appliedUserCss).not.toHaveBeenCalled()
   })
 })
 

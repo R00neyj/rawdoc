@@ -12,6 +12,7 @@ import {
   toInlineStyledHtml,
   readPalette,
   type ExportPalette,
+  type ExportUserCss,
   type ExportResources,
 } from '../viewer/toHtmlDoc'
 import type { LineEnding } from '../types'
@@ -190,12 +191,14 @@ export function buildHtmlPayload({
   title,
   body,
   css,
+  userCss,
 }: {
   title: string
   body: string
   css: string
+  userCss?: readonly ExportUserCss[]
 }): { filename: string; bytes: Uint8Array<ArrayBuffer> } {
-  const html = buildHtmlDocument({ title, body, css })
+  const html = buildHtmlDocument({ title, body, css, userCss })
   const filename = toFileName(title).replace(/\.md$/, '.html')
   const bytes = new TextEncoder().encode(html)
   return { filename, bytes }
@@ -228,6 +231,7 @@ export async function exportDocAsHtml({
   saver,
   store,
   onNotice,
+  userCss,
 }: {
   handle: EditorHandle | null | undefined
   doc: ExportDocInfo | null | undefined
@@ -235,6 +239,7 @@ export async function exportDocAsHtml({
   saver?: Saver
   store: ExportStore | null | undefined
   onNotice?: (notice: Notice) => void
+  userCss?: readonly ExportUserCss[]
 }): Promise<void> {
   if (!handle || !doc) return
 
@@ -248,7 +253,7 @@ export async function exportDocAsHtml({
   // CSS 원문을 첫 화면 번들에서 뗀다(F-280.md 6.1) — 수식 폰트 CSS(F-291.md 7.2)도 같은 동적 import 에 실려 번들 비용이 늘지 않는다
   const { EXPORT_CSS, MATH_EXPORT_CSS } = await import('../viewer/exportHtmlCss')
   const css = selectExportCss(body, EXPORT_CSS, MATH_EXPORT_CSS)
-  const payload = buildHtmlPayload({ title: doc.title, body, css })
+  const payload = buildHtmlPayload({ title: doc.title, body, css, userCss })
   downloadBlob(new Blob([payload.bytes], { type: 'text/html;charset=utf-8' }), payload.filename)
 
   const sizeMB = payload.bytes.length / (1024 * 1024)

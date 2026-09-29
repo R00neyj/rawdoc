@@ -109,6 +109,20 @@ describe('buildHtmlPayload (F-280 A13)', () => {
   })
 })
 
+describe('buildHtmlPayload — 사용자 CSS (F-2097 A5)', () => {
+  const userCss = [
+    { name: '가', css: ':root:root{--paper:red}' },
+    { name: '나', css: '.markdown-body{color:blue}' },
+  ]
+
+  it('userCss 가 바이트에 들어가고, 없으면 기존 결과 그대로', () => {
+    const withCss = buildHtmlPayload({ title: '문서', body: '<p>a</p>', css: 'x{}', userCss })
+    expect(new TextDecoder().decode(withCss.bytes)).toContain('/* 나 */')
+    const plain = buildHtmlPayload({ title: '문서', body: '<p>a</p>', css: 'x{}' })
+    expect(new TextDecoder().decode(plain.bytes)).not.toContain('/* 나 */')
+  })
+})
+
 // specs/features/F-291.md 7.2, 13장 A18
 describe('selectExportCss — 수식 있을 때만 MATH_EXPORT_CSS 를 잇는다 (A18)', () => {
   const BASE_CSS = 'body{color:red}'

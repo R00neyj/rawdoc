@@ -8,6 +8,7 @@ import {
   readPalette,
   stripFontFaceBlocks,
   stripImportLines,
+  userCssExportBlock,
 } from '../../../src/viewer/toHtmlDoc'
 import { EXPORT_CSS } from '../../../src/viewer/exportHtmlCss'
 import { buildImageBlock } from '../../../src/lib/imageBlock'
@@ -219,5 +220,38 @@ describe('buildHtmlDocument — CSS 안의 </style> 가 스타일 블록을 끊�
   it('실제 EXPORT_CSS 로 만든 문서도 </style> 가 한 번뿐이다', () => {
     const html = buildHtmlDocument({ title: '사용법', body: '<p>본문</p>', css: EXPORT_CSS })
     expect(html.match(/<\/style>/g) ?? []).toHaveLength(1)
+  })
+})
+
+describe('buildHtmlDocument — 사용자 CSS (F-2097 A1~A4)', () => {
+  const base = { title: '문서', body: '<p>본문</p>', css: 'x{}' }
+  const two = [
+    { name: '가', css: ':root:root{--paper:red}' },
+    { name: '나', css: '.markdown-body{color:blue}' },
+  ]
+
+  it('A1 userCss 없음·[] 는 안 준 호출과 바이트가 같다', () => {
+    const plain = buildHtmlDocument(base)
+    expect(buildHtmlDocument({ ...base, userCss: [] })).toBe(plain)
+    expect(buildHtmlDocument({ ...base, userCss: undefined })).toBe(plain)
+  })
+
+  it('A2 style 하나, css 뒤에 스니펫이 순서대로 이어진다', () => {
+    const html = buildHtmlDocument({ ...base, userCss: two })
+    expect(html.match(/<style>/g)).toHaveLength(1)
+    expect(html).toContain('x{}\n/* 가 */\n:root:root{--paper:red}\n/* 나 */\n.markdown-body{color:blue}</style>')
+  })
+
+  it('A3 이름 안의 */ 는 뒤집힌 슬래시 형태로 바뀐다', () => {
+    const html = buildHtmlDocument({ ...base, userCss: [{ name: 'x */ a{color:red} /* y', css: '' }] })
+    expect(html).toContain('/* x *\\/ a{color:red} /* y */')
+    expect(html).not.toContain('x */')
+    expect(userCssExportBlock([{ name: 'a*/b*/', css: '' }])).toBe('\n/* a*\\/b*\\/ */\n')
+  })
+
+  it('A4 사용자 css 의 닫는 style 태그는 끊기지 않는다', () => {
+    const html = buildHtmlDocument({ ...base, userCss: [{ name: 'a', css: 'a{}</style><b>' }] })
+    expect(html).toContain('<\\/style>')
+    expect(html.match(/<\/style>/g)).toHaveLength(1)
   })
 })

@@ -89,11 +89,28 @@ export function escapeStyleClose(css: string): string {
   return css.replace(/<\/(style)/gi, '<\\/$1')
 }
 
+export type ExportUserCss = { name: string; css: string }
+
+// 스니펫마다 이름 주석 + 검사 끝난 css. 이름의 */ 는 주석을 못 벗어나게 바꾼다 (F-2097 3장)
+export function userCssExportBlock(items: readonly ExportUserCss[]): string {
+  return items.map((it) => `\n/* ${it.name.replace(/\*\//g, '*\\/')} */\n${it.css}`).join('')
+}
+
 // 단독 .html 파일 한 개 (4.5)
-export function buildHtmlDocument({ title, body, css }: { title: string; body: string; css: string }): string {
+export function buildHtmlDocument({
+  title,
+  body,
+  css,
+  userCss = [],
+}: {
+  title: string
+  body: string
+  css: string
+  userCss?: readonly ExportUserCss[]
+}): string {
   const safeTitleText = title.trim() ? title : '제목 없는 문서'
   const safeTitle = escapeHtml(safeTitleText)
-  const safeCss = escapeStyleClose(css)
+  const safeCss = escapeStyleClose(css + userCssExportBlock(userCss))
   const safeBody = body.replace(SCRIPT_TAG_RE, '') // SVG 안 <script> 를 빼는 마지막 방어 (4.3, A7)
 
   return `<!doctype html>

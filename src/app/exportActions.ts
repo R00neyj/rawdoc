@@ -11,6 +11,7 @@ import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from '
 import { downloadWorkspaceExport, type WorkspaceExportSourceStore } from './exportWorkspace'
 import { downloadVaultExport } from './exportVault'
 import { printDoc } from './printDoc'
+import { appliedUserCss } from './userCssApply'
 
 export type ExportActionsDeps = {
   store: Store
@@ -89,6 +90,7 @@ export function createExportActions(deps: ExportActionsDeps): ExportActions {
       saver: { flush: () => docSaverFlushRef.current() },
       store: e2eeScopedExportStore(currentDoc.e2ee === 'open'),
       onNotice: showNotice,
+      userCss: appliedUserCss(),
     })
   }
 
