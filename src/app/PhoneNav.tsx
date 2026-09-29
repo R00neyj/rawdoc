@@ -91,25 +91,25 @@ export default function PhoneNav({ editorRef, screen, viewMode, vaultLocked, onO
     <div className="topbar-pill phone-nav" role="group" aria-label="하단 도구">
       <span className="icon-btn-wrap">
         <button type="button" className="icon-btn" aria-label={BACK_LABEL} disabled={!canBack} onClick={() => history.back()}>
-          <IconChevronLeft size={18} />
+          <IconChevronLeft size={22} />
         </button>
         <IconTooltip text={BACK_LABEL} />
       </span>
       <span className="icon-btn-wrap">
         <button type="button" className="icon-btn" aria-label={FORWARD_LABEL} disabled={!canForward} onClick={() => history.forward()}>
-          <IconChevron size={18} />
+          <IconChevron size={22} />
         </button>
         <IconTooltip text={FORWARD_LABEL} />
       </span>
       <span className="icon-btn-wrap">
         <button type="button" className="icon-btn" aria-label={FIND_LABEL} disabled={findDisabled} onClick={handleFind}>
-          <IconSearch size={18} />
+          <IconSearch size={22} />
         </button>
         <IconTooltip text={FIND_LABEL} />
       </span>
       <span className="icon-btn-wrap">
         <button type="button" className="icon-btn" aria-label={PALETTE_LABEL} onClick={onOpenPalette}>
-          <IconCommandPalette size={18} />
+          <IconCommandPalette size={22} />
         </button>
         <IconTooltip text={PALETTE_LABEL} />
       </span>
