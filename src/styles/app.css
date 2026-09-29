@@ -4308,8 +4308,8 @@ body.sidebar-resizing {
   color: var(--ink);
 }
 
-/* 터치 전용 기기에는 자리가 없다 — 팔레트 명령은 남는다 (F-2052 4.2 결정 10) */
-@media (hover: none) and (pointer: coarse) {
+/* 터치 전용 기기·휴대폰 폭에는 자리가 없다 — 팔레트 명령은 남는다 (F-2052 4.2 결정 10, tweak) */
+@media (hover: none) and (pointer: coarse), (max-width: 600px) {
   .statusbar-shortcuts {
     display: none;
   }
