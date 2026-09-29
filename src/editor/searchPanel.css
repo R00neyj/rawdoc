@@ -23,7 +23,8 @@
   --icon-more: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='5' cy='12' r='2.1' fill='black'/%3E%3Ccircle cx='12' cy='12' r='2.1' fill='black'/%3E%3Ccircle cx='19' cy='12' r='2.1' fill='black'/%3E%3C/svg%3E");
 
   position: absolute;
-  top: 10px;
+  /* 휴대폰 폭에서 떠 있는 상단바(--float-cover) 아래로 — 안 그러면 닫기가 ⋯ 에 가려진다 */
+  top: calc(var(--float-cover) + 10px);
   right: 10px;
   left: auto;
   z-index: 20;
