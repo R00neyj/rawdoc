@@ -126,3 +126,11 @@ export function buildUserCssBoot(
     account: account ? { userId: account.userId, sheets: sheets(account.snippets) } : null,
   }
 }
+
+export type UserCssGetResponse = { snippets: UserCssSnippet[]; rev: number }
+export type UserCssPutBody = { snippets: UserCssSnippet[]; baseRev: number }
+export type UserCssPutResponse = { rev: number }
+export type UserCssPutError =
+  | { error: 'conflict'; rev: number }
+  | { error: 'too_large'; limit: number }
+  | { error: 'invalid'; field?: string }

@@ -215,6 +215,7 @@ const OWNER_TABLES: [string, string][] = [
   ['doc_comments', "SELECT COUNT(*) AS n FROM doc_comments WHERE doc_id LIKE 'd%'"],
   ['notifications', "SELECT COUNT(*) AS n FROM notifications WHERE doc_id LIKE 'd%' OR recipient_email = 'owner@example.com'"],
   ['push_subscriptions', 'SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?1'],
+  ['user_css', 'SELECT COUNT(*) AS n FROM user_css WHERE user_id = ?1'],
 ]
 
 function seedDeleteExtras(sqlDb: DatabaseSync) {
@@ -224,6 +225,7 @@ function seedDeleteExtras(sqlDb: DatabaseSync) {
   run(sqlDb, "INSERT INTO doc_locks (doc_id, user_id, email, session_id, expires_at) VALUES ('x1', ?, ?, 'ls', 9)", OWNER, OWNER_EMAIL)
   run(sqlDb, "INSERT INTO doc_locks (doc_id, user_id, email, session_id, expires_at) VALUES ('d1', ?, ?, 'ls', 9)", OTHER, OTHER_EMAIL)
   run(sqlDb, "INSERT INTO e2ee_keys (user_id, bundle, rev, created_at, updated_at) VALUES (?, '{}', 1, 1, 1)", OWNER)
+  run(sqlDb, "INSERT INTO user_css (user_id, snippets, rev, created_at, updated_at) VALUES (?, '[]', 1, 1, 1), (?, '[]', 1, 1, 1)", OWNER, OTHER)
   run(sqlDb, "INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at) VALUES ('p1', ?, 'https://fcm.googleapis.com/fcm/send/o', 'p', 'a', 1), ('p2', ?, 'https://fcm.googleapis.com/fcm/send/x', 'p', 'a', 1)", OWNER, OTHER)
   run(
     sqlDb,
@@ -260,6 +262,7 @@ describe('F-2038 W3 지우기', () => {
     expect(count(sqlDb, "SELECT COUNT(*) AS n FROM doc_comments WHERE doc_id = 'x1'")).toBe(1)
     expect(count(sqlDb, "SELECT COUNT(*) AS n FROM notifications WHERE id = 'n3'")).toBe(1)
     expect(count(sqlDb, "SELECT COUNT(*) AS n FROM push_subscriptions WHERE id = 'p2'")).toBe(1)
+    expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM user_css WHERE user_id = ?', OTHER)).toBe(1)
     expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM users WHERE id = ?', OTHER)).toBe(1)
 
     await Promise.all(pending)

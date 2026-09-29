@@ -67,6 +67,7 @@ import {
 } from './v1'
 import { handleDeleteE2eeKeys, handleGetE2eeKeys, handlePutE2eeKeys } from './e2eeKeys'
 import { handleSetDocE2ee } from './e2eeDocs'
+import { handleGetUserCss, handlePutUserCss } from './userCss'
 import { renderPublicPage } from './publicPage'
 import { renderWelcomePage } from './welcomePage'
 import { rootTarget, withRootHeaders, withWelcomeHeaders } from './rootRoute'
@@ -246,6 +247,8 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/e2ee/keys', handler: handleGetE2eeKeys },
   { method: 'PUT', path: '/api/e2ee/keys', handler: handlePutE2eeKeys },
   { method: 'DELETE', path: '/api/e2ee/keys', handler: handleDeleteE2eeKeys },
+  { method: 'GET', path: '/api/user-css', handler: handleGetUserCss },
+  { method: 'PUT', path: '/api/user-css', handler: handlePutUserCss },
   { method: 'POST', path: '/api/docs/:id/lock', handler: handleLockDoc },
   { method: 'DELETE', path: '/api/docs/:id/lock', handler: handleUnlockDoc },
   { method: 'GET', path: '/api/docs/:id/link', handler: handleGetDocLink },

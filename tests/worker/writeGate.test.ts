@@ -134,6 +134,7 @@ const WRITE_ROUTES: [string, string][] = [
   ['POST', '/api/notifications/read'],
   ['PUT', '/api/push/subscription'],
   ['POST', '/api/push/test'],
+  ['PUT', '/api/user-css'],
 ]
 
 const PUB_GET_ROUTES = [
@@ -148,7 +149,7 @@ const PUB_GET_ROUTES = [
 ]
 
 describe('G1 isWriteRoute — 3장 표', () => {
-  it('37개만 참, 나머지 전부 거짓 (F-401 금고 셋 + F-402 첨부 지우기 + F-2050 삭제·이동·폴더 삭제 포함)', () => {
+  it('38개만 참, 나머지 전부 거짓 (F-401 금고 셋 + F-402 첨부 지우기 + F-2050 삭제·이동·폴더 삭제 포함)', () => {
     for (const [method, path] of WRITE_ROUTES) {
       expect(isWriteRoute(method, path), `${method} ${path}`).toBe(true)
     }
@@ -171,7 +172,8 @@ describe('G1 isWriteRoute — 3장 표', () => {
     expect(isWriteRoute('GET', '/api/account')).toBe(false)
     expect(isWriteRoute('DELETE', '/api/push/subscription')).toBe(false)
     expect(isWriteRoute('GET', '/api/push/key')).toBe(false)
-    expect(WRITE_ROUTES).toHaveLength(37)
+    expect(isWriteRoute('GET', '/api/user-css')).toBe(false)
+    expect(WRITE_ROUTES).toHaveLength(38)
   })
 })
 

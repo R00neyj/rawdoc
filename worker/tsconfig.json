@@ -8,5 +8,5 @@
     "moduleResolution": "bundler",
     "skipLibCheck": true
   },
-  "include": ["./**/*.ts", "../tests/worker/**/*.ts", "../src/lib/folderTree.ts", "../src/lib/imageBlock.ts","../src/types.ts", "../src/lib/comments.ts", "../src/lib/siteMeta.ts", "../src/lib/appEntry.ts", "../src/lib/siteChrome.ts", "../src/lib/lineEnding.ts", "../src/lib/docRoomProtocol.ts", "../src/lib/textRebase.ts", "../src/lib/e2eeLimits.ts", "../src/lib/pushPayload.ts", "../src/lib/pushText.ts", "../brand.config.ts"]
+  "include": ["./**/*.ts", "../tests/worker/**/*.ts", "../src/lib/folderTree.ts", "../src/lib/imageBlock.ts","../src/types.ts", "../src/lib/comments.ts", "../src/lib/siteMeta.ts", "../src/lib/appEntry.ts", "../src/lib/siteChrome.ts", "../src/lib/lineEnding.ts", "../src/lib/docRoomProtocol.ts", "../src/lib/textRebase.ts", "../src/lib/e2eeLimits.ts", "../src/lib/pushPayload.ts", "../src/lib/pushText.ts", "../src/lib/userCssPolicy.ts","../brand.config.ts"]
 }
