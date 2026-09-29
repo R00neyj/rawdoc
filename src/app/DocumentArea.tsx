@@ -1,4 +1,5 @@
-import type { CSSProperties, Dispatch, RefObject, SetStateAction } from 'react'
+import { useEffect, useState, type CSSProperties, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { floatCoverFor } from '../lib/floatCover'
 import type { EditorState } from '@codemirror/state'
 import Editor, { type EditorHandle } from '../editor/Editor'
 import Viewer from '../viewer/Viewer'
@@ -25,9 +26,10 @@ import type { UseNotificationsGlueResult } from './useNotificationsGlue'
 import type { UseLiveRoomDocResult } from './useLiveRoomDoc'
 
 // 떠 있는 `댓글 달기` 버튼 — 선택이 화면 위로 지나가면 위 끝, 아래에 있으면 아래 끝에 붙인다(버튼 32px + 여백 8px)
-function clampFabY(y: number, viewportH: number): number {
+function clampFabY(y: number, viewportH: number, cover: number): number {
   if (viewportH <= 0) return y
-  return Math.min(Math.max(y, 8), Math.max(8, viewportH - 40))
+  const top = cover + 8
+  return Math.min(Math.max(y, top), Math.max(top, viewportH - 40))
 }
 
 export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref' | 'resolvedTheme' | 'wikiPreviewPref'> &
@@ -82,6 +84,13 @@ export default function DocumentArea({
   mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme, setCommentRailExtra, setEditorRefs, sharedDoc,
   sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
 }: DocumentAreaProps) {
+  const [pillCover, setPillCover] = useState(0)
+  useEffect(() => {
+    const read = () => contentAreaRef.current && setPillCover(floatCoverFor(contentAreaRef.current))
+    read()
+    window.addEventListener('resize', read)
+    return () => window.removeEventListener('resize', read)
+  }, [contentAreaRef])
   // 잠긴 금고 문서 — 편집기 자리에 P1 (F-405 6.2)
   const showE2eeLockedPanel = currentDoc?.e2ee === 'locked' && openDoc?.id !== currentDocId
   // 위키링크 미리보기 켜짐 조건 — 문서가 열려 있고 공유 화면·지도·도움말·공유 관리가 안 떠 있다 (F-2044 4.1)
@@ -105,7 +114,7 @@ export default function DocumentArea({
   return (
     // 공유 화면·지도가 떠 있는 동안 편집 영역을 언마운트하지 않고 hidden 으로만 숨긴다 — 언마운트하면 EditorView 가 새로 만들어져 저장된 편집을 덮어쓴다(F-138 3.2, F-292.md 6.1)
     <div
-      className="content-area"
+      className="content-area content-area--doc"
       ref={contentAreaRef}
       hidden={Boolean(sharedDoc) || Boolean(mapRoute)}
       data-comment-rail-open={commentRailVisible || undefined}
@@ -216,7 +225,7 @@ export default function DocumentArea({
             className="comment-add-button"
             aria-label="댓글 달기"
             title="댓글 달기 (Ctrl+Alt+M)"
-            style={{ transform: `translateY(${clampFabY(floatingCommentAnchor - editorScrollTop, editorViewportH)}px)` }}
+            style={{ transform: `translateY(${clampFabY(floatingCommentAnchor - editorScrollTop, editorViewportH, pillCover)}px)` }}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => comments.beginComment()}
           >

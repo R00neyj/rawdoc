@@ -49,6 +49,7 @@ import { readOnlyChangeGuard } from './readOnlyGuard'
 import './searchPanel.css'
 import './commentMarks.css'
 import { isTouchContextMenu } from '../lib/touchContextMenu'
+import { floatCoverFor } from '../lib/floatCover'
 
 // 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
 const HEADINGS_DEBOUNCE_MS = 150
@@ -399,6 +400,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // compartment 밖에 둔다 — 재구성에 다시 만들어지면 묶음 상태·선택 저장이 끊긴다 (F-302 5.2)
     binding.extension,
     EditorView.lineWrapping,
+    EditorView.scrollMargins.of((v) => ({ top: floatCoverFor(v.scrollDOM) })),
     // 놓을 자리 표시(F-156.md 2.5) — imageInsert() 는 dropFileGuard 보다 먼저 등록해 같은 'drop' 이벤트를 먼저 가로채야 한다(CM6 는 등록 순서로 호출)
     dropCursor(),
     imageInsert({ onImageFiles }),
@@ -649,7 +651,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
           const coords = view.coordsAtPos(clamped)
           if (!coords) return
           const scrollerTop = view.scrollDOM.getBoundingClientRect().top
-          const delta = coords.top - scrollerTop - 16
+          const delta = coords.top - scrollerTop - 16 - floatCoverFor(view.scrollDOM)
           if (Math.abs(delta) > 0.5) view.scrollDOM.scrollTop += delta
         })
       })

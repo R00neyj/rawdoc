@@ -1,4 +1,4 @@
-// 휴대폰 폭 상단바 `⋯` 버튼 + 아래 판 — 홈·목차·댓글·공유·내보내기·알림·계정 (specs/features/F-2083.md 4장)
+// 휴대폰 폭 상단바 `⋯` 버튼 + 아래 판 — 목차·댓글·공유·내보내기·알림·계정 (specs/features/F-2083.md 4장)
 import { useEffect, useRef, useState, type ComponentType, type ReactNode, type RefObject } from 'react'
 
 import {
@@ -9,7 +9,6 @@ import {
   IconCommandPalette,
   IconDownload,
   IconForum,
-  IconHome,
   IconMore,
   IconNotifications,
   IconShare,
@@ -39,7 +38,6 @@ type TopBarMoreSheetProps = {
 }
 
 const ROW_LABEL: Record<MoreItemKey, string> = {
-  home: '홈',
   outline: '목차',
   comments: '댓글',
   share: '공유',
@@ -50,7 +48,6 @@ const ROW_LABEL: Record<MoreItemKey, string> = {
 }
 
 const ROW_ICON: Record<MoreItemKey, ComponentType<{ size?: number }>> = {
-  home: IconHome,
   outline: IconToc,
   comments: IconForum,
   share: IconShare,
@@ -178,9 +175,7 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
   }
 
   function activate(key: MoreItemKey) {
-    if (key === 'home') {
-      closeSheet()
-    } else if (key === 'outline') {
+    if (key === 'outline') {
       closeSheet()
       outlineControlRef.current?.openCard(moreBtnRef.current)
     } else if (key === 'comments') {
@@ -282,7 +277,6 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
                 type="button"
                 className="more-sheet-item"
                 data-row={key}
-                data-go-home={key === 'home' ? '' : undefined}
                 aria-label={rowLabel(key)}
                 disabled={disabled}
                 onClick={() => activate(key)}

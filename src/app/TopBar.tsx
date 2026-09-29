@@ -115,7 +115,7 @@ export default function TopBar({
       <header className="topbar">
         {narrow && (
           <SidebarHead
-            variant="topbar"
+            variant={phone ? 'phone' : 'topbar'}
             expanded={sidebarOpen}
             onToggleSidebar={onToggleSidebar}
             toggleButtonRef={toggleButtonRef}
@@ -128,7 +128,7 @@ export default function TopBar({
         </div>
         <PeerAvatars peers={peers} selfUserId={selfUserId} narrow={narrow} />
         {phone ? (
-          <>
+          <div className="topbar-pill topbar-pill--end">
             {screen === 'doc' && <ViewModeMenu viewMode={viewMode} disabled={viewModeDisabled} onChange={onChangeViewMode} />}
             <TopBarMoreSheet
               screen={screen}
@@ -149,7 +149,7 @@ export default function TopBar({
               exporter={{ disabled: exportDisabled, onExportMd, onExportTxt, onPrintDoc, onExportHtml, onCopyRich }}
               account={{ account, onBeforeNavigate: onAccountBeforeNavigate, onNotice: onAccountNotice, onLoggedOut: onAccountLoggedOut }}
             />
-          </>
+          </div>
         ) : (
           <>
             <div className="seg view-mode-seg" role="group" aria-label="보기 모드">

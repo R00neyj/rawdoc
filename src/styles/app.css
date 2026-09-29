@@ -1,5 +1,11 @@
 /* 레이아웃·컴포넌트 스타일 (specs/ia.md 2·3.11·7장, specs/design.md 4장) */
 
+@property --float-cover {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
 /* 브라우저 기본 `[hidden]{display:none}` 보다 구체성이 높은 `.sidebar{display:flex}` 같은
    규칙이 있으면 hidden 속성이 무시된다. 항상 최우선으로 적용되게 한다 (F-122 2.3) */
 [hidden] {
@@ -351,16 +357,8 @@ svg {
   transition-delay: 0s;
 }
 
-/* 휴대폰 폭 — 상단바가 화면보다 넓어 가로·세로 스크롤이 생기던 문제, 제품명 글자·준비 중 검색을 빼고 간격을 줄인다 (F-216) */
+/* 휴대폰 폭 — 상단바는 떠 있는 알약 (F-216·F-2085), 알약 모양은 파일 맨 아래 블록 */
 @media (max-width: 600px) {
-  .topbar {
-    gap: 4px;
-    padding: 0 8px;
-    overflow-x: clip;
-  }
-
-  .topbar .brand-group,
-  .topbar .brand,
   .topbar .icon-btn-wrap:has(> .topbar-search-btn),
   .topbar .icon-btn-wrap:has(> .topbar-palette-btn) {
     display: none;
@@ -4924,4 +4922,128 @@ body.sidebar-resizing {
 
 .account-delete-error {
   color: var(--danger);
+}
+
+/* 휴대폰 폭 상단바 — 전폭 바 대신 본문 위에 떠 있는 알약 (F-2085) */
+@media (max-width: 600px) {
+  .app-shell {
+    --float-cover: calc(env(safe-area-inset-top, 0px) + 60px);
+  }
+
+  .topbar {
+    position: absolute;
+    inset: 0 0 auto 0;
+    z-index: 36;
+    height: auto;
+    gap: 8px;
+    padding: calc(env(safe-area-inset-top, 0px) + 8px) 8px 0;
+    border-bottom: none;
+    background: transparent;
+    pointer-events: none;
+    overflow-x: clip;
+  }
+
+  .topbar-pill,
+  .topbar .peer-avatars {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    height: 44px;
+    border: 1px solid var(--rule);
+    border-radius: 22px;
+    background: color-mix(in srgb, var(--panel) 85%, transparent);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+    backdrop-filter: blur(12px);
+  }
+
+  .topbar-pill {
+    gap: 0;
+    padding: 0 4px;
+  }
+
+  .topbar .peer-avatars {
+    padding: 0 10px;
+    margin-right: 0;
+  }
+
+  .topbar-pill .icon-btn,
+  .topbar-pill .brand-group {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    margin: 0;
+    justify-content: center;
+  }
+
+  .topbar:has(.sidebar-toggle[aria-expanded='true']) .topbar-pill--end,
+  .topbar:has(.sidebar-toggle[aria-expanded='true']) .peer-avatars {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .topbar-pill--end,
+  .topbar .peer-avatars {
+    transition: opacity var(--transition-fast), visibility var(--transition-fast);
+  }
+
+  .app-shell .content-area {
+    isolation: isolate;
+  }
+
+  .app-shell .content-area:not(.content-area--doc) {
+    padding-top: var(--float-cover);
+  }
+
+  .content-area--doc {
+    --doc-pad-top: calc(var(--float-cover) + 16px);
+  }
+
+  .content-area--doc .cm-scroller,
+  .content-area--doc .viewer {
+    scroll-padding-top: var(--float-cover);
+  }
+
+  .content-area--doc .cm-panels-top {
+    padding-top: var(--float-cover);
+  }
+
+  .sidebar--overlay {
+    padding-top: var(--float-cover);
+  }
+
+  .app-shell .outline-popup {
+    top: calc(var(--float-cover) - 8px);
+  }
+
+  .comment-sheet {
+    max-height: calc(100% - var(--float-cover));
+  }
+
+  .notice {
+    position: absolute;
+    top: var(--float-cover);
+    left: 8px;
+    right: 8px;
+    z-index: 15;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-dialog);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  }
+}
+
+@media (max-width: 600px) and (pointer: coarse) {
+  .topbar .topbar-pill .icon-btn,
+  .topbar .topbar-pill .brand-group {
+    width: 44px;
+    height: 44px;
+    margin: -4px;
+  }
+}
+
+@media (max-width: 600px) and (prefers-reduced-transparency: reduce) {
+  .topbar-pill,
+  .topbar .peer-avatars {
+    background: var(--panel);
+    backdrop-filter: none;
+  }
 }

@@ -26,7 +26,7 @@ describe('F-2083 A1 topBarScreen', () => {
 describe('F-2083 A2 moreSheetItems', () => {
   const all = { screen: 'doc' as const, hasOutline: true, comments: true, notifications: true }
   it('doc 전부 → 7개 순서 그대로', () => {
-    expect(moreSheetItems(all)).toEqual(['home', 'outline', 'comments', 'share', 'export', 'palette', 'notifications', 'account'])
+    expect(moreSheetItems(all)).toEqual(['outline', 'comments', 'share', 'export', 'palette', 'notifications', 'account'])
   })
   it('doc 제목 없음 → outline 빠짐', () => {
     expect(moreSheetItems({ ...all, hasOutline: false })).not.toContain('outline')
@@ -42,7 +42,7 @@ describe('F-2083 A2 moreSheetItems', () => {
     expect(moreSheetItems({ ...all, screen: 'home', notifications: false })).toEqual(['palette', 'account'])
   })
   it('other', () => {
-    expect(moreSheetItems({ ...all, screen: 'other' })).toEqual(['home', 'palette', 'notifications', 'account'])
+    expect(moreSheetItems({ ...all, screen: 'other' })).toEqual(['palette', 'notifications', 'account'])
   })
 })
 
@@ -63,5 +63,16 @@ describe('F-2083 A3 moreDotVisible', () => {
   })
   it('둘 다 null → 거짓', () => {
     expect(moreDotVisible({ screen: 'doc', unread: null, commentsOpenCount: null })).toBe(false)
+  })
+})
+
+describe('F-2085 A2 home 행 없음', () => {
+  it('어느 입력에서도 home 이 없다', () => {
+    for (const screen of ['doc', 'home', 'other'] as const) {
+      for (const notifications of [true, false]) {
+        const items: string[] = moreSheetItems({ screen, hasOutline: true, comments: true, notifications })
+        expect(items).not.toContain('home')
+      }
+    }
   })
 })

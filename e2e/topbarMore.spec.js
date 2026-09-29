@@ -2,6 +2,7 @@
 import { test, expect } from '@playwright/test'
 import { openApp, importMarkdown, setPrefBeforeLoad } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
+import brand from '../brand.config.ts'
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
 
@@ -29,6 +30,9 @@ test('F-2083 E1 휴대폰 폭 상단바와 판', async ({ page }) => {
   await expect(topbar.getByRole('button', { name: '사이드바 열기' })).toBeVisible()
   await expect(topbar.getByRole('button', { name: '보기 모드: 편집' })).toBeVisible()
   await expect(moreBtn(page)).toBeVisible()
+  await expect(topbar.getByRole('button', { name: `${brand.name} 홈으로` })).toBeVisible()
+  const leadLabels = await topbar.locator('.topbar-lead button').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
+  expect(leadLabels).toEqual(['사이드바 열기', `${brand.name} 홈으로`])
   for (const name of ['공유 — 링크·마크다운 복사', '내보내기', '계정', '댓글 0개']) {
     await expect(topbar.getByRole('button', { name, exact: true })).toHaveCount(0)
   }
@@ -39,7 +43,8 @@ test('F-2083 E1 휴대폰 폭 상단바와 판', async ({ page }) => {
 
   await moreBtn(page).click()
   await expect(sheet(page)).toBeVisible()
-  expect(await rowTexts(page)).toEqual(['홈', '목차', '댓글', '공유', '내보내기', '명령 팔레트', '계정'])
+  expect(await rowTexts(page)).toEqual(['목차', '댓글', '공유', '내보내기', '명령 팔레트', '계정'])
+  await expect(sheet(page).getByRole('button', { name: '홈', exact: true })).toHaveCount(0)
   await expect(sheet(page).locator('.more-sheet-item').first()).toBeFocused()
 
   await sheet(page).getByRole('button', { name: '내보내기', exact: true }).click()
@@ -60,8 +65,7 @@ test('F-2083 E1 휴대폰 폭 상단바와 판', async ({ page }) => {
   await page.touchscreen.tap(195, 40)
   await expect(sheet(page)).toBeHidden()
 
-  await moreBtn(page).click()
-  await sheet(page).getByRole('button', { name: '홈', exact: true }).click()
+  await topbar.getByRole('button', { name: `${brand.name} 홈으로` }).tap()
   await expect(page.locator('.empty-state p')).toHaveText('문서를 선택하거나 새로 만드세요.')
   await expect(page.locator('.topbar').getByRole('button', { name: /^보기 모드/ })).toHaveCount(0)
   await moreBtn(page).click()
@@ -142,4 +146,51 @@ test('F-2083 E3 목차·알림 진입과 점', async ({ page }) => {
   await importMarkdown(page, { content: '본문\n' })
   await moreBtn(page).click()
   expect(await rowTexts(page)).not.toContain('목차')
+})
+
+test('F-2085 E1 떠 있는 알약 — 본문이 밑으로 지나가고 가리지 않는다', async ({ page }) => {
+  await openApp(page)
+  await importMarkdown(page, { content: longDoc() })
+  const topbar = page.locator('.topbar')
+  const lead = topbar.locator('.topbar-lead')
+  const end = topbar.locator('.topbar-pill--end')
+  await expect(lead).toBeVisible()
+  await expect(end).toBeVisible()
+  const bottomOf = (loc) => loc.evaluate((el) => el.getBoundingClientRect().bottom)
+  const pillBottom = Math.max(await bottomOf(lead), await bottomOf(end))
+  const topOf = (sel) => page.locator(sel).first().evaluate((el) => el.getBoundingClientRect().top)
+
+  expect(await topOf('.cm-scroller')).toBeLessThanOrEqual(0.5)
+  expect(await topOf('textarea.doc-title')).toBeGreaterThanOrEqual(pillBottom)
+
+  await moreBtn(page).click()
+  await sheet(page).getByRole('button', { name: '목차', exact: true }).click()
+  await page.locator('.outline-popup-card').getByRole('button', { name: /부제 10/ }).first().click()
+  await expect
+    .poll(() => page.locator('.cm-line', { hasText: '부제 10' }).first().evaluate((el) => { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect().top }))
+    .toBeGreaterThanOrEqual(pillBottom)
+
+  await page.locator('.topbar').getByRole('button', { name: '보기 모드: 편집' }).click()
+  await page.getByRole('menuitemradio', { name: /^보기/ }).click()
+  await expect(page.locator('.viewer').first()).toBeVisible()
+  await moreBtn(page).click()
+  await sheet(page).getByRole('button', { name: '목차', exact: true }).click()
+  await page.locator('.outline-popup-card').getByRole('button', { name: /부제 12/ }).first().click()
+  await expect
+    .poll(() => page.locator('.viewer').getByRole('heading', { name: '부제 12' }).first().evaluate((el) => el.getBoundingClientRect().top))
+    .toBeGreaterThanOrEqual(pillBottom)
+
+  await topbar.getByRole('button', { name: '사이드바 열기' }).click()
+  await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'open')
+  await expect(end).toBeHidden()
+  await expect(topbar.getByRole('button', { name: '사이드바 닫기' })).toBeVisible()
+  expect(await topOf('.sidebar-actions')).toBeGreaterThanOrEqual(pillBottom)
+  await topbar.getByRole('button', { name: '사이드바 닫기' }).click()
+  await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'closed')
+  await expect(end).toBeVisible()
+
+  await page.setViewportSize({ width: 601, height: 844 })
+  await expect(end).toHaveCount(0)
+  expect(await topOf('.viewer')).toBeGreaterThanOrEqual(51.5)
+  await expect(topbar.locator('.brand')).toBeVisible()
 })

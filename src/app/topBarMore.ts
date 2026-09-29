@@ -14,7 +14,7 @@ export function topBarScreen(input: {
   return input.currentDocId === null ? 'home' : 'doc'
 }
 
-export type MoreItemKey = 'home' | 'outline' | 'comments' | 'share' | 'export' | 'palette' | 'notifications' | 'account'
+export type MoreItemKey = 'outline' | 'comments' | 'share' | 'export' | 'palette' | 'notifications' | 'account'
 
 export function moreSheetItems(input: {
   screen: TopBarScreen
@@ -24,7 +24,6 @@ export function moreSheetItems(input: {
 }): MoreItemKey[] {
   const { screen } = input
   const items: MoreItemKey[] = []
-  if (screen !== 'home') items.push('home')
   if (screen === 'doc' && input.hasOutline) items.push('outline')
   if (screen === 'doc' && input.comments) items.push('comments')
   if (screen === 'doc') items.push('share', 'export')

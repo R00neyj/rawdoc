@@ -5,6 +5,7 @@ import type { Heading } from '../editor/outline'
 import type { EditorHandle } from '../editor/Editor'
 import usePresence from './usePresence'
 import { IconToc } from './icons'
+import { floatCoverFor } from '../lib/floatCover'
 
 const SELECT_MARGIN = 16 // 3.3 "그 제목이 스크롤 영역 위에서 16px 아래에 오도록"
 const MIN_MARGIN = 56 // 2장 "메인 열 오른쪽 여백이 … 56px 이상일 때만"
@@ -116,30 +117,48 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
     if (viewMode === 'view') {
       const container = viewerRef?.current
       if (!container) return
+      let cover = floatCoverFor(container)
+      const handleResize = () => {
+        cover = floatCoverFor(container)
+        update()
+      }
       function update() {
         const tops = headings.map((h) => {
           const el = findViewerHeadingEl(container!, handle!, h.from)
           return el ? topInScroller(el, container!) : 0
         })
-        setCurrentIndex(computeCurrentIndex(container!.scrollTop, tops))
+        setCurrentIndex(computeCurrentIndex(container!.scrollTop + cover, tops))
       }
       update()
       container.addEventListener('scroll', update, { passive: true })
-      return () => container.removeEventListener('scroll', update)
+      window.addEventListener('resize', handleResize)
+      return () => {
+        container.removeEventListener('scroll', update)
+        window.removeEventListener('resize', handleResize)
+      }
     }
 
     const scroller = handle.view.scrollDOM
+    let cover = floatCoverFor(scroller)
+    const handleResize = () => {
+      cover = floatCoverFor(scroller)
+      update()
+    }
     function update() {
       // lineBlockAt().top 은 문서 위 여백을 뺀 값이라 scrollTop 좌표계로 맞춤
       const padTop = handle!.view.documentPadding.top
       const tops = headings.map(
         (h) => handle!.view.lineBlockAt(Math.min(h.from, handle!.view.state.doc.length)).top + padTop,
       )
-      setCurrentIndex(computeCurrentIndex(scroller.scrollTop, tops))
+      setCurrentIndex(computeCurrentIndex(scroller.scrollTop + cover, tops))
     }
     update()
     scroller.addEventListener('scroll', update, { passive: true })
-    return () => scroller.removeEventListener('scroll', update)
+    window.addEventListener('resize', handleResize)
+    return () => {
+      scroller.removeEventListener('scroll', update)
+      window.removeEventListener('resize', handleResize)
+    }
   }, [visible, headings, viewMode, editorRef, viewerRef])
 
   // 카드가 열리면 현재 위치 항목이 보이도록 카드만 스크롤하고 포커스를 옮긴다 (F-229 2.3·2.5)
@@ -224,7 +243,7 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
       if (!container) return
       const el = findViewerHeadingEl(container, handle, heading.from)
       if (!el) return // 3.4 — 못 찾으면 아무것도 안 함
-      scrollTo(container, Math.max(0, topInScroller(el, container) - SELECT_MARGIN))
+      scrollTo(container, Math.max(0, topInScroller(el, container) - SELECT_MARGIN - floatCoverFor(container)))
     } else {
       handle.scrollToHeading(heading.from)
     }

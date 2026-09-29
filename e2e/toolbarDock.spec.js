@@ -1,6 +1,6 @@
 // 휴대폰 폭 서식 바를 키보드 위로 (specs/features/F-2084.md 4장)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, resizeWindow, fakeImeCompose } from './helpers.js'
+import { openApp, importMarkdown, resizeWindow, fakeImeCompose, setPrefBeforeLoad } from './helpers.js'
 
 const BODY = '선택\n\n둘째\n\n셋째\n'
 
@@ -16,6 +16,8 @@ test.describe('F-2084 휴대폰 폭 (390×844, 터치)', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
 
   test('F-2084 E1 포커스 때만 보이고 앱 틀 맨 아래에 붙는다', async ({ page }) => {
+    // F-2085 부터 저장 공간 알림은 알약 아래 떠 있는 카드라 제목 입력칸을 덮는다 — 이 테스트는 서식 바만 본다
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
     await openApp(page)
     await importMarkdown(page, { content: BODY })
     await blurAll(page)

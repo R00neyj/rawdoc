@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { showSearchMatches } from '../editor/showSearchMatches'
 import { createWikiResolver, type WikiResolver } from '../lib/wikiResolve'
+import { floatCoverFor } from '../lib/floatCover'
 import { countChars, countWords } from '../editor/stats'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { findHeadingLine } from '../viewer/headingTarget'
@@ -162,7 +163,7 @@ export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResul
         } else {
           const place = () => {
             const el = findViewerHeadingElByLine(container, line)
-            if (el) container.scrollTo({ top: Math.max(0, topInScroller(el, container) - HEADING_JUMP_MARGIN) })
+            if (el) container.scrollTo({ top: Math.max(0, topInScroller(el, container) - HEADING_JUMP_MARGIN - floatCoverFor(container)) })
           }
           place()
           // 그려진 뒤(rAF 2회) 실측 보정 — 모드 전환 복원과 같은 이유
