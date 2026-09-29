@@ -122,12 +122,12 @@ function setup(opts: { content?: string; title?: string } = {}) {
   return { sqlDb, ...db }
 }
 
-function makeRoom(DB: D1Database, storage = makeStorage()) {
+function makeRoom(DB: D1Database, storage = makeStorage(), extraEnv: Record<string, unknown> = {}) {
   const doc = new Y.Doc()
   const alarms: number[] = []
   const host: DocRoomHost<RoomConnection> = {
     docId: DOC_ID,
-    env: { DB } as unknown as Env,
+    env: { DB, ...extraEnv } as unknown as Env,
     storage,
     doc,
     connections: () => [],
@@ -301,6 +301,7 @@ describe('F-502 D7·D8 알림', () => {
     expect(notes(sqlDb)).toEqual([
       { recipient_email: 'bob@example.com', kind: 'reply', comment_id: 'a1', thread_id: 'r1', actor_email: 'owner@example.com', doc_title: '회의록', excerpt: '네 볼게요' },
       { recipient_email: 'carol@example.com', kind: 'mention', comment_id: 'r1', thread_id: 'r1', actor_email: 'bob@example.com', doc_title: '회의록', excerpt: body },
+      { recipient_email: 'owner@example.com', kind: 'comment', comment_id: 'r1', thread_id: 'r1', actor_email: 'bob@example.com', doc_title: '회의록', excerpt: body },
     ])
   })
 
@@ -315,7 +316,7 @@ describe('F-502 D7·D8 알림', () => {
     expect(state.batches).toHaveLength(1)
     await vi.advanceTimersByTimeAsync(SNAPSHOT_RETRY_MS)
     expect(state.batches).toHaveLength(2)
-    expect(notes(sqlDb)).toHaveLength(1)
+    expect(notes(sqlDb)).toHaveLength(2)
     expect(ownerBytes(sqlDb)).toBe(dbRows(sqlDb)[0].bytes)
     await room.core.flush()
     expect(state.batches).toHaveLength(2)
@@ -367,12 +368,13 @@ describe('F-502 D10~D12 지우기·앵커 다시 적기', () => {
     put(room.doc, conn(BOB), (m) => m.set('r1', entryAt(room.content, 'target', BOB, { body: '@carol@example.com 봐 주세요', mentions: ['carol@example.com'] })))
     put(room.doc, conn(BOB), (m) => m.set('r2', entryAt(room.content, 'intro', BOB)))
     await room.core.flush()
-    expect(notes(sqlDb)).toHaveLength(1)
+    expect(notes(sqlDb)).toHaveLength(3)
     const r2Bytes = dbRows(sqlDb).find((r) => r.id === 'r2')!.bytes
     put(room.doc, conn(BOB), (m) => m.delete('r1'))
     await room.core.flush()
     expect(dbRows(sqlDb).map((r) => r.id)).toEqual(['r2'])
-    expect(notes(sqlDb)).toHaveLength(0)
+    expect(notes(sqlDb)).toHaveLength(1)
+    expect(notes(sqlDb)[0]).toMatchObject({ kind: 'comment', comment_id: 'r2' })
     expect(ownerBytes(sqlDb)).toBe(r2Bytes)
   })
 
@@ -483,7 +485,7 @@ describe('F-502 D15 접근 집합 60초 보관', () => {
     vi.setSystemTime(1_030_000)
     put(room.doc, conn(BOB), (m) => m.set('r2', entryAt(room.content, 'intro', BOB, { body: '@carol@example.com 둘', mentions: ['carol@example.com'] })))
     await room.core.flush()
-    expect(notes(sqlDb)).toHaveLength(2)
+    expect(notes(sqlDb)).toHaveLength(4)
     expect(state.prepares.filter((s) => s.includes('FROM grants'))).toHaveLength(1)
   })
 })
@@ -499,5 +501,79 @@ describe('F-502 D16 스냅숏 도중 문서 삭제', () => {
     await room.core.flush()
     expect(dbRows(sqlDb)).toHaveLength(0)
     expect(ownerBytes(sqlDb)).toBe(bytes)
+  })
+})
+
+async function vapidEnv() {
+  const pair = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign'])) as CryptoKeyPair
+  const jwk = JSON.stringify(await crypto.subtle.exportKey('jwk', pair.privateKey))
+  return { VAPID_PRIVATE_JWK: jwk, BETTER_AUTH_URL: 'http://localhost:8790' }
+}
+
+const ownerComments = (sqlDb: DatabaseSync) =>
+  sqlDb.prepare("SELECT push_due_at, created_at FROM notifications WHERE recipient_email = 'owner@example.com' AND kind = 'comment'").all() as { push_due_at: number | null; created_at: number }[]
+
+function subscribeOwner(sqlDb: DatabaseSync) {
+  sqlDb.prepare('INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at) VALUES (?,?,?,?,?,?)').run('s1', 'owner', 'https://push.example/1', 'k', 'a', 1)
+}
+
+async function bobComments(w: ReturnType<typeof setup>, env: Record<string, unknown>) {
+  const room = makeRoom(w.DB, makeStorage(), env)
+  await room.core.load()
+  put(room.doc, conn(BOB), (m) => m.set('r1', entryAt(room.content, 'target', BOB)))
+  await room.core.flush()
+}
+
+describe('F-3005 D1~D4 comment 알림·push_due_at', () => {
+  it('D1 주인 아닌 사람의 새 댓글 → 주인 comment, 답글은 reply 가 이긴다', async () => {
+    const { DB, sqlDb } = setup()
+    const room = makeRoom(DB)
+    await room.core.load()
+    put(room.doc, conn(OWNER), (m) => m.set('r2', entryAt(room.content, 'intro', OWNER)))
+    await room.core.flush()
+    put(room.doc, conn(BOB), (m) => m.set('r1', entryAt(room.content, 'target', BOB)))
+    put(room.doc, conn(BOB), (m) => m.set('a1', reply('r2', BOB)))
+    await room.core.flush()
+    expect(notes(sqlDb).map((n) => [n.recipient_email, n.kind, n.comment_id, n.thread_id, n.actor_email])).toEqual([
+      ['owner@example.com', 'comment', 'r1', 'r1', 'bob@example.com'],
+      ['owner@example.com', 'reply', 'a1', 'r2', 'bob@example.com'],
+    ])
+  })
+
+  it('D2 주인 혼자 → 알림 0, 접근 집합 질의 0', async () => {
+    const { DB, sqlDb, state } = setup()
+    const room = makeRoom(DB)
+    await room.core.load()
+    put(room.doc, conn(OWNER), (m) => m.set('r1', entryAt(room.content, 'target', OWNER)))
+    put(room.doc, conn(OWNER), (m) => m.set('r2', entryAt(room.content, 'intro', OWNER)))
+    await room.core.flush()
+    expect(notes(sqlDb)).toHaveLength(0)
+    expect(state.prepares.filter((s) => s.includes('FROM grants'))).toHaveLength(0)
+  })
+
+  it('D3 푸시 켜짐 → 구독 있는 주인 행에 created_at + 180000, 구독 없으면 NULL', async () => {
+    const env = await vapidEnv()
+    const withSub = setup()
+    subscribeOwner(withSub.sqlDb)
+    await bobComments(withSub, env)
+    const [row] = ownerComments(withSub.sqlDb)
+    expect(row.push_due_at).toBe(row.created_at + 180_000)
+    const noSub = setup()
+    await bobComments(noSub, env)
+    expect(ownerComments(noSub.sqlDb)[0].push_due_at).toBeNull()
+  })
+
+  it('D4 푸시 꺼짐 → NULL, 켜진 env 와 batch 문장 배열이 같다', async () => {
+    const off = setup()
+    subscribeOwner(off.sqlDb)
+    await bobComments(off, {})
+    expect(ownerComments(off.sqlDb)[0].push_due_at).toBeNull()
+    const on = setup()
+    subscribeOwner(on.sqlDb)
+    await bobComments(on, await vapidEnv())
+    expect(labels(on.state.batches[0])).toEqual(labels(off.state.batches[0]))
+    for (const batch of [off.state.batches[0], on.state.batches[0]]) {
+      expect(batch.filter((s) => s.sql.includes('push_subscriptions')).map((s) => label(s.sql))).toEqual(['c5'])
+    }
   })
 })

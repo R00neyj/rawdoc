@@ -1,6 +1,7 @@
 // 푸시 알림 문구와 알림 제목·발췌 자르기 — Worker·앱 공용 (specs/features/F-3002.md 5장)
 import { PUSH_EXCERPT_CHARS, type PushPayload } from './pushPayload'
 import { formatCount, formatMegabytes } from './usageLimits'
+import type { NotificationKind } from './docComments'
 
 export const NOTIFICATION_TITLE_MAX = 40 // 문구 안 문서 제목 (코드 포인트)
 
@@ -31,7 +32,7 @@ export function formatPushExcerpt(excerpt: string): string {
   return clip(notificationExcerptLine(excerpt), PUSH_EXCERPT_CHARS)
 }
 
-export type PushCommentKind = 'mention' | 'reply' | 'comment'
+export type PushCommentKind = NotificationKind
 export type PushCommentRow = { kind: PushCommentKind; actorEmail: string; docTitle: string; excerpt: string; threadId: string; createdAt: number }
 export type PushShare = { actorEmail: string; target: 'doc' | 'folder'; targetId: string; name: string; role: 'view' | 'edit' }
 export type PushQuota = { images?: { used: number; limit: number }; docBytes?: { used: number; limit: number }; docCount?: { used: number; limit: number } }

@@ -1,5 +1,6 @@
 // 댓글 D1 문장·행 왕복·알림 받는 사람·발췌 (specs/features/F-502.md 4장·5장·6장·8.4, 13.2 R1~R9)
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import type { DatabaseSync } from 'node:sqlite'
 
 import { asD1, openTestDb } from '../../worker/testD1'
@@ -247,7 +248,7 @@ describe('F-502 R8 notificationTargets', () => {
 
   it('멘션 — 집합 밖·자기 자신 빠짐, mentions 순서', () => {
     const e = entry('a', { body: '@z@example.com @a@example.com @c@example.com @b@example.com', mentions: ['z@example.com', 'a@example.com', 'c@example.com', 'b@example.com'] })
-    const out = notificationTargets({ id: 'r', entry: e }, null, people)
+    const out = notificationTargets({ id: 'r', entry: e }, null, people, null)
     expect(out).toEqual([
       { recipient: 'c@example.com', kind: 'mention', commentId: 'r', threadId: 'r', actor: 'a@example.com', excerpt: e.body },
       { recipient: 'b@example.com', kind: 'mention', commentId: 'r', threadId: 'r', actor: 'a@example.com', excerpt: e.body },
@@ -265,7 +266,7 @@ describe('F-502 R8 notificationTargets', () => {
     ]
     const thread = groupCommentThreads(items).threads[0]
     const me = items[4][1]
-    const out = notificationTargets({ id: 'me', entry: me }, thread, people)
+    const out = notificationTargets({ id: 'me', entry: me }, thread, people, null)
     expect(out.map((d) => [d.recipient, d.kind])).toEqual([
       ['c@example.com', 'mention'],
       ['b@example.com', 'reply'],
@@ -275,7 +276,7 @@ describe('F-502 R8 notificationTargets', () => {
   })
 
   it('작성자 이메일이 없으면 []', () => {
-    expect(notificationTargets({ id: 'r', entry: entry(null) }, null, people)).toEqual([])
+    expect(notificationTargets({ id: 'r', entry: entry(null) }, null, people, null)).toEqual([])
   })
 })
 
@@ -575,5 +576,88 @@ describe('F-2075 A6 넣기 batch 자리', () => {
     expect(calls[1].sql).toBe(TRIM_NOTIFICATIONS_SQL)
     expect(calls[1].args).toEqual(['["b@x","c@x"]'])
     expect(calls[2].sql.startsWith('UPDATE users SET notif_rev')).toBe(true)
+  })
+})
+
+describe('F-3005 T1 notificationTargets comment', () => {
+  const OWNER = 'owner@example.com'
+  const people = new Set([OWNER, 'bob@example.com', 'carol@example.com'])
+  const kinds = (out: NotificationDraft[]) => out.map((d) => [d.recipient, d.kind])
+
+  it('주인이 작성자가 아닐 때만 끝에 하나, 멘션 > 답글 > comment', () => {
+    const first = entry('bob')
+    expect(notificationTargets({ id: 'r1', entry: first }, null, people, OWNER)).toEqual([
+      { recipient: OWNER, kind: 'comment', commentId: 'r1', threadId: 'r1', actor: 'bob@example.com', excerpt: first.body },
+    ])
+    expect(notificationTargets({ id: 'r1', entry: entry('owner') }, null, people, OWNER)).toEqual([])
+    const mention = entry('bob', { body: '@owner@example.com', mentions: [OWNER] })
+    expect(kinds(notificationTargets({ id: 'r1', entry: mention }, null, people, OWNER))).toEqual([[OWNER, 'mention']])
+    const owned: [string, CommentEntry][] = [
+      ['r', entry('owner')],
+      ['a', entry('bob', { parent: 'r', quote: '', createdAt: 2 })],
+    ]
+    const t1 = groupCommentThreads(owned).threads[0]
+    expect(kinds(notificationTargets({ id: 'a', entry: owned[1][1] }, t1, people, OWNER))).toEqual([[OWNER, 'reply']])
+    const carols: [string, CommentEntry][] = [
+      ['r', entry('carol')],
+      ['a', entry('bob', { parent: 'r', quote: '', createdAt: 2, body: '@carol@example.com', mentions: ['carol@example.com'] })],
+    ]
+    const t2 = groupCommentThreads(carols).threads[0]
+    expect(kinds(notificationTargets({ id: 'a', entry: carols[1][1] }, t2, people, OWNER))).toEqual([
+      ['carol@example.com', 'mention'],
+      [OWNER, 'comment'],
+    ])
+    expect(notificationTargets({ id: 'r1', entry: first }, null, people, null)).toEqual([])
+    expect(notificationTargets({ id: 'r1', entry: first }, null, new Set(['bob@example.com']), OWNER)).toEqual([])
+    expect(notificationTargets({ id: 'r1', entry: entry('Owner') }, null, people, OWNER)).toEqual([])
+  })
+})
+
+describe('F-3005 T2 notificationStatements pushDueAt', () => {
+  const dueOf = (sqlDb: DatabaseSync) =>
+    Object.fromEntries((sqlDb.prepare('SELECT recipient_email AS r, push_due_at AS p FROM notifications').all() as { r: string; p: number | null }[]).map((x) => [x.r, x.p]))
+  const drafts = [draft('u1@example.com', 'c1', { kind: 'comment' }), draft('carol@example.com', 'c1'), draft('ghost@example.com', 'c1')]
+
+  function subscribed() {
+    const w = setup()
+    w.sqlDb.prepare('INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)').run('u9', 'carol@example.com', 1)
+    w.sqlDb.prepare('INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at) VALUES (?,?,?,?,?,?)').run('s1', OWNER_ID, 'https://p/1', 'k', 'a', 1)
+    return w
+  }
+
+  it('구독 있는 사람만 pushDueAt, 없음·null·금고는 NULL 또는 0행', async () => {
+    const on = subscribed()
+    await on.db.batch(notificationStatements(on.db, { docId: DOC, docTitle: 't', now: 1, drafts, pushDueAt: 500 }))
+    expect(dueOf(on.sqlDb)).toEqual({ 'u1@example.com': 500, 'carol@example.com': null, 'ghost@example.com': null })
+    const off = subscribed()
+    await off.db.batch(notificationStatements(off.db, { docId: DOC, docTitle: 't', now: 1, drafts }))
+    expect(Object.values(dueOf(off.sqlDb))).toEqual([null, null, null])
+    const vault = subscribed()
+    insertDoc(vault.sqlDb, 'vault', OWNER_ID, 'k')
+    await vault.db.batch(notificationStatements(vault.db, { docId: 'vault', docTitle: 't', now: 1, drafts, pushDueAt: 500 }))
+    expect(count(vault.sqlDb, 'SELECT COUNT(*) AS n FROM notifications')).toBe(0)
+    expect(notificationStatements(on.db, { docId: DOC, docTitle: 't', now: 1, drafts, pushDueAt: 500 })).toHaveLength(1 + 2)
+  })
+})
+
+describe('F-3005 T3 0018 마이그레이션', () => {
+  it('행·값 보존, push_due_at NULL, comment 허용, like·중복 거부, 색인 이름', () => {
+    const sqlDb = openTestDb('0017')
+    const ins = sqlDb.prepare(
+      'INSERT INTO notifications (id, recipient_email, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at, read_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    )
+    ins.run('n1', 'a@x', 'mention', 'd', 'c1', 't', 'b@x', 'T', 'e1', 10, null)
+    ins.run('n2', 'a@x', 'reply', 'd', 'c2', 't', 'b@x', 'T', 'e2', 20, 30)
+    const before = sqlDb.prepare('SELECT * FROM notifications ORDER BY id').all()
+    sqlDb.exec(readFileSync('migrations/0018_notifications_push.sql', 'utf-8'))
+    const after = sqlDb.prepare('SELECT * FROM notifications ORDER BY id').all() as Record<string, unknown>[]
+    expect(after.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'push_due_at')))).toEqual(before)
+    expect(after.every((r) => r.push_due_at === null)).toBe(true)
+    expect(() => ins.run('n3', 'a@x', 'comment', 'd', 'c3', 't', 'b@x', 'T', 'e3', 40, null)).not.toThrow()
+    expect(() => ins.run('n4', 'a@x', 'like', 'd', 'c4', 't', 'b@x', 'T', 'e4', 40, null)).toThrow()
+    expect(() => ins.run('n5', 'a@x', 'comment', 'd', 'c3', 't', 'b@x', 'T', 'e5', 40, null)).toThrow()
+    const names = (sqlDb.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'notifications'").all() as { name: string }[]).map((r) => r.name).sort()
+    expect(names.filter((n) => !n.startsWith('sqlite_autoindex'))).toEqual(['notifications_doc', 'notifications_recipient_order'])
+    expect(names.filter((n) => n.startsWith('sqlite_autoindex'))).toHaveLength(2)
   })
 })

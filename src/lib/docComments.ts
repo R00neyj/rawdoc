@@ -634,9 +634,12 @@ export type DocPeopleResponse = { people: { email: string; role: 'owner' | 'edit
 export type CommentCountResponse = { total: number; open: number }
 export type CommentImportBody = { records: CommentRecord[] }
 export type CommentImportResponse = { imported: number; orphaned: number }
+export const NOTIFICATION_KINDS = ['mention', 'reply', 'comment'] as const
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]
+export const NOTIFICATIONS_DEFAULT_KINDS: readonly NotificationKind[] = ['mention', 'reply']
 export type NotificationItem = {
   id: string
-  kind: 'mention' | 'reply'
+  kind: NotificationKind
   docId: string
   commentId: string
   threadId: string

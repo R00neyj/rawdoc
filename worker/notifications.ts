@@ -4,15 +4,15 @@ import { requireUser } from './auth'
 import { readJsonLimited } from './docs'
 import { readNotificationsUsageStatement } from './usage'
 import { isValidUuid } from './validate'
-import { NOTIFICATIONS_LIST_DEFAULT, NOTIFICATIONS_LIST_MAX, NOTIFICATIONS_READ_IDS_MAX } from '../src/lib/docComments'
-import type { NotificationItem, NotificationsResponse } from '../src/lib/docComments'
+import { NOTIFICATIONS_DEFAULT_KINDS, NOTIFICATIONS_LIST_DEFAULT, NOTIFICATIONS_LIST_MAX, NOTIFICATIONS_READ_IDS_MAX, NOTIFICATION_KINDS } from '../src/lib/docComments'
+import type { NotificationItem, NotificationKind, NotificationsResponse } from '../src/lib/docComments'
 
 // UUID 50개 몸통이 약 2,000 B
 export const NOTIFICATIONS_READ_MAX_BODY_BYTES = 8_192
 
 type NotificationRow = {
   id: string
-  kind: 'mention' | 'reply'
+  kind: NotificationKind
   doc_id: string
   comment_id: string
   thread_id: string
@@ -23,10 +23,10 @@ type NotificationRow = {
   read_at: number | null
 }
 
-const LIST_SQL =
-  'SELECT id, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at, read_at FROM notifications WHERE recipient_email = ? ORDER BY created_at DESC, id DESC LIMIT ?'
-const UNREAD_SQL = 'SELECT COUNT(*) AS n FROM notifications WHERE recipient_email = ? AND read_at IS NULL'
-const READ_ALL_SQL = 'UPDATE notifications SET read_at = ?1 WHERE recipient_email = ?2 AND read_at IS NULL'
+const KINDS_IN = 'kind IN (SELECT value FROM json_each(?))'
+const LIST_SQL = `SELECT id, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at, read_at FROM notifications WHERE recipient_email = ? AND ${KINDS_IN} ORDER BY created_at DESC, id DESC LIMIT ?`
+const UNREAD_SQL = `SELECT COUNT(*) AS n FROM notifications WHERE recipient_email = ? AND ${KINDS_IN} AND read_at IS NULL`
+const READ_ALL_SQL = 'UPDATE notifications SET read_at = ?1, push_due_at = NULL WHERE recipient_email = ?2 AND read_at IS NULL'
 const READ_IDS_SQL = `${READ_ALL_SQL} AND id IN (SELECT value FROM json_each(?3))`
 
 function toItem(row: NotificationRow): NotificationItem {
@@ -52,8 +52,20 @@ function readLimit(raw: string | null): number | null {
 }
 
 // n1 = 응답 모양의 판. userId 가 있어야 계정이 바뀌면 빗나간다 (F-2057 3.3)
-export function notificationsEtag(p: { userId: string; rev: number; limit: number }): string {
-  return `W/"n1-${p.userId}-${p.rev}-${p.limit}"`
+export function notificationsEtag(p: { userId: string; rev: number; limit: number; kinds?: readonly NotificationKind[] }): string {
+  const tail = p.kinds && !isDefaultKinds(p.kinds) ? `-${p.kinds.join('.')}` : ''
+  return `W/"n1-${p.userId}-${p.rev}-${p.limit}${tail}"`
+}
+
+const isDefaultKinds = (kinds: readonly NotificationKind[]) => kinds.length === NOTIFICATIONS_DEFAULT_KINDS.length && NOTIFICATIONS_DEFAULT_KINDS.every((k, i) => kinds[i] === k)
+
+// 쉼표로 이은 종류를 NOTIFICATION_KINDS 순서로 정규화 — 틀리면 null
+function readKinds(raw: string | null): NotificationKind[] | null {
+  if (raw === null) return [...NOTIFICATIONS_DEFAULT_KINDS]
+  if (raw.length > 64) return null
+  const parts = raw.split(',')
+  if (!parts.every((p) => (NOTIFICATION_KINDS as readonly string[]).includes(p))) return null
+  return NOTIFICATION_KINDS.filter((k) => parts.includes(k))
 }
 
 const stripWeak = (tag: string) => (tag.startsWith('W/') ? tag.slice(2) : tag)
@@ -70,16 +82,20 @@ export function ifNoneMatchHits(header: string | null, etag: string): boolean {
 // 문서 접근을 다시 보지 않는다 — 막힌 계정도 본다 (6.5)
 export async function handleListNotifications(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
-  const limit = readLimit(new URL(request.url).searchParams.get('limit'))
+  const params = new URL(request.url).searchParams
+  const limit = readLimit(params.get('limit'))
   if (limit === null) return jsonResponse({ error: 'invalid', field: 'limit' }, 400)
+  const kinds = readKinds(params.get('kinds'))
+  if (kinds === null) return jsonResponse({ error: 'invalid', field: 'kinds' }, 400)
   // 리비전은 인증 때 목록보다 먼저 읽혔다 — 사이에 생긴 알림은 다음 요청이 200 으로 받는다 (F-2057 3.4)
-  const etag = typeof user.notifRev === 'number' ? notificationsEtag({ userId: user.id, rev: user.notifRev, limit }) : null
+  const etag = typeof user.notifRev === 'number' ? notificationsEtag({ userId: user.id, rev: user.notifRev, limit, kinds }) : null
   if (etag !== null && ifNoneMatchHits(request.headers.get('If-None-Match'), etag)) {
     return new Response(null, { status: 304, headers: { ETag: etag, 'Cache-Control': 'no-store' } })
   }
   const recipient = user.email.toLowerCase()
-  const { results } = await env.DB.prepare(LIST_SQL).bind(recipient, limit).all<NotificationRow>()
-  const unread = await env.DB.prepare(UNREAD_SQL).bind(recipient).first<{ n: number }>()
+  const kindsJson = JSON.stringify(kinds)
+  const { results } = await env.DB.prepare(LIST_SQL).bind(recipient, kindsJson, limit).all<NotificationRow>()
+  const unread = await env.DB.prepare(UNREAD_SQL).bind(recipient, kindsJson).first<{ n: number }>()
   const res = jsonResponse({ items: results.map(toItem), unread: unread?.n ?? 0 } satisfies NotificationsResponse)
   if (etag !== null) res.headers.set('ETag', etag)
   return res

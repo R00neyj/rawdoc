@@ -36,6 +36,8 @@ import {
 } from './commentRows'
 import type { CommentRow, DocCommentDbRow, NotificationDraft } from './commentRows'
 import { loadDocPeople } from './docPeople'
+import { loadVapid } from './pushServer'
+import { PUSH_BATCH_MS } from '../src/lib/pushPayload'
 import { fromEditorText, toEditorText } from '../src/lib/lineEnding'
 import type { LineEnding } from '../src/lib/lineEnding'
 import { isWriteBlocked, resolveDocAccess, roleAtLeast } from './access'
@@ -121,7 +123,7 @@ type D1DocRow = { title: string; content: string; line_ending: LineEnding; versi
 type Base = { content: string; title: string; version: number; lineEnding: LineEnding; updatedAt: number | null; rowBytes: number }
 type SnapshotResult = 'ok' | 'retry' | 'gone'
 // 한 스냅숏이 D1 댓글 복사본에 쓸 것 (F-502 4.2). keys = dirty 에서 떼어 온 키
-type CommentPlan = { keys: string[]; full: boolean; upserts: CommentRow[]; deletes: string[]; drafts: NotificationDraft[] }
+type CommentPlan = { keys: string[]; full: boolean; upserts: CommentRow[]; deletes: string[]; drafts: NotificationDraft[]; pushDueAt: number | null }
 type KnownComment = { sig: string; anchorSig: string }
 
 // D1 읽기 셋은 금고 행을 거른다 — DO 는 금고 문서를 없는 문서로 본다 (F-401 X16)
@@ -230,7 +232,8 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
   private dirty = new Set<string>()
   private anchorsDirty = false
   private fullAnchorsNext = false
-  private people: { at: number; emails: Set<string> | null } | null = null
+  private people: { at: number; emails: Set<string> | null; owner: string | null } | null = null
+  private pushOn: boolean | null = null
 
   constructor(host: DocRoomHost<C>) {
     this.host = host
@@ -701,7 +704,8 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     }
     if (upserts.size === 0 && deletes.length === 0) return null
     const rows = [...upserts.values()]
-    return { keys, full, upserts: rows, deletes, drafts: await this.notificationDrafts(rows, live, now) }
+    const drafts = await this.notificationDrafts(rows, live, now)
+    return { keys, full, upserts: rows, deletes, drafts, pushDueAt: drafts.length > 0 && (await this.pushEnabled()) ? now + PUSH_BATCH_MS : null }
   }
 
   // F-502 6장 — D1 에 없던 새 항목만. 접근 집합은 멘션이나 답글이 있을 때만 읽는다
@@ -714,22 +718,28 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
       .filter((r) => !this.known.has(r.id))
       .map((r) => ({ id: r.id, ...live.get(r.id)! }))
       .sort((a, b) => a.entry.createdAt - b.entry.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-    if (!fresh.some((f) => f.entry.mentions.length > 0 || f.entry.parent !== null)) return []
-    const people = await this.docPeople(now)
-    if (!people) return []
-    const drafts = fresh.flatMap((f) => notificationTargets({ id: f.id, entry: f.entry }, f.entry.parent !== null ? f.thread : null, people))
+    if (!fresh.some((f) => f.entry.mentions.length > 0 || f.entry.parent !== null || (f.entry.author.id && f.entry.author.id !== this.ownerId))) return []
+    const access = await this.docPeople(now)
+    if (!access?.emails) return []
+    const drafts = fresh.flatMap((f) => notificationTargets({ id: f.id, entry: f.entry }, f.entry.parent !== null ? f.thread : null, access.emails!, access.owner))
     if (drafts.length <= NOTIFICATIONS_PER_BATCH_MAX) return drafts
     console.warn(`docRoom: notifications capped (${this.host.docId})`)
     return drafts.slice(0, NOTIFICATIONS_PER_BATCH_MAX)
   }
 
   // 60초(REVALIDATE_INTERVAL_MS) 안에 읽은 것이 있으면 그것을 쓴다 (F-502 6.3)
-  private async docPeople(now: number): Promise<Set<string> | null> {
-    if (this.people && now - this.people.at < REVALIDATE_INTERVAL_MS) return this.people.emails
+  private async docPeople(now: number): Promise<{ emails: Set<string> | null; owner: string | null }> {
+    if (this.people && now - this.people.at < REVALIDATE_INTERVAL_MS) return this.people
     const list = await loadDocPeople(this.host.env, this.host.docId)
     const emails = list ? new Set(list.map((p) => p.email)) : null
-    this.people = { at: now, emails }
-    return emails
+    this.people = { at: now, emails, owner: list?.find((p) => p.role === 'owner')?.email ?? null }
+    return this.people
+  }
+
+  // 푸시 켜짐 판정은 방 수명 동안 한 번 (F-3005 4.3)
+  private async pushEnabled(): Promise<boolean> {
+    this.pushOn ??= (await loadVapid(this.host.env)) !== null
+    return this.pushOn
   }
 
   // 9.3 — 불러오기 없이 연결 상태와 D1 한 줄만으로

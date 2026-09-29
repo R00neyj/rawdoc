@@ -270,3 +270,99 @@ describe('F-2057 U5 읽음 뒤 옛 ETag', () => {
     expect(((await res.json()) as { unread: number }).unread).toBe(0)
   })
 })
+
+// ----- F-3005 comment 종류·?kinds=·읽음이 push_due_at 지움 -----
+
+type KindNote = { n: number; kind: string; at: number; read?: number | null }
+
+function kindNotes(sqlDb: DatabaseSync, list: KindNote[], recipient = ME) {
+  for (const k of list) {
+    sqlDb
+      .prepare(
+        'INSERT INTO notifications (id, recipient_email, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at, read_at, push_due_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+      )
+      .run(uuid(k.n), recipient, k.kind, 'd1', `c${k.n}`, 't1', 'actor@example.com', '회의록', `발췌 ${k.n}`, k.at, k.read ?? null, 999)
+  }
+}
+
+const mixed: KindNote[] = [
+  { n: 1, kind: 'mention', at: 100 },
+  { n: 2, kind: 'reply', at: 200 },
+  { n: 3, kind: 'comment', at: 300 },
+  { n: 4, kind: 'comment', at: 400 },
+]
+
+async function listOf(env: Env, query = '') {
+  const res = await call(env, `/api/notifications${query}`)
+  return { res, body: (await res.json()) as { items: { id: string; kind: string }[]; unread: number } }
+}
+
+describe('F-3005 N1~N4 ?kinds=', () => {
+  it('N1 kinds 없음 → mention·reply 만, 옛 모양 ETag', async () => {
+    const w = await worldWithMe()
+    kindNotes(w.sqlDb, mixed)
+    const { res, body } = await listOf(w.env)
+    expect(body.items.map((i) => i.kind)).toEqual(['reply', 'mention'])
+    expect(body.unread).toBe(2)
+    expect(res.headers.get('ETag')).toBe(`W/"n1-${w.id}-0-30"`)
+  })
+
+  it('N2 kinds 지정 → 그 종류만, 정규화된 ETag 꼬리', async () => {
+    const w = await worldWithMe()
+    kindNotes(w.sqlDb, mixed)
+    const all = await listOf(w.env, '?kinds=mention,reply,comment')
+    expect(all.body.items).toHaveLength(4)
+    expect(all.body.unread).toBe(4)
+    expect(all.res.headers.get('ETag')).toBe(`W/"n1-${w.id}-0-30-mention.reply.comment"`)
+    const dup = await listOf(w.env, '?kinds=comment,reply,mention,comment')
+    expect(dup.res.headers.get('ETag')).toBe(all.res.headers.get('ETag'))
+    const only = await listOf(w.env, '?kinds=comment')
+    expect(only.body.items.map((i) => i.kind)).toEqual(['comment', 'comment'])
+    expect(only.body.unread).toBe(2)
+    expect(only.res.headers.get('ETag')).toBe(`W/"n1-${w.id}-0-30-comment"`)
+    const same = await listOf(w.env, '?kinds=reply,mention')
+    expect(same.res.headers.get('ETag')).toBe(`W/"n1-${w.id}-0-30"`)
+    expect(same.body.items).toHaveLength(2)
+  })
+
+  it('N3 잘못된 kinds → 400 field kinds', async () => {
+    const w = await worldWithMe()
+    for (const bad of ['', 'mention,,reply', 'like', 'Mention', 'mention,%20reply', 'a'.repeat(65)]) {
+      const r = await call(w.env, `/api/notifications?kinds=${bad}`)
+      expect([r.status, await r.json()], bad).toEqual([400, { error: 'invalid', field: 'kinds' }])
+    }
+  })
+
+  it('N4 같은 kinds 의 ETag 는 304, kinds 없는 요청에는 200', async () => {
+    const w = await worldWithMe()
+    kindNotes(w.sqlDb, mixed)
+    const tag = `W/"n1-${w.id}-0-30-mention.reply.comment"`
+    const counter = countNotificationQueries(w.env)
+    const hit = await call(w.env, '/api/notifications?kinds=mention,reply,comment', ifNoneMatch(tag))
+    expect(hit.status).toBe(304)
+    expect(counter.n).toBe(0)
+    expect((await call(w.env, '/api/notifications', ifNoneMatch(tag))).status).toBe(200)
+  })
+})
+
+describe('F-3005 N5 읽음이 push_due_at 을 지운다', () => {
+  const due = (sqlDb: DatabaseSync, n: number) => (sqlDb.prepare('SELECT push_due_at AS p FROM notifications WHERE id = ?').get(uuid(n)) as { p: number | null }).p
+
+  it('ids 는 그 행만, all 은 종류 무관 전부, 남의 행은 그대로', async () => {
+    const w = await worldWithMe()
+    kindNotes(w.sqlDb, [
+      { n: 1, kind: 'mention', at: 100 },
+      { n: 2, kind: 'reply', at: 200 },
+      { n: 3, kind: 'comment', at: 300 },
+    ])
+    kindNotes(w.sqlDb, [{ n: 4, kind: 'comment', at: 400 }], OTHER)
+    expect((await call(w.env, '/api/notifications/read', post({ ids: [uuid(1)] }))).status).toBe(204)
+    expect([due(w.sqlDb, 1), due(w.sqlDb, 2), due(w.sqlDb, 3)]).toEqual([null, 999, 999])
+    expect(readAt(w.sqlDb, 1)).not.toBeNull()
+    expect(readAt(w.sqlDb, 2)).toBeNull()
+    await call(w.env, '/api/notifications/read', post({ all: true }))
+    expect([due(w.sqlDb, 2), due(w.sqlDb, 3)]).toEqual([null, null])
+    expect(readAt(w.sqlDb, 3)).not.toBeNull()
+    expect([due(w.sqlDb, 4), readAt(w.sqlDb, 4)]).toEqual([999, null])
+  })
+})

@@ -1,6 +1,6 @@
 // 댓글 D1 복사본·알림 문장, 행 ↔ CommentRecord, 알림 받는 사람·발췌 (specs/features/F-502.md 4장·5장·6장·8장)
 import { NOTIFICATIONS_PER_RECIPIENT_MAX, commentSig, recordAnchorSig } from '../src/lib/docComments'
-import type { AnchorRange, CommentEntry, CommentRecord, CommentThread } from '../src/lib/docComments'
+import type { AnchorRange, CommentEntry, CommentRecord, CommentThread, NotificationKind } from '../src/lib/docComments'
 import { toCommentRecord } from '../src/lib/commentAnchor'
 import { commentBytesInStatement, commentBytesOutStatement, deleteFolderCommentBytesStatement, e2eeCommentBytesOutStatement } from './usage'
 import { utf8ByteLength } from './validate'
@@ -34,7 +34,7 @@ export type DocCommentDbRow = {
   anchor_sig: string
 }
 
-export type NotificationDraft = { recipient: string; kind: 'mention' | 'reply'; commentId: string; threadId: string; actor: string; excerpt: string }
+export type NotificationDraft = { recipient: string; kind: NotificationKind; commentId: string; threadId: string; actor: string; excerpt: string }
 
 export const KNOWN_COMMENTS_SQL = 'SELECT id, sig, anchor_sig FROM doc_comments WHERE doc_id = ?'
 export const ALL_COMMENTS_SQL = 'SELECT * FROM doc_comments WHERE doc_id = ? ORDER BY created_at, id'
@@ -51,9 +51,11 @@ const UPSERT_SQL =
   'ON CONFLICT (doc_id, id) DO UPDATE SET parent_id = excluded.parent_id, author_id = excluded.author_id, author_email = excluded.author_email, body = excluded.body, mentions = excluded.mentions, quote = excluded.quote, prefix = excluded.prefix, suffix = excluded.suffix, anchor_from = excluded.anchor_from, anchor_length = excluded.anchor_length, resolved_at = excluded.resolved_at, resolved_by = excluded.resolved_by, resolved_by_id = excluded.resolved_by_id, created_at = excluded.created_at, bytes = excluded.bytes, sig = excluded.sig, anchor_sig = excluded.anchor_sig'
 const DELETE_ROWS_SQL = 'DELETE FROM doc_comments WHERE doc_id = ?1 AND id IN (SELECT value FROM json_each(?2))'
 const ROW_NOTIFICATIONS_WHERE = 'doc_id = ?1 AND comment_id IN (SELECT value FROM json_each(?2))'
+// 푸시가 켜져 있고(?5) 받는 사람에게 구독이 있을 때만 (F-3005 4.2)
+const PUSH_DUE_SQL = `CASE WHEN ?5 IS NOT NULL AND EXISTS (SELECT 1 FROM users u JOIN push_subscriptions p ON p.user_id = u.id WHERE u.email = ${field('recipient')}) THEN ?5 END`
 const INSERT_NOTIFICATIONS_SQL =
-  'INSERT OR IGNORE INTO notifications (id, recipient_email, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at) ' +
-  `SELECT ${field('id')}, ${field('recipient')}, ${field('kind')}, ?1, ${field('commentId')}, ${field('threadId')}, ${field('actor')}, ?2, ${field('excerpt')}, ?3 ` +
+  'INSERT OR IGNORE INTO notifications (id, recipient_email, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at, push_due_at) ' +
+  `SELECT ${field('id')}, ${field('recipient')}, ${field('kind')}, ?1, ${field('commentId')}, ${field('threadId')}, ${field('actor')}, ?2, ${field('excerpt')}, ?3, ${PUSH_DUE_SQL} ` +
   `FROM json_each(?4) WHERE ${DOC_WRITABLE}`
 // 받는 사람 식마다 300번째 행 id — 그보다 뒤가 지울 행 (F-2075 3.2)
 export const nthNotificationIdSql = (recipient: string) =>
@@ -150,13 +152,13 @@ export function upsertCommentStatements(db: D1Database, docId: string, rows: rea
 
 export function notificationStatements(
   db: D1Database,
-  p: { docId: string; docTitle: string; now: number; drafts: readonly NotificationDraft[] },
+  p: { docId: string; docTitle: string; now: number; drafts: readonly NotificationDraft[]; pushDueAt?: number | null },
 ): D1PreparedStatement[] {
   if (p.drafts.length === 0) return []
   const rows = p.drafts.map((d) => ({ id: crypto.randomUUID(), ...d }))
   const recipients = JSON.stringify([...new Set(p.drafts.map((d) => d.recipient))])
   return [
-    ...chunkJsonRows(rows).map((json) => db.prepare(INSERT_NOTIFICATIONS_SQL).bind(p.docId, p.docTitle, p.now, json)),
+    ...chunkJsonRows(rows).map((json) => db.prepare(INSERT_NOTIFICATIONS_SQL).bind(p.docId, p.docTitle, p.now, json, p.pushDueAt ?? null)),
     db.prepare(TRIM_NOTIFICATIONS_SQL).bind(recipients),
     db.prepare(INSERT_NOTIF_REV_SQL).bind(recipients, p.docId),
   ]
@@ -164,7 +166,7 @@ export function notificationStatements(
 
 export function commentBundleStatements(
   db: D1Database,
-  p: { docId: string; ownerId: string; upserts: readonly CommentRow[]; deletes: readonly string[]; drafts: readonly NotificationDraft[]; docTitle: string; now: number },
+  p: { docId: string; ownerId: string; upserts: readonly CommentRow[]; deletes: readonly string[]; drafts: readonly NotificationDraft[]; docTitle: string; now: number; pushDueAt?: number | null },
 ): D1PreparedStatement[] {
   const statements = [commentBytesOutStatement(db, p.ownerId, p.docId), ...upsertCommentStatements(db, p.docId, p.upserts)]
   if (p.deletes.length > 0) {
@@ -188,6 +190,7 @@ export function notificationTargets(
   item: { id: string; entry: CommentEntry },
   thread: CommentThread | null,
   people: ReadonlySet<string>,
+  owner: string | null,
 ): NotificationDraft[] {
   const actor = item.entry.author.email?.toLowerCase()
   if (!actor) return []
@@ -205,7 +208,13 @@ export function notificationTargets(
     taken.add(lower)
     drafts.push({ recipient: lower, kind: 'mention', ...base })
   }
-  if (item.entry.parent === null || !thread) return drafts
+  const addOwnerComment = () => {
+    if (owner && !taken.has(owner) && people.has(owner)) drafts.push({ recipient: owner, kind: 'comment', ...base })
+  }
+  if (item.entry.parent === null || !thread) {
+    addOwnerComment()
+    return drafts
+  }
   const earlier = [thread.root.author.email]
   for (const r of thread.replies) {
     if (r.id === item.id) break
@@ -217,6 +226,7 @@ export function notificationTargets(
     taken.add(lower)
     drafts.push({ recipient: lower, kind: 'reply', ...base })
   }
+  addOwnerComment()
   return drafts
 }
 
