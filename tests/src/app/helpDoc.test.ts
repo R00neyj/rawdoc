@@ -488,3 +488,19 @@ describe('F-2111 도움말 ## 알림 절', () => {
     )
   })
 })
+
+// 사용법 글 custom-css (write-guide, 2026-09-30)
+describe('도움말 ## 사용자 CSS 절', () => {
+  it('## 옵시디언 볼트 바로 뒤에 있고, 사용법 글 줄로 끝나며, 화면 글자와 안전 모드 주소가 들어 있다', () => {
+    const names = appSections().map((s) => s.name)
+    expect(names[names.indexOf('옵시디언 볼트') + 1]).toBe('사용자 CSS')
+    const section = appSections().find((s) => s.name === '사용자 CSS')!
+    const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [사용자 CSS 로 모양 바꾸기](/guides/custom-css)')
+    expect(section.body).toContain('`사용자 CSS`')
+    expect(section.body).toContain('`새 스니펫`')
+    expect(section.body).toContain('`템플릿으로 시작`')
+    expect(section.body).toContain('`?safe`')
+    expect(section.body).toContain('`다시 켜기`')
+  })
+})

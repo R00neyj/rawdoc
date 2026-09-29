@@ -48,6 +48,10 @@ import { toggleMath } from '../../src/editor/formatCommands'
 import { toPlainText } from '../../src/viewer/toPlainText'
 import { renderMarkdown } from '../../src/viewer/renderMarkdown'
 import { checkContentFile } from '../../site/guard'
+import { USER_CSS_PUSH_DELAY_MS, USER_CSS_PULL_GAP_MS, mergeLocalIntoAccount } from '../../src/app/userCssSync'
+import { nextSnippetName, userCssSaveMessage, userCssStatusLines } from '../../src/app/userCssEdit'
+import { USER_CSS_SAFE_NOTICE } from '../../src/app/appNotices'
+import type { UserCssRemoval } from '../../src/lib/userCssPolicy'
 
 const GUIDES_DIR = fileURLToPath(new URL('../../content/guides', import.meta.url))
 
@@ -420,6 +424,42 @@ describe('comments 글', () => {
 
   it('글에 제품명이 없다 (R6)', () => {
     const body = guideBody(readGuide('comments')).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+// 사용법 글 custom-css (write-guide, 2026-09-30) — 변수·훅 이름과 상한은 tests/src/lib/userCssGuide.test.ts
+describe('custom-css 글', () => {
+  const raw = readGuide('custom-css')
+  const code = (text: string) => '`' + text + '`'
+
+  it('글의 동기화 간격이 상수와 같다 (R5)', () => {
+    expect(raw).toContain(`마지막으로 고친 지 ${USER_CSS_PUSH_DELAY_MS / 1000}초 뒤`)
+    expect(raw).toContain(`받은 지 ${USER_CSS_PULL_GAP_MS / 60_000}분이 지났을 때`)
+  })
+
+  it('글이 인용한 화면 글자가 코드 문구와 같다', () => {
+    expect(raw).toContain(`${code(nextSnippetName([], 'snippet'))}처럼`)
+    expect(raw).toContain(`${code(nextSnippetName([], 'template'))}이라는 스니펫`)
+    const removal = (reason: UserCssRemoval['reason']): UserCssRemoval => ({ reason, rule: '', property: null })
+    const status = (ruleCount: number, removed: UserCssRemoval[]) => userCssStatusLines({ css: '', ruleCount, removed }, true)
+    expect(raw).toContain(code(status(3, [])[0]))
+    expect(raw).toContain(code(status(1, [removal('url'), removal('import')])[1]))
+    expect(raw).toContain(code(status(0, [removal('unstable')])[0]))
+    expect(raw).toContain(code(userCssSaveMessage('bytes')))
+    expect(raw).toContain(`${code(USER_CSS_SAFE_NOTICE.message)}와 ${code(USER_CSS_SAFE_NOTICE.action)}`)
+    const merged = mergeLocalIntoAccount(
+      [{ id: 'a'.repeat(16), name: '스니펫 1', css: 'a{}', enabled: true, updatedAt: 0 }],
+      [{ id: 'b'.repeat(16), name: '스니펫 1', css: 'b{}', enabled: true, updatedAt: 0 }],
+      () => 'c'.repeat(16),
+      0,
+    )
+    expect(raw).toContain(`${code(merged.snippets[1].name.slice('스니펫 1 '.length))}를 붙입니다`)
+  })
+
+  it('글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(raw).toLowerCase()
     expect(body).not.toContain(brand.name.toLowerCase())
     expect(body).not.toContain(brand.shortName.toLowerCase())
   })
