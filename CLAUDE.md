@@ -190,6 +190,8 @@ Breaking one of these is a design violation, not a bug. To change one, fix the s
 - **The product name is `rawdoc` (styled `Rawdoc`); the primary color is undecided.** Define both only in the root `brand.config.ts`; never write the name string or a color hex directly in code, CSS, HTML, UI text, or the manifest. Derive colors with `color-mix()` (`specs/design.md` 3.2)
   - Exception: the official Google and GitHub sign-in logo SVGs keep their original colors and live only in `worker/providerLogos.ts`; never copy those color values anywhere else (F-2032 3.3.1)
   - Exception: the contact address `contact@rawdoc.app` in `content/legal/*.md`; never copy the name string anywhere else
+  - Exception: user CSS snippets are user data, not app source — users may write hex. The template CSS the app generates is app source and still follows the rule (F-2092)
+- **User CSS never leaves its owner** — it applies only in the owner's browser (and files the owner exports), never on a view someone else opens, and only after the check that strips external resource loads (F-2092)
 - **Storage identifiers never contain the product name** — not in the IndexedDB database name, localStorage keys, or service worker cache names
 
 Known pitfalls when porting the editor are in `.workflow/architecture.md` ch. 3 and `.workflow/tasks/T-004/verify.md` ch. 4–5 (`view.composing` timing, arrow-key assistance for block widgets colliding with `lineWrapping`, and so on).
