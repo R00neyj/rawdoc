@@ -66,7 +66,6 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
     setEditorRefs: (handle: EditorHandle | null) => void
     sharedDoc: ShareDoc | null
     sharesOpen: boolean
-    showEditor: boolean
     store: Store
     titleReadOnly: boolean
     viewerHtml: string
@@ -80,14 +79,13 @@ export default function DocumentArea({
   editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles, handleOpenWikiLink,
   handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, liveEditorOption, mapRoute,
   mentionSource, onNavigateFolder, openDoc, openWikiLinkTarget, resolveAttachment, resolvedTheme, setCommentRailExtra, setEditorRefs, sharedDoc,
-  sharesOpen, showEditor, store, titleReadOnly, viewerHtml, viewerRef, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
+  sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
 }: DocumentAreaProps) {
   // 잠긴 금고 문서 — 편집기 자리에 P1 (F-405 6.2)
   const showE2eeLockedPanel = currentDoc?.e2ee === 'locked' && openDoc?.id !== currentDocId
   // 위키링크 미리보기 켜짐 조건 — 문서가 열려 있고 공유 화면·지도·도움말·공유 관리가 안 떠 있다 (F-2044 4.1)
   const wikiPreviewEnabled =
     wikiPreviewPref === 'on' &&
-    showEditor &&
     openDoc?.id === currentDocId &&
     !sharedDoc &&
     !sharesOpen &&
@@ -99,7 +97,7 @@ export default function DocumentArea({
   }
 
   // 댓글 레일·판 보이는 조건 — 편집기가 보이고 접근이 none 이 아니고 편집·원문 모드일 때만 (F-505 5.1·6장)
-  const commentAvailable = showEditor && openDoc?.id === currentDocId && commentAccessValue.kind !== 'none' && (viewMode === 'live' || viewMode === 'raw')
+  const commentAvailable = openDoc?.id === currentDocId && commentAccessValue.kind !== 'none' && (viewMode === 'live' || viewMode === 'raw')
   const commentRailVisible = commentAvailable && comments.mode === 'rail' && comments.open
   const commentSheetVisible = commentAvailable && comments.mode === 'sheet' && comments.open
 

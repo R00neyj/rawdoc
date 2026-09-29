@@ -1280,7 +1280,7 @@ export default function App() {
             editorScrollTop, editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles,
             handleOpenWikiLink, handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc,
             liveEditorOption, mapRoute, mentionSource, onNavigateFolder, openDoc, openWikiLinkTarget, resolveAttachment, resolvedTheme,
-            setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, showEditor, store, titleReadOnly, viewerHtml, viewerRef, viewMode,
+            setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewMode,
             wikiContext, wikiPreviewPref, wikiResolver,
           }} />}
           {statusBarVisible && shortcutsOpen && <ShortcutPanel mac={isMac} used={shortcutsUsed} onClose={closeShortcuts} />}
