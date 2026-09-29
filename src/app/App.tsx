@@ -1134,10 +1134,14 @@ export default function App() {
   // ----- 단축키 판 열림·커서 스크롤 (F-2078) -----
   const { shortcutsOpen, openShortcuts, closeShortcuts, toggleShortcuts } = useShortcutsPanel({ editorRef, viewMode, shortcutsButtonRef })
 
+  // ----- 우클릭 메뉴 (specs/features/F-170.md) -----
+  const { contextMenu, handleViewContextMenu, handleContextMenuSelect, closeContextMenu, openPaletteFromRef } = useContextMenu({
+    editorRef, commentsRef, beginComment: comments.beginComment, openDoc, currentDocId, showNotice,
+  })
+
   // ----- 명령 팔레트 열기·템플릿 넣기·context 조립 (F-2078) -----
-  const closeContextMenuRef = useRef<() => void>(() => {})
-  const { openPalette, openPaletteFrom, paletteContext } = useCommandPalette({
-    paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose, closeContextMenuRef,
+  const { openPalette, paletteContext } = useCommandPalette({
+    paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose, closeContextMenu, openPaletteFromRef,
     bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
     account, e2ee, statusBarVisible, canInviteCurrentDoc, commentAccessValue, comments, editorRef, currentDocIdRef, readOnlyDocRef, sidebarCommandRef,
     showNotice, templateEntries, readTemplateDocText, openShortcuts, notificationsEnabled, setNotificationsOpen, wikiResolver, currentFolderId,
@@ -1161,16 +1165,6 @@ export default function App() {
     cmd(view)
     view.focus()
   }, [])
-
-  // ----- 우클릭 메뉴 (specs/features/F-170.md) -----
-  const { contextMenu, handleViewContextMenu, handleContextMenuSelect, closeContextMenu } = useContextMenu({
-    editorRef, commentsRef, beginComment: comments.beginComment, openDoc, currentDocId, showNotice, openPaletteFrom,
-  })
-
-  // useContextMenu 가 openPaletteFrom 을 받아 호출 순서가 거꾸로다 — 팔레트는 ref 로 최신 closeContextMenu 를 부른다 (F-2078)
-  useEffect(() => {
-    closeContextMenuRef.current = closeContextMenu
-  })
 
   // 공개 보기 화면(F-210.md 2.4) — 위 모든 훅은 매 렌더 그대로 호출되고 여기서 조기 반환만 한다
   if (publicRoute) {

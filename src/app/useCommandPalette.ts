@@ -1,5 +1,5 @@
 // 명령 팔레트 열기·템플릿 넣기·context 조립 — App.tsx 에서 옮김 (F-2078, F-2022, F-2053, F-2054, F-2055)
-import { useMemo, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { StateCommand } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { expandTemplateVariables, type TemplateEntry } from '../lib/templates'
@@ -39,7 +39,8 @@ export type UseCommandPaletteOptions = {
   deferredAfterPaletteCloseRef: RefObject<(() => void) | null>
   closePalette: () => void
   runAfterPaletteClose: (fn: () => void) => void
-  closeContextMenuRef: RefObject<() => void>
+  closeContextMenu: () => void
+  openPaletteFromRef: RefObject<(fromEditor: boolean | undefined) => void>
   bootPhase: 'booting' | 'ready'
   docs: DocMeta[]
   folders: Folder[]
@@ -110,13 +111,12 @@ export type UseCommandPaletteOptions = {
 
 export type UseCommandPaletteResult = {
   openPalette: () => void
-  openPaletteFrom: (fromEditor: boolean | undefined) => void
   paletteContext: PaletteContext
 }
 
 export function useCommandPalette(options: UseCommandPaletteOptions): UseCommandPaletteResult {
   const {
-    paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose, closeContextMenuRef,
+    paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose, closeContextMenu, openPaletteFromRef,
     bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
     account, e2ee, statusBarVisible, canInviteCurrentDoc, commentAccessValue, comments, editorRef, currentDocIdRef, readOnlyDocRef, sidebarCommandRef,
     showNotice, templateEntries, readTemplateDocText, openShortcuts, notificationsEnabled, setNotificationsOpen, wikiResolver, currentFolderId,
@@ -161,7 +161,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     const mainView = editorRef.current?.view
     const fromBody = fromEditor ?? (mainView ? document.activeElement === mainView.contentDOM : false)
     setPaletteEditor(fromBody && canInsertTemplate && mainView ? { docId: currentDocId, disabled: editorCommandGates(mainView.state, 'editor') } : null)
-    closeContextMenuRef.current()
+    closeContextMenu()
     closeSidebarIfNarrow()
     setPaletteOpen(true)
     // 이번 열기·닫기 한 판을 새로 센다 (F-2054 5.1)
@@ -170,6 +170,11 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     // 상태가 unknown 이면 한 번 읽는다 — 읽는 동안은 금고 명령이 안 보인다 (F-404.md 7.6)
     if (e2ee?.status === 'unknown') void e2ee.keyring.load()
   }
+
+  // 우클릭 메뉴가 이벤트 핸들러에서 최신 openPaletteFrom 을 부르게 한다 (F-2078)
+  useEffect(() => {
+    openPaletteFromRef.current = openPaletteFrom
+  })
 
   // 명령 팔레트 `템플릿 삽입` — 원문 읽기 → 치환 → 자리에 넣기 (F-2022.md 5.7)
   async function insertTemplate(templateId: string, signal: AbortSignal) {
@@ -378,5 +383,5 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     },
     output: paletteOutputCtx,
   }
-  return { openPalette, openPaletteFrom, paletteContext }
+  return { openPalette, paletteContext }
 }
