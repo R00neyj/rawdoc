@@ -2,12 +2,13 @@
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve as resolvePath, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig, runnerImport, type Plugin } from 'vite'
+import { build, defineConfig, runnerImport, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import brand from './brand.config'
 import { SITE_DESCRIPTION, SITE_URL } from './src/lib/siteMeta'
 import { BOOT_PAINT_SCRIPT } from './src/app/bootPaint'
+import { PUSH_SW_MAX_BYTES } from './src/pwa/pushSwCore'
 import type { SiteInput } from './site/build'
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url))
@@ -178,6 +179,34 @@ function stripFontsourceWoffPlugin(): Plugin {
   }
 }
 
+// 푸시 처리기를 고전 스크립트 push-sw.js 로 따로 묶는다. VitePWA 가 closeBundle 에서 precache 를 만들므로 그 앞 generateBundle 에서 낸다 (F-3004 5.1)
+function pushSwPlugin(): Plugin {
+  return {
+    name: 'rawdoc-push-sw',
+    apply: 'build',
+    async generateBundle() {
+      const result = await build({
+        configFile: false,
+        root: rootDir,
+        publicDir: false,
+        logLevel: 'warn',
+        build: {
+          write: false,
+          emptyOutDir: false,
+          lib: { entry: resolvePath(rootDir, 'src/pwa/pushSw.ts'), formats: ['iife'], name: 'pushSw' },
+        },
+      })
+      const outputs = Array.isArray(result) ? result : [result]
+      const chunks = outputs.flatMap((out) => ('output' in out ? out.output : [])).filter((item) => item.type === 'chunk')
+      if (chunks.length !== 1) throw new Error(`push-sw.js 는 IIFE 청크 하나여야 합니다 (${chunks.length}개)`)
+      const source = chunks[0].code
+      const bytes = new TextEncoder().encode(source).length
+      if (bytes > PUSH_SW_MAX_BYTES) throw new Error(`push-sw.js 가 ${bytes} B 로 상한 ${PUSH_SW_MAX_BYTES} B 를 넘습니다`)
+      this.emitFile({ type: 'asset', fileName: 'push-sw.js', source })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   // GSAP 등 서드파티 저작권 주석을 청크 끝에 남긴다 — Vite 기본값은 지운다 (specs/features/F-2049.md 3.3)
@@ -201,6 +230,7 @@ export default defineConfig({
     stripFontsourceWoffPlugin(),
     brandHtmlPlugin(),
     bootPaintPlugin(),
+    pushSwPlugin(),
     VitePWA({
       // 새 서비스 워커가 대기 상태가 되면 앱이 직접 알린다 (registerType 'prompt').
       // injectRegister:false — 등록 스크립트는 src/pwa/useAppUpdate.js 가 useRegisterSW 로
@@ -263,6 +293,8 @@ export default defineConfig({
           /^\/sitemap\.xml(\?|$)/, /^\/robots\.txt(\?|$)/, /^\/llms\.txt(\?|$)/, /^\/404(\.html)?(\?|$)/,
         ],
         cleanupOutdatedCaches: true,
+        // 푸시 처리기 — precache 에 들어가 그 revision 이 sw.js 를 바꾼다 (F-3004 5.2·5.3)
+        importScripts: ['/push-sw.js'],
       },
     }),
     sitePlugin(),
