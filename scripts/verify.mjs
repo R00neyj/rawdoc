@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process'
 
 function parseArgs(argv) {
-  const opts = { e2e: false, repeat: 1, dryRun: false, dist: 'dist', e2ePort: 4317, e2eDist: 'dist' }
+  const opts = { e2e: false, repeat: 1, dryRun: false, dist: 'dist', e2ePort: 4317, e2eDist: 'dist', workers: null }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     const next = () => argv[++i]
@@ -14,6 +14,7 @@ function parseArgs(argv) {
       case '--dist': opts.dist = next(); break
       case '--e2e-port': opts.e2ePort = Number(next()); break
       case '--e2e-dist': opts.e2eDist = next(); break
+      case '--workers': opts.workers = Number(next()); break
       default: throw new Error(`알 수 없는 옵션: ${arg}`)
     }
   }
@@ -40,7 +41,7 @@ function buildSteps(opts) {
       steps.push({
         name: `e2e ${round}회차`,
         cmd: 'npx',
-        args: ['playwright', 'test'],
+        args: ['playwright', 'test', ...(opts.workers ? [`--workers=${opts.workers}`] : [])],
         env: {
           E2E_PORT: String(opts.e2ePort),
           E2E_DIST: opts.e2eDist,
