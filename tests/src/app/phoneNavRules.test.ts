@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   focusHidesPhoneNav, navAtStart, navButtons, navOnPush, navOnSettle, parseNavMax, phoneNavFindDisabled, readNavIdx, type FocusInfo,
-} from '../../../src/app/phoneNav'
+} from '../../../src/app/phoneNavRules'
 
 describe('F-2086 A1 phoneNavFindDisabled', () => {
   const base = { screen: 'doc' as const, viewMode: 'live' as const, vaultLocked: false }

@@ -1,5 +1,5 @@
 // 방문 기록 쓰기와 번호 추적 — 앱의 모든 pushState·replaceState 는 여기를 거친다 (F-2086 3.2)
-import { navAtStart, navOnPush, navOnSettle, parseNavMax, readNavIdx, type NavPos } from './phoneNav'
+import { navAtStart, navOnPush, navOnSettle, parseNavMax, readNavIdx, type NavPos } from './phoneNavRules'
 
 export const NAV_MAX_KEY = 'md.navMax'
 
