@@ -79,6 +79,7 @@ import { useShortcutUsage } from './useShortcutUsage'
 import { useGlobalShortcuts } from './useGlobalShortcuts'
 import { usePaletteOpen } from './usePaletteOpen'
 import { useCommandPalette } from './useCommandPalette'
+import { useViewFind } from './useViewFind'
 import { useShortcutsPanel } from './useShortcutsPanel'
 import { useNewDocTemplate } from './useNewDocTemplate'
 import { useAccountStatus } from './useAccountStatus'
@@ -224,6 +225,7 @@ export default function App() {
   const sidebarCommandRef = useRef<SidebarCommands | null>(null)
   const toggleShortcutsRef = useRef(() => {}) // Ctrl+Shift+/ 가 매 커밋 최신 toggleShortcuts 를 읽게 한다 (F-2052.md 6.1)
   const toggleCommentsRef = useRef<(() => void) | null>(null) // Ctrl+M — 상단바 `댓글` 버튼을 누를 수 없으면 null (tweak 2026-09-28)
+  const openViewFindRef = useRef<(() => void) | null>(null) // Ctrl+F — 보기 찾기를 열 수 없으면 null (F-2087 3.6)
   const shortcutsButtonRef = useRef<HTMLButtonElement | null>(null) // 상태바 `?` 버튼 — 판이 닫힐 때 포커스를 돌려준다 (F-2052 5.3)
   const bootPhaseRef = useRef(bootPhase) // Ctrl+P 가 매 커밋 최신 bootPhase 를 읽게 한다 (F-2022.md 6.1)
   // hashchange 핸들러가 낡은 클로저의 docs·currentDocId 를 읽지 않도록 매 렌더 후 갱신한다 (0단계 버그 수정)
@@ -802,6 +804,7 @@ export default function App() {
     selectSearchQueryRef,
     toggleCommentsRef,
     toggleShortcutsRef,
+    openViewFindRef,
   })
 
   // ----- 편집기 연동 — 본문 1회 읽기·위키 문맥·보기 HTML·layout effect (F-2072) -----
@@ -1159,6 +1162,11 @@ export default function App() {
     toggleShortcutsRef.current = toggleShortcuts
   })
 
+  const viewFind = useViewFind({ viewMode, viewerRef, editorRef, viewerHtml, currentDocId, docScreenId, openDocId: openDoc?.id ?? null })
+  useEffect(() => {
+    openViewFindRef.current = viewFind.available ? viewFind.open : null
+  })
+
   // 탭바 아이콘 버튼이 명령을 실행하고 포커스를 에디터로 돌려준다 (F-233 3.2)
   const runToolbarCommand = useCallback((cmd: StateCommand) => {
     const view = editorRef.current?.view
@@ -1192,7 +1200,7 @@ export default function App() {
     account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef, e2ee,
     getShareDoc, handleCopyDocAsRichText, handleExportDoc, handleExportDocAsHtml, handleExportDocAsText, handleOpenNotification,
     handlePrintDoc, helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
-    outlineControlRef, openPalette, openSearch, openSettings, openHelp, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
+    outlineControlRef, openPalette, openSearch, openViewFind: viewFind.open, openSettings, openHelp, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
     toggleButtonRef, toggleCommentsPanel, toggleSidebar, toolbarPref, viewMode, wikiResolver,
     editorRef,
   }} />
@@ -1283,7 +1291,7 @@ export default function App() {
             editorScrollTop, editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles,
             handleOpenWikiLink, handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc,
             liveEditorOption, mapRoute, mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme,
-            setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewMode,
+            setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewFindCard: viewFind.card, viewMode,
             wikiContext, wikiPreviewPref, wikiResolver,
           }} />}
           {statusBarVisible && shortcutsOpen && <ShortcutPanel mac={isMac} used={shortcutsUsed} onClose={closeShortcuts} />}

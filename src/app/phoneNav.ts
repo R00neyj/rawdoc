@@ -5,7 +5,6 @@ import type { ViewMode } from './ViewModeMenu'
 export function phoneNavFindDisabled(input: { screen: TopBarScreen; viewMode: ViewMode; vaultLocked: boolean }): boolean {
   if (input.screen !== 'doc') return true
   if (input.vaultLocked) return true
-  if (input.viewMode === 'view') return true
   return false
 }
 

@@ -13,7 +13,7 @@
   border: none;
 }
 
-.cm-host .cm-panel.cm-search {
+:is(.cm-host .cm-panel.cm-search, .view-find) {
   --icon-prev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 15l6-6 6 6' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --icon-next: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --icon-select: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -52,13 +52,13 @@
 }
 
 @starting-style {
-  .cm-host .cm-panel.cm-search {
+  :is(.cm-host .cm-panel.cm-search, .view-find) {
     opacity: 0;
     transform: translateY(-4px) scale(0.9);
   }
 }
 
-.cm-host .cm-panel.cm-search .cm-textfield {
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-textfield {
   /* 고정 폭 — flex:1 로 늘어나게 두면 옵션 아이콘들이 줄바꿈 지점을 넘나들어 "단어 단위" 가 바꾸기 줄로 밀려나 보이는 문제가 있었다(2026-09-20 사용자 지적) */
   /* 찾기·바꾸기 두 입력이 항상 같은 폭이라 줄 구성이 입력 내용과 무관하게 고정된다 */
   flex: none;
@@ -74,15 +74,15 @@
   transition: var(--transition-colors);
 }
 
-.cm-host .cm-panel.cm-search .cm-textfield:focus-visible {
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-textfield:focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
 
 /* 아이콘 버튼 공통 — next·prev·select·replace·replaceAll·close. 원래 글자(phrase 로 한글화됨)는 화면엔 숨기고 접근성 트리에만 남긴다 */
-.cm-host .cm-panel.cm-search .cm-button,
-.cm-host .cm-panel.cm-search [name='close'] {
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button,
+:is(.cm-host .cm-panel.cm-search, .view-find) [name='close'] {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -100,14 +100,14 @@
   transition: var(--transition-colors);
 }
 
-.cm-host .cm-panel.cm-search .cm-button:hover,
-.cm-host .cm-panel.cm-search [name='close']:hover {
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button:hover,
+:is(.cm-host .cm-panel.cm-search, .view-find) [name='close']:hover {
   background: var(--rule-2);
   color: var(--ink);
 }
 
-.cm-host .cm-panel.cm-search .cm-button::before,
-.cm-host .cm-panel.cm-search [name='close']::before {
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button::before,
+:is(.cm-host .cm-panel.cm-search, .view-find) [name='close']::before {
   content: '';
   width: 16px;
   height: 16px;
@@ -120,31 +120,31 @@
   mask-position: center;
 }
 
-.cm-host .cm-panel.cm-search .cm-button[name='prev']::before { -webkit-mask-image: var(--icon-prev); mask-image: var(--icon-prev); }
-.cm-host .cm-panel.cm-search .cm-button[name='next']::before { -webkit-mask-image: var(--icon-next); mask-image: var(--icon-next); }
-.cm-host .cm-panel.cm-search .cm-button[name='select']::before { -webkit-mask-image: var(--icon-select); mask-image: var(--icon-select); }
-.cm-host .cm-panel.cm-search .cm-button[name='replace']::before { -webkit-mask-image: var(--icon-replace); mask-image: var(--icon-replace); }
-.cm-host .cm-panel.cm-search .cm-button[name='replaceAll']::before { -webkit-mask-image: var(--icon-replace-all); mask-image: var(--icon-replace-all); }
-.cm-host .cm-panel.cm-search [name='close']::before { -webkit-mask-image: var(--icon-close); mask-image: var(--icon-close); }
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button[name='prev']::before { -webkit-mask-image: var(--icon-prev); mask-image: var(--icon-prev); }
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button[name='next']::before { -webkit-mask-image: var(--icon-next); mask-image: var(--icon-next); }
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button[name='select']::before { -webkit-mask-image: var(--icon-select); mask-image: var(--icon-select); }
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button[name='replace']::before { -webkit-mask-image: var(--icon-replace); mask-image: var(--icon-replace); }
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button[name='replaceAll']::before { -webkit-mask-image: var(--icon-replace-all); mask-image: var(--icon-replace-all); }
+:is(.cm-host .cm-panel.cm-search, .view-find) [name='close']::before { -webkit-mask-image: var(--icon-close); mask-image: var(--icon-close); }
 
 /* "더보기" 토글(createEditor.ts 의 searchMoreToggle 이 DOM 에 끼워 넣는다) — "···" 점 3개, 다음 찾기(icon-next, 아래 화살표)와 모양이 안 겹치게 따로 둔다(2026-09-20 사용자 지적) */
 /* 자주 안 쓰는 옵션(모두 선택·대소문자·정규식·단어 단위)을 기본은 숨기고 이 버튼으로만 연다 */
-.cm-host .cm-panel.cm-search .cm-search-more::before {
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-search-more::before {
   -webkit-mask-image: var(--icon-more);
   mask-image: var(--icon-more);
 }
 
-.cm-host .cm-panel.cm-search.cm-search--expanded .cm-search-more {
+:is(.cm-host .cm-panel.cm-search, .view-find).cm-search--expanded .cm-search-more {
   background: color-mix(in srgb, var(--ink) 10%, transparent);
   color: var(--ink);
 }
 
-.cm-host .cm-panel.cm-search .cm-search-more::after { content: '옵션 더 보기'; }
-.cm-host .cm-panel.cm-search.cm-search--expanded .cm-search-more::after { content: '옵션 접기'; }
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-search-more::after { content: '옵션 더 보기'; }
+:is(.cm-host .cm-panel.cm-search, .view-find).cm-search--expanded .cm-search-more::after { content: '옵션 접기'; }
 
 /* 옵션 팝오버 — 같은 줄에 펼치지 않고 카드 아래에 별도 카드로 띄운다(createEditor.ts 가 모두 선택 버튼·라벨 3개를 이 컨테이너로 옮긴다) */
 /* 토글의 offsetLeft 로 left 를 맞추면 카드가 화면 오른쪽 끝(right:10px)에 붙어 팝오버가 화면 밖으로 나가는 문제가 있었다(2026-09-20) — 카드 오른쪽 끝에 고정하면 항상 뷰포트 안에 들어온다 */
-.cm-host .cm-panel.cm-search .cm-search-more-panel {
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-search-more-panel {
   display: flex;
   position: absolute;
   top: calc(100% + 6px);
@@ -169,7 +169,7 @@
   transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
 }
 
-.cm-host .cm-panel.cm-search.cm-search--expanded .cm-search-more-panel {
+:is(.cm-host .cm-panel.cm-search, .view-find).cm-search--expanded .cm-search-more-panel {
   opacity: 1;
   visibility: visible;
   transform: translateY(0) scale(1);
@@ -177,7 +177,7 @@
 }
 
 @starting-style {
-  .cm-host .cm-panel.cm-search.cm-search--expanded .cm-search-more-panel {
+  :is(.cm-host .cm-panel.cm-search, .view-find).cm-search--expanded .cm-search-more-panel {
     opacity: 0;
     transform: translateY(-4px) scale(0.9);
   }
@@ -185,8 +185,8 @@
 
 /* 호버 툴팁 — 앱 공통 .icon-tooltip 규칙과 같은 모양·트랜지션(배경 --ink, 글자 --panel, 12px, 모서리 6px, scale·translate 로 나타남, design.md 4장) */
 /* 전에는 opacity·visibility 만 바뀌어 앱의 다른 아이콘 버튼 툴팁과 트랜지션 규칙이 달랐다(2026-09-20 사용자 지적) */
-.cm-host .cm-panel.cm-search .cm-button::after,
-.cm-host .cm-panel.cm-search [name='close']::after {
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button::after,
+:is(.cm-host .cm-panel.cm-search, .view-find) [name='close']::after {
   position: absolute;
   top: calc(100% + 6px);
   left: 50%;
@@ -208,24 +208,24 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cm-host .cm-panel.cm-search .cm-button::after,
-  .cm-host .cm-panel.cm-search [name='close']::after,
-  .cm-host .cm-panel.cm-search label::after {
+  :is(.cm-host .cm-panel.cm-search, .view-find) .cm-button::after,
+  :is(.cm-host .cm-panel.cm-search, .view-find) [name='close']::after,
+  :is(.cm-host .cm-panel.cm-search, .view-find) label::after {
     transition-duration: 0ms;
   }
 }
 
-.cm-host .cm-panel.cm-search .cm-button[name='prev']::after { content: '이전 찾기'; }
-.cm-host .cm-panel.cm-search .cm-button[name='next']::after { content: '다음 찾기'; }
-.cm-host .cm-panel.cm-search .cm-button[name='select']::after { content: '일치 항목 모두 선택'; }
-.cm-host .cm-panel.cm-search .cm-button[name='replace']::after { content: '바꾸기'; }
-.cm-host .cm-panel.cm-search .cm-button[name='replaceAll']::after { content: '모두 바꾸기'; }
-.cm-host .cm-panel.cm-search [name='close']::after { content: '닫기'; right: 0; left: auto; transform: none; }
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button[name='prev']::after { content: '이전 찾기'; }
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button[name='next']::after { content: '다음 찾기'; }
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button[name='select']::after { content: '일치 항목 모두 선택'; }
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button[name='replace']::after { content: '바꾸기'; }
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button[name='replaceAll']::after { content: '모두 바꾸기'; }
+:is(.cm-host .cm-panel.cm-search, .view-find) [name='close']::after { content: '닫기'; right: 0; left: auto; transform: none; }
 
-.cm-host .cm-panel.cm-search .cm-button:hover::after,
-.cm-host .cm-panel.cm-search .cm-button:focus-visible::after,
-.cm-host .cm-panel.cm-search [name='close']:hover::after,
-.cm-host .cm-panel.cm-search [name='close']:focus-visible::after {
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button:hover::after,
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button:focus-visible::after,
+:is(.cm-host .cm-panel.cm-search, .view-find) [name='close']:hover::after,
+:is(.cm-host .cm-panel.cm-search, .view-find) [name='close']:focus-visible::after {
   opacity: 1;
   scale: 1;
   translate: 0 0;
@@ -235,16 +235,16 @@
 
 /* 터치 기기는 탭 뒤 :hover 가 남으므로 툴팁을 띄우지 않는다 (tweak) */
 @media (hover: none) {
-  .cm-host .cm-panel.cm-search .cm-button::after,
-  .cm-host .cm-panel.cm-search [name='close']::after,
-  .cm-host .cm-panel.cm-search label::after {
+  :is(.cm-host .cm-panel.cm-search, .view-find) .cm-button::after,
+  :is(.cm-host .cm-panel.cm-search, .view-find) [name='close']::after,
+  :is(.cm-host .cm-panel.cm-search, .view-find) label::after {
     display: none;
   }
 }
 
 /* 대소문자·정규식·단어 단위 — 체크박스가 아니라 눌림 토글 아이콘 버튼처럼 보이게 한다 */
 /* 실제 <input type=checkbox> 는 라벨 전체를 덮어 그대로 두고(클릭·접근성·:checked 동작), 시각적으로만 숨기고 글자 대신 짧은 기호를 ::before 로 그린다 */
-.cm-host .cm-panel.cm-search label {
+:is(.cm-host .cm-panel.cm-search, .view-find) label {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -261,17 +261,17 @@
   transition: var(--transition-colors);
 }
 
-.cm-host .cm-panel.cm-search label:hover {
+:is(.cm-host .cm-panel.cm-search, .view-find) label:hover {
   background: var(--rule-2);
   color: var(--ink);
 }
 
-.cm-host .cm-panel.cm-search label:has(input:checked) {
+:is(.cm-host .cm-panel.cm-search, .view-find) label:has(input:checked) {
   background: color-mix(in srgb, var(--ink) 10%, transparent);
   color: var(--ink);
 }
 
-.cm-host .cm-panel.cm-search label::before {
+:is(.cm-host .cm-panel.cm-search, .view-find) label::before {
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
@@ -279,15 +279,15 @@
   pointer-events: none;
 }
 
-.cm-host .cm-panel.cm-search label:has(input[name='case'])::before { content: 'Aa'; }
-.cm-host .cm-panel.cm-search label:has(input[name='re'])::before { content: '.*'; font-size: 13px; }
-.cm-host .cm-panel.cm-search label:has(input[name='word'])::before { content: '|ab|'; font-size: 10px; letter-spacing: -0.03em; }
+:is(.cm-host .cm-panel.cm-search, .view-find) label:has(input[name='case'])::before { content: 'Aa'; }
+:is(.cm-host .cm-panel.cm-search, .view-find) label:has(input[name='re'])::before { content: '.*'; font-size: 13px; }
+:is(.cm-host .cm-panel.cm-search, .view-find) label:has(input[name='word'])::before { content: '|ab|'; font-size: 10px; letter-spacing: -0.03em; }
 
-.cm-host .cm-panel.cm-search label:has(input[name='case'])::after { content: '대소문자 구분'; }
-.cm-host .cm-panel.cm-search label:has(input[name='re'])::after { content: '정규식'; }
-.cm-host .cm-panel.cm-search label:has(input[name='word'])::after { content: '단어 단위'; }
+:is(.cm-host .cm-panel.cm-search, .view-find) label:has(input[name='case'])::after { content: '대소문자 구분'; }
+:is(.cm-host .cm-panel.cm-search, .view-find) label:has(input[name='re'])::after { content: '정규식'; }
+:is(.cm-host .cm-panel.cm-search, .view-find) label:has(input[name='word'])::after { content: '단어 단위'; }
 
-.cm-host .cm-panel.cm-search label::after {
+:is(.cm-host .cm-panel.cm-search, .view-find) label::after {
   position: absolute;
   top: calc(100% + 6px);
   left: 50%;
@@ -309,8 +309,8 @@
   z-index: 30;
 }
 
-.cm-host .cm-panel.cm-search label:hover::after,
-.cm-host .cm-panel.cm-search label:focus-within::after {
+:is(.cm-host .cm-panel.cm-search, .view-find) label:hover::after,
+:is(.cm-host .cm-panel.cm-search, .view-find) label:focus-within::after {
   opacity: 1;
   scale: 1;
   translate: 0 0;
@@ -318,7 +318,7 @@
   transition-delay: 400ms;
 }
 
-.cm-host .cm-panel.cm-search input[type='checkbox'] {
+:is(.cm-host .cm-panel.cm-search, .view-find) input[type='checkbox'] {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -329,28 +329,28 @@
 }
 
 /* 모두 선택·대소문자·정규식·단어 단위는 "더보기" 를 눌러야 보인다. 기본은 숨김 — 위 선택자(.cm-button·label)가 준 display:inline-flex 를 소스 순서로 덮는다 */
-.cm-host .cm-panel.cm-search .cm-button[name='select'],
-.cm-host .cm-panel.cm-search label {
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-button[name='select'],
+:is(.cm-host .cm-panel.cm-search, .view-find) label {
   display: none;
 }
 
-.cm-host .cm-panel.cm-search.cm-search--expanded .cm-button[name='select'] {
+:is(.cm-host .cm-panel.cm-search, .view-find).cm-search--expanded .cm-button[name='select'] {
   display: inline-flex;
 }
 
-.cm-host .cm-panel.cm-search.cm-search--expanded label {
+:is(.cm-host .cm-panel.cm-search, .view-find).cm-search--expanded label {
   display: inline-flex;
 }
 
 /* 찾기·바꾸기 각 줄(row) — searchMoreToggle 이 만드는 실제 <div> 컨테이너 */
 /* 라이브러리가 원래 넣던 <br> 구분선은 JS 에서 지우고, 대신 바꾸기 줄 위 테두리로 같은 모양을 낸다 */
-.cm-host .cm-panel.cm-search .cm-search-row {
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-search-row {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.cm-host .cm-panel.cm-search .cm-search-row--replace {
+:is(.cm-host .cm-panel.cm-search, .view-find) .cm-search-row--replace {
   margin-top: 2px;
   padding-top: 4px;
   border-top: 1px solid var(--rule);
@@ -358,7 +358,7 @@
 
 /* 예전엔 position:absolute 로 카드 오른쪽 위에 따로 띄웠는데 다른 버튼과 세로 정렬이 살짝 어긋나 보였다(2026-09-20 사용자 지적) */
 /* 찾기 줄(.cm-search-row) 안에 넣고 margin-left:auto 로 같은 줄 끝으로 미는 것으로 바꾼다(createEditor.ts) */
-.cm-host .cm-panel.cm-search [name='close'] {
+:is(.cm-host .cm-panel.cm-search, .view-find) [name='close'] {
   margin-left: auto;
 }
 

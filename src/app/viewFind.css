@@ -1,0 +1,48 @@
+/* 보기 모드 찾기 카드 — 모양 대부분은 ../editor/searchPanel.css 의 :is() 규칙을 함께 쓴다 (F-2087 8장) */
+.content-area .view-find.view-find.view-find {
+  top: 10px;
+  right: 10px;
+}
+
+.view-find-field {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.view-find .view-find-field .cm-textfield.cm-textfield.cm-textfield {
+  padding-right: 56px;
+}
+
+.view-find-count {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .content-area .view-find.view-find.view-find {
+    top: calc(var(--float-cover) + 10px);
+  }
+}
+
+::highlight(view-find-match) {
+  background-color: color-mix(in srgb, var(--callout-warning) 28%, transparent);
+}
+
+::highlight(view-find-current) {
+  background-color: color-mix(in srgb, var(--callout-warning) 60%, transparent);
+}
+
+@media print {
+  ::highlight(view-find-match),
+  ::highlight(view-find-current) {
+    background-color: transparent;
+  }
+}

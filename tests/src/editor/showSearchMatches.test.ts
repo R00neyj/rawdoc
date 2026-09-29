@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
-import { search, searchPanelOpen, getSearchQuery } from '@codemirror/search'
-import { showSearchMatches } from '../../../src/editor/showSearchMatches'
+import { search, searchPanelOpen, getSearchQuery, SearchQuery, setSearchQuery } from '@codemirror/search'
+import { readSearchPanel, showSearchMatches, syncSearchPanel } from '../../../src/editor/showSearchMatches'
 
 function fakeView(initial: EditorState) {
   let current = initial
@@ -77,5 +77,29 @@ describe('showSearchMatches', () => {
     const found = showSearchMatches(view, '')
     expect(found).toBe(false)
     expect(searchPanelOpen(getState())).toBe(false)
+  })
+})
+
+describe('F-2087 readSearchPanel·syncSearchPanel', () => {
+  it('U13 닫혀 있으면 null, 열린 뒤에는 질의', () => {
+    const { view } = makeView('앞부분\n오늘 회고를 썼다\n')
+    expect(readSearchPanel(view)).toBeNull()
+    showSearchMatches(view, '회고')
+    expect(readSearchPanel(view)).toEqual({ search: '회고', caseSensitive: false, regexp: false, wholeWord: false })
+  })
+
+  it('U14 질의를 넣으면 열리고 선택은 그대로, null 이면 닫히고 치환어는 그대로', () => {
+    const { view, getState } = makeView('앞부분\n오늘 회고를 썼다\n')
+    view.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: '', replace: '바꿈' })) })
+    const before = getState().selection.main
+    syncSearchPanel(view, { search: '회고', caseSensitive: true, regexp: false, wholeWord: true })
+    const state = getState()
+    expect(searchPanelOpen(state)).toBe(true)
+    const query = getSearchQuery(state)
+    expect([query.search, query.caseSensitive, query.regexp, query.wholeWord, query.replace]).toEqual(['회고', true, false, true, '바꿈'])
+    expect([state.selection.main.from, state.selection.main.to]).toEqual([before.from, before.to])
+    syncSearchPanel(view, null)
+    expect(searchPanelOpen(getState())).toBe(false)
+    expect(getSearchQuery(getState()).replace).toBe('바꿈')
   })
 })

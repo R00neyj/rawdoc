@@ -9,8 +9,8 @@ describe('F-2086 A1 phoneNavFindDisabled', () => {
     expect(phoneNavFindDisabled(base)).toBe(false)
     expect(phoneNavFindDisabled({ ...base, viewMode: 'raw' })).toBe(false)
   })
-  it('보기 모드 → 흐림', () => {
-    expect(phoneNavFindDisabled({ ...base, viewMode: 'view' })).toBe(true)
+  it('보기 모드 → 켜짐 (F-2087 이 풀었다)', () => {
+    expect(phoneNavFindDisabled({ ...base, viewMode: 'view' })).toBe(false)
   })
   it('잠김 → 흐림', () => {
     expect(phoneNavFindDisabled({ ...base, vaultLocked: true })).toBe(true)

@@ -5,6 +5,7 @@ import type { EditorState } from '@codemirror/state'
 import Editor, { type EditorHandle } from '../editor/Editor'
 import Viewer from '../viewer/Viewer'
 import E2eeLockedPanel from './E2eeLockedPanel'
+import ViewFindCard, { type ViewFindCardProps } from './ViewFindCard'
 import WikiLinkPreview from './WikiLinkPreview'
 import Outline, { type OutlineControl } from './Outline'
 import CommentRailPanel, { CommentPanelPresence } from './CommentRailPanel'
@@ -74,6 +75,7 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
     titleReadOnly: boolean
     viewerHtml: string
     viewerRef: RefObject<HTMLDivElement | null>
+    viewFindCard: ViewFindCardProps | null
     viewMode: 'live' | 'raw' | 'view'
   }
 
@@ -83,7 +85,7 @@ export default function DocumentArea({
   editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles, handleOpenWikiLink,
   handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, liveEditorOption, mapRoute,
   mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme, setCommentRailExtra, setEditorRefs, sharedDoc,
-  sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
+  sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewFindCard, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
 }: DocumentAreaProps) {
   const phone = usePhoneWidth()
   const [pillCover, setPillCover] = useState(0)
@@ -173,6 +175,7 @@ export default function DocumentArea({
           onContextMenu={handleViewContextMenu}
         />
       )}
+      {viewMode === 'view' && viewFindCard && <ViewFindCard {...viewFindCard} />}
       {/* 레일·판 여닫힘 전환 — 닫힌 뒤에도 전환 시간만큼 남긴다. 편집기가 사라지면(commentAvailable 거짓) 곧바로 뗀다 */}
       {commentAvailable && (
         <CommentPanelPresence open={commentRailVisible || commentSheetVisible}>

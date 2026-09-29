@@ -51,6 +51,7 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
     openDoc: OpenDoc | null
     outlineControlRef: RefObject<OutlineControl | null>
     openSearch: () => void
+    openViewFind: () => void
     openSettings: () => void
     openHelp: () => void
     requestInviteCurrentDoc: () => void
@@ -68,7 +69,7 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
 export default function AppTopBar({
   account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef, e2ee,
   getShareDoc, handleCopyDocAsRichText, handleExportDoc, handleExportDocAsHtml, handleExportDocAsText, handleOpenNotification, handlePrintDoc,
-  helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch, openSettings, openHelp,
+  helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch, openViewFind, openSettings, openHelp,
   requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store, toggleButtonRef, toggleCommentsPanel,
   toggleSidebar, toolbarPref, viewMode, wikiResolver,
   editorRef,
@@ -164,7 +165,7 @@ export default function AppTopBar({
           : undefined
       }
     />
-    <PhoneNav editorRef={editorRef} screen={screen} viewMode={viewMode} vaultLocked={currentDoc?.e2ee === 'locked'} onOpenPalette={openPalette} />
+    <PhoneNav editorRef={editorRef} screen={screen} viewMode={viewMode} vaultLocked={currentDoc?.e2ee === 'locked'} onOpenPalette={openPalette} onOpenViewFind={openViewFind} />
     </>
   )
 }

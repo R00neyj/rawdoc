@@ -16,6 +16,7 @@ type PhoneNavProps = {
   viewMode: ViewMode
   vaultLocked: boolean
   onOpenPalette: () => void
+  onOpenViewFind: () => void
 }
 
 const BACK_LABEL = '뒤로 가기'
@@ -60,7 +61,7 @@ function useFocusHidesNav(): boolean {
   return hidden
 }
 
-export default function PhoneNav({ editorRef, screen, viewMode, vaultLocked, onOpenPalette }: PhoneNavProps): ReactNode {
+export default function PhoneNav({ editorRef, screen, viewMode, vaultLocked, onOpenPalette, onOpenViewFind }: PhoneNavProps): ReactNode {
   useEffect(() => startHistoryTracking(), [])
   const pos = useSyncExternalStore(subscribeHistoryNav, getHistoryNavSnapshot)
   const hidden = useFocusHidesNav()
@@ -71,6 +72,10 @@ export default function PhoneNav({ editorRef, screen, viewMode, vaultLocked, onO
   const findDisabled = phoneNavFindDisabled({ screen, viewMode, vaultLocked })
 
   function handleFind() {
+    if (viewMode === 'view') {
+      onOpenViewFind()
+      return
+    }
     const view = editorRef.current?.view
     if (!view) return
     openSearchPanel(view)
