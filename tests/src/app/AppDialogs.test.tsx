@@ -35,10 +35,10 @@ const hasMigrate = (props: Record<string, unknown>) => find(render(props), (el) 
 
 describe('F-2081 U7~U8 여러 항목 삭제 대화상자', () => {
   it('U7 항목 3개면 열리고 개수를 말한다', () => {
-    expect(bulkDialog({ bulkDeleteItems: [{}, {}, {}] })).toEqual({ open: true, text: '선택한 3개 항목을 삭제할까요? 되돌릴 수 없습니다.' })
+    expect(bulkDialog({ bulkDeleteItems: [{}, {}, {}], account: { state: 'out' } })).toEqual({ open: true, text: '선택한 3개 항목을 삭제할까요? 되돌릴 수 없습니다.' })
   })
   it('U8 항목이 없으면 닫히고 0개', () => {
-    expect(bulkDialog({ bulkDeleteItems: null })).toEqual({ open: false, text: '선택한 0개 항목을 삭제할까요? 되돌릴 수 없습니다.' })
+    expect(bulkDialog({ bulkDeleteItems: null, account: { state: 'out' } })).toEqual({ open: false, text: '선택한 0개 항목을 삭제할까요? 되돌릴 수 없습니다.' })
   })
 })
 
