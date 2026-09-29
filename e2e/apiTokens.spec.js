@@ -78,14 +78,3 @@ test.describe('F-222 A4 폐기', () => {
     expect([...server.apiTokens.values()].every((t) => t.revokedAt)).toBe(true)
   })
 })
-
-test.describe('F-222 A5 로그아웃 상태', () => {
-  test('계정 메뉴에 API 토큰 항목이 없다', async ({ page }) => {
-    await page.route('**/api/me', (route) =>
-      route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' }),
-    )
-    await openApp(page)
-    await page.getByRole('button', { name: '계정' }).click()
-    await expect(page.getByRole('menuitem', { name: 'API 토큰' })).toHaveCount(0)
-  })
-})

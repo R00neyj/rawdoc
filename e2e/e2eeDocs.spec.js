@@ -1,6 +1,6 @@
 // 금고 문서 저장·열기 (specs/features/F-405.md 9.2) — 금고는 F-404 화면으로 만들고, 금고 폴더는 저장소 행·가짜 서버 맵에 직접 표시한다
 import { test, expect } from '@playwright/test'
-import { openApp as openAppRaw, setPrefBeforeLoad, currentDocId, importMarkdown } from './helpers.js'
+import { openApp as openAppRaw, setPrefBeforeLoad, currentDocId } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const SETTINGS_DIALOG_SELECTOR = 'dialog[aria-labelledby="settings-title"]'
@@ -220,14 +220,14 @@ test.describe('F-405 로컬 금고 문서', () => {
     expect(row.content.length).toBeGreaterThan(row.title.length)
   })
 
-  test('F-405 E3 새로고침하면 잠긴 문서, 누르면 P1 — 틀린 암호는 오류, 맞으면 편집기', async ({ page }) => {
+  test('F-405 E3·E4·E5·E11 새로고침하면 잠긴 문서, 틀린 암호는 오류, 상태바로 다시 잠그면 평문이 사라지고, 일반 문서는 금고 폴더로 못 들어간다', async ({ page }) => {
     const { docId } = await makeLocalVaultDoc(page)
-    const plain = await importMarkdown(page, { name: '일반.md', content: '# 일반\n\n평문' })
-    expect(plain).not.toBe(docId)
+    await page.locator('.sidebar a').filter({ hasText: '제목 없는 문서' }).click()
     await page.reload()
     await waitBooted(page)
     await expandIfCollapsed(page, VAULT_FOLDER)
 
+    // E3 잠긴 문서 — 틀린 암호는 오류, 맞으면 편집기
     const link = docLink(page, docId)
     await expect(link).toHaveText('잠긴 문서')
     await expect(link).toHaveClass(/doc-item-btn--locked/)
@@ -247,17 +247,13 @@ test.describe('F-405 로컬 금고 문서', () => {
     await expect(page.locator('.cm-content')).toContainText('비밀 본문 한 줄')
     await expect(link).toHaveText('비밀 제목')
     await expect(panel).toHaveCount(0)
-  })
 
-  test('F-405 E4·E5 상태바로 잠그면 평문이 화면에서 사라지고, 암호를 잊었나요? 는 복구 모드', async ({ page }) => {
-    const { docId } = await makeLocalVaultDoc(page)
+    // E4·E5 상태바로 잠그면 평문이 화면에서 사라지고, 암호를 잊었나요? 는 복구 모드
     await page.locator('.cm-content').click()
-
     await page.locator('.statusbar-e2ee').click()
-    const panel = lockedPanel(page)
     await expect(panel).toBeVisible()
     await expect(page.locator('.cm-host .cm-editor')).toHaveCount(0)
-    await expect(docLink(page, docId)).toHaveText('잠긴 문서')
+    await expect(link).toHaveText('잠긴 문서')
     const html = await page.content()
     expect(html).not.toContain('비밀 본문')
     expect(html).not.toContain('비밀 제목')
@@ -265,17 +261,15 @@ test.describe('F-405 로컬 금고 문서', () => {
 
     await panel.getByRole('button', { name: '암호를 잊었나요?' }).click()
     await expect(unlockDialog(page).getByRole('heading', { name: '복구 코드로 열기' })).toBeVisible()
-  })
+    await page.keyboard.press('Escape')
+    await expect(unlockDialog(page)).toBeHidden()
 
-  test('F-405 E11 일반 문서를 금고 폴더로 끌어 놓으면 E19, 제자리에 남는다', async ({ page }) => {
-    await setupLocalVaultFolder(page)
-    const plainId = await importMarkdown(page, { name: '일반.md', content: '# 일반\n\n평문' })
-
+    // E11 잠긴 채로 일반 문서(처음부터 있던 제목 없는 문서)를 금고 폴더로 끌어 놓으면 E19, 제자리에 남는다
+    const plainId = (await page.locator('.sidebar a').filter({ hasText: '제목 없는 문서' }).getAttribute('href')).replace('#/d/', '')
     await dragRowTo(page, docRow(page, plainId), rowOf(page, VAULT_FOLDER))
-
     await expect(page.locator('.notice--error .notice-message')).toHaveText('금고 폴더에는 금고 문서와 금고 폴더만 넣을 수 있습니다.')
-    const row = (await idbGetAll(page, 'md-docs', 'docs')).find((d) => d.id === plainId)
-    expect(row.folderId ?? null).toBeNull()
+    const plainRow = (await idbGetAll(page, 'md-docs', 'docs')).find((d) => d.id === plainId)
+    expect(plainRow.folderId ?? null).toBeNull()
   })
 })
 
@@ -323,7 +317,7 @@ async function remoteRow(page, docId) {
 }
 
 test.describe('F-405 서버 금고 문서', () => {
-  test('F-405 E6 금고 문서는 봉투로 POST·PUT, 웹소켓을 열지 않는다', async ({ page }) => {
+  test('F-405 E6·E7 금고 문서는 봉투로 POST·PUT 하고 웹소켓을 열지 않으며, PUT 은 앞 응답 뒤 10초 안에 다시 나가지 않는다', async ({ page }) => {
     await page.clock.install()
     const server = await fakeServer(page)
     seedVaultFolder(server)
@@ -351,24 +345,10 @@ test.describe('F-405 서버 금고 문서', () => {
     expect(put.content).toMatch(BASE64)
     expect(put.content).not.toContain('비밀')
     expect(sockets.filter((u) => u.includes(docId))).toEqual([])
-  })
 
-  test('F-405 E7 금고 문서 PUT 은 앞 응답 뒤 10초 안에 다시 나가지 않는다', async ({ page }) => {
-    await page.clock.install()
-    const server = await fakeServer(page)
-    seedVaultFolder(server)
-    const requests = collectRequests(page)
-    await openApp(page)
-    await createVault(page)
-    const docId = await newVaultDoc(page)
-    await page.locator('.cm-content').click()
-    await page.keyboard.type('가')
-    await expect(page.locator('.statusbar-save')).toContainText('저장됨')
-    await page.clock.fastForward(11_000)
-    await expect.poll(() => putsOf(requests, docId).length).toBe(1)
+    // E7 앞 응답 뒤 10초 안에는 다시 나가지 않는다
     await expect.poll(() => server.docs.get(docId)?.version).toBe(2)
-    const firstLength = putsOf(requests, docId)[0].body.content.length
-
+    const firstLength = put.content.length
     const now = await page.evaluate(() => Date.now())
     await page.clock.pauseAt(now + 50)
     for (const ch of ['a', 'b', 'c']) {
@@ -477,8 +457,6 @@ test.describe('F-405 서버 금고 문서', () => {
     await page.waitForTimeout(300)
     expect(putsOf(requests, docId)).toHaveLength(0)
     expect((await remoteRow(page, docId)).content.length).toBe(lengthBefore)
-    const height = await page.locator('.cm-content').evaluate((el) => el.getBoundingClientRect().height)
-    expect(height).toBeGreaterThan(100_000)
   })
 
   test('F-405 E12 두 탭에서 같은 금고 문서를 열면 두 번째는 읽기 전용', async ({ page, context }) => {

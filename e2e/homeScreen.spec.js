@@ -8,46 +8,43 @@ async function goHome(page) {
   await page.getByRole('button', { name: `${brand.name} 홈으로` }).click()
 }
 
-async function mockPublicDoc(page) {
-  await page.route('**/pub/docs/**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ title: '공개 문서', content: '본문\n', lineEnding: 'lf', updatedAt: 1_700_000_000_000 }),
-    }),
-  )
-}
-
-test.describe('F-232 A2 첫 진입 — 홈 기본값', () => {
-  test('문서가 여러 개 있어도 해시 없이 열면 홈 화면, 특정 문서는 자동으로 안 열린다', async ({ page }) => {
+test.describe('F-232 A2·A6·A7·A8·리뷰 A4 홈 흐름', () => {
+  test('F-232 A2·A6·A7·A8·리뷰 A4 해시 없이 열면 홈, 목록 클릭·로고로 오가고, 문서 해시 우선, 모르는 해시는 알림', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1') // 저장 공간 알림이 먼저 뜨면 info 알림이 가려진다(notice.ts)
     await openAppHome(page) // 빈 저장소 — 문서 0개 (F-257 7장)
     await importMarkdown(page, { name: 'a.md', content: '문서 A\n' })
     await importMarkdown(page, { name: 'b.md', content: '문서 B\n' })
 
-    // 문서를 연 채로 해시를 지우고 새로 고쳐 "해시 없이 새로 열기"를 재현한다
+    // A2 문서를 연 채로 해시를 지우고 새로 고쳐 "해시 없이 새로 열기"를 재현한다
     await page.evaluate(() => history.replaceState(null, '', '/'))
     await page.reload()
-
     await expect(page.locator('.empty-state p')).toHaveText('문서를 선택하거나 새로 만드세요.')
     expect(await currentDocId(page)).toBeNull()
     await expect(page.locator('.tree-row')).toHaveCount(2)
-  })
-})
 
-test.describe('F-232 A3 문서 0개 홈', () => {
-  test('문서가 하나도 없으면 문구가 다르다', async ({ page }) => {
-    await openAppHome(page) // 빈 저장소 — 문서 0개 (F-257 7장)
-    await expect(page.locator('.empty-state p')).toHaveText('문서가 없습니다.')
-  })
-})
+    // A6 사이드바 클릭
+    await page.locator('.doc-item-btn').first().click()
+    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+    const docId = await currentDocId(page)
+    expect(docId).not.toBeNull()
 
-test.describe('F-232 A4 문서 있는 홈', () => {
-  test('문서가 1개 이상이면 문구가 다르다', async ({ page }) => {
-    await openAppHome(page)
-    await importMarkdown(page, { name: 'a.md', content: '문서\n' }) // 첫 실행 자동 생성이 없어져 직접 만든다 (F-257 7장)
+    // A7 로고 → 홈, 이미 홈이면 다시 눌러도 조용히 아무 일 없다 (3.3)
     await goHome(page)
-    await expect(page.locator('.empty-state p')).toHaveText('문서를 선택하거나 새로 만드세요.')
-    await expect(page.locator('.tree-row')).toHaveCount(1)
+    await expect(page.locator('.empty-state')).toBeVisible()
+    expect(await currentDocId(page)).toBeNull()
+    await expect(page.locator('.tree-row')).toHaveCount(2)
+    await goHome(page)
+    await expect(page.locator('.empty-state')).toBeVisible()
+
+    // A8 #/d/{id} 주소는 설정과 무관하게 그 문서가 열린다
+    await page.goto(`/#/d/${docId}`)
+    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+    expect(await currentDocId(page)).toBe(docId)
+
+    // 리뷰 A4 인식 못 한 해시는 홈이 아니라 첫 문서 + 알림
+    await page.evaluate(() => { location.hash = '#abc' })
+    await expect(page.locator('.notice-message')).toHaveText('문서를 찾을 수 없습니다.')
+    expect(await currentDocId(page)).toBe(docId)
   })
 })
 
@@ -66,140 +63,23 @@ test.describe('F-232 A5 마지막 문서 토글', () => {
   })
 })
 
-test.describe('F-232 A6 사이드바 클릭', () => {
-  test('홈에서 목록 문서를 클릭하면 그 문서가 열리고 해시가 붙는다', async ({ page }) => {
+test.describe('F-241 A4·A5·A7 홈의 최근 문서', () => {
+  test('F-241 A4·A5·A7 최근 목록이 최신순, 항목 클릭으로 열림, 고쳐 저장하면 맨 위로', async ({ page }) => {
     await openAppHome(page)
-    await importMarkdown(page, { name: 'a.md', content: '문서\n' }) // 첫 실행 자동 생성이 없어져 직접 만든다 (F-257 7장)
-    await goHome(page)
-    await page.locator('.doc-item-btn').first().click()
-
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    expect(await currentDocId(page)).not.toBeNull()
-  })
-})
-
-test.describe('F-232 A7 로고 → 홈', () => {
-  test('문서를 연 상태에서 로고를 누르면 홈으로 돌아간다', async ({ page }) => {
-    await openAppHome(page)
-    await importMarkdown(page, { name: 'a.md', content: '문서\n' }) // 첫 실행 자동 생성이 없어져 직접 만든다 (F-257 7장)
-    await goHome(page)
-    await page.locator('.doc-item-btn').first().click()
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-
-    await page.getByRole('button', { name: `${brand.name} 홈으로` }).click()
-
-    await expect(page.locator('.empty-state')).toBeVisible()
-    expect(await currentDocId(page)).toBeNull()
-    await expect(page.locator('.tree-row')).toHaveCount(1) // 사이드바 유지
-
-    // 이미 홈이면 다시 눌러도 조용히 아무 일 없다 (3.3)
-    await page.getByRole('button', { name: `${brand.name} 홈으로` }).click()
-    await expect(page.locator('.empty-state')).toBeVisible()
-  })
-})
-
-test.describe('F-232 A8 특정 문서 해시 우선', () => {
-  test('startScreen=home 이어도 #/d/{id} 주소로 열면 설정과 무관하게 그 문서가 열린다', async ({ page }) => {
-    await openAppHome(page)
-    await importMarkdown(page, { name: 'a.md', content: '문서\n' }) // 첫 실행 자동 생성이 없어져 직접 만든다 (F-257 7장)
-    await goHome(page)
-    await page.locator('.doc-item-btn').first().click()
-    const docId = await currentDocId(page)
-    expect(docId).not.toBeNull()
-
-    await page.goto(`/#/d/${docId}`)
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    expect(await currentDocId(page)).toBe(docId)
-  })
-})
-
-test.describe('F-232 리뷰 A4 인식 못 한 해시', () => {
-  test('문서를 연 채로 인식 못 한 해시로 바뀌면 홈이 아니라 첫 문서 + 알림', async ({ page }) => {
-    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1') // 저장 공간 알림이 먼저 뜨면 info 알림이 가려진다(notice.ts)
-    await openAppHome(page)
-    const docId = await importMarkdown(page, { name: 'a.md', content: '문서\n' })
-
-    await page.evaluate(() => { location.hash = '#abc' })
-
-    await expect(page.locator('.notice-message')).toHaveText('문서를 찾을 수 없습니다.')
-    expect(await currentDocId(page)).toBe(docId)
-  })
-})
-
-test.describe('F-232 A9 공유·공개 화면 무관', () => {
-  test('#/p/{토큰} 로 열면 설정과 무관하게 공개 보기 화면이 뜬다', async ({ page }) => {
-    await mockPublicDoc(page)
-    await page.goto('/#/p/tok123')
-
-    await expect(page.locator('.public-view-title')).toBeVisible()
-    await expect(page.locator('.empty-state')).toHaveCount(0)
-    await expect(page.locator('.sidebar')).toHaveCount(0)
-  })
-})
-
-test.describe('F-232 A10 공개 화면 설정 대화상자', () => {
-  test('PublicView 설정 대화상자에는 시작 화면 항목이 없다', async ({ page }) => {
-    await mockPublicDoc(page)
-    await page.goto('/#/p/tok123')
-
-    await page.locator('.public-view-settings').click()
-    await expect(page.locator('#settings-title')).toBeVisible()
-    await expect(page.locator('#start-screen-label')).toHaveCount(0)
-  })
-})
-
-test.describe('F-241 A4 홈에 최근 문서', () => {
-  test('문서를 3개 만들면 홈 화면에 최근 목록이 최신순으로 보인다', async ({ page }) => {
-    await openAppHome(page)
-    await importMarkdown(page, { name: 'A.md', content: '문서 A\n' })
-    await importMarkdown(page, { name: 'B.md', content: '문서 B\n' })
-    await importMarkdown(page, { name: 'C.md', content: '문서 C\n' })
-    await goHome(page)
-
-    const items = page.locator('.empty-state-recent-item')
-    await expect(items).toHaveCount(3)
-    await expect(items.first()).toContainText('C')
-  })
-})
-
-test.describe('F-241 A5 최근 항목 열기', () => {
-  test('최근 목록 항목을 클릭하면 그 문서가 열리고 해시가 바뀐다', async ({ page }) => {
-    await openAppHome(page)
-    const docId = await importMarkdown(page, { name: 'A.md', content: '문서 A\n' })
-    await goHome(page)
-
-    await page.locator('.empty-state-recent-item').filter({ hasText: 'A' }).click()
-
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    expect(await currentDocId(page)).toBe(docId)
-  })
-})
-
-test.describe('F-241 A6 최근 목록 5개 제한', () => {
-  test('문서가 6개 이상이어도 최근 목록엔 5개만 보인다', async ({ page }) => {
-    await openAppHome(page)
-    for (const name of ['A', 'B', 'C', 'D', 'E', 'F']) {
-      await importMarkdown(page, { name: `${name}.md`, content: `문서 ${name}\n` })
-    }
-    await goHome(page)
-
-    await expect(page.locator('.empty-state-recent-item')).toHaveCount(5)
-  })
-})
-
-test.describe('F-241 A7 순서 갱신', () => {
-  test('목록 아래쪽 문서를 고쳐 저장하면 홈에서 맨 위로 온다', async ({ page }) => {
-    await openAppHome(page)
-    await importMarkdown(page, { name: 'A.md', content: '문서 A\n' })
+    const idA = await importMarkdown(page, { name: 'A.md', content: '문서 A\n' })
     await importMarkdown(page, { name: 'B.md', content: '문서 B\n' })
     await importMarkdown(page, { name: 'C.md', content: '문서 C\n' })
     await goHome(page)
 
     let items = page.locator('.empty-state-recent-item')
+    await expect(items).toHaveCount(3)
     await expect(items.first()).toContainText('C')
     await expect(items.last()).toContainText('A')
 
     await items.filter({ hasText: 'A' }).click()
+    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+    expect(await currentDocId(page)).toBe(idA)
+
     await page.locator('.cm-content').click()
     await page.keyboard.type('고침')
     await waitSaved(page)

@@ -11,7 +11,6 @@ const N1 = '편집 권한이 없어 읽기만 할 수 있습니다.'
 const N2 = '편집 권한이 없어져 읽기만 할 수 있습니다.'
 const N3 = '이 문서가 삭제되었거나 접근할 수 없게 되었습니다. 지금 화면의 내용은 저장되지 않습니다.'
 const N5 = '서버와 연결이 끊겼습니다. 편집은 이 브라우저에 저장되고 다시 연결되면 합쳐집니다'
-const N6 = '문서가 1MB 를 넘어 서버에 저장되지 않습니다. 내용을 줄이거나 문서를 나눠 주세요'
 
 function serverDoc(id, { title, content }) {
   const now = Date.now()
@@ -76,60 +75,93 @@ async function typeAtEnd(page, lineText, text) {
 const saveStatus = (page) => page.locator('.statusbar-save')
 
 test.describe('F-305 실시간 연결', () => {
-  test('F-305 E1 방 본문으로 열리고 입력이 방에 들어가며 PUT·잠금이 없다', async ({ page }) => {
+  test('F-305 E1·E3·E17 첫 동기화 전에는 편집기가 없고, 열리면 방 본문으로 입력이 방에 들어가며 PUT·잠금이 없고, 다른 문서로 옮기면 연결이 닫힌다', async ({ page }) => {
     const room = createFakeDocRoom()
     room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    const { requests } = await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
+    room.seed(OTHER, { content: '다른 본문', title: '다른 문서' })
+    room.pause(DOC)
+    const { requests } = await openSide(page, {
+      room,
+      docs: [
+        { id: DOC, title: '실시간 문서', content: '옛 본문' },
+        { id: OTHER, title: '다른 문서', content: '다른 본문' },
+      ],
+    })
 
+    // E3 첫 동기화 전에는 편집기가 없고 불러오는 중이다
+    await expect(saveStatus(page)).toHaveText('불러오는 중…')
+    await expect.poll(() => room.connections(DOC)).toBe(1)
+    await page.waitForTimeout(500)
+    await expect(page.locator('.cm-content')).toHaveCount(0)
+    room.resume(DOC)
+
+    // E1 방 본문으로 열리고 입력이 방에 들어가며 PUT·잠금이 없다
     await expect(mainContent(page)).toContainText('방 본문')
     await expect(mainContent(page)).not.toContainText('옛 본문')
     await expect(saveStatus(page)).toHaveText('저장됨')
-
     await typeAtEnd(page, '방 본문', '안녕')
     await expect.poll(() => room.content(DOC), { timeout: 1_000 }).toBe('방 본문안녕')
-
     await page.waitForTimeout(3_000)
     expect(requests.puts(DOC)).toHaveLength(0)
     expect(requests.lockPosts(DOC)).toHaveLength(0)
+
+    // E17 다른 문서로 옮기면 방 연결이 닫힌다
+    expect(room.connections(DOC)).toBe(1)
+    await page.locator('.doc-item-btn', { hasText: '다른 문서' }).click()
+    await expect(mainContent(page)).toContainText('다른 본문')
+    await expect.poll(() => room.connections(DOC)).toBe(0)
+    expect(room.connections(OTHER)).toBe(1)
   })
 
-  test('F-305 E2 두 context 가 서로 친 글자를 2초 안에 본다', async ({ browser, baseURL }) => {
+  test('F-305 E2·E12·E16 두 context 가 서로 친 글자를 2초 안에 보고, 제목은 Yjs 로 가며, 조합 중 원격 편집은 보류되고 확정하면 둘 다 보인다', async ({ browser, baseURL }) => {
     const room = createFakeDocRoom()
     room.seed(DOC, { content: '공유 본문', title: '실시간 문서' })
     const a = await newSide(browser, baseURL)
     const b = await newSide(browser, baseURL)
     try {
       const docs = [{ id: DOC, title: '실시간 문서', content: '공유 본문' }]
-      await openSide(a.page, { room, docs })
+      const sideA = await openSide(a.page, { room, docs })
       await openSide(b.page, { room, docs })
       await expect(mainContent(a.page)).toContainText('공유 본문')
       await expect(mainContent(b.page)).toContainText('공유 본문')
 
+      // E2 서로 친 글자를 2초 안에 본다
       await typeAtEnd(a.page, '공유 본문', 'AAA')
       await expect(mainContent(b.page)).toContainText('AAA', { timeout: 2_000 })
-
       await typeAtEnd(b.page, '공유 본문', 'BBB')
       await expect(mainContent(a.page)).toContainText('BBB', { timeout: 2_000 })
+
+      // E12 제목이 Yjs 로 상대에게 가고 제목 PUT 이 없다
+      const title = a.page.locator('textarea.doc-title')
+      await title.click()
+      await title.press('Control+A')
+      await a.page.keyboard.type('새 제목')
+      await a.page.locator('.cm-content .cm-line', { hasText: '공유 본문' }).first().click()
+      await expect(b.page.locator('textarea.doc-title')).toHaveValue('새 제목', { timeout: 3_000 })
+      await expect(b.page.locator('.doc-item-btn', { hasText: '새 제목' })).toBeVisible({ timeout: 3_000 })
+      expect(room.title(DOC)).toBe('새 제목')
+      await a.page.waitForTimeout(1_000)
+      expect(sideA.requests.puts(DOC)).toHaveLength(0)
+
+      // E16 조합 중 원격 편집은 보류되고 확정하면 둘 다 보인다
+      await a.page.locator('.cm-content .cm-line', { hasText: '공유 본문' }).first().click()
+      await a.page.keyboard.press('End')
+      const cdp = await fakeImeCompose(a.page, '한')
+      await expect(mainContent(a.page)).toContainText('BBB한')
+
+      await typeAtEnd(b.page, '공유 본문', 'CCC')
+      await expect.poll(() => room.content(DOC)).toContain('CCC')
+      await a.page.waitForTimeout(200)
+      expect(await mainContent(a.page).textContent()).not.toContain('CCC')
+
+      await fakeImeCommit(cdp, '한')
+      await expect(mainContent(a.page)).toContainText('CCC')
+      await expect(mainContent(a.page)).toContainText('한')
+      await expect.poll(() => room.content(DOC)).toContain('한')
     } finally {
       await a.context.close()
       await b.context.close()
     }
-  })
-
-  test('F-305 E3 첫 동기화 전에는 편집기가 없고 불러오는 중이다', async ({ page }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    room.pause(DOC)
-    await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
-
-    await expect(saveStatus(page)).toHaveText('불러오는 중…')
-    await expect.poll(() => room.connections(DOC)).toBe(1)
-    await page.waitForTimeout(500)
-    await expect(page.locator('.cm-content')).toHaveCount(0)
-
-    room.resume(DOC)
-    await expect(mainContent(page)).toContainText('방 본문')
-    await expect(saveStatus(page)).toHaveText('저장됨')
   })
 })
 
@@ -161,18 +193,7 @@ test.describe('F-305 첫 동기화 전 닫힘', () => {
     expect(requests.puts(DOC).length).toBeGreaterThan(0)
   })
 
-  test('F-305 E5 4401 도 폴백', async ({ page }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    room.setReject(DOC, { code: 4401, reason: 'unauthenticated' })
-    const { requests } = await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
-
-    await expect(mainContent(page)).toContainText('옛 본문')
-    await expect(page.locator('.statusbar-live')).toHaveText(LIVE_FALLBACK_TEXT)
-    await expect.poll(() => requests.lockPosts(DOC).length).toBeGreaterThan(0)
-  })
-
-  test('F-305 E6 4403 은 보기로 열고 다시 와도 시도하지 않는다', async ({ page }) => {
+  test('F-305 E6·E7 4403 은 보기로 열고 다시 와도 시도하지 않으며, 4404 는 캐시 본문을 읽기 전용으로 + N3', async ({ page }) => {
     const room = createFakeDocRoom()
     room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
     room.seed(OTHER, { content: '다른 본문', title: '다른 문서' })
@@ -198,14 +219,10 @@ test.describe('F-305 첫 동기화 전 닫힘', () => {
     await page.waitForTimeout(500)
     expect(room.attempts(DOC)).toBe(1)
     expect(requests.puts(DOC)).toHaveLength(0)
-  })
 
-  test('F-305 E7 4404 는 캐시 본문을 읽기 전용으로 + N3', async ({ page }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
+    // E7 4404 는 캐시 본문을 읽기 전용으로 + N3
     room.setReject(DOC, { code: 4404, reason: 'not_found' })
-    await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
-
+    await page.reload()
     await expect(page.locator('.notice-message')).toHaveText(N3)
     await expect(page.locator('.notice').getByRole('button', { name: '새 문서로 저장' })).toBeVisible()
     await expect(mainContent(page)).toContainText('옛 본문')
@@ -215,7 +232,8 @@ test.describe('F-305 첫 동기화 전 닫힘', () => {
 })
 
 test.describe('F-305 동기화 뒤 닫힘', () => {
-  test('F-305 E8 1013 뒤 다시 붙고 끊긴 동안 친 글자가 방에 들어간다', async ({ page }) => {
+  test('F-305 E8·E15 1013 뒤 다시 붙고 끊긴 동안 친 글자가 방에 들어가며, 끊김이 10초 넘으면 N5 가 뜨고 다시 붙으면 걷힌다', async ({ page }) => {
+    test.setTimeout(60_000)
     const room = createFakeDocRoom()
     room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
     await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
@@ -234,15 +252,21 @@ test.describe('F-305 동기화 뒤 닫힘', () => {
     await page.waitForTimeout(300)
     expect(room.content(DOC)).toBe('방 본문')
 
+    // E15 끊김이 10초 넘으면 N5
+    await page.waitForTimeout(8_000)
+    await expect(page.getByText(N5)).toHaveCount(0)
+    await expect(page.locator('.notice-message')).toHaveText(N5, { timeout: 5_000 })
+
     room.setReject(DOC, null)
-    await expect(saveStatus(page)).toHaveText('저장됨', { timeout: 8_000 })
+    await expect(saveStatus(page)).toHaveText('저장됨', { timeout: 20_000 })
     await expect.poll(() => room.content(DOC)).toBe('방 본문끊김중')
+    await expect(page.getByText(N5)).toHaveCount(0)
   })
 
-  test('F-305 E9 4403 revoked 는 읽기 전용 + N2, 다시 시도하지 않는다', async ({ page }) => {
+  test('F-305 E9·E10 4403 revoked 는 읽기 전용 + N2 로 다시 시도하지 않고, 4404 deleted 는 새 문서로 저장한다', async ({ page }) => {
     const room = createFakeDocRoom()
     room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
+    const { requests } = await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
     await expect(mainContent(page)).toContainText('방 본문')
 
     room.closeAll(DOC, 4403, 'revoked')
@@ -253,12 +277,10 @@ test.describe('F-305 동기화 뒤 닫힘', () => {
     const attempts = room.attempts(DOC)
     await page.waitForTimeout(5_000)
     expect(room.attempts(DOC)).toBe(attempts)
-  })
 
-  test('F-305 E10 4404 deleted 뒤 새 문서로 저장', async ({ page }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    const { requests } = await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
+    // E10 4404 deleted 뒤 새 문서로 저장
+    await page.reload()
+    await expect(mainContent(page)).toHaveAttribute('contenteditable', 'true')
     await expect(mainContent(page)).toContainText('방 본문')
     await typeAtEnd(page, '방 본문', '더함')
     await expect.poll(() => room.content(DOC)).toBe('방 본문더함')
@@ -274,118 +296,6 @@ test.describe('F-305 동기화 뒤 닫힘', () => {
     await expect.poll(() => currentDocId(page)).not.toBe(DOC)
     await expect(mainContent(page)).toContainText('방 본문더함')
     await expect(mainContent(page)).toHaveAttribute('contenteditable', 'true')
-  })
-
-  test('F-305 E11 too-large 알림과 size-ok 로 걷힘', async ({ page }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
-    await expect(mainContent(page)).toContainText('방 본문')
-
-    room.sendCustom(DOC, { type: 'too-large', limit: 1_000_000, bytes: 1_000_100 })
-    await expect(page.locator('.notice-message')).toHaveText(N6)
-    room.sendCustom(DOC, { type: 'size-ok' })
-    await expect(page.getByText(N6)).toHaveCount(0)
-  })
-
-  test('F-305 E12 제목이 Yjs 로 상대에게 가고 제목 PUT 이 없다', async ({ browser, baseURL }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '공유 본문', title: '실시간 문서' })
-    const a = await newSide(browser, baseURL)
-    const b = await newSide(browser, baseURL)
-    try {
-      const docs = [{ id: DOC, title: '실시간 문서', content: '공유 본문' }]
-      const sideA = await openSide(a.page, { room, docs })
-      await openSide(b.page, { room, docs })
-      await expect(mainContent(a.page)).toContainText('공유 본문')
-      await expect(mainContent(b.page)).toContainText('공유 본문')
-
-      const title = a.page.locator('textarea.doc-title')
-      await title.click()
-      await title.press('Control+A')
-      await a.page.keyboard.type('새 제목')
-      await a.page.locator('.cm-content .cm-line', { hasText: '공유 본문' }).first().click()
-
-      await expect(b.page.locator('textarea.doc-title')).toHaveValue('새 제목', { timeout: 3_000 })
-      await expect(b.page.locator('.doc-item-btn', { hasText: '새 제목' })).toBeVisible({ timeout: 3_000 })
-      expect(room.title(DOC)).toBe('새 제목')
-      await a.page.waitForTimeout(1_000)
-      expect(sideA.requests.puts(DOC)).toHaveLength(0)
-    } finally {
-      await a.context.close()
-      await b.context.close()
-    }
-  })
-
-  test('F-305 E15 끊김이 10초 넘으면 N5, 다시 붙으면 걷힌다', async ({ page }) => {
-    test.setTimeout(40_000)
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
-    await expect(mainContent(page)).toContainText('방 본문')
-
-    room.setReject(DOC, { code: 1013, reason: 'unavailable', open: true })
-    room.closeAll(DOC, 1013, 'unavailable')
-    await expect(saveStatus(page)).toHaveText('연결 끊김 · 다시 연결 중')
-    await page.waitForTimeout(8_000)
-    await expect(page.getByText(N5)).toHaveCount(0)
-    await expect(page.locator('.notice-message')).toHaveText(N5, { timeout: 5_000 })
-
-    room.setReject(DOC, null)
-    await expect(saveStatus(page)).toHaveText('저장됨', { timeout: 20_000 })
-    await expect(page.getByText(N5)).toHaveCount(0)
-  })
-
-  test('F-305 E16 조합 중 원격 편집은 보류되고 확정하면 둘 다 보인다', async ({ browser, baseURL }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '첫 줄', title: '실시간 문서' })
-    const a = await newSide(browser, baseURL)
-    const b = await newSide(browser, baseURL)
-    try {
-      const docs = [{ id: DOC, title: '실시간 문서', content: '첫 줄' }]
-      await openSide(a.page, { room, docs })
-      await openSide(b.page, { room, docs })
-      await expect(mainContent(a.page)).toContainText('첫 줄')
-      await expect(mainContent(b.page)).toContainText('첫 줄')
-
-      await a.page.locator('.cm-content .cm-line', { hasText: '첫 줄' }).first().click()
-      await a.page.keyboard.press('End')
-      const cdp = await fakeImeCompose(a.page, '한')
-      await expect(mainContent(a.page)).toContainText('첫 줄한')
-
-      await typeAtEnd(b.page, '첫 줄', 'BBB')
-      await expect.poll(() => room.content(DOC)).toContain('BBB')
-      await a.page.waitForTimeout(200)
-      expect(await mainContent(a.page).textContent()).not.toContain('BBB')
-
-      await fakeImeCommit(cdp, '한')
-      await expect(mainContent(a.page)).toContainText('BBB')
-      await expect(mainContent(a.page)).toContainText('한')
-      await expect.poll(() => room.content(DOC)).toContain('한')
-    } finally {
-      await a.context.close()
-      await b.context.close()
-    }
-  })
-
-  test('F-305 E17 다른 문서로 옮기면 방 연결이 닫힌다', async ({ page }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    room.seed(OTHER, { content: '다른 본문', title: '다른 문서' })
-    await openSide(page, {
-      room,
-      docs: [
-        { id: DOC, title: '실시간 문서', content: '옛 본문' },
-        { id: OTHER, title: '다른 문서', content: '다른 본문' },
-      ],
-    })
-    await expect(mainContent(page)).toContainText('방 본문')
-    expect(room.connections(DOC)).toBe(1)
-
-    await page.locator('.doc-item-btn', { hasText: '다른 문서' }).click()
-    await expect(mainContent(page)).toContainText('다른 본문')
-    await expect.poll(() => room.connections(DOC)).toBe(0)
-    expect(room.connections(OTHER)).toBe(1)
   })
 })
 

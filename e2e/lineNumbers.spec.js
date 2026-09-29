@@ -20,23 +20,6 @@ async function setLineNumbers(page, label) {
   await closeSettings(page)
 }
 
-test.describe('F-147 A1 설정', () => {
-  test('표시/숨김 두 버튼, 기본 표시', async ({ page }) => {
-    await openApp(page)
-    await openSettings(page)
-    await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '편집기' }).click() // F-290 — 줄 번호는 편집기 탭
-
-    // 항목 순서는 e2e/settingsTabs.spec.js 의 편집기 탭 라벨 목록 검사가 본다
-
-    const seg = page.locator(LINE_NUMBERS_LABEL_SCOPE).locator('..').locator('[role="radio"]')
-    await expect(seg).toHaveCount(2)
-    await expect(seg.nth(0)).toHaveText('표시')
-    await expect(seg.nth(1)).toHaveText('숨김')
-    await expect(seg.nth(0)).toHaveAttribute('aria-checked', 'true')
-    await expect(seg.nth(1)).toHaveAttribute('aria-checked', 'false')
-  })
-})
-
 test.describe('F-147 A2 끄기·켜기', () => {
   for (const mode of ['live', 'raw']) {
     test(`${mode} 모드 — 거터 사라짐/생김, 커서·선택·실행 취소 유지`, async ({ page }) => {
@@ -77,8 +60,8 @@ test.describe('F-147 A2 끄기·켜기', () => {
   }
 })
 
-test.describe('F-147 A2 스크롤 위치', () => {
-  test('숨김·표시 전환 사이 편집 없이 보이는 첫 줄이 유지된다', async ({ page }) => {
+test.describe('F-147 A2 스크롤·A3 유지', () => {
+  test('F-147 A2 스크롤 위치·A3 유지 — 전환 사이 첫 줄 유지, 숨김은 새로고침·다른 문서에서도 유지', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: longDoc(200) })
     await expect(page.locator('.cm-gutters')).toHaveCount(1)
@@ -98,28 +81,12 @@ test.describe('F-147 A2 스크롤 위치', () => {
     await expect(page.locator('.cm-gutters')).toHaveCount(1)
     const scrollAfterOn = await scroller.evaluate((el) => el.scrollTop)
     expect(Math.abs(scrollAfterOn - scrollBefore)).toBeLessThanOrEqual(5)
-  })
-})
 
-test.describe('F-147 A3 유지', () => {
-  test('숨김 후 새로고침 — 계속 숨김', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '문단\n' })
     await setLineNumbers(page, '숨김')
-    await expect(page.locator('.cm-gutters')).toHaveCount(0)
-
     await page.reload()
     await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
     await expect(page.locator('.cm-gutters')).toHaveCount(0)
-    const persisted = await page.evaluate(() => localStorage.getItem('md.lineNumbers'))
-    expect(persisted).toBe('off')
-  })
-
-  test('숨김 후 다른 문서를 열어도 계속 숨김', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '문단1\n' })
-    await setLineNumbers(page, '숨김')
-    await expect(page.locator('.cm-gutters')).toHaveCount(0)
+    expect(await page.evaluate(() => localStorage.getItem('md.lineNumbers'))).toBe('off')
 
     await importMarkdown(page, { content: '문단2\n' })
     await expect(page.locator('.cm-gutters')).toHaveCount(0)

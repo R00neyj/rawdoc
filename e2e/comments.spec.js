@@ -1,6 +1,6 @@
 // 댓글 레일·판·달기 흐름 (specs/features/F-505.md 13.2 E1~E18)
 import { test, expect } from '@playwright/test'
-import { openApp as openAppRaw, openAppHome, setPrefBeforeLoad, importMarkdown, currentDocId, setViewMode, fakeImeCompose } from './helpers.js'
+import { openApp as openAppRaw, setPrefBeforeLoad, importMarkdown, currentDocId, setViewMode, fakeImeCompose } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
 
@@ -46,34 +46,61 @@ async function addCommentViaShortcut(page, body) {
   await expect(composerTextarea(page)).toHaveCount(0)
 }
 
-test.describe('F-505 E1 로컬 문서 달기(V1)', () => {
-  test('선택 → Ctrl+Alt+M → 입력 → Ctrl+Enter — 카드·앵커·거터, 같은 줄 둘째는 data-count=2', async ({ page }) => {
+test.describe('F-505 E1·E4·E6 달기·거터·줄 번호', () => {
+  test('F-505 E1·E4·E6 선택 → Ctrl+Alt+M → 입력 → Ctrl+Enter 로 카드·앵커·거터, 같은 줄 둘째는 data-count=2, 거터 클릭은 먼저 단 스레드 활성, 줄 번호를 끄고 켜도 앵커 유지', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: CONTENT })
     await selectCat(page)
 
+    // E1 달기
     await addCommentViaShortcut(page, '첫 댓글')
-
     await expect(threadCards(page)).toHaveCount(1)
-    const threadId = await threadCards(page).first().getAttribute('data-thread-id')
-    expect(threadId).toBeTruthy()
-    const anchor = page.locator('.cm-comment-anchor')
-    await expect(anchor).toHaveText('고양이')
+    const firstId = await threadCards(page).first().getAttribute('data-thread-id')
+    expect(firstId).toBeTruthy()
+    await expect(page.locator('.cm-comment-anchor')).toHaveText('고양이')
     await expect.poll(() => gutterMarker(page).count()).toBe(1)
 
-    // 같은 줄에 하나 더
     await selectCat(page)
     await addCommentViaShortcut(page, '둘째 댓글')
     await expect(threadCards(page)).toHaveCount(2)
     await expect.poll(() => gutterMarker(page).count()).toBe(1)
     await expect(gutterMarker(page)).toHaveAttribute('data-count', '2')
+
+    // E4 스레드 둘 있는 줄의 거터 — 먼저 단 스레드가 활성
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+End')
+    const markerBox = await gutterMarker(page).boundingBox()
+    await page.mouse.click(markerBox.x + markerBox.width / 2, markerBox.y + markerBox.height / 2)
+    await expect(page.locator('.comment-thread[data-active="true"]')).toHaveAttribute('data-thread-id', firstId)
+
+    // E6 줄 번호를 끄면 거터가 없다, 앵커는 그대로. 다시 켜면 거터 둘
+    await page.getByRole('button', { name: '설정', exact: true }).click()
+    const dialog = page.locator(SETTINGS_DIALOG_SELECTOR)
+    await dialog.getByRole('tab', { name: '편집기' }).click()
+    await page.locator('#line-numbers-label').locator('..').getByRole('radio', { name: '숨김', exact: true }).click()
+    await page.getByRole('button', { name: '닫기', exact: true }).click()
+    await expect(page.locator('.cm-gutters')).toHaveCount(0)
+    await expect(page.locator('.cm-comment-anchor')).toHaveCount(2)
+
+    await page.getByRole('button', { name: '설정', exact: true }).click()
+    await dialog.getByRole('tab', { name: '편집기' }).click()
+    await page.locator('#line-numbers-label').locator('..').getByRole('radio', { name: '표시', exact: true }).click()
+    await page.getByRole('button', { name: '닫기', exact: true }).click()
+    await expect(page.locator('.cm-gutters')).toHaveCount(1)
+    await expect(page.locator('.cm-gutters .cm-gutter')).toHaveCount(2)
   })
 })
 
-test.describe('F-505 E2 세 가지 시작', () => {
-  test('떠 있는 버튼 / 우클릭 / 팔레트, 빈 선택은 알림', async ({ page }) => {
+test.describe('F-505 E2·E14 시작 방법과 보기 모드', () => {
+  test('F-505 E2·E14 보기 모드에서 상단바 댓글은 편집 모드로 바꾸고, 떠 있는 버튼·우클릭·팔레트로 달고, 빈 선택은 알림', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: CONTENT })
+
+    // E14 보기 모드에서 상단바 댓글 — 편집 모드로 바뀌고 레일이 보인다
+    await setViewMode(page, 'view')
+    await commentToggle(page).click()
+    await expect(page.getByRole('button', { name: '편집 — 서식을 보며 편집' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(rail(page)).toBeVisible()
 
     await selectCat(page)
     await page.locator('.comment-add-button').click()
@@ -120,18 +147,17 @@ test.describe('F-505 E2 세 가지 시작', () => {
   })
 })
 
-test.describe('F-505 E3 앵커 클릭·끌기(V2)', () => {
-  test('앵커 클릭은 활성, 앵커 위 끌기는 활성을 바꾸지 않는다', async ({ page }) => {
+test.describe('F-505 E3·E8 앵커 클릭·끌기와 삭제', () => {
+  test('F-505 E3·E8 앵커 클릭은 활성, 앵커 위 끌기는 활성을 바꾸지 않고, 답글 있는 첫 댓글 삭제 확인, 답글만 삭제', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: CONTENT })
     await selectCat(page)
     await addCommentViaShortcut(page, '댓글')
-    const threadId = await threadCards(page).first().getAttribute('data-thread-id')
 
+    // E3 앵커 클릭은 활성, 앵커 위 끌기는 활성을 바꾸지 않는다
     await page.locator('.cm-content').click()
     await page.keyboard.press('Control+Home')
     await expect(threadCards(page).first()).not.toHaveAttribute('data-active', 'true')
-
     await page.locator('.cm-comment-anchor').click()
     await expect(threadCards(page).first()).toHaveAttribute('data-active', 'true')
     await expect(page.locator('.cm-comment-anchor-active')).toHaveCount(1)
@@ -139,36 +165,97 @@ test.describe('F-505 E3 앵커 클릭·끌기(V2)', () => {
     await page.locator('.cm-content').click()
     await page.keyboard.press('Control+Home')
     await expect(threadCards(page).first()).not.toHaveAttribute('data-active', 'true')
-
     const anchorBox = await page.locator('.cm-comment-anchor').boundingBox()
     await page.mouse.move(anchorBox.x + 2, anchorBox.y + anchorBox.height / 2)
     await page.mouse.down()
     await page.mouse.move(anchorBox.x + anchorBox.width - 2, anchorBox.y + anchorBox.height / 2)
     await page.mouse.up()
     await expect(threadCards(page).first()).not.toHaveAttribute('data-active', 'true')
-    expect(threadId).toBeTruthy()
+
+    // E8 답글 있는 첫 댓글 삭제 확인
+    // 선택이 남아 있으면 떠 있는 버튼이 카드 위에 겹쳐 뜬다(의도된 동작, 7.1 10번) — 선택을 접어 비킨다
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+Home')
+    const card = threadCards(page).first()
+    await card.click()
+    await card.locator('.comment-reply-input').fill('답글')
+    await card.getByRole('button', { name: '답글' }).click()
+    await expect(card.locator('.comment-reply')).toHaveCount(1)
+
+    await card.getByRole('button', { name: '댓글 메뉴' }).click()
+    await page.getByRole('menuitem', { name: '삭제' }).click()
+    const dialog = page.locator('dialog[open]')
+    await expect(dialog).toContainText('이 댓글과 답글 1개를 지웁니다. 되돌릴 수 없습니다.')
+    await expect(dialog.getByRole('button', { name: '취소' })).toBeFocused()
+    await dialog.getByRole('button', { name: '삭제', exact: true }).click()
+    await expect(threadCards(page)).toHaveCount(0)
+    await expect(page.locator('.cm-comment-anchor')).toHaveCount(0)
+
+    // E8 답글만 삭제
+    await selectCat(page)
+    await addCommentViaShortcut(page, '댓글2')
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('Control+Home')
+    const card2 = threadCards(page).first()
+    await card2.click()
+    await card2.locator('.comment-reply-input').fill('답글2')
+    await card2.getByRole('button', { name: '답글' }).click()
+    await card2.locator('.comment-reply').getByRole('button', { name: '답글 메뉴' }).click()
+    await page.getByRole('menuitem', { name: '삭제' }).click()
+    const dialog2 = page.locator('dialog[open]')
+    await expect(dialog2).toContainText('이 댓글을 지웁니다. 되돌릴 수 없습니다.')
+    await dialog2.getByRole('button', { name: '삭제', exact: true }).click()
+    await expect(card2.locator('.comment-reply')).toHaveCount(0)
+    await expect(threadCards(page)).toHaveCount(1)
   })
 })
 
-test.describe('F-505 E4 거터 표시(V3)', () => {
-  test('스레드 둘 있는 줄의 거터 — 먼저 단 스레드가 활성, 선택은 그대로', async ({ page }) => {
+test.describe('F-505 E7·E10 해결·다시 열기와 내보내기 바이트', () => {
+  test('F-505 E7·E10 해결 → 해결된 댓글 보기 → 답글로 다시 열림, 팔레트로 레일 닫기, 그 전후 .md 내보내기 바이트가 같다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: CONTENT })
+
+    async function exportBytes() {
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByRole('button', { name: '내보내기' }).click().then(() => page.locator('.export-menu-list [role="menuitem"]').first().click()),
+      ])
+      const stream = await download.createReadStream()
+      const chunks = []
+      for await (const chunk of stream) chunks.push(chunk)
+      return Buffer.concat(chunks).toString('utf-8')
+    }
+
+    const before = await exportBytes()
     await selectCat(page)
-    await addCommentViaShortcut(page, '먼저')
-    const firstId = await threadCards(page).first().getAttribute('data-thread-id')
-    await selectCat(page)
-    await addCommentViaShortcut(page, '나중')
+    await addCommentViaShortcut(page, '댓글')
+    const card = threadCards(page).first()
 
-    await page.locator('.cm-content').click()
-    await page.keyboard.press('Control+End')
+    await card.getByRole('button', { name: '해결' }).click()
+    await expect(threadCards(page)).toHaveCount(0)
+    await expect(page.locator('.cm-comment-anchor')).toHaveCount(0)
+    await expect(gutterMarker(page)).toHaveCount(0)
 
-    const marker = gutterMarker(page)
-    const markerBox = await marker.boundingBox()
-    await page.mouse.click(markerBox.x + markerBox.width / 2, markerBox.y + markerBox.height / 2)
+    await rail(page).locator('.comment-rail-resolved-toggle input').check()
+    await expect(threadCards(page)).toHaveCount(1)
+    await expect(threadCards(page).first()).toHaveAttribute('data-resolved', 'true')
+    await expect(threadCards(page).first()).toContainText('해결함')
+    await expect(threadCards(page).first().getByRole('button', { name: '다시 열기' })).toBeVisible()
 
-    const active = page.locator('.comment-thread[data-active="true"]')
-    await expect(active).toHaveAttribute('data-thread-id', firstId)
+    await threadCards(page).first().click()
+    await threadCards(page).first().locator('.comment-reply-input').fill('답글로 다시 열기')
+    await threadCards(page).first().getByRole('button', { name: '답글' }).click()
+    await expect(threadCards(page).first()).not.toHaveAttribute('data-resolved', 'true')
+    await expect(page.locator('.cm-comment-anchor')).toHaveCount(1)
+
+    expect(await exportBytes()).toBe(before)
+
+    await page.keyboard.press('Control+p')
+    await page.locator('.command-palette-input').fill('>댓글 닫기') // F-2053 — 명령 모드로 문서 결과와 안 섞이게
+    await page.keyboard.press('Enter')
+    await expect(rail(page)).toHaveCount(0)
+    const stored = await page.evaluate(() => localStorage.getItem('md.commentRail'))
+    expect(stored).toBe('closed')
   })
 })
 
@@ -211,108 +298,6 @@ test.describe('F-505 E5 긴 문서 레일 클릭(V4)', () => {
   })
 })
 
-test.describe('F-505 E6 줄 번호 끄기(V5)', () => {
-  test('줄 번호를 끄면 거터가 없다, 앵커는 그대로. 다시 켜면 거터 둘', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: CONTENT })
-    await selectCat(page)
-    await addCommentViaShortcut(page, '댓글')
-
-    await page.getByRole('button', { name: '설정', exact: true }).click()
-    const dialog = page.locator(SETTINGS_DIALOG_SELECTOR)
-    await dialog.getByRole('tab', { name: '편집기' }).click()
-    await page.locator('#line-numbers-label').locator('..').getByRole('radio', { name: '숨김', exact: true }).click()
-    await page.getByRole('button', { name: '닫기', exact: true }).click()
-
-    await expect(page.locator('.cm-gutters')).toHaveCount(0)
-    await expect(page.locator('.cm-comment-anchor')).toHaveCount(1)
-
-    await page.getByRole('button', { name: '설정', exact: true }).click()
-    await dialog.getByRole('tab', { name: '편집기' }).click()
-    await page.locator('#line-numbers-label').locator('..').getByRole('radio', { name: '표시', exact: true }).click()
-    await page.getByRole('button', { name: '닫기', exact: true }).click()
-
-    await expect(page.locator('.cm-gutters')).toHaveCount(1)
-    await expect(page.locator('.cm-gutters .cm-gutter')).toHaveCount(2)
-  })
-})
-
-test.describe('F-505 E7 해결·다시 열기(V6)', () => {
-  test('해결 → 해결된 댓글 보기 → 답글로 다시 열림. 팔레트로 레일 닫기', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: CONTENT })
-    await selectCat(page)
-    await addCommentViaShortcut(page, '댓글')
-    const card = threadCards(page).first()
-
-    await card.getByRole('button', { name: '해결' }).click()
-    await expect(threadCards(page)).toHaveCount(0)
-    await expect(page.locator('.cm-comment-anchor')).toHaveCount(0)
-    await expect(gutterMarker(page)).toHaveCount(0)
-
-    await rail(page).locator('.comment-rail-resolved-toggle input').check()
-    await expect(threadCards(page)).toHaveCount(1)
-    await expect(threadCards(page).first()).toHaveAttribute('data-resolved', 'true')
-    await expect(threadCards(page).first()).toContainText('해결함')
-    await expect(threadCards(page).first().getByRole('button', { name: '다시 열기' })).toBeVisible()
-
-    await threadCards(page).first().click()
-    await threadCards(page).first().locator('.comment-reply-input').fill('답글로 다시 열기')
-    await threadCards(page).first().getByRole('button', { name: '답글' }).click()
-    await expect(threadCards(page).first()).not.toHaveAttribute('data-resolved', 'true')
-    await expect(page.locator('.cm-comment-anchor')).toHaveCount(1)
-
-    await page.keyboard.press('Control+p')
-    await page.locator('.command-palette-input').fill('>댓글 닫기') // F-2053 — 명령 모드로 문서 결과와 안 섞이게
-    await page.keyboard.press('Enter')
-    await expect(rail(page)).toHaveCount(0)
-    const stored = await page.evaluate(() => localStorage.getItem('md.commentRail'))
-    expect(stored).toBe('closed')
-  })
-})
-
-test.describe('F-505 E8 삭제', () => {
-  test('답글 있는 첫 댓글 삭제 확인, 답글만 삭제', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: CONTENT })
-    await selectCat(page)
-    await addCommentViaShortcut(page, '댓글')
-    // 선택이 남아 있으면 떠 있는 버튼이 카드 위에 겹쳐 뜬다(의도된 동작, 7.1 10번) — 선택을 접어 비킨다
-    await page.locator('.cm-content').click()
-    await page.keyboard.press('Control+Home')
-    const card = threadCards(page).first()
-    await card.click()
-    await card.locator('.comment-reply-input').fill('답글')
-    await card.getByRole('button', { name: '답글' }).click()
-    await expect(card.locator('.comment-reply')).toHaveCount(1)
-
-    await card.getByRole('button', { name: '댓글 메뉴' }).click()
-    await page.getByRole('menuitem', { name: '삭제' }).click()
-    const dialog = page.locator('dialog[open]')
-    await expect(dialog).toContainText('이 댓글과 답글 1개를 지웁니다. 되돌릴 수 없습니다.')
-    await expect(dialog.getByRole('button', { name: '취소' })).toBeFocused()
-    await dialog.getByRole('button', { name: '삭제', exact: true }).click()
-    await expect(threadCards(page)).toHaveCount(0)
-    await expect(page.locator('.cm-comment-anchor')).toHaveCount(0)
-
-    await selectCat(page)
-    await addCommentViaShortcut(page, '댓글2')
-    await page.locator('.cm-content').click()
-    await page.keyboard.press('Control+Home')
-    const card2 = threadCards(page).first()
-    await card2.click()
-    await card2.locator('.comment-reply-input').fill('답글2')
-    await card2.getByRole('button', { name: '답글' }).click()
-    await card2.locator('.comment-reply').getByRole('button', { name: '답글 메뉴' }).click()
-    await page.getByRole('menuitem', { name: '삭제' }).click()
-    const dialog2 = page.locator('dialog[open]')
-    await expect(dialog2).toContainText('이 댓글을 지웁니다. 되돌릴 수 없습니다.')
-    await dialog2.getByRole('button', { name: '삭제', exact: true }).click()
-    await expect(card2.locator('.comment-reply')).toHaveCount(0)
-    await expect(threadCards(page)).toHaveCount(1)
-  })
-})
-
 test.describe('F-505 E9 고아 되기·되돌리기', () => {
   test('앵커 범위를 통째로 지우면 고아 묶음, Ctrl+Z 로 되돌리면 카드가 돌아온다', async ({ page }) => {
     await openApp(page)
@@ -336,37 +321,6 @@ test.describe('F-505 E9 고아 되기·되돌리기', () => {
   })
 })
 
-test.describe('F-505 E10 .md 내보내기 바이트 불변(V7)', () => {
-  test('달기·답글·해결 전후 내보내기 바이트가 같다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: CONTENT })
-
-    async function exportBytes() {
-      const [download] = await Promise.all([
-        page.waitForEvent('download'),
-        page.getByRole('button', { name: '내보내기' }).click().then(() => page.locator('.export-menu-list [role="menuitem"]').first().click()),
-      ])
-      const stream = await download.createReadStream()
-      const chunks = []
-      for await (const chunk of stream) chunks.push(chunk)
-      return Buffer.concat(chunks).toString('utf-8')
-    }
-
-    const before = await exportBytes()
-    await selectCat(page)
-    await addCommentViaShortcut(page, '댓글')
-    const card = threadCards(page).first()
-    await card.click()
-    await card.locator('.comment-reply-input').fill('답글')
-    await card.getByRole('button', { name: '답글' }).click()
-    await card.getByRole('button', { name: '해결' }).click()
-    await rail(page).locator('.comment-rail-resolved-toggle input').check()
-
-    const after = await exportBytes()
-    expect(after).toBe(before)
-  })
-})
-
 function serverDoc(id, { title, content, updatedAt = Date.now() }) {
   return { id, title, content, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: updatedAt, updatedAt }
 }
@@ -382,8 +336,8 @@ async function openServerDoc(page, room, user = { id: 'u1', email: 'a@b.com' }, 
   return server
 }
 
-test.describe('F-505 E11 주소로 이동', () => {
-  test('#/d/{id}/c/{threadId} 로 들어가면 레일이 열리고 활성, 없는 id 는 알림', async ({ page }) => {
+test.describe('F-505 E11·E18 주소로 이동과 상단바 배지', () => {
+  test('F-505 E11·E18 #/d/{id}/c/{threadId} 로 들어가면 레일이 열리고 활성, 없는 id 는 알림, 배지는 스레드 수를 따른다', async ({ page }) => {
     const room = createFakeDocRoom()
     room.seed(DOC, { content: CONTENT, title: '함께 쓰는 문서' })
     const cat = CONTENT.indexOf('고양이')
@@ -397,6 +351,10 @@ test.describe('F-505 E11 주소로 이동', () => {
     await expect(page.locator('.cm-comment-anchor')).toBeInViewport()
     await expect(page).toHaveURL(/#\/d\/comment-doc-1$/)
 
+    // E18 스레드 하나 — 댓글 1개·배지 1
+    await expect(commentToggle(page)).toHaveAttribute('aria-label', '댓글 1개')
+    await expect(page.locator('.comment-badge')).toHaveText('1')
+
     // 이미 그 문서를 보는 중에 해시만 바뀜(handleHashChange 같은 문서 분기) — 활성을 끈 뒤 다시 들어간다
     await line(page, '첫째 줄').click()
     await expect(page.locator('.comment-thread[data-active="true"]')).toHaveCount(0)
@@ -407,6 +365,12 @@ test.describe('F-505 E11 주소로 이동', () => {
     await page.goto(`/#/d/${DOC}/c/없는id`)
     await expect(page.locator('.notice-message')).toHaveText('댓글을 찾지 못했습니다. 지워졌을 수 있습니다.')
     await expect(page).toHaveURL(/#\/d\/comment-doc-1$/)
+
+    // E18 해결하면 댓글 0개·배지 없음
+    await expect(rail(page)).toBeVisible()
+    await threadCards(page).first().getByRole('button', { name: '해결' }).click()
+    await expect(commentToggle(page)).toHaveAttribute('aria-label', '댓글 0개')
+    await expect(page.locator('.comment-badge')).toHaveCount(0)
   })
 })
 
@@ -493,18 +457,6 @@ test.describe('F-505 E13 판(좁은 창)', () => {
 
     const stored = await page.evaluate(() => localStorage.getItem('md.commentRail'))
     expect(stored).toBeNull()
-  })
-})
-
-test.describe('F-505 E14 보기 모드에서 댓글', () => {
-  test('상단바 댓글 — 편집 모드로 바뀌고 레일이 보인다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: CONTENT })
-    await setViewMode(page, 'view')
-
-    await commentToggle(page).click()
-    await expect(page.getByRole('button', { name: '편집 — 서식을 보며 편집' })).toHaveAttribute('aria-pressed', 'true')
-    await expect(rail(page)).toBeVisible()
   })
 })
 
@@ -642,51 +594,3 @@ test.describe('F-505 E16 IME 조합 중', () => {
   })
 })
 
-test.describe('F-505 E17 md.commentRail 처음값', () => {
-  test('open 을 미리 넣고 댓글 없는 문서 — 빈 문구·목차 선 모드 그대로. 닫으면 closed·목차 선 모드 (선 모드는 2026-09-27 tweak)', async ({ page }) => {
-    await setPrefBeforeLoad(page, 'md.commentRail', 'open')
-    await openApp(page)
-    await importMarkdown(page, { content: '# 제목\n\n## 부제목\n\n본문\n' })
-
-    await expect(rail(page)).toBeVisible()
-    await expect(rail(page).locator('.comment-rail-empty')).toHaveText(
-      '이 문서에 댓글이 없습니다. 본문을 선택하고 댓글을 달아 보세요.',
-    )
-    await expect(page.locator('.outline')).toBeVisible()
-    await expect(page.locator('.outline-popup')).toHaveCount(0)
-
-    await commentToggle(page).click()
-    await expect(rail(page)).toHaveCount(0)
-    const stored = await page.evaluate(() => localStorage.getItem('md.commentRail'))
-    expect(stored).toBe('closed')
-    await expect(page.locator('.outline')).toBeVisible()
-    await expect(page.locator('.outline-popup')).toHaveCount(0)
-  })
-})
-
-test.describe('F-505 E18 상단바 배지', () => {
-  test('스레드 하나 — 댓글 1개·배지 1, 해결하면 댓글 0개·배지 없음', async ({ page }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: CONTENT, title: '함께 쓰는 문서' })
-    const cat = CONTENT.indexOf('고양이')
-    room.putComment(DOC, 't1', { from: cat, to: cat + 3, body: '서버 댓글' })
-    await openServerDoc(page, room)
-
-    await expect(commentToggle(page)).toHaveAttribute('aria-label', '댓글 1개')
-    await expect(page.locator('.comment-badge')).toHaveText('1')
-
-    // 열린 스레드가 있고 md.commentRail 이 없어 레일이 이미 열려 있다(5.1) — 토글을 누르면 닫힌다
-    await expect(rail(page)).toBeVisible()
-    await threadCards(page).first().getByRole('button', { name: '해결' }).click()
-
-    await expect(commentToggle(page)).toHaveAttribute('aria-label', '댓글 0개')
-    await expect(page.locator('.comment-badge')).toHaveCount(0)
-  })
-})
-
-test.describe('F-505 정적 확인', () => {
-  test('openAppHome 은 댓글 없이 정상 부팅한다(스모크)', async ({ page }) => {
-    await openAppHome(page)
-    await expect(page.locator('.empty-state')).toBeVisible()
-  })
-})

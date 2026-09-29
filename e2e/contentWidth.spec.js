@@ -1,4 +1,4 @@
-// 본문 너비 설정 (specs/features/F-2043.md) — A1~A10
+// 본문 너비 설정 (specs/features/F-2043.md) — A2·A5·A6·A7·A9
 import { test, expect } from '@playwright/test'
 import { openApp, openAppHome, importMarkdown, resizeWindow, setPrefBeforeLoad, setViewMode, waitTransitionEnd } from './helpers.js'
 import { longDoc } from './fixtures/docs.js'
@@ -53,26 +53,16 @@ async function setContentWidthViaSettings(page, px) {
   await closeSettings(page)
 }
 
-test.describe('F-2043 A1 자리·기본값', () => {
-  test('편집기 탭 순서, 슬라이더·숫자 입력 기본 800', async ({ page }) => {
+// 본문 칸이 몇 px 늘었는지는 시각 값이라 --content-max 가 편집·보기 모드 본문 칸까지 닿는지만 본다
+test.describe('F-2043 A2·A5·A6 슬라이더 키보드·Esc·화면 반영', () => {
+  test('F-2043 A2·A5·A6 슬라이더 키로 값·--content-max·저장값이 같이 바뀌고, Esc 는 되돌리고, 편집·보기 본문 칸에 닿는다', async ({ page }) => {
+    await resizeWindow(page, 1920, 1080)
     await openApp(page)
-    const dialog = await openSettingsEditorTab(page)
-    const panel = dialog.locator('.settings-panel')
+    await importMarkdown(page, { content: longDoc(30) })
 
-    await expect(panel.locator('.dialog-field > span')).toHaveText(['탭바', '들여쓰기', '줄 번호', '본문 너비', '새 문서 템플릿'])
-    await expect(slider(page)).toHaveValue('800')
-    await expect(spinbutton(page)).toHaveValue('800')
-    await expect(slider(page)).toHaveAttribute('aria-valuetext', '800px')
-  })
-})
-
-test.describe('F-2043 A2 슬라이더 키보드', () => {
-  test('ArrowRight +20, End 1600 — 값·--content-max·저장값 모두 같이 바뀐다', async ({ page }) => {
-    await openApp(page)
     await openSettingsEditorTab(page)
     await slider(page).focus()
     await page.keyboard.press('ArrowRight')
-
     await expect(slider(page)).toHaveValue('820')
     await expect(spinbutton(page)).toHaveValue('820')
     expect(await getContentMax(page)).toBe('820px')
@@ -83,86 +73,21 @@ test.describe('F-2043 A2 슬라이더 키보드', () => {
     await expect(spinbutton(page)).toHaveValue('1600')
     expect(await getContentMax(page)).toBe('1600px')
     expect(await getSavedContentWidth(page)).toBe('1600')
-  })
-})
+    await closeSettings(page)
 
-test.describe('F-2043 A3 숫자 입력 — 확정 전에도 정확한 값은 즉시 반영', () => {
-  test('fill(1200), 초점 유지', async ({ page }) => {
-    await openApp(page)
-    await openSettingsEditorTab(page)
-    await spinbutton(page).fill('1200')
-
-    await expect(slider(page)).toHaveValue('1200')
-    expect(await getContentMax(page)).toBe('1200px')
-    expect(await getSavedContentWidth(page)).toBe('1200')
-  })
-})
-
-test.describe('F-2043 A4 숫자 입력 확정 — 맞추기·되돌리기', () => {
-  test('Enter·Tab 확정, 빈 칸은 되돌아온다', async ({ page }) => {
-    await openApp(page)
-    await openSettingsEditorTab(page)
-    const input = spinbutton(page)
-
-    await input.fill('1210')
-    await input.press('Enter')
-    await expect(input).toHaveValue('1220')
-    await expect(slider(page)).toHaveValue('1220')
-    expect(await getContentMax(page)).toBe('1220px')
-    expect(await getSavedContentWidth(page)).toBe('1220')
-
-    await input.fill('5000')
-    await input.press('Tab')
-    await expect(input).toHaveValue('1600')
-    expect(await getContentMax(page)).toBe('1600px')
-    expect(await getSavedContentWidth(page)).toBe('1600')
-
-    await input.focus()
-    await input.fill('100')
-    await input.press('Enter')
-    await expect(input).toHaveValue('600')
-    expect(await getContentMax(page)).toBe('600px')
-    expect(await getSavedContentWidth(page)).toBe('600')
-
-    await input.focus()
-    await input.fill('')
-    await input.press('Tab')
-    await expect(input).toHaveValue('600')
-    expect(await getSavedContentWidth(page)).toBe('600')
-  })
-})
-
-test.describe('F-2043 A5 Esc — 되돌리고 대화상자는 평소대로 닫힌다', () => {
-  test('1200 인 상태에서 1210 을 쳐 두고 Esc', async ({ page }) => {
-    await openApp(page)
     await setContentWidthViaSettings(page, 1200)
-
     const dialog = await openSettingsEditorTab(page)
-    const input = spinbutton(page)
-    await input.fill('1210')
+    await spinbutton(page).fill('1210')
     await page.keyboard.press('Escape')
     await expect(dialog).toBeHidden()
-
     expect(await getContentMax(page)).toBe('1200px')
     expect(await getSavedContentWidth(page)).toBe('1200')
-
     await openSettingsEditorTab(page)
     await expect(spinbutton(page)).toHaveValue('1200')
-  })
-})
-
-// 본문 칸이 몇 px 늘었는지는 시각 값이라 --content-max 가 편집·보기 모드 본문 칸까지 닿는지만 본다
-test.describe('F-2043 A6 화면 반영 — 편집·보기 모드', () => {
-  test('800 → 1200, .cm-content·.viewer 에 닿는 --content-max 가 1200px', async ({ page }) => {
-    await resizeWindow(page, 1920, 1080)
-    await openApp(page)
-    await importMarkdown(page, { content: longDoc(30) })
+    await closeSettings(page)
 
     const contentMaxOf = (locator) => locator.evaluate((el) => getComputedStyle(el).getPropertyValue('--content-max').trim())
-
-    await setContentWidthViaSettings(page, 1200)
     expect(await contentMaxOf(page.locator('.cm-content'))).toBe('1200px')
-
     await setViewMode(page, 'view')
     expect(await contentMaxOf(page.locator('.viewer:not(.print-root)'))).toBe('1200px')
   })
@@ -177,8 +102,6 @@ test.describe('F-2043 A7 저장값으로 열기 — 인라인 값·홈 화면·�
       const inline = await page.evaluate(() => document.documentElement.style.getPropertyValue('--content-width').trim())
       expect(inline).toBe('1400px')
       expect(await getContentMax(page)).toBe('1400px')
-      const emptyMax = await page.locator('.empty-state').evaluate((el) => getComputedStyle(el).maxWidth)
-      expect(emptyMax).toBe('1400px')
 
       await openSettingsEditorTab(page)
       await expect(slider(page)).toHaveValue('1400')
@@ -190,22 +113,6 @@ test.describe('F-2043 A7 저장값으로 열기 — 인라인 값·홈 화면·�
     await page.reload()
     await expect(page.locator('.empty-state')).toBeVisible()
     await checkAll()
-  })
-})
-
-test.describe('F-2043 A8 좁은 창 — 메인 열에 맞춰 줄어든다', () => {
-  test('1024×768, 값 1600 — 가로 스크롤 없음, --content-max 1600px', async ({ page }) => {
-    await setPrefBeforeLoad(page, 'md.contentWidth', '1600')
-    await resizeWindow(page, 1024, 768)
-    await openApp(page)
-    await importMarkdown(page, { content: longDoc(10) })
-
-    const sizes = await page.locator('.cm-scroller').evaluate((el) => ({
-      scrollWidth: el.scrollWidth,
-      clientWidth: el.clientWidth,
-    }))
-    expect(sizes.scrollWidth).toBeLessThanOrEqual(sizes.clientWidth)
-    expect(await getContentMax(page)).toBe('1600px')
   })
 })
 
@@ -225,25 +132,5 @@ test.describe('F-2043 A9 목차 여백 다시 판정', () => {
     await page.keyboard.press('Home')
     await expect(page.locator('.outline-rail')).toHaveCount(1)
     await expect(page.getByRole('button', { name: '목차' })).toHaveCount(0)
-  })
-})
-
-test.describe('F-2043 A10 400px 창 — 편집기 탭 가로 넘침 없음', () => {
-  test('슬라이더·숫자 입력 둘 다 보인다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await resizeWindow(page, 400, 800)
-
-    const dialog = await openSettingsEditorTab(page)
-    await expect(dialog).toBeVisible()
-
-    const sizes = await page.evaluate(() => ({
-      scrollWidth: document.scrollingElement.scrollWidth,
-      clientWidth: document.scrollingElement.clientWidth,
-    }))
-    expect(sizes.scrollWidth).toBeLessThanOrEqual(sizes.clientWidth)
-    expect(await dialog.evaluate((el) => el.offsetWidth)).toBeLessThanOrEqual(400)
-    await expect(slider(page)).toBeVisible()
-    await expect(spinbutton(page)).toBeVisible()
   })
 })

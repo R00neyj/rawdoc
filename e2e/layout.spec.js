@@ -1,7 +1,7 @@
 // 사이드바 접기·레일, 너비 조절, 문서 끝 커서 (F-150.md 3.3)
 // 행 여백·바탕색·아이콘 크기·가이드 선 x 같은 시각 값은 e2e 로 고정하지 않는다 (CLAUDE.md "How we work", 2026-09-25 e2e 경량화)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, resizeWindow, rectOf, waitTransitionEnd } from './helpers.js'
+import { openApp, importMarkdown, rectOf } from './helpers.js'
 
 // F-143 A3·A6 은 토글·검색이 상단바로 옮겨가 (F-151) e2e/topbar.spec.js 의
 // F-151 A2·A3·A5·A6 테스트로 옮겼다. 레일 폭·유지만 여기 남긴다
@@ -52,38 +52,7 @@ test.describe('F-159 사이드바 너비 조절', () => {
     expect(await page.evaluate(() => window.localStorage.getItem('md.sidebarWidth'))).toBe('400')
   })
 
-  // -200px(최소 200)·+600px(최대 480) 끌기는 src/app/sidebarWidth.test.ts clampSidebarWidth 가 같은 입력·기대값으로 본다 (2026-09-25 e2e 경량화)
-
-  test('F-159 A7 창 줄이기 — 저장값 480 유지, 화면만 464 로 줄고 1600px 에서 되돌아온다', async ({ page }) => {
-    await openApp(page)
-    await dragHandleBy(page, 600) // 480 으로 저장
-    await waitTransitionEnd(page.locator('.sidebar'))
-    expect(await page.evaluate(() => window.localStorage.getItem('md.sidebarWidth'))).toBe('480')
-
-    await resizeWindow(page, 1024)
-    await waitTransitionEnd(page.locator('.sidebar'))
-    const narrowWidth = (await rectOf(page.locator('.sidebar'))).width
-    expect(Math.abs(narrowWidth - 464)).toBeLessThanOrEqual(1)
-    expect(await page.evaluate(() => window.localStorage.getItem('md.sidebarWidth'))).toBe('480')
-
-    await resizeWindow(page, 1600)
-    await waitTransitionEnd(page.locator('.sidebar'))
-    const backWidth = (await rectOf(page.locator('.sidebar'))).width
-    expect(Math.abs(backWidth - 480)).toBeLessThanOrEqual(1)
-  })
-
-  test('F-159 A8 좁은 창 — 손잡이 없음, 겹쳐 열린 폭 = 저장 너비(창 폭-48 이하)', async ({ page }) => {
-    await openApp(page)
-    await dragHandleBy(page, 100) // 400 으로 저장
-    await waitTransitionEnd(page.locator('.sidebar'))
-
-    await resizeWindow(page, 900)
-    await page.locator('.sidebar-toggle').click() // 겹쳐 열기
-    await expect(page.locator('.sidebar')).toBeVisible()
-    await expect(page.locator('.sidebar-resize-handle')).toHaveCount(0)
-    const overlayWidth = (await rectOf(page.locator('.sidebar'))).width
-    expect(Math.abs(overlayWidth - 400)).toBeLessThanOrEqual(2)
-  })
+  // A7·A8 창 폭 규칙은 src/app/sidebarWidth.test.ts 가 본다 (2026-09-29 e2e 정리)
 })
 
 test.describe('F-124 A2d 문서 끝', () => {
