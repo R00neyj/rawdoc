@@ -36,10 +36,10 @@ Guide articles get no spec (`specs/ia.md` 6.1 R9, user instruction 2026-09-27: "
 - src/app/helpDoc.ts — {sections} 절만. 절 끝 `사용법 글:` 줄, R2 분량
 - 수치 대조 행: 앱 상수 → tests/site/helpGuides.test.ts, 서버 상수 → tests/worker/guideLimits.test.ts, 도움말 절 수치 → tests/src/app/helpDoc.test.ts. 상수에 export 만 붙이는 것은 허용
 - 도움말에 ##/### 를 더하면 tests/site/pageNav.test.ts·tests/site/render.test.ts 의 제목 수
-- e2e/site.spec.js — 글이 뜨는지·목록·앱 도움말 링크 스모크 한 묶음
+- e2e 는 더하지 않는다 — 글·목록·링크는 tests/site/** 단위가 본다
 
 ## 검증 (이것만)
-eslint(바꾼 파일), npx vitest run tests/src/app/helpDoc.test.ts tests/site/ tests/worker/guideLimits.test.ts, npm run build 뒤 dist/guides/{slug}.html, e2e:one "{slug}" 한 번
+eslint(바꾼 파일), npx vitest run tests/src/app/helpDoc.test.ts tests/site/ tests/worker/guideLimits.test.ts, npm run build 뒤 dist/guides/{slug}.html
 
 ## 보고 (음슴체)
 바꾼 파일, 사실 근거 표(글 문장 → 코드 이름), 코드와 명세가 어긋난 곳, 확인 못 한 것, 사람 확인 항목

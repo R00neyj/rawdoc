@@ -24,7 +24,7 @@ A source-preserving Markdown collaboration tool. Typing `##` does not make the m
 - **Each criterion is tested in one place.** A criterion a pure function can decide gets a unit test only, never a second e2e. e2e is for what only a browser shows — wiring, focus, IME, sync between contexts — **at most 3 e2e per spec**; more needs a line in the spec saying why. App.tsx split characterization tests (F-2059) are exempt
 - If a test could not come first (unknown external response shape, bug fixes), check whether the test you added **fails against the pre-fix code**, decide whether it works as a regression test, and say so in your report
 - **A feature lives in its own component or hook file; `src/app/App.tsx` only wires it in.** A spec may grow App.tsx by at most 30 lines net; `npm run review` flags more as a violation. A spec that truly needs more writes `App.tsx 증가 허용: N — {reason}` in its body
-- **Design does not get TDD.** Smoke e2e only covers whether interactive elements — buttons, menus, dialogs — open, close, and respond. Never pin visual values (color, spacing, alignment, typeface) in e2e
+- **Design does not get TDD, and there are no smoke e2e.** Never write an e2e that only checks that a button, menu or dialog appears, opens or closes — a person sees that at once. An e2e must assert what happens after: data changes, a save survives a reload, focus returns by rule, sync across contexts. Never pin visual values (color, spacing, alignment, typeface) in e2e
 - **Build design fast and let the user look.** Implement → `npm run dev` / deploy → user checks → fix. Visual judgment goes to `specs/human-checks.md`, not to an agent
 
 ## Code comments
@@ -205,7 +205,7 @@ A subagent implements one small spec at a time.
 - When done, run and report verbatim: eslint on changed files, the related unit tests, and one e2e pass for that spec (`-g "F-xxx" --workers=2`). **Stop there** — no full e2e, no other specs' e2e, no `--repeat`, no `e2e:before`, and new e2e are not run red first
 - **Never run `git stash` or `git checkout -- <path>`.** Several agents share one working tree. To see what the code did before your change, use `npm run e2e:before -- "<test>" --ref <sha>` (a throwaway `git worktree`). Remove it only with `npm run e2e:before -- --ref <sha> --remove x`, never `git worktree remove`
 - For measurements and partial e2e, use the tools in `scripts/` (measure, e2e-one, e2e-before, verify, review-diff) instead of temporary scripts
-- A spec's **behavioral** acceptance criteria that need a browser become Playwright tests named `e2e/F-xxx` (at most 3 per spec, see "How we work"), judged automatically — never substitute manual claude-in-chrome operation. Criteria a pure function can decide stay unit-only. Visual criteria get smoke coverage only
+- A spec's **behavioral** acceptance criteria that need a browser become Playwright tests named `e2e/F-xxx` (at most 3 per spec, see "How we work"), judged automatically — never substitute manual claude-in-chrome operation. Criteria a pure function can decide stay unit-only. Visual criteria get no e2e; they go to "사람 확인 필요"
 - Criteria that cannot be automated (real Korean IME, OS windows, color and feel) do not become tests; report them as "사람 확인 필요". Main adds them to `specs/human-checks.md`
 - Report: files changed, pass/fail per acceptance criterion, and anything you could not verify. Never record a check you did not run as passing
 - Do not commit

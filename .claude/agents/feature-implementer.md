@@ -18,7 +18,7 @@ Korean copy of this file: `.claude/ko/agents/feature-implementer.ko.md` (snapsho
 1. Write the spec's **behavioral** acceptance criteria as tests first — unit tests under `tests/` mirroring the source path (`tests/{source path}/{name}.test.ts`), browser behavior as `F-xxx A*` in `e2e/`. Put the feature in its own component or hook; App.tsx gets wiring only (`npm run review` flags more than 30 lines net growth). **One place per criterion** — if a pure function decides it, unit only, no e2e duplicate. At most 3 e2e per spec unless the spec says why (CLAUDE.md "How we work")
 2. Run the **unit** tests and **confirm they fail**. If one passes right away you transcribed the criterion wrong; rewrite it. **Do not run the new e2e red** — that costs an extra build; its first run is after implementing (user, 2026-09-26: "테스트 코드가 너무 많은것같아 … 병목")
 3. Implement only enough to pass. 4. Run again, confirm green, then clean up
-- Visual criteria (color, spacing, alignment, typeface, motion) do not get TDD. Cover only the interaction — opens, closes, responds — with a smoke test and hand the value judgment to "사람 확인 필요". Otherwise every value change forces a test change and subpixel rendering makes it flaky
+- Visual criteria (color, spacing, alignment, typeface, motion) do not get TDD and get no e2e — not even a smoke test that only checks something opens, closes or is visible. Hand them to "사람 확인 필요". Otherwise every value change forces a test change and subpixel rendering makes it flaky
 - For criteria you could not write first, check whether the **unit** test you added afterward fails against the pre-implementation code, and say so in your report. Do not build a worktree (`e2e:before`) to see an e2e fail
 - **"The structural change was entangled with it" is not a reason to write tests later** (user instruction, 2026-09-21). E2E selectors, DOM structure, and state names are already fixed by the spec, so you can write them without looking at the implementation. Building first and writing tests to match verifies the implementation rather than the spec. If the spec has no selector, do not invent one — stop and report
 
@@ -61,7 +61,7 @@ Pass the prompt's `E2E_PORT` and `E2E_DIST` as environment variables to every e2
 - If main sends a "마무리" message, report immediately without starting anything new
 
 ## Acceptance criteria
-- Browser **behavior** criteria are judged by Playwright tests in `e2e/` named `F-xxx A*`. Visual criteria get smoke coverage only
+- Browser **behavior** criteria are judged by Playwright tests in `e2e/` named `F-xxx A*`. Visual criteria get no e2e
 - Criteria that cannot be automated (real Korean IME, OS windows, look and feel) do not become tests; report them as "사람 확인 필요"
 
 ## Report (concise, 음슴체)
