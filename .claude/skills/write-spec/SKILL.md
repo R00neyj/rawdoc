@@ -11,7 +11,7 @@ Korean copy: `.claude/ko/skills/write-spec/SKILL.ko.md` (snapshot, for humans). 
 
 ## 1. Preparation — main decides these first
 
-1. **Pick the number.** Hundreds per milestone — M1 `F-1NN`, M2 and M1 follow-ups `F-2NN`, M3 `F-3NN`. Find a free number with `ls specs/features/` and see what is outstanding with `npm run specs -- --todo` (numbers that exist only in an overview's roadmap table have no file yet, so you have to open that overview to see them)
+1. **Pick the number.** Four digits by nature — `F-2NNN` screens/client, `F-3NNN` server, `F-4NNN` security; a mixed overview takes its main side and each child its own (`CLAUDE.md` "Document layout"). Find a free number with `ls specs/features/` and see what is outstanding with `npm run specs -- --todo` (numbers that exist only in an overview's roadmap table have no file yet, so you have to open that overview to see them)
 2. **Decide overview or small spec**
    - Spanning several screens or implementation units → a **design overview** (the `F-270` / `F-277` / `F-284` format). Chapters 1–5 are decisions, chapter 6 is the roadmap table of children
    - One implementation unit → a **small spec** (the `F-279` / `F-282` format)
