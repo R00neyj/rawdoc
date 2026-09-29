@@ -949,6 +949,13 @@ body.sidebar-resizing {
   opacity: 1;
 }
 
+/* 호버가 없는 기기·휴대폰 폭은 행 `⋯` 을 늘 보인다 — 숨겨 두면 문서 조작 방법을 찾을 수 없다 (tweak) */
+@media (hover: none), (max-width: 600px) {
+  .item-menu-btn {
+    opacity: 1;
+  }
+}
+
 .item-menu-btn:hover {
   background: var(--rule-2);
   color: var(--ink);
