@@ -71,6 +71,9 @@ export type UseImportFlowOptions = {
   foldersRef: RefObject<Folder[]>
   currentDocIdRef: RefObject<string | null>
   sharedDocRef: RefObject<ShareDoc | null>
+  sharesOpenRef: RefObject<boolean>
+  helpOpenRef: RefObject<boolean>
+  mapRouteRef: RefObject<unknown>
   docPathRef: RefObject<{ docId: string | null; path: DocPathKind | null }>
   focusEditorRef: RefObject<boolean>
   docSaverFlushRef: RefObject<() => Promise<boolean>>
@@ -104,12 +107,25 @@ export function dropBlocks(dropBlocked: boolean, imageDropBlocked: boolean, impo
   return { md: dropBlocked || importOpen, image: imageDropBlocked || importOpen }
 }
 
+// 이미 가져온 파일을 열 때 화면을 떠나야 하는지 — 다른 문서이거나 문서 화면이 아닐 때(공유·공유 관리·도움말·지도)
+export function shouldLeaveForMatchedDoc(s: {
+  matchedId: string
+  currentDocId: string | null
+  sharedOpen: boolean
+  sharesOpen: boolean
+  helpOpen: boolean
+  mapOpen: boolean
+}): boolean {
+  return s.matchedId !== s.currentDocId || s.sharedOpen || s.sharesOpen || s.helpOpen || s.mapOpen
+}
+
 export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResult {
   const {
     store, folders, currentDoc, bootPhase, setDocs, setFolders, setCurrentDocId, setOpenDoc, setEditorRemountNonce, setSharedDoc, setSharesOpen,
     setHelpOpen, setMapRoute, showNotice, keepLiveTitle, beforeLeaveDoc, addOpenFolders, closeSidebarIfNarrow, closeSettings, newDocFolderId,
     ensureE2eeOpenForFolder, pushHashUrl, importInputRef, importZipInputRef, importFolderInputRef, docsRef, foldersRef, currentDocIdRef,
-    sharedDocRef, docPathRef, focusEditorRef, docSaverFlushRef, dropBlockedRef, imageDropBlockedRef, readOnlyDocRef,
+    sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, docPathRef, focusEditorRef, docSaverFlushRef, dropBlockedRef, imageDropBlockedRef,
+    readOnlyDocRef,
   } = options
   // 외부 .md 파일을 창 위로 끄는 동안의 덮개 (F-145.md 2.4)
   const [dropActive, setDropActive] = useState(false)
@@ -684,7 +700,15 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
 
       const matchedDoc = matchedId ? docsRef.current.find((d) => d.id === matchedId) : undefined
       if (matchedId && matchedDoc) {
-        if (matchedId !== currentDocIdRef.current || sharedDocRef.current) {
+        const leave = shouldLeaveForMatchedDoc({
+          matchedId,
+          currentDocId: currentDocIdRef.current,
+          sharedOpen: Boolean(sharedDocRef.current),
+          sharesOpen: sharesOpenRef.current,
+          helpOpen: helpOpenRef.current,
+          mapOpen: Boolean(mapRouteRef.current),
+        })
+        if (leave) {
           await beforeLeaveDoc()
           // runImportFiles 처럼 공유 보기·공유 관리·도움말·지도를 모두 떠난다 (F-2076 7장 D1)
           setSharedDoc(null)
