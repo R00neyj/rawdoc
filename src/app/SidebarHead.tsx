@@ -43,6 +43,12 @@ export default function SidebarHead({
     return (
       <div className="topbar-lead topbar-pill">
         <span className="icon-btn-wrap">
+          <button type="button" className="brand-group" aria-label={homeLabel} data-go-home>
+            <img className="brand-icon" src={brand.icon} alt="" width={20} height={20} />
+          </button>
+          <IconTooltip text="홈으로" />
+        </span>
+        <span className="icon-btn-wrap">
           <button
             type="button"
             ref={toggleButtonRef}
@@ -55,12 +61,6 @@ export default function SidebarHead({
             <ToggleIcon size={18} />
           </button>
           <IconTooltip text={toggleLabel} />
-        </span>
-        <span className="icon-btn-wrap">
-          <button type="button" className="brand-group" aria-label={homeLabel} data-go-home>
-            <img className="brand-icon" src={brand.icon} alt="" width={20} height={20} />
-          </button>
-          <IconTooltip text="홈으로" />
         </span>
       </div>
     )

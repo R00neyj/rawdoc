@@ -32,7 +32,7 @@ test('F-2083 E1 휴대폰 폭 상단바와 판', async ({ page }) => {
   await expect(moreBtn(page)).toBeVisible()
   await expect(topbar.getByRole('button', { name: `${brand.name} 홈으로` })).toBeVisible()
   const leadLabels = await topbar.locator('.topbar-lead button').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
-  expect(leadLabels).toEqual(['사이드바 열기', `${brand.name} 홈으로`])
+  expect(leadLabels).toEqual([`${brand.name} 홈으로`, '사이드바 열기'])
   for (const name of ['공유 — 링크·마크다운 복사', '내보내기', '계정', '댓글 0개']) {
     await expect(topbar.getByRole('button', { name, exact: true })).toHaveCount(0)
   }
