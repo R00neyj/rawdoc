@@ -31,8 +31,9 @@ function useAccountMenu({
   afterSelect,
   active,
   onClose,
-}: AccountMenuProps & { active: boolean; onClose: () => void }): { usage: Usage | null; items: MenuAction[]; dialogs: ReactNode } {
-  const [usage, setUsage] = useState<Usage | null>(null)
+}: AccountMenuProps & { active: boolean; onClose: () => void }): { usage: Usage | null | undefined; items: MenuAction[]; dialogs: ReactNode } {
+  // undefined 는 아직 한 번도 받지 못함 — 그동안 스켈레톤으로 자리를 잡는다
+  const [usage, setUsage] = useState<Usage | null | undefined>(undefined)
   const [apiTokensOpen, setApiTokensOpen] = useState(false)
 
   // 열 때마다 사용량을 새로 받는다. 실패·오프라인이면 줄을 숨긴다 (F-221.md 2.5)
@@ -101,7 +102,7 @@ function useAccountMenu({
 }
 
 // 머리 줄 — 이메일·오프라인·이미지 사용량·문서 사용량 li (F-221.md 2.5, F-2030 7장)
-function AccountInfoRows({ account, usage }: { account: AccountState; usage: Usage | null }): ReactNode {
+function AccountInfoRows({ account, usage }: { account: AccountState; usage: Usage | null | undefined }): ReactNode {
   const stored = account.state === 'offline' ? storedAccount() : null
   const email = account.state === 'in' ? account.email : stored?.email ?? null
   return (
@@ -116,6 +117,16 @@ function AccountInfoRows({ account, usage }: { account: AccountState; usage: Usa
         <li className="account-menu-email" role="none">
           <span className="account-menu-offline">오프라인</span>
         </li>
+      )}
+      {usage === undefined && account.state === 'in' && (
+        <>
+          <li className="account-menu-usage-skeleton" role="none" aria-hidden="true">
+            <span />
+          </li>
+          <li className="account-menu-usage-skeleton" role="none" aria-hidden="true">
+            <span />
+          </li>
+        </>
       )}
       {usage && (
         <li

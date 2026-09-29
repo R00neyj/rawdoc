@@ -2252,8 +2252,9 @@ body.sidebar-resizing {
   color: var(--danger);
 }
 
+/* --accent-soft 는 투명이라 휴대폰에서 뜬 띠 뒤가 비친다 — 패널과 섞어 불투명하게 */
 .notice--update {
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
 }
 
 /* 메시지만 남은 폭을 채움. span 전체로 잡으면 닫기 버튼 칸도 늘어남 (F-152 2.4) */
@@ -2581,6 +2582,7 @@ body.sidebar-resizing {
 .settings-body {
   display: flex;
   gap: 14px;
+  margin-bottom: 16px;
 }
 
 .settings-tabs {
@@ -4044,6 +4046,31 @@ body.sidebar-resizing {
   color: var(--danger);
 }
 
+/* 사용량을 받기 전 두 줄 자리 — 받은 뒤 메뉴 높이가 튀지 않게 */
+.account-menu-usage-skeleton {
+  padding: 0 10px 6px;
+  font-size: 12px;
+}
+
+.account-menu-usage-skeleton span {
+  display: block;
+  width: 60%;
+  height: 1lh;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  border-radius: 4px;
+  animation: boot-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+.account-menu-usage-skeleton + .account-menu-usage-skeleton span {
+  width: 80%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-menu-usage-skeleton span {
+    animation: none;
+  }
+}
+
 /* 사이드바 하단 계정 — 줄에서는 이메일 버튼, 레일에서는 아이콘. 목록은 줄 기준 위로, 레일은 오른쪽으로 (F-2090 4.3·6장) */
 .account-menu--row {
   position: static;
@@ -5016,6 +5043,7 @@ body.sidebar-resizing {
 }
 
 .settings-panel .settings-account-note {
+  margin: 12px 0 0;
   text-align: left;
 }
 
