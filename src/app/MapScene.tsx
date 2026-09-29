@@ -25,7 +25,8 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { createMapLayout, type MapForceNorms, type MapLayout } from '../lib/mapLayout3d'
 import { clipPlanes, easeAt, fitDistance, parseCubicBezier, tweenPose, unprojectToViewPlane, viewDepth, zoomLimits, type CameraPose } from '../lib/mapCamera'
-import { parseCssColor, type Rgba } from '../lib/cssColor'
+import { colorViaCanvas, parseCssColor, type PixelContext, type Rgba } from '../lib/cssColor'
+import { USER_CSS_REV_ATTR } from '../lib/userCssContract'
 import { blendRgb, depthMix, ndcToScreen, nodeRadius, pickLabelNodes, screenRadius, type ScreenPoint } from '../lib/mapNodeStyle'
 import { edgeColorAt } from '../lib/mapEdgeStyle'
 import { MAP_EDGE_CENTER, MAP_EDGE_FOCUS, MAP_FOCUS_FADE_MS, MAP_HOVER_DIM, combineMix, edgeClass, fillNodeFocus, stepFade } from '../lib/mapFocus'
@@ -107,22 +108,39 @@ type ThemeColors = {
 }
 
 // 프로브 하나를 돌려쓴다 — 인라인 var() 도 계산값으로 풀려 나오고 조상에 display:none 이 걸려 있어도 읽힌다 (6.3)
-function readToken(probe: HTMLElement, token: string): Rgba {
+function readToken(probe: HTMLElement, token: string, getCtx: () => PixelContext | null): Rgba {
   probe.style.color = ''
   probe.style.color = `var(${token})`
-  return parseCssColor(getComputedStyle(probe).color) ?? FALLBACK
+  const computed = getComputedStyle(probe).color
+  const parsed = parseCssColor(computed)
+  if (parsed) return parsed
+  const ctx = getCtx()
+  return ctx ? colorViaCanvas(ctx, computed) : FALLBACK
 }
 
-function readTheme(probe: HTMLElement): ThemeColors {
+// 못 읽은 색이 있을 때만 1x1 캔버스를 만들어 돌려쓴다. 만들지 못하면 다시 시도하지 않는다 (F-2098 4장)
+function pixelContextGetter(): () => PixelContext | null {
+  let ctx: PixelContext | null | undefined
+  return () => {
+    if (ctx === undefined) {
+      const c = document.createElement('canvas')
+      c.width = c.height = 1
+      ctx = c.getContext('2d', { willReadFrequently: true })
+    }
+    return ctx
+  }
+}
+
+function readTheme(probe: HTMLElement, getCtx: () => PixelContext | null): ThemeColors {
   const group: Rgba[] = []
-  for (let i = 1; i <= MAP_GROUP_PALETTE; i++) group.push(readToken(probe, `--map-group-${i}`))
+  for (let i = 1; i <= MAP_GROUP_PALETTE; i++) group.push(readToken(probe, `--map-group-${i}`, getCtx))
   return {
-    panel: readToken(probe, '--panel'),
-    ink: readToken(probe, '--ink'),
-    accent: readToken(probe, '--accent'),
-    muted: readToken(probe, '--muted'),
-    ink2: readToken(probe, '--ink-2'),
-    rule: readToken(probe, '--rule'),
+    panel: readToken(probe, '--panel', getCtx),
+    ink: readToken(probe, '--ink', getCtx),
+    accent: readToken(probe, '--accent', getCtx),
+    muted: readToken(probe, '--muted', getCtx),
+    ink2: readToken(probe, '--ink-2', getCtx),
+    rule: readToken(probe, '--rule', getCtx),
     group,
   }
 }
@@ -314,6 +332,7 @@ function buildScene(
     adjacency[edge.from]?.push(edge.to)
     adjacency[edge.to]?.push(edge.from)
   }
+  const getPixelCtx = pixelContextGetter()
   let panelColor: Rgba = FALLBACK
   let ruleColor: Rgba = FALLBACK
   let inkColor: Rgba = FALLBACK
@@ -395,7 +414,7 @@ function buildScene(
   // 인스턴스 색을 직접 쓰지 않고 base 색만 채운다. 판정 순서는 끊긴 링크 → 현재 문서 → 공유받음 → 기본이다 (F-2004 6.1)
   function applyColors(nextCenterId: string | null = activeCenterId) {
     activeCenterId = nextCenterId
-    const theme = readTheme(probe)
+    const theme = readTheme(probe, getPixelCtx)
     panelColor = theme.panel
     ruleColor = theme.rule
     inkColor = theme.ink
@@ -1134,7 +1153,7 @@ function buildScene(
     applyColors()
     requestDraw()
   })
-  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', USER_CSS_REV_ATTR] })
 
   resize()
   applyColors()

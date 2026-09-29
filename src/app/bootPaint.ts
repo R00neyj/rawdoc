@@ -13,10 +13,11 @@ import {
   CONTENT_WIDTH_VAR,
 } from './contentWidth'
 import { USER_CSS_CHECKER_VERSION, USER_CSS_MAX_SNIPPETS } from '../lib/userCssPolicy'
+import { USER_CSS_REV_ATTR } from '../lib/userCssContract'
 
 export const USER_CSS_BOOT_KEY = 'md.userCssBoot'
 export const USER_CSS_ATTR = 'data-user-css'
-export const USER_CSS_REV_ATTR = 'data-user-css-rev'
+export { USER_CSS_REV_ATTR } from '../lib/userCssContract'
 // window 속성 — 부팅이 붙인 { sheets, texts } 를 앱이 이어받는다 (F-2095 2장 2)
 export const USER_CSS_HANDOFF = '__userCssBoot'
 

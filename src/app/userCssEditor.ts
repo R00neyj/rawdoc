@@ -7,6 +7,7 @@ import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
 import { cssLanguage } from '@codemirror/lang-css'
 import { classHighlighter } from '@lezer/highlight'
 import { exceedsUserCssBytes } from './userCssEdit'
+import { userCssRemeasure } from '../editor/userCssRemeasure'
 
 type Input = { parent: HTMLElement; doc: string; otherBytes: number; onDocChange: () => void; onTooLarge: () => void }
 
@@ -22,6 +23,7 @@ export function createUserCssEditor(i: Input): EditorView {
       syntaxHighlighting(classHighlighter),
       new LanguageSupport(cssLanguage),
       EditorView.lineWrapping,
+      userCssRemeasure,
       EditorView.contentAttributes.of({
         spellcheck: 'false',
         autocapitalize: 'off',

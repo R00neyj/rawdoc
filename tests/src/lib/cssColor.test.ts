@@ -1,6 +1,6 @@
 // specs/features/F-2002.md 12.1 U1~U7
 import { describe, it, expect } from 'vitest'
-import { parseCssColor } from '../../../src/lib/cssColor'
+import { parseCssColor, colorViaCanvas, type PixelContext } from '../../../src/lib/cssColor'
 
 // 0~1 실수 비교라 자릿수를 정해 둔다
 function expectRgba(got: ReturnType<typeof parseCssColor>, want: [number, number, number, number]) {
@@ -73,5 +73,40 @@ describe('parseCssColor', () => {
     for (const input of rejected) {
       expect(parseCssColor(input as string), String(input)).toBeNull()
     }
+  })
+})
+
+function fakeCtx(bytes: number[]) {
+  const log: string[] = []
+  const ctx = {
+    clearRect: (...a: number[]) => log.push(`clearRect ${a.join(',')}`),
+    fillRect: (...a: number[]) => log.push(`fillRect ${a.join(',')}`),
+    getImageData: (...a: number[]) => {
+      log.push(`getImageData ${a.join(',')}`)
+      return { data: Uint8ClampedArray.from(bytes) }
+    },
+    set fillStyle(v: string) {
+      log.push(`fillStyle ${v}`)
+    },
+    get fillStyle() {
+      return ''
+    },
+  }
+  return { ctx: ctx as unknown as PixelContext, log }
+}
+
+describe('colorViaCanvas', () => {
+  it('C1 읽은 네 바이트를 255 로 나눈다', () => {
+    expectRgba(colorViaCanvas(fakeCtx([75, 163, 247, 255]).ctx, 'oklch(0.7 0.15 250)'), [75 / 255, 163 / 255, 247 / 255, 1])
+  })
+
+  it('C2 알파도 255 로 나눈다', () => {
+    expectRgba(colorViaCanvas(fakeCtx([147, 76, 64, 128]).ctx, 'oklch(0.5 0.1 30 / 0.5)'), [147 / 255, 76 / 255, 64 / 255, 128 / 255])
+  })
+
+  it('C3 지우고 칠하고 읽는 순서, 모두 1x1', () => {
+    const { ctx, log } = fakeCtx([0, 0, 0, 255])
+    colorViaCanvas(ctx, 'oklab(0.6 0.1 -0.1)')
+    expect(log).toEqual(['clearRect 0,0,1,1', 'fillStyle oklab(0.6 0.1 -0.1)', 'fillRect 0,0,1,1', 'getImageData 0,0,1,1'])
   })
 })

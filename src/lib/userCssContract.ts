@@ -7,6 +7,9 @@ export type ChromeHook = { value: string; label: string; files: readonly string[
 export type ContentHook = { id: string; label: string; edit: readonly string[]; view: readonly string[] }
 export type StateAttr = { name: `data-${string}`; on: 'html' | 'content'; values: readonly string[]; label: string }
 
+// 비공개 신호라 STATE_ATTRS 에 넣지 않는다 (F-2098)
+export const USER_CSS_REV_ATTR = 'data-user-css-rev'
+
 export const USER_CSS_GUIDE_PATH = `${GUIDES_PATH}/custom-css`
 
 const v = (name: `--${string}`, group: PublicVarGroup, label: string): PublicVar => ({ name, group, label })

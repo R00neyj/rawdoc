@@ -102,3 +102,14 @@ export function parseCssColor(input: string): Rgba | null {
 
   return null
 }
+
+export type PixelContext = Pick<CanvasRenderingContext2D, 'fillStyle' | 'clearRect' | 'fillRect' | 'getImageData'>
+
+// 계산된 색 문자열을 1x1 픽셀로 칠해 8비트 sRGB 로 읽는다. 앞 픽셀과 섞이지 않게 먼저 지운다 (F-2098 4장)
+export function colorViaCanvas(ctx: PixelContext, css: string): Rgba {
+  ctx.clearRect(0, 0, 1, 1)
+  ctx.fillStyle = css
+  ctx.fillRect(0, 0, 1, 1)
+  const d = ctx.getImageData(0, 0, 1, 1).data
+  return [d[0] / 255, d[1] / 255, d[2] / 255, d[3] / 255]
+}
