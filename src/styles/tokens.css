@@ -250,6 +250,7 @@
 html,
 body {
   height: 100%;
+  overscroll-behavior: none; /* iOS 에서 당기면 앱 전체가 튕기던 것 (tweak 2026-09-29) */
 }
 
 body {
