@@ -95,6 +95,8 @@ export type PaletteContext = {
     disabled: EditorCommandGates // 팔레트를 연 순간 주 에디터 상태로 한 번 계산 (4.1)
     run: (command: StateCommand) => void // 4.3
   }
+  // 오늘 날짜·지금 시각 넣기 — 선택 필드. 없으면 두 명령이 안 보인다 (F-2088)
+  dateTime?: { insert: (text: string) => void }
 }
 
 export type PaletteScreen = 'doc' | 'home' | 'help' | 'map' | 'shares' | 'sharedLink'

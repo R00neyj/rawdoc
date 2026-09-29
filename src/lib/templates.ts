@@ -76,6 +76,9 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0')
 }
 
+export const TEMPLATE_DATE_FORMAT = 'YYYY-MM-DD'
+export const TEMPLATE_TIME_FORMAT = 'HH:mm'
+
 // 왼쪽부터 읽으며 가장 긴 토큰을 먼저 맞춘다. [글자] 는 그대로 두고 대괄호만 뗀다. 표에 없는 글자는 그대로 (5.2)
 export function formatTemplateDate(now: Date, format: string): string {
   const weekday = WEEKDAYS[now.getDay()]
@@ -129,8 +132,8 @@ export function expandTemplateVariables(
 ): string {
   const trimmed = vars.title.trim()
   const title = trimmed === '' ? (vars.emptyTitle === 'keep-empty' ? '' : '제목 없는 문서') : trimmed
-  let out = text.replace(DATE_VAR_RE, (_m, fmt: string | undefined) => formatTemplateDate(vars.now, fmt ?? 'YYYY-MM-DD'))
-  out = out.replace(TIME_VAR_RE, (_m, fmt: string | undefined) => formatTemplateDate(vars.now, fmt ?? 'HH:mm'))
+  let out = text.replace(DATE_VAR_RE, (_m, fmt: string | undefined) => formatTemplateDate(vars.now, fmt ?? TEMPLATE_DATE_FORMAT))
+  out = out.replace(TIME_VAR_RE, (_m, fmt: string | undefined) => formatTemplateDate(vars.now, fmt ?? TEMPLATE_TIME_FORMAT))
   out = out.replace(TITLE_VAR_RE, () => title) // 함수로 넘겨야 제목의 $&·$$ 등이 치환 패턴으로 풀리지 않는다 (리뷰 L4)
   return out
 }

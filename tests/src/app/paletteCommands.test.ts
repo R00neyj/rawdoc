@@ -37,6 +37,8 @@ describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀, F-505 U
     const ids = PALETTE_COMMANDS.map((c) => c.id)
     expect(ids).toEqual([
       'template.insert',
+      'insert.date', // F-2088 날짜·시각 넣기
+      'insert.time',
       'doc.print',
       'e2ee.lock',
       'e2ee.unlock',

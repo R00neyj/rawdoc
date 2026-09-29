@@ -5,6 +5,7 @@ import { EditorView } from '@codemirror/view'
 import { expandTemplateVariables, type TemplateEntry } from '../lib/templates'
 import { insertTemplate as insertTemplateIntoEditor } from '../editor/insertTemplate'
 import { insertTable } from '../editor/insertCommands'
+import { insertTextAtSelection } from '../editor/insertDateTime'
 import { isComposing } from '../editor/composition'
 import type { EditorHandle } from '../editor/Editor'
 import { toEditorText } from '../lib/lineEnding'
@@ -128,6 +129,8 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
   } = options
   // 본문에서 연 팔레트만 서식·단락·삽입을 보인다 — 연 순간의 문서와 가능 여부 (F-2055 4.1)
   const [paletteEditor, setPaletteEditor] = useState<{ docId: string | null; disabled: EditorCommandGates } | null>(null)
+  // 날짜·시각 넣기 — 연 순간의 문서. 표 칸에서 연 팔레트는 null (F-2088 4.1)
+  const [paletteDateTimeDocId, setPaletteDateTimeDocId] = useState<string | null>(null)
   // 명령 팔레트 D-7 — 템플릿 삽입이 보이는 조건 (specs/features/F-2022.md 6.3)
   const canInsertTemplate =
     bootPhase === 'ready' &&
@@ -161,6 +164,8 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     const mainView = editorRef.current?.view
     const fromBody = fromEditor ?? (mainView ? document.activeElement === mainView.contentDOM : false)
     setPaletteEditor(fromBody && canInsertTemplate && mainView ? { docId: currentDocId, disabled: editorCommandGates(mainView.state, 'editor') } : null)
+    const inTableCell = fromEditor === false || Boolean(document.activeElement?.closest('.md-table-widget'))
+    setPaletteDateTimeDocId(canInsertTemplate && mainView && !inTableCell ? currentDocId : null)
     closeContextMenu()
     closeSidebarIfNarrow()
     setPaletteOpen(true)
@@ -292,8 +297,23 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     })
   }
 
+  // 날짜·시각 넣기 — 글은 바로, 포커스는 Dialog 복귀 뒤 (F-2088 4.3)
+  function insertDateTimeText(text: string) {
+    const startDocId = paletteDateTimeDocId
+    const view = editorRef.current?.view
+    if (!view || currentDocIdRef.current !== startDocId || readOnlyDocRef.current || isComposing(view)) return
+    insertTextAtSelection(text)(view)
+    runAfterPaletteClose(() => {
+      const v = editorRef.current?.view
+      if (!v || currentDocIdRef.current !== startDocId) return
+      v.focus()
+      v.dispatch({ effects: EditorView.scrollIntoView(v.state.selection.main.head) })
+    })
+  }
+
   const paletteContext: PaletteContext = {
     canInsertTemplate,
+    dateTime: paletteDateTimeDocId !== null && paletteDateTimeDocId === currentDocId && canInsertTemplate ? { insert: insertDateTimeText } : undefined,
     editor: paletteEditor && canInsertTemplate ? { disabled: paletteEditor.disabled, run: runPaletteEditorCommand } : undefined,
     canPrint,
     templates: templateEntries,

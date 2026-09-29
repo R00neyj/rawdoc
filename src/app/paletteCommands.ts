@@ -2,6 +2,7 @@
 import type { PaletteCommand, PaletteItem } from './paletteContract'
 import { THEME_OPTIONS, type ThemePref } from './theme'
 import { EDITOR_PALETTE_COMMANDS } from './paletteEditorCommands'
+import { PALETTE_DATETIME_COMMANDS } from './paletteDateTimeCommands'
 
 // 테마 2단계 각 줄의 keywords (F-2054 3.5)
 const THEME_ITEM_KEYWORDS: Record<ThemePref, readonly string[]> = {
@@ -34,6 +35,7 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     items: (ctx) => ctx.templates.map((t) => ({ id: t.id, label: t.title, detail: t.detail })),
     pick: (item, ctx, signal) => ctx.insertTemplate(item.id, signal),
   },
+  ...PALETTE_DATETIME_COMMANDS,
   {
     id: 'doc.print',
     kind: 'action',
