@@ -1,9 +1,9 @@
 // 도움말 전용 페이지 (specs/features/F-244.md), 오른쪽 목차 (F-249.md)
 import { test, expect } from '@playwright/test'
-import { openApp, openAppHome, resizeWindow, importMarkdown, waitSaved } from './helpers.js'
+import { openApp, openAppHome, resizeWindow, importMarkdown, waitSaved, openHelpFromSidebar } from './helpers.js'
 
 async function openHelpPage(page) {
-  await page.getByRole('button', { name: '도움말' }).first().click()
+  await openHelpFromSidebar(page)
   await expect(page.locator('.help-page')).toBeVisible()
   return page.locator('.help-page')
 }

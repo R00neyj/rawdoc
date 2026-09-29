@@ -1,19 +1,14 @@
-// 휴대폰 폭 상단바 `⋯` 버튼 + 아래 판 — 목차·댓글·공유·내보내기·팔레트·알림·계정·설정·도움말·사용법 (specs/features/F-2083.md 4장)
+// 휴대폰 폭 상단바 `⋯` 버튼 + 아래 판 — 목차·댓글·공유·내보내기·알림 (specs/features/F-2083.md 4장)
 import { useEffect, useRef, useState, type ComponentType, type ReactNode, type RefObject } from 'react'
 
 import {
-  IconAccount,
   IconArrowBack,
   IconChevron,
   IconClose,
   IconDownload,
-  IconExternalLink,
   IconForum,
-  IconGuide,
-  IconHelp,
   IconMore,
   IconNotifications,
-  IconSettings,
   IconShare,
   IconToc,
   IconTooltip,
@@ -23,12 +18,10 @@ import { commentBadgeText } from './commentRail'
 import { moreDotVisible, moreSheetItems, type MoreItemKey, type TopBarScreen } from './topBarMore'
 import { exportMenuItems, type ExportMenuProps } from './ExportMenu'
 import { useShareMenu, type MenuAction, type ShareMenuProps } from './ShareMenu'
-import { AccountInfoRows, useAccountMenu, type AccountMenuProps } from './AccountMenu'
 import { NotificationsList, type NotificationsMenuProps } from './NotificationsMenu'
 import type { OutlineControl } from './Outline'
-import { GUIDES_PATH } from '../lib/siteChrome'
 
-type SubView = 'share' | 'export' | 'account'
+type SubView = 'share' | 'export'
 
 type TopBarMoreSheetProps = {
   screen: TopBarScreen
@@ -37,9 +30,6 @@ type TopBarMoreSheetProps = {
   notifications?: NotificationsMenuProps
   share: ShareMenuProps
   exporter: ExportMenuProps
-  account: AccountMenuProps
-  onOpenSettings: () => void
-  onOpenHelp: () => void
 }
 
 const ROW_LABEL: Record<MoreItemKey, string> = {
@@ -48,10 +38,6 @@ const ROW_LABEL: Record<MoreItemKey, string> = {
   share: '공유',
   export: '내보내기',
   notifications: '알림',
-  account: '계정',
-  settings: '설정',
-  help: '도움말',
-  guides: '사용법',
 }
 
 const ROW_ICON: Record<MoreItemKey, ComponentType<{ size?: number }>> = {
@@ -60,10 +46,6 @@ const ROW_ICON: Record<MoreItemKey, ComponentType<{ size?: number }>> = {
   share: IconShare,
   export: IconDownload,
   notifications: IconNotifications,
-  account: IconAccount,
-  settings: IconSettings,
-  help: IconHelp,
-  guides: IconGuide,
 }
 
 const MORE_LABEL = '메뉴'
@@ -93,7 +75,7 @@ function ActionList({ items, note }: { items: MenuAction[]; note?: ReactNode }) 
   )
 }
 
-export default function TopBarMoreSheet({ screen, outlineControlRef, comments, notifications, share, exporter, account, onOpenSettings, onOpenHelp }: TopBarMoreSheetProps) {
+export default function TopBarMoreSheet({ screen, outlineControlRef, comments, notifications, share, exporter }: TopBarMoreSheetProps) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<SubView | null>(null)
   const [hasOutline, setHasOutline] = useState(false)
@@ -123,7 +105,6 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
   }
 
   const shareMenu = useShareMenu({ ...share, active: visible && view === 'share', onClose: closeSheet })
-  const accountMenu = useAccountMenu({ ...account, active: visible && view === 'account', onClose: closeSheet })
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -190,15 +171,6 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
     } else if (key === 'comments') {
       closeSheet()
       comments?.onToggle()
-    } else if (key === 'settings') {
-      closeSheet()
-      onOpenSettings()
-    } else if (key === 'help') {
-      closeSheet()
-      onOpenHelp()
-    } else if (key === 'guides') {
-      closeSheet()
-      window.open(GUIDES_PATH, '_blank', 'noopener,noreferrer')
     } else {
       enter(key)
     }
@@ -272,13 +244,6 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
         <ActionList items={exportItems} />
       </ul>
     )
-  } else if (view === 'account') {
-    body = (
-      <ul className="more-sheet-list">
-        <AccountInfoRows account={account.account} usage={accountMenu.usage} />
-        <ActionList items={accountMenu.items} />
-      </ul>
-    )
   } else {
     body = (
       <ul className="more-sheet-list">
@@ -303,8 +268,7 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
                     {badge}
                   </span>
                 )}
-                {(key === 'share' || key === 'export' || key === 'notifications' || key === 'account') && <IconChevron size={16} />}
-                {key === 'guides' && <IconExternalLink size={14} />}
+                {(key === 'share' || key === 'export' || key === 'notifications') && <IconChevron size={16} />}
               </button>
             </li>
           )
@@ -371,7 +335,6 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
         )}
       </dialog>
       {shareMenu.dialogs}
-      {accountMenu.dialogs}
     </>
   )
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { moreDotVisible, moreSheetItems, topBarScreen } from '../../../src/app/topBarMore'
+import { moreButtonVisible, moreDotVisible, moreSheetItems, topBarScreen } from '../../../src/app/topBarMore'
 
 const base = { bootPhase: 'ready' as const, currentDocId: 'd1', sharedDoc: false, sharesOpen: false, helpOpen: false, mapRoute: false }
 
@@ -25,8 +25,8 @@ describe('F-2083 A1 topBarScreen', () => {
 
 describe('F-2083 A2 moreSheetItems', () => {
   const all = { screen: 'doc' as const, hasOutline: true, comments: true, notifications: true }
-  it('doc 전부 → 7개 순서 그대로', () => {
-    expect(moreSheetItems(all)).toEqual(['outline', 'comments', 'share', 'export', 'notifications', 'account', 'settings', 'help', 'guides'])
+  it('doc 전부 → 5개 순서 그대로', () => {
+    expect(moreSheetItems(all)).toEqual(['outline', 'comments', 'share', 'export', 'notifications'])
   })
   it('doc 제목 없음 → outline 빠짐', () => {
     expect(moreSheetItems({ ...all, hasOutline: false })).not.toContain('outline')
@@ -38,11 +38,32 @@ describe('F-2083 A2 moreSheetItems', () => {
     expect(moreSheetItems({ ...all, notifications: false })).not.toContain('notifications')
   })
   it('home', () => {
-    expect(moreSheetItems({ ...all, screen: 'home' })).toEqual(['notifications', 'account', 'settings', 'help', 'guides'])
-    expect(moreSheetItems({ ...all, screen: 'home', notifications: false })).toEqual(['account', 'settings', 'help', 'guides'])
+    expect(moreSheetItems({ ...all, screen: 'home' })).toEqual(['notifications'])
+    expect(moreSheetItems({ ...all, screen: 'home', notifications: false })).toEqual([])
   })
   it('other', () => {
-    expect(moreSheetItems({ ...all, screen: 'other' })).toEqual(['notifications', 'account', 'settings', 'help', 'guides'])
+    expect(moreSheetItems({ ...all, screen: 'other' })).toEqual(['notifications'])
+  })
+  it('계정·설정·도움말·사용법 행은 어떤 입력에도 없다 (F-2090)', () => {
+    for (const screen of ['doc', 'home', 'other'] as const) {
+      for (const notifications of [true, false]) {
+        const items: string[] = moreSheetItems({ screen, hasOutline: true, comments: true, notifications })
+        for (const gone of ['account', 'settings', 'help', 'guides']) expect(items).not.toContain(gone)
+      }
+    }
+  })
+})
+
+describe('F-2090 A3 moreButtonVisible', () => {
+  it('doc 은 알림이 없어도 보인다', () => {
+    expect(moreButtonVisible({ screen: 'doc', notifications: false })).toBe(true)
+  })
+  it('home·other 는 알림이 꺼지면 숨는다', () => {
+    expect(moreButtonVisible({ screen: 'home', notifications: false })).toBe(false)
+    expect(moreButtonVisible({ screen: 'other', notifications: false })).toBe(false)
+  })
+  it('home 에서 알림이 켜지면 보인다', () => {
+    expect(moreButtonVisible({ screen: 'home', notifications: true })).toBe(true)
   })
 })
 

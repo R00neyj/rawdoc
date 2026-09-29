@@ -48,7 +48,6 @@ import {
   IconGroup,
   IconHelp,
   IconGuide,
-  IconExternalLink,
   IconCollapseAll,
   IconDownload,
   IconOpenInNew,
@@ -59,6 +58,8 @@ import {
 import { e2eeMenuForDoc, e2eeMenuForFolder, type E2eeConvertDirection, type E2eeConvertTarget, type E2eeMenuState } from '../e2ee/convert'
 import { formatHash } from './hashRoute'
 import { GUIDES_PATH } from '../lib/siteChrome'
+import AccountMenu, { type AccountMenuProps } from './AccountMenu'
+import SidebarFooter from './SidebarFooter'
 import type { Notice } from './notice'
 
 export { SIDEBAR_ID }
@@ -618,36 +619,6 @@ function RailButton(props: RailButtonProps) {
   )
 }
 
-type SidebarButtonProps = {
-  label: string
-  icon: ComponentType<{ size?: number; className?: string }>
-  onClick?: () => void
-  ariaDisabled?: boolean
-  href?: string
-  className?: string
-}
-
-// 펼친 사이드바의 아이콘+글자 동작 버튼 (F-143 3.2)
-// href 를 주면 사이트로 나가는 새 탭 링크로 그린다 (F-276.md 4.3)
-function SidebarButton(props: SidebarButtonProps) {
-  const { label, onClick, ariaDisabled, href, className } = props
-  if (href) {
-    return (
-      <a className="sidebar-btn" href={href} target="_blank" rel="noopener noreferrer">
-        <props.icon size={18} className="sidebar-btn-icon" />
-        <span className="sidebar-btn-label">{label}</span>
-        <IconExternalLink size={14} className="sidebar-btn-ext" />
-      </a>
-    )
-  }
-  return (
-    <button type="button" className={className ? `sidebar-btn ${className}` : 'sidebar-btn'} aria-disabled={ariaDisabled || undefined} onClick={onClick}>
-      <props.icon size={18} className="sidebar-btn-icon" />
-      <span className="sidebar-btn-label">{label}</span>
-    </button>
-  )
-}
-
 // 펼친 사이드바 위쪽 고정 영역의 새 문서·새 폴더·가져오기·검색 — 가로로 나란히, 아이콘만(아래쪽 툴팁) (2026-09-20 사용자 요청 "새문서, 새폴더, 가져오기는 아이콘 버튼으로 가로로 표시")
 function SidebarIconButton({
   label,
@@ -774,6 +745,7 @@ type SidebarProps = {
   onTogglePin: (id: string, pinned: boolean) => void
   onOpenSettings: () => void
   onOpenHelp: () => void
+  account: AccountMenuProps
   onOpenMap: () => void
   onOpenSearch: () => void
   onOpenPalette: () => void
@@ -824,6 +796,7 @@ export default function Sidebar({
   onTogglePin,
   onOpenSettings,
   onOpenHelp,
+  account,
   onOpenMap,
   onOpenSearch,
   onOpenPalette,
@@ -1228,27 +1201,17 @@ export default function Sidebar({
           </>
         )}
 
-        <div className={isRail ? 'sidebar-rail-bottom' : 'sidebar-bottom'}>
-          {canInstall &&
-            (isRail ? (
-              <RailButton icon={IconInstall} label="앱 설치" onClick={onInstall} />
-            ) : (
-              <SidebarButton icon={IconInstall} label="앱 설치" className="sidebar-install-row" onClick={onInstall} />
-            ))}
-          {isRail ? (
-            <>
-              <RailButton icon={IconHelp} label="도움말" onClick={onOpenHelp} />
-              <RailButton icon={IconGuide} label="사용법" href={GUIDES_PATH} />
-              <RailButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
-            </>
-          ) : (
-            <>
-              <SidebarButton icon={IconHelp} label="도움말" onClick={onOpenHelp} />
-              <SidebarButton icon={IconGuide} label="사용법" href={GUIDES_PATH} />
-              <SidebarButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
-            </>
-          )}
-        </div>
+        {isRail ? (
+          <div className="sidebar-rail-bottom">
+            {canInstall && <RailButton icon={IconInstall} label="앱 설치" onClick={onInstall} />}
+            <RailButton icon={IconHelp} label="도움말" onClick={onOpenHelp} />
+            <RailButton icon={IconGuide} label="사용법" href={GUIDES_PATH} />
+            <RailButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
+            <AccountMenu {...account} variant="rail" />
+          </div>
+        ) : (
+          <SidebarFooter account={account} canInstall={canInstall} onInstall={onInstall} onOpenHelp={onOpenHelp} onOpenSettings={onOpenSettings} />
+        )}
       </div>
       {/* 너비 손잡이 — 레일·좁은 창에는 없다 (F-159 2.5) */}
       {!narrow && !isRail && <WidthHandle width={width} onWidthChange={onWidthChange} onWidthCommit={onWidthCommit} />}

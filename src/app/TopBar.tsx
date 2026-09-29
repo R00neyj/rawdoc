@@ -3,7 +3,6 @@ import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
 import type { StateCommand } from '@codemirror/state'
 import ShareMenu from './ShareMenu'
 import ExportMenu from './ExportMenu'
-import AccountMenu from './AccountMenu'
 import NotificationsMenu, { type NotificationsMenuProps } from './NotificationsMenu'
 import EditorToolbar from './EditorToolbar'
 import { IconTooltip, IconForum } from './icons'
@@ -14,12 +13,11 @@ import ViewModeMenu, { VIEW_MODES, type ViewMode } from './ViewModeMenu'
 import TopBarMoreSheet from './TopBarMoreSheet'
 import { usePhoneWidth } from './usePhoneWidth'
 import type { OutlineControl } from './Outline'
-import type { TopBarScreen } from './topBarMore'
+import { moreButtonVisible, type TopBarScreen } from './topBarMore'
 import type { Peer } from '../lib/peers'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { WikiResolver } from '../lib/wikiResolve'
 import type { Notice } from './notice'
-import type { AccountState } from './account'
 
 type TopBarProps = {
   narrow: boolean
@@ -28,8 +26,6 @@ type TopBarProps = {
   toggleButtonRef: RefObject<HTMLButtonElement | null>
   onOpenSearch: () => void
   onOpenPalette: () => void
-  onOpenSettings: () => void
-  onOpenHelp: () => void
   viewMode: ViewMode
   viewModeDisabled: boolean
   onChangeViewMode: (mode: ViewMode) => void
@@ -49,11 +45,6 @@ type TopBarProps = {
   onPrintDoc: () => void
   onExportHtml: () => void
   onCopyRich: () => void
-  account: AccountState
-  onAccountBeforeNavigate: () => Promise<void>
-  // 로그아웃 실패 알림 (F-2034 3.2)
-  onAccountNotice: (notice: Notice) => void
-  onAccountLoggedOut?: () => void
   // 서식·단락·삽입 탭바 (F-233.md 3.1) — AppTopBar.tsx 가 표시 조건을 계산해 넘긴다
   showToolbar: boolean
   onRunToolbarCommand: (cmd: StateCommand) => void
@@ -79,8 +70,6 @@ export default function TopBar({
   toggleButtonRef,
   onOpenSearch,
   onOpenPalette,
-  onOpenSettings,
-  onOpenHelp,
   viewMode,
   viewModeDisabled,
   onChangeViewMode,
@@ -98,10 +87,6 @@ export default function TopBar({
   onPrintDoc,
   onExportHtml,
   onCopyRich,
-  account,
-  onAccountBeforeNavigate,
-  onAccountNotice,
-  onAccountLoggedOut,
   showToolbar,
   onRunToolbarCommand,
   toolbarDocked,
@@ -134,11 +119,10 @@ export default function TopBar({
         {phone ? (
           <div className="topbar-pill topbar-pill--end">
             {screen === 'doc' && <ViewModeMenu viewMode={viewMode} disabled={viewModeDisabled} onChange={onChangeViewMode} />}
+            {moreButtonVisible({ screen, notifications: Boolean(notifications) }) && (
             <TopBarMoreSheet
               screen={screen}
               outlineControlRef={outlineControlRef}
-              onOpenSettings={onOpenSettings}
-              onOpenHelp={onOpenHelp}
               comments={comments}
               notifications={notifications}
               share={{
@@ -152,8 +136,8 @@ export default function TopBar({
                 e2eeDoc: shareE2ee,
               }}
               exporter={{ disabled: exportDisabled, onExportMd, onExportTxt, onPrintDoc, onExportHtml, onCopyRich }}
-              account={{ account, onBeforeNavigate: onAccountBeforeNavigate, onNotice: onAccountNotice, onLoggedOut: onAccountLoggedOut }}
             />
+            )}
           </div>
         ) : (
           <>
@@ -213,7 +197,6 @@ export default function TopBar({
               onCopyRich={onCopyRich}
             />
             {notifications && <NotificationsMenu {...notifications} />}
-            <AccountMenu account={account} onBeforeNavigate={onAccountBeforeNavigate} onNotice={onAccountNotice} onLoggedOut={onAccountLoggedOut} />
           </>
         )}
       </header>

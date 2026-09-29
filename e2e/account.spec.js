@@ -14,8 +14,8 @@ test.describe('F-2034 A8 로그아웃 성공', () => {
     await page.waitForURL((url) => url.pathname === '/' && url.search === '?app=1' && url.hash === '')
     expect(server.signOutCount()).toBe(1)
 
-    await page.getByRole('button', { name: '계정' }).click()
-    await expect(page.getByRole('menuitem', { name: '로그인' })).toBeVisible()
+    await expect(page.locator('.sidebar').getByRole('button', { name: '로그인', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^계정/ })).toHaveCount(0)
     await expect(page.getByRole('menuitem', { name: '로그아웃' })).toHaveCount(0)
 
     const stored = await page.evaluate(() => window.localStorage.getItem('md.account'))
@@ -67,8 +67,7 @@ test.describe('F-205 A6 로그인 이동', () => {
       route.fulfill({ status: 302, headers: { Location: '/' } })
     })
 
-    await page.getByRole('button', { name: '계정' }).click()
-    await page.getByRole('menuitem', { name: '로그인' }).click()
+    await page.locator('.sidebar').getByRole('button', { name: '로그인', exact: true }).click()
 
     await expect.poll(() => loginRequestUrl).not.toBeNull()
     const url = new URL(loginRequestUrl)

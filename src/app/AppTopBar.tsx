@@ -5,7 +5,6 @@ import { isSharedDoc, type DocMeta, type OpenDoc } from './docMeta'
 import type { Peer } from '../lib/peers'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { LineEnding, Store } from '../types'
-import type { UseE2ee } from './useE2ee'
 import type { CommentAccess } from './commentRail'
 import type { UseDocCommentsResult } from './useDocComments'
 import type { UseDocSessionResult } from './useDocSession'
@@ -42,7 +41,6 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
     currentDoc: DocMeta | null
     currentDocId: string | null
     docSaverFlushRef: RefObject<() => Promise<boolean>>
-    e2ee: UseE2ee | null
     getShareDoc: () => { title: string; lineEnding: LineEnding; content: string }
     helpOpen: boolean
     isEmpty: boolean
@@ -52,8 +50,6 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
     outlineControlRef: RefObject<OutlineControl | null>
     openSearch: () => void
     openViewFind: () => void
-    openSettings: () => void
-    openHelp: () => void
     requestInviteCurrentDoc: () => void
     runToolbarCommand: (cmd: StateCommand) => void
     editorRef: RefObject<EditorHandle | null>
@@ -67,9 +63,9 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
   }
 
 export default function AppTopBar({
-  account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef, e2ee,
+  account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef,
   getShareDoc, handleCopyDocAsRichText, handleExportDoc, handleExportDocAsHtml, handleExportDocAsText, handleOpenNotification, handlePrintDoc,
-  helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch, openViewFind, openSettings, openHelp,
+  helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch, openViewFind,
   requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store, toggleButtonRef, toggleCommentsPanel,
   toggleSidebar, toolbarPref, viewMode, wikiResolver,
   editorRef,
@@ -99,8 +95,6 @@ export default function AppTopBar({
       toggleButtonRef={toggleButtonRef}
       onOpenSearch={openSearch}
       onOpenPalette={openPalette}
-      onOpenSettings={openSettings}
-      onOpenHelp={openHelp}
       viewMode={viewMode}
       viewModeDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
       onChangeViewMode={changeViewMode}
@@ -127,12 +121,6 @@ export default function AppTopBar({
       onPrintDoc={handlePrintDoc}
       onExportHtml={handleExportDocAsHtml}
       onCopyRich={handleCopyDocAsRichText}
-      account={account}
-      onAccountBeforeNavigate={async () => {
-        await docSaverFlushRef.current()
-      }}
-      onAccountNotice={showNotice}
-      onAccountLoggedOut={() => e2ee?.broadcastLogoutLock()}
       screen={screen}
       outlineControlRef={outlineControlRef}
       showToolbar={showToolbar}

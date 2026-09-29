@@ -3,13 +3,14 @@
 export type SiteLink = { path: string; label: string }
 
 export const GUIDES_PATH = '/guides'
+export const CHANGELOG_PATH = '/changelog'
 // 랜딩 고정 주소 — 언제나 랜딩을 준다 (F-2051.md 2.2). 사이드바·머리글·워커 분기가 같은 상수를 본다
 export const WELCOME_PATH = '/welcome'
 
 // F-273~F-276 이 자기 페이지를 만들면서 한 줄씩 더한다. 최종 순서: 사용법(F-276)·체인지로그(F-273)·도움말(F-274)
 export const SITE_NAV: SiteLink[] = [
   { path: GUIDES_PATH, label: '사용법' },
-  { path: '/changelog', label: '체인지로그' },
+  { path: CHANGELOG_PATH, label: '체인지로그' },
   { path: '/help', label: '도움말' },
 ]
 // F-275 가 두 줄을 더한다. 순서: 개인정보 처리방침 → 이용약관

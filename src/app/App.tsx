@@ -1197,10 +1197,10 @@ export default function App() {
 
   // 상단바 — 좁은 창은 앞 묶음을 담아 창 전체 위에, 넓은 창은 앞 묶음 없이 메인 열 안에만 (F-159 2.1)
   const topBar = <AppTopBar {...{
-    account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef, e2ee,
+    account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef,
     getShareDoc, handleCopyDocAsRichText, handleExportDoc, handleExportDocAsHtml, handleExportDocAsText, handleOpenNotification,
     handlePrintDoc, helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
-    outlineControlRef, openPalette, openSearch, openViewFind: viewFind.open, openSettings, openHelp, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
+    outlineControlRef, openPalette, openSearch, openViewFind: viewFind.open, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
     toggleButtonRef, toggleCommentsPanel, toggleSidebar, toolbarPref, viewMode, wikiResolver,
     editorRef,
   }} />
@@ -1247,6 +1247,15 @@ export default function App() {
           onTogglePin={handleTogglePin}
           onOpenSettings={openSettings}
           onOpenHelp={openHelp}
+          account={{
+            account,
+            onBeforeNavigate: async () => {
+              await docSaverFlushRef.current()
+            },
+            onNotice: showNotice,
+            onLoggedOut: () => e2ee?.broadcastLogoutLock(),
+            afterSelect: closeSidebarIfNarrow,
+          }}
           onOpenMap={openMap}
           onOpenSearch={openSearch}
           onOpenPalette={openPalette}

@@ -192,6 +192,8 @@ export function useSidebarLayout(options: UseSidebarLayoutOptions): UseSidebarLa
       setSidebarOpen(false)
     }
     function handleKeyDown(e: KeyboardEvent) {
+      // 메뉴가 Esc 를 이미 썼으면(preventDefault) 사이드바는 그대로 둔다 (F-2090 4.6)
+      if (e.defaultPrevented) return
       if (e.key === 'Escape' && !settingsOpen && !searchOpen && !paletteOpen && !deleteTarget && !moveDocTarget && !bulkDeleteItems) {
         setSidebarOpen(false)
       }

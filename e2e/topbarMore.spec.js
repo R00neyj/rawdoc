@@ -43,7 +43,7 @@ test('F-2083 E1 휴대폰 폭 상단바와 판', async ({ page }) => {
 
   await moreBtn(page).click()
   await expect(sheet(page)).toBeVisible()
-  expect(await rowTexts(page)).toEqual(['목차', '댓글', '공유', '내보내기', '계정', '설정', '도움말', '사용법'])
+  expect(await rowTexts(page)).toEqual(['목차', '댓글', '공유', '내보내기'])
   await expect(sheet(page).getByRole('button', { name: '홈', exact: true })).toHaveCount(0)
   await expect(sheet(page).locator('.more-sheet-item').first()).toBeFocused()
 
@@ -54,8 +54,6 @@ test('F-2083 E1 휴대폰 폭 상단바와 판', async ({ page }) => {
   await sheet(page).getByRole('button', { name: '뒤로' }).click()
   await expect(sheet(page).getByRole('button', { name: '내보내기', exact: true })).toBeFocused()
 
-  await sheet(page).getByRole('button', { name: '계정', exact: true }).click()
-  await expect(sheet(page).getByRole('button', { name: '로그인' })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(sheet(page)).toBeHidden()
   await expect(moreBtn(page)).toBeFocused()
@@ -68,8 +66,7 @@ test('F-2083 E1 휴대폰 폭 상단바와 판', async ({ page }) => {
   await topbar.getByRole('button', { name: `${brand.name} 홈으로` }).tap()
   await expect(page.locator('.empty-state p')).toHaveText('문서를 선택하거나 새로 만드세요.')
   await expect(page.locator('.topbar').getByRole('button', { name: /^보기 모드/ })).toHaveCount(0)
-  await moreBtn(page).click()
-  expect(await rowTexts(page)).toEqual(['계정', '설정', '도움말', '사용법'])
+  await expect(moreBtn(page)).toHaveCount(0)
 })
 
 test('F-2083 E2 보기 모드 메뉴', async ({ page }) => {

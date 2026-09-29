@@ -1,6 +1,6 @@
 // App.tsx 분할 특성 테스트 — 옮기기 전 동작을 고정한다 (specs/features/F-2059.md 5.2)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad, resizeWindow, currentDocId, waitSaved } from './helpers.js'
+import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad, resizeWindow, currentDocId, waitSaved, openHelpFromSidebar } from './helpers.js'
 import { zipSync, unzipSync } from 'fflate'
 import { fakeServer } from './fixtures/fakeServer.js'
 import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
@@ -452,7 +452,7 @@ test.describe('F-2064 공유 관리 절', () => {
     )
 
     await page.goto('/#/shares')
-    await page.getByRole('button', { name: '로그인' }).click()
+    await page.locator('.shares-page').getByRole('button', { name: '로그인' }).click()
     await expect(page).toHaveURL(/\/api\/login\?return=%23%2Fshares$/)
   })
 })
@@ -1165,7 +1165,7 @@ test.describe('F-2071 해시 라우팅 절', () => {
     await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
     await openApp(page)
     const A = await importMarkdown(page, { name: '가.md', content: '가 본문\n' })
-    await page.locator('.sidebar').getByRole('button', { name: '도움말' }).first().click()
+    await openHelpFromSidebar(page)
     await expect(page.locator('.help-page')).toBeVisible()
     await expect(page).toHaveURL(/#\/help$/)
 

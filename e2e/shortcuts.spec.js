@@ -1,6 +1,6 @@
 // 단축키 판 — 여는 진입점 셋, 사용 감지, 자리, 열린 화면 (specs/features/F-2052.md)
 import { test, expect } from '@playwright/test'
-import { openApp, openAppHome, importMarkdown, rectOf } from './helpers.js'
+import { openApp, openAppHome, importMarkdown, rectOf, openHelpFromSidebar } from './helpers.js'
 import { longDoc } from './fixtures/docs.js'
 
 const LEAD = '표\n\n'
@@ -110,7 +110,7 @@ test.describe('F-2052 A8·A9·A12·A13 열린 화면', () => {
     await expect(panel(page)).toHaveCount(0)
     await page.locator('.map-page').getByRole('button', { name: '닫기', exact: true }).click()
 
-    await page.getByRole('button', { name: '도움말' }).first().click()
+    await openHelpFromSidebar(page)
     await expect(page.locator('.help-page')).toBeVisible()
     await expect(shortcutsButton(page)).toHaveCount(0)
     await page.keyboard.press('Control+Shift+Slash')

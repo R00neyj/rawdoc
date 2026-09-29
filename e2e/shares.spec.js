@@ -77,7 +77,7 @@ test.describe('F-243 A14 비로그인', () => {
 
     await page.goto('/#/shares')
     await expect(page.locator('.shares-login-required')).toHaveText('로그인이 필요합니다.')
-    await expect(page.getByRole('button', { name: '로그인' })).toBeVisible()
+    await expect(page.locator('.shares-page').getByRole('button', { name: '로그인' })).toBeVisible()
     expect(sharesRequested).toBe(false)
   })
 })

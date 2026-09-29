@@ -1,9 +1,11 @@
-// 상단바 계정 메뉴 — 여닫기·키보드는 ShareMenu(F-130)와 같은 패턴, 로그아웃은 F-2034 (F-205.md 2.5)
+// 사이드바 하단 계정 메뉴 — 여닫기·키보드는 ShareMenu(F-130)와 같은 패턴, 로그아웃은 F-2034 (F-205.md 2.5, F-2090)
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 import { loginUrl, logout, AFTER_LOGOUT_URL, LOGOUT_FAILED_MESSAGE, storedAccount, type AccountState } from './account'
 import { IconAccount, IconKey, IconLogin, IconLogout, IconShare, IconTooltip } from './icons'
 import usePresence from './usePresence'
+import { accountTrigger } from './accountTrigger'
 import { fetchUsage, type Usage } from '../storage/attachmentsApi'
 import ApiTokensDialog from './ApiTokensDialog'
 import type { Notice } from './notice'
@@ -16,15 +18,17 @@ export type AccountMenuProps = {
   onNotice: (notice: Notice) => void
   // 로그아웃 성공 직후, 주소를 옮기기 전에 부른다 — 이 탭에서 금고를 잠그는 신호를 보낸다 (F-404.md 4.5)
   onLoggedOut?: () => void
+  // 항목 동작을 마친 뒤 — 겹침 사이드바를 닫는다 (F-2090 4.4)
+  afterSelect?: () => void
 }
 
-// 항목·딸린 상태 — 상단바 팝오버와 휴대폰 폭 ⋯ 판이 같이 쓴다. active 는 "열려 있다", onClose 는 닫고 트리거로 포커스 (F-2083 5장)
-// eslint-disable-next-line react-refresh/only-export-components -- 명세(F-2083 5장)가 이 훅을 이 파일에서 내보내게 했다
-export function useAccountMenu({
+// 항목·딸린 상태. active 는 "열려 있다", onClose 는 닫고 트리거로 포커스
+function useAccountMenu({
   account,
   onBeforeNavigate,
   onNotice,
   onLoggedOut,
+  afterSelect,
   active,
   onClose,
 }: AccountMenuProps & { active: boolean; onClose: () => void }): { usage: Usage | null; items: MenuAction[]; dialogs: ReactNode } {
@@ -78,6 +82,7 @@ export function useAccountMenu({
     return async () => {
       onClose()
       await action()
+      afterSelect?.()
     }
   }
 
@@ -96,7 +101,7 @@ export function useAccountMenu({
 }
 
 // 머리 줄 — 이메일·오프라인·이미지 사용량·문서 사용량 li (F-221.md 2.5, F-2030 7장)
-export function AccountInfoRows({ account, usage }: { account: AccountState; usage: Usage | null }): ReactNode {
+function AccountInfoRows({ account, usage }: { account: AccountState; usage: Usage | null }): ReactNode {
   const stored = account.state === 'offline' ? storedAccount() : null
   const email = account.state === 'in' ? account.email : stored?.email ?? null
   return (
@@ -142,8 +147,9 @@ export function AccountInfoRows({ account, usage }: { account: AccountState; usa
   )
 }
 
-export default function AccountMenu(props: AccountMenuProps) {
-  const { account } = props
+export default function AccountMenu(props: AccountMenuProps & { variant: 'row' | 'rail' }) {
+  const { account, variant } = props
+  const trigger = accountTrigger(account, storedAccount()?.email ?? null)
   const [open, setOpen] = useState(false)
   const { mounted, state } = usePresence(open)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
@@ -192,25 +198,49 @@ export default function AccountMenu(props: AccountMenuProps) {
     }
   }
 
-  const label = '계정'
+  function renderTrigger(): ReactNode {
+    if (trigger.kind === 'login') {
+      const login = () => void actionItems[0]?.onSelect()
+      if (variant === 'rail') {
+        return (
+          <span className="icon-btn-wrap rail-btn-wrap">
+            <button type="button" className="icon-btn rail-btn account-login-btn" aria-label={trigger.label} onClick={login}>
+              <IconLogin size={18} />
+            </button>
+            <IconTooltip text={trigger.label} side />
+          </span>
+        )
+      }
+      return (
+        <button type="button" className="account-login-btn" onClick={login}>
+          <IconLogin size={18} />
+          <span>{trigger.label}</span>
+        </button>
+      )
+    }
+    const expanded = { 'aria-haspopup': 'menu' as const, 'aria-expanded': open, onClick: () => setOpen((v) => !v) }
+    if (variant === 'rail') {
+      return (
+        <span className="icon-btn-wrap rail-btn-wrap">
+          <button type="button" ref={buttonRef} className="icon-btn rail-btn account-menu-btn" aria-label={trigger.ariaLabel} {...expanded}>
+            <IconAccount size={18} />
+          </button>
+          {!open && <IconTooltip text="계정" side />}
+        </span>
+      )
+    }
+    return (
+      <button type="button" ref={buttonRef} className="account-menu-btn account-menu-row-btn" aria-label={trigger.ariaLabel} {...expanded}>
+        <IconAccount size={18} />
+        <span className="account-menu-name">{trigger.text}</span>
+      </button>
+    )
+  }
 
   return (
-    <div className="account-menu">
-      <span className="icon-btn-wrap">
-        <button
-          type="button"
-          ref={buttonRef}
-          className="icon-btn account-menu-btn"
-          aria-label={label}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-        >
-          <IconAccount size={18} />
-        </button>
-        {!open && <IconTooltip text={label} align="end" />}
-      </span>
-      {mounted && (
+    <div className={`account-menu account-menu--${variant}`}>
+      {renderTrigger()}
+      {mounted && trigger.kind === 'menu' && (
         <ul
           className="account-menu-list"
           data-state={state}
@@ -237,7 +267,7 @@ export default function AccountMenu(props: AccountMenuProps) {
           ))}
         </ul>
       )}
-      {dialogs}
+      {createPortal(dialogs, document.body)}
     </div>
   )
 }

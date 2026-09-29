@@ -44,7 +44,8 @@ test('F-272 A12 랜딩에 같은 머리·꼬리가 보이고 앱 열기 로 앱�
 
 test('F-276 A15 사이드바 사용법 항목이 새 탭으로 연다', async ({ page }) => {
   await openApp(page)
-  const link = page.locator('.sidebar-bottom a[href="/guides"]')
+  await page.getByRole('button', { name: '도움말 메뉴' }).click()
+  const link = page.getByRole('menuitem', { name: '사용법' })
   await expect(link).toHaveAttribute('target', '_blank')
   await expect(link).toHaveAttribute('rel', /noopener/)
   await expect(link).toHaveAccessibleName('사용법')

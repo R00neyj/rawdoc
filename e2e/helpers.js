@@ -189,3 +189,9 @@ export async function resetBrowserState(page) {
   })
   await page.goto('about:blank')
 }
+
+// 사이드바 하단 `도움말 메뉴` 로 도움말 화면을 연다 — 펼친 사이드바 기준 (F-2090 10장)
+export async function openHelpFromSidebar(page) {
+  await page.locator('.sidebar').getByRole('button', { name: '도움말 메뉴' }).click()
+  await page.getByRole('menuitem', { name: '도움말', exact: true }).click()
+}
