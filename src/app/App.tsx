@@ -694,8 +694,7 @@ export default function App() {
   )
 
   // ----- 새 버전 알림 (specs/features/F-117.md, ia.md 3.13) -----
-  // updateAvailable 이 false→true 로 바뀔 때만 1회 띄운다 — true 로 유지되는 동안 다시 띄우지 않는다 (ia.md 4.2)
-  // 자동 새로고침은 하지 않는다 — applyUpdate 는 사용자가 버튼을 눌러야 실행된다
+  // false→true 전환 때만 1회 띄우고 자동 새로고침은 안 한다 (ia.md 4.2)
   const wasUpdateAvailableRef = useRef(false)
   useEffect(() => {
     if (updateAvailable && !wasUpdateAvailableRef.current) {
@@ -818,8 +817,7 @@ export default function App() {
   }, [currentDocId])
 
   // ----- 문서 전환 후 포커스 요청 플래그 정리 (ia.md 3.4, F-103 3.4) -----
-  // 실제 포커스 이동은 Editor 의 layout effect 가 autoFocus prop 으로 한다 (Editor.jsx) — StrictMode 재마운트에도 그 effect 가 다시 실행돼 최종 뷰가 받는다
-  // 여기 passive effect 는 전환 요청 플래그를 소비 표시만 해 다음 전환에 새지 않게 한다
+  // 포커스 이동은 Editor layout effect 가 하고, 여기선 요청 플래그만 소비해 다음 전환에 새지 않게 한다 (Editor.jsx)
   useEffect(() => {
     if (openDoc?.id !== currentDocId) return
     focusEditorRef.current = false
