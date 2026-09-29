@@ -10,7 +10,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/open-spec-hook.mjs\""
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/open-spec-hook.mjs\" --record"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/open-spec-hook.mjs\" --flush"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/open-spec-hook.mjs\" --flush"
           }
         ]
       }
