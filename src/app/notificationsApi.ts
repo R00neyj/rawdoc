@@ -1,5 +1,5 @@
 // 알림함 API·순수 함수 — 응답 검사, 문구, 가져오기 판정, 읽음 대기 합치기 (specs/features/F-507.md 3.1). React·DOM 없음
-import type { DocPeopleResponse, NotificationItem, NotificationsResponse } from '../lib/docComments'
+import { NOTIFICATION_KINDS, type DocPeopleResponse, type NotificationItem, type NotificationsResponse } from '../lib/docComments'
 import { formatNotificationTitle } from '../lib/pushText'
 
 export { NOTIFICATION_TITLE_MAX, notificationExcerptLine } from '../lib/pushText' // F-3002 5.4 — 옛 import 그대로
@@ -40,7 +40,7 @@ function hasExactKeys(obj: Record<string, unknown>, keys: readonly string[]): bo
 function isNotificationItem(value: unknown): value is NotificationItem {
   if (!isPlainObject(value) || !hasExactKeys(value, NOTIFICATION_ITEM_KEYS)) return false
   if (typeof value.id !== 'string') return false
-  if (value.kind !== 'mention' && value.kind !== 'reply') return false
+  if (!NOTIFICATION_KINDS.some((k) => k === value.kind)) return false
   if (typeof value.docId !== 'string') return false
   if (typeof value.commentId !== 'string') return false
   if (typeof value.threadId !== 'string') return false
@@ -81,7 +81,7 @@ export function readDocPeopleResponse(json: unknown): DocPeopleResponse | null {
 export async function fetchNotifications(etag: string | null): Promise<NotificationsFetchResult> {
   let res: Response
   try {
-    res = await fetch('/api/notifications', {
+    res = await fetch(`/api/notifications?kinds=${NOTIFICATION_KINDS.join(',')}`, {
       credentials: 'same-origin',
       cache: 'no-store',
       headers: etag !== null ? { 'If-None-Match': etag } : {},
@@ -139,10 +139,11 @@ export async function fetchDocPeople(docId: string): Promise<DocPeopleFetchResul
   return { ok: true, people: data.people }
 }
 
-// F-500 5.1 두 문구
+// F-500 5.1 문구, comment 는 F-2111
 export function notificationText(item: NotificationItem): string {
   const title = formatNotificationTitle(item.docTitle)
   if (item.kind === 'mention') return `${item.actorEmail}님이 "${title}" 댓글에서 멘션했습니다.`
+  if (item.kind === 'comment') return `${item.actorEmail}님이 "${title}"에 댓글을 달았습니다.`
   return `${item.actorEmail}님이 "${title}"의 댓글에 답글을 달았습니다.`
 }
 

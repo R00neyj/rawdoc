@@ -586,3 +586,27 @@ test.describe('F-510 E13 30개로 잘린 목록', () => {
     await expect(docRowByTitle(page, '함께 쓰는 문서')).not.toHaveAttribute('data-unread', 'true')
   })
 })
+
+test.describe('F-2111 E1 comment 종류', () => {
+  test('F-2111 E1 내 문서의 새 댓글 알림이 알림함에 보이고 눌러 그 스레드로 이동하며, 요청에 kinds 가 붙는다', async ({ page }) => {
+    const { server } = await openTwoDocs(page, {
+      setupRoom: putCatThread,
+      notifications: [
+        notif({ id: 'k1', kind: 'comment', docId: DOC, commentId: 't1', threadId: 't1', createdAt: 9000, readAt: null }),
+        notif({ id: 'm1', kind: 'mention', docId: OTHER, commentId: 'x', threadId: 'x', createdAt: 4000, readAt: null }),
+      ],
+    })
+    await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
+    await notifBtn(page).click()
+    await expect(notifItems(page)).toHaveCount(2)
+    await expect(notifItems(page).first()).toContainText('에 댓글을 달았습니다.')
+    await notifItems(page).first().click()
+    await expect(page).toHaveURL(/#\/d\/notif-doc-1$/)
+    await expect(page.locator('.comment-thread[data-thread-id="t1"]')).toHaveAttribute('data-active', 'true')
+    await expect.poll(() => postsOf(server).length).toBeGreaterThan(0)
+    expect(postsOf(server)[0].body).toEqual({ ids: ['k1'] })
+    const gets = server.notificationRequests().filter((r) => r.method === 'GET')
+    expect(gets.length).toBeGreaterThan(0)
+    expect(gets.every((r) => r.search === '?kinds=mention,reply,comment')).toBe(true)
+  })
+})

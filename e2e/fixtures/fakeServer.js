@@ -639,7 +639,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
     return entry
   }
 
-  await page.route('**/api/notifications', async (route) => {
+  await page.route(/\/api\/notifications(\?[^#]*)?$/, async (route) => {
     const req = route.request()
     if (req.method() !== 'GET') return route.fallback()
     const entry = logNotificationRequest(req)
@@ -654,7 +654,10 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       entry.status = 304
       return route.fulfill({ status: 304, headers: { ETag: etag } })
     }
-    const sorted = [...notificationItems].sort((a, b) => b.createdAt - a.createdAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
+    const kindsParam = new URL(req.url()).searchParams.get('kinds')
+    const kinds = kindsParam === null ? ['mention', 'reply'] : kindsParam.split(',')
+    const visible = notificationItems.filter((n) => kinds.includes(n.kind))
+    const sorted = [...visible].sort((a, b) => b.createdAt - a.createdAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
     const items = sorted.slice(0, 30)
     const unread = notificationItems.filter((n) => n.readAt === null).length
     entry.status = 200

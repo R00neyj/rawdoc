@@ -315,3 +315,33 @@ describe('applyPendingReads·dropSettledReads — U8·U9', () => {
     expect(dropSettledReads(pending, 5000)).toHaveLength(1)
   })
 })
+
+describe('F-2111 comment 종류', () => {
+  const originalFetch = globalThis.fetch
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  it('U1: 요청 주소는 etag 와 상관없이 kinds 가 붙은 주소', async () => {
+    const data: NotificationsResponse = { items: [], unread: 0 }
+    const fake = vi.fn().mockImplementation(async () => new Response(JSON.stringify(data), { status: 200 }))
+    globalThis.fetch = fake
+    await fetchNotifications(null)
+    await fetchNotifications('W/"x"')
+    expect(fake.mock.calls[0][0]).toBe('/api/notifications?kinds=mention,reply,comment')
+    expect(fake.mock.calls[1][0]).toBe('/api/notifications?kinds=mention,reply,comment')
+  })
+
+  it('U2: comment 항목은 통과하고 like 는 null', () => {
+    const body = { items: [item({ kind: 'comment' })], unread: 1 }
+    expect(readNotificationsResponse(body)).toEqual(body)
+    expect(readNotificationsResponse({ items: [item({ kind: 'like' as never })], unread: 1 })).toBeNull()
+  })
+
+  it('U3: comment 문구와 빈 제목', () => {
+    expect(notificationText(item({ kind: 'comment' }))).toBe('a@x.com님이 "제목"에 댓글을 달았습니다.')
+    expect(notificationText(item({ kind: 'comment', docTitle: '' }))).toContain('"제목 없는 문서"')
+    expect(notificationText(item({ kind: 'mention' }))).toBe('a@x.com님이 "제목" 댓글에서 멘션했습니다.')
+    expect(notificationText(item({ kind: 'reply' }))).toBe('a@x.com님이 "제목"의 댓글에 답글을 달았습니다.')
+  })
+})

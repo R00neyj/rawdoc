@@ -479,3 +479,12 @@ describe('F-2052 단축키 판 도움말 한 줄', () => {
     expect(section.body).toContain('`?`')
   })
 })
+
+describe('F-2111 도움말 ## 알림 절', () => {
+  it('U4: comment 알림 문장을 글자 그대로 담는다', () => {
+    const section = appSections().find((s) => s.name === '알림')!
+    expect(section.body).toContain(
+      '누군가 나를 멘션하거나, 다른 사람이 내 문서에 댓글이나 답글을 달거나, 내가 댓글·답글을 쓴 스레드에 답글을 달면 상단바 `알림`에 모이고, 안 읽은 수가 배지로 보입니다.',
+    )
+  })
+})
