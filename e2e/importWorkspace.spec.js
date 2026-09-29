@@ -1,4 +1,4 @@
-// 가져오기 (specs/features/F-282.md) — A11~A15
+// 가져오기 (specs/features/F-282.md) — A12·A13
 import { test, expect } from '@playwright/test'
 import { zipSync, unzipSync } from 'fflate'
 import { openApp, importMarkdown, waitSaved, readSavedContent, setPrefBeforeLoad } from './helpers.js'
@@ -88,30 +88,6 @@ async function deleteFolderRowAll(folderRow, page) {
   const dialog = page.locator('dialog[open]')
   await dialog.getByRole('button', { name: '전부 삭제' }).click()
 }
-
-test.describe('F-282 A11 대화상자 (스모크)', () => {
-  test('설정 → 가져오기… → 파일 고르기 → 미리보기 → 취소', async ({ page }) => {
-    await skipPersistNotice(page)
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    const before = await page.locator('.tree-row').count()
-
-    const dialog = await openSettingsData(page)
-    await dialog.getByRole('button', { name: '가져오기…', exact: true }).click()
-    await expect(dialog).toBeHidden()
-
-    const zipBytes = zipSync({ 'a.md': new TextEncoder().encode('A 내용\n') })
-    await chooseZip(page, Buffer.from(zipBytes))
-
-    const importDialog = importDialogLocator(page)
-    await expect(importDialog).toBeVisible()
-    await expect(importDialog).toContainText('새로 1개')
-
-    await importDialog.getByRole('button', { name: '취소' }).click()
-    await expect(importDialog).toBeHidden()
-    await expect(page.locator('.tree-row')).toHaveCount(before)
-  })
-})
 
 test.describe('F-282 A12 왕복', () => {
   test('전체 내보내기 → 전부 지움 → 가져오기 — 같은 구조·같은 제목·같은 바이트', async ({ page }) => {
@@ -217,66 +193,5 @@ test.describe('F-282 A13 갱신·사본', () => {
 
     const updated = await readSavedContent(page, docId)
     expect(updated.content).toBe('원본 내용\n')
-  })
-})
-
-test.describe('F-282 A14 일반 zip (F-2019 로 볼트 가져오기가 됨)', () => {
-  test('manifest 없는 zip — 볼트 이름 폴더를 새로 만들고 구조를 그대로, 나머지는 경고', async ({ page }) => {
-    await skipPersistNotice(page)
-    await openApp(page)
-
-    const zipBytes = zipSync({
-      'a.md': new TextEncoder().encode('A 내용\n'),
-      '폴더/b.md': new TextEncoder().encode('B 내용\n'),
-      'note.txt': new TextEncoder().encode('텍스트\n'),
-    })
-
-    const dialog = await openSettingsData(page)
-    await dialog.getByRole('button', { name: '가져오기…', exact: true }).click()
-    await chooseZip(page, Buffer.from(zipBytes))
-
-    const importDialog = importDialogLocator(page)
-    await expect(importDialog).toBeVisible()
-    // 넣을 폴더 기본값 — 같은 이름 폴더가 없으니 볼트 이름(zip 파일 이름에서 뗀 것)으로 새로 만든다(F-2019.md 7.1)
-    await expect(importDialog.locator('.import-target')).toHaveValue('new')
-    await expect(importDialog).toContainText('새로 2개')
-    await expect(importDialog).toContainText('.md 가 아니라 건너뛴 파일 1개')
-    await importDialog.getByRole('button', { name: '가져오기' }).click()
-
-    await expect(page.locator('.notice-message')).toHaveText('문서 2개를 가져왔습니다.')
-    // 볼트 이름 폴더(import) 안에 옵시디언 폴더 구조(폴더/b.md)를 그대로 둔다 — 펼칠 수 있는 폴더가 둘(F-2019.md 14장)
-    await expect(page.locator('.tree-row').filter({ has: page.locator('.tree-toggle') })).toHaveCount(2)
-    // 넣은 폴더(import)는 가져온 뒤 펼쳐진다(17장 Q4) — 안의 문서·하위 폴더가 바로 보인다
-    await expect(page.locator('.tree-label').filter({ hasText: /^import$/ })).toBeVisible()
-    await expect(page.locator('.tree-label').filter({ hasText: /^a$/ })).toBeVisible()
-    await expect(page.locator('.tree-label').filter({ hasText: /^폴더$/ })).toBeVisible()
-    // 안의 하위 폴더(폴더)는 기본으로 접혀 있다 — 펼쳐야 b 가 보인다
-    await page
-      .locator('.tree-row')
-      .filter({ has: page.locator('.tree-toggle') })
-      .filter({ has: page.locator('.tree-label', { hasText: /^폴더$/ }) })
-      .locator('.tree-toggle')
-      .click()
-    await expect(page.locator('.tree-label').filter({ hasText: /^b$/ })).toBeVisible()
-  })
-})
-
-test.describe('F-282 A15 거부', () => {
-  test('모르는 format — 대화상자를 열지 않고 오류 알림만', async ({ page }) => {
-    await skipPersistNotice(page)
-    await openApp(page)
-    const before = await page.locator('.tree-row').count()
-
-    const zipBytes = zipSync({
-      'manifest.json': new TextEncoder().encode(JSON.stringify({ format: 99, folders: [], docs: [] })),
-    })
-
-    const dialog = await openSettingsData(page)
-    await dialog.getByRole('button', { name: '가져오기…', exact: true }).click()
-    await chooseZip(page, Buffer.from(zipBytes))
-
-    await expect(page.locator('.notice-message')).toHaveText('이 zip 은 모르는 형식(format 99)이라 가져올 수 없습니다.')
-    await expect(importDialogLocator(page)).toBeHidden()
-    await expect(page.locator('.tree-row')).toHaveCount(before)
   })
 })

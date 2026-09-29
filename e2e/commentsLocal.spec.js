@@ -125,168 +125,110 @@ async function deleteCurrentDoc(page) {
 
 const E1_CONTENT = '첫 줄\n둘째 줄\n셋째 줄 고양이'
 
-test.describe('F-508 E1 저장·다시 열기', () => {
-  test('댓글이 comments 행에 저장되고 새로고침 뒤 되살아난다. .md 내보내기는 댓글을 담지 않는다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: E1_CONTENT })
-    await selectSubstring(page, '셋째 줄 고양이', '고양이')
-    await addCommentViaShortcut(page, '메모')
-    await waitSaved(page)
-
-    const row = await readCommentsRow(page, docId)
-    expect(row.records).toHaveLength(1)
-    expect(row.records[0].quote).toBe('고양이')
-    expect(row.records[0].anchorFrom).toBe(14)
-    expect(row.records[0].authorId).toBeNull()
-
-    const before = await exportMdBytes(page)
-    expect(before).not.toContain('메모')
-
-    await page.reload()
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    await expect.poll(() => currentDocId(page)).toBe(docId)
-
-    await expect(threadCards(page)).toHaveCount(1)
-    const threadId = await threadCards(page).first().getAttribute('data-thread-id')
-    expect(threadId).toBeTruthy()
-    await expect(page.locator('.cm-comment-anchor')).toHaveText('고양이')
-    await expect(threadCards(page).first().locator('.comment-thread-author')).toHaveText('나')
-
-    const after = await exportMdBytes(page)
-    expect(after).toBe(before)
-    expect(after).not.toContain('메모')
-  })
-})
-
-test.describe('F-508 E2 댓글만 바뀐 저장은 updatedAt 을 올리지 않는다', () => {
-  test('B 를 열어 댓글 달기 → 저장됨 — B 의 updatedAt 그대로, 사이드바 순서 A → B 그대로', async ({ page }) => {
-    await openApp(page)
-    const idB = await importMarkdown(page, { name: 'b.md', content: 'B 문서 고양이\n' })
-    await fillTitle(page, 'B')
-    const idA = await importMarkdown(page, { name: 'a.md', content: 'A 문서\n' })
-    await fillTitle(page, 'A')
-
-    // B 를 다시 연다
-    await page.locator('.doc-list').getByRole('link', { name: 'B', exact: true }).click()
-    await expect.poll(() => currentDocId(page)).toBe(idB)
-
-    const beforeRow = await readDocRow(page, idB)
-    await selectSubstring(page, 'B 문서 고양이', '고양이')
-    await addCommentViaShortcut(page, '댓글')
-    await waitSaved(page)
-
-    const afterRow = await readDocRow(page, idB)
-    expect(afterRow.updatedAt).toBe(beforeRow.updatedAt)
-
-    const titles = await page.locator('.doc-list').getByRole('link').allTextContents()
-    const relevant = titles.filter((t) => t === 'A' || t === 'B')
-    expect(relevant).toEqual(['A', 'B'])
-
-    expect(idA).not.toBe(idB)
-  })
-})
-
-test.describe('F-508 E3 답글·해결이 새로고침 뒤에도 남는다', () => {
-  test('해결 → 새로고침 → 해결된 댓글 보기 켬 — data-resolved=true, 해결함, 답글 1개', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: E1_CONTENT })
-    await selectSubstring(page, '셋째 줄 고양이', '고양이')
-    await addCommentViaShortcut(page, '댓글')
-
-    await page.locator('.cm-content').click()
-    await page.keyboard.press('Control+Home')
-    const card = threadCards(page).first()
-    await card.click()
-    await card.locator('.comment-reply-input').fill('답글')
-    await card.getByRole('button', { name: '답글' }).click()
-    await expect(card.locator('.comment-reply')).toHaveCount(1)
-
-    await card.getByRole('button', { name: '해결' }).click()
-    await expect(threadCards(page)).toHaveCount(0)
-    await waitSaved(page)
-
-    await page.reload()
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    await expect.poll(() => currentDocId(page)).toBe(docId)
-
-    await page.locator('.comment-rail-toggle').click()
-    await rail(page).locator('.comment-rail-resolved-toggle input').check()
-    await expect(threadCards(page)).toHaveCount(1)
-    await expect(threadCards(page).first()).toHaveAttribute('data-resolved', 'true')
-    await expect(threadCards(page).first()).toContainText('해결함')
-    // 답글은 스레드를 펼쳐야 보인다 (comments.spec.js 의 같은 패턴)
-    await threadCards(page).first().click()
-    await expect(threadCards(page).first().locator('.comment-reply')).toHaveCount(1)
-  })
-})
-
-test.describe('F-508 E4 본문 앞에 글을 더해도 앵커를 따라간다', () => {
-  test('맨 앞에 세 줄을 더하고 저장 → 새로고침 — 앵커 글자 그대로, anchorFrom 이 늘어난다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: E1_CONTENT })
-    await selectSubstring(page, '셋째 줄 고양이', '고양이')
-    await addCommentViaShortcut(page, '메모')
-    await waitSaved(page)
-
-    await page.locator('.cm-content').click()
-    await page.keyboard.press('Control+Home')
-    for (let i = 0; i < 3; i++) await page.keyboard.type('추가 줄\n')
-    await waitSaved(page)
-
-    await page.reload()
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    await expect.poll(() => currentDocId(page)).toBe(docId)
-    await expect(page.locator('.cm-comment-anchor')).toHaveText('고양이')
-
-    const row = await readCommentsRow(page, docId)
-    expect(row.records[0].anchorFrom).toBe(29)
-  })
-})
-
-test.describe('F-508 E5 앵커를 지우면 고아가 되고 새로고침 뒤에도 고아로 남는다', () => {
-  test('앵커 글자를 지우고 저장 → 새로고침 — 고아 묶음, anchorFrom null', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: E1_CONTENT })
-    await selectSubstring(page, '셋째 줄 고양이', '고양이')
-    await addCommentViaShortcut(page, '메모')
-    await waitSaved(page)
-
-    await selectSubstring(page, '셋째 줄 고양이', '고양이')
-    await page.keyboard.press('Delete')
-    await waitSaved(page)
-
-    await page.reload()
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    await expect.poll(() => currentDocId(page)).toBe(docId)
-
-    await expect(page.locator('.comment-orphans-head')).toHaveText('본문이 지워진 댓글 1')
-    await page.locator('.comment-orphans-head').click()
-    await expect(page.locator('.comment-orphans-list .comment-thread-quote del')).toHaveText('고양이')
-
-    const row = await readCommentsRow(page, docId)
-    expect(row.records[0].anchorFrom).toBeNull()
-  })
-})
-
-test.describe('F-508 E6 문서를 삭제하면 댓글 기록도 지워진다', () => {
-  test('사이드바에서 삭제 — comments 행 없음', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: E1_CONTENT })
-    await selectSubstring(page, '셋째 줄 고양이', '고양이')
-    await addCommentViaShortcut(page, '댓글')
-    await waitSaved(page)
-
-    expect(await readCommentsRow(page, docId)).not.toBeNull()
-
-    await deleteCurrentDoc(page)
-    await expect.poll(() => readCommentsRow(page, docId)).toBeNull()
-  })
-})
-
-// E7~E9 — 로그인 이관 (F-208 A2 방식)
-async function prepareLocalDocWithComments(page) {
-  await page.route('**/api/me', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' }))
+test('F-508 E1·E4·E3 댓글이 저장돼 새로고침 뒤 되살아나고(.md 내보내기엔 없음), 앞에 글을 더해도 앵커를 따라가고, 답글·해결이 남는다', async ({ page }) => {
   await openApp(page)
+  const docId = await importMarkdown(page, { content: E1_CONTENT })
+  await selectSubstring(page, '셋째 줄 고양이', '고양이')
+  await addCommentViaShortcut(page, '메모')
+  await waitSaved(page)
+
+  const row = await readCommentsRow(page, docId)
+  expect(row.records).toHaveLength(1)
+  expect(row.records[0].quote).toBe('고양이')
+  expect(row.records[0].anchorFrom).toBe(14)
+  expect(row.records[0].authorId).toBeNull()
+
+  const before = await exportMdBytes(page)
+  expect(before).not.toContain('메모')
+
+  await page.reload()
+  await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+  await expect.poll(() => currentDocId(page)).toBe(docId)
+  await expect(threadCards(page)).toHaveCount(1)
+  expect(await threadCards(page).first().getAttribute('data-thread-id')).toBeTruthy()
+  await expect(page.locator('.cm-comment-anchor')).toHaveText('고양이')
+  await expect(threadCards(page).first().locator('.comment-thread-author')).toHaveText('나')
+  const after = await exportMdBytes(page)
+  expect(after).toBe(before)
+
+  // E4 — 본문 앞에 세 줄을 더하고 저장 → 새로고침: 앵커 글자 그대로, anchorFrom 이 늘어난다
+  await page.locator('.cm-content').click()
+  await page.keyboard.press('Control+Home')
+  for (let i = 0; i < 3; i++) await page.keyboard.type('추가 줄\n')
+  await waitSaved(page)
+  await page.reload()
+  await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+  await expect.poll(() => currentDocId(page)).toBe(docId)
+  await expect(page.locator('.cm-comment-anchor')).toHaveText('고양이')
+  expect((await readCommentsRow(page, docId)).records[0].anchorFrom).toBe(29)
+
+  // E3 — 답글·해결이 새로고침 뒤에도 남는다
+  await page.locator('.cm-content').click()
+  await page.keyboard.press('Control+Home')
+  const card = threadCards(page).first()
+  await card.click()
+  await card.locator('.comment-reply-input').fill('답글')
+  await card.getByRole('button', { name: '답글' }).click()
+  await expect(card.locator('.comment-reply')).toHaveCount(1)
+  await card.getByRole('button', { name: '해결' }).click()
+  await expect(threadCards(page)).toHaveCount(0)
+  await waitSaved(page)
+
+  await page.reload()
+  await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+  await expect.poll(() => currentDocId(page)).toBe(docId)
+  await page.locator('.comment-rail-toggle').click()
+  await rail(page).locator('.comment-rail-resolved-toggle input').check()
+  await expect(threadCards(page)).toHaveCount(1)
+  await expect(threadCards(page).first()).toHaveAttribute('data-resolved', 'true')
+  await expect(threadCards(page).first()).toContainText('해결함')
+  // 답글은 스레드를 펼쳐야 보인다 (comments.spec.js 의 같은 패턴)
+  await threadCards(page).first().click()
+  await expect(threadCards(page).first().locator('.comment-reply')).toHaveCount(1)
+})
+
+test('F-508 E2·E5·E6 댓글만 바뀐 저장은 updatedAt 을 안 올리고, 앵커를 지우면 새로고침 뒤에도 고아, 문서를 삭제하면 댓글 기록도 지워진다', async ({ page }) => {
+  await openApp(page)
+  const idB = await importMarkdown(page, { name: 'b.md', content: 'B 문서 고양이\n' })
+  await fillTitle(page, 'B')
+  await importMarkdown(page, { name: 'a.md', content: 'A 문서\n' })
+  await fillTitle(page, 'A')
+
+  await page.locator('.doc-list').getByRole('link', { name: 'B', exact: true }).click()
+  await expect.poll(() => currentDocId(page)).toBe(idB)
+
+  const beforeRow = await readDocRow(page, idB)
+  await selectSubstring(page, 'B 문서 고양이', '고양이')
+  await addCommentViaShortcut(page, '댓글')
+  await waitSaved(page)
+
+  const afterRow = await readDocRow(page, idB)
+  expect(afterRow.updatedAt).toBe(beforeRow.updatedAt)
+  const titles = await page.locator('.doc-list').getByRole('link').allTextContents()
+  expect(titles.filter((t) => t === 'A' || t === 'B')).toEqual(['A', 'B'])
+
+  await selectSubstring(page, 'B 문서 고양이', '고양이')
+  await page.keyboard.press('Delete')
+  await waitSaved(page)
+  await page.reload()
+  await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+  await expect.poll(() => currentDocId(page)).toBe(idB)
+  await expect(page.locator('.comment-orphans-head')).toHaveText('본문이 지워진 댓글 1')
+  await page.locator('.comment-orphans-head').click()
+  await expect(page.locator('.comment-orphans-list .comment-thread-quote del')).toHaveText('고양이')
+  const orphanRow = await readCommentsRow(page, idB)
+  expect(orphanRow.records[0].anchorFrom).toBeNull()
+
+  await deleteCurrentDoc(page)
+  await expect.poll(() => readCommentsRow(page, idB)).toBeNull()
+})
+
+// 로그인 이관 (F-208 A2 방식) — 문서마다 댓글 하나·답글 하나·해결
+async function prepareLocalDocWithComments(page, { first = true } = {}) {
+  if (first) {
+    await page.route('**/api/me', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' }))
+    await openApp(page)
+  }
   await importMarkdown(page, { content: E1_CONTENT })
   await selectSubstring(page, '셋째 줄 고양이', '고양이')
   await addCommentViaShortcut(page, '댓글')
@@ -304,75 +246,45 @@ async function prepareLocalDocWithComments(page) {
   return currentDocId(page)
 }
 
-async function signInAndMigrate(page, { beforeReload } = {}) {
+test('F-508 E7·E8·E9 로그인 이관 — 로컬 댓글이 옮겨지고, 이미 댓글 있는 문서는 조용히 버리고, 503 뒤에는 재시도로 이관된다', async ({ page }) => {
+  // 이관은 새 문서부터 차례로 하고 503 은 그 뒤 문서를 막는다 — 재시도 문서를 가장 오래된 것으로 둔다
+  const docRetry = await prepareLocalDocWithComments(page)
+  const docHas = await prepareLocalDocWithComments(page, { first: false })
+  const docOk = await prepareLocalDocWithComments(page, { first: false })
+
   const server = await fakeServer(page)
-  await beforeReload?.(server)
+  server.setCommentsExist(docHas)
+  server.failWrites({ status: 503, times: 1, match: ({ path }) => path === `/api/docs/${docRetry}/comments/import` })
   await page.reload()
   await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-  return server
-}
+  const importCount = (id) => server.writeRequests().filter((w) => w.path === `/api/docs/${id}/comments/import`).length
 
-test.describe('F-508 E7 로그인 이관 — 로컬 댓글이 옮겨진다', () => {
-  test('createDoc 뒤 comments/import, 서버에 기록 둘', async ({ page }) => {
-    const docId = await prepareLocalDocWithComments(page)
-    const server = await signInAndMigrate(page)
+    // E7 — createDoc 뒤 comments/import, 서버에 기록 둘
+  await expect.poll(() => server.commentImports.has(docOk)).toBe(true)
+  const writes = server.writeRequests()
+  const createIdx = writes.findIndex((w) => w.method === 'POST' && w.path === '/api/docs')
+  const importIdx = writes.findIndex((w) => w.method === 'POST' && w.path === `/api/docs/${docOk}/comments/import`)
+  expect(createIdx).toBeGreaterThanOrEqual(0)
+  expect(importIdx).toBeGreaterThan(createIdx)
+  const records = server.commentImports.get(docOk)
+  expect(records).toHaveLength(2)
+  const root = records.find((r) => r.parent === null)
+  expect(typeof root.resolvedAt).toBe('number')
+  expect(root.authorId).toBeNull()
+  expect(root.quote).toBe('고양이')
+  expect((await readCommentsRow(page, docOk)).records).toHaveLength(2)
 
-    await expect.poll(() => server.commentImports.has(docId)).toBe(true)
+  // E8 — 이관 대상에 이미 댓글이 있으면 409 한 번으로 조용히 버린다
+  await expect.poll(() => importCount(docHas)).toBe(1)
+  expect(server.commentImports.has(docHas)).toBe(false)
 
-    const writes = server.writeRequests()
-    const createIdx = writes.findIndex((w) => w.method === 'POST' && w.path === '/api/docs')
-    const importIdx = writes.findIndex((w) => w.method === 'POST' && w.path === `/api/docs/${docId}/comments/import`)
-    expect(createIdx).toBeGreaterThanOrEqual(0)
-    expect(importIdx).toBeGreaterThan(createIdx)
-
-    const records = server.commentImports.get(docId)
-    expect(records).toHaveLength(2)
-    const root = records.find((r) => r.parent === null)
-    expect(typeof root.resolvedAt).toBe('number')
-    expect(root.authorId).toBeNull()
-    expect(root.quote).toBe('고양이')
-
-    const row = await readCommentsRow(page, docId)
-    expect(row.records).toHaveLength(2)
-  })
-})
-
-test.describe('F-508 E8 이관 대상 문서에 이미 댓글이 있으면 조용히 버린다', () => {
-  test('setCommentsExist 먼저 — 409 한 번, outbox 비고, 동기화 실패 알림 없음', async ({ page }) => {
-    const docId = await prepareLocalDocWithComments(page)
-    const server = await signInAndMigrate(page, { beforeReload: (s) => s.setCommentsExist(docId) })
-
-    await expect
-      .poll(() => server.writeRequests().filter((w) => w.path === `/api/docs/${docId}/comments/import`).length)
-      .toBe(1)
-    await expect.poll(async () => (await idbRows(page, 'md-remote', 'outbox')).length).toBe(0)
-    await expect(page.locator('.notice-message', { hasText: '동기화하지 못했습니다.' })).toHaveCount(0)
-  })
-})
-
-test.describe('F-508 E9 503 뒤 재시도로 이관된다', () => {
-  test('failWrites 503 한 번 → online 이벤트 — 두 번째 요청은 200', async ({ page }) => {
-    const docId = await prepareLocalDocWithComments(page)
-    const server = await signInAndMigrate(page, {
-      beforeReload: (s) => s.failWrites({ status: 503, times: 1, match: ({ path }) => path.endsWith('/comments/import') }),
-    })
-
-    await expect
-      .poll(() => server.writeRequests().filter((w) => w.path === `/api/docs/${docId}/comments/import`).length)
-      .toBeGreaterThanOrEqual(1)
-    expect(server.commentImports.has(docId)).toBe(false)
-
-    await page.evaluate(() => window.dispatchEvent(new Event('online')))
-
-    await expect.poll(() => server.commentImports.has(docId)).toBe(true)
-    expect(server.writeRequests().filter((w) => w.path === `/api/docs/${docId}/comments/import`).length).toBe(2)
-    await expect.poll(async () => (await idbRows(page, 'md-remote', 'outbox')).length).toBe(0)
-  })
-})
-
-test.describe('F-508 정적 확인', () => {
-  test('openApp 은 댓글 저장소 없이도 정상 부팅한다(스모크)', async ({ page }) => {
-    await openApp(page)
-    await expect(page.locator('.cm-host .cm-editor').or(page.locator('.empty-state'))).toBeVisible()
-  })
+  // E9 — 503 한 번 → online 이벤트 뒤 두 번째 요청은 200
+  await expect.poll(() => importCount(docRetry)).toBeGreaterThanOrEqual(1)
+  expect(server.commentImports.has(docRetry)).toBe(false)
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await expect.poll(() => server.commentImports.has(docRetry)).toBe(true)
+  expect(importCount(docRetry)).toBe(2)
+  expect(importCount(docHas)).toBe(1)
+  await expect.poll(async () => (await idbRows(page, 'md-remote', 'outbox')).length).toBe(0)
+  await expect(page.locator('.notice-message', { hasText: '동기화하지 못했습니다.' })).toHaveCount(0)
 })

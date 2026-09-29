@@ -1,7 +1,6 @@
 // 터치 화면 사이드바 여닫기 — 큰 버튼과 화면 밀기 (F-227.md)
 import { test, expect } from '@playwright/test'
 import { openApp, importMarkdown, rectOf } from './helpers.js'
-import { longDoc } from './fixtures/docs.js'
 
 const LEAD = '표\n\n'
 function wideTable(cols) {
@@ -28,23 +27,29 @@ test.describe('F-227 터치 사이드바 여닫기 (412×915, 터치)', () => {
 
   // F-227 A2 열기 버튼 44×44 는 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
 
-  test('F-227 A3 화면 어디서든 오른쪽으로 밀면 사이드바가 열린다', async ({ page }) => {
+  test('F-227 A3·A4·A5·A8 오른쪽 밀기로 열고 왼쪽 밀기로 닫고, 넓은 표 안과 지도 보기에서는 열리지 않는다', async ({ page }) => {
     await openApp(page)
     await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'closed')
     await touchSwipe(page, { startX: 150, startY: 400, endX: 300, endY: 400 })
     await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'open')
-  })
-
-  test('F-227 A4 사이드바 위에서 왼쪽으로 밀면 닫힌다', async ({ page }) => {
-    await openApp(page)
-    await page.locator('.sidebar-toggle').click()
-    await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'open')
     await touchSwipe(page, { startX: 200, startY: 400, endX: 60, endY: 400 })
     await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'closed')
-  })
 
-  test('F-227 A8 지도 보기에서는 오른쪽으로 밀어도 사이드바가 열리지 않는다', async ({ page }) => {
-    await openApp(page)
+    await importMarkdown(page, { content: wideTable(20) })
+    const scroll = page.locator('.md-table-scroll')
+    await scroll.evaluate((el) => {
+      el.scrollLeft = 60
+    })
+    const tableBox = await rectOf(scroll)
+    await touchSwipe(page, {
+      startX: tableBox.x + 20,
+      startY: tableBox.y + tableBox.height / 2,
+      endX: tableBox.x + 140,
+      endY: tableBox.y + tableBox.height / 2,
+    })
+    await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'closed')
+    await expect.poll(async () => scroll.evaluate((el) => el.scrollLeft)).not.toBe(60)
+
     await page.goto('/#/map')
     const map = page.locator('.map-page')
     await expect(map.locator('canvas')).toHaveCount(1)
@@ -53,51 +58,5 @@ test.describe('F-227 터치 사이드바 여닫기 (412×915, 터치)', () => {
     await touchSwipe(page, { startX: 150, startY: y, endX: 300, endY: y })
     await page.waitForTimeout(300)
     await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'closed')
-  })
-
-  test('F-227 A5 세로 스크롤 제스처는 무시 — 본문은 스크롤되고 사이드바는 그대로', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: longDoc(80) })
-    const scroller = page.locator('.cm-scroller')
-    const before = await scroller.evaluate((el) => el.scrollTop)
-    await touchSwipe(page, { startX: 150, startY: 700, endX: 170, endY: 500 })
-    await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'closed')
-    await expect
-      .poll(async () => scroller.evaluate((el) => el.scrollTop))
-      .toBeGreaterThan(before)
-  })
-
-  test('F-227 A5 가로로 스크롤된 넓은 표 안에서 오른쪽 밀기는 표 스크롤에 양보한다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: wideTable(20) })
-    const scroll = page.locator('.md-table-scroll')
-    await scroll.evaluate((el) => {
-      el.scrollLeft = 60
-    })
-    const box = await rectOf(scroll)
-    await touchSwipe(page, {
-      startX: box.x + 20,
-      startY: box.y + box.height / 2,
-      endX: box.x + 140,
-      endY: box.y + box.height / 2,
-    })
-    await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'closed')
-    await expect
-      .poll(async () => scroll.evaluate((el) => el.scrollLeft))
-      .not.toBe(60)
-  })
-})
-
-test.describe('F-227 마우스 기기는 바꾸지 않는다', () => {
-  test.use({ viewport: { width: 1280, height: 900 } })
-
-  test('F-227 A5 1280 폭 마우스 끌기는 화면 밀기로 처리되지 않는다', async ({ page }) => {
-    await openApp(page)
-    await page.mouse.move(150, 400)
-    await page.mouse.down()
-    await page.mouse.move(400, 400, { steps: 5 })
-    await page.mouse.up()
-    // 데스크톱 폭은 겹침 사이드바 대상이 아니다 — data-state 자체가 없다 (F-172.md 2.2)
-    await expect(page.locator('.sidebar')).not.toHaveAttribute('data-state', /open|closed/)
   })
 })

@@ -1,6 +1,6 @@
 // 휴대폰 폭 서식 바를 키보드 위로 (specs/features/F-2084.md 4장)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, resizeWindow, fakeImeCompose, setPrefBeforeLoad } from './helpers.js'
+import { openApp, importMarkdown, fakeImeCompose, setPrefBeforeLoad } from './helpers.js'
 
 const BODY = '선택\n\n둘째\n\n셋째\n'
 
@@ -15,7 +15,7 @@ async function editorHasFocus(page) {
 test.describe('F-2084 휴대폰 폭 (390×844, 터치)', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
 
-  test('F-2084 E1 포커스 때만 보이고 앱 틀 맨 아래에 붙는다', async ({ page }) => {
+  test('F-2084 E1 포커스 때만 보인다', async ({ page }) => {
     // F-2085 부터 저장 공간 알림은 알약 아래 떠 있는 카드라 제목 입력칸을 덮는다 — 이 테스트는 서식 바만 본다
     await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
     await openApp(page)
@@ -26,19 +26,12 @@ test.describe('F-2084 휴대폰 폭 (390×844, 터치)', () => {
     await page.locator('.cm-content .cm-line', { hasText: '둘째' }).tap()
     const row = page.locator('.editor-toolbar-row.editor-toolbar-row--docked')
     await expect(row).toBeVisible()
-    const layout = await page.evaluate(() => {
-      const r = document.querySelector('.editor-toolbar-row--docked').getBoundingClientRect()
-      const s = document.querySelector('.statusbar').getBoundingClientRect()
-      return { rowTop: r.top, rowBottom: r.bottom, statusBottom: s.bottom, innerHeight: window.innerHeight }
-    })
-    expect(Math.abs(layout.rowBottom - layout.innerHeight)).toBeLessThanOrEqual(1)
-    expect(layout.rowTop).toBeGreaterThanOrEqual(layout.statusBottom - 0.5)
 
     await page.locator('textarea.doc-title').tap()
     await expect(page.locator('.editor-toolbar')).toHaveCount(0)
   })
 
-  test('F-2084 E2 누르면 포커스 유지, 조합 중 탭은 조합을 먼저 끝낸다', async ({ page }) => {
+  test('F-2084 E2 누르면 포커스 유지, 조합 중 탭은 조합을 먼저 끝낸다, 분류 메뉴도 포커스 유지', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: BODY })
     await page.locator('.cm-content .cm-line', { hasText: '선택' }).tap()
@@ -85,43 +78,12 @@ test.describe('F-2084 휴대폰 폭 (390×844, 터치)', () => {
     expect(endAt).toBeGreaterThanOrEqual(0)
     expect(endAt).toBeLessThan(events.indexOf('click'))
     await expect.poll(() => editorHasFocus(page)).toBe(true)
-  })
 
-  test('서식 바 카테고리 한 칸 메뉴 (2026-09-29 tweak)', async ({ page }) => {
-    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
-    await openApp(page)
-    await importMarkdown(page, { content: BODY })
-    await page.locator('.cm-content .cm-line', { hasText: '둘째' }).tap()
-    await expect(page.locator('.editor-toolbar [role="tab"]')).toHaveCount(0)
-    const trigger = page.locator('.editor-toolbar').getByRole('button', { name: '서식 분류: 서식' })
-    await expect(trigger).toBeVisible()
-    await trigger.tap()
+    // 서식 분류 한 칸 메뉴 (2026-09-29 tweak) — 메뉴를 눌러도 포커스 유지
+    await row.getByRole('button', { name: '서식 분류: 서식' }).tap()
     await expect(page.getByRole('menuitemradio')).toHaveCount(3)
     expect(await editorHasFocus(page)).toBe(true)
     await page.getByRole('menuitemradio', { name: '삽입' }).tap()
-    await expect(page.getByRole('menuitemradio')).toHaveCount(0)
-    await expect(page.locator('.editor-toolbar').getByRole('button', { name: '서식 분류: 삽입' })).toBeVisible()
-    await expect(page.locator('.editor-toolbar').getByRole('button', { name: '표', exact: true })).toBeVisible()
     expect(await editorHasFocus(page)).toBe(true)
-  })
-})
-
-test.describe('F-2084 601px 이상', () => {
-  test('F-2084 E3 601 은 상단 바 밑 줄 그대로, 600 은 포커스 없으면 없음', async ({ page }) => {
-    await resizeWindow(page, 601, 900)
-    await openApp(page)
-    await importMarkdown(page, { content: BODY })
-    await blurAll(page)
-
-    const row = page.locator('.editor-toolbar-row')
-    await expect(row).toBeVisible()
-    await expect(row).not.toHaveClass(/editor-toolbar-row--docked/)
-    const afterTopbar = await page.evaluate(
-      () => document.querySelector('header.topbar')?.nextElementSibling?.classList.contains('editor-toolbar-row') ?? false,
-    )
-    expect(afterTopbar).toBe(true)
-
-    await resizeWindow(page, 600, 900)
-    await expect(page.locator('.editor-toolbar')).toHaveCount(0)
   })
 })

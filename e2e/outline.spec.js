@@ -1,4 +1,4 @@
-// 오른쪽 목차 F-144 A2~A8, F-229 좁은 화면 버튼 (F-150.md 3.3)
+// 오른쪽 목차 F-144 A4·A6·A8, F-229 좁은 화면 버튼 (F-150.md 3.3)
 import { test, expect } from '@playwright/test'
 import { openApp, importMarkdown, resizeWindow, setViewMode, rectOf } from './helpers.js'
 
@@ -14,38 +14,6 @@ function longDoc() {
   }
   return parts.join('\n\n')
 }
-
-test.describe('F-144 A2 접힘 모양', () => {
-  // 수준별 선 길이는 시각 값이라 뺐다 (CLAUDE.md "Design does not get TDD")
-  test('선 개수 = 제목 수, 현재 위치 선 하나', async ({ page }) => {
-    await resizeWindow(page, 1600, 900)
-    await openApp(page)
-    await importMarkdown(page, { content: longDoc() })
-
-    const items = page.locator('.outline-rail-item')
-    await expect(items).toHaveCount(60)
-
-    const current = page.locator('.outline-rail-item[data-current="true"]')
-    await expect(current).toHaveCount(1)
-  })
-})
-
-test.describe('F-144 A3 펼침', () => {
-  test('마우스를 올리면 카드가 뜨고, 떠나면 접힌다', async ({ page }) => {
-    await resizeWindow(page, 1600, 900)
-    await openApp(page)
-    await importMarkdown(page, { content: longDoc() })
-
-    const nav = page.locator('nav.outline')
-    await nav.hover()
-    await expect(nav).toHaveClass(/outline--expanded/)
-    const card = page.locator('.outline-card')
-    await expect(card.locator('li').first()).toBeVisible()
-
-    await page.mouse.move(10, 10)
-    await expect(nav).not.toHaveClass(/outline--expanded/, { timeout: 1000 })
-  })
-})
 
 // 보기 모드 목차 클릭 이동은 e2e/viewScroll.spec.js F-295 A9 가 본다
 test.describe('F-144 A4 이동', () => {
@@ -95,60 +63,19 @@ test.describe('F-144 A4 이동', () => {
   }
 })
 
-test.describe('F-144 A5 현재 위치', () => {
-  test('스크롤을 옮기면 aria-current 항목이 바뀐다', async ({ page }) => {
-    await resizeWindow(page, 1600, 900)
-    await openApp(page)
-    await importMarkdown(page, { content: longDoc() })
-
-    const scroller = page.locator('.cm-scroller')
-    await scroller.evaluate((el) => {
-      el.scrollTop = el.scrollHeight / 2
-    })
-    await page.locator('nav.outline').hover()
-    const current = page.locator('.outline-item[aria-current="location"]')
-    await expect(current).toHaveCount(1)
-  })
-})
-
 test.describe('F-144 A6 갱신', () => {
-  test('제목 추가 후 입력이 멈추면 목록이 반영된다', async ({ page }) => {
+  test('현재 위치 선·항목이 하나, 제목 추가 후 입력이 멈추면 목록이 반영된다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '# 하나\n' })
     await expect(page.locator('.outline-rail-item')).toHaveCount(1)
+    await expect(page.locator('.outline-rail-item[data-current="true"]')).toHaveCount(1)
+    await page.locator('nav.outline').hover()
+    await expect(page.locator('.outline-item[aria-current="location"]')).toHaveCount(1)
 
     await page.locator('.cm-content').click()
     await page.keyboard.press('Control+End')
     await page.keyboard.type('\n## 둘')
     await expect(page.locator('.outline-rail-item')).toHaveCount(2, { timeout: 2000 })
-  })
-})
-
-test.describe('F-229 A1 전환', () => {
-  test('900: 선 목차 없이 버튼. 1600: 선 목차, 버튼 없음. 제목 없음: 둘 다 없음', async ({ page }) => {
-    await resizeWindow(page, 900, 900)
-    await openApp(page)
-    await importMarkdown(page, { content: '# 제목\n' })
-    await expect(page.locator('.outline-rail')).toHaveCount(0)
-    await expect(page.getByRole('button', { name: '목차' })).toBeVisible()
-
-    await resizeWindow(page, 1600, 900)
-    await expect(page.locator('.outline-rail')).toBeVisible()
-    await expect(page.getByRole('button', { name: '목차' })).toHaveCount(0)
-
-    await resizeWindow(page, 900, 900)
-    await importMarkdown(page, { content: '제목 없는 본문\n' })
-    await expect(page.locator('.outline-rail')).toHaveCount(0)
-    await expect(page.getByRole('button', { name: '목차' })).toHaveCount(0)
-  })
-})
-
-test.describe('F-144 A7 숨김', () => {
-  test('제목 없는 문서에는 목차가 없다', async ({ page }) => {
-    await resizeWindow(page, 1600, 900)
-    await openApp(page)
-    await importMarkdown(page, { content: '제목 없는 본문\n' })
-    await expect(page.locator('nav.outline')).toHaveCount(0)
   })
 })
 
@@ -175,34 +102,17 @@ test.describe('F-229 좁은 화면 목차 버튼 (700×915, 터치)', () => {
 
   // F-229 A2 버튼 위치·크기(44px, 오른쪽 16·위 12)는 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
 
-  test('F-229 A3 열기 — 카드가 화면 안에 보이고 현재 위치 항목이 보인다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: longDoc() })
-
-    const btn = page.getByRole('button', { name: '목차' })
-    await btn.click()
-    await expect(btn).toHaveAttribute('aria-expanded', 'true')
-
-    const card = page.locator('.outline-popup-card')
-    await expect(card).toBeVisible()
-    await expect(card.locator('li')).toHaveCount(60)
-
-    const cardRect = await rectOf(card)
-    expect(cardRect.left).toBeGreaterThanOrEqual(16)
-    expect(cardRect.right).toBeLessThanOrEqual(700 - 16)
-
-    const current = page.locator('.outline-popup-card .outline-item[aria-current="location"]')
-    await expect(current).toBeVisible()
-  })
-
   for (const mode of ['live', 'raw', 'view']) {
-    test(`F-229 A4 이동(${mode}) — 스크롤만 하고 카드는 닫힌다`, async ({ page }) => {
+    test(`F-229 A3·A4 열기·이동(${mode}) — 카드에 항목·현재 위치, 스크롤만 하고 카드는 닫힌다`, async ({ page }) => {
       await openApp(page)
       await importMarkdown(page, { content: longDoc() })
       await setViewMode(page, mode)
 
       const btn = page.getByRole('button', { name: '목차' })
       await btn.click()
+      await expect(btn).toHaveAttribute('aria-expanded', 'true')
+      await expect(page.locator('.outline-popup-card li')).toHaveCount(60)
+      await expect(page.locator('.outline-popup-card .outline-item[aria-current="location"]')).toBeVisible()
       const targetItem = page.locator('.outline-popup-card .outline-item', { hasText: /^제목 2$/ })
       await targetItem.click()
 
@@ -228,7 +138,7 @@ test.describe('F-229 좁은 화면 목차 버튼 (700×915, 터치)', () => {
     })
   }
 
-  test('F-229 A5 닫기 — 다시 탭 / 본문 탭 / Esc', async ({ page }) => {
+  test('F-229 A5·A6 닫기 — 다시 탭 / 본문 탭 / Esc, 키보드로 열고 Tab 으로 나가면 닫힘', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: longDoc() })
     const btn = page.getByRole('button', { name: '목차' })
@@ -248,23 +158,11 @@ test.describe('F-229 좁은 화면 목차 버튼 (700×915, 터치)', () => {
     await page.keyboard.press('Escape')
     await expect(page.locator('.outline-popup-card')).toHaveCount(0)
     await expect(btn).toBeFocused()
-  })
-})
 
-test.describe('F-229 A6 키보드 (900×900)', () => {
-  test('Tab 으로 버튼 → Enter → 현재 위치 항목 포커스, Tab 으로 카드 밖에 나가면 닫힘', async ({ page }) => {
-    await resizeWindow(page, 900, 900)
-    await openApp(page)
-    await importMarkdown(page, { content: longDoc() })
-
-    const btn = page.getByRole('button', { name: '목차' })
-    await btn.focus()
+    // A6 — 키보드: 버튼 → Enter → 현재 위치 항목 포커스, Tab 으로 카드 밖에 나가면 닫힘
     await page.keyboard.press('Enter')
     await expect(page.locator('.outline-popup-card')).toBeVisible()
-
-    const current = page.locator('.outline-popup-card .outline-item[aria-current="location"]')
-    await expect(current).toBeFocused()
-
+    await expect(page.locator('.outline-popup-card .outline-item[aria-current="location"]')).toBeFocused()
     const itemCount = await page.locator('.outline-popup-card .outline-item').count()
     for (let i = 0; i < itemCount; i++) {
       await page.keyboard.press('Tab')

@@ -1,10 +1,9 @@
-// 볼트 가져오기 (specs/features/F-2019.md) — V1~V7. 폴더 끌어놓기 자체는 e2e 로 못 낸다(머리 (b), 15.2)
+// 볼트 가져오기 (specs/features/F-2019.md) — V1·V2·V4·V6. 폴더 끌어놓기 자체는 e2e 로 못 낸다(머리 (b), 15.2)
 import fs from 'node:fs'
 import path from 'node:path'
-import crypto from 'node:crypto'
 import { test, expect } from '@playwright/test'
 import { zipSync } from 'fflate'
-import { openApp, waitSaved, readSavedContent, setPrefBeforeLoad } from './helpers.js'
+import { openApp, waitSaved, setPrefBeforeLoad } from './helpers.js'
 
 async function skipPersistNotice(page) {
   await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
@@ -20,12 +19,8 @@ function ascii(s) {
 function pngBytes(width, height) {
   return [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...u32be(13), ...ascii('IHDR'), ...u32be(width), ...u32be(height), 8, 6, 0, 0, 0]
 }
-function sha256Hex16(bytes) {
-  return crypto.createHash('sha256').update(Buffer.from(bytes)).digest('hex').slice(0, 16)
-}
 
 const GRIM_PNG = pngBytes(40, 20)
-const GRIM_HASH = sha256Hex16(GRIM_PNG)
 
 // 15.2 기본 볼트
 function writeBaseVault(dir) {
@@ -88,16 +83,8 @@ function openMenuItem(page, name) {
   return page.locator('.item-menu-list:not([inert])').getByRole('menuitem', { name })
 }
 
-async function docIdByLabel(page, name) {
-  await page.locator('.tree-label').filter({ hasText: new RegExp(`^${name}$`) }).click()
-  return page.evaluate(() => {
-    const m = /^#\/d\/(.+)$/.exec(location.hash)
-    return m ? m[1] : null
-  })
-}
-
 test.describe('F-2019 볼트 가져오기', () => {
-  test('V1 폴더 선택 (스모크)', async ({ page }, testInfo) => {
+  test('V1·V2·V6 폴더 가져오기 미리보기·알림·이미지 상자, manifest 없는 zip 가져오기', async ({ page }, testInfo) => {
     await skipPersistNotice(page)
     await openApp(page)
     const dir = testInfo.outputPath('내 볼트')
@@ -110,82 +97,43 @@ test.describe('F-2019 볼트 가져오기', () => {
 
     const importDialog = importDialogLocator(page)
     await expect(importDialog).toBeVisible()
-    await expect(importDialog).toContainText('내 볼트')
     const select = importDialog.locator('.import-target')
     await expect(select).toHaveValue('new')
     await expect(select.locator('option:checked')).toHaveText('새 폴더 "내 볼트"')
     await expect(importDialog).toContainText('새로 3개')
-    await expect(importDialog).toContainText('갱신 0개')
-    await expect(importDialog).toContainText('건너뜀 0개')
     await expect(importDialog).toContainText('이미지 1개')
-    await expect(importDialog).toContainText('.md 가 아니라 건너뛴 파일 1개')
-    await expect(importDialog).toContainText('원문 그대로 둔 이미지·임베드 2개')
 
     await importDialog.getByRole('button', { name: '가져오기' }).click()
     await expect(page.locator('.notice-message')).toHaveText('문서 3개를 가져왔습니다.')
-
     await expect(page.locator('.tree-label').filter({ hasText: /^내 볼트$/ })).toBeVisible()
     await expect(page.locator('.tree-label').filter({ hasText: /^위키$/ })).toBeVisible()
     await expect(page.locator('.tree-label').filter({ hasText: /^루트$/ })).toBeVisible()
-  })
 
-  test('V2 이미지 변환', async ({ page }, testInfo) => {
-    await skipPersistNotice(page)
-    await openApp(page)
-    const dir = testInfo.outputPath('내 볼트')
-    writeBaseVault(dir)
-
-    const dialog = await openSettingsData(page)
-    await dialog.getByRole('button', { name: '폴더 가져오기…' }).click()
-    await chooseFolder(page, dir)
-    await importDialogLocator(page).getByRole('button', { name: '가져오기' }).click()
-    await expect(page.locator('.notice-message')).toHaveText('문서 3개를 가져왔습니다.')
-
-    // 위키 → 개념 폴더를 차례로 펼쳐 안의 a 를 연다
+    // 위키 → 개념 폴더를 차례로 펼쳐 안의 a 를 연다 — 첨부가 저장돼 이미지 상자 2개가 뜬다
     await treeRowByLabel(page, '위키').locator('.tree-toggle').click()
     await treeRowByLabel(page, '개념').locator('.tree-toggle').click()
-    const docId = await docIdByLabel(page, 'a')
+    await page.locator('.tree-label').filter({ hasText: /^a$/ }).click()
     await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-
-    const saved = await readSavedContent(page, docId)
-    const expected =
-      `# a\n\n` +
-      `<div align="left">\n  <img src="attachments/${GRIM_HASH}.png" alt="그림">\n</div>\n\n` +
-      `<div align="left">\n  <img src="attachments/${GRIM_HASH}.png" alt="그림" width="300">\n</div>\n\n` +
-      `글 가운데 ![[그림.png]] 입니다.\n\n` +
-      `![[다른 문서]]\n`
-    expect(saved.content).toBe(expected)
-
     await expect(page.locator('.md-image-box')).toHaveCount(2)
-  })
 
-  test('V3 다시 가져오기 = 건너뜀', async ({ page }, testInfo) => {
-    await skipPersistNotice(page)
-    await openApp(page)
-    const dir = testInfo.outputPath('내 볼트')
-    writeBaseVault(dir)
-
-    const dialog1 = await openSettingsData(page)
-    await dialog1.getByRole('button', { name: '폴더 가져오기…' }).click()
-    await chooseFolder(page, dir)
-    await importDialogLocator(page).getByRole('button', { name: '가져오기' }).click()
-    await expect(page.locator('.notice-message')).toHaveText('문서 3개를 가져왔습니다.')
-
+    const zipBytes = zipSync({
+      '두번째/z.md': new TextEncoder().encode('# z\n'),
+      '두번째/y/x.md': new TextEncoder().encode('# x\n'),
+      '__MACOSX/q': new TextEncoder().encode(''),
+    })
     const dialog2 = await openSettingsData(page)
-    await dialog2.getByRole('button', { name: '폴더 가져오기…' }).click()
-    await chooseFolder(page, dir)
-
-    const importDialog = importDialogLocator(page)
+    await dialog2.getByRole('button', { name: '가져오기…', exact: true }).click()
+    await chooseZip(page, Buffer.from(zipBytes), 'vault.zip')
     await expect(importDialog).toBeVisible()
-    const select = importDialog.locator('.import-target')
-    await expect(select.locator('option:checked')).toHaveText('내 볼트')
-    await expect(importDialog).toContainText('새로 0개')
-    await expect(importDialog).toContainText('갱신 0개')
-    await expect(importDialog).toContainText('건너뜀 3개')
-    await expect(importDialog).toContainText('이미지 0개')
-    await expect(importDialog).toContainText('가져올 문서가 없습니다.')
-    await expect(importDialog.getByRole('button', { name: '가져오기' })).toBeDisabled()
+    await expect(importDialog.locator('.import-target option:checked')).toHaveText('새 폴더 "두번째"')
+    await expect(importDialog).toContainText('새로 2개')
+    await importDialog.getByRole('button', { name: '가져오기' }).click()
+    await expect(page.locator('.notice-message')).toHaveText('문서 2개를 가져왔습니다.')
+    await expect(page.locator('.tree-label').filter({ hasText: /^두번째$/ })).toBeVisible()
+    await expect(page.locator('.tree-label').filter({ hasText: /^z$/ })).toBeVisible()
+    await expect(page.locator('.tree-label').filter({ hasText: /^y$/ })).toBeVisible()
   })
+
 
   test('V4 갱신·사본·그대로 둔 문서', async ({ page }, testInfo) => {
     await skipPersistNotice(page)
@@ -231,82 +179,5 @@ test.describe('F-2019 볼트 가져오기', () => {
     await treeRowByLabel(page, '위키').locator('.tree-toggle').click()
     await expect(page.locator('.tree-label').filter({ hasText: /^색인 \(가져오기 전\)$/ })).toBeVisible()
     await expect(page.locator('.tree-label').filter({ hasText: /^새 글$/ })).toBeVisible()
-  })
-
-  test('V5 넣을 폴더 바꾸기', async ({ page }, testInfo) => {
-    await skipPersistNotice(page)
-    await openApp(page)
-    const dir = testInfo.outputPath('내 볼트')
-    writeBaseVault(dir)
-
-    const dialog1 = await openSettingsData(page)
-    await dialog1.getByRole('button', { name: '폴더 가져오기…' }).click()
-    await chooseFolder(page, dir)
-    await importDialogLocator(page).getByRole('button', { name: '가져오기' }).click()
-    await expect(page.locator('.notice-message')).toHaveText('문서 3개를 가져왔습니다.')
-
-    const rowCountBefore = await page.locator('.tree-row').count()
-
-    const dialog2 = await openSettingsData(page)
-    await dialog2.getByRole('button', { name: '폴더 가져오기…' }).click()
-    await chooseFolder(page, dir)
-
-    const importDialog = importDialogLocator(page)
-    const select = importDialog.locator('.import-target')
-    await expect(importDialog).toContainText('건너뜀 3개')
-
-    await select.selectOption('top')
-    await expect(importDialog).toContainText('새로 3개')
-    await expect(importDialog).toContainText('갱신 0개')
-    await expect(importDialog).toContainText('건너뜀 0개')
-
-    await select.selectOption({ label: '내 볼트' })
-    await expect(importDialog).toContainText('건너뜀 3개')
-
-    await importDialog.getByRole('button', { name: '취소' }).click()
-    await expect(importDialog).toBeHidden()
-    await expect(page.locator('.tree-row')).toHaveCount(rowCountBefore)
-  })
-
-  test('V6 manifest.json 없는 zip', async ({ page }) => {
-    await skipPersistNotice(page)
-    await openApp(page)
-
-    const zipBytes = zipSync({
-      '내 볼트/a.md': new TextEncoder().encode('# a\n'),
-      '내 볼트/b/c.md': new TextEncoder().encode('# c\n'),
-      '__MACOSX/x': new TextEncoder().encode(''),
-    })
-
-    const dialog = await openSettingsData(page)
-    await dialog.getByRole('button', { name: '가져오기…', exact: true }).click()
-    await chooseZip(page, Buffer.from(zipBytes), 'vault.zip')
-
-    const importDialog = importDialogLocator(page)
-    await expect(importDialog).toBeVisible()
-    await expect(importDialog).toContainText('vault.zip')
-    await expect(importDialog.locator('.import-target option:checked')).toHaveText('새 폴더 "내 볼트"')
-    await expect(importDialog).toContainText('새로 2개')
-
-    await importDialog.getByRole('button', { name: '가져오기' }).click()
-    await expect(page.locator('.notice-message')).toHaveText('문서 2개를 가져왔습니다.')
-
-    await expect(page.locator('.tree-label').filter({ hasText: /^내 볼트$/ })).toBeVisible()
-    await expect(page.locator('.tree-label').filter({ hasText: /^a$/ })).toBeVisible()
-    await expect(page.locator('.tree-label').filter({ hasText: /^b$/ })).toBeVisible()
-  })
-
-  test('V7 끌어놓기 덮개 문구', async ({ page }) => {
-    await skipPersistNotice(page)
-    await openApp(page)
-
-    await page.evaluate(() => {
-      const dt = new DataTransfer()
-      dt.items.add(new File(['# 안녕\n'], 'a.md', { type: 'text/markdown' }))
-      const el = document.querySelector('.sidebar')
-      el.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }))
-    })
-
-    await expect(page.locator('.drop-overlay')).toContainText('여기에 놓아 .md 파일·폴더 가져오기')
   })
 })

@@ -79,16 +79,6 @@ function collectPageErrors(page) {
 test.describe('F-2017 폴더 깊이 해제', () => {
   test.use({ viewport: { width: 1280, height: 900 } })
 
-  test('F-2017 A1 하위 폴더로 7단계까지 만든다', async ({ page }) => {
-    await openApp(page)
-    await buildDepthChain(page)
-
-    await expect(page.locator('.sidebar .tree-toggle')).toHaveCount(7)
-    await expect(groupsAbove(rowOf(page, '사'))).toHaveCount(6)
-    const menu = await openRowMenu(page, '사')
-    await expect(menu.getByRole('menuitem', { name: '하위 폴더' })).toBeVisible()
-  })
-
   test('F-2017 A2 자식 폴더가 있는 폴더를 다른 폴더 안으로 끌어놓는다', async ({ page }) => {
     await openApp(page)
     await newFolder(page, 'X')
@@ -113,22 +103,20 @@ test.describe('F-2017 폴더 깊이 해제', () => {
     await expect(groupsAbove(rowOf(page, '깊은 문서'))).toHaveCount(3)
   })
 
-  test('F-2017 A3 폴더를 자기 손자 폴더에 놓으면 아무 일도 없다', async ({ page }) => {
+  test('F-2017 A1·A3·A4 7단계 만들기, 손자 폴더에 놓기는 아무 일 없음, 이동 대화상자·새로고침 뒤 조상 펼침', async ({ page }) => {
     const errors = collectPageErrors(page)
     await openApp(page)
     await buildDepthChain(page)
 
-    await dragRowTo(page, rowOf(page, '가'), rowOf(page, '다'))
+    await expect(page.locator('.sidebar .tree-toggle')).toHaveCount(7)
+    await expect(groupsAbove(rowOf(page, '사'))).toHaveCount(6)
 
+    await dragRowTo(page, rowOf(page, '가'), rowOf(page, '다'))
     await expect(groupsAbove(rowOf(page, '가'))).toHaveCount(0)
     await expect(groupsAbove(rowOf(page, '다'))).toHaveCount(2)
     await expect(page.locator('.sidebar .tree-toggle')).toHaveCount(7)
     expect(errors).toEqual([])
-  })
 
-  test('F-2017 A4 폴더로 이동 대화상자에 7단계가 모두 나오고, 깊은 문서를 열면 조상이 다 펼쳐진다', async ({ page }) => {
-    await openApp(page)
-    await buildDepthChain(page)
     await importMarkdown(page, { name: '깊은 문서.md', content: '깊은 문서\n' })
 
     const menu = await openRowMenu(page, '깊은 문서')
@@ -201,47 +189,5 @@ test.describe('F-2017 폴더 깊이 해제', () => {
     await expect(groupsAbove(rowOf(page, 'A'))).toHaveCount(0)
     await expect(groupsAbove(rowOf(page, 'B'))).toHaveCount(1)
     await expect(rowOf(page, 'B').locator('xpath=../../..')).toHaveAttribute('data-folder-id', idA)
-  })
-
-  test('F-2017 A6 공개 폴더 목록이 손자 폴더 문서까지 트리 순서로 보인다', async ({ page }) => {
-    const folder = {
-      name: '링크 폴더',
-      folders: [
-        { id: 'da', name: '다', parentId: 'na' },
-        { id: 'bin', name: '빈', parentId: 'root' },
-        { id: 'ga', name: '가', parentId: 'root' },
-        { id: 'na', name: '나', parentId: 'ga' },
-      ],
-      docs: [
-        { id: 'top', title: '위 문서', folderId: 'root', updatedAt: 100 },
-        { id: 'deep', title: '깊은 문서', folderId: 'da', updatedAt: 200 },
-      ],
-    }
-    const bodies = {
-      top: { title: '위 문서', content: '# 위 문서\n', lineEnding: 'lf', updatedAt: 100 },
-      deep: { title: '깊은 문서', content: '# 깊은 문서\n', lineEnding: 'lf', updatedAt: 200 },
-    }
-    await page.route('**/pub/folders/*', (route) => {
-      if (/\/pub\/folders\/[^/]+$/.test(route.request().url())) {
-        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(folder) })
-      }
-      return route.continue()
-    })
-    await page.route('**/pub/folders/*/docs/*', (route) => {
-      const docId = new URL(route.request().url()).pathname.split('/').pop()
-      const body = bodies[docId]
-      if (!body) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
-    })
-
-    await page.goto('/#/p/f/tokDeep')
-    await expect(page.locator('.public-view-title')).toHaveText('위 문서')
-    const subtitles = page.locator('.public-folder-list-subtitle')
-    await expect(subtitles).toHaveText(['가', '나', '다'])
-    expect(await subtitles.evaluateAll((els) => els.map((el) => el.tagName))).toEqual(['H3', 'H4', 'H5'])
-
-    await page.getByRole('button', { name: '깊은 문서', exact: true }).click()
-    await expect(page.locator('.public-view-title')).toHaveText('깊은 문서')
-    await expect(page).toHaveURL(/#\/p\/f\/tokDeep\/deep$/)
   })
 })

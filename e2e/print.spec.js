@@ -62,32 +62,6 @@ async function triggerPrint(page) {
   await page.getByRole('menuitem', { name: 'PDF (A4 인쇄)', exact: true }).click()
 }
 
-// 메뉴 항목 전체 순서를 못박는 단언은 e2e/export.spec.js 한 곳에만 둔다 — 여기서는 인쇄 항목이 제 라벨로 있는지만 본다 (항목이 늘 때마다(F-280) 두 곳을 고치지 않으려는 것)
-test.describe('F-279 A3 메뉴 항목', () => {
-  test('내보내기 메뉴에 PDF (A4 인쇄) 항목이 있다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    const items = await openExportMenu(page)
-    await expect(items.filter({ hasText: /^PDF \(A4 인쇄\)$/ })).toHaveCount(1)
-  })
-})
-
-test.describe('F-279 A4 키보드 순회', () => {
-  test('ArrowDown 을 항목 수만큼 누르면 첫 항목으로 순환한다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    const items = await openExportMenu(page)
-    const count = await items.count()
-    await expect(items.nth(0)).toBeFocused()
-    for (let i = 1; i < count; i += 1) {
-      await page.keyboard.press('ArrowDown')
-      await expect(items.nth(i)).toBeFocused()
-    }
-    await page.keyboard.press('ArrowDown')
-    await expect(items.nth(0)).toBeFocused()
-  })
-})
-
 async function deleteFirstDoc(page) {
   const row = page.locator('.tree-row').first()
   await row.hover()
@@ -96,159 +70,72 @@ async function deleteFirstDoc(page) {
   await page.getByRole('button', { name: '삭제', exact: true }).click()
 }
 
-test.describe('F-279 A5 비활성', () => {
-  test('문서가 없는 빈 상태에서는 내보내기 버튼이 비활성, 메뉴가 열리지 않는다', async ({ page }) => {
-    await openApp(page)
-    await deleteFirstDoc(page) // 첫 실행 안내 문서를 지워 빈 상태를 만든다 (F-278 A20 와 같은 방식)
-    const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
-    await expect(btn).toBeDisabled()
-    await btn.click({ force: true })
-    await expect(page.getByRole('menu')).toHaveCount(0)
-  })
+// F-279 A3 메뉴 항목·A4 키보드 순회는 e2e/export.spec.js 한 곳이 보고, A10 인쇄 미디어 배치는 시각 값이라 specs/human-checks.md 로 옮겼다
+test('F-279 A5·A11 빈 상태에서는 버튼 비활성·메뉴 안 열림, Ctrl+P 는 인쇄를 안 부르고 팔레트에 PDF 없음', async ({ page }) => {
+  await stubPrint(page)
+  await openApp(page)
+  await deleteFirstDoc(page) // 첫 실행 안내 문서를 지워 빈 상태를 만든다 (F-278 A20 와 같은 방식)
+  const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
+  await expect(btn).toBeDisabled()
+  await btn.click({ force: true })
+  await expect(page.getByRole('menu')).toHaveCount(0)
+
+  await page.keyboard.press('Control+p')
+  await page.waitForTimeout(300)
+
+  expect(await printCallCount(page)).toBe(0)
+  // 홈 화면에는 F-2054 이동·만들기·보기 명령이 보인다 — PDF (A4 인쇄) 만 없다
+  await expect(page.getByRole('option', { name: 'PDF (A4 인쇄)' })).toHaveCount(0)
 })
 
-test.describe('F-279 A6 인쇄 호출', () => {
-  test('window.print 가 1번 불리고 그 시점에 인쇄 영역에 제목·본문이 채워진다', async ({ page }) => {
-    await stubPrint(page)
-    await openApp(page)
-    await importMarkdown(page, { content: '## 소개\n\n본문\n' })
-    await fillTitle(page, '인쇄 문서')
+test('F-279 A6·A7·A8·A9·A11·F-293 A13 인쇄 호출·인쇄 중 상태·이미지·Mermaid·머리줄 없음·복원, Ctrl+P 는 팔레트로', async ({ page }) => {
+  await stubPrint(page)
+  await openApp(page)
+  await importMarkdown(page, { content: '## 소개\n\n본문\n\n```mermaid\ngraph TD; A-->B\n```\n\n```js\nalert(1)\n```\n' })
+  await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+  await pasteFiles(page, { files: [{ bytes: pngBytes(20, 20), name: 'a.png', mime: 'image/png' }] })
+  await expect(page.locator('.md-image-box')).toBeVisible()
+  await fillTitle(page, '인쇄 문서')
 
-    await triggerPrint(page)
+  const prevTitle = await page.title()
+  const prevTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
 
-    await expect.poll(() => printCallCount(page)).toBe(1)
-    await expect(page.locator('.print-root .markdown-body h2')).toHaveText('소개')
-    await expect(page.locator('.print-root .doc-title-view')).toHaveText('인쇄 문서')
-  })
-})
+  await triggerPrint(page)
 
-test.describe('F-279 A7 인쇄 중 상태', () => {
-  test('document.title·data-printing 이 바뀌고 data-theme 가 없다', async ({ page }) => {
-    await stubPrint(page)
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await fillTitle(page, '인쇄 문서')
+  // A6 — 1번 불리고 그 시점에 인쇄 영역이 채워진다
+  await expect.poll(() => printCallCount(page)).toBe(1)
+  await expect(page.locator('.print-root .markdown-body h2')).toHaveText('소개')
+  await expect(page.locator('.print-root .doc-title-view')).toHaveText('인쇄 문서')
 
-    await triggerPrint(page)
-    await expect.poll(() => printCallCount(page)).toBe(1)
+  // A7 — 인쇄 중 title·data-printing, data-theme 없음
+  const snapshot = await page.evaluate(() => window.printLog.snapshots[0])
+  expect(snapshot.title).toBe('인쇄 문서')
+  expect(snapshot.printing).toBe('1')
+  expect(snapshot.theme).toBeNull()
 
-    const snapshot = await page.evaluate(() => window.printLog.snapshots[0])
-    expect(snapshot.title).toBe('인쇄 문서')
-    expect(snapshot.printing).toBe('1')
-    expect(snapshot.theme).toBeNull()
-  })
-})
+  // A9 — 이미지 blob URL·mermaid svg
+  await expect(page.locator('.print-root .md-mermaid svg')).toHaveCount(1)
+  const src = await page.locator('.print-root img[data-attachment]').getAttribute('src')
+  expect(src).toMatch(/^blob:/)
 
-test.describe('F-279 A8 되돌리기', () => {
-  test('afterprint 뒤 title·data-theme·data-printing·print-root 가 원래대로', async ({ page }) => {
-    await stubPrint(page)
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await fillTitle(page, '인쇄 문서')
+  // F-293 A13 — 인쇄 영역에 머리줄·복사 버튼 없음
+  await expect(page.locator('.print-root .md-code-head')).toHaveCount(0)
+  await expect(page.locator('.print-root .code-copy-btn')).toHaveCount(0)
+  await expect(page.locator('.print-root pre')).not.toHaveCount(0)
 
-    const prevTitle = await page.title()
-    const prevTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+  // A8 — afterprint 뒤 원래대로
+  await page.evaluate(() => window.dispatchEvent(new Event('afterprint')))
+  await expect.poll(() => page.title()).toBe(prevTitle)
+  await expect.poll(() => page.evaluate(() => document.documentElement.getAttribute('data-theme'))).toBe(prevTheme)
+  await expect(page.locator('html')).not.toHaveAttribute('data-printing', '1')
+  await expect.poll(() => page.locator('.print-root').evaluate((el) => el.childElementCount)).toBe(0)
 
-    await triggerPrint(page)
-    await expect.poll(() => printCallCount(page)).toBe(1)
-
-    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')))
-
-    await expect.poll(() => page.title()).toBe(prevTitle)
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.getAttribute('data-theme')))
-      .toBe(prevTheme)
-    await expect(page.locator('html')).not.toHaveAttribute('data-printing', '1')
-    await expect
-      .poll(() => page.locator('.print-root').evaluate((el) => el.childElementCount))
-      .toBe(0)
-  })
-})
-
-test.describe('F-279 A9 이미지·Mermaid 준비', () => {
-  test('print 호출 시점에 이미지 blob URL 과 mermaid svg 가 채워져 있다', async ({ page }) => {
-    await stubPrint(page)
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n\n```mermaid\ngraph TD; A-->B\n```\n' })
-    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
-    await pasteFiles(page, { files: [{ bytes: pngBytes(20, 20), name: 'a.png', mime: 'image/png' }] })
-    await expect(page.locator('.md-image-box')).toBeVisible()
-
-    await triggerPrint(page)
-    await expect.poll(() => printCallCount(page)).toBe(1)
-
-    await expect(page.locator('.print-root .md-mermaid svg')).toHaveCount(1)
-    const src = await page.locator('.print-root img[data-attachment]').getAttribute('src')
-    expect(src).toMatch(/^blob:/)
-  })
-})
-
-test.describe('F-279 A10 인쇄 미디어 구조', () => {
-  test('emulateMedia print 면 app-body 가 숨고 print-root 가 화면 안으로, 되돌리면 반대', async ({ page }) => {
-    await stubPrint(page)
-    await openApp(page)
-    await importMarkdown(page, { content: '## 소개\n\n본문\n' })
-
-    await triggerPrint(page)
-    await expect.poll(() => printCallCount(page)).toBe(1)
-
-    await page.emulateMedia({ media: 'print' })
-    await expect(page.locator('.app-body')).toBeHidden()
-    const printBox = await page.locator('.print-root').boundingBox()
-    expect(printBox).not.toBeNull()
-    expect(printBox.x).toBeGreaterThanOrEqual(0)
-
-    await page.emulateMedia({ media: null })
-    await expect(page.locator('.app-body')).toBeVisible()
-    const offBox = await page.locator('.print-root').boundingBox()
-    expect(offBox.x).toBeLessThan(0)
-  })
-})
-
-test.describe('F-293 A13 인쇄 영역에 머리줄 없음', () => {
-  test('코드블록이 있어도 .print-root 안에 md-code-head·code-copy-btn 이 없다', async ({ page }) => {
-    await stubPrint(page)
-    await openApp(page)
-    await importMarkdown(page, { content: '```js\nalert(1)\n```\n' })
-
-    await triggerPrint(page)
-    await expect.poll(() => printCallCount(page)).toBe(1)
-
-    await expect(page.locator('.print-root .md-code-head')).toHaveCount(0)
-    await expect(page.locator('.print-root .code-copy-btn')).toHaveCount(0)
-    await expect(page.locator('.print-root pre')).not.toHaveCount(0)
-  })
-})
-
-test.describe('F-279 A11 Ctrl+P', () => {
-  test('Ctrl+P 는 인쇄 대신 명령 팔레트를 연다', async ({ page }) => {
-    await stubPrint(page)
-    await openApp(page)
-    await importMarkdown(page, { content: '## 소개\n\n본문\n' })
-    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
-
-    await page.keyboard.press('Control+p')
-
-    expect(await printCallCount(page)).toBe(0)
-    const palette = page.locator('dialog[open] .command-palette')
-    await expect(palette).toBeVisible()
-
-    await page.getByRole('option', { name: 'PDF (A4 인쇄)' }).click()
-
-    await expect.poll(() => printCallCount(page)).toBe(1)
-    await expect(page.locator('.print-root .markdown-body h2')).toHaveText('소개')
-  })
-
-  test('빈 상태에서는 인쇄를 부르지 않고 팔레트에 PDF 명령이 없다', async ({ page }) => {
-    await stubPrint(page)
-    await openApp(page)
-    await deleteFirstDoc(page) // 첫 실행 안내 문서를 지워 빈 상태를 만든다
-
-    await page.keyboard.press('Control+p')
-    await page.waitForTimeout(300)
-
-    expect(await printCallCount(page)).toBe(0)
-    // 홈 화면에는 F-2054 이동·만들기·보기 명령이 보인다 — PDF (A4 인쇄) 만 없다
-    await expect(page.getByRole('option', { name: 'PDF (A4 인쇄)' })).toHaveCount(0)
-  })
+  // A11 — Ctrl+P 는 인쇄 대신 명령 팔레트를 연다
+  await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+  await page.keyboard.press('Control+p')
+  expect(await printCallCount(page)).toBe(1)
+  await expect(page.locator('dialog[open] .command-palette')).toBeVisible()
+  await page.getByRole('option', { name: 'PDF (A4 인쇄)' }).click()
+  await expect.poll(() => printCallCount(page)).toBe(2)
+  await expect(page.locator('.print-root .markdown-body h2')).toHaveText('소개')
 })

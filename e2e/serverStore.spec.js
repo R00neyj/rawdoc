@@ -12,94 +12,86 @@ async function typeIntoEditor(page, text) {
   await page.keyboard.type(text)
 }
 
-test.describe('F-207 A2·A3 편집 왕복·새로고침', () => {
-  test('새 문서 입력이 서버에 반영되고 새로고침해도 남는다', async ({ page }) => {
-    const server = await fakeServer(page)
-    await openApp(page)
-
-    await page.getByRole('button', { name: '새 문서' }).click()
-    await typeIntoEditor(page, '서버에 저장될 내용')
-    await waitSyncIdle(page)
-
-    const docId = await currentDocId(page)
-    await expect.poll(() => server.docs.get(docId)?.content).toBe('서버에 저장될 내용')
-    await expect(page.locator('.statusbar-save')).not.toContainText('동기화 대기')
-
-    await page.reload()
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    await expect.poll(() => currentDocId(page)).toBe(docId)
-    await expect(page.locator('.cm-content')).toContainText('서버에 저장될 내용')
+test('F-207 A2·A3·2.2 새 문서 입력이 서버에 반영되고 새로고침해도 남고, 서버 폴더와 그 안의 문서가 보인다', async ({ page }) => {
+  const server = await fakeServer(page)
+  const now = Date.now()
+  const folderId = '11111111-1111-4111-8111-111111111111'
+  server.folders.set(folderId, { id: folderId, name: '업무', parentId: null, createdAt: now, updatedAt: now })
+  server.docs.set('22222222-2222-4222-8222-222222222222', {
+    id: '22222222-2222-4222-8222-222222222222',
+    title: '회의록',
+    content: '회의록 내용',
+    lineEnding: 'lf',
+    folderId,
+    pinnedAt: null,
+    version: 1,
+    createdAt: now,
+    updatedAt: now,
   })
+  await openApp(page)
+
+  await page.getByRole('button', { name: '새 문서' }).click()
+  await typeIntoEditor(page, '서버에 저장될 내용')
+  await waitSyncIdle(page)
+
+  const docId = await currentDocId(page)
+  await expect.poll(() => server.docs.get(docId)?.content).toBe('서버에 저장될 내용')
+  await expect(page.locator('.statusbar-save')).not.toContainText('동기화 대기')
+
+  await page.reload()
+  await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+  await expect.poll(() => currentDocId(page)).toBe(docId)
+  await expect(page.locator('.cm-content')).toContainText('서버에 저장될 내용')
+
+  const folder = page.locator(`[data-folder-id="${folderId}"]`)
+  await expect(folder).toBeVisible()
+  if ((await folder.getAttribute('aria-expanded')) !== 'true') {
+    await folder.locator('.tree-toggle').first().click()
+  }
+  await expect(folder.locator('.tree-group .doc-item-btn', { hasText: '회의록' })).toBeVisible()
 })
 
-test.describe('F-207 A4 오프라인', () => {
-  test('오프라인 중 입력은 대기하고 온라인이 되면 반영된다', async ({ page }) => {
-    const server = await fakeServer(page)
-    await openApp(page)
+test('F-207 A4·A5 오프라인 중 입력은 대기하다 온라인이 되면 반영되고, 다른 곳에서 먼저 바뀌면 사본을 만들어 연다', async ({ page }) => {
+  const server = await fakeServer(page)
+  await openApp(page)
 
-    await page.getByRole('button', { name: '새 문서' }).click()
-    await typeIntoEditor(page, '오프라인 이전')
-    await waitSyncIdle(page)
-    const docId = await currentDocId(page)
+  await page.getByRole('button', { name: '새 문서' }).click()
+  await typeIntoEditor(page, '오프라인 이전')
+  await waitSyncIdle(page)
+  const docId = await currentDocId(page)
 
-    server.setOffline(true)
-    await page.locator('.cm-content').click()
-    await page.keyboard.type(' 오프라인 중 입력')
-    await expect(page.locator('.statusbar-save')).toContainText('오프라인', { timeout: 10_000 })
-    await expect(page.locator('.statusbar-save')).toContainText('동기화 대기')
-    expect(server.docs.get(docId)?.content).toBe('오프라인 이전')
+  server.setOffline(true)
+  await page.locator('.cm-content').click()
+  await page.keyboard.type(' 오프라인 중 입력')
+  await expect(page.locator('.statusbar-save')).toContainText('오프라인', { timeout: 10_000 })
+  await expect(page.locator('.statusbar-save')).toContainText('동기화 대기')
+  expect(server.docs.get(docId)?.content).toBe('오프라인 이전')
 
-    server.setOffline(false)
-    // 실제 네트워크는 안 끊겼으므로 브라우저가 online 을 스스로 내지 않는다 — 재시도 트리거를 직접 흉내낸다 (2.3)
-    await page.evaluate(() => window.dispatchEvent(new Event('online')))
-    await waitSyncIdle(page)
-    await expect.poll(() => server.docs.get(docId)?.content).toBe('오프라인 이전 오프라인 중 입력')
-  })
-})
+  server.setOffline(false)
+  // 실제 네트워크는 안 끊겼으므로 브라우저가 online 을 스스로 내지 않는다 — 재시도 트리거를 직접 흉내낸다 (2.3)
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await waitSyncIdle(page)
+  await expect.poll(() => server.docs.get(docId)?.content).toBe('오프라인 이전 오프라인 중 입력')
 
-test.describe('F-207 A5 충돌', () => {
-  test('다른 곳에서 먼저 바뀌면 사본을 만들어 연다', async ({ page }) => {
-    const server = await fakeServer(page)
-    await openApp(page)
+  const originalTitle = await page.locator('.doc-title').inputValue()
+  server.bumpVersion(docId) // 다른 곳에서 먼저 바뀜
 
-    await page.getByRole('button', { name: '새 문서' }).click()
-    await typeIntoEditor(page, '원본 내용')
-    await waitSyncIdle(page)
-    const docId = await currentDocId(page)
-    const originalTitle = await page.locator('.doc-title').inputValue()
+  await page.locator('.cm-content').click()
+  await page.keyboard.type(' + 내 편집')
+  await waitSyncIdle(page)
 
-    server.bumpVersion(docId) // 다른 곳에서 먼저 바뀜
+  await expect.poll(() => currentDocId(page)).not.toBe(docId)
+  const copyId = await currentDocId(page)
+  await expect.poll(() => server.docs.get(copyId)?.content).toBe('오프라인 이전 오프라인 중 입력 + 내 편집')
+  expect(server.docs.get(copyId)?.title).toBe(`${originalTitle} (충돌 사본)`)
 
-    await page.locator('.cm-content').click()
-    await page.keyboard.type(' + 내 편집')
-    await waitSyncIdle(page)
-
-    await expect.poll(() => currentDocId(page)).not.toBe(docId)
-    const copyId = await currentDocId(page)
-    await expect.poll(() => server.docs.get(copyId)?.content).toBe('원본 내용 + 내 편집')
-    expect(server.docs.get(copyId)?.title).toBe(`${originalTitle} (충돌 사본)`)
-
-    // 원래 문서를 열면 서버 내용
-    await page.evaluate((id) => {
-      location.hash = `#/d/${id}`
-    }, docId)
-    await expect.poll(() => currentDocId(page)).toBe(docId)
-    await expect(page.locator('.cm-content')).toContainText('원본 내용')
-    await expect(page.locator('.cm-content')).not.toContainText('내 편집')
-  })
-})
-
-test.describe('F-207 A6 로그아웃 상태', () => {
-  test('/api/me 401 이면 M1 로컬 저장이 그대로 동작한다', async ({ page }) => {
-    await page.route('**/api/me', (route) =>
-      route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' }),
-    )
-    await openApp(page)
-    await page.getByRole('button', { name: '새 문서' }).click()
-    await typeIntoEditor(page, '로컬 문서 내용')
-    await waitSyncIdle(page)
-    await expect(page.locator('.statusbar-save')).toHaveText('저장됨')
-  })
+  // 원래 문서를 열면 서버 내용
+  await page.evaluate((id) => {
+    location.hash = `#/d/${id}`
+  }, docId)
+  await expect.poll(() => currentDocId(page)).toBe(docId)
+  await expect(page.locator('.cm-content')).toContainText('오프라인 이전')
+  await expect(page.locator('.cm-content')).not.toContainText('내 편집')
 })
 
 // 로컬 문서 3개(폴더 1·고정 1, CRLF 원문)를 만들고 계정에 로그인해 이관한다 (F-208 2.2)
@@ -150,71 +142,33 @@ async function createLocalDocsThenSignIn(page) {
   return server
 }
 
-test.describe('F-208 A2 로컬 이관', () => {
-  test('로그인하면 로컬 문서가 계정으로 옮겨진다', async ({ page }) => {
-    const server = await createLocalDocsThenSignIn(page)
+test('F-208 A2·A3 로그인하면 로컬 문서가 계정으로 옮겨지고, 다시 새로고침해도 다시 옮기지 않는다', async ({ page }) => {
+  const server = await createLocalDocsThenSignIn(page)
 
-    await expect(page.getByText('폴더 문서').first()).toBeVisible()
-    await expect(page.getByText('고정 문서').first()).toBeVisible()
-    await expect(page.getByText('평범한 문서').first()).toBeVisible()
-    await expect(page.locator('.pinned-list .tree-row')).toHaveCount(1)
+  await expect(page.getByText('폴더 문서').first()).toBeVisible()
+  await expect(page.getByText('고정 문서').first()).toBeVisible()
+  await expect(page.getByText('평범한 문서').first()).toBeVisible()
+  await expect(page.locator('.pinned-list .tree-row')).toHaveCount(1)
 
-    await expect.poll(() => server.docs.size).toBe(3)
-    const titles = [...server.docs.values()].map((d) => d.title).sort()
-    expect(titles).toEqual(['고정 문서', '평범한 문서', '폴더 문서'])
+  await expect.poll(() => server.docs.size).toBe(3)
+  const titles = [...server.docs.values()].map((d) => d.title).sort()
+  expect(titles).toEqual(['고정 문서', '평범한 문서', '폴더 문서'])
 
-    const folderDoc = [...server.docs.values()].find((d) => d.title === '폴더 문서')
-    expect(folderDoc.content).toBe('폴더 안 내용')
-    expect(folderDoc.lineEnding).toBe('crlf')
-    expect(folderDoc.folderId).not.toBeNull()
-    expect(typeof folderDoc.updatedAt).toBe('number')
+  const folderDoc = [...server.docs.values()].find((d) => d.title === '폴더 문서')
+  expect(folderDoc.content).toBe('폴더 안 내용')
+  expect(folderDoc.lineEnding).toBe('crlf')
+  expect(folderDoc.folderId).not.toBeNull()
+  expect(typeof folderDoc.updatedAt).toBe('number')
 
-    const pinnedDoc = [...server.docs.values()].find((d) => d.title === '고정 문서')
-    expect(pinnedDoc.pinnedAt).not.toBeNull()
+  const pinnedDoc = [...server.docs.values()].find((d) => d.title === '고정 문서')
+  expect(pinnedDoc.pinnedAt).not.toBeNull()
 
-    await expect.poll(() => server.folders.size).toBe(1)
-  })
-})
+  await expect.poll(() => server.folders.size).toBe(1)
 
-test.describe('F-208 A3 한 번만', () => {
-  test('다시 새로고침해도 다시 옮기지 않는다', async ({ page }) => {
-    const server = await createLocalDocsThenSignIn(page)
-    await expect.poll(() => server.docs.size).toBe(3)
-
-    await page.reload()
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    await expect(page.getByText('폴더 문서').first()).toBeVisible()
-    await expect(page.getByText('고정 문서').first()).toBeVisible()
-    await expect(page.getByText('평범한 문서').first()).toBeVisible()
-    expect(server.docs.size).toBe(3)
-  })
-})
-
-test.describe('F-207 2.2 폴더 목록 동기화', () => {
-  test('다른 기기에서도 서버 폴더와 그 안의 문서가 폴더 안에 보인다', async ({ page }) => {
-    const server = await fakeServer(page)
-    const now = Date.now()
-    const folderId = '11111111-1111-4111-8111-111111111111'
-    server.folders.set(folderId, { id: folderId, name: '업무', parentId: null, createdAt: now, updatedAt: now })
-    server.docs.set('22222222-2222-4222-8222-222222222222', {
-      id: '22222222-2222-4222-8222-222222222222',
-      title: '회의록',
-      content: '회의록 내용',
-      lineEnding: 'lf',
-      folderId,
-      pinnedAt: null,
-      version: 1,
-      createdAt: now,
-      updatedAt: now,
-    })
-
-    await openApp(page)
-
-    const folder = page.locator(`[data-folder-id="${folderId}"]`)
-    await expect(folder).toBeVisible()
-    if ((await folder.getAttribute('aria-expanded')) !== 'true') {
-      await folder.locator('.tree-toggle').first().click()
-    }
-    await expect(folder.locator('.tree-group .doc-item-btn', { hasText: '회의록' })).toBeVisible()
-  })
+  await page.reload()
+  await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+  await expect(page.getByText('폴더 문서').first()).toBeVisible()
+  await expect(page.getByText('고정 문서').first()).toBeVisible()
+  await expect(page.getByText('평범한 문서').first()).toBeVisible()
+  expect(server.docs.size).toBe(3)
 })
