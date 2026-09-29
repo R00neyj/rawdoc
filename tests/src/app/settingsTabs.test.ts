@@ -66,3 +66,26 @@ describe('visibleSettingsTabs — C1 (F-2038.md 9.2)', () => {
     expect(visibleSettingsTabs({ screen: true, editor: true, data: true, e2ee: true })).toEqual(['screen', 'editor', 'data', 'e2ee'])
   })
 })
+
+describe('visibleSettingsTabs — F-2096 A1', () => {
+  test('css 는 편집기 다음·데이터 앞', () => {
+    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, css: true, e2ee: true, account: true })).toEqual([
+      'screen',
+      'editor',
+      'css',
+      'data',
+      'e2ee',
+      'account',
+    ])
+  })
+
+  test('css 없음 → 기존 그대로', () => {
+    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, e2ee: true, account: true })).toEqual([
+      'screen',
+      'editor',
+      'data',
+      'e2ee',
+      'account',
+    ])
+  })
+})

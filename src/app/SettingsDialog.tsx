@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import Dialog from './Dialog'
 import PushSettings from './PushSettings'
+import UserCssTab from './UserCssTab'
 import type { PushSettingsView } from './pushClient'
 import { WELCOME_PATH } from '../lib/siteChrome'
 import { visibleSettingsTabs, nextTabIndex, type SettingsTabId } from './settingsTabs'
@@ -64,6 +65,7 @@ const WIKI_PREVIEW_OPTIONS = [
 const TAB_LABELS: Record<SettingsTabId, string> = {
   screen: '화면',
   editor: '편집기',
+  css: '사용자 CSS',
   data: '데이터',
   e2ee: '금고',
   account: '계정',
@@ -335,6 +337,8 @@ type SettingsDialogProps = {
   onImportFolder?: () => void
   // `금고` 탭 — 3.1 범위가 있을 때만 준다. 안 주면 탭이 안 보인다 (F-404.md 7.5)
   e2ee?: SettingsE2ee
+  // `사용자 CSS` 탭 — 로그아웃 로컬 앱만 준다 (F-2096.md 2장 1)
+  userCss?: boolean
   // `계정` 탭 — 안 주면 탭이 안 보인다 (F-2038.md 6.1)
   account?: SettingsAccount
   // `계정` 탭 `알림` 묶음 — account 와 함께 있을 때만 그린다 (F-2110 6.1)
@@ -373,6 +377,7 @@ export default function SettingsDialog({
   onImport,
   onImportFolder,
   e2ee,
+  userCss,
   account,
   push,
   onClose,
@@ -391,6 +396,7 @@ export default function SettingsDialog({
     screen: true,
     editor: hasToolbar || showEditorSettings,
     data: onExportAll !== undefined,
+    css: userCss === true,
     e2ee: e2ee !== undefined,
     account: account !== undefined,
   })
@@ -529,6 +535,7 @@ export default function SettingsDialog({
         </>
       )
     }
+    if (id === 'css') return <UserCssTab />
     if (id === 'data') {
       // 로컬 앱·로그인 계정 전용, PublicView 는 안 준다(F-281.md 3.6, F-282.md 3.1) — 내보내기·가져오기 두 묶음, 버튼마다 한 줄 설명(tweak 2026-09-26)
       // .dialog-field 는 쓰지 않는다 — 설정 라벨 세는 선택자에 걸린다, 두 묶음이 한 격자를 같이 써 버튼·설명 칸이 묶음 넘어 맞춰진다

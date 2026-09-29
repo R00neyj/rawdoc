@@ -8,6 +8,7 @@ import Dialog from './Dialog'
 import MoveDocDialog, { type MoveDocTarget } from './MoveDocDialog'
 import InviteDialog, { type InviteTarget } from './InviteDialog'
 import SettingsDialog from './SettingsDialog'
+import { userCssAccountId } from './useUserCss'
 import AccountDeleteDialog from './AccountDeleteDialog'
 import SearchDialog from './SearchDialog'
 import CommandPalette from './CommandPalette'
@@ -202,6 +203,7 @@ export default function AppDialogs({
               }
             : undefined
         }
+        userCss={userCssAccountId(account) === null}
         account={settingsAccount}
         push={settingsPush}
         onClose={closeSettings}

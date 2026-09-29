@@ -23,6 +23,11 @@ export type UseUserCssOptions = {
   beforeReload: () => Promise<void>
 }
 
+// usePushDevice 의 userId 와 같은 식 — 앱 초기값 offline 이라 부팅 직후 부팅 스크립트와 같은 답 (F-2095 2장 4)
+export function userCssAccountId(account: AccountState): string | null {
+  return account.state === 'in' ? account.id : account.state === 'offline' ? (storedAccount()?.id ?? null) : null
+}
+
 function refreshUserCss(safe: boolean, isPublic: boolean, accountId: string | null): void {
   try {
     const sheets = userCssSheets()
@@ -45,8 +50,7 @@ function refreshUserCss(safe: boolean, isPublic: boolean, accountId: string | nu
 
 export default function useUserCss({ isPublic, account, showNotice, beforeReload }: UseUserCssOptions): void {
   const [safe] = useState(() => hasSafeParam(location.search))
-  // usePushDevice 의 userId 와 같은 식 — 앱 초기값 offline 이라 부팅 직후 부팅 스크립트와 같은 답 (2장 4)
-  const accountId = account.state === 'in' ? account.id : account.state === 'offline' ? (storedAccount()?.id ?? null) : null
+  const accountId = userCssAccountId(account)
   const refreshRef = useRef<() => void>(() => {})
 
   // 공개 보기 커밋이 칠해지기 전에 뺀다 (4장)

@@ -280,3 +280,70 @@ test('F-2095 A16 다른 탭에서 바꾼 사용자 CSS 는 한글 조합이 끝�
   await writeZ(false)
   await expect.poll(async () => (await userCssState(pageB)).z).toBe('')
 })
+
+async function openCssTab(page) {
+  await page.getByRole('button', { name: '설정', exact: true }).click()
+  const dialog = page.locator('dialog[open]').filter({ has: page.locator('#settings-title') })
+  await dialog.getByRole('tab', { name: '사용자 CSS' }).click()
+  return dialog
+}
+
+const probeValue = (page, name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name)
+
+test('F-2096 A10 설정에서 만든 스니펫이 바로 적용되고 다시 읽어도 남으며 끄고 지우면 빠진다', async ({ page }) => {
+  await openApp(page)
+  let dialog = await openCssTab(page)
+  await expect(dialog.getByText('스니펫이 없습니다.')).toBeVisible()
+  await dialog.getByRole('button', { name: '새 스니펫' }).click()
+
+  const edit = page.locator('dialog[aria-labelledby="user-css-edit-title"]')
+  const content = edit.locator('.cm-content')
+  await expect(content).toBeFocused()
+  await page.keyboard.insertText(':root:root { --probe-t: 1 }')
+  await expect.poll(() => probeValue(page, '--probe-t')).toBe('1')
+  const names = await page.evaluate(() => JSON.parse(localStorage.getItem('md.userCss')).snippets.map((s) => s.name))
+  expect(names).toEqual(['스니펫 1'])
+
+  await page.keyboard.press('Escape')
+  await expect(edit).toHaveCount(0)
+  await expect(dialog.locator('.user-css-row').getByRole('button', { name: '편집' })).toBeFocused()
+
+  await page.reload()
+  await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+  await expect.poll(() => probeValue(page, '--probe-t')).toBe('1')
+
+  dialog = await openCssTab(page)
+  await dialog.getByRole('checkbox', { name: '스니펫 1' }).uncheck()
+  await expect.poll(() => probeValue(page, '--probe-t')).toBe('')
+  await page.reload()
+  await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+  expect(await probeValue(page, '--probe-t')).toBe('')
+
+  dialog = await openCssTab(page)
+  await dialog.locator('.user-css-row').getByRole('button', { name: '삭제' }).click()
+  await page.locator('dialog[aria-labelledby="user-css-delete-title"][open]').getByRole('button', { name: '삭제' }).click()
+  await expect(dialog.getByText('스니펫이 없습니다.')).toBeVisible()
+  await expect(dialog.getByRole('button', { name: '새 스니펫' })).toBeFocused()
+})
+
+test('F-2096 A11 CSS 편집 중 한글 조합이 끝나기 전에는 저장하지 않고 끝나면 적용한다', async ({ page }) => {
+  const seed = userCssValue([['조합', ':root:root { --probe-k: 1 }', true]])
+  await setPrefBeforeLoad(page, 'md.userCss', seed)
+  await openApp(page)
+  const dialog = await openCssTab(page)
+  await dialog.locator('.user-css-row').getByRole('button', { name: '편집' }).click()
+  const edit = page.locator('dialog[aria-labelledby="user-css-edit-title"]')
+  const content = edit.locator('.cm-content')
+  await expect(content).toBeFocused()
+  await page.keyboard.press('Control+End')
+  await page.keyboard.press('ArrowLeft')
+  await page.keyboard.press('ArrowLeft')
+
+  const cdp = await fakeImeCompose(page, '가')
+  await page.waitForTimeout(900)
+  expect(await probeValue(page, '--probe-k')).toBe('1')
+  expect(await page.evaluate(() => localStorage.getItem('md.userCss'))).toBe(seed)
+
+  await fakeImeCommit(cdp, '가')
+  await expect.poll(() => probeValue(page, '--probe-k')).toBe('1가')
+})
