@@ -5174,7 +5174,8 @@ body.sidebar-resizing {
 
   .app-shell:has(.sidebar-toggle[aria-expanded='true']) .phone-nav,
   .app-shell:has(.content-area[data-comment-sheet-open]) .phone-nav,
-  .app-shell:has(.shortcut-panel) .phone-nav {
+  .app-shell:has(.shortcut-panel) .phone-nav,
+  .app-shell:has(.outline-panel[data-state='open']) .phone-nav {
     opacity: 0;
     visibility: hidden;
   }
