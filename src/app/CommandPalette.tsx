@@ -1,7 +1,7 @@
 // 명령 팔레트 UI D-7 — 두 단계(1단계 구역 목록 → 2단계 템플릿), 키보드 (specs/features/F-2022.md 8장, F-2053.md 5·8장)
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type RefObject } from 'react'
 import Dialog from './Dialog'
-import { IconSearch, IconPin, IconUnpin } from './icons'
+import { IconArrowBack, IconSearch, IconPin, IconUnpin } from './icons'
 import {
   visibleCommands,
   filterPaletteItems,
@@ -234,10 +234,15 @@ export default function CommandPalette({ open, context, onClose, selectQueryRef 
     }
     if (e.key === 'Backspace' && query === '' && stage.kind === 'pick') {
       e.preventDefault()
-      setPendingSelectId(stage.command.id)
-      setStage({ kind: 'commands' })
-      setQuery('')
+      backToCommands()
     }
+  }
+
+  function backToCommands() {
+    if (stage.kind !== 'pick') return
+    setPendingSelectId(stage.command.id)
+    setStage({ kind: 'commands' })
+    setQuery('')
   }
 
   function handlePinMouseDown(e: MouseEvent<HTMLButtonElement>) {
@@ -349,7 +354,15 @@ export default function CommandPalette({ open, context, onClose, selectQueryRef 
   return (
     <Dialog open={open} onClose={handleDialogClose} titleId="command-palette-title" size="wide" initialFocusRef={inputRef}>
       <div className="command-palette">
-        <h2 id="command-palette-title">{stageTitle}</h2>
+        <div className="command-palette-head">
+          {/* 휴대폰 자판은 빈 입력칸의 Backspace 를 안 보내기도 한다 — 2단계에서 되돌아갈 버튼 */}
+          {stage.kind === 'pick' && (
+            <button type="button" className="icon-btn command-palette-back" aria-label="뒤로" onMouseDown={handlePinMouseDown} onClick={backToCommands}>
+              <IconArrowBack size={18} />
+            </button>
+          )}
+          <h2 id="command-palette-title">{stageTitle}</h2>
+        </div>
         <div className="search-input-row">
           <IconSearch size={18} />
           <input

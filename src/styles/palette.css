@@ -6,6 +6,22 @@
   margin-bottom: auto;
 }
 
+.command-palette-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.command-palette-head h2 {
+  margin: 0;
+}
+
+/* 위아래 음수 여백 — 단계가 바뀌어도 머리 높이·입력칸 위치가 그대로 */
+.command-palette-back {
+  margin: -8px 0 -8px -6px;
+}
+
 .command-palette-status {
   padding: 24px 4px;
   text-align: center;
