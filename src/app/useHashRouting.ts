@@ -74,6 +74,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
       if (nav.kind === 'share') {
         ;(async () => {
           await beforeLeaveDoc()
+          if (location.hash !== hashAtEntry) return // await 중 주소가 또 바뀌었으면 뒤 핸들러에 맡긴다
           setSharesOpen(false) // 공유 보기를 닫았을 때 밑에 공유 관리·도움말이 드러나지 않게 (F-2059 D12)
           setHelpOpen(false)
           setMapRoute(null)
@@ -86,6 +87,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
       if (nav.kind === 'shares') {
         ;(async () => {
           await beforeLeaveDoc()
+          if (location.hash !== hashAtEntry) return // await 중 주소가 또 바뀌었으면 뒤 핸들러에 맡긴다
           leave() // 도움말을 켜 두면 뒤로 가기의 #/help 가 무시된다 (F-2059 D12)
           setCurrentDocId(null)
           setSharesOpen(true)
@@ -97,6 +99,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
       if (nav.kind === 'help') {
         ;(async () => {
           await beforeLeaveDoc()
+          if (location.hash !== hashAtEntry) return // await 중 주소가 또 바뀌었으면 뒤 핸들러에 맡긴다
           leave()
           setCurrentDocId(null)
           setHelpOpen(true)
