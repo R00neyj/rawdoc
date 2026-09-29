@@ -37,7 +37,12 @@ import {
 import type { CommentRow, DocCommentDbRow, NotificationDraft } from './commentRows'
 import { loadDocPeople } from './docPeople'
 import { loadVapid } from './pushServer'
-import { PUSH_BATCH_MS } from '../src/lib/pushPayload'
+import type { PushVapid } from './pushServer'
+import { createVapidAuth } from './webPush'
+import type { VapidAuth } from './webPush'
+import { PUSH_FOLLOWUP_MS, PUSH_RETRY_MS, presentEmails, runDocPush } from './pushRun'
+import type { DocPushResult, PresenceConn } from './pushRun'
+import { PUSH_BATCH_MS, PUSH_STALE_MS } from '../src/lib/pushPayload'
 import { fromEditorText, toEditorText } from '../src/lib/lineEnding'
 import type { LineEnding } from '../src/lib/lineEnding'
 import { isWriteBlocked, resolveDocAccess, roleAtLeast } from './access'
@@ -73,6 +78,8 @@ export interface RoomConnection {
 export type StatefulConnection = RoomConnection & { setState(update: (prev: unknown) => unknown): unknown }
 export const COMMENT_RATE_KEY = 'commentRate'
 export type CommentRateState = { start: number; count: number }
+// 연결 시각(ms)도 첨부에 — "열어 둠" 판정 (F-3006 5장)
+export const CONNECTED_AT_KEY = 'connectedAt'
 
 export interface DocRoomHost<C extends RoomConnection = RoomConnection> {
   docId: string
@@ -88,6 +95,10 @@ export interface DocRoomHost<C extends RoomConnection = RoomConnection> {
   exclusive<T>(fn: () => Promise<T>): Promise<T>
   // DO 알람을 at(ms) 에 건다. 이미 걸린 알람은 바뀐다 (F-2027 5.5)
   setAlarm(at: number): Promise<void>
+  // 걸린 알람 시각. 없으면 "없음"으로 본다 (F-3006 2.1)
+  getAlarm?(): Promise<number | null>
+  // 런타임 자동 응답(ping)의 마지막 시각. 없으면 null (F-3006 5장)
+  lastPing?(conn: C): number | null
 }
 
 // /v1 PUT 이 DO 에 넘기는 값 — 검사는 Worker 가 끝냈다 (F-308 5.1)
@@ -132,6 +143,9 @@ const BLOCKED_SQL = 'SELECT blocked_at FROM users WHERE id = ?'
 const ACCESS_ROW_SQL = 'SELECT id, owner_id, folder_id FROM docs WHERE id = ? AND e2ee_key IS NULL'
 const UPDATE_SQL = 'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND version = ?'
 const FULL_ROW_SQL = 'SELECT * FROM docs WHERE id = ? AND e2ee_key IS NULL'
+// 스냅숏 batch 끝 — 1시간 넘은 행을 빼야 새 댓글이 3분 묶음 없이 나가지 않는다 (F-3006 3장)
+const MIN_DUE_SQL = 'SELECT MIN(push_due_at) AS due FROM notifications WHERE doc_id = ?1 AND push_due_at > ?2'
+const PUSH_RETRY_KEY = 'push_retry'
 
 // 빈 Doc 의 encodeStateAsUpdate 길이
 const EMPTY_UPDATE_BYTES = 2
@@ -163,6 +177,14 @@ export function readConnState(state: unknown): RoomConnState | null {
   if (typeof s.userId !== 'string' || typeof s.email !== 'string') return null
   if (s.role !== 'owner' && s.role !== 'edit' && s.role !== 'view') return null
   return { userId: s.userId, email: s.email, role: s.role }
+}
+
+// 상태를 못 읽는 연결은 null. 역할은 보지 않는다 — view 도 "열어 둠" (F-3006 5장)
+export function readPresence(state: unknown, lastPing: number | null): PresenceConn | null {
+  const conn = readConnState(state)
+  if (!conn) return null
+  const at = (state as Record<string, unknown>)[CONNECTED_AT_KEY]
+  return { email: conn.email, connectedAt: typeof at === 'number' && Number.isFinite(at) ? at : null, lastPing }
 }
 
 // 닫힌 쪽으로 — 상태를 읽을 수 없는 연결도 읽기 전용이다 (F-503 2.3)
@@ -218,11 +240,15 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
   private flushAgain = false
   // 다음 한 번의 flush 가 느린 문을 건너뛴다 — writeText·알람 (F-2027 5.4·5.5)
   private bypassNext = false
+  // 다음 한 번의 flush 가 연결 점검을 건너뛴다 — 알람의 하위 요청 예산 (F-3006 2.2)
+  private skipCheckNext = false
   private ownerId: string | null = null
   private slowDay: string | null = null
   private blocked = false
   private lastBatchAt: number | null = null
   private alarmAt: number | null = null
+  // 새 인스턴스는 걸린 알람을 모른다 — 처음 걸 때 getAlarm 한 번 (F-3006 2.1)
+  private alarmKnown = false
   private retryCount = 0
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private loadFlushTimer: ReturnType<typeof setTimeout> | null = null
@@ -233,7 +259,8 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
   private anchorsDirty = false
   private fullAnchorsNext = false
   private people: { at: number; emails: Set<string> | null; owner: string | null } | null = null
-  private pushOn: boolean | null = null
+  // undefined = 아직 안 읽음. auth 가 출처별 JWT 캐시를 인스턴스 수명 동안 쥔다 (F-3006 2.3)
+  private push: { vapid: PushVapid; auth: VapidAuth } | null | undefined = undefined
 
   constructor(host: DocRoomHost<C>) {
     this.host = host
@@ -429,9 +456,10 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
   }
 
   // 합쳐지면 강제 표시는 뒤이은 한 번에 실린다 (F-2027 5.4)
-  private runFlush(fromRetry: boolean, bypassSlow = false, fullAnchors = false): Promise<void> {
+  private runFlush(fromRetry: boolean, bypassSlow = false, fullAnchors = false, skipCheck = false): Promise<void> {
     if (bypassSlow) this.bypassNext = true
     if (fullAnchors) this.fullAnchorsNext = true
+    if (skipCheck) this.skipCheckNext = true
     if (this.flushing) {
       this.flushAgain = true
       return this.flushing
@@ -445,7 +473,9 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
           this.bypassNext = false
           const full = this.fullAnchorsNext
           this.fullAnchorsNext = false
-          await this.flushOnce(retry, bypass, full)
+          const skipCheck = this.skipCheckNext
+          this.skipCheckNext = false
+          await this.flushOnce(retry, bypass, full, skipCheck)
           retry = false
         } while (this.flushAgain)
       } finally {
@@ -460,11 +490,72 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     return this.runFlush(false, false, true)
   }
 
-  // DO 알람 (F-2027 5.5) — 60초 검사만 건너뛴 flush 하나. 댓글 앵커 전체 다시 적기 한 번 (F-502 4.5)
+  // DO 알람 — 느린 문·연결 점검을 건너뛴 flush, 그다음 댓글 푸시 (F-2027 5.5, F-502 4.5, F-3006 2.2)
   async alarm(): Promise<void> {
     this.alarmAt = null
+    this.alarmKnown = true
     if (this.gone || !this.loaded) return
-    await this.runFlush(false, true, true)
+    await this.runFlush(false, true, true, true)
+    if (this.gone) return
+    await this.pushRun()
+  }
+
+  // 던지지 않는다 — 알람 처리기가 던지면 런타임이 다시 불러 10분 한 번 규칙이 깨진다 (F-3006 2.2 4번)
+  private async pushRun(): Promise<void> {
+    let result: DocPushResult
+    try {
+      const push = await this.pushKeys()
+      if (!push) return
+      const now = Date.now()
+      const present = presentEmails(this.presence(), now)
+      result = await runDocPush({ db: this.host.env.DB, docId: this.host.docId, now, auth: push.auth, present })
+    } catch (err) {
+      console.warn(`docRoom: push run threw (${this.host.docId})`, err)
+      result = { type: 'failed' }
+    }
+    try {
+      await this.afterPush(result)
+    } catch (err) {
+      console.warn(`docRoom: push follow-up failed (${this.host.docId})`, err)
+    }
+  }
+
+  // 재시도 표지는 DO SQLite — 10분 사이 빈 방은 쫓겨난다 (F-3006 6장)
+  private async afterPush(result: DocPushResult) {
+    const mark = this.store.getMeta(PUSH_RETRY_KEY)
+    const marked = mark !== null && mark !== '0'
+    const now = Date.now()
+    if (result.type === 'failed') {
+      if (marked) {
+        this.store.setMeta(PUSH_RETRY_KEY, '0')
+        console.warn(`docRoom: push gave up after retry (${this.host.docId})`)
+        return
+      }
+      this.store.setMeta(PUSH_RETRY_KEY, String(now))
+      await this.scheduleAlarm(now + PUSH_RETRY_MS)
+      return
+    }
+    if (marked) this.store.setMeta(PUSH_RETRY_KEY, '0')
+    if (result.followUp) await this.scheduleAlarm(now + PUSH_FOLLOWUP_MS)
+    else if (result.next !== null) await this.scheduleAlarm(result.next)
+  }
+
+  private presence(): PresenceConn[] {
+    const out: PresenceConn[] = []
+    for (const conn of this.host.connections()) {
+      const p = readPresence(conn.state, this.pingOf(conn))
+      if (p) out.push(p)
+    }
+    return out
+  }
+
+  // 런타임이 시각을 못 주면 연결 시각만으로 판정한다
+  private pingOf(conn: C): number | null {
+    try {
+      return this.host.lastPing?.(conn) ?? null
+    } catch {
+      return null
+    }
   }
 
   private persistPending() {
@@ -480,7 +571,7 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     }
   }
 
-  private async flushOnce(fromRetry: boolean, bypassSlow: boolean, fullAnchors: boolean) {
+  private async flushOnce(fromRetry: boolean, bypassSlow: boolean, fullAnchors: boolean, skipCheck: boolean) {
     if (!this.loaded || this.gone) return
     if (this.loadFlushTimer) {
       clearTimeout(this.loadFlushTimer)
@@ -508,6 +599,7 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     if (result === 'gone') return
     if (result === 'retry') this.scheduleRetry()
 
+    if (skipCheck) return
     if (this.lastRevalidate === null || Date.now() - this.lastRevalidate >= REVALIDATE_INTERVAL_MS) {
       await this.revalidateConnections()
     }
@@ -539,15 +631,29 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     return false
   }
 
-  // 같은 창 안에서 setAlarm 을 되풀이하지 않는다
+  // 이른 쪽 — 걸린 미래 알람이 at 보다 늦지 않으면 건너뛴다. 느린 저장과 댓글 푸시가 나눠 쓴다 (F-3006 2.1)
   private async scheduleAlarm(at: number) {
-    if (this.alarmAt !== null && this.alarmAt > Date.now()) return
+    if (!this.alarmKnown) {
+      this.alarmKnown = true
+      this.alarmAt = await this.readAlarm()
+    }
+    if (this.alarmAt !== null && this.alarmAt > Date.now() && this.alarmAt <= at) return
     this.alarmAt = at
     try {
       await this.host.setAlarm(at)
     } catch (err) {
       console.warn(`docRoom: setAlarm failed (${this.host.docId})`, err)
       this.alarmAt = null
+      this.alarmKnown = false
+    }
+  }
+
+  private async readAlarm(): Promise<number | null> {
+    try {
+      return (await this.host.getAlarm?.()) ?? null
+    } catch (err) {
+      console.warn(`docRoom: getAlarm failed (${this.host.docId})`, err)
+      return null
     }
   }
 
@@ -611,9 +717,11 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
       const bundle = plan
         ? commentBundleStatements(db, { docId: this.host.docId, ownerId: this.ownerId!, ...plan, docTitle: title, now })
         : []
+      const wantsDue = !!plan && plan.drafts.length > 0 && plan.pushDueAt !== null
+      const tail = wantsDue ? [db.prepare(MIN_DUE_SQL).bind(this.host.docId, now - PUSH_STALE_MS)] : []
       let results: D1Result<UsageRow>[]
       try {
-        results = await db.batch<UsageRow>([...head, ...bundle])
+        results = await db.batch<UsageRow>([...head, ...bundle, ...tail])
       } catch (err) {
         if (plan) this.returnCommentPlan(plan)
         throw err
@@ -622,6 +730,10 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
       // 던지지 않고 돌아왔으면 댓글 묶음은 커밋됐다 — UPDATE 가 0행이어도
       if (plan) this.commitCommentPlan(plan)
       this.judgeUsage(results[writeBody ? 1 : 0].results?.[0], now)
+      if (wantsDue) {
+        const due = (results[results.length - 1] as unknown as D1Result<{ due: unknown }>).results?.[0]?.due
+        if (typeof due === 'number') await this.scheduleAlarm(due)
+      }
       if (!writeBody) {
         if (bodySame) this.setSizeOk()
         return 'ok'
@@ -705,7 +817,7 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     if (upserts.size === 0 && deletes.length === 0) return null
     const rows = [...upserts.values()]
     const drafts = await this.notificationDrafts(rows, live, now)
-    return { keys, full, upserts: rows, deletes, drafts, pushDueAt: drafts.length > 0 && (await this.pushEnabled()) ? now + PUSH_BATCH_MS : null }
+    return { keys, full, upserts: rows, deletes, drafts, pushDueAt: drafts.length > 0 && (await this.pushKeys()) ? now + PUSH_BATCH_MS : null }
   }
 
   // F-502 6장 — D1 에 없던 새 항목만. 접근 집합은 멘션이나 답글이 있을 때만 읽는다
@@ -736,10 +848,13 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     return this.people
   }
 
-  // 푸시 켜짐 판정은 방 수명 동안 한 번 (F-3005 4.3)
-  private async pushEnabled(): Promise<boolean> {
-    this.pushOn ??= (await loadVapid(this.host.env)) !== null
-    return this.pushOn
+  // 푸시 켜짐 판정과 VAPID 는 방 수명 동안 한 번. loadVapid 는 D1 을 부르지 않는다 (F-3005 4.3, F-3006 2.3)
+  private async pushKeys(): Promise<{ vapid: PushVapid; auth: VapidAuth } | null> {
+    if (this.push === undefined) {
+      const vapid = await loadVapid(this.host.env)
+      this.push = vapid ? { vapid, auth: createVapidAuth(vapid.keys, vapid.subject) } : null
+    }
+    return this.push
   }
 
   // 9.3 — 불러오기 없이 연결 상태와 D1 한 줄만으로

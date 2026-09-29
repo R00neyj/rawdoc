@@ -1418,3 +1418,20 @@ describe('F-506 K1 read-only 메시지', () => {
     expect(c.sent).not.toContain(READ_ONLY)
   })
 })
+
+describe('F-3006 S3 비밀 값 없음', () => {
+  it('slowRoom 알람 → notifications 든 SQL 0, 연결 점검 SQL 0', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { d1, core, doc, conns } = await slowRoom()
+    conns.push(conn('a', 'a@example.com'))
+    vi.setSystemTime(1_030_000)
+    edit(doc, (c) => c.insert(c.length, 'c'))
+    const before = d1.state.calls.length
+    await core.alarm()
+    const calls = d1.state.calls.slice(before)
+    expect(d1.state.batches).toHaveLength(2)
+    expect(calls.filter((c) => c.sql.includes('notifications'))).toEqual([])
+    expect(calls.filter((c) => c.sql.startsWith('SELECT id, owner_id, folder_id FROM docs'))).toEqual([])
+    expect(resolveDocAccess).not.toHaveBeenCalled()
+  })
+})

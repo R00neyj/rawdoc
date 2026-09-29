@@ -26,14 +26,20 @@ type Sql = { sql: string; args: unknown[] }
 
 function makeDb(sqlDb: DatabaseSync) {
   const inner = asD1(sqlDb)
-  const state = { batches: [] as Sql[][], prepares: [] as string[], failAfterCommit: 0, beforeBatch: null as null | (() => void) }
+  const state = {
+    batches: [] as Sql[][],
+    prepares: [] as string[],
+    failAfterCommit: 0,
+    beforeBatch: null as null | (() => void),
+    failAll: null as null | ((sql: string) => boolean),
+  }
   type Stmt = { sql: string; args: unknown[]; bind(...a: unknown[]): Stmt; first(): Promise<unknown>; all(): Promise<{ results: unknown[] }>; run(): Promise<unknown> }
   const wrap = (sql: string, args: unknown[], stmt: D1PreparedStatement): Stmt => ({
     sql,
     args,
     bind: (...a: unknown[]) => wrap(sql, a, stmt.bind(...a)),
     first: () => stmt.first(),
-    all: () => stmt.all() as Promise<{ results: unknown[] }>,
+    all: () => (state.failAll?.(sql) ? Promise.reject(new Error('D1 down')) : (stmt.all() as Promise<{ results: unknown[] }>)),
     run: () => stmt.run(),
   })
   const DB = {
@@ -47,8 +53,12 @@ function makeDb(sqlDb: DatabaseSync) {
       sqlDb.exec('BEGIN')
       const results: unknown[] = []
       try {
-        // RETURNING 이 붙은 사용량 줄은 D1 처럼 results 를 돌려준다
-        for (const s of list) results.push(s.sql.includes(' RETURNING ') ? { ...(await s.all()), meta: { changes: 1 } } : await s.run())
+        // RETURNING 이 붙은 사용량 줄·SELECT 는 D1 처럼 results 를 돌려준다
+        for (const s of list) {
+          if (s.sql.includes(' RETURNING ')) results.push({ ...(await s.all()), meta: { changes: 1 } })
+          else if (s.sql.startsWith('SELECT')) results.push({ ...(await s.all()), meta: { changes: 0 } })
+          else results.push(await s.run())
+        }
         sqlDb.exec('COMMIT')
       } catch (err) {
         sqlDb.exec('ROLLBACK')
@@ -122,7 +132,12 @@ function setup(opts: { content?: string; title?: string } = {}) {
   return { sqlDb, ...db }
 }
 
-function makeRoom(DB: D1Database, storage = makeStorage(), extraEnv: Record<string, unknown> = {}) {
+function makeRoom(
+  DB: D1Database,
+  storage = makeStorage(),
+  extraEnv: Record<string, unknown> = {},
+  hostExtra: Pick<Partial<DocRoomHost<RoomConnection>>, 'connections' | 'getAlarm' | 'lastPing'> = {},
+) {
   const doc = new Y.Doc()
   const alarms: number[] = []
   const host: DocRoomHost<RoomConnection> = {
@@ -138,6 +153,7 @@ function makeRoom(DB: D1Database, storage = makeStorage(), extraEnv: Record<stri
     setAlarm: async (at: number) => {
       alarms.push(at)
     },
+    ...hostExtra,
   }
   const core = new DocRoomCore(host)
   return { core, doc, storage, alarms, comments: doc.getMap<unknown>('comments'), content: doc.getText('content') }
@@ -181,6 +197,7 @@ function label(sql: string): string {
   if (sql.startsWith('INSERT OR IGNORE INTO notifications')) return 'c5'
   if (sql.startsWith('UPDATE users SET notif_rev')) return 'rev' // F-2057 3.5
   if (sql.startsWith('UPDATE users SET content_bytes = content_bytes + (')) return 'c7'
+  if (sql.startsWith('SELECT MIN(push_due_at)')) return 'min'
   return sql
 }
 
@@ -571,9 +588,140 @@ describe('F-3005 D1~D4 comment 알림·push_due_at', () => {
     const on = setup()
     subscribeOwner(on.sqlDb)
     await bobComments(on, await vapidEnv())
-    expect(labels(on.state.batches[0])).toEqual(labels(off.state.batches[0]))
+    expect(labels(on.state.batches[0])).toEqual([...labels(off.state.batches[0]), 'min'])
     for (const batch of [off.state.batches[0], on.state.batches[0]]) {
       expect(batch.filter((s) => s.sql.includes('push_subscriptions')).map((s) => label(s.sql))).toEqual(['c5'])
     }
+  })
+})
+
+describe('F-3006 R1~R7 스냅숏 끝 MIN·알람이 보낸다', () => {
+  const T = Date.parse('2026-09-30T00:00:00Z')
+  const DUE = T + 180_000
+
+  beforeEach(() => {
+    vi.setSystemTime(T)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function b64url(bytes: Uint8Array): string {
+    let s = ''
+    for (const b of bytes) s += String.fromCharCode(b)
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  }
+
+  // 보내기까지 가려면 허용 목록 안 주소와 곡선 위 점이 있어야 한다 (F-3002 3.4)
+  async function subscribeOwnerLive(sqlDb: DatabaseSync) {
+    const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair
+    const raw = new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)
+    sqlDb
+      .prepare('INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at) VALUES (?,?,?,?,?,?)')
+      .run('s1', 'owner', 'https://fcm.googleapis.com/fcm/send/s1', b64url(raw), b64url(crypto.getRandomValues(new Uint8Array(16))), 1)
+  }
+
+  async function world(hostExtra: Parameters<typeof makeRoom>[3] = {}, before?: (sqlDb: DatabaseSync) => void) {
+    const w = setup()
+    await subscribeOwnerLive(w.sqlDb)
+    before?.(w.sqlDb)
+    const room = makeRoom(w.DB, makeStorage(), await vapidEnv(), hostExtra)
+    await room.core.load()
+    put(room.doc, conn(BOB), (m) => m.set('r1', entryAt(room.content, 'target', BOB)))
+    await room.core.flush()
+    return { ...w, room }
+  }
+
+  const retryMark = (storage: DoStorageLike) =>
+    storage.sql.exec('SELECT key, value FROM ydoc_meta').toArray().find((r) => r.key === 'push_retry')?.value ?? null
+
+  it('R1 켜진 env·주인 구독, BOB 첫 댓글 → batch 끝 min, 알람 = 그 행 push_due_at', async () => {
+    const { sqlDb, state, room } = await world()
+    expect(labels(state.batches[0]).at(-1)).toBe('min')
+    expect(ownerComments(sqlDb)[0].push_due_at).toBe(DUE)
+    expect(room.alarms).toEqual([DUE])
+  })
+
+  it('R2 1시간 넘은 행은 MIN 에서 빠진다', async () => {
+    const { room } = await world({}, (sqlDb) => {
+      sqlDb
+        .prepare(
+          'INSERT INTO notifications (id, recipient_email, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at, push_due_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        )
+        .run('old', 'owner@example.com', 'comment', DOC_ID, 'old-c', 'old-c', 'bob@example.com', '회의록', 'x', T - 7_400_000, T - 7_200_000)
+    })
+    expect(room.alarms).toEqual([DUE])
+  })
+
+  it('R3 그 시각의 alarm() 한 번에 푸시 1, 주인 행 NULL, 다시 걸린 알람 없음', async () => {
+    const { sqlDb, room } = await world()
+    const fetchMock = vi.fn(async () => new Response(null, { status: 201 }))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.setSystemTime(DUE)
+    await room.core.alarm()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(ownerComments(sqlDb)[0].push_due_at).toBeNull()
+    expect(room.alarms).toEqual([DUE])
+  })
+
+  it('R4 모으기가 던지면 10분 뒤 한 번, 또 던지면 포기 — 표지 0, 알람이 던지지 않음', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { state, room } = await world()
+    state.failAll = (sql) => sql.includes('FROM notifications n')
+    vi.setSystemTime(DUE)
+    await room.core.alarm()
+    expect(room.alarms.at(-1)).toBe(DUE + 600_000)
+    expect(retryMark(room.storage)).toBe(String(DUE))
+
+    const count = room.alarms.length
+    vi.setSystemTime(DUE + 600_000)
+    await expect(room.core.alarm()).resolves.toBeUndefined()
+    expect(room.alarms).toHaveLength(count)
+    expect(retryMark(room.storage)).toBe('0')
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it('R5 주인이 열어 둠(connectedAt 10초 전) → fetch 0, 행 NULL', async () => {
+    const open: RoomConnection[] = []
+    const { sqlDb, room } = await world({ connections: () => open })
+    const fetchMock = vi.fn(async () => new Response(null, { status: 201 }))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.setSystemTime(DUE)
+    open.push({ state: { ...OWNER, connectedAt: DUE - 10_000 }, close() {} })
+    await room.core.alarm()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(ownerComments(sqlDb)[0].push_due_at).toBeNull()
+  })
+
+  it('R6 느린 날 — MIN 알람 뒤 느린 저장 알람이 더 이르면 건다, 같은 창은 되풀이 안 함', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { room } = await world({}, (sqlDb) => {
+      sqlDb.prepare("UPDATE users SET write_day = '2026-09-30', write_count = 5000 WHERE id = 'owner'").run()
+    })
+    expect(room.alarms).toEqual([T + 180_000])
+    vi.setSystemTime(T + 20_000)
+    room.doc.transact(() => room.content.insert(0, 'Z'), conn(OWNER))
+    await room.core.flush()
+    expect(room.alarms).toEqual([T + 180_000, T + 60_000])
+    vi.setSystemTime(T + 30_000)
+    room.doc.transact(() => room.content.insert(0, 'Y'), conn(OWNER))
+    await room.core.flush()
+    expect(room.alarms).toEqual([T + 180_000, T + 60_000])
+  })
+
+  it('R7 쫓겨난 뒤 새 코어는 getAlarm 을 한 번 읽는다 — 더 이르면 두고, 늦으면 건다', async () => {
+    let reads = 0
+    const early = await world({
+      getAlarm: async () => {
+        reads++
+        return T + 50_000
+      },
+    })
+    expect(early.room.alarms).toEqual([])
+    expect(reads).toBe(1)
+
+    const late = await world({ getAlarm: async () => T + 500_000 })
+    expect(late.room.alarms).toEqual([T + 180_000])
   })
 })

@@ -15,7 +15,7 @@ import {
   relayAwareness,
 } from './awarenessRelay'
 import type { AwarenessClocks, RelayConn } from './awarenessRelay'
-import { DocRoomCore, FLUSH_DEBOUNCE_MS, FLUSH_MAX_WAIT_MS, isReadOnlyState, mayRelayAwareness, readConnState } from './docRoomCore'
+import { CONNECTED_AT_KEY, DocRoomCore, FLUSH_DEBOUNCE_MS, FLUSH_MAX_WAIT_MS, isReadOnlyState, mayRelayAwareness, readConnState } from './docRoomCore'
 import type { RoomCommentImport, RoomCommentImportResult, RoomConnState, RoomTextWrite, RoomTextWriteResult } from './docRoomCore'
 import { readForwardedIdentity } from './docSocket'
 import { SOCKET_CLOSE, SOCKET_PING, SOCKET_PONG } from '../src/lib/docRoomProtocol'
@@ -66,6 +66,9 @@ export class DocRoom extends YServer<Env> {
       ensureLoaded: () => this.setName(this.name),
       exclusive: <T,>(fn: () => Promise<T>) => ctx.blockConcurrencyWhile(fn),
       setAlarm: (at) => ctx.storage.setAlarm(at),
+      getAlarm: () => ctx.storage.getAlarm(),
+      // partyserver 의 Connection 은 WebSocket 그 자체다 — 자동 응답은 DO 를 깨우지 않고 시각만 남긴다 (F-3006 5장)
+      lastPing: (conn) => ctx.getWebSocketAutoResponseTimestamp(conn)?.getTime() ?? null,
     })
   }
 
@@ -97,7 +100,7 @@ export class DocRoom extends YServer<Env> {
       return
     }
     const { docVersion, ...state } = identity
-    conn.setState((prev: unknown) => ({ ...((prev as object | null) ?? {}), ...(state satisfies RoomConnState) }))
+    conn.setState((prev: unknown) => ({ ...((prev as object | null) ?? {}), ...(state satisfies RoomConnState), [CONNECTED_AT_KEY]: Date.now() }))
     await this.core.connect(conn, docVersion, () => super.onConnect(conn, ctx))
   }
 
