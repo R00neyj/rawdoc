@@ -62,6 +62,7 @@ import { useAppUpdate } from '../pwa/useAppUpdate'
 import { ensurePersist } from '../pwa/persistStorage'
 
 import AppTopBar from './AppTopBar'
+import type { OutlineControl } from './Outline'
 import AppScreens from './AppScreens'
 import DocumentArea from './DocumentArea'
 import AppDialogs from './AppDialogs'
@@ -193,6 +194,7 @@ export default function App() {
     setEditorHandle(handle)
   }, [])
   const contentAreaRef = useRef<HTMLDivElement | null>(null) // 오른쪽 목차 여백 측정용 (F-144.md 2장)
+  const outlineControlRef = useRef<OutlineControl | null>(null)
   const viewerRef = useRef<HTMLDivElement | null>(null) // 오른쪽 목차가 보기 모드에서 스크롤할 대상 (F-144.md 3.4)
   // 모드 전환 직전 화면 맨 위 원문 줄 — 문서가 바뀌면(docId 불일치) 버린다 (F-295.md 5.1·5.6)
   const scrollAnchorRef = useRef<{ docId: string; anchor: ScrollAnchor } | null>(null)
@@ -1187,8 +1189,8 @@ export default function App() {
   const topBar = <AppTopBar {...{
     account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef, e2ee,
     getShareDoc, handleCopyDocAsRichText, handleExportDoc, handleExportDocAsHtml, handleExportDocAsText, handleOpenNotification,
-    handlePrintDoc, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
-    openPalette, openSearch, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, showNotice, sidebarOpen, store,
+    handlePrintDoc, helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
+    outlineControlRef, openPalette, openSearch, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
     toggleButtonRef, toggleCommentsPanel, toggleSidebar, toolbarPref, viewMode, wikiResolver,
   }} />
 
@@ -1277,7 +1279,7 @@ export default function App() {
             currentDoc, currentDocId, currentFolderId, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorRemountNonce,
             editorScrollTop, editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles,
             handleOpenWikiLink, handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc,
-            liveEditorOption, mapRoute, mentionSource, onNavigateFolder, openDoc, openWikiLinkTarget, resolveAttachment, resolvedTheme,
+            liveEditorOption, mapRoute, mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme,
             setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewMode,
             wikiContext, wikiPreviewPref, wikiResolver,
           }} />}

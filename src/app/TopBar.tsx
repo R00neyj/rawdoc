@@ -6,23 +6,20 @@ import ExportMenu from './ExportMenu'
 import AccountMenu from './AccountMenu'
 import NotificationsMenu, { type NotificationsMenuProps } from './NotificationsMenu'
 import EditorToolbar from './EditorToolbar'
-import { IconEdit, IconRaw, IconView, IconTooltip, IconForum } from './icons'
+import { IconTooltip, IconForum } from './icons'
 import { commentBadgeText } from './commentRail'
 import SidebarHead from './SidebarHead'
 import PeerAvatars from './PeerAvatars'
+import ViewModeMenu, { VIEW_MODES, type ViewMode } from './ViewModeMenu'
+import TopBarMoreSheet from './TopBarMoreSheet'
+import { usePhoneWidth } from './usePhoneWidth'
+import type { OutlineControl } from './Outline'
+import type { TopBarScreen } from './topBarMore'
 import type { Peer } from '../lib/peers'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { WikiResolver } from '../lib/wikiResolve'
 import type { Notice } from './notice'
 import type { AccountState } from './account'
-
-type ViewMode = 'live' | 'raw' | 'view'
-
-const VIEW_MODES: { value: ViewMode; label: string; Icon: typeof IconEdit }[] = [
-  { value: 'live', label: '편집 — 서식을 보며 편집', Icon: IconEdit },
-  { value: 'raw', label: '원문 — 마크다운 기호 그대로 편집', Icon: IconRaw },
-  { value: 'view', label: '보기 — 읽기 전용으로 보기', Icon: IconView },
-]
 
 type TopBarProps = {
   narrow: boolean
@@ -65,6 +62,9 @@ type TopBarProps = {
   comments?: { openCount: number; open: boolean; disabled: boolean; onToggle: () => void }
   // 알림함 — 없으면 버튼이 없다(로그인 안 함·로컬 저장소) (F-507 3.4)
   notifications?: NotificationsMenuProps
+  // 휴대폰 폭 ⋯ 판 — 어느 화면인지와 목차 카드 통로 (F-2083)
+  screen: TopBarScreen
+  outlineControlRef: RefObject<OutlineControl | null>
 }
 
 export default function TopBar({
@@ -101,7 +101,10 @@ export default function TopBar({
   selfUserId,
   comments,
   notifications,
+  screen,
+  outlineControlRef,
 }: TopBarProps) {
+  const phone = usePhoneWidth()
   return (
     <>
       <header className="topbar">
@@ -119,63 +122,89 @@ export default function TopBar({
           {showToolbar && !narrow && <EditorToolbar onRunCommand={onRunToolbarCommand} />}
         </div>
         <PeerAvatars peers={peers} selfUserId={selfUserId} narrow={narrow} />
-        <div className="seg view-mode-seg" role="group" aria-label="보기 모드">
-          {VIEW_MODES.map((mode) => (
-            <span className="icon-btn-wrap" key={mode.value}>
-              <button
-                type="button"
-                className="icon-btn"
-                aria-label={mode.label}
-                aria-pressed={viewMode === mode.value}
-                disabled={viewModeDisabled}
-                onClick={() => onChangeViewMode(mode.value)}
-              >
-                <mode.Icon size={18} />
-              </button>
-              <IconTooltip text={mode.label} />
-            </span>
-          ))}
-        </div>
-        {comments && (
-          <span className="icon-btn-wrap">
-            <button
-              type="button"
-              className="icon-btn comment-rail-toggle"
-              aria-label={`댓글 ${comments.openCount}개`}
-              aria-expanded={comments.open}
-              disabled={comments.disabled}
-              onClick={comments.onToggle}
-            >
-              <IconForum size={18} />
-              {commentBadgeText(comments.openCount) !== null && (
-                <span className="comment-badge" aria-hidden="true">
-                  {commentBadgeText(comments.openCount)}
+        {phone ? (
+          <>
+            {screen === 'doc' && <ViewModeMenu viewMode={viewMode} disabled={viewModeDisabled} onChange={onChangeViewMode} />}
+            <TopBarMoreSheet
+              screen={screen}
+              outlineControlRef={outlineControlRef}
+              comments={comments}
+              notifications={notifications}
+              share={{
+                disabled: shareDisabled,
+                getShareDoc,
+                onNotice: onShareNotice,
+                linkDocId: shareLinkDocId,
+                onBeforeLinkAction: onBeforeShareLinkAction,
+                onInvite,
+                wikiResolver,
+                e2eeDoc: shareE2ee,
+              }}
+              exporter={{ disabled: exportDisabled, onExportMd, onExportTxt, onPrintDoc, onExportHtml, onCopyRich }}
+              account={{ account, onBeforeNavigate: onAccountBeforeNavigate, onNotice: onAccountNotice, onLoggedOut: onAccountLoggedOut }}
+            />
+          </>
+        ) : (
+          <>
+            <div className="seg view-mode-seg" role="group" aria-label="보기 모드">
+              {VIEW_MODES.map((mode) => (
+                <span className="icon-btn-wrap" key={mode.value}>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={mode.label}
+                    aria-pressed={viewMode === mode.value}
+                    disabled={viewModeDisabled}
+                    onClick={() => onChangeViewMode(mode.value)}
+                  >
+                    <mode.Icon size={18} />
+                  </button>
+                  <IconTooltip text={mode.label} />
                 </span>
-              )}
-            </button>
-            <IconTooltip text="댓글" />
-          </span>
+              ))}
+            </div>
+            {comments && (
+              <span className="icon-btn-wrap">
+                <button
+                  type="button"
+                  className="icon-btn comment-rail-toggle"
+                  aria-label={`댓글 ${comments.openCount}개`}
+                  aria-expanded={comments.open}
+                  disabled={comments.disabled}
+                  onClick={comments.onToggle}
+                >
+                  <IconForum size={18} />
+                  {commentBadgeText(comments.openCount) !== null && (
+                    <span className="comment-badge" aria-hidden="true">
+                      {commentBadgeText(comments.openCount)}
+                    </span>
+                  )}
+                </button>
+                <IconTooltip text="댓글" />
+              </span>
+            )}
+            <ShareMenu
+              disabled={shareDisabled}
+              getShareDoc={getShareDoc}
+              onNotice={onShareNotice}
+              linkDocId={shareLinkDocId}
+              onBeforeLinkAction={onBeforeShareLinkAction}
+              onInvite={onInvite}
+              wikiResolver={wikiResolver}
+              e2eeDoc={shareE2ee}
+            />
+            <ExportMenu
+              disabled={exportDisabled}
+              onExportMd={onExportMd}
+              onExportTxt={onExportTxt}
+              onPrintDoc={onPrintDoc}
+              onExportHtml={onExportHtml}
+              onCopyRich={onCopyRich}
+            />
+            {notifications && <NotificationsMenu {...notifications} />}
+            <AccountMenu account={account} onBeforeNavigate={onAccountBeforeNavigate} onNotice={onAccountNotice} onLoggedOut={onAccountLoggedOut} />
+          </>
         )}
-        <ShareMenu
-          disabled={shareDisabled}
-          getShareDoc={getShareDoc}
-          onNotice={onShareNotice}
-          linkDocId={shareLinkDocId}
-          onBeforeLinkAction={onBeforeShareLinkAction}
-          onInvite={onInvite}
-          wikiResolver={wikiResolver}
-          e2eeDoc={shareE2ee}
-        />
-        <ExportMenu
-          disabled={exportDisabled}
-          onExportMd={onExportMd}
-          onExportTxt={onExportTxt}
-          onPrintDoc={onPrintDoc}
-          onExportHtml={onExportHtml}
-          onCopyRich={onCopyRich}
-        />
-        {notifications && <NotificationsMenu {...notifications} />}
-        <AccountMenu account={account} onBeforeNavigate={onAccountBeforeNavigate} onNotice={onAccountNotice} onLoggedOut={onAccountLoggedOut} />
       </header>
       {/* 좁은 창은 탭바를 상단바 밑 줄로 뺀다 — 아이콘 줄이 세로로도 접혀(2줄) 가로 스크롤 없이 다 보인다 (사용자 2026-09-16 "모바일일때가 툴바 더 필요할거임") */}
       {narrow && showToolbar && (

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react'
 
 import type { ShareDoc } from '../lib/shareCodec'
 import { findWikiLinks } from '../lib/wikiLink'
@@ -13,7 +13,7 @@ import type { Notice } from './notice'
 // 상단바 `공유` 메뉴 — FolderMenu 와 같은 패턴으로 방향키·Enter·Esc·바깥 클릭을 직접 구현한다 (ia.md 2장 A·3.19, F-130.md 2장, F-126.md 5.2)
 // 링크·마크다운 복사 본문은 shareCopy.ts 로 옮겼다 — 명령 팔레트와 같이 쓴다 (F-2054 6.2)
 
-type ShareMenuProps = {
+export type ShareMenuProps = {
   disabled: boolean // 문서가 없을 때(S-1) 비활성 (F-130.md 2장)
   // 호출 시점의 에디터 원문을 그대로 읽는다 — 저장 대기 입력 포함, 저장소를 다시 읽지 않는다 (F-130.md 2장)
   getShareDoc: () => ShareDoc
@@ -29,12 +29,19 @@ type ShareMenuProps = {
   e2eeDoc?: boolean
 }
 
-type ShareMenuItem = { key: string; label: string; icon: ComponentType<{ size?: number }>; onSelect: () => Promise<void>; disabled?: boolean }
+export type MenuAction = {
+  key: string
+  label: string
+  icon: ComponentType<{ size?: number }>
+  onSelect: () => void | Promise<void>
+  disabled?: boolean
+}
 
 const E2EE_SHARE_NOTE_ID = 'share-menu-e2ee-note'
 
-export default function ShareMenu({
-  disabled,
+// 항목·딸린 상태 — 상단바 팝오버와 휴대폰 폭 ⋯ 판이 같이 쓴다. active 는 "열려 있다", onClose 는 닫고 트리거로 포커스 (F-2083 5장)
+// eslint-disable-next-line react-refresh/only-export-components -- 명세(F-2083 5장)가 이 훅을 이 파일에서 내보내게 했다
+export function useShareMenu({
   getShareDoc,
   onNotice,
   linkDocId,
@@ -42,30 +49,15 @@ export default function ShareMenu({
   onInvite,
   wikiResolver,
   e2eeDoc = false,
-}: ShareMenuProps) {
-  const [open, setOpen] = useState(false)
+  active,
+  onClose,
+}: ShareMenuProps & { active: boolean; onClose: () => void }): { items: MenuAction[]; e2eeNote: boolean; dialogs: ReactNode } {
   const [hasLink, setHasLink] = useState(false)
   const [shareSetOpen, setShareSetOpen] = useState(false)
-  const { mounted, state } = usePresence(open) // 나타나고 사라지는 전환 (F-172.md 2.2)
-  const buttonRef = useRef<HTMLButtonElement | null>(null)
-  const menuRef = useRef<HTMLUListElement | null>(null)
-  const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
 
+  // 열 때마다 링크 유무를 다시 확인한다(끊기 항목 노출 조건, F-210.md 2.6) — 금고 문서는 GET 조차 안 보내 끊기를 보일 일이 없다 (F-409 6.2)
   useEffect(() => {
-    if (!open) return
-
-    function handlePointerDown(e: MouseEvent) {
-      const target = e.target as Node
-      if (menuRef.current?.contains(target) || buttonRef.current?.contains(target)) return
-      setOpen(false)
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [open])
-
-  // 메뉴를 열 때마다 링크 유무를 다시 확인한다(끊기 항목 노출 조건, F-210.md 2.6) — 금고 문서는 GET 조차 안 보내 끊기를 보일 일이 없다 (F-409 6.2)
-  useEffect(() => {
-    if (!open || !linkDocId || e2eeDoc) return
+    if (!active || !linkDocId || e2eeDoc) return
     let cancelled = false
     getShareLink(linkDocId)
       .then((info) => {
@@ -77,32 +69,20 @@ export default function ShareMenu({
     return () => {
       cancelled = true
     }
-  }, [open, linkDocId, e2eeDoc])
+  }, [active, linkDocId, e2eeDoc])
 
-  useEffect(() => {
-    if (open) {
-      itemRefs.current[0]?.focus()
-    }
-  }, [open])
-
-  // 위키링크 대상 유무 — 메뉴를 열 때 로컬 판정, 렌더 중 open 전이 감지로 갱신한다 (F-252.md 3.1, MoveDocDialog.tsx 와 같은 패턴)
-  const [trackedMenuOpen, setTrackedMenuOpen] = useState(open)
+  // 위키링크 대상 유무 — 열 때 로컬 판정, 렌더 중 active 전이 감지로 갱신한다 (F-252.md 3.1, MoveDocDialog.tsx 와 같은 패턴)
+  const [trackedActive, setTrackedActive] = useState(active)
   const [hasWikiTargets, setHasWikiTargets] = useState(false)
-  if (open !== trackedMenuOpen) {
-    setTrackedMenuOpen(open)
-    if (open) {
+  if (active !== trackedActive) {
+    setTrackedActive(active)
+    if (active) {
       const content = getShareDoc().content
       // 있음/없음은 원본 폴더와 무관하다 — 원본 없이 판정한다 (F-2018 8.4)
       setHasWikiTargets(findWikiLinks(content).some((m) => m.target !== '' && wikiResolver.resolve(m.target, null) !== null))
     }
   }
 
-  function closeAndReturnFocus() {
-    setOpen(false)
-    buttonRef.current?.focus()
-  }
-
-  // ----- 링크 복사 (F-130.md 2·3장) -----
   function handleCopyLink() {
     return copyShareLink({
       getShareDoc,
@@ -112,7 +92,6 @@ export default function ShareMenu({
     })
   }
 
-  // ----- 마크다운 복사 (F-130.md 2장) -----
   function handleCopyMarkdown() {
     return copyShareMarkdown({
       getShareDoc,
@@ -170,28 +149,82 @@ export default function ShareMenu({
     await handleCopyReadOnlyLink()
   }
 
+  // 닫기 → 트리거 포커스 → 동작 순서 (runAndClose 와 같다)
+  function closeThen(action: () => void | Promise<void>) {
+    return async () => {
+      onClose()
+      await action()
+    }
+  }
+
   // 비활성 항목도 보이는 조건은 지금 그대로 — 누르거나 Enter 를 쳐도 동작을 부르지 않는다 (F-409 6.2)
-  const items: ShareMenuItem[] = [
-    { key: 'link', label: '링크 복사', icon: IconLink, onSelect: handleCopyLink, disabled: e2eeDoc },
-    { key: 'markdown', label: '마크다운 복사', icon: IconCopy, onSelect: handleCopyMarkdown },
+  const items: MenuAction[] = [
+    { key: 'link', label: '링크 복사', icon: IconLink, onSelect: closeThen(handleCopyLink), disabled: e2eeDoc },
+    { key: 'markdown', label: '마크다운 복사', icon: IconCopy, onSelect: closeThen(handleCopyMarkdown) },
     ...(linkDocId
       ? [
           {
             key: 'readonly-link',
             label: hasWikiTargets ? '읽기 전용 링크 복사…' : '읽기 전용 링크 복사',
             icon: IconLink,
-            onSelect: handleReadOnlyLinkSelect,
+            onSelect: closeThen(handleReadOnlyLinkSelect),
             disabled: e2eeDoc,
           },
         ]
       : []),
     ...(linkDocId && hasLink && !e2eeDoc
-      ? [{ key: 'readonly-link-off', label: '읽기 전용 링크 끊기', icon: IconLinkOff, onSelect: handleRevokeReadOnlyLink }]
+      ? [{ key: 'readonly-link-off', label: '읽기 전용 링크 끊기', icon: IconLinkOff, onSelect: closeThen(handleRevokeReadOnlyLink) }]
       : []),
     ...(onInvite
-      ? [{ key: 'invite', label: '사람 초대…', icon: IconPersonAdd, onSelect: async () => onInvite(), disabled: e2eeDoc }]
+      ? [{ key: 'invite', label: '사람 초대…', icon: IconPersonAdd, onSelect: closeThen(async () => onInvite()), disabled: e2eeDoc }]
       : []),
   ]
+
+  const dialogs = (
+    <ShareSetDialog
+      open={shareSetOpen}
+      docId={linkDocId}
+      onClose={() => setShareSetOpen(false)}
+      onNotice={onNotice}
+      onLinked={() => setHasLink(true)}
+    />
+  )
+
+  return { items, e2eeNote: e2eeDoc, dialogs }
+}
+
+export default function ShareMenu(props: ShareMenuProps) {
+  const { disabled } = props
+  const [open, setOpen] = useState(false)
+  const { mounted, state } = usePresence(open) // 나타나고 사라지는 전환 (F-172.md 2.2)
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const menuRef = useRef<HTMLUListElement | null>(null)
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
+
+  useEffect(() => {
+    if (!open) return
+
+    function handlePointerDown(e: MouseEvent) {
+      const target = e.target as Node
+      if (menuRef.current?.contains(target) || buttonRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [open])
+
+  useEffect(() => {
+    if (open) {
+      itemRefs.current[0]?.focus()
+    }
+  }, [open])
+
+  function closeAndReturnFocus() {
+    setOpen(false)
+    buttonRef.current?.focus()
+  }
+
+  const { items, e2eeNote, dialogs } = useShareMenu({ ...props, active: open, onClose: closeAndReturnFocus })
 
   function handleKeyDown(e: KeyboardEvent<HTMLUListElement>) {
     if (e.key === 'Escape') {
@@ -207,12 +240,6 @@ export default function ShareMenu({
       const next = current === -1 ? 0 : (current + delta + count) % count
       itemRefs.current[next]?.focus()
     }
-  }
-
-  async function runAndClose(action: () => Promise<void>) {
-    setOpen(false)
-    buttonRef.current?.focus()
-    await action()
   }
 
   const shareLabel = '공유 — 링크·마크다운 복사'
@@ -256,7 +283,7 @@ export default function ShareMenu({
                 }}
                 onClick={() => {
                   if (item.disabled) return
-                  runAndClose(item.onSelect)
+                  void item.onSelect()
                 }}
               >
                 <item.icon size={16} />
@@ -265,7 +292,7 @@ export default function ShareMenu({
             </li>
           ))}
           {/* 메뉴 항목이 아니라 방향키가 여기서 멈추지 않는다 (F-409 6.2) */}
-          {e2eeDoc && (
+          {e2eeNote && (
             <li role="none">
               <p className="share-menu-note" id={E2EE_SHARE_NOTE_ID}>
                 금고 문서는 공유할 수 없습니다.
@@ -274,13 +301,7 @@ export default function ShareMenu({
           )}
         </ul>
       )}
-      <ShareSetDialog
-        open={shareSetOpen}
-        docId={linkDocId}
-        onClose={() => setShareSetOpen(false)}
-        onNotice={onNotice}
-        onLinked={() => setHasLink(true)}
-      />
+      {dialogs}
     </div>
   )
 }

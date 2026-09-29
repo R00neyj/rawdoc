@@ -320,9 +320,15 @@ svg {
     overflow-x: clip;
   }
 
+  .topbar .brand-group,
   .topbar .brand,
   .topbar .icon-btn-wrap:has(> .topbar-search-btn),
   .topbar .icon-btn-wrap:has(> .topbar-palette-btn) {
+    display: none;
+  }
+
+  /* 앱 화면의 떠 있는 목차 버튼 — ⋯ 판 `목차` 로 대신한다. 공개 보기(.app-shell 밖)는 그대로 (F-2083 4.6) */
+  .app-shell .outline-popup > .outline-btn {
     display: none;
   }
 }
@@ -3501,13 +3507,16 @@ body.sidebar-resizing {
 
 /* ===== 상단바 공유·내보내기 메뉴 (specs/features/F-130.md 2장, F-278.md 3장, ia.md 3.19) ===== */
 .share-menu,
-.export-menu {
+.export-menu,
+.view-mode-menu {
   position: relative;
   flex: none;
 }
 
 /* 모양은 .icon-btn 기본값 그대로, 메뉴가 열린 동안은 선택 버튼과 같은 바탕, hover 규칙과 우선순위를 맞춰 이긴다 (design.md 4장, F-153 2.1) */
 .share-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']),
+.view-mode-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']),
+.topbar-more-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']),
 .export-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']) {
   background: color-mix(in srgb, var(--ink) 10%, transparent);
   color: var(--ink);
@@ -3515,7 +3524,8 @@ body.sidebar-resizing {
 
 /* 나타나고 사라지는 전환 — usePresence 의 [data-state] 로 몬다 (F-172.md 2.1·2.2) */
 .share-menu-list,
-.export-menu-list {
+.export-menu-list,
+.view-mode-menu-list {
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
@@ -3539,27 +3549,31 @@ body.sidebar-resizing {
 }
 
 .share-menu-list[data-state='closed'],
-.export-menu-list[data-state='closed'] {
+.export-menu-list[data-state='closed'],
+.view-mode-menu-list[data-state='closed'] {
   opacity: 0;
   visibility: hidden;
   transform: translateY(-4px) scale(0.9);
 }
 
 .share-menu-list[data-state='open'],
-.export-menu-list[data-state='open'] {
+.export-menu-list[data-state='open'],
+.view-mode-menu-list[data-state='open'] {
   transition: opacity var(--transition-pop-fade), transform var(--transition-pop), visibility var(--transition-pop-fade);
 }
 
 @starting-style {
   .share-menu-list[data-state='open'],
-  .export-menu-list[data-state='open'] {
+  .export-menu-list[data-state='open'],
+  .view-mode-menu-list[data-state='open'] {
     opacity: 0;
     transform: translateY(-4px) scale(0.9);
   }
 }
 
 .share-menu-list button,
-.export-menu-list button {
+.export-menu-list button,
+.view-mode-menu-list button {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3576,7 +3590,9 @@ body.sidebar-resizing {
 .share-menu-list button:hover,
 .share-menu-list button:focus-visible,
 .export-menu-list button:hover,
-.export-menu-list button:focus-visible {
+.export-menu-list button:focus-visible,
+.view-mode-menu-list button:hover,
+.view-mode-menu-list button:focus-visible {
   background: var(--rule-2);
   color: var(--ink);
 }
@@ -3598,6 +3614,167 @@ body.sidebar-resizing {
   padding: 8px 10px 4px;
   font-size: 12px;
   color: var(--muted);
+}
+
+/* 휴대폰 폭 보기 모드 메뉴 — 오른쪽 끝을 트리거에 맞춘다 (F-2083 6장) */
+.view-mode-menu-list {
+  width: max-content;
+  max-width: calc(100vw - 16px);
+}
+
+/* 휴대폰 폭 상단바 ⋯ 버튼·점 (F-2083 4.3) */
+.topbar-more-btn {
+  position: relative;
+}
+
+.topbar-more-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+@media (pointer: coarse) {
+  .icon-btn.topbar-more-btn,
+  .icon-btn.view-mode-menu-btn {
+    width: 44px;
+    height: 44px;
+    margin: -6px;
+  }
+}
+
+/* 휴대폰 폭 ⋯ 아래 판 — 모달 <dialog>, 전환은 .dialog 와 같은 방식 (F-2083 6장) */
+.more-sheet {
+  box-sizing: border-box;
+  position: fixed;
+  inset: auto 0 0 0;
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  max-height: 80dvh;
+  padding: 0;
+  overflow: hidden;
+  flex-direction: column;
+  border: 0;
+  border-top: 1px solid var(--rule);
+  border-radius: var(--radius-dialog) var(--radius-dialog) 0 0;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.16);
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity var(--transition-fast), transform var(--transition-move), display var(--transition-fast),
+    overlay var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.more-sheet[open] {
+  display: flex;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@starting-style {
+  .more-sheet[open] {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+.more-sheet::backdrop {
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transition: opacity var(--transition-fast), display var(--transition-fast), overlay var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.more-sheet[open]::backdrop {
+  opacity: 1;
+}
+
+@starting-style {
+  .more-sheet[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+.more-sheet-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 52px;
+  padding: 0 8px;
+}
+
+.more-sheet-head h2 {
+  margin: 0 0 0 4px;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.more-sheet-head-spacer {
+  flex: 1;
+}
+
+.more-sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.more-sheet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.more-sheet-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  text-align: left;
+  font-size: 14px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.more-sheet-item:hover:not(:disabled),
+.more-sheet-item:focus-visible {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+.more-sheet-item:disabled,
+.more-sheet-item[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: default;
+}
+
+.more-sheet-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.more-sheet-badge {
+  position: static;
+  flex: none;
+}
+
+.more-sheet-list .account-menu-email,
+.more-sheet-list .account-menu-usage,
+.more-sheet-list .account-menu-usage-docs,
+.more-sheet-list .share-menu-note {
+  padding-inline: 16px;
 }
 
 /* 편집기·표 칸·보기 모드 우클릭 메뉴 — 공유 메뉴와 같은 모양, 클릭 지점에 고정으로 연다 (F-170.md 5장) */

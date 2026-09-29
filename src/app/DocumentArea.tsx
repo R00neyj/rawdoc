@@ -4,7 +4,7 @@ import Editor, { type EditorHandle } from '../editor/Editor'
 import Viewer from '../viewer/Viewer'
 import E2eeLockedPanel from './E2eeLockedPanel'
 import WikiLinkPreview from './WikiLinkPreview'
-import Outline from './Outline'
+import Outline, { type OutlineControl } from './Outline'
 import CommentRailPanel, { CommentPanelPresence } from './CommentRailPanel'
 import { CommentCommandContext, type UseDocCommentsResult } from './useDocComments'
 import { MentionSourceContext } from './MentionField'
@@ -61,6 +61,7 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
     isReadOnlyDoc: boolean
     mapRoute: { centerDocId: string | null; returnDocId: string | null } | null
     openDoc: OpenDoc | null
+    outlineControlRef: RefObject<OutlineControl | null>
     openWikiLinkTarget: (target: string, heading?: string | null, source?: { docId: string; folderId: string | null }) => Promise<void>
     setCommentRailExtra: Dispatch<SetStateAction<number>>
     setEditorRefs: (handle: EditorHandle | null) => void
@@ -78,7 +79,7 @@ export default function DocumentArea({
   currentDocId, currentFolderId, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorRemountNonce, editorScrollTop,
   editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles, handleOpenWikiLink,
   handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, liveEditorOption, mapRoute,
-  mentionSource, onNavigateFolder, openDoc, openWikiLinkTarget, resolveAttachment, resolvedTheme, setCommentRailExtra, setEditorRefs, sharedDoc,
+  mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme, setCommentRailExtra, setEditorRefs, sharedDoc,
   sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
 }: DocumentAreaProps) {
   // 잠긴 금고 문서 — 편집기 자리에 P1 (F-405 6.2)
@@ -231,6 +232,7 @@ export default function DocumentArea({
           viewMode={viewMode}
           contentWidth={contentWidthPref}
           railOpen={commentRailVisible}
+          controlRef={outlineControlRef}
         />
       )}
       <WikiLinkPreview

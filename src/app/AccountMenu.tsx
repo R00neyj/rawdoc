@@ -1,5 +1,5 @@
 // 상단바 계정 메뉴 — 여닫기·키보드는 ShareMenu(F-130)와 같은 패턴, 로그아웃은 F-2034 (F-205.md 2.5)
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 
 import { loginUrl, logout, AFTER_LOGOUT_URL, LOGOUT_FAILED_MESSAGE, storedAccount, type AccountState } from './account'
 import { IconAccount, IconKey, IconLogin, IconLogout, IconShare, IconTooltip } from './icons'
@@ -7,9 +7,10 @@ import usePresence from './usePresence'
 import { fetchUsage, type Usage } from '../storage/attachmentsApi'
 import ApiTokensDialog from './ApiTokensDialog'
 import type { Notice } from './notice'
+import type { MenuAction } from './ShareMenu'
 import { formatMegabytes, formatCount } from '../lib/usageLimits'
 
-type AccountMenuProps = {
+export type AccountMenuProps = {
   account: AccountState
   onBeforeNavigate: () => Promise<void>
   onNotice: (notice: Notice) => void
@@ -17,10 +18,133 @@ type AccountMenuProps = {
   onLoggedOut?: () => void
 }
 
-export default function AccountMenu({ account, onBeforeNavigate, onNotice, onLoggedOut }: AccountMenuProps) {
-  const [open, setOpen] = useState(false)
+// 항목·딸린 상태 — 상단바 팝오버와 휴대폰 폭 ⋯ 판이 같이 쓴다. active 는 "열려 있다", onClose 는 닫고 트리거로 포커스 (F-2083 5장)
+// eslint-disable-next-line react-refresh/only-export-components -- 명세(F-2083 5장)가 이 훅을 이 파일에서 내보내게 했다
+export function useAccountMenu({
+  account,
+  onBeforeNavigate,
+  onNotice,
+  onLoggedOut,
+  active,
+  onClose,
+}: AccountMenuProps & { active: boolean; onClose: () => void }): { usage: Usage | null; items: MenuAction[]; dialogs: ReactNode } {
   const [usage, setUsage] = useState<Usage | null>(null)
   const [apiTokensOpen, setApiTokensOpen] = useState(false)
+
+  // 열 때마다 사용량을 새로 받는다. 실패·오프라인이면 줄을 숨긴다 (F-221.md 2.5)
+  useEffect(() => {
+    if (!active || account.state !== 'in') return
+    let cancelled = false
+    fetchUsage()
+      .then((u) => {
+        if (!cancelled) setUsage(u)
+      })
+      .catch(() => {
+        if (!cancelled) setUsage(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [active, account.state])
+
+  async function handleLogin() {
+    await onBeforeNavigate()
+    location.assign(loginUrl(location.hash))
+  }
+
+  // 순서는 4.1 — 저장 대기 입력 저장이 로그아웃 요청보다 먼저 (F-2034)
+  async function handleLogout() {
+    await onBeforeNavigate()
+    const ok = await logout()
+    if (ok) {
+      onLoggedOut?.()
+      location.replace(AFTER_LOGOUT_URL)
+    } else {
+      onNotice({ type: 'error', message: LOGOUT_FAILED_MESSAGE })
+    }
+  }
+
+  // 같은 앱 안 이동이라 onBeforeNavigate 는 부르지 않는다(useHashRouting.ts 의 hashchange 처리가 맡는다) (F-243 3.5)
+  async function handleOpenShares() {
+    location.assign('#/shares')
+  }
+
+  // 로그인 상태에서만, 로그아웃 위에 (F-222 2.4)
+  async function handleOpenApiTokens() {
+    setApiTokensOpen(true)
+  }
+
+  function closeThen(action: () => Promise<void>) {
+    return async () => {
+      onClose()
+      await action()
+    }
+  }
+
+  const items: MenuAction[] =
+    account.state === 'in'
+      ? [
+          { key: 'shares', label: '공유 관리', icon: IconShare, onSelect: closeThen(handleOpenShares) },
+          { key: 'api-tokens', label: 'API 토큰', icon: IconKey, onSelect: closeThen(handleOpenApiTokens) },
+          { key: 'logout', label: '로그아웃', icon: IconLogout, onSelect: closeThen(handleLogout) },
+        ]
+      : account.state === 'out'
+        ? [{ key: 'login', label: '로그인', icon: IconLogin, onSelect: closeThen(handleLogin) }]
+        : []
+
+  return { usage, items, dialogs: <ApiTokensDialog open={apiTokensOpen} onClose={() => setApiTokensOpen(false)} /> }
+}
+
+// 머리 줄 — 이메일·오프라인·이미지 사용량·문서 사용량 li (F-221.md 2.5, F-2030 7장)
+export function AccountInfoRows({ account, usage }: { account: AccountState; usage: Usage | null }): ReactNode {
+  const stored = account.state === 'offline' ? storedAccount() : null
+  const email = account.state === 'in' ? account.email : stored?.email ?? null
+  return (
+    <>
+      {email && (
+        <li className="account-menu-email" role="none">
+          <span>{email}</span>
+          {account.state === 'offline' && <span className="account-menu-offline">오프라인</span>}
+        </li>
+      )}
+      {!email && account.state === 'offline' && (
+        <li className="account-menu-email" role="none">
+          <span className="account-menu-offline">오프라인</span>
+        </li>
+      )}
+      {usage && (
+        <li
+          className={usage.used / usage.limit >= 0.9 ? 'account-menu-usage account-menu-usage-danger' : 'account-menu-usage'}
+          role="none"
+        >
+          이미지 {formatMegabytes(usage.used)} / 300MB
+        </li>
+      )}
+      {usage?.docs &&
+        Number.isFinite(usage.docs.bytes) &&
+        Number.isFinite(usage.docs.bytesLimit) &&
+        Number.isFinite(usage.docs.count) &&
+        Number.isFinite(usage.docs.countLimit) &&
+        usage.docs.bytesLimit > 0 &&
+        usage.docs.countLimit > 0 && (
+          <li
+            className={
+              usage.docs.bytes / usage.docs.bytesLimit >= 0.9 || usage.docs.count / usage.docs.countLimit >= 0.9
+                ? 'account-menu-usage-docs account-menu-usage-danger'
+                : 'account-menu-usage-docs'
+            }
+            role="none"
+          >
+            문서 {formatMegabytes(usage.docs.bytes)} / {formatMegabytes(usage.docs.bytesLimit)} · {formatCount(usage.docs.count)}개
+          </li>
+        )}
+    </>
+  )
+}
+
+export default function AccountMenu(props: AccountMenuProps) {
+  const { account } = props
+  const [open, setOpen] = useState(false)
   const { mounted, state } = usePresence(open)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLUListElement | null>(null)
@@ -44,71 +168,12 @@ export default function AccountMenu({ account, onBeforeNavigate, onNotice, onLog
     }
   }, [open])
 
-  // 열 때마다 사용량을 새로 받는다. 실패·오프라인이면 줄을 숨긴다 (F-221.md 2.5)
-  useEffect(() => {
-    if (!open || account.state !== 'in') return
-    let cancelled = false
-    fetchUsage()
-      .then((u) => {
-        if (!cancelled) setUsage(u)
-      })
-      .catch(() => {
-        if (!cancelled) setUsage(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [open, account.state])
-
   function closeAndReturnFocus() {
     setOpen(false)
     buttonRef.current?.focus()
   }
 
-  async function handleLogin() {
-    setOpen(false)
-    await onBeforeNavigate()
-    location.href = loginUrl(location.hash)
-  }
-
-  // 순서는 4.1 — 저장 대기 입력 저장이 로그아웃 요청보다 먼저 (F-2034)
-  async function handleLogout() {
-    setOpen(false)
-    await onBeforeNavigate()
-    const ok = await logout()
-    if (ok) {
-      onLoggedOut?.()
-      location.replace(AFTER_LOGOUT_URL)
-    } else {
-      onNotice({ type: 'error', message: LOGOUT_FAILED_MESSAGE })
-    }
-  }
-
-  // 로그인 상태에서만, 로그아웃 위에 (F-222 2.4)
-  async function handleOpenApiTokens() {
-    setOpen(false)
-    setApiTokensOpen(true)
-  }
-
-  // 로그인 상태에서만, API 토큰 위 (F-243 3.5) — 같은 앱 안 이동이라 onBeforeNavigate 는 부르지 않는다(useHashRouting.ts 의 hashchange 처리가 맡는다)
-  async function handleOpenShares() {
-    setOpen(false)
-    location.hash = '#/shares'
-  }
-
-  const stored = account.state === 'offline' ? storedAccount() : null
-  const email = account.state === 'in' ? account.email : stored?.email ?? null
-
-  const actionItems: { key: string; label: string; icon: typeof IconLogin; onSelect: () => Promise<void> }[] =
-    account.state === 'in'
-      ? [
-          { key: 'shares', label: '공유 관리', icon: IconShare, onSelect: handleOpenShares },
-          { key: 'api-tokens', label: 'API 토큰', icon: IconKey, onSelect: handleOpenApiTokens },
-          { key: 'logout', label: '로그아웃', icon: IconLogout, onSelect: handleLogout },
-        ]
-      : account.state === 'out'
-        ? [{ key: 'login', label: '로그인', icon: IconLogin, onSelect: handleLogin }]
-        : []
+  const { usage, items: actionItems, dialogs } = useAccountMenu({ ...props, active: open, onClose: closeAndReturnFocus })
 
   function handleKeyDown(e: KeyboardEvent<HTMLUListElement>) {
     if (e.key === 'Escape') {
@@ -125,11 +190,6 @@ export default function AccountMenu({ account, onBeforeNavigate, onNotice, onLog
       const next = current === -1 ? 0 : (current + delta + count) % count
       itemRefs.current[next]?.focus()
     }
-  }
-
-  async function runAndClose(action: () => Promise<void>) {
-    buttonRef.current?.focus()
-    await action()
   }
 
   const label = '계정'
@@ -159,45 +219,7 @@ export default function AccountMenu({ account, onBeforeNavigate, onNotice, onLog
           ref={menuRef}
           onKeyDown={handleKeyDown}
         >
-          {email && (
-            <li className="account-menu-email" role="none">
-              <span>{email}</span>
-              {account.state === 'offline' && <span className="account-menu-offline">오프라인</span>}
-            </li>
-          )}
-          {!email && account.state === 'offline' && (
-            <li className="account-menu-email" role="none">
-              <span className="account-menu-offline">오프라인</span>
-            </li>
-          )}
-          {usage && (
-            <li
-              className={
-                usage.used / usage.limit >= 0.9 ? 'account-menu-usage account-menu-usage-danger' : 'account-menu-usage'
-              }
-              role="none"
-            >
-              이미지 {formatMegabytes(usage.used)} / 300MB
-            </li>
-          )}
-          {usage?.docs &&
-            Number.isFinite(usage.docs.bytes) &&
-            Number.isFinite(usage.docs.bytesLimit) &&
-            Number.isFinite(usage.docs.count) &&
-            Number.isFinite(usage.docs.countLimit) &&
-            usage.docs.bytesLimit > 0 &&
-            usage.docs.countLimit > 0 && (
-              <li
-                className={
-                  usage.docs.bytes / usage.docs.bytesLimit >= 0.9 || usage.docs.count / usage.docs.countLimit >= 0.9
-                    ? 'account-menu-usage-docs account-menu-usage-danger'
-                    : 'account-menu-usage-docs'
-                }
-                role="none"
-              >
-                문서 {formatMegabytes(usage.docs.bytes)} / {formatMegabytes(usage.docs.bytesLimit)} · {formatCount(usage.docs.count)}개
-              </li>
-            )}
+          <AccountInfoRows account={account} usage={usage} />
           {actionItems.map((item, i) => (
             <li key={item.key} role="none">
               <button
@@ -206,7 +228,7 @@ export default function AccountMenu({ account, onBeforeNavigate, onNotice, onLog
                 ref={(el) => {
                   itemRefs.current[i] = el
                 }}
-                onClick={() => runAndClose(item.onSelect)}
+                onClick={() => void item.onSelect()}
               >
                 <item.icon size={16} />
                 {item.label}
@@ -215,7 +237,7 @@ export default function AccountMenu({ account, onBeforeNavigate, onNotice, onLog
           ))}
         </ul>
       )}
-      <ApiTokensDialog open={apiTokensOpen} onClose={() => setApiTokensOpen(false)} />
+      {dialogs}
     </div>
   )
 }

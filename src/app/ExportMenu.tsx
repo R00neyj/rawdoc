@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 
 import { IconDownload, IconNotes, IconPrint, IconRaw, IconCopy, IconTooltip } from './icons'
 import usePresence from './usePresence'
+import type { MenuAction } from './ShareMenu'
 
 // 상단바 `내보내기` 메뉴 (specs/features/F-278.md 3장, F-279.md 3장, F-280.md 3.3) — ShareMenu.tsx 패턴을 그대로 따른다(3.1)
-type ExportMenuProps = {
+export type ExportMenuProps = {
   disabled: boolean // 문서가 없을 때·공유 문서일 때 비활성 (3.2)
   onExportMd: () => void
   onExportTxt: () => void
@@ -13,7 +14,17 @@ type ExportMenuProps = {
   onCopyRich: () => void
 }
 
-type ExportMenuItem = { key: string; label: string; icon: ComponentType<{ size?: number }>; onSelect: () => void }
+// 상단바 팝오버와 휴대폰 폭 ⋯ 판이 같은 항목을 쓴다 (F-2083 5장)
+// eslint-disable-next-line react-refresh/only-export-components -- 명세(F-2083 5장)가 이 함수를 이 파일에서 내보내게 했다
+export function exportMenuItems({ onExportMd, onExportTxt, onPrintDoc, onExportHtml, onCopyRich }: Omit<ExportMenuProps, 'disabled'>): MenuAction[] {
+  return [
+    { key: 'md', label: '.md', icon: IconDownload, onSelect: onExportMd },
+    { key: 'txt', label: '.txt (평문)', icon: IconNotes, onSelect: onExportTxt },
+    { key: 'html', label: 'HTML 파일', icon: IconRaw, onSelect: onExportHtml },
+    { key: 'print', label: 'PDF (A4 인쇄)', icon: IconPrint, onSelect: onPrintDoc },
+    { key: 'copy-rich', label: '서식 있는 복사', icon: IconCopy, onSelect: onCopyRich },
+  ]
+}
 
 export default function ExportMenu({ disabled, onExportMd, onExportTxt, onPrintDoc, onExportHtml, onCopyRich }: ExportMenuProps) {
   const [open, setOpen] = useState(false)
@@ -45,13 +56,7 @@ export default function ExportMenu({ disabled, onExportMd, onExportTxt, onPrintD
     buttonRef.current?.focus()
   }
 
-  const items: ExportMenuItem[] = [
-    { key: 'md', label: '.md', icon: IconDownload, onSelect: onExportMd },
-    { key: 'txt', label: '.txt (평문)', icon: IconNotes, onSelect: onExportTxt },
-    { key: 'html', label: 'HTML 파일', icon: IconRaw, onSelect: onExportHtml },
-    { key: 'print', label: 'PDF (A4 인쇄)', icon: IconPrint, onSelect: onPrintDoc },
-    { key: 'copy-rich', label: '서식 있는 복사', icon: IconCopy, onSelect: onCopyRich },
-  ]
+  const items = exportMenuItems({ onExportMd, onExportTxt, onPrintDoc, onExportHtml, onCopyRich })
 
   function handleKeyDown(e: KeyboardEvent<HTMLUListElement>) {
     if (e.key === 'Escape') {
@@ -69,10 +74,10 @@ export default function ExportMenu({ disabled, onExportMd, onExportTxt, onPrintD
     }
   }
 
-  function runAndClose(action: () => void) {
+  function runAndClose(action: () => void | Promise<void>) {
     setOpen(false)
     buttonRef.current?.focus()
-    action()
+    void action()
   }
 
   // 화면에 글자로 보이지 않는 툴팁·aria-label 이다 — 무엇을 내보낼 수 있는지는 메뉴를 열면 보인다 (3.2, 2026-09-21 사람 승인)

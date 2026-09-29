@@ -170,8 +170,8 @@ test.describe('F-144 A8 키보드', () => {
   })
 })
 
-test.describe('F-229 좁은 화면 목차 버튼 (412×915, 터치)', () => {
-  test.use({ viewport: { width: 412, height: 915 }, hasTouch: true, isMobile: true })
+test.describe('F-229 좁은 화면 목차 버튼 (700×915, 터치)', () => {
+  test.use({ viewport: { width: 700, height: 915 }, hasTouch: true, isMobile: true })
 
   // F-229 A2 버튼 위치·크기(44px, 오른쪽 16·위 12)는 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
 
@@ -189,7 +189,7 @@ test.describe('F-229 좁은 화면 목차 버튼 (412×915, 터치)', () => {
 
     const cardRect = await rectOf(card)
     expect(cardRect.left).toBeGreaterThanOrEqual(16)
-    expect(cardRect.right).toBeLessThanOrEqual(412 - 16)
+    expect(cardRect.right).toBeLessThanOrEqual(700 - 16)
 
     const current = page.locator('.outline-popup-card .outline-item[aria-current="location"]')
     await expect(current).toBeVisible()

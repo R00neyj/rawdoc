@@ -21,6 +21,16 @@ function scrollTo(el: HTMLElement, top: number) {
 // PublicView.tsx 의 가짜 handle 도 맞도록 실제 쓰는 메서드만 Pick 한다
 type OutlineEditorHandle = Pick<EditorHandle, 'getHeadings' | 'onHeadingsChange' | 'view' | 'scrollToHeading' | 'focus'>
 
+// ⋯ 판이 목차 카드를 열 때 쓰는 통로 — 마운트된 동안만 채워진다 (F-2083 4.6)
+export type OutlineControl = {
+  hasHeadings: () => boolean
+  openCard: (returnFocusTo: HTMLElement | null) => void
+}
+
+function setControl(ref: RefObject<OutlineControl | null>, value: OutlineControl | null) {
+  ref.current = value
+}
+
 type OutlineProps = {
   editorRef: RefObject<OutlineEditorHandle | null>
   containerRef: RefObject<HTMLElement | null>
@@ -31,10 +41,11 @@ type OutlineProps = {
   contentWidth?: number
   // 참이면 여백 판정 없이 선 목차 — 레일이 있으면 편집기 오른쪽 여백이 늘 164px 이상이다 (F-505 3.6, 2026-09-27 tweak)
   railOpen?: boolean
+  controlRef?: RefObject<OutlineControl | null>
 }
 
 // 보기 모드에서도 Editor 는 hidden 으로 마운트돼 있어 editorRef 의 view.state 를 쓴다 (F-123.md 3.3)
-export default function Outline({ editorRef, containerRef, viewerRef, docId, viewMode, contentWidth, railOpen }: OutlineProps) {
+export default function Outline({ editorRef, containerRef, viewerRef, docId, viewMode, contentWidth, railOpen, controlRef }: OutlineProps) {
   const [headings, setHeadings] = useState<Heading[]>([])
   const [fits, setFits] = useState(false)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
@@ -45,6 +56,9 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
   const cardId = useId()
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const popupRef = useRef<HTMLDivElement | null>(null)
+  const escapeFocusRef = useRef<HTMLElement | null>(null)
+  const popupModeRef = useRef(false)
+  const headingsRef = useRef<Heading[]>([])
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
   const { mounted: cardMounted, state: cardState } = usePresence(cardOpen)
 
@@ -73,6 +87,25 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
   }, [containerRef, contentWidth])
 
   const visible = headings.length > 0
+  const popupMode = !railOpen && !fits
+
+  useEffect(() => {
+    headingsRef.current = headings
+    popupModeRef.current = popupMode
+  }, [headings, popupMode])
+
+  useEffect(() => {
+    if (!controlRef) return
+    setControl(controlRef, {
+      hasHeadings: () => headingsRef.current.length > 0,
+      openCard: (returnFocusTo) => {
+        if (!popupModeRef.current) return
+        escapeFocusRef.current = returnFocusTo
+        setCardOpen(true)
+      },
+    })
+    return () => setControl(controlRef, null)
+  }, [controlRef])
 
   // 현재 위치 갱신 + 스크롤 구독 (3.3)
   useEffect(() => {
@@ -174,7 +207,9 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
     if (e.key !== 'Escape') return
     e.preventDefault()
     setCardOpen(false)
-    buttonRef.current?.focus()
+    const returnTo = escapeFocusRef.current ?? buttonRef.current
+    escapeFocusRef.current = null
+    returnTo?.focus()
   }
 
   function handlePopupBlur(e: FocusEvent<HTMLElement>) {
@@ -194,10 +229,11 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
       handle.scrollToHeading(heading.from)
     }
     collapseNow()
+    escapeFocusRef.current = null
     setCardOpen(false) // F-229 2.4 — 포커스는 버튼으로 돌아가지 않는다
   }
 
-  if (!railOpen && !fits) {
+  if (popupMode) {
     const cardWidth = containerSize.width > 0 ? Math.min(280, containerSize.width - POPUP_CARD_MARGIN.width) : 280
     const cardMaxHeight =
       containerSize.height > 0 ? Math.min(window.innerHeight * 0.6, containerSize.height - POPUP_CARD_MARGIN.height) : undefined

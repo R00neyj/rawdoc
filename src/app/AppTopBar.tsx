@@ -17,6 +17,8 @@ import type { UseAccountStatusResult } from './useAccountStatus'
 import type { UseCommandPaletteResult } from './useCommandPalette'
 import type { ExportActions } from './exportActions'
 import type { NoticeWithAction } from './NoticeBar'
+import type { OutlineControl } from './Outline'
+import { topBarScreen } from './topBarMore'
 
 // 공유 화면·지도가 떠 있는 동안 상단바에 넘기는 빈 접속자 목록 — 참조가 늘 같아 다시 그리지 않는다 (F-307 7.4)
 const NO_PEERS: Peer[] = []
@@ -39,14 +41,17 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
     docSaverFlushRef: RefObject<() => Promise<boolean>>
     e2ee: UseE2ee | null
     getShareDoc: () => { title: string; lineEnding: LineEnding; content: string }
+    helpOpen: boolean
     isEmpty: boolean
     isReadOnlyDoc: boolean
     mapRoute: { centerDocId: string | null; returnDocId: string | null } | null
     openDoc: OpenDoc | null
+    outlineControlRef: RefObject<OutlineControl | null>
     openSearch: () => void
     requestInviteCurrentDoc: () => void
     runToolbarCommand: (cmd: StateCommand) => void
     sharedDoc: ShareDoc | null
+    sharesOpen: boolean
     showNotice: (input: NoticeWithAction, options?: { sticky?: boolean }) => number
     store: Store
     toggleButtonRef: RefObject<HTMLButtonElement | null>
@@ -57,8 +62,8 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
 export default function AppTopBar({
   account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef, e2ee,
   getShareDoc, handleCopyDocAsRichText, handleExportDoc, handleExportDocAsHtml, handleExportDocAsText, handleOpenNotification, handlePrintDoc,
-  isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, openPalette, openSearch,
-  requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, showNotice, sidebarOpen, store, toggleButtonRef, toggleCommentsPanel,
+  helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch,
+  requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store, toggleButtonRef, toggleCommentsPanel,
   toggleSidebar, toolbarPref, viewMode, wikiResolver,
 }: AppTopBarProps) {
   // 탭바 표시 조건 (F-233 3.1) — 자리는 항상 유지, 조건에 안 맞으면 안 그린다.
@@ -112,6 +117,8 @@ export default function AppTopBar({
       }}
       onAccountNotice={showNotice}
       onAccountLoggedOut={() => e2ee?.broadcastLogoutLock()}
+      screen={topBarScreen({ bootPhase, currentDocId, sharedDoc: Boolean(sharedDoc), sharesOpen, helpOpen, mapRoute: Boolean(mapRoute) })}
+      outlineControlRef={outlineControlRef}
       showToolbar={showToolbar}
       onRunToolbarCommand={runToolbarCommand}
       // 공유 화면·지도가 떠 있는 동안은 지금 보는 것이 그 문서가 아니다 (F-307 7.4)

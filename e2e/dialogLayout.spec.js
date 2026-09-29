@@ -25,8 +25,9 @@ async function openSettingsDialog(page) {
 }
 
 async function openInviteDialog(page) {
-  await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).first().click()
-  await page.getByRole('menuitem', { name: '사람 초대…' }).click()
+  await page.getByRole('button', { name: '메뉴', exact: true }).click()
+  await page.getByRole('button', { name: '공유', exact: true }).click()
+  await page.getByRole('button', { name: '사람 초대…' }).click()
   const dialog = page.locator('.dialog[open]')
   await waitTransitionEnd(dialog)
   return dialog

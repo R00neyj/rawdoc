@@ -35,6 +35,8 @@ import checkSvg from '@material-symbols/svg-400/outlined/check.svg?raw'
 import personAddSvg from '@material-symbols/svg-400/outlined/person_add.svg?raw'
 import groupSvg from '@material-symbols/svg-400/outlined/group.svg?raw'
 import keySvg from '@material-symbols/svg-400/outlined/key.svg?raw'
+import homeSvg from '@material-symbols/svg-400/outlined/home.svg?raw'
+import arrowBackSvg from '@material-symbols/svg-400/outlined/arrow_back.svg?raw'
 import tocSvg from '@material-symbols/svg-400/outlined/toc.svg?raw'
 import openInNewSvg from '@material-symbols/svg-400/outlined/open_in_new.svg?raw'
 import recenterSvg from '@material-symbols/svg-400/outlined/recenter.svg?raw'
@@ -150,6 +152,8 @@ export const IconPersonAdd = makeIcon(personAddSvg)
 export const IconGroup = makeIcon(groupSvg)
 export const IconKey = makeIcon(keySvg)
 export const IconToc = makeIcon(tocSvg)
+export const IconHome = makeIcon(homeSvg)
+export const IconArrowBack = makeIcon(arrowBackSvg)
 
 // 상단바 탭바(F-233 3.4) — 링크 추가(위키링크)는 기존 IconLink 를 그대로 쓴다(명령이 다를 뿐 "연결" 개념은 같다)
 export const IconAddLink = IconLink
