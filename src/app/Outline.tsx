@@ -138,8 +138,8 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
     setPanelHost(containerRef.current?.closest<HTMLElement>('.app-body') ?? null)
   }, [containerRef])
 
-  // 폭이 넓어지거나 지도·공유 화면으로 가거나 문서가 바뀌면 패널은 닫힌 채로 돌아간다 (F-2089 5.2)
-  const panelKey = `${docId}|${Boolean(phonePanel)}`
+  // 폭이 넓어지거나 지도·공유 화면으로 가거나 문서가 바뀌거나 제목이 다 사라지면 패널은 닫힌 채로 돌아간다 (F-2089 5.2)
+  const panelKey = `${docId}|${Boolean(phonePanel)}|${headings.length > 0}`
   const [seenPanelKey, setSeenPanelKey] = useState(panelKey)
   if (seenPanelKey !== panelKey) {
     setSeenPanelKey(panelKey)

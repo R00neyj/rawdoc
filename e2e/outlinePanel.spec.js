@@ -106,3 +106,31 @@ test('F-2089 E2 왼쪽 사이드바가 열려 있을 때·넓은 표를 가로�
   await page.waitForTimeout(300)
   await expect(panel(page)).toHaveCount(0)
 })
+
+test('F-2089 E3 패널이 열린 채 제목이 모두 사라지면 패널 상태도 닫혀, 편집기의 Esc 가 포커스를 ⋯ 버튼으로 빼앗지 않는다', async ({ page }) => {
+  await openApp(page)
+  await importMarkdown(page, { content: longDoc() })
+  await page.locator('.topbar').getByRole('button', { name: /^메뉴/ }).click()
+  await page.locator('dialog.more-sheet').getByRole('button', { name: '목차', exact: true }).click()
+  await expect(panel(page)).toHaveAttribute('data-state', 'open')
+
+  // 공동 작업자가 제목을 모두 지운 상황 — 패널을 거치지 않고 문서를 바꾼다
+  await page.evaluate(() => {
+    const view = document.querySelector('.cm-content').cmTile.view
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '본문만 남음\n' } })
+  })
+  await expect(panel(page)).toHaveCount(0)
+
+  await page.locator('.cm-content').tap()
+  await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest('.cm-editor')))).toBe(true)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
+  expect(await page.evaluate(() => Boolean(document.activeElement?.closest('.cm-editor')))).toBe(true)
+
+  await page.evaluate(() => {
+    const view = document.querySelector('.cm-content').cmTile.view
+    view.dispatch({ changes: { from: 0, insert: '# 새 제목\n\n' } })
+  })
+  await page.waitForTimeout(300)
+  await expect(panel(page)).toHaveCount(0)
+})
