@@ -5231,6 +5231,12 @@ body.sidebar-resizing {
 }
 
 @media (max-width: 600px) and (pointer: coarse) {
+  /* 앱 아이콘(icons.tsx makeIcon) 기본 18px 은 손가락 화면에서 작다 — 22px 로 (tweak 2026-09-30) */
+  svg[viewBox='0 -960 960 960'][width='18'] {
+    width: 22px;
+    height: 22px;
+  }
+
   .topbar .topbar-pill .icon-btn,
   .topbar .topbar-pill .brand-group {
     width: 44px;
