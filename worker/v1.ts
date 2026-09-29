@@ -34,7 +34,7 @@ function innerRequest(request: Request, user: AuthUser, bodyObj: unknown, dropHe
   return inner
 }
 
-export async function handleCreateDocV1(request: Request, env: Env): Promise<Response> {
+export async function handleCreateDocV1(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   const user = await requireUser(request, env)
   const parsed = await readJsonLimited(request, MAX_BODY_BYTES)
   if (!parsed.ok) return badBody(parsed)
@@ -57,7 +57,7 @@ export async function handleCreateDocV1(request: Request, env: Env): Promise<Res
   const forwardBody: Record<string, unknown> = { title, content, lineEnding: resolvedLineEnding }
   if (folderId !== undefined) forwardBody.folderId = folderId
 
-  return handleCreateDoc(innerRequest(request, user, forwardBody), env)
+  return handleCreateDoc(innerRequest(request, user, forwardBody), env, ctx)
 }
 
 type DocSummaryBody = { title: string; e2eeKey?: string; attachmentRefs?: string[] }
@@ -193,7 +193,7 @@ export async function handleUpdateDocV1(
   }
 }
 
-export async function handleCreateAttachmentV1(request: Request, env: Env): Promise<Response> {
+export async function handleCreateAttachmentV1(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   const user = await requireUser(request, env)
 
   const contentLength = request.headers.get('Content-Length')
@@ -208,7 +208,7 @@ export async function handleCreateAttachmentV1(request: Request, env: Env): Prom
   }
 
   const id = generateAttachmentId()
-  const result = await storeAttachment(env, user.id, id, buffer, null)
+  const result = await storeAttachment(env, user.id, id, buffer, null, ctx)
   if (!result.ok) {
     if (result.status === 400) return errorResponse(result.error, 400)
     return jsonResponse({ error: result.error, used: result.used, limit: result.limit }, 507)

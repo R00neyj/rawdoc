@@ -53,7 +53,7 @@ import { YStore } from './yStore'
 import type { DoStorageLike } from './yStore'
 import { updateDocRow } from './docWrite'
 import type { DocRow } from './docWrite'
-import { isDailyLimitReached, rowToUsage, snapshotUsageStatement, utcDay } from './usage'
+import { DOC_BYTES_QUOTA, DOC_COUNT_QUOTA, isDailyLimitReached, quotaOver, rowToUsage, sendQuotaPush, snapshotUsageStatement, utcDay } from './usage'
 import type { UsageRow } from './usage'
 
 export const FLUSH_DEBOUNCE_MS = 5_000
@@ -243,6 +243,8 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
   // 다음 한 번의 flush 가 연결 점검을 건너뛴다 — 알람의 하위 요청 예산 (F-3006 2.2)
   private skipCheckNext = false
   private ownerId: string | null = null
+  private lastUsageRow: UsageRow | undefined
+  private quotaClaimed = false
   private slowDay: string | null = null
   private blocked = false
   private lastBatchAt: number | null = null
@@ -588,6 +590,7 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     this.persistPending()
 
     let result: SnapshotResult
+    this.lastUsageRow = undefined
     try {
       result = await this.snapshot(bypassSlow, fullAnchors)
     } catch (err) {
@@ -600,8 +603,28 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     if (result === 'retry') this.scheduleRetry()
 
     if (skipCheck) return
+    await this.pushQuotaWarning()
     if (this.lastRevalidate === null || Date.now() - this.lastRevalidate >= REVALIDATE_INTERVAL_MS) {
       await this.revalidateConnections()
+    }
+  }
+
+  // F-3008 4장 — 인스턴스당 claim 한 번, 알람 flush 는 건너뛴다. 실패는 삼킨다
+  private async pushQuotaWarning() {
+    const row = this.lastUsageRow
+    if (!row || this.quotaClaimed || !this.ownerId) return
+    const quota = quotaOver({
+      docBytes: { used: row.content_bytes, limit: DOC_BYTES_QUOTA },
+      docCount: { used: row.doc_count, limit: DOC_COUNT_QUOTA },
+    })
+    if (!quota) return
+    try {
+      const push = await this.pushKeys()
+      if (!push) return
+      this.quotaClaimed = true
+      await sendQuotaPush(this.host.env.DB, push.auth, this.ownerId, quota, Date.now())
+    } catch (err) {
+      console.warn(`docRoom: quota push failed (${this.host.docId})`, err)
     }
   }
 
@@ -729,7 +752,8 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
       this.lastBatchAt = Date.now()
       // 던지지 않고 돌아왔으면 댓글 묶음은 커밋됐다 — UPDATE 가 0행이어도
       if (plan) this.commitCommentPlan(plan)
-      this.judgeUsage(results[writeBody ? 1 : 0].results?.[0], now)
+      this.lastUsageRow = results[writeBody ? 1 : 0].results?.[0]
+      this.judgeUsage(this.lastUsageRow, now)
       if (wantsDue) {
         const due = (results[results.length - 1] as unknown as D1Result<{ due: unknown }>).results?.[0]?.due
         if (typeof due === 'number') await this.scheduleAlarm(due)

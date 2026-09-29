@@ -8,7 +8,7 @@ import { sniffImage, MAX_PIXELS, IMAGE_MIME, type ImageExt } from './imageSniff'
 import { extractAttachmentRefs } from '../src/lib/imageBlock'
 import { findPublicLink, folderTreeIds, isDocInLinkSet } from './links'
 import { getDocAccess, isDocAttachmentOwner } from './access'
-import { DAILY_WRITE_LIMIT, DOC_BYTES_QUOTA, DOC_COUNT_QUOTA, dayUsageStatement, usageOf, writesToday } from './usage'
+import { DAILY_WRITE_LIMIT, DOC_BYTES_QUOTA, DOC_COUNT_QUOTA, dayUsageStatement, quotaPushInBackground, usageOf, writesToday } from './usage'
 import { E2EE_ATTACHMENT_OVERHEAD, E2EE_FORMAT_VERSION, E2EE_SERVER_MAX_ATTACHMENT_BYTES } from '../src/lib/e2eeLimits'
 
 export const MAX_ATTACHMENT_BYTES = E2EE_SERVER_MAX_ATTACHMENT_BYTES
@@ -75,6 +75,7 @@ export async function storeAttachment(
   id: string,
   buffer: Uint8Array,
   expectedExt: ImageExt | null,
+  ctx?: ExecutionContext,
 ): Promise<StoreAttachmentResult> {
   const sniffed = sniffImage(buffer)
   if (!sniffed) return { ok: false, status: 400, error: 'unsupported' }
@@ -95,6 +96,7 @@ export async function storeAttachment(
     ).bind(ownerId, id, sniffed.ext, sniffed.mime, buffer.length, sniffed.width, sniffed.height, now),
     dayUsageStatement(env.DB, ownerId, now),
   ])
+  await quotaPushInBackground(env, ctx, ownerId, { images: { used: used + buffer.length, limit: ATTACHMENT_QUOTA_BYTES } }, now)
 
   return {
     ok: true,
@@ -112,7 +114,7 @@ export function generateAttachmentId(): string {
 export async function handleUploadAttachment(
   request: Request,
   env: Env,
-  _ctx: ExecutionContext,
+  ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
@@ -175,10 +177,11 @@ export async function handleUploadAttachment(
       ).bind(user.id, id, ext, mime, buffer.length, width, height, now),
       dayUsageStatement(env.DB, user.id, now),
     ])
+    await quotaPushInBackground(env, ctx, user.id, { images: { used: used + buffer.length, limit: ATTACHMENT_QUOTA_BYTES } }, now)
     return jsonResponse({ id, ext, mime, size: buffer.length, width, height, e2ee: true as const }, 201)
   }
 
-  const result = await storeAttachment(env, user.id, id, buffer, ext)
+  const result = await storeAttachment(env, user.id, id, buffer, ext, ctx)
   if (!result.ok) {
     if (result.status === 400) return errorResponse(result.error, 400)
     return jsonResponse({ error: result.error, used: result.used, limit: result.limit }, 507)

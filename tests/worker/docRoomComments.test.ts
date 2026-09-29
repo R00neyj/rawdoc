@@ -725,3 +725,90 @@ describe('F-3006 R1~R7 스냅숏 끝 MIN·알람이 보낸다', () => {
     expect(late.room.alarms).toEqual([T + 180_000])
   })
 })
+
+describe('F-3008 R1~R4 스냅숏 뒤 저장 공간 경고', () => {
+  const T = Date.parse('2026-09-30T00:00:00Z')
+  const NEAR = 104_857_600 * 0.9
+
+  beforeEach(() => {
+    vi.setSystemTime(T)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function b64url(bytes: Uint8Array): string {
+    let s = ''
+    for (const b of bytes) s += String.fromCharCode(b)
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  }
+
+  async function world(env: Record<string, unknown> | null) {
+    const w = setup()
+    const pair = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])) as CryptoKeyPair
+    const raw = new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer)
+    w.sqlDb
+      .prepare('INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at) VALUES (?,?,?,?,?,?)')
+      .run('s1', 'owner', 'https://fcm.googleapis.com/fcm/send/s1', b64url(raw), b64url(crypto.getRandomValues(new Uint8Array(16))), 1)
+    w.sqlDb.prepare("UPDATE users SET content_bytes = ? WHERE id = 'owner'").run(NEAR)
+    const room = makeRoom(w.DB, makeStorage(), env ?? {})
+    await room.core.load()
+    return { ...w, room }
+  }
+
+  const grow = (room: ReturnType<typeof makeRoom>, ch: string) => room.doc.transact(() => room.content.insert(0, ch), conn(OWNER))
+  const quotaSql = (state: { prepares: string[] }) => state.prepares.filter((s) => s.includes('push_quota_at'))
+  const quotaAt = (sqlDb: DatabaseSync) => (sqlDb.prepare("SELECT push_quota_at AS n FROM users WHERE id = 'owner'").get() as { n: number | null }).n
+
+  it('R1 스냅숏이 90% 를 넘기면 fetch 1, 표지가 찍히고 스냅숏은 정상', async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 201 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { sqlDb, room } = await world(await vapidEnv())
+    grow(room, 'Z')
+    await room.core.flush()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(quotaAt(sqlDb)).toBe(T)
+    expect(docRow(sqlDb).version).toBe(2)
+  })
+
+  it('R2 같은 방에서 더 flush 해도 claim SQL 은 모두 1', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 201 })))
+    const { state, room } = await world(await vapidEnv())
+    for (const ch of ['Z', 'Y', 'X']) {
+      grow(room, ch)
+      await room.core.flush()
+    }
+    expect(quotaSql(state)).toHaveLength(1)
+  })
+
+  it('R3 알람이 부른 flush 는 건너뛰고 보통 flush 가 한다', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 201 })))
+    const { state, room } = await world(await vapidEnv())
+    grow(room, 'Z')
+    await room.core.alarm()
+    expect(quotaSql(state)).toHaveLength(0)
+    grow(room, 'Y')
+    await room.core.flush()
+    expect(quotaSql(state)).toHaveLength(1)
+  })
+
+  it('R4 VAPID 없음이면 claim SQL 0, 구독 읽기가 던져도 flush 는 풀리고 warn 1', async () => {
+    const off = await world(null)
+    grow(off.room, 'Z')
+    await off.room.core.flush()
+    expect(quotaSql(off.state)).toHaveLength(0)
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const on = await world(await vapidEnv())
+    const prepare = on.DB.prepare.bind(on.DB)
+    on.DB.prepare = ((sql: string) => {
+      if (sql.includes('FROM push_subscriptions')) throw new Error('D1 down')
+      return prepare(sql)
+    }) as D1Database['prepare']
+    grow(on.room, 'Z')
+    await on.room.core.flush()
+    expect(docRow(on.sqlDb).version).toBe(2)
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+})

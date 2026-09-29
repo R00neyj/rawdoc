@@ -8,15 +8,19 @@ import { docCommentDeleteStatements } from './commentRows'
 import { e2eeDocFields, rowToDoc, updateDocRow, updateE2eeDocRow } from './docWrite'
 import type { DocRow } from './docWrite'
 import {
+  DOC_BYTES_QUOTA,
+  DOC_COUNT_QUOTA,
   checkDocCreate,
   checkDocGrow,
   dayUsageStatement,
   deleteDocUsageStatement,
   docUsageStatements,
+  quotaPushInBackground,
   readUsage,
   usageOf,
   utf8Bytes,
 } from './usage'
+import type { UserUsage } from './usage'
 import {
   MAX_BODY_BYTES,
   MAX_CONTENT_BYTES,
@@ -139,7 +143,7 @@ export async function handleGetDoc(
   return jsonResponse(rowToDoc(access.doc))
 }
 
-export async function handleCreateDoc(request: Request, env: Env): Promise<Response> {
+export async function handleCreateDoc(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   const user = await requireUser(request, env)
   const parsed = await readJsonLimited(request, MAX_BODY_BYTES)
   if (!parsed.ok) return badBody(parsed)
@@ -192,7 +196,8 @@ export async function handleCreateDoc(request: Request, env: Env): Promise<Respo
   if (e2ee && !(await hasE2eeKeys(env, user.id))) return jsonResponse({ error: 'no_vault' }, 409)
 
   const newBytes = utf8Bytes(content as string)
-  const quota = checkDocCreate(await usageOf(env, user), newBytes)
+  const startUsage = await usageOf(env, user)
+  const quota = checkDocCreate(startUsage, newBytes)
   if (quota) return jsonResponse(quota, 413)
 
   const id = typeof bodyId === 'string' ? bodyId : crypto.randomUUID()
@@ -209,6 +214,16 @@ export async function handleCreateDoc(request: Request, env: Env): Promise<Respo
     ).bind(id, user.id, title, content, lineEnding, resolvedFolderId, resolvedPinnedAt, 1, resolvedCreatedAt, resolvedUpdatedAt, e2eeKeyValue, refsValue),
     ...docUsageStatements(env.DB, { actorId: user.id, ownerId: user.id, now, deltaBytes: newBytes, deltaDocs: 1 }),
   ])
+  await quotaPushInBackground(
+    env,
+    ctx,
+    user.id,
+    {
+      docBytes: { used: startUsage.contentBytes + newBytes, limit: DOC_BYTES_QUOTA },
+      docCount: { used: startUsage.docCount + 1, limit: DOC_COUNT_QUOTA },
+    },
+    now,
+  )
 
   return jsonResponse(
     rowToDoc({
@@ -232,7 +247,7 @@ export async function handleCreateDoc(request: Request, env: Env): Promise<Respo
 export async function handleUpdateDoc(
   request: Request,
   env: Env,
-  _ctx: ExecutionContext,
+  ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
@@ -280,12 +295,14 @@ export async function handleUpdateDoc(
     return jsonResponse({ error: 'conflict', doc: rowToDoc(existing) }, 409)
   }
 
+  let grown: { ownerUsage: UserUsage; deltaBytes: number } | null = null
   if (typeof content === 'string') {
     const deltaBytes = utf8Bytes(content) - utf8Bytes(existing.content)
     if (deltaBytes > 0) {
       const ownerUsage = existing.owner_id === user.id ? await usageOf(env, user) : await readUsage(env, existing.owner_id)
       const quota = checkDocGrow(ownerUsage, deltaBytes)
       if (quota) return jsonResponse(quota, 413)
+      grown = { ownerUsage, deltaBytes }
     }
   }
 
@@ -301,6 +318,10 @@ export async function handleUpdateDoc(
     return jsonResponse({ error: 'conflict', doc: rowToDoc(latest) }, 409)
   }
 
+  if (grown) {
+    const docBytes = { used: grown.ownerUsage.contentBytes + grown.deltaBytes, limit: DOC_BYTES_QUOTA }
+    await quotaPushInBackground(env, ctx, existing.owner_id, { docBytes }, Date.now())
+  }
   return jsonResponse(rowToDoc(written.row))
 }
 

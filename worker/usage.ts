@@ -1,4 +1,9 @@
 // 사용량 열·한도 상수·사용량 줄 SQL·사용량 읽기 (specs/features/F-2024.md 2.3, F-2025.md 4장·5장)
+import { PUSH_QUOTA_RATIO, PUSH_QUOTA_REPEAT_MS } from '../src/lib/pushPayload'
+import { quotaPushPayload } from '../src/lib/pushText'
+import type { PushQuota } from '../src/lib/pushText'
+import { pushInBackground, pushToEmail } from './pushSend'
+import type { VapidAuth } from './webPush'
 export const DAILY_WRITE_LIMIT = 5_000
 export const DOC_BYTES_QUOTA = 104_857_600 // 100MiB
 export const DOC_COUNT_QUOTA = 10_000
@@ -180,4 +185,50 @@ export async function readUsage(env: Env, userId: string): Promise<UserUsage> {
 export async function usageOf(env: Env, user: { id: string; usage?: UserUsage }): Promise<UserUsage> {
   if (user.usage) return user.usage
   return readUsage(env, user.id)
+}
+
+// F-3008 저장 공간 경고 푸시
+
+const CLAIM_QUOTA_PUSH_SQL =
+  'UPDATE users SET push_quota_at = ?1 WHERE id = ?2 AND (push_quota_at IS NULL OR push_quota_at < ?1 - ?3) RETURNING email'
+
+export function quotaOver(candidates: PushQuota): PushQuota | null {
+  const over: PushQuota = {}
+  for (const key of ['images', 'docBytes', 'docCount'] as const) {
+    const item = candidates[key]
+    if (item && item.used / item.limit >= PUSH_QUOTA_RATIO) over[key] = item
+  }
+  return Object.keys(over).length > 0 ? over : null
+}
+
+export async function claimQuotaPush(db: D1Database, userId: string, now: number): Promise<string | null> {
+  const row = await db.prepare(CLAIM_QUOTA_PUSH_SQL).bind(now, userId, PUSH_QUOTA_REPEAT_MS).first<{ email: string }>()
+  return row?.email ?? null
+}
+
+export async function sendQuotaPush(
+  db: D1Database,
+  auth: VapidAuth,
+  userId: string,
+  quota: PushQuota,
+  now: number,
+  fetchImpl?: typeof fetch,
+): Promise<number> {
+  const email = await claimQuotaPush(db, userId, now)
+  if (!email) return 0
+  return pushToEmail(db, auth, email, quotaPushPayload(quota), now, fetchImpl)
+}
+
+export async function quotaPushInBackground(
+  env: Env,
+  ctx: ExecutionContext | undefined,
+  userId: string,
+  candidates: PushQuota,
+  now: number,
+): Promise<void> {
+  const quota = quotaOver(candidates)
+  if (!quota) return
+  await pushInBackground(env, ctx, 'quota', async (auth) => {
+    await sendQuotaPush(env.DB, auth, userId, quota, now)
+  })
 }
