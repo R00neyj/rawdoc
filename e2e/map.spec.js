@@ -616,7 +616,8 @@ test.describe('F-2006 장력 묶음', () => {
     }
     await expect(p.locator('.map-group-row')).toHaveCount(1)
 
-    // 닫고 다시 들어와도 되돌린 값이 유지된다
+    // 닫고 다시 들어와도 되돌린 값이 유지된다 — 패널이 열려 있으면 × 는 패널만 닫는다
+    await map.getByRole('button', { name: '지도 설정 닫기', exact: true }).click()
     await map.getByRole('button', { name: '닫기', exact: true }).click()
     await page.goto('/#/map')
     const map2 = page.locator('.map-page')

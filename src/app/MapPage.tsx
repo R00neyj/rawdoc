@@ -355,14 +355,13 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
         </div>
 
         <div className="map-page-actions">
-          {effectiveView === 'graph' && (
-            <span className="icon-btn-wrap">
-              <button type="button" className="icon-btn map-fit-btn" aria-label="맞춤" onClick={() => setFitToken((n) => n + 1)}>
-                <IconFit size={18} />
-              </button>
-              <IconTooltip text="맞춤" />
-            </span>
-          )}
+          {/* 목록 보기에선 폭을 접어 숨긴다 — 머리 줄 폭이 전환으로 바뀐다 (tweak 2026-09-29) */}
+          <span className="icon-btn-wrap map-fit-wrap" data-hidden={effectiveView !== 'graph' || undefined} inert={effectiveView !== 'graph'}>
+            <button type="button" className="icon-btn map-fit-btn" aria-label="맞춤" onClick={() => setFitToken((n) => n + 1)}>
+              <IconFit size={18} />
+            </button>
+            <IconTooltip text="맞춤" />
+          </span>
           {/* 목록 보기에서도 그린다 — WebGL 을 못 쓰는 사람에게는 목록이 유일한 화면이다 (F-2007 11.3) */}
           <span className="icon-btn-wrap">
             <button
@@ -378,11 +377,17 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
             </button>
             <IconTooltip text="지도 설정" />
           </span>
+          {/* 패널이 × 바로 밑에 붙어 패널 닫기로 읽힌다 — 열려 있으면 패널만 닫는다 (tweak 2026-09-29) */}
           <span className="icon-btn-wrap">
-            <button type="button" className="icon-btn map-page-close" aria-label="닫기" onClick={onClose}>
+            <button
+              type="button"
+              className="icon-btn map-page-close"
+              aria-label={panelOpen ? '지도 설정 닫기' : '닫기'}
+              onClick={panelOpen ? closePanel : onClose}
+            >
               <IconClose size={18} />
             </button>
-            <IconTooltip text="닫기" align="end" />
+            <IconTooltip text={panelOpen ? '지도 설정 닫기' : '닫기'} align="end" />
           </span>
         </div>
       </div>
