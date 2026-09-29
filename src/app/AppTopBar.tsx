@@ -21,6 +21,7 @@ import type { EditorHandle } from '../editor/Editor'
 import { keepEditorFocusOnToolbar, useToolbarDock } from './useToolbarDock'
 import type { OutlineControl } from './Outline'
 import { topBarScreen } from './topBarMore'
+import PhoneNav from './PhoneNav'
 
 // 공유 화면·지도가 떠 있는 동안 상단바에 넘기는 빈 접속자 목록 — 참조가 늘 같아 다시 그리지 않는다 (F-307 7.4)
 const NO_PEERS: Peer[] = []
@@ -86,7 +87,10 @@ export default function AppTopBar({
     // 휴대폰 폭은 편집기 포커스 중에만 — 앱 틀 맨 아래(키보드 위) 줄 (F-2084 3.4)
     (!toolbarDocked || editorFocused)
 
+  const screen = topBarScreen({ bootPhase, currentDocId, sharedDoc: Boolean(sharedDoc), sharesOpen, helpOpen, mapRoute: Boolean(mapRoute) })
+
   return (
+    <>
     <TopBar
       narrow={narrow}
       sidebarOpen={sidebarOpen}
@@ -128,7 +132,7 @@ export default function AppTopBar({
       }}
       onAccountNotice={showNotice}
       onAccountLoggedOut={() => e2ee?.broadcastLogoutLock()}
-      screen={topBarScreen({ bootPhase, currentDocId, sharedDoc: Boolean(sharedDoc), sharesOpen, helpOpen, mapRoute: Boolean(mapRoute) })}
+      screen={screen}
       outlineControlRef={outlineControlRef}
       showToolbar={showToolbar}
       onRunToolbarCommand={runToolbarCommand}
@@ -160,5 +164,7 @@ export default function AppTopBar({
           : undefined
       }
     />
+    <PhoneNav editorRef={editorRef} screen={screen} viewMode={viewMode} vaultLocked={currentDoc?.e2ee === 'locked'} onOpenPalette={openPalette} />
+    </>
   )
 }

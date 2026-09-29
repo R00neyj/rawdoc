@@ -4,6 +4,7 @@ import codeSvg from '@material-symbols/svg-400/outlined/code.svg?raw'
 import visibilitySvg from '@material-symbols/svg-400/outlined/visibility.svg?raw'
 import iosShareSvg from '@material-symbols/svg-400/outlined/ios_share.svg?raw'
 import downloadSvg from '@material-symbols/svg-400/outlined/download.svg?raw'
+import chevronLeftSvg from '@material-symbols/svg-400/outlined/chevron_left.svg?raw'
 import chevronRightSvg from '@material-symbols/svg-400/outlined/chevron_right.svg?raw'
 // 사이드바 `새 문서` — note_add 는 가져오기(upload_file)와 나란히 두면 헷갈려 note_stack_add 로 바꿨다 (2026-09-20 사용자 지적)
 import noteAddSvg from '@material-symbols/svg-400/outlined/note_stack_add.svg?raw'
@@ -122,6 +123,7 @@ export const IconView = makeIcon(visibilitySvg)
 export const IconShare = makeIcon(iosShareSvg)
 export const IconDownload = makeIcon(downloadSvg)
 export const IconChevron = makeIcon(chevronRightSvg)
+export const IconChevronLeft = makeIcon(chevronLeftSvg)
 export const IconNoteAdd = makeIcon(noteAddSvg)
 export const IconFolderAdd = makeIcon(createNewFolderSvg)
 export const IconUpload = makeIcon(uploadFileSvg)

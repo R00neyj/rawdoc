@@ -137,7 +137,6 @@ export default function TopBar({
             <TopBarMoreSheet
               screen={screen}
               outlineControlRef={outlineControlRef}
-              onOpenPalette={onOpenPalette}
               onOpenSettings={onOpenSettings}
               onOpenHelp={onOpenHelp}
               comments={comments}

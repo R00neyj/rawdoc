@@ -5022,6 +5022,41 @@ body.sidebar-resizing {
     transition: opacity var(--transition-fast), visibility var(--transition-fast);
   }
 
+  .app-shell {
+    --phone-nav-cover: calc(env(safe-area-inset-bottom, 0px) + 60px);
+  }
+
+  .phone-nav {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+    margin-inline: auto;
+    width: fit-content;
+    z-index: 36;
+    transition: opacity var(--transition-fast), visibility var(--transition-fast);
+  }
+
+  .app-shell:has(.statusbar) .phone-nav {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px + var(--statusbar-h));
+  }
+
+  .app-shell:has(.sidebar-toggle[aria-expanded='true']) .phone-nav,
+  .app-shell:has(.content-area[data-comment-sheet-open]) .phone-nav,
+  .app-shell:has(.shortcut-panel) .phone-nav {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .phone-nav .icon-tooltip {
+    top: auto;
+    bottom: calc(100% + 6px);
+  }
+
+  .app-shell .content-area:not(.content-area--doc) {
+    padding-bottom: var(--phone-nav-cover);
+  }
+
   .app-shell .content-area {
     isolation: isolate;
   }
@@ -5069,6 +5104,7 @@ body.sidebar-resizing {
 
 @media (max-width: 600px) and (pointer: coarse) {
   .topbar .topbar-pill .icon-btn,
+  .phone-nav .icon-btn,
   .topbar .topbar-pill .brand-group {
     width: 44px;
     height: 44px;

@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { usePhoneWidth } from './usePhoneWidth'
 import { floatCoverFor } from '../lib/floatCover'
 import type { EditorState } from '@codemirror/state'
 import Editor, { type EditorHandle } from '../editor/Editor'
@@ -84,6 +85,7 @@ export default function DocumentArea({
   mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme, setCommentRailExtra, setEditorRefs, sharedDoc,
   sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
 }: DocumentAreaProps) {
+  const phone = usePhoneWidth()
   const [pillCover, setPillCover] = useState(0)
   useEffect(() => {
     const read = () => contentAreaRef.current && setPillCover(floatCoverFor(contentAreaRef.current))
@@ -131,7 +133,7 @@ export default function DocumentArea({
             viewMode={viewMode}
             readOnly={isReadOnlyDoc}
             // eslint-disable-next-line react-hooks/refs -- 포커스 요청 플래그는 마운트 때 한 번 읽고 passive effect 가 소비한다
-            autoFocus={focusTitleRef.current ? 'title' : focusEditorRef.current}
+            autoFocus={focusTitleRef.current ? 'title' : focusEditorRef.current && !phone}
             onDocChange={handleDocChange}
             onSelectionChange={handleSelectionChange}
             wikiContext={wikiContext}

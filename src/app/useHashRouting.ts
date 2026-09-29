@@ -9,23 +9,24 @@ import { formatHash, formatMapHash } from './hashRoute'
 import { decideHashNav } from './hashNav'
 import { leaveScreens } from './leaveScreens'
 import { setPref } from './prefs'
+import { pushAppEntry, replaceAppEntry } from './historyEntries'
 import { ancestorsOfDoc } from '../lib/folderTree'
 
 export function replaceHashUrl(docId: string | null) {
   const url = `${location.pathname}${location.search}${formatHash(docId)}`
-  history.replaceState(null, '', url)
+  replaceAppEntry(url)
 }
 
 // location.hash 대입과 달리 hashchange 를 일으키지 않아 상태 갱신과 리렌더 사이 경쟁을 없앤다 (0단계 버그 수정, ia.md 3.10)
 export function pushHashUrl(docId: string | null) {
   const url = `${location.pathname}${location.search}${formatHash(docId)}`
-  history.pushState(null, '', url)
+  pushAppEntry(url)
 }
 
 // `#/help` 로 들어갈 때 — 같은 이유로 pushState 를 써서 뒤로 가기가 자연스럽게 이전 화면으로 돌아간다 (F-244.md 3.3)
 export function pushHelpHash() {
   const url = `${location.pathname}${location.search}#/help`
-  history.pushState(null, '', url)
+  pushAppEntry(url)
 }
 
 export type UseHashRoutingOptions = {
@@ -117,7 +118,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
           const anchorId = nextCenterId && docsRef.current.some((d) => d.id === nextCenterId) ? nextCenterId : null
           setCurrentDocId(anchorId)
           if (anchorId) setPref('md.lastDocId', anchorId)
-          else if (nextCenterId) history.replaceState(null, '', `${location.pathname}${location.search}${formatMapHash(null)}`) // 없는 중심 id 를 주소에 남기지 않는다 (F-2059 D13)
+          else if (nextCenterId) replaceAppEntry(`${location.pathname}${location.search}${formatMapHash(null)}`) // 없는 중심 id 를 주소에 남기지 않는다 (F-2059 D13)
           setMapRoute({ centerDocId: anchorId, returnDocId: anchorId })
         })()
         return

@@ -14,7 +14,7 @@ export function topBarScreen(input: {
   return input.currentDocId === null ? 'home' : 'doc'
 }
 
-export type MoreItemKey = 'outline' | 'comments' | 'share' | 'export' | 'palette' | 'notifications' | 'account' | 'settings' | 'help' | 'guides'
+export type MoreItemKey = 'outline' | 'comments' | 'share' | 'export' | 'notifications' | 'account' | 'settings' | 'help' | 'guides'
 
 export function moreSheetItems(input: {
   screen: TopBarScreen
@@ -27,7 +27,6 @@ export function moreSheetItems(input: {
   if (screen === 'doc' && input.hasOutline) items.push('outline')
   if (screen === 'doc' && input.comments) items.push('comments')
   if (screen === 'doc') items.push('share', 'export')
-  items.push('palette') // 휴대폰엔 단축키가 없어 팔레트 진입점이 여기뿐 (tweak 2026-09-29)
   if (input.notifications) items.push('notifications')
   items.push('account')
   items.push('settings', 'help', 'guides') // 휴대폰 사이드바 아래 줄에서 옮겨 옴 (tweak 2026-09-29)

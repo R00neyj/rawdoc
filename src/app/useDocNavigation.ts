@@ -9,6 +9,7 @@ import { resolveInitialDoc } from './resolveInitialDoc'
 import { formatMapHash } from './hashRoute'
 import { leaveScreens, screenOpen } from './leaveScreens'
 import { replaceHashUrl, pushHashUrl, pushHelpHash } from './useHashRouting'
+import { pushAppEntry, replaceAppEntry } from './historyEntries'
 import type { EditorHandle } from '../editor/Editor'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { PaletteCreatePlan } from './paletteContract'
@@ -371,7 +372,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     leave()
     const anchorId = currentDocId
     setMapRoute({ centerDocId: anchorId, returnDocId: anchorId })
-    history.pushState(null, '', `${location.pathname}${location.search}${formatMapHash(anchorId ?? undefined)}`)
+    pushAppEntry(`${location.pathname}${location.search}${formatMapHash(anchorId ?? undefined)}`)
     closeSidebarIfNarrow()
   }
 
@@ -385,7 +386,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
   // Ctrl(⌘)+클릭 — 그 노드를 중심으로 다시 그린다. 지도는 닫지 않는다(6.4)
   function recenterMap(id: string) {
     setMapRoute((prev) => (prev ? { ...prev, centerDocId: id } : prev))
-    history.replaceState(null, '', `${location.pathname}${location.search}${formatMapHash(id)}`)
+    replaceAppEntry(`${location.pathname}${location.search}${formatMapHash(id)}`)
   }
 
   // 도움말 페이지 `내 문서로 복사` (F-244.md 3.4) — 중복 검사 없이 그냥 하나 더 만든다
