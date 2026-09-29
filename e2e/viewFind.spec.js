@@ -1,6 +1,6 @@
 // 보기 모드 문서 안 찾기 (specs/features/F-2087.md 10.2) — 색·간격은 판정하지 않는다
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, setViewMode, setPrefBeforeLoad } from './helpers.js'
+import { openApp, importMarkdown, setViewMode, fakeSoftKeyboard, setPrefBeforeLoad } from './helpers.js'
 
 const DOC = [
   '문단 사과 하나',
@@ -99,6 +99,7 @@ test.describe('F-2087 보기 모드 찾기', () => {
       await expect(find).toBeEnabled()
       await find.tap()
       await expect(field(page)).toBeFocused()
+      await fakeSoftKeyboard(page, true)
       await expect(page.locator('.phone-nav')).toHaveCount(0)
       await page.keyboard.type('끝말')
       await expect(count(page)).toHaveText('1/1')

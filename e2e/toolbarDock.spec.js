@@ -1,6 +1,6 @@
 // 휴대폰 폭 서식 바를 키보드 위로 (specs/features/F-2084.md 4장)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, fakeImeCompose, setPrefBeforeLoad } from './helpers.js'
+import { openApp, importMarkdown, fakeImeCompose, fakeSoftKeyboard, setPrefBeforeLoad } from './helpers.js'
 
 const BODY = '선택\n\n둘째\n\n셋째\n'
 
@@ -24,6 +24,7 @@ test.describe('F-2084 휴대폰 폭 (390×844, 터치)', () => {
     await expect(page.locator('.editor-toolbar')).toHaveCount(0)
 
     await page.locator('.cm-content .cm-line', { hasText: '둘째' }).tap()
+    await fakeSoftKeyboard(page, true)
     const row = page.locator('.editor-toolbar-row.editor-toolbar-row--docked')
     await expect(row).toBeVisible()
 
@@ -35,6 +36,7 @@ test.describe('F-2084 휴대폰 폭 (390×844, 터치)', () => {
     await openApp(page)
     await importMarkdown(page, { content: BODY })
     await page.locator('.cm-content .cm-line', { hasText: '선택' }).tap()
+    await fakeSoftKeyboard(page, true)
     await page.keyboard.press('Home')
     await page.keyboard.press('Shift+End')
 

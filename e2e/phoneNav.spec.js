@@ -1,6 +1,6 @@
 // 휴대폰 폭 하단 알약 (specs/features/F-2086.md 9.2)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, currentDocId, setPrefBeforeLoad } from './helpers.js'
+import { openApp, importMarkdown, currentDocId, fakeSoftKeyboard, setPrefBeforeLoad } from './helpers.js'
 
 const nav = (page) => page.getByRole('group', { name: '하단 도구' })
 const btn = (page, name) => nav(page).getByRole('button', { name, exact: true })
@@ -51,6 +51,7 @@ test.describe('F-2086 하단 알약 (390×844, 터치)', () => {
     await blurAll(page)
     await expect(nav(page)).toBeVisible()
     await page.locator('.cm-content .cm-line', { hasText: '둘째' }).tap()
+    await fakeSoftKeyboard(page, true)
     await expect(nav(page)).toHaveCount(0)
     await expect(page.locator('.editor-toolbar-row--docked')).toBeVisible()
 

@@ -107,6 +107,20 @@ export async function resizeWindow(page, width, height = 900) {
   await page.setViewportSize({ width, height })
 }
 
+const softKeyboardShrink = new WeakMap()
+
+// 가상 키보드 흉내 (F-2091 8.1) — 창 높이만 344px 줄였다 되돌린다. iOS 경로(visualViewport 만 감소)는 단위 U1 이 본다
+export async function fakeSoftKeyboard(page, open) {
+  const size = page.viewportSize()
+  const restore = softKeyboardShrink.get(page)
+  if (open === (restore !== undefined)) return
+  const height = open ? size.height - 344 : restore
+  if (open) softKeyboardShrink.set(page, size.height)
+  else softKeyboardShrink.delete(page)
+  await page.setViewportSize({ width: size.width, height })
+  await page.waitForFunction((h) => window.innerHeight === h, height)
+}
+
 /** CDP 로 한글 조합을 흉내 낸다 (F-150 3.2). 실제 IME 판정은 여전히 사람 몫이다.
  * 편집 영역에 포커스가 있는 상태에서 부른다 */
 export async function fakeImeCompose(page, text) {

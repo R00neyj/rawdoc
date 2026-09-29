@@ -3,6 +3,8 @@ import { useEffect, useState, type MouseEvent as ReactMouseEvent, type RefObject
 import type { EditorHandle } from '../editor/Editor'
 import { isComposing } from '../editor/composition'
 import { DOCK_QUERY } from './viewportFit'
+import { typingSurface } from './softKeyboard'
+import { useSoftKeyboard } from './useSoftKeyboard'
 
 const ROW_SELECTOR = '.editor-toolbar-row'
 
@@ -13,9 +15,10 @@ function isEditorFocus(active: Element | null, contentDOM: HTMLElement | undefin
   return active.closest(ROW_SELECTOR) !== null
 }
 
-export function useToolbarDock(editorRef: RefObject<EditorHandle | null>): { docked: boolean; editorFocused: boolean } {
+export function useToolbarDock(editorRef: RefObject<EditorHandle | null>): { docked: boolean; dockVisible: boolean } {
   const [docked, setDocked] = useState(() => (typeof window !== 'undefined' ? window.matchMedia(DOCK_QUERY).matches : false))
   const [editorFocused, setEditorFocused] = useState(false)
+  const keyboard = useSoftKeyboard()
 
   useEffect(() => {
     const mql = window.matchMedia(DOCK_QUERY)
@@ -53,7 +56,7 @@ export function useToolbarDock(editorRef: RefObject<EditorHandle | null>): { doc
     }
   }, [docked, editorRef])
 
-  return { docked, editorFocused }
+  return { docked, dockVisible: typingSurface(editorFocused, keyboard) }
 }
 
 // docked 줄 mousedown — 포커스(가상 키보드)를 편집기에 남긴다. 한글 조합 중 버튼만 예외로 조합을 먼저 끝낸다 (F-2084 3.5)

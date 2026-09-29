@@ -9,6 +9,8 @@ import { focusHidesPhoneNav, navButtons, phoneNavFindDisabled, type FocusInfo } 
 import type { TopBarScreen } from './topBarMore'
 import type { ViewMode } from './ViewModeMenu'
 import { usePhoneWidth } from './usePhoneWidth'
+import { typingSurface } from './softKeyboard'
+import { useSoftKeyboard } from './useSoftKeyboard'
 
 type PhoneNavProps = {
   editorRef: RefObject<EditorHandle | null>
@@ -64,7 +66,7 @@ function useFocusHidesNav(): boolean {
 export default function PhoneNav({ editorRef, screen, viewMode, vaultLocked, onOpenPalette, onOpenViewFind }: PhoneNavProps): ReactNode {
   useEffect(() => startHistoryTracking(), [])
   const pos = useSyncExternalStore(subscribeHistoryNav, getHistoryNavSnapshot)
-  const hidden = useFocusHidesNav()
+  const hidden = typingSurface(useFocusHidesNav(), useSoftKeyboard())
   const phone = usePhoneWidth()
   if (!phone || hidden) return null
 
