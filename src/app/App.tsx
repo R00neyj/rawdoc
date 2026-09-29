@@ -54,7 +54,7 @@ import { decodeShare, type ShareDoc } from '../lib/shareCodec'
 import { readViewerAnchor } from './viewerScroll'
 import type { ScrollAnchor } from '../lib/scrollAnchor'
 import { useContextMenu } from './useContextMenu'
-import { useDocComments, computeCommentAccess, scrollTopOf } from './useDocComments'
+import { useDocComments, computeCommentAccess } from './useDocComments'
 import { useNotificationsGlue } from './useNotificationsGlue'
 
 import { useInstallPrompt } from '../pwa/useInstallPrompt'
@@ -85,7 +85,7 @@ import { useNewDocTemplate } from './useNewDocTemplate'
 import { useAccountStatus } from './useAccountStatus'
 import { useAccountDelete } from './useAccountDelete'
 import { useTitleCommit } from './useTitleCommit'
-import { useCommentFab } from './useCommentFab'
+import { useCommentFab, fabAnchorOf } from './useCommentFab'
 import { useDocNavigation } from './useDocNavigation'
 import { useSidebarLayout } from './useSidebarLayout'
 import { useFolderActions } from './useFolderActions'
@@ -1034,7 +1034,7 @@ export default function App() {
     setStats((prev) => ({ ...prev, ...cursorInfo(state) }))
     const view = editorRef.current?.view
     const sel = state.selection.main
-    setFloatingCommentAnchor(view && !sel.empty ? scrollTopOf(view, sel.from) : null)
+    setFloatingCommentAnchor(view && !sel.empty ? fabAnchorOf(view, sel.from, sel.to) : null)
   }, [setFloatingCommentAnchor])
 
   // 레일 여분(px) — 레일이 보이는 동안만 .content-area 의 --comment-rail-extra 로 (F-505 5.6)

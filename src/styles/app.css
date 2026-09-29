@@ -5394,6 +5394,11 @@ body.sidebar-resizing {
     padding-left: 10px;
   }
 
+  /* CM6 기본 .cm-gutter { overflow: hidden } 이 폭 0 칸 밖으로 뺀 점을 잘라 낸다 */
+  .cm-host .cm-editor .cm-comment-gutter {
+    overflow: visible;
+  }
+
   .cm-host .cm-editor .cm-comment-gutter .cm-gutterElement {
     position: relative;
     min-width: 0;

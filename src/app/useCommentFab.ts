@@ -1,6 +1,21 @@
 // 떠 있는 `댓글 달기` 버튼 자리·스크롤 — App.tsx 에서 옮김 (F-2079, F-505)
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import type { EditorView } from '@codemirror/view'
 import type { EditorHandle } from '../editor/Editor'
+import { isTouchPrimary } from '../lib/touchContextMenu'
+import { scrollTopOf } from './useDocComments'
+
+// 선택 끝 손잡이(약 24px) 아래로 비키는 여백
+const TOUCH_HANDLE_GAP = 32
+
+// 버튼 자리(문서 좌표) — 터치는 OS 선택 메뉴가 선택 위에 뜨므로 선택 끝 줄 아래로 (tweak 2026-09-30)
+export function fabAnchorOf(view: EditorView, from: number, to: number): number {
+  if (!isTouchPrimary()) return scrollTopOf(view, from)
+  const coords = view.coordsAtPos(to, -1)
+  if (!coords) return scrollTopOf(view, to) + view.lineBlockAt(to).height + TOUCH_HANDLE_GAP
+  const scroller = view.scrollDOM
+  return coords.bottom - scroller.getBoundingClientRect().top - scroller.clientTop + scroller.scrollTop + TOUCH_HANDLE_GAP
+}
 
 export type UseCommentFabOptions = {
   editorHandle: EditorHandle | null
