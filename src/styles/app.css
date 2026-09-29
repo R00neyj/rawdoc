@@ -2152,6 +2152,13 @@ body.sidebar-resizing {
   color: var(--muted);
 }
 
+/* 휴대폰 폭은 최근 문서 행이 화면 끝에 붙지 않게 양옆 16px (tweak 2026-09-29) */
+@media (max-width: 600px) {
+  .empty-state {
+    padding-inline: 16px;
+  }
+}
+
 /* ===== 알림 띠 ===== */
 /* 나타나고 사라지는 전환 — usePresence 의 [data-state] 로 몬다 (F-172.md 2.1·2.2) */
 .notice {
