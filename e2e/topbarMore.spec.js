@@ -133,7 +133,7 @@ test('F-2083 E3 목차·알림 진입과 점', async ({ page }) => {
   await expect(sheet(page)).toBeHidden()
 
   await page.keyboard.press('Control+p')
-  await page.locator('.command-palette-input').fill('>알림 열기')
+  await page.locator('.command-palette-input').fill('/알림 열기')
   await page.keyboard.press('Enter')
   await expect(sheet(page).getByRole('heading', { name: '알림' })).toBeVisible()
   await expect(page.locator('.notification-item').first()).toBeFocused()

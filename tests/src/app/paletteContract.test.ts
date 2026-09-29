@@ -119,11 +119,12 @@ describe('filterPaletteItems — U2 3단 순서 (F-2053.md 11.1)', () => {
 describe('parsePaletteQuery — U3 (F-2053.md 11.1)', () => {
   it.each([
     ['', { mode: 'all', text: '' }],
-    ['>', { mode: 'commands', text: '' }],
-    ['  > 인쇄', { mode: 'commands', text: ' 인쇄' }],
-    ['>>인쇄', { mode: 'commands', text: '>인쇄' }],
-    ['＞인쇄', { mode: 'all', text: '＞인쇄' }],
-    ['a>b', { mode: 'all', text: 'a>b' }],
+    ['/', { mode: 'commands', text: '' }],
+    ['  / 인쇄', { mode: 'commands', text: ' 인쇄' }],
+    ['//인쇄', { mode: 'commands', text: '/인쇄' }],
+    ['／인쇄', { mode: 'all', text: '／인쇄' }],
+    ['>인쇄', { mode: 'all', text: '>인쇄' }],
+    ['a/b', { mode: 'all', text: 'a/b' }],
   ] as const)('%p → %p', (raw, expected) => {
     expect(parsePaletteQuery(raw)).toEqual(expected)
   })

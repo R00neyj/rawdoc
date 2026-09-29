@@ -613,17 +613,17 @@ test.describe('F-2066 사이드바 레이아웃 절', () => {
   test('F-2066 C4 팔레트 사이드바 명령', async ({ page }) => {
     await openApp(page)
     const sidebar = page.locator('.sidebar')
-    await runPaletteCommand(page, '>사이드바 접기')
+    await runPaletteCommand(page, '/사이드바 접기')
     await expect(sidebar).toHaveClass(/sidebar--collapsed/)
     await expect.poll(() => readPref(page, 'md.sidebar')).toBe('collapsed')
 
-    await runPaletteCommand(page, '>사이드바 펴기')
+    await runPaletteCommand(page, '/사이드바 펴기')
     await expect(sidebar).not.toHaveClass(/sidebar--collapsed/)
     await expect.poll(() => readPref(page, 'md.sidebar')).toBe('expanded')
 
     await resizeWindow(page, 900)
     await expect(sidebar).toBeHidden()
-    await runPaletteCommand(page, '>사이드바 열기')
+    await runPaletteCommand(page, '/사이드바 열기')
     await expect(sidebar).toBeVisible()
     expect(await readPref(page, 'md.sidebar')).toBe('expanded')
   })
@@ -747,14 +747,14 @@ test.describe('F-2067 삭제·폴더·고정·이동 절', () => {
     await importNamed2067(page, '이동할 문서')
     await page.locator('.cm-content').click()
 
-    await runPaletteCommand(page, '>이 문서 상단 고정')
+    await runPaletteCommand(page, '/이 문서 상단 고정')
     await expect(page.locator('.pinned-list .tree-row')).toHaveCount(1)
-    await runPaletteCommand(page, '>이 문서 고정 해제')
+    await runPaletteCommand(page, '/이 문서 고정 해제')
     await expect(page.locator('.pinned-list')).toHaveCount(0)
 
     await folderToggle(page, '가 접기').click()
     await expect(folderToggle(page, '가 펼치기')).toBeVisible()
-    await runPaletteCommand(page, '>이 문서 폴더로 이동…')
+    await runPaletteCommand(page, '/이 문서 폴더로 이동…')
     const dialog = page.locator('.dialog[open]')
     await dialog.getByRole('radio', { name: '가', exact: true }).click()
     await dialog.getByRole('button', { name: '이동', exact: true }).click()

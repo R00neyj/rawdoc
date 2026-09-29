@@ -255,7 +255,7 @@ export default function CommandPalette({ open, context, onClose, selectQueryRef 
   }
 
   const stageTitle = stage.kind === 'commands' ? '명령 팔레트' : stage.command.stageTitle
-  const placeholder = stage.kind === 'commands' ? '문서나 명령 찾기 — >로 시작하면 명령만' : stage.command.placeholder
+  const placeholder = stage.kind === 'commands' ? '문서나 명령 찾기 — /로 시작하면 명령만' : stage.command.placeholder
   const inputLabel = stage.kind === 'commands' ? '문서나 명령 찾기' : stage.command.placeholder
   const listLabel = stage.kind === 'commands' ? '문서와 명령' : '템플릿'
 

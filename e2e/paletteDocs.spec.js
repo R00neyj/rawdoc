@@ -46,7 +46,7 @@ test.describe('F-2053 명령 팔레트 확장', () => {
   test('F-2053 A2 최근 명령 — 쓴 명령이 최근 구역으로', async ({ page }) => {
     await setupDocs(page)
     await openPalette(page)
-    await input(page).fill('>인쇄')
+    await input(page).fill('/인쇄')
     await page.keyboard.press('Enter')
     await expect(palette(page)).toHaveCount(0)
     // dialog close 이벤트(포커스 복귀, Dialog.tsx)가 나중 태스크라 한 틱 흘려보낸다(palette.spec.js 와 같은 경합)
@@ -59,13 +59,13 @@ test.describe('F-2053 명령 팔레트 확장', () => {
   test('F-2053 A3 고정 — Alt+P 로 고정·해제', async ({ page }) => {
     await setupDocs(page)
     await openPalette(page)
-    await input(page).fill('>')
+    await input(page).fill('/')
     // 선택을 PDF 줄로 옮긴 뒤 고정
     const idx = await options(page).evaluateAll((els) => els.findIndex((e) => e.textContent.includes('PDF (A4 인쇄)')))
     for (let i = 0; i < idx; i += 1) await page.keyboard.press('ArrowDown')
     await page.keyboard.press('Alt+p')
     await expect(sections(page).first()).toHaveText('고정')
-    await expect(input(page)).toHaveValue('>')
+    await expect(input(page)).toHaveValue('/')
     expect(await page.evaluate(() => localStorage.getItem('md.palettePinned'))).toBe('["doc.print"]')
     await page.keyboard.press('Alt+p')
     await expect(sections(page).filter({ hasText: '고정' })).toHaveCount(0)

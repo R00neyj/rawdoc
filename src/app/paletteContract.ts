@@ -221,10 +221,10 @@ export function filterPaletteItems<T extends PaletteItem>(items: readonly T[], q
   return scored.map((s) => s.item)
 }
 
-// 팔레트 입력칸 글 해석 — 앞 공백을 뗀 첫 글자가 반각 > 이면 명령 모드 (F-2053 5.3)
+// 팔레트 입력칸 글 해석 — 앞 공백을 뗀 첫 글자가 / 이면 명령 모드 (F-2053 5.3, tweak 2026-09-30)
 export function parsePaletteQuery(raw: string): PaletteQuery {
   const trimmedStart = raw.replace(/^\s+/, '')
-  if (trimmedStart.startsWith('>')) {
+  if (trimmedStart.startsWith('/')) {
     return { mode: 'commands', text: trimmedStart.slice(1) }
   }
   return { mode: 'all', text: raw }

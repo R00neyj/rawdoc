@@ -68,7 +68,7 @@ test.describe('F-2022 A4 내장 템플릿 넣기', () => {
       const docId = await importMarkdown(page, { content: '본문\n' })
       await page.locator('.cm-content').click()
       await page.keyboard.press('Control+p')
-      await page.keyboard.type('>') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
+      await page.keyboard.type('/') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
       await page.keyboard.press('Enter') // 템플릿 삽입 2단계
       await palette(page).locator('.command-palette-input').fill('회의')
       await page.keyboard.press('Enter')
@@ -92,7 +92,7 @@ test.describe('F-2022 A4 내장 템플릿 넣기', () => {
       await page.locator('.cm-content').click()
       await page.keyboard.press('Control+End')
       await page.keyboard.press('Control+p')
-      await page.keyboard.type('>') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
+      await page.keyboard.type('/') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
       await page.keyboard.press('Enter')
       await palette(page).locator('.command-palette-input').fill('주간 회고')
       await page.keyboard.press('Enter')
@@ -121,7 +121,7 @@ test.describe('F-2022 A4 내장 템플릿 넣기', () => {
       await page.locator('.cm-content').click()
 
       await page.keyboard.press('Control+p')
-      await page.keyboard.type('>') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
+      await page.keyboard.type('/') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
       await page.keyboard.press('Enter')
 
       const options = paletteOptions(page)
@@ -152,7 +152,7 @@ test.describe('F-2022 A4 내장 템플릿 넣기', () => {
       const menuItems = page.locator('.context-menu-root [role="menuitem"]')
       await menuItems.last().click()
       await expect(palette(page)).toBeVisible()
-      await page.keyboard.type('>') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
+      await page.keyboard.type('/') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
       await page.keyboard.press('Enter')
       await palette(page).locator('.command-palette-input').fill('버그')
       await page.keyboard.press('Enter')
@@ -201,7 +201,7 @@ test.describe('F-2022 A4 내장 템플릿 넣기', () => {
       )
 
       await page.keyboard.press('Control+p')
-      await page.keyboard.type('>') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
+      await page.keyboard.type('/') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
       await page.keyboard.press('Enter')
       await palette(page).locator('.command-palette-input').fill('주간 보고')
       await page.keyboard.press('Enter')
@@ -244,7 +244,7 @@ test.describe('F-2022 A9 우클릭으로 열기·닫기', () => {
       await importMarkdown(page, { content: '본문\n' })
       await page.locator('.doc-title').click()
       await page.keyboard.press('Control+p')
-      await page.keyboard.type('>') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
+      await page.keyboard.type('/') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
       await page.keyboard.press('Enter')
       await page.keyboard.press('Enter') // 첫 템플릿(회의록)
 
@@ -260,7 +260,7 @@ test.describe('F-2022 A9 우클릭으로 열기·닫기', () => {
       await importMarkdown(page, { content: '본문\n' })
       await page.locator('.cm-content').click()
       await page.keyboard.press('Control+p')
-      await page.keyboard.type('>') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
+      await page.keyboard.type('/') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
 
       // 옵션 수는 명령을 더하는 명세마다 늘어난다 — ArrowUp 은 순환해 마지막으로 간다(개수는 보지 않는다, F-2054 9장)
       await page.keyboard.press('ArrowUp')
@@ -315,7 +315,7 @@ test.describe('F-2022 A13 보기 모드', () => {
       await setViewMode(page, 'view')
 
       await page.keyboard.press('Control+p')
-      await page.keyboard.type('>') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
+      await page.keyboard.type('/') // F-2053 — 빈 입력 첫 줄이 최근 문서가 아니라 명령이 되게 명령 모드로
       // 개수는 명령을 더하는 명세마다 바뀐다 — 첫 옵션이 PDF 라는 것만 본다(3.1)
       await expect(paletteOptions(page).first()).toHaveText(/PDF/)
       await page.keyboard.press('Enter')

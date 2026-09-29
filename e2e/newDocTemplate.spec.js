@@ -164,7 +164,7 @@ test.describe('F-2037 새 문서 템플릿', () => {
     await page.locator('.cm-content').click()
     await page.keyboard.press('Control+End')
     await page.keyboard.press('Control+p')
-    await page.keyboard.type('>')
+    await page.keyboard.type('/')
     await page.keyboard.press('Enter')
     await palette(page).locator('.command-palette-input').fill('노트 틀')
     await page.keyboard.press('Enter')

@@ -28,7 +28,7 @@ test.describe('F-2054 A1 탐색·포커스', () => {
     test.setTimeout(150000)
     await test.step('설정 열고 닫으면 에디터로', async () => {
       await prepareDoc(page)
-      await runCommand(page, '>설정')
+      await runCommand(page, '/설정')
 
       await expect(palette(page)).toHaveCount(0)
       await expect(page.locator('dialog[open] h2')).toHaveText('설정')
@@ -43,15 +43,15 @@ test.describe('F-2054 A1 탐색·포커스', () => {
       await prepareDoc(page)
 
       // ① 팔레트 명령
-      await runCommand(page, '>도움말')
+      await runCommand(page, '/도움말')
       await expect(page.locator('.help-page-title')).toBeVisible()
-      await runCommand(page, '>새 문서')
+      await runCommand(page, '/새 문서')
       await expect(page.locator('.main-column .content-area')).toHaveCount(1)
       await expect(page.locator('.main-column h1', { hasText: '도움말' })).toHaveCount(0)
       await expect(page.locator('.doc-title')).toBeFocused()
 
       // ② 사이드바 새 문서 버튼
-      await runCommand(page, '>도움말')
+      await runCommand(page, '/도움말')
       await expect(page.locator('.help-page-title')).toBeVisible()
       await page.getByRole('button', { name: '새 문서', exact: true }).click()
       await expect(page.locator('.doc-title')).toBeVisible()
@@ -59,7 +59,7 @@ test.describe('F-2054 A1 탐색·포커스', () => {
       await expect(page.locator('.main-column h1', { hasText: '도움말' })).toHaveCount(0)
 
       // ③ .md 가져오기 파일 입력
-      await runCommand(page, '>도움말')
+      await runCommand(page, '/도움말')
       await expect(page.locator('.help-page-title')).toBeVisible()
       await page.locator('input[data-import="md"]').setInputFiles({
         name: '가져온 글.md',
@@ -72,7 +72,7 @@ test.describe('F-2054 A1 탐색·포커스', () => {
     await test.step('가져온 파일이 0개면 도움말 화면과 #/help 가 그대로다', async () => {
       await resetBrowserState(page)
       await prepareDoc(page)
-      await runCommand(page, '>도움말')
+      await runCommand(page, '/도움말')
       await expect(page.locator('.help-page-title')).toBeVisible()
 
       await page.locator('input[data-import="md"]').setInputFiles({
@@ -87,7 +87,7 @@ test.describe('F-2054 A1 탐색·포커스', () => {
     await test.step('새 문서 만들기가 실패하면 도움말 화면과 #/help 가 그대로다', async () => {
       await resetBrowserState(page)
       await prepareDoc(page)
-      await runCommand(page, '>도움말')
+      await runCommand(page, '/도움말')
       await expect(page.locator('.help-page-title')).toBeVisible()
       await page.evaluate(() => {
         const put = IDBObjectStore.prototype.put
@@ -106,7 +106,7 @@ test.describe('F-2054 A1 탐색·포커스', () => {
       await resetBrowserState(page)
       await prepareDoc(page)
       await page.keyboard.press('Control+p')
-      await palette(page).locator('.command-palette-input').fill('>.md 가져오기')
+      await palette(page).locator('.command-palette-input').fill('/.md 가져오기')
 
       const [chooser] = await Promise.all([
         page.waitForEvent('filechooser', { timeout: 3000 }),
@@ -129,7 +129,7 @@ test.describe('F-2054 A4 지금 문서 — 삭제 확인(사용자 결정 2)', (
       await fillTitle(page, '지울 문서')
       await page.locator('.cm-content').click()
 
-      await runCommand(page, '>삭제')
+      await runCommand(page, '/삭제')
 
       const dialog = page.locator('dialog[open]')
       await expect(dialog).toContainText('"지울 문서" 을(를) 삭제할까요? 되돌릴 수 없습니다.')
@@ -140,21 +140,21 @@ test.describe('F-2054 A4 지금 문서 — 삭제 확인(사용자 결정 2)', (
       const focused = await page.evaluate(() => document.activeElement?.closest('.cm-content') != null)
       expect(focused).toBe(true)
 
-      await runCommand(page, '>삭제')
+      await runCommand(page, '/삭제')
       await page.locator('dialog[open]').getByRole('button', { name: '삭제', exact: true }).click()
       await expect(page.locator('.sidebar .doc-item-btn', { hasText: '지울 문서' })).toHaveCount(0)
     })
     await test.step('원문 모드로 전환 뒤 포커스, 목록에서 빠진다', async () => {
       await resetBrowserState(page)
       await prepareDoc(page)
-      await runCommand(page, '>원문')
+      await runCommand(page, '/원문')
 
       await expect(page.getByRole('button', { name: '원문 — 마크다운 기호 그대로 편집', exact: true })).toHaveAttribute('aria-pressed', 'true')
       const focused = await page.evaluate(() => document.activeElement?.closest('.cm-content') != null)
       expect(focused).toBe(true)
 
       await page.keyboard.press('Control+p')
-      await palette(page).locator('.command-palette-input').fill('>모드')
+      await palette(page).locator('.command-palette-input').fill('/모드')
       const texts = await paletteOptions(page).allTextContents()
       expect(texts.some((t) => t.includes('원문 모드로 전환'))).toBe(false)
       expect(texts.some((t) => t.includes('편집 모드로 전환'))).toBe(true)
@@ -164,7 +164,7 @@ test.describe('F-2054 A4 지금 문서 — 삭제 확인(사용자 결정 2)', (
       await resetBrowserState(page)
       await prepareDoc(page)
       await page.keyboard.press('Control+p')
-      await palette(page).locator('.command-palette-input').fill('>테마')
+      await palette(page).locator('.command-palette-input').fill('/테마')
       await page.keyboard.press('Enter')
 
       await expect(palette(page).locator('h2')).toHaveText('테마 바꾸기')
@@ -186,7 +186,7 @@ test.describe('F-2054 A4 지금 문서 — 삭제 확인(사용자 결정 2)', (
       await fillTitle(page, '내보낼 문서')
       await page.locator('.cm-content').click()
       await page.keyboard.press('Control+p')
-      await palette(page).locator('.command-palette-input').fill('>.md 내보내기')
+      await palette(page).locator('.command-palette-input').fill('/.md 내보내기')
 
       const [download] = await Promise.all([page.waitForEvent('download'), page.keyboard.press('Enter')])
       expect(download.suggestedFilename()).toBe('내보낼 문서.md')
@@ -199,7 +199,7 @@ test.describe('F-2054 A4 지금 문서 — 삭제 확인(사용자 결정 2)', (
       await openApp(page)
       await importMarkdown(page, { content: '# 가\n본문\n' })
       await page.locator('.cm-content').click()
-      await runCommand(page, '>마크다운 복사')
+      await runCommand(page, '/마크다운 복사')
 
       await expect(page.locator('.notice--info .notice-message')).toHaveText('마크다운을 복사했습니다.')
       const clip = await page.evaluate(() => navigator.clipboard.readText())
@@ -216,7 +216,7 @@ test.describe('F-2054 A6 만들기 — 새 폴더 이름 칸', () => {
       await page.setViewportSize({ width: 1600, height: 900 })
       await prepareDoc(page)
 
-      await runCommand(page, '>새 폴더')
+      await runCommand(page, '/새 폴더')
       const input1 = page.locator('.tree-rename-input')
       await expect(input1).toBeFocused()
       await expect(input1).toHaveValue('새 폴더')
@@ -226,7 +226,7 @@ test.describe('F-2054 A6 만들기 — 새 폴더 이름 칸', () => {
 
       // 레일(접힌 사이드바)에서도 같다
       await page.locator('.sidebar').getByRole('button', { name: '사이드바 접기', exact: true }).click()
-      await runCommand(page, '>새 폴더')
+      await runCommand(page, '/새 폴더')
       const input2 = page.locator('.tree-rename-input')
       await expect(input2).toBeFocused()
       await expect(input2).toHaveValue('새 폴더')
@@ -240,7 +240,7 @@ test.describe('F-2054 A6 만들기 — 새 폴더 이름 칸', () => {
       await setPrefBeforeLoad(page, 'md.sidebar', 'collapsed')
       await prepareDoc(page)
 
-      await runCommand(page, '>새 폴더')
+      await runCommand(page, '/새 폴더')
       const input = page.locator('.tree-rename-input')
       await expect(input).toBeFocused()
       await expect(input).toHaveValue('새 폴더')
