@@ -118,25 +118,18 @@ async function yjsUnsynced(page, docId) {
 }
 
 test.describe('F-306 기록 남기기와 재개', () => {
-  test('F-306 E1 실시간으로 친 글자가 md-yjs 에 남고 새 DB 는 md-yjs 하나다', async ({ page }) => {
+  test('F-306 E1·E2 실시간 글자가 md-yjs 에 남고(새 DB 는 md-yjs 하나), 끊긴 채 새로고침해도 끊긴 동안의 편집으로 열리고, 방이 풀리면 올라간다', async ({ page }) => {
     const room = createFakeDocRoom()
     room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
+    const { requests } = await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
     await expect(mainContent(page)).toContainText('방 본문')
+    await expect(saveStatus(page)).toHaveText('저장됨')
 
     await typeAtEnd(page, '방 본문', '안녕')
     await expect.poll(() => yjsRowCount(page, DOC)).toBeGreaterThanOrEqual(1)
     const names = await page.evaluate(async () => (await indexedDB.databases()).map((d) => d.name))
     expect(names).toContain('md-yjs')
     expect(names.filter((name) => !['md-docs', 'md-remote', 'md-yjs'].includes(name))).toEqual([])
-  })
-
-  test('F-306 E2 끊긴 채 새로고침해도 끊긴 동안의 편집으로 열리고, 방이 풀리면 올라간다', async ({ page }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    const { requests } = await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
-    await expect(mainContent(page)).toContainText('방 본문')
-    await expect(saveStatus(page)).toHaveText('저장됨')
 
     room.setReject(DOC, { code: 1013, reason: 'unavailable', open: true })
     room.closeAll(DOC, 1013, 'unavailable')
@@ -148,7 +141,7 @@ test.describe('F-306 기록 남기기와 재개', () => {
 
     room.setReject(DOC, { code: 1011, reason: 'x' })
     await page.reload()
-    await expect(mainContent(page)).toContainText('방 본문 끊김중')
+    await expect(mainContent(page)).toContainText('방 본문안녕 끊김중')
     await expect(mainContent(page)).toHaveAttribute('contenteditable', 'true')
     await expect(saveStatus(page)).toHaveText(RECONNECTING)
     await expect(page.locator('.statusbar-live')).toHaveCount(0)
@@ -157,20 +150,25 @@ test.describe('F-306 기록 남기기와 재개', () => {
 
     room.setReject(DOC, null)
     await expect(saveStatus(page)).toHaveText('저장됨', { timeout: 5_000 })
-    await expect.poll(() => room.content(DOC)).toBe('방 본문 끊김중')
+    await expect.poll(() => room.content(DOC)).toBe('방 본문안녕 끊김중')
     expect(requests.lockPosts(DOC)).toHaveLength(0)
     expect(requests.puts(DOC)).toHaveLength(0)
   })
 
-  test('F-306 E3 한 번 연 문서는 오프라인에서 곧바로 편집으로 열리고 온라인이 되면 올라간다', async ({ page }) => {
+  test('F-306 E3·E4·E10 한 번 연 문서는 오프라인에서 곧바로 편집으로 열리고 온라인이 되면 올라간다, 기록이 없는 문서를 오프라인에서 열면 읽기 전용 + N7(온라인이 되면 방 본문으로 편집), 방이 거절하면 F-305 그대로 폴백', async ({ page }) => {
     const room = createFakeDocRoom()
     room.seed(DOC, { content: '에이 본문', title: '에이 문서' })
     room.seed(OTHER, { content: '비 본문', title: '비 문서' })
+    room.seed(FRESH, { content: '씨 방 본문', title: '씨 문서' })
+    room.seed('off-doc-4', { content: '디 방 본문', title: '디 문서' })
+    room.setReject('off-doc-4', { code: 1011, reason: 'x' })
     const { server, requests } = await openSide(page, {
       room,
       docs: [
         { id: DOC, title: '에이 문서', content: '에이 본문' },
         { id: OTHER, title: '비 문서', content: '비 본문' },
+        { id: FRESH, title: '씨 문서', content: '씨 캐시 본문' },
+        { id: 'off-doc-4', title: '디 문서', content: '디 옛 본문' },
       ],
     })
     await expect(mainContent(page)).toContainText('에이 본문')
@@ -197,21 +195,6 @@ test.describe('F-306 기록 남기기와 재개', () => {
     await expect.poll(() => room.content(DOC)).toBe('에이 본문 오프라인편집')
     expect(requests.lockPosts(DOC)).toHaveLength(0)
     expect(requests.puts(DOC)).toHaveLength(0)
-  })
-
-  test('F-306 E4 기록이 없는 문서를 오프라인에서 열면 읽기 전용 + N7, 온라인이 되면 방 본문으로 편집', async ({ page }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '에이 본문', title: '에이 문서' })
-    room.seed(FRESH, { content: '씨 방 본문', title: '씨 문서' })
-    const { server, requests } = await openSide(page, {
-      room,
-      docs: [
-        { id: DOC, title: '에이 문서', content: '에이 본문' },
-        { id: FRESH, title: '씨 문서', content: '씨 캐시 본문' },
-      ],
-    })
-    await expect(mainContent(page)).toContainText('에이 본문')
-    await expect(saveStatus(page)).toHaveText('저장됨')
 
     await setOffline(page, server, true)
     await page.locator('.doc-item-btn', { hasText: '씨 문서' }).click()
@@ -229,6 +212,11 @@ test.describe('F-306 기록 남기기와 재개', () => {
     await expect(mainContent(page)).toContainText('씨 방 본문', { timeout: 5_000 })
     await expect(mainContent(page)).toHaveAttribute('contenteditable', 'true')
     await expect(page.getByText(N7)).toHaveCount(0)
+
+    await page.locator('.doc-item-btn', { hasText: '디 문서' }).click()
+    await expect(mainContent(page)).toContainText('디 옛 본문')
+    await expect(page.locator('.statusbar-live')).toHaveText(LIVE_FALLBACK_TEXT)
+    await expect.poll(() => requests.lockPosts('off-doc-4').length).toBeGreaterThan(0)
   })
 })
 
@@ -247,43 +235,29 @@ test.describe('F-306 병합 알림', () => {
     return { room, a, b, serverA: sideA.server }
   }
 
-  test('F-306 E5 끊긴 동안 양쪽이 고치면 다시 붙을 때 N8, 두 편집 모두 남는다', async ({ browser, baseURL }) => {
-    const { room, a, b, serverA } = await twoSides(browser, baseURL)
-    try {
-      await setOffline(a.page, serverA, true)
-      await expect(saveStatus(a.page)).toHaveText(RECONNECTING)
-      await typeAtEnd(a.page, '공유 본문', ' 로컬')
-      await typeAtEnd(b.page, '공유 본문', ' 원격')
-      await expect.poll(() => room.content(DOC)).toContain(' 원격')
-
-      await setOffline(a.page, serverA, false)
-      await expect(a.page.locator('.notice-message')).toHaveText(N8, { timeout: 5_000 })
-      await expect(mainContent(a.page)).toContainText(' 로컬')
-      await expect(mainContent(a.page)).toContainText(' 원격')
-      await expect.poll(() => room.content(DOC)).toContain(' 로컬')
-      expect(room.content(DOC)).toContain(' 원격')
-    } finally {
-      await a.context.close()
-      await b.context.close()
-    }
-  })
-
-  test('F-306 E6 한쪽만 고쳤으면 N8 이 없다', async ({ browser, baseURL }) => {
-    for (const who of ['remote-only', 'local-only']) {
+  test('F-306 E5·E6 끊긴 동안 양쪽이 고치면 다시 붙을 때 N8(두 편집 모두 남는다), 한쪽만 고쳤으면 N8 이 없다', async ({ browser, baseURL }) => {
+    for (const who of ['both', 'remote-only', 'local-only']) {
       const { room, a, b, serverA } = await twoSides(browser, baseURL)
       try {
         await setOffline(a.page, serverA, true)
         await expect(saveStatus(a.page)).toHaveText(RECONNECTING)
-        if (who === 'remote-only') {
+        if (who !== 'remote-only') await typeAtEnd(a.page, '공유 본문', ' 로컬')
+        if (who !== 'local-only') {
           await typeAtEnd(b.page, '공유 본문', ' 원격')
           await expect.poll(() => room.content(DOC)).toContain(' 원격')
-        } else {
-          await typeAtEnd(a.page, '공유 본문', ' 로컬')
         }
         await setOffline(a.page, serverA, false)
-        await expect(saveStatus(a.page)).toHaveText('저장됨', { timeout: 5_000 })
-        await a.page.waitForTimeout(3_000)
-        await expect(a.page.getByText(N8)).toHaveCount(0)
+        if (who === 'both') {
+          await expect(a.page.locator('.notice-message')).toHaveText(N8, { timeout: 5_000 })
+          await expect(mainContent(a.page)).toContainText(' 로컬')
+          await expect(mainContent(a.page)).toContainText(' 원격')
+          await expect.poll(() => room.content(DOC)).toContain(' 로컬')
+          expect(room.content(DOC)).toContain(' 원격')
+        } else {
+          await expect(saveStatus(a.page)).toHaveText('저장됨', { timeout: 5_000 })
+          await a.page.waitForTimeout(3_000)
+          await expect(a.page.getByText(N8)).toHaveCount(0)
+        }
       } finally {
         await a.context.close()
         await b.context.close()
@@ -314,20 +288,8 @@ test.describe('F-306 러너·알림·지우기·회귀', () => {
     expect(await page.evaluate(() => location.hash)).not.toContain(DOC)
   })
 
-  test('F-306 E8 동기화 뒤 10초 넘게 끊기면 새 N5 문구', async ({ page }) => {
-    test.setTimeout(40_000)
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
-    await expect(mainContent(page)).toContainText('방 본문')
-
-    room.setReject(DOC, { code: 1013, reason: 'unavailable', open: true })
-    room.closeAll(DOC, 1013, 'unavailable')
-    await expect(saveStatus(page)).toHaveText(RECONNECTING)
-    await expect(page.locator('.notice-message')).toHaveText(N5, { timeout: 15_000 })
-  })
-
-  test('F-306 E9 재개 세션에서 4404 deleted 면 N3·읽기 전용, md-yjs 기록이 지워진다', async ({ page }) => {
+  test('F-306 E8·E9 10초 넘게 끊기면 새 N5 문구, 재개 세션에서 4404 deleted 면 N3·읽기 전용, md-yjs 기록이 지워진다', async ({ page }) => {
+    test.setTimeout(50_000)
     const room = createFakeDocRoom()
     room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
     await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
@@ -337,6 +299,7 @@ test.describe('F-306 러너·알림·지우기·회귀', () => {
     room.setReject(DOC, { code: 1013, reason: 'unavailable', open: true })
     room.closeAll(DOC, 1013, 'unavailable')
     await expect(saveStatus(page)).toHaveText(RECONNECTING)
+    await expect(page.locator('.notice-message')).toHaveText(N5, { timeout: 15_000 })
     await typeAtEnd(page, '방 본문', ' 끊김중')
     await expect.poll(() => yjsUnsynced(page, DOC)).toBe(true)
 
@@ -352,14 +315,4 @@ test.describe('F-306 러너·알림·지우기·회귀', () => {
     await expect.poll(() => yjsRowCount(page, DOC)).toBe(0)
   })
 
-  test('F-306 E10 기록이 없는 문서는 F-305 그대로 폴백한다', async ({ page }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    room.setReject(DOC, { code: 1011, reason: 'x' })
-    const { requests } = await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
-
-    await expect(mainContent(page)).toContainText('옛 본문')
-    await expect(page.locator('.statusbar-live')).toHaveText(LIVE_FALLBACK_TEXT)
-    await expect.poll(() => requests.lockPosts(DOC).length).toBeGreaterThan(0)
-  })
 })

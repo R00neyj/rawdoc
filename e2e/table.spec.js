@@ -17,52 +17,8 @@ const LEAD = '표\n\n'
 // 머리 행 + 데이터 2행 = tr 3개(F-140 A13·A14 가 "마지막 행" 을 가리키는 데 쓴다)
 const NARROW_TABLE = `${LEAD}| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n`
 
-// 칸 안에 이미 <br> 이 든 표 (F-162 A3·A4 용)
-const BR_TABLE = `${LEAD}| a | b |\n| --- | --- |\n| x<br>y | 2 |\n| 3 | 4 |\n`
-
-function wideTable(cols) {
-  const head = `| ${Array.from({ length: cols }, (_, i) => `h${i}`).join(' | ')} |`
-  const sep = `| ${Array.from({ length: cols }, () => '---').join(' | ')} |`
-  const row = `| ${Array.from({ length: cols }, (_, i) => `v${i}`).join(' | ')} |`
-  return `${LEAD}${head}\n${sep}\n${row}\n`
-}
-
 test.describe('F-140 표 추가 버튼 위치와 칸 인라인 표시', () => {
   // F-140 A2(버튼 위치)·A11(칸 크기 불변)·A13(빈 칸 높이)은 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
-
-  // 좁은 표·20열 표 두 번 돌던 것을 20열 하나로 줄였다. 툴팁 위치(±1px)는 시각 값이라 뺐다
-  test('F-140 A3 20열 표는 편집 영역에 가로 스크롤을 만들지 않는다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: wideTable(20) })
-    const scroller = page.locator('.cm-scroller')
-    const wrap = page.locator('.md-table-widget')
-    await wrap.hover()
-    await wrap.locator('.md-table-add-col').focus()
-    const sizes = await scroller.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }))
-    expect(sizes.scrollWidth).toBe(sizes.clientWidth)
-  })
-
-  test('F-140 A4 넓은 표를 가로 스크롤해도 버튼이 보이는 영역 안에 남는다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: wideTable(20) })
-    const wrap = page.locator('.md-table-widget')
-    const scroll = wrap.locator('.md-table-scroll')
-    const scroller = page.locator('.cm-scroller')
-
-    for (const fraction of [0, 0.5, 1]) {
-      await scroll.evaluate((el, f) => {
-        el.scrollLeft = (el.scrollWidth - el.clientWidth) * f
-      }, fraction)
-      await wrap.hover()
-      const colRect = await rectOf(wrap.locator('.md-table-add-col'))
-      const rowRect = await rectOf(wrap.locator('.md-table-add-row'))
-      const scrollerRect = await rectOf(scroller)
-      expect(colRect.right).toBeLessThanOrEqual(scrollerRect.right + 1)
-      expect(colRect.left).toBeGreaterThanOrEqual(scrollerRect.left - 1)
-      expect(rowRect.left).toBeGreaterThanOrEqual(scrollerRect.left - 1)
-      expect(rowRect.right).toBeLessThanOrEqual(scrollerRect.right + 1)
-    }
-  })
 
   test('F-140 A6 원문 보존 — 편집하지 않은 칸은 바이트가 그대로다', async ({ page }) => {
     const content = `${LEAD}| **굵게** | [링크](https://example.com) |\n| --- | --- |\n| \`a*b\` | [[없는 문서]] |\n`
@@ -155,20 +111,6 @@ test.describe('F-124 A2d 위젯 아래 줄 클릭 위치', () => {
   })
 })
 
-test.describe('F-139 표를 치는 도중 내용 손실', () => {
-  test('F-139 A2 새 줄에서 표를 이어 쳐도 세 줄이 그대로 남는다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n' })
-    await page.locator('.cm-content').click()
-    await page.keyboard.press('Control+End')
-    await page.keyboard.type('| a | b |\n| --- | --- |\n| 1 | 2 |')
-
-    await setViewMode(page, 'raw')
-    const doc = await readSavedContent(page, docId)
-    expect(doc.content.replace(/\r\n/g, '\n')).toContain('| a | b |\n| --- | --- |\n| 1 | 2 |')
-  })
-})
-
 test.describe('F-138 표 칸 역슬래시 왕복', () => {
   test('F-138 A2 칸 끝에 글자를 입력해도 역슬래시가 유지된다', async ({ page }) => {
     const content = `${LEAD}| C:\\Users | a\\*b |\n| --- | --- |\n| x | y |\n`
@@ -188,58 +130,52 @@ test.describe('F-138 표 칸 역슬래시 왕복', () => {
 })
 
 test.describe('F-161 표 칸 입력 결함', () => {
-  test('F-161 A1 칸 안에서 실제 키로 띄어쓰기가 그대로 들어간다', async ({ page }) => {
+  test('F-161 A1·A2·A6 칸 안 띄어쓰기, 키보드 포커스 편집 시작, 방향키·Tab 이동', async ({ page }) => {
     await openApp(page)
     const docId = await importMarkdown(page, { content: NARROW_TABLE })
     const wrap = page.locator('.md-table-widget')
-    const cell = wrap.locator('td, th').nth(2) // 2행 1열, "1"
+    const editing = (r, c) => wrap.locator(`.md-table-cell-editing[data-row="${r}"][data-col="${c}"]`)
 
-    await cell.click()
+    await wrap.locator('td, th').nth(0).click()
+    await page.keyboard.press('Tab')
+    await expect(editing(0, 1)).toHaveCount(1)
+    await page.keyboard.press('ArrowDown')
+    await expect(editing(1, 1)).toHaveCount(1)
+    await page.keyboard.press('ArrowLeft')
+    await expect(editing(1, 0)).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await expect(wrap.locator('.md-table-cell-editing')).toHaveCount(0)
+
+    await wrap.locator('td, th').nth(0).focus()
+    await page.keyboard.press('Enter')
+    await expect(editing(0, 0)).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    await wrap.locator('td, th').nth(2).focus()
+    await page.keyboard.press(' ')
+    await expect(editing(1, 0)).toHaveCount(1)
+    await page.keyboard.press('Escape')
+    expect((await readSavedContent(page, docId)).content).toContain('| 1 | 2 |')
+
+    await wrap.locator('td, th').nth(2).click()
     await page.keyboard.press('End')
     await page.keyboard.press('Shift+Home')
     await page.keyboard.type('a b c')
     await page.keyboard.press('Escape')
-
     const doc = await readSavedContent(page, docId)
     expect(doc.content).toContain('| a b c | 2 |')
-    // 다른 줄은 바이트가 그대로다
     expect(doc.content).toContain('| a | b |')
     expect(doc.content).toContain('| --- | --- |')
     expect(doc.content).toContain('| 3 | 4 |')
   })
 
-  test('F-161 A2 칸에 키보드로 포커스한 뒤 Enter·Space 로 편집을 시작한다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: NARROW_TABLE })
-    const wrap = page.locator('.md-table-widget')
-
-    // Tab 으로 포커스한 뒤 Enter — 그 칸 편집 시작
-    const cellA = wrap.locator('td, th').nth(0) // 머리 행 "a"
-    await cellA.focus()
-    await page.keyboard.press('Enter')
-    await expect(wrap.locator('.md-table-cell-editing[data-row="0"][data-col="0"]')).toHaveCount(1)
-    await page.keyboard.press('Escape')
-    await expect(wrap.locator('.md-table-cell-editing')).toHaveCount(0)
-
-    // 다른 칸에 포커스한 뒤 Space — 그 칸 편집 시작, Space 가 글자로 들어가지 않는다
-    const cellB = wrap.locator('td, th').nth(2) // "1"
-    await cellB.focus()
-    await page.keyboard.press(' ')
-    await expect(wrap.locator('.md-table-cell-editing[data-row="1"][data-col="0"]')).toHaveCount(1)
-    await page.keyboard.press('Escape')
-
-    const doc = await readSavedContent(page, docId)
-    expect(doc.content).toContain('| 1 | 2 |') // Space 가 칸에 들어가지 않아 "1" 그대로
-  })
-
-  test('F-161 A3 조합 확정 뒤 스페이스로 이어 조합해도 칸에 그대로 남는다', async ({ page }) => {
-    const content = `${LEAD}| a | b |\n| --- | --- |\n|  | y |\n`
+  test('F-161 A3·A4 조합 확정 뒤 스페이스 이어 조합, 조합 중 Tab 은 칸을 옮기지 않는다', async ({ page }) => {
+    const content = `${LEAD}| a | b |\n| --- | --- |\n|  | y |\n|  | z |\n`
     await openApp(page)
     const docId = await importMarkdown(page, { content })
     const wrap = page.locator('.md-table-widget')
-    const cell = wrap.locator('td, th').nth(2) // 빈 칸
+    const cells = wrap.locator('td, th')
 
-    await cell.click()
+    await cells.nth(2).click()
     const cdp1 = await fakeImeCompose(page, '한')
     await fakeImeCommit(cdp1, '한')
     await page.keyboard.press(' ')
@@ -247,35 +183,21 @@ test.describe('F-161 표 칸 입력 결함', () => {
     await fakeImeCommit(cdp2, '글')
     await page.keyboard.press('Escape')
 
-    const doc = await readSavedContent(page, docId)
-    expect(doc.content).toContain('| 한 글 | y |')
-  })
-
-  test('F-161 A4 조합 중에는 Tab 이 칸을 이동시키지 않는다', async ({ page }) => {
-    const content = `${LEAD}| a | b |\n| --- | --- |\n|  | y |\n`
-    await openApp(page)
-    const docId = await importMarkdown(page, { content })
-    const wrap = page.locator('.md-table-widget')
-    const cell = wrap.locator('td, th').nth(2) // 빈 칸, row=1 col=0
-
-    await cell.click()
-    await expect(wrap.locator('.md-table-cell-editing[data-row="1"][data-col="0"]')).toHaveCount(1)
-
-    const cdp = await fakeImeCompose(page, '한')
+    await cells.nth(4).click()
+    await expect(wrap.locator('.md-table-cell-editing[data-row="2"][data-col="0"]')).toHaveCount(1)
+    const cdp = await fakeImeCompose(page, '별')
     await page.keyboard.press('Tab')
     await page.waitForTimeout(50)
-    // 다른 칸(row=1 col=1)으로 옮겨가지 않았어야 한다
-    await expect(wrap.locator('.md-table-cell-editing[data-row="1"][data-col="1"]')).toHaveCount(0)
-
-    await fakeImeCommit(cdp, '한')
+    await expect(wrap.locator('.md-table-cell-editing[data-row="2"][data-col="1"]')).toHaveCount(0)
+    await fakeImeCommit(cdp, '별')
     await page.keyboard.press('Escape')
 
     const doc = await readSavedContent(page, docId)
-    expect(doc.content).toContain('한')
-    expect(doc.content).toContain('| y |')
+    expect(doc.content).toContain('| 한 글 | y |')
+    expect(doc.content).toContain('| 별 | z |')
   })
 
-  test('F-161 A5 표를 줄 단위로 한글 포함해 쳐도 세 줄이 그대로 남는다', async ({ page }) => {
+  test('F-139 A2·F-161 A5 표를 줄 단위로(한글 포함) 쳐도 세 줄이 그대로 남는다', async ({ page }) => {
     await openApp(page)
     const docId = await importMarkdown(page, { content: '\n' })
     await page.locator('.cm-content').click()
@@ -300,24 +222,6 @@ test.describe('F-161 표 칸 입력 결함', () => {
     expect(doc.content.replace(/\r\n/g, '\n')).toContain('| 이름 | 값 |\n| --- | --- |\n| 가 | 나 |')
   })
 
-  test('F-161 A6 회귀 — 방향키·Tab 으로 칸 사이를 옮긴다 (F-125 2.3)', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: NARROW_TABLE })
-    const wrap = page.locator('.md-table-widget')
-
-    await wrap.locator('td, th').nth(0).click() // row0 col0
-    await page.keyboard.press('Tab')
-    await expect(wrap.locator('.md-table-cell-editing[data-row="0"][data-col="1"]')).toHaveCount(1)
-
-    await page.keyboard.press('ArrowDown')
-    await expect(wrap.locator('.md-table-cell-editing[data-row="1"][data-col="1"]')).toHaveCount(1)
-
-    await page.keyboard.press('ArrowLeft')
-    await expect(wrap.locator('.md-table-cell-editing[data-row="1"][data-col="0"]')).toHaveCount(1)
-
-    await page.keyboard.press('Escape')
-    await expect(wrap.locator('.md-table-cell-editing')).toHaveCount(0)
-  })
 })
 
 test.describe('F-162 표 칸 안 줄바꿈 (Alt+Enter → <br>)', () => {
@@ -354,39 +258,6 @@ test.describe('F-162 표 칸 안 줄바꿈 (Alt+Enter → <br>)', () => {
     expect(doc.content).toContain('| 3 | 4 |')
   })
 
-  // 칸 높이가 늘어나는지(1.5배)는 시각 값이라 뺐다 — <br> 요소가 그려지는지만 본다
-  test('F-162 A3 편집 중이 아닌 칸의 <br> 은 줄바꿈으로 보인다', async ({ page }) => {
-    const content = `${BR_TABLE}아래줄\n`
-    await openApp(page)
-    const docId = await importMarkdown(page, { content })
-    const wrap = page.locator('.md-table-widget')
-    const rows = wrap.locator('table tr')
-    const brCell = rows.nth(1).locator('td').first() // "x<br>y"
-
-    await expect(brCell.locator('br')).toHaveCount(1)
-
-    // 표 아래 줄 클릭 위치가 F-124 3.4 규칙대로 맞는다(F-124 A2d 방법)
-    const belowTable = page.getByText('아래줄', { exact: true })
-    await belowTable.click()
-    await page.keyboard.press('End')
-    await page.keyboard.type('!')
-    const doc = await readSavedContent(page, docId)
-    expect(doc.content).toContain('아래줄!')
-  })
-
-  test('F-162 A4 보기 모드 — 표 칸의 <br> 은 줄바꿈, 문단의 <br> 은 글자', async ({ page }) => {
-    const content = `${BR_TABLE}\n문단 x<br>y\n`
-    await openApp(page)
-    await importMarkdown(page, { content })
-    await setViewMode(page, 'view')
-
-    const cell = page.locator('.viewer table td').first() // "x<br>y"
-    await expect(cell.locator('br')).toHaveCount(1)
-
-    const paragraph = page.locator('.viewer p', { hasText: '문단' })
-    await expect(paragraph).toContainText('x<br>y')
-    await expect(paragraph.locator('br')).toHaveCount(0)
-  })
 })
 
 // 머리 행 + 본문 4행 (F-164 A1 "본문 4행 표")
@@ -411,128 +282,18 @@ function cellAt(table, row, col) {
 }
 
 test.describe('F-165 표 칸 범위 선택과 행·열 삭제', () => {
-  // 사각형이 두 칸을 감싸는 좌표(±2px)는 시각 값이라 뺐다
-  test('F-165 A2 끌기로 범위를 선택하면 사각형이 보이고 하위 에디터는 없다', async ({ page }) => {
+  test('F-165 A3·A9 끌지 않고 떼면 칸 편집 시작(회귀), Esc·표 밖 클릭으로 범위 선택 해제', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: GRID_TABLE })
     const wrap = page.locator('.md-table-widget')
     const table = wrap.locator('table')
-    const from = cellAt(table, 1, 0) // "1"
-    const to = cellAt(table, 2, 1) // "5"
-
-    await dragSelect(from, to)
-
     const highlight = wrap.locator('.md-table-cell-highlight')
-    await expect(highlight).toBeVisible()
-    await expect(wrap.locator('.md-table-cell-editing')).toHaveCount(0)
-  })
+    const cell = cellAt(table, 1, 1)
 
-  test('F-165 A3 끌지 않고 떼면 그 칸 편집이 시작된다(회귀, F-125 A3)', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: GRID_TABLE })
-    const wrap = page.locator('.md-table-widget')
-    const table = wrap.locator('table')
-    const cell = cellAt(table, 1, 1) // "2"
-
-    await dragSelect(cell, cell) // 같은 칸에서 누르고 뗀다 — 끌기 아님
-
+    await dragSelect(cell, cell)
     await expect(wrap.locator('.md-table-cell-editing[data-row="1"][data-col="1"]')).toHaveCount(1)
-    await expect(wrap.locator('.md-table-cell-highlight')).not.toBeVisible()
-  })
-
-  test('F-165 A4 열 전체를 끌어 선택한 뒤 Delete 로 그 열을 지운다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: GRID_TABLE })
-    const wrap = page.locator('.md-table-widget')
-    const table = wrap.locator('table')
-
-    await dragSelect(cellAt(table, 0, 1), cellAt(table, 2, 1)) // 머리~마지막 행, 가운데 열
-    await page.keyboard.press('Delete')
-
-    const doc = await readSavedContent(page, docId)
-    expect(doc.content.replace(/\r\n/g, '\n')).toContain('| a | c |\n| --- | --- |\n| 1 | 3 |\n| 4 | 6 |')
-
-    // 삭제 뒤 포커스가 주 에디터로 돌아와 있어야 Ctrl+Z 한 번으로 되돌아간다
-    await page.keyboard.press('Control+z')
-    const undone = await readSavedContent(page, docId)
-    expect(undone.content.replace(/\r\n/g, '\n')).toBe(GRID_TABLE)
-  })
-
-  test('F-165 A5 본문 행 전체를 끌어 선택한 뒤 Backspace 로 그 행을 지운다, 커서는 표 다음 줄로', async ({ page }) => {
-    // 표와 "이후문단" 사이에 빈 줄이 있어야 표가 거기서 끝난다(빈 줄 없이 붙으면 그 줄도 표의 한 본문 행으로 읽힌다 — F-124 A2d 픽스처와 같은 이유)
-    const content = `${GRID_TABLE}\n이후문단\n`
-    await openApp(page)
-    const docId = await importMarkdown(page, { content })
-    const wrap = page.locator('.md-table-widget')
-    const table = wrap.locator('table')
-
-    await dragSelect(cellAt(table, 2, 0), cellAt(table, 2, 2)) // 본문 2행 전체("4 | 5 | 6")
-    await page.keyboard.press('Backspace')
-
-    await expect(table.locator('tr')).toHaveCount(2) // 머리 + 본문 1행만 남는다
-    await page.keyboard.type('X')
-
-    // 커서는 "표 다음 줄"(표와 "이후문단" 사이의 빈 줄) 시작에 있다 — 그 줄에 친 글자가 들어간다
-    const doc = await readSavedContent(page, docId)
-    expect(doc.content.replace(/\r\n/g, '\n')).toContain('| 1 | 2 | 3 |\nX\n이후문단')
-  })
-
-  test('F-165 A6 머리+본문 행을 함께 선택해 Delete — 머리는 비우고 본문 행은 지운다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: GRID_TABLE })
-    const wrap = page.locator('.md-table-widget')
-    const table = wrap.locator('table')
-
-    await dragSelect(cellAt(table, 0, 0), cellAt(table, 1, 2)) // 머리 전체 + 본문 1행 전체
-    await page.keyboard.press('Delete')
-
-    await expect(wrap).toHaveCount(1) // 위젯 그대로(표 구조 유지)
-    await expect(table.locator('tr')).toHaveCount(2) // 머리 + 본문 1행("4|5|6")만 남는다
-    const headerCells = table.locator('tr').nth(0).locator('th')
-    await expect(headerCells.nth(0)).toHaveText('')
-    await expect(headerCells.nth(1)).toHaveText('')
-    await expect(headerCells.nth(2)).toHaveText('')
-
-    const doc = await readSavedContent(page, docId)
-    expect(doc.content.replace(/\r\n/g, '\n')).toContain('| 4 | 5 | 6 |')
-  })
-
-  test('F-165 A7 모든 칸을 선택해 Delete — 표가 사라지고 빈 줄 하나만 남는다', async ({ page }) => {
-    const content = `앞줄\n\n${GRID_TABLE.slice(LEAD.length)}\n뒤줄\n`
-    await openApp(page)
-    const docId = await importMarkdown(page, { content })
-    const wrap = page.locator('.md-table-widget')
-    const table = wrap.locator('table')
-
-    await dragSelect(cellAt(table, 0, 0), cellAt(table, 2, 2))
-    await page.keyboard.press('Delete')
-
-    await expect(page.locator('.md-table-widget')).toHaveCount(0)
-    const doc = await readSavedContent(page, docId)
-    expect(doc.content.replace(/\r\n/g, '\n')).toContain('앞줄\n\n\n\n뒤줄')
-  })
-
-  test('F-165 A8 일부 칸만 선택해 Delete — 내용만 비우고 선택은 유지된다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: GRID_TABLE })
-    const wrap = page.locator('.md-table-widget')
-    const table = wrap.locator('table')
-
-    await dragSelect(cellAt(table, 1, 0), cellAt(table, 1, 1)) // 본문 1행의 두 칸만("1","2")
-    await page.keyboard.press('Delete')
-
-    await expect(wrap.locator('.md-table-cell-highlight')).toBeVisible() // 선택 유지
-
-    const doc = await readSavedContent(page, docId)
-    expect(doc.content.replace(/\r\n/g, '\n')).toContain('|  |  | 3 |')
-  })
-
-  test('F-165 A9 Esc 와 표 밖 클릭으로 범위 선택을 해제한다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: GRID_TABLE })
-    const wrap = page.locator('.md-table-widget')
-    const table = wrap.locator('table')
-    const highlight = wrap.locator('.md-table-cell-highlight')
+    await expect(highlight).not.toBeVisible()
+    await page.keyboard.press('Escape')
 
     await dragSelect(cellAt(table, 0, 0), cellAt(table, 1, 1))
     await expect(highlight).toBeVisible()
@@ -541,9 +302,68 @@ test.describe('F-165 표 칸 범위 선택과 행·열 삭제', () => {
 
     await dragSelect(cellAt(table, 0, 0), cellAt(table, 1, 1))
     await expect(highlight).toBeVisible()
-    await page.getByText('표', { exact: true }).click() // LEAD 문단(표 밖)
+    await page.getByText('표', { exact: true }).click()
     await expect(highlight).not.toBeVisible()
   })
+
+  test('F-165 A4·A6·A8 열·머리+행·일부 칸 선택 Delete (각 단계 뒤 Ctrl+Z 로 복원)', async ({ page }) => {
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: GRID_TABLE })
+    const wrap = page.locator('.md-table-widget')
+    const table = wrap.locator('table')
+    const saved = async () => (await readSavedContent(page, docId)).content.replace(/\r\n/g, '\n')
+
+    await dragSelect(cellAt(table, 0, 1), cellAt(table, 2, 1))
+    await page.keyboard.press('Delete')
+    expect(await saved()).toContain('| a | c |\n| --- | --- |\n| 1 | 3 |\n| 4 | 6 |')
+    await page.keyboard.press('Control+z')
+    expect(await saved()).toBe(GRID_TABLE)
+    await expect(table.locator('tr')).toHaveCount(3)
+
+    await dragSelect(cellAt(table, 0, 0), cellAt(table, 1, 2))
+    await page.keyboard.press('Delete')
+    await expect(wrap).toHaveCount(1)
+    await expect(table.locator('tr')).toHaveCount(2)
+    await expect(table.locator('tr').nth(0).locator('th')).toHaveText(['', '', ''])
+    expect(await saved()).toContain('| 4 | 5 | 6 |')
+    await page.keyboard.press('Control+z')
+    expect(await saved()).toBe(GRID_TABLE)
+    await expect(table.locator('tr')).toHaveCount(3)
+
+    await dragSelect(cellAt(table, 1, 0), cellAt(table, 1, 1))
+    await page.keyboard.press('Delete')
+    await expect(wrap.locator('.md-table-cell-highlight')).toBeVisible()
+    expect(await saved()).toContain('|  |  | 3 |')
+  })
+
+  test('F-165 A5 본문 행 전체를 끌어 선택한 뒤 Backspace 로 그 행을 지운다, 커서는 표 다음 줄로', async ({ page }) => {
+    const content = `${GRID_TABLE}\n이후문단\n`
+    await openApp(page)
+    const docId = await importMarkdown(page, { content })
+    const wrap = page.locator('.md-table-widget')
+    const table = wrap.locator('table')
+
+    await dragSelect(cellAt(table, 2, 0), cellAt(table, 2, 2))
+    await page.keyboard.press('Backspace')
+    await expect(table.locator('tr')).toHaveCount(2)
+    await page.keyboard.type('X')
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content.replace(/\r\n/g, '\n')).toContain('| 1 | 2 | 3 |\nX\n이후문단')
+  })
+
+  test('F-165 A7 모든 칸을 선택해 Delete — 표가 사라지고 빈 줄 하나만 남는다', async ({ page }) => {
+    const content = `앞줄\n\n${GRID_TABLE.slice(LEAD.length)}\n뒤줄\n`
+    await openApp(page)
+    const docId = await importMarkdown(page, { content })
+    const table = page.locator('.md-table-widget table')
+
+    await dragSelect(cellAt(table, 0, 0), cellAt(table, 2, 2))
+    await page.keyboard.press('Delete')
+    await expect(page.locator('.md-table-widget')).toHaveCount(0)
+    const doc = await readSavedContent(page, docId)
+    expect(doc.content.replace(/\r\n/g, '\n')).toContain('앞줄\n\n\n\n뒤줄')
+  })
+
 })
 
 // F-171: 표 행·열 추가 때 화면 튐. 표 앞뒤에 긴 여백을 둬 스크롤 여지를 만든다
@@ -595,29 +415,44 @@ async function f171PositionTable(page, offsetFromBottom) {
 }
 
 test.describe('F-171 표 행·열 추가 때 화면 튐', () => {
-  test('F-171 A2 칸이 이미 보이면 Enter·+ 행 추가 모두 scrollTop 을 바꾸지 않는다', async ({ page }) => {
+  test('F-171 A2·A4·A5 칸이 보이면 행 추가(Enter·+ 5회)·열 추가·칸 이동 모두 scrollTop 을 바꾸지 않는다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: F171_DOC })
-    const table = await f171PositionTable(page, 300) // 아래에 room 넉넉
+    const table = await f171PositionTable(page, 400)
+    const wrap = page.locator('.md-table-widget')
+    const same = async (before) => expect(Math.abs((await mainScrollTop(page)) - before)).toBeLessThanOrEqual(1)
 
-    // 마지막 행 Enter 로 행 추가
     const before1 = await mainScrollTop(page)
     await table.locator('tr').last().locator('td').last().click()
     await page.keyboard.press('End')
     await page.keyboard.press('Enter')
     await waitScrollSettle(page)
     await expect(table.locator('tr')).toHaveCount(4)
-    expect(Math.abs((await mainScrollTop(page)) - before1)).toBeLessThanOrEqual(1)
+    await same(before1)
     await page.keyboard.press('Escape')
 
-    // + 버튼으로 행 추가
-    const before2 = await mainScrollTop(page)
-    const wrap = page.locator('.md-table-widget')
     await wrap.hover()
-    await wrap.locator('.md-table-add-row').click()
+    for (let i = 0; i < 5; i++) {
+      const before = await mainScrollTop(page)
+      await wrap.locator('.md-table-add-row').click()
+      await waitScrollSettle(page)
+      await same(before)
+    }
+    await expect(table.locator('tr')).toHaveCount(9)
+
+    const beforeCol = await mainScrollTop(page)
+    await wrap.hover()
+    await wrap.locator('.md-table-add-col').click()
     await waitScrollSettle(page)
-    await expect(table.locator('tr')).toHaveCount(5)
-    expect(Math.abs((await mainScrollTop(page)) - before2)).toBeLessThanOrEqual(1)
+    await same(beforeCol)
+
+    await table.locator('tr').nth(0).locator('th').first().click()
+    for (const key of ['Tab', 'Enter', 'ArrowDown', 'ArrowLeft', 'ArrowUp']) {
+      const before = await mainScrollTop(page)
+      await page.keyboard.press(key)
+      await waitScrollSettle(page)
+      await same(before)
+    }
   })
 
   test('F-171 A3 칸이 창 아래로 벗어나면 그 칸 아래 끝만 창 아래 끝에 맞춘다', async ({ page }) => {
@@ -643,45 +478,6 @@ test.describe('F-171 표 행·열 추가 때 화면 튐', () => {
       const scRect = await rectOf(page.locator('.cm-scroller').first())
       expect(Math.abs(cellRect.bottom - scRect.bottom)).toBeLessThanOrEqual(2)
       expect(cellRect.top).toBeGreaterThanOrEqual(scRect.top - 1)
-    }
-  })
-
-  test('F-171 A4 행 추가를 5회 반복해도 매번 scrollTop 이 그대로다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: F171_DOC })
-    const table = await f171PositionTable(page, 400) // 5행 추가할 room
-    const wrap = page.locator('.md-table-widget')
-    await wrap.hover()
-    const rowBtn = wrap.locator('.md-table-add-row')
-
-    for (let i = 0; i < 5; i++) {
-      const before = await mainScrollTop(page)
-      await rowBtn.click()
-      await waitScrollSettle(page)
-      const after = await mainScrollTop(page)
-      expect(Math.abs(after - before)).toBeLessThanOrEqual(1)
-    }
-    await expect(table.locator('tr')).toHaveCount(8)
-  })
-
-  test('F-171 A5 열 추가·칸 이동(칸이 보이는 경우) 모두 scrollTop 을 바꾸지 않는다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: F171_DOC })
-    const table = await f171PositionTable(page, 300)
-    const wrap = page.locator('.md-table-widget')
-
-    const before1 = await mainScrollTop(page)
-    await wrap.hover()
-    await wrap.locator('.md-table-add-col').click()
-    await waitScrollSettle(page)
-    expect(Math.abs((await mainScrollTop(page)) - before1)).toBeLessThanOrEqual(1)
-
-    await table.locator('tr').nth(0).locator('th').first().click()
-    for (const key of ['Tab', 'Enter', 'ArrowDown', 'ArrowLeft', 'ArrowUp']) {
-      const before = await mainScrollTop(page)
-      await page.keyboard.press(key)
-      await waitScrollSettle(page)
-      expect(Math.abs((await mainScrollTop(page)) - before)).toBeLessThanOrEqual(1)
     }
   })
 

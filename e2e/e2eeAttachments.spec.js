@@ -309,7 +309,7 @@ async function fetchRejects(page, url) {
 }
 
 test.describe('F-406 로컬 금고 첨부', () => {
-  test('F-406 E1·E2·E3 올리면 봉투로 저장, 새로고침 뒤 다시 열어도 보이고, 잠그면 사라지고 주소가 거부된다', async ({ page }) => {
+  test('F-406 E1·E2·E3·E8 올리면 봉투로 저장, 새로고침 뒤 다시 열어도 보이고(보기 모드 포함), 잠그면 사라지고 주소가 거부된다', async ({ page }) => {
     await openLocalVaultDoc(page)
     await pasteImage(page, decodablePngBytes(200, 100))
 
@@ -348,10 +348,18 @@ test.describe('F-406 로컬 금고 첨부', () => {
     await expect.poll(() => img2.evaluate((el) => el.naturalWidth)).toBeGreaterThan(0)
     const src2 = await img2.getAttribute('src')
 
+    await setViewMode(page, 'view')
+    const viewImg = page.locator('.content-area .viewer img[data-attachment]')
+    await expect(viewImg).toBeVisible()
+    const viewSrc = await viewImg.getAttribute('src')
+    await setViewMode(page, 'live')
+    await expect(page.locator('.md-image-img')).toBeVisible()
+
     // E3 — 상태바로 잠그면 이미지가 사라지고, 적어 둔 주소는 fetch 가 거부된다
     await page.locator('.statusbar-e2ee').click()
     await expect(page.locator('.md-image-img')).toHaveCount(0)
     expect(await fetchRejects(page, src2)).toBe(true)
+    expect(await fetchRejects(page, viewSrc)).toBe(true)
   })
 
   test('F-406 E7 금고 문서를 떠나면(사이드바에서 다른 문서를 엶) 그 주소는 거둬진다', async ({ page }) => {
@@ -369,19 +377,6 @@ test.describe('F-406 로컬 금고 첨부', () => {
     expect(await fetchRejects(page, src)).toBe(true)
   })
 
-  test('F-406 E8 보기 모드에도 이미지가 뜨고, 잠그면 그 주소는 거둬진다', async ({ page }) => {
-    await openLocalVaultDoc(page)
-    await pasteImage(page, decodablePngBytes(80, 60))
-
-    await setViewMode(page, 'view')
-    const viewImg = page.locator('.content-area .viewer img[data-attachment]')
-    await expect(viewImg).toBeVisible()
-    const src = await viewImg.getAttribute('src')
-
-    await page.locator('.statusbar-e2ee').click()
-    await expect(lockedPanel(page)).toBeVisible()
-    expect(await fetchRejects(page, src)).toBe(true)
-  })
 })
 
 test.describe('F-406 서버 금고 첨부', () => {

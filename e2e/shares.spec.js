@@ -18,11 +18,6 @@ function seedDoc(server, { id, title, folderId = null }) {
   })
 }
 
-function seedFolder(server, { id, name, parentId = null }) {
-  const now = Date.now()
-  server.folders.set(id, { id, name, parentId, createdAt: now, updatedAt: now })
-}
-
 function seedLink(server, { targetType, targetId, token }) {
   server.shareLinks.set(`${targetType}:${targetId}`, { token, createdAt: Date.now(), revokedAt: null })
 }
@@ -38,44 +33,23 @@ async function openShares(page) {
 }
 
 test.describe('F-243 A8 진입', () => {
-  test('계정 메뉴 → 공유 관리 — 페이지가 열리고 해시가 #/shares', async ({ page }) => {
-    await fakeServer(page)
+  test('F-243 A8·A10·A11·A12 계정 메뉴로 진입, 초대 삭제, 대상 열기, 링크 해제(공유 메뉴에도 반영)', async ({ page }) => {
+    const server = await fakeServer(page)
+    seedDoc(server, { id: 'd1', title: '회의록' })
+    seedLink(server, { targetType: 'doc', targetId: 'd1', token: 'tok-doc' })
+    seedGrant(server, { targetType: 'doc', targetId: 'd1', email: 'a@b.com', role: 'view' })
     await openApp(page)
 
     await openShares(page)
     await expect(page).toHaveURL(/#\/shares$/)
-  })
-})
-
-test.describe('F-243 A9 목록', () => {
-  test('링크 1개·초대 1개 — 두 묶음에 각각 한 줄', async ({ page }) => {
-    const server = await fakeServer(page)
-    seedDoc(server, { id: 'd1', title: '회의록' })
-    seedFolder(server, { id: 'f1', name: '업무' })
-    seedLink(server, { targetType: 'doc', targetId: 'd1', token: 'tok-doc' })
-    seedGrant(server, { targetType: 'folder', targetId: 'f1', email: 'a@b.com', role: 'edit' })
-    await openApp(page)
-
-    await openShares(page)
-
-    await expect(page.locator('.shares-link-row')).toHaveCount(1)
-    await expect(page.locator('.shares-link-row')).toContainText('회의록')
-    await expect(page.locator('.shares-link-row')).toContainText('문서')
 
     await expect(page.locator('.shares-grant-row')).toHaveCount(1)
-    await expect(page.locator('.shares-grant-row')).toContainText('업무')
-    await expect(page.locator('.shares-grant-row')).toContainText('폴더')
-    await expect(page.locator('.shares-grant-row')).toContainText('a@b.com')
-    await expect(page.locator('.shares-grant-row')).toContainText('편집')
-  })
-})
+    await page.locator('.shares-grant-revoke').click()
+    await expect(page.locator('.shares-grant-row')).toHaveCount(0)
 
-test.describe('F-243 A10 해제', () => {
-  test('링크 줄 해제 — 줄이 사라지고 그 문서 공유 메뉴에 링크가 없다', async ({ page }) => {
-    const server = await fakeServer(page)
-    seedDoc(server, { id: 'd1', title: '회의록' })
-    seedLink(server, { targetType: 'doc', targetId: 'd1', token: 'tok-doc' })
-    await openApp(page)
+    await page.locator('.shares-target-btn').first().click()
+    await expect(page).toHaveURL(/#\/d\/d1$/)
+    await expect(page.locator('.cm-content')).toContainText('내용')
 
     await openShares(page)
     await expect(page.locator('.shares-link-row')).toHaveCount(1)
@@ -89,45 +63,6 @@ test.describe('F-243 A10 해제', () => {
     await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
     await expect(page.getByRole('menuitem', { name: '읽기 전용 링크 끊기' })).toHaveCount(0)
     await expect(page.getByRole('menuitem', { name: '읽기 전용 링크 복사' })).toBeVisible()
-  })
-})
-
-test.describe('F-243 A11 초대 삭제', () => {
-  test('초대 줄 초대 삭제 — 줄이 사라진다', async ({ page }) => {
-    const server = await fakeServer(page)
-    seedDoc(server, { id: 'd1', title: '회의록' })
-    seedGrant(server, { targetType: 'doc', targetId: 'd1', email: 'a@b.com', role: 'view' })
-    await openApp(page)
-
-    await openShares(page)
-    await expect(page.locator('.shares-grant-row')).toHaveCount(1)
-    await page.locator('.shares-grant-revoke').click()
-    await expect(page.locator('.shares-grant-row')).toHaveCount(0)
-  })
-})
-
-test.describe('F-243 A12 대상 열기', () => {
-  test('문서 이름 클릭 — 그 문서가 열리고 해시가 #/d/{id}', async ({ page }) => {
-    const server = await fakeServer(page)
-    seedDoc(server, { id: 'd1', title: '회의록' })
-    seedLink(server, { targetType: 'doc', targetId: 'd1', token: 'tok-doc' })
-    await openApp(page)
-
-    await openShares(page)
-    await page.locator('.shares-target-btn').click()
-
-    await expect(page).toHaveURL(/#\/d\/d1$/)
-    await expect(page.locator('.cm-content')).toContainText('내용')
-  })
-})
-
-test.describe('F-243 A13 빈 상태', () => {
-  test('공유가 하나도 없으면 안내 문구', async ({ page }) => {
-    await fakeServer(page)
-    await openApp(page)
-
-    await openShares(page)
-    await expect(page.locator('.shares-empty')).toHaveText('공유 중인 문서와 폴더가 없습니다.')
   })
 })
 

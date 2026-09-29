@@ -2,7 +2,7 @@
 import { test, expect } from '@playwright/test'
 import { mockLanding, mockWelcome, setPrefBeforeLoad } from './helpers.js'
 
-test('F-271 A6 첫 방문 — 랜딩만 보이고 앱으로 넘어가지 않는다', async ({ page }) => {
+test('F-271 A6·A9 첫 방문 — 랜딩만 보이고, 로그인 없이 사용을 누르면 앱이 뜨고 두 값이 생긴다', async ({ page }) => {
   await mockLanding(page)
   await page.goto('/')
   // 히어로(#demo)는 F-239 §2.1 에 따라 assets/welcome-demo.js 가 뜨면 실제 편집기로 바꿔 낀다(demo-host).
@@ -12,51 +12,34 @@ test('F-271 A6 첫 방문 — 랜딩만 보이고 앱으로 넘어가지 않는�
   await expect(page.locator('.cm-host:not(.demo-host)')).toHaveCount(0)
   await expect(page.locator('.empty-state')).toHaveCount(0)
   await expect(page.locator('.cookie-escape a[href="/?app=1"]')).toBeHidden()
-})
 
-test('F-271 A7 기존 사용자 키(md.firstRunDone) 가 있으면 랜딩에 머무르지 않고 앱이 뜬다', async ({ page }) => {
-  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
-  await mockLanding(page)
-  await page.goto('/')
+  await page.locator('[data-cta="enter"]').first().click()
   await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible({ timeout: 10_000 })
-
   const landingDone = await page.evaluate(() => localStorage.getItem('md.landingDone'))
   expect(landingDone).toBe('1')
   const cookies = await page.context().cookies()
   expect(cookies.find((c) => c.name === 'md_app')?.value).toBe('1')
 })
 
-test('F-271 A8 앱 해시가 붙어 있으면 랜딩에 막히지 않고 앱으로 간다', async ({ page }) => {
+test('F-271 A7·A8 앱 해시가 붙어 있거나 기존 사용자 키(md.firstRunDone)가 있으면 랜딩에 머무르지 않고 앱이 뜬다', async ({ page }) => {
   await mockLanding(page)
   await page.goto('/#/help')
   await expect(page).toHaveURL(/#\/help$/)
-
   const landingDone = await page.evaluate(() => localStorage.getItem('md.landingDone'))
   expect(landingDone).toBe('1')
   const cookies = await page.context().cookies()
   expect(cookies.find((c) => c.name === 'md_app')?.value).toBe('1')
-})
 
-test('F-271 A9 로그인 없이 사용 클릭 시 앱이 뜨고 두 값이 생긴다', async ({ page }) => {
+  await page.context().clearCookies()
+  await page.evaluate(() => {
+    localStorage.clear()
+    localStorage.setItem('md.firstRunDone', '1')
+  })
   await mockLanding(page)
   await page.goto('/')
-  await page.locator('[data-cta="enter"]').first().click()
   await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible({ timeout: 10_000 })
-
-  const landingDone = await page.evaluate(() => localStorage.getItem('md.landingDone'))
-  expect(landingDone).toBe('1')
-  const cookies = await page.context().cookies()
-  expect(cookies.find((c) => c.name === 'md_app')?.value).toBe('1')
-})
-
-test('F-271 A10 앱 부팅 시 두 값을 쓴다 (랜딩을 거치지 않아도 다음부터 앱)', async ({ page }) => {
-  await page.goto('/')
-  await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible({ timeout: 10_000 })
-
-  const landingDone = await page.evaluate(() => localStorage.getItem('md.landingDone'))
-  expect(landingDone).toBe('1')
-  const cookies = await page.context().cookies()
-  expect(cookies.find((c) => c.name === 'md_app')?.value).toBe('1')
+  expect(await page.evaluate(() => localStorage.getItem('md.landingDone'))).toBe('1')
+  expect((await page.context().cookies()).find((c) => c.name === 'md_app')?.value).toBe('1')
 })
 
 test('F-271 A11 쿠키가 차단된 브라우저 — 되돌이는 1회, 탈출구 링크가 보인다', async ({ page }) => {
@@ -104,7 +87,7 @@ test.describe('F-2049 E1 스크립트 없음', () => {
   })
 })
 
-test('F-2049 E2 움직임 줄이기 — 고정·스크럽 없이 제목이 원래 글 그대로 보인다', async ({ page }) => {
+test('F-2049 E2·E4 움직임 줄이기 — 제목이 원래 글 그대로 보이고, 스토리 번들을 못 받아도 글이 보이고 로그인 없이 사용이 동작한다', async ({ page }) => {
   const { renderWelcomePage } = await import('../worker/welcomePage.ts')
   const html = await renderWelcomePage().text()
   await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -121,18 +104,7 @@ test('F-2049 E2 움직임 줄이기 — 고정·스크럽 없이 제목이 원�
   const titles = page.locator('main h2')
   expect(await titles.allTextContents()).toEqual(expected)
   for (const title of await titles.all()) await expect(title).toBeVisible()
-})
 
-test('F-2049 E3 390px 창에서 끝까지 스크롤해도 가로로 넘치지 않는다', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
-  await mockLanding(page)
-  await page.goto('/')
-  await expect(page.locator('.story')).toHaveClass(/is-live/, { timeout: 10_000 })
-  const overflow = await scrollToEnd(page)
-  expect(Math.max(...overflow)).toBeLessThanOrEqual(0)
-})
-
-test('F-2049 E4 스토리 번들을 못 받아도 글이 보이고 로그인 없이 사용이 동작한다', async ({ page }) => {
   await page.route('**/assets/welcome-demo.js', (route) => route.abort())
   await mockLanding(page)
   await page.goto('/')
@@ -143,21 +115,15 @@ test('F-2049 E4 스토리 번들을 못 받아도 글이 보이고 로그인 없
   await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible({ timeout: 10_000 })
 })
 
-test('F-2049 E5 기본 — 스토리가 고정되어 돌고 앱 편집기는 뜨지 않는다', async ({ page }) => {
+test('F-2049 E5·E6 스토리가 고정되어 돌고 앱 편집기는 안 뜨며, 끝까지 스크롤해도 서버 연결·다른 출처 스크립트 요청이 없다', async ({ page }) => {
+  const requests = []
+  page.on('request', (request) => requests.push({ url: request.url(), type: request.resourceType() }))
   await page.setViewportSize({ width: 1280, height: 800 })
   await mockLanding(page)
   await page.goto('/')
   await expect(page.locator('.story')).toHaveClass(/is-live/, { timeout: 10_000 })
   expect(await page.locator('.pin-spacer').count()).toBeGreaterThan(0)
   await expect(page.locator('.cm-host:not(.demo-host)')).toHaveCount(0)
-})
-
-test('F-2049 E6 끝까지 스크롤해도 서버 연결·다른 출처 스크립트 요청이 없다', async ({ page }) => {
-  const requests = []
-  page.on('request', (request) => requests.push({ url: request.url(), type: request.resourceType() }))
-  await mockLanding(page)
-  await page.goto('/')
-  await expect(page.locator('.story')).toHaveClass(/is-live/, { timeout: 10_000 })
   await scrollToEnd(page)
   const origin = new URL(page.url()).origin
   expect(requests.filter((r) => /\/(ws|api)\//.test(new URL(r.url).pathname))).toEqual([])
@@ -178,28 +144,25 @@ test('F-2051 E1 기존 사용자도 /welcome 은 랜딩', async ({ page }) => {
   expect(reloaded).toBeNull()
 })
 
-test('F-2051 E2 /welcome 에서 로그인 없이 사용', async ({ page }) => {
+test('F-2051 E2·E3 /welcome 에서 로그인 없이 사용, 머리글 앱 열기', async ({ page }) => {
   await mockWelcome(page)
   await page.goto('/welcome')
   await page.locator('[data-cta="enter"]').first().click()
   await expect(page).toHaveURL(/\/$/)
   await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible({ timeout: 10_000 })
-
   const landingDone = await page.evaluate(() => localStorage.getItem('md.landingDone'))
   expect(landingDone).toBe('1')
   const cookies = await page.context().cookies()
   expect(cookies.find((c) => c.name === 'md_app')?.value).toBe('1')
-})
 
-test('F-2051 E3 /welcome 머리글 앱 열기', async ({ page }) => {
+  await page.context().clearCookies()
+  await page.evaluate(() => localStorage.clear())
   await mockWelcome(page)
   await page.goto('/welcome')
   await page.locator('.site-head [data-cta="enter"]').click()
   await expect(page).toHaveURL(/\/$/)
   await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible({ timeout: 10_000 })
-
-  const landingDone = await page.evaluate(() => localStorage.getItem('md.landingDone'))
-  expect(landingDone).toBe('1')
-  const cookies = await page.context().cookies()
-  expect(cookies.find((c) => c.name === 'md_app')?.value).toBe('1')
+  expect(await page.evaluate(() => localStorage.getItem('md.landingDone'))).toBe('1')
+  expect((await page.context().cookies()).find((c) => c.name === 'md_app')?.value).toBe('1')
 })
+

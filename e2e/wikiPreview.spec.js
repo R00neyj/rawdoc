@@ -45,16 +45,13 @@ function editorLink(page, text) {
 
 const preview = (page) => page.locator('.wiki-preview')
 
-// 미리보기 창에 가리지 않는, 창 바로 아래 안전한 지점(링크·창 둘 다 아님)
-async function pointBelowPreview(page) {
-  const box = await preview(page).boundingBox()
-  return { x: box.x + 20, y: box.y + box.height + 40 }
-}
+test.describe('F-2044 위키링크 미리보기', () => {
+  // .viewer 의 scroll-behavior: smooth 애니메이션 도중 값을 읽지 않도록 끈다
+  test.use({ reducedMotion: 'reduce' })
 
-test.describe('F-2044 E1~E2 편집·보기 모드에서 뜬다', () => {
-  test('E1 편집 모드 — 있는 문서 위키링크 hover 로 뜨고, 편집기 포커스를 잃지 않는다', async ({ page }) => {
+  test('E1·E2·E3·E4·E17 편집·보기 모드에서 뜨고, 원문 모드·끊긴 링크·자기 링크는 안 뜬다', async ({ page }) => {
     const server = await fakeServer(page)
-    seedDoc(server, { id: 'a', title: 'A', content: '[[B]]\n\n끝줄' })
+    seedDoc(server, { id: 'a', title: 'A', content: '[[B]]\n\n[[없는 문서]]\n\n[[#둘째]] [[A]]\n\n끝줄' })
     seedDoc(server, { id: 'b', title: 'B', content: 'B 문서 본문 고유글' })
     await openApp(page)
     await openDoc(page, 'a')
@@ -66,209 +63,97 @@ test.describe('F-2044 E1~E2 편집·보기 모드에서 뜬다', () => {
     await expect(preview(page).locator('.doc-title-view')).toHaveText('B')
     await expect(preview(page)).toHaveAttribute('aria-label', 'B 미리보기')
     await expect(page.locator('.cm-content')).toBeFocused()
-  })
-
-  test('E2 보기 모드 — 같다', async ({ page }) => {
-    const server = await fakeServer(page)
-    seedDoc(server, { id: 'a', title: 'A', content: '[[B]]\n\n끝줄' })
-    seedDoc(server, { id: 'b', title: 'B', content: 'B 문서 본문 고유글' })
-    await openApp(page)
-    await openDoc(page, 'a')
-    await setViewMode(page, 'view')
-
-    await page.locator('.viewer a.wikilink').hover()
-    await expect(preview(page)).toBeVisible()
-    await expect(preview(page)).toContainText('B 문서 본문 고유글')
-    await expect(preview(page).locator('.doc-title-view')).toHaveText('B')
-  })
-})
-
-test.describe('F-2044 E3 원문 모드에는 없다', () => {
-  test('원문 모드 위키링크 글자 위로 hover 해도 창이 없다', async ({ page }) => {
-    const server = await fakeServer(page)
-    seedDoc(server, { id: 'a', title: 'A', content: '[[B]]\n\n끝줄' })
-    seedDoc(server, { id: 'b', title: 'B', content: 'B 문서 본문' })
-    await openApp(page)
-    await openDoc(page, 'a')
-    await setViewMode(page, 'raw')
-
-    await page.locator('.cm-line', { hasText: '[[B]]' }).hover()
-    await page.waitForTimeout(NOT_OPEN_WAIT_MS)
+    await expect(editorLink(page, 'B')).not.toHaveAttribute('title')
+    await page.mouse.move(2, 2, { steps: 8 })
     await expect(preview(page)).toHaveCount(0)
-  })
-})
-
-test.describe('F-2044 E4 끊긴 링크는 안 뜨고 title 툴팁을 유지한다', () => {
-  test('없는 문서 링크는 기존 title, 있는 문서 링크는 title 이 없다', async ({ page }) => {
-    const server = await fakeServer(page)
-    seedDoc(server, { id: 'a', title: 'A', content: '[[없는 문서]]\n\n[[다른 문서]]\n\n끝줄' })
-    seedDoc(server, { id: 'c', title: '다른 문서', content: '다른 문서 본문' })
-    await openApp(page)
-    await openDoc(page, 'a')
-    await focusEditorSafely(page)
 
     const missing = page.locator('.cm-content .md-wikilink--missing')
     await missing.hover()
+    await page.locator('.cm-content .md-wikilink').filter({ hasText: '#둘째' }).hover()
+    await editorLink(page, 'A').hover()
     await page.waitForTimeout(NOT_OPEN_WAIT_MS)
     await expect(preview(page)).toHaveCount(0)
     await expect(missing).toHaveAttribute('title', '새 문서 만들기: 없는 문서')
 
-    const existing = editorLink(page, '다른 문서')
-    await expect(existing).not.toHaveAttribute('title')
-  })
-})
-
-test.describe('F-2044 E5~E6 미리보기 안 스크롤·바깥으로 나가면 닫힘', () => {
-  test('E5 미리보기 안에서 휠 스크롤은 그 안만 움직인다', async ({ page }) => {
-    const server = await fakeServer(page)
-    const longBody = Array.from({ length: 80 }, (_, i) => `B 문서 문단 ${i + 1}`).join('\n\n')
-    seedDoc(server, { id: 'a', title: 'A', content: '[[B]]\n\n끝줄' })
-    seedDoc(server, { id: 'b', title: 'B', content: longBody })
-    await openApp(page)
-    await openDoc(page, 'a')
-    await focusEditorSafely(page)
-
-    const link = editorLink(page, 'B')
-    await link.hover()
+    await setViewMode(page, 'view')
+    await page.locator('.viewer a.wikilink', { hasText: 'B' }).hover()
     await expect(preview(page)).toBeVisible()
-
-    const box = await preview(page).boundingBox()
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 })
-    await expect(preview(page)).toBeVisible()
-    await page.mouse.wheel(0, 300)
-
-    await expect
-      .poll(() => preview(page).locator('.viewer').evaluate((el) => el.scrollTop))
-      .toBeGreaterThan(0)
-    await expect(page.locator('.cm-scroller').evaluate((el) => el.scrollTop)).resolves.toBe(0)
-  })
-
-  test('E6 링크·미리보기 둘 다 벗어나면 닫힌다', async ({ page }) => {
-    const server = await fakeServer(page)
-    seedDoc(server, { id: 'a', title: 'A', content: '[[B]]\n\n끝줄' })
-    seedDoc(server, { id: 'b', title: 'B', content: 'B 문서 본문' })
-    await openApp(page)
-    await openDoc(page, 'a')
-    await focusEditorSafely(page)
-
-    await editorLink(page, 'B').hover()
-    await expect(preview(page)).toBeVisible()
-
-    const pt = await pointBelowPreview(page)
-    await page.mouse.move(pt.x, pt.y, { steps: 8 })
+    await expect(preview(page)).toContainText('B 문서 본문 고유글')
+    await page.mouse.move(2, 2, { steps: 8 })
     await expect(preview(page)).toHaveCount(0)
-  })
-})
 
-test.describe('F-2044 E7 Esc 로 닫고 다시 뜨지 않는다', () => {
-  test('Esc 는 미리보기만 닫고, 편집기 찾기 패널은 첫 Esc 에 남는다', async ({ page }) => {
-    const server = await fakeServer(page)
-    seedDoc(server, { id: 'a', title: 'A', content: '[[B]]\n\n끝줄' })
-    seedDoc(server, { id: 'b', title: 'B', content: 'B 문서 본문' })
-    await openApp(page)
-    await openDoc(page, 'a')
-    await focusEditorSafely(page)
-
-    await page.keyboard.press('Control+f')
-    await expect(page.locator('.cm-panel.cm-search')).toHaveCount(1)
-
-    const link = editorLink(page, 'B')
-    await link.hover()
-    await expect(preview(page)).toBeVisible()
-
-    await page.keyboard.press('Escape')
-    await expect(preview(page)).toHaveCount(0)
-    await expect(page.locator('.cm-panel.cm-search')).toHaveCount(1)
-
+    await setViewMode(page, 'raw')
+    await page.locator('.cm-line', { hasText: '[[B]]' }).hover()
     await page.waitForTimeout(NOT_OPEN_WAIT_MS)
     await expect(preview(page)).toHaveCount(0)
   })
-})
 
-test.describe('F-2044 E8~E9 스크롤·입력에 닫힌다', () => {
-  test('E8 편집기 스크롤이면 닫힌다', async ({ page }) => {
+  test('E5·E6·E7·E8·E9 창 안 스크롤, 벗어나면 닫힘, Esc·편집기 스크롤·입력에 닫힘', async ({ page }) => {
     const server = await fakeServer(page)
-    const longBody = Array.from({ length: 80 }, (_, i) => `줄 ${i + 1}`).join('\n\n')
-    seedDoc(server, { id: 'a', title: 'A', content: `[[B]]\n\n${longBody}` })
-    seedDoc(server, { id: 'b', title: 'B', content: 'B 문서 본문' })
+    const para = (n, label) => Array.from({ length: n }, (_, i) => `${label} ${i + 1}`).join('\n\n')
+    seedDoc(server, { id: 'a', title: 'A', content: `[[B]]\n\n${para(80, '줄')}\n\n끝줄` })
+    seedDoc(server, { id: 'b', title: 'B', content: para(80, 'B 문서 문단') })
     await openApp(page)
     await openDoc(page, 'a')
     await focusEditorSafely(page)
-    // focusEditorSafely 가 Control+End 로 맨 끝까지 스크롤해 [[B]] 가 가상화로 사라진다 — 되돌린다
-    await page.locator('.cm-scroller').evaluate((el) => {
+    const editorScroller = page.locator('.cm-scroller')
+    await editorScroller.evaluate((el) => {
       el.scrollTop = 0
     })
 
     await editorLink(page, 'B').hover()
     await expect(preview(page)).toBeVisible()
-
-    // 포인터는 링크 위 그대로 — 스크롤 자체가 닫는 이유임을 확인한다(떠나서가 아니라)
+    const box = await preview(page).boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 })
+    await expect(preview(page)).toBeVisible()
     await page.mouse.wheel(0, 300)
+    await expect.poll(() => preview(page).locator('.viewer').evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+    expect(await editorScroller.evaluate((el) => el.scrollTop)).toBe(0)
+
+    await page.mouse.move(2, 2, { steps: 8 })
     await expect(preview(page)).toHaveCount(0)
-  })
 
-  test('E9 편집기 포커스 상태에서 글자를 치면 닫히고, 그 글자는 본문에 들어간다', async ({ page }) => {
-    const server = await fakeServer(page)
-    seedDoc(server, { id: 'a', title: 'A', content: '[[B]]\n\n끝줄' })
-    seedDoc(server, { id: 'b', title: 'B', content: 'B 문서 본문' })
-    await openApp(page)
-    await openDoc(page, 'a')
-    await focusEditorSafely(page)
-
+    await page.keyboard.press('Control+f')
+    await expect(page.locator('.cm-panel.cm-search')).toHaveCount(1)
     await editorLink(page, 'B').hover()
     await expect(preview(page)).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(preview(page)).toHaveCount(0)
+    await expect(page.locator('.cm-panel.cm-search')).toHaveCount(1)
+    await page.waitForTimeout(NOT_OPEN_WAIT_MS)
+    await expect(preview(page)).toHaveCount(0)
+    await page.keyboard.press('Escape')
 
+    await page.mouse.move(2, 2, { steps: 8 })
+    await editorLink(page, 'B').hover()
+    await expect(preview(page)).toBeVisible()
+    await page.mouse.wheel(0, 300)
+    await expect(preview(page)).toHaveCount(0)
+
+    await editorScroller.evaluate((el) => {
+      el.scrollTop = 0
+    })
+    await page.mouse.move(2, 2, { steps: 8 })
+    await editorLink(page, 'B').hover()
+    await expect(preview(page)).toBeVisible()
     await page.keyboard.type('x')
     await expect(preview(page)).toHaveCount(0)
     await expect(page.locator('.cm-content')).toContainText('끝줄x')
   })
-})
 
-test.describe('F-2044 E10~E12 미리보기 안에서 누르기', () => {
-  async function seedCourse(server) {
+  test('E10·E11·E12·E16·E18 창 안 링크 해석·중첩 없음·바깥 링크·긴 문서 잘림·제목 스크롤', async ({ page, context }) => {
+    test.slow()
+    const server = await fakeServer(page)
+    const filler = Array.from({ length: 60 }, (_, i) => `줄 ${i + 1}`).join('\n\n')
+    const afterHeading = Array.from({ length: 20 }, (_, i) => `뒤 ${i + 1}`).join('\n\n')
     seedFolder(server, { id: 'f1', name: '교안' })
     seedFolder(server, { id: 'f2', name: '과제' })
     seedDoc(server, { id: 'w1', title: '1주차', content: '교안 1주차 본문', folderId: 'f1', age: 100_000 })
     seedDoc(server, { id: 'w2', title: '1주차', content: '과제 1주차 본문', folderId: 'f2', age: 0 })
-    seedDoc(server, { id: 'b', title: 'B', content: '[[1주차]]', folderId: 'f1' })
-    seedDoc(server, { id: 'a', title: 'A', content: '[[B]]\n\n끝줄', folderId: null })
-  }
-
-  test('E10 창 안 링크를 누르면 미리보기 문서 기준으로 해석해 그 문서를 연다', async ({ page }) => {
-    const server = await fakeServer(page)
-    await seedCourse(server)
-    await openApp(page)
-    await openDoc(page, 'a')
-    await focusEditorSafely(page)
-
-    await editorLink(page, 'B').hover()
-    await expect(preview(page)).toBeVisible()
-
-    await preview(page).getByText('1주차').click()
-    await expect.poll(() => currentDocId(page)).toBe('w1')
-    await expect(preview(page)).toHaveCount(0)
-  })
-
-  test('E11 창 안 위키링크는 hover 해도 중첩 미리보기가 뜨지 않는다', async ({ page }) => {
-    const server = await fakeServer(page)
-    await seedCourse(server)
-    await openApp(page)
-    await openDoc(page, 'a')
-    await focusEditorSafely(page)
-
-    await editorLink(page, 'B').hover()
-    await expect(preview(page)).toBeVisible()
-
-    await preview(page).getByText('1주차').hover()
-    await page.waitForTimeout(NOT_OPEN_WAIT_MS)
-    await expect(preview(page)).toHaveCount(1)
-    await expect(preview(page)).toContainText('1주차')
-  })
-
-  test('E12 바깥 링크는 새 탭으로 열리고 창은 닫힌다', async ({ page, context }) => {
-    const server = await fakeServer(page)
-    seedDoc(server, { id: 'a', title: 'A', content: '[[B]]\n\n끝줄' })
-    seedDoc(server, { id: 'b', title: 'B', content: '[바깥](https://example.com/)' })
+    seedDoc(server, { id: 'b', title: 'B', content: '[[1주차]]\n\n[바깥](https://example.com/)', folderId: 'f1' })
+    seedDoc(server, { id: 'h', title: '헤딩문서', content: `${filler}\n\n## 둘째\n\n둘째 아래 고유글\n\n${afterHeading}` })
+    seedDoc(server, { id: 'l', title: '긴문서', content: 'ㄱ'.repeat(30_000) })
+    seedDoc(server, { id: 'a', title: 'A', content: '[[B]]\n\n[[헤딩문서#둘째]]\n\n[[긴문서]]\n\n끝줄' })
     await page.route('https://example.com/**', (route) => route.abort())
     await openApp(page)
     await openDoc(page, 'a')
@@ -276,7 +161,40 @@ test.describe('F-2044 E10~E12 미리보기 안에서 누르기', () => {
 
     await editorLink(page, 'B').hover()
     await expect(preview(page)).toBeVisible()
+    await preview(page).getByText('1주차').hover()
+    await page.waitForTimeout(NOT_OPEN_WAIT_MS)
+    await expect(preview(page)).toHaveCount(1)
+    await page.mouse.move(page.viewportSize().width - 4, 4, { steps: 8 })
+    await expect(preview(page)).toHaveCount(0)
 
+    await editorLink(page, '헤딩문서#둘째').hover()
+    await expect(preview(page)).toContainText('둘째 아래 고유글')
+    const viewer = preview(page).locator('.viewer')
+    await expect.poll(() => viewer.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+    const headingBox = await preview(page).locator('h2', { hasText: '둘째' }).boundingBox()
+    const viewerBox = await viewer.boundingBox()
+    expect(headingBox.y - viewerBox.y).toBeLessThan(60)
+    await page.mouse.move(page.viewportSize().width - 4, 4, { steps: 8 })
+    await expect(preview(page)).toHaveCount(0)
+
+    await editorLink(page, '긴문서').hover()
+    await expect(preview(page)).toContainText('문서가 길어 앞부분만 보여 줍니다.')
+    await preview(page).getByRole('button', { name: '문서 열기' }).click()
+    await expect.poll(() => currentDocId(page)).toBe('l')
+    await expect(preview(page)).toHaveCount(0)
+
+    await openDoc(page, 'a')
+    await focusEditorSafely(page)
+    await editorLink(page, 'B').hover()
+    await expect(preview(page)).toBeVisible()
+    await preview(page).getByText('1주차').click()
+    await expect.poll(() => currentDocId(page)).toBe('w1')
+    await expect(preview(page)).toHaveCount(0)
+
+    await openDoc(page, 'a')
+    await focusEditorSafely(page)
+    await editorLink(page, 'B').hover()
+    await expect(preview(page)).toBeVisible()
     const [newPage] = await Promise.all([context.waitForEvent('page'), preview(page).getByText('바깥').click()])
     await newPage.close()
     await expect(preview(page)).toHaveCount(0)
@@ -368,73 +286,6 @@ test.describe('F-2044 E15 공유받은 문서는 안내만, 본문을 읽지 않
     await expect(preview(page)).toBeVisible()
     await expect(preview(page)).toContainText('공유받은 문서는 열어야 볼 수 있습니다.')
     expect(getCount).toBe(0)
-  })
-})
-
-test.describe('F-2044 E16 긴 문서는 잘리고 문서 열기로 이어진다', () => {
-  test('잘림 안내와 문서 열기 버튼이 있고, 누르면 그 문서가 열린다', async ({ page }) => {
-    const server = await fakeServer(page)
-    const longBody = 'ㄱ'.repeat(30_000)
-    seedDoc(server, { id: 'a', title: 'A', content: '[[B]]\n\n끝줄' })
-    seedDoc(server, { id: 'b', title: 'B', content: longBody })
-    await openApp(page)
-    await openDoc(page, 'a')
-    await focusEditorSafely(page)
-
-    await editorLink(page, 'B').hover()
-    await expect(preview(page)).toBeVisible()
-    await expect(preview(page)).toContainText('문서가 길어 앞부분만 보여 줍니다.')
-
-    await preview(page).getByRole('button', { name: '문서 열기' }).click()
-    await expect.poll(() => currentDocId(page)).toBe('b')
-    await expect(preview(page)).toHaveCount(0)
-  })
-})
-
-test.describe('F-2044 E17 끊긴 링크·자기 자신은 안 뜬다', () => {
-  test('[[#헤딩]] 과 자기 자신 제목 링크는 hover 해도 창이 없다', async ({ page }) => {
-    const server = await fakeServer(page)
-    seedDoc(server, { id: 'a', title: 'A', content: '[[#둘째]] [[A]]\n\n끝줄' })
-    await openApp(page)
-    await openDoc(page, 'a')
-    await focusEditorSafely(page)
-
-    await page.locator('.cm-content .md-wikilink').filter({ hasText: '#둘째' }).hover()
-    await page.waitForTimeout(NOT_OPEN_WAIT_MS)
-    await expect(preview(page)).toHaveCount(0)
-
-    await editorLink(page, 'A').hover()
-    await page.waitForTimeout(NOT_OPEN_WAIT_MS)
-    await expect(preview(page)).toHaveCount(0)
-  })
-})
-
-test.describe('F-2044 E18 [[문서#제목]] 은 그 제목이 창 맨 위로 오도록 스크롤한다', () => {
-  // .viewer 의 scroll-behavior: smooth 애니메이션 도중 값을 읽지 않도록 끈다(transition.spec.js·map.spec.js 와 같은 방식)
-  test.use({ reducedMotion: 'reduce' })
-
-  test('창 안 스크롤이 그 제목 근처로 맞춰진다', async ({ page }) => {
-    const server = await fakeServer(page)
-    const filler = Array.from({ length: 60 }, (_, i) => `줄 ${i + 1}`).join('\n\n')
-    // 제목 뒤에도 미리보기 창 높이만큼 스크롤할 여지가 있어야 제목이 맨 위까지 올라간다(스크롤 최댓값에 막히지 않게)
-    const afterHeading = Array.from({ length: 20 }, (_, i) => `뒤 ${i + 1}`).join('\n\n')
-    const bBody = `${filler}\n\n## 둘째\n\n둘째 아래 고유글\n\n${afterHeading}`
-    seedDoc(server, { id: 'a', title: 'A', content: '[[B#둘째]]\n\n끝줄' })
-    seedDoc(server, { id: 'b', title: 'B', content: bBody })
-    await openApp(page)
-    await openDoc(page, 'a')
-    await focusEditorSafely(page)
-
-    await editorLink(page, 'B#둘째').hover()
-    await expect(preview(page)).toBeVisible()
-    await expect(preview(page)).toContainText('둘째 아래 고유글')
-
-    const viewerLocator = preview(page).locator('.viewer')
-    await expect.poll(() => viewerLocator.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
-
-    const headingBox = await preview(page).locator('h2', { hasText: '둘째' }).boundingBox()
-    const viewerBox = await viewerLocator.boundingBox()
-    expect(headingBox.y - viewerBox.y).toBeLessThan(60)
   })
 })
 

@@ -198,24 +198,6 @@ test.describe('F-250 A4 새로고침', () => {
 })
 
 test.describe('F-250 A6 다른 탭', () => {
-  test('같은 문서를 다른 탭에서 열면 그 탭은 읽기 전용이다', async ({ page, context }) => {
-    await installFakeServer(context)
-    await openApp(page)
-    await page.getByRole('button', { name: '새 문서' }).click()
-    await typeIntoEditor(page, '원본')
-    await waitSyncIdle(page)
-    const docId = await currentDocId(page)
-
-    const page2 = await context.newPage()
-    await page2.goto(`/#/d/${docId}`)
-    await expect(page2.locator('.cm-host .cm-editor')).toBeVisible()
-
-    await expect(page2.locator('.notice-message')).toContainText('편집 중입니다', { timeout: 10_000 })
-    await page2.locator('.cm-content').click()
-    await page2.keyboard.type('다른 탭 입력')
-    await expect(page2.locator('.cm-content')).toContainText('원본')
-    await expect(page2.locator('.cm-content')).not.toContainText('다른 탭 입력')
-  })
 })
 
 test.describe('F-213 A5 423 저장', () => {

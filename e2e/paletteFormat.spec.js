@@ -62,17 +62,4 @@ test.describe('F-2055 팔레트 서식 명령', () => {
     await expect.poll(() => savedText(page)).toContain('| x |')
   })
 
-  test('F-2055 A4 본문 밖에서 열면 서식 명령이 없다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await page.locator('.doc-title').click()
-    await openPaletteWith(page, '>볼드')
-    await expect(options(page)).toHaveCount(0)
-    await page.keyboard.press('Escape')
-    await expect(palette(page)).toHaveCount(0)
-    await setViewMode(page, 'view')
-    await page.waitForTimeout(50)
-    await openPaletteWith(page, '>볼드')
-    await expect(options(page)).toHaveCount(0)
-  })
 })

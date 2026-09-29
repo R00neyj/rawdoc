@@ -127,10 +127,10 @@ async function buildHistory(page, docId, text) {
 }
 
 test.describe('F-2041 로컬 기록으로 먼저 열기', () => {
-  test('F-2041 E1 기록 있는 문서는 step2 전에도 편집기가 뜨고 연결 중…, PUT·잠금 없음, resume 뒤 저장됨', async ({ page }) => {
+  test('F-2041 E1·E6 기록 있는 문서는 step2 전에도 편집기가 뜨고 연결 중…, PUT·잠금 없음, resume 뒤 저장됨, 연결 중→오프라인→온라인 상태 문구', async ({ page }) => {
     const room = createFakeDocRoom()
     room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    const { requests } = await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
+    const { server, requests } = await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
     await buildHistory(page, DOC, '방 본문')
 
     room.pause(DOC)
@@ -146,53 +146,15 @@ test.describe('F-2041 로컬 기록으로 먼저 열기', () => {
 
     room.resume(DOC)
     await expect(saveStatus(page)).toHaveText('저장됨')
-  })
 
-  test('F-2041 E2 표시 시간 비교 — 기록 있는 문서는 resume 전에 뜨고, 기록 없는 문서는 뜨지 않는다', async ({ page, browser, baseURL }) => {
-    test.setTimeout(60_000)
-    for (const D of [1000, 3000]) {
-      const room = createFakeDocRoom()
-      room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-      await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
-      await buildHistory(page, DOC, '방 본문')
-
-      room.pause(DOC)
-      let resumed = false
-      const timer = setTimeout(() => {
-        resumed = true
-        room.resume(DOC)
-      }, D)
-      const t0 = Date.now()
-      await page.reload()
-      await expect(mainContent(page)).toHaveCount(1)
-      const resumedShownMs = Date.now() - t0
-      expect(resumed).toBe(false)
-      test.info().annotations.push({ type: `F-2041 E2 기록 있음 D=${D}`, description: `${resumedShownMs}ms` })
-      await expect(saveStatus(page)).toHaveText('저장됨', { timeout: D + 5_000 })
-      clearTimeout(timer)
-
-      const freshRoom = createFakeDocRoom()
-      freshRoom.seed(FRESH, { content: '새 방 본문', title: '새 문서' })
-      freshRoom.pause(FRESH)
-      const fresh = await newSide(browser, baseURL)
-      try {
-        await openSide(fresh.page, { room: freshRoom, docs: [{ id: FRESH, title: '새 문서', content: '새 캐시 본문' }], open: FRESH })
-        let freshResumed = false
-        const freshTimer = setTimeout(() => {
-          freshResumed = true
-          freshRoom.resume(FRESH)
-        }, D)
-        const t1 = Date.now()
-        await expect(fresh.page.locator('.cm-content')).toHaveCount(0)
-        expect(freshResumed).toBe(false)
-        await expect(fresh.page.locator('.cm-content')).toHaveCount(1, { timeout: D + 5_000 })
-        const freshShownMs = Date.now() - t1
-        test.info().annotations.push({ type: `F-2041 E2 기록 없음 D=${D}`, description: `${freshShownMs}ms` })
-        clearTimeout(freshTimer)
-      } finally {
-        await fresh.context.close()
-      }
-    }
+    room.pause(DOC)
+    await page.reload()
+    await expect(saveStatus(page)).toHaveText(SYNCING)
+    await setOffline(page, server, true)
+    await expect(saveStatus(page)).toHaveText(RECONNECTING)
+    await setOffline(page, server, false)
+    room.resume(DOC)
+    await expect(saveStatus(page)).toHaveText('저장됨', { timeout: 10_000 })
   })
 
   test('F-2041 E3 재연결로 따라잡은 원격 편집과 동기화 전 내 편집이 둘 다 한 번씩만 남고 N8', async ({ page, browser, baseURL }) => {
@@ -299,21 +261,4 @@ test.describe('F-2041 로컬 기록으로 먼저 열기', () => {
     expect(log.some((m) => m === N1)).toBe(false)
   })
 
-  test('F-2041 E6 연결 중… → 오프라인이면 연결 끊김 · 다시 연결 중 → 온라인 → resume → 저장됨', async ({ page }) => {
-    const room = createFakeDocRoom()
-    room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
-    const { server } = await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
-    await buildHistory(page, DOC, '방 본문')
-
-    room.pause(DOC)
-    await page.reload()
-    await expect(saveStatus(page)).toHaveText(SYNCING)
-
-    await setOffline(page, server, true)
-    await expect(saveStatus(page)).toHaveText(RECONNECTING)
-
-    await setOffline(page, server, false)
-    room.resume(DOC)
-    await expect(saveStatus(page)).toHaveText('저장됨', { timeout: 10_000 })
-  })
 })

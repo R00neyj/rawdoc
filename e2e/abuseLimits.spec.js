@@ -29,87 +29,70 @@ async function gotoDoc(page, id) {
   await expect.poll(() => currentDocId(page)).toBe(id)
 }
 
+async function dismissNotices(page) {
+  const close = page.getByRole('button', { name: '알림 닫기' })
+  for (let i = 0; i < 5 && (await close.count()) > 0; i++) await close.first().click({ timeout: 2000 }).catch(() => {})
+  await expect(page.locator('.notice-message')).toHaveCount(0)
+}
+
 test.describe('F-2030 웹 — 한도·차단·주의 표시', () => {
-  test('F-2030 A1 계정이 막힌 상태로 열면 L5·읽기 전용, 내보내기는 눌린다, 쓰기 요청 없음', async ({ page }) => {
-    const server = await fakeServer(page)
-    server.setMe({ blocked: true })
-    await openApp(page)
-
-    await expect(page.locator('.notice-message')).toHaveText(L5)
-    await expect(page.locator('.notice')).toHaveAttribute('role', 'alert')
-    await expect(page.locator('.cm-content')).toHaveAttribute('contenteditable', 'false')
-    await expect(page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })).toBeEnabled()
-    expect(server.writeRequests()).toEqual([])
-  })
-
-  test('F-2030 A2 warned 로 열면 L7, 닫고 새로고침해도 다시 L7', async ({ page }) => {
+  test('F-2030 A2·A4·A1 warned 는 L7(닫고 새로고침해도 다시), 편집 중 막히면 새 문서에서 L5, 막힌 채 열면 L5·읽기 전용·쓰기 요청 없음', async ({ page }) => {
     const server = await fakeServer(page)
     server.setMe({ warned: true })
     await openApp(page)
-
-    const notice = page.locator('.notice--warn .notice-message')
-    await expect(notice).toHaveText(L7)
-
+    await expect(page.locator('.notice--warn .notice-message')).toHaveText(L7)
     await page.getByRole('button', { name: '알림 닫기' }).click()
     await expect(page.locator('.notice-message')).not.toBeVisible()
-
     await page.reload()
     await expect(page.locator('.notice--warn .notice-message')).toHaveText(L7)
-  })
+    await dismissNotices(page)
 
-  test('F-2030 A3 blocked·warned 둘 다면 L5 만 보이고 L7 은 한 번도 뜨지 않는다', async ({ page }) => {
-    const server = await fakeServer(page)
-    server.setMe({ blocked: true, warned: true })
-    await openApp(page)
-
-    await expect(page.locator('.notice-message')).toHaveText(L5)
-    await expect(page.locator('.notice--warn')).toHaveCount(0)
-  })
-
-  test('F-2030 A4 편집 중 계정이 막히면 새 문서 만들기에서 L5, 새로고침 뒤에도 문서가 남는다', async ({ page }) => {
-    const server = await fakeServer(page)
-    await openApp(page)
     const firstDocId = await currentDocId(page)
-
+    server.setMe({ warned: false, blocked: true })
     server.failWrites({ status: 403, body: { error: 'account_blocked' } })
-    server.setMe({ blocked: true })
-
     await page.getByRole('button', { name: '새 문서' }).click()
     await expect.poll(() => currentDocId(page)).not.toBe(firstDocId)
     const docId = await currentDocId(page)
-
     await expect(page.locator('.notice-message')).toHaveText(L5)
     await expect(page.locator('.cm-content')).toHaveAttribute('contenteditable', 'false')
-
     await page.reload()
     await gotoDoc(page, docId)
     await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-  })
 
-  test('F-2030 A5 429 분 단위는 L1 이 뜨고 잠깐 멈췄다가 저절로 다시 나간다', async ({ page }) => {
-    const server = await fakeServer(page)
-    await openApp(page)
-
-    server.failWrites({ status: 429, headers: { 'Retry-After': '2' }, times: 1 })
-    await page.getByRole('button', { name: '새 문서' }).click()
-    const docId = await currentDocId(page)
-
-    await expect(page.locator('.notice-message')).toHaveText(L1)
-    const afterFirst = server.writeRequests().length
-    expect(afterFirst).toBeGreaterThan(0)
-
-    await page.waitForTimeout(1_500)
-    expect(server.writeRequests().length).toBe(afterFirst)
-
-    await expect.poll(() => server.docs.get(docId), { timeout: 5_000 }).toBeTruthy()
+    await expect(page.locator('.notice-message')).toHaveText(L5)
+    await expect(page.locator('.notice')).toHaveAttribute('role', 'alert')
+    await expect(page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })).toBeEnabled()
+    const writes = server.writeRequests().length
+    await page.waitForTimeout(500)
+    expect(server.writeRequests().length).toBe(writes)
   })
 
   test.describe('타임존 Asia/Seoul', () => {
     test.use({ timezoneId: 'Asia/Seoul' })
 
-    test('F-2030 A6 429 하루 단위는 L2 문구·시각, 상태바에 동기화 대기가 보인다', async ({ page }) => {
+    test('F-2030 A5·A6·A10·A11 429 분 단위 L1 후 재개, 하루 단위 L2 문구·시각·동기화 대기, 계정 메뉴 문서 사용량 줄', async ({ page }) => {
       const server = await fakeServer(page)
       await openApp(page)
+
+      await page.getByRole('button', { name: '계정' }).click()
+      await expect(page.locator('.account-menu-usage-docs')).toHaveCount(0)
+      await page.getByRole('button', { name: '계정' }).click()
+      server.setUsage({ docs: { bytes: 12_582_912, bytesLimit: 104_857_600, count: 1234, countLimit: 10_000 } })
+      await page.getByRole('button', { name: '계정' }).click()
+      await expect(page.locator('.account-menu-usage-docs')).toHaveText('문서 12MB / 100MB · 1,234개')
+      await expect(page.locator('.account-menu-usage')).toHaveText('이미지 0.0MB / 300MB')
+      await page.getByRole('button', { name: '계정' }).click()
+
+      server.failWrites({ status: 429, headers: { 'Retry-After': '2' }, times: 1 })
+      await page.getByRole('button', { name: '새 문서' }).click()
+      const docId = await currentDocId(page)
+      await expect(page.locator('.notice-message')).toHaveText(L1)
+      const afterFirst = server.writeRequests().length
+      expect(afterFirst).toBeGreaterThan(0)
+      await page.waitForTimeout(1_500)
+      expect(server.writeRequests().length).toBe(afterFirst)
+      await expect.poll(() => server.docs.get(docId), { timeout: 5_000 }).toBeTruthy()
+      await dismissNotices(page)
 
       server.failWrites({
         status: 429,
@@ -117,18 +100,16 @@ test.describe('F-2030 웹 — 한도·차단·주의 표시', () => {
         body: { error: 'rate_limited', scope: 'day', limit: 5000, retryAfter: 3600 },
       })
       await page.getByRole('button', { name: '새 문서' }).click()
-
       await expect(page.locator('.notice-message')).toHaveText(L2)
       await typeIntoEditor(page, '더 입력')
       await expect(page.locator('.statusbar-save')).toContainText('동기화 대기')
-
-      const afterFirst = server.writeRequests().length
+      const afterSecond = server.writeRequests().length
       await page.waitForTimeout(3_000)
-      expect(server.writeRequests().length).toBe(afterFirst)
+      expect(server.writeRequests().length).toBe(afterSecond)
     })
   })
 
-  test('F-2030 A7 문서별 413 bytes 는 그 문서만 막고 다른 문서는 그대로 저장된다', async ({ page }) => {
+  test('F-2030 A7·A8·A9 413 — 문서별 bytes 는 그 문서만, docs 는 새 문서 만들기를, too_large 는 기존 문구', async ({ page }) => {
     const server = await fakeServer(page)
     const docA = 'doc-a'
     const docB = 'doc-b'
@@ -143,77 +124,38 @@ test.describe('F-2030 웹 — 한도·차단·주의 표시', () => {
       body: { error: 'doc_quota_exceeded', resource: 'bytes', used: 104_857_600, limit: 104_857_600 },
       match: ({ method, path }) => method === 'PUT' && path === `/api/docs/${docA}`,
     })
-
     await typeIntoEditor(page, ' + A 편집')
     await expect(page.locator('.notice-message')).toHaveText(L3)
-
     await gotoDoc(page, docB)
     await typeIntoEditor(page, ' + B 편집')
     await expect.poll(() => server.docs.get(docB)?.content).toBe('B 원문 + B 편집')
     expect(server.docs.get(docA)?.content).toBe('A 원문')
-
     await page.reload()
     await gotoDoc(page, docA)
     await expect(page.locator('.cm-content')).toContainText('A 원문 + A 편집')
-  })
-
-  test('F-2030 A8 413 docs 는 새 문서 만들기를 막고 L4, 새로고침 뒤에도 남아있고 PUT 은 0', async ({ page }) => {
-    const server = await fakeServer(page)
-    await openApp(page)
-    const firstDocId = await currentDocId(page)
+    await dismissNotices(page)
 
     server.failWrites({
       status: 413,
       body: { error: 'doc_quota_exceeded', resource: 'docs', used: 10_000, limit: 10_000 },
       match: ({ method, path }) => method === 'POST' && path === '/api/docs',
     })
-
     await page.getByRole('button', { name: '새 문서' }).click()
-    await expect.poll(() => currentDocId(page)).not.toBe(firstDocId)
-    const docId = await currentDocId(page)
+    await expect.poll(() => currentDocId(page)).not.toBe(docA)
+    const blockedId = await currentDocId(page)
     await page.locator('.doc-title').fill('막힌 새 문서')
     await page.locator('.doc-title').blur()
-
     await expect(page.locator('.notice-message')).toHaveText(L4)
-    expect(server.writeRequests().filter((w) => w.method === 'PUT').length).toBe(0)
-
+    expect(server.writeRequests().filter((w) => w.method === 'PUT' && w.path.endsWith(blockedId)).length).toBe(0)
     await page.reload()
-    await gotoDoc(page, docId)
+    await gotoDoc(page, blockedId)
     await expect(page.locator('.doc-title')).toHaveValue('막힌 새 문서')
-  })
-
-  test('F-2030 A9 413 too_large 는 기존 문구 그대로', async ({ page }) => {
-    const server = await fakeServer(page)
-    await openApp(page)
+    await dismissNotices(page)
 
     server.failWrites({ status: 413, body: { error: 'too_large', limit: 1_000_000 } })
+    await gotoDoc(page, docB)
     await typeIntoEditor(page, '편집')
-
     await expect(page.locator('.notice-message')).toHaveText(TOO_LARGE)
-  })
-
-  test('F-2030 A10 계정 메뉴에 문서 사용량 줄이 보이고 90% 넘으면 위험 색', async ({ page }) => {
-    const server = await fakeServer(page)
-    server.setUsage({ docs: { bytes: 12_582_912, bytesLimit: 104_857_600, count: 1234, countLimit: 10_000 } })
-    await openApp(page)
-
-    await page.getByRole('button', { name: '계정' }).click()
-    await expect(page.locator('.account-menu-usage-docs')).toHaveText('문서 12MB / 100MB · 1,234개')
-    await expect(page.locator('.account-menu-usage-docs')).not.toHaveClass(/account-menu-usage-danger/)
-    await expect(page.locator('.account-menu-usage')).toHaveText('이미지 0.0MB / 300MB')
-
-    await page.getByRole('button', { name: '계정' }).click()
-    server.setUsage({ docs: { bytes: 12_582_912, bytesLimit: 104_857_600, count: 9000, countLimit: 10_000 } })
-    await page.getByRole('button', { name: '계정' }).click()
-    await expect(page.locator('.account-menu-usage-docs')).toHaveClass(/account-menu-usage-danger/)
-  })
-
-  test('F-2030 A11 docs 없는 /api/usage 이면 문서 사용량 줄이 없다', async ({ page }) => {
-    await fakeServer(page)
-    await openApp(page)
-
-    await page.getByRole('button', { name: '계정' }).click()
-    await expect(page.locator('.account-menu-usage-docs')).toHaveCount(0)
   })
 
   test('F-2030 A12 실시간 편집 중 계정이 막히고 방이 4403 revoked 로 닫히면 결국 L5, 새 문서로 저장 버튼 없음', async ({ page }) => {

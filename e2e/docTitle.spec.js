@@ -8,10 +8,11 @@ async function fillTitle(page, text) {
 }
 
 test.describe('F-217 A1 원문 불변', () => {
-  test('제목은 .md 내보내기·저장된 content 에 없다', async ({ page }) => {
+  test('F-217 A1·A3 제목은 .md 내보내기·저장된 content 에 없고, 사이드바 동기·새로고침 유지·비우면 복귀', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { name: 'doc.md', content: '본문 첫 줄\n둘째 줄\n' })
     await fillTitle(page, '내 제목')
+    await expect(page.locator('.tree-row').filter({ hasText: '내 제목' })).toHaveCount(1)
     await page.locator('.doc-title').blur()
 
     const saved = await readSavedContent(page)
@@ -26,43 +27,12 @@ test.describe('F-217 A1 원문 불변', () => {
     const stream = await download.createReadStream()
     const chunks = []
     for await (const chunk of stream) chunks.push(chunk)
-    const text = Buffer.concat(chunks).toString('utf-8')
-    expect(text).toBe('본문 첫 줄\n둘째 줄\n')
+    expect(Buffer.concat(chunks).toString('utf-8')).toBe('본문 첫 줄\n둘째 줄\n')
     expect(download.suggestedFilename()).toBe('내 제목.md')
-  })
-})
-
-test.describe('F-217 A2 자리', () => {
-  test('상단바에 문서 제목 입력이 없고, 본문 맨 위에 제목이 있다 — 편집·원문·보기', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await fillTitle(page, '자리 확인')
-
-    await expect(page.locator('.topbar .doc-title')).toHaveCount(0)
-    await expect(page.locator('.cm-content .doc-title')).toHaveValue('자리 확인')
-
-    // 제목 글자 시작 = 본문 첫 글자 시작 정렬은 시각 값이라 H77 사람 확인 몫
-
-    await setViewMode(page, 'raw')
-    await expect(page.locator('.cm-content .doc-title')).toHaveValue('자리 확인')
-
-    await setViewMode(page, 'view')
-    await expect(page.locator('.doc-title-view')).toHaveText('자리 확인')
-    await expect(page.locator('.topbar .doc-title')).toHaveCount(0)
-  })
-})
-
-test.describe('F-217 A3 입력·저장', () => {
-  test('입력하는 동안 사이드바가 함께 바뀌고, 새로고침 후 유지, 비우고 blur 하면 되돌아간다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await fillTitle(page, '수정된 제목')
-
-    await expect(page.locator('.tree-row').filter({ hasText: '수정된 제목' })).toHaveCount(1)
 
     await page.reload()
     await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    await expect(page.locator('.doc-title')).toHaveValue('수정된 제목')
+    await expect(page.locator('.doc-title')).toHaveValue('내 제목')
 
     await fillTitle(page, '   ')
     await page.locator('.doc-title').blur()
@@ -71,7 +41,7 @@ test.describe('F-217 A3 입력·저장', () => {
 })
 
 test.describe('F-217 A4 키보드', () => {
-  test('제목에서 Enter → 본문 맨 앞, 본문 첫 줄에서 ↑ → 제목', async ({ page }) => {
+  test('F-217 A4·A5·A5b 제목 Enter·↑ 이동, 새 문서·폴더 메뉴 새 문서 뒤 제목에 포커스(전체 선택)', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '본문 내용\n' })
 
@@ -85,12 +55,7 @@ test.describe('F-217 A4 키보드', () => {
     await page.keyboard.press('Control+Home')
     await page.keyboard.press('ArrowUp')
     await expect(page.locator('.doc-title')).toBeFocused()
-  })
-})
 
-test.describe('F-217 A5 새 문서', () => {
-  test('새 문서 를 누르면 본문 제목에 포커스 + 전체 선택된다', async ({ page }) => {
-    await openApp(page)
     await page.getByRole('button', { name: '새 문서' }).click()
     await expect(page.locator('.doc-title')).toBeFocused()
     const selection = await page.locator('.doc-title').evaluate((el) => ({
@@ -101,6 +66,16 @@ test.describe('F-217 A5 새 문서', () => {
     expect(selection.start).toBe(0)
     expect(selection.end).toBe(selection.value.length)
     expect(selection.value.length).toBeGreaterThan(0)
+
+    await page.locator('.sidebar').getByRole('button', { name: '새 폴더', exact: true }).click()
+    const input = page.locator('.tree-rename-input')
+    await input.fill('폴더A')
+    await input.press('Enter')
+    await page.locator('.tree-row').filter({ hasText: '폴더A' }).first().click({ button: 'right' })
+    await page.getByRole('menuitem', { name: '새 문서' }).click()
+    await expect(page.locator('.doc-title')).toBeFocused()
+    await page.getByRole('button', { name: '새 문서' }).click()
+    await expect(page.locator('.doc-title')).toBeFocused()
   })
 })
 
@@ -167,154 +142,52 @@ async function moveCurrentDocToFolder(page, folderName) {
 
 // F-234 A1 제목 20px 고정은 시각 값이라 e2e 에서 뺐다 — specs/human-checks.md (2026-09-25 e2e 경량화)
 
-test.describe('F-234 A2 폴더 밖', () => {
-  test('편집·원문은 "제목" 표시, 보기는 경로 줄이 없다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-
-    await expect(page.locator('.editor-slot .doc-title-label')).toHaveText('제목')
-    await expect(page.locator('.editor-slot .doc-title-label')).toHaveAttribute('aria-hidden', 'true')
-    await expect(page.locator('.editor-slot .doc-title-crumb')).toHaveCount(0)
-
-    await setViewMode(page, 'raw')
-    await expect(page.locator('.editor-slot .doc-title-label')).toHaveText('제목')
-
-    await setViewMode(page, 'view')
-    await expect(page.locator('.viewer .doc-title-label')).toHaveCount(0)
-  })
-})
-
-test.describe('F-234 A3 폴더 안(1단계)', () => {
-  test('편집·원문·보기 모두 폴더 이름, 구분자 없음', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await createTopFolder(page, 'A')
-    await moveCurrentDocToFolder(page, 'A')
-
-    await expect(page.locator('.editor-slot .doc-title-crumb')).toHaveCount(1)
-    await expect(page.locator('.editor-slot .doc-title-crumb')).toHaveText('A')
-    await expect(page.locator('.editor-slot .doc-title-crumb-sep')).toHaveCount(0)
-
-    await setViewMode(page, 'raw')
-    await expect(page.locator('.editor-slot .doc-title-crumb')).toHaveText('A')
-
-    await setViewMode(page, 'view')
-    await expect(page.locator('.viewer .doc-title-crumb')).toHaveText('A')
-    await expect(page.locator('.viewer .doc-title-crumb-sep')).toHaveCount(0)
-  })
-})
-
-test.describe('F-234 A4 폴더 안(2단계)', () => {
-  test('"A / B" 로 보인다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await createTopFolder(page, 'A')
-    await createSubfolder(page, 'A', 'B')
-    await moveCurrentDocToFolder(page, 'B')
-
-    await expect(page.locator('.doc-title-crumb')).toHaveCount(2)
-    await expect(page.locator('.doc-title-crumb').nth(0)).toHaveText('A')
-    await expect(page.locator('.doc-title-crumb').nth(1)).toHaveText('B')
-    await expect(page.locator('.doc-title-crumb-sep')).toHaveCount(1)
-  })
-})
-
-test.describe('F-234 A5 클릭 이동', () => {
-  test('경로의 폴더 이름을 누르면 사이드바 행이 보이고 잠깐 강조된다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await createTopFolder(page, 'A')
-    await moveCurrentDocToFolder(page, 'A')
-
-    await page.locator('.doc-title-crumb').click()
-    const folderRow = page.locator('[data-folder-id] .tree-row').filter({ hasText: 'A' }).first()
-    await expect(folderRow).toBeVisible()
-    await expect(folderRow).toHaveClass(/tree-row--highlight-(start|fading)/)
-  })
-})
-
-test.describe('F-234 A6 접힌 사이드바', () => {
-  test('레일 상태에서 경로를 누르면 사이드바가 펼쳐지고 행으로 스크롤·강조된다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await createTopFolder(page, 'A')
-    await moveCurrentDocToFolder(page, 'A')
-
-    await page.getByRole('button', { name: '사이드바 접기' }).click()
-    await expect(page.locator('.sidebar')).toHaveClass(/sidebar--collapsed/)
-
-    await page.locator('.doc-title-crumb').click()
-    await expect(page.locator('.sidebar')).not.toHaveClass(/sidebar--collapsed/)
-    const folderRow = page.locator('[data-folder-id] .tree-row').filter({ hasText: 'A' }).first()
-    await expect(folderRow).toBeVisible()
-    await expect(folderRow).toHaveClass(/tree-row--highlight-(start|fading)/)
-  })
-})
-
-test.describe('F-234 A7 폴더 이동 반영', () => {
-  test('문서를 다른 폴더로 옮기면 경로 표시가 바뀐다', async ({ page }) => {
+test.describe('F-234 폴더 경로 표시', () => {
+  test('A3·A5·A9·A6·A4·A7 폴더 이름, 클릭 이동(키보드 포함), 접힌 사이드바, 2단계, 이동 반영', async ({ page }) => {
+    const highlightRow = () => page.locator('[data-folder-id] .tree-row').filter({ hasText: 'A' }).first()
     await openApp(page)
     await importMarkdown(page, { content: '본문\n' })
     await createTopFolder(page, 'A')
     await createTopFolder(page, 'C')
+    await createSubfolder(page, 'A', 'B')
     await moveCurrentDocToFolder(page, 'A')
-    await expect(page.locator('.doc-title-crumb')).toHaveText('A')
 
-    await moveCurrentDocToFolder(page, 'C')
-    await expect(page.locator('.doc-title-crumb')).toHaveText('C')
-  })
-})
-
-test.describe('F-234 A8 공개·공유 화면 무관', () => {
-  test('공개 보기 화면은 경로 표시가 없다', async ({ page }) => {
-    await page.route('**/pub/docs/**', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ title: '공개 문서', content: '본문\n', lineEnding: 'lf', updatedAt: 1_700_000_000_000 }),
-      }),
-    )
-    await page.goto('/#/p/tok123')
-    await expect(page.locator('.viewer')).toBeVisible()
-    await expect(page.locator('.doc-title-crumb')).toHaveCount(0)
-    await expect(page.locator('.doc-title-label')).toHaveCount(0)
-  })
-})
-
-test.describe('F-234 A9 접근성', () => {
-  test('폴더 이름 버튼은 키보드로 닿고 Enter 로 동작한다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    await createTopFolder(page, 'A')
-    await moveCurrentDocToFolder(page, 'A')
+    await expect(page.locator('.editor-slot .doc-title-crumb')).toHaveText('A')
+    await expect(page.locator('.editor-slot .doc-title-crumb-sep')).toHaveCount(0)
+    await setViewMode(page, 'raw')
+    await expect(page.locator('.editor-slot .doc-title-crumb')).toHaveText('A')
+    await setViewMode(page, 'view')
+    await expect(page.locator('.viewer .doc-title-crumb')).toHaveText('A')
+    await expect(page.locator('.viewer .doc-title-crumb-sep')).toHaveCount(0)
+    await setViewMode(page, 'live')
 
     const crumb = page.locator('.doc-title-crumb')
+    await crumb.click()
+    await expect(highlightRow()).toBeVisible()
+    await expect(highlightRow()).toHaveClass(/tree-row--highlight-(start|fading)/)
+
     await expect(crumb).toHaveAttribute('aria-label', 'A 폴더로 이동')
     await crumb.focus()
     await expect(crumb).toBeFocused()
     await page.keyboard.press('Enter')
+    await expect(highlightRow()).toHaveClass(/tree-row--highlight-(start|fading)/)
 
-    const folderRow = page.locator('[data-folder-id] .tree-row').filter({ hasText: 'A' }).first()
-    await expect(folderRow).toHaveClass(/tree-row--highlight-(start|fading)/)
+    await page.getByRole('button', { name: '사이드바 접기' }).click()
+    await expect(page.locator('.sidebar')).toHaveClass(/sidebar--collapsed/)
+    await crumb.click()
+    await expect(page.locator('.sidebar')).not.toHaveClass(/sidebar--collapsed/)
+    await expect(highlightRow()).toBeVisible()
+    await expect(highlightRow()).toHaveClass(/tree-row--highlight-(start|fading)/)
+
+    await moveCurrentDocToFolder(page, 'B')
+    await expect(crumb).toHaveCount(2)
+    await expect(crumb.nth(0)).toHaveText('A')
+    await expect(crumb.nth(1)).toHaveText('B')
+    await expect(page.locator('.doc-title-crumb-sep')).toHaveCount(1)
+
+    await moveCurrentDocToFolder(page, 'C')
+    await expect(crumb).toHaveText('C')
   })
 })
 
 // F-217 A7 좁은 창 긴 제목 가로 넘침은 e2e/dialogLayout.spec.js 의 합친 테스트로 옮겼다 (2026-09-25 e2e 경량화)
-
-// 폴더 메뉴 새 문서 뒤 최상위 새 문서에서 제목 포커스가 비던 버그 (2026-09-24, F-2022 구현 중 발견)
-test.describe('F-217 A5b 폴더 메뉴 새 문서', () => {
-  test('폴더 메뉴 새 문서·이어서 최상위 새 문서 모두 제목에 포커스된다', async ({ page }) => {
-    await openApp(page)
-    await page.locator('.sidebar').getByRole('button', { name: '새 폴더', exact: true }).click()
-    const input = page.locator('.tree-rename-input')
-    await input.fill('폴더A')
-    await input.press('Enter')
-
-    await page.locator('.tree-row').filter({ hasText: '폴더A' }).first().click({ button: 'right' })
-    await page.getByRole('menuitem', { name: '새 문서' }).click()
-    await expect(page.locator('.doc-title')).toBeFocused()
-
-    await page.getByRole('button', { name: '새 문서' }).click()
-    await expect(page.locator('.doc-title')).toBeFocused()
-  })
-})

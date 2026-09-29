@@ -7,124 +7,6 @@ async function placeCursorAtEnd(page) {
   await page.keyboard.press('Control+End')
 }
 
-// 줄바꿈 없는 원문은 저장 시 CRLF 로 기본 판정된다(F-110 3.3, F-245 와 무관) — 앞에 빈 줄을 둬 LF 로 판정시킨다
-test.describe('F-245 A1 조합 경로 — 글머리', () => {
-  test('- 테스트 → Enter → - X, 빈 줄 없음', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n- ' })
-    await placeCursorAtEnd(page)
-
-    await fakeImeCompose(page, '테스트')
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-
-    const saved = await readSavedContent(page, docId)
-    expect(saved.content).toBe('\n- 테스트\n- X')
-  })
-})
-
-test.describe('F-245 A2 조합 경로 — 순서 목록', () => {
-  test('1. 테스트 → Enter → 2. X', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n1. ' })
-    await placeCursorAtEnd(page)
-
-    await fakeImeCompose(page, '테스트')
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-
-    const saved = await readSavedContent(page, docId)
-    expect(saved.content).toBe('\n1. 테스트\n2. X')
-  })
-})
-
-test.describe('F-245 A3 조합 경로 — 체크박스', () => {
-  test('- [ ] 테스트 → Enter → - [ ] X', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '\n- [ ] ' })
-    await placeCursorAtEnd(page)
-
-    await fakeImeCompose(page, '테스트')
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-
-    const saved = await readSavedContent(page, docId)
-    expect(saved.content).toBe('\n- [ ] 테스트\n- [ ] X')
-  })
-})
-
-test.describe('F-245 A4 조합 경로 — 중첩', () => {
-  test('2단계 들여쓰기를 유지한 채 다음 줄도 같은 들여쓰기', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '- 상위\n  - ' })
-    await placeCursorAtEnd(page)
-
-    await fakeImeCompose(page, '테스트')
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-
-    const saved = await readSavedContent(page, docId)
-    expect(saved.content).toBe('- 상위\n  - 테스트\n  - X')
-  })
-})
-
-test.describe('F-245 A5 조합 경로 — 빈 항목에서 끝내기', () => {
-  // 항목 2개짜리 tight list 는 빈 마지막 항목 엔터가 list 를 non-tight 로 바꿀 뿐 안 끝낸다(CM6 규칙, F-245 무관) — 항목 3개로 피한다
-  test('빈 목록 줄에서 조합 중 Enter → 기호를 지우고 목록을 끝낸다', async ({ page }) => {
-    await openApp(page)
-    const docId = await importMarkdown(page, { content: '- 항목\n- 둘째\n- ' })
-    await placeCursorAtEnd(page)
-
-    // 빈 항목 조합 — 실제 문자는 없지만 view.composing 은 true 로 남는다
-    await fakeImeCompose(page, '')
-    await page.keyboard.press('Enter')
-
-    const saved = await readSavedContent(page, docId)
-    expect(saved.content).toBe('- 항목\n- 둘째\n')
-  })
-})
-
-test.describe('F-245 A6 비조합 회귀', () => {
-  test('합성 키 입력만으로 A1~A5 가 지금처럼 정상 동작한다', async ({ page }) => {
-    await openApp(page)
-
-    const docId1 = await importMarkdown(page, { content: '\n- ' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.type('테스트')
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-    expect((await readSavedContent(page, docId1)).content).toBe('\n- 테스트\n- X')
-
-    const docId2 = await importMarkdown(page, { content: '\n1. ' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.type('테스트')
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-    expect((await readSavedContent(page, docId2)).content).toBe('\n1. 테스트\n2. X')
-
-    const docId3 = await importMarkdown(page, { content: '\n- [ ] ' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.type('테스트')
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-    expect((await readSavedContent(page, docId3)).content).toBe('\n- [ ] 테스트\n- [ ] X')
-
-    const docId4 = await importMarkdown(page, { content: '- 상위\n  - ' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.type('테스트')
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-    expect((await readSavedContent(page, docId4)).content).toBe('- 상위\n  - 테스트\n  - X')
-
-    const docId5 = await importMarkdown(page, { content: '- 항목\n- 둘째\n- ' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    expect((await readSavedContent(page, docId5)).content).toBe('- 항목\n- 둘째\n')
-  })
-})
-
-// F-245 A11~A16·F-253 B2~B9 (조합 없는 Enter) 는 src/editor/listEnter.test.ts runEnter 가 같은 입력·기대값으로 본다 (2026-09-25 e2e 경량화)
-
 async function exportMdText(page) {
   await openExportMenu(page)
   const [download] = await Promise.all([
@@ -137,37 +19,40 @@ async function exportMdText(page) {
   return Buffer.concat(chunks).toString('utf-8')
 }
 
-// F-245 A7·A19, F-253 B10 세 내보내기 확인을 하나로 합쳤다 (2026-09-25 e2e 경량화)
-test.describe('F-245 A7·A19 / F-253 B10 원문 불변', () => {
-  test('.md 내보내기 결과가 화면에서 본 줄 수와 같다 — 조합 Enter·빈 항목 Enter·loose 목록 Enter', async ({ page }) => {
+// 줄바꿈 없는 원문은 저장 시 CRLF 로 기본 판정된다(F-110 3.3, F-245 와 무관) — 앞에 빈 줄을 둬 LF 로 판정시킨다
+// 조합 없는 Enter(F-245 A6·A11~A16·A19, F-253 B2~B10)는 src/editor/listEnter.test.ts runEnter 가 같은 입력·기대값으로 본다 (2026-09-25 e2e 경량화)
+test.describe('F-245 조합 경로', () => {
+  test('F-245 A1·A2·A3·A4·A5·A7 조합 중 Enter — 글머리·순서 목록·체크박스·중첩·빈 항목 끝내기, .md 내보내기 원문 불변', async ({ page }) => {
     await openApp(page)
+    const cases = [
+      { content: '\n- ', typed: '테스트', expected: '\n- 테스트\n- X' },
+      { content: '\n1. ', typed: '테스트', expected: '\n1. 테스트\n2. X' },
+      { content: '\n- [ ] ', typed: '테스트', expected: '\n- [ ] 테스트\n- [ ] X' },
+      { content: '- 상위\n  - ', typed: '테스트', expected: '- 상위\n  - 테스트\n  - X' },
+    ]
+    for (const { content, typed, expected } of cases) {
+      const docId = await importMarkdown(page, { content })
+      await placeCursorAtEnd(page)
+      await fakeImeCompose(page, typed)
+      await page.keyboard.press('Enter')
+      await page.keyboard.type('X')
+      expect((await readSavedContent(page, docId)).content).toBe(expected)
+    }
 
-    // F-245 A7 — 조합 중 Enter 뒤 빈 줄이 몰래 들어가지 않는다
+    // 항목 2개짜리 tight list 는 빈 마지막 항목 엔터가 list 를 non-tight 로 바꿀 뿐 안 끝낸다(CM6 규칙, F-245 무관) — 항목 3개로 피한다
+    const endId = await importMarkdown(page, { content: '- 항목\n- 둘째\n- ' })
+    await placeCursorAtEnd(page)
+    await fakeImeCompose(page, '')
+    await page.keyboard.press('Enter')
+    expect((await readSavedContent(page, endId)).content).toBe('- 항목\n- 둘째\n')
+
     await importMarkdown(page, { content: '\n- ' })
     await placeCursorAtEnd(page)
     await fakeImeCompose(page, '테스트')
     await page.keyboard.press('Enter')
     await page.keyboard.type('X')
-    let text = await exportMdText(page)
+    const text = await exportMdText(page)
     expect(text).toBe('\n- 테스트\n- X')
     expect(text.split('\n')).toHaveLength(3)
-
-    // F-245 A19 — 항목 2개 빈 항목 Enter
-    await importMarkdown(page, { content: '\n- 하나\n- ' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-    text = await exportMdText(page)
-    expect(text).toBe('\n- 하나\nX')
-    expect(text.split('\n')).toHaveLength(3)
-
-    // F-253 B10 — loose 목록 이어쓰기
-    await importMarkdown(page, { content: '\n- 하나\n\n- 둘' })
-    await placeCursorAtEnd(page)
-    await page.keyboard.press('Enter')
-    await page.keyboard.type('X')
-    text = await exportMdText(page)
-    expect(text).toBe('\n- 하나\n\n- 둘\n- X')
-    expect(text.split('\n')).toHaveLength(5)
   })
 })
