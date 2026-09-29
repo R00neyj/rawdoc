@@ -1,9 +1,11 @@
 // 알림함 API·순수 함수 — 응답 검사, 문구, 가져오기 판정, 읽음 대기 합치기 (specs/features/F-507.md 3.1). React·DOM 없음
 import type { DocPeopleResponse, NotificationItem, NotificationsResponse } from '../lib/docComments'
+import { formatNotificationTitle } from '../lib/pushText'
+
+export { NOTIFICATION_TITLE_MAX, notificationExcerptLine } from '../lib/pushText' // F-3002 5.4 — 옛 import 그대로
 
 export const NOTIFICATIONS_POLL_MS = 60_000 // F-500 4.8
 export const NOTIFICATIONS_MIN_GAP_MS = 5_000 // 자동 가져오기끼리의 최소 간격
-export const NOTIFICATION_TITLE_MAX = 40 // 문구 안 문서 제목 (코드 포인트)
 
 export const NOTIFICATIONS_ETAG_MAX = 200 // 이보다 긴 ETag 는 쥐지 않는다 (F-2057 4.1)
 
@@ -137,23 +139,11 @@ export async function fetchDocPeople(docId: string): Promise<DocPeopleFetchResul
   return { ok: true, people: data.people }
 }
 
-function formatNotificationTitle(docTitle: string): string {
-  const trimmed = docTitle.trim()
-  if (trimmed === '') return '제목 없는 문서'
-  const chars = [...trimmed]
-  if (chars.length > NOTIFICATION_TITLE_MAX) return chars.slice(0, NOTIFICATION_TITLE_MAX - 1).join('') + '…'
-  return trimmed
-}
-
 // F-500 5.1 두 문구
 export function notificationText(item: NotificationItem): string {
   const title = formatNotificationTitle(item.docTitle)
   if (item.kind === 'mention') return `${item.actorEmail}님이 "${title}" 댓글에서 멘션했습니다.`
   return `${item.actorEmail}님이 "${title}"의 댓글에 답글을 달았습니다.`
-}
-
-export function notificationExcerptLine(excerpt: string): string {
-  return excerpt.replace(/\r\n|\r|\n/g, ' ').trim()
 }
 
 export type PollReason = 'enable' | 'interval' | 'visible' | 'online' | 'open'
