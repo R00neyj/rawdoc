@@ -38,6 +38,10 @@ type PrefMap = {
   'md.push': string
   // 마지막으로 서버에 구독을 알린 때(ms 문자열), 없음은 '' (F-2110 7.1)
   'md.pushSyncedAt': string
+  // 사용자 CSS 로컬 슬롯·계정 슬롯 캐시·부팅용 컴파일 결과, 모두 JSON (F-2092 4.2)
+  'md.userCss': string
+  'md.userCssAccount': string
+  'md.userCssBoot': string
 }
 
 type PrefKey = keyof PrefMap
@@ -74,6 +78,9 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.palettePinned',
   'md.push',
   'md.pushSyncedAt',
+  'md.userCss',
+  'md.userCssAccount',
+  'md.userCssBoot',
 ])
 
 function assertAllowed(key: string) {
@@ -103,5 +110,19 @@ export function setPref(key: string, value: string): void {
     globalThis.localStorage?.setItem(key, value)
   } catch {
     // 시크릿 창·차단 등은 삼킨다
+  }
+}
+
+// setPref 와 같되 성공 여부를 돌려준다 — 한도 초과를 알아야 하는 쓰기용 (F-2095 6장)
+export function trySetPref<K extends PrefKey>(key: K, value: PrefMap[K]): boolean
+export function trySetPref(key: string, value: string): boolean
+export function trySetPref(key: string, value: string): boolean {
+  assertAllowed(key)
+  try {
+    if (!globalThis.localStorage) return false
+    globalThis.localStorage.setItem(key, value)
+    return true
+  } catch {
+    return false
   }
 }

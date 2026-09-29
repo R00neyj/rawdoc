@@ -2,6 +2,7 @@
 import { test, expect } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
+import { openApp, setPrefBeforeLoad, currentDocId, fakeImeCompose, fakeImeCommit } from './helpers.js'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
@@ -124,4 +125,158 @@ test('F-2094 A12 외부 주소를 부르는 스니펫을 컴파일해 적용해�
   })
   expect(y).toEqual({ marginLeft: '7px', backgroundColor: 'rgb(255, 0, 0)', backgroundImage: 'none' })
   await context.close()
+})
+
+// ── F-2095 적용·부팅·안전 모드 (specs/features/F-2095.md 7.2) ──
+const MAIN_JS_PATTERN = /\/assets\/index-[^/]+\.js$/
+
+async function holdMainJs(page) {
+  let release
+  const gate = new Promise((resolve) => {
+    release = resolve
+  })
+  await page.route(MAIN_JS_PATTERN, async (route) => {
+    await gate
+    await route.continue()
+  })
+  return release
+}
+
+// [이름, 원문, 켬] 목록 → md.userCss 값
+function userCssValue(rows) {
+  const snippets = rows.map(([name, css, enabled], i) => ({
+    id: (i + 1).toString(16).padStart(16, '0'),
+    name,
+    css,
+    enabled,
+    updatedAt: 1,
+  }))
+  return JSON.stringify({ snippets })
+}
+
+const probeCss = (letter) => `:root:root { --probe-${letter}: 1 }`
+
+async function userCssState(page) {
+  return page.evaluate(() => {
+    const root = document.documentElement
+    const style = getComputedStyle(root)
+    const probe = (n) => style.getPropertyValue(`--probe-${n}`).trim()
+    return {
+      a: probe('a'),
+      b: probe('b'),
+      c: probe('c'),
+      z: probe('z'),
+      sheets: document.adoptedStyleSheets.length,
+      mode: root.getAttribute('data-user-css'),
+      rev: root.getAttribute('data-user-css-rev'),
+    }
+  })
+}
+
+const bootLocalLength = (page) =>
+  page.evaluate(() => {
+    try {
+      return JSON.parse(localStorage.getItem('md.userCssBoot') ?? '').local.length
+    } catch {
+      return null
+    }
+  })
+
+test('F-2095 A14 첫 칠 전에 부팅 시트가 붙고 앱이 같은 시트를 이어받으며 공개 보기에서는 빠진다', async ({ page }) => {
+  await setPrefBeforeLoad(
+    page,
+    'md.userCss',
+    userCssValue([
+      ['A', probeCss('a'), true],
+      ['B', probeCss('b'), false],
+      ['C', probeCss('c'), true],
+    ]),
+  )
+  await openApp(page)
+  await expect.poll(() => bootLocalLength(page)).toBe(2)
+  const docId = await currentDocId(page)
+
+  const releaseJs = await holdMainJs(page)
+  await page.reload({ waitUntil: 'commit' })
+  await expect(page.locator('#boot-skeleton')).toBeVisible()
+  expect(await page.locator('#root > *').count()).toBe(0)
+  expect(await userCssState(page)).toMatchObject({ a: '1', b: '', c: '1', sheets: 2, mode: 'on', rev: '1' })
+  await page.evaluate(() => {
+    window.heldBootSheets = [...document.adoptedStyleSheets]
+  })
+
+  releaseJs()
+  await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+  const handedOver = await page.evaluate(() => ({
+    same: document.adoptedStyleSheets.length === 2 && document.adoptedStyleSheets.every((s, i) => s === window.heldBootSheets[i]),
+    handoff: '__userCssBoot' in window,
+  }))
+  expect(handedOver).toEqual({ same: true, handoff: false })
+  expect(await userCssState(page)).toMatchObject({ a: '1', b: '', c: '1', sheets: 2, mode: 'on', rev: '1' })
+
+  await page.route('**/pub/docs/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ title: '공개 문서', content: '# 공개\n', lineEnding: 'lf', updatedAt: 1_700_000_000_000 }),
+    }),
+  )
+  await page.evaluate(() => {
+    location.hash = '#/p/tok123'
+  })
+  await expect(page.locator('.public-view-title')).toBeVisible()
+  expect(await userCssState(page)).toMatchObject({ a: '', c: '', sheets: 0, mode: 'off' })
+
+  await page.goBack()
+  await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/d/${docId}`)
+  await expect.poll(async () => (await userCssState(page)).a).toBe('1')
+  expect(await userCssState(page)).toMatchObject({ c: '1', sheets: 2, mode: 'on' })
+})
+
+test('F-2095 A15 ?safe 로 열면 사용자 CSS 없이 열리고 다시 켜기가 주소에서 safe 만 빼고 적용한다', async ({ page }) => {
+  await setPrefBeforeLoad(page, 'md.userCss', userCssValue([['A', probeCss('a'), true]]))
+  await openApp(page)
+  await expect.poll(() => bootLocalLength(page)).toBe(1)
+  const docId = await currentDocId(page)
+  const readKeys = () => page.evaluate(() => [localStorage.getItem('md.userCss'), localStorage.getItem('md.userCssBoot')])
+  const before = await readKeys()
+
+  await page.goto(`/?app=1&safe#/d/${docId}`)
+  await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+  const reenable = page.getByRole('button', { name: '다시 켜기' })
+  await expect(reenable).toBeVisible()
+  expect(await userCssState(page)).toMatchObject({ a: '', sheets: 0, mode: 'safe' })
+  expect(await readKeys()).toEqual(before)
+
+  await reenable.click()
+  await expect.poll(() => page.evaluate(() => location.search)).toBe('?app=1')
+  expect(await page.evaluate(() => location.hash)).toBe(`#/d/${docId}`)
+  await expect.poll(async () => (await userCssState(page)).a).toBe('1')
+  expect((await userCssState(page)).mode).toBe('on')
+})
+
+test('F-2095 A16 다른 탭에서 바꾼 사용자 CSS 는 한글 조합이 끝난 뒤 적용된다', async ({ page }) => {
+  // B 가 문서를 쥐고, A 는 같은 출처의 도움말 화면 — 같은 문서를 두 탭이 열면 편집 잠금에 걸린다
+  const pageB = page
+  await openApp(pageB)
+  const pageA = await pageB.context().newPage()
+  await pageA.goto('/#/help')
+  await expect(pageA.locator('html[data-user-css]')).toHaveCount(1)
+
+  await pageB.bringToFront()
+  await pageB.locator('.cm-host .cm-content').click()
+  expect(await pageB.evaluate(() => [document.hasFocus(), document.activeElement?.classList.contains('cm-content')])).toEqual([true, true])
+  const cdp = await fakeImeCompose(pageB, '한')
+
+  const writeZ = (enabled) =>
+    pageA.evaluate((value) => localStorage.setItem('md.userCss', value), userCssValue([['Z', probeCss('z'), enabled]]))
+  await writeZ(true)
+  await pageB.waitForTimeout(500)
+  expect((await userCssState(pageB)).z).toBe('')
+
+  await fakeImeCommit(cdp, '한')
+  await expect.poll(async () => (await userCssState(pageB)).z).toBe('1')
+
+  await writeZ(false)
+  await expect.poll(async () => (await userCssState(pageB)).z).toBe('')
 })

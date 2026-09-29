@@ -12,6 +12,13 @@ import {
   DEFAULT_CONTENT_WIDTH,
   CONTENT_WIDTH_VAR,
 } from './contentWidth'
+import { USER_CSS_CHECKER_VERSION, USER_CSS_MAX_SNIPPETS } from '../lib/userCssPolicy'
+
+export const USER_CSS_BOOT_KEY = 'md.userCssBoot'
+export const USER_CSS_ATTR = 'data-user-css'
+export const USER_CSS_REV_ATTR = 'data-user-css-rev'
+// window 속성 — 부팅이 붙인 { sheets, texts } 를 앱이 이어받는다 (F-2095 2장 2)
+export const USER_CSS_HANDOFF = '__userCssBoot'
 
 export const BOOT_SKELETON_ID = 'boot-skeleton'
 export const BOOT_VIEW_ATTR = 'data-boot-view'
@@ -41,11 +48,16 @@ const contentMinJson = JSON.stringify(MIN_CONTENT_WIDTH)
 const contentMaxJson = JSON.stringify(MAX_CONTENT_WIDTH)
 const contentStepJson = JSON.stringify(CONTENT_WIDTH_STEP)
 const contentDefaultJson = JSON.stringify(DEFAULT_CONTENT_WIDTH)
+const userCssBootKeyJson = JSON.stringify(USER_CSS_BOOT_KEY)
+const userCssAttrJson = JSON.stringify(USER_CSS_ATTR)
+const userCssRevAttrJson = JSON.stringify(USER_CSS_REV_ATTR)
+const userCssHandoffJson = JSON.stringify(USER_CSS_HANDOFF)
 
 // 클래식 스크립트(모듈 아님) — document·localStorage·matchMedia·location·innerWidth 다섯 전역만 쓴다 (4.3)
 export const BOOT_PAINT_SCRIPT = `(function () {
   try {
     var el = document.documentElement
+    var publicView = null
     function readPref(key) {
       try { return localStorage.getItem(key) } catch (e) { return null }
     }
@@ -116,7 +128,8 @@ export const BOOT_PAINT_SCRIPT = `(function () {
       var isPathPublicFolder =
         pathParts.length === 3 && pathParts[0] === 'p' && pathParts[1] === 'f' && pathParts[2].length > 0
       var view = 'home'
-      if (isPathPublic || isPathPublicFolder || hashStarts('#/p/f/') || hashStarts('#/p/')) {
+      publicView = isPathPublic || isPathPublicFolder || hashStarts('#/p/f/') || hashStarts('#/p/')
+      if (publicView) {
         view = 'off'
       } else if (hashStarts('#/d/')) {
         view = 'doc'
@@ -126,6 +139,55 @@ export const BOOT_PAINT_SCRIPT = `(function () {
         view = 'doc'
       }
       el.setAttribute(${viewAttrJson}, view)
+    } catch (e) {}
+
+    try {
+      var userCss = 'off'
+      function applyUserCss() {
+        var boot = null
+        try { boot = JSON.parse(readPref(${userCssBootKeyJson})) } catch (e) { return 'off' }
+        if (!boot || typeof boot !== 'object' || boot.v !== ${USER_CSS_CHECKER_VERSION}) return 'off'
+        var accountId = null
+        try {
+          var acc = JSON.parse(readPref('md.account'))
+          if (acc && typeof acc.id === 'string' && typeof acc.email === 'string') accountId = acc.id
+        } catch (e) {}
+        var list = null
+        if (accountId === null) list = boot.local
+        else if (boot.account && typeof boot.account === 'object' && boot.account.userId === accountId) list = boot.account.sheets
+        if (!Array.isArray(list) || list.length === 0 || list.length > ${USER_CSS_MAX_SNIPPETS}) return 'off'
+        for (var k = 0; k < list.length; k++) if (typeof list[k] !== 'string') return 'off'
+        var win = document.defaultView
+        var current = document.adoptedStyleSheets
+        if (!win || !win.CSSStyleSheet || !current) return 'off'
+        var sheets = []
+        try {
+          for (k = 0; k < list.length; k++) {
+            var sheet = new win.CSSStyleSheet()
+            sheet.replaceSync(list[k])
+            sheets.push(sheet)
+          }
+        } catch (e) { return 'off' }
+        var next = []
+        for (k = 0; k < current.length; k++) next.push(current[k])
+        for (k = 0; k < sheets.length; k++) next.push(sheets[k])
+        win[${userCssHandoffJson}] = { sheets: sheets, texts: list.slice() }
+        document.adoptedStyleSheets = next
+        return 'on'
+      }
+      try {
+        var search = typeof location.search === 'string' ? location.search : ''
+        var parts = (search.charAt(0) === '?' ? search.slice(1) : search).split('&')
+        var safe = false
+        for (var j = 0; j < parts.length; j++) {
+          var eq = parts[j].indexOf('=')
+          if ((eq === -1 ? parts[j] : parts[j].slice(0, eq)) === 'safe') safe = true
+        }
+        if (safe) userCss = 'safe'
+        else if (publicView === false) userCss = applyUserCss()
+      } catch (e) {}
+      if (userCss === 'on') el.setAttribute(${userCssRevAttrJson}, '1')
+      el.setAttribute(${userCssAttrJson}, userCss)
     } catch (e) {}
   } catch (e) {}
 })()`

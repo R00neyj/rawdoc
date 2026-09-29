@@ -358,7 +358,7 @@ describe('F-2093 U2 훅이 소스에 붙어 있다', () => {
 
   test('상태 속성 이름이 src 어딘가에 있다', () => {
     expect(STATE_ATTRS.map((a) => a.name)).toEqual([
-      'data-theme', 'data-heading-font', 'data-body-font', 'data-font-size', 'data-indent', 'data-printing', 'data-view-mode',
+      'data-theme', 'data-heading-font', 'data-body-font', 'data-font-size', 'data-indent', 'data-printing', 'data-user-css', 'data-view-mode',
     ])
     const all = SRC_TS.map(read).join('\n')
     for (const attr of STATE_ATTRS) {
@@ -537,5 +537,16 @@ describe('F-2093 U6 템플릿 CSS', () => {
   test('제품명이 없고 같은 입력이면 같은 출력이다', () => {
     expect(template.toLowerCase()).not.toContain(brand.name.toLowerCase())
     expect(buildTemplateCss(TOKENS)).toBe(template)
+  })
+})
+
+describe('F-2095 A13 data-user-css 상태 속성', () => {
+  test('<html> 에 on·off·safe, data-printing 바로 뒤', () => {
+    const names = STATE_ATTRS.map((a) => a.name)
+    expect(names).toHaveLength(8)
+    expect(names.indexOf('data-user-css')).toBe(names.indexOf('data-printing') + 1)
+    const attr = STATE_ATTRS.find((a) => a.name === 'data-user-css')
+    expect(attr?.on).toBe('html')
+    expect(attr?.values).toEqual(['on', 'off', 'safe'])
   })
 })

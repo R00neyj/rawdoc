@@ -160,6 +160,12 @@ export const STATE_ATTRS: readonly StateAttr[] = [
   { name: 'data-font-size', on: 'html', values: ['small', 'medium', 'large'], label: '설정 글자 크기' },
   { name: 'data-indent', on: 'html', values: ['2', '4'], label: '설정 들여쓰기' },
   { name: 'data-printing', on: 'html', values: ['1'], label: '인쇄하는 동안만' },
+  {
+    name: 'data-user-css',
+    on: 'html',
+    values: ['on', 'off', 'safe'],
+    label: '사용자 CSS 적용 상태 — 켠 스니펫이 적용 중이면 on, 주소에 ?safe 를 붙여 열면 safe',
+  },
   { name: 'data-view-mode', on: 'content', values: ['live', 'raw', 'view'], label: '편집·원문·보기 모드' },
 ]
 

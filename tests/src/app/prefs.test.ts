@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { getPref, setPref } from '../../../src/app/prefs'
+import { getPref, setPref, trySetPref } from '../../../src/app/prefs'
 
 function createMemoryLocalStorage(): Storage {
   const store = new Map<string, string>()
@@ -148,5 +148,32 @@ describe('F-407 U23 md.e2eeBackupNotice', () => {
     expect(getPref('md.e2eeBackupNotice', '' as '1')).toBe('')
     expect(() => setPref('md.e2eeBackupNotice', '1')).not.toThrow()
     expect(getPref('md.e2eeBackupNotice', '' as '1')).toBe('1')
+  })
+})
+
+describe('F-2095 A12 사용자 CSS 키·trySetPref', () => {
+  it('md.userCss·md.userCssAccount·md.userCssBoot 읽기·쓰기', () => {
+    for (const key of ['md.userCss', 'md.userCssAccount', 'md.userCssBoot'] as const) {
+      expect(() => setPref(key, '{"x":1}')).not.toThrow()
+      expect(getPref(key, '')).toBe('{"x":1}')
+    }
+  })
+
+  it('trySetPref 는 성공하면 true', () => {
+    expect(trySetPref('md.userCss', 'a')).toBe(true)
+    expect(getPref('md.userCss', '')).toBe('a')
+  })
+
+  it('trySetPref 는 쓰기가 던지면 false, 던지지 않는다', () => {
+    globalThis.localStorage = {
+      setItem() {
+        throw new Error('QuotaExceededError')
+      },
+    } as unknown as Storage
+    expect(trySetPref('md.userCssBoot', 'a')).toBe(false)
+  })
+
+  it('trySetPref 도 허용되지 않은 키는 예외', () => {
+    expect(() => trySetPref('md.unknown', 'x')).toThrow()
   })
 })

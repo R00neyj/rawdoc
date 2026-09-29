@@ -85,6 +85,7 @@ import { useNewDocTemplate } from './useNewDocTemplate'
 import { useAccountStatus } from './useAccountStatus'
 import { useAccountDelete } from './useAccountDelete'
 import { usePushDevice } from './usePushDevice'
+import useUserCss from './useUserCss'
 import { useTitleCommit } from './useTitleCommit'
 import { useCommentFab, fabAnchorOf } from './useCommentFab'
 import { useDocNavigation } from './useDocNavigation'
@@ -312,6 +313,9 @@ export default function App() {
 
   // ----- 계정 상태·차단·경고 알림·다시 읽기 (F-2079) -----
   const { account, accountBlocked, applyAccountFlags, recheckAccount } = useAccountStatus({ store, showNotice, dismissNotice, e2eeRef })
+
+  // ----- 사용자 CSS 적용·이어받기·안전 모드 (F-2095) -----
+  useUserCss({ isPublic: publicRoute !== null, account, showNotice, beforeReload: beforeLeaveDoc })
 
   // view 권한 문서이거나(F-212.md 2.4), edit 권한 문서가 403 으로 강등됐거나, 계정이 막혔으면 읽기 전용 (F-2030 5.2)
   const isReadOnlyByRole =

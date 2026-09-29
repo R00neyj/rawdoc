@@ -98,3 +98,6 @@ export function e2eeCreateErrorMessage(err: unknown): string | null {
   if (isE2eeStoreError(err, 'too-many-refs')) return E2EE_NOTICE.tooManyRefs
   return null
 }
+
+// ?safe 로 연 안전 모드 알림 띠 N-1 (F-2095 5장)
+export const USER_CSS_SAFE_NOTICE = { message: '사용자 CSS 를 끄고 열었습니다.', action: '다시 켜기' } as const
