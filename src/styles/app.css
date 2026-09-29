@@ -204,6 +204,37 @@ svg {
   .editor-toolbar-row--docked .item-menu-list {
     transform-origin: bottom left;
   }
+
+  /* 카테고리 한 칸 — 줄 오른쪽 끝에 고정, 가로 스크롤 중에도 보인다 (tweak) */
+  .editor-toolbar .editor-toolbar-category {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    margin-left: auto;
+    padding-left: 6px;
+    border-left: 1px solid var(--rule);
+    background: var(--panel);
+  }
+
+  .editor-toolbar .editor-toolbar-category-btn {
+    gap: 2px;
+    padding: 0 2px 0 8px;
+    font-size: 13px;
+    color: var(--ink-2);
+  }
+
+  .editor-toolbar .editor-toolbar-category-list {
+    position: fixed;
+    right: auto;
+    top: 0;
+    min-width: 120px;
+    transform-origin: bottom right;
+  }
+
+  .editor-toolbar-category-list [aria-checked='true'] {
+    color: var(--ink);
+    font-weight: 600;
+  }
 }
 
 /* 탭 선택 표시 — .seg 재사용, radiogroup 대신 tablist 라 aria-selected 로 맞춘 규칙만 더한다 (F-153 2.1) */

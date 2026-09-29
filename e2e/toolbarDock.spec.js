@@ -86,6 +86,24 @@ test.describe('F-2084 휴대폰 폭 (390×844, 터치)', () => {
     expect(endAt).toBeLessThan(events.indexOf('click'))
     await expect.poll(() => editorHasFocus(page)).toBe(true)
   })
+
+  test('서식 바 카테고리 한 칸 메뉴 (2026-09-29 tweak)', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    await importMarkdown(page, { content: BODY })
+    await page.locator('.cm-content .cm-line', { hasText: '둘째' }).tap()
+    await expect(page.locator('.editor-toolbar [role="tab"]')).toHaveCount(0)
+    const trigger = page.locator('.editor-toolbar').getByRole('button', { name: '서식 분류: 서식' })
+    await expect(trigger).toBeVisible()
+    await trigger.tap()
+    await expect(page.getByRole('menuitemradio')).toHaveCount(3)
+    expect(await editorHasFocus(page)).toBe(true)
+    await page.getByRole('menuitemradio', { name: '삽입' }).tap()
+    await expect(page.getByRole('menuitemradio')).toHaveCount(0)
+    await expect(page.locator('.editor-toolbar').getByRole('button', { name: '서식 분류: 삽입' })).toBeVisible()
+    await expect(page.locator('.editor-toolbar').getByRole('button', { name: '표', exact: true })).toBeVisible()
+    expect(await editorHasFocus(page)).toBe(true)
+  })
 })
 
 test.describe('F-2084 601px 이상', () => {

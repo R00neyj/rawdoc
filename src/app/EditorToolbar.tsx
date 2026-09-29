@@ -6,6 +6,7 @@ import { IconDropdown, IconRedo, IconTooltip, IconUndo } from './icons'
 import { redoLocal, undoLocal } from '../editor/yBinding'
 import usePresence from './usePresence'
 import { toolbarTabs, type ToolbarTabId } from './toolbarConfig'
+import ToolbarCategoryMenu from './ToolbarCategoryMenu'
 
 type EditorToolbarProps = {
   onRunCommand: (cmd: StateCommand) => void
@@ -150,63 +151,65 @@ export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorTo
         ))}
         <span className="editor-toolbar-sep" aria-hidden="true" />
       </div>
-      <div
-        className="seg editor-toolbar-tabs"
-        role="tablist"
-        aria-label="서식 명령 탭"
-        onKeyDown={handleTabKeyDown}
-      >
-        {toolbarTabs.map((t, i) =>
-          narrow ? (
-            // 좁은 창은 글자 대신 아이콘으로 폭을 줄이고, 가로 스크롤 중에도 항상 보이게 왼쪽에 고정한다 (F-233.md 3.6 재개정)
-            <span
-              key={t.id}
-              className="icon-btn-wrap editor-toolbar-tab-wrap"
-              onMouseEnter={(e) => positionToolbarTooltip(e.currentTarget)}
-              onFocus={(e) => positionToolbarTooltip(e.currentTarget)}
-            >
+      {!docked && (
+        <div
+          className="seg editor-toolbar-tabs"
+          role="tablist"
+          aria-label="서식 명령 탭"
+          onKeyDown={handleTabKeyDown}
+        >
+          {toolbarTabs.map((t, i) =>
+            narrow ? (
+              // 좁은 창은 글자 대신 아이콘으로 폭을 줄이고, 가로 스크롤 중에도 항상 보이게 왼쪽에 고정한다 (F-233.md 3.6 재개정)
+              <span
+                key={t.id}
+                className="icon-btn-wrap editor-toolbar-tab-wrap"
+                onMouseEnter={(e) => positionToolbarTooltip(e.currentTarget)}
+                onFocus={(e) => positionToolbarTooltip(e.currentTarget)}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  className="editor-toolbar-btn"
+                  id={`editor-toolbar-tab-${t.id}`}
+                  aria-selected={activeTab === t.id}
+                  aria-controls={`editor-toolbar-panel-${t.id}`}
+                  aria-label={t.label}
+                  tabIndex={activeTab === t.id ? 0 : -1}
+                  ref={(el) => {
+                    tabRefs.current[i] = el
+                  }}
+                  onClick={() => selectTab(t.id)}
+                >
+                  <t.Icon size={18} />
+                </button>
+                <IconTooltip text={t.label} />
+              </span>
+            ) : (
               <button
+                key={t.id}
                 type="button"
                 role="tab"
-                className="editor-toolbar-btn"
                 id={`editor-toolbar-tab-${t.id}`}
                 aria-selected={activeTab === t.id}
                 aria-controls={`editor-toolbar-panel-${t.id}`}
-                aria-label={t.label}
                 tabIndex={activeTab === t.id ? 0 : -1}
                 ref={(el) => {
                   tabRefs.current[i] = el
                 }}
                 onClick={() => selectTab(t.id)}
               >
-                <t.Icon size={18} />
+                {t.label}
               </button>
-              <IconTooltip text={t.label} />
-            </span>
-          ) : (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              id={`editor-toolbar-tab-${t.id}`}
-              aria-selected={activeTab === t.id}
-              aria-controls={`editor-toolbar-panel-${t.id}`}
-              tabIndex={activeTab === t.id ? 0 : -1}
-              ref={(el) => {
-                tabRefs.current[i] = el
-              }}
-              onClick={() => selectTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ),
-        )}
-      </div>
+            ),
+          )}
+        </div>
+      )}
       <div
         className="editor-toolbar-items"
-        role="tabpanel"
+        role={docked ? undefined : 'tabpanel'}
         id={`editor-toolbar-panel-${tab.id}`}
-        aria-labelledby={`editor-toolbar-tab-${tab.id}`}
+        aria-labelledby={docked ? undefined : `editor-toolbar-tab-${tab.id}`}
       >
         {tab.items.map((item) => (
           <Fragment key={item.id}>
@@ -274,6 +277,7 @@ export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorTo
           </Fragment>
         ))}
       </div>
+      {docked && <ToolbarCategoryMenu activeTab={activeTab} onSelect={selectTab} />}
     </div>
   )
 }
