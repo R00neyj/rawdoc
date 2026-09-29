@@ -195,6 +195,10 @@ svg {
     border-bottom: none;
   }
 
+  .editor-toolbar {
+    gap: 0;
+  }
+
   /* 버튼 위로 뜨니 나타남도 아래에서 위로 */
   .editor-toolbar-row--docked .icon-tooltip {
     transform-origin: bottom center;
