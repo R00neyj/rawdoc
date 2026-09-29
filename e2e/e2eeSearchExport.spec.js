@@ -2,8 +2,7 @@
 import { test, expect } from '@playwright/test'
 import zlib from 'node:zlib'
 import { unzipSync } from 'fflate'
-import brand from '../brand.config.ts'
-import { openApp as openAppRaw, setPrefBeforeLoad, currentDocId, setViewMode, openExportMenu, EXPORT_BUTTON_LABEL } from './helpers.js'
+import { openApp as openAppRaw, setPrefBeforeLoad, currentDocId, setViewMode, openExportMenu, EXPORT_BUTTON_LABEL, resetBrowserState } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const SETTINGS_DIALOG_SELECTOR = 'dialog[aria-labelledby="settings-title"]'
@@ -266,295 +265,313 @@ async function pasteImage(page, bytes) {
 }
 
 test.describe('F-409 검색', () => {
-  test('F-409 E1 열린 채 검색 — 잠그면 결과가 사라지고 안내가 뜬다, 빈 검색어는 안내 없음', async ({ page }) => {
-    await setupDocs(page)
+  test('F-409 E1·E3·E4·E5·E13 열림→잠금 — 검색·지도·링크 자동완성', async ({ page }) => {
+    test.setTimeout(150_000)
+    await test.step('F-409 E1 열린 채 검색 — 잠그면 결과가 사라지고 안내가 뜬다, 빈 검색어는 안내 없음', async () => {
+      await setupDocs(page)
 
-    // '비밀' 만으로는 `일반 문서` 본문의 [[비밀 제목]] 도 걸려 금고 문서만 걸리는 '비밀 본문' 으로 찾는다
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('비밀 본문')
-    await page.waitForTimeout(300)
-    await expect(page.getByRole('option')).toHaveCount(1)
-    await expect(page.locator('dialog[open] .search-note', { hasText: '금고가 잠겨' })).toHaveCount(0)
-    await page.keyboard.press('Escape')
-    await expect(page.locator('dialog[open]')).toHaveCount(0)
+      // '비밀' 만으로는 `일반 문서` 본문의 [[비밀 제목]] 도 걸려 금고 문서만 걸리는 '비밀 본문' 으로 찾는다
+      await page.keyboard.press('Control+Shift+F')
+      await page.locator('.search-input').fill('비밀 본문')
+      await page.waitForTimeout(300)
+      await expect(page.getByRole('option')).toHaveCount(1)
+      await expect(page.locator('dialog[open] .search-note', { hasText: '금고가 잠겨' })).toHaveCount(0)
+      await page.keyboard.press('Escape')
+      await expect(page.locator('dialog[open]')).toHaveCount(0)
 
-    await lockVault(page)
+      await lockVault(page)
 
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('비밀 본문')
-    await page.waitForTimeout(300)
-    await expect(page.getByText('찾는 문서가 없습니다')).toBeVisible()
-    await expect(page.locator('dialog[open] .search-note')).toContainText('금고가 잠겨 있어 금고 문서 1개는 찾지 않았습니다')
+      await page.keyboard.press('Control+Shift+F')
+      await page.locator('.search-input').fill('비밀 본문')
+      await page.waitForTimeout(300)
+      await expect(page.getByText('찾는 문서가 없습니다')).toBeVisible()
+      await expect(page.locator('dialog[open] .search-note')).toContainText('금고가 잠겨 있어 금고 문서 1개는 찾지 않았습니다')
 
-    await page.locator('.search-input').fill('')
-    await page.waitForTimeout(300)
-    await expect(page.locator('dialog[open] .search-note', { hasText: '금고가 잠겨' })).toHaveCount(0)
+      await page.locator('.search-input').fill('')
+      await page.waitForTimeout(300)
+      await expect(page.locator('dialog[open] .search-note', { hasText: '금고가 잠겨' })).toHaveCount(0)
+    })
+    await test.step('F-409 E3 지도(목록) — 열림엔 목록에, 연 채 잠그면 끊긴 링크로 바뀌고 발에 안내가 뜬다', async () => {
+      await resetBrowserState(page)
+      await setupDocs(page)
+
+      const map = await openMap(page)
+      await showList(map)
+      await expect(map.locator('.map-list-group h2', { hasText: '끊긴 링크 (0)' })).toBeVisible()
+      await expect(map.getByRole('button', { name: '비밀 제목', exact: true })).toBeVisible()
+
+      await lockVaultViaPalette(page)
+
+      await expect(map.locator('.map-page-foot')).toContainText('금고가 잠겨 있어 금고 문서 1개는 지도에 넣지 않았습니다.')
+      await expect(map.locator('.map-page-foot')).not.toContainText('공유받은 문서')
+      await expect(map.locator('.map-list-group h2', { hasText: '끊긴 링크 (1)' })).toBeVisible()
+      await expect(map.getByRole('button', { name: '비밀 제목', exact: true })).toBeVisible()
+    })
+    await test.step('F-409 E4 검색·지도를 한 번씩 연 뒤 잠그면 page.content() 에 평문이 없다', async () => {
+      await resetBrowserState(page)
+      await setupDocs(page)
+
+      await page.keyboard.press('Control+Shift+F')
+      await page.locator('.search-input').fill('비밀')
+      await page.waitForTimeout(300)
+      await page.keyboard.press('Escape')
+      await expect(page.locator('dialog[open]')).toHaveCount(0)
+
+      const map = await openMap(page)
+      await showList(map)
+      await map.getByRole('button', { name: '닫기', exact: true }).click()
+      await expect(page.locator('.map-page')).toHaveCount(0)
+
+      await lockVault(page)
+
+      // '비밀 제목' 은 뺀다 — 일반 문서 자신이 손으로 친 [[비밀 제목]] 이 잠근 뒤에도 끊긴 링크 글자로 보인다(E5, 유출이 아니다)
+      const html = await page.content()
+      expect(html).not.toContain('비밀 본문')
+    })
+    await test.step('F-409 E5 일반 문서의 손으로 친 [[비밀 제목]] — 열림은 이어지고 잠금은 끊긴다', async () => {
+      await resetBrowserState(page)
+      await setupDocs(page)
+      // 커서가 링크 위(닿음)면 원문(괄호 보임)으로 펼쳐진다(F-129) — 줄 끝으로 옮겨 놓고 본다
+      await page.locator('.cm-content').click()
+      await page.keyboard.press('Control+End')
+
+      await expect(page.locator('.md-wikilink')).not.toHaveClass(/--missing/)
+      await setViewMode(page, 'view')
+      await expect(page.locator('.wikilink')).not.toHaveClass(/--missing/)
+      await setViewMode(page, 'live')
+      await page.locator('.cm-content').click()
+      await page.keyboard.press('Control+End')
+
+      await lockVault(page)
+
+      await expect(page.locator('.md-wikilink')).toHaveClass(/--missing/)
+      await setViewMode(page, 'view')
+      await expect(page.locator('.wikilink')).toHaveClass(/--missing/)
+    })
+    await test.step('F-409 E13 [[ 자동완성 — 일반 문서는 금고 제목을 안 띄우고, 금고 문서 안에서는 둘 다 띄운다', async () => {
+      await resetBrowserState(page)
+      const { secretId } = await setupDocs(page)
+
+      await page.locator('.cm-content').click()
+      await page.keyboard.press('Control+End')
+      await page.keyboard.type('[[비밀')
+      await page.waitForTimeout(300)
+      await expect(page.locator('.cm-tooltip-autocomplete')).toHaveCount(0)
+
+      await gotoDoc(page, secretId)
+      await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+      await page.locator('.cm-content').click()
+      await page.keyboard.press('Control+End')
+      await page.keyboard.type(' [[일반')
+      await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('일반 문서')
+      await page.keyboard.press('Escape')
+
+      await page.keyboard.press('Control+End')
+      await page.keyboard.type(' [[비밀')
+      await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('비밀 제목')
+    })
   })
 
-  test('F-409 E2 검색 대화상자를 연 채 자동 잠금 — 열린 채 결과가 사라지고 검색어는 남는다, 다시 열면 다시 찾는다', async ({ page }) => {
-    await page.clock.install()
-    const { secretId } = await setupDocs(page)
+  test('F-409 E2·E10 자동 잠금·잠긴 P1', async ({ page }) => {
+    test.setTimeout(60000)
+    await test.step('F-409 E2 검색 대화상자를 연 채 자동 잠금 — 열린 채 결과가 사라지고 검색어는 남는다, 다시 열면 다시 찾는다', async () => {
+      await page.clock.install()
+      const { secretId } = await setupDocs(page)
 
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('비밀 본문')
-    await page.clock.runFor(300)
-    await expect(page.getByRole('option')).toHaveCount(1)
+      await page.keyboard.press('Control+Shift+F')
+      await page.locator('.search-input').fill('비밀 본문')
+      await page.clock.runFor(300)
+      await expect(page.getByRole('option')).toHaveCount(1)
 
-    await page.clock.fastForward('30:30')
+      await page.clock.fastForward('30:30')
 
-    await expect(page.locator('dialog[open] .search-dialog')).toBeVisible()
-    await expect(page.getByRole('option')).toHaveCount(0)
-    await expect(page.getByText('찾는 문서가 없습니다')).toBeVisible()
-    await expect(page.locator('dialog[open] .search-note')).toContainText('금고가 잠겨 있어 금고 문서 1개는 찾지 않았습니다')
-    await expect(page.locator('.search-input')).toHaveValue('비밀 본문')
+      await expect(page.locator('dialog[open] .search-dialog')).toBeVisible()
+      await expect(page.getByRole('option')).toHaveCount(0)
+      await expect(page.getByText('찾는 문서가 없습니다')).toBeVisible()
+      await expect(page.locator('dialog[open] .search-note')).toContainText('금고가 잠겨 있어 금고 문서 1개는 찾지 않았습니다')
+      await expect(page.locator('.search-input')).toHaveValue('비밀 본문')
 
-    await page.keyboard.press('Escape')
-    await expect(page.locator('dialog[open]')).toHaveCount(0)
+      await page.keyboard.press('Escape')
+      await expect(page.locator('dialog[open]')).toHaveCount(0)
 
-    await gotoDoc(page, secretId)
-    await expect(page.locator('.e2ee-locked-panel')).toBeVisible()
-    await unlockVia(page.locator('.e2ee-locked-panel'))
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+      await gotoDoc(page, secretId)
+      await expect(page.locator('.e2ee-locked-panel')).toBeVisible()
+      await unlockVia(page.locator('.e2ee-locked-panel'))
+      await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
 
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('비밀 본문')
-    await page.clock.runFor(300)
-    await expect(page.getByRole('option')).toHaveCount(1)
-  })
-})
+      await page.keyboard.press('Control+Shift+F')
+      await page.locator('.search-input').fill('비밀 본문')
+      await page.clock.runFor(300)
+      await expect(page.getByRole('option')).toHaveCount(1)
+    })
+    await test.step('F-409 E10 P1 — 상단바 공유·내보내기 버튼이 비활성, 팔레트에 인쇄가 없다', async () => {
+      await resetBrowserState(page)
+      const { secretId } = await setupDocs(page)
+      await lockVault(page)
+      await gotoDoc(page, secretId)
+      const panel = page.locator('.e2ee-locked-panel')
+      await expect(panel).toBeVisible()
+      await panel.getByRole('heading').click()
 
-test.describe('F-409 지도', () => {
-  test('F-409 E3 지도(목록) — 열림엔 목록에, 연 채 잠그면 끊긴 링크로 바뀌고 발에 안내가 뜬다', async ({ page }) => {
-    await setupDocs(page)
+      await expect(page.getByRole('button', { name: SHARE_BUTTON_LABEL })).toBeDisabled()
+      await expect(page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })).toBeDisabled()
 
-    const map = await openMap(page)
-    await showList(map)
-    await expect(map.locator('.map-list-group h2', { hasText: '끊긴 링크 (0)' })).toBeVisible()
-    await expect(map.getByRole('button', { name: '비밀 제목', exact: true })).toBeVisible()
-
-    await lockVaultViaPalette(page)
-
-    await expect(map.locator('.map-page-foot')).toContainText('금고가 잠겨 있어 금고 문서 1개는 지도에 넣지 않았습니다.')
-    await expect(map.locator('.map-page-foot')).not.toContainText('공유받은 문서')
-    await expect(map.locator('.map-list-group h2', { hasText: '끊긴 링크 (1)' })).toBeVisible()
-    await expect(map.getByRole('button', { name: '비밀 제목', exact: true })).toBeVisible()
-  })
-})
-
-test.describe('F-409 잠근 뒤 평문 흔적', () => {
-  test('F-409 E4 검색·지도를 한 번씩 연 뒤 잠그면 page.content() 에 평문이 없다', async ({ page }) => {
-    await setupDocs(page)
-
-    await page.keyboard.press('Control+Shift+F')
-    await page.locator('.search-input').fill('비밀')
-    await page.waitForTimeout(300)
-    await page.keyboard.press('Escape')
-    await expect(page.locator('dialog[open]')).toHaveCount(0)
-
-    const map = await openMap(page)
-    await showList(map)
-    await map.getByRole('button', { name: '닫기', exact: true }).click()
-    await expect(page.locator('.map-page')).toHaveCount(0)
-
-    await lockVault(page)
-
-    // '비밀 제목' 은 뺀다 — 일반 문서 자신이 손으로 친 [[비밀 제목]] 이 잠근 뒤에도 끊긴 링크 글자로 보인다(E5, 유출이 아니다)
-    const html = await page.content()
-    expect(html).not.toContain('비밀 본문')
-  })
-})
-
-test.describe('F-409 위키링크', () => {
-  test('F-409 E5 일반 문서의 손으로 친 [[비밀 제목]] — 열림은 이어지고 잠금은 끊긴다', async ({ page }) => {
-    await setupDocs(page)
-    // 커서가 링크 위(닿음)면 원문(괄호 보임)으로 펼쳐진다(F-129) — 줄 끝으로 옮겨 놓고 본다
-    await page.locator('.cm-content').click()
-    await page.keyboard.press('Control+End')
-
-    await expect(page.locator('.md-wikilink')).not.toHaveClass(/--missing/)
-    await setViewMode(page, 'view')
-    await expect(page.locator('.wikilink')).not.toHaveClass(/--missing/)
-    await setViewMode(page, 'live')
-    await page.locator('.cm-content').click()
-    await page.keyboard.press('Control+End')
-
-    await lockVault(page)
-
-    await expect(page.locator('.md-wikilink')).toHaveClass(/--missing/)
-    await setViewMode(page, 'view')
-    await expect(page.locator('.wikilink')).toHaveClass(/--missing/)
-  })
-})
-
-test.describe('F-409 자동완성', () => {
-  test('F-409 E13 [[ 자동완성 — 일반 문서는 금고 제목을 안 띄우고, 금고 문서 안에서는 둘 다 띄운다', async ({ page }) => {
-    const { secretId } = await setupDocs(page)
-
-    await page.locator('.cm-content').click()
-    await page.keyboard.press('Control+End')
-    await page.keyboard.type('[[비밀')
-    await page.waitForTimeout(300)
-    await expect(page.locator('.cm-tooltip-autocomplete')).toHaveCount(0)
-
-    await gotoDoc(page, secretId)
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    await page.locator('.cm-content').click()
-    await page.keyboard.press('Control+End')
-    await page.keyboard.type(' [[일반')
-    await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('일반 문서')
-    await page.keyboard.press('Escape')
-
-    await page.keyboard.press('Control+End')
-    await page.keyboard.type(' [[비밀')
-    await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('비밀 제목')
+      await page.keyboard.press('Control+p')
+      await expect(page.locator('dialog[open] .command-palette')).toBeVisible()
+      await expect(page.getByRole('option', { name: 'PDF (A4 인쇄)' })).toHaveCount(0)
+    })
   })
 })
 
 test.describe('F-409 내보내기', () => {
-  test('F-409 E14 일반 문서에 복사해 넣은 금고 이미지 줄 — 금고 폴더 자리에만 들어가고 이미지 누락으로 센다', async ({ page }) => {
-    const { secretId, plainId } = await setupDocs(page)
+  test('F-409 E14·E7·E6·E8a·E8b·E12 내보내기', async ({ page }) => {
+    test.setTimeout(180_000)
+    await test.step('F-409 E14 일반 문서에 복사해 넣은 금고 이미지 줄 — 금고 폴더 자리에만 들어가고 이미지 누락으로 센다', async () => {
+      const { secretId, plainId } = await setupDocs(page)
 
-    await gotoDoc(page, secretId)
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    await pasteImage(page, decodablePngBytes(20, 20))
-    await waitSaved(page)
-    await setViewMode(page, 'raw')
-    const rawText = await page.locator('.cm-content').innerText()
-    const match = /attachments\/([0-9a-f]{16})\.(png|webp)/.exec(rawText)
-    expect(match).not.toBeNull()
-    const [imgLine, id, ext] = match
-    await setViewMode(page, 'live')
+      await gotoDoc(page, secretId)
+      await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+      await pasteImage(page, decodablePngBytes(20, 20))
+      await waitSaved(page)
+      await setViewMode(page, 'raw')
+      const rawText = await page.locator('.cm-content').innerText()
+      const match = /attachments\/([0-9a-f]{16})\.(png|webp)/.exec(rawText)
+      expect(match).not.toBeNull()
+      const [imgLine, id, ext] = match
+      await setViewMode(page, 'live')
 
-    await gotoDoc(page, plainId)
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    await page.locator('.cm-content').click()
-    await page.keyboard.press('Control+End')
-    await page.keyboard.type(`\n${imgLine}`)
-    await waitSaved(page)
+      await gotoDoc(page, plainId)
+      await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+      await page.locator('.cm-content').click()
+      await page.keyboard.press('Control+End')
+      await page.keyboard.type(`\n${imgLine}`)
+      await waitSaved(page)
 
-    const dialog = await openSettings(page)
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      dialog.getByRole('button', { name: '전체 내보내기' }).click(),
-    ])
-    await expect(page.locator('.notice-message')).toHaveText('이미지 1개를 찾을 수 없어 빼고 내보냈습니다.')
+      const dialog = await openSettings(page)
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        dialog.getByRole('button', { name: '전체 내보내기' }).click(),
+      ])
+      await expect(page.locator('.notice-message')).toHaveText('이미지 1개를 찾을 수 없어 빼고 내보냈습니다.')
 
-    const unzipped = await unzipDownload(download)
-    const names = Object.keys(unzipped)
-    expect(names).toContain(`${VAULT_FOLDER}/attachments/${id}.${ext}`)
-    expect(names).not.toContain(`attachments/${id}.${ext}`)
+      const unzipped = await unzipDownload(download)
+      const names = Object.keys(unzipped)
+      expect(names).toContain(`${VAULT_FOLDER}/attachments/${id}.${ext}`)
+      expect(names).not.toContain(`attachments/${id}.${ext}`)
+    })
+    await test.step('F-409 E7 열린 채 전체 내보내기 — 평문으로 들어간다', async () => {
+      await resetBrowserState(page)
+      await setupDocs(page)
+
+      const dialog = await openSettings(page)
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        dialog.getByRole('button', { name: '전체 내보내기' }).click(),
+      ])
+      await expect(page.locator('.notice-message')).toHaveText('문서 2개를 내보냈습니다.')
+
+      const unzipped = await unzipDownload(download)
+      const body = Buffer.from(unzipped[`${VAULT_FOLDER}/비밀 제목.md`]).toString('utf-8')
+      expect(body).toContain('비밀 본문 한 줄')
+    })
+    await test.step('F-409 E6 잠긴 채 전체 내보내기 — 빼고 알린다', async () => {
+      await resetBrowserState(page)
+      await setupDocs(page)
+      await lockVault(page)
+
+      const dialog = await openSettings(page)
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        dialog.getByRole('button', { name: '전체 내보내기' }).click(),
+      ])
+      await expect(page.locator('.notice-message')).toHaveText('금고가 잠겨 있어 금고 문서 1개는 빼고 내보냈습니다.')
+
+      const unzipped = await unzipDownload(download)
+      const names = Object.keys(unzipped)
+      expect(names).not.toContain(`${VAULT_FOLDER}/비밀 제목.md`)
+      expect(names).toContain('일반 문서.md')
+      const manifest = JSON.parse(Buffer.from(unzipped['manifest.json']).toString('utf-8'))
+      expect(manifest.docs.some((d) => d.title === '비밀 제목')).toBe(false)
+    })
+    await test.step('F-409 E8a 잠긴 채 금고 폴더 ⋯ → 폴더 내보내기 — D-11, 취소는 아무것도 안 하고 열면 내려받는다', async () => {
+      await resetBrowserState(page)
+      await setupDocs(page)
+      await lockVault(page)
+
+      const menu1 = await openRowMenu(page, VAULT_FOLDER)
+      await menu1.getByRole('menuitem', { name: '폴더 내보내기', exact: true }).click()
+      await expect(unlockDialog(page)).toBeVisible()
+      const raced = await Promise.race([
+        page.waitForEvent('download').then(() => 'download'),
+        new Promise((resolve) => setTimeout(() => resolve('timeout'), 1000)),
+      ])
+      expect(raced).toBe('timeout')
+      await page.keyboard.press('Escape')
+      await expect(unlockDialog(page)).toBeHidden()
+      await expect(page.locator('.notice-message')).toHaveCount(0)
+
+      const menu2 = await openRowMenu(page, VAULT_FOLDER)
+      const downloadPromise = page.waitForEvent('download')
+      await menu2.getByRole('menuitem', { name: '폴더 내보내기', exact: true }).click()
+      await expect(unlockDialog(page)).toBeVisible()
+      await unlockVia(unlockDialog(page))
+      await expect(unlockDialog(page)).toBeHidden()
+      const download = await downloadPromise
+
+      const unzipped = await unzipDownload(download)
+      expect(Object.keys(unzipped)).toContain('비밀 제목.md')
+    })
+    await test.step('F-409 E8b 잠긴 채 금고 폴더 ⋯ → 옵시디언 볼트로 내보내기 — D-11, 취소는 아무것도 안 하고 열면 내려받는다', async () => {
+      await resetBrowserState(page)
+      await setupDocs(page)
+      await lockVault(page)
+
+      const menu1 = await openRowMenu(page, VAULT_FOLDER)
+      await menu1.getByRole('menuitem', { name: '옵시디언 볼트로 내보내기', exact: true }).click()
+      await expect(unlockDialog(page)).toBeVisible()
+      const raced = await Promise.race([
+        page.waitForEvent('download').then(() => 'download'),
+        new Promise((resolve) => setTimeout(() => resolve('timeout'), 1000)),
+      ])
+      expect(raced).toBe('timeout')
+      await page.keyboard.press('Escape')
+      await expect(unlockDialog(page)).toBeHidden()
+      await expect(page.locator('.notice-message')).toHaveCount(0)
+
+      const menu2 = await openRowMenu(page, VAULT_FOLDER)
+      const downloadPromise = page.waitForEvent('download')
+      await menu2.getByRole('menuitem', { name: '옵시디언 볼트로 내보내기', exact: true }).click()
+      await expect(unlockDialog(page)).toBeVisible()
+      await unlockVia(unlockDialog(page))
+      await expect(unlockDialog(page)).toBeHidden()
+      const download = await downloadPromise
+
+      const unzipped = await unzipDownload(download)
+      expect(Object.keys(unzipped)).toContain('비밀 제목.md')
+    })
+    await test.step('F-409 E12 열린 금고 문서 — .md·HTML 파일 내보내기 둘 다 내려받고 .md 본문은 평문', async () => {
+      await resetBrowserState(page)
+      const { secretId } = await setupDocs(page)
+      await gotoDoc(page, secretId)
+      await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+
+      await openExportMenu(page)
+      const [mdDownload] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByRole('menuitem', { name: '.md', exact: true }).click(),
+      ])
+      const mdText = await readDownloadText(mdDownload)
+      expect(mdText).toContain('비밀 본문 한 줄')
+
+      await openExportMenu(page)
+      const [htmlDownload] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByRole('menuitem', { name: 'HTML 파일', exact: true }).click(),
+      ])
+      expect(htmlDownload.suggestedFilename()).toBeTruthy()
+    })
   })
 
-  test('F-409 E6 잠긴 채 전체 내보내기 — 빼고 알린다', async ({ page }) => {
-    await setupDocs(page)
-    await lockVault(page)
-
-    const dialog = await openSettings(page)
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      dialog.getByRole('button', { name: '전체 내보내기' }).click(),
-    ])
-    await expect(page.locator('.notice-message')).toHaveText('금고가 잠겨 있어 금고 문서 1개는 빼고 내보냈습니다.')
-
-    const unzipped = await unzipDownload(download)
-    const names = Object.keys(unzipped)
-    expect(names).not.toContain(`${VAULT_FOLDER}/비밀 제목.md`)
-    expect(names).toContain('일반 문서.md')
-    const manifest = JSON.parse(Buffer.from(unzipped['manifest.json']).toString('utf-8'))
-    expect(manifest.docs.some((d) => d.title === '비밀 제목')).toBe(false)
-  })
-
-  test('F-409 E7 열린 채 전체 내보내기 — 평문으로 들어간다', async ({ page }) => {
-    await setupDocs(page)
-
-    const dialog = await openSettings(page)
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      dialog.getByRole('button', { name: '전체 내보내기' }).click(),
-    ])
-    await expect(page.locator('.notice-message')).toHaveText('문서 2개를 내보냈습니다.')
-
-    const unzipped = await unzipDownload(download)
-    const body = Buffer.from(unzipped[`${VAULT_FOLDER}/비밀 제목.md`]).toString('utf-8')
-    expect(body).toContain('비밀 본문 한 줄')
-  })
-
-  test('F-409 E8a 잠긴 채 금고 폴더 ⋯ → 폴더 내보내기 — D-11, 취소는 아무것도 안 하고 열면 내려받는다', async ({ page }) => {
-    await setupDocs(page)
-    await lockVault(page)
-
-    const menu1 = await openRowMenu(page, VAULT_FOLDER)
-    await menu1.getByRole('menuitem', { name: '폴더 내보내기', exact: true }).click()
-    await expect(unlockDialog(page)).toBeVisible()
-    const raced = await Promise.race([
-      page.waitForEvent('download').then(() => 'download'),
-      new Promise((resolve) => setTimeout(() => resolve('timeout'), 1000)),
-    ])
-    expect(raced).toBe('timeout')
-    await page.keyboard.press('Escape')
-    await expect(unlockDialog(page)).toBeHidden()
-    await expect(page.locator('.notice-message')).toHaveCount(0)
-
-    const menu2 = await openRowMenu(page, VAULT_FOLDER)
-    const downloadPromise = page.waitForEvent('download')
-    await menu2.getByRole('menuitem', { name: '폴더 내보내기', exact: true }).click()
-    await expect(unlockDialog(page)).toBeVisible()
-    await unlockVia(unlockDialog(page))
-    await expect(unlockDialog(page)).toBeHidden()
-    const download = await downloadPromise
-
-    const unzipped = await unzipDownload(download)
-    expect(Object.keys(unzipped)).toContain('비밀 제목.md')
-  })
-
-  test('F-409 E8b 잠긴 채 금고 폴더 ⋯ → 옵시디언 볼트로 내보내기 — D-11, 취소는 아무것도 안 하고 열면 내려받는다', async ({ page }) => {
-    await setupDocs(page)
-    await lockVault(page)
-
-    const menu1 = await openRowMenu(page, VAULT_FOLDER)
-    await menu1.getByRole('menuitem', { name: '옵시디언 볼트로 내보내기', exact: true }).click()
-    await expect(unlockDialog(page)).toBeVisible()
-    const raced = await Promise.race([
-      page.waitForEvent('download').then(() => 'download'),
-      new Promise((resolve) => setTimeout(() => resolve('timeout'), 1000)),
-    ])
-    expect(raced).toBe('timeout')
-    await page.keyboard.press('Escape')
-    await expect(unlockDialog(page)).toBeHidden()
-    await expect(page.locator('.notice-message')).toHaveCount(0)
-
-    const menu2 = await openRowMenu(page, VAULT_FOLDER)
-    const downloadPromise = page.waitForEvent('download')
-    await menu2.getByRole('menuitem', { name: '옵시디언 볼트로 내보내기', exact: true }).click()
-    await expect(unlockDialog(page)).toBeVisible()
-    await unlockVia(unlockDialog(page))
-    await expect(unlockDialog(page)).toBeHidden()
-    const download = await downloadPromise
-
-    const unzipped = await unzipDownload(download)
-    expect(Object.keys(unzipped)).toContain('비밀 제목.md')
-  })
-
-  test('F-409 E12 열린 금고 문서 — .md·HTML 파일 내보내기 둘 다 내려받고 .md 본문은 평문', async ({ page }) => {
-    const { secretId } = await setupDocs(page)
-    await gotoDoc(page, secretId)
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-
-    await openExportMenu(page)
-    const [mdDownload] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByRole('menuitem', { name: '.md', exact: true }).click(),
-    ])
-    const mdText = await readDownloadText(mdDownload)
-    expect(mdText).toContain('비밀 본문 한 줄')
-
-    await openExportMenu(page)
-    const [htmlDownload] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByRole('menuitem', { name: 'HTML 파일', exact: true }).click(),
-    ])
-    expect(htmlDownload.suggestedFilename()).toBeTruthy()
-  })
 })
 
 test.describe('F-409 공유 메뉴', () => {
@@ -600,38 +617,5 @@ test.describe('F-409 공유 메뉴', () => {
     const menu2 = page.locator('.share-menu-list[data-state="open"]')
     await expect(menu2.getByRole('menuitem', { name: '링크 복사', exact: true })).not.toHaveAttribute('aria-disabled', 'true')
     await expect(menu2.locator('.share-menu-note')).toHaveCount(0)
-  })
-})
-
-test.describe('F-409 잠긴 금고 문서를 연 상태', () => {
-  test('F-409 E10 P1 — 상단바 공유·내보내기 버튼이 비활성, 팔레트에 인쇄가 없다', async ({ page }) => {
-    const { secretId } = await setupDocs(page)
-    await lockVault(page)
-    await gotoDoc(page, secretId)
-    const panel = page.locator('.e2ee-locked-panel')
-    await expect(panel).toBeVisible()
-    await panel.getByRole('heading').click()
-
-    await expect(page.getByRole('button', { name: SHARE_BUTTON_LABEL })).toBeDisabled()
-    await expect(page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })).toBeDisabled()
-
-    await page.keyboard.press('Control+p')
-    await expect(page.locator('dialog[open] .command-palette')).toBeVisible()
-    await expect(page.getByRole('option', { name: 'PDF (A4 인쇄)' })).toHaveCount(0)
-  })
-})
-
-test.describe('F-409 홈 화면', () => {
-  test('F-409 E11 잠긴 채 홈 — 최근 문서에 잠긴 문서, 누르면 P1', async ({ page }) => {
-    await setupDocs(page)
-    await lockVault(page)
-
-    await page.getByRole('button', { name: `${brand.name} 홈으로` }).click()
-    await expect(page.locator('.empty-state')).toBeVisible()
-    const lockedItem = page.locator('.empty-state-recent-item').filter({ hasText: '잠긴 문서' })
-    await expect(lockedItem).toBeVisible()
-    await lockedItem.click()
-
-    await expect(page.locator('.e2ee-locked-panel')).toBeVisible()
   })
 })

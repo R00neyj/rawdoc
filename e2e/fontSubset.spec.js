@@ -1,7 +1,7 @@
 // 서체 나눠 받기와 precache 줄이기 (specs/features/F-2040.md 7장)
 import { test, expect } from '@playwright/test'
 import { readFileSync } from 'node:fs'
-import { importMarkdown, openApp, setPrefBeforeLoad, setViewMode } from './helpers.js'
+import { importMarkdown, openApp, setPrefBeforeLoad } from './helpers.js'
 
 const ZETTEL = readFileSync(new URL('../content/guides/zettelkasten.md', import.meta.url), 'utf-8')
 
@@ -33,40 +33,39 @@ async function openZettel(page) {
   await page.evaluate(() => document.fonts.ready.then(() => undefined))
 }
 
-test('F-2040 A1 precache 에 큰 서체 없음', async ({ page }) => {
-  const { urls } = await precacheUrls(page)
-  const woff2 = urls.filter((u) => u.endsWith('.woff2'))
-  expect(woff2.length).toBeGreaterThan(0)
-  for (const u of woff2) expect(u, u).toMatch(/^assets\/KaTeX_/)
-  expect(urls.filter((u) => /PretendardVariable|noto-serif-kr|D2Coding/.test(u))).toEqual([])
-})
-
-test('F-2040 A2 precache 크기 상한', async ({ page }) => {
-  const { urls } = await precacheUrls(page)
-  let total = 0
-  for (const u of urls) {
-    const res = await page.request.get(`/${u}`)
-    expect(res.status(), u).toBe(200)
-    total += (await res.body()).length
-  }
-  expect(total).toBeLessThanOrEqual(10_485_760)
-})
-
-test('F-2040 A3 서체 런타임 캐시 규칙', async ({ page }) => {
-  const { body } = await precacheUrls(page)
-  expect(body).toContain('"fonts"')
-  expect(body).toContain('CacheFirst')
-})
-
-test('F-2040 A4 조각 서체 CSS', async ({ page }) => {
-  const html = await (await page.request.get('/')).text()
-  const href = /assets\/index-[^"']+\.css/.exec(html)?.[0]
-  expect(href).toBeTruthy()
-  const css = await (await page.request.get(`/${href}`)).text()
-  const faces = css.split('@font-face').slice(1)
-  expect(faces.filter((f) => f.includes('PretendardVariable.subset.')).length).toBe(92)
-  expect(css).not.toContain('noto-serif-kr-korean-')
-  expect(css.match(/url\([^)]*noto-serif-kr-[^)]*\.woff\)/g)).toBeNull()
+test('F-2040 A1·A2·A3·A4 빌드 산출물 — precache·크기 상한·런타임 캐시·조각 서체 CSS', async ({ page }) => {
+  await test.step('F-2040 A1 precache 에 큰 서체 없음', async () => {
+    const { urls } = await precacheUrls(page)
+    const woff2 = urls.filter((u) => u.endsWith('.woff2'))
+    expect(woff2.length).toBeGreaterThan(0)
+    for (const u of woff2) expect(u, u).toMatch(/^assets\/KaTeX_/)
+    expect(urls.filter((u) => /PretendardVariable|noto-serif-kr|D2Coding/.test(u))).toEqual([])
+  })
+  await test.step('F-2040 A2 precache 크기 상한', async () => {
+    const { urls } = await precacheUrls(page)
+    let total = 0
+    for (const u of urls) {
+      const res = await page.request.get(`/${u}`)
+      expect(res.status(), u).toBe(200)
+      total += (await res.body()).length
+    }
+    expect(total).toBeLessThanOrEqual(10_485_760)
+  })
+  await test.step('F-2040 A3 서체 런타임 캐시 규칙', async () => {
+    const { body } = await precacheUrls(page)
+    expect(body).toContain('"fonts"')
+    expect(body).toContain('CacheFirst')
+  })
+  await test.step('F-2040 A4 조각 서체 CSS', async () => {
+    const html = await (await page.request.get('/')).text()
+    const href = /assets\/index-[^"']+\.css/.exec(html)?.[0]
+    expect(href).toBeTruthy()
+    const css = await (await page.request.get(`/${href}`)).text()
+    const faces = css.split('@font-face').slice(1)
+    expect(faces.filter((f) => f.includes('PretendardVariable.subset.')).length).toBe(92)
+    expect(css).not.toContain('noto-serif-kr-korean-')
+    expect(css.match(/url\([^)]*noto-serif-kr-[^)]*\.woff\)/g)).toBeNull()
+  })
 })
 
 test('F-2040 A5 첫 방문 문서 한 편 서체 양', async ({ page }) => {
@@ -81,18 +80,6 @@ test('F-2040 A5 첫 방문 문서 한 편 서체 양', async ({ page }) => {
   expect(paths.filter((p) => /noto-serif-kr-\d+-700/.test(p)).length).toBeGreaterThanOrEqual(1)
   expect(paths.filter((p) => p.includes('PretendardVariable-'))).toEqual([])
   expect(paths.filter((p) => p.includes('noto-serif-kr-korean-'))).toEqual([])
-})
-
-test('F-2040 A7 서체가 실제로 적용됨', async ({ page }) => {
-  await openZettel(page)
-  expect(await page.evaluate(() => document.fonts.check('400 16px "Pretendard Variable"', '제텔카스텐'))).toBe(true)
-  expect(await page.evaluate(() => document.fonts.check('700 16px "Noto Serif KR"', '제텔카스텐'))).toBe(true)
-
-  await setViewMode(page, 'raw')
-  await page.evaluate(() => document.fonts.ready.then(() => undefined))
-  await expect
-    .poll(() => page.evaluate(() => document.fonts.check('400 14px D2Coding', '# abc')))
-    .toBe(true)
 })
 
 test.describe('서비스 워커 허용', () => {

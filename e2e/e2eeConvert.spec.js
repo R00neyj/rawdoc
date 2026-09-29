@@ -1,7 +1,7 @@
 // 금고로 옮기기·빼기 — 메뉴·D-9·D-10·진행 알림·쓰기 순서 (specs/features/F-407.md 9.2) — 금고는 F-404 화면, 서버는 fakeServer, 실시간은 fakeDocRoom
 import { test, expect } from '@playwright/test'
 import zlib from 'node:zlib'
-import { openApp as openAppRaw, setPrefBeforeLoad, currentDocId, importMarkdown, setViewMode, waitSaved } from './helpers.js'
+import { openApp as openAppRaw, setPrefBeforeLoad, currentDocId, importMarkdown, setViewMode, waitSaved, resetBrowserState } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
 
@@ -215,341 +215,384 @@ async function convertFromMenu(page, row, label = '금고로 옮기기…') {
 }
 
 test.describe('F-407 로컬 금고로 옮기기', () => {
-  test('F-407 E1 문서 옮기기 — 로컬 D-9, 첫 초점 취소, D-8 뒤 끝 알림·자물쇠·봉투 행', async ({ page }) => {
-    await openApp(page)
-    const id = await importMarkdown(page, { name: '옮길 메모.md', content: '# 제목\n\n비밀 본문\n' })
-    await convertFromMenu(page, docRow(page, id))
-    const dialog = convertDialog(page)
-    await expect(dialog.locator('h2')).toHaveText('금고로 옮기기')
-    await expect(dialog).toContainText('이 브라우저의 금고')
-    await expect(dialog.locator('.e2ee-backup-notice')).toHaveCount(0)
-    await expect(dialog.getByRole('button', { name: '취소', exact: true })).toBeFocused()
+  test('F-407 E1·E2·E10 로컬 금고로 옮기기 — 문서·이미지·너무 큰 문서', async ({ page }) => {
+    test.setTimeout(90_000)
+    await test.step('F-407 E1 문서 옮기기 — 로컬 D-9, 첫 초점 취소, D-8 뒤 끝 알림·자물쇠·봉투 행', async () => {
+      await openApp(page)
+      const id = await importMarkdown(page, { name: '옮길 메모.md', content: '# 제목\n\n비밀 본문\n' })
+      await convertFromMenu(page, docRow(page, id))
+      const dialog = convertDialog(page)
+      await expect(dialog.locator('h2')).toHaveText('금고로 옮기기')
+      await expect(dialog).toContainText('이 브라우저의 금고')
+      await expect(dialog.locator('.e2ee-backup-notice')).toHaveCount(0)
+      await expect(dialog.getByRole('button', { name: '취소', exact: true })).toBeFocused()
 
-    await dialog.getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"옮길 메모"을(를) 금고로 옮겼습니다.')
-    await expect(docRow(page, id).locator('.tree-e2ee-icon')).toBeVisible()
+      await dialog.getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"옮길 메모"을(를) 금고로 옮겼습니다.')
+      await expect(docRow(page, id).locator('.tree-e2ee-icon')).toBeVisible()
 
-    const row = await readIdb(page, 'md-docs', 'docs', id)
-    expect(row.title).toMatch(BASE64_RE)
-    expect(row.content).toMatch(BASE64_RE)
-    expect(row.content).not.toContain('비밀')
-    expect(row.e2eeKey).toHaveLength(56)
+      const row = await readIdb(page, 'md-docs', 'docs', id)
+      expect(row.title).toMatch(BASE64_RE)
+      expect(row.content).toMatch(BASE64_RE)
+      expect(row.content).not.toContain('비밀')
+      expect(row.e2eeKey).toHaveLength(56)
+    })
+    await test.step('F-407 E2 이미지 든 문서 — 새 암호 첨부 행, 옛 평문 행 없음, 줄의 id 만 바뀌고 이미지가 보인다', async () => {
+      await resetBrowserState(page)
+      await openApp(page)
+      const id = await importMarkdown(page, { name: '그림.md', content: '그림 문서\n\n' })
+      await page.locator('.cm-content .cm-line').last().click()
+      await pasteImage(page, decodablePng(40, 20))
+      await expect(page.locator('.statusbar-save')).toHaveText('저장됨', { timeout: 10_000 })
+      const before = await readIdb(page, 'md-docs', 'attachments', null)
+      expect(before).toHaveLength(1)
+      const old = before[0]
+
+      await convertFromMenu(page, docRow(page, id))
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"그림"을(를) 금고로 옮겼습니다.')
+
+      const after = await readIdb(page, 'md-docs', 'attachments', null)
+      expect(after.map((a) => a.id)).not.toContain(old.id)
+      expect(after).toHaveLength(1)
+      expect(after[0].e2ee).toBe(true)
+      expect(after[0].ext).toBe(old.ext)
+
+      await setViewMode(page, 'raw')
+      await expect(page.locator('.cm-content')).toContainText(`attachments/${after[0].id}.${old.ext}`)
+      await expect(page.locator('.cm-content')).not.toContainText(old.id)
+      await setViewMode(page, 'live')
+      await page.locator('.cm-content .cm-line', { hasText: '그림 문서' }).click()
+      const img = page.locator('.md-image-img')
+      await expect(img).toBeVisible()
+      await expect.poll(() => img.evaluate((el) => el.naturalWidth)).toBeGreaterThan(0)
+    })
+    await test.step('F-407 E10 너무 큰 문서 — 문서 메뉴 E6, 든 폴더 E33, D-9 없음', async () => {
+      await resetBrowserState(page)
+      await openApp(page)
+      await newFolder(page, '큰 폴더')
+      const menu = await openMenuOf(page, folderRow(page, '큰 폴더'))
+      const before = await currentDocId(page)
+      await menu.getByRole('menuitem', { name: '새 문서', exact: true }).click()
+      await expect.poll(() => currentDocId(page)).not.toBe(before)
+      const line = 'abcdefghijklmnopqrstuvwxyz0123456789AB'
+      expect(line).toHaveLength(38)
+      const id = await importMarkdown(page, { name: '큰 문서.md', content: `${line}\n`.repeat(20_000) })
+      await expect(docRow(page, id)).toBeVisible()
+
+      const docMenu = await openMenuOf(page, docRow(page, id))
+      await docMenu.getByRole('menuitem', { name: '금고로 옮기기…', exact: true }).click()
+      await expect(notice(page)).toHaveText(E6)
+      await expect(convertDialog(page)).toHaveCount(0)
+
+      const folderMenu = await openMenuOf(page, folderRow(page, '큰 폴더'))
+      await folderMenu.getByRole('menuitem', { name: '금고로 옮기기…', exact: true }).click()
+      await expect(notice(page)).toContainText('금고에 넣을 수 없는 문서가 1개 있어 폴더를 옮기지 않았습니다.')
+      await expect(convertDialog(page)).toHaveCount(0)
+    })
   })
 
-  test('F-407 E2 이미지 든 문서 — 새 암호 첨부 행, 옛 평문 행 없음, 줄의 id 만 바뀌고 이미지가 보인다', async ({ page }) => {
-    await openApp(page)
-    const id = await importMarkdown(page, { name: '그림.md', content: '그림 문서\n\n' })
-    await page.locator('.cm-content .cm-line').last().click()
-    await pasteImage(page, decodablePng(40, 20))
-    await expect(page.locator('.statusbar-save')).toHaveText('저장됨', { timeout: 10_000 })
-    const before = await readIdb(page, 'md-docs', 'attachments', null)
-    expect(before).toHaveLength(1)
-    const old = before[0]
-
-    await convertFromMenu(page, docRow(page, id))
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"그림"을(를) 금고로 옮겼습니다.')
-
-    const after = await readIdb(page, 'md-docs', 'attachments', null)
-    expect(after.map((a) => a.id)).not.toContain(old.id)
-    expect(after).toHaveLength(1)
-    expect(after[0].e2ee).toBe(true)
-    expect(after[0].ext).toBe(old.ext)
-
-    await setViewMode(page, 'raw')
-    await expect(page.locator('.cm-content')).toContainText(`attachments/${after[0].id}.${old.ext}`)
-    await expect(page.locator('.cm-content')).not.toContainText(old.id)
-    await setViewMode(page, 'live')
-    await page.locator('.cm-content .cm-line', { hasText: '그림 문서' }).click()
-    const img = page.locator('.md-image-img')
-    await expect(img).toBeVisible()
-    await expect.poll(() => img.evaluate((el) => el.naturalWidth)).toBeGreaterThan(0)
-  })
-
-  test('F-407 E9 로컬 저장소에서는 오프라인이어도 비활성이 아니다', async ({ page, context }) => {
-    await openApp(page)
-    const id = await importMarkdown(page, { name: '로컬.md', content: '본문\n' })
-    await context.setOffline(true)
-    const menu = await openMenuOf(page, docRow(page, id))
-    await expect(menu.getByRole('menuitem', { name: '금고로 옮기기…', exact: true })).not.toHaveAttribute('aria-disabled', 'true')
-    await context.setOffline(false)
-  })
-
-  test('F-407 E10 너무 큰 문서 — 문서 메뉴 E6, 든 폴더 E33, D-9 없음', async ({ page }) => {
-    await openApp(page)
-    await newFolder(page, '큰 폴더')
-    const menu = await openMenuOf(page, folderRow(page, '큰 폴더'))
-    const before = await currentDocId(page)
-    await menu.getByRole('menuitem', { name: '새 문서', exact: true }).click()
-    await expect.poll(() => currentDocId(page)).not.toBe(before)
-    const line = 'abcdefghijklmnopqrstuvwxyz0123456789AB'
-    expect(line).toHaveLength(38)
-    const id = await importMarkdown(page, { name: '큰 문서.md', content: `${line}\n`.repeat(20_000) })
-    await expect(docRow(page, id)).toBeVisible()
-
-    const docMenu = await openMenuOf(page, docRow(page, id))
-    await docMenu.getByRole('menuitem', { name: '금고로 옮기기…', exact: true }).click()
-    await expect(notice(page)).toHaveText(E6)
-    await expect(convertDialog(page)).toHaveCount(0)
-
-    const folderMenu = await openMenuOf(page, folderRow(page, '큰 폴더'))
-    await folderMenu.getByRole('menuitem', { name: '금고로 옮기기…', exact: true }).click()
-    await expect(notice(page)).toContainText('금고에 넣을 수 없는 문서가 1개 있어 폴더를 옮기지 않았습니다.')
-    await expect(convertDialog(page)).toHaveCount(0)
-  })
 })
 
 test.describe('F-407 서버 금고로 옮기기', () => {
-  test('F-407 E3 서버 문서 — F-400 본문·백업 안내, PUT /e2ee 한 번, 두 번째 D-9 에는 백업 안내 없음', async ({ page }) => {
-    const { requests } = await openServerApp(page, {
-      docs: [serverDoc('sd1', { title: '서버 메모', content: '서버 본문\n' }), serverDoc('sd2', { title: '둘째 메모', content: '둘째\n' })],
+  test('F-407 E3·E4·E11·E9·E13 서버 문서·실시간 옮기기와 빼기·오프라인', async ({ page, context }) => {
+    test.setTimeout(120_000)
+    await test.step('F-407 E3 서버 문서 — F-400 본문·백업 안내, PUT /e2ee 한 번, 두 번째 D-9 에는 백업 안내 없음', async () => {
+      const { requests } = await openServerApp(page, {
+        docs: [serverDoc('sd1', { title: '서버 메모', content: '서버 본문\n' }), serverDoc('sd2', { title: '둘째 메모', content: '둘째\n' })],
+      })
+      await convertFromMenu(page, docRow(page, 'sd1'))
+      const dialog = convertDialog(page)
+      await expect(dialog).toContainText(`"서버 메모"${D9_SERVER_BODY}`)
+      await expect(dialog.locator('.e2ee-backup-notice')).toBeVisible()
+      await dialog.getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"서버 메모"을(를) 금고로 옮겼습니다.')
+
+      const puts = requests.filter((r) => r.method === 'PUT' && r.path === '/api/docs/sd1/e2ee')
+      expect(puts).toHaveLength(1)
+      expect(puts[0].body.e2eeKey).toHaveLength(56)
+      expect(puts[0].body.title).toMatch(BASE64_RE)
+      expect(puts[0].body.content).toMatch(BASE64_RE)
+      expect(await page.evaluate(() => localStorage.getItem('md.e2eeBackupNotice'))).toBe('1')
+
+      await convertFromMenu(page, docRow(page, 'sd2'))
+      await expect(convertDialog(page).locator('.e2ee-backup-notice')).toHaveCount(0)
+      await convertDialog(page).getByRole('button', { name: '취소', exact: true }).click()
     })
-    await convertFromMenu(page, docRow(page, 'sd1'))
-    const dialog = convertDialog(page)
-    await expect(dialog).toContainText(`"서버 메모"${D9_SERVER_BODY}`)
-    await expect(dialog.locator('.e2ee-backup-notice')).toBeVisible()
-    await dialog.getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"서버 메모"을(를) 금고로 옮겼습니다.')
+    await test.step('F-407 E4 평문 이미지 — 암호 PUT → 문서 PUT(새 id 참조) → 옛 첨부 DELETE, 옛 첨부 upload 없음', async () => {
+      await resetBrowserState(page)
+      const oldId = '00000000000000a1'
+      const png = decodablePng(20, 10)
+      const { requests } = await openServerApp(page, {
+        docs: [serverDoc('sd1', { title: '그림 메모', content: `그림\n\n![](attachments/${oldId}.png)\n` })],
+        attachments: { [`${oldId}.png`]: { mime: 'image/png', bytes: png, width: 20, height: 10 } },
+      })
+      await convertFromMenu(page, docRow(page, 'sd1'))
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"그림 메모"을(를) 금고로 옮겼습니다.')
 
-    const puts = requests.filter((r) => r.method === 'PUT' && r.path === '/api/docs/sd1/e2ee')
-    expect(puts).toHaveLength(1)
-    expect(puts[0].body.e2eeKey).toHaveLength(56)
-    expect(puts[0].body.title).toMatch(BASE64_RE)
-    expect(puts[0].body.content).toMatch(BASE64_RE)
-    expect(await page.evaluate(() => localStorage.getItem('md.e2eeBackupNotice'))).toBe('1')
-
-    await convertFromMenu(page, docRow(page, 'sd2'))
-    await expect(convertDialog(page).locator('.e2ee-backup-notice')).toHaveCount(0)
-    await convertDialog(page).getByRole('button', { name: '취소', exact: true }).click()
-  })
-
-  test('F-407 E4 평문 이미지 — 암호 PUT → 문서 PUT(새 id 참조) → 옛 첨부 DELETE, 옛 첨부 upload 없음', async ({ page }) => {
-    const oldId = '00000000000000a1'
-    const png = decodablePng(20, 10)
-    const { requests } = await openServerApp(page, {
-      docs: [serverDoc('sd1', { title: '그림 메모', content: `그림\n\n![](attachments/${oldId}.png)\n` })],
-      attachments: { [`${oldId}.png`]: { mime: 'image/png', bytes: png, width: 20, height: 10 } },
+      const writes = requests.filter(isConvertWrite)
+      expect(writes.map((r) => `${r.method} ${r.path.replace(/[0-9a-f]{16}/, 'ID')}`)).toEqual([
+        'PUT /api/attachments/ID.png',
+        'PUT /api/docs/sd1/e2ee',
+        'DELETE /api/attachments/ID.png',
+      ])
+      const newId = /([0-9a-f]{16})/.exec(writes[0].path)[1]
+      expect(newId).not.toBe(oldId)
+      expect(writes[0].search).toContain('e2ee=1')
+      expect(writes[1].body.attachmentRefs).toEqual([newId])
+      expect(writes[2].path).toBe(`/api/attachments/${oldId}.png`)
+      expect(requests.filter((r) => r.method === 'PUT' && r.path === `/api/attachments/${oldId}.png`)).toHaveLength(0)
     })
-    await convertFromMenu(page, docRow(page, 'sd1'))
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"그림 메모"을(를) 금고로 옮겼습니다.')
+    await test.step('F-407 E11 빼기 — 잠근 뒤 D-11 먼저, D-10 에 진짜 제목, 평문 PUT → 문서 PUT(키 null) → 옛 암호 첨부 DELETE', async () => {
+      await resetBrowserState(page)
+      const oldId = '00000000000000b1'
+      const png = decodablePng(20, 10)
+      const { requests } = await openServerApp(page, {
+        docs: [serverDoc('sd1', { title: '뺄 메모', content: `뺄 본문\n\n![](attachments/${oldId}.png)\n` })],
+        attachments: { [`${oldId}.png`]: { mime: 'image/png', bytes: png, width: 20, height: 10 } },
+      })
+      await convertFromMenu(page, docRow(page, 'sd1'))
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"뺄 메모"을(를) 금고로 옮겼습니다.')
+      const vaultId = /([0-9a-f]{16})/.exec(requests.filter(isConvertWrite)[0].path)[1]
 
-    const writes = requests.filter(isConvertWrite)
-    expect(writes.map((r) => `${r.method} ${r.path.replace(/[0-9a-f]{16}/, 'ID')}`)).toEqual([
-      'PUT /api/attachments/ID.png',
-      'PUT /api/docs/sd1/e2ee',
-      'DELETE /api/attachments/ID.png',
-    ])
-    const newId = /([0-9a-f]{16})/.exec(writes[0].path)[1]
-    expect(newId).not.toBe(oldId)
-    expect(writes[0].search).toContain('e2ee=1')
-    expect(writes[1].body.attachmentRefs).toEqual([newId])
-    expect(writes[2].path).toBe(`/api/attachments/${oldId}.png`)
-    expect(requests.filter((r) => r.method === 'PUT' && r.path === `/api/attachments/${oldId}.png`)).toHaveLength(0)
-  })
+      await page.locator('.statusbar-e2ee').click()
+      await expect(page.locator('.statusbar-e2ee')).toHaveCount(0)
+      const writesBefore = requests.length
 
-  test('F-407 E11 빼기 — 잠근 뒤 D-11 먼저, D-10 에 진짜 제목, 평문 PUT → 문서 PUT(키 null) → 옛 암호 첨부 DELETE', async ({ page }) => {
-    const oldId = '00000000000000b1'
-    const png = decodablePng(20, 10)
-    const { requests } = await openServerApp(page, {
-      docs: [serverDoc('sd1', { title: '뺄 메모', content: `뺄 본문\n\n![](attachments/${oldId}.png)\n` })],
-      attachments: { [`${oldId}.png`]: { mime: 'image/png', bytes: png, width: 20, height: 10 } },
+      const menu = await openMenuOf(page, docRow(page, 'sd1'))
+      await menu.getByRole('menuitem', { name: '금고에서 빼기…', exact: true }).click()
+      await expect(unlockDialog(page)).toBeVisible()
+      await unlockDialog(page).locator('input[type="password"]').fill(PASSWORD)
+      await unlockDialog(page).getByRole('button', { name: '열기', exact: true }).click()
+      await expect(convertDialog(page)).toContainText('"뺄 메모"을(를) 복호화해 일반 문서로 저장합니다. 서버가 내용을 읽을 수 있게 됩니다.')
+      await convertDialog(page).getByRole('button', { name: '빼기', exact: true }).click()
+      await expect(notice(page)).toHaveText('"뺄 메모"을(를) 금고에서 뺐습니다.')
+
+      const writes = requests.slice(writesBefore).filter(isConvertWrite)
+      expect(writes.map((r) => `${r.method} ${r.path.replace(/[0-9a-f]{16}/, 'ID')}`)).toEqual([
+        'PUT /api/attachments/ID.png',
+        'PUT /api/docs/sd1/e2ee',
+        'DELETE /api/attachments/ID.png',
+      ])
+      expect(writes[0].search).toBe('')
+      expect(writes[1].body.e2eeKey).toBeNull()
+      expect(writes[1].body.title).toBe('뺄 메모')
+      expect(writes[1].body.content).toContain('뺄 본문')
+      expect(writes[2].path).toBe(`/api/attachments/${vaultId}.png`)
+      await expect(docRow(page, 'sd1').locator('.tree-e2ee-icon')).toHaveCount(0)
     })
-    await convertFromMenu(page, docRow(page, 'sd1'))
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"뺄 메모"을(를) 금고로 옮겼습니다.')
-    const vaultId = /([0-9a-f]{16})/.exec(requests.filter(isConvertWrite)[0].path)[1]
-
-    await page.locator('.statusbar-e2ee').click()
-    await expect(page.locator('.statusbar-e2ee')).toHaveCount(0)
-    const writesBefore = requests.length
-
-    const menu = await openMenuOf(page, docRow(page, 'sd1'))
-    await menu.getByRole('menuitem', { name: '금고에서 빼기…', exact: true }).click()
-    await expect(unlockDialog(page)).toBeVisible()
-    await unlockDialog(page).locator('input[type="password"]').fill(PASSWORD)
-    await unlockDialog(page).getByRole('button', { name: '열기', exact: true }).click()
-    await expect(convertDialog(page)).toContainText('"뺄 메모"을(를) 복호화해 일반 문서로 저장합니다. 서버가 내용을 읽을 수 있게 됩니다.')
-    await convertDialog(page).getByRole('button', { name: '빼기', exact: true }).click()
-    await expect(notice(page)).toHaveText('"뺄 메모"을(를) 금고에서 뺐습니다.')
-
-    const writes = requests.slice(writesBefore).filter(isConvertWrite)
-    expect(writes.map((r) => `${r.method} ${r.path.replace(/[0-9a-f]{16}/, 'ID')}`)).toEqual([
-      'PUT /api/attachments/ID.png',
-      'PUT /api/docs/sd1/e2ee',
-      'DELETE /api/attachments/ID.png',
-    ])
-    expect(writes[0].search).toBe('')
-    expect(writes[1].body.e2eeKey).toBeNull()
-    expect(writes[1].body.title).toBe('뺄 메모')
-    expect(writes[1].body.content).toContain('뺄 본문')
-    expect(writes[2].path).toBe(`/api/attachments/${vaultId}.png`)
-    await expect(docRow(page, 'sd1').locator('.tree-e2ee-icon')).toHaveCount(0)
-  })
-
-  test('F-407 E5 폴더 — N1 문장, 깊은 폴더부터, 쓰기 사이 ≥ 550ms, 끝 알림', async ({ page }) => {
-    const t = Date.now()
-    const { server } = await openServerApp(page, {
-      folders: [serverFolder('fa', '바깥'), serverFolder('fb', '안쪽', 'fa')],
-      docs: [
-        serverDoc('b1', { title: '안1', folderId: 'fb', updatedAt: t - 1000 }),
-        serverDoc('b2', { title: '안2', folderId: 'fb', updatedAt: t - 2000 }),
-        serverDoc('a1', { title: '밖1', folderId: 'fa', updatedAt: t - 3000 }),
-      ],
+    await test.step('F-407 E9 오프라인 — 항목 aria-disabled, 누르면 E5, D-9 없음', async () => {
+      await resetBrowserState(page)
+      const { server } = await openServerApp(page, { docs: [serverDoc('sd1', { title: '끊긴 메모', content: '본문\n' })] })
+      await expect(docRow(page, 'sd1')).toBeVisible()
+      server.setOffline(true)
+      await context.setOffline(true)
+      const menu = await openMenuOf(page, docRow(page, 'sd1'))
+      const item = menu.getByRole('menuitem', { name: '금고로 옮기기…', exact: true })
+      await expect(item).toHaveAttribute('aria-disabled', 'true')
+      // aria-disabled 도 눌린다(F-407 3.4) — Playwright 는 aria-disabled 를 비활성으로 보고 기다리므로 강제로 누른다
+      await item.click({ force: true })
+      await expect(notice(page)).toHaveText(E5)
+      await expect(convertDialog(page)).toHaveCount(0)
+      await context.setOffline(false)
     })
-    await convertFromMenu(page, folderRow(page, '바깥'))
-    await expect(convertDialog(page).locator('.e2ee-convert-note').first()).toHaveText('폴더 안 문서 3개와 하위 폴더 1개를 함께 옮깁니다.')
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"바깥" 폴더를 금고로 옮겼습니다(문서 3개).', { timeout: 20_000 })
+    await test.step('F-407 E13 지금 열린 실시간 문서 — 친 글까지 봉투에 담기고, 사라짐 알림·새 소켓 없이 다시 열린다', async () => {
+      await resetBrowserState(page)
+      const room = createFakeDocRoom()
+      const server = await fakeServer(page)
+      await room.install(page.context())
+      await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) =>
+        route.request().method() === 'POST'
+          ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
+          : route.fulfill({ status: 204 }),
+      )
+      const base = '첫 줄\n'
+      server.docs.set('live1', serverDoc('live1', { title: '실시간 메모', content: base }))
+      room.seed('live1', { title: '실시간 메모', content: base })
+      const requests = collectRequests(page)
+      await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+      await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+      await recordNotices(page)
+      await page.goto('/#/d/live1')
+      await expect(page.locator('.cm-content').first()).toContainText('첫 줄')
 
-    const writes = server.writeRequests().filter((w) => /\/e2ee$/.test(w.path) || /^\/api\/folders\/[^/]+$/.test(w.path))
-    expect(writes.map((w) => w.path)).toEqual([
-      '/api/docs/b1/e2ee',
-      '/api/docs/b2/e2ee',
-      '/api/folders/fb',
-      '/api/docs/a1/e2ee',
-      '/api/folders/fa',
-    ])
-    for (let i = 1; i < writes.length; i++) expect(writes[i].at - writes[i - 1].at).toBeGreaterThanOrEqual(550)
-    expect(server.folders.get('fa').e2ee).toBe(true)
-    expect(server.folders.get('fb').e2ee).toBe(true)
-  })
+      await page.locator('.cm-content .cm-line', { hasText: '첫 줄' }).first().click()
+      await page.keyboard.press('End')
+      await page.keyboard.type(' 방금 친 글')
+      await expect.poll(() => room.content('live1')).toBe('첫 줄 방금 친 글\n')
+      await convertFromMenu(page, docRow(page, 'live1'))
+      // 옮기기 전 연결 수 — 옮긴 뒤 새 소켓이 열리지 않아야 한다
+      const attempts = room.attempts('live1')
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"실시간 메모"을(를) 금고로 옮겼습니다.')
 
-  test('F-407 E6 멈춤·이어 옮기기 — 둘째 PUT 500 에서 멈추고, 다시 누르면 남은 것만', async ({ page }) => {
-    const t = Date.now()
-    const { server } = await openServerApp(page, {
-      folders: [serverFolder('fa', '바깥'), serverFolder('fb', '안쪽', 'fa')],
-      docs: [
-        serverDoc('b1', { title: '안1', folderId: 'fb', updatedAt: t - 1000 }),
-        serverDoc('b2', { title: '안2', folderId: 'fb', updatedAt: t - 2000 }),
-        serverDoc('a1', { title: '밖1', folderId: 'fa', updatedAt: t - 3000 }),
-      ],
+      const put = requests.find((r) => r.method === 'PUT' && r.path === '/api/docs/live1/e2ee')
+      const typed = '첫 줄 방금 친 글\n'
+      const minEnvelope = 4 * Math.ceil((Buffer.byteLength(typed, 'utf-8') + 29) / 3)
+      expect(put.body.content.length).toBeGreaterThanOrEqual(minEnvelope)
+      await expect(page.locator('.cm-content').first()).toContainText('첫 줄 방금 친 글')
+      await page.waitForTimeout(1000)
+      expect(room.attempts('live1')).toBe(attempts)
+      const log = await noticeLog(page)
+      expect(log.some((m) => m.startsWith(LIVE_GONE))).toBe(false)
     })
-    let e2eePuts = 0
-    server.failWrites({ match: ({ method, path }) => method === 'PUT' && /\/e2ee$/.test(path) && ++e2eePuts === 2, status: 500, body: { error: 'internal' }, times: 1 })
-    await convertFromMenu(page, folderRow(page, '바깥'))
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('1/3개를 옮기고 멈췄습니다. 다시 누르면 남은 것부터 이어 옮깁니다. 저장하지 못했습니다.', { timeout: 20_000 })
-
-    await convertFromMenu(page, folderRow(page, '바깥'))
-    await expect(convertDialog(page).locator('.e2ee-convert-note').first()).toHaveText('폴더 안 문서 2개와 하위 폴더 1개를 함께 옮깁니다.')
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await expect(notice(page)).toHaveText('"바깥" 폴더를 금고로 옮겼습니다(문서 2개).', { timeout: 20_000 })
-    expect(server.folders.get('fa').e2ee).toBe(true)
-    expect(server.folders.get('fb').e2ee).toBe(true)
-    for (const id of ['a1', 'b1', 'b2']) expect(server.docs.get(id).e2eeKey).toHaveLength(56)
   })
 
-  test('F-407 E7 429 minute — 진행 알림이 2초 쉬었다가 같은 PUT 을 다시 보내 끝낸다, outbox 쪽 알림 없음', async ({ page }) => {
-    const { server } = await openServerApp(page, { docs: [serverDoc('sd1', { title: '느린 메모', content: '본문\n' })] })
-    server.failWrites({
-      match: ({ method, path }) => method === 'PUT' && /\/e2ee$/.test(path),
-      status: 429,
-      body: { error: 'rate_limited', scope: 'minute', limit: 120, retryAfter: 2 },
-      headers: { 'Retry-After': '2' },
-      times: 1,
+  test('F-407 E5·E6·E7·E8·E12·E14 서버 폴더 — 순서·멈춤·429·빼기·멈추기', async ({ page }) => {
+    test.setTimeout(180_000)
+    await test.step('F-407 E5 폴더 — N1 문장, 깊은 폴더부터, 쓰기 사이 ≥ 550ms, 끝 알림', async () => {
+      const t = Date.now()
+      const { server } = await openServerApp(page, {
+        folders: [serverFolder('fa', '바깥'), serverFolder('fb', '안쪽', 'fa')],
+        docs: [
+          serverDoc('b1', { title: '안1', folderId: 'fb', updatedAt: t - 1000 }),
+          serverDoc('b2', { title: '안2', folderId: 'fb', updatedAt: t - 2000 }),
+          serverDoc('a1', { title: '밖1', folderId: 'fa', updatedAt: t - 3000 }),
+        ],
+      })
+      await convertFromMenu(page, folderRow(page, '바깥'))
+      await expect(convertDialog(page).locator('.e2ee-convert-note').first()).toHaveText('폴더 안 문서 3개와 하위 폴더 1개를 함께 옮깁니다.')
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"바깥" 폴더를 금고로 옮겼습니다(문서 3개).', { timeout: 20_000 })
+
+      const writes = server.writeRequests().filter((w) => /\/e2ee$/.test(w.path) || /^\/api\/folders\/[^/]+$/.test(w.path))
+      expect(writes.map((w) => w.path)).toEqual([
+        '/api/docs/b1/e2ee',
+        '/api/docs/b2/e2ee',
+        '/api/folders/fb',
+        '/api/docs/a1/e2ee',
+        '/api/folders/fa',
+      ])
+      for (let i = 1; i < writes.length; i++) expect(writes[i].at - writes[i - 1].at).toBeGreaterThanOrEqual(550)
+      expect(server.folders.get('fa').e2ee).toBe(true)
+      expect(server.folders.get('fb').e2ee).toBe(true)
     })
-    await convertFromMenu(page, docRow(page, 'sd1'))
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"느린 메모"을(를) 금고로 옮겼습니다.', { timeout: 15_000 })
-    const log = await noticeLog(page)
-    expect(log.some((m) => m.endsWith('요청이 많아 2초 쉬었다가 이어 갑니다.'))).toBe(true)
-    expect(log).not.toContain(OUTBOX_RATE_NOTICE)
-    expect(server.writeRequests().filter((w) => w.path === '/api/docs/sd1/e2ee')).toHaveLength(2)
-  })
+    await test.step('F-407 E6 멈춤·이어 옮기기 — 둘째 PUT 500 에서 멈추고, 다시 누르면 남은 것만', async () => {
+      await resetBrowserState(page)
+      const t = Date.now()
+      const { server } = await openServerApp(page, {
+        folders: [serverFolder('fa', '바깥'), serverFolder('fb', '안쪽', 'fa')],
+        docs: [
+          serverDoc('b1', { title: '안1', folderId: 'fb', updatedAt: t - 1000 }),
+          serverDoc('b2', { title: '안2', folderId: 'fb', updatedAt: t - 2000 }),
+          serverDoc('a1', { title: '밖1', folderId: 'fa', updatedAt: t - 3000 }),
+        ],
+      })
+      let e2eePuts = 0
+      server.failWrites({ match: ({ method, path }) => method === 'PUT' && /\/e2ee$/.test(path) && ++e2eePuts === 2, status: 500, body: { error: 'internal' }, times: 1 })
+      await convertFromMenu(page, folderRow(page, '바깥'))
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('1/3개를 옮기고 멈췄습니다. 다시 누르면 남은 것부터 이어 옮깁니다. 저장하지 못했습니다.', { timeout: 20_000 })
 
-  test('F-407 E8 429 day — 멈춤 + R2, PUT 을 다시 보내지 않는다', async ({ page }) => {
-    const { server } = await openServerApp(page, { docs: [serverDoc('sd1', { title: '한도 메모', content: '본문\n' })] })
-    server.failWrites({
-      match: ({ method, path }) => method === 'PUT' && /\/e2ee$/.test(path),
-      status: 429,
-      body: { error: 'rate_limited', scope: 'day', limit: 5000, retryAfter: 3600 },
-      headers: { 'Retry-After': '3600' },
-      times: 1,
+      await convertFromMenu(page, folderRow(page, '바깥'))
+      await expect(convertDialog(page).locator('.e2ee-convert-note').first()).toHaveText('폴더 안 문서 2개와 하위 폴더 1개를 함께 옮깁니다.')
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await expect(notice(page)).toHaveText('"바깥" 폴더를 금고로 옮겼습니다(문서 2개).', { timeout: 20_000 })
+      expect(server.folders.get('fa').e2ee).toBe(true)
+      expect(server.folders.get('fb').e2ee).toBe(true)
+      for (const id of ['a1', 'b1', 'b2']) expect(server.docs.get(id).e2eeKey).toHaveLength(56)
     })
-    await convertFromMenu(page, docRow(page, 'sd1'))
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toContainText('0/1개를 옮기고 멈췄습니다. 다시 누르면 남은 것부터 이어 옮깁니다. 오늘 저장 한도에 닿았습니다.')
-    await expect(notice(page)).toContainText('부터 다시 누를 수 있습니다.')
-    await page.waitForTimeout(1500)
-    expect(server.writeRequests().filter((w) => w.path === '/api/docs/sd1/e2ee')).toHaveLength(1)
-  })
-
-  test('F-407 E9 오프라인 — 항목 aria-disabled, 누르면 E5, D-9 없음', async ({ page, context }) => {
-    const { server } = await openServerApp(page, { docs: [serverDoc('sd1', { title: '끊긴 메모', content: '본문\n' })] })
-    await expect(docRow(page, 'sd1')).toBeVisible()
-    server.setOffline(true)
-    await context.setOffline(true)
-    const menu = await openMenuOf(page, docRow(page, 'sd1'))
-    const item = menu.getByRole('menuitem', { name: '금고로 옮기기…', exact: true })
-    await expect(item).toHaveAttribute('aria-disabled', 'true')
-    // aria-disabled 도 눌린다(F-407 3.4) — Playwright 는 aria-disabled 를 비활성으로 보고 기다리므로 강제로 누른다
-    await item.click({ force: true })
-    await expect(notice(page)).toHaveText(E5)
-    await expect(convertDialog(page)).toHaveCount(0)
-    await context.setOffline(false)
-  })
-
-  test('F-407 E12 폴더 빼기 — 바깥부터 끄고 문서들, 안쪽 폴더 메뉴엔 없음, 안쪽 문서는 비활성 + E42', async ({ page }) => {
-    const t = Date.now()
-    const { requests } = await openServerApp(page, {
-      folders: [serverFolder('fa', '바깥'), serverFolder('fb', '안쪽', 'fa')],
-      docs: [serverDoc('b1', { title: '안1', folderId: 'fb', updatedAt: t - 1000 }), serverDoc('a1', { title: '밖1', folderId: 'fa', updatedAt: t - 2000 })],
+    await test.step('F-407 E7 429 minute — 진행 알림이 2초 쉬었다가 같은 PUT 을 다시 보내 끝낸다, outbox 쪽 알림 없음', async () => {
+      await resetBrowserState(page)
+      const { server } = await openServerApp(page, { docs: [serverDoc('sd1', { title: '느린 메모', content: '본문\n' })] })
+      server.failWrites({
+        match: ({ method, path }) => method === 'PUT' && /\/e2ee$/.test(path),
+        status: 429,
+        body: { error: 'rate_limited', scope: 'minute', limit: 120, retryAfter: 2 },
+        headers: { 'Retry-After': '2' },
+        times: 1,
+      })
+      await convertFromMenu(page, docRow(page, 'sd1'))
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"느린 메모"을(를) 금고로 옮겼습니다.', { timeout: 15_000 })
+      const log = await noticeLog(page)
+      expect(log.some((m) => m.endsWith('요청이 많아 2초 쉬었다가 이어 갑니다.'))).toBe(true)
+      expect(log).not.toContain(OUTBOX_RATE_NOTICE)
+      expect(server.writeRequests().filter((w) => w.path === '/api/docs/sd1/e2ee')).toHaveLength(2)
     })
-    await convertFromMenu(page, folderRow(page, '바깥'))
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"바깥" 폴더를 금고로 옮겼습니다(문서 2개).', { timeout: 20_000 })
-
-    await expandFolder(page, '바깥')
-    await expandFolder(page, '안쪽')
-    const innerMenu = await openMenuOf(page, folderRow(page, '안쪽'))
-    await expect(innerMenu.getByRole('menuitem', { name: '금고에서 빼기…', exact: true })).toHaveCount(0)
-    await page.keyboard.press('Escape')
-    const docMenu = await openMenuOf(page, docRow(page, 'b1'))
-    const disabledItem = docMenu.getByRole('menuitem', { name: '금고에서 빼기…', exact: true })
-    await expect(disabledItem).toHaveAttribute('aria-disabled', 'true')
-    await disabledItem.click({ force: true })
-    await expect(notice(page)).toHaveText(E42)
-
-    const before = requests.length
-    await convertFromMenu(page, folderRow(page, '바깥'), '금고에서 빼기…')
-    await convertDialog(page).getByRole('button', { name: '빼기', exact: true }).click()
-    await expect(notice(page)).toHaveText('"바깥" 폴더를 금고에서 뺐습니다(문서 2개).', { timeout: 20_000 })
-    const writes = requests.slice(before).filter(isConvertWrite)
-    expect(writes.slice(0, 2).map((r) => [r.path, r.body.e2ee])).toEqual([
-      ['/api/folders/fa', false],
-      ['/api/folders/fb', false],
-    ])
-    expect(writes.slice(2).map((r) => r.path).sort()).toEqual(['/api/docs/a1/e2ee', '/api/docs/b1/e2ee'])
-  })
-
-  test('F-407 E14 멈추기 — 진행 알림의 멈추기, 그 뒤 PUT /e2ee 가 더 나가지 않는다', async ({ page }) => {
-    const t = Date.now()
-    const { server } = await openServerApp(page, {
-      folders: [serverFolder('fa', '다섯')],
-      docs: [1, 2, 3, 4, 5].map((n) => serverDoc(`d${n}`, { title: `문서${n}`, folderId: 'fa', updatedAt: t - n * 1000 })),
+    await test.step('F-407 E8 429 day — 멈춤 + R2, PUT 을 다시 보내지 않는다', async () => {
+      await resetBrowserState(page)
+      const { server } = await openServerApp(page, { docs: [serverDoc('sd1', { title: '한도 메모', content: '본문\n' })] })
+      server.failWrites({
+        match: ({ method, path }) => method === 'PUT' && /\/e2ee$/.test(path),
+        status: 429,
+        body: { error: 'rate_limited', scope: 'day', limit: 5000, retryAfter: 3600 },
+        headers: { 'Retry-After': '3600' },
+        times: 1,
+      })
+      await convertFromMenu(page, docRow(page, 'sd1'))
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toContainText('0/1개를 옮기고 멈췄습니다. 다시 누르면 남은 것부터 이어 옮깁니다. 오늘 저장 한도에 닿았습니다.')
+      await expect(notice(page)).toContainText('부터 다시 누를 수 있습니다.')
+      await page.waitForTimeout(1500)
+      expect(server.writeRequests().filter((w) => w.path === '/api/docs/sd1/e2ee')).toHaveLength(1)
     })
-    await convertFromMenu(page, folderRow(page, '다섯'))
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toContainText('금고로 옮기는 중…')
-    await page.locator('.notice:not([inert])').getByRole('button', { name: '멈추기', exact: true }).click()
-    await expect(page.locator('.notice--info .notice-message')).toContainText('개를 옮기고 멈췄습니다. 다시 누르면 남은 것부터 이어 옮깁니다.')
-    const count = server.writeRequests().filter((w) => /\/e2ee$/.test(w.path)).length
-    expect(count).toBeLessThan(5)
-    await page.waitForTimeout(1500)
-    expect(server.writeRequests().filter((w) => /\/e2ee$/.test(w.path))).toHaveLength(count)
+    await test.step('F-407 E12 폴더 빼기 — 바깥부터 끄고 문서들, 안쪽 폴더 메뉴엔 없음, 안쪽 문서는 비활성 + E42', async () => {
+      await resetBrowserState(page)
+      const t = Date.now()
+      const { requests } = await openServerApp(page, {
+        folders: [serverFolder('fa', '바깥'), serverFolder('fb', '안쪽', 'fa')],
+        docs: [serverDoc('b1', { title: '안1', folderId: 'fb', updatedAt: t - 1000 }), serverDoc('a1', { title: '밖1', folderId: 'fa', updatedAt: t - 2000 })],
+      })
+      await convertFromMenu(page, folderRow(page, '바깥'))
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"바깥" 폴더를 금고로 옮겼습니다(문서 2개).', { timeout: 20_000 })
+
+      await expandFolder(page, '바깥')
+      await expandFolder(page, '안쪽')
+      const innerMenu = await openMenuOf(page, folderRow(page, '안쪽'))
+      await expect(innerMenu.getByRole('menuitem', { name: '금고에서 빼기…', exact: true })).toHaveCount(0)
+      await page.keyboard.press('Escape')
+      const docMenu = await openMenuOf(page, docRow(page, 'b1'))
+      const disabledItem = docMenu.getByRole('menuitem', { name: '금고에서 빼기…', exact: true })
+      await expect(disabledItem).toHaveAttribute('aria-disabled', 'true')
+      await disabledItem.click({ force: true })
+      await expect(notice(page)).toHaveText(E42)
+
+      const before = requests.length
+      await convertFromMenu(page, folderRow(page, '바깥'), '금고에서 빼기…')
+      await convertDialog(page).getByRole('button', { name: '빼기', exact: true }).click()
+      await expect(notice(page)).toHaveText('"바깥" 폴더를 금고에서 뺐습니다(문서 2개).', { timeout: 20_000 })
+      const writes = requests.slice(before).filter(isConvertWrite)
+      expect(writes.slice(0, 2).map((r) => [r.path, r.body.e2ee])).toEqual([
+        ['/api/folders/fa', false],
+        ['/api/folders/fb', false],
+      ])
+      expect(writes.slice(2).map((r) => r.path).sort()).toEqual(['/api/docs/a1/e2ee', '/api/docs/b1/e2ee'])
+    })
+    await test.step('F-407 E14 멈추기 — 진행 알림의 멈추기, 그 뒤 PUT /e2ee 가 더 나가지 않는다', async () => {
+      await resetBrowserState(page)
+      const t = Date.now()
+      const { server } = await openServerApp(page, {
+        folders: [serverFolder('fa', '다섯')],
+        docs: [1, 2, 3, 4, 5].map((n) => serverDoc(`d${n}`, { title: `문서${n}`, folderId: 'fa', updatedAt: t - n * 1000 })),
+      })
+      await convertFromMenu(page, folderRow(page, '다섯'))
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toContainText('금고로 옮기는 중…')
+      await page.locator('.notice:not([inert])').getByRole('button', { name: '멈추기', exact: true }).click()
+      await expect(page.locator('.notice--info .notice-message')).toContainText('개를 옮기고 멈췄습니다. 다시 누르면 남은 것부터 이어 옮깁니다.')
+      const count = server.writeRequests().filter((w) => /\/e2ee$/.test(w.path)).length
+      expect(count).toBeLessThan(5)
+      await page.waitForTimeout(1500)
+      expect(server.writeRequests().filter((w) => /\/e2ee$/.test(w.path))).toHaveLength(count)
+    })
   })
+
 })
 
 // md-yjs 가 아직 없으면 -1 (offlineDoc.spec.js 와 같은 준비, F-2041 9.2)
@@ -573,46 +616,6 @@ async function yjsRowCount(page, docId) {
 }
 
 test.describe('F-407 실시간 문서 옮기기', () => {
-  test('F-407 E13 지금 열린 실시간 문서 — 친 글까지 봉투에 담기고, 사라짐 알림·새 소켓 없이 다시 열린다', async ({ page }) => {
-    const room = createFakeDocRoom()
-    const server = await fakeServer(page)
-    await room.install(page.context())
-    await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) =>
-      route.request().method() === 'POST'
-        ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
-        : route.fulfill({ status: 204 }),
-    )
-    const base = '첫 줄\n'
-    server.docs.set('live1', serverDoc('live1', { title: '실시간 메모', content: base }))
-    room.seed('live1', { title: '실시간 메모', content: base })
-    const requests = collectRequests(page)
-    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
-    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
-    await recordNotices(page)
-    await page.goto('/#/d/live1')
-    await expect(page.locator('.cm-content').first()).toContainText('첫 줄')
-
-    await page.locator('.cm-content .cm-line', { hasText: '첫 줄' }).first().click()
-    await page.keyboard.press('End')
-    await page.keyboard.type(' 방금 친 글')
-    await expect.poll(() => room.content('live1')).toBe('첫 줄 방금 친 글\n')
-    await convertFromMenu(page, docRow(page, 'live1'))
-    // 옮기기 전 연결 수 — 옮긴 뒤 새 소켓이 열리지 않아야 한다
-    const attempts = room.attempts('live1')
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"실시간 메모"을(를) 금고로 옮겼습니다.')
-
-    const put = requests.find((r) => r.method === 'PUT' && r.path === '/api/docs/live1/e2ee')
-    const typed = '첫 줄 방금 친 글\n'
-    const minEnvelope = 4 * Math.ceil((Buffer.byteLength(typed, 'utf-8') + 29) / 3)
-    expect(put.body.content.length).toBeGreaterThanOrEqual(minEnvelope)
-    await expect(page.locator('.cm-content').first()).toContainText('첫 줄 방금 친 글')
-    await page.waitForTimeout(1000)
-    expect(room.attempts('live1')).toBe(attempts)
-    const log = await noticeLog(page)
-    expect(log.some((m) => m.startsWith(LIVE_GONE))).toBe(false)
-  })
 
   test('F-2041 E7 연결 중… 에서는 금고로 옮기기가 멈추고(pending-sync), resume 뒤 다시 누르면 옮겨진다', async ({ page }) => {
     const room = createFakeDocRoom()
@@ -724,110 +727,135 @@ async function expectNoCommentUi(page) {
 }
 
 test.describe('F-509 서버 — D-9 댓글 수', () => {
-  test('F-509 E1 폴더 — d1·d2 수를 물어 합, 쓰기 기록에 섞이지 않는다', async ({ page }) => {
-    const { server } = await openServerApp(page, {
-      folders: [serverFolder('fa', 'A')],
-      docs: [serverDoc('d1', { title: '메모1', folderId: 'fa' }), serverDoc('d2', { title: '메모2', folderId: 'fa' })],
+  test('F-509 E1·E2·E3 서버 D-9 댓글 수', async ({ page }) => {
+    test.setTimeout(90_000)
+    await test.step('F-509 E1 폴더 — d1·d2 수를 물어 합, 쓰기 기록에 섞이지 않는다', async () => {
+      const { server } = await openServerApp(page, {
+        folders: [serverFolder('fa', 'A')],
+        docs: [serverDoc('d1', { title: '메모1', folderId: 'fa' }), serverDoc('d2', { title: '메모2', folderId: 'fa' })],
+      })
+      server.setCommentCount('d1', 3)
+      server.setCommentCount('d2', 2)
+      await convertFromMenu(page, folderRow(page, 'A'))
+      await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글 5개도 함께 지워집니다.')
+      expect(server.commentCountRequests().sort()).toEqual(['d1', 'd2'])
+
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"A" 폴더를 금고로 옮겼습니다(문서 2개).', { timeout: 20_000 })
+      expect(server.writeRequests().some((w) => /\/comments\/count$/.test(w.path))).toBe(false)
     })
-    server.setCommentCount('d1', 3)
-    server.setCommentCount('d2', 2)
-    await convertFromMenu(page, folderRow(page, 'A'))
-    await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글 5개도 함께 지워집니다.')
-    expect(server.commentCountRequests().sort()).toEqual(['d1', 'd2'])
+    await test.step('F-509 E2 세기 0·실패 — 옮기기를 막지 않는다', async () => {
+      await resetBrowserState(page)
+      const { server } = await openServerApp(page, { docs: [serverDoc('sd1', { title: '메모', content: '본문\n' })] })
+      server.setCommentCount('sd1', 0)
+      await convertFromMenu(page, docRow(page, 'sd1'))
+      await expect.poll(() => server.commentCountRequests()).toContain('sd1')
+      await expect(convertDialog(page).locator('.e2ee-convert-note', { hasText: '댓글' })).toHaveCount(0)
+      await convertDialog(page).getByRole('button', { name: '취소', exact: true }).click()
+      await expect(convertDialog(page)).toBeHidden()
 
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"A" 폴더를 금고로 옮겼습니다(문서 2개).', { timeout: 20_000 })
-    expect(server.writeRequests().some((w) => /\/comments\/count$/.test(w.path))).toBe(false)
+      server.setCommentCount('sd1', { status: 500, body: { error: 'internal' } })
+      await convertFromMenu(page, docRow(page, 'sd1'))
+      await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글이 있다면 함께 지워집니다.')
+      await expect(convertDialog(page).getByRole('button', { name: '옮기기', exact: true })).toBeEnabled()
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"메모"을(를) 금고로 옮겼습니다.')
+    })
+    await test.step('F-509 E3 실시간 — 편집기 수(첫 댓글 + 답글)가 쓰이고, 옮긴 뒤 댓글 UI 없음', async () => {
+      await resetBrowserState(page)
+      const DOC = 'commented-doc'
+      const room = createFakeDocRoom()
+      const server = await fakeServer(page)
+      await room.install(page.context())
+      server.docs.set(DOC, serverDoc(DOC, { title: '함께 쓰는 문서', content: F509_CONTENT }))
+      room.seed(DOC, { content: F509_CONTENT, title: '함께 쓰는 문서' })
+      const cat = F509_CONTENT.indexOf('고양이')
+      room.putComment(DOC, 't1', { from: cat, to: cat + 3, body: '서버 댓글' })
+      room.putComment(DOC, 'r1', { from: cat, to: cat + 3, body: '답글', parent: 't1' })
+      await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+      await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+      await setPrefBeforeLoad(page, 'md.commentRail', 'open')
+      await recordNotices(page)
+      await page.goto(`/#/d/${DOC}`)
+      await expect(page.locator('.comment-thread[data-thread-id="t1"]')).toBeVisible()
+
+      await convertFromMenu(page, docRow(page, DOC))
+      await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글 2개도 함께 지워집니다.')
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"함께 쓰는 문서"을(를) 금고로 옮겼습니다.')
+      await expect(docRow(page, DOC).locator('.tree-e2ee-icon')).toBeVisible()
+
+      await expectNoCommentUi(page)
+      const log = await noticeLog(page)
+      expect(log.some((m) => m.startsWith(LIVE_GONE))).toBe(false)
+    })
   })
 
-  test('F-509 E2 세기 0·실패 — 옮기기를 막지 않는다', async ({ page }) => {
-    const { server } = await openServerApp(page, { docs: [serverDoc('sd1', { title: '메모', content: '본문\n' })] })
-    server.setCommentCount('sd1', 0)
-    await convertFromMenu(page, docRow(page, 'sd1'))
-    await expect.poll(() => server.commentCountRequests()).toContain('sd1')
-    await expect(convertDialog(page).locator('.e2ee-convert-note', { hasText: '댓글' })).toHaveCount(0)
-    await convertDialog(page).getByRole('button', { name: '취소', exact: true }).click()
-    await expect(convertDialog(page)).toBeHidden()
-
-    server.setCommentCount('sd1', { status: 500, body: { error: 'internal' } })
-    await convertFromMenu(page, docRow(page, 'sd1'))
-    await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글이 있다면 함께 지워집니다.')
-    await expect(convertDialog(page).getByRole('button', { name: '옮기기', exact: true })).toBeEnabled()
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"메모"을(를) 금고로 옮겼습니다.')
-  })
-
-  test('F-509 E3 실시간 — 편집기 수(첫 댓글 + 답글)가 쓰이고, 옮긴 뒤 댓글 UI 없음', async ({ page }) => {
-    const DOC = 'commented-doc'
-    const room = createFakeDocRoom()
-    const server = await fakeServer(page)
-    await room.install(page.context())
-    server.docs.set(DOC, serverDoc(DOC, { title: '함께 쓰는 문서', content: F509_CONTENT }))
-    room.seed(DOC, { content: F509_CONTENT, title: '함께 쓰는 문서' })
-    const cat = F509_CONTENT.indexOf('고양이')
-    room.putComment(DOC, 't1', { from: cat, to: cat + 3, body: '서버 댓글' })
-    room.putComment(DOC, 'r1', { from: cat, to: cat + 3, body: '답글', parent: 't1' })
-    await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
-    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
-    await setPrefBeforeLoad(page, 'md.commentRail', 'open')
-    await recordNotices(page)
-    await page.goto(`/#/d/${DOC}`)
-    await expect(page.locator('.comment-thread[data-thread-id="t1"]')).toBeVisible()
-
-    await convertFromMenu(page, docRow(page, DOC))
-    await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글 2개도 함께 지워집니다.')
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"함께 쓰는 문서"을(를) 금고로 옮겼습니다.')
-    await expect(docRow(page, DOC).locator('.tree-e2ee-icon')).toBeVisible()
-
-    await expectNoCommentUi(page)
-    const log = await noticeLog(page)
-    expect(log.some((m) => m.startsWith(LIVE_GONE))).toBe(false)
-  })
 })
 
 test.describe('F-509 로컬 — 댓글 달린 문서를 옮기기·빼기', () => {
-  test('F-509 E4 로컬 문서 — 댓글 1개, 옮긴 뒤 기록 없음·댓글 UI 없음', async ({ page }) => {
-    await setPrefBeforeLoad(page, 'md.commentRail', 'open')
-    await openApp(page)
-    const id = await importMarkdown(page, { name: '댓글 문서.md', content: F509_CONTENT })
-    await f509SelectCat(page)
-    await f509AddComment(page, '댓글')
-    await waitSaved(page)
+  test('F-509 E4·E6 로컬 댓글 달린 문서 옮기기', async ({ page }) => {
+    test.setTimeout(60_000)
+    await test.step('F-509 E4 로컬 문서 — 댓글 1개, 옮긴 뒤 기록 없음·댓글 UI 없음', async () => {
+      await setPrefBeforeLoad(page, 'md.commentRail', 'open')
+      await openApp(page)
+      const id = await importMarkdown(page, { name: '댓글 문서.md', content: F509_CONTENT })
+      await f509SelectCat(page)
+      await f509AddComment(page, '댓글')
+      await waitSaved(page)
 
-    await convertFromMenu(page, docRow(page, id))
-    await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글 1개도 함께 지워집니다.')
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"댓글 문서"을(를) 금고로 옮겼습니다.')
+      await convertFromMenu(page, docRow(page, id))
+      await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글 1개도 함께 지워집니다.')
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"댓글 문서"을(를) 금고로 옮겼습니다.')
 
-    expect(await readIdb(page, 'md-docs', 'comments', id)).toBeNull()
-    await expect(page.locator('.comment-rail')).toHaveCount(0)
-    await expect(page.locator('.comment-thread')).toHaveCount(0)
-    await expect(page.locator('.cm-comment-anchor')).toHaveCount(0)
-    const box = await page.locator('.cm-content').first().boundingBox()
-    await page.mouse.click(box.x + 5, box.y + 5, { button: 'right' })
-    await expect(page.getByRole('menuitem', { name: '댓글 달기' })).toHaveCount(0)
-    await page.keyboard.press('Escape')
+      expect(await readIdb(page, 'md-docs', 'comments', id)).toBeNull()
+      await expect(page.locator('.comment-rail')).toHaveCount(0)
+      await expect(page.locator('.comment-thread')).toHaveCount(0)
+      await expect(page.locator('.cm-comment-anchor')).toHaveCount(0)
+      const box = await page.locator('.cm-content').first().boundingBox()
+      await page.mouse.click(box.x + 5, box.y + 5, { button: 'right' })
+      await expect(page.getByRole('menuitem', { name: '댓글 달기' })).toHaveCount(0)
+      await page.keyboard.press('Escape')
 
-    // F-509 E5 — 금고에서 빼면 댓글이 돌아오지 않는다(빈 레일), 다시 불러와도 같다
-    const menu = await openMenuOf(page, docRow(page, id))
-    await menu.getByRole('menuitem', { name: '금고에서 빼기…', exact: true }).click()
-    if (await unlockDialog(page).isVisible()) {
-      await unlockDialog(page).locator('input[type="password"]').fill(PASSWORD)
-      await unlockDialog(page).getByRole('button', { name: '열기', exact: true }).click()
-    }
-    await expect(convertDialog(page)).toBeVisible()
-    await convertDialog(page).getByRole('button', { name: '빼기', exact: true }).click()
-    await expect(notice(page)).toHaveText('"댓글 문서"을(를) 금고에서 뺐습니다.')
+      // F-509 E5 — 금고에서 빼면 댓글이 돌아오지 않는다(빈 레일), 다시 불러와도 같다
+      const menu = await openMenuOf(page, docRow(page, id))
+      await menu.getByRole('menuitem', { name: '금고에서 빼기…', exact: true }).click()
+      if (await unlockDialog(page).isVisible()) {
+        await unlockDialog(page).locator('input[type="password"]').fill(PASSWORD)
+        await unlockDialog(page).getByRole('button', { name: '열기', exact: true }).click()
+      }
+      await expect(convertDialog(page)).toBeVisible()
+      await convertDialog(page).getByRole('button', { name: '빼기', exact: true }).click()
+      await expect(notice(page)).toHaveText('"댓글 문서"을(를) 금고에서 뺐습니다.')
 
-    await page.reload()
-    await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
-    await expect(page.locator('.comment-rail-empty')).toHaveText('이 문서에 댓글이 없습니다. 본문을 선택하고 댓글을 달아 보세요.', { timeout: 10_000 })
-    await expect(page.locator('.comment-thread')).toHaveCount(0)
+      await page.reload()
+      await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
+      await expect(page.locator('.comment-rail-empty')).toHaveText('이 문서에 댓글이 없습니다. 본문을 선택하고 댓글을 달아 보세요.', { timeout: 10_000 })
+      await expect(page.locator('.comment-thread')).toHaveCount(0)
+    })
+    await test.step('F-509 E6 로컬 — 열지 않은 문서는 기록 수로 센다, 옮긴 뒤 그 문서의 기록 없음', async () => {
+      await resetBrowserState(page)
+      await openApp(page)
+      const x = await importMarkdown(page, { name: 'X.md', content: F509_CONTENT })
+      await f509SelectCat(page)
+      await f509AddComment(page, '댓글')
+      await waitSaved(page)
+      const y = await importMarkdown(page, { name: 'Y.md', content: '다른 문서\n' })
+      expect(await currentDocId(page)).toBe(y)
+
+      await convertFromMenu(page, docRow(page, x))
+      await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글 1개도 함께 지워집니다.')
+      await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
+      await completeCreateVault(page)
+      await expect(notice(page)).toHaveText('"X"을(를) 금고로 옮겼습니다.')
+
+      expect(await readIdb(page, 'md-docs', 'comments', x)).toBeNull()
+    })
   })
 
   test('F-509 회귀 로컬 — 옮긴 뒤 같은 세션에서 빼면 새로고침 없이 레일이 빈 목록으로 뜬다', async ({ page }) => {
@@ -854,21 +882,4 @@ test.describe('F-509 로컬 — 댓글 달린 문서를 옮기기·빼기', () =
     await expect(page.locator('.comment-thread')).toHaveCount(0)
   })
 
-  test('F-509 E6 로컬 — 열지 않은 문서는 기록 수로 센다, 옮긴 뒤 그 문서의 기록 없음', async ({ page }) => {
-    await openApp(page)
-    const x = await importMarkdown(page, { name: 'X.md', content: F509_CONTENT })
-    await f509SelectCat(page)
-    await f509AddComment(page, '댓글')
-    await waitSaved(page)
-    const y = await importMarkdown(page, { name: 'Y.md', content: '다른 문서\n' })
-    expect(await currentDocId(page)).toBe(y)
-
-    await convertFromMenu(page, docRow(page, x))
-    await expect(convertDialog(page).locator('.e2ee-convert-note').last()).toHaveText('댓글 1개도 함께 지워집니다.')
-    await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    await completeCreateVault(page)
-    await expect(notice(page)).toHaveText('"X"을(를) 금고로 옮겼습니다.')
-
-    expect(await readIdb(page, 'md-docs', 'comments', x)).toBeNull()
-  })
 })

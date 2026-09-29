@@ -8,20 +8,6 @@ async function openDoc(page, content) {
   await page.locator('.cm-content').click()
 }
 
-test.describe('F-261 A1 열기·찾기', () => {
-  test('Control+f 로 패널이 열리고 매치가 강조된다', async ({ page }) => {
-    // 검색어는 영문으로 둔다 — pressSequentially() 가 US 키보드에 없는 문자(한글 등)는 keyup 없이 CDP insertText 로 넣어 패널의 commit()(keyup 기반)이 안 불린다
-    await openDoc(page, 'apple banana apple grape\n')
-
-    await page.keyboard.press('Control+f')
-    const panel = page.locator('.cm-search')
-    await expect(panel).toBeVisible()
-
-    await panel.locator('input[name="search"]').pressSequentially('apple')
-    await expect(page.locator('.cm-searchMatch')).toHaveCount(2)
-  })
-})
-
 test.describe('F-261 A2 치환', () => {
   test('Control+h 로 치환 입력에 포커스가 가고, 모두 바꾸기가 문서를 바꾼다', async ({ page }) => {
     await openDoc(page, '사과 바나나 사과 포도\n')

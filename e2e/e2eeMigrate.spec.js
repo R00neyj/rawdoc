@@ -1,7 +1,7 @@
 // 금고 로그인 이관 — E9 알림·D-14·adopt·rewrap (specs/features/F-408.md 7.2)
 import { test, expect } from '@playwright/test'
 import zlib from 'node:zlib'
-import { openApp as openAppRaw, openAppHome, setPrefBeforeLoad, currentDocId, importMarkdown, waitSaved } from './helpers.js'
+import { openApp as openAppRaw, openAppHome, setPrefBeforeLoad, currentDocId, importMarkdown, waitSaved, resetBrowserState } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const SETTINGS_DIALOG_SELECTOR = 'dialog[aria-labelledby="settings-title"]'
@@ -250,33 +250,57 @@ async function captureAccountBundle(browser, password) {
 }
 
 test.describe('F-408 E1·E2 알림 — 나중에는 기억하지 않는다', () => {
-  test('로그인하면 E9 알림이 뜨고 나중에를 누르면 다음 부팅에 다시 묻는다', async ({ page }) => {
-    await page.route('**/api/me', (route) => route.fulfill(LOGGED_OUT))
-    await openApp(page)
-    await buildLocalVault(page, PASSWORD_A)
+  test('F-408 E1·E2·E9 알림 — 나중에·로그인·오프라인 오류', async ({ page }) => {
+    test.setTimeout(60_000)
+    await test.step('로그인하면 E9 알림이 뜨고 나중에를 누르면 다음 부팅에 다시 묻는다', async () => {
+      await page.route('**/api/me', (route) => route.fulfill(LOGGED_OUT))
+      await openApp(page)
+      await buildLocalVault(page, PASSWORD_A)
 
-    const requests = collectRequests(page)
-    await fakeServer(page)
-    await page.reload()
-    await waitBooted(page)
+      const requests = collectRequests(page)
+      await fakeServer(page)
+      await page.reload()
+      await waitBooted(page)
 
-    await expect(notice(page).locator('.notice-message')).toHaveText(
-      '이 브라우저에 로그인 전 금고 문서 2개가 있습니다. 금고 암호를 입력하면 계정 금고로 옮깁니다.',
-    )
-    await expect(notice(page).getByRole('button', { name: '옮기기' })).toBeVisible()
-    await expect(notice(page).getByRole('button', { name: '나중에' })).toBeVisible()
-    await page.waitForTimeout(4500)
-    await expect(notice(page).locator('.notice-message')).toBeVisible() // info 지만 자동으로 안 사라진다
-    expect(requests.some((r) => r.path === '/api/e2ee/keys')).toBe(false)
-    expect(requests.some((r) => r.path === '/api/docs' && r.body?.e2eeKey)).toBe(false)
+      await expect(notice(page).locator('.notice-message')).toHaveText(
+        '이 브라우저에 로그인 전 금고 문서 2개가 있습니다. 금고 암호를 입력하면 계정 금고로 옮깁니다.',
+      )
+      await expect(notice(page).getByRole('button', { name: '옮기기' })).toBeVisible()
+      await expect(notice(page).getByRole('button', { name: '나중에' })).toBeVisible()
+      await page.waitForTimeout(4500)
+      await expect(notice(page).locator('.notice-message')).toBeVisible() // info 지만 자동으로 안 사라진다
+      expect(requests.some((r) => r.path === '/api/e2ee/keys')).toBe(false)
+      expect(requests.some((r) => r.path === '/api/docs' && r.body?.e2eeKey)).toBe(false)
 
-    await notice(page).getByRole('button', { name: '나중에' }).click()
-    await expect(notice(page)).toHaveCount(0)
-    expect(requests).toHaveLength(0)
+      await notice(page).getByRole('button', { name: '나중에' }).click()
+      await expect(notice(page)).toHaveCount(0)
+      expect(requests).toHaveLength(0)
 
-    await page.reload()
-    await waitBooted(page)
-    await expect(notice(page).locator('.notice-message')).toContainText('로그인 전 금고 문서 2개가 있습니다')
+      await page.reload()
+      await waitBooted(page)
+      await expect(notice(page).locator('.notice-message')).toContainText('로그인 전 금고 문서 2개가 있습니다')
+    })
+    await test.step('D-14 를 연 뒤 오프라인이면 저장하지 못했다는 오류가 뜨고 대화상자는 열린 채로 남는다', async () => {
+      await resetBrowserState(page)
+      await page.route('**/api/me', (route) => route.fulfill(LOGGED_OUT))
+      await openApp(page)
+      await buildLocalVault(page, PASSWORD_A)
+
+      const server = await fakeServer(page)
+      await page.reload()
+      await waitBooted(page)
+
+      await notice(page).getByRole('button', { name: '옮기기' }).click()
+      const dialog = migrateDialog(page)
+      server.setOffline(true)
+      await dialog.locator('input[aria-labelledby="e2ee-migrate-password-label"]').fill(PASSWORD_A)
+      await dialog.getByRole('button', { name: '옮기기', exact: true }).click()
+      await expect(dialog.locator('.e2ee-error')).toHaveText('인터넷에 연결되어 있지 않아 저장하지 못했습니다. 연결한 뒤 다시 누르세요.')
+      await expect(dialog).toBeVisible()
+
+      const cachedDocs = (await readIdb(page, 'md-remote', 'docs', null)) ?? []
+      expect(cachedDocs.filter((d) => d.e2eeKey !== undefined)).toHaveLength(0)
+    })
   })
 })
 
@@ -370,55 +394,6 @@ test.describe('F-408 E3·E4·E5 계정 금고 없음(adopt)', () => {
 })
 
 test.describe('F-408 E6·E7 계정 금고 있음(rewrap)', () => {
-  test('E6 두 암호가 다르면 D-14 2단계를 거친다', async ({ page, browser }) => {
-    const bundle = await captureAccountBundle(browser, PASSWORD_B)
-
-    await page.route('**/api/me', (route) => route.fulfill(LOGGED_OUT))
-    await openApp(page)
-    await buildLocalVault(page, PASSWORD_A)
-    const localAttachmentsBefore = await readAttachmentRows(page)
-
-    const requests = collectRequests(page)
-    const server = await fakeServer(page)
-    server.setE2eeKeys(bundle)
-    await page.reload()
-    await waitBooted(page)
-
-    await notice(page).getByRole('button', { name: '옮기기' }).click()
-    const dialog = migrateDialog(page)
-    await expect(dialog.locator('.e2ee-migrate-note')).toHaveText('계정 금고에 넣습니다. 계정 금고의 암호와 복구 코드는 바뀌지 않습니다.')
-    await dialog.locator('input[aria-labelledby="e2ee-migrate-password-label"]').fill(PASSWORD_A)
-    await dialog.getByRole('button', { name: '옮기기', exact: true }).click()
-
-    await expect(dialog.locator('h2')).toHaveText('계정 금고 열기')
-    await dialog.locator('input[aria-labelledby="e2ee-migrate-step2-password-label"]').fill(PASSWORD_B)
-    await dialog.getByRole('button', { name: '열기', exact: true }).click()
-    await expect(dialog).toBeHidden()
-    await expect(notice(page).locator('.notice-message')).toContainText('계정 금고에 넣었습니다', { timeout: 20_000 })
-
-    // 2.1 공통 앞부분 2번이 "있나 보고 만들기" 를 시도해 409 를 받는다 — 계정 묶음 자체는 바뀌지 않는다
-    const putKeys = requests.filter((r) => r.path === '/api/e2ee/keys' && r.method === 'PUT')
-    expect(putKeys).toHaveLength(1)
-    expect(server.getE2eeKeys().bundle).toBe(bundle.bundle)
-
-    await expect.poll(() => server.docs.size).toBe(2)
-    const localDocs = (await readIdb(page, 'md-docs', 'docs', null)).filter((d) => d.e2eeKey !== undefined)
-    for (const doc of localDocs) {
-      const serverDoc = server.docs.get(doc.id)
-      expect(serverDoc.title).toBe(doc.title)
-      expect(serverDoc.content).toBe(doc.content)
-      expect(serverDoc.e2eeKey).not.toBe(doc.e2eeKey)
-    }
-
-    const serverAttachment = [...server.attachments.values()].find((a) => a.mime === 'image/png')
-    const localBytes = localAttachmentsBefore[0].bytes
-    const serverBytes = Array.from(serverAttachment.bytes)
-    expect(serverBytes[0]).toBe(localBytes[0])
-    expect(serverBytes.slice(41)).toEqual(localBytes.slice(41))
-    expect(serverBytes.slice(1, 41)).not.toEqual(localBytes.slice(1, 41))
-
-    await expect(page.getByText('금고전1').first()).toBeVisible()
-  })
 
   test('E7 두 암호가 같으면 2단계 없이 끝난다', async ({ page, browser }) => {
     const bundle = await captureAccountBundle(browser, PASSWORD_A)
@@ -445,59 +420,89 @@ test.describe('F-408 E6·E7 계정 금고 있음(rewrap)', () => {
     await expect.poll(() => server.docs.size).toBe(2)
   })
 
-  test('E8 2단계에서 나중에를 누르면 아무것도 쓰지 않고 다음 부팅에 다시 묻는다', async ({ page, browser }) => {
-    const bundle = await captureAccountBundle(browser, PASSWORD_B)
+  test('F-408 E8·E6 계정 금고 있음 — 2단계 나중에·D-14', async ({ page, browser }) => {
+    test.setTimeout(60_000)
+    await test.step('E8 2단계에서 나중에를 누르면 아무것도 쓰지 않고 다음 부팅에 다시 묻는다', async () => {
+      const bundle = await captureAccountBundle(browser, PASSWORD_B)
 
-    await page.route('**/api/me', (route) => route.fulfill(LOGGED_OUT))
-    await openApp(page)
-    await buildLocalVault(page, PASSWORD_A)
+      await page.route('**/api/me', (route) => route.fulfill(LOGGED_OUT))
+      await openApp(page)
+      await buildLocalVault(page, PASSWORD_A)
 
-    const requests = collectRequests(page)
-    const server = await fakeServer(page)
-    server.setE2eeKeys(bundle)
-    await page.reload()
-    await waitBooted(page)
+      const requests = collectRequests(page)
+      const server = await fakeServer(page)
+      server.setE2eeKeys(bundle)
+      await page.reload()
+      await waitBooted(page)
 
-    await notice(page).getByRole('button', { name: '옮기기' }).click()
-    const dialog = migrateDialog(page)
-    await dialog.locator('input[aria-labelledby="e2ee-migrate-password-label"]').fill(PASSWORD_A)
-    await dialog.getByRole('button', { name: '옮기기', exact: true }).click()
-    await expect(dialog.locator('h2')).toHaveText('계정 금고 열기')
-    await dialog.getByRole('button', { name: '나중에', exact: true }).click()
-    await expect(dialog).toBeHidden()
+      await notice(page).getByRole('button', { name: '옮기기' }).click()
+      const dialog = migrateDialog(page)
+      await dialog.locator('input[aria-labelledby="e2ee-migrate-password-label"]').fill(PASSWORD_A)
+      await dialog.getByRole('button', { name: '옮기기', exact: true }).click()
+      await expect(dialog.locator('h2')).toHaveText('계정 금고 열기')
+      await dialog.getByRole('button', { name: '나중에', exact: true }).click()
+      await expect(dialog).toBeHidden()
 
-    // 1단계 제출이 "있나 보고 만들기" 시도 한 번을 보낸다(409) — 그 밖엔 아무것도 쓰지 않는다(2.4)
-    expect(requests).toHaveLength(1)
-    expect(server.getE2eeKeys().bundle).toBe(bundle.bundle)
-    expect(server.docs.size).toBe(0)
-    expect(server.attachments.size).toBe(0)
-    expect(notice(page)).toHaveCount(0)
+      // 1단계 제출이 "있나 보고 만들기" 시도 한 번을 보낸다(409) — 그 밖엔 아무것도 쓰지 않는다(2.4)
+      expect(requests).toHaveLength(1)
+      expect(server.getE2eeKeys().bundle).toBe(bundle.bundle)
+      expect(server.docs.size).toBe(0)
+      expect(server.attachments.size).toBe(0)
+      expect(notice(page)).toHaveCount(0)
 
-    await page.reload()
-    await waitBooted(page)
-    await expect(notice(page).locator('.notice-message')).toContainText('로그인 전 금고 문서 2개가 있습니다')
-  })
-})
+      await page.reload()
+      await waitBooted(page)
+      await expect(notice(page).locator('.notice-message')).toContainText('로그인 전 금고 문서 2개가 있습니다')
+    })
+    await test.step('E6 두 암호가 다르면 D-14 2단계를 거친다', async () => {
+      await resetBrowserState(page)
+      const bundle = await captureAccountBundle(browser, PASSWORD_B)
 
-test.describe('F-408 E9 오프라인', () => {
-  test('D-14 를 연 뒤 오프라인이면 저장하지 못했다는 오류가 뜨고 대화상자는 열린 채로 남는다', async ({ page }) => {
-    await page.route('**/api/me', (route) => route.fulfill(LOGGED_OUT))
-    await openApp(page)
-    await buildLocalVault(page, PASSWORD_A)
+      await page.route('**/api/me', (route) => route.fulfill(LOGGED_OUT))
+      await openApp(page)
+      await buildLocalVault(page, PASSWORD_A)
+      const localAttachmentsBefore = await readAttachmentRows(page)
 
-    const server = await fakeServer(page)
-    await page.reload()
-    await waitBooted(page)
+      const requests = collectRequests(page)
+      const server = await fakeServer(page)
+      server.setE2eeKeys(bundle)
+      await page.reload()
+      await waitBooted(page)
 
-    await notice(page).getByRole('button', { name: '옮기기' }).click()
-    const dialog = migrateDialog(page)
-    server.setOffline(true)
-    await dialog.locator('input[aria-labelledby="e2ee-migrate-password-label"]').fill(PASSWORD_A)
-    await dialog.getByRole('button', { name: '옮기기', exact: true }).click()
-    await expect(dialog.locator('.e2ee-error')).toHaveText('인터넷에 연결되어 있지 않아 저장하지 못했습니다. 연결한 뒤 다시 누르세요.')
-    await expect(dialog).toBeVisible()
+      await notice(page).getByRole('button', { name: '옮기기' }).click()
+      const dialog = migrateDialog(page)
+      await expect(dialog.locator('.e2ee-migrate-note')).toHaveText('계정 금고에 넣습니다. 계정 금고의 암호와 복구 코드는 바뀌지 않습니다.')
+      await dialog.locator('input[aria-labelledby="e2ee-migrate-password-label"]').fill(PASSWORD_A)
+      await dialog.getByRole('button', { name: '옮기기', exact: true }).click()
 
-    const cachedDocs = (await readIdb(page, 'md-remote', 'docs', null)) ?? []
-    expect(cachedDocs.filter((d) => d.e2eeKey !== undefined)).toHaveLength(0)
+      await expect(dialog.locator('h2')).toHaveText('계정 금고 열기')
+      await dialog.locator('input[aria-labelledby="e2ee-migrate-step2-password-label"]').fill(PASSWORD_B)
+      await dialog.getByRole('button', { name: '열기', exact: true }).click()
+      await expect(dialog).toBeHidden()
+      await expect(notice(page).locator('.notice-message')).toContainText('계정 금고에 넣었습니다', { timeout: 20_000 })
+
+      // 2.1 공통 앞부분 2번이 "있나 보고 만들기" 를 시도해 409 를 받는다 — 계정 묶음 자체는 바뀌지 않는다
+      const putKeys = requests.filter((r) => r.path === '/api/e2ee/keys' && r.method === 'PUT')
+      expect(putKeys).toHaveLength(1)
+      expect(server.getE2eeKeys().bundle).toBe(bundle.bundle)
+
+      await expect.poll(() => server.docs.size).toBe(2)
+      const localDocs = (await readIdb(page, 'md-docs', 'docs', null)).filter((d) => d.e2eeKey !== undefined)
+      for (const doc of localDocs) {
+        const serverDoc = server.docs.get(doc.id)
+        expect(serverDoc.title).toBe(doc.title)
+        expect(serverDoc.content).toBe(doc.content)
+        expect(serverDoc.e2eeKey).not.toBe(doc.e2eeKey)
+      }
+
+      const serverAttachment = [...server.attachments.values()].find((a) => a.mime === 'image/png')
+      const localBytes = localAttachmentsBefore[0].bytes
+      const serverBytes = Array.from(serverAttachment.bytes)
+      expect(serverBytes[0]).toBe(localBytes[0])
+      expect(serverBytes.slice(41)).toEqual(localBytes.slice(41))
+      expect(serverBytes.slice(1, 41)).not.toEqual(localBytes.slice(1, 41))
+
+      await expect(page.getByText('금고전1').first()).toBeVisible()
+    })
   })
 })

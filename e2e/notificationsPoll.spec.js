@@ -1,6 +1,6 @@
 // 알림 폴링 줄이기 — ETag 조건부 응답·한 탭만 가져오기 (specs/features/F-2057.md 8.2 E1~E7)
 import { test, expect } from '@playwright/test'
-import { openApp, setPrefBeforeLoad } from './helpers.js'
+import { openApp, setPrefBeforeLoad, resetBrowserState } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const USER = { id: 'u1', email: 'a@b.com' }
@@ -67,120 +67,121 @@ async function openTwo(context) {
 }
 
 test.describe('F-2057 E1 조건부 요청', () => {
-  test('첫 GET 은 If-None-Match 없음·200, 1분 뒤 GET 은 W/"fake-…"·304, 배지 그대로', async ({ page }) => {
-    await page.clock.install()
-    const server = await prepare(page)
-    server.setNotifications(ONE)
-    await openApp(page)
-    await expect(badge(page)).toHaveText('1')
-    expect(gets(server)).toHaveLength(1)
-    expect(gets(server)[0]).toMatchObject({ ifNoneMatch: null, status: 200 })
+  test('F-2057 E1·E2 조건부 요청·바뀌면 200', async ({ page }) => {
+    test.setTimeout(60000)
+    await test.step('첫 GET 은 If-None-Match 없음·200, 1분 뒤 GET 은 W/"fake-…"·304, 배지 그대로', async () => {
+      await page.clock.install()
+      const server = await prepare(page)
+      server.setNotifications(ONE)
+      await openApp(page)
+      await expect(badge(page)).toHaveText('1')
+      expect(gets(server)).toHaveLength(1)
+      expect(gets(server)[0]).toMatchObject({ ifNoneMatch: null, status: 200 })
 
-    await page.clock.fastForward('01:00')
-    await expect.poll(() => gets(server).length).toBe(2)
-    expect(gets(server)[1].ifNoneMatch).toMatch(/^W\/"fake-\d+"$/)
-    expect(gets(server)[1].status).toBe(304)
-    await expect(badge(page)).toHaveText('1')
-  })
-})
+      await page.clock.fastForward('01:00')
+      await expect.poll(() => gets(server).length).toBe(2)
+      expect(gets(server)[1].ifNoneMatch).toMatch(/^W\/"fake-\d+"$/)
+      expect(gets(server)[1].status).toBe(304)
+      await expect(badge(page)).toHaveText('1')
+    })
+    await test.step('알림 하나 더한 뒤 1분 → 200, 배지가 는다', async () => {
+      await resetBrowserState(page)
+      await page.clock.install()
+      const server = await prepare(page)
+      server.setNotifications(ONE)
+      await openApp(page)
+      await expect(badge(page)).toHaveText('1')
 
-test.describe('F-2057 E2 바뀌면 200', () => {
-  test('알림 하나 더한 뒤 1분 → 200, 배지가 는다', async ({ page }) => {
-    await page.clock.install()
-    const server = await prepare(page)
-    server.setNotifications(ONE)
-    await openApp(page)
-    await expect(badge(page)).toHaveText('1')
-
-    server.setNotifications(TWO)
-    await page.clock.fastForward('01:00')
-    await expect.poll(() => gets(server).length).toBe(2)
-    expect(gets(server)[1].status).toBe(200)
-    await expect(badge(page)).toHaveText('2')
+      server.setNotifications(TWO)
+      await page.clock.fastForward('01:00')
+      await expect.poll(() => gets(server).length).toBe(2)
+      expect(gets(server)[1].status).toBe(200)
+      await expect(badge(page)).toHaveText('2')
+    })
   })
 })
 
 test.describe('F-2057 E3 두 탭 중 한 탭만', () => {
-  test('01:01 씩 세 번 — 두 페이지 합쳐 GET 이 매번 정확히 1개', async ({ context }) => {
-    const two = await openTwo(context)
-    for (let i = 0; i < 3; i++) await two.round()
-    const after = two.total()
-    await settle(two.pages[0].page)
-    expect(two.total()).toBe(after)
-  })
-})
+  test('F-2057 E3·E4·E6 두 탭 한 탭만·결과 나누기·알림함 열기', async ({ context }) => {
+    test.setTimeout(90000)
+    await test.step('01:01 씩 세 번 — 두 페이지 합쳐 GET 이 매번 정확히 1개', async () => {
+      const two = await openTwo(context)
+      for (let i = 0; i < 3; i++) await two.round()
+      const after = two.total()
+      await settle(two.pages[0].page)
+      expect(two.total()).toBe(after)
+    })
+    await test.step('새 알림 → GET 은 한 페이지에서만 1개, 두 페이지 모두 배지가 는다', async () => {
+      await resetBrowserState(await context.newPage())
+      const two = await openTwo(context)
+      await two.round()
+      two.setAll(THREE)
+      const leader = await two.round()
+      expect(gets(leader.server).at(-1).status).toBe(200)
+      for (const p of two.pages) await expect(badge(p.page)).toHaveText('3')
+    })
+    await test.step('뒤따르는 페이지가 6초 뒤 열면 그 페이지만 조건부 GET 1, 2초 뒤 다른 페이지가 열면 둘 다 0', async () => {
+      await resetBrowserState(await context.newPage())
+      const two = await openTwo(context)
+      await two.round()
+      const leader = two.leaderOf()
+      const follower = two.followerOf()
+      const leaderBefore = gets(leader.server).length
+      const followerBefore = gets(follower.server).length
 
-test.describe('F-2057 E4 결과 나누기', () => {
-  test('새 알림 → GET 은 한 페이지에서만 1개, 두 페이지 모두 배지가 는다', async ({ context }) => {
-    const two = await openTwo(context)
-    await two.round()
-    two.setAll(THREE)
-    const leader = await two.round()
-    expect(gets(leader.server).at(-1).status).toBe(200)
-    for (const p of two.pages) await expect(badge(p.page)).toHaveText('3')
+      await context.clock.fastForward('00:06')
+      await notifBtn(follower.page).click()
+      await expect.poll(() => gets(follower.server).length).toBe(followerBefore + 1)
+      expect(gets(follower.server).at(-1).ifNoneMatch).not.toBeNull()
+      await settle(follower.page)
+      expect(gets(leader.server)).toHaveLength(leaderBefore)
+
+      await context.clock.fastForward('00:02')
+      await notifBtn(leader.page).click()
+      await settle(leader.page)
+      expect(gets(leader.server)).toHaveLength(leaderBefore)
+      expect(gets(follower.server)).toHaveLength(followerBefore + 1)
+    })
   })
 })
 
 test.describe('F-2057 E5 가져오는 탭이 닫히면', () => {
-  test('01:01 에는 남은 페이지 GET 0, 00:10 더 가면 1', async ({ context }) => {
-    const two = await openTwo(context)
-    await two.round()
-    const leader = two.leaderOf()
-    const rest = two.followerOf()
-    await leader.page.close()
-    const before = gets(rest.server).length
+  test('F-2057 E5·E7 가져오는 탭이 닫히거나 숨을 때', async ({ context }) => {
+    test.setTimeout(60000)
+    await test.step('01:01 에는 남은 페이지 GET 0, 00:10 더 가면 1', async () => {
+      const two = await openTwo(context)
+      await two.round()
+      const leader = two.leaderOf()
+      const rest = two.followerOf()
+      await leader.page.close()
+      const before = gets(rest.server).length
 
-    await context.clock.fastForward('01:01')
-    await settle(rest.page)
-    expect(gets(rest.server)).toHaveLength(before)
+      await context.clock.fastForward('01:01')
+      await settle(rest.page)
+      expect(gets(rest.server)).toHaveLength(before)
 
-    await context.clock.fastForward('00:10')
-    await expect.poll(() => gets(rest.server).length).toBe(before + 1)
-  })
-})
-
-test.describe('F-2057 E6 알림함 열기', () => {
-  test('뒤따르는 페이지가 6초 뒤 열면 그 페이지만 조건부 GET 1, 2초 뒤 다른 페이지가 열면 둘 다 0', async ({ context }) => {
-    const two = await openTwo(context)
-    await two.round()
-    const leader = two.leaderOf()
-    const follower = two.followerOf()
-    const leaderBefore = gets(leader.server).length
-    const followerBefore = gets(follower.server).length
-
-    await context.clock.fastForward('00:06')
-    await notifBtn(follower.page).click()
-    await expect.poll(() => gets(follower.server).length).toBe(followerBefore + 1)
-    expect(gets(follower.server).at(-1).ifNoneMatch).not.toBeNull()
-    await settle(follower.page)
-    expect(gets(leader.server)).toHaveLength(leaderBefore)
-
-    await context.clock.fastForward('00:02')
-    await notifBtn(leader.page).click()
-    await settle(leader.page)
-    expect(gets(leader.server)).toHaveLength(leaderBefore)
-    expect(gets(follower.server)).toHaveLength(followerBefore + 1)
-  })
-})
-
-test.describe('F-2057 E7 가져오는 탭이 숨으면', () => {
-  test('01:11 안에 다른 페이지가 GET 1, 숨긴 페이지 GET 0', async ({ context }) => {
-    const two = await openTwo(context)
-    await two.round()
-    const leader = two.leaderOf()
-    const follower = two.followerOf()
-    const leaderBefore = gets(leader.server).length
-    const followerBefore = gets(follower.server).length
-
-    // 흉내 — 헤드리스에서는 두 페이지가 늘 보인다(m8)
-    await leader.page.evaluate(() => {
-      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
-      document.dispatchEvent(new Event('visibilitychange'))
+      await context.clock.fastForward('00:10')
+      await expect.poll(() => gets(rest.server).length).toBe(before + 1)
     })
+    await test.step('01:11 안에 다른 페이지가 GET 1, 숨긴 페이지 GET 0', async () => {
+      await resetBrowserState(await context.newPage())
+      const two = await openTwo(context)
+      await two.round()
+      const leader = two.leaderOf()
+      const follower = two.followerOf()
+      const leaderBefore = gets(leader.server).length
+      const followerBefore = gets(follower.server).length
 
-    await context.clock.fastForward('01:11')
-    await expect.poll(() => gets(follower.server).length).toBe(followerBefore + 1)
-    await settle(follower.page)
-    expect(gets(leader.server)).toHaveLength(leaderBefore)
+      // 흉내 — 헤드리스에서는 두 페이지가 늘 보인다(m8)
+      await leader.page.evaluate(() => {
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+
+      await context.clock.fastForward('01:11')
+      await expect.poll(() => gets(follower.server).length).toBe(followerBefore + 1)
+      await settle(follower.page)
+      expect(gets(leader.server)).toHaveLength(leaderBefore)
+    })
   })
 })

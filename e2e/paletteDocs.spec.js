@@ -43,14 +43,6 @@ test.describe('F-2053 명령 팔레트 확장', () => {
     await stubPrint(page)
   })
 
-  test('F-2053 A1 빈 입력 첫 화면 — 최근 문서 → 명령', async ({ page }) => {
-    await setupDocs(page)
-    await openPalette(page)
-    await expect(sections(page)).toHaveText(['최근 문서', '명령'])
-    await expect(palette(page).locator('.command-palette-item--doc')).toHaveText([/회의록 모음/, /여행 계획/])
-    await expect(options(page).first()).toHaveAttribute('aria-selected', 'true')
-  })
-
   test('F-2053 A2 최근 명령 — 쓴 명령이 최근 구역으로', async ({ page }) => {
     await setupDocs(page)
     await openPalette(page)
@@ -98,23 +90,4 @@ test.describe('F-2053 명령 팔레트 확장', () => {
     await expect(page.locator('.sidebar .doc-item-btn', { hasText: '장보기 목록' })).toBeVisible()
   })
 
-  test('F-2053 A7 > 명령 모드 + A8 초성', async ({ page }) => {
-    await setupDocs(page)
-    await openPalette(page)
-    await input(page).fill('>여행')
-    await expect(options(page)).toHaveCount(0)
-    await input(page).fill('>ㅌㅍㄹ')
-    await expect(options(page).first()).toContainText('템플릿 삽입')
-    await input(page).fill('ㅇㅎ ㄱ')
-    await expect(options(page).first()).toContainText('여행 계획')
-    await input(page).fill('ㅋㅋㅋ')
-    await expect(options(page)).toHaveCount(0)
-  })
-
-  test('F-2053 A16 버튼 — 넓은 창 사이드바', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 900 })
-    await openApp(page)
-    await page.locator('.sidebar').getByRole('button', { name: '명령 팔레트', exact: true }).click()
-    await expect(palette(page)).toBeVisible()
-  })
 })

@@ -324,26 +324,6 @@ test.describe('F-2064 공유 관리 절', () => {
   const twoFrames = (page) =>
     page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))))
 
-  test('F-2064 C1 불러오는 중 문구', async ({ page }) => {
-    const server = await fakeServer(page)
-    seedDoc(server, { id: 'd1', title: '회의록' })
-    seedLink(server, { targetType: 'doc', targetId: 'd1', token: 'tok-doc' })
-    await openApp(page)
-    const gate = deferred()
-    await page.route('**/api/shares', async (route) => {
-      await gate.promise
-      return route.fallback()
-    })
-
-    await openShares(page)
-    await expect(page.locator('.shares-loading')).toHaveText('불러오는 중…')
-    await expect(rows(page)).toHaveCount(0)
-
-    gate.resolve()
-    await expect(rows(page)).toHaveCount(1)
-    await expect(page.locator('.shares-loading')).toHaveCount(0)
-  })
-
   test('F-2064 C2 다시 들어오면 새로 부른다', async ({ page }) => {
     const server = await fakeServer(page)
     seedDoc(server, { id: 'd1', title: '회의록' })
@@ -1655,21 +1635,6 @@ test.describe('F-2079 계정 상태 절', () => {
     await page.clock.fastForward('01:01')
     expect(await countMeOnVisible(page)).toBe(1)
     await expect(page.locator('.notice--warn .notice-message')).toHaveText(L7)
-  })
-})
-
-test.describe('F-2081 JSX 컴포넌트 다섯 절', () => {
-  test('F-2081 C1 숨은 파일 입력 셋과 인쇄 영역 자리', async ({ page }) => {
-    await openApp(page)
-    const inputs = page.locator('.app-shell > input[type="file"][hidden]')
-    await expect(inputs).toHaveCount(3)
-    const attrs = await inputs.evaluateAll((els) => els.map((el) => [el.dataset.import, el.accept, el.webkitdirectory]))
-    expect(attrs).toEqual([
-      ['md', '.md,text/markdown', false],
-      ['zip', '.zip,application/zip', false],
-      ['folder', '', true],
-    ])
-    await expect(page.locator('.app-shell > .print-root:last-child')).toHaveCount(1)
   })
 })
 

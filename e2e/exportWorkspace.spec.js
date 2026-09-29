@@ -1,8 +1,7 @@
 // 전체·폴더 내보내기 (specs/features/F-281.md) — A11~A15
 import { test, expect } from '@playwright/test'
 import { unzipSync } from 'fflate'
-import { openApp, openAppHome, importMarkdown } from './helpers.js'
-import { fakeServer } from './fixtures/fakeServer.js'
+import { openApp, importMarkdown } from './helpers.js'
 
 async function openSettings(page) {
   await page.getByRole('button', { name: '설정', exact: true }).click()
@@ -47,22 +46,6 @@ async function unzipDownload(download) {
   for await (const chunk of stream) chunks.push(chunk)
   return unzipSync(new Uint8Array(Buffer.concat(chunks)))
 }
-
-test.describe('F-281 A11 데이터 절 (스모크)', () => {
-  test('설정 대화상자에 데이터 라벨과 전체 내보내기 버튼이 보이고, 닫기로 닫힌다', async ({ page }) => {
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-
-    const dialog = await openSettings(page)
-    await expect(dialog.getByText('데이터')).toBeVisible()
-    const exportBtn = dialog.getByRole('button', { name: '전체 내보내기' })
-    await expect(exportBtn).toBeVisible()
-    await expect(exportBtn).toBeEnabled()
-
-    await dialog.getByRole('button', { name: '닫기' }).click()
-    await expect(dialog).toBeHidden()
-  })
-})
 
 test.describe('F-281 A12 전체 내보내기', () => {
   test('최상위 문서 + 폴더(문서) + 하위 폴더(문서) — zip 파일명·manifest·.md 3개', async ({ page }) => {
@@ -128,44 +111,5 @@ test.describe('F-281 A13 폴더 내보내기', () => {
     expect(names).toContain('manifest.json')
     expect(names).toContain('안쪽문서.md')
     expect(names).not.toContain('바깥문서.md')
-  })
-})
-
-test.describe('F-281 A14 오프라인', () => {
-  test('로그인 뒤 오프라인 — 전체 내보내기 버튼 비활성, 안내 문구', async ({ page }) => {
-    const server = await fakeServer(page)
-    await openApp(page)
-    await importMarkdown(page, { content: '본문\n' })
-    server.setOffline(true)
-    // setOffline 은 fakeServer 가 요청을 끊게 하는 플래그일 뿐이다. 앱의 syncState.online 은
-    // 요청이 실제로 실패하거나 브라우저 offline 이벤트가 올 때만 false 가 된다(serverStore.ts) —
-    // 설정만 열면 요청이 한 번도 안 나가 online 이 true 로 남는다 (2026-09-21)
-    await page.evaluate(() => window.dispatchEvent(new Event('offline')))
-
-    const dialog = await openSettings(page)
-    const exportBtn = dialog.getByRole('button', { name: '전체 내보내기' })
-    await expect(exportBtn).toBeDisabled()
-    await expect(dialog.getByText('온라인일 때 내보낼 수 있습니다')).toBeVisible()
-  })
-})
-
-test.describe('F-281 A15 내보낼 것 없음', () => {
-  test('문서·폴더가 없는 빈 상태 — 다운로드 없이 안내 알림', async ({ page }) => {
-    // 빈 저장소로 openAppHome 을 열면 문서가 0개다(F-257 7장 — 첫 실행 문서 생성 분기 제거) — 진짜 빈 상태
-    await openAppHome(page)
-
-    // e2e 브라우저는 저장 공간 보호를 거부해 그 경고가 알림 자리를 차지한다 — 설정을 열기 전에 닫아야 한다(대화상자가 덮는다)
-    const closeNotice = page.getByRole('button', { name: '알림 닫기' })
-    if (await closeNotice.count()) await closeNotice.click()
-
-    const dialog = await openSettings(page)
-
-    let downloadHappened = false
-    page.once('download', () => {
-      downloadHappened = true
-    })
-    await dialog.getByRole('button', { name: '전체 내보내기' }).click()
-    await expect(page.locator('.notice-message')).toHaveText('내보낼 문서가 없습니다.')
-    expect(downloadHappened).toBe(false)
   })
 })

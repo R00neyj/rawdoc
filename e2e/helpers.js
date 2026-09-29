@@ -167,3 +167,25 @@ export async function rectOf(locator) {
     return { x: r.x, y: r.y, width: r.width, height: r.height, top: r.top, right: r.right, bottom: r.bottom, left: r.left }
   })
 }
+
+// 한 테스트 안에서 단계를 이어 돌릴 때 앞 단계 상태(localStorage·IndexedDB)를 비운다 — 뒤에 openApp 을 다시 부른다
+export async function resetBrowserState(page) {
+  for (const other of page.context().pages()) if (other !== page) await other.close()
+  await page.goto('about:blank')
+  await page.goto('/sw.js')
+  await page.evaluate(async () => {
+    localStorage.clear()
+    sessionStorage.clear()
+    const dbs = await indexedDB.databases()
+    await Promise.all(
+      dbs.map(
+        ({ name }) =>
+          new Promise((resolve) => {
+            const req = indexedDB.deleteDatabase(name)
+            req.onsuccess = req.onerror = req.onblocked = () => resolve()
+          }),
+      ),
+    )
+  })
+  await page.goto('about:blank')
+}
