@@ -233,6 +233,15 @@
   transition-delay: 400ms;
 }
 
+/* 터치 기기는 탭 뒤 :hover 가 남으므로 툴팁을 띄우지 않는다 (tweak) */
+@media (hover: none) {
+  .cm-host .cm-panel.cm-search .cm-button::after,
+  .cm-host .cm-panel.cm-search [name='close']::after,
+  .cm-host .cm-panel.cm-search label::after {
+    display: none;
+  }
+}
+
 /* 대소문자·정규식·단어 단위 — 체크박스가 아니라 눌림 토글 아이콘 버튼처럼 보이게 한다 */
 /* 실제 <input type=checkbox> 는 라벨 전체를 덮어 그대로 두고(클릭·접근성·:checked 동작), 시각적으로만 숨기고 글자 대신 짧은 기호를 ::before 로 그린다 */
 .cm-host .cm-panel.cm-search label {
