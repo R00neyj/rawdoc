@@ -27,13 +27,14 @@ type TestStatement = {
   first<T = unknown>(): Promise<T | null>
   all<T = unknown>(): Promise<{ results: T[] }>
   run(): Promise<{ success: true; meta: { changes: number } }>
+  runBatch(): Promise<{ success: true; meta: { changes: number }; results?: unknown[] }>
 }
 
-function makeStatement(stmt: StatementSync, boundArgs: unknown[]): TestStatement {
+function makeStatement(db: DatabaseSync, stmt: StatementSync, boundArgs: unknown[]): TestStatement {
   const args = boundArgs.map(toSqlValue)
   return {
     bind(...next: unknown[]) {
-      return makeStatement(stmt, next)
+      return makeStatement(db, stmt, next)
     },
     async first<T>() {
       const row = stmt.get(...args) as T | undefined
@@ -45,6 +46,12 @@ function makeStatement(stmt: StatementSync, boundArgs: unknown[]): TestStatement
     async run() {
       const result = stmt.run(...args)
       return { success: true, meta: { changes: Number(result.changes) } }
+    },
+    async runBatch() {
+      if ((stmt as StatementSync & { columns(): unknown[] }).columns().length === 0) return this.run()
+      const results = stmt.all(...args)
+      const changes = (db.prepare('SELECT changes() AS c').get() as { c: number | bigint }).c
+      return { success: true, meta: { changes: Number(changes) }, results }
     },
   }
 }
@@ -58,14 +65,14 @@ export function asAuthDb(db: DatabaseSync): DatabaseSync {
   const prepare = db.prepare.bind(db)
   db.prepare = ((sql: string) => {
     const stmt = prepare(sql)
-    return Object.assign(stmt, { bind: (...args: unknown[]) => makeStatement(stmt, args) })
+    return Object.assign(stmt, { bind: (...args: unknown[]) => makeStatement(db, stmt, args) })
   }) as typeof db.prepare
   return db
 }
 
 // prepare → bind → first·all·run, prepare 에서 바로 first·all·run, batch
 export function asD1(db: DatabaseSync): D1Database {
-  const prepare = (sql: string): TestStatement => makeStatement(db.prepare(sql), [])
+  const prepare = (sql: string): TestStatement => makeStatement(db, db.prepare(sql), [])
   return {
     prepare,
     async batch<T>(statements: TestStatement[]) {
@@ -73,7 +80,7 @@ export function asD1(db: DatabaseSync): D1Database {
       try {
         const results: T[] = []
         for (const statement of statements) {
-          results.push((await statement.run()) as unknown as T)
+          results.push((await statement.runBatch()) as unknown as T)
         }
         db.exec('COMMIT')
         return results

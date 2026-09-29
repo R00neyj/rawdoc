@@ -6,6 +6,10 @@ import { MAX_BODY_BYTES } from './validate'
 import { higherRole, resolveDocAccess, type GrantRole, type Role } from './access'
 import { notifyRevalidate } from './docRoomRpc'
 import { dayUsageStatement } from './usage'
+import { PUSH_SHARE_DEDUPE_MS } from '../src/lib/pushPayload'
+import { sharePushPayload } from '../src/lib/pushText'
+import type { VapidAuth } from './webPush'
+import { pushInBackground, pushToEmail } from './pushSend'
 
 type TargetType = 'doc' | 'folder'
 
@@ -33,26 +37,26 @@ function isValidRole(value: unknown): value is 'view' | 'edit' {
   return value === 'view' || value === 'edit'
 }
 
-type OwnerCheck = { ok: true; e2ee: boolean } | { ok: false; status: 404 | 403 }
+type OwnerCheck = { ok: true; e2ee: boolean; name: string } | { ok: false; status: 404 | 403 }
 
 // 초대·이동·삭제·링크는 owner 만. 권한이 전혀 없으면 404, 있지만(view·edit) owner 가 아니면 403 (F-212 2.2)
 // 금고 판정 열을 함께 읽는다 — resolveDocAccess 가 금고 비소유자를 null 로 본다 (F-401 X3)
 async function checkOwnedTarget(env: Env, targetType: TargetType, targetId: string, user: AuthUser): Promise<OwnerCheck> {
   if (targetType === 'doc') {
-    const doc = await env.DB.prepare('SELECT id, owner_id, folder_id, e2ee_key FROM docs WHERE id = ?')
+    const doc = await env.DB.prepare('SELECT id, owner_id, folder_id, e2ee_key, title FROM docs WHERE id = ?')
       .bind(targetId)
-      .first<{ id: string; owner_id: string; folder_id: string | null; e2ee_key?: string | null }>()
+      .first<{ id: string; owner_id: string; folder_id: string | null; e2ee_key?: string | null; title?: string }>()
     if (!doc) return { ok: false, status: 404 }
-    if (doc.owner_id === user.id) return { ok: true, e2ee: typeof doc.e2ee_key === 'string' }
+    if (doc.owner_id === user.id) return { ok: true, e2ee: typeof doc.e2ee_key === 'string', name: doc.title ?? '' }
     const access = await resolveDocAccess(env, doc, user)
     return { ok: false, status: access ? 403 : 404 }
   }
 
-  const folder = await env.DB.prepare('SELECT id, owner_id, e2ee FROM folders WHERE id = ?')
+  const folder = await env.DB.prepare('SELECT id, owner_id, e2ee, name FROM folders WHERE id = ?')
     .bind(targetId)
-    .first<{ id: string; owner_id: string; e2ee?: number }>()
+    .first<{ id: string; owner_id: string; e2ee?: number; name?: string }>()
   if (!folder) return { ok: false, status: 404 }
-  if (folder.owner_id === user.id) return { ok: true, e2ee: folder.e2ee === 1 }
+  if (folder.owner_id === user.id) return { ok: true, e2ee: folder.e2ee === 1, name: folder.name ?? '' }
   const grant = await env.DB.prepare(
     "SELECT role FROM grants WHERE target_type = 'folder' AND target_id = ? AND owner_id = ? AND grantee_email = ?",
   )
@@ -80,6 +84,21 @@ async function handleListGrants(
   return jsonResponse(results.map((r) => ({ email: r.grantee_email, role: r.role, createdAt: r.created_at })))
 }
 
+type ShareInput = { grantee: string; owner: AuthUser; targetType: TargetType; targetId: string; name: string; role: 'view' | 'edit'; now: number }
+
+const SHARE_OVERLAP_SQL = `SELECT 1 FROM grants
+ WHERE grantee_email = ?1 AND owner_id = ?2 AND created_at > ?3 AND created_at <= ?4
+   AND NOT (target_type = ?5 AND target_id = ?6)
+ LIMIT 1`
+
+// 같은 주인이 10분 안에 다른 대상을 이미 초대했으면 건너뛴다 (F-3007 3.2)
+async function pushShare(env: Env, auth: VapidAuth, s: ShareInput): Promise<void> {
+  const overlap = await env.DB.prepare(SHARE_OVERLAP_SQL).bind(s.grantee, s.owner.id, s.now - PUSH_SHARE_DEDUPE_MS, s.now, s.targetType, s.targetId).first()
+  if (overlap) return
+  const payload = sharePushPayload({ actorEmail: s.owner.email, target: s.targetType, targetId: s.targetId, name: s.name, role: s.role })
+  await pushToEmail(env.DB, auth, s.grantee, payload, s.now)
+}
+
 async function handlePutGrant(
   targetType: TargetType,
   request: Request,
@@ -105,16 +124,20 @@ async function handlePutGrant(
   if (!isValidRole(role)) return jsonResponse({ error: 'invalid', field: 'role' }, 400)
 
   const now = Date.now()
-  await env.DB.batch([
+  const [inserted] = (await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO grants (target_type, target_id, owner_id, grantee_email, role, created_at)
        VALUES (?,?,?,?,?,?)
-       ON CONFLICT(target_type, target_id, grantee_email) DO UPDATE SET role = excluded.role, owner_id = excluded.owner_id`,
+       ON CONFLICT(target_type, target_id, grantee_email) DO UPDATE SET role = excluded.role, owner_id = excluded.owner_id
+       RETURNING created_at`,
     ).bind(targetType, params.id, user.id, email, role, now),
     dayUsageStatement(env.DB, user.id, now),
-  ])
+  ])) as Array<{ results?: Array<{ created_at?: number }> } | undefined>
 
   const response = jsonResponse({ email, role })
+  if (inserted?.results?.[0]?.created_at === now) {
+    await pushInBackground(env, ctx, 'share', (auth) => pushShare(env, auth, { grantee: email, owner: user, targetType, targetId: params.id, name: check.name, role, now }))
+  }
   // 보기로 낮추면 열린 편집 연결을 다시 본다. 폴더 초대는 주기 점검이 잡는다 (F-304 9.1)
   if (targetType === 'doc' && role === 'view') await notifyRevalidate(env, ctx, params.id, email)
   return response
@@ -152,8 +175,8 @@ export const handleGetFolderGrants = (r: Request, e: Env, _c: ExecutionContext, 
   handleListGrants('folder', r, e, p)
 export const handlePutDocGrant = (r: Request, e: Env, c: ExecutionContext, p: Record<string, string>) =>
   handlePutGrant('doc', r, e, c, p)
-export const handlePutFolderGrant = (r: Request, e: Env, _c: ExecutionContext, p: Record<string, string>) =>
-  handlePutGrant('folder', r, e, undefined, p)
+export const handlePutFolderGrant = (r: Request, e: Env, c: ExecutionContext, p: Record<string, string>) =>
+  handlePutGrant('folder', r, e, c, p)
 export const handleDeleteDocGrant = (r: Request, e: Env, c: ExecutionContext, p: Record<string, string>) =>
   handleDeleteGrant('doc', r, e, c, p)
 export const handleDeleteFolderGrant = (r: Request, e: Env, _c: ExecutionContext, p: Record<string, string>) =>

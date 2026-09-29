@@ -5,13 +5,14 @@ import type { PushCommentRow } from '../src/lib/pushText'
 import type { NotificationKind } from '../src/lib/docComments'
 import { listLivePushSubscriptions, pushResultStatements } from './pushServer'
 import type { LivePushSubscription } from './pushServer'
-import { pushTopic, sendPush } from './webPush'
-import type { PushOutcome, VapidAuth } from './webPush'
+import { PUSH_SEND_CONCURRENCY, sendPushJobs } from './pushSend'
+import { pushTopic } from './webPush'
+import type { VapidAuth } from './webPush'
 
 export const PUSH_READ_ROWS_MAX = 200
 export const PUSH_FOLLOWUP_MS = 1_000
 export const PUSH_RETRY_MS = 600_000
-export const PUSH_SEND_CONCURRENCY = 6
+export { PUSH_SEND_CONCURRENCY }
 
 export type PresenceConn = { email: string; connectedAt: number | null; lastPing: number | null }
 
@@ -109,14 +110,6 @@ function toPushRow(row: PendingPushRow): PushCommentRow {
   return { kind: row.kind, actorEmail: row.actor_email, docTitle: row.doc_title, excerpt: row.excerpt, threadId: row.thread_id, createdAt: row.created_at }
 }
 
-async function eachLimited<T>(items: readonly T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
-  let next = 0
-  const worker = async () => {
-    while (next < items.length) await fn(items[next++])
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
-}
-
 // D1 이 던지면 failed — 재시도 판단은 부르는 쪽 (6장). 푸시 서비스 실패는 그 기기만 건너뛴다
 export async function runDocPush(input: DocPushInput): Promise<DocPushResult> {
   const { db, docId, now, auth, present, fetchImpl } = input
@@ -133,13 +126,9 @@ export async function runDocPush(input: DocPushInput): Promise<DocPushResult> {
     const topic = pushTopic(docId) ?? undefined
     const jobs = sends.flatMap(({ recipient, subs: mine }) => {
       const payload = commentPushPayload(docId, recipient.rows.map(toPushRow))
-      return mine.map((sub) => ({ sub, payload }))
+      return mine.map((sub) => ({ sub, payload, topic }))
     })
-    const outcomes: { sub: LivePushSubscription; outcome: PushOutcome }[] = []
-    await eachLimited(jobs, PUSH_SEND_CONCURRENCY, async ({ sub, payload }) => {
-      const { outcome } = await sendPush(sub, payload, auth, now, topic, fetchImpl)
-      outcomes.push({ sub, outcome })
-    })
+    const outcomes = await sendPushJobs(jobs, auth, now, fetchImpl)
 
     await db.batch([
       db.prepare(CLEAR_IDS_SQL).bind(JSON.stringify([...skipped, ...handled])),
