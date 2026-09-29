@@ -22,7 +22,7 @@ type StartInfo = {
   skip: boolean
 }
 
-function hasOpenDialog(): boolean {
+export function hasOpenDialog(): boolean {
   return document.querySelector('dialog[open]') != null
 }
 
@@ -36,8 +36,18 @@ function hasScrollableLeftAncestor(start: Element | null): boolean {
   return false
 }
 
+// 시작 지점 조상 중 오른쪽으로 더 스크롤될 수 있는 요소가 있는가 (F-2089 4.2)
+export function hasScrollableRightAncestor(start: Element | null): boolean {
+  let node: Element | null = start
+  while (node) {
+    if (node.scrollWidth > node.clientWidth && node.scrollWidth - node.clientWidth - node.scrollLeft > 1) return true
+    node = node.parentElement
+  }
+  return false
+}
+
 // 편집기 안에서 비어 있지 않은 선택을 끄는 중이면 열지 않는다 (2.2 예외)
-function isDraggingTextSelection(target: Element | null): boolean {
+export function isDraggingTextSelection(target: Element | null): boolean {
   if (!target?.closest?.('.cm-content, [contenteditable="true"]')) return false
   const selection = window.getSelection()
   return Boolean(selection && !selection.isCollapsed)
@@ -59,7 +69,7 @@ export function useEdgeSwipe({ shellRef, sidebarRef, enabled, canOpen, sidebarOp
     }
 
     function handleTouchStart(e: TouchEvent) {
-      if (e.touches.length !== 1 || composingRef.current || hasOpenDialog()) {
+      if (e.touches.length !== 1 || composingRef.current || hasOpenDialog() || document.querySelector(".outline-panel[data-state='open']")) {
         startRef.current = null
         return
       }

@@ -247,6 +247,7 @@ export default function DocumentArea({
           contentWidth={contentWidthPref}
           railOpen={commentRailVisible}
           controlRef={outlineControlRef}
+          phonePanel={phone && !sharedDoc && !mapRoute}
         />
       )}
       <WikiLinkPreview

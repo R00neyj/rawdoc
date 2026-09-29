@@ -119,10 +119,10 @@ test('F-2083 E3 목차·알림 진입과 점', async ({ page }) => {
   await moreBtn(page).click()
   await sheet(page).getByRole('button', { name: '목차', exact: true }).click()
   await expect(sheet(page)).toBeHidden()
-  await expect(page.locator('.outline-popup-card')).toBeVisible()
-  await expect(page.locator('.outline-popup-card [aria-current="location"]')).toBeFocused()
+  await expect(page.locator('.outline-panel')).toHaveAttribute('data-state', 'open')
+  await expect(page.locator('.outline-panel .outline-item[aria-current="location"]')).toBeFocused()
   await page.keyboard.press('Escape')
-  await expect(page.locator('.outline-popup-card')).toHaveCount(0)
+  await expect(page.locator('.outline-panel')).toHaveCount(0)
   await expect(moreBtn(page)).toBeFocused()
 
   await moreBtn(page).click()

@@ -1,11 +1,24 @@
+// 알약이 다시 보일 때까지 프레임마다 포커스를 다시 시도한다 (F-2089 5.2)
+function focusAfterPillsBack(el: HTMLElement | null) {
+  if (!el) return
+  let tries = 0
+  const attempt = () => {
+    el.focus()
+    if (document.activeElement !== el && tries++ < 20) requestAnimationFrame(attempt)
+  }
+  requestAnimationFrame(attempt)
+}
+
 // 오른쪽 목차 — 편집·원문은 CM6 handle, 보기는 data-source-line 요소 기준(F-144.md 3.4), 여백 부족(56px 미만)이면 목차 버튼 + 같은 목록 카드(F-229.md 2장)
-import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type RefObject } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type RefObject } from 'react'
 import { computeCurrentIndex, findViewerHeadingEl, topInScroller } from './outlinePosition'
 import type { Heading } from '../editor/outline'
 import type { EditorHandle } from '../editor/Editor'
 import usePresence from './usePresence'
 import { IconToc } from './icons'
 import { floatCoverFor } from '../lib/floatCover'
+import OutlinePanel from './OutlinePanel'
+import { useOutlineSwipe } from './useOutlineSwipe'
 
 const SELECT_MARGIN = 16 // 3.3 "그 제목이 스크롤 영역 위에서 16px 아래에 오도록"
 const MIN_MARGIN = 56 // 2장 "메인 열 오른쪽 여백이 … 56px 이상일 때만"
@@ -43,16 +56,23 @@ type OutlineProps = {
   // 참이면 여백 판정 없이 선 목차 — 레일이 있으면 편집기 오른쪽 여백이 늘 164px 이상이다 (F-505 3.6, 2026-09-27 tweak)
   railOpen?: boolean
   controlRef?: RefObject<OutlineControl | null>
+  // 참이면 여백 모드에서 .outline-popup 대신 오른쪽 패널 (F-2089). DocumentArea 만 넘긴다
+  phonePanel?: boolean
 }
 
 // 보기 모드에서도 Editor 는 hidden 으로 마운트돼 있어 editorRef 의 view.state 를 쓴다 (F-123.md 3.3)
-export default function Outline({ editorRef, containerRef, viewerRef, docId, viewMode, contentWidth, railOpen, controlRef }: OutlineProps) {
+export default function Outline({ editorRef, containerRef, viewerRef, docId, viewMode, contentWidth, railOpen, controlRef, phonePanel }: OutlineProps) {
   const [headings, setHeadings] = useState<Heading[]>([])
   const [fits, setFits] = useState(false)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
   const [expanded, setExpanded] = useState(false) // 선 목차 마우스 올림 펼침 (F-144 2장)
   const [cardOpen, setCardOpen] = useState(false) // 버튼 모드 카드 (F-229 2.3)
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [panelOpen, setPanelOpen] = useState(false)
+  const [panelHost, setPanelHost] = useState<HTMLElement | null>(null)
+  const panelReturnRef = useRef<HTMLElement | null>(null)
+  const panelListRef = useRef<HTMLOListElement | null>(null)
+  const phonePanelRef = useRef(false)
   const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cardId = useId()
   const buttonRef = useRef<HTMLButtonElement | null>(null)
@@ -93,13 +113,19 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
   useEffect(() => {
     headingsRef.current = headings
     popupModeRef.current = popupMode
-  }, [headings, popupMode])
+    phonePanelRef.current = Boolean(phonePanel)
+  }, [headings, popupMode, phonePanel])
 
   useEffect(() => {
     if (!controlRef) return
     setControl(controlRef, {
       hasHeadings: () => headingsRef.current.length > 0,
       openCard: (returnFocusTo) => {
+        if (phonePanelRef.current) {
+          panelReturnRef.current = returnFocusTo
+          setPanelOpen(true)
+          return
+        }
         if (!popupModeRef.current) return
         escapeFocusRef.current = returnFocusTo
         setCardOpen(true)
@@ -107,6 +133,52 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
     })
     return () => setControl(controlRef, null)
   }, [controlRef])
+
+  useEffect(() => {
+    setPanelHost(containerRef.current?.closest<HTMLElement>('.app-body') ?? null)
+  }, [containerRef])
+
+  // 폭이 넓어지거나 지도·공유 화면으로 가거나 문서가 바뀌면 패널은 닫힌 채로 돌아간다 (F-2089 5.2)
+  const panelKey = `${docId}|${Boolean(phonePanel)}`
+  const [seenPanelKey, setSeenPanelKey] = useState(panelKey)
+  if (seenPanelKey !== panelKey) {
+    setSeenPanelKey(panelKey)
+    setPanelOpen(false)
+  }
+
+  const panelActive = Boolean(phonePanel) && visible
+  const openPanelBySwipe = useCallback(() => {
+    panelReturnRef.current = null
+    setPanelOpen(true)
+  }, [])
+  const closePanelBySwipe = useCallback(() => setPanelOpen(false), [])
+  useOutlineSwipe({ containerRef, enabled: panelActive, panelOpen, onOpen: openPanelBySwipe, onClose: closePanelBySwipe })
+
+  // 패널 Esc·대화상자·사이드바 겹침으로 닫기 (F-2089 5.2)
+  useEffect(() => {
+    if (!panelOpen) return
+    function handleKeyDown(e: globalThis.KeyboardEvent) {
+      if (e.key !== 'Escape' || document.querySelector('dialog[open]')) return
+      e.preventDefault()
+      closePanel(true)
+    }
+    function handleOverlay() {
+      if (document.querySelector('.sidebar-backdrop') || document.querySelector('dialog[open]')) setPanelOpen(false)
+    }
+    function closePanel(restoreFocus: boolean) {
+      const returnTo = panelReturnRef.current
+      panelReturnRef.current = null
+      setPanelOpen(false)
+      if (restoreFocus) focusAfterPillsBack(returnTo)
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    const mo = new MutationObserver(handleOverlay)
+    mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] })
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      mo.disconnect()
+    }
+  }, [panelOpen])
 
   // 현재 위치 갱신 + 스크롤 구독 (3.3)
   useEffect(() => {
@@ -250,6 +322,30 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
     collapseNow()
     escapeFocusRef.current = null
     setCardOpen(false) // F-229 2.4 — 포커스는 버튼으로 돌아가지 않는다
+    panelReturnRef.current = null
+    setPanelOpen(false)
+  }
+
+  function closePanelButton() {
+    const returnTo = panelReturnRef.current
+    panelReturnRef.current = null
+    setPanelOpen(false)
+    focusAfterPillsBack(returnTo)
+  }
+
+  if (phonePanel) {
+    if (!panelHost) return null
+    return (
+      <OutlinePanel
+        host={panelHost}
+        open={panelOpen}
+        headings={headings}
+        currentIndex={currentIndex}
+        listRef={panelListRef}
+        onSelect={selectHeading}
+        onClose={closePanelButton}
+      />
+    )
   }
 
   if (popupMode) {

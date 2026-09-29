@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { classifySwipe } from '../../../src/app/edgeSwipe'
+import { classifySwipe, classifyOutlineSwipe } from '../../../src/app/edgeSwipe'
 
 const base = {
   startX: 0,
@@ -64,5 +64,31 @@ describe('classifySwipe — 닫기 (열린 상태)', () => {
 
   it('열린 상태에서 오른쪽으로 밀면 null', () => {
     expect(classifySwipe({ ...openBase, startX: 100, startY: 100, endX: 200, endY: 100 })).toBeNull()
+  })
+})
+
+describe('classifyOutlineSwipe (F-2089 3.2)', () => {
+  const o = { startY: 400, endY: 400, panelOpen: false, startedInPanel: false, startedInScrollableRight: false }
+
+  it('닫힘 — 왼쪽 56px 이상이면 시작 위치와 무관하게 open', () => {
+    expect(classifyOutlineSwipe({ ...o, startX: 200, endX: 144 })).toBe('open')
+    expect(classifyOutlineSwipe({ ...o, startX: 380, endX: 300 })).toBe('open')
+    expect(classifyOutlineSwipe({ ...o, startX: 100, endX: 20 })).toBe('open')
+  })
+
+  it('닫힘 — 거리 부족·오른쪽·방향 비율 미달·스크롤 조상이면 null', () => {
+    expect(classifyOutlineSwipe({ ...o, startX: 200, endX: 160 })).toBeNull()
+    expect(classifyOutlineSwipe({ ...o, startX: 200, endX: 300 })).toBeNull()
+    expect(classifyOutlineSwipe({ ...o, startX: 200, endX: 120, endY: 460 })).toBeNull()
+    expect(classifyOutlineSwipe({ ...o, startX: 200, endX: 120, endY: 450 })).toBe('open')
+    expect(classifyOutlineSwipe({ ...o, startX: 200, endX: 100, startedInScrollableRight: true })).toBeNull()
+  })
+
+  it('열림 — 패널 안 시작 오른쪽 56px 이상만 close', () => {
+    const open = { ...o, panelOpen: true, startedInPanel: true }
+    expect(classifyOutlineSwipe({ ...open, startX: 200, endX: 256 })).toBe('close')
+    expect(classifyOutlineSwipe({ ...open, startX: 200, endX: 240 })).toBeNull()
+    expect(classifyOutlineSwipe({ ...open, startX: 200, endX: 100 })).toBeNull()
+    expect(classifyOutlineSwipe({ ...open, startedInPanel: false, startX: 200, endX: 300 })).toBeNull()
   })
 })

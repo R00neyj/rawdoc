@@ -398,11 +398,6 @@ svg {
   .topbar .icon-btn-wrap:has(> .topbar-palette-btn) {
     display: none;
   }
-
-  /* 앱 화면의 떠 있는 목차 버튼 — ⋯ 판 `목차` 로 대신한다. 공개 보기(.app-shell 밖)는 그대로 (F-2083 4.6) */
-  .app-shell .outline-popup > .outline-btn {
-    display: none;
-  }
 }
 
 /* ===== 본문 영역 (사이드바 + 메인 열) ===== */
@@ -5082,10 +5077,6 @@ body.sidebar-resizing {
     padding-top: var(--float-cover);
   }
 
-  .app-shell .outline-popup {
-    top: calc(var(--float-cover) - 8px);
-  }
-
   .comment-sheet {
     max-height: calc(100% - var(--float-cover));
   }
@@ -5266,5 +5257,91 @@ body.sidebar-resizing {
 
   .cm-host .cm-editor .cm-comment-gutter-marker::before {
     content: none;
+  }
+}
+
+/* 휴대폰 폭 목차 오른쪽 패널 — 겹침 사이드바(35/34)의 좌우 반전 (F-2089 6장) */
+@media (max-width: 600px) {
+  .outline-panel-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 34;
+    background: transparent;
+  }
+
+  .outline-panel {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 85%;
+    z-index: 35;
+    display: flex;
+    flex-direction: column;
+    background: var(--paper);
+    border-left: 1px solid var(--rule);
+    box-shadow: -8px 0 30px rgba(0, 0, 0, 0.12);
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+    transition: transform var(--transition-move), opacity var(--transition-fast), visibility var(--transition-fast);
+    transition-behavior: allow-discrete;
+  }
+
+  .outline-panel[data-state='closed'] {
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(100%);
+  }
+
+  @starting-style {
+    .outline-panel[data-state='open'] {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+  }
+
+  .outline-panel-head {
+    flex: none;
+    box-sizing: border-box;
+    height: calc(env(safe-area-inset-top, 0px) + 8px + 44px);
+    padding: calc(env(safe-area-inset-top, 0px) + 8px) 8px 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .outline-panel-title {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .outline-panel-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .outline-panel-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    list-style: none;
+    margin: 0;
+    padding: 6px 8px calc(env(safe-area-inset-bottom, 0px) + 6px);
+  }
+
+  .outline-panel-list li[data-level='2'] .outline-item {
+    padding-left: 20px;
+  }
+
+  .outline-panel-list li[data-level='3'] .outline-item {
+    padding-left: 32px;
+  }
+
+  .app-shell:has(.outline-panel[data-state='open']) .topbar-pill,
+  .app-shell:has(.outline-panel[data-state='open']) .topbar .peer-avatars {
+    opacity: 0;
+    visibility: hidden;
   }
 }
