@@ -11,6 +11,7 @@ export interface AuthUser {
   id: string
   email: string
   usage?: UserUsage // getUser 세 경로가 채운다. vi.mock('./auth') 테스트는 비워 둔다 (F-2024 2.1)
+  sessionId?: string // getUser 의 better-auth 세션 경로만 채운다 — 푸시 구독을 세션에 묶는다 (F-3003 6.1)
   notifRev?: number // 세션·개발 우회 경로가 채운다. /v1 토큰 경로와 vi.mock('./auth') 테스트는 비워 둔다 (F-2057 3.2)
 }
 
@@ -83,7 +84,7 @@ export async function getUser(request: Request, env: Env, ctx?: ExecutionContext
   const auth = getAuth(env)
   try {
     const result = await auth.api.getSession({ headers: request.headers, query: { disableRefresh: true } })
-    return result ? toAuthUser(result.user) : null
+    return result ? { ...toAuthUser(result.user), sessionId: result.session.id } : null
   } catch {
     return null
   }

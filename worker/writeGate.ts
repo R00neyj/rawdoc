@@ -16,6 +16,8 @@ export function isWriteRoute(method: string, routePath: string): boolean {
   if (routePath === '/api/login') return false
   // 계정 삭제는 막힌 계정·한도를 넘긴 계정도 할 수 있어야 한다 (F-2038 3.4)
   if (routePath === '/api/account') return false
+  // 끄기는 막힌 계정·한도를 넘긴 계정도 할 수 있어야 한다 (F-3003 Q2)
+  if (method === 'DELETE' && routePath === '/api/push/subscription') return false
   if (routePath.startsWith('/api/auth/')) return false
   return true
 }

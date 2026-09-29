@@ -77,6 +77,8 @@ import { isWriteRoute, runWriteGate } from './writeGate'
 import { handleDeleteAccount, handleGetAccount } from './account'
 import { PURGE_CALLS_ON_CRON, PURGE_CRON, runPurgeJobs } from './purgeJobs'
 import { usageOf } from './usage'
+import { handleDeletePushSubscription, handleGetPushKey, handlePostPushTest, handlePutPushSubscription } from './pushApi'
+import { cleanupPushSubscriptions, loadVapid } from './pushServer'
 
 export { DocRoom } from './docRoom'
 
@@ -281,6 +283,10 @@ const routes: Route[] = [
     path: '/pub/docs/:token/docs/:docId/attachments/:idext',
     handler: handlePublicGetDocSetAttachment,
   },
+  { method: 'GET', path: '/api/push/key', handler: handleGetPushKey },
+  { method: 'PUT', path: '/api/push/subscription', handler: handlePutPushSubscription },
+  { method: 'DELETE', path: '/api/push/subscription', handler: handleDeletePushSubscription },
+  { method: 'POST', path: '/api/push/test', handler: handlePostPushTest },
   { method: 'GET', path: '/api/usage', handler: handleGetUsage },
   { method: 'PUT', path: '/api/attachments/:idext', handler: handleUploadAttachment },
   { method: 'GET', path: '/api/attachments/:idext', handler: handleGetAttachment },
@@ -409,5 +415,7 @@ export default {
     ctx.waitUntil(runQuietly(() => cleanupServerAttachments(env, now)))
     ctx.waitUntil(runQuietly(() => cleanupExpiredAuth(env, now)))
     ctx.waitUntil(runQuietly(() => cleanupComments(env, now)))
+    // 비밀 값이 없으면 푸시가 꺼져 있다 — 구독 정리도 하지 않는다 (F-3003 6.4)
+    if (await loadVapid(env)) ctx.waitUntil(runQuietly(() => cleanupPushSubscriptions(env, now)))
   },
 } satisfies ExportedHandler<Env>

@@ -19,6 +19,13 @@ declare module 'node:fs' {
 declare module 'node:url' {
   export function fileURLToPath(url: string | URL): string
 }
+declare module 'node:child_process' {
+  export function spawnSync(
+    command: string,
+    args: string[],
+    options: { encoding: 'utf-8' },
+  ): { status: number | null; stdout: string; stderr: string }
+}
 // 테스트가 migrations/·wrangler.jsonc 를 찾는 기준 — DOM lib 이 없어 여기서 선언한다
 interface ImportMeta {
   readonly url: string

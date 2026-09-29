@@ -2,7 +2,7 @@
 import { SITE_URL } from '../src/lib/siteMeta'
 
 // wrangler types 는 vars 를 리터럴 타입으로 만든다 — 로컬 .dev.vars 값이 들어오므로 string 으로 넓혀 읽는다
-export function readVar(env: Env, name: 'BETTER_AUTH_URL' | 'DEV_AUTH_EMAIL'): string | undefined {
+export function readVar(env: Env, name: 'BETTER_AUTH_URL' | 'DEV_AUTH_EMAIL' | 'VAPID_PRIVATE_JWK'): string | undefined {
   const value = (env as unknown as Record<string, unknown>)[name]
   return typeof value === 'string' ? value : undefined
 }
