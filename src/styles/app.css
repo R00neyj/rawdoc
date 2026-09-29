@@ -518,6 +518,7 @@ body.sidebar-resizing {
 
 .sidebar-actions {
   display: flex;
+  flex-wrap: wrap; /* 좁은 폰·좁게 저장된 사이드바에서 가로로 넘치던 것 (tweak 2026-09-29) */
   justify-content: center;
   gap: 4px;
   margin: 2px 0 8px;
