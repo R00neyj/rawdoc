@@ -125,7 +125,7 @@ async function createLocalDocsThenSignIn(page) {
   await folderRow.locator('.item-menu-btn').click()
   await page.getByRole('menuitem', { name: '새 문서' }).click()
   await page.locator('.doc-title').fill('폴더 문서')
-  await typeIntoEditor(page, '폴더 안 내용') // 새 문서 lineEnding 기본값이 crlf 다 (App.tsx createNewDoc)
+  await typeIntoEditor(page, '폴더 안 내용') // 새 문서 lineEnding 기본값이 crlf 다 (useDocNavigation.ts createNewDoc)
   await waitSaved(page)
 
   // 상단 고정 문서

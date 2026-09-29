@@ -6,7 +6,7 @@ import { extractAttachmentRefs } from '../lib/imageBlock'
 import { parseCommentRecords, type CommentRecord } from '../lib/docComments'
 import type { Store, Doc, Folder, Attachment, AttachmentExt, FolderDeleteMode } from '../types'
 
-const DEFAULT_DB_NAME = 'md-docs'
+export const DEFAULT_DB_NAME = 'md-docs'
 const DB_VERSION = 6
 const DOCS_STORE = 'docs'
 const META_STORE = 'meta'

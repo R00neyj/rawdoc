@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { StateCommand } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import type { EditorHandle } from '../editor/Editor'
@@ -24,7 +24,6 @@ export type UseContextMenuOptions = {
   openDoc: { readonly id: string } | null
   currentDocId: string | null
   showNotice: (input: NoticeWithAction) => number
-  openPaletteFrom: (fromEditor: boolean | undefined) => void
 }
 
 export type UseContextMenuResult = {
@@ -32,11 +31,13 @@ export type UseContextMenuResult = {
   handleViewContextMenu: (info: ViewContextMenuInfo) => void
   handleContextMenuSelect: (node: MenuItemNode) => Promise<void>
   closeContextMenu: (opts?: { returnFocus?: boolean }) => void
+  openPaletteFromRef: RefObject<(fromEditor: boolean | undefined) => void>
 }
 
 // 우클릭 메뉴 상태·열기·닫기·실행 (specs/features/F-170.md, F-2061)
 export function useContextMenu(options: UseContextMenuOptions): UseContextMenuResult {
-  const { editorRef, commentsRef, beginComment, openDoc, currentDocId, showNotice, openPaletteFrom } = options
+  const { editorRef, commentsRef, beginComment, openDoc, currentDocId, showNotice } = options
+  const openPaletteFromRef = useRef<(fromEditor: boolean | undefined) => void>(() => {})
 
   // 우클릭 메뉴 상태 (specs/features/F-170.md) — view·container 는 place 에 따라 하나만 쓴다
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
@@ -207,7 +208,7 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
       // 메뉴가 이미 사라져 Dialog 가 기억할 "연 순간의 요소" 가 없다 — 먼저 포커스를 돌려 놓는다(칸 메뉴면 주 에디터, F-2022.md 7.3)
       ;(cm.mainView ?? cm.view)?.focus()
       // 칸 갈래는 팔레트 전에 주 에디터에 포커스를 주므로 activeElement 로 판정하면 틀린다 — 연 곳을 넘긴다 (F-2055 4.1)
-      openPaletteFrom(cm.place === 'editor')
+      openPaletteFromRef.current(cm.place === 'editor')
       return
     }
     if (node.action === 'comment-add') {
@@ -224,5 +225,5 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
     refocusContextMenuTarget(cm)
   }
 
-  return { contextMenu, handleViewContextMenu, handleContextMenuSelect, closeContextMenu }
+  return { contextMenu, handleViewContextMenu, handleContextMenuSelect, closeContextMenu, openPaletteFromRef }
 }

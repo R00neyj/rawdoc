@@ -1065,3 +1065,676 @@ test.describe('F-2069 알림함 절', () => {
     expect(countDocs()).toBe(before)
   })
 })
+
+// ----- F-2070 실시간 알림 띠 절 -----
+function serverDoc2070(id, { title, content }) {
+  const now = Date.now()
+  return { id, title, content, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: now, updatedAt: now }
+}
+
+async function openLive2070(page, room, docs, openId) {
+  const server = await fakeServer(page)
+  await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
+    }
+    return route.fulfill({ status: 204 })
+  })
+  await room.install(page.context())
+  for (const doc of docs) server.docs.set(doc.id, serverDoc2070(doc.id, doc))
+  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+  await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+  await page.goto(`/#/d/${openId}`)
+}
+
+async function openViewLive2070(page, room) {
+  await fakeServer(page)
+  await room.install(page.context())
+  // 서버 본문을 방과 다르게 둬서 방 본문이 보이면 실시간 동기화가 끝난 것으로 본다
+  const viewDoc = serverDoc2070('f2070-view', { title: '보기 문서', content: '서버 본문' })
+  await page.route(/\/api\/docs\/f2070-view$/, (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(viewDoc) })
+  })
+  await page.route('**/api/shared', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{ ...viewDoc, content: undefined, role: 'view', ownerEmail: 'owner@x.com' }]),
+    }),
+  )
+  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+  await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+  await page.goto('/#/d/f2070-view')
+}
+
+test.describe('F-2070 실시간 알림 띠 절', () => {
+  test.use({ viewport: { width: 1600, height: 900 } })
+
+  test('F-2070 C1 동기화 뒤 4401 — N4 와 새 문서로 저장', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed('f2070-live', { content: '본문 가', title: '실시간 가' })
+    await openLive2070(page, room, [{ id: 'f2070-live', title: '실시간 가', content: '본문 가' }], 'f2070-live')
+    await expect(page.locator('.cm-content').first()).toContainText('본문 가')
+
+    room.closeAll('f2070-live', 4401, 'unauthenticated')
+    await expect(page.locator('.notice--error .notice-message')).toHaveText(
+      '로그인이 만료되어 실시간 편집을 멈췄습니다. 지금 화면의 내용은 새 문서로 저장할 수 있습니다.',
+    )
+    await expect(page.locator('.notice').getByRole('button', { name: '새 문서로 저장' })).toBeVisible()
+    await expect(page.locator('.cm-content').first()).toHaveAttribute('contenteditable', 'false')
+  })
+
+  test('F-2059 D1 지도 위에서 새 문서로 저장 — 지도를 떠나 새 문서를 연다', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed('f2070-live', { content: '본문 가', title: '실시간 가' })
+    await openLive2070(page, room, [{ id: 'f2070-live', title: '실시간 가', content: '본문 가' }], 'f2070-live')
+    await expect(page.locator('.cm-content').first()).toContainText('본문 가')
+
+    room.closeAll('f2070-live', 4401, 'unauthenticated')
+    const saveBtn = page.locator('.notice').getByRole('button', { name: '새 문서로 저장' })
+    await expect(saveBtn).toBeVisible()
+    await page.getByRole('button', { name: '지도' }).first().click()
+    await expect(page.locator('.map-page')).toBeVisible()
+
+    await saveBtn.click()
+    await expect(page).toHaveURL(/#\/d\/(?!f2070-live)[^/]+$/)
+    await expect(page.locator('.map-page')).toHaveCount(0)
+    await expect(page.locator('.cm-content').first()).toContainText('본문 가')
+  })
+
+  test('F-2070 C2 새 문서로 저장 알림은 다른 문서로 옮기면 걷힌다', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed('f2070-live', { content: '본문 가', title: '실시간 가' })
+    room.seed('f2070-other', { content: '본문 나', title: '실시간 나' })
+    const docs = [
+      { id: 'f2070-live', title: '실시간 가', content: '본문 가' },
+      { id: 'f2070-other', title: '실시간 나', content: '본문 나' },
+    ]
+    await openLive2070(page, room, docs, 'f2070-live')
+    await expect(page.locator('.cm-content').first()).toContainText('본문 가')
+
+    room.closeAll('f2070-live', 4403, 'revoked')
+    await expect(page.locator('.notice-message')).toHaveText('편집 권한이 없어져 읽기만 할 수 있습니다.')
+    await page.locator('.doc-item-btn', { hasText: '실시간 나' }).click()
+
+    await expect(page.locator('.cm-content').first()).toContainText('본문 나')
+    await expect(page.getByText('편집 권한이 없어져 읽기만 할 수 있습니다.')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '새 문서로 저장' })).toHaveCount(0)
+  })
+
+  test('F-2070 C3 읽기 전용 세션 동기화 뒤 4401 — N10, 버튼 없음', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed('f2070-view', { content: '보기 본문', title: '보기 문서' })
+    room.setRole('f2070-view', 'u1', 'view')
+    await openViewLive2070(page, room)
+    await expect(page.locator('.statusbar-save')).toHaveText('저장됨')
+    // 저장됨 은 HTTP 본문으로도 뜬다 — 방 본문이 보여야 닫을 실시간 연결이 있다
+    await expect(page.locator('.cm-content', { hasText: '보기 본문' })).toBeVisible()
+
+    room.closeAll('f2070-view', 4401, 'unauthenticated')
+    await expect(page.locator('.notice--error .notice-message')).toHaveText('로그인이 만료되어 실시간 연결을 멈췄습니다.')
+    await expect(page.getByRole('button', { name: '새 문서로 저장' })).toHaveCount(0)
+  })
+})
+
+test.describe('F-2071 해시 라우팅 절', () => {
+  test.use({ viewport: { width: 1280, height: 900 } })
+
+  test('F-2071 C1 도움말 — 뒤로 가기로 문서, 앞으로 가기로 다시 도움말', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    const A = await importMarkdown(page, { name: '가.md', content: '가 본문\n' })
+    await page.locator('.sidebar').getByRole('button', { name: '도움말' }).first().click()
+    await expect(page.locator('.help-page')).toBeVisible()
+    await expect(page).toHaveURL(/#\/help$/)
+
+    await page.goBack()
+    await expect(page).toHaveURL(new RegExp(`#/d/${A}$`))
+    await expect(page.locator('.help-page')).toHaveCount(0)
+    await expect(page.locator('.doc-title')).toHaveValue('가')
+
+    await page.goForward()
+    await expect(page.locator('.help-page')).toBeVisible()
+    await expect(page).toHaveURL(/#\/help$/)
+
+    await page.goBack()
+    await expect(page.locator('.doc-title')).toHaveValue('가')
+    await expect(page.locator('.help-page')).toHaveCount(0)
+  })
+
+  test('F-2071 C2 지도 — 앞으로 가기로 다시 들어가면 그 문서가 중심이다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    const A = await currentDocId(page)
+    await page.locator('.sidebar').getByRole('button', { name: '지도' }).first().click()
+    await expect(page.locator('.map-page')).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`#/map/${A}$`))
+    await page.goBack()
+    await expect(page).toHaveURL(new RegExp(`#/d/${A}$`))
+    await expect(page.locator('.map-page')).toHaveCount(0)
+
+    await page.goForward()
+    await expect(page.locator('.map-page')).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`#/map/${A}$`))
+    expect(await readPref(page, 'md.lastDocId')).toBe(A)
+
+    await page.locator('.map-page').getByRole('button', { name: '닫기', exact: true }).click()
+    await expect(page).toHaveURL(new RegExp(`#/d/${A}$`))
+    await expect(page.locator('.map-page')).toHaveCount(0)
+  })
+
+  test('F-2071 C3 주소 직접 수정 — 폴더 안 문서는 폴더를 펴고 편집기에 초점, #/ 는 홈', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    const A = await importMarkdown(page, { name: '가.md', content: '가 본문\n' })
+    await createLayoutFolder(page, '폴더')
+    await moveDocToLayoutFolder(page, '폴더')
+    await importMarkdown(page, { name: '나.md', content: '나 본문\n' })
+    await folderToggle(page, '폴더 접기').click()
+    await expect(folderToggle(page, '폴더 펼치기')).toBeVisible()
+
+    await page.evaluate((id) => { location.hash = '#/d/' + id }, A)
+    await expect(page.locator('.doc-title')).toHaveValue('가')
+    await expect(folderToggle(page, '폴더 접기')).toBeVisible()
+    await expect.poll(() => readPref(page, 'md.lastDocId')).toBe(A)
+    await expect(page.locator('.cm-content')).toBeFocused()
+
+    await page.evaluate(() => { location.hash = '#/' })
+    await expect(page.locator('.empty-state')).toBeVisible()
+    await expect(page).toHaveURL(/#\/$/)
+  })
+})
+
+function docItem2072(page, name) {
+  const sidebar = page.locator('.sidebar')
+  return sidebar.getByRole('button', { name, exact: true }).or(sidebar.getByRole('link', { name, exact: true }))
+}
+
+test.describe('F-2072 편집기 연동 절', () => {
+  test.use({ viewport: { width: 1280, height: 900 } })
+
+  test('F-2072 C1 문서를 열면 상태바 글자·단어 수가 그 문서 저장 본문 기준이다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    const A = await importMarkdown(page, { name: '셈가.md', content: '하나 둘 셋\n' })
+    await importMarkdown(page, { name: '셈나.md', content: 'abc def ghij klm\n' })
+    await expect(page.locator('.statusbar-info')).toContainText('16자 · 4단어')
+
+    await docItem2072(page, '셈가').click()
+    await expect.poll(() => currentDocId(page)).toBe(A)
+    await expect(page.locator('.statusbar-info')).toContainText('6자 · 3단어')
+
+    await docItem2072(page, '셈나').click()
+    await expect(page.locator('.statusbar-info')).toContainText('16자 · 4단어')
+  })
+
+  test('F-2072 C2 보기 모드에서 [[문서#제목]] 로 다른 문서를 열면 그 문서 HTML 이 그려진 뒤 제목으로 스크롤한다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await openApp(page)
+    const LONG = Array.from({ length: 60 }, (_, i) => `문단 ${i}`).join('\n\n')
+    const target = await importMarkdown(page, { name: '회의록.md', content: '회의 첫 줄\n\n' + LONG + '\n\n## 결정\n\n결정 내용\n' })
+    await importMarkdown(page, { name: '출발.md', content: '출발 문서\n\n[[회의록#결정]]\n' })
+    await setViewMode(page, 'view')
+    const link = page.locator('.viewer a.wikilink[data-wikilink="회의록"][data-wikilink-heading="결정"]')
+    await expect(link).toBeVisible()
+    await link.click()
+
+    await expect.poll(() => currentDocId(page)).toBe(target)
+    await expect(page.locator('.viewer h2', { hasText: '결정' })).toBeInViewport()
+    await expect(page.locator('.viewer p', { hasText: /^회의 첫 줄$/ })).not.toBeInViewport()
+  })
+})
+
+const PASSWORD2073 = '충분히긴금고암호입니다'
+
+async function waitBooted2073(page) {
+  await expect(page.locator('.cm-host .cm-editor').or(page.locator('.e2ee-locked-panel')).or(page.locator('.empty-state'))).toBeVisible()
+}
+
+async function createVault2073(page) {
+  await page.getByRole('button', { name: '설정', exact: true }).click()
+  const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
+  await dialog.getByRole('tab', { name: '금고' }).click()
+  await dialog.getByRole('button', { name: '금고 만들기…' }).click()
+  const create = page.locator('dialog[aria-labelledby="e2ee-create-title"]')
+  await create.locator('input[aria-labelledby="e2ee-create-password-label"]').fill(PASSWORD2073)
+  await create.locator('input[aria-labelledby="e2ee-create-confirm-label"]').fill(PASSWORD2073)
+  await create.getByRole('button', { name: '다음' }).click()
+  await create.getByLabel('복구 코드를 안전한 곳에 보관했습니다').check()
+  await create.getByRole('button', { name: '금고 만들기' }).click()
+  await expect(create).toBeHidden()
+  await page.getByRole('button', { name: '닫기', exact: true }).click()
+  await expect(dialog).toBeHidden()
+  await expect(page.locator('.statusbar-e2ee')).toHaveText('금고 열림')
+}
+
+function rowOf2073(page, name) {
+  const label = page.getByRole('button', { name, exact: true }).or(page.getByRole('link', { name, exact: true }))
+  return page.locator('.sidebar .tree-row').filter({ has: label })
+}
+
+async function openRowMenu2073(page, name) {
+  const row = rowOf2073(page, name)
+  await row.hover()
+  await row.getByRole('button', { name: `${name} 메뉴` }).click()
+  return page.locator('.item-menu-list:not([inert])')
+}
+
+async function newFolder2073(page, name) {
+  await page.locator('.sidebar').getByRole('button', { name: '새 폴더', exact: true }).click()
+  const input = page.locator('.tree-rename-input')
+  await expect(input).toBeFocused()
+  await input.fill(name)
+  await input.press('Enter')
+  await expect(rowOf2073(page, name)).toBeVisible()
+}
+
+async function clickNewDocInFolder2073(page, folderName) {
+  const menu = await openRowMenu2073(page, folderName)
+  await menu.getByRole('menuitem', { name: '새 문서', exact: true }).click()
+}
+
+async function markLocalFolderE2ee2073(page, folderId) {
+  await page.evaluate(
+    (folderId) =>
+      new Promise((resolve, reject) => {
+        const req = indexedDB.open('md-docs')
+        req.onerror = () => reject(req.error)
+        req.onsuccess = () => {
+          const db = req.result
+          const tx = db.transaction('folders', 'readwrite')
+          const store = tx.objectStore('folders')
+          const get = store.get(folderId)
+          get.onsuccess = () => store.put({ ...get.result, e2ee: true })
+          tx.oncomplete = () => {
+            db.close()
+            resolve()
+          }
+          tx.onerror = () => reject(tx.error)
+        }
+      }),
+    folderId,
+  )
+}
+
+async function folderIdOf2073(page, name) {
+  return page.locator('.sidebar li[data-folder-id]').filter({ has: page.getByRole('button', { name, exact: true }) }).first().getAttribute('data-folder-id')
+}
+
+async function unlockVia2073(container) {
+  await container.locator('input[type="password"]').fill(PASSWORD2073)
+  await container.getByRole('button', { name: '열기', exact: true }).click()
+}
+
+// 로컬 금고 문서 하나를 만들어 제목·본문을 저장해 둔다 (e2eeDocs.spec.js makeLocalVaultDoc 와 같은 절차)
+async function makeLocalVaultDoc2073(page) {
+  await openApp(page)
+  await createVault2073(page)
+  await newFolder2073(page, '비밀함')
+  const folderId = await folderIdOf2073(page, '비밀함')
+  await markLocalFolderE2ee2073(page, folderId)
+  await page.reload()
+  await waitBooted2073(page)
+  await clickNewDocInFolder2073(page, '비밀함')
+  const unlock = page.locator('dialog[aria-labelledby="e2ee-unlock-title"]')
+  await unlockVia2073(unlock)
+  await expect(unlock).toBeHidden()
+  await expect(page.locator('.doc-title')).toBeFocused()
+  const docId = await currentDocId(page)
+  await page.locator('.doc-title').fill('비밀 제목')
+  await page.locator('.doc-title').press('Enter')
+  await page.locator('.cm-content').click()
+  await page.keyboard.type('비밀 본문 한 줄')
+  await expect(page.locator('.statusbar-save')).toContainText('저장됨')
+  return { folderId, docId }
+}
+
+test.describe('F-2073 금고 옮기기·이관·잠그기·초기화 절', () => {
+  test.use({ viewport: { width: 1280, height: 900 } })
+
+  test('F-2073 C1 잠가서 P1 이 뜬 문서는 초점을 주지 않고, 다른 문서에 다녀오면 P1 이 초점을 받는다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    const { docId: vaultId } = await makeLocalVaultDoc2073(page)
+    // 가져오기는 지금 문서의 폴더에 넣는다 — 금고 폴더 밖 문서로 옮겨 가서 가져온다
+    await page.locator('.sidebar .tree-row').filter({ has: page.getByRole('link', { name: '제목 없는 문서', exact: true }) }).getByRole('link').click()
+    await expect.poll(() => currentDocId(page)).not.toBe(vaultId)
+    const plainId = await importMarkdown(page, { name: '일반.md', content: '# 일반\n' })
+
+    await page.locator(`.sidebar a[href="#/d/${vaultId}"]`).click()
+    await expect(page.locator('.cm-content')).toContainText('비밀 본문 한 줄')
+    await page.locator('.cm-content').click()
+    await page.locator('.statusbar-e2ee').click()
+    const panel = page.locator('.e2ee-locked-panel')
+    await expect(panel).toBeVisible()
+    await expect(page.locator('.cm-host .cm-editor')).toHaveCount(0)
+    await expect(panel.locator('input[type="password"]')).not.toBeFocused()
+
+    await page.locator(`.sidebar a[href="#/d/${plainId}"]`).click()
+    await expect(page.locator('.cm-content')).toContainText('일반')
+    await page.locator(`.sidebar a[href="#/d/${vaultId}"]`).click()
+    await expect(panel).toBeVisible()
+    await expect(panel.locator('input[type="password"]')).toBeFocused()
+  })
+
+  test('F-2073 C2 열린 금고 문서가 있을 때 금고를 초기화하면 문서를 닫고 주소가 #/ 가 된다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    const { folderId, docId } = await makeLocalVaultDoc2073(page)
+    await expect.poll(() => currentDocId(page)).toBe(docId)
+
+    await page.getByRole('button', { name: '설정', exact: true }).click()
+    const settings = page.locator('dialog[aria-labelledby="settings-title"]')
+    await settings.getByRole('tab', { name: '금고' }).click()
+    await settings.getByRole('button', { name: '금고 초기화…' }).click()
+    const reset = page.locator('dialog[aria-labelledby="e2ee-reset-title"]')
+    await reset.locator('input[aria-labelledby="e2ee-reset-confirm-label"]').fill('초기화')
+    await reset.getByRole('button', { name: '초기화', exact: true }).click()
+
+    await expect(page.locator('.notice--info .notice-message')).toHaveText('금고를 초기화했습니다.')
+    await expect.poll(() => currentDocId(page)).toBe(null)
+    expect(await page.evaluate(() => location.hash)).toBe('#/')
+
+    await page.getByRole('button', { name: '닫기', exact: true }).click()
+    await expect(page.locator(`.sidebar a[href="#/d/${docId}"]`)).toHaveCount(0)
+    await expect(page.locator(`.sidebar li[data-folder-id="${folderId}"]`)).toHaveCount(0)
+  })
+})
+
+async function reboot2074(page, hash) {
+  await page.goto('about:blank')
+  await page.goto('/' + hash)
+}
+
+async function twoDocs2074(page) {
+  await openApp(page)
+  const a = await importMarkdown(page, { name: '가.md', content: '가 문서\n' })
+  const b = await importMarkdown(page, { name: '나.md', content: '나 문서\n' })
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem('md.lastDocId'))).toBe(b)
+  return { a, b }
+}
+
+test.describe('F-2074 부팅 첫 화면 절', () => {
+  test.use({ viewport: { width: 1280, height: 900 } })
+
+  test('F-2074 C1 부팅 해시가 공유 링크면 공유 화면을 연다', async ({ page, context }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await openApp(page)
+    await importMarkdown(page, { name: '공유부팅.md', content: '공유 부팅 본문\n' })
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    await page.getByRole('menuitem', { name: '링크 복사' }).click()
+    const link = await page.evaluate(() => navigator.clipboard.readText())
+    const hash = new URL(link).hash
+
+    await reboot2074(page, hash)
+    await expect(page.locator('.shared-view')).toBeVisible()
+    await expect(page.locator('.shared-view')).toContainText('공유 부팅 본문')
+    expect(await page.evaluate(() => location.hash)).toContain('#/s/')
+    await expect(page.locator('.notice--error')).toHaveCount(0)
+  })
+
+  test('F-2074 C2 부팅 해시의 공유 조각이 깨졌으면 알림 뒤 마지막 문서를 연다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    const { b } = await twoDocs2074(page)
+
+    await reboot2074(page, '#/s/a')
+    await expect(page.locator('.notice-message')).toHaveText('공유 링크를 읽을 수 없습니다. 주소가 잘렸는지 확인하세요.')
+    await expect(page.locator('.cm-content')).toContainText('나 문서')
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`#/d/${b}$`))
+    await expect(page.locator('.shared-view')).toHaveCount(0)
+  })
+
+  test('F-2074 C3 부팅 해시의 문서가 없으면 알림 뒤 마지막 문서를 열고 주소를 바꾼다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    const { b } = await twoDocs2074(page)
+
+    await reboot2074(page, '#/d/f2074-missing')
+    await expect(page.locator('.notice-message')).toHaveText('문서를 찾을 수 없습니다.')
+    await expect(page.locator('.cm-content')).toContainText('나 문서')
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`#/d/${b}$`))
+  })
+
+  test('F-2074 C4 부팅 해시가 지도 기준 문서면 지도를 열고 마지막 문서로 적는다', async ({ page }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    const { a } = await twoDocs2074(page)
+
+    await reboot2074(page, `#/map/${a}`)
+    await expect(page.locator('.map-page')).toBeVisible()
+    await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`#/map/${a}$`))
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem('md.lastDocId'))).toBe(a)
+  })
+})
+
+// ----- F-2077 세션 핵 절 -----
+function serverDoc2077(id, { title, content, updatedAt = Date.now() }) {
+  return { id, title, content, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: updatedAt, updatedAt }
+}
+
+async function openLive2077(page, room, docs, openId) {
+  const server = await fakeServer(page)
+  await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
+    }
+    return route.fulfill({ status: 204 })
+  })
+  await room.install(page.context())
+  for (const doc of docs) server.docs.set(doc.id, serverDoc2077(doc.id, doc))
+  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+  await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+  await page.goto(`/#/d/${openId}`)
+  return server
+}
+
+// context.setOffline 은 navigator.onLine·이벤트만, fakeServer.setOffline 은 요청 실패만 만든다 — 둘을 함께
+async function setOffline2077(page, server, offline) {
+  server.setOffline(offline)
+  await page.context().setOffline(offline)
+}
+
+test.describe('F-2077 세션 핵 절', () => {
+  test.use({ viewport: { width: 1600, height: 900 } })
+
+  test('F-2077 C1 동기화 뒤 상대 편집도 700ms 뒤 사이드바 맨 위로 올린다', async ({ page, browser, baseURL }) => {
+    const room = createFakeDocRoom()
+    room.seed('f2077-x', { content: '엑스 본문', title: '엑스 문서' })
+    room.seed('f2077-y', { content: '와이 본문', title: '와이 문서' })
+    const now = Date.now()
+    const docs = [
+      { id: 'f2077-x', title: '엑스 문서', content: '엑스 본문', updatedAt: now - 10_000 },
+      { id: 'f2077-y', title: '와이 문서', content: '와이 본문', updatedAt: now },
+    ]
+    await openLive2077(page, room, docs, 'f2077-x')
+    await expect(page.locator('.cm-content').first()).toContainText('엑스 본문')
+    await expect(page.locator('.statusbar-save')).toHaveText('저장됨')
+    await page.waitForTimeout(1_000)
+    const before = await page.locator('.doc-item-btn').allTextContents()
+    expect(before.indexOf('와이 문서')).toBeLessThan(before.indexOf('엑스 문서'))
+
+    const context = await browser.newContext({ baseURL, viewport: { width: 1600, height: 900 }, serviceWorkers: 'block' })
+    try {
+      const other = await context.newPage()
+      await openLive2077(other, room, docs, 'f2077-x')
+      await expect(other.locator('.cm-content').first()).toContainText('엑스 본문')
+      await other.locator('.cm-content .cm-line', { hasText: '엑스 본문' }).first().click()
+      await other.keyboard.press('End')
+      await other.keyboard.type(' 원격')
+      await expect.poll(() => room.content('f2077-x')).toContain(' 원격')
+
+      await expect(page.locator('.cm-content').first()).toContainText('엑스 본문 원격')
+      await expect(page.locator('.doc-item-btn').first()).toHaveText('엑스 문서', { timeout: 3_000 })
+    } finally {
+      await context.close()
+    }
+  })
+
+  test('F-2077 C2 첫 동기화 전 오프라인이 되면 읽기 전용으로 내려가고 온라인이 되면 방 본문으로 편집한다', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed('f2077-c', { content: '씨 방 본문', title: '씨 문서' })
+    room.pause('f2077-c')
+    const server = await openLive2077(page, room, [{ id: 'f2077-c', title: '씨 문서', content: '씨 캐시 본문' }], 'f2077-c')
+    await expect(page.locator('.statusbar-save')).toHaveText('불러오는 중…')
+    await expect.poll(() => room.connections('f2077-c')).toBe(1)
+
+    await setOffline2077(page, server, true)
+    const notice = '오프라인에서는 이 문서를 읽기만 할 수 있습니다. 연결되면 편집할 수 있습니다.'
+    await expect(page.locator('.notice-message')).toHaveText(notice)
+    await expect(page.locator('.cm-content').first()).toContainText('씨 캐시 본문')
+    await expect(page.locator('.cm-content').first()).toHaveAttribute('contenteditable', 'false')
+
+    room.resume('f2077-c')
+    await setOffline2077(page, server, false)
+    await expect(page.locator('.cm-content').first()).toContainText('씨 방 본문', { timeout: 5_000 })
+    await expect(page.locator('.cm-content').first()).toHaveAttribute('contenteditable', 'true')
+    await expect(page.getByText(notice)).toHaveCount(0)
+  })
+})
+
+test.describe('F-2078 명령 팔레트 절', () => {
+  test('F-2078 C1 우클릭 메뉴가 열린 채 Ctrl+P — 메뉴가 닫히고 팔레트가 열린다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '본문 줄\n' })
+    const line = page.locator('.cm-line', { hasText: '본문 줄' }).first()
+    await rightClick(page, line)
+    await expect(root(page)).toBeVisible()
+    await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('.context-menu-root'))).toBe(true)
+
+    await page.keyboard.press('Control+p')
+    await expect(page.locator('dialog[open] .command-palette')).toBeVisible()
+    await expect(root(page)).toHaveCount(0)
+    await expect(page.locator('.command-palette-input')).toBeFocused()
+  })
+})
+
+test.describe('F-2079 계정 상태 절', () => {
+  const L5 = '이 계정은 운영자가 쓰기를 막았습니다. 문서 읽기와 내보내기만 할 수 있습니다.'
+  const L7 = '운영자가 이 계정의 사용 방식에 주의를 보냈습니다. 이용약관 제7조(금지 행위)를 확인해 주세요. 계속되면 쓰기가 막힐 수 있습니다.'
+
+  const countMeOnVisible = (page) => page.evaluate(() => {
+    const original = window.fetch
+    let count = 0
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (new URL(url, location.href).pathname === '/api/me') count++
+      return original(input, init)
+    }
+    try {
+      document.dispatchEvent(new Event('visibilitychange'))
+    } finally {
+      window.fetch = original
+    }
+    return count
+  })
+
+  test('F-2079 C1 online 이 오면 /api/me 를 다시 읽어 막힘과 풀림을 반영한다', async ({ page }) => {
+    const server = await fakeServer(page)
+    await openApp(page)
+    await expect(page.locator('.cm-content')).toHaveAttribute('contenteditable', 'true')
+
+    server.setMe({ blocked: true })
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+    await expect(page.locator('.notice-message')).toHaveText(L5)
+    await expect(page.locator('.cm-content')).toHaveAttribute('contenteditable', 'false')
+
+    server.setMe({ blocked: false })
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+    await expect(page.locator('.notice-message')).toHaveCount(0)
+    await expect(page.locator('.cm-content')).toHaveAttribute('contenteditable', 'true')
+  })
+
+  test('F-2079 C2 화면 복귀는 마지막 확인 10분 안이면 /api/me 를 읽지 않고, 지나면 읽는다', async ({ page }) => {
+    await page.clock.install()
+    const server = await fakeServer(page)
+    await openApp(page)
+    await expect(page.locator('.cm-content')).toBeVisible()
+
+    await page.clock.fastForward('09:00')
+    expect(await countMeOnVisible(page)).toBe(0)
+
+    server.setMe({ warned: true })
+    await page.clock.fastForward('01:01')
+    expect(await countMeOnVisible(page)).toBe(1)
+    await expect(page.locator('.notice--warn .notice-message')).toHaveText(L7)
+  })
+})
+
+test.describe('F-2081 JSX 컴포넌트 다섯 절', () => {
+  test('F-2081 C1 숨은 파일 입력 셋과 인쇄 영역 자리', async ({ page }) => {
+    await openApp(page)
+    const inputs = page.locator('.app-shell > input[type="file"][hidden]')
+    await expect(inputs).toHaveCount(3)
+    const attrs = await inputs.evaluateAll((els) => els.map((el) => [el.dataset.import, el.accept, el.webkitdirectory]))
+    expect(attrs).toEqual([
+      ['md', '.md,text/markdown', false],
+      ['zip', '.zip,application/zip', false],
+      ['folder', '', true],
+    ])
+    await expect(page.locator('.app-shell > .print-root:last-child')).toHaveCount(1)
+  })
+})
+
+// F-2074 C1 과 같은 길로 공유 화면을 열고 가져온 문서 id 를 돌려준다
+async function openSharedView2082(page, context, name, content) {
+  await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await openApp(page)
+  const docId = await importMarkdown(page, { name, content })
+  await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+  await page.getByRole('menuitem', { name: '링크 복사' }).click()
+  const link = await page.evaluate(() => navigator.clipboard.readText())
+  const hash = new URL(link).hash
+  await page.goto('about:blank')
+  await page.goto('/' + hash)
+  await expect(page.locator('.shared-view')).toBeVisible()
+  return docId
+}
+
+test.describe('F-2082 문서 이동 절', () => {
+  test.use({ viewport: { width: 1280, height: 900 } })
+
+  test('F-2082 C1 공유 화면 내 문서로 가져오기 — 새 문서로 열고 주소를 바꾼다', async ({ page, context }) => {
+    const importedId = await openSharedView2082(page, context, '가져올.md', '가져올 본문\n')
+    const historyLenBefore = await page.evaluate(() => history.length)
+
+    await page.locator('.shared-view-notice').getByRole('button', { name: '내 문서로 가져오기' }).click()
+
+    await expect(page.locator('.shared-view')).toHaveCount(0)
+    await expect(page.locator('.notice-message')).toHaveText('내 문서로 가져왔습니다.')
+    await expect(page.locator('.cm-content')).toContainText('가져올 본문')
+    const newId = await currentDocId(page)
+    expect(newId).not.toBe(importedId)
+    expect(await page.evaluate(() => location.hash)).toBe(`#/d/${newId}`)
+    expect(await page.evaluate(() => history.length)).toBe(historyLenBefore)
+  })
+
+  test('F-2082 C2 공유 화면 닫기 — 마지막으로 연 문서로 돌아간다', async ({ page, context }) => {
+    const importedId = await openSharedView2082(page, context, '돌아갈.md', '돌아갈 본문\n')
+
+    await page.locator('.shared-view-notice').getByRole('button', { name: '닫기' }).click()
+
+    await expect(page.locator('.shared-view')).toHaveCount(0)
+    await expect(page.locator('.cm-content')).toContainText('돌아갈 본문')
+    expect(await currentDocId(page)).toBe(importedId)
+  })
+
+  test('F-2082 C3 공유 관리에서 폴더 이름 클릭 — 홈으로 가며 그 폴더를 펼친다', async ({ page }) => {
+    const server = await fakeServer(page)
+    seedFolder(server, { id: 'f2082', name: '업무' })
+    seedDoc(server, { id: 'd2082', title: '폴더 안 문서', folderId: 'f2082' })
+    seedDoc(server, { id: 'd2082top', title: '밖 문서' })
+    seedLink(server, { targetType: 'folder', targetId: 'f2082', token: 'tok-f2082' })
+    await setPrefBeforeLoad(page, 'md.lastDocId', 'd2082top')
+
+    await openApp(page)
+    expect((await readOpenFolders(page)) ?? []).not.toContain('f2082')
+    await openShares(page)
+
+    await page.locator('.shares-target-btn').click()
+
+    await expect(page.locator('.shares-page-head')).toHaveCount(0)
+    await expect(page.locator('.empty-state')).toBeVisible()
+    expect(await page.evaluate(() => location.hash)).toBe('#/')
+    await expect.poll(() => readOpenFolders(page)).toContain('f2082')
+    await expect(page.locator('.sidebar .tree-label').filter({ hasText: '폴더 안 문서' })).toBeVisible()
+  })
+})

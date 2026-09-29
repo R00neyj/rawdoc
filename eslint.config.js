@@ -45,7 +45,7 @@ export default defineConfig([
   },
   {
     // 검증 도구 CLI (specs/features/F-160.md) 는 node 환경에서 돈다
-    files: ['scripts/**/*.mjs'],
+    files: ['scripts/**/*.mjs', 'tests/scripts/**/*.mjs'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -54,7 +54,7 @@ export default defineConfig([
   },
   {
     // npm 배포 CLI (specs/features/F-2021.md) 도 node 환경에서 돈다
-    files: ['cli/**/*.{ts,tsx}'],
+    files: ['cli/**/*.{ts,tsx}', 'tests/cli/**/*.{ts,tsx}'],
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },
     },

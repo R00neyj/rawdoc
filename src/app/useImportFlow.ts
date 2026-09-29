@@ -39,6 +39,7 @@ import { toWebp } from '../storage/toWebp'
 import { attachImages } from './attachImages'
 import { setupFileLaunch } from '../pwa/fileLaunch'
 import type { NoticeWithAction } from './NoticeBar'
+import { leaveScreens, screenOpen, type ScreenState } from './leaveScreens'
 import { canRemountWithFresh, shouldRemountAfterImport } from './importResult'
 
 export type UseImportFlowOptions = {
@@ -71,6 +72,9 @@ export type UseImportFlowOptions = {
   foldersRef: RefObject<Folder[]>
   currentDocIdRef: RefObject<string | null>
   sharedDocRef: RefObject<ShareDoc | null>
+  sharesOpenRef: RefObject<boolean>
+  helpOpenRef: RefObject<boolean>
+  mapRouteRef: RefObject<unknown>
   docPathRef: RefObject<{ docId: string | null; path: DocPathKind | null }>
   focusEditorRef: RefObject<boolean>
   docSaverFlushRef: RefObject<() => Promise<boolean>>
@@ -99,17 +103,30 @@ export type UseImportFlowResult = {
   ) => Promise<Awaited<ReturnType<typeof attachImages>>['inserted']>
 }
 
+// 가져오기 대화상자(미리보기·진행·결과)가 떠 있으면 다른 대화상자처럼 md·이미지 끌어놓기를 모두 막는다 (F-2059 D11)
+export function dropBlocks(dropBlocked: boolean, imageDropBlocked: boolean, importOpen: boolean): { md: boolean; image: boolean } {
+  return { md: dropBlocked || importOpen, image: imageDropBlocked || importOpen }
+}
+
+// 이미 가져온 파일을 열 때 화면을 떠나야 하는지 — 다른 문서이거나 전용 화면이 열려 있을 때
+export function shouldLeaveForMatchedDoc(s: ScreenState & { matchedId: string; currentDocId: string | null }): boolean {
+  return s.matchedId !== s.currentDocId || screenOpen(s)
+}
+
 export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResult {
   const {
     store, folders, currentDoc, bootPhase, setDocs, setFolders, setCurrentDocId, setOpenDoc, setEditorRemountNonce, setSharedDoc, setSharesOpen,
     setHelpOpen, setMapRoute, showNotice, keepLiveTitle, beforeLeaveDoc, addOpenFolders, closeSidebarIfNarrow, closeSettings, newDocFolderId,
     ensureE2eeOpenForFolder, pushHashUrl, importInputRef, importZipInputRef, importFolderInputRef, docsRef, foldersRef, currentDocIdRef,
-    sharedDocRef, docPathRef, focusEditorRef, docSaverFlushRef, dropBlockedRef, imageDropBlockedRef, readOnlyDocRef,
+    sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, docPathRef, focusEditorRef, docSaverFlushRef, dropBlockedRef, imageDropBlockedRef,
+    readOnlyDocRef,
   } = options
+  const leave = () => leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute })
   // 외부 .md 파일을 창 위로 끄는 동안의 덮개 (F-145.md 2.4)
   const [dropActive, setDropActive] = useState(false)
   // zip 가져오기 미리보기·진행·결과 대화상자 (F-282.md 3.8)
   const [importState, setImportState] = useState<ImportDialogState | null>(null)
+  const importOpenRef = useRef(false)
   // zip 가져오기 — 선택 input, 확정된 계획, 취소 신호 (F-282.md 3.1·3.9)
   const importFileRef = useRef<File | null>(null)
   const importPlanRef = useRef<ImportPlan | null>(null)
@@ -152,25 +169,27 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
     runImportFilesRef.current = runImportFiles
     openOrImportLaunchedFilesRef.current = openOrImportLaunchedFiles
     previewImportFolderRef.current = previewImportFolder
+    importOpenRef.current = importState !== null
   })
 
   // 창 전체 .md 파일 끌어놓기(F-145.md 2장) — 외부 파일만 반응, depth 로 진입 횟수를 센다
   useEffect(() => {
     let depth = 0
+    const blocks = () => dropBlocks(dropBlockedRef.current, imageDropBlockedRef.current, importOpenRef.current)
 
     function handleDragEnter(e: DragEvent) {
       if (!isExternalFileDrag(e.dataTransfer)) return
       e.preventDefault()
       depth++
       // 이미지 파일만 끌 때는 F-145 덮개를 띄우지 않는다 — 에디터 위 CM6 dropCursor 가 놓을 자리를 보인다 (F-156.md 2.5)
-      if (!dropBlockedRef.current && !isImageOnlyDrag(e.dataTransfer)) setDropActive(true)
+      if (!blocks().md && !isImageOnlyDrag(e.dataTransfer)) setDropActive(true)
     }
 
     function handleDragOver(e: DragEvent) {
       if (!isExternalFileDrag(e.dataTransfer)) return
       // 받지 않는 때에도 브라우저 기본 파일 열기를 막는다 (2.1)
       e.preventDefault()
-      if (e.dataTransfer) e.dataTransfer.dropEffect = dropBlockedRef.current ? 'none' : 'copy'
+      if (e.dataTransfer) e.dataTransfer.dropEffect = blocks().md ? 'none' : 'copy'
     }
 
     function handleDragLeave(e: DragEvent) {
@@ -185,13 +204,13 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
       depth = 0
       setDropActive(false)
       // 대화상자·공유 화면에서는 이미지도 md 도 다 막는다 (F-145.md 2.1, F-156.md 2.5)
-      if (imageDropBlockedRef.current) return
+      if (blocks().image) return
 
       // 폴더 판정을 pickMarkdownFiles 보다 먼저 — 이벤트가 끝나면 dataTransfer.items 에 못 닿는다 (F-2019.md 4.3·12장)
       const droppedEntries = e.dataTransfer ? Array.from(e.dataTransfer.items).filter((it) => it.kind === 'file').map((it) => it.webkitGetAsEntry()) : []
       const dropClass = classifyDroppedEntries(droppedEntries)
       if (dropClass.kind === 'folder') {
-        if (dropBlockedRef.current) return // 메모리 저장소는 .md 처럼 조용히 무시
+        if (blocks().md) return // 메모리 저장소는 .md 처럼 조용히 무시
         readDroppedDirectory(dropClass.entry)
           .then(async (files) => {
             const fileName = files[0]?.path.split('/')[0] ?? dropClass.entry.name
@@ -202,7 +221,7 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
         return
       }
       if (dropClass.kind === 'too-many') {
-        if (dropBlockedRef.current) return
+        if (blocks().md) return
         showNotice({ type: 'info', message: '폴더는 한 번에 하나만 가져올 수 있습니다.' })
         return
       }
@@ -210,7 +229,7 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
       const files = Array.from(e.dataTransfer!.files)
       const { mdFiles, allNonMd } = pickMarkdownFiles(files)
       // 여기선 대화상자·공유 화면은 이미 걸러졌으니 dropBlockedRef 가 true 면 store.kind==='memory' 뿐 — md 는 막고 이미지는 예외로 받는다(F-156.md 2.5)
-      const memoryBlocked = dropBlockedRef.current
+      const memoryBlocked = blocks().md
 
       if (mdFiles.length > 0) {
         if (memoryBlocked) return
@@ -309,10 +328,7 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
     const createdDoc = lastCreatedDoc as Doc | null
     if (createdDoc) {
       // 공유 보기(F-130 4장)·공유 관리·도움말·지도(F-2054 6.4)를 떠난다 — 가져온 게 없으면 화면과 주소를 그대로 둔다
-      setSharedDoc(null)
-      setSharesOpen(false)
-      setHelpOpen(false)
-      setMapRoute(null)
+      leave()
       focusEditorRef.current = true
       setCurrentDocId(createdDoc.id)
       setPref('md.lastDocId', createdDoc.id)
@@ -676,9 +692,17 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
 
       const matchedDoc = matchedId ? docsRef.current.find((d) => d.id === matchedId) : undefined
       if (matchedId && matchedDoc) {
-        if (matchedId !== currentDocIdRef.current || sharedDocRef.current) {
+        const shouldLeave = shouldLeaveForMatchedDoc({
+          matchedId,
+          currentDocId: currentDocIdRef.current,
+          sharedDoc: sharedDocRef.current,
+          sharesOpen: sharesOpenRef.current,
+          helpOpen: helpOpenRef.current,
+          mapRoute: mapRouteRef.current,
+        })
+        if (shouldLeave) {
           await beforeLeaveDoc()
-          setSharedDoc(null)
+          leave() // runImportFiles 와 같이 전용 화면을 모두 떠난다 (F-2076 7장 D1)
           focusEditorRef.current = true
           setCurrentDocId(matchedId)
           setPref('md.lastDocId', matchedId)

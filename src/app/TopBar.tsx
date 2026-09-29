@@ -55,7 +55,7 @@ type TopBarProps = {
   // 로그아웃 실패 알림 (F-2034 3.2)
   onAccountNotice: (notice: Notice) => void
   onAccountLoggedOut?: () => void
-  // 서식·단락·삽입 탭바 (F-233.md 3.1) — App.tsx 가 표시 조건을 계산해 넘긴다
+  // 서식·단락·삽입 탭바 (F-233.md 3.1) — AppTopBar.tsx 가 표시 조건을 계산해 넘긴다
   showToolbar: boolean
   onRunToolbarCommand: (cmd: StateCommand) => void
   // 접속자 아바타 — 보기 모드 토글 왼쪽, 없으면 요소가 없다 (F-307 7.1)

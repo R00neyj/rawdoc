@@ -1,0 +1,126 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import {
+  getShareLink,
+  createShareLink,
+  revokeShareLink,
+  getFolderShareLink,
+  createFolderShareLink,
+  revokeFolderShareLink,
+  LinkApiError,
+} from '../../../src/app/linkApi'
+
+beforeEach(() => {
+  vi.restoreAllMocks()
+})
+
+describe('getShareLink', () => {
+  it('200 이면 token·docIds', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => ({ token: 'tok1', docIds: ['b', 'c'] }) }),
+    )
+    expect(await getShareLink('d1')).toEqual({ token: 'tok1', docIds: ['b', 'c'] })
+  })
+
+  it('docIds 가 없는 응답이면 빈 배열', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => ({ token: 'tok1' }) }))
+    expect(await getShareLink('d1')).toEqual({ token: 'tok1', docIds: [] })
+  })
+
+  it('404 면 null', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404, ok: false }))
+    expect(await getShareLink('d1')).toBeNull()
+  })
+
+  it('5xx 면 server_error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 500, ok: false }))
+    await expect(getShareLink('d1')).rejects.toMatchObject({ kind: 'server_error' })
+  })
+
+  it('네트워크 오류면 network', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network')))
+    await expect(getShareLink('d1')).rejects.toBeInstanceOf(LinkApiError)
+    await expect(getShareLink('d1')).rejects.toMatchObject({ kind: 'network' })
+  })
+})
+
+describe('createShareLink', () => {
+  it('200·201 모두 토큰', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 201, ok: true, json: async () => ({ token: 'tok2' }) }))
+    expect(await createShareLink('d1')).toBe('tok2')
+  })
+
+  it('docIds 를 주면 본문에 담아 보낸다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ status: 201, ok: true, json: async () => ({ token: 'tok3' }) })
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await createShareLink('d1', ['b', 'c'])).toBe('tok3')
+    expect(fetchMock).toHaveBeenCalledWith('/api/docs/d1/link', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ docIds: ['b', 'c'] }),
+    })
+  })
+
+  it('docIds 를 주지 않으면 본문 없이 보낸다(기존 동작)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ status: 201, ok: true, json: async () => ({ token: 'tok2' }) })
+    vi.stubGlobal('fetch', fetchMock)
+    await createShareLink('d1')
+    expect(fetchMock).toHaveBeenCalledWith('/api/docs/d1/link', { method: 'POST', credentials: 'same-origin' })
+  })
+
+  it('5xx 면 server_error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 500, ok: false }))
+    await expect(createShareLink('d1')).rejects.toMatchObject({ kind: 'server_error' })
+  })
+})
+
+describe('revokeShareLink', () => {
+  it('204 면 성공', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 204, ok: true }))
+    await expect(revokeShareLink('d1')).resolves.toBeUndefined()
+  })
+
+  it('5xx 면 server_error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 500, ok: false }))
+    await expect(revokeShareLink('d1')).rejects.toMatchObject({ kind: 'server_error' })
+  })
+})
+
+describe('getFolderShareLink', () => {
+  it('200 이면 토큰', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, ok: true, json: async () => ({ token: 'tokF' }) })
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await getFolderShareLink('f1')).toBe('tokF')
+    expect(fetchMock).toHaveBeenCalledWith('/api/folders/f1/link', { credentials: 'same-origin' })
+  })
+
+  it('404 면 null', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404, ok: false }))
+    expect(await getFolderShareLink('f1')).toBeNull()
+  })
+})
+
+describe('createFolderShareLink', () => {
+  it('201 이면 토큰', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 201, ok: true, json: async () => ({ token: 'tokF2' }) }))
+    expect(await createFolderShareLink('f1')).toBe('tokF2')
+  })
+
+  it('5xx 면 server_error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 500, ok: false }))
+    await expect(createFolderShareLink('f1')).rejects.toMatchObject({ kind: 'server_error' })
+  })
+})
+
+describe('revokeFolderShareLink', () => {
+  it('204 면 성공', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 204, ok: true }))
+    await expect(revokeFolderShareLink('f1')).resolves.toBeUndefined()
+  })
+
+  it('5xx 면 server_error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 500, ok: false }))
+    await expect(revokeFolderShareLink('f1')).rejects.toMatchObject({ kind: 'server_error' })
+  })
+})

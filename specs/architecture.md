@@ -40,6 +40,26 @@ src/
     useImportFlow.ts     .md·zip·볼트 가져오기, OS 파일 열기, 창 전체 끌어놓기, 이미지 붙여넣기·끌어놓기 저장 (F-114, F-119, F-145, F-156, F-231, F-282, F-2019, F-2068)
     importResult.ts      가져오기 뒤 편집기 다시 마운트 판정 — 실시간 경로는 건너뜀 (F-305 10.1, F-2068)
     useNotificationsGlue.ts 알림함 여닫기·항목 이동·안 읽은 점·멘션 후보 원천 (F-507, F-510, F-2069)
+    useLiveNotices.ts 실시간 알림 띠 N1~N10·오프라인 보기 알림 (F-305, F-306, F-2070)
+    liveNotices.ts   알림 띠 판정 순수 함수 — 자기 서버 문서 여부·끊김 문구·멈춤 갈래 (F-2070)
+    useHashRouting.ts hashchange 처리·해시 주소 쓰기 (F-210, F-243, F-244, F-292, F-2071)
+    hashNav.ts       해시 이동 갈래 판정 순수 함수·공개 보기 경로 (F-2071)
+    useEditorSync.ts 편집기 연동 — 본문 1회 읽기·위키 문맥·보기 HTML·편집기 layout effect (F-123, F-144, F-295, F-2018, F-2072)
+    useE2eeConvert.ts 문서·폴더 금고로 옮기기·빼기 (F-405, F-407, F-2073)
+    useE2eeMigrate.ts 금고 이관 판정·실행·잠그기·초기화 (F-404, F-408, F-2073)
+    bootFlow.ts      부팅(저장소 열기·목록·첫 화면 판정)·밀린 편집 러너 (F-110, F-111, F-207, F-2015, F-2042, F-306, F-2074)
+    useDocSession.ts 문서 세션(Y.Doc·편집기 연결·경로 판정)·실시간 방 연결 (F-305, F-306, F-2077)
+    useLiveRoomDoc.ts 실시간 방 온라인 재시작·사이드바 updatedAt·편집기 옵션 (F-305, F-506, F-2077)
+    usePaletteOpen.ts 명령 팔레트 열림·닫기 뒤 실행 (F-2022, F-2078)
+    useCommandPalette.ts 팔레트 열기·템플릿 넣기·context 조립 (F-2053, F-2054, F-2055, F-2078)
+    useShortcutsPanel.ts 단축키 판 열기·닫기·커서 스크롤 (F-2037, F-2078)
+    useNewDocTemplate.ts newDocTemplate.ts 새 문서 템플릿 목록·원문 읽기·본문 (F-2052, F-2078)
+    useAccountStatus.ts 계정 플래그 반영·다시 읽기(online·화면 복귀·10분) (F-2026, F-2079)
+    useAccountDelete.ts 계정 삭제 대화상자 열기·실행 (F-2079)
+    useTitleCommit.ts 제목 저장 (F-2079)
+    useCommentFab.ts 댓글 달기 버튼 위치 (F-2079)
+    useDocNavigation.ts 문서 열기·새 문서·홈·위키링크·도움말·지도·공유 보기 이동 (F-131, F-243, F-244, F-292, F-2082)
+    AppTopBar.tsx AppScreens.tsx DocumentArea.tsx AppDialogs.tsx ImportFileInputs.tsx  App JSX 를 나눈 상태 없는 컴포넌트 (F-2081)
     TopBar.jsx Sidebar.jsx StatusBar.jsx NoticeBar.jsx EmptyState.jsx
     Dialog.jsx ConfirmDeleteDialog.jsx SettingsDialog.jsx
     hashRoute.js         해시 URL 해석·생성 (순수 함수)
@@ -150,7 +170,7 @@ src/
 - 랜딩 스크롤 스토리(F-2049)로 추가
   - `welcome/`: 랜딩 번들(`assets/welcome-demo.js`, 고정 이름). 편집기 데모·스크롤 스토리. gsap 은 여기서만 import(F-2049). `worker/welcomePage.ts` 가 여기의 순수 데이터 모듈을 import 한다
 
-- 테스트는 대상 옆 `{이름}.test.js` (`specs/features/F-101.md` 5.3)
+- 단위 테스트는 `tests/` 아래, 원본 경로를 그대로 따라 `tests/{원본 경로}/{이름}.test.ts` (2026-09-28 사용자 지정. 처음엔 대상 옆이었다 — `specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
 - **`site → src`, `site → brand.config` 도 한 방향이다** — `src/` 는 `site/` 를 import 하지 않는다 (F-272 3.3). `site/helpPage.ts` 가 `src/app/helpDoc.ts` 를 읽는 것이 그 예다 — 도움말 글은 앱과 사이트가 같아야 해서 원본을 하나로 둔다 (F-274). `site/guidesIndex.ts` 는 `src/lib/frontmatter.ts` 만 읽는다 (F-276)
 - 라우터·상태관리·UI 컴포넌트 라이브러리를 들이지 않는다. 아이콘은 `@material-symbols/svg-400` SVG 파일만 쓴다 (2026-09-14 사용자 지정, F-142)

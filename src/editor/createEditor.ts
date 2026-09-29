@@ -273,7 +273,7 @@ function focusRelay(): Extension {
 type CreateEditorOptions = {
   text?: string
   viewMode?: ViewMode
-  // 앱 테마(white|sepia|dark), 기본 'white' — mermaid 위젯에 쓰인다. 이후 전환은 handle.setTheme(theme) (F-260.md 2.1·2.3, Editor.tsx 는 아직 이 값을 넘기지 않아 App.tsx 가 마운트 때마다 setTheme 으로 맞춘다)
+  // 앱 테마(white|sepia|dark), 기본 'white' — mermaid 위젯에 쓰인다. 이후 전환은 handle.setTheme(theme) (F-260.md 2.1·2.3, Editor.tsx 는 아직 이 값을 넘기지 않아 useEditorSync.ts 가 마운트 때마다 setTheme 으로 맞춘다)
   theme?: string
   // 줄 번호(거터) 표시 여부, 기본 true(F-147 2장) — 이후 전환은 handle.setLineNumbers(on), 이 값은 최초 생성에만 쓴다
   lineNumbers?: boolean

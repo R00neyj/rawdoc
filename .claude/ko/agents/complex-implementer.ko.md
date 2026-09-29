@@ -15,7 +15,7 @@ tools: Read, Edit, Write, Bash, PowerShell, Grep, Glob, ToolSearch, TaskOutput, 
 
 ## 1. 메인이 왜 너를 골랐나
 
-`feature-implementer`(Opus, medium effort) 가 기본이고 대부분의 명세를 처리한다. 메인은 명세가 **필요한 판단을 담아낼 수 없을 때만** 이리로 보낸다.
+`feature-implementer`(Sonnet, medium effort) 가 기본이고 대부분의 명세를 처리한다. 메인은 명세가 **필요한 판단을 담아낼 수 없을 때만** 이리로 보낸다.
 
 - 그래픽·3D — three.js, WebGL, 투영, 히트테스트, 힘 시뮬레이션
 - CodeMirror 6 내부 — StateField/ViewPlugin 수명주기, 데코레이션 범위, IME 조합 타이밍

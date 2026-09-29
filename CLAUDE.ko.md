@@ -99,7 +99,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | 실시간 동기화 | Durable Object + y-partyserver | 사용 중 (서버 F-304 `worker/docRoom.ts`, 클라이언트 F-305 `src/app/useLiveDoc.ts`). 2026-09-24 배포(F-305~F-308). 편집 잠금(F-213)은 F-309 까지 폴백으로 남음 |
 | E2E 테스트 | Playwright (`@playwright/test`), 설치된 Chrome 채널 | 사용 중 (F-150) |
 | 3D 지도 | `three` + `d3-force-3d` (더해서 `@types/three` 와 로컬 `src/types/d3-force-3d.d.ts`) | 사용 중 (F-292 개정판). 설치는 F-2001·F-2002 뿐이고, 다른 명세는 3D 의존성을 더하지 않는다. `3d-force-graph` 는 쓰지 않는다 |
-| 랜딩 애니메이션 | gsap 3.15.0 (ScrollTrigger 만), exact pin | 사용 중 (F-2049). `src/welcome/` 만 import 할 수 있다 — 앱·`worker/`·`site/`·`cli/` 는 하지 않는다 (`src/welcome/gsapBoundary.test.ts`). Standard "No Charge" 라이선스, 오픈소스 아님 |
+| 랜딩 애니메이션 | gsap 3.15.0 (ScrollTrigger 만), exact pin | 사용 중 (F-2049). `src/welcome/` 만 import 할 수 있다 — 앱·`worker/`·`site/`·`cli/` 는 하지 않는다 (`tests/src/welcome/gsapBoundary.test.ts`). Standard "No Charge" 라이선스, 오픈소스 아님 |
 | CLI | Node 22+, 런타임 의존성 없음, npm `rawdoc` | 사용 중 (F-2021) |
 | 요청 제한 | Workers Rate Limiting 바인딩 `WRITE_LIMITER` | 사용 중 (F-2026) |
 
@@ -111,7 +111,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 npm run dev          # web app dev server
 npm run build        # web app build
 npm run lint         # ESLint (whole repo)
-npm test             # Vitest single run (src/**/*.test.{js,jsx,ts,tsx}, worker/**/*.test.ts)
+npm test             # Vitest single run (tests/{src,worker,site,cli}/**/*.test.{js,jsx,ts,tsx})
 npm run typecheck    # tsc --noEmit (app)
 npm run typecheck:worker   # tsc -p worker
 npm run build:cli    # vite build --config cli/vite.config.ts → cli/dist/rawdoc.js (F-2021)
@@ -129,26 +129,25 @@ npm run measure -- --doc long:300 --select ".cm-line" --style line-height   # on
 npm run review -- F-xxx   # check for out-of-ownership files and forbidden patterns
 npm run specs -- --todo   # remaining specs (--status pending, --milestone M3, --check, --json)
 node scripts/admin-usage.mjs [--top N] [--local]   # view remote D1 usage (F-2029). block/unblock/warn/recount only write with --yes
-node --test "scripts/lib/*.test.mjs"   # admin script tests (F-2029)
+node --test "tests/scripts/lib/*.test.mjs"   # admin script tests (F-2029)
 npm run clean        # delete dist-* e2e slots, test-results/, playwright-report/ (--all also drops dist/, --force ignores the 10-minute in-use guard)
 E2E_PORT=4501 E2E_DIST=dist-a npx playwright test   # parallel e2e slot
 npm run dev:spike    # for checking spikes
 ```
 
-테스트는 대상 옆에 `{name}.test.js` 로 두고, `vitest` 에서 명시적으로 import 한다 (`specs/features/F-101.md` 5.3)
+단위 테스트는 `tests/` 아래, 원본 경로를 그대로 따라 `tests/{원본 경로}/{name}.test.ts` 로 둔다(`src/app/foo.ts` → `tests/src/app/foo.test.ts`, `scripts/lib/a.mjs` → `tests/scripts/lib/a.test.mjs`). 대상은 상대 경로로, `vitest` 는 명시적으로 import 한다 (`specs/features/F-101.md` 5.3)
 
 ## 메인 규칙 (오케스트레이터)
 
 - **커밋 단위는 "커밋 단위" 아래 절을 따른다.** 다음 서브에이전트는 커밋 뒤에만 띄운다. 파일이 겹치지 않는 명세만 병렬로 돌린다
 - **명세 작성은 `spec-writer` 에이전트**(Opus)다. `model` 을 따로 주지 않는다
-- **구현은 기본이 `feature-implementer`**(Opus, medium effort)다. Sonnet 5.5 가 나오면 모델을 다시 본다
+- **구현은 기본이 `feature-implementer`**(Sonnet, medium effort)다
 - **3D 지도 재작업은 `specs/features/F-292.md` 9장의 `누가` 열을 따라 소명세마다 갈린다**: F-2002~F-2004 는 메인이 직접 구현하고, F-2006 은 `complex-implementer`, 나머지는 평범하게 맡긴다
 - **`complex-implementer`(Opus)** 는 수용 기준은 분명한데 거기 닿는 길이 분명하지 않은 명세용이다 — 그래픽·3D, CM6 내부, 프레임·번들 예산, 여러 소유 표를 가로지르는 리팩터, 아무도 돌려 본 적 없는 외부 API. 만들기 전에 조사·측정하고, 기준 안쪽의 빈틈을 스스로 정하며, 빌드·precache 증분을 보고한다. 메인이 명시적으로 이쪽을 고르며, 기본은 여전히 `feature-implementer` 다
 - **에이전트를 직접 띄우지 말고 스킬을 거친다.** 아이디어를 따져보는 건 `grill`, 명세 작성은 `write-spec`, 구현은 `ship-feature`, 명세 없는 디자인·상호작용 수정은 `tweak`, 가이드 글은 `write-guide`. 범용 `grilling` 스킬이 아니라 `grill` 을 쓴다 — 열린 결정 하나하나가 `AskUserQuestion` 으로 사용자에게 간다
 - **구현 프롬프트에는 명세 번호와 `E2E_PORT`·`E2E_DIST` 슬롯만 담는다.** 판정은 `npm run review -- F-xxx` 다음 관련 e2e. 손 스크립트 대신 `scripts/` 도구를 쓰고, 도구가 못 덮는 반복이 보이면 도구 추가를 제안한다
 - **진짜 갈림길이 없는 명세는 바로 구현으로 간다.** 열린 질문마다 기본값이 멀쩡하면 명세를 커밋하고 그 사실을 알린 뒤 같은 턴에 `ship-feature` 를 띄운다. 무엇이 갈림길인지는 `write-spec` 스킬 5장에 있다
 - `e2e:one` 검색어는 `"F-225|F-212"` 처럼 `|` 로 묶을 수 있다. 슬롯은 `--port`·`--dist` 또는 `E2E_PORT`·`E2E_DIST`
-- **F-2059 App.tsx 분할 진행 중** — 조각을 구현하는 동안 `src/app/App.tsx` 는 다른 명세·수정에 대해 동결된다. 운영은 F-2059 5.3. F-2074(또는 단계 4)가 커밋된 뒤 이 줄을 지운다
 
 ## 커밋 단위
 
