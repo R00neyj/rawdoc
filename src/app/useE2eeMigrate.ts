@@ -1,6 +1,6 @@
 // 로그인 전 금고 이관, 금고 잠그기·초기화 단계 — App.tsx 에서 옮김 (F-2073, F-2059)
 import { useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import { createIdbStore, markLocalE2eeMigrated, readE2eeRow } from '../storage/idbStore'
+import { DEFAULT_DB_NAME, createIdbStore, markLocalE2eeMigrated, readE2eeRow } from '../storage/idbStore'
 import type { ServerStore } from '../storage/serverStore'
 import { checkLocalE2eeMigration, runLocalE2eeMigration } from './migrateLocal'
 import type { LocalE2eeKeys } from '../e2ee/convert'
@@ -44,6 +44,28 @@ export type UseE2eeMigrateResult = {
   runE2eeReset: () => Promise<void>
 }
 
+function sharedMigrationDeps(userId: string, docsRef: RefObject<DocMeta[]>, foldersRef: RefObject<Folder[]>) {
+  return {
+    userId,
+    localDbExists: async () => {
+      if (typeof indexedDB === 'undefined' || !indexedDB.databases) return true
+      const dbs = await indexedDB.databases()
+      return dbs.some((d) => d.name === DEFAULT_DB_NAME)
+    },
+    readLocalRow: () => readE2eeRow('local'),
+    readLocal: async () => {
+      const local = await createIdbStore()
+      const [localFolders, localDocs] = await Promise.all([local.listFolders(), local.list()])
+      return { folders: localFolders, docs: localDocs }
+    },
+    accountIds: () => ({
+      docIds: new Set(docsRef.current.map((d) => d.id)),
+      folderIds: new Set(foldersRef.current.map((f) => f.id)),
+    }),
+    markMigrated: (bundle: string) => markLocalE2eeMigrated(userId, bundle),
+  }
+}
+
 export function useE2eeMigrate(options: UseE2eeMigrateOptions): UseE2eeMigrateResult {
   const {
     store, bootPhase, account, e2ee, currentDocId, showNotice, dismissNotice, resyncFromStore, setDocs, setOpenDoc, setViewerHtml, setCurrentDocId,
@@ -62,25 +84,7 @@ export function useE2eeMigrate(options: UseE2eeMigrateOptions): UseE2eeMigrateRe
     if (e2eeMigrateCheckedRef.current) return
     e2eeMigrateCheckedRef.current = true
     const userId = (store as ServerStore).userId
-    void checkLocalE2eeMigration({
-      userId,
-      localDbExists: async () => {
-        if (typeof indexedDB === 'undefined' || !indexedDB.databases) return true
-        const dbs = await indexedDB.databases()
-        return dbs.some((d) => d.name === 'md-docs')
-      },
-      readLocalRow: () => readE2eeRow('local'),
-      readLocal: async () => {
-        const local = await createIdbStore()
-        const [localFolders, localDocs] = await Promise.all([local.listFolders(), local.list()])
-        return { folders: localFolders, docs: localDocs }
-      },
-      accountIds: () => ({
-        docIds: new Set(docsRef.current.map((d) => d.id)),
-        folderIds: new Set(foldersRef.current.map((f) => f.id)),
-      }),
-      markMigrated: (bundle) => markLocalE2eeMigrated(userId, bundle),
-    })
+    void checkLocalE2eeMigration(sharedMigrationDeps(userId, docsRef, foldersRef))
       .then((result) => {
         if (result.kind !== 'ask') return
         setE2eeMigrateAsk({ count: result.count, bundle: result.bundle })
@@ -124,23 +128,7 @@ export function useE2eeMigrate(options: UseE2eeMigrateOptions): UseE2eeMigrateRe
     let outcome: Awaited<ReturnType<typeof runLocalE2eeMigration>>
     try {
       outcome = await runLocalE2eeMigration({
-        userId,
-        localDbExists: async () => {
-          if (typeof indexedDB === 'undefined' || !indexedDB.databases) return true
-          const dbs = await indexedDB.databases()
-          return dbs.some((d) => d.name === 'md-docs')
-        },
-        readLocalRow: () => readE2eeRow('local'),
-        readLocal: async () => {
-          const local = await createIdbStore()
-          const [localFolders, localDocs] = await Promise.all([local.listFolders(), local.list()])
-          return { folders: localFolders, docs: localDocs }
-        },
-        accountIds: () => ({
-          docIds: new Set(docsRef.current.map((d) => d.id)),
-          folderIds: new Set(foldersRef.current.map((f) => f.id)),
-        }),
-        markMigrated: (b) => markLocalE2eeMigrated(userId, b),
+        ...sharedMigrationDeps(userId, docsRef, foldersRef),
         bundle,
         keys,
         getLocalAttachment: async (id) => {
