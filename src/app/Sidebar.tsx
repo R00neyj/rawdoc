@@ -624,12 +624,13 @@ type SidebarButtonProps = {
   onClick?: () => void
   ariaDisabled?: boolean
   href?: string
+  className?: string
 }
 
 // 펼친 사이드바의 아이콘+글자 동작 버튼 (F-143 3.2)
 // href 를 주면 사이트로 나가는 새 탭 링크로 그린다 (F-276.md 4.3)
 function SidebarButton(props: SidebarButtonProps) {
-  const { label, onClick, ariaDisabled, href } = props
+  const { label, onClick, ariaDisabled, href, className } = props
   if (href) {
     return (
       <a className="sidebar-btn" href={href} target="_blank" rel="noopener noreferrer">
@@ -640,7 +641,7 @@ function SidebarButton(props: SidebarButtonProps) {
     )
   }
   return (
-    <button type="button" className="sidebar-btn" aria-disabled={ariaDisabled || undefined} onClick={onClick}>
+    <button type="button" className={className ? `sidebar-btn ${className}` : 'sidebar-btn'} aria-disabled={ariaDisabled || undefined} onClick={onClick}>
       <props.icon size={18} className="sidebar-btn-icon" />
       <span className="sidebar-btn-label">{label}</span>
     </button>
@@ -1184,12 +1185,11 @@ export default function Sidebar({
             <div className="sidebar-fixed">
               <div className="sidebar-actions">
                 <SidebarIconButton icon={IconSearch} label="검색" btnClassName="sidebar-search-btn" onClick={onOpenSearch} />
-                <SidebarIconButton icon={IconCommandPalette} label={PALETTE_LABEL} btnClassName="sidebar-palette-btn" onClick={onOpenPalette} />
                 <SidebarIconButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
                 <SidebarIconButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
                 <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
                 <SidebarIconButton icon={IconCollapseAll} label="모두 접기" onClick={onCollapseAllFolders} />
-                <SidebarIconButton icon={IconMap} label="지도" onClick={onOpenMap} />
+                <SidebarIconButton icon={IconMap} label="지도" btnClassName="sidebar-map-btn" onClick={onOpenMap} />
               </div>
               {pinned.length > 0 && (
                 <>
@@ -1243,6 +1243,7 @@ export default function Sidebar({
             </>
           ) : (
             <>
+              <SidebarButton icon={IconMap} label="지도" className="sidebar-map-row" onClick={onOpenMap} />
               <SidebarButton icon={IconHelp} label="도움말" onClick={onOpenHelp} />
               <SidebarButton icon={IconGuide} label="사용법" href={GUIDES_PATH} />
               <SidebarButton icon={IconSettings} label="설정" onClick={onOpenSettings} />

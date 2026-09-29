@@ -6,6 +6,7 @@ import {
   IconArrowBack,
   IconChevron,
   IconClose,
+  IconCommandPalette,
   IconDownload,
   IconForum,
   IconHome,
@@ -34,6 +35,7 @@ type TopBarMoreSheetProps = {
   share: ShareMenuProps
   exporter: ExportMenuProps
   account: AccountMenuProps
+  onOpenPalette: () => void
 }
 
 const ROW_LABEL: Record<MoreItemKey, string> = {
@@ -42,6 +44,7 @@ const ROW_LABEL: Record<MoreItemKey, string> = {
   comments: '댓글',
   share: '공유',
   export: '내보내기',
+  palette: '명령 팔레트',
   notifications: '알림',
   account: '계정',
 }
@@ -52,6 +55,7 @@ const ROW_ICON: Record<MoreItemKey, ComponentType<{ size?: number }>> = {
   comments: IconForum,
   share: IconShare,
   export: IconDownload,
+  palette: IconCommandPalette,
   notifications: IconNotifications,
   account: IconAccount,
 }
@@ -83,7 +87,7 @@ function ActionList({ items, note }: { items: MenuAction[]; note?: ReactNode }) 
   )
 }
 
-export default function TopBarMoreSheet({ screen, outlineControlRef, comments, notifications, share, exporter, account }: TopBarMoreSheetProps) {
+export default function TopBarMoreSheet({ screen, outlineControlRef, comments, notifications, share, exporter, account, onOpenPalette }: TopBarMoreSheetProps) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<SubView | null>(null)
   const [hasOutline, setHasOutline] = useState(false)
@@ -182,6 +186,9 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
     } else if (key === 'comments') {
       closeSheet()
       comments?.onToggle()
+    } else if (key === 'palette') {
+      closeSheet()
+      onOpenPalette()
     } else {
       enter(key)
     }

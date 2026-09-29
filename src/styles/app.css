@@ -518,22 +518,26 @@ body.sidebar-resizing {
 
 .sidebar-actions {
   display: flex;
-  flex-wrap: wrap; /* 좁은 폰·좁게 저장된 사이드바에서 가로로 넘치던 것 (tweak 2026-09-29) */
   justify-content: center;
   gap: 4px;
   margin: 2px 0 8px;
 }
 
-/* 휴대폰 폭 검색·팔레트 진입점(F-287 3.3, F-2053 10.1) — 상단바 검색이 숨는(F-216) 그 600px 미디어 쿼리를 그대로 쓴다 */
+/* 휴대폰 폭 검색 진입점(F-287 3.3) — 상단바 검색이 숨는(F-216) 그 600px 미디어 쿼리를 그대로 쓴다 */
 .icon-btn-wrap:has(> .sidebar-search-btn),
-.icon-btn-wrap:has(> .sidebar-palette-btn) {
+.sidebar-btn.sidebar-map-row {
   display: none;
 }
 
+/* 휴대폰 폭은 동작 줄을 검색+만들기 5개로 — 팔레트는 ⋯ 판, 지도는 아래 줄로 (tweak 2026-09-29) */
 @media (max-width: 600px) {
   .icon-btn-wrap:has(> .sidebar-search-btn),
-  .icon-btn-wrap:has(> .sidebar-palette-btn) {
+  .sidebar-btn.sidebar-map-row {
     display: flex;
+  }
+
+  .icon-btn-wrap:has(> .sidebar-map-btn) {
+    display: none;
   }
 }
 

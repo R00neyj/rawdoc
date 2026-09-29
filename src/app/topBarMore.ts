@@ -14,7 +14,7 @@ export function topBarScreen(input: {
   return input.currentDocId === null ? 'home' : 'doc'
 }
 
-export type MoreItemKey = 'home' | 'outline' | 'comments' | 'share' | 'export' | 'notifications' | 'account'
+export type MoreItemKey = 'home' | 'outline' | 'comments' | 'share' | 'export' | 'palette' | 'notifications' | 'account'
 
 export function moreSheetItems(input: {
   screen: TopBarScreen
@@ -28,6 +28,7 @@ export function moreSheetItems(input: {
   if (screen === 'doc' && input.hasOutline) items.push('outline')
   if (screen === 'doc' && input.comments) items.push('comments')
   if (screen === 'doc') items.push('share', 'export')
+  items.push('palette') // 휴대폰엔 단축키가 없어 팔레트 진입점이 여기뿐 (tweak 2026-09-29)
   if (input.notifications) items.push('notifications')
   items.push('account')
   return items
