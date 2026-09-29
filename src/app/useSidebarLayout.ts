@@ -205,6 +205,14 @@ export function useSidebarLayout(options: UseSidebarLayoutOptions): UseSidebarLa
     }
   }, [narrow, sidebarOpen, settingsOpen, searchOpen, paletteOpen, deleteTarget, moveDocTarget, bulkDeleteItems, sidebarRef, toggleButtonRef])
 
+  // 겹침 사이드바를 열면 본문·입력칸 포커스를 푼다 — 안 풀면 사이드바 뒤에서 커서가 깜박이고 키보드가 남는다
+  useEffect(() => {
+    if (!narrow || !sidebarOpen) return
+    const active = document.activeElement
+    if (!(active instanceof HTMLElement) || sidebarRef.current?.contains(active)) return
+    if (active.isContentEditable || active.matches('input, textarea')) active.blur()
+  }, [narrow, sidebarOpen, sidebarRef])
+
   // 위 ref 3개 최신화 — App 의 인자 없는 최신값 effect ③ 에서 옮김 (F-2066)
   useEffect(() => {
     narrowRef.current = narrow

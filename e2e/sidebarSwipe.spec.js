@@ -59,4 +59,23 @@ test.describe('F-227 터치 사이드바 여닫기 (412×915, 터치)', () => {
     await page.waitForTimeout(300)
     await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'closed')
   })
+
+  // 2026-09-29 버그: 휴대폰에서 사이드바를 열어도 본문 포커스가 남아 커서가 깜박였다
+  test('휴대폰 폭 사이드바를 열면 본문 포커스가 풀린다 (밀기·☰ 버튼)', async ({ page }) => {
+    await openApp(page)
+    const editorFocused = () => page.evaluate(() => !!document.activeElement?.closest('.cm-editor'))
+    await page.locator('.cm-content').click()
+    await expect.poll(editorFocused).toBe(true)
+    await touchSwipe(page, { startX: 150, startY: 400, endX: 300, endY: 400 })
+    await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'open')
+    await expect.poll(editorFocused).toBe(false)
+
+    await touchSwipe(page, { startX: 200, startY: 400, endX: 60, endY: 400 })
+    await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'closed')
+    await page.locator('.cm-content').click()
+    await expect.poll(editorFocused).toBe(true)
+    await page.locator('.sidebar-toggle').first().tap()
+    await expect(page.locator('.sidebar')).toHaveAttribute('data-state', 'open')
+    await expect.poll(editorFocused).toBe(false)
+  })
 })
