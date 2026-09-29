@@ -60,6 +60,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
     if (bootPhase !== 'ready') return
 
     function handleHashChange() {
+      const hashAtEntry = location.hash
       const nav = decideHashNav({
         hash: location.hash, pathname: location.pathname, currentDocId: currentDocIdRef.current, sharedDoc: sharedDocRef.current,
         sharesOpen: sharesOpenRef.current, helpOpen: helpOpenRef.current, mapRoute: mapRouteRef.current,
@@ -109,6 +110,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
         const nextCenterId = nav.centerDocId
         ;(async () => {
           await beforeLeaveDoc()
+          if (location.hash !== hashAtEntry) return // await 중 주소가 또 바뀌었으면 뒤 핸들러에 맡긴다
           setSharedDoc(null)
           setSharesOpen(false)
           setHelpOpen(false)
@@ -132,6 +134,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
 
       ;(async () => {
         await beforeLeaveDoc()
+        if (location.hash !== hashAtEntry) return // await 중 주소가 또 바뀌었으면 뒤 핸들러에 맡긴다
         setSharedDoc(null) // 공유 화면을 보고 있었으면 떠난다 (F-130.md 4장)
         setSharesOpen(false) // 공유 관리 페이지를 보고 있었으면 떠난다 (F-243.md 3.4)
         setHelpOpen(false) // 도움말 페이지를 보고 있었으면 떠난다 (F-244.md 3.3)
