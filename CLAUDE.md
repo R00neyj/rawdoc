@@ -167,7 +167,7 @@ Unit tests live under `tests/`, mirroring the source path: `tests/{source path}/
 - **Commit as soon as a unit is done**
 - Implementation subjects read `{feature summary} (F-xxx)`; spec subjects read `F-xxx {title} 명세`. Body format is in the `ship-feature` skill, ch. 5
 - After committing, set that spec's frontmatter to `status: done` and `implemented: {hash}` in a follow-up commit (an `--amend` changes the hash)
-- **`.claude/settings.json` never rides along in another commit.** The only shared setting is the `PostToolUse` hook that opens a newly written spec in VS Code; change it on its own commit and say so in the subject
+- **`.claude/settings.json` never rides along in another commit.** The only shared settings are the hooks that open a newly written spec in VS Code once the writer stops (`PostToolUse` records, `SubagentStop`/`Stop` open); change it on its own commit and say so in the subject
 
 ## Deployment
 
