@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
 import { openApp, setPrefBeforeLoad, currentDocId, fakeImeCompose, fakeImeCommit } from './helpers.js'
+import { fakeServer } from './fixtures/fakeServer.js'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
@@ -346,4 +347,37 @@ test('F-2096 A11 CSS 편집 중 한글 조합이 끝나기 전에는 저장하�
 
   await fakeImeCommit(cdp, '가')
   await expect.poll(() => probeValue(page, '--probe-k')).toBe('1가')
+})
+
+test('F-2099 A14 첫 로그인 때 로컬 스니펫이 계정에 붙고 다른 기기에서 받으며 끄면 따라간다', async ({ browser }) => {
+  const shared = { snippets: [], rev: 0 }
+  const seed = userCssValue([['내 색', ':root:root { --probe-m: 1 }', true]])
+  const open = async () => {
+    const context = await browser.newContext()
+    const page = await context.newPage()
+    await fakeServer(page, { userCss: shared })
+    await setPrefBeforeLoad(page, 'md.userCss', seed)
+    await openApp(page)
+    return { context, page }
+  }
+  const a = await open()
+  await expect.poll(() => shared.rev, { timeout: 10_000 }).toBe(1)
+  expect(shared.snippets.map((s) => s.name)).toEqual(['내 색'])
+  await expect.poll(() => probeValue(a.page, '--probe-m')).toBe('1')
+
+  const b = await open()
+  await expect.poll(() => probeValue(b.page, '--probe-m')).toBe('1')
+  expect(shared.snippets).toHaveLength(1)
+  const dialog = await openCssTab(b.page)
+  await expect(dialog.getByText('계정에 저장해 로그인한 기기 모두에 적용합니다.')).toBeVisible()
+  await dialog.getByRole('checkbox', { name: '내 색' }).uncheck()
+  await expect.poll(() => probeValue(b.page, '--probe-m')).toBe('')
+  await expect.poll(() => shared.rev, { timeout: 10_000 }).toBe(2)
+  expect(shared.snippets[0].enabled).toBe(false)
+
+  await a.page.reload()
+  await expect(a.page.locator('.cm-host .cm-editor')).toBeVisible()
+  await expect.poll(() => probeValue(a.page, '--probe-m')).toBe('')
+  await a.context.close()
+  await b.context.close()
 })

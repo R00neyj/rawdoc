@@ -117,7 +117,7 @@ export type CleanupDeps = {
   clearRemoteCache: () => Promise<void>
   clearYjs: () => Promise<void>
   clearE2eeRow: () => Promise<void>
-  setPref: (key: 'md.account' | 'md.lastDocId', value: string) => void
+  setPref: (key: 'md.account' | 'md.userCssAccount' | 'md.userCssBoot' | 'md.lastDocId', value: string) => void
   writeMarker: (value: string) => void
   navigate: (url: string) => void
   waitMs?: number
@@ -137,6 +137,8 @@ export async function cleanUpAfterAccountDelete(deps: CleanupDeps): Promise<void
   await Promise.race([Promise.all([quiet(deps.clearRemoteCache), quiet(deps.clearYjs), quiet(deps.clearE2eeRow)]), timeout])
   clearTimeout(timer)
   deps.setPref('md.account', '')
+  deps.setPref('md.userCssAccount', '')
+  deps.setPref('md.userCssBoot', '')
   deps.setPref('md.lastDocId', '')
   deps.writeMarker(ACCOUNT_DELETE_DONE_MARKER)
   deps.navigate(AFTER_ACCOUNT_DELETE_URL)

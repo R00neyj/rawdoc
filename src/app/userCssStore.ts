@@ -11,6 +11,7 @@ import {
   type UserCssCompiled,
   type UserCssSnippet,
 } from '../lib/userCssPolicy'
+import { diffPending } from './userCssSync'
 
 export const USER_CSS_KEY = 'md.userCss'
 export const USER_CSS_ACCOUNT_KEY = 'md.userCssAccount'
@@ -80,6 +81,78 @@ export function saveLocalSnippets(
   if (!writeUserCssBoot({ local, account: readUserCssSources().account }, compile)) trySetPref(USER_CSS_BOOT_KEY, '')
   notifyUserCssChanged('self')
   return 'ok'
+}
+
+export type UserCssPending = { upserts: string[]; deletes: string[] }
+export type UserCssAccountSlot = {
+  userId: string
+  rev: number
+  snippets: UserCssSnippet[]
+  pending: UserCssPending
+  mergedLocal: boolean
+  fetchedAt: number
+  etag: string
+}
+
+const SNIPPET_ID = /^[0-9a-f]{16}$/
+
+function idList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && SNIPPET_ID.test(v)) : []
+}
+
+export function readAccountSlot(): UserCssAccountSlot | null {
+  const slot = parseObject(getPref(USER_CSS_ACCOUNT_KEY, ''))
+  const userId = slot?.userId
+  const snippets = validSnippets(slot?.snippets)
+  if (!slot || typeof userId !== 'string' || userId === '' || !snippets) return null
+  const pending = slot.pending as { upserts?: unknown; deletes?: unknown } | null
+  const isObj = typeof pending === 'object' && pending !== null
+  return {
+    userId,
+    rev: typeof slot.rev === 'number' && Number.isSafeInteger(slot.rev) && slot.rev >= 0 ? slot.rev : 0,
+    snippets,
+    pending: { upserts: idList(isObj ? pending.upserts : null), deletes: idList(isObj ? pending.deletes : null) },
+    mergedLocal: slot.mergedLocal === true,
+    fetchedAt: typeof slot.fetchedAt === 'number' && Number.isFinite(slot.fetchedAt) ? slot.fetchedAt : 0,
+    etag: typeof slot.etag === 'string' ? slot.etag : '',
+  }
+}
+
+export function emptyAccountSlot(userId: string): UserCssAccountSlot {
+  return { userId, rev: 0, snippets: [], pending: { upserts: [], deletes: [] }, mergedLocal: false, fetchedAt: 0, etag: '' }
+}
+
+export function writeAccountSlot(
+  slot: UserCssAccountSlot,
+  origin: UserCssOrigin,
+  compile: (s: string) => UserCssCompiled = compileCached,
+): boolean {
+  if (!trySetPref(USER_CSS_ACCOUNT_KEY, JSON.stringify(slot))) return false
+  if (!writeUserCssBoot(readUserCssSources(), compile)) trySetPref(USER_CSS_BOOT_KEY, '')
+  notifyUserCssChanged(origin)
+  return true
+}
+
+export function editableSnippets(accountId: string | null): UserCssSnippet[] {
+  if (accountId === null) return readUserCssSources().local
+  const slot = readUserCssSources().account
+  return slot && slot.userId === accountId ? slot.snippets : []
+}
+
+export function saveUserCssSnippets(
+  accountId: string | null,
+  next: readonly UserCssSnippet[],
+  compile: (s: string) => UserCssCompiled = compileCached,
+): 'ok' | 'count' | 'bytes' | 'invalid' | 'quota' {
+  if (accountId === null) return saveLocalSnippets(next, compile)
+  const limit = checkUserCssLimits(next)
+  if (limit) return limit
+  const snippets = validSnippets(next)
+  if (!snippets) return 'invalid'
+  const found = readAccountSlot()
+  const slot = found && found.userId === accountId ? found : emptyAccountSlot(accountId)
+  const pending = diffPending(slot.snippets, snippets, slot.pending)
+  return writeAccountSlot({ ...slot, snippets, pending }, 'self', compile) ? 'ok' : 'quota'
 }
 
 const listeners = new Set<(origin: UserCssOrigin) => void>()

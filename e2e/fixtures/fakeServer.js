@@ -5,7 +5,8 @@ import crypto from 'node:crypto'
 const ATTACHMENT_MIME = { png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
 
 // 로그인 상태로 /api/me·/api/docs·/api/folders 를 흉내낸다
-export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
+// userCss — { snippets, rev } 를 여러 컨텍스트에 같은 객체로 넘기면 한 서버처럼 쓴다 (F-2099 7.2)
+export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss = { snippets: [], rev: 0 } } = {}) {
   const docs = new Map()
   const folders = new Map()
   const attachments = new Map() // key `${id}.${ext}` -> { mime, bytes, width, height }
@@ -513,6 +514,28 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com' } = {}) {
       }
       e2eeKeys = null
       return route.fulfill({ status: 204 })
+    }
+    return route.fallback()
+  })
+
+  // GET·PUT /api/user-css — 사용자 CSS 계정 슬롯 (F-2099 7.2, 행 있음 = rev > 0)
+  await page.route('**/api/user-css', async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() === 'GET') {
+      const etag = `"c1-${id}-${userCss.rev}"`
+      if (req.headers()['if-none-match'] === etag) return route.fulfill({ status: 304, headers: { etag } })
+      return route.fulfill({ status: 200, contentType: 'application/json', headers: { etag }, body: JSON.stringify({ snippets: userCss.snippets, rev: userCss.rev }) })
+    }
+    if (req.method() === 'PUT') {
+      if (recordWrite(route, req)) return
+      const body = req.postDataJSON()
+      if (body.baseRev !== userCss.rev) {
+        return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'conflict', rev: userCss.rev }) })
+      }
+      userCss.snippets = body.snippets
+      userCss.rev += 1
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rev: userCss.rev }) })
     }
     return route.fallback()
   })

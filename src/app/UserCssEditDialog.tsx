@@ -2,7 +2,8 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import Dialog from './Dialog'
 import { createUserCssEditor } from './userCssEditor'
 import { compileCached } from './userCssApply'
-import { readUserCssSources, saveLocalSnippets } from './userCssStore'
+import { editableSnippets, saveUserCssSnippets } from './userCssStore'
+import { flushUserCssPush } from './userCssSync'
 import { USER_CSS_SAFE_LINE, cleanSnippetName, replaceSnippet, userCssSaveMessage, userCssStatusLines } from './userCssEdit'
 import { USER_CSS_MAX_NAME_LENGTH, utf8ByteLength, type UserCssSnippet } from '../lib/userCssPolicy'
 
@@ -13,8 +14,8 @@ function statusFor(css: string, enabled: boolean): string[] {
   return document.documentElement.getAttribute('data-user-css') === 'safe' ? [USER_CSS_SAFE_LINE, ...lines] : lines
 }
 
-function readInitial(id: string): { snippet: UserCssSnippet; otherBytes: number } | null {
-  const local = readUserCssSources().local
+function readInitial(accountId: string | null, id: string): { snippet: UserCssSnippet; otherBytes: number } | null {
+  const local = editableSnippets(accountId)
   const snippet = local.find((s) => s.id === id)
   if (!snippet) return null
   const otherBytes = local.reduce((sum, s) => (s.id === id ? sum : sum + utf8ByteLength(s.css)), 0)
@@ -22,8 +23,8 @@ function readInitial(id: string): { snippet: UserCssSnippet; otherBytes: number 
 }
 
 // D-16 CSS 편집 — 열 때 원문을 한 번 읽고, 400ms 뒤·닫을 때 저장한다 (specs/features/F-2096.md 4장)
-export default function UserCssEditDialog({ snippetId, onClose }: { snippetId: string; onClose: () => void }) {
-  const [initial] = useState(() => readInitial(snippetId))
+export default function UserCssEditDialog({ accountId, snippetId, onClose }: { accountId: string | null; snippetId: string; onClose: () => void }) {
+  const [initial] = useState(() => readInitial(accountId, snippetId))
   const [open, setOpen] = useState(true)
   const [nameDraft, setNameDraft] = useState(initial?.snippet.name ?? '')
   const [status, setStatus] = useState(() => (initial ? statusFor(initial.snippet.css, initial.snippet.enabled) : []))
@@ -44,7 +45,7 @@ export default function UserCssEditDialog({ snippetId, onClose }: { snippetId: s
       clearTimeout(timer)
       if (!dirty) return
       dirty = false
-      const local = readUserCssSources().local
+      const local = editableSnippets(accountId)
       const cur = local.find((s) => s.id === snippetId)
       const next = cur && { ...cur, css: view.state.doc.toString(), name: nameRef.current, updatedAt: Date.now() }
       const list = next ? replaceSnippet(local, next) : null
@@ -53,7 +54,7 @@ export default function UserCssEditDialog({ snippetId, onClose }: { snippetId: s
         return
       }
       if (next.css === cur.css && next.name === cur.name) return
-      const result = saveLocalSnippets(list)
+      const result = saveUserCssSnippets(accountId, list)
       setError(result === 'ok' ? '' : userCssSaveMessage(result))
       setStatus(statusFor(next.css, next.enabled))
     }
@@ -84,7 +85,7 @@ export default function UserCssEditDialog({ snippetId, onClose }: { snippetId: s
       focusRef.current = null
       flushRef.current = () => {}
     }
-  }, [initial, snippetId])
+  }, [initial, snippetId, accountId])
 
   function handleNameChange(raw: string) {
     setNameDraft(raw)
@@ -98,6 +99,7 @@ export default function UserCssEditDialog({ snippetId, onClose }: { snippetId: s
     if (closedRef.current) return
     closedRef.current = true
     flushRef.current()
+    flushUserCssPush()
     onClose()
   }
 

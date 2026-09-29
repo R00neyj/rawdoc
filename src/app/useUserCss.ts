@@ -6,6 +6,7 @@ import { getPref } from './prefs'
 import { USER_CSS_BOOT_KEY } from './bootPaint'
 import { USER_CSS_SAFE_NOTICE } from './appNotices'
 import { compileCached, createDeferredRun, hasSafeParam, pruneCompileCache, urlWithoutSafe, userCssSheets } from './userCssApply'
+import { useUserCssSync } from './userCssSync'
 import {
   USER_CSS_ACCOUNT_KEY,
   USER_CSS_KEY,
@@ -52,6 +53,10 @@ export default function useUserCss({ isPublic, account, showNotice, beforeReload
   const [safe] = useState(() => hasSafeParam(location.search))
   const accountId = userCssAccountId(account)
   const refreshRef = useRef<() => void>(() => {})
+  useUserCssSync({
+    accountId: !isPublic && account.state === 'in' ? account.id : null,
+    blocked: account.state === 'in' && account.blocked,
+  })
 
   // 공개 보기 커밋이 칠해지기 전에 뺀다 (4장)
   useLayoutEffect(() => {

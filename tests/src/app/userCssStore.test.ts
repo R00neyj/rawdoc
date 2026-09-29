@@ -3,10 +3,13 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import {
   USER_CSS_ACCOUNT_KEY,
   USER_CSS_KEY,
+  editableSnippets,
   isBootCurrent,
   notifyUserCssChanged,
+  readAccountSlot,
   readUserCssSources,
   saveLocalSnippets,
+  saveUserCssSnippets,
   selectSlot,
   subscribeUserCss,
   writeUserCssBoot,
@@ -187,5 +190,71 @@ describe('notifyUserCssChanged', () => {
     off()
     notifyUserCssChanged('self')
     expect(listener).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('F-2099 계정 슬롯', () => {
+  const emptyPending = { upserts: [], deletes: [] }
+
+  test('readAccountSlot 은 칸마다 기본값으로 읽고 account 판정은 readUserCssSources 와 같다', () => {
+    expect(readAccountSlot()).toBeNull()
+    store.set(USER_CSS_ACCOUNT_KEY, JSON.stringify({ userId: 'u1', snippets: [snip(1, 'a')] }))
+    expect(readAccountSlot()).toEqual({ userId: 'u1', rev: 0, snippets: [snip(1, 'a')], pending: emptyPending, mergedLocal: false, fetchedAt: 0, etag: '' })
+    const odd = { userId: 'u1', snippets: [], rev: -1, pending: { upserts: ['0000000000000001', 'x', 3], deletes: 'no' }, mergedLocal: 'yes', fetchedAt: 'z', etag: 7 }
+    store.set(USER_CSS_ACCOUNT_KEY, JSON.stringify(odd))
+    expect(readAccountSlot()).toEqual({ userId: 'u1', rev: 0, snippets: [], pending: { upserts: ['0000000000000001'], deletes: [] }, mergedLocal: false, fetchedAt: 0, etag: '' })
+    for (const raw of ['', '{', JSON.stringify({ userId: '', snippets: [] }), JSON.stringify({ userId: 'u1', snippets: 'a' })]) {
+      store.set(USER_CSS_ACCOUNT_KEY, raw)
+      expect(readAccountSlot(), raw).toBeNull()
+      expect(readUserCssSources().account).toBeNull()
+    }
+  })
+
+  test('saveUserCssSnippets(null, …) 은 saveLocalSnippets 와 같다', () => {
+    expect(saveUserCssSnippets(null, [snip(1, 'a')], compile)).toBe('ok')
+    expect(JSON.parse(store.get(USER_CSS_KEY)!)).toEqual({ snippets: [snip(1, 'a')] })
+    expect(store.has(USER_CSS_ACCOUNT_KEY)).toBe(false)
+  })
+
+  test('id 있음 — 슬롯에 pending 반영·부팅 값 account 갱신·self 한 번·로컬 슬롯 불변', () => {
+    store.set(USER_CSS_KEY, JSON.stringify({ snippets: [snip(9, 'loc')] }))
+    const localRaw = store.get(USER_CSS_KEY)
+    store.set(USER_CSS_ACCOUNT_KEY, JSON.stringify({ userId: 'u1', rev: 4, snippets: [snip(1, 'a'), snip(2, 'b')], pending: emptyPending, mergedLocal: true, fetchedAt: 5, etag: '"t"' }))
+    const heard: string[] = []
+    const off = subscribeUserCss((o) => heard.push(o))
+    const next = [snip(1, 'a2'), snip(3, 'c')]
+    expect(saveUserCssSnippets('u1', next, compile)).toBe('ok')
+    off()
+    const slot = readAccountSlot()!
+    expect(slot).toMatchObject({ userId: 'u1', rev: 4, snippets: next, mergedLocal: true, fetchedAt: 5, etag: '"t"' })
+    expect(slot.pending).toEqual({ upserts: [snip(1, 'x').id, snip(3, 'x').id], deletes: [snip(2, 'x').id] })
+    expect(JSON.parse(store.get(USER_CSS_BOOT_KEY)!).account).toEqual({ userId: 'u1', sheets: ['c:a2', 'c:c'] })
+    expect(heard).toEqual(['self'])
+    expect(store.get(USER_CSS_KEY)).toBe(localRaw)
+  })
+
+  test('다른 사용자 슬롯이면 빈 새 슬롯에서 시작한다', () => {
+    store.set(USER_CSS_ACCOUNT_KEY, JSON.stringify({ userId: 'u1', rev: 4, snippets: [snip(1, 'a')], pending: { upserts: [snip(1, 'x').id], deletes: [] }, mergedLocal: true }))
+    expect(saveUserCssSnippets('u2', [snip(5, 'z')], compile)).toBe('ok')
+    expect(readAccountSlot()).toMatchObject({ userId: 'u2', rev: 0, snippets: [snip(5, 'z')], pending: { upserts: [snip(5, 'x').id], deletes: [] }, mergedLocal: false, etag: '' })
+  })
+
+  test('한도·검증 실패 코드와 quota 는 두 키를 바꾸지 않는다', () => {
+    store.set(USER_CSS_ACCOUNT_KEY, JSON.stringify({ userId: 'u1', snippets: [snip(1, 'a')] }))
+    store.set(USER_CSS_BOOT_KEY, boot([]))
+    const before = [store.get(USER_CSS_ACCOUNT_KEY), store.get(USER_CSS_BOOT_KEY)]
+    expect(saveUserCssSnippets('u1', Array.from({ length: 51 }, (_, i) => snip(i, 'a')), compile)).toBe('count')
+    expect(saveUserCssSnippets('u1', [{ ...snip(1, 'a'), name: ' x' }], compile)).toBe('invalid')
+    failSet = (key) => key === USER_CSS_ACCOUNT_KEY
+    expect(saveUserCssSnippets('u1', [snip(1, 'b')], compile)).toBe('quota')
+    expect([store.get(USER_CSS_ACCOUNT_KEY), store.get(USER_CSS_BOOT_KEY)]).toEqual(before)
+  })
+
+  test('editableSnippets 세 갈래', () => {
+    store.set(USER_CSS_KEY, JSON.stringify({ snippets: [snip(9, 'loc')] }))
+    store.set(USER_CSS_ACCOUNT_KEY, JSON.stringify({ userId: 'u1', snippets: [snip(1, 'a')] }))
+    expect(editableSnippets(null)).toEqual([snip(9, 'loc')])
+    expect(editableSnippets('u1')).toEqual([snip(1, 'a')])
+    expect(editableSnippets('u2')).toEqual([])
   })
 })

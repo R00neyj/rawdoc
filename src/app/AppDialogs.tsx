@@ -203,7 +203,7 @@ export default function AppDialogs({
               }
             : undefined
         }
-        userCss={userCssAccountId(account) === null}
+        userCss={{ accountId: userCssAccountId(account) }}
         account={settingsAccount}
         push={settingsPush}
         onClose={closeSettings}

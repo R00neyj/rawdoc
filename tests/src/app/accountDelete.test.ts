@@ -152,7 +152,7 @@ describe('F-2038 C7 이 기기 정리 순서', () => {
     await cleanUpAfterAccountDelete(deps)
     expect(log[0]).toBe('lock')
     expect(log.slice(1, 4).sort()).toEqual(['e2ee', 'remote', 'yjs'])
-    expect(log.slice(4)).toEqual(['pref md.account=', 'pref md.lastDocId=', 'marker {"step":"done"}', 'go /?app=1'])
+    expect(log.slice(4)).toEqual(['pref md.account=', 'pref md.userCssAccount=', 'pref md.userCssBoot=', 'pref md.lastDocId=', 'marker {"step":"done"}', 'go /?app=1'])
   })
 
   it('하나가 던져도 나머지와 뒤 단계가 불린다', async () => {
