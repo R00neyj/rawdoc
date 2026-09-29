@@ -324,7 +324,7 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
   const hasNoLinksAtAll = !loading && graph !== null && graph.edges.length === 0 && graph.nodes.every((n) => !n.missing)
 
   return (
-    <div className="map-page">
+    <div className="map-page" data-ui="map">
       {/* 제목·보기 설정·닫기를 한 줄에 둔다 — 편집 화면의 상단바까지 세면 가로 막대가
           세 겹이 되어 지도가 볼 자리를 잃는다 (2026-09-21 사용자 확인) */}
       <div className="map-page-head">

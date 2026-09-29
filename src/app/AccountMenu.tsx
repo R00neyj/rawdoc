@@ -256,6 +256,7 @@ export default function AccountMenu(props: AccountMenuProps & { variant: 'row' |
           className="account-menu-list"
           data-state={state}
           inert={state === 'closed'}
+          data-ui="menu"
           role="menu"
           ref={menuRef}
           onKeyDown={handleKeyDown}

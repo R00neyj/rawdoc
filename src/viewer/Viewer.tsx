@@ -203,6 +203,7 @@ export default function Viewer({
   return (
     <div
       ref={setRefs}
+      data-ui="viewer"
       className={`viewer${codeCopy ? ' viewer--code-copy' : ''}`}
       tabIndex={0}
       onClick={handleClick}
@@ -231,7 +232,7 @@ export default function Viewer({
         </span>
       )}
       {/* 목차(F-144) 항목에 넣지 않는다 — extractHeadings 는 본문(html)만 읽는다 (F-217.md 2.1) */}
-      {title !== undefined && <h1 className="doc-title-view">{title || '제목 없는 문서'}</h1>}
+      {title !== undefined && <h1 className="doc-title-view" data-ui="doc-title">{title || '제목 없는 문서'}</h1>}
       <div className="markdown-body" dangerouslySetInnerHTML={innerHtml} />
     </div>
   )

@@ -267,6 +267,7 @@ export default function ShareMenu(props: ShareMenuProps) {
           className="share-menu-list"
           data-state={state}
           inert={state === 'closed'}
+          data-ui="menu"
           role="menu"
           ref={menuRef}
           onKeyDown={handleKeyDown}

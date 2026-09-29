@@ -354,7 +354,7 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
       containerSize.height > 0 ? Math.min(window.innerHeight * 0.6, containerSize.height - POPUP_CARD_MARGIN.height) : undefined
 
     return (
-      <div className="outline-popup" ref={popupRef} onKeyDown={handlePopupKeyDown} onBlur={handlePopupBlur}>
+      <div className="outline-popup" data-ui="outline" ref={popupRef} onKeyDown={handlePopupKeyDown} onBlur={handlePopupBlur}>
         <button
           type="button"
           ref={buttonRef}
@@ -397,6 +397,7 @@ export default function Outline({ editorRef, containerRef, viewerRef, docId, vie
 
   return (
     <nav
+      data-ui="outline"
       className={`outline${expanded ? ' outline--expanded' : ''}`}
       aria-label="목차"
       onMouseEnter={expand}

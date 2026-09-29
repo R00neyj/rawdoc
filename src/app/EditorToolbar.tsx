@@ -236,6 +236,7 @@ export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorTo
                   className="item-menu-list"
                   data-state={headingState}
                   inert={headingState === 'closed'}
+                  data-ui="menu"
                   role="menu"
                   ref={headingMenuRef}
                   onKeyDown={handleHeadingKeyDown}

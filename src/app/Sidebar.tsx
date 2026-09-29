@@ -1125,6 +1125,7 @@ export default function Sidebar({
     <nav
       ref={sidebarRef}
       id={SIDEBAR_ID}
+      data-ui="sidebar"
       className={`sidebar${narrow ? ' sidebar--overlay' : ''}${isRail ? ' sidebar--collapsed' : ''}`}
       data-state={overlayState}
       inert={overlayState === 'closed'}
@@ -1180,6 +1181,7 @@ export default function Sidebar({
             </div>
             <div
               className="sidebar-scroll"
+              data-ui="sidebar-list"
               onClick={(e) => {
                 if (e.target === e.currentTarget) setSelection(EMPTY_SELECTION)
               }}

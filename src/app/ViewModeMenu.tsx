@@ -91,6 +91,7 @@ export default function ViewModeMenu({ viewMode, disabled, onChange }: ViewModeM
           className="view-mode-menu-list"
           data-state={state}
           inert={state === 'closed'}
+          data-ui="menu"
           role="menu"
           ref={menuRef}
           onKeyDown={handleKeyDown}

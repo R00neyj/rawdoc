@@ -69,7 +69,7 @@ export default function HelpMenu({ onOpenHelp }: { onOpenHelp: () => void }) {
         {!open && <IconTooltip text={LABEL} align="end" />}
       </span>
       {mounted && (
-        <ul className="help-menu-list" data-state={state} inert={state === 'closed'} role="menu" ref={menuRef} onKeyDown={handleKeyDown}>
+        <ul className="help-menu-list" data-state={state} inert={state === 'closed'} role="menu" data-ui="menu" ref={menuRef} onKeyDown={handleKeyDown}>
           {items.map((item, i) => {
             const Icon = ITEM_ICON[item.key]
             return (

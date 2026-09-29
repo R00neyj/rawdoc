@@ -144,6 +144,7 @@ class TitleWidget extends WidgetType {
 
     const textarea = document.createElement('textarea')
     textarea.className = 'doc-title'
+    textarea.setAttribute('data-ui', 'doc-title')
     textarea.setAttribute('aria-label', '문서 제목')
     textarea.rows = 1
     textarea.value = this.title

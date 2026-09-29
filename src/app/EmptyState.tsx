@@ -34,7 +34,7 @@ function formatDate(ts: number): string {
 export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDocs, onSelectDoc, onOpenHelp }: EmptyStateProps) {
   const recent = recentDocs.slice(0, MAX_RECENT)
   return (
-    <div className="empty-state">
+    <div className="empty-state" data-ui="home">
       <p style={{ fontFamily: 'var(--font-display)' }}>
         {hasDocs ? '문서를 선택하거나 새로 만드세요.' : '문서가 없습니다.'}
       </p>

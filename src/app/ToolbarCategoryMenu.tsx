@@ -102,6 +102,7 @@ export default function ToolbarCategoryMenu({ activeTab, onSelect }: ToolbarCate
           className="item-menu-list editor-toolbar-category-list"
           data-state={state}
           inert={state === 'closed'}
+          data-ui="menu"
           role="menu"
           ref={menuRef}
           onKeyDown={handleKeyDown}

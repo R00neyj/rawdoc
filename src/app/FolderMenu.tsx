@@ -234,6 +234,7 @@ export default function FolderMenu({
           className={`item-menu-list${anchorPoint ? ' item-menu-list--anchored' : ''}${openUp ? ' item-menu-list--up' : ''}`}
           data-state={state}
           inert={state === 'closed'}
+          data-ui="menu"
           role="menu"
           ref={menuRef}
           onKeyDown={handleKeyDown}

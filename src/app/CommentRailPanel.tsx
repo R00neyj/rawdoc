@@ -339,7 +339,7 @@ export default function CommentRailPanel({
 
   if (mode === 'rail') {
     return (
-      <aside className="comment-rail" data-state={presence} aria-label="댓글" ref={containerRef as RefObject<HTMLElement>}>
+      <aside className="comment-rail" data-ui="comments" data-state={presence} aria-label="댓글" ref={containerRef as RefObject<HTMLElement>}>
         {content}
       </aside>
     )
@@ -347,6 +347,7 @@ export default function CommentRailPanel({
   return (
     <section
       className="comment-sheet"
+      data-ui="comments"
       data-state={presence}
       role="dialog"
       aria-modal="false"

@@ -28,6 +28,7 @@ export default function NoticeBar({ notice, onDismiss }: NoticeBarProps) {
   return (
     <div
       className={`notice notice--${shown.type}`}
+      data-ui="notice"
       data-state={state}
       inert={state === 'closed'}
       role={shown.type === 'error' ? 'alert' : 'status'}

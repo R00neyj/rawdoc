@@ -95,5 +95,5 @@ export default function Editor({
 
   useImperativeHandle<EditorHandle | null, EditorHandle | null>(ref, () => handleRef.current, [])
 
-  return <div className="cm-host" ref={containerRef} />
+  return <div className="cm-host" data-ui="editor" ref={containerRef} />
 }

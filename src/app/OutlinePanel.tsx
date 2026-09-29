@@ -37,7 +37,7 @@ export default function OutlinePanel({ host, open, headings, currentIndex, listR
   return createPortal(
     <>
       {open && <div className="outline-panel-backdrop" onClick={onClose} />}
-      <nav className="outline-panel" aria-label="목차" data-state={state} inert={state === 'closed'}>
+      <nav className="outline-panel" data-ui="outline" aria-label="목차" data-state={state} inert={state === 'closed'}>
         <div className="outline-panel-head">
           <h2 className="outline-panel-title">목차</h2>
           <button type="button" className="icon-btn outline-panel-close" aria-label="목차 닫기" onClick={onClose}>

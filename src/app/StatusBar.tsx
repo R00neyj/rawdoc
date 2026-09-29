@@ -83,7 +83,7 @@ export default function StatusBar({
   const text = SAVE_STATUS_TEXT[saveStatus] ?? ''
   const liveEntry = live ? LIVE_STATUS[live] : null
   return (
-    <div className="statusbar">
+    <div className="statusbar" data-ui="statusbar">
       <span className="statusbar-info">
         {viewMode !== 'view' && <>줄 {line}, 열 {col} · </>}
         {charCount.toLocaleString('ko-KR')}자 · {wordCount.toLocaleString('ko-KR')}단어

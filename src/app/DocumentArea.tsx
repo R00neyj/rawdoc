@@ -119,6 +119,8 @@ export default function DocumentArea({
     // 공유 화면·지도가 떠 있는 동안 편집 영역을 언마운트하지 않고 hidden 으로만 숨긴다 — 언마운트하면 EditorView 가 새로 만들어져 저장된 편집을 덮어쓴다(F-138 3.2, F-292.md 6.1)
     <div
       className="content-area content-area--doc"
+      data-ui="content"
+      data-view-mode={viewMode}
       ref={contentAreaRef}
       hidden={Boolean(sharedDoc) || Boolean(mapRoute)}
       data-comment-rail-open={commentRailVisible || undefined}

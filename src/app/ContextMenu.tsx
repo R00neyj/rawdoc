@@ -300,6 +300,7 @@ export default function ContextMenu({ x, y, nodes, onSelect, onClose, keepSource
   return (
     <ul
       className="context-menu-list context-menu-root"
+      data-ui="menu"
       role="menu"
       ref={menuRef}
       onKeyDown={keepSourceFocus ? undefined : (e: ReactKeyboardEvent<HTMLUListElement>) => handleTopKeyDown(e)}

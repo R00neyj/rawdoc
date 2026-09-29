@@ -26,6 +26,7 @@ export async function printDoc(args: {
   root.replaceChildren()
   const heading = document.createElement('h1')
   heading.className = 'doc-title-view'
+  heading.setAttribute('data-ui', 'doc-title')
   heading.textContent = title || '제목 없는 문서'
   const body = document.createElement('div')
   body.className = 'markdown-body'

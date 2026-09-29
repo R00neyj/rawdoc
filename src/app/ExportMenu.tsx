@@ -106,6 +106,7 @@ export default function ExportMenu({ disabled, onExportMd, onExportTxt, onPrintD
           className="export-menu-list"
           data-state={state}
           inert={state === 'closed'}
+          data-ui="menu"
           role="menu"
           ref={menuRef}
           onKeyDown={handleKeyDown}

@@ -101,7 +101,7 @@ export default function TopBar({
   const phone = usePhoneWidth()
   return (
     <>
-      <header className="topbar">
+      <header className="topbar" data-ui="topbar">
         {narrow && (
           <SidebarHead
             variant={phone ? 'phone' : 'topbar'}

@@ -60,6 +60,7 @@ export default function Dialog({ open, onClose, titleId, initialFocusRef, size =
   return (
     <dialog
       ref={dialogRef}
+      data-ui="dialog"
       className={size === 'default' ? 'dialog' : `dialog dialog--${size}`}
       aria-labelledby={titleId}
       aria-describedby={describedById}

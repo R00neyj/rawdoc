@@ -1208,6 +1208,7 @@ export default function App() {
   return (
     <div
       className="app-shell"
+      data-ui="app"
       ref={appShellRef}
       onClick={handleAppShellClick}
       style={{ '--sidebar-w': `${displaySidebarWidth}px` } as CSSProperties}
@@ -1340,7 +1341,7 @@ export default function App() {
         toolbarPref, wikiPreviewPref,
       }} />
       {/* 인쇄 전용 영역 — printDoc() 이 채운다. .app-shell 의 마지막 직계 자식이어야 한다 (F-279.md 4.2) */}
-      <div className="viewer print-root" ref={printRootRef} aria-hidden="true" inert />
+      <div className="viewer print-root" data-ui="print" ref={printRootRef} aria-hidden="true" inert />
     </div>
   )
 }
