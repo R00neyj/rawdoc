@@ -5247,6 +5247,74 @@ body.sidebar-resizing {
   .phone-nav .icon-btn {
     margin: 0;
   }
+
+  /* 댓글 판 — 해결 체크·⋯ 는 44px 칸, 서로 8px 떨어뜨리고 줄 높이는 세로 음수 여백으로 지킨다 (tweak 2026-09-30) */
+  .comment-thread-actions {
+    gap: 8px;
+    margin-right: -8px;
+  }
+
+  .comment-thread .comment-thread-resolve,
+  .comment-thread .item-menu-btn {
+    width: var(--touch-target);
+    height: var(--touch-target);
+    margin: -10px 0;
+  }
+
+  .comment-reply .item-menu-btn {
+    margin-right: -8px;
+  }
+
+  .comment-rail-resolved-toggle {
+    min-height: var(--touch-target);
+    gap: 10px;
+    padding: 0 8px;
+  }
+
+  .comment-rail-resolved-toggle input[type='checkbox'] {
+    width: 20px;
+    height: 20px;
+  }
+
+  .comment-sheet-close,
+  .comment-orphans-head,
+  .notifications-read-all {
+    min-height: var(--touch-target);
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .comment-composer-buttons {
+    gap: 8px;
+  }
+
+  .comment-composer-cancel,
+  .comment-composer-send {
+    height: 40px;
+    padding: 0 16px;
+  }
+
+  .comment-reply-send {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 0;
+  }
+
+  .shortcut-panel-close {
+    width: var(--touch-target);
+    height: var(--touch-target);
+  }
+
+  .dialog-btn,
+  .dialog-actions button,
+  .help-page-close,
+  .shares-close {
+    min-height: var(--touch-target);
+  }
+
+  .dialog-actions {
+    gap: 10px;
+  }
 }
 
 @media (max-width: 600px) and (prefers-reduced-transparency: reduce) {

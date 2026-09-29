@@ -374,3 +374,22 @@
   box-shadow: 0 0 0 2px var(--callout-warning);
   border-radius: 3px;
 }
+
+/* 휴대폰 터치 — 찾기 카드 버튼 40px 칸, 카드 폭 300px 에 맞춰 입력 140 → 100px, 간격 8px (tweak 2026-09-30) */
+@media (max-width: 600px) and (pointer: coarse) {
+  body :is(.cm-host .cm-panel.cm-search, .view-find) .cm-button,
+  body :is(.cm-host .cm-panel.cm-search, .view-find) [name='close'],
+  body :is(.cm-host .cm-panel.cm-search, .view-find) label {
+    width: 40px;
+    height: 40px;
+  }
+
+  body :is(.cm-host .cm-panel.cm-search, .view-find) .cm-textfield {
+    width: 100px;
+    height: 40px;
+  }
+
+  body :is(.cm-host .cm-panel.cm-search, .view-find) .cm-search-row {
+    gap: 8px;
+  }
+}
