@@ -7,6 +7,7 @@ import { e2eeCreateErrorMessage } from './appNotices'
 import { stripContent, sortByUpdatedAtDesc, type DocMeta, type OpenDoc } from './docMeta'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { formatMapHash } from './hashRoute'
+import { leaveScreens, screenOpen } from './leaveScreens'
 import { replaceHashUrl, pushHashUrl, pushHelpHash } from './useHashRouting'
 import type { EditorHandle } from '../editor/Editor'
 import type { ShareDoc } from '../lib/shareCodec'
@@ -89,6 +90,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute, setDeletedElsewhereId, setNotice, setSearchOpen, setPendingEditorSearch,
     editorRef, focusTitleRef, focusEditorRef, pendingHeadingRef, openDocIdRef,
   } = options
+  const leave = () => leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute })
   // Editor 는 마운트 시점의 onOpenWikiLink 클로저만 계속 쓰므로 ref 로 우회해 최신 값을 보게 한다 (F-131 3·5장)
   const openWikiLinkRef = useRef<(target: string, heading: string | null) => Promise<void>>(async () => {})
 
@@ -158,10 +160,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     // 새 문서는 에디터가 아니라 제목 입력에 포커스한다 — 이전 전환 요청이 아직 소비되지 않았을 가능성에 대비해 명시적으로 내려둔다 (ia.md 3.3, F-103 3.4)
     focusEditorRef.current = false
     // 공유 보기(F-130 4장)·공유 관리·도움말(F-2054 6.4)·지도 빈 상태(F-292 6.5)를 떠난다 — 만든 뒤에만, 실패하면 화면과 주소가 어긋난다
-    setSharedDoc(null)
-    setSharesOpen(false)
-    setHelpOpen(false)
-    setMapRoute(null)
+    leave()
     setCurrentDocId(doc.id)
     setPref('md.lastDocId', doc.id)
     pushHashUrl(doc.id)
@@ -190,10 +189,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     focusTitleRef.current = false
     focusEditorRef.current = true
     // 화면 떠나기는 만든 뒤에만 — 실패하면 지금 화면과 주소가 그대로 남는다
-    setSharedDoc(null)
-    setSharesOpen(false)
-    setHelpOpen(false)
-    setMapRoute(null)
+    leave()
     setCurrentDocId(doc.id)
     setPref('md.lastDocId', doc.id)
     pushHashUrl(doc.id)
@@ -207,15 +203,12 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
 
   async function selectDoc(id: string) {
     // sharedDoc·공유 관리 페이지·도움말 페이지·지도가 있으면 currentDocId 가 우연히 같아도 화면을 떠나야 한다 (ia.md 3.19, F-243.md 3.4, F-244.md 3.3, F-292.md 6.4 "노드 클릭 → 문서 열고 지도 닫기")
-    if (id === currentDocId && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute) {
+    if (id === currentDocId && !screenOpen({ sharedDoc, sharesOpen, helpOpen, mapRoute })) {
       notifications.markDocRead(id) // 이미 보이는 문서를 다시 고르면 전환이 아니라도 읽음 처리 (F-510 4.2 2번)
       return
     }
     await beforeLeaveDoc()
-    setSharedDoc(null)
-    setSharesOpen(false)
-    setHelpOpen(false)
-    setMapRoute(null)
+    leave()
     focusEditorRef.current = true
     setCurrentDocId(id)
     setPref('md.lastDocId', id)
@@ -226,12 +219,9 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
 
   // ----- 로고 클릭 → 홈 (F-232 3.3, F-244 3.3) — 이미 홈이거나 도움말 페이지의 `닫기` 도 이 함수를 그대로 쓴다 -----
   async function goHome() {
-    if (currentDocId === null && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute) return
+    if (currentDocId === null && !screenOpen({ sharedDoc, sharesOpen, helpOpen, mapRoute })) return
     await beforeLeaveDoc()
-    setSharedDoc(null)
-    setSharesOpen(false)
-    setHelpOpen(false)
-    setMapRoute(null)
+    leave()
     setCurrentDocId(null)
     replaceHashUrl(null)
   }
@@ -255,7 +245,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
   ) {
     if (target === '') {
       if (source) {
-        const onDocScreen = !sharedDoc && !sharesOpen && !helpOpen && !mapRoute
+        const onDocScreen = !screenOpen({ sharedDoc, sharesOpen, helpOpen, mapRoute })
         if (source.docId === currentDocId && onDocScreen) {
           if (heading) jumpToHeading(heading)
           return
@@ -269,7 +259,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     }
     const folderId = source ? source.folderId : currentFolderId
     const match = wikiResolver.resolve(target, folderId)
-    const onDocScreen = !sharedDoc && !sharesOpen && !helpOpen && !mapRoute
+    const onDocScreen = !screenOpen({ sharedDoc, sharesOpen, helpOpen, mapRoute })
     if (match && match.id === currentDocId && onDocScreen) {
       if (heading) jumpToHeading(heading)
       return
@@ -370,9 +360,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
   // 사이드바 `도움말` → 전용 페이지로 이동 (F-244.md 3.3, 3.5)
   async function openHelp() {
     await beforeLeaveDoc()
-    setSharedDoc(null)
-    setSharesOpen(false)
-    setMapRoute(null)
+    leave()
     setCurrentDocId(null)
     setHelpOpen(true)
     pushHelpHash()
@@ -382,9 +370,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
   // ----- 위키링크 지도 S-8 — currentDocId 는 비우지 않는다(F-138 3.2 와 같은 방식, F-292.md 6.1) -----
   async function openMap() {
     await beforeLeaveDoc()
-    setSharedDoc(null)
-    setSharesOpen(false)
-    setHelpOpen(false)
+    leave()
     const anchorId = currentDocId
     setMapRoute({ centerDocId: anchorId, returnDocId: anchorId })
     history.pushState(null, '', `${location.pathname}${location.search}${formatMapHash(anchorId ?? undefined)}`)

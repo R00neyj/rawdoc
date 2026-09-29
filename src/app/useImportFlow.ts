@@ -39,6 +39,7 @@ import { toWebp } from '../storage/toWebp'
 import { attachImages } from './attachImages'
 import { setupFileLaunch } from '../pwa/fileLaunch'
 import type { NoticeWithAction } from './NoticeBar'
+import { leaveScreens, screenOpen, type ScreenState } from './leaveScreens'
 import { canRemountWithFresh, shouldRemountAfterImport } from './importResult'
 
 export type UseImportFlowOptions = {
@@ -107,16 +108,9 @@ export function dropBlocks(dropBlocked: boolean, imageDropBlocked: boolean, impo
   return { md: dropBlocked || importOpen, image: imageDropBlocked || importOpen }
 }
 
-// 이미 가져온 파일을 열 때 화면을 떠나야 하는지 — 다른 문서이거나 문서 화면이 아닐 때(공유·공유 관리·도움말·지도)
-export function shouldLeaveForMatchedDoc(s: {
-  matchedId: string
-  currentDocId: string | null
-  sharedOpen: boolean
-  sharesOpen: boolean
-  helpOpen: boolean
-  mapOpen: boolean
-}): boolean {
-  return s.matchedId !== s.currentDocId || s.sharedOpen || s.sharesOpen || s.helpOpen || s.mapOpen
+// 이미 가져온 파일을 열 때 화면을 떠나야 하는지 — 다른 문서이거나 전용 화면이 열려 있을 때
+export function shouldLeaveForMatchedDoc(s: ScreenState & { matchedId: string; currentDocId: string | null }): boolean {
+  return s.matchedId !== s.currentDocId || screenOpen(s)
 }
 
 export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResult {
@@ -127,6 +121,7 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
     sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, docPathRef, focusEditorRef, docSaverFlushRef, dropBlockedRef, imageDropBlockedRef,
     readOnlyDocRef,
   } = options
+  const leave = () => leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute })
   // 외부 .md 파일을 창 위로 끄는 동안의 덮개 (F-145.md 2.4)
   const [dropActive, setDropActive] = useState(false)
   // zip 가져오기 미리보기·진행·결과 대화상자 (F-282.md 3.8)
@@ -333,10 +328,7 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
     const createdDoc = lastCreatedDoc as Doc | null
     if (createdDoc) {
       // 공유 보기(F-130 4장)·공유 관리·도움말·지도(F-2054 6.4)를 떠난다 — 가져온 게 없으면 화면과 주소를 그대로 둔다
-      setSharedDoc(null)
-      setSharesOpen(false)
-      setHelpOpen(false)
-      setMapRoute(null)
+      leave()
       focusEditorRef.current = true
       setCurrentDocId(createdDoc.id)
       setPref('md.lastDocId', createdDoc.id)
@@ -700,21 +692,17 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
 
       const matchedDoc = matchedId ? docsRef.current.find((d) => d.id === matchedId) : undefined
       if (matchedId && matchedDoc) {
-        const leave = shouldLeaveForMatchedDoc({
+        const shouldLeave = shouldLeaveForMatchedDoc({
           matchedId,
           currentDocId: currentDocIdRef.current,
-          sharedOpen: Boolean(sharedDocRef.current),
+          sharedDoc: sharedDocRef.current,
           sharesOpen: sharesOpenRef.current,
           helpOpen: helpOpenRef.current,
-          mapOpen: Boolean(mapRouteRef.current),
+          mapRoute: mapRouteRef.current,
         })
-        if (leave) {
+        if (shouldLeave) {
           await beforeLeaveDoc()
-          // runImportFiles 처럼 공유 보기·공유 관리·도움말·지도를 모두 떠난다 (F-2076 7장 D1)
-          setSharedDoc(null)
-          setSharesOpen(false)
-          setHelpOpen(false)
-          setMapRoute(null)
+          leave() // runImportFiles 와 같이 전용 화면을 모두 떠난다 (F-2076 7장 D1)
           focusEditorRef.current = true
           setCurrentDocId(matchedId)
           setPref('md.lastDocId', matchedId)

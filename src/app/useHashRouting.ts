@@ -7,6 +7,7 @@ import type { NoticeWithAction } from './NoticeBar'
 import type { UseDocCommentsResult } from './useDocComments'
 import { formatHash, formatMapHash } from './hashRoute'
 import { decideHashNav } from './hashNav'
+import { leaveScreens } from './leaveScreens'
 import { setPref } from './prefs'
 import { ancestorsOfDoc } from '../lib/folderTree'
 
@@ -59,6 +60,8 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
   useEffect(() => {
     if (bootPhase !== 'ready') return
 
+    const leave = () => leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute })
+
     function handleHashChange() {
       const hashAtEntry = location.hash
       const nav = decideHashNav({
@@ -83,9 +86,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
       if (nav.kind === 'shares') {
         ;(async () => {
           await beforeLeaveDoc()
-          setSharedDoc(null)
-          setHelpOpen(false) // 켜 두면 뒤로 가기의 #/help 가 무시된다 (F-2059 D12)
-          setMapRoute(null)
+          leave() // 도움말을 켜 두면 뒤로 가기의 #/help 가 무시된다 (F-2059 D12)
           setCurrentDocId(null)
           setSharesOpen(true)
         })()
@@ -96,9 +97,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
       if (nav.kind === 'help') {
         ;(async () => {
           await beforeLeaveDoc()
-          setSharedDoc(null)
-          setSharesOpen(false) // (F-2059 D12)
-          setMapRoute(null)
+          leave()
           setCurrentDocId(null)
           setHelpOpen(true)
         })()
@@ -111,9 +110,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
         ;(async () => {
           await beforeLeaveDoc()
           if (location.hash !== hashAtEntry) return // await 중 주소가 또 바뀌었으면 뒤 핸들러에 맡긴다
-          setSharedDoc(null)
-          setSharesOpen(false)
-          setHelpOpen(false)
+          leave()
           const anchorId = nextCenterId && docsRef.current.some((d) => d.id === nextCenterId) ? nextCenterId : null
           setCurrentDocId(anchorId)
           if (anchorId) setPref('md.lastDocId', anchorId)
@@ -135,10 +132,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
       ;(async () => {
         await beforeLeaveDoc()
         if (location.hash !== hashAtEntry) return // await 중 주소가 또 바뀌었으면 뒤 핸들러에 맡긴다
-        setSharedDoc(null) // 공유 화면을 보고 있었으면 떠난다 (F-130.md 4장)
-        setSharesOpen(false) // 공유 관리 페이지를 보고 있었으면 떠난다 (F-243.md 3.4)
-        setHelpOpen(false) // 도움말 페이지를 보고 있었으면 떠난다 (F-244.md 3.3)
-        setMapRoute(null) // 지도를 보고 있었으면 떠난다 — 뒤로 가기로 지도를 나갈 때가 그렇다 (F-292.md 6.1)
+        leave() // 공유·공유 관리·도움말·지도를 보고 있었으면 떠난다 — 뒤로 가기로 나갈 때가 그렇다 (F-130.md 4장, F-292.md 6.1)
         // `#/`·빈 해시만 홈 — 인식 못 한 해시는 기존대로 첫 문서 + 알림으로 내려간다 (F-232 3.2, 리뷰 A4)
         if (nav.home) {
           setCurrentDocId(null)

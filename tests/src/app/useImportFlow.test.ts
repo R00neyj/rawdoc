@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { dropBlocks, shouldLeaveForMatchedDoc } from '../../../src/app/useImportFlow'
 
 describe('shouldLeaveForMatchedDoc (F-2076 D1)', () => {
-  const base = { matchedId: 'A', currentDocId: 'A', sharedOpen: false, sharesOpen: false, helpOpen: false, mapOpen: false }
+  const base = { matchedId: 'A', currentDocId: 'A', sharedDoc: null, sharesOpen: false, helpOpen: false, mapRoute: null }
 
   it('같은 문서 화면이면 떠나지 않는다', () => {
     expect(shouldLeaveForMatchedDoc(base)).toBe(false)
@@ -12,8 +12,8 @@ describe('shouldLeaveForMatchedDoc (F-2076 D1)', () => {
     expect(shouldLeaveForMatchedDoc({ ...base, currentDocId: 'B' })).toBe(true)
   })
 
-  it.each(['sharedOpen', 'sharesOpen', 'helpOpen', 'mapOpen'] as const)('같은 문서라도 %s 이면 떠난다', (key) => {
-    expect(shouldLeaveForMatchedDoc({ ...base, [key]: true })).toBe(true)
+  it.each([['sharedDoc', {}], ['sharesOpen', true], ['helpOpen', true], ['mapRoute', {}]] as const)('같은 문서라도 %s 이면 떠난다', (key, value) => {
+    expect(shouldLeaveForMatchedDoc({ ...base, [key]: value })).toBe(true)
   })
 })
 
