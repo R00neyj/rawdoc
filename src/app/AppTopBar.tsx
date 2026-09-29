@@ -17,6 +17,8 @@ import type { UseAccountStatusResult } from './useAccountStatus'
 import type { UseCommandPaletteResult } from './useCommandPalette'
 import type { ExportActions } from './exportActions'
 import type { NoticeWithAction } from './NoticeBar'
+import type { EditorHandle } from '../editor/Editor'
+import { keepEditorFocusOnToolbar, useToolbarDock } from './useToolbarDock'
 import type { OutlineControl } from './Outline'
 import { topBarScreen } from './topBarMore'
 
@@ -50,6 +52,7 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
     openSearch: () => void
     requestInviteCurrentDoc: () => void
     runToolbarCommand: (cmd: StateCommand) => void
+    editorRef: RefObject<EditorHandle | null>
     sharedDoc: ShareDoc | null
     sharesOpen: boolean
     showNotice: (input: NoticeWithAction, options?: { sticky?: boolean }) => number
@@ -65,7 +68,9 @@ export default function AppTopBar({
   helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch,
   requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store, toggleButtonRef, toggleCommentsPanel,
   toggleSidebar, toolbarPref, viewMode, wikiResolver,
+  editorRef,
 }: AppTopBarProps) {
+  const { docked: toolbarDocked, editorFocused } = useToolbarDock(editorRef)
   // 탭바 표시 조건 (F-233 3.1) — 자리는 항상 유지, 조건에 안 맞으면 안 그린다.
   // 좁은 창도 보여준다(2026-09-16 사용자 "모바일일때가 툴바 더 필요할거임") — TopBar 가 narrow 면 상단바 밑 자기 줄에 그린다
   const showToolbar =
@@ -75,7 +80,9 @@ export default function AppTopBar({
     !isReadOnlyDoc &&
     // 지도는 편집기를 숨기고 그 자리를 통째로 쓴다 — 서식 단추가 누를 대상이 없다 (F-292 6.1)
     !mapRoute &&
-    (viewMode === 'live' || viewMode === 'raw')
+    (viewMode === 'live' || viewMode === 'raw') &&
+    // 휴대폰 폭은 편집기 포커스 중에만 — 앱 틀 맨 아래(키보드 위) 줄 (F-2084 3.4)
+    (!toolbarDocked || editorFocused)
 
   return (
     <TopBar
@@ -121,6 +128,8 @@ export default function AppTopBar({
       outlineControlRef={outlineControlRef}
       showToolbar={showToolbar}
       onRunToolbarCommand={runToolbarCommand}
+      toolbarDocked={toolbarDocked}
+      onToolbarRowMouseDown={toolbarDocked ? (e) => keepEditorFocusOnToolbar(e, editorRef) : undefined}
       // 공유 화면·지도가 떠 있는 동안은 지금 보는 것이 그 문서가 아니다 (F-307 7.4)
       peers={sharedDoc || mapRoute ? NO_PEERS : livePeers}
       selfUserId={account.state === 'in' ? account.id : null}

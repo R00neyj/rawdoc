@@ -11,11 +11,15 @@ type EditorToolbarProps = {
   onRunCommand: (cmd: StateCommand) => void
   // 좁은 창은 상단바 밑 자기 줄에 그려 탭·아이콘 줄이 접혀 2줄까지 보인다 (App.tsx·TopBar.tsx 가 넘긴다)
   narrow?: boolean
+  // 휴대폰 폭 앱 틀 맨 아래 줄 — 제목 목록·툴팁을 버튼 위로 연다 (F-2084 3.6)
+  docked?: boolean
 }
 
-export default function EditorToolbar({ onRunCommand, narrow }: EditorToolbarProps) {
+export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorToolbarProps) {
   const [activeTab, setActiveTab] = useState<ToolbarTabId>('format')
   const [headingOpen, setHeadingOpen] = useState(false)
+  // docked 에서 손가락으로 열면 첫 항목에 포커스를 주지 않는다 — 편집기 blur 로 키보드가 내려가 목록 좌표가 어긋난다 (F-2084 3.6)
+  const headingFocusOnOpenRef = useRef(true)
   const { mounted: headingMounted, state: headingState } = usePresence(headingOpen) // 나타나고 사라지는 전환 (F-172.md 2.2)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const headingBtnRef = useRef<HTMLButtonElement | null>(null)
@@ -36,8 +40,19 @@ export default function EditorToolbar({ onRunCommand, narrow }: EditorToolbarPro
   }, [headingOpen])
 
   useEffect(() => {
-    if (headingOpen) headingItemRefs.current[0]?.focus()
+    if (headingOpen && headingFocusOnOpenRef.current) headingItemRefs.current[0]?.focus()
   }, [headingOpen])
+
+  // 키보드 높이가 바뀌면 줄이 움직여 목록 좌표가 낡는다 (F-2084 3.6)
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!docked || !headingOpen || !vv) return
+    function close() {
+      setHeadingOpen(false)
+    }
+    vv.addEventListener('resize', close)
+    return () => vv.removeEventListener('resize', close)
+  }, [docked, headingOpen])
 
   // 드롭다운 위치는 position: fixed 로 직접 계산한다 — absolute 면 .editor-toolbar 의 overflow-x: auto 가 overflow-y 도 clip 시켜(CSS 스펙) 항상 잘렸다
   useEffect(() => {
@@ -47,8 +62,8 @@ export default function EditorToolbar({ onRunCommand, narrow }: EditorToolbarPro
     if (!btn || !menu) return
     const r = btn.getBoundingClientRect()
     menu.style.left = `${r.left}px`
-    menu.style.top = `${r.bottom + 2}px`
-  }, [headingMounted])
+    menu.style.top = docked ? `${r.top - 2 - menu.offsetHeight}px` : `${r.bottom + 2}px`
+  }, [headingMounted, docked])
 
   // 아이콘 툴팁도 같은 이유로 position: fixed — 마우스 오버·포커스 시점에 좌표를 다시 잰다
   function positionToolbarTooltip(wrapper: HTMLElement) {
@@ -57,7 +72,7 @@ export default function EditorToolbar({ onRunCommand, narrow }: EditorToolbarPro
     if (!btn || !tooltip) return
     const r = btn.getBoundingClientRect()
     tooltip.style.left = `${r.left + r.width / 2}px`
-    tooltip.style.top = `${r.bottom + 6}px`
+    tooltip.style.top = docked ? `${r.top - 6 - tooltip.offsetHeight}px` : `${r.bottom + 6}px`
   }
 
   // 탭을 바꾸면 그 전 탭에서 열려 있던 제목 목록은 닫는다
@@ -205,7 +220,10 @@ export default function EditorToolbar({ onRunCommand, narrow }: EditorToolbarPro
                 aria-label={item.label}
                 aria-haspopup="menu"
                 aria-expanded={headingOpen}
-                onClick={() => setHeadingOpen((v) => !v)}
+                onClick={(e) => {
+                  headingFocusOnOpenRef.current = !docked || e.detail === 0
+                  setHeadingOpen((v) => !v)
+                }}
               >
                 <item.Icon size={18} />
                 <IconDropdown size={14} />

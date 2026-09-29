@@ -1,5 +1,5 @@
 // 상단바 — 보기 모드 토글(F-107·F-123), .md 내보내기(F-112), 공유(F-130), 아이콘·툴팁(F-142 3.2·3.3), 좁은 창 전용 앞 묶음(F-159 2.1) (ia.md 2장 A, F-102.md 5.3)
-import type { RefObject } from 'react'
+import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
 import type { StateCommand } from '@codemirror/state'
 import ShareMenu from './ShareMenu'
 import ExportMenu from './ExportMenu'
@@ -55,6 +55,9 @@ type TopBarProps = {
   // 서식·단락·삽입 탭바 (F-233.md 3.1) — AppTopBar.tsx 가 표시 조건을 계산해 넘긴다
   showToolbar: boolean
   onRunToolbarCommand: (cmd: StateCommand) => void
+  // 휴대폰 폭 — 서식 바 줄을 앱 틀 맨 아래로, 줄 mousedown 이 편집기 포커스를 지킨다 (F-2084 3.4·3.5)
+  toolbarDocked: boolean
+  onToolbarRowMouseDown?: (e: ReactMouseEvent) => void
   // 접속자 아바타 — 보기 모드 토글 왼쪽, 없으면 요소가 없다 (F-307 7.1)
   peers: readonly Peer[]
   selfUserId: string | null
@@ -97,6 +100,8 @@ export default function TopBar({
   onAccountLoggedOut,
   showToolbar,
   onRunToolbarCommand,
+  toolbarDocked,
+  onToolbarRowMouseDown,
   peers,
   selfUserId,
   comments,
@@ -208,8 +213,8 @@ export default function TopBar({
       </header>
       {/* 좁은 창은 탭바를 상단바 밑 줄로 뺀다 — 아이콘 줄이 세로로도 접혀(2줄) 가로 스크롤 없이 다 보인다 (사용자 2026-09-16 "모바일일때가 툴바 더 필요할거임") */}
       {narrow && showToolbar && (
-        <div className="editor-toolbar-row">
-          <EditorToolbar onRunCommand={onRunToolbarCommand} narrow />
+        <div className={toolbarDocked ? 'editor-toolbar-row editor-toolbar-row--docked' : 'editor-toolbar-row'} onMouseDown={onToolbarRowMouseDown}>
+          <EditorToolbar onRunCommand={onRunToolbarCommand} narrow docked={toolbarDocked} />
         </div>
       )}
     </>

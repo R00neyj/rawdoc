@@ -62,6 +62,7 @@ import { useAppUpdate } from '../pwa/useAppUpdate'
 import { ensurePersist } from '../pwa/persistStorage'
 
 import AppTopBar from './AppTopBar'
+import { useViewportFit } from './useViewportFit'
 import type { OutlineControl } from './Outline'
 import AppScreens from './AppScreens'
 import DocumentArea from './DocumentArea'
@@ -1165,6 +1166,7 @@ export default function App() {
     cmd(view)
     view.focus()
   }, [])
+  useViewportFit() // 휴대폰 폭 앱 틀 = visualViewport (F-2084 3.3)
 
   // 공개 보기 화면(F-210.md 2.4) — 위 모든 훅은 매 렌더 그대로 호출되고 여기서 조기 반환만 한다
   if (publicRoute) {
@@ -1192,6 +1194,7 @@ export default function App() {
     handlePrintDoc, helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
     outlineControlRef, openPalette, openSearch, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
     toggleButtonRef, toggleCommentsPanel, toggleSidebar, toolbarPref, viewMode, wikiResolver,
+    editorRef,
   }} />
 
   return (
