@@ -225,4 +225,22 @@ describe('runBoot', () => {
     expect(deps.setDeletedElsewhereId).toHaveBeenCalledTimes(1)
     expect(docs).toEqual([])
   })
+
+  it('R5 열린 문서의 저장 충돌로 사본으로 옮길 때 지도 등 전용 화면도 닫는다', async () => {
+    stubLocation('')
+    vi.mocked(fetchAccount).mockResolvedValue({ state: 'out' })
+    const memory = createMemoryStore()
+    const copy = await memory.create({ title: '사본', content: '', lineEnding: 'lf' })
+    vi.mocked(openStore).mockResolvedValue(memory)
+    const deps = makeDeps()
+    await runBoot(deps)
+    deps.currentDocIdRef.current = 'orig'
+    const { onConflict } = vi.mocked(openStore).mock.calls[0][0] as unknown as { onConflict: (e: { docId: string; copyId: string }) => void }
+    onConflict({ docId: 'orig', copyId: copy.id })
+    await vi.waitFor(() => expect(deps.setCurrentDocId).toHaveBeenCalledWith(copy.id))
+    expect(deps.setSharedDoc).toHaveBeenCalledWith(null)
+    expect(deps.setSharesOpen).toHaveBeenCalledWith(false)
+    expect(deps.setHelpOpen).toHaveBeenCalledWith(false)
+    expect(deps.setMapRoute).toHaveBeenCalledWith(null)
+  })
 })

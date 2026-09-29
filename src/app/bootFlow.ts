@@ -19,6 +19,7 @@ import { resolveInitialDoc } from './resolveInitialDoc'
 import { canShowCachedShell, mergeBootList, shouldApplyListResult } from './bootList'
 import type { DocPathKind } from './docPath'
 import { createLiveDocController } from './liveDoc'
+import { leaveScreens } from './leaveScreens'
 import { flushUnsyncedDocs } from './yjsFlush'
 import { withTabBroadcast, type TabMessage } from './tabSync'
 import { withE2ee, type E2eeStore } from '../e2ee/e2eeStore'
@@ -212,7 +213,7 @@ export async function runBoot(deps: BootDeps): Promise<void> {
           : `다른 곳에서 먼저 바뀌어 내 편집을 "${copyTitle}" 으로 저장했습니다.`,
     })
     if (docId === currentDocIdRef.current) {
-      setSharedDoc(null)
+      leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute })
       focusEditorRef.current = false
       setCurrentDocId(copyId)
       setPref('md.lastDocId', copyId)

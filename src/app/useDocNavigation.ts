@@ -120,9 +120,8 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     }
     setDocs((prev) => sortByUpdatedAtDesc([...prev, stripContent(doc)]))
     setDeletedElsewhereId(null)
-    // 지도·공유 보기는 currentDocId 를 유지하므로 따로 닫아야 새 문서가 보인다 (F-2059 D1)
-    setSharedDoc(null)
-    setMapRoute(null)
+    // 지도·공유 보기는 currentDocId 를 유지하고 알림 액션은 다른 화면에서도 눌리므로 전부 닫는다 (F-2059 D1)
+    leave()
     setCurrentDocId(doc.id)
     setPref('md.lastDocId', doc.id)
     pushHashUrl(doc.id)
@@ -299,8 +298,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     focusTitleRef.current = true
     focusEditorRef.current = false
     // 지도의 끊긴 링크 노드도 이 흐름을 탄다(F-292 6.4) — 만든 뒤에만 떠나야 실패 때 화면과 주소가 맞는다
-    setSharedDoc(null)
-    setMapRoute(null)
+    leave()
     setCurrentDocId(doc.id)
     setPref('md.lastDocId', doc.id)
     pushHashUrl(doc.id)
