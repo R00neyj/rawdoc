@@ -5018,7 +5018,7 @@ body.sidebar-resizing {
   }
 
   .app-shell {
-    --phone-nav-cover: calc(env(safe-area-inset-bottom, 0px) + 60px);
+    --phone-nav-cover: calc(env(safe-area-inset-bottom, 0px) + 68px);
   }
 
   .phone-nav {
@@ -5030,6 +5030,14 @@ body.sidebar-resizing {
     width: fit-content;
     z-index: 36;
     transition: opacity var(--transition-fast), visibility var(--transition-fast);
+    height: auto;
+    padding: 3px 4px;
+    border-radius: 26px;
+  }
+
+  .phone-nav .icon-btn {
+    width: 44px;
+    height: 44px;
   }
 
   .app-shell:has(.statusbar) .phone-nav {
@@ -5095,11 +5103,14 @@ body.sidebar-resizing {
 
 @media (max-width: 600px) and (pointer: coarse) {
   .topbar .topbar-pill .icon-btn,
-  .phone-nav .icon-btn,
   .topbar .topbar-pill .brand-group {
     width: 44px;
     height: 44px;
     margin: -4px;
+  }
+
+  .phone-nav .icon-btn {
+    margin: 0;
   }
 }
 
