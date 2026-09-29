@@ -1233,7 +1233,7 @@ export default function Sidebar({
             (isRail ? (
               <RailButton icon={IconInstall} label="앱 설치" onClick={onInstall} />
             ) : (
-              <SidebarButton icon={IconInstall} label="앱 설치" onClick={onInstall} />
+              <SidebarButton icon={IconInstall} label="앱 설치" className="sidebar-install-row" onClick={onInstall} />
             ))}
           {isRail ? (
             <>
@@ -1243,7 +1243,6 @@ export default function Sidebar({
             </>
           ) : (
             <>
-              <SidebarButton icon={IconMap} label="지도" className="sidebar-map-row" onClick={onOpenMap} />
               <SidebarButton icon={IconHelp} label="도움말" onClick={onOpenHelp} />
               <SidebarButton icon={IconGuide} label="사용법" href={GUIDES_PATH} />
               <SidebarButton icon={IconSettings} label="설정" onClick={onOpenSettings} />

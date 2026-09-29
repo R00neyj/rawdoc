@@ -26,7 +26,7 @@ describe('F-2083 A1 topBarScreen', () => {
 describe('F-2083 A2 moreSheetItems', () => {
   const all = { screen: 'doc' as const, hasOutline: true, comments: true, notifications: true }
   it('doc 전부 → 7개 순서 그대로', () => {
-    expect(moreSheetItems(all)).toEqual(['outline', 'comments', 'share', 'export', 'palette', 'notifications', 'account'])
+    expect(moreSheetItems(all)).toEqual(['outline', 'comments', 'share', 'export', 'palette', 'notifications', 'account', 'settings', 'help', 'guides'])
   })
   it('doc 제목 없음 → outline 빠짐', () => {
     expect(moreSheetItems({ ...all, hasOutline: false })).not.toContain('outline')
@@ -38,11 +38,11 @@ describe('F-2083 A2 moreSheetItems', () => {
     expect(moreSheetItems({ ...all, notifications: false })).not.toContain('notifications')
   })
   it('home', () => {
-    expect(moreSheetItems({ ...all, screen: 'home' })).toEqual(['palette', 'notifications', 'account'])
-    expect(moreSheetItems({ ...all, screen: 'home', notifications: false })).toEqual(['palette', 'account'])
+    expect(moreSheetItems({ ...all, screen: 'home' })).toEqual(['palette', 'notifications', 'account', 'settings', 'help', 'guides'])
+    expect(moreSheetItems({ ...all, screen: 'home', notifications: false })).toEqual(['palette', 'account', 'settings', 'help', 'guides'])
   })
   it('other', () => {
-    expect(moreSheetItems({ ...all, screen: 'other' })).toEqual(['palette', 'notifications', 'account'])
+    expect(moreSheetItems({ ...all, screen: 'other' })).toEqual(['palette', 'notifications', 'account', 'settings', 'help', 'guides'])
   })
 })
 

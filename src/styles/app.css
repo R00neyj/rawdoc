@@ -564,20 +564,13 @@ body.sidebar-resizing {
 }
 
 /* 휴대폰 폭 검색 진입점(F-287 3.3) — 상단바 검색이 숨는(F-216) 그 600px 미디어 쿼리를 그대로 쓴다 */
-.icon-btn-wrap:has(> .sidebar-search-btn),
-.sidebar-btn.sidebar-map-row {
+.icon-btn-wrap:has(> .sidebar-search-btn) {
   display: none;
 }
 
-/* 휴대폰 폭은 동작 줄을 검색+만들기 5개로 — 팔레트는 ⋯ 판, 지도는 아래 줄로 (tweak 2026-09-29) */
 @media (max-width: 600px) {
-  .icon-btn-wrap:has(> .sidebar-search-btn),
-  .sidebar-btn.sidebar-map-row {
+  .icon-btn-wrap:has(> .sidebar-search-btn) {
     display: flex;
-  }
-
-  .icon-btn-wrap:has(> .sidebar-map-btn) {
-    display: none;
   }
 }
 
@@ -585,6 +578,7 @@ body.sidebar-resizing {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden; /* 세로 스크롤만 — 행 끝 버튼이 조금 삐져나와도 가로 스크롤을 만들지 않는다 (tweak) */
 }
 
 .sidebar-rail-scroll,
@@ -5084,4 +5078,111 @@ body.sidebar-resizing {
     background: var(--panel);
     backdrop-filter: none;
   }
+}
+
+/* 터치 기기 누르는 영역 44px (tweak) */
+@media (pointer: coarse) {
+  .icon-btn {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+    margin: -6px;
+  }
+
+  .brand-group {
+    box-sizing: border-box;
+    min-height: var(--touch-target);
+  }
+
+  .tree-row {
+    min-height: var(--touch-target);
+  }
+
+  .item-menu-btn {
+    width: var(--touch-target);
+    height: var(--touch-target);
+    margin: -11px -4px -11px -11px;
+  }
+
+  .tree-toggle {
+    height: var(--touch-target);
+  }
+
+  .editor-toolbar-btn,
+  .editor-toolbar-heading-btn,
+  .editor-toolbar .editor-toolbar-category-btn {
+    min-height: var(--touch-target);
+  }
+
+  .editor-toolbar-btn {
+    width: var(--touch-target);
+  }
+
+  .item-menu-list button,
+  .share-menu-list button,
+  .export-menu-list button,
+  .view-mode-menu-list button,
+  .more-sheet-item,
+  .command-palette-item {
+    min-height: var(--touch-target);
+  }
+}
+
+/* 휴대폰 폭 겹침 사이드바는 창 폭의 85% — 저장 너비(기본 300px)는 390px 폰에서 77% 라 좁았다 (tweak) */
+@media (max-width: 600px) {
+  .sidebar.sidebar--overlay {
+    width: 85%;
+  }
+}
+
+/* 휴대폰 폭 사이드바 — 위는 목록만, 도구 다섯+지도는 아래 엄지 닿는 곳에 아이콘 한 줄. 도움말·사용법·설정은 ⋯ 판 (tweak) */
+@media (max-width: 600px) {
+  .sidebar-fixed {
+    display: contents;
+  }
+
+  .sidebar-actions {
+    order: 1;
+    margin: 6px 0 0;
+    padding-top: 6px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .sidebar-bottom {
+    order: 2;
+    margin-top: 0;
+  }
+
+  .sidebar-bottom > :not(.sidebar-install-row) {
+    display: none;
+  }
+
+  .sidebar-actions {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0;
+    padding-right: 10px;
+  }
+
+  .sidebar h2 {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    --tracking: -0.02em;
+  }
+
+  .sidebar-actions .icon-btn-wrap {
+    justify-content: center;
+  }
+
+  .sidebar-actions .icon-btn {
+    width: 100%;
+    min-width: 0;
+    height: var(--touch-target);
+    margin: 0;
+  }
+
+  .sidebar-actions .icon-btn svg {
+    width: 22px;
+    height: 22px;
+  }
+
 }

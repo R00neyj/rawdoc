@@ -28,6 +28,8 @@ type TopBarProps = {
   toggleButtonRef: RefObject<HTMLButtonElement | null>
   onOpenSearch: () => void
   onOpenPalette: () => void
+  onOpenSettings: () => void
+  onOpenHelp: () => void
   viewMode: ViewMode
   viewModeDisabled: boolean
   onChangeViewMode: (mode: ViewMode) => void
@@ -77,6 +79,8 @@ export default function TopBar({
   toggleButtonRef,
   onOpenSearch,
   onOpenPalette,
+  onOpenSettings,
+  onOpenHelp,
   viewMode,
   viewModeDisabled,
   onChangeViewMode,
@@ -134,6 +138,8 @@ export default function TopBar({
               screen={screen}
               outlineControlRef={outlineControlRef}
               onOpenPalette={onOpenPalette}
+              onOpenSettings={onOpenSettings}
+              onOpenHelp={onOpenHelp}
               comments={comments}
               notifications={notifications}
               share={{

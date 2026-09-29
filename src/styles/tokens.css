@@ -10,6 +10,7 @@
 }
 
 :root {
+  --touch-target: 44px;
   /* 색 — 화이트 테마 (design.md 3.1 초안 값, F-141 3.1 첫 :root 블록) */
   --paper: #faf8f4;
   --panel: #fffefb;

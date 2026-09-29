@@ -30,6 +30,8 @@ type FolderMenuProps = {
   hideTrigger?: boolean
 }
 
+const MENU_GAP = 4
+
 // 사이드바 항목 `⋯` 메뉴 — 라이브러리 없이 방향키·Enter·Esc·바깥 클릭을 직접 구현한다 (F-126.md 5.2)
 export default function FolderMenu({
   label,
@@ -178,25 +180,39 @@ export default function FolderMenu({
     el.style.top = `${top}px`
   }, [open, anchorPoint])
 
-  // 트리거로 열렸을 때 버튼 아래로 펼치면 스크롤 조상(또는 창) 아래 경계를 넘치는지 재서, 넘치면 위로 연다 (2026-09-20 사용자 신고)
+  // 아래로 넘치면 위로, 양쪽 다 모자라면 넓은 쪽에 높이를 맞추고 안에서 스크롤 (2026-09-20·09-29 사용자 신고)
   useLayoutEffect(() => {
-    if (!open || anchorPoint || !buttonRef.current || !menuRef.current) {
+    const menu = menuRef.current
+    if (!open || anchorPoint || !buttonRef.current || !menu) {
       setOpenUp(false)
       return
     }
+    menu.style.maxHeight = ''
+    menu.style.overflowY = ''
     const btnRect = buttonRef.current.getBoundingClientRect()
-    const menuHeight = menuRef.current.getBoundingClientRect().height
-    let limit = window.innerHeight
+    const menuHeight = menu.getBoundingClientRect().height
+    let top = 0
+    let bottom = window.innerHeight
     let node: HTMLElement | null = buttonRef.current.parentElement
     while (node) {
       const overflowY = getComputedStyle(node).overflowY
       if (overflowY === 'auto' || overflowY === 'scroll') {
-        limit = Math.min(limit, node.getBoundingClientRect().bottom)
+        const rect = node.getBoundingClientRect()
+        top = Math.max(top, rect.top)
+        bottom = Math.min(bottom, rect.bottom)
         break
       }
       node = node.parentElement
     }
-    setOpenUp(btnRect.bottom + menuHeight > limit)
+    const below = bottom - btnRect.bottom - MENU_GAP
+    const above = btnRect.top - top - MENU_GAP
+    const up = menuHeight > below && above > below
+    const room = up ? above : below
+    if (menuHeight > room) {
+      menu.style.maxHeight = `${Math.max(room, 0)}px`
+      menu.style.overflowY = 'auto'
+    }
+    setOpenUp(up)
   }, [open, anchorPoint])
 
   return (

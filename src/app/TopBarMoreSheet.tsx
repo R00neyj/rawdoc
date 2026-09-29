@@ -1,4 +1,4 @@
-// 휴대폰 폭 상단바 `⋯` 버튼 + 아래 판 — 목차·댓글·공유·내보내기·알림·계정 (specs/features/F-2083.md 4장)
+// 휴대폰 폭 상단바 `⋯` 버튼 + 아래 판 — 목차·댓글·공유·내보내기·팔레트·알림·계정·설정·도움말·사용법 (specs/features/F-2083.md 4장)
 import { useEffect, useRef, useState, type ComponentType, type ReactNode, type RefObject } from 'react'
 
 import {
@@ -8,9 +8,13 @@ import {
   IconClose,
   IconCommandPalette,
   IconDownload,
+  IconExternalLink,
   IconForum,
+  IconGuide,
+  IconHelp,
   IconMore,
   IconNotifications,
+  IconSettings,
   IconShare,
   IconToc,
   IconTooltip,
@@ -23,6 +27,7 @@ import { useShareMenu, type MenuAction, type ShareMenuProps } from './ShareMenu'
 import { AccountInfoRows, useAccountMenu, type AccountMenuProps } from './AccountMenu'
 import { NotificationsList, type NotificationsMenuProps } from './NotificationsMenu'
 import type { OutlineControl } from './Outline'
+import { GUIDES_PATH } from '../lib/siteChrome'
 
 type SubView = 'share' | 'export' | 'account'
 
@@ -35,6 +40,8 @@ type TopBarMoreSheetProps = {
   exporter: ExportMenuProps
   account: AccountMenuProps
   onOpenPalette: () => void
+  onOpenSettings: () => void
+  onOpenHelp: () => void
 }
 
 const ROW_LABEL: Record<MoreItemKey, string> = {
@@ -45,6 +52,9 @@ const ROW_LABEL: Record<MoreItemKey, string> = {
   palette: '명령 팔레트',
   notifications: '알림',
   account: '계정',
+  settings: '설정',
+  help: '도움말',
+  guides: '사용법',
 }
 
 const ROW_ICON: Record<MoreItemKey, ComponentType<{ size?: number }>> = {
@@ -55,6 +65,9 @@ const ROW_ICON: Record<MoreItemKey, ComponentType<{ size?: number }>> = {
   palette: IconCommandPalette,
   notifications: IconNotifications,
   account: IconAccount,
+  settings: IconSettings,
+  help: IconHelp,
+  guides: IconGuide,
 }
 
 const MORE_LABEL = '메뉴'
@@ -84,7 +97,7 @@ function ActionList({ items, note }: { items: MenuAction[]; note?: ReactNode }) 
   )
 }
 
-export default function TopBarMoreSheet({ screen, outlineControlRef, comments, notifications, share, exporter, account, onOpenPalette }: TopBarMoreSheetProps) {
+export default function TopBarMoreSheet({ screen, outlineControlRef, comments, notifications, share, exporter, account, onOpenPalette, onOpenSettings, onOpenHelp }: TopBarMoreSheetProps) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<SubView | null>(null)
   const [hasOutline, setHasOutline] = useState(false)
@@ -184,6 +197,15 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
     } else if (key === 'palette') {
       closeSheet()
       onOpenPalette()
+    } else if (key === 'settings') {
+      closeSheet()
+      onOpenSettings()
+    } else if (key === 'help') {
+      closeSheet()
+      onOpenHelp()
+    } else if (key === 'guides') {
+      closeSheet()
+      window.open(GUIDES_PATH, '_blank', 'noopener,noreferrer')
     } else {
       enter(key)
     }
@@ -289,6 +311,7 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
                   </span>
                 )}
                 {(key === 'share' || key === 'export' || key === 'notifications' || key === 'account') && <IconChevron size={16} />}
+                {key === 'guides' && <IconExternalLink size={14} />}
               </button>
             </li>
           )

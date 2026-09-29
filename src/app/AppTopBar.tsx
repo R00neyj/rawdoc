@@ -50,6 +50,8 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
     openDoc: OpenDoc | null
     outlineControlRef: RefObject<OutlineControl | null>
     openSearch: () => void
+    openSettings: () => void
+    openHelp: () => void
     requestInviteCurrentDoc: () => void
     runToolbarCommand: (cmd: StateCommand) => void
     editorRef: RefObject<EditorHandle | null>
@@ -65,7 +67,7 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
 export default function AppTopBar({
   account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef, e2ee,
   getShareDoc, handleCopyDocAsRichText, handleExportDoc, handleExportDocAsHtml, handleExportDocAsText, handleOpenNotification, handlePrintDoc,
-  helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch,
+  helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch, openSettings, openHelp,
   requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store, toggleButtonRef, toggleCommentsPanel,
   toggleSidebar, toolbarPref, viewMode, wikiResolver,
   editorRef,
@@ -92,6 +94,8 @@ export default function AppTopBar({
       toggleButtonRef={toggleButtonRef}
       onOpenSearch={openSearch}
       onOpenPalette={openPalette}
+      onOpenSettings={openSettings}
+      onOpenHelp={openHelp}
       viewMode={viewMode}
       viewModeDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
       onChangeViewMode={changeViewMode}
