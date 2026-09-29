@@ -996,6 +996,7 @@ function buildScene(
     if (touch) activeTouches += 1
     // 두 손가락은 확대·이동이다 — 끌던 노드는 놓은 것으로 친다 (F-2009 5.2)
     if (touch && activeTouches > 1) {
+      setHover(null)
       endDrag()
       pendingDrag = null
       endLongPress()
@@ -1012,6 +1013,8 @@ function buildScene(
     if (!touch) return
     // 배경이면 그냥 회전하게 둔다. 끊긴 링크 노드도 길게 누르면 메뉴가 열린다 (F-2004 8.1)
     if (!hit) return
+    // 터치엔 호버가 없어 누르는 동안 이름표를 띄운다 (tweak 2026-09-29, F-2004 Q3)
+    if (!inputs.current.menuOpen) setHover(hit)
     // enabled 가 아니라 enableRotate 를 끈다 — 두 손가락 확대가 살아남는다 (F-2003 5.1)
     controls.enableRotate = false
     longPress = { id: e.pointerId, x: e.clientX, y: e.clientY, nodeId: hit.id }
@@ -1055,6 +1058,7 @@ function buildScene(
     if (e.pointerType === 'touch') {
       activeTouches = Math.max(0, activeTouches - 1)
       endLongPress()
+      setHover(null)
     }
     if (e.button !== 0 || !down) return
     // 길게 눌러 메뉴를 연 제스처는 문서를 열지 않는다
@@ -1072,7 +1076,10 @@ function buildScene(
     unlockControls()
     downAt = null
     menuWasOpen = false
-    if (e.pointerType === 'touch') activeTouches = Math.max(0, activeTouches - 1)
+    if (e.pointerType === 'touch') {
+      activeTouches = Math.max(0, activeTouches - 1)
+      setHover(null)
+    }
     endLongPress()
   }
 
