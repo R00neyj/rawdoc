@@ -33,6 +33,10 @@ export type DocSession = {
   persist: YjsStore | null
 }
 
+export function restartedSession(cur: DocSession): DocSession {
+  return { ...cur, seq: cur.seq + 1, path: null, fallbackReason: null, forbiddenClose: false, quietForbidden: false, resume: false, startOffline: false, readOnly: false, persist: null }
+}
+
 export type UseDocSessionOptions = {
   store: Store
   currentDocId: string | null

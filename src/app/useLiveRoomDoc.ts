@@ -8,7 +8,7 @@ import { sortByUpdatedAtDesc, type DocMeta, type OpenDoc } from './docMeta'
 import type { DocPathKind } from './docPath'
 import type { LiveSnapshot } from './liveDoc'
 import type { LiveDocSession } from './useLiveDoc'
-import type { DocSession } from './useDocSession'
+import { restartedSession, type DocSession } from './useDocSession'
 
 const SAVE_DEBOUNCE_MS = 700 // useDocSaver 와 같은 박자 — 실시간 경로의 사이드바 updatedAt 갱신 (F-305 10.1)
 
@@ -48,7 +48,7 @@ export function useLiveRoomDoc(options: UseLiveRoomDocOptions): UseLiveRoomDocRe
     const handleOnline = () => {
       setDocSession((cur) =>
         cur.seq === seq
-          ? { ...cur, seq: cur.seq + 1, path: null, fallbackReason: null, forbiddenClose: false, quietForbidden: false, resume: false, startOffline: false, readOnly: false, persist: null }
+          ? restartedSession(cur)
           : cur,
       )
       setOpenDoc(null)
