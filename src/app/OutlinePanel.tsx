@@ -26,6 +26,9 @@ export default function OutlinePanel({ host, open, headings, currentIndex, listR
   // 열리면 현재 위치 항목이 목록 가운데 오도록 목록만 스크롤하고 포커스한다 (5.1)
   useEffect(() => {
     if (!open) return
+    // 제목이 없어 옮길 항목이 없어도 본문 포커스는 푼다 — 패널 뒤에서 커서·키보드가 남지 않게
+    const active = document.activeElement
+    if (active instanceof HTMLElement && (active.isContentEditable || active.matches('input, textarea'))) active.blur()
     const item = itemRefs.current[currentRef.current]
     const list = listRef.current
     if (!item || !list) return
