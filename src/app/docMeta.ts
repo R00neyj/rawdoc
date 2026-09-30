@@ -7,6 +7,11 @@ export type DocMeta = Pick<Doc, 'id' | 'title' | 'updatedAt' | 'folderId' | 'pin
 }
 export type OpenDoc = { id: string; content: string; lineEnding: LineEnding }
 
+// 목록에 보일 제목 — 공백 제목 되돌림은 포커스를 잃을 때 도니까(F-111 3.4) 그 사이 행이 통째로 비어 보였다
+export function displayDocTitle(title: string): string {
+  return title.trim() === '' ? '제목 없는 문서' : title
+}
+
 export function stripContent(doc: Doc): DocMeta {
   return {
     id: doc.id,

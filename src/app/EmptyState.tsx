@@ -1,5 +1,6 @@
 // 빈 상태 S-2 (specs/ia.md 4.3, specs/features/F-111.md 3.6, F-114.md 2.3)
 import { IconNoteAdd, IconUpload } from './icons'
+import { displayDocTitle } from './docMeta'
 import { formatHash } from './hashRoute'
 
 const MAX_RECENT = 5
@@ -65,7 +66,7 @@ export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDo
                   draggable={false}
                   onClick={(e) => { e.preventDefault(); onSelectDoc(doc.id) }}
                 >
-                  <span className="empty-state-recent-title">{doc.e2ee === 'locked' ? '잠긴 문서' : doc.title || '제목 없음'}</span>
+                  <span className="empty-state-recent-title">{doc.e2ee === 'locked' ? '잠긴 문서' : displayDocTitle(doc.title)}</span>
                   <span className="empty-state-recent-date">{formatDate(doc.updatedAt)}</span>
                 </a>
               </li>

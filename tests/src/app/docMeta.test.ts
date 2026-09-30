@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { stripContent, isSharedDoc, sortByUpdatedAtDesc } from '../../../src/app/docMeta'
+import { stripContent, isSharedDoc, sortByUpdatedAtDesc, displayDocTitle } from '../../../src/app/docMeta'
 import type { Doc } from '../../../src/types'
 
 const full: Doc = {
@@ -75,5 +75,22 @@ describe('sortByUpdatedAtDesc', () => {
     const r = sortByUpdatedAtDesc(list)
     expect(r).not.toBe(list)
     expect(list.map((d) => d.updatedAt)).toEqual([1, 2])
+  })
+})
+
+// 공백 제목 되돌림은 포커스를 잃을 때 도니까(F-111 3.4) 그 사이 목록 행이 통째로 비어 보였다
+describe('displayDocTitle', () => {
+  it('제목이 있으면 그대로 보인다', () => {
+    expect(displayDocTitle('메모')).toBe('메모')
+  })
+
+  it('빈 제목·공백뿐인 제목은 대체 문구', () => {
+    expect(displayDocTitle('')).toBe('제목 없는 문서')
+    expect(displayDocTitle('   ')).toBe('제목 없는 문서')
+    expect(displayDocTitle('\n\t')).toBe('제목 없는 문서')
+  })
+
+  it('앞뒤 공백은 다듬지 않는다 — 원문 제목을 그대로 보인다', () => {
+    expect(displayDocTitle(' 메모 ')).toBe(' 메모 ')
   })
 })

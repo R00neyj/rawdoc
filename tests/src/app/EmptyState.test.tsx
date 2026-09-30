@@ -73,7 +73,7 @@ describe('F-409 U11 잠긴 금고 문서', () => {
     ]
     const tree = EmptyState({ ...baseProps, recentDocs: docs })
     const titles = collect(tree, 'empty-state-recent-title').map((n) => (n as { props?: { children?: unknown } }).props?.children)
-    expect(titles).toEqual(['잠긴 문서', '열린 금고', '일반 문서', '제목 없음'])
+    expect(titles).toEqual(['잠긴 문서', '열린 금고', '일반 문서', '제목 없는 문서'])
   })
 })
 

@@ -11,6 +11,7 @@ import {
   type RefObject,
 } from 'react'
 import { buildTree, canMoveFolder, pinnedDocs, type DocLike, type DocNode, type FolderLike, type FolderNode, type TreeNode as TreeNodeType } from '../lib/folderTree'
+import { displayDocTitle } from './docMeta'
 import { foldersWithUnreadDocs } from './docNotifications'
 import FolderMenu, { type FolderMenuItem } from './FolderMenu'
 import SidebarHead, { SIDEBAR_ID, SEARCH_LABEL, PALETTE_LABEL } from './SidebarHead'
@@ -79,7 +80,7 @@ type E2eeDocState = 'locked' | 'open'
 const LOCKED_DOC_TITLE = '잠긴 문서'
 
 function displayTitleOf(id: string, title: string, e2eeDocs: Map<string, E2eeDocState>): string {
-  return e2eeDocs.get(id) === 'locked' ? LOCKED_DOC_TITLE : title
+  return e2eeDocs.get(id) === 'locked' ? LOCKED_DOC_TITLE : displayDocTitle(title)
 }
 
 function E2eeIcon() {
@@ -510,7 +511,7 @@ function SharedDocRow({ doc, ctx }: { doc: SharedDocLike; ctx: SidebarCtx }) {
           aria-current={doc.id === ctx.currentDocId ? 'page' : undefined}
           onClick={(e) => { e.preventDefault(); ctx.onSelectDoc(doc.id) }}
         >
-          {doc.title}
+          {displayDocTitle(doc.title)}
           {isUnread && <TreeUnreadSr />}
         </a>
         {isUnread && <TreeUnreadDot />}
