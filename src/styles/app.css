@@ -5245,6 +5245,12 @@ body.sidebar-resizing {
     height: 22px;
   }
 
+  /* 브랜드 아이콘은 svg 가 아니라 <img> 라 위 규칙에서 빠져 혼자 20px 로 남았다 (tweak 2026-09-30) */
+  .topbar-pill .brand-icon {
+    width: 22px;
+    height: 22px;
+  }
+
   .topbar .topbar-pill .icon-btn,
   .topbar .topbar-pill .brand-group {
     width: 44px;
