@@ -35,17 +35,52 @@ export type LiveSocket = {
   send(text: string): boolean
 }
 
+// y-partyserver 생성자는 창이 닫힐 때 내 awareness 를 거두려고 window 'unload' 리스너를 단다.
+// 크롬이 Permissions-Policy 로 unload 를 막아 콘솔 경고만 남고 핸들러는 돌지 않는다 — 만드는 동안만
+// addEventListener 를 가로채 같은 핸들러를 'pagehide' 로 옮긴다 (2026-09-30 사용자 콘솔 보고)
+function createProvider(make: () => YProvider): { provider: YProvider; releaseLeave: () => void } {
+  const win = typeof window === 'undefined' ? null : window
+  if (!win) return { provider: make(), releaseLeave: () => {} }
+  // 프로젝트에 워커 타입이 섞여 있어 리터럴 이벤트 이름 대신 느슨한 꼴로 부른다
+  type AnyListen = (type: string, listener: EventListenerOrEventListenerObject, opts?: unknown) => void
+  const original = win.addEventListener
+  const add = original.bind(win) as AnyListen
+  const remove = win.removeEventListener.bind(win) as AnyListen
+  let leave: EventListenerOrEventListenerObject | null = null
+  win.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, opts?: unknown) => {
+    if (type === 'unload' && listener) {
+      leave = listener
+      add('pagehide', listener, opts)
+      return
+    }
+    add(type, listener, opts)
+  }) as typeof win.addEventListener
+  try {
+    return {
+      provider: make(),
+      releaseLeave: () => {
+        if (leave) remove('pagehide', leave)
+      },
+    }
+  } finally {
+    win.addEventListener = original
+  }
+}
+
 export function openLiveSocket(options: LiveSocketOptions): LiveSocket {
   const { host, secure, docId, doc, WebSocketImpl, awareness: givenAwareness } = options
 
-  const provider = new YProvider(host, docId, doc, {
-    connect: false,
-    prefix: DOC_SOCKET_PREFIX + docId,
-    protocol: secure ? 'wss' : 'ws',
-    disableBc: true,
-    ...(WebSocketImpl ? { WebSocketPolyfill: WebSocketImpl } : {}),
-    ...(givenAwareness ? { awareness: givenAwareness } : {}),
-  })
+  const { provider, releaseLeave } = createProvider(
+    () =>
+      new YProvider(host, docId, doc, {
+        connect: false,
+        prefix: DOC_SOCKET_PREFIX + docId,
+        protocol: secure ? 'wss' : 'ws',
+        disableBc: true,
+        ...(WebSocketImpl ? { WebSocketPolyfill: WebSocketImpl } : {}),
+        ...(givenAwareness ? { awareness: givenAwareness } : {}),
+      }),
+  )
   // 연결 전에 끄면 awareness 를 한 통도 보내지 않는다 — 서버는 한 통마다 DO 를 깨운다 (6.2)
   if (!givenAwareness) provider.awareness.setLocalState(null)
   else onlyOwnAwareness(provider)
@@ -67,6 +102,7 @@ export function openLiveSocket(options: LiveSocketOptions): LiveSocket {
   function teardown() {
     finished = true
     detachRaw()
+    releaseLeave()
     provider.destroy()
     if (!givenAwareness) provider.awareness.destroy()
     else forgetRemoteAwareness(provider)

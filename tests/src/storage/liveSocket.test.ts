@@ -412,3 +412,50 @@ describe('F-506 W1 send', () => {
     expect(texts()).toEqual(['__YPS:x'])
   })
 })
+
+// 2026-09-30 사용자 콘솔 보고: "Permissions policy violation: unload is not allowed in this document."
+describe('창 닫힘 정리는 unload 가 아니라 pagehide 로 단다', () => {
+  type Reg = { type: string; listener: EventListenerOrEventListenerObject }
+
+  function stubWindow() {
+    const added: Reg[] = []
+    const removed: Reg[] = []
+    const win = {
+      addEventListener: (type: string, listener: EventListenerOrEventListenerObject) => {
+        added.push({ type, listener })
+      },
+      removeEventListener: (type: string, listener: EventListenerOrEventListenerObject) => {
+        removed.push({ type, listener })
+      },
+    }
+    vi.stubGlobal('window', win)
+    return { added, removed }
+  }
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('열면 unload 는 달지 않고 pagehide 만 단다', () => {
+    const { added } = stubWindow()
+    const { socket } = open()
+    expect(added.filter((r) => r.type === 'unload')).toHaveLength(0)
+    expect(added.filter((r) => r.type === 'pagehide')).toHaveLength(1)
+    socket.close()
+  })
+
+  it('닫으면 단 pagehide 를 뗀다', () => {
+    const { added, removed } = stubWindow()
+    const { socket } = open()
+    const pagehide = added.find((r) => r.type === 'pagehide')
+    expect(pagehide).toBeDefined()
+    socket.close()
+    expect(removed).toContainEqual({ type: 'pagehide', listener: pagehide?.listener })
+  })
+
+  it('가로채기는 만드는 동안만 — 끝나면 window.addEventListener 가 원래 것으로 돌아온다', () => {
+    stubWindow()
+    const before = window.addEventListener
+    const { socket } = open()
+    expect(window.addEventListener).toBe(before)
+    socket.close()
+  })
+})
