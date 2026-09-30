@@ -5049,6 +5049,12 @@ body.sidebar-resizing {
   text-align: left;
 }
 
+@media (max-width: 600px) {
+  .settings-panel .dialog-note {
+    text-align: left;
+  }
+}
+
 .dialog-btn.danger {
   color: var(--danger);
   border-color: color-mix(in srgb, var(--danger) 45%, var(--rule));
