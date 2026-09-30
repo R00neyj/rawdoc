@@ -77,5 +77,19 @@ export function useTitleCommit(options: UseTitleCommitOptions): UseTitleCommitRe
     }
   }, [docsRef, currentDocIdRef])
 
+  // blur 만으로는 제목칸에 커서를 둔 채 탭을 닫거나 앱을 배경으로 보낼 때 '' 가 그대로 저장된다
+  // pagehide 는 최선 시도다 — 브라우저가 페이지를 죽이면 비동기 쓰기가 안 끝날 수 있다 (App.tsx 본문 flush 와 같은 짝)
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') handleTitleCommit()
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('pagehide', handleTitleCommit)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('pagehide', handleTitleCommit)
+    }
+  }, [handleTitleCommit])
+
   return { handleTitleChange, handleTitleCommit }
 }
