@@ -19,6 +19,7 @@ type StartInfo = {
   y: number
   startedInSidebar: boolean
   startedInScrollableLeft: boolean
+  startedInEditor: boolean
   skip: boolean
 }
 
@@ -44,6 +45,11 @@ export function hasScrollableRightAncestor(start: Element | null): boolean {
     node = node.parentElement
   }
   return false
+}
+
+// 편집기 글자 위에서 시작했는가 — 여기서 시작한 가로 끌기는 CM6 가 커서 이동으로도 읽는다 (tweak 2026-09-30)
+export function startedInEditorText(target: Element | null): boolean {
+  return Boolean(target?.closest?.('.cm-content'))
 }
 
 // 편집기 안에서 비어 있지 않은 선택을 끄는 중이면 열지 않는다 (2.2 예외)
@@ -83,6 +89,7 @@ export function useEdgeSwipe({ shellRef, sidebarRef, enabled, canOpen, sidebarOp
         y: touch.clientY,
         startedInSidebar,
         startedInScrollableLeft: hasScrollableLeftAncestor(target),
+        startedInEditor: startedInEditorText(target),
         skip: isDraggingTextSelection(target),
       }
     }
@@ -101,6 +108,7 @@ export function useEdgeSwipe({ shellRef, sidebarRef, enabled, canOpen, sidebarOp
         sidebarOpen,
         startedInSidebar: start.startedInSidebar,
         startedInScrollableLeft: start.startedInScrollableLeft,
+        startedInEditor: start.startedInEditor,
       })
       if (result === 'open' && canOpen) onOpen()
       else if (result === 'close') onClose()
