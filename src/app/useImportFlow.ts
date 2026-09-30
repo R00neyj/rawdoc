@@ -62,7 +62,6 @@ export type UseImportFlowOptions = {
   addOpenFolders: (ids: string[] | null | undefined) => void
   closeSidebarIfNarrow: () => void
   closeSettings: () => void
-  newDocFolderId: () => string | null
   ensureE2eeOpenForFolder: (folderId: string | null) => Promise<boolean>
   pushHashUrl: (docId: string | null) => void
   importInputRef: RefObject<HTMLInputElement | null>
@@ -116,7 +115,7 @@ export function shouldLeaveForMatchedDoc(s: ScreenState & { matchedId: string; c
 export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResult {
   const {
     store, folders, currentDoc, bootPhase, setDocs, setFolders, setCurrentDocId, setOpenDoc, setEditorRemountNonce, setSharedDoc, setSharesOpen,
-    setHelpOpen, setMapRoute, showNotice, keepLiveTitle, beforeLeaveDoc, addOpenFolders, closeSidebarIfNarrow, closeSettings, newDocFolderId,
+    setHelpOpen, setMapRoute, showNotice, keepLiveTitle, beforeLeaveDoc, addOpenFolders, closeSidebarIfNarrow, closeSettings,
     ensureE2eeOpenForFolder, pushHashUrl, importInputRef, importZipInputRef, importFolderInputRef, docsRef, foldersRef, currentDocIdRef,
     sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, docPathRef, focusEditorRef, docSaverFlushRef, dropBlockedRef, imageDropBlockedRef,
     readOnlyDocRef,
@@ -283,11 +282,11 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
   }
 
   // 가져오기 실행(F-114.md 2.2) — 파일 선택 input 과 OS 파일 열기 연동(F-119)이 함께 쓴다
-  // 현재 문서가 속한 폴더 안에 만든다(F-126.md 5.3) — importFiles.js 는 범위 밖이라 store.create 를 감싸 folderId 를 주입한다
+  // 언제나 최상위에 만든다(F-126.md 5.3, 나란한 `새 문서` 와 같게) — importFiles.js 는 범위 밖이라 store.create 를 감싸 folderId 를 주입한다
   async function runImportFiles(files: File[]): Promise<Doc | null> { // 마지막으로 만든 문서를 돌려준다 — OS 파일 열기 재중복 방지(F-231)가 handle 연결에 쓴다
     if (files.length === 0) return null
 
-    const targetFolderId = newDocFolderId() // F-138 3.4 — 끊긴 folderId 는 최상위로
+    const targetFolderId: string | null = null
     // 금고 폴더면 여러 파일이어도 한 번만 묻는다 (F-405 7.6)
     if (!(await ensureE2eeOpenForFolder(targetFolderId))) return null
 
