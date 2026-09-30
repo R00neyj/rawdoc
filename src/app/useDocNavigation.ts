@@ -129,9 +129,9 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     setNotice(null)
   }
 
-  // folderId 생략 시 현재 문서가 속한 폴더에 만든다(없으면 최상위) — 사이드바 폴더 메뉴의 새 문서는 폴더 id 를 명시로 넘긴다 (F-126.md 5.3)
+  // folderId 생략 시 언제나 최상위 — 폴더 안 문서를 보고 있어도 밖에 만든다. 폴더 메뉴의 새 문서만 폴더 id 를 명시로 넘긴다 (F-126.md 5.3, 2026-09-30 사용자 지시)
   async function createNewDoc(folderId?: string | null) {
-    const targetFolderId = folderId !== undefined ? folderId : newDocFolderId()
+    const targetFolderId = folderId ?? null
     if (!(await ensureE2eeOpenForFolder(targetFolderId))) return
     // 보기 모드에서 새 문서 를 누르면 제목 입력 포커스가 필요해 먼저 편집 모드로 바꾼다 (ia.md 3.3, F-123.md 3.3)
     if (viewMode === 'view') changeViewMode('live')
