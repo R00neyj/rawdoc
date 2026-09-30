@@ -506,7 +506,7 @@ function composing(view: EditorView): boolean {
   return view.compositionStarted || isCellCompositionStarted(view)
 }
 
-const commentGutterExtension = gutter({
+const commentGutterConfig = {
   class: 'cm-comment-gutter',
   lineMarker(view, line) {
     const value = view.state.field(commentField, false)
@@ -533,11 +533,16 @@ const commentGutterExtension = gutter({
       return true
     },
   },
-})
+} satisfies Parameters<typeof gutter>[0]
+
+const commentGutterBefore = gutter(commentGutterConfig)
+// 휴대폰 폭은 목록 기호와 헷갈리지 않게 본문 오른쪽에 둔다 (tweak 2026-09-30)
+const commentGutterAfter = gutter({ ...commentGutterConfig, side: 'after' })
+const PHONE_QUERY = '(max-width: 600px)'
 
 // 줄 번호 compartment 안, lineNumbers() 바로 뒤에 둔다 — 붙어 있고 줄 번호가 켜져 있을 때만 (4.3, Q2)
 export function commentGutter(): Extension {
-  return commentGutterExtension
+  return typeof matchMedia === 'function' && matchMedia(PHONE_QUERY).matches ? commentGutterAfter : commentGutterBefore
 }
 
 // ----- 뷰 플러그인 — 관찰·타이머·클릭·레일 좌표 (3.1, 4.2, 4.4) -----

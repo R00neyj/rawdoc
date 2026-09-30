@@ -5463,34 +5463,34 @@ body.sidebar-resizing {
   }
 
   .cm-host .cm-editor .cm-content {
-    padding-right: 12px;
+    padding-right: 4px;
   }
 
   .cm-host .cm-editor .cm-lineNumbers .cm-gutterElement {
     padding-left: 10px;
   }
 
-  /* CM6 기본 .cm-gutter { overflow: hidden } 이 폭 0 칸 밖으로 뺀 점을 잘라 낸다 */
-  .cm-host .cm-editor .cm-comment-gutter {
-    overflow: visible;
+  /* 댓글 칸은 본문 오른쪽(side: after) — 점이 목록 기호와 헷갈리지 않게, 칸 전체가 누르는 자리 */
+  .cm-host .cm-editor .cm-gutters-after {
+    border-left: none;
+    background: transparent;
   }
 
   .cm-host .cm-editor .cm-comment-gutter .cm-gutterElement {
-    position: relative;
-    min-width: 0;
-    padding: 0;
+    min-width: 20px;
+    padding: 0 6px 0 0;
+    justify-content: flex-end;
   }
 
   .cm-host .cm-editor .cm-comment-gutter-marker {
-    position: absolute;
-    right: 0;
     min-width: 0;
-    width: 6px;
-    height: 6px;
-    margin-top: 0.6em;
+    width: 10px;
+    height: 10px;
+    margin-top: 0.5em;
     padding: 0;
     border-radius: 50%;
     font-size: 0;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
   }
 
   .cm-host .cm-editor .cm-comment-gutter-marker::before {
