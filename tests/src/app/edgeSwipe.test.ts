@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { classifySwipe, classifyOutlineSwipe } from '../../../src/app/edgeSwipe'
+import { classifySwipe, classifyOutlineSwipe, dragAxis } from '../../../src/app/edgeSwipe'
 
 const base = {
   startX: 0,
@@ -90,5 +90,21 @@ describe('classifyOutlineSwipe (F-2089 3.2)', () => {
     expect(classifyOutlineSwipe({ ...open, startX: 200, endX: 240 })).toBeNull()
     expect(classifyOutlineSwipe({ ...open, startX: 200, endX: 100 })).toBeNull()
     expect(classifyOutlineSwipe({ ...open, startedInPanel: false, startX: 200, endX: 300 })).toBeNull()
+  })
+})
+
+describe('dragAxis — 편집기 안 가로 끌기 판정 (tweak 2026-09-30)', () => {
+  it('8px 미만 움직임은 아직 모른다', () => {
+    expect(dragAxis(5, 3)).toBeNull()
+  })
+
+  it('가로가 세로보다 크면 x', () => {
+    expect(dragAxis(12, 4)).toBe('x')
+    expect(dragAxis(-12, 4)).toBe('x')
+  })
+
+  it('세로가 같거나 크면 y — 스크롤은 그대로', () => {
+    expect(dragAxis(9, 9)).toBe('y')
+    expect(dragAxis(3, -20)).toBe('y')
   })
 })

@@ -57,3 +57,11 @@ export function classifyOutlineSwipe(input: OutlineSwipeInput): SwipeResult {
   if (startedInScrollableRight) return null
   return dx <= -SWIPE_THRESHOLD_PX && isHorizontalEnough ? 'open' : null
 }
+
+export const DRAG_AXIS_SLOP_PX = 8
+
+// 끌기 방향이 정해졌는가 — 편집기 안 가로 끌기의 기본 동작(커서 옮기기)만 막는 데 쓴다 (tweak 2026-09-30)
+export function dragAxis(dx: number, dy: number): 'x' | 'y' | null {
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < DRAG_AXIS_SLOP_PX) return null
+  return Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
+}

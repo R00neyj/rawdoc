@@ -1,7 +1,7 @@
 // app-shell 에 터치 이벤트를 달아 F-227 화면 밀기로 좁은 창 겹침 사이드바를 여닫는 훅
 import { useEffect, useRef } from 'react'
 import type { RefObject } from 'react'
-import { classifySwipe } from './edgeSwipe'
+import { classifySwipe, dragAxis } from './edgeSwipe'
 
 type UseEdgeSwipeArgs = {
   shellRef: RefObject<HTMLElement | null>
@@ -20,6 +20,8 @@ type StartInfo = {
   startedInSidebar: boolean
   startedInScrollableLeft: boolean
   skip: boolean
+  guardEditorDrag: boolean
+  axis: 'x' | 'y' | null
 }
 
 export function hasOpenDialog(): boolean {
@@ -41,6 +43,16 @@ export function hasScrollableRightAncestor(start: Element | null): boolean {
   let node: Element | null = start
   while (node) {
     if (node.scrollWidth > node.clientWidth && node.scrollWidth - node.clientWidth - node.scrollLeft > 1) return true
+    node = node.parentElement
+  }
+  return false
+}
+
+// 시작 지점 조상 중 가로로 넘치는 요소가 있는가 — 표·코드 블록의 가로 스크롤은 막지 않는다
+function hasHorizontalScroller(start: Element | null): boolean {
+  let node: Element | null = start
+  while (node) {
+    if (node.scrollWidth > node.clientWidth + 1 && getComputedStyle(node).overflowX !== 'visible') return true
     node = node.parentElement
   }
   return false
@@ -78,13 +90,25 @@ export function useEdgeSwipe({ shellRef, sidebarRef, enabled, canOpen, sidebarOp
       const startedInSidebar = Boolean(
         sidebarRef.current?.contains(target) || target?.closest('.sidebar-backdrop'),
       )
+      const skip = isDraggingTextSelection(target)
       startRef.current = {
         x: touch.clientX,
         y: touch.clientY,
         startedInSidebar,
         startedInScrollableLeft: hasScrollableLeftAncestor(target),
-        skip: isDraggingTextSelection(target),
+        skip,
+        guardEditorDrag: !skip && Boolean(target?.closest?.('.cm-content')) && !hasHorizontalScroller(target),
+        axis: null,
       }
+    }
+
+    // 옵시디언처럼 편집기 안 가로 끌기는 커서를 옮기지 않는다 — 밀기 판정은 touchend 가 그대로 한다 (tweak 2026-09-30)
+    function handleTouchMove(e: TouchEvent) {
+      const start = startRef.current
+      const touch = e.touches[0]
+      if (!start?.guardEditorDrag || !touch || e.touches.length !== 1) return
+      start.axis ??= dragAxis(touch.clientX - start.x, touch.clientY - start.y)
+      if (start.axis === 'x' && e.cancelable) e.preventDefault()
     }
 
     function handleTouchEnd(e: TouchEvent) {
@@ -111,12 +135,14 @@ export function useEdgeSwipe({ shellRef, sidebarRef, enabled, canOpen, sidebarOp
     }
 
     shell.addEventListener('touchstart', handleTouchStart, { passive: true })
+    shell.addEventListener('touchmove', handleTouchMove, { passive: false })
     shell.addEventListener('touchend', handleTouchEnd, { passive: true })
     shell.addEventListener('touchcancel', handleTouchCancel, { passive: true })
     document.addEventListener('compositionstart', handleCompositionStart)
     document.addEventListener('compositionend', handleCompositionEnd)
     return () => {
       shell.removeEventListener('touchstart', handleTouchStart)
+      shell.removeEventListener('touchmove', handleTouchMove)
       shell.removeEventListener('touchend', handleTouchEnd)
       shell.removeEventListener('touchcancel', handleTouchCancel)
       document.removeEventListener('compositionstart', handleCompositionStart)
