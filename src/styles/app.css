@@ -38,7 +38,7 @@ svg {
   gap: 12px;
   padding: 0 14px;
   border-bottom: 1px solid var(--rule);
-  background: var(--panel);
+  background: var(--surface);
 }
 
 /* .topbar-search-btn 클래스 이름은 F-216 의 :has(> .topbar-search-btn) 선택자가 걸려 있어 남긴다 (F-287) */
@@ -153,7 +153,7 @@ svg {
   flex: none;
   padding: 6px 14px;
   border-bottom: 1px solid var(--rule);
-  background: var(--panel);
+  background: var(--surface);
 }
 
 /* 좁은 창도 줄바꿈 없이 한 줄 — 넘치면 .editor-toolbar 기본 overflow-x: auto 로 가로 스크롤
@@ -217,7 +217,7 @@ svg {
     margin-left: auto;
     padding-left: 6px;
     border-left: 1px solid var(--rule);
-    background: var(--panel);
+    background: var(--surface);
   }
 
   .editor-toolbar .editor-toolbar-category-btn {
@@ -414,7 +414,7 @@ svg {
   width: var(--sidebar-w);
   flex: none;
   border-right: 1px solid var(--rule);
-  background: var(--paper);
+  background: var(--surface);
   display: flex;
   flex-direction: column;
   transition: width var(--transition-fast);
@@ -1254,7 +1254,7 @@ body.sidebar-resizing {
   width: 240px;
   max-height: 60vh;
   overflow-y: auto;
-  background: var(--panel);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
@@ -1361,7 +1361,7 @@ body.sidebar-resizing {
   margin: 0;
   padding: 6px;
   overflow-y: auto;
-  background: var(--panel);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
@@ -1420,7 +1420,7 @@ body.sidebar-resizing {
   flex-direction: column;
   min-height: 0;
   border-left: 1px solid var(--rule);
-  background: var(--panel);
+  background: var(--surface);
 }
 
 .comment-sheet {
@@ -1434,7 +1434,7 @@ body.sidebar-resizing {
   flex-direction: column;
   min-height: 0;
   border-top: 1px solid var(--rule);
-  background: var(--panel);
+  background: var(--surface);
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.16);
 }
 
@@ -4427,7 +4427,7 @@ body.sidebar-resizing {
   gap: 12px;
   padding: 0 14px;
   border-top: 1px solid var(--rule);
-  background: var(--paper);
+  background: var(--surface);
   font-family: var(--font-mono);
   --tracking: 0; /* F-141 3.6 */
   font-size: 10.5px;
@@ -5118,7 +5118,7 @@ body.sidebar-resizing {
     height: 44px;
     border: 1px solid var(--rule);
     border-radius: 22px;
-    background: color-mix(in srgb, var(--panel) 85%, transparent);
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
     backdrop-filter: blur(12px);
   }
@@ -5328,7 +5328,7 @@ body.sidebar-resizing {
 @media (max-width: 600px) and (prefers-reduced-transparency: reduce) {
   .topbar-pill,
   .topbar .peer-avatars {
-    background: var(--panel);
+    background: var(--surface);
     backdrop-filter: none;
   }
 }
@@ -5514,7 +5514,7 @@ body.sidebar-resizing {
     z-index: 35;
     display: flex;
     flex-direction: column;
-    background: var(--paper);
+    background: var(--surface);
     border-left: 1px solid var(--rule);
     box-shadow: -8px 0 30px rgba(0, 0, 0, 0.12);
     opacity: 1;
