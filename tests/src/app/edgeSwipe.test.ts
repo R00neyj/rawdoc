@@ -67,37 +67,6 @@ describe('classifySwipe — 닫기 (열린 상태)', () => {
   })
 })
 
-describe('편집기 안에서 시작한 밀기는 임계값이 까다롭다 (tweak 2026-09-30)', () => {
-  const inEditor = { ...base, startedInEditor: true }
-
-  it('오른쪽 80px 은 열지 않는다 — 편집기 밖이면 열리는 거리', () => {
-    expect(classifySwipe({ ...base, startX: 100, startY: 100, endX: 180, endY: 100 })).toBe('open')
-    expect(classifySwipe({ ...inEditor, startX: 100, startY: 100, endX: 180, endY: 100 })).toBeNull()
-  })
-
-  it('오른쪽 96px (경계값) 은 연다', () => {
-    expect(classifySwipe({ ...inEditor, startX: 100, startY: 100, endX: 196, endY: 100 })).toBe('open')
-  })
-
-  it('가로 96·세로 40 (비율 2.4) 은 방향 비율 미달 — 편집기 밖이면 열리는 비율', () => {
-    expect(classifySwipe({ ...base, startX: 100, startY: 100, endX: 196, endY: 140 })).toBe('open')
-    expect(classifySwipe({ ...inEditor, startX: 100, startY: 100, endX: 196, endY: 140 })).toBeNull()
-  })
-
-  it('닫기는 사이드바 위에서 시작하므로 임계값이 그대로다', () => {
-    const openBase = { ...base, sidebarOpen: true, startedInSidebar: true, startedInEditor: false }
-    expect(classifySwipe({ ...openBase, startX: 200, startY: 100, endX: 144, endY: 100 })).toBe('close')
-  })
-
-  it('목차 패널도 같은 임계값을 쓴다', () => {
-    const o = { startY: 400, endY: 400, panelOpen: false, startedInPanel: false, startedInScrollableRight: false }
-    expect(classifyOutlineSwipe({ ...o, startX: 200, endX: 120 })).toBe('open')
-    expect(classifyOutlineSwipe({ ...o, startX: 200, endX: 120, startedInEditor: true })).toBeNull()
-    expect(classifyOutlineSwipe({ ...o, startX: 200, endX: 104, startedInEditor: true })).toBe('open')
-    expect(classifyOutlineSwipe({ ...o, startX: 200, endX: 104, endY: 440, startedInEditor: true })).toBeNull()
-  })
-})
-
 describe('classifyOutlineSwipe (F-2089 3.2)', () => {
   const o = { startY: 400, endY: 400, panelOpen: false, startedInPanel: false, startedInScrollableRight: false }
 

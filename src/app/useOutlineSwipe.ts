@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react'
 import type { RefObject } from 'react'
 import { classifyOutlineSwipe } from './edgeSwipe'
-import { hasOpenDialog, hasScrollableRightAncestor, isDraggingTextSelection, startedInEditorText } from './useEdgeSwipe'
+import { hasOpenDialog, hasScrollableRightAncestor, isDraggingTextSelection } from './useEdgeSwipe'
 
 type Args = {
   containerRef: RefObject<HTMLElement | null>
@@ -17,7 +17,6 @@ type StartInfo = {
   y: number
   startedInPanel: boolean
   startedInScrollableRight: boolean
-  startedInEditor: boolean
 }
 
 export function useOutlineSwipe({ containerRef, enabled, panelOpen, onOpen, onClose }: Args) {
@@ -47,7 +46,6 @@ export function useOutlineSwipe({ containerRef, enabled, panelOpen, onOpen, onCl
         y: touch.clientY,
         startedInPanel: Boolean(target?.closest('.outline-panel, .outline-panel-backdrop')),
         startedInScrollableRight: hasScrollableRightAncestor(target),
-        startedInEditor: startedInEditorText(target),
       }
     }
 
@@ -64,7 +62,6 @@ export function useOutlineSwipe({ containerRef, enabled, panelOpen, onOpen, onCl
         panelOpen,
         startedInPanel: start.startedInPanel,
         startedInScrollableRight: start.startedInScrollableRight,
-        startedInEditor: start.startedInEditor,
       })
       if (result === 'open') onOpen()
       else if (result === 'close') onClose()
