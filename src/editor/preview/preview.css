@@ -307,6 +307,12 @@
   outline: none;
 }
 
+/* 칸 편집기는 주 편집기의 .cm-scroller 안에 있어 본문 가운데 정렬 안쪽 여백(app.css)을 그대로 물려받는다 —
+   --content-max 의 100% 가 칸 폭으로 풀려 좁은 칸일수록 좌우 여백이 거대해졌다. 클래스 개수는 .cm-content 규칙과 같은 이유로 늘린다 (tweak 2026-09-30) */
+.md-table-widget .md-table-cell-editing .cm-editor .cm-scroller {
+  padding: 0;
+}
+
 /* .cm-content 하나에만 여백을 준다 — .cm-line 에도 같이 주면 두 배가 된다(3.3 원인) */
 .md-table-widget .md-table-cell-editing .cm-editor .cm-content {
   padding: 6px 13px;
