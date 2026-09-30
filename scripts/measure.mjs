@@ -11,6 +11,8 @@ function parseArgs(argv) {
     doc: 'mixed',
     docs: null,
     reducedMotion: false,
+    // 휴대폰 실측 — (pointer: coarse) 미디어 쿼리가 걸린 값을 재려면 켜야 한다
+    touch: false,
     mode: 'live',
     theme: 'white',
     prefs: [],
@@ -32,6 +34,7 @@ function parseArgs(argv) {
       case '--doc': opts.doc = next(); break
       case '--docs': opts.docs = parseDocs(next()); break
       case '--reduced-motion': opts.reducedMotion = true; break
+      case '--touch': opts.touch = true; break
       case '--mode': opts.mode = next(); break
       case '--theme': opts.theme = next(); break
       case '--pref': opts.prefs.push(next()); break
@@ -193,7 +196,12 @@ async function main() {
   const browser = await chromium.launch({ channel: 'chrome' })
   const errors = []
   try {
-    const context = await browser.newContext({ baseURL: server.url, viewport: size, serviceWorkers: 'block' })
+    const context = await browser.newContext({
+      baseURL: server.url,
+      viewport: size,
+      serviceWorkers: 'block',
+      ...(opts.touch ? { hasTouch: true, isMobile: true } : {}),
+    })
     const page = await context.newPage()
     // goto 전에 걸어야 첫 렌더부터 먹는다 (e2e/transition.spec.js:269 와 같은 방법)
     if (opts.reducedMotion) await page.emulateMedia({ reducedMotion: 'reduce' })

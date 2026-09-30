@@ -126,6 +126,7 @@ npm run e2e:one -- "F-152 A8a" --repeat 3   # repeat a subset of e2e; skips the 
 npm run e2e:one -- e2e/site.spec.js "F-274 A9" --workers 2   # several targets at once; unknown flags pass through to playwright; prints the raw tail on failure
 npm run e2e:before -- "F-246 A6" --ref 2f4099a --repeat 3   # run the same test at an earlier commit, to tell "my change broke it" from "it was already broken"
 npm run measure -- --doc long:300 --select ".cm-line" --style line-height   # on-screen measurement JSON (4400, dist-measure)
+npm run measure -- --touch --size 390x844 --select ".topbar-pill" --style width,height   # phone measurement; --touch is required for (pointer: coarse) values
 npm run review -- F-xxx   # check for out-of-ownership files and forbidden patterns
 npm run specs -- --todo   # remaining specs (--status pending, --milestone M3, --check, --json)
 node scripts/admin-usage.mjs [--top N] [--local]   # view remote D1 usage (F-2029). block/unblock/warn/recount only write with --yes
