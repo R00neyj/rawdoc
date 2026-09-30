@@ -114,3 +114,38 @@
   color: var(--muted);
   white-space: pre-line; /* 안내 줄이 여러 줄이다 (F-2037.md 5.2) */
 }
+
+/* 휴대폰 폭 — 앱 UI 글자 크기 두 단계(app.css 맨 아래 블록)에 맞춘다. 목록 높이는 8.1 의 12vh 고정과
+   짝이라 키보드를 내리면 아래가 텅 비어 보였다 (tweak 2026-09-30) */
+@media (max-width: 600px) {
+  .dialog:has(> .command-palette) {
+    margin-top: 8vh;
+  }
+
+  .command-palette-list {
+    max-height: min(560px, 68dvh);
+  }
+
+  .command-palette-input,
+  .command-palette-item-label {
+    font-size: 16px;
+  }
+
+  .command-palette-item-detail,
+  .command-palette-section,
+  .command-palette-status,
+  .command-palette-hint {
+    font-size: 13.5px;
+  }
+}
+
+/* 호버가 없는 손가락 화면에서 안 보이는 핀이 줄 오른쪽에 깔려 오터치가 났다 (tweak 2026-09-30) */
+.command-palette-pin {
+  pointer-events: none;
+}
+
+.command-palette-item:hover .command-palette-pin,
+.command-palette-item--on .command-palette-pin,
+.command-palette-item--pinned .command-palette-pin {
+  pointer-events: auto;
+}
