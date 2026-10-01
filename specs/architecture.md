@@ -297,7 +297,7 @@ type YjsMetaRow = {
 
 ```
 wrangler.jsonc           Worker 스크립트·D1(DB)·R2(BUCKET)·정적 자산(ASSETS) 바인딩 (F-204), Durable Object `DOC_ROOM`(클래스 `DocRoom`) 바인딩·마이그레이션 (F-304), Rate Limiting `WRITE_LIMITER` (F-2026)
-migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057) 0015 notifications_recipient_order(F-2075) 0016 shared_indexes(F-2058)
+migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057) 0015 notifications_recipient_order(F-2075) 0016 shared_indexes(F-2058) 0017 push_subscriptions(F-3003) 0018 notifications_push(F-3005) 0019 push_quota 0020 user_css 0021 notifications_share(F-3012)
 worker/
   index.ts               fetch 진입점, 라우트 표 { method, path, handler }
   http.ts                JSON 응답 도우미
