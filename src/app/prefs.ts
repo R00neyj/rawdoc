@@ -2,6 +2,7 @@
 
 type PrefMap = {
   'md.viewMode': 'live' | 'raw' | 'view'
+  'md.defaultView': 'remember' | 'live' | 'raw' | 'view'
   'md.openFolders': string
   'md.headingFont': 'serif' | 'sans'
   'md.bodyFont': 'sans' | 'serif'
@@ -48,6 +49,7 @@ type PrefKey = keyof PrefMap
 
 const ALLOWED_KEYS = new Set<PrefKey>([
   'md.viewMode',
+  'md.defaultView',
   'md.headingFont',
   'md.bodyFont',
   'md.theme',

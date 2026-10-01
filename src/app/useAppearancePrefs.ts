@@ -5,6 +5,7 @@ import type { EditorHandle } from '../editor/Editor'
 import { getPref, setPref } from './prefs'
 import { resolveStoredContentWidth, CONTENT_WIDTH_VAR } from './contentWidth'
 import { resolveTheme } from './theme'
+import { resolveDefaultView, type DefaultView } from './defaultView'
 import { NEW_DOC_TEMPLATE_NONE } from '../lib/templates'
 
 export type UseAppearancePrefsOptions = {
@@ -20,6 +21,7 @@ export type UseAppearancePrefsResult = {
   lineNumbersPref: 'on' | 'off'
   indentPref: '2' | '4'
   startScreenPref: 'home' | 'last'
+  defaultViewPref: DefaultView
   toolbarPref: 'on' | 'off'
   wikiPreviewPref: string
   newDocTemplatePref: string
@@ -32,6 +34,7 @@ export type UseAppearancePrefsResult = {
   changeLineNumbers: (value: string) => void
   changeIndent: (value: string) => void
   changeStartScreen: (value: string) => void
+  changeDefaultView: (value: string) => void
   changeToolbar: (value: string) => void
   changeWikiPreview: (value: string) => void
   changeNewDocTemplate: (value: string) => void
@@ -51,6 +54,7 @@ export function useAppearancePrefs({ editorRef }: UseAppearancePrefsOptions): Us
   const [fontSizePref, setFontSizePref] = useState(() => getPref('md.fontSize', 'medium')) // F-154 2.2
   const [indentPref, setIndentPref] = useState(() => getPref('md.indent', '4')) // F-154 2.3
   const [startScreenPref, setStartScreenPref] = useState(() => getPref('md.startScreen', 'home')) // F-232 3.4
+  const [defaultViewPref, setDefaultViewPref] = useState(() => resolveDefaultView(getPref('md.defaultView', 'remember'))) // F-2112 2.2
   const [toolbarPref, setToolbarPref] = useState(() => getPref('md.toolbar', 'on')) // F-233 3.5
   // 위키링크 미리보기 켜짐(기본 켬) — 모르는 값은 켬으로 다룬다(F-2044 8.1)
   const [wikiPreviewPref, setWikiPreviewPref] = useState(() => (getPref('md.wikiPreview', 'on') === 'off' ? 'off' : 'on'))
@@ -136,6 +140,13 @@ export function useAppearancePrefs({ editorRef }: UseAppearancePrefsOptions): Us
     setPref('md.startScreen', v)
   }
 
+  // 기본 뷰 — 다음 부팅부터 적용, 지금 모드와 md.viewMode 는 건드리지 않는다 (F-2112 2.2)
+  function changeDefaultView(value: string) {
+    const v = resolveDefaultView(value)
+    setDefaultViewPref(v)
+    setPref('md.defaultView', v)
+  }
+
   // 탭바 표시·숨김 — 즉시 반영(F-233 3.5, A6)
   function changeToolbar(value: string) {
     const v = value as 'on' | 'off'
@@ -166,8 +177,8 @@ export function useAppearancePrefs({ editorRef }: UseAppearancePrefsOptions): Us
 
   return {
     themePref, resolvedTheme, headingFont, bodyFont, fontSizePref, lineNumbersPref, indentPref, startScreenPref,
-    toolbarPref, wikiPreviewPref, newDocTemplatePref, e2eeLockMinutesPref, contentWidthPref,
+    defaultViewPref, toolbarPref, wikiPreviewPref, newDocTemplatePref, e2eeLockMinutesPref, contentWidthPref,
     changeTheme, changeHeadingFont, changeBodyFont, changeFontSize, changeLineNumbers, changeIndent, changeStartScreen,
-    changeToolbar, changeWikiPreview, changeNewDocTemplate, changeE2eeLockMinutes, changeContentWidth,
+    changeDefaultView, changeToolbar, changeWikiPreview, changeNewDocTemplate, changeE2eeLockMinutes, changeContentWidth,
   }
 }

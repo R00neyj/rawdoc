@@ -41,7 +41,7 @@ export type AppDialogsProps = Pick<UseAccountStatusResult, 'account' | 'recheckA
     | 'bodyFont' | 'changeBodyFont' | 'changeContentWidth' | 'changeE2eeLockMinutes' | 'changeFontSize' | 'changeHeadingFont' | 'changeIndent'
     | 'changeLineNumbers' | 'changeNewDocTemplate' | 'changeStartScreen' | 'changeTheme' | 'changeToolbar' | 'changeWikiPreview' | 'contentWidthPref'
     | 'e2eeLockMinutesPref' | 'fontSizePref' | 'headingFont' | 'indentPref' | 'lineNumbersPref' | 'newDocTemplatePref' | 'startScreenPref'
-    | 'themePref' | 'toolbarPref' | 'wikiPreviewPref'
+    | 'themePref' | 'toolbarPref' | 'wikiPreviewPref' | 'changeDefaultView' | 'defaultViewPref'
   > &
   Pick<UseContextMenuResult, 'closeContextMenu' | 'contextMenu' | 'handleContextMenuSelect'> &
   Pick<UseFolderActionsResult, 'cancelBulkDelete' | 'cancelDelete' | 'cancelMoveDoc' | 'confirmBulkDelete' | 'confirmDelete' | 'confirmMoveDoc'> &
@@ -94,7 +94,7 @@ export default function AppDialogs({
   moveDocTarget, newDocTemplatePref, openDocFromSearch, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
   requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
   setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref, toolbarPref,
-  wikiPreviewPref,
+  wikiPreviewPref, changeDefaultView, defaultViewPref,
 }: AppDialogsProps) {
   return (
     <>
@@ -168,6 +168,8 @@ export default function AppDialogs({
         onChangeFontSize={changeFontSize}
         startScreen={startScreenPref}
         onChangeStartScreen={changeStartScreen}
+        defaultView={defaultViewPref}
+        onChangeDefaultView={changeDefaultView}
         wikiPreview={wikiPreviewPref}
         onChangeWikiPreview={changeWikiPreview}
         toolbar={toolbarPref}

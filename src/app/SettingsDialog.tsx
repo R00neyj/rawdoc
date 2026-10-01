@@ -8,6 +8,7 @@ import { visibleSettingsTabs, nextTabIndex, type SettingsTabId } from './setting
 import { newDocTemplateOptions, type TemplateEntry } from '../lib/templates'
 import { E2EE_LOCK_MINUTES, type E2eeStatus } from '../e2ee/keyring'
 import { THEME_OPTIONS } from './theme'
+import { DEFAULT_VIEW_OPTIONS } from './defaultView'
 import {
   MIN_CONTENT_WIDTH,
   MAX_CONTENT_WIDTH,
@@ -310,6 +311,8 @@ type SettingsDialogProps = {
   onChangeFontSize: (value: string) => void
   startScreen?: string
   onChangeStartScreen?: (value: string) => void
+  defaultView?: string
+  onChangeDefaultView?: (value: string) => void
   // `화면` 탭 맨 끝 — 위키링크 미리보기 (F-2044.md 8.2). 둘 다 있을 때만 그린다
   wikiPreview?: string
   onChangeWikiPreview?: (value: string) => void
@@ -358,6 +361,8 @@ export default function SettingsDialog({
   onChangeFontSize,
   startScreen,
   onChangeStartScreen,
+  defaultView,
+  onChangeDefaultView,
   wikiPreview,
   onChangeWikiPreview,
   toolbar,
@@ -478,6 +483,15 @@ export default function SettingsDialog({
               value={startScreen}
               options={START_SCREEN_OPTIONS}
               onChange={onChangeStartScreen}
+            />
+          )}
+          {defaultView !== undefined && onChangeDefaultView !== undefined && (
+            <Segment
+              labelId="default-view-label"
+              label="기본 뷰"
+              value={defaultView}
+              options={DEFAULT_VIEW_OPTIONS}
+              onChange={onChangeDefaultView}
             />
           )}
           {/* 화면 탭 맨 끝 — 위키링크 미리보기 (F-2044.md 8.2) */}

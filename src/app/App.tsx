@@ -21,6 +21,7 @@ import { storedAccount } from './account'
 import type { SyncState } from '../types'
 import { IconRefresh } from './icons'
 import { useAppearancePrefs } from './useAppearancePrefs'
+import { readInitialViewMode } from './defaultView'
 import { removeBootSkeleton } from './bootPaint'
 import { parseHash, parsePathRoute } from './hashRoute'
 import { toPublicRoute, type PublicRoute } from './hashNav'
@@ -163,7 +164,7 @@ export default function App() {
   const [inviteTarget, setInviteTarget] = useState<InviteTarget>(null)
   // edit 권한 문서가 서버에서 403 을 받아 이번 세션 동안 읽기 전용으로 내려간 문서 id (F-212.md 2.4)
   const [forbiddenDocIds, setForbiddenDocIds] = useState<Set<string>>(() => new Set())
-  const [viewMode, setViewMode] = useState(() => getPref('md.viewMode', 'live'))
+  const [viewMode, setViewMode] = useState(readInitialViewMode)
   // 문서를 열 때 에디터에 넘기는 용도의 스냅샷 — 편집 중 동기화하지 않는다, 원본은 CM6 EditorState 하나다 (architecture.md 3장)
   const [openDoc, setOpenDoc] = useState<OpenDoc | null>(null)
   // 잠금을 되찾은 뒤 서버 값을 다시 받아 에디터를 다시 마운트할 때 올린다 (F-213.md 2.3)
@@ -788,8 +789,8 @@ export default function App() {
   // ----- 설정값·시스템 테마 (F-2063) -----
   const {
     themePref, resolvedTheme, headingFont, bodyFont, fontSizePref, lineNumbersPref, indentPref, startScreenPref,
-    toolbarPref, wikiPreviewPref, newDocTemplatePref, e2eeLockMinutesPref, contentWidthPref,
-    changeTheme, changeHeadingFont, changeBodyFont, changeFontSize, changeLineNumbers, changeIndent, changeStartScreen,
+    toolbarPref, wikiPreviewPref, newDocTemplatePref, e2eeLockMinutesPref, contentWidthPref, defaultViewPref,
+    changeTheme, changeHeadingFont, changeBodyFont, changeFontSize, changeLineNumbers, changeIndent, changeStartScreen, changeDefaultView,
     changeToolbar, changeWikiPreview, changeNewDocTemplate, changeE2eeLockMinutes, changeContentWidth,
   } = useAppearancePrefs({ editorRef })
 
@@ -1338,7 +1339,7 @@ export default function App() {
         account, accountDeleteUnsynced, accountDeleteUserId, answerE2eeConvertDialog, beforeLeaveDoc, bodyFont, bulkDeleteCancelRef,
         bulkDeleteItems, cancelBulkDelete, cancelDelete, cancelImportPreview, cancelImportProgress, cancelInvite, cancelMoveDoc,
         changeBodyFont, changeContentWidth, changeE2eeLockMinutes, changeFontSize, changeHeadingFont, changeIndent, changeLineNumbers,
-        changeNewDocTemplate, changeStartScreen, changeTheme, changeToolbar, changeWikiPreview, closeAccountDelete, closeContextMenu,
+        changeNewDocTemplate, changeStartScreen, changeDefaultView, defaultViewPref, changeTheme, changeToolbar, changeWikiPreview, closeAccountDelete, closeContextMenu,
         closeImportResult, closePalette, closeSearch, closeSettings, confirmBulkDelete, confirmDelete, confirmImport, confirmMoveDoc,
         contentWidthPref, contextMenu, deleteTarget, e2ee, e2eeConvertText, e2eeLockMinutesPref, e2eeMigrateAsk, e2eeMigrateDialogOpen,
         exportOffline, finishAccountDelete, folders, fontSizePref, handleContextMenuSelect, handleExportAll, handleExportVault,
