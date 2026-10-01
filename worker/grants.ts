@@ -185,6 +185,36 @@ export const handleDeleteDocGrant = (r: Request, e: Env, c: ExecutionContext, p:
 export const handleDeleteFolderGrant = (r: Request, e: Env, _c: ExecutionContext, p: Record<string, string>) =>
   handleDeleteGrant('folder', r, e, undefined, p)
 
+// 받는 쪽이 자기 grant 행을 지운다. 행이 없으면 404 로 끊어 D1 쓰기·사용량 줄이 없다 (F-3011 3.2)
+async function handleLeaveShare(
+  targetType: TargetType,
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext | undefined,
+  params: Record<string, string>,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  const email = user.email.toLowerCase()
+  const mine = await env.DB.prepare('SELECT 1 AS hit FROM grants WHERE target_type = ? AND target_id = ? AND grantee_email = ?')
+    .bind(targetType, params.id, email)
+    .first()
+  if (!mine) return errorResponse('not_found', 404)
+
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM grants WHERE target_type = ? AND target_id = ? AND grantee_email = ?').bind(targetType, params.id, email),
+    dayUsageStatement(env.DB, user.id, Date.now()),
+    ...shareNotificationDeleteStatements(env.DB, { targetType, targetId: params.id, email }),
+  ])
+  const response = new Response(null, { status: 204 })
+  if (targetType === 'doc') await notifyRevalidate(env, ctx, params.id, email)
+  return response
+}
+
+export const handleLeaveDocShare = (r: Request, e: Env, c: ExecutionContext, p: Record<string, string>) =>
+  handleLeaveShare('doc', r, e, c, p)
+export const handleLeaveFolderShare = (r: Request, e: Env, _c: ExecutionContext, p: Record<string, string>) =>
+  handleLeaveShare('folder', r, e, undefined, p)
+
 // 저장된 부모 사슬(가까운 것부터) — folderAncestors 와 같은 규칙을 미리 만든 표로. 없는 폴더·순환에서 멈춘다
 function storedChain(folderById: Map<string, { parent_id: string | null }>, folderId: string): string[] {
   const chain: string[] = []
