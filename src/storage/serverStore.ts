@@ -95,6 +95,8 @@ export type ServerStore = Store & {
   lastListSharedOk(): boolean
   // 마지막으로 끝난 list() 의 /api/shared 결과. 없거나 실패했으면 null (F-2056 4.2)
   lastSharedList(): Doc[] | null
+  // 공유에서 나간 문서를 마지막 공유 목록에서 뺀다. knownSharedIds 는 남긴다 (F-2115 2.4)
+  forgetSharedDocs(ids: readonly string[]): void
   // /api/docs 를 성공적으로 읽은 마지막 list() 가 끝난 시각. 없으면 null (F-2056 4.2)
   lastServerListAt(): number | null
 }
@@ -1200,6 +1202,12 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
     lastSharedList() {
       return lastSharedDocs ? [...lastSharedDocs] : null
+    },
+
+    forgetSharedDocs(ids) {
+      if (!lastSharedDocs) return
+      const gone = new Set(ids)
+      lastSharedDocs = lastSharedDocs.filter((d) => !gone.has(d.id))
     },
 
     lastServerListAt() {

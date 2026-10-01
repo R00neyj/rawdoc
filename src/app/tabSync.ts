@@ -14,6 +14,7 @@ export type TabMessage =
   | { kind: 'claim-release'; tabId: string; docId: string }
   // 금고 잠그기만 퍼진다 — 풀기는 탭마다(F-404.md 4.4)
   | { kind: 'e2ee-lock'; tabId: string }
+  | { kind: 'shared-left'; tabId: string; docIds: string[] }
 
 function wrap<A extends unknown[], R>(fn: (...args: A) => Promise<R>, notify: () => void): (...args: A) => Promise<R> {
   return async (...args: A) => {
@@ -64,6 +65,7 @@ export type ClaimEffect =
 export function reduceClaim(state: ClaimState, message: TabMessage): ClaimEffect {
   if (message.tabId === state.tabId) return null // 자기 자신이 보낸 메시지는 전부 무시한다 (6.1)
   if (message.kind === 'docs-changed') return null
+  if (message.kind === 'shared-left') return null
   if (message.kind === 'e2ee-lock') return null // 편집권 상태와 무관 (F-404.md 4.4)
   if (message.docId !== state.docId) return null // 다른 문서의 메시지는 무시한다
 

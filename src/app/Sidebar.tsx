@@ -31,6 +31,7 @@ import {
   type SelectionItem,
   type SelectionRow,
 } from './sidebarSelection'
+import { leaveTargetOfDoc, leaveTargetOfFolder, type LeaveShareTarget } from './leaveShare'
 import {
   IconChevron,
   IconNoteAdd,
@@ -47,6 +48,7 @@ import {
   IconEdit,
   IconTooltip,
   IconGroup,
+  IconGroupRemove,
   IconHelp,
   IconGuide,
   IconCollapseAll,
@@ -100,7 +102,12 @@ export type SharedDocLike = {
   viaFolder?: { id: string; name: string } | null
 }
 
+// 공유받음 줄 `공유에서 나가기` 메뉴 — 없으면 메뉴를 그리지 않는다 (F-2115 2.6)
+export type SharedLeaveMenu = { online: boolean; onRequest(target: LeaveShareTarget): void; onUnavailable(): void }
+
 type SidebarCtx = {
+  sharedLeave?: SharedLeaveMenu
+  onSharedContextMenu: (e: ReactMouseEvent<HTMLElement>, key: string) => void
   currentDocId: string | null
   openFolderIds: string[]
   editingId: string | null
@@ -496,13 +503,45 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
   )
 }
 
-// 공유받음 묶음의 문서 한 줄 — 끌어 옮기기·⋯ 메뉴가 없다. 오른쪽에 소유자 이메일 앞부분 (F-212.md 2.4)
+// 공유받음 줄의 `⋯` 메뉴 — 항목은 `공유에서 나가기` 하나, 우클릭도 같은 메뉴 (F-2115 2.1)
+function SharedLeaveFolderMenu({ label, menuKey, target, ctx }: { label: string; menuKey: string; target: LeaveShareTarget; ctx: SidebarCtx }) {
+  const menu = ctx.sharedLeave
+  if (!menu) return null
+  const openHere = ctx.contextMenu?.key === menuKey
+  const items: FolderMenuItem[] = [
+    {
+      key: 'leave-share',
+      label: '공유에서 나가기',
+      icon: IconGroupRemove,
+      danger: true,
+      disabled: !menu.online,
+      onSelect: () => (menu.online ? menu.onRequest(target) : menu.onUnavailable()),
+    },
+  ]
+  return (
+    <FolderMenu
+      label={label}
+      items={items}
+      open={openHere ? true : undefined}
+      onOpenChange={openHere ? (v) => { if (!v) ctx.onCloseContextMenu() } : undefined}
+      anchorPoint={openHere ? ctx.contextMenu!.point : undefined}
+    />
+  )
+}
+
+// 공유받음 묶음의 문서 한 줄 — 끌어 옮기기가 없다. 직접 받은 줄에만 `⋯` 메뉴, 오른쪽에 소유자 이메일 앞부분 (F-212.md 2.4, F-2115)
 function SharedDocRow({ doc, ctx }: { doc: SharedDocLike; ctx: SidebarCtx }) {
   const emailPrefix = doc.ownerEmail.split('@')[0] || doc.ownerEmail
   const isUnread = ctx.unreadDocIds.has(doc.id)
+  const leaveTarget = ctx.sharedLeave ? leaveTargetOfDoc(doc) : null
+  const menuKey = `shared:${doc.id}`
   return (
     <li role="listitem" className="tree-item">
-      <div className="tree-row shared-doc-row" data-unread={isUnread ? 'true' : undefined}>
+      <div
+        className="tree-row shared-doc-row"
+        data-unread={isUnread ? 'true' : undefined}
+        onContextMenu={leaveTarget ? (e) => ctx.onSharedContextMenu(e, menuKey) : undefined}
+      >
         <span className="tree-toggle-spacer" aria-hidden="true" />
         <a
           className="tree-label doc-item-btn"
@@ -516,6 +555,7 @@ function SharedDocRow({ doc, ctx }: { doc: SharedDocLike; ctx: SidebarCtx }) {
         </a>
         {isUnread && <TreeUnreadDot />}
         <span className="shared-doc-owner">{emailPrefix}</span>
+        {leaveTarget && <SharedLeaveFolderMenu label={displayDocTitle(doc.title)} menuKey={menuKey} target={leaveTarget} ctx={ctx} />}
       </div>
     </li>
   )
@@ -527,10 +567,10 @@ function SharedGroup({ sharedDocs, ctx }: { sharedDocs: SharedDocLike[]; ctx: Si
   if (sharedDocs.length === 0) return null
 
   const direct: SharedDocLike[] = []
-  const byFolder = new Map<string, { name: string; docs: SharedDocLike[] }>()
+  const byFolder = new Map<string, { id: string; name: string; docs: SharedDocLike[] }>()
   for (const doc of sharedDocs) {
     if (doc.viaFolder) {
-      const group = byFolder.get(doc.viaFolder.id) ?? { name: doc.viaFolder.name, docs: [] }
+      const group = byFolder.get(doc.viaFolder.id) ?? { id: doc.viaFolder.id, name: doc.viaFolder.name, docs: [] }
       group.docs.push(doc)
       byFolder.set(doc.viaFolder.id, group)
     } else {
@@ -560,8 +600,19 @@ function SharedGroup({ sharedDocs, ctx }: { sharedDocs: SharedDocLike[]; ctx: Si
       {open && (
         <ul className="pinned-list shared-doc-list" role="list" aria-label="공유받은 문서">
           {[...byFolder.values()].map((group) => (
-            <li key={group.name} role="presentation" className="shared-doc-folder">
-              <span className="shared-doc-folder-name">{group.name}</span>
+            <li key={group.id} role="presentation" className="shared-doc-folder">
+              <div
+                className="tree-row shared-folder-row"
+                onContextMenu={ctx.sharedLeave ? (e) => ctx.onSharedContextMenu(e, `shared-folder:${group.id}`) : undefined}
+              >
+                <span className="shared-doc-folder-name">{group.name}</span>
+                <SharedLeaveFolderMenu
+                  label={group.name}
+                  menuKey={`shared-folder:${group.id}`}
+                  target={leaveTargetOfFolder(group, sharedDocs)}
+                  ctx={ctx}
+                />
+              </div>
               <ul role="list">
                 {group.docs.map((doc) => (
                   <SharedDocRow key={doc.id} doc={doc} ctx={ctx} />
@@ -766,6 +817,7 @@ type SidebarProps = {
   unreadNotificationDocIds?: ReadonlySet<string>
   // 명령 팔레트 `새 폴더` 가 사이드바 안 동작(레일 펼치기·이름 칸 열기)을 부르는 자리 (F-2054 6.1)
   commandRef?: RefObject<SidebarCommands | null>
+  sharedLeave?: SharedLeaveMenu
 }
 
 // 명령 팔레트가 부르는 사이드바 동작 (F-2054 6.1)
@@ -814,6 +866,7 @@ export default function Sidebar({
   e2eeConvert,
   unreadNotificationDocIds,
   commandRef,
+  sharedLeave,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
@@ -964,6 +1017,12 @@ export default function Sidebar({
     setContextMenu({ key: row.key, point })
   }
 
+  // 공유받음 줄 우클릭 — 선택은 바꾸지 않고 그 줄 메뉴만 연다 (F-2115 2.1)
+  function handleSharedContextMenu(e: ReactMouseEvent<HTMLElement>, key: string) {
+    e.preventDefault()
+    setContextMenu({ key, point: { x: e.clientX, y: e.clientY } })
+  }
+
   const selectedItems: SelectionItem[] = selection.ids
     .map((id) => {
       const kind = kindOf(id)
@@ -1096,6 +1155,8 @@ export default function Sidebar({
     onDrop: handleDrop,
     selection,
     contextMenu,
+    sharedLeave,
+    onSharedContextMenu: handleSharedContextMenu,
     multiMenuItems,
     onItemClick: handleItemClick,
     onRowContextMenu: handleRowContextMenu,

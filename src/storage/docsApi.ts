@@ -473,6 +473,20 @@ export async function getShared(): Promise<SharedDocMeta[]> {
   return (await readJson(res)) as SharedDocMeta[]
 }
 
+// 공유받은 문서·폴더에서 내 권한 버리기 — 404(이미 없는 초대)도 성공으로 본다 (F-2115 2.6)
+export async function leaveShare(targetType: 'doc' | 'folder', targetId: string): Promise<void> {
+  const res = await send(`/api/shared/${targetType}s/${encodeURIComponent(targetId)}`, { method: 'DELETE' })
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 403) {
+    const blocked = await accountBlockedError(res)
+    if (blocked) throw blocked
+  }
+  if (res.status === 404) return
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+}
+
 // 초대(권한 부여) 관리 — owner 만 (F-212.md 2.3)
 export type GrantTargetType = 'doc' | 'folder'
 export type GrantRole = 'view' | 'edit'

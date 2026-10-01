@@ -11,6 +11,8 @@ export type UseTabSyncOptions = {
   onClaimRegained: () => void // 편집권을 되찾았을 때 — 저장소에서 다시 읽어 에디터를 다시 마운트
   // 다른 탭이 금고를 잠갔다는 신호를 받았을 때(자기 tabId 는 걸러진 뒤) — 선택 (F-404.md 4.4)
   onE2eeLock?: () => void
+  // 다른 탭이 공유에서 나갔을 때 (F-2115 2.5)
+  onSharedLeft?: (docIds: string[]) => void
 }
 
 const hasBroadcastChannel = typeof BroadcastChannel !== 'undefined'
@@ -23,6 +25,7 @@ export function useTabSync({
   onNotice,
   onClaimRegained,
   onE2eeLock,
+  onSharedLeft,
 }: UseTabSyncOptions): { post: (m: TabMessage) => void; claimReadOnly: boolean } {
   const [claimReadOnly, setClaimReadOnly] = useState(false)
 
@@ -43,7 +46,9 @@ export function useTabSync({
   const onNoticeRef = useRef(onNotice)
   const onClaimRegainedRef = useRef(onClaimRegained)
   const onE2eeLockRef = useRef(onE2eeLock)
+  const onSharedLeftRef = useRef(onSharedLeft)
   useEffect(() => {
+    onSharedLeftRef.current = onSharedLeft
     onDocsChangedRef.current = onDocsChanged
     onNoticeRef.current = onNotice
     onClaimRegainedRef.current = onClaimRegained
@@ -130,6 +135,11 @@ export function useTabSync({
       if (msg.kind === 'e2ee-lock') {
         if (msg.tabId === tabId) return
         onE2eeLockRef.current?.()
+        return
+      }
+      if (msg.kind === 'shared-left') {
+        if (msg.tabId === tabId) return
+        onSharedLeftRef.current?.(msg.docIds)
         return
       }
       const state = claimStateRef.current

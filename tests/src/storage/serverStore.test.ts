@@ -3038,3 +3038,25 @@ describe('F-2056 U1~U7 list() 합치기·마지막 서버 목록', () => {
     expect(wrapped.lastSharedList()).toHaveLength(1)
   })
 })
+
+describe('F-2115 U8 forgetSharedDocs', () => {
+  it('lastSharedList 에서 그 id 만 빠지고, 그 id 의 get() 은 캐시에 안 쓴다', async () => {
+    const server = makeFakeServer()
+    server.docs.set('sh1', { id: 'sh1', title: '공유1', content: '내용', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1 })
+    server.setShared([
+      { id: 'sh1', title: '공유1', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1, role: 'view' },
+      { id: 'sh2', title: '공유2', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1, role: 'view' },
+    ])
+    vi.stubGlobal('fetch', fetchWithSharedExcludedFromList(server, ['sh1']))
+    const dbName = freshDbName()
+    const store = await createServerStore('u1', { dbName })
+    await store.list()
+
+    store.forgetSharedDocs(['sh1'])
+    expect(store.lastSharedList()?.map((d) => d.id)).toEqual(['sh2'])
+
+    await store.get('sh1')
+    const cache = await createRemoteCache(dbName)
+    expect(await cache.getDoc('u1', 'sh1')).toBeNull()
+  })
+})

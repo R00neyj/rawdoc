@@ -1,6 +1,6 @@
 // F-2030 3.1 — 429·413 doc_quota_exceeded·403 account_blocked 분류 규칙 (U1~U5)
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { ApiError, createDoc, updateDoc, removeDoc, createFolder, setDocE2ee, updateFolder, importDocComments, fetchCommentCount } from '../../../src/storage/docsApi'
+import { ApiError, createDoc, updateDoc, removeDoc, createFolder, setDocE2ee, updateFolder, importDocComments, fetchCommentCount, leaveShare } from '../../../src/storage/docsApi'
 
 function jsonResponse(status: number, data: unknown, headers: Record<string, string> = {}): Response {
   return new Response(data === undefined ? null : JSON.stringify(data), {
@@ -355,5 +355,31 @@ describe('F-509 U9: fetchCommentCount', () => {
   it('네트워크 실패 → network', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('failed')))
     await expect(fetchCommentCount('a')).rejects.toMatchObject({ kind: 'network' })
+  })
+})
+
+describe('F-2115 U7: leaveShare 상태 해석', () => {
+  it('204·200·404 는 resolve, 요청은 DELETE /api/shared/{docs|folders}/:id', async () => {
+    for (const status of [204, 200, 404]) {
+      const fetchMock = vi.fn().mockResolvedValue(new Response(status === 204 ? null : '{}', { status }))
+      vi.stubGlobal('fetch', fetchMock)
+      await expect(leaveShare('doc', 'a b')).resolves.toBeUndefined()
+      const [path, init] = fetchMock.mock.calls[0]
+      expect(path).toBe('/api/shared/docs/a%20b')
+      expect(init.method).toBe('DELETE')
+    }
+    const folderMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', folderMock)
+    await leaveShare('folder', 'f1')
+    expect(folderMock.mock.calls[0][0]).toBe('/api/shared/folders/f1')
+  })
+
+  it('500·401·네트워크는 reject', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 500 })))
+    await expect(leaveShare('doc', 'a')).rejects.toMatchObject({ kind: 'server_error' })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 401 })))
+    await expect(leaveShare('doc', 'a')).rejects.toMatchObject({ kind: 'unauthorized' })
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('failed')))
+    await expect(leaveShare('doc', 'a')).rejects.toMatchObject({ kind: 'network' })
   })
 })

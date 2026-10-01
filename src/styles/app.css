@@ -697,6 +697,14 @@ body.sidebar-resizing {
   color: var(--muted);
 }
 
+.shared-folder-row .shared-doc-folder-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .shared-doc-folder ul {
   list-style: none;
   margin: 0;

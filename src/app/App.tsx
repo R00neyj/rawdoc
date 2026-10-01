@@ -95,6 +95,8 @@ import { useFolderActions } from './useFolderActions'
 import { useImportFlow } from './useImportFlow'
 import { useE2eeMigrate } from './useE2eeMigrate'
 import { useE2eeConvert } from './useE2eeConvert'
+import { useLeaveShare } from './useLeaveShare'
+import LeaveShareDialog from './LeaveShareDialog'
 import { useEditorSync } from './useEditorSync'
 import { useHashRouting, replaceHashUrl, pushHashUrl } from './useHashRouting'
 import { useSharesPage } from './useSharesPage'
@@ -521,6 +523,7 @@ export default function App() {
   const claimDocId = (store.kind === 'idb' || docPath === 'e2ee') && !sharedDoc && !DEV_YSYNC ? currentDocId : null
   // useTabSync 가 e2ee 열쇠고리보다 먼저 만들어지므로, 다른 탭 잠그기 신호는 ref 로 늦게 잇는다 (F-404.md 6장)
   const e2eeOtherTabLockRef = useRef<() => void>(() => {})
+  const sharedLeftRef = useRef<(docIds: string[]) => void>(() => {})
   const { post: postTabMessage, claimReadOnly } = useTabSync({
     enabled: bootPhase === 'ready',
     tabId,
@@ -529,6 +532,7 @@ export default function App() {
     onNotice: showNotice,
     onClaimRegained: handleClaimRegained,
     onE2eeLock: () => e2eeOtherTabLockRef.current(),
+    onSharedLeft: (docIds) => sharedLeftRef.current(docIds),
   })
 
   // 금고 키 상태·화면 (F-404.md 6장) — 범위(local·account)가 있을 때만 값을 돌려준다
@@ -1059,6 +1063,12 @@ export default function App() {
     e2eeConvertBusyRef, e2eeRef, currentDocIdRef, docPathRef, docSaverFlushRef, titleSavingRef, liveSessionRef, editorRef, openDocLineEndingRef, yjsStoreRef,
   })
 
+  // ----- 공유에서 나가기 (F-2115) -----
+  const leaveShare = useLeaveShare({
+    store, docsRef, setDocs, currentDocIdRef, currentDocId, online: syncState?.online ?? true, beforeLeaveDoc, goHome, showNotice, resyncFromStore,
+    postLeft: (docIds) => postTabMessage({ kind: 'shared-left', tabId, docIds }), closeSidebarIfNarrow, yjsStoreRef, otherTabLeftRef: sharedLeftRef,
+  })
+
   // 대상이 금고 폴더면 금고가 열려 있어야 만든다 (F-405 7.6)
   async function ensureE2eeOpenForFolder(folderId: string | null): Promise<boolean> {
     if (!folderId || !foldersRef.current.some((f) => f.id === folderId && f.e2ee === true)) return true
@@ -1292,7 +1302,9 @@ export default function App() {
               : undefined
           }
           unreadNotificationDocIds={unreadNotificationDocIdsValue}
+          sharedLeave={store.kind === 'server' ? leaveShare.menu : undefined}
         />
+        <LeaveShareDialog target={leaveShare.target} sending={leaveShare.sending} onCancel={leaveShare.cancel} onConfirm={leaveShare.confirm} />
         {narrow && sidebarOpen && (
           <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
         )}

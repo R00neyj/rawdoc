@@ -261,3 +261,13 @@ describe('F-407 U22 withTabBroadcast — 옮기기·폴더 표지', () => {
     expect('setFolderE2ee' in wrapped).toBe(false)
   })
 })
+
+describe('F-2115 U9 shared-left', () => {
+  it('어떤 상태에서도 null', () => {
+    const base: ClaimState = { tabId: 'me', docId: 'doc-1', since: 1000, held: true }
+    const msg: TabMessage = { kind: 'shared-left', tabId: 'other', docIds: ['doc-1'] }
+    expect(reduceClaim(base, msg)).toBeNull()
+    expect(reduceClaim({ ...base, held: false }, msg)).toBeNull()
+    expect(reduceClaim({ ...base, held: false, waiting: true }, msg)).toBeNull()
+  })
+})
