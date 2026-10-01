@@ -1,21 +1,28 @@
 // 사이드바 문서 행 안 읽은 알림 표시 — 순수 함수. React·DOM 없음 (specs/features/F-510.md 3.1)
-import { NOTIFICATIONS_READ_IDS_MAX, type NotificationItem } from '../lib/docComments'
+import { NOTIFICATIONS_READ_IDS_MAX, type InboxNotificationItem } from '../lib/docComments'
 import type { TreeNode } from '../lib/folderTree'
 
+// 댓글 종류는 docId, 문서 공유는 대상 문서, 폴더 공유는 없음 (F-2116 2.5)
+export function notificationDocId(item: InboxNotificationItem): string | null {
+  if (item.kind !== 'share') return item.docId
+  return item.target === 'doc' ? item.targetId : null
+}
+
 // readAt === null 인 항목의 docId 집합
-export function unreadNotificationDocIds(items: readonly NotificationItem[]): ReadonlySet<string> {
+export function unreadNotificationDocIds(items: readonly InboxNotificationItem[]): ReadonlySet<string> {
   const ids = new Set<string>()
   for (const item of items) {
-    if (item.readAt === null) ids.add(item.docId)
+    const docId = notificationDocId(item)
+    if (item.readAt === null && docId !== null) ids.add(docId)
   }
   return ids
 }
 
 // 그 문서의 안 읽은 항목 id — 목록 순서 그대로, 서버 한도만큼 자른다 (r2)
-export function unreadNotificationIdsForDoc(items: readonly NotificationItem[], docId: string): string[] {
+export function unreadNotificationIdsForDoc(items: readonly InboxNotificationItem[], docId: string): string[] {
   const ids: string[] = []
   for (const item of items) {
-    if (item.docId !== docId || item.readAt !== null) continue
+    if (notificationDocId(item) !== docId || item.readAt !== null) continue
     ids.push(item.id)
     if (ids.length >= NOTIFICATIONS_READ_IDS_MAX) break
   }

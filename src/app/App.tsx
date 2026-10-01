@@ -643,17 +643,6 @@ export default function App() {
   const docScreenId =
     bootPhase === 'ready' && currentDocId !== null && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute ? currentDocId : null
 
-  // ----- 알림함·멘션·안 읽은 점 (F-507, F-510, F-2069) -----
-  const {
-    notificationsEnabled,
-    notifications,
-    notificationsOpen,
-    setNotificationsOpen,
-    handleOpenNotification,
-    unreadNotificationDocIdsValue,
-    mentionSource,
-  } = useNotificationsGlue({ bootPhase, store, account, currentDocId, docScreenId, commentAccessValue, docsRef, resyncFromStore })
-
   // ----- 템플릿 목록·원문 읽기·새 문서 본문 (F-2078) -----
   const { templateEntries, readTemplateDocText, buildNewDocContent } = useNewDocTemplate({ store, docs, folders, currentDocIdRef, editorRef })
 
@@ -681,9 +670,22 @@ export default function App() {
   // ----- 사이드바 레이아웃·폴더 펼침·좁은 창 (F-2066) -----
   const {
     narrow, sidebarOpen, setSidebarOpen, sidebarCollapsed, openFolders, addOpenFolders, toggleFolderOpen, collapseAllFolders,
-    onNavigateFolder, closeSidebarIfNarrow, toggleSidebar, handleSidebarWidthChange, handleSidebarWidthCommit, displaySidebarWidth,
+    onNavigateFolder, sharedGroupOpen, toggleSharedGroup, onNavigateSharedFolder, closeSidebarIfNarrow, toggleSidebar, handleSidebarWidthChange, handleSidebarWidthCommit, displaySidebarWidth,
   } = useSidebarLayout({
     sidebarRef, appShellRef, toggleButtonRef, mapRoute, settingsOpen, searchOpen, paletteOpen, deleteTarget, moveDocTarget, bulkDeleteItems,
+  })
+
+  // ----- 알림함·멘션·안 읽은 점 (F-507, F-510, F-2069) -----
+  const {
+    notificationsEnabled,
+    notifications,
+    notificationsOpen,
+    setNotificationsOpen,
+    handleOpenNotification,
+    unreadNotificationDocIdsValue,
+    mentionSource,
+  } = useNotificationsGlue({
+    bootPhase, store, account, currentDocId, docScreenId, commentAccessValue, docsRef, resyncFromStore, revealSharedFolder: onNavigateSharedFolder, showNotice,
   })
 
   // ----- 공유 링크 조각 해석 (specs/features/F-130.md 4장) -----
@@ -1251,6 +1253,8 @@ export default function App() {
           docs={ownedDocs}
           folders={folders}
           sharedDocs={sharedDocsList}
+          sharedGroupOpen={sharedGroupOpen}
+          onToggleSharedGroup={toggleSharedGroup}
           currentDocId={currentDocId}
           openFolderIds={openFolders}
           onToggleFolder={toggleFolderOpen}

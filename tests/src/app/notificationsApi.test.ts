@@ -6,13 +6,14 @@ import {
   fetchNotifications,
   markNotificationsRead,
   notificationExcerptLine,
+  notificationLines,
   notificationText,
   readDocPeopleResponse,
   readNotificationsResponse,
   shouldFetchNotifications,
   type PendingRead,
 } from '../../../src/app/notificationsApi'
-import type { NotificationItem, NotificationsResponse } from '../../../src/lib/docComments'
+import type { NotificationItem, NotificationsResponse, ShareNotificationItem } from '../../../src/lib/docComments'
 
 function item(over: Partial<NotificationItem> = {}): NotificationItem {
   return {
@@ -328,8 +329,8 @@ describe('F-2111 comment 종류', () => {
     globalThis.fetch = fake
     await fetchNotifications(null)
     await fetchNotifications('W/"x"')
-    expect(fake.mock.calls[0][0]).toBe('/api/notifications?kinds=mention,reply,comment')
-    expect(fake.mock.calls[1][0]).toBe('/api/notifications?kinds=mention,reply,comment')
+    expect(fake.mock.calls[0][0]).toBe('/api/notifications?kinds=mention,reply,comment,share')
+    expect(fake.mock.calls[1][0]).toBe('/api/notifications?kinds=mention,reply,comment,share')
   })
 
   it('U2: comment 항목은 통과하고 like 는 null', () => {
@@ -343,5 +344,33 @@ describe('F-2111 comment 종류', () => {
     expect(notificationText(item({ kind: 'comment', docTitle: '' }))).toContain('"제목 없는 문서"')
     expect(notificationText(item({ kind: 'mention' }))).toBe('a@x.com님이 "제목" 댓글에서 멘션했습니다.')
     expect(notificationText(item({ kind: 'reply' }))).toBe('a@x.com님이 "제목"의 댓글에 답글을 달았습니다.')
+  })
+})
+
+describe('F-2116 공유 알림', () => {
+  function share(over: Partial<ShareNotificationItem> = {}): ShareNotificationItem {
+    return { id: 's1', kind: 'share', target: 'doc', targetId: 'd9', name: '제목', role: 'view', actorEmail: 'a@x.com', createdAt: 1000, readAt: null, ...over }
+  }
+
+  it('U1: 공유 항목과 섞인 응답은 통과, 틀린 공유는 전체 null', () => {
+    const body = { items: [share(), share({ id: 's2', target: 'folder' }), item({ kind: 'comment' })], unread: 3 }
+    expect(readNotificationsResponse(body)).toEqual(body)
+    expect(readNotificationsResponse({ items: [item(), share({ role: 'owner' as never })], unread: 1 })).toBeNull()
+    expect(readNotificationsResponse({ items: [share({ target: 'x' as never })], unread: 1 })).toBeNull()
+    expect(readNotificationsResponse({ items: [{ ...share(), extra: 1 }], unread: 1 })).toBeNull()
+    const { name: _name, ...noName } = share()
+    expect(readNotificationsResponse({ items: [noName], unread: 1 })).toBeNull()
+  })
+
+  it('U2: 두 줄 문구', () => {
+    expect(notificationLines(share())).toEqual({ text: 'a@x.com님이 문서를 공유했습니다.', excerpt: '"제목" · 보기 권한' })
+    expect(notificationLines(share({ role: 'edit' }))).toEqual({ text: 'a@x.com님이 문서를 공유했습니다.', excerpt: '"제목" · 편집 권한' })
+    expect(notificationLines(share({ target: 'folder', name: '폴더' }))).toEqual({ text: 'a@x.com님이 폴더를 공유했습니다.', excerpt: '"폴더" · 보기 권한' })
+    expect(notificationLines(share({ target: 'folder', name: '폴더', role: 'edit' })).excerpt).toBe('"폴더" · 편집 권한')
+    expect(notificationLines(share({ name: '' })).excerpt).toBe('"제목 없는 문서" · 보기 권한')
+    expect(notificationLines(share({ target: 'folder', name: '' })).excerpt).toBe('"이름 없는 폴더" · 보기 권한')
+    expect(notificationLines(share({ name: 'a'.repeat(41) })).excerpt).toBe(`"${'a'.repeat(39)}…" · 보기 권한`)
+    const c = item({ kind: 'comment' })
+    expect(notificationLines(c)).toEqual({ text: notificationText(c), excerpt: notificationExcerptLine(c.excerpt) })
   })
 })

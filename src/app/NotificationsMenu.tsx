@@ -3,8 +3,8 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type R
 import usePresence from './usePresence'
 import { IconNotifications, IconTooltip } from './icons'
 import { commentBadgeText, formatCommentTime } from './commentRail'
-import { notificationExcerptLine, notificationText } from './notificationsApi'
-import type { NotificationItem } from '../lib/docComments'
+import { notificationLines } from './notificationsApi'
+import type { InboxNotificationItem } from '../lib/docComments'
 import type { NotificationsState } from './useNotifications'
 
 export type NotificationsMenuProps = {
@@ -13,7 +13,7 @@ export type NotificationsMenuProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onReadAll: () => void
-  onOpenItem: (item: NotificationItem) => void
+  onOpenItem: (item: InboxNotificationItem) => void
 }
 
 function setItemRef(refs: RefObject<(HTMLButtonElement | null)[]> | undefined, i: number, el: HTMLButtonElement | null) {
@@ -29,7 +29,7 @@ export function NotificationsList({
 }: {
   state: NotificationsState
   active: boolean
-  onOpenItem: (item: NotificationItem) => void
+  onOpenItem: (item: InboxNotificationItem) => void
   itemRefs?: RefObject<(HTMLButtonElement | null)[]>
 }): ReactNode {
   const [now, setNow] = useState(() => Date.now())
@@ -47,6 +47,7 @@ export function NotificationsList({
     <ul className="notifications-list">
       {state.items.map((item, i) => {
         const isUnread = item.readAt === null
+        const lines = notificationLines(item)
         return (
           <li key={item.id}>
             <button
@@ -58,10 +59,10 @@ export function NotificationsList({
               onClick={() => onOpenItem(item)}
             >
               <span className="notification-item-text">
-                {notificationText(item)}
+                {lines.text}
                 {isUnread && <span className="notification-item-sr">{' 안 읽음'}</span>}
               </span>
-              <span className="notification-item-excerpt">{notificationExcerptLine(item.excerpt)}</span>
+              <span className="notification-item-excerpt">{lines.excerpt}</span>
               <span className="notification-item-time">{formatCommentTime(item.createdAt, now)}</span>
             </button>
           </li>

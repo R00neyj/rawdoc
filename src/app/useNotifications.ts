@@ -1,6 +1,6 @@
 // 알림함 훅 — 가져오기 주기·읽음 표시 상태 (specs/features/F-507.md 3.3), 조건부 요청·탭 사이 결과 나누기 (F-2057 4장)
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { NotificationItem, NotificationsResponse } from '../lib/docComments'
+import type { InboxNotificationItem, InboxNotificationsResponse } from '../lib/docComments'
 import {
   applyPendingReads,
   dropSettledReads,
@@ -23,7 +23,7 @@ import { newTabId } from '../lib/tabChannel'
 
 export type NotificationsState = {
   status: 'idle' | 'loading' | 'ready' | 'failed' // idle = 꺼짐, loading = 첫 응답 전, failed = 한 번도 못 받음
-  items: readonly NotificationItem[] // 대기 읽음을 얹은 값
+  items: readonly InboxNotificationItem[] // 대기 읽음을 얹은 값
   unread: number | null // null = 아직 모름 → 배지 없음
 }
 
@@ -40,11 +40,11 @@ export function useNotifications(input: { enabled: boolean; blocked: boolean; ac
   const { enabled, blocked, accountId } = input
 
   const [status, setStatus] = useState<NotificationsState['status']>('idle')
-  const [items, setItems] = useState<readonly NotificationItem[]>([])
+  const [items, setItems] = useState<readonly InboxNotificationItem[]>([])
   const [unread, setUnread] = useState<number | null>(null)
   const [tabId] = useState(newTabId)
 
-  const lastServerRef = useRef<NotificationsResponse | null>(null)
+  const lastServerRef = useRef<InboxNotificationsResponse | null>(null)
   const etagRef = useRef<string | null>(null) // lastServerRef 와 함께 온 ETag 만 쥔다
   const appliedRef = useRef<AppliedStart | null>(null)
   const pendingRef = useRef<PendingRead[]>([])
@@ -87,7 +87,7 @@ export function useNotifications(input: { enabled: boolean; blocked: boolean; ac
 
   // 200·304·받은 메시지가 같은 길 (4.4). 지금까지 적용한 것보다 새 결과일 때만 참
   const applyResult = useCallback(
-    (from: AppliedStart, fresh: { data: NotificationsResponse; etag: string | null } | null): boolean => {
+    (from: AppliedStart, fresh: { data: InboxNotificationsResponse; etag: string | null } | null): boolean => {
       if (appliedRef.current && !isNewerStart(from, appliedRef.current)) return false
       appliedRef.current = from
       if (fresh) {

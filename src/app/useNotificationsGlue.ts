@@ -6,10 +6,13 @@ import type { DocMeta } from './docMeta'
 import type { MentionSource } from './MentionField'
 import { useNotifications, type UseNotificationsResult } from './useNotifications'
 import { fetchDocPeople } from './notificationsApi'
-import { unreadNotificationDocIds } from './docNotifications'
+import { notificationDocId, unreadNotificationDocIds } from './docNotifications'
+import { shareTarget, sharedFolderListed } from './shareNotifications'
+import { useShareResync } from './useShareResync'
+import type { Notice } from './notice'
 import { createPeopleCache } from './mentionCandidates'
-import { formatCommentHash } from './hashRoute'
-import type { NotificationItem } from '../lib/docComments'
+import { formatCommentHash, formatHash, parseHash } from './hashRoute'
+import type { InboxNotificationItem } from '../lib/docComments'
 import type { Store } from '../types'
 
 export type UseNotificationsGlueOptions = {
@@ -20,7 +23,9 @@ export type UseNotificationsGlueOptions = {
   docScreenId: string | null
   commentAccessValue: CommentAccess
   docsRef: RefObject<DocMeta[]>
-  resyncFromStore: () => Promise<void>
+  resyncFromStore: (deletedSource?: 'tab' | 'bootMerge') => Promise<void>
+  revealSharedFolder: (folderId: string) => void
+  showNotice: (notice: Notice) => unknown
 }
 
 export type UseNotificationsGlueResult = {
@@ -28,7 +33,7 @@ export type UseNotificationsGlueResult = {
   notifications: UseNotificationsResult
   notificationsOpen: boolean
   setNotificationsOpen: (open: boolean) => void
-  handleOpenNotification: (item: NotificationItem) => Promise<void>
+  handleOpenNotification: (item: InboxNotificationItem) => Promise<void>
   unreadNotificationDocIdsValue: ReadonlySet<string>
   mentionSource: MentionSource | null
 }
@@ -42,6 +47,8 @@ export function useNotificationsGlue({
   commentAccessValue,
   docsRef,
   resyncFromStore,
+  revealSharedFolder,
+  showNotice,
 }: UseNotificationsGlueOptions): UseNotificationsGlueResult {
   // ----- 알림함 (F-507 3.3·4장) -----
   const notificationsEnabled = bootPhase === 'ready' && store.kind === 'server' && account.state === 'in'
@@ -62,16 +69,29 @@ export function useNotificationsGlue({
   )
   // 항목 → 문서·스레드 이동 (4.5)
   const handleOpenNotification = useCallback(
-    async (item: NotificationItem) => {
+    async (item: InboxNotificationItem) => {
       setNotificationsOpen(false)
       notifications.markRead(item.id)
-      if (!docsRef.current.some((d) => d.id === item.docId) && navigator.onLine) {
-        await resyncFromStore().catch(() => {})
+      const target = shareTarget(item)
+      if (target?.kind === 'folder') {
+        if (!sharedFolderListed(docsRef.current, target.folderId) && navigator.onLine) await resyncFromStore().catch(() => {})
+        if (!sharedFolderListed(docsRef.current, target.folderId)) {
+          showNotice({ type: 'info', message: '공유받은 폴더를 찾을 수 없습니다.' })
+          return
+        }
+        if (parseHash(location.hash).type !== 'home') location.hash = '#/'
+        revealSharedFolder(target.folderId)
+        return
       }
-      location.hash = formatCommentHash(item.docId, item.threadId)
+      const docId = notificationDocId(item)
+      if (docId === null) return
+      if (!docsRef.current.some((d) => d.id === docId) && navigator.onLine) await resyncFromStore().catch(() => {})
+      location.hash = item.kind === 'share' ? formatHash(docId) : formatCommentHash(docId, item.threadId)
     },
-    [setNotificationsOpen, notifications, resyncFromStore, docsRef],
+    [setNotificationsOpen, notifications, resyncFromStore, docsRef, revealSharedFolder, showNotice],
   )
+
+  useShareResync({ status: notifications.status, items: notifications.items, accountId: account.state === 'in' ? account.id : null, resync: resyncFromStore })
 
   // ----- 사이드바 안 읽은 알림 점 (F-510 2·3.3) -----
   const unreadNotificationDocIdsValue = useMemo(() => unreadNotificationDocIds(notifications.items), [notifications.items])

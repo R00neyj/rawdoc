@@ -1,5 +1,5 @@
 // 탭 사이 알림 결과 메시지 — 채널 이름·모양 검사·더 새 결과 판정 (specs/features/F-2057.md 4.2·4.3). 순수
-import type { NotificationsResponse } from '../lib/docComments'
+import type { InboxNotificationsResponse } from '../lib/docComments'
 import { readNotificationsResponse } from './notificationsApi'
 
 export const NOTIFICATIONS_CHANNEL_NAME = 'md-notifications'
@@ -12,7 +12,7 @@ export type NotificationsShareMessage = {
   accountId: string
   startedAt: number // 그 결과를 가져온 요청을 시작한 시각(ms)
   etag: string | null
-  data: NotificationsResponse // 서버 값 그대로 — 보낸 탭의 읽음 대기를 얹지 않는다
+  data: InboxNotificationsResponse // 서버 값 그대로 — 보낸 탭의 읽음 대기를 얹지 않는다
 }
 
 const MESSAGE_KEYS = ['kind', 'v', 'tabId', 'accountId', 'startedAt', 'etag', 'data']

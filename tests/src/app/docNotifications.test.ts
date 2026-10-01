@@ -122,3 +122,14 @@ describe('대기 읽음을 얹은 값에서의 id 계산 — U5', () => {
     expect(unreadNotificationIdsForDoc(applied.items, 'A')).toEqual([])
   })
 })
+
+describe('F-2116 U4 공유 알림 점', () => {
+  const docShare = { id: 's1', kind: 'share', target: 'doc', targetId: 'D', name: 'n', role: 'view', actorEmail: 'a@x.com', createdAt: 1, readAt: null } as const
+  const folderShare = { ...docShare, id: 's2', target: 'folder', targetId: 'F' } as const
+
+  it('문서 공유는 그 문서 id, 폴더 공유는 어느 쪽에도 없음', () => {
+    expect([...unreadNotificationDocIds([docShare, folderShare])]).toEqual(['D'])
+    expect(unreadNotificationIdsForDoc([docShare, folderShare], 'D')).toEqual(['s1'])
+    expect(unreadNotificationIdsForDoc([docShare, folderShare], 'F')).toEqual([])
+  })
+})

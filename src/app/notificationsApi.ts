@@ -1,6 +1,13 @@
 // 알림함 API·순수 함수 — 응답 검사, 문구, 가져오기 판정, 읽음 대기 합치기 (specs/features/F-507.md 3.1). React·DOM 없음
-import { NOTIFICATION_KINDS, type DocPeopleResponse, type NotificationItem, type NotificationsResponse } from '../lib/docComments'
-import { formatNotificationTitle } from '../lib/pushText'
+import {
+  INBOX_NOTIFICATION_KINDS,
+  NOTIFICATION_KINDS,
+  type DocPeopleResponse,
+  type InboxNotificationItem,
+  type InboxNotificationsResponse,
+  type NotificationItem,
+} from '../lib/docComments'
+import { formatNotificationTitle, notificationExcerptLine, sharePushPayload } from '../lib/pushText'
 
 export { NOTIFICATION_TITLE_MAX, notificationExcerptLine } from '../lib/pushText' // F-3002 5.4 — 옛 import 그대로
 
@@ -10,7 +17,7 @@ export const NOTIFICATIONS_MIN_GAP_MS = 5_000 // 자동 가져오기끼리의 �
 export const NOTIFICATIONS_ETAG_MAX = 200 // 이보다 긴 ETag 는 쥐지 않는다 (F-2057 4.1)
 
 export type NotificationsFetchResult =
-  | { ok: true; data: NotificationsResponse; etag: string | null }
+  | { ok: true; data: InboxNotificationsResponse; etag: string | null }
   | { ok: true; notModified: true }
   | { ok: false; reason: 'network' | 'unauthorized' | 'server' | 'invalid' }
 export type DocPeopleFetchResult = { ok: true; people: DocPeopleResponse['people'] } | { ok: false }
@@ -28,6 +35,8 @@ const NOTIFICATION_ITEM_KEYS = [
   'readAt',
 ] as const
 
+const SHARE_ITEM_KEYS = ['id', 'kind', 'target', 'targetId', 'name', 'role', 'actorEmail', 'createdAt', 'readAt'] as const
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -37,8 +46,23 @@ function hasExactKeys(obj: Record<string, unknown>, keys: readonly string[]): bo
   return objKeys.length === keys.length && keys.every((k) => Object.prototype.hasOwnProperty.call(obj, k))
 }
 
-function isNotificationItem(value: unknown): value is NotificationItem {
-  if (!isPlainObject(value) || !hasExactKeys(value, NOTIFICATION_ITEM_KEYS)) return false
+function isTimestampPair(value: Record<string, unknown>): boolean {
+  if (typeof value.createdAt !== 'number' || !Number.isFinite(value.createdAt)) return false
+  return value.readAt === null || (typeof value.readAt === 'number' && Number.isFinite(value.readAt))
+}
+
+function isShareItem(value: Record<string, unknown>): boolean {
+  if (!hasExactKeys(value, SHARE_ITEM_KEYS)) return false
+  if (typeof value.id !== 'string' || typeof value.targetId !== 'string' || typeof value.name !== 'string' || typeof value.actorEmail !== 'string') return false
+  if (value.target !== 'doc' && value.target !== 'folder') return false
+  if (value.role !== 'view' && value.role !== 'edit') return false
+  return isTimestampPair(value)
+}
+
+function isNotificationItem(value: unknown): value is InboxNotificationItem {
+  if (!isPlainObject(value)) return false
+  if (value.kind === 'share') return isShareItem(value)
+  if (!hasExactKeys(value, NOTIFICATION_ITEM_KEYS)) return false
   if (typeof value.id !== 'string') return false
   if (!NOTIFICATION_KINDS.some((k) => k === value.kind)) return false
   if (typeof value.docId !== 'string') return false
@@ -52,14 +76,14 @@ function isNotificationItem(value: unknown): value is NotificationItem {
   return true
 }
 
-export function readNotificationsResponse(json: unknown): NotificationsResponse | null {
+export function readNotificationsResponse(json: unknown): InboxNotificationsResponse | null {
   if (!isPlainObject(json)) return null
   if (!Array.isArray(json.items)) return null
   if (typeof json.unread !== 'number' || !Number.isInteger(json.unread) || json.unread < 0) return null
   for (const item of json.items) {
     if (!isNotificationItem(item)) return null
   }
-  return { items: json.items as NotificationItem[], unread: json.unread }
+  return { items: json.items as InboxNotificationItem[], unread: json.unread }
 }
 
 function isDocPerson(value: unknown): value is DocPeopleResponse['people'][number] {
@@ -81,7 +105,7 @@ export function readDocPeopleResponse(json: unknown): DocPeopleResponse | null {
 export async function fetchNotifications(etag: string | null): Promise<NotificationsFetchResult> {
   let res: Response
   try {
-    res = await fetch(`/api/notifications?kinds=${NOTIFICATION_KINDS.join(',')}`, {
+    res = await fetch(`/api/notifications?kinds=${INBOX_NOTIFICATION_KINDS.join(',')}`, {
       credentials: 'same-origin',
       cache: 'no-store',
       headers: etag !== null ? { 'If-None-Match': etag } : {},
@@ -147,6 +171,13 @@ export function notificationText(item: NotificationItem): string {
   return `${item.actorEmail}님이 "${title}"의 댓글에 답글을 달았습니다.`
 }
 
+// 알림함 행 두 줄 — 공유는 푸시 문구에 마침표 (F-2116 2.2)
+export function notificationLines(item: InboxNotificationItem): { text: string; excerpt: string } {
+  if (item.kind !== 'share') return { text: notificationText(item), excerpt: notificationExcerptLine(item.excerpt) }
+  const { title, body } = sharePushPayload(item)
+  return { text: `${title}.`, excerpt: body }
+}
+
 export type PollReason = 'enable' | 'interval' | 'visible' | 'online' | 'open'
 
 export function shouldFetchNotifications(input: {
@@ -171,7 +202,7 @@ export type PendingRead =
   | { kind: 'ids'; ids: readonly string[]; at: number; settledAt: number | null }
   | { kind: 'all'; at: number; settledAt: number | null }
 
-export function applyPendingReads(data: NotificationsResponse, pending: readonly PendingRead[]): NotificationsResponse {
+export function applyPendingReads(data: InboxNotificationsResponse, pending: readonly PendingRead[]): InboxNotificationsResponse {
   let allAt: number | null = null
   const idsAt = new Map<string, number>()
   for (const p of pending) {

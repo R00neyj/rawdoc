@@ -562,8 +562,7 @@ function SharedDocRow({ doc, ctx }: { doc: SharedDocLike; ctx: SidebarCtx }) {
 }
 
 // 사이드바 `공유받음` 묶음 — 폴더로 받은 것은 폴더 이름 아래, 문서로 받은 것은 바로 (F-212.md 2.4)
-function SharedGroup({ sharedDocs, ctx }: { sharedDocs: SharedDocLike[]; ctx: SidebarCtx }) {
-  const [open, setOpen] = useState(true)
+function SharedGroup({ sharedDocs, ctx, open, onToggle }: { sharedDocs: SharedDocLike[]; ctx: SidebarCtx; open: boolean; onToggle: () => void }) {
   if (sharedDocs.length === 0) return null
 
   const direct: SharedDocLike[] = []
@@ -588,7 +587,8 @@ function SharedGroup({ sharedDocs, ctx }: { sharedDocs: SharedDocLike[]; ctx: Si
           type="button"
           className="shared-group-toggle"
           data-unread={isUnread ? 'true' : undefined}
-          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          onClick={onToggle}
         >
           <IconChevron size={14} className={`tree-toggle-icon${open ? ' tree-toggle-icon--open' : ''}`} />
           <IconGroup size={14} />
@@ -600,7 +600,7 @@ function SharedGroup({ sharedDocs, ctx }: { sharedDocs: SharedDocLike[]; ctx: Si
       {open && (
         <ul className="pinned-list shared-doc-list" role="list" aria-label="공유받은 문서">
           {[...byFolder.values()].map((group) => (
-            <li key={group.id} role="presentation" className="shared-doc-folder">
+            <li key={group.id} role="presentation" className="shared-doc-folder" data-shared-folder-id={group.id}>
               <div
                 className="tree-row shared-folder-row"
                 onContextMenu={ctx.sharedLeave ? (e) => ctx.onSharedContextMenu(e, `shared-folder:${group.id}`) : undefined}
@@ -779,6 +779,8 @@ type SidebarProps = {
   docs: Array<DocLike & { e2ee?: E2eeDocState }>
   folders: Array<FolderLike & { e2ee?: true }>
   sharedDocs: SharedDocLike[]
+  sharedGroupOpen: boolean
+  onToggleSharedGroup: () => void
   currentDocId: string | null
   openFolderIds: string[]
   onToggleFolder: (id: string) => void
@@ -832,6 +834,8 @@ export default function Sidebar({
   docs,
   folders,
   sharedDocs,
+  sharedGroupOpen,
+  onToggleSharedGroup,
   currentDocId,
   openFolderIds,
   onToggleFolder,
@@ -1248,7 +1252,7 @@ export default function Sidebar({
                 if (e.target === e.currentTarget) setSelection(EMPTY_SELECTION)
               }}
             >
-              <SharedGroup sharedDocs={sharedDocs} ctx={ctx} />
+              <SharedGroup sharedDocs={sharedDocs} ctx={ctx} open={sharedGroupOpen} onToggle={onToggleSharedGroup} />
               <h2>문서</h2>
               <ul className="doc-list" role="tree" aria-label="문서와 폴더">
                 {tree.map((node) => (

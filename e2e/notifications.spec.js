@@ -607,6 +607,86 @@ test.describe('F-2111 E1 comment 종류', () => {
     expect(postsOf(server)[0].body).toEqual({ ids: ['k1'] })
     const gets = server.notificationRequests().filter((r) => r.method === 'GET')
     expect(gets.length).toBeGreaterThan(0)
-    expect(gets.every((r) => r.search === '?kinds=mention,reply,comment')).toBe(true)
+    expect(gets.every((r) => r.search === '?kinds=mention,reply,comment,share')).toBe(true)
+  })
+})
+
+// ----- F-2116 공유 알림 -----
+
+function shareNotif(overrides) {
+  return { id: 'sh', kind: 'share', target: 'doc', targetId: 'S', name: '받은 문서', role: 'view', actorEmail: 'x@y.com', createdAt: Date.now(), readAt: null, ...overrides }
+}
+
+function sharedEntry(id, title, over = {}) {
+  return { ...serverDoc(id, { title, content: undefined, updatedAt: 1000 }), content: undefined, role: 'view', ownerEmail: 'owner@x.com', ...over }
+}
+
+test.describe('F-2116 E1 새 문서 공유', () => {
+  test('F-2116 E1 새 공유 행이 오면 공유 목록을 한 번 다시 읽고 점이 켜지며, 같은 결과·304 로는 다시 읽지 않고, 누르면 그 문서 주소로 간다', async ({ page }) => {
+    await page.clock.install()
+    let sharedList = []
+    let sharedGets = 0
+    await page.route('**/api/shared', (route) => {
+      sharedGets += 1
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sharedList) })
+    })
+    const server = await openServerApp(page, USER, (s) => {
+      s.docs.set(OTHER, serverDoc(OTHER, { title: OTHER_TITLE, content: OTHER_CONTENT }))
+      s.setNotifications([])
+    })
+    await expect(docLink(page, OTHER_TITLE)).toBeVisible()
+    await expect.poll(() => server.notificationRequests().filter((r) => r.method === 'GET').length).toBeGreaterThan(0)
+    const before = sharedGets
+
+    sharedList = [sharedEntry('S', '받은 문서')]
+    const gets = () => server.notificationRequests().filter((r) => r.method === 'GET').length
+    const g0 = gets()
+    server.setNotifications([shareNotif({ id: 'sh1' })])
+    await page.clock.fastForward('01:00')
+    await expect.poll(() => gets()).toBeGreaterThan(g0)
+    await expect(sharedRowByTitle(page, '받은 문서')).toHaveAttribute('data-unread', 'true')
+    expect(sharedGets).toBe(before + 1)
+
+    const g1 = gets()
+    await page.clock.fastForward('01:00')
+    await expect.poll(() => gets()).toBeGreaterThan(g1)
+    expect(sharedGets).toBe(before + 1)
+
+    await notifBtn(page).click()
+    await notifItems(page).first().click()
+    await expect(page).toHaveURL(/#\/d\/S$/)
+    await expect.poll(() => postsOf(server).length).toBeGreaterThan(0)
+    expect(postsOf(server)[0].body).toEqual({ ids: ['sh1'] })
+  })
+})
+
+test.describe('F-2116 E2 폴더 공유', () => {
+  test('F-2116 E2 폴더 공유 행을 누르면 홈으로 가고 닫혀 있던 공유받음이 열려 그 폴더의 문서로 포커스가 간다', async ({ page }) => {
+    let sharedGets = 0
+    const sharedList = [sharedEntry('SD', '폴더 안 문서', { viaFolder: { id: 'SF', name: '받은 폴더' } })]
+    await page.route('**/api/shared', (route) => {
+      sharedGets += 1
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sharedList) })
+    })
+    await openServerApp(page, USER, (s) => {
+      s.docs.set(OTHER, serverDoc(OTHER, { title: OTHER_TITLE, content: OTHER_CONTENT }))
+      s.setNotifications([shareNotif({ id: 'shf', target: 'folder', targetId: 'SF', name: '받은 폴더' })])
+    })
+    await expect(sharedGroupToggle(page)).toHaveAttribute('aria-expanded', 'true')
+    await expect(notifBtn(page)).toBeVisible()
+    await page.evaluate((id) => {
+      location.hash = `#/d/${id}`
+    }, OTHER)
+    await expect(page).toHaveURL(/#\/d\/notif-doc-2$/)
+    await sharedGroupToggle(page).click()
+    await expect(sharedGroupToggle(page)).toHaveAttribute('aria-expanded', 'false')
+    const before = sharedGets
+
+    await notifBtn(page).click()
+    await notifItems(page).first().click()
+    await expect(page).toHaveURL(/#\/$/)
+    await expect(sharedGroupToggle(page)).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.locator('[data-shared-folder-id="SF"] a.doc-item-btn')).toBeFocused()
+    expect(sharedGets).toBe(before)
   })
 })

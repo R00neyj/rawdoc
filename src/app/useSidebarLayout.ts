@@ -43,6 +43,9 @@ export type UseSidebarLayoutResult = {
   toggleFolderOpen: (id: string) => void
   collapseAllFolders: () => void
   onNavigateFolder: (folderId: string) => void
+  sharedGroupOpen: boolean
+  toggleSharedGroup: () => void
+  onNavigateSharedFolder: (folderId: string) => void
   closeSidebarIfNarrow: () => void
   toggleSidebar: () => void
   handleSidebarWidthChange: (px: number) => void
@@ -57,6 +60,7 @@ export function useSidebarLayout(options: UseSidebarLayoutOptions): UseSidebarLa
     typeof window !== 'undefined' ? window.matchMedia(NARROW_QUERY).matches : false,
   )
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sharedGroupOpen, setSharedGroupOpen] = useState(true) // 저장하지 않음 (F-2116 2.6)
   // 사이드바 접힘(아이콘 레일) — 좁은 창에서는 쓰지 않는다 (F-143 3.3·3.4, md.sidebar)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getPref('md.sidebar', 'expanded') === 'collapsed')
   // 사이드바 너비(원 저장값) — 끄는 동안은 실시간으로, 놓으면 md.sidebarWidth 에 저장한다 (F-159 2.5)
@@ -120,9 +124,7 @@ export function useSidebarLayout(options: UseSidebarLayoutOptions): UseSidebarLa
   }, [])
 
   // 제목 경로의 폴더 이름을 눌렀을 때: 사이드바에서 그 폴더 행을 찾아 스크롤·강조한다 (F-234.md 3.5)
-  const scrollToFolderRow = useCallback((folderId: string) => {
-    const row = sidebarRef.current?.querySelector<HTMLElement>(`[data-folder-id="${folderId}"] .tree-row`)
-    if (!row) return
+  const flashRow = useCallback((row: HTMLElement) => {
     if (highlightFolderTimeoutRef.current) window.clearTimeout(highlightFolderTimeoutRef.current)
     row.scrollIntoView({ block: 'nearest' })
     row.classList.remove('tree-row--highlight-fading')
@@ -136,7 +138,38 @@ export function useSidebarLayout(options: UseSidebarLayoutOptions): UseSidebarLa
     highlightFolderTimeoutRef.current = window.setTimeout(() => {
       row.classList.remove('tree-row--highlight-fading')
     }, 600)
-  }, [sidebarRef])
+  }, [])
+
+  const scrollToFolderRow = useCallback(
+    (folderId: string) => {
+      const row = sidebarRef.current?.querySelector<HTMLElement>(`[data-folder-id="${folderId}"] .tree-row`)
+      if (row) flashRow(row)
+    },
+    [sidebarRef, flashRow],
+  )
+
+  // 공유받음 묶음을 열고 그 폴더 이름 줄로 — 묶음 DOM 이 생길 두 프레임 뒤에 찾는다 (F-2116 2.4)
+  const onNavigateSharedFolder = useCallback(
+    (folderId: string) => {
+      if (narrowRef.current) {
+        setSidebarOpen(true)
+      } else if (sidebarCollapsedRef.current) {
+        setSidebarCollapsed(false)
+        setPref('md.sidebar', 'expanded')
+      }
+      setSharedGroupOpen(true)
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const group = sidebarRef.current?.querySelector<HTMLElement>(`[data-shared-folder-id="${CSS.escape(folderId)}"]`)
+          const row = group?.querySelector<HTMLElement>('.shared-doc-folder-name')
+          if (!group || !row) return
+          flashRow(row)
+          group.querySelector<HTMLElement>('a.doc-item-btn')?.focus()
+        }),
+      )
+    },
+    [sidebarRef, flashRow],
+  )
 
   // 접혀 있거나(레일) 좁은 창에서 숨겨져 있으면 먼저 펼친 뒤 스크롤·강조한다 (F-234.md 3.5)
   const onNavigateFolder = useCallback(
@@ -215,6 +248,8 @@ export function useSidebarLayout(options: UseSidebarLayoutOptions): UseSidebarLa
     if (active.isContentEditable || active.matches('input, textarea')) active.blur()
   }, [narrow, sidebarOpen, sidebarRef])
 
+  const toggleSharedGroup = useCallback(() => setSharedGroupOpen((v) => !v), [])
+
   // 위 ref 3개 최신화 — App 의 인자 없는 최신값 effect ③ 에서 옮김 (F-2066)
   useEffect(() => {
     narrowRef.current = narrow
@@ -253,6 +288,6 @@ export function useSidebarLayout(options: UseSidebarLayoutOptions): UseSidebarLa
 
   return {
     narrow, sidebarOpen, setSidebarOpen, sidebarCollapsed, openFolders, addOpenFolders, toggleFolderOpen, collapseAllFolders,
-    onNavigateFolder, closeSidebarIfNarrow, toggleSidebar, handleSidebarWidthChange, handleSidebarWidthCommit, displaySidebarWidth,
+    onNavigateFolder, sharedGroupOpen, toggleSharedGroup, onNavigateSharedFolder, closeSidebarIfNarrow, toggleSidebar, handleSidebarWidthChange, handleSidebarWidthCommit, displaySidebarWidth,
   }
 }
