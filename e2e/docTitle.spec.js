@@ -190,4 +190,17 @@ test.describe('F-234 폴더 경로 표시', () => {
   })
 })
 
+test.describe('제목칸 높이', () => {
+  test('보기 모드로 열린 문서를 편집으로 바꾸면 제목칸이 보인다 (숨은 채 0px 로 재던 버그)', async ({ page }) => {
+    await openApp(page)
+    await setViewMode(page, 'view')
+    await page.reload()
+    await expect(page.locator('.doc-title-view')).toBeVisible()
+
+    await setViewMode(page, 'live')
+    await expect(page.locator('.doc-title')).toBeVisible()
+    await expect(page.locator('.doc-title')).toHaveValue('제목 없는 문서')
+  })
+})
+
 // F-217 A7 좁은 창 긴 제목 가로 넘침은 e2e/dialogLayout.spec.js 의 합친 테스트로 옮겼다 (2026-09-25 e2e 경량화)

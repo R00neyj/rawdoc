@@ -22,6 +22,7 @@ const NO_NAVIGATE: OnNavigateFolder = () => {}
 const latestTitle = new WeakMap<HTMLElement, string>()
 // textarea 가 마지막으로 보인 값 — 다음 input 의 직전 값(prev)이 된다 (리뷰 E4)
 const shownValue = new WeakMap<HTMLTextAreaElement, string>()
+const widthObservers = new WeakMap<HTMLElement, ResizeObserver>()
 
 function breadcrumbEqual(a: Breadcrumb, b: Breadcrumb): boolean {
   if (a.length !== b.length) return false
@@ -200,6 +201,16 @@ class TitleWidget extends WidgetType {
     wrap.appendChild(tooltip)
 
     requestAnimationFrame(() => resizeToContent(textarea))
+    // 보기 모드로 열면 숨은 슬롯에서 0px 로 재진다 — 폭이 생기는 순간 다시 잰다
+    let lastWidth = 0
+    const widthObserver = new ResizeObserver(() => {
+      const width = textarea.clientWidth
+      if (width === lastWidth) return
+      lastWidth = width
+      if (width > 0) resizeToContent(textarea)
+    })
+    widthObserver.observe(textarea)
+    widthObservers.set(wrap, widthObserver)
     // textarea 가 늘어나 위젯 높이가 바뀌면 CM6 에 알려 그 아래 줄 클릭 위치가 어긋나지 않게 한다 (F-134 3.6 과 같은 이유)
     observeHeight(wrap, view)
     return wrap
@@ -207,6 +218,8 @@ class TitleWidget extends WidgetType {
 
   destroy(dom: HTMLElement): void {
     stopObservingHeight(dom)
+    widthObservers.get(dom)?.disconnect()
+    widthObservers.delete(dom)
   }
 
   // 값·읽기 전용·경로가 바뀌어도 textarea 는 다시 만들지 않는다(2.2) — 새 문서 직후 경로가 뒤늦게 오면 textarea 를 갈아 끼우며 막 받은 제목 포커스가 사라졌다(폴더 메뉴 새 문서, 2026-09-24)
