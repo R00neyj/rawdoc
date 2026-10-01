@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import Dialog from './Dialog'
+import { IconLink } from './icons'
+import { formatHash } from './hashRoute'
 import { listGrants, putGrant, deleteGrant, type Grant, type GrantRole, type GrantTargetType } from '../storage/docsApi'
 import type { Notice } from './notice'
 
@@ -126,11 +128,27 @@ export default function InviteDialog({ target, onClose, onNotice }: InviteDialog
       triggerHighlight(result.email)
       onNotice({
         type: 'info',
-        message: `${result.email} 님에게 ${ROLE_LABEL[result.role]} 권한을 줬습니다. 앱 주소를 직접 알려 주세요.`,
+        message: `${result.email} 님에게 ${ROLE_LABEL[result.role]} 권한을 줬습니다. 아래 링크 복사로 주소를 알려 주세요.`,
       })
     } catch {
       setFormError(true)
     }
+  }
+
+  // 문서는 그 문서 주소, 폴더는 열 문서가 없어 앱 주소 — 둘 다 로그인해야 열린다 (본문이 담기는 공유 메뉴 링크와 다름)
+  async function handleCopyLink() {
+    if (!target) return
+    const link = `${location.origin}${location.pathname}${target.type === 'doc' ? formatHash(target.id) : ''}`
+    try {
+      await navigator.clipboard.writeText(link)
+    } catch {
+      onNotice({ type: 'error', message: '복사하지 못했습니다. 브라우저 권한을 확인하세요.' })
+      return
+    }
+    onNotice({
+      type: 'info',
+      message: target.type === 'doc' ? '문서 링크를 복사했습니다. 초대받은 사람이 로그인하면 열립니다.' : '앱 주소를 복사했습니다. 초대받은 사람은 공유받음에서 폴더를 볼 수 있습니다.',
+    })
   }
 
   async function handleChangeRole(grantEmail: string, nextRole: GrantRole) {
@@ -258,6 +276,10 @@ export default function InviteDialog({ target, onClose, onNotice }: InviteDialog
       <div className="invite-foot">
         <p className="invite-hint">같은 이메일의 Google 또는 GitHub 계정으로 로그인하면 사이드바 공유받음에 보입니다.</p>
         <div className="dialog-actions">
+          <button type="button" className="invite-copy-link" onClick={handleCopyLink}>
+            <IconLink />
+            링크 복사
+          </button>
           <button type="button" onClick={onClose}>
             닫기
           </button>

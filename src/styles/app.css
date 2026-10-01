@@ -3121,6 +3121,17 @@ body.sidebar-resizing {
   flex: none;
 }
 
+.invite-copy-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.invite-copy-link svg {
+  width: 15px;
+  height: 15px;
+}
+
 @container (max-width: 480px) {
   .invite-bar {
     flex-wrap: wrap;
