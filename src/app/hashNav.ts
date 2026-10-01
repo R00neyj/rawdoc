@@ -57,3 +57,21 @@ export function decideHashNav(input: HashNavInput): HashNav {
   }
   return { kind: 'open', home: parsedHash.type === 'home', docId, threadId }
 }
+
+// 목록에 없는 문서 해시는 서버 목록을 한 번 다시 읽고 찾는다 — 공유받은 문서 링크가 새로고침 없이 열리게
+export async function docKnownAfterRefresh(input: {
+  docId: string
+  getDocs: () => readonly { id: string }[]
+  refresh: () => Promise<void>
+  online: boolean
+}): Promise<boolean> {
+  const has = () => input.getDocs().some((d) => d.id === input.docId)
+  if (has()) return true
+  if (!input.online) return false
+  try {
+    await input.refresh()
+  } catch {
+    return false
+  }
+  return has()
+}

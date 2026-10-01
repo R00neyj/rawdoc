@@ -6,7 +6,7 @@ import type { DocMeta } from './docMeta'
 import type { NoticeWithAction } from './NoticeBar'
 import type { UseDocCommentsResult } from './useDocComments'
 import { formatHash, formatMapHash } from './hashRoute'
-import { decideHashNav } from './hashNav'
+import { decideHashNav, docKnownAfterRefresh } from './hashNav'
 import { leaveScreens } from './leaveScreens'
 import { setPref } from './prefs'
 import { pushAppEntry, replaceAppEntry } from './historyEntries'
@@ -49,12 +49,13 @@ export type UseHashRoutingOptions = {
   mapRouteRef: RefObject<{ centerDocId: string | null; returnDocId: string | null } | null>
   focusEditorRef: RefObject<boolean>
   commentsRef: RefObject<UseDocCommentsResult>
+  resyncList: () => Promise<void>
 }
 
 export function useHashRouting(options: UseHashRoutingOptions): void {
   const {
     bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment, setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute,
-    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, focusEditorRef, commentsRef,
+    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, focusEditorRef, commentsRef, resyncList,
   } = options
 
   // docs·currentDocId 는 ref 로 읽는다 — bootPhase 변경시만 재구독해 클로저에 담으면 낡은 값을 본다 (0단계 버그 수정)
@@ -143,8 +144,12 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
           return
         }
         focusEditorRef.current = true
+        const known = docId
+          ? await docKnownAfterRefresh({ docId, getDocs: () => docsRef.current, refresh: resyncList, online: navigator.onLine })
+          : false
+        if (location.hash !== hashAtEntry) return // 재조회 중 주소가 또 바뀌었으면 뒤 핸들러에 맡긴다
         const latestDocs = docsRef.current
-        if (docId && latestDocs.some((d) => d.id === docId)) {
+        if (docId && known) {
           setCurrentDocId(docId)
           setPref('md.lastDocId', docId)
           if (threadId) {
@@ -167,6 +172,6 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [
     bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment, setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute,
-    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, focusEditorRef, commentsRef,
+    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, focusEditorRef, commentsRef, resyncList,
   ])
 }

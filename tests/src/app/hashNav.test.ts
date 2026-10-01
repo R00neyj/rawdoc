@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decideHashNav, toPublicRoute, type HashNavInput } from '../../../src/app/hashNav'
+import { decideHashNav, docKnownAfterRefresh, toPublicRoute, type HashNavInput } from '../../../src/app/hashNav'
 
 const B: HashNavInput = {
   hash: '#/d/a',
@@ -132,5 +132,39 @@ describe('toPublicRoute (F-2071 U21)', () => {
     expect(toPublicRoute({ type: 'help' })).toBeNull()
     expect(toPublicRoute({ type: 'home' })).toBeNull()
     expect(toPublicRoute({ type: 'none' })).toBeNull()
+  })
+})
+
+describe('docKnownAfterRefresh (공유받은 문서 링크)', () => {
+  const docs = (...ids: string[]) => ids.map((id) => ({ id }))
+
+  it('목록에 있으면 재조회 없이 참', async () => {
+    let calls = 0
+    const ok = await docKnownAfterRefresh({ docId: 'a', getDocs: () => docs('a'), refresh: async () => void calls++, online: true })
+    expect(ok).toBe(true)
+    expect(calls).toBe(0)
+  })
+
+  it('목록에 없으면 재조회한 뒤 다시 찾는다', async () => {
+    let list = docs('a')
+    const ok = await docKnownAfterRefresh({ docId: 'b', getDocs: () => list, refresh: async () => void (list = docs('a', 'b')), online: true })
+    expect(ok).toBe(true)
+  })
+
+  it('재조회 뒤에도 없으면 거짓', async () => {
+    const ok = await docKnownAfterRefresh({ docId: 'b', getDocs: () => docs('a'), refresh: async () => {}, online: true })
+    expect(ok).toBe(false)
+  })
+
+  it('오프라인이면 재조회하지 않는다', async () => {
+    let calls = 0
+    const ok = await docKnownAfterRefresh({ docId: 'b', getDocs: () => docs('a'), refresh: async () => void calls++, online: false })
+    expect(ok).toBe(false)
+    expect(calls).toBe(0)
+  })
+
+  it('재조회가 던져도 거짓으로 끝난다', async () => {
+    const ok = await docKnownAfterRefresh({ docId: 'b', getDocs: () => docs('a'), refresh: async () => { throw new Error('x') }, online: true })
+    expect(ok).toBe(false)
   })
 })

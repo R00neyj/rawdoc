@@ -755,6 +755,7 @@ export default function App() {
   useHashRouting({
     bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment, setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute,
     setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, focusEditorRef, commentsRef,
+    resyncList: resyncFromStore,
   })
 
   // ----- 저장소 영속화 요청 (specs/features/F-118.md) -----
