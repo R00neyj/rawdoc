@@ -4,6 +4,7 @@ import type { EditorView } from '@codemirror/view'
 
 import { forceRecalc } from './composition'
 import { DEV_YSYNC_NOGATE } from './devSyncFlag'
+import { isFrontmatterCompositionStarted } from './preview/frontmatterEdit'
 import { isCellCompositionStarted } from './preview/tableWidget'
 import { Y_TEXT_NAME } from './yBinding'
 
@@ -195,7 +196,7 @@ export function connectRemote({
   if (!docId || (!sharedDoc && typeof factory !== 'function')) return null
 
   // composing 이 아니라 compositionStarted — 조합 진입 직후 첫 변경 전 틈까지 막는다 (5.1)
-  const composing = () => view.compositionStarted || isCellCompositionStarted(view)
+  const composing = () => view.compositionStarted || isCellCompositionStarted(view) || isFrontmatterCompositionStarted(view)
   const gate = createRemoteGate(editorDoc, {
     docId,
     isComposing: composing,

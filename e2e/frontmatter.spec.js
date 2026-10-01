@@ -59,7 +59,7 @@ test('F-155 A3·A4 열자마자 본문 첫 줄, Ctrl+Home·위젯 클릭·위 �
   await page.keyboard.type('A')
   expect((await readSavedContent(page, docId)).content).toContain('---\nAX본문 문단')
 
-  await page.locator('.md-frontmatter-widget table').click()
+  await page.locator('.md-frontmatter-widget th').first().click()
   await page.keyboard.type('B')
   expect((await readSavedContent(page, docId)).content).toContain('---\nBAX본문 문단')
 

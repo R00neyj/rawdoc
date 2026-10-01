@@ -1,6 +1,12 @@
-// specs/features/F-133.md 4장 A1·A4
+// specs/features/F-133.md 4장 A1·A4, specs/features/F-2113.md 7장 A1~A4
 import { describe, expect, it } from 'vitest'
-import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from '../../../src/lib/frontmatter'
+import {
+  findFrontmatter,
+  frontmatterValueRanges,
+  frontmatterValueWrite,
+  parseSimpleProperties,
+  textAfterFrontmatter,
+} from '../../../src/lib/frontmatter'
 
 describe('findFrontmatter — 범위 찾기 (A1)', () => {
   it('---\\na: 1\\n---\\n본문 을 인식한다', () => {
@@ -106,4 +112,126 @@ describe('parseSimpleProperties — 속성 해석 (A4)', () => {
   it('키:값 형식도 목록 항목도 아니면 null', () => {
     expect(parseSimpleProperties('그냥 문장입니다')).toBeNull()
   })
+})
+
+// F-2113 3.1 표 — [문서, [key, kind, 원문 구간][]]
+const RANGE_CASES: [string, [string, 'scalar' | 'listItem', string][]][] = [
+  ['---\na: 1\n---\n본문', [['a', 'scalar', '1']]],
+  ['---\nb: "x y" # 메모\n---\nx', [['b', 'scalar', '"x y" # 메모']]],
+  ['---\ntags:\n  - one\n  - \'two\'\n---\nx', [['tags', 'listItem', 'one'], ['tags', 'listItem', "'two'"]]],
+  ['---\nc:\n---\nx', [['c', 'scalar', '']]],
+  ['---\nk:\t  v  \n---\nx', [['k', 'scalar', 'v  ']]],
+  ['---\nurl: http://x:1\n---\nx', [['url', 'scalar', 'http://x:1']]],
+  ['---\na: b\n  - c\n---\nx', [['a', 'listItem', 'c']]],
+  ['---\r\na: 1\r\ntags:\r\n  - x\r\n---\r\n본문', [['a', 'scalar', '1'], ['tags', 'listItem', 'x']]],
+]
+
+function stripQuotes(value: string): string {
+  if (value.length >= 2 && ((value[0] === '"' && value.endsWith('"')) || (value[0] === "'" && value.endsWith("'")))) {
+    return value.slice(1, -1)
+  }
+  return value
+}
+
+function contentOf(doc: string): string {
+  const fm = findFrontmatter(doc)!
+  return doc.slice(fm.contentFrom, fm.contentTo)
+}
+
+describe('frontmatterValueRanges — 값 위치 (F-2113 A1)', () => {
+  it.each(RANGE_CASES)('%j', (doc, expected) => {
+    const ranges = frontmatterValueRanges(doc)
+    expect(ranges.map((r) => [r.key, r.kind, doc.slice(r.from, r.to)])).toEqual(expected)
+  })
+
+  it('offset 은 문서 절대 위치 — a: 1 은 7–8', () => {
+    expect(frontmatterValueRanges('---\na: 1\n---\n본문')).toEqual([{ key: 'a', kind: 'scalar', from: 7, to: 8 }])
+  })
+
+  it('빈 값 c: 는 from === to === 줄 끝', () => {
+    const [r] = frontmatterValueRanges('---\nc:\n---\nx')
+    expect(r.from).toBe(6)
+    expect(r.to).toBe(6)
+  })
+
+  it('CRLF — \\r 미포함, 8–9 와 22–23', () => {
+    const ranges = frontmatterValueRanges('---\r\na: 1\r\ntags:\r\n  - x\r\n---\r\n본문')
+    expect(ranges.map((r) => [r.from, r.to])).toEqual([
+      [8, 9],
+      [22, 23],
+    ])
+  })
+
+  it.each([
+    '---\n  - x\n---\nx',
+    '---\nparent:\n  child: 1\n---\nx',
+    '---\na: |\n  t\n---\nx',
+    '# 제목',
+  ])('해석 불가 %j 는 []', (doc) => {
+    expect(frontmatterValueRanges(doc)).toEqual([])
+  })
+})
+
+describe('frontmatterValueRanges — 표시 대응 (F-2113 A2)', () => {
+  it.each(RANGE_CASES)('%j 의 칸 표시 = 파서 값 펼친 목록', (doc) => {
+    const shown = frontmatterValueRanges(doc).map((r) => stripQuotes(doc.slice(r.from, r.to).trim()))
+    const parsed = parseSimpleProperties(contentOf(doc))!.flatMap((p) => (Array.isArray(p.value) ? p.value : [p.value]))
+    expect(shown).toEqual(parsed)
+  })
+})
+
+describe('frontmatterValueWrite — 쓰기 구간 (F-2113 A3)', () => {
+  it('"웹"→"웹앱" 은 끝에 앱 삽입 하나', () => {
+    expect(frontmatterValueWrite('웹', 10, '웹앱', ' ')).toEqual({
+      change: { from: 11, to: 11, insert: '앱' },
+      range: { from: 10, to: 12 },
+    })
+  })
+
+  it('같으면 change: null', () => {
+    expect(frontmatterValueWrite('웹', 10, '웹', ' ')).toEqual({ change: null, range: { from: 10, to: 11 } })
+  })
+
+  it('c: 빈 값 첫 쓰기는 " x", range.from = from+1', () => {
+    expect(frontmatterValueWrite('', 6, 'x', ':')).toEqual({
+      change: { from: 6, to: 6, insert: ' x' },
+      range: { from: 7, to: 8 },
+    })
+  })
+
+  it('c:  (콜론 뒤 공백 있는) 빈 값은 공백을 안 붙인다', () => {
+    expect(frontmatterValueWrite('', 7, 'x', ' ')).toEqual({
+      change: { from: 7, to: 7, insert: 'x' },
+      range: { from: 7, to: 8 },
+    })
+  })
+
+  it('a:b 처럼 붙은 값은 공백을 안 붙인다', () => {
+    expect(frontmatterValueWrite('b', 6, 'bc', ':')).toEqual({
+      change: { from: 7, to: 7, insert: 'c' },
+      range: { from: 6, to: 8 },
+    })
+  })
+
+  it('c: 빈 값에 빈 문자열은 change: null', () => {
+    expect(frontmatterValueWrite('', 6, '', ':')).toEqual({ change: null, range: { from: 6, to: 6 } })
+  })
+})
+
+describe('frontmatterValueWrite — 구조 유지 (F-2113 A4)', () => {
+  const REPLACEMENTS = ['- x', ': y', '# c', '"', "'a", '---', '...', '|', '> t', '[1, 2]', "''"]
+  const docs = RANGE_CASES.map(([doc]) => doc)
+
+  for (const doc of docs) {
+    const before = frontmatterValueRanges(doc)
+    before.forEach((range, cell) => {
+      it.each(REPLACEMENTS)(`${JSON.stringify(doc)} 칸 ${cell} ← %j`, (next) => {
+        const current = doc.slice(range.from, range.to)
+        const { change } = frontmatterValueWrite(current, range.from, next, doc.slice(range.from - 1, range.from))
+        const written = change ? doc.slice(0, change.from) + change.insert + doc.slice(change.to) : doc
+        expect(parseSimpleProperties(contentOf(written))).not.toBeNull()
+        expect(frontmatterValueRanges(written).map((r) => [r.key, r.kind])).toEqual(before.map((r) => [r.key, r.kind]))
+      })
+    })
+  }
 })

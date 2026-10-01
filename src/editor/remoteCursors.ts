@@ -10,6 +10,7 @@ import type { PeerCursor } from '../lib/docRoomProtocol'
 import { peerColorIndex, peerLabel, readPeerState } from '../lib/peers'
 import { isForced } from './composition'
 import { REMOTE_HOLD_CHECK_MS, compositionAlive } from './remoteGate'
+import { isFrontmatterCompositionStarted } from './preview/frontmatterEdit'
 import { isCellCompositionStarted } from './preview/tableWidget'
 
 export const CURSOR_SEND_MS = 250
@@ -203,7 +204,7 @@ type AwarenessChange = { added: number[]; updated: number[]; removed: number[] }
 
 // 조합 판정은 F-303 5.1 과 같다
 function composing(view: EditorView): boolean {
-  return view.compositionStarted || isCellCompositionStarted(view)
+  return view.compositionStarted || isCellCompositionStarted(view) || isFrontmatterCompositionStarted(view)
 }
 
 function toIndex(json: unknown, ytext: Y.Text, max: number): number | null {

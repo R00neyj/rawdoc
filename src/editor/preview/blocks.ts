@@ -13,6 +13,7 @@ import { createCodeCopyButton } from '../../lib/codeCopyButton'
 import { displayLang, isMermaidInfo } from '../../lib/codeLang'
 import { isComposing, isForced } from '../composition'
 import { isEditorFocused } from './active'
+import { isFrontmatterComposing } from './frontmatterEdit'
 import type { ResolveAttachment } from './imageWidget'
 import { ImageWidget, destroyImageCache } from './imageWidget'
 import { MathBlockWidget } from './mathWidget'
@@ -393,7 +394,7 @@ export function blockPreview({ resolveAttachment, theme }: { resolveAttachment?:
         // 안 넣으면 긴 문서 뒷부분(첫 파싱이 못 미친 곳)의 위젯이 다음 문서·선택 변화까지 늦게 생긴다
         const treeChanged = syntaxTree(tr.startState) !== syntaxTree(tr.state)
         if (!tr.docChanged && !tr.selection && !treeChanged) return value
-        if (isComposing(viewRef.current) || isCellComposing(viewRef.current)) {
+        if (isComposing(viewRef.current) || isCellComposing(viewRef.current) || isFrontmatterComposing(viewRef.current)) {
           return tr.docChanged ? { ...value, deco: value.deco.map(tr.changes), stale: true } : value
         }
         // 선택만 바뀌었고 어느 블록도 위젯↔원문이 바뀌지 않으면 다시 만들어도 같은 결과다 — 문서 전체 순회·파싱을 건너뛴다 (리뷰 E6)

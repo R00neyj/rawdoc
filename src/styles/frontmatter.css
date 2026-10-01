@@ -102,18 +102,50 @@
   word-break: break-word;
 }
 
-/* 마우스를 올렸을 때만 보이는 안내 문구 (F-155 2.2) */
-.md-frontmatter-widget-hint {
-  position: absolute;
-  top: 4px;
-  right: 8px;
-  font-size: 12px;
-  color: var(--muted);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--transition-fast);
+/* 값 칸 (F-2113 2.1) — 목록 항목은 칸마다 세로로 쌓는다. 빈 값도 누를 수 있게 한 줄 높이를 둔다 */
+.md-frontmatter-widget .md-frontmatter-value {
+  min-height: 1lh;
+  cursor: text;
+  overflow-wrap: anywhere;
 }
 
-.md-block.md-frontmatter-widget:hover .md-frontmatter-widget-hint {
-  opacity: 1;
+.md-frontmatter-widget .md-frontmatter-value + .md-frontmatter-value {
+  margin-top: 2px;
+}
+
+/* 읽기 전용(주 편집기 contenteditable=false)이면 값 칸이 편집 가능해 보이지 않는다 */
+.cm-content[contenteditable='false'] .md-frontmatter-widget .md-frontmatter-value {
+  cursor: default;
+}
+
+.md-frontmatter-widget .md-frontmatter-value-editing {
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--accent-ring);
+}
+
+/* 하위 편집기는 주 편집기 .cm-scroller 안이라 본문 여백·현재 줄 강조를 물려받는다 — 칸 안에서 끈다(표 칸 편집기와 같은 이유) */
+.md-frontmatter-widget .md-frontmatter-value-editing .cm-editor {
+  outline: none;
+}
+
+.md-frontmatter-widget .md-frontmatter-value-editing .cm-editor .cm-scroller {
+  padding: 0;
+  font-family: inherit;
+  line-height: inherit;
+}
+
+.md-frontmatter-widget .md-frontmatter-value-editing .cm-editor .cm-content {
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.md-frontmatter-widget .md-frontmatter-value-editing .cm-editor .cm-line {
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.md-frontmatter-widget .md-frontmatter-value-editing .cm-activeLine {
+  background: none;
 }

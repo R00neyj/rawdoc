@@ -11,6 +11,7 @@ import type { AnchorRange, CommentAnchor, CommentThread } from '../lib/docCommen
 import { Y_COMMENTS_NAME } from '../lib/docRoomProtocol'
 import { forceRecalc, isForced } from './composition'
 import { REMOTE_HOLD_CHECK_MS, compositionAlive } from './remoteGate'
+import { isFrontmatterCompositionStarted } from './preview/frontmatterEdit'
 import { isCellCompositionStarted } from './preview/tableWidget'
 
 export const COMMENT_RERESOLVE_MS = 300
@@ -503,7 +504,7 @@ function markerFor(count: number): CommentGutterMarker | null {
 }
 
 function composing(view: EditorView): boolean {
-  return view.compositionStarted || isCellCompositionStarted(view)
+  return view.compositionStarted || isCellCompositionStarted(view) || isFrontmatterCompositionStarted(view)
 }
 
 const commentGutterConfig = {

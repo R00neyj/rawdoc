@@ -1,5 +1,6 @@
 // YAML 프론트매터 범위 찾기·단순 속성 해석 (specs/features/F-133.md 3.1·3.3)
 // 순수 함수, DOM·CM6·markdown-it 다루지 않음 — 각 소비자가 따로 쓴다. YAML 라이브러리는 쓰지 않는다(F-133 2장) — 여기 규칙이 전부다
+import { diffText } from './textRebase'
 
 const OPEN_RE = /^---[ \t]*$/
 const CLOSE_RE = /^(---|\.\.\.)[ \t]*$/
@@ -111,4 +112,67 @@ export function parseSimpleProperties(content: string): FrontmatterProperty[] | 
   }
 
   return result
+}
+
+// 칸 원문 → 비편집 표시 글자(= parseSimpleProperties 값) (F-2113 2.1)
+export function frontmatterValueText(raw: string): string {
+  return stripQuotes(raw.trim())
+}
+
+export type FrontmatterValueRange = { key: string; kind: 'scalar' | 'listItem'; from: number; to: number }
+
+const LINE_BREAK_RE = /\r\n|\r|\n/g
+
+// 편집 칸마다 값 원문 구간(문서 절대 offset). 줄 규칙은 parseSimpleProperties 와 같고, 해석 불가면 [] (F-2113 3.1)
+export function frontmatterValueRanges(text: string): FrontmatterValueRange[] {
+  const fm = findFrontmatter(text)
+  if (!fm) return []
+  const content = text.slice(fm.contentFrom, fm.contentTo)
+  if (parseSimpleProperties(content) === null) return []
+
+  const result: FrontmatterValueRange[] = []
+  let head: { scalar: FrontmatterValueRange; items: FrontmatterValueRange[] } | null = null
+  const flush = () => {
+    if (head) result.push(...(head.items.length > 0 ? head.items : [head.scalar]))
+  }
+
+  let lineStart = fm.contentFrom
+  for (const rawLine of content.split(LINE_BREAK_RE)) {
+    const from = lineStart
+    const to = from + rawLine.length
+    lineStart = to + (text[to] === '\r' && text[to + 1] === '\n' ? 2 : 1)
+    if (rawLine.trim() === '') continue
+
+    if (/^[ \t]/.test(rawLine)) {
+      const listMatch = LIST_ITEM_RE.exec(rawLine)
+      if (!listMatch || !head) return []
+      head.items.push({ key: head.scalar.key, kind: 'listItem', from: to - listMatch[1].length, to })
+      continue
+    }
+    if (rawLine.startsWith('#')) continue
+
+    const match = KEY_VALUE_RE.exec(rawLine)
+    if (!match) return []
+    flush()
+    head = { scalar: { key: match[1].trim(), kind: 'scalar', from: to - match[2].length, to }, items: [] }
+  }
+  flush()
+  return result
+}
+
+// 칸 값 next 를 쓸 바뀐 구간과 쓴 뒤 세션 구간. 콜론 바로 뒤 빈 값의 첫 쓰기만 공백 1개를 앞에 붙인다 (F-2113 3.2)
+export function frontmatterValueWrite(
+  current: string,
+  from: number,
+  next: string,
+  charBefore: string,
+): { change: { from: number; to: number; insert: string } | null; range: { from: number; to: number } } {
+  if (current === '' && charBefore === ':' && next !== '') {
+    return { change: { from, to: from, insert: ` ${next}` }, range: { from: from + 1, to: from + 1 + next.length } }
+  }
+  const edit = diffText(current, next)
+  return {
+    change: edit ? { from: from + edit.from, to: from + edit.to, insert: edit.insert } : null,
+    range: { from, to: from + next.length },
+  }
 }

@@ -9,7 +9,8 @@ import type { BlockContext } from '@lezer/markdown'
 import type { SyntaxNode } from '@lezer/common'
 
 import { findFrontmatter, parseSimpleProperties } from '../lib/frontmatter'
-import { isComposing } from './composition'
+import { isComposing, isForced } from './composition'
+import { isFrontmatterComposing, trackFrontmatterEdit } from './preview/frontmatterEdit'
 import { FrontmatterWidget } from './preview/frontmatterWidget'
 
 // pos 앞에 있는 줄 종결자(\r\n 또는 \n)를 뗀 위치 — 여는 마커 범위 계산용
@@ -114,8 +115,13 @@ export function frontmatterWidgetExtension(): Extension {
   const field = StateField.define({
     create: (state) => frontmatterDecorations(state),
     update(value, tr) {
+      // 조합 보류와 무관하게 값 칸 세션 범위를 옮기고, 읽기 전용 전환도 알린다 (F-2113 4.4·5.2)
+      if (tr.docChanged || tr.startState.readOnly !== tr.state.readOnly) trackFrontmatterEdit(viewRef.current, tr)
+      const forced = isForced(tr)
+      // 값 칸 조합 중엔 같은 위젯 인스턴스를 지켜 하위 view DOM 을 살린다 — compositionend 의 forceRecalc 가 따라잡는다
+      if (!forced && isFrontmatterComposing(viewRef.current)) return tr.docChanged ? value.map(tr.changes) : value
       const treeChanged = syntaxTree(tr.startState) !== syntaxTree(tr.state)
-      if (!tr.docChanged && !treeChanged) return value
+      if (!forced && !tr.docChanged && !treeChanged) return value
       return frontmatterDecorations(tr.state)
     },
     provide: (f) => EditorView.decorations.from(f),
