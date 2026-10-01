@@ -10,6 +10,7 @@ import { PUSH_SHARE_DEDUPE_MS } from '../src/lib/pushPayload'
 import { sharePushPayload } from '../src/lib/pushText'
 import type { VapidAuth } from './webPush'
 import { pushInBackground, pushToEmail } from './pushSend'
+import { shareNotificationDeleteStatements, shareNotificationInsertStatements } from './shareNotifications'
 
 type TargetType = 'doc' | 'folder'
 
@@ -132,6 +133,7 @@ async function handlePutGrant(
        RETURNING created_at`,
     ).bind(targetType, params.id, user.id, email, role, now),
     dayUsageStatement(env.DB, user.id, now),
+    ...shareNotificationInsertStatements(env.DB, { targetType, targetId: params.id, email, id: crypto.randomUUID(), actorEmail: user.email, name: check.name, role, now }),
   ])) as Array<{ results?: Array<{ created_at?: number }> } | undefined>
 
   const response = jsonResponse({ email, role })
@@ -163,6 +165,7 @@ async function handleDeleteGrant(
       email,
     ),
     dayUsageStatement(env.DB, user.id, Date.now()),
+    ...shareNotificationDeleteStatements(env.DB, { targetType, targetId: params.id, email }),
   ])
   const response = new Response(null, { status: 204 })
   if (targetType === 'doc') await notifyRevalidate(env, ctx, params.id, email)

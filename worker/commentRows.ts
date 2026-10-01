@@ -79,9 +79,9 @@ const DOC_NOTIFICATIONS_WHERE = 'doc_id = ?'
 const FOLDER_DOCS = 'SELECT id FROM docs WHERE owner_id = ?1 AND folder_id IN (SELECT value FROM json_each(?2))'
 const WROTE_KEY = 'EXISTS (SELECT 1 FROM docs WHERE id = ?1 AND e2ee_key = ?2)'
 const OWNER_DOCS = 'SELECT id FROM docs WHERE owner_id = ?1'
-const FOLDER_NOTIFICATIONS_WHERE = `doc_id IN (${FOLDER_DOCS})`
+const FOLDER_NOTIFICATIONS_WHERE = `doc_id IN (${FOLDER_DOCS}) OR folder_id IN (SELECT value FROM json_each(?2))`
 const E2EE_NOTIFICATIONS_WHERE = `doc_id = ?1 AND ${WROTE_KEY}`
-const ACCOUNT_NOTIFICATIONS_WHERE = `doc_id IN (${OWNER_DOCS}) OR recipient_email = ?2`
+const ACCOUNT_NOTIFICATIONS_WHERE = `doc_id IN (${OWNER_DOCS}) OR folder_id IN (SELECT id FROM folders WHERE owner_id = ?1) OR recipient_email = ?2`
 
 // 받는 사람 리비전 → 알림 지우기, 같은 WHERE·같은 바인딩
 function deleteNotificationsStatements(db: D1Database, where: string, ...args: unknown[]): D1PreparedStatement[] {

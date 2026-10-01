@@ -650,4 +650,19 @@ export type NotificationItem = {
   readAt: number | null
 }
 export type NotificationsResponse = { items: NotificationItem[]; unread: number }
+export const INBOX_NOTIFICATION_KINDS = ['mention', 'reply', 'comment', 'share'] as const
+export type InboxNotificationKind = (typeof INBOX_NOTIFICATION_KINDS)[number]
+export type ShareNotificationItem = {
+  id: string
+  kind: 'share'
+  target: 'doc' | 'folder'
+  targetId: string
+  name: string
+  role: 'view' | 'edit'
+  actorEmail: string
+  createdAt: number
+  readAt: number | null
+}
+export type InboxNotificationItem = NotificationItem | ShareNotificationItem
+export type InboxNotificationsResponse = { items: InboxNotificationItem[]; unread: number }
 export type NotificationsReadBody = { ids: string[] } | { all: true }

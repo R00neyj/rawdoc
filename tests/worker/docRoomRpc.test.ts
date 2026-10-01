@@ -143,6 +143,8 @@ describe('F-304 A24 배선', () => {
                   return { meta: { changes: 1 } }
                 }
                 if (sql.startsWith('UPDATE users SET')) return { meta: { changes: 1 } }
+                // F-3012 — 초대 알림 행 넣기·300개 정리
+                if (sql.startsWith('INSERT INTO notifications') || sql.startsWith('WITH cut')) return { meta: { changes: 0 } }
                 throw new Error(`unhandled run sql: ${sql}`)
               },
             }

@@ -7,7 +7,9 @@ const NO_DOC = (table: string) => `NOT EXISTS (SELECT 1 FROM docs WHERE docs.id 
 
 const ORPHAN_ROWS_SQL = `DELETE FROM doc_comments WHERE ${NO_DOC('doc_comments')}`
 const OLD_WHERE = 'created_at < ?'
-const ORPHAN_WHERE = NO_DOC('notifications')
+const NO_INVITE =
+  "NOT EXISTS (SELECT 1 FROM grants g WHERE g.target_type = CASE WHEN notifications.folder_id IS NULL THEN 'doc' ELSE 'folder' END AND g.target_id = COALESCE(notifications.doc_id, notifications.folder_id) AND g.grantee_email = notifications.recipient_email)"
+const ORPHAN_WHERE = `(kind <> 'share' AND ${NO_DOC('notifications')}) OR (kind = 'share' AND ${NO_INVITE})`
 const OLD_NOTIFICATIONS_SQL = `DELETE FROM notifications WHERE ${OLD_WHERE}`
 const ORPHAN_NOTIFICATIONS_SQL = `DELETE FROM notifications WHERE ${ORPHAN_WHERE}`
 // 300개를 넘는 받는 사람만 골라 300번째 행을 한 번 찾는다. 리비전은 넣기 때 TRIM 과 함께 이미 올랐다 (F-2057 3.5 ⑦, F-2075 3.3)
