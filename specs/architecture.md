@@ -248,7 +248,7 @@ type YjsMetaRow = {
 
 | 키 | 값 | 기본 | 명세 |
 | --- | --- | --- | --- |
-| `md.viewMode` | `live` \| `raw` \| `view` (화면 문구는 `편집` `원문` `보기`) | `live` | F-107, F-122, F-123 |
+| `md.viewMode` | `live` \| `raw` \| `view` (화면 문구는 `편집` `원문` `보기`) | `live` | F-107, F-122, F-123, F-2112(부팅 초기값은 `md.defaultView` 가 `remember` 일 때만) |
 | `md.openFolders` | 펼친 폴더 id 배열 (JSON) | `[]` | F-126 |
 | `md.headingFont` | `serif` \| `sans` | `serif` | F-121 |
 | `md.bodyFont` | `sans` \| `serif` | `sans` | F-141 |
@@ -263,6 +263,7 @@ type YjsMetaRow = {
 | `md.firstRunDone` | `1` | 없음 | F-111 |
 | `md.persistNoticeShown` | `1` | 없음 | F-118 |
 | `md.startScreen` | `home` \| `last` | `home` | F-232 3.4 |
+| `md.defaultView` | `remember` \| `live` \| `raw` \| `view` (화면 문구는 `기억` `편집` `원문` `보기`) | `remember` | F-2112 |
 | `md.mapView` | JSON — 묶음 단위 객체 `{ display, force, filter }`. **`파일 검색` 입력은 여기 넣지 않는다** — 지도를 열 때마다 비운다 (F-2007 6.2) | 없음 | F-292 개정판 6.11 (F-2005, F-2007) |
 | `md.mapGroups` | JSON — 그룹 쿼리 + 팔레트 인덱스 `1`~`8` | 없음 | F-292 개정판 6.5 (F-2008) |
 | `md.toolbar` | `on` \| `off` | `on` | F-233 3.5 |
