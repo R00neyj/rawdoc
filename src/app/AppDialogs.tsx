@@ -71,6 +71,7 @@ export type AppDialogsProps = Pick<UseAccountStatusResult, 'account' | 'recheckA
     listSource: Pick<Store, 'list' | 'listFolders'>
     moveDocTarget: MoveDocTarget | null
     openDocFromSearch: (id: string, term: string | null) => Promise<void>
+    openSettings: () => void
     runE2eeMigrateFlow: (keys: LocalE2eeKeys, bundle: string) => Promise<void>
     searchDialogScope: string
     searchOffline: boolean
@@ -91,7 +92,7 @@ export default function AppDialogs({
   confirmBulkDelete, confirmDelete, confirmImport, confirmMoveDoc, contentWidthPref, contextMenu, deleteTarget, e2ee, e2eeConvertText,
   e2eeLockMinutesPref, e2eeMigrateAsk, e2eeMigrateDialogOpen, exportOffline, finishAccountDelete, folders, fontSizePref, handleContextMenuSelect,
   handleExportAll, handleExportVault, handleImportTargetChange, headingFont, importState, indentPref, inviteTarget, lineNumbersPref, listSource,
-  moveDocTarget, newDocTemplatePref, openDocFromSearch, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
+  moveDocTarget, newDocTemplatePref, openDocFromSearch, openSettings, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
   requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
   setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref, toolbarPref,
   wikiPreviewPref, changeDefaultView, defaultViewPref,
@@ -208,6 +209,7 @@ export default function AppDialogs({
         userCss={{ accountId: userCssAccountId(account) }}
         account={settingsAccount}
         push={settingsPush}
+        onOpen={openSettings}
         onClose={closeSettings}
       />
       {e2ee?.dialogs}

@@ -59,11 +59,11 @@ export function replaceAppEntry(url: string): void {
   publish(pos!)
 }
 
-export function pushAppEntry(url: string): void {
+export function pushAppEntry(url: string, extra?: { settings: string }): void {
   const { unmarked } = ensureInit()
   if (unmarked) history.replaceState({ navIdx: pos!.idx }, '')
   const next = navOnPush(pos!)
-  history.pushState({ navIdx: next.idx }, '', url)
+  history.pushState({ navIdx: next.idx, ...extra }, '', url)
   publish(next)
 }
 

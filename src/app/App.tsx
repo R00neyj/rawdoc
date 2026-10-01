@@ -1344,7 +1344,7 @@ export default function App() {
         contentWidthPref, contextMenu, deleteTarget, e2ee, e2eeConvertText, e2eeLockMinutesPref, e2eeMigrateAsk, e2eeMigrateDialogOpen,
         exportOffline, finishAccountDelete, folders, fontSizePref, handleContextMenuSelect, handleExportAll, handleExportVault,
         handleImportTargetChange, headingFont, importState, indentPref, inviteTarget, lineNumbersPref, listSource, moveDocTarget,
-        newDocTemplatePref, openDocFromSearch, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
+        newDocTemplatePref, openDocFromSearch, openSettings, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
         requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
         setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref,
         toolbarPref, wikiPreviewPref,

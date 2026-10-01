@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import Dialog from './Dialog'
+import SettingsPageShell from './SettingsPageShell'
+import { usePhoneWidth } from './usePhoneWidth'
+import { useSettingsPages } from './useSettingsPages'
+import { settingsPagesMode } from './settingsPages'
 import PushSettings from './PushSettings'
 import UserCssTab from './UserCssTab'
 import type { PushSettingsView } from './pushClient'
@@ -114,22 +118,6 @@ export type SettingsE2ee = {
   onReset: () => void
   onLockNow: () => void
   onRetry: () => void
-}
-
-// 대화상자 폭이 460px 아래로 줄면 탭 목록을 가로로 눕힌다 (F-290.md 3.5). app.css 의 같은 값과 맞춘다
-const NARROW_QUERY = '(max-width: 459px)'
-
-function useSettingsNarrow(): boolean {
-  const [narrow, setNarrow] = useState(() => (typeof window !== 'undefined' ? window.matchMedia(NARROW_QUERY).matches : false))
-  useEffect(() => {
-    const mql = window.matchMedia(NARROW_QUERY)
-    function handle(e: MediaQueryListEvent) {
-      setNarrow(e.matches)
-    }
-    mql.addEventListener('change', handle)
-    return () => mql.removeEventListener('change', handle)
-  }, [])
-  return narrow
 }
 
 type SegmentOption = { value: string; label: string; fontVar?: string }
@@ -346,6 +334,7 @@ type SettingsDialogProps = {
   account?: SettingsAccount
   // `계정` 탭 `알림` 묶음 — account 와 함께 있을 때만 그린다 (F-2110 6.1)
   push?: SettingsPush
+  onOpen?: () => void
   onClose: () => void
 }
 
@@ -385,13 +374,14 @@ export default function SettingsDialog({
   userCss,
   account,
   push,
+  onOpen,
   onClose,
 }: SettingsDialogProps) {
   const titleId = 'settings-title'
   const checkedRef = useRef<HTMLButtonElement | null>(null) // 탭이 없을 때 초점: 테마의 현재 선택 버튼 (3.3)
   const activeTabButtonRef = useRef<HTMLButtonElement | null>(null) // 탭이 있을 때 초점: 활성 탭 버튼
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
-  const narrow = useSettingsNarrow()
+  const phone = usePhoneWidth()
 
   // 들여쓰기·줄 번호는 CM6 편집 영역 전용 — 넷 다 있을 때만 그린다(공개 보기 화면은 안 줌, F-230 2.2)
   const showEditorSettings = indent !== undefined && onChangeIndent !== undefined && lineNumbers !== undefined && onChangeLineNumbers !== undefined
@@ -419,6 +409,19 @@ export default function SettingsDialog({
     }
   }
 
+  const pagesMode = settingsPagesMode(phone, tabs.length)
+  const pages = useSettingsPages({ open, enabled: pagesMode, tabs, onOpen, onClose })
+  const [pagesSeen, setPagesSeen] = useState(pagesMode)
+  if (pagesMode !== pagesSeen) {
+    setPagesSeen(pagesMode)
+    if (!pagesMode && open && pages.page !== null && pages.page !== 'list') {
+      resolvedActiveTab = pages.page
+      setActiveTab(pages.page)
+    }
+  }
+  const pageTab = pages.page !== null && pages.page !== 'list' ? pages.page : null
+  const visibleTab = pagesMode ? pageTab : resolvedActiveTab
+
   function handleTabKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
     const current = tabs.indexOf(resolvedActiveTab)
     const next = nextTabIndex(current, tabs.length, e.key)
@@ -430,15 +433,15 @@ export default function SettingsDialog({
 
   // 금고 탭이 보이게 될 때마다(누르거나 방향키로 옮겨 올 때) 3.2 ① 읽기를 부른다 (F-404.md 7.5)
   useEffect(() => {
-    if (open && resolvedActiveTab === 'e2ee') e2ee?.onShown()
+    if (open && visibleTab === 'e2ee') e2ee?.onShown()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, resolvedActiveTab])
+  }, [open, visibleTab])
 
   // 계정 탭이 보일 때마다 푸시 상태를 다시 읽는다 (F-2110 6.1)
   useEffect(() => {
-    if (open && resolvedActiveTab === 'account') push?.onShown()
+    if (open && visibleTab === 'account') push?.onShown()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, resolvedActiveTab])
+  }, [open, visibleTab])
 
   function fieldsForTab(id: SettingsTabId): ReactNode {
     if (id === 'screen') {
@@ -671,6 +674,25 @@ export default function SettingsDialog({
     )
   }
 
+  if (pagesMode) {
+    return (
+      <Dialog open={open} onClose={onClose} titleId={titleId} size="full" initialFocusRef={activeTabButtonRef} onCancel={pages.onCancel}>
+        <SettingsPageShell
+          titleId={titleId}
+          page={pages.page}
+          tabs={tabs}
+          labels={TAB_LABELS}
+          firstRowRef={activeTabButtonRef}
+          onEnter={pages.enter}
+          onBack={pages.back}
+          onClose={pages.close}
+        >
+          {pageTab !== null && fieldsForTab(pageTab)}
+        </SettingsPageShell>
+      </Dialog>
+    )
+  }
+
   return (
     <Dialog
       open={open}
@@ -686,7 +708,7 @@ export default function SettingsDialog({
             className="settings-tabs"
             role="tablist"
             aria-label="설정 분류"
-            aria-orientation={narrow ? 'horizontal' : 'vertical'}
+            aria-orientation="vertical"
             onKeyDown={handleTabKeyDown}
           >
             {tabs.map((id, i) => {

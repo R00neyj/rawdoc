@@ -5,13 +5,14 @@ type DialogProps = {
   onClose: () => void
   titleId: string
   initialFocusRef?: RefObject<HTMLElement | null>
-  size?: 'default' | 'wide' | 'xwide'
+  size?: 'default' | 'wide' | 'xwide' | 'full'
+  onCancel?: (e: Event) => void
   describedById?: string
   children: ReactNode
 }
 
 // 대화상자 공통 컴포넌트 — 네이티브 <dialog> + showModal(), 포커스 이동/복귀와 Esc·바깥 클릭 닫기를 담당한다 (F-102.md 5.6)
-export default function Dialog({ open, onClose, titleId, initialFocusRef, size = 'default', describedById, children }: DialogProps) {
+export default function Dialog({ open, onClose, titleId, initialFocusRef, size = 'default', describedById, onCancel, children }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement | null>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)
 
@@ -49,13 +50,19 @@ export default function Dialog({ open, onClose, titleId, initialFocusRef, size =
       }
     }
 
+    function handleCancel(event: Event) {
+      if (event.target === dialog) onCancel?.(event)
+    }
+
     dialog.addEventListener('close', handleClose)
-    dialog.addEventListener('click', handleBackdropClick)
+    dialog.addEventListener('cancel', handleCancel)
+    if (size !== 'full') dialog.addEventListener('click', handleBackdropClick)
     return () => {
       dialog.removeEventListener('close', handleClose)
+      dialog.removeEventListener('cancel', handleCancel)
       dialog.removeEventListener('click', handleBackdropClick)
     }
-  }, [onClose])
+  }, [onClose, onCancel, size])
 
   return (
     <dialog
