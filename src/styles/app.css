@@ -2476,6 +2476,11 @@ body.sidebar-resizing {
   color: var(--muted);
 }
 
+/* `.dialog p` 의 아래 16px 이 위 8px 을 덮어 버튼 줄 아래 보조 문구가 붙어 보였다 — 버튼 줄 바로 뒤면 위로 (tweak 2026-10-01) */
+.dialog-actions + .dialog-note {
+  margin: 8px 0 0;
+}
+
 /* 검색 대화상자 (specs/features/F-287.md 4.1) */
 .search-input-row {
   display: flex;
