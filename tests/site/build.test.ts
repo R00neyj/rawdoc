@@ -37,7 +37,7 @@ describe('F-274 A6 페이지·색인 내용', () => {
     const out = buildSite({ content: {}, appCssHref, builtAt })
     expect(out['help.html']).toContain('<title>도움말 · Rawdoc</title>')
     expect(out['help.html']).toContain('rel="canonical" href="https://rawdoc.app/help"')
-    expect(out['help.html']).not.toContain('<script')
+    expect(out['help.html']).not.toMatch(/<script(?![^>]*type="application\/ld\+json")/)
   })
 
   it('sitemap.xml 에 /help 항목이 빌드 시각 lastmod 로 들어간다', () => {

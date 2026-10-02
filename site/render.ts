@@ -5,6 +5,7 @@ import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS } from '../src/lib/
 import { SITE_URL, SITE_DESCRIPTION } from '../src/lib/siteMeta'
 import { KIND_ALIASES } from '../src/lib/callout'
 import { calloutIconSvg } from '../src/lib/calloutIcons'
+import { jsonLdScript, sitePageGraph } from '../src/lib/structuredData'
 import brand from '../brand.config'
 import { siteHeadings, addHeadingIds, renderDocNav, renderToc, renderFold, insertFoldIntoBody, type DocNav } from './pageNav'
 
@@ -103,6 +104,7 @@ export function renderSitePage(input: { url: string; raw: string; appCssHref: st
     <meta property="og:image" content="${ogImage}" />
     <meta property="og:url" content="${canonical}" />
     <meta property="og:locale" content="ko_KR" />
+    ${jsonLdScript(sitePageGraph({ url: input.url, ...meta }))}
     <style>:root{--brand-accent:${brand.accent}}</style>
     <link rel="stylesheet" href="${input.appCssHref}" />
     <style>${SITE_CHROME_CSS}${SITE_DOC_CSS}</style>

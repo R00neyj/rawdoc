@@ -869,3 +869,6 @@
 | H810 | 공유 폴더 (F-2120) | 소유자가 공유 폴더에 새 문서 → 받는 사람 사이드바 `공유받음` 에 뜨기까지 초 | 대기 |
 | H811 | 실제 한글 IME (F-2120) | 본문·폴더 이름 입력 중 다른 곳에서 문서를 만들어도 조합이 깨지지 않고, 끝낸 뒤 목록이 붙는지 | 대기 |
 | H812 | 요청량 (F-2120) | 배포 전 7일·후 7일 Cloudflare 대시보드의 Workers 요청 수·D1 읽은 행(일 합계) | 대기 |
+| H813 | JSON-LD 리치 결과 테스트 (F-2121 H1) | 배포 뒤 Google 리치 결과 테스트에 `https://rawdoc.app/`·`/guides/account`·`/changelog` 입력. 구조화 데이터 파싱 오류가 없는지. 랜딩 `WebApplication` 은 `offers`·평점이 없어 필수 필드 누락이 예상됨 — 그 밖의 오류가 없으면 통과 | 대기 |
+| H814 | JSON-LD Article 감지 (F-2121 H2) | 같은 도구가 가이드 글을 Article 계열로 감지하는지. 감지하지 못하면 `TechArticle` → `Article` 한 줄 tweak | 대기 |
+| H815 | JSON-LD Search Console (F-2121 H3) | 배포 몇 주 뒤 Search Console 개선 사항 보고서에 구조화 데이터 오류 항목이 생겼는지 | 대기 |

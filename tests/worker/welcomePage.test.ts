@@ -36,6 +36,20 @@ describe('F-239 renderWelcomePage', () => {
     expect(html).toContain('name="theme-color" content="' + brand.accent + '"')
   })
 
+  it('F-2121 A10: 두 경로 모두 같은 JSON-LD 블록 하나가 og:locale 뒤, 첫 style 앞에 있다', async () => {
+    const re = /<script type="application\/ld\+json">[\s\S]*?<\/script>/g
+    const blocks: string[] = []
+    for (const opts of [undefined, { path: '/welcome' as const }]) {
+      const html = await renderWelcomePage(opts).text()
+      const found = html.match(re)!
+      expect(found).toHaveLength(1)
+      expect(html.indexOf('og:locale')).toBeLessThan(html.indexOf(found[0]))
+      expect(html.indexOf(found[0])).toBeLessThan(html.indexOf('<style>'))
+      blocks.push(found[0])
+    }
+    expect(blocks[0]).toBe(blocks[1])
+  })
+
   it('A4: X-Robots-Tag 헤더 없음', async () => {
     const res = renderWelcomePage()
     expect(res.headers.get('X-Robots-Tag')).toBeNull()

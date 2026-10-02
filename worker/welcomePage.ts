@@ -3,6 +3,7 @@ import brand from '../brand.config'
 import { EARLY_APP_KEYS, LANDING_DONE_KEY, buildAppCookie } from '../src/lib/appEntry'
 import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS, WELCOME_PATH } from '../src/lib/siteChrome'
 import { SITE_URL } from '../src/lib/siteMeta'
+import { jsonLdScript, landingGraph } from '../src/lib/structuredData'
 import {
   STORY_BASE_LINES,
   STORY_TERMINAL,
@@ -16,6 +17,7 @@ const pageTitle = `한국어로 쓰는 마크다운 협업 도구 — ${brand.na
 const subheadText = '##를 쳐도 기호가 사라지지 않고, 입력한 그대로 남습니다.'
 const ogImageUrl = new URL(brand.ogImage, siteUrl).href
 const ogUrl = siteUrl
+const landingJsonLd = jsonLdScript(landingGraph({ description: subheadText }))
 
 // 조기 판정·CTA 클릭 모두 같은 쿠키 문자열을 쓴다 — 키 문자열을 여기 다시 적지 않는다 (3.2)
 const cookieSecure = buildAppCookie({ secure: true })
@@ -259,6 +261,7 @@ export function renderWelcomePage(options?: { path?: LandingPath }): Response {
     <meta property="og:image" content="${ogImageUrl}" />
     <meta property="og:url" content="${ogUrl}" />
     <meta property="og:locale" content="ko_KR" />
+    ${landingJsonLd}
     <style>
       /* 색·서체·형태 값은 앱 화이트 테마(src/styles/tokens.css)와 같다. 워커가 돌려주는
          단일 HTML 이라 CSS 파일을 import 하지 않고 같은 값을 여기 다시 적는다 */

@@ -9,6 +9,9 @@ import { helpContent } from '../../site/helpPage'
 import { guidesIndexContent } from '../../site/guidesIndex'
 import { buildDocNav } from '../../site/pageNav'
 
+// 실행 스크립트 금지 — JSON-LD 데이터 블록(F-2121)만 허용
+const NON_LD_SCRIPT = /<script(?![^>]*type="application\/ld\+json")/
+
 describe('F-272 A2 renderSitePage 페이지 뼈대', () => {
   it('뼈대 요소가 모두 채워지고 스크립트·프론트매터 표가 없다', () => {
     const raw = '---\ntitle: 체인지로그\nsummary: 요약\n---\n본문 내용'
@@ -21,8 +24,29 @@ describe('F-272 A2 renderSitePage 페이지 뼈대', () => {
     expect(html).toMatch(/name="description" content="요약"/)
     expect(html).toMatch(/property="og:description" content="요약"/)
     expect(html).toContain('<link rel="stylesheet" href="/assets/index-abc.css" />')
-    expect(html).not.toContain('<script')
+    expect(html).not.toMatch(NON_LD_SCRIPT)
     expect(html).not.toContain('markdown-frontmatter')
+  })
+})
+
+describe('F-2121 A9 JSON-LD 배선', () => {
+  const ldBlocks = (html: string) => [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => m[1])
+
+  it('head 안에 블록이 하나이고 본문 노드 url 이 canonical 과 같다', () => {
+    const raw = '---\ntitle: 계정\nsummary: 요약\n---\n본문'
+    const { html } = renderSitePage({ url: '/guides/account', raw, appCssHref: '/a.css' })
+    const head = /<head>([\s\S]*?)<\/head>/.exec(html)![1]
+    const blocks = ldBlocks(head)
+    expect(blocks).toHaveLength(1)
+    expect(ldBlocks(html)).toHaveLength(1)
+    const node = JSON.parse(blocks[0])['@graph'][1]
+    expect(node['@type']).toBe('TechArticle')
+    expect(node.url).toBe(/rel="canonical" href="([^"]+)"/.exec(html)![1])
+  })
+
+  it('/changelog 는 WebPage', () => {
+    const { html } = renderSitePage({ url: '/changelog', raw: '---\ntitle: 체인지로그\n---\n본문', appCssHref: '/a.css' })
+    expect(JSON.parse(ldBlocks(html)[0])['@graph'][1]['@type']).toBe('WebPage')
   })
 })
 
@@ -53,7 +77,7 @@ describe('F-2036 A6 페이지 markup', () => {
     expect(html.match(/ id="/g)!.length).toBe([...html.matchAll(/<h[1-3] id=/g)].length)
 
     expect(html).toMatch(/<\/h1>\n?<details class="site-fold">/)
-    expect(html).not.toContain('<script')
+    expect(html).not.toMatch(NON_LD_SCRIPT)
   })
 })
 
