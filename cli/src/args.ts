@@ -181,7 +181,7 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       const force = parsed.values.force === true
       if (hasBaseVersion === force) {
         return usage(
-          `--base-version 또는 --force 가 필요합니다. ${brand.cliName} get ${id} --json 으로 지금 version 을 확인하세요.`,
+          `--base-version 또는 --force 가 필요합니다. ${brand.cliName} get ${id} --json 으로 내용과 version 을 함께 받아 고친 뒤 --base-version 으로 올리세요. --force 는 그 사이 바뀐 내용을 덮어씁니다.`,
           command,
         )
       }

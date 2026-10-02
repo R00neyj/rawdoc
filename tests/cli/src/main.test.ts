@@ -295,6 +295,18 @@ describe('F-2021 U16 main()', () => {
     expect(deps.stdoutLog.join('')).toBe('')
   })
 
+  it('put --help 가 get 먼저·판 번호·--force 위험을 안내한다', async () => {
+    const deps = baseDeps({ argv: ['put', '--help'] })
+    const code = await main(deps)
+    expect(code).toBe(0)
+    const text = deps.stdoutLog.join('')
+    expect(text).toContain('--base-version <n>')
+    expect(text).toContain('종료 코드 5')
+    expect(text).toContain('--force')
+    expect(text).toContain('확인 없이 덮어씁니다')
+    expect(text).toContain('get <id> -o 파일.md')
+  })
+
   it('F-2050 C13 도움말에 mv·rm·rmdir 줄이 순서대로', async () => {
     const deps = baseDeps({ argv: ['--help'] })
     const code = await main(deps)

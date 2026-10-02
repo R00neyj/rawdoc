@@ -53,7 +53,7 @@ const COMMAND_DESCRIPTIONS: Record<CommandName, string> = {
   ls: '내 문서 목록 (--shared: 공유받은 문서)',
   get: '문서 원문을 출력합니다',
   new: '새 문서를 만듭니다',
-  put: '문서를 고칩니다',
+  put: '문서를 고칩니다 (get 으로 받은 판 번호 --base-version 필요. 자세히: put --help)',
   mv: '문서를 다른 폴더로 옮깁니다',
   rm: '문서를 영구 삭제합니다 (--yes 필요)',
   folders: '폴더 목록',
@@ -72,8 +72,22 @@ function helpText(version: string): string {
   return lines.join('\n') + '\n'
 }
 
+// 한 줄 설명만으로 모자란 명령의 덧붙임 — put 은 판 번호만 맞춰 올리다 그 사이 저장분을 덮어쓰기 쉽다
+const COMMAND_DETAILS: Partial<Record<CommandName, string[]>> = {
+  put: [
+    '',
+    `사용: ${brand.cliName} put <id> [<파일>|-] [--title <제목>] (--base-version <n> | --force)`,
+    '  --base-version <n>  get 으로 받았을 때의 판 번호. 그 사이 서버 문서가 바뀌었으면 덮어쓰지 않고 종료 코드 5 로 멈춥니다',
+    '  --force             서버의 지금 판 위에 확인 없이 덮어씁니다. 그 사이 다른 곳에서 고친 내용이 사라집니다',
+    '',
+    `순서: ${brand.cliName} get <id> -o 파일.md 로 내용과 판 번호를 한 번에 받아 그 파일을 고친 뒤 put 하세요.`,
+    '판 번호만 다시 읽고 옛 내용을 올리면 번호는 맞아도 그 사이 저장분을 덮어씁니다.',
+  ],
+}
+
 function commandHelpText(command: CommandName): string {
-  return `${brand.cliName} ${command} — ${COMMAND_DESCRIPTIONS[command]}\n`
+  const lines = [`${brand.cliName} ${command} — ${COMMAND_DESCRIPTIONS[command]}`, ...(COMMAND_DETAILS[command] ?? [])]
+  return lines.join('\n') + '\n'
 }
 
 export type MainDeps = {

@@ -49,7 +49,7 @@ rawdoc login --with-token < token.txt
 | `ls --shared` | 공유받은 문서 목록(역할·소유자 이메일 포함) |
 | `get <id> [-o <파일>]` | 문서 원문을 출력하거나 파일로 받습니다 |
 | `new [<파일>\|-] [--title <제목>] [--folder <id>]` | 새 문서를 만듭니다 |
-| `put <id> [<파일>\|-] [--title <제목>] (--base-version <n>\|--force)` | 문서를 고칩니다 |
+| `put <id> [<파일>\|-] [--title <제목>] (--base-version <n>\|--force)` | 문서를 고칩니다. `--base-version` 은 `get` 으로 받았을 때의 판 번호이고, 그 사이 서버 문서가 바뀌었으면 종료 코드 5 로 멈춥니다. `--force` 는 확인 없이 덮어씁니다 |
 | `mv <id> (--folder <id>\|--root)` | 문서를 다른 폴더나 맨 위로 옮깁니다 |
 | `rm <id> --yes` | 문서를 영구 삭제합니다 |
 | `folders` | 폴더 목록 |
