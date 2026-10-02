@@ -121,6 +121,10 @@ describe('F-2021 U6 output.ts', () => {
     expect(text).toBe('d1\t1970-01-01T00:00:00Z\t제 목\n')
   })
 
+  it('humanDocList 는 금고 문서의 빈 제목 자리에 (금고 문서) 를 찍는다', () => {
+    expect(humanDocList([{ id: 'v1', updatedAt: 0, title: '', e2ee: true }])).toBe('v1\t1970-01-01T00:00:00Z\t(금고 문서)\n')
+  })
+
   it('humanFolderList 는 경로 오름차순, 탭으로 id·경로를 잇는다', () => {
     const folders = [
       { id: 'top', name: '나', parentId: null },

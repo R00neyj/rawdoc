@@ -220,10 +220,13 @@ export function isoUtcSeconds(ms: number): string {
   return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z')
 }
 
-type DocListItem = { id: string; updatedAt: number; title: string }
+type DocListItem = { id: string; updatedAt: number; title: string; e2ee?: true }
+
+// 금고 문서는 서버가 제목을 빈 문자열로 준다 — 빈칸 대신 표시를 찍는다
+const E2EE_TITLE = '(금고 문서)'
 
 export function humanDocList(docs: DocListItem[]): string {
-  return docs.map((d) => `${d.id}\t${isoUtcSeconds(d.updatedAt)}\t${stripControlChars(d.title)}\n`).join('')
+  return docs.map((d) => `${d.id}\t${isoUtcSeconds(d.updatedAt)}\t${d.e2ee ? E2EE_TITLE : stripControlChars(d.title)}\n`).join('')
 }
 
 type FolderListItem = FolderLike & { id: string }
