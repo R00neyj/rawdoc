@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import brand from '../../brand.config'
+import { GUIDES_PATH } from '../lib/siteChrome'
 import Dialog from './Dialog'
 import { listTokens, createToken, revokeToken, type ApiToken, type CreatedApiToken } from '../storage/apiTokensApi'
 
@@ -108,6 +110,13 @@ export default function ApiTokensDialog({ open, onClose }: ApiTokensDialogProps)
     <Dialog open={open} onClose={onClose} titleId={titleId} initialFocusRef={nameInputRef} size="wide">
       <h2 id={titleId}>API 토큰</h2>
       <p>스크립트나 자동화 도구가 이 계정으로 문서를 올릴 때 씁니다. 토큰을 가진 사람은 내 문서를 읽고 고칠 수 있습니다.</p>
+      <p className="dialog-note">
+        터미널에서는 토큰을 만들지 않고 바로 로그인할 수 있습니다. <code>npm i -g {brand.cliName}</code> 로 설치한 뒤{' '}
+        <code>{brand.cliName} login</code> 을 실행하세요.{' '}
+        <a href={`${GUIDES_PATH}/cli`} target="_blank" rel="noopener noreferrer">
+          명령줄 도구 사용법
+        </a>
+      </p>
 
       {created && (
         <div className="api-token-created">
