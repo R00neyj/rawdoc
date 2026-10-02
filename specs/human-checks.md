@@ -860,3 +860,5 @@
 | H801 | cli 글 | `/guides/cli` `스크립트·AI 도구에서 쓰기` 끝의 문법 안내 문단이 자연스러운지, `/help`·`/guides/callouts-math-diagrams`·`/guides/wiki-links` 링크 셋이 열리는지 | 대기 |
 | H802 | F-2118 8장 H1 | 문법을 모르는 새 Claude Code 세션에 "`npx -y rawdoc syntax` 를 보고 콜아웃 하나와 위키링크 하나가 든 문서를 `rawdoc new` 로 만들어" 라고만 시킨다 → 앱에서 열어 콜아웃이 색·아이콘으로, 위키링크가 링크로 보이는지(`[!note]제목` 처럼 붙여 쓰지 않는지). 발행(0.3.1) 뒤에 확인 | 대기 |
 | H803 | F-2118 8장 H2 | Windows PowerShell 5.1·Windows Terminal 에서 `rawdoc syntax` 출력의 한글·`·`·`—` 가 깨지지 않는지 | 대기 |
+| H804 | F-2119 12장 H1 | 실제 계정(폴더 8개·문서 24개)에서 Windows Terminal 로 `rawdoc ls --path` → 어느 문서가 어느 폴더인지 한눈에 읽히는지. 금고 문서 행이 `(금고 문서)` 로 보이고 탭 열이 크게 어긋나 읽기 힘든 줄이 없는지. 발행(0.3.2) 뒤에 확인 | 대기 |
+| H805 | F-2119 12장 H2 | 새 Claude Code 세션에 "`npx -y rawdoc --help` 를 보고 (실제 제목 일부) 문서가 어느 폴더에 있고 판 번호가 몇인지 알려 줘" 라고만 시킨다 → `ls --folder` 를 폴더마다 돌리지 않고 `find`·`ls --path`·`info` 로 3번 이하 호출에 답하는지 | 대기 |

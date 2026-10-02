@@ -6,6 +6,7 @@ import {
   errorToJson,
   exitCodeFor,
   humanAccountLine,
+  humanDocInfo,
   humanDocList,
   humanFolderList,
   humanIdLine,
@@ -327,5 +328,44 @@ describe('F-2031 A6 errorToJson — 새 코드', () => {
     expect('scope' in json).toBe(false)
     expect('retryAfter' in json).toBe(false)
     expect('resource' in json).toBe(false)
+  })
+})
+
+describe('F-2119 A4 경로 열·humanDocInfo', () => {
+  const base = { lineEnding: 'lf' as const, pinnedAt: null, version: 3, createdAt: 0, updatedAt: 86400000 }
+
+  it('path 가 없으면 기존 출력, 있으면 셋째 열 경로·넷째 열 제목', () => {
+    const docs = [
+      { id: 'a', title: '맨위', folderPath: [] as string[] | null, ...base },
+      { id: 'b', title: '안', folderPath: ['가', '나\n다'], ...base },
+      { id: 'c', title: '없음', folderPath: null, ...base },
+      { id: 'd', title: '', e2ee: true as const, folderPath: [], ...base },
+    ]
+    expect(humanDocList(docs)).toBe(
+      'a\t1970-01-02T00:00:00Z\t맨위\nb\t1970-01-02T00:00:00Z\t안\nc\t1970-01-02T00:00:00Z\t없음\nd\t1970-01-02T00:00:00Z\t(금고 문서)\n',
+    )
+    expect(humanDocList(docs, { path: true })).toBe(
+      'a\t1970-01-02T00:00:00Z\t/\t맨위\nb\t1970-01-02T00:00:00Z\t가/나 다\t안\nc\t1970-01-02T00:00:00Z\t?\t없음\nd\t1970-01-02T00:00:00Z\t/\t(금고 문서)\n',
+    )
+  })
+
+  it('humanDocInfo 키 순서', () => {
+    const mine = humanDocInfo({ id: 'a', title: '제목', folderPath: ['가'], ...base, pinnedAt: 0 })
+    expect(mine.split('\n').map((l) => l.split('\t')[0])).toEqual([
+      'id', 'title', 'folder', 'version', 'updatedAt', 'createdAt', 'lineEnding', 'pinnedAt', 'e2ee', '',
+    ])
+    expect(mine).toContain('folder\t가\n')
+    expect(mine).toContain('e2ee\tfalse\n')
+    expect(mine).toContain('pinnedAt\t1970-01-01T00:00:00Z\n')
+    const unpinned = humanDocInfo({ id: 'a', title: 't', folderPath: [], ...base, e2ee: true })
+    expect(unpinned).toContain('folder\t/\n')
+    expect(unpinned).toContain('pinnedAt\t-\n')
+    expect(unpinned).toContain('e2ee\ttrue\n')
+  })
+
+  it('공유받은 문서는 folder - 와 role·ownerEmail', () => {
+    const text = humanDocInfo({ id: 's', title: 't', folderPath: null, role: 'edit', ownerEmail: 'o@x.com', ...base })
+    expect(text).toContain('folder\t-\n')
+    expect(text.endsWith('role\t편집\nownerEmail\to@x.com\n')).toBe(true)
   })
 })

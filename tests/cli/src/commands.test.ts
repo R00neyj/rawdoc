@@ -1,6 +1,6 @@
 // F-2021 U8 (specs/features/F-2021.md 13.1, 4.2). ls 필터는 4.2 명령별 규칙
 import { describe, expect, it, vi } from 'vitest'
-import { ls, lsShared, moveDoc, putDoc, removeDoc, removeFolder } from '../../../cli/src/commands'
+import { find, info, ls, lsShared, moveDoc, putDoc, removeDoc, removeFolder } from '../../../cli/src/commands'
 import type { ClientConfig } from '../../../cli/src/client'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -107,7 +107,7 @@ describe('F-2021 U8 ls --folder', () => {
     ]
     const fetchImpl = vi.fn(async () => jsonResponse(docs))
     const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
-    const result = await ls(cfg, 'f1')
+    const result = await ls(cfg, { kind: 'folder', id: 'f1' }, false)
     expect(result.map((d) => d.id)).toEqual(['d1', 'd3'])
   })
 
@@ -115,7 +115,65 @@ describe('F-2021 U8 ls --folder', () => {
     const docs = [{ id: 'd1', folderId: 'f1' }]
     const fetchImpl = vi.fn(async () => jsonResponse(docs))
     const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
-    const result = await ls(cfg, null)
+    const result = await ls(cfg, { kind: 'all' }, false)
     expect(result.length).toBe(1)
+  })
+})
+
+describe('F-2119 A6~A8 ls --root, find, info', () => {
+  const mk = (id: string, folderId: string | null, title: string, extra: object = {}) => ({
+    id, title, folderId, lineEnding: 'lf', pinnedAt: null, version: 2, createdAt: 1, updatedAt: 2, ...extra,
+  })
+  const docs = [mk('d1', null, '바이브 회의록'), mk('d2', 'f1', '회의록 2'), mk('d3', 'f1', '', { e2ee: true }), mk('d4', 'f2', '기타')]
+  const folderList = [
+    { id: 'f1', name: '수업', parentId: null, createdAt: 0, updatedAt: 0 },
+    { id: 'f2', name: '하위', parentId: 'f1', createdAt: 0, updatedAt: 0 },
+  ]
+  const shared = [{ ...mk('s1', 'other', '공유'), role: 'view', ownerEmail: 'o@x.com' }]
+
+  function routed(failFolders = false) {
+    const urls: string[] = []
+    const fetchImpl = vi.fn(async (url: string) => {
+      urls.push(new URL(url).pathname)
+      if (url.endsWith('/v1/docs')) return jsonResponse(docs)
+      if (url.endsWith('/v1/folders')) return failFolders ? jsonResponse({ error: 'x' }, 500) : jsonResponse(folderList)
+      if (url.endsWith('/v1/shared')) return jsonResponse(shared)
+      return jsonResponse({}, 404)
+    })
+    return { urls, cfg: baseCfg(fetchImpl as unknown as typeof fetch) }
+  }
+
+  it('A6 --root 는 folderId null 만', async () => {
+    const { cfg, urls } = routed()
+    expect((await ls(cfg, { kind: 'root' }, false)).map((d) => d.id)).toEqual(['d1'])
+    expect(urls).toEqual(['/v1/docs'])
+  })
+
+  it('ls withPath 는 folderPath 를 더하고 요청 2회', async () => {
+    const { cfg, urls } = routed()
+    const out = await ls(cfg, { kind: 'all' }, true)
+    expect(out.map((d) => (d as { folderPath: unknown }).folderPath)).toEqual([[], ['수업'], ['수업'], ['수업', '하위']])
+    expect(urls.sort()).toEqual(['/v1/docs', '/v1/folders'])
+  })
+
+  it('A7 find 는 제목으로 거르고 금고 문서는 안 나온다, 요청 1회', async () => {
+    const { cfg, urls } = routed()
+    expect((await find(cfg, '회의록', { kind: 'all' }, false)).map((d) => d.id)).toEqual(['d1', 'd2'])
+    expect(urls).toEqual(['/v1/docs'])
+    expect((await find(cfg, '회의록', { kind: 'root' }, false)).map((d) => d.id)).toEqual(['d1'])
+    expect((await find(cfg, '회의록', { kind: 'folder', id: 'f1' }, false)).map((d) => d.id)).toEqual(['d2'])
+    expect(await find(cfg, '금고', { kind: 'all' }, false)).toEqual([])
+  })
+
+  it('A8 info: 내 문서 2회, 금고 문서 메타, 공유 3회, 없으면 not_found', async () => {
+    const a = routed()
+    expect(await info(a.cfg, 'd2')).toMatchObject({ id: 'd2', folderPath: ['수업'] })
+    expect(a.urls.sort()).toEqual(['/v1/docs', '/v1/folders'])
+    expect(await info(routed().cfg, 'd3')).toMatchObject({ id: 'd3', e2ee: true })
+    const b = routed()
+    expect(await info(b.cfg, 's1')).toMatchObject({ id: 's1', role: 'view', folderPath: null })
+    expect(b.urls.sort()).toEqual(['/v1/docs', '/v1/folders', '/v1/shared'])
+    await expect(info(routed().cfg, 'zzz')).rejects.toMatchObject({ code: 'not_found', details: { id: 'zzz' } })
+    await expect(info(routed(true).cfg, 'd1')).rejects.toMatchObject({ code: 'server_error' })
   })
 })

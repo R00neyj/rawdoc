@@ -34,6 +34,7 @@ import {
   errorToJson,
   exitCodeFor,
   humanAccountLine,
+  humanDocInfo,
   humanDocList,
   humanFolderList,
   humanIdLine,
@@ -43,6 +44,7 @@ import {
   humanSharedList,
   humanUploadLine,
   humanUrlLine,
+  stripControlChars,
 } from './output'
 
 const ENV_PREFIX = brand.cliName.toUpperCase()
@@ -51,7 +53,9 @@ const COMMAND_DESCRIPTIONS: Record<CommandName, string> = {
   login: '브라우저로 로그인해 토큰을 저장합니다',
   logout: '이 컴퓨터에 저장한 토큰을 지웁니다',
   whoami: '로그인한 계정을 보여 줍니다',
-  ls: '내 문서 목록 (--shared: 공유받은 문서)',
+  ls: '내 문서 목록 (--path: 폴더 경로 열, --root: 맨 위 문서만, --shared: 공유받은 문서)',
+  find: '제목에 그 글자가 든 내 문서를 찾습니다 (대소문자 무시)',
+  info: '문서 정보(폴더 경로·판 번호·시각)를 내용 없이 보여 줍니다',
   get: '문서 원문을 출력합니다',
   new: '새 문서를 만듭니다',
   put: '문서를 고칩니다 (get 으로 받은 판 번호 --base-version 필요. 자세히: put --help)',
@@ -77,6 +81,15 @@ function helpText(version: string): string {
 
 // 한 줄 설명만으로 모자란 명령의 덧붙임 — put 은 판 번호만 맞춰 올리다 그 사이 저장분을 덮어쓰기 쉽다
 const COMMAND_DETAILS: Partial<Record<CommandName, string[]>> = {
+  ls: [
+    '',
+    `사용: ${brand.cliName} ls [--folder <폴더id> | --root | --shared] [--path]`,
+    '  --folder <폴더id>  그 폴더에 바로 든 문서만 (하위 폴더의 문서는 빠집니다)',
+    '  --root             폴더에 들지 않은 맨 위 문서만',
+    '  --path             제목 앞에 폴더 경로 열을 넣습니다. 맨 위 문서는 /',
+    '  --shared           공유받은 문서',
+    '시각은 UTC(ISO 8601)입니다. --json 의 시각 필드는 1970년부터의 밀리초입니다.',
+  ],
   put: [
     '',
     `사용: ${brand.cliName} put <id> [<파일>|-] [--title <제목>] (--base-version <n> | --force)`,
@@ -131,6 +144,11 @@ function resolveServerOrigin(opts: {
     return { origin: url.origin }
   }
   return { usageError: `http 주소는 localhost 에서만 쓸 수 있습니다: ${raw}` }
+}
+
+function scopeOf(command: { folder: string | null; root: boolean }): commands.DocScope {
+  if (command.root) return { kind: 'root' }
+  return command.folder !== null ? { kind: 'folder', id: command.folder } : { kind: 'all' }
 }
 
 function resolveToken(env: Record<string, string | undefined>, store: StoredCredentials, origin: string): string | null {
@@ -390,12 +408,27 @@ export async function main(deps: MainDeps): Promise<number> {
           }
           return 0
         }
-        const docs = await commands.ls(cfg, command.folder)
+        const scope = scopeOf(command)
+        const docs = await commands.ls(cfg, scope, command.path)
         if (command.global.json) deps.out.stdout(`${JSON.stringify(docs)}\n`)
         else {
-          deps.out.stdout(humanDocList(docs))
+          deps.out.stdout(humanDocList(docs, { path: command.path }))
           if (docs.length === 0) deps.out.stderr('문서가 없습니다.\n')
         }
+        return 0
+      }
+      case 'find': {
+        const docs = await commands.find(cfg, command.query, scopeOf(command), command.path)
+        if (command.global.json) deps.out.stdout(`${JSON.stringify(docs)}\n`)
+        else {
+          deps.out.stdout(humanDocList(docs, { path: command.path }))
+          if (docs.length === 0) deps.out.stderr(`제목으로 찾은 문서가 없습니다: ${stripControlChars(command.query)}\n`)
+        }
+        return 0
+      }
+      case 'info': {
+        const doc = await commands.info(cfg, command.id)
+        emitResult(deps, command.global.json, doc, () => humanDocInfo(doc))
         return 0
       }
       case 'get': {

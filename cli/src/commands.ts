@@ -16,15 +16,50 @@ import {
   apiUploadAttachment,
   type ClientConfig,
 } from './client'
+import { titleMatches, withFolderPath, type DocWithPath } from './docMeta'
+import { CliError } from './output'
 
 export function whoami(cfg: ClientConfig): Promise<V1Me> {
   return apiMe(cfg)
 }
 
-// ls --folder 는 받은 목록을 folderId 가 같은 것만 남긴다 — 서버에 거르기 인자가 없다 (4.2)
-export async function ls(cfg: ClientConfig, folder: string | null): Promise<V1DocSummary[]> {
-  const docs = await apiListDocs(cfg)
-  return folder === null ? docs : docs.filter((d) => d.folderId === folder)
+export type DocScope = { kind: 'all' } | { kind: 'folder'; id: string } | { kind: 'root' }
+
+export type DocInfo = DocWithPath<V1DocSummary> | (V1SharedDoc & { folderPath: null })
+
+function inScope(docs: V1DocSummary[], scope: DocScope): V1DocSummary[] {
+  if (scope.kind === 'folder') return docs.filter((d) => d.folderId === scope.id)
+  if (scope.kind === 'root') return docs.filter((d) => d.folderId === null)
+  return docs
+}
+
+// 서버에 거르기 인자가 없어 받은 목록을 여기서 거른다. 요청 하나라도 실패하면 그 오류로 끝낸다 (F-2119 2.1)
+async function listScoped(
+  cfg: ClientConfig,
+  scope: DocScope,
+  withPath: boolean,
+  keep: (d: V1DocSummary) => boolean,
+): Promise<V1DocSummary[] | DocWithPath[]> {
+  const [docs, folders] = await Promise.all([apiListDocs(cfg), withPath ? apiListFolders(cfg) : Promise.resolve([])])
+  const kept = inScope(docs, scope).filter(keep)
+  return withPath ? withFolderPath(kept, folders) : kept
+}
+
+export function ls(cfg: ClientConfig, scope: DocScope, withPath: boolean): Promise<V1DocSummary[] | DocWithPath[]> {
+  return listScoped(cfg, scope, withPath, () => true)
+}
+
+export function find(cfg: ClientConfig, query: string, scope: DocScope, withPath: boolean): Promise<V1DocSummary[] | DocWithPath[]> {
+  return listScoped(cfg, scope, withPath, (d) => titleMatches(d.title, query))
+}
+
+export async function info(cfg: ClientConfig, id: string): Promise<DocInfo> {
+  const [docs, folders] = await Promise.all([apiListDocs(cfg), apiListFolders(cfg)])
+  const mine = docs.find((d) => d.id === id)
+  if (mine) return withFolderPath([mine], folders)[0]
+  const shared = (await apiListShared(cfg)).find((d) => d.id === id)
+  if (shared) return { ...shared, folderPath: null }
+  throw new CliError('not_found', { id })
 }
 
 export function get(cfg: ClientConfig, id: string): Promise<V1Doc> {

@@ -28,7 +28,7 @@ describe('F-2021 U1 args.ts — 명령마다 해석', () => {
     const r = parseArgs(['ls', '--folder', 'f1'])
     expect(r).toEqual({
       kind: 'run',
-      command: { name: 'ls', global: { server: null, json: false }, folder: 'f1', shared: false },
+      command: { name: 'ls', global: { server: null, json: false }, folder: 'f1', shared: false, root: false, path: false },
     })
   })
 
@@ -175,7 +175,7 @@ describe('F-2050 5.1 args.ts — rm·mv·rmdir·ls --shared', () => {
     const r = parseArgs(['ls', '--shared'])
     expect(r).toEqual({
       kind: 'run',
-      command: { name: 'ls', global: { server: null, json: false }, folder: null, shared: true },
+      command: { name: 'ls', global: { server: null, json: false }, folder: null, shared: true, root: false, path: false },
     })
   })
 
@@ -206,11 +206,11 @@ describe('F-2050 5.1 args.ts — rm·mv·rmdir·ls --shared', () => {
   it('ls·ls --folder 는 지금과 같다(shared: false 가 더해지는 것 외)', () => {
     expect(parseArgs(['ls'])).toEqual({
       kind: 'run',
-      command: { name: 'ls', global: { server: null, json: false }, folder: null, shared: false },
+      command: { name: 'ls', global: { server: null, json: false }, folder: null, shared: false, root: false, path: false },
     })
     expect(parseArgs(['ls', '--folder', 'f1'])).toEqual({
       kind: 'run',
-      command: { name: 'ls', global: { server: null, json: false }, folder: 'f1', shared: false },
+      command: { name: 'ls', global: { server: null, json: false }, folder: 'f1', shared: false, root: false, path: false },
     })
   })
 })
@@ -256,5 +256,47 @@ describe('F-2118 A7 args.ts — syntax', () => {
     })
     expect(parseArgs(['syntax', 'foo']).kind).toBe('usage')
     expect(parseArgs(['syntax', '--x']).kind).toBe('usage')
+  })
+})
+
+describe('F-2119 A1 ls --root·--path, find, info', () => {
+  const g = { server: null, json: false }
+
+  it('해석', () => {
+    expect(parseArgs(['ls', '--root', '--path'])).toEqual({
+      kind: 'run',
+      command: { name: 'ls', global: g, folder: null, shared: false, root: true, path: true },
+    })
+    expect(parseArgs(['find', '회의록', '--folder', 'f1'])).toEqual({
+      kind: 'run',
+      command: { name: 'find', global: g, query: '회의록', folder: 'f1', root: false, path: false },
+    })
+    expect(parseArgs(['find', '  회의 ', '--root', '--path', '--json'])).toEqual({
+      kind: 'run',
+      command: { name: 'find', global: { server: null, json: true }, query: '회의', folder: null, root: true, path: true },
+    })
+    expect(parseArgs(['info', 'd1'])).toEqual({ kind: 'run', command: { name: 'info', global: g, id: 'd1' } })
+  })
+
+  it('사용법 오류 문구', () => {
+    const cases: Array<[string[], string, string]> = [
+      [['ls', '--shared', '--root'], '--shared 와 --root 는 함께 쓸 수 없습니다.', 'ls'],
+      [['ls', '--shared', '--path'], '--shared 와 --path 는 함께 쓸 수 없습니다.', 'ls'],
+      [['ls', '--root', '--folder', 'f1'], '--root 와 --folder 는 함께 쓸 수 없습니다.', 'ls'],
+      [['find', '--root', '--folder', 'f1', 'x'], '--root 와 --folder 는 함께 쓸 수 없습니다.', 'find'],
+      [['find'], '찾을 제목이 필요합니다.', 'find'],
+      [['find', '   '], '찾을 제목이 필요합니다.', 'find'],
+      [['find', 'a', 'b'], '제목은 하나만 줄 수 있습니다. 띄어쓰기가 든 제목은 따옴표로 감싸세요.', 'find'],
+      [['info'], '문서 id 가 필요합니다.', 'info'],
+      [['info', 'a', 'b'], '문서 id 가 필요합니다.', 'info'],
+    ]
+    for (const [argv, message, command] of cases) {
+      const r = parseArgs(argv)
+      expect(r.kind, argv.join(' ')).toBe('usage')
+      if (r.kind === 'usage') {
+        expect(r.message, argv.join(' ')).toBe(message)
+        expect(r.command).toBe(command)
+      }
+    }
   })
 })

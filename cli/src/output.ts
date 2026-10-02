@@ -1,5 +1,6 @@
 // 사람용·--json 렌더링, 오류 → 종료 코드 (specs/features/F-2021.md 4.3~4.5)
-import { folderAncestors, type FolderLike } from '../../src/lib/folderTree'
+import type { FolderLike } from '../../src/lib/folderTree'
+import { folderPathOf } from './docMeta'
 
 export type CliErrorCode =
   | 'network'
@@ -220,29 +221,66 @@ export function isoUtcSeconds(ms: number): string {
   return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z')
 }
 
-type DocListItem = { id: string; updatedAt: number; title: string; e2ee?: true }
+type DocListItem = { id: string; updatedAt: number; title: string; e2ee?: true; folderPath?: string[] | null }
 
 // 금고 문서는 서버가 제목을 빈 문자열로 준다 — 빈칸 대신 표시를 찍는다
 const E2EE_TITLE = '(금고 문서)'
 
-export function humanDocList(docs: DocListItem[]): string {
-  return docs.map((d) => `${d.id}\t${isoUtcSeconds(d.updatedAt)}\t${d.e2ee ? E2EE_TITLE : stripControlChars(d.title)}\n`).join('')
+// 맨 위 문서는 /, 목록에 없는 폴더는 ? (F-2119 5.1)
+function folderPathText(path: string[] | null | undefined): string {
+  if (path === null || path === undefined) return '?'
+  return path.length === 0 ? '/' : path.map(stripControlChars).join('/')
+}
+
+export function humanDocList(docs: DocListItem[], opts: { path?: boolean } = {}): string {
+  return docs
+    .map((d) => {
+      const title = d.e2ee ? E2EE_TITLE : stripControlChars(d.title)
+      const pathCell = opts.path ? `${folderPathText(d.folderPath)}\t` : ''
+      return `${d.id}\t${isoUtcSeconds(d.updatedAt)}\t${pathCell}${title}\n`
+    })
+    .join('')
 }
 
 type FolderListItem = FolderLike & { id: string }
 
 export function humanFolderList(folders: FolderListItem[]): string {
-  const byId = new Map(folders.map((f) => [f.id, f]))
-  const rows = folders.map((f) => {
-    const ids = folderAncestors(folders, f.id)
-    const path = [...ids]
-      .reverse()
-      .map((id) => stripControlChars(byId.get(id)?.name ?? ''))
-      .join('/')
-    return { id: f.id, path }
-  })
+  const rows = folders.map((f) => ({ id: f.id, path: (folderPathOf(folders, f.id) ?? []).map(stripControlChars).join('/') }))
   rows.sort((a, b) => a.path.localeCompare(b.path, 'ko'))
   return rows.map((r) => `${r.id}\t${r.path}\n`).join('')
+}
+
+type DocInfoItem = {
+  id: string
+  title: string
+  version: number
+  updatedAt: number
+  createdAt: number
+  lineEnding: 'crlf' | 'lf'
+  pinnedAt: number | null
+  e2ee?: true
+  folderPath: string[] | null
+  role?: 'edit' | 'view'
+  ownerEmail?: string
+}
+
+// 키는 --json 필드 이름과 같다 (F-2119 5.3)
+export function humanDocInfo(d: DocInfoItem): string {
+  const shared = d.role !== undefined
+  const rows: Array<[string, string]> = [
+    ['id', d.id],
+    ['title', d.e2ee ? E2EE_TITLE : stripControlChars(d.title)],
+    ['folder', shared ? '-' : folderPathText(d.folderPath)],
+    ['version', String(d.version)],
+    ['updatedAt', isoUtcSeconds(d.updatedAt)],
+    ['createdAt', isoUtcSeconds(d.createdAt)],
+    ['lineEnding', d.lineEnding],
+    ['pinnedAt', d.pinnedAt === null ? '-' : isoUtcSeconds(d.pinnedAt)],
+    ['e2ee', d.e2ee ? 'true' : 'false'],
+  ]
+  if (d.role !== undefined) rows.push(['role', ROLE_LABEL[d.role]])
+  if (d.ownerEmail !== undefined) rows.push(['ownerEmail', stripControlChars(d.ownerEmail)])
+  return rows.map(([k, v]) => `${k}\t${v}\n`).join('')
 }
 
 export function humanAccountLine(email: string, origin: string): string {

@@ -8,7 +8,9 @@ export type RunCommand =
   | { name: 'login'; global: GlobalOptions; force: boolean; withToken: boolean; noBrowser: boolean }
   | { name: 'logout'; global: GlobalOptions }
   | { name: 'whoami'; global: GlobalOptions }
-  | { name: 'ls'; global: GlobalOptions; folder: string | null; shared: boolean }
+  | { name: 'ls'; global: GlobalOptions; folder: string | null; shared: boolean; root: boolean; path: boolean }
+  | { name: 'find'; global: GlobalOptions; query: string; folder: string | null; root: boolean; path: boolean }
+  | { name: 'info'; global: GlobalOptions; id: string }
   | { name: 'get'; global: GlobalOptions; id: string; output: string | null }
   | { name: 'new'; global: GlobalOptions; source: string | null; title: string | null; folder: string | null }
   | {
@@ -43,6 +45,8 @@ export const COMMAND_NAMES: CommandName[] = [
   'logout',
   'whoami',
   'ls',
+  'find',
+  'info',
   'get',
   'new',
   'put',
@@ -119,16 +123,50 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       return { kind: 'run', command: { name: command, global: globalsOf(parsed.values) } }
     }
     case 'ls': {
-      const options: OptionSchema = { ...GLOBAL_OPTIONS, folder: { type: 'string' }, shared: { type: 'boolean' } }
+      const options: OptionSchema = {
+        ...GLOBAL_OPTIONS,
+        folder: { type: 'string' },
+        shared: { type: 'boolean' },
+        root: { type: 'boolean' },
+        path: { type: 'boolean' },
+      }
       const parsed = runParseArgs(rest, options, false)
       if (!parsed) return usage('알 수 없는 옵션입니다.', command)
       const folder = typeof parsed.values.folder === 'string' ? parsed.values.folder : null
       const shared = parsed.values.shared === true
+      const root = parsed.values.root === true
+      const path = parsed.values.path === true
       if (folder !== null && shared) return usage('--shared 와 --folder 는 함께 쓸 수 없습니다.', command)
+      if (root && shared) return usage('--shared 와 --root 는 함께 쓸 수 없습니다.', command)
+      if (path && shared) return usage('--shared 와 --path 는 함께 쓸 수 없습니다.', command)
+      if (root && folder !== null) return usage('--root 와 --folder 는 함께 쓸 수 없습니다.', command)
       return {
         kind: 'run',
-        command: { name: 'ls', global: globalsOf(parsed.values), folder, shared },
+        command: { name: 'ls', global: globalsOf(parsed.values), folder, shared, root, path },
       }
+    }
+    case 'find': {
+      const options: OptionSchema = { ...GLOBAL_OPTIONS, folder: { type: 'string' }, root: { type: 'boolean' }, path: { type: 'boolean' } }
+      const parsed = runParseArgs(rest, options, true)
+      if (!parsed) return usage('알 수 없는 옵션입니다.', command)
+      const folder = typeof parsed.values.folder === 'string' ? parsed.values.folder : null
+      const root = parsed.values.root === true
+      if (root && folder !== null) return usage('--root 와 --folder 는 함께 쓸 수 없습니다.', command)
+      const query = (parsed.positionals[0] ?? '').trim()
+      if (query === '') return usage('찾을 제목이 필요합니다.', command)
+      if (parsed.positionals.length > 1) {
+        return usage('제목은 하나만 줄 수 있습니다. 띄어쓰기가 든 제목은 따옴표로 감싸세요.', command)
+      }
+      return {
+        kind: 'run',
+        command: { name: 'find', global: globalsOf(parsed.values), query, folder, root, path: parsed.values.path === true },
+      }
+    }
+    case 'info': {
+      const parsed = runParseArgs(rest, GLOBAL_OPTIONS, true)
+      if (!parsed) return usage('알 수 없는 옵션입니다.', command)
+      if (parsed.positionals.length !== 1) return usage('문서 id 가 필요합니다.', command)
+      return { kind: 'run', command: { name: 'info', global: globalsOf(parsed.values), id: parsed.positionals[0] } }
     }
     case 'get': {
       const options: OptionSchema = { ...GLOBAL_OPTIONS, output: { type: 'string', short: 'o' } }

@@ -448,3 +448,94 @@ describe('F-2118 syntax 명령', () => {
     expect(deps.stdoutLog.join('')).toBe('rawdoc syntax — 문서에 쓰는 마크다운 문법(콜아웃·위키링크·수식 등)을 출력합니다\n')
   })
 })
+
+describe('F-2119 A5·A7~A9 main()', () => {
+  const tokenEnv = { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) }
+  const mk = (id: string, folderId: string | null, title: string, extra: object = {}) => ({
+    id, title, folderId, lineEnding: 'lf', pinnedAt: null, version: 2, createdAt: 1000, updatedAt: 2000, ...extra,
+  })
+  const docs = [mk('d1', null, '바이브 회의록'), mk('d2', 'f1', '일지'), mk('d3', 'gone', '유령'), mk('d4', null, '', { e2ee: true })]
+  const folders = [{ id: 'f1', name: '수업', parentId: null, createdAt: 0, updatedAt: 0 }]
+  const shared = [{ ...mk('s1', 'other', '공유'), role: 'view', ownerEmail: 'o@x.com' }]
+
+  function run(argv: string[], failFolders = false) {
+    const urls: string[] = []
+    const deps = baseDeps({
+      argv,
+      env: tokenEnv,
+      fetchImpl: (async (url: string) => {
+        urls.push(new URL(url).pathname)
+        if (url.endsWith('/v1/docs')) return jsonResponse(docs)
+        if (url.endsWith('/v1/folders')) return failFolders ? jsonResponse({ error: 'x' }, 500) : jsonResponse(folders)
+        if (url.endsWith('/v1/shared')) return jsonResponse(shared)
+        return jsonResponse({}, 404)
+      }) as unknown as typeof fetch,
+    })
+    return { deps, urls }
+  }
+
+  it('A5 ls 는 1회·3열, ls --path 는 2회·4열, --json 은 folderPath 만 더한다', async () => {
+    const plain = run(['ls'])
+    expect(await main(plain.deps)).toBe(0)
+    expect(plain.urls).toEqual(['/v1/docs'])
+    expect(plain.deps.stdoutLog.join('').split('\n')[0].split('\t')).toHaveLength(3)
+
+    const withPath = run(['ls', '--path'])
+    expect(await main(withPath.deps)).toBe(0)
+    expect(withPath.urls.sort()).toEqual(['/v1/docs', '/v1/folders'])
+    const rows = withPath.deps.stdoutLog.join('').trim().split('\n').map((l) => l.split('\t'))
+    expect(rows.map((r) => r[2])).toEqual(['/', '수업', '?', '/'])
+    expect(rows.every((r) => r.length === 4)).toBe(true)
+
+    const json = run(['ls', '--path', '--json'])
+    await main(json.deps)
+    const parsed = JSON.parse(json.deps.stdoutLog.join(''))
+    expect(parsed.map((d: { folderPath: unknown }) => d.folderPath)).toEqual([[], ['수업'], null, []])
+    expect(parsed.map((d: Record<string, unknown>) => Object.fromEntries(Object.entries(d).filter(([k]) => k !== 'folderPath')))).toEqual(docs)
+  })
+
+  it('A7 find 0건: 종료 0, 표준 출력 비움, 표준 오류 문구. --json 은 []', async () => {
+    const r = run(['find', '없는제목'])
+    expect(await main(r.deps)).toBe(0)
+    expect(r.deps.stdoutLog.join('')).toBe('')
+    expect(r.deps.stderrLog.join('')).toBe('제목으로 찾은 문서가 없습니다: 없는제목\n')
+    const j = run(['find', '없는제목', '--json'])
+    expect(await main(j.deps)).toBe(0)
+    expect(j.deps.stdoutLog.join('')).toBe('[]\n')
+    const hit = run(['find', '회의록'])
+    await main(hit.deps)
+    expect(hit.deps.stdoutLog.join('')).toBe('d1\t1970-01-01T00:00:02Z\t바이브 회의록\n')
+    expect(hit.urls).toEqual(['/v1/docs'])
+  })
+
+  it('A8 info: 내 문서·공유·없음·폴더 500', async () => {
+    const mine = run(['info', 'd2'])
+    expect(await main(mine.deps)).toBe(0)
+    expect(mine.deps.stdoutLog.join('')).toContain('folder\t수업\n')
+    const sh = run(['info', 's1'])
+    expect(await main(sh.deps)).toBe(0)
+    expect(sh.urls).toHaveLength(3)
+    expect(sh.deps.stdoutLog.join('')).toContain('role\t보기\n')
+    const none = run(['info', 'zzz'])
+    expect(await main(none.deps)).toBe(4)
+    expect(none.deps.stderrLog.join('')).toBe('찾을 수 없습니다. id 를 확인하세요: zzz\n')
+    const bad = run(['info', 'd1'], true)
+    expect(await main(bad.deps)).toBe(1)
+    expect(bad.deps.stdoutLog.join('')).toBe('')
+  })
+
+  it('A9 --help 순서와 ls --help 상세', async () => {
+    const h = baseDeps({ argv: ['--help'] })
+    await main(h)
+    const t = h.stdoutLog.join('')
+    expect(t.indexOf('  find\t')).toBeGreaterThan(t.indexOf('  ls\t'))
+    expect(t.indexOf('  info\t')).toBeGreaterThan(t.indexOf('  find\t'))
+    expect(t.indexOf('  get\t')).toBeGreaterThan(t.indexOf('  info\t'))
+    const l = baseDeps({ argv: ['ls', '--help'] })
+    await main(l)
+    const lt = l.stdoutLog.join('')
+    expect(lt).toContain('사용: rawdoc ls [--folder <폴더id> | --root | --shared] [--path]')
+    expect(lt).toContain('  --path             제목 앞에 폴더 경로 열을 넣습니다. 맨 위 문서는 /')
+    expect(lt).toContain('시각은 UTC(ISO 8601)입니다. --json 의 시각 필드는 1970년부터의 밀리초입니다.')
+  })
+})

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import brand from '../../../brand.config'
 
 const SOURCE_FILES = [
+  'docMeta.ts',
   'args.ts',
   'client.ts',
   'commands.ts',
