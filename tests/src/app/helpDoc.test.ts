@@ -334,7 +334,8 @@ describe('도움말 ## 명령줄 도구 절', () => {
     const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
     expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [터미널에서 문서 읽고 쓰기](/guides/cli)')
     const cli = brand.cliName
-    expect(section.body).toContain(`\`npx -y ${cli} login\``)
+    expect(section.body).toContain(`\`npm i -g ${cli}\``)
+    expect(section.body).toContain(`\`${cli} login\``)
     expect(section.body).toContain(`\`${cli} login --with-token < token.txt\``)
     expect(section.body).toContain(`\`${cli} put <id> 파일.md --base-version <n>\``)
     const page = readSource('../../../src/app/CliLoginPage.tsx')
