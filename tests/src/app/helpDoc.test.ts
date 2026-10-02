@@ -1,5 +1,7 @@
 // F-257 도움말 문서 — 앱 사용법 + 마크다운 문법 두 축 (specs/features/F-257.md 5장 G1~G4)
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from '../../../src/app/helpDoc'
 import brand from '../../../brand.config'
 import { E2EE_DEFAULT_LOCK_MINUTES } from '../../../src/e2ee/keyring'
@@ -30,6 +32,7 @@ const SECTION_ORDER = [
   '옵시디언 볼트',
   '설치와 오프라인',
   '계정',
+  '명령줄 도구',
   '단축키',
   '마크다운 문법',
 ]
@@ -152,9 +155,17 @@ describe('HELP_DOC_CONTENT', () => {
     expect(HELP_DOC_CONTENT).not.toContain('## 한도')
   })
 
+  // 예외: ## 명령줄 도구 절 인라인 코드 속 명령 이름(brand.cliName) — ia.md 6.1 R6 의 cli.md 예외와 같은 이유
   it('제품명 문자열을 직접 쓰지 않는다(CLAUDE.md 불변조건)', () => {
-    expect(HELP_DOC_CONTENT).not.toContain(brand.name)
-    expect(HELP_DOC_CONTENT.toLowerCase()).not.toContain(brand.shortName.toLowerCase())
+    const start = HELP_DOC_CONTENT.indexOf('## 명령줄 도구')
+    const end = HELP_DOC_CONTENT.indexOf('## 단축키')
+    const cliSection = HELP_DOC_CONTENT.slice(start, end)
+    const rest = HELP_DOC_CONTENT.slice(0, start) + HELP_DOC_CONTENT.slice(end)
+    expect(rest).not.toContain(brand.name)
+    expect(rest.toLowerCase()).not.toContain(brand.shortName.toLowerCase())
+    const cliProse = cliSection.replace(/`[^`\n]*`/g, '')
+    expect(cliProse.toLowerCase()).not.toContain(brand.shortName.toLowerCase())
+    expect(cliSection).not.toContain(brand.name)
   })
 
   it('이미지 캡션에 ![설명](주소) 표준 이미지 문법을 그대로 쓰지 않는다 (F-274.md 4.2 — 빌드 가드 G4 회피)', () => {
@@ -301,7 +312,7 @@ describe('도움말 ## 계정 절', () => {
   it('## 설치와 오프라인 바로 뒤에 있고, 사용법 글 줄로 끝나며, 화면 글자가 들어 있다', () => {
     const names = appSections().map((s) => s.name)
     expect(names[names.indexOf('설치와 오프라인') + 1]).toBe('계정')
-    expect(names[names.indexOf('계정') + 1]).toBe('단축키')
+    expect(names[names.indexOf('계정') + 1]).toBe('명령줄 도구')
     const section = appSections().find((s) => s.name === '계정')!
     const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
     expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [계정과 로그인](/guides/account)')
@@ -309,6 +320,38 @@ describe('도움말 ## 계정 절', () => {
     expect(section.body).toContain('`API 토큰`')
     expect(section.body).toContain('`로그아웃`')
     expect(section.body).toContain('`계정 삭제…`')
+  })
+})
+
+// 사용법 글 cli 의 도움말 절 (write-guide, 2026-10-03) — 쓰기 한도 수치는 tests/worker/guideLimits.test.ts
+describe('도움말 ## 명령줄 도구 절', () => {
+  const readSource = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf-8')
+
+  it('## 계정 바로 뒤·## 단축키 앞에 있고, 사용법 글 줄로 끝나며, 명령·화면 글자가 코드와 같다', () => {
+    const names = appSections().map((s) => s.name)
+    expect(names[names.indexOf('명령줄 도구') + 1]).toBe('단축키')
+    const section = appSections().find((s) => s.name === '명령줄 도구')!
+    const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [터미널에서 문서 읽고 쓰기](/guides/cli)')
+    const cli = brand.cliName
+    expect(section.body).toContain(`\`npx -y ${cli} login\``)
+    expect(section.body).toContain(`\`${cli} login --with-token < token.txt\``)
+    expect(section.body).toContain(`\`${cli} put <id> 파일.md --base-version <n>\``)
+    const page = readSource('../../../src/app/CliLoginPage.tsx')
+    expect(page).toContain('터미널 로그인')
+    expect(page).toContain("'승인'")
+    expect(section.body).toContain('`터미널 로그인`')
+    expect(section.body).toContain('`승인`')
+    expect(readSource('../../../src/app/AccountMenu.tsx')).toContain("label: 'API 토큰'")
+    expect(section.body).toContain('`API 토큰`')
+  })
+
+  it('Node 최소 판이 cli/package.json engines 와 같다 (R5)', () => {
+    const pkg = JSON.parse(readSource('../../../cli/package.json')) as { engines: { node: string } }
+    const major = /^>=(\d+)$/.exec(pkg.engines.node)?.[1]
+    expect(major).toBeTruthy()
+    const section = appSections().find((s) => s.name === '명령줄 도구')!
+    expect(section.body).toContain(`Node ${major} 이상`)
   })
 })
 

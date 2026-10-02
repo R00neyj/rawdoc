@@ -46,6 +46,18 @@ describe('U5 도움말 ## 저장 의 서버 한도 (R5, U22 가 넘긴 것)', ()
   })
 })
 
+// 사용법 글 cli 의 도움말 절 (write-guide, 2026-10-03)
+describe('도움말 ## 명령줄 도구 의 쓰기 한도 (R5)', () => {
+  it('## 명령줄 도구 부터 ## 단축키 앞까지에 분·하루 쓰기 한도가 상수 그대로 들어 있다', () => {
+    const cliIdx = HELP_DOC_CONTENT.indexOf('## 명령줄 도구')
+    const shortcutIdx = HELP_DOC_CONTENT.indexOf('## 단축키')
+    expect(cliIdx).toBeGreaterThan(-1)
+    const section = HELP_DOC_CONTENT.slice(cliIdx, shortcutIdx)
+    expect(section).toContain(`1분에 ${MINUTE_WRITE_LIMIT}번`)
+    expect(section).toContain(`하루 ${DAILY_WRITE_LIMIT.toLocaleString('en-US')}번`)
+  })
+})
+
 // F-2048.md 6.3 U4·U5
 describe('F-2048 U4 이미지 글의 서버 수치 (R5)', () => {
   it('images.md 에 저장 공간·정리 여유 수치가 상수 그대로 들어 있다', () => {
