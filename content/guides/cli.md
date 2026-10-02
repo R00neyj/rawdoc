@@ -39,7 +39,11 @@ rawdoc login --with-token < token.txt
 | 명령 | 하는 일 |
 | --- | --- |
 | `rawdoc ls` | 내 문서 목록 |
+| `rawdoc ls --path` | 폴더 경로를 붙여 목록 보기(폴더에 안 든 문서는 `/`) |
+| `rawdoc ls --root` | 폴더에 안 든 문서만 보기 |
 | `rawdoc ls --shared` | 공유받은 문서 목록 |
+| `rawdoc find 회의` | 제목에 그 글자가 든 문서 찾기 |
+| `rawdoc info <id>` | 내용 없이 폴더·판 번호·시각만 보기 |
 | `rawdoc get <id> -o 노트.md` | 문서 원문을 파일로 받기 |
 | `rawdoc new 노트.md --title 회의록` | 파일로 새 문서 만들기 |
 | `rawdoc put <id> 노트.md --base-version <n>` | 문서 고치기 |
@@ -48,6 +52,7 @@ rawdoc login --with-token < token.txt
 | `rawdoc link <id>` | 읽기 전용 링크 만들기 |
 | `rawdoc mv <id> --folder <폴더id>` | 문서 옮기기(`--root` 면 맨 위로) |
 | `rawdoc rm <id> --yes` · `rawdoc rmdir <id> --yes` | 문서·폴더 지우기(되돌릴 수 없음. `rmdir` 은 안의 것을 위 폴더로 올리고, `--all` 이면 모두 지움) |
+| `rawdoc syntax` | 이 앱에서 쓰는 마크다운 문법을 터미널에 출력 |
 
 금고 문서나 금고 폴더가 걸린 지우기·옮기기는 웹에서 합니다.
 
@@ -82,6 +87,8 @@ RAWDOC_TOKEN=... npx -y rawdoc ls --json
 `-y`는 처음 실행할 때 나오는 설치 확인을 건너뜁니다. 대화형 입력을 받을 수 없는 AI 도구에서 부를 때 이 형태를 씁니다.
 
 AI 도구에 문서를 쓰게 한다면 이 앱의 마크다운 문법을 먼저 읽게 하세요. 콜아웃(`> [!note] 제목`)이나 위키링크(`[[문서 제목]]`)처럼 일반 마크다운에 없는 문법이 있습니다. 문법을 한 곳에 모은 곳은 [도움말](/help)의 `마크다운 문법` 절이고, 자세한 설명은 [콜아웃·수식·다이어그램 쓰기](/guides/callouts-math-diagrams)와 [위키링크로 문서 잇기](/guides/wiki-links)에 있습니다.
+
+도움말을 열 수 없는 환경에서는 `npx -y rawdoc syntax`를 실행하게 하세요. 로그인 없이, 서버에 연결하지 않고 문법표를 출력합니다. 설치된 판에 들어 있는 표라서, 새 문법은 도움말이 먼저 반영됩니다.
 
 ## 한도
 
