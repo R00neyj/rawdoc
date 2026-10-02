@@ -36,6 +36,11 @@
   color: var(--ink);
 }
 
+/* 목록 줄의 padding-left(.md-list-line)가 위 16px 을 덮어써 선에 붙는다 — 내어쓰기 값에 16px 을 더한다 (tweak 2026-10-03) */
+.cm-host .cm-editor .cm-line.md-callout.md-list-line {
+  padding-left: calc(16px + var(--md-list-indent, 0px));
+}
+
 .cm-host .cm-editor .cm-line.md-callout-title {
   padding-top: 8px;
   border-top-right-radius: 6px;
