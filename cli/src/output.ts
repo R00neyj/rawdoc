@@ -251,7 +251,7 @@ export function humanIdLine(id: string): string {
 }
 
 export function humanIdVersionLine(id: string, version: number): string {
-  return `${id}\t${version}\n`
+  return `${id}\tversion ${version}\n`
 }
 
 export function humanUploadLine(markdown: string): string {

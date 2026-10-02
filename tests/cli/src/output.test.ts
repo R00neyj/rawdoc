@@ -135,7 +135,7 @@ describe('F-2021 U6 output.ts', () => {
   it('나머지 줄 형식', () => {
     expect(humanAccountLine('a@b.com', 'https://rawdoc.app')).toBe('a@b.com\thttps://rawdoc.app\n')
     expect(humanIdLine('doc-1')).toBe('doc-1\n')
-    expect(humanIdVersionLine('doc-1', 3)).toBe('doc-1\t3\n')
+    expect(humanIdVersionLine('doc-1', 3)).toBe('doc-1\tversion 3\n')
     expect(humanUploadLine('![이미지](x)')).toBe('![이미지](x)\n')
     expect(humanUrlLine('https://rawdoc.app/#/p/x')).toBe('https://rawdoc.app/#/p/x\n')
   })
