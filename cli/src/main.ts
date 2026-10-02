@@ -27,6 +27,7 @@ import { apiMe, type ClientConfig } from './client'
 import * as commands from './commands'
 import { checkAlreadyLoggedIn, startCallbackServer } from './login'
 import { openBrowser } from './openBrowser'
+import { renderSyntaxMarkdown, syntaxJson } from './syntax'
 import {
   CliError,
   errorMessage,
@@ -61,6 +62,7 @@ const COMMAND_DESCRIPTIONS: Record<CommandName, string> = {
   rmdir: '폴더를 지웁니다. 안의 것은 위 폴더로 (--all: 모두 영구 삭제, --yes 필요)',
   upload: '이미지를 올리고 붙일 마크다운을 출력합니다',
   link: '읽기 전용 링크를 만듭니다',
+  syntax: '문서에 쓰는 마크다운 문법(콜아웃·위키링크·수식 등)을 출력합니다',
 }
 
 function helpText(version: string): string {
@@ -69,6 +71,7 @@ function helpText(version: string): string {
   lines.push('')
   lines.push('Windows PowerShell 5.1 에서는 > 대신 -o 로 저장하세요. > 는 파일을 UTF-16 으로 바꿉니다.')
   lines.push(`AI 도구에서 쓸 때는 npx -y ${brand.cliName} … 또는 ${ENV_PREFIX}_TOKEN 환경 변수를 쓰세요.`)
+  lines.push(`AI 도구가 문서를 쓰기 전에 ${brand.cliName} syntax 로 콜아웃·위키링크 같은 문법을 확인하게 하세요.`)
   return lines.join('\n') + '\n'
 }
 
@@ -335,6 +338,11 @@ export async function main(deps: MainDeps): Promise<number> {
   }
 
   const command = invocation.command
+  if (command.name === 'syntax') {
+    const json = `${JSON.stringify(syntaxJson(deps.packageVersion))}\n`
+    deps.out.stdout(command.global.json ? json : renderSyntaxMarkdown(deps.packageVersion))
+    return 0
+  }
   const serverResult = resolveServerOrigin({ flag: command.global.server, env: deps.env })
   if ('usageError' in serverResult) {
     deps.out.stderr(`${serverResult.usageError}\n`)

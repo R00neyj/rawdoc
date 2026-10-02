@@ -19,6 +19,7 @@
     "../src/lib/lineEnding.ts",
     "../src/lib/siteMeta.ts",
     "../src/lib/folderTree.ts",
+    "../src/lib/markdownSyntax.ts",
     "../worker/v1Contract.ts"
   ]
 }

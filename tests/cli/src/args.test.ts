@@ -247,3 +247,14 @@ describe('F-2021 U1 args.ts — 오류', () => {
     expect(parseArgs(['-v']).kind).toBe('version')
   })
 })
+
+describe('F-2118 A7 args.ts — syntax', () => {
+  it('옵션 없이 run, 위치 인자·모르는 옵션은 usage', () => {
+    expect(parseArgs(['syntax', '--json'])).toEqual({
+      kind: 'run',
+      command: { name: 'syntax', global: { server: null, json: true } },
+    })
+    expect(parseArgs(['syntax', 'foo']).kind).toBe('usage')
+    expect(parseArgs(['syntax', '--x']).kind).toBe('usage')
+  })
+})

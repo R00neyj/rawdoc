@@ -27,6 +27,7 @@ export type RunCommand =
   | { name: 'rmdir'; global: GlobalOptions; id: string; all: boolean }
   | { name: 'upload'; global: GlobalOptions; file: string }
   | { name: 'link'; global: GlobalOptions; id: string }
+  | { name: 'syntax'; global: GlobalOptions }
 
 export type CommandName = RunCommand['name']
 
@@ -52,6 +53,7 @@ export const COMMAND_NAMES: CommandName[] = [
   'rmdir',
   'upload',
   'link',
+  'syntax',
 ]
 
 function isCommandName(value: string): value is CommandName {
@@ -110,7 +112,8 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
     }
     case 'logout':
     case 'whoami':
-    case 'folders': {
+    case 'folders':
+    case 'syntax': {
       const parsed = runParseArgs(rest, GLOBAL_OPTIONS, false)
       if (!parsed) return usage('알 수 없는 옵션입니다.', command)
       return { kind: 'run', command: { name: command, global: globalsOf(parsed.values) } }

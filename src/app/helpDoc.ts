@@ -1,138 +1,23 @@
 // 도움말 원문 — 앱 사용법 + 마크다운 문법 두 축(F-257.md 2·3장, helpSyntax.ts 를 그대로 옮김, F-235.md/F-244.md 3.1), 공개 사이트 /help 로도 나가 이미지·mermaid 문법을 쓰면 빌드가 실패한다 (F-274)
 
 import brand from '../../brand.config'
+import { fenceSource, SYNTAX_GROUPS, type SyntaxGroup, type SyntaxItem } from '../lib/markdownSyntax'
 
 export const HELP_DOC_TITLE = '도움말'
 
 // 명령줄 도구 절의 명령 이름 — 도움말에서 제품명이 나오는 유일한 자리다(인라인 코드 안)
 const CLI = brand.cliName
 
-type HelpItem = {
-  name: string
-  source: string
-  caption?: string
-  // 프론트매터·이미지처럼 결과 예시를 넣지 않는 문법만 false (3.1)
-  showResult?: boolean
-}
-
-// guide: 이 문법을 다룬 사용법 글 — 절 끝에 `사용법 글:` 줄 하나를 붙인다 (specs/ia.md 6.1 R3)
-type HelpGroup = { group: string; items: HelpItem[]; guide?: { title: string; slug: string } }
-
-const CALLOUTS_MATH_DIAGRAMS_GUIDE = { title: '콜아웃·수식·다이어그램 쓰기', slug: 'callouts-math-diagrams' }
-
-const GROUPS: HelpGroup[] = [
-  {
-    group: '제목',
-    items: [{ name: '제목', source: '# 제목 1\n## 제목 2\n### 제목 3' }],
-  },
-  {
-    group: '강조',
-    items: [
-      { name: '굵게', source: '**굵게**' },
-      { name: '기울임', source: '*기울임*' },
-      { name: '취소선', source: '~~취소선~~' },
-      { name: '하이라이트', source: '==하이라이트==' },
-      { name: '인라인코드', source: '`코드`' },
-    ],
-  },
-  {
-    group: '목록',
-    items: [
-      { name: '글머리 목록', source: '- 항목' },
-      { name: '번호 목록', source: '1. 항목' },
-      { name: '체크박스', source: '- [ ] 할 일\n- [x] 끝낸 일' },
-    ],
-  },
-  {
-    group: '인용',
-    items: [{ name: '인용', source: '> 인용문' }],
-  },
-  {
-    group: '링크',
-    items: [{ name: '링크', source: '[링크](https://example.com)' }],
-  },
-  {
-    group: '위키링크',
-    items: [
-      {
-        name: '위키링크',
-        source: '[[문서 제목]]',
-        caption: '실제로 있는 문서 제목을 쓰면 클릭해서 그 문서가 열립니다.',
-      },
-    ],
-  },
-  {
-    group: '표',
-    items: [{ name: '표', source: '| 머리1 | 머리2 |\n| --- | --- |\n| 값1 | 값2 |' }],
-  },
-  {
-    group: '코드블록',
-    items: [{ name: '코드블록', source: '```js\ncode\n```' }],
-  },
-  {
-    group: '이미지',
-    items: [
-      {
-        name: '이미지',
-        source: '<div align="center">\n  <img src="attachments/0000000000000000.png" width="320">\n</div>',
-        caption:
-          '붙여넣기·끌어넣기로 넣은 이미지만 이렇게 보입니다. 주소를 직접 적는 표준 이미지 문법은 오프라인에서도 항상 보이도록 이미지 대신 `이미지: 설명` 링크로 바뀝니다.',
-        showResult: false,
-      },
-    ],
-  },
-  {
-    group: '콜아웃',
-    items: [{ name: '콜아웃', source: '> [!note] 제목\n> 내용' }],
-    guide: CALLOUTS_MATH_DIAGRAMS_GUIDE,
-  },
-  {
-    group: '수식',
-    items: [
-      {
-        name: '수식',
-        source: '넓이는 $\\pi r^2$ 입니다.\n\n$$\n\\frac{a+b}{2}\n$$',
-        caption:
-          '문장 속 수식은 `$` 한 쌍으로, 따로 세우는 수식은 `$$` 줄 두 개 사이에 씁니다. 그린 모습은 `편집`·`보기` 모드에서 봅니다.',
-        // 사이트 /help 페이지에는 KaTeX 스타일시트가 없어 결과를 그리면 글자가 겹친다 — 원문만 둔다
-        showResult: false,
-      },
-    ],
-    guide: CALLOUTS_MATH_DIAGRAMS_GUIDE,
-  },
-  {
-    group: '구분선',
-    items: [{ name: '구분선', source: '---' }],
-  },
-  {
-    group: '프론트매터',
-    items: [
-      {
-        name: '프론트매터',
-        source: '---\ntitle: 문서 제목\n---',
-        caption: '문서 맨 위에 있을 때만 프론트매터로 인식됩니다. 문서 중간에 있으면 원문 그대로 보입니다.',
-        showResult: false,
-      },
-    ],
-  },
-]
-
-// 원문이 코드펜스(```)를 포함하면(코드블록 문법) 한 단계 긴 펜스로 감싼다
-function fence(source: string): string {
-  const ticks = source.includes('```') ? '````' : '```'
-  return `${ticks}\n${source}\n${ticks}`
-}
-
-function renderItem(item: HelpItem, withSubheading: boolean): string {
+function renderItem(item: SyntaxItem, withSubheading: boolean): string {
   const parts: string[] = []
   if (withSubheading) parts.push(`### ${item.name}`)
-  parts.push(fence(item.source))
+  parts.push(fenceSource(item.source))
   if (item.showResult !== false) parts.push(item.source)
   if (item.caption) parts.push(item.caption)
   return parts.join('\n\n')
 }
 
-function renderGroup(group: HelpGroup): string {
+function renderGroup(group: SyntaxGroup): string {
   const withSubheading = group.items.length > 1
   const body = group.items.map((item) => renderItem(item, withSubheading)).join('\n\n')
   const guideLine = group.guide ? `\n\n사용법 글: [${group.guide.title}](/guides/${group.guide.slug})` : ''
@@ -349,4 +234,4 @@ CSS 때문에 설정 창을 열 수 없으면 주소 끝에 \`?safe\`를 붙여 
 | \`~~취소선~~\` | ~~취소선~~ |
 | \`[링크](https://example.com)\` | [링크](https://example.com) |`
 
-export const HELP_DOC_CONTENT = `# ${HELP_DOC_TITLE}\n\n${APP_SECTIONS}\n\n${GROUPS.map(renderGroup).join('\n\n')}\n`
+export const HELP_DOC_CONTENT = `# ${HELP_DOC_TITLE}\n\n${APP_SECTIONS}\n\n${SYNTAX_GROUPS.filter((g) => !g.cliOnly).map(renderGroup).join('\n\n')}\n`

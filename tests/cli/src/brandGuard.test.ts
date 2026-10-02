@@ -12,6 +12,7 @@ const SOURCE_FILES = [
   'main.ts',
   'openBrowser.ts',
   'output.ts',
+  'syntax.ts',
 ]
 
 describe('F-2021 8장 제품명 불변조건 — cli/', () => {

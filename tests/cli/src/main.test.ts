@@ -1,6 +1,7 @@
 // F-2021 U16 (specs/features/F-2021.md 13.1, 4.7)
 import { describe, expect, it, vi } from 'vitest'
 import { isEntryScript, main, type MainDeps } from '../../../cli/src/main'
+import { syntaxJson } from '../../../cli/src/syntax'
 import { cliCallbackUrl, parseCliLoginHash } from '../../../src/lib/cliLoginUrl'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -401,5 +402,49 @@ describe('로그인 대기 정리 (리뷰 C2·C3)', () => {
     const deps = baseDeps({ argv: ['ls'], env: { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) }, watchSigint })
     expect(await main(deps)).toBe(0)
     expect(watchSigint).not.toHaveBeenCalled()
+  })
+})
+
+describe('F-2118 syntax 명령', () => {
+  it('A1 서버·토큰·fetch 없이 마크다운을 출력하고 종료 0', async () => {
+    const fetchImpl = vi.fn()
+    const deps = baseDeps({ argv: ['syntax'], env: { RAWDOC_SERVER: 'http://example.com' }, fetchImpl: fetchImpl as unknown as typeof fetch })
+    const code = await main(deps)
+    expect(code).toBe(0)
+    expect(deps.stdoutLog.join('').startsWith('# Rawdoc 마크다운 문법\n')).toBe(true)
+    expect(deps.stderrLog.join('')).toBe('')
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('A6 --json 은 syntaxJson 한 줄', async () => {
+    const deps = baseDeps({ argv: ['syntax', '--json'], packageVersion: '0.3.1' })
+    expect(await main(deps)).toBe(0)
+    const out = deps.stdoutLog.join('')
+    expect(out.endsWith('\n') && out.split('\n').length).toBe(2)
+    expect(JSON.parse(out)).toEqual(syntaxJson('0.3.1'))
+  })
+
+  it('A7 위치 인자·모르는 옵션은 종료 2', async () => {
+    for (const argv of [['syntax', 'foo'], ['syntax', '--x']]) {
+      const deps = baseDeps({ argv })
+      expect(await main(deps)).toBe(2)
+      expect(deps.stderrLog.join('')).toContain('rawdoc syntax --help 를 보세요.')
+    }
+  })
+
+  it('A8 --help 에 syntax 줄이 link 뒤, 마지막 줄은 안내 문구', async () => {
+    const deps = baseDeps({ argv: ['--help'] })
+    await main(deps)
+    const out = deps.stdoutLog.join('')
+    expect(out.indexOf('  syntax\t')).toBeGreaterThan(out.indexOf('  link\t'))
+    expect(out.trimEnd().split('\n').pop()).toBe(
+      'AI 도구가 문서를 쓰기 전에 rawdoc syntax 로 콜아웃·위키링크 같은 문법을 확인하게 하세요.',
+    )
+  })
+
+  it('A9 syntax --help 는 한 줄 설명', async () => {
+    const deps = baseDeps({ argv: ['syntax', '--help'] })
+    expect(await main(deps)).toBe(0)
+    expect(deps.stdoutLog.join('')).toBe('rawdoc syntax — 문서에 쓰는 마크다운 문법(콜아웃·위키링크·수식 등)을 출력합니다\n')
   })
 })
