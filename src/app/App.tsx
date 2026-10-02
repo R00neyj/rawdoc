@@ -32,6 +32,7 @@ import { resolveInitialDoc } from './resolveInitialDoc'
 import { shouldApplyListResult } from './bootList'
 import { runBoot, startFlushRunner } from './bootFlow'
 import { mergeResyncList } from './resyncList'
+import { isDocLoading } from './docLoading'
 import { combineCachedList, createCachedListSource, createListRefresher, hasLiveChangesSince, isListStale } from './cachedList'
 import { useDocSaver } from './useDocSaver'
 import { useDocLock } from './useDocLock'
@@ -593,6 +594,10 @@ export default function App() {
     isOfflineView ||
     isConvertingDoc ||
     (isRealtime && docSession.readOnly)
+  const docLoading = isDocLoading({
+    currentDocId, openDocId: openDoc?.id ?? null, sharedScreen: Boolean(sharedDoc), e2eeLocked: currentDoc?.e2ee === 'locked',
+    offlineView: isOfflineView, liveStopped, deletedElsewhere: isDeletedElsewhere,
+  })
   // 본문 맨 위 제목 읽기 전용 — 상단바 옛 제목 입력의 disabled·readOnly 조건을 하나로 합친다 (F-217.md 2.4)
   const titleReadOnly = isReadOnlyDoc || viewMode === 'view' || Boolean(sharedDoc)
 
@@ -1326,7 +1331,7 @@ export default function App() {
           }} />
           {showEditor && <DocumentArea {...{
             attachmentResolverFor, commentAccessValue, commentRailExtra, comments, contentAreaRef, contentWidthPref, currentBreadcrumb,
-            currentDoc, currentDocId, currentFolderId, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorRemountNonce,
+            currentDoc, currentDocId, currentFolderId, docLoading, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorRemountNonce,
             editorScrollTop, editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles,
             handleOpenWikiLink, handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc,
             liveEditorOption, mapRoute, mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme,

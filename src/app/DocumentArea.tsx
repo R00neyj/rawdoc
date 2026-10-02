@@ -5,6 +5,7 @@ import type { EditorState } from '@codemirror/state'
 import Editor, { type EditorHandle } from '../editor/Editor'
 import Viewer from '../viewer/Viewer'
 import E2eeLockedPanel from './E2eeLockedPanel'
+import DocSkeleton from './DocSkeleton'
 import ViewFindCard, { type ViewFindCardProps } from './ViewFindCard'
 import WikiLinkPreview from './WikiLinkPreview'
 import Outline, { type OutlineControl } from './Outline'
@@ -61,6 +62,7 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
     handleDocChange: (state: EditorState) => void
     handleOpenWikiLink: (target: string, heading?: string | null) => void
     handleSelectionChange: (state: EditorState) => void
+    docLoading: boolean
     helpOpen: boolean
     isReadOnlyDoc: boolean
     mapRoute: { centerDocId: string | null; returnDocId: string | null } | null
@@ -81,7 +83,7 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
 
 export default function DocumentArea({
   attachmentResolverFor, commentAccessValue, commentRailExtra, comments, contentAreaRef, contentWidthPref, currentBreadcrumb, currentDoc,
-  currentDocId, currentFolderId, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorRemountNonce, editorScrollTop,
+  currentDocId, currentFolderId, docLoading, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorRemountNonce, editorScrollTop,
   editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles, handleOpenWikiLink,
   handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, liveEditorOption, mapRoute,
   mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme, setCommentRailExtra, setEditorRefs, sharedDoc,
@@ -153,6 +155,7 @@ export default function DocumentArea({
           />
         )}
       </div>
+      {docLoading && <DocSkeleton key={currentDocId} />}
       {showE2eeLockedPanel && e2ee && (
         <E2eeLockedPanel
           key={currentDocId}
