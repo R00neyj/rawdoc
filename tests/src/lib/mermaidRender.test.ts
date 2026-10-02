@@ -1,5 +1,5 @@
 // renderMermaid 단위 테스트 (specs/features/F-258.md 3장 A1, F-260.md 3장 A1) — mermaid 모듈을 mock 한다
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const initialize = vi.fn()
 const render = vi.fn()
@@ -99,5 +99,45 @@ describe('renderMermaid — 앱 테마 → mermaid 테마 매핑 (F-260 A1)', ()
     expect(initialize).toHaveBeenCalledTimes(2)
     expect(initialize).toHaveBeenNthCalledWith(1, { startOnLoad: false, theme: 'default' })
     expect(initialize).toHaveBeenNthCalledWith(2, { startOnLoad: false, theme: 'dark' })
+  })
+})
+
+describe('renderMermaid — 임시 컨테이너 (미리보기 열 때 문서가 순간 늘어나던 것)', () => {
+  type FakeEl = { style: { cssText: string }; remove: () => void; removed: boolean }
+  let appended: FakeEl[]
+
+  beforeEach(() => {
+    vi.resetModules()
+    initialize.mockClear()
+    render.mockClear()
+    appended = []
+    vi.stubGlobal('document', {
+      createElement: () => {
+        const el: FakeEl = { style: { cssText: '' }, removed: false, remove: () => { el.removed = true } }
+        return el
+      },
+      body: { append: (el: FakeEl) => appended.push(el) },
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('화면 밖 fixed 컨테이너를 mermaid.render 에 넘기고, 끝나면 떼어 낸다', async () => {
+    render.mockResolvedValue({ svg: '<svg/>' })
+    const { renderMermaid } = await import('../../../src/lib/mermaidRender')
+    await renderMermaid('a', 'white')
+    expect(appended).toHaveLength(1)
+    expect(render.mock.calls[0][2]).toBe(appended[0])
+    expect(appended[0].style.cssText).toContain('position:fixed')
+    expect(appended[0].removed).toBe(true)
+  })
+
+  it('렌더가 실패해도 컨테이너를 떼어 낸다', async () => {
+    render.mockRejectedValue(new Error('문법 오류'))
+    const { renderMermaid } = await import('../../../src/lib/mermaidRender')
+    await renderMermaid('nope', 'white')
+    expect(appended[0].removed).toBe(true)
   })
 })

@@ -22,15 +22,27 @@ let counter = 0
 
 export type MermaidResult = { svg: string } | { error: string }
 
+// 컨테이너를 안 주면 mermaid 가 body 끝에 임시 div 를 흐름 안에 붙여 문서가 순간 늘어난다 — 화면 밖 fixed 로 준다
+function createScratchContainer(): HTMLElement | undefined {
+  if (typeof document === 'undefined') return undefined
+  const el = document.createElement('div')
+  el.style.cssText = 'position:fixed;left:-99999px;top:0;width:100vw;visibility:hidden;pointer-events:none'
+  document.body.append(el)
+  return el
+}
+
 // source: mermaid 코드블록 본문. appTheme: 앱 테마(F-260 2.1, 모르는 값·생략은 'default' — exportDoc.ts·fillMarkdownAssets.ts 는 F-260 소유 범위 밖이라 아직 안 넘긴다). 성공하면 {svg}, 예외(문법 오류 등)를 던지면 {error}
 export async function renderMermaid(source: string, appTheme = 'white'): Promise<MermaidResult> {
   ensureTheme(mermaidThemeFor(appTheme))
   const id = `md-mermaid-${counter++}`
+  const container = createScratchContainer()
   try {
-    const { svg } = await mermaid.render(id, source)
+    const { svg } = await mermaid.render(id, source, container)
     return { svg }
   } catch (err) {
     const message = err instanceof Error && err.message ? err.message : DEFAULT_ERROR
     return { error: message }
+  } finally {
+    container?.remove()
   }
 }
