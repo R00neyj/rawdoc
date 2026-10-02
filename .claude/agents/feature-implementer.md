@@ -49,7 +49,7 @@ Korean copy of this file: `.claude/ko/agents/feature-implementer.ko.md` (snapsho
 1. `npx eslint <changed files>`
 2. Only the related unit tests: `npx vitest run <test file>`
 3. One e2e pass for this spec: `E2E_PORT=… E2E_DIST=… npx playwright test -g "F-xxx" --workers=2` (the webServer handles the build)
-- **Stop at green on these three.** No other specs' e2e "for regression", no `--repeat`, no `e2e:before`, no full `npm test`, no full e2e suite or `verify.mjs --e2e` — regressions are caught by `verify:full` before a deploy (user, 2026-09-26). Only when main asks separately
+- **Stop at green on these three.** No other specs' e2e "for regression", no `--repeat`, no `e2e:before`, no full `npm test`, no full e2e suite or `verify.mjs --e2e` — `verify:full` is run only when the user asks, not by default before a deploy (user, 2026-09-26, 2026-10-03). Only when main asks separately
 - Other agents may be working in the same repo at the same time. Do not fix lint, build, or test failures caused by files outside your ownership — just report them. Re-Read even your own files right before each Edit
 - Write a throwaway script in the scratchpad only for measurements the tools cannot do. When you do, label it "도구에 없던 측정" in your report
 

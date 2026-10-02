@@ -174,7 +174,7 @@ Unit tests live under `tests/`, mirroring the source path: `tests/{source path}/
 
 The full procedure — changelog rules, verify:full known failures, D1 migrations, local-deploy fallback, `.env` token, CLI publish — is in the **`deploy` skill** (`.claude/skills/deploy/SKILL.md`). Load it before any deploy or before judging a verify:full failure. Always:
 
-- Pushing `main` runs CI only. Deploying means `git push --force origin <sha>:refs/heads/deploy` with a SHA that passed `npm run verify:full`. **Tell the user before and after**
+- Pushing `main` runs CI only. Deploying means `git push --force origin <sha>:refs/heads/deploy`. **`verify:full` is not run before a deploy by default; run it only when the user asks.** **Tell the user before and after**
 - Never push to `deploy` without the day's `content/changelog.md` entry in the range (`.githooks/pre-push` enforces it; `--no-verify` only when nothing user-visible shipped)
 - **Remote D1 migrations go before the code that reads them**
 - **Login redesign deploy (F-2033 ch. 11) is forward-only:** delete the Access app `md-editor-api` (step 5) *before* applying remote migrations (step 6), then push. Never reorder
