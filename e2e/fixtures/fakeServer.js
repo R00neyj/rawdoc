@@ -6,7 +6,11 @@ const ATTACHMENT_MIME = { png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif',
 
 // 로그인 상태로 /api/me·/api/docs·/api/folders 를 흉내낸다
 // userCss — { snippets, rev } 를 여러 컨텍스트에 같은 객체로 넘기면 한 서버처럼 쓴다 (F-2099 7.2)
-export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss = { snippets: [], rev: 0 } } = {}) {
+// listAutoRefreshMs — 사이드바 목록 주기 갱신 간격 덮어쓰기. 기본 0 = 끔 (F-2120 4.3)
+export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss = { snippets: [], rev: 0 }, listAutoRefreshMs = 0 } = {}) {
+  await page.addInitScript((ms) => {
+    window.__listAutoRefreshMs = ms
+  }, listAutoRefreshMs)
   const docs = new Map()
   const folders = new Map()
   const attachments = new Map() // key `${id}.${ext}` -> { mime, bytes, width, height }

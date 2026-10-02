@@ -44,6 +44,7 @@ import { useLiveRoomDoc } from './useLiveRoomDoc'
 import { liveStatusOf, type LiveSnapshot } from './liveDoc'
 import { newTabId } from './tabSync'
 import { useTabSync } from './useTabSync'
+import { createListRefreshGate, useListAutoRefresh, type ListRefreshGate } from './useListAutoRefresh'
 import { useE2ee } from './useE2ee'
 import { isE2eeStoreError, type E2eeStore } from '../e2ee/e2eeStore'
 import { createExportActions } from './exportActions'
@@ -437,7 +438,7 @@ export default function App() {
 
   // 서버가 알려준 삭제는 다른 탭이라고 단정할 수 없어 뒤 새로 읽기는 'bootMerge' 문구를 쓴다 (F-2056 3.2)
   const resyncFromStore = useCallback(
-    async (deletedSource: 'tab' | 'bootMerge' = 'tab') => {
+    async (deletedSource: 'tab' | 'bootMerge' = 'tab', gate?: ListRefreshGate) => {
       const seq = ++bootListSeqRef.current
       const snapshot = docsRef.current
       // 공유 목록 성공 여부는 list() 가 끝난 즉시 읽는다 — 다른 list() 가 끝나며 덮어쓰기 전에 (리뷰 A3)
@@ -447,6 +448,8 @@ export default function App() {
       }
       const [newFolders, listed] = await Promise.all([store.listFolders(), listDocs()])
       if (!shouldApplyListResult({ seq, lastAppliedSeq: lastAppliedListSeqRef.current })) return
+      // 조합·끌기·이름 입력 중이면 반영을 미루고 끝날 때 캐시로 따라잡는다 (F-2120 3.4)
+      if (gate && !gate.canApply()) return gate.markDeferred()
       lastAppliedListSeqRef.current = seq
       setFolders(newFolders)
       applyResyncResult({ snapshot, docs: listed.docs, sharedListed: listed.sharedListed, deletedSource })
@@ -455,6 +458,7 @@ export default function App() {
   )
 
   // 검색·지도·탭 신호가 나눠 쓰는 뒤 새로 읽기 한 줄 — 페이지 수명 동안 하나, 최신 값은 ref 로 읽는다 (F-2056 6.1)
+  const [listGate] = useState(createListRefreshGate)
   const listRefreshDepsRef = useRef({ store, resyncFromStore })
   useEffect(() => {
     listRefreshDepsRef.current = { store, resyncFromStore }
@@ -464,7 +468,7 @@ export default function App() {
     createListRefresher({
       refresh: () => {
         const deps = listRefreshDepsRef.current
-        return deps.store.kind === 'server' ? deps.resyncFromStore('bootMerge') : Promise.resolve()
+        return deps.store.kind === 'server' ? deps.resyncFromStore('bootMerge', listGate) : Promise.resolve()
       },
       isStale: () => {
         const current = listRefreshDepsRef.current.store
@@ -474,7 +478,7 @@ export default function App() {
   )
 
   // 로그인 상태의 탭 신호는 md-remote 캐시로 맞춘다 — 순번은 올리지도 비교하지도 않는다 (F-2056 6.2)
-  const resyncFromCache = useCallback(async () => {
+  const resyncFromCache = useCallback(async (deletedSource: 'tab' | 'bootMerge' = 'tab') => {
     const serverStore = store as ServerStore
     const snapshot = docsRef.current
     let cached: { docs: Doc[]; folders: Folder[] }
@@ -486,7 +490,7 @@ export default function App() {
     }
     const combined = combineCachedList({ cached: cached.docs, shared: serverStore.lastSharedList() })
     setFolders(cached.folders)
-    applyResyncResult({ snapshot, docs: combined.docs, sharedListed: combined.sharedListed, deletedSource: 'tab' })
+    applyResyncResult({ snapshot, docs: combined.docs, sharedListed: combined.sharedListed, deletedSource })
     listRefresher.maybeRefresh()
   }, [store, applyResyncResult, listRefresher])
 
@@ -679,6 +683,12 @@ export default function App() {
     onNavigateFolder, sharedGroupOpen, toggleSharedGroup, onNavigateSharedFolder, closeSidebarIfNarrow, toggleSidebar, handleSidebarWidthChange, handleSidebarWidthCommit, displaySidebarWidth,
   } = useSidebarLayout({
     sidebarRef, appShellRef, toggleButtonRef, mapRoute, settingsOpen, searchOpen, paletteOpen, deleteTarget, moveDocTarget, bulkDeleteItems,
+  })
+
+  // 로그인 상태 사이드바 목록 자동 갱신 (F-2120)
+  useListAutoRefresh({
+    enabled: bootPhase === 'ready' && account.state === 'in', store, listRefresher, gate: listGate, resyncFromCache, docsRef, foldersRef,
+    sidebarVisible: narrow ? sidebarOpen : !sidebarCollapsed,
   })
 
   // ----- 알림함·멘션·안 읽은 점 (F-507, F-510, F-2069) -----
