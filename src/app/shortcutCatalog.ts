@@ -71,6 +71,7 @@ export const SHORTCUT_CATALOG: readonly ShortcutEntry[] = [
     ],
     scopes: ['body'],
   },
+  { id: 'edit.exportMd', label: '.md 내보내기', group: '편집', keys: [{ mod: true, key: 'KeyS' }], scopes: ['doc'] },
   // 찾기
   { id: 'find.find', label: '이 문서에서 찾기', group: '찾기', keys: [{ mod: true, key: 'KeyF' }], scopes: ['doc'] },
   { id: 'find.replace', label: '이 문서에서 바꾸기', group: '찾기', keys: [{ mod: true, key: 'KeyH' }], scopes: ['editor'] },

@@ -20,8 +20,8 @@ import { PALETTE_COMMANDS } from '../../../src/app/paletteCommands'
 const ID_RE = /^[a-z][a-z0-9]*\.[a-z][a-zA-Z0-9]*$/
 
 describe('SHORTCUT_CATALOG — U1', () => {
-  it('23개, id 겹치지 않고 모양을 지킨다', () => {
-    expect(SHORTCUT_CATALOG.length).toBe(23)
+  it('24개, id 겹치지 않고 모양을 지킨다', () => {
+    expect(SHORTCUT_CATALOG.length).toBe(24)
     const ids = SHORTCUT_CATALOG.map((e) => e.id)
     expect(new Set(ids).size).toBe(ids.length)
     for (const id of ids) expect(id).toMatch(ID_RE)
@@ -96,9 +96,9 @@ describe('formatChord — U3 (맥)', () => {
     expect(formatEntryKeys(entry('edit.redo'), false)).toEqual(['Ctrl+Y', 'Ctrl+Shift+Z'])
   })
 
-  it('visibleShortcuts(true).length === 22, visibleShortcuts(false).length === 23', () => {
-    expect(visibleShortcuts(true).length).toBe(22)
-    expect(visibleShortcuts(false).length).toBe(23)
+  it('visibleShortcuts(true).length === 23, visibleShortcuts(false).length === 24', () => {
+    expect(visibleShortcuts(true).length).toBe(23)
+    expect(visibleShortcuts(false).length).toBe(24)
   })
 })
 
@@ -176,6 +176,7 @@ describe('U9 — 우클릭 메뉴·팔레트 키 문자열이 카탈로그와 �
     const MENU = {
       'comment.add': 'comment.add',
       'comment.toggleRail': 'comment.toggleRail',
+      'doc.exportMd': 'edit.exportMd',
       'shortcuts.open': 'nav.shortcuts',
       'search.open': 'find.search',
       // F-2055 서식 명령 — 우클릭 메뉴와 같은 글
@@ -189,5 +190,14 @@ describe('U9 — 우클릭 메뉴·팔레트 키 문자열이 카탈로그와 �
       const expected = formatChord(entry(catalogId).keys[0], false)
       expect(shortcut).toBe(expected)
     }
+  })
+})
+
+describe('F-2117 U2 edit.exportMd', () => {
+  it('편집 묶음 안, Ctrl+S / ⌘S', () => {
+    const e = entry('edit.exportMd')
+    expect(e.group).toBe('편집')
+    expect(formatEntryKeys(e, false)).toEqual(['Ctrl+S'])
+    expect(formatEntryKeys(e, true)).toEqual(['⌘S'])
   })
 })

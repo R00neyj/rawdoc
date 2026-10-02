@@ -11,6 +11,11 @@ export function isPaletteKey(e: KeyEventLike): boolean {
   return e.key.toLowerCase() === 'p'
 }
 
+export function isExportKey(e: KeyEventLike): boolean {
+  if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return false
+  return e.key.toLowerCase() === 's'
+}
+
 export function isSearchDialogKey(e: KeyEventLike): boolean {
   if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return false
   return e.key.toLowerCase() === 'f'

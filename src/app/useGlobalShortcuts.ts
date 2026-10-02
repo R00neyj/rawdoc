@@ -12,6 +12,7 @@ import {
   isAddCommentKey,
   isToggleCommentsKey,
   isShortcutsPanelKey,
+  isExportKey,
 } from './globalShortcuts'
 
 export type UseGlobalShortcutsOptions = {
@@ -30,6 +31,7 @@ export type UseGlobalShortcutsOptions = {
   toggleCommentsRef: RefObject<(() => void) | null>
   toggleShortcutsRef: RefObject<() => void>
   openViewFindRef: RefObject<(() => void) | null>
+  exportMdRef: RefObject<(() => void) | null>
 }
 
 export function useGlobalShortcuts({
@@ -48,6 +50,7 @@ export function useGlobalShortcuts({
   toggleCommentsRef,
   toggleShortcutsRef,
   openViewFindRef,
+  exportMdRef,
 }: UseGlobalShortcutsOptions): void {
   // ----- 브라우저 기본 찾기(Ctrl/Cmd+F) 비활성화 (2026-09-20 사용자 요청) -----
   // 에디터 안 포커스는 createEditor.ts 의 Mod-f 키맵이 먼저 처리한다 — 여기는 에디터 밖 포커스일 때만 대신 열어 브라우저 찾기를 막는다
@@ -176,4 +179,19 @@ export function useGlobalShortcuts({
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [publicRoute, bootPhaseRef, currentDocIdRef, sharedDocRef, mapRouteRef, toggleShortcutsRef])
+
+  // ----- Ctrl+S(Cmd+S) → 지금 문서 .md 내려받기, 브라우저 페이지 저장 대신 (F-2117) -----
+  useEffect(() => {
+    if (publicRoute) return // 공개 보기(S-5)는 자기 내보내기 버튼이 있다 — 브라우저 기본으로 남긴다
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!isExportKey(e)) return
+      if (sharedDocRef.current) return // 공유 링크 화면 S-4 — 브라우저 기본으로 남긴다
+      e.preventDefault()
+      if (e.repeat || bootPhaseRef.current !== 'ready') return
+      if (document.querySelector('dialog[open]')) return
+      exportMdRef.current?.()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [publicRoute, sharedDocRef, bootPhaseRef, exportMdRef])
 }

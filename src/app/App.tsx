@@ -231,6 +231,7 @@ export default function App() {
   const toggleShortcutsRef = useRef(() => {}) // Ctrl+Shift+/ 가 매 커밋 최신 toggleShortcuts 를 읽게 한다 (F-2052.md 6.1)
   const toggleCommentsRef = useRef<(() => void) | null>(null) // Ctrl+M — 상단바 `댓글` 버튼을 누를 수 없으면 null (tweak 2026-09-28)
   const openViewFindRef = useRef<(() => void) | null>(null) // Ctrl+F — 보기 찾기를 열 수 없으면 null (F-2087 3.6)
+  const exportMdRef = useRef<(() => void) | null>(null) // Ctrl+S — 내보낼 수 없는 화면이면 null (F-2117)
   const shortcutsButtonRef = useRef<HTMLButtonElement | null>(null) // 상태바 `?` 버튼 — 판이 닫힐 때 포커스를 돌려준다 (F-2052 5.3)
   const bootPhaseRef = useRef(bootPhase) // Ctrl+P 가 매 커밋 최신 bootPhase 를 읽게 한다 (F-2022.md 6.1)
   // hashchange 핸들러가 낡은 클로저의 docs·currentDocId 를 읽지 않도록 매 렌더 후 갱신한다 (0단계 버그 수정)
@@ -801,7 +802,7 @@ export default function App() {
     changeToolbar, changeWikiPreview, changeNewDocTemplate, changeE2eeLockMinutes, changeContentWidth,
   } = useAppearancePrefs({ editorRef })
 
-  // ----- 전역 단축키 6개 — 순서·단계 그대로 (F-2062) -----
+  // ----- 전역 단축키 7개 — 순서·단계 그대로 (F-2062) -----
   useGlobalShortcuts({
     publicRoute,
     showNotice,
@@ -818,6 +819,7 @@ export default function App() {
     toggleCommentsRef,
     toggleShortcutsRef,
     openViewFindRef,
+    exportMdRef,
   })
 
   // ----- 편집기 연동 — 본문 1회 읽기·위키 문맥·보기 HTML·layout effect (F-2072) -----
@@ -1182,6 +1184,7 @@ export default function App() {
   useEffect(() => {
     openPaletteRef.current = openPalette
     toggleShortcutsRef.current = toggleShortcuts
+    exportMdRef.current = paletteContext.output?.exportMd ?? null
   })
 
   const viewFind = useViewFind({ viewMode, viewerRef, editorRef, viewerHtml, currentDocId, docScreenId, openDocId: openDoc?.id ?? null })

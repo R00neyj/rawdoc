@@ -504,3 +504,12 @@ describe('도움말 ## 사용자 CSS 절', () => {
     expect(section.body).toContain('`다시 켜기`')
   })
 })
+
+describe('F-2117 도움말 Ctrl+S', () => {
+  it('U3: ## 단축키 절이 한 줄을, ## 내보내기·가져오기 절이 Ctrl+S 를 담는다', () => {
+    const shortcuts = appSections().find((s) => s.name === '단축키')!
+    expect(shortcuts.body).toContain('- `Ctrl+S` 지금 문서를 `.md` 파일로 받기')
+    const exp = appSections().find((s) => s.name === '내보내기·가져오기')!
+    expect(exp.body).toContain('`Ctrl+S`')
+  })
+})

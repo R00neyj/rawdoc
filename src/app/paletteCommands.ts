@@ -222,6 +222,7 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     id: 'doc.exportMd',
     kind: 'action',
     label: '.md 내보내기',
+    shortcut: 'Ctrl+S',
     keywords: ['내보내기', 'export', 'md', 'markdown', '마크다운', '다운로드', 'download', '저장', '파일'],
     when: (ctx) => Boolean(ctx.output),
     run: (ctx) => ctx.output?.exportMd(),

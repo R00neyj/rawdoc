@@ -7,6 +7,7 @@ import {
   isAddCommentKey,
   isToggleCommentsKey,
   isShortcutsPanelKey,
+  isExportKey,
 } from '../../../src/app/globalShortcuts'
 
 function ev(over: Partial<KeyEventLike>): KeyEventLike {
@@ -57,9 +58,15 @@ const TRUE_CASES = {
     ev({ metaKey: true, shiftKey: true, key: '?', code: 'Slash' }),
     ev({ ctrlKey: true, shiftKey: true, key: '?', code: 'Slash', keyCode: 229 }),
   ],
+  isExportKey: [
+    ev({ ctrlKey: true, key: 's', code: 'KeyS' }),
+    ev({ metaKey: true, key: 's', code: 'KeyS' }),
+    ev({ ctrlKey: true, key: 'S', code: 'KeyS' }),
+    ev({ ctrlKey: true, key: 's', code: 'KeyS', isComposing: true }),
+  ],
 }
 
-const FNS = { isFindKey, isPaletteKey, isSearchDialogKey, isAddCommentKey, isToggleCommentsKey, isShortcutsPanelKey }
+const FNS = { isFindKey, isPaletteKey, isSearchDialogKey, isAddCommentKey, isToggleCommentsKey, isShortcutsPanelKey, isExportKey }
 
 describe('F-2062 U1 isFindKey', () => {
   it('참', () => {
@@ -135,12 +142,25 @@ describe('F-2062 U6 isShortcutsPanelKey', () => {
 })
 
 describe('F-2062 U7 참 사례마다 정확히 한 함수만 참', () => {
-  it('여섯 함수', () => {
+  it('일곱 함수', () => {
     for (const [name, cases] of Object.entries(TRUE_CASES)) {
       for (const e of cases) {
         const hits = Object.entries(FNS).filter(([, fn]) => fn(e)).map(([n]) => n)
         expect(hits).toEqual([name])
       }
     }
+  })
+})
+
+describe('F-2117 U1 isExportKey', () => {
+  it('참', () => {
+    for (const e of TRUE_CASES.isExportKey) expect(isExportKey(e)).toBe(true)
+  })
+  it('거짓', () => {
+    expect(isExportKey(ev({ ctrlKey: true, shiftKey: true, key: 'S', code: 'KeyS' }))).toBe(false)
+    expect(isExportKey(ev({ ctrlKey: true, altKey: true, key: 's', code: 'KeyS' }))).toBe(false)
+    expect(isExportKey(ev({ key: 's', code: 'KeyS' }))).toBe(false)
+    expect(isExportKey(ev({ ctrlKey: true, key: 'ㄴ', code: 'KeyS' }))).toBe(false)
+    expect(isExportKey(ev({ ctrlKey: true, key: 'p', code: 'KeyP' }))).toBe(false)
   })
 })

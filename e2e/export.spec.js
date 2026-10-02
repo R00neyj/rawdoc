@@ -47,3 +47,25 @@ test.describe('F-278 A18 .md 회귀', () => {
     expect(text).toBe('# 제목\n\n본문\n')
   })
 })
+
+test.describe('F-2117 Ctrl+S', () => {
+  test('F-2117 E1 본문 포커스에서 Ctrl+S 는 .md 를 한 번 받고 포커스를 유지한다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { name: 'doc.md', content: '# 제목\n\n본문\n' })
+    await fillTitle(page, '내 문서')
+    await page.locator('.cm-content').click()
+    await page.keyboard.press('ControlOrMeta+End')
+    await page.keyboard.type('abc')
+
+    let count = 0
+    page.on('download', () => { count += 1 })
+    const [download] = await Promise.all([page.waitForEvent('download'), page.keyboard.press('ControlOrMeta+s')])
+    expect(download.suggestedFilename()).toBe('내 문서.md')
+    const stream = await download.createReadStream()
+    const chunks = []
+    for await (const chunk of stream) chunks.push(chunk)
+    expect(Buffer.concat(chunks).toString('utf-8')).toBe('# 제목\n\n본문\nabc')
+    expect(count).toBe(1)
+    await expect(page.locator('.cm-content')).toBeFocused()
+  })
+})
