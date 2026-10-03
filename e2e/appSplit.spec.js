@@ -1054,12 +1054,6 @@ function serverDoc2070(id, { title, content }) {
 
 async function openLive2070(page, room, docs, openId) {
   const server = await fakeServer(page)
-  await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) => {
-    if (route.request().method() === 'POST') {
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
-    }
-    return route.fulfill({ status: 204 })
-  })
   await room.install(page.context())
   for (const doc of docs) server.docs.set(doc.id, serverDoc2070(doc.id, doc))
   await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
@@ -1492,12 +1486,6 @@ function serverDoc2077(id, { title, content, updatedAt = Date.now() }) {
 
 async function openLive2077(page, room, docs, openId) {
   const server = await fakeServer(page)
-  await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) => {
-    if (route.request().method() === 'POST') {
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
-    }
-    return route.fulfill({ status: 204 })
-  })
   await room.install(page.context())
   for (const doc of docs) server.docs.set(doc.id, serverDoc2077(doc.id, doc))
   await setPrefBeforeLoad(page, 'md.firstRunDone', '1')

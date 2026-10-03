@@ -2,7 +2,6 @@
 import { errorResponse, jsonResponse } from './http'
 import { rememberUser, requireUser, type AuthUser } from './auth'
 import { getDocAccess, getOwnedFolder, roleAtLeast } from './access'
-import { getActiveLock } from './locks'
 import { badBody, deleteDocRows, handleCreateDoc, handleListDocs, handleUpdateDoc, readJsonLimited, writeMoveDocFolder } from './docs'
 import { deleteFolderContents, folderSubtreeHasE2ee, handleCreateFolder, type FolderRow } from './folders'
 import { handleGetShared } from './grants'
@@ -108,7 +107,7 @@ function roomDocToV1(row: DocRow, doc: RoomDocState) {
   return rowToDoc({ ...row, title: doc.title, content: doc.content, version: doc.version, updated_at: doc.updatedAt ?? row.updated_at })
 }
 
-// 문서의 DocRoom 을 거쳐 쓴다 — 판정 순서는 F-308 4장, DO 호출이 던지면 D1 직접 쓰기(9장), D1 잠금 423 은 F-309 까지
+// 문서의 DocRoom 을 거쳐 쓴다 — 판정 순서는 F-308 4장, DO 호출이 던지면 D1 직접 쓰기(9장)
 export async function handleUpdateDocV1(
   request: Request,
   env: Env,
@@ -143,11 +142,6 @@ export async function handleUpdateDocV1(
   if (!roleAtLeast(access.role, 'edit')) return errorResponse('forbidden', 403)
   const row = access.doc
 
-  const activeLock = await getActiveLock(env, params.id)
-  if (activeLock) {
-    return jsonResponse({ error: 'locked', email: activeLock.email, expiresAt: activeLock.expires_at }, 423)
-  }
-
   // 문서 줄바꿈에 맞춘다 — Y.Text 는 LF 만 담는다 (8장)
   const nextContent = typeof content === 'string' ? fromEditorText(toEditorText(content), row.line_ending) : undefined
   if (nextContent !== undefined && isContentTooLarge(nextContent)) {
@@ -177,7 +171,7 @@ export async function handleUpdateDocV1(
 
   if (!result) {
     const forward = { title, content: nextContent, baseVersion }
-    return handleUpdateDoc(innerRequest(request, user, forward, ['X-Lock-Session']), env, ctx, params)
+    return handleUpdateDoc(innerRequest(request, user, forward), env, ctx, params)
   }
   switch (result.type) {
     case 'ok':

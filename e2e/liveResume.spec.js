@@ -16,33 +16,21 @@ function serverDoc(id, { title, content, updatedAt = Date.now() }) {
   return { id, title, content, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: updatedAt, updatedAt }
 }
 
-// 이 페이지가 보낸 본문 PUT·잠금 POST 를 센다 (offlineDoc.spec.js·liveDoc.spec.js 와 같은 준비, 9.2)
+// 이 페이지가 보낸 본문 PUT 을 센다 (offlineDoc.spec.js·liveDoc.spec.js 와 같은 준비, 9.2)
 function trackRequests(page) {
-  const log = { puts: [], lockPosts: [] }
+  const log = { puts: [] }
   page.on('request', (req) => {
     const path = new URL(req.url()).pathname
     if (req.method() === 'PUT' && /^\/api\/docs\/[^/]+$/.test(path)) log.puts.push(path)
-    if (req.method() === 'POST' && /^\/api\/docs\/[^/]+\/lock$/.test(path)) log.lockPosts.push(path)
   })
   return {
     puts: (id) => log.puts.filter((p) => p === `/api/docs/${id}`),
-    lockPosts: (id) => log.lockPosts.filter((p) => p === `/api/docs/${id}/lock`),
   }
-}
-
-async function installLockRoute(page) {
-  await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) => {
-    if (route.request().method() === 'POST') {
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
-    }
-    return route.fulfill({ status: 204 })
-  })
 }
 
 async function openSide(page, { room, docs, open = DOC }) {
   const server = await fakeServer(page)
   const requests = trackRequests(page)
-  await installLockRoute(page)
   if (room) await room.install(page.context())
   for (const doc of docs) server.docs.set(doc.id, serverDoc(doc.id, doc))
   await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
@@ -127,7 +115,7 @@ async function buildHistory(page, docId, text) {
 }
 
 test.describe('F-2041 로컬 기록으로 먼저 열기', () => {
-  test('F-2041 E1·E6 기록 있는 문서는 step2 전에도 편집기가 뜨고 연결 중…, PUT·잠금 없음, resume 뒤 저장됨, 연결 중→오프라인→온라인 상태 문구', async ({ page }) => {
+  test('F-2041 E1·E6 기록 있는 문서는 step2 전에도 편집기가 뜨고 연결 중…, PUT 없음, resume 뒤 저장됨, 연결 중→오프라인→온라인 상태 문구', async ({ page }) => {
     const room = createFakeDocRoom()
     room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
     const { server, requests } = await openSide(page, { room, docs: [{ id: DOC, title: '실시간 문서', content: '옛 본문' }] })
@@ -142,7 +130,6 @@ test.describe('F-2041 로컬 기록으로 먼저 열기', () => {
     await expect(page.locator('.statusbar-live')).toHaveCount(0)
     await page.waitForTimeout(500)
     expect(requests.puts(DOC)).toHaveLength(0)
-    expect(requests.lockPosts(DOC)).toHaveLength(0)
 
     room.resume(DOC)
     await expect(saveStatus(page)).toHaveText('저장됨')

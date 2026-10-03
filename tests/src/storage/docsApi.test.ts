@@ -383,3 +383,13 @@ describe('F-2115 U7: leaveShare 상태 해석', () => {
     await expect(leaveShare('doc', 'a')).rejects.toMatchObject({ kind: 'network' })
   })
 })
+
+describe('F-309 A6 updateDoc 헤더', () => {
+  it('PUT 에 X-Lock-Session 을 싣지 않는다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, {}))
+    vi.stubGlobal('fetch', fetchMock)
+    await updateDoc('a', { content: 'x', baseVersion: 1 })
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    expect(new Headers(init.headers).has('X-Lock-Session')).toBe(false)
+  })
+})

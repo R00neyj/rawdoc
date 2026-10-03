@@ -106,7 +106,7 @@ function envelopeBytes(): Uint8Array {
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
 describe('F-2025 R1 쓰기 라우트마다 write_count +1', () => {
-  it('/api 21개 + 폴더 delete-all 변형 + /v1 5개 + /v1 삭제·이동·폴더 삭제 4개(F-2050) + 금고 3개 (F-401 G2)', async () => {
+  it('/api 19개 + 폴더 delete-all 변형 + /v1 5개 + /v1 삭제·이동·폴더 삭제 4개(F-2050) + 금고 3개 (F-401 G2)', async () => {
     const { sqlDb, env } = makeEnv()
 
     async function expectPlusOne(label: string, run: () => Promise<Response>, okStatuses: number[]) {
@@ -140,21 +140,6 @@ describe('F-2025 R1 쓰기 라우트마다 write_count +1', () => {
 
     insertDoc(sqlDb, uuid(4), owner)
     await expectPlusOne('PUT /api/docs/:id/pin', () => call(env, `/api/docs/${uuid(4)}/pin`, jsonInit('PUT', { pinned: true })), [200])
-
-    // 잠금 2
-    insertDoc(sqlDb, uuid(5), owner)
-    await expectPlusOne(
-      'POST /api/docs/:id/lock',
-      () => call(env, `/api/docs/${uuid(5)}/lock`, jsonInit('POST', { sessionId: 's1' })),
-      [200],
-    )
-
-    insertDoc(sqlDb, uuid(6), owner)
-    await expectPlusOne(
-      'DELETE /api/docs/:id/lock?session=',
-      () => call(env, `/api/docs/${uuid(6)}/lock?session=s1`, { method: 'DELETE' }),
-      [204],
-    )
 
     // 링크 4
     insertDoc(sqlDb, uuid(7), owner)
@@ -406,9 +391,6 @@ describe('F-2025 R3 D1 에 쓰지 않고 끝나는 쓰기 요청', () => {
     insertDoc(sqlDb, uuid(41), owner)
     await call(env, `/api/docs/${uuid(41)}/link`, { method: 'POST' })
     await expectNoChange('POST 링크 다시 받기', () => call(env, `/api/docs/${uuid(41)}/link`, { method: 'POST' }))
-    // session 없는 잠금 놓기
-    insertDoc(sqlDb, uuid(42), owner)
-    await expectNoChange('DELETE 잠금 session 없음', () => call(env, `/api/docs/${uuid(42)}/lock`, { method: 'DELETE' }))
     // 같은 id 다시 만들기
     const dup = uuid(43)
     await call(env, '/api/docs', jsonInit('POST', { id: dup, title: 't', content: 'c', lineEnding: 'lf' }))

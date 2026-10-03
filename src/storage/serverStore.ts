@@ -52,8 +52,7 @@ export class PendingSyncError extends Error {
 }
 
 export type ServerStoreHandlers = {
-  // reason:'locked' 면 F-213.md 2.4 — 다른 세션이 편집 중이라 내 편집을 사본으로 돌렸다
-  onConflict?: (event: { docId: string; copyId: string; reason?: 'locked'; email?: string }) => void
+  onConflict?: (event: { docId: string; copyId: string }) => void
   onNotice?: (notice: StoreNotice) => void
   // 편집 권한이 있어 저장을 대기하던 문서가 서버에서 403 을 받았다 — 앱이 읽기 전용으로 내린다 (F-212.md 2.4)
   onForbidden?: (docId: string) => void
@@ -411,7 +410,6 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   async function handleConflict(
     entry: Extract<OutboxEntry, { type: 'updateDoc' }>,
     serverDoc: ServerDoc | undefined,
-    extra?: { reason: 'locked'; email?: string },
   ) {
     const myDoc = await cache.getDoc(userId, entry.docId)
     const now = Date.now()
@@ -438,7 +436,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       await cache.putDoc(userId, { ...serverDoc, id: entry.docId })
     }
 
-    handlers.onConflict?.({ docId: entry.docId, copyId, ...extra })
+    handlers.onConflict?.({ docId: entry.docId, copyId })
   }
 
   // 금고 충돌 사본 — 주입된 함수로 새 id·새 문서 키로 다시 암호화한다. 값이 없으면 그 문서만 대기(E21) (F-405 5.3)
@@ -936,19 +934,6 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       }
       if (err.kind === 'conflict' && entry.type === 'updateDoc') {
         await handleConflict(entry, err.doc)
-        await dropLaterEdits(entry.docId, entry.key)
-        await cache.removeOutbox(entry.key)
-        return true
-      }
-      if (err.kind === 'locked' && entry.type === 'updateDoc' && !entry.e2ee) {
-        // 423 에는 문서 본문이 없다 — 서버 값을 따로 받아 원본 캐시에 반영한다 (F-213.md 2.4)
-        let serverDoc: ServerDoc | undefined
-        try {
-          serverDoc = await api.getDoc(entry.docId)
-        } catch {
-          // 못 받아도 사본은 만든다 — 원본 캐시는 다음 list() 때 다시 맞춰진다
-        }
-        await handleConflict(entry, serverDoc, { reason: 'locked', email: err.email })
         await dropLaterEdits(entry.docId, entry.key)
         await cache.removeOutbox(entry.key)
         return true

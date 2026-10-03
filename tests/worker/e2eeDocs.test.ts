@@ -252,13 +252,10 @@ describe('F-401 D5~D9 PUT /api/docs/:id 금고 표지', () => {
     expect(docRow(sqlDb, uuid(11))!.content).toBe('c')
   })
 
-  it('D7 표지 달린 쓰기는 잠금을 보지 않고 200, attachmentRefs 는 받았을 때만', async () => {
+  it('D7 표지 달린 쓰기는 200, attachmentRefs 는 받았을 때만', async () => {
     const { sqlDb, owner } = makeWorld()
     const id = await userId(owner, sqlDb)
     insertDoc(sqlDb, uuid(12), id, { e2ee_key: KEY, attachment_refs: `["${REF}"]` })
-    sqlDb
-      .prepare('INSERT INTO doc_locks (doc_id, user_id, email, session_id, expires_at) VALUES (?,?,?,?,?)')
-      .run(uuid(12), id, OWNER, 'other-session', Date.now() + 60_000)
     const res = await call(owner, `/api/docs/${uuid(12)}`, json('PUT', { e2ee: true, content: 'QUJD', baseVersion: 1 }))
     expect(res.status).toBe(200)
     const body = (await res.json()) as { version: number; content: string; e2eeKey: string; attachmentRefs: string[] }

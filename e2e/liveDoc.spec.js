@@ -1,4 +1,4 @@
-// 실시간 연결·잠금 폴백 — fakeServer + fakeDocRoom (specs/features/F-305.md 19.2)
+// 실시간 연결·폴백 — fakeServer + fakeDocRoom (specs/features/F-305.md 19.2)
 import { test, expect } from '@playwright/test'
 import { openApp, currentDocId, setPrefBeforeLoad, fakeImeCompose, fakeImeCommit } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
@@ -6,7 +6,7 @@ import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
 
 const DOC = 'live-doc-1'
 const OTHER = 'live-doc-2'
-const LIVE_FALLBACK_TEXT = '실시간 연결 실패 · 한 명씩 편집'
+const LIVE_FALLBACK_TEXT = '실시간 연결 실패'
 const N1 = '편집 권한이 없어 읽기만 할 수 있습니다.'
 const N2 = '편집 권한이 없어져 읽기만 할 수 있습니다.'
 const N3 = '이 문서가 삭제되었거나 접근할 수 없게 되었습니다. 지금 화면의 내용은 저장되지 않습니다.'
@@ -17,37 +17,24 @@ function serverDoc(id, { title, content }) {
   return { id, title, content, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: now, updatedAt: now }
 }
 
-// 이 페이지가 보낸 본문 PUT·잠금 POST·문서 POST 를 센다
+// 이 페이지가 보낸 본문 PUT·문서 POST 를 센다
 function trackRequests(page) {
-  const log = { puts: [], lockPosts: [], docPosts: [] }
+  const log = { puts: [], docPosts: [] }
   page.on('request', (req) => {
     const path = new URL(req.url()).pathname
     if (req.method() === 'PUT' && /^\/api\/docs\/[^/]+$/.test(path)) log.puts.push({ path, body: req.postDataJSON() })
-    if (req.method() === 'POST' && /^\/api\/docs\/[^/]+\/lock$/.test(path)) log.lockPosts.push(path)
     if (req.method() === 'POST' && path === '/api/docs') log.docPosts.push(req.postDataJSON())
   })
   return {
     puts: (id) => log.puts.filter((p) => p.path === `/api/docs/${id}`),
-    lockPosts: (id) => log.lockPosts.filter((p) => p === `/api/docs/${id}/lock`),
     docPosts: () => log.docPosts,
   }
-}
-
-// fakeServer 에는 잠금 경로가 없다 — 늘 잡히는 최소 잠금만 둔다 (F-213 흐름이 도는지만 본다)
-async function installLockRoute(page) {
-  await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) => {
-    if (route.request().method() === 'POST') {
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
-    }
-    return route.fulfill({ status: 204 })
-  })
 }
 
 // 서버 문서를 심고(방에도 같은 id 로 심을 수 있다) 그 문서 주소로 연다
 async function openSide(page, { room, docs, open = DOC }) {
   const server = await fakeServer(page)
   const requests = trackRequests(page)
-  await installLockRoute(page)
   if (room) await room.install(page.context())
   for (const doc of docs) server.docs.set(doc.id, serverDoc(doc.id, doc))
   await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
@@ -75,7 +62,7 @@ async function typeAtEnd(page, lineText, text) {
 const saveStatus = (page) => page.locator('.statusbar-save')
 
 test.describe('F-305 실시간 연결', () => {
-  test('F-305 E1·E3·E17 첫 동기화 전에는 편집기가 없고, 열리면 방 본문으로 입력이 방에 들어가며 PUT·잠금이 없고, 다른 문서로 옮기면 연결이 닫힌다', async ({ page }) => {
+  test('F-305 E1·E3·E17 첫 동기화 전에는 편집기가 없고, 열리면 방 본문으로 입력이 방에 들어가며 PUT 이 없고, 다른 문서로 옮기면 연결이 닫힌다', async ({ page }) => {
     const room = createFakeDocRoom()
     room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
     room.seed(OTHER, { content: '다른 본문', title: '다른 문서' })
@@ -95,7 +82,7 @@ test.describe('F-305 실시간 연결', () => {
     await expect(page.locator('.cm-content')).toHaveCount(0)
     room.resume(DOC)
 
-    // E1 방 본문으로 열리고 입력이 방에 들어가며 PUT·잠금이 없다
+    // E1 방 본문으로 열리고 입력이 방에 들어가며 PUT 이 없다
     await expect(mainContent(page)).toContainText('방 본문')
     await expect(mainContent(page)).not.toContainText('옛 본문')
     await expect(saveStatus(page)).toHaveText('저장됨')
@@ -103,7 +90,6 @@ test.describe('F-305 실시간 연결', () => {
     await expect.poll(() => room.content(DOC), { timeout: 1_000 }).toBe('방 본문안녕')
     await page.waitForTimeout(3_000)
     expect(requests.puts(DOC)).toHaveLength(0)
-    expect(requests.lockPosts(DOC)).toHaveLength(0)
 
     // E17 다른 문서로 옮기면 방 연결이 닫힌다
     expect(room.connections(DOC)).toBe(1)
@@ -166,7 +152,7 @@ test.describe('F-305 실시간 연결', () => {
 })
 
 test.describe('F-305 첫 동기화 전 닫힘', () => {
-  test('F-305 E4 열리지 않고 닫히면 폴백 — 잠금과 PUT', async ({ page }) => {
+  test('F-305 E4 열리지 않고 닫히면 폴백 — PUT', async ({ page }) => {
     const room = createFakeDocRoom()
     room.seed(DOC, { content: '방 본문', title: '실시간 문서' })
     room.setReject(DOC, { code: 1011, reason: 'x' })
@@ -174,7 +160,6 @@ test.describe('F-305 첫 동기화 전 닫힘', () => {
 
     await expect(mainContent(page)).toContainText('옛 본문')
     await expect(page.locator('.statusbar-live')).toHaveText(LIVE_FALLBACK_TEXT)
-    await expect.poll(() => requests.lockPosts(DOC).length).toBeGreaterThan(0)
 
     await typeAtEnd(page, '옛 본문', '폴백')
     await expect.poll(() => requests.puts(DOC).length).toBeGreaterThan(0)
@@ -186,7 +171,6 @@ test.describe('F-305 첫 동기화 전 닫힘', () => {
 
     await expect(mainContent(page)).toContainText('옛 본문')
     await expect(page.locator('.statusbar-live')).toHaveText(LIVE_FALLBACK_TEXT)
-    await expect.poll(() => requests.lockPosts(DOC).length).toBeGreaterThan(0)
 
     await typeAtEnd(page, '옛 본문', '폴백')
     await expect.poll(() => server.docs.get(DOC)?.content).toBe('옛 본문폴백')
@@ -304,7 +288,6 @@ test.describe('F-305 실시간이 아닌 경로', () => {
     const room = createFakeDocRoom()
     const server = await fakeServer(page)
     const requests = trackRequests(page)
-    await installLockRoute(page)
     await room.install(page.context())
     await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
     await openApp(page)

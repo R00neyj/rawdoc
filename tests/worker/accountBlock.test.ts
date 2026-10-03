@@ -180,7 +180,7 @@ describe('F-2028 B5~B8 막힌 소유자 문서에 남이 쓰기', () => {
     return { w, d, h, ownerToken, friendToken }
   }
 
-  it('B5 PUT·잠금 잡기는 403 account_blocked, 잠금 놓기는 204, 아무 것도 바뀌지 않는다', async () => {
+  it('B5 PUT 은 403 account_blocked, 아무 것도 바뀌지 않는다', async () => {
     const { w, d } = await setupShared()
     const before = docRow(w.sqlDb, d)
     const ownerBytes = userRow(w.sqlDb, OWNER).content_bytes
@@ -190,17 +190,9 @@ describe('F-2028 B5~B8 막힌 소유자 문서에 남이 쓰기', () => {
     expect(put.status).toBe(403)
     expect(await put.json()).toEqual({ error: 'account_blocked' })
 
-    const lock = await call(w.friend, `/api/docs/${d}/lock`, json('POST', { sessionId: 's1' }))
-    expect(lock.status).toBe(403)
-    expect(await lock.json()).toEqual({ error: 'account_blocked' })
-    expect((w.sqlDb.prepare('SELECT COUNT(*) AS n FROM doc_locks').get() as { n: number }).n).toBe(0)
-
-    const unlock = await call(w.friend, `/api/docs/${d}/lock?session=s1`, json('DELETE'))
-    expect(unlock.status).toBe(204)
-
     expect(docRow(w.sqlDb, d)).toEqual(before)
     expect(userRow(w.sqlDb, OWNER).content_bytes).toBe(ownerBytes)
-    expect(userRow(w.sqlDb, FRIEND).write_count).toBe(friendWrites + 1)
+    expect(userRow(w.sqlDb, FRIEND).write_count).toBe(friendWrites)
   })
 
   it('B6 /v1 PUT 은 403 account_blocked, DO 를 부르지 않는다', async () => {

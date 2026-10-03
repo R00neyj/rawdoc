@@ -42,7 +42,6 @@ type DocRow = {
 }
 type FolderRow = { id: string; owner_id: string; name: string; parent_id: string | null; created_at: number; updated_at: number }
 type GrantRow = { target_type: 'doc' | 'folder'; target_id: string; grantee_email: string; role: 'view' | 'edit' }
-type LockRow = { doc_id: string; user_id: string; email: string; session_id: string; expires_at: number }
 type LinkRow = { token: string; owner_id: string; target_type: 'doc' | 'folder'; target_id: string; created_at: number; revoked_at: number | null }
 type AttachmentRow = { owner_id: string; id: string; ext: string; mime: string; size: number; width: number; height: number; created_at: number }
 type UserRow = { id: string; write_day?: string | null; write_count?: number; content_bytes?: number; doc_count?: number; blocked_at?: number | null; warned_at?: number | null }
@@ -51,7 +50,6 @@ function makeEnv(data: {
   docs?: DocRow[]
   folders?: FolderRow[]
   grants?: GrantRow[]
-  locks?: LockRow[]
   links?: LinkRow[]
   attachments?: AttachmentRow[]
   users?: UserRow[]
@@ -59,7 +57,6 @@ function makeEnv(data: {
   const docs = data.docs ?? []
   const folders = data.folders ?? []
   const grants = data.grants ?? []
-  const locks = data.locks ?? []
   const links = data.links ?? []
   const attachments = data.attachments ?? []
   const users = data.users ?? []
@@ -97,10 +94,7 @@ function makeEnv(data: {
                 const [id] = args as [string]
                 return (folders.find((f) => f.id === id) as T) ?? null
               }
-              if (sql.startsWith('SELECT * FROM doc_locks WHERE doc_id = ?')) {
-                const [docId] = args as [string]
-                return (locks.find((l) => l.doc_id === docId) as T) ?? null
-              }
+              if (sql.includes('doc_locks')) throw new Error('no such table: doc_locks')
               if (sql.startsWith('SELECT * FROM share_links WHERE target_type = ? AND target_id = ? AND owner_id = ? AND revoked_at IS NULL')) {
                 const [targetType, targetId, ownerId] = args as [string, string, string]
                 return (links.find((l) => l.target_type === targetType && l.target_id === targetId && l.owner_id === ownerId && !l.revoked_at) as T) ?? null
@@ -245,7 +239,7 @@ function makeEnv(data: {
   const putCalls: string[] = []
   const BUCKET = { async put(key: string) { putCalls.push(key) } }
 
-  return { env: { DB, BUCKET } as unknown as Env, docs, folders, grants, locks, links, attachments, putCalls }
+  return { env: { DB, BUCKET } as unknown as Env, docs, folders, grants, links, attachments, putCalls }
 }
 
 function pngBytes(): Uint8Array {
@@ -327,15 +321,6 @@ describe('F-223 A1 PUT /v1/docs/:id', () => {
     expect(res.status).toBe(409)
   })
 
-  it('잠금이 있으면 X-Lock-Session 을 보내도 항상 423', async () => {
-    const { env } = makeEnv({ docs: [baseDoc()], locks: [{ doc_id: 'd1', user_id: 'other', email: 'other@example.com', session_id: 'sess-1', expires_at: Date.now() + 60_000 }] })
-    const res = await handleUpdateDocV1(
-      new Request('http://local.test/v1/docs/d1', { method: 'PUT', headers: { 'x-test-user': 'u1', 'X-Lock-Session': 'sess-1' }, body: JSON.stringify({ content: 'new', baseVersion: 1 }) }),
-      env, {} as ExecutionContext, { id: 'd1' },
-    )
-    expect(res.status).toBe(423)
-  })
-
   it('남의 문서는 404', async () => {
     const { env } = makeEnv({ docs: [baseDoc({ owner_id: 'owner-2' })] })
     const res = await handleUpdateDocV1(
@@ -414,7 +399,7 @@ describe('F-308 A1~A8 /v1 PUT 을 DO 경유로', () => {
     room.mockImplementation(async () => null)
   })
 
-  it('A1 본문 400·413, 남의 문서 404, 보기 권한 403, D1 잠금 423 이 먼저 — writeTextInRoom 호출 0', async () => {
+  it('A1 본문 400·413, 남의 문서 404, 보기 권한 403 이 먼저 — writeTextInRoom 호출 0', async () => {
     room.mockImplementation(async () => okResult)
     const view: GrantRow = { target_type: 'doc', target_id: 'd1', grantee_email: 'u1@example.com', role: 'view' }
     const cases: [DocRow[], GrantRow[], unknown, number][] = [
@@ -429,11 +414,6 @@ describe('F-308 A1~A8 /v1 PUT 을 DO 경유로', () => {
       const res = await callV1(env, body)
       expect(res.status).toBe(status)
     }
-    const expiresAt = Date.now() + 60_000
-    const { env } = makeEnv({ docs: [baseDoc()], locks: [{ doc_id: 'd1', user_id: 'other', email: 'other@example.com', session_id: 's', expires_at: expiresAt }] })
-    const locked = await callV1(env, { content: 'x', baseVersion: 3 })
-    expect(locked.status).toBe(423)
-    expect(await locked.json()).toEqual({ error: 'locked', email: 'other@example.com', expiresAt })
     expect(room).not.toHaveBeenCalled()
   })
 
@@ -518,7 +498,7 @@ describe('F-308 A1~A8 /v1 PUT 을 DO 경유로', () => {
     expect(room).toHaveBeenCalledTimes(1)
   })
 
-  it('A7 423 은 D1 잠금뿐 — /api PUT 은 writeTextInRoom 을 부르지 않는다', async () => {
+  it('A7 /api PUT 은 writeTextInRoom 을 부르지 않는다', async () => {
     const results: (RoomTextWriteResult | null)[] = [
       okResult,
       { type: 'conflict', doc: { title: 't', content: 'c', version: 3, updatedAt: null } },
@@ -530,8 +510,7 @@ describe('F-308 A1~A8 /v1 PUT 을 DO 경유로', () => {
     for (const result of results) {
       room.mockImplementation(async () => result)
       const { env } = makeEnv({ docs: [baseDoc()] })
-      const res = await callV1(env, { content: 'new', baseVersion: 3 })
-      expect(res.status).not.toBe(423)
+      await callV1(env, { content: 'new', baseVersion: 3 })
     }
 
     room.mockClear()
@@ -542,12 +521,12 @@ describe('F-308 A1~A8 /v1 PUT 을 DO 경유로', () => {
     expect(room).not.toHaveBeenCalled()
   })
 
-  it('A8 X-Lock-Session 을 보내도 D1 잠금이 있으면 423, DO 를 부르지 않는다', async () => {
+  it('A8 X-Lock-Session 을 실어도 무시하고 DO 를 한 번 부른다', async () => {
     room.mockImplementation(async () => okResult)
-    const { env } = makeEnv({ docs: [baseDoc()], locks: [{ doc_id: 'd1', user_id: 'other', email: 'other@example.com', session_id: 'sess-1', expires_at: Date.now() + 60_000 }] })
+    const { env } = makeEnv({ docs: [baseDoc()] })
     const res = await callV1(env, { content: 'new', baseVersion: 3 }, { 'X-Lock-Session': 'sess-1' })
-    expect(res.status).toBe(423)
-    expect(room).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    expect(room).toHaveBeenCalledTimes(1)
   })
 
   it('V1 소유자 누계 한도에서 늘리는 본문은 413, writeTextInRoom 호출 0 (F-308 A1 과 같은 방식, F-2025 6.3)', async () => {

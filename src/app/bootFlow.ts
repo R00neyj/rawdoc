@@ -122,7 +122,7 @@ export async function runBoot(deps: BootDeps): Promise<void> {
 
   // resolvedStore 가 정해지기 전엔 handleServerConflict 를 못 만드므로 자리만 먼저 둔다
   let conflictHandler:
-    | ((event: { docId: string; copyId: string; reason?: 'locked'; email?: string }) => void)
+    | ((event: { docId: string; copyId: string }) => void)
     | null = null
 
   const resolvedStore = await openStore({
@@ -181,17 +181,7 @@ export async function runBoot(deps: BootDeps): Promise<void> {
   })
 
   // 열린 문서가 충돌한 원본이면 서버 내용을 밀어 넣지 않고(불변조건) 사본으로 전환한다
-  async function handleServerConflict({
-    docId,
-    copyId,
-    reason,
-    email,
-  }: {
-    docId: string
-    copyId: string
-    reason?: 'locked'
-    email?: string
-  }) {
+  async function handleServerConflict({ docId, copyId }: { docId: string; copyId: string }) {
     const [orig, copy] = await Promise.all([appStore.get(docId), appStore.get(copyId)])
     setDocs((prev) => {
       let next = prev
@@ -204,14 +194,7 @@ export async function runBoot(deps: BootDeps): Promise<void> {
       return next
     })
     const copyTitle = copy?.title ?? ''
-    // 423(F-213.md 2.4) 이면 문구가 다르다 — 그 외(409)는 기존 충돌 문구
-    showNotice({
-      type: 'warn',
-      message:
-        reason === 'locked'
-          ? `${email ?? ''} 님이 편집 중이라 내 편집을 "${copyTitle}" 으로 저장했습니다.`
-          : `다른 곳에서 먼저 바뀌어 내 편집을 "${copyTitle}" 으로 저장했습니다.`,
-    })
+    showNotice({ type: 'warn', message: `다른 곳에서 먼저 바뀌어 내 편집을 "${copyTitle}" 으로 저장했습니다.` })
     if (docId === currentDocIdRef.current) {
       leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute })
       focusEditorRef.current = false

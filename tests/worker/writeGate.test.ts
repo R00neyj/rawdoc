@@ -102,8 +102,6 @@ const WRITE_ROUTES: [string, string][] = [
   ['DELETE', '/api/docs/:id'],
   ['PUT', '/api/docs/:id/folder'],
   ['PUT', '/api/docs/:id/pin'],
-  ['POST', '/api/docs/:id/lock'],
-  ['DELETE', '/api/docs/:id/lock'],
   ['POST', '/api/docs/:id/link'],
   ['DELETE', '/api/docs/:id/link'],
   ['POST', '/api/folders'],
@@ -149,7 +147,7 @@ const PUB_GET_ROUTES = [
 ]
 
 describe('G1 isWriteRoute — 3장 표', () => {
-  it('38개만 참, 나머지 전부 거짓 (F-401 금고 셋 + F-402 첨부 지우기 + F-2050 삭제·이동·폴더 삭제 포함)', () => {
+  it('36개만 참, 나머지 전부 거짓 (F-401 금고 셋 + F-402 첨부 지우기 + F-2050 삭제·이동·폴더 삭제 포함)', () => {
     for (const [method, path] of WRITE_ROUTES) {
       expect(isWriteRoute(method, path), `${method} ${path}`).toBe(true)
     }
@@ -173,7 +171,7 @@ describe('G1 isWriteRoute — 3장 표', () => {
     expect(isWriteRoute('DELETE', '/api/push/subscription')).toBe(false)
     expect(isWriteRoute('GET', '/api/push/key')).toBe(false)
     expect(isWriteRoute('GET', '/api/user-css')).toBe(false)
-    expect(WRITE_ROUTES).toHaveLength(38)
+    expect(WRITE_ROUTES).toHaveLength(36)
   })
 })
 
@@ -396,8 +394,8 @@ describe('G7 순서 — 막힘/하루/분당', () => {
   })
 })
 
-describe('G8 26개 쓰기 라우트 전부 429 minute, 그 밖은 아니다', () => {
-  it('26개 429, 로그인·GET 은 아니다', async () => {
+describe('G8 24개 쓰기 라우트 전부 429 minute, 그 밖은 아니다', () => {
+  it('24개 429, 로그인·GET 은 아니다', async () => {
     const { env } = makeEnv()
     await call(env, '/api/docs') // 사용자 행 만들기, 기본 limiter(true) 통과
     const token = await createToken(env)
@@ -412,8 +410,6 @@ describe('G8 26개 쓰기 라우트 전부 429 minute, 그 밖은 아니다', ()
       ['DELETE', `/api/docs/${id}`, { method: 'DELETE' }],
       ['PUT', `/api/docs/${id}/folder`, jsonInit('PUT', { folderId: null })],
       ['PUT', `/api/docs/${id}/pin`, jsonInit('PUT', { pinned: true })],
-      ['POST', `/api/docs/${id}/lock`, jsonInit('POST', { sessionId: 's1' })],
-      ['DELETE', `/api/docs/${id}/lock`, { method: 'DELETE' }],
       ['POST', `/api/docs/${id}/link`, { method: 'POST' }],
       ['DELETE', `/api/docs/${id}/link`, { method: 'DELETE' }],
       ['POST', '/api/folders', jsonInit('POST', { name: 'f' })],
@@ -434,7 +430,7 @@ describe('G8 26개 쓰기 라우트 전부 429 minute, 그 밖은 아니다', ()
       ['POST', '/v1/attachments', bearerInit('POST', token)],
       ['POST', `/v1/docs/${id}/link`, bearerInit('POST', token)],
     ]
-    expect(writeCalls.length).toBe(26)
+    expect(writeCalls.length).toBe(24)
 
     for (const [method, path, init] of writeCalls) {
       const res = await call(env, path, init)
@@ -446,7 +442,7 @@ describe('G8 26개 쓰기 라우트 전부 429 minute, 그 밖은 아니다', ()
         retryAfter: MINUTE_RETRY_AFTER,
       })
     }
-    expect(limiter.limit).toHaveBeenCalledTimes(26)
+    expect(limiter.limit).toHaveBeenCalledTimes(24)
 
     const login = await call(env, '/api/login', {
       method: 'POST',
@@ -454,7 +450,7 @@ describe('G8 26개 쓰기 라우트 전부 429 minute, 그 밖은 아니다', ()
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': String('provider=google&return=%23%2Fd%2Fabc'.length) },
     })
     expect(login.status).toBe(303)
-    expect(limiter.limit).toHaveBeenCalledTimes(26)
+    expect(limiter.limit).toHaveBeenCalledTimes(24)
 
     const getCalls: [string, RequestInit?][] = [
       ['/api/docs', undefined],
@@ -478,7 +474,7 @@ describe('G8 26개 쓰기 라우트 전부 429 minute, 그 밖은 아니다', ()
       const res = await call(env, path, init)
       expect(res.status, path).not.toBe(429)
     }
-    expect(limiter.limit).toHaveBeenCalledTimes(26)
+    expect(limiter.limit).toHaveBeenCalledTimes(24)
   })
 })
 

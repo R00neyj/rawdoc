@@ -7,7 +7,7 @@ import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
 const DOC = 'off-doc-1'
 const OTHER = 'off-doc-2'
 const FRESH = 'off-doc-3'
-const LIVE_FALLBACK_TEXT = '실시간 연결 실패 · 한 명씩 편집'
+const LIVE_FALLBACK_TEXT = '실시간 연결 실패'
 const N3 = '이 문서가 삭제되었거나 접근할 수 없게 되었습니다. 지금 화면의 내용은 저장되지 않습니다.'
 const N5 = '서버와 연결이 끊겼습니다. 편집은 이 브라우저에 저장되고 다시 연결되면 합쳐집니다'
 const N7 = '오프라인에서는 이 문서를 읽기만 할 수 있습니다. 연결되면 편집할 수 있습니다.'
@@ -19,33 +19,21 @@ function serverDoc(id, { title, content }) {
   return { id, title, content, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: now, updatedAt: now }
 }
 
-// 이 페이지가 보낸 본문 PUT·잠금 POST 를 센다 (liveDoc.spec.js 와 같은 준비)
+// 이 페이지가 보낸 본문 PUT 을 센다 (liveDoc.spec.js 와 같은 준비)
 function trackRequests(page) {
-  const log = { puts: [], lockPosts: [] }
+  const log = { puts: [] }
   page.on('request', (req) => {
     const path = new URL(req.url()).pathname
     if (req.method() === 'PUT' && /^\/api\/docs\/[^/]+$/.test(path)) log.puts.push(path)
-    if (req.method() === 'POST' && /^\/api\/docs\/[^/]+\/lock$/.test(path)) log.lockPosts.push(path)
   })
   return {
     puts: (id) => log.puts.filter((p) => p === `/api/docs/${id}`),
-    lockPosts: (id) => log.lockPosts.filter((p) => p === `/api/docs/${id}/lock`),
   }
-}
-
-async function installLockRoute(page) {
-  await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) => {
-    if (route.request().method() === 'POST') {
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
-    }
-    return route.fulfill({ status: 204 })
-  })
 }
 
 async function openSide(page, { room, docs, open = DOC }) {
   const server = await fakeServer(page)
   const requests = trackRequests(page)
-  await installLockRoute(page)
   if (room) await room.install(page.context())
   for (const doc of docs) server.docs.set(doc.id, serverDoc(doc.id, doc))
   await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
@@ -145,13 +133,11 @@ test.describe('F-306 기록 남기기와 재개', () => {
     await expect(mainContent(page)).toHaveAttribute('contenteditable', 'true')
     await expect(saveStatus(page)).toHaveText(RECONNECTING)
     await expect(page.locator('.statusbar-live')).toHaveCount(0)
-    expect(requests.lockPosts(DOC)).toHaveLength(0)
     expect(requests.puts(DOC)).toHaveLength(0)
 
     room.setReject(DOC, null)
     await expect(saveStatus(page)).toHaveText('저장됨', { timeout: 5_000 })
     await expect.poll(() => room.content(DOC)).toBe('방 본문안녕 끊김중')
-    expect(requests.lockPosts(DOC)).toHaveLength(0)
     expect(requests.puts(DOC)).toHaveLength(0)
   })
 
@@ -193,7 +179,6 @@ test.describe('F-306 기록 남기기와 재개', () => {
     await setOffline(page, server, false)
     await expect(saveStatus(page)).toHaveText('저장됨', { timeout: 5_000 })
     await expect.poll(() => room.content(DOC)).toBe('에이 본문 오프라인편집')
-    expect(requests.lockPosts(DOC)).toHaveLength(0)
     expect(requests.puts(DOC)).toHaveLength(0)
 
     await setOffline(page, server, true)
@@ -204,7 +189,6 @@ test.describe('F-306 기록 남기기와 재개', () => {
     await expect(page.locator('textarea.doc-title')).not.toBeEditable()
     await expect(page.locator('.statusbar-live')).toHaveCount(0)
     await page.waitForTimeout(500)
-    expect(requests.lockPosts(FRESH)).toHaveLength(0)
     expect(requests.puts(FRESH)).toHaveLength(0)
     expect(room.attempts(FRESH)).toBe(0)
 
@@ -216,7 +200,6 @@ test.describe('F-306 기록 남기기와 재개', () => {
     await page.locator('.doc-item-btn', { hasText: '디 문서' }).click()
     await expect(mainContent(page)).toContainText('디 옛 본문')
     await expect(page.locator('.statusbar-live')).toHaveText(LIVE_FALLBACK_TEXT)
-    await expect.poll(() => requests.lockPosts('off-doc-4').length).toBeGreaterThan(0)
   })
 })
 

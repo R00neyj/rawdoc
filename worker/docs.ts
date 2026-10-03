@@ -2,7 +2,6 @@
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { getDocAccess, getOwnedFolder, roleAtLeast, targetShareCleanupStatements } from './access'
-import { getActiveLock } from './locks'
 import { notifyPurge } from './docRoomRpc'
 import { docCommentDeleteStatements } from './commentRows'
 import { e2eeDocFields, rowToDoc, updateDocRow, updateE2eeDocRow } from './docWrite'
@@ -282,14 +281,6 @@ export async function handleUpdateDoc(
   const rowIsE2ee = typeof existing.e2ee_key === 'string'
   if (rowIsE2ee && !e2ee) return jsonResponse({ error: 'e2ee_doc' }, 409)
   if (!rowIsE2ee && e2ee) return jsonResponse({ error: 'not_e2ee' }, 409)
-
-  // 금고 문서는 편집 잠금을 보지 않는다 (F-401 3.3 8번)
-  if (!rowIsE2ee) {
-    const activeLock = await getActiveLock(env, params.id)
-    if (activeLock && activeLock.session_id !== request.headers.get('X-Lock-Session')) {
-      return jsonResponse({ error: 'locked', email: activeLock.email, expiresAt: activeLock.expires_at }, 423)
-    }
-  }
 
   if (existing.version !== baseVersion) {
     return jsonResponse({ error: 'conflict', doc: rowToDoc(existing) }, 409)

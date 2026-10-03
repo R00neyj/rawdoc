@@ -31,7 +31,7 @@ const LIVE_STATUS: Record<LiveStatus, { text: string; dot: DotStatus }> = {
   gone: { text: '저장되지 않음', dot: 'error' },
 }
 
-const LIVE_FALLBACK_TEXT = '실시간 연결 실패 · 한 명씩 편집'
+const LIVE_FALLBACK_TEXT = '실시간 연결 실패'
 
 // pending·오프라인·signedOut 순서로 이어 붙인다 (F-207.md 2.5)
 function syncSuffix(sync?: SyncState): string {

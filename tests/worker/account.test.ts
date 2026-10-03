@@ -209,7 +209,6 @@ const OWNER_TABLES: [string, string][] = [
   ['share_link_docs', "SELECT COUNT(*) AS n FROM share_link_docs WHERE token IN ('live', 'dead') OR doc_id LIKE 'd%'"],
   ['grants given', 'SELECT COUNT(*) AS n FROM grants WHERE owner_id = ?1'],
   ['grants received', "SELECT COUNT(*) AS n FROM grants WHERE grantee_email = 'owner@example.com'"],
-  ['doc_locks', "SELECT COUNT(*) AS n FROM doc_locks WHERE user_id = ?1 OR doc_id LIKE 'd%'"],
   ['api_tokens', 'SELECT COUNT(*) AS n FROM api_tokens WHERE user_id = ?1'],
   ['e2ee_keys', 'SELECT COUNT(*) AS n FROM e2ee_keys WHERE user_id = ?1'],
   ['doc_comments', "SELECT COUNT(*) AS n FROM doc_comments WHERE doc_id LIKE 'd%'"],
@@ -222,8 +221,6 @@ function seedDeleteExtras(sqlDb: DatabaseSync) {
   const iso = new Date().toISOString()
   run(sqlDb, 'INSERT INTO auth_sessions (id, user_id, token, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', 's1', OWNER, 'tok', iso, iso, iso)
   run(sqlDb, "INSERT INTO auth_accounts (id, user_id, account_id, provider_id, created_at, updated_at) VALUES ('ac1', ?, 'g-1', 'google', ?, ?)", OWNER, iso, iso)
-  run(sqlDb, "INSERT INTO doc_locks (doc_id, user_id, email, session_id, expires_at) VALUES ('x1', ?, ?, 'ls', 9)", OWNER, OWNER_EMAIL)
-  run(sqlDb, "INSERT INTO doc_locks (doc_id, user_id, email, session_id, expires_at) VALUES ('d1', ?, ?, 'ls', 9)", OTHER, OTHER_EMAIL)
   run(sqlDb, "INSERT INTO e2ee_keys (user_id, bundle, rev, created_at, updated_at) VALUES (?, '{}', 1, 1, 1)", OWNER)
   run(sqlDb, "INSERT INTO user_css (user_id, snippets, rev, created_at, updated_at) VALUES (?, '[]', 1, 1, 1), (?, '[]', 1, 1, 1)", OWNER, OTHER)
   run(sqlDb, "INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at) VALUES ('p1', ?, 'https://fcm.googleapis.com/fcm/send/o', 'p', 'a', 1), ('p2', ?, 'https://fcm.googleapis.com/fcm/send/x', 'p', 'a', 1)", OWNER, OTHER)

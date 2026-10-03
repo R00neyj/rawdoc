@@ -1,6 +1,5 @@
 // F-206 서버 API 호출 래퍼 — fetch 하나로 감싸고 오류를 종류별로 분류한다 (specs/features/F-207.md 2.3)
 import type { Doc, Folder, LineEnding } from '../types'
-import { getLockSessionId, isLockSessionSettled, lockSessionReady } from './lockSession'
 import { parseRetryAfter } from '../lib/usageLimits'
 import type { CommentCountResponse, CommentImportBody, CommentImportResponse } from '../lib/docComments'
 
@@ -14,7 +13,6 @@ export type ApiErrorKind =
   | 'not_found'
   | 'too_large'
   | 'conflict'
-  | 'locked'
   | 'id_taken'
   | 'invalid'
   | 'forbidden'
@@ -34,8 +32,6 @@ export class ApiError extends Error {
   kind: ApiErrorKind
   status?: number
   doc?: ServerDoc
-  email?: string
-  expiresAt?: number
   scope?: 'minute' | 'day'
   retryAfter?: number
   limit?: number
@@ -47,8 +43,6 @@ export class ApiError extends Error {
     extra: {
       status?: number
       doc?: ServerDoc
-      email?: string
-      expiresAt?: number
       scope?: 'minute' | 'day'
       retryAfter?: number
       limit?: number
@@ -60,8 +54,6 @@ export class ApiError extends Error {
     this.kind = kind
     this.status = extra.status
     this.doc = extra.doc
-    this.email = extra.email
-    this.expiresAt = extra.expiresAt
     this.scope = extra.scope
     this.retryAfter = extra.retryAfter
     this.limit = extra.limit
@@ -183,10 +175,9 @@ export async function updateDoc(
   id: string,
   body: { title?: string; content?: string; baseVersion: number; e2ee?: true; attachmentRefs?: string[] },
 ): Promise<ServerDoc> {
-  if (!isLockSessionSettled()) await lockSessionReady() // 탭 복제로 회전할지 정해지기 전엔 세션 id 를 싣는 요청을 안 보낸다 (F-297.md 4.2)
   const res = await send(`/api/docs/${encodeURIComponent(id)}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'X-Lock-Session': getLockSessionId() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
   const kind = classifyStatus(res.status)
@@ -203,10 +194,6 @@ export async function updateDoc(
   if (res.status === 404) throw new ApiError('not_found')
   if (res.status === 403) throw new ApiError('forbidden')
   if (res.status === 413) throw new ApiError('too_large')
-  if (res.status === 423) {
-    const data = (await readJson(res)) as { email?: string; expiresAt?: number } | null
-    throw new ApiError('locked', { email: data?.email, expiresAt: data?.expiresAt })
-  }
   if (res.status === 409) {
     const data = (await readJson(res)) as { doc?: ServerDoc } | null
     const e2eeKind = e2eeConflictKind(data, ['e2ee_doc', 'not_e2ee'])
@@ -257,45 +244,6 @@ export async function importDocComments(id: string, body: CommentImportBody): Pr
   if (res.status === 400) throw new ApiError('invalid')
   if (!res.ok) throw new ApiError('other', { status: res.status })
   return (await readJson(res)) as CommentImportResponse
-}
-
-// 잡기·연장 — edit 이상 권한 필요, 200 이면 잡음/연장, 423 이면 다른 세션이 쥐고 있음 (F-213.md 2.2)
-export async function lockDoc(id: string): Promise<{ expiresAt: number }> {
-  if (!isLockSessionSettled()) await lockSessionReady()
-  const res = await send(`/api/docs/${encodeURIComponent(id)}/lock`, jsonInit({ sessionId: getLockSessionId() }, 'POST'))
-  const kind = classifyStatus(res.status)
-  if (kind) throw new ApiError(kind)
-  if (res.status === 429) throw await rateLimitedError(res)
-  if (res.status === 413) {
-    const quota = await docQuotaError(res)
-    if (quota) throw quota
-  }
-  if (res.status === 403) {
-    const blocked = await accountBlockedError(res)
-    if (blocked) throw blocked
-  }
-  if (res.status === 404) throw new ApiError('not_found')
-  if (res.status === 403) throw new ApiError('forbidden')
-  if (res.status === 423) {
-    const data = (await readJson(res)) as { email?: string; expiresAt?: number } | null
-    throw new ApiError('locked', { email: data?.email, expiresAt: data?.expiresAt })
-  }
-  if (!res.ok) throw new ApiError('other', { status: res.status })
-  return (await readJson(res)) as { expiresAt: number }
-}
-
-// 같은 세션일 때만 서버가 지운다. 못 보내도 60초 뒤 만료하므로 오류는 무시한다 (F-213.md 2.2·2.3)
-export async function unlockDoc(id: string, opts: { keepalive?: boolean } = {}): Promise<void> {
-  if (!isLockSessionSettled()) await lockSessionReady()
-  try {
-    await fetch(`/api/docs/${encodeURIComponent(id)}/lock?session=${encodeURIComponent(getLockSessionId())}`, {
-      method: 'DELETE',
-      credentials: 'same-origin',
-      keepalive: opts.keepalive,
-    })
-  } catch {
-    // 못 보내도 60초 뒤 만료 (2.3)
-  }
 }
 
 export async function moveDocFolder(id: string, folderId: string | null): Promise<ServerDoc> {
@@ -408,7 +356,7 @@ export async function updateFolder(
   return (await readJson(res)) as ServerFolder
 }
 
-// 금고로 옮기기·빼기 — 편집 잠금을 보지 않으므로 X-Lock-Session 을 싣지 않는다. 분류 차례는 updateDoc 과 같다 (F-407 3.2)
+// 금고로 옮기기·빼기 — 분류 차례는 updateDoc 과 같다 (F-407 3.2)
 export async function setDocE2ee(
   id: string,
   body: { e2eeKey: string | null; title: string; content: string; attachmentRefs: string[] | null; baseVersion: number },

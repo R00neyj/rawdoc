@@ -408,11 +408,6 @@ test.describe('F-407 서버 금고로 옮기기', () => {
       const room = createFakeDocRoom()
       const server = await fakeServer(page)
       await room.install(page.context())
-      await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) =>
-        route.request().method() === 'POST'
-          ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
-          : route.fulfill({ status: 204 }),
-      )
       const base = '첫 줄\n'
       server.docs.set('live1', serverDoc('live1', { title: '실시간 메모', content: base }))
       room.seed('live1', { title: '실시간 메모', content: base })
@@ -621,11 +616,6 @@ test.describe('F-407 실시간 문서 옮기기', () => {
     const room = createFakeDocRoom()
     const server = await fakeServer(page)
     await room.install(page.context())
-    await page.route(/\/api\/docs\/[^/]+\/lock(\?.*)?$/, (route) =>
-      route.request().method() === 'POST'
-        ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ expiresAt: Date.now() + 60_000 }) })
-        : route.fulfill({ status: 204 }),
-    )
     const base = '첫 줄\n'
     server.docs.set('live2', serverDoc('live2', { title: '실시간 메모2', content: base }))
     room.seed('live2', { title: '실시간 메모2', content: base })

@@ -13,7 +13,6 @@ import {
   handleUpdateDoc,
 } from './docs'
 import { handleCreateFolder, handleDeleteFolder, handleListFolders, handleUpdateFolder } from './folders'
-import { handleLockDoc, handleUnlockDoc } from './locks'
 import {
   handleCreateDocLink,
   handleCreateFolderLink,
@@ -251,8 +250,6 @@ const routes: Route[] = [
   { method: 'DELETE', path: '/api/e2ee/keys', handler: handleDeleteE2eeKeys },
   { method: 'GET', path: '/api/user-css', handler: handleGetUserCss },
   { method: 'PUT', path: '/api/user-css', handler: handlePutUserCss },
-  { method: 'POST', path: '/api/docs/:id/lock', handler: handleLockDoc },
-  { method: 'DELETE', path: '/api/docs/:id/lock', handler: handleUnlockDoc },
   { method: 'GET', path: '/api/docs/:id/link', handler: handleGetDocLink },
   { method: 'POST', path: '/api/docs/:id/link', handler: handleCreateDocLink },
   { method: 'DELETE', path: '/api/docs/:id/link', handler: handleDeleteDocLink },

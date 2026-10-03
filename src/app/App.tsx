@@ -35,7 +35,6 @@ import { mergeResyncList } from './resyncList'
 import { isDocLoading } from './docLoading'
 import { combineCachedList, createCachedListSource, createListRefresher, hasLiveChangesSince, isListStale } from './cachedList'
 import { useDocSaver } from './useDocSaver'
-import { useDocLock } from './useDocLock'
 import type { DocPathKind } from './docPath'
 import type { LiveDocSession } from './useLiveDoc'
 import { useLiveNotices } from './useLiveNotices'
@@ -363,36 +362,6 @@ export default function App() {
     liveEverSyncedRef, liveChangedAtRef,
   })
 
-  // 편집 잠금(F-213.md 2.3) — 다른 세션이 잡고 있으면 읽기 전용 + 알림, 되찾으면 에디터를 다시 마운트한다
-  const handleLockReacquired = useCallback(
-    (docId: string) => {
-      const serverStore = store as ServerStore
-      if (typeof serverStore.refreshDocFromServer !== 'function') return
-      serverStore.refreshDocFromServer(docId).then((fresh) => {
-        if (!fresh || docId !== currentDocIdRef.current) return
-        setOpenDoc({ id: fresh.id, content: fresh.content, lineEnding: fresh.lineEnding })
-        setDocs((prev) =>
-          sortByUpdatedAtDesc(
-            prev.map((d) => (d.id === fresh.id ? { ...d, title: fresh.title, updatedAt: fresh.updatedAt } : d)),
-          ),
-        )
-        focusEditorRef.current = false
-        setEditorRemountNonce((n) => n + 1)
-      })
-    },
-    [store],
-  )
-  const { readOnly: isLockedReadOnly } = useDocLock({
-    isServerStore: store.kind === 'server',
-    // 잠금은 pending·fallback 경로에서만 — 판정 전·실시간이면 null (F-305 10.1)
-    docId: docPath === 'pending' || docPath === 'fallback' ? currentDocId : null,
-    role: currentDoc?.role as 'owner' | 'edit' | 'view' | undefined,
-    online: syncState?.online ?? true,
-    myEmail: account.state === 'in' ? account.email : null,
-    onNotice: showNotice,
-    onReacquired: handleLockReacquired,
-  })
-
   // 탭마다 한 번 — 메모리에만 둔다 (F-296.md 6.1)
   const [tabId] = useState(newTabId)
   const tabIdRef = useRef(tabId)
@@ -508,7 +477,7 @@ export default function App() {
     })
   }, [store, listRefresher])
 
-  // 로컬 편집권을 되찾으면 서버 잠금 재획득(handleLockReacquired)과 같은 방식으로 다시 읽어 다시 마운트한다 (F-296.md 6.4)
+  // 로컬 편집권을 되찾으면 다시 읽어 다시 마운트한다 (F-296.md 6.4)
   const handleClaimRegained = useCallback(() => {
     const docId = currentDocIdRef.current
     if (!docId) return
@@ -524,8 +493,7 @@ export default function App() {
     })
   }, [store])
 
-  // 편집권은 로컬(idb) 문서에만 켠다 — 서버는 useDocLock(F-213), 메모리는 탭마다 저장소가 달라 안 겹친다 (F-296.md 6.4)
-  // ?ysync 두 탭은 둘 다 편집해야 해 안 켠다(F-303 9.4), 서버 금고 문서는 잠금·병합이 없어 켠다(F-405 7.5)
+  // 편집권은 로컬(idb)·서버 금고 문서에만 켠다 — 메모리는 탭마다 저장소가 달라 안 겹치고 ?ysync 두 탭은 안 켠다 (F-296.md 6.4, F-303 9.4, F-405 7.5)
   const claimDocId = (store.kind === 'idb' || docPath === 'e2ee') && !sharedDoc && !DEV_YSYNC ? currentDocId : null
   // useTabSync 가 e2ee 열쇠고리보다 먼저 만들어지므로, 다른 탭 잠그기 신호는 ref 로 늦게 잇는다 (F-404.md 6장)
   const e2eeOtherTabLockRef = useRef<() => void>(() => {})
@@ -591,7 +559,6 @@ export default function App() {
   const isConvertingDoc = convertingDocId !== null && convertingDocId === currentDocId
   const isReadOnlyDoc =
     isReadOnlyByRole ||
-    isLockedReadOnly ||
     claimReadOnly ||
     isDeletedElsewhere ||
     liveStopped ||
@@ -901,7 +868,7 @@ export default function App() {
     getComments: () => comments.localCommentRecords(),
     onSaved: handleDocSaved,
     onSaveError: handleSaveError,
-    // 잠금 뺏긴 서버 문서는 그대로 내보내 423 충돌 사본을 만드는 설계다(F-296.md 7.4), 실시간 경로는 방 Doc 으로 보낸다 — PUT 하면 409 사본이 생긴다(F-305 10.1)
+    // 실시간 경로는 방 Doc 으로 보낸다 — PUT 하면 409 사본이 생긴다 (F-305 10.1)
     // 편집기가 내려가 있으면 getText 가 '' 를 돌려줘 대기 저장이 서버 본문을 지우지 않게 막는다 (리뷰 A2)
     blocked: isDeletedElsewhere || claimReadOnly || isRealtime || isOfflineView || openDoc?.id !== currentDocId,
   })

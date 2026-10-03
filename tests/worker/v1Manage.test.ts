@@ -215,16 +215,13 @@ describe('V2 DELETE /v1/docs/:id — 거절', () => {
   })
 })
 
-describe('V3 DELETE /v1/docs/:id — 편집 잠금·접속자 무시', () => {
-  it('다른 사람 잠금이 살아 있어도 200', async () => {
+describe('V3 DELETE /v1/docs/:id — 접속자 무시', () => {
+  it('200', async () => {
     const { sqlDb, env } = makeEnv()
     await call(env, '/api/docs', jsonInit('POST', { title: 't', content: 'c', lineEnding: 'lf' }))
     const owner = userId(sqlDb)
     const token = await createToken(env)
     insertDoc(sqlDb, uuid(1), owner)
-    sqlDb
-      .prepare('INSERT INTO doc_locks (doc_id, user_id, email, session_id, expires_at) VALUES (?,?,?,?,?)')
-      .run(uuid(1), 'someone', 'someone@example.com', 's1', Date.now() + 60_000)
 
     const res = await call(env, `/v1/docs/${uuid(1)}`, bearerInit('DELETE', token))
     expect(res.status).toBe(200)
