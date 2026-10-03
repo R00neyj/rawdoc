@@ -41,7 +41,7 @@ type ViewerProps = {
 }
 
 // resolveAttachment(id) 는 생략하면(F-130 공유 화면) 항상 자리 표시, missingImageText 는 그 문구(생략 시 F-157 2.2 문구)
-// codeCopy 는 참이면 pre > code 마다 복사 버튼을 붙인다. 지금은 공개 보기(S-5)에서만 켠다 (F-210 2.5)
+// codeCopy 는 참이면 pre > code 마다 복사 버튼을 붙인다. 보기 모드·공개 보기·도움말에서 켠다 (F-210 2.5)
 export default function Viewer({
   html,
   theme,

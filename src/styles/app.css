@@ -5541,7 +5541,7 @@ body.sidebar-resizing {
     --gutter-gap: 10px;
   }
 
-  .app-shell .viewer {
+  :is(.app-shell, .public-view) .viewer {
     padding-left: 16px;
     padding-right: 16px;
   }

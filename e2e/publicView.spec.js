@@ -377,12 +377,13 @@ test('F-293 A8·A9·A10 코드블록 머리줄 구조, 복사 버튼은 원문�
   await expect(btn.locator('svg')).toBeVisible()
 })
 
-test('F-293 A14 앱 보기 모드는 코드블록이 있어도 .viewer 에 머리줄·복사 버튼이 없다', async ({ page }) => {
+test('F-293 A14 앱 보기 모드 코드블록 복사 버튼은 원문을 클립보드에 담는다 (2026-10-04 tweak)', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await openApp(page)
   await importMarkdown(page, { content: '```js\nalert(1)\n```\n' })
 
   await page.getByRole('button', { name: '보기 — 읽기 전용으로 보기' }).click()
-  await expect(page.locator('.viewer .markdown-body pre')).toBeVisible()
-  await expect(page.locator('.viewer .md-code-head')).toHaveCount(0)
-  await expect(page.locator('.viewer .code-copy-btn')).toHaveCount(0)
+  await page.locator('.viewer .code-copy-btn').click()
+  const clip = await page.evaluate(() => navigator.clipboard.readText())
+  expect(clip.trim()).toBe('alert(1)')
 })

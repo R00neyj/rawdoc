@@ -177,6 +177,7 @@ export default function DocumentArea({
           onNavigateFolder={onNavigateFolder}
           onOpenWikiLink={handleOpenWikiLink}
           resolveAttachment={resolveAttachment}
+          codeCopy
           onContextMenu={handleViewContextMenu}
         />
       )}
