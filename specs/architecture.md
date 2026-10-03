@@ -103,7 +103,6 @@ src/
   - `editor/`: `showSearchMatches.ts`(F-294 — 검색 결과로 연 문서에서 CM6 찾기 패널 열기)
 - 탭 세션 겹침(2026-09-21)으로 추가
   - `lib/`: `tabChannel.ts`(F-297 — 탭 사이 채널 이름·상수)
-  - `storage/`: `lockSession.ts`(F-297 — 잠금 세션 id 보관·회전)
 - 위키링크 지도(2026-09-21)로 추가
   - `lib/`: `wikiGraph.ts`(F-292 — 위키링크 추출·그래프 만들기 순수 함수), `mapLayout3d.ts`(F-2001 — `d3-force-3d` 3D 배치), `cssColor.ts`(F-2002 — 계산된 CSS 색 파싱), `mapCamera.ts`(F-2003·F-2009 — 카메라 거리·절단면·확대 한계와 화면 평행 평면 좌표 풀기), `mapNodeStyle.ts`(F-2004 — 노드 크기·깊이·이름표 판정), `mapEdgeStyle.ts`(F-2005 — `선 두께` 정규값 → 간선 색), `mapFilter.ts`(F-2007 — 필터·거리 계산)
   - `app/`: `mapIndex.ts`(F-292 — 그래프 캐시), `MapPage.tsx`(F-292 — S-8 화면), `MapScene.tsx`(F-2002 — three 렌더러), `MapLabels.tsx`(F-2004 — 이름표 DOM 레이어), `MapPanel.tsx`·`mapPrefs.ts`(F-2005 — 설정 패널과 그 저장)
@@ -291,13 +290,12 @@ type YjsMetaRow = {
 
 | 키 | 값 | 기본 | 명세 |
 | --- | --- | --- | --- |
-| `md.lockSession` | 편집 잠금 세션 id (`src/storage/lockSession.ts`). 탭마다 다르고 새로고침에는 살아남는다. 탭 복제로 겹치면 부팅 때 회전한다 | 없음(첫 접근 때 만든다) | F-250, F-297 |
 
 ## 6. 서버 (M2, 2026-09-15)
 
 ```
 wrangler.jsonc           Worker 스크립트·D1(DB)·R2(BUCKET)·정적 자산(ASSETS) 바인딩 (F-204), Durable Object `DOC_ROOM`(클래스 `DocRoom`) 바인딩·마이그레이션 (F-304), Rate Limiting `WRITE_LIMITER` (F-2026)
-migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057) 0015 notifications_recipient_order(F-2075) 0016 shared_indexes(F-2058) 0017 push_subscriptions(F-3003) 0018 notifications_push(F-3005) 0019 push_quota 0020 user_css 0021 notifications_share(F-3012)
+migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213, F-309 에서 삭제) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057) 0015 notifications_recipient_order(F-2075) 0016 shared_indexes(F-2058) 0017 push_subscriptions(F-3003) 0018 notifications_push(F-3005) 0019 push_quota 0020 user_css 0021 notifications_share(F-3012) 0022 drop_doc_locks(F-309)
 worker/
   index.ts               fetch 진입점, 라우트 표 { method, path, handler }
   http.ts                JSON 응답 도우미
@@ -310,7 +308,6 @@ worker/
   links.ts token.ts      (F-210·F-211)
   attachments.ts imageSniff.ts     (F-209)
   access.ts grants.ts    (F-212)
-  locks.ts               (F-213)
   docSocket.ts docRoom.ts docRoomCore.ts yStore.ts textRebase.ts docRoomRpc.ts   (F-304)
   docWrite.ts            문서 행 조건부 쓰기 한 벌 — `/api`·`/v1` 폴백 PUT 과 DocRoom idle 경로가 같이 씀 (F-308)
   usage.ts               사용량 열·한도·사용량 줄 (F-2025)
