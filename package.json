@@ -55,6 +55,7 @@
     "mermaid": "^12.0.0",
     "partyserver": "^0.5.10",
     "pretendard": "^1.3.9",
+    "rawdoc": "^0.3.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "three": "0.186.0",
