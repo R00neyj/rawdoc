@@ -277,6 +277,14 @@ describe('F-2045 공유 글', () => {
     expect(raw).toContain(`${DISCONNECT_NOTICE_MS / 1000}초 넘게`)
   })
 
+  it('F-309: 공유 글에 편집 잠금 시절 문구가 없고 충돌 사본을 말한다', () => {
+    const raw = readGuide('sharing')
+    expect(raw).toContain('`실시간 연결 실패`')
+    expect(raw).toContain('`(충돌 사본)`')
+    expect(raw).not.toContain('한 명씩')
+    expect(raw).not.toContain('님이 편집 중입니다')
+  })
+
   it('U3: 공유 글에 제품명이 없다 (R6)', () => {
     const body = guideBody(readGuide('sharing')).toLowerCase()
     expect(body).not.toContain(brand.name.toLowerCase())
