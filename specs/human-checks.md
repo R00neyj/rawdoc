@@ -375,6 +375,9 @@
 | H835 | F-2128 H2 | 로컬 앱(F-3014 8장)으로 실제 GitHub: 설정 `GitHub 연결` → 돌아와 `{login} 연결됨`, D-18 연결 → 설치 → 돌아와 D-18 다시 열림, 실제 저장소에서 가져오기·연결 | 대기 |
 | H836 | F-3017 H1 | (배포) 공개 링크를 시크릿 창으로 열어 상대 경로 SVG·5MB 넘는 PNG 가 보임. 스크립트 넣은 SVG 를 직접 열면 스크립트가 안 돌고 `data:` 그림은 보임 | 대기 |
 | H837 | F-3017 H2 | (배포) 300초 안에 같은 프록시 그림을 두 번 열면 `wrangler tail` 에 GitHub 호출이 한 번 (Cache API 저장) | 대기 |
+| H838 | F-3016 H1 | 로컬 앱으로 `.md`(BOM·CRLF) + 그림 2장 푸시 → GitHub 커밋이 내 메시지·연결된 GitHub 사용자로 보이고, 올라간 `.md` sha 가 내보내기(F-112)+BOM 파일의 `git hash-object` 와 같음 | 대기 |
+| H839 | F-3016 H2 | 보호 브랜치(PR 필수) 푸시 → 403 `github_forbidden`. 다른 곳에서 커밋한 뒤 푸시 → 409. 빈 저장소 연결 → push-plan 409 `github_empty_repo` | 대기 |
+| H840 | F-3016 H3 | (배포) Workers 지표 CPU: 1MB `.md` + 1,000개 든 `attachments` 폴더 push-plan, 5MB 그림 blobs, push 가 10ms 안 | 대기 |
 
 ## 4. 결정 대기 (확인이 아니라 정해야 하는 것)
 

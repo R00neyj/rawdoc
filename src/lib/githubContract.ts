@@ -23,6 +23,7 @@ export type GithubErrorCode =
   | 'github_target_taken'
   | 'e2ee'
   | 'github_linked'
+  | 'github_empty_repo'
 
 export const GITHUB_RETURN_PARAM = 'github' // 값 'connected'
 export const GITHUB_ERROR_PARAM = 'github_error'
@@ -57,6 +58,17 @@ export type GithubLink = {
 }
 export type GithubLinkPut = { repo: string; branch: string; path: string; sha: string | null; bom: boolean }
 export type GithubSyncedBody = { sha: string; bom: boolean }
+
+// F-3016 6장 — 푸시 (push-plan → blobs → push)
+export const GITHUB_PUSH_MAX_IMAGES = 50
+export const GITHUB_BLOB_MAX_BYTES = 7_000_000
+export type GithubPushPlanBody = { attachments: string[] } // '{16hex}.{ext}'
+export type GithubPushPlan = { missing: string[]; skipped: string[] }
+export type GithubBlobCreated = { sha: string }
+export type GithubPushImage = { name: string; sha: string }
+export type GithubPushBody = { message: string; mdSha: string; images: GithubPushImage[] }
+export type GithubPushed = { sha: string; commitSha: string | null; commitUrl: string | null } // null = 바뀐 것 없음
+export type GithubConflictBody = { error: 'github_conflict'; remoteSha?: string | null } // null = 원격에 파일 없음, 없음 = ref 경합
 
 // F-3017 4장 — 저장소 그림 대응·프록시
 export const GITHUB_PROXY_MAX_BYTES = 10_000_000

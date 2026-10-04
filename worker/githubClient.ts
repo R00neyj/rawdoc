@@ -173,7 +173,7 @@ function retryAfterOf(res: Response, now: number): number {
   return DEFAULT_RETRY_AFTER
 }
 
-function classify(res: Response): Response | GithubFailure {
+export function classifyGithubResponse(res: Response): Response | GithubFailure {
   const { status } = res
   const limited =
     status === 429 || (status === 403 && (res.headers.has('retry-after') || res.headers.get('x-ratelimit-remaining') === '0'))
@@ -212,5 +212,5 @@ export async function githubFetch(
     if (!res) return UNAVAILABLE
     if (res.status === 401) return markReconnect(env.DB, userId, second.rev)
   }
-  return classify(res)
+  return classifyGithubResponse(res)
 }

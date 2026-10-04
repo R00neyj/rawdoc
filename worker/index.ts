@@ -94,6 +94,7 @@ import {
   handlePublicGithubImg,
   handlePutGithubImage,
 } from './githubImages'
+import { handleGithubBlobs, handleGithubPush, handleGithubPushPlan } from './githubPush'
 
 export { DocRoom } from './docRoom'
 
@@ -326,6 +327,9 @@ const routes: Route[] = [
   { method: 'GET', path: '/pub/docs/:token/gh', handler: handlePublicGithubImg },
   { method: 'GET', path: '/pub/docs/:token/docs/:docId/gh', handler: handlePublicDocSetGithubImg },
   { method: 'GET', path: '/pub/folders/:token/docs/:docId/gh', handler: handlePublicFolderGithubImg },
+  { method: 'POST', path: '/api/docs/:id/github/push-plan', handler: handleGithubPushPlan },
+  { method: 'POST', path: '/api/docs/:id/github/blobs', handler: handleGithubBlobs },
+  { method: 'POST', path: '/api/docs/:id/github/push', handler: handleGithubPush },
   { method: 'GET', path: '/api/usage', handler: handleGetUsage },
   { method: 'PUT', path: '/api/attachments/:idext', handler: handleUploadAttachment },
   { method: 'GET', path: '/api/attachments/:idext', handler: handleGetAttachment },
