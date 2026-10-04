@@ -8,6 +8,7 @@ import { buildWikiLinkTable, collectWikiSet, type LoadDoc } from './shareSet'
 import { descendantFolderIds } from '../src/lib/folderTree'
 import { createWikiResolver, type WikiFolderRef } from '../src/lib/wikiResolve'
 import { dayUsageStatement } from './usage'
+import { githubImageMapOf } from './githubImages'
 
 export type PublicLinkRow = {
   token: string
@@ -38,6 +39,18 @@ type FolderRow = {
   owner_id: string
   name: string
   parent_id: string | null
+}
+
+// 공개 문서 본문 셋의 같은 모양. 연결된 문서면 본문 경로만 거른 github 칸 (F-3017 2.6)
+async function publicDocBody(env: Env, docId: string, ownerId: string, doc: PublicDocRow) {
+  const github = await githubImageMapOf(env, { id: docId, owner_id: ownerId, content: doc.content }, { filter: true })
+  return {
+    title: doc.title,
+    content: stripComments(doc.content),
+    lineEnding: doc.line_ending,
+    updatedAt: doc.updated_at,
+    ...(github ? { github } : {}),
+  }
 }
 
 // F-210 2.3 헤더 — F-204 API 헤더 + 색인 금지·리퍼러 없음
@@ -286,12 +299,7 @@ export async function handlePublicGetDoc(
     .first<PublicDocRow>()
   if (!doc) return pubResponse({ error: 'not_found' }, 404)
 
-  return pubResponse({
-    title: doc.title,
-    content: stripComments(doc.content),
-    lineEnding: doc.line_ending,
-    updatedAt: doc.updated_at,
-  })
+  return pubResponse(await publicDocBody(env, link.target_id, link.owner_id, doc))
 }
 
 // 묶음 문서 목록 — 시작 문서가 맨 앞, 삭제된 문서는 빠진다 (F-252 2.5)
@@ -367,12 +375,7 @@ export async function handlePublicGetDocSetDoc(
     .first<PublicDocRow>()
   if (!doc) return pubResponse({ error: 'not_found' }, 404)
 
-  return pubResponse({
-    title: doc.title,
-    content: stripComments(doc.content),
-    lineEnding: doc.line_ending,
-    updatedAt: doc.updated_at,
-  })
+  return pubResponse(await publicDocBody(env, params.docId, link.owner_id, doc))
 }
 
 export async function handleGetFolderLink(
@@ -485,10 +488,5 @@ export async function handlePublicGetFolderDoc(
     .first<PublicDocRow & { folder_id: string | null }>()
   if (!doc || !doc.folder_id || !treeIds.includes(doc.folder_id)) return pubResponse({ error: 'not_found' }, 404)
 
-  return pubResponse({
-    title: doc.title,
-    content: stripComments(doc.content),
-    lineEnding: doc.line_ending,
-    updatedAt: doc.updated_at,
-  })
+  return pubResponse(await publicDocBody(env, params.docId, link.owner_id, doc))
 }

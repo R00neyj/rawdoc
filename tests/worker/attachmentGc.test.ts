@@ -34,6 +34,8 @@ function makeEnv(docs: DocRow[], attachments: AttachmentRow[], opts: { failR2Key
                 const rows = attachments.filter((a) => a.created_at < threshold).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
                 return { results: rows as unknown as T[] }
               }
+              // F-3017 (C) 대응 행이 있는 문서 쪽 — 이 가짜 DB 에는 대응 행이 없다
+              if (sql.includes('FROM github_images')) return { results: [] as T[] }
               throw new Error(`unhandled sql: ${sql}`)
             },
             async run() {

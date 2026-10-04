@@ -57,3 +57,15 @@ export type GithubLink = {
 }
 export type GithubLinkPut = { repo: string; branch: string; path: string; sha: string | null; bom: boolean }
 export type GithubSyncedBody = { sha: string; bom: boolean }
+
+// F-3017 4장 — 저장소 그림 대응·프록시
+export const GITHUB_PROXY_MAX_BYTES = 10_000_000
+export const GITHUB_RAW_MAX_BYTES = 20_000_000
+export const GITHUB_IMAGE_SOURCES_MAX_PATHS = 500
+export const GITHUB_IMAGE_SOURCES_MAX_DIRS = 20
+export const GITHUB_IMAGES_PER_DOC = 1000
+export type GithubImageSourcesBody = { paths: string[] }
+export type GithubImageSource = { path: string; sha: string; size: number }
+export type GithubImageSources = { sources: GithubImageSource[]; truncated: boolean }
+export type GithubImagePut = { path: string; blobSha: string; attachment: string } // attachment: '{id}.{ext}'
+export type GithubImageMap = { path: string; images: Record<string, string> } // 저장소 경로 → '{attachment_id}.{ext}'

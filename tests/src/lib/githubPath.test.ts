@@ -97,3 +97,37 @@ describe('F-3015 A3 판별·주소', () => {
     expect(githubBlobUrl('o/r', 'feature/x', '문서/a b.md')).toBe('https://github.com/o/r/blob/feature/x/%EB%AC%B8%EC%84%9C/a%20b.md')
   })
 })
+
+describe('F-3017 A1 repoImagePaths 선형', () => {
+  const timed = (body: string) => {
+    const start = performance.now()
+    const got = repoImagePaths(body, MD)
+    return { got, ms: performance.now() - start }
+  }
+
+  it("'<img ' ×8,000 은 50ms 안 (이차 시간이면 ~100ms)", () => {
+    const { got, ms } = timed('<img '.repeat(8000))
+    expect(got.size).toBe(0)
+    expect(ms).toBeLessThan(50)
+  })
+
+  it("'<img ' ×200,000(1MB) 과 그 뒤 '>' 하나가 각각 50ms 안, 빈 집합", () => {
+    for (const body of ['<img '.repeat(200_000), `${'<img '.repeat(200_000)}>`]) {
+      const { got, ms } = timed(body)
+      expect(got.size).toBe(0)
+      expect(ms).toBeLessThan(50)
+    }
+  })
+
+  it('따옴표 값 안의 > 와 그 안의 <img 는 정규식 때와 같게', () => {
+    expect([...repoImagePaths('<img src="a>b.png"> <img alt="<img src=x.png>" src="y.png">', MD)]).toEqual(['docs/guide/a>b.png', 'docs/guide/x.png'])
+    expect([...repoImagePaths('<img src="q.png><img src=evil.png>">', MD)]).toEqual(['docs/guide/q.png><img src=evil.png>'])
+    expect([...repoImagePaths('<img data-src-x srcset="a.png" src="b.png">', MD)]).toEqual(['docs/guide/b.png'])
+    expect(repoImagePaths('<img src="never-closed.png"', MD).size).toBe(0)
+  })
+
+  it('같은 url 1,000번 → 결과 하나', () => {
+    const got = repoImagePaths(Array.from({ length: 1000 }, () => '![a](img/one.png) <img src="img/one.png">').join('\n'), MD)
+    expect([...got]).toEqual(['docs/guide/img/one.png'])
+  })
+})

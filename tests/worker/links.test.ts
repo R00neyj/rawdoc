@@ -260,6 +260,7 @@ function makeFolderEnv(folders: TreeFolderRow[], docs: TreeDocRow[]) {
                 const [id, ownerId] = args as [string, string]
                 return (docs.find((d) => d.id === id && d.owner_id === ownerId) ?? null) as T
               }
+              if (sql.includes('FROM github_links')) return null as T
               throw new Error(`unhandled first sql: ${sql}`)
             },
             async all<T>() {

@@ -6,6 +6,7 @@ import type { AuthUser } from './auth'
 import { isValidToken } from './token'
 import { sniffImage, MAX_PIXELS, IMAGE_MIME, type ImageExt } from './imageSniff'
 import { extractAttachmentRefs } from '../src/lib/imageBlock'
+import { isDocAttachmentRef, isGithubImageInUse } from './githubImages'
 import { findPublicLink, folderTreeIds, isDocInLinkSet } from './links'
 import { getDocAccess, isDocAttachmentOwner } from './access'
 import { DAILY_WRITE_LIMIT, DOC_BYTES_QUOTA, DOC_COUNT_QUOTA, dayUsageStatement, quotaPushInBackground, usageOf, writesToday } from './usage'
@@ -53,7 +54,7 @@ async function getUsedBytes(env: Env, ownerId: string): Promise<number> {
   return row?.used ?? 0
 }
 
-function attachmentResponse(object: R2ObjectBody, mime: string, cacheControl: string): Response {
+export function attachmentResponse(object: R2ObjectBody, mime: string, cacheControl: string): Response {
   const headers = new Headers()
   headers.set('Content-Type', mime)
   headers.set('X-Content-Type-Options', 'nosniff')
@@ -238,7 +239,7 @@ export async function handleGetAttachment(
     'id, owner_id, folder_id, content',
   )
   if (!access) return errorResponse('not_found', 404)
-  if (!extractAttachmentRefs(access.doc.content).has(id)) return errorResponse('not_found', 404)
+  if (!(await isDocAttachmentRef(env, access.doc, id))) return errorResponse('not_found', 404)
 
   // 금고 첨부는 남에게 절대 내주지 않는다 — 일반 문서가 금고 첨부를 참조해도 404 (F-402.md 3.2)
   const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
@@ -277,7 +278,7 @@ export async function handlePublicGetAttachment(
     .bind(link.target_id, link.owner_id)
     .first<{ id: string; owner_id: string; content: string; folder_id: string | null }>()
   if (!doc) return errorResponse('not_found', 404)
-  if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)
+  if (!(await isDocAttachmentRef(env, doc, id))) return errorResponse('not_found', 404)
 
   const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
     .bind(id, ext)
@@ -317,7 +318,7 @@ export async function handlePublicGetDocSetAttachment(
     .bind(params.docId, link.owner_id)
     .first<{ id: string; owner_id: string; content: string; folder_id: string | null }>()
   if (!doc) return errorResponse('not_found', 404)
-  if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)
+  if (!(await isDocAttachmentRef(env, doc, id))) return errorResponse('not_found', 404)
 
   const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
     .bind(id, ext)
@@ -357,7 +358,7 @@ export async function handlePublicGetFolderAttachment(
 
   const treeIds = await folderTreeIds(env, link.target_id, link.owner_id)
   if (!doc.folder_id || !treeIds.includes(doc.folder_id)) return errorResponse('not_found', 404)
-  if (!extractAttachmentRefs(doc.content).has(id)) return errorResponse('not_found', 404)
+  if (!(await isDocAttachmentRef(env, doc, id))) return errorResponse('not_found', 404)
 
   const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
     .bind(id, ext)
@@ -377,7 +378,7 @@ export async function handlePublicGetFolderAttachment(
   return attachmentResponse(object, row.mime, 'private, max-age=300')
 }
 
-// "쓰는 중" 판정 — 내 문서(또는 나에게 편집 초대를 준 사람의 문서) 본문이 참조하거나, 내 금고 문서 attachment_refs 에 있으면 참 (F-402.md 3.3)
+// "쓰는 중" — 내 문서(편집 초대 준 사람 문서 포함) 본문 참조, 내 금고 attachment_refs, 본문 경로의 대응 (F-402.md 3.3, F-3017 3.2)
 async function isAttachmentInUse(env: Env, user: AuthUser, id: string): Promise<boolean> {
   const { results: granters } = await env.DB.prepare(
     "SELECT DISTINCT owner_id FROM grants WHERE grantee_email = ? AND role = 'edit'",
@@ -400,7 +401,8 @@ async function isAttachmentInUse(env: Env, user: AuthUser, id: string): Promise<
   )
     .bind(user.id, id)
     .first<{ hit: number }>()
-  return refHit !== null
+  if (refHit !== null) return true
+  return isGithubImageInUse(env, user.id, id)
 }
 
 export async function handleDeleteAttachment(
@@ -433,6 +435,7 @@ export async function handleDeleteAttachment(
   const now = Date.now()
   await env.DB.batch([
     env.DB.prepare('DELETE FROM attachments WHERE owner_id = ? AND id = ?').bind(user.id, id),
+    env.DB.prepare('DELETE FROM github_images WHERE owner_id = ? AND attachment_id = ?').bind(user.id, id),
     dayUsageStatement(env.DB, user.id, now),
   ])
 

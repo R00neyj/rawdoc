@@ -1,5 +1,6 @@
-// 어떤 문서 원문에도 없고 24시간 지난 첨부를 매일 지운다 (specs/features/F-219.md 2.1, 2.2, F-402.md 4장)
+// 어떤 문서 원문에도 없고 24시간 지난 첨부를 매일 지운다 (specs/features/F-219.md 2.1, 2.2, F-402.md 4장, 저장소 그림 대응은 F-3017 3.3)
 import { extractAttachmentRefs } from '../src/lib/imageBlock'
+import { collectGithubImageRefs, deleteGithubImageRows } from './githubImages'
 
 const PAGE_SIZE = 200
 const MAX_DELETE = 500
@@ -65,8 +66,9 @@ async function collectReferencedIds(env: Env): Promise<{ refs: Set<string>; prot
 
 export async function cleanupServerAttachments(env: Env, now: number): Promise<{ deleted: number; failed: number }> {
   const { refs, protectedOwners } = await collectReferencedIds(env)
-
   const threshold = now - GRACE_MS
+  const staleGithubRows = await collectGithubImageRefs(env, refs, threshold)
+
   const { results: rows } = await env.DB.prepare(
     'SELECT owner_id, id, ext, created_at FROM attachments WHERE created_at < ? ORDER BY id',
   )
@@ -96,6 +98,12 @@ export async function cleanupServerAttachments(env: Env, now: number): Promise<{
     }
   }
 
-  console.log(`attachment gc: deleted=${deleted} failed=${failed}`)
+  let githubRows = 0
+  try {
+    githubRows = await deleteGithubImageRows(env, staleGithubRows)
+  } catch (err) {
+    console.error(err)
+  }
+  console.log(`attachment gc: deleted=${deleted} failed=${failed} github_rows=${githubRows}`)
   return { deleted, failed }
 }

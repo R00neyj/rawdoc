@@ -138,6 +138,8 @@ const WRITE_ROUTES: [string, string][] = [
   ['DELETE', '/api/docs/:id/github'],
   ['POST', '/api/docs/:id/github/pull'],
   ['POST', '/api/docs/:id/github/synced'],
+  ['POST', '/api/docs/:id/github/image-sources'],
+  ['PUT', '/api/docs/:id/github/images'],
 ]
 
 const PUB_GET_ROUTES = [
@@ -152,7 +154,7 @@ const PUB_GET_ROUTES = [
 ]
 
 describe('G1 isWriteRoute — 3장 표', () => {
-  it('41개만 참, 나머지 전부 거짓 (F-401 금고 셋 + F-402 첨부 지우기 + F-2050 삭제·이동·폴더 삭제 포함)', () => {
+  it('43개만 참, 나머지 전부 거짓 (F-401 금고 셋 + F-402 첨부 지우기 + F-2050 삭제·이동·폴더 삭제 + F-3017 그림 둘 포함)', () => {
     for (const [method, path] of WRITE_ROUTES) {
       expect(isWriteRoute(method, path), `${method} ${path}`).toBe(true)
     }
@@ -178,7 +180,7 @@ describe('G1 isWriteRoute — 3장 표', () => {
     expect(isWriteRoute('GET', '/api/user-css')).toBe(false)
     // F-3014 — 연결 해제는 막힌 계정도 할 수 있다 (F-3013 3.4)
     expect(isWriteRoute('DELETE', '/api/github/account')).toBe(false)
-    expect(WRITE_ROUTES).toHaveLength(41)
+    expect(WRITE_ROUTES).toHaveLength(43)
   })
 })
 

@@ -5,7 +5,7 @@ import brand from '../../brand.config'
 import { asD1, openTestDb } from '../../worker/testD1'
 import { importTokenKey, openToken, sealToken } from '../../worker/githubCrypto'
 import { loadGithubConfig, type GithubConfig } from '../../worker/githubSettings'
-import { githubFailureResponse, githubFetch, isGithubFailure, type GithubFailure } from '../../worker/githubClient'
+import { githubApiHeaders, githubFailureResponse, githubFetch, isGithubFailure, type GithubFailure } from '../../worker/githubClient'
 
 const NOW = Date.UTC(2026, 9, 4, 12, 0)
 const KEY_TEXT = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)))
@@ -138,6 +138,22 @@ describe('F-3014 A10 githubFetch 갱신 판정·머리', () => {
     const calls = fakeGithub(() => newPair())
     expect(failure(await githubFetch(env, config, 'u1', '/user')).code).toBe('github_reconnect')
     expect(calls).toHaveLength(0)
+  })
+})
+
+describe('F-3017 A2 githubApiHeaders Accept', () => {
+  it('받은 Accept 는 지키고, 없으면 application/vnd.github+json', () => {
+    expect(githubApiHeaders('t', { Accept: 'application/vnd.github.raw+json' }).get('Accept')).toBe('application/vnd.github.raw+json')
+    expect(githubApiHeaders('t').get('Accept')).toBe('application/vnd.github+json')
+    expect(githubApiHeaders('t', { 'X-Other': '1' }).get('Accept')).toBe('application/vnd.github+json')
+  })
+
+  it('githubFetch 가 Accept 를 GitHub 까지 넘긴다', async () => {
+    await seed(300_000)
+    const calls = fakeGithub(() => new Response('raw'))
+    await githubFetch(env, config, 'u1', '/repos/o/r/contents/a.png', { headers: { Accept: 'application/vnd.github.raw+json' } })
+    expect(calls[0].headers.get('Accept')).toBe('application/vnd.github.raw+json')
+    expect(calls[0].headers.get('Authorization')).toBe(`Bearer ${OLD_ACCESS}`)
   })
 })
 

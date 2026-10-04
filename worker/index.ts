@@ -84,6 +84,16 @@ import { cleanupPushSubscriptions, loadVapid } from './pushServer'
 import { handleGithubCallback, handleGithubConnect, handleGithubDeleteAccount, handleGithubSetup, handleGithubStatus } from './githubAuth'
 import { handleGithubBranches, handleGithubFile, handleGithubRepos, handleGithubTree } from './githubRepos'
 import { handleDeleteDocGithub, handleGetDocGithub, handlePullDocGithub, handlePutDocGithub, handleSyncedDocGithub } from './githubLinks'
+import {
+  handleGetGithubImages,
+  handleGithubImageSources,
+  handleGithubImg,
+  handleGithubRaw,
+  handlePublicDocSetGithubImg,
+  handlePublicFolderGithubImg,
+  handlePublicGithubImg,
+  handlePutGithubImage,
+} from './githubImages'
 
 export { DocRoom } from './docRoom'
 
@@ -308,6 +318,14 @@ const routes: Route[] = [
   { method: 'DELETE', path: '/api/docs/:id/github', handler: handleDeleteDocGithub },
   { method: 'POST', path: '/api/docs/:id/github/pull', handler: handlePullDocGithub },
   { method: 'POST', path: '/api/docs/:id/github/synced', handler: handleSyncedDocGithub },
+  { method: 'POST', path: '/api/docs/:id/github/image-sources', handler: handleGithubImageSources },
+  { method: 'GET', path: '/api/docs/:id/github/raw', handler: handleGithubRaw },
+  { method: 'PUT', path: '/api/docs/:id/github/images', handler: handlePutGithubImage },
+  { method: 'GET', path: '/api/docs/:id/github/images', handler: handleGetGithubImages },
+  { method: 'GET', path: '/api/docs/:id/github/img', handler: handleGithubImg },
+  { method: 'GET', path: '/pub/docs/:token/gh', handler: handlePublicGithubImg },
+  { method: 'GET', path: '/pub/docs/:token/docs/:docId/gh', handler: handlePublicDocSetGithubImg },
+  { method: 'GET', path: '/pub/folders/:token/docs/:docId/gh', handler: handlePublicFolderGithubImg },
   { method: 'GET', path: '/api/usage', handler: handleGetUsage },
   { method: 'PUT', path: '/api/attachments/:idext', handler: handleUploadAttachment },
   { method: 'GET', path: '/api/attachments/:idext', handler: handleGetAttachment },

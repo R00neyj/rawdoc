@@ -43,7 +43,7 @@ export function githubFailureResponse(f: GithubFailure): Response {
 export function githubApiHeaders(access: string, extra?: HeadersInit): Headers {
   const headers = new Headers(extra)
   headers.set('Authorization', `Bearer ${access}`)
-  headers.set('Accept', 'application/vnd.github+json')
+  if (!headers.has('Accept')) headers.set('Accept', 'application/vnd.github+json')
   headers.set('User-Agent', brand.name)
   headers.set('X-GitHub-Api-Version', GITHUB_API_VERSION)
   return headers
