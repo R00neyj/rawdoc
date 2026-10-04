@@ -6191,7 +6191,31 @@ a.dialog-btn {
   overflow: auto;
 }
 
-.github-pull-chunk-btn {
+.github-pull-merge {
+  margin-bottom: 12px;
+}
+
+.github-pull-merge .cm-editor.cm-focused {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.dialog-note.github-pull-intro {
+  text-align: left;
+}
+
+/* 좁은 화면에서는 덩어리 버튼이 줄 글자를 가리지 않게 따로 한 줄로 (tweak 2026-10-04) */
+@media (max-width: 600px) {
+  .github-pull-merge .cm-editor .cm-chunkButtons {
+    position: static;
+    display: flex;
+    justify-content: flex-end;
+    padding: 2px 0;
+  }
+}
+
+/* 라이브러리 테마의 흰 글자를 이기려고 선택자를 높인다 (tweak 2026-10-04) */
+.github-pull-merge .cm-chunkButtons .github-pull-chunk-btn {
   margin-right: 6px;
   padding: 2px 8px;
   border: 1px solid var(--rule);

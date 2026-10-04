@@ -149,7 +149,7 @@ export default function GithubPullDialog({ state, onCancel, onApply }: GithubPul
       {!ready && <p className="dialog-note">GitHub에서 받는 중…</p>}
       {compare && (
         <>
-          <p className="dialog-note">바뀐 부분마다 고르세요. 고르지 않은 부분은 지금 내용을 유지합니다.</p>
+          <p className="dialog-note github-pull-intro">바뀐 부분마다 고르세요. 빨간 줄은 GitHub, 초록 줄은 지금 내용이고 고르지 않은 부분은 지금 내용을 유지합니다.</p>
           {compare.note && <p className="dialog-note github-pull-note">{compare.note}</p>}
           {compare.status && <p className="dialog-note" role="status">{compare.status}</p>}
           {compare.error && <p className="dialog-note github-error" role="alert">{compare.error}</p>}
