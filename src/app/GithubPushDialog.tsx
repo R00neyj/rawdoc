@@ -36,7 +36,7 @@ export default function GithubPushDialog({ state, onMessage, onPush, onPull, onC
       <h2 id="github-push-title" ref={titleRef}>GitHub에 푸시</h2>
       {state && (
         <>
-          <p className="dialog-note github-push-target">{state.target}</p>
+          <p className="dialog-note github-push-note github-push-target">{state.target}</p>
           <label className="github-push-label">
             <span>커밋 메시지</span>
             <textarea
@@ -49,12 +49,12 @@ export default function GithubPushDialog({ state, onMessage, onPush, onPull, onC
               onChange={(e) => onMessage(e.target.value)}
             />
           </label>
-          {state.checking && <p className="dialog-note">GitHub 확인 중…</p>}
-          {summary && <p className="dialog-note">{summary.newLine}</p>}
-          {summary?.skippedLine && <p className="dialog-note">{summary.skippedLine}</p>}
-          {state.progress && <p className="dialog-note" role="status">{state.progress}</p>}
-          {state.error && <p className="dialog-note github-error" role="alert">{state.error}</p>}
-          {state.conflict && <p className="dialog-note github-error" role="alert">{state.conflict.gone ? CONFLICT_TEXT.gone : CONFLICT_TEXT.live}</p>}
+          {state.checking && <p className="dialog-note github-push-note">GitHub 확인 중…</p>}
+          {summary && <p className="dialog-note github-push-note">{summary.newLine}</p>}
+          {summary?.skippedLine && <p className="dialog-note github-push-note">{summary.skippedLine}</p>}
+          {state.progress && <p className="dialog-note github-push-note" role="status">{state.progress}</p>}
+          {state.error && <p className="dialog-note github-push-note github-error" role="alert">{state.error}</p>}
+          {state.conflict && <p className="dialog-note github-push-note github-error" role="alert">{state.conflict.gone ? CONFLICT_TEXT.gone : CONFLICT_TEXT.live}</p>}
         </>
       )}
       <div className="dialog-actions">

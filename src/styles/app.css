@@ -6232,6 +6232,10 @@ a.dialog-btn {
   margin-right: auto;
 }
 
+.dialog-note.github-push-note {
+  text-align: left;
+}
+
 .github-push-target {
   overflow-wrap: anywhere;
 }
