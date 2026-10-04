@@ -96,8 +96,9 @@ export async function handleGithubStatus(request: Request, env: Env): Promise<Re
     env.DB.prepare('SELECT login, refresh_expires_at FROM github_accounts WHERE user_id = ?').bind(user.id).first<{ login: string; refresh_expires_at: number }>(),
     githubUsedThisMonth(env.DB, user.id, now),
   ])
-  const enabled = settings.enabled && (await loadGithubConfig(env)) !== null
-  const body: GithubStatus = { enabled, connected: row !== null, month: { used, limit: settings.monthlyLimit } }
+  const config = settings.enabled ? await loadGithubConfig(env) : null
+  const body: GithubStatus = { enabled: config !== null, connected: row !== null, month: { used, limit: settings.monthlyLimit } }
+  if (config) body.installUrl = `https://github.com/apps/${encodeURIComponent(config.slug)}/installations/new`
   if (row) {
     body.login = row.login
     body.reconnect = row.refresh_expires_at <= now

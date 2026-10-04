@@ -5,6 +5,7 @@ export type GithubStatus = {
   connected: boolean
   login?: string
   reconnect?: boolean
+  installUrl?: string
   month: { used: number; limit: number | null }
 }
 

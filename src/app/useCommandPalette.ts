@@ -93,6 +93,7 @@ export type UseCommandPaletteOptions = {
   handleCopyDocAsRichText: ExportActions['handleCopyDocAsRichText']
   handlePrintDoc: ExportActions['handlePrintDoc']
   requestImport: () => void
+  github?: PaletteContext['github']
   handleTogglePin: UseFolderActionsResult['handleTogglePin']
   requestMoveDoc: UseFolderActionsResult['requestMoveDoc']
   requestDeleteDoc: UseFolderActionsResult['requestDeleteDoc']
@@ -123,7 +124,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     showNotice, templateEntries, readTemplateDocText, openShortcuts, notificationsEnabled, setNotificationsOpen, wikiResolver, currentFolderId,
     narrow, sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebar, closeSidebarIfNarrow, themePref, lineNumbersPref, toolbarPref,
     wikiPreviewPref, changeTheme, changeLineNumbers, changeToolbar, changeWikiPreview, handleExportDoc, handleExportDocAsText,
-    handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, handleTogglePin, requestMoveDoc, requestDeleteDoc,
+    handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, github, handleTogglePin, requestMoveDoc, requestDeleteDoc,
     getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createDocFromPalette,
     openDocFromSearch, newDocFolderId, changeViewMode,
   } = options
@@ -402,6 +403,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
       toggleWikiPreview: () => changeWikiPreview(wikiPreviewPref === 'on' ? 'off' : 'on'),
     },
     output: paletteOutputCtx,
+    github: github ? { importFile: () => runAfterPaletteClose(github.importFile) } : undefined,
   }
   return { openPalette, paletteContext }
 }

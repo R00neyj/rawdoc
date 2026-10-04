@@ -7,10 +7,11 @@ import E2eeMigrateDialog from './E2eeMigrateDialog'
 import Dialog from './Dialog'
 import MoveDocDialog, { type MoveDocTarget } from './MoveDocDialog'
 import InviteDialog, { type InviteTarget } from './InviteDialog'
-import SettingsDialog from './SettingsDialog'
+import SettingsDialog, { type SettingsGithub } from './SettingsDialog'
 import { userCssAccountId } from './useUserCss'
 import AccountDeleteDialog from './AccountDeleteDialog'
 import SearchDialog from './SearchDialog'
+import { GithubDialogs, type GithubDialogsProps } from './GithubPickerDialog'
 import CommandPalette from './CommandPalette'
 import ImportPreviewDialog from './ImportPreviewDialog'
 import type { SelectionItem } from './sidebarSelection'
@@ -67,6 +68,9 @@ export type AppDialogsProps = Pick<UseAccountStatusResult, 'account' | 'recheckA
     e2eeMigrateAsk: { count: number; bundle: string } | null
     e2eeMigrateDialogOpen: boolean
     folders: Folder[]
+    // GitHub 설정 묶음·고르기 대화상자 — 기능이 꺼지면 둘 다 없다 (F-2128)
+    settingsGithub?: SettingsGithub
+    githubDialogs?: GithubDialogsProps
     inviteTarget: InviteTarget
     listSource: Pick<Store, 'list' | 'listFolders'>
     moveDocTarget: MoveDocTarget | null
@@ -95,7 +99,7 @@ export default function AppDialogs({
   moveDocTarget, newDocTemplatePref, openDocFromSearch, openSettings, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
   requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
   setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref, toolbarPref,
-  wikiPreviewPref, changeDefaultView, defaultViewPref,
+  wikiPreviewPref, changeDefaultView, defaultViewPref, settingsGithub, githubDialogs,
 }: AppDialogsProps) {
   return (
     <>
@@ -209,10 +213,12 @@ export default function AppDialogs({
         userCss={{ accountId: userCssAccountId(account) }}
         account={settingsAccount}
         push={settingsPush}
+        github={settingsGithub}
         onOpen={openSettings}
         onClose={closeSettings}
       />
       {e2ee?.dialogs}
+      {githubDialogs && <GithubDialogs {...githubDialogs} />}
       <AccountDeleteDialog
         open={accountDeleteUserId !== null}
         unsynced={accountDeleteUnsynced}

@@ -127,6 +127,30 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     when: (ctx) => Boolean(ctx.docActions),
     run: (ctx) => ctx.docActions?.importDoc(),
   },
+  {
+    id: 'github.import',
+    kind: 'action',
+    label: 'GitHub에서 가져오기…',
+    keywords: ['github', '깃허브', '저장소', '가져오기', 'import', 'repo'],
+    when: (ctx) => Boolean(ctx.github),
+    run: (ctx) => ctx.github?.importFile(),
+  },
+  {
+    id: 'github.pull',
+    kind: 'action',
+    label: '이 문서 GitHub에 당기기…',
+    keywords: ['github', '깃허브', '저장소', '당기기', 'pull', '풀'],
+    when: (ctx) => Boolean(ctx.github?.pull),
+    run: (ctx) => ctx.github?.pull?.(),
+  },
+  {
+    id: 'github.push',
+    kind: 'action',
+    label: '이 문서 GitHub에 푸시…',
+    keywords: ['github', '깃허브', '저장소', '푸시', 'push', '올리기'],
+    when: (ctx) => Boolean(ctx.github?.push),
+    run: (ctx) => ctx.github?.push?.(),
+  },
 
   // ----- 이동 (F-2054 3.2) -----
   {

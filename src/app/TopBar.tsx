@@ -3,6 +3,7 @@ import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
 import type { StateCommand } from '@codemirror/state'
 import ShareMenu from './ShareMenu'
 import ExportMenu from './ExportMenu'
+import GithubMenu, { type GithubMenuProps } from './GithubMenu'
 import NotificationsMenu, { type NotificationsMenuProps } from './NotificationsMenu'
 import EditorToolbar from './EditorToolbar'
 import { IconTooltip, IconForum } from './icons'
@@ -58,6 +59,8 @@ type TopBarProps = {
   comments?: { openCount: number; open: boolean; disabled: boolean; onToggle: () => void }
   // 알림함 — 없으면 버튼이 없다(로그인 안 함·로컬 저장소) (F-507 3.4)
   notifications?: NotificationsMenuProps
+  // GitHub 메뉴 — 연결된 문서에만, 휴대폰 폭에서는 그리지 않는다 (F-2128 4.5)
+  github?: GithubMenuProps
   // 휴대폰 폭 ⋯ 판 — 어느 화면인지와 목차 카드 통로 (F-2083)
   screen: TopBarScreen
   outlineControlRef: RefObject<OutlineControl | null>
@@ -95,6 +98,7 @@ export default function TopBar({
   selfUserId,
   comments,
   notifications,
+  github,
   screen,
   outlineControlRef,
 }: TopBarProps) {
@@ -178,6 +182,7 @@ export default function TopBar({
                 <IconTooltip text="댓글" />
               </span>
             )}
+            {github && <GithubMenu {...github} />}
             <ShareMenu
               disabled={shareDisabled}
               getShareDoc={getShareDoc}

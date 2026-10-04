@@ -7,7 +7,7 @@ const ATTACHMENT_MIME = { png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif',
 // 로그인 상태로 /api/me·/api/docs·/api/folders 를 흉내낸다
 // userCss — { snippets, rev } 를 여러 컨텍스트에 같은 객체로 넘기면 한 서버처럼 쓴다 (F-2099 7.2)
 // listAutoRefreshMs — 사이드바 목록 주기 갱신 간격 덮어쓰기. 기본 0 = 끔 (F-2120 4.3)
-export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss = { snippets: [], rev: 0 }, listAutoRefreshMs = 0 } = {}) {
+export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss = { snippets: [], rev: 0 }, listAutoRefreshMs = 0, github } = {}) {
   await page.addInitScript((ms) => {
     window.__listAutoRefreshMs = ms
   }, listAutoRefreshMs)
@@ -761,6 +761,89 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
     return route.fulfill({ status: 204 })
   })
 
+  // F-2128 7장 — /api/github/* 와 /api/docs/:id/github 흉내. 생략하면 꺼짐(enabled: false)을 답한다
+  const gh = { enabled: false, connected: false, login: 'octocat', repos: [], branches: {}, files: {}, ...github }
+  const githubLinks = new Map() // docId -> GithubLink
+  const githubLog = [] // { method, path, query, body }
+  const ghJson = (route, status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+  const ghBytes = (f) => (typeof f.bytes === 'string' ? Buffer.from(f.bytes, 'utf8') : Buffer.from(f.bytes))
+  await page.route('**/api/github/**', async (route) => {
+    const req = route.request()
+    const url = new URL(req.url())
+    const path = url.pathname
+    const method = req.method()
+    githubLog.push({ method, path, query: Object.fromEntries(url.searchParams), body: safePostDataJSON(req) })
+    if (path === '/api/github/status') {
+      const month = { used: 0, limit: null }
+      if (!gh.enabled) return ghJson(route, 200, { enabled: false, connected: false, month })
+      const body = { enabled: true, connected: Boolean(gh.connected), installUrl: 'https://github.com/apps/fake/installations/new', month }
+      if (gh.connected) Object.assign(body, { login: gh.login, reconnect: Boolean(gh.reconnect) })
+      return ghJson(route, 200, body)
+    }
+    if (method === 'DELETE' && path === '/api/github/account') {
+      gh.connected = false
+      return route.fulfill({ status: 204 })
+    }
+    if (path === '/api/github/repos') {
+      const repos = gh.repos.map((r, i) => {
+        const o = typeof r === 'string' ? { fullName: r } : r
+        return { id: i + 1, fullName: o.fullName, defaultBranch: o.defaultBranch ?? 'main', private: false, canWrite: o.canWrite !== false }
+      })
+      return ghJson(route, 200, { repos, truncated: false })
+    }
+    const repo = url.searchParams.get('repo')
+    if (path === '/api/github/branches') return ghJson(route, 200, { branches: gh.branches[repo] ?? ['main'], truncated: false })
+    if (path === '/api/github/tree') {
+      const prefix = `${repo}@${url.searchParams.get('branch')}:`
+      const dir = url.searchParams.get('dir') ?? ''
+      const entries = new Map()
+      for (const [key, f] of Object.entries(gh.files)) {
+        if (!key.startsWith(prefix)) continue
+        const rest = key.slice(prefix.length)
+        if (dir && !rest.startsWith(`${dir}/`)) continue
+        const [head, ...tail] = (dir ? rest.slice(dir.length + 1) : rest).split('/')
+        if (tail.length > 0) entries.set(head, { name: head, type: 'dir', size: 0 })
+        else entries.set(head, { name: head, type: 'file', size: ghBytes(f).length })
+      }
+      return ghJson(route, 200, { entries: [...entries.values()], truncated: false })
+    }
+    if (method === 'POST' && path === '/api/github/file') {
+      const b = safePostDataJSON(req)
+      const f = gh.files[`${b.repo}@${b.branch}:${b.path}`]
+      if (!f) return ghJson(route, 404, { error: 'github_not_found' })
+      const linked = [...githubLinks].find(([, l]) => l.repo === b.repo && l.branch === b.branch && l.path === b.path)
+      const bytes = ghBytes(f)
+      const content = bytes.toString('base64').replace(/(.{60})/g, '$1\n')
+      return ghJson(route, 200, { sha: f.sha, size: bytes.length, content, linkedDocId: linked ? linked[0] : null })
+    }
+    return route.fallback()
+  })
+  await page.route(/\/api\/docs\/[^/]+\/github$/, async (route) => {
+    const req = route.request()
+    const docId = new URL(req.url()).pathname.split('/')[3]
+    const method = req.method()
+    githubLog.push({ method, path: new URL(req.url()).pathname, query: {}, body: safePostDataJSON(req) })
+    if (method === 'GET') {
+      const link = githubLinks.get(docId)
+      return link ? ghJson(route, 200, link) : ghJson(route, 404, { error: 'not_found' })
+    }
+    if (method === 'PUT') {
+      if (!docs.has(docId)) return ghJson(route, 404, { error: 'not_found' })
+      const b = safePostDataJSON(req)
+      const link = {
+        repo: b.repo, branch: b.branch, path: b.path, remoteSha: b.sha, remoteBom: b.bom, syncedAt: b.sha ? Date.now() : null,
+        htmlUrl: `https://github.com/${b.repo}/blob/${b.branch}/${b.path}`, images: {},
+      }
+      githubLinks.set(docId, link)
+      return ghJson(route, 200, link)
+    }
+    if (method === 'DELETE') {
+      githubLinks.delete(docId)
+      return route.fulfill({ status: 204 })
+    }
+    return route.fallback()
+  })
+
   // F-2042 8.1 — 이후 모든 /api/** 응답을 latencyMs 만큼 늦춘다. 마지막에 걸어 다른 경로보다 먼저 가로챈 뒤 route.fallback() 한다
   let latencyMs = 0
   const getRequestLog = [] // GET 요청만 기록 — 동시성 확인용 { path, startedAt, endedAt }
@@ -778,6 +861,15 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
     docs,
     folders,
     attachments,
+    githubLinks,
+    // /api/github/* 와 /api/docs/:id/github 로 받은 요청 { method, path, query, body } (F-2128 7장)
+    githubRequests() {
+      return githubLog.map((r) => ({ ...r }))
+    },
+    // 가짜 GitHub 설정을 덮어쓴다 — { enabled, connected, repos, branches, files } (F-2128 7장)
+    setGithub(patch) {
+      Object.assign(gh, patch)
+    },
     shareLinks,
     grants,
     apiTokens,

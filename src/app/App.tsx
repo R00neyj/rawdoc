@@ -87,6 +87,7 @@ import { useNewDocTemplate } from './useNewDocTemplate'
 import { useAccountStatus } from './useAccountStatus'
 import { useAccountDelete } from './useAccountDelete'
 import { usePushDevice } from './usePushDevice'
+import { useGithubFlow } from './useGithubFlow'
 import useUserCss from './useUserCss'
 import { useTitleCommit } from './useTitleCommit'
 import { useCommentFab, fabAnchorOf } from './useCommentFab'
@@ -1138,6 +1139,9 @@ export default function App() {
   // ----- 설정 계정 탭 푸시·push-open (F-2110) -----
   const { settingsPush } = usePushDevice({ bootPhase, account, online: syncState?.online !== false, showNotice, docsRef, resyncFromStore })
 
+  // ----- GitHub 연결·가져오기 (F-2128) -----
+  const github = useGithubFlow({ account, bootPhase, store, online: syncState?.online !== false, showNotice, docs, currentDoc, currentDocId, setDocs, selectDoc, docSaverFlushRef })
+
   // 단축키 판 — 상태바가 보이는 조건과 같다(4.3). 팔레트 context·판 렌더 자리가 함께 쓴다
   const statusBarVisible = bootPhase === 'ready' && currentDocId !== null && !sharedDoc && !mapRoute
 
@@ -1157,7 +1161,7 @@ export default function App() {
     showNotice, templateEntries, readTemplateDocText, openShortcuts, notificationsEnabled, setNotificationsOpen, wikiResolver, currentFolderId,
     narrow, sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebar, closeSidebarIfNarrow, themePref, lineNumbersPref, toolbarPref,
     wikiPreviewPref, changeTheme, changeLineNumbers, changeToolbar, changeWikiPreview, handleExportDoc, handleExportDocAsText,
-    handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, handleTogglePin, requestMoveDoc, requestDeleteDoc,
+    handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, github: github.palette, handleTogglePin, requestMoveDoc, requestDeleteDoc,
     getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createDocFromPalette,
     openDocFromSearch, newDocFolderId, changeViewMode,
   })
@@ -1209,7 +1213,7 @@ export default function App() {
     handlePrintDoc, helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
     outlineControlRef, openPalette, openSearch, openViewFind: viewFind.open, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
     toggleButtonRef, toggleCommentsPanel, toggleSidebar, toolbarPref, viewMode, wikiResolver,
-    editorRef,
+    editorRef, github: github.topBar,
   }} />
 
   return (
@@ -1247,6 +1251,7 @@ export default function App() {
           onSelectDoc={selectDoc}
           onCreateDoc={createNewDoc}
           onImportDoc={requestImport}
+          github={github.sidebar}
           onCreateFolder={handleCreateFolder}
           onRenameFolder={handleRenameFolder}
           onBulkMove={handleBulkMove}
@@ -1349,7 +1354,7 @@ export default function App() {
         newDocTemplatePref, openDocFromSearch, openSettings, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
         requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
         setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref,
-        toolbarPref, wikiPreviewPref,
+        toolbarPref, wikiPreviewPref, settingsGithub: github.settings, githubDialogs: github.dialogs,
       }} />
       {/* 인쇄 전용 영역 — printDoc() 이 채운다. .app-shell 의 마지막 직계 자식이어야 한다 (F-279.md 4.2) */}
       <div className="viewer print-root" data-ui="print" ref={printRootRef} aria-hidden="true" inert />

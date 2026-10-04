@@ -57,7 +57,9 @@ import {
   IconMap,
   IconLock,
   IconLockOpen,
+  IconCommit,
 } from './icons'
+import { GithubImportMenu } from './GithubMenu'
 import { e2eeMenuForDoc, e2eeMenuForFolder, type E2eeConvertDirection, type E2eeConvertTarget, type E2eeMenuState } from '../e2ee/convert'
 import { formatHash } from './hashRoute'
 import { GUIDES_PATH } from '../lib/siteChrome'
@@ -103,10 +105,14 @@ export type SharedDocLike = {
 }
 
 // 공유받음 줄 `공유에서 나가기` 메뉴 — 없으면 메뉴를 그리지 않는다 (F-2115 2.6)
+// GitHub 연결 진입점 — 기능이 켜졌을 때만 App 이 준다 (F-2128 4.6)
+export type SidebarGithub = { onImport: () => void; onLinkDoc: (doc: { id: string; title: string }) => void; linkedDocIds: ReadonlySet<string> }
+
 export type SharedLeaveMenu = { online: boolean; onRequest(target: LeaveShareTarget): void; onUnavailable(): void }
 
 type SidebarCtx = {
   sharedLeave?: SharedLeaveMenu
+  github?: SidebarGithub
   onSharedContextMenu: (e: ReactMouseEvent<HTMLElement>, key: string) => void
   currentDocId: string | null
   openFolderIds: string[]
@@ -201,6 +207,12 @@ function docE2eeItems(ctx: SidebarCtx, doc: { id: string; folderId: string | nul
   if (!ctx.e2eeConvert) return []
   const state = e2eeMenuForDoc({ folderId: doc.folderId, e2ee: ctx.e2eeDocs.get(doc.id) }, ctx.allFolders)
   return e2eeConvertItems(ctx, state, { kind: 'doc', id: doc.id }, title || '제목 없음')
+}
+
+function githubDocItems(ctx: SidebarCtx, doc: { id: string }, title: string): FolderMenuItem[] {
+  if (!ctx.github || ctx.e2eeDocs.has(doc.id)) return []
+  const label = ctx.github.linkedDocIds.has(doc.id) ? 'GitHub 연결 정보…' : 'GitHub에 연결…'
+  return [{ key: 'github', label, icon: IconCommit, onSelect: () => ctx.github?.onLinkDoc({ id: doc.id, title }) }]
 }
 
 function dropKeyOf(target: DropTarget): string {
@@ -386,6 +398,7 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
       onSelect: () => ctx.onRequestMoveDoc({ id: node.id, title, folderId: node.folderId }),
     },
     ...docE2eeItems(ctx, node, title),
+    ...githubDocItems(ctx, node, title),
     {
       key: 'delete',
       label: '삭제',
@@ -459,6 +472,7 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
       onSelect: () => ctx.onRequestMoveDoc({ id: doc.id, title, folderId: doc.folderId }),
     },
     ...docE2eeItems(ctx, doc, title),
+    ...githubDocItems(ctx, doc, title),
     {
       key: 'delete',
       label: '삭제',
@@ -820,6 +834,7 @@ type SidebarProps = {
   // 명령 팔레트 `새 폴더` 가 사이드바 안 동작(레일 펼치기·이름 칸 열기)을 부르는 자리 (F-2054 6.1)
   commandRef?: RefObject<SidebarCommands | null>
   sharedLeave?: SharedLeaveMenu
+  github?: SidebarGithub
 }
 
 // 명령 팔레트가 부르는 사이드바 동작 (F-2054 6.1)
@@ -871,6 +886,7 @@ export default function Sidebar({
   unreadNotificationDocIds,
   commandRef,
   sharedLeave,
+  github,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
@@ -1160,6 +1176,7 @@ export default function Sidebar({
     selection,
     contextMenu,
     sharedLeave,
+    github,
     onSharedContextMenu: handleSharedContextMenu,
     multiMenuItems,
     onItemClick: handleItemClick,
@@ -1215,7 +1232,7 @@ export default function Sidebar({
             <RailButton icon={IconCommandPalette} label={PALETTE_LABEL} onClick={onOpenPalette} />
             <RailButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
             <RailButton icon={IconFolderAdd} label="새 폴더" onClick={handleRailCreateFolder} />
-            <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
+            {github ? <GithubImportMenu variant="rail" onFile={onImportDoc} onGithub={github.onImport} /> : <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
             <RailButton icon={IconMap} label="지도" onClick={onOpenMap} />
           </div>
         ) : (
@@ -1227,7 +1244,7 @@ export default function Sidebar({
                 <SidebarIconButton icon={IconSearch} label="검색" btnClassName="sidebar-search-btn" onClick={onOpenSearch} />
                 <SidebarIconButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
                 <SidebarIconButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
-                <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />
+                {github ? <GithubImportMenu variant="bar" onFile={onImportDoc} onGithub={github.onImport} /> : <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
                 <SidebarIconButton icon={IconCollapseAll} label="모두 접기" onClick={onCollapseAllFolders} />
                 <SidebarIconButton icon={IconMap} label="지도" btnClassName="sidebar-map-btn" onClick={onOpenMap} />
               </div>

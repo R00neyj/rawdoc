@@ -49,6 +49,9 @@ describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀, F-505 U
       'doc.new',
       'folder.new',
       'doc.import',
+      'github.import',
+      'github.pull',
+      'github.push',
       'search.open',
       'nav.home',
       'nav.map',
@@ -637,5 +640,16 @@ describe('3.7 낱말 가드 — U7 (F-2054 11.1)', () => {
       expect(filterPaletteItems(commandsOn, q), q).toEqual([])
       expect(filterPaletteItems(commandsOff, q), q).toEqual([])
     }
+  })
+})
+
+describe('GitHub 명령 — F-2128 A7', () => {
+  const noop = () => {}
+  it('ctx.github 없음 → 셋 다 안 보임, importFile 만 → github.import 만, pull·push 주면 각각', () => {
+    const ids = (github?: PaletteContext['github']) => visibleIdsOf({ ...ctx([]), github }).filter((id) => id.startsWith('github.'))
+    expect(ids(undefined)).toEqual([])
+    expect(ids({ importFile: noop })).toEqual(['github.import'])
+    expect(ids({ importFile: noop, pull: noop })).toEqual(['github.import', 'github.pull'])
+    expect(ids({ importFile: noop, push: noop })).toEqual(['github.import', 'github.push'])
   })
 })

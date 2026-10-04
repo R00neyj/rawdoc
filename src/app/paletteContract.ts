@@ -64,6 +64,8 @@ export type PaletteContext = {
       remove: () => void
     }
   }
+  // GitHub 가져오기·당기기·푸시 — 선택 필드. 기능이 켜졌을 때만 준다 (F-2128 6장)
+  github?: { importFile: () => void; pull?: () => void; push?: () => void }
   // 보기 설정 — 선택 필드. 없으면 모드·사이드바·테마·토글 명령들이 안 보인다 (F-2054 4.1)
   view?: {
     mode: PaletteViewMode | null

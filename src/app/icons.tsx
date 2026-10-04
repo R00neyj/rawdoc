@@ -10,6 +10,7 @@ import chevronRightSvg from '@material-symbols/svg-400/outlined/chevron_right.sv
 import noteAddSvg from '@material-symbols/svg-400/outlined/note_stack_add.svg?raw'
 import createNewFolderSvg from '@material-symbols/svg-400/outlined/create_new_folder.svg?raw'
 import uploadFileSvg from '@material-symbols/svg-400/outlined/upload_file.svg?raw'
+import commitSvg from '@material-symbols/svg-400/outlined/commit.svg?raw'
 import searchSvg from '@material-symbols/svg-400/outlined/search.svg?raw'
 import settingsSvg from '@material-symbols/svg-400/outlined/settings.svg?raw'
 import installDesktopSvg from '@material-symbols/svg-400/outlined/install_desktop.svg?raw'
@@ -129,6 +130,7 @@ export const IconChevronLeft = makeIcon(chevronLeftSvg)
 export const IconNoteAdd = makeIcon(noteAddSvg)
 export const IconFolderAdd = makeIcon(createNewFolderSvg)
 export const IconUpload = makeIcon(uploadFileSvg)
+export const IconCommit = makeIcon(commitSvg)
 export const IconSearch = makeIcon(searchSvg)
 export const IconSettings = makeIcon(settingsSvg)
 export const IconInstall = makeIcon(installDesktopSvg)

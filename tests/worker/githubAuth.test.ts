@@ -198,10 +198,10 @@ describe('F-3014 A4 status', () => {
     const env = devEnv(db)
     const first = await call(env, '/api/github/status')
     expect(first.headers.get('Cache-Control')).toBe('no-store')
-    expect(await first.json()).toEqual({ enabled: true, connected: false, month: { used: 0, limit: null } })
+    expect(await first.json()).toEqual({ enabled: true, connected: false, installUrl: 'https://github.com/apps/test-app/installations/new', month: { used: 0, limit: null } })
 
     await seedAccount(db, myId(db))
-    expect(await status(env)).toEqual({ enabled: true, connected: true, login: 'octocat', reconnect: false, month: { used: 0, limit: null } })
+    expect(await status(env)).toEqual({ enabled: true, connected: true, login: 'octocat', reconnect: false, installUrl: 'https://github.com/apps/test-app/installations/new', month: { used: 0, limit: null } })
 
     db.prepare('UPDATE github_accounts SET refresh_expires_at = 0').run()
     expect((await status(env)).reconnect).toBe(true)
