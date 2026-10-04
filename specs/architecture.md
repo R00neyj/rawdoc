@@ -295,7 +295,7 @@ type YjsMetaRow = {
 
 ```
 wrangler.jsonc           Worker 스크립트·D1(DB)·R2(BUCKET)·정적 자산(ASSETS) 바인딩 (F-204), Durable Object `DOC_ROOM`(클래스 `DocRoom`) 바인딩·마이그레이션 (F-304), Rate Limiting `WRITE_LIMITER` (F-2026)
-migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213, F-309 에서 삭제) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057) 0015 notifications_recipient_order(F-2075) 0016 shared_indexes(F-2058) 0017 push_subscriptions(F-3003) 0018 notifications_push(F-3005) 0019 push_quota 0020 user_css 0021 notifications_share(F-3012) 0022 drop_doc_locks(F-309)
+migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213, F-309 에서 삭제) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057) 0015 notifications_recipient_order(F-2075) 0016 shared_indexes(F-2058) 0017 push_subscriptions(F-3003) 0018 notifications_push(F-3005) 0019 push_quota 0020 user_css 0021 notifications_share(F-3012) 0022 drop_doc_locks(F-309) 0023 github(F-3013, F-3014 가 만듦 — 예정)
 worker/
   index.ts               fetch 진입점, 라우트 표 { method, path, handler }
   http.ts                JSON 응답 도우미
@@ -318,9 +318,14 @@ worker/
   awarenessRelay.ts        (F-307)
   v1.ts apiTokens.ts       `/v1` 핸들러·개인 토큰 (F-222·F-223)
   v1Contract.ts            `/v1` 응답 타입과 예시 값. 핸들러는 import 하지 않는다 — 서버·CLI 양쪽 테스트가 이 파일에 댄다 (F-2021 7.2)
+  githubCrypto.ts githubClient.ts githubAuth.ts githubSettings.ts   GitHub 토큰 암호화·GitHub fetch 도우미(갱신·오류 대응)·연결 흐름·설정 행과 월 횟수 (F-3014, 예정)
+  githubRepos.ts githubLinks.ts      저장소·브랜치·폴더·파일 읽기, 문서 ↔ 파일 연결·당기기 (F-3015, 예정)
+  githubPush.ts          푸시 — 새 그림 확인·blob 흘려보내기·Git Data 커밋 (F-3016, 예정)
+  githubImages.ts        저장소 그림 대응·프록시 (F-3017, 예정)
   tsconfig.json worker-configuration.d.ts(`npm run cf:types` 생성)
 scripts/admin-{usage,block,unblock,warn,recount}.mjs   원격 D1 관리 (F-2029)
 scripts/lib/admin.mjs d1.mjs                          관리 스크립트 공용 도우미·`wrangler d1 execute` 호출 (F-2029)
+scripts/admin-github.mjs                              GitHub 기능 켜기·끄기·월 횟수 (F-3018, 예정)
 ```
 
 - 배포: GitHub `deploy` 브랜치에 올리면 Cloudflare Workers Builds 가 `npm run build` → `npx wrangler deploy`. `deploy` 는 로컬 `verify:full` 을 통과한 main 커밋만 가리킨다(`git push origin <sha>:deploy`). main push 는 GitHub Actions `ci.yml`(린트·타입·단위·빌드)만. D1 원격 마이그레이션은 자동화하지 않고 배포 전에 손으로 (2026-09-15)
@@ -332,6 +337,9 @@ scripts/lib/admin.mjs d1.mjs                          관리 스크립트 공용
 - 남의 자원은 404, 권한은 있으나 동작이 막히면 403 (F-206·F-212)
 - Worker 는 `src/lib/**` 순수 함수와 `src/types.ts` 만 import 한다
 - 로컬 개발: `.dev.vars` 키 — `BETTER_AUTH_URL=http://localhost:8790`, `BETTER_AUTH_SECRET`(32바이트 난수 base64), `DEV_AUTH_EMAIL=…@example.com`(우회를 쓸 때), 실제 OAuth 를 로컬에서 시험할 때만 `GOOGLE_CLIENT_ID`·`GOOGLE_CLIENT_SECRET`·`GITHUB_CLIENT_ID`·`GITHUB_CLIENT_SECRET`(로컬 앱 값). 우회는 `BETTER_AUTH_URL` 이 `http:` localhost 이고 `DEV_AUTH_EMAIL` 이 `@example.com` 으로 끝날 때만 켜진다(`origin.ts` `isDevBypass`). `wrangler.jsonc` `vars` 의 `DEV_AUTH_EMAIL` 은 빈 값 — `.dev.vars` 가 덮는다 (F-2033 5.2·8.1·11장 3번). 포트는 `dev:worker` 8790, 에이전트 병렬 슬롯 8791~
+- GitHub 파일 연결(F-3013 3.1, 예정): `GITHUB_APP_CLIENT_ID`·`GITHUB_APP_SLUG` 는 `vars`(운영 값 커밋), `GITHUB_APP_CLIENT_SECRET`·`GITHUB_TOKEN_KEY`(토큰 암호 키, 32바이트 난수 base64)는 `secrets.required` — 이 둘 없이 배포하면 실패한다. 로그인용 `GITHUB_CLIENT_*` 와 다른 앱이다. 로컬은 따로 등록한 로컬 앱 값으로 `.dev.vars` 에 네 이름 모두
+- 서버 문서의 첨부 참조 = 원문의 `attachments/{id}` 글자 ∪ 그 문서 `github_images` 중 본문에 경로가 남은 대응. `worker/attachmentGc.ts`·`isAttachmentInUse`·첨부 공개 권한 검사가 이 합을 쓴다 (F-3013 3.8 ①②, F-3017, 예정)
+- GitHub 그림 프록시(`/api/docs/:id/github/img`, `/pub/…/gh`) 응답 머리: 서버가 판정한 `Content-Type`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox`, `Cross-Origin-Resource-Policy: same-origin`, `Content-Disposition: inline`, `Cache-Control: private, max-age=300` (F-3013 3.8, F-3017, 예정)
 - 클라이언트: 로그인 상태면 `store.kind === 'server'` (F-207). IndexedDB `md-remote` 에 캐시·보낼 목록·첨부. 로컬 `md-docs` 는 로그아웃 상태와 이관(F-208)에 쓴다
 - 서버 저장소 전용 `lastSharedList()`·`lastServerListAt()`, `list()` 진행 중 합치기(쓰기 세대)가 있다(F-2056)
 - R2 키 `att/{owner_id}/{id}.{ext}`, 공개 버킷·서명 URL 없음 (F-209)
