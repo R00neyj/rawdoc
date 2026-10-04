@@ -64,3 +64,10 @@ export async function countGithubUse(db: D1Database, userId: string, now: number
     .bind(userId, githubMonth(now))
     .run()
 }
+
+export async function loadEnabledGithub(env: Env): Promise<{ config: GithubConfig; settings: GithubSettings } | null> {
+  const settings = await loadGithubSettings(env.DB)
+  if (!settings.enabled) return null
+  const config = await loadGithubConfig(env)
+  return config ? { config, settings } : null
+}

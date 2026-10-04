@@ -35,3 +35,24 @@ export function githubQuotaResetAt(now: number): number {
   const d = new Date(now)
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)
 }
+
+// F-3015 5장 — 저장소 고르기·파일·연결
+export type GithubRepo = { id: number; fullName: string; defaultBranch: string; private: boolean; canWrite: boolean }
+export type GithubRepoList = { repos: GithubRepo[]; truncated: boolean }
+export type GithubBranchList = { branches: string[]; truncated: boolean }
+export type GithubTreeEntry = { name: string; type: 'dir' | 'file'; size: number }
+export type GithubTree = { entries: GithubTreeEntry[]; truncated: boolean }
+export type GithubFile = { sha: string; size: number; content: string; linkedDocId: string | null } // content: base64, \n 섞임
+export type GithubPulled = { sha: string; size: number; content: string }
+export type GithubLink = {
+  repo: string
+  branch: string
+  path: string
+  remoteSha: string | null
+  remoteBom: boolean
+  syncedAt: number | null
+  htmlUrl: string
+  images: Record<string, string>
+}
+export type GithubLinkPut = { repo: string; branch: string; path: string; sha: string | null; bom: boolean }
+export type GithubSyncedBody = { sha: string; bom: boolean }

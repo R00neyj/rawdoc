@@ -392,6 +392,8 @@ export async function deleteDocRows(env: Env, ctx: ExecutionContext, docId: stri
     deleteDocUsageStatement(env.DB, ownerId, docId, Date.now()),
     // share_link_docs.doc_id REFERENCES docs(id) — docs 를 지우기 전에 묶음 행부터 지운다 (버그 수정, F-2038.md 12장 X1)
     env.DB.prepare('DELETE FROM share_link_docs WHERE doc_id = ?').bind(docId),
+    env.DB.prepare('DELETE FROM github_images WHERE doc_id = ?').bind(docId),
+    env.DB.prepare('DELETE FROM github_links WHERE doc_id = ?').bind(docId),
     env.DB.prepare('DELETE FROM docs WHERE id = ? AND owner_id = ?').bind(docId, ownerId),
     // 같은 id 로 문서가 다시 생겨도 옛 공개 링크·초대가 따라가지 않게 (리뷰 W2)
     ...targetShareCleanupStatements(env.DB, 'doc', [docId], Date.now()),

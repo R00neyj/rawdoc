@@ -176,3 +176,23 @@ describe('버그 수정 — 폴더 전부 삭제와 공유 링크 묶음', () =>
     expect(link).toBeTruthy()
   })
 })
+
+// F-3015 A13 — 폴더 `전부 삭제` 도 github_links·github_images 를 docs 앞에서 지운다
+describe('F-3015 A13 GitHub 연결이 있는 문서가 든 폴더 전부 삭제', () => {
+  it('FK 오류 없이 204, 폴더 안 문서의 두 표 행만 사라진다', async () => {
+    const sqlDb = openTestDb()
+    const env = { DB: asD1(sqlDb) } as unknown as Env
+    sqlDb.prepare('INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)').run('u1', 'u1@example.com', 1)
+    sqlDb.prepare('INSERT INTO folders (id, owner_id, name, parent_id, created_at, updated_at, e2ee) VALUES (?,?,?,?,?,?,0)').run('f1', 'u1', 'f1', null, 1, 1)
+    for (const [id, folder] of [['d1', 'f1'], ['d2', null]] as const) {
+      sqlDb.prepare("INSERT INTO docs (id, owner_id, title, content, line_ending, folder_id, version, created_at, updated_at) VALUES (?,?,'t','c','lf',?,1,1,1)").run(id, 'u1', folder)
+      sqlDb.prepare("INSERT INTO github_links (doc_id, owner_id, repo_id, repo, branch, path, remote_bom, created_at) VALUES (?, 'u1', 1, 'o/r', 'main', ?, 0, 1)").run(id, `${id}.md`)
+      sqlDb.prepare("INSERT INTO github_images (doc_id, path, owner_id, attachment_id, ext, blob_sha, created_at) VALUES (?, 'x.png', 'u1', '0123456789abcdef', 'png', 'a', 1)").run(id)
+    }
+    const res = await handleDeleteFolder(new Request('https://x/api/folders/f1?contents=delete-all', { method: 'DELETE' }), env, ctx, { id: 'f1' })
+    expect(res.status).toBe(204)
+    for (const table of ['github_links', 'github_images']) {
+      expect(sqlDb.prepare(`SELECT doc_id FROM ${table}`).all()).toEqual([{ doc_id: 'd2' }])
+    }
+  })
+})

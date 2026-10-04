@@ -254,6 +254,8 @@ export async function deleteFolderContents(
       const chunk = docIds.slice(i, i + BATCH_ID_LIMIT)
       const placeholders = chunk.map(() => '?').join(',')
       statements.push(env.DB.prepare(`DELETE FROM share_link_docs WHERE doc_id IN (${placeholders})`).bind(...chunk))
+      statements.push(env.DB.prepare(`DELETE FROM github_images WHERE doc_id IN (${placeholders})`).bind(...chunk))
+      statements.push(env.DB.prepare(`DELETE FROM github_links WHERE doc_id IN (${placeholders})`).bind(...chunk))
     }
     for (let i = 0; i < ids.length; i += BATCH_ID_LIMIT) {
       const chunk = ids.slice(i, i + BATCH_ID_LIMIT)

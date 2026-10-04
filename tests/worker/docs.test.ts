@@ -303,3 +303,30 @@ describe('F-502 X1·X2 문서·폴더 삭제가 댓글 복사본을 지운다', 
     expect(getUserRow(sqlDb, 'u1').doc_count).toBe(1)
   })
 })
+
+// F-3015 A13 — github_links·github_images 가 docs 를 막지 않는다 (/api·/v1 공용 deleteDocRows)
+describe('F-3015 A13 GitHub 연결이 있는 문서 삭제', () => {
+  function insertGithubRows(sqlDb: DatabaseSync, docId: string, ownerId: string) {
+    sqlDb
+      .prepare("INSERT INTO github_links (doc_id, owner_id, repo_id, repo, branch, path, remote_bom, created_at) VALUES (?, ?, 1, 'o/r', 'main', ?, 0, 1)")
+      .run(docId, ownerId, `${docId}.md`)
+    sqlDb
+      .prepare("INSERT INTO github_images (doc_id, path, owner_id, attachment_id, ext, blob_sha, created_at) VALUES (?, 'x.png', ?, '0123456789abcdef', 'png', 'a', 1)")
+      .run(docId, ownerId)
+  }
+
+  it('FK 오류 없이 204, 그 문서 행만 사라지고 다른 문서 행은 남는다', async () => {
+    const { sqlDb, env } = setup()
+    insertUser(sqlDb, 'u1', 'u1@example.com')
+    insertDoc(sqlDb, { id: 'd1', ownerId: 'u1', content: 'a' })
+    insertDoc(sqlDb, { id: 'd2', ownerId: 'u1', content: 'b' })
+    insertGithubRows(sqlDb, 'd1', 'u1')
+    insertGithubRows(sqlDb, 'd2', 'u1')
+
+    const res = await handleDeleteDoc(req('DELETE', '/api/docs/d1'), env, ctx, { id: 'd1' })
+    expect(res.status).toBe(204)
+    for (const table of ['github_links', 'github_images']) {
+      expect(sqlDb.prepare(`SELECT doc_id FROM ${table} ORDER BY doc_id`).all()).toEqual([{ doc_id: 'd2' }])
+    }
+  })
+})

@@ -775,3 +775,25 @@ describe('F-401 F1~F7 금고 폴더', () => {
     expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM grants')).toBe(0)
   })
 })
+
+describe('F-3015 A12 연결된 문서의 금고 옮기기', () => {
+  it('github_links 가 있으면 409 github_linked, 행·version·write_count 그대로, 없으면 200', async () => {
+    const { sqlDb, owner } = makeWorld()
+    await withKeys(owner)
+    const id = await userId(owner, sqlDb)
+    insertDoc(sqlDb, uuid(40), id)
+    insertDoc(sqlDb, uuid(41), id)
+    sqlDb
+      .prepare("INSERT INTO github_links (doc_id, owner_id, repo_id, repo, branch, path, remote_bom, created_at) VALUES (?, ?, 1, 'o/r', 'main', 'a.md', 0, 1)")
+      .run(uuid(40), id)
+
+    const before = usage(sqlDb)
+    const res = await call(owner, `/api/docs/${uuid(40)}/e2ee`, json('PUT', moveBody()))
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: 'github_linked' })
+    expect(docRow(sqlDb, uuid(40))).toMatchObject({ e2ee_key: null, version: 1, content: 'c' })
+    expect(usage(sqlDb).write_count - before.write_count).toBe(0)
+
+    expect((await call(owner, `/api/docs/${uuid(41)}/e2ee`, json('PUT', moveBody()))).status).toBe(200)
+  })
+})

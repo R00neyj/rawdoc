@@ -369,6 +369,8 @@
 | H829 | F-3018 ① | 원격에 `0023` 적용 뒤 `node scripts/admin-github.mjs`(읽기만) 종료 0·꺼짐 표시, `admin-usage` 에 GitHub 줄 | 대기 (배포 전) |
 | H830 | F-3018 ② | GitHub 하위 명세가 다 나간 뒤 `admin-github.mjs --on --yes` → 배포 주소 설정 `계정` 탭에 `GitHub` 묶음이 보임 | 대기 |
 | H831 | F-3018 ③ | `--limit 1 --yes` → 본인 계정으로 가져오기 두 번째에 횟수 끝 문구 → `--unlimited --yes` 로 되돌림 | 대기 |
+| H832 | F-3015 H1 | 로컬 앱(F-3014 8장)으로 `repos`·`branches`·`tree`·`file`·PUT·`pull` 을 실제 GitHub 에 부르고 응답 모양이 F-3015 5장과 같음. 1,000개 넘는 폴더면 `truncated` | 대기 |
+| H833 | F-3015 7장 4 | (배포) 1MB 가까운 파일 `file` 요청이 Workers 대시보드에서 CPU 10ms 안 · exceeded CPU 없음 | 대기 |
 
 ## 4. 결정 대기 (확인이 아니라 정해야 하는 것)
 

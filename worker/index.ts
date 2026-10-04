@@ -82,6 +82,8 @@ import { usageOf } from './usage'
 import { handleDeletePushSubscription, handleGetPushKey, handlePostPushTest, handlePutPushSubscription } from './pushApi'
 import { cleanupPushSubscriptions, loadVapid } from './pushServer'
 import { handleGithubCallback, handleGithubConnect, handleGithubDeleteAccount, handleGithubSetup, handleGithubStatus } from './githubAuth'
+import { handleGithubBranches, handleGithubFile, handleGithubRepos, handleGithubTree } from './githubRepos'
+import { handleDeleteDocGithub, handleGetDocGithub, handlePullDocGithub, handlePutDocGithub, handleSyncedDocGithub } from './githubLinks'
 
 export { DocRoom } from './docRoom'
 
@@ -297,6 +299,15 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/github/callback', handler: handleGithubCallback },
   { method: 'GET', path: '/api/github/setup', handler: handleGithubSetup },
   { method: 'DELETE', path: '/api/github/account', handler: handleGithubDeleteAccount },
+  { method: 'GET', path: '/api/github/repos', handler: handleGithubRepos },
+  { method: 'GET', path: '/api/github/branches', handler: handleGithubBranches },
+  { method: 'GET', path: '/api/github/tree', handler: handleGithubTree },
+  { method: 'POST', path: '/api/github/file', handler: handleGithubFile },
+  { method: 'GET', path: '/api/docs/:id/github', handler: handleGetDocGithub },
+  { method: 'PUT', path: '/api/docs/:id/github', handler: handlePutDocGithub },
+  { method: 'DELETE', path: '/api/docs/:id/github', handler: handleDeleteDocGithub },
+  { method: 'POST', path: '/api/docs/:id/github/pull', handler: handlePullDocGithub },
+  { method: 'POST', path: '/api/docs/:id/github/synced', handler: handleSyncedDocGithub },
   { method: 'GET', path: '/api/usage', handler: handleGetUsage },
   { method: 'PUT', path: '/api/attachments/:idext', handler: handleUploadAttachment },
   { method: 'GET', path: '/api/attachments/:idext', handler: handleGetAttachment },

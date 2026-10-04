@@ -100,6 +100,9 @@ export async function handleSetDocE2ee(
   const rowIsE2ee = typeof existing.e2ee_key === 'string'
   if (moving && rowIsE2ee) return jsonResponse({ error: 'e2ee_doc' }, 409)
   if (!moving && !rowIsE2ee) return jsonResponse({ error: 'not_e2ee' }, 409)
+  if (moving && (await env.DB.prepare('SELECT 1 AS x FROM github_links WHERE doc_id = ?').bind(params.id).first())) {
+    return jsonResponse({ error: 'github_linked' }, 409)
+  }
   if (!moving && existing.folder_id) {
     const folder = await getOwnedFolder<{ id: string; owner_id: string; e2ee?: number }>(env, existing.folder_id, user)
     if (folder?.e2ee === 1) return jsonResponse({ error: 'e2ee_folder' }, 409)

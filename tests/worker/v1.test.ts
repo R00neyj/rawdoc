@@ -207,6 +207,7 @@ function makeEnv(data: {
                 return { meta: { changes } }
               }
               if (sql.startsWith('DELETE FROM share_link_docs WHERE doc_id IN')) return { meta: { changes: 0 } }
+              if (sql.startsWith('DELETE FROM github_')) return { meta: { changes: 0 } }
               // F-502 8.2 — 댓글 행·알림 지우기
               if (sql.startsWith('DELETE FROM doc_comments') || sql.startsWith('DELETE FROM notifications')) return { meta: { changes: 0 } }
               if (sql.startsWith('DELETE FROM folders WHERE owner_id = ? AND id IN')) {
