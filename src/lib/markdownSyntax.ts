@@ -78,11 +78,11 @@ export const SYNTAX_GROUPS: SyntaxGroup[] = [
         name: '이미지',
         source: '<div align="center">\n  <img src="attachments/0000000000000000.png" width="320">\n</div>',
         caption:
-          '붙여넣기·끌어넣기로 넣은 이미지만 이렇게 보입니다. 주소를 직접 적는 표준 이미지 문법은 오프라인에서도 항상 보이도록 이미지 대신 `이미지: 설명` 링크로 바뀝니다.',
+          '붙여넣기·끌어넣기로 넣은 이미지는 `attachments/` 파일을 가리키는 표준 이미지 문법 한 줄로 들어가고, 설명 뒤에 붙은 `|center`·`|320`이 정렬과 폭입니다. 위 HTML 세 줄 모양도 똑같이 그림으로 보입니다. 인터넷 주소처럼 `attachments/`가 아닌 주소를 적은 이미지 문법은 오프라인에서도 항상 같은 모양이 되도록 이미지 대신 `이미지: 설명` 링크로 바뀝니다.',
         showResult: false,
       },
     ],
-    cliNote: '`upload` 명령이 출력한 세 줄을 그대로 붙입니다.',
+    cliNote: '`upload` 명령이 출력한 한 줄을 그대로 붙입니다.',
   },
   {
     group: '콜아웃',
