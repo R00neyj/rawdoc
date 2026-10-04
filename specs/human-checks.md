@@ -366,6 +366,9 @@
 | H826 | F-3014 H1 | 로컬 GitHub App 으로 F-3014 8장 "로컬에서 돌리기" 끝까지 — 연결·설치 뒤 돌아오기, `status`, DB 에 봉한 글자, 해제 뒤 GitHub 설정 → Applications → Authorized GitHub Apps 에서 사라짐 | 대기 |
 | H827 | F-3014 H2 | 8시간 뒤(또는 DB `access_expires_at` 을 과거로 바꾼 뒤) 갱신이 실제 GitHub 에서 되고 `token_rev` 가 오름 | 대기 |
 | H828 | F-3014 H3 | (배포) `wrangler secret put` 두 개 뒤 배포 성공, 꺼진 상태 `/api/github/status` 200 `enabled: false` | 대기 (배포 전) |
+| H829 | F-3018 ① | 원격에 `0023` 적용 뒤 `node scripts/admin-github.mjs`(읽기만) 종료 0·꺼짐 표시, `admin-usage` 에 GitHub 줄 | 대기 (배포 전) |
+| H830 | F-3018 ② | GitHub 하위 명세가 다 나간 뒤 `admin-github.mjs --on --yes` → 배포 주소 설정 `계정` 탭에 `GitHub` 묶음이 보임 | 대기 |
+| H831 | F-3018 ③ | `--limit 1 --yes` → 본인 계정으로 가져오기 두 번째에 횟수 끝 문구 → `--unlimited --yes` 로 되돌림 | 대기 |
 
 ## 4. 결정 대기 (확인이 아니라 정해야 하는 것)
 

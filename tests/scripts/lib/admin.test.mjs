@@ -14,6 +14,7 @@ import {
   sqlText,
   utcDay,
   utcDayStartMs,
+  utcMonth,
 } from '../../../scripts/lib/admin.mjs'
 
 const MIGRATIONS = fileURLToPath(new URL('../../../migrations/', import.meta.url))
@@ -351,6 +352,8 @@ describe('--yes 없으면 실행기가 받은 SQL 이 모두 SELECT (S11)', () =
     ['unblock', ['a@x.com']],
     ['warn', ['a@x.com']],
     ['recount', ['--all']],
+    ['github', []],
+    ['github', ['--off', '--limit', '5']],
   ]
   for (const [command, argv] of cases) {
     it(command, async () => {
@@ -378,6 +381,9 @@ describe('--yes 없으면 실행기가 받은 SQL 이 모두 SELECT (S11)', () =
                 docs: 1,
                 blocked: 0,
                 warned: 0,
+                enabled: 0,
+                monthly_limit: null,
+                updated_at: 0,
               },
             ],
           ],
@@ -473,5 +479,222 @@ describe('recount 출력 (S14)', () => {
     assert.equal(code, 0)
     assert.ok(prints.includes('다시 셀 것이 없습니다.'))
     assert.equal(calls.filter((sql) => sql.startsWith('UPDATE')).length, 0)
+  })
+})
+
+const NOW_G = Date.parse('2026-10-04T10:00Z')
+
+function seedGithub(db) {
+  insertUser(db, { id: 'u1', email: 'a@example.com', created_at: 0 })
+  insertUser(db, { id: 'u2', email: 'b@example.com', created_at: 0 })
+  insertUser(db, { id: 'u3', email: 'c@example.com', created_at: 0 })
+  db.prepare("INSERT INTO github_accounts (user_id, github_id, login, access_token, access_expires_at, refresh_token, refresh_expires_at, token_rev, created_at, updated_at) VALUES ('u1', 1, 'alice', 'x', 0, 'y', 0, 0, 0, 0)").run()
+  const usage = db.prepare('INSERT INTO github_usage (user_id, month, count) VALUES (?,?,?)')
+  usage.run('u1', '2026-10', 5)
+  usage.run('u2', '2026-10', 9)
+  usage.run('u1', '2026-09', 99)
+  usage.run('u3', '2026-09', 1)
+}
+
+describe('utcMonth (G1)', () => {
+  it('UTC YYYY-MM', () => {
+    assert.equal(utcMonth(Date.parse('2026-10-31T23:59Z')), '2026-10')
+    assert.equal(utcMonth(Date.parse('2026-11-01T00:00Z')), '2026-11')
+    assert.equal(utcMonth(Date.parse('2026-01-05T00:00Z')), '2026-01')
+  })
+})
+
+describe('parseAdminArgs github (G2)', () => {
+  const bad = [
+    ['--on', '--off'],
+    ['--limit', '5', '--unlimited'],
+    ['--limit', '0'],
+    ['--limit', '-1'],
+    ['--limit', '1.5'],
+    ['--limit', 'abc'],
+    ['--limit', '1000001'],
+    ['--yes'],
+    ['--limit', '5', '--top', '3'],
+  ]
+  for (const argv of bad) {
+    it(`틀림: ${argv.join(' ')}`, () => {
+      assert.throws(() => parseAdminArgs('github', argv), (e) => e instanceof AdminError && e.kind === 'usage')
+    })
+  }
+  it('통과', () => {
+    assert.equal(parseAdminArgs('github', ['--limit', '1000000']).limit, 1000000)
+    const o = parseAdminArgs('github', ['--on', '--limit', '30', '--yes'])
+    assert.equal(o.on, true)
+    assert.equal(o.limit, 30)
+    assert.equal(parseAdminArgs('github', ['--top', '5']).top, 5)
+  })
+  it('다른 명령은 바꾸는 인자를 받지 않는다', () => {
+    assert.throws(() => parseAdminArgs('usage', ['--on']), AdminError)
+    assert.throws(() => parseAdminArgs('block', ['a@x.com', '--limit', '3']), AdminError)
+  })
+})
+
+describe('githubSummary 의미 (G3)', () => {
+  it('이번 달 합계·사람 수', async () => {
+    const db = openDb()
+    seedGithub(db)
+    const exec = execOn(db)
+    const s = (await exec(SQL.githubSummary(NOW_G)))[0]
+    assert.equal(s.month_total, 14)
+    assert.equal(s.month_users, 2)
+    assert.equal(s.accounts, 1)
+    assert.equal(s.links, 0)
+    assert.equal(s.enabled, 0)
+    assert.equal(s.monthly_limit, null)
+    db.prepare('DELETE FROM github_settings').run()
+    assert.deepEqual(await exec(SQL.githubSummary(NOW_G)), [])
+  })
+})
+
+describe('githubTop 의미 (G4)', () => {
+  it('이번 달만, 많은 순, 연결 없으면 login null', async () => {
+    const db = openDb()
+    seedGithub(db)
+    const exec = execOn(db)
+    const top = await exec(SQL.githubTop(NOW_G, 20))
+    assert.deepEqual(top.map((r) => [r.email, r.count, r.login]), [
+      ['b@example.com', 9, null],
+      ['a@example.com', 5, 'alice'],
+    ])
+    assert.equal((await exec(SQL.githubTop(NOW_G, 1))).length, 1)
+  })
+})
+
+describe('githubSet 의미 (G5)', () => {
+  it('준 칸만 바꾸고 같은 값이면 []', async () => {
+    const db = openDb()
+    const exec = execOn(db)
+    const r1 = await exec(SQL.githubSet({ enabled: 1, limit: null }, 1000))
+    assert.equal(r1.length, 1)
+    assert.equal(r1[0].enabled, 1)
+    assert.equal(r1[0].updated_at, 1000)
+    assert.deepEqual(await exec(SQL.githubSet({ enabled: 1, limit: null }, 2000)), [])
+    assert.equal(db.prepare('SELECT updated_at FROM github_settings').get().updated_at, 1000)
+    const r2 = await exec(SQL.githubSet({ limit: 30 }, 3000))
+    assert.deepEqual([r2[0].enabled, r2[0].monthly_limit], [1, 30])
+    const r3 = await exec(SQL.githubSet({ enabled: 0 }, 4000))
+    assert.deepEqual([r3[0].enabled, r3[0].monthly_limit], [0, 30])
+    db.prepare('DELETE FROM github_settings').run()
+    assert.deepEqual(await exec(SQL.githubSet({ enabled: 1 }, 5000)), [])
+  })
+})
+
+const SUMMARY_PREFIX = 'SELECT enabled, monthly_limit'
+const summaryRow = (over = {}) => ({ enabled: 0, monthly_limit: null, updated_at: 0, accounts: 1, links: 0, month_total: 14, month_users: 2, ...over })
+
+describe('흐름 — admin-github 보기 (G6)', () => {
+  it('summary → top 순, 설정·요약·머리글 출력', async () => {
+    const calls = []
+    const prints = []
+    const exec = fakeExecFactory(
+      [
+        [SUMMARY_PREFIX, [summaryRow()]],
+        ['SELECT users.email', [{ email: 'b@x.com', count: 9, login: null }]],
+      ],
+      calls,
+    )
+    const code = await runAdmin('github', [], { exec, now: () => NOW_G, print: (l) => prints.push(l) })
+    assert.equal(code, 0)
+    assert.equal(calls.length, 2)
+    assert.ok(calls[0].startsWith(SUMMARY_PREFIX))
+    assert.ok(calls[1].startsWith('SELECT users.email'))
+    assert.equal(prints[0], '대상: 원격 D1 md-editor-db')
+    assert.ok(prints.includes('GitHub 기능: 꺼짐 · 월 한도: 무제한 · 마지막 변경: -'))
+    assert.ok(prints.includes('이번 달(UTC 2026-10): 14회 · 2명 · 연결 계정 1 · 연결 문서 0'))
+    assert.ok(prints.includes(['이메일', '이번 달', 'GitHub'].join('  ')))
+  })
+  it('설정 행 없음 → 1, top 안 보냄', async () => {
+    const calls = []
+    const prints = []
+    const exec = fakeExecFactory([[SUMMARY_PREFIX, []]], calls)
+    const code = await runAdmin('github', [], { exec, now: () => NOW_G, print: (l) => prints.push(l) })
+    assert.equal(code, 1)
+    assert.equal(calls.length, 1)
+    assert.ok(prints.some((l) => l.startsWith('설정 행이 없습니다.')))
+  })
+})
+
+describe('흐름 — admin-github 바꾸기 (G7)', () => {
+  it('--yes 없음: summary 만, 바꿀 것·SQL·M3', async () => {
+    const calls = []
+    const prints = []
+    const exec = fakeExecFactory([[SUMMARY_PREFIX, [summaryRow()]]], calls)
+    const code = await runAdmin('github', ['--on'], { exec, now: () => NOW_G, print: (l) => prints.push(l) })
+    assert.equal(code, 0)
+    assert.equal(calls.length, 1)
+    assert.ok(prints.includes('바꿀 것: 꺼짐 → 켜짐'))
+    assert.ok(prints.some((l) => l.startsWith('SQL: UPDATE github_settings')))
+    assert.ok(prints.includes('실행하지 않았습니다. 위 SQL 을 실행하려면 --yes 를 붙이세요.'))
+  })
+  it('--yes: summary·set, N3 세 줄', async () => {
+    const calls = []
+    const prints = []
+    const exec = fakeExecFactory(
+      [
+        [SUMMARY_PREFIX, [summaryRow()]],
+        ['UPDATE github_settings', [{ enabled: 1, monthly_limit: null, updated_at: NOW_G }]],
+      ],
+      calls,
+    )
+    const code = await runAdmin('github', ['--on', '--yes'], { exec, now: () => NOW_G, print: (l) => prints.push(l) })
+    assert.equal(code, 0)
+    assert.equal(calls.length, 2)
+    assert.ok(prints.some((l) => l.startsWith('바꿨습니다: GitHub 기능 켜짐 · 월 한도 무제한 (')))
+    assert.ok(prints.some((l) => l.startsWith('Worker 는 다음 요청부터')))
+    assert.ok(prints.some((l) => l.startsWith('GITHUB_APP_CLIENT_ID')))
+  })
+  it('이미 그 값 → N1, 쓰기 없음', async () => {
+    const calls = []
+    const prints = []
+    const exec = fakeExecFactory([[SUMMARY_PREFIX, [summaryRow({ enabled: 1 })]]], calls)
+    const code = await runAdmin('github', ['--on', '--yes'], { exec, now: () => NOW_G, print: (l) => prints.push(l) })
+    assert.equal(code, 0)
+    assert.equal(calls.length, 1)
+    assert.ok(prints.includes('이미 그 설정입니다.'))
+  })
+  it('set 결과 [] → 1·M13', async () => {
+    const prints = []
+    const exec = fakeExecFactory([[SUMMARY_PREFIX, [summaryRow()]], ['UPDATE github_settings', []]], [])
+    const code = await runAdmin('github', ['--on', '--yes'], { exec, now: () => NOW_G, print: (l) => prints.push(l) })
+    assert.equal(code, 1)
+    assert.ok(prints.includes('그 사이 상태가 바뀌었습니다. 다시 실행해 지금 상태를 보세요.'))
+  })
+})
+
+describe('admin-usage GitHub 줄 (G9)', () => {
+  const usageRows = [
+    ['SELECT (SELECT CASE', [{ gate_today: 0, created_today: 0, users: 1, bytes: 0, docs: 0, blocked: 0, warned: 0 }]],
+    ['SELECT email, created_at', []],
+  ]
+  it('한 줄 출력', async () => {
+    const prints = []
+    const exec = fakeExecFactory([...usageRows, [SUMMARY_PREFIX, [summaryRow({ enabled: 1, monthly_limit: 30, month_total: 4, month_users: 2 })]]], [])
+    const code = await runAdmin('usage', [], { exec, now: () => NOW_G, print: (l) => prints.push(l) })
+    assert.equal(code, 0)
+    assert.ok(prints.includes('GitHub: 켜짐 · 월 한도 30회 · 이번 달 4회 · 2명'))
+  })
+  it('실패해도 계속, 종료 0', async () => {
+    const prints = []
+    const exec = fakeExecFactory(
+      [
+        ...usageRows,
+        [
+          SUMMARY_PREFIX,
+          () => {
+            throw new AdminError('db', 'no such table: github_settings')
+          },
+        ],
+      ],
+      [],
+    )
+    const code = await runAdmin('usage', [], { exec, now: () => NOW_G, print: (l) => prints.push(l) })
+    assert.equal(code, 0)
+    assert.ok(prints.includes('GitHub: 읽지 못했습니다 (no such table: github_settings)'))
+    assert.ok(prints.some((l) => l.startsWith('오늘 쓰기 많은 순')))
   })
 })
