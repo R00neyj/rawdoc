@@ -6,6 +6,7 @@ import type { GithubBranchList, GithubLink, GithubLinkPut, GithubRepo, GithubSta
 import { fetchGithubBranches, fetchGithubRepos, fetchGithubTree, type GithubResult } from './githubApi'
 import { branchChoices, githubErrorMessage, GITHUB_RECONNECT_MESSAGE, linkTargetPath, type GithubFailure } from './githubUi'
 import { formatCommentTime } from './commentRail'
+import { IconArrowBack, IconChevron } from './icons'
 
 export type GithubPickerMode = { kind: 'import' } | { kind: 'link'; docId: string; title: string }
 export type GithubImportFile = { repo: string; branch: string; path: string; size: number }
@@ -200,7 +201,7 @@ function Body(props: GithubPickerProps & { mode: GithubPickerMode; busyRef: RefO
         <div className="github-picker">
           <label className="dialog-field">
             <span>저장소</span>
-            <select value={repo} ref={(el) => { if (el) firstRef.current = el }} onChange={(e) => pickRepo(e.target.value)} disabled={busy}>
+            <select className="settings-select" value={repo} ref={(el) => { if (el) firstRef.current = el }} onChange={(e) => pickRepo(e.target.value)} disabled={busy}>
               {repos?.list.map((r) => (
                 <option key={r.id} value={r.fullName} disabled={!r.canWrite}>{r.fullName}{r.canWrite ? '' : ' — 쓰기 권한 없음'}</option>
               ))}
@@ -216,7 +217,7 @@ function Body(props: GithubPickerProps & { mode: GithubPickerMode; busyRef: RefO
           {repo && (
             <label className="dialog-field">
               <span>브랜치</span>
-              <select value={branch} onChange={(e) => { setBranch(e.target.value); setDir(''); setTree(null); setSelected(null) }} disabled={busy}>
+              <select className="settings-select" value={branch} onChange={(e) => { setBranch(e.target.value); setDir(''); setTree(null); setSelected(null) }} disabled={busy}>
                 {branchChoices(branches?.branches ?? [], current?.defaultBranch ?? branch).map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
             </label>
@@ -230,10 +231,10 @@ function Body(props: GithubPickerProps & { mode: GithubPickerMode; busyRef: RefO
               ) : (
                 <ul className="github-entries">
                   {dir !== '' && (
-                    <li><button type="button" onClick={() => { setDir(dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : ''); setSelected(null) }}>상위 폴더</button></li>
+                    <li><button type="button" onClick={() => { setDir(dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : ''); setSelected(null) }}><IconArrowBack />상위 폴더</button></li>
                   )}
                   {entries.filter((e) => e.type === 'dir').map((e) => (
-                    <li key={`d:${e.name}`}><button type="button" onClick={() => { setDir(dir ? `${dir}/${e.name}` : e.name); setSelected(null) }}>{e.name}/</button></li>
+                    <li key={`d:${e.name}`}><button type="button" className="github-entry-dir" onClick={() => { setDir(dir ? `${dir}/${e.name}` : e.name); setSelected(null) }}>{e.name}/<IconChevron /></button></li>
                   ))}
                   {files.map((e) => (
                     <li key={`f:${e.name}`}>

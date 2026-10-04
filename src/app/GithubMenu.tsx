@@ -98,7 +98,7 @@ function PopMenu({ className, header, items, trigger }: PopMenuProps) {
 function StatusLine({ link }: { link: GithubLink }) {
   const [now] = useState(() => Date.now())
   const when = link.syncedAt === null ? '아직 맞춘 적 없음' : `마지막 동기화 ${formatCommentTime(link.syncedAt, now)}`
-  return <>{`GitHub ${link.repo} · ${link.path} — ${when}`}</>
+  return <>{`GitHub ${link.repo} · `}<span className="github-menu-path">{link.path}</span><span className="github-menu-when">{when}</span></>
 }
 
 export default function GithubMenu({ role, link, onUnlink, onPull, onPush }: GithubMenuProps) {

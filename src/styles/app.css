@@ -6051,7 +6051,7 @@ body.sidebar-resizing {
 
 .github-menu-status {
   padding: 6px 10px 8px;
-  max-width: 280px;
+  max-width: 300px;
   font-size: 12px;
   color: var(--ink-2);
   overflow-wrap: anywhere;
@@ -6061,10 +6061,50 @@ body.sidebar-resizing {
   max-width: 300px;
 }
 
+/* 경로는 한 덩어리로 보이게 한글 앞에서 끊지 않는다 (tweak 2026-10-04) */
+.github-menu-path {
+  word-break: keep-all;
+}
+
+.github-menu-when {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+}
+
+.github-menu-list a {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  color: var(--ink-2);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: var(--transition-colors);
+}
+
+.github-menu-list a:hover,
+.github-menu-list a:focus-visible {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
 .github-picker {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-bottom: 16px;
+}
+
+.github-install {
+  align-self: flex-start;
+}
+
+a.dialog-btn {
+  color: var(--ink);
+  text-decoration: none;
 }
 
 .github-path {
@@ -6084,11 +6124,34 @@ body.sidebar-resizing {
 }
 
 .github-entries button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   width: 100%;
   padding: 6px 8px;
   text-align: left;
   border-radius: var(--radius-control);
   color: var(--ink-2);
+}
+
+.github-entries button:hover {
+  background: var(--rule-2);
+}
+
+.github-entries .github-entry-dir {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.github-entry-dir svg {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.github-entries svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
 }
 
 .github-entries button[aria-pressed='true'] {
