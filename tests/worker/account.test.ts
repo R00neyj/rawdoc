@@ -215,6 +215,10 @@ const OWNER_TABLES: [string, string][] = [
   ['notifications', "SELECT COUNT(*) AS n FROM notifications WHERE doc_id LIKE 'd%' OR recipient_email = 'owner@example.com'"],
   ['push_subscriptions', 'SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?1'],
   ['user_css', 'SELECT COUNT(*) AS n FROM user_css WHERE user_id = ?1'],
+  ['github_accounts', 'SELECT COUNT(*) AS n FROM github_accounts WHERE user_id = ?1'],
+  ['github_links', 'SELECT COUNT(*) AS n FROM github_links WHERE owner_id = ?1'],
+  ['github_images', 'SELECT COUNT(*) AS n FROM github_images WHERE owner_id = ?1'],
+  ['github_usage', 'SELECT COUNT(*) AS n FROM github_usage WHERE user_id = ?1'],
 ]
 
 function seedDeleteExtras(sqlDb: DatabaseSync) {
@@ -233,6 +237,26 @@ function seedDeleteExtras(sqlDb: DatabaseSync) {
     "INSERT INTO notifications (id, recipient_email, kind, doc_id, comment_id, thread_id, actor_email, doc_title, excerpt, created_at) VALUES ('n1', 'friend@example.com', 'mention', 'd1', 'c1', 'c1', 'x@example.com', 't', 'e', 1), ('n2', ?, 'mention', 'x1', 'c2', 'c2', 'x@example.com', 't', 'e', 1), ('n3', 'friend@example.com', 'mention', 'x1', 'c2', 'c2', 'x@example.com', 't', 'e', 1)",
     OWNER_EMAIL,
   )
+  // F-3014 7장 — GitHub 네 표, 내 것 + OTHER 것
+  run(
+    sqlDb,
+    "INSERT INTO github_accounts (user_id, github_id, login, access_token, access_expires_at, refresh_token, refresh_expires_at, token_rev, created_at, updated_at) VALUES (?, 1, 'me', 'v1.a.b', 1, 'v1.a.b', 1, 1, 1, 1), (?, 2, 'you', 'v1.a.b', 1, 'v1.a.b', 1, 1, 1, 1)",
+    OWNER,
+    OTHER,
+  )
+  run(
+    sqlDb,
+    "INSERT INTO github_links (doc_id, owner_id, repo_id, repo, branch, path, created_at) VALUES ('d1', ?, 1, 'o/r', 'main', 'a.md', 1), ('x1', ?, 2, 'x/r', 'main', 'a.md', 1)",
+    OWNER,
+    OTHER,
+  )
+  run(
+    sqlDb,
+    "INSERT INTO github_images (doc_id, path, owner_id, attachment_id, ext, blob_sha, created_at) VALUES ('d1', 'img/a.png', ?, 'a1', 'webp', 's', 1), ('x1', 'img/a.png', ?, 'a3', 'webp', 's', 1)",
+    OWNER,
+    OTHER,
+  )
+  run(sqlDb, "INSERT INTO github_usage (user_id, month, count) VALUES (?, '2026-10', 3), (?, '2026-10', 4)", OWNER, OTHER)
 }
 
 describe('F-2038 W3 지우기', () => {
@@ -259,6 +283,9 @@ describe('F-2038 W3 지우기', () => {
     expect(count(sqlDb, "SELECT COUNT(*) AS n FROM doc_comments WHERE doc_id = 'x1'")).toBe(1)
     expect(count(sqlDb, "SELECT COUNT(*) AS n FROM notifications WHERE id = 'n3'")).toBe(1)
     expect(count(sqlDb, "SELECT COUNT(*) AS n FROM push_subscriptions WHERE id = 'p2'")).toBe(1)
+    for (const [table, column] of [['github_accounts', 'user_id'], ['github_usage', 'user_id'], ['github_links', 'owner_id'], ['github_images', 'owner_id']]) {
+      expect([table, count(sqlDb, `SELECT COUNT(*) AS n FROM ${table} WHERE ${column} = ?`, OTHER)]).toEqual([table, 1])
+    }
     expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM user_css WHERE user_id = ?', OTHER)).toBe(1)
     expect(count(sqlDb, 'SELECT COUNT(*) AS n FROM users WHERE id = ?', OTHER)).toBe(1)
 
@@ -449,7 +476,7 @@ function countingD1(inner: D1Database) {
 }
 
 describe('F-2038 W8 문장 수', () => {
-  it('개발 우회 DELETE 한 번의 동기 경로 D1 문장 ≤ 22, 뒤따르는 정리는 ≤ 4', async () => {
+  it('개발 우회 DELETE 한 번의 동기 경로 D1 문장 ≤ 25 (F-3014 GitHub 네 표), 뒤따르는 정리는 ≤ 4', async () => {
     const sqlDb = openTestDb()
     seedWorld(sqlDb)
     const { db, executed } = countingD1(asD1(sqlDb))
@@ -462,7 +489,7 @@ describe('F-2038 W8 문장 수', () => {
     const purgeSql = new Set<string>(Object.values(PURGE_SQL))
     const purge = executed.filter((sql) => purgeSql.has(sql))
     const sync = executed.filter((sql) => !purgeSql.has(sql))
-    expect(sync.length).toBeLessThanOrEqual(22)
+    expect(sync.length).toBeLessThanOrEqual(25)
     expect(purge.length).toBeGreaterThan(0)
     expect(purge.length).toBeLessThanOrEqual(4)
   })

@@ -466,12 +466,26 @@ describe('F-2033 U12 wrangler.jsonc 계약', () => {
       compatibility_flags: string[]
       assets: { run_worker_first: string[] }
     }
-    expect(config.vars).toEqual({ BETTER_AUTH_URL: 'https://rawdoc.app', DEV_AUTH_EMAIL: '' })
+    expect(config.vars).toMatchObject({ BETTER_AUTH_URL: 'https://rawdoc.app', DEV_AUTH_EMAIL: '' })
+    // F-3014 8장 — GitHub App id·slug 는 vars(등록 전에는 빈 글자), 비밀 둘은 secrets.required
+    expect(Object.keys(config.vars).sort()).toEqual(['BETTER_AUTH_URL', 'DEV_AUTH_EMAIL', 'GITHUB_APP_CLIENT_ID', 'GITHUB_APP_SLUG'])
+    expect(typeof config.vars.GITHUB_APP_CLIENT_ID).toBe('string')
+    expect(typeof config.vars.GITHUB_APP_SLUG).toBe('string')
     expect([...config.secrets.required].sort()).toEqual(
-      ['BETTER_AUTH_SECRET', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'].sort(),
+      [
+        'BETTER_AUTH_SECRET',
+        'GITHUB_APP_CLIENT_SECRET',
+        'GITHUB_CLIENT_ID',
+        'GITHUB_CLIENT_SECRET',
+        'GITHUB_TOKEN_KEY',
+        'GOOGLE_CLIENT_ID',
+        'GOOGLE_CLIENT_SECRET',
+      ].sort(),
     )
     expect(config.secrets.required).not.toContain('BETTER_AUTH_URL')
     expect(config.secrets.required).not.toContain('DEV_AUTH_EMAIL')
+    expect(config.secrets.required).not.toContain('GITHUB_APP_CLIENT_ID')
+    expect(config.secrets.required).not.toContain('GITHUB_APP_SLUG')
     expect(config.compatibility_flags).toContain('nodejs_compat')
     expect(config.assets.run_worker_first).toContain('/login')
   })

@@ -18,6 +18,8 @@ export function isWriteRoute(method: string, routePath: string): boolean {
   if (routePath === '/api/account') return false
   // 끄기는 막힌 계정·한도를 넘긴 계정도 할 수 있어야 한다 (F-3003 Q2)
   if (method === 'DELETE' && routePath === '/api/push/subscription') return false
+  // GitHub 연결 해제도 막힌 계정이 할 수 있어야 한다 (F-3013 3.4)
+  if (method === 'DELETE' && routePath === '/api/github/account') return false
   if (routePath.startsWith('/api/auth/')) return false
   return true
 }

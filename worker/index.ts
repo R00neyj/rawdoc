@@ -81,6 +81,7 @@ import { PURGE_CALLS_ON_CRON, PURGE_CRON, runPurgeJobs } from './purgeJobs'
 import { usageOf } from './usage'
 import { handleDeletePushSubscription, handleGetPushKey, handlePostPushTest, handlePutPushSubscription } from './pushApi'
 import { cleanupPushSubscriptions, loadVapid } from './pushServer'
+import { handleGithubCallback, handleGithubConnect, handleGithubDeleteAccount, handleGithubSetup, handleGithubStatus } from './githubAuth'
 
 export { DocRoom } from './docRoom'
 
@@ -291,6 +292,11 @@ const routes: Route[] = [
   { method: 'PUT', path: '/api/push/subscription', handler: handlePutPushSubscription },
   { method: 'DELETE', path: '/api/push/subscription', handler: handleDeletePushSubscription },
   { method: 'POST', path: '/api/push/test', handler: handlePostPushTest },
+  { method: 'GET', path: '/api/github/status', handler: handleGithubStatus },
+  { method: 'GET', path: '/api/github/connect', handler: handleGithubConnect },
+  { method: 'GET', path: '/api/github/callback', handler: handleGithubCallback },
+  { method: 'GET', path: '/api/github/setup', handler: handleGithubSetup },
+  { method: 'DELETE', path: '/api/github/account', handler: handleGithubDeleteAccount },
   { method: 'GET', path: '/api/usage', handler: handleGetUsage },
   { method: 'PUT', path: '/api/attachments/:idext', handler: handleUploadAttachment },
   { method: 'GET', path: '/api/attachments/:idext', handler: handleGetAttachment },

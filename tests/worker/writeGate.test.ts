@@ -171,6 +171,8 @@ describe('G1 isWriteRoute — 3장 표', () => {
     expect(isWriteRoute('DELETE', '/api/push/subscription')).toBe(false)
     expect(isWriteRoute('GET', '/api/push/key')).toBe(false)
     expect(isWriteRoute('GET', '/api/user-css')).toBe(false)
+    // F-3014 — 연결 해제는 막힌 계정도 할 수 있다 (F-3013 3.4)
+    expect(isWriteRoute('DELETE', '/api/github/account')).toBe(false)
     expect(WRITE_ROUTES).toHaveLength(36)
   })
 })
