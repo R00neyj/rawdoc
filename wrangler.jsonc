@@ -10,8 +10,8 @@
   "vars": {
     "BETTER_AUTH_URL": "https://rawdoc.app",
     "DEV_AUTH_EMAIL": "",
-    "GITHUB_APP_CLIENT_ID": "",
-    "GITHUB_APP_SLUG": ""
+    "GITHUB_APP_CLIENT_ID": "Iv23liB3xEVxzfKyGvuo",
+    "GITHUB_APP_SLUG": "rawdoc-app"
   },
   "secrets": {
     "required": ["BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "GITHUB_APP_CLIENT_SECRET", "GITHUB_TOKEN_KEY"]
