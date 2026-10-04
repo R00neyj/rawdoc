@@ -96,14 +96,15 @@ const LINES = ['첫째 줄', '둘째 줄', '셋째 줄', '넷째 줄', '다섯�
 const BODY = LINES.join('\n')
 const REMOTE = LINES.map((l, i) => (i === 1 || i === 7 ? `${l} 원격` : l)).join('\n')
 
-async function openLinkedDoc(page, room, { remote, syncedAt = null }) {
+async function openLinkedDoc(page, room, { remote, syncedAt = null, lineEnding = 'lf', link = {}, body = BODY, atts = [] }) {
   const server = await fakeServer(page, { github: { enabled: true, connected: true, repos: ['o/r'], files: { 'o/r@main:doc.md': { sha: 'S2', bytes: remote } } } })
   await room.install(page.context())
   const now = Date.now()
-  server.docs.set(PULL_DOC, { id: PULL_DOC, title: '당길 문서', content: BODY, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: now, updatedAt: now })
+  server.docs.set(PULL_DOC, { id: PULL_DOC, title: '당길 문서', content: body, lineEnding, folderId: null, pinnedAt: null, version: 1, createdAt: now, updatedAt: now })
   server.githubLinks.set(PULL_DOC, {
-    repo: 'o/r', branch: 'main', path: 'doc.md', remoteSha: 'S1', remoteBom: false, syncedAt, htmlUrl: 'https://github.com/o/r/blob/main/doc.md', images: {},
+    repo: 'o/r', branch: 'main', path: 'doc.md', remoteSha: 'S1', remoteBom: false, syncedAt, htmlUrl: 'https://github.com/o/r/blob/main/doc.md', images: {}, ...link,
   })
+  for (const name of atts) server.attachments.set(name, { mime: 'image/png', bytes: PNG, width: 1, height: 1 })
   await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
   await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
   await page.goto(`/#/d/${PULL_DOC}`)
@@ -193,5 +194,62 @@ test.describe('F-2129 GitHub 당기기', () => {
     expect(requestsTo(server, '/synced')).toHaveLength(1)
     await page.getByRole('button', { name: 'GitHub', exact: true }).click()
     await expect(page.locator('.github-menu-status')).toContainText('마지막 동기화')
+  })
+})
+
+// F-2130 8장 — 푸시
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==', 'base64')
+const PUSH_NAME = '0123456789abcdef.png'
+const pushDialog = (page) => page.getByRole('dialog', { name: 'GitHub에 푸시' })
+async function openPush(page) {
+  await page.getByRole('button', { name: 'GitHub', exact: true }).click()
+  await page.getByRole('menuitem', { name: '푸시…', exact: true }).click()
+}
+
+test.describe('F-2130 GitHub 푸시', () => {
+  test('F-2130 E1 BOM·CRLF 본문과 새 그림 한 장을 푸시, 요청 순서와 몸통, 상태 줄', async ({ page }) => {
+    const room = createFakeDocRoom()
+    const body = `${BODY}\n\n![](attachments/${PUSH_NAME})\n`
+    room.seed(PULL_DOC, { content: body, title: '당길 문서' })
+    const server = await openLinkedDoc(page, room, { remote: 'x', lineEnding: 'crlf', link: { remoteSha: 'S2', remoteBom: true }, body, atts: [PUSH_NAME] })
+
+    await openPush(page)
+    const dialog = pushDialog(page)
+    await expect(dialog.getByText('새 그림 1장')).toBeVisible()
+    await dialog.getByLabel('커밋 메시지').fill('  첫 푸시\n')
+    await dialog.getByRole('button', { name: '푸시', exact: true }).click()
+
+    await expect(page.locator('.notice-message', { hasText: '푸시했습니다' })).toBeVisible()
+    const reqs = server.githubRequests().filter((r) => /push-plan|blobs|\/push$/.test(r.path))
+    expect(reqs.map((r) => r.path.split('/').pop())).toEqual(['push-plan', 'push-plan', 'blobs', 'blobs', 'push'])
+    const mdBlob = Buffer.from(reqs[2].body.content, 'base64')
+    expect(mdBlob.equals(Buffer.concat([BOM, Buffer.from(body.replace(/\n/g, '\r\n'), 'utf-8')]))).toBe(true)
+    const pushBody = reqs[4].body
+    expect(pushBody.message).toBe('첫 푸시')
+    expect(pushBody.images).toEqual([{ name: PUSH_NAME, sha: expect.any(String) }])
+    expect(pushBody.mdSha).not.toBe(pushBody.images[0].sha)
+    await page.getByRole('button', { name: 'GitHub', exact: true }).click()
+    await expect(page.locator('.github-menu-status')).toContainText('마지막 동기화')
+  })
+
+  test('F-2130 E2 원격이 바뀌어 충돌 → 당기기 → 다시 푸시 대화상자에 메시지가 남아 있다', async ({ page }) => {
+    const room = createFakeDocRoom()
+    room.seed(PULL_DOC, { content: BODY, title: '당길 문서' })
+    const server = await openLinkedDoc(page, room, { remote: BODY })
+
+    await openPush(page)
+    const dialog = pushDialog(page)
+    await dialog.getByLabel('커밋 메시지').fill('고침')
+    await expect(dialog.getByRole('alert')).toHaveText('GitHub 파일이 바뀌었습니다. 당겨서 합친 뒤 푸시하세요')
+    await dialog.getByRole('button', { name: '당기기…' }).click()
+    await expect(page.locator('.notice-message', { hasText: 'GitHub 파일과 같습니다' })).toBeVisible()
+    expect(requestsTo(server, '/synced')).toHaveLength(1)
+
+    await openPush(page)
+    await expect(pushDialog(page).getByLabel('커밋 메시지')).toHaveValue('고침')
+    await expect(pushDialog(page).getByRole('alert')).toHaveCount(0)
+    await pushDialog(page).getByRole('button', { name: '푸시', exact: true }).click()
+    await expect.poll(() => requestsTo(server, '/push')).toHaveLength(1)
+    expect(requestsTo(server, '/push')[0].body.message).toBe('고침')
   })
 })

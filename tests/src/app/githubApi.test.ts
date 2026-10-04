@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { deleteDocGithub, fetchGithubStatus, fetchGithubTree, getDocGithub, postDocGithubPull, postDocGithubSynced, postGithubFile } from '../../../src/app/githubApi'
+import { deleteDocGithub, fetchGithubStatus, fetchGithubTree, getDocGithub, postDocGithubBlob, postDocGithubPlan, postDocGithubPull, postDocGithubPush, postDocGithubSynced, postGithubFile } from '../../../src/app/githubApi'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -65,5 +65,31 @@ describe('F-2129 A6 당기기·synced', () => {
     stub(() => { throw new TypeError('offline') })
     expect(await postDocGithubSynced('d1', { sha: 'S2', bom: false })).toEqual({ ok: false, status: 0, error: null, body: null })
     expect(await postDocGithubPull('d1')).toEqual({ ok: false, status: 0, error: null, body: null })
+  })
+})
+
+describe('F-2130 A2 푸시 세 함수', () => {
+  it('경로·메서드·Content-Type, blob 은 문자열 그대로, 409 몸통이 남는다', async () => {
+    const fn = stub(() => new Response(JSON.stringify({ missing: [], skipped: [] }), { status: 200 }))
+    await postDocGithubPlan('d 1', ['a.png'])
+    let [url, init] = fn.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('/api/docs/d%201/github/push-plan')
+    expect(init.method).toBe('POST')
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
+    expect(init.body).toBe(JSON.stringify({ attachments: ['a.png'] }))
+
+    const fn2 = stub(() => new Response(JSON.stringify({ sha: 's' }), { status: 200 }))
+    await postDocGithubBlob('d1', '{"raw":1}')
+    ;[url, init] = fn2.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('/api/docs/d1/github/blobs')
+    expect(init.method).toBe('POST')
+    expect(init.body).toBe('{"raw":1}')
+
+    const fn3 = stub(() => new Response(JSON.stringify({ error: 'github_conflict', remoteSha: 'x' }), { status: 409 }))
+    const r = await postDocGithubPush('d1', { message: 'm', mdSha: 's', images: [] })
+    ;[url, init] = fn3.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('/api/docs/d1/github/push')
+    expect(init.method).toBe('POST')
+    expect(r).toMatchObject({ ok: false, status: 409, error: 'github_conflict', body: { remoteSha: 'x' } })
   })
 })

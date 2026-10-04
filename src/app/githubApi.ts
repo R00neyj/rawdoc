@@ -1,5 +1,6 @@
 // GitHub 계정·저장소·연결 API 호출 — 던지지 않고 결과 값으로 돌려준다 (specs/features/F-2128.md 3.1)
 import type { GithubBranchList, GithubFile, GithubLink, GithubLinkPut, GithubPulled, GithubRepoList, GithubStatus, GithubSyncedBody, GithubTree } from '../lib/githubContract'
+import type { GithubBlobCreated, GithubPushBody, GithubPushed, GithubPushPlan } from '../lib/githubContract'
 import { parseGithubStatus } from './githubUi'
 
 export type GithubResult<T> = { ok: true; value: T } | { ok: false; status: number; error: string | null; body: unknown }
@@ -60,3 +61,22 @@ export const deleteDocGithub = (id: string): Promise<GithubResult<true>> => call
 export const deleteGithubAccount = (): Promise<GithubResult<true>> => call('/api/github/account', { method: 'DELETE' }, asEmpty)
 export const postDocGithubPull = (id: string): Promise<GithubResult<GithubPulled>> => call(`/api/docs/${encodeURIComponent(id)}/github/pull`, { method: 'POST' }, asPulled)
 export const postDocGithubSynced = (id: string, body: GithubSyncedBody): Promise<GithubResult<true>> => call(`/api/docs/${encodeURIComponent(id)}/github/synced`, json('POST', body), asEmpty)
+
+// F-2130 푸시 — push-plan → blobs → push (F-3016)
+const docGithub = (id: string, tail: string) => `/api/docs/${encodeURIComponent(id)}/github/${tail}`
+const asPlan = (body: unknown): GithubPushPlan | null => {
+  const o = asObject<GithubPushPlan>(body)
+  return o && Array.isArray(o.missing) && Array.isArray(o.skipped) ? o : null
+}
+const asBlob = (body: unknown): GithubBlobCreated | null => {
+  const o = asObject<GithubBlobCreated>(body)
+  return o && typeof o.sha === 'string' ? o : null
+}
+const asPushed = (body: unknown): GithubPushed | null => {
+  const o = asObject<GithubPushed>(body)
+  return o && typeof o.sha === 'string' ? o : null
+}
+export const postDocGithubPlan = (id: string, attachments: string[]): Promise<GithubResult<GithubPushPlan>> => call(docGithub(id, 'push-plan'), json('POST', { attachments }), asPlan)
+export const postDocGithubBlob = (id: string, body: string): Promise<GithubResult<GithubBlobCreated>> =>
+  call(docGithub(id, 'blobs'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, asBlob)
+export const postDocGithubPush = (id: string, body: GithubPushBody): Promise<GithubResult<GithubPushed>> => call(docGithub(id, 'push'), json('POST', body), asPushed)

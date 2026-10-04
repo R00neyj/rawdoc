@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { GithubLink, GithubLinkPut } from '../lib/githubContract'
 import type { ServerStore } from '../storage/serverStore'
-import type { Doc, Store } from '../types'
+import type { AttachmentExt, Doc, Store } from '../types'
 import type { AccountState } from './account'
 import { deleteDocGithub, deleteGithubAccount, getDocGithub, postGithubFile, putDocGithub, type GithubResult } from './githubApi'
 import { runGithubImport } from './githubImport'
@@ -20,6 +20,7 @@ import type { SettingsGithub } from './SettingsDialog'
 import type { SidebarGithub } from './Sidebar'
 import type { LiveStatus } from './StatusBar'
 import { useGithubPull } from './useGithubPull'
+import { useGithubPush } from './useGithubPush'
 import { useGithubStatus } from './useGithubStatus'
 import type { EditorHandle } from '../editor/Editor'
 
@@ -78,6 +79,7 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
     [refresh],
   )
 
+  const server = store as Partial<ServerStore>
   const noEditorRef = useRef<EditorHandle | null>(null)
   const pull = useGithubPull({
     editorRef: o.editorRef ?? noEditorRef,
@@ -96,6 +98,31 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
         return { ...prev, [docId]: { at: now, link: { ...link, remoteSha: sha, remoteBom: bom, syncedAt: now } } }
       }),
     selectDoc,
+  })
+
+  const push = useGithubPush({
+    editorRef: o.editorRef ?? noEditorRef,
+    liveStatus: o.liveStatus ?? null,
+    currentDocId,
+    lineEnding: currentDoc?.lineEnding ?? 'crlf',
+    blocked: mode !== null || unlinkDocId !== null || pull.state !== null,
+    showNotice,
+    watch,
+    linkOf: (docId) => linksRef.current[docId]?.link ?? null,
+    flush: async () => { try { await server.flushOutbox?.() } catch { /* 올리지 못한 그림은 push-plan 의 skipped 로 드러난다 */ } },
+    readAttachment: async (name) => {
+      const [id, ext] = name.split('.')
+      const rec = await store.getAttachment(id, { ext: ext as AttachmentExt })
+      return rec ? new Uint8Array(await rec.blob.arrayBuffer()) : null
+    },
+    onPushed: (docId, sha) =>
+      setLinks((prev) => {
+        const link = prev[docId]?.link
+        if (!link) return prev
+        const now = Date.now()
+        return { ...prev, [docId]: { at: now, link: { ...link, remoteSha: sha, syncedAt: now } } }
+      }),
+    startPull: pull.startPull,
   })
 
   const role = githubDocRole(currentDoc)
@@ -124,8 +151,6 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
     },
     [putCache, watch],
   )
-
-  const server = store as Partial<ServerStore>
 
   async function importFile(file: { repo: string; branch: string; path: string; size: number }) {
     await runGithubImport(file, {
@@ -239,15 +264,16 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
 
   const link = currentDocId ? links[currentDocId]?.link ?? null : null
   const linkedDocIds = new Set(Object.keys(links).filter((id) => links[id].link !== null))
+  const onPush = role === 'owner' && link && currentDocId ? () => void push.openPush(currentDocId) : undefined
   const onPull = role === 'owner' && link && currentDocId ? () => void pull.startPull(currentDocId) : undefined
   return {
     sidebar: { onImport: () => setMode({ kind: 'import' }), onLinkDoc: (d) => setMode({ kind: 'link', docId: d.id, title: d.title }), linkedDocIds },
     topBar:
       role !== null && link && currentDocId
-        ? { role, link, onUnlink: role === 'owner' ? () => { setUnlinkError(null); setUnlinkDocId(currentDocId) } : undefined, onPull }
+        ? { role, link, onUnlink: role === 'owner' ? () => { setUnlinkError(null); setUnlinkDocId(currentDocId) } : undefined, onPull, onPush }
         : undefined,
     settings: { status, online, onShown: () => void refresh(), onConnect: () => connect(null), onDisconnect: () => void disconnectAccount() },
-    palette: { importFile: () => setMode({ kind: 'import' }), pull: onPull },
+    palette: { importFile: () => setMode({ kind: 'import' }), pull: onPull, push: onPush },
     dialogs: {
       picker: {
         mode, status, refreshStatus: refresh, onClose: () => setMode(null), onConnect: connect, onImport: importFile, loadLink, onLink: linkDoc,
@@ -255,6 +281,7 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
       },
       unlink: { open: unlinkDocId !== null, error: unlinkError, onCancel: () => setUnlinkDocId(null), onConfirm: () => void confirmUnlink() },
       pull: pull.dialog,
+      push: push.dialog,
     },
   }
 }

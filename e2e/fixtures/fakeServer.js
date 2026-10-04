@@ -862,6 +862,40 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
     githubLinks.set(docId, { ...link, remoteSha: body.sha, remoteBom: body.bom, syncedAt: Date.now() })
     return route.fulfill({ status: 204 })
   })
+  // F-2130 8장 — push-plan·blobs·push. 원격 sha 가 연결과 다르면 409, blobs 는 몸통의 sha1 을 돌려준다
+  const ghBlobs = new Map() // sha -> Buffer
+  await page.route(/\/api\/docs\/[^/]+\/github\/(push-plan|blobs|push)$/, async (route) => {
+    const req = route.request()
+    const path = new URL(req.url()).pathname
+    const [, , , docId, , action] = path.split('/')
+    const body = safePostDataJSON(req)
+    githubLog.push({ method: req.method(), path, query: {}, body })
+    const link = githubLinks.get(docId)
+    if (!link) return ghJson(route, 404, { error: 'not_found' })
+    const key = `${link.repo}@${link.branch}:${link.path}`
+    if (action === 'blobs') {
+      const sha = crypto.createHash('sha1').update(req.postData() ?? '').digest('hex')
+      ghBlobs.set(sha, Buffer.from(body.content, 'base64'))
+      return ghJson(route, 200, { sha })
+    }
+    const remoteSha = gh.files[key]?.sha ?? null
+    if (remoteSha !== link.remoteSha) return ghJson(route, 409, { error: 'github_conflict', remoteSha })
+    const dir = link.path.includes('/') ? `${link.path.slice(0, link.path.lastIndexOf('/'))}/` : ''
+    const imageKey = (name) => `${link.repo}@${link.branch}:${dir}attachments/${name}`
+    if (action === 'push-plan') {
+      const missing = []
+      const skipped = []
+      for (const name of body.attachments) {
+        if (!attachments.has(name)) skipped.push(name)
+        else if (!gh.files[imageKey(name)]) missing.push(name)
+      }
+      return ghJson(route, 200, { missing, skipped })
+    }
+    gh.files[key] = { sha: body.mdSha, bytes: ghBlobs.get(body.mdSha) }
+    for (const img of body.images) gh.files[imageKey(img.name)] = { sha: img.sha, bytes: ghBlobs.get(img.sha) }
+    githubLinks.set(docId, { ...link, remoteSha: body.mdSha, syncedAt: Date.now() })
+    return ghJson(route, 200, { sha: body.mdSha, commitSha: 'c'.repeat(40), commitUrl: `https://github.com/${link.repo}/commit/${'c'.repeat(40)}` })
+  })
 
   // F-2042 8.1 — 이후 모든 /api/** 응답을 latencyMs 만큼 늦춘다. 마지막에 걸어 다른 경로보다 먼저 가로챈 뒤 route.fallback() 한다
   let latencyMs = 0

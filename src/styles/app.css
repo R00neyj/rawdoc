@@ -6231,3 +6231,26 @@ a.dialog-btn {
   gap: 8px;
   margin-right: auto;
 }
+
+.github-push-target {
+  overflow-wrap: anywhere;
+}
+
+.github-push-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.github-push-message {
+  width: 100%;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
