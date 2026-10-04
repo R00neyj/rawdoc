@@ -1,5 +1,6 @@
 // 이미지 블록 → 옵시디언 임베드 문자열 (specs/features/F-2020.md 5.3). markdown-it 을 import 하지 않는다 — F-2019 가 뒤에 임베드→블록 함수를 덧붙인다
 import { buildImageBlock, parseImageBlock, type ImageAlign, type ImageExt, type ParsedImageBlock } from './imageBlock'
+import { buildImageLine, imageLineTarget, parseImageLine } from './imageMarkdown'
 import { findFrontmatter } from './frontmatter'
 import { toEditorText } from './lineEnding'
 
@@ -172,6 +173,7 @@ function isBlankLine(line: string): boolean {
   return /^[ \t]*$/.test(line)
 }
 
+const APP_ATTACHMENT_RE = /^attachments\/[0-9a-f]{16}\.(png|jpg|gif|webp)$/
 const WIKI_EMBED_RE = /!\[\[([^\]\n]+)\]\]/g
 const MD_EMBED_RE = /!\[([^\]\n]*)\]\(([^)\n]+)\)/g
 
@@ -242,6 +244,7 @@ export function findVaultEmbeds(markdown: string): VaultEmbed[] {
     const rawTarget = extractMdTarget(m[2])
     if (rawTarget === '' || isExternalTarget(rawTarget)) continue
     const target = decodeMdTarget(rawTarget)
+    if (APP_ATTACHMENT_RE.test(target)) continue // 이 앱 형식 — 바꾸면 alt 조각이 캡션으로 섞인다 (F-2127 5.3)
     const { caption, width } = parseMdAlt(m[1])
     raws.push({ from: m.index, to: m.index + m[0].length, syntax: 'markdown', target, caption, width })
   }
@@ -274,7 +277,9 @@ export function findVaultEmbeds(markdown: string): VaultEmbed[] {
   })
 }
 
-export type EmbedBlock = { id: string; ext: ImageExt; alt: string; width: number | null; align: ImageAlign }
+// form: 쓸 원문 모양 — 생략하면 3줄 블록 (F-2127 5.3)
+export type ImageForm = 'html' | 'markdown'
+export type EmbedBlock = { id: string; ext: ImageExt; alt: string; width: number | null; align: ImageAlign; form?: ImageForm }
 
 // blocks 에 든 임베드가 있는 줄만 F-156 블록 3줄로 바꾼다. 앞뒤 빈 줄 규칙(5.3) — markdown 은 '\n' 으로만 줄이 나뉜다
 export function embedsToImageBlocks(markdown: string, blocks: ReadonlyMap<VaultEmbed, EmbedBlock>): string {
@@ -300,7 +305,8 @@ export function embedsToImageBlocks(markdown: string, blocks: ReadonlyMap<VaultE
   for (let i = 0; i < lines.length; i++) {
     const block = blockByLine.get(i)
     if (block) {
-      out.push(buildImageBlock({ id: block.id, ext: block.ext, alt: block.alt, width: block.width, align: block.align }))
+      const build = block.form === 'markdown' ? buildImageLine : buildImageBlock
+      out.push(build({ id: block.id, ext: block.ext, alt: block.alt, width: block.width, align: block.align }))
     } else {
       out.push(lines[i])
     }
@@ -312,17 +318,29 @@ export function embedsToImageBlocks(markdown: string, blocks: ReadonlyMap<VaultE
 
 // 원문 안 F-156 블록(줄 첫 칸 <div align= 줄 + 뒤 두 줄)을 문서 순서로. 3줄 뒤가 문서 끝이거나 빈 줄이어야 블록으로 본다 — 아니면 4줄째까지 이어지는 html_block 이라 보기 모드에서는 블록이 아니다 (F-2019.md 5.4)
 // 저장소 원문은 CRLF 일 수 있어 줄바꿈을 먼저 '\n' 으로 맞춘다 (리뷰 L3). line 은 맞춘 뒤 기준
-export function listImageBlocks(markdown: string): Array<{ line: number; block: ParsedImageBlock }> {
+// 표준 이미지 한 줄(`![alt|center|300](attachments/…)`)도 form 'markdown' 으로 함께 넣는다 (F-2127 5.3)
+export function listImageBlocks(markdown: string): Array<{ line: number; block: ParsedImageBlock; form: ImageForm }> {
   const lines = toEditorText(markdown).split('\n')
-  const result: Array<{ line: number; block: ParsedImageBlock }> = []
+  const result: Array<{ line: number; block: ParsedImageBlock; form: ImageForm }> = []
   for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('![')) {
+      const next = lines[i + 1]
+      if (next !== undefined && !isBlankLine(next)) continue
+      const line = parseImageLine(lines[i])
+      const target = line && imageLineTarget(line)
+      if (line && target) {
+        const block = { align: line.align, id: target.id, ext: target.ext, src: line.url, alt: line.alt, width: line.width }
+        result.push({ line: i, block, form: 'markdown' })
+      }
+      continue
+    }
     if (!lines[i].startsWith('<div align=')) continue
     if (i + 2 >= lines.length) continue
     const next = lines[i + 3]
     if (next !== undefined && !isBlankLine(next)) continue
     const candidate = [lines[i], lines[i + 1], lines[i + 2]].join('\n')
     const parsed = parseImageBlock(candidate)
-    if (parsed) result.push({ line: i, block: parsed })
+    if (parsed) result.push({ line: i, block: parsed, form: 'html' })
   }
   return result
 }

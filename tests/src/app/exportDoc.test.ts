@@ -158,3 +158,14 @@ describe('buildRichCopyPayload (F-280 A14)', () => {
     expect(payload.html).not.toContain('<style')
   })
 })
+
+describe('F-2127 A6 buildExportPayload 새 문법', () => {
+  it('새 문법 줄이 든 문서도 첨부를 zip 에 담는다', async () => {
+    const id = '0f3a9c2e7b1d4a58'
+    const text = `본문\n\n![a|center|10](attachments/${id}.png)\n`
+    const store = { getAttachment: async () => ({ id, ext: 'png', blob: { arrayBuffer: async () => new Uint8Array([1]).buffer } }) }
+    const payload = await buildExportPayload({ text, title: '내 문서', store })
+    expect(payload.kind).toBe('zip')
+    expect(Object.keys(unzipSync(payload.bytes)).sort()).toEqual([`attachments/${id}.png`, '내 문서.md'])
+  })
+})

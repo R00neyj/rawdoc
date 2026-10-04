@@ -109,7 +109,7 @@ test.describe('F-2061 우클릭 메뉴 절', () => {
     await line.click()
     await rightClick(page, line)
     await root(page).getByRole('menuitem', { name: /^붙여넣기/ }).click()
-    await expect.poll(async () => (await readSavedContent(page)).content).toMatch(/<img src="attachments\//)
+    await expect.poll(async () => (await readSavedContent(page)).content).toMatch(/\]\(attachments\//)
   })
 })
 

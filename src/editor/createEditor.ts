@@ -51,6 +51,7 @@ import './searchPanel.css'
 import './commentMarks.css'
 import { isTouchContextMenu } from '../lib/touchContextMenu'
 import { floatCoverFor } from '../lib/floatCover'
+import type { ResolveImagePath } from '../lib/imageMarkdown'
 
 // 제목 목록 갱신 debounce (specs/features/F-144.md 3.3 "입력이 멈춘 뒤(150ms) 갱신")
 const HEADINGS_DEBOUNCE_MS = 150
@@ -59,15 +60,19 @@ type ViewMode = 'live' | 'raw' | 'view'
 type LineEnding = 'crlf' | 'lf'
 type IndentSize = 2 | 4
 
-type PreviewCallbacks = { onOpenWikiLink?: OnOpenWikiLink; resolveAttachment?: ResolveAttachment }
+type PreviewCallbacks = {
+  onOpenWikiLink?: OnOpenWikiLink
+  resolveAttachment?: ResolveAttachment
+  resolveImagePath?: ResolveImagePath
+}
 
 // theme: 앱 테마 — mermaid 코드블록 위젯에 쓰인다(F-260.md 2.3)
 function previewExtensionFor(
   mode: ViewMode,
   theme: string,
-  { onOpenWikiLink, resolveAttachment }: PreviewCallbacks = {},
+  { onOpenWikiLink, resolveAttachment, resolveImagePath }: PreviewCallbacks = {},
 ): Extension {
-  return mode === 'live' ? livePreview({ onOpenWikiLink, resolveAttachment, theme }) : []
+  return mode === 'live' ? livePreview({ onOpenWikiLink, resolveAttachment, resolveImagePath, theme }) : []
 }
 
 function attributesExtensionFor(mode: ViewMode): Extension {
@@ -292,6 +297,8 @@ type CreateEditorOptions = {
   onImageFiles?: OnImageFiles
   // 편집 모드 이미지 블록 위젯이 첨부를 읽는 콜백 (F-157.md 2.2)
   resolveAttachment?: ResolveAttachment
+  // 상대 경로 이미지의 첨부 대응 (F-2127 6장) — 아무도 안 넘긴다
+  resolveImagePath?: ResolveImagePath
   // 우클릭 메뉴 열기 (F-170.md 2·5장) — 주 에디터·표 칸 하위 에디터 공통. handle.onContextMenu() 로도 나중에 등록할 수 있다
   onContextMenu?: OnEditorContextMenu
   // 본문 맨 위 제목 (F-217.md 2장) — 이후 갱신은 handle.setTitle()·setTitleReadOnly() 로 한다. 이 값은 최초 생성에만 쓴다
@@ -329,6 +336,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     onOpenWikiLink,
     onImageFiles,
     resolveAttachment,
+    resolveImagePath,
     onContextMenu,
     title = '',
     titleReadOnly = false,
@@ -450,7 +458,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // 위키링크 해석 문맥(F-2018). 모드와 무관하게 항상 켠다 — wikiComplete() 도 같은 필드를 읽고, previewCompartment 재구성에도 값을 잃지 않는다
     wikiContext ? wikiContextField.init(() => wikiContext) : wikiContextField,
     wikiComplete(),
-    previewCompartment.of(previewExtensionFor(currentMode, currentTheme, { onOpenWikiLink, resolveAttachment })),
+    previewCompartment.of(previewExtensionFor(currentMode, currentTheme, { onOpenWikiLink, resolveAttachment, resolveImagePath })),
     attributesCompartment.of(attributesExtensionFor(viewMode)),
     // 본문 첫 시각 줄에서 ↑ 는 제목으로 포커스를 옮긴다 — defaultKeymap 커서 이동보다 먼저 받아야 한다 (F-217.md 2.3)
     Prec.high(keymap.of([{ key: 'ArrowUp', run: focusTitleFromBody }])),
@@ -538,7 +546,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       currentMode = mode
       view.dispatch({
         effects: [
-          previewCompartment.reconfigure(previewExtensionFor(mode, currentTheme, { onOpenWikiLink, resolveAttachment })),
+          previewCompartment.reconfigure(previewExtensionFor(mode, currentTheme, { onOpenWikiLink, resolveAttachment, resolveImagePath })),
           attributesCompartment.reconfigure(attributesExtensionFor(mode)),
           ...scrollSnapshotIfVisible(view),
         ],
@@ -550,7 +558,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       currentTheme = theme
       view.dispatch({
         effects: previewCompartment.reconfigure(
-          previewExtensionFor(currentMode, currentTheme, { onOpenWikiLink, resolveAttachment }),
+          previewExtensionFor(currentMode, currentTheme, { onOpenWikiLink, resolveAttachment, resolveImagePath }),
         ),
       })
       // 재구성으로 blockPreview 의 StateField 가 create 부터 다시 도는데, 그 시점엔 새 ViewPlugin 이 아직 viewRef 를 채우지 않아 포커스가 false 로 잡힌다 — 커서가 든 코드블록·표까지 위젯으로 접힌다. 한 번 더 보내 실제 포커스로 다시 계산시킨다

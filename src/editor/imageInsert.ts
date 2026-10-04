@@ -4,8 +4,8 @@ import type { EditorState, Extension } from '@codemirror/state'
 import { StateEffect, StateField } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 
-import { buildImageBlock } from '../lib/imageBlock'
 import type { ImageExt } from '../lib/imageBlock'
+import { buildImageLine } from '../lib/imageMarkdown'
 import { isComposing } from './composition'
 
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp)$/i
@@ -160,11 +160,12 @@ async function handleIncomingImages(
   const targetPos = trackedPos ?? pos
 
   const blocks = attached.map((img) =>
-    buildImageBlock({
+    buildImageLine({
       id: img.id,
       ext: img.ext,
       alt: img.alt,
       width: Math.max(1, Math.min(img.width, contentWidth || img.width)),
+      align: 'center',
     }),
   )
 

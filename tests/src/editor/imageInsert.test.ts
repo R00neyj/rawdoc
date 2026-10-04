@@ -4,6 +4,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
 import { frontmatterExtension } from '../../../src/editor/frontmatter'
 import { computeImagePlacement, isBlockedPosition } from '../../../src/editor/imageInsert'
+import { buildImageLine } from '../../../src/lib/imageMarkdown'
 
 function apply(doc: string, from: number, insert: string): string {
   return doc.slice(0, from) + insert + doc.slice(from)
@@ -104,5 +105,15 @@ describe('isBlockedPosition', () => {
     expect(isBlockedPosition(makeState(doc), doc.indexOf('문단'))).toBe(false)
     expect(isBlockedPosition(makeState(doc), doc.indexOf('목록'))).toBe(false)
     expect(isBlockedPosition(makeState(doc), doc.indexOf('인용'))).toBe(false)
+  })
+})
+
+describe('F-2127 A8 넣는 글자', () => {
+  it('붙여넣기 200×100 PNG → 새 문법 한 줄이 빈 줄 사이에 들어간다', () => {
+    const line = buildImageLine({ id: '0f3a9c2e7b1d4a58', ext: 'png', alt: '이미지', width: 200, align: 'center' })
+    expect(line).toBe('![이미지|center|200](attachments/0f3a9c2e7b1d4a58.png)')
+    const doc = '본문\n다음'
+    const { insert } = computeImagePlacement(doc, 0, [line])
+    expect(insert).toBe(`\n\n${line}\n`)
   })
 })

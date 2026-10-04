@@ -8,6 +8,8 @@ import { syntaxTree } from '@codemirror/language'
 import type { SyntaxNode } from '@lezer/common'
 
 import { parseImageBlock } from '../../lib/imageBlock'
+import { imageLineTarget, parseImageLine } from '../../lib/imageMarkdown'
+import type { ResolveImagePath } from '../../lib/imageMarkdown'
 import { parseMathBlock } from '../../lib/mathSyntax'
 import { createCodeCopyButton } from '../../lib/codeCopyButton'
 import { displayLang, isMermaidInfo } from '../../lib/codeLang'
@@ -240,6 +242,7 @@ export function buildBlocks(
   resolveAttachment: ResolveAttachment | undefined,
   theme: string,
   spans?: BlockSpan[],
+  resolveImagePath?: ResolveImagePath,
 ): CMRange<Decoration>[] {
   const out: CMRange<Decoration>[] = []
   syntaxTree(state).iterate({
@@ -265,9 +268,25 @@ export function buildBlocks(
       if (node.name === 'Paragraph') {
         if (isInsideListOrQuote(node.node)) return false
         const from = state.doc.lineAt(node.from).from
+        const to = state.doc.lineAt(node.to).to
+        // 이미지 한 줄 `![…](attachments/…)` (F-2127 4.1) — 문단 첫 글자(앞 0~3칸 뒤)가 `!` 일 때만 해석한다
+        if (state.doc.sliceString(node.from, node.from + 1) === '!') {
+          const line = parseImageLine(state.doc.sliceString(from, to))
+          const target = line && imageLineTarget(line, resolveImagePath)
+          if (line && target) {
+            const span = { from, to, table: false }
+            spans?.push(span)
+            if (showsWidget(state, hasFocus, span)) {
+              const parsed = { align: line.align, id: target.id, ext: target.ext, src: line.url, alt: line.alt, width: line.width }
+              out.push(
+                Decoration.replace({ widget: new ImageWidget(parsed, resolveAttachment, 'markdown'), block: true }).range(from, to),
+              )
+            }
+            return false
+          }
+        }
         // 수식 블록은 문단 첫 두 글자가 `$$` 여야 한다(parseMathBlock) — 아니면 파싱 안 하고, 문단 자식은 인라인 노드뿐이라 내려가지 않는다(리뷰 E6)
         if (state.doc.sliceString(from, from + 2) !== '$$') return false
-        const to = state.doc.lineAt(node.to).to
         const parsed = parseMathBlock(state.doc.sliceString(from, to))
         if (!parsed) return false
         const span = { from, to, table: false }
@@ -357,7 +376,15 @@ const blockKeymap = Prec.highest(
 
 // 표·코드블록 위젯 확장 — StateField 는 view 를 못 받아 위젯 없는 ViewPlugin(tracker)으로 view 참조만 잡아 클로저에서 읽는다(최초 create 시점엔 조합 중일 수 없다). IME 규칙은 F-104 2.3 과 같다
 // 표 칸 조합(F-125 2.2)은 칸의 하위 EditorView 에서 일어나 주 view.composing 이 계속 false 라 isCellComposing 도 봐야 한다 — 안 보면 재계산이 하위 뷰 DOM 을 파괴한다. resolveAttachment(F-157 2.2)·theme(F-260 2.2)은 호출부가 넘긴다
-export function blockPreview({ resolveAttachment, theme }: { resolveAttachment?: ResolveAttachment; theme: string }): Extension {
+export function blockPreview({
+  resolveAttachment,
+  theme,
+  resolveImagePath,
+}: {
+  resolveAttachment?: ResolveAttachment
+  theme: string
+  resolveImagePath?: ResolveImagePath
+}): Extension {
   const viewRef: { current: EditorView | null } = { current: null }
   const tracker = ViewPlugin.fromClass(
     class {
@@ -376,7 +403,7 @@ export function blockPreview({ resolveAttachment, theme }: { resolveAttachment?:
   type FieldValue = { deco: DecorationSet; spans: BlockSpan[]; key: string; stale: boolean }
   function build(state: EditorState, hasFocus: boolean): FieldValue {
     const spans: BlockSpan[] = []
-    const deco = Decoration.set(buildBlocks(state, hasFocus, resolveAttachment, theme, spans), true)
+    const deco = Decoration.set(buildBlocks(state, hasFocus, resolveAttachment, theme, spans, resolveImagePath), true)
     return { deco, spans, key: blockVisibilityKey(state, hasFocus, spans), stale: false }
   }
 

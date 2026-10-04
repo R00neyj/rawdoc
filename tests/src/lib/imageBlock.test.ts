@@ -288,3 +288,9 @@ describe('width 선택 (F-2019.md 5.4 U4)', () => {
     expect(parseImageBlock(changed!)?.align).toBe('right')
   })
 })
+
+describe('F-2127 A6 새 문법 줄의 참조', () => {
+  it('extractAttachmentRefs 가 새 문법 줄 안 id 를 찾는다', () => {
+    expect(extractAttachmentRefs(`![회의|center|300](attachments/${ID}.webp)`)).toEqual(new Set([ID]))
+  })
+})

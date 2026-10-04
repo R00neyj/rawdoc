@@ -658,3 +658,49 @@ describe('blockPreview — 선택만 바뀐 갱신 (리뷰 E6)', () => {
     expect(blockVisibilityKey(inCode, true, spans)).not.toBe(key)
   })
 })
+
+describe('buildBlocks — 이미지 한 줄 위젯 (F-2127 A4)', () => {
+  const ID = '0f3a9c2e7b1d4a58'
+  const LINE = `![설명|center|120](attachments/${ID}.png)`
+  const find = (state: CMState, resolve?: (p: string) => { id: string; ext: 'png' } | null) =>
+    buildBlocks(state, true, undefined, TEST_THEME, undefined, resolve).filter((r) => r.value.spec.widget?.id !== undefined)
+
+  it('커서가 밖이면 줄 범위의 위젯 1개', () => {
+    const doc = `앞\n\n${LINE}\n\n뒤`
+    const found = find(makeState(doc, 0))
+    expect(found).toHaveLength(1)
+    const w = found[0].value.spec.widget as TestImageWidget
+    expect([w.id, w.alt, w.align, w.width]).toEqual([ID, '설명', 'center', 120])
+    expect(found[0].from).toBe(doc.indexOf('!['))
+    expect(found[0].to).toBe(doc.indexOf('!['.concat('')) + LINE.length)
+  })
+
+  it('커서가 그 줄이면 위젯 없음', () => {
+    const doc = `앞\n\n${LINE}\n\n뒤`
+    expect(find(makeState(doc, doc.indexOf('설명')))).toHaveLength(0)
+  })
+
+  it('문장 안·목록·인용·외부 주소·대응 없는 상대 경로는 위젯 없음', () => {
+    const docs = [
+      `글 ${LINE}\n\n뒤`,
+      `- ${LINE}\n\n뒤`,
+      `> ${LINE}\n\n뒤`,
+      `![x](https://example.com/a.png)\n\n뒤`,
+      `![y](./img/a.png)\n\n뒤`,
+      `${LINE}\n글`,
+    ]
+    for (const doc of docs) expect(find(makeState(doc, doc.length))).toHaveLength(0)
+  })
+
+  it('resolveImagePath 가 첨부를 주면 상대 경로도 위젯', () => {
+    const doc = '![y](./img/a.png)\n\n뒤'
+    expect(find(makeState(doc, doc.length), () => ({ id: ID, ext: 'png' }))).toHaveLength(1)
+  })
+
+  it('eq 는 원문 모양(form)도 비교한다', () => {
+    const html = [`<div align="center">`, `  <img src="attachments/${ID}.png" alt="설명" width="120">`, `</div>`].join('\n')
+    const a = find(makeState(`${LINE}\n\n뒤`, LINE.length + 3))[0].value.spec.widget as TestImageWidget
+    const b = find(makeState(`${html}\n\n뒤`, html.length + 3))[0].value.spec.widget as TestImageWidget
+    expect(a.eq(b)).toBe(false)
+  })
+})

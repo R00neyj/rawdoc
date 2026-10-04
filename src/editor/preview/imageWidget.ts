@@ -3,6 +3,7 @@ import { EditorView, WidgetType } from '@codemirror/view'
 
 import type { ImageAlign, ParsedImageBlock } from '../../lib/imageBlock'
 import { imageAlignChange, imageWidthChange, imageBlockDeleteRange } from '../../lib/imageBlock'
+import { imageLineAlignChange, imageLineWidthChange } from '../../lib/imageMarkdown'
 import { createAttachmentUrl, revokeAttachmentUrl } from '../../lib/attachmentUrls'
 import { observeHeight, stopObservingHeight } from './blocks'
 
@@ -13,6 +14,9 @@ import deleteSvg from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import brokenImageSvg from '@material-symbols/svg-400/outlined/broken_image.svg?raw'
 
 const MIN_WIDTH = 48
+
+// 원문 모양: html 은 3줄 블록, markdown 은 `![alt|center|300](…)` 한 줄 (F-2127 4.2)
+export type ImageForm = 'html' | 'markdown'
 
 export type AttachmentRecord = { blob: Blob; width: number; height: number; e2ee?: true }
 export type ResolveAttachment = (id: string) => Promise<AttachmentRecord | null>
@@ -78,10 +82,14 @@ function measureMaxWidth(view: EditorView): number {
   return Math.max(MIN_WIDTH, Math.floor(contentEl.clientWidth - padding))
 }
 
-// wrap(위젯 최상위 DOM)의 현재 문서 위치에서 3줄 블록 범위를 구한다(F-106 2.3 과 같은 방식)
+// wrap(위젯 최상위 DOM)의 현재 문서 위치에서 블록 범위를 구한다(F-106 2.3 과 같은 방식). markdown 모양은 줄 하나
 function currentBlockRange(view: EditorView, wrap: HTMLElement): { blockFrom: number; blockTo: number } {
   const blockFrom = view.posAtDOM(wrap)
   const startLine = view.state.doc.lineAt(blockFrom).number
+  if (wrap.dataset.imgForm === 'markdown') {
+    const line = view.state.doc.line(startLine)
+    return { blockFrom: line.from, blockTo: line.to }
+  }
   const endLineNo = Math.min(startLine + 2, view.state.doc.lines)
   const blockTo = view.state.doc.line(endLineNo).to
   return { blockFrom, blockTo }
@@ -95,14 +103,14 @@ function currentBlockText(view: EditorView, wrap: HTMLElement): { blockFrom: num
 function dispatchAlign(view: EditorView, wrap: HTMLElement, align: ImageAlign): void {
   if (view.state.readOnly) return // 읽기 전용이면 위젯도 문서를 바꾸지 않는다 (리뷰 E1)
   const { blockFrom, text } = currentBlockText(view, wrap)
-  const change = imageAlignChange(text, blockFrom, align)
+  const change = (wrap.dataset.imgForm === 'markdown' ? imageLineAlignChange : imageAlignChange)(text, blockFrom, align)
   if (change) view.dispatch({ changes: change, userEvent: 'input.image' })
 }
 
 function dispatchWidth(view: EditorView, wrap: HTMLElement, width: number): void {
   if (view.state.readOnly) return
   const { blockFrom, text } = currentBlockText(view, wrap)
-  const change = imageWidthChange(text, blockFrom, width)
+  const change = (wrap.dataset.imgForm === 'markdown' ? imageLineWidthChange : imageWidthChange)(text, blockFrom, width)
   if (change) view.dispatch({ changes: change, userEvent: 'input.image' })
 }
 
@@ -327,9 +335,10 @@ export class ImageWidget extends WidgetType {
   align: ImageAlign
   width: number | null
   resolveAttachment?: ResolveAttachment
+  form: ImageForm
   key: string
 
-  constructor(parsed: ParsedImageBlock, resolveAttachment?: ResolveAttachment) {
+  constructor(parsed: ParsedImageBlock, resolveAttachment?: ResolveAttachment, form: ImageForm = 'html') {
     super()
     this.id = parsed.id
     this.ext = parsed.ext
@@ -337,7 +346,8 @@ export class ImageWidget extends WidgetType {
     this.align = parsed.align
     this.width = parsed.width
     this.resolveAttachment = resolveAttachment
-    this.key = JSON.stringify({ id: this.id, ext: this.ext, alt: this.alt, align: this.align, width: this.width })
+    this.form = form
+    this.key = JSON.stringify({ id: this.id, ext: this.ext, alt: this.alt, align: this.align, width: this.width, form })
   }
 
   eq(other: ImageWidget): boolean {
@@ -349,6 +359,7 @@ export class ImageWidget extends WidgetType {
     wrap.dataset.imgId = this.id
     wrap.dataset.imgExt = this.ext
     wrap.dataset.imgAlt = this.alt
+    wrap.dataset.imgForm = this.form
 
     const box = el('div', 'md-image-box')
     box.dataset.align = this.align
@@ -399,7 +410,7 @@ export class ImageWidget extends WidgetType {
   }
 
   updateDOM(dom: HTMLElement): boolean {
-    if (dom.dataset.imgId !== this.id || dom.dataset.imgExt !== this.ext || dom.dataset.imgAlt !== this.alt) {
+    if (dom.dataset.imgId !== this.id || dom.dataset.imgExt !== this.ext || dom.dataset.imgAlt !== this.alt || dom.dataset.imgForm !== this.form) {
       return false
     }
     const box = dom.querySelector<HTMLElement>('.md-image-box')!

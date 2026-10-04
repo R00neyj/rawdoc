@@ -11,7 +11,7 @@ import { writeTextInRoom } from './docRoomRpc'
 import type { RoomDocState, RoomTextWrite } from './docRoomCore'
 import { handleCreateDocLink } from './links'
 import { MAX_ATTACHMENT_BYTES, generateAttachmentId, storeAttachment } from './attachments'
-import { buildImageBlock } from '../src/lib/imageBlock'
+import { buildImageLine } from '../src/lib/imageMarkdown'
 import { fromEditorText, toEditorText } from '../src/lib/lineEnding'
 import { MAX_BODY_BYTES, MAX_CONTENT_BYTES, isContentTooLarge, isValidLineEnding, isValidTitle, isValidUuid } from './validate'
 import { checkDocGrow, readUsage, usageOf, utf8Bytes } from './usage'
@@ -208,11 +208,12 @@ export async function handleCreateAttachmentV1(request: Request, env: Env, ctx?:
     return jsonResponse({ error: result.error, used: result.used, limit: result.limit }, 507)
   }
 
-  const markdown = buildImageBlock({
+  const markdown = buildImageLine({
     id: result.row.id,
     ext: result.row.ext,
     alt: '이미지',
     width: Math.min(result.row.width, 800),
+    align: 'center',
   })
   return jsonResponse({ ...result.row, markdown }, 201)
 }

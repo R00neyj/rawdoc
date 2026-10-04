@@ -969,3 +969,15 @@ describe('F-509 U8 countE2eeConvertComments — 끊기면 null', () => {
     expect(calls.length).toBeLessThanOrEqual(E2EE_COMMENT_COUNT_CONCURRENCY)
   })
 })
+
+describe('F-2127 A6 새 문법 줄', () => {
+  const id = '0f3a9c2e7b1d4a58'
+  const to = '00000000000000cc'
+  const line = `![회의|center|300](attachments/${id}.png)`
+  it('attachmentLinksOf 가 id 를 찾고 rewriteAttachmentLinks 는 경로만 바꾼다(alt 조각 그대로)', () => {
+    expect(attachmentLinksOf(line)).toEqual([{ id, ext: 'png' }])
+    expect(rewriteAttachmentLinks(line, new Map([[id, { id: to, ext: 'png' as AttachmentExt }]]))).toBe(
+      `![회의|center|300](attachments/${to}.png)`,
+    )
+  })
+})

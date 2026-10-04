@@ -209,11 +209,9 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
       expect(lines[0]).toBe('첫째 줄')
       expect(lines[1]).toBe('둘째 줄')
       expect(lines[2]).toBe('')
-      expect(lines[3]).toBe('<div align="center">')
-      expect(lines[4]).toMatch(/^ {2}<img src="attachments\/[0-9a-f]{16}\.png" alt="이미지" width="200">$/)
-      expect(lines[5]).toBe('</div>')
-      expect(lines[6]).toBe('')
-      expect(lines[7]).toBe('셋째 줄')
+      expect(lines[3]).toMatch(/^!\[이미지\|center\|200\]\(attachments\/[0-9a-f]{16}\.png\)$/)
+      expect(lines[4]).toBe('')
+      expect(lines[5]).toBe('셋째 줄')
 
       // 커서 = 셋째 줄 시작
       await page.keyboard.type('X')
@@ -256,10 +254,10 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
 
       await waitSaved(page)
       const saved = await readSavedContent(page)
-      const altOrder = [...saved.content.matchAll(/alt="([^"]*)"/g)].map((m) => m[1])
+      const altOrder = [...saved.content.matchAll(/!\[([^|\]]*)/g)].map((m) => m[1])
       expect(altOrder).toEqual(['a', 'b'])
       // 사이 빈 줄 하나
-      expect(saved.content).toMatch(/<\/div>\n\n<div align="center">/)
+      expect(saved.content).toMatch(/\)\n\n!\[/)
 
       await page.locator('.cm-content').click()
       await page.keyboard.press('Control+z')
@@ -347,8 +345,7 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
       await pasteFiles(page, { files: [{ bytes: pngBytes(200, 100), name: 'a.png', mime: 'image/png' }] })
       await waitSaved(page)
       const rawSaved = await readSavedContent(page)
-      expect(rawSaved.content).toContain('<div align="center">')
-      expect(rawSaved.content).toContain('width="200"')
+      expect(rawSaved.content).toContain('|center|200](attachments/')
 
       await importMarkdown(page, { content: '본문\n' })
       await setViewMode(page, 'view')
@@ -385,8 +382,7 @@ test.describe('F-156 이미지 첨부 저장·붙여넣기·끌어놓기', () =>
 
     const saved = await readSavedContent(page)
     expect(fileBytes).toBe(saved.content)
-    expect(fileBytes).toContain('<div align="center">\r\n')
-    expect(fileBytes).toContain('</div>\r\n')
+    expect(fileBytes).toMatch(/\]\(attachments\/[0-9a-f]{16}\.png\)\r\n/)
   })
 })
 
@@ -406,7 +402,7 @@ test.describe('F-220 이미지 넣을 때 자동 축소', () => {
       const saved = await readSavedContent(page)
       const match = /attachments\/([0-9a-f]{16})\.(webp)/.exec(saved.content)
       expect(match).not.toBeNull()
-      const width = Number(/width="(\d+)"/.exec(saved.content)[1])
+      const width = Number(/\|(\d+)\]\(attachments\//.exec(saved.content)[1])
       expect(width).toBeLessThanOrEqual(contentWidth + 1)
 
       const attachment = await readAttachment(page, match[1])
@@ -457,7 +453,7 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
   }
 
   function widthOf(content) {
-    return Number(/width="(\d+)"/.exec(content)[1])
+    return Number(/\|(\d+)\]\(attachments\//.exec(content)[1])
   }
 
   test('F-157 A3·A6·A8 정렬 버튼·키보드·없는 첨부', async ({ page }) => {
@@ -468,7 +464,7 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
       await pasteImage(page, { width: 200, height: 100, afterText: '본문' })
 
       const before = (await readSavedContent(page)).content
-      expect(before).toContain('<div align="center">')
+      expect(before).toContain('|center|')
 
       const box = page.locator('.md-image-box')
       await box.hover()
@@ -476,7 +472,7 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
       await leftBtn.click()
       await waitSaved(page)
       const afterLeft = (await readSavedContent(page)).content
-      expect(afterLeft).toBe(before.replace('align="center"', 'align="left"')) // align 값 글자만 바뀜
+      expect(afterLeft).toBe(before.replace('|center|', '|')) // 정렬 조각만 바뀜
       await expect(leftBtn).toHaveAttribute('aria-pressed', 'true')
       await expect(page.getByRole('button', { name: '가운데 정렬' })).toHaveAttribute('aria-pressed', 'false')
       // 정렬별 화면 위치(글자 칸 왼쪽·오른쪽 ±2px)는 시각 값이라 뺐다 (CLAUDE.md "Design does not get TDD")
@@ -486,7 +482,7 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
       await rightBtn.click()
       await waitSaved(page)
       const afterRight = (await readSavedContent(page)).content
-      expect(afterRight).toBe(before.replace('align="center"', 'align="right"'))
+      expect(afterRight).toBe(before.replace('|center|', '|right|'))
 
       await page.locator('.cm-content .cm-line', { hasText: '본문' }).click() // 편집기로 포커스 복귀(Ctrl+Z 는 CM6 키맵)
       await page.keyboard.press('Control+z')
@@ -650,7 +646,7 @@ test.describe('F-157 편집 모드 이미지 표시·정렬·크기 조절', () 
       await page.keyboard.press('ArrowDown')
       await page.keyboard.press('ArrowDown')
       await expect(page.locator('.md-image-box')).toHaveCount(0)
-      await expect(page.locator('.cm-content')).toContainText('<div align="center">')
+      await expect(page.locator('.cm-content')).toContainText('![이미지|center|')
 
       await page.keyboard.press('Control+Home')
       await expect(page.locator('.md-image-box')).toHaveCount(1)
@@ -733,11 +729,11 @@ test.describe('F-218 편집 모드 이미지 삭제 버튼', () => {
     await waitSaved(page)
 
     const before = (await readSavedContent(page)).content
-    expect(before).toContain('<div align="center">')
+    expect(before).toContain('![이미지|center|')
 
-    const blockStart = before.indexOf('<div align="center">')
-    const divEnd = before.indexOf('</div>', blockStart) + '</div>'.length
-    const removeEnd = before[divEnd] === '\n' ? divEnd + 1 : divEnd
+    const blockStart = before.indexOf('![이미지|center|')
+    const lineEnd = before.indexOf('\n', blockStart)
+    const removeEnd = before[lineEnd] === '\n' ? lineEnd + 1 : lineEnd
     const expected = before.slice(0, blockStart) + before.slice(removeEnd)
 
     const box = page.locator('.md-image-box')
@@ -945,5 +941,91 @@ test.describe('F-214 공유 화면에서 주석 숨기기', () => {
 
     const bodyText = await page.locator('.content-area .viewer').innerText()
     expect(bodyText).toContain('%%비밀%%')
+  })
+})
+
+test.describe('F-2127 이미지 원문을 표준 마크다운으로', () => {
+  async function pasteOne(page, afterText, width, height) {
+    await page.locator('.cm-content .cm-line', { hasText: afterText }).click()
+    await pasteFiles(page, { files: [{ bytes: decodablePngBytes(width, height), name: 'a.png', mime: 'image/png' }] })
+    await waitSaved(page)
+    await expect(page.locator('.md-image-box').last()).toBeVisible()
+  }
+
+  test('F-2127 E1 붙여넣기 → 정렬 → 키보드 너비 → 삭제 → Ctrl+Z, 원문은 알 조각만 바뀐다', async ({ page }) => {
+    test.setTimeout(60000)
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteOne(page, '본문', 200, 100)
+    const pasted = (await readSavedContent(page)).content
+    expect(pasted).toMatch(/\n!\[이미지\|center\|200\]\(attachments\/[0-9a-f]{16}\.png\)\n/)
+
+    await page.locator('.md-image-box').hover()
+    await page.getByRole('button', { name: '왼쪽 정렬' }).click()
+    await waitSaved(page)
+    const left = (await readSavedContent(page)).content
+    expect(left).toBe(pasted.replace('|center|', '|'))
+    await expect.poll(async () => page.locator('.md-image-img').evaluate((el) => el.naturalWidth)).toBeGreaterThan(0)
+
+    await page.locator('.md-image-handle-edge').focus()
+    await page.keyboard.press('ArrowRight')
+    await waitSaved(page)
+    const wider = (await readSavedContent(page)).content
+    expect(wider).toBe(left.replace('|200]', '|210]'))
+
+    await page.locator('.md-image-box').hover()
+    await page.getByRole('button', { name: '이미지 삭제' }).click()
+    await waitSaved(page)
+    const start = wider.indexOf('![이미지|210]')
+    const lineEnd = wider.indexOf('\n', start)
+    expect((await readSavedContent(page)).content).toBe(wider.slice(0, start) + wider.slice(lineEnd + 1))
+
+    await page.locator('.cm-content .cm-line', { hasText: '본문' }).click()
+    await page.keyboard.press('Control+z')
+    await waitSaved(page)
+    expect((await readSavedContent(page)).content).toBe(wider)
+  })
+
+  test('F-2127 E2 옛 블록·새 문법만 위젯, 문장 안·외부·상대 경로는 글자, 보기 모드에서 외부 요청 없음', async ({ page }) => {
+    test.setTimeout(60000)
+    await openApp(page)
+    await importMarkdown(page, { content: '본문\n' })
+    await pasteOne(page, '본문', 40, 40)
+    await pasteOne(page, '본문', 50, 50)
+    const ids = [...(await readSavedContent(page)).content.matchAll(/attachments\/([0-9a-f]{16})\.png/g)].map((m) => m[1])
+    expect(ids).toHaveLength(2)
+
+    await importMarkdown(page, {
+      content: [
+        '시작',
+        '',
+        '<div align="center">',
+        '  <img src="attachments/' + ids[0] + '.png" alt="옛" width="100">',
+        '</div>',
+        '',
+        '위 줄',
+        '',
+        '![새|center|100](attachments/' + ids[1] + '.png)',
+        '',
+        '글 ![a](attachments/' + ids[0] + '.png)',
+        '',
+        '![x](https://example.com/a.png)',
+        '',
+        '![y](./img/a.png)',
+        '',
+      ].join('\n'),
+    })
+    await page.locator('.cm-content .cm-line', { hasText: '위 줄' }).click()
+    await expect(page.locator('.md-image-box')).toHaveCount(2)
+
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ArrowDown')
+    await expect(page.locator('.md-image-box')).toHaveCount(1)
+    await expect(page.locator('.cm-content')).toContainText('![새|center|100]')
+
+    await setViewMode(page, 'view')
+    await expect(page.locator('.content-area .viewer .md-image')).toHaveCount(2)
+    const urls = await page.evaluate(() => performance.getEntriesByType('resource').map((r) => r.name))
+    expect(urls.some((u) => u.includes('example.com') || u.includes('/img/a.png'))).toBe(false)
   })
 })

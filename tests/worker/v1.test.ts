@@ -572,7 +572,7 @@ describe('F-308 A1~A8 /v1 PUT 을 DO 경유로', () => {
 })
 
 describe('F-223 A2 POST /v1/attachments', () => {
-  it('PNG 바이트를 올리면 201 + markdown 3줄', async () => {
+  it('PNG 바이트를 올리면 201 + markdown 새 문법 한 줄', async () => {
     const { env, putCalls } = makeEnv()
     const bytes = pngBytes()
     const res = await handleCreateAttachmentV1(
@@ -582,9 +582,9 @@ describe('F-223 A2 POST /v1/attachments', () => {
     expect(res.status).toBe(201)
     const body = (await res.json()) as { id: string; ext: string; markdown: string; width: number }
     expect(body.ext).toBe('png')
-    const lines = body.markdown.split('\n')
-    expect(lines.length).toBe(3)
-    expect(lines[1]).toContain(`attachments/${body.id}.png`)
+    expect(body.markdown.split('\n').length).toBe(1)
+    expect(body.markdown.startsWith('![이미지|center|')).toBe(true)
+    expect(body.markdown.endsWith(`](attachments/${body.id}.png)`)).toBe(true)
     expect(putCalls.length).toBe(1)
   })
 

@@ -169,3 +169,9 @@ describe('toPlainText — 가로줄·빈 문서 (A14)', () => {
     expect(toPlainText('', 'lf')).toBe('\n')
   })
 })
+
+describe('toPlainText — 새 문법 이미지 줄 (F-2127 A5)', () => {
+  it('[이미지: alt] 로 바뀐다', () => {
+    expect(toPlainText('![그림|center|300](attachments/0f3a9c2e7b1d4a58.png)', 'lf')).toBe('[이미지: 그림]\n')
+  })
+})

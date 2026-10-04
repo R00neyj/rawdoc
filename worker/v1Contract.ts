@@ -89,7 +89,7 @@ export const V1_EXAMPLES: {
     size: 100,
     width: 2,
     height: 2,
-    markdown: '![이미지](/api/attachments/0123456789abcdef.png)',
+    markdown: '![이미지|center|2](attachments/0123456789abcdef.png)',
   },
   link: { token: 'abc123', url: 'https://rawdoc.app/#/p/abc123' },
   me: { id: 'user-1', email: 'a@b.com', blocked: false, warned: false },

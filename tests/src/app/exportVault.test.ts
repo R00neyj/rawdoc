@@ -516,3 +516,10 @@ describe('F-409 U14 exportVault 금고 첨부 거르기 (zip 전체 기준)', ()
     expect(result.missingCount).toBe(0)
   })
 })
+
+describe('toVaultMarkdown — 새 문법 이미지 줄 (F-2127 A7)', () => {
+  it('![alt|center|300](attachments/…) 줄이 임베드로 바뀐다', () => {
+    const content = '텍스트\n\n![a|center|300](attachments/0f3a9c2e7b1d4a58.png)\n\n다음\n'
+    expect(toVaultMarkdown(content, null, EMPTY_LINKS).text).toBe('텍스트\n\n![[0f3a9c2e7b1d4a58.png|300]]\n\n다음\n')
+  })
+})

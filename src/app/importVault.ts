@@ -665,7 +665,7 @@ export function planVaultImport(input: {
     const linkRewrittenText = text
 
     // 이미지 블록으로 바꾸기 (5.2·5.3) — ext 가 나중에(9.3) 정해질 수 있어 blocksMap 은 계획에 남겨 적용 때 다시 쓴다
-    const existingBlocks = existing ? new Map(listImageBlocks(existing.content).map((b) => [b.block.id, b.block])) : new Map()
+    const existingBlocks = existing ? new Map(listImageBlocks(existing.content).map((b) => [b.block.id, { ...b.block, form: b.form }])) : new Map()
     const blocksMap = new Map<VaultEmbed, EmbedBlock>()
     let unresolvedExt = false
     for (const embed of vd.embeds) {
@@ -704,6 +704,7 @@ export function planVaultImport(input: {
         alt: embed.caption ?? existingBlock?.alt ?? imageStemOf(baseOf(img.path)),
         width: embed.width,
         align: existingBlock?.align ?? 'left',
+        form: existingBlock?.form ?? 'html',
       })
     }
 

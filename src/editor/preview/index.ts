@@ -5,6 +5,7 @@ import './preview.css'
 
 import { blockPreview } from './blocks'
 import type { ResolveAttachment } from './blocks'
+import type { ResolveImagePath } from '../../lib/imageMarkdown'
 import { highlightMarkPreview } from './highlightMark'
 import { inlinePreview } from './inline'
 import { gutterAlignPreview, linePreview, listIndentPreview } from './lines'
@@ -18,8 +19,14 @@ import type { OnOpenWikiLink } from './wikiLinks'
 export function livePreview({
   onOpenWikiLink,
   resolveAttachment,
+  resolveImagePath,
   theme,
-}: { onOpenWikiLink?: OnOpenWikiLink; resolveAttachment?: ResolveAttachment; theme: string }): Extension {
+}: {
+  onOpenWikiLink?: OnOpenWikiLink
+  resolveAttachment?: ResolveAttachment
+  resolveImagePath?: ResolveImagePath
+  theme: string
+}): Extension {
   return [
     inlinePreview(),
     highlightMarkPreview(),
@@ -27,7 +34,7 @@ export function livePreview({
     linePreview(),
     gutterAlignPreview(),
     listIndentPreview(),
-    blockPreview({ resolveAttachment, theme }),
+    blockPreview({ resolveAttachment, theme, resolveImagePath }),
     linkClicks(),
     wikiLinksPreview(),
     wikiLinkClicks(onOpenWikiLink),

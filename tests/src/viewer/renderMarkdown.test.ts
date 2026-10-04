@@ -683,3 +683,38 @@ describe('renderMarkdown — 수식 블록·제외 자리 (A9)', () => {
     expect(html).toContain('katex')
   })
 })
+
+describe('renderMarkdown — 이미지 한 줄 (F-2127 A5)', () => {
+  const ID = '0f3a9c2e7b1d4a58'
+  const OLD = `<div align="center">\n  <img src="attachments/${ID}.png" alt="설명" width="120">\n</div>`
+  const NEW = `![설명|center|120](attachments/${ID}.png)`
+
+  it('옛 블록 문서와 출력이 같은 문자열(sourceLines 켬·끔)', () => {
+    for (const opts of [{}, { sourceLines: true }]) {
+      expect(renderMarkdown(`앞\n\n${NEW}`, opts)).toBe(renderMarkdown(`앞\n\n${OLD}`, opts))
+    }
+    expect(renderMarkdown(NEW)).toContain('class="md-image md-image--center"')
+  })
+
+  it('왼쪽·너비 없음도 같다', () => {
+    const oldLeft = `<div align="left">\n  <img src="attachments/${ID}.png" alt="a">\n</div>`
+    expect(renderMarkdown(`![a](attachments/${ID}.png)`)).toBe(renderMarkdown(oldLeft))
+  })
+
+  it('외부·문장 안·목록 안·상대 경로는 이미지 블록이 아니다', () => {
+    for (const src of [
+      '![x](https://example.com/a.png)',
+      `글 ![x](attachments/${ID}.png)`,
+      `- ![x](attachments/${ID}.png)`,
+      '![y](./img/a.png)',
+    ]) {
+      expect(renderMarkdown(src)).not.toContain('md-image')
+    }
+    expect(renderMarkdown('![x](https://example.com/a.png)')).toContain('이미지: x')
+  })
+
+  it('resolveImagePath 가 주면 상대 경로도 블록', () => {
+    const html = renderMarkdown('![y](./img/a.png)', { resolveImagePath: () => ({ id: ID, ext: 'png' }) })
+    expect(html).toContain(`data-attachment="${ID}"`)
+  })
+})

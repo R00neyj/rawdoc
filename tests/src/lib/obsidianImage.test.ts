@@ -211,3 +211,26 @@ describe('listImageBlocks (F-2019.md 5.4 U3)', () => {
     ])
   })
 })
+
+describe('F-2127 A7 새 문법 줄', () => {
+  const LINE = '![a|center|300](attachments/0f3a9c2e7b1d4a58.png)'
+  it('findVaultEmbeds 는 이 앱 형식 줄을 내지 않는다', () => {
+    expect(findVaultEmbeds(`${LINE}\n`)).toEqual([])
+    expect(findVaultEmbeds('![a|300](./img/a.png)\n')).toHaveLength(1)
+  })
+  it('listImageBlocks 가 form markdown 으로 넣고 문서 순서를 지킨다', () => {
+    const html = '<div align="left">\n  <img src="attachments/1111111111111111.png" alt="">\n</div>'
+    const found = listImageBlocks(`${LINE}\n\n${html}\n\n앞 ${LINE}\n`)
+    expect(found.map((f) => [f.line, f.form, f.block.id, f.block.width])).toEqual([
+      [0, 'markdown', '0f3a9c2e7b1d4a58', 300],
+      [2, 'html', '1111111111111111', null],
+    ])
+  })
+  it('embedsToImageBlocks 는 form markdown 이면 한 줄, 아니면 3줄', () => {
+    const md = '![[a.png|300]]\n'
+    const [embed] = findVaultEmbeds(md)
+    const base: EmbedBlock = { id: '0f3a9c2e7b1d4a58', ext: 'png', alt: 'a', width: 300, align: 'center' }
+    expect(embedsToImageBlocks(md, new Map([[embed, { ...base, form: 'markdown' }]]))).toBe(`${LINE}\n`)
+    expect(embedsToImageBlocks(md, new Map([[embed, base]]))).toContain('<div align="center">')
+  })
+})

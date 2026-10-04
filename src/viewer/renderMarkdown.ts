@@ -9,6 +9,8 @@ import { findWikiLinks } from '../lib/wikiLink'
 import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from '../lib/frontmatter'
 import { parseImageBlock } from '../lib/imageBlock'
 import type { ParsedImageBlock } from '../lib/imageBlock'
+import { imageLineTarget, parseImageLine } from '../lib/imageMarkdown'
+import type { ResolveImagePath } from '../lib/imageMarkdown'
 import { matchMathAt, parseMathBlock } from '../lib/mathSyntax'
 import { renderMath } from '../lib/mathRender'
 import { isMermaidInfo } from '../lib/codeLang'
@@ -157,9 +159,19 @@ function renderImageBlockHtml(parsed: ParsedImageBlock, sourceLine: number | nul
 }
 
 // token.level === 0 은 목록·인용 등 컨테이너 밖(최상위) 문단만 고른다는 뜻이다
+// 옛 3줄 블록이 아니면 표준 이미지 한 줄(F-2127 5.1)도 같은 토큰으로 바꾼다
+function parseImageParagraph(content: string, resolveImagePath?: ResolveImagePath): ParsedImageBlock | null {
+  const old = parseImageBlock(content)
+  if (old) return old
+  const line = parseImageLine(content)
+  const target = line && imageLineTarget(line, resolveImagePath)
+  if (!line || !target) return null
+  return { align: line.align, id: target.id, ext: target.ext, src: line.url, alt: line.alt, width: line.width }
+}
+
 function imageBlockRule(state: StateCore): void {
   const tokens = state.tokens
-  const env = state.env as { sourceLines?: boolean; lineOffset?: number } | undefined
+  const env = state.env as { sourceLines?: boolean; lineOffset?: number; resolveImagePath?: ResolveImagePath } | undefined
 
   for (let i = 0; i < tokens.length; i++) {
     const open = tokens[i]
@@ -169,7 +181,7 @@ function imageBlockRule(state: StateCore): void {
     const close = tokens[i + 2]
     if (inline?.type !== 'inline' || close?.type !== 'paragraph_close') continue
 
-    const parsed = parseImageBlock(inline.content)
+    const parsed = parseImageParagraph(inline.content, env?.resolveImagePath)
     if (!parsed) continue
 
     const sourceLine = env?.sourceLines && open.map ? (env.lineOffset ?? 0) + open.map[0] + 1 : null
@@ -603,11 +615,17 @@ export function parseMarkdownTokens(body: string, env: Record<string, unknown> =
 // text: 저장소·에디터 원문 그대로. resolveWikiLink 생략 시 위키링크는 클릭 불가 글자로만(F-131 4장). sourceLines: 최상위 블록에 data-source-line 부착, 기본 꺼짐(F-295.md 9장)
 export function renderMarkdown(
   text: string,
-  options: { resolveWikiLink?: ResolveWikiLink; sourceLines?: boolean } = {},
+  options: { resolveWikiLink?: ResolveWikiLink; sourceLines?: boolean; resolveImagePath?: ResolveImagePath } = {},
 ): string {
-  const env: { resolveWikiLink?: ResolveWikiLink; lineOffset?: number; sourceLines?: boolean } = {
+  const env: {
+    resolveWikiLink?: ResolveWikiLink
+    lineOffset?: number
+    sourceLines?: boolean
+    resolveImagePath?: ResolveImagePath
+  } = {
     resolveWikiLink: options.resolveWikiLink,
     sourceLines: options.sourceLines,
+    resolveImagePath: options.resolveImagePath,
   }
   const frontmatter = findFrontmatter(text)
   if (!frontmatter) return md.render(text, env)
