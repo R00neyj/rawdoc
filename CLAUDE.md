@@ -90,7 +90,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | --- | --- | --- |
 | Frontend | React 19, Vite 7, TypeScript 6.0 (`typescript-eslint`) | In use. `e2e/` and `scripts/` stay JS |
 | Editor | CodeMirror 6 + `@codemirror/lang-markdown` | In use |
-| Merge view | `@codemirror/merge` 6.12.2 (`unifiedMergeView`) — only in the GitHub pull dialog, lazy-loaded via `import()` | Not installed yet; F-2129 installs it (F-3013 4.3) |
+| Merge view | `@codemirror/merge` 6.12.2 (`unifiedMergeView`) — only in the GitHub pull dialog, lazy-loaded via `import()` | In use (F-2129) |
 | PWA | `vite-plugin-pwa` (Workbox) | In use |
 | Static + API | Cloudflare Workers (static assets + `worker/`), custom domain `rawdoc.app` (workers.dev disabled) | In use (F-204). Structure in `specs/architecture.md` ch. 6 |
 | Metadata DB / files | D1 `md-editor-db` / R2 `md-editor-attachments` | In use (F-205~) |
