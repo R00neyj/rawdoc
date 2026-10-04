@@ -97,6 +97,10 @@ describe('F-2127 A2 imageLineTarget', () => {
     const t = { id: ID, ext: 'jpg' as const }
     expect(imageLineTarget(p('./img/a.png'), () => t)).toBe(t)
   })
+  it('리졸버의 저장소 갈래 { repoPath, src } 를 그대로 돌려준다 (F-2131 A1)', () => {
+    const t = { repoPath: 'docs/img/b.svg', src: '/api/docs/d1/github/img?path=docs%2Fimg%2Fb.svg' }
+    expect(imageLineTarget(p('img/b.svg'), () => t)).toBe(t)
+  })
 })
 
 describe('F-2127 A3 조각 고치기', () => {

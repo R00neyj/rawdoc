@@ -806,7 +806,7 @@ export default function App() {
   })
 
   // ----- 편집기 연동 — 본문 1회 읽기·위키 문맥·보기 HTML·layout effect (F-2072) -----
-  const { wikiResolver, currentFolderId, wikiContext, resolveWikiHref, jumpToHeading, attachmentResolverFor, resolveAttachment } = useEditorSync({
+  const { wikiResolver, currentFolderId, wikiContext, resolveWikiHref, jumpToHeading, attachmentResolverFor, resolveAttachment, githubImages } = useEditorSync({
     store, docs, folders, currentDocId, currentDoc, openDoc, bootPhase, viewMode, isRealtime, liveSnapshot, docPath, everLiveIds, docSession,
     e2ee, wikiPreviewPref, lineNumbersPref, resolvedTheme, indentPref, isReadOnlyDoc, titleReadOnly, currentBreadcrumb, onNavigateFolder,
     viewerHtml, viewerDocId, pendingEditorSearch, showNotice, setOpenDoc, setStats, setViewerHtml, setViewerDocId, setPendingEditorSearch,
@@ -897,7 +897,7 @@ export default function App() {
     // 5.2a — 보기로 갈 때 변환을 여기서 한다. passive effect(1050행대)에 맡기면 복원 시점에 편집 전 옛 HTML 로 좌표를 잰다
     if (v === 'view' && editorRef.current) {
       setViewerHtml(
-        renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true }),
+        renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true, resolveImagePath: githubImages.resolveImagePath ?? undefined }),
       )
       setViewerDocId(currentDocId)
     }
@@ -1141,7 +1141,7 @@ export default function App() {
 
   // ----- GitHub 연결·가져오기 (F-2128) -----
   const github = useGithubFlow({ account, bootPhase, store, online: syncState?.online !== false, showNotice, docs, currentDoc, currentDocId, setDocs, selectDoc,
-    docSaverFlushRef, editorRef, liveStatus: isRealtime ? liveStatusOf(liveSnapshot) : null })
+    docSaverFlushRef, editorRef, liveStatus: isRealtime ? liveStatusOf(liveSnapshot) : null, githubImages })
 
   // 단축키 판 — 상태바가 보이는 조건과 같다(4.3). 팔레트 context·판 렌더 자리가 함께 쓴다
   const statusBarVisible = bootPhase === 'ready' && currentDocId !== null && !sharedDoc && !mapRoute
@@ -1318,6 +1318,7 @@ export default function App() {
             editorScrollTop, editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles,
             handleOpenWikiLink, handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc,
             liveEditorOption, mapRoute, mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme,
+            resolveImagePath: githubImages.resolveImagePath,
             setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewFindCard: viewFind.card, viewMode,
             wikiContext, wikiPreviewPref, wikiResolver,
           }} />}

@@ -1,8 +1,18 @@
 // 공개 문서 조회 — 로그인 없이 /pub/docs/{토큰} (specs/features/F-210.md 2.3, 2.4)
 import { flattenFolderTree } from '../lib/folderTree'
 import type { LineEnding } from '../types'
+import type { GithubImageMap } from '../lib/githubContract'
+import { parseGithubImageMap } from './githubImages'
 
-export type PublicDoc = { title: string; content: string; lineEnding: LineEnding; updatedAt: number }
+// github: 연결된 문서의 저장소 그림 대응표, 본문에 있는 경로만 (F-3017 2.6, F-2131 3.4)
+export type PublicDoc = { title: string; content: string; lineEnding: LineEnding; updatedAt: number; github?: GithubImageMap }
+
+// 틀린 github 칸은 없는 것으로
+function withGithub(raw: PublicDoc): PublicDoc {
+  const { github, ...rest } = raw
+  const map = parseGithubImageMap(github)
+  return map ? { ...rest, github: map } : rest
+}
 
 export type PublicDocErrorKind = 'not_found' | 'network' | 'other'
 
@@ -24,7 +34,7 @@ export async function fetchPublicDoc(token: string): Promise<PublicDoc> {
   }
   if (res.status === 404) throw new PublicDocError('not_found')
   if (!res.ok) throw new PublicDocError('other')
-  return (await res.json()) as PublicDoc
+  return withGithub((await res.json()) as PublicDoc)
 }
 
 // 폴더 공개 조회 (F-211.md 2.2) — 링크 폴더 + 모든 자손 폴더의 폴더·문서 목록. folders 에 링크 폴더는 없다 (F-2017 4.2)
@@ -125,7 +135,7 @@ export async function fetchPublicSetDoc(token: string, docId: string): Promise<P
   }
   if (res.status === 404) throw new PublicDocError('not_found')
   if (!res.ok) throw new PublicDocError('other')
-  return (await res.json()) as PublicDoc
+  return withGithub((await res.json()) as PublicDoc)
 }
 
 // 폴더 링크로 그 트리 안 문서 하나를 읽는다 (F-211.md 2.2) — 트리 밖이면 404
@@ -140,5 +150,5 @@ export async function fetchPublicFolderDoc(token: string, docId: string): Promis
   }
   if (res.status === 404) throw new PublicDocError('not_found')
   if (!res.ok) throw new PublicDocError('other')
-  return (await res.json()) as PublicDoc
+  return withGithub((await res.json()) as PublicDoc)
 }

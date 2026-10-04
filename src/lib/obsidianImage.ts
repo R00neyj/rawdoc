@@ -328,7 +328,7 @@ export function listImageBlocks(markdown: string): Array<{ line: number; block: 
       if (next !== undefined && !isBlankLine(next)) continue
       const line = parseImageLine(lines[i])
       const target = line && imageLineTarget(line)
-      if (line && target) {
+      if (line && target && 'id' in target) {
         const block = { align: line.align, id: target.id, ext: target.ext, src: line.url, alt: line.alt, width: line.width }
         result.push({ line: i, block, form: 'markdown' })
       }

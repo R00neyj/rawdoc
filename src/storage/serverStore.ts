@@ -1597,9 +1597,9 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       const promise = (async (): Promise<Attachment | null> => {
         const docs = await cache.getDocs(userId)
         const found = findExtInDocs(docs, id)
-        // 캐시 본문에서 못 찾으면 힌트(withE2ee 가 금고 원문에서 찾아 준 확장자)로 — ?doc= 없이 소유자 받기 (F-406 4.3)
+        // 캐시 본문에서 못 찾으면 힌트로 — 금고 원문의 확장자(F-406 4.3), 저장소 그림 대응의 확장자·문서(F-2131 4.3)
         const ext = found?.ext ?? hint?.ext
-        const docId = found?.docId
+        const docId = found ? found.docId : hint?.docId
         if (!ext) return null
 
         try {

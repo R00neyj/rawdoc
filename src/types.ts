@@ -115,7 +115,7 @@ export type Store = {
     e2ee?: true
   }): Promise<{ id: string; ext: AttachmentExt }>
   // 둘째 인자: 캐시·원문에서 확장자를 못 찾을 때 서버 저장소가 쓸 확장자. idb·메모리 저장소는 무시한다 (F-406 2.1)
-  getAttachment(id: string, hint?: { ext: AttachmentExt }): Promise<Attachment | null>
+  getAttachment(id: string, hint?: { ext: AttachmentExt; docId?: string }): Promise<Attachment | null>
   listAttachments(): Promise<AttachmentMeta[]>
   removeAttachment(id: string): Promise<void>
   // idb 저장소에만 있다 (둘 다 있을 때만 OS 파일 열기 재중복 판정을 한다, F-231.md 3.3)

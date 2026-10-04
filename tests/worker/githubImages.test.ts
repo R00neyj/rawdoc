@@ -213,8 +213,8 @@ describe('F-3017 A3 image-sources', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({
       sources: [
-        { path: 'docs/img/a.png', sha: SHA, size: 7 },
-        { path: 'top.svg', sha: SHA2, size: 3 },
+        { path: 'docs/img/a.png', sha: SHA, size: 7, mapped: false },
+        { path: 'top.svg', sha: SHA2, size: 3, mapped: false },
       ],
       truncated: false,
     })
@@ -236,10 +236,10 @@ describe('F-3017 A3 image-sources', () => {
   it('한 폴더 404 → 그 폴더만 빠짐, 둘째 폴더 한도 → 모은 것 + truncated, 첫 폴더 한도 → 503', async () => {
     const w = await linked()
     fakeGithub((url) => (url.pathname.endsWith('/a') ? new Response('{}', { status: 404 }) : listing([{ path: 'b/x.png' }])))
-    expect(await (await sources(w.env, ['a/x.png', 'b/x.png'])).json()).toEqual({ sources: [{ path: 'b/x.png', sha: SHA2, size: 10 }], truncated: false })
+    expect(await (await sources(w.env, ['a/x.png', 'b/x.png'])).json()).toEqual({ sources: [{ path: 'b/x.png', sha: SHA2, size: 10, mapped: false }], truncated: false })
 
     fakeGithub((url) => (url.pathname.endsWith('/b') ? limited() : listing([{ path: 'a/x.png' }])))
-    expect(await (await sources(w.env, ['a/x.png', 'b/x.png', 'c/x.png'])).json()).toEqual({ sources: [{ path: 'a/x.png', sha: SHA2, size: 10 }], truncated: true })
+    expect(await (await sources(w.env, ['a/x.png', 'b/x.png', 'c/x.png'])).json()).toEqual({ sources: [{ path: 'a/x.png', sha: SHA2, size: 10, mapped: false }], truncated: true })
 
     const calls = fakeGithub(() => limited())
     const res = await sources(w.env, ['a/x.png', 'b/x.png'])
@@ -261,6 +261,21 @@ describe('F-3017 A3 image-sources', () => {
     const off = await linked({ enabled: false })
     const res = await sources(off.env, ['a/x.png'])
     expect([res.status, await res.json()]).toEqual([503, { error: 'github_disabled' }])
+  })
+})
+
+describe('F-2131 A1 image-sources mapped', () => {
+  it('같은 sha 대응 → mapped: true, 다른 sha·대응 없음 → false', async () => {
+    const w = await linked()
+    addMapping(w, 'd1', 'docs/img/a.png', ATT_A)
+    addMapping(w, 'd1', 'docs/img/b.png', ATT_B)
+    fakeGithub(() => listing([{ path: 'docs/img/a.png', sha: SHA }, { path: 'docs/img/b.png', sha: SHA2 }, { path: 'docs/img/c.png', sha: SHA }]))
+    const res = await send(w.env, 'POST', '/api/docs/d1/github/image-sources', { paths: ['docs/img/a.png', 'docs/img/b.png', 'docs/img/c.png'] })
+    expect(((await res.json()) as { sources: unknown[] }).sources).toEqual([
+      { path: 'docs/img/a.png', sha: SHA, size: 10, mapped: true },
+      { path: 'docs/img/b.png', sha: SHA2, size: 10, mapped: false },
+      { path: 'docs/img/c.png', sha: SHA, size: 10, mapped: false },
+    ])
   })
 })
 

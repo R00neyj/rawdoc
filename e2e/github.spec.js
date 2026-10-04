@@ -253,3 +253,112 @@ test.describe('F-2130 GitHub 푸시', () => {
     expect(requestsTo(server, '/push')[0].body.message).toBe('고침')
   })
 })
+
+// F-2131 7장 — 저장소 그림 보이기·받아 넣기. 연결 경로 docs/README.md
+const IMG_DOC = 'gh-img-doc'
+const IMG_ATT = 'fedcba9876543210'
+const SHA_P = 'a'.repeat(40)
+// 위 PNG 는 <img> 는 그리지만 createImageBitmap 이 못 푼다 — toWebp·공개 첨부 확인용 2x2
+const DECODABLE_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAADklEQVR4nGM4AQYMEAoAQa4JYQOnncMAAAAASUVORK5CYII=', 'base64')
+
+async function openImageDoc(page, room, { body, images = {}, github = {}, files = {} }) {
+  const server = await fakeServer(page, {
+    github: { enabled: true, connected: true, repos: ['o/r'], files: { 'o/r@main:docs/README.md': { sha: 'S1', bytes: body }, ...files }, ...github },
+  })
+  await room.install(page.context())
+  const now = Date.now()
+  server.docs.set(IMG_DOC, { id: IMG_DOC, title: '그림 문서', content: body, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: now, updatedAt: now })
+  server.githubLinks.set(IMG_DOC, {
+    repo: 'o/r', branch: 'main', path: 'docs/README.md', remoteSha: 'S1', remoteBom: false, syncedAt: null, htmlUrl: 'https://github.com/o/r/blob/main/docs/README.md', images,
+  })
+  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+  await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+  return server
+}
+
+const naturalWidth = (locator) => locator.evaluate((img) => img.naturalWidth)
+
+test.describe('F-2131 저장소 그림', () => {
+  test('F-2131 E1 대응표가 늦게 와도 다른 입력 없이 그려진다 — 대응은 첨부, 나머지는 프록시, 원문 주소로는 요청하지 않는다', async ({ page }) => {
+    const body = '시작\n\n![a](./img/a.png)\n\n![b](img/b.svg)\n\n![c](https://example.com/c.png)\n\n끝'
+    const room = createFakeDocRoom()
+    room.seed(IMG_DOC, { content: body, title: '그림 문서' })
+    // 기능 꺼짐 — 연결 GET(F-2128)이 대응표를 먼저 채우지 않아 늦은 images 응답만으로 다시 그리는지 본다 (3.5 꺼짐 행)
+    const server = await openImageDoc(page, room, { body, images: { 'docs/img/a.png': `${IMG_ATT}.png` }, github: { enabled: false, imagesDelayMs: 1500 } })
+    server.attachments.set(`${IMG_ATT}.png`, { mime: 'image/png', bytes: PNG, width: 1, height: 1 })
+    const urls = []
+    page.on('request', (r) => urls.push(r.url()))
+
+    await page.goto(`/#/d/${IMG_DOC}`)
+    await expect(page.locator('.cm-content').first()).toContainText('시작')
+    await expect(page.locator('.md-image')).toHaveCount(0)
+    await expect(page.locator('.md-image')).toHaveCount(2)
+
+    await expect(page.locator('[data-img-repo="docs/img/b.svg"] img')).toHaveAttribute('src', /\/api\/docs\/gh-img-doc\/github\/img\?path=docs%2Fimg%2Fb\.svg$/)
+    const a = page.locator(`.md-image[data-img-id="${IMG_ATT}"] .md-image-img`)
+    await expect.poll(() => naturalWidth(a)).toBeGreaterThan(0)
+    expect(urls.filter((u) => u.includes('example.com'))).toEqual([])
+    expect(urls.filter((u) => ['/img/a.png', '/docs/img/a.png'].includes(new URL(u).pathname))).toEqual([])
+    expect(room.content(IMG_DOC)).toBe(body)
+  })
+
+  test('F-2131 E2 당기기가 같음으로 끝나면 png 만 받아 넣고, 그 줄은 첨부 그림으로 바뀐다', async ({ page }) => {
+    const body = '시작\n\n![p](img/p.png)\n\n![s](img/s.svg)\n'
+    const room = createFakeDocRoom()
+    room.seed(IMG_DOC, { content: body, title: '그림 문서' })
+    const server = await openImageDoc(page, room, {
+      body,
+      files: { 'o/r@main:docs/img/p.png': { sha: SHA_P, bytes: DECODABLE_PNG }, 'o/r@main:docs/img/s.svg': { sha: 'b'.repeat(40), bytes: '<svg xmlns="http://www.w3.org/2000/svg"/>' } },
+    })
+    const attachmentPuts = []
+    page.on('request', (r) => {
+      if (r.method() === 'PUT' && /\/api\/attachments\//.test(r.url())) attachmentPuts.push(new URL(r.url()).pathname)
+    })
+    await page.goto(`/#/d/${IMG_DOC}`)
+    await expect(page.locator('[data-img-repo="docs/img/p.png"]')).toHaveCount(1)
+
+    await startPull(page)
+    await expect(page.locator('.notice-message', { hasText: 'GitHub 파일과 같습니다' })).toBeVisible()
+    await expect.poll(() => requestsTo(server, '/images').filter((r) => r.method === 'PUT')).toHaveLength(1)
+
+    expect(requestsTo(server, '/image-sources').map((r) => r.body)).toEqual([{ paths: ['docs/img/p.png', 'docs/img/s.svg'] }])
+    expect(requestsTo(server, '/raw').map((r) => r.query.path)).toEqual(['docs/img/p.png'])
+    expect(attachmentPuts).toHaveLength(1)
+    expect(attachmentPuts[0]).toMatch(/^\/api\/attachments\/[0-9a-f]{16}\.(webp|png)$/)
+    const put = requestsTo(server, '/images').find((r) => r.method === 'PUT')
+    expect(put.body).toEqual({ path: 'docs/img/p.png', blobSha: SHA_P, attachment: attachmentPuts[0].split('/').pop() })
+
+    const p = page.locator('.md-image[data-img-alt="p"]')
+    await expect(p).not.toHaveAttribute('data-img-repo')
+    await expect.poll(() => naturalWidth(p.locator('.md-image-img'))).toBeGreaterThan(0)
+    expect(room.content(IMG_DOC)).toBe(body)
+  })
+
+  test('F-2131 E3 공개 문서 — 대응은 공개 첨부 주소, 나머지는 /gh 프록시, github 칸이 없으면 /gh 요청 0', async ({ page }) => {
+    const content = '![a](img/a.png)\n\n![b](img/b.png)\n'
+    const docs = {
+      TOKGH: { title: '공개 그림', content, lineEnding: 'lf', updatedAt: 1, github: { path: 'README.md', images: { 'img/a.png': `${IMG_ATT}.png` } } },
+      TOKNO: { title: '공개 그림 없음', content, lineEnding: 'lf', updatedAt: 1 },
+    }
+    const reqs = []
+    await page.route(/\/pub\//, (route) => {
+      const u = new URL(route.request().url())
+      reqs.push(`${u.pathname}${u.search}`)
+      const doc = docs[u.pathname.split('/')[3]]
+      if (doc && u.pathname.split('/').length === 4) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) })
+      if (u.pathname.endsWith(`/attachments/${IMG_ATT}.png`) || u.pathname.endsWith('/gh')) return route.fulfill({ status: 200, contentType: 'image/png', body: DECODABLE_PNG })
+      return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+    })
+
+    await page.goto('/#/p/TOKGH')
+    await expect(page.locator('img[data-repo-path="img/b.png"]')).toHaveAttribute('src', '/pub/docs/TOKGH/gh?path=img%2Fb.png')
+    await expect.poll(() => reqs).toContain(`/pub/docs/TOKGH/attachments/${IMG_ATT}.png`)
+    await expect(page.locator(`img[data-attachment="${IMG_ATT}"]`)).toHaveAttribute('src', /^blob:/)
+
+    await page.goto('about:blank')
+    await page.goto('/#/p/TOKNO')
+    await expect(page.locator('.public-view-title')).toHaveText('공개 그림 없음')
+    await expect(page.locator('.viewer')).toContainText('이미지: b')
+    expect(reqs.filter((r) => r.startsWith('/pub/docs/TOKNO') && r.includes('/gh'))).toEqual([])
+  })
+})

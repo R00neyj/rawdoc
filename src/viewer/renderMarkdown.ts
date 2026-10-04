@@ -148,24 +148,29 @@ md.core.ruler.before('inline', 'callout', calloutRule)
 
 // ----- 이미지 블록 (F-158.md 2.1) — src 는 출력하지 않고 data-attachment 로 id 만 남겨 Viewer 가 채운다 -----
 // sourceLine: F-295 9.3 — html_block 렌더러는 attrs 를 무시하므로 문자열에 직접 넣는다. null 이면(옵션 꺼짐) 지금과 바이트가 같다
-function renderImageBlockHtml(parsed: ParsedImageBlock, sourceLine: number | null): string {
-  const align = md.utils.escapeHtml(parsed.align)
-  const id = md.utils.escapeHtml(parsed.id)
-  const alt = md.utils.escapeHtml(parsed.alt)
+// 저장소 그림은 같은 틀에 data-attachment 대신 같은 출처 src·data-repo-path (F-2131 3.3)
+type RepoImageBlock = Pick<ParsedImageBlock, 'align' | 'alt' | 'width'> & { repoPath: string; src: string }
+
+function renderImageBlockHtml(parsed: ParsedImageBlock | RepoImageBlock, sourceLine: number | null): string {
+  const esc = md.utils.escapeHtml
+  const align = esc(parsed.align)
+  const alt = esc(parsed.alt)
   const lineAttr = sourceLine !== null ? ` data-source-line="${sourceLine}"` : ''
   const style = parsed.width ? ` style="width:${parsed.width}px"` : ''
   const widthAttr = parsed.width ? ` width="${parsed.width}"` : ''
-  return `<div class="md-image md-image--${align}"${lineAttr}${style}><img data-attachment="${id}" alt="${alt}"${widthAttr}></div>\n`
+  const source = 'repoPath' in parsed ? `src="${esc(parsed.src)}" data-repo-path="${esc(parsed.repoPath)}"` : `data-attachment="${esc(parsed.id)}"`
+  return `<div class="md-image md-image--${align}"${lineAttr}${style}><img ${source} alt="${alt}"${widthAttr}></div>\n`
 }
 
 // token.level === 0 은 목록·인용 등 컨테이너 밖(최상위) 문단만 고른다는 뜻이다
 // 옛 3줄 블록이 아니면 표준 이미지 한 줄(F-2127 5.1)도 같은 토큰으로 바꾼다
-function parseImageParagraph(content: string, resolveImagePath?: ResolveImagePath): ParsedImageBlock | null {
+function parseImageParagraph(content: string, resolveImagePath?: ResolveImagePath): ParsedImageBlock | RepoImageBlock | null {
   const old = parseImageBlock(content)
   if (old) return old
   const line = parseImageLine(content)
   const target = line && imageLineTarget(line, resolveImagePath)
   if (!line || !target) return null
+  if ('repoPath' in target) return { align: line.align, alt: line.alt, width: line.width, repoPath: target.repoPath, src: target.src }
   return { align: line.align, id: target.id, ext: target.ext, src: line.url, alt: line.alt, width: line.width }
 }
 

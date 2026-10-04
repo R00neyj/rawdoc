@@ -13,6 +13,25 @@ import { showPlaceholder, showImage } from './fillMarkdownAssets'
 import { isTouchContextMenu } from '../lib/touchContextMenu'
 
 const DEFAULT_MISSING_TEXT = '이미지를 찾을 수 없습니다' // F-157 2.2 자리 표시와 같은 문구
+const REPO_IMAGE_RETRY_MS = 35_000 // D1 반영 최대 30초 + 5초 (F-2131 3.2, r10)
+
+// 같은 주소에 &retry=1 을 붙여 한 번 더 — 그 사이 문서가 다시 그려졌으면 하지 않는다
+function retryRepoImage(container: HTMLElement, original: HTMLImageElement): void {
+  if (!container.isConnected) return
+  const img = document.createElement('img')
+  img.alt = original.alt
+  img.dataset.repoPath = original.dataset.repoPath ?? ''
+  const width = original.getAttribute('width')
+  if (width) img.setAttribute('width', width)
+  img.addEventListener('load', () => {
+    if (!container.isConnected) return
+    container.classList.remove('md-image-missing')
+    container.removeAttribute('role')
+    container.removeAttribute('aria-label')
+    container.replaceChildren(img)
+  })
+  img.src = `${original.getAttribute('src')}&retry=1`
+}
 
 export type AttachmentRecord = { blob: Blob; width: number; height: number; e2ee?: true }
 export type ResolveAttachment = (id: string) => Promise<AttachmentRecord | null>
@@ -109,6 +128,31 @@ export default function Viewer({
       cancelled = true
     }
   }, [html, resolveAttachment, missingImageText])
+
+  // 저장소 그림은 src 가 이미 있다 — 실패하면 자리 표시, 35초 뒤 한 번 다시 (F-2131 3.3)
+  useEffect(() => {
+    const root = containerRef.current
+    if (!root) return
+    const timers: ReturnType<typeof setTimeout>[] = []
+    const cleanups: (() => void)[] = []
+    root.querySelectorAll<HTMLImageElement>('img[data-repo-path]').forEach((img) => {
+      const container = img.parentElement
+      if (!container) return
+      const fail = () => {
+        showPlaceholder(container, img.alt, DEFAULT_MISSING_TEXT)
+        timers.push(setTimeout(() => retryRepoImage(container, img), REPO_IMAGE_RETRY_MS))
+      }
+      if (img.complete && img.naturalWidth === 0) fail()
+      else {
+        img.addEventListener('error', fail, { once: true })
+        cleanups.push(() => img.removeEventListener('error', fail))
+      }
+    })
+    return () => {
+      timers.forEach(clearTimeout)
+      cleanups.forEach((f) => f())
+    }
+  }, [html])
 
   useEffect(() => {
     return () => {

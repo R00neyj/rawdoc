@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { deleteDocGithub, fetchGithubStatus, fetchGithubTree, getDocGithub, postDocGithubBlob, postDocGithubPlan, postDocGithubPull, postDocGithubPush, postDocGithubSynced, postGithubFile } from '../../../src/app/githubApi'
+import { deleteDocGithub, fetchGithubStatus, fetchGithubTree, getDocGithub, getDocGithubImages, getDocGithubRaw, postDocGithubBlob, postDocGithubImageSources, postDocGithubPlan, postDocGithubPull, postDocGithubPush, postDocGithubSynced, postGithubFile, putDocGithubImage } from '../../../src/app/githubApi'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -91,5 +91,46 @@ describe('F-2130 A2 푸시 세 함수', () => {
     expect(url).toBe('/api/docs/d1/github/push')
     expect(init.method).toBe('POST')
     expect(r).toMatchObject({ ok: false, status: 409, error: 'github_conflict', body: { remoteSha: 'x' } })
+  })
+})
+
+describe('F-2131 A1 저장소 그림 네 함수', () => {
+  const SHA = 'a'.repeat(40)
+  it('image-sources 는 POST JSON { paths }, 응답을 그대로', async () => {
+    const sources = { sources: [{ path: 'img/a.png', sha: SHA, size: 3, mapped: false }], truncated: false }
+    const fn = stub(() => new Response(JSON.stringify(sources), { status: 200 }))
+    expect(await postDocGithubImageSources('d 1', { paths: ['img/a.png'] })).toEqual({ ok: true, value: sources })
+    const [url, init] = fn.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('/api/docs/d%201/github/image-sources')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(String(init.body))).toEqual({ paths: ['img/a.png'] })
+  })
+  it('raw 는 GET ?path=, 몸통 바이트, 실패는 error 코드', async () => {
+    const fn = stub(() => new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'Content-Type': 'application/octet-stream' } }))
+    const r = await getDocGithubRaw('d1', 'docs/a b.png')
+    expect(r.ok && Array.from(r.value)).toEqual([1, 2, 3])
+    const [url, init] = fn.mock.calls[0] as unknown as [string, RequestInit | undefined]
+    expect(url).toBe('/api/docs/d1/github/raw?path=docs%2Fa%20b.png')
+    expect(init?.method ?? 'GET').toBe('GET')
+    stub(() => new Response(JSON.stringify({ error: 'too_large', limit: 1 }), { status: 413 }))
+    expect(await getDocGithubRaw('d1', 'a.png')).toMatchObject({ ok: false, status: 413, error: 'too_large' })
+    stub(() => { throw new TypeError('offline') })
+    expect(await getDocGithubRaw('d1', 'a.png')).toEqual({ ok: false, status: 0, error: null, body: null })
+  })
+  it('images PUT 은 JSON 몸통, 204 → ok', async () => {
+    const fn = stub(() => new Response(null, { status: 204 }))
+    const body = { path: 'img/a.png', blobSha: SHA, attachment: '0123456789abcdef.webp' }
+    expect(await putDocGithubImage('d1', body)).toEqual({ ok: true, value: true })
+    const [url, init] = fn.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('/api/docs/d1/github/images')
+    expect(init.method).toBe('PUT')
+    expect(JSON.parse(String(init.body))).toEqual(body)
+  })
+  it('images GET 은 대응표를 거른다, 틀린 꼴은 ok:false', async () => {
+    const fn = stub(() => new Response(JSON.stringify({ path: 'README.md', images: { 'a.png': '0123456789abcdef.png', 'b.png': 'x' } }), { status: 200 }))
+    expect(await getDocGithubImages('d1')).toEqual({ ok: true, value: { path: 'README.md', images: { 'a.png': '0123456789abcdef.png' } } })
+    expect(String((fn.mock.calls[0] as unknown[])[0])).toBe('/api/docs/d1/github/images')
+    stub(() => new Response(JSON.stringify({ path: 3 }), { status: 200 }))
+    expect(await getDocGithubImages('d1')).toMatchObject({ ok: false, status: 200 })
   })
 })

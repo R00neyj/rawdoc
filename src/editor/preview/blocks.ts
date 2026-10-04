@@ -16,6 +16,7 @@ import { displayLang, isMermaidInfo } from '../../lib/codeLang'
 import { isComposing, isForced } from '../composition'
 import { isEditorFocused } from './active'
 import { isFrontmatterComposing } from './frontmatterEdit'
+import { imagePathsChanged, imagePathsField } from './imagePaths'
 import type { ResolveAttachment } from './imageWidget'
 import { ImageWidget, destroyImageCache } from './imageWidget'
 import { MathBlockWidget } from './mathWidget'
@@ -277,9 +278,11 @@ export function buildBlocks(
             const span = { from, to, table: false }
             spans?.push(span)
             if (showsWidget(state, hasFocus, span)) {
-              const parsed = { align: line.align, id: target.id, ext: target.ext, src: line.url, alt: line.alt, width: line.width }
+              const repo = 'repoPath' in target ? { repoPath: target.repoPath, src: target.src } : null
+              const att = 'id' in target ? target : null
+              const parsed = { align: line.align, id: att?.id ?? '', ext: att?.ext ?? '', alt: line.alt, width: line.width }
               out.push(
-                Decoration.replace({ widget: new ImageWidget(parsed, resolveAttachment, 'markdown'), block: true }).range(from, to),
+                Decoration.replace({ widget: new ImageWidget(parsed, resolveAttachment, 'markdown', repo), block: true }).range(from, to),
               )
             }
             return false
@@ -403,7 +406,10 @@ export function blockPreview({
   type FieldValue = { deco: DecorationSet; spans: BlockSpan[]; key: string; stale: boolean }
   function build(state: EditorState, hasFocus: boolean): FieldValue {
     const spans: BlockSpan[] = []
-    const deco = Decoration.set(buildBlocks(state, hasFocus, resolveAttachment, theme, spans, resolveImagePath), true)
+    // 필드가 있으면 그 값(null 포함)이 이긴다 — 없으면(테스트·옛 호출부) 옵션 (F-2131 3.1)
+    const fromField = state.field(imagePathsField, false)
+    const paths = fromField === undefined ? resolveImagePath : (fromField ?? undefined)
+    const deco = Decoration.set(buildBlocks(state, hasFocus, resolveAttachment, theme, spans, paths), true)
     return { deco, spans, key: blockVisibilityKey(state, hasFocus, spans), stale: false }
   }
 
@@ -420,12 +426,15 @@ export function blockPreview({
         // F-134 3.8: 배경 구문 분석이 끝나 트리만 바뀐 갱신도 재계산 조건에 넣는다
         // 안 넣으면 긴 문서 뒷부분(첫 파싱이 못 미친 곳)의 위젯이 다음 문서·선택 변화까지 늦게 생긴다
         const treeChanged = syntaxTree(tr.startState) !== syntaxTree(tr.state)
-        if (!tr.docChanged && !tr.selection && !treeChanged) return value
+        // 리졸버가 바뀐 갱신은 문서 변경과 같게 다룬다 — 조합 중이면 보류하고 compositionend 의 forceRecalc 가 따라잡는다 (F-2131 3.1)
+        const pathsChanged = tr.effects.some((e) => e.is(imagePathsChanged))
+        if (!tr.docChanged && !tr.selection && !treeChanged && !pathsChanged) return value
         if (isComposing(viewRef.current) || isCellComposing(viewRef.current) || isFrontmatterComposing(viewRef.current)) {
-          return tr.docChanged ? { ...value, deco: value.deco.map(tr.changes), stale: true } : value
+          if (tr.docChanged) return { ...value, deco: value.deco.map(tr.changes), stale: true }
+          return pathsChanged ? { ...value, stale: true } : value
         }
         // 선택만 바뀌었고 어느 블록도 위젯↔원문이 바뀌지 않으면 다시 만들어도 같은 결과다 — 문서 전체 순회·파싱을 건너뛴다 (리뷰 E6)
-        if (!tr.docChanged && !treeChanged && !value.stale) {
+        if (!tr.docChanged && !treeChanged && !pathsChanged && !value.stale) {
           if (blockVisibilityKey(tr.state, isEditorFocused(viewRef.current), value.spans) === value.key) return value
         }
       }

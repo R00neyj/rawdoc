@@ -9,6 +9,7 @@ import type { OnOpenWikiLink, WikiContext } from './preview/wikiLinks'
 import type { ResolveAttachment } from './preview/blocks'
 import type { OnImageFiles } from './imageInsert'
 import type { OnTitleChange, OnTitleCommit } from './docTitle'
+import type { ResolveImagePath } from '../lib/imageMarkdown'
 
 export type EditorHandle = ReturnType<typeof createEditor>
 
@@ -24,6 +25,8 @@ type EditorProps = {
   onOpenWikiLink?: OnOpenWikiLink
   onImageFiles?: OnImageFiles
   resolveAttachment?: ResolveAttachment
+  // 마운트 때만 읽는다 — 이후 값은 handle.setImagePaths() (F-2131 3.1)
+  resolveImagePath?: ResolveImagePath | null
   title?: string
   titleReadOnly?: boolean
   onTitleChange?: OnTitleChange
@@ -46,6 +49,7 @@ export default function Editor({
   onOpenWikiLink,
   onImageFiles,
   resolveAttachment,
+  resolveImagePath,
   title,
   titleReadOnly,
   onTitleChange,
@@ -70,6 +74,7 @@ export default function Editor({
       onOpenWikiLink,
       onImageFiles,
       resolveAttachment,
+      resolveImagePath: resolveImagePath ?? undefined,
       title,
       titleReadOnly,
       onTitleChange,

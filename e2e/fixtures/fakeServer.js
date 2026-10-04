@@ -897,6 +897,40 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
     return ghJson(route, 200, { sha: body.mdSha, commitSha: 'c'.repeat(40), commitUrl: `https://github.com/${link.repo}/commit/${'c'.repeat(40)}` })
   })
 
+  // F-2131 7장 — 저장소 그림. 출처는 gh.files, 대응은 연결의 images + 기록한 blobSha. images GET 은 gh.imagesDelayMs 만큼 늦춘다
+  const ghImageShas = new Map() // `${docId}:${path}` -> blobSha
+  const TINY_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==', 'base64')
+  await page.route(/\/api\/docs\/[^/]+\/github\/(image-sources|raw|images|img)(\?.*)?$/, async (route) => {
+    const req = route.request()
+    const url = new URL(req.url())
+    const [, , , docId, , action] = url.pathname.split('/')
+    const body = safePostDataJSON(req)
+    githubLog.push({ method: req.method(), path: url.pathname, query: Object.fromEntries(url.searchParams), body })
+    const link = githubLinks.get(docId)
+    if (!link) return ghJson(route, 404, { error: 'not_found' })
+    const fileOf = (path) => gh.files[`${link.repo}@${link.branch}:${path}`]
+    if (action === 'image-sources') {
+      const sources = body.paths.filter((p) => fileOf(p)).map((p) => {
+        const f = fileOf(p)
+        return { path: p, sha: f.sha, size: ghBytes(f).length, mapped: Boolean(link.images[p]) && ghImageShas.get(`${docId}:${p}`) === f.sha }
+      })
+      return ghJson(route, 200, { sources, truncated: false })
+    }
+    if (action === 'raw') {
+      const f = fileOf(url.searchParams.get('path'))
+      if (!f) return ghJson(route, 404, { error: 'github_not_found' })
+      return route.fulfill({ status: 200, contentType: 'application/octet-stream', body: ghBytes(f) })
+    }
+    if (action === 'img') return route.fulfill({ status: 200, contentType: 'image/png', body: TINY_PNG })
+    if (req.method() === 'PUT') {
+      link.images = { ...link.images, [body.path]: body.attachment }
+      ghImageShas.set(`${docId}:${body.path}`, body.blobSha)
+      return route.fulfill({ status: 204 })
+    }
+    if (gh.imagesDelayMs) await new Promise((resolve) => setTimeout(resolve, gh.imagesDelayMs))
+    return ghJson(route, 200, { path: link.path, images: link.images })
+  })
+
   // F-2042 8.1 — 이후 모든 /api/** 응답을 latencyMs 만큼 늦춘다. 마지막에 걸어 다른 경로보다 먼저 가로챈 뒤 route.fallback() 한다
   let latencyMs = 0
   const getRequestLog = [] // GET 요청만 기록 — 동시성 확인용 { path, startedAt, endedAt }

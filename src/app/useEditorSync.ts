@@ -19,6 +19,7 @@ import type { DocMeta, OpenDoc } from './docMeta'
 import type { DocPathKind } from './docPath'
 import type { LiveSnapshot } from './liveDoc'
 import type { NoticeWithAction } from './NoticeBar'
+import { useGithubImages, type GithubImagesHandle } from './useGithubImages'
 
 const HEADING_JUMP_MARGIN = 16 // 목차 SELECT_MARGIN 과 같다 (F-2018 7.3)
 
@@ -69,6 +70,7 @@ export type UseEditorSyncResult = {
   jumpToHeading: (heading: string) => void
   attachmentResolverFor: (forE2eeDoc: boolean) => ResolveAttachment
   resolveAttachment: ResolveAttachment
+  githubImages: GithubImagesHandle
 }
 
 export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResult {
@@ -182,16 +184,20 @@ export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResul
     [viewMode, showNotice, editorRef, viewerRef],
   )
 
+  // 연결 문서의 저장소 그림 대응표 (F-2131 4장)
+  const githubImages = useGithubImages({ store, currentDoc })
+  const { resolveImagePath } = githubImages
+
   // ----- 보기 모드 변환 (specs/features/F-123.md 3.3) -----
   // 입력은 editorRef.current.getText('lf') 하나뿐(본문 사본 없음), docs 가 바뀌면 다시 계산해 위키링크 있음/없음을 최신으로 (F-131 4장)
   useEffect(() => {
     if (viewMode !== 'view') return
     if (!editorRef.current || openDoc?.id !== currentDocId) return
     setViewerHtml(
-      renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true }),
+      renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true, resolveImagePath: resolveImagePath ?? undefined }),
     )
     setViewerDocId(currentDocId)
-  }, [viewMode, openDoc, currentDocId, resolveWikiHref, editorRef, setViewerHtml, setViewerDocId])
+  }, [viewMode, openDoc, currentDocId, resolveWikiHref, resolveImagePath, editorRef, setViewerHtml, setViewerDocId])
 
   // 검색 결과로 연 문서에 검색어 넘기기 — 새 EditorView 가 만들어진 뒤(자식 layout effect 뒤)에 적용한다 (specs/features/F-294.md 4.3)
   useEffect(() => {
@@ -219,6 +225,12 @@ export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResul
     if (openDoc?.id !== currentDocId) return
     editorRef.current?.setWikiContext(wikiContext)
   }, [wikiContext, openDoc, currentDocId, editorRef])
+
+  // 편집기는 리졸버를 마운트 때만 받는다 — 대응표가 늦게 오거나 바뀌면 민다 (F-2131 3.1)
+  useEffect(() => {
+    if (openDoc?.id !== currentDocId) return
+    editorRef.current?.setImagePaths(resolveImagePath)
+  }, [resolveImagePath, openDoc, currentDocId, editorRef])
 
   // 문서 전환·최초 마운트로 에디터가 새로 생기면 저장된 줄 번호 값을 그리기 전에 맞춘다 (F-147 2장)
   useLayoutEffect(() => {
@@ -291,9 +303,14 @@ export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResul
   }, [currentDoc, showNotice])
 
   // 첨부 해석(F-157.md 2.2, F-406.md 3.1) — 문서의 금고 여부를 받는 모양으로 빼서 resolveAttachment·위키링크 미리보기(F-2044 5.5)가 함께 쓴다
+  // 저장소 그림 대응 첨부는 본문에 글자가 없어 힌트를 부를 때마다 ref 로 읽는다 — 편집기가 콜백을 마운트 때만 받는다 (F-2131 4.3)
+  const hintRef = useRef(githubImages.attachmentHint)
+  useEffect(() => {
+    hintRef.current = githubImages.attachmentHint
+  }, [githubImages.attachmentHint])
   const attachmentResolverFor = useCallback(
     (forE2eeDoc: boolean) => async (id: string) => {
-      const record = await store.getAttachment(id)
+      const record = await store.getAttachment(id, hintRef.current(id) ?? undefined)
       if (!record) return null
       if (record.e2ee && !forE2eeDoc) return null
       return { blob: record.blob, width: record.width, height: record.height, ...(record.e2ee ? { e2ee: record.e2ee } : {}) }
@@ -307,5 +324,5 @@ export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResul
     [attachmentResolverFor, currentDoc?.e2ee],
   )
 
-  return { wikiResolver, currentFolderId, wikiContext, resolveWikiHref, jumpToHeading, attachmentResolverFor, resolveAttachment }
+  return { wikiResolver, currentFolderId, wikiContext, resolveWikiHref, jumpToHeading, attachmentResolverFor, resolveAttachment, githubImages }
 }

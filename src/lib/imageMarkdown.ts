@@ -7,7 +7,7 @@ export type ParsedImageLine = {
   width: number | null
   url: string
 }
-export type ImageTarget = { id: string; ext: ImageExt }
+export type ImageTarget = { id: string; ext: ImageExt } | { repoPath: string; src: string }
 export type ResolveImagePath = (path: string) => ImageTarget | null
 
 const LINE_RE = /^!\[([^[\]\n]*)\]\((<[^<>\n]+>|[^\s()<][^\s()]*)(?:\s+"[^"\n]*")?\)$/

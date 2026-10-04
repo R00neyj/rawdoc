@@ -8,6 +8,7 @@ import { blockPreview, blockVisibilityKey, buildBlocks, codeBlockText, observeHe
 import type { BlockSpan } from '../../../../src/editor/preview/blocks'
 import type { EditorState as CMState } from '@codemirror/state'
 import type { TableModel } from '../../../../src/editor/preview/tableModel'
+import { imagePathsChanged, imagePathsField } from '../../../../src/editor/preview/imagePaths'
 
 // Decoration.spec 은 라이브러리 타입이 any 다 — 여기서만 실제 위젯 모양으로 좁혀 쓴다
 type TestTableWidget = { table: TableModel; eq(other: TestTableWidget): boolean }
@@ -702,5 +703,50 @@ describe('buildBlocks — 이미지 한 줄 위젯 (F-2127 A4)', () => {
     const a = find(makeState(`${LINE}\n\n뒤`, LINE.length + 3))[0].value.spec.widget as TestImageWidget
     const b = find(makeState(`${html}\n\n뒤`, html.length + 3))[0].value.spec.widget as TestImageWidget
     expect(a.eq(b)).toBe(false)
+  })
+})
+
+describe('F-2131 A1 저장소 그림 — 위젯·imagePathsField', () => {
+  const REPO = { repoPath: 'docs/img/b.svg', src: '/api/docs/d1/github/img?path=docs%2Fimg%2Fb.svg' }
+  const DOC = '앞\n\n![b|center](img/b.svg)\n\n뒤'
+  type RepoWidget = TestImageWidget & { repo: { repoPath: string; src: string } | null }
+  function decoWidgets(state: CMState): RepoWidget[] {
+    const decos = state.facet(EditorView.decorations).find((e) => typeof e !== 'function') as ReturnType<typeof Decoration.set> | undefined
+    const out: RepoWidget[] = []
+    decos?.between(0, state.doc.length, (_f, _t, d) => {
+      out.push(d.spec.widget as RepoWidget)
+    })
+    return out
+  }
+
+  it('가짜 리졸버 저장소 갈래 → 위젯 1개(repoPath·src), id·ext 빈 글자', () => {
+    const found = buildBlocks(makeState(DOC, 0), true, undefined, TEST_THEME, undefined, () => REPO).map((r) => r.value.spec.widget as RepoWidget)
+    expect(found).toHaveLength(1)
+    expect(found[0].repo).toEqual(REPO)
+    expect([found[0].id, found[0].ext, found[0].align]).toEqual(['', '', 'center'])
+    const other = buildBlocks(makeState(DOC, 0), true, undefined, TEST_THEME, undefined, () => ({ ...REPO, src: `${REPO.src}&x` }))[0].value.spec.widget as RepoWidget
+    expect(found[0].eq(other)).toBe(false)
+  })
+
+  it('imagePathsField 에 리졸버를 넣은 상태 → blockPreview 가 위젯을 그린다', () => {
+    const state = EditorState.create({
+      doc: DOC,
+      extensions: [markdown({ base: markdownLanguage }), imagePathsField.init(() => () => REPO), blockPreview({ theme: TEST_THEME })],
+    })
+    ensureSyntaxTree(state, DOC.length, 5000)
+    expect(decoWidgets(state.update({}).state).map((w) => w.repo)).toEqual([REPO])
+  })
+
+  it('빈 필드 + imagePathsChanged 트랜잭션 → 위젯이 생기고, null 이면 사라진다', () => {
+    const state = EditorState.create({
+      doc: DOC,
+      extensions: [markdown({ base: markdownLanguage }), imagePathsField, blockPreview({ theme: TEST_THEME })],
+    })
+    ensureSyntaxTree(state, DOC.length, 5000)
+    const parsed = state.update({}).state
+    expect(decoWidgets(parsed)).toHaveLength(0)
+    const withPaths = parsed.update({ effects: imagePathsChanged.of(() => REPO) }).state
+    expect(decoWidgets(withPaths)).toHaveLength(1)
+    expect(decoWidgets(withPaths.update({ effects: imagePathsChanged.of(null) }).state)).toHaveLength(0)
   })
 })

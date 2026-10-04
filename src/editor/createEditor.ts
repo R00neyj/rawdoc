@@ -33,6 +33,7 @@ import { livePreview } from './preview/index'
 import { highlightMarkStyle } from './preview/highlightMark'
 import { fenceLinePreview } from './preview/lines'
 import { setWikiContextEffect, wikiContextField } from './preview/wikiLinks'
+import { imagePathsChanged, imagePathsField } from './preview/imagePaths'
 import type { OnOpenWikiLink, WikiContext } from './preview/wikiLinks'
 import type { ResolveAttachment } from './preview/blocks'
 import { enterTableFromKeyboard, setCellContextMenuHandler } from './preview/tableWidget'
@@ -297,7 +298,7 @@ type CreateEditorOptions = {
   onImageFiles?: OnImageFiles
   // 편집 모드 이미지 블록 위젯이 첨부를 읽는 콜백 (F-157.md 2.2)
   resolveAttachment?: ResolveAttachment
-  // 상대 경로 이미지의 첨부 대응 (F-2127 6장) — 아무도 안 넘긴다
+  // 상대 경로 이미지의 첨부·저장소 대응 (F-2127 6장). 이후 갱신은 handle.setImagePaths() (F-2131 3.1)
   resolveImagePath?: ResolveImagePath
   // 우클릭 메뉴 열기 (F-170.md 2·5장) — 주 에디터·표 칸 하위 에디터 공통. handle.onContextMenu() 로도 나중에 등록할 수 있다
   onContextMenu?: OnEditorContextMenu
@@ -458,6 +459,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // 위키링크 해석 문맥(F-2018). 모드와 무관하게 항상 켠다 — wikiComplete() 도 같은 필드를 읽고, previewCompartment 재구성에도 값을 잃지 않는다
     wikiContext ? wikiContextField.init(() => wikiContext) : wikiContextField,
     wikiComplete(),
+    // 상대 경로 이미지 리졸버 — 컴파트먼트 밖이라 모드·테마 전환 뒤에도 마지막 값이 남는다 (F-2131 3.1)
+    imagePathsField.init(() => resolveImagePath ?? null),
     previewCompartment.of(previewExtensionFor(currentMode, currentTheme, { onOpenWikiLink, resolveAttachment, resolveImagePath })),
     attributesCompartment.of(attributesExtensionFor(viewMode)),
     // 본문 첫 시각 줄에서 ↑ 는 제목으로 포커스를 옮긴다 — defaultKeymap 커서 이동보다 먼저 받아야 한다 (F-217.md 2.3)
@@ -592,6 +595,11 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // 위키링크 해석 문맥 갱신 (F-2018 5.2) — 문서·폴더 목록이나 연 문서의 폴더가 바뀌면 App 이 부른다
     setWikiContext(context: WikiContext) {
       view.dispatch({ effects: setWikiContextEffect.of(context) })
+    },
+
+    // 상대 경로 이미지 리졸버 갱신 — 대응표가 늦게 와도 다른 입력 없이 다시 그린다 (F-2131 3.1)
+    setImagePaths(resolve: ResolveImagePath | null) {
+      view.dispatch({ effects: imagePathsChanged.of(resolve) })
     },
 
     // 본문 맨 위 제목 값 갱신 (F-217.md 2.2) — 포커스가 없을 때만 위젯 DOM 값을 바꾼다

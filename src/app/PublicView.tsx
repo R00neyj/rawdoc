@@ -35,6 +35,8 @@ import {
 import { formatPublicFolderHash, formatPublicHash, parseHash } from './hashRoute'
 import PublicFolderList from './PublicFolderList'
 import PublicBrand from './PublicBrand'
+import { githubAttachmentOf, githubImageResolver } from './githubImages'
+import type { ResolveImagePath } from '../lib/imageMarkdown'
 
 const NARROW_QUERY = '(max-width: 1023px)'
 const HEADING_JUMP_MARGIN = 16 // 목차 SELECT_MARGIN 과 같다 (F-2018 7.3)
@@ -73,6 +75,11 @@ function useHeadingRequests() {
 function findAttachmentExt(content: string, id: string): string | null {
   const m = new RegExp(`attachments/${id}\\.(png|jpg|gif|webp)`).exec(content)
   return m ? m[1] : null
+}
+
+// 화면에 그릴 첨부의 확장자 — 본문에 없으면 저장소 그림 대응에서 (F-2131 3.4). 내보내기는 본문 것만
+function shownAttachmentExt(doc: PublicDoc, id: string): string | null {
+  return findAttachmentExt(doc.content, id) ?? (doc.github ? githubAttachmentOf(doc.github, id)?.ext ?? null : null)
 }
 
 type DocLoadState =
@@ -144,6 +151,7 @@ function DocPane({
   showBrand = true,
   settings,
   resolveWikiLink,
+  resolveImagePath,
   onOpenWikiLink,
   shownDocId = null,
   headingRequest = null,
@@ -158,6 +166,7 @@ function DocPane({
   showBrand?: boolean
   settings: PublicSettings
   resolveWikiLink?: (target: string) => string | null
+  resolveImagePath?: ResolveImagePath
   onOpenWikiLink?: (target: string, heading?: string | null) => void
   // 지금 그리는 문서 id 와 이동할 제목 — 그 문서가 그려진 뒤 한 번 이동하고 onHeadingDone(찾았나) (F-2018 11.3)
   shownDocId?: string | null
@@ -178,7 +187,7 @@ function DocPane({
 
   const title = doc ? doc.title || '제목 없는 문서' : ''
   // sourceLines — h4~h6 에도 줄 번호가 붙어야 헤딩 이동이 요소를 찾는다 (F-2018 7.3)
-  const html = doc ? renderMarkdown(doc.content, { resolveWikiLink, sourceLines: true }) : ''
+  const html = doc ? renderMarkdown(doc.content, { resolveWikiLink, sourceLines: true, resolveImagePath }) : ''
 
   useEffect(() => {
     if (!headingRequest || !doc || headingRequest.docId !== shownDocId) return
@@ -415,10 +424,16 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
 
+  // 저장소 그림 — 시작 문서 pub, 묶음 안 다른 문서 pubSet (F-2131 3.4)
+  const resolveImagePath = useMemo(
+    () => (doc?.github ? githubImageResolver(doc.github, isStartDoc ? { kind: 'pub', token } : { kind: 'pubSet', token, docId: activeDocId as string }) : undefined),
+    [doc, token, isStartDoc, activeDocId],
+  )
+
   const resolveAttachment: ResolveAttachment = useCallback(
     async (id) => {
       if (!doc) return null
-      const ext = findAttachmentExt(doc.content, id)
+      const ext = shownAttachmentExt(doc, id)
       if (!ext) return null
       const path = isStartDoc
         ? `/pub/docs/${encodeURIComponent(token)}/attachments/${id}.${ext}`
@@ -495,6 +510,7 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
         onRetry={retry}
         settings={settings}
         resolveWikiLink={resolveWikiLink}
+        resolveImagePath={resolveImagePath}
         onOpenWikiLink={onOpenWikiLink}
         shownDocId={shownDocId}
         headingRequest={headingRequest}
@@ -623,10 +639,15 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
     [clearRequest, showNotice],
   )
 
+  const resolveImagePath = useMemo(
+    () => (doc?.github && activeDocId ? githubImageResolver(doc.github, { kind: 'pubFolder', token, docId: activeDocId }) : undefined),
+    [doc, token, activeDocId],
+  )
+
   const resolveAttachment: ResolveAttachment = useCallback(
     async (id) => {
       if (!doc || !activeDocId) return null
-      const ext = findAttachmentExt(doc.content, id)
+      const ext = shownAttachmentExt(doc, id)
       if (!ext) return null
       const res = await fetch(`/pub/folders/${encodeURIComponent(token)}/docs/${encodeURIComponent(activeDocId)}/attachments/${id}.${ext}`, {
         cache: 'no-store',
@@ -777,6 +798,7 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
             showBrand={false}
             settings={settings}
             resolveWikiLink={resolveWikiLink}
+            resolveImagePath={resolveImagePath}
             onOpenWikiLink={onOpenWikiLink}
             shownDocId={activeDocId}
             headingRequest={headingRequest}

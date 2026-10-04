@@ -4,7 +4,11 @@ import type { GithubLink, GithubLinkPut } from '../lib/githubContract'
 import type { ServerStore } from '../storage/serverStore'
 import type { AttachmentExt, Doc, Store } from '../types'
 import type { AccountState } from './account'
-import { deleteDocGithub, deleteGithubAccount, getDocGithub, postGithubFile, putDocGithub, type GithubResult } from './githubApi'
+import { deleteDocGithub, deleteGithubAccount, getDocGithub, getDocGithubRaw, postDocGithubImageSources, postGithubFile, putDocGithub, putDocGithubImage, type GithubResult } from './githubApi'
+import { randomAttachmentId, runGithubImageImport } from './githubImages'
+import type { GithubImagesHandle } from './useGithubImages'
+import { uploadAttachment } from '../storage/attachmentsApi'
+import { toWebp } from '../storage/toWebp'
 import { runGithubImport } from './githubImport'
 import {
   decideGithubResume, githubConnectErrorMessage, githubConnectUrl, githubDocRole, githubErrorMessage, GITHUB_LINK_FRESH_MS, GITHUB_RESUME_KEY, readGithubReturn,
@@ -38,6 +42,7 @@ export type UseGithubFlowOptions = {
   docSaverFlushRef: RefObject<() => Promise<boolean>>
   editorRef?: RefObject<EditorHandle | null>
   liveStatus?: LiveStatus | null
+  githubImages?: Pick<GithubImagesHandle, 'setMap' | 'addImage'>
 }
 export type UseGithubFlowResult = {
   sidebar: SidebarGithub | undefined
@@ -62,14 +67,21 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
   const docsRef = useRef(docs)
   const returnRef = useRef<{ connected: boolean } | null>(null)
 
+  const imagesRef = useRef(o.githubImages)
   useEffect(() => {
     linksRef.current = links
     docsRef.current = docs
+    imagesRef.current = o.githubImages
   })
 
-  const putCache = useCallback((docId: string, link: GithubLink | null) => {
-    setLinks((prev) => ({ ...prev, [docId]: { at: Date.now(), link } }))
-  }, [])
+  const setImageMap = o.githubImages?.setMap
+  const putCache = useCallback(
+    (docId: string, link: GithubLink | null) => {
+      setLinks((prev) => ({ ...prev, [docId]: { at: Date.now(), link } }))
+      setImageMap?.(docId, link ? { path: link.path, images: link.images ?? {} } : null)
+    },
+    [setImageMap],
+  )
 
   const watch = useCallback(
     <T,>(r: GithubResult<T>): GithubResult<T> => {
@@ -77,6 +89,52 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
       return r
     },
     [refresh],
+  )
+
+  // 저장소 그림 받아 넣기 — 같은 문서가 돌고 있으면 끝난 뒤 마지막 본문으로 한 번만 더, 계정이 바뀌면 멈춘다 (F-2131 5.1)
+  const importsRef = useRef(new Map<string, { next: { content: string; mdPath: string } | null }>())
+  const abortRef = useRef<AbortController | null>(null)
+  useEffect(() => {
+    const ctl = new AbortController()
+    abortRef.current = ctl
+    return () => ctl.abort()
+  }, [userId])
+  const importImages = useCallback(
+    (docId: string, input: { content: string; mdPath: string }) => {
+      const running = importsRef.current.get(docId)
+      if (running) {
+        running.next = input
+        return
+      }
+      const signal = abortRef.current?.signal
+      if (!signal || signal.aborted) return
+      const slot: { next: { content: string; mdPath: string } | null } = { next: null }
+      importsRef.current.set(docId, slot)
+      void (async () => {
+        try {
+          let cur: typeof input | null = input
+          while (cur && !signal.aborted) {
+            await runGithubImageImport(cur, {
+              imageSources: async (paths) => watch(await postDocGithubImageSources(docId, { paths })),
+              raw: async (path) => watch(await getDocGithubRaw(docId, path)),
+              putImage: async (body) => watch(await putDocGithubImage(docId, body)),
+              toWebp,
+              upload: (id, ext, blob) => uploadAttachment(id, ext, blob),
+              newId: randomAttachmentId,
+              onMapped: (path, attachment) => imagesRef.current?.addImage(docId, path, attachment),
+              signal,
+            })
+            cur = slot.next
+            slot.next = null
+          }
+        } catch {
+          // 실패는 알리지 않는다 — 그림은 프록시로 남고 다음 당기기가 다시 시도한다 (5.2)
+        } finally {
+          importsRef.current.delete(docId)
+        }
+      })()
+    },
+    [watch],
   )
 
   const server = store as Partial<ServerStore>
@@ -90,13 +148,18 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
     showNotice,
     watch,
     linkOf: (docId) => linksRef.current[docId]?.link ?? null,
-    onSynced: (docId, sha, bom) =>
+    onSynced: (docId, sha, bom) => {
       setLinks((prev) => {
         const link = prev[docId]?.link
         if (!link) return prev
         const now = Date.now()
         return { ...prev, [docId]: { at: now, link: { ...link, remoteSha: sha, remoteBom: bom, syncedAt: now } } }
-      }),
+      })
+      const mdPath = linksRef.current[docId]?.link?.path
+      const owner = githubDocRole(docsRef.current.find((d) => d.id === docId) ?? null) === 'owner'
+      const content = docId === currentDocId && owner ? o.editorRef?.current?.getText('lf') : undefined
+      if (mdPath && content !== undefined) importImages(docId, { content, mdPath })
+    },
     selectDoc,
   })
 
@@ -166,6 +229,7 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
       remove: (id) => store.remove(id),
       open: (id, created: Doc | null) => {
         if (created) setDocs((prev) => sortByUpdatedAtDesc([...prev, stripContent(created)]))
+        if (created) importImages(id, { content: created.content, mdPath: file.path })
         void selectDoc(id)
       },
       notify: (n) => { showNotice(n) },

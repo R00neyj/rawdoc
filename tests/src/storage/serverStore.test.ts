@@ -3060,3 +3060,23 @@ describe('F-2115 U8 forgetSharedDocs', () => {
     expect(await cache.getDoc('u1', 'sh1')).toBeNull()
   })
 })
+
+describe('F-2131 A1 getAttachment 힌트 docId', () => {
+  it('캐시 본문에 없는 id + { ext, docId } → ?doc={docId}, docId 없으면 쿼리 없음', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    const a = '3333333333333333'
+    const b = '4444444444444444'
+    server.setAttachmentGetResponse(`${a}.png`, 'image/png', [1, 2, 3])
+    server.setAttachmentGetResponse(`${b}.png`, 'image/png', [1, 2, 3])
+    fetchMock.mockClear()
+
+    expect(await store.getAttachment(a, { ext: 'png', docId: 'd 1' })).not.toBeNull()
+    expect(await store.getAttachment(b, { ext: 'png' })).not.toBeNull()
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]))
+    expect(urls.find((u) => u.includes(a))).toBe(`/api/attachments/${a}.png?doc=d%201`)
+    expect(urls.find((u) => u.includes(b))).toBe(`/api/attachments/${b}.png`)
+  })
+})

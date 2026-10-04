@@ -16,6 +16,7 @@ import { IconAddComment } from './icons'
 import type { DocMeta, OpenDoc } from './docMeta'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { Store } from '../types'
+import type { ResolveImagePath } from '../lib/imageMarkdown'
 import type { UseE2ee } from './useE2ee'
 import type { CommentAccess } from './commentRail'
 import type { UseAppearancePrefsResult } from './useAppearancePrefs'
@@ -73,6 +74,8 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
     setEditorRefs: (handle: EditorHandle | null) => void
     sharedDoc: ShareDoc | null
     sharesOpen: boolean
+    // 연결 문서의 저장소 그림 리졸버 — 편집기는 마운트 때만 읽는다 (F-2131 3.1)
+    resolveImagePath: ResolveImagePath | null
     store: Store
     titleReadOnly: boolean
     viewerHtml: string
@@ -86,7 +89,7 @@ export default function DocumentArea({
   currentDocId, currentFolderId, docLoading, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorRemountNonce, editorScrollTop,
   editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles, handleOpenWikiLink,
   handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, liveEditorOption, mapRoute,
-  mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme, setCommentRailExtra, setEditorRefs, sharedDoc,
+  mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolveImagePath, resolvedTheme, setCommentRailExtra, setEditorRefs, sharedDoc,
   sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewFindCard, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
 }: DocumentAreaProps) {
   const phone = usePhoneWidth()
@@ -146,6 +149,7 @@ export default function DocumentArea({
             onOpenWikiLink={handleOpenWikiLink}
             onImageFiles={handleImageFiles}
             resolveAttachment={resolveAttachment}
+            resolveImagePath={resolveImagePath}
             title={currentDoc?.title ?? ''}
             titleReadOnly={titleReadOnly}
             onTitleChange={handleTitleChange}

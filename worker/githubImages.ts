@@ -148,8 +148,13 @@ export async function handleGithubImageSources(request: Request, env: Env, _ctx:
     for (const item of listing) {
       if (!isObject(item) || item.type !== 'file' || typeof item.path !== 'string' || !wanted.has(item.path)) continue
       if (typeof item.sha !== 'string' || !SHA_RE.test(item.sha) || typeof item.size !== 'number') continue
-      found.set(item.path, { path: item.path, sha: item.sha, size: item.size })
+      found.set(item.path, { path: item.path, sha: item.sha, size: item.size, mapped: false })
     }
+  }
+  const { results: rows } = await env.DB.prepare('SELECT path, blob_sha FROM github_images WHERE doc_id = ?').bind(params.id).all<{ path: string; blob_sha: string }>()
+  for (const row of rows) {
+    const source = found.get(row.path)
+    if (source && source.sha === row.blob_sha) source.mapped = true
   }
   const out: GithubImageSources = { sources: [...wanted].flatMap((p) => found.get(p) ?? []), truncated }
   return jsonResponse(out)

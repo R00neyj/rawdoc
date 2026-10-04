@@ -1,7 +1,9 @@
 // GitHub 계정·저장소·연결 API 호출 — 던지지 않고 결과 값으로 돌려준다 (specs/features/F-2128.md 3.1)
 import type { GithubBranchList, GithubFile, GithubLink, GithubLinkPut, GithubPulled, GithubRepoList, GithubStatus, GithubSyncedBody, GithubTree } from '../lib/githubContract'
 import type { GithubBlobCreated, GithubPushBody, GithubPushed, GithubPushPlan } from '../lib/githubContract'
+import type { GithubImageMap, GithubImagePut, GithubImageSources, GithubImageSourcesBody } from '../lib/githubContract'
 import { parseGithubStatus } from './githubUi'
+import { parseGithubImageMap } from './githubImages'
 
 export type GithubResult<T> = { ok: true; value: T } | { ok: false; status: number; error: string | null; body: unknown }
 
@@ -80,3 +82,28 @@ export const postDocGithubPlan = (id: string, attachments: string[]): Promise<Gi
 export const postDocGithubBlob = (id: string, body: string): Promise<GithubResult<GithubBlobCreated>> =>
   call(docGithub(id, 'blobs'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, asBlob)
 export const postDocGithubPush = (id: string, body: GithubPushBody): Promise<GithubResult<GithubPushed>> => call(docGithub(id, 'push'), json('POST', body), asPushed)
+
+// F-2131 저장소 그림 — 출처 찾기·받기·대응 기록·대응표 (F-3017 2장)
+const asSources = (body: unknown): GithubImageSources | null => {
+  const o = asObject<GithubImageSources>(body)
+  if (!o || !Array.isArray(o.sources) || typeof o.truncated !== 'boolean') return null
+  const sources = o.sources.filter((s) => s && typeof s.path === 'string' && typeof s.sha === 'string' && typeof s.size === 'number' && typeof s.mapped === 'boolean')
+  return { sources, truncated: o.truncated }
+}
+export const postDocGithubImageSources = (id: string, body: GithubImageSourcesBody): Promise<GithubResult<GithubImageSources>> => call(docGithub(id, 'image-sources'), json('POST', body), asSources)
+export const putDocGithubImage = (id: string, body: GithubImagePut): Promise<GithubResult<true>> => call(docGithub(id, 'images'), json('PUT', body), asEmpty)
+export const getDocGithubImages = (id: string): Promise<GithubResult<GithubImageMap>> => call(docGithub(id, 'images'), undefined, parseGithubImageMap)
+
+// 몸통이 JSON 이 아니라 바이트다 — 실패만 call 과 같은 꼴로
+export async function getDocGithubRaw(id: string, path: string): Promise<GithubResult<Uint8Array>> {
+  let res: Response
+  try {
+    res = await fetch(docGithub(id, `raw?path=${encodeURIComponent(path)}`), { credentials: 'same-origin', redirect: 'manual' })
+    if (res.ok) return { ok: true, value: new Uint8Array(await res.arrayBuffer()) }
+  } catch {
+    return { ok: false, status: 0, error: null, body: null }
+  }
+  const body: unknown = await res.json().catch(() => null)
+  const error = body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string' ? (body as { error: string }).error : null
+  return { ok: false, status: res.status, error, body }
+}

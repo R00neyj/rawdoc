@@ -718,3 +718,28 @@ describe('renderMarkdown — 이미지 한 줄 (F-2127 A5)', () => {
     expect(html).toContain(`data-attachment="${ID}"`)
   })
 })
+
+describe('renderMarkdown — 저장소 그림 (F-2131 A1)', () => {
+  const ID = '0f3a9c2e7b1d4a58'
+  const REPO = { repoPath: 'docs/img/b.svg', src: '/api/docs/d1/github/img?path=docs%2Fimg%2Fb.svg' }
+
+  it('3.3 출력 글자 그대로(sourceLines 끔·켬)', () => {
+    expect(renderMarkdown('![설명|center|120](img/b.svg)', { resolveImagePath: () => REPO })).toBe(
+      `<div class="md-image md-image--center" style="width:120px"><img src="${REPO.src}" data-repo-path="docs/img/b.svg" alt="설명" width="120"></div>\n`,
+    )
+    expect(renderMarkdown('앞\n\n![b](img/b.svg)', { resolveImagePath: () => REPO, sourceLines: true })).toBe(
+      `<p data-source-line="1">앞</p>\n<div class="md-image md-image--left" data-source-line="3"><img src="${REPO.src}" data-repo-path="docs/img/b.svg" alt="b"></div>\n`,
+    )
+  })
+
+  it('src·repoPath 의 " < 를 이스케이프한다', () => {
+    const html = renderMarkdown('![b](x.png)', { resolveImagePath: () => ({ repoPath: 'a"<b.png', src: '/x?p="<' }) })
+    expect(html).toContain('src="/x?p=&quot;&lt;" data-repo-path="a&quot;&lt;b.png"')
+  })
+
+  it('첨부 갈래 출력은 바뀌지 않는다', () => {
+    expect(renderMarkdown('![y](./img/a.png)', { resolveImagePath: () => ({ id: ID, ext: 'png' }) })).toBe(
+      `<div class="md-image md-image--left"><img data-attachment="${ID}" alt="y"></div>\n`,
+    )
+  })
+})

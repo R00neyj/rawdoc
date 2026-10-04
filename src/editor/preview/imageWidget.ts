@@ -327,6 +327,35 @@ function renderImage(frame: HTMLElement, url: string, alt: string, naturalWidth:
   frame.setAttribute('aria-label', alt || '이미지')
 }
 
+// 저장소 그림 프록시가 실패하면 한 번 더 — D1 반영 최대 30초 + 5초 (F-2131 3.2, r10)
+export const REPO_IMAGE_RETRY_MS = 35_000
+
+// 저장소 그림 — blob URL 없이 같은 출처 프록시 주소를 바로 넣는다 (F-2131 3.2)
+export type RepoImage = { repoPath: string; src: string }
+
+function loadRepoImage(frame: HTMLElement, src: string, alt: string): void {
+  const img = el('img', 'md-image-img')
+  img.alt = alt
+  img.addEventListener('load', () => {
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) frame.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`
+  })
+  img.addEventListener('error', () => {
+    renderPlaceholder(frame, alt)
+    setTimeout(() => {
+      if (!frame.isConnected) return
+      const retry = el('img', 'md-image-img')
+      retry.alt = alt
+      retry.addEventListener('load', () => {
+        if (frame.isConnected) renderImage(frame, retry.src, alt, retry.naturalWidth, retry.naturalHeight)
+      })
+      retry.src = `${src}&retry=1`
+    }, REPO_IMAGE_RETRY_MS)
+  })
+  img.src = src
+  frame.replaceChildren(img)
+  frame.setAttribute('aria-label', alt || '이미지')
+}
+
 // 편집 모드 이미지 블록 위젯 (F-157 2.1~2.5). eq() 는 id·ext·alt·align·width 로 판정하고, id·ext·alt 가 같으면 updateDOM 으로 align·width 만 갱신한다
 export class ImageWidget extends WidgetType {
   id: string
@@ -336,9 +365,15 @@ export class ImageWidget extends WidgetType {
   width: number | null
   resolveAttachment?: ResolveAttachment
   form: ImageForm
+  repo: RepoImage | null
   key: string
 
-  constructor(parsed: ParsedImageBlock, resolveAttachment?: ResolveAttachment, form: ImageForm = 'html') {
+  constructor(
+    parsed: Pick<ParsedImageBlock, 'id' | 'alt' | 'align' | 'width'> & { ext: string },
+    resolveAttachment?: ResolveAttachment,
+    form: ImageForm = 'html',
+    repo: RepoImage | null = null,
+  ) {
     super()
     this.id = parsed.id
     this.ext = parsed.ext
@@ -347,7 +382,8 @@ export class ImageWidget extends WidgetType {
     this.width = parsed.width
     this.resolveAttachment = resolveAttachment
     this.form = form
-    this.key = JSON.stringify({ id: this.id, ext: this.ext, alt: this.alt, align: this.align, width: this.width, form })
+    this.repo = repo
+    this.key = JSON.stringify({ id: this.id, ext: this.ext, alt: this.alt, align: this.align, width: this.width, form, repo })
   }
 
   eq(other: ImageWidget): boolean {
@@ -360,6 +396,10 @@ export class ImageWidget extends WidgetType {
     wrap.dataset.imgExt = this.ext
     wrap.dataset.imgAlt = this.alt
     wrap.dataset.imgForm = this.form
+    if (this.repo) {
+      wrap.dataset.imgRepo = this.repo.repoPath
+      wrap.dataset.imgRepoSrc = this.repo.src
+    }
 
     const box = el('div', 'md-image-box')
     box.dataset.align = this.align
@@ -379,7 +419,8 @@ export class ImageWidget extends WidgetType {
     box.appendChild(edge)
     box.appendChild(corner)
 
-    this._loadImage(view, frame)
+    if (this.repo) loadRepoImage(frame, this.repo.src, this.alt)
+    else this._loadImage(view, frame)
 
     wrap.addEventListener('mousedown', (event) => {
       if ((event.target as Element | null)?.closest?.('.md-image-align-btn, .md-image-delete-btn, .md-image-handle')) return
@@ -413,6 +454,7 @@ export class ImageWidget extends WidgetType {
     if (dom.dataset.imgId !== this.id || dom.dataset.imgExt !== this.ext || dom.dataset.imgAlt !== this.alt || dom.dataset.imgForm !== this.form) {
       return false
     }
+    if (dom.dataset.imgRepoSrc !== this.repo?.src) return false
     const box = dom.querySelector<HTMLElement>('.md-image-box')!
     box.dataset.align = this.align
     box.dataset.imgWidth = this.width ? String(this.width) : ''
