@@ -6176,3 +6176,34 @@ a.dialog-btn {
 .settings-github-usage {
   margin: 0;
 }
+
+/* D-20 GitHub 당기기 합치기 편집기 (F-2129 5장) */
+.github-pull-merge .cm-editor {
+  max-height: min(60vh, 560px);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+.github-pull-merge .cm-scroller {
+  overflow: auto;
+}
+
+.github-pull-chunk-btn {
+  margin-right: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font: 12px var(--font-sans);
+  cursor: pointer;
+}
+
+.github-pull-actions .github-pull-bulk {
+  display: flex;
+  gap: 8px;
+  margin-right: auto;
+}

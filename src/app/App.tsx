@@ -1140,7 +1140,8 @@ export default function App() {
   const { settingsPush } = usePushDevice({ bootPhase, account, online: syncState?.online !== false, showNotice, docsRef, resyncFromStore })
 
   // ----- GitHub 연결·가져오기 (F-2128) -----
-  const github = useGithubFlow({ account, bootPhase, store, online: syncState?.online !== false, showNotice, docs, currentDoc, currentDocId, setDocs, selectDoc, docSaverFlushRef })
+  const github = useGithubFlow({ account, bootPhase, store, online: syncState?.online !== false, showNotice, docs, currentDoc, currentDocId, setDocs, selectDoc,
+    docSaverFlushRef, editorRef, liveStatus: isRealtime ? liveStatusOf(liveSnapshot) : null })
 
   // 단축키 판 — 상태바가 보이는 조건과 같다(4.3). 팔레트 context·판 렌더 자리가 함께 쓴다
   const statusBarVisible = bootPhase === 'ready' && currentDocId !== null && !sharedDoc && !mapRoute

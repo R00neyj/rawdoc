@@ -138,7 +138,7 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
   {
     id: 'github.pull',
     kind: 'action',
-    label: '이 문서 GitHub에 당기기…',
+    label: '이 문서 GitHub에서 당기기…',
     keywords: ['github', '깃허브', '저장소', '당기기', 'pull', '풀'],
     when: (ctx) => Boolean(ctx.github?.pull),
     run: (ctx) => ctx.github?.pull?.(),

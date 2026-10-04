@@ -843,6 +843,25 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
     }
     return route.fallback()
   })
+  // F-2129 8장 — 당기기·synced. pull 은 연결의 파일을 file 과 같은 꼴로, synced 는 연결을 고친다
+  await page.route(/\/api\/docs\/[^/]+\/github\/(pull|synced)$/, async (route) => {
+    const req = route.request()
+    const path = new URL(req.url()).pathname
+    const [, , , docId, , action] = path.split('/')
+    const body = safePostDataJSON(req)
+    githubLog.push({ method: req.method(), path, query: {}, body })
+    const link = githubLinks.get(docId)
+    if (req.method() !== 'POST') return route.fallback()
+    if (!link) return ghJson(route, 404, { error: 'not_found' })
+    if (action === 'pull') {
+      const f = gh.files[`${link.repo}@${link.branch}:${link.path}`]
+      if (!f) return ghJson(route, 404, { error: 'github_not_found' })
+      const bytes = ghBytes(f)
+      return ghJson(route, 200, { sha: f.sha, size: bytes.length, content: bytes.toString('base64').replace(/(.{60})/g, '$1\n') })
+    }
+    githubLinks.set(docId, { ...link, remoteSha: body.sha, remoteBom: body.bom, syncedAt: Date.now() })
+    return route.fulfill({ status: 204 })
+  })
 
   // F-2042 8.1 — 이후 모든 /api/** 응답을 latencyMs 만큼 늦춘다. 마지막에 걸어 다른 경로보다 먼저 가로챈 뒤 route.fallback() 한다
   let latencyMs = 0

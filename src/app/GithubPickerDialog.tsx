@@ -1,6 +1,7 @@
-// D-18 GitHub 고르기(가져오기·연결·연결 정보)와 D-19 연결 해제 확인 (specs/features/F-2128.md 4.3·4.5)
-import { useEffect, useRef, useState, type RefObject } from 'react'
+// D-18 GitHub 고르기(가져오기·연결·연결 정보)와 D-19 연결 해제 확인 (specs/features/F-2128.md 4.3·4.5), D-20 자리 (F-2129)
+import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from 'react'
 import Dialog from './Dialog'
+import type { GithubPullDialogProps } from './useGithubPull'
 import { toFileName } from '../lib/filename'
 import type { GithubBranchList, GithubLink, GithubLinkPut, GithubRepo, GithubStatus, GithubTreeEntry } from '../lib/githubContract'
 import { fetchGithubBranches, fetchGithubRepos, fetchGithubTree, type GithubResult } from './githubApi'
@@ -322,13 +323,27 @@ export function GithubUnlinkDialog({ open, onCancel, onConfirm, error }: { open:
   )
 }
 
-export type GithubDialogsProps = { picker: GithubPickerProps; unlink: { open: boolean; error: string | null; onCancel: () => void; onConfirm: () => void } }
+export type GithubDialogsProps = {
+  picker: GithubPickerProps
+  unlink: { open: boolean; error: string | null; onCancel: () => void; onConfirm: () => void }
+  pull?: GithubPullDialogProps
+}
 
-export function GithubDialogs({ picker, unlink }: GithubDialogsProps) {
+// @codemirror/merge 는 이 조각에만 든다 (F-2129 3장)
+const GithubPullDialog = lazy(() => import('./GithubPullDialog'))
+
+export function GithubDialogs({ picker, unlink, pull }: GithubDialogsProps) {
+  const [pullUsed, setPullUsed] = useState(false)
+  if (pull?.state && !pullUsed) setPullUsed(true)
   return (
     <>
       <GithubPickerDialog {...picker} />
       <GithubUnlinkDialog {...unlink} />
+      {pull && (pullUsed || pull.state) && (
+        <Suspense fallback={null}>
+          <GithubPullDialog {...pull} />
+        </Suspense>
+      )}
     </>
   )
 }

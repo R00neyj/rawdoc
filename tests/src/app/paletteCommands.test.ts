@@ -653,3 +653,10 @@ describe('GitHub 명령 — F-2128 A7', () => {
     expect(ids({ importFile: noop, push: noop })).toEqual(['github.import', 'github.push'])
   })
 })
+
+describe('GitHub 당기기 글자 — F-2129 A6', () => {
+  it('github.pull 은 "이 문서 GitHub에서 당기기…", 푸시는 그대로', () => {
+    expect(PALETTE_COMMANDS.find((c) => c.id === 'github.pull')?.label).toBe('이 문서 GitHub에서 당기기…')
+    expect(PALETTE_COMMANDS.find((c) => c.id === 'github.push')?.label).toBe('이 문서 GitHub에 푸시…')
+  })
+})

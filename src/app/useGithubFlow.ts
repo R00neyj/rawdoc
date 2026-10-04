@@ -1,4 +1,4 @@
-// GitHub 연결·가져오기 화면의 상태·연결 캐시·돌아오기·진입점 props 조립 (specs/features/F-2128.md 2~6장)
+// GitHub 연결·가져오기 화면의 상태·연결 캐시·돌아오기·진입점 props 조립 (specs/features/F-2128.md 2~6장, 당기기 F-2129)
 import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { GithubLink, GithubLinkPut } from '../lib/githubContract'
 import type { ServerStore } from '../storage/serverStore'
@@ -18,7 +18,10 @@ import type { NoticeWithAction } from './NoticeBar'
 import type { PaletteContext } from './paletteContract'
 import type { SettingsGithub } from './SettingsDialog'
 import type { SidebarGithub } from './Sidebar'
+import type { LiveStatus } from './StatusBar'
+import { useGithubPull } from './useGithubPull'
 import { useGithubStatus } from './useGithubStatus'
+import type { EditorHandle } from '../editor/Editor'
 
 export type UseGithubFlowOptions = {
   account: AccountState
@@ -32,6 +35,8 @@ export type UseGithubFlowOptions = {
   setDocs: Dispatch<SetStateAction<DocMeta[]>>
   selectDoc: (id: string) => Promise<void>
   docSaverFlushRef: RefObject<() => Promise<boolean>>
+  editorRef?: RefObject<EditorHandle | null>
+  liveStatus?: LiveStatus | null
 }
 export type UseGithubFlowResult = {
   sidebar: SidebarGithub | undefined
@@ -72,6 +77,26 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
     },
     [refresh],
   )
+
+  const noEditorRef = useRef<EditorHandle | null>(null)
+  const pull = useGithubPull({
+    editorRef: o.editorRef ?? noEditorRef,
+    liveStatus: o.liveStatus ?? null,
+    currentDocId,
+    lineEnding: currentDoc?.lineEnding ?? 'crlf',
+    blocked: mode !== null || unlinkDocId !== null,
+    showNotice,
+    watch,
+    linkOf: (docId) => linksRef.current[docId]?.link ?? null,
+    onSynced: (docId, sha, bom) =>
+      setLinks((prev) => {
+        const link = prev[docId]?.link
+        if (!link) return prev
+        const now = Date.now()
+        return { ...prev, [docId]: { at: now, link: { ...link, remoteSha: sha, remoteBom: bom, syncedAt: now } } }
+      }),
+    selectDoc,
+  })
 
   const role = githubDocRole(currentDoc)
   useEffect(() => {
@@ -136,6 +161,7 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
       type: 'info',
       message: existed ? 'GitHub 파일에 연결했습니다. 당기기로 내용을 맞춰 주세요' : `GitHub에 연결했습니다. 첫 푸시가 ${put.path} 파일을 만듭니다`,
     })
+    if (existed) pull.requestPull(docId)
     return null
   }
 
@@ -213,20 +239,22 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
 
   const link = currentDocId ? links[currentDocId]?.link ?? null : null
   const linkedDocIds = new Set(Object.keys(links).filter((id) => links[id].link !== null))
+  const onPull = role === 'owner' && link && currentDocId ? () => void pull.startPull(currentDocId) : undefined
   return {
     sidebar: { onImport: () => setMode({ kind: 'import' }), onLinkDoc: (d) => setMode({ kind: 'link', docId: d.id, title: d.title }), linkedDocIds },
     topBar:
       role !== null && link && currentDocId
-        ? { role, link, onUnlink: role === 'owner' ? () => { setUnlinkError(null); setUnlinkDocId(currentDocId) } : undefined }
+        ? { role, link, onUnlink: role === 'owner' ? () => { setUnlinkError(null); setUnlinkDocId(currentDocId) } : undefined, onPull }
         : undefined,
     settings: { status, online, onShown: () => void refresh(), onConnect: () => connect(null), onDisconnect: () => void disconnectAccount() },
-    palette: { importFile: () => setMode({ kind: 'import' }) },
+    palette: { importFile: () => setMode({ kind: 'import' }), pull: onPull },
     dialogs: {
       picker: {
         mode, status, refreshStatus: refresh, onClose: () => setMode(null), onConnect: connect, onImport: importFile, loadLink, onLink: linkDoc,
         onRequestUnlink: (docId) => { setUnlinkError(null); setUnlinkDocId(docId) },
       },
       unlink: { open: unlinkDocId !== null, error: unlinkError, onCancel: () => setUnlinkDocId(null), onConfirm: () => void confirmUnlink() },
+      pull: pull.dialog,
     },
   }
 }
