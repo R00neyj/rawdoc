@@ -146,7 +146,7 @@ Unit tests live under `tests/`, mirroring the source path: `tests/{source path}/
 - **Implementation goes to `feature-implementer`** (Sonnet, medium effort) by default
 - **3D map rework is split per sub-spec by the `누가` column of `specs/features/F-292.md` ch. 9**: main implements F-2002~F-2004 itself; F-2006 goes to `complex-implementer`; the rest are ordinary handoffs
 - **`complex-implementer` (Opus)** is for a spec whose acceptance criteria are clear but whose route is not — graphics and 3D, CM6 internals, a frame or bundle budget, a refactor across several ownership tables, an external API nobody has run yet. It researches and measures before building, decides the gaps inside a criterion itself, and reports build and precache deltas. Main names it explicitly; the default stays `feature-implementer`
-- **Go through the skill instead of launching an agent directly.** Stress-testing an idea is `grill`, spec writing is `write-spec`, implementation is `ship-feature`, a no-spec design or interaction fix is `tweak`, a guide article is `write-guide`. Use `grill`, not the generic `grilling` skill — every open decision goes to the user through `AskUserQuestion`
+- **Go through the skill instead of launching an agent directly.** Stress-testing an idea is `grill`, spec writing is `write-spec`, implementation is `ship-feature`, a no-spec design or interaction fix is `tweak`, a guide article is `write-guide`, Korean prose polish is `polish-korean`. Use `grill`, not the generic `grilling` skill — every open decision goes to the user through `AskUserQuestion`
 - **Implementation prompts carry only the spec number and the `E2E_PORT` / `E2E_DIST` slots.** Judge with `npm run review -- F-xxx` then the related e2e. Use the tools in `scripts/` instead of ad-hoc scripts; propose a new tool when you see a repeat they do not cover
 - **A spec that leaves no real fork goes straight to implementation.** When every open question has a sound default, commit the spec, say so, and launch `ship-feature` in the same turn. What counts as a fork is in the `write-spec` skill, ch. 5
 - `e2e:one` search terms can be OR'd with `|`, e.g. `"F-225|F-212"`. Slots are `--port`/`--dist` or `E2E_PORT`/`E2E_DIST`
@@ -176,7 +176,7 @@ Unit tests live under `tests/`, mirroring the source path: `tests/{source path}/
 The full procedure — changelog rules, verify:full known failures, D1 migrations, local-deploy fallback, `.env` token, CLI publish — is in the **`deploy` skill** (`.claude/skills/deploy/SKILL.md`). Load it before any deploy or before judging a verify:full failure. Always:
 
 - Pushing `main` runs CI only. Deploying means `git push --force origin <sha>:refs/heads/deploy`. **`verify:full` is not run before a deploy by default; run it only when the user asks.** **Tell the user before and after**
-- Never push to `deploy` without the day's `content/changelog.md` entry in the range (`.githooks/pre-push` enforces it; `--no-verify` only when nothing user-visible shipped)
+- Never push to `deploy` without the day's `content/changelog.md` entry in the range (`.githooks/pre-push` enforces it; `--no-verify` only when nothing user-visible shipped). Every changelog entry goes through the `polish-korean` skill before it is committed
 - **Remote D1 migrations go before the code that reads them**
 - **Login redesign deploy (F-2033 ch. 11) is forward-only:** delete the Access app `md-editor-api` (step 5) *before* applying remote migrations (step 6), then push. Never reorder
 

@@ -144,7 +144,7 @@ npm run dev:spike    # for checking spikes
 - **구현은 기본이 `feature-implementer`**(Sonnet, medium effort)다
 - **3D 지도 재작업은 `specs/features/F-292.md` 9장의 `누가` 열을 따라 소명세마다 갈린다**: F-2002~F-2004 는 메인이 직접 구현하고, F-2006 은 `complex-implementer`, 나머지는 평범하게 맡긴다
 - **`complex-implementer`(Opus)** 는 수용 기준은 분명한데 거기 닿는 길이 분명하지 않은 명세용이다 — 그래픽·3D, CM6 내부, 프레임·번들 예산, 여러 소유 표를 가로지르는 리팩터, 아무도 돌려 본 적 없는 외부 API. 만들기 전에 조사·측정하고, 기준 안쪽의 빈틈을 스스로 정하며, 빌드·precache 증분을 보고한다. 메인이 명시적으로 이쪽을 고르며, 기본은 여전히 `feature-implementer` 다
-- **에이전트를 직접 띄우지 말고 스킬을 거친다.** 아이디어를 따져보는 건 `grill`, 명세 작성은 `write-spec`, 구현은 `ship-feature`, 명세 없는 디자인·상호작용 수정은 `tweak`, 가이드 글은 `write-guide`. 범용 `grilling` 스킬이 아니라 `grill` 을 쓴다 — 열린 결정 하나하나가 `AskUserQuestion` 으로 사용자에게 간다
+- **에이전트를 직접 띄우지 말고 스킬을 거친다.** 아이디어를 따져보는 건 `grill`, 명세 작성은 `write-spec`, 구현은 `ship-feature`, 명세 없는 디자인·상호작용 수정은 `tweak`, 가이드 글은 `write-guide`, 한국어 윤문은 `polish-korean`. 범용 `grilling` 스킬이 아니라 `grill` 을 쓴다 — 열린 결정 하나하나가 `AskUserQuestion` 으로 사용자에게 간다
 - **구현 프롬프트에는 명세 번호와 `E2E_PORT`·`E2E_DIST` 슬롯만 담는다.** 판정은 `npm run review -- F-xxx` 다음 관련 e2e. 손 스크립트 대신 `scripts/` 도구를 쓰고, 도구가 못 덮는 반복이 보이면 도구 추가를 제안한다
 - **진짜 갈림길이 없는 명세는 바로 구현으로 간다.** 열린 질문마다 기본값이 멀쩡하면 명세를 커밋하고 그 사실을 알린 뒤 같은 턴에 `ship-feature` 를 띄운다. 무엇이 갈림길인지는 `write-spec` 스킬 5장에 있다
 - `e2e:one` 검색어는 `"F-225|F-212"` 처럼 `|` 로 묶을 수 있다. 슬롯은 `--port`·`--dist` 또는 `E2E_PORT`·`E2E_DIST`
@@ -174,7 +174,7 @@ npm run dev:spike    # for checking spikes
 전체 절차 — changelog 규칙, verify:full 에서 알려진 실패, D1 마이그레이션, 로컬 배포 대체, `.env` 토큰, CLI 배포 — 는 **`deploy` 스킬**(`.claude/skills/deploy/SKILL.md`)에 있다. 배포 전이나 verify:full 실패를 판정하기 전에 반드시 그걸 먼저 읽는다. 언제나:
 
 - `main` push 는 CI 만 돈다. 배포되지 않는다. 배포란 `npm run verify:full` 을 통과한 SHA 를 `deploy` 브랜치로 보내는 것이다: `git push --force origin <sha>:refs/heads/deploy`. **올리기 전후로 사용자에게 알린다**
-- 그날 `content/changelog.md` 항목이 범위에 없으면 `deploy` 에 push 하지 않는다(`.githooks/pre-push` 가 강제한다; `--no-verify` 는 사용자에게 보이는 게 아무것도 안 나갔을 때만)
+- 그날 `content/changelog.md` 항목이 범위에 없으면 `deploy` 에 push 하지 않는다(`.githooks/pre-push` 가 강제한다; `--no-verify` 는 사용자에게 보이는 게 아무것도 안 나갔을 때만). 체인지로그 항목은 커밋 전에 늘 `polish-korean` 스킬을 거친다
 - **원격 D1 마이그레이션은 그걸 읽는 코드보다 먼저 간다**
 - **로그인 재설계 배포(F-2033 11장)는 앞으로만 간다:** 원격 마이그레이션 적용(6단계) *전에* Access 앱 `md-editor-api` 삭제(5단계), 그다음 push. 순서를 바꾸지 않는다
 

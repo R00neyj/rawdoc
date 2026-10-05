@@ -9,7 +9,7 @@ description: Rawdoc 을 rawdoc.app 에 배포한다(deploy 브랜치로 푸시).
 # 배포 (CLAUDE.md 에서 옮김, 2026-09-25)
 
 - `main` 을 푸시하면 GitHub Actions `ci.yml`(lint·타입·유닛·빌드)만 돈다. 배포는 되지 않는다
-- **배포 전에 그날의 체인지로그 항목을 추가한다.** `content/changelog.md` 맨 위에 `## YYYY-MM-DD` 묶음을 만들고 지난 배포 이후 사용자가 볼 수 있는 변화 하나당 한 줄 — 코드에서 뭐가 바뀌었는지가 아니라 사용자가 이제 뭘 할 수 있는지. 명세·테스트·툴링·리팩터는 뺀다. 전체 규칙은 `specs/features/F-273.md` 3장. 프론트매터 `updated:` 를 같은 날짜로 맞추고, 단독 커밋(제목 `체인지로그 {날짜} 항목`)한 뒤, 그걸 포함한 SHA 를 배포한다 — 푸시 뒤에 추가한 항목은 다음 배포 전까지 사이트에 안 올라간다
+- **배포 전에 그날의 체인지로그 항목을 추가한다.** `content/changelog.md` 맨 위에 `## YYYY-MM-DD` 묶음을 만들고 지난 배포 이후 사용자가 볼 수 있는 변화 하나당 한 줄 — 코드에서 뭐가 바뀌었는지가 아니라 사용자가 이제 뭘 할 수 있는지. 명세·테스트·툴링·리팩터는 뺀다. 전체 규칙은 `specs/features/F-273.md` 3장. **그다음 새로 넣은 줄에 `polish-korean` 스킬을 돌린다 — 매번**(사용자, 2026-10-05). 프론트매터 `updated:` 를 같은 날짜로 맞추고, 단독 커밋(제목 `체인지로그 {날짜} 항목`)한 뒤, 그걸 포함한 SHA 를 배포한다 — 푸시 뒤에 추가한 항목은 다음 배포 전까지 사이트에 안 올라간다
 - **`.githooks/pre-push` 가 이걸 강제한다** (사용자 지시, 2026-09-21: "베포시 체인지로그 작성은 훅으로 고정"). `origin/deploy`..`<푸시한 sha>` 범위에 `content/changelog.md` 변경이 없으면 `deploy` 로의 푸시를 막는다. `npm install` 이 `core.hooksPath` 를 설정해서 설치하므로(`scripts/install-hooks.mjs`), 머신마다 한 번씩 저절로 준비된다. 사용자에게 보이는 변화가 없었으면 `--no-verify` 로 푸시한다
 - 배포하려면 `npm run verify:full` 을 통과한 `main` 커밋을 `deploy` 브랜치로 푸시한다: `git push --force origin <sha>:refs/heads/deploy` → Cloudflare Workers Builds(`md-editor-web`, 브랜치 제어 `deploy`)가 빌드·배포한다. **사용자에게 전후로 알린다** (사용자: "다음 배포때 말만해줘")
 - 확인 방법: 그 커밋의 Cloudflare 체크 실행, 그리고 `https://rawdoc.app/` 의 `assets/index-*.js` 이름이 로컬 빌드와 맞는지. 첫 빌드는 2026-09-15 `c75c14f` 에서 확인됨: `Workers Builds: md-editor-web` 이 성공했고 푸시 뒤 약 1분 만에 라이브로 올라갔다
