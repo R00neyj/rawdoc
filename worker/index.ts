@@ -72,6 +72,7 @@ import { handleGetUserCss, handlePutUserCss } from './userCss'
 import { renderPublicPage } from './publicPage'
 import { renderWelcomePage } from './welcomePage'
 import { rootTarget, withRootHeaders, withWelcomeHeaders } from './rootRoute'
+import { withSecurityHeaders } from './securityHeaders'
 import { WELCOME_PATH } from '../src/lib/siteChrome'
 import { handleDocSocket } from './docSocket'
 import { DOC_SOCKET_PREFIX } from '../src/lib/docRoomProtocol'
@@ -357,8 +358,7 @@ const routes: Route[] = [
   { method: 'GET', path: '/v1/me', handler: handleMe },
 ]
 
-export default {
-  async fetch(request, env, ctx) {
+async function handleRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
 
     // 실시간 동기화 소켓 — JSON API 분기보다 앞에서 받는다 (F-304 4.1)
@@ -447,6 +447,11 @@ export default {
       console.error(err)
       return errorResponse('internal', 500)
     }
+}
+
+export default {
+  async fetch(request, env, ctx) {
+    return withSecurityHeaders(await handleRequest(request, env, ctx), new URL(request.url).pathname)
   },
   async scheduled(event, env, ctx) {
     const now = Date.now()
