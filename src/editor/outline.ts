@@ -1,10 +1,14 @@
 // EditorState → 제목 목록 (specs/features/F-144.md 3.2). 순수 함수, DOM 없음
-import { ensureSyntaxTree, syntaxTree } from '@codemirror/language'
+import { syntaxTree } from '@codemirror/language'
+import { markdownLanguage } from '@codemirror/lang-markdown'
 import type { EditorState } from '@codemirror/state'
 import type { SyntaxNode } from '@lezer/common'
+import type { MarkdownParser } from '@lezer/markdown'
 
-// 구문 트리 확보 시간 상한 — 입력 멈춘 뒤 150ms 에 1회 호출이라 타이핑을 막지 않음 (F-144.md 3.2)
-const ENSURE_TREE_TIMEOUT_MS = 100
+import { frontmatterExtension } from './frontmatter'
+
+// 편집기 markdown() 과 같은 기반·확장, 코드 중첩 없음 — 제목은 바깥 구조만 보면 된다 (F-2125 4장)
+const outlineParser = (markdownLanguage.parser as MarkdownParser).configure([frontmatterExtension()])
 
 const ATX_LEVEL: Record<string, 1 | 2 | 3> = { ATXHeading1: 1, ATXHeading2: 2, ATXHeading3: 3 }
 const SETEXT_LEVEL: Record<string, 1 | 2> = { SetextHeading1: 1, SetextHeading2: 2 }
@@ -69,10 +73,9 @@ export type Heading = { level: 1 | 2 | 3; text: string; from: number }
 
 // 문서 순서
 export function extractHeadings(state: EditorState): Heading[] {
-  let tree = syntaxTree(state)
-  if (tree.length < state.doc.length) {
-    tree = ensureSyntaxTree(state, state.doc.length, ENSURE_TREE_TIMEOUT_MS) ?? tree
-  }
+  // 덜 된 트리에 ensureSyntaxTree 를 걸면 시간이 코드블록 중첩 파싱에 쓰여 뒤쪽 제목을 잃는다 (F-2125 R8)
+  const current = syntaxTree(state)
+  const tree = current.length === state.doc.length ? current : outlineParser.parse(state.doc.toString())
 
   const headings: Heading[] = []
 

@@ -12,7 +12,11 @@ import { imageLineTarget, parseImageLine } from '../../lib/imageMarkdown'
 import type { ResolveImagePath } from '../../lib/imageMarkdown'
 import { parseMathBlock } from '../../lib/mathSyntax'
 import { createCodeCopyButton } from '../../lib/codeCopyButton'
-import { displayLang, isMermaidInfo } from '../../lib/codeLang'
+import { codeLangId, displayLang, isMermaidInfo } from '../../lib/codeLang'
+import { CODE_HIGHLIGHT_LIMITS, highlightCodeLines } from '../../lib/codeHighlight'
+import type { CodeSegment } from '../../lib/codeHighlight'
+import { loadedCodeGrammar } from '../../lib/codeParsers'
+import type { CodeGrammar } from '../../lib/codeParsers'
 import { isComposing, isForced } from '../composition'
 import { isEditorFocused } from './active'
 import { isFrontmatterComposing } from './frontmatterEdit'
@@ -89,7 +93,30 @@ export function codeBlockText(lines: CodeLine[]): string {
   return lines.map((line) => line.text).join('\n')
 }
 
-// 펜스 코드블록 위젯. 구문 강조는 하지 않는다 (F-106 2.1)
+function segmentNode(seg: CodeSegment): Node {
+  if (!seg.kind) return document.createTextNode(seg.text)
+  const span = document.createElement('span')
+  span.className = `code-${seg.kind}`
+  span.textContent = seg.text
+  return span
+}
+
+// 문법을 불러왔고 상한 안이면 그 문법, 아니면 null (단색)
+function paintGrammar(lines: CodeLine[], info: string): CodeGrammar | null {
+  const id = codeLangId(info)
+  const grammar = id ? loadedCodeGrammar(id) : null
+  if (!grammar || lines.length === 0) return null
+  const chars = lines.reduce((n, line) => n + line.text.length, lines.length - 1)
+  return chars <= CODE_HIGHLIGHT_LIMITS.blockChars ? grammar : null
+}
+
+// 줄마다 (글자, 종류) 조각 — 줄 수는 lines 와 같다. null 이면 단색 (F-2125 3장)
+export function paintCodeLines(lines: CodeLine[], info: string): CodeSegment[][] | null {
+  const grammar = paintGrammar(lines, info)
+  return grammar ? highlightCodeLines(codeBlockText(lines), grammar.parser) : null
+}
+
+// 펜스 코드블록 위젯. 칠하기는 toDOM 에서 — 블록 필드는 고칠 때마다 문서 전체를 돈다 (F-106 2.5, F-2125 3장)
 class CodeWidget extends WidgetType {
   info: string
   lines: CodeLine[]
@@ -101,9 +128,9 @@ class CodeWidget extends WidgetType {
     super()
     this.info = info
     this.lines = lines
-    // 비교 기준은 화면 표시 내용뿐 아니라 클릭 위치 계산에 쓰는 offset 도 포함한다(F-134 3.3) — 칸 글자가 같아도 공백·구분 행·펜스 길이·들여쓰기가 다르면 offset 이 달라진다
-    // eq 를 참으로 잘못 판정하면 CM 이 옛 DOM(옛 data-offset)을 재사용해 클릭 위치가 어긋난다
-    this.key = JSON.stringify({ info, lines })
+    // offset 도 비교한다 — eq 를 잘못 참으로 내면 옛 data-offset DOM 을 재사용해 클릭 위치가 어긋난다 (F-134 3.3)
+    // painted: 문법이 늦게 오면 다시 그리게 (F-2125 3장)
+    this.key = JSON.stringify({ info, lines, painted: paintGrammar(lines, info) !== null })
   }
 
   eq(other: CodeWidget): boolean {
@@ -135,11 +162,13 @@ class CodeWidget extends WidgetType {
     inner.appendChild(head)
 
     const pre = document.createElement('pre')
+    const painted = paintCodeLines(this.lines, this.info)
     this.lines.forEach((line, i) => {
       const span = document.createElement('span')
       span.className = 'md-codeblock-line'
       span.dataset.offset = String(line.offset)
-      span.textContent = line.text
+      if (painted) span.append(...painted[i].map(segmentNode))
+      else span.textContent = line.text
       pre.appendChild(span)
       if (i < this.lines.length - 1) pre.appendChild(document.createTextNode('\n'))
     })

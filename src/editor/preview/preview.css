@@ -144,6 +144,14 @@
   background: none;
   padding: 0;
   border-radius: 0;
+  font-size: inherit; /* 줄이 이미 85% — 겹치면 72% (F-2122 3.3) */
+}
+
+/* 원문 모드도 펜스 줄 단위 서체 — 칠한 코드는 .md-code 를 잃는다. 바탕은 주지 않는다 (F-2122 3.3) */
+.cm-host .cm-editor[data-view='raw'] .cm-line.md-fence-line {
+  font-family: var(--font-mono);
+  font-size: 85%;
+  --tracking: 0; /* F-141 3.6 */
 }
 
 /* 이어진 배경(--md-bg-muted)은 편집(라이브) 모드에서만 — 원문 모드는 서체·크기만 따르고 요소 모양은 안 바꾼다(F-124 1장 원칙) */

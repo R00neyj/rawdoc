@@ -2,7 +2,8 @@
 import { describe, expect, it } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
-import { ensureSyntaxTree } from '@codemirror/language'
+import { ensureSyntaxTree, syntaxTree } from '@codemirror/language'
+import { codeLanguageFor } from '../../../src/editor/codeLanguages'
 import { frontmatterExtension } from '../../../src/editor/frontmatter'
 import { extractHeadings } from '../../../src/editor/outline'
 
@@ -105,4 +106,40 @@ describe('extractHeadings — 성능 기록 (A9, 통과 기준 없음)', () => {
 
     expect(headings.length).toBe(500)
   })
+})
+
+describe('extractHeadings — 중첩 파싱이 덜 된 트리 (F-2125 A8)', () => {
+  const tsBlock = (n: number) =>
+    ['```ts', ...Array.from({ length: n }, (_, i) => `const v${i}: number = f(${i}) // 줄 ${i}`), '```'].join('\n')
+
+  function nestedState(doc: string) {
+    return EditorState.create({
+      doc,
+      extensions: [
+        markdown({ base: markdownLanguage, extensions: [frontmatterExtension()], addKeymap: false, codeLanguages: codeLanguageFor }),
+      ],
+    })
+  }
+
+  const cases: [string, () => string, number][] = [
+    ['## + TS 20줄 블록 × 300', () => Array.from({ length: 300 }, (_, i) => `## 절 ${i}\n\n${tsBlock(20)}\n`).join('\n'), 300],
+    ['# + TS 5,000줄 한 블록 + #', () => `# 처음\n\n${tsBlock(5000)}\n\n# 끝\n`, 2],
+  ]
+
+  for (const [name, make, count] of cases) {
+    it(name, async () => {
+      await codeLanguageFor('ts')!.load()
+      const doc = make()
+      const state = nestedState(doc)
+      expect(syntaxTree(state).length).toBeLessThan(doc.length)
+
+      const start = performance.now()
+      const headings = extractHeadings(state)
+      const elapsed = performance.now() - start
+      console.info(`[F-2125 A8] ${name} ${doc.length}자: 제목 ${headings.length}개 ${elapsed.toFixed(1)}ms`)
+
+      expect(headings).toHaveLength(count)
+      expect(headings).toEqual(extractHeadings(makeState(doc)))
+    })
+  }
 })

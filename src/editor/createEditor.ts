@@ -24,6 +24,7 @@ import {
 import type { Breadcrumb, OnNavigateFolder, OnTitleChange, OnTitleCommit } from './docTitle'
 import { frontmatterExtension } from './frontmatter'
 import { highlightExtension } from './highlight'
+import { codeEditorExtension, codeLanguageFor } from './codeLanguages'
 import { shortcutKeymap } from './commands'
 import { extractHeadings } from './outline'
 import type { Heading } from './outline'
@@ -422,10 +423,11 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     autoPair(),
     // base: markdownLanguage — commonmark 기본값은 GFM 표를 못 읽는다(spike index.js 86~88행). extensions: frontmatterExtension() 없으면 lezer 가 첫 `---` 를 HorizontalRule 로 잘못 읽는다(F-133 3.2)
     // addKeymap:false — markdownKeymap 기본 Enter 대신 insertNewlineContinueList 를 같은 자리에 쓴다(F-245 6.3)
-    markdown({ base: markdownLanguage, extensions: [frontmatterExtension()], addKeymap: false }),
+    markdown({ base: markdownLanguage, extensions: [frontmatterExtension()], addKeymap: false, codeLanguages: codeLanguageFor }),
     Prec.high(keymap.of([{ key: 'Enter', run: insertNewlineContinueList }, { key: 'Backspace', run: deleteMarkupBackward }])),
     indentCompartment.of(indentExtensionsFor(indentSize)),
     highlightExtension(),
+    codeEditorExtension(),
     // 찾기·바꾸기 패널(F-261.md 2.1) — 모드와 무관하게 항상 켠다. previewCompartment 밖: fenceLinePreview()·wikiComplete() 와 같은 이유
     search({ top: true }),
     // 검색 패널 문구 한국어화(2026-09-20 사용자 요청 "한글로 나와야함") — @codemirror/search 가 view.state.phrase() 로 찾는 원문 문자열을 키로 매핑한다

@@ -1,6 +1,6 @@
 // 코드블록 구문 색 (specs/features/F-2122.md 개요) — F-2126 보기 찾기·HTML 내보내기·인쇄
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, setViewMode, openExportMenu } from './helpers.js'
+import { openApp, importMarkdown, setViewMode, openExportMenu, readSavedContent } from './helpers.js'
 
 test.describe('F-2126 코드블록 구문 색 연결', () => {
   test('F-2126 E2 보기 모드 칠한 코드블록에서 찾기가 span 경계를 넘어 맞는다', async ({ page }) => {
@@ -52,5 +52,25 @@ test.describe('F-2126 코드블록 구문 색 연결', () => {
     await page.getByRole('menuitem', { name: 'PDF (A4 인쇄)', exact: true }).click()
     await expect.poll(() => page.evaluate(() => window.printLog.calls)).toBe(1)
     expect(await page.evaluate(() => window.printLog.keywords)).toBeGreaterThan(0)
+  })
+})
+
+// F-2125 편집기 연결 — 문법 청크 지연 로드 → 다시 파싱 → 위젯 다시 그림이 브라우저에서 이어지는가
+test.describe('F-2125 코드블록 구문 색 편집기', () => {
+  test('F-2125 E1 편집 모드 코드블록 색 — 지연 로드 뒤 위젯·원문 줄, 원문 불변', async ({ page }) => {
+    const content = '문단\n\n```ts\nconst a: number = 1 // 주석\n```\n'
+    await openApp(page)
+    const docId = await importMarkdown(page, { content })
+
+    const widget = page.locator('.md-codeblock')
+    await expect(widget.locator('.code-keyword').first()).toHaveText('const')
+    await expect(widget.locator('.code-comment')).toHaveText('// 주석')
+    await expect(widget.locator('.md-codeblock-line')).toHaveText('const a: number = 1 // 주석')
+
+    await setViewMode(page, 'raw')
+    await expect(page.locator('.cm-line.md-fence-line .code-keyword').first()).toHaveText('const')
+
+    const saved = await readSavedContent(page, docId)
+    expect(saved.content).toBe(content)
   })
 })

@@ -4,7 +4,9 @@ import { EditorState } from '@codemirror/state'
 import { Decoration, EditorView } from '@codemirror/view'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
-import { blockPreview, blockVisibilityKey, buildBlocks, codeBlockText, observeHeight, stopObservingHeight } from '../../../../src/editor/preview/blocks'
+import { blockPreview, blockVisibilityKey, buildBlocks, codeBlockText, observeHeight, paintCodeLines, stopObservingHeight } from '../../../../src/editor/preview/blocks'
+import { codeLanguageFor } from '../../../../src/editor/codeLanguages'
+import { loadCodeGrammar } from '../../../../src/lib/codeParsers'
 import type { BlockSpan } from '../../../../src/editor/preview/blocks'
 import type { EditorState as CMState } from '@codemirror/state'
 import type { TableModel } from '../../../../src/editor/preview/tableModel'
@@ -748,5 +750,109 @@ describe('F-2131 A1 저장소 그림 — 위젯·imagePathsField', () => {
     const withPaths = parsed.update({ effects: imagePathsChanged.of(() => REPO) }).state
     expect(decoWidgets(withPaths)).toHaveLength(1)
     expect(decoWidgets(withPaths.update({ effects: imagePathsChanged.of(null) }).state)).toHaveLength(0)
+  })
+})
+
+describe('paintCodeLines — 접힌 위젯 칠하기 (F-2125 A6)', () => {
+  const lineWidget = (doc: string) => {
+    const range = buildBlocks(makeState(doc, doc.length), true, undefined, TEST_THEME).find((r) => r.value.spec.widget.lines !== undefined)!
+    return range.value.spec.widget as TestCodeWidget
+  }
+  const joined = (painted: { text: string }[][]) => painted.map((segs) => segs.map((s) => s.text).join(''))
+
+  it('문법 불러오기 전 null, 뒤에는 줄 수가 같고 조각을 이으면 그 줄 text — 맨 위·목록·인용 안', async () => {
+    const docs = [
+      '```ts\nconst a: number = 1 // 주석\n\nfunction f() {\n  return `t${a}`\n}\n```\nx',
+      '- 항목\n\n  ```ts\n  const a = 1\n\n  /* 여러\n  줄 */ f(a)\n  ```\nx',
+      '> ```ts\n> const a = 1\n>\n> let s = "b"\n> ```\nx',
+    ]
+    const widgets = docs.map(lineWidget)
+    for (const w of widgets) expect(paintCodeLines(w.lines, w.info)).toBeNull()
+
+    await loadCodeGrammar('typescript')
+    for (const w of widgets) {
+      const painted = paintCodeLines(w.lines, w.info)!
+      expect(painted).toHaveLength(w.lines.length)
+      expect(joined(painted)).toEqual(w.lines.map((l) => l.text))
+      expect(painted.flat().some((s) => s.kind === 'keyword')).toBe(true)
+    }
+  })
+
+  it('20,001자 블록은 null, 20,000자는 칠한다', async () => {
+    await loadCodeGrammar('typescript')
+    const over = [{ text: 'a'.repeat(20_001), offset: 0 }]
+    const edge = [
+      { text: 'a'.repeat(9_999), offset: 0 },
+      { text: 'b'.repeat(10_000), offset: 10_000 },
+    ]
+    expect(paintCodeLines(over, 'ts')).toBeNull()
+    expect(paintCodeLines(edge, 'ts')).toHaveLength(2)
+  })
+
+  it('표에 없는 언어·mermaid 는 null 이고 mermaid 블록은 CodeWidget 이 아니다', () => {
+    const lines = [{ text: 'graph TD; A-->B', offset: 0 }]
+    for (const info of ['mermaid', 'kotlin', '']) expect(paintCodeLines(lines, info), info).toBeNull()
+    const doc = '```mermaid\ngraph TD; A-->B\n```\nx'
+    const widgets = buildBlocks(makeState(doc, doc.length), true, undefined, TEST_THEME).map((r) => r.value.spec.widget)
+    expect(widgets).toHaveLength(1)
+    expect(widgets[0].lines).toBeUndefined()
+  })
+})
+
+describe('CodeWidget 비교 키·중첩 유무 (F-2125 A7)', () => {
+  it('같은 블록에서 문법 불러오기 전·뒤 eq 가 거짓', async () => {
+    const doc = '```py\ndef f():\n    return None\n```\nx'
+    const pick = () =>
+      buildBlocks(makeState(doc, doc.length), true, undefined, TEST_THEME).find((r) => r.value.spec.widget.lines !== undefined)!.value
+        .spec.widget as TestCodeWidget
+    const before = pick()
+    expect(before.eq(pick())).toBe(true)
+    await loadCodeGrammar('python')
+    const after = pick()
+    expect(after.eq(before)).toBe(false)
+    expect(after.eq(pick())).toBe(true)
+  })
+
+  it('중첩 유무로 buildBlocks 의 위젯 범위·lines 가 같다 (R4)', async () => {
+    await codeLanguageFor('ts')!.load()
+    await codeLanguageFor('html')!.load()
+    const doc = [
+      '# 제목',
+      '',
+      '```ts',
+      'const a = 1',
+      '```',
+      '',
+      '- 항목',
+      '',
+      '  ```html',
+      '  <p>x</p>',
+      '  <script>let b = 2</script>',
+      '  ```',
+      '',
+      '> ```ts',
+      '> let c = 3',
+      '> ```',
+      '',
+      '| a | b |',
+      '| - | - |',
+      '| 1 | 2 |',
+      '',
+      'x',
+    ].join('\n')
+    const nested = EditorState.create({
+      doc,
+      selection: { anchor: doc.length },
+      extensions: [markdown({ base: markdownLanguage, codeLanguages: codeLanguageFor })],
+    })
+    ensureSyntaxTree(nested, doc.length, 5000)
+    const shape = (state: CMState) =>
+      buildBlocks(state, true, undefined, TEST_THEME).map((r) => {
+        const w = r.value.spec.widget as TestCodeWidget
+        return { from: r.from, to: r.to, info: w.info, lines: w.lines }
+      })
+    const plain = shape(makeState(doc, doc.length))
+    expect(plain.filter((x) => x.lines).length).toBe(3)
+    expect(shape(nested.update({}).state)).toEqual(plain)
   })
 })
