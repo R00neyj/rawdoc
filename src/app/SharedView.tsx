@@ -1,6 +1,7 @@
 // 공유받은 문서 화면 S-4 (specs/ia.md 1장 S-4·3.19, F-130.md 4장) — 위키링크(F-131)는 문서 목록이 없어 여기선 만들지 않는다
 import Viewer, { type ViewContextMenuInfo } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
+import { useCodeHighlight } from '../viewer/useCodeHighlight'
 import { IconDownload, IconClose } from './icons'
 import { stripComments } from '../lib/comments'
 import type { ShareDoc } from '../lib/shareCodec'
@@ -14,7 +15,7 @@ type SharedViewProps = {
 
 export default function SharedView({ sharedDoc, onImport, onClose, onContextMenu }: SharedViewProps) {
   // 이미 만든 옛 링크(주석이 담긴 채로 공유된 것) 대비 렌더 전에도 한 번 더 제거한다 (F-214.md 2.2)
-  const html = renderMarkdown(stripComments(sharedDoc.content))
+  const html = useCodeHighlight(renderMarkdown(stripComments(sharedDoc.content)))
 
   return (
     <div className="shared-view">

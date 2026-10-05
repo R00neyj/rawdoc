@@ -1,5 +1,7 @@
 // 마크다운 문법 데이터 — 앱 도움말과 명령줄 도구가 같이 읽는다 (F-2118, F-257 2·3장)
 
+import { HIGHLIGHT_LANG_LABELS } from './codeLang'
+
 export type SyntaxItem = {
   name: string
   source: string
@@ -69,7 +71,13 @@ export const SYNTAX_GROUPS: SyntaxGroup[] = [
   },
   {
     group: '코드블록',
-    items: [{ name: '코드블록', source: '```js\ncode\n```' }],
+    items: [
+      {
+        name: '코드블록',
+        source: '```js\ncode\n```',
+        caption: `언어 자리에 \`ts\`·\`py\`·\`sh\`처럼 적으면 편집·원문·보기 모드와 인쇄·HTML 파일에서 구문에 색이 입혀집니다. 원문은 바뀌지 않습니다. 색을 입히는 언어: ${HIGHLIGHT_LANG_LABELS.join('·')}.`,
+      },
+    ],
   },
   {
     group: '이미지',

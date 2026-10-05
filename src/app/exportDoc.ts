@@ -4,6 +4,7 @@ import { zipSync } from 'fflate'
 import { toFileName } from '../lib/filename'
 import { extractAttachmentRefs } from '../lib/imageBlock'
 import { toPlainText } from '../viewer/toPlainText'
+import { highlightHtmlWhenReady } from '../viewer/useCodeHighlight'
 import { renderMermaid } from '../lib/mermaidRender'
 import {
   collectMermaidSources,
@@ -248,7 +249,8 @@ export async function exportDocAsHtml({
 
   const text = handle.getText(lineEnding)
   const resources = await buildExportResources(text, store)
-  const { html: body, missingImages } = buildExportBody(text, resources)
+  const { html: plainBody, missingImages } = buildExportBody(text, resources)
+  const body = await highlightHtmlWhenReady(plainBody)
 
   // CSS 원문을 첫 화면 번들에서 뗀다(F-280.md 6.1) — 수식 폰트 CSS(F-291.md 7.2)도 같은 동적 import 에 실려 번들 비용이 늘지 않는다
   const { EXPORT_CSS, MATH_EXPORT_CSS } = await import('../viewer/exportHtmlCss')

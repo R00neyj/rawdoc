@@ -7,6 +7,7 @@ import type { EditorView } from '@codemirror/view'
 import Viewer from '../viewer/Viewer'
 import type { ResolveAttachment } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
+import { useCodeHighlight } from '../viewer/useCodeHighlight'
 import { extractHeadings, type Heading } from '../editor/outline'
 import { frontmatterExtension } from '../editor/frontmatter'
 import { resolveWikiTarget } from '../lib/wikiLink'
@@ -187,7 +188,7 @@ function DocPane({
 
   const title = doc ? doc.title || '제목 없는 문서' : ''
   // sourceLines — h4~h6 에도 줄 번호가 붙어야 헤딩 이동이 요소를 찾는다 (F-2018 7.3)
-  const html = doc ? renderMarkdown(doc.content, { resolveWikiLink, sourceLines: true, resolveImagePath }) : ''
+  const html = useCodeHighlight(doc ? renderMarkdown(doc.content, { resolveWikiLink, sourceLines: true, resolveImagePath }) : '')
 
   useEffect(() => {
     if (!headingRequest || !doc || headingRequest.docId !== shownDocId) return

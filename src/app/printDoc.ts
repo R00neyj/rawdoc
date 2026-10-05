@@ -1,4 +1,5 @@
 // 인쇄 전용 영역을 채워 window.print() 를 부르고 되돌린다 (specs/features/F-279.md 4장)
+import { highlightHtmlWhenReady } from '../viewer/useCodeHighlight'
 import { fillAttachmentImages, fillMermaidBlocks, type ResolveAttachment } from '../viewer/fillMarkdownAssets'
 
 // 순수 — 비었거나 공백뿐이면 '제목 없는 문서' (10장 A1)
@@ -20,6 +21,8 @@ export async function printDoc(args: {
   // root 없음 방어 — 예외 없이 끝나고 print 를 부르지 않는다 (10장 A2)
   if (!root) return
 
+  const paintedHtml = await highlightHtmlWhenReady(html)
+
   // 이전 인쇄가 안 끝났으면 먼저 되돌린다
   activeCleanup?.()
 
@@ -30,7 +33,7 @@ export async function printDoc(args: {
   heading.textContent = title || '제목 없는 문서'
   const body = document.createElement('div')
   body.className = 'markdown-body'
-  body.innerHTML = html
+  body.innerHTML = paintedHtml
   root.append(heading, body)
 
   const urls = await fillAttachmentImages(root, resolveAttachment)

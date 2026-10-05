@@ -6,7 +6,7 @@ import brand from '../../../brand.config'
 import { fenceSource, SYNTAX_GROUPS } from '../../../src/lib/markdownSyntax'
 import { HELP_DOC_CONTENT } from '../../../src/app/helpDoc'
 import { KIND_ALIASES, parseCalloutHeader } from '../../../src/lib/callout'
-import { isMermaidInfo } from '../../../src/lib/codeLang'
+import { HIGHLIGHT_LANG_LABELS, isMermaidInfo } from '../../../src/lib/codeLang'
 
 // site/guard.ts MERMAID_FENCE_RE 와 같은 패턴 (비공개라 복사)
 const MERMAID_FENCE_RE = /^ {0,3}`{3,}\s*mermaid\b/im
@@ -38,5 +38,13 @@ describe('F-2118 markdownSyntax', () => {
     const text = readFileSync(fileURLToPath(new URL('../../../src/lib/markdownSyntax.ts', import.meta.url)), 'utf-8')
     expect(text.includes(brand.name)).toBe(false)
     expect(text.includes(brand.cliName)).toBe(false)
+  })
+
+  it('F-2126 A5 코드블록 캡션이 언어 목록을 담고 도움말에 있다', () => {
+    const item = SYNTAX_GROUPS.find((g) => g.group === '코드블록')!.items[0]
+    expect(item.caption).toBe(
+      `언어 자리에 \`ts\`·\`py\`·\`sh\`처럼 적으면 편집·원문·보기 모드와 인쇄·HTML 파일에서 구문에 색이 입혀집니다. 원문은 바뀌지 않습니다. 색을 입히는 언어: ${HIGHLIGHT_LANG_LABELS.join('·')}.`,
+    )
+    expect(HELP_DOC_CONTENT).toContain(item.caption!)
   })
 })

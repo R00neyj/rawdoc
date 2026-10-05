@@ -18,6 +18,7 @@ import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree'
 import type { SelectionItem } from './sidebarSelection'
 import { getPref, setPref } from './prefs'
 import { storedAccount } from './account'
+import { useCodeHighlight } from '../viewer/useCodeHighlight'
 import type { SyncState } from '../types'
 import { IconRefresh } from './icons'
 import { useAppearancePrefs } from './useAppearancePrefs'
@@ -1174,7 +1175,8 @@ export default function App() {
     exportMdRef.current = paletteContext.output?.exportMd ?? null
   })
 
-  const viewFind = useViewFind({ viewMode, viewerRef, editorRef, viewerHtml, currentDocId, docScreenId, openDocId: openDoc?.id ?? null })
+  const shownViewerHtml = useCodeHighlight(viewerHtml)
+  const viewFind = useViewFind({ viewMode, viewerRef, editorRef, viewerHtml: shownViewerHtml, currentDocId, docScreenId, openDocId: openDoc?.id ?? null })
   useEffect(() => {
     openViewFindRef.current = viewFind.available ? viewFind.open : null
   })
@@ -1319,7 +1321,7 @@ export default function App() {
             handleOpenWikiLink, handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc,
             liveEditorOption, mapRoute, mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme,
             resolveImagePath: githubImages.resolveImagePath,
-            setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewFindCard: viewFind.card, viewMode,
+            setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, store, titleReadOnly, viewerHtml: shownViewerHtml, viewerRef, viewFindCard: viewFind.card, viewMode,
             wikiContext, wikiPreviewPref, wikiResolver,
           }} />}
           {statusBarVisible && shortcutsOpen && <ShortcutPanel mac={isMac} used={shortcutsUsed} onClose={closeShortcuts} />}

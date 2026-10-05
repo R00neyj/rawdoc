@@ -1,5 +1,6 @@
 // F-244 A3 도움말 페이지 — jsdom 없이 컴포넌트 함수를 직접 호출해 트리를 순회한다 (SharesPage.test.tsx 와 같은 방식)
 import { describe, expect, it, vi } from 'vitest'
+vi.mock('../../../src/viewer/useCodeHighlight', () => ({ useCodeHighlight: (html: string) => html }))
 import HelpPage from '../../../src/app/HelpPage'
 import Viewer from '../../../src/viewer/Viewer'
 import Outline from '../../../src/app/Outline'

@@ -14,6 +14,7 @@ import { createPortal } from 'react-dom'
 
 import Viewer, { type ResolveAttachment } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
+import { useCodeHighlight } from '../viewer/useCodeHighlight'
 import { findHeadingLine } from '../viewer/headingTarget'
 import { findViewerHeadingElByLine, topInScroller } from './outlinePosition'
 import { findWikiLinkAt } from '../editor/preview/wikiLinks'
@@ -100,6 +101,7 @@ export default function WikiLinkPreview({
   const [session, setSession] = useState<Session | null>(null)
   const sessionRef = useRef<Session | null>(null)
   sessionRef.current = session
+  const shownHtml = useCodeHighlight(session?.html ?? '')
 
   const linkInfoRef = useRef<LinkInfo | null>(null)
   const lastPosRef = useRef<{ x: number; y: number } | null>(null)
@@ -482,7 +484,7 @@ export default function WikiLinkPreview({
       {session.status === 'ready' && (
         <>
           <Viewer
-            html={session.html ?? ''}
+            html={shownHtml}
             theme={theme}
             title={session.title}
             onOpenWikiLink={handleInnerWikiLink}

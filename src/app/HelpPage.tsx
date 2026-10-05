@@ -3,11 +3,12 @@ import type { RefObject } from 'react'
 
 import Viewer from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
+import { useCodeHighlight } from '../viewer/useCodeHighlight'
 import { HELP_DOC_CONTENT } from './helpDoc'
 import Outline from './Outline'
 import { helpOutlineHandle, type HelpOutlineHandle } from './helpOutline'
 
-// 정적 문서라 렌더 결과·목차 ref 를 모듈 스코프에서 한 번만 만든다 — 컴포넌트를 훅 없이 순수 함수로 둔다 (F-249.md 3.1)
+// 정적 문서라 렌더 결과·목차 ref 를 모듈 스코프에서 한 번만 만든다 — 훅은 코드 칠하기 하나뿐 (F-249.md 3.1, F-2126)
 const HELP_HTML = renderMarkdown(HELP_DOC_CONTENT)
 const helpEditorRef: RefObject<HelpOutlineHandle | null> = { current: helpOutlineHandle }
 const containerRef: RefObject<HTMLElement | null> = { current: null }
@@ -21,6 +22,7 @@ type HelpPageProps = {
 }
 
 export default function HelpPage({ onClose, onCopy, contentWidth }: HelpPageProps) {
+  const shownHtml = useCodeHighlight(HELP_HTML)
   return (
     <div className="help-page">
       <div className="help-page-head">
@@ -35,7 +37,7 @@ export default function HelpPage({ onClose, onCopy, contentWidth }: HelpPageProp
         </div>
       </div>
       <div className="help-page-body" ref={containerRef as RefObject<HTMLDivElement | null>}>
-        <Viewer ref={viewerRef as RefObject<HTMLDivElement | null>} html={HELP_HTML} codeCopy />
+        <Viewer ref={viewerRef as RefObject<HTMLDivElement | null>} html={shownHtml} codeCopy />
         <Outline
           editorRef={helpEditorRef}
           containerRef={containerRef}
