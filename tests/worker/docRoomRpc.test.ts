@@ -6,6 +6,7 @@ vi.mock('../../worker/docRoomRpc', () => ({
   notifyRevalidate: vi.fn(async () => {}),
   notifyRevalidateDocs: vi.fn(async () => {}),
   notifyPurge: vi.fn(async () => {}),
+  purgeRoomNow: vi.fn(async () => true),
   writeTextInRoom: vi.fn(async () => null),
 }))
 vi.mock('../../worker/auth', () => ({
@@ -245,8 +246,8 @@ describe('F-304 A24 배선', () => {
 })
 
 // 버그 수정(명세 없음) — 폴더 `전부 삭제` 는 지운 문서들의 DO 방을 비우지 않았다(notifyPurge 없음, F-2038.md 12장 X2).
-// 문서 단건 삭제가 하는 것과 같게, 지운 문서마다 notifyPurge 를 부른다
-describe('버그 수정 X2 — 폴더 전부 삭제 notifyPurge 배선', () => {
+// 지운 문서의 방은 purge_jobs 를 거쳐 purgeRoomNow 로 비운다 (호출 상한은 folderDeleteAllLimits.test.ts)
+describe('버그 수정 X2 — 폴더 전부 삭제 방 비우기 배선', () => {
   const ctx = { waitUntil: () => {} } as unknown as ExecutionContext
 
   function setup() {
@@ -271,10 +272,10 @@ describe('버그 수정 X2 — 폴더 전부 삭제 notifyPurge 배선', () => {
   }
 
   beforeEach(() => {
-    vi.mocked(rpc.notifyPurge).mockClear()
+    vi.mocked(rpc.purgeRoomNow).mockClear()
   })
 
-  it('폴더 전부 삭제 → 지운 문서마다 notifyPurge(env, ctx, docId) 1번씩, 204', async () => {
+  it('폴더 전부 삭제 → 지운 문서마다 purgeRoomNow(env, docId) 1번씩, 비운 행은 purge_jobs 에서 사라진다, 204', async () => {
     const { sqlDb, env } = setup()
     insertUser(sqlDb, 'me', 'me@example.com')
     insertFolder(sqlDb, 'f1', 'me')
@@ -289,9 +290,10 @@ describe('버그 수정 X2 — 폴더 전부 삭제 notifyPurge 배선', () => {
       { id: 'f1' },
     )
     expect(res.status).toBe(204)
-    expect(rpc.notifyPurge).toHaveBeenCalledTimes(2)
-    const purgedIds = vi.mocked(rpc.notifyPurge).mock.calls.map((call) => call[2]).sort()
+    expect(rpc.purgeRoomNow).toHaveBeenCalledTimes(2)
+    const purgedIds = vi.mocked(rpc.purgeRoomNow).mock.calls.map((call) => call[1]).sort()
     expect(purgedIds).toEqual(['d1', 'd2'])
+    expect(sqlDb.prepare('SELECT COUNT(*) AS c FROM purge_jobs').get()).toEqual({ c: 0 })
     expect(sqlDb.prepare('SELECT id FROM docs WHERE id = ?').get('d3')).toBeTruthy()
   })
 })

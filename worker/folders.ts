@@ -6,11 +6,13 @@ import { MAX_BODY_BYTES, isValidFolderName, isValidUuid } from './validate'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../src/lib/folderTree'
 import { getOwnedFolder, targetShareCleanupStatements } from './access'
 import { dayUsageStatement, deleteFoldersUsageStatement } from './usage'
-import { notifyPurge, notifyRevalidateDocs } from './docRoomRpc'
+import { notifyRevalidateDocs } from './docRoomRpc'
 import { anyFolderGrant, lostAncestorIds, notifyFolderRooms, subtreeRoomDocIds } from './revalidateTargets'
 import { folderCommentDeleteStatements } from './commentRows'
+import { PURGE_CALLS_ON_DELETE, runPurgeJobs } from './purgeJobs'
 
-const BATCH_ID_LIMIT = 100
+// D1 바인딩 상한 100 에서 owner_id 한 칸을 뺀다
+const BATCH_ID_LIMIT = 99
 
 export type FolderRow = {
   id: string
@@ -213,6 +215,14 @@ export async function handleUpdateFolder(
   )
 }
 
+async function purgeQuietly(env: Env, now: number): Promise<void> {
+  try {
+    await runPurgeJobs(env, now, PURGE_CALLS_ON_DELETE)
+  } catch (err) {
+    console.error('purge_after_folder_delete_failed', err)
+  }
+}
+
 export type FolderDeleteOutcome =
   | { ok: true; docs: number; folders: number }
   | { ok: false; error: 'e2ee_folder' }
@@ -259,6 +269,11 @@ export async function deleteFolderContents(
     for (let i = 0; i < docIds.length; i += BATCH_ID_LIMIT) {
       const chunk = docIds.slice(i, i + BATCH_ID_LIMIT)
       const placeholders = chunk.map(() => '?').join(',')
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO purge_jobs (kind, target, priority, created_at) SELECT 'room', id, updated_at, ? FROM docs WHERE id IN (${placeholders}) ON CONFLICT (kind, target) DO NOTHING`,
+        ).bind(now, ...chunk),
+      )
       statements.push(env.DB.prepare(`DELETE FROM share_link_docs WHERE doc_id IN (${placeholders})`).bind(...chunk))
       statements.push(env.DB.prepare(`DELETE FROM github_images WHERE doc_id IN (${placeholders})`).bind(...chunk))
       statements.push(env.DB.prepare(`DELETE FROM github_links WHERE doc_id IN (${placeholders})`).bind(...chunk))
@@ -278,8 +293,8 @@ export async function deleteFolderContents(
       )
     }
     if (statements.length > 0) await env.DB.batch(statements)
-    // 열린 연결을 닫고 DO 저장소를 비운다 — 문서 단건 삭제와 같게 (F-304 9.4, 버그 수정 X2)
-    for (const docId of docIds) await notifyPurge(env, ctx, docId)
+    // 방은 purge_jobs 로 호출 예산 안에서 비우고 남은 것은 Cron 이 맡는다 (F-2038 5.4, 버그 수정 X2)
+    if (docIds.length > 0) await purgeQuietly(env, now)
     return { ok: true, docs: docIds.length, folders: ids.length }
   }
 
