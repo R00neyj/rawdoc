@@ -56,7 +56,7 @@ import type { UserCssRemoval } from '../../src/lib/userCssPolicy'
 const GUIDES_DIR = fileURLToPath(new URL('../../content/guides', import.meta.url))
 
 function readGuide(slug: string): string {
-  return readFileSync(`${GUIDES_DIR}/${slug}.md`, 'utf-8')
+  return readFileSync(`${GUIDES_DIR}/${slug}.md`, 'utf-8').replace(/\r\n/g, '\n')
 }
 
 function guideTitle(raw: string): string {

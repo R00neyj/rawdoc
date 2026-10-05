@@ -11,7 +11,7 @@ import {
 } from '../../../src/lib/userCssPolicy'
 
 const GUIDE_FILE = fileURLToPath(new URL('../../../content/guides/custom-css.md', import.meta.url))
-const raw = readFileSync(GUIDE_FILE, 'utf-8')
+const raw = readFileSync(GUIDE_FILE, 'utf-8').replace(/\r\n/g, '\n')
 const PREFIX = ':root:root '
 
 // `## {name}` 절 본문 — 다음 ## 앞까지
