@@ -8,12 +8,7 @@ import { decodeMarkdown, type DecodedMarkdown } from '../../src/lib/decodeMarkdo
 import { buildCliLoginUrl, sanitizeCliHost } from '../../src/lib/cliLoginUrl'
 import { generateSealKeyPairV2 } from '../../src/lib/cliSeal'
 import type { V1Doc, V1Me } from '../../worker/v1Contract'
-import {
-  COMMAND_NAMES,
-  parseArgs,
-  type CommandName,
-  type RunCommand,
-} from './args'
+import { parseArgs, type RunCommand } from './args'
 import {
   credentialsPath,
   getServerToken,
@@ -25,7 +20,9 @@ import {
 } from './credentials'
 import { apiMe, type ClientConfig } from './client'
 import * as commands from './commands'
+import { commandHelpText, helpText } from './help'
 import { checkAlreadyLoggedIn, startCallbackServer } from './login'
+import { buildPutPreview, fileLineEndingOf, lineEndingNotice, wouldConflict } from './putPreview'
 import { openBrowser } from './openBrowser'
 import { renderSyntaxMarkdown, syntaxJson } from './syntax'
 import {
@@ -39,6 +36,7 @@ import {
   humanFolderList,
   humanIdLine,
   humanIdVersionLine,
+  humanPutPreview,
   humanRemoveDocLine,
   humanRemoveFolderNotice,
   humanSharedList,
@@ -48,63 +46,6 @@ import {
 } from './output'
 
 const ENV_PREFIX = brand.cliName.toUpperCase()
-
-const COMMAND_DESCRIPTIONS: Record<CommandName, string> = {
-  login: '브라우저로 로그인해 토큰을 저장합니다',
-  logout: '이 컴퓨터에 저장한 토큰을 지웁니다',
-  whoami: '로그인한 계정을 보여 줍니다',
-  ls: '내 문서 목록 (--path: 폴더 경로 열, --root: 맨 위 문서만, --shared: 공유받은 문서)',
-  find: '제목에 그 글자가 든 내 문서를 찾습니다 (대소문자 무시)',
-  info: '문서 정보(폴더 경로·판 번호·시각)를 내용 없이 보여 줍니다',
-  get: '문서 원문을 출력합니다',
-  new: '새 문서를 만듭니다',
-  put: '문서를 고칩니다 (get 으로 받은 판 번호 --base-version 필요. 자세히: put --help)',
-  mv: '문서를 다른 폴더로 옮깁니다',
-  rm: '문서를 영구 삭제합니다 (--yes 필요)',
-  folders: '폴더 목록',
-  mkdir: '폴더를 만듭니다',
-  rmdir: '폴더를 지웁니다. 안의 것은 위 폴더로 (--all: 모두 영구 삭제, --yes 필요)',
-  upload: '이미지를 올리고 붙일 마크다운을 출력합니다',
-  link: '읽기 전용 링크를 만듭니다',
-  syntax: '문서에 쓰는 마크다운 문법(콜아웃·위키링크·수식 등)을 출력합니다',
-}
-
-function helpText(version: string): string {
-  const lines = [`${brand.name} 명령줄 도구 ${version}`, '']
-  for (const name of COMMAND_NAMES) lines.push(`  ${name}\t${COMMAND_DESCRIPTIONS[name]}`)
-  lines.push('')
-  lines.push('Windows PowerShell 5.1 에서는 > 대신 -o 로 저장하세요. > 는 파일을 UTF-16 으로 바꿉니다.')
-  lines.push(`AI 도구에서 쓸 때는 npx -y ${brand.cliName} … 또는 ${ENV_PREFIX}_TOKEN 환경 변수를 쓰세요.`)
-  lines.push(`AI 도구가 문서를 쓰기 전에 ${brand.cliName} syntax 로 콜아웃·위키링크 같은 문법을 확인하게 하세요.`)
-  return lines.join('\n') + '\n'
-}
-
-// 한 줄 설명만으로 모자란 명령의 덧붙임 — put 은 판 번호만 맞춰 올리다 그 사이 저장분을 덮어쓰기 쉽다
-const COMMAND_DETAILS: Partial<Record<CommandName, string[]>> = {
-  ls: [
-    '',
-    `사용: ${brand.cliName} ls [--folder <폴더id> | --root | --shared] [--path]`,
-    '  --folder <폴더id>  그 폴더에 바로 든 문서만 (하위 폴더의 문서는 빠집니다)',
-    '  --root             폴더에 들지 않은 맨 위 문서만',
-    '  --path             제목 앞에 폴더 경로 열을 넣습니다. 맨 위 문서는 /',
-    '  --shared           공유받은 문서',
-    '시각은 UTC(ISO 8601)입니다. --json 의 시각 필드는 1970년부터의 밀리초입니다.',
-  ],
-  put: [
-    '',
-    `사용: ${brand.cliName} put <id> [<파일>|-] [--title <제목>] (--base-version <n> | --force)`,
-    '  --base-version <n>  get 으로 받았을 때의 판 번호. 그 사이 서버 문서가 바뀌었으면 덮어쓰지 않고 종료 코드 5 로 멈춥니다',
-    '  --force             서버의 지금 판 위에 확인 없이 덮어씁니다. 그 사이 다른 곳에서 고친 내용이 사라집니다',
-    '',
-    `순서: ${brand.cliName} get <id> -o 파일.md 로 내용과 판 번호를 한 번에 받아 그 파일을 고친 뒤 put 하세요.`,
-    '판 번호만 다시 읽고 옛 내용을 올리면 번호는 맞아도 그 사이 저장분을 덮어씁니다.',
-  ],
-}
-
-function commandHelpText(command: CommandName): string {
-  const lines = [`${brand.cliName} ${command} — ${COMMAND_DESCRIPTIONS[command]}`, ...(COMMAND_DETAILS[command] ?? [])]
-  return lines.join('\n') + '\n'
-}
 
 export type MainDeps = {
   argv: string[]
@@ -146,9 +87,13 @@ function resolveServerOrigin(opts: {
   return { usageError: `http 주소는 localhost 에서만 쓸 수 있습니다: ${raw}` }
 }
 
-function scopeOf(command: { folder: string | null; root: boolean }): commands.DocScope {
-  if (command.root) return { kind: 'root' }
-  return command.folder !== null ? { kind: 'folder', id: command.folder } : { kind: 'all' }
+function scopeOf(root: boolean, folderId: string | null): commands.DocScope {
+  if (root) return { kind: 'root' }
+  return folderId !== null ? { kind: 'folder', id: folderId } : { kind: 'all' }
+}
+
+async function folderIdOf(cfg: ClientConfig, value: string | null): Promise<string | null> {
+  return value === null ? null : (await commands.resolveFolder(cfg, value)).id
 }
 
 function resolveToken(env: Record<string, string | undefined>, store: StoredCredentials, origin: string): string | null {
@@ -408,8 +353,8 @@ export async function main(deps: MainDeps): Promise<number> {
           }
           return 0
         }
-        const scope = scopeOf(command)
-        const docs = await commands.ls(cfg, scope, command.path)
+        const ref = command.folder !== null ? await commands.resolveFolder(cfg, command.folder) : null
+        const docs = await commands.ls(cfg, scopeOf(command.root, ref?.id ?? null), command.path, ref?.folders ?? undefined)
         if (command.global.json) deps.out.stdout(`${JSON.stringify(docs)}\n`)
         else {
           deps.out.stdout(humanDocList(docs, { path: command.path }))
@@ -418,7 +363,9 @@ export async function main(deps: MainDeps): Promise<number> {
         return 0
       }
       case 'find': {
-        const docs = await commands.find(cfg, command.query, scopeOf(command), command.path)
+        const ref = command.folder !== null ? await commands.resolveFolder(cfg, command.folder) : null
+        const scope = scopeOf(command.root, ref?.id ?? null)
+        const docs = await commands.find(cfg, command.query, scope, command.path, ref?.folders ?? undefined)
         if (command.global.json) deps.out.stdout(`${JSON.stringify(docs)}\n`)
         else {
           deps.out.stdout(humanDocList(docs, { path: command.path }))
@@ -462,30 +409,47 @@ export async function main(deps: MainDeps): Promise<number> {
           emitDecodeNotices(deps, decoded, command.source)
         }
         const title = command.title ?? titleFromSource(command.source)
-        const doc = await commands.createDoc(cfg, { title, content, lineEnding, folderId: command.folder })
+        const folderId = await folderIdOf(cfg, command.folder)
+        const doc = await commands.createDoc(cfg, { title, content, lineEnding, folderId })
         emitResult(deps, command.global.json, doc, () => humanIdLine(doc.id))
         return 0
       }
       case 'put': {
-        let content: string | undefined
+        let decoded: DecodedMarkdown | null = null
         if (command.source !== null) {
-          const bytes = await readSourceBytes(deps, command.source)
-          const decoded = decodeSource(bytes, command.source)
-          content = decoded.text
+          decoded = decodeSource(await readSourceBytes(deps, command.source), command.source)
           emitDecodeNotices(deps, decoded, command.source)
+        }
+        const title = command.title ?? undefined
+        const label = labelOf(command.source ?? '')
+        const file = decoded ? { text: decoded.text, lineEnding: decoded.lineEnding } : null
+        if (command.dryRun) {
+          const server = await commands.get(cfg, command.id)
+          const preview = buildPutPreview({ server, file, title })
+          if (wouldConflict(command.baseVersion, preview)) {
+            throw new CliError('conflict', { status: 409, currentVersion: server.version })
+          }
+          const notice = lineEndingNotice(label, preview.fileLineEnding, preview.lineEnding, true)
+          if (notice) deps.out.stderr(notice)
+          if (!preview.titleChanged && !preview.contentChanged) deps.out.stderr('바뀌는 내용이 없습니다.\n')
+          emitResult(deps, command.global.json, preview, () => humanPutPreview(preview))
+          return 0
         }
         const doc = await commands.putDoc(cfg, {
           id: command.id,
-          content,
-          title: command.title ?? undefined,
+          content: file?.text,
+          title,
           baseVersion: command.baseVersion,
           force: command.force,
         })
+        const notice = lineEndingNotice(label, fileLineEndingOf(file), doc.lineEnding, false)
+        if (notice) deps.out.stderr(notice)
         emitResult(deps, command.global.json, doc, () => humanIdVersionLine(doc.id, doc.version))
         return 0
       }
       case 'mv': {
-        const doc = await commands.moveDoc(cfg, { id: command.id, folderId: command.folderId })
+        const folderId = await folderIdOf(cfg, command.folderId)
+        const doc = await commands.moveDoc(cfg, { id: command.id, folderId })
         emitResult(deps, command.global.json, doc, () => humanIdLine(doc.id))
         return 0
       }
@@ -505,7 +469,8 @@ export async function main(deps: MainDeps): Promise<number> {
         return 0
       }
       case 'mkdir': {
-        const folder = await commands.mkdir(cfg, command.folderName, command.parent)
+        const parentId = await folderIdOf(cfg, command.parent)
+        const folder = await commands.mkdir(cfg, command.folderName, parentId)
         emitResult(deps, command.global.json, folder, () => humanIdLine(folder.id))
         return 0
       }

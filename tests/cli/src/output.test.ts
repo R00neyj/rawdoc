@@ -369,3 +369,33 @@ describe('F-2119 A4 경로 열·humanDocInfo', () => {
     expect(text.endsWith('role\t편집\nownerEmail\to@x.com\n')).toBe(true)
   })
 })
+
+describe('F-2132 A5 폴더 오류 문구', () => {
+  const HINT = 'rawdoc folders 로 폴더 id 와 경로를 확인하세요.'
+  it('invalid 의 field 가 folderId·parentId 면 안내가 붙고 다른 field 는 그대로', () => {
+    for (const field of ['folderId', 'parentId']) {
+      const err = new CliError('invalid', { field })
+      expect(errorMessage(err, CLI, CLI_ENV)).toBe(`서버가 요청을 거절했습니다: ${field} 값이 올바르지 않습니다. ${HINT}`)
+      expect(errorToJson(err, CLI, CLI_ENV).message).toContain(HINT)
+    }
+    expect(errorMessage(new CliError('invalid', { field: 'title' }), CLI, CLI_ENV)).toBe(
+      '서버가 요청을 거절했습니다: title 값이 올바르지 않습니다.',
+    )
+  })
+
+  it('folder_not_found: 문구·종료 2·Git Bash 문장·json folder', () => {
+    const err = new CliError('folder_not_found', { folder: '수업/x\n' })
+    expect(errorMessage(err, CLI, CLI_ENV)).toBe(`폴더를 찾을 수 없습니다: 수업/x . ${HINT}`)
+    expect(exitCodeFor('folder_not_found')).toBe(2)
+    const bash = new CliError('folder_not_found', { folder: 'C:/Program Files/Git/x' })
+    expect(errorMessage(bash, CLI, CLI_ENV)).toContain('Git Bash 가 Windows 경로로 바꿉니다')
+    expect(errorToJson(bash, CLI, CLI_ENV)).toMatchObject({ error: 'folder_not_found', status: null, folder: 'C:/Program Files/Git/x' })
+  })
+
+  it('folder_ambiguous: 문구·종료 2·json folderIds', () => {
+    const err = new CliError('folder_ambiguous', { folder: 'a', folderIds: ['i1', 'i2'] })
+    expect(errorMessage(err, CLI, CLI_ENV)).toBe('경로가 같은 폴더가 2개입니다: a (i1, i2). 폴더 id 로 지정하세요.')
+    expect(exitCodeFor('folder_ambiguous')).toBe(2)
+    expect(errorToJson(err, CLI, CLI_ENV)).toMatchObject({ folder: 'a', folderIds: ['i1', 'i2'] })
+  })
+})

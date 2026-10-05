@@ -534,8 +534,149 @@ describe('F-2119 A5·A7~A9 main()', () => {
     const l = baseDeps({ argv: ['ls', '--help'] })
     await main(l)
     const lt = l.stdoutLog.join('')
-    expect(lt).toContain('사용: rawdoc ls [--folder <폴더id> | --root | --shared] [--path]')
+    expect(lt).toContain('사용: rawdoc ls [--folder <폴더id|경로> | --root | --shared] [--path]')
     expect(lt).toContain('  --path             제목 앞에 폴더 경로 열을 넣습니다. 맨 위 문서는 /')
     expect(lt).toContain('시각은 UTC(ISO 8601)입니다. --json 의 시각 필드는 1970년부터의 밀리초입니다.')
+  })
+})
+
+describe('F-2132 main() — 폴더 경로·put 미리 보기·help', () => {
+  const tokenEnv = { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) }
+  const F1 = '11111111-1111-4111-8111-111111111111'
+  const F2 = '22222222-2222-4222-8222-222222222222'
+  const F3 = '33333333-3333-4333-8333-333333333333'
+  const folder = (id: string, name: string, parentId: string | null) => ({ id, name, parentId, createdAt: 0, updatedAt: 0 })
+  const mkDoc = (id: string, folderId: string | null, content = 'a\r\nb', lineEnding = 'crlf', version = 5) => ({
+    id, title: id, content, lineEnding, folderId, pinnedAt: null, version, createdAt: 0, updatedAt: 0,
+  })
+  const tree = [folder(F1, '수업자료', null), folder(F2, '1주차', F1)]
+
+  function setup(argv: string[], opts: { folders?: unknown[]; serverDoc?: ReturnType<typeof mkDoc>; readFile?: string } = {}) {
+    const calls: Array<{ method: string; path: string; body: unknown }> = []
+    const folders = opts.folders ?? tree
+    const serverDoc = opts.serverDoc ?? mkDoc('d1', null)
+    const deps = baseDeps({
+      argv,
+      env: tokenEnv,
+      readFile: vi.fn(async () => new TextEncoder().encode(opts.readFile ?? 'x\ny')),
+      fetchImpl: (async (url: string, init?: RequestInit) => {
+        const path = new URL(url).pathname
+        const method = init?.method ?? 'GET'
+        calls.push({ method, path, body: init?.body ? JSON.parse(init.body as string) : undefined })
+        if (path === '/v1/folders' && method === 'GET') return jsonResponse(folders)
+        if (path === '/v1/folders') return jsonResponse(folder(F3, 'n', null), 201)
+        if (path === '/v1/docs' && method === 'GET') return jsonResponse([mkDoc('in', F2), mkDoc('deep', F3), mkDoc('top', null)])
+        if (path === '/v1/docs') return jsonResponse(mkDoc('new', F2), 201)
+        if (path.endsWith('/folder')) return jsonResponse(mkDoc('d1', F2))
+        return jsonResponse(serverDoc)
+      }) as unknown as typeof fetch,
+    })
+    return { deps, calls }
+  }
+
+  it('A3 new --folder 경로: GET folders → POST docs(folderId)', async () => {
+    const r = setup(['new', 'a.md', '--folder', '수업자료/1주차'])
+    expect(await main(r.deps)).toBe(0)
+    expect(r.calls.map((c) => `${c.method} ${c.path}`)).toEqual(['GET /v1/folders', 'POST /v1/docs'])
+    expect(r.calls[1].body).toMatchObject({ folderId: F2 })
+  })
+
+  it('A3 UUID 값이면 요청 1회', async () => {
+    const r = setup(['new', 'a.md', '--folder', F2])
+    expect(await main(r.deps)).toBe(0)
+    expect(r.calls.map((c) => `${c.method} ${c.path}`)).toEqual(['POST /v1/docs'])
+  })
+
+  it('A3 없는 경로: 종료 2, 표준 출력 비움, 쓰기 없음. Git Bash 변환 값이면 문장이 붙음', async () => {
+    const r = setup(['new', 'a.md', '--folder', '없는/경로'])
+    expect(await main(r.deps)).toBe(2)
+    expect(r.deps.stdoutLog.join('')).toBe('')
+    expect(r.deps.stderrLog.join('')).toBe('폴더를 찾을 수 없습니다: 없는/경로. rawdoc folders 로 폴더 id 와 경로를 확인하세요.\n')
+    expect(r.calls.some((c) => c.method !== 'GET')).toBe(false)
+    const bash = setup(['new', 'a.md', '--folder', 'C:/Program Files/Git/x'])
+    await main(bash.deps)
+    expect(bash.deps.stderrLog.join('')).toContain('Git Bash 가 Windows 경로로 바꿉니다')
+  })
+
+  it('A3 여러 폴더: 종료 2, --json 에 folderIds', async () => {
+    const dup = [folder(F1, 'x', null), folder(F2, 'x', null)]
+    const r = setup(['new', 'a.md', '--folder', 'x', '--json'], { folders: dup })
+    expect(await main(r.deps)).toBe(2)
+    expect(JSON.parse(r.deps.stderrLog.join(''))).toMatchObject({ error: 'folder_ambiguous', folder: 'x', folderIds: [F1, F2] })
+    expect(r.calls.some((c) => c.method === 'POST')).toBe(false)
+  })
+
+  it('A3 mv --folder 경로·mkdir --parent 경로', async () => {
+    const mv = setup(['mv', 'd1', '--folder', '수업자료/1주차'])
+    expect(await main(mv.deps)).toBe(0)
+    expect(mv.calls.map((c) => `${c.method} ${c.path}`)).toEqual(['GET /v1/folders', 'PUT /v1/docs/d1/folder'])
+    expect(mv.calls[1].body).toEqual({ folderId: F2 })
+    const mk = setup(['mkdir', 'x', '--parent', '수업자료'])
+    expect(await main(mk.deps)).toBe(0)
+    expect(mk.calls.map((c) => `${c.method} ${c.path}`)).toEqual(['GET /v1/folders', 'POST /v1/folders'])
+    expect(mk.calls[1].body).toEqual({ name: 'x', parentId: F1 })
+  })
+
+  it('A4 ls·find --folder 경로는 요청 2회, 바로 든 문서만', async () => {
+    for (const argv of [['ls', '--folder', '수업자료/1주차'], ['ls', '--folder', '수업자료/1주차', '--path'], ['find', 'i', '--folder', '수업자료/1주차']]) {
+      const r = setup(argv)
+      expect(await main(r.deps)).toBe(0)
+      expect(r.calls.map((c) => c.path).sort()).toEqual(['/v1/docs', '/v1/folders'])
+      const rows = r.deps.stdoutLog.join('').trim().split('\n')
+      expect(rows).toHaveLength(1)
+      expect(rows[0].startsWith('in\t')).toBe(true)
+    }
+  })
+
+  it('A7 put --dry-run: GET 1회, PUT 없음, 키 순서 줄', async () => {
+    const r = setup(['put', 'd1', 'a.md', '--dry-run'], { readFile: 'a\nX' })
+    expect(await main(r.deps)).toBe(0)
+    expect(r.calls.map((c) => `${c.method} ${c.path}`)).toEqual(['GET /v1/docs/d1'])
+    expect(r.deps.stdoutLog.join('')).toBe(
+      'id\td1\nversion\t5\nlineEnding\tcrlf\nfileLineEnding\tlf\ntitleChanged\tfalse\ncontentChanged\ttrue\nlinesAdded\t1\nlinesRemoved\t1\nfirstChangedLine\t2\n',
+    )
+    expect(r.deps.stderrLog.join('')).toBe('"a.md" 줄바꿈(LF)이 서버 문서(CRLF)와 달라 서버 문서에 맞춰 저장됩니다.\n')
+    const j = setup(['put', 'd1', 'a.md', '--dry-run', '--json'], { readFile: 'a\nX' })
+    await main(j.deps)
+    expect(JSON.parse(j.deps.stdoutLog.join(''))).toMatchObject({ dryRun: true, id: 'd1', version: 5, linesAdded: 1, firstChangedLine: 2 })
+  })
+
+  it('A7 --base-version 불일치+변경 → 종료 5, 표준 출력 비움', async () => {
+    const r = setup(['put', 'd1', 'a.md', '--dry-run', '--base-version', '3', '--json'], { readFile: 'q\nr' })
+    expect(await main(r.deps)).toBe(5)
+    expect(r.deps.stdoutLog.join('')).toBe('')
+    expect(JSON.parse(r.deps.stderrLog.join(''))).toMatchObject({ error: 'conflict', currentVersion: 5 })
+  })
+
+  it('A7 바뀌는 것 없음 → 종료 0, 표준 오류 안내', async () => {
+    const r = setup(['put', 'd1', 'a.md', '--dry-run'], { readFile: 'a\nb' })
+    expect(await main(r.deps)).toBe(0)
+    expect(r.deps.stderrLog.join('')).toContain('바뀌는 내용이 없습니다.\n')
+  })
+
+  it('A8 쓰기 put: 서버 방식이 다르면 성공 뒤 안내, 같거나 한 줄·제목만이면 없음', async () => {
+    const differ = setup(['put', 'd1', 'a.md', '--force'], { readFile: 'a\nb' })
+    expect(await main(differ.deps)).toBe(0)
+    expect(differ.deps.stderrLog.join('')).toBe('"a.md" 줄바꿈(LF)이 서버 문서(CRLF)와 달라 서버 문서에 맞춰 저장했습니다.\n')
+    const same = setup(['put', 'd1', 'a.md', '--force'], { readFile: 'a\r\nb' })
+    await main(same.deps)
+    expect(same.deps.stderrLog.join('')).toBe('')
+    const one = setup(['put', 'd1', 'a.md', '--force'], { readFile: 'ab' })
+    await main(one.deps)
+    expect(one.deps.stderrLog.join('')).toBe('')
+    const title = setup(['put', 'd1', '--title', 't', '--force'])
+    await main(title.deps)
+    expect(title.deps.stderrLog.join('')).toBe('')
+  })
+
+  it('A9 help <명령> 은 <명령> --help 와 같고 help nope 은 종료 2', async () => {
+    const a = baseDeps({ argv: ['help', 'new'] })
+    const b = baseDeps({ argv: ['new', '--help'] })
+    expect(await main(a)).toBe(0)
+    await main(b)
+    expect(a.stdoutLog.join('')).toBe(b.stdoutLog.join(''))
+    const bad = baseDeps({ argv: ['help', 'nope'] })
+    expect(await main(bad)).toBe(2)
+    expect(bad.stderrLog.join('')).toBe('알 수 없는 명령입니다: nope\n')
   })
 })

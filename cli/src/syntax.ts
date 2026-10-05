@@ -10,6 +10,14 @@ export function syntaxHelpUrl(): string {
   return new URL('help', SITE_URL).href
 }
 
+// markdownSyntax.cliNote 는 src/ 소유라 cli/ 에서 덧붙인다 (F-2132 6장)
+export const WIKILINK_BREAK_NOTE = '제목을 바꾸면 옛 제목으로 건 위키링크는 자동으로 고쳐지지 않아 끊깁니다. 폴더를 붙인 링크는 문서를 다른 폴더로 옮겨도 끊길 수 있습니다.'
+
+function cliNoteOf(group: SyntaxGroup): string | undefined {
+  if (group.group !== '위키링크') return group.cliNote
+  return group.cliNote ? `${group.cliNote} ${WIKILINK_BREAK_NOTE}` : WIKILINK_BREAK_NOTE
+}
+
 function orderedGroups(): { app: SyntaxGroup[]; general: SyntaxGroup[] } {
   const app = APP_SYNTAX_GROUPS.map((name) => SYNTAX_GROUPS.find((g) => g.group === name)!)
   return { app, general: SYNTAX_GROUPS.filter((g) => !APP_SYNTAX_GROUPS.includes(g.group)) }
@@ -23,6 +31,7 @@ function renderGroup(group: SyntaxGroup): string {
     if (item.caption) parts.push(item.caption)
   }
   if (group.cliNote) parts.push(group.cliNote)
+  if (group.group === '위키링크') parts.push(WIKILINK_BREAK_NOTE)
   return parts.join('\n\n')
 }
 
@@ -60,7 +69,7 @@ export function syntaxJson(version: string): SyntaxJson {
       group: g.group,
       appOnly: APP_SYNTAX_GROUPS.includes(g.group),
       items: g.items.map(({ name, source, caption }) => ({ name, source, caption })),
-      note: g.cliNote,
+      note: cliNoteOf(g),
     })),
   }
 }

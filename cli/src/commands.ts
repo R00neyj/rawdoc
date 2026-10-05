@@ -16,6 +16,7 @@ import {
   apiUploadAttachment,
   type ClientConfig,
 } from './client'
+import { isFolderId, resolveFolderPath } from './folderRef'
 import { titleMatches, withFolderPath, type DocWithPath } from './docMeta'
 import { CliError } from './output'
 
@@ -39,18 +40,38 @@ async function listScoped(
   scope: DocScope,
   withPath: boolean,
   keep: (d: V1DocSummary) => boolean,
+  knownFolders?: V1Folder[],
 ): Promise<V1DocSummary[] | DocWithPath[]> {
-  const [docs, folders] = await Promise.all([apiListDocs(cfg), withPath ? apiListFolders(cfg) : Promise.resolve([])])
+  const [docs, folders] = await Promise.all([
+    apiListDocs(cfg),
+    knownFolders ?? (withPath ? apiListFolders(cfg) : Promise.resolve([])),
+  ])
   const kept = inScope(docs, scope).filter(keep)
   return withPath ? withFolderPath(kept, folders) : kept
 }
 
-export function ls(cfg: ClientConfig, scope: DocScope, withPath: boolean): Promise<V1DocSummary[] | DocWithPath[]> {
-  return listScoped(cfg, scope, withPath, () => true)
+export function ls(cfg: ClientConfig, scope: DocScope, withPath: boolean, knownFolders?: V1Folder[]): Promise<V1DocSummary[] | DocWithPath[]> {
+  return listScoped(cfg, scope, withPath, () => true, knownFolders)
 }
 
-export function find(cfg: ClientConfig, query: string, scope: DocScope, withPath: boolean): Promise<V1DocSummary[] | DocWithPath[]> {
-  return listScoped(cfg, scope, withPath, (d) => titleMatches(d.title, query))
+export function find(
+  cfg: ClientConfig,
+  query: string,
+  scope: DocScope,
+  withPath: boolean,
+  knownFolders?: V1Folder[],
+): Promise<V1DocSummary[] | DocWithPath[]> {
+  return listScoped(cfg, scope, withPath, (d) => titleMatches(d.title, query), knownFolders)
+}
+
+// UUID 는 그대로 쓰고(요청 없음), 아니면 폴더 목록을 한 번 받아 경로로 푼다 (F-2132 2장)
+export async function resolveFolder(cfg: ClientConfig, value: string): Promise<{ id: string; folders: V1Folder[] | null }> {
+  if (isFolderId(value)) return { id: value, folders: null }
+  const folders = await apiListFolders(cfg)
+  const result = resolveFolderPath(value, folders)
+  if (result.kind === 'found') return { id: result.id, folders }
+  if (result.kind === 'ambiguous') throw new CliError('folder_ambiguous', { folder: value, folderIds: result.ids })
+  throw new CliError('folder_not_found', { folder: value })
 }
 
 export async function info(cfg: ClientConfig, id: string): Promise<DocInfo> {

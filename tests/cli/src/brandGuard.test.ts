@@ -5,6 +5,9 @@ import brand from '../../../brand.config'
 
 const SOURCE_FILES = [
   'docMeta.ts',
+  'help.ts',
+  'folderRef.ts',
+  'putPreview.ts',
   'args.ts',
   'client.ts',
   'commands.ts',

@@ -1,6 +1,7 @@
 // 사람용·--json 렌더링, 오류 → 종료 코드 (specs/features/F-2021.md 4.3~4.5)
 import type { FolderLike } from '../../src/lib/folderTree'
 import { folderPathOf } from './docMeta'
+import type { PutPreview } from './putPreview'
 
 export type CliErrorCode =
   | 'network'
@@ -15,6 +16,8 @@ export type CliErrorCode =
   | 'login_port'
   | 'usage'
   | 'invalid'
+  | 'folder_not_found'
+  | 'folder_ambiguous'
   | 'not_logged_in'
   | 'unauthenticated'
   | 'forbidden'
@@ -34,6 +37,8 @@ export type CliErrorDetails = {
   origin?: string
   path?: string
   field?: string
+  folder?: string
+  folderIds?: string[]
   limit?: number
   used?: number
   email?: string
@@ -59,6 +64,8 @@ const EXIT_CODES: Record<CliErrorCode, number> = {
   login_port: 1,
   usage: 2,
   invalid: 2,
+  folder_not_found: 2,
+  folder_ambiguous: 2,
   not_logged_in: 3,
   unauthenticated: 3,
   forbidden: 4,
@@ -98,6 +105,8 @@ export function remainingTimeText(retryAfterSeconds: number): string {
   return `${minutes}분`
 }
 
+const folderHint = (cli: string) => `${cli} folders 로 폴더 id 와 경로를 확인하세요.`
+
 // 4.5 표의 한국어 문구
 export function errorMessage(err: CliError, cli: string, cliEnvPrefix: string): string {
   const d = err.details
@@ -124,10 +133,20 @@ export function errorMessage(err: CliError, cli: string, cliEnvPrefix: string): 
       return '로그인용 임시 포트를 열 수 없습니다.'
     case 'usage':
       return d.usageMessage ?? '사용법이 올바르지 않습니다.'
-    case 'invalid':
-      return d.field
-        ? `서버가 요청을 거절했습니다: ${d.field} 값이 올바르지 않습니다.`
-        : '서버가 요청을 거절했습니다.'
+    case 'invalid': {
+      if (!d.field) return '서버가 요청을 거절했습니다.'
+      const base = `서버가 요청을 거절했습니다: ${d.field} 값이 올바르지 않습니다.`
+      return d.field === 'folderId' || d.field === 'parentId' ? `${base} ${folderHint(cli)}` : base
+    }
+    case 'folder_not_found': {
+      const raw = d.folder ?? ''
+      const bash = /^[A-Za-z]:\//.test(raw) ? ' / 로 시작하는 값은 Git Bash 가 Windows 경로로 바꿉니다. 앞의 / 를 빼고 다시 실행하세요.' : ''
+      return `폴더를 찾을 수 없습니다: ${stripControlChars(raw)}. ${folderHint(cli)}${bash}`
+    }
+    case 'folder_ambiguous': {
+      const ids = d.folderIds ?? []
+      return `경로가 같은 폴더가 ${ids.length}개입니다: ${stripControlChars(d.folder ?? '')} (${ids.join(', ')}). 폴더 id 로 지정하세요.`
+    }
     case 'not_logged_in':
       return `로그인이 필요합니다. ${cli} login 을 실행하거나 ${cliEnvPrefix}_TOKEN 환경 변수를 설정하세요.`
     case 'unauthenticated':
@@ -181,6 +200,8 @@ export type CliErrorJson = {
   status: number | null
   message: string
   field?: string
+  folder?: string
+  folderIds?: string[]
   limit?: number
   used?: number
   email?: string
@@ -199,6 +220,8 @@ export function errorToJson(err: CliError, cli: string, cliEnvPrefix: string): C
     message: errorMessage(err, cli, cliEnvPrefix),
   }
   if (d.field !== undefined) json.field = d.field
+  if (d.folder !== undefined) json.folder = d.folder
+  if (d.folderIds !== undefined) json.folderIds = d.folderIds
   if (d.limit !== undefined) json.limit = d.limit
   if (d.used !== undefined) json.used = d.used
   if (d.email !== undefined) json.email = d.email
@@ -335,4 +358,20 @@ export function humanRemoveFolderNotice(result: RemoveFolderResult): string {
   if (result.docs === 0 && result.folders === 0) return '폴더를 지웠습니다.\n'
   const where = result.parentId === null ? '맨 위' : '위 폴더'
   return `폴더를 지웠습니다. ${removedItemsPhrase(result.docs, result.folders)}는 ${where}로 옮겼습니다.\n`
+}
+
+// 키는 --json 필드 이름과 같고 dryRun 은 뺀다 (F-2132 4.3)
+export function humanPutPreview(p: PutPreview): string {
+  const rows: Array<[string, string | number | boolean | null]> = [
+    ['id', p.id],
+    ['version', p.version],
+    ['lineEnding', p.lineEnding],
+    ['fileLineEnding', p.fileLineEnding],
+    ['titleChanged', p.titleChanged],
+    ['contentChanged', p.contentChanged],
+    ['linesAdded', p.linesAdded],
+    ['linesRemoved', p.linesRemoved],
+    ['firstChangedLine', p.firstChangedLine],
+  ]
+  return rows.map(([k, v]) => `${k}\t${v === null ? '-' : String(v)}\n`).join('')
 }

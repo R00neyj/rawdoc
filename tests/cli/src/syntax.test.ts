@@ -49,3 +49,18 @@ describe('F-2118 syntax 출력', () => {
     expect(j.groups.find((g) => g.group === '제목')!.appOnly).toBe(false)
   })
 })
+
+describe('F-2132 A9 위키링크 안내 문장', () => {
+  const NOTE = '제목을 바꾸면 옛 제목으로 건 위키링크는 자동으로 고쳐지지 않아 끊깁니다. 폴더를 붙인 링크는 문서를 다른 폴더로 옮겨도 끊길 수 있습니다.'
+  it('위키링크 그룹 안에 있고 2000자 이하', () => {
+    const md = renderSyntaxMarkdown('9.9.9')
+    const start = md.indexOf('### 위키링크')
+    const end = md.indexOf('\n### ', start + 1)
+    expect(md.slice(start, end)).toContain(NOTE)
+    expect([...md].length).toBeLessThanOrEqual(2000)
+  })
+  it('json 위키링크 그룹 note 끝에 같은 문장', () => {
+    const g = syntaxJson('9.9.9').groups.find((x) => x.group === '위키링크')!
+    expect(g.note!.endsWith(` ${NOTE}`)).toBe(true)
+  })
+})

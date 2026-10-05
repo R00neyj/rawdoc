@@ -21,6 +21,7 @@ export type RunCommand =
       title: string | null
       baseVersion: number | null
       force: boolean
+      dryRun: boolean
     }
   | { name: 'mv'; global: GlobalOptions; id: string; folderId: string | null }
   | { name: 'rm'; global: GlobalOptions; id: string }
@@ -208,6 +209,7 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
         title: { type: 'string' },
         'base-version': { type: 'string' },
         force: { type: 'boolean' },
+        'dry-run': { type: 'boolean' },
       }
       const parsed = runParseArgs(rest, options, true)
       if (!parsed) return usage('알 수 없는 옵션입니다.', command)
@@ -220,7 +222,8 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
 
       const hasBaseVersion = typeof parsed.values['base-version'] === 'string'
       const force = parsed.values.force === true
-      if (hasBaseVersion === force) {
+      const dryRun = parsed.values['dry-run'] === true
+      if (dryRun ? hasBaseVersion && force : hasBaseVersion === force) {
         return usage(
           `--base-version 또는 --force 가 필요합니다. ${brand.cliName} get ${id} --json 으로 내용과 version 을 함께 받아 고친 뒤 --base-version 으로 올리세요. --force 는 그 사이 바뀐 내용을 덮어씁니다.`,
           command,
@@ -233,7 +236,7 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       }
       return {
         kind: 'run',
-        command: { name: 'put', global: globalsOf(parsed.values), id, source, title, baseVersion, force },
+        command: { name: 'put', global: globalsOf(parsed.values), id, source, title, baseVersion, force, dryRun },
       }
     }
     case 'mv': {
@@ -310,11 +313,18 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
   }
 }
 
+function parseHelpAlias(rest: string[]): ParsedInvocation {
+  if (rest.length === 0) return { kind: 'help', command: null }
+  if (rest.length > 1) return usage('help 뒤에는 명령 이름 하나만 줍니다.')
+  return isCommandName(rest[0]) ? { kind: 'help', command: rest[0] } : usage(`알 수 없는 명령입니다: ${rest[0]}`)
+}
+
 export function parseArgs(argv: string[]): ParsedInvocation {
   if (argv.length === 0) return { kind: 'no-command' }
   const [first, ...rest] = argv
   if (first === '--help' || first === '-h') return { kind: 'help', command: null }
   if (first === '--version' || first === '-v') return { kind: 'version' }
+  if (first === 'help') return parseHelpAlias(rest)
   if (!isCommandName(first)) return usage(`알 수 없는 명령입니다: ${first}`)
 
   if (rest.includes('--help') || rest.includes('-h')) return { kind: 'help', command: first }

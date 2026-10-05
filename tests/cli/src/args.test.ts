@@ -76,6 +76,7 @@ describe('F-2021 U1 args.ts — 명령마다 해석', () => {
         title: null,
         baseVersion: 3,
         force: false,
+        dryRun: false,
       },
     })
   })
@@ -298,5 +299,35 @@ describe('F-2119 A1 ls --root·--path, find, info', () => {
         expect(r.command).toBe(command)
       }
     }
+  })
+})
+
+describe('F-2132 A1 help 별칭·put --dry-run', () => {
+  it('help·help put·help nope·help put ls', () => {
+    expect(parseArgs(['help'])).toEqual({ kind: 'help', command: null })
+    expect(parseArgs(['help', 'put'])).toEqual({ kind: 'help', command: 'put' })
+    expect(parseArgs(['help', 'nope'])).toEqual({ kind: 'usage', message: '알 수 없는 명령입니다: nope', command: null })
+    expect(parseArgs(['help', 'put', 'ls'])).toEqual({
+      kind: 'usage',
+      message: 'help 뒤에는 명령 이름 하나만 줍니다.',
+      command: null,
+    })
+  })
+
+  it('put --dry-run 은 판 번호·--force 없이도 run', () => {
+    const r = parseArgs(['put', 'd1', 'a.md', '--dry-run'])
+    expect(r).toMatchObject({ kind: 'run', command: { name: 'put', dryRun: true, baseVersion: null, force: false } })
+  })
+
+  it('put --dry-run --base-version 3 은 run, --base-version 과 --force 둘 다면 usage', () => {
+    expect(parseArgs(['put', 'd1', 'a.md', '--dry-run', '--base-version', '3'])).toMatchObject({
+      kind: 'run',
+      command: { dryRun: true, baseVersion: 3 },
+    })
+    expect(parseArgs(['put', 'd1', 'a.md', '--dry-run', '--base-version', '1', '--force']).kind).toBe('usage')
+  })
+
+  it('--dry-run 이 없으면 판 번호 규칙은 그대로', () => {
+    expect(parseArgs(['put', 'd1', 'a.md']).kind).toBe('usage')
   })
 })
