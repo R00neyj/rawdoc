@@ -2,7 +2,7 @@
 title: 사용자 CSS 로 모양 바꾸기
 summary: 설정 `사용자 CSS` 탭의 스니펫과 템플릿, 약속된 변수와 훅, 테마·인쇄·HTML 파일에서 먹는 규칙, 빠지는 외부 파일, 계정 저장, 화면이 망가졌을 때 여는 법.
 date: 2026-09-30
-updated: 2026-09-30
+updated: 2026-10-05
 ---
 
 # 사용자 CSS 로 모양 바꾸기
@@ -51,6 +51,7 @@ updated: 2026-09-30
 | 기본 색 | `--paper` 바탕 · `--panel` 대화상자·메뉴 · `--ink` 글자 · `--ink-2` 보조 글자 · `--muted` 흐린 글자 · `--rule` `--rule-2` 구분선 · `--link` 링크 · `--danger` 오류 · `--accent` 강조 |
 | 파생 색 | `--accent-soft` `--accent-ring` `--selection-bg` |
 | 본문 | `--md-font-size` `--md-line-height` `--md-fg-muted` `--md-border` `--md-border-muted` `--md-bg-muted` `--md-code-bg` `--md-link` `--highlight-base` `--md-highlight-bg` |
+| 코드 | `--code-keyword` 키워드 · `--code-string` 문자열 · `--code-comment` 주석 · `--code-number` 숫자·값 · `--code-function` 함수 · `--code-type` 타입 · `--code-property` 속성 · `--code-tag` 태그 |
 | 콜아웃 | `--callout-note` `--callout-tip` `--callout-success` `--callout-question` `--callout-warning` `--callout-danger` `--callout-example` `--callout-quote` |
 | 지도 그룹 | `--map-group-1` `--map-group-2` `--map-group-3` `--map-group-4` `--map-group-5` `--map-group-6` `--map-group-7` `--map-group-8` |
 | 댓글 | `--comment-anchor` `--comment-anchor-active` `--comment-anchor-line` |
@@ -59,6 +60,7 @@ updated: 2026-09-30
 
 - `--md-font-size`·`--font-display`·`--font-body`를 바꾸면 설정 `글자 크기`·`제목 서체`·`본문 서체`가 먹지 않습니다
 - 지도 캔버스 안은 선택자가 닿지 않고, `--panel` `--ink` `--ink-2` `--muted` `--rule` `--accent`와 지도 그룹 색만 읽어 칠합니다
+- `코드` 묶음은 코드블록 구문 색입니다. `CSS 편집` 창 글자 색도 이 변수를 따릅니다. 구문 색을 끄려면 `:root:root`에서 여덟 변수를 모두 `currentColor`로 두세요
 
 ## 화면 뼈대 훅
 

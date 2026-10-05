@@ -1,0 +1,9 @@
+/* 코드블록 구문 색 — 클래스는 F-2122 1.3, 색은 tokens.css --code-* */
+.code-keyword { color: var(--code-keyword); }
+.code-string { color: var(--code-string); }
+.code-comment { color: var(--code-comment); }
+.code-number { color: var(--code-number); }
+.code-function { color: var(--code-function); }
+.code-type { color: var(--code-type); }
+.code-property { color: var(--code-property); }
+.code-tag { color: var(--code-tag); }

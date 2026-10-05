@@ -3,6 +3,7 @@ import brand from '../brand'
 import tokensCss from '../styles/tokens.css?raw'
 import githubMarkdownCss from 'github-markdown-css/github-markdown-light.css?raw'
 import markdownCss from '../styles/markdown.css?raw'
+import codeHighlightCss from '../styles/codeHighlight.css?raw'
 import calloutCss from '../styles/callout.css?raw'
 import imageCss from '../styles/image.css?raw'
 import wikilinkCss from '../styles/wikilink.css?raw'
@@ -45,6 +46,7 @@ export const EXPORT_CSS = [
   stripFontFaceBlocks(tokensCss),
   githubMarkdownCss,
   markdownCss,
+  codeHighlightCss,
   calloutCss,
   imageCss,
   wikilinkCss,

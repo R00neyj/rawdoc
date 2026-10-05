@@ -1,7 +1,7 @@
 // 사용자 CSS 공식 계약 — 공개 변수·뼈대 훅·본문 훅·상태 속성과 템플릿 생성 (specs/features/F-2093.md)
 import { GUIDES_PATH } from './siteChrome'
 
-export type PublicVarGroup = '기본 색' | '파생 색' | '본문' | '콜아웃' | '지도 그룹' | '댓글 앵커' | '서체' | '모양'
+export type PublicVarGroup = '기본 색' | '파생 색' | '본문' | '코드' | '콜아웃' | '지도 그룹' | '댓글 앵커' | '서체' | '모양'
 export type PublicVar = { name: `--${string}`; group: PublicVarGroup; label: string }
 export type ChromeHook = { value: string; label: string; files: readonly string[] }
 export type ContentHook = { id: string; label: string; edit: readonly string[]; view: readonly string[] }
@@ -38,6 +38,14 @@ export const PUBLIC_VARS: readonly PublicVar[] = [
   v('--md-link', '본문', '본문 링크'),
   v('--highlight-base', '본문', '하이라이트 기준색 — 바탕은 이 색을 60% 섞어 만듭니다'),
   v('--md-highlight-bg', '본문', '하이라이트 바탕'),
+  v('--code-keyword', '코드', '코드 키워드 — if·return·import 등'),
+  v('--code-string', '코드', '코드 문자열·정규식'),
+  v('--code-comment', '코드', '코드 주석'),
+  v('--code-number', '코드', '코드 숫자·참거짓·null·CSS 값'),
+  v('--code-function', '코드', '코드 함수 이름'),
+  v('--code-type', '코드', '코드 타입·클래스 이름'),
+  v('--code-property', '코드', '코드 속성 이름 — 객체 키·CSS 속성·HTML 속성'),
+  v('--code-tag', '코드', '코드 HTML·XML·JSX 태그 이름'),
   v('--callout-note', '콜아웃', '콜아웃 note (info·todo)'),
   v('--callout-tip', '콜아웃', '콜아웃 tip (abstract·summary·tldr·hint·important)'),
   v('--callout-success', '콜아웃', '콜아웃 success (check·done)'),

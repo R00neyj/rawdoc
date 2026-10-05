@@ -5835,27 +5835,31 @@ body.sidebar-resizing {
 }
 
 .user-css-editor .tok-comment {
-  color: var(--muted);
+  color: var(--code-comment);
 }
 
 .user-css-editor .tok-propertyName {
-  color: var(--link);
+  color: var(--code-property);
 }
 
 .user-css-editor .tok-variableName {
   color: var(--accent);
 }
 
-.user-css-editor :is(.tok-string, .tok-literal, .tok-number) {
-  color: var(--callout-success);
+.user-css-editor :is(.tok-string, .tok-literal) {
+  color: var(--code-string);
+}
+
+.user-css-editor .tok-number {
+  color: var(--code-number);
 }
 
 .user-css-editor :is(.tok-keyword, .tok-atom) {
-  color: var(--callout-example);
+  color: var(--code-keyword);
 }
 
 .user-css-editor :is(.tok-className, .tok-typeName, .tok-labelName) {
-  color: var(--ink);
+  color: var(--code-type);
   font-weight: 700;
 }
 

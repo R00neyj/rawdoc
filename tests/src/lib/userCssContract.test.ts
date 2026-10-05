@@ -17,6 +17,8 @@ const PUBLIC_VAR_NAMES = [
   '--accent-soft', '--accent-ring', '--selection-bg',
   '--md-font-size', '--md-line-height', '--md-fg-muted', '--md-border', '--md-border-muted', '--md-bg-muted',
   '--md-code-bg', '--md-link', '--highlight-base', '--md-highlight-bg',
+  '--code-keyword', '--code-string', '--code-comment', '--code-number', '--code-function', '--code-type',
+  '--code-property', '--code-tag',
   '--callout-note', '--callout-tip', '--callout-success', '--callout-question', '--callout-warning',
   '--callout-danger', '--callout-example', '--callout-quote',
   '--map-group-1', '--map-group-2', '--map-group-3', '--map-group-4', '--map-group-5', '--map-group-6',
@@ -300,8 +302,8 @@ describe('F-2093 U1 공개 변수', () => {
     for (const name of names) expect(lightBlock, name).toMatch(new RegExp(`${name}\\s*:`))
   })
 
-  test('묶음은 여덟 값 중 하나이고 라벨은 비어 있지 않으며 주석 표시가 없다', () => {
-    const groups = new Set(['기본 색', '파생 색', '본문', '콜아웃', '지도 그룹', '댓글 앵커', '서체', '모양'])
+  test('묶음은 아홉 값 중 하나이고 라벨은 비어 있지 않으며 주석 표시가 없다', () => {
+    const groups = new Set(['기본 색', '파생 색', '본문', '코드', '콜아웃', '지도 그룹', '댓글 앵커', '서체', '모양'])
     for (const p of PUBLIC_VARS) {
       expect(groups.has(p.group), p.name).toBe(true)
       expect(p.label.trim(), p.name).not.toBe('')

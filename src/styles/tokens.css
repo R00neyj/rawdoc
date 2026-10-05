@@ -83,6 +83,16 @@
   --highlight-base: #ffd43b;
   --md-highlight-bg: color-mix(in srgb, var(--highlight-base) 60%, transparent);
 
+  /* 코드 구문 색 — 콜아웃 색에 --ink 15% 를 섞어 코드 바탕 대비를 올린다 (F-2122 2장) */
+  --code-keyword: color-mix(in srgb, var(--callout-danger) 85%, var(--ink));
+  --code-string: color-mix(in srgb, var(--callout-note) 85%, var(--ink));
+  --code-comment: color-mix(in srgb, var(--ink-2) 50%, var(--muted));
+  --code-number: color-mix(in srgb, var(--callout-tip) 85%, var(--ink));
+  --code-function: color-mix(in srgb, var(--callout-example) 85%, var(--ink));
+  --code-type: color-mix(in srgb, var(--callout-warning) 85%, var(--ink));
+  --code-property: color-mix(in srgb, var(--callout-question) 85%, var(--ink));
+  --code-tag: color-mix(in srgb, var(--callout-success) 85%, var(--ink));
+
   /* 서체 (design.md 2.4) */
   --font-sans: 'Pretendard Variable', system-ui, sans-serif;
   --font-serif: 'Noto Serif KR', serif;

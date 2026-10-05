@@ -205,3 +205,55 @@ describe('메인 컬러 대비 — 확정 전까지 경고만 (design.md 3.2)', 
     expect(true).toBe(true)
   })
 })
+
+describe('코드 구문 색 (F-2124)', () => {
+  const CODE_VARS = [
+    'code-keyword', 'code-string', 'code-comment', 'code-number',
+    'code-function', 'code-type', 'code-property', 'code-tag',
+  ]
+  const MIX_RE = /^color-mix\(in srgb, var\(--([\w-]+)\) (\d+)%, var\(--([\w-]+)\)\)$/
+
+  function toHex(tokens: Tokens, value: string): string {
+    const v = /^var\(--([\w-]+)\)$/.exec(value)
+    if (v) return toHex(tokens, tokens[v[1]] ?? '')
+    if (/^#[0-9a-fA-F]{6}$/.test(value)) return value
+    const m = MIX_RE.exec(value)
+    if (!m) return ''
+    const a = toHex(tokens, `var(--${m[1]})`)
+    const b = toHex(tokens, `var(--${m[3]})`)
+    if (!a || !b) return ''
+    const p = Number(m[2]) / 100
+    const ch = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16)
+    return `#${[0, 1, 2].map((i) => Math.round(ch(a, i) * p + ch(b, i) * (1 - p)).toString(16).padStart(2, '0')).join('')}`
+  }
+
+  test('T1 첫 :root 에 8개가 순서대로, color-mix 꼴이고 hex 가 없다', () => {
+    const names = Object.keys(whiteTokens).filter((k) => k.startsWith('code-'))
+    expect(names).toEqual(CODE_VARS)
+    for (const n of CODE_VARS) {
+      expect(whiteTokens[n], n).toMatch(MIX_RE)
+      expect(whiteTokens[n], n).not.toContain('#')
+    }
+  })
+
+  test('T2 세피아·다크 블록에는 --code- 선언이 없다', () => {
+    for (const t of ['sepia', 'dark']) {
+      const block = extractBlock(`:root\\[data-theme='${t}'\\]`)
+      expect(Object.keys(block).filter((k) => k.startsWith('code-')), t).toEqual([])
+    }
+  })
+
+  for (const [theme, tokens] of Object.entries(THEMES)) {
+    for (const bg of ['rule-2', 'paper']) {
+      test(`T3 ${theme} 코드 색 vs --${bg} >= 4.5`, () => {
+        const bgHex = toHex(tokens, `var(--${bg})`)
+        expect(bgHex).not.toBe('')
+        for (const n of CODE_VARS) {
+          const hex = toHex(tokens, `var(--${n})`)
+          expect(hex, `${theme} ${n} 풀림`).not.toBe('')
+          expect(contrastRatio(hex, bgHex), `${theme} ${n}`).toBeGreaterThanOrEqual(4.5)
+        }
+      })
+    }
+  }
+})
