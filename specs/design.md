@@ -145,6 +145,7 @@
 | `--callout-*` 8종 | note `var(--link)`, tip `#0B7285`, success `#177A33`, question `#855A00`, warning `#A84400`, danger `#C4212C`, example `#7644D0`, quote `var(--ink-2)`. 전부 `--panel` 대비 4.5:1 이상 | F-128 3장 |
 | `--map-group-1`~`-8` | 위 `--callout-*` 8색의 **별칭**이다. 새 hex 가 아니다. 지도 그룹 색이 쓰고, 저장값은 hex 가 아니라 인덱스 `1`~`8` 이라 테마를 바꾸면 그룹 색도 따라 바뀐다 | F-292 개정판 6.5 |
 | `--people-1`~`-7` | `--callout-note`·`tip`·`success`·`question`·`warning`·`danger`·`example` 의 **별칭**이다. 새 hex 가 아니다. 접속자 아바타·원격 커서 색이 쓰고, 저장값은 인덱스 `1`~`7`(`peerColorIndex`) 이라 테마를 바꾸면 색도 따라 바뀐다 | F-307 3.3 |
+| `--code-*` 8종 | 코드블록 구문 색. keyword `color-mix(in srgb, var(--callout-danger) 85%, var(--ink))`, string `…(--callout-note)…`, number `…(--callout-tip)…`, function `…(--callout-example)…`, type `…(--callout-warning)…`, property `…(--callout-question)…`, tag `…(--callout-success)…`(모두 85% + `--ink`), comment `color-mix(in srgb, var(--ink-2) 50%, var(--muted))`. 새 hex 아님. 세 테마에서 코드 바탕 `--rule-2`·`--paper` 대비 4.76 이상 | F-2122 2장, F-2124 M1 |
 
 - 마크다운 요소의 크기·여백은 GitHub 스타일(`github-markdown-css` 5.9.0)을 따르고, 색은 위 토큰, 서체는 2.4 그대로다 (`specs/product.md` Q18)
 
@@ -156,6 +157,7 @@
 - 기본은 시스템 설정 따라가기(라이트 → 화이트, 다크 → 다크). 설정 대화상자에서 고정할 수 있다 (`specs/ia.md` 3.15)
 - 세피아·다크 토큰 초안 값과 대비 기준은 `specs/features/F-141.md` 3.1. 대비 검사는 테스트가 실패 조건으로 한다 (메인 컬러만 경고)
 - 세피아는 글자 대비를 더 올린다: `--ink` ≥ 14:1, `--ink-2` ≥ 9:1, `--muted` ≥ 4.5:1 (2026-09-14 사용자 "검정색 더 적극적으로", F-153 2.4)
+- 코드 색(`--code-*`)은 테마 블록에 다시 적지 않는다 — 콜아웃·잉크를 따라간다 (F-2122 2.1)
 - 메인 컬러는 브랜드 설정 값 하나다. 다크에서는 어두운 바탕 대비를 위해 `color-mix(in srgb, 브랜드색 55%, white)` 로 밝혀 쓴다 (3.2 파생 규칙과 같은 방식)
 
 ## 4. 형태와 움직임

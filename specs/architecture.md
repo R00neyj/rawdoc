@@ -168,6 +168,11 @@ src/
   - `app/`: `notificationsShare.ts`(F-2057 — 탭 사이 알림 결과 채널 `md-notifications`, 순수 함수)
 - 랜딩 스크롤 스토리(F-2049)로 추가
   - `welcome/`: 랜딩 번들(`assets/welcome-demo.js`, 고정 이름). 편집기 데모·스크롤 스토리. gsap 은 여기서만 import(F-2049). `worker/welcomePage.ts` 가 여기의 순수 데이터 모듈을 import 한다
+- 코드블록 구문 색(F-2122)으로 추가
+  - `lib/`: `codeHighlight.ts`(F-2123 — 태그 → `code-*` 클래스, 줄 나누기·HTML 코드블록 칠하기·상한·캐시, 순수 함수), `codeParsers.ts`(F-2123 — 언어별 문법 동적 import·실패 기억). 기존 `codeLang.ts` 에 언어 id 표(import 0개 — `cli/`·`site/` 도 묶는다). 엔진은 진입 청크 밖, 첫 로드되는 `createEditor` 청크에 들고 문법 6개는 따로 청크
+  - `editor/`: `codeLanguages.ts`(F-2125 — `codeLanguages` 함수·scope 하이라이터·들여쓰기 보정·주석 자료)
+  - `viewer/`: `useCodeHighlight.ts`(F-2126 — 보기 화면 훅·인쇄/내보내기용 `highlightHtmlWhenReady`, 엔진은 `import()`)
+  - `styles/`: `codeHighlight.css`(F-2124 — `.code-*` 8규칙, `main.tsx` 정적 import·`EXPORT_CSS`)
 
 - 단위 테스트는 `tests/` 아래, 원본 경로를 그대로 따라 `tests/{원본 경로}/{이름}.test.ts` (2026-09-28 사용자 지정. 처음엔 대상 옆이었다 — `specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
