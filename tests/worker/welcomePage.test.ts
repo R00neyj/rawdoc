@@ -159,3 +159,20 @@ describe('F-2051 A3 renderWelcomePage — 두 판의 차이', () => {
     expect(footWelcome).toBe(footSlash)
   })
 })
+
+describe('F-4001 U8 nonce', () => {
+  const execScripts = (html: string) => html.match(/<script(?![^>]*\bsrc=)(?![^>]*application\/ld\+json)[^>]*>/g) ?? []
+  it.each([
+    ['/', 4],
+    ['/welcome', 3],
+  ] as const)('%s: 실행 인라인 스크립트 %i개 모두 nonce', async (path, count) => {
+    const html = await renderWelcomePage({ path, nonce: 'n' }).text()
+    const tags = execScripts(html)
+    expect(tags).toHaveLength(count)
+    for (const t of tags) expect(t).toBe('<script nonce="n">')
+    expect(html.match(/nonce=/g)).toHaveLength(count)
+  })
+  it('인자 없으면 nonce 없음', async () => {
+    expect(await renderWelcomePage().text()).not.toContain('nonce=')
+  })
+})

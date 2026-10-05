@@ -917,3 +917,7 @@
 | H819 | 배포 전 탭 (F-309 H4) | 배포 **전**에 열어 둔 탭에서 계속 치기 — 저장됨, 네트워크 탭의 `/lock` 은 404 만 | 대기 |
 | H820 | DROP 확인 (F-309 H5) | DROP 뒤 `wrangler d1 execute md-editor-db --remote --command "SELECT name FROM sqlite_master WHERE name='doc_locks'"` 0행, 문서 저장·계정 삭제(시험 계정) 정상 | 대기 |
 | H821 | 상태바·알림 문구 (F-309) | 폴백 상태바 `실시간 연결 실패` 와 충돌 사본 알림 문구가 화면에서 자연스러운지 | 대기 |
+| H822 | 콘솔 CSP 경고 0 (F-4001 H1) | Chrome·Firefox·Safari(가능하면 iOS 홈 화면 앱 포함)에서 DevTools 콘솔에 CSP 경고 0: 비로그인 앱 편집·mermaid·수식·그림 붙이기·인쇄·HTML 내보내기 / 로그인(Google·GitHub 끝까지) / 로그인 상태 실시간 편집(`/ws/`) / `/p/{token}` 공개 보기 / `/`·`/welcome` 랜딩과 CTA / `/guides`·`/help` / PWA 설치·오프라인 다시 열기 / 푸시 받기 / 사용자 CSS 스니펫 켜기 | 대기 |
+| H823 | 응답 머리 (F-4001 H2) | `curl -sI` 로 `/`(쿠키 있음·없음)·`/p/{token}`·`/login`·`/welcome`·`/guides`·`/assets/{아무 js}`·`/sw.js`·`/api/me` 머리가 3.3 과 같다(r10 의 운영 동작 확인 포함) | 대기 |
+| H824 | 위반 보고 204·행 (F-4001 H3) | 앱 콘솔에서 `document.head.append(Object.assign(document.createElement('script'), { textContent: '1' }))` → 네트워크에 `/api/csp-report` 204, 4.4 조회에 `page=root`, `directive=script-src-elem`, `blocked=inline` 행 | 대기 |
+| H825 | enforce 승격 뒤 반복 (F-4001 H4) | 승격 배포 뒤 H1~H3 반복(H3 은 `mode=enforce`) | 대기 |

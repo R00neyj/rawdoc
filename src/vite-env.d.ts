@@ -9,6 +9,9 @@ declare module 'node:fs' {
   export function readdirSync(path: string): string[]
   export function statSync(path: string): { isDirectory(): boolean }
 }
+declare module 'node:crypto' {
+  export function createHash(algorithm: 'sha256'): { update(data: string): { digest(encoding: 'hex' | 'base64'): string } }
+}
 declare module 'node:url' {
   export function fileURLToPath(url: string | URL): string
 }

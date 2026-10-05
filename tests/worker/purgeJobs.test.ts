@@ -218,8 +218,8 @@ describe('F-2038 P5 Cron 가르기', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const worker = await loadWorker()
     expect(await pendingFor(worker, { cron: PURGE_CRON })).toBe(1)
-    expect(await pendingFor(worker, { cron: DAILY_CRON })).toBe(3)
-    expect(await pendingFor(worker, {})).toBe(3)
+    expect(await pendingFor(worker, { cron: DAILY_CRON })).toBe(4)
+    expect(await pendingFor(worker, {})).toBe(4)
   })
 
   it('wrangler.jsonc 의 triggers.crons 에 두 상수가 글자까지 같게', () => {

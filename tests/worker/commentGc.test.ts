@@ -97,7 +97,7 @@ describe('F-502 K4 scheduled', () => {
       scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void>
     }
     await worker.scheduled({} as ScheduledController, { DB } as unknown as Env, ctx)
-    expect(pending.length).toBe(3)
+    expect(pending.length).toBe(4)
     await expect(Promise.all(pending)).resolves.toBeDefined()
     vi.restoreAllMocks()
   })

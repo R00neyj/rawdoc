@@ -241,9 +241,9 @@ const featureItems = features
 export type LandingPath = '/' | '/welcome'
 
 // path 별 차이는 렌더 인자로 준다 — location.pathname 분기가 아니라 문자열로 "조기 판정이 없다" 를 판정할 수 있다 (F-2051 2.2 Q6, A1)
-export function renderWelcomePage(options?: { path?: LandingPath }): Response {
+export function renderWelcomePage(options?: { path?: LandingPath; nonce?: string }): Response {
   const welcome = options?.path === WELCOME_PATH
-  const html = `<!doctype html>
+  const rawHtml = `<!doctype html>
 <html lang="ko">
   <head>
     ${welcome ? '' : earlyScript}
@@ -862,6 +862,8 @@ export function renderWelcomePage(options?: { path?: LandingPath }): Response {
     <script type="module" src="/assets/welcome-demo.js"></script>
   </body>
 </html>`
+  // 속성 없는 <script> 만 실행 인라인이다 — JSON-LD·src 스크립트는 속성이 있어 걸리지 않는다
+  const html = options?.nonce ? rawHtml.replace(/<script>/g, `<script nonce="${options.nonce}">`) : rawHtml
 
   return new Response(html, {
     status: 200,

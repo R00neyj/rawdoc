@@ -7,7 +7,9 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import brand from './brand.config'
 import { SITE_DESCRIPTION, SITE_URL } from './src/lib/siteMeta'
+import { createHash } from 'node:crypto'
 import { BOOT_PAINT_SCRIPT } from './src/app/bootPaint'
+import { cspRevisionSource } from './src/lib/cspPolicy'
 import { PUSH_SW_MAX_BYTES } from './src/pwa/pushSwCore'
 import type { SiteInput } from './site/build'
 
@@ -93,6 +95,9 @@ function sitePlugin(): Plugin {
 }
 
 // index.html 의 %BRAND_NAME% 치환, theme-color·--accent·OG/Twitter 카드 태그 주입 (specs/architecture.md 5장)
+// 모드·앱 정책만 바꾼 배포도 index.html revision 이 바뀌게 한다 (F-4001 3.4)
+const cspRev = createHash('sha256').update(cspRevisionSource()).digest('hex').slice(0, 8)
+
 function brandHtmlPlugin(): Plugin {
   return {
     name: 'brand-html',
@@ -110,6 +115,7 @@ function brandHtmlPlugin(): Plugin {
             children: `:root{--brand-accent:${brand.accent}}`,
             injectTo: 'head-prepend',
           },
+          { tag: 'meta', attrs: { name: 'csp-rev', content: cspRev }, injectTo: 'head' },
           { tag: 'meta', attrs: { property: 'og:type', content: 'website' }, injectTo: 'head' },
           { tag: 'meta', attrs: { property: 'og:title', content: brand.name }, injectTo: 'head' },
           {

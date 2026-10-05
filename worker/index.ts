@@ -73,6 +73,8 @@ import { renderPublicPage } from './publicPage'
 import { renderWelcomePage } from './welcomePage'
 import { rootTarget, withRootHeaders, withWelcomeHeaders } from './rootRoute'
 import { withSecurityHeaders } from './securityHeaders'
+import { cleanupCspReports, handleCspReport } from './cspReport'
+import { CSP_REPORT_PATH, createCspNonce } from '../src/lib/cspPolicy'
 import { WELCOME_PATH } from '../src/lib/siteChrome'
 import { handleDocSocket } from './docSocket'
 import { DOC_SOCKET_PREFIX } from '../src/lib/docRoomProtocol'
@@ -358,8 +360,11 @@ const routes: Route[] = [
   { method: 'GET', path: '/v1/me', handler: handleMe },
 ]
 
-async function handleRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+async function handleRequest(request: Request, env: Env, ctx: ExecutionContext, nonce: string): Promise<Response> {
     const url = new URL(request.url)
+
+    // 위반 보고 — 세션 없이 받는다. Origin 은 핸들러가 본다 (F-4001 4.2)
+    if (url.pathname === CSP_REPORT_PATH) return handleCspReport(request, env)
 
     // 실시간 동기화 소켓 — JSON API 분기보다 앞에서 받는다 (F-304 4.1)
     if (url.pathname.startsWith('/ws/')) {
@@ -390,11 +395,11 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext):
         return handleLoginPage(request, env)
       }
       if (url.pathname === '/welcome') {
-        return withWelcomeHeaders(renderWelcomePage({ path: WELCOME_PATH }))
+        return withWelcomeHeaders(renderWelcomePage({ path: WELCOME_PATH, nonce }))
       }
       if (url.pathname === '/') {
         if (rootTarget(request) === 'landing') {
-          return withRootHeaders(renderWelcomePage())
+          return withRootHeaders(renderWelcomePage({ nonce }))
         }
         const appRes = withRootHeaders(await env.ASSETS.fetch(request))
         // ?app=1 탈출구 응답은 중복 색인을 막는다 (2.3) — 평소 / 응답에는 붙이지 않는다
@@ -451,7 +456,8 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext):
 
 export default {
   async fetch(request, env, ctx) {
-    return withSecurityHeaders(await handleRequest(request, env, ctx), new URL(request.url).pathname)
+    const nonce = createCspNonce()
+    return withSecurityHeaders(await handleRequest(request, env, ctx, nonce), request, nonce)
   },
   async scheduled(event, env, ctx) {
     const now = Date.now()
@@ -463,6 +469,7 @@ export default {
     ctx.waitUntil(runQuietly(() => cleanupServerAttachments(env, now)))
     ctx.waitUntil(runQuietly(() => cleanupExpiredAuth(env, now)))
     ctx.waitUntil(runQuietly(() => cleanupComments(env, now)))
+    ctx.waitUntil(runQuietly(() => cleanupCspReports(env, now)))
     // 비밀 값이 없으면 푸시가 꺼져 있다 — 구독 정리도 하지 않는다 (F-3003 6.4)
     if (await loadVapid(env)) ctx.waitUntil(runQuietly(() => cleanupPushSubscriptions(env, now)))
   },

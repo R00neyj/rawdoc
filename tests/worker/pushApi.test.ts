@@ -362,15 +362,15 @@ async function pending(e: Env, cron: string | undefined): Promise<number> {
 }
 
 describe('F-3003 A11 매일 Cron', () => {
-  it('비밀 값이 있으면 넷, 없으면 셋, 10분 Cron 은 하나', async () => {
+  it('비밀 값이 있으면 다섯, 없으면 넷, 10분 Cron 은 하나', async () => {
     vi.spyOn(console, 'info').mockImplementation(() => {})
     const { db, e, keys } = await setup()
     await put(e, { endpoint: ENDPOINT, keys })
     db.prepare('UPDATE push_subscriptions SET session_id = ?').run('dead-session')
-    expect(await pending(e, DAILY_CRON)).toBe(4)
+    expect(await pending(e, DAILY_CRON)).toBe(5)
     expect(rows(db)).toHaveLength(0)
     expect(await pending(e, PURGE_CRON)).toBe(1)
-    expect(await pending(env(db), DAILY_CRON)).toBe(3)
+    expect(await pending(env(db), DAILY_CRON)).toBe(4)
   })
 })
 
@@ -393,7 +393,7 @@ describe('F-3003 A12 비밀 값이 없으면 꺼진다', () => {
     expect((await test(e, { endpoint: ENDPOINT })).status).toBe(503)
     expect(executed.filter((s) => s.includes('push_subscriptions'))).toEqual([])
     expect(writeCount(db)).toBe(0)
-    expect(await pending(e, DAILY_CRON)).toBe(3)
+    expect(await pending(e, DAILY_CRON)).toBe(4)
     expect(executed.filter((s) => s.includes('push_subscriptions'))).toEqual([])
   })
 })
