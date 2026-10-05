@@ -37,6 +37,22 @@ export async function notifyRevalidate(
   await dispatch(ctx, () => stub.revalidateConnections(email))
 }
 
+export const REVALIDATE_FANOUT_MAX = 20
+
+// 한 요청의 방 RPC 상한 — 넘는 문서는 주기 점검이 맡는다 (F-4002 3.3)
+export async function notifyRevalidateDocs(
+  env: Env,
+  ctx: ExecutionContext | undefined,
+  docIds: readonly string[],
+  email?: string,
+): Promise<void> {
+  for (const docId of docIds.slice(0, REVALIDATE_FANOUT_MAX)) {
+    const stub = roomStub(env, docId)
+    if (!stub) return
+    await dispatch(ctx, () => stub.revalidateConnections(email))
+  }
+}
+
 export async function notifyPurge(env: Env, ctx: ExecutionContext | undefined, docId: string): Promise<void> {
   const stub = roomStub(env, docId)
   if (!stub) return

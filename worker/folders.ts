@@ -6,7 +6,8 @@ import { MAX_BODY_BYTES, isValidFolderName, isValidUuid } from './validate'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../src/lib/folderTree'
 import { getOwnedFolder, targetShareCleanupStatements } from './access'
 import { dayUsageStatement, deleteFoldersUsageStatement } from './usage'
-import { notifyPurge } from './docRoomRpc'
+import { notifyPurge, notifyRevalidateDocs } from './docRoomRpc'
+import { anyFolderGrant, lostAncestorIds, notifyFolderRooms, subtreeRoomDocIds } from './revalidateTargets'
 import { folderCommentDeleteStatements } from './commentRows'
 
 const BATCH_ID_LIMIT = 100
@@ -133,7 +134,7 @@ export async function handleCreateFolder(request: Request, env: Env): Promise<Re
 export async function handleUpdateFolder(
   request: Request,
   env: Env,
-  _ctx: ExecutionContext,
+  ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
@@ -156,6 +157,7 @@ export async function handleUpdateFolder(
   if (!existing) return errorResponse('not_found', 404)
 
   let nextParentId = existing.parent_id
+  let lostParents: string[] = []
   if (parentId !== undefined) {
     const { results: ownFolders } = await env.DB.prepare(
       'SELECT id, name, parent_id FROM folders WHERE owner_id = ?',
@@ -168,6 +170,7 @@ export async function handleUpdateFolder(
       return jsonResponse({ error: 'invalid', field: 'parentId' }, 400)
     }
     nextParentId = resolvedParentId
+    lostParents = lostAncestorIds(folderLikes, existing.parent_id, resolvedParentId)
   }
 
   const wasE2ee = isE2eeFolder(existing)
@@ -201,6 +204,9 @@ export async function handleUpdateFolder(
   if (turningOn && written.meta.changes !== 1) {
     return jsonResponse({ error: 'e2ee_folder_not_ready', ...(await plainChildren(env, params.id, user.id)) }, 409)
   }
+
+  // 초대 있던 상위 폴더를 벗어나면 받은 사람의 열린 방을 바로 다시 본다 (F-4002 3.1)
+  if (await anyFolderGrant(env, user.id, lostParents)) await notifyFolderRooms(env, ctx, params.id, user.id)
 
   return jsonResponse(
     rowToFolder({ ...existing, name: nextName, parent_id: nextParentId, updated_at: now, e2ee: nextE2ee ? 1 : 0 }),
@@ -283,6 +289,8 @@ export async function deleteFolderContents(
     const children = await plainChildren(env, existing.id, user.id)
     if (children.docs > 0 || children.folders > 0) return { ok: false, error: 'e2ee_folder' }
   }
+  const hadGrant = await anyFolderGrant(env, user.id, [existing.id])
+  const affected = hadGrant ? await subtreeRoomDocIds(env, existing.id, user.id) : { ids: [], capped: false }
   const [docsResult, foldersResult] = await env.DB.batch([
     env.DB.prepare('UPDATE docs SET folder_id = ? WHERE folder_id = ? AND owner_id = ?').bind(
       parentId,
@@ -300,6 +308,8 @@ export async function deleteFolderContents(
     ...targetShareCleanupStatements(env.DB, 'folder', [existing.id], Date.now()),
   ])
 
+  if (affected.capped) console.warn('room revalidate capped', existing.id)
+  await notifyRevalidateDocs(env, ctx, affected.ids)
   return { ok: true, docs: docsResult.meta.changes, folders: foldersResult.meta.changes }
 }
 

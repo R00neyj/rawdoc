@@ -2,7 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../worker/docRoomRpc', () => ({
+  REVALIDATE_FANOUT_MAX: 20,
   notifyRevalidate: vi.fn(async () => {}),
+  notifyRevalidateDocs: vi.fn(async () => {}),
   notifyPurge: vi.fn(async () => {}),
   writeTextInRoom: vi.fn(async () => null),
 }))
@@ -17,7 +19,7 @@ import { handleDeleteFolder } from '../../worker/folders'
 import { asD1, openTestDb } from '../../worker/testD1'
 import type { DatabaseSync } from 'node:sqlite'
 
-const { notifyPurge, notifyRevalidate, purgeRoomNow, writeTextInRoom } = await vi.importActual<typeof import('../../worker/docRoomRpc')>('../../worker/docRoomRpc')
+const { notifyPurge, notifyRevalidate, notifyRevalidateDocs, purgeRoomNow, writeTextInRoom } = await vi.importActual<typeof import('../../worker/docRoomRpc')>('../../worker/docRoomRpc')
 
 const DOC_ID = '33333333-3333-4333-8333-333333333333'
 
@@ -111,6 +113,26 @@ describe('F-2038 P6 결과를 돌려주는 방 비우기', () => {
   })
 })
 
+describe('F-4002 B10 notifyRevalidateDocs', () => {
+  it('25개를 주면 getByName 20번, 이메일을 그대로 넘긴다', async () => {
+    const revalidateConnections = vi.fn(async () => {})
+    const { env, getByName } = stubEnv({ revalidateConnections })
+    const ids = Array.from({ length: 25 }, (_, i) => `d${i}`)
+    await notifyRevalidateDocs(env, undefined, ids, 'a@example.com')
+    expect(getByName).toHaveBeenCalledTimes(20)
+    expect(getByName).toHaveBeenLastCalledWith('d19')
+    expect(revalidateConnections).toHaveBeenCalledWith('a@example.com')
+  })
+
+  it('이메일이 없으면 인자 없이, DOC_ROOM 이 없으면 아무 일도 없다', async () => {
+    const revalidateConnections = vi.fn(async () => {})
+    const { env } = stubEnv({ revalidateConnections })
+    await notifyRevalidateDocs(env, undefined, ['d1'])
+    expect(revalidateConnections).toHaveBeenCalledWith(undefined)
+    await expect(notifyRevalidateDocs({} as Env, undefined, ['d1'])).resolves.toBeUndefined()
+  })
+})
+
 describe('F-304 A24 배선', () => {
   const FOLDER_ID = '44444444-4444-4444-8444-444444444444'
   const EMAIL = 'friend@example.com'
@@ -130,6 +152,10 @@ describe('F-304 A24 배선', () => {
                 }
                 if (sql.startsWith('SELECT write_day')) return null
                 throw new Error(`unhandled first sql: ${sql}`)
+              },
+              async all<T>() {
+                if (sql.includes('WITH RECURSIVE sub')) return { results: [] as T[] }
+                throw new Error(`unhandled all sql: ${sql}`)
               },
               async run() {
                 if (sql.startsWith('INSERT INTO grants') || sql.startsWith('DELETE FROM grants')) return { meta: { changes: 1 } }
@@ -196,11 +222,12 @@ describe('F-304 A24 배선', () => {
     expect(rpc.notifyRevalidate).toHaveBeenCalledTimes(1)
   })
 
-  it('폴더 초대 삭제 → 0번', async () => {
+  it('폴더 초대 삭제 — 하위 문서 없으면 notifyRevalidate·notifyRevalidateDocs 0번', async () => {
     const env = makeEnv([])
     const res = await handleDeleteFolderGrant(new Request('https://x', { method: 'DELETE' }), env, ctx, { id: FOLDER_ID, email: EMAIL })
     expect(res.status).toBe(204)
     expect(rpc.notifyRevalidate).not.toHaveBeenCalled()
+    expect(rpc.notifyRevalidateDocs).not.toHaveBeenCalled()
   })
 
   it('문서 삭제 → DELETE FROM docs 뒤 notifyPurge(…, docId) 1번, 204', async () => {

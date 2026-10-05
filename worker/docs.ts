@@ -2,7 +2,7 @@
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
 import { getDocAccess, getOwnedFolder, roleAtLeast, targetShareCleanupStatements } from './access'
-import { notifyPurge } from './docRoomRpc'
+import { notifyPurge, notifyRevalidateDocs } from './docRoomRpc'
 import { docCommentDeleteStatements } from './commentRows'
 import { e2eeDocFields, rowToDoc, updateDocRow, updateE2eeDocRow } from './docWrite'
 import type { DocRow } from './docWrite'
@@ -317,18 +317,20 @@ export async function handleUpdateDoc(
 }
 
 // folderId 검사·권한 판정 뒤의 D1 쓰기 한 벌 — /api·/v1 이 같이 쓴다 (F-2050 3.3)
-export async function writeMoveDocFolder(env: Env, existing: DocRow, folderId: string | null): Promise<DocRow> {
+export async function writeMoveDocFolder(env: Env, ctx: ExecutionContext | undefined, existing: DocRow, folderId: string | null): Promise<DocRow> {
   await env.DB.batch([
     env.DB.prepare('UPDATE docs SET folder_id = ? WHERE id = ? AND owner_id = ?').bind(folderId, existing.id, existing.owner_id),
     dayUsageStatement(env.DB, existing.owner_id, Date.now()),
   ])
+  // 상위 폴더 초대가 바뀌므로 열린 방을 바로 다시 본다 — 금고 문서는 방이 없다 (F-4002 3.1)
+  if (existing.folder_id !== folderId && !existing.e2ee_key) await notifyRevalidateDocs(env, ctx, [existing.id])
   return { ...existing, folder_id: folderId }
 }
 
 export async function handleMoveDocFolder(
   request: Request,
   env: Env,
-  _ctx: ExecutionContext,
+  ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
@@ -353,7 +355,7 @@ export async function handleMoveDocFolder(
     if (folder.e2ee === 1 && typeof existing.e2ee_key !== 'string') return jsonResponse({ error: 'e2ee_folder' }, 409)
   }
 
-  const updated = await writeMoveDocFolder(env, existing, folderId as string | null)
+  const updated = await writeMoveDocFolder(env, ctx, existing, folderId as string | null)
   return jsonResponse(rowToDoc(updated))
 }
 

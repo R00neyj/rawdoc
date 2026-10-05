@@ -55,13 +55,20 @@ function makeEnv({ docs = [], links = [], folders = [] }: { docs?: DocRow[]; lin
                 const results = shareLinkDocs.filter((r) => r.token === token).map((r) => ({ doc_id: r.doc_id }))
                 return { results: results as T[] }
               }
+              if (sql.startsWith('SELECT id, e2ee_key FROM docs WHERE owner_id = ?1 AND id IN')) {
+                const ids = JSON.parse(args[1] as string) as string[]
+                const results = docs.filter((d) => d.owner_id === args[0] && ids.includes(d.id)).map((d) => ({ id: d.id, e2ee_key: null }))
+                return { results: results as T[] }
+              }
               if (sql.startsWith('SELECT id, title FROM docs WHERE id IN')) {
-                const results = docs.filter((d) => (args as string[]).includes(d.id)).map((d) => ({ id: d.id, title: d.title }))
+                const ids = JSON.parse(args[0] as string) as string[]
+                const results = docs.filter((d) => ids.includes(d.id)).map((d) => ({ id: d.id, title: d.title }))
                 return { results: results as T[] }
               }
               if (sql.startsWith('SELECT id, content, folder_id FROM docs WHERE id IN')) {
+                const ids = JSON.parse(args[0] as string) as string[]
                 const results = docs
-                  .filter((d) => (args as string[]).includes(d.id))
+                  .filter((d) => ids.includes(d.id))
                   .map((d) => ({ id: d.id, content: d.content ?? '', folder_id: d.folder_id ?? null }))
                 return { results: results as T[] }
               }
@@ -91,8 +98,8 @@ function makeEnv({ docs = [], links = [], folders = [] }: { docs?: DocRow[]; lin
                 return {}
               }
               if (sql.startsWith('INSERT INTO share_link_docs')) {
-                const [token, docId] = args as [string, string]
-                shareLinkDocs.push({ token, doc_id: docId })
+                const [token, docIdsJson] = args as [string, string]
+                for (const docId of JSON.parse(docIdsJson) as string[]) shareLinkDocs.push({ token, doc_id: docId })
                 return {}
               }
               if (sql.startsWith('UPDATE share_links SET revoked_at')) {

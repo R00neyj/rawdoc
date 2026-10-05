@@ -921,3 +921,5 @@
 | H823 | 응답 머리 (F-4001 H2) | `curl -sI` 로 `/`(쿠키 있음·없음)·`/p/{token}`·`/login`·`/welcome`·`/guides`·`/assets/{아무 js}`·`/sw.js`·`/api/me` 머리가 3.3 과 같다(r10 의 운영 동작 확인 포함) | 대기 |
 | H824 | 위반 보고 204·행 (F-4001 H3) | 앱 콘솔에서 `document.head.append(Object.assign(document.createElement('script'), { textContent: '1' }))` → 네트워크에 `/api/csp-report` 204, 4.4 조회에 `page=root`, `directive=script-src-elem`, `blocked=inline` 행 | 대기 |
 | H825 | enforce 승격 뒤 반복 (F-4001 H4) | 승격 배포 뒤 H1~H3 반복(H3 은 `mode=enforce`) | 대기 |
+| H826 | 폴더 초대 삭제 즉시 끊김 (F-4002 H1) | 배포 뒤 계정 둘. 소유자가 폴더 F 를 `edit` 로 초대 → 받은 쪽이 F 안 문서를 열고 편집 중 → 소유자가 F 초대 삭제. 받은 쪽 편집기가 몇 초 안에 끊기는지(90초를 기다리지 않는지) | 대기 |
+| H827 | 원격 D1 큰 묶음 확인 (F-4002 H2) | `SELECT token, COUNT(*) AS n FROM share_link_docs GROUP BY token HAVING n > 98` — 행이 있으면 그 링크는 지금 묶음 목록이 깨져 있고 이 명세 뒤 열린다. 결과를 적는다 | 대기 |

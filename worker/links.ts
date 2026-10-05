@@ -9,6 +9,7 @@ import { descendantFolderIds } from '../src/lib/folderTree'
 import { createWikiResolver, type WikiFolderRef } from '../src/lib/wikiResolve'
 import { dayUsageStatement } from './usage'
 import { githubImageMapOf } from './githubImages'
+import { readJsonLimited } from './docs'
 
 export type PublicLinkRow = {
   token: string
@@ -182,18 +183,18 @@ export async function handleGetDocShareSet(
   })
 }
 
+export const LINK_DOC_IDS_MAX = 100
+export const LINK_BODY_MAX_BYTES = 8_192
+
 // docIds 본문을 읽는다. docIds 필드가 아예 없으면 undefined('묶음 정보 없음' — 기존 묶음 유지), 있으면(빈 배열 포함) 그 배열, 모양이 틀리면 'bad_request' (F-259 2장)
 async function readDocIds(request: Request): Promise<string[] | 'bad_request' | undefined> {
-  let raw: unknown
-  try {
-    raw = await request.json()
-  } catch {
-    return undefined
-  }
+  const parsed = await readJsonLimited(request, LINK_BODY_MAX_BYTES)
+  if (!parsed.ok) return parsed.reason === 'too_large' ? 'bad_request' : undefined
+  const raw = parsed.data
   if (raw === null || typeof raw !== 'object') return undefined
   const docIds = (raw as { docIds?: unknown }).docIds
   if (docIds === undefined) return undefined
-  if (!Array.isArray(docIds) || !docIds.every((id) => typeof id === 'string')) return 'bad_request'
+  if (!Array.isArray(docIds) || docIds.length > LINK_DOC_IDS_MAX || !docIds.every((id) => typeof id === 'string')) return 'bad_request'
   return docIds
 }
 
@@ -206,8 +207,10 @@ function insertLink(env: Env, token: string, ownerId: string, targetId: string):
 
 function replaceShareLinkDocs(env: Env, token: string, docIds: string[]): D1PreparedStatement[] {
   const statements = [env.DB.prepare('DELETE FROM share_link_docs WHERE token = ?').bind(token)]
-  for (const id of docIds) {
-    statements.push(env.DB.prepare('INSERT INTO share_link_docs (token, doc_id) VALUES (?,?)').bind(token, id))
+  if (docIds.length > 0) {
+    statements.push(
+      env.DB.prepare('INSERT INTO share_link_docs (token, doc_id) SELECT ?1, value FROM json_each(?2)').bind(token, JSON.stringify(docIds)),
+    )
   }
   return statements
 }
@@ -238,12 +241,15 @@ export async function handleCreateDocLink(
   }
 
   // 금고 문서는 조용히 뺀다 — 남의 문서·없는 문서만 400 (F-401 X8, 11장 Q7)
-  const uniqueIds: string[] = []
-  for (const id of [...new Set(docIds)].filter((id) => id !== params.id)) {
-    const owned = await findOwnedDoc(env, id, user.id)
-    if (!owned) return errorResponse('bad_request', 400)
-    if (!owned.e2ee_key) uniqueIds.push(id)
-  }
+  const wanted = [...new Set(docIds)].filter((id) => id !== params.id)
+  const { results: ownedRows } = await env.DB.prepare(
+    'SELECT id, e2ee_key FROM docs WHERE owner_id = ?1 AND id IN (SELECT value FROM json_each(?2))',
+  )
+    .bind(user.id, JSON.stringify(wanted))
+    .all<OwnedDoc>()
+  const ownedById = new Map(ownedRows.map((r) => [r.id, r]))
+  if (wanted.some((id) => !ownedById.has(id))) return errorResponse('bad_request', 400)
+  const uniqueIds = wanted.filter((id) => !ownedById.get(id)?.e2ee_key)
 
   if (existing) {
     const existingIds = new Set(await fetchShareLinkDocIds(env, existing.token))
@@ -316,10 +322,9 @@ export async function handlePublicGetDocSet(
 
   const bundledIds = await fetchShareLinkDocIds(env, params.token)
   const orderedIds = [link.target_id, ...bundledIds]
-  const placeholders = orderedIds.map(() => '?').join(',')
   // 금고 문서 거르기는 두 번째 벽 — 옮기기 batch 가 묶음 행을 이미 지운다 (F-401 X14)
-  const { results: docs } = await env.DB.prepare(`SELECT id, title FROM docs WHERE id IN (${placeholders}) AND owner_id = ? AND e2ee_key IS NULL`)
-    .bind(...orderedIds, link.owner_id)
+  const { results: docs } = await env.DB.prepare('SELECT id, title FROM docs WHERE id IN (SELECT value FROM json_each(?1)) AND owner_id = ?2 AND e2ee_key IS NULL')
+    .bind(JSON.stringify(orderedIds), link.owner_id)
     .all<{ id: string; title: string }>()
 
   const byId = new Map(docs.map((d) => [d.id, d]))
@@ -332,8 +337,8 @@ export async function handlePublicGetDocSet(
 
   const setIds = ordered.map((d) => d.id)
   const [{ results: bodies }, { results: ownerDocs }, folders] = await Promise.all([
-    env.DB.prepare(`SELECT id, content, folder_id FROM docs WHERE id IN (${setIds.map(() => '?').join(',')}) AND owner_id = ? AND e2ee_key IS NULL`)
-      .bind(...setIds, link.owner_id)
+    env.DB.prepare('SELECT id, content, folder_id FROM docs WHERE id IN (SELECT value FROM json_each(?1)) AND owner_id = ?2 AND e2ee_key IS NULL')
+      .bind(JSON.stringify(setIds), link.owner_id)
       .all<{ id: string; content: string; folder_id: string | null }>(),
     env.DB.prepare('SELECT id, title, folder_id FROM docs WHERE owner_id = ? ORDER BY updated_at DESC')
       .bind(link.owner_id)

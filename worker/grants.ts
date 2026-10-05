@@ -5,6 +5,7 @@ import { badBody, readJsonLimited } from './docs'
 import { MAX_BODY_BYTES } from './validate'
 import { higherRole, resolveDocAccess, type GrantRole, type Role } from './access'
 import { notifyRevalidate } from './docRoomRpc'
+import { notifyFolderRooms } from './revalidateTargets'
 import { dayUsageStatement } from './usage'
 import { PUSH_SHARE_DEDUPE_MS } from '../src/lib/pushPayload'
 import { sharePushPayload } from '../src/lib/pushText'
@@ -140,8 +141,10 @@ async function handlePutGrant(
   if (inserted?.results?.[0]?.created_at === now) {
     await pushInBackground(env, ctx, 'share', (auth) => pushShare(env, auth, { grantee: email, owner: user, targetType, targetId: params.id, name: check.name, role, now }))
   }
-  // 보기로 낮추면 열린 편집 연결을 다시 본다. 폴더 초대는 주기 점검이 잡는다 (F-304 9.1)
+  // 보기로 낮추면 열린 편집 연결을 다시 본다. 새로 만든 초대는 잃은 권한이 없다 (F-304 9.1, F-4002 3.1)
+  const created = inserted?.results?.[0]?.created_at === now
   if (targetType === 'doc' && role === 'view') await notifyRevalidate(env, ctx, params.id, email)
+  if (targetType === 'folder' && role === 'view' && !created) await notifyFolderRooms(env, ctx, params.id, user.id, email)
   return response
 }
 
@@ -169,6 +172,7 @@ async function handleDeleteGrant(
   ])
   const response = new Response(null, { status: 204 })
   if (targetType === 'doc') await notifyRevalidate(env, ctx, params.id, email)
+  else await notifyFolderRooms(env, ctx, params.id, user.id, email)
   return response
 }
 
@@ -182,8 +186,8 @@ export const handlePutFolderGrant = (r: Request, e: Env, c: ExecutionContext, p:
   handlePutGrant('folder', r, e, c, p)
 export const handleDeleteDocGrant = (r: Request, e: Env, c: ExecutionContext, p: Record<string, string>) =>
   handleDeleteGrant('doc', r, e, c, p)
-export const handleDeleteFolderGrant = (r: Request, e: Env, _c: ExecutionContext, p: Record<string, string>) =>
-  handleDeleteGrant('folder', r, e, undefined, p)
+export const handleDeleteFolderGrant = (r: Request, e: Env, c: ExecutionContext, p: Record<string, string>) =>
+  handleDeleteGrant('folder', r, e, c, p)
 
 // 받는 쪽이 자기 grant 행을 지운다. 행이 없으면 404 로 끊어 D1 쓰기·사용량 줄이 없다 (F-3011 3.2)
 async function handleLeaveShare(

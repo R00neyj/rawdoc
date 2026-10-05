@@ -254,7 +254,7 @@ export async function handleDeleteDocV1(
 export async function handleMoveDocFolderV1(
   request: Request,
   env: Env,
-  _ctx: ExecutionContext,
+  ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
@@ -280,7 +280,7 @@ export async function handleMoveDocFolderV1(
     if (folder.e2ee === 1) return jsonResponse({ error: 'e2ee_folder' }, 403)
   }
 
-  const updated = await writeMoveDocFolder(env, existing, folderId as string | null)
+  const updated = await writeMoveDocFolder(env, ctx, existing, folderId as string | null)
   const { content: _content, ...summary } = rowToDoc(updated)
   return jsonResponse(summary)
 }

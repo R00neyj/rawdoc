@@ -94,6 +94,7 @@ function makeEnv(data: {
                 const [id] = args as [string]
                 return (folders.find((f) => f.id === id) as T) ?? null
               }
+              if (sql.startsWith("SELECT 1 AS hit FROM grants WHERE owner_id = ?1")) return null
               if (sql.includes('doc_locks')) throw new Error('no such table: doc_locks')
               if (sql.startsWith('SELECT * FROM share_links WHERE target_type = ? AND target_id = ? AND owner_id = ? AND revoked_at IS NULL')) {
                 const [targetType, targetId, ownerId] = args as [string, string, string]
