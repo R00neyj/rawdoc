@@ -6,6 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "preview_urls": false,
+  "placement": { "region": "gcp:asia-east2" },
   "routes": [{ "pattern": "rawdoc.app", "custom_domain": true }],
   "vars": {
     "BETTER_AUTH_URL": "https://rawdoc.app",
