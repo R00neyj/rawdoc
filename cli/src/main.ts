@@ -27,6 +27,7 @@ import { openBrowser } from './openBrowser'
 import { renderSyntaxMarkdown, syntaxJson } from './syntax'
 import {
   CliError,
+  docAppUrl,
   errorMessage,
   errorToJson,
   exitCodeFor,
@@ -131,8 +132,9 @@ async function readSourceBytes(deps: MainDeps, source: string): Promise<Uint8Arr
   }
   try {
     return await deps.readFile(source)
-  } catch {
-    throw new CliError('file_read', { path: source })
+  } catch (err) {
+    const code = err && typeof err === 'object' && 'code' in err && typeof err.code === 'string' ? err.code : undefined
+    throw new CliError('file_read', { path: source, reason: code })
   }
 }
 
@@ -411,7 +413,8 @@ export async function main(deps: MainDeps): Promise<number> {
         const title = command.title ?? titleFromSource(command.source)
         const folderId = await folderIdOf(cfg, command.folder)
         const doc = await commands.createDoc(cfg, { title, content, lineEnding, folderId })
-        emitResult(deps, command.global.json, doc, () => humanIdLine(doc.id))
+        const url = command.url ? docAppUrl(cfg.origin, doc.id) : null
+        emitResult(deps, command.global.json, url ? { ...doc, url } : doc, () => humanIdLine(doc.id) + (url ? `${url}\n` : ''))
         return 0
       }
       case 'put': {

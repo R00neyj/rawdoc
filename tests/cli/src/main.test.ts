@@ -680,3 +680,45 @@ describe('F-2132 main() — 폴더 경로·put 미리 보기·help', () => {
     expect(bad.stderrLog.join('')).toBe('알 수 없는 명령입니다: nope\n')
   })
 })
+
+describe('new --url·파일 읽기 오류 (tweak)', () => {
+  const tokenEnv = { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) }
+  const created = { id: 'd 1', title: 't', content: '', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 0, updatedAt: 0 }
+  const newDeps = (argv: string[], readFile?: MainDeps['readFile']) =>
+    baseDeps({
+      argv,
+      env: { ...tokenEnv, RAWDOC_SERVER: 'http://localhost:8790' },
+      readFile: readFile ?? vi.fn(async () => new TextEncoder().encode('x')),
+      fetchImpl: (async () => jsonResponse(created, 201)) as unknown as typeof fetch,
+    })
+
+  it('--url 없으면 id 한 줄, 있으면 id 다음 줄에 앱 주소', async () => {
+    const plain = newDeps(['new', 'a.md'])
+    expect(await main(plain)).toBe(0)
+    expect(plain.stdoutLog.join('')).toBe('d 1\n')
+    const withUrl = newDeps(['new', 'a.md', '--url'])
+    expect(await main(withUrl)).toBe(0)
+    expect(withUrl.stdoutLog.join('')).toBe('d 1\nhttp://localhost:8790/#/d/d%201\n')
+  })
+
+  it('--url --json 은 url 필드를 더하고, --url 없는 --json 엔 url 이 없다', async () => {
+    const withUrl = newDeps(['new', 'a.md', '--url', '--json'])
+    await main(withUrl)
+    expect(JSON.parse(withUrl.stdoutLog.join(''))).toMatchObject({ id: 'd 1', url: 'http://localhost:8790/#/d/d%201' })
+    const plain = newDeps(['new', 'a.md', '--json'])
+    await main(plain)
+    expect(JSON.parse(plain.stdoutLog.join(''))).not.toHaveProperty('url')
+  })
+
+  it('읽기 실패는 OS 오류 코드로 문구가 갈리고, 주소 모양 경로엔 표준 입력 안내가 붙는다', async () => {
+    const enoent = vi.fn(async () => {
+      throw Object.assign(new Error('nope'), { code: 'ENOENT' })
+    })
+    const missing = newDeps(['new', 'local://a.md'], enoent)
+    expect(await main(missing)).toBe(1)
+    expect(missing.stderrLog.join('')).toBe('파일이 없습니다: local://a.md. 파일 경로가 아니라면 내용을 - (표준 입력)으로 넘기세요.\n')
+    const plainMissing = newDeps(['new', 'a.md'], enoent)
+    await main(plainMissing)
+    expect(plainMissing.stderrLog.join('')).toBe('파일이 없습니다: a.md.\n')
+  })
+})

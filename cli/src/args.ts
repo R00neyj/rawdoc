@@ -12,7 +12,7 @@ export type RunCommand =
   | { name: 'find'; global: GlobalOptions; query: string; folder: string | null; root: boolean; path: boolean }
   | { name: 'info'; global: GlobalOptions; id: string }
   | { name: 'get'; global: GlobalOptions; id: string; output: string | null }
-  | { name: 'new'; global: GlobalOptions; source: string | null; title: string | null; folder: string | null }
+  | { name: 'new'; global: GlobalOptions; source: string | null; title: string | null; folder: string | null; url: boolean }
   | {
       name: 'put'
       global: GlobalOptions
@@ -185,7 +185,7 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       }
     }
     case 'new': {
-      const options: OptionSchema = { ...GLOBAL_OPTIONS, title: { type: 'string' }, folder: { type: 'string' } }
+      const options: OptionSchema = { ...GLOBAL_OPTIONS, title: { type: 'string' }, folder: { type: 'string' }, url: { type: 'boolean' } }
       const parsed = runParseArgs(rest, options, true)
       if (!parsed) return usage('알 수 없는 옵션입니다.', command)
       if (parsed.positionals.length > 1) return usage('원문 인자는 하나만 줄 수 있습니다.', command)
@@ -200,6 +200,7 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
           source,
           title,
           folder: typeof parsed.values.folder === 'string' ? parsed.values.folder : null,
+          url: parsed.values.url === true,
         },
       }
     }

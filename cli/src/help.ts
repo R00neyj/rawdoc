@@ -82,11 +82,12 @@ const COMMAND_DETAILS: Partial<Record<CommandName, string[]>> = {
   ],
   new: [
     '',
-    `사용: ${CLI} new [<파일>|-] [--title <제목>] [--folder <폴더id|경로>]`,
+    `사용: ${CLI} new [<파일>|-] [--title <제목>] [--folder <폴더id|경로>] [--url]`,
     ...optionLines([
       ['<파일>|-', '올릴 원문. - 는 표준 입력. 없으면 빈 문서이고 --title 이 필요합니다'],
       ['--title <제목>', '없으면 파일 이름에서 .md 를 뗀 것'],
       ['--folder <폴더id|경로>', '넣을 폴더. 없으면 맨 위'],
+      ['--url', 'id 다음 줄에 앱에서 여는 주소를 찍습니다. --json 이면 url 필드'],
     ]),
     PATH_GUIDE,
   ],

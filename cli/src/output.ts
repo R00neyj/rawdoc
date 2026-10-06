@@ -36,6 +36,7 @@ export type CliErrorDetails = {
   status?: number | null
   origin?: string
   path?: string
+  reason?: string
   field?: string
   folder?: string
   folderIds?: string[]
@@ -119,8 +120,14 @@ export function errorMessage(err: CliError, cli: string, cliEnvPrefix: string): 
       return `서버 오류가 났습니다 (${d.status}). 잠시 뒤 다시 시도하세요.`
     case 'bad_response':
       return `서버 응답을 해석하지 못했습니다 (${d.status}).`
-    case 'file_read':
-      return `파일을 읽을 수 없습니다: ${d.path}`
+    case 'file_read': {
+      // local:// 같은 다른 도구 전용 주소는 파일 경로가 아니다 — 표준 입력으로 넘기면 된다
+      const hint = /^[a-z][a-z0-9+.-]*:\/\//i.test(d.path ?? '') ? ' 파일 경로가 아니라면 내용을 - (표준 입력)으로 넘기세요.' : ''
+      if (d.reason === 'ENOENT') return `파일이 없습니다: ${d.path}.${hint}`
+      if (d.reason === 'EACCES' || d.reason === 'EPERM') return `파일을 읽을 권한이 없습니다: ${d.path}`
+      if (d.reason === 'EISDIR') return `파일이 아니라 폴더입니다: ${d.path}`
+      return `파일을 읽을 수 없습니다: ${d.path}${d.reason ? ` (${d.reason})` : ''}`
+    }
     case 'file_write':
       return `파일을 쓸 수 없습니다: ${d.path}`
     case 'not_utf8':
@@ -312,6 +319,10 @@ export function humanAccountLine(email: string, origin: string): string {
 
 export function humanIdLine(id: string): string {
   return `${id}\n`
+}
+
+export function docAppUrl(origin: string, id: string): string {
+  return `${origin}/#/d/${encodeURIComponent(id)}`
 }
 
 export function humanIdVersionLine(id: string, version: number): string {

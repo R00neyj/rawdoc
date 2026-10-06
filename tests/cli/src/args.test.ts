@@ -49,7 +49,7 @@ describe('F-2021 U1 args.ts — 명령마다 해석', () => {
     const r = parseArgs(['new', 'a.md', '--title', '제목', '--folder', 'f1'])
     expect(r).toEqual({
       kind: 'run',
-      command: { name: 'new', global: { server: null, json: false }, source: 'a.md', title: '제목', folder: 'f1' },
+      command: { name: 'new', global: { server: null, json: false }, source: 'a.md', title: '제목', folder: 'f1', url: false },
     })
   })
 
