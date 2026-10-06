@@ -1,6 +1,6 @@
 // 저장소 위 한 겹 — 금고 문서의 제목·본문을 봉투로 쓰고 읽을 때 푼다 (specs/features/F-405.md 4장, F-406.md 2·3·4장 첨부)
 import type { Attachment, AttachmentExt, Doc, Folder, Store } from '../types'
-import type { E2eeCopyResult, E2eeCopySource, ServerStore } from '../storage/serverStore'
+import type { DocSummary, E2eeCopyResult, E2eeCopySource, ServerStore } from '../storage/serverStore'
 import { toWebp } from '../storage/toWebp'
 import { E2EE_MAX_ATTACHMENT_REFS, isPlainAttachmentTooLarge, isPlainContentTooLarge } from '../lib/e2eeLimits'
 import { extractAttachmentRefs } from '../lib/imageBlock'
@@ -176,6 +176,27 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
         console.error('e2ee_decrypt_failed', row.id)
       }
       return lockedShape(rest, refs)
+    }
+  }
+
+  // 요약 행은 본문 봉투가 없어 제목만 푼다 — 실패·MK 없음은 decode 와 같은 잠긴 모양 (F-2133 3.6)
+  async function decodeSummary(row: DocSummary): Promise<DocSummary> {
+    if (row.e2eeKey === undefined) return row
+    const { e2eeKey, ...rest } = row
+    const locked: DocSummary = { ...rest, title: '', e2ee: 'locked', attachmentRefs: row.attachmentRefs ?? [] }
+    const mk = currentMasterKey()
+    if (!mk) return locked
+    const startGeneration = generation
+    try {
+      const title = await decryptDocField(await docKeyFor(mk, e2eeKey), row.id, 'title', row.title)
+      if (generation !== startGeneration || deps.getMasterKey() !== mk) return locked
+      return { ...locked, title, e2ee: 'open' }
+    } catch {
+      if (!failureLogged.has(row.id)) {
+        failureLogged.add(row.id)
+        console.error('e2ee_decrypt_failed', row.id)
+      }
+      return locked
     }
   }
 
@@ -449,6 +470,15 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
     ;(wrapped as unknown as ServerStore).listCached = async () => {
       const { docs, folders } = await listCached()
       return { docs: await Promise.all(docs.map(decode)), folders }
+    }
+  }
+  if (serverInner.listStaged) {
+    const listStaged = serverInner.listStaged
+    ;(wrapped as unknown as ServerStore).listStaged = async () => {
+      const { docs, full } = await listStaged()
+      const decodedFull = full.then((rows) => Promise.all(rows.map(decode)))
+      decodedFull.catch(() => {})
+      return { docs: await Promise.all(docs.map(decodeSummary)), full: decodedFull }
     }
   }
   // 펼치면 게터가 값이 되므로 syncState 는 아래 저장소를 계속 읽게 둔다

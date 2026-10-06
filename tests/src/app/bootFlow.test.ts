@@ -5,7 +5,9 @@ import { fetchAccount } from '../../../src/app/account'
 import { openStore } from '../../../src/storage/openStore'
 import { openYjsStore } from '../../../src/storage/yjsStore'
 import { createMemoryStore } from '../../../src/storage/memoryStore'
-import type { Store } from '../../../src/types'
+import { migrateLocalIfNeeded } from '../../../src/app/migrateLocal'
+import { cleanupUnusedAttachments, scheduleAttachmentGc } from '../../../src/app/attachmentGc'
+import type { Doc, Store } from '../../../src/types'
 
 vi.mock('../../../src/app/account', () => ({ fetchAccount: vi.fn() }))
 vi.mock('../../../src/storage/openStore', () => ({ openStore: vi.fn() }))
@@ -180,6 +182,7 @@ describe('runBoot', () => {
       setAccountBlocked: vi.fn(),
       listCached: vi.fn(() => Promise.reject(failure)),
       list: vi.fn(async () => []),
+      listStaged: vi.fn(async () => ({ docs: [], full: Promise.resolve([]) })),
       listFolders: vi.fn(async () => []),
     } as unknown as Store
     vi.mocked(openStore).mockResolvedValue(server)
@@ -206,6 +209,7 @@ describe('runBoot', () => {
       setAccountBlocked: vi.fn(),
       listCached: vi.fn(async () => ({ docs: [cachedDoc], folders: [] })),
       list: vi.fn(async () => []),
+      listStaged: vi.fn(async () => ({ docs: [], full: Promise.resolve([]) })),
       listFolders: vi.fn(async () => []),
     } as unknown as Store
     vi.mocked(openStore).mockResolvedValue(server)
@@ -242,5 +246,96 @@ describe('runBoot', () => {
     expect(deps.setSharesOpen).toHaveBeenCalledWith(false)
     expect(deps.setHelpOpen).toHaveBeenCalledWith(false)
     expect(deps.setMapRoute).toHaveBeenCalledWith(null)
+  })
+
+  function deferredDocs() {
+    let resolve!: (docs: Doc[]) => void
+    const promise = new Promise<Doc[]>((res) => {
+      resolve = res
+    })
+    return { promise, resolve }
+  }
+
+  const summaryA = { id: 'a', title: 'A', lineEnding: 'lf' as const, folderId: null, pinnedAt: null, createdAt: 1, updatedAt: 1, role: 'owner' as const }
+  const summaryB = { ...summaryA, id: 'b', title: 'B', updatedAt: 2 }
+  const fullA: Doc = { ...summaryA, content: '본문A' }
+  const fullB: Doc = { ...summaryB, content: '본문B' }
+
+  function stagedServer(input: { cached: Doc[]; staged: Array<Omit<Doc, 'content'>>; full: Promise<Doc[]>; list?: () => Promise<Doc[]> }) {
+    return {
+      ...createMemoryStore(),
+      kind: 'server',
+      userId: 'u1',
+      setAccountBlocked: vi.fn(),
+      listCached: vi.fn(async () => ({ docs: input.cached, folders: [] })),
+      list: vi.fn(input.list ?? (async () => [])),
+      listFolders: vi.fn(async () => []),
+      listStaged: vi.fn(async () => ({ docs: input.staged, full: input.full })),
+      listAttachments: vi.fn(async () => []),
+    }
+  }
+
+  async function gcListedDocs(): Promise<Doc[]> {
+    const task = vi.mocked(scheduleAttachmentGc).mock.calls.at(-1)![0]
+    await task()
+    const { store } = vi.mocked(cleanupUnusedAttachments).mock.calls.at(-1)![0] as unknown as { store: { list(): Promise<Doc[]> } }
+    return store.list()
+  }
+
+  it('U9 캐시 빈 기다리는 길 — full 이 붙잡힌 채 요약으로 ready, GC 는 full 뒤 그 문서로', async () => {
+    stubLocation('')
+    vi.mocked(scheduleAttachmentGc).mockClear()
+    vi.mocked(fetchAccount).mockResolvedValue({ state: 'in', id: 'u1', email: 'a@b.com', blocked: false, warned: false })
+    const full = deferredDocs()
+    const server = stagedServer({ cached: [], staged: [summaryA, summaryB], full: full.promise })
+    vi.mocked(openStore).mockResolvedValue(server as unknown as Store)
+    const deps = makeDeps()
+    await runBoot(deps)
+    expect(lastCall(deps.setBootPhase)).toBe('ready')
+    expect(deps.setDocs).toHaveBeenCalledWith([expect.objectContaining({ id: 'b', title: 'B' }), expect.objectContaining({ id: 'a', title: 'A' })])
+    expect(scheduleAttachmentGc).not.toHaveBeenCalled()
+
+    full.resolve([fullB, fullA])
+    await vi.waitFor(() => expect(scheduleAttachmentGc).toHaveBeenCalledTimes(1))
+    expect(await gcListedDocs()).toEqual([fullB, fullA])
+    expect(server.list).not.toHaveBeenCalled()
+  })
+
+  it('U10 캐시 먼저 길 — 뒤 맞추기가 listStaged().docs 로 병합하고, GC 는 full 뒤', async () => {
+    stubLocation('')
+    vi.mocked(scheduleAttachmentGc).mockClear()
+    vi.mocked(fetchAccount).mockResolvedValue({ state: 'in', id: 'u1', email: 'a@b.com', blocked: false, warned: false })
+    const full = deferredDocs()
+    const server = stagedServer({ cached: [fullA], staged: [summaryA, summaryB], full: full.promise })
+    vi.mocked(openStore).mockResolvedValue(server as unknown as Store)
+    const deps = makeDeps()
+    let docs: Array<{ id: string }> = []
+    vi.mocked(deps.setDocs).mockImplementation((next) => {
+      docs = typeof next === 'function' ? next(docs as never) : next
+    })
+    await runBoot(deps)
+    await vi.waitFor(() => expect(docs.map((d) => d.id)).toEqual(['b', 'a']))
+    expect(scheduleAttachmentGc).not.toHaveBeenCalled()
+
+    full.resolve([fullB, fullA])
+    await vi.waitFor(() => expect(scheduleAttachmentGc).toHaveBeenCalledTimes(1))
+    expect(await gcListedDocs()).toEqual([fullB, fullA])
+    expect(server.list).not.toHaveBeenCalled()
+  })
+
+  it('U11 이관 길 — afterImport 가 full 을 기다리지 않는다', async () => {
+    stubLocation('')
+    vi.mocked(fetchAccount).mockResolvedValue({ state: 'in', id: 'u1', email: 'a@b.com', blocked: false, warned: false })
+    vi.mocked(migrateLocalIfNeeded).mockImplementationOnce(async (input) => {
+      await input.afterImport?.()
+    })
+    const never = new Promise<Doc[]>(() => {})
+    const server = stagedServer({ cached: [], staged: [summaryA], full: never, list: () => never })
+    vi.mocked(openStore).mockResolvedValue(server as unknown as Store)
+    const deps = makeDeps()
+    // full·list 가 끝나지 않으므로 둘 중 하나라도 기다리면 runBoot 이 끝나지 않아 테스트 시간 제한에 걸린다
+    await runBoot(deps)
+    expect(deps.setDocs).toHaveBeenCalledWith([expect.objectContaining({ id: 'a', title: 'A' })])
+    expect(lastCall(deps.setBootPhase)).toBe('ready')
   })
 })

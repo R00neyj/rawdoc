@@ -695,6 +695,50 @@ describe('F-2042 U7 listCached — decode 로 감싸 내보내기', () => {
   })
 })
 
+describe('F-2133 U8 listStaged — 금고 요약은 제목만 풀기', () => {
+  it('MK 있으면 평문 제목·open, 없으면 빈 제목·locked, 풀기 실패는 잠긴 모양. full 은 본문까지 풀린다', async () => {
+    const mk = await newMasterKey()
+    const { docKey, wrappedDocKey } = await createDocKey(mk)
+    const docId = 'vd-staged-1'
+    const titleEnvelope = await encryptDocField(docKey, docId, 'title', '비밀 제목')
+    const contentEnvelope = await encryptDocField(docKey, docId, 'content', '비밀 본문')
+    const summary = { id: docId, title: titleEnvelope, lineEnding: 'lf' as const, createdAt: 1, updatedAt: 2, folderId: null, pinnedAt: null, role: 'owner' as const, e2eeKey: wrappedDocKey, attachmentRefs: [] }
+    const broken = { ...summary, id: 'vd-staged-bad', title: titleEnvelope }
+    const plain = { id: 'p1', title: '보통', lineEnding: 'lf' as const, createdAt: 1, updatedAt: 1, folderId: null, pinnedAt: null, role: 'owner' as const }
+    const inner = {
+      kind: 'server',
+      listStaged: async () => ({
+        docs: [summary, broken, plain],
+        full: Promise.resolve([{ ...summary, content: contentEnvelope }, { ...plain, content: '보통 본문' }]),
+      }),
+    } as unknown as Store
+    type Staged = { docs: Array<Omit<Doc, 'content'>>; full: Promise<Doc[]> }
+    let currentMk: CryptoKey | null = mk
+    const store = withE2ee(inner, { getMasterKey: () => currentMk }) as unknown as { listStaged: () => Promise<Staged> }
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const open = await store.listStaged()
+    expect(open.docs[0]).toMatchObject({ id: docId, title: '비밀 제목', e2ee: 'open' })
+    expect('e2eeKey' in open.docs[0]).toBe(false)
+    expect(open.docs[1]).toMatchObject({ id: 'vd-staged-bad', title: '', e2ee: 'locked' })
+    expect(open.docs[2]).toEqual(plain)
+    expect(open.docs.every((d) => !('content' in d))).toBe(true)
+    const full = await open.full
+    expect(full[0]).toMatchObject({ title: '비밀 제목', content: '비밀 본문', e2ee: 'open' })
+    expect(full[1]).toMatchObject({ title: '보통', content: '보통 본문' })
+    expect(error).toHaveBeenCalledWith('e2ee_decrypt_failed', 'vd-staged-bad')
+
+    currentMk = null
+    const locked = await store.listStaged()
+    expect(locked.docs[0]).toMatchObject({ id: docId, title: '', e2ee: 'locked' })
+  })
+
+  it('안쪽에 listStaged 가 없으면 withE2ee 결과에도 없다', () => {
+    const store = withE2ee({ kind: 'memory' } as unknown as Store, { getMasterKey: () => null })
+    expect('listStaged' in store).toBe(false)
+  })
+})
+
 // 코드 리뷰 S4 — 제목 저장과 본문 저장이 겹치면 기억에 옛 제목이 새 봉투와 짝지어 남았다
 describe('리뷰 S4 제목·본문 저장 겹침', () => {
   it('본문 저장이 아래 저장소를 기다리는 사이 제목이 바뀌어도 새 제목이 보인다', async () => {

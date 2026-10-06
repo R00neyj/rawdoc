@@ -3,7 +3,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { flushSync } from 'react-dom'
 import { createIdbStore } from '../storage/idbStore'
 import { openStore } from '../storage/openStore'
-import type { ServerStore } from '../storage/serverStore'
+import type { DocSummary, ServerStore } from '../storage/serverStore'
 import { openYjsStore, type YjsStore } from '../storage/yjsStore'
 import { openLiveSocket } from '../storage/liveSocket'
 import { migrateLocalIfNeeded } from './migrateLocal'
@@ -229,9 +229,10 @@ export async function runBoot(deps: BootDeps): Promise<void> {
       },
       importLocal: (input) => serverStore.importLocal(input),
       notice: showNotice,
+      // 본문을 기다리지 않는다 — 이관 뒤 부팅이 같은 회차에 합류해 목록을 다시 읽는다 (F-2133 4.2)
       afterImport: async () => {
-        const [freshDocs, freshFolders] = await Promise.all([appStore.list(), appStore.listFolders()])
-        setDocs(sortByUpdatedAtDesc(freshDocs.map(stripContent)))
+        const [staged, freshFolders] = await Promise.all([(appStore as ServerStore).listStaged(), appStore.listFolders()])
+        setDocs(sortByUpdatedAtDesc(staged.docs.map(stripContent)))
         setFolders(freshFolders)
       },
     })
@@ -308,7 +309,7 @@ export async function runBoot(deps: BootDeps): Promise<void> {
   }
 
   // 뒤 맞추기 결과를 지금 목록에 합친다 — 스냅샷 뒤 생긴 문서는 남기고, 늦게 시작한 결과는 버린다 (F-2042 4.3)
-  function applyBootMerge(seq: number, snapshotIds: ReadonlySet<string>, newFolders: Folder[], newDocs: Doc[]) {
+  function applyBootMerge(seq: number, snapshotIds: ReadonlySet<string>, newFolders: Folder[], newDocs: DocSummary[]) {
     if (!shouldApplyListResult({ seq, lastAppliedSeq: lastAppliedListSeqRef.current })) return
     lastAppliedListSeqRef.current = seq
     setFolders(newFolders)
@@ -361,12 +362,12 @@ export async function runBoot(deps: BootDeps): Promise<void> {
 
         await finishBootRouting(cachedMetaList, cachedFolders)
 
-        // 뒤 맞추기 — 서버 목록으로 캐시 목록을 맞춘다. 실패해도 새 알림은 없다(캐시를 그대로 둔다) (F-2042 4.2·4.7)
-        Promise.all([appStore.listFolders(), appStore.list()])
-          .then(([newFolders, newDocs]) => {
-            applyBootMerge(seq, snapshotIds, newFolders, newDocs)
-            // 첨부 정리는 뒤 맞추기 결과로 그 뒤에 예약한다 — 실패하면 이 페이지에서는 하지 않는다 (F-2056 3.5)
-            scheduleGc(newDocs)
+        // 뒤 맞추기 — 서버 요약으로 캐시 목록을 맞춘다. 실패해도 새 알림은 없다(캐시를 그대로 둔다) (F-2042 4.2·4.7, F-2133 4.2)
+        Promise.all([appStore.listFolders(), (appStore as ServerStore).listStaged()])
+          .then(async ([newFolders, staged]) => {
+            applyBootMerge(seq, snapshotIds, newFolders, staged.docs)
+            // 첨부 정리는 본문까지 받은 결과로 그 뒤에 예약한다 — 실패하면 이 페이지에서는 하지 않는다 (F-2056 3.5)
+            scheduleGc(await staged.full)
           })
           .catch((err) => {
             console.error('boot_resync_failed', err)
@@ -381,15 +382,23 @@ export async function runBoot(deps: BootDeps): Promise<void> {
   if (!usedCachedShell) {
     // 폴더를 문서와 함께 받아 먼저 반영한다 — 폴더가 늦으면 그 안의 문서가 잠깐 루트에 보인다
     const foldersPromise = appStore.listFolders()
-    const list = await appStore.list()
+    // 서버 저장소는 요약으로 셸을 띄우고 본문은 뒤에서 받는다 — GC 는 본문까지 받은 뒤 (F-2133 4.1)
+    let list: DocSummary[]
+    if (resolvedStore.kind === 'server') {
+      const staged = await (appStore as ServerStore).listStaged()
+      list = staged.docs
+      staged.full.then(scheduleGc, (err) => console.error('boot_resync_failed', err))
+    } else {
+      const docs = await appStore.list()
+      list = docs
+      scheduleGc(docs)
+    }
 
     const folderList = await foldersPromise
     setFolders(folderList)
 
     const metaList = sortByUpdatedAtDesc(list.map(stripContent))
     setDocs(metaList)
-
-    scheduleGc(list)
 
     await finishBootRouting(metaList, folderList)
   }

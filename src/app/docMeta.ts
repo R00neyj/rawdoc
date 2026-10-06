@@ -12,7 +12,7 @@ export function displayDocTitle(title: string): string {
   return title.trim() === '' ? '제목 없는 문서' : title
 }
 
-export function stripContent(doc: Doc): DocMeta {
+export function stripContent(doc: Omit<Doc, 'content'>): DocMeta {
   return {
     id: doc.id,
     title: doc.title,

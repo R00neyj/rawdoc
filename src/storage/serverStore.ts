@@ -68,6 +68,9 @@ export type E2eeCopySource = { id: string; title: string; content: string; e2eeK
 export type E2eeCopyResult = { title: string; content: string; e2eeKey: string; attachmentRefs: string[] }
 export type E2eeCopyMaker = (source: E2eeCopySource, copyId: string) => Promise<E2eeCopyResult | null>
 
+// 본문 없는 목록 행 — 서버 요약과 같은 열 (F-2133 3.1)
+export type DocSummary = Omit<Doc, 'content'>
+
 // server 저장소에만 있는 로컬 이관(F-208 2.2) 진입점 — Store 표준 타입엔 없어 이 타입으로 좁혀 쓴다
 export type ServerStore = Store & {
   // 오프라인 부팅에서도 md-yjs 를 이 사용자로 연다 (F-306 9.2)
@@ -98,6 +101,8 @@ export type ServerStore = Store & {
   forgetSharedDocs(ids: readonly string[]): void
   // /api/docs 를 성공적으로 읽은 마지막 list() 가 끝난 시각. 없으면 null (F-2056 4.2)
   lastServerListAt(): number | null
+  // 한 회차의 요약 시점 목록(docs)과 본문 받기가 끝난 list() 결과(full) — 거부된 full 은 부르는 쪽이 안 기다려도 된다 (F-2133 3.1)
+  listStaged(): Promise<{ docs: DocSummary[]; full: Promise<Doc[]> }>
 }
 
 // 안 보낸 removeFolder(delete-all) 이 지운 폴더 id 들(자신 포함) — 서버 목록 기준 자손 판정 (F-247.md 3.1)
@@ -143,6 +148,11 @@ function toDoc(cached: Doc & { version: number; userId?: string }): Doc {
 function toFolder(cached: CachedFolder): Folder {
   const { userId: _userId, ...folder } = cached
   return folder
+}
+
+function withoutContent(doc: Doc): DocSummary {
+  const { content: _content, ...meta } = doc
+  return meta
 }
 
 function sortByUpdatedAtDesc<T extends { updatedAt: number }>(list: T[]): T[] {
@@ -260,15 +270,17 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   let e2eeRuleNoticeShownThisRound = false
   const convertingDocIds = new Set<string>() // 금고로 옮기는·빼는 중인 문서 — 그 문서의 outbox 항목을 건너뛴다 (F-407 5.2 3번)
 
-  // 공유받은(내 소유가 아닌) 문서 id — 마지막 list() 의 /api/shared 응답으로 갱신한다. get()·refreshDocFromServer·fetchDocIntoCache 가 이 문서를 캐시에 넣지 않는 판정 근거다 (버그 수정 2026-09-26)
+  // 공유받은(내 소유가 아닌) 문서 id — /api/shared 응답이 오는 즉시 갱신한다. get()·refreshDocFromServer·fetchDocIntoCache 가 캐시에 넣지 않는 근거 (버그 수정 2026-09-26, F-2133 3.4)
   const knownSharedIds = new Set<string>()
   let lastListSharedOk = false
   let lastSharedDocs: Doc[] | null = null
   let lastServerListAt: number | null = null
+  // 마지막으로 받은 /api/docs 요약의 id — 캐시 행 없이 사이드바에 보이는 문서의 삭제를 보낸다 (F-2133 3.5)
+  let lastSummaryIds = new Set<string>()
 
   // 캐시 문서·폴더 행을 바꾸는 공개 메서드가 불리는 순간 올린다 — 사이에 쓰기가 없던 list() 끼리만 합친다 (F-2056 3.5·4.1)
   let writeGen = 0
-  let inFlightList: { gen: number; promise: Promise<Doc[]> } | null = null
+  let inFlightList: { gen: number; staged: Promise<DocSummary[]>; promise: Promise<Doc[]> } | null = null
   function bumpWriteGen() {
     writeGen++
   }
@@ -624,6 +636,22 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       inFlightBodyFetches.set(key, pending)
     }
     return pending
+  }
+
+  // get()·옮기기가 먼저 받아 둔 본문은 다시 받지 않는다 (F-2133 U6)
+  async function fetchBodyUnlessCached(item: { id: string; version: number; beforeVersion: number | undefined }): Promise<void> {
+    if ((await cache.getDoc(userId, item.id))?.version === item.version) return
+    await ensureBodyFetch(item.id, item.version, item.beforeVersion)
+  }
+
+  // 요약으로만 보이는 문서 — 진행 중인 본문 받기를 기다리고, 그래도 행이 없으면 서버에서 받아 둔다 (F-2133 3.5)
+  async function loadMissingRow(docId: string): Promise<CachedDoc | null> {
+    const pending = [...inFlightBodyFetches].filter(([key]) => key.startsWith(`${docId}\u0000`)).map(([, p]) => p)
+    await Promise.all(pending)
+    const row = await cache.getDoc(userId, docId)
+    if (row) return row
+    await fetchDocIntoCache(docId)
+    return cache.getDoc(userId, docId)
   }
 
   function noticeE2eeFolderMovedUp() {
@@ -1005,14 +1033,31 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     }
   }
 
+  // 요약 시점 목록 — 받을 문서는 요약 값, 나머지는 캐시 값, 그리고 공유 문서 (F-2133 3.2)
+  async function stagedDocs(summaries: api.ServerDocSummary[], targets: Map<string, number>, shared: Doc[] | null): Promise<DocSummary[]> {
+    const rows = (await cache.getDocs(userId)).filter((d) => !targets.has(d.id)).map((d) => withoutContent(toDoc(d)))
+    const fresh = summaries.filter((s) => targets.has(s.id)).map((s) => {
+      const { version: _version, ...meta } = s
+      return meta
+    })
+    const owned = [...rows, ...fresh].map((d) => ({ ...d, role: 'owner' as const }))
+    return sortByUpdatedAtDesc([...owned, ...(shared ?? []).map(withoutContent)])
+  }
+
   // 공유받은 문서는 /api/docs 와 동시에 시작해 마지막에 기다린다. 절대 던지지 않는다 (F-2042 3.1, D2)
-  async function runList(): Promise<Doc[]> {
-    const sharedPromise = fetchShared()
+  // onStaged 는 요약·공유가 온 뒤 본문 받기 전에 한 번 부른다. /api/docs 가 실패하면 끝에서 (F-2133 3.2)
+  async function runList(onStaged: (docs: DocSummary[]) => void): Promise<Doc[]> {
+    const sharedPromise = fetchShared().then((shared) => {
+      knownSharedIds.clear()
+      for (const d of shared ?? []) knownSharedIds.add(d.id)
+      return shared
+    })
 
     const summariesPromise: Promise<api.ServerDocSummary[] | null> = (async () => {
       try {
         const s = await api.listDocs()
         patchState({ online: true })
+        lastSummaryIds = new Set(s.map((d) => d.id))
         return s
       } catch (err) {
         if (!(err instanceof ApiError)) throw err
@@ -1072,7 +1117,10 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         resolveTargets(targets)
 
         // 최근 문서(서버 응답 순서)부터, 최대 BODY_FETCH_CONCURRENCY 개씩 동시에 (F-2042 3.2)
-        await runPool(toFetch, BODY_FETCH_CONCURRENCY, (item) => ensureBodyFetch(item.id, item.version, item.beforeVersion))
+        await Promise.all([
+          runPool(toFetch, BODY_FETCH_CONCURRENCY, fetchBodyUnlessCached),
+          sharedPromise.then(async (shared) => onStaged(await stagedDocs(summaries, targets, shared))),
+        ])
       } else {
         resolveTargets(new Map())
       }
@@ -1081,18 +1129,41 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       await refreshPending()
       const owned = cached.map((d) => ({ ...toDoc(d), role: 'owner' as const }))
 
-      // 공유받은 문서(F-212.md 2.4) — 목록은 캐시하지 않고 매번 새로 읽고, id 는 get()·refreshDocFromServer·fetchDocIntoCache 가 캐시 안 함을 판정할 근거로 남긴다(오프라인·오류면 빈 목록)
+      // 공유받은 문서(F-212.md 2.4) — 목록은 캐시하지 않고 매번 새로 읽는다(오프라인·오류면 빈 목록)
       const shared = await sharedPromise
       lastListSharedOk = shared !== null
       lastSharedDocs = shared
-      knownSharedIds.clear()
-      for (const d of shared ?? []) knownSharedIds.add(d.id)
       if (summaries) lastServerListAt = now()
 
-      return sortByUpdatedAtDesc([...owned, ...(shared ?? [])])
+      const result = sortByUpdatedAtDesc([...owned, ...(shared ?? [])])
+      onStaged(result.map(withoutContent))
+      return result
     } finally {
       activeListSessions.delete(session)
     }
+  }
+
+  // 같은 쓰기 세대의 회차가 진행 중이면 합류한다 — list()·listStaged() 가 함께 쓴다 (F-2056 4.1, F-2133 3.1)
+  function currentListRound(): { staged: Promise<DocSummary[]>; promise: Promise<Doc[]> } {
+    if (!inFlightList || inFlightList.gen !== writeGen) {
+      let resolveStaged!: (docs: DocSummary[]) => void
+      let rejectStaged!: (err: unknown) => void
+      const staged = new Promise<DocSummary[]>((resolve, reject) => {
+        resolveStaged = resolve
+        rejectStaged = reject
+      })
+      staged.catch(() => {})
+      const entry = { gen: writeGen, staged, promise: runList(resolveStaged) }
+      inFlightList = entry
+      const clear = () => {
+        if (inFlightList === entry) inFlightList = null
+      }
+      entry.promise.then(clear, (err: unknown) => {
+        rejectStaged(err)
+        clear()
+      })
+    }
+    return inFlightList
   }
 
   refreshPending()
@@ -1139,15 +1210,14 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     },
 
     list() {
-      if (!inFlightList || inFlightList.gen !== writeGen) {
-        const entry = { gen: writeGen, promise: runList() }
-        inFlightList = entry
-        const clear = () => {
-          if (inFlightList === entry) inFlightList = null
-        }
-        entry.promise.then(clear, clear)
-      }
-      return inFlightList.promise.then((docs) => [...docs])
+      return currentListRound().promise.then((docs) => [...docs])
+    },
+
+    async listStaged() {
+      const round = currentListRound()
+      const full = round.promise.then((docs) => [...docs])
+      full.catch(() => {})
+      return { docs: [...(await round.staged)], full }
     },
 
     async get(id) {
@@ -1343,7 +1413,9 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       const hasInFlightCreate = outboxBefore.some((e) => e.type === 'createDoc' && e.docId === id && e.key === inFlightKey)
       await cache.deleteDoc(userId, id)
       await cache.removeOutboxForDoc(userId, id, inFlightKey)
-      if (existing && (existing.version > 0 || hasInFlightCreate)) {
+      // 본문을 아직 못 받아 행이 없어도 요약에 있던 문서면 서버에서 지운다 — 안 보내면 다음 목록에서 되살아난다 (F-2133 3.5)
+      const listed = lastSummaryIds.delete(id)
+      if ((existing && (existing.version > 0 || hasInFlightCreate)) || (!existing && listed)) {
         await cache.addOutbox(userId, { type: 'removeDoc', docId: id })
       }
       await refreshPending()
@@ -1353,7 +1425,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     moveDoc(id, folderId) {
       bumpWriteGen()
       return withDocWriteLock(async () => {
-        const existing = await cache.getDoc(userId, id)
+        const existing = (await cache.getDoc(userId, id)) ?? (await loadMissingRow(id))
         if (!existing) throw new Error(`문서를 찾을 수 없음: ${id}`)
         const resolvedFolderId = folderId ?? null
         const folders = await cache.getFolders(userId)
@@ -1374,7 +1446,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     setPinned(id, pinned) {
       bumpWriteGen()
       return withDocWriteLock(async () => {
-        const existing = await cache.getDoc(userId, id)
+        const existing = (await cache.getDoc(userId, id)) ?? (await loadMissingRow(id))
         if (!existing) throw new Error(`문서를 찾을 수 없음: ${id}`)
         const updated = { ...existing, pinnedAt: pinned ? Date.now() : null }
         await cache.putDoc(userId, updated)

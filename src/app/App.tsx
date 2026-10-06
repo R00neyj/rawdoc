@@ -34,7 +34,7 @@ import { shouldApplyListResult } from './bootList'
 import { runBoot, startFlushRunner } from './bootFlow'
 import { mergeResyncList } from './resyncList'
 import { isDocLoading } from './docLoading'
-import { combineCachedList, createCachedListSource, createListRefresher, hasLiveChangesSince, isListStale } from './cachedList'
+import { combineCachedList, createCachedListSource, createListRefresher, hasLiveChangesSince, isListStale, waitFirstServerList } from './cachedList'
 import { useDocSaver } from './useDocSaver'
 import type { DocPathKind } from './docPath'
 import type { LiveDocSession } from './useLiveDoc'
@@ -451,6 +451,7 @@ export default function App() {
   // 로그인 상태의 탭 신호는 md-remote 캐시로 맞춘다 — 순번은 올리지도 비교하지도 않는다 (F-2056 6.2)
   const resyncFromCache = useCallback(async (deletedSource: 'tab' | 'bootMerge' = 'tab') => {
     const serverStore = store as ServerStore
+    await waitFirstServerList(serverStore, navigator.onLine)
     const snapshot = docsRef.current
     let cached: { docs: Doc[]; folders: Folder[] }
     try {
@@ -476,6 +477,7 @@ export default function App() {
       hasLiveChanges: () => hasLiveChangesSince(liveChangedAtRef.current, serverStore.lastServerListAt()),
       isOnline: () => navigator.onLine,
       refresher: listRefresher,
+      firstServerList: () => waitFirstServerList(serverStore, navigator.onLine),
     })
   }, [store, listRefresher])
 

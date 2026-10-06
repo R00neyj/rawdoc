@@ -58,6 +58,15 @@ export function createListRefresher(deps: { refresh: () => Promise<void>; isStal
   }
 }
 
+// 이 페이지에서 /api/docs 를 읽은 회차가 아직 없고 온라인이면 그 회차(진행 중이면 합류)를 기다린다. 거부는 삼킨다 (F-2133 5.2)
+export function waitFirstServerList(store: { lastServerListAt(): number | null; list(): Promise<unknown> }, online: boolean): Promise<void> | null {
+  if (store.lastServerListAt() !== null || !online) return null
+  return store.list().then(
+    () => {},
+    () => {},
+  )
+}
+
 // 검색·지도에 넘기는 목록 소스 — list()·listFolders() 가 한 번의 캐시 읽기를 나눠 쓴다 (5.5)
 export function createCachedListSource(deps: {
   listCached: () => Promise<{ docs: Doc[]; folders: Folder[] }>
@@ -65,10 +74,13 @@ export function createCachedListSource(deps: {
   hasLiveChanges: () => boolean
   isOnline: () => boolean
   refresher: ListRefresher
+  firstServerList: () => Promise<void> | null
 }): Pick<Store, 'list' | 'listFolders'> {
   let round: Promise<{ docs: Doc[]; folders: Folder[] }> | null = null
 
   async function readRound(): Promise<{ docs: Doc[]; folders: Folder[] }> {
+    const first = deps.firstServerList()
+    if (first) await first
     if (deps.hasLiveChanges() && deps.isOnline()) await deps.refresher.run()
     else deps.refresher.maybeRefresh()
     const cached = await deps.listCached()

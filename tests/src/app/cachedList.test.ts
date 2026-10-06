@@ -118,6 +118,7 @@ function makeSource(over: {
   refresher?: ListRefresher
   shared?: Doc[] | null
   calls?: string[]
+  firstServerList?: () => Promise<void> | null
 }) {
   const calls = over.calls ?? []
   const listCached = vi.fn(async () => {
@@ -131,6 +132,7 @@ function makeSource(over: {
     hasLiveChanges: () => over.hasLiveChanges ?? false,
     isOnline: () => over.online ?? true,
     refresher,
+    firstServerList: over.firstServerList ?? (() => null),
   })
   return { source, listCached, refresher, calls }
 }
@@ -185,5 +187,24 @@ describe('F-2056 C8 실시간 변경 있음', () => {
     await offline.source.list()
     expect(offCalls).toEqual(['listCached'])
     expect(never).toHaveBeenCalledTimes(0)
+  })
+})
+
+describe('F-2133 U12 첫 서버 회차 기다림', () => {
+  it('firstServerList 가 약속을 주면 끝난 뒤 listCached, null 이면 곧바로', async () => {
+    const gate = deferred()
+    const waiting = makeSource({ firstServerList: () => gate.promise })
+    const p = waiting.source.list()
+    await flush(10)
+    expect(waiting.listCached).not.toHaveBeenCalled()
+    gate.resolve()
+    await p
+    expect(waiting.listCached).toHaveBeenCalledTimes(1)
+
+    const immediate = makeSource({ firstServerList: () => null })
+    const q = immediate.source.list()
+    await flush(3)
+    expect(immediate.listCached).toHaveBeenCalledTimes(1)
+    await q
   })
 })

@@ -3080,3 +3080,228 @@ describe('F-2131 A1 getAttachment 힌트 docId', () => {
     expect(urls.find((u) => u.includes(b))).toBe(`/api/attachments/${b}.png`)
   })
 })
+
+// F-2133 8장 U1~U7 — 요약 시점 목록(listStaged)·공유 판정 앞당김·행 없는 문서 쓰기
+function stagedFetch(
+  server: ReturnType<typeof makeFakeServer>,
+  opts: { hold?: (id: string) => boolean; listExcluded?: string[]; holdWrites?: boolean; failDocs?: boolean } = {},
+) {
+  const counts = { docs: 0, shared: 0, bodies: new Map<string, number>() }
+  const waiting: Array<() => void> = []
+  let holding = true
+  const fetchMock = vi.fn(async (url: string, init: RequestInit = {}): Promise<Response> => {
+    const method = init.method ?? 'GET'
+    const path = new URL(String(url), 'http://local.test').pathname
+    if (method !== 'GET' && opts.holdWrites) return new Promise<Response>(() => {})
+    if (method === 'GET' && path === '/api/docs') {
+      counts.docs++
+      if (opts.failDocs) throw new TypeError('network down')
+      const res = await server.fetchImpl(url, init)
+      if (!opts.listExcluded) return res
+      const list = (await res.json()) as Array<{ id: string }>
+      const kept = list.filter((d) => !opts.listExcluded!.includes(d.id))
+      return new Response(JSON.stringify(kept), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }
+    if (method === 'GET' && path === '/api/shared') counts.shared++
+    const bodyMatch = /^\/api\/docs\/([^/]+)$/.exec(path)
+    if (method === 'GET' && bodyMatch) {
+      const id = bodyMatch[1]
+      counts.bodies.set(id, (counts.bodies.get(id) ?? 0) + 1)
+      if (holding && (opts.hold?.(id) ?? true)) await new Promise<void>((resolve) => waiting.push(resolve))
+    }
+    return server.fetchImpl(url, init)
+  })
+  return {
+    counts,
+    fetchMock,
+    heldBodies: () => waiting.length,
+    release: () => {
+      holding = false
+      for (const resolve of waiting.splice(0)) resolve()
+    },
+  }
+}
+
+function seedServerDocs(server: ReturnType<typeof makeFakeServer>, count: number): string[] {
+  const ids: string[] = []
+  for (let i = 0; i < count; i++) {
+    const id = `s${i}`
+    server.docs.set(id, { id, title: `제목${i}`, content: `본문${i}`, lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 100 - i, updatedAt: 100 - i })
+    ids.push(id)
+  }
+  return ids
+}
+
+const SHARED_ROW = { id: 'sh1', title: '공유문서', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 500, role: 'view' as const }
+
+describe('F-2133 U1~U7 listStaged·공유 판정·행 없는 문서 쓰기', () => {
+  it('U1 본문 GET 이 모두 붙잡힌 채 docs 가 온다 — 20개 제목·owner·updatedAt 내림차순·공유 포함. 풀면 full 이 본문째, 목록 요청은 한 번씩', async () => {
+    const server = makeFakeServer()
+    const ids = seedServerDocs(server, 20)
+    server.setShared([SHARED_ROW])
+    const h = stagedFetch(server)
+    vi.stubGlobal('fetch', h.fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const staged = await store.listStaged()
+    expect(h.heldBodies()).toBe(BODY_FETCH_CONCURRENCY)
+    expect(staged.docs.map((d) => d.id)).toEqual(['sh1', ...ids])
+    expect(staged.docs.slice(1).map((d) => d.title)).toEqual(ids.map((_, i) => `제목${i}`))
+    expect(staged.docs.slice(1).every((d) => d.role === 'owner')).toBe(true)
+    expect(staged.docs.every((d) => !('content' in d))).toBe(true)
+
+    h.release()
+    const full = await staged.full
+    expect(full.map((d) => d.id)).toEqual(['sh1', ...ids])
+    expect(full.slice(1).map((d) => d.content)).toEqual(ids.map((_, i) => `본문${i}`))
+    expect(h.counts.docs).toBe(1)
+    expect(h.counts.shared).toBe(1)
+  })
+
+  it('U2 listStaged 와 list 를 같은 세대에 부르면 순서와 상관없이 회차 하나 — full 이 list 결과와 같고, 끝난 뒤 full 을 읽어도 요청이 늘지 않는다', async () => {
+    for (const stagedFirst of [true, false]) {
+      const server = makeFakeServer()
+      seedServerDocs(server, 3)
+      const h = stagedFetch(server)
+      h.release()
+      vi.stubGlobal('fetch', h.fetchMock)
+      const store = await createServerStore('u1', { dbName: freshDbName() })
+
+      const [staged, listed] = stagedFirst
+        ? await Promise.all([store.listStaged(), store.list()])
+        : await Promise.all([store.list(), store.listStaged()]).then(([l, s]) => [s, l] as const)
+      expect(await staged.full).toEqual(listed)
+      expect(h.counts.docs).toBe(1)
+      expect(h.counts.shared).toBe(1)
+      await tick(5)
+      expect(await staged.full).toEqual(listed)
+      expect(h.counts.docs).toBe(1)
+      expect(h.counts.shared).toBe(1)
+    }
+  })
+
+  it('U3 캐시 행과 요약을 섞는다 — 같은 버전·버전 0·보낼 목록 있는 문서는 캐시 값, 바뀐 문서·새 문서는 요약 값', async () => {
+    const dbName = freshDbName()
+    const cache = await createRemoteCache(dbName)
+    const row = (id: string, title: string, version: number, updatedAt: number) => ({
+      id, title, content: `${id}본문`, lineEnding: 'lf' as const, folderId: null, pinnedAt: null, createdAt: 1, updatedAt, version,
+    })
+    await cache.putDoc('u1', row('a', 'A', 1, 1))
+    await cache.putDoc('u1', row('b', 'B옛', 1, 2))
+    await cache.putDoc('u1', row('c', 'C', 0, 3))
+    await cache.putDoc('u1', row('d', 'D', 1, 4))
+    await cache.addOutbox('u1', { type: 'updateDoc', docId: 'd', patch: { content: 'd2' } })
+    const server = makeFakeServer()
+    server.docs.set('a', { ...row('a', 'A', 1, 1) })
+    server.docs.set('b', { ...row('b', 'B새', 2, 5) })
+    server.docs.set('e', { ...row('e', 'E', 1, 6) })
+    const h = stagedFetch(server, { holdWrites: true })
+    vi.stubGlobal('fetch', h.fetchMock)
+    const store = await createServerStore('u1', { dbName })
+
+    const staged = await store.listStaged()
+    expect(staged.docs.map((d) => [d.id, d.title])).toEqual([
+      ['e', 'E'],
+      ['b', 'B새'],
+      ['d', 'D'],
+      ['c', 'C'],
+      ['a', 'A'],
+    ])
+    expect(staged.docs.every((d) => d.role === 'owner')).toBe(true)
+    h.release()
+    await staged.full
+  })
+
+  it('U4 /api/docs 네트워크 실패 — docs 는 캐시 행 전부, full 은 같은 id 를 본문째, 오프라인 표시', async () => {
+    const dbName = freshDbName()
+    const cache = await createRemoteCache(dbName)
+    for (const [id, updatedAt] of [['a', 1], ['b', 2]] as const) {
+      await cache.putDoc('u1', { id, title: id, content: `${id}본문`, lineEnding: 'lf', folderId: null, pinnedAt: null, createdAt: 1, updatedAt, version: 1 })
+    }
+    const server = makeFakeServer()
+    const h = stagedFetch(server, { failDocs: true })
+    vi.stubGlobal('fetch', h.fetchMock)
+    const store = await createServerStore('u1', { dbName })
+
+    const staged = await store.listStaged()
+    expect(staged.docs.map((d) => d.id)).toEqual(['b', 'a'])
+    const full = await staged.full
+    expect(full.map((d) => [d.id, d.content])).toEqual([
+      ['b', 'b본문'],
+      ['a', 'a본문'],
+    ])
+    expect(store.syncState?.online).toBe(false)
+  })
+
+  it('U5 docs 가 온 뒤 본문 받기가 끝나기 전 공유 문서를 get() 해도 캐시에 넣지 않는다', async () => {
+    const server = makeFakeServer()
+    seedServerDocs(server, 1)
+    server.docs.set('sh1', { id: 'sh1', title: '공유문서', content: '공유 내용', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 500 })
+    server.setShared([SHARED_ROW])
+    const h = stagedFetch(server, { listExcluded: ['sh1'], hold: (id) => id !== 'sh1' })
+    vi.stubGlobal('fetch', h.fetchMock)
+    const dbName = freshDbName()
+    const store = await createServerStore('u1', { dbName })
+
+    const staged = await store.listStaged()
+    const got = await store.get('sh1')
+    expect(got?.content).toBe('공유 내용')
+    expect(h.heldBodies()).toBe(1)
+    expect((await store.listCached()).docs.some((d) => d.id === 'sh1')).toBe(false)
+    const cache = await createRemoteCache(dbName)
+    expect(await cache.getDoc('u1', 'sh1')).toBeNull()
+    h.release()
+    await staged.full
+  })
+
+  it('U6 docs 가 온 뒤 캐시에 없는 X 를 get() 하면 풀 동시 상한과 상관없이 곧바로 받고, X 본문 GET 은 한 번', async () => {
+    const server = makeFakeServer()
+    const ids = seedServerDocs(server, 20)
+    const x = ids[19]
+    const h = stagedFetch(server)
+    vi.stubGlobal('fetch', h.fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+
+    const staged = await store.listStaged()
+    expect(h.counts.bodies.get(x)).toBeUndefined()
+    const getting = store.get(x)
+    await tick(10)
+    expect(h.counts.bodies.get(x)).toBe(1)
+    expect(h.heldBodies()).toBe(BODY_FETCH_CONCURRENCY + 1)
+
+    h.release()
+    expect((await getting)?.content).toBe('본문19')
+    await staged.full
+    expect(h.counts.bodies.get(x)).toBe(1)
+  })
+
+  it('U7 캐시 행 없는 서버 문서에 옮기기·고정은 던지지 않고 보낼 목록에, 행 없는 요약 문서 삭제는 removeDoc, 모르는 id 삭제는 그대로', async () => {
+    const server = makeFakeServer()
+    seedServerDocs(server, 3)
+    const dbName = freshDbName()
+    const h = stagedFetch(server, { holdWrites: true })
+    vi.stubGlobal('fetch', h.fetchMock)
+    const store = await createServerStore('u1', { dbName })
+    const cache = await createRemoteCache(dbName)
+    const outboxOf = async () => (await cache.getOutbox('u1')).map((e) => ({ type: e.type, docId: 'docId' in e ? e.docId : null }))
+
+    const staged = await store.listStaged()
+    await store.remove('s2')
+    expect(await outboxOf()).toEqual([{ type: 'removeDoc', docId: 's2' }])
+    await store.remove('nope')
+    expect(await outboxOf()).toEqual([{ type: 'removeDoc', docId: 's2' }])
+
+    const moving = store.moveDoc('s0', null)
+    const pinning = store.setPinned('s0', true)
+    await tick(5)
+    h.release()
+    await expect(moving).resolves.toMatchObject({ id: 's0', folderId: null })
+    await expect(pinning).resolves.toMatchObject({ id: 's0' })
+    expect(await outboxOf()).toEqual([
+      { type: 'removeDoc', docId: 's2' },
+      { type: 'moveDoc', docId: 's0' },
+      { type: 'setPinned', docId: 's0' },
+    ])
+    await staged.full
+  })
+})

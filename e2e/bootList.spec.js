@@ -1,6 +1,6 @@
 // 부팅 목록 읽기 — 병렬화와 캐시 먼저 셸 (specs/features/F-2042.md 8장)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, currentDocId, waitSaved } from './helpers.js'
+import { openApp, importMarkdown, currentDocId, waitSaved, setPrefBeforeLoad } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 function makeGate() {
@@ -184,8 +184,10 @@ test.describe('F-2042 A9·A10 본문 동시 개수와 부팅 시간', () => {
     await expect(page.locator('.app-shell')).not.toHaveAttribute('aria-busy', 'true', { timeout: 20_000 })
     expect(Date.now() - startA).toBeLessThanOrEqual(6_000)
 
-    const bodyRequests = server.readRequests().filter((r) => /\/api\/docs\/[^/]+$/.test(r.path))
-    expect(bodyRequests.length).toBe(50)
+    // 본문은 ready 뒤에도 받는다 — 50개가 모두 끝나기를 기다린 뒤 겹침을 센다 (F-2133 10장)
+    const bodyRequestsNow = () => server.readRequests().filter((r) => /\/api\/docs\/[^/]+$/.test(r.path))
+    await expect.poll(() => bodyRequestsNow().length, { timeout: 20_000 }).toBe(50)
+    const bodyRequests = bodyRequestsNow()
 
     let maxOverlap = 0
     for (const r of bodyRequests) {
@@ -206,5 +208,78 @@ test.describe('F-2042 A9·A10 본문 동시 개수와 부팅 시간', () => {
     await page.reload()
     await expect(page.locator('.app-shell')).not.toHaveAttribute('aria-busy', 'true', { timeout: 10_000 })
     expect(Date.now() - startB).toBeLessThanOrEqual(1_500)
+  })
+})
+
+// 본문 GET(/api/docs/{id})을 풀 때까지 붙잡는다 — 목록 GET(/api/docs)은 건드리지 않는다
+async function holdBodies(page) {
+  const gate = makeGate()
+  await page.route('**/api/docs/*', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await gate.promise
+    return route.fallback()
+  })
+  return gate.release
+}
+
+async function cachedDocCount(page) {
+  return page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const req = indexedDB.open('md-remote')
+        req.onerror = () => reject(req.error)
+        req.onsuccess = () => {
+          const db = req.result
+          const all = db.transaction('docs', 'readonly').objectStore('docs').getAll()
+          all.onsuccess = () => {
+            db.close()
+            resolve(all.result.length)
+          }
+          all.onerror = () => reject(all.error)
+        }
+      }),
+  )
+}
+
+async function seedTwenty(page) {
+  const server = await fakeServer(page)
+  const now = Date.now()
+  for (let i = 0; i < 20; i++) {
+    server.docs.set(`b${i}`, { ...serverDoc(`b${i}`, `부팅문서${i}`, now - i), content: `본문단어${i}\n` })
+  }
+  await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
+  await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+  return server
+}
+
+test.describe('F-2133 E1·E2 캐시 없는 부팅이 본문을 기다리지 않음', () => {
+  test('F-2133 E1 본문이 붙잡힌 채 요약으로 셸이 뜨고, 뒤에서 받은 본문이 캐시에 남아 다음 부팅은 캐시 먼저', async ({ page }) => {
+    const server = await seedTwenty(page)
+    const releaseBodies = await holdBodies(page)
+    await page.goto('/')
+    await expect(page.locator('.app-shell')).not.toHaveAttribute('aria-busy', 'true')
+    for (let i = 0; i < 20; i++) await expect(docLink(page, `부팅문서${i}`)).toBeVisible()
+
+    releaseBodies()
+    await expect.poll(() => server.readRequests().filter((r) => /\/api\/docs\/[^/]+$/.test(r.path)).length).toBe(20)
+    await expect.poll(() => cachedDocCount(page)).toBe(20)
+
+    await holdApiDocs(page)
+    await page.reload()
+    await expect(page.locator('.app-shell')).not.toHaveAttribute('aria-busy', 'true')
+    for (let i = 0; i < 20; i++) await expect(docLink(page, `부팅문서${i}`)).toBeVisible()
+  })
+
+  test('F-2133 E2 본문이 붙잡힌 채 연 검색은 첫 서버 회차를 기다렸다가 본문에서 찾는다', async ({ page }) => {
+    await seedTwenty(page)
+    const releaseBodies = await holdBodies(page)
+    await page.goto('/')
+    await expect(page.locator('.app-shell')).not.toHaveAttribute('aria-busy', 'true')
+
+    await page.keyboard.press('Control+Shift+F')
+    await page.locator('.search-input').fill('본문단어7')
+    releaseBodies()
+    await expect(page.getByRole('option')).toHaveCount(1)
+    await expect(page.getByRole('option')).toContainText('부팅문서7')
   })
 })
