@@ -1,6 +1,6 @@
-// F-2042 7.3 B1~B3 — 부팅 캐시 먼저 셸의 순수 함수
+// F-2042 7.3 B1~B3 — 부팅 캐시 먼저 셸의 순수 함수, F-2134 7장 B4·B5
 import { describe, expect, it } from 'vitest'
-import { canShowCachedShell, mergeBootList, shouldApplyListResult } from '../../../src/app/bootList'
+import { ACCOUNT_CONFIRM_WAIT_MS, canShowCachedShell, canStartBeforeAccount, judgeEarlyAccount, mergeBootList, shouldApplyListResult } from '../../../src/app/bootList'
 import type { HashRoute } from '../../../src/app/hashRoute'
 
 const NONE: HashRoute = { type: 'none' }
@@ -101,5 +101,44 @@ describe('B3 shouldApplyListResult — 순번 비교', () => {
 
   it('같은 순번은 반영하지 않는다(중복 반영 방지)', () => {
     expect(shouldApplyListResult({ seq: 2, lastAppliedSeq: 2 })).toBe(false)
+  })
+})
+
+describe('B4 canStartBeforeAccount', () => {
+  const base = { storedAccountId: 'u1', localMigratedId: 'u1', hash: NONE }
+
+  it('저장 id 없음 / localMigratedId 다름 / share 해시면 거짓', () => {
+    expect(canStartBeforeAccount({ ...base, storedAccountId: null })).toBe(false)
+    expect(canStartBeforeAccount({ ...base, localMigratedId: '' })).toBe(false)
+    expect(canStartBeforeAccount({ ...base, localMigratedId: 'u2' })).toBe(false)
+    expect(canStartBeforeAccount({ ...base, hash: SHARE })).toBe(false)
+  })
+
+  it('조건이 맞으면 home·none·doc·map·help·shares 에서 참', () => {
+    const hashes: HashRoute[] = [{ type: 'home' }, NONE, { type: 'doc', docId: 'd1' }, MAP_NO_ID, { type: 'map', docId: 'd1' }, HELP, SHARES]
+    for (const hash of hashes) expect(canStartBeforeAccount({ ...base, hash })).toBe(true)
+  })
+})
+
+describe('B5 judgeEarlyAccount', () => {
+  const inAs = (id: string) => ({ state: 'in' as const, id, email: `${id}@example.com`, blocked: false, warned: false })
+
+  it('in 같은 id·offline 은 confirm', () => {
+    expect(judgeEarlyAccount({ earlyId: 'u1', result: inAs('u1'), storedIdAfter: 'u1' })).toBe('confirm')
+    expect(judgeEarlyAccount({ earlyId: 'u1', result: { state: 'offline' }, storedIdAfter: 'u1' })).toBe('confirm')
+  })
+
+  it('in 다른 id + 저장 갱신·out + 저장 지움은 reload', () => {
+    expect(judgeEarlyAccount({ earlyId: 'u1', result: inAs('u2'), storedIdAfter: 'u2' })).toBe('reload')
+    expect(judgeEarlyAccount({ earlyId: 'u1', result: { state: 'out' }, storedIdAfter: null })).toBe('reload')
+  })
+
+  it('저장이 그대로면 stuck', () => {
+    expect(judgeEarlyAccount({ earlyId: 'u1', result: inAs('u2'), storedIdAfter: 'u1' })).toBe('stuck')
+    expect(judgeEarlyAccount({ earlyId: 'u1', result: { state: 'out' }, storedIdAfter: 'u1' })).toBe('stuck')
+  })
+
+  it('확인 대기 상한은 5,000ms', () => {
+    expect(ACCOUNT_CONFIRM_WAIT_MS).toBe(5_000)
   })
 })

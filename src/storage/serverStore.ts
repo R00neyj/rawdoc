@@ -2,9 +2,10 @@
 // F-209 2.5: 첨부는 캐시에 blob 을 두고 서버로 올린다(변환은 toWebp)
 import { createIdbStore } from './idbStore'
 import { createRemoteCache, docIdOf, folderIdOf, type CachedAttachment, type CachedDoc, type CachedFolder, type OutboxEntry, type OutboxItem, type RemoteCache, type RemoteCacheHandlers } from './remoteCache'
-import * as api from './docsApi'
+import * as docsApi from './docsApi'
 import { ApiError, type ServerDoc } from './docsApi'
-import { uploadAttachment, fetchAttachment, fetchUsage, deleteAttachment, AttachmentApiError } from './attachmentsApi'
+import * as attachmentsApi from './attachmentsApi'
+import { AttachmentApiError } from './attachmentsApi'
 import { toWebp } from './toWebp'
 import { extractAttachmentRefs } from '../lib/imageBlock'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
@@ -61,6 +62,8 @@ export type ServerStoreHandlers = {
   onAccountBlocked?: () => void
   // 시계 — 단위 테스트가 30초·Retry-After 를 기다리지 않게 주입한다. 기본 Date.now (F-2030 3.3)
   now?: () => number
+  // true 면 confirmAccount() 전까지 서버 요청을 보내지 않는다 (F-2134)
+  holdUntilConfirmed?: boolean
 } & RemoteCacheHandlers // md-remote 버전이 다른 탭과 엇갈릴 때 — idbStore 와 같은 세 콜백 (리뷰 S8)
 
 // 금고 충돌 사본 — storage 는 e2ee 를 import 하지 않으므로 withE2ee 가 함수를 주입한다 (F-405 5.4)
@@ -103,10 +106,12 @@ export type ServerStore = Store & {
   lastServerListAt(): number | null
   // 한 회차의 요약 시점 목록(docs)과 본문 받기가 끝난 list() 결과(full) — 거부된 full 은 부르는 쪽이 안 기다려도 된다 (F-2133 3.1)
   listStaged(): Promise<{ docs: DocSummary[]; full: Promise<Doc[]> }>
+  // 멈춤을 풀고 outbox 회차를 한 번 시작한다. 두 번째부터는 아무것도 하지 않는다 (F-2134 5장)
+  confirmAccount(): void
 }
 
 // 안 보낸 removeFolder(delete-all) 이 지운 폴더 id 들(자신 포함) — 서버 목록 기준 자손 판정 (F-247.md 3.1)
-function excludedByPendingDeleteAll(outbox: OutboxEntry[], serverFolders: api.ServerFolder[]): Set<string> {
+function excludedByPendingDeleteAll(outbox: OutboxEntry[], serverFolders: docsApi.ServerFolder[]): Set<string> {
   const excluded = new Set<string>()
   for (const entry of outbox) {
     if (entry.type !== 'removeFolder' || entry.mode !== 'delete-all') continue
@@ -243,6 +248,37 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   const bytesHoldUntil = new Map<number, number>() // 413 bytes — 그 항목만 (4.3)
   const docsHoldUntil = new Map<number, number>() // 413 docs — outbox 의 모든 createDoc (4.3)
 
+  // ----- F-2134 5장 — 계정 확인 전 멈춤. 서버를 부르는 자리는 아래 api·첨부 함수만 쓴다 -----
+  let releaseHold: () => void = () => {}
+  let accountHold: Promise<void> | null = handlers.holdUntilConfirmed
+    ? new Promise<void>((resolve) => {
+        releaseHold = () => resolve()
+      })
+    : null
+  function afterConfirm<A extends unknown[], R>(call: (...args: A) => Promise<R>): (...args: A) => Promise<R> {
+    return (...args) => (accountHold ? accountHold.then(() => call(...args)) : call(...args))
+  }
+  const api = {
+    listDocs: afterConfirm(docsApi.listDocs),
+    getDoc: afterConfirm(docsApi.getDoc),
+    getShared: afterConfirm(docsApi.getShared),
+    createDoc: afterConfirm(docsApi.createDoc),
+    updateDoc: afterConfirm(docsApi.updateDoc),
+    setDocE2ee: afterConfirm(docsApi.setDocE2ee),
+    moveDocFolder: afterConfirm(docsApi.moveDocFolder),
+    setPinned: afterConfirm(docsApi.setPinned),
+    removeDoc: afterConfirm(docsApi.removeDoc),
+    importDocComments: afterConfirm(docsApi.importDocComments),
+    listFolders: afterConfirm(docsApi.listFolders),
+    createFolder: afterConfirm(docsApi.createFolder),
+    updateFolder: afterConfirm(docsApi.updateFolder),
+    removeFolder: afterConfirm(docsApi.removeFolder),
+  }
+  const uploadAttachment = afterConfirm(attachmentsApi.uploadAttachment)
+  const fetchAttachment = afterConfirm(attachmentsApi.fetchAttachment)
+  const fetchUsage = afterConfirm(attachmentsApi.fetchUsage)
+  const deleteAttachment = afterConfirm(attachmentsApi.deleteAttachment)
+
   // 진행 중인 첨부 원격 GET — id 별로 하나만, 끝나면(성공·실패 모두) Map 에서 뺀다. 위젯이 파괴·재생성돼 같은 id 를 거의 동시에 두 번 부르는 경우를 흡수한다 (F-406 E5)
   const inFlightAttachmentGets = new Map<string, Promise<Attachment | null>>()
 
@@ -250,7 +286,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   const inFlightBodyFetches = new Map<string, Promise<void>>()
   type ListSession = {
     // /api/docs 요약 — 실패하면 null (get() 이 3.5 대로 기다릴 대상)
-    summariesPromise: Promise<api.ServerDocSummary[] | null>
+    summariesPromise: Promise<docsApi.ServerDocSummary[] | null>
     // 이번 list() 가 받기로 한 문서 id → 서버 버전. summaries 처리 뒤 채워진다
     targetsPromise: Promise<Map<string, number>>
     // 요청이 나간 뒤 createDoc 이 성공한 문서 — 서버 목록에도 outbox 에도 없어 지워지지 않게 지킨다 (리뷰 S6)
@@ -389,6 +425,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   // 진행 중인 회차가 있으면 그 약속을 돌려준다 — flushOutbox 가 기다린다 (F-405 5.4)
   function kickSend(): Promise<void> {
     if (sendingRound) return sendingRound
+    if (accountHold) return Promise.resolve()
     if (blockedStop) return Promise.resolve()
     if (rateLimitedUntil !== null && now() < rateLimitedUntil) return Promise.resolve()
     quotaNoticeShownThisRound = false
@@ -1034,7 +1071,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   }
 
   // 요약 시점 목록 — 받을 문서는 요약 값, 나머지는 캐시 값, 그리고 공유 문서 (F-2133 3.2)
-  async function stagedDocs(summaries: api.ServerDocSummary[], targets: Map<string, number>, shared: Doc[] | null): Promise<DocSummary[]> {
+  async function stagedDocs(summaries: docsApi.ServerDocSummary[], targets: Map<string, number>, shared: Doc[] | null): Promise<DocSummary[]> {
     const rows = (await cache.getDocs(userId)).filter((d) => !targets.has(d.id)).map((d) => withoutContent(toDoc(d)))
     const fresh = summaries.filter((s) => targets.has(s.id)).map((s) => {
       const { version: _version, ...meta } = s
@@ -1047,13 +1084,15 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   // 공유받은 문서는 /api/docs 와 동시에 시작해 마지막에 기다린다. 절대 던지지 않는다 (F-2042 3.1, D2)
   // onStaged 는 요약·공유가 온 뒤 본문 받기 전에 한 번 부른다. /api/docs 가 실패하면 끝에서 (F-2133 3.2)
   async function runList(onStaged: (docs: DocSummary[]) => void): Promise<Doc[]> {
+    // 확인 전에는 회차를 열지 않는다 — 열린 회차가 있으면 get() 이 캐시 대신 요약을 기다린다 (F-2134 5장)
+    if (accountHold) await accountHold
     const sharedPromise = fetchShared().then((shared) => {
       knownSharedIds.clear()
       for (const d of shared ?? []) knownSharedIds.add(d.id)
       return shared
     })
 
-    const summariesPromise: Promise<api.ServerDocSummary[] | null> = (async () => {
+    const summariesPromise: Promise<docsApi.ServerDocSummary[] | null> = (async () => {
       try {
         const s = await api.listDocs()
         patchState({ online: true })
@@ -1085,7 +1124,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         const hasPendingDeleteAll = outbox.some((e) => e.type === 'removeFolder' && e.mode === 'delete-all')
         let excludedDocIds = new Set<string>()
         if (hasPendingDeleteAll) {
-          let serverFolders: api.ServerFolder[] = []
+          let serverFolders: docsApi.ServerFolder[] = []
           try {
             serverFolders = await api.listFolders()
           } catch {
@@ -1286,6 +1325,14 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       return entries.some((e) => (e.type === 'createDoc' || e.type === 'updateDoc' || e.type === 'importComments') && e.docId === docId)
     },
 
+    // 부팅이 /api/me 로 앞질러 연 계정을 확인한 뒤 부른다 — 막힘이 먼저 걸렸으면 회차는 시작하지 않는다 (F-2134 5장)
+    confirmAccount() {
+      if (!accountHold) return
+      accountHold = null
+      releaseHold()
+      kickSend()
+    },
+
     // App 이 /api/me 결과로 부른다 (F-2030 4.4)
     setAccountBlocked(blocked) {
       if (blocked) {
@@ -1461,7 +1508,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
     // list() 와 같은 방식 — 서버 목록으로 캐시를 맞추고 캐시에서 돌려준다 (F-207.md 2.2)
     async listFolders() {
-      let serverFolders: api.ServerFolder[] | null = null
+      let serverFolders: docsApi.ServerFolder[] | null = null
       const createdDuringRequest = new Set<string>()
       activeFolderListCreated.add(createdDuringRequest)
       try {

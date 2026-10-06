@@ -3305,3 +3305,90 @@ describe('F-2133 U1~U7 listStaged·공유 판정·행 없는 문서 쓰기', () 
     await staged.full
   })
 })
+
+// F-2134 7장 S1~S4 — 계정 확인 전 멈춤
+describe('F-2134 S1~S4 holdUntilConfirmed·confirmAccount', () => {
+  it('S1 멈춤 동안 create·update 는 fetch 0회로 outbox·pending 만 늘고, confirmAccount() 뒤 POST /api/docs 가 나간다', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const dbName = freshDbName()
+    const store = await createServerStore('u1', { dbName, holdUntilConfirmed: true })
+    const cache = await createRemoteCache(dbName)
+
+    const doc = await store.create({ title: 'T', content: 'a', lineEnding: 'lf' })
+    await tick(10)
+    expect((await cache.getOutbox('u1')).length).toBe(1)
+    expect(store.syncState?.pending).toBe(1)
+    await store.update(doc.id, { content: 'b' })
+    const other = await store.create({ title: 'O', content: 'o', lineEnding: 'lf' })
+    await tick(20)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect((await cache.getOutbox('u1')).length).toBeGreaterThanOrEqual(2)
+    expect(store.syncState?.pending).toBe((await cache.getOutbox('u1')).length)
+
+    store.confirmAccount()
+    await tick(40)
+    expect(requestsOf(fetchMock, 'POST', '/api/docs').map((b) => b.id).sort()).toEqual([doc.id, other.id].sort())
+    expect(server.docs.get(doc.id)?.content).toBe('b')
+  })
+
+  it('S2 멈춤 동안 list() 는 fetch 없이 미결, 캐시에 있는 get(id) 는 곧바로 캐시, confirmAccount() 뒤 list() 가 서버 목록으로 끝난다', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 's1')
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName(), holdUntilConfirmed: true })
+    const local = await store.create({ title: 'L', content: '로컬', lineEnding: 'lf' })
+
+    let listed: string[] | null = null
+    const listing = store.list().then((docs) => {
+      listed = docs.map((d) => d.id)
+    })
+    await tick(20)
+    expect(listed).toBeNull()
+    // GET_WAIT_FOR_LIST_MS(3초) 를 기다리면 이 몇 칸 안에 끝나지 않는다
+    const got = await Promise.race([store.get(local.id), tick(40).then(() => 'late' as const)])
+    expect(got).not.toBe('late')
+    expect(got).toMatchObject({ id: local.id, content: '로컬' })
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    store.confirmAccount()
+    await listing
+    expect(listed).toContain('s1')
+    expect(requestsOf(fetchMock, 'GET', '/api/docs').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('S3 멈춤 동안 setAccountBlocked(true) → confirmAccount() 면 쓰기 요청 0회', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName(), holdUntilConfirmed: true })
+    await store.create({ title: 'T', content: 'a', lineEnding: 'lf' })
+    await store.createFolder({ name: 'F' })
+
+    store.setAccountBlocked(true)
+    store.confirmAccount()
+    await tick(40)
+    expect(fetchMock.mock.calls.filter(([, init]) => ((init as RequestInit | undefined)?.method ?? 'GET') !== 'GET')).toHaveLength(0)
+    expect(store.syncState?.pending).toBe(2)
+  })
+
+  it('S4 confirmAccount() 를 두 번 불러도 회차는 한 번', async () => {
+    const server = makeFakeServer()
+    const fetchMock = vi.fn(server.fetchImpl)
+    vi.stubGlobal('fetch', fetchMock)
+    const store = await createServerStore('u1', { dbName: freshDbName(), holdUntilConfirmed: true })
+    await store.create({ title: 'T', content: 'a', lineEnding: 'lf' })
+    await tick(10)
+    // 회차가 네트워크 실패로 멈추게 해 두 번째 confirmAccount() 가 새 회차를 시작하면 POST 가 한 번 더 보인다
+    server.setNetworkDown(true)
+
+    store.confirmAccount()
+    await tick(30)
+    expect(requestsOf(fetchMock, 'POST', '/api/docs')).toHaveLength(1)
+    store.confirmAccount()
+    await tick(30)
+    expect(requestsOf(fetchMock, 'POST', '/api/docs')).toHaveLength(1)
+  })
+})

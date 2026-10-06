@@ -2,7 +2,7 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { flushSync } from 'react-dom'
 import { createIdbStore } from '../storage/idbStore'
-import { openStore } from '../storage/openStore'
+import { openStore, type OpenStoreAccount } from '../storage/openStore'
 import type { DocSummary, ServerStore } from '../storage/serverStore'
 import { openYjsStore, type YjsStore } from '../storage/yjsStore'
 import { openLiveSocket } from '../storage/liveSocket'
@@ -11,12 +11,12 @@ import { ancestorsOfDoc } from '../lib/folderTree'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { Doc, Folder, Store } from '../types'
 import { getPref, setPref } from './prefs'
-import { fetchAccount, type AccountState } from './account'
+import { fetchAccount, storedAccount, type AccountState } from './account'
 import { IconRefresh } from './icons'
 import { parseHash, type HashRoute } from './hashRoute'
 import { stripContent, sortByUpdatedAtDesc, type DocMeta } from './docMeta'
 import { resolveInitialDoc } from './resolveInitialDoc'
-import { canShowCachedShell, mergeBootList, shouldApplyListResult } from './bootList'
+import { ACCOUNT_CONFIRM_WAIT_MS, canShowCachedShell, canStartBeforeAccount, judgeEarlyAccount, mergeBootList, shouldApplyListResult } from './bootList'
 import type { DocPathKind } from './docPath'
 import { createLiveDocController } from './liveDoc'
 import { leaveScreens } from './leaveScreens'
@@ -43,6 +43,8 @@ export type BootDeps = {
   showNotice: (input: NoticeWithAction) => number
   beforeLeaveDoc: () => Promise<void>
   applyAccountFlags: (next: AccountState) => void
+  // 앞질러 연 셸이 계정 확인을 기다리는 동안 true — App 이 문서 세션·러너·금고 범위를 미룬다 (F-2134 6장)
+  setAccountPending: Dispatch<SetStateAction<boolean>>
   recheckAccount: () => Promise<void>
   addOpenFolders: (ids: string[] | null | undefined) => void
   openSharedFragment: (fragment: string, docsForFallback: DocMeta[]) => Promise<void>
@@ -105,7 +107,7 @@ export function decideBootRoute({ hash: parsedHash, docs: metaList, lastDocId, s
 export async function runBoot(deps: BootDeps): Promise<void> {
   const {
     setBootPhase, setDbBlockedMessage, setStore, setDocs, setFolders, setCurrentDocId, setForbiddenDocIds, setSharedDoc, setSharesOpen, setHelpOpen,
-    setMapRoute, setDeletedElsewhereId, showNotice, beforeLeaveDoc, applyAccountFlags, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
+    setMapRoute, setDeletedElsewhereId, showNotice, beforeLeaveDoc, applyAccountFlags, setAccountPending, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
     restartDocSessionAfterFlush, postTabMessage, replaceHashUrl, yjsStoreRef, e2eeStoreRef, e2eeRef, tabIdRef, createdHereRef, currentDocIdRef, focusEditorRef,
     foldersRef, commentsRef, bootListSeqRef, lastAppliedListSeqRef, deletedElsewhereSourceRef, docPathRef, e2eeConvertBusyRef,
   } = deps
@@ -116,9 +118,19 @@ export async function runBoot(deps: BootDeps): Promise<void> {
     return
   }
 
-  // 저장소는 부팅 때 한 번만 고른다 — 계정 상태를 먼저 읽고 그 결과로 고른다 (F-207.md 2.6)
-  const accountState = await fetchAccount()
-  applyAccountFlags(accountState)
+  // 저장소는 부팅 때 한 번만 고른다 — 이관을 마친 저장 id 가 있으면 /api/me 를 기다리지 않고 그 저장소를 멈춘 채 연다 (F-207.md 2.6, F-2134 3.2)
+  const accountPromise = fetchAccount()
+  const storedId = storedAccount()?.id ?? null
+  const earlyId = canStartBeforeAccount({ storedAccountId: storedId, localMigratedId: getPref('md.localMigrated', ''), hash: parseHash(location.hash) }) ? storedId : null
+  let accountState: AccountState | null = null
+  let storeAccount: OpenStoreAccount
+  if (earlyId === null) {
+    accountState = await accountPromise
+    applyAccountFlags(accountState)
+    storeAccount = accountState
+  } else {
+    storeAccount = { state: 'in', id: earlyId }
+  }
 
   // resolvedStore 가 정해지기 전엔 handleServerConflict 를 못 만드므로 자리만 먼저 둔다
   let conflictHandler:
@@ -126,7 +138,8 @@ export async function runBoot(deps: BootDeps): Promise<void> {
     | null = null
 
   const resolvedStore = await openStore({
-    account: accountState,
+    account: storeAccount,
+    ...(earlyId === null ? {} : { holdUntilConfirmed: true }),
     // 새 버전 창: 옛 버전 연결이 열기를 막았을 때 부팅 화면에 문구를 보이고 기다린다 (F-136.md 3.3)
     onBlocked: () => {
       setDbBlockedMessage(
@@ -167,7 +180,7 @@ export async function runBoot(deps: BootDeps): Promise<void> {
   // 이 한 곳만 감싸면 App.tsx 의 모든 저장 경로가 자동으로 다른 탭에 신호를 보낸다 (F-296.md 6.2)
   const broadcastStore = withTabBroadcast(appStore, postTabMessage, tabIdRef.current)
   // 부팅에서 먼저 막힘을 알게 된 경우 — 첫 요청을 보내 403 을 받는 일 없이 처음부터 멈춰 있다 (F-2030 4.4 3번)
-  if (resolvedStore.kind === 'server' && accountState.state === 'in' && accountState.blocked) {
+  if (resolvedStore.kind === 'server' && accountState?.state === 'in' && accountState.blocked) {
     ;(resolvedStore as ServerStore).setAccountBlocked(true)
   }
   setStore({
@@ -216,7 +229,7 @@ export async function runBoot(deps: BootDeps): Promise<void> {
   }
 
   // 로컬 → 계정 이관 (F-208.md 2.1·2.2) — 첫 실행 안내 문서 판단은 이 뒤에 한다
-  if (resolvedStore.kind === 'server' && accountState.state === 'in') {
+  if (resolvedStore.kind === 'server' && accountState?.state === 'in') {
     const serverStore = resolvedStore as ServerStore
     await migrateLocalIfNeeded({
       userId: accountState.id,
@@ -338,19 +351,47 @@ export async function runBoot(deps: BootDeps): Promise<void> {
     }
   }
 
+  // 뒤 맞추기 — 서버 요약으로 캐시 목록을 맞춘다. 실패해도 새 알림은 없다(캐시를 그대로 둔다) (F-2042 4.2·4.7, F-2133 4.2)
+  function startBootResync(seq: number, snapshotIds: ReadonlySet<string>) {
+    Promise.all([appStore.listFolders(), (appStore as ServerStore).listStaged()])
+      .then(async ([newFolders, staged]) => {
+        applyBootMerge(seq, snapshotIds, newFolders, staged.docs)
+        // 첨부 정리는 본문까지 받은 결과로 그 뒤에 예약한다 — 실패하면 이 페이지에서는 하지 않는다 (F-2056 3.5)
+        scheduleGc(await staged.full)
+      })
+      .catch((err) => {
+        console.error('boot_resync_failed', err)
+      })
+  }
+
+  // 앞질러 연 계정을 /api/me 답으로 판정한다 — 확인 순서가 계약, 확인했으면 true (F-2134 4.1)
+  async function confirmEarlyAccount(earlyUserId: string): Promise<boolean> {
+    const result = await accountPromise
+    const verdict = judgeEarlyAccount({ earlyId: earlyUserId, result, storedIdAfter: storedAccount()?.id ?? null })
+    if (verdict === 'reload') {
+      await beforeLeaveDoc()
+      location.reload()
+      return false
+    }
+    if (verdict === 'stuck') {
+      console.error('boot_account_stuck')
+      return false
+    }
+    const serverStore = resolvedStore as ServerStore
+    applyAccountFlags(result)
+    if (result.state === 'in' && result.blocked) serverStore.setAccountBlocked(true)
+    serverStore.confirmAccount()
+    setAccountPending(false)
+    return true
+  }
+
   let usedCachedShell = false
-  if (resolvedStore.kind === 'server' && accountState.state === 'in') {
+  if (resolvedStore.kind === 'server' && (earlyId !== null || accountState?.state === 'in')) {
     try {
       const cachedList = await (appStore as ServerStore).listCached()
       const cachedDocIds = new Set(cachedList.docs.map((d) => d.id))
-      if (
-        canShowCachedShell({
-          storeKind: resolvedStore.kind,
-          accountState: accountState.state,
-          hash: parsedHash,
-          cachedDocIds,
-        })
-      ) {
+      // 앞질러 연 저장소도 in 으로 본다 (F-2134 3.2 4번)
+      if (canShowCachedShell({ storeKind: resolvedStore.kind, accountState: 'in', hash: parsedHash, cachedDocIds })) {
         usedCachedShell = true
         const cachedFolders = cachedList.folders
         const cachedMetaList = sortByUpdatedAtDesc(cachedList.docs.map(stripContent))
@@ -358,20 +399,21 @@ export async function runBoot(deps: BootDeps): Promise<void> {
         setDocs(cachedMetaList)
 
         const snapshotIds = new Set(cachedMetaList.map((d) => d.id))
-        const seq = ++bootListSeqRef.current
-
-        await finishBootRouting(cachedMetaList, cachedFolders)
-
-        // 뒤 맞추기 — 서버 요약으로 캐시 목록을 맞춘다. 실패해도 새 알림은 없다(캐시를 그대로 둔다) (F-2042 4.2·4.7, F-2133 4.2)
-        Promise.all([appStore.listFolders(), (appStore as ServerStore).listStaged()])
-          .then(async ([newFolders, staged]) => {
-            applyBootMerge(seq, snapshotIds, newFolders, staged.docs)
-            // 첨부 정리는 본문까지 받은 결과로 그 뒤에 예약한다 — 실패하면 이 페이지에서는 하지 않는다 (F-2056 3.5)
-            scheduleGc(await staged.full)
+        if (earlyId === null) {
+          const seq = ++bootListSeqRef.current
+          await finishBootRouting(cachedMetaList, cachedFolders)
+          startBootResync(seq, snapshotIds)
+        } else {
+          setAccountPending(true)
+          const pendingTimer = setTimeout(() => setAccountPending(false), ACCOUNT_CONFIRM_WAIT_MS)
+          await finishBootRouting(cachedMetaList, cachedFolders)
+          // 순번은 뒤 맞추기를 실제로 시작할 때 받는다 — 확인 전에 시작한 목록 읽기보다 늦은 결과다 (F-2134 4.1)
+          void confirmEarlyAccount(earlyId).then((confirmed) => {
+            if (!confirmed) return
+            clearTimeout(pendingTimer)
+            startBootResync(++bootListSeqRef.current, snapshotIds)
           })
-          .catch((err) => {
-            console.error('boot_resync_failed', err)
-          })
+        }
       }
     } catch (err) {
       // listCached()가 던지면 캐시 먼저를 포기하고 지금 순서로 간다 (F-2042 4.7)
@@ -380,6 +422,8 @@ export async function runBoot(deps: BootDeps): Promise<void> {
   }
 
   if (!usedCachedShell) {
+    // 캐시로 셸을 못 띄웠으면 앞질러 연 계정도 답을 기다려 확인한 뒤 지금 순서로 간다 (F-2134 3.2 4번)
+    if (earlyId !== null && !(await confirmEarlyAccount(earlyId))) return
     // 폴더를 문서와 함께 받아 먼저 반영한다 — 폴더가 늦으면 그 안의 문서가 잠깐 루트에 보인다
     const foldersPromise = appStore.listFolders()
     // 서버 저장소는 요약으로 셸을 띄우고 본문은 뒤에서 받는다 — GC 는 본문까지 받은 뒤 (F-2133 4.1)

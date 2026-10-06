@@ -134,6 +134,9 @@ export default function App() {
   const [store, setStore] = useState<Store>(() => createMemoryStore())
 
   const [bootPhase, setBootPhase] = useState<'booting' | 'ready'>('booting')
+  // 앞질러 연 셸이 계정 확인을 기다리는 동안 문서 세션·러너·금고 범위만 부팅 중으로 본다 (F-2134 6장)
+  const [accountPending, setAccountPending] = useState(false)
+  const sessionPhase: 'booting' | 'ready' = accountPending ? 'booting' : bootPhase
   // 다른 창이 옛 버전 IndexedDB 연결을 쥐고 있어 막혔을 때 부팅 화면에 보일 문구, 풀리면 null 로 되돌린다 (F-136.md 3.3)
   const [dbBlockedMessage, setDbBlockedMessage] = useState<string | null>(null)
   const [docs, setDocs] = useState<DocMeta[]>([])
@@ -346,7 +349,7 @@ export default function App() {
     docSession, setDocSession, docPath, isRealtime, everLiveIds, restartDocSession, restartDocSessionAfterFlush,
     liveSession, liveSnapshot, liveAwareness, livePeers, liveStopped, isOfflineView,
   } = useDocSession({
-    store, currentDocId, currentDoc, sharedDoc, forbiddenDocIds, accountBlocked, bootPhase, convertingDocId, docs, setDocs, setOpenDoc,
+    store, currentDocId, currentDoc, sharedDoc, forbiddenDocIds, accountBlocked, bootPhase: sessionPhase, convertingDocId, docs, setDocs, setOpenDoc,
     setStats, setForbiddenDocIds, createdHereRef, yjsStoreRef, currentDocIdRef, docSaverFlushRef,
   })
 
@@ -516,7 +519,7 @@ export default function App() {
   // 금고 키 상태·화면 (F-404.md 6장) — 범위(local·account)가 있을 때만 값을 돌려준다
   const e2ee = useE2ee({
     store,
-    bootPhase,
+    bootPhase: sessionPhase,
     tabId,
     postTabMessage,
     accountEmail: account.state === 'in' ? account.email : (storedAccount()?.email ?? null),
@@ -723,7 +726,7 @@ export default function App() {
 
     runBoot({
       setBootPhase, setDbBlockedMessage, setStore, setDocs, setFolders, setCurrentDocId, setForbiddenDocIds, setSharedDoc, setSharesOpen, setHelpOpen,
-      setMapRoute, setDeletedElsewhereId, showNotice, beforeLeaveDoc, applyAccountFlags, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
+      setMapRoute, setDeletedElsewhereId, showNotice, beforeLeaveDoc, applyAccountFlags, setAccountPending, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
       restartDocSessionAfterFlush, postTabMessage, replaceHashUrl, yjsStoreRef, e2eeStoreRef, e2eeRef, tabIdRef, createdHereRef, currentDocIdRef, focusEditorRef,
       foldersRef, commentsRef, bootListSeqRef, lastAppliedListSeqRef, deletedElsewhereSourceRef, docPathRef, e2eeConvertBusyRef,
     })
@@ -733,9 +736,9 @@ export default function App() {
   // md-yjs 나이 정리 뒤 밀린 편집 러너 — 부팅 뒤 idle 에 한 번, online 마다 한 번. 한 페이지에 러너 하나 (F-306 8.2·9.2)
   const flushRunningRef = useRef(false)
   useEffect(() => {
-    if (bootPhase !== 'ready' || store.kind !== 'server') return
+    if (sessionPhase !== 'ready' || store.kind !== 'server') return
     return startFlushRunner({ flushRunningRef, yjsStoreRef, currentDocIdRef })
-  }, [bootPhase, store.kind])
+  }, [sessionPhase, store.kind])
 
   // 부팅 스켈레톤 인계 — ready·공개 보기·F-136 막힘 중 하나라도 되면 겹침을 걷는다 (specs/features/F-2015.md 5.3)
   useLayoutEffect(() => {

@@ -1,5 +1,29 @@
-// F-2042 4.1·4.3 — 부팅 캐시 먼저 셸의 순수 함수
+// F-2042 4.1·4.3 — 부팅 캐시 먼저 셸의 순수 함수, F-2134 3.1·4.1 — 계정 확인 전 셸
+import type { AccountState } from './account'
 import type { HashRoute } from './hashRoute'
+
+// 앞질러 연 셸의 문서 세션 미룸을 푸는 상한 — 서버 요청 멈춤은 이 값과 상관없이 답을 기다린다 (F-2134 3.2·D5)
+export const ACCOUNT_CONFIRM_WAIT_MS = 5_000
+
+export type EarlyAccountVerdict = 'confirm' | 'reload' | 'stuck'
+
+// 저장 id 로 저장소를 /api/me 전에 열 수 있는가 — 로컬 이관이 남았거나 공유 링크면 지금 순서 (F-2134 3.1)
+export function canStartBeforeAccount(input: { storedAccountId: string | null; localMigratedId: string; hash: HashRoute }): boolean {
+  if (!input.storedAccountId) return false
+  if (input.localMigratedId !== input.storedAccountId) return false
+  return input.hash.type !== 'share'
+}
+
+// 앞질러 연 사용자와 /api/me 답 비교 — 새로 고쳐도 같은 판정이 되풀이되면 stuck (F-2134 4.1)
+export function judgeEarlyAccount(input: { earlyId: string; result: AccountState; storedIdAfter: string | null }): EarlyAccountVerdict {
+  const { earlyId, result, storedIdAfter } = input
+  if (result.state === 'offline') return 'confirm'
+  if (result.state === 'in') {
+    if (result.id === earlyId) return 'confirm'
+    return storedIdAfter === result.id ? 'reload' : 'stuck'
+  }
+  return storedIdAfter === null ? 'reload' : 'stuck'
+}
 
 // 캐시 먼저 셸을 쓸 수 있는가 — 4.1 표를 모두 만족해야 참
 export function canShowCachedShell(input: {

@@ -1,7 +1,8 @@
-// F-2074 7.1 U1~U16 부팅 첫 화면 판정, R1~R3 부팅 갈래
+// F-2074 7.1 U1~U16 부팅 첫 화면 판정, R1~R3 부팅 갈래, F-2134 R6~R10 계정 확인 전 셸
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { decideBootRoute, runBoot, type BootDeps, type BootRouteInput } from '../../../src/app/bootFlow'
-import { fetchAccount } from '../../../src/app/account'
+import { fetchAccount, type AccountState } from '../../../src/app/account'
+import { ACCOUNT_CONFIRM_WAIT_MS } from '../../../src/app/bootList'
 import { openStore } from '../../../src/storage/openStore'
 import { openYjsStore } from '../../../src/storage/yjsStore'
 import { createMemoryStore } from '../../../src/storage/memoryStore'
@@ -9,7 +10,7 @@ import { migrateLocalIfNeeded } from '../../../src/app/migrateLocal'
 import { cleanupUnusedAttachments, scheduleAttachmentGc } from '../../../src/app/attachmentGc'
 import type { Doc, Store } from '../../../src/types'
 
-vi.mock('../../../src/app/account', () => ({ fetchAccount: vi.fn() }))
+vi.mock('../../../src/app/account', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../../src/app/account')>()), fetchAccount: vi.fn() }))
 vi.mock('../../../src/storage/openStore', () => ({ openStore: vi.fn() }))
 vi.mock('../../../src/storage/yjsStore', () => ({ openYjsStore: vi.fn(() => Promise.resolve(null)) }))
 vi.mock('../../../src/e2ee/e2eeStore', () => ({ withE2ee: vi.fn((store: Store) => store) }))
@@ -109,6 +110,7 @@ function makeDeps(): BootDeps {
     showNotice: vi.fn(() => 1),
     beforeLeaveDoc: vi.fn(async () => {}),
     applyAccountFlags: vi.fn(),
+    setAccountPending: vi.fn(),
     recheckAccount: vi.fn(async () => {}),
     addOpenFolders: vi.fn(),
     openSharedFragment: vi.fn(async () => {}),
@@ -336,6 +338,115 @@ describe('runBoot', () => {
     // full·list 가 끝나지 않으므로 둘 중 하나라도 기다리면 runBoot 이 끝나지 않아 테스트 시간 제한에 걸린다
     await runBoot(deps)
     expect(deps.setDocs).toHaveBeenCalledWith([expect.objectContaining({ id: 'a', title: 'A' })])
+    expect(lastCall(deps.setBootPhase)).toBe('ready')
+  })
+
+  function stubStorage(entries: Record<string, string>) {
+    const map = new Map(Object.entries(entries))
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => map.get(k) ?? null,
+      setItem: (k: string, v: string) => void map.set(k, v),
+      removeItem: (k: string) => void map.delete(k),
+    })
+    return map
+  }
+
+  function deferredAccount() {
+    let resolve!: (state: AccountState) => void
+    const promise = new Promise<AccountState>((res) => {
+      resolve = res
+    })
+    return { promise, resolve }
+  }
+
+  const u1In = (blocked = false): AccountState => ({ state: 'in', id: 'u1', email: 'u1@example.com', blocked, warned: false })
+
+  // md.account·md.localMigrated = u1, 캐시 문서 하나, /api/me 미결 — 앞질러 연 길 (F-2134 R6)
+  async function bootEarly() {
+    stubLocation('')
+    vi.mocked(migrateLocalIfNeeded).mockClear()
+    const storage = stubStorage({ 'md.account': JSON.stringify({ id: 'u1', email: 'u1@example.com' }), 'md.localMigrated': 'u1' })
+    const answer = deferredAccount()
+    vi.mocked(fetchAccount).mockReturnValue(answer.promise)
+    const server = { ...stagedServer({ cached: [fullA], staged: [summaryA], full: Promise.resolve([fullA]) }), confirmAccount: vi.fn() }
+    vi.mocked(openStore).mockResolvedValue(server as unknown as Store)
+    const deps = makeDeps()
+    await runBoot(deps)
+    return { storage, answer, server, deps }
+  }
+
+  const orderOf = (fn: unknown, arg?: unknown) => {
+    const mock = vi.mocked(fn as (...a: unknown[]) => unknown).mock
+    const i = arg === undefined ? mock.calls.length - 1 : mock.calls.findIndex(([v]) => v === arg)
+    return i < 0 ? Number.NaN : mock.invocationCallOrder[i]
+  }
+
+  it('R6 저장 id 로 앞질러 열면 /api/me 전에 ready·확인 대기, 계정 반영·확인은 아직', async () => {
+    const { server, deps } = await bootEarly()
+    expect(lastCall(deps.setBootPhase)).toBe('ready')
+    expect(deps.setAccountPending).toHaveBeenCalledWith(true)
+    expect(deps.applyAccountFlags).not.toHaveBeenCalled()
+    expect(server.confirmAccount).not.toHaveBeenCalled()
+    expect(server.listStaged).not.toHaveBeenCalled()
+    expect(migrateLocalIfNeeded).not.toHaveBeenCalled()
+    expect(lastCall(openStore)).toMatchObject({ account: { state: 'in', id: 'u1' }, holdUntilConfirmed: true })
+  })
+
+  it('R7 in(u1, blocked) 이 오면 계정 반영 → 막힘 → 확인 → 대기 풀기 → 뒤 맞추기 순서', async () => {
+    const { answer, server, deps } = await bootEarly()
+    answer.resolve(u1In(true))
+    await vi.waitFor(() => expect(server.listStaged).toHaveBeenCalled())
+    expect(deps.applyAccountFlags).toHaveBeenCalledWith(u1In(true))
+    expect(server.setAccountBlocked).toHaveBeenCalledWith(true)
+    const steps = [
+      orderOf(deps.applyAccountFlags),
+      orderOf(server.setAccountBlocked, true),
+      orderOf(server.confirmAccount),
+      orderOf(deps.setAccountPending, false),
+      orderOf(server.listStaged),
+    ]
+    expect(steps.every((v) => Number.isFinite(v))).toBe(true)
+    expect([...steps].sort((a, b) => a - b)).toEqual(steps)
+  })
+
+  it('R8 out 이 오고 md.account 가 지워졌으면 beforeLeaveDoc 뒤 새로고침 한 번, 확인하지 않는다', async () => {
+    const { storage, answer, server, deps } = await bootEarly()
+    const reload = vi.mocked(location.reload)
+    storage.delete('md.account')
+    answer.resolve({ state: 'out' })
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
+    expect(orderOf(deps.beforeLeaveDoc)).toBeLessThan(orderOf(reload))
+    expect(server.confirmAccount).not.toHaveBeenCalled()
+  })
+
+  it('R9 답이 없으면 ACCOUNT_CONFIRM_WAIT_MS 뒤 대기만 풀고 확인은 답이 올 때', async () => {
+    vi.useFakeTimers()
+    try {
+      const { answer, server, deps } = await bootEarly()
+      vi.advanceTimersByTime(ACCOUNT_CONFIRM_WAIT_MS - 1)
+      expect(deps.setAccountPending).not.toHaveBeenCalledWith(false)
+      vi.advanceTimersByTime(1)
+      expect(lastCall(deps.setAccountPending)).toBe(false)
+      expect(server.confirmAccount).not.toHaveBeenCalled()
+
+      answer.resolve(u1In())
+      await vi.waitFor(() => expect(server.confirmAccount).toHaveBeenCalledTimes(1))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('R10 md.account 가 없으면 /api/me 결과로 저장소를 연다 — 멈춤 없음', async () => {
+    stubLocation('')
+    stubStorage({})
+    vi.mocked(fetchAccount).mockResolvedValue(u1In())
+    vi.mocked(openStore).mockResolvedValue(stagedServer({ cached: [], staged: [], full: Promise.resolve([]) }) as unknown as Store)
+    const deps = makeDeps()
+    await runBoot(deps)
+    const args = vi.mocked(openStore).mock.calls.at(-1)?.[0]
+    expect(args?.account).toEqual(u1In())
+    expect(args?.holdUntilConfirmed).toBeUndefined()
+    expect(deps.setAccountPending).not.toHaveBeenCalled()
     expect(lastCall(deps.setBootPhase)).toBe('ready')
   })
 })
