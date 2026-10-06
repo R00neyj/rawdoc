@@ -4,6 +4,7 @@ import {
   openApp,
   importMarkdown,
   readSavedContent,
+  currentDocId,
   setViewMode,
   rectOf,
   fakeImeCompose,
@@ -32,12 +33,12 @@ test.describe('F-140 표 추가 버튼 위치와 칸 인라인 표시', () => {
     await expect(cells.nth(0).locator('.md-strong')).toBeVisible()
     await expect(cells.nth(1)).toHaveText('링크')
 
-    // 링크 클릭 시 새 탭이 열리지 않고 칸 편집이 시작된다
+    // 링크 글자를 Ctrl+클릭하면 열지 않고 칸 편집이 시작된다 (그냥 클릭은 연다 — 아래 '표 칸 링크 클릭')
     let opened = false
     page.once('popup', () => {
       opened = true
     })
-    await cells.nth(1).click()
+    await cells.nth(1).locator('.md-link').click({ modifiers: ['Control'] })
     await expect(wrap.locator('.md-table-cell-editing')).toHaveCount(1)
     await page.keyboard.press('Escape')
     expect(opened).toBe(false)
@@ -76,6 +77,38 @@ test.describe('F-140 표 추가 버튼 위치와 칸 인라인 표시', () => {
 
     const doc = await readSavedContent(page, docId)
     expect(doc.content).toMatch(/4x|x4/)
+  })
+})
+
+test.describe('표 칸 링크 클릭 — 위키링크·외부 링크', () => {
+  test('표 칸 링크 클릭 — 위키링크는 그 문서로, 외부 링크는 새 탭, 링크 밖은 칸 편집', async ({ page }) => {
+    const content = `${LEAD}| 링크 | 위키 |\n| --- | --- |\n| [바깥](https://example.com/x) | 앞 [[표 링크 문서\\|별칭]] |\n`
+    await openApp(page)
+    const docId = await importMarkdown(page, { content })
+    const wrap = page.locator('.md-table-widget')
+    const cells = wrap.locator('td')
+    await expect(cells.nth(1).locator('.md-wikilink')).toHaveText('별칭')
+
+    await page.evaluate(() => {
+      window.__opened = []
+      window.open = (url) => {
+        window.__opened.push(url)
+        return null
+      }
+    })
+    await cells.nth(0).locator('.md-link').click()
+    expect(await page.evaluate(() => window.__opened)).toEqual(['https://example.com/x'])
+    await expect(wrap.locator('.md-table-cell-editing')).toHaveCount(0)
+
+    // 링크 밖(칸 안쪽 여백)은 지금처럼 칸 편집
+    await cells.nth(1).click({ position: { x: 3, y: 3 } })
+    await expect(wrap.locator('.md-table-cell-editing')).toHaveCount(1)
+    await page.keyboard.press('Escape')
+
+    // 없는 문서 위키링크 — 본문과 같이 그 제목으로 새 문서를 만들어 연다
+    await cells.nth(1).locator('.md-wikilink').click()
+    await expect(page.locator('.doc-title')).toHaveValue('표 링크 문서')
+    expect(await currentDocId(page)).not.toBe(docId)
   })
 })
 

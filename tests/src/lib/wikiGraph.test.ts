@@ -58,9 +58,9 @@ describe('extractWikiTargets — A1', () => {
     expect(extractWikiTargets(content)).toEqual(['본문'])
   })
 
-  it('표 칸 안 [[…]] 는 뺀다', () => {
-    const content = ['[[앞]]', '| a | b |', '| --- | --- |', '| [[제외1]] | [[제외2]] |', '', '[[뒤]]'].join('\n')
-    expect(extractWikiTargets(content)).toEqual(['앞', '뒤'])
+  it('표 칸 안 [[…]] 도 담고, 칸의 [[대상\\|별칭]] 은 대상만, 이스케이프 없는 | 는 칸을 나눠 링크가 아니다', () => {
+    const content = ['[[앞]]', '| a | b |', '| --- | --- |', '| [[표1]] | [[표2\\|별칭]] |', '| [[나뉨|x]] | y |', '', '[[뒤]]'].join('\n')
+    expect(extractWikiTargets(content)).toEqual(['앞', '표1', '표2', '뒤'])
   })
 
   it('![[…]] 는 이미지식이라 뺀다', () => {
@@ -268,15 +268,16 @@ describe('scanWikiLinks (F-2020 U3)', () => {
     expect(links.map((l) => l.target)).toEqual(['본문'])
   })
 
-  it('표 줄 링크는 inTable: true', () => {
-    const content = ['[[앞]]', '| a | b |', '| --- | --- |', '| [[제외1]] | [[제외2]] |', '', '[[뒤]]'].join('\n')
+  it('표 줄 링크는 inTable: true, [[대상\\|별칭]] 의 대상 범위는 \\ 앞까지', () => {
+    const content = ['[[앞]]', '| a | b |', '| --- | --- |', '| [[표1]] | [[표2\\|별칭]] |', '', '[[뒤]]'].join('\n')
     const links = scanWikiLinks(content)
-    expect(links.map((l) => [l.target, l.inTable])).toEqual([
-      ['앞', false],
-      ['제외1', true],
-      ['제외2', true],
-      ['뒤', false],
+    expect(links.map((l) => [l.target, l.alias, l.inTable])).toEqual([
+      ['앞', null, false],
+      ['표1', null, true],
+      ['표2', '별칭', true],
+      ['뒤', null, false],
     ])
+    expect(content.slice(links[2].targetFrom, links[2].targetTo)).toBe('표2')
   })
 
   it('[[#헤딩]] 은 target: \'\' 로 나온다', () => {
@@ -286,21 +287,21 @@ describe('scanWikiLinks (F-2020 U3)', () => {
     expect(links[0].heading).toBe('결정')
   })
 
-  it('extractWikiTargets 는 scanWikiLinks 에서 표 줄·빈 대상을 뺀 target 목록과 같다', () => {
+  it('extractWikiTargets 는 scanWikiLinks 에서 빈 대상을 뺀 target 목록과 같다', () => {
     const content = [
       '[[A]]',
       '| a | b |',
       '| --- | --- |',
-      '| [[제외1]] | [[제외2]] |',
+      '| [[표1]] | x |',
       '',
       '[[B#헤딩]]',
       '[[#결정]]',
     ].join('\n')
     const expected = scanWikiLinks(content)
-      .filter((l) => !l.inTable && l.target !== '')
+      .filter((l) => l.target !== '')
       .map((l) => l.target)
     expect(extractWikiTargets(content)).toEqual(expected)
-    expect(extractWikiTargets(content)).toEqual(['A', 'B'])
+    expect(extractWikiTargets(content)).toEqual(['A', '표1', 'B'])
   })
 })
 

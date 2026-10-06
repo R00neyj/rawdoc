@@ -2,7 +2,7 @@
 import { markdownLanguage } from '@codemirror/lang-markdown'
 import type { MarkdownParser } from '@lezer/markdown'
 
-import { findWikiLinks, type WikiLinkMatch } from '../../lib/wikiLink'
+import { findWikiLinks, maskEscapedPipes, type WikiLinkMatch } from '../../lib/wikiLink'
 
 // markdownLanguage.parser 는 공개 타입(LRParser)으로 좁혀지지만 실제로는 항상 MarkdownParser 인스턴스다(@codemirror/lang-markdown 구현) — nodeSet·parseInline 접근에 필요
 const parser = markdownLanguage.parser as unknown as MarkdownParser
@@ -51,18 +51,19 @@ function sameMarks(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((m, i) => m === b[i])
 }
 
+// href: 외부 링크 주소, wiki: 위키링크 대상 — 칸 안 링크 클릭이 읽는다
 export type CellInlinePiece =
-  | { text: string; marks: string[]; title?: string }
+  | { text: string; marks: string[]; href?: string; wiki?: { target: string; heading: string | null } }
   | { br: true }
 
-// 제목 없는(title 없는) 조각끼리만 이어 붙인다 — 링크류·줄바꿈은 항상 독립 조각으로 둔다
-function push(out: CellInlinePiece[], text: string, marks: string[], title?: string): void {
+// 링크 아닌 조각끼리만 이어 붙인다 — 링크류·줄바꿈은 항상 독립 조각으로 둔다
+function push(out: CellInlinePiece[], text: string, marks: string[], link?: { href: string } | { wiki: { target: string; heading: string | null } }): void {
   const last = out[out.length - 1]
-  if (!title && last && !('br' in last) && !last.title && sameMarks(last.marks, marks)) {
+  if (!link && last && !('br' in last) && !last.href && !last.wiki && sameMarks(last.marks, marks)) {
     last.text += text
     return
   }
-  out.push(title ? { text, marks, title } : { text, marks })
+  out.push({ text, marks, ...link })
 }
 
 type Item =
@@ -104,7 +105,9 @@ function walkRange(
     if (item.from > cursor) push(out, text.slice(cursor, item.from), marks)
     if (item.kind === 'wiki') {
       // 보이는 글자: 별칭, 없으면 '#' 뒤까지 원문 조각 (F-2018 3.2)
-      push(out, item.wiki.alias ?? text.slice(item.wiki.targetFrom, item.wiki.targetTo).trim(), [...marks, 'wikilink'])
+      push(out, item.wiki.alias ?? text.slice(item.wiki.targetFrom, item.wiki.targetTo).trim(), [...marks, 'wikilink'], {
+        wiki: { target: item.wiki.target, heading: item.wiki.heading },
+      })
     } else if (item.kind === 'br') {
       out.push({ br: true })
     } else {
@@ -152,7 +155,7 @@ function emitNode(
     const urlNode = children.find((c) => typeName(c) === 'URL')
     if (urlNode && linkMarks.length >= 2 && linkMarks[0].to < linkMarks[1].from) {
       const url = text.slice(urlNode.from, urlNode.to)
-      push(out, text.slice(linkMarks[0].to, linkMarks[1].from), [...marks, 'link'], url)
+      push(out, text.slice(linkMarks[0].to, linkMarks[1].from), [...marks, 'link'], { href: url })
       return
     }
     push(out, text.slice(el.from, el.to), marks) // URL 없는 Link — 표에 없는 것, 글자 그대로
@@ -163,7 +166,7 @@ function emitNode(
     const urlNode = children.find((c) => typeName(c) === 'URL')
     if (urlNode) {
       const url = text.slice(urlNode.from, urlNode.to)
-      push(out, url, [...marks, 'link'], url)
+      push(out, url, [...marks, 'link'], { href: url })
       return
     }
     push(out, text.slice(el.from, el.to), marks)
@@ -172,7 +175,7 @@ function emitNode(
 
   if (name === 'URL') {
     const url = text.slice(el.from, el.to)
-    push(out, url, [...marks, 'link'], url)
+    push(out, url, [...marks, 'link'], { href: url })
     return
   }
 
@@ -185,7 +188,7 @@ export function parseCellInline(text: string): CellInlinePiece[] {
   if (text === '') return []
   const elements = parser.parseInline(text, 0) as unknown as LezerElement[]
   const codeRanges = collectCodeRanges(elements, [])
-  const wikiMatches = findWikiLinks(text).filter((m) => !codeRanges.some((cr) => m.from < cr.to && m.to > cr.from))
+  const wikiMatches = findWikiLinks(maskEscapedPipes(text)).filter((m) => !codeRanges.some((cr) => m.from < cr.to && m.to > cr.from))
   const brMatches = findBrMatches(text).filter((m) => !codeRanges.some((cr) => m.from < cr.to && m.to > cr.from))
   const out: CellInlinePiece[] = []
   walkRange(text, 0, text.length, elements, wikiMatches, brMatches, [], out)

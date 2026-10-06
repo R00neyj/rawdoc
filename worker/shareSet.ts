@@ -1,5 +1,5 @@
 // 위키링크를 따라 함께 공유할 문서를 너비 우선으로 모은다. D1 을 모르는 순수 함수 (specs/features/F-252.md 2.2, F-2018 10장)
-import { findWikiLinks } from '../src/lib/wikiLink'
+import { findWikiLinks, maskEscapedPipes } from '../src/lib/wikiLink'
 import { createWikiResolver, type WikiDocRef, type WikiFolderRef, type WikiResolver } from '../src/lib/wikiResolve'
 
 export type SetNode = { id: string; title: string; depth: number; parentId: string | null }
@@ -15,11 +15,11 @@ export interface CollectWikiSetResult {
   truncated: boolean
 }
 
-// [[#헤딩]](target '') 은 다른 문서를 가리키지 않아 뺀다 (F-2018 3.1)
+// [[#헤딩]](target '') 은 다른 문서를 가리키지 않아 뺀다 (F-2018 3.1). 표 칸 [[대상\|별칭]] 도 대상만 남긴다
 function extractWikiTargets(content: string): string[] {
   const targets: string[] = []
   for (const line of content.split(/\r\n|\r|\n/)) {
-    for (const match of findWikiLinks(line)) {
+    for (const match of findWikiLinks(maskEscapedPipes(line))) {
       if (match.target !== '') targets.push(match.target)
     }
   }

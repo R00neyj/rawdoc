@@ -25,33 +25,42 @@ describe('parseCellInline', () => {
     expect(parseCellInline('`**a**`')).toEqual([{ text: '**a**', marks: ['code'] }])
   })
 
-  it('링크 [글자](주소) — title 에 주소', () => {
+  it('링크 [글자](주소) — href 에 주소', () => {
     expect(parseCellInline('[x](https://e.com)')).toEqual([
-      { text: 'x', marks: ['link'], title: 'https://e.com' },
+      { text: 'x', marks: ['link'], href: 'https://e.com' },
     ])
   })
 
   it('맨 URL·<URL> 은 주소 글자 그대로에 link mark', () => {
     expect(parseCellInline('https://e.com')).toEqual([
-      { text: 'https://e.com', marks: ['link'], title: 'https://e.com' },
+      { text: 'https://e.com', marks: ['link'], href: 'https://e.com' },
     ])
     expect(parseCellInline('<https://e.com>')).toEqual([
-      { text: 'https://e.com', marks: ['link'], title: 'https://e.com' },
+      { text: 'https://e.com', marks: ['link'], href: 'https://e.com' },
     ])
   })
 
-  it('위키링크 [[대상]]·[[대상|별칭]] — 있음/없음 구분 없이 대상 또는 별칭', () => {
-    expect(parseCellInline('[[없는 문서]]')).toEqual([{ text: '없는 문서', marks: ['wikilink'] }])
-    expect(parseCellInline('[[문서|별칭]]')).toEqual([{ text: '별칭', marks: ['wikilink'] }])
+  it('위키링크 [[대상]]·[[대상|별칭]] — 보이는 글자는 대상 또는 별칭, wiki 에 대상', () => {
+    expect(parseCellInline('[[없는 문서]]')).toEqual([
+      { text: '없는 문서', marks: ['wikilink'], wiki: { target: '없는 문서', heading: null } },
+    ])
+    expect(parseCellInline('[[문서|별칭]]')).toEqual([{ text: '별칭', marks: ['wikilink'], wiki: { target: '문서', heading: null } }])
   })
 
   it('위키링크 헤딩 — [[문서#절]] 은 문서#절, [[#절]] 은 #절 (F-2018 U12)', () => {
-    expect(parseCellInline('[[문서#절]]')).toEqual([{ text: '문서#절', marks: ['wikilink'] }])
-    expect(parseCellInline('[[#절]]')).toEqual([{ text: '#절', marks: ['wikilink'] }])
+    expect(parseCellInline('[[문서#절]]')).toEqual([{ text: '문서#절', marks: ['wikilink'], wiki: { target: '문서', heading: '절' } }])
+    expect(parseCellInline('[[#절]]')).toEqual([{ text: '#절', marks: ['wikilink'], wiki: { target: '', heading: '절' } }])
   })
 
-  it('표 안 파이프 이스케이프에서 온 [[문서\\|별칭]] 도 별칭', () => {
-    expect(parseCellInline('[[문서\\|별칭]]')).toEqual([{ text: '별칭', marks: ['wikilink'] }])
+  it('표 안 파이프 이스케이프에서 온 [[문서\\|별칭]] 은 별칭, 대상에 \\ 가 붙지 않는다', () => {
+    expect(parseCellInline('[[문서\\|별칭]]')).toEqual([{ text: '별칭', marks: ['wikilink'], wiki: { target: '문서', heading: null } }])
+  })
+
+  it('나란한 위키링크 [[a]][[b]] 는 조각 둘', () => {
+    expect(parseCellInline('[[a]][[b]]')).toEqual([
+      { text: 'a', marks: ['wikilink'], wiki: { target: 'a', heading: null } },
+      { text: 'b', marks: ['wikilink'], wiki: { target: 'b', heading: null } },
+    ])
   })
 
   it('겹친 서식 **a *b***', () => {

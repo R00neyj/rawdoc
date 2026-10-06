@@ -1,5 +1,5 @@
 // 위키링크 관계 뽑기·그래프 만들기·부분 그래프. 순수 함수, DOM·CM6·markdown-it·React·저장소를 import 하지 않는다 (specs/features/F-292.md 3장, architecture.md 1장)
-import { findWikiLinks, type WikiLinkMatch } from './wikiLink'
+import { findWikiLinks, maskEscapedPipes, type WikiLinkMatch } from './wikiLink'
 import { findFrontmatter } from './frontmatter'
 import { createWikiResolver, type WikiDocRef, type WikiFolderRef } from './wikiResolve'
 
@@ -64,7 +64,8 @@ function linesWithOffsets(text: string): { line: string; start: number }[] {
 
 export type ScannedWikiLink = WikiLinkMatch & { inTable: boolean }
 
-// 문서 원문 한 덩어리에서 위키링크을 위치와 함께 훑는다 — extractWikiTargets 의 훑기 그대로, 표 줄도 뺴지 않고 inTable 로 남긴다 (F-2020.md 5.2)
+// 문서 원문 한 덩어리에서 위키링크을 위치와 함께 훑는다 — 표 줄도 담고 inTable 로 남긴다 (F-2020.md 5.2)
+// 표 줄 별칭은 `[[대상\|별칭]]` 만 인정한다 — 이스케이프 없는 `|` 는 칸을 나눠 링크가 아니다(F-131 2장)
 export function scanWikiLinks(content: string): ScannedWikiLink[] {
   if (typeof content !== 'string' || content === '') return []
 
@@ -102,14 +103,17 @@ export function scanWikiLinks(content: string): ScannedWikiLink[] {
     const lineInTable = inTable
     if (inTable && line.trim() === '') inTable = false
 
-    const masked = maskInlineCode(line)
+    const masked = maskInlineCode(lineInTable ? maskEscapedPipes(line) : line)
     for (const link of findWikiLinks(masked)) {
+      const escapedPipe = lineInTable && link.alias !== null && line[link.targetTo - 1] === '\\'
+      if (lineInTable && link.alias !== null && !escapedPipe) continue
+      const targetTo = escapedPipe ? link.targetTo - 1 : link.targetTo
       results.push({
         ...link,
         from: baseOffset + start + link.from,
         to: baseOffset + start + link.to,
         targetFrom: baseOffset + start + link.targetFrom,
-        targetTo: baseOffset + start + link.targetTo,
+        targetTo: baseOffset + start + targetTo,
         inTable: lineInTable,
       })
     }
@@ -118,10 +122,10 @@ export function scanWikiLinks(content: string): ScannedWikiLink[] {
   return results
 }
 
-// 문서 원문 한 덩어리에서 위키링크 대상 제목을 순서대로 뽑는다 (3.2). 표 줄·빈 대상(헤딩만 있는 링크)은 뺀다
+// 문서 원문 한 덩어리에서 위키링크 대상 제목을 순서대로 뽑는다 (3.2). 빈 대상(헤딩만 있는 링크)은 뺀다
 export function extractWikiTargets(content: string): string[] {
   return scanWikiLinks(content)
-    .filter((link) => !link.inTable && link.target !== '') // [[#헤딩]] 은 다른 문서를 가리키지 않는다 (F-2018 9.1)
+    .filter((link) => link.target !== '') // [[#헤딩]] 은 다른 문서를 가리키지 않는다 (F-2018 9.1)
     .map((link) => link.target)
 }
 

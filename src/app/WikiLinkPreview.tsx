@@ -223,6 +223,10 @@ export default function WikiLinkPreview({
     }
     const span = target.closest('.md-wikilink:not(.md-wikilink--missing)')
     if (!span) return null
+    // 표 칸 위젯 안 링크는 문서 위치가 없어 대상을 data 속성으로 싣는다 (tableWidget.ts)
+    if (span instanceof HTMLElement && span.dataset.wikilink !== undefined) {
+      return { targetStr: span.dataset.wikilink, heading: span.dataset.wikilinkHeading ?? null, el: span }
+    }
     const view = editorRef.current?.view
     if (!view) return null
     const pos = view.posAtDOM(span)

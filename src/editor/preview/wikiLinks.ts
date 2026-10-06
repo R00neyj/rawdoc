@@ -2,7 +2,7 @@
 // 활성(닿음) 판정은 F-129 와 같은 범위 단위(active.ts selectionTouches)
 import { syntaxTree } from '@codemirror/language'
 import type { EditorState, Extension, Range as CMRange } from '@codemirror/state'
-import { StateEffect, StateField } from '@codemirror/state'
+import { Facet, StateEffect, StateField } from '@codemirror/state'
 import type { ChangeDesc, Line } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin } from '@codemirror/view'
 import type { ViewUpdate } from '@codemirror/view'
@@ -86,12 +86,17 @@ function wikiLinksOnLine(state: EditorState, line: Line): WikiLinkOnLine[] {
 export type WikiContext = { resolver: WikiResolver; sourceFolderId: string | null; sourceE2ee?: boolean; hoverPreview?: boolean }
 
 // 있음 판정은 문서만, [[#헤딩]] 은 언제나 있음. title 은 있으면 대상 원문 조각(5.4), hoverPreview 켜짐이면 있는 링크는 아예 안 단다(F-2044 4.5)
-function visibleMark(target: string, shown: string, context: WikiContext): Decoration {
+// 표 칸 위젯(tableWidget.ts)도 같은 모양을 DOM 에 직접 입힌다
+export function wikiLinkLook(target: string, shown: string, context: WikiContext): { cls: string; title: string | null } {
   const exists = target === '' || context.resolver.resolve(target, context.sourceFolderId) !== null
   const cls = exists ? 'md-wikilink' : 'md-wikilink md-wikilink--missing'
-  if (exists && context.hoverPreview) return Decoration.mark({ class: cls })
-  const titleAttr = exists ? shown : `새 문서 만들기: ${target}`
-  return Decoration.mark({ class: cls, attributes: { title: titleAttr } })
+  if (exists && context.hoverPreview) return { cls, title: null }
+  return { cls, title: exists ? shown : `새 문서 만들기: ${target}` }
+}
+
+function visibleMark(target: string, shown: string, context: WikiContext): Decoration {
+  const { cls, title } = wikiLinkLook(target, shown, context)
+  return Decoration.mark(title === null ? { class: cls } : { class: cls, attributes: { title } })
 }
 
 const SYNTAX_MARK = Decoration.mark({ class: 'md-wikilink-mark' })
@@ -219,30 +224,36 @@ export function wikiLinksPreview(): Extension {
 
 export type OnOpenWikiLink = (target: string, heading?: string | null) => void
 
+// 위키링크 여는 함수 — 표 칸 위젯이 주 view 에서 꺼내 쓴다
+export const wikiLinkOpener = Facet.define<OnOpenWikiLink, OnOpenWikiLink | null>({ combine: (values) => values[0] ?? null })
+
 // 편집 모드 위키링크 클릭 확장(F-131 3장) — F-129 링크 클릭과 같은 구조, mousedown 에서 기본 동작을 막아야 여는 클릭에서 커서가 안 움직인다
 export function wikiLinkClicks(onOpenWikiLink?: OnOpenWikiLink): Extension {
-  return EditorView.domEventHandlers({
-    mousedown(event, view) {
-      if (!onOpenWikiLink) return false
-      if (event.button !== 0) return false // 왼쪽 버튼만
-      if (isComposing(view)) return false // 조합 중이면 가로채지 않는다
+  return [
+    onOpenWikiLink ? wikiLinkOpener.of(onOpenWikiLink) : [],
+    EditorView.domEventHandlers({
+      mousedown(event, view) {
+        if (!onOpenWikiLink) return false
+        if (event.button !== 0) return false // 왼쪽 버튼만
+        if (isComposing(view)) return false // 조합 중이면 가로채지 않는다
 
-      const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
-      if (pos == null) return false
+        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
+        if (pos == null) return false
 
-      const link = findWikiLinkAt(view.state, pos)
-      if (!link) return false
-      if (!(event.target as Element | null)?.closest?.('.md-wikilink')) return false // 실제 글자 위가 아니면 기본 동작
+        const link = findWikiLinkAt(view.state, pos)
+        if (!link) return false
+        if (!(event.target as Element | null)?.closest?.('.md-wikilink')) return false // 실제 글자 위가 아니면 기본 동작
 
-      if (event.shiftKey) return false // 기존 선택 확장 동작 그대로
-      if (event.ctrlKey || event.metaKey) return false // 열지 않고 커서 이동 — 편집 진입
+        if (event.shiftKey) return false // 기존 선택 확장 동작 그대로
+        if (event.ctrlKey || event.metaKey) return false // 열지 않고 커서 이동 — 편집 진입
 
-      // 드러난 상태(커서가 위키링크에 닿음)면 보통 커서 이동 — 열지 않는다
-      if (selectionTouches(view.state, link.from, link.to, isEditorFocused(view))) return false
+        // 드러난 상태(커서가 위키링크에 닿음)면 보통 커서 이동 — 열지 않는다
+        if (selectionTouches(view.state, link.from, link.to, isEditorFocused(view))) return false
 
-      event.preventDefault()
-      onOpenWikiLink(link.target, link.heading)
-      return true
-    },
-  })
+        event.preventDefault()
+        onOpenWikiLink(link.target, link.heading)
+        return true
+      },
+    }),
+  ]
 }

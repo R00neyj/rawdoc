@@ -58,6 +58,11 @@ export function findWikiLinks(lineText: unknown): WikiLinkMatch[] {
   return results
 }
 
+// 표 칸의 `\|`(GFM 파이프 이스케이프)를 같은 길이의 ` |` 로 덮는다 — [[대상\|별칭]] 의 대상에 `\` 가 붙지 않게 한다
+export function maskEscapedPipes(text: string): string {
+  return text.replace(/\\\|/g, ' |')
+}
+
 // 대상 제목 → 문서. 정확히 같은 제목, 없으면 대소문자 무시로, 여러 개면 최근 수정 것. 제목 빈 문서는 매칭 안 함 (F-131 2.1)
 export function resolveWikiTarget<T extends { title: string }>(target: unknown, docs: T[] | null | undefined): T | null {
   if (typeof target !== 'string') return null

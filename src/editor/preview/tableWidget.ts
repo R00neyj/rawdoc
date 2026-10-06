@@ -24,6 +24,8 @@ import {
 import type { TableModel } from './tableModel'
 import { observeHeight, stopObservingHeight } from './blocks'
 import { parseCellInline } from './cellInline'
+import { isOpenableUrl } from './links'
+import { setWikiContextEffect, wikiContextField, wikiLinkLook, wikiLinkOpener, type WikiContext } from './wikiLinks'
 import { insertLink, toggleEmphasis, toggleStrong } from '../commands'
 import { forceRecalc, isComposing } from '../composition'
 import { redoLocal, undoLocal } from '../yBinding'
@@ -217,7 +219,7 @@ function endEdit(mainView: EditorView, { deferDispatch = false }: { deferDispatc
   activeEdit.delete(mainView)
   entry.cellView.destroy()
   const cell = entry.widget.table.rows[entry.row]?.cells[entry.col]
-  renderCellText(entry.td, cell ? cell.text : '')
+  renderCellText(entry.td, cell ? cell.text : '', mainView)
   entry.td.classList.remove('md-table-cell-editing')
   hideCellHighlight(entry.wrap) // 편집이 끝나면 강조를 숨긴다(F-140 3.3)
 
@@ -581,7 +583,7 @@ const CELL_MARK_CLASS: Record<string, string> = {
 
 // 칸(td/th) 안쪽을 편집 중이 아닌 표시(인라인 서식)로 채운다. createElement·textContent 만 쓴다 — innerHTML 로 칸 글자를 안 넣는다(F-140 3.2 보안)
 // el.dataset.rawText 는 구조가 같을 때 "바뀌었는지"를 표시 글자가 아니라 칸 원문으로 비교하는 데 쓴다(updateDOM patch)
-function renderCellText(el: HTMLElement, text: string): void {
+function renderCellText(el: HTMLElement, text: string, view: EditorView): void {
   el.textContent = ''
   el.dataset.rawText = text
   for (const seg of parseCellInline(text)) {
@@ -596,9 +598,56 @@ function renderCellText(el: HTMLElement, text: string): void {
       span.appendChild(node)
       node = span
     }
-    if (seg.title && node.nodeType === Node.ELEMENT_NODE) (node as HTMLElement).title = seg.title
+    if (node instanceof HTMLElement) {
+      if (seg.href) {
+        node.title = seg.href
+        node.dataset.href = seg.href
+      }
+      if (seg.wiki) {
+        node.dataset.wikilink = seg.wiki.target
+        if (seg.wiki.heading !== null) node.dataset.wikilinkHeading = seg.wiki.heading
+      }
+    }
     el.appendChild(node)
   }
+  applyCellWikiLinkLooks(el, view.state.field(wikiContextField, false))
+}
+
+// 칸 위키링크에 본문과 같은 있음/없음 클래스·title 을 입힌다 (F-131 3장)
+function applyCellWikiLinkLooks(root: HTMLElement, context: WikiContext | undefined): void {
+  if (!context) return
+  for (const span of root.querySelectorAll<HTMLElement>('[data-wikilink]')) {
+    const target = span.dataset.wikilink ?? ''
+    const heading = span.dataset.wikilinkHeading
+    const { cls, title } = wikiLinkLook(target, heading === undefined ? target : `${target}#${heading}`, context)
+    span.className = cls
+    if (title === null) span.removeAttribute('title')
+    else span.title = title
+  }
+}
+
+// 해석 문맥이 바뀌면(문서 목록 갱신 등) 이미 그려진 칸 위키링크의 있음/없음을 다시 입힌다
+export const cellWikiLinkLooks = EditorView.updateListener.of((update) => {
+  if (!update.transactions.some((tr) => tr.effects.some((e) => e.is(setWikiContextEffect)))) return
+  const context = update.state.field(wikiContextField, false)
+  for (const wrap of update.view.dom.querySelectorAll<HTMLElement>('.md-table-widget')) applyCellWikiLinkLooks(wrap, context)
+})
+
+// 칸 안 링크 글자를 연다 — 위키링크는 주 view 의 여는 함수, 외부 링크는 F-129 와 같은 새 탭. 열었으면 true
+function openCellLink(view: EditorView, target: EventTarget | null): boolean {
+  const link = (target as Element | null)?.closest?.<HTMLElement>('[data-wikilink], [data-href]')
+  if (!link) return false
+  const wikiTarget = link.dataset.wikilink
+  if (wikiTarget !== undefined) {
+    const open = view.state.facet(wikiLinkOpener)
+    if (!open) return false
+    open(wikiTarget, link.dataset.wikilinkHeading ?? null)
+    return true
+  }
+  const href = link.dataset.href ?? ''
+  if (!isOpenableUrl(href)) return false
+  window.open(href, '_blank', 'noopener,noreferrer')
+  return true
 }
 
 // 마우스 버튼을 누른 채 다른 칸으로 끌면 범위 선택, 끌지 않고 떼면 그 칸 편집(F-165 2.1). document 에 임시로 mousemove·mouseup 을 걸어 칸 밖으로 나간 뒤에도 계속 따라간다
@@ -651,7 +700,7 @@ function buildCell(
   wrap: HTMLElement,
 ): HTMLTableCellElement {
   const el = document.createElement(tagName)
-  renderCellText(el, text)
+  renderCellText(el, text, mainView)
   el.tabIndex = 0
   el.dataset.row = String(row)
   el.dataset.col = String(col)
@@ -659,9 +708,10 @@ function buildCell(
   el.addEventListener('mousedown', (event) => {
     if (event.button !== 0) return
     event.preventDefault()
-    // 칸 안 링크·위키링크 글자를 눌러도 열지 않고 칸 편집을 시작한다(F-140 3.2)
     // 전파를 막아 EditorView 의 linkClicks·wikiLinkClicks(mousedown)가 같은 클릭을 다시 처리하지 않게 한다
     event.stopPropagation()
+    // 칸 안 링크 글자는 클릭으로 열고, Ctrl/Cmd+클릭이면 칸 편집을 시작한다 (F-131 3장)
+    if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !isComposing(mainView) && openCellLink(mainView, event.target)) return
     beginPointerSelection(mainView, wrap, row, col)
   })
   el.addEventListener('keydown', (event) => {
@@ -1089,7 +1139,7 @@ export class TableWidget extends WidgetType {
         const text = cell ? cell.text : ''
         const el = tr.cells[c]
         // "바뀌었는지" 는 표시 글자가 아니라 칸 원문으로 비교한다(F-140 3.2)
-        if (el.dataset.rawText !== text) renderCellText(el, text)
+        if (el.dataset.rawText !== text) renderCellText(el, text, view)
         el.dataset.row = String(r)
         el.dataset.col = String(c)
       }

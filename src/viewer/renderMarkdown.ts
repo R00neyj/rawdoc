@@ -421,7 +421,7 @@ md.renderer.rules.heading_open = function (tokens, idx, options, env, self) {
 }
 
 // ----- 위키링크 (F-131.md 4장, F-252.md 4.1) ----- 'inline' 규칙(code_inline·link_open 등으로 나눈) 다음에 실행해 남은 'text' 자식 토큰만 훑는다
-// 인라인코드·fence 는 'inline' 토큰이 아니라 자연히 빠지고, 표 칸은 table_open/close 로 깊이를 세어 건너뛴다
+// 인라인코드·fence 는 'inline' 토큰이 아니라 자연히 빠진다. 표 칸 `\|` 는 markdown-it 이 칸을 나눌 때 이미 `|` 로 풀어 별칭이 된다
 
 // 대상 제목 → href 문자열(찾으면) | null(못 찾으면) — href 모양은 호출부가 정한다 (F-252.md 4.1)
 type ResolveWikiLink = (target: string) => string | null
@@ -464,14 +464,8 @@ function wikiLinkTokens(
 }
 
 function wikiLinkRule(state: StateCore, resolveWikiLink: ResolveWikiLink | undefined): void {
-  const tokens = state.tokens
-  let tableDepth = 0
-
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i]
-    if (token.type === 'table_open') tableDepth++
-    else if (token.type === 'table_close') tableDepth--
-    if (token.type !== 'inline' || tableDepth > 0 || !token.children) continue
+  for (const token of state.tokens) {
+    if (token.type !== 'inline' || !token.children) continue
 
     let changed = false
     const nextChildren: Token[] = []

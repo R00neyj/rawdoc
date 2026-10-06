@@ -351,12 +351,12 @@ describe('renderMarkdown — 위키링크 (specs/features/F-131.md 7장 A3, F-25
     expect(html).not.toContain('<b>')
   })
 
-  it('표 칸 안은 위키링크로 바꾸지 않는다', () => {
-    const html = renderMarkdown('| a | [[b]] |\n| --- | --- |\n| x | y |\n', {
-      resolveWikiLink: () => 'id',
+  it('표 칸 안 위키링크도 바꾸고, 칸의 \\| 는 별칭 구분자다', () => {
+    const html = renderMarkdown('| a | [[b]] |\n| --- | --- |\n| [[c\\|별칭]] | y |\n', {
+      resolveWikiLink: (t) => `#/d/${t}`,
     })
-    expect(html).not.toContain('wikilink')
-    expect(html).toContain('[[b]]')
+    expect(html).toContain('<a data-wikilink="b" class="wikilink" href="#/d/b">b</a>')
+    expect(html).toContain('<a data-wikilink="c" class="wikilink" href="#/d/c">별칭</a>')
   })
 
   it('인라인코드·펜스 코드블록 안은 위키링크로 바꾸지 않는다', () => {

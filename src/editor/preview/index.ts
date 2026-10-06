@@ -11,6 +11,7 @@ import { inlinePreview } from './inline'
 import { gutterAlignPreview, linePreview, listIndentPreview } from './lines'
 import { linkClicks } from './links'
 import { mathPreview } from './mathPreview'
+import { cellWikiLinkLooks } from './tableWidget'
 import { wikiLinkClicks, wikiLinksPreview } from './wikiLinks'
 import type { OnOpenWikiLink } from './wikiLinks'
 
@@ -38,5 +39,6 @@ export function livePreview({
     linkClicks(),
     wikiLinksPreview(),
     wikiLinkClicks(onOpenWikiLink),
+    cellWikiLinkLooks,
   ]
 }
