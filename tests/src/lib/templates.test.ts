@@ -61,6 +61,19 @@ describe('listTemplates — U4 (F-2022.md 11.1)', () => {
   })
 })
 
+describe('listTemplates — 잠긴 금고 문서 (F-4003 U10)', () => {
+  it('템플릿 폴더 안 일반 1 + 잠긴 1 → 사용자 항목은 일반 하나, 제목 없는 문서 줄 없음', () => {
+    const folders: FolderLike[] = [{ id: 'T', name: '템플릿', parentId: null }]
+    const docs = [
+      { id: 'plain', title: '주간 보고', folderId: 'T' },
+      { id: 'locked', title: '', folderId: 'T', e2ee: 'locked' as const },
+    ]
+    const userEntries = listTemplates({ folders, docs }).filter((e) => e.source.kind === 'doc')
+    expect(userEntries.map((e) => e.id)).toEqual(['doc:plain'])
+    expect(userEntries.some((e) => e.title === '제목 없는 문서')).toBe(false)
+  })
+})
+
 describe('formatTemplateDate — U5 (2026-09-23 09:05:07 수요일 기준)', () => {
   const now = new Date(2026, 8, 23, 9, 5, 7)
 

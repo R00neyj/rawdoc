@@ -10,6 +10,7 @@ import type { NoticeWithAction } from './NoticeBar'
 import { exportDoc, exportDocAsText, exportDocAsHtml, copyDocAsRichText } from './exportDoc'
 import { downloadWorkspaceExport, type WorkspaceExportSourceStore } from './exportWorkspace'
 import { downloadVaultExport } from './exportVault'
+import { vaultNoticeOn } from './vaultVisibility'
 import { printDoc } from './printDoc'
 import { appliedUserCss } from './userCssApply'
 
@@ -23,7 +24,7 @@ export type ExportActionsDeps = {
   docSaverFlushRef: RefObject<() => Promise<boolean>>
   printRootRef: RefObject<HTMLDivElement | null>
   foldersRef: RefObject<readonly Pick<Folder, 'id' | 'e2ee'>[]>
-  e2eeRef: RefObject<{ keyring: { getStatus(): E2eeStatus }; requestOpen(): Promise<boolean> } | null>
+  e2eeRef: RefObject<{ keyring: { getStatus(): E2eeStatus; load(): Promise<void> }; requestOpen(): Promise<boolean> } | null>
   showNotice: (input: NoticeWithAction) => number
   resolveWikiHref: (target: string) => string | null
   resolveAttachment: ResolveAttachment
@@ -123,6 +124,14 @@ export function createExportActions(deps: ExportActionsDeps): ExportActions {
   // 로그인 + 오프라인이면 서버 첨부를 못 받아 내보내기를 막는다 (F-281.md 3.1)
   const exportOffline = store.kind === 'server' && syncState?.online === false
 
+  // 시작할 때 unknown 이면 먼저 읽는다 — 안내는 금고 문서 유무가 아니라 상태로 정한다 (F-4003 3.3 ⑥)
+  async function readVaultLocked(): Promise<boolean> {
+    const ring = e2eeRef.current
+    if (!ring) return false
+    if (ring.keyring.getStatus() === 'unknown') await ring.keyring.load()
+    return vaultNoticeOn(ring.keyring.getStatus())
+  }
+
   // ----- 전체 내보내기 — 설정 `데이터` 절 (specs/features/F-281.md 3.6) -----
   async function handleExportAll() {
     await docSaverFlushRef.current()
@@ -131,6 +140,7 @@ export function createExportActions(deps: ExportActionsDeps): ExportActions {
       scope: { kind: 'all' },
       onProgress: ({ done, total }) => showNotice({ type: 'info', message: `내보내는 중… ${done}/${total}` }),
       onNotice: showNotice,
+      vaultLocked: await readVaultLocked(),
     })
   }
 
@@ -159,6 +169,7 @@ export function createExportActions(deps: ExportActionsDeps): ExportActions {
         scope: { kind: 'folder', folderId: id },
         onProgress: ({ done, total }) => showNotice({ type: 'info', message: `내보내는 중… ${done}/${total}` }),
         onNotice: showNotice,
+        vaultLocked: await readVaultLocked(),
       })
     })()
   }
@@ -171,6 +182,7 @@ export function createExportActions(deps: ExportActionsDeps): ExportActions {
       scope: { kind: 'all' },
       onProgress: ({ done, total }) => showNotice({ type: 'info', message: `내보내는 중… ${done}/${total}` }),
       onNotice: showNotice,
+      vaultLocked: await readVaultLocked(),
     })
   }
 
@@ -188,6 +200,7 @@ export function createExportActions(deps: ExportActionsDeps): ExportActions {
         scope: { kind: 'folder', folderId: id },
         onProgress: ({ done, total }) => showNotice({ type: 'info', message: `내보내는 중… ${done}/${total}` }),
         onNotice: showNotice,
+        vaultLocked: await readVaultLocked(),
       })
     })()
   }

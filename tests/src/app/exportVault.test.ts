@@ -419,13 +419,13 @@ describe('exportVault (F-2020 U8)', () => {
 })
 
 describe('F-409 U10 잠긴 금고 문서', () => {
-  it('locked 문서는 lockedCount 로 빠지고 docs 에 없다', () => {
+  it('locked 문서는 docs 에 없고 계획에 lockedCount 가 없다', () => {
     const docs = [
       doc({ id: 'd1', title: '일반' }),
       doc({ id: 'locked', title: '', content: '', e2ee: 'locked' }),
     ]
     const plan = planVaultExport({ docs, folders: [], scope: { kind: 'all' }, now: NOW })
-    expect(plan.lockedCount).toBe(1)
+    expect('lockedCount' in plan).toBe(false)
     expect(plan.docs.map((d) => d.doc.id)).toEqual(['d1'])
   })
 
@@ -459,7 +459,19 @@ describe('F-409 U10 잠긴 금고 문서', () => {
     return { list: async () => docs, listFolders: async () => folders, getAttachment: async () => null }
   }
 
-  it('downloadVaultExport — 0개 + 잠김 → E32 하나만', async () => {
+  it('F-4003 U8 downloadVaultExport — 0개 + vaultLocked → E32 하나만', async () => {
+    const notices: Array<{ type: string; message: string }> = []
+    await downloadVaultExport({
+      store: storeOf([doc({ id: 'locked', title: '', content: '', e2ee: 'locked' })]),
+      scope: { kind: 'all' },
+      now: NOW,
+      vaultLocked: true,
+      onNotice: (n) => notices.push(n),
+    })
+    expect(notices).toEqual([{ type: 'warn', message: '금고가 잠겨 있어 내보낼 문서가 없습니다. 금고를 연 뒤 다시 해 주세요.' }])
+  })
+
+  it('F-4003 U8 downloadVaultExport — 0개 + vaultLocked 없음 → 잠긴 문서가 있어도 info', async () => {
     const notices: Array<{ type: string; message: string }> = []
     await downloadVaultExport({
       store: storeOf([doc({ id: 'locked', title: '', content: '', e2ee: 'locked' })]),
@@ -467,20 +479,37 @@ describe('F-409 U10 잠긴 금고 문서', () => {
       now: NOW,
       onNotice: (n) => notices.push(n),
     })
-    expect(notices).toEqual([{ type: 'warn', message: '금고가 잠겨 있어 내보낼 문서가 없습니다. 금고를 연 뒤 다시 해 주세요.' }])
+    expect(notices).toEqual([{ type: 'info', message: '내보낼 문서가 없습니다.' }])
   })
 
-  it('downloadVaultExport — 내보냄, 잠김 있음, 누락 0 → 성공 info 뒤 warn S3', async () => {
+  it('F-4003 U8 downloadVaultExport — 내보냄 + vaultLocked, 잠긴 문서 없음 → 성공 info 뒤 warn S3', async () => {
     const notices: Array<{ type: string; message: string }> = []
     await downloadVaultExport({
-      store: storeOf([doc({ id: 'd1', title: '문서' }), doc({ id: 'locked', title: '', content: '', e2ee: 'locked' })]),
+      store: storeOf([doc({ id: 'd1', title: '문서' })]),
       scope: { kind: 'all' },
       now: NOW,
+      vaultLocked: true,
       onNotice: (n) => notices.push(n),
     })
     expect(notices).toEqual([
       { type: 'info', message: '옵시디언 볼트로 내보냈습니다.' },
-      { type: 'warn', message: '금고가 잠겨 있어 금고 문서 1개는 빼고 내보냈습니다.' },
+      { type: 'warn', message: '금고가 잠겨 있어 금고 문서는 내보내지 않았습니다.' },
+    ])
+  })
+
+  it('F-4003 U8 downloadVaultExport — 내보냄 + vaultLocked, 누락 1 → E31', async () => {
+    const notices: Array<{ type: string; message: string }> = []
+    const img = `<div align="center">\n  <img src="attachments/0f3a9c2e7b1d4a58.png" alt="a">\n</div>\n`
+    await downloadVaultExport({
+      store: storeOf([doc({ id: 'd1', title: '문서', content: img }), doc({ id: 'locked', title: '', content: '', e2ee: 'locked' })]),
+      scope: { kind: 'all' },
+      now: NOW,
+      vaultLocked: true,
+      onNotice: (n) => notices.push(n),
+    })
+    expect(notices).toEqual([
+      { type: 'info', message: '옵시디언 볼트로 내보냈습니다.' },
+      { type: 'warn', message: '금고가 잠겨 있어 금고 문서는 내보내지 않았습니다. 이미지 1개를 찾을 수 없어 빼고 내보냈습니다.' },
     ])
   })
 })

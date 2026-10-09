@@ -849,17 +849,12 @@ body.sidebar-resizing {
   font-weight: 600;
 }
 
-/* 금고 문서·폴더 자물쇠, 잠긴 문서 제목 (F-405 6.6) — 자리·색은 design.md 가 정한다 */
+/* 금고 문서·폴더 자물쇠 (F-405 6.6) — 자리·색은 design.md 가 정한다 */
 .tree-e2ee-icon {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
   color: var(--muted);
-}
-
-.doc-item-btn--locked {
-  color: var(--muted);
-  font-style: italic;
 }
 
 /* 사이드바 문서 행·접힌 폴더 행·닫힌 공유받음 머리의 안 읽은 알림 점 — 알림함 안 읽음 점과 같은 값 (F-510 3.3, H1) */

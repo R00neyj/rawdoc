@@ -66,6 +66,7 @@ import { GUIDES_PATH } from '../lib/siteChrome'
 import AccountMenu, { type AccountMenuProps } from './AccountMenu'
 import SidebarFooter from './SidebarFooter'
 import type { Notice } from './notice'
+import { visibleOpenFolderIds, type VaultFolderGate } from './vaultVisibility'
 
 export { SIDEBAR_ID }
 
@@ -81,11 +82,9 @@ type MoveDocTarget = { id: string; title: string; folderId: string | null }
 
 // 금고 표시 (F-405 6.1) — 트리 노드는 buildTree 가 새로 만들어 e2ee 가 없으므로 id 로 찾는다
 type E2eeDocState = 'locked' | 'open'
-const LOCKED_DOC_TITLE = '잠긴 문서'
 
-function displayTitleOf(id: string, title: string, e2eeDocs: Map<string, E2eeDocState>): string {
-  return e2eeDocs.get(id) === 'locked' ? LOCKED_DOC_TITLE : displayDocTitle(title)
-}
+// 잠긴 금고 폴더 펼침 문·폴더 메뉴 `금고 잠그기` — 없으면 금고 폴더도 그냥 펼치고 잠그기 항목이 없다 (F-4003 3.1·3.2)
+export type SidebarVault = { gate: VaultFolderGate; onUnlockFolder: (folderId: string) => void; onLock: () => void }
 
 function E2eeIcon() {
   return (
@@ -158,6 +157,7 @@ type SidebarCtx = {
   e2eeConvert?: E2eeConvertMenu
   allDocs: Array<DocLike & { e2ee?: E2eeDocState }>
   allFolders: Array<FolderLike & { e2ee?: true }>
+  vault?: SidebarVault
   // 안 읽은 알림이 있는 문서 id·(접혔을 때만 보이는) 그 조상 폴더 id (F-510 3.3)
   unreadDocIds: ReadonlySet<string>
   unreadFolderIds: ReadonlySet<string>
@@ -273,6 +273,10 @@ function FolderRow({
   const canShare = !isMulti && ctx.isServerStore && !isE2eeFolder
   // 접혀 있을 때만 — 펼치면 그 아래 행으로 점이 옮겨간다 (F-510 3.3)
   const isUnread = !isOpen && ctx.unreadFolderIds.has(node.id)
+  const vault = ctx.vault
+  // 잠긴 금고 폴더는 펼치는 대신 D-11 을 띄운다 (F-4003 2.4·3.1)
+  const gated = isE2eeFolder && vault?.gate === 'locked'
+  const toggle = () => (gated ? vault.onUnlockFolder(node.id) : ctx.onToggleFolder(node.id))
 
   // `하위 폴더` 는 모든 폴더에 — 깊이 제한 없음 (F-2017 5.1)
   const ownItems: FolderMenuItem[] = [
@@ -295,6 +299,9 @@ function FolderRow({
   if (ctx.e2eeConvert) {
     const state = e2eeMenuForFolder(node.id, ctx.allDocs, ctx.allFolders)
     ownItems.push(...e2eeConvertItems(ctx, state, { kind: 'folder', id: node.id }, node.name))
+  }
+  if (isE2eeFolder && vault?.gate === 'open') {
+    ownItems.push({ key: 'e2ee-lock', label: '금고 잠그기', icon: IconLock, onSelect: vault.onLock })
   }
   ownItems.push({
     key: 'delete',
@@ -322,7 +329,8 @@ function FolderRow({
           type="button"
           className="tree-toggle"
           aria-label={`${node.name} ${isOpen ? '접기' : '펼치기'}`}
-          onClick={() => ctx.onToggleFolder(node.id)}
+          aria-haspopup={gated ? 'dialog' : undefined}
+          onClick={toggle}
         >
           <IconChevron size={16} className={`tree-toggle-icon${isOpen ? ' tree-toggle-icon--open' : ''}`} />
         </button>
@@ -339,7 +347,8 @@ function FolderRow({
           <button
             type="button"
             className="tree-label"
-            onClick={(e) => ctx.onItemClick(e, row, () => ctx.onToggleFolder(node.id))}
+            aria-haspopup={gated ? 'dialog' : undefined}
+            onClick={(e) => ctx.onItemClick(e, row, toggle)}
           >
             {node.name}
             {isUnread && <TreeUnreadSr />}
@@ -379,7 +388,7 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
   const row: SelectionRow = { kind: 'doc', id: node.id, key: rowKey('tree', node.id) }
   const menuOpenHere = ctx.contextMenu?.key === row.key
   const e2eeState = ctx.e2eeDocs.get(node.id)
-  const title = displayTitleOf(node.id, node.title, ctx.e2eeDocs)
+  const title = displayDocTitle(node.title)
   const isUnread = ctx.unreadDocIds.has(node.id)
 
   const ownItems: FolderMenuItem[] = [
@@ -424,7 +433,7 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
       >
         <span className="tree-toggle-spacer" aria-hidden="true" />
         <a
-          className={`tree-label doc-item-btn${e2eeState === 'locked' ? ' doc-item-btn--locked' : ''}`}
+          className="tree-label doc-item-btn"
           href={formatHash(node.id)}
           draggable={false}
           aria-current={node.id === ctx.currentDocId ? 'page' : undefined}
@@ -454,7 +463,7 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
   const row: SelectionRow = { kind: 'doc', id: doc.id, key: rowKey('pinned', doc.id) }
   const menuOpenHere = ctx.contextMenu?.key === row.key
   const e2eeState = ctx.e2eeDocs.get(doc.id)
-  const title = displayTitleOf(doc.id, doc.title, ctx.e2eeDocs)
+  const title = displayDocTitle(doc.title)
   const isUnread = ctx.unreadDocIds.has(doc.id)
 
   const ownItems: FolderMenuItem[] = [
@@ -494,7 +503,7 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
           <IconPin size={16} className="pinned-row-icon" />
         </span>
         <a
-          className={`tree-label doc-item-btn${e2eeState === 'locked' ? ' doc-item-btn--locked' : ''}`}
+          className="tree-label doc-item-btn"
           href={formatHash(doc.id)}
           draggable={false}
           aria-current={doc.id === ctx.currentDocId ? 'page' : undefined}
@@ -835,6 +844,8 @@ type SidebarProps = {
   commandRef?: RefObject<SidebarCommands | null>
   sharedLeave?: SharedLeaveMenu
   github?: SidebarGithub
+  // 잠긴 금고 폴더 문·`금고 잠그기` — 금고 범위가 없으면(메모리·공개 보기) 주지 않는다 (F-4003 3.1)
+  vault?: SidebarVault
 }
 
 // 명령 팔레트가 부르는 사이드바 동작 (F-2054 6.1)
@@ -887,6 +898,7 @@ export default function Sidebar({
   commandRef,
   sharedLeave,
   github,
+  vault,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
@@ -944,6 +956,9 @@ export default function Sidebar({
   const pinned = pinnedDocs(docs) // F-132.md 2장, 3장
   const unreadDocIds = unreadNotificationDocIds ?? EMPTY_UNREAD_SET
   const unreadFolderIds = foldersWithUnreadDocs(tree, unreadDocIds) // F-510 3.1·3.3
+  const e2eeFolderIds = new Set(folders.filter((f) => f.e2ee === true).map((f) => f.id))
+  // 잠긴 동안 금고 폴더는 저장된 펼침과 무관하게 접혀 보인다 — 펼침·안 읽음 점·Shift 범위가 모두 이 목록을 본다 (F-4003 2.3)
+  const shownOpenFolderIds = vault ? visibleOpenFolderIds(openFolderIds, e2eeFolderIds, vault.gate) : openFolderIds
 
   function startRename(id: string, name: string) {
     skipBlurCommitRef.current = false
@@ -1008,7 +1023,7 @@ export default function Sidebar({
     return null
   }
 
-  const visibleRows = visibleOrder({ pinnedIds: pinned.map((d) => d.id), tree, openFolderIds })
+  const visibleRows = visibleOrder({ pinnedIds: pinned.map((d) => d.id), tree, openFolderIds: shownOpenFolderIds })
 
   // 일반 클릭은 그대로 열고 단독 선택도 겸한다. Ctrl/Cmd 는 더하고 빼기, Shift 는 화면 순서 범위 (F-255.md 2·3.1)
   function handleItemClick(e: ReactMouseEvent<HTMLElement>, row: SelectionRow, action: () => void) {
@@ -1149,11 +1164,10 @@ export default function Sidebar({
 
   const e2eeDocs = new Map<string, E2eeDocState>()
   for (const d of docs) if (d.e2ee) e2eeDocs.set(d.id, d.e2ee)
-  const e2eeFolderIds = new Set(folders.filter((f) => f.e2ee === true).map((f) => f.id))
 
   const ctx: SidebarCtx = {
     currentDocId,
-    openFolderIds,
+    openFolderIds: shownOpenFolderIds,
     editingId,
     editingValue,
     dropTargetKey,
@@ -1192,6 +1206,7 @@ export default function Sidebar({
     e2eeConvert,
     allDocs: docs,
     allFolders: folders,
+    vault,
     unreadDocIds,
     unreadFolderIds,
   }

@@ -27,7 +27,6 @@ export type SearchIndex = {
   sharedCount: number // shared 인 문서 수 (F-284 4.4 안내 문구)
   rebuiltCount: number // 이번 호출에서 본문을 새로 만든 문서 수 — 계측·테스트용 (7장)
   reusedCount: number // 이번 호출에서 캐시를 재사용한 문서 수
-  lockedCount: number // e2ee === 'locked' 이라 항목을 만들지 않은 문서 수 (SearchDialog 안내 줄, F-409 3.1)
 }
 
 // 인덱스 재사용 범위 키. 계정·저장소 종류가 다르면 인덱스를 통째로 버린다 (3.4)
@@ -130,33 +129,26 @@ export async function buildSearchIndex(args: { store: SearchSource; scope: strin
   let reusedCount = 0
   let frontmatterUnreadableCount = 0
   let sharedCount = 0
-  let lockedCount = 0
   const entries: SearchIndexEntry[] = []
 
   // 목록을 기다리는 동안 잠기면(세대가 바뀌면) 캐시를 읽지도 쓰지도 지우지도 않는다 — 이미 취소된 호출이라 이번 목록만 계산해 돌려준다 (F-409 3.3)
   if (generation !== startGeneration) {
     for (const doc of docs) {
-      if (doc.e2ee === 'locked') {
-        lockedCount++
-        continue
-      }
+      if (doc.e2ee === 'locked') continue
       const entry = makeIndexEntry(doc, folderPaths)
       entries.push(entry)
       rebuiltCount++
       if (entry.frontmatterUnreadable) frontmatterUnreadableCount++
       if (entry.shared) sharedCount++
     }
-    return { scope, entries, frontmatterUnreadableCount, sharedCount, rebuiltCount, reusedCount, lockedCount }
+    return { scope, entries, frontmatterUnreadableCount, sharedCount, rebuiltCount, reusedCount }
   }
 
   const seenIds = new Set<string>()
 
   for (const doc of docs) {
     // 잠긴 금고 문서는 항목을 안 만든다 — seenIds 에서도 빠져 지우기 단계가 캐시의 평문을 스스로 지운다 (F-409 3.1)
-    if (doc.e2ee === 'locked') {
-      lockedCount++
-      continue
-    }
+    if (doc.e2ee === 'locked') continue
     seenIds.add(doc.id)
     const key = changeKey(doc)
     const hit = cache.get(doc.id)
@@ -188,7 +180,7 @@ export async function buildSearchIndex(args: { store: SearchSource; scope: strin
   cachedScope = scope
   cachedStore = store
 
-  return { scope, entries, frontmatterUnreadableCount, sharedCount, rebuiltCount, reusedCount, lockedCount }
+  return { scope, entries, frontmatterUnreadableCount, sharedCount, rebuiltCount, reusedCount }
 }
 
 // 모듈 수준 캐시를 비운다. 테스트가 매번 부른다 (5.4). 세대를 올려, 이미 기다리던 buildSearchIndex 가 이 리셋 뒤 평문을 캐시에 다시 쓰지 못하게 한다 (F-409 3.3)

@@ -114,7 +114,7 @@ describe('F-409 U4~U5 금고 문서', () => {
     resetMapIndexCache()
   })
 
-  it('U4 잠긴 문서는 entries·unreadable 어디에도 없다, lockedCount, 캐시가 준다', async () => {
+  it('U4 잠긴 문서는 entries·unreadable 어디에도 없다, 캐시가 준다', async () => {
     const store = createMemoryStore()
     const a = await store.create({ title: 'A', content: '[[B]]', lineEnding: 'lf' })
     const scope = mapIndexScope('memory', null)
@@ -133,7 +133,6 @@ describe('F-409 U4~U5 금고 문서', () => {
     }
     const first = await buildMapIndex({ store: source, scope })
     expect(first.entries.map((e) => e.id).sort()).toEqual([a.id, 'shared'])
-    expect(first.lockedCount).toBe(2)
     expect(first.entries.find((e) => e.id === 'shared')!.unreadable).toBe(true)
     expect(mapIndexCacheSize()).toBe(2)
   })

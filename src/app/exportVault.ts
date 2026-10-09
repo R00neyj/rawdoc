@@ -9,7 +9,15 @@ import { findFrontmatter, textAfterFrontmatter } from '../lib/frontmatter'
 import { parseMarkdownTokens } from '../viewer/renderMarkdown'
 import { scanWikiLinks } from '../lib/wikiGraph'
 import { createWikiResolver, type WikiResolver, type WikiDocRef, type WikiFolderRef } from '../lib/wikiResolve'
-import { selectExportScope, planExportPaths, type ExportScope, type WorkspaceExportStore, type WorkspaceExportSourceStore } from './exportWorkspace'
+import {
+  selectExportScope,
+  planExportPaths,
+  emptyExportNotice,
+  exportFollowUpWarning,
+  type ExportScope,
+  type WorkspaceExportStore,
+  type WorkspaceExportSourceStore,
+} from './exportWorkspace'
 import { downloadBlob } from './exportDoc'
 import type { Doc, Folder } from '../types'
 import type { Notice } from './notice'
@@ -24,7 +32,6 @@ export type VaultPlan = {
   zipFilename: string
   docs: VaultPlanDoc[] // zip 에 넣는 순서
   links: VaultLinkContext
-  lockedCount: number // e2ee === 'locked' 이라 뺀 문서 수 (F-409.md 5.1)
 }
 
 function formatLocalDate(ts: number): string {
@@ -129,7 +136,7 @@ export function planVaultExport({
   scope: ExportScope
   now: number
 }): VaultPlan {
-  const { docs: scopedDocs, folders: scopedFolders, rootFolderId, lockedCount } = selectExportScope(docs, folders, scope)
+  const { docs: scopedDocs, folders: scopedFolders, rootFolderId } = selectExportScope(docs, folders, scope)
   const { orderedFolders, docPaths } = planExportPaths(scopedDocs, scopedFolders, rootFolderId, {
     fileName: toObsidianFileName,
     folderName: toObsidianFolderName,
@@ -158,7 +165,7 @@ export function planVaultExport({
   const links: VaultLinkContext = { resolver, exportedIds, vaultPathOf }
   suffixCountsCache.set(links, buildSuffixCounts(vaultPathOf))
 
-  return { zipFilename, docs: vaultDocs, links, lockedCount }
+  return { zipFilename, docs: vaultDocs, links }
 }
 
 // 줄 시작 위치와 함께 훑는다 — wikiGraph.ts 의 것과 같은 규칙, 이미지 블록의 줄 범위를 원문 문자 위치로 바꾸는 데 쓴다 (F-2020.md 5.3)
@@ -350,12 +357,14 @@ export async function downloadVaultExport({
   now = Date.now(),
   onProgress,
   onNotice,
+  vaultLocked = false,
 }: {
   store: WorkspaceExportSourceStore
   scope: ExportScope
   now?: number
   onProgress?: (p: { done: number; total: number }) => void
   onNotice?: (notice: Notice) => void
+  vaultLocked?: boolean
 }): Promise<void> {
   let docs: Doc[]
   let folders: Folder[]
@@ -368,11 +377,7 @@ export async function downloadVaultExport({
 
   const plan = planVaultExport({ docs, folders, scope, now })
   if (plan.docs.length === 0) {
-    if (plan.lockedCount > 0) {
-      onNotice?.({ type: 'warn', message: '금고가 잠겨 있어 내보낼 문서가 없습니다. 금고를 연 뒤 다시 해 주세요.' })
-    } else {
-      onNotice?.({ type: 'info', message: '내보낼 문서가 없습니다.' })
-    }
+    onNotice?.(emptyExportNotice(vaultLocked))
     return
   }
 
@@ -386,21 +391,8 @@ export async function downloadVaultExport({
           ? `옵시디언 볼트로 내보냈습니다. 위키링크 ${result.rewrittenLinks}개에 경로를 붙였습니다.`
           : '옵시디언 볼트로 내보냈습니다.',
     })
-    // 알림 띠는 한 칸이라 잠긴 문서·이미지 누락을 warn 하나로 합쳐 보낸다 (F-409.md 5.2)
-    if (plan.lockedCount > 0) {
-      const lockedN = plan.lockedCount.toLocaleString('ko-KR')
-      if (result.missingCount > 0) {
-        const missingK = result.missingCount.toLocaleString('ko-KR')
-        onNotice?.({
-          type: 'warn',
-          message: `금고가 잠겨 있어 금고 문서 ${lockedN}개는 빼고 내보냈습니다. 이미지 ${missingK}개를 찾을 수 없어 빼고 내보냈습니다.`,
-        })
-      } else {
-        onNotice?.({ type: 'warn', message: `금고가 잠겨 있어 금고 문서 ${lockedN}개는 빼고 내보냈습니다.` })
-      }
-    } else if (result.missingCount > 0) {
-      onNotice?.({ type: 'warn', message: `이미지 ${result.missingCount}개를 찾을 수 없어 빼고 내보냈습니다.` })
-    }
+    const warning = exportFollowUpWarning(vaultLocked, result.missingCount)
+    if (warning) onNotice?.({ type: 'warn', message: warning })
   } catch {
     onNotice?.({ type: 'error', message: '내보내지 못했습니다.' })
   }

@@ -285,7 +285,7 @@ test.describe('F-409 검색', () => {
       await page.locator('.search-input').fill('비밀 본문')
       await page.waitForTimeout(300)
       await expect(page.getByText('찾는 문서가 없습니다')).toBeVisible()
-      await expect(page.locator('dialog[open] .search-note')).toContainText('금고가 잠겨 있어 금고 문서 1개는 찾지 않았습니다')
+      await expect(page.locator('dialog[open] .search-note')).toContainText('금고가 잠겨 있어 금고 문서는 찾지 않았습니다')
 
       await page.locator('.search-input').fill('')
       await page.waitForTimeout(300)
@@ -302,7 +302,7 @@ test.describe('F-409 검색', () => {
 
       await lockVaultViaPalette(page)
 
-      await expect(map.locator('.map-page-foot')).toContainText('금고가 잠겨 있어 금고 문서 1개는 지도에 넣지 않았습니다.')
+      await expect(map.locator('.map-page-foot')).toContainText('금고가 잠겨 있어 금고 문서는 지도에 넣지 않았습니다.')
       await expect(map.locator('.map-page-foot')).not.toContainText('공유받은 문서')
       await expect(map.locator('.map-list-group h2', { hasText: '끊긴 링크 (1)' })).toBeVisible()
       await expect(map.getByRole('button', { name: '비밀 제목', exact: true })).toBeVisible()
@@ -388,7 +388,7 @@ test.describe('F-409 검색', () => {
       await expect(page.locator('dialog[open] .search-dialog')).toBeVisible()
       await expect(page.getByRole('option')).toHaveCount(0)
       await expect(page.getByText('찾는 문서가 없습니다')).toBeVisible()
-      await expect(page.locator('dialog[open] .search-note')).toContainText('금고가 잠겨 있어 금고 문서 1개는 찾지 않았습니다')
+      await expect(page.locator('dialog[open] .search-note')).toContainText('금고가 잠겨 있어 금고 문서는 찾지 않았습니다')
       await expect(page.locator('.search-input')).toHaveValue('비밀 본문')
 
       await page.keyboard.press('Escape')
@@ -484,7 +484,7 @@ test.describe('F-409 내보내기', () => {
         page.waitForEvent('download'),
         dialog.getByRole('button', { name: '전체 내보내기' }).click(),
       ])
-      await expect(page.locator('.notice-message')).toHaveText('금고가 잠겨 있어 금고 문서 1개는 빼고 내보냈습니다.')
+      await expect(page.locator('.notice-message')).toHaveText('금고가 잠겨 있어 금고 문서는 내보내지 않았습니다.')
 
       const unzipped = await unzipDownload(download)
       const names = Object.keys(unzipped)

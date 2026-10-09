@@ -95,6 +95,8 @@ import { useCommentFab, fabAnchorOf } from './useCommentFab'
 import { useDocNavigation } from './useDocNavigation'
 import { useSidebarLayout } from './useSidebarLayout'
 import { useFolderActions } from './useFolderActions'
+import { useVaultGate } from './useVaultGate'
+import { hideLockedVaultDocs } from './vaultVisibility'
 import { useImportFlow } from './useImportFlow'
 import { useE2eeMigrate } from './useE2eeMigrate'
 import { useE2eeConvert } from './useE2eeConvert'
@@ -277,7 +279,9 @@ export default function App() {
   }, [currentDoc, folders])
 
   // docs 가 그대로면 같은 배열을 넘긴다 — 새 배열이면 memo·effect deps 가 매번 풀린다 (F-212.md 2.4, 리뷰 A14)
-  const ownedDocs = useMemo(() => docs.filter((d) => !isSharedDoc(d)), [docs])
+  // 표시만 하는 곳은 잠긴 금고 문서를 뺀 목록을 본다 — docs 자체는 P1·경로 판정 때문에 거르지 않는다 (F-4003 2.1)
+  const listedDocs = useMemo(() => hideLockedVaultDocs(docs), [docs])
+  const ownedDocs = useMemo(() => listedDocs.filter((d) => !isSharedDoc(d)), [listedDocs])
   const sharedDocsList: SharedDocLike[] = useMemo(
     () =>
       docs
@@ -533,7 +537,7 @@ export default function App() {
   // 금고 초기화 단계 본체 — 등록은 열쇠고리마다 한 번이고 매 커밋 최신 store 를 쓴다 (F-405 7.9)
   const e2eeResetStepRef = useRef<() => Promise<void>>(async () => {})
   // ----- 금고 이관·잠그기·초기화 (F-2073) -----
-  const { e2eeMigrateAsk, e2eeMigrateDialogOpen, setE2eeMigrateDialogOpen, runE2eeMigrateFlow, e2eeUnmountedDocId, runE2eeReset } = useE2eeMigrate({
+  const { e2eeMigrateDialogOpen, setE2eeMigrateDialogOpen, runE2eeMigrateFlow, e2eeUnmountedDocId, runE2eeReset } = useE2eeMigrate({
     store, bootPhase, account, e2ee, currentDocId, showNotice, dismissNotice, resyncFromStore, setDocs, setOpenDoc, setViewerHtml, setCurrentDocId,
     replaceHashUrl, e2eeRef, docsRef, foldersRef, currentDocIdRef, docSaverFlushRef, titleSavingRef, e2eeStoreRef, e2eeResetStepRef,
   })
@@ -1105,13 +1109,16 @@ export default function App() {
     store, currentDocId, isRealtime, setDocs, showNotice, editorRef, titleSavingRef, docsRef, currentDocIdRef,
   })
 
+  // ----- 잠긴 금고 폴더 문·금고 잠그기 (F-4003) -----
+  const vault = useVaultGate({ e2ee, probe: searchOpen || mapRoute !== null, requestOpen: requestE2eeOpen, expandFolder: (id) => addOpenFolders([id]), showNotice })
+
   // ----- 삭제·폴더 CRUD·일괄·고정·이동 (F-2067) -----
   const {
     requestDeleteDoc, requestDeleteFolder, cancelDelete, confirmDelete, handleCreateFolder, handleRenameFolder, requestBulkDelete,
     cancelBulkDelete, confirmBulkDelete, handleBulkMove, handleTogglePin, requestMoveDoc, cancelMoveDoc, confirmMoveDoc,
   } = useFolderActions({
     store, docs, folders, currentDocId, bulkDeleteItems, setDocs, setFolders, setCurrentDocId, setDeleteTarget, setBulkDeleteItems,
-    setMoveDocTarget, keepLiveTitle, showNotice, addOpenFolders, closeSidebarIfNarrow, replaceHashUrl,
+    setMoveDocTarget, keepLiveTitle, showNotice, addOpenFolders, closeSidebarIfNarrow, replaceHashUrl, vaultGate: vault?.gate,
   })
 
   // ----- D-4 사람 초대 (specs/features/F-212.md 2.5) -----
@@ -1305,6 +1312,7 @@ export default function App() {
           }
           unreadNotificationDocIds={unreadNotificationDocIdsValue}
           sharedLeave={store.kind === 'server' ? leaveShare.menu : undefined}
+          vault={vault}
         />
         <LeaveShareDialog target={leaveShare.target} sending={leaveShare.sending} onCancel={leaveShare.cancel} onConfirm={leaveShare.confirm} />
         {narrow && sidebarOpen && (
@@ -1314,7 +1322,7 @@ export default function App() {
           {!narrow && topBar}
           <NoticeBar notice={notice} onDismiss={() => setNotice(null)} />
           <AppScreens {...{
-            account, bootPhase, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs, e2ee,
+            account, bootPhase, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs: listedDocs, e2ee,
             goHome, handleOpenWikiLink, handleViewContextMenu, helpOpen, importSharedDoc, isEmpty, listSource, loginFromShares,
             mapDialogScope, mapRoute, openHelp, openSharesTarget, ownedDocs, recenterMap, requestImport, revokeShareGrantRow,
             revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc, sharesGrants, sharesLinks, sharesLoading, sharesOpen, showNotice,
@@ -1357,7 +1365,7 @@ export default function App() {
         changeBodyFont, changeContentWidth, changeE2eeLockMinutes, changeFontSize, changeHeadingFont, changeIndent, changeLineNumbers,
         changeNewDocTemplate, changeStartScreen, changeDefaultView, defaultViewPref, changeTheme, changeToolbar, changeWikiPreview, closeAccountDelete, closeContextMenu,
         closeImportResult, closePalette, closeSearch, closeSettings, confirmBulkDelete, confirmDelete, confirmImport, confirmMoveDoc,
-        contentWidthPref, contextMenu, deleteTarget, e2ee, e2eeConvertText, e2eeLockMinutesPref, e2eeMigrateAsk, e2eeMigrateDialogOpen,
+        contentWidthPref, contextMenu, deleteTarget, e2ee, e2eeConvertText, e2eeLockMinutesPref, e2eeMigrateDialogOpen,
         exportOffline, finishAccountDelete, folders, fontSizePref, handleContextMenuSelect, handleExportAll, handleExportVault,
         handleImportTargetChange, headingFont, importState, indentPref, inviteTarget, lineNumbersPref, listSource, moveDocTarget,
         newDocTemplatePref, openDocFromSearch, openSettings, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,

@@ -83,9 +83,9 @@ export function buildSearchNotes(input: {
   sharedCount: number
   offline: boolean
   loading: boolean
-  lockedCount?: number // 없으면 0 — 잠긴 금고 문서 수 (F-409 3.4)
+  vaultLocked?: boolean // 없으면 거짓 — 금고 상태로 정해 문서 유무를 드러내지 않는다 (F-4003 4장)
 }): string[] {
-  const { query, outcome, sharedCount, offline, loading, lockedCount = 0 } = input
+  const { query, outcome, sharedCount, offline, loading, vaultLocked = false } = input
   const notes: string[] = []
 
   if (loading) notes.push('목록을 새로 읽는 중…')
@@ -97,8 +97,8 @@ export function buildSearchNotes(input: {
     notes.push(`공유받은 문서 ${sharedCount.toLocaleString('ko-KR')}개는 제목만 찾았습니다`)
   }
   // 검색어만·필터만·둘 다 — 쿼리가 비어 있지 않을 때만. 자리는 안내 줄들의 맨 끝 (F-409 3.4)
-  if (lockedCount > 0 && !query.isEmpty) {
-    notes.push(`금고가 잠겨 있어 금고 문서 ${lockedCount.toLocaleString('ko-KR')}개는 찾지 않았습니다`)
+  if (vaultLocked && !query.isEmpty) {
+    notes.push('금고가 잠겨 있어 금고 문서는 찾지 않았습니다')
   }
 
   return notes

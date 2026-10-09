@@ -31,7 +31,6 @@ function noteFor(kind: NoteKind): string | null {
 
 export type E2eeMigrateDialogProps = {
   open: boolean
-  count: number
   userId: string
   e2ee: UseE2ee
   // 나중에·Esc·바깥 클릭 — 아무것도 쓰지 않는다 (2.4)
@@ -41,7 +40,7 @@ export type E2eeMigrateDialogProps = {
 }
 
 // D-14 1단계(로그인 전 금고 암호) · 2단계(계정 금고 열기, 두 금고 암호가 다를 때만) (specs/features/F-408.md 5.2)
-export default function E2eeMigrateDialog({ open, count, userId, e2ee, onClose, onReady }: E2eeMigrateDialogProps) {
+export default function E2eeMigrateDialog({ open, userId, e2ee, onClose, onReady }: E2eeMigrateDialogProps) {
   const titleId = 'e2ee-migrate-title'
   const [step, setStep] = useState<1 | 2>(1)
   const [password, setPassword] = useState('')
@@ -153,7 +152,7 @@ export default function E2eeMigrateDialog({ open, count, userId, e2ee, onClose, 
     }
   }
 
-  const description = `이 브라우저에 로그인 전에 만든 금고 문서 ${count.toLocaleString('ko-KR')}개가 있습니다. 그 금고의 암호를 입력하면 계정 금고로 옮깁니다. 이 브라우저의 금고 문서는 지우지 않습니다.`
+  const description = '이 브라우저에 로그인 전에 만든 금고 문서가 있습니다. 그 금고의 암호를 입력하면 계정 금고로 옮깁니다. 이 브라우저의 금고 문서는 지우지 않습니다.'
   const noteText = noteFor(note)
 
   return (

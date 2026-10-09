@@ -64,11 +64,6 @@ async function openRowMenu(page, name) {
   return page.locator('.item-menu-list:not([inert])')
 }
 
-async function expandIfCollapsed(page, name) {
-  const toggle = page.locator('.sidebar').getByRole('button', { name: `${name} 펼치기`, exact: true })
-  if (await toggle.count()) await toggle.click()
-}
-
 async function newFolder(page, name) {
   await page.locator('.sidebar').getByRole('button', { name: '새 폴더', exact: true }).click()
   const input = page.locator('.tree-rename-input')
@@ -225,15 +220,14 @@ test.describe('F-405 로컬 금고 문서', () => {
     await page.locator('.sidebar a').filter({ hasText: '제목 없는 문서' }).click()
     await page.reload()
     await waitBooted(page)
-    await expandIfCollapsed(page, VAULT_FOLDER)
 
-    // E3 잠긴 문서 — 틀린 암호는 오류, 맞으면 편집기
+    // E3 잠긴 문서는 사이드바에 행이 없다 — 해시로 직접 열면 P1 (F-4003 2.2). 틀린 암호는 오류, 맞으면 편집기
     const link = docLink(page, docId)
-    await expect(link).toHaveText('잠긴 문서')
-    await expect(link).toHaveClass(/doc-item-btn--locked/)
-    await expect(docRow(page, docId).locator('.tree-e2ee-icon')).toHaveCount(1)
+    await expect(link).toHaveCount(0)
 
-    await link.click()
+    await page.evaluate((id) => {
+      location.hash = `#/d/${id}`
+    }, docId)
     const panel = lockedPanel(page)
     await expect(panel.getByRole('heading', { name: '잠긴 금고 문서입니다.' })).toBeVisible()
     await expect(panel.locator('input[type="password"]')).toBeFocused()
@@ -253,7 +247,7 @@ test.describe('F-405 로컬 금고 문서', () => {
     await page.locator('.statusbar-e2ee').click()
     await expect(panel).toBeVisible()
     await expect(page.locator('.cm-host .cm-editor')).toHaveCount(0)
-    await expect(link).toHaveText('잠긴 문서')
+    await expect(link).toHaveCount(0)
     const html = await page.content()
     expect(html).not.toContain('비밀 본문')
     expect(html).not.toContain('비밀 제목')

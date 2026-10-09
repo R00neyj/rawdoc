@@ -263,7 +263,7 @@ test.describe('F-408 E1·E2 알림 — 나중에는 기억하지 않는다', () 
       await waitBooted(page)
 
       await expect(notice(page).locator('.notice-message')).toHaveText(
-        '이 브라우저에 로그인 전 금고 문서 2개가 있습니다. 금고 암호를 입력하면 계정 금고로 옮깁니다.',
+        '이 브라우저에 로그인 전 금고 문서가 있습니다. 금고 암호를 입력하면 계정 금고로 옮깁니다.',
       )
       await expect(notice(page).getByRole('button', { name: '옮기기' })).toBeVisible()
       await expect(notice(page).getByRole('button', { name: '나중에' })).toBeVisible()
@@ -278,7 +278,7 @@ test.describe('F-408 E1·E2 알림 — 나중에는 기억하지 않는다', () 
 
       await page.reload()
       await waitBooted(page)
-      await expect(notice(page).locator('.notice-message')).toContainText('로그인 전 금고 문서 2개가 있습니다')
+      await expect(notice(page).locator('.notice-message')).toContainText('로그인 전 금고 문서가 있습니다')
     })
     await test.step('D-14 를 연 뒤 오프라인이면 저장하지 못했다는 오류가 뜨고 대화상자는 열린 채로 남는다', async () => {
       await resetBrowserState(page)
@@ -292,6 +292,8 @@ test.describe('F-408 E1·E2 알림 — 나중에는 기억하지 않는다', () 
 
       await notice(page).getByRole('button', { name: '옮기기' }).click()
       const dialog = migrateDialog(page)
+      // D-14 1단계 설명에 개수가 없다 (F-4003 4장)
+      await expect(dialog).toContainText('이 브라우저에 로그인 전에 만든 금고 문서가 있습니다. 그 금고의 암호를 입력하면 계정 금고로 옮깁니다.')
       server.setOffline(true)
       await dialog.locator('input[aria-labelledby="e2ee-migrate-password-label"]').fill(PASSWORD_A)
       await dialog.getByRole('button', { name: '옮기기', exact: true }).click()
@@ -452,7 +454,7 @@ test.describe('F-408 E6·E7 계정 금고 있음(rewrap)', () => {
 
       await page.reload()
       await waitBooted(page)
-      await expect(notice(page).locator('.notice-message')).toContainText('로그인 전 금고 문서 2개가 있습니다')
+      await expect(notice(page).locator('.notice-message')).toContainText('로그인 전 금고 문서가 있습니다')
     })
     await test.step('E6 두 암호가 다르면 D-14 2단계를 거친다', async () => {
       await resetBrowserState(page)

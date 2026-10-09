@@ -348,7 +348,7 @@ test.describe('F-407 서버 금고로 옮기기', () => {
       expect(writes[2].path).toBe(`/api/attachments/${oldId}.png`)
       expect(requests.filter((r) => r.method === 'PUT' && r.path === `/api/attachments/${oldId}.png`)).toHaveLength(0)
     })
-    await test.step('F-407 E11 빼기 — 잠근 뒤 D-11 먼저, D-10 에 진짜 제목, 평문 PUT → 문서 PUT(키 null) → 옛 암호 첨부 DELETE', async () => {
+    await test.step('F-407 E11 빼기 — 잠근 뒤 행이 숨고, 팔레트 금고 열기 뒤 D-10 에 진짜 제목, 평문 PUT → 문서 PUT(키 null) → 옛 암호 첨부 DELETE', async () => {
       await resetBrowserState(page)
       const oldId = '00000000000000b1'
       const png = decodablePng(20, 10)
@@ -365,12 +365,19 @@ test.describe('F-407 서버 금고로 옮기기', () => {
       await page.locator('.statusbar-e2ee').click()
       await expect(page.locator('.statusbar-e2ee')).toHaveCount(0)
       const writesBefore = requests.length
-
-      const menu = await openMenuOf(page, docRow(page, 'sd1'))
-      await menu.getByRole('menuitem', { name: '금고에서 빼기…', exact: true }).click()
+      // 잠긴 금고 문서는 사이드바에 행이 없다 (F-4003 2.1) — 팔레트 `금고 열기` 로 연 뒤 메뉴를 쓴다
+      await expect(docRow(page, 'sd1')).toHaveCount(0)
+      await page.keyboard.press('Control+p')
+      const palette = page.locator('dialog[open] .command-palette')
+      await palette.locator('.command-palette-input').fill('금고 열기')
+      await palette.getByRole('option', { name: '금고 열기', exact: true }).click()
       await expect(unlockDialog(page)).toBeVisible()
       await unlockDialog(page).locator('input[type="password"]').fill(PASSWORD)
       await unlockDialog(page).getByRole('button', { name: '열기', exact: true }).click()
+      await expect(unlockDialog(page)).toBeHidden()
+
+      const menu = await openMenuOf(page, docRow(page, 'sd1'))
+      await menu.getByRole('menuitem', { name: '금고에서 빼기…', exact: true }).click()
       await expect(convertDialog(page)).toContainText('"뺄 메모"을(를) 복호화해 일반 문서로 저장합니다. 서버가 내용을 읽을 수 있게 됩니다.')
       await convertDialog(page).getByRole('button', { name: '빼기', exact: true }).click()
       await expect(notice(page)).toHaveText('"뺄 메모"을(를) 금고에서 뺐습니다.')

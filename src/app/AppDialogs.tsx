@@ -11,6 +11,7 @@ import SettingsDialog, { type SettingsGithub } from './SettingsDialog'
 import { userCssAccountId } from './useUserCss'
 import AccountDeleteDialog from './AccountDeleteDialog'
 import SearchDialog from './SearchDialog'
+import { vaultNoticeOn } from './vaultVisibility'
 import { GithubDialogs, type GithubDialogsProps } from './GithubPickerDialog'
 import CommandPalette from './CommandPalette'
 import ImportPreviewDialog from './ImportPreviewDialog'
@@ -65,7 +66,6 @@ export type AppDialogsProps = Pick<UseAccountStatusResult, 'account' | 'recheckA
     deleteTarget: DeleteTarget | null
     e2ee: UseE2ee | null
     e2eeConvertText: E2eeConvertDialogText | null
-    e2eeMigrateAsk: { count: number; bundle: string } | null
     e2eeMigrateDialogOpen: boolean
     folders: Folder[]
     // GitHub 설정 묶음·고르기 대화상자 — 기능이 꺼지면 둘 다 없다 (F-2128)
@@ -94,7 +94,7 @@ export default function AppDialogs({
   changeE2eeLockMinutes, changeFontSize, changeHeadingFont, changeIndent, changeLineNumbers, changeNewDocTemplate, changeStartScreen, changeTheme,
   changeToolbar, changeWikiPreview, closeAccountDelete, closeContextMenu, closeImportResult, closePalette, closeSearch, closeSettings,
   confirmBulkDelete, confirmDelete, confirmImport, confirmMoveDoc, contentWidthPref, contextMenu, deleteTarget, e2ee, e2eeConvertText,
-  e2eeLockMinutesPref, e2eeMigrateAsk, e2eeMigrateDialogOpen, exportOffline, finishAccountDelete, folders, fontSizePref, handleContextMenuSelect,
+  e2eeLockMinutesPref, e2eeMigrateDialogOpen, exportOffline, finishAccountDelete, folders, fontSizePref, handleContextMenuSelect,
   handleExportAll, handleExportVault, handleImportTargetChange, headingFont, importState, indentPref, inviteTarget, lineNumbersPref, listSource,
   moveDocTarget, newDocTemplatePref, openDocFromSearch, openSettings, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
   requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
@@ -124,7 +124,6 @@ export default function AppDialogs({
       {e2ee && store.kind === 'server' && account.state === 'in' && (
         <E2eeMigrateDialog
           open={e2eeMigrateDialogOpen}
-          count={e2eeMigrateAsk?.count ?? 0}
           userId={(store as ServerStore).userId}
           e2ee={e2ee}
           onClose={() => setE2eeMigrateDialogOpen(false)}
@@ -240,6 +239,7 @@ export default function AppDialogs({
         selectQueryRef={selectSearchQueryRef}
         offline={searchOffline}
         e2eeOpen={e2ee?.status === 'open'}
+        vaultLocked={e2ee ? vaultNoticeOn(e2ee.status) : false}
       />
       <CommandPalette open={paletteOpen} context={paletteContext} onClose={closePalette} selectQueryRef={selectPaletteQueryRef} />
       <ImportPreviewDialog

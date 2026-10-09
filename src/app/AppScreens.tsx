@@ -13,6 +13,7 @@ import type { UseImportFlowResult } from './useImportFlow'
 import type { UseSharesPageResult } from './useSharesPage'
 import type { UseContextMenuResult } from './useContextMenu'
 import type { NoticeWithAction } from './NoticeBar'
+import { vaultNoticeOn } from './vaultVisibility'
 // three 가 초기 로드에 붙지 않게 지연 경계를 여기 긋는다 (specs/features/F-292.md 3.3, F-2002 4장)
 const MapPage = lazy(() => import('./MapPage'))
 
@@ -103,6 +104,7 @@ export default function AppScreens({
               onClose={closeMap}
               onCreateDoc={() => createNewDoc()}
               e2eeOpen={e2ee?.status === 'open'}
+              vaultLocked={e2ee ? vaultNoticeOn(e2ee.status) : false}
             />
           </Suspense>
         </div>

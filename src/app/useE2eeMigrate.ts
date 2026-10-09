@@ -36,7 +36,6 @@ export type UseE2eeMigrateOptions = {
 }
 
 export type UseE2eeMigrateResult = {
-  e2eeMigrateAsk: { count: number; bundle: string } | null
   e2eeMigrateDialogOpen: boolean
   setE2eeMigrateDialogOpen: Dispatch<SetStateAction<boolean>>
   runE2eeMigrateFlow: (keys: LocalE2eeKeys, bundle: string) => Promise<void>
@@ -92,7 +91,7 @@ export function useE2eeMigrate(options: UseE2eeMigrateOptions): UseE2eeMigrateRe
         noticeId = showNotice(
           {
             type: 'info',
-            message: `이 브라우저에 로그인 전 금고 문서 ${result.count.toLocaleString('ko-KR')}개가 있습니다. 금고 암호를 입력하면 계정 금고로 옮깁니다.`,
+            message: '이 브라우저에 로그인 전 금고 문서가 있습니다. 금고 암호를 입력하면 계정 금고로 옮깁니다.',
             action: {
               label: '옮기기',
               onClick: () => {
@@ -221,5 +220,5 @@ export function useE2eeMigrate(options: UseE2eeMigrateOptions): UseE2eeMigrateRe
     await resyncFromStore()
   }
 
-  return { e2eeMigrateAsk, e2eeMigrateDialogOpen, setE2eeMigrateDialogOpen, runE2eeMigrateFlow, e2eeUnmountedDocId, runE2eeReset }
+  return { e2eeMigrateDialogOpen, setE2eeMigrateDialogOpen, runE2eeMigrateFlow, e2eeUnmountedDocId, runE2eeReset }
 }

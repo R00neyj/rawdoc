@@ -347,7 +347,7 @@ describe('A1·A25 기타', () => {
 })
 
 describe('F-409 U1~U3 금고 문서', () => {
-  it('U1 잠긴 문서는 빼고 lockedCount 로만 센다', async () => {
+  it('U1 잠긴 문서는 항목에서 뺀다', async () => {
     const store = createMemoryStore()
     await store.create({ title: 'a', content: '1', lineEnding: 'lf' })
     await store.create({ title: 'b', content: '2', lineEnding: 'lf' })
@@ -359,7 +359,6 @@ describe('F-409 U1~U3 금고 문서', () => {
     ])
     const idx = await buildSearchIndex({ store: source, scope: 's' })
     expect(idx.entries.map((e) => e.id).sort()).toEqual((await store.list()).map((d) => d.id).sort())
-    expect(idx.lockedCount).toBe(2)
     expect(idx.sharedCount).toBe(0)
     const openEntry = idx.entries.find((e) => e.id === open.id)!
     expect(openEntry.title).toBe('열린금고')

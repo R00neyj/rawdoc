@@ -23,6 +23,8 @@ type SearchDialogProps = {
   offline: boolean
   // 이 탭에서 금고가 열려 있는가 — 바뀌면 인덱스를 버리고 다시 만든다 (F-409 3.5)
   e2eeOpen: boolean
+  // 금고가 잠겨 있거나 못 읽었다 — 안내 줄만 바꾸고 인덱스는 다시 만들지 않는다 (F-4003 4장)
+  vaultLocked: boolean
 }
 
 function renderParts(parts: SnippetPart[]) {
@@ -37,7 +39,7 @@ function renderParts(parts: SnippetPart[]) {
   )
 }
 
-export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDoc, onClose, selectQueryRef, offline, e2eeOpen }: SearchDialogProps) {
+export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDoc, onClose, selectQueryRef, offline, e2eeOpen, vaultLocked }: SearchDialogProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const resultRefs = useRef<(HTMLLIElement | null)[]>([])
 
@@ -153,7 +155,7 @@ export default function SearchDialog({ open, store, scope, beforeIndex, onOpenDo
 
   // 해석 줄·안내 줄·꼬리 줄 (F-288.md 5장)
   const querySummary = formatQuerySummary(parsed)
-  const notes = buildSearchNotes({ query: parsed, outcome, sharedCount: index?.sharedCount ?? 0, offline, loading, lockedCount: index?.lockedCount ?? 0 })
+  const notes = buildSearchNotes({ query: parsed, outcome, sharedCount: index?.sharedCount ?? 0, offline, loading, vaultLocked })
   const hasNotes = querySummary !== null || notes.length > 0
   const foot = formatResultCount(outcome, rows.length)
 

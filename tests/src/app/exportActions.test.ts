@@ -266,7 +266,7 @@ describe('폴더 내보내기 (U10~U12)', () => {
     const requestOpen = vi.fn(async () => true)
     const deps = makeDeps({
       foldersRef: { current: [{ id: 'f1' }] },
-      e2eeRef: { current: { keyring: { getStatus: () => 'locked' }, requestOpen } },
+      e2eeRef: { current: { keyring: { getStatus: () => 'locked', load: async () => {} }, requestOpen } },
       docSaverFlushRef: {
         current: vi.fn(async () => {
           order.push('flush')
@@ -309,7 +309,7 @@ describe('폴더 내보내기 (U10~U12)', () => {
       })
       const deps = makeDeps({
         foldersRef: { current: [] },
-        e2eeRef: { current: ring === 'none' ? null : { keyring: { getStatus: () => status }, requestOpen } },
+        e2eeRef: { current: ring === 'none' ? null : { keyring: { getStatus: () => status, load: async () => {} }, requestOpen } },
       })
       const actions = createExportActions(deps)
       deps.foldersRef.current = [{ id: 'vault', e2ee: true }]

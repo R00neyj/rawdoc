@@ -1386,7 +1386,10 @@ test.describe('F-2073 금고 옮기기·이관·잠그기·초기화 절', () =>
 
     await page.locator(`.sidebar a[href="#/d/${plainId}"]`).click()
     await expect(page.locator('.cm-content')).toContainText('일반')
-    await page.locator(`.sidebar a[href="#/d/${vaultId}"]`).click()
+    // 잠긴 금고 문서는 사이드바에 행이 없다 — 해시로 연다 (F-4003 2.2)
+    await page.evaluate((id) => {
+      location.hash = `#/d/${id}`
+    }, vaultId)
     await expect(panel).toBeVisible()
     await expect(panel.locator('input[type="password"]')).toBeFocused()
   })

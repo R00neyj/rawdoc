@@ -10,6 +10,7 @@ import { isE2eeStoreError } from '../e2ee/e2eeStore'
 import { E2EE_NOTICE } from './appNotices'
 import { stripContent, sortByUpdatedAtDesc, type DocMeta } from './docMeta'
 import { setPref } from './prefs'
+import { firstListedDocId, folderLooksEmpty, type VaultFolderGate } from './vaultVisibility'
 
 export type UseFolderActionsOptions = {
   store: Store
@@ -28,6 +29,8 @@ export type UseFolderActionsOptions = {
   addOpenFolders: (ids: string[] | null | undefined) => void
   closeSidebarIfNarrow: () => void
   replaceHashUrl: (docId: string | null) => void
+  // 금고 폴더 문 — 없으면 금고가 없는 것으로 본다 (F-4003 2.5)
+  vaultGate?: VaultFolderGate
 }
 
 export type UseFolderActionsResult = {
@@ -50,7 +53,7 @@ export type UseFolderActionsResult = {
 export function useFolderActions(options: UseFolderActionsOptions): UseFolderActionsResult {
   const {
     store, docs, folders, currentDocId, bulkDeleteItems, setDocs, setFolders, setCurrentDocId, setDeleteTarget, setBulkDeleteItems,
-    setMoveDocTarget, keepLiveTitle, showNotice, addOpenFolders, closeSidebarIfNarrow, replaceHashUrl,
+    setMoveDocTarget, keepLiveTitle, showNotice, addOpenFolders, closeSidebarIfNarrow, replaceHashUrl, vaultGate = 'none',
   } = options
 
   // ----- 삭제 D-1: 문서·폴더 공용 (specs/ia.md 3.6, F-126.md 5.3) -----
@@ -59,9 +62,9 @@ export function useFolderActions(options: UseFolderActionsOptions): UseFolderAct
     closeSidebarIfNarrow()
   }
 
-  // 폴더가 비어 있는지 대화상자에 알려 준다 — 비어 있으면 버튼 하나만 보여준다 (F-242.md 3.5·3.6)
+  // 폴더가 비어 보이는지 대화상자에 알려 준다 — 숨은 금고 문서가 대화상자 갈래로 드러나지 않게 센다 (F-242.md 3.5·3.6, F-4003 2.5)
   function requestDeleteFolder(folder: { id: string; name: string }) {
-    const empty = !docs.some((d) => d.folderId === folder.id) && !folders.some((f) => f.parentId === folder.id)
+    const empty = folderLooksEmpty({ folderId: folder.id, docs, folders, gate: vaultGate })
     setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name, empty })
     closeSidebarIfNarrow()
   }
@@ -107,7 +110,7 @@ export function useFolderActions(options: UseFolderActionsOptions): UseFolderAct
     setDeleteTarget(null)
 
     if (target.id === currentDocId) {
-      const nextId = remaining[0]?.id ?? null
+      const nextId = firstListedDocId(remaining) // 잠긴 금고 문서는 건너뛴다 (F-4003 2.2)
       setCurrentDocId(nextId)
       if (nextId) setPref('md.lastDocId', nextId)
       replaceHashUrl(nextId)

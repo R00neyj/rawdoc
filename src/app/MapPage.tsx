@@ -43,9 +43,11 @@ type MapPageProps = {
   onCreateDoc: () => void
   // 이 탭에서 금고가 열려 있는가 — 바뀌면 그래프를 버리고 다시 읽는다 (F-409 3.6)
   e2eeOpen: boolean
+  // 금고가 잠겨 있거나 못 읽었다 — 발 안내만 바꾸고 색인은 다시 만들지 않는다 (F-4003 4장)
+  vaultLocked: boolean
 }
 
-export default function MapPage({ docCount, store, scope, searchScope, centerDocId, onOpenDoc, onOpenWikiLink, onRecenter, onClose, onCreateDoc, e2eeOpen }: MapPageProps) {
+export default function MapPage({ docCount, store, scope, searchScope, centerDocId, onOpenDoc, onOpenWikiLink, onRecenter, onClose, onCreateDoc, e2eeOpen, vaultLocked }: MapPageProps) {
   const [loading, setLoading] = useState(true)
   const [graph, setGraph] = useState<WikiGraph | null>(null)
   const [updatedAtById, setUpdatedAtById] = useState<Map<string, number>>(new Map())
@@ -67,8 +69,6 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
   // 폴더·검색 인덱스 — 필터 5항목이 읽는다 (F-2007 5·7장)
   const [folders, setFolders] = useState<Folder[]>([])
   const [searchEntries, setSearchEntries] = useState<SearchIndexEntry[]>([])
-  // 잠긴 금고 문서 수 — 발 안내 (F-409 3.6)
-  const [lockedCount, setLockedCount] = useState(0)
   // `파일 검색` 은 md.mapView 에 저장하지 않는다 — 지도를 열 때마다 빈 값이다 (F-2007 6.2)
   const [query, setQuery] = useState('')
   const queryRef = useRef('')
@@ -176,7 +176,6 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
       setUpdatedAtById(new Map(mapResult.entries.map((e) => [e.id, e.updatedAt])))
       setFolders(folderList)
       setSearchEntries(searchResult.entries)
-      setLockedCount(mapResult.lockedCount)
       setLoading(false)
     }
     load()
@@ -535,7 +534,7 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
         )}
         {truncated && <span>문서가 많아 연결이 많은 {NODE_CAP.toLocaleString('ko-KR')}개만 보입니다.</span>}
         {sharedCount > 0 && <span>공유받은 문서 {sharedCount}개는 나가는 링크를 읽지 못했습니다.</span>}
-        {lockedCount > 0 && <span>금고가 잠겨 있어 금고 문서 {lockedCount.toLocaleString('ko-KR')}개는 지도에 넣지 않았습니다.</span>}
+        {vaultLocked && <span>금고가 잠겨 있어 금고 문서는 지도에 넣지 않았습니다.</span>}
       </div>
     </div>
   )

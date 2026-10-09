@@ -25,7 +25,7 @@ export function useNewDocTemplate(options: UseNewDocTemplateOptions): UseNewDocT
   const { store, docs, folders, currentDocIdRef, editorRef } = options
   // 최상위 '템플릿'·'templates' 폴더 하위 문서 + 내장 4개 (F-2022.md 4.2)
   const templateEntries: TemplateEntry[] = useMemo(
-    () => listTemplates({ folders, docs: docs.map((d) => ({ id: d.id, title: d.title, folderId: d.folderId ?? null, role: d.role })) }),
+    () => listTemplates({ folders, docs: docs.map((d) => ({ id: d.id, title: d.title, folderId: d.folderId ?? null, role: d.role, e2ee: d.e2ee })) }),
     [folders, docs],
   )
 

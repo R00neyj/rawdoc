@@ -11,6 +11,7 @@ import { leaveScreens } from './leaveScreens'
 import { setPref } from './prefs'
 import { pushAppEntry, replaceAppEntry } from './historyEntries'
 import { ancestorsOfDoc } from '../lib/folderTree'
+import { firstListedDocId } from './vaultVisibility'
 
 export function replaceHashUrl(docId: string | null) {
   const url = `${location.pathname}${location.search}${formatHash(docId)}`
@@ -159,7 +160,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
           const openedDoc = latestDocs.find((d) => d.id === docId)
           addOpenFolders(ancestorsOfDoc({ folders: foldersRef.current, doc: openedDoc }))
         } else {
-          const fallbackId = latestDocs[0]?.id ?? null
+          const fallbackId = firstListedDocId(latestDocs) // 잠긴 금고 문서는 건너뛴다 (F-4003 2.2)
           setCurrentDocId(fallbackId)
           if (fallbackId) setPref('md.lastDocId', fallbackId)
           replaceHashUrl(fallbackId)

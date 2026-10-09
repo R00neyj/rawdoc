@@ -173,7 +173,7 @@ export function useE2eeConvert(options: UseE2eeConvertOptions): UseE2eeConvertRe
       if (!(await requestE2eeOpen())) return
       ;({ plan, docs: planDocs } = await makePlan())
     }
-    const name = target.kind === 'doc' ? planDocs.find((d) => d.id === target.id)?.title || (menuName === '잠긴 문서' ? '제목 없음' : menuName) : menuName
+    const name = target.kind === 'doc' ? planDocs.find((d) => d.id === target.id)?.title || menuName : menuName
     if (plan.steps.length === 0) {
       showNotice(e2eeConvertResultNotice({ kind: 'done', done: 0, keptAttachments: 0, purgeFailed: 0 }, direction, target.kind, name))
       return

@@ -60,3 +60,23 @@ describe('resolveInitialDoc', () => {
     })
   })
 })
+
+describe('F-4003 U6 resolveInitialDoc 잠긴 금고 문서', () => {
+  const withLocked = [{ id: 'L1', e2ee: 'locked' as const }, { id: 'L2', e2ee: 'locked' as const }, { id: 'o', e2ee: 'open' as const }, { id: 'p' }]
+
+  it('해시가 잠긴 문서면 그 id (P1)', () => {
+    expect(resolveInitialDoc({ hashDocId: 'L2', lastDocId: null, docs: withLocked })).toEqual({ docId: 'L2', notFound: false })
+  })
+
+  it('해시 없음 + lastDocId 가 잠긴 문서 → 안 잠긴 첫 문서', () => {
+    expect(resolveInitialDoc({ hashDocId: null, lastDocId: 'L1', docs: withLocked })).toEqual({ docId: 'o', notFound: false })
+  })
+
+  it('해시 못 찾음 → notFound + 안 잠긴 첫 문서', () => {
+    expect(resolveInitialDoc({ hashDocId: '없음', lastDocId: null, docs: withLocked })).toEqual({ docId: 'o', notFound: true })
+  })
+
+  it('잠긴 문서뿐이면 null (홈)', () => {
+    expect(resolveInitialDoc({ hashDocId: null, lastDocId: 'L1', docs: withLocked.slice(0, 2) })).toEqual({ docId: null, notFound: false })
+  })
+})

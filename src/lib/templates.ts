@@ -12,7 +12,7 @@ export type TemplateEntry = {
   source: { kind: 'doc'; docId: string } | { kind: 'builtin'; body: string }
 }
 
-export type TemplateDocLike = { id: string; title: string; folderId: string | null; role?: 'owner' | 'edit' | 'view' }
+export type TemplateDocLike = { id: string; title: string; folderId: string | null; role?: 'owner' | 'edit' | 'view'; e2ee?: 'locked' | 'open' }
 
 // 최상위 폴더 이름이 '템플릿' 또는 'templates'(대소문자 무시)인지 (4.2)
 export function isTemplateFolderName(name: string): boolean {
@@ -44,6 +44,7 @@ export function listTemplates(input: { folders: readonly FolderLike[]; docs: rea
     const ids = new Set(descendantFolderIds(folders, root.id))
     for (const doc of input.docs) {
       if (doc.role === 'edit' || doc.role === 'view') continue
+      if (doc.e2ee === 'locked') continue // 잠긴 금고 문서가 제목 없는 문서 줄로 드러나지 않게 (F-4003 4장 14)
       if (!doc.folderId || !ids.has(doc.folderId)) continue
       if (seenDocIds.has(doc.id)) continue
       seenDocIds.add(doc.id)
