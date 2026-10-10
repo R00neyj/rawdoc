@@ -20,7 +20,7 @@ import { ACCOUNT_CONFIRM_WAIT_MS, canShowCachedShell, canStartBeforeAccount, jud
 import type { DocPathKind } from './docPath'
 import { createLiveDocController } from './liveDoc'
 import { leaveScreens } from './leaveScreens'
-import { flushUnsyncedDocs } from './yjsFlush'
+import { flushUnsyncedDocs, type FlushDocDeps } from './yjsFlush'
 import { withTabBroadcast, type TabMessage } from './tabSync'
 import { withE2ee, type E2eeStore } from '../e2ee/e2eeStore'
 import { cleanupUnusedAttachments, scheduleAttachmentGc } from './attachmentGc'
@@ -454,27 +454,31 @@ export type FlushRunnerDeps = {
   currentDocIdRef: RefObject<string | null>
 }
 
+// 러너와 금고로 옮기기가 같은 브라우저 제어기로 한 문서씩 방에 붙는다 (F-306 8장)
+export function browserFlushDeps(persist: YjsStore): FlushDocDeps {
+  return {
+    store: persist,
+    createController: (options) =>
+      createLiveDocController({
+        ...options,
+        openSocket: openLiveSocket,
+        host: location.host,
+        secure: location.protocol === 'https:',
+        setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+        clearTimeout: (handle) => window.clearTimeout(handle as number),
+        random: Math.random,
+      }),
+    setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+    clearTimeout: (handle) => window.clearTimeout(handle as number),
+  }
+}
+
 export function startFlushRunner({ flushRunningRef, yjsStoreRef, currentDocIdRef }: FlushRunnerDeps): () => void {
   let cancelled = false
   const runFlush = (persist: YjsStore) => {
     if (flushRunningRef.current || cancelled) return
     flushRunningRef.current = true
-    flushUnsyncedDocs({
-      store: persist,
-      isOpenDoc: (id) => id === currentDocIdRef.current,
-      createController: (options) =>
-        createLiveDocController({
-          ...options,
-          openSocket: openLiveSocket,
-          host: location.host,
-          secure: location.protocol === 'https:',
-          setTimeout: (fn, ms) => window.setTimeout(fn, ms),
-          clearTimeout: (handle) => window.clearTimeout(handle as number),
-          random: Math.random,
-        }),
-      setTimeout: (fn, ms) => window.setTimeout(fn, ms),
-      clearTimeout: (handle) => window.clearTimeout(handle as number),
-    })
+    flushUnsyncedDocs({ ...browserFlushDeps(persist), isOpenDoc: (id) => id === currentDocIdRef.current })
       .catch(() => {})
       .finally(() => {
         flushRunningRef.current = false

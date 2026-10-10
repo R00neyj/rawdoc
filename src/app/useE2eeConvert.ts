@@ -21,15 +21,18 @@ import type { EditorHandle } from '../editor/Editor'
 import type { YjsStore } from '../storage/yjsStore'
 import { formatCount } from '../lib/usageLimits'
 import { Y_TITLE_NAME } from '../lib/docRoomProtocol'
+import { fromEditorText } from '../lib/lineEnding'
 import type { LineEnding, Store, SyncState } from '../types'
 import { E2EE_NOTICE, E2EE_CONVERT_NOTICE, e2eeConvertProgressText, e2eeConvertResultNotice } from './appNotices'
 import type { CommentAccess } from './commentRail'
 import { isSharedDoc } from './docMeta'
 import type { DocPathKind } from './docPath'
 import type { NoticeWithAction } from './NoticeBar'
+import { browserFlushDeps } from './bootFlow'
 import { getPref, setPref } from './prefs'
 import type { UseE2ee } from './useE2ee'
 import type { LiveDocSession } from './useLiveDoc'
+import { flushDocForMove } from './yjsFlush'
 
 // 멈추기를 누르면 곧바로 풀리는 기다림 (F-407 2.2)
 function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -100,21 +103,24 @@ export function useE2eeConvert(options: UseE2eeConvertOptions): UseE2eeConvertRe
   async function prepareConvertDoc(docId: string): Promise<{ text?: string; title?: string } | null | 'blocked'> {
     if (docId !== currentDocIdRef.current) return null
     const path = docPathRef.current.docId === docId ? docPathRef.current.path : null
+    // 읽기 전용 렌더가 세션을 닫는다 — 대화상자 클릭에서 곧바로 이어지면 그 렌더가 flush 보다 먼저라 세션·글을 그 전에 잡는다 (H531)
+    const session = liveSessionRef.current
+    const editor = editorRef.current
+    // live 가 아니면(첫 동기화 전·재연결 중) 편집기 글이 서버보다 낡았을 수 있다 (F-2041 5.5)
+    const live =
+      path === 'realtime' && session && session.docId === docId && session.snapshot.phase === 'live' && editor
+        ? { text: editor.getText(openDocLineEndingRef.current ?? 'lf'), title: session.roomDoc.getText(Y_TITLE_NAME).toString() }
+        : null
     setConvertingDocId(docId)
     const saved = await docSaverFlushRef.current()
     const titleSaving = titleSavingRef.current
     if (titleSaving) await titleSaving
     if (!saved) return 'blocked'
     if (path !== 'realtime') return {}
-    const session = liveSessionRef.current
-    const editor = editorRef.current
-    // live 가 아니면(첫 동기화 전·재연결 중) 편집기 글이 서버보다 낡았을 수 있다 (F-2041 5.5)
-    if (!session || session.docId !== docId || session.snapshot.phase !== 'live' || !editor) return 'blocked'
-    const text = editor.getText(openDocLineEndingRef.current ?? 'lf')
-    const title = session.roomDoc.getText(Y_TITLE_NAME).toString()
+    if (!live) return 'blocked'
     // 세션이 닫힐 때까지(렌더 뒤 정리) 기다린다 — 닫힌 소켓의 정지 알림은 뜨지 않는다
     for (let i = 0; i < 100 && liveSessionRef.current !== null; i++) await abortableSleep(20, new AbortController().signal)
-    return { text, title }
+    return live
   }
 
   // 7.4 — 읽기 전용을 풀고 같은 문서를 새 세션으로 다시 연다(멈춤이면 원래 경로로)
@@ -289,6 +295,13 @@ export function useE2eeConvert(options: UseE2eeConvertOptions): UseE2eeConvertRe
                 hasUnsyncedYjs: async (id: string) => {
                   const persist = await yjs
                   return persist ? (await persist.unsyncedDocIds()).includes(id) : false
+                },
+                syncYjsRecord: async (id: string) => {
+                  const persist = await yjs
+                  const synced = persist ? await flushDocForMove(browserFlushDeps(persist), id) : null
+                  if (!synced) return null
+                  const lineEnding = (await convertStore.get(id))?.lineEnding ?? 'lf'
+                  return { text: fromEditorText(synced.content, lineEnding), title: synced.title }
                 },
                 removeYjsRecord: async (id: string) => {
                   const persist = await yjs

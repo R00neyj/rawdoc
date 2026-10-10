@@ -649,25 +649,9 @@ test.describe('F-407 실시간 문서 옮기기', () => {
     room.resume('live2')
     await expect(page.locator('.statusbar-save')).toHaveText('저장됨', { timeout: 10_000 })
 
-    // 곧바로 재시도는 F-407 재연결 경합과 겹쳐 새로고침한 안정된 세션에서 다시 누른다 (사람 확인 필요)
-    await page.reload()
-    await expect(page.locator('.cm-content').first()).toContainText('첫 줄')
-    await expect(page.locator('.statusbar-save')).toHaveText('저장됨', { timeout: 10_000 })
-
-    // 새로고침 뒤 금고가 잠겨 있으면(D-9 전에) 먼저 푼다
-    const menu = await openMenuOf(page, docRow(page, 'live2'))
-    await menu.getByRole('menuitem', { name: '금고로 옮기기…', exact: true }).click()
-    if (await unlockDialog(page).isVisible()) {
-      await unlockDialog(page).locator('input[type="password"]').fill(PASSWORD)
-      await unlockDialog(page).getByRole('button', { name: '열기', exact: true }).click()
-    }
-    await expect(convertDialog(page)).toBeVisible()
+    // 새로고침 없이 금고가 열린 채 곧바로 다시 누른다 — 예전엔 새로고침(잠금 해제)해야 풀렸다 (H531, 버그 수정 2026-10-10)
+    await convertFromMenu(page, docRow(page, 'live2'))
     await convertDialog(page).getByRole('button', { name: '옮기기', exact: true }).click()
-    // 새로고침으로 금고 키가 사라진 채라 확인 뒤에도 한 번 더 열기를 묻는다
-    if (await unlockDialog(page).isVisible()) {
-      await unlockDialog(page).locator('input[type="password"]').fill(PASSWORD)
-      await unlockDialog(page).getByRole('button', { name: '열기', exact: true }).click()
-    }
     await expect(notice(page)).toHaveText('"실시간 메모2"을(를) 금고로 옮겼습니다.')
     expect(requests.filter((r) => r.method === 'PUT' && r.path === '/api/docs/live2/e2ee')).toHaveLength(1)
   })

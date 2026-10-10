@@ -336,6 +336,8 @@ export type E2eeConvertDeps = {
   prepareDoc(docId: string): Promise<{ text?: string; title?: string } | null | 'blocked'>
   finishDoc(docId: string, changed: boolean): void
   hasUnsyncedYjs?(docId: string): Promise<boolean>
+  // 그 기록을 지금 방에 올려 본다 — 올렸으면 그 순간의 본문(저장 문자열)·제목, 못 올렸으면 null
+  syncYjsRecord?(docId: string): Promise<{ text: string; title: string } | null>
   removeYjsRecord?(docId: string): Promise<void>
 }
 
@@ -534,11 +536,17 @@ export async function runE2eeConvert(
     if (!deps.isOnline()) throw new Stop('offline')
     currentStep = `prepare ${id}`
     const prepared = await deps.prepareDoc(id)
-    const prep = prepared === 'blocked' ? null : prepared
+    let prep = prepared === 'blocked' ? null : prepared
     let changed = false
     try {
       if (prepared === 'blocked') throw new Stop('pending-sync')
-      if (server && deps.hasUnsyncedYjs && (await deps.hasUnsyncedYjs(id))) throw new Stop('pending-sync')
+      if (server && deps.hasUnsyncedYjs && (await deps.hasUnsyncedYjs(id))) {
+        // 다른 탭·live 전에 닫힌 세션의 기록 — 원본이 방일 때만 지금 올려 그 본문으로 옮긴다, {} 경로와 outbox 대기는 원본이 저장소다
+        const roomIsSource = prep ? prep.text !== undefined : !(extra.hasPendingChanges && (await extra.hasPendingChanges(id)))
+        const synced = roomIsSource && deps.syncYjsRecord ? await deps.syncYjsRecord(id) : null
+        if (!synced || (await deps.hasUnsyncedYjs(id))) throw new Stop('pending-sync')
+        prep = synced
+      }
       let conflicts = 0
       let read: DocRead = null
       let swap: Awaited<ReturnType<typeof swapAttachments>> | null = null

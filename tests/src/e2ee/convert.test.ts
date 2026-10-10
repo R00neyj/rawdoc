@@ -615,6 +615,84 @@ describe('F-407 실행기 — 빼기 (4.5)', () => {
   })
 })
 
+// 버그 수정 2026-10-10 — 다른 탭·live 전에 닫힌 세션이 남긴 md-yjs 표시는 새로고침(부팅 러너) 전까지 풀리지 않았다
+describe('md-yjs 밀린 기록 — 옮기기 직전에 올려 본다', () => {
+  function flagged(synced: { text: string; title: string } | null) {
+    let unsynced = true
+    const syncCalls: string[] = []
+    const deps = {
+      hasUnsyncedYjs: async () => unsynced,
+      syncYjsRecord: async (id: string) => {
+        syncCalls.push(id)
+        if (synced) unsynced = false
+        return synced
+      },
+    }
+    return { deps, syncCalls, isUnsynced: () => unsynced }
+  }
+
+  it('지금 문서(실시간) — 올리기에 성공하면 그때의 본문·제목으로 옮긴다', async () => {
+    const run = makeFakeRun({ folders: [], docs: [doc('d1', null, 10, 'D1 본문')] })
+    const yjs = flagged({ text: '편집기 글 + 다른 탭 편집', title: '방 제목' })
+    const outcome = await runE2eeConvert(
+      run.plan('to-e2ee', { kind: 'doc', id: 'd1' }),
+      run.deps({ prepareDoc: async () => ({ text: '편집기 글', title: '방 제목' }), ...yjs.deps }),
+      run.onProgress,
+    )
+    expect(outcome).toMatchObject({ kind: 'done', done: 1 })
+    expect(yjs.syncCalls).toEqual(['d1'])
+    const move = run.calls.find((c) => c.name === 'setDocE2ee')!
+    expect(move.args[1]).toMatchObject({ e2ee: true, title: '방 제목', content: '편집기 글 + 다른 탭 편집' })
+  })
+
+  it('열리지 않은 문서 — 올린 본문으로 옮기고 판은 서버에서 새로 받는다', async () => {
+    const run = makeFakeRun({ folders: [], docs: [doc('d1', null, 10, 'D1 본문')] })
+    const yjs = flagged({ text: '밀린 편집', title: '제목 d1' })
+    const outcome = await runE2eeConvert(run.plan('to-e2ee', { kind: 'doc', id: 'd1' }), run.deps(yjs.deps), run.onProgress)
+    expect(outcome).toMatchObject({ kind: 'done', done: 1 })
+    expect(run.calls.some((c) => c.name === 'refreshDocFromServer' && c.args[0] === 'd1')).toBe(true)
+    expect(run.calls.find((c) => c.name === 'setDocE2ee')?.args[1]).toMatchObject({ content: '밀린 편집' })
+  })
+
+  it('올리지 못하면(오프라인·시간 초과) 그대로 pending-sync — 옮기지 않는다', async () => {
+    const run = makeFakeRun({ folders: [], docs: [doc('d1', null, 10, 'D1 본문')] })
+    const yjs = flagged(null)
+    const outcome = await runE2eeConvert(run.plan('to-e2ee', { kind: 'doc', id: 'd1' }), run.deps(yjs.deps), run.onProgress)
+    expect(outcome).toMatchObject({ kind: 'stopped', reason: 'pending-sync', done: 0 })
+    expect(yjs.syncCalls).toEqual(['d1'])
+    expect(run.calls.some((c) => c.name === 'setDocE2ee')).toBe(false)
+    expect(yjs.isUnsynced()).toBe(true)
+  })
+
+  it('올린 뒤에도 표시가 남으면 pending-sync', async () => {
+    const run = makeFakeRun({ folders: [], docs: [doc('d1', null, 10)] })
+    const outcome = await runE2eeConvert(
+      run.plan('to-e2ee', { kind: 'doc', id: 'd1' }),
+      run.deps({ hasUnsyncedYjs: async () => true, syncYjsRecord: async () => ({ text: '글', title: '제목' }) }),
+      run.onProgress,
+    )
+    expect(outcome).toMatchObject({ kind: 'stopped', reason: 'pending-sync' })
+    expect(run.calls.some((c) => c.name === 'setDocE2ee')).toBe(false)
+  })
+
+  it('지금 문서가 실시간이 아닌 경로({})면 올리지 않고 pending-sync — 그 경로의 원본은 저장소다', async () => {
+    const run = makeFakeRun({ folders: [], docs: [doc('d1', null, 10)] })
+    const yjs = flagged({ text: '글', title: '제목' })
+    const outcome = await runE2eeConvert(run.plan('to-e2ee', { kind: 'doc', id: 'd1' }), run.deps({ prepareDoc: async () => ({}), ...yjs.deps }), run.onProgress)
+    expect(outcome).toMatchObject({ kind: 'stopped', reason: 'pending-sync' })
+    expect(yjs.syncCalls).toEqual([])
+  })
+
+  it('열리지 않은 문서라도 outbox 에 항목이 남았으면 올리지 않고 pending-sync', async () => {
+    const run = makeFakeRun({ folders: [], docs: [doc('d1', null, 10)] })
+    Object.assign(run.store, { hasPendingChanges: async () => true })
+    const yjs = flagged({ text: '글', title: '제목' })
+    const outcome = await runE2eeConvert(run.plan('to-e2ee', { kind: 'doc', id: 'd1' }), run.deps(yjs.deps), run.onProgress)
+    expect(outcome).toMatchObject({ kind: 'stopped', reason: 'pending-sync' })
+    expect(yjs.syncCalls).toEqual([])
+  })
+})
+
 // ---- F-408 로그인 이관 — planLocalE2eeMigration·rekeyLocalE2eeDoc·rekeyLocalE2eeAttachment·encryptLocalPlainAttachment ----
 
 function vFolder(id: string, parentId: string | null): Folder {

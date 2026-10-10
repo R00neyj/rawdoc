@@ -6,7 +6,7 @@ import * as Y from 'yjs'
 import { openYjsStore } from '../../../src/storage/yjsStore'
 import type { YjsStore } from '../../../src/storage/yjsStore'
 import type { LiveDocController, LiveSnapshot } from '../../../src/app/liveDoc'
-import { FLUSH_SESSION_TIMEOUT_MS, flushUnsyncedDocs } from '../../../src/app/yjsFlush'
+import { FLUSH_SESSION_TIMEOUT_MS, flushDocForMove, flushUnsyncedDocs } from '../../../src/app/yjsFlush'
 
 let dbCounter = 0
 function freshDbName() {
@@ -278,5 +278,40 @@ describe('F-306 U25 synced 뒤 표시가 내려간다', () => {
     const again = await store.attach('a', new Y.Doc())
     expect(again.unsyncedLocal).toBe(false)
     again.detach()
+  })
+})
+
+// 버그 수정 2026-10-10 — 열린 세션의 메모리 사본이 거짓이면 다른 세션이 세운 표시를 내리지 못해 새로고침해야 풀렸다
+describe('flushDocForMove — 금고로 옮기기 직전 한 문서', () => {
+  it('다른 세션이 남긴 표시: 메모리 사본이 거짓인 붙이기는 못 내리지만, 옮기기 올리기는 본문·제목을 돌려주고 표시를 내린다', async () => {
+    const store = await setupStore()
+    const openDoc = new Y.Doc()
+    const open = await store.attach('a', openDoc)
+    await seedUnsynced(store, 'a', '다른 탭 편집')
+    open.setUnsyncedLocal(false)
+    await tick()
+    expect(await store.unsyncedDocIds()).toEqual(['a'])
+    open.detach()
+
+    const clock = fakeClock()
+    const fakes = fakeControllers({ a: 'live' })
+    const moved = await flushDocForMove({ store, createController: fakes.create, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout }, 'a')
+    expect(moved).toEqual({ content: '다른 탭 편집', title: '' })
+    expect(fakes.created[0].destroyed).toBe(true)
+    await tick()
+    expect(await store.unsyncedDocIds()).toEqual([])
+  })
+
+  it('synced 가 아니면 null, 표시는 남는다', async () => {
+    const store = await setupStore()
+    await seedUnsynced(store, 'a', 'A')
+    await seedUnsynced(store, 'b', 'B')
+    const clock = fakeClock()
+    const fakes = fakeControllers({ a: 'reconnecting', b: 'forbidden' })
+    const deps = { store, createController: fakes.create, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout }
+    expect(await flushDocForMove(deps, 'a')).toBeNull()
+    expect(await flushDocForMove(deps, 'b')).toBeNull()
+    await tick()
+    expect(await store.unsyncedDocIds()).toEqual(['a', 'b'])
   })
 })
