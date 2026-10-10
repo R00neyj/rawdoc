@@ -43,6 +43,8 @@ rawdoc login --with-token < token.txt
 | `rawdoc ls --root` | 폴더에 안 든 문서만 보기 |
 | `rawdoc ls --shared` | 공유받은 문서 목록 |
 | `rawdoc find 회의` | 제목에 그 글자가 든 문서 찾기 |
+| `rawdoc search 회의` | 제목·본문에서 그 글자가 든 문서와 줄 찾기(금고 문서 제외) |
+| `rawdoc replace 옛말 새말 --yes` | 여러 문서 본문에서 글자를 찾아 바꾸기(`--yes`를 빼면 바뀔 곳만 미리 보기) |
 | `rawdoc info <id>` | 내용 없이 폴더·판 번호·시각만 보기 |
 | `rawdoc get <id> -o 노트.md` | 문서 원문을 파일로 받기 |
 | `rawdoc new 노트.md --title 회의록` | 파일로 새 문서 만들기 |
@@ -56,7 +58,7 @@ rawdoc login --with-token < token.txt
 
 금고 문서나 금고 폴더가 걸린 지우기·옮기기는 웹에서 합니다.
 
-폴더를 받는 옵션(`new`·`mv`·`ls`·`find`의 `--folder`, `mkdir`의 `--parent`)에는 폴더 id 대신 `folders`가 보여 주는 경로(예: `수업자료/1주차`)를 넣어도 됩니다. 경로에 맞는 폴더가 없거나 같은 경로의 폴더가 여럿이면 멈추고, `rawdoc folders`로 id를 확인하라고 알려 줍니다. `rmdir`은 id만 받습니다.
+폴더를 받는 옵션(`new`·`mv`·`ls`·`find`·`search`·`replace`의 `--folder`, `mkdir`의 `--parent`)에는 폴더 id 대신 `folders`가 보여 주는 경로(예: `수업자료/1주차`)를 넣어도 됩니다. 경로에 맞는 폴더가 없거나 같은 경로의 폴더가 여럿이면 멈추고, `rawdoc folders`로 id를 확인하라고 알려 줍니다. `rmdir`은 id만 받습니다.
 
 명령마다 사용법과 옵션 설명은 `rawdoc help <명령>`으로 봅니다. `rawdoc <명령> --help`와 같습니다.
 
