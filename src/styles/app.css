@@ -1233,9 +1233,10 @@ body.sidebar-resizing {
 /* ===== 오른쪽 목차 (specs/ia.md 3.23, specs/features/F-144.md 2장) ===== */
 .outline {
   position: absolute;
-  top: 96px;
+  top: 50%;
   right: 16px;
   z-index: 20;
+  translate: 0 -50%;
 }
 
 .outline-rail {
@@ -1253,11 +1254,11 @@ body.sidebar-resizing {
   display: block;
   height: 2px;
   border-radius: 999px;
-  background: var(--rule);
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
 }
 
 .outline-rail-item[data-current='true'] span {
-  background: var(--ink-2);
+  background: var(--ink);
 }
 
 .outline--expanded .outline-rail {
@@ -1266,8 +1267,9 @@ body.sidebar-resizing {
 
 .outline-card {
   position: absolute;
-  top: 0;
+  top: 50%;
   right: 0;
+  translate: 0 -50%;
   list-style: none;
   margin: 0;
   padding: 6px;
