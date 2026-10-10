@@ -242,8 +242,11 @@ export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResul
     if (openDoc?.id !== currentDocId || !editorRef.current) return
     if (viewMode === 'view' && viewerDocId !== currentDocId) return
     pendingJumpRef.current = null // 한 번만 쓴다
-    if ('line' in pending) jumpToLine(pending.line)
-    else jumpToHeading(pending.heading)
+    // 새 편집기의 autoFocus·dev StrictMode 재마운트가 커서를 문서 처음에 두므로 그 뒤 프레임에 옮긴다
+    requestAnimationFrame(() => {
+      if ('line' in pending) jumpToLine(pending.line)
+      else jumpToHeading(pending.heading)
+    })
   }, [openDoc, currentDocId, viewMode, viewerDocId, jumpToHeading, jumpToLine, pendingJumpRef, editorRef])
 
   // 편집기 위키링크 해석 문맥 갱신 — 문서 전환 중(옛 에디터가 붙은 순간)은 건드리지 않는다 (F-2018 5.2)
