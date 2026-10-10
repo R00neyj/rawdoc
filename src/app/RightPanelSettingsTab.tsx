@@ -1,7 +1,7 @@
-// 설정 `오른쪽 패널` 탭 — 표시할 항목·달력·할 일 표시(전역 필터), 모두 기기별 (small 2026-10-10, 2026-10-11)
+// 설정 `오른쪽 패널` 탭 — 표시할 항목·댓글창과 함께·달력·할 일 표시(전역 필터), 모두 기기별 (small 2026-10-10, 2026-10-11)
 import CalendarSettingsTab, { type CalendarSettings } from './CalendarSettingsTab'
 import type { PanelItemId } from '../lib/panelSlots'
-import type { RightPanelItemsSettings } from './useRightPanel'
+import type { CommentPanelLayout, RightPanelItemsSettings } from './useRightPanel'
 import type { TemplateEntry } from '../lib/templates'
 
 export type RightPanelSettings = RightPanelItemsSettings & { calendar: CalendarSettings }
@@ -12,6 +12,11 @@ const ITEM_LABELS: [PanelItemId, string][] = [
   ['graph', '그래프'],
   ['links', '링크'],
   ['todos', '할 일'],
+]
+
+const COMMENT_LAYOUT_LABELS: [CommentPanelLayout, string][] = [
+  ['side', '나란히'],
+  ['hide', '패널 숨기기'],
 ]
 
 export default function RightPanelSettingsTab({ settings, entries }: { settings: RightPanelSettings; entries: readonly TemplateEntry[] }) {
@@ -28,6 +33,17 @@ export default function RightPanelSettingsTab({ settings, entries }: { settings:
           </label>
         ))}
       </fieldset>
+      <div className="dialog-field">
+        <span id="comment-layout-label">댓글창과 함께 열릴 때</span>
+        <div className="seg" role="radiogroup" aria-labelledby="comment-layout-label">
+          {COMMENT_LAYOUT_LABELS.map(([value, label]) => (
+            <button key={value} type="button" role="radio" aria-checked={settings.commentLayout === value} onClick={() => settings.onChangeCommentLayout(value)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="settings-hint">넓은 창에서 댓글창을 열 때 오른쪽 패널을 옆에 그대로 둘지, 댓글창이 열린 동안 숨길지 고릅니다.</p>
       <h3 className="panel-settings-title">달력</h3>
       <CalendarSettingsTab settings={settings.calendar} entries={entries} />
       <h3 className="panel-settings-title">할 일</h3>

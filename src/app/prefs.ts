@@ -53,6 +53,8 @@ type PrefMap = {
   // `할 일` 보기 전역 필터(쉼표로 여러 개, ''=모든 체크박스)·글자에서 표시 숨기기, 기기별 (small 2026-10-11)
   'md.taskFilter': string
   'md.taskFilterHide': 'on' | 'off'
+  // 넓은 창 댓글 레일과 오른쪽 패널 — side 나란히, hide 레일이 열린 동안 패널 숨김, 기기별 (small 2026-10-11)
+  'md.commentPanelLayout': 'side' | 'hide'
   // 달력 날짜 문서 — 폴더 id(''=최상위)·제목 형식·템플릿 id(none=없음), 기기별 (small 2026-10-10)
   'md.calendarFolder': string
   'md.calendarFormat': string
@@ -103,6 +105,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.rightPanelCollapsed',
   'md.taskFilter',
   'md.taskFilterHide',
+  'md.commentPanelLayout',
   'md.calendarFolder',
   'md.calendarFormat',
   'md.calendarTemplate',

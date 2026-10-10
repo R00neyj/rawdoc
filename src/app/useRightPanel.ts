@@ -37,7 +37,14 @@ export type PanelSlotState = {
   onToggleCollapsed: () => void
 }
 
-export type RightPanelItemsSettings = { items: PanelItems; onToggleItem: (id: PanelItemId, on: boolean) => void } & TaskFilterSettings
+export type CommentPanelLayout = 'side' | 'hide'
+
+export type RightPanelItemsSettings = {
+  items: PanelItems
+  onToggleItem: (id: PanelItemId, on: boolean) => void
+  commentLayout: CommentPanelLayout
+  onChangeCommentLayout: (value: CommentPanelLayout) => void
+} & TaskFilterSettings
 
 export type UseRightPanelResult = {
   // 표시할 항목이 하나도 없으면 거짓 — 상단바 버튼·팔레트 명령·넓은 창 패널을 그리지 않는다
@@ -80,8 +87,9 @@ export function useRightPanel({
   const enabled = (view: PanelViewId) => items[view]
   const visibleWide = filterSlots(WIDE_SLOTS, enabled)
   const available = visibleWide.length > 0
-  // 넓은 창 오른쪽 열은 하나만 — 댓글 레일이 열린 동안 패널은 기억한 열림 그대로 숨는다 (tweak 2026-10-11)
-  const hiddenByComments = !narrow && commentRail
+  // 댓글 레일과 함께일 때 — `side` 는 나란히, `hide` 는 레일이 열린 동안 패널이 기억한 열림 그대로 숨는다 (tweak·small 2026-10-11)
+  const [commentLayout, setCommentLayout] = useState(() => getPref('md.commentPanelLayout', 'side'))
+  const hiddenByComments = !narrow && commentRail && commentLayout === 'hide'
   const open = (phone || available) && (narrow ? narrowOpen : widePref === 'open' && !hiddenByComments)
 
   // 밀기·Esc 구독이 렌더마다 다시 걸리지 않게 안정 함수로 둔다
@@ -151,6 +159,11 @@ export function useRightPanel({
         const next = { ...items, [id]: on }
         setItems(next)
         setPref('md.rightPanelItems', JSON.stringify(next))
+      },
+      commentLayout,
+      onChangeCommentLayout: (value) => {
+        setCommentLayout(value)
+        setPref('md.commentPanelLayout', value)
       },
       ...tasks.settings,
     },

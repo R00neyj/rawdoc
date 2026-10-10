@@ -36,12 +36,23 @@ test('패널 칸 접기 — 넓은 창에서 칸 머리를 눌러 접으면 새�
   await expect(empty).toHaveCount(0)
 })
 
-test('댓글 레일과 오른쪽 패널 — 레일을 열면 패널이 숨고, 패널 버튼을 누르면 레일이 닫히고 패널이 다시 보인다', async ({ page }) => {
+test('댓글 레일과 오른쪽 패널 — 기본은 나란히, 설정에서 패널 숨기기를 고르면 레일이 열린 동안 숨고 패널 버튼으로 다시 보인다', async ({ page }) => {
   await openApp(page)
   const rail = page.locator('.comment-rail')
+  const railToggle = page.locator('.comment-rail-toggle')
+  await railToggle.click()
+  await expect(rail).toBeVisible()
   await expect(panel(page)).toBeVisible()
+  await railToggle.click()
+  await expect(rail).toBeHidden()
 
-  await page.locator('.comment-rail-toggle').click()
+  await page.getByRole('button', { name: '설정', exact: true }).click()
+  const settings = page.locator('dialog[aria-labelledby="settings-title"]')
+  await settings.getByRole('tab', { name: '오른쪽 패널' }).click()
+  await settings.getByRole('radio', { name: '패널 숨기기' }).click()
+  await page.getByRole('button', { name: '닫기', exact: true }).click()
+
+  await railToggle.click()
   await expect(rail).toBeVisible()
   await expect(panel(page)).toBeHidden()
 
