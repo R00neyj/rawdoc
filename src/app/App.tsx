@@ -1137,7 +1137,9 @@ export default function App() {
   })
   const templateManager = useTemplateManager({ store, folders, setFolders, createDoc, selectDoc, requestDeleteDoc, closeSettings, showNotice })
   const phone = usePhoneWidth()
-  const rightPanel = useRightPanel({ narrow, phone })
+  const rightPanel = useRightPanel({
+    narrow, phone, commentRail: comments.open && comments.mode === 'rail', closeCommentRail: () => comments.setOpen(false, true),
+  })
   const calendar = useCalendarPanel({
     closePanelIfNarrow: rightPanel.closeIfNarrow, dayDocsActive: rightPanel.dayDocsActive, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate,
   })

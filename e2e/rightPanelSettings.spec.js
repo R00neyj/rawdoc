@@ -1,4 +1,4 @@
-// 오른쪽 패널 — 설정 `표시할 항목` 으로 칸 끄기, 넓은 창 칸 접기. 둘 다 새로고침 뒤에도 남는다 (small 2026-10-11)
+// 오른쪽 패널 — 설정 `표시할 항목` 으로 칸 끄기, 넓은 창 칸 접기(둘 다 새로고침 뒤에도 남는다), 댓글 레일과 번갈아 보이기 (small·tweak 2026-10-11)
 import { test, expect } from '@playwright/test'
 import { openApp } from './helpers.js'
 
@@ -34,4 +34,19 @@ test('패널 칸 접기 — 넓은 창에서 칸 머리를 눌러 접으면 새�
   await page.reload()
   await expect(panel(page).getByRole('button', { name: '할 일', exact: true })).toHaveAttribute('aria-expanded', 'false')
   await expect(empty).toHaveCount(0)
+})
+
+test('댓글 레일과 오른쪽 패널 — 레일을 열면 패널이 숨고, 패널 버튼을 누르면 레일이 닫히고 패널이 다시 보인다', async ({ page }) => {
+  await openApp(page)
+  const rail = page.locator('.comment-rail')
+  await expect(panel(page)).toBeVisible()
+
+  await page.locator('.comment-rail-toggle').click()
+  await expect(rail).toBeVisible()
+  await expect(panel(page)).toBeHidden()
+
+  await page.getByRole('button', { name: '오른쪽 패널', exact: true }).click()
+  await expect(rail).toBeHidden()
+  await expect(panel(page)).toBeVisible()
+  expect(await page.evaluate(() => localStorage.getItem('md.rightPanel'))).toBe('open')
 })

@@ -55,7 +55,17 @@ export type UseRightPanelResult = {
   settings: RightPanelItemsSettings
 }
 
-export function useRightPanel({ narrow, phone }: { narrow: boolean; phone: boolean }): UseRightPanelResult {
+export function useRightPanel({
+  narrow,
+  phone,
+  commentRail,
+  closeCommentRail,
+}: {
+  narrow: boolean
+  phone: boolean
+  commentRail: boolean
+  closeCommentRail: () => void
+}): UseRightPanelResult {
   const [widePref, setWidePref] = useState(() => getPref('md.rightPanel', 'open'))
   const [narrowOpen, setNarrowOpen] = useState(false)
   // 넓은 창으로 돌아가면 겹침 열림은 버린다 — 렌더 중 조정
@@ -70,7 +80,9 @@ export function useRightPanel({ narrow, phone }: { narrow: boolean; phone: boole
   const enabled = (view: PanelViewId) => items[view]
   const visibleWide = filterSlots(WIDE_SLOTS, enabled)
   const available = visibleWide.length > 0
-  const open = (phone || available) && (narrow ? narrowOpen : widePref === 'open')
+  // 넓은 창 오른쪽 열은 하나만 — 댓글 레일이 열린 동안 패널은 기억한 열림 그대로 숨는다 (tweak 2026-10-11)
+  const hiddenByComments = !narrow && commentRail
+  const open = (phone || available) && (narrow ? narrowOpen : widePref === 'open' && !hiddenByComments)
 
   // 밀기·Esc 구독이 렌더마다 다시 걸리지 않게 안정 함수로 둔다
   const setPanelOpen = useCallback(
@@ -117,7 +129,11 @@ export function useRightPanel({ narrow, phone }: { narrow: boolean; phone: boole
 
   return {
     open,
-    togglePanel: () => setPanelOpen(!open),
+    togglePanel: () => {
+      if (!hiddenByComments) return setPanelOpen(!open)
+      setPanelOpen(true)
+      closeCommentRail()
+    },
     openPanel,
     closePanel,
     closeIfNarrow: () => {
