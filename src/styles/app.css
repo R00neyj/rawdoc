@@ -4611,6 +4611,16 @@ body.sidebar-resizing {
   font-family: var(--font-mono);
   word-break: break-all;
   user-select: all;
+  margin-bottom: 10px;
+}
+
+/* 복구 코드 단계 — 보관 확인 체크와 문구를 한 줄로 */
+.e2ee-recovery-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0;
+  cursor: pointer;
 }
 
 .e2ee-error {

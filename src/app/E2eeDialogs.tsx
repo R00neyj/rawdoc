@@ -108,15 +108,15 @@ function RecoveryCodeStep({
       <p>이 코드는 지금 한 번만 보입니다. 금고 암호를 잊었을 때 이 코드로만 금고를 열 수 있습니다.</p>
       <code className="e2ee-recovery-code">{code}</code>
       <div className="dialog-btn-row">
-        <button type="button" ref={copyBtnRef} onClick={handleCopy}>
+        <button type="button" className="dialog-btn" ref={copyBtnRef} onClick={handleCopy}>
           {copied ? '복사됨' : '복사'}
         </button>
-        <button type="button" onClick={handleSaveFile}>
+        <button type="button" className="dialog-btn" onClick={handleSaveFile}>
           파일로 저장
         </button>
       </div>
       {copyError && <p className="e2ee-error" role="alert">복사하지 못했습니다. 코드를 직접 골라 복사하세요.</p>}
-      <label className="dialog-field">
+      <label className="e2ee-recovery-check">
         <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
         <span>복구 코드를 안전한 곳에 보관했습니다</span>
       </label>
