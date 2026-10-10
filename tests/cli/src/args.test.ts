@@ -357,3 +357,36 @@ describe('search 해석', () => {
     }
   })
 })
+
+describe('replace 해석', () => {
+  const g = { server: null, json: false }
+
+  it('찾을 말·바꿀 말은 다듬지 않고, 빈 바꿀 말·--folder·--yes·--json', () => {
+    expect(parseArgs(['replace', ' a ', 'b'])).toEqual({
+      kind: 'run',
+      command: { name: 'replace', global: g, find: ' a ', replacement: 'b', folder: null, yes: false },
+    })
+    expect(parseArgs(['replace', 'a', '', '--folder', '수업/1주차', '--yes', '--json'])).toEqual({
+      kind: 'run',
+      command: { name: 'replace', global: { server: null, json: true }, find: 'a', replacement: '', folder: '수업/1주차', yes: true },
+    })
+    expect(parseArgs(['replace', 'a'.repeat(200), 'b']).kind).toBe('run')
+    expect(parseArgs(['replace', 'a', 'b\nc']).kind).toBe('run')
+  })
+
+  it('사용법 오류', () => {
+    const cases: [string[], string][] = [
+      [['replace'], '찾을 말과 바꿀 말이 필요합니다. 지우려면 바꿀 말에 "" 를 주세요.'],
+      [['replace', 'a'], '찾을 말과 바꿀 말이 필요합니다. 지우려면 바꿀 말에 "" 를 주세요.'],
+      [['replace', 'a', 'b', 'c'], '찾을 말과 바꿀 말은 하나씩만 줄 수 있습니다. 띄어쓰기가 든 말은 따옴표로 감싸세요.'],
+      [['replace', '', 'b'], '찾을 말이 비어 있습니다.'],
+      [['replace', 'a\nb', 'c'], '찾을 말에는 줄바꿈을 넣을 수 없습니다.'],
+      [['replace', 'a\rb', 'c'], '찾을 말에는 줄바꿈을 넣을 수 없습니다.'],
+      [['replace', 'a'.repeat(201), 'b'], '찾을 말은 200자까지입니다.'],
+      [['replace', 'a', 'b', '--root'], '알 수 없는 옵션입니다.'],
+    ]
+    for (const [argv, message] of cases) {
+      expect(parseArgs(argv), JSON.stringify(argv)).toEqual({ kind: 'usage', message, command: 'replace' })
+    }
+  })
+})

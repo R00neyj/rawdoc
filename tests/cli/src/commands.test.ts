@@ -1,6 +1,6 @@
 // F-2021 U8 (specs/features/F-2021.md 13.1, 4.2). ls 필터는 4.2 명령별 규칙
 import { describe, expect, it, vi } from 'vitest'
-import { find, info, ls, lsShared, moveDoc, putDoc, removeDoc, removeFolder, search } from '../../../cli/src/commands'
+import { find, info, ls, lsShared, moveDoc, putDoc, removeDoc, removeFolder, replace, search } from '../../../cli/src/commands'
 import type { ClientConfig } from '../../../cli/src/client'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -212,5 +212,105 @@ describe('search', () => {
   it('폴더를 준 검색이 404 면 folder_not_found', async () => {
     await expect(search(routed(404).cfg, 'x', { id: F1, value: F1 })).rejects.toMatchObject({ code: 'folder_not_found', details: { folder: F1 } })
     await expect(search(routed(404).cfg, 'x', null)).rejects.toMatchObject({ code: 'not_found' })
+  })
+})
+
+describe('replace', () => {
+  const hit = (id: string) => ({ id, title: `t-${id}`, folderId: null, version: 1, updatedAt: 0, lines: [], matchedLines: 1 })
+  const doc = (id: string, content: string, version = 3) => ({
+    id, title: `t-${id}`, content, version, lineEnding: 'lf', folderId: null, pinnedAt: null, createdAt: 0, updatedAt: 0,
+  })
+
+  // PUT 응답은 문서마다 차례로 꺼내 쓴다. 비면 성공(판 +1)
+  function server(opts: { hits: string[]; docs: Record<string, string>; puts?: Record<string, Response[]>; truncated?: boolean }) {
+    const calls: string[] = []
+    const bodies: Record<string, unknown[]> = {}
+    const fetchImpl = vi.fn(async (url: string, init: RequestInit) => {
+      const u = new URL(url)
+      calls.push(`${init.method} ${u.pathname}`)
+      if (u.pathname === '/v1/search') {
+        return jsonResponse({ docs: opts.hits.map(hit), truncated: opts.truncated ?? false, e2eeSkipped: 2 })
+      }
+      if (u.pathname === '/v1/folders') return jsonResponse([])
+      const id = decodeURIComponent(u.pathname.replace('/v1/docs/', ''))
+      if (init.method === 'GET') return jsonResponse(doc(id, opts.docs[id]))
+      ;(bodies[id] ??= []).push(JSON.parse(init.body as string))
+      return opts.puts?.[id]?.shift() ?? jsonResponse(doc(id, '', 4))
+    })
+    return { calls, bodies, cfg: baseCfg(fetchImpl as unknown as typeof fetch) }
+  }
+
+  function hooks() {
+    const waits: number[] = []
+    const notices: number[] = []
+    return { waits, notices, sleep: async (ms: number) => void waits.push(ms), onWait: (s: number) => void notices.push(s) }
+  }
+
+  const rateLimited = (scope: 'minute' | 'day', retryAfter: number) => jsonResponse({ error: 'rate_limited', scope, limit: 120, retryAfter }, 429)
+
+  it('미리 보기는 PUT 하지 않고, 대소문자만 다른 문서는 빠진다', async () => {
+    const s = server({ hits: ['d1', 'd2'], docs: { d1: 'foo\nx foo', d2: 'FOO only' } })
+    const out = await replace(s.cfg, { find: 'foo', replacement: 'bar', folder: null, apply: false }, hooks())
+    expect(s.calls.filter((c) => c.startsWith('PUT'))).toEqual([])
+    expect(out).toMatchObject({ applied: false, e2eeSkipped: 2, stopped: null })
+    expect(out.docs).toHaveLength(1)
+    expect(out.docs[0]).toMatchObject({ id: 'd1', title: 't-d1', folderPath: [], count: 2, status: 'preview', changedLines: 2 })
+  })
+
+  it('--yes: GET 의 판 번호로 PUT, 409 는 충돌로 두고 다음 문서를 계속한다', async () => {
+    const s = server({
+      hits: ['d1', 'd2', 'd3'],
+      docs: { d1: 'foo', d2: 'foo foo', d3: 'a foo' },
+      puts: { d1: [jsonResponse({ error: 'conflict', doc: doc('d1', 'x', 9) }, 409)], d2: [jsonResponse({ error: 'too_large', limit: 1 }, 413)] },
+    })
+    const out = await replace(s.cfg, { find: 'foo', replacement: 'bar', folder: null, apply: true }, hooks())
+    expect(s.bodies.d1).toEqual([{ content: 'bar', baseVersion: 3 }])
+    expect(s.bodies.d3).toEqual([{ content: 'a bar', baseVersion: 3 }])
+    expect(out.applied).toBe(true)
+    expect(out.docs.map((d) => [d.id, d.status, d.count, d.version])).toEqual([
+      ['d1', 'conflict', 1, undefined],
+      ['d2', 'too_large', 2, undefined],
+      ['d3', 'updated', 1, 4],
+    ])
+  })
+
+  it('분당 429 는 retryAfter 만큼 기다렸다가 같은 문서를 다시 쓴다', async () => {
+    const s = server({ hits: ['d1', 'd2'], docs: { d1: 'foo', d2: 'foo' }, puts: { d1: [rateLimited('minute', 7)] } })
+    const h = hooks()
+    const out = await replace(s.cfg, { find: 'foo', replacement: 'bar', folder: null, apply: true }, h)
+    expect(h.notices).toEqual([7])
+    expect(h.waits).toEqual([7000])
+    expect(s.bodies.d1).toHaveLength(2)
+    expect(out.docs.map((d) => d.status)).toEqual(['updated', 'updated'])
+  })
+
+  it('하루 한도 429 는 멈추고 남은 문서를 미처리로 둔다', async () => {
+    const s = server({ hits: ['d1', 'd2', 'd3'], docs: { d1: 'foo', d2: 'foo', d3: 'foo' }, puts: { d2: [rateLimited('day', 3600)] } })
+    const h = hooks()
+    const out = await replace(s.cfg, { find: 'foo', replacement: 'bar', folder: null, apply: true }, h)
+    expect(h.waits).toEqual([])
+    expect(s.calls).not.toContain('GET /v1/docs/d3')
+    expect(out.docs.map((d) => [d.id, d.status, d.count])).toEqual([
+      ['d1', 'updated', 1],
+      ['d2', 'skipped', 1],
+      ['d3', 'skipped', null],
+    ])
+    expect(out.stopped).toMatchObject({ code: 'rate_limited', details: { scope: 'day' } })
+  })
+
+  it('바꾼 본문이 원문과 같으면 PUT 하지 않는다', async () => {
+    const s = server({ hits: ['d1'], docs: { d1: 'foo' } })
+    const out = await replace(s.cfg, { find: 'foo', replacement: 'foo', folder: null, apply: true }, hooks())
+    expect(s.calls.filter((c) => c.startsWith('PUT'))).toEqual([])
+    expect(out.docs).toEqual([])
+  })
+
+  it('검색이 200개를 넘으면 아무것도 읽거나 쓰지 않고 too_many_docs', async () => {
+    const s = server({ hits: ['d1'], docs: { d1: 'foo' }, truncated: true })
+    await expect(replace(s.cfg, { find: 'foo', replacement: 'bar', folder: null, apply: true }, hooks())).rejects.toMatchObject({
+      code: 'too_many_docs',
+      details: { limit: 200 },
+    })
+    expect(s.calls.filter((c) => c.includes('/v1/docs/'))).toEqual([])
   })
 })

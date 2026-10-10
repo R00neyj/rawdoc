@@ -13,6 +13,9 @@ import {
   humanIdVersionLine,
   humanRemoveDocLine,
   humanRemoveFolderNotice,
+  humanReplaceList,
+  humanReplaceSummary,
+  humanReplaceWait,
   humanSearchList,
   humanSearchSummary,
   humanSharedList,
@@ -20,6 +23,8 @@ import {
   humanUrlLine,
   isoUtcSeconds,
   remainingTimeText,
+  replaceExitCode,
+  replaceJson,
   stripControlChars,
   type CliErrorCode,
 } from '../../../cli/src/output'
@@ -443,5 +448,117 @@ describe('search 사람용 출력', () => {
     expect(humanSearchSummary({ docs: [], truncated: false, e2eeSkipped: 3 }, 'x')).toBe(
       '제목·본문에서 찾은 문서가 없습니다: x (금고 문서 3개는 찾지 못함)\n',
     )
+  })
+})
+
+describe('replace 출력', () => {
+  type Status = 'preview' | 'updated' | 'conflict' | 'too_large' | 'skipped' | 'error'
+  const item = (id: string, folderPath: string[] | null, status: Status, extra: Record<string, unknown> = {}) => ({
+    id, title: `t-${id}`, folderPath, count: 2 as number | null, status, lines: [], changedLines: 0, ...extra,
+  })
+
+  it('too_many_docs: 종료 2, 문구에 한도와 --folder', () => {
+    expect(exitCodeFor('too_many_docs')).toBe(2)
+    expect(errorMessage(new CliError('too_many_docs', { limit: 200 }), CLI, CLI_ENV)).toBe('대상 문서가 200개를 넘습니다. --folder 로 좁혀 주세요.')
+  })
+
+  it('미리 보기: 문서 머리에 곳 수, 바뀜 줄은 - 전 / + 후, 더 있으면 외 N줄', () => {
+    const docs = [
+      item('d1', ['수업'], 'preview', {
+        count: 3,
+        lines: [
+          { line: 2, before: 'a foo', after: 'a bar' },
+          { line: 5, before: 'foo\tx', after: 'bar\tx' },
+        ],
+        changedLines: 4,
+      }),
+      item('d2', [], 'preview', { count: 1, lines: [{ line: 1, before: 'foo', after: '' }], changedLines: 1 }),
+    ]
+    expect(humanReplaceList(docs, CLI, CLI_ENV)).toBe(
+      [
+        'd1\t수업/t-d1  (3곳)',
+        '  - 2: a foo',
+        '  + 2: a bar',
+        '  - 5: foo x',
+        '  + 5: bar x',
+        '  … 외 2줄',
+        'd2\t/t-d2  (1곳)',
+        '  - 1: foo',
+        '  + 1: ',
+        '',
+      ].join('\n'),
+    )
+  })
+
+  it('적용 결과: 문서마다 한 줄', () => {
+    const docs = [
+      item('d1', [], 'updated', { version: 4 }),
+      item('d2', [], 'conflict'),
+      item('d3', null, 'too_large'),
+      item('d4', [], 'skipped', { count: null }),
+      item('d5', [], 'error', { failure: new CliError('not_found', { id: 'd5' }) }),
+    ]
+    expect(humanReplaceList(docs, CLI, CLI_ENV)).toBe(
+      [
+        'd1\t/t-d1  바꿈 2곳 → 판 4',
+        'd2\t/t-d2  충돌 (그 사이 바뀌어 덮어쓰지 않음)',
+        'd3\t?/t-d3  너무 큼 (바꾼 본문이 한도를 넘음)',
+        'd4\t/t-d4  미처리',
+        'd5\t/t-d5  오류: 찾을 수 없습니다. id 를 확인하세요: d5',
+        '',
+      ].join('\n'),
+    )
+  })
+
+  it('합계 줄: 미리 보기는 --yes 안내, 적용은 결과별 수, 0건은 search 와 같은 꼴', () => {
+    const preview = [item('d1', [], 'preview', { count: 3 }), item('d2', [], 'preview', { count: 1 })]
+    expect(humanReplaceSummary({ applied: false, docs: preview, e2eeSkipped: 0 }, 'foo')).toBe('바꿀 곳: 문서 2개 4곳\n적용하려면 --yes 를 붙이세요.\n')
+    expect(humanReplaceSummary({ applied: false, docs: preview, e2eeSkipped: 1 }, 'foo')).toBe(
+      '바꿀 곳: 문서 2개 4곳, 금고 문서 1개는 바꾸지 못함\n적용하려면 --yes 를 붙이세요.\n',
+    )
+    const applied = [
+      item('d1', [], 'updated', { version: 4 }),
+      item('d2', [], 'updated', { version: 2, count: 5 }),
+      item('d3', [], 'conflict'),
+      item('d4', [], 'too_large'),
+      item('d5', [], 'error'),
+      item('d6', [], 'skipped', { count: null }),
+    ]
+    expect(humanReplaceSummary({ applied: true, docs: applied, e2eeSkipped: 2 }, 'foo')).toBe(
+      '바꿈: 문서 2개 7곳, 충돌 1개, 너무 큼 1개, 오류 1개, 미처리 1개, 금고 문서 2개는 바꾸지 못함\n',
+    )
+    expect(humanReplaceSummary({ applied: true, docs: [item('d1', [], 'updated', { version: 4 })], e2eeSkipped: 0 }, 'foo')).toBe('바꿈: 문서 1개 2곳\n')
+    expect(humanReplaceSummary({ applied: false, docs: [], e2eeSkipped: 0 }, 'a\tb')).toBe('바꿀 곳이 있는 문서가 없습니다: a b\n')
+    expect(humanReplaceSummary({ applied: true, docs: [], e2eeSkipped: 3 }, 'x')).toBe('바꿀 곳이 있는 문서가 없습니다: x (금고 문서 3개는 바꾸지 못함)\n')
+  })
+
+  it('--json 모양: lines 는 빼고 version·error 는 있을 때만', () => {
+    const docs = [
+      item('d1', ['a'], 'updated', { version: 4, lines: [{ line: 1, before: 'x', after: 'y' }], changedLines: 1 }),
+      item('d2', [], 'error', { failure: new CliError('not_found', { id: 'd2' }) }),
+      item('d3', [], 'skipped', { count: null }),
+    ]
+    expect(replaceJson({ applied: true, docs, e2eeSkipped: 1 })).toEqual({
+      applied: true,
+      docs: [
+        { id: 'd1', title: 't-d1', folderPath: ['a'], count: 2, status: 'updated', version: 4 },
+        { id: 'd2', title: 't-d2', folderPath: [], count: 2, status: 'error', error: 'not_found' },
+        { id: 'd3', title: 't-d3', folderPath: [], count: null, status: 'skipped' },
+      ],
+      e2eeSkipped: 1,
+    })
+  })
+
+  it('종료 코드: 미리 보기·바꿈만이면 0, 하나라도 다르면 1', () => {
+    expect(replaceExitCode([])).toBe(0)
+    expect(replaceExitCode([item('d1', [], 'preview')])).toBe(0)
+    expect(replaceExitCode([item('d1', [], 'updated')])).toBe(0)
+    for (const s of ['conflict', 'too_large', 'skipped', 'error'] as const) {
+      expect(replaceExitCode([item('d1', [], 'updated'), item('d2', [], s)]), s).toBe(1)
+    }
+  })
+
+  it('기다림 안내 한 줄', () => {
+    expect(humanReplaceWait(30)).toBe('쓰기 한도에 걸려 30초 기다렸다가 다시 씁니다.\n')
   })
 })

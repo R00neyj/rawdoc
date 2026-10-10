@@ -40,11 +40,16 @@ import {
   humanPutPreview,
   humanRemoveDocLine,
   humanRemoveFolderNotice,
+  humanReplaceList,
+  humanReplaceSummary,
+  humanReplaceWait,
   humanSearchList,
   humanSearchSummary,
   humanSharedList,
   humanUploadLine,
   humanUrlLine,
+  replaceExitCode,
+  replaceJson,
   stripControlChars,
 } from './output'
 
@@ -387,6 +392,18 @@ export async function main(deps: MainDeps): Promise<number> {
           deps.out.stderr(humanSearchSummary(result, command.query))
         }
         return 0
+      }
+      case 'replace': {
+        const ref = command.folder !== null ? await commands.resolveFolder(cfg, command.folder) : null
+        const folder = ref !== null && command.folder !== null ? { id: ref.id, value: command.folder } : null
+        const input = { find: command.find, replacement: command.replacement, folder, apply: command.yes }
+        const hooks = { sleep: (ms: number) => deps.wait(ms), onWait: (seconds: number) => deps.out.stderr(humanReplaceWait(seconds)) }
+        const result = await commands.replace(cfg, input, hooks, ref?.folders ?? undefined)
+        if (command.global.json) deps.out.stdout(`${JSON.stringify(replaceJson(result))}\n`)
+        else deps.out.stdout(humanReplaceList(result.docs, brand.cliName, ENV_PREFIX))
+        if (result.stopped) emitError(deps, command.global.json, result.stopped)
+        if (!command.global.json) deps.out.stderr(humanReplaceSummary(result, command.find))
+        return replaceExitCode(result.docs)
       }
       case 'info': {
         const doc = await commands.info(cfg, command.id)

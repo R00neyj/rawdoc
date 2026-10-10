@@ -12,6 +12,7 @@ export type RunCommand =
   | { name: 'ls'; global: GlobalOptions; folder: string | null; shared: boolean; root: boolean; path: boolean }
   | { name: 'find'; global: GlobalOptions; query: string; folder: string | null; root: boolean; path: boolean }
   | { name: 'search'; global: GlobalOptions; query: string; folder: string | null }
+  | { name: 'replace'; global: GlobalOptions; find: string; replacement: string; folder: string | null; yes: boolean }
   | { name: 'info'; global: GlobalOptions; id: string }
   | { name: 'get'; global: GlobalOptions; id: string; output: string | null }
   | { name: 'new'; global: GlobalOptions; source: string | null; title: string | null; folder: string | null; url: boolean }
@@ -50,6 +51,7 @@ export const COMMAND_NAMES: CommandName[] = [
   'ls',
   'find',
   'search',
+  'replace',
   'info',
   'get',
   'new',
@@ -177,6 +179,23 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       if (query.length > SEARCH_MAX_QUERY_CHARS) return usage(`검색어는 ${SEARCH_MAX_QUERY_CHARS}자까지입니다.`, command)
       const folder = typeof parsed.values.folder === 'string' ? parsed.values.folder : null
       return { kind: 'run', command: { name: 'search', global: globalsOf(parsed.values), query, folder } }
+    }
+    case 'replace': {
+      const parsed = runParseArgs(rest, { ...GLOBAL_OPTIONS, folder: { type: 'string' }, yes: { type: 'boolean' } }, true)
+      if (!parsed) return usage('알 수 없는 옵션입니다.', command)
+      if (parsed.positionals.length < 2) return usage('찾을 말과 바꿀 말이 필요합니다. 지우려면 바꿀 말에 "" 를 주세요.', command)
+      if (parsed.positionals.length > 2) {
+        return usage('찾을 말과 바꿀 말은 하나씩만 줄 수 있습니다. 띄어쓰기가 든 말은 따옴표로 감싸세요.', command)
+      }
+      const [find, replacement] = parsed.positionals
+      if (find === '') return usage('찾을 말이 비어 있습니다.', command)
+      if (/[\r\n]/.test(find)) return usage('찾을 말에는 줄바꿈을 넣을 수 없습니다.', command)
+      if (find.length > SEARCH_MAX_QUERY_CHARS) return usage(`찾을 말은 ${SEARCH_MAX_QUERY_CHARS}자까지입니다.`, command)
+      const folder = typeof parsed.values.folder === 'string' ? parsed.values.folder : null
+      return {
+        kind: 'run',
+        command: { name: 'replace', global: globalsOf(parsed.values), find, replacement, folder, yes: parsed.values.yes === true },
+      }
     }
     case 'info': {
       const parsed = runParseArgs(rest, GLOBAL_OPTIONS, true)

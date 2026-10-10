@@ -31,6 +31,7 @@ export type CliErrorCode =
   | 'account_blocked'
   | 'e2ee_doc'
   | 'e2ee_folder'
+  | 'too_many_docs'
 
 export type CliErrorDetails = {
   status?: number | null
@@ -80,6 +81,7 @@ const EXIT_CODES: Record<CliErrorCode, number> = {
   account_blocked: 4,
   e2ee_doc: 4,
   e2ee_folder: 4,
+  too_many_docs: 2,
 }
 
 export class CliError extends Error {
@@ -197,6 +199,8 @@ export function errorMessage(err: CliError, cli: string, cliEnvPrefix: string): 
       return '금고 문서는 명령줄 도구로 다룰 수 없습니다. 웹에서 하세요.'
     case 'e2ee_folder':
       return '금고 폴더나 금고 문서가 걸려 있어 명령줄 도구로는 할 수 없습니다. 웹에서 하세요.'
+    case 'too_many_docs':
+      return `대상 문서가 ${d.limit}개를 넘습니다. --folder 로 좁혀 주세요.`
     default:
       return err.message
   }
@@ -274,14 +278,18 @@ export function humanDocList(docs: DocListItem[], opts: { path?: boolean } = {})
 
 type SearchListItem = { id: string; title: string; folderPath: string[] | null; lines: { line: number; text: string }[]; matchedLines: number }
 
+// 머리 줄 — 맨 위 문서는 /제목, 목록에 없는 폴더는 ?/제목
+function docHeadText(d: { id: string; title: string; folderPath: string[] | null }): string {
+  const path = folderPathText(d.folderPath)
+  return `${d.id}\t${path === '/' ? '' : path}/${stripControlChars(d.title)}`
+}
+
 export function humanSearchList(docs: SearchListItem[]): string {
   return docs
     .map((d) => {
-      const path = folderPathText(d.folderPath)
-      const head = `${d.id}\t${path === '/' ? '' : path}/${stripControlChars(d.title)}\n`
       const rows = d.lines.map((l) => `  ${l.line}: ${stripControlChars(l.text)}\n`).join('')
       const more = d.matchedLines > d.lines.length ? `  … 외 ${d.matchedLines - d.lines.length}줄\n` : ''
-      return head + rows + more
+      return `${docHeadText(d)}\n${rows}${more}`
     })
     .join('')
 }
@@ -293,6 +301,97 @@ export function humanSearchSummary(result: { docs: unknown[]; truncated: boolean
   if (n === 0) return `제목·본문에서 찾은 문서가 없습니다: ${stripControlChars(query)}${vault ? ` (${vault})` : ''}\n`
   const count = result.truncated ? `문서 ${n}개 이상 (처음 ${n}개만 보여 줍니다)` : `문서 ${n}개`
   return `${count}${vault ? `, ${vault}` : ''}\n`
+}
+
+export type ReplaceStatus = 'preview' | 'updated' | 'conflict' | 'too_large' | 'skipped' | 'error'
+
+// count 는 본문을 읽지 못한 미처리 문서만 null. failure 는 status 가 error 일 때
+export type ReplaceListItem = {
+  id: string
+  title: string
+  folderPath: string[] | null
+  count: number | null
+  status: ReplaceStatus
+  version?: number
+  failure?: CliError
+  lines: { line: number; before: string; after: string }[]
+  changedLines: number
+}
+
+type ReplaceResultLike = { applied: boolean; docs: ReplaceListItem[]; e2eeSkipped: number }
+
+function replaceStatusText(d: ReplaceListItem, cli: string, cliEnvPrefix: string): string {
+  switch (d.status) {
+    case 'updated':
+      return `바꿈 ${d.count}곳 → 판 ${d.version}`
+    case 'conflict':
+      return '충돌 (그 사이 바뀌어 덮어쓰지 않음)'
+    case 'too_large':
+      return '너무 큼 (바꾼 본문이 한도를 넘음)'
+    case 'skipped':
+      return '미처리'
+    default:
+      return `오류: ${d.failure ? errorMessage(d.failure, cli, cliEnvPrefix) : ''}`
+  }
+}
+
+export function humanReplaceList(docs: ReplaceListItem[], cli: string, cliEnvPrefix: string): string {
+  return docs
+    .map((d) => {
+      if (d.status !== 'preview') return `${docHeadText(d)}  ${replaceStatusText(d, cli, cliEnvPrefix)}\n`
+      const rows = d.lines
+        .map((l) => `  - ${l.line}: ${stripControlChars(l.before)}\n  + ${l.line}: ${stripControlChars(l.after)}\n`)
+        .join('')
+      const more = d.changedLines > d.lines.length ? `  … 외 ${d.changedLines - d.lines.length}줄\n` : ''
+      return `${docHeadText(d)}  (${d.count}곳)\n${rows}${more}`
+    })
+    .join('')
+}
+
+const REPLACE_TALLY: Array<[ReplaceStatus, string]> = [
+  ['conflict', '충돌'],
+  ['too_large', '너무 큼'],
+  ['error', '오류'],
+  ['skipped', '미처리'],
+]
+
+// 표준 오류로 가는 합계 — 0건 문구는 search 와 같은 꼴
+export function humanReplaceSummary(result: ReplaceResultLike, find: string): string {
+  const vault = result.e2eeSkipped > 0 ? `금고 문서 ${result.e2eeSkipped}개는 바꾸지 못함` : ''
+  if (result.docs.length === 0) return `바꿀 곳이 있는 문서가 없습니다: ${stripControlChars(find)}${vault ? ` (${vault})` : ''}\n`
+  const done = result.docs.filter((d) => d.status === (result.applied ? 'updated' : 'preview'))
+  const places = done.reduce((n, d) => n + (d.count ?? 0), 0)
+  const parts = [`${result.applied ? '바꿈' : '바꿀 곳'}: 문서 ${done.length}개 ${places}곳`]
+  for (const [status, label] of REPLACE_TALLY) {
+    const n = result.docs.filter((d) => d.status === status).length
+    if (n > 0) parts.push(`${label} ${n}개`)
+  }
+  if (vault) parts.push(vault)
+  return `${parts.join(', ')}\n${result.applied ? '' : '적용하려면 --yes 를 붙이세요.\n'}`
+}
+
+export function replaceJson(result: ReplaceResultLike) {
+  return {
+    applied: result.applied,
+    docs: result.docs.map((d) => ({
+      id: d.id,
+      title: d.title,
+      folderPath: d.folderPath,
+      count: d.count,
+      status: d.status,
+      ...(d.version !== undefined ? { version: d.version } : {}),
+      ...(d.failure ? { error: d.failure.code } : {}),
+    })),
+    e2eeSkipped: result.e2eeSkipped,
+  }
+}
+
+export function replaceExitCode(docs: ReplaceListItem[]): number {
+  return docs.every((d) => d.status === 'preview' || d.status === 'updated') ? 0 : 1
+}
+
+export function humanReplaceWait(seconds: number): string {
+  return `쓰기 한도에 걸려 ${seconds}초 기다렸다가 다시 씁니다.\n`
 }
 
 type FolderListItem = FolderLike & { id: string }

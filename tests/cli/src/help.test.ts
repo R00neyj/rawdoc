@@ -7,6 +7,7 @@ const USAGE: Record<string, string> = {
   ls: '사용: rawdoc ls [--folder <폴더id|경로> | --root | --shared] [--path]',
   find: '사용: rawdoc find <제목> [--folder <폴더id|경로> | --root] [--path]',
   search: '사용: rawdoc search <검색어> [--folder <폴더id|경로>]',
+  replace: '사용: rawdoc replace <찾을말> <바꿀말> [--folder <폴더id|경로>] [--yes]',
   get: '사용: rawdoc get <id> [-o <파일>]',
   new: '사용: rawdoc new [<파일>|-] [--title <제목>] [--folder <폴더id|경로>]',
   put: '사용: rawdoc put <id> [<파일>|-] [--title <제목>] (--base-version <n> | --force) [--dry-run]',
@@ -41,6 +42,13 @@ describe('F-2132 A9 help.ts', () => {
     expect(commandHelpText('put')).toContain('제목을 바꾸면 옛 제목으로 건 [[위키링크]] 는 자동으로 고쳐지지 않아 끊깁니다.')
     expect(commandHelpText('put')).toContain('서버 문서 방식으로 맞춰 저장됩니다.')
     expect(commandHelpText('mv')).toContain('[[폴더/문서 제목]] 처럼 폴더를 붙여 건 위키링크는 옮기면 끊길 수 있습니다.')
+  })
+
+  it('replace 도움말에 대소문자·제목 제외·충돌 안내', () => {
+    const text = commandHelpText('replace')
+    expect(text).toContain('대소문자를 구분')
+    expect(text).toContain('제목은 바꾸지 않습니다')
+    expect(text).toContain('덮어쓰지 않고')
   })
 
   it('put 한 줄 설명에 --dry-run', () => {

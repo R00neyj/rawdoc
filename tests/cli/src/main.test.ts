@@ -775,3 +775,84 @@ describe('search main()', () => {
     expect(rows[at + 1]).toBe('  search\t제목·본문에 그 글자가 든 내 문서와 줄을 찾습니다 (금고 문서 제외)')
   })
 })
+
+describe('replace main()', () => {
+  const tokenEnv = { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) }
+  const doc = (id: string, content: string, version: number) => ({
+    id, title: `t-${id}`, content, version, lineEnding: 'lf', folderId: null, pinnedAt: null, createdAt: 0, updatedAt: 0,
+  })
+  const hit = (id: string) => ({ id, title: `t-${id}`, folderId: null, version: 1, updatedAt: 0, lines: [], matchedLines: 1 })
+
+  function run(argv: string[], opts: { hits: string[]; truncated?: boolean; puts?: Response[] }) {
+    const calls: string[] = []
+    const waits: number[] = []
+    const puts = [...(opts.puts ?? [])]
+    const deps = baseDeps({
+      argv,
+      env: tokenEnv,
+      wait: async (ms: number) => void waits.push(ms),
+      fetchImpl: (async (url: string, init: RequestInit) => {
+        const u = new URL(url)
+        calls.push(`${init.method} ${u.pathname}`)
+        if (u.pathname === '/v1/search') return jsonResponse({ docs: opts.hits.map(hit), truncated: opts.truncated ?? false, e2eeSkipped: 0 })
+        if (u.pathname === '/v1/folders') return jsonResponse([])
+        const id = u.pathname.replace('/v1/docs/', '')
+        if (init.method === 'GET') return jsonResponse(doc(id, 'foo here', 3))
+        return puts.shift() ?? jsonResponse(doc(id, 'bar here', 4))
+      }) as unknown as typeof fetch,
+    })
+    return { deps, calls, waits }
+  }
+
+  it('--yes 없으면 PUT 없이 미리 보기와 안내, 종료 0', async () => {
+    const r = run(['replace', 'foo', 'bar'], { hits: ['d1'] })
+    expect(await main(r.deps)).toBe(0)
+    expect(r.calls.filter((c) => c.startsWith('PUT'))).toEqual([])
+    expect(r.deps.stdoutLog.join('')).toBe('d1\t/t-d1  (1곳)\n  - 1: foo here\n  + 1: bar here\n')
+    expect(r.deps.stderrLog.join('')).toBe('바꿀 곳: 문서 1개 1곳\n적용하려면 --yes 를 붙이세요.\n')
+  })
+
+  it('--yes: 409 는 충돌로 두고 다음 문서를 계속, 종료 1. 분당 429 는 주입한 wait 로 기다린 뒤 다시', async () => {
+    const r = run(['replace', 'foo', 'bar', '--yes'], {
+      hits: ['d1', 'd2'],
+      puts: [
+        jsonResponse({ error: 'conflict', doc: doc('d1', 'x', 9) }, 409),
+        jsonResponse({ error: 'rate_limited', scope: 'minute', limit: 120, retryAfter: 5 }, 429),
+      ],
+    })
+    expect(await main(r.deps)).toBe(1)
+    expect(r.calls.filter((c) => c.startsWith('PUT'))).toEqual(['PUT /v1/docs/d1', 'PUT /v1/docs/d2', 'PUT /v1/docs/d2'])
+    expect(r.waits).toEqual([5000])
+    expect(r.deps.stdoutLog.join('')).toBe('d1\t/t-d1  충돌 (그 사이 바뀌어 덮어쓰지 않음)\nd2\t/t-d2  바꿈 1곳 → 판 4\n')
+    expect(r.deps.stderrLog.join('')).toBe('쓰기 한도에 걸려 5초 기다렸다가 다시 씁니다.\n바꿈: 문서 1개 1곳, 충돌 1개\n')
+  })
+
+  it('200개를 넘으면 문서를 읽거나 쓰지 않고 종료 2. 0건은 종료 0, --json 은 결과 객체', async () => {
+    const t = run(['replace', 'foo', 'bar', '--yes'], { hits: ['d1'], truncated: true })
+    expect(await main(t.deps)).toBe(2)
+    expect(t.calls.filter((c) => c.includes('/v1/docs/'))).toEqual([])
+    expect(t.deps.stderrLog.join('')).toBe('대상 문서가 200개를 넘습니다. --folder 로 좁혀 주세요.\n')
+
+    const e = run(['replace', 'foo', 'bar'], { hits: [] })
+    expect(await main(e.deps)).toBe(0)
+    expect(e.deps.stdoutLog.join('')).toBe('')
+    expect(e.deps.stderrLog.join('')).toBe('바꿀 곳이 있는 문서가 없습니다: foo\n')
+
+    const j = run(['replace', 'foo', '', '--json'], { hits: ['d1'] })
+    expect(await main(j.deps)).toBe(0)
+    expect(JSON.parse(j.deps.stdoutLog.join(''))).toEqual({
+      applied: false,
+      docs: [{ id: 'd1', title: 't-d1', folderPath: [], count: 1, status: 'preview' }],
+      e2eeSkipped: 0,
+    })
+    expect(j.deps.stderrLog.join('')).toBe('')
+  })
+
+  it('전체 도움말에서 replace 는 search 바로 뒤', async () => {
+    const h = baseDeps({ argv: ['--help'] })
+    await main(h)
+    const rows = h.stdoutLog.join('').split('\n').filter((l) => l.startsWith('  '))
+    const at = rows.findIndex((l) => l.startsWith('  search\t'))
+    expect(rows[at + 1]).toBe('  replace\t여러 문서 본문에서 글자를 찾아 바꿉니다 (--yes 없으면 미리 보기만)')
+  })
+})
