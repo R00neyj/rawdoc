@@ -111,7 +111,7 @@ function PhoneSidePanel({ open, view, onClose, phone }: { open: boolean; view: C
           <SectionToggle label="목차" expanded={sections.outline} onToggle={() => onToggleSection('outline')} />
         </div>
         <div className="side-panel-body" data-collapsed={sections.outline ? undefined : ''} inert={!sections.outline}>
-          {hasDoc ? <div ref={onOutlineSlot} /> : <p className="side-panel-empty">문서를 열면 제목이 여기에 나옵니다.</p>}
+          {hasDoc ? <div className="side-panel-slot" ref={onOutlineSlot} /> : <p className="side-panel-empty">문서를 열면 제목이 여기에 나옵니다.</p>}
         </div>
       </nav>
     </>
