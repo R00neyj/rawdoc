@@ -61,6 +61,7 @@ import {
   IconCommit,
 } from './icons'
 import { GithubImportMenu } from './GithubMenu'
+import SidebarMoreMenu from './SidebarMoreMenu'
 import { e2eeMenuForDoc, e2eeMenuForFolder, type E2eeConvertDirection, type E2eeConvertTarget, type E2eeMenuState } from '../e2ee/convert'
 import { formatHash } from './hashRoute'
 import { GUIDES_PATH } from '../lib/siteChrome'
@@ -1266,7 +1267,8 @@ export default function Sidebar({
                 {github ? <GithubImportMenu variant="bar" onFile={onImportDoc} onGithub={github.onImport} /> : <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
                 <SidebarIconButton icon={IconCollapseAll} label="모두 접기" onClick={onCollapseAllFolders} />
                 <SidebarIconButton icon={IconMap} label="지도" btnClassName="sidebar-map-btn" onClick={onOpenMap} />
-                <SidebarIconButton icon={IconTemplates} label="템플릿 관리" onClick={onOpenTemplates} />
+                <SidebarIconButton icon={IconTemplates} label="템플릿 관리" btnClassName="sidebar-templates-btn" onClick={onOpenTemplates} />
+                <SidebarMoreMenu onOpenMap={onOpenMap} onOpenTemplates={onOpenTemplates} />
               </div>
               {pinned.length > 0 && (
                 <>

@@ -567,9 +567,26 @@ body.sidebar-resizing {
   display: none;
 }
 
+/* 휴대폰 폭은 지도·템플릿 관리를 `⋯` 하나로 묶어 버튼 줄을 한 줄로 둔다 (tweak 2026-10-10) */
+.sidebar-more-menu {
+  display: none;
+}
+
 @media (max-width: 600px) {
   .icon-btn-wrap:has(> .sidebar-search-btn) {
     display: flex;
+  }
+
+  .sidebar-more-menu {
+    display: flex;
+  }
+
+  .sidebar-more-menu > .icon-btn-wrap {
+    flex: 1;
+  }
+
+  .icon-btn-wrap:has(> :is(.sidebar-map-btn, .sidebar-templates-btn)) {
+    display: none;
   }
 }
 
@@ -5500,6 +5517,7 @@ body.sidebar-resizing {
   }
 
   .sidebar-actions {
+    position: relative;
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 0;
