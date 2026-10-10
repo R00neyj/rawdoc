@@ -2843,6 +2843,22 @@ body.sidebar-resizing {
   filter: brightness(0.95);
 }
 
+/* 보조 동작(암호를 잊었나요? 등)은 글자 링크로 낮추고 왼쪽 끝으로 떼어 주 버튼과 헷갈리지 않게 */
+.dialog-actions button.link-btn {
+  margin-right: auto;
+  padding-inline: 2px;
+  border-color: transparent;
+  background: none;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.dialog-actions button.link-btn:hover {
+  background: none;
+  color: var(--ink);
+}
+
 /* ----- 도움말 전용 페이지 (specs/features/F-244.md 3.2) ----- */
 .help-page {
   width: 100%;
