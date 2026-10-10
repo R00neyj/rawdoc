@@ -1139,7 +1139,7 @@ export default function App() {
   const phone = usePhoneWidth()
   const rightPanel = useRightPanel({ narrow, phone })
   const calendar = useCalendarPanel({
-    closePanelIfNarrow: rightPanel.closeIfNarrow, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate,
+    closePanelIfNarrow: rightPanel.closeIfNarrow, dayDocsActive: rightPanel.dayDocsActive, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate,
   })
   const panelDocs = usePanelDocs({
     linksActive: rightPanel.shownViews.includes('links'), graphActive: rightPanel.shownViews.includes('graph'), todosActive: rightPanel.shownViews.includes('todos'),
@@ -1207,7 +1207,7 @@ export default function App() {
     handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, github: github.palette, handleTogglePin, requestMoveDoc, requestDeleteDoc,
     getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createDocFromPalette,
     openDocFromSearch, newDocFolderId, changeViewMode, openTemplates: templateManager.openTemplates,
-    rightPanelOpen: rightPanel.open, toggleRightPanel: rightPanel.togglePanel,
+    rightPanelOpen: rightPanel.open, toggleRightPanel: rightPanel.available ? rightPanel.togglePanel : undefined,
   })
 
   // Ctrl+P·Ctrl+Shift+/ 가 매 커밋 최신 openPalette·toggleShortcuts 를 읽게 한다 (F-2080)
@@ -1258,7 +1258,7 @@ export default function App() {
     handlePrintDoc, helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
     outlineControlRef, openPalette, openSearch, openViewFind: viewFind.open, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
     toggleButtonRef, toggleCommentsPanel, toggleSidebar, toolbarPref, viewMode, wikiResolver,
-    editorRef, github: github.topBar, rightPanel: { open: rightPanel.open, onToggle: rightPanel.togglePanel },
+    editorRef, github: github.topBar, rightPanel: rightPanel.available ? { open: rightPanel.open, onToggle: rightPanel.togglePanel } : undefined,
   }} />
 
   return (
@@ -1415,7 +1415,7 @@ export default function App() {
         requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
         setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref,
         toolbarPref, wikiPreviewPref, settingsGithub: github.settings, githubDialogs: github.dialogs, ...templateManager,
-        calendarSettings: calendar.settings,
+        rightPanelSettings: { ...rightPanel.settings, calendar: calendar.settings },
       }} />
       {/* 인쇄 전용 영역 — printDoc() 이 채운다. .app-shell 의 마지막 직계 자식이어야 한다 (F-279.md 4.2) */}
       <div className="viewer print-root" data-ui="print" ref={printRootRef} aria-hidden="true" inert />

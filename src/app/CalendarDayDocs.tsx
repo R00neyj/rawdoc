@@ -23,6 +23,7 @@ function DayGroup({ title, rows, onOpen }: { title: string; rows: DayDocRow[]; o
 }
 
 export default function CalendarDayDocs({ view }: { view: CalendarView }) {
+  if (!view.dayDocs) return null
   const { label, created, updated } = view.dayDocs
   return (
     <section className="calendar-day-docs">

@@ -105,7 +105,8 @@ export type UseCommandPaletteOptions = {
   openMap: () => Promise<void>
   openTemplates: () => void
   rightPanelOpen: boolean
-  toggleRightPanel: () => void
+  // 표시할 항목을 다 끄면 없다 — 팔레트 명령이 숨는다
+  toggleRightPanel?: () => void
   openHelp: () => Promise<void>
   createNewDoc: (folderId?: string | null) => Promise<void>
   createDocFromPalette: (plan: PaletteCreatePlan) => Promise<void>

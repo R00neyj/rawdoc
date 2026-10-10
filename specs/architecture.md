@@ -55,8 +55,8 @@ src/
     useShortcutsPanel.ts 단축키 판 열기·닫기·커서 스크롤 (F-2037, F-2078)
     useNewDocTemplate.ts newDocTemplate.ts 새 문서 템플릿 목록·원문 읽기·본문 (F-2052, F-2078)
     useTemplateManager.ts TemplateManagerDialog.tsx 템플릿 관리 D-22 열기·새 템플릿·편집·삭제 (small 2026-10-10)
-    useRightPanel.ts RightPanel.tsx 오른쪽 패널 열림·칸(보기 목록·‹ › 넘기기) (small 2026-10-10, 2026-10-11)
-    useCalendarPanel.ts CalendarDayDocs.tsx CalendarSettingsTab.tsx TemplateSelectField.tsx 오른쪽 패널 `달력` 보기·그날 문서·설정 달력 탭 (small 2026-10-10, 2026-10-11)
+    useRightPanel.ts RightPanel.tsx RightPanelSettingsTab.tsx 오른쪽 패널 열림·칸(보기 목록·‹ › 넘기기·접기)·설정 `오른쪽 패널` 탭의 표시할 항목 (small 2026-10-10, 2026-10-11)
+    useCalendarPanel.ts CalendarDayDocs.tsx CalendarSettingsTab.tsx TemplateSelectField.tsx 오른쪽 패널 `달력` 보기·그날 문서·설정 탭의 달력 묶음 (small 2026-10-10, 2026-10-11)
     usePanelDocs.ts PanelLinks.tsx PanelTodos.tsx PanelGraph.tsx 오른쪽 패널 `링크`·`할 일`·`그래프` 보기 — 목록 한 번 읽기를 나눠 씀, 백링크·나가는 링크·언급, 문서별 미완료 체크박스, 1단계 2D 미니 그래프(SVG, d3-force-3d 지연 로드) (small 2026-10-11)
     useAccountStatus.ts 계정 플래그 반영·다시 읽기(online·화면 복귀·10분) (F-2026, F-2079)
     useAccountDelete.ts 계정 삭제 대화상자 열기·실행 (F-2079)
@@ -290,6 +290,8 @@ type YjsMetaRow = {
 | `md.palettePinned` | 명령 id JSON 배열, 고정한 순서 | 없음(`[]` 로 읽는다) | F-2053 7.2·7.3 |
 | `md.rightPanel` | `open` \| `closed` — 넓은 창 오른쪽 패널 열림 | `open` | small 2026-10-10, 2026-10-11 |
 | `md.rightPanelViews` | `{ 칸 id: 보기 id }` JSON — 칸별 마지막 보기(`wide1`·`wide2`·`wide3`·`phoneTop`, 보기 `calendar`·`graph`·`links`·`todos`) | 없음(칸마다 첫 보기) | small 2026-10-11 |
+| `md.rightPanelItems` | `{ 항목 id: 켬 }` JSON — 설정 `표시할 항목`(`calendar`·`dayDocs`·`graph`·`links`·`todos`) | 없음(모두 켬) | small 2026-10-11 |
+| `md.rightPanelCollapsed` | `{ 칸 id: 접힘 }` JSON — 넓은 창 칸 접힘(`wide1`·`wide2`·`wide3`) | 없음(모두 펼침) | small 2026-10-11 |
 | `md.calendarFolder` | 달력 날짜 문서 폴더 id, `''` = 최상위 | `''` | small 2026-10-10 |
 | `md.calendarFormat` | 날짜 문서 제목 형식(템플릿 날짜 토큰) | `YYYY-MM-DD` | small 2026-10-10 |
 | `md.calendarTemplate` | `md.newDocTemplate` 과 같은 값 | `none` | small 2026-10-10 |

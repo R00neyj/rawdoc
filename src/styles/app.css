@@ -6392,7 +6392,7 @@ a.dialog-btn {
   align-items: center;
   gap: 2px;
   height: var(--topbar-h);
-  padding: 0 8px 0 16px;
+  padding: 0 8px;
   border-bottom: 1px solid var(--rule);
 }
 
@@ -6402,13 +6402,41 @@ a.dialog-btn {
   font-weight: 600;
 }
 
-/* ‹ › 가 있는 머리는 화살표가 왼쪽 끝에 붙는다 */
-.right-panel-head:has(> .icon-btn:first-child) {
-  padding-left: 8px;
+/* 칸 머리 — 꺾쇠 + 보기 이름을 누르면 접고 편다. 휴대폰 side-panel-toggle 과 같은 모양 (small 2026-10-11) */
+.panel-slot-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 6px 0 2px;
+  border-radius: var(--radius-control);
+  font: inherit;
+  color: var(--ink);
+}
+
+.panel-slot-toggle:hover {
+  background: var(--rule-2);
+}
+
+.panel-slot-toggle .side-panel-chevron {
+  transition: transform var(--transition-fast);
+}
+
+.panel-slot-toggle[aria-expanded='true'] .side-panel-chevron {
+  transform: rotate(90deg);
+}
+
+.panel-slot-nav {
+  display: flex;
+  margin-left: auto;
 }
 
 .right-panel-close {
   margin-left: auto;
+}
+
+.panel-slot-nav + .right-panel-close {
+  margin-left: 0;
 }
 
 .panel-slot {
@@ -6422,8 +6450,57 @@ a.dialog-btn {
   min-height: 0;
 }
 
+/* 접힌 칸은 머리만 — 남은 칸이 높이를 나눠 쓴다 */
+.panel-slot[data-collapsed] {
+  flex: none;
+}
+
+.panel-slot[data-collapsed] .right-panel-head {
+  border-bottom-color: transparent;
+}
+
 .panel-slot + .panel-slot .right-panel-head {
   border-top: 1px solid var(--rule);
+}
+
+/* 설정 `오른쪽 패널` 탭 — 표시할 항목·달력 묶음 제목 */
+.panel-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0 0 20px;
+  padding: 0;
+  border: 0;
+}
+
+.panel-settings-title {
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.panel-item-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+}
+
+.panel-item-check input {
+  accent-color: var(--accent);
+}
+
+.panel-item-check:has(input:disabled) {
+  color: var(--muted);
+}
+
+@media (pointer: coarse) {
+  .panel-item-check {
+    min-height: var(--touch-target);
+  }
 }
 
 .doc-links {

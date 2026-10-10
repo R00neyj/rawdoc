@@ -16,7 +16,7 @@ test('달력 — 설정대로 날짜 문서를 만들고, 다시 누르면 그 �
 
   await page.getByRole('button', { name: '설정', exact: true }).click()
   const settings = page.locator(SETTINGS_DIALOG_SELECTOR)
-  await settings.getByRole('tab', { name: '달력' }).click()
+  await settings.getByRole('tab', { name: '오른쪽 패널' }).click()
   await settings.getByRole('combobox', { name: '문서 위치' }).selectOption({ label: '일기' })
   await settings.getByRole('textbox', { name: '제목 형식' }).fill('YYYY.MM.DD')
   await settings.getByRole('combobox', { name: '달력 문서 템플릿' }).selectOption({ label: '일일 노트' })

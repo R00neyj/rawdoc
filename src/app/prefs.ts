@@ -47,6 +47,9 @@ type PrefMap = {
   'md.rightPanel': 'open' | 'closed'
   // 오른쪽 패널 칸별 마지막 보기 — { 칸 id: 보기 id } JSON, 기기별 (small 2026-10-11)
   'md.rightPanelViews': string
+  // 설정 `표시할 항목` { 항목 id: 켬 } JSON·넓은 창 칸 접힘 { 칸 id: 접힘 } JSON, 기기별 (small 2026-10-11)
+  'md.rightPanelItems': string
+  'md.rightPanelCollapsed': string
   // 달력 날짜 문서 — 폴더 id(''=최상위)·제목 형식·템플릿 id(none=없음), 기기별 (small 2026-10-10)
   'md.calendarFolder': string
   'md.calendarFormat': string
@@ -93,6 +96,8 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.userCssBoot',
   'md.rightPanel',
   'md.rightPanelViews',
+  'md.rightPanelItems',
+  'md.rightPanelCollapsed',
   'md.calendarFolder',
   'md.calendarFormat',
   'md.calendarTemplate',

@@ -103,7 +103,7 @@ export type PhoneSidePanelProps = {
   onToggleSection: (key: keyof PhoneSideSections) => void
   onOutlineSlot: (el: HTMLElement | null) => void
   hasDoc: boolean
-  top: PanelSlotState
+  top: PanelSlotState | null
 }
 
 function SectionToggle({ label, expanded, onToggle }: { label: string; expanded: boolean; onToggle: () => void }) {
@@ -115,19 +115,20 @@ function SectionToggle({ label, expanded, onToggle }: { label: string; expanded:
   )
 }
 
-// 휴대폰 폭 — 왼쪽 밀기로 여는 위 칸(‹ › 로 보기 넘기기)·아래 목차 패널. 목차 줄은 Outline 이 onOutlineSlot 자리로 포털한다
+// 휴대폰 폭 — 왼쪽 밀기로 여는 위 칸(‹ › 로 보기 넘기기)·아래 목차 패널. 표시할 항목을 다 끄면 목차 칸만. 목차 줄은 Outline 이 onOutlineSlot 자리로 포털한다
 // 닫힘·접힘도 전환이 보이게 패널은 usePresence 로, 칸 몸통은 늘 그려 두고 flex-grow 로 줄인다
 function PhoneSidePanel({ open, views, onClose, phone }: { open: boolean; views: PanelViews; onClose: () => void; phone: PhoneSidePanelProps }) {
   const { sections, onToggleSection, onOutlineSlot, hasDoc, top } = phone
   const { mounted, state } = usePresence(open)
   if (!mounted) return null
+  const outlineToggle = <SectionToggle label="목차" expanded={sections.outline} onToggle={() => onToggleSection('outline')} />
   return (
     <>
       {open && <div className="outline-panel-backdrop" onClick={onClose} />}
       <nav className="outline-panel side-panel" data-ui="right-panel" aria-label="오른쪽 패널" data-state={state} inert={state === 'closed'}>
         <div className="outline-panel-head">
-          <SectionToggle label={PANEL_VIEW_LABELS[top.view]} expanded={sections.top} onToggle={() => onToggleSection('top')} />
-          {top.views.length > 1 && (
+          {top ? <SectionToggle label={PANEL_VIEW_LABELS[top.view]} expanded={sections.top} onToggle={() => onToggleSection('top')} /> : outlineToggle}
+          {top && top.views.length > 1 && (
             <span className="panel-slot-nav">
               <SlotArrow slot={top} step={-1} />
               <SlotArrow slot={top} step={1} />
@@ -137,12 +138,14 @@ function PhoneSidePanel({ open, views, onClose, phone }: { open: boolean; views:
             <IconClose size={20} />
           </button>
         </div>
-        <div className="side-panel-body" data-collapsed={sections.top ? undefined : ''} inert={!sections.top}>
-          <ViewBody view={top.view} views={views} />
-        </div>
-        <div className="side-panel-head">
-          <SectionToggle label="목차" expanded={sections.outline} onToggle={() => onToggleSection('outline')} />
-        </div>
+        {top && (
+          <>
+            <div className="side-panel-body" data-collapsed={sections.top ? undefined : ''} inert={!sections.top}>
+              <ViewBody view={top.view} views={views} />
+            </div>
+            <div className="side-panel-head">{outlineToggle}</div>
+          </>
+        )}
         <div className="side-panel-body" data-collapsed={sections.outline ? undefined : ''} inert={!sections.outline}>
           {hasDoc ? <div className="side-panel-slot" ref={onOutlineSlot} /> : <p className="side-panel-empty">문서를 열면 제목이 여기에 나옵니다.</p>}
         </div>
@@ -171,18 +174,28 @@ export default function RightPanel({
   return (
     <aside className={narrow ? 'right-panel right-panel--overlay' : 'right-panel'} data-ui="right-panel" aria-label="오른쪽 패널">
       {slots.map((slot, index) => (
-        <div key={slot.id} className={FILL_VIEW[slot.view] ? 'panel-slot panel-slot--fill' : 'panel-slot'}>
+        <div key={slot.id} className={FILL_VIEW[slot.view] ? 'panel-slot panel-slot--fill' : 'panel-slot'} data-collapsed={slot.collapsed ? '' : undefined}>
           <div className="right-panel-head">
-            {slot.views.length > 1 && <SlotArrow slot={slot} step={-1} />}
-            <h2 aria-live={slot.views.length > 1 ? 'polite' : undefined}>{PANEL_VIEW_LABELS[slot.view]}</h2>
-            {slot.views.length > 1 && <SlotArrow slot={slot} step={1} />}
+            <h2>
+              <button type="button" className="panel-slot-toggle" aria-expanded={!slot.collapsed} onClick={slot.onToggleCollapsed}>
+                <IconChevron size={18} className="side-panel-chevron" />
+                <span aria-live={slot.views.length > 1 ? 'polite' : undefined}>{PANEL_VIEW_LABELS[slot.view]}</span>
+              </button>
+            </h2>
+            {slot.views.length > 1 && (
+              <span className="panel-slot-nav">
+                <SlotArrow slot={slot} step={-1} />
+                <SlotArrow slot={slot} step={1} />
+              </span>
+            )}
             {index === 0 && (
               <button type="button" className="icon-btn right-panel-close" aria-label="오른쪽 패널 닫기" onClick={onClose}>
                 <IconClose size={18} />
               </button>
             )}
           </div>
-          <ViewBody view={slot.view} views={views} />
+          {/* 접힌 칸은 보기를 그리지 않는다 — 데이터도 useRightPanel.shownViews 에서 빠져 계산하지 않는다 */}
+          {!slot.collapsed && <ViewBody view={slot.view} views={views} />}
         </div>
       ))}
     </aside>

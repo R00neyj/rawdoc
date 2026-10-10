@@ -26,6 +26,8 @@ import type { Folder } from '../types'
 
 export type UseCalendarPanelOptions = {
   closePanelIfNarrow: () => void
+  // 설정에서 켰고 달력 보기가 보일 때만 그날 문서를 센다
+  dayDocsActive: boolean
   docs: DocMeta[]
   docsRef: RefObject<DocMeta[]>
   folders: Folder[]
@@ -44,8 +46,8 @@ export type CalendarView = {
   docIndex: Map<string, string>
   todayKey: string
   currentDocId: string | null
-  // 열린 날짜 문서의 날, 아니면 오늘 — 그날 만든 문서·고친 문서
-  dayDocs: { label: string; created: DayDocRow[]; updated: DayDocRow[] }
+  // 열린 날짜 문서의 날, 아니면 오늘 — 그날 만든 문서·고친 문서. 끄거나 안 보이면 null
+  dayDocs: { label: string; created: DayDocRow[]; updated: DayDocRow[] } | null
   onPrevMonth: () => void
   onNextMonth: () => void
   onToday: () => void
@@ -64,7 +66,7 @@ export type UseCalendarPanelResult = {
 }
 
 export function useCalendarPanel(options: UseCalendarPanelOptions): UseCalendarPanelResult {
-  const { closePanelIfNarrow, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate } = options
+  const { closePanelIfNarrow, dayDocsActive, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate } = options
   const [month, setMonth] = useState(todayYearMonth)
   const [folderPref, setFolderPref] = useState(() => getPref('md.calendarFolder', ''))
   const [formatPref, setFormatPref] = useState(() => getPref('md.calendarFormat', CALENDAR_DEFAULT_FORMAT))
@@ -89,13 +91,14 @@ export function useCalendarPanel(options: UseCalendarPanelOptions): UseCalendarP
   const openedDay = currentDoc && currentDoc.e2ee !== 'locked' ? calendarDocDay(currentDoc, folderState.folderId, formatPref) : null
   const listKey = openedDay ? dayKey(openedDay) : todayKey
   const dayDocs = useMemo(() => {
+    if (!dayDocsActive) return null
     const [year, month1, day] = listKey.split('-').map(Number)
     const date = { year, month: month1 - 1, day }
     const dateDocId = calendarDocIndex({ docs, folderId: folderState.folderId, format: formatPref, days: [date] }).get(listKey) ?? null
     const { created, updated } = docsOfDay({ docs, day: date, excludeId: dateDocId, hiddenFolderIds: templateFolderIds(folders) })
     const row = (d: DocMeta): DayDocRow => ({ id: d.id, title: d.e2ee === 'locked' ? '잠긴 문서' : displayDocTitle(d.title) })
     return { label: `${month1}월 ${day}일`, created: created.map(row), updated: updated.map(row) }
-  }, [docs, folders, listKey, folderState.folderId, formatPref])
+  }, [dayDocsActive, docs, folders, listKey, folderState.folderId, formatPref])
 
   // 있으면 열고, 없으면 설정 폴더에 템플릿 본문으로 만든다. 잠긴 금고 폴더는 먼저 열어 제목을 읽은 뒤 판정한다
   async function openDay(day: CalendarDate) {

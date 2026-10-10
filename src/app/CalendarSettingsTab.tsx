@@ -2,7 +2,7 @@ import TemplateSelectField from './TemplateSelectField'
 import { calendarDocTitle, CALENDAR_DEFAULT_FORMAT } from '../lib/calendar'
 import type { TemplateEntry } from '../lib/templates'
 
-// 설정 `달력` 탭 — 날짜 문서 위치·제목 형식·템플릿, 기기별 (small 2026-10-10)
+// 설정 `오른쪽 패널` 탭의 달력 묶음 — 날짜 문서 위치·제목 형식·템플릿, 기기별 (small 2026-10-10)
 export type CalendarSettings = {
   folder: string
   folderOptions: readonly { id: string; label: string }[]
