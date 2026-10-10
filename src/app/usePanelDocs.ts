@@ -1,7 +1,7 @@
 // 오른쪽 패널 `링크`·`할 일` 보기 — 보일 때만 목록을 한 번 읽어 둘이 나눠 쓴다. 지금 문서는 편집기 본문 기준 (small 2026-10-11)
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { findIncomingLinks, findOutgoingLinks, MENTION_MIN_LENGTH, type IncomingLinks, type OutgoingLinkRow } from '../lib/docLinks'
-import { findOpenTodos, groupTodos, scanTodoSources, type TodoGroup } from '../lib/docTodos'
+import { findOpenTodos, groupTasks, scanTodoSources, type TaskBucket, type TaskFilter, type TaskRow } from '../lib/docTodos'
 import { buildLocalGraph, type LocalGraph } from '../lib/localGraph'
 import type { WikiResolver } from '../lib/wikiResolve'
 import type { EditorHandle } from '../editor/Editor'
@@ -22,7 +22,9 @@ export type DocLinksView = {
 }
 
 export type DocTodosView = {
-  todos: { groups: TodoGroup[]; truncated: boolean; lockedCount: number } | null
+  todos: { groups: { bucket: TaskBucket; items: TaskRow[] }[]; truncated: boolean; lockedCount: number } | null
+  // 빈 안내에 어떤 표시를 찾았는지 보여 준다
+  filters: readonly string[]
   onOpenItem: (docId: string, line: number) => void
 }
 
@@ -36,6 +38,7 @@ export function usePanelDocs(options: {
   linksActive: boolean
   graphActive: boolean
   todosActive: boolean
+  taskFilter: TaskFilter
   listSource: { list(): Promise<Doc[]> }
   docs: DocMeta[]
   folders: Folder[]
@@ -50,7 +53,7 @@ export function usePanelDocs(options: {
   afterOpen: () => void
   openMap: () => Promise<void>
 }): { links: DocLinksView; todos: DocTodosView; graph: DocGraphView } {
-  const { todosActive, listSource, docs, folders, currentDoc, editor, resolver, e2eeOpen } = options
+  const { todosActive, taskFilter, listSource, docs, folders, currentDoc, editor, resolver, e2eeOpen } = options
   const { selectDoc, openWikiLinkTarget, pendingJumpRef, jumpToLine, afterOpen, openMap } = options
   // 그래프는 링크 보기의 백링크·나가는 링크로 그린다
   const linksActive = options.linksActive || options.graphActive
@@ -123,12 +126,18 @@ export function usePanelDocs(options: {
     () => (linksActive && current && currentText !== null ? findOutgoingLinks({ text: currentText, current, resolver }) : []),
     [linksActive, current, currentText, resolver],
   )
-  const otherTodos = useMemo(() => (todosActive && listed ? scanTodoSources(listed.sources, currentId) : null), [todosActive, listed, currentId])
+  const otherTodos = useMemo(
+    () => (todosActive && listed ? scanTodoSources(listed.sources, currentId, taskFilter) : null),
+    [todosActive, listed, currentId, taskFilter],
+  )
+  // 날짜 묶음(기한 지남·오늘)은 기기 날짜 기준 — 다시 그릴 때 날이 바뀌었으면 새로 묶는다
+  const now = new Date()
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const todos = useMemo(() => {
     if (!otherTodos) return null
-    const own = current && currentText !== null ? { id: current.id, title: current.title, items: findOpenTodos(currentText) } : null
-    return { ...groupTodos(own, otherTodos.docs), lockedCount: otherTodos.lockedCount }
-  }, [otherTodos, current, currentText])
+    const own = current && currentText !== null ? [{ id: current.id, title: current.title, items: findOpenTodos(currentText, taskFilter) }] : []
+    return { ...groupTasks([...own, ...otherTodos.docs], todayKey), lockedCount: otherTodos.lockedCount }
+  }, [otherTodos, current, currentText, taskFilter, todayKey])
 
   const incoming = current && listed?.forId === current.id ? listed.incoming : null
   const graphActive = options.graphActive
@@ -163,6 +172,7 @@ export function usePanelDocs(options: {
     },
     todos: {
       todos,
+      filters: taskFilter.filters,
       onOpenItem: (docId, line) => {
         afterOpen()
         if (docId === currentId) {

@@ -55,9 +55,9 @@ src/
     useShortcutsPanel.ts 단축키 판 열기·닫기·커서 스크롤 (F-2037, F-2078)
     useNewDocTemplate.ts newDocTemplate.ts 새 문서 템플릿 목록·원문 읽기·본문 (F-2052, F-2078)
     useTemplateManager.ts TemplateManagerDialog.tsx 템플릿 관리 D-22 열기·새 템플릿·편집·삭제 (small 2026-10-10)
-    useRightPanel.ts RightPanel.tsx RightPanelSettingsTab.tsx 오른쪽 패널 열림·칸(보기 목록·‹ › 넘기기·접기)·설정 `오른쪽 패널` 탭의 표시할 항목 (small 2026-10-10, 2026-10-11)
+    useRightPanel.ts RightPanel.tsx RightPanelSettingsTab.tsx useTaskFilter.ts 오른쪽 패널 열림·칸(보기 목록·‹ › 넘기기·접기)·설정 `오른쪽 패널` 탭의 표시할 항목·할 일 표시(전역 필터) (small 2026-10-10, 2026-10-11)
     useCalendarPanel.ts CalendarDayDocs.tsx CalendarSettingsTab.tsx TemplateSelectField.tsx 오른쪽 패널 `달력` 보기·그날 문서·설정 탭의 달력 묶음 (small 2026-10-10, 2026-10-11)
-    usePanelDocs.ts PanelLinks.tsx PanelTodos.tsx PanelGraph.tsx 오른쪽 패널 `링크`·`할 일`·`그래프` 보기 — 목록 한 번 읽기를 나눠 씀, 백링크·나가는 링크·언급, 문서별 미완료 체크박스, 1단계 2D 미니 그래프(SVG, d3-force-3d 지연 로드) (small 2026-10-11)
+    usePanelDocs.ts PanelLinks.tsx PanelTodos.tsx PanelGraph.tsx 오른쪽 패널 `링크`·`할 일`·`그래프` 보기 — 목록 한 번 읽기를 나눠 씀, 백링크·나가는 링크·언급, Tasks 방식 할 일(날짜 묶음), 1단계 2D 미니 그래프(SVG, d3-force-3d 지연 로드) (small 2026-10-11)
     useAccountStatus.ts 계정 플래그 반영·다시 읽기(online·화면 복귀·10분) (F-2026, F-2079)
     useAccountDelete.ts 계정 삭제 대화상자 열기·실행 (F-2079)
     useTitleCommit.ts 제목 저장 (F-2079)
@@ -143,7 +143,7 @@ src/
 - 오른쪽 패널·달력(2026-10-10 small)으로 추가
   - `lib/`: `calendar.ts`(월 격자·날짜 문서 제목·폴더 안 날짜 문서 찾기·제목에서 날짜 읽기·그날 만든/고친 문서, 순수 함수)
 - 오른쪽 패널 칸·링크 보기(2026-10-11 small)로 추가
-  - `lib/`: `panelSlots.ts`(칸의 지금 보기·넘기기·저장값 읽기), `docLinks.ts`(백링크·나가는 링크·연결되지 않은 언급·줄 발췌), `docTodos.ts`(미완료 체크박스·문서별 훑기·300개 상한 묶음), `localGraph.ts`(1단계 그래프 노드·2차원 힘 배치 — d3 모듈을 인자로 받는다), 모두 순수 함수. `wikiGraph.ts` 는 프론트매터·펜스 밖 줄 훑기 `proseLines`(원문 줄 번호 포함)를 내보낸다
+  - `lib/`: `panelSlots.ts`(칸의 지금 보기·넘기기·저장값 읽기), `docLinks.ts`(백링크·나가는 링크·연결되지 않은 언급·줄 발췌), `docTodos.ts`(옵시디언 Tasks 방식 — 전역 필터·상태·이모지 필드·happens 묶음·기본 정렬·300개 상한), `localGraph.ts`(1단계 그래프 노드·2차원 힘 배치 — d3 모듈을 인자로 받는다), 모두 순수 함수. `wikiGraph.ts` 는 프론트매터·펜스 밖 줄 훑기 `proseLines`(원문 줄 번호 포함)를 내보낸다
 - DO 서버·`/ws` 인증(2026-09-24)으로 추가
   - `lib/`: `docRoomProtocol.ts`(F-304 — 서버·클라이언트 공용 소켓 계약. 앱은 F-304 에서 import 하지 않는다)
 - 명령줄 도구(2026-09-24)로 추가
@@ -292,6 +292,8 @@ type YjsMetaRow = {
 | `md.rightPanelViews` | `{ 칸 id: 보기 id }` JSON — 칸별 마지막 보기(`wide1`·`wide2`·`wide3`·`phoneTop`, 보기 `calendar`·`graph`·`links`·`todos`) | 없음(칸마다 첫 보기) | small 2026-10-11 |
 | `md.rightPanelItems` | `{ 항목 id: 켬 }` JSON — 설정 `표시할 항목`(`calendar`·`dayDocs`·`graph`·`links`·`todos`) | 없음(모두 켬) | small 2026-10-11 |
 | `md.rightPanelCollapsed` | `{ 칸 id: 접힘 }` JSON — 넓은 창 칸 접힘(`wide1`·`wide2`·`wide3`) | 없음(모두 펼침) | small 2026-10-11 |
+| `md.taskFilter` | `할 일` 보기 전역 필터 — 쉼표로 여러 개, `''` = 모든 체크박스 | `#task, #할일` | small 2026-10-11 |
+| `md.taskFilterHide` | `on` \| `off` — 항목 글자에서 할 일 표시 숨기기 | `off` | small 2026-10-11 |
 | `md.calendarFolder` | 달력 날짜 문서 폴더 id, `''` = 최상위 | `''` | small 2026-10-10 |
 | `md.calendarFormat` | 날짜 문서 제목 형식(템플릿 날짜 토큰) | `YYYY-MM-DD` | small 2026-10-10 |
 | `md.calendarTemplate` | `md.newDocTemplate` 과 같은 값 | `none` | small 2026-10-10 |

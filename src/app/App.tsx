@@ -1142,7 +1142,7 @@ export default function App() {
     closePanelIfNarrow: rightPanel.closeIfNarrow, dayDocsActive: rightPanel.dayDocsActive, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate,
   })
   const panelDocs = usePanelDocs({
-    linksActive: rightPanel.shownViews.includes('links'), graphActive: rightPanel.shownViews.includes('graph'), todosActive: rightPanel.shownViews.includes('todos'),
+    linksActive: rightPanel.shownViews.includes('links'), graphActive: rightPanel.shownViews.includes('graph'), todosActive: rightPanel.shownViews.includes('todos'), taskFilter: rightPanel.taskFilter,
     listSource, docs, folders, currentDoc, editor: editorHandle, resolver: wikiResolver, e2eeOpen: e2ee?.status === 'open', selectDoc, openWikiLinkTarget, openMap,
     pendingJumpRef, jumpToLine, afterOpen: rightPanel.closeIfNarrow,
   })

@@ -23,14 +23,15 @@ test('패널 설정 — 표시할 항목에서 링크를 끄면 링크 칸이 �
 test('패널 칸 접기 — 넓은 창에서 칸 머리를 눌러 접으면 새로고침 뒤에도 접혀 있다', async ({ page }) => {
   await openApp(page)
   const toggle = panel(page).getByRole('button', { name: '할 일', exact: true })
+  const empty = panel(page).getByText('#task · #할일 표시가 붙은 할 일이 없습니다.')
   await expect(toggle).toHaveAttribute('aria-expanded', 'true')
-  await expect(panel(page).getByText('남은 할 일이 없습니다.')).toBeVisible()
+  await expect(empty).toBeVisible()
 
   await toggle.click()
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
-  await expect(panel(page).getByText('남은 할 일이 없습니다.')).toHaveCount(0)
+  await expect(empty).toHaveCount(0)
 
   await page.reload()
   await expect(panel(page).getByRole('button', { name: '할 일', exact: true })).toHaveAttribute('aria-expanded', 'false')
-  await expect(panel(page).getByText('남은 할 일이 없습니다.')).toHaveCount(0)
+  await expect(empty).toHaveCount(0)
 })

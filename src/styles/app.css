@@ -6463,12 +6463,12 @@ a.dialog-btn {
   border-top: 1px solid var(--rule);
 }
 
-/* 설정 `오른쪽 패널` 탭 — 표시할 항목·달력 묶음 제목 */
+/* 설정 `오른쪽 패널` 탭 — 표시할 항목·달력·할 일 묶음 */
 .panel-items {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
-  margin: 0 0 20px;
+  margin: 0;
   padding: 0;
   border: 0;
 }
@@ -6480,6 +6480,11 @@ a.dialog-btn {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--muted);
+}
+
+/* 묶음 사이 띄움 — 첫 묶음(표시할 항목)은 fieldset legend 라 해당 없음 */
+h3.panel-settings-title:not(:first-child) {
+  margin-top: 20px;
 }
 
 .panel-item-check {
@@ -6595,32 +6600,42 @@ a.dialog-btn {
   }
 }
 
-/* `할 일` 보기 — 체크 상자 모양은 그림일 뿐 눌러도 바뀌지 않는다 (small 2026-10-11) */
-.todo-group-title {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
+/* `할 일` 보기 — 체크 상자 모양은 그림일 뿐 눌러도 바뀌지 않는다. 진행 중은 절반 채움 (small 2026-10-11) */
 .doc-link-item.todo-item {
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
   gap: 8px;
 }
 
-.todo-item .doc-link-title {
+.todo-body {
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
+}
+
+.todo-meta {
+  overflow: hidden;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .todo-box {
   flex: none;
   width: 12px;
   height: 12px;
+  margin-top: 3px;
   border: 1.5px solid var(--muted);
   border-radius: 3px;
+}
+
+.todo-box[data-status='inProgress'] {
+  border-color: var(--accent);
+  background: linear-gradient(to right, var(--accent) 50%, transparent 50%);
 }
 
 /* `그래프` 보기 — 2D 미니 그래프. 노드는 가운데에서 펼쳐지고, 움직임 줄이기면 토큰이 0ms 라 바로 놓인다 (small 2026-10-11) */
@@ -6874,7 +6889,8 @@ a.dialog-btn {
     font-size: 13.5px;
   }
 
-  .side-panel .doc-links-title {
+  .side-panel .doc-links-title,
+  .side-panel .todo-meta {
     font-size: 13.5px;
   }
 

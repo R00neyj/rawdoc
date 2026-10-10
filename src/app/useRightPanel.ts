@@ -1,6 +1,8 @@
 // 오른쪽 패널(R-1) 열림·칸별 보기·표시할 항목·칸 접힘 — 넓은 창 고정 열·좁은 창 겹침·휴대폰 밀기 패널이 함께 쓴다 (small 2026-10-10, 2026-10-11)
 import { useCallback, useState } from 'react'
 import { getPref, setPref } from './prefs'
+import { useTaskFilter, type TaskFilterSettings } from './useTaskFilter'
+import type { TaskFilter } from '../lib/docTodos'
 import {
   cycleSlotView,
   filterSlots,
@@ -35,7 +37,7 @@ export type PanelSlotState = {
   onToggleCollapsed: () => void
 }
 
-export type RightPanelItemsSettings = { items: PanelItems; onToggleItem: (id: PanelItemId, on: boolean) => void }
+export type RightPanelItemsSettings = { items: PanelItems; onToggleItem: (id: PanelItemId, on: boolean) => void } & TaskFilterSettings
 
 export type UseRightPanelResult = {
   // 표시할 항목이 하나도 없으면 거짓 — 상단바 버튼·팔레트 명령·넓은 창 패널을 그리지 않는다
@@ -49,6 +51,7 @@ export type UseRightPanelResult = {
   phoneTop: PanelSlotState | null
   shownViews: PanelViewId[]
   dayDocsActive: boolean
+  taskFilter: TaskFilter
   settings: RightPanelItemsSettings
 }
 
@@ -63,6 +66,7 @@ export function useRightPanel({ narrow, phone }: { narrow: boolean; phone: boole
   }
 
   const [items, setItems] = useState(() => readPanelItems(getPref('md.rightPanelItems', '')))
+  const tasks = useTaskFilter()
   const enabled = (view: PanelViewId) => items[view]
   const visibleWide = filterSlots(WIDE_SLOTS, enabled)
   const available = visibleWide.length > 0
@@ -124,6 +128,7 @@ export function useRightPanel({ narrow, phone }: { narrow: boolean; phone: boole
     shownViews,
     dayDocsActive: items.dayDocs && shownViews.includes('calendar'),
     available,
+    taskFilter: tasks.taskFilter,
     settings: {
       items,
       onToggleItem: (id, on) => {
@@ -131,6 +136,7 @@ export function useRightPanel({ narrow, phone }: { narrow: boolean; phone: boole
         setItems(next)
         setPref('md.rightPanelItems', JSON.stringify(next))
       },
+      ...tasks.settings,
     },
   }
 }

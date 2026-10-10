@@ -50,6 +50,9 @@ type PrefMap = {
   // 설정 `표시할 항목` { 항목 id: 켬 } JSON·넓은 창 칸 접힘 { 칸 id: 접힘 } JSON, 기기별 (small 2026-10-11)
   'md.rightPanelItems': string
   'md.rightPanelCollapsed': string
+  // `할 일` 보기 전역 필터(쉼표로 여러 개, ''=모든 체크박스)·글자에서 표시 숨기기, 기기별 (small 2026-10-11)
+  'md.taskFilter': string
+  'md.taskFilterHide': 'on' | 'off'
   // 달력 날짜 문서 — 폴더 id(''=최상위)·제목 형식·템플릿 id(none=없음), 기기별 (small 2026-10-10)
   'md.calendarFolder': string
   'md.calendarFormat': string
@@ -98,6 +101,8 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.rightPanelViews',
   'md.rightPanelItems',
   'md.rightPanelCollapsed',
+  'md.taskFilter',
+  'md.taskFilterHide',
   'md.calendarFolder',
   'md.calendarFormat',
   'md.calendarTemplate',

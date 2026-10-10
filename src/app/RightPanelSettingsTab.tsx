@@ -1,4 +1,4 @@
-// 설정 `오른쪽 패널` 탭 — 표시할 항목(기기별)과 달력 설정 (small 2026-10-10, 2026-10-11)
+// 설정 `오른쪽 패널` 탭 — 표시할 항목·달력·할 일 표시(전역 필터), 모두 기기별 (small 2026-10-10, 2026-10-11)
 import CalendarSettingsTab, { type CalendarSettings } from './CalendarSettingsTab'
 import type { PanelItemId } from '../lib/panelSlots'
 import type { RightPanelItemsSettings } from './useRightPanel'
@@ -30,6 +30,24 @@ export default function RightPanelSettingsTab({ settings, entries }: { settings:
       </fieldset>
       <h3 className="panel-settings-title">달력</h3>
       <CalendarSettingsTab settings={settings.calendar} entries={entries} />
+      <h3 className="panel-settings-title">할 일</h3>
+      <div className="dialog-field">
+        <span id="task-filter-label">할 일 표시</span>
+        <input
+          type="text"
+          className="settings-text"
+          aria-labelledby="task-filter-label"
+          placeholder="비우면 모든 체크박스"
+          spellCheck={false}
+          value={settings.taskFilterText}
+          onChange={(e) => settings.onChangeTaskFilter(e.target.value)}
+        />
+      </div>
+      <p className="settings-hint">이 표시가 붙은 체크박스만 할 일로 모읍니다. 쉼표로 여러 개를 적고, 비우면 모든 체크박스입니다. #으로 시작하면 그 태그만 찾습니다(#task/하위·#tasks 는 다른 태그).</p>
+      <label className="panel-item-check">
+        <input type="checkbox" checked={settings.taskFilterHide} onChange={(e) => settings.onChangeTaskFilterHide(e.target.checked)} />
+        <span>글자에서 할 일 표시 숨기기</span>
+      </label>
     </>
   )
 }
