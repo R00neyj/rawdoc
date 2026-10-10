@@ -11,6 +11,7 @@ import { E2EE_NOTICE } from './appNotices'
 import { stripContent, sortByUpdatedAtDesc, type DocMeta } from './docMeta'
 import { setPref } from './prefs'
 import { firstListedDocId, folderLooksEmpty, type VaultFolderGate } from './vaultVisibility'
+import { splitVaultFolderDrop, vaultDropMoveItems } from './vaultFolderDrop'
 
 export type UseFolderActionsOptions = {
   store: Store
@@ -31,6 +32,8 @@ export type UseFolderActionsOptions = {
   replaceHashUrl: (docId: string | null) => void
   // 금고 폴더 문 — 없으면 금고가 없는 것으로 본다 (F-4003 2.5)
   vaultGate?: VaultFolderGate
+  // 금고 폴더로 옮길 평문 문서를 먼저 금고 문서로 — 바뀐 id, 취소면 null. 없으면 기존처럼 E19
+  convertDocsForVault?: (docIds: string[], folderName: string) => Promise<string[] | null>
 }
 
 export type UseFolderActionsResult = {
@@ -53,7 +56,7 @@ export type UseFolderActionsResult = {
 export function useFolderActions(options: UseFolderActionsOptions): UseFolderActionsResult {
   const {
     store, docs, folders, currentDocId, bulkDeleteItems, setDocs, setFolders, setCurrentDocId, setDeleteTarget, setBulkDeleteItems,
-    setMoveDocTarget, keepLiveTitle, showNotice, addOpenFolders, closeSidebarIfNarrow, replaceHashUrl, vaultGate = 'none',
+    setMoveDocTarget, keepLiveTitle, showNotice, addOpenFolders, closeSidebarIfNarrow, replaceHashUrl, vaultGate = 'none', convertDocsForVault,
   } = options
 
   // ----- 삭제 D-1: 문서·폴더 공용 (specs/ia.md 3.6, F-126.md 5.3) -----
@@ -211,7 +214,7 @@ export function useFolderActions(options: UseFolderActionsOptions): UseFolderAct
   }
 
   // canMoveFolder 가 막는 항목(제 자손 등)은 건너뛰고 몇 개인지 알린다 (F-255.md 2·3.3)
-  async function handleBulkMove(items: SelectionItem[], targetFolderId: string | null) {
+  async function moveItems(items: SelectionItem[], targetFolderId: string | null) {
     let skipped = 0
     let e2eeBlocked = false
     for (const item of items) {
@@ -230,6 +233,14 @@ export function useFolderActions(options: UseFolderActionsOptions): UseFolderAct
     if (skipped > 0) {
       showNotice({ type: 'error', message: `${skipped}개 폴더는 옮길 수 없어 건너뛰었습니다.` })
     }
+  }
+
+  // 금고 폴더에 평문 문서가 오면 금고 문서로 바꾼 뒤 바뀐 것만 옮긴다 — 취소면 아무것도 옮기지 않는다
+  async function handleBulkMove(items: SelectionItem[], targetFolderId: string | null) {
+    const split = convertDocsForVault ? splitVaultFolderDrop({ items, targetFolderId, docs, folders }) : null
+    if (!split || !convertDocsForVault) return moveItems(items, targetFolderId)
+    const converted = await convertDocsForVault(split.convert, folders.find((f) => f.id === targetFolderId)?.name ?? '')
+    if (converted) await moveItems(vaultDropMoveItems(split, converted), targetFolderId)
   }
 
   // ----- 상단 고정 (specs/features/F-132.md 2·4장) -----
@@ -255,7 +266,7 @@ export function useFolderActions(options: UseFolderActionsOptions): UseFolderAct
 
   async function confirmMoveDoc(id: string, folderId: string | null) {
     setMoveDocTarget(null)
-    await handleMoveDoc(id, folderId)
+    await handleBulkMove([{ kind: 'doc', id }], folderId)
   }
 
   return {

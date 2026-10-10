@@ -22,10 +22,10 @@ import type { YjsStore } from '../storage/yjsStore'
 import { formatCount } from '../lib/usageLimits'
 import { Y_TITLE_NAME } from '../lib/docRoomProtocol'
 import { fromEditorText } from '../lib/lineEnding'
-import type { LineEnding, Store, SyncState } from '../types'
+import type { Doc, LineEnding, Store, SyncState } from '../types'
 import { E2EE_NOTICE, E2EE_CONVERT_NOTICE, e2eeConvertProgressText, e2eeConvertResultNotice } from './appNotices'
 import type { CommentAccess } from './commentRail'
-import { isSharedDoc } from './docMeta'
+import { displayDocTitle, isSharedDoc } from './docMeta'
 import type { DocPathKind } from './docPath'
 import type { NoticeWithAction } from './NoticeBar'
 import { browserFlushDeps } from './bootFlow'
@@ -33,6 +33,7 @@ import { getPref, setPref } from './prefs'
 import type { UseE2ee } from './useE2ee'
 import type { LiveDocSession } from './useLiveDoc'
 import { flushDocForMove } from './yjsFlush'
+import { convertedDocIds, planVaultDropConvert } from './vaultFolderDrop'
 
 // 멈추기를 누르면 곧바로 풀리는 기다림 (F-407 2.2)
 function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -76,6 +77,7 @@ export type UseE2eeConvertResult = {
   e2eeConvertText: E2eeConvertDialogText | null
   requestE2eeConvert: (direction: E2eeConvertDirection, target: E2eeConvertTarget, menuName: string) => Promise<void>
   handleE2eeConvertUnavailable: (reason: 'offline' | 'busy' | 'inside-e2ee-folder') => void
+  convertDocsForVaultFolder: (docIds: string[], folderName: string) => Promise<string[] | null>
   answerE2eeConvertDialog: (ok: boolean) => void
 }
 
@@ -145,16 +147,22 @@ export function useE2eeConvert(options: UseE2eeConvertOptions): UseE2eeConvertRe
     else showNotice({ type: 'info', message: E2EE_CONVERT_NOTICE.insideFolder })
   }
 
-  // 7.3 흐름 — 확인·금고 열기·실행·결과 알림
-  async function requestE2eeConvert(direction: E2eeConvertDirection, target: E2eeConvertTarget, menuName: string) {
+  // 옮기기 중·오프라인이면 알리고 true
+  function convertRefused(): boolean {
     if (e2eeConvertBusyRef.current) {
       showNotice({ type: 'info', message: E2EE_CONVERT_NOTICE.busy })
-      return
+      return true
     }
     if (store.kind === 'server' && !(syncState?.online ?? navigator.onLine)) {
       showNotice({ type: 'error', message: E2EE_CONVERT_NOTICE.offline })
-      return
+      return true
     }
+    return false
+  }
+
+  // 7.3 흐름 — 확인·금고 열기·실행·결과 알림
+  async function requestE2eeConvert(direction: E2eeConvertDirection, target: E2eeConvertTarget, menuName: string) {
+    if (convertRefused()) return
     const convertStore = store
     const scope: 'local' | 'account' = convertStore.kind === 'server' ? 'account' : 'local'
     const makePlan = async () => {
@@ -184,10 +192,42 @@ export function useE2eeConvert(options: UseE2eeConvertOptions): UseE2eeConvertRe
       showNotice(e2eeConvertResultNotice({ kind: 'done', done: 0, keptAttachments: 0, purgeFailed: 0 }, direction, target.kind, name))
       return
     }
+    await confirmAndRun({ plan, planDocs, convertStore, scope, name })
+  }
 
+  // 금고 폴더로 끈 평문 문서를 금고 문서로 바꾼다 — 바뀐 문서 id, 거절·취소면 null (금고 폴더 드롭)
+  async function convertDocsForVaultFolder(docIds: string[], folderName: string): Promise<string[] | null> {
+    if (convertRefused()) return null
+    const convertStore = store
+    const scope: 'local' | 'account' = convertStore.kind === 'server' ? 'account' : 'local'
+    const [list, folderList] = await Promise.all([convertStore.list(), convertStore.listFolders()])
+    const planDocs = list.filter((d) => !isSharedDoc(d))
+    const plan = planVaultDropConvert({ docIds, docs: planDocs, folders: folderList })
+    const { tooLarge, tooManyRefs } = plan.blocked
+    if (tooLarge.length + tooManyRefs.length > 0) {
+      showNotice({ type: 'error', message: tooLarge.length > 0 ? E2EE_NOTICE.createTooLarge : E2EE_NOTICE.tooManyRefs })
+      return null
+    }
+    if (plan.steps.length === 0) return convertedDocIds(docIds, planDocs)
+    const name = displayDocTitle(planDocs.find((d) => d.id === plan.steps[0].id)?.title ?? '')
+    if (!(await confirmAndRun({ plan, planDocs, convertStore, scope, name, intoFolder: folderName }))) return null
+    return convertedDocIds(docIds, await convertStore.list())
+  }
+
+  // D-9 를 띄우고 답을 기다린다 — 확인이면 (옮기기는 금고를 연 뒤) 실행한다. 닫기·실행 못 함이면 null
+  async function confirmAndRun(input: {
+    plan: E2eeConvertPlan
+    planDocs: Doc[]
+    convertStore: Store
+    scope: 'local' | 'account'
+    name: string
+    intoFolder?: string
+  }): Promise<E2eeConvertOutcome | null> {
+    const { plan, planDocs, convertStore, scope, name, intoFolder } = input
+    const { direction, target } = plan
     const showBackupNotice = scope === 'account' && direction === 'to-e2ee' && getPref('md.e2eeBackupNotice', '') !== '1'
     const cost = estimateE2eeConvertCost({ plan, docs: planDocs })
-    const textInput = { direction, scope, name, targetKind: target.kind, docCount: plan.docCount, folderCount: plan.folderCount, showBackupNotice, cost }
+    const textInput = { direction, scope, name, targetKind: target.kind, docCount: plan.docCount, folderCount: plan.folderCount, showBackupNotice, cost, intoFolder }
     const answered = new Promise<boolean>((resolve) => {
       e2eeConvertAnswerRef.current = resolve
     })
@@ -238,15 +278,15 @@ export function useE2eeConvert(options: UseE2eeConvertOptions): UseE2eeConvertRe
         rebuildConvertText()
       })
     }
-    if (!(await answered)) return
+    if (!(await answered)) return null
     if (showBackupNotice) setPref('md.e2eeBackupNotice', '1')
-    if (direction === 'to-e2ee' && !(await requestE2eeOpen())) return
-    await runE2eeConvertFlow(plan, convertStore, scope, name)
+    if (direction === 'to-e2ee' && !(await requestE2eeOpen())) return null
+    return runE2eeConvertFlow(plan, convertStore, scope, name, intoFolder)
   }
 
-  async function runE2eeConvertFlow(plan: E2eeConvertPlan, convertStore: Store, scope: 'local' | 'account', name: string) {
+  async function runE2eeConvertFlow(plan: E2eeConvertPlan, convertStore: Store, scope: 'local' | 'account', name: string, intoFolder?: string): Promise<E2eeConvertOutcome | null> {
     const ring = e2eeRef.current
-    if (!ring || e2eeConvertBusyRef.current) return
+    if (!ring || e2eeConvertBusyRef.current) return null
     e2eeConvertBusyRef.current = true
     setE2eeConvertBusy(true)
     if (e2eeConvertResultIdRef.current !== null) dismissNotice(e2eeConvertResultIdRef.current)
@@ -319,8 +359,9 @@ export function useE2eeConvert(options: UseE2eeConvertOptions): UseE2eeConvertRe
     await resyncFromStore().catch(() => {})
     e2eeConvertBusyRef.current = false
     setE2eeConvertBusy(false)
-    e2eeConvertResultIdRef.current = showNotice(e2eeConvertResultNotice(outcome, plan.direction, plan.target.kind, name))
+    e2eeConvertResultIdRef.current = showNotice(e2eeConvertResultNotice(outcome, plan.direction, plan.target.kind, name, intoFolder))
+    return outcome
   }
 
-  return { e2eeConvertOnline, e2eeConvertBusy, e2eeConvertText, requestE2eeConvert, handleE2eeConvertUnavailable, answerE2eeConvertDialog }
+  return { e2eeConvertOnline, e2eeConvertBusy, e2eeConvertText, requestE2eeConvert, handleE2eeConvertUnavailable, convertDocsForVaultFolder, answerE2eeConvertDialog }
 }

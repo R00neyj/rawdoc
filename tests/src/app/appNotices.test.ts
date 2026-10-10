@@ -137,6 +137,33 @@ describe('e2eeConvertResultNotice', () => {
   })
 })
 
+describe('e2eeConvertResultNotice — 금고 폴더 드롭', () => {
+  it('문서 하나 완료', () => {
+    expect(e2eeConvertResultNotice(done(), 'to-e2ee', 'doc', '메모', '비밀함')).toEqual({
+      type: 'info',
+      message: '"메모"을(를) 금고로 옮겨 "비밀함" 폴더에 넣었습니다.',
+    })
+  })
+  it('여러 문서 완료 — 개수, 천 단위 구분', () => {
+    expect(e2eeConvertResultNotice(done({ done: 1234 }), 'to-e2ee', 'doc', '메모', '비밀함')).toEqual({
+      type: 'info',
+      message: '문서 1,234개를 금고로 옮겨 "비밀함" 폴더에 넣었습니다.',
+    })
+  })
+  it('멈춤 — 옮긴 문서만 넣었다고, 이유는 뒤에', () => {
+    expect(e2eeConvertResultNotice(stopped('pending-sync'), 'to-e2ee', 'doc', '메모', '비밀함')).toEqual({
+      type: 'warn',
+      message: `2/5개를 옮기고 멈췄습니다. 옮긴 문서만 "비밀함" 폴더에 넣었습니다. ${E2EE_CONVERT_STOP_REASON['pending-sync']}`,
+    })
+  })
+  it('하나도 못 옮기고 멈추면 넣었다는 말 없음', () => {
+    expect(e2eeConvertResultNotice(stopped('cancelled', { done: 0, total: 2 }), 'to-e2ee', 'doc', '메모', '비밀함')).toEqual({
+      type: 'info',
+      message: '0/2개를 옮기고 멈췄습니다.',
+    })
+  })
+})
+
 describe('e2eeCreateErrorMessage', () => {
   it('U18 잠김', () => {
     expect(e2eeCreateErrorMessage(new E2eeStoreError('locked'))).toBe(E2EE_NOTICE.locked)

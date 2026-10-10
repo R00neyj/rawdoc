@@ -195,18 +195,21 @@ export function buildE2eeConvertDialogText(input: {
   usage: { writesLeft: number | null; bytesLeft: number | null }
   cost: { writes: number; deltaBytes: number }
   comments?: E2eeCommentCount // to-e2ee 에서만 본다. 없으면 아직 세는 중 — 줄 없음 (F-509 2.1)
+  intoFolder?: string // 금고 폴더 드롭 — 옮긴 뒤 넣을 폴더 이름. 문서가 여럿이면 본문 주어가 개수
 }): E2eeConvertDialogText {
-  const { direction, scope, name, targetKind, docCount, folderCount, usage, cost } = input
+  const { direction, scope, name, targetKind, docCount, folderCount, usage, cost, intoFolder } = input
   const toE2ee = direction === 'to-e2ee'
   const local = scope === 'local'
+  const subject = intoFolder !== undefined && docCount > 1 ? `문서 ${formatCount(docCount)}개를` : `"${name}"을(를)`
   const body = toE2ee
     ? local
-      ? `"${name}"을(를) 암호화해 이 브라우저의 금고에 넣습니다.`
-      : `"${name}"을(를) 암호화해 금고에 넣습니다. 공유 링크와 초대는 끊깁니다. 다른 기기에서 열어 둔 편집 중 저장되지 않은 내용은 사라질 수 있습니다.`
+      ? `${subject} 암호화해 이 브라우저의 금고에 넣습니다.`
+      : `${subject} 암호화해 금고에 넣습니다. 공유 링크와 초대는 끊깁니다. 다른 기기에서 열어 둔 편집 중 저장되지 않은 내용은 사라질 수 있습니다.`
     : local
       ? `"${name}"을(를) 복호화해 일반 문서로 저장합니다. 이 브라우저에 암호화하지 않은 채 저장됩니다.`
       : `"${name}"을(를) 복호화해 일반 문서로 저장합니다. 서버가 내용을 읽을 수 있게 됩니다.`
   const notes: string[] = []
+  if (intoFolder !== undefined) notes.push(`옮긴 뒤 "${intoFolder}" 폴더에 넣습니다.`)
   if (targetKind === 'folder') {
     const n = formatCount(docCount)
     const m = formatCount(folderCount)

@@ -1059,3 +1059,29 @@ describe('F-2127 A6 새 문법 줄', () => {
     )
   })
 })
+
+describe('D-9 금고 폴더 드롭 (intoFolder)', () => {
+  const base = {
+    direction: 'to-e2ee' as const,
+    targetKind: 'doc' as const,
+    folderCount: 0,
+    showBackupNotice: false,
+    usage: NO_USAGE,
+    cost: { writes: 1, deltaBytes: 0 },
+    intoFolder: '비밀함',
+  }
+
+  it('문서 하나 — 이름 그대로, 첫 줄에 넣을 폴더', () => {
+    const text = buildE2eeConvertDialogText({ ...base, scope: 'account', name: '메모', docCount: 1 })
+    expect(text.body).toBe(D9_BODY)
+    expect(text.notes).toEqual(['옮긴 뒤 "비밀함" 폴더에 넣습니다.'])
+    expect(text.title).toBe('금고로 옮기기')
+    expect(text.confirmLabel).toBe('옮기기')
+  })
+
+  it('여러 문서 — 본문에 개수, 댓글 줄은 끝', () => {
+    const text = buildE2eeConvertDialogText({ ...base, scope: 'local', name: '메모', docCount: 1234, comments: { kind: 'known', total: 2 } })
+    expect(text.body).toBe('문서 1,234개를 암호화해 이 브라우저의 금고에 넣습니다.')
+    expect(text.notes).toEqual(['옮긴 뒤 "비밀함" 폴더에 넣습니다.', '댓글 2개도 함께 지워집니다.'])
+  })
+})

@@ -60,14 +60,22 @@ export function e2eeConvertProgressText(direction: E2eeConvertDirection, done: n
   return `${direction === 'to-e2ee' ? '금고로 옮기는 중…' : '금고에서 빼는 중…'} ${formatCount(done)}/${formatCount(total)}`
 }
 
-// 끝·멈춤 알림 — 문장을 한 칸에 이어 붙인다(알림 띠가 한 칸이라서, F-407 7.5)
-export function e2eeConvertResultNotice(outcome: E2eeConvertOutcome, direction: E2eeConvertDirection, targetKind: 'doc' | 'folder', name: string): Notice {
+// 끝·멈춤 알림 — 문장을 한 칸에 이어 붙인다(알림 띠가 한 칸이라서, F-407 7.5). intoFolder 는 금고 폴더 드롭
+export function e2eeConvertResultNotice(
+  outcome: E2eeConvertOutcome,
+  direction: E2eeConvertDirection,
+  targetKind: 'doc' | 'folder',
+  name: string,
+  intoFolder?: string,
+): Notice {
   const toE2ee = direction === 'to-e2ee'
   const parts: string[] = []
   let warn = false
   if (outcome.kind === 'done') {
     const count = formatCount(outcome.done)
-    if (toE2ee) parts.push(targetKind === 'doc' ? `"${name}"을(를) 금고로 옮겼습니다.` : `"${name}" 폴더를 금고로 옮겼습니다(문서 ${count}개).`)
+    if (toE2ee && intoFolder !== undefined) {
+      parts.push(`${outcome.done === 1 ? `"${name}"을(를)` : `문서 ${count}개를`} 금고로 옮겨 "${intoFolder}" 폴더에 넣었습니다.`)
+    } else if (toE2ee) parts.push(targetKind === 'doc' ? `"${name}"을(를) 금고로 옮겼습니다.` : `"${name}" 폴더를 금고로 옮겼습니다(문서 ${count}개).`)
     else parts.push(targetKind === 'doc' ? `"${name}"을(를) 금고에서 뺐습니다.` : `"${name}" 폴더를 금고에서 뺐습니다(문서 ${count}개).`)
     if (outcome.keptAttachments > 0) {
       const k = formatCount(outcome.keptAttachments)
@@ -77,7 +85,10 @@ export function e2eeConvertResultNotice(outcome: E2eeConvertOutcome, direction: 
   } else {
     const n = formatCount(outcome.done)
     const total = formatCount(outcome.total)
-    parts.push(toE2ee ? `${n}/${total}개를 옮기고 멈췄습니다. 다시 누르면 남은 것부터 이어 옮깁니다.` : `${n}/${total}개를 빼고 멈췄습니다. 다시 누르면 남은 것부터 이어 뺍니다.`)
+    if (toE2ee && intoFolder !== undefined) {
+      parts.push(`${n}/${total}개를 옮기고 멈췄습니다.`)
+      if (outcome.done > 0) parts.push(`옮긴 문서만 "${intoFolder}" 폴더에 넣었습니다.`)
+    } else parts.push(toE2ee ? `${n}/${total}개를 옮기고 멈췄습니다. 다시 누르면 남은 것부터 이어 옮깁니다.` : `${n}/${total}개를 빼고 멈췄습니다. 다시 누르면 남은 것부터 이어 뺍니다.`)
     if (outcome.reason === 'day-limit') parts.push(`오늘 저장 한도에 닿았습니다. ${formatResetTime(outcome.resetAt ?? Date.now())}부터 다시 누를 수 있습니다.`)
     else if (outcome.reason === 'account-blocked') parts.push(ACCOUNT_BLOCKED_MESSAGE)
     else if (outcome.reason !== 'cancelled') parts.push(E2EE_CONVERT_STOP_REASON[outcome.reason])

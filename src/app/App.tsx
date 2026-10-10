@@ -1055,7 +1055,7 @@ export default function App() {
   }
 
   // ----- 금고로 옮기기·빼기 (F-2073) -----
-  const { e2eeConvertOnline, e2eeConvertBusy, e2eeConvertText, requestE2eeConvert, handleE2eeConvertUnavailable, answerE2eeConvertDialog } = useE2eeConvert({
+  const { e2eeConvertOnline, e2eeConvertBusy, e2eeConvertText, requestE2eeConvert, handleE2eeConvertUnavailable, convertDocsForVaultFolder, answerE2eeConvertDialog } = useE2eeConvert({
     store, syncState, commentAccessValue, showNotice, dismissNotice, resyncFromStore, restartDocSession, requestE2eeOpen, setConvertingDocId,
     e2eeConvertBusyRef, e2eeRef, currentDocIdRef, docPathRef, docSaverFlushRef, titleSavingRef, liveSessionRef, editorRef, openDocLineEndingRef, yjsStoreRef,
   })
@@ -1119,6 +1119,7 @@ export default function App() {
   } = useFolderActions({
     store, docs, folders, currentDocId, bulkDeleteItems, setDocs, setFolders, setCurrentDocId, setDeleteTarget, setBulkDeleteItems,
     setMoveDocTarget, keepLiveTitle, showNotice, addOpenFolders, closeSidebarIfNarrow, replaceHashUrl, vaultGate: vault?.gate,
+    ...(e2ee && (store.kind === 'idb' || store.kind === 'server') ? { convertDocsForVault: convertDocsForVaultFolder } : {}),
   })
 
   // ----- D-4 사람 초대 (specs/features/F-212.md 2.5) -----

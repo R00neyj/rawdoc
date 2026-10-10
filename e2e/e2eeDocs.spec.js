@@ -215,7 +215,7 @@ test.describe('F-405 로컬 금고 문서', () => {
     expect(row.content.length).toBeGreaterThan(row.title.length)
   })
 
-  test('F-405 E3·E4·E5·E11 새로고침하면 잠긴 문서, 틀린 암호는 오류, 상태바로 다시 잠그면 평문이 사라지고, 일반 문서는 금고 폴더로 못 들어간다', async ({ page }) => {
+  test('F-405 E3·E4·E5·E11 새로고침하면 잠긴 문서, 틀린 암호는 오류, 상태바로 다시 잠그면 평문이 사라지고, 일반 폴더는 금고 폴더로 못 들어간다', async ({ page }) => {
     const { docId } = await makeLocalVaultDoc(page)
     await page.locator('.sidebar a').filter({ hasText: '제목 없는 문서' }).click()
     await page.reload()
@@ -258,12 +258,13 @@ test.describe('F-405 로컬 금고 문서', () => {
     await page.keyboard.press('Escape')
     await expect(unlockDialog(page)).toBeHidden()
 
-    // E11 잠긴 채로 일반 문서(처음부터 있던 제목 없는 문서)를 금고 폴더로 끌어 놓으면 E19, 제자리에 남는다
-    const plainId = (await page.locator('.sidebar a').filter({ hasText: '제목 없는 문서' }).getAttribute('href')).replace('#/d/', '')
-    await dragRowTo(page, docRow(page, plainId), rowOf(page, VAULT_FOLDER))
+    // E11 잠긴 채로 일반 폴더를 금고 폴더로 끌어 놓으면 E19, 제자리에 남는다 — 일반 문서는 금고 폴더 드롭(vaultFolderDrop.spec.js)이 바꿔 넣는다
+    await newFolder(page, '일반함')
+    const plainFolderId = await folderIdOf(page, '일반함')
+    await dragRowTo(page, rowOf(page, '일반함'), rowOf(page, VAULT_FOLDER))
     await expect(page.locator('.notice--error .notice-message')).toHaveText('금고 폴더에는 금고 문서와 금고 폴더만 넣을 수 있습니다.')
-    const plainRow = (await idbGetAll(page, 'md-docs', 'docs')).find((d) => d.id === plainId)
-    expect(plainRow.folderId ?? null).toBeNull()
+    const plainFolder = (await idbGetAll(page, 'md-docs', 'folders')).find((f) => f.id === plainFolderId)
+    expect(plainFolder.parentId ?? null).toBeNull()
   })
 })
 
