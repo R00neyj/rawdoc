@@ -3,9 +3,10 @@ import { dayKey, type CalendarDay } from '../lib/calendar'
 import { IconChevron, IconChevronLeft, IconClose } from './icons'
 import usePresence from './usePresence'
 import PanelLinks from './PanelLinks'
+import PanelTodos from './PanelTodos'
 import { PANEL_VIEW_LABELS, type PanelSlotState, type PanelViewId } from './useRightPanel'
 import type { CalendarView } from './useCalendarPanel'
-import type { DocLinksView } from './useDocLinks'
+import type { DocLinksView, DocTodosView } from './usePanelDocs'
 import type { PhoneSideSections } from './usePhoneSidePanel'
 
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
@@ -75,13 +76,14 @@ function CalendarMonth({ view }: { view: CalendarView }) {
   )
 }
 
-export type PanelViews = { calendar: CalendarView; links: DocLinksView }
+export type PanelViews = { calendar: CalendarView; links: DocLinksView; todos: DocTodosView }
 
-// 링크처럼 길어지는 보기는 남은 높이를 채우고 안에서 스크롤한다
-const FILL_VIEW: Record<PanelViewId, boolean> = { calendar: false, links: true }
+// 링크·할 일처럼 길어지는 보기는 남은 높이를 채우고 안에서 스크롤한다
+const FILL_VIEW: Record<PanelViewId, boolean> = { calendar: false, links: true, todos: true }
 
 function ViewBody({ view, views }: { view: PanelViewId; views: PanelViews }) {
-  return view === 'calendar' ? <CalendarMonth view={views.calendar} /> : <PanelLinks view={views.links} />
+  if (view === 'calendar') return <CalendarMonth view={views.calendar} />
+  return view === 'links' ? <PanelLinks view={views.links} /> : <PanelTodos view={views.todos} />
 }
 
 function SlotArrow({ slot, step }: { slot: PanelSlotState; step: 1 | -1 }) {

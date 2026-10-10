@@ -17,6 +17,7 @@ import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from './helpDoc'
 import type { NoticeWithAction } from './NoticeBar'
 import type { UseNotificationsResult } from './useNotifications'
 import type { WikiResolver } from '../lib/wikiResolve'
+import type { PendingJump } from './useEditorSync'
 import type { Doc, Folder, LineEnding, Store } from '../types'
 
 type MapRoute = { centerDocId: string | null; returnDocId: string | null }
@@ -60,7 +61,7 @@ export type UseDocNavigationOptions = {
   editorRef: RefObject<EditorHandle | null>
   focusTitleRef: RefObject<boolean>
   focusEditorRef: RefObject<boolean>
-  pendingHeadingRef: RefObject<{ docId: string; heading: string } | null>
+  pendingJumpRef: RefObject<PendingJump | null>
   openDocIdRef: RefObject<string | null>
 }
 
@@ -98,7 +99,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     wikiResolver, currentFolderId, jumpToHeading, buildNewDocContent, beforeLeaveDoc, showNotice, changeViewMode, closePalette,
     closeSidebarIfNarrow, addOpenFolders, newDocFolderId, ensureE2eeOpenForFolder, requestE2eeOpen, setDocs, setCurrentDocId,
     setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute, setDeletedElsewhereId, setNotice, setSearchOpen, setPendingEditorSearch,
-    editorRef, focusTitleRef, focusEditorRef, pendingHeadingRef, openDocIdRef,
+    editorRef, focusTitleRef, focusEditorRef, pendingJumpRef, openDocIdRef,
   } = options
   const leave = () => leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute })
   // Editor 는 마운트 시점의 onOpenWikiLink 클로저만 계속 쓰므로 ref 로 우회해 최신 값을 보게 한다 (F-131 3·5장)
@@ -242,7 +243,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
           if (heading) jumpToHeading(heading)
           return
         }
-        pendingHeadingRef.current = heading ? { docId: source.docId, heading } : null
+        pendingJumpRef.current = heading ? { docId: source.docId, heading } : null
         await selectDoc(source.docId)
         return
       }
@@ -257,7 +258,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
       return
     }
     if (match) {
-      pendingHeadingRef.current = heading ? { docId: match.id, heading } : null
+      pendingJumpRef.current = heading ? { docId: match.id, heading } : null
       await selectDoc(match.id)
       return
     }

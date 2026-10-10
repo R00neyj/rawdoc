@@ -3,16 +3,17 @@ import { useCallback, useState } from 'react'
 import { getPref, setPref } from './prefs'
 import { cycleSlotView, parseSlotViews, slotView, type PanelSlot, type SlotViews } from '../lib/panelSlots'
 
-export type PanelViewId = 'calendar' | 'links'
+export type PanelViewId = 'calendar' | 'links' | 'todos'
 
-export const PANEL_VIEW_LABELS: Record<PanelViewId, string> = { calendar: '달력', links: '링크' }
+export const PANEL_VIEW_LABELS: Record<PanelViewId, string> = { calendar: '달력', links: '링크', todos: '할 일' }
 
 // 넓은 창은 위에서부터 최대 세 칸, 휴대폰은 위 칸 하나(아래 목차는 고정). 보기를 더할 때는 이 목록에만 넣는다
 const WIDE_SLOTS: PanelSlot<PanelViewId>[] = [
   { id: 'wide1', views: ['calendar'] },
   { id: 'wide2', views: ['links'] },
+  { id: 'wide3', views: ['todos'] },
 ]
-const PHONE_TOP_SLOT: PanelSlot<PanelViewId> = { id: 'phoneTop', views: ['calendar', 'links'] }
+const PHONE_TOP_SLOT: PanelSlot<PanelViewId> = { id: 'phoneTop', views: ['calendar', 'links', 'todos'] }
 
 export type PanelSlotState = { id: string; views: readonly PanelViewId[]; view: PanelViewId; onCycle: (step: 1 | -1) => void }
 
@@ -24,7 +25,7 @@ export type UseRightPanelResult = {
   closeIfNarrow: () => void
   wideSlots: PanelSlotState[]
   phoneTop: PanelSlotState
-  linksVisible: boolean
+  shownViews: PanelViewId[]
 }
 
 export function useRightPanel({ narrow, phone }: { narrow: boolean; phone: boolean }): UseRightPanelResult {
@@ -81,6 +82,6 @@ export function useRightPanel({ narrow, phone }: { narrow: boolean; phone: boole
     },
     wideSlots,
     phoneTop,
-    linksVisible: open && (phone ? [phoneTop] : wideSlots).some((s) => s.view === 'links'),
+    shownViews: open ? (phone ? [phoneTop] : wideSlots).map((s) => s.view) : [],
   }
 }

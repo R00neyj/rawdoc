@@ -63,15 +63,17 @@ function linesWithOffsets(text: string): { line: string; start: number }[] {
 }
 
 export type ScannedWikiLink = WikiLinkMatch & { inTable: boolean }
-export type ProseLine = { line: string; start: number; inTable: boolean }
+// number: 원문 기준 줄 번호(1부터). 프론트매터 닫는 줄 뒤 나머지는 닫는 줄 번호를 받는다
+export type ProseLine = { line: string; start: number; number: number; inTable: boolean }
 
-// 프론트매터·펜스 코드 밖의 줄을 원문 위치·표 줄 여부와 함께 — 위키링크 훑기와 연결되지 않은 언급(small 2026-10-11)이 같이 쓴다
+// 프론트매터·펜스 코드 밖의 줄을 원문 위치·표 줄 여부와 함께 — 위키링크 훑기·연결되지 않은 언급·할 일(small 2026-10-11)이 같이 쓴다
 export function proseLines(content: string): ProseLine[] {
   if (typeof content !== 'string' || content === '') return []
 
   const fm = findFrontmatter(content)
   const body = fm ? content.slice(fm.to) : content
   const baseOffset = fm ? fm.to : 0
+  const baseLine = fm ? linesWithOffsets(content.slice(0, fm.to)).length - 1 : 0
   const lines = linesWithOffsets(body)
 
   const results: ProseLine[] = []
@@ -100,7 +102,7 @@ export function proseLines(content: string): ProseLine[] {
         inTable = true
       }
     }
-    results.push({ line, start: baseOffset + start, inTable })
+    results.push({ line, start: baseOffset + start, number: baseLine + i + 1, inTable })
     if (inTable && line.trim() === '') inTable = false
   }
 

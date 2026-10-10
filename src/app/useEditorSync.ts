@@ -23,6 +23,9 @@ import { useGithubImages, type GithubImagesHandle } from './useGithubImages'
 
 const HEADING_JUMP_MARGIN = 16 // 목차 SELECT_MARGIN 과 같다 (F-2018 7.3)
 
+// 다른 문서를 연 뒤 한 번 이동할 곳 — [[문서#제목]] 의 제목, 또는 할 일 항목의 줄 (small 2026-10-11)
+export type PendingJump = { docId: string; heading: string } | { docId: string; line: number }
+
 export type UseEditorSyncOptions = {
   store: Store
   docs: DocMeta[]
@@ -58,7 +61,7 @@ export type UseEditorSyncOptions = {
   editorRef: RefObject<EditorHandle | null>
   viewerRef: RefObject<HTMLDivElement | null>
   scrollAnchorRef: RefObject<{ docId: string; anchor: ScrollAnchor } | null>
-  pendingHeadingRef: RefObject<{ docId: string; heading: string } | null>
+  pendingJumpRef: RefObject<PendingJump | null>
   openDocIdRef: RefObject<string | null>
 }
 
@@ -68,6 +71,7 @@ export type UseEditorSyncResult = {
   wikiContext: WikiContext
   resolveWikiHref: (target: string) => string | null
   jumpToHeading: (heading: string) => void
+  jumpToLine: (line: number) => void
   attachmentResolverFor: (forE2eeDoc: boolean) => ResolveAttachment
   resolveAttachment: ResolveAttachment
   githubImages: GithubImagesHandle
@@ -78,7 +82,7 @@ export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResul
     store, docs, folders, currentDocId, currentDoc, openDoc, bootPhase, viewMode, isRealtime, liveSnapshot, docPath, everLiveIds, docSession,
     e2ee, wikiPreviewPref, lineNumbersPref, resolvedTheme, indentPref, isReadOnlyDoc, titleReadOnly, currentBreadcrumb, onNavigateFolder,
     viewerHtml, viewerDocId, pendingEditorSearch, showNotice, setOpenDoc, setStats, setViewerHtml, setViewerDocId, setPendingEditorSearch,
-    editorRef, viewerRef, scrollAnchorRef, pendingHeadingRef, openDocIdRef,
+    editorRef, viewerRef, scrollAnchorRef, pendingJumpRef, openDocIdRef,
   } = options
   // ----- 문서를 열 때 저장소 본문을 1회 읽어 에디터에 넘긴다 (architecture.md 3장) -----
   // openDoc.id 와 currentDocId 가 다르면 렌더링에서 에디터를 안 그리는 것으로 처리해 여기서 null 로 되돌리지 않는다 (동기 setState 회피)
@@ -184,6 +188,27 @@ export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResul
     [viewMode, showNotice, editorRef, viewerRef],
   )
 
+  // 지금 문서의 원문 줄로 이동 — 편집·원문은 줄 끝에 커서, 보기는 모드 전환 복원과 같은 줄 기준 스크롤 (small 2026-10-11)
+  const jumpToLine = useCallback(
+    (line: number) => {
+      const handle = editorRef.current
+      if (!handle) return
+      if (viewMode === 'view') {
+        const container = viewerRef.current
+        if (!container) return
+        scrollViewerToAnchor(container, line)
+        requestAnimationFrame(() => requestAnimationFrame(() => scrollViewerToAnchor(container, line)))
+        return
+      }
+      const view = handle.view
+      const pos = view.state.doc.line(Math.max(1, Math.min(line, view.state.doc.lines))).to
+      view.dispatch({ selection: { anchor: pos } })
+      handle.focus()
+      handle.scrollToHeading(pos)
+    },
+    [viewMode, editorRef, viewerRef],
+  )
+
   // 연결 문서의 저장소 그림 대응표 (F-2131 4장)
   const githubImages = useGithubImages({ store, currentDoc })
   const { resolveImagePath } = githubImages
@@ -210,15 +235,16 @@ export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResul
     setPendingEditorSearch(null) // 한 번만 쓴다
   }, [pendingEditorSearch, openDoc, currentDocId, editorRef, setPendingEditorSearch])
 
-  // [[문서#제목]] 으로 연 문서 — 에디터가 만들어지고(보기 모드면 그 문서 HTML 이 그려진) 뒤 한 번 이동한다 (F-2018 8.3, F-294 4.3 과 같은 방식)
+  // [[문서#제목]]·할 일 항목으로 연 문서 — 에디터가 만들어지고(보기 모드면 그 문서 HTML 이 그려진) 뒤 한 번 이동한다 (F-2018 8.3, F-294 4.3 과 같은 방식)
   useEffect(() => {
-    const pending = pendingHeadingRef.current
+    const pending = pendingJumpRef.current
     if (!pending || currentDocId !== pending.docId) return
     if (openDoc?.id !== currentDocId || !editorRef.current) return
     if (viewMode === 'view' && viewerDocId !== currentDocId) return
-    pendingHeadingRef.current = null // 한 번만 쓴다
-    jumpToHeading(pending.heading)
-  }, [openDoc, currentDocId, viewMode, viewerDocId, jumpToHeading, pendingHeadingRef, editorRef])
+    pendingJumpRef.current = null // 한 번만 쓴다
+    if ('line' in pending) jumpToLine(pending.line)
+    else jumpToHeading(pending.heading)
+  }, [openDoc, currentDocId, viewMode, viewerDocId, jumpToHeading, jumpToLine, pendingJumpRef, editorRef])
 
   // 편집기 위키링크 해석 문맥 갱신 — 문서 전환 중(옛 에디터가 붙은 순간)은 건드리지 않는다 (F-2018 5.2)
   useEffect(() => {
@@ -324,5 +350,5 @@ export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResul
     [attachmentResolverFor, currentDoc?.e2ee],
   )
 
-  return { wikiResolver, currentFolderId, wikiContext, resolveWikiHref, jumpToHeading, attachmentResolverFor, resolveAttachment, githubImages }
+  return { wikiResolver, currentFolderId, wikiContext, resolveWikiHref, jumpToHeading, jumpToLine, attachmentResolverFor, resolveAttachment, githubImages }
 }

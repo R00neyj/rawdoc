@@ -6518,6 +6518,34 @@ a.dialog-btn {
   }
 }
 
+/* `할 일` 보기 — 체크 상자 모양은 그림일 뿐 눌러도 바뀌지 않는다 (small 2026-10-11) */
+.todo-group-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.doc-link-item.todo-item {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.todo-item .doc-link-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.todo-box {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--muted);
+  border-radius: 3px;
+}
+
 .calendar {
   padding: 12px;
 }

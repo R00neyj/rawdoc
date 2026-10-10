@@ -88,7 +88,7 @@ import { useNewDocTemplate } from './useNewDocTemplate'
 import { useTemplateManager } from './useTemplateManager'
 import { useCalendarPanel } from './useCalendarPanel'
 import { useRightPanel } from './useRightPanel'
-import { useDocLinks } from './useDocLinks'
+import { usePanelDocs } from './usePanelDocs'
 import RightPanel from './RightPanel'
 import { usePhoneSidePanel } from './usePhoneSidePanel'
 import { usePhoneWidth } from './usePhoneWidth'
@@ -110,7 +110,7 @@ import { useE2eeMigrate } from './useE2eeMigrate'
 import { useE2eeConvert } from './useE2eeConvert'
 import { useLeaveShare } from './useLeaveShare'
 import LeaveShareDialog from './LeaveShareDialog'
-import { useEditorSync } from './useEditorSync'
+import { useEditorSync, type PendingJump } from './useEditorSync'
 import { useHashRouting, replaceHashUrl, pushHashUrl } from './useHashRouting'
 import { useSharesPage } from './useSharesPage'
 import { isMacPlatform } from './shortcutCatalog'
@@ -165,8 +165,8 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false)
   // 검색 결과로 연 문서에 넣어 줄 검색어 예약 — 본문이 도착하고 에디터가 만들어질 때까지 기다린다 (specs/features/F-294.md 4.3)
   const [pendingEditorSearch, setPendingEditorSearch] = useState<{ docId: string; term: string } | null>(null)
-  // 위키링크 [[문서#제목]] 으로 연 문서에서 이동할 제목 — 그 문서가 열려 그려진 뒤 한 번 쓴다 (specs/features/F-2018.md 8.3)
-  const pendingHeadingRef = useRef<{ docId: string; heading: string } | null>(null)
+  // [[문서#제목]]·할 일 항목으로 연 문서에서 이동할 곳 — 그 문서가 열려 그려진 뒤 한 번 쓴다 (specs/features/F-2018.md 8.3)
+  const pendingJumpRef = useRef<PendingJump | null>(null)
   // 도움말 전용 페이지 S-7 (specs/features/F-244.md 3.3) — currentDocId 는 이 화면 동안 null
   const [helpOpen, setHelpOpen] = useState(false)
   // 위키링크 지도 S-8 (specs/features/F-292.md 6.1) — 공유 화면과 같은 방식으로 currentDocId 를 비우지 않고 유지한다
@@ -830,11 +830,11 @@ export default function App() {
   })
 
   // ----- 편집기 연동 — 본문 1회 읽기·위키 문맥·보기 HTML·layout effect (F-2072) -----
-  const { wikiResolver, currentFolderId, wikiContext, resolveWikiHref, jumpToHeading, attachmentResolverFor, resolveAttachment, githubImages } = useEditorSync({
+  const { wikiResolver, currentFolderId, wikiContext, resolveWikiHref, jumpToHeading, jumpToLine, attachmentResolverFor, resolveAttachment, githubImages } = useEditorSync({
     store, docs, folders, currentDocId, currentDoc, openDoc, bootPhase, viewMode, isRealtime, liveSnapshot, docPath, everLiveIds, docSession,
     e2ee, wikiPreviewPref, lineNumbersPref, resolvedTheme, indentPref, isReadOnlyDoc, titleReadOnly, currentBreadcrumb, onNavigateFolder,
     viewerHtml, viewerDocId, pendingEditorSearch, showNotice, setOpenDoc, setStats, setViewerHtml, setViewerDocId, setPendingEditorSearch,
-    editorRef, viewerRef, scrollAnchorRef, pendingHeadingRef, openDocIdRef,
+    editorRef, viewerRef, scrollAnchorRef, pendingJumpRef, openDocIdRef,
   })
 
   // 문서를 전환하면 이전 문서의 대기 중인 글자·단어 수 재계산은 버린다
@@ -981,7 +981,7 @@ export default function App() {
     wikiResolver, currentFolderId, jumpToHeading, buildNewDocContent, beforeLeaveDoc, showNotice, changeViewMode, closePalette,
     closeSidebarIfNarrow, addOpenFolders, newDocFolderId, ensureE2eeOpenForFolder, requestE2eeOpen, setDocs, setCurrentDocId,
     setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute, setDeletedElsewhereId, setNotice, setSearchOpen, setPendingEditorSearch,
-    editorRef, focusTitleRef, focusEditorRef, pendingHeadingRef, openDocIdRef,
+    editorRef, focusTitleRef, focusEditorRef, pendingJumpRef, openDocIdRef,
   })
 
   // hashchange 핸들러(위)가 항상 최신 docs·currentDocId 를 보도록 매 커밋 후 갱신한다 (0단계 버그 수정)
@@ -1141,9 +1141,9 @@ export default function App() {
   const calendar = useCalendarPanel({
     closePanelIfNarrow: rightPanel.closeIfNarrow, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate,
   })
-  const docLinks = useDocLinks({
-    active: rightPanel.linksVisible, listSource, docs, folders, currentDoc, editor: editorHandle, resolver: wikiResolver, e2eeOpen: e2ee?.status === 'open',
-    selectDoc, openWikiLinkTarget, afterOpen: rightPanel.closeIfNarrow,
+  const panelDocs = usePanelDocs({
+    linksActive: rightPanel.shownViews.includes('links'), todosActive: rightPanel.shownViews.includes('todos'), listSource, docs, folders, currentDoc,
+    editor: editorHandle, resolver: wikiResolver, e2eeOpen: e2ee?.status === 'open', selectDoc, openWikiLinkTarget, pendingJumpRef, jumpToLine, afterOpen: rightPanel.closeIfNarrow,
   })
   const sidePanel = usePhoneSidePanel({
     appShellRef, enabled: phone && bootPhase === 'ready' && !sharedDoc && !mapRoute, open: rightPanel.open, onOpen: rightPanel.openPanel, onClose: rightPanel.closePanel,
@@ -1394,7 +1394,7 @@ export default function App() {
             open={rightPanel.open}
             narrow={narrow}
             slots={rightPanel.wideSlots}
-            views={{ calendar: calendar.view, links: docLinks }}
+            views={{ calendar: calendar.view, ...panelDocs }}
             onClose={phone ? sidePanel.closeAndReturn : rightPanel.closePanel}
             phone={phone ? { sections: sidePanel.sections, onToggleSection: sidePanel.toggleSection, onOutlineSlot: sidePanel.setOutlineSlot, hasDoc: showEditor, top: rightPanel.phoneTop } : undefined}
           />

@@ -1,7 +1,7 @@
 // 오른쪽 패널 `링크` 보기 — 백링크·나가는 링크·연결되지 않은 언급 세 묶음 (small 2026-10-11)
 import type { ReactNode } from 'react'
 import type { DocLinkRow, OutgoingLinkRow } from '../lib/docLinks'
-import type { DocLinksView } from './useDocLinks'
+import type { DocLinksView } from './usePanelDocs'
 
 const UNTITLED = '제목 없는 문서'
 
