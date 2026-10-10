@@ -177,12 +177,16 @@ function Segment<T extends string>({
   )
 }
 
-// 새 문서 템플릿 선택칸 — 세그먼트가 아니라 네이티브 <select> 다(F-2037.md 3.2)
-function NewDocTemplateField({
+// 템플릿 선택칸 — 새 문서·달력 문서가 같이 쓴다. 세그먼트가 아니라 네이티브 <select> 다(F-2037.md 3.2)
+function TemplateSelectField({
+  idBase,
+  label,
   value,
   entries,
   onChange,
 }: {
+  idBase: string
+  label: string
   value: string
   entries: readonly TemplateEntry[]
   onChange: (value: string) => void
@@ -194,43 +198,39 @@ function NewDocTemplateField({
   const missingOpt = options.find((o) => o.group === 'missing')
 
   return (
-    <>
-      <div className="dialog-field">
-        <span id="new-doc-template-label">새 문서 템플릿</span>
-        <select
-          id="new-doc-template-select"
-          className="settings-select"
-          aria-labelledby="new-doc-template-label"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          {noneOpt && <option value={noneOpt.value}>{noneOpt.label}</option>}
-          <optgroup label="내장">
-            {builtinOpts.map((o) => (
+    <div className="dialog-field">
+      <span id={`${idBase}-label`}>{label}</span>
+      <select
+        id={`${idBase}-select`}
+        className="settings-select"
+        aria-labelledby={`${idBase}-label`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {noneOpt && <option value={noneOpt.value}>{noneOpt.label}</option>}
+        <optgroup label="내장">
+          {builtinOpts.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </optgroup>
+        {userOpts.length > 0 && (
+          <optgroup label="내 템플릿">
+            {userOpts.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
             ))}
           </optgroup>
-          {userOpts.length > 0 && (
-            <optgroup label="템플릿 폴더">
-              {userOpts.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          {missingOpt && (
-            <option value={missingOpt.value} disabled>
-              {missingOpt.label}
-            </option>
-          )}
-        </select>
-      </div>
-      {/* .dialog-field 밖에 둔다 — .dialog-field > span 은 각 설정 라벨을 세는 선택자라(F-290.md A4) 안에 두면 겹친다 */}
-      {userOpts.length === 0 && <p className="dialog-note">최상위에 '템플릿' 폴더를 만들고 문서를 넣으면 여기에 함께 나옵니다.</p>}
-    </>
+        )}
+        {missingOpt && (
+          <option value={missingOpt.value} disabled>
+            {missingOpt.label}
+          </option>
+        )}
+      </select>
+    </div>
   )
 }
 
@@ -328,6 +328,8 @@ type SettingsDialogProps = {
   newDocTemplate?: string
   onChangeNewDocTemplate?: (value: string) => void
   templateEntries?: readonly TemplateEntry[]
+  // 새 문서 템플릿 아래 `템플릿 관리…` 버튼
+  onOpenTemplates?: () => void
   // `데이터` 절 — 전체 내보내기 (F-281.md 3.6). 안 주면 절을 그리지 않는다(공개 보기 화면)
   onExportAll?: () => void
   exportAllDisabled?: boolean
@@ -378,6 +380,7 @@ export default function SettingsDialog({
   newDocTemplate,
   onChangeNewDocTemplate,
   templateEntries,
+  onOpenTemplates,
   onExportAll,
   exportAllDisabled,
   onExportVault,
@@ -564,7 +567,21 @@ export default function SettingsDialog({
           )}
           {/* 새 문서 템플릿 — 편집기 탭 맨 끝 (F-2037.md 3.2) */}
           {newDocTemplate !== undefined && onChangeNewDocTemplate !== undefined && (
-            <NewDocTemplateField value={newDocTemplate} entries={templateEntries ?? []} onChange={onChangeNewDocTemplate} />
+            <TemplateSelectField
+              idBase="new-doc-template"
+              label="새 문서 템플릿"
+              value={newDocTemplate}
+              entries={templateEntries ?? []}
+              onChange={onChangeNewDocTemplate}
+            />
+          )}
+          {/* .dialog-field 밖에 둔다 — .dialog-field > span 은 각 설정 라벨을 세는 선택자다(F-290.md A4) */}
+          {onOpenTemplates && (
+            <p className="settings-template-manage">
+              <button type="button" className="dialog-btn" onClick={onOpenTemplates}>
+                템플릿 관리…
+              </button>
+            </p>
           )}
         </>
       )

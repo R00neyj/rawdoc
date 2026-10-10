@@ -76,6 +76,8 @@ import collapseAllSvg from '@material-symbols/svg-400/outlined/collapse_all.svg?
 import printSvg from '@material-symbols/svg-400/outlined/print.svg?raw'
 // 사이드바 `지도` (F-292.md 6.2)
 import hubSvg from '@material-symbols/svg-400/outlined/hub.svg?raw'
+// 템플릿 관리 (small 2026-10-10)
+import libraryBooksSvg from '@material-symbols/svg-400/outlined/library_books.svg?raw'
 // 지도 머리 줄 `목록` 보기 (F-2011.md 2.2)
 import listSvg from '@material-symbols/svg-400/outlined/list.svg?raw'
 // 지도 머리 줄 `맞춤` (F-2011.md 2.1)
@@ -216,6 +218,7 @@ export const IconPrint = makeIcon(printSvg)
 
 // 사이드바 `지도` (F-292.md 6.2)
 export const IconMap = makeIcon(hubSvg)
+export const IconTemplates = makeIcon(libraryBooksSvg)
 
 // 지도 머리 줄 `목록` (F-2011.md 2.2)
 export const IconList = makeIcon(listSvg)

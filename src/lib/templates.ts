@@ -35,8 +35,7 @@ function pathFromRoot(root: FolderLike, folder: FolderLike, byId: Map<string, Fo
 export function listTemplates(input: { folders: readonly FolderLike[]; docs: readonly TemplateDocLike[] }): TemplateEntry[] {
   const folders = [...input.folders]
   const byId = new Map(folders.map((f) => [f.id, f]))
-  const screenParent = screenParentResolver(folders)
-  const roots = folders.filter((f) => screenParent(f) === null && isTemplateFolderName(f.name))
+  const roots = templateRoots(folders)
 
   const userEntries: TemplateEntry[] = []
   const seenDocIds = new Set<string>()
@@ -69,6 +68,41 @@ export function listTemplates(input: { folders: readonly FolderLike[]; docs: rea
   }))
 
   return [...userEntries, ...builtinEntries]
+}
+
+function templateRoots<F extends FolderLike>(folders: readonly F[]): F[] {
+  const screenParent = screenParentResolver(folders)
+  return folders.filter((f) => screenParent(f) === null && isTemplateFolderName(f.name))
+}
+
+// 최상위 템플릿 폴더와 그 하위 전체 — 트리·검색·지도·팔레트에서 숨기는 폴더
+export function templateFolderIds(folders: readonly FolderLike[]): Set<string> {
+  const all = [...folders]
+  return new Set(templateRoots(folders).flatMap((root) => descendantFolderIds(all, root.id)))
+}
+
+// 새 템플릿을 넣을 최상위 템플릿 폴더. 여럿이면 이름·id 순 첫째
+export function templateRootFolder<F extends FolderLike>(folders: readonly F[]): F | null {
+  const roots = templateRoots(folders).sort((a, b) => a.name.localeCompare(b.name, 'ko') || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  return roots[0] ?? null
+}
+
+type ListSourceLike<D, F> = { list(): Promise<D[]>; listFolders(): Promise<F[]> }
+
+// 검색·지도에 넘기는 목록에서 템플릿 폴더와 그 문서를 뺀다
+export function withoutTemplateFolders<D extends { folderId?: string | null }, F extends FolderLike>(source: ListSourceLike<D, F>): ListSourceLike<D, F> {
+  return {
+    async list() {
+      const [docs, folders] = await Promise.all([source.list(), source.listFolders()])
+      const hidden = templateFolderIds(folders)
+      return hidden.size === 0 ? docs : docs.filter((d) => !d.folderId || !hidden.has(d.folderId))
+    },
+    async listFolders() {
+      const folders = await source.listFolders()
+      const hidden = templateFolderIds(folders)
+      return hidden.size === 0 ? folders : folders.filter((f) => !hidden.has(f.id))
+    },
+  }
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']

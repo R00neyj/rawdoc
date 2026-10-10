@@ -54,6 +54,7 @@ src/
     useCommandPalette.ts 팔레트 열기·템플릿 넣기·context 조립 (F-2053, F-2054, F-2055, F-2078)
     useShortcutsPanel.ts 단축키 판 열기·닫기·커서 스크롤 (F-2037, F-2078)
     useNewDocTemplate.ts newDocTemplate.ts 새 문서 템플릿 목록·원문 읽기·본문 (F-2052, F-2078)
+    useTemplateManager.ts TemplateManagerDialog.tsx 템플릿 관리 D-22 열기·새 템플릿·편집·삭제 (small 2026-10-10)
     useAccountStatus.ts 계정 플래그 반영·다시 읽기(online·화면 복귀·10분) (F-2026, F-2079)
     useAccountDelete.ts 계정 삭제 대화상자 열기·실행 (F-2079)
     useTitleCommit.ts 제목 저장 (F-2079)

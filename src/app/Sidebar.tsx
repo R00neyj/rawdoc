@@ -55,6 +55,7 @@ import {
   IconDownload,
   IconOpenInNew,
   IconMap,
+  IconTemplates,
   IconLock,
   IconLockOpen,
   IconCommit,
@@ -824,6 +825,7 @@ type SidebarProps = {
   onOpenHelp: () => void
   account: AccountMenuProps
   onOpenMap: () => void
+  onOpenTemplates: () => void
   onOpenSearch: () => void
   onOpenPalette: () => void
   canInstall: boolean
@@ -881,6 +883,7 @@ export default function Sidebar({
   onOpenHelp,
   account,
   onOpenMap,
+  onOpenTemplates,
   onOpenSearch,
   onOpenPalette,
   canInstall,
@@ -1249,6 +1252,7 @@ export default function Sidebar({
             <RailButton icon={IconFolderAdd} label="새 폴더" onClick={handleRailCreateFolder} />
             {github ? <GithubImportMenu variant="rail" onFile={onImportDoc} onGithub={github.onImport} /> : <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
             <RailButton icon={IconMap} label="지도" onClick={onOpenMap} />
+            <RailButton icon={IconTemplates} label="템플릿 관리" onClick={onOpenTemplates} />
           </div>
         ) : (
           <>
@@ -1262,6 +1266,7 @@ export default function Sidebar({
                 {github ? <GithubImportMenu variant="bar" onFile={onImportDoc} onGithub={github.onImport} /> : <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
                 <SidebarIconButton icon={IconCollapseAll} label="모두 접기" onClick={onCollapseAllFolders} />
                 <SidebarIconButton icon={IconMap} label="지도" btnClassName="sidebar-map-btn" onClick={onOpenMap} />
+                <SidebarIconButton icon={IconTemplates} label="템플릿 관리" onClick={onOpenTemplates} />
               </div>
               {pinned.length > 0 && (
                 <>

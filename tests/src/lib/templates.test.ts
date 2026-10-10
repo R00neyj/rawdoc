@@ -8,6 +8,9 @@ import {
   resolveNewDocTemplate,
   newDocContentFromTemplate,
   newDocTemplateOptions,
+  templateFolderIds,
+  templateRootFolder,
+  withoutTemplateFolders,
   type TemplateEntry,
 } from '../../../src/lib/templates'
 import { BUILTIN_TEMPLATES } from '../../../src/lib/builtinTemplates'
@@ -272,5 +275,69 @@ describe('expandTemplateVariables — 제목의 $ 패턴 (리뷰 L4)', () => {
 
   it.each(['비용 $& 정리', '$$ 수식', "A$'B", 'x$`y', '$1 달러'])('제목 %s 를 글자 그대로 넣는다', (title) => {
     expect(expandTemplateVariables('# {{title}}\n본문', { title, now })).toBe(`# ${title}\n본문`)
+  })
+})
+
+describe('templateFolderIds — 템플릿 관리 창이 숨기는 폴더', () => {
+  it('최상위 템플릿·templates 폴더와 그 하위만, 다른 폴더 안의 같은 이름은 빼고', () => {
+    const folders: FolderLike[] = [
+      { id: 'A', name: '템플릿', parentId: null },
+      { id: 'B', name: '회의', parentId: 'A' },
+      { id: 'B2', name: '주간', parentId: 'B' },
+      { id: 'C', name: 'templates', parentId: null },
+      { id: 'D', name: '일반', parentId: null },
+      { id: 'E', name: '템플릿', parentId: 'D' },
+      { id: 'F', name: '고아', parentId: 'gone' },
+    ]
+    expect([...templateFolderIds(folders)].sort()).toEqual(['A', 'B', 'B2', 'C'])
+  })
+
+  it('부모가 없어 화면 최상위로 올라온 템플릿 폴더도 숨긴다', () => {
+    const folders: FolderLike[] = [{ id: 'X', name: '템플릿', parentId: 'gone' }]
+    expect([...templateFolderIds(folders)]).toEqual(['X'])
+  })
+
+  it('템플릿 폴더가 없으면 빈 집합', () => {
+    expect(templateFolderIds([{ id: 'D', name: '일반', parentId: null }]).size).toBe(0)
+  })
+})
+
+describe('templateRootFolder — 새 템플릿을 넣을 폴더', () => {
+  it('없으면 null', () => {
+    expect(templateRootFolder([{ id: 'D', name: '일반', parentId: null }])).toBeNull()
+  })
+
+  it('하위 폴더의 같은 이름은 고르지 않는다', () => {
+    expect(templateRootFolder([{ id: 'D', name: '일반', parentId: null }, { id: 'E', name: '템플릿', parentId: 'D' }])).toBeNull()
+  })
+
+  it('최상위가 여럿이면 입력 순서와 무관하게 같은 폴더', () => {
+    const a: FolderLike = { id: 'a', name: 'templates', parentId: null }
+    const b: FolderLike = { id: 'b', name: '템플릿', parentId: null }
+    const c: FolderLike = { id: 'c', name: '템플릿', parentId: null }
+    const first = templateRootFolder([a, b, c])
+    expect(templateRootFolder([c, b, a])).toBe(first)
+    expect(templateRootFolder([b, a, c])).toBe(first)
+  })
+})
+
+describe('withoutTemplateFolders — 검색·지도 목록에서 템플릿 빼기', () => {
+  const folders: FolderLike[] = [
+    { id: 'T', name: '템플릿', parentId: null },
+    { id: 'T2', name: '회의', parentId: 'T' },
+    { id: 'W', name: '업무', parentId: null },
+  ]
+  const docs = [
+    { id: '1', folderId: 'T' },
+    { id: '2', folderId: 'T2' },
+    { id: '3', folderId: 'W' },
+    { id: '4', folderId: null },
+  ]
+  const source = { list: async () => docs, listFolders: async () => folders }
+
+  it('템플릿 폴더와 그 안 문서가 빠진다', async () => {
+    const wrapped = withoutTemplateFolders(source)
+    expect((await wrapped.list()).map((d) => d.id)).toEqual(['3', '4'])
+    expect((await wrapped.listFolders()).map((f) => f.id)).toEqual(['W'])
   })
 })

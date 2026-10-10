@@ -6257,3 +6257,51 @@ a.dialog-btn {
   color: var(--ink);
   font: inherit;
 }
+
+/* 템플릿 관리 대화상자·설정 `템플릿 관리…` 버튼 (small 2026-10-10) */
+.settings-template-manage {
+  margin: 4px 0 0;
+}
+
+.template-manager-heading {
+  margin: 12px 0 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.template-manager-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.template-manager-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.template-manager-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-manager-row .dialog-btn {
+  flex: none;
+}
+
+.template-manager-empty,
+.template-manager-help {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.template-manager-help {
+  margin: 16px 0;
+}

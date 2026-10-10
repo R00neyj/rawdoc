@@ -26,7 +26,7 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     hint: (ctx) => {
       const lines: string[] = []
       if (!ctx.templates.some((t) => t.source.kind === 'doc')) {
-        lines.push("최상위에 '템플릿' 폴더를 만들고 문서를 넣으면 여기에 함께 나옵니다.")
+        lines.push("명령 '템플릿 관리'에서 내 템플릿을 만들면 여기에 함께 나옵니다.")
       }
       lines.push('{{date}}·{{time}}·{{title}}은 넣을 때 오늘 날짜·지금 시각·문서 제목으로 바뀝니다. {{date:YYYY.MM.DD}}처럼 형식을 붙일 수도 있습니다.')
       lines.push("자세한 내용은 도움말의 '템플릿' 절에 있습니다.")
@@ -177,6 +177,14 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     keywords: ['지도', 'map', 'graph', '그래프', '네트워크', '연결', '위키링크'],
     when: (ctx) => Boolean(ctx.nav) && ctx.nav?.screen !== 'map',
     run: (ctx) => ctx.nav?.openMap(),
+  },
+  {
+    id: 'template.manage',
+    kind: 'action',
+    label: '템플릿 관리',
+    keywords: ['템플릿', 'template', '틀', '양식', '관리', '새 템플릿'],
+    when: (ctx) => Boolean(ctx.nav?.openTemplates),
+    run: (ctx) => ctx.nav?.openTemplates?.(),
   },
   {
     id: 'nav.help',

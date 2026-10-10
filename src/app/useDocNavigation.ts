@@ -64,8 +64,17 @@ export type UseDocNavigationOptions = {
   openDocIdRef: RefObject<string | null>
 }
 
+export type CreateDocInput = {
+  folderId: string | null
+  title: string
+  focus: 'title' | 'editor'
+  content: () => Promise<{ content: string; failed: boolean }>
+  failedMessage?: string
+}
+
 export type UseDocNavigationResult = {
   saveCurrentAsNewDoc: () => Promise<void>
+  createDoc: (input: CreateDocInput) => Promise<boolean>
   createNewDoc: (folderId?: string | null) => Promise<void>
   createDocFromPalette: (plan: PaletteCreatePlan) => Promise<void>
   selectDoc: (id: string) => Promise<void>
@@ -129,76 +138,59 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     setNotice(null)
   }
 
-  // folderId 생략 시 언제나 최상위 — 폴더 안 문서를 보고 있어도 밖에 만든다. 폴더 메뉴의 새 문서만 폴더 id 를 명시로 넘긴다 (F-126.md 5.3, 2026-09-30 사용자 지시)
-  async function createNewDoc(folderId?: string | null) {
-    const targetFolderId = folderId ?? null
-    if (!(await ensureE2eeOpenForFolder(targetFolderId))) return
+  // 만들어 열기 공용 — 본문은 떠난 뒤에 만든다(지금 문서의 저장이 템플릿 원문에 반영되게). 성공하면 true
+  async function createDoc(input: CreateDocInput): Promise<boolean> {
+    if (!(await ensureE2eeOpenForFolder(input.folderId))) return false
     // 보기 모드에서 새 문서 를 누르면 제목 입력 포커스가 필요해 먼저 편집 모드로 바꾼다 (ia.md 3.3, F-123.md 3.3)
     if (viewMode === 'view') changeViewMode('live')
     await beforeLeaveDoc()
-    // 새 문서 버튼은 {{title}} 이 빈 글자다 — 사용자 결정, F-2037.md 4.4
-    const { content, failed } = await buildNewDocContent({ title: '', emptyTitle: 'keep-empty' })
+    const { content, failed } = await input.content()
     let doc: Doc
     try {
-      doc = await store.create({
-        title: '제목 없는 문서',
-        content,
-        lineEnding: 'crlf',
-        folderId: targetFolderId,
-      })
+      doc = await store.create({ title: input.title, content, lineEnding: 'crlf', folderId: input.folderId })
     } catch (err) {
       // 저장소가 folderId 를 거부하면(F-136.md 3.1) 처리되지 않은 rejection 으로 두지 않고 기존 오류 알림 경로로 보여준다 (F-138 3.4)
       showNotice({ type: 'error', message: e2eeCreateErrorMessage(err) ?? '새 문서를 만들지 못했습니다. 다시 시도하세요.' })
-      return
+      return false
     }
-    // 목록에 없는 템플릿(3.4)과 달리, 설정은 맞는데 이번만 못 읽은 것은 알린다 (4.2-4)
-    if (failed) showNotice({ type: 'error', message: '새 문서 템플릿을 읽지 못해 빈 문서로 만들었습니다.' })
+    // 목록에 없는 템플릿(3.4)과 달리, 설정은 맞는데 이번만 못 읽은 것은 알린다 (F-2037 4.2-4)
+    if (failed) showNotice({ type: 'error', message: input.failedMessage ?? '새 문서 템플릿을 읽지 못해 빈 문서로 만들었습니다.' })
     const meta = stripContent(doc)
     setDocs((prev) => sortByUpdatedAtDesc([...prev, meta]))
     addOpenFolders(ancestorsOfDoc({ folders, doc: meta }))
-    focusTitleRef.current = true
-    // 새 문서는 에디터가 아니라 제목 입력에 포커스한다 — 이전 전환 요청이 아직 소비되지 않았을 가능성에 대비해 명시적으로 내려둔다 (ia.md 3.3, F-103 3.4)
-    focusEditorRef.current = false
-    // 공유 보기(F-130 4장)·공유 관리·도움말(F-2054 6.4)·지도 빈 상태(F-292 6.5)를 떠난다 — 만든 뒤에만, 실패하면 화면과 주소가 어긋난다
+    // 이전 전환 요청이 아직 소비되지 않았을 가능성에 대비해 둘 다 명시로 둔다 (ia.md 3.3, F-103 3.4)
+    focusTitleRef.current = input.focus === 'title'
+    focusEditorRef.current = input.focus === 'editor'
+    // 공유 보기·공유 관리·도움말·지도를 떠난다 — 만든 뒤에만, 실패하면 화면과 주소가 어긋난다 (F-130 4장, F-2054 6.4, F-292 6.5)
     leave()
     setCurrentDocId(doc.id)
     setPref('md.lastDocId', doc.id)
     pushHashUrl(doc.id)
     closeSidebarIfNarrow()
+    if (input.focus === 'editor') {
+      // 대화상자가 닫는 요소로 포커스를 돌리는 비동기 처리를 이겨야 한다. 새 편집기가 아직 안 떴으면 마운트 시 autoFocus 가 맡는다 (리뷰 P3)
+      setTimeout(() => {
+        if (openDocIdRef.current === doc.id) editorRef.current?.focus()
+      }, 0)
+    }
+    return true
   }
 
-  // 명령 팔레트 `'{제목}' 새 문서 만들기` 줄 — openWikiLinkTarget 만들기 갈래와 같은 순서, selectDoc 이 떠나는 네 화면을 같이 떠난다 (F-2053 6.2·6.3)
+  // folderId 생략 시 언제나 최상위 — 폴더 메뉴의 새 문서만 폴더 id 를 명시로 넘긴다 (F-126.md 5.3, 2026-09-30 사용자 지시)
+  async function createNewDoc(folderId?: string | null) {
+    // 새 문서 버튼은 {{title}} 이 빈 글자다 — 사용자 결정, F-2037.md 4.4
+    await createDoc({
+      folderId: folderId ?? null,
+      title: '제목 없는 문서',
+      focus: 'title',
+      content: () => buildNewDocContent({ title: '', emptyTitle: 'keep-empty' }),
+    })
+  }
+
+  // 명령 팔레트 `'{제목}' 새 문서 만들기` 줄 — 포커스는 본문, 사용자가 방금 제목을 쳤다 (F-2053 6.2·6.3 Q8)
   async function createDocFromPalette(plan: PaletteCreatePlan) {
     closePalette()
-    if (!(await ensureE2eeOpenForFolder(plan.folderId))) return
-    if (viewMode === 'view') changeViewMode('live')
-    await beforeLeaveDoc()
-    const { content, failed } = await buildNewDocContent({ title: plan.title })
-    let doc: Doc
-    try {
-      doc = await store.create({ title: plan.title, content, lineEnding: 'crlf', folderId: plan.folderId })
-    } catch (err) {
-      showNotice({ type: 'error', message: e2eeCreateErrorMessage(err) ?? '새 문서를 만들지 못했습니다. 다시 시도하세요.' })
-      return
-    }
-    if (failed) showNotice({ type: 'error', message: '새 문서 템플릿을 읽지 못해 빈 문서로 만들었습니다.' })
-    const meta = stripContent(doc)
-    setDocs((prev) => sortByUpdatedAtDesc([...prev, meta]))
-    addOpenFolders(ancestorsOfDoc({ folders, doc: meta }))
-    // 포커스는 본문 에디터다(제목 입력이 아니다) — 사용자가 방금 제목을 쳤다 (F-2053 6.3 Q8)
-    focusTitleRef.current = false
-    focusEditorRef.current = true
-    // 화면 떠나기는 만든 뒤에만 — 실패하면 지금 화면과 주소가 그대로 남는다
-    leave()
-    setCurrentDocId(doc.id)
-    setPref('md.lastDocId', doc.id)
-    pushHashUrl(doc.id)
-    closeSidebarIfNarrow()
-    // Dialog(팔레트)가 닫는 요소로 포커스를 돌리는 비동기 처리를 이겨야 한다 — openDocFromSearch 와 같은 방식
-    // 새 편집기가 아직 안 떴으면 editorRef 는 이전 문서 편집기라 포커스를 주면 안 된다 — 마운트 시 autoFocus 로 스스로 포커스한다 (리뷰 P3)
-    setTimeout(() => {
-      if (openDocIdRef.current === doc.id) editorRef.current?.focus()
-    }, 0)
+    await createDoc({ folderId: plan.folderId, title: plan.title, focus: 'editor', content: () => buildNewDocContent({ title: plan.title }) })
   }
 
   async function selectDoc(id: string) {
@@ -414,7 +406,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
   }
 
   return {
-    saveCurrentAsNewDoc, createNewDoc, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
+    saveCurrentAsNewDoc, createDoc, createNewDoc, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
     handleOpenWikiLink, importSharedDoc, closeSharedDoc, openDocFromSearch, openHelp, openMap, closeMap, recenterMap, copyHelpToDoc,
   }
 }

@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { StateCommand } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
-import { expandTemplateVariables, type TemplateEntry } from '../lib/templates'
+import { expandTemplateVariables, templateFolderIds, type TemplateEntry } from '../lib/templates'
 import { insertTemplate as insertTemplateIntoEditor } from '../editor/insertTemplate'
 import { insertTable } from '../editor/insertCommands'
 import { insertTextAtSelection } from '../editor/insertDateTime'
@@ -103,6 +103,7 @@ export type UseCommandPaletteOptions = {
   openSettings: () => void
   goHome: () => Promise<void>
   openMap: () => Promise<void>
+  openTemplates: () => void
   openHelp: () => Promise<void>
   createNewDoc: (folderId?: string | null) => Promise<void>
   createDocFromPalette: (plan: PaletteCreatePlan) => Promise<void>
@@ -126,7 +127,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     wikiPreviewPref, changeTheme, changeLineNumbers, changeToolbar, changeWikiPreview, handleExportDoc, handleExportDocAsText,
     handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, github, handleTogglePin, requestMoveDoc, requestDeleteDoc,
     getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createDocFromPalette,
-    openDocFromSearch, newDocFolderId, changeViewMode,
+    openDocFromSearch, newDocFolderId, changeViewMode, openTemplates,
   } = options
   // 본문에서 연 팔레트만 서식·단락·삽입을 보인다 — 연 순간의 문서와 가능 여부 (F-2055 4.1)
   const [paletteEditor, setPaletteEditor] = useState<{ docId: string | null; disabled: EditorCommandGates } | null>(null)
@@ -147,11 +148,13 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
   const canPrint = bootPhase === 'ready' && currentDocId !== null && !sharedDoc && currentDoc?.e2ee !== 'locked'
   // 폴더 경로 — 팔레트 문서 목록·새 문서 만들기 계획이 함께 쓴다(같은 걸 두 번 계산하지 않는다, F-2053 9장)
   const palettePathMap = useMemo(() => folderPathMap(folders), [folders])
-  // 팔레트 문서 목록 — 팔레트가 열려 있을 때만 만들고, docs·palettePathMap·currentDocId 가 바뀔 때만 다시 만든다 (F-2053 3.2)
-  const paletteDocsData = useMemo(
-    () => (paletteOpen ? toPaletteDocs({ docs, folderPaths: palettePathMap, currentDocId }) : null),
-    [paletteOpen, docs, palettePathMap, currentDocId],
-  )
+  // 팔레트 문서 목록 — 열려 있을 때만 만든다. 템플릿 폴더 문서는 템플릿 관리 창에서만 다룬다 (F-2053 3.2)
+  const paletteDocsData = useMemo(() => {
+    if (!paletteOpen) return null
+    const hidden = templateFolderIds(folders)
+    const shown = hidden.size === 0 ? docs : docs.filter((d) => !d.folderId || !hidden.has(d.folderId))
+    return toPaletteDocs({ docs: shown, folderPaths: palettePathMap, currentDocId })
+  }, [paletteOpen, docs, folders, palettePathMap, currentDocId])
 
   // 명령 팔레트 D-7 (specs/features/F-2022.md 6.1) — 열려 있던 우클릭 메뉴를 닫고, 좁은 창 사이드바를 닫는다
   // 버튼 onClick 이 이벤트를 넘겨도 무시한다 — 연 곳은 activeElement 로 판정 (F-2055 4.1)
@@ -356,6 +359,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
       openSearch: () => runAfterPaletteClose(() => openSearch()),
       goHome: () => void goHome(),
       openMap: () => void openMap(),
+      openTemplates: () => runAfterPaletteClose(() => openTemplates()),
       openHelp: () => void openHelp(),
       openGuides: () => window.open(GUIDES_PATH, '_blank', 'noopener,noreferrer'),
       openSettings: () => runAfterPaletteClose(() => openSettings()),

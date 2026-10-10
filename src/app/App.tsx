@@ -85,6 +85,8 @@ import { useCommandPalette } from './useCommandPalette'
 import { useViewFind } from './useViewFind'
 import { useShortcutsPanel } from './useShortcutsPanel'
 import { useNewDocTemplate } from './useNewDocTemplate'
+import { useTemplateManager } from './useTemplateManager'
+import { templateFolderIds, withoutTemplateFolders } from '../lib/templates'
 import { useAccountStatus } from './useAccountStatus'
 import { useAccountDelete } from './useAccountDelete'
 import { usePushDevice } from './usePushDevice'
@@ -281,7 +283,13 @@ export default function App() {
   // docs 가 그대로면 같은 배열을 넘긴다 — 새 배열이면 memo·effect deps 가 매번 풀린다 (F-212.md 2.4, 리뷰 A14)
   // 표시만 하는 곳은 잠긴 금고 문서를 뺀 목록을 본다 — docs 자체는 P1·경로 판정 때문에 거르지 않는다 (F-4003 2.1)
   const listedDocs = useMemo(() => hideLockedVaultDocs(docs), [docs])
-  const ownedDocs = useMemo(() => listedDocs.filter((d) => !isSharedDoc(d)), [listedDocs])
+  // 템플릿 폴더는 템플릿 관리 창에서만 다룬다 — 트리·홈 최근 문서에서 뺀다
+  const templateFolderSet = useMemo(() => templateFolderIds(folders), [folders])
+  const treeFolders = useMemo(() => folders.filter((f) => !templateFolderSet.has(f.id)), [folders, templateFolderSet])
+  const ownedDocs = useMemo(
+    () => listedDocs.filter((d) => !isSharedDoc(d) && !(d.folderId && templateFolderSet.has(d.folderId))),
+    [listedDocs, templateFolderSet],
+  )
   const sharedDocsList: SharedDocLike[] = useMemo(
     () =>
       docs
@@ -475,17 +483,17 @@ export default function App() {
 
   // 검색·지도에 넘기는 목록 — 로그인 상태면 캐시 목록 소스. store 가 바뀔 때만 새로 만들어 검색 인덱스 재사용을 지킨다 (F-2056 6.4)
   const listSource = useMemo(() => {
-    if (store.kind !== 'server') return store
+    if (store.kind !== 'server') return withoutTemplateFolders(store)
     const serverStore = store as ServerStore
     // eslint-disable-next-line react-hooks/refs -- hasLiveChanges 는 검색·지도가 목록을 읽을 때만 불린다
-    return createCachedListSource({
+    return withoutTemplateFolders(createCachedListSource({
       listCached: () => serverStore.listCached(),
       lastSharedList: () => serverStore.lastSharedList(),
       hasLiveChanges: () => hasLiveChangesSince(liveChangedAtRef.current, serverStore.lastServerListAt()),
       isOnline: () => navigator.onLine,
       refresher: listRefresher,
       firstServerList: () => waitFirstServerList(serverStore, navigator.onLine),
-    })
+    }))
   }, [store, listRefresher])
 
   // 로컬 편집권을 되찾으면 다시 읽어 다시 마운트한다 (F-296.md 6.4)
@@ -960,7 +968,7 @@ export default function App() {
 
   // ----- 문서 이동 — 새 문서·고르기·홈·위키링크·공유 화면 가져오기/닫기·검색 결과·도움말·지도 (F-2082) -----
   const {
-    saveCurrentAsNewDoc, createNewDoc, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
+    saveCurrentAsNewDoc, createDoc, createNewDoc, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
     handleOpenWikiLink, importSharedDoc, closeSharedDoc, openDocFromSearch, openHelp, openMap, closeMap, recenterMap, copyHelpToDoc,
   } = useDocNavigation({
     store, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, mapRoute, viewMode, notifications,
@@ -1121,6 +1129,7 @@ export default function App() {
     setMoveDocTarget, keepLiveTitle, showNotice, addOpenFolders, closeSidebarIfNarrow, replaceHashUrl, vaultGate: vault?.gate,
     ...(e2ee && (store.kind === 'idb' || store.kind === 'server') ? { convertDocsForVault: convertDocsForVaultFolder } : {}),
   })
+  const templateManager = useTemplateManager({ store, folders, setFolders, createDoc, selectDoc, requestDeleteDoc, closeSettings, showNotice })
 
   // ----- D-4 사람 초대 (specs/features/F-212.md 2.5) -----
   function requestInviteCurrentDoc() {
@@ -1178,7 +1187,7 @@ export default function App() {
     wikiPreviewPref, changeTheme, changeLineNumbers, changeToolbar, changeWikiPreview, handleExportDoc, handleExportDocAsText,
     handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, github: github.palette, handleTogglePin, requestMoveDoc, requestDeleteDoc,
     getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createDocFromPalette,
-    openDocFromSearch, newDocFolderId, changeViewMode,
+    openDocFromSearch, newDocFolderId, changeViewMode, openTemplates: templateManager.openTemplates,
   })
 
   // Ctrl+P·Ctrl+Shift+/ 가 매 커밋 최신 openPalette·toggleShortcuts 를 읽게 한다 (F-2080)
@@ -1256,7 +1265,7 @@ export default function App() {
           collapsed={sidebarCollapsed}
           onToggleCollapse={toggleSidebar}
           docs={ownedDocs}
-          folders={folders}
+          folders={treeFolders}
           sharedDocs={sharedDocsList}
           sharedGroupOpen={sharedGroupOpen}
           onToggleSharedGroup={toggleSharedGroup}
@@ -1288,6 +1297,7 @@ export default function App() {
             afterSelect: closeSidebarIfNarrow,
           }}
           onOpenMap={openMap}
+          onOpenTemplates={templateManager.openTemplates}
           onOpenSearch={openSearch}
           onOpenPalette={openPalette}
           commandRef={sidebarCommandRef}
@@ -1372,7 +1382,7 @@ export default function App() {
         newDocTemplatePref, openDocFromSearch, openSettings, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
         requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
         setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref,
-        toolbarPref, wikiPreviewPref, settingsGithub: github.settings, githubDialogs: github.dialogs,
+        toolbarPref, wikiPreviewPref, settingsGithub: github.settings, githubDialogs: github.dialogs, ...templateManager,
       }} />
       {/* 인쇄 전용 영역 — printDoc() 이 채운다. .app-shell 의 마지막 직계 자식이어야 한다 (F-279.md 4.2) */}
       <div className="viewer print-root" data-ui="print" ref={printRootRef} aria-hidden="true" inert />

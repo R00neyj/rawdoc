@@ -15,6 +15,8 @@ import { vaultNoticeOn } from './vaultVisibility'
 import { GithubDialogs, type GithubDialogsProps } from './GithubPickerDialog'
 import CommandPalette from './CommandPalette'
 import ImportPreviewDialog from './ImportPreviewDialog'
+import TemplateManagerDialog from './TemplateManagerDialog'
+import type { UseTemplateManagerResult } from './useTemplateManager'
 import type { SelectionItem } from './sidebarSelection'
 import type { Folder, Store } from '../types'
 import type { UseE2ee } from './useE2ee'
@@ -55,6 +57,7 @@ export type AppDialogsProps = Pick<UseAccountStatusResult, 'account' | 'recheckA
   Pick<UsePaletteOpenResult, 'closePalette' | 'paletteOpen'> &
   Pick<UseCommandPaletteResult, 'paletteContext'> &
   Pick<UseNewDocTemplateResult, 'templateEntries'> &
+  UseTemplateManagerResult &
   Pick<ExportActions, 'exportOffline' | 'handleExportAll' | 'handleExportVault'> & {
     answerE2eeConvertDialog: (ok: boolean) => void
     beforeLeaveDoc: () => Promise<void>
@@ -99,7 +102,8 @@ export default function AppDialogs({
   moveDocTarget, newDocTemplatePref, openDocFromSearch, openSettings, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
   requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
   setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref, toolbarPref,
-  wikiPreviewPref, changeDefaultView, defaultViewPref, settingsGithub, githubDialogs,
+  wikiPreviewPref, changeDefaultView, defaultViewPref, settingsGithub, githubDialogs, templatesOpen, openTemplates, closeTemplates,
+  createTemplate, editTemplate, deleteTemplate,
 }: AppDialogsProps) {
   return (
     <>
@@ -185,6 +189,7 @@ export default function AppDialogs({
         newDocTemplate={newDocTemplatePref}
         onChangeNewDocTemplate={changeNewDocTemplate}
         templateEntries={templateEntries}
+        onOpenTemplates={openTemplates}
         contentWidth={contentWidthPref}
         onChangeContentWidth={changeContentWidth}
         onExportAll={handleExportAll}
@@ -215,6 +220,14 @@ export default function AppDialogs({
         github={settingsGithub}
         onOpen={openSettings}
         onClose={closeSettings}
+      />
+      <TemplateManagerDialog
+        open={templatesOpen}
+        entries={templateEntries}
+        onClose={closeTemplates}
+        onCreate={() => void createTemplate()}
+        onEdit={(docId) => void editTemplate(docId)}
+        onDelete={deleteTemplate}
       />
       {e2ee?.dialogs}
       {githubDialogs && <GithubDialogs {...githubDialogs} />}

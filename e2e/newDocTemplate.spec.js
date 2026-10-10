@@ -1,6 +1,6 @@
 // 새 문서 템플릿 (specs/features/F-2037.md)
 import { test, expect } from '@playwright/test'
-import { openApp, openAppHome, importMarkdown, readSavedContent, currentDocId, setPrefBeforeLoad, waitSaved } from './helpers.js'
+import { openApp, openAppHome, importMarkdown, readSavedContent, currentDocId, setPrefBeforeLoad, waitSaved, newTemplate } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const FIXED_NOW = new Date(2026, 8, 25, 9, 5, 7) // 2026-09-25 09:05:07 금요일 (F-2037.md 머리 확인 (a))
@@ -46,11 +46,11 @@ async function newDocInFolder(page, folderName) {
   await expect(page.locator('.doc-title')).toBeVisible()
 }
 
+// 템플릿 문서는 트리에 없어 팔레트 `이 문서 폴더로 이동…` 으로 옮긴다
 async function moveCurrentDocToFolder(page, folderName) {
-  const docRow = page.locator('.tree-row').filter({ has: page.locator('.doc-item-btn[aria-current="page"]') })
-  await docRow.hover()
-  await docRow.locator('.item-menu-btn').click()
-  await page.getByRole('menuitem', { name: '폴더로 이동…' }).click()
+  await page.keyboard.press('Control+p')
+  await palette(page).locator('.command-palette-input').fill('/이 문서 폴더로 이동')
+  await page.keyboard.press('Enter')
   const dialog = page.locator('.dialog[open]')
   await dialog.getByRole('radio', { name: folderName, exact: true }).click()
   await dialog.getByRole('button', { name: '이동', exact: true }).click()
@@ -93,10 +93,9 @@ async function selectNewDocTemplateByLabel(page, label) {
   await closeSettings(page)
 }
 
-// 최상위 템플릿 폴더 + 문서 하나(## {{title}}\n\n- ) 만들고 설정에서 그 템플릿을 고른다 (F-2037.md A6 준비)
+// 템플릿 관리 창으로 문서 하나(## {{title}}\n\n- ) 만들고 설정에서 그 템플릿을 고른다 (F-2037.md A6 준비)
 async function setupUserTemplate(page) {
-  await newTopFolder(page, '템플릿')
-  await newDocInFolder(page, '템플릿')
+  await newTemplate(page)
   await fillTitle(page, '노트 틀')
   await page.locator('.cm-content').click()
   await page.keyboard.type('## {{title}}\n\n- ')

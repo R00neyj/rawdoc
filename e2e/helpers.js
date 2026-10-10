@@ -209,3 +209,12 @@ export async function openHelpFromSidebar(page) {
   await page.locator('.sidebar').getByRole('button', { name: '도움말 메뉴' }).click()
   await page.getByRole('menuitem', { name: '도움말', exact: true }).click()
 }
+
+// 템플릿 관리 창 `새 템플릿` — 숨은 템플릿 폴더에 빈 문서를 만들어 연다
+export async function newTemplate(page) {
+  await page.locator('.sidebar').getByRole('button', { name: '템플릿 관리', exact: true }).click()
+  const dialog = page.locator('dialog[aria-labelledby="template-manager-title"]')
+  await dialog.getByRole('button', { name: '새 템플릿', exact: true }).click()
+  await expect(dialog).toBeHidden()
+  await expect(page.locator('.doc-title')).toHaveValue('제목 없는 템플릿')
+}

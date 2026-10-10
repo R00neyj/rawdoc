@@ -1,6 +1,6 @@
 // 명령 팔레트와 템플릿 삽입 (specs/features/F-2022.md)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, readSavedContent, setViewMode, resetBrowserState } from './helpers.js'
+import { openApp, importMarkdown, readSavedContent, setViewMode, resetBrowserState, newTemplate } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const FIXED_NOW = new Date(2026, 8, 23, 9, 5, 7) // 2026-09-23 09:05:07 수요일 (11.2)
@@ -30,33 +30,6 @@ async function newTopDoc(page) {
   await page.getByRole('button', { name: '새 문서' }).click()
   // 폴더 메뉴로 문서를 만든 직후엔 제목 자동 포커스가 빌 때가 있다(F-2022 범위 밖 버그) — 보이는지만 본다
   await expect(page.locator('.doc-title')).toBeVisible()
-}
-
-async function newTopFolder(page, name) {
-  await page.locator('.sidebar').getByRole('button', { name: '새 폴더', exact: true }).click()
-  const input = page.locator('.tree-rename-input')
-  await input.fill(name)
-  await input.press('Enter')
-}
-
-async function newDocInFolder(page, folderName) {
-  await page.locator('.tree-row').filter({ hasText: folderName }).first().click({ button: 'right' })
-  await page.getByRole('menuitem', { name: '새 문서' }).click()
-  // 폴더 메뉴 새 문서는 제목 입력 자동 포커스가 F-2022 범위 밖이라 여기서 못박지 않는다 — 제목이 보이는지만 확인
-  await expect(page.locator('.doc-title')).toBeVisible()
-}
-
-async function moveCurrentDocToFolder(page, folderName) {
-  const docRow = page.locator('.tree-row').filter({ has: page.locator('.doc-item-btn[aria-current="page"]') })
-  await docRow.hover()
-  await docRow.locator('.item-menu-btn').click()
-  await page.getByRole('menuitem', { name: '폴더로 이동…' }).click()
-  const dialog = page.locator('.dialog[open]')
-  await dialog.getByRole('radio', { name: folderName, exact: true }).click()
-  await dialog.getByRole('button', { name: '이동', exact: true }).click()
-  // dialog 의 close 이벤트(포커스 복귀, Dialog.tsx)는 close() 와 같은 틱이 아니라 나중 태스크라 한 틱 흘려보낸다(F-146 A4 류 경합)
-  await expect(page.locator('.dialog[open]')).toHaveCount(0)
-  await page.waitForTimeout(50)
 }
 
 test.describe('F-2022 A4 내장 템플릿 넣기', () => {
@@ -109,12 +82,10 @@ test.describe('F-2022 A4 내장 템플릿 넣기', () => {
     await test.step('템플릿 폴더 문서가 사용자 템플릿으로 뜨고, 대상 문서 제목으로 치환된다', async () => {
       await resetBrowserState(page)
       await openApp(page)
-      await newTopFolder(page, '템플릿')
-      await newDocInFolder(page, '템플릿')
+      await newTemplate(page)
       await fillTitle(page, '주간 보고')
       await page.locator('.cm-content').click()
       await page.keyboard.type('## {{title}}\n\n- ')
-      await moveCurrentDocToFolder(page, '템플릿') // 이미 그 폴더 안이면 무해하게 같은 폴더로
 
       await newTopDoc(page)
       await fillTitle(page, '팀 회의')
@@ -130,7 +101,7 @@ test.describe('F-2022 A4 내장 템플릿 넣기', () => {
       // 사용자 템플릿이 있으면 폴더 줄만 빠지고 변수·도움말 줄은 그대로 (F-2037.md 5.1)
       const hint = palette(page).locator('.command-palette-hint')
       await expect(hint).toHaveCount(1)
-      await expect(hint).not.toContainText('폴더를 만들고')
+      await expect(hint).not.toContainText('템플릿 관리')
       await expect(hint).toContainText('{{date}}·{{time}}·{{title}}은')
 
       await options.first().click()
@@ -166,8 +137,7 @@ test.describe('F-2022 A4 내장 템플릿 넣기', () => {
     await test.step('IndexedDB 레코드가 지워진 사용자 템플릿 — error 알림, 본문 불변, 팔레트 닫힘', async () => {
       await resetBrowserState(page)
       await openApp(page)
-      await newTopFolder(page, '템플릿')
-      await newDocInFolder(page, '템플릿')
+      await newTemplate(page)
       await fillTitle(page, '주간 보고')
       const templateDocId = await page.evaluate(() => {
         const m = /^#\/d\/(.+)$/.exec(location.hash)

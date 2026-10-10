@@ -49,6 +49,7 @@ export type PaletteContext = {
     openGuides: () => void
     openSettings: () => void
     openShares?: () => void
+    openTemplates?: () => void
   }
   // 문서 조작 — 선택 필드. 없으면 만들기·지금 문서 명령들이 안 보인다 (F-2054 4.1)
   docActions?: {
