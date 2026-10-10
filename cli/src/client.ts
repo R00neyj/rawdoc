@@ -8,6 +8,7 @@ import type {
   V1Folder,
   V1Link,
   V1Me,
+  V1SearchResult,
   V1SharedDoc,
 } from '../../worker/v1Contract'
 import { CliError, type CliErrorDetails } from './output'
@@ -202,6 +203,11 @@ export function apiCreateLink(cfg: ClientConfig, id: string): Promise<V1Link> {
 
 export function apiListShared(cfg: ClientConfig): Promise<V1SharedDoc[]> {
   return request(cfg, 'GET', '/v1/shared', undefined) as Promise<V1SharedDoc[]>
+}
+
+export function apiSearch(cfg: ClientConfig, query: string, folderId: string | null): Promise<V1SearchResult> {
+  const folder = folderId !== null ? `&folder=${encodeURIComponent(folderId)}` : ''
+  return request(cfg, 'GET', `/v1/search?q=${encodeURIComponent(query)}${folder}`, undefined) as Promise<V1SearchResult>
 }
 
 export function apiMoveDoc(cfg: ClientConfig, id: string, folderId: string | null): Promise<V1DocSummary> {

@@ -13,6 +13,8 @@ import {
   humanIdVersionLine,
   humanRemoveDocLine,
   humanRemoveFolderNotice,
+  humanSearchList,
+  humanSearchSummary,
   humanSharedList,
   humanUploadLine,
   humanUrlLine,
@@ -397,5 +399,49 @@ describe('F-2132 A5 폴더 오류 문구', () => {
     expect(errorMessage(err, CLI, CLI_ENV)).toBe('경로가 같은 폴더가 2개입니다: a (i1, i2). 폴더 id 로 지정하세요.')
     expect(exitCodeFor('folder_ambiguous')).toBe(2)
     expect(errorToJson(err, CLI, CLI_ENV)).toMatchObject({ folder: 'a', folderIds: ['i1', 'i2'] })
+  })
+})
+
+describe('search 사람용 출력', () => {
+  const hit = (id: string, folderPath: string[] | null, title: string, lines: { line: number; text: string }[], matchedLines: number) => ({
+    id, title, folderId: null, version: 1, updatedAt: 0, folderPath, lines, matchedLines,
+  })
+
+  it('문서마다 id·경로/제목 한 줄, 그 아래 들여 쓴 매칭 줄, 더 있으면 외 N줄', () => {
+    const docs = [
+      hit('d1', [], '맨 위', [{ line: 12, text: 'the needle' }], 1),
+      hit('d2', ['수업', '1주차'], '메모\t정리', [1, 2, 3, 4, 5].map((n) => ({ line: n, text: `n${n}\tx` })), 8),
+      hit('d3', null, '제목만', [], 0),
+    ]
+    expect(humanSearchList(docs)).toBe(
+      [
+        'd1\t/맨 위',
+        '  12: the needle',
+        'd2\t수업/1주차/메모 정리',
+        '  1: n1 x',
+        '  2: n2 x',
+        '  3: n3 x',
+        '  4: n4 x',
+        '  5: n5 x',
+        '  … 외 3줄',
+        'd3\t?/제목만',
+        '',
+      ].join('\n'),
+    )
+    expect(humanSearchList([])).toBe('')
+  })
+
+  it('합계 줄: 금고 문서는 M>0 일 때만, 넘치면 200개까지 안내, 0건은 find 와 같은 꼴', () => {
+    const one = [hit('d1', [], 't', [], 0)]
+    expect(humanSearchSummary({ docs: one, truncated: false, e2eeSkipped: 0 }, 'q')).toBe('문서 1개\n')
+    expect(humanSearchSummary({ docs: one, truncated: false, e2eeSkipped: 2 }, 'q')).toBe('문서 1개, 금고 문서 2개는 찾지 못함\n')
+    const many = Array.from({ length: 200 }, (_, i) => hit(`d${i}`, [], 't', [], 0))
+    expect(humanSearchSummary({ docs: many, truncated: true, e2eeSkipped: 1 }, 'q')).toBe(
+      '문서 200개 이상 (처음 200개만 보여 줍니다), 금고 문서 1개는 찾지 못함\n',
+    )
+    expect(humanSearchSummary({ docs: [], truncated: false, e2eeSkipped: 0 }, 'a\tb')).toBe('제목·본문에서 찾은 문서가 없습니다: a b\n')
+    expect(humanSearchSummary({ docs: [], truncated: false, e2eeSkipped: 3 }, 'x')).toBe(
+      '제목·본문에서 찾은 문서가 없습니다: x (금고 문서 3개는 찾지 못함)\n',
+    )
   })
 })

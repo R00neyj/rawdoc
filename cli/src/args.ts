@@ -1,6 +1,7 @@
 // parseArgs 로 명령·옵션 해석, 사용법 오류 (specs/features/F-2021.md 4.2)
 import { parseArgs as nodeParseArgs } from 'node:util'
 import brand from '../../brand.config'
+import { SEARCH_MAX_QUERY_CHARS } from '../../worker/searchLines'
 
 export type GlobalOptions = { server: string | null; json: boolean }
 
@@ -10,6 +11,7 @@ export type RunCommand =
   | { name: 'whoami'; global: GlobalOptions }
   | { name: 'ls'; global: GlobalOptions; folder: string | null; shared: boolean; root: boolean; path: boolean }
   | { name: 'find'; global: GlobalOptions; query: string; folder: string | null; root: boolean; path: boolean }
+  | { name: 'search'; global: GlobalOptions; query: string; folder: string | null }
   | { name: 'info'; global: GlobalOptions; id: string }
   | { name: 'get'; global: GlobalOptions; id: string; output: string | null }
   | { name: 'new'; global: GlobalOptions; source: string | null; title: string | null; folder: string | null; url: boolean }
@@ -47,6 +49,7 @@ export const COMMAND_NAMES: CommandName[] = [
   'whoami',
   'ls',
   'find',
+  'search',
   'info',
   'get',
   'new',
@@ -162,6 +165,18 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
         kind: 'run',
         command: { name: 'find', global: globalsOf(parsed.values), query, folder, root, path: parsed.values.path === true },
       }
+    }
+    case 'search': {
+      const parsed = runParseArgs(rest, { ...GLOBAL_OPTIONS, folder: { type: 'string' } }, true)
+      if (!parsed) return usage('알 수 없는 옵션입니다.', command)
+      const query = (parsed.positionals[0] ?? '').trim()
+      if (query === '') return usage('찾을 글자가 필요합니다.', command)
+      if (parsed.positionals.length > 1) {
+        return usage('검색어는 하나만 줄 수 있습니다. 띄어쓰기가 든 검색어는 따옴표로 감싸세요.', command)
+      }
+      if (query.length > SEARCH_MAX_QUERY_CHARS) return usage(`검색어는 ${SEARCH_MAX_QUERY_CHARS}자까지입니다.`, command)
+      const folder = typeof parsed.values.folder === 'string' ? parsed.values.folder : null
+      return { kind: 'run', command: { name: 'search', global: globalsOf(parsed.values), query, folder } }
     }
     case 'info': {
       const parsed = runParseArgs(rest, GLOBAL_OPTIONS, true)

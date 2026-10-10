@@ -722,3 +722,56 @@ describe('new --url·파일 읽기 오류 (tweak)', () => {
     expect(plainMissing.stderrLog.join('')).toBe('파일이 없습니다: a.md.\n')
   })
 })
+
+describe('search main()', () => {
+  const tokenEnv = { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) }
+  const found = {
+    docs: [{ id: 'd1', title: '회의', folderId: null, version: 1, updatedAt: 0, lines: [{ line: 3, text: 'the needle' }], matchedLines: 1 }],
+    truncated: false,
+    e2eeSkipped: 2,
+  }
+  const empty = { docs: [], truncated: false, e2eeSkipped: 0 }
+
+  function run(argv: string[], body: unknown) {
+    const urls: string[] = []
+    const deps = baseDeps({
+      argv,
+      env: tokenEnv,
+      fetchImpl: (async (url: string) => {
+        const u = new URL(url)
+        urls.push(u.pathname)
+        if (u.pathname === '/v1/search') return jsonResponse(body)
+        if (u.pathname === '/v1/folders') return jsonResponse([])
+        return jsonResponse({}, 404)
+      }) as unknown as typeof fetch,
+    })
+    return { deps, urls }
+  }
+
+  it('찾으면 표준 출력에 문서·줄, 표준 오류에 합계, 종료 0', async () => {
+    const r = run(['search', 'needle'], found)
+    expect(await main(r.deps)).toBe(0)
+    expect(r.urls.sort()).toEqual(['/v1/folders', '/v1/search'])
+    expect(r.deps.stdoutLog.join('')).toBe('d1\t/회의\n  3: the needle\n')
+    expect(r.deps.stderrLog.join('')).toBe('문서 1개, 금고 문서 2개는 찾지 못함\n')
+  })
+
+  it('0건: 종료 0, 표준 출력 비움, 표준 오류 문구. --json 은 결과 객체', async () => {
+    const r = run(['search', '없는글자'], empty)
+    expect(await main(r.deps)).toBe(0)
+    expect(r.deps.stdoutLog.join('')).toBe('')
+    expect(r.deps.stderrLog.join('')).toBe('제목·본문에서 찾은 문서가 없습니다: 없는글자\n')
+    const j = run(['search', '없는글자', '--json'], empty)
+    expect(await main(j.deps)).toBe(0)
+    expect(JSON.parse(j.deps.stdoutLog.join(''))).toEqual(empty)
+    expect(j.deps.stderrLog.join('')).toBe('')
+  })
+
+  it('전체 도움말에서 search 는 find 바로 뒤', async () => {
+    const h = baseDeps({ argv: ['--help'] })
+    await main(h)
+    const rows = h.stdoutLog.join('').split('\n').filter((l) => l.startsWith('  '))
+    const at = rows.findIndex((l) => l.startsWith('  find\t'))
+    expect(rows[at + 1]).toBe('  search\t제목·본문에 그 글자가 든 내 문서와 줄을 찾습니다 (금고 문서 제외)')
+  })
+})

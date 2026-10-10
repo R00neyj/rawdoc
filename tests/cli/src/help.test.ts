@@ -6,6 +6,7 @@ const USAGE: Record<string, string> = {
   login: '사용: rawdoc login [--force] [--with-token] [--no-browser]',
   ls: '사용: rawdoc ls [--folder <폴더id|경로> | --root | --shared] [--path]',
   find: '사용: rawdoc find <제목> [--folder <폴더id|경로> | --root] [--path]',
+  search: '사용: rawdoc search <검색어> [--folder <폴더id|경로>]',
   get: '사용: rawdoc get <id> [-o <파일>]',
   new: '사용: rawdoc new [<파일>|-] [--title <제목>] [--folder <폴더id|경로>]',
   put: '사용: rawdoc put <id> [<파일>|-] [--title <제목>] (--base-version <n> | --force) [--dry-run]',

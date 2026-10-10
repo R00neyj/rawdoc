@@ -331,3 +331,29 @@ describe('F-2132 A1 help 별칭·put --dry-run', () => {
     expect(parseArgs(['put', 'd1', 'a.md']).kind).toBe('usage')
   })
 })
+
+describe('search 해석', () => {
+  const g = { server: null, json: false }
+
+  it('검색어·--folder·--json', () => {
+    expect(parseArgs(['search', 'needle'])).toEqual({ kind: 'run', command: { name: 'search', global: g, query: 'needle', folder: null } })
+    expect(parseArgs(['search', ' 회의 메모 ', '--folder', '수업/1주차', '--json'])).toEqual({
+      kind: 'run',
+      command: { name: 'search', global: { server: null, json: true }, query: '회의 메모', folder: '수업/1주차' },
+    })
+    expect(parseArgs(['search', 'a'.repeat(200)]).kind).toBe('run')
+  })
+
+  it('사용법 오류', () => {
+    const cases: [string[], string][] = [
+      [['search'], '찾을 글자가 필요합니다.'],
+      [['search', '  '], '찾을 글자가 필요합니다.'],
+      [['search', 'a', 'b'], '검색어는 하나만 줄 수 있습니다. 띄어쓰기가 든 검색어는 따옴표로 감싸세요.'],
+      [['search', 'a'.repeat(201)], '검색어는 200자까지입니다.'],
+      [['search', 'a', '--root'], '알 수 없는 옵션입니다.'],
+    ]
+    for (const [argv, message] of cases) {
+      expect(parseArgs(argv), argv.join(' ')).toEqual({ kind: 'usage', message, command: 'search' })
+    }
+  })
+})

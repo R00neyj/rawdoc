@@ -272,6 +272,29 @@ export function humanDocList(docs: DocListItem[], opts: { path?: boolean } = {})
     .join('')
 }
 
+type SearchListItem = { id: string; title: string; folderPath: string[] | null; lines: { line: number; text: string }[]; matchedLines: number }
+
+export function humanSearchList(docs: SearchListItem[]): string {
+  return docs
+    .map((d) => {
+      const path = folderPathText(d.folderPath)
+      const head = `${d.id}\t${path === '/' ? '' : path}/${stripControlChars(d.title)}\n`
+      const rows = d.lines.map((l) => `  ${l.line}: ${stripControlChars(l.text)}\n`).join('')
+      const more = d.matchedLines > d.lines.length ? `  … 외 ${d.matchedLines - d.lines.length}줄\n` : ''
+      return head + rows + more
+    })
+    .join('')
+}
+
+// 표준 오류로 가는 끝 줄 — 0건 문구는 find 와 같은 꼴
+export function humanSearchSummary(result: { docs: unknown[]; truncated: boolean; e2eeSkipped: number }, query: string): string {
+  const n = result.docs.length
+  const vault = result.e2eeSkipped > 0 ? `금고 문서 ${result.e2eeSkipped}개는 찾지 못함` : ''
+  if (n === 0) return `제목·본문에서 찾은 문서가 없습니다: ${stripControlChars(query)}${vault ? ` (${vault})` : ''}\n`
+  const count = result.truncated ? `문서 ${n}개 이상 (처음 ${n}개만 보여 줍니다)` : `문서 ${n}개`
+  return `${count}${vault ? `, ${vault}` : ''}\n`
+}
+
 type FolderListItem = FolderLike & { id: string }
 
 export function humanFolderList(folders: FolderListItem[]): string {

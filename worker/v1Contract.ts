@@ -36,6 +36,17 @@ export type V1DeletedFolder = {
   folders: number // F-2050 3.5 표
 }
 export type V1Me = { id: string; email: string; blocked: boolean; warned: boolean } // blocked·warned 는 F-2028 7장
+export type V1SearchLine = { line: number; text: string } // line 은 1부터, text 는 200자 안쪽
+export type V1SearchHit = {
+  id: string
+  title: string
+  folderId: string | null
+  version: number
+  updatedAt: number
+  lines: V1SearchLine[] // 앞에서부터 최대 5줄. 제목만 맞으면 빈 목록
+  matchedLines: number // 본문의 전체 매칭 줄 수
+}
+export type V1SearchResult = { docs: V1SearchHit[]; truncated: boolean; e2eeSkipped: number } // e2eeSkipped 는 범위 안 금고 문서 수
 export type V1Error = {
   error: string
   field?: string
@@ -59,6 +70,7 @@ export const V1_EXAMPLES: {
   sharedDoc: V1SharedDoc
   deletedDoc: V1DeletedDoc
   deletedFolder: V1DeletedFolder
+  searchResult: V1SearchResult
 } = {
   docSummary: {
     id: 'doc-1',
@@ -107,4 +119,9 @@ export const V1_EXAMPLES: {
   },
   deletedDoc: { id: 'doc-1', title: '예시 문서' },
   deletedFolder: { id: 'folder-1', contents: 'move-up', parentId: null, docs: 0, folders: 0 },
+  searchResult: {
+    docs: [{ id: 'doc-1', title: '예시 문서', folderId: null, version: 1, updatedAt: 0, lines: [{ line: 1, text: '# 예시' }], matchedLines: 1 }],
+    truncated: false,
+    e2eeSkipped: 0,
+  },
 }

@@ -66,6 +66,7 @@ import {
   handleMoveDocFolderV1,
   handleUpdateDocV1,
 } from './v1'
+import { handleSearchV1 } from './v1Search'
 import { handleDeleteE2eeKeys, handleGetE2eeKeys, handlePutE2eeKeys } from './e2eeKeys'
 import { handleSetDocE2ee } from './e2eeDocs'
 import { handleGetUserCss, handlePutUserCss } from './userCss'
@@ -357,6 +358,7 @@ const routes: Route[] = [
   { method: 'PUT', path: '/v1/docs/:id/folder', handler: handleMoveDocFolderV1 },
   { method: 'DELETE', path: '/v1/folders/:id', handler: handleDeleteFolderV1 },
   { method: 'GET', path: '/v1/shared', handler: handleListSharedV1 },
+  { method: 'GET', path: '/v1/search', handler: handleSearchV1 },
   { method: 'GET', path: '/v1/me', handler: handleMe },
 ]
 

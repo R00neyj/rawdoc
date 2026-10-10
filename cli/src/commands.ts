@@ -1,5 +1,17 @@
 // 명령마다 결과 데이터를 돌려주는 함수. 출력하지 않는다. 입력은 이미 해석된 값이다 — 파일 읽기는 main 쪽 층에서 끝낸다 (specs/features/F-2021.md 4.7, 삭제·이동·공유 목록은 F-2050.md 5.4)
-import type { V1Attachment, V1DeletedDoc, V1DeletedFolder, V1Doc, V1DocSummary, V1Folder, V1Link, V1Me, V1SharedDoc } from '../../worker/v1Contract'
+import type {
+  V1Attachment,
+  V1DeletedDoc,
+  V1DeletedFolder,
+  V1Doc,
+  V1DocSummary,
+  V1Folder,
+  V1Link,
+  V1Me,
+  V1SearchHit,
+  V1SearchResult,
+  V1SharedDoc,
+} from '../../worker/v1Contract'
 import {
   apiCreateDoc,
   apiCreateFolder,
@@ -12,12 +24,13 @@ import {
   apiListShared,
   apiMe,
   apiMoveDoc,
+  apiSearch,
   apiUpdateDoc,
   apiUploadAttachment,
   type ClientConfig,
 } from './client'
 import { isFolderId, resolveFolderPath } from './folderRef'
-import { titleMatches, withFolderPath, type DocWithPath } from './docMeta'
+import { folderPathOf, titleMatches, withFolderPath, type DocWithPath } from './docMeta'
 import { CliError } from './output'
 
 export function whoami(cfg: ClientConfig): Promise<V1Me> {
@@ -62,6 +75,24 @@ export function find(
   knownFolders?: V1Folder[],
 ): Promise<V1DocSummary[] | DocWithPath[]> {
   return listScoped(cfg, scope, withPath, (d) => titleMatches(d.title, query), knownFolders)
+}
+
+export type SearchOutput = Omit<V1SearchResult, 'docs'> & { docs: Array<V1SearchHit & { folderPath: string[] | null }> }
+
+// 폴더를 준 검색의 404 는 폴더가 없다는 뜻이다
+export async function search(
+  cfg: ClientConfig,
+  query: string,
+  folder: { id: string; value: string } | null,
+  knownFolders?: V1Folder[],
+): Promise<SearchOutput> {
+  try {
+    const [result, folders] = await Promise.all([apiSearch(cfg, query, folder?.id ?? null), knownFolders ?? apiListFolders(cfg)])
+    return { ...result, docs: result.docs.map((d) => ({ ...d, folderPath: folderPathOf(folders, d.folderId) })) }
+  } catch (err) {
+    if (folder !== null && err instanceof CliError && err.code === 'not_found') throw new CliError('folder_not_found', { folder: folder.value })
+    throw err
+  }
 }
 
 // UUID 는 그대로 쓰고(요청 없음), 아니면 폴더 목록을 한 번 받아 경로로 푼다 (F-2132 2장)

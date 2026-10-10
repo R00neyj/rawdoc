@@ -1,6 +1,6 @@
 // F-2021 U8 (specs/features/F-2021.md 13.1, 4.2). ls 필터는 4.2 명령별 규칙
 import { describe, expect, it, vi } from 'vitest'
-import { find, info, ls, lsShared, moveDoc, putDoc, removeDoc, removeFolder } from '../../../cli/src/commands'
+import { find, info, ls, lsShared, moveDoc, putDoc, removeDoc, removeFolder, search } from '../../../cli/src/commands'
 import type { ClientConfig } from '../../../cli/src/client'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -175,5 +175,42 @@ describe('F-2119 A6~A8 ls --root, find, info', () => {
     expect(b.urls.sort()).toEqual(['/v1/docs', '/v1/folders', '/v1/shared'])
     await expect(info(routed().cfg, 'zzz')).rejects.toMatchObject({ code: 'not_found', details: { id: 'zzz' } })
     await expect(info(routed(true).cfg, 'd1')).rejects.toMatchObject({ code: 'server_error' })
+  })
+})
+
+describe('search', () => {
+  const F1 = '00000000-0000-4000-8000-000000000001'
+  const folderList = [{ id: F1, name: '수업', parentId: null, createdAt: 0, updatedAt: 0 }]
+  const hit = (id: string, folderId: string | null) => ({ id, title: 't', folderId, version: 1, updatedAt: 0, lines: [], matchedLines: 0 })
+  const result = { docs: [hit('d1', null), hit('d2', F1), hit('d3', 'gone')], truncated: false, e2eeSkipped: 1 }
+
+  function routed(searchStatus = 200) {
+    const urls: string[] = []
+    const fetchImpl = vi.fn(async (url: string) => {
+      const u = new URL(url)
+      urls.push(`${u.pathname}${u.search}`)
+      if (u.pathname === '/v1/search') return searchStatus === 200 ? jsonResponse(result) : jsonResponse({ error: 'not_found' }, searchStatus)
+      if (u.pathname === '/v1/folders') return jsonResponse(folderList)
+      return jsonResponse({}, 404)
+    })
+    return { urls, cfg: baseCfg(fetchImpl as unknown as typeof fetch) }
+  }
+
+  it('검색어를 인코딩해 보내고, 폴더 경로를 붙인다', async () => {
+    const { cfg, urls } = routed()
+    const out = await search(cfg, '회의 & 메모', null)
+    expect(urls.sort()).toEqual(['/v1/folders', `/v1/search?q=${encodeURIComponent('회의 & 메모')}`])
+    expect(out).toEqual({ ...result, docs: [{ ...result.docs[0], folderPath: [] }, { ...result.docs[1], folderPath: ['수업'] }, { ...result.docs[2], folderPath: null }] })
+  })
+
+  it('받아 둔 폴더 목록이 있으면 검색 요청 1회, folder 를 함께 보낸다', async () => {
+    const { cfg, urls } = routed()
+    await search(cfg, 'x', { id: F1, value: '수업' }, folderList)
+    expect(urls).toEqual([`/v1/search?q=x&folder=${F1}`])
+  })
+
+  it('폴더를 준 검색이 404 면 folder_not_found', async () => {
+    await expect(search(routed(404).cfg, 'x', { id: F1, value: F1 })).rejects.toMatchObject({ code: 'folder_not_found', details: { folder: F1 } })
+    await expect(search(routed(404).cfg, 'x', null)).rejects.toMatchObject({ code: 'not_found' })
   })
 })

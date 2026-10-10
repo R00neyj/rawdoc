@@ -40,6 +40,8 @@ import {
   humanPutPreview,
   humanRemoveDocLine,
   humanRemoveFolderNotice,
+  humanSearchList,
+  humanSearchSummary,
   humanSharedList,
   humanUploadLine,
   humanUrlLine,
@@ -372,6 +374,17 @@ export async function main(deps: MainDeps): Promise<number> {
         else {
           deps.out.stdout(humanDocList(docs, { path: command.path }))
           if (docs.length === 0) deps.out.stderr(`제목으로 찾은 문서가 없습니다: ${stripControlChars(command.query)}\n`)
+        }
+        return 0
+      }
+      case 'search': {
+        const ref = command.folder !== null ? await commands.resolveFolder(cfg, command.folder) : null
+        const folder = ref !== null && command.folder !== null ? { id: ref.id, value: command.folder } : null
+        const result = await commands.search(cfg, command.query, folder, ref?.folders ?? undefined)
+        if (command.global.json) deps.out.stdout(`${JSON.stringify(result)}\n`)
+        else {
+          deps.out.stdout(humanSearchList(result.docs))
+          deps.out.stderr(humanSearchSummary(result, command.query))
         }
         return 0
       }

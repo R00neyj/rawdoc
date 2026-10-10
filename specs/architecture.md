@@ -362,6 +362,7 @@ scripts/admin-github.mjs                              GitHub 기능 켜기·끄�
 - 경로 접두사 4개: `/api/*` better-auth 세션 쿠키(브라우저), `/pub/*` 로그인 없음(공유 링크), `/v1/*` `Authorization: Bearer rd_…` 개인 토큰만(스크립트, F-222·F-223). `/v1` 은 쿠키를 보지 않는다. 토큰은 D1 `api_tokens` 에 SHA-256 해시만 (0007). `/ws/*` — Worker 가 Origin·better-auth 세션 쿠키로 인증하고 edit 이상만 `DocRoom` DO(`/ws/doc/:id`)로 넘긴다. 거절은 닫기 코드 4401·4403·4404 (F-304)
 - `GET /api/me`·`GET /v1/me` → `{ id, email, blocked, warned }`(F-2028 7.1. 토큰 없음·틀림·폐기는 401). `/v1/me` 는 `handleMe` 를 그대로 붙인 라우트 한 줄, 명령줄 도구의 `whoami`·`--with-token` 확인에 쓴다 (F-2021 7.1)
 - `/v1` 문서 삭제·이동·폴더 삭제는 `/api` 본체와 같은 쓰기 문장을 쓰고, 금고가 끼면 403. `GET /v1/shared` 는 `handleGetShared` 를 `updatedAt` 내림차순으로만 바꿔 쓴다 (F-2050)
+- `GET /v1/search?q=&folder=` → `{ docs: [{ id, title, folderId, version, updatedAt, lines: [{ line, text }], matchedLines }], truncated, e2eeSkipped }`. 내 문서만(folder 는 하위 포함), 제목·본문 부분 문자열, 영문 대소문자만 무시, 금고 문서는 개수만. q 1~200자(400 `field: 'q'`), 문서 200개·문서당 5줄·줄 200자 (`worker/v1Search.ts`, 2026-10-10 small)
 - 알림 리비전: 알림 행을 넣고·읽고·지우는 batch 는 받는 사람 `users.notif_rev` 를 같은 batch 에서 올린다 (F-2057 3.5)
 
 ## 5. 브랜드 주입
