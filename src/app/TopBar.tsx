@@ -106,6 +106,15 @@ export default function TopBar({
   calendar,
 }: TopBarProps) {
   const phone = usePhoneWidth()
+  // 휴대폰 폭은 버튼 없이 왼쪽 밀기로 연다(usePhoneSidePanel)
+  const calendarButton = calendar && (
+    <span className="icon-btn-wrap">
+      <button type="button" className="icon-btn" aria-label="달력" aria-expanded={calendar.open} onClick={calendar.onToggle}>
+        <IconCalendar size={18} />
+      </button>
+      <IconTooltip text="달력" align="end" />
+    </span>
+  )
   return (
     <>
       <header className="topbar" data-ui="topbar">
@@ -205,15 +214,8 @@ export default function TopBar({
               onCopyRich={onCopyRich}
             />
             {notifications && <NotificationsMenu {...notifications} />}
+            {calendarButton}
           </>
-        )}
-        {calendar && (
-          <span className="icon-btn-wrap">
-            <button type="button" className="icon-btn" aria-label="달력" aria-expanded={calendar.open} onClick={calendar.onToggle}>
-              <IconCalendar size={18} />
-            </button>
-            <IconTooltip text="달력" align="end" />
-          </span>
         )}
       </header>
       {/* 좁은 창은 탭바를 상단바 밑 줄로 뺀다 — 아이콘 줄이 세로로도 접혀(2줄) 가로 스크롤 없이 다 보인다 (사용자 2026-09-16 "모바일일때가 툴바 더 필요할거임") */}

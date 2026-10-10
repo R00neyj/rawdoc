@@ -1,32 +1,23 @@
-// 휴대폰 폭 목차 오른쪽 패널 + 뒤 막 — .app-body 로 포털한다 (F-2089 3.4)
+// 휴대폰 폭 공용 오른쪽 패널의 목차 칸 — Outline 이 패널 자리로 포털한다 (F-2089 3.4, small 2026-10-10)
 import { useEffect, useRef, type RefObject } from 'react'
-import { createPortal } from 'react-dom'
-import usePresence from './usePresence'
-import { IconClose } from './icons'
 import type { Heading } from '../editor/outline'
 
 type OutlinePanelProps = {
-  host: HTMLElement
-  open: boolean
   headings: Heading[]
   currentIndex: number
   listRef: RefObject<HTMLOListElement | null>
   onSelect: (heading: Heading) => void
-  onClose: () => void
 }
 
-export default function OutlinePanel({ host, open, headings, currentIndex, listRef, onSelect, onClose }: OutlinePanelProps) {
-  const { mounted, state } = usePresence(open)
+export default function OutlinePanel({ headings, currentIndex, listRef, onSelect }: OutlinePanelProps) {
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
   const currentRef = useRef(currentIndex)
   useEffect(() => {
     currentRef.current = currentIndex
   })
 
-  // 열리면 현재 위치 항목이 목록 가운데 오도록 목록만 스크롤하고 포커스한다 (5.1)
+  // 패널이 열려 이 칸이 붙으면 본문 포커스를 풀고, 현재 위치 항목을 목록 가운데로 옮겨 포커스한다 (5.1)
   useEffect(() => {
-    if (!open) return
-    // 제목이 없어 옮길 항목이 없어도 본문 포커스는 푼다 — 패널 뒤에서 커서·키보드가 남지 않게
     const active = document.activeElement
     if (active instanceof HTMLElement && (active.isContentEditable || active.matches('input, textarea'))) active.blur()
     const item = itemRefs.current[currentRef.current]
@@ -34,38 +25,26 @@ export default function OutlinePanel({ host, open, headings, currentIndex, listR
     if (!item || !list) return
     list.scrollTop = item.offsetTop - list.offsetTop - (list.clientHeight - item.offsetHeight) / 2
     item.focus({ preventScroll: true })
-  }, [open, mounted, listRef])
+  }, [listRef])
 
-  if (!mounted) return null
-  return createPortal(
-    <>
-      {open && <div className="outline-panel-backdrop" onClick={onClose} />}
-      <nav className="outline-panel" data-ui="outline" aria-label="목차" data-state={state} inert={state === 'closed'}>
-        <div className="outline-panel-head">
-          <h2 className="outline-panel-title">목차</h2>
-          <button type="button" className="icon-btn outline-panel-close" aria-label="목차 닫기" onClick={onClose}>
-            <IconClose size={20} />
+  if (headings.length === 0) return <p className="side-panel-empty">이 문서에는 제목이 없습니다.</p>
+  return (
+    <ol className="outline-panel-list" ref={listRef} aria-label="목차">
+      {headings.map((h, i) => (
+        <li key={h.from} data-level={h.level}>
+          <button
+            type="button"
+            className="outline-item"
+            ref={(el) => {
+              itemRefs.current[i] = el
+            }}
+            aria-current={i === currentIndex ? 'location' : undefined}
+            onClick={() => onSelect(h)}
+          >
+            {h.text}
           </button>
-        </div>
-        <ol className="outline-panel-list" ref={listRef}>
-          {headings.map((h, i) => (
-            <li key={h.from} data-level={h.level}>
-              <button
-                type="button"
-                className="outline-item"
-                ref={(el) => {
-                  itemRefs.current[i] = el
-                }}
-                aria-current={i === currentIndex ? 'location' : undefined}
-                onClick={() => onSelect(h)}
-              >
-                {h.text}
-              </button>
-            </li>
-          ))}
-        </ol>
-      </nav>
-    </>,
-    host,
+        </li>
+      ))}
+    </ol>
   )
 }

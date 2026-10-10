@@ -88,6 +88,8 @@ import { useNewDocTemplate } from './useNewDocTemplate'
 import { useTemplateManager } from './useTemplateManager'
 import { useCalendarPanel } from './useCalendarPanel'
 import RightPanel from './RightPanel'
+import { usePhoneSidePanel } from './usePhoneSidePanel'
+import { usePhoneWidth } from './usePhoneWidth'
 import { templateFolderIds, withoutTemplateFolders } from '../lib/templates'
 import { useAccountStatus } from './useAccountStatus'
 import { useAccountDelete } from './useAccountDelete'
@@ -1135,6 +1137,10 @@ export default function App() {
   const calendar = useCalendarPanel({
     narrow, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate,
   })
+  const phone = usePhoneWidth()
+  const sidePanel = usePhoneSidePanel({
+    appShellRef, enabled: phone && bootPhase === 'ready' && !sharedDoc && !mapRoute, open: calendar.panelOpen, onOpen: calendar.openPanel, onClose: calendar.closePanel,
+  })
 
   // ----- D-4 사람 초대 (specs/features/F-212.md 2.5) -----
   function requestInviteCurrentDoc() {
@@ -1353,6 +1359,7 @@ export default function App() {
             resolveImagePath: githubImages.resolveImagePath,
             setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, store, titleReadOnly, viewerHtml: shownViewerHtml, viewerRef, viewFindCard: viewFind.card, viewMode,
             wikiContext, wikiPreviewPref, wikiResolver,
+            phoneSidePanel: { slot: sidePanel.outlineSlot, open: sidePanel.openFrom, close: calendar.closePanel },
           }} />}
           {statusBarVisible && shortcutsOpen && <ShortcutPanel mac={isMac} used={shortcutsUsed} onClose={closeShortcuts} />}
           {!sharedDoc && !mapRoute && showEditor && (
@@ -1374,8 +1381,15 @@ export default function App() {
             />
           )}
         </div>
-        {narrow && calendar.panelOpen && <div className="right-panel-backdrop" onClick={calendar.closePanel} />}
-        {calendar.panelOpen && <RightPanel narrow={narrow} view={calendar.view} onClose={calendar.closePanel} />}
+        {narrow && !phone && calendar.panelOpen && <div className="right-panel-backdrop" onClick={calendar.closePanel} />}
+        {calendar.panelOpen && (
+          <RightPanel
+            narrow={narrow}
+            view={calendar.view}
+            onClose={phone ? sidePanel.closeAndReturn : calendar.closePanel}
+            phone={phone ? { sections: sidePanel.sections, onToggleSection: sidePanel.toggleSection, onOutlineSlot: sidePanel.setOutlineSlot, hasDoc: showEditor } : undefined}
+          />
+        )}
       </div>
 
       <AppDialogs {...{

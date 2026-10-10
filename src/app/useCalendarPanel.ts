@@ -1,5 +1,5 @@
 // 오른쪽 패널(달력) 열림·달 이동·날짜 문서 열기/만들기·달력 설정 (small 2026-10-10)
-import { useMemo, useState, type RefObject } from 'react'
+import { useCallback, useMemo, useState, type RefObject } from 'react'
 import { getPref, setPref } from './prefs'
 import { flattenFolderTree } from '../lib/folderTree'
 import { templateFolderIds, NEW_DOC_TEMPLATE_NONE } from '../lib/templates'
@@ -54,6 +54,7 @@ function todayYearMonth(): YearMonth {
 export type UseCalendarPanelResult = {
   panelOpen: boolean
   togglePanel: () => void
+  openPanel: () => void
   closePanel: () => void
   view: CalendarView
   settings: CalendarSettings
@@ -89,15 +90,21 @@ export function useCalendarPanel(options: UseCalendarPanelOptions): UseCalendarP
       .map((f) => ({ id: f.id, label: `${'\u00a0\u00a0'.repeat(f.depth)}${f.name}` }))
   }, [folders])
 
-  function setPanelOpen(open: boolean) {
-    if (narrow) {
-      setNarrowOpen(open)
-      return
-    }
-    const value = open ? 'open' : 'closed'
-    setWidePref(value)
-    setPref('md.rightPanel', value)
-  }
+  // 밀기·Esc 구독이 렌더마다 다시 걸리지 않게 안정 함수로 둔다
+  const setPanelOpen = useCallback(
+    (open: boolean) => {
+      if (narrow) {
+        setNarrowOpen(open)
+        return
+      }
+      const value = open ? 'open' : 'closed'
+      setWidePref(value)
+      setPref('md.rightPanel', value)
+    },
+    [narrow],
+  )
+  const openPanel = useCallback(() => setPanelOpen(true), [setPanelOpen])
+  const closePanel = useCallback(() => setPanelOpen(false), [setPanelOpen])
 
   // 있으면 열고, 없으면 설정 폴더에 템플릿 본문으로 만든다. 잠긴 금고 폴더는 먼저 열어 제목을 읽은 뒤 판정한다
   async function openDay(day: CalendarDate) {
@@ -155,7 +162,8 @@ export function useCalendarPanel(options: UseCalendarPanelOptions): UseCalendarP
   return {
     panelOpen,
     togglePanel: () => setPanelOpen(!panelOpen),
-    closePanel: () => setPanelOpen(false),
+    openPanel,
+    closePanel,
     view,
     settings,
   }
