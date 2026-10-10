@@ -359,17 +359,18 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     run: (ctx) => ctx.view?.toggleSidebar(),
   },
   {
+    // 이름은 바뀌었어도 id 는 그대로 — 기기에 저장된 최근·고정 명령이 이어진다 (small 2026-10-11)
     id: 'view.calendar',
     kind: 'action',
     get label() {
-      return calendarOpenState ? '달력 닫기' : '달력 열기'
+      return rightPanelOpenState ? '오른쪽 패널 닫기' : '오른쪽 패널 열기'
     },
-    keywords: ['달력', 'calendar', '날짜', '일기', 'daily', '데일리', '오른쪽 패널'],
+    keywords: ['오른쪽 패널', '패널', 'panel', '달력', 'calendar', '날짜', '일기', 'daily', '데일리', '링크', '백링크', 'backlink'],
     when: (ctx) => {
-      calendarOpenState = ctx.view?.calendar ?? null
-      return ctx.view?.toggleCalendar !== undefined
+      rightPanelOpenState = ctx.view?.rightPanel ?? null
+      return ctx.view?.toggleRightPanel !== undefined
     },
-    run: (ctx) => ctx.view?.toggleCalendar?.(),
+    run: (ctx) => ctx.view?.toggleRightPanel?.(),
   },
   {
     id: 'view.theme',
@@ -437,7 +438,7 @@ let toggleRailOpen = false
 // F-2054 라벨 getter 가 읽는 값 — 명령마다 하나(3.6)
 let docTogglePinned = false
 let sidebarViewState: 'expanded' | 'collapsed' | 'narrowOpen' | 'narrowClosed' | null = null
-let calendarOpenState: boolean | null = null
+let rightPanelOpenState: boolean | null = null
 let lineNumbersOn = false
 let toolbarOn = false
 let wikiPreviewOn = false

@@ -1,8 +1,11 @@
-// 오른쪽 패널 — 지금은 달력 하나. 넓은 창은 메인 열 오른쪽 고정 폭, 좁은 창은 오른쪽에서 겹쳐 연다 (small 2026-10-10)
+// 오른쪽 패널 — 보기 목록을 가진 칸을 위아래로 쌓는다. 넓은 창은 메인 열 오른쪽 고정 폭, 좁은 창은 오른쪽에서 겹쳐 연다 (small 2026-10-10, 2026-10-11)
 import { dayKey, type CalendarDay } from '../lib/calendar'
 import { IconChevron, IconChevronLeft, IconClose } from './icons'
 import usePresence from './usePresence'
+import PanelLinks from './PanelLinks'
+import { PANEL_VIEW_LABELS, type PanelSlotState, type PanelViewId } from './useRightPanel'
 import type { CalendarView } from './useCalendarPanel'
+import type { DocLinksView } from './useDocLinks'
 import type { PhoneSideSections } from './usePhoneSidePanel'
 
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
@@ -72,11 +75,29 @@ function CalendarMonth({ view }: { view: CalendarView }) {
   )
 }
 
+export type PanelViews = { calendar: CalendarView; links: DocLinksView }
+
+// 링크처럼 길어지는 보기는 남은 높이를 채우고 안에서 스크롤한다
+const FILL_VIEW: Record<PanelViewId, boolean> = { calendar: false, links: true }
+
+function ViewBody({ view, views }: { view: PanelViewId; views: PanelViews }) {
+  return view === 'calendar' ? <CalendarMonth view={views.calendar} /> : <PanelLinks view={views.links} />
+}
+
+function SlotArrow({ slot, step }: { slot: PanelSlotState; step: 1 | -1 }) {
+  return (
+    <button type="button" className="icon-btn" aria-label={step < 0 ? '이전 보기' : '다음 보기'} onClick={() => slot.onCycle(step)}>
+      {step < 0 ? <IconChevronLeft size={18} /> : <IconChevron size={18} />}
+    </button>
+  )
+}
+
 export type PhoneSidePanelProps = {
   sections: PhoneSideSections
   onToggleSection: (key: keyof PhoneSideSections) => void
   onOutlineSlot: (el: HTMLElement | null) => void
   hasDoc: boolean
+  top: PanelSlotState
 }
 
 function SectionToggle({ label, expanded, onToggle }: { label: string; expanded: boolean; onToggle: () => void }) {
@@ -88,24 +109,30 @@ function SectionToggle({ label, expanded, onToggle }: { label: string; expanded:
   )
 }
 
-// 휴대폰 폭 — 왼쪽 밀기로 여는 달력(위)·목차(아래) 패널. 목차 줄은 Outline 이 onOutlineSlot 자리로 포털한다
+// 휴대폰 폭 — 왼쪽 밀기로 여는 위 칸(‹ › 로 보기 넘기기)·아래 목차 패널. 목차 줄은 Outline 이 onOutlineSlot 자리로 포털한다
 // 닫힘·접힘도 전환이 보이게 패널은 usePresence 로, 칸 몸통은 늘 그려 두고 flex-grow 로 줄인다
-function PhoneSidePanel({ open, view, onClose, phone }: { open: boolean; view: CalendarView; onClose: () => void; phone: PhoneSidePanelProps }) {
-  const { sections, onToggleSection, onOutlineSlot, hasDoc } = phone
+function PhoneSidePanel({ open, views, onClose, phone }: { open: boolean; views: PanelViews; onClose: () => void; phone: PhoneSidePanelProps }) {
+  const { sections, onToggleSection, onOutlineSlot, hasDoc, top } = phone
   const { mounted, state } = usePresence(open)
   if (!mounted) return null
   return (
     <>
       {open && <div className="outline-panel-backdrop" onClick={onClose} />}
-      <nav className="outline-panel side-panel" data-ui="right-panel" aria-label="달력과 목차" data-state={state} inert={state === 'closed'}>
+      <nav className="outline-panel side-panel" data-ui="right-panel" aria-label="오른쪽 패널" data-state={state} inert={state === 'closed'}>
         <div className="outline-panel-head">
-          <SectionToggle label="달력" expanded={sections.calendar} onToggle={() => onToggleSection('calendar')} />
+          <SectionToggle label={PANEL_VIEW_LABELS[top.view]} expanded={sections.top} onToggle={() => onToggleSection('top')} />
+          {top.views.length > 1 && (
+            <span className="panel-slot-nav">
+              <SlotArrow slot={top} step={-1} />
+              <SlotArrow slot={top} step={1} />
+            </span>
+          )}
           <button type="button" className="icon-btn outline-panel-close" aria-label="패널 닫기" onClick={onClose}>
             <IconClose size={20} />
           </button>
         </div>
-        <div className="side-panel-body" data-collapsed={sections.calendar ? undefined : ''} inert={!sections.calendar}>
-          <CalendarMonth view={view} />
+        <div className="side-panel-body" data-collapsed={sections.top ? undefined : ''} inert={!sections.top}>
+          <ViewBody view={top.view} views={views} />
         </div>
         <div className="side-panel-head">
           <SectionToggle label="목차" expanded={sections.outline} onToggle={() => onToggleSection('outline')} />
@@ -121,27 +148,37 @@ function PhoneSidePanel({ open, view, onClose, phone }: { open: boolean; view: C
 export default function RightPanel({
   open,
   narrow,
-  view,
+  slots,
+  views,
   onClose,
   phone,
 }: {
   open: boolean
   narrow: boolean
-  view: CalendarView
+  slots: PanelSlotState[]
+  views: PanelViews
   onClose: () => void
   phone?: PhoneSidePanelProps
 }) {
-  if (phone) return <PhoneSidePanel open={open} view={view} onClose={onClose} phone={phone} />
+  if (phone) return <PhoneSidePanel open={open} views={views} onClose={onClose} phone={phone} />
   if (!open) return null
   return (
-    <aside className={narrow ? 'right-panel right-panel--overlay' : 'right-panel'} data-ui="right-panel" aria-label="달력">
-      <div className="right-panel-head">
-        <h2>달력</h2>
-        <button type="button" className="icon-btn" aria-label="달력 닫기" onClick={onClose}>
-          <IconClose size={18} />
-        </button>
-      </div>
-      <CalendarMonth view={view} />
+    <aside className={narrow ? 'right-panel right-panel--overlay' : 'right-panel'} data-ui="right-panel" aria-label="오른쪽 패널">
+      {slots.map((slot, index) => (
+        <div key={slot.id} className={FILL_VIEW[slot.view] ? 'panel-slot panel-slot--fill' : 'panel-slot'}>
+          <div className="right-panel-head">
+            {slot.views.length > 1 && <SlotArrow slot={slot} step={-1} />}
+            <h2 aria-live={slot.views.length > 1 ? 'polite' : undefined}>{PANEL_VIEW_LABELS[slot.view]}</h2>
+            {slot.views.length > 1 && <SlotArrow slot={slot} step={1} />}
+            {index === 0 && (
+              <button type="button" className="icon-btn right-panel-close" aria-label="오른쪽 패널 닫기" onClick={onClose}>
+                <IconClose size={18} />
+              </button>
+            )}
+          </div>
+          <ViewBody view={slot.view} views={views} />
+        </div>
+      ))}
     </aside>
   )
 }

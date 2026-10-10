@@ -62,7 +62,7 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
     toggleButtonRef: RefObject<HTMLButtonElement | null>
     toggleCommentsPanel: () => void
     viewMode: 'live' | 'raw' | 'view'
-    calendar?: { open: boolean; onToggle: () => void }
+    rightPanel?: { open: boolean; onToggle: () => void }
   }
 
 export default function AppTopBar({
@@ -71,7 +71,7 @@ export default function AppTopBar({
   helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch, openViewFind,
   requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store, toggleButtonRef, toggleCommentsPanel,
   toggleSidebar, toolbarPref, viewMode, wikiResolver,
-  editorRef, calendar,
+  editorRef, rightPanel,
 }: AppTopBarProps) {
   const { docked: toolbarDocked, dockVisible } = useToolbarDock(editorRef)
   // 탭바 표시 조건 (F-233 3.1) — 자리는 항상 유지, 조건에 안 맞으면 안 그린다.
@@ -127,7 +127,7 @@ export default function AppTopBar({
       onCopyRich={handleCopyDocAsRichText}
       screen={screen}
       outlineControlRef={outlineControlRef}
-      calendar={calendar}
+      rightPanel={rightPanel}
       showToolbar={showToolbar}
       onRunToolbarCommand={runToolbarCommand}
       toolbarDocked={toolbarDocked}

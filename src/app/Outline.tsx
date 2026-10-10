@@ -9,7 +9,7 @@ import { IconToc } from './icons'
 import { floatCoverFor } from '../lib/floatCover'
 import OutlinePanel from './OutlinePanel'
 
-// 휴대폰 폭 공용 오른쪽 패널(달력 위·목차 아래) — 목록을 slot 으로 포털하고, 열기·닫기는 App 이 맡는다 (small 2026-10-10)
+// 휴대폰 폭 공용 오른쪽 패널(위 칸·아래 목차) — 목록을 slot 으로 포털하고, 열기·닫기는 App 이 맡는다 (small 2026-10-10)
 export type OutlinePhonePanel = { slot: HTMLElement | null; open: (returnFocusTo: HTMLElement | null) => void; close: () => void }
 
 const SELECT_MARGIN = 16 // 3.3 "그 제목이 스크롤 영역 위에서 16px 아래에 오도록"

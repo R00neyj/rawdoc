@@ -87,6 +87,8 @@ import { useShortcutsPanel } from './useShortcutsPanel'
 import { useNewDocTemplate } from './useNewDocTemplate'
 import { useTemplateManager } from './useTemplateManager'
 import { useCalendarPanel } from './useCalendarPanel'
+import { useRightPanel } from './useRightPanel'
+import { useDocLinks } from './useDocLinks'
 import RightPanel from './RightPanel'
 import { usePhoneSidePanel } from './usePhoneSidePanel'
 import { usePhoneWidth } from './usePhoneWidth'
@@ -1134,12 +1136,17 @@ export default function App() {
     ...(e2ee && (store.kind === 'idb' || store.kind === 'server') ? { convertDocsForVault: convertDocsForVaultFolder } : {}),
   })
   const templateManager = useTemplateManager({ store, folders, setFolders, createDoc, selectDoc, requestDeleteDoc, closeSettings, showNotice })
-  const calendar = useCalendarPanel({
-    narrow, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate,
-  })
   const phone = usePhoneWidth()
+  const rightPanel = useRightPanel({ narrow, phone })
+  const calendar = useCalendarPanel({
+    closePanelIfNarrow: rightPanel.closeIfNarrow, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate,
+  })
+  const docLinks = useDocLinks({
+    active: rightPanel.linksVisible, listSource, docs, folders, currentDoc, editor: editorHandle, resolver: wikiResolver, e2eeOpen: e2ee?.status === 'open',
+    selectDoc, openWikiLinkTarget, afterOpen: rightPanel.closeIfNarrow,
+  })
   const sidePanel = usePhoneSidePanel({
-    appShellRef, enabled: phone && bootPhase === 'ready' && !sharedDoc && !mapRoute, open: calendar.panelOpen, onOpen: calendar.openPanel, onClose: calendar.closePanel,
+    appShellRef, enabled: phone && bootPhase === 'ready' && !sharedDoc && !mapRoute, open: rightPanel.open, onOpen: rightPanel.openPanel, onClose: rightPanel.closePanel,
   })
 
   // ----- D-4 사람 초대 (specs/features/F-212.md 2.5) -----
@@ -1199,7 +1206,7 @@ export default function App() {
     handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, github: github.palette, handleTogglePin, requestMoveDoc, requestDeleteDoc,
     getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createDocFromPalette,
     openDocFromSearch, newDocFolderId, changeViewMode, openTemplates: templateManager.openTemplates,
-    calendarOpen: calendar.panelOpen, toggleCalendar: calendar.togglePanel,
+    rightPanelOpen: rightPanel.open, toggleRightPanel: rightPanel.togglePanel,
   })
 
   // Ctrl+P·Ctrl+Shift+/ 가 매 커밋 최신 openPalette·toggleShortcuts 를 읽게 한다 (F-2080)
@@ -1250,7 +1257,7 @@ export default function App() {
     handlePrintDoc, helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
     outlineControlRef, openPalette, openSearch, openViewFind: viewFind.open, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
     toggleButtonRef, toggleCommentsPanel, toggleSidebar, toolbarPref, viewMode, wikiResolver,
-    editorRef, github: github.topBar, calendar: { open: calendar.panelOpen, onToggle: calendar.togglePanel },
+    editorRef, github: github.topBar, rightPanel: { open: rightPanel.open, onToggle: rightPanel.togglePanel },
   }} />
 
   return (
@@ -1359,7 +1366,7 @@ export default function App() {
             resolveImagePath: githubImages.resolveImagePath,
             setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, store, titleReadOnly, viewerHtml: shownViewerHtml, viewerRef, viewFindCard: viewFind.card, viewMode,
             wikiContext, wikiPreviewPref, wikiResolver,
-            phoneSidePanel: { slot: sidePanel.outlineSlot, open: sidePanel.openFrom, close: calendar.closePanel },
+            phoneSidePanel: { slot: sidePanel.outlineSlot, open: sidePanel.openFrom, close: rightPanel.closePanel },
           }} />}
           {statusBarVisible && shortcutsOpen && <ShortcutPanel mac={isMac} used={shortcutsUsed} onClose={closeShortcuts} />}
           {!sharedDoc && !mapRoute && showEditor && (
@@ -1381,14 +1388,15 @@ export default function App() {
             />
           )}
         </div>
-        {narrow && !phone && calendar.panelOpen && <div className="right-panel-backdrop" onClick={calendar.closePanel} />}
-        {(calendar.panelOpen || phone) && (
+        {narrow && !phone && rightPanel.open && <div className="right-panel-backdrop" onClick={rightPanel.closePanel} />}
+        {(rightPanel.open || phone) && (
           <RightPanel
-            open={calendar.panelOpen}
+            open={rightPanel.open}
             narrow={narrow}
-            view={calendar.view}
-            onClose={phone ? sidePanel.closeAndReturn : calendar.closePanel}
-            phone={phone ? { sections: sidePanel.sections, onToggleSection: sidePanel.toggleSection, onOutlineSlot: sidePanel.setOutlineSlot, hasDoc: showEditor } : undefined}
+            slots={rightPanel.wideSlots}
+            views={{ calendar: calendar.view, links: docLinks }}
+            onClose={phone ? sidePanel.closeAndReturn : rightPanel.closePanel}
+            phone={phone ? { sections: sidePanel.sections, onToggleSection: sidePanel.toggleSection, onOutlineSlot: sidePanel.setOutlineSlot, hasDoc: showEditor, top: rightPanel.phoneTop } : undefined}
           />
         )}
       </div>

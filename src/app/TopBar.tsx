@@ -64,8 +64,8 @@ type TopBarProps = {
   // 휴대폰 폭 ⋯ 판 — 어느 화면인지와 목차 카드 통로 (F-2083)
   screen: TopBarScreen
   outlineControlRef: RefObject<OutlineControl | null>
-  // 오른쪽 패널(달력) 여닫기 — 맨 오른쪽 끝 (small 2026-10-10)
-  calendar?: { open: boolean; onToggle: () => void }
+  // 오른쪽 패널 여닫기 — 맨 오른쪽 끝 (small 2026-10-10)
+  rightPanel?: { open: boolean; onToggle: () => void }
 }
 
 export default function TopBar({
@@ -103,16 +103,16 @@ export default function TopBar({
   github,
   screen,
   outlineControlRef,
-  calendar,
+  rightPanel,
 }: TopBarProps) {
   const phone = usePhoneWidth()
   // 휴대폰 폭은 버튼 없이 왼쪽 밀기로 연다(usePhoneSidePanel)
-  const calendarButton = calendar && (
+  const rightPanelButton = rightPanel && (
     <span className="icon-btn-wrap">
-      <button type="button" className="icon-btn" aria-label="달력" aria-expanded={calendar.open} onClick={calendar.onToggle}>
+      <button type="button" className="icon-btn" aria-label="오른쪽 패널" aria-expanded={rightPanel.open} onClick={rightPanel.onToggle}>
         <IconCalendar size={18} />
       </button>
-      <IconTooltip text="달력" align="end" />
+      <IconTooltip text="오른쪽 패널" align="end" />
     </span>
   )
   return (
@@ -214,7 +214,7 @@ export default function TopBar({
               onCopyRich={onCopyRich}
             />
             {notifications && <NotificationsMenu {...notifications} />}
-            {calendarButton}
+            {rightPanelButton}
           </>
         )}
       </header>

@@ -24,7 +24,7 @@ test('달력 — 설정대로 날짜 문서를 만들고, 다시 누르면 그 �
   await expect(settings).toBeHidden()
 
   // 넓은 창은 기본 열림
-  const panel = page.getByRole('complementary', { name: '달력' })
+  const panel = page.getByRole('complementary', { name: '오른쪽 패널' })
   await expect(panel.getByText('2026년 10월')).toBeVisible()
 
   await panel.getByRole('button', { name: /^10월 3일 토요일$/ }).click()
@@ -42,5 +42,5 @@ test('달력 — 설정대로 날짜 문서를 만들고, 다시 누르면 그 �
   await expect(page.locator('.sidebar .doc-item-btn', { hasText: '2026.10.03' })).toHaveCount(1)
 
   await page.reload()
-  await expect(page.getByRole('complementary', { name: '달력' }).getByRole('button', { name: '10월 3일 토요일, 문서 있음' })).toBeVisible()
+  await expect(page.getByRole('complementary', { name: '오른쪽 패널' }).getByRole('button', { name: '10월 3일 토요일, 문서 있음' })).toBeVisible()
 })

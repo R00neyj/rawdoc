@@ -1,8 +1,8 @@
-// 휴대폰 폭 오른쪽 패널(달력 위·목차 아래) — 왼쪽 밀기로 열기, 칸 접기, 목차 자리, Esc·겹침으로 닫기 (small 2026-10-10)
+// 휴대폰 폭 오른쪽 패널(위 칸·아래 목차) — 왼쪽 밀기로 열기, 칸 접기, 목차 자리, Esc·겹침으로 닫기 (small 2026-10-10)
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { useOutlineSwipe } from './useOutlineSwipe'
 
-export type PhoneSideSections = { calendar: boolean; outline: boolean }
+export type PhoneSideSections = { top: boolean; outline: boolean }
 
 export type UsePhoneSidePanelResult = {
   sections: PhoneSideSections
@@ -34,7 +34,7 @@ export function usePhoneSidePanel(options: {
 }): UsePhoneSidePanelResult {
   const { appShellRef, enabled, open, onOpen, onClose } = options
   // 둘 다 펼친 반반이 기본. 패널을 닫아도 접은 상태는 이 실행 동안 기억한다
-  const [sections, setSections] = useState<PhoneSideSections>({ calendar: true, outline: true })
+  const [sections, setSections] = useState<PhoneSideSections>({ top: true, outline: true })
   const [outlineSlot, setOutlineSlot] = useState<HTMLElement | null>(null)
   const returnRef = useRef<HTMLElement | null>(null)
 

@@ -23,7 +23,7 @@ function matchFence(line: string): Fence | null {
 const TABLE_DELIMITER_RE = /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/
 
 // 백틱 쌍 사이를 같은 길이의 공백으로 덮는다 — 위치가 어긋나지 않게 한다 (3.2 인라인 코드)
-function maskInlineCode(line: string): string {
+export function maskInlineCode(line: string): string {
   const runs: { start: number; end: number; len: number }[] = []
   const re = /`+/g
   let match: RegExpExecArray | null
@@ -63,10 +63,10 @@ function linesWithOffsets(text: string): { line: string; start: number }[] {
 }
 
 export type ScannedWikiLink = WikiLinkMatch & { inTable: boolean }
+export type ProseLine = { line: string; start: number; inTable: boolean }
 
-// 문서 원문 한 덩어리에서 위키링크을 위치와 함께 훑는다 — 표 줄도 담고 inTable 로 남긴다 (F-2020.md 5.2)
-// 표 줄 별칭은 `[[대상\|별칭]]` 만 인정한다 — 이스케이프 없는 `|` 는 칸을 나눠 링크가 아니다(F-131 2장)
-export function scanWikiLinks(content: string): ScannedWikiLink[] {
+// 프론트매터·펜스 코드 밖의 줄을 원문 위치·표 줄 여부와 함께 — 위키링크 훑기와 연결되지 않은 언급(small 2026-10-11)이 같이 쓴다
+export function proseLines(content: string): ProseLine[] {
   if (typeof content !== 'string' || content === '') return []
 
   const fm = findFrontmatter(content)
@@ -74,7 +74,7 @@ export function scanWikiLinks(content: string): ScannedWikiLink[] {
   const baseOffset = fm ? fm.to : 0
   const lines = linesWithOffsets(body)
 
-  const results: ScannedWikiLink[] = []
+  const results: ProseLine[] = []
   let openFence: Fence | null = null
   let inTable = false
 
@@ -100,25 +100,33 @@ export function scanWikiLinks(content: string): ScannedWikiLink[] {
         inTable = true
       }
     }
-    const lineInTable = inTable
+    results.push({ line, start: baseOffset + start, inTable })
     if (inTable && line.trim() === '') inTable = false
+  }
 
-    const masked = maskInlineCode(lineInTable ? maskEscapedPipes(line) : line)
+  return results
+}
+
+// 문서 원문 한 덩어리에서 위키링크을 위치와 함께 훑는다 — 표 줄도 담고 inTable 로 남긴다 (F-2020.md 5.2)
+// 표 줄 별칭은 `[[대상\|별칭]]` 만 인정한다 — 이스케이프 없는 `|` 는 칸을 나눠 링크가 아니다(F-131 2장)
+export function scanWikiLinks(content: string): ScannedWikiLink[] {
+  const results: ScannedWikiLink[] = []
+  for (const { line, start, inTable } of proseLines(content)) {
+    const masked = maskInlineCode(inTable ? maskEscapedPipes(line) : line)
     for (const link of findWikiLinks(masked)) {
-      const escapedPipe = lineInTable && link.alias !== null && line[link.targetTo - 1] === '\\'
-      if (lineInTable && link.alias !== null && !escapedPipe) continue
+      const escapedPipe = inTable && link.alias !== null && line[link.targetTo - 1] === '\\'
+      if (inTable && link.alias !== null && !escapedPipe) continue
       const targetTo = escapedPipe ? link.targetTo - 1 : link.targetTo
       results.push({
         ...link,
-        from: baseOffset + start + link.from,
-        to: baseOffset + start + link.to,
-        targetFrom: baseOffset + start + link.targetFrom,
-        targetTo: baseOffset + start + targetTo,
-        inTable: lineInTable,
+        from: start + link.from,
+        to: start + link.to,
+        targetFrom: start + link.targetFrom,
+        targetTo: start + targetTo,
+        inTable,
       })
     }
   }
-
   return results
 }
 

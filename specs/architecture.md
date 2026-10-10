@@ -55,7 +55,9 @@ src/
     useShortcutsPanel.ts 단축키 판 열기·닫기·커서 스크롤 (F-2037, F-2078)
     useNewDocTemplate.ts newDocTemplate.ts 새 문서 템플릿 목록·원문 읽기·본문 (F-2052, F-2078)
     useTemplateManager.ts TemplateManagerDialog.tsx 템플릿 관리 D-22 열기·새 템플릿·편집·삭제 (small 2026-10-10)
-    useCalendarPanel.ts RightPanel.tsx CalendarSettingsTab.tsx TemplateSelectField.tsx 오른쪽 패널 달력·설정 달력 탭 (small 2026-10-10)
+    useRightPanel.ts RightPanel.tsx 오른쪽 패널 열림·칸(보기 목록·‹ › 넘기기) (small 2026-10-10, 2026-10-11)
+    useCalendarPanel.ts CalendarSettingsTab.tsx TemplateSelectField.tsx 오른쪽 패널 `달력` 보기·설정 달력 탭 (small 2026-10-10)
+    useDocLinks.ts PanelLinks.tsx 오른쪽 패널 `링크` 보기 — 백링크·나가는 링크·연결되지 않은 언급 (small 2026-10-11)
     useAccountStatus.ts 계정 플래그 반영·다시 읽기(online·화면 복귀·10분) (F-2026, F-2079)
     useAccountDelete.ts 계정 삭제 대화상자 열기·실행 (F-2079)
     useTitleCommit.ts 제목 저장 (F-2079)
@@ -140,6 +142,8 @@ src/
   - `app/`: `paletteEditorCommands.ts`(F-2055 — `EDITOR_COMMANDS` 를 팔레트 명령으로 옮기는 순수 목록). 새 저장 키 없음
 - 오른쪽 패널·달력(2026-10-10 small)으로 추가
   - `lib/`: `calendar.ts`(월 격자·날짜 문서 제목·폴더 안 날짜 문서 찾기, 순수 함수)
+- 오른쪽 패널 칸·링크 보기(2026-10-11 small)로 추가
+  - `lib/`: `panelSlots.ts`(칸의 지금 보기·넘기기·저장값 읽기), `docLinks.ts`(백링크·나가는 링크·연결되지 않은 언급·줄 발췌), 둘 다 순수 함수. `wikiGraph.ts` 는 프론트매터·펜스 밖 줄 훑기 `proseLines` 를 내보낸다
 - DO 서버·`/ws` 인증(2026-09-24)으로 추가
   - `lib/`: `docRoomProtocol.ts`(F-304 — 서버·클라이언트 공용 소켓 계약. 앱은 F-304 에서 import 하지 않는다)
 - 명령줄 도구(2026-09-24)로 추가
@@ -284,7 +288,8 @@ type YjsMetaRow = {
 | `md.commentRail` | `open` \| `closed` | 없으면 열린 스레드가 있을 때 열림 | F-505 |
 | `md.paletteRecent` | 명령 id JSON 배열, 최근 쓴 것부터, 최대 10 | 없음(`[]` 로 읽는다) | F-2053 7.1·7.3 |
 | `md.palettePinned` | 명령 id JSON 배열, 고정한 순서 | 없음(`[]` 로 읽는다) | F-2053 7.2·7.3 |
-| `md.rightPanel` | `open` \| `closed` — 넓은 창 오른쪽 패널(달력) 열림 | `closed` | small 2026-10-10 |
+| `md.rightPanel` | `open` \| `closed` — 넓은 창 오른쪽 패널 열림 | `open` | small 2026-10-10, 2026-10-11 |
+| `md.rightPanelViews` | `{ 칸 id: 보기 id }` JSON — 칸별 마지막 보기(`wide1`·`wide2`·`phoneTop`, 보기 `calendar`·`links`) | 없음(칸마다 첫 보기) | small 2026-10-11 |
 | `md.calendarFolder` | 달력 날짜 문서 폴더 id, `''` = 최상위 | `''` | small 2026-10-10 |
 | `md.calendarFormat` | 날짜 문서 제목 형식(템플릿 날짜 토큰) | `YYYY-MM-DD` | small 2026-10-10 |
 | `md.calendarTemplate` | `md.newDocTemplate` 과 같은 값 | `none` | small 2026-10-10 |

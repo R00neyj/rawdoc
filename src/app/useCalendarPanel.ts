@@ -1,5 +1,5 @@
-// 오른쪽 패널(달력) 열림·달 이동·날짜 문서 열기/만들기·달력 설정 (small 2026-10-10)
-import { useCallback, useMemo, useState, type RefObject } from 'react'
+// 오른쪽 패널 `달력` 보기 — 달 이동·날짜 문서 열기/만들기·달력 설정 (small 2026-10-10)
+import { useMemo, useState, type RefObject } from 'react'
 import { getPref, setPref } from './prefs'
 import { flattenFolderTree } from '../lib/folderTree'
 import { templateFolderIds, NEW_DOC_TEMPLATE_NONE } from '../lib/templates'
@@ -23,7 +23,7 @@ import type { DocMeta } from './docMeta'
 import type { Folder } from '../types'
 
 export type UseCalendarPanelOptions = {
-  narrow: boolean
+  closePanelIfNarrow: () => void
   docs: DocMeta[]
   docsRef: RefObject<DocMeta[]>
   folders: Folder[]
@@ -52,26 +52,12 @@ function todayYearMonth(): YearMonth {
 }
 
 export type UseCalendarPanelResult = {
-  panelOpen: boolean
-  togglePanel: () => void
-  openPanel: () => void
-  closePanel: () => void
   view: CalendarView
   settings: CalendarSettings
 }
 
 export function useCalendarPanel(options: UseCalendarPanelOptions): UseCalendarPanelResult {
-  const { narrow, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate } = options
-  const [widePref, setWidePref] = useState(() => getPref('md.rightPanel', 'open'))
-  const [narrowOpen, setNarrowOpen] = useState(false)
-  // 넓은 창으로 돌아가면 겹침 열림은 버린다 — 렌더 중 조정
-  const [narrowSeen, setNarrowSeen] = useState(narrow)
-  if (narrow !== narrowSeen) {
-    setNarrowSeen(narrow)
-    if (!narrow) setNarrowOpen(false)
-  }
-  const panelOpen = narrow ? narrowOpen : widePref === 'open'
-
+  const { closePanelIfNarrow, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate } = options
   const [month, setMonth] = useState(todayYearMonth)
   const [folderPref, setFolderPref] = useState(() => getPref('md.calendarFolder', ''))
   const [formatPref, setFormatPref] = useState(() => getPref('md.calendarFormat', CALENDAR_DEFAULT_FORMAT))
@@ -90,27 +76,11 @@ export function useCalendarPanel(options: UseCalendarPanelOptions): UseCalendarP
       .map((f) => ({ id: f.id, label: `${'\u00a0\u00a0'.repeat(f.depth)}${f.name}` }))
   }, [folders])
 
-  // 밀기·Esc 구독이 렌더마다 다시 걸리지 않게 안정 함수로 둔다
-  const setPanelOpen = useCallback(
-    (open: boolean) => {
-      if (narrow) {
-        setNarrowOpen(open)
-        return
-      }
-      const value = open ? 'open' : 'closed'
-      setWidePref(value)
-      setPref('md.rightPanel', value)
-    },
-    [narrow],
-  )
-  const openPanel = useCallback(() => setPanelOpen(true), [setPanelOpen])
-  const closePanel = useCallback(() => setPanelOpen(false), [setPanelOpen])
-
   // 있으면 열고, 없으면 설정 폴더에 템플릿 본문으로 만든다. 잠긴 금고 폴더는 먼저 열어 제목을 읽은 뒤 판정한다
   async function openDay(day: CalendarDate) {
     const { folderId } = resolveCalendarFolder(folderPref, folders)
     if (!(await ensureE2eeOpenForFolder(folderId))) return
-    if (narrow) setNarrowOpen(false)
+    closePanelIfNarrow()
     const existing = calendarDocIndex({ docs: docsRef.current, folderId, format: formatPref, days: [day] }).get(dayKey(day))
     if (existing) {
       await selectDoc(existing)
@@ -159,12 +129,5 @@ export function useCalendarPanel(options: UseCalendarPanelOptions): UseCalendarP
     },
   }
 
-  return {
-    panelOpen,
-    togglePanel: () => setPanelOpen(!panelOpen),
-    openPanel,
-    closePanel,
-    view,
-    settings,
-  }
+  return { view, settings }
 }

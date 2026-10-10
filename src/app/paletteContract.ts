@@ -81,9 +81,9 @@ export type PaletteContext = {
     toggleLineNumbers: () => void
     toggleToolbar: () => void
     toggleWikiPreview: () => void
-    // 오른쪽 패널(달력) — App 만 준다 (small 2026-10-10)
-    calendar?: boolean
-    toggleCalendar?: () => void
+    // 오른쪽 패널 — App 만 준다 (small 2026-10-10)
+    rightPanel?: boolean
+    toggleRightPanel?: () => void
   }
   // 지금 문서 내보내기·공유 — 선택 필드. 없으면 내보내기·복사·초대 명령들이 안 보인다 (F-2054 4.1)
   output?: {
