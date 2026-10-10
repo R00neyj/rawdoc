@@ -6,6 +6,7 @@ import {
   parseTaskFilters,
   happensDate,
   taskUrgency,
+  tasksByDoc,
   TODO_MAX_ITEMS,
   type TaskFilter,
   type TodoItem,
@@ -18,6 +19,19 @@ describe('parseTaskFilters — 쉼표로 여러 개', () => {
   it('앞뒤 공백을 떼고 빈 값은 버린다', () => {
     expect(parseTaskFilters(' #task, #할일 ,, ')).toEqual(['#task', '#할일'])
     expect(parseTaskFilters('')).toEqual([])
+  })
+})
+
+describe('tasksByDoc — 날짜 묶음 안에서 같은 문서끼리', () => {
+  const row = (docId: string, line: number) => ({ docId, docTitle: docId.toUpperCase(), line }) as Parameters<typeof tasksByDoc>[0][number]
+
+  it('흩어진 같은 문서 항목을 한 묶음으로 모으고, 문서 순서는 그 문서의 가장 앞 항목 자리를 따른다', () => {
+    const groups = tasksByDoc([row('a', 5), row('b', 1), row('a', 2), row('c', 9), row('b', 7)])
+    expect(groups.map((g) => [g.docId, g.docTitle, g.items.map((i) => i.line)])).toEqual([
+      ['a', 'A', [5, 2]],
+      ['b', 'B', [1, 7]],
+      ['c', 'C', [9]],
+    ])
   })
 })
 

@@ -207,3 +207,14 @@ export function groupTasks(docs: readonly DocTodos[], today: string): { groups: 
   const groups = BUCKETS.map((bucket, index) => ({ bucket, items: kept.filter((r) => r.bucket === index).map((r) => r.row) })).filter((g) => g.items.length > 0)
   return { groups, truncated: rows.length > kept.length }
 }
+
+// 날짜 묶음 안에서 같은 문서 항목을 모은다 — 문서 순서는 그 문서의 가장 앞 항목 자리
+export function tasksByDoc(items: readonly TaskRow[]): { docId: string; docTitle: string; items: TaskRow[] }[] {
+  const byId = new Map<string, { docId: string; docTitle: string; items: TaskRow[] }>()
+  for (const row of items) {
+    const group = byId.get(row.docId)
+    if (group) group.items.push(row)
+    else byId.set(row.docId, { docId: row.docId, docTitle: row.docTitle, items: [row] })
+  }
+  return [...byId.values()]
+}

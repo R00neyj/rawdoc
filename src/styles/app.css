@@ -6638,6 +6638,22 @@ h3.panel-settings-title:not(:first-child) {
   background: linear-gradient(to right, var(--accent) 50%, transparent 50%);
 }
 
+.todo-doc + .todo-doc {
+  margin-top: 4px;
+}
+
+.todo-doc-title {
+  overflow: hidden;
+  margin: 0;
+  padding: 4px 8px 0;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* `그래프` 보기 — 2D 미니 그래프. 노드는 가운데에서 펼쳐지고, 움직임 줄이기면 토큰이 0ms 라 바로 놓인다 (small 2026-10-11) */
 .panel-graph {
   position: relative;
@@ -6890,7 +6906,8 @@ h3.panel-settings-title:not(:first-child) {
   }
 
   .side-panel .doc-links-title,
-  .side-panel .todo-meta {
+  .side-panel .todo-meta,
+  .side-panel .todo-doc-title {
     font-size: 13.5px;
   }
 
