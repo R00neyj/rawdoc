@@ -1,7 +1,9 @@
 // 루프백 서버·콜백 판정·로그인 흐름 (specs/features/F-2021.md 5.1~5.5)
 // 콜백 state 는 자기 공개키 문자열, 풀기는 openSealedTokenV2 (F-2023 9장)
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import brand from '../../brand.config'
 import { openSealedTokenV2 } from '../../src/lib/cliSeal'
+import { PAGE_DARK_VARS, PAGE_TOKENS_CSS } from '../../worker/pageTokens'
 import { apiMe, type ClientConfig } from './client'
 import { CliError } from './output'
 import type { V1Me } from '../../worker/v1Contract'
@@ -41,8 +43,42 @@ export function classifyCallback(req: CallbackRequest, port: number, expectedSta
   return { kind: 'try-seal', sealed }
 }
 
+type PageTone = 'ok' | 'off' | 'warn'
+
+const PAGE_HEADS: Record<string, { tone: PageTone; heading: string }> = {
+  [CALLBACK_SUCCESS_BODY]: { tone: 'ok', heading: '로그인 완료' },
+  [CALLBACK_DENIED_BODY]: { tone: 'off', heading: '로그인 취소' },
+  [CALLBACK_MISMATCH_BODY]: { tone: 'warn', heading: '로그인 확인 실패' },
+}
+
+const ICON_PATHS: Record<PageTone, string> = {
+  ok: '<path d="M7 12.5l3.2 3.2L17 9"/>',
+  off: '<path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/>',
+  warn: '<path d="M12 7.5v5.5M12 16.5v.01"/>',
+}
+
+const PAGE_CSS = `${PAGE_TOKENS_CSS}
+      @media (prefers-color-scheme: dark) { :root { ${PAGE_DARK_VARS} } }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;
+        background: var(--paper); color: var(--ink); font-family: var(--font-body); letter-spacing: var(--tracking); }
+      main { width: 100%; max-width: 380px; padding: 32px 28px; text-align: center;
+        background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius-dialog); }
+      .mark { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; margin-bottom: 16px;
+        color: var(--ink-2); background: var(--rule-2); }
+      .mark--ok { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+      .mark svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+      h1 { margin: 0 0 8px; font-size: 18px; font-weight: 600; }
+      p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+      .brand { margin-top: 24px; font-size: 12px; color: var(--muted); }`
+
 function htmlPage(text: string): string {
-  return `<!doctype html><meta charset="utf-8"><p>${text}</p>`
+  const { tone, heading } = PAGE_HEADS[text]
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>터미널 로그인 · ${brand.name}</title><style>${PAGE_CSS}</style></head>
+<body><main><div class="mark mark--${tone}" aria-hidden="true"><svg viewBox="0 0 24 24">${ICON_PATHS[tone]}</svg></div>
+<h1>${heading}</h1><p>${text}</p><div class="brand">${brand.name}</div></main></body></html>`
 }
 
 function respond(res: ServerResponse, status: number, body?: string): void {
