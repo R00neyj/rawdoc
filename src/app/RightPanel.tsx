@@ -170,9 +170,21 @@ export default function RightPanel({
   phone?: PhoneSidePanelProps
 }) {
   if (phone) return <PhoneSidePanel open={open} views={views} onClose={onClose} phone={phone} />
-  if (!open) return null
+  return <WidePanel open={open} narrow={narrow} slots={slots} views={views} onClose={onClose} />
+}
+
+// 넓은 창·겹침 — 왼쪽 사이드바의 거울. 닫히는 전환 동안도 그리도록 usePresence 로 [data-state] 를 준다
+function WidePanel({ open, narrow, slots, views, onClose }: { open: boolean; narrow: boolean; slots: PanelSlotState[]; views: PanelViews; onClose: () => void }) {
+  const { mounted, state } = usePresence(open)
+  if (!mounted) return null
   return (
-    <aside className={narrow ? 'right-panel right-panel--overlay' : 'right-panel'} data-ui="right-panel" aria-label="오른쪽 패널">
+    <aside
+      className={narrow ? 'right-panel right-panel--overlay' : 'right-panel'}
+      data-ui="right-panel"
+      aria-label="오른쪽 패널"
+      data-state={state}
+      inert={state === 'closed'}
+    >
       {slots.map((slot, index) => (
         <div key={slot.id} className={FILL_VIEW[slot.view] ? 'panel-slot panel-slot--fill' : 'panel-slot'} data-collapsed={slot.collapsed ? '' : undefined}>
           <div className="right-panel-head">

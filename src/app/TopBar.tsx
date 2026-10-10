@@ -6,7 +6,7 @@ import ExportMenu from './ExportMenu'
 import GithubMenu, { type GithubMenuProps } from './GithubMenu'
 import NotificationsMenu, { type NotificationsMenuProps } from './NotificationsMenu'
 import EditorToolbar from './EditorToolbar'
-import { IconTooltip, IconForum, IconCalendar } from './icons'
+import { IconTooltip, IconForum, IconRightPanelClose, IconRightPanelOpen } from './icons'
 import { commentBadgeText } from './commentRail'
 import SidebarHead from './SidebarHead'
 import PeerAvatars from './PeerAvatars'
@@ -110,7 +110,7 @@ export default function TopBar({
   const rightPanelButton = rightPanel && (
     <span className="icon-btn-wrap">
       <button type="button" className="icon-btn" aria-label="오른쪽 패널" aria-expanded={rightPanel.open} onClick={rightPanel.onToggle}>
-        <IconCalendar size={18} />
+        {rightPanel.open ? <IconRightPanelClose size={18} /> : <IconRightPanelOpen size={18} />}
       </button>
       <IconTooltip text="오른쪽 패널" align="end" />
     </span>

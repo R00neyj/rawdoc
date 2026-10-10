@@ -78,8 +78,9 @@ import printSvg from '@material-symbols/svg-400/outlined/print.svg?raw'
 import hubSvg from '@material-symbols/svg-400/outlined/hub.svg?raw'
 // 템플릿 관리 (small 2026-10-10)
 import libraryBooksSvg from '@material-symbols/svg-400/outlined/library_books.svg?raw'
-// 상단바 `오른쪽 패널` 버튼 (small 2026-10-10)
-import calendarMonthSvg from '@material-symbols/svg-400/outlined/calendar_month.svg?raw'
+// 상단바 `오른쪽 패널` 버튼 — 사이드바 토글(left_panel_*)의 거울 (small 2026-10-11)
+import rightPanelCloseSvg from '@material-symbols/svg-400/outlined/right_panel_close.svg?raw'
+import rightPanelOpenSvg from '@material-symbols/svg-400/outlined/right_panel_open.svg?raw'
 // 지도 머리 줄 `목록` 보기 (F-2011.md 2.2)
 import listSvg from '@material-symbols/svg-400/outlined/list.svg?raw'
 // 지도 머리 줄 `맞춤` (F-2011.md 2.1)
@@ -221,7 +222,8 @@ export const IconPrint = makeIcon(printSvg)
 // 사이드바 `지도` (F-292.md 6.2)
 export const IconMap = makeIcon(hubSvg)
 export const IconTemplates = makeIcon(libraryBooksSvg)
-export const IconCalendar = makeIcon(calendarMonthSvg)
+export const IconRightPanelClose = makeIcon(rightPanelCloseSvg)
+export const IconRightPanelOpen = makeIcon(rightPanelOpenSvg)
 
 // 지도 머리 줄 `목록` (F-2011.md 2.2)
 export const IconList = makeIcon(listSvg)

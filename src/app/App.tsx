@@ -1390,16 +1390,14 @@ export default function App() {
           )}
         </div>
         {narrow && !phone && rightPanel.open && <div className="right-panel-backdrop" onClick={rightPanel.closePanel} />}
-        {(rightPanel.open || phone) && (
-          <RightPanel
-            open={rightPanel.open}
-            narrow={narrow}
-            slots={rightPanel.wideSlots}
-            views={{ calendar: calendar.view, ...panelDocs }}
-            onClose={phone ? sidePanel.closeAndReturn : rightPanel.closePanel}
-            phone={phone ? { sections: sidePanel.sections, onToggleSection: sidePanel.toggleSection, onOutlineSlot: sidePanel.setOutlineSlot, hasDoc: showEditor, top: rightPanel.phoneTop } : undefined}
-          />
-        )}
+        <RightPanel
+          open={rightPanel.open}
+          narrow={narrow}
+          slots={rightPanel.wideSlots}
+          views={{ calendar: calendar.view, ...panelDocs }}
+          onClose={phone ? sidePanel.closeAndReturn : rightPanel.closePanel}
+          phone={phone ? { sections: sidePanel.sections, onToggleSection: sidePanel.toggleSection, onOutlineSlot: sidePanel.setOutlineSlot, hasDoc: showEditor, top: rightPanel.phoneTop } : undefined}
+        />
       </div>
 
       <AppDialogs {...{

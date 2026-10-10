@@ -6368,15 +6368,54 @@ a.dialog-btn {
   background: var(--surface);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden auto;
+  transition: width var(--transition-fast);
 }
 
+/* 넓은 창 여닫힘 — 왼쪽 사이드바 폭 전환의 거울. 안쪽은 280 폭 그대로 둬 전환 중 줄바꿈이 흔들리지 않는다 */
+.right-panel > * {
+  min-width: 279px;
+}
+
+.right-panel[data-state='closed'] {
+  width: 0;
+  border-left-width: 0;
+}
+
+@starting-style {
+  .right-panel[data-state='open'] {
+    width: 0;
+  }
+}
+
+/* 겹침 — 겹침 사이드바(.sidebar--overlay)의 거울 */
 .right-panel--overlay {
   position: absolute;
   inset: 0 0 0 auto;
   z-index: 35;
   max-width: 100%;
   box-shadow: -8px 0 30px rgba(0, 0, 0, 0.12);
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition: transform var(--transition-move), opacity var(--transition-fast), visibility var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.right-panel--overlay[data-state='closed'] {
+  width: 280px;
+  border-left-width: 1px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(100%);
+}
+
+@starting-style {
+  .right-panel--overlay[data-state='open'] {
+    width: 280px;
+    opacity: 0;
+    transform: translateX(100%);
+  }
 }
 
 .right-panel-backdrop {
