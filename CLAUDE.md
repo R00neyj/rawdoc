@@ -13,10 +13,11 @@ A source-preserving Markdown collaboration tool. Typing `##` does not make the m
 
 1. **Web app first.** Finish it for desktop browsers. PWA (install, offline) counts as part of finishing the web app
 2. Android (Capacitor) comes after the web app is done. Until then, no Android-only work
-3. Order is spec → small spec → implementation. **If it is not in a spec, do not build it.** Exceptions:
+3. **A spec is needed only for invariants, security, and new dependencies** — changing or adding an invariant below; security work (vault/E2EE encryption and keys, sign-in and auth, access control and sharing permissions); adding a dependency. Those go spec → small spec → implementation. Everything else is built without a spec:
    - **Tweak** — a small visual or interaction fix to something that already exists (color, spacing, copy, moving a button, menu order, hover/focus). Goes through the `tweak` skill and leaves one line in `specs/tweaks.md`
+   - **Small change** — any other feature or behavior change: new buttons, dialogs, screens, CLI commands, API routes, D1 migrations. Main builds it directly (logic still TDD, App.tsx growth still ≤30 lines, e2e still at most 3), updates any `ia.md` / `design.md` / `architecture.md` line it changes, and leaves one line in `specs/small-changes.md`
    - **Guide article** — `content/guides/*.md` plus its help section. Goes through the `write-guide` skill
-   - Data, storage, server, new screens/commands/shortcuts, new dependencies and invariants always need a spec
+   - Reusing an existing secure path from a new entry point (e.g. dropping onto a vault folder calls the existing move-to-vault flow) is a small change; changing how that path encrypts, stores keys or checks access is security
 
 ## How we work
 
@@ -49,6 +50,7 @@ Overrides "match the surrounding code" — older multi-line blocks are not prece
 | `specs/features/F-xxx.md` | Small specs. One spec = one implementation unit. **New specs take a four-digit number by nature**: `F-2NNN` screens, UI/UX and client code; `F-3NNN` server (`worker/`, D1, R2, Durable Objects, sync, push); `F-4NNN` security (vault/E2EE, auth hardening). A mixed feature's overview takes the side with most of the work; each child takes its own side. `F-1NN` (M1 prototype) and `F-5NN` (comments) are closed to new specs. Existing numbers keep their old meaning (`F-2NN`/`F-2001`~ M2 and M1 follow-ups, `F-3NN` M3 live collaboration). `npm run specs` sorts numerically. YAML frontmatter at the top (below) | After human approval |
 | `specs/human-checks.md` | Items no automated test can judge, plus their status | By main, as each spec lands |
 | `specs/tweaks.md` | One line per tweak: date, what, why (user's words), related spec | By main, in the tweak's commit |
+| `specs/small-changes.md` | One line per small change: date, what, why (user's words), related spec | By main, in the change's commit |
 | `specs/map.md` | Mermaid map of every page, screen, dialog and feature group, plus the mobile review checklist. Derived from `ia.md` and the code, not a source of truth | By main, when a screen, layer or entry route is added or removed |
 | `specs/notes.md` | Discussion notes before anything becomes a spec. Move into `product.md` or an `F-xxx.md` once settled, and delete here | Freely |
 | `content/` | Public-site article sources, `.md` (F-272). `site/` reads them | Per spec |
@@ -148,7 +150,7 @@ Unit tests live under `tests/`, mirroring the source path: `tests/{source path}/
 - **Implementation goes to `feature-implementer`** (Sonnet, medium effort) by default
 - **3D map rework is split per sub-spec by the `누가` column of `specs/features/F-292.md` ch. 9**: main implements F-2002~F-2004 itself; F-2006 goes to `complex-implementer`; the rest are ordinary handoffs
 - **`complex-implementer` (Opus)** is for a spec whose acceptance criteria are clear but whose route is not — graphics and 3D, CM6 internals, a frame or bundle budget, a refactor across several ownership tables, an external API nobody has run yet. It researches and measures before building, decides the gaps inside a criterion itself, and reports build and precache deltas. Main names it explicitly; the default stays `feature-implementer`
-- **Go through the skill instead of launching an agent directly.** Stress-testing an idea is `grill`, spec writing is `write-spec`, implementation is `ship-feature`, a no-spec design or interaction fix is `tweak`, a guide article is `write-guide`, Korean prose polish is `polish-korean`. Use `grill`, not the generic `grilling` skill — every open decision goes to the user through `AskUserQuestion`
+- **Go through the skill instead of launching an agent directly.** Stress-testing an idea is `grill`, spec writing is `write-spec`, implementation is `ship-feature`, a no-spec design or interaction fix is `tweak`, a guide article is `write-guide`, Korean prose polish is `polish-korean`. A small change has no skill — main builds it, or hands independent ones to `task` agents with the full brief in the prompt. Use `grill`, not the generic `grilling` skill — every open decision goes to the user through `AskUserQuestion`
 - **Implementation prompts carry only the spec number and the `E2E_PORT` / `E2E_DIST` slots.** Judge with `npm run review -- F-xxx` then the related e2e. Use the tools in `scripts/` instead of ad-hoc scripts; propose a new tool when you see a repeat they do not cover
 - **A spec that leaves no real fork goes straight to implementation.** When every open question has a sound default, commit the spec, say so, and launch `ship-feature` in the same turn. What counts as a fork is in the `write-spec` skill, ch. 5
 - `e2e:one` search terms can be OR'd with `|`, e.g. `"F-225|F-212"`. Slots are `--port`/`--dist` or `E2E_PORT`/`E2E_DIST`
@@ -163,6 +165,7 @@ Unit tests live under `tests/`, mirroring the source path: `tests/{source path}/
 | One spec implemented | the files in that spec's ownership table + tests + `specs/human-checks.md` + the frontmatter update | `문서 가져오기 (F-282)` |
 | One change outside any spec | one bug fix, one docs/rules change, or one tool addition | `HTML 내보내기에서 CSS 가 평문으로 쏟아지던 버그` |
 | One tweak | the changed code + its `specs/tweaks.md` line (+ the `design.md` / `ia.md` line it changed) | `사이드바 행 간격 줄임 (tweak)` |
+| One small change | the changed code + tests + its `specs/small-changes.md` line (+ any `ia.md` / `design.md` / `architecture.md` line it changed, + `specs/human-checks.md` rows) | `CLI 본문 찾기 (small)` |
 | One guide article | `content/guides/{slug}.md` + its help section in `helpDoc.ts` + the number-check test rows + `specs/human-checks.md` rows; fact basis in the body | `검색 사용법 글 (guide)` |
 
 - **A spec and its implementation are separate commits**, even when you implement right after writing the spec

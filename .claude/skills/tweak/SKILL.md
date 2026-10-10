@@ -1,6 +1,6 @@
 ---
 name: tweak
-description: Fixes a small design or interaction detail in Rawdoc directly, without writing a spec, and leaves a one-line note in specs/tweaks.md as evidence. Use it for requests like "간격 좀 줄여줘", "이 색 바꿔줘", "버튼 위치 옮겨줘", "메뉴 순서 바꿔", "명세 없이 바로 고쳐". Anything bigger goes to write-spec.
+description: Fixes a small design or interaction detail in Rawdoc directly, without writing a spec, and leaves a one-line note in specs/tweaks.md as evidence. Use it for requests like "간격 좀 줄여줘", "이 색 바꿔줘", "버튼 위치 옮겨줘", "메뉴 순서 바꿔", "명세 없이 바로 고쳐". New features are small changes (CLAUDE.md "Direction" 3); invariants, security and new dependencies go to write-spec.
 ---
 
 # tweak
@@ -19,13 +19,11 @@ Rule basis: `CLAUDE.md` "Direction" 3 carries the exception for this skill (user
 - UI copy: labels, tooltips, notice wording
 - Small interactions on things that already exist: move a button, reorder menu items, hover / focus / active indication, which existing element gets focus, show or hide an existing control
 
-**Out of scope** — stop and send it to `write-spec`:
+**Out of scope** — not a tweak:
 
-- Data, storage, sync, server (`worker/`), migrations, the Yjs path
-- A new screen, dialog, menu, command, or keyboard shortcut
-- A new dependency
-- Anything touching an invariant in `CLAUDE.md`
-- Changing what a spec's **behavioral** acceptance criterion says (an `e2e/F-xxx` behavior test would have to change its expectation, not just its selector)
+- Data, storage, sync, server (`worker/`), migrations, the Yjs path, or a new screen, dialog, menu, command, or keyboard shortcut → a **small change** (`CLAUDE.md` "Direction" 3): build it without a spec and log it in `specs/small-changes.md`
+- A new dependency, anything touching an invariant in `CLAUDE.md`, or security work → `write-spec`
+- Changing what a spec's **behavioral** acceptance criterion says (an `e2e/F-xxx` behavior test would have to change its expectation, not just its selector) → a small change; name the criterion in its `specs/small-changes.md` line
 
 If it is borderline, say which side you put it on and why in one line, then proceed. If the user disagrees, they will say so.
 
