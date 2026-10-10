@@ -6785,8 +6785,10 @@ h3.panel-settings-title:not(:first-child) {
   stroke-width: 2;
 }
 
-.panel-graph-empty {
-  padding: 12px 16px;
+/* 빈·읽는 중 문구도 그래프처럼 칸 가운데 */
+.panel-graph > .doc-links-empty {
+  margin: auto 0;
+  text-align: center;
 }
 
 .calendar {

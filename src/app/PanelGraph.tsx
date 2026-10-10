@@ -55,7 +55,13 @@ export default function PanelGraph({ view }: { view: DocGraphView }) {
     return () => cancelAnimationFrame(id)
   }, [layout, reduced])
 
-  if (!links.hasDoc) return <p className="doc-links-empty panel-graph-empty">문서를 열면 연결이 여기에 나옵니다.</p>
+  if (!links.hasDoc) {
+    return (
+      <div className="panel-graph">
+        <p className="doc-links-empty">문서를 열면 연결이 여기에 나옵니다.</p>
+      </div>
+    )
+  }
   const ready = layout !== null && layout.key === nodesKey
   const spread = reduced || spreadKey === nodesKey
   const current = Math.min(activeIndex, Math.max(0, count - 1))
