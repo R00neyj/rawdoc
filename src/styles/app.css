@@ -4629,6 +4629,12 @@ body.sidebar-resizing {
   cursor: pointer;
 }
 
+.dialog .e2ee-password-hint {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
 .e2ee-error {
   color: var(--danger);
 }
@@ -6003,6 +6009,7 @@ body.sidebar-resizing {
   .empty-state-recent-date,
   .dialog-field > span,
   .dialog-note,
+  .dialog .e2ee-password-hint,
   .e2ee-convert-dialog .e2ee-backup-notice,
   .notice button:not(.icon-btn),
   .search-result-meta,

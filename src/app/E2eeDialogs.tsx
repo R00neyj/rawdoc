@@ -2,11 +2,16 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import Dialog from './Dialog'
 import { downloadBlob } from './exportDoc'
-import { isE2eePasswordLongEnough } from '../lib/e2eeLimits'
+import { E2EE_MIN_PASSWORD_CHARS, isE2eePasswordLongEnough } from '../lib/e2eeLimits'
 import type { E2eeActionError, E2eeScope, Keyring } from '../e2ee/keyring'
 
 function samePassword(a: string, b: string): boolean {
   return a.normalize('NFC') === b.normalize('NFC')
+}
+
+// 새 암호 칸 아래 길이 규칙 — 틀린 뒤에야 알던 조건을 미리 보인다
+function PasswordHint({ id }: { id: string }) {
+  return <p id={id} className="e2ee-password-hint">{E2EE_MIN_PASSWORD_CHARS}자 이상</p>
 }
 
 // 7.9 표 — 오류 코드 → 대화상자 오류 줄. D-12 의 wrong-password 는 호출부가 따로 바꾼다
@@ -343,9 +348,11 @@ function CreateDialog({
                 type="password"
                 autoComplete="new-password"
                 aria-labelledby="e2ee-create-password-label"
+                aria-describedby="e2ee-create-password-hint"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              <PasswordHint id="e2ee-create-password-hint" />
             </div>
             <div className="dialog-field">
               <span id="e2ee-create-confirm-label">암호 확인</span>
@@ -550,9 +557,11 @@ function UnlockDialog({
                 type="password"
                 autoComplete="new-password"
                 aria-labelledby="e2ee-new-password-label"
+                aria-describedby="e2ee-new-password-hint"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              <PasswordHint id="e2ee-new-password-hint" />
             </div>
             <div className="dialog-field">
               <span id="e2ee-new-confirm-label">암호 확인</span>
@@ -681,9 +690,11 @@ function ChangePasswordDialog({
             type="password"
             autoComplete="new-password"
             aria-labelledby="e2ee-next-password-label"
+            aria-describedby="e2ee-next-password-hint"
             value={next}
             onChange={(e) => setNext(e.target.value)}
           />
+          <PasswordHint id="e2ee-next-password-hint" />
         </div>
         <div className="dialog-field">
           <span id="e2ee-next-confirm-label">암호 확인</span>
