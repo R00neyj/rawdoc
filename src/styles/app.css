@@ -2834,8 +2834,8 @@ body.sidebar-resizing {
   transition: var(--transition-colors);
 }
 
-.dialog-actions button:hover,
-.dialog-btn:hover {
+.dialog-actions button:hover:not(:disabled),
+.dialog-btn:hover:not(:disabled) {
   background: var(--rule-2);
 }
 
@@ -2847,6 +2847,16 @@ body.sidebar-resizing {
 
 .dialog-actions button.danger:hover {
   filter: brightness(0.95);
+}
+
+/* 비활성 버튼이 눌릴 것처럼 보였다 — 글자를 흐리고 호버·위험 색을 뺀다 */
+.dialog-actions button:disabled,
+.dialog-actions button.danger:disabled {
+  border-color: var(--rule);
+  background: none;
+  color: var(--muted);
+  filter: none;
+  cursor: default;
 }
 
 /* 보조 동작(암호를 잊었나요? 등)은 글자 링크로 낮추고 왼쪽 끝으로 떼어 주 버튼과 헷갈리지 않게 */
