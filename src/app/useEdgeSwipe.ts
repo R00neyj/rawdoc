@@ -39,10 +39,11 @@ function hasScrollableLeftAncestor(start: Element | null): boolean {
 }
 
 // 시작 지점 조상 중 오른쪽으로 더 스크롤될 수 있는 요소가 있는가 (F-2089 4.2)
+// overflow visible·hidden 은 손가락으로 못 민다 — 몇 px 넘친 .cm-content 가 편집기 전체 밀기를 막았다
 export function hasScrollableRightAncestor(start: Element | null): boolean {
   let node: Element | null = start
   while (node) {
-    if (node.scrollWidth > node.clientWidth && node.scrollWidth - node.clientWidth - node.scrollLeft > 1) return true
+    if (node.scrollWidth - node.clientWidth - node.scrollLeft > 1 && /^(auto|scroll)$/.test(getComputedStyle(node).overflowX)) return true
     node = node.parentElement
   }
   return false
