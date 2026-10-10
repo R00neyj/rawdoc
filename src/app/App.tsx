@@ -1382,8 +1382,9 @@ export default function App() {
           )}
         </div>
         {narrow && !phone && calendar.panelOpen && <div className="right-panel-backdrop" onClick={calendar.closePanel} />}
-        {calendar.panelOpen && (
+        {(calendar.panelOpen || phone) && (
           <RightPanel
+            open={calendar.panelOpen}
             narrow={narrow}
             view={calendar.view}
             onClose={phone ? sidePanel.closeAndReturn : calendar.closePanel}

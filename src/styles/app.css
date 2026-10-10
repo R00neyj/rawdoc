@@ -6517,6 +6517,13 @@ a.dialog-btn {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    transition: flex-grow var(--transition-move);
+  }
+
+  /* 접힘 — 몸통을 지우지 않고 0 으로 줄여 높이가 부드럽게 바뀐다 */
+  .side-panel-body[data-collapsed] {
+    flex-grow: 0;
+    overflow: hidden;
   }
 
   /* 목차 줄이 포털되는 자리 — 목록이 바로 이 칸의 스크롤 영역이 되게 */

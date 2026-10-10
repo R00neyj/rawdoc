@@ -1,6 +1,7 @@
 // 오른쪽 패널 — 지금은 달력 하나. 넓은 창은 메인 열 오른쪽 고정 폭, 좁은 창은 오른쪽에서 겹쳐 연다 (small 2026-10-10)
 import { dayKey, type CalendarDay } from '../lib/calendar'
 import { IconChevron, IconChevronLeft, IconClose } from './icons'
+import usePresence from './usePresence'
 import type { CalendarView } from './useCalendarPanel'
 import type { PhoneSideSections } from './usePhoneSidePanel'
 
@@ -88,48 +89,50 @@ function SectionToggle({ label, expanded, onToggle }: { label: string; expanded:
 }
 
 // 휴대폰 폭 — 왼쪽 밀기로 여는 달력(위)·목차(아래) 패널. 목차 줄은 Outline 이 onOutlineSlot 자리로 포털한다
-function PhoneSidePanel({ view, onClose, phone }: { view: CalendarView; onClose: () => void; phone: PhoneSidePanelProps }) {
+// 닫힘·접힘도 전환이 보이게 패널은 usePresence 로, 칸 몸통은 늘 그려 두고 flex-grow 로 줄인다
+function PhoneSidePanel({ open, view, onClose, phone }: { open: boolean; view: CalendarView; onClose: () => void; phone: PhoneSidePanelProps }) {
   const { sections, onToggleSection, onOutlineSlot, hasDoc } = phone
+  const { mounted, state } = usePresence(open)
+  if (!mounted) return null
   return (
     <>
-      <div className="outline-panel-backdrop" onClick={onClose} />
-      <nav className="outline-panel side-panel" data-ui="right-panel" aria-label="달력과 목차" data-state="open">
+      {open && <div className="outline-panel-backdrop" onClick={onClose} />}
+      <nav className="outline-panel side-panel" data-ui="right-panel" aria-label="달력과 목차" data-state={state} inert={state === 'closed'}>
         <div className="outline-panel-head">
           <SectionToggle label="달력" expanded={sections.calendar} onToggle={() => onToggleSection('calendar')} />
           <button type="button" className="icon-btn outline-panel-close" aria-label="패널 닫기" onClick={onClose}>
             <IconClose size={20} />
           </button>
         </div>
-        {sections.calendar && (
-          <div className="side-panel-body">
-            <CalendarMonth view={view} />
-          </div>
-        )}
+        <div className="side-panel-body" data-collapsed={sections.calendar ? undefined : ''} inert={!sections.calendar}>
+          <CalendarMonth view={view} />
+        </div>
         <div className="side-panel-head">
           <SectionToggle label="목차" expanded={sections.outline} onToggle={() => onToggleSection('outline')} />
         </div>
-        {sections.outline && (
-          <div className="side-panel-body">
-            {hasDoc ? <div ref={onOutlineSlot} /> : <p className="side-panel-empty">문서를 열면 제목이 여기에 나옵니다.</p>}
-          </div>
-        )}
+        <div className="side-panel-body" data-collapsed={sections.outline ? undefined : ''} inert={!sections.outline}>
+          {hasDoc ? <div ref={onOutlineSlot} /> : <p className="side-panel-empty">문서를 열면 제목이 여기에 나옵니다.</p>}
+        </div>
       </nav>
     </>
   )
 }
 
 export default function RightPanel({
+  open,
   narrow,
   view,
   onClose,
   phone,
 }: {
+  open: boolean
   narrow: boolean
   view: CalendarView
   onClose: () => void
   phone?: PhoneSidePanelProps
 }) {
-  if (phone) return <PhoneSidePanel view={view} onClose={onClose} phone={phone} />
+  if (phone) return <PhoneSidePanel open={open} view={view} onClose={onClose} phone={phone} />
+  if (!open) return null
   return (
     <aside className={narrow ? 'right-panel right-panel--overlay' : 'right-panel'} data-ui="right-panel" aria-label="달력">
       <div className="right-panel-head">
