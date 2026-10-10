@@ -23,7 +23,7 @@ test('달력 — 설정대로 날짜 문서를 만들고, 다시 누르면 그 �
   await page.getByRole('button', { name: '닫기', exact: true }).click()
   await expect(settings).toBeHidden()
 
-  await page.getByRole('button', { name: '달력', exact: true }).click()
+  // 넓은 창은 기본 열림
   const panel = page.getByRole('complementary', { name: '달력' })
   await expect(panel.getByText('2026년 10월')).toBeVisible()
 

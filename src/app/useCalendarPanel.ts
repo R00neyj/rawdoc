@@ -62,7 +62,7 @@ export type UseCalendarPanelResult = {
 
 export function useCalendarPanel(options: UseCalendarPanelOptions): UseCalendarPanelResult {
   const { narrow, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate } = options
-  const [widePref, setWidePref] = useState(() => getPref('md.rightPanel', 'closed'))
+  const [widePref, setWidePref] = useState(() => getPref('md.rightPanel', 'open'))
   const [narrowOpen, setNarrowOpen] = useState(false)
   // 넓은 창으로 돌아가면 겹침 열림은 버린다 — 렌더 중 조정
   const [narrowSeen, setNarrowSeen] = useState(narrow)
