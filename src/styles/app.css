@@ -6727,6 +6727,24 @@ a.dialog-btn {
   background: var(--accent);
 }
 
+/* 달력 아래 그날 문서 — 길면 이 칸 안에서만 스크롤 (small 2026-10-11) */
+.calendar-day-docs {
+  max-height: 220px;
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--rule);
+  overflow-y: auto;
+}
+
+.calendar-day-docs-title {
+  margin: 0;
+  padding: 6px 8px 2px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
 .settings-text {
   width: 100%;
   padding: 8px 10px;
@@ -6853,10 +6871,28 @@ a.dialog-btn {
     display: contents;
   }
 
-  /* 스크롤하지 않는다 — 칸 높이를 고정해 폭이 바뀌어도 줄 높이가 흔들리지 않고, 칸보다 길면 칸이 잘라 낸다 */
+  /* 격자 줄 높이는 고정하고, 남는 높이는 그날 문서 목록이 받아 그 안에서 스크롤한다 */
   .side-panel .calendar {
-    flex: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
     padding: 0 12px 12px;
+  }
+
+  .side-panel .calendar-nav,
+  .side-panel .calendar-grid {
+    flex: none;
+  }
+
+  .side-panel .calendar-day-docs {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .side-panel .calendar-day-docs-title {
+    font-size: 16px;
   }
 
   .side-panel .calendar-day {

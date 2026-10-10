@@ -2,7 +2,7 @@
 import type { Doc, LineEnding } from '../types'
 
 // lineEnding 은 실시간 경로가 편집기를 열 때 읽는다 — 본문을 store.get 으로 읽지 않기 때문이다 (F-305 5.2)
-export type DocMeta = Pick<Doc, 'id' | 'title' | 'updatedAt' | 'folderId' | 'pinnedAt' | 'role' | 'ownerEmail' | 'viaFolder' | 'e2ee'> & {
+export type DocMeta = Pick<Doc, 'id' | 'title' | 'createdAt' | 'updatedAt' | 'folderId' | 'pinnedAt' | 'role' | 'ownerEmail' | 'viaFolder' | 'e2ee'> & {
   lineEnding?: LineEnding
 }
 export type OpenDoc = { id: string; content: string; lineEnding: LineEnding }
@@ -16,6 +16,7 @@ export function stripContent(doc: Omit<Doc, 'content'>): DocMeta {
   return {
     id: doc.id,
     title: doc.title,
+    createdAt: doc.createdAt, // 달력 그날 문서 (small 2026-10-11)
     updatedAt: doc.updatedAt,
     folderId: doc.folderId ?? null,
     pinnedAt: doc.pinnedAt ?? null, // F-132

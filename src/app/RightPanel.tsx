@@ -5,6 +5,7 @@ import usePresence from './usePresence'
 import PanelLinks from './PanelLinks'
 import PanelTodos from './PanelTodos'
 import PanelGraph from './PanelGraph'
+import CalendarDayDocs from './CalendarDayDocs'
 import { PANEL_VIEW_LABELS, type PanelSlotState, type PanelViewId } from './useRightPanel'
 import type { CalendarView } from './useCalendarPanel'
 import type { DocGraphView, DocLinksView, DocTodosView } from './usePanelDocs'
@@ -73,6 +74,7 @@ function CalendarMonth({ view }: { view: CalendarView }) {
           ))}
         </tbody>
       </table>
+      <CalendarDayDocs view={view} />
     </div>
   )
 }

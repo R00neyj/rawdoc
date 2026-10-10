@@ -56,7 +56,7 @@ src/
     useNewDocTemplate.ts newDocTemplate.ts 새 문서 템플릿 목록·원문 읽기·본문 (F-2052, F-2078)
     useTemplateManager.ts TemplateManagerDialog.tsx 템플릿 관리 D-22 열기·새 템플릿·편집·삭제 (small 2026-10-10)
     useRightPanel.ts RightPanel.tsx 오른쪽 패널 열림·칸(보기 목록·‹ › 넘기기) (small 2026-10-10, 2026-10-11)
-    useCalendarPanel.ts CalendarSettingsTab.tsx TemplateSelectField.tsx 오른쪽 패널 `달력` 보기·설정 달력 탭 (small 2026-10-10)
+    useCalendarPanel.ts CalendarDayDocs.tsx CalendarSettingsTab.tsx TemplateSelectField.tsx 오른쪽 패널 `달력` 보기·그날 문서·설정 달력 탭 (small 2026-10-10, 2026-10-11)
     usePanelDocs.ts PanelLinks.tsx PanelTodos.tsx PanelGraph.tsx 오른쪽 패널 `링크`·`할 일`·`그래프` 보기 — 목록 한 번 읽기를 나눠 씀, 백링크·나가는 링크·언급, 문서별 미완료 체크박스, 1단계 2D 미니 그래프(SVG, d3-force-3d 지연 로드) (small 2026-10-11)
     useAccountStatus.ts 계정 플래그 반영·다시 읽기(online·화면 복귀·10분) (F-2026, F-2079)
     useAccountDelete.ts 계정 삭제 대화상자 열기·실행 (F-2079)
@@ -141,7 +141,7 @@ src/
 - 명령 팔레트 서식 명령(2026-09-28)으로 추가
   - `app/`: `paletteEditorCommands.ts`(F-2055 — `EDITOR_COMMANDS` 를 팔레트 명령으로 옮기는 순수 목록). 새 저장 키 없음
 - 오른쪽 패널·달력(2026-10-10 small)으로 추가
-  - `lib/`: `calendar.ts`(월 격자·날짜 문서 제목·폴더 안 날짜 문서 찾기, 순수 함수)
+  - `lib/`: `calendar.ts`(월 격자·날짜 문서 제목·폴더 안 날짜 문서 찾기·제목에서 날짜 읽기·그날 만든/고친 문서, 순수 함수)
 - 오른쪽 패널 칸·링크 보기(2026-10-11 small)로 추가
   - `lib/`: `panelSlots.ts`(칸의 지금 보기·넘기기·저장값 읽기), `docLinks.ts`(백링크·나가는 링크·연결되지 않은 언급·줄 발췌), `docTodos.ts`(미완료 체크박스·문서별 훑기·300개 상한 묶음), `localGraph.ts`(1단계 그래프 노드·2차원 힘 배치 — d3 모듈을 인자로 받는다), 모두 순수 함수. `wikiGraph.ts` 는 프론트매터·펜스 밖 줄 훑기 `proseLines`(원문 줄 번호 포함)를 내보낸다
 - DO 서버·`/ws` 인증(2026-09-24)으로 추가

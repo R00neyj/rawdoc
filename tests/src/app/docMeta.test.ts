@@ -17,11 +17,11 @@ const full: Doc = {
 }
 
 describe('stripContent', () => {
-  it('U21 본문·생성 시각을 빼고 키 순서를 지킨다', () => {
+  it('U21 본문을 빼고 키 순서를 지킨다 — 생성 시각은 달력 그날 문서가 쓴다(small 2026-10-11)', () => {
     const r = stripContent(full)
     expect('content' in r).toBe(false)
-    expect('createdAt' in r).toBe(false)
-    expect(Object.keys(r)).toEqual(['id', 'title', 'updatedAt', 'folderId', 'pinnedAt', 'role', 'ownerEmail', 'viaFolder', 'lineEnding'])
+    expect(r.createdAt).toBe(1)
+    expect(Object.keys(r)).toEqual(['id', 'title', 'createdAt', 'updatedAt', 'folderId', 'pinnedAt', 'role', 'ownerEmail', 'viaFolder', 'lineEnding'])
   })
   it('U22 undefined 는 null 로', () => {
     const r = stripContent({ ...full, folderId: undefined, pinnedAt: undefined, viaFolder: undefined } as unknown as Doc)
