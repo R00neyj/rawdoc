@@ -2451,10 +2451,6 @@ body.sidebar-resizing {
   color: var(--ink-2);
 }
 
-.e2ee-locked-panel .dialog-note {
-  text-align: left;
-}
-
 /* 금고로 옮기기·빼기 D-9·D-10 — 덧붙임 줄과 백업 안내 (F-407 7.6) */
 .e2ee-convert-dialog .e2ee-convert-note {
   margin: 8px 0 0;
@@ -2477,13 +2473,11 @@ body.sidebar-resizing {
   margin: 8px 0 0;
   font-size: 13px;
   color: var(--ink-2);
-  text-align: left;
 }
 
-/* 폴더 삭제 대화상자, 버튼 3개(취소·위로 옮기기·전부 삭제) 아래 보조 문구 (F-242.md 3.5) */
+/* 보조 문구는 왼쪽. 오른쪽 정렬 버튼 줄 바로 아래 붙을 때만 오른쪽(폴더 삭제 대화상자, F-242.md 3.5) */
 .dialog-note {
   margin: 8px 0 0;
-  text-align: right;
   font-size: 12.5px;
   color: var(--muted);
 }
@@ -2491,6 +2485,7 @@ body.sidebar-resizing {
 /* `.dialog p` 의 아래 16px 이 위 8px 을 덮어 버튼 줄 아래 보조 문구가 붙어 보였다 — 버튼 줄 바로 뒤면 위로 (tweak 2026-10-01) */
 .dialog-actions + .dialog-note {
   margin: 8px 0 0;
+  text-align: right;
 }
 
 /* 검색 대화상자 (specs/features/F-287.md 4.1) */
@@ -2767,7 +2762,6 @@ body.sidebar-resizing {
 
 .dialog-btn-row .dialog-note {
   margin: 0;
-  text-align: left;
 }
 
 /* 설정 데이터 탭 — 내보내기·가져오기 묶음, 버튼 + 한 줄 설명 (tweak 2026-09-26) */
@@ -2809,7 +2803,6 @@ body.sidebar-resizing {
 .data-grid .data-row-note {
   grid-column: 1 / -1;
   margin: 0;
-  text-align: left;
 }
 
 @media (max-width: 459px) {
@@ -5140,19 +5133,12 @@ body.sidebar-resizing {
 /* 설정 `계정` 탭·계정 삭제 대화상자 D-15 (F-2038.md 6.1·6.3) — 모양은 사람 확인 H1 */
 .settings-panel .settings-account-email {
   margin: 0 0 12px;
-  text-align: left;
   font-size: 13px;
   color: var(--ink-2);
 }
 
 .settings-panel .settings-account-note {
   margin: 12px 0 0;
-  text-align: left;
-}
-
-/* 설정 패널의 보조 문구는 창 폭과 무관하게 왼쪽 — .dialog-note 의 오른쪽 정렬은 오른쪽 정렬 버튼 줄 아래 붙는 폴더 삭제 대화상자(F-242 3.5) 기준이다 (tweak 2026-09-30) */
-.settings-panel .dialog-note {
-  text-align: left;
 }
 
 .dialog-btn.danger {
@@ -6243,10 +6229,6 @@ a.dialog-btn {
   border-color: var(--accent);
 }
 
-.dialog-note.github-pull-intro {
-  text-align: left;
-}
-
 /* 좁은 화면에서는 덩어리 버튼이 줄 글자를 가리지 않게 따로 한 줄로 (tweak 2026-10-04) */
 @media (max-width: 600px) {
   .github-pull-merge .cm-editor .cm-chunkButtons {
@@ -6273,10 +6255,6 @@ a.dialog-btn {
   display: flex;
   gap: 8px;
   margin-right: auto;
-}
-
-.dialog-note.github-push-note {
-  text-align: left;
 }
 
 .github-push-target {
