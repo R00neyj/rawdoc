@@ -49,17 +49,18 @@ test.describe('휴대폰 폭', () => {
     await expect(page.locator('.outline-panel')).toHaveAttribute('data-state', 'open')
   }
 
-  test('링크 보기 — 위 칸을 다음 보기로 넘기면 링크가 보이고, 새로고침 뒤에도 그 보기다', async ({ page }) => {
+  test('링크 보기 — 위 칸을 다음 보기로 링크까지 넘기면 링크가 보이고, 새로고침 뒤에도 그 보기다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { name: '일지.md', content: '오늘 [[회의]] 를 했다\n' })
     await importMarkdown(page, { name: '회의.md', content: '내용\n' })
 
     await swipeOpen(page)
     const side = page.locator('.outline-panel')
+    // 위 칸 보기 순서: 달력 → 그래프 → 링크 → 할 일
+    await side.getByRole('button', { name: '다음 보기' }).tap()
     await side.getByRole('button', { name: '다음 보기' }).tap()
     await expect(side.getByRole('button', { name: '링크', exact: true })).toHaveAttribute('aria-expanded', 'true')
     await expect(side.locator('.doc-link-item', { hasText: '일지' })).toBeVisible()
-
     await page.reload()
     await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
     await swipeOpen(page)

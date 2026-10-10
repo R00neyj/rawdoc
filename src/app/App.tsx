@@ -1142,8 +1142,9 @@ export default function App() {
     closePanelIfNarrow: rightPanel.closeIfNarrow, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate,
   })
   const panelDocs = usePanelDocs({
-    linksActive: rightPanel.shownViews.includes('links'), todosActive: rightPanel.shownViews.includes('todos'), listSource, docs, folders, currentDoc,
-    editor: editorHandle, resolver: wikiResolver, e2eeOpen: e2ee?.status === 'open', selectDoc, openWikiLinkTarget, pendingJumpRef, jumpToLine, afterOpen: rightPanel.closeIfNarrow,
+    linksActive: rightPanel.shownViews.includes('links'), graphActive: rightPanel.shownViews.includes('graph'), todosActive: rightPanel.shownViews.includes('todos'),
+    listSource, docs, folders, currentDoc, editor: editorHandle, resolver: wikiResolver, e2eeOpen: e2ee?.status === 'open', selectDoc, openWikiLinkTarget, openMap,
+    pendingJumpRef, jumpToLine, afterOpen: rightPanel.closeIfNarrow,
   })
   const sidePanel = usePhoneSidePanel({
     appShellRef, enabled: phone && bootPhase === 'ready' && !sharedDoc && !mapRoute, open: rightPanel.open, onOpen: rightPanel.openPanel, onClose: rightPanel.closePanel,

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { findIncomingLinks, findOutgoingLinks, MENTION_MIN_LENGTH, type IncomingLinks, type OutgoingLinkRow } from '../lib/docLinks'
 import { findOpenTodos, groupTodos, scanTodoSources, type TodoGroup } from '../lib/docTodos'
+import { buildLocalGraph, type LocalGraph } from '../lib/localGraph'
 import type { WikiResolver } from '../lib/wikiResolve'
 import type { EditorHandle } from '../editor/Editor'
 import type { DocMeta } from './docMeta'
@@ -25,8 +26,15 @@ export type DocTodosView = {
   onOpenItem: (docId: string, line: number) => void
 }
 
+export type DocGraphView = {
+  links: DocLinksView
+  graph: LocalGraph | null
+  onOpenMap: () => void
+}
+
 export function usePanelDocs(options: {
   linksActive: boolean
+  graphActive: boolean
   todosActive: boolean
   listSource: { list(): Promise<Doc[]> }
   docs: DocMeta[]
@@ -40,9 +48,12 @@ export function usePanelDocs(options: {
   pendingJumpRef: RefObject<PendingJump | null>
   jumpToLine: (line: number) => void
   afterOpen: () => void
-}): { links: DocLinksView; todos: DocTodosView } {
-  const { linksActive, todosActive, listSource, docs, folders, currentDoc, editor, resolver, e2eeOpen } = options
-  const { selectDoc, openWikiLinkTarget, pendingJumpRef, jumpToLine, afterOpen } = options
+  openMap: () => Promise<void>
+}): { links: DocLinksView; todos: DocTodosView; graph: DocGraphView } {
+  const { todosActive, listSource, docs, folders, currentDoc, editor, resolver, e2eeOpen } = options
+  const { selectDoc, openWikiLinkTarget, pendingJumpRef, jumpToLine, afterOpen, openMap } = options
+  // 그래프는 링크 보기의 백링크·나가는 링크로 그린다
+  const linksActive = options.linksActive || options.graphActive
   const active = linksActive || todosActive
   const currentId = currentDoc && currentDoc.e2ee !== 'locked' ? currentDoc.id : null
   const currentTitle = currentDoc?.title ?? ''
@@ -119,19 +130,35 @@ export function usePanelDocs(options: {
     return { ...groupTodos(own, otherTodos.docs), lockedCount: otherTodos.lockedCount }
   }, [otherTodos, current, currentText])
 
+  const incoming = current && listed?.forId === current.id ? listed.incoming : null
+  const graphActive = options.graphActive
+  const graph = useMemo(
+    () => (graphActive && current && incoming ? buildLocalGraph({ center: current, outgoing, backlinks: incoming.backlinks }) : null),
+    [graphActive, current, incoming, outgoing],
+  )
+  const links: DocLinksView = {
+    hasDoc: current !== null,
+    incoming,
+    mentionsOff: Array.from(currentTitle.trim()).length < MENTION_MIN_LENGTH,
+    outgoing,
+    onOpenDoc: (id) => {
+      afterOpen()
+      void selectDoc(id)
+    },
+    onOpenTarget: (target) => {
+      afterOpen()
+      void openWikiLinkTarget(target)
+    },
+  }
+
   return {
-    links: {
-      hasDoc: current !== null,
-      incoming: current && listed?.forId === current.id ? listed.incoming : null,
-      mentionsOff: Array.from(currentTitle.trim()).length < MENTION_MIN_LENGTH,
-      outgoing,
-      onOpenDoc: (id) => {
+    links,
+    graph: {
+      links,
+      graph,
+      onOpenMap: () => {
         afterOpen()
-        void selectDoc(id)
-      },
-      onOpenTarget: (target) => {
-        afterOpen()
-        void openWikiLinkTarget(target)
+        void openMap()
       },
     },
     todos: {

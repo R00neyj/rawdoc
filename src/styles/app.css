@@ -6546,6 +6546,100 @@ a.dialog-btn {
   border-radius: 3px;
 }
 
+/* `그래프` 보기 — 2D 미니 그래프. 노드는 가운데에서 펼쳐지고, 움직임 줄이기면 토큰이 0ms 라 바로 놓인다 (small 2026-10-11) */
+.panel-graph {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 280px;
+  padding: 4px 8px 8px;
+}
+
+.panel-graph-map {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  z-index: 1;
+  padding: 4px 8px;
+  border-radius: var(--radius-control);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.panel-graph-map:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+.panel-graph-svg {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: visible;
+}
+
+.panel-graph-edge {
+  stroke: var(--rule);
+  stroke-width: 1;
+  transition: transform var(--transition-move);
+}
+
+.panel-graph-node {
+  cursor: pointer;
+  outline: none;
+  transition: transform var(--transition-move);
+}
+
+.panel-graph-node circle {
+  fill: var(--surface);
+  stroke: var(--muted);
+  stroke-width: 1.2;
+}
+
+.panel-graph-node text {
+  font-family: var(--font-sans);
+  font-size: 8.5px;
+  fill: var(--ink);
+  pointer-events: none;
+}
+
+.panel-graph-node--center {
+  cursor: default;
+}
+
+.panel-graph-node--center circle {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+.panel-graph-node--center text {
+  font-weight: 600;
+}
+
+.panel-graph-node--missing circle {
+  stroke-dasharray: 2 1.5;
+}
+
+/* 눈에 보이는 점보다 넓게 눌리게 — 휴대폰 위 칸에서 지름 약 44px */
+.panel-graph-node circle.panel-graph-hit {
+  fill: transparent;
+  stroke: none;
+}
+
+.panel-graph-node--missing text {
+  fill: var(--muted);
+}
+
+.panel-graph-node:hover circle:not(.panel-graph-hit),
+.panel-graph-node:focus-visible circle:not(.panel-graph-hit) {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.panel-graph-empty {
+  padding: 12px 16px;
+}
+
 .calendar {
   padding: 12px;
 }
@@ -6686,6 +6780,18 @@ a.dialog-btn {
   }
 
   .side-panel .doc-links-title {
+    font-size: 13.5px;
+  }
+
+  /* 위 칸 높이를 다 쓴다 */
+  .side-panel .panel-graph {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+  }
+
+  .side-panel .panel-graph-map {
+    min-height: var(--touch-target);
     font-size: 13.5px;
   }
 

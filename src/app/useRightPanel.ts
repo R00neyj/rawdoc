@@ -3,17 +3,17 @@ import { useCallback, useState } from 'react'
 import { getPref, setPref } from './prefs'
 import { cycleSlotView, parseSlotViews, slotView, type PanelSlot, type SlotViews } from '../lib/panelSlots'
 
-export type PanelViewId = 'calendar' | 'links' | 'todos'
+export type PanelViewId = 'calendar' | 'graph' | 'links' | 'todos'
 
-export const PANEL_VIEW_LABELS: Record<PanelViewId, string> = { calendar: '달력', links: '링크', todos: '할 일' }
+export const PANEL_VIEW_LABELS: Record<PanelViewId, string> = { calendar: '달력', graph: '그래프', links: '링크', todos: '할 일' }
 
 // 넓은 창은 위에서부터 최대 세 칸, 휴대폰은 위 칸 하나(아래 목차는 고정). 보기를 더할 때는 이 목록에만 넣는다
 const WIDE_SLOTS: PanelSlot<PanelViewId>[] = [
-  { id: 'wide1', views: ['calendar'] },
+  { id: 'wide1', views: ['calendar', 'graph'] },
   { id: 'wide2', views: ['links'] },
   { id: 'wide3', views: ['todos'] },
 ]
-const PHONE_TOP_SLOT: PanelSlot<PanelViewId> = { id: 'phoneTop', views: ['calendar', 'links', 'todos'] }
+const PHONE_TOP_SLOT: PanelSlot<PanelViewId> = { id: 'phoneTop', views: ['calendar', 'graph', 'links', 'todos'] }
 
 export type PanelSlotState = { id: string; views: readonly PanelViewId[]; view: PanelViewId; onCycle: (step: 1 | -1) => void }
 
