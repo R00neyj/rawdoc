@@ -335,7 +335,7 @@ function CreateDialog({
               금고에 넣은 문서는 이 기기에서 암호화한 뒤 저장합니다. 서버와 운영자도 내용을 읽을 수 없습니다. 금고 암호와 복구 코드를 모두 잃으면
               누구도 되살릴 수 없습니다.
             </p>
-            {scope?.kind === 'local' && <p className="dialog-note">이 금고는 이 브라우저에만 있습니다. 로그인하면 계정 금고로 옮길 수 있습니다.</p>}
+            {scope?.kind === 'local' && <p className="dialog-callout">이 금고는 이 브라우저에만 있습니다. 로그인하면 계정 금고로 옮길 수 있습니다.</p>}
             <div className="dialog-field">
               <span id="e2ee-create-password-label">금고 암호</span>
               <input

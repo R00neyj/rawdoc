@@ -2488,6 +2488,19 @@ body.sidebar-resizing {
   text-align: right;
 }
 
+/* 놓치면 곤란한 안내 — 흐린 보조 문구 대신 메인 색을 옅게 깐 상자 */
+.dialog-callout {
+  margin: 12px 0 16px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-left-width: 3px;
+  border-left-color: var(--accent);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+  font-size: 13px;
+  color: var(--ink);
+}
+
 /* 검색 대화상자 (specs/features/F-287.md 4.1) */
 .search-input-row {
   display: flex;
