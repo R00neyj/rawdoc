@@ -70,6 +70,8 @@ function seedRoom(room, role = 'view') {
 
 // "셋째 줄 고양이" 의 "고양이" 를 마우스로 끌어 고른다 — 읽기 전용 편집기라 키보드 선택 대신
 async function selectCat(page) {
+  // 보기 권한 문서는 저장 상태가 먼저 뜨고 방 본문이 뒤따라 그려진다 — 줄이 생길 때까지 기다린다
+  await expect(page.locator('.cm-content .cm-line', { hasText: '고양이' })).toBeVisible()
   const box = await page.evaluate(() => {
     const line = [...document.querySelectorAll('.cm-content .cm-line')].find((el) => el.textContent.includes('고양이'))
     const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT)
