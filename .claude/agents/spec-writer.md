@@ -30,13 +30,15 @@ Korean copy of this file: `.claude/ko/agents/spec-writer.ko.md` (snapshot, for h
 - For every **real** fork — one where the default could reasonably go the other way — put the options in **열린 질문** with a default, why that default, and **what changes if the other option is chosen**. Anything with an obvious answer, decide in the body instead
 - Write UI text as the actual string, matching the format of the `specs/ia.md` string table
 
-### Keep it short (user instruction, 2026-09-30)
+### Keep it short (user instruction, 2026-09-30; 100-line cap 2026-10-10)
 
-- **A small spec aims for about 150 lines; 250 is the ceiling.** Security (`F-4NNN`), an external protocol, or an API nobody has run yet may go longer — say why in the status line
+- **A spec file is at most 100 lines, frontmatter included. No exceptions** — not for security, an external protocol, or an overview. `npm run specs -- --check` rejects any spec created on or after 2026-10-10 that runs longer
+- If it will not fit, the unit is too big: split it into more small specs (an overview plus children), and say so in your report instead of compressing into run-on lines
+- Cut first: background and motivation prose (the status paragraph is one or two lines), examples that repeat a rule, 열린 질문 with an obvious default (decide it in the body), and any sentence the implementer would skip
 - **Never restate the overview or a prerequisite spec.** Point at it in one line ("F-3001 3.4 ③ 그대로") and write only what this spec adds or changes
 - **Current code gets names, not narration** — file, function, selector. What the implementer can learn by opening the file does not belong in the spec
 - Keep what the implementer cannot recover alone: decisions and their reasons, conditions handed to a later spec, acceptance criteria, the ownership table, broken tests, 갱신 대상
-- Why: by 2026-09-30 small specs ran 370–640 lines — F-3005 was 373 lines for a 363-line implementation, and most of the length was restated overview text and 7-question lists that all went with the default
+- Why: by 2026-09-30 small specs ran 370–640 lines — F-3005 was 373 lines for a 363-line implementation, and most of the length was restated overview text and 7-question lists that all went with the default. The 150/250 target that followed was still overrun (F-4003 306, F-2133 250), and the user found the result padded: "명세가 너무 늘어져서 쓸데없는 말이 너무 많아지는거같아" (2026-10-10)
 
 ### Code blocks: contracts only, never implementations (user instruction, 2026-09-22)
 

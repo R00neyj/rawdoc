@@ -7,6 +7,9 @@ const DIR = 'specs/features'
 const STATUSES = ['draft', 'pending', 'approved', 'done', 'deferred', 'superseded', 'overview']
 // 구현이 남은 것 — done·deferred·superseded·overview 는 할 일이 아니다
 const TODO = ['draft', 'pending', 'approved']
+// 명세 한 파일 상한(프런트매터 포함). 이날 이후 created 인 명세만 검사한다 — 사용자 지시 2026-10-10
+const MAX_LINES = 100
+const MAX_LINES_FROM = '2026-10-10'
 
 function parseArgs(argv) {
   const opts = { status: null, milestone: null, todo: false, check: false, json: false }
@@ -47,7 +50,11 @@ function load() {
     .filter((f) => /^F-\d+\.md$/.test(f))
     // 숫자 정렬 — 문자열 정렬이면 네 자리 번호(F-2001)가 세 자리(F-201) 앞으로 간다
     .sort((a, b) => Number(a.slice(2, -3)) - Number(b.slice(2, -3)))
-    .map((f) => ({ file: `${DIR}/${f}`, fm: frontmatter(readFileSync(`${DIR}/${f}`, 'utf-8')) }))
+    .map((f) => {
+      const text = readFileSync(`${DIR}/${f}`, 'utf-8')
+      const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0)
+      return { file: `${DIR}/${f}`, fm: frontmatter(text), lines }
+    })
 }
 
 const opts = parseArgs(process.argv.slice(2))
@@ -55,7 +62,7 @@ const all = load()
 
 if (opts.check) {
   const bad = []
-  for (const { file, fm } of all) {
+  for (const { file, fm, lines } of all) {
     const id = file.slice(DIR.length + 1).replace('.md', '')
     if (!fm) { bad.push(`${id}  프론트매터 없음`); continue }
     if (fm.id !== id) bad.push(`${id}  id 가 파일명과 다름: ${fm.id}`)
@@ -63,6 +70,7 @@ if (opts.check) {
     if (!STATUSES.includes(fm.status)) bad.push(`${id}  status 값이 이상함: ${fm.status}`)
     if (!/^M\d$/.test(fm.milestone ?? '')) bad.push(`${id}  milestone 값이 이상함: ${fm.milestone}`)
     if (fm.status === 'done' && !fm.implemented) bad.push(`${id}  done 인데 implemented 가 없음`)
+    if (fm.created >= MAX_LINES_FROM && lines > MAX_LINES) bad.push(`${id}  ${lines}줄 — 상한 ${MAX_LINES}줄 넘음, 명세를 나눌 것`)
     for (const d of fm.depends ?? []) {
       if (!all.some((x) => x.fm?.id === d)) bad.push(`${id}  depends 가 없는 명세를 가리킴: ${d}`)
     }

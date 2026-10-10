@@ -67,7 +67,7 @@ Shared rules live in the agent definition. In the prompt, point at **where in th
 0. **The spec is already open in VS Code.** Hooks in `.claude/settings.json` run `scripts/open-spec-hook.mjs`: `PostToolUse` only records each `specs/features/F-xxx.md` that is written, and `SubagentStop`/`Stop` open the recorded files with `code <path>` — so the file opens once the agent (or you) stops, never half-written. Read the report first, then read the file there
 1. **Read "가정으로 둔 것" first.** That is where the next round of thinking belongs
 2. Verify yourself any **conflict with existing code or specs** the report flags (reading a file or two is enough). Do not relay the agent's word to the user unchecked
-3. Run `npm run review -- F-xxx` to confirm the file table parses, and `npm run specs -- --check` for the frontmatter (the former reads any of "파일 소유", "수정 파일", "바꾸는 파일")
+3. Run `npm run review -- F-xxx` to confirm the file table parses, and `npm run specs -- --check` for the frontmatter and the 100-line cap (the former reads any of "파일 소유", "수정 파일", "바꾸는 파일"). Over 100 lines → send it back to be split, never trim it yourself into run-on lines
 4. Scan for broken section references with `grep -n "^### \|(N\.M)"` — agents often move a section without fixing what points at it
 
 ## 4. Commit

@@ -82,7 +82,8 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 
 - `status`: `draft` rough / `pending` awaiting human approval / `approved` approved, not yet implemented / `done` implementation committed / `deferred` approved, start date undecided / `superseded` replaced by another spec / `overview` design overview (not an implementation unit)
 - **Never copy the file-ownership table into the frontmatter.** The chapter 1 table is the original and `npm run review` reads it
-- Query with `npm run specs`. `npm run specs -- --check` catches format errors, `done` without `implemented`, and `depends` pointing at a nonexistent spec
+- **A spec file is at most 100 lines, frontmatter included.** One that will not fit is split into more small specs
+- Query with `npm run specs`. `npm run specs -- --check` catches format errors, `done` without `implemented`, `depends` pointing at a nonexistent spec, and specs created on or after 2026-10-10 that pass 100 lines
 
 ## Tech stack
 
