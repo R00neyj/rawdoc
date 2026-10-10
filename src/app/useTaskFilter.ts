@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { getPref, setPref } from './prefs'
 import { parseTaskFilters, type TaskFilter } from '../lib/docTodos'
 
-export const DEFAULT_TASK_FILTER = '#task, #할일'
+export const DEFAULT_TASK_FILTER = '#task, #할일, #todo'
 
 export type TaskFilterSettings = {
   taskFilterText: string

@@ -36,7 +36,7 @@ test('할 일 보기 — 항목을 누르면 그 문서의 그 줄로 가고, �
 test('할 일 보기 — 지금 문서에 표시를 붙인 할 일을 넣으면 바로 나온다', async ({ page }) => {
   await openApp(page)
   await importMarkdown(page, { name: '메모.md', content: '첫 줄\n' })
-  await expect(todoSlot(page).getByText('#task · #할일 표시가 붙은 할 일이 없습니다.')).toBeVisible()
+  await expect(todoSlot(page).getByText('#task · #할일 · #todo 표시가 붙은 할 일이 없습니다.')).toBeVisible()
 
   await page.locator('.cm-content').click()
   await page.keyboard.press('Control+End')

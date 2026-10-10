@@ -292,7 +292,7 @@ type YjsMetaRow = {
 | `md.rightPanelViews` | `{ 칸 id: 보기 id }` JSON — 칸별 마지막 보기(`wide1`·`wide2`·`wide3`·`phoneTop`, 보기 `calendar`·`graph`·`links`·`todos`) | 없음(칸마다 첫 보기) | small 2026-10-11 |
 | `md.rightPanelItems` | `{ 항목 id: 켬 }` JSON — 설정 `표시할 항목`(`calendar`·`dayDocs`·`graph`·`links`·`todos`) | 없음(모두 켬) | small 2026-10-11 |
 | `md.rightPanelCollapsed` | `{ 칸 id: 접힘 }` JSON — 넓은 창 칸 접힘(`wide1`·`wide2`·`wide3`) | 없음(모두 펼침) | small 2026-10-11 |
-| `md.taskFilter` | `할 일` 보기 전역 필터 — 쉼표로 여러 개, `''` = 모든 체크박스 | `#task, #할일` | small 2026-10-11 |
+| `md.taskFilter` | `할 일` 보기 전역 필터 — 쉼표로 여러 개, `''` = 모든 체크박스 | `#task, #할일, #todo` | small 2026-10-11 |
 | `md.taskFilterHide` | `on` \| `off` — 항목 글자에서 할 일 표시 숨기기 | `off` | small 2026-10-11 |
 | `md.calendarFolder` | 달력 날짜 문서 폴더 id, `''` = 최상위 | `''` | small 2026-10-10 |
 | `md.calendarFormat` | 날짜 문서 제목 형식(템플릿 날짜 토큰) | `YYYY-MM-DD` | small 2026-10-10 |
