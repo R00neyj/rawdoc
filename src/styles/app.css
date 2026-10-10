@@ -6541,12 +6541,9 @@ a.dialog-btn {
     display: contents;
   }
 
-  /* 낮은 화면에서만 스크롤. 스크롤바 자리를 늘 비워 두고 칸 높이를 고정해 폭이 바뀌어도 줄 높이가 따라 흔들리지 않게 */
+  /* 스크롤하지 않는다 — 칸 높이를 고정해 폭이 바뀌어도 줄 높이가 흔들리지 않고, 칸보다 길면 칸이 잘라 낸다 */
   .side-panel .calendar {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    scrollbar-gutter: stable both-edges;
+    flex: none;
     padding: 0 12px 12px;
   }
 
