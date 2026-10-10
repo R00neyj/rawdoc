@@ -6472,6 +6472,31 @@ a.dialog-btn {
   margin-left: auto;
 }
 
+.panel-slot-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: var(--radius-control);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  transition: var(--transition-colors);
+}
+
+.panel-slot-step:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+@media (pointer: coarse) {
+  .panel-slot-step {
+    min-height: var(--touch-target);
+    font-size: 13.5px;
+  }
+}
+
 .right-panel-close {
   margin-left: auto;
 }

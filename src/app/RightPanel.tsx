@@ -90,11 +90,25 @@ function ViewBody({ view, views }: { view: PanelViewId; views: PanelViews }) {
   return view === 'links' ? <PanelLinks view={views.links} /> : <PanelTodos view={views.todos} />
 }
 
-function SlotArrow({ slot, step }: { slot: PanelSlotState; step: 1 | -1 }) {
+// 넘기기 버튼에 앞뒤 보기 이름을 적어 다른 보기가 있다는 걸 드러낸다. 보기가 둘이면 앞뒤가 같아 하나만 (tweak 2026-10-11)
+function SlotNav({ slot }: { slot: PanelSlotState }) {
+  const count = slot.views.length
+  const index = slot.views.indexOf(slot.view)
+  const prev = PANEL_VIEW_LABELS[slot.views[(index - 1 + count) % count]]
+  const next = PANEL_VIEW_LABELS[slot.views[(index + 1) % count]]
   return (
-    <button type="button" className="icon-btn" aria-label={step < 0 ? '이전 보기' : '다음 보기'} onClick={() => slot.onCycle(step)}>
-      {step < 0 ? <IconChevronLeft size={18} /> : <IconChevron size={18} />}
-    </button>
+    <span className="panel-slot-nav">
+      {count > 2 && (
+        <button type="button" className="panel-slot-step" aria-label={`이전 보기: ${prev}`} onClick={() => slot.onCycle(-1)}>
+          <IconChevronLeft size={16} />
+          {prev}
+        </button>
+      )}
+      <button type="button" className="panel-slot-step" aria-label={`다음 보기: ${next}`} onClick={() => slot.onCycle(1)}>
+        {next}
+        <IconChevron size={16} />
+      </button>
+    </span>
   )
 }
 
@@ -115,7 +129,7 @@ function SectionToggle({ label, expanded, onToggle }: { label: string; expanded:
   )
 }
 
-// 휴대폰 폭 — 왼쪽 밀기로 여는 위 칸(‹ › 로 보기 넘기기)·아래 목차 패널. 표시할 항목을 다 끄면 목차 칸만. 목차 줄은 Outline 이 onOutlineSlot 자리로 포털한다
+// 휴대폰 폭 — 왼쪽 밀기로 여는 위 칸(머리의 앞뒤 보기 버튼으로 넘기기)·아래 목차 패널. 표시할 항목을 다 끄면 목차 칸만. 목차 줄은 Outline 이 onOutlineSlot 자리로 포털한다
 // 닫힘·접힘도 전환이 보이게 패널은 usePresence 로, 칸 몸통은 늘 그려 두고 flex-grow 로 줄인다
 function PhoneSidePanel({ open, views, onClose, phone }: { open: boolean; views: PanelViews; onClose: () => void; phone: PhoneSidePanelProps }) {
   const { sections, onToggleSection, onOutlineSlot, hasDoc, top } = phone
@@ -128,12 +142,7 @@ function PhoneSidePanel({ open, views, onClose, phone }: { open: boolean; views:
       <nav className="outline-panel side-panel" data-ui="right-panel" aria-label="오른쪽 패널" data-state={state} inert={state === 'closed'}>
         <div className="outline-panel-head">
           {top ? <SectionToggle label={PANEL_VIEW_LABELS[top.view]} expanded={sections.top} onToggle={() => onToggleSection('top')} /> : outlineToggle}
-          {top && top.views.length > 1 && (
-            <span className="panel-slot-nav">
-              <SlotArrow slot={top} step={-1} />
-              <SlotArrow slot={top} step={1} />
-            </span>
-          )}
+          {top && top.views.length > 1 && <SlotNav slot={top} />}
           <button type="button" className="icon-btn outline-panel-close" aria-label="패널 닫기" onClick={onClose}>
             <IconClose size={20} />
           </button>
@@ -194,12 +203,7 @@ function WidePanel({ open, narrow, slots, views, onClose }: { open: boolean; nar
                 <span aria-live={slot.views.length > 1 ? 'polite' : undefined}>{PANEL_VIEW_LABELS[slot.view]}</span>
               </button>
             </h2>
-            {slot.views.length > 1 && (
-              <span className="panel-slot-nav">
-                <SlotArrow slot={slot} step={-1} />
-                <SlotArrow slot={slot} step={1} />
-              </span>
-            )}
+            {slot.views.length > 1 && <SlotNav slot={slot} />}
             {index === 0 && (
               <button type="button" className="icon-btn right-panel-close" aria-label="오른쪽 패널 닫기" onClick={onClose}>
                 <IconClose size={18} />
