@@ -16,14 +16,16 @@ test.describe('F-290 설정 탭 키보드', () => {
     const dialog = await openSettings(page)
     const tabs = dialog.locator('[role="tab"]')
     await expect(tabs.nth(0)).toBeFocused()
+    // 탭 수는 기능이 늘면 바뀐다 — 끝까지 돈 뒤 처음으로 순환하는지만 본다
+    const count = await tabs.count()
 
-    for (const i of [1, 2, 3, 4, 0]) {
+    for (const i of [...Array.from({ length: count - 1 }, (_, k) => k + 1), 0]) {
       await page.keyboard.press('ArrowDown')
       await expect(tabs.nth(i)).toHaveAttribute('aria-selected', 'true')
       await expect(tabs.nth(i)).toBeFocused()
     }
     await page.keyboard.press('End')
-    await expect(tabs.nth(4)).toHaveAttribute('aria-selected', 'true')
+    await expect(tabs.nth(count - 1)).toHaveAttribute('aria-selected', 'true')
     await page.keyboard.press('Home')
     await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true')
     await page.keyboard.press('ArrowRight')

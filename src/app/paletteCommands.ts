@@ -359,6 +359,19 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     run: (ctx) => ctx.view?.toggleSidebar(),
   },
   {
+    id: 'view.calendar',
+    kind: 'action',
+    get label() {
+      return calendarOpenState ? '달력 닫기' : '달력 열기'
+    },
+    keywords: ['달력', 'calendar', '날짜', '일기', 'daily', '데일리', '오른쪽 패널'],
+    when: (ctx) => {
+      calendarOpenState = ctx.view?.calendar ?? null
+      return ctx.view?.toggleCalendar !== undefined
+    },
+    run: (ctx) => ctx.view?.toggleCalendar?.(),
+  },
+  {
     id: 'view.theme',
     kind: 'pick',
     label: '테마 바꾸기',
@@ -424,6 +437,7 @@ let toggleRailOpen = false
 // F-2054 라벨 getter 가 읽는 값 — 명령마다 하나(3.6)
 let docTogglePinned = false
 let sidebarViewState: 'expanded' | 'collapsed' | 'narrowOpen' | 'narrowClosed' | null = null
+let calendarOpenState: boolean | null = null
 let lineNumbersOn = false
 let toolbarOn = false
 let wikiPreviewOn = false

@@ -17,6 +17,7 @@ import CommandPalette from './CommandPalette'
 import ImportPreviewDialog from './ImportPreviewDialog'
 import TemplateManagerDialog from './TemplateManagerDialog'
 import type { UseTemplateManagerResult } from './useTemplateManager'
+import type { CalendarSettings } from './CalendarSettingsTab'
 import type { SelectionItem } from './sidebarSelection'
 import type { Folder, Store } from '../types'
 import type { UseE2ee } from './useE2ee'
@@ -89,6 +90,7 @@ export type AppDialogsProps = Pick<UseAccountStatusResult, 'account' | 'recheckA
     settingsOpen: boolean
     showNotice: (input: NoticeWithAction, options?: { sticky?: boolean }) => number
     store: Store
+    calendarSettings?: CalendarSettings
   }
 
 export default function AppDialogs({
@@ -103,7 +105,7 @@ export default function AppDialogs({
   requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
   setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref, toolbarPref,
   wikiPreviewPref, changeDefaultView, defaultViewPref, settingsGithub, githubDialogs, templatesOpen, openTemplates, closeTemplates,
-  createTemplate, editTemplate, deleteTemplate,
+  createTemplate, editTemplate, deleteTemplate, calendarSettings,
 }: AppDialogsProps) {
   return (
     <>
@@ -190,6 +192,7 @@ export default function AppDialogs({
         onChangeNewDocTemplate={changeNewDocTemplate}
         templateEntries={templateEntries}
         onOpenTemplates={openTemplates}
+        calendar={calendarSettings}
         contentWidth={contentWidthPref}
         onChangeContentWidth={changeContentWidth}
         onExportAll={handleExportAll}

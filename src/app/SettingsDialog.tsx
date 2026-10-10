@@ -11,7 +11,9 @@ import type { PushSettingsView } from './pushClient'
 import type { GithubStatus } from '../lib/githubContract'
 import { WELCOME_PATH } from '../lib/siteChrome'
 import { visibleSettingsTabs, nextTabIndex, type SettingsTabId } from './settingsTabs'
-import { newDocTemplateOptions, type TemplateEntry } from '../lib/templates'
+import type { TemplateEntry } from '../lib/templates'
+import TemplateSelectField from './TemplateSelectField'
+import CalendarSettingsTab, { type CalendarSettings } from './CalendarSettingsTab'
 import { E2EE_LOCK_MINUTES, type E2eeStatus } from '../e2ee/keyring'
 import { THEME_OPTIONS } from './theme'
 import { DEFAULT_VIEW_OPTIONS } from './defaultView'
@@ -68,10 +70,11 @@ const WIKI_PREVIEW_OPTIONS = [
   { value: 'off', label: '숨김' },
 ] as const
 
-// 탭 — 순서·구성은 F-290.md 3.1, 금고 탭은 F-404.md 7.5
+// 탭 — 순서·구성은 F-290.md 3.1, 금고 탭은 F-404.md 7.5, 달력 탭은 small 2026-10-10
 const TAB_LABELS: Record<SettingsTabId, string> = {
   screen: '화면',
   editor: '편집기',
+  calendar: '달력',
   css: '사용자 CSS',
   data: '데이터',
   e2ee: '금고',
@@ -177,63 +180,6 @@ function Segment<T extends string>({
   )
 }
 
-// 템플릿 선택칸 — 새 문서·달력 문서가 같이 쓴다. 세그먼트가 아니라 네이티브 <select> 다(F-2037.md 3.2)
-function TemplateSelectField({
-  idBase,
-  label,
-  value,
-  entries,
-  onChange,
-}: {
-  idBase: string
-  label: string
-  value: string
-  entries: readonly TemplateEntry[]
-  onChange: (value: string) => void
-}) {
-  const options = newDocTemplateOptions(value, entries)
-  const noneOpt = options.find((o) => o.group === 'none')
-  const builtinOpts = options.filter((o) => o.group === 'builtin')
-  const userOpts = options.filter((o) => o.group === 'user')
-  const missingOpt = options.find((o) => o.group === 'missing')
-
-  return (
-    <div className="dialog-field">
-      <span id={`${idBase}-label`}>{label}</span>
-      <select
-        id={`${idBase}-select`}
-        className="settings-select"
-        aria-labelledby={`${idBase}-label`}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {noneOpt && <option value={noneOpt.value}>{noneOpt.label}</option>}
-        <optgroup label="내장">
-          {builtinOpts.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </optgroup>
-        {userOpts.length > 0 && (
-          <optgroup label="내 템플릿">
-            {userOpts.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {missingOpt && (
-          <option value={missingOpt.value} disabled>
-            {missingOpt.label}
-          </option>
-        )}
-      </select>
-    </div>
-  )
-}
-
 // 본문 너비 — 슬라이더 + 숫자 입력, 서로 동기. 입력에 id 가 없는 이유는 라벨 세기 선택자 때문이다 (F-2043 4장)
 function ContentWidthField({ value, onChange }: { value: number; onChange: (px: number) => void }) {
   const [draft, setDraft] = useState(String(value))
@@ -330,6 +276,8 @@ type SettingsDialogProps = {
   templateEntries?: readonly TemplateEntry[]
   // 새 문서 템플릿 아래 `템플릿 관리…` 버튼
   onOpenTemplates?: () => void
+  // `달력` 탭 — 안 주면 탭을 그리지 않는다(공개 보기 화면)
+  calendar?: CalendarSettings
   // `데이터` 절 — 전체 내보내기 (F-281.md 3.6). 안 주면 절을 그리지 않는다(공개 보기 화면)
   onExportAll?: () => void
   exportAllDisabled?: boolean
@@ -381,6 +329,7 @@ export default function SettingsDialog({
   onChangeNewDocTemplate,
   templateEntries,
   onOpenTemplates,
+  calendar,
   onExportAll,
   exportAllDisabled,
   onExportVault,
@@ -411,6 +360,7 @@ export default function SettingsDialog({
     css: userCss !== undefined,
     e2ee: e2ee !== undefined,
     account: account !== undefined,
+    calendar: calendar !== undefined,
   })
 
   const [activeTab, setActiveTab] = useState<SettingsTabId>(tabs[0])
@@ -586,6 +536,7 @@ export default function SettingsDialog({
         </>
       )
     }
+    if (id === 'calendar' && calendar) return <CalendarSettingsTab settings={calendar} entries={templateEntries ?? []} />
     if (id === 'css' && userCss) return <UserCssTab key={userCss.accountId ?? ''} accountId={userCss.accountId} />
     if (id === 'data') {
       // 로컬 앱·로그인 계정 전용, PublicView 는 안 준다(F-281.md 3.6, F-282.md 3.1) — 내보내기·가져오기 두 묶음, 버튼마다 한 줄 설명(tweak 2026-09-26)

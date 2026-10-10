@@ -55,6 +55,7 @@ src/
     useShortcutsPanel.ts 단축키 판 열기·닫기·커서 스크롤 (F-2037, F-2078)
     useNewDocTemplate.ts newDocTemplate.ts 새 문서 템플릿 목록·원문 읽기·본문 (F-2052, F-2078)
     useTemplateManager.ts TemplateManagerDialog.tsx 템플릿 관리 D-22 열기·새 템플릿·편집·삭제 (small 2026-10-10)
+    useCalendarPanel.ts RightPanel.tsx CalendarSettingsTab.tsx TemplateSelectField.tsx 오른쪽 패널 달력·설정 달력 탭 (small 2026-10-10)
     useAccountStatus.ts 계정 플래그 반영·다시 읽기(online·화면 복귀·10분) (F-2026, F-2079)
     useAccountDelete.ts 계정 삭제 대화상자 열기·실행 (F-2079)
     useTitleCommit.ts 제목 저장 (F-2079)
@@ -137,6 +138,8 @@ src/
   - `app/`: `shareCopy.ts`(F-2054 — 공유 링크·마크다운 복사 순수 함수, `ShareMenu.tsx`·팔레트가 같이 쓴다)
 - 명령 팔레트 서식 명령(2026-09-28)으로 추가
   - `app/`: `paletteEditorCommands.ts`(F-2055 — `EDITOR_COMMANDS` 를 팔레트 명령으로 옮기는 순수 목록). 새 저장 키 없음
+- 오른쪽 패널·달력(2026-10-10 small)으로 추가
+  - `lib/`: `calendar.ts`(월 격자·날짜 문서 제목·폴더 안 날짜 문서 찾기, 순수 함수)
 - DO 서버·`/ws` 인증(2026-09-24)으로 추가
   - `lib/`: `docRoomProtocol.ts`(F-304 — 서버·클라이언트 공용 소켓 계약. 앱은 F-304 에서 import 하지 않는다)
 - 명령줄 도구(2026-09-24)로 추가
@@ -281,6 +284,10 @@ type YjsMetaRow = {
 | `md.commentRail` | `open` \| `closed` | 없으면 열린 스레드가 있을 때 열림 | F-505 |
 | `md.paletteRecent` | 명령 id JSON 배열, 최근 쓴 것부터, 최대 10 | 없음(`[]` 로 읽는다) | F-2053 7.1·7.3 |
 | `md.palettePinned` | 명령 id JSON 배열, 고정한 순서 | 없음(`[]` 로 읽는다) | F-2053 7.2·7.3 |
+| `md.rightPanel` | `open` \| `closed` — 넓은 창 오른쪽 패널(달력) 열림 | `closed` | small 2026-10-10 |
+| `md.calendarFolder` | 달력 날짜 문서 폴더 id, `''` = 최상위 | `''` | small 2026-10-10 |
+| `md.calendarFormat` | 날짜 문서 제목 형식(템플릿 날짜 토큰) | `YYYY-MM-DD` | small 2026-10-10 |
+| `md.calendarTemplate` | `md.newDocTemplate` 과 같은 값 | `none` | small 2026-10-10 |
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
   - 예외: `md.theme`·`md.sidebar`·`md.sidebarWidth`·`md.startScreen`·`md.contentWidth` 는 `BOOT_PAINT_SCRIPT` 도 읽는다 — 첫 페인트 전이라 `prefs.ts` 를 쓸 수 없다 (F-2015, F-2043)

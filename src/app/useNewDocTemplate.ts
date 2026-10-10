@@ -15,10 +15,13 @@ export type UseNewDocTemplateOptions = {
   editorRef: RefObject<EditorHandle | null>
 }
 
+export type TemplateContentVars = { title: string; emptyTitle?: 'fallback' | 'keep-empty'; now?: Date }
+
 export type UseNewDocTemplateResult = {
   templateEntries: TemplateEntry[]
   readTemplateDocText: (docId: string) => Promise<string | null>
-  buildNewDocContent: (vars: { title: string; emptyTitle?: 'fallback' | 'keep-empty' }) => Promise<{ content: string; failed: boolean }>
+  buildNewDocContent: (vars: TemplateContentVars) => Promise<{ content: string; failed: boolean }>
+  buildContentFromTemplate: (templateId: string, vars: TemplateContentVars) => Promise<{ content: string; failed: boolean }>
 }
 
 export function useNewDocTemplate(options: UseNewDocTemplateOptions): UseNewDocTemplateResult {
@@ -42,21 +45,25 @@ export function useNewDocTemplate(options: UseNewDocTemplateOptions): UseNewDocT
     }
   }
 
-  // 새 문서 본문 만들기 — createNewDoc·openWikiLinkTarget 공용 (F-2037.md 4.2·4.3)
-  async function buildNewDocContent(vars: { title: string; emptyTitle?: 'fallback' | 'keep-empty' }): Promise<{ content: string; failed: boolean }> {
-    const pref = getPref('md.newDocTemplate', NEW_DOC_TEMPLATE_NONE)
-    const resolution = resolveNewDocTemplate(pref, templateEntries)
+  // 템플릿 id → 새 문서 본문. 'none'·목록에 없는 id 는 빈 문서, 읽기 실패는 failed (F-2037.md 4.2·4.3)
+  async function buildContentFromTemplate(templateId: string, vars: TemplateContentVars): Promise<{ content: string; failed: boolean }> {
+    const resolution = resolveNewDocTemplate(templateId, templateEntries)
     if (resolution.kind !== 'found') return { content: '', failed: false }
 
-    const now = new Date()
+    const fullVars = { ...vars, now: vars.now ?? new Date() }
     if (resolution.entry.source.kind === 'builtin') {
-      return { content: newDocContentFromTemplate(resolution.entry.source.body, { ...vars, now }, 'crlf'), failed: false }
+      return { content: newDocContentFromTemplate(resolution.entry.source.body, fullVars, 'crlf'), failed: false }
     }
 
     const rawText = await withTemplateReadTimeout(readTemplateDocText(resolution.entry.source.docId))
     if (rawText === null) return { content: '', failed: true }
-    return { content: newDocContentFromTemplate(rawText, { ...vars, now }, 'crlf'), failed: false }
+    return { content: newDocContentFromTemplate(rawText, fullVars, 'crlf'), failed: false }
   }
 
-  return { templateEntries, readTemplateDocText, buildNewDocContent }
+  // 새 문서 본문 만들기 — createNewDoc·openWikiLinkTarget 공용 (F-2037.md 4.2·4.3)
+  function buildNewDocContent(vars: TemplateContentVars) {
+    return buildContentFromTemplate(getPref('md.newDocTemplate', NEW_DOC_TEMPLATE_NONE), vars)
+  }
+
+  return { templateEntries, readTemplateDocText, buildNewDocContent, buildContentFromTemplate }
 }

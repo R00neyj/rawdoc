@@ -75,6 +75,7 @@ describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀, F-505 U
       'mode.raw',
       'mode.view',
       'view.sidebar',
+      'view.calendar',
       'view.theme',
       'view.lineNumbers',
       'view.toolbar',

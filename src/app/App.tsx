@@ -86,6 +86,8 @@ import { useViewFind } from './useViewFind'
 import { useShortcutsPanel } from './useShortcutsPanel'
 import { useNewDocTemplate } from './useNewDocTemplate'
 import { useTemplateManager } from './useTemplateManager'
+import { useCalendarPanel } from './useCalendarPanel'
+import RightPanel from './RightPanel'
 import { templateFolderIds, withoutTemplateFolders } from '../lib/templates'
 import { useAccountStatus } from './useAccountStatus'
 import { useAccountDelete } from './useAccountDelete'
@@ -640,7 +642,7 @@ export default function App() {
     bootPhase === 'ready' && currentDocId !== null && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute ? currentDocId : null
 
   // ----- 템플릿 목록·원문 읽기·새 문서 본문 (F-2078) -----
-  const { templateEntries, readTemplateDocText, buildNewDocContent } = useNewDocTemplate({ store, docs, folders, currentDocIdRef, editorRef })
+  const { templateEntries, readTemplateDocText, buildNewDocContent, buildContentFromTemplate } = useNewDocTemplate({ store, docs, folders, currentDocIdRef, editorRef })
 
   // 문서를 바꾸면 지워짐 상태를 되돌린다 — 렌더 중 상태를 맞추는 공식 패턴 (F-296.md 7.3, useDocSaver.ts trackedDocId 와 같은 방식)
   const [deletedElsewhereTrackedDocId, setDeletedElsewhereTrackedDocId] = useState(currentDocId)
@@ -1130,6 +1132,9 @@ export default function App() {
     ...(e2ee && (store.kind === 'idb' || store.kind === 'server') ? { convertDocsForVault: convertDocsForVaultFolder } : {}),
   })
   const templateManager = useTemplateManager({ store, folders, setFolders, createDoc, selectDoc, requestDeleteDoc, closeSettings, showNotice })
+  const calendar = useCalendarPanel({
+    narrow, docs, docsRef, folders, currentDocId, createDoc, selectDoc, ensureE2eeOpenForFolder, buildContentFromTemplate,
+  })
 
   // ----- D-4 사람 초대 (specs/features/F-212.md 2.5) -----
   function requestInviteCurrentDoc() {
@@ -1188,6 +1193,7 @@ export default function App() {
     handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, github: github.palette, handleTogglePin, requestMoveDoc, requestDeleteDoc,
     getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createDocFromPalette,
     openDocFromSearch, newDocFolderId, changeViewMode, openTemplates: templateManager.openTemplates,
+    calendarOpen: calendar.panelOpen, toggleCalendar: calendar.togglePanel,
   })
 
   // Ctrl+P·Ctrl+Shift+/ 가 매 커밋 최신 openPalette·toggleShortcuts 를 읽게 한다 (F-2080)
@@ -1238,7 +1244,7 @@ export default function App() {
     handlePrintDoc, helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
     outlineControlRef, openPalette, openSearch, openViewFind: viewFind.open, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
     toggleButtonRef, toggleCommentsPanel, toggleSidebar, toolbarPref, viewMode, wikiResolver,
-    editorRef, github: github.topBar,
+    editorRef, github: github.topBar, calendar: { open: calendar.panelOpen, onToggle: calendar.togglePanel },
   }} />
 
   return (
@@ -1368,6 +1374,8 @@ export default function App() {
             />
           )}
         </div>
+        {narrow && calendar.panelOpen && <div className="right-panel-backdrop" onClick={calendar.closePanel} />}
+        {calendar.panelOpen && <RightPanel narrow={narrow} view={calendar.view} onClose={calendar.closePanel} />}
       </div>
 
       <AppDialogs {...{
@@ -1383,6 +1391,7 @@ export default function App() {
         requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
         setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref,
         toolbarPref, wikiPreviewPref, settingsGithub: github.settings, githubDialogs: github.dialogs, ...templateManager,
+        calendarSettings: calendar.settings,
       }} />
       {/* 인쇄 전용 영역 — printDoc() 이 채운다. .app-shell 의 마지막 직계 자식이어야 한다 (F-279.md 4.2) */}
       <div className="viewer print-root" data-ui="print" ref={printRootRef} aria-hidden="true" inert />

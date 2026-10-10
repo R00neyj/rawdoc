@@ -104,6 +104,8 @@ export type UseCommandPaletteOptions = {
   goHome: () => Promise<void>
   openMap: () => Promise<void>
   openTemplates: () => void
+  calendarOpen: boolean
+  toggleCalendar: () => void
   openHelp: () => Promise<void>
   createNewDoc: (folderId?: string | null) => Promise<void>
   createDocFromPalette: (plan: PaletteCreatePlan) => Promise<void>
@@ -127,7 +129,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     wikiPreviewPref, changeTheme, changeLineNumbers, changeToolbar, changeWikiPreview, handleExportDoc, handleExportDocAsText,
     handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, github, handleTogglePin, requestMoveDoc, requestDeleteDoc,
     getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createDocFromPalette,
-    openDocFromSearch, newDocFolderId, changeViewMode, openTemplates,
+    openDocFromSearch, newDocFolderId, changeViewMode, openTemplates, calendarOpen, toggleCalendar,
   } = options
   // 본문에서 연 팔레트만 서식·단락·삽입을 보인다 — 연 순간의 문서와 가능 여부 (F-2055 4.1)
   const [paletteEditor, setPaletteEditor] = useState<{ docId: string | null; disabled: EditorCommandGates } | null>(null)
@@ -405,6 +407,8 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
       toggleLineNumbers: () => changeLineNumbers(lineNumbersPref === 'on' ? 'off' : 'on'),
       toggleToolbar: () => changeToolbar(toolbarPref === 'on' ? 'off' : 'on'),
       toggleWikiPreview: () => changeWikiPreview(wikiPreviewPref === 'on' ? 'off' : 'on'),
+      calendar: calendarOpen,
+      toggleCalendar,
     },
     output: paletteOutputCtx,
     github: github ? { importFile: () => runAfterPaletteClose(github.importFile) } : undefined,

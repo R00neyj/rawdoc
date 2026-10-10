@@ -6,7 +6,7 @@ import ExportMenu from './ExportMenu'
 import GithubMenu, { type GithubMenuProps } from './GithubMenu'
 import NotificationsMenu, { type NotificationsMenuProps } from './NotificationsMenu'
 import EditorToolbar from './EditorToolbar'
-import { IconTooltip, IconForum } from './icons'
+import { IconTooltip, IconForum, IconCalendar } from './icons'
 import { commentBadgeText } from './commentRail'
 import SidebarHead from './SidebarHead'
 import PeerAvatars from './PeerAvatars'
@@ -64,6 +64,8 @@ type TopBarProps = {
   // 휴대폰 폭 ⋯ 판 — 어느 화면인지와 목차 카드 통로 (F-2083)
   screen: TopBarScreen
   outlineControlRef: RefObject<OutlineControl | null>
+  // 오른쪽 패널(달력) 여닫기 — 맨 오른쪽 끝 (small 2026-10-10)
+  calendar?: { open: boolean; onToggle: () => void }
 }
 
 export default function TopBar({
@@ -101,6 +103,7 @@ export default function TopBar({
   github,
   screen,
   outlineControlRef,
+  calendar,
 }: TopBarProps) {
   const phone = usePhoneWidth()
   return (
@@ -203,6 +206,14 @@ export default function TopBar({
             />
             {notifications && <NotificationsMenu {...notifications} />}
           </>
+        )}
+        {calendar && (
+          <span className="icon-btn-wrap">
+            <button type="button" className="icon-btn" aria-label="달력" aria-expanded={calendar.open} onClick={calendar.onToggle}>
+              <IconCalendar size={18} />
+            </button>
+            <IconTooltip text="달력" align="end" />
+          </span>
         )}
       </header>
       {/* 좁은 창은 탭바를 상단바 밑 줄로 뺀다 — 아이콘 줄이 세로로도 접혀(2줄) 가로 스크롤 없이 다 보인다 (사용자 2026-09-16 "모바일일때가 툴바 더 필요할거임") */}
