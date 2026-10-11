@@ -442,10 +442,15 @@ describe('F-2118 syntax 명령', () => {
     )
   })
 
-  it('A9 syntax --help 는 한 줄 설명', async () => {
+  it('A9 syntax --short 는 이 앱의 문법만, --help 첫 줄은 짧은 이름', async () => {
     const deps = baseDeps({ argv: ['syntax', '--help'] })
     expect(await main(deps)).toBe(0)
-    expect(deps.stdoutLog.join('')).toBe('rawdoc syntax — 문서에 쓰는 마크다운 문법(콜아웃·위키링크·수식 등)을 출력합니다\n')
+    expect(deps.stdoutLog.join('').split('\n')[0]).toBe('rawdoc syntax — 마크다운 문법')
+    const short = baseDeps({ argv: ['syntax', '--short'] })
+    expect(await main(short)).toBe(0)
+    const text = short.stdoutLog.join('')
+    expect(text).toContain('### 콜아웃')
+    expect(text).not.toContain('## 일반 마크다운')
   })
 })
 
@@ -512,6 +517,7 @@ describe('F-2119 A5·A7~A9 main()', () => {
     const mine = run(['info', 'd2'])
     expect(await main(mine.deps)).toBe(0)
     expect(mine.deps.stdoutLog.join('')).toContain('folder\t수업\n')
+    expect(mine.deps.stdoutLog.join('')).toContain('url\thttps://rawdoc.app/#/d/d2\n')
     const sh = run(['info', 's1'])
     expect(await main(sh.deps)).toBe(0)
     expect(sh.urls).toHaveLength(3)
@@ -854,5 +860,167 @@ describe('replace main()', () => {
     const rows = h.stdoutLog.join('').split('\n').filter((l) => l.startsWith('  '))
     const at = rows.findIndex((l) => l.startsWith('  search\t'))
     expect(rows[at + 1]).toBe('  replace\t여러 문서 본문에서 글자를 찾아 바꿉니다 (--yes 없으면 미리 보기만)')
+  })
+})
+
+describe('편집 흐름 main() — diff·판 번호 기록·merge·replace --id·위키링크 경고 (small 2026-10-11)', () => {
+  const tokenEnv = { RAWDOC_TOKEN: 'rd_' + 'a'.repeat(43) }
+  const serverDoc = (content: string, version: number) => ({
+    id: 'd1', title: 'd1', content, lineEnding: 'lf', folderId: null, pinnedAt: null, version, createdAt: 0, updatedAt: 0,
+  })
+  const sidecarText = (version: number, base: string) => `${JSON.stringify({ id: 'd1', version, base })}\n`
+
+  function setup(
+    argv: string[],
+    opts: { files?: Record<string, string>; server?: ReturnType<typeof serverDoc>; putResponse?: Response; docsFail?: boolean } = {},
+  ) {
+    const calls: Array<{ method: string; path: string; body: Record<string, unknown> | undefined }> = []
+    const written: Record<string, string> = {}
+    const files = opts.files ?? {}
+    const server = opts.server ?? serverDoc('a\nb\nc\n', 5)
+    const deps = baseDeps({
+      argv,
+      env: tokenEnv,
+      readFile: vi.fn(async (path: string) => {
+        if (path in files) return new TextEncoder().encode(files[path])
+        throw Object.assign(new Error('nope'), { code: 'ENOENT' })
+      }),
+      writeFile: vi.fn(async (path: string, content: string) => {
+        written[path] = content
+      }),
+      fetchImpl: (async (url: string, init?: RequestInit) => {
+        const path = new URL(url).pathname
+        const method = init?.method ?? 'GET'
+        const body = init?.body ? (JSON.parse(init.body as string) as Record<string, unknown>) : undefined
+        calls.push({ method, path, body })
+        if (path === '/v1/docs' && method === 'GET') return opts.docsFail ? jsonResponse({ error: 'x' }, 500) : jsonResponse([server])
+        if (path === '/v1/folders') return jsonResponse([])
+        if (method === 'PUT') return opts.putResponse ?? jsonResponse({ ...server, content: body?.content ?? server.content, version: server.version + 1 })
+        return jsonResponse(server)
+      }) as unknown as typeof fetch,
+    })
+    return { deps, calls, written }
+  }
+
+  it('diff: GET 한 번, unified diff 를 표준 출력에, 종료 0. 같으면 빈 출력과 안내. --json 필드', async () => {
+    const r = setup(['diff', 'd1', 'a.md'], { files: { 'a.md': 'a\r\nB\r\nc' }, server: serverDoc('a\nb\nc', 5) })
+    expect(await main(r.deps)).toBe(0)
+    expect(r.calls.map((c) => `${c.method} ${c.path}`)).toEqual(['GET /v1/docs/d1'])
+    expect(r.deps.stdoutLog.join('')).toBe('--- d1 (서버 판 5)\n+++ a.md\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n\\ No newline at end of file\n')
+
+    const same = setup(['diff', 'd1', 'a.md'], { files: { 'a.md': 'a\r\nb\r\nc\r\n' } })
+    expect(await main(same.deps)).toBe(0)
+    expect(same.deps.stdoutLog.join('')).toBe('')
+    expect(same.deps.stderrLog.join('')).toBe('바뀌는 내용이 없습니다.\n')
+
+    const j = setup(['diff', 'd1', 'a.md', '--json'], { files: { 'a.md': 'a\nb\nc\nd\n' } })
+    await main(j.deps)
+    expect(JSON.parse(j.deps.stdoutLog.join(''))).toMatchObject({ id: 'd1', version: 5, changed: true, linesAdded: 1, linesRemoved: 0 })
+  })
+
+  it('put --dry-run --diff: 미리 보기 줄 뒤에 diff, 쓰기 없음', async () => {
+    const r = setup(['put', 'd1', 'a.md', '--dry-run', '--diff'], { files: { 'a.md': 'a\nb\nC\n' } })
+    expect(await main(r.deps)).toBe(0)
+    expect(r.calls.some((c) => c.method === 'PUT')).toBe(false)
+    const out = r.deps.stdoutLog.join('')
+    expect(out.startsWith('id\td1\nversion\t5\n')).toBe(true)
+    expect(out.endsWith('@@ -1,3 +1,3 @@\n a\n b\n-c\n+C\n')).toBe(true)
+  })
+
+  it('get -o 는 원문 파일과 옆 기록을 함께 쓴다', async () => {
+    const r = setup(['get', 'd1', '-o', 'out.md'])
+    expect(await main(r.deps)).toBe(0)
+    expect(r.written).toEqual({ 'out.md': 'a\nb\nc\n', 'out.md.rawdoc': sidecarText(5, 'a\nb\nc\n') })
+  })
+
+  it('put --base-version auto: 기록의 판으로 올리고, 기록을 새 판·올린 원문으로 고친다. 둘째 줄은 앱 주소', async () => {
+    const files = { 'a.md': 'a\nX\nc\n', 'a.md.rawdoc': sidecarText(3, 'a\nb\nc\n') }
+    const r = setup(['put', 'd1', 'a.md', '--base-version', 'auto'], { files, server: serverDoc('a\nb\nc\n', 3) })
+    expect(await main(r.deps)).toBe(0)
+    expect(r.calls.find((c) => c.method === 'PUT')?.body).toMatchObject({ baseVersion: 3, content: 'a\nX\nc\n' })
+    expect(r.written).toEqual({ 'a.md.rawdoc': sidecarText(4, 'a\nX\nc\n') })
+    expect(r.deps.stdoutLog.join('')).toBe('d1\tversion 4\nhttps://rawdoc.app/#/d/d1\n')
+
+    const j = setup(['put', 'd1', 'a.md', '--base-version', 'auto', '--json'], { files, server: serverDoc('a\nb\nc\n', 3) })
+    await main(j.deps)
+    expect(JSON.parse(j.deps.stdoutLog.join(''))).toMatchObject({ id: 'd1', version: 4, url: 'https://rawdoc.app/#/d/d1' })
+  })
+
+  it('put --base-version auto: 기록이 없거나 다른 문서 것이면 종료 2, 쓰기 없음', async () => {
+    const missing = setup(['put', 'd1', 'a.md', '--base-version', 'auto'], { files: { 'a.md': 'x' } })
+    expect(await main(missing.deps)).toBe(2)
+    expect(missing.deps.stderrLog.join('')).toContain('판 번호 기록이 없거나 읽을 수 없습니다: a.md.rawdoc')
+    expect(missing.calls.some((c) => c.method === 'PUT')).toBe(false)
+    const other = `${JSON.stringify({ id: 'd9', version: 1, base: '' })}\n`
+    const wrong = setup(['put', 'd1', 'a.md', '--base-version', 'auto'], { files: { 'a.md': 'x', 'a.md.rawdoc': other } })
+    expect(await main(wrong.deps)).toBe(2)
+    expect(wrong.deps.stderrLog.join('')).toContain('다른 문서(d9)')
+  })
+
+  it('기록 없는 파일을 판 번호로 올리면 기록을 만들지 않고, 충돌이면 merge 를 안내한다', async () => {
+    const plain = setup(['put', 'd1', 'a.md', '--base-version', '5'], { files: { 'a.md': 'x\n' } })
+    expect(await main(plain.deps)).toBe(0)
+    expect(plain.written).toEqual({})
+    const conflict = setup(['put', 'd1', 'a.md', '--base-version', '2'], {
+      files: { 'a.md': 'x\n' },
+      putResponse: jsonResponse({ error: 'conflict', doc: { version: 9 } }, 409),
+    })
+    expect(await main(conflict.deps)).toBe(5)
+    expect(conflict.deps.stderrLog.join('')).toContain('rawdoc merge d1 a.md 로 서버 판과 합친 뒤 --base-version auto 로 올리세요')
+  })
+
+  it('merge: 충돌 없으면 파일에 합친 원문, 기록은 서버 판으로, 종료 0', async () => {
+    const files = { 'a.md': 'a\nB\nc\nd\n', 'a.md.rawdoc': sidecarText(3, 'a\nb\nc\nd\n') }
+    const r = setup(['merge', 'd1', 'a.md'], { files, server: serverDoc('a\nb\nc\nD\n', 5) })
+    expect(await main(r.deps)).toBe(0)
+    expect(r.calls.map((c) => `${c.method} ${c.path}`)).toEqual(['GET /v1/docs/d1'])
+    expect(r.written).toEqual({ 'a.md': 'a\nB\nc\nD\n', 'a.md.rawdoc': sidecarText(5, 'a\nb\nc\nD\n') })
+    expect(r.deps.stdoutLog.join('')).toBe('d1\tversion 5\tconflicts 0\n')
+  })
+
+  it('merge: 같은 줄을 다르게 고쳤으면 표시를 넣고 종료 5. 기록이 없으면 종료 2', async () => {
+    const files = { 'a.md': 'a\nM\nc\n', 'a.md.rawdoc': sidecarText(3, 'a\nb\nc\n') }
+    const r = setup(['merge', 'd1', 'a.md', '--json'], { files, server: serverDoc('a\nT\nc\n', 5) })
+    expect(await main(r.deps)).toBe(5)
+    expect(r.written['a.md']).toBe('a\n<<<<<<< 내 파일\nM\n=======\nT\n>>>>>>> 서버 판 5\nc\n')
+    expect(JSON.parse(r.deps.stdoutLog.join(''))).toEqual({ id: 'd1', version: 5, file: 'a.md', conflicts: 1 })
+    const none = setup(['merge', 'd1', 'a.md'], { files: { 'a.md': 'x' } })
+    expect(await main(none.deps)).toBe(2)
+    expect(none.written).toEqual({})
+  })
+
+  it('replace --id: 검색 없이 그 문서만. 판이 다르면 쓰지 않고 종료 5', async () => {
+    const conflict = setup(['replace', 'b', 'B', '--id', 'd1', '--base-version', '2', '--yes'])
+    expect(await main(conflict.deps)).toBe(5)
+    expect(conflict.calls.some((c) => c.method === 'PUT' || c.path === '/v1/search')).toBe(false)
+    const ok = setup(['replace', 'b', 'B', '--id', 'd1', '--base-version', '5', '--yes'])
+    expect(await main(ok.deps)).toBe(0)
+    expect(ok.calls.filter((c) => c.method === 'PUT').map((c) => c.body)).toEqual([{ content: 'a\nB\nc\n', baseVersion: 5 }])
+    expect(ok.deps.stdoutLog.join('')).toBe('d1\t/d1  바꿈 1곳 → 판 6\n')
+  })
+
+  it('put: 없는 문서를 가리키는 위키링크마다 표준 오류 경고, 종료 코드는 그대로. 목록을 못 받으면 경고 없이', async () => {
+    const content = '[[d1]] [[없는 문서|별칭]] `[[코드]]` ![[그림.png]]'
+    const r = setup(['put', 'd1', 'a.md', '--force'], { files: { 'a.md': content } })
+    expect(await main(r.deps)).toBe(0)
+    expect(r.deps.stderrLog.join('')).toBe('경고: 없는 문서를 가리키는 위키링크: [[없는 문서]]\n')
+    const dry = setup(['put', 'd1', 'a.md', '--dry-run'], { files: { 'a.md': content } })
+    expect(await main(dry.deps)).toBe(0)
+    expect(dry.deps.stderrLog.join('')).toContain('경고: 없는 문서를 가리키는 위키링크: [[없는 문서]]\n')
+    const fail = setup(['put', 'd1', 'a.md', '--force'], { files: { 'a.md': content }, docsFail: true })
+    expect(await main(fail.deps)).toBe(0)
+    expect(fail.deps.stderrLog.join('')).toBe('')
+  })
+
+  it('put: merge 충돌 표시가 남은 본문은 --force·--dry-run 이어도 쓰지 않고 종료 2', async () => {
+    const marked = 'a\n<<<<<<< 내 파일\nM\n=======\nT\n>>>>>>> 서버 판 5\nc\n'
+    for (const flags of [['--force'], ['--base-version', '5'], ['--dry-run']]) {
+      const r = setup(['put', 'd1', 'a.md', ...flags], { files: { 'a.md': marked } })
+      expect(await main(r.deps), flags.join(' ')).toBe(2)
+      expect(r.calls.some((c) => c.method === 'PUT'), flags.join(' ')).toBe(false)
+      expect(r.deps.stderrLog.join('')).toContain('충돌 표시(<<<<<<< ~ >>>>>>>)가 남아 있습니다. 정리한 뒤 다시 올리세요.')
+    }
+    const lone = setup(['put', 'd1', 'a.md', '--force'], { files: { 'a.md': '<<<<<<< 내 파일 이라는 글\n' } })
+    expect(await main(lone.deps)).toBe(0)
   })
 })

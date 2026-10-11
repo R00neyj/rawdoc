@@ -77,6 +77,7 @@ describe('F-2021 U1 args.ts — 명령마다 해석', () => {
         baseVersion: 3,
         force: false,
         dryRun: false,
+        diff: false,
       },
     })
   })
@@ -253,8 +254,9 @@ describe('F-2118 A7 args.ts — syntax', () => {
   it('옵션 없이 run, 위치 인자·모르는 옵션은 usage', () => {
     expect(parseArgs(['syntax', '--json'])).toEqual({
       kind: 'run',
-      command: { name: 'syntax', global: { server: null, json: true } },
+      command: { name: 'syntax', global: { server: null, json: true }, short: false },
     })
+    expect(parseArgs(['syntax', '--short'])).toMatchObject({ kind: 'run', command: { name: 'syntax', short: true } })
     expect(parseArgs(['syntax', 'foo']).kind).toBe('usage')
     expect(parseArgs(['syntax', '--x']).kind).toBe('usage')
   })
@@ -332,6 +334,27 @@ describe('F-2132 A1 help 별칭·put --dry-run', () => {
   })
 })
 
+describe('diff·merge·put --base-version auto·--diff 해석', () => {
+  const g = { server: null, json: false }
+
+  it('diff <id> <파일>|- 와 merge <id> <파일>', () => {
+    expect(parseArgs(['diff', 'd1', 'a.md'])).toEqual({ kind: 'run', command: { name: 'diff', global: g, id: 'd1', source: 'a.md' } })
+    expect(parseArgs(['diff', 'd1', '-'])).toMatchObject({ kind: 'run', command: { source: '-' } })
+    expect(parseArgs(['diff', 'd1']).kind).toBe('usage')
+    expect(parseArgs(['merge', 'd1', 'a.md'])).toEqual({ kind: 'run', command: { name: 'merge', global: g, id: 'd1', file: 'a.md' } })
+    expect(parseArgs(['merge', 'd1', '-']).kind).toBe('usage')
+    expect(parseArgs(['merge', 'd1']).kind).toBe('usage')
+  })
+
+  it('put --base-version auto 는 파일일 때만, --diff 는 --dry-run 과 함께만', () => {
+    expect(parseArgs(['put', 'd1', 'a.md', '--base-version', 'auto'])).toMatchObject({ kind: 'run', command: { baseVersion: 'auto' } })
+    expect(parseArgs(['put', 'd1', '-', '--base-version', 'auto']).kind).toBe('usage')
+    expect(parseArgs(['put', 'd1', '--title', 't', '--base-version', 'auto']).kind).toBe('usage')
+    expect(parseArgs(['put', 'd1', 'a.md', '--dry-run', '--diff'])).toMatchObject({ kind: 'run', command: { dryRun: true, diff: true } })
+    expect(parseArgs(['put', 'd1', 'a.md', '--force', '--diff']).kind).toBe('usage')
+  })
+})
+
 describe('search 해석', () => {
   const g = { server: null, json: false }
 
@@ -364,11 +387,15 @@ describe('replace 해석', () => {
   it('찾을 말·바꿀 말은 다듬지 않고, 빈 바꿀 말·--folder·--yes·--json', () => {
     expect(parseArgs(['replace', ' a ', 'b'])).toEqual({
       kind: 'run',
-      command: { name: 'replace', global: g, find: ' a ', replacement: 'b', folder: null, yes: false },
+      command: { name: 'replace', global: g, find: ' a ', replacement: 'b', folder: null, yes: false, id: null, baseVersion: null },
     })
     expect(parseArgs(['replace', 'a', '', '--folder', '수업/1주차', '--yes', '--json'])).toEqual({
       kind: 'run',
-      command: { name: 'replace', global: { server: null, json: true }, find: 'a', replacement: '', folder: '수업/1주차', yes: true },
+      command: { name: 'replace', global: { server: null, json: true }, find: 'a', replacement: '', folder: '수업/1주차', yes: true, id: null, baseVersion: null },
+    })
+    expect(parseArgs(['replace', 'a', 'b', '--id', 'd1', '--base-version', '3'])).toEqual({
+      kind: 'run',
+      command: { name: 'replace', global: g, find: 'a', replacement: 'b', folder: null, yes: false, id: 'd1', baseVersion: 3 },
     })
     expect(parseArgs(['replace', 'a'.repeat(200), 'b']).kind).toBe('run')
     expect(parseArgs(['replace', 'a', 'b\nc']).kind).toBe('run')
@@ -384,6 +411,9 @@ describe('replace 해석', () => {
       [['replace', 'a\rb', 'c'], '찾을 말에는 줄바꿈을 넣을 수 없습니다.'],
       [['replace', 'a'.repeat(201), 'b'], '찾을 말은 200자까지입니다.'],
       [['replace', 'a', 'b', '--root'], '알 수 없는 옵션입니다.'],
+      [['replace', 'a', 'b', '--base-version', '3'], '--base-version 은 --id 와 함께 씁니다.'],
+      [['replace', 'a', 'b', '--id', 'd1', '--folder', 'x'], '--id 와 --folder 는 함께 쓸 수 없습니다.'],
+      [['replace', 'a', 'b', '--id', 'd1', '--base-version', 'auto'], '--base-version 은 0 이상의 정수여야 합니다.'],
     ]
     for (const [argv, message] of cases) {
       expect(parseArgs(argv), JSON.stringify(argv)).toEqual({ kind: 'usage', message, command: 'replace' })

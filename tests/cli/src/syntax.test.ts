@@ -50,6 +50,16 @@ describe('F-2118 syntax 출력', () => {
   })
 })
 
+describe('syntax --short', () => {
+  it('이 앱의 문법 그룹만 담아 전체보다 짧다', () => {
+    const short = renderSyntaxMarkdown('9.9.9', true)
+    expect(short.length).toBeLessThan(md.length)
+    expect([...short.matchAll(/^### (.+)$/gm)].map((m) => m[1])).toEqual(APP_SYNTAX_GROUPS)
+    expect(short).not.toContain('## 일반 마크다운')
+    expect(syntaxJson('9.9.9', true).groups.map((g) => g.group)).toEqual(APP_SYNTAX_GROUPS)
+  })
+})
+
 describe('F-2132 A9 위키링크 안내 문장', () => {
   const NOTE = '제목을 바꾸면 옛 제목으로 건 위키링크는 자동으로 고쳐지지 않아 끊깁니다. 폴더를 붙인 링크는 문서를 다른 폴더로 옮겨도 끊길 수 있습니다.'
   it('위키링크 그룹 안에 있고 2000자 이하', () => {

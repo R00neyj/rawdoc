@@ -35,15 +35,15 @@ function renderGroup(group: SyntaxGroup): string {
   return parts.join('\n\n')
 }
 
-export function renderSyntaxMarkdown(version: string): string {
+// short 면 이 앱에만 있는 문법만 — 일반 마크다운을 아는 도구용
+export function renderSyntaxMarkdown(version: string, short = false): string {
   const { app, general } = orderedGroups()
   const blocks = [
     `# ${brand.name} 마크다운 문법`,
-    '문서에 쓰는 마크다운입니다. 일반 마크다운에 없는 문법을 먼저 둡니다.',
+    short ? '이 앱에만 있는 문법입니다. 일반 마크다운까지 보려면 --short 를 빼세요.' : '문서에 쓰는 마크다운입니다. 일반 마크다운에 없는 문법을 먼저 둡니다.',
     '## 이 앱의 문법',
     ...app.map(renderGroup),
-    '## 일반 마크다운',
-    ...general.map(renderGroup),
+    ...(short ? [] : ['## 일반 마크다운', ...general.map(renderGroup)]),
     `${brand.cliName} ${version} 기준입니다. 최신 문법은 ${syntaxHelpUrl()} 에서 봅니다.`,
   ]
   return `${blocks.join('\n\n')}\n`
@@ -60,12 +60,12 @@ export type SyntaxJson = {
   }>
 }
 
-export function syntaxJson(version: string): SyntaxJson {
+export function syntaxJson(version: string, short = false): SyntaxJson {
   const { app, general } = orderedGroups()
   return {
     version,
     helpUrl: syntaxHelpUrl(),
-    groups: [...app, ...general].map((g) => ({
+    groups: [...app, ...(short ? [] : general)].map((g) => ({
       group: g.group,
       appOnly: APP_SYNTAX_GROUPS.includes(g.group),
       items: g.items.map(({ name, source, caption }) => ({ name, source, caption })),

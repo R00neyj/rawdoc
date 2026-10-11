@@ -12,9 +12,19 @@ export type RunCommand =
   | { name: 'ls'; global: GlobalOptions; folder: string | null; shared: boolean; root: boolean; path: boolean }
   | { name: 'find'; global: GlobalOptions; query: string; folder: string | null; root: boolean; path: boolean }
   | { name: 'search'; global: GlobalOptions; query: string; folder: string | null }
-  | { name: 'replace'; global: GlobalOptions; find: string; replacement: string; folder: string | null; yes: boolean }
+  | {
+      name: 'replace'
+      global: GlobalOptions
+      find: string
+      replacement: string
+      folder: string | null
+      yes: boolean
+      id: string | null
+      baseVersion: number | null
+    }
   | { name: 'info'; global: GlobalOptions; id: string }
   | { name: 'get'; global: GlobalOptions; id: string; output: string | null }
+  | { name: 'diff'; global: GlobalOptions; id: string; source: string }
   | { name: 'new'; global: GlobalOptions; source: string | null; title: string | null; folder: string | null; url: boolean }
   | {
       name: 'put'
@@ -22,10 +32,12 @@ export type RunCommand =
       id: string
       source: string | null
       title: string | null
-      baseVersion: number | null
+      baseVersion: number | 'auto' | null
       force: boolean
       dryRun: boolean
+      diff: boolean
     }
+  | { name: 'merge'; global: GlobalOptions; id: string; file: string }
   | { name: 'mv'; global: GlobalOptions; id: string; folderId: string | null }
   | { name: 'rm'; global: GlobalOptions; id: string }
   | { name: 'folders'; global: GlobalOptions }
@@ -33,7 +45,7 @@ export type RunCommand =
   | { name: 'rmdir'; global: GlobalOptions; id: string; all: boolean }
   | { name: 'upload'; global: GlobalOptions; file: string }
   | { name: 'link'; global: GlobalOptions; id: string }
-  | { name: 'syntax'; global: GlobalOptions }
+  | { name: 'syntax'; global: GlobalOptions; short: boolean }
 
 export type CommandName = RunCommand['name']
 
@@ -54,8 +66,10 @@ export const COMMAND_NAMES: CommandName[] = [
   'replace',
   'info',
   'get',
+  'diff',
   'new',
   'put',
+  'merge',
   'mv',
   'rm',
   'folders',
@@ -122,11 +136,15 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
     }
     case 'logout':
     case 'whoami':
-    case 'folders':
-    case 'syntax': {
+    case 'folders': {
       const parsed = runParseArgs(rest, GLOBAL_OPTIONS, false)
       if (!parsed) return usage('알 수 없는 옵션입니다.', command)
       return { kind: 'run', command: { name: command, global: globalsOf(parsed.values) } }
+    }
+    case 'syntax': {
+      const parsed = runParseArgs(rest, { ...GLOBAL_OPTIONS, short: { type: 'boolean' } }, false)
+      if (!parsed) return usage('알 수 없는 옵션입니다.', command)
+      return { kind: 'run', command: { name: 'syntax', global: globalsOf(parsed.values), short: parsed.values.short === true } }
     }
     case 'ls': {
       const options: OptionSchema = {
@@ -181,7 +199,8 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       return { kind: 'run', command: { name: 'search', global: globalsOf(parsed.values), query, folder } }
     }
     case 'replace': {
-      const parsed = runParseArgs(rest, { ...GLOBAL_OPTIONS, folder: { type: 'string' }, yes: { type: 'boolean' } }, true)
+      const options: OptionSchema = { ...GLOBAL_OPTIONS, folder: { type: 'string' }, yes: { type: 'boolean' }, id: { type: 'string' }, 'base-version': { type: 'string' } }
+      const parsed = runParseArgs(rest, options, true)
       if (!parsed) return usage('알 수 없는 옵션입니다.', command)
       if (parsed.positionals.length < 2) return usage('찾을 말과 바꿀 말이 필요합니다. 지우려면 바꿀 말에 "" 를 주세요.', command)
       if (parsed.positionals.length > 2) {
@@ -192,9 +211,17 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       if (/[\r\n]/.test(find)) return usage('찾을 말에는 줄바꿈을 넣을 수 없습니다.', command)
       if (find.length > SEARCH_MAX_QUERY_CHARS) return usage(`찾을 말은 ${SEARCH_MAX_QUERY_CHARS}자까지입니다.`, command)
       const folder = typeof parsed.values.folder === 'string' ? parsed.values.folder : null
+      const id = typeof parsed.values.id === 'string' ? parsed.values.id : null
+      if (id !== null && folder !== null) return usage('--id 와 --folder 는 함께 쓸 수 없습니다.', command)
+      let baseVersion: number | null = null
+      if (typeof parsed.values['base-version'] === 'string') {
+        if (id === null) return usage('--base-version 은 --id 와 함께 씁니다.', command)
+        baseVersion = parseNonNegativeInt(parsed.values['base-version'])
+        if (baseVersion === null) return usage('--base-version 은 0 이상의 정수여야 합니다.', command)
+      }
       return {
         kind: 'run',
-        command: { name: 'replace', global: globalsOf(parsed.values), find, replacement, folder, yes: parsed.values.yes === true },
+        command: { name: 'replace', global: globalsOf(parsed.values), find, replacement, folder, yes: parsed.values.yes === true, id, baseVersion },
       }
     }
     case 'info': {
@@ -217,6 +244,21 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
           output: typeof parsed.values.output === 'string' ? parsed.values.output : null,
         },
       }
+    }
+    case 'diff': {
+      const parsed = runParseArgs(rest, GLOBAL_OPTIONS, true)
+      if (!parsed) return usage('알 수 없는 옵션입니다.', command)
+      if (parsed.positionals.length !== 2) return usage('문서 id 와 비교할 파일(표준 입력은 -)이 필요합니다.', command)
+      const [id, source] = parsed.positionals
+      return { kind: 'run', command: { name: 'diff', global: globalsOf(parsed.values), id, source } }
+    }
+    case 'merge': {
+      const parsed = runParseArgs(rest, GLOBAL_OPTIONS, true)
+      if (!parsed) return usage('알 수 없는 옵션입니다.', command)
+      if (parsed.positionals.length !== 2) return usage('문서 id 와 get -o 로 받은 파일이 필요합니다.', command)
+      const [id, file] = parsed.positionals
+      if (file === '-') return usage('merge 는 표준 입력을 받지 않습니다. get -o 로 받은 파일을 주세요.', command)
+      return { kind: 'run', command: { name: 'merge', global: globalsOf(parsed.values), id, file } }
     }
     case 'new': {
       const options: OptionSchema = { ...GLOBAL_OPTIONS, title: { type: 'string' }, folder: { type: 'string' }, url: { type: 'boolean' } }
@@ -245,6 +287,7 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
         'base-version': { type: 'string' },
         force: { type: 'boolean' },
         'dry-run': { type: 'boolean' },
+        diff: { type: 'boolean' },
       }
       const parsed = runParseArgs(rest, options, true)
       if (!parsed) return usage('알 수 없는 옵션입니다.', command)
@@ -258,20 +301,26 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       const hasBaseVersion = typeof parsed.values['base-version'] === 'string'
       const force = parsed.values.force === true
       const dryRun = parsed.values['dry-run'] === true
+      const diff = parsed.values.diff === true
+      if (diff && !dryRun) return usage('--diff 는 --dry-run 과 함께 씁니다. 쓰지 않고 비교만 하려면 diff 명령을 쓰세요.', command)
       if (dryRun ? hasBaseVersion && force : hasBaseVersion === force) {
         return usage(
-          `--base-version 또는 --force 가 필요합니다. ${brand.cliName} get ${id} --json 으로 내용과 version 을 함께 받아 고친 뒤 --base-version 으로 올리세요. --force 는 그 사이 바뀐 내용을 덮어씁니다.`,
+          `--base-version 또는 --force 가 필요합니다. ${brand.cliName} get ${id} -o 파일.md 로 받아 고친 뒤 ${brand.cliName} put ${id} 파일.md --base-version auto 로 올리세요. --force 는 그 사이 바뀐 내용을 덮어씁니다.`,
           command,
         )
       }
-      let baseVersion: number | null = null
+      let baseVersion: number | 'auto' | null = null
       if (hasBaseVersion) {
-        baseVersion = parseNonNegativeInt(parsed.values['base-version'] as string)
-        if (baseVersion === null) return usage('--base-version 은 0 이상의 정수여야 합니다.', command)
+        const raw = parsed.values['base-version'] as string
+        baseVersion = raw === 'auto' ? 'auto' : parseNonNegativeInt(raw)
+        if (baseVersion === null) return usage('--base-version 은 0 이상의 정수나 auto 여야 합니다.', command)
+        if (baseVersion === 'auto' && (source === null || source === '-')) {
+          return usage('--base-version auto 는 get -o 로 받은 파일을 올릴 때만 씁니다. 표준 입력이면 판 번호를 직접 주세요.', command)
+        }
       }
       return {
         kind: 'run',
-        command: { name: 'put', global: globalsOf(parsed.values), id, source, title, baseVersion, force, dryRun },
+        command: { name: 'put', global: globalsOf(parsed.values), id, source, title, baseVersion, force, dryRun, diff },
       }
     }
     case 'mv': {

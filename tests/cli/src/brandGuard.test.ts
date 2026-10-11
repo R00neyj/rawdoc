@@ -17,6 +17,10 @@ const SOURCE_FILES = [
   'openBrowser.ts',
   'output.ts',
   'syntax.ts',
+  'lineDiff.ts',
+  'merge3.ts',
+  'sidecar.ts',
+  'linkCheck.ts',
 ]
 
 describe('F-2021 8장 제품명 불변조건 — cli/', () => {

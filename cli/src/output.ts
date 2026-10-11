@@ -164,8 +164,12 @@ export function errorMessage(err: CliError, cli: string, cliEnvPrefix: string): 
       return '이 문서를 고칠 권한이 없습니다.'
     case 'not_found':
       return `찾을 수 없습니다. id 를 확인하세요: ${d.id ?? ''}`
-    case 'conflict':
-      return `서버의 문서가 바뀌었습니다 (지금 버전 ${d.currentVersion}). 다시 받아 고친 뒤 --base-version ${d.currentVersion} 으로 올리세요.`
+    case 'conflict': {
+      const head = `서버의 문서가 바뀌었습니다 (지금 버전 ${d.currentVersion}).`
+      if (d.path === undefined || d.id === undefined) return `${head} 다시 받아 고친 뒤 --base-version ${d.currentVersion} 으로 올리세요.`
+      const file = /\s/.test(d.path) ? `"${d.path}"` : d.path
+      return `${head} get -o 로 받은 파일이면 ${cli} merge ${d.id} ${file} 로 서버 판과 합친 뒤 --base-version auto 로 올리세요.`
+    }
     case 'locked':
       return d.email
         ? `브라우저에서 편집 중인 문서라 고칠 수 없습니다 (${d.email}). 편집을 마친 뒤 다시 시도하세요.`
@@ -414,6 +418,7 @@ type DocInfoItem = {
   folderPath: string[] | null
   role?: 'edit' | 'view'
   ownerEmail?: string
+  url?: string
 }
 
 // 키는 --json 필드 이름과 같다 (F-2119 5.3)
@@ -432,6 +437,7 @@ export function humanDocInfo(d: DocInfoItem): string {
   ]
   if (d.role !== undefined) rows.push(['role', ROLE_LABEL[d.role]])
   if (d.ownerEmail !== undefined) rows.push(['ownerEmail', stripControlChars(d.ownerEmail)])
+  if (d.url !== undefined) rows.push(['url', d.url])
   return rows.map(([k, v]) => `${k}\t${v}\n`).join('')
 }
 

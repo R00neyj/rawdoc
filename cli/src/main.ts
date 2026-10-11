@@ -7,6 +7,7 @@ import { SITE_URL } from '../../src/lib/siteMeta'
 import { decodeMarkdown, type DecodedMarkdown } from '../../src/lib/decodeMarkdown'
 import { buildCliLoginUrl, sanitizeCliHost } from '../../src/lib/cliLoginUrl'
 import { generateSealKeyPairV2 } from '../../src/lib/cliSeal'
+import { fromEditorText } from '../../src/lib/lineEnding'
 import type { V1Doc, V1Me } from '../../worker/v1Contract'
 import { parseArgs, type RunCommand } from './args'
 import {
@@ -22,8 +23,12 @@ import { apiMe, type ClientConfig } from './client'
 import * as commands from './commands'
 import { commandHelpText, helpText } from './help'
 import { checkAlreadyLoggedIn, startCallbackServer } from './login'
+import { unifiedDiff } from './lineDiff'
+import { missingWikiTargets, wikiTargetsOf } from './linkCheck'
+import { hasConflictMarkers, merge3, MINE_LABEL, THEIRS_LABEL_PREFIX } from './merge3'
 import { buildPutPreview, fileLineEndingOf, lineEndingNotice, wouldConflict } from './putPreview'
 import { openBrowser } from './openBrowser'
+import { parseSidecar, serializeSidecar, sidecarPathOf, type Sidecar } from './sidecar'
 import { renderSyntaxMarkdown, syntaxJson } from './syntax'
 import {
   CliError,
@@ -181,6 +186,124 @@ function baseCfg(origin: string, token: string, deps: MainDeps): ClientConfig {
   return { origin, token, fetchImpl: deps.fetchImpl, userAgent: userAgentOf(deps) }
 }
 
+async function writeTextFile(deps: MainDeps, path: string, content: string): Promise<void> {
+  try {
+    await deps.writeFile(path, content)
+  } catch {
+    throw new CliError('file_write', { path })
+  }
+}
+
+// 없거나 모양이 어긋난 기록은 null
+async function readSidecar(deps: MainDeps, file: string): Promise<Sidecar | null> {
+  try {
+    return parseSidecar(new TextDecoder().decode(await deps.readFile(sidecarPathOf(file))))
+  } catch {
+    return null
+  }
+}
+
+async function requireSidecar(deps: MainDeps, file: string, id: string): Promise<Sidecar> {
+  const sidecar = await readSidecar(deps, file)
+  const path = sidecarPathOf(file)
+  if (sidecar === null) {
+    const usageMessage = `판 번호 기록이 없거나 읽을 수 없습니다: ${path}. ${brand.cliName} get ${id} -o ${file} 로 받은 파일에만 쓸 수 있습니다.`
+    throw new CliError('usage', { usageMessage })
+  }
+  if (sidecar.id !== id) {
+    throw new CliError('usage', { usageMessage: `${path} 는 다른 문서(${sidecar.id})의 기록입니다. 문서 id 를 확인하세요.` })
+  }
+  return sidecar
+}
+
+// 목록을 못 받으면 조용히 넘어간다 — 경고일 뿐 put 을 막지 않는다
+async function warnBrokenLinks(deps: MainDeps, cfg: ClientConfig, id: string, content: string, newTitle: string | null): Promise<void> {
+  const targets = wikiTargetsOf(content)
+  if (targets.length === 0) return
+  let index: commands.WikiIndex
+  try {
+    index = await commands.wikiIndex(cfg, targets.some((t) => t.includes('/')))
+  } catch {
+    return
+  }
+  const docs = index.docs.map((d) => ({ id: d.id, title: d.id === id && newTitle !== null ? newTitle : d.title, folderId: d.folderId }))
+  const sourceFolderId = index.docs.find((d) => d.id === id)?.folderId ?? null
+  for (const target of missingWikiTargets(targets, docs, index.folders, sourceFolderId)) {
+    deps.out.stderr(`경고: 없는 문서를 가리키는 위키링크: [[${stripControlChars(target)}]]\n`)
+  }
+}
+
+async function runPut(command: Extract<RunCommand, { name: 'put' }>, deps: MainDeps, cfg: ClientConfig): Promise<number> {
+  let decoded: DecodedMarkdown | null = null
+  if (command.source !== null) {
+    decoded = decodeSource(await readSourceBytes(deps, command.source), command.source)
+    emitDecodeNotices(deps, decoded, command.source)
+  }
+  const title = command.title ?? undefined
+  const label = labelOf(command.source ?? '')
+  const file = decoded ? { text: decoded.text, lineEnding: decoded.lineEnding } : null
+  if (file !== null && hasConflictMarkers(file.text)) {
+    throw new CliError('usage', { usageMessage: '충돌 표시(<<<<<<< ~ >>>>>>>)가 남아 있습니다. 정리한 뒤 다시 올리세요.' })
+  }
+  const filePath = command.source !== null && command.source !== '-' ? command.source : null
+  let sidecar: Sidecar | null = null
+  if (filePath !== null) {
+    sidecar = command.baseVersion === 'auto' ? await requireSidecar(deps, filePath, command.id) : await readSidecar(deps, filePath)
+  }
+  const baseVersion = command.baseVersion === 'auto' ? (sidecar as Sidecar).version : command.baseVersion
+  if (file !== null) await warnBrokenLinks(deps, cfg, command.id, file.text, command.title)
+  try {
+    if (command.dryRun) {
+      const server = await commands.get(cfg, command.id)
+      const preview = buildPutPreview({ server, file, title })
+      if (wouldConflict(baseVersion, preview)) {
+        throw new CliError('conflict', { status: 409, currentVersion: server.version })
+      }
+      const notice = lineEndingNotice(label, preview.fileLineEnding, preview.lineEnding, true)
+      if (notice) deps.out.stderr(notice)
+      if (!preview.titleChanged && !preview.contentChanged) deps.out.stderr('바뀌는 내용이 없습니다.\n')
+      const labels = { old: `${server.id} (서버 판 ${server.version})`, new: label }
+      const diff = command.diff && file !== null ? unifiedDiff(server.content, file.text, labels).text : null
+      emitResult(deps, command.global.json, diff === null ? preview : { ...preview, diff }, () => humanPutPreview(preview) + (diff ?? ''))
+      return 0
+    }
+    const doc = await commands.putDoc(cfg, { id: command.id, content: file?.text, title, baseVersion, force: command.force })
+    const notice = lineEndingNotice(label, fileLineEndingOf(file), doc.lineEnding, false)
+    if (notice) deps.out.stderr(notice)
+    if (filePath !== null && file !== null && sidecar?.id === command.id) {
+      await writeTextFile(deps, sidecarPathOf(filePath), serializeSidecar({ id: doc.id, version: doc.version, base: doc.content }))
+    }
+    const url = docAppUrl(cfg.origin, doc.id)
+    emitResult(deps, command.global.json, { ...doc, url }, () => humanIdVersionLine(doc.id, doc.version) + humanUrlLine(url))
+    return 0
+  } catch (err) {
+    if (err instanceof CliError && err.code === 'conflict' && filePath !== null) {
+      throw new CliError('conflict', { ...err.details, id: command.id, path: filePath })
+    }
+    throw err
+  }
+}
+
+// 충돌 표시가 남으면 종료 5 — put 의 충돌과 같은 뜻으로 "아직 올릴 수 없음"
+async function runMerge(command: Extract<RunCommand, { name: 'merge' }>, deps: MainDeps, cfg: ClientConfig): Promise<number> {
+  const sidecar = await requireSidecar(deps, command.file, command.id)
+  const decoded = decodeSource(await readSourceBytes(deps, command.file), command.file)
+  emitDecodeNotices(deps, decoded, command.file)
+  const server = await commands.get(cfg, command.id)
+  const merged = merge3(sidecar.base, decoded.text, server.content, { mine: MINE_LABEL, theirs: `${THEIRS_LABEL_PREFIX}${server.version}` })
+  await writeTextFile(deps, command.file, fromEditorText(merged.text, decoded.lineEnding))
+  await writeTextFile(deps, sidecarPathOf(command.file), serializeSidecar({ id: server.id, version: server.version, base: server.content }))
+  const putLine = `${brand.cliName} put ${command.id} ${command.file} --base-version auto`
+  deps.out.stderr(
+    merged.conflicts === 0
+      ? `서버 판 ${server.version} 과 충돌 없이 합쳤습니다. 확인한 뒤 ${putLine} 로 올리세요.\n`
+      : `충돌 ${merged.conflicts}곳이 남았습니다. 파일에서 <<<<<<< ~ >>>>>>> 표시를 정리한 뒤 ${putLine} 로 올리세요.\n`,
+  )
+  const result = { id: server.id, version: server.version, file: command.file, conflicts: merged.conflicts }
+  emitResult(deps, command.global.json, result, () => `${result.id}\tversion ${result.version}\tconflicts ${result.conflicts}\n`)
+  return merged.conflicts === 0 ? 0 : exitCodeFor('conflict')
+}
+
 async function saveLogin(
   deps: MainDeps,
   credPath: string,
@@ -311,8 +434,8 @@ export async function main(deps: MainDeps): Promise<number> {
 
   const command = invocation.command
   if (command.name === 'syntax') {
-    const json = `${JSON.stringify(syntaxJson(deps.packageVersion))}\n`
-    deps.out.stdout(command.global.json ? json : renderSyntaxMarkdown(deps.packageVersion))
+    const json = `${JSON.stringify(syntaxJson(deps.packageVersion, command.short))}\n`
+    deps.out.stdout(command.global.json ? json : renderSyntaxMarkdown(deps.packageVersion, command.short))
     return 0
   }
   const serverResult = resolveServerOrigin({ flag: command.global.server, env: deps.env })
@@ -394,11 +517,17 @@ export async function main(deps: MainDeps): Promise<number> {
         return 0
       }
       case 'replace': {
-        const ref = command.folder !== null ? await commands.resolveFolder(cfg, command.folder) : null
-        const folder = ref !== null && command.folder !== null ? { id: ref.id, value: command.folder } : null
-        const input = { find: command.find, replacement: command.replacement, folder, apply: command.yes }
         const hooks = { sleep: (ms: number) => deps.wait(ms), onWait: (seconds: number) => deps.out.stderr(humanReplaceWait(seconds)) }
-        const result = await commands.replace(cfg, input, hooks, ref?.folders ?? undefined)
+        let result: commands.ReplaceOutput
+        if (command.id !== null) {
+          const input = { id: command.id, find: command.find, replacement: command.replacement, apply: command.yes, baseVersion: command.baseVersion }
+          result = await commands.replaceInDoc(cfg, input)
+        } else {
+          const ref = command.folder !== null ? await commands.resolveFolder(cfg, command.folder) : null
+          const folder = ref !== null && command.folder !== null ? { id: ref.id, value: command.folder } : null
+          const input = { find: command.find, replacement: command.replacement, folder, apply: command.yes }
+          result = await commands.replace(cfg, input, hooks, ref?.folders ?? undefined)
+        }
         if (command.global.json) deps.out.stdout(`${JSON.stringify(replaceJson(result))}\n`)
         else deps.out.stdout(humanReplaceList(result.docs, brand.cliName, ENV_PREFIX))
         if (result.stopped) emitError(deps, command.global.json, result.stopped)
@@ -406,18 +535,16 @@ export async function main(deps: MainDeps): Promise<number> {
         return replaceExitCode(result.docs)
       }
       case 'info': {
-        const doc = await commands.info(cfg, command.id)
+        const info = await commands.info(cfg, command.id)
+        const doc = { ...info, url: docAppUrl(cfg.origin, info.id) }
         emitResult(deps, command.global.json, doc, () => humanDocInfo(doc))
         return 0
       }
       case 'get': {
         const doc = await commands.get(cfg, command.id)
         if (command.output) {
-          try {
-            await deps.writeFile(command.output, doc.content)
-          } catch {
-            throw new CliError('file_write', { path: command.output })
-          }
+          await writeTextFile(deps, command.output, doc.content)
+          await writeTextFile(deps, sidecarPathOf(command.output), serializeSidecar({ id: doc.id, version: doc.version, base: doc.content }))
         }
         if (command.global.json) {
           const body: Partial<V1Doc> = { ...doc }
@@ -428,6 +555,17 @@ export async function main(deps: MainDeps): Promise<number> {
         } else {
           deps.out.stdout(doc.content)
         }
+        return 0
+      }
+      case 'diff': {
+        const decoded = decodeSource(await readSourceBytes(deps, command.source), command.source)
+        emitDecodeNotices(deps, decoded, command.source)
+        const server = await commands.get(cfg, command.id)
+        const labels = { old: `${server.id} (서버 판 ${server.version})`, new: labelOf(command.source) }
+        const diff = unifiedDiff(server.content, decoded.text, labels)
+        if (diff.text === '') deps.out.stderr('바뀌는 내용이 없습니다.\n')
+        const result = { id: server.id, version: server.version, changed: diff.text !== '', linesAdded: diff.added, linesRemoved: diff.removed, diff: diff.text }
+        emitResult(deps, command.global.json, result, () => diff.text)
         return 0
       }
       case 'new': {
@@ -447,39 +585,10 @@ export async function main(deps: MainDeps): Promise<number> {
         emitResult(deps, command.global.json, url ? { ...doc, url } : doc, () => humanIdLine(doc.id) + (url ? `${url}\n` : ''))
         return 0
       }
-      case 'put': {
-        let decoded: DecodedMarkdown | null = null
-        if (command.source !== null) {
-          decoded = decodeSource(await readSourceBytes(deps, command.source), command.source)
-          emitDecodeNotices(deps, decoded, command.source)
-        }
-        const title = command.title ?? undefined
-        const label = labelOf(command.source ?? '')
-        const file = decoded ? { text: decoded.text, lineEnding: decoded.lineEnding } : null
-        if (command.dryRun) {
-          const server = await commands.get(cfg, command.id)
-          const preview = buildPutPreview({ server, file, title })
-          if (wouldConflict(command.baseVersion, preview)) {
-            throw new CliError('conflict', { status: 409, currentVersion: server.version })
-          }
-          const notice = lineEndingNotice(label, preview.fileLineEnding, preview.lineEnding, true)
-          if (notice) deps.out.stderr(notice)
-          if (!preview.titleChanged && !preview.contentChanged) deps.out.stderr('바뀌는 내용이 없습니다.\n')
-          emitResult(deps, command.global.json, preview, () => humanPutPreview(preview))
-          return 0
-        }
-        const doc = await commands.putDoc(cfg, {
-          id: command.id,
-          content: file?.text,
-          title,
-          baseVersion: command.baseVersion,
-          force: command.force,
-        })
-        const notice = lineEndingNotice(label, fileLineEndingOf(file), doc.lineEnding, false)
-        if (notice) deps.out.stderr(notice)
-        emitResult(deps, command.global.json, doc, () => humanIdVersionLine(doc.id, doc.version))
-        return 0
-      }
+      case 'put':
+        return await runPut(command, deps, cfg)
+      case 'merge':
+        return await runMerge(command, deps, cfg)
       case 'mv': {
         const folderId = await folderIdOf(cfg, command.folderId)
         const doc = await commands.moveDoc(cfg, { id: command.id, folderId })

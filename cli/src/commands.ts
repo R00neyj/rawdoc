@@ -162,6 +162,39 @@ export async function replace(cfg: ClientConfig, input: ReplaceInput, hooks: Rep
   return { applied: input.apply, docs, e2eeSkipped: found.e2eeSkipped, stopped }
 }
 
+export type ReplaceOneInput = { id: string; find: string; replacement: string; apply: boolean; baseVersion: number | null }
+
+// replace --id — 그 문서 하나만. 판 번호를 주면 서버 판이 다를 때 쓰지 않고 충돌로 멈춘다(종료 5)
+export async function replaceInDoc(cfg: ClientConfig, input: ReplaceOneInput): Promise<ReplaceOutput> {
+  const [doc, folders] = await Promise.all([apiGetDoc(cfg, input.id), apiListFolders(cfg)])
+  if (input.baseVersion !== null && doc.version !== input.baseVersion) {
+    throw new CliError('conflict', { status: null, currentVersion: doc.version })
+  }
+  const result: ReplaceOutput = { applied: input.apply, docs: [], e2eeSkipped: 0, stopped: null }
+  const r = replaceLiteral(doc.content, input.find, input.replacement)
+  if (r.content === doc.content) return result
+  const read: ReplaceListItem = {
+    id: doc.id,
+    title: doc.title,
+    folderPath: folderPathOf(folders, doc.folderId),
+    count: r.count,
+    lines: r.lines,
+    changedLines: r.changedLines,
+    status: 'preview',
+  }
+  if (!input.apply) return { ...result, docs: [read] }
+  const written = await apiUpdateDoc(cfg, doc.id, { content: r.content, baseVersion: doc.version })
+  return { ...result, docs: [{ ...read, status: 'updated', version: written.version }] }
+}
+
+export type WikiIndex = { docs: V1DocSummary[]; folders: V1Folder[] }
+
+// put 의 위키링크 확인용 — 폴더 목록은 폴더를 붙인 링크가 있을 때만 받는다
+export async function wikiIndex(cfg: ClientConfig, withFolders: boolean): Promise<WikiIndex> {
+  const [docs, folders] = await Promise.all([apiListDocs(cfg), withFolders ? apiListFolders(cfg) : Promise.resolve([])])
+  return { docs, folders }
+}
+
 // UUID 는 그대로 쓰고(요청 없음), 아니면 폴더 목록을 한 번 받아 경로로 푼다 (F-2132 2장)
 export async function resolveFolder(cfg: ClientConfig, value: string): Promise<{ id: string; folders: V1Folder[] | null }> {
   if (isFolderId(value)) return { id: value, folders: null }

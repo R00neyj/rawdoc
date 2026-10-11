@@ -1,9 +1,35 @@
 // 전체·명령별 도움말 순수 함수 (specs/features/F-2132.md 5장)
 import brand from '../../brand.config'
 import { COMMAND_NAMES, type CommandName } from './args'
+import { SIDECAR_SUFFIX } from './sidecar'
 
 const CLI = brand.cliName
 const ENV_PREFIX = CLI.toUpperCase()
+
+// 명령별 도움말 첫 줄의 짧은 이름 — 전체 도움말의 한 줄 설명을 되풀이하지 않는다
+const COMMAND_TITLES: Record<CommandName, string> = {
+  login: '로그인',
+  logout: '로그아웃',
+  whoami: '로그인한 계정',
+  ls: '문서 목록',
+  find: '제목으로 찾기',
+  search: '본문 검색',
+  replace: '찾아 바꾸기',
+  info: '문서 정보',
+  get: '문서 받기',
+  diff: '서버 판과 비교',
+  new: '새 문서',
+  put: '문서 고치기',
+  merge: '서버 판과 합치기',
+  mv: '문서 옮기기',
+  rm: '문서 삭제',
+  folders: '폴더 목록',
+  mkdir: '폴더 만들기',
+  rmdir: '폴더 지우기',
+  upload: '이미지 올리기',
+  link: '읽기 전용 링크',
+  syntax: '마크다운 문법',
+}
 
 const COMMAND_DESCRIPTIONS: Record<CommandName, string> = {
   login: '브라우저로 로그인해 토큰을 저장합니다',
@@ -13,10 +39,12 @@ const COMMAND_DESCRIPTIONS: Record<CommandName, string> = {
   find: '제목에 그 글자가 든 내 문서를 찾습니다 (대소문자 무시)',
   search: '제목·본문에 그 글자가 든 내 문서와 줄을 찾습니다 (금고 문서 제외)',
   replace: '여러 문서 본문에서 글자를 찾아 바꿉니다 (--yes 없으면 미리 보기만)',
-  info: '문서 정보(폴더 경로·판 번호·시각)를 내용 없이 보여 줍니다',
-  get: '문서 원문을 출력합니다',
+  info: '문서 정보(폴더 경로·판 번호·시각·주소)를 내용 없이 보여 줍니다',
+  get: '문서 원문을 출력합니다 (-o 는 파일과 판 번호 기록을 함께 저장)',
+  diff: '서버의 지금 원문과 파일의 차이를 unified diff 로 보여 줍니다',
   new: '새 문서를 만듭니다',
-  put: '문서를 고칩니다 (get 으로 받은 판 번호 --base-version 필요, --dry-run 은 미리 보기. 자세히: put --help)',
+  put: '문서를 고칩니다 (--base-version <n|auto> 또는 --force 필요, --dry-run 은 미리 보기. 자세히: put --help)',
+  merge: 'get -o 로 받은 파일에 그 사이 바뀐 서버 판을 줄 단위로 합칩니다',
   mv: '문서를 다른 폴더로 옮깁니다',
   rm: '문서를 영구 삭제합니다 (--yes 필요)',
   folders: '폴더 목록',
@@ -27,6 +55,8 @@ const COMMAND_DESCRIPTIONS: Record<CommandName, string> = {
   syntax: '문서에 쓰는 마크다운 문법(콜아웃·위키링크·수식 등)을 출력합니다',
 }
 
+const EDIT_ORDER = `${CLI} get <id> -o 파일.md → 파일 고치기 → ${CLI} diff <id> 파일.md → ${CLI} put <id> 파일.md --base-version auto`
+
 export function helpText(version: string): string {
   const lines = [`${brand.name} 명령줄 도구 ${version}`, '']
   for (const name of COMMAND_NAMES) lines.push(`  ${name}\t${COMMAND_DESCRIPTIONS[name]}`)
@@ -34,6 +64,8 @@ export function helpText(version: string): string {
   lines.push(`명령별 옵션은 ${CLI} help <명령> 또는 ${CLI} <명령> --help 로 봅니다.`)
   lines.push('Windows PowerShell 5.1 에서는 > 대신 -o 로 저장하세요. > 는 파일을 UTF-16 으로 바꿉니다.')
   lines.push(`AI 도구에서 쓸 때는 npx -y ${CLI} … 또는 ${ENV_PREFIX}_TOKEN 환경 변수를 쓰세요.`)
+  lines.push(`문서를 고치는 순서: ${EDIT_ORDER}. 종료 코드 5 면 ${CLI} merge <id> 파일.md 로 합친 뒤 다시 put 하세요.`)
+  lines.push('모든 명령은 --json 을 받습니다. 결과는 표준 출력에, 오류는 표준 오류에 JSON 한 줄로 씁니다.')
   lines.push(`AI 도구가 문서를 쓰기 전에 ${CLI} syntax 로 콜아웃·위키링크 같은 문법을 확인하게 하세요.`)
   return lines.join('\n') + '\n'
 }
@@ -45,6 +77,7 @@ function optionLines(rows: Array<[string, string]>): string[] {
 }
 
 const PATH_GUIDE = `폴더 경로는 ${CLI} folders 가 보여 주는 모양(예: 수업자료/1주차)입니다.`
+const SIDECAR = `<파일>${SIDECAR_SUFFIX}`
 
 // 한 줄 설명만으로 모자란 명령의 덧붙임 — put 은 판 번호만 맞춰 올리다 그 사이 저장분을 덮어쓰기 쉽다
 const COMMAND_DETAILS: Partial<Record<CommandName, string[]>> = {
@@ -88,21 +121,33 @@ const COMMAND_DETAILS: Partial<Record<CommandName, string[]>> = {
   ],
   replace: [
     '',
-    `사용: ${CLI} replace <찾을말> <바꿀말> [--folder <폴더id|경로>] [--yes]`,
+    `사용: ${CLI} replace <찾을말> <바꿀말> [--folder <폴더id|경로> | --id <id> [--base-version <n>]] [--yes]`,
     ...optionLines([
       ['--folder <폴더id|경로>', '그 폴더와 하위 폴더의 문서 중에서만'],
+      ['--id <id>', '그 문서 하나에서만. 검색 없이 문서를 바로 읽습니다'],
+      ['--base-version <n>', '--id 와 함께. 서버 판이 n 이 아니면 쓰지 않고 종료 코드 5 로 멈춥니다'],
       ['--yes', '실제로 바꿉니다. 없으면 바뀔 문서와 줄만 보여 줍니다'],
     ]),
     '정규식이 아니라 글자 그대로, 대소문자를 구분해 본문의 모든 곳을 바꿉니다. 바꿀말을 "" 로 주면 지웁니다.',
     '제목은 바꾸지 않습니다. 금고 문서는 바꾸지 못하고 그 수만 끝 줄에 알려 줍니다.',
     '문서마다 읽은 판 위에만 씁니다. 그 사이 다른 곳에서 고친 문서는 덮어쓰지 않고 충돌로 남깁니다.',
-    '대상 문서가 200개를 넘으면 아무것도 바꾸지 않습니다. 하나라도 바꾸지 못하면 종료 코드 1 입니다.',
+    '대상 문서가 200개를 넘으면 아무것도 바꾸지 않습니다. 하나라도 바꾸지 못하면 종료 코드 1 입니다. --id 의 충돌은 종료 코드 5 입니다.',
     `띄어쓰기가 든 말은 따옴표로 감싸세요. ${PATH_GUIDE}`,
   ],
+  info: ['내용 없이 문서 정보를 보여 줍니다. url 줄은 앱에서 그 문서를 여는 주소입니다.'],
   get: [
     '',
     `사용: ${CLI} get <id> [-o <파일>]`,
     ...optionLines([['-o, --output <파일>', '원문을 그 파일에 UTF-8 로 씁니다. 표준 출력에는 id 와 판 번호만']]),
+    `-o 로 받으면 옆에 ${SIDECAR} 기록도 씁니다. {"id","version","base"} JSON 한 줄이고 base 는 받은 원문입니다.`,
+    'put --base-version auto 와 merge 가 이 기록을 읽습니다. 지워도 되지만 그러면 두 기능을 쓸 수 없습니다.',
+  ],
+  diff: [
+    '',
+    `사용: ${CLI} diff <id> (<파일>|-)`,
+    '서버의 지금 원문(---)과 파일(+++)의 차이를 unified diff 로 표준 출력에 씁니다. 바뀐 줄 앞뒤 3줄을 함께 보입니다.',
+    '줄바꿈(LF·CRLF) 차이는 무시합니다. 같으면 표준 출력은 비고 표준 오류에 안내가 뜹니다.',
+    '차이가 있어도 종료 코드는 0 입니다. --json 이면 {id, version, changed, linesAdded, linesRemoved, diff}.',
   ],
   new: [
     '',
@@ -117,18 +162,37 @@ const COMMAND_DETAILS: Partial<Record<CommandName, string[]>> = {
   ],
   put: [
     '',
-    `사용: ${CLI} put <id> [<파일>|-] [--title <제목>] (--base-version <n> | --force) [--dry-run]`,
+    `사용: ${CLI} put <id> [<파일>|-] [--title <제목>] (--base-version <n|auto> | --force) [--dry-run [--diff]]`,
     ...optionLines([
       ['--title <제목>', '제목을 바꿉니다'],
       ['--base-version <n>', 'get 으로 받았을 때의 판 번호. 그 사이 서버 문서가 바뀌었으면 덮어쓰지 않고 종료 코드 5 로 멈춥니다'],
+      ['--base-version auto', `get -o 로 받은 파일 옆 ${SIDECAR} 기록의 판 번호를 씁니다. 기록이 없으면 종료 코드 2`],
       ['--force', '서버의 지금 판 위에 확인 없이 덮어씁니다. 그 사이 다른 곳에서 고친 내용이 사라집니다'],
       ['--dry-run', '서버에 쓰지 않고 바뀌는 줄 수·줄바꿈 방식을 보여 줍니다. --base-version·--force 를 빼도 됩니다'],
+      ['--diff', '--dry-run 과 함께. 바뀌는 줄을 unified diff 로 덧붙입니다. --json 이면 diff 필드'],
     ]),
     '',
-    `순서: ${CLI} get <id> -o 파일.md 로 내용과 판 번호를 한 번에 받아 그 파일을 고친 뒤 put 하세요.`,
+    `순서: ${EDIT_ORDER}.`,
+    `종료 코드 5 면 ${CLI} merge <id> 파일.md 로 서버 판과 합친 뒤 다시 put 하세요.`,
+    'merge 가 남긴 충돌 표시(<<<<<<< ~ >>>>>>>)가 본문에 있으면 --force 여도 올리지 않고 종료 코드 2 로 멈춥니다.',
     '판 번호만 다시 읽고 옛 내용을 올리면 번호는 맞아도 그 사이 저장분을 덮어씁니다.',
+    `파일을 올리면 옆 기록(${SIDECAR})을 새 판 번호와 올린 원문으로 고쳐 씁니다. 기록이 없고 auto 도 아니면 만들지 않습니다.`,
+    '성공하면 id·판 번호 줄 다음 줄에 앱에서 여는 주소를 찍습니다. --json 이면 url 필드.',
+    '올리는 본문의 [[위키링크]] 가 내 문서와 맞지 않으면 표준 오류에 경고를 찍습니다. 종료 코드는 그대로입니다.',
     '파일의 줄바꿈(LF·CRLF)이 서버 문서와 다르면 서버 문서 방식으로 맞춰 저장됩니다.',
     '제목을 바꾸면 옛 제목으로 건 [[위키링크]] 는 자동으로 고쳐지지 않아 끊깁니다.',
+  ],
+  merge: [
+    '',
+    `사용: ${CLI} merge <id> <파일>`,
+    `get -o 로 받았을 때의 원문(${SIDECAR} 의 base)을 기준으로, 파일에서 고친 곳과 그 사이 서버에서 바뀐 곳을 줄 단위로 합쳐 파일에 씁니다.`,
+    '같은 곳을 양쪽이 다르게 고쳤으면 그 자리에 충돌 표시를 넣습니다:',
+    '  <<<<<<< 내 파일',
+    '  =======',
+    '  >>>>>>> 서버 판 N',
+    `합친 뒤 기록은 서버 판 N 으로 바뀝니다. 표시를 정리하고 ${CLI} put <id> <파일> --base-version auto 로 올리세요.`,
+    '충돌이 없으면 종료 코드 0, 충돌 표시가 남으면 종료 코드 5 입니다.',
+    '표준 출력은 id·판 번호·충돌 수 한 줄, --json 이면 {id, version, file, conflicts}.',
   ],
   mv: [
     '',
@@ -160,9 +224,15 @@ const COMMAND_DETAILS: Partial<Record<CommandName, string[]>> = {
     ]),
     `폴더는 경로가 아니라 id 로만 지정합니다. ${CLI} folders 로 확인하세요.`,
   ],
+  syntax: [
+    '',
+    `사용: ${CLI} syntax [--short]`,
+    ...optionLines([['--short', '이 앱에만 있는 문법(콜아웃·위키링크·수식·다이어그램·이미지·프론트매터)만. 일반 마크다운은 뺍니다']]),
+  ],
 }
 
+// 첫 줄은 짧은 이름, 덧붙임이 없는 명령은 한 줄 설명을 둘째 줄에 둔다
 export function commandHelpText(command: CommandName): string {
-  const lines = [`${CLI} ${command} — ${COMMAND_DESCRIPTIONS[command]}`, ...(COMMAND_DETAILS[command] ?? [])]
+  const lines = [`${CLI} ${command} — ${COMMAND_TITLES[command]}`, ...(COMMAND_DETAILS[command] ?? [COMMAND_DESCRIPTIONS[command]])]
   return lines.join('\n') + '\n'
 }

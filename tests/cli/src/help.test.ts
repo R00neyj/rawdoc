@@ -7,10 +7,13 @@ const USAGE: Record<string, string> = {
   ls: '사용: rawdoc ls [--folder <폴더id|경로> | --root | --shared] [--path]',
   find: '사용: rawdoc find <제목> [--folder <폴더id|경로> | --root] [--path]',
   search: '사용: rawdoc search <검색어> [--folder <폴더id|경로>]',
-  replace: '사용: rawdoc replace <찾을말> <바꿀말> [--folder <폴더id|경로>] [--yes]',
+  replace: '사용: rawdoc replace <찾을말> <바꿀말> [--folder <폴더id|경로> | --id <id> [--base-version <n>]] [--yes]',
   get: '사용: rawdoc get <id> [-o <파일>]',
   new: '사용: rawdoc new [<파일>|-] [--title <제목>] [--folder <폴더id|경로>]',
-  put: '사용: rawdoc put <id> [<파일>|-] [--title <제목>] (--base-version <n> | --force) [--dry-run]',
+  put: '사용: rawdoc put <id> [<파일>|-] [--title <제목>] (--base-version <n|auto> | --force) [--dry-run [--diff]]',
+  diff: '사용: rawdoc diff <id> (<파일>|-)',
+  merge: '사용: rawdoc merge <id> <파일>',
+  syntax: '사용: rawdoc syntax [--short]',
   mv: '사용: rawdoc mv <id> (--folder <폴더id|경로> | --root)',
   rm: '사용: rawdoc rm <id> --yes',
   mkdir: '사용: rawdoc mkdir <이름> [--parent <폴더id|경로>]',
@@ -24,10 +27,21 @@ describe('F-2132 A9 help.ts', () => {
     }
   })
 
-  it('옵션 없는 명령은 한 줄 설명만', () => {
-    for (const name of ['logout', 'whoami', 'info', 'folders', 'upload', 'link', 'syntax'] as const) {
-      expect(commandHelpText(name).trimEnd().split('\n'), name).toHaveLength(1)
+  it('첫 줄은 짧은 이름이고 전체 도움말의 한 줄 설명을 되풀이하지 않는다. 덧붙임 없는 명령은 둘째 줄이 한 줄 설명', () => {
+    const put = commandHelpText('put').split('\n')
+    expect(put[0]).toBe('rawdoc put — 문서 고치기')
+    expect(commandHelpText('put')).not.toContain('자세히: put --help')
+    for (const name of ['logout', 'whoami', 'folders', 'upload', 'link'] as const) {
+      const lines = commandHelpText(name).trimEnd().split('\n')
+      expect(lines, name).toHaveLength(2)
+      expect(lines[0].startsWith(`rawdoc ${name} — `), name).toBe(true)
     }
+  })
+
+  it('put 도움말이 get -o → diff → put auto 순서와 merge 를 안내한다', () => {
+    const text = commandHelpText('put')
+    expect(text).toContain('rawdoc get <id> -o 파일.md → 파일 고치기 → rawdoc diff <id> 파일.md → rawdoc put <id> 파일.md --base-version auto')
+    expect(text).toContain('rawdoc merge <id> 파일.md')
   })
 
   it('전체 도움말 꼬리: help 안내가 PowerShell 줄 위, syntax 안내가 마지막', () => {
@@ -36,6 +50,7 @@ describe('F-2132 A9 help.ts', () => {
     expect(help).toBeGreaterThan(0)
     expect(lines[help + 1]).toContain('Windows PowerShell')
     expect(lines[lines.length - 1]).toContain('rawdoc syntax')
+    expect(lines[lines.length - 2]).toContain('--json')
   })
 
   it('put·mv 도움말에 위키링크 문장과 줄바꿈 안내', () => {
