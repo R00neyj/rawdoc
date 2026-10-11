@@ -54,6 +54,7 @@ Overrides "match the surrounding code" — older multi-line blocks are not prece
 | `specs/map.md` | Mermaid map of every page, screen, dialog and feature group, plus the mobile review checklist. Derived from `ia.md` and the code, not a source of truth | By main, when a screen, layer or entry route is added or removed |
 | `specs/files.md` | One plain-Korean line per `.ts`/`.tsx` source file (tests excluded), readable by non-developers. Derived from the code, not a source of truth | By main, when a source file is added, removed or changes role |
 | `specs/notes.md` | Discussion notes before anything becomes a spec. Move into `product.md` or an `F-xxx.md` once settled, and delete here | Freely |
+| `specs/wireframes/` | Grayscale HTML wireframes (and their image assets) shown to the user before building a screen. Not a source of truth; assets move to `public/` when implemented | Freely |
 | `content/` | Public-site article sources, `.md` (F-272). `site/` reads them | Per spec |
 | `site/` | Public-site build — articles → HTML, 404, sitemap, robots (F-272). `src/` never imports from here | Per spec |
 | `e2e/` | Playwright E2E tests (F-150) | Per spec |

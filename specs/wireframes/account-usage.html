@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>와이어프레임 — 계정 메뉴 사용량 게이지 · 후원</title>
+<style>
+  :root { --fg:#222; --muted:#777; --line:#ccc; --bg:#fafafa; --fill:#555; --warn:#999; --danger:#222; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; font: 14px/1.5 system-ui, sans-serif; color: var(--fg); background: #fff; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 40px 0 12px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  p.lead, .note { color: var(--muted); margin: 0 0 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+  .cap { font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+  .note { font-size: 12px; max-width: 320px; }
+  .note b { color: var(--fg); }
+
+  /* 계정 메뉴 팝오버 */
+  .menu { width: 280px; border: 1px solid var(--line); border-radius: 8px; background: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.08); padding: 6px 0; }
+  .menu li { list-style: none; }
+  .menu ul { margin: 0; padding: 0; }
+  .email { padding: 8px 14px 4px; font-weight: 600; }
+  .usage { padding: 6px 14px 10px; display: grid; gap: 10px; }
+  .gauge-head { display: flex; justify-content: space-between; font-size: 12px; }
+  .gauge-head .val { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .bar { height: 6px; border-radius: 3px; background: #e6e6e6; overflow: hidden; margin-top: 3px; }
+  .bar > i { display: block; height: 100%; background: var(--fill); }
+  .g-warn .bar > i { background: repeating-linear-gradient(45deg, #777 0 4px, #aaa 4px 8px); }
+  .g-danger .val, .g-danger .lab { color: var(--danger); font-weight: 600; }
+  .g-danger .bar > i { background: var(--danger); }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .skel { height: 6px; border-radius: 3px; background: linear-gradient(90deg,#eee,#f6f6f6,#eee); margin-top: 18px; }
+  .sep { height: 1px; background: var(--line); margin: 4px 0; }
+  .item { padding: 7px 14px; cursor: default; }
+  .item:hover { background: var(--bg); }
+  .item.donate { display: flex; justify-content: space-between; }
+  .item.donate small { color: var(--muted); }
+
+  /* 후원 대화상자 */
+  .dialog { width: 320px; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 20px; box-shadow: 0 8px 28px rgba(0,0,0,.12); }
+  .dialog h3 { margin: 0 0 6px; font-size: 16px; }
+  .dialog p { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+  .qr { display: block; width: 180px; height: 180px; margin: 0 auto 10px; image-rendering: pixelated; }
+  .btn { display: block; width: 100%; text-align: center; padding: 10px; border: 1px solid var(--fg); border-radius: 6px; background: #fff; font: inherit; }
+  .btn.primary { background: var(--fg); color: #fff; }
+  .actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+  .actions .btn { width: auto; padding: 6px 14px; border-color: var(--line); }
+
+  /* 휴대폰 틀 */
+  .phone { width: 300px; border: 2px solid var(--fg); border-radius: 22px; padding: 14px 10px; background: var(--bg); }
+  .sheet { background: #fff; border: 1px solid var(--line); border-radius: 14px 14px 0 0; margin-top: 180px; padding-bottom: 8px; }
+  .sheet .item { padding: 12px 14px; }
+  .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto; }
+</style>
+</head>
+<body>
+<h1>계정 메뉴 — 사용량 게이지 · 후원</h1>
+<p class="lead">회색조 와이어프레임. 색·간격은 design.md 토큰으로 구현 때 맞춤. 지금 코드(`AccountMenu.tsx` AccountInfoRows)는 글자 두 줄 `이미지 12MB / 300MB`, `문서 3.2MB / 100MB · 120개`</p>
+
+<h2>1. 데스크톱 계정 메뉴 (사이드바 아래 계정 버튼)</h2>
+<div class="row">
+  <div>
+    <div class="cap">A. 보통 (80% 미만)</div>
+    <div class="menu"><ul>
+      <li class="email">user@example.com</li>
+      <li class="usage">
+        <div class="g"><div class="gauge-head"><span class="lab">이미지</span><span class="val">12MB / 300MB</span></div><div class="bar"><i style="width:4%"></i></div></div>
+        <div class="g"><div class="gauge-head"><span class="lab">문서 용량</span><span class="val">3.2MB / 100MB</span></div><div class="bar"><i style="width:3.2%"></i></div></div>
+        <div class="g"><div class="gauge-head"><span class="lab">문서 수</span><span class="val">120 / 10,000개</span></div><div class="bar"><i style="width:1.2%"></i></div></div>
+      </li>
+      <li class="sep"></li>
+      <li class="item donate"><span>후원하기</span><small>토스</small></li>
+      <li class="item">API 토큰…</li>
+      <li class="item">로그아웃</li>
+    </ul></div>
+  </div>
+
+  <div>
+    <div class="cap">B. 80% 이상 / 90% 이상</div>
+    <div class="menu"><ul>
+      <li class="email">user@example.com</li>
+      <li class="usage">
+        <div class="g g-warn"><div class="gauge-head"><span class="lab">이미지</span><span class="val">252MB / 300MB</span></div><div class="bar"><i style="width:84%"></i></div></div>
+        <div class="g g-danger"><div class="gauge-head"><span class="lab">문서 용량</span><span class="val">93MB / 100MB</span></div><div class="bar"><i style="width:93%"></i></div><div class="hint">곧 저장할 수 없게 됩니다. 안 쓰는 문서를 지워 주세요</div></div>
+        <div class="g"><div class="gauge-head"><span class="lab">문서 수</span><span class="val">1,204 / 10,000개</span></div><div class="bar"><i style="width:12%"></i></div></div>
+      </li>
+      <li class="sep"></li>
+      <li class="item donate"><span>후원하기</span><small>토스</small></li>
+      <li class="item">API 토큰…</li>
+      <li class="item">로그아웃</li>
+    </ul></div>
+  </div>
+
+  <div>
+    <div class="cap">C. 불러오는 중 / 실패</div>
+    <div class="menu"><ul>
+      <li class="email">user@example.com</li>
+      <li class="usage"><div class="skel"></div><div class="skel"></div><div class="skel"></div></li>
+      <li class="sep"></li>
+      <li class="item donate"><span>후원하기</span><small>토스</small></li>
+      <li class="item">로그아웃</li>
+    </ul></div>
+    <p class="note" style="margin-top:8px">실패하면 지금처럼 사용량 줄 전체를 숨김</p>
+  </div>
+
+  <div class="note">
+    <b>정할 것</b><br>
+    ① 게이지 3개(이미지·문서 용량·문서 수) — 지금은 문서 용량과 개수가 한 줄. 나누면 어느 쪽이 차는지 바로 보임<br>
+    ② 오늘 쓰기 횟수(5,000회) 게이지는 넣지 않음 — 서버가 보내지만 지금도 화면에 안 씀<br>
+    ③ 단계: 80% 미만 기본 / 80% 이상 주의 / 90% 이상 위험+안내 한 줄. 지금 코드는 90%만 있음 (notes.md 구독 결정 9번의 80·90%)<br>
+    ④ 숫자는 오른쪽 정렬 `사용 / 한도`. 퍼센트 글자는 안 씀
+  </div>
+</div>
+
+<h2>2. 후원 대화상자 (`후원하기` 클릭)</h2>
+<div class="row">
+  <div>
+    <div class="cap">데스크톱 — QR 을 휴대폰 카메라로 찍음</div>
+    <div class="dialog">
+      <h3>후원하기</h3>
+      <p>광고·구독 없이 운영합니다. 서버비에 보태 주시면 고맙겠습니다. 토스 앱으로 QR 을 찍으면 송금 화면이 열립니다</p>
+      <img class="qr" src="toss-qr.png" alt="토스 송금 QR">
+      <div class="actions"><button class="btn">닫기</button></div>
+    </div>
+  </div>
+  <div>
+    <div class="cap">휴대폰 — 자기 화면 QR 은 못 찍으므로 버튼</div>
+    <div class="phone">
+      <div class="sheet">
+        <div class="grab"></div>
+        <div style="padding:4px 16px 12px">
+          <h3 style="margin:0 0 6px;font-size:16px">후원하기</h3>
+          <p style="margin:0 0 14px;color:var(--muted);font-size:13px">광고·구독 없이 운영합니다. 서버비에 보태 주시면 고맙겠습니다</p>
+          <button class="btn primary">토스 앱에서 열기</button>
+          <p style="margin:10px 0 0;font-size:11px;color:var(--muted)">토스 앱이 없으면 열리지 않습니다</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note">
+    <b>QR 내용</b>: <code>supertoss://send?…&amp;accountNo=…&amp;origin=qr</code> (토스뱅크 계좌 송금 링크, 금액 0 = 보내는 사람이 입력)<br><br>
+    <b>정할 것</b><br>
+    ① 후원 자리: 계정 메뉴만 / 도움말·공개 사이트(`site/`) 바닥에도<br>
+    ② 휴대폰 버튼은 위 <code>supertoss://</code> 링크를 그대로 엶 — 토스 앱 없는 기기·iOS 사파리 확인 필요<br>
+    ③ 로그인 안 한 사용자에게도 보일지<br>
+    ④ QR 이미지(1.4KB, 여백 2칸만 남기고 자름)는 구현 때 `public/` 으로 옮김
+  </div>
+</div>
+</body>
+</html>
