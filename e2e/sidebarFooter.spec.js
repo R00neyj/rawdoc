@@ -13,7 +13,8 @@ test('F-2090 E1 넓은 창 — 계정이 상단바에서 사이드바 하단으�
   await expect(page.locator('.topbar').getByRole('button', { name: /계정/ })).toHaveCount(0)
 
   await page.locator('.sidebar-bottom').getByRole('button', { name: ACCOUNT }).click()
-  await expect(page.getByRole('menuitem', { name: '공유 관리' })).toBeFocused()
+  // 와이어프레임대로 후원하기가 첫 항목 (small 2026-10-11)
+  await expect(page.getByRole('menuitem', { name: '후원하기' })).toBeFocused()
   const box = await page.locator('.account-menu-list').boundingBox()
   expect(box.y).toBeGreaterThanOrEqual(0)
   expect(box.y + box.height).toBeLessThanOrEqual(900)

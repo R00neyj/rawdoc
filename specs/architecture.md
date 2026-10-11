@@ -274,6 +274,7 @@ type YjsMetaRow = {
 | `md.lastDocId` | 문서 id | 없음 | F-111 |
 | `md.firstRunDone` | `1` | 없음 | F-111 |
 | `md.persistNoticeShown` | `1` | 없음 | F-118 |
+| `md.donatePromptAt` | epoch ms — 다음 후원 알림 시각 | 없음(처음 본 날 + 7일로 저장) | small 2026-10-11 |
 | `md.startScreen` | `home` \| `last` | `home` | F-232 3.4 |
 | `md.defaultView` | `remember` \| `live` \| `raw` \| `view` (화면 문구는 `기억` `편집` `원문` `보기`) | `remember` | F-2112 |
 | `md.mapView` | JSON — 묶음 단위 객체 `{ display, force, filter }`. **`파일 검색` 입력은 여기 넣지 않는다** — 지도를 열 때마다 비운다 (F-2007 6.2) | 없음 | F-292 개정판 6.11 (F-2005, F-2007) |

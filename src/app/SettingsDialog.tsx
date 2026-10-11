@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import Dialog from './Dialog'
 import SettingsPageShell from './SettingsPageShell'
+import { openDonateDialog } from './donateStore'
 import { usePhoneWidth } from './usePhoneWidth'
 import { useSettingsPages } from './useSettingsPages'
 import { settingsPagesMode } from './settingsPages'
@@ -736,6 +737,9 @@ export default function SettingsDialog({
         <a className="dialog-btn settings-intro" href={WELCOME_PATH} target="_blank" rel="noopener noreferrer">
           소개 보기
         </a>
+        <button type="button" className="settings-donate" onClick={openDonateDialog}>
+          후원하기
+        </button>
         <button type="button" onClick={onClose}>
           닫기
         </button>

@@ -80,6 +80,8 @@ test.describe('F-221 A3 넣기 거부 — 계정 한도가 거의 찼을 때', (
     expect(server.docs.get(docId)?.content ?? '').not.toContain('attachments/')
 
     await page.getByRole('button', { name: '계정' }).click()
-    await expect(page.locator('.account-menu-usage')).toHaveText('이미지 300MB / 300MB')
+    const images = page.locator('.account-menu-gauge[data-gauge="images"]')
+    await expect(images.locator('.account-menu-gauge-value')).toHaveText('300MB / 300MB')
+    await expect(images).toHaveAttribute('data-level', 'danger')
   })
 })

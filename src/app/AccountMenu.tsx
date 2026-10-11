@@ -3,14 +3,17 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { createPortal } from 'react-dom'
 
 import { loginUrl, logout, AFTER_LOGOUT_URL, LOGOUT_FAILED_MESSAGE, storedAccount, type AccountState } from './account'
-import { IconAccount, IconKey, IconLogin, IconLogout, IconShare, IconTooltip } from './icons'
+import { IconAccount, IconFavorite, IconKey, IconLogin, IconLogout, IconShare, IconTooltip } from './icons'
 import usePresence from './usePresence'
 import { accountTrigger } from './accountTrigger'
 import { fetchUsage, type Usage } from '../storage/attachmentsApi'
 import ApiTokensDialog from './ApiTokensDialog'
 import type { Notice } from './notice'
 import type { MenuAction } from './ShareMenu'
-import { formatMegabytes, formatCount } from '../lib/usageLimits'
+import { usageGaugeRows } from '../lib/usageGauge'
+import { openDonateDialog } from './donateStore'
+
+type AccountMenuAction = MenuAction & { hint?: string }
 
 export type AccountMenuProps = {
   account: AccountState
@@ -31,7 +34,7 @@ function useAccountMenu({
   afterSelect,
   active,
   onClose,
-}: AccountMenuProps & { active: boolean; onClose: () => void }): { usage: Usage | null | undefined; items: MenuAction[]; dialogs: ReactNode } {
+}: AccountMenuProps & { active: boolean; onClose: () => void }): { usage: Usage | null | undefined; items: AccountMenuAction[]; dialogs: ReactNode } {
   // undefined 는 아직 한 번도 받지 못함 — 그동안 스켈레톤으로 자리를 잡는다
   const [usage, setUsage] = useState<Usage | null | undefined>(undefined)
   const [apiTokensOpen, setApiTokensOpen] = useState(false)
@@ -87,24 +90,28 @@ function useAccountMenu({
     }
   }
 
-  const items: MenuAction[] =
+  // 후원은 메뉴가 그려지는 상태(로그인·오프라인) 모두 맨 앞 — 로그아웃 상태는 메뉴 대신 로그인 버튼이라 [0] 이 로그인이어야 한다
+  const donate: AccountMenuAction = { key: 'donate', label: '후원하기', icon: IconFavorite, hint: '토스', onSelect: closeThen(async () => openDonateDialog()) }
+  const items: AccountMenuAction[] =
     account.state === 'in'
       ? [
+          donate,
           { key: 'shares', label: '공유 관리', icon: IconShare, onSelect: closeThen(handleOpenShares) },
           { key: 'api-tokens', label: 'API 토큰', icon: IconKey, onSelect: closeThen(handleOpenApiTokens) },
           { key: 'logout', label: '로그아웃', icon: IconLogout, onSelect: closeThen(handleLogout) },
         ]
       : account.state === 'out'
         ? [{ key: 'login', label: '로그인', icon: IconLogin, onSelect: closeThen(handleLogin) }]
-        : []
+        : [donate]
 
   return { usage, items, dialogs: <ApiTokensDialog open={apiTokensOpen} onClose={() => setApiTokensOpen(false)} /> }
 }
 
-// 머리 줄 — 이메일·오프라인·이미지 사용량·문서 사용량 li (F-221.md 2.5, F-2030 7장)
+// 머리 줄 — 이메일·오프라인·사용량 게이지 li (F-221.md 2.5, F-2030 7장, 게이지 small 2026-10-11)
 function AccountInfoRows({ account, usage }: { account: AccountState; usage: Usage | null | undefined }): ReactNode {
   const stored = account.state === 'offline' ? storedAccount() : null
   const email = account.state === 'in' ? account.email : stored?.email ?? null
+  const rows = usage ? usageGaugeRows(usage) : []
   return (
     <>
       {email && (
@@ -119,41 +126,37 @@ function AccountInfoRows({ account, usage }: { account: AccountState; usage: Usa
         </li>
       )}
       {usage === undefined && account.state === 'in' && (
-        <>
-          <li className="account-menu-usage-skeleton" role="none" aria-hidden="true">
-            <span />
-          </li>
-          <li className="account-menu-usage-skeleton" role="none" aria-hidden="true">
-            <span />
-          </li>
-        </>
-      )}
-      {usage && (
-        <li
-          className={usage.used / usage.limit >= 0.9 ? 'account-menu-usage account-menu-usage-danger' : 'account-menu-usage'}
-          role="none"
-        >
-          이미지 {formatMegabytes(usage.used)} / 300MB
+        <li className="account-menu-usage account-menu-usage--loading" role="none" aria-hidden="true">
+          <span className="account-menu-gauge-skeleton" />
+          <span className="account-menu-gauge-skeleton" />
+          <span className="account-menu-gauge-skeleton" />
         </li>
       )}
-      {usage?.docs &&
-        Number.isFinite(usage.docs.bytes) &&
-        Number.isFinite(usage.docs.bytesLimit) &&
-        Number.isFinite(usage.docs.count) &&
-        Number.isFinite(usage.docs.countLimit) &&
-        usage.docs.bytesLimit > 0 &&
-        usage.docs.countLimit > 0 && (
-          <li
-            className={
-              usage.docs.bytes / usage.docs.bytesLimit >= 0.9 || usage.docs.count / usage.docs.countLimit >= 0.9
-                ? 'account-menu-usage-docs account-menu-usage-danger'
-                : 'account-menu-usage-docs'
-            }
-            role="none"
-          >
-            문서 {formatMegabytes(usage.docs.bytes)} / {formatMegabytes(usage.docs.bytesLimit)} · {formatCount(usage.docs.count)}개
-          </li>
-        )}
+      {rows.length > 0 && (
+        <li className="account-menu-usage" role="none">
+          {rows.map((row) => (
+            <div key={row.key} className="account-menu-gauge" data-gauge={row.key} data-level={row.gauge.level}>
+              <div className="account-menu-gauge-head">
+                <span className="account-menu-gauge-label">{row.label}</span>
+                <span className="account-menu-gauge-value">{row.value}</span>
+              </div>
+              <div
+                className="account-menu-gauge-bar"
+                role="meter"
+                aria-label={row.label}
+                aria-valuemin={0}
+                aria-valuemax={row.limit}
+                aria-valuenow={Math.min(Math.max(0, row.used), row.limit)}
+                aria-valuetext={row.value}
+              >
+                <span style={{ width: `${row.gauge.percent}%` }} />
+              </div>
+              {row.hint && <div className="account-menu-gauge-hint">{row.hint}</div>}
+            </div>
+          ))}
+        </li>
+      )}
+      <li className="account-menu-sep" role="separator" />
     </>
   )
 }
@@ -274,6 +277,11 @@ export default function AccountMenu(props: AccountMenuProps & { variant: 'row' |
               >
                 <item.icon size={16} />
                 {item.label}
+                {item.hint && (
+                  <small className="account-menu-hint" aria-hidden="true">
+                    {item.hint}
+                  </small>
+                )}
               </button>
             </li>
           ))}

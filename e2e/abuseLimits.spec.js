@@ -75,12 +75,13 @@ test.describe('F-2030 웹 — 한도·차단·주의 표시', () => {
       await openApp(page)
 
       await page.getByRole('button', { name: '계정' }).click()
-      await expect(page.locator('.account-menu-usage-docs')).toHaveCount(0)
+      await expect(page.locator('.account-menu-gauge[data-gauge="docBytes"]')).toHaveCount(0)
       await page.getByRole('button', { name: '계정' }).click()
       server.setUsage({ docs: { bytes: 12_582_912, bytesLimit: 104_857_600, count: 1234, countLimit: 10_000 } })
       await page.getByRole('button', { name: '계정' }).click()
-      await expect(page.locator('.account-menu-usage-docs')).toHaveText('문서 12MB / 100MB · 1,234개')
-      await expect(page.locator('.account-menu-usage')).toHaveText('이미지 0.0MB / 300MB')
+      await expect(page.locator('.account-menu-gauge[data-gauge="docBytes"] .account-menu-gauge-value')).toHaveText('12MB / 100MB')
+      await expect(page.locator('.account-menu-gauge[data-gauge="docCount"] .account-menu-gauge-value')).toHaveText('1,234 / 10,000개')
+      await expect(page.locator('.account-menu-gauge[data-gauge="images"] .account-menu-gauge-value')).toHaveText('0.0MB / 300MB')
       await page.getByRole('button', { name: '계정' }).click()
 
       server.failWrites({ status: 429, headers: { 'Retry-After': '2' }, times: 1 })

@@ -25,7 +25,7 @@
 |`src/types.ts`|문서·폴더 등 저장 데이터의 모양을 정해 둠|
 |`src/vite-env.d.ts`|빌드 도구와 컴퓨터 기본 기능의 모양을 적어 둔 선언|
 
-## `src/app/` 화면과 앱 동작 (250)
+## `src/app/` 화면과 앱 동작 (253)
 
 사용자가 보는 창·메뉴·버튼과, 그 뒤에서 도는 규칙
 
@@ -71,6 +71,8 @@
 |`src/app/docPath.ts`|문서를 열 때 실시간 편집·읽기 전용·오프라인 등 어느 방식으로 열지 정함|
 |`src/app/DocSkeleton.tsx`|문서를 불러오는 동안 보이는 회색 자리 표시 화면|
 |`src/app/DocumentArea.tsx`|문서 본문 편집 영역과 그 주변(댓글 달기 버튼 등)을 배치함|
+|`src/app/DonateDialog.tsx`|토스 송금 QR(넓은 창)이나 토스 앱 열기 버튼(휴대폰)을 보여 주는 후원 창|
+|`src/app/donateStore.ts`|후원 창이 열렸는지 기억하고, 열면 다음 후원 알림을 1년 뒤로 미룸|
 |`src/app/DropOverlay.tsx`|파일을 창 위로 끌어올 때 덮이는 안내 화면|
 |`src/app/E2eeConvertDialog.tsx`|문서를 금고에 넣거나 금고에서 뺄지 확인하는 창|
 |`src/app/E2eeDialogs.tsx`|금고 만들기·열기·복구·암호 바꾸기·초기화 창 모음|
@@ -215,6 +217,7 @@
 |`src/app/useDocNavigation.ts`|문서 열기·새 문서 만들기·문서 사이 이동을 처리함|
 |`src/app/useDocSaver.ts`|편집 중인 문서와 댓글을 자동으로 저장함|
 |`src/app/useDocSession.ts`|문서를 열 때 혼자 편집인지 실시간 함께 편집인지 정하고 접속자를 관리함|
+|`src/app/useDonatePrompt.ts`|때가 된 기기에서 부팅 뒤 후원 알림 띠를 한 번 띄움|
 |`src/app/useE2ee.ts`|암호 금고 잠금·열기와 관련 창 상태를 관리함|
 |`src/app/useE2eeConvert.ts`|문서를 암호 금고로 옮기거나 금고에서 꺼냄|
 |`src/app/useE2eeMigrate.ts`|로그인 전 금고 옮기기와 금고 잠그기·초기화 단계를 처리함|
@@ -354,7 +357,7 @@
 |`src/viewer/viewFindDom.ts`|보기 모드에서 찾은 글자를 강조하고 그 위치로 스크롤함|
 |`src/viewer/viewFindMatch.ts`|보기 모드 찾기에서 검색어와 맞는 곳을 계산함|
 
-## `src/lib/` 공통 규칙 (72)
+## `src/lib/` 공통 규칙 (75)
 
 여러 화면이 함께 쓰는 계산과 판단
 
@@ -385,6 +388,8 @@
 |`src/lib/docRoomProtocol.ts`|실시간 편집 방 서버와 앱이 주고받는 신호 규칙을 정함|
 |`src/lib/docSearch.ts`|문서 검색어를 해석해 맞는 문서와 미리보기 문장을 찾음|
 |`src/lib/docTodos.ts`|문서 속 할 일 목록을 모아 상태·순서대로 정리함|
+|`src/lib/donateLink.ts`|토스 송금 링크와 QR 이미지 경로를 한곳에 둠|
+|`src/lib/donatePrompt.ts`|후원 알림을 다음에 언제 띄울지 계산함(처음 7일, 닫으면 30일, 후원하면 1년)|
 |`src/lib/e2eeLimits.ts`|금고(종단 암호화) 문서의 크기·형식 제한을 정함|
 |`src/lib/filename.ts`|문서 제목을 저장 가능한 파일·폴더 이름으로 바꿈|
 |`src/lib/floatCover.ts`|떠 있는 막대가 본문을 얼마나 가리는지 계산함|
@@ -425,6 +430,7 @@
 |`src/lib/templates.ts`|서식 폴더를 알아보고 서식 속 빈칸을 채워 넣음|
 |`src/lib/textRebase.ts`|밖에서 바뀐 글을 내가 고친 글 위에 겹쳐 반영함|
 |`src/lib/touchContextMenu.ts`|터치 길게 누르기와 마우스 우클릭 메뉴를 구분함|
+|`src/lib/usageGauge.ts`|사용량 막대의 비율과 주의(80%)·위험(90%) 단계, 안내 문구를 정함|
 |`src/lib/usageLimits.ts`|사용량 초과 알림 문구와 다시 시도할 시간을 정함|
 |`src/lib/userCssContract.ts`|사용자 꾸미기 코드에서 쓸 수 있는 색 이름·요소 목록과 서식을 정함|
 |`src/lib/userCssFilter.ts`|사용자 꾸미기 코드에서 외부 자원을 부르는 부분을 걸러 냄|

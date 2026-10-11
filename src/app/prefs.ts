@@ -59,6 +59,8 @@ type PrefMap = {
   'md.calendarFolder': string
   'md.calendarFormat': string
   'md.calendarTemplate': string
+  // 후원 알림 띠를 다음에 띄울 때(epoch ms 문자열), 기기별 (small 2026-10-11)
+  'md.donatePromptAt': string
 }
 
 type PrefKey = keyof PrefMap
@@ -109,6 +111,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.calendarFolder',
   'md.calendarFormat',
   'md.calendarTemplate',
+  'md.donatePromptAt',
 ])
 
 function assertAllowed(key: string) {

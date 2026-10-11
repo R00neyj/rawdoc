@@ -2670,11 +2670,41 @@ body.sidebar-resizing {
   overflow-y: auto;
 }
 
-/* 설정 아래 줄 왼쪽 끝의 소개 보기 링크 (F-2051, tweak 2026-09-28) */
+/* 설정 아래 줄 왼쪽 끝의 소개 보기 링크와 후원하기 (F-2051, tweak 2026-09-28, small 2026-10-11) */
 .settings-intro {
-  margin-right: auto;
   color: inherit;
   text-decoration: none;
+}
+
+.settings-donate {
+  margin-right: auto;
+}
+
+/* 후원 대화상자 — 넓은 창 QR, 휴대폰 토스 앱 열기 (small 2026-10-11) */
+.donate-qr {
+  display: block;
+  margin: 0 auto 4px;
+  image-rendering: pixelated;
+}
+
+.donate-dialog a.donate-open {
+  display: block;
+  text-align: center;
+  padding: 10px;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--panel);
+}
+
+.donate-dialog a.donate-open:hover {
+  background: var(--ink);
+  filter: brightness(1.15);
+}
+
+.donate-dialog .donate-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .dialog--full .settings-panel {
@@ -4151,36 +4181,83 @@ body.sidebar-resizing {
   opacity: 0.7;
 }
 
-/* 계정당 이미지·문서 저장 사용량 (F-221.md 2.5, 문서 줄은 F-2030 7장) */
-.account-menu-usage,
-.account-menu-usage-docs {
-  padding: 0 10px 6px;
+/* 계정당 이미지·문서 용량·문서 수 게이지 — 80% 주의, 90% 위험 (F-221.md 2.5, F-2030 7장, small 2026-10-11) */
+.account-menu-usage {
+  display: grid;
+  gap: 10px;
+  min-width: 216px;
+  padding: 4px 10px 10px;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--ink-2);
   user-select: none;
 }
 
-.account-menu-usage-danger {
-  color: var(--danger);
+.account-menu-gauge-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-/* 사용량을 받기 전 두 줄 자리 — 받은 뒤 메뉴 높이가 튀지 않게 */
-.account-menu-usage-skeleton {
-  padding: 0 10px 6px;
-  font-size: 12px;
+.account-menu-gauge-value {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.account-menu-usage-skeleton span {
+.account-menu-gauge-bar {
+  height: 6px;
+  margin-top: 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  overflow: hidden;
+}
+
+.account-menu-gauge-bar span {
   display: block;
-  width: 60%;
-  height: 1lh;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--ink-2) 55%, var(--muted));
+}
+
+.account-menu-gauge[data-level='warn'] .account-menu-gauge-bar span {
+  background: var(--callout-warning);
+}
+
+.account-menu-gauge[data-level='danger'] :is(.account-menu-gauge-label, .account-menu-gauge-value) {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.account-menu-gauge[data-level='danger'] .account-menu-gauge-bar span {
+  background: var(--danger);
+}
+
+.account-menu-gauge-hint {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* 받기 전 세 줄 자리 — 글자 한 줄 + 막대 높이라 받은 뒤 메뉴 높이가 튀지 않는다 */
+.account-menu-gauge-skeleton {
+  display: block;
+  height: calc(1lh + 9px);
   background: color-mix(in srgb, var(--ink) 8%, transparent);
   border-radius: 4px;
   animation: boot-skeleton-pulse 1.6s ease-in-out infinite;
 }
 
-.account-menu-usage-skeleton + .account-menu-usage-skeleton span {
-  width: 80%;
+.account-menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--rule);
+}
+
+.account-menu-hint {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: 11px;
+  color: var(--muted);
 }
 
 /* 링크 유무 확인 중인 `끊기` 자리 — 버튼 틀은 그대로, 아이콘·글자만 회색 막대 */
@@ -4207,7 +4284,7 @@ body.sidebar-resizing {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .account-menu-usage-skeleton span,
+  .account-menu-gauge-skeleton,
   .menu-item-skeleton-icon,
   .menu-item-skeleton-bar {
     animation: none;
@@ -6082,8 +6159,7 @@ body.sidebar-resizing {
   .invite-grant-remove,
   .invite-hint,
   .account-menu-offline,
-  .account-menu-usage-docs,
-  .account-menu-usage-skeleton,
+  .account-menu-usage,
   .shared-view-notice-actions button,
   .context-menu-shortcut,
   .shortcut-panel-count,

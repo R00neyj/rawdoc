@@ -74,6 +74,8 @@ import AppDialogs from './AppDialogs'
 import ImportFileInputs from './ImportFileInputs'
 import Sidebar, { type SharedDocLike, type SidebarCommands } from './Sidebar'
 import NoticeBar, { type NoticeWithAction } from './NoticeBar'
+import DonateDialog from './DonateDialog'
+import useDonatePrompt from './useDonatePrompt'
 import type { DeleteTarget } from './ConfirmDeleteDialog'
 import type { MoveDocTarget } from './MoveDocDialog'
 import { searchScope } from './searchIndex'
@@ -319,9 +321,9 @@ export default function App() {
   // 만든 알림 id 를 돌려준다 — 조건이 풀리면 dismissNotice(id) 로 그 알림만 걷는다 (F-305 11.2)
   // sticky 면 info 도 4초 뒤 사라지지 않는다 — 금고 옮기기 진행 알림 전용 (F-407 6장)
   const showNotice = useCallback((input: NoticeWithAction, options?: { sticky?: boolean }): number => {
-    const { type, message, action, secondaryAction } = input
+    const { type, message, action, secondaryAction, onDismiss } = input
     const id = ++noticeIdRef.current
-    const candidate: AppNotice = { id, type, message, action, secondaryAction }
+    const candidate: AppNotice = { id, type, message, action, secondaryAction, onDismiss }
     const sticky = options?.sticky === true
     setNotice((current) => {
       const result = pushNotice(current, candidate) as AppNotice
@@ -345,6 +347,8 @@ export default function App() {
 
   // ----- 사용자 CSS 적용·이어받기·안전 모드 (F-2095) -----
   useUserCss({ isPublic: publicRoute !== null, account, showNotice, beforeReload: beforeLeaveDoc })
+  // ----- 후원 알림 띠 (small 2026-10-11) -----
+  useDonatePrompt({ ready: bootPhase === 'ready', isPublic: publicRoute !== null, noticeVisible: notice !== null, showNotice, dismissNotice })
 
   // view 권한 문서이거나(F-212.md 2.4), edit 권한 문서가 403 으로 강등됐거나, 계정이 막혔으면 읽기 전용 (F-2030 5.2)
   const isReadOnlyByRole =
@@ -1418,6 +1422,7 @@ export default function App() {
         toolbarPref, wikiPreviewPref, settingsGithub: github.settings, githubDialogs: github.dialogs, ...templateManager,
         rightPanelSettings: { ...rightPanel.settings, calendar: calendar.settings },
       }} />
+      <DonateDialog />
       {/* 인쇄 전용 영역 — printDoc() 이 채운다. .app-shell 의 마지막 직계 자식이어야 한다 (F-279.md 4.2) */}
       <div className="viewer print-root" data-ui="print" ref={printRootRef} aria-hidden="true" inert />
     </div>

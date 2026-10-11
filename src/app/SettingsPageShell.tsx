@@ -2,6 +2,7 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { IconArrowBack, IconChevron, IconClose } from './icons'
 import { WELCOME_PATH } from '../lib/siteChrome'
+import { openDonateDialog } from './donateStore'
 import type { SettingsPage } from './settingsPages'
 import type { SettingsTabId } from './settingsTabs'
 
@@ -72,6 +73,11 @@ export default function SettingsPageShell({ titleId, page, tabs, labels, firstRo
             <a className="settings-row settings-row-intro" href={WELCOME_PATH} target="_blank" rel="noopener noreferrer">
               <span className="settings-row-label">소개 보기</span>
             </a>
+          </li>
+          <li>
+            <button type="button" className="settings-row settings-row-intro" onClick={openDonateDialog}>
+              <span className="settings-row-label">후원하기</span>
+            </button>
           </li>
         </ul>
       ) : (

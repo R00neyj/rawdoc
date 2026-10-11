@@ -7,6 +7,7 @@ import type { Notice } from './notice'
 export type NoticeWithAction = Notice & {
   action?: { label: string; onClick: () => void; icon?: ComponentType<{ size?: number }> }
   secondaryAction?: { label: string; onClick: () => void } // 두 번째 버튼 — action 뒤, 닫기 앞 (F-408 E9 `나중에`)
+  onDismiss?: () => void // 사용자가 닫기 버튼으로 걷을 때만 — 자동 사라짐·대체에는 부르지 않는다 (small 2026-10-11)
 }
 
 type NoticeBarProps = {
@@ -46,7 +47,15 @@ export default function NoticeBar({ notice, onDismiss }: NoticeBarProps) {
         </button>
       )}
       <span className="icon-btn-wrap">
-        <button type="button" className="icon-btn" aria-label="알림 닫기" onClick={onDismiss}>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="알림 닫기"
+          onClick={() => {
+            shown.onDismiss?.()
+            onDismiss()
+          }}
+        >
           <IconClose size={18} />
         </button>
         <IconTooltip text="알림 닫기" align="end" />
