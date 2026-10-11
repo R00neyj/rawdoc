@@ -52,6 +52,7 @@ Overrides "match the surrounding code" — older multi-line blocks are not prece
 | `specs/tweaks.md` | One line per tweak: date, what, why (user's words), related spec | By main, in the tweak's commit |
 | `specs/small-changes.md` | One line per small change: date, what, why (user's words), related spec | By main, in the change's commit |
 | `specs/map.md` | Mermaid map of every page, screen, dialog and feature group, plus the mobile review checklist. Derived from `ia.md` and the code, not a source of truth | By main, when a screen, layer or entry route is added or removed |
+| `specs/files.md` | One plain-Korean line per `.ts`/`.tsx` source file (tests excluded), readable by non-developers. Derived from the code, not a source of truth | By main, when a source file is added, removed or changes role |
 | `specs/notes.md` | Discussion notes before anything becomes a spec. Move into `product.md` or an `F-xxx.md` once settled, and delete here | Freely |
 | `content/` | Public-site article sources, `.md` (F-272). `site/` reads them | Per spec |
 | `site/` | Public-site build — articles → HTML, 404, sitemap, robots (F-272). `src/` never imports from here | Per spec |
