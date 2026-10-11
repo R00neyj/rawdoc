@@ -53,6 +53,7 @@ import {
   IconCallout,
   IconHorizontalRule,
   IconCodeBlock,
+  IconImage,
   IconTabFormat,
   IconTabBlock,
   IconTabInsert,
@@ -82,7 +83,10 @@ export type ToolbarHeadingItem = {
   sep?: boolean
 }
 
-export type ToolbarItem = ToolbarCommandItem | ToolbarHeadingItem
+// 이미지는 명령이 아니라 파일 고르기 창을 연다 — EditorToolbar 가 숨은 파일 입력으로 처리한다
+export type ToolbarImageItem = { kind: 'image'; id: 'image'; label: string; Icon: IconComponent; sep?: boolean }
+
+export type ToolbarItem = ToolbarCommandItem | ToolbarHeadingItem | ToolbarImageItem
 export type ToolbarTabId = 'format' | 'block' | 'insert'
 // Icon 은 좁은 창 탭바에서 글자 대신 쓴다 (F-233.md 3.6, 2026-09-16 재개정 "아이콘으로 공간 최소화")
 export type ToolbarTab = { id: ToolbarTabId; label: string; Icon: IconComponent; items: ToolbarItem[] }
@@ -136,6 +140,7 @@ export const toolbarTabs: ToolbarTab[] = [
       { kind: 'command', id: 'hr', label: '수평선', Icon: IconHorizontalRule, run: insertHorizontalRule },
       { kind: 'command', id: 'codeblock', label: '코드 블럭', Icon: IconCodeBlock, run: insertCodeBlock, sep: true },
       { kind: 'command', id: 'mathblock', label: '수식 블럭', Icon: IconCalculate, run: insertMathBlock },
+      { kind: 'image', id: 'image', label: '이미지', Icon: IconImage, sep: true },
     ],
   },
 ]

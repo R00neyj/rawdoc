@@ -1,5 +1,5 @@
 import type { RefObject } from 'react'
-import type { StateCommand } from '@codemirror/state'
+import type { Command } from '@codemirror/view'
 import TopBar from './TopBar'
 import { isSharedDoc, type DocMeta, type OpenDoc } from './docMeta'
 import type { Peer } from '../lib/peers'
@@ -53,7 +53,7 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
     openSearch: () => void
     openViewFind: () => void
     requestInviteCurrentDoc: () => void
-    runToolbarCommand: (cmd: StateCommand) => void
+    runToolbarCommand: (cmd: Command) => void
     editorRef: RefObject<EditorHandle | null>
     sharedDoc: ShareDoc | null
     sharesOpen: boolean

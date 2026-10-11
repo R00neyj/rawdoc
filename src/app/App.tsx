@@ -9,7 +9,8 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react'
 import { flushSync } from 'react-dom'
-import type { EditorState, StateCommand } from '@codemirror/state'
+import type { EditorState } from '@codemirror/state'
+import type { Command } from '@codemirror/view'
 
 import { createMemoryStore } from '../storage/memoryStore'
 import type { ServerStore } from '../storage/serverStore'
@@ -1226,7 +1227,7 @@ export default function App() {
   })
 
   // 탭바 아이콘 버튼이 명령을 실행하고 포커스를 에디터로 돌려준다 (F-233 3.2)
-  const runToolbarCommand = useCallback((cmd: StateCommand) => {
+  const runToolbarCommand = useCallback((cmd: Command) => {
     const view = editorRef.current?.view
     if (!view) return
     cmd(view)

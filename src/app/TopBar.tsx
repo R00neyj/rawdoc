@@ -1,6 +1,6 @@
 // 상단바 — 보기 모드 토글(F-107·F-123), .md 내보내기(F-112), 공유(F-130), 아이콘·툴팁(F-142 3.2·3.3), 좁은 창 전용 앞 묶음(F-159 2.1) (ia.md 2장 A, F-102.md 5.3)
 import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
-import type { StateCommand } from '@codemirror/state'
+import type { Command } from '@codemirror/view'
 import ShareMenu from './ShareMenu'
 import ExportMenu from './ExportMenu'
 import GithubMenu, { type GithubMenuProps } from './GithubMenu'
@@ -48,7 +48,7 @@ type TopBarProps = {
   onCopyRich: () => void
   // 서식·단락·삽입 탭바 (F-233.md 3.1) — AppTopBar.tsx 가 표시 조건을 계산해 넘긴다
   showToolbar: boolean
-  onRunToolbarCommand: (cmd: StateCommand) => void
+  onRunToolbarCommand: (cmd: Command) => void
   // 휴대폰 폭 — 서식 바 줄을 앱 틀 맨 아래로, 줄 mousedown 이 편집기 포커스를 지킨다 (F-2084 3.4·3.5)
   toolbarDocked: boolean
   onToolbarRowMouseDown?: (e: ReactMouseEvent) => void

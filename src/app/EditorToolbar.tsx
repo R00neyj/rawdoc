@@ -1,15 +1,17 @@
 // 상단바 서식 탭바 (specs/features/F-233.md 3.2·3.3) — F-167·168·169 명령을 탭 3개 + 아이콘 버튼 줄로
-import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import type { StateCommand } from '@codemirror/state'
+import { Fragment, useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { indentMore } from '@codemirror/commands'
+import type { Command } from '@codemirror/view'
 
-import { IconDropdown, IconRedo, IconTooltip, IconUndo } from './icons'
+import { IconDropdown, IconIndent, IconRedo, IconTooltip, IconUndo } from './icons'
 import { redoLocal, undoLocal } from '../editor/yBinding'
+import { insertPickedImages } from '../editor/imageInsert'
 import usePresence from './usePresence'
 import { toolbarTabs, type ToolbarTabId } from './toolbarConfig'
 import ToolbarCategoryMenu from './ToolbarCategoryMenu'
 
 type EditorToolbarProps = {
-  onRunCommand: (cmd: StateCommand) => void
+  onRunCommand: (cmd: Command) => void
   // 좁은 창은 상단바 밑 자기 줄에 그려 탭·아이콘 줄이 접혀 2줄까지 보인다 (App.tsx·TopBar.tsx 가 넘긴다)
   narrow?: boolean
   // 휴대폰 폭 앱 틀 맨 아래 줄 — 제목 목록·툴팁을 버튼 위로 연다 (F-2084 3.6)
@@ -26,6 +28,7 @@ export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorTo
   const headingBtnRef = useRef<HTMLButtonElement | null>(null)
   const headingMenuRef = useRef<HTMLUListElement | null>(null)
   const headingItemRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
 
   const tab = toolbarTabs.find((t) => t.id === activeTab) ?? toolbarTabs[0]
 
@@ -87,11 +90,18 @@ export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorTo
     headingBtnRef.current?.focus()
   }
 
-  function runCommand(cmd: StateCommand) {
+  function runCommand(cmd: Command) {
     onRunCommand(cmd)
   }
 
-  function runHeading(cmd: StateCommand) {
+  // 같은 파일을 다시 골라도 change 가 오도록 값을 비운다
+  function handleImagePicked(e: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    if (files.length > 0) onRunCommand((view) => insertPickedImages(view, files))
+  }
+
+  function runHeading(cmd: Command) {
     setHeadingOpen(false)
     onRunCommand(cmd)
   }
@@ -123,9 +133,11 @@ export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorTo
   }
 
   // 되돌리기·다시 실행은 탭과 무관하게 늘 왼쪽에 — 모바일엔 Ctrl+Z 가 없다 (2026-09-23 tweak, specs/tweaks.md)
+  // 들여쓰기는 화면 키보드에 Tab 이 없는 터치 기기에서만 보인다 (app.css .editor-toolbar-touch-only)
   const historyItems = [
     { id: 'undo', label: '되돌리기', Icon: IconUndo, run: undoLocal },
     { id: 'redo', label: '다시 실행', Icon: IconRedo, run: redoLocal },
+    { id: 'indent', label: '들여쓰기 (Tab)', Icon: IconIndent, run: indentMore, touchOnly: true },
   ]
 
   return (
@@ -133,7 +145,7 @@ export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorTo
       <div className="editor-toolbar-items editor-toolbar-history">
         {historyItems.map((item) => (
           <span
-            className="icon-btn-wrap"
+            className={item.touchOnly ? 'icon-btn-wrap editor-toolbar-touch-only' : 'icon-btn-wrap'}
             key={item.id}
             onMouseEnter={(e) => positionToolbarTooltip(e.currentTarget)}
             onFocus={(e) => positionToolbarTooltip(e.currentTarget)}
@@ -268,7 +280,7 @@ export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorTo
                 type="button"
                 className="editor-toolbar-btn"
                 aria-label={item.label}
-                onClick={() => runCommand(item.run)}
+                onClick={() => (item.kind === 'image' ? imageInputRef.current?.click() : runCommand(item.run))}
               >
                 <item.Icon size={18} />
               </button>
@@ -278,6 +290,14 @@ export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorTo
           </Fragment>
         ))}
       </div>
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        multiple
+        hidden
+        onChange={handleImagePicked}
+      />
       {docked && <ToolbarCategoryMenu activeTab={activeTab} onSelect={selectTab} />}
     </div>
   )

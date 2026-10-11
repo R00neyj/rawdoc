@@ -1,7 +1,7 @@
 // 붙여넣기·끌어놓기로 이미지 받기, 넣을 원문 위치 계산 (F-156.md 2.4·2.5·2.6). 저장은 App 이 넘긴 onImageFiles 콜백이 한다
 import { syntaxTree } from '@codemirror/language'
 import type { EditorState, Extension } from '@codemirror/state'
-import { StateEffect, StateField } from '@codemirror/state'
+import { Facet, StateEffect, StateField } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 
 import type { ImageExt } from '../lib/imageBlock'
@@ -177,10 +177,22 @@ async function handleIncomingImages(
   })
 }
 
+// 툴바 '이미지' 버튼으로 고른 파일 — 붙여넣기와 같은 길로 현재 선택 끝에 넣는다
+const imageFilesHandler = Facet.define<OnImageFiles, OnImageFiles | undefined>({ combine: (v) => v[0] })
+
+export function insertPickedImages(view: EditorView, files: File[]): boolean {
+  const onImageFiles = view.state.facet(imageFilesHandler)
+  const imageFiles = files.filter(isImageFile)
+  if (!onImageFiles || isViewOnly(view) || imageFiles.length === 0) return false
+  handleIncomingImages(view, imageFiles, { source: 'drop', pos: view.state.selection.main.to, onImageFiles })
+  return true
+}
+
 // 붙여넣기·끌어놓기 이미지 받기(2.4·2.5). createEditor.ts 가 onImageFiles(files, {source, blocked?}) => Promise<attached[]> 옵션과 함께 조립한다
 export function imageInsert({ onImageFiles }: { onImageFiles?: OnImageFiles } = {}): Extension {
   return [
     trackedPosField,
+    onImageFiles ? imageFilesHandler.of(onImageFiles) : [],
     EditorView.domEventHandlers({
       paste(event, view) {
         if (!onImageFiles) return false
