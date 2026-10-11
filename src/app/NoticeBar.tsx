@@ -8,6 +8,7 @@ export type NoticeWithAction = Notice & {
   action?: { label: string; onClick: () => void; icon?: ComponentType<{ size?: number }> }
   secondaryAction?: { label: string; onClick: () => void } // 두 번째 버튼 — action 뒤, 닫기 앞 (F-408 E9 `나중에`)
   onDismiss?: () => void // 사용자가 닫기 버튼으로 걷을 때만 — 자동 사라짐·대체에는 부르지 않는다 (small 2026-10-11)
+  placement?: 'bottom' // 띠 대신 화면 아래 떠 있는 카드로 (후원 알림, small 2026-10-11)
 }
 
 type NoticeBarProps = {
@@ -28,7 +29,7 @@ export default function NoticeBar({ notice, onDismiss }: NoticeBarProps) {
 
   return (
     <div
-      className={`notice notice--${shown.type}`}
+      className={`notice notice--${shown.type}${shown.placement === 'bottom' ? ' notice--bottom' : ''}`}
       data-ui="notice"
       data-state={state}
       inert={state === 'closed'}

@@ -321,9 +321,9 @@ export default function App() {
   // 만든 알림 id 를 돌려준다 — 조건이 풀리면 dismissNotice(id) 로 그 알림만 걷는다 (F-305 11.2)
   // sticky 면 info 도 4초 뒤 사라지지 않는다 — 금고 옮기기 진행 알림 전용 (F-407 6장)
   const showNotice = useCallback((input: NoticeWithAction, options?: { sticky?: boolean }): number => {
-    const { type, message, action, secondaryAction, onDismiss } = input
+    const { type, message, action, secondaryAction, onDismiss, placement } = input
     const id = ++noticeIdRef.current
-    const candidate: AppNotice = { id, type, message, action, secondaryAction, onDismiss }
+    const candidate: AppNotice = { id, type, message, action, secondaryAction, onDismiss, placement }
     const sticky = options?.sticky === true
     setNotice((current) => {
       const result = pushNotice(current, candidate) as AppNotice

@@ -44,6 +44,7 @@ export default function useDonatePrompt({ ready, isPublic, noticeVisible, showNo
             },
           },
           onDismiss: () => setPref('md.donatePromptAt', String(afterDismiss(Date.now()))),
+          placement: 'bottom',
         },
         { sticky: true },
       )
