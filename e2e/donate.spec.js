@@ -33,7 +33,7 @@ test('small 후원 C1 때가 된 부팅에 알림 띠 — 후원하기는 대화
   await notice.getByRole('button', { name: '후원하기' }).click()
 
   const dialog = page.locator('dialog[open]')
-  await expect(dialog.getByRole('heading', { name: '후원하기' })).toBeVisible()
+  await expect(dialog.getByRole('heading', { name: '커피 한 잔 보내기' })).toBeVisible()
   const qr = dialog.getByRole('img', { name: '토스 송금 QR' })
   await expect.poll(() => qr.evaluate((img) => img.naturalWidth)).toBeGreaterThan(0)
   await expect(notice).toHaveCount(0)

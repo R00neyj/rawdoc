@@ -2719,10 +2719,42 @@ body.sidebar-resizing {
   margin-right: auto;
 }
 
-/* 후원 대화상자 — 넓은 창 QR, 휴대폰 토스 앱 열기 (small 2026-10-11) */
+/* 후원 대화상자 — 하트·제목·QR 을 가운데 세운 작은 카드 (small 2026-10-11, tweak 같은 날) */
+.donate-dialog {
+  text-align: center;
+}
+
+.donate-heart {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--accent);
+}
+
+.donate-dialog .donate-lead {
+  margin: 6px 0 16px;
+  color: var(--ink-2);
+  line-height: 1.6;
+  text-wrap: balance;
+  word-break: keep-all;
+}
+
+.donate-qr-wrap {
+  margin: 0;
+}
+
 .donate-qr {
   display: block;
-  margin: 0 auto 4px;
+  margin: 0 auto;
+  padding: 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--panel);
   image-rendering: pixelated;
 }
 
@@ -2730,20 +2762,25 @@ body.sidebar-resizing {
   display: block;
   text-align: center;
   padding: 10px;
-  border-color: var(--ink);
-  background: var(--ink);
+  border-color: transparent;
+  background: var(--accent);
   color: var(--panel);
+  font-weight: 600;
 }
 
 .donate-dialog a.donate-open:hover {
-  background: var(--ink);
-  filter: brightness(1.15);
+  background: color-mix(in srgb, var(--accent) 85%, black);
 }
 
 .donate-dialog .donate-note {
   margin: 8px 0 0;
   font-size: 12px;
   color: var(--muted);
+}
+
+.donate-dialog .dialog-actions {
+  justify-content: center;
+  margin-top: 16px;
 }
 
 .dialog--full .settings-panel {

@@ -2,6 +2,7 @@
 import { useRef } from 'react'
 import Dialog from './Dialog'
 import { closeDonateDialog, useDonateDialogOpen } from './donateStore'
+import { IconFavorite } from './icons'
 import { usePhoneWidth } from './usePhoneWidth'
 import { DONATE_QR_PATH, TOSS_DONATE_URL } from '../lib/donateLink'
 
@@ -14,20 +15,23 @@ export default function DonateDialog() {
   return (
     <Dialog open={open} onClose={closeDonateDialog} titleId={titleId} initialFocusRef={closeRef}>
       <div className="donate-dialog">
-        <h2 id={titleId}>후원하기</h2>
+        <span className="donate-heart" aria-hidden="true">
+          <IconFavorite size={28} />
+        </span>
+        <h2 id={titleId}>커피 한 잔 보내기</h2>
+        <p className="donate-lead">광고도 구독료도 없이 운영하고 있습니다. 보내 주신 마음은 서버비에 보탭니다.</p>
         {phone ? (
           <>
-            <p>광고·구독 없이 운영합니다. 서버비에 보태 주시면 고맙겠습니다.</p>
             <a className="dialog-btn donate-open" href={TOSS_DONATE_URL}>
-              토스 앱에서 열기
+              토스로 보내기
             </a>
-            <p className="dialog-note donate-note">토스 앱이 없으면 열리지 않습니다</p>
+            <p className="dialog-note donate-note">토스 앱이 열리고 송금 화면으로 이어집니다</p>
           </>
         ) : (
-          <>
-            <p>광고·구독 없이 운영합니다. 서버비에 보태 주시면 고맙겠습니다. 토스 앱으로 QR 을 찍으면 송금 화면이 열립니다</p>
+          <figure className="donate-qr-wrap">
             <img className="donate-qr" src={DONATE_QR_PATH} alt="토스 송금 QR" width={180} height={180} />
-          </>
+            <figcaption className="donate-note">휴대폰 카메라로 찍으면 토스 송금 화면이 열립니다</figcaption>
+          </figure>
         )}
         <div className="dialog-actions">
           <button type="button" ref={closeRef} onClick={closeDonateDialog}>
