@@ -2724,6 +2724,12 @@ body.sidebar-resizing {
   text-align: center;
 }
 
+/* 한 번 보고 닫는 창이라 다른 대화상자(15·13.5·12px)보다 한 단계 크게 */
+.donate-dialog h2 {
+  font-size: 19px;
+  margin-bottom: 4px;
+}
+
 .donate-heart {
   display: inline-flex;
   align-items: center;
@@ -2738,6 +2744,7 @@ body.sidebar-resizing {
 
 .donate-dialog .donate-lead {
   margin: 6px 0 16px;
+  font-size: 15px;
   color: var(--ink-2);
   line-height: 1.6;
   text-wrap: balance;
@@ -2766,6 +2773,7 @@ body.sidebar-resizing {
   background: var(--accent);
   color: var(--panel);
   font-weight: 600;
+  font-size: 15px;
 }
 
 .donate-dialog a.donate-open:hover {
@@ -2774,7 +2782,7 @@ body.sidebar-resizing {
 
 .donate-dialog .donate-note {
   margin: 8px 0 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 
