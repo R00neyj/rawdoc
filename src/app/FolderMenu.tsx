@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type KeyboardEvent } from 'react'
 import { IconMore, IconLink, IconLinkOff, IconPersonAdd } from './icons'
 import usePresence from './usePresence'
+import MenuItemSkeleton from './MenuItemSkeleton'
 import { getFolderShareLink, createFolderShareLink, revokeFolderShareLink } from './linkApi'
 import type { Notice } from './notice'
 
@@ -11,6 +12,8 @@ export type FolderMenuItem = {
   danger?: boolean
   // 모양·접근성만 바꾼다(aria-disabled) — 눌러도 onSelect 를 부르고, 부르는 쪽이 이유 알림을 띄운다 (F-407 3.4)
   disabled?: boolean
+  // 서버 확인 중인 자리 — 스켈레톤으로 그리고 고를 수 없다
+  loading?: boolean
   onSelect: () => void
 }
 
@@ -54,7 +57,13 @@ export default function FolderMenu({
     },
     [openProp, onOpenChange],
   )
-  const [hasLink, setHasLink] = useState(false)
+  // null = 서버에 묻는 중 — 늦게 오는 `끊기` 자리를 스켈레톤으로 잡는다
+  const [hasLink, setHasLink] = useState<boolean | null>(false)
+  const [trackedOpen, setTrackedOpen] = useState(open)
+  if (open !== trackedOpen) {
+    setTrackedOpen(open)
+    if (open && shareFolderId) setHasLink(null)
+  }
   const { mounted, state } = usePresence(open) // 나타나고 사라지는 전환 (F-172.md 2.2)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLUListElement | null>(null)
@@ -142,6 +151,9 @@ export default function FolderMenu({
     ...(shareFolderId
       ? [{ key: 'share-link', label: '읽기 전용 링크 복사', icon: IconLink, onSelect: handleCopyFolderLink }]
       : []),
+    ...(shareFolderId && hasLink === null
+      ? [{ key: 'share-link-off', label: '읽기 전용 링크 끊기', icon: IconLinkOff, onSelect: () => {}, loading: true }]
+      : []),
     ...(shareFolderId && hasLink
       ? [{ key: 'share-link-off', label: '읽기 전용 링크 끊기', icon: IconLinkOff, onSelect: handleRevokeFolderLink }]
       : []),
@@ -161,11 +173,12 @@ export default function FolderMenu({
     }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
-      const count = allItems.length
-      const current = itemRefs.current.indexOf(document.activeElement as HTMLButtonElement)
+      const focusable = itemRefs.current.slice(0, allItems.length).filter((el): el is HTMLButtonElement => el !== null)
+      const count = focusable.length
+      const current = focusable.indexOf(document.activeElement as HTMLButtonElement)
       const delta = e.key === 'ArrowDown' ? 1 : -1
       const next = current === -1 ? 0 : (current + delta + count) % count
-      itemRefs.current[next]?.focus()
+      focusable[next]?.focus()
     }
   }
 
@@ -239,7 +252,10 @@ export default function FolderMenu({
           ref={menuRef}
           onKeyDown={handleKeyDown}
         >
-          {allItems.map((item, i) => (
+          {allItems.map((item, i) =>
+            item.loading ? (
+              <MenuItemSkeleton key={item.key} iconSize={16} />
+            ) : (
             <li key={item.key} role="none">
               <button
                 type="button"
@@ -255,7 +271,8 @@ export default function FolderMenu({
                 {item.label}
               </button>
             </li>
-          ))}
+            ),
+          )}
         </ul>
       )}
     </div>

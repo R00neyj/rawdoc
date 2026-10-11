@@ -133,6 +133,7 @@
 |`src/app/markAppEntry.ts`|사용자가 앱에 들어왔다는 표시를 남겨 다음부터 소개 화면을 건너뜀|
 |`src/app/mentionCandidates.ts`|댓글에서 @를 치면 언급할 사람 후보를 찾아 보여 주고 넣어 줌|
 |`src/app/MentionField.tsx`|댓글 입력칸에서 사람 이름 후보를 띄워 부를 수 있게 함|
+|`src/app/MenuItemSkeleton.tsx`|서버 답을 기다리는 메뉴 항목 자리를 회색 막대로 잡아 둠|
 |`src/app/migrateLocal.ts`|로그인 전 이 기기에 쓴 문서를 계정으로 한 번 옮겨 줌|
 |`src/app/MoveDocDialog.tsx`|문서를 다른 폴더로 옮기는 창|
 |`src/app/newDocTemplate.ts`|새 문서 서식 본문을 읽을 때 3초가 넘으면 포기하게 함|

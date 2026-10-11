@@ -7,6 +7,7 @@ import { getShareLink, createShareLink, revokeShareLink } from './linkApi'
 import { copyShareLink, copyShareMarkdown } from './shareCopy'
 import { IconShare, IconTooltip, IconLink, IconLinkOff, IconCopy, IconPersonAdd } from './icons'
 import usePresence from './usePresence'
+import MenuItemSkeleton from './MenuItemSkeleton'
 import ShareSetDialog from './ShareSetDialog'
 import type { Notice } from './notice'
 
@@ -35,6 +36,8 @@ export type MenuAction = {
   icon: ComponentType<{ size?: number }>
   onSelect: () => void | Promise<void>
   disabled?: boolean
+  // 서버 확인 중인 자리 — 스켈레톤으로 그리고 고를 수 없다
+  loading?: boolean
 }
 
 const E2EE_SHARE_NOTE_ID = 'share-menu-e2ee-note'
@@ -52,7 +55,8 @@ export function useShareMenu({
   active,
   onClose,
 }: ShareMenuProps & { active: boolean; onClose: () => void }): { items: MenuAction[]; e2eeNote: boolean; dialogs: ReactNode } {
-  const [hasLink, setHasLink] = useState(false)
+  // null = 서버에 묻는 중 — 늦게 오는 `끊기` 자리를 스켈레톤으로 잡는다
+  const [hasLink, setHasLink] = useState<boolean | null>(false)
   const [shareSetOpen, setShareSetOpen] = useState(false)
 
   // 열 때마다 링크 유무를 다시 확인한다(끊기 항목 노출 조건, F-210.md 2.6) — 금고 문서는 GET 조차 안 보내 끊기를 보일 일이 없다 (F-409 6.2)
@@ -76,6 +80,7 @@ export function useShareMenu({
   const [hasWikiTargets, setHasWikiTargets] = useState(false)
   if (active !== trackedActive) {
     setTrackedActive(active)
+    if (active && linkDocId && !e2eeDoc) setHasLink(null)
     if (active) {
       const content = getShareDoc().content
       // 있음/없음은 원본 폴더와 무관하다 — 원본 없이 판정한다 (F-2018 8.4)
@@ -172,6 +177,9 @@ export function useShareMenu({
           },
         ]
       : []),
+    ...(linkDocId && hasLink === null && !e2eeDoc
+      ? [{ key: 'readonly-link-off', label: '읽기 전용 링크 끊기', icon: IconLinkOff, onSelect: () => {}, loading: true }]
+      : []),
     ...(linkDocId && hasLink && !e2eeDoc
       ? [{ key: 'readonly-link-off', label: '읽기 전용 링크 끊기', icon: IconLinkOff, onSelect: closeThen(handleRevokeReadOnlyLink) }]
       : []),
@@ -234,11 +242,12 @@ export default function ShareMenu(props: ShareMenuProps) {
     }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
-      const count = items.length
-      const current = itemRefs.current.indexOf(document.activeElement as HTMLButtonElement)
+      const focusable = itemRefs.current.slice(0, items.length).filter((el): el is HTMLButtonElement => el !== null)
+      const count = focusable.length
+      const current = focusable.indexOf(document.activeElement as HTMLButtonElement)
       const delta = e.key === 'ArrowDown' ? 1 : -1
       const next = current === -1 ? 0 : (current + delta + count) % count
-      itemRefs.current[next]?.focus()
+      focusable[next]?.focus()
     }
   }
 
@@ -272,7 +281,9 @@ export default function ShareMenu(props: ShareMenuProps) {
           ref={menuRef}
           onKeyDown={handleKeyDown}
         >
-          {items.map((item, i) => (
+          {items.map((item, i) => {
+            if (item.loading) return <MenuItemSkeleton key={item.key} iconSize={16} />
+            return (
             <li key={item.key} role="none">
               <button
                 type="button"
@@ -291,7 +302,8 @@ export default function ShareMenu(props: ShareMenuProps) {
                 {item.label}
               </button>
             </li>
-          ))}
+            )
+          })}
           {/* 메뉴 항목이 아니라 방향키가 여기서 멈추지 않는다 (F-409 6.2) */}
           {e2eeNote && (
             <li role="none">

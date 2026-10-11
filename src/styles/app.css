@@ -4183,8 +4183,33 @@ body.sidebar-resizing {
   width: 80%;
 }
 
+/* 링크 유무 확인 중인 `끊기` 자리 — 버튼 틀은 그대로, 아이콘·글자만 회색 막대 */
+.menu-item-skeleton:disabled,
+.menu-item-skeleton:disabled:hover {
+  background: none;
+  cursor: default;
+  opacity: 1;
+}
+
+.menu-item-skeleton-icon,
+.menu-item-skeleton-bar {
+  display: block;
+  flex: none;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  border-radius: 4px;
+  animation: boot-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+.menu-item-skeleton-bar {
+  width: 8em;
+  height: 1em;
+  margin-block: calc((1lh - 1em) / 2);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .account-menu-usage-skeleton span {
+  .account-menu-usage-skeleton span,
+  .menu-item-skeleton-icon,
+  .menu-item-skeleton-bar {
     animation: none;
   }
 }

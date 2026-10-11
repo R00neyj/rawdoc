@@ -18,6 +18,7 @@ import { commentBadgeText } from './commentRail'
 import { moreDotVisible, moreSheetItems, type MoreItemKey, type TopBarScreen } from './topBarMore'
 import { exportMenuItems, type ExportMenuProps } from './ExportMenu'
 import { useShareMenu, type MenuAction, type ShareMenuProps } from './ShareMenu'
+import MenuItemSkeleton from './MenuItemSkeleton'
 import { NotificationsList, type NotificationsMenuProps } from './NotificationsMenu'
 import type { OutlineControl } from './Outline'
 
@@ -54,7 +55,10 @@ const MORE_LABEL_WITH_DOT = '메뉴, 안 읽은 알림·열린 댓글 있음'
 function ActionList({ items, note }: { items: MenuAction[]; note?: ReactNode }) {
   return (
     <>
-      {items.map((item) => (
+      {items.map((item) =>
+        item.loading ? (
+          <MenuItemSkeleton key={item.key} iconSize={20} className="more-sheet-item" />
+        ) : (
         <li key={item.key}>
           <button
             type="button"
@@ -70,7 +74,8 @@ function ActionList({ items, note }: { items: MenuAction[]; note?: ReactNode }) 
             <span className="more-sheet-label">{item.label}</span>
           </button>
         </li>
-      ))}
+        ),
+      )}
     </>
   )
 }
