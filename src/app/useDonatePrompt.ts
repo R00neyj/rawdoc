@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react'
 import { getPref, setPref } from './prefs'
 import { openDonateDialog } from './donateStore'
+import { IconFavorite } from './icons'
 import type { NoticeWithAction } from './NoticeBar'
 import { afterDismiss, decideDonatePrompt } from '../lib/donatePrompt'
 
@@ -38,6 +39,7 @@ export default function useDonatePrompt({ ready, isPublic, noticeVisible, showNo
           message: DONATE_NOTICE_MESSAGE,
           action: {
             label: '후원하기',
+            icon: IconFavorite,
             onClick: () => {
               dismissNotice(id)
               openDonateDialog()

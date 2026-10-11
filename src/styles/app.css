@@ -2333,6 +2333,19 @@ body.sidebar-resizing {
   background: var(--panel);
 }
 
+/* 아래 카드의 동작 버튼은 채운 강조색 — 띠 버튼과 달리 카드 바탕과 구분되고 hover 가 보이게 (tweak 2026-10-11) */
+.notice--bottom button:not(.icon-btn) {
+  border-color: transparent;
+  padding: 6px 12px;
+  background: var(--accent);
+  color: var(--panel);
+  font-weight: 600;
+}
+
+.notice--bottom button:not(.icon-btn):hover {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+}
+
 /* ===== 대화상자 ===== */
 /* 나타나고 사라지는 전환 — 네이티브 <dialog> [open]·::backdrop 그대로, Dialog.jsx 는 JS 변경 없이 CSS 의 allow-discrete 로 닫기를 늦춘다 (F-172.md 2.1·2.2) */
 .dialog {
