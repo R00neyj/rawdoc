@@ -52,7 +52,8 @@ export function mergeBootList<T extends { id: string; updatedAt: number }>(input
   for (const cur of input.current) {
     const fromResult = remaining.get(cur.id)
     if (fromResult) {
-      docs.push(fromResult)
+      // 실시간 편집은 사이드바 시각을 먼저 올리고 D1 은 DO 가 늦게 쓴다 — 옛 결과 시각으로 되돌리지 않는다 (F-305 10.1)
+      docs.push(fromResult.updatedAt < cur.updatedAt ? { ...fromResult, updatedAt: cur.updatedAt } : fromResult)
       remaining.delete(cur.id)
     } else if (input.snapshotIds.has(cur.id)) {
       removedIds.push(cur.id)

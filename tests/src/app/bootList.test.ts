@@ -88,6 +88,31 @@ describe('B2 mergeBootList', () => {
     expect(removedIds).toEqual([])
     expect(docs).toEqual([{ id: 'a', updatedAt: 2 }])
   })
+
+  it('결과의 updatedAt 이 지금 목록보다 옛 값이면 지금 값을 둔다 — 실시간 편집으로 올린 문서가 DO 가 늦게 쓴 D1 값으로 내려가지 않는다', () => {
+    const snapshotIds = new Set(['live', 'other'])
+    const current: T[] = [
+      { id: 'live', updatedAt: 50 },
+      { id: 'other', updatedAt: 20 },
+    ]
+    const result: T[] = [
+      { id: 'other', updatedAt: 20 },
+      { id: 'live', updatedAt: 10 },
+    ]
+    const { docs } = mergeBootList({ snapshotIds, current, result })
+    expect(docs).toEqual([
+      { id: 'live', updatedAt: 50 },
+      { id: 'other', updatedAt: 20 },
+    ])
+  })
+
+  it('updatedAt 만 지금 값을 두고 나머지 필드는 결과 값을 쓴다', () => {
+    const snapshotIds = new Set(['a'])
+    const current = [{ id: 'a', updatedAt: 50, title: '옛 제목', folderId: null as string | null }]
+    const result = [{ id: 'a', updatedAt: 10, title: '새 제목', folderId: 'f1' as string | null }]
+    const { docs } = mergeBootList({ snapshotIds, current, result })
+    expect(docs).toEqual([{ id: 'a', updatedAt: 50, title: '새 제목', folderId: 'f1' }])
+  })
 })
 
 describe('B3 shouldApplyListResult — 순번 비교', () => {
