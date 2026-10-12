@@ -8,7 +8,7 @@ export type RightPanelSettings = RightPanelItemsSettings & { calendar: CalendarS
 
 const ITEM_LABELS: [PanelItemId, string][] = [
   ['calendar', '달력'],
-  ['dayDocs', '그날 문서'],
+  ['dayDocs', '달력 아래 그날 만든·고친 문서'],
   ['graph', '그래프'],
   ['links', '링크'],
   ['todos', '할 일'],
