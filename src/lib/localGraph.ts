@@ -1,6 +1,7 @@
-// 지금 문서를 가운데 둔 1단계 위키링크 그래프 — 백링크·나가는 링크로 노드를 만들고 2차원으로 배치, 순수 함수 (small 2026-10-11)
+// 지금 문서를 가운데 둔 1단계 위키링크 그래프 — 백링크·나가는 링크로 노드를 만들고 지도 장면 그래프로 바꾸거나 2차원으로 배치, 순수 함수 (small 2026-10-11)
 import type * as D3 from 'd3-force-3d'
 import type { DocLinkRow, OutgoingLinkRow } from './docLinks'
+import type { WikiGraph } from './wikiGraph'
 
 // 280px 칸에서 노드가 겹쳐 읽을 수 없게 되는 선 — 넘으면 앞에서 자르고 안내한다
 export const LOCAL_GRAPH_MAX_NEIGHBORS = 60
@@ -47,6 +48,22 @@ export function buildLocalGraph(input: { center: { id: string; title: string }; 
     nodes: [centerNode, ...neighbors.slice(0, LOCAL_GRAPH_MAX_NEIGHBORS)],
     truncated: Math.max(0, neighbors.length - LOCAL_GRAPH_MAX_NEIGHBORS),
   }
+}
+
+// 지도 3D 장면이 받는 모양으로 — id·간선 방향·차수는 buildWikiGraphFromEntries 와 같은 규칙이라 지도와 같은 크기·색이 나온다
+export function localGraphToWikiGraph(graph: LocalGraph): WikiGraph {
+  const nodes: WikiGraph['nodes'] = graph.nodes.map((n) => ({ id: n.kind === 'missing' ? n.key : (n.docId ?? n.key), title: n.title, missing: n.kind === 'missing', degree: 0 }))
+  const edges: WikiGraph['edges'] = []
+  graph.nodes.forEach((n, i) => {
+    if (i === 0) return
+    if (n.dir !== 'in') edges.push({ from: 0, to: i })
+    if (n.dir === 'in' || n.dir === 'both') edges.push({ from: i, to: 0 })
+  })
+  for (const edge of edges) {
+    nodes[edge.from].degree++
+    nodes[edge.to].degree++
+  }
+  return { nodes, edges, unreadable: [] }
 }
 
 type LayoutNode = D3.ForceNode

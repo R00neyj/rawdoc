@@ -156,7 +156,9 @@
 |`src/app/paletteDocs.ts`|명령 팔레트에 보일 문서 목록을 고르고 새 문서 만들기를 준비함|
 |`src/app/paletteEditorCommands.ts`|우클릭 메뉴의 서식·삽입 명령을 명령 팔레트에도 보여 줌|
 |`src/app/paletteMemory.ts`|명령 팔레트에서 최근 쓴 명령과 고정한 명령을 기억함|
-|`src/app/PanelGraph.tsx`|오른쪽 칸 그래프 탭. 지금 문서와 바로 이어진 문서들을 그림|
+|`src/app/PanelGraph.tsx`|오른쪽 칸 그래프 탭. 지금 문서와 바로 이어진 문서를 지도와 같은 입체 그림으로 보여 주고, 안 되는 브라우저에선 평면 그림으로|
+|`src/app/PanelGraphScene.tsx`|오른쪽 칸 그래프 탭의 입체 그림 — 보일 때만 불러옴|
+|`src/app/PanelGraphSvg.tsx`|입체 그림을 못 그리는 브라우저에서 쓰는 평면 연결 그림(키보드로 노드 이동)|
 |`src/app/PanelLinks.tsx`|오른쪽 패널에 이 문서를 가리키는 링크·나가는 링크·이어지지 않은 언급을 보여줌|
 |`src/app/PanelTodos.tsx`|오른쪽 패널에 문서 속 할 일을 마감일별로 묶어 보여줌(읽기 전용)|
 |`src/app/PeerAvatars.tsx`|상단바에 지금 같이 접속한 사람들의 동그란 얼굴 아이콘을 보여줌|
@@ -286,6 +288,7 @@
 |`src/app/ViewFindCard.tsx`|보기 모드에서 문서 안 글자를 찾는 작은 찾기 상자|
 |`src/app/ViewModeMenu.tsx`|휴대폰에서 편집·원문·보기 모드를 고르는 버튼과 메뉴|
 |`src/app/viewportFit.ts`|휴대폰 화면 키보드에 맞춘 앱 높이와 위치를 계산함|
+|`src/app/webgl2.ts`|브라우저가 입체 그림(WebGL2)을 그릴 수 있는지 한 번 재 둠|
 |`src/app/WikiLinkPreview.tsx`|문서 링크에 마우스를 올리면 그 문서 내용을 미리 보여주는 창|
 |`src/app/wikiPreview.ts`|문서 연결 링크에 마우스를 올리면 뜨는 미리보기 규칙을 정함|
 |`src/app/yDevLink.ts`|개발 중에만 쓰는, 두 탭 사이 같은 문서 동시 편집 연결|
@@ -410,7 +413,7 @@
 |`src/lib/imageFile.ts`|그림 파일의 종류와 가로·세로 크기를 알아냄|
 |`src/lib/imageMarkdown.ts`|표준 마크다운 그림 줄을 읽고 만들고 고침|
 |`src/lib/lineEnding.ts`|파일의 줄바꿈 방식을 알아내고 바꿈|
-|`src/lib/localGraph.ts`|지금 문서 주변의 연결 문서를 작은 관계도로 그릴 자리를 계산함|
+|`src/lib/localGraph.ts`|지금 문서 주변의 연결 문서를 모아, 지도 장면 모양으로 바꾸거나 평면 관계도 자리를 계산함|
 |`src/lib/mapCamera.ts`|3D 지도를 볼 시점의 거리와 확대 한계를 계산함|
 |`src/lib/mapEdgeStyle.ts`|3D 지도에서 문서 사이 선의 색 진하기를 정함|
 |`src/lib/mapFilter.ts`|3D 지도 필터로 보일 것과 흐리게 할 것을 가림|

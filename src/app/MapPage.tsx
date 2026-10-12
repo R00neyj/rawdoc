@@ -17,7 +17,8 @@ import {
   type MapFilterNode,
 } from '../lib/mapFilter'
 import { IconClose, IconEdit, IconFit, IconList, IconMap, IconNoteAdd, IconOpenInNew, IconRecenter, IconSettings, IconTooltip } from './icons'
-import MapScene, { hasWebGL2 } from './MapScene'
+import MapScene from './MapScene'
+import { hasWebGL2 } from './webgl2'
 import MapPanel, { type MapFolderRow } from './MapPanel'
 import usePresence from './usePresence'
 import { loadMapGroups, loadMapView, saveMapGroups, saveMapView, type MapGroup, type MapView } from './mapPrefs'

@@ -48,6 +48,8 @@ type MapSceneProps = {
   onNodeMenu: (id: string, x: number, y: number) => void // 뷰포트 좌표 (F-2003 4.3·5.2)
   onUnsupported: () => void // 렌더러를 못 만들었다 — MapPage 가 목록으로 돌린다
   onLayoutReady?: () => void // reduced-motion 에서 배치 계산이 끝났다 (6.5)
+  compact?: boolean // 오른쪽 패널 그래프 — 바탕은 --surface, 휠 확대는 Ctrl·⌘ 일 때만 (small 2026-10-12)
+  label?: string // 캔버스 읽기 이름. 없으면 지도 문구
 }
 
 // 읽기에 실패했을 때 쓰는 중간 회색. 디자인 색이 아니라 "읽기 실패 표시"다 (6.3)
@@ -78,23 +80,6 @@ const CAMERA_TWEEN_MS = 240
 // 네 축의 얕은 비교. 하나라도 다르면 힘을 다시 걸고 재가열한다 (F-2006 8.3)
 function forceChanged(a: MapForceNorms, b: MapForceNorms): boolean {
   return a.center !== b.center || a.repel !== b.repel || a.linkStrength !== b.linkStrength || a.linkDistance !== b.linkDistance
-}
-
-let webgl2Cache: boolean | null = null
-
-// eslint-disable-next-line react-refresh/only-export-components -- WebGL2 판정. 명세(F-2002 6.2)가 MapPage 가 쓰는 이 함수를 여기 두게 했다. 한 번 재면 모듈 수준에 캐시한다
-export function hasWebGL2(): boolean {
-  if (webgl2Cache !== null) return webgl2Cache
-  try {
-    const probe = document.createElement('canvas')
-    const gl = probe.getContext('webgl2')
-    // 컨텍스트 슬롯(보통 16개)을 낭비하지 않게 바로 놓는다
-    if (gl) gl.getExtension('WEBGL_lose_context')?.loseContext()
-    webgl2Cache = Boolean(gl)
-  } catch {
-    webgl2Cache = false
-  }
-  return webgl2Cache
 }
 
 type ThemeColors = {
@@ -131,11 +116,11 @@ function pixelContextGetter(): () => PixelContext | null {
   }
 }
 
-function readTheme(probe: HTMLElement, getCtx: () => PixelContext | null): ThemeColors {
+function readTheme(probe: HTMLElement, getCtx: () => PixelContext | null, background: string): ThemeColors {
   const group: Rgba[] = []
   for (let i = 1; i <= MAP_GROUP_PALETTE; i++) group.push(readToken(probe, `--map-group-${i}`, getCtx))
   return {
-    panel: readToken(probe, '--panel', getCtx),
+    panel: readToken(probe, background, getCtx),
     ink: readToken(probe, '--ink', getCtx),
     accent: readToken(probe, '--accent', getCtx),
     muted: readToken(probe, '--muted', getCtx),
@@ -218,6 +203,7 @@ function buildScene(
   inputs: { current: SceneInputs },
   labelsRef: { current: MapLabelsHandle | null },
   setLabelItems: (items: MapLabelItem[]) => void,
+  compact: boolean,
 ): SceneBundle | null {
   let renderer: WebGLRenderer
   try {
@@ -414,7 +400,7 @@ function buildScene(
   // 인스턴스 색을 직접 쓰지 않고 base 색만 채운다. 판정 순서는 끊긴 링크 → 현재 문서 → 공유받음 → 기본이다 (F-2004 6.1)
   function applyColors(nextCenterId: string | null = activeCenterId) {
     activeCenterId = nextCenterId
-    const theme = readTheme(probe, getPixelCtx)
+    const theme = readTheme(probe, getPixelCtx, compact ? '--surface' : '--panel')
     panelColor = theme.panel
     ruleColor = theme.rule
     inkColor = theme.ink
@@ -1123,6 +1109,11 @@ function buildScene(
     inputs.current.onNodeMenu(hit.id, e.clientX, e.clientY)
   }
 
+  // 패널에서는 그냥 휠이 패널 스크롤이다 — 같은 요소의 OrbitControls 리스너보다 먼저 돌아 그쪽을 막는다
+  function onCompactWheel(e: WheelEvent) {
+    if (!e.ctrlKey && !e.metaKey) e.stopImmediatePropagation()
+  }
+
   canvas.addEventListener('pointerdown', onPointerDown)
   canvas.addEventListener('pointermove', onPointerMove)
   canvas.addEventListener('pointerup', onPointerUp)
@@ -1130,6 +1121,7 @@ function buildScene(
   canvas.addEventListener('touchend', onTouchEnd, { passive: false })
   canvas.addEventListener('contextmenu', onContextMenu)
   canvas.addEventListener('pointerleave', onPointerLeave)
+  if (compact) canvas.addEventListener('wheel', onCompactWheel, { passive: true })
 
   // 여기서 붙인다 — OrbitControls 의 리스너가 우리 것보다 뒤에 등록돼야 한다 (F-2003 4.1)
   controls.connect(canvas)
@@ -1220,6 +1212,7 @@ function buildScene(
       canvas.removeEventListener('touchend', onTouchEnd)
       canvas.removeEventListener('contextmenu', onContextMenu)
       canvas.removeEventListener('pointerleave', onPointerLeave)
+      canvas.removeEventListener('wheel', onCompactWheel)
       sphereGeometry.dispose()
       quadGeometry.dispose()
       edgeGeometry.dispose()
@@ -1235,7 +1228,7 @@ function buildScene(
   }
 }
 
-export default function MapScene({ graph, centerId, fitToken, centerToken, menuOpen, view, visible, groups, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady }: MapSceneProps) {
+export default function MapScene({ graph, centerId, fitToken, centerToken, menuOpen, view, visible, groups, onNodeClick, onNodeMenu, onUnsupported, onLayoutReady, compact = false, label }: MapSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const probeRef = useRef<HTMLSpanElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -1258,7 +1251,7 @@ export default function MapScene({ graph, centerId, fitToken, centerToken, menuO
     const probe = probeRef.current
     const wrapper = wrapperRef.current
     if (!canvas || !probe || !wrapper) return
-    const bundle = buildScene(canvas, probe, wrapper, graph, inputs.current.centerId, inputs.current.view, inputs, labelsRef, setLabelItems)
+    const bundle = buildScene(canvas, probe, wrapper, graph, inputs.current.centerId, inputs.current.view, inputs, labelsRef, setLabelItems, compact)
     if (!bundle) {
       // getContext 는 됐는데 생성자가 던진 경우 — 두 번째 그물이다 (6.2)
       inputs.current.onUnsupported()
@@ -1271,7 +1264,7 @@ export default function MapScene({ graph, centerId, fitToken, centerToken, menuO
       setLabelItems([])
       bundle.dispose()
     }
-  }, [graph])
+  }, [graph, compact])
 
   // (b) `맞춤` 을 누르면 카메라를 다시 맞춘다
   useEffect(() => {
@@ -1325,7 +1318,7 @@ export default function MapScene({ graph, centerId, fitToken, centerToken, menuO
         ref={canvasRef}
         className="map-canvas"
         role="img"
-        aria-label={`문서 ${graph.nodes.length}개, 연결 ${graph.edges.length}개의 지도. 같은 내용을 목록으로 보려면 목록 단추를 누르세요.`}
+        aria-label={label ?? `문서 ${graph.nodes.length}개, 연결 ${graph.edges.length}개의 지도. 같은 내용을 목록으로 보려면 목록 단추를 누르세요.`}
         tabIndex={-1}
       />
       <MapLabels ref={labelsRef} items={labelItems} />

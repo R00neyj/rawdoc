@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as d3 from 'd3-force-3d'
-import { buildLocalGraph, layoutLocalGraph, LOCAL_GRAPH_MAX_NEIGHBORS } from '../../../src/lib/localGraph'
+import { buildLocalGraph, layoutLocalGraph, localGraphToWikiGraph, LOCAL_GRAPH_MAX_NEIGHBORS } from '../../../src/lib/localGraph'
 
 const center = { id: 'cur', title: '회의' }
 
@@ -32,6 +32,45 @@ describe('buildLocalGraph — 지금 문서를 가운데 둔 1단계 그래프',
     const graph = buildLocalGraph({ center, outgoing: [], backlinks })
     expect(graph.nodes).toHaveLength(LOCAL_GRAPH_MAX_NEIGHBORS + 1)
     expect(graph.truncated).toBe(7)
+  })
+})
+
+describe('localGraphToWikiGraph — 지도 3D 장면이 받는 그래프로', () => {
+  it('노드 순서 그대로, 문서는 문서 id·끊긴 링크는 지도와 같은 missing: 키. 간선은 링크 방향대로(서로 가리키면 둘), 차수는 간선 수', () => {
+    const graph = buildLocalGraph({
+      center,
+      outgoing: [
+        { target: '계획', docId: 'plan', title: '계획' },
+        { target: '없는 문서', docId: null, title: '없는 문서' },
+      ],
+      backlinks: [
+        { id: 'log', title: '일지', excerpt: '' },
+        { id: 'plan', title: '계획', excerpt: '' },
+      ],
+    })
+    expect(localGraphToWikiGraph(graph)).toEqual({
+      nodes: [
+        { id: 'cur', title: '회의', missing: false, degree: 4 },
+        { id: 'plan', title: '계획', missing: false, degree: 2 },
+        { id: 'missing:없는 문서', title: '없는 문서', missing: true, degree: 1 },
+        { id: 'log', title: '일지', missing: false, degree: 1 },
+      ],
+      edges: [
+        { from: 0, to: 1 },
+        { from: 1, to: 0 },
+        { from: 0, to: 2 },
+        { from: 3, to: 0 },
+      ],
+      unreadable: [],
+    })
+  })
+
+  it('이웃이 없으면 가운데 하나에 간선 없음', () => {
+    expect(localGraphToWikiGraph(buildLocalGraph({ center, outgoing: [], backlinks: [] }))).toEqual({
+      nodes: [{ id: 'cur', title: '회의', missing: false, degree: 0 }],
+      edges: [],
+      unreadable: [],
+    })
   })
 })
 

@@ -6929,7 +6929,7 @@ h3.panel-settings-title:not(:first-child) {
   text-overflow: ellipsis;
 }
 
-/* `그래프` 보기 — 2D 미니 그래프. 노드는 가운데에서 펼쳐지고, 움직임 줄이기면 토큰이 0ms 라 바로 놓인다 (small 2026-10-11) */
+/* `그래프` 보기 — 지도와 같은 3D 장면(.map-scene)을 칸에 채운다. WebGL2 가 없을 때의 SVG 대체는 가운데에서 펼쳐지고, 움직임 줄이기면 토큰이 0ms 라 바로 놓인다 (small 2026-10-11·2026-10-12) */
 .panel-graph {
   position: relative;
   display: flex;
@@ -6952,6 +6952,13 @@ h3.panel-settings-title:not(:first-child) {
 .panel-graph-map:hover {
   background: var(--rule-2);
   color: var(--ink);
+}
+
+/* .map-scene 이 inset: 0 으로 이 상자를 채운다 */
+.panel-graph-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .panel-graph-svg {

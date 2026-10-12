@@ -36,6 +36,8 @@ export function useOutlineSwipe({ containerRef, enabled, panelOpen, onOpen, onCl
         hasOpenDialog() ||
         document.querySelector('.sidebar-backdrop') != null ||
         target?.closest('.comment-sheet') != null ||
+        // 패널 그래프 캔버스 안 끌기는 장면 회전·노드 끌기다 (small 2026-10-12)
+        target?.closest('.map-canvas') != null ||
         isDraggingTextSelection(target)
       if (ignore || !touch) {
         startRef.current = null
