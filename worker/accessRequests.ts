@@ -3,11 +3,13 @@ import { requireUser, type AuthUser } from './auth'
 import { applyGrant } from './grants'
 import { folderChainRole, resolveDocAccess, roleAtLeast, type GrantRole } from './access'
 import { notifRevBeforeDeleteSql } from './commentRows'
+import { accessRequestNotificationInsertStatements, accessRequestRoleStatements, pushAccessRequest } from './accessRequestNotifications'
 import { readJsonLimited } from './docs'
 import { errorResponse, jsonResponse } from './http'
 import { findPublicLink, isDocInLinkSet } from './links'
 import { isValidToken } from './token'
 import { dayUsageStatement } from './usage'
+import { pushInBackground } from './pushSend'
 import { MAX_BODY_BYTES } from './validate'
 import {
   ACCESS_REQUEST_COOLDOWN_MS,
@@ -104,7 +106,7 @@ export async function handleGetAccessRequest(request: Request, env: Env, _ctx: E
   return jsonResponse(statusBody(target, false, memberRole, body))
 }
 
-export async function handlePostAccessRequest(request: Request, env: Env, _ctx: ExecutionContext, params: Record<string, string>): Promise<Response> {
+export async function handlePostAccessRequest(request: Request, env: Env, ctx: ExecutionContext, params: Record<string, string>): Promise<Response> {
   const user = await requireUser(request, env)
   const parsed = await readJsonLimited(request, MAX_BODY_BYTES)
   if (!parsed.ok) return errorResponse(parsed.reason === 'too_large' ? 'too_large' : 'invalid', parsed.reason === 'too_large' ? 413 : 400)
@@ -127,6 +129,7 @@ export async function handlePostAccessRequest(request: Request, env: Env, _ctx: 
   if (existing && existing.live && existing.status === 'pending') {
     await env.DB.batch([
       env.DB.prepare("UPDATE access_requests SET role = ? WHERE id = ? AND status = 'pending'").bind(role, existing.id),
+      ...accessRequestRoleStatements(env.DB, { id: existing.id, role }),
       dayUsageStatement(env.DB, user.id, now),
     ])
     return jsonResponse(pending(), 200)
@@ -141,15 +144,27 @@ export async function handlePostAccessRequest(request: Request, env: Env, _ctx: 
   if ((theirs?.n ?? 0) >= ACCESS_REQUEST_OWNER_PENDING_MAX) return jsonResponse({ error: 'owner_full' }, 409)
 
   const nameRow = await env.DB.prepare('SELECT name FROM users WHERE id = ?').bind(user.id).first<{ name: string }>()
+  const nameSql = target.type === 'doc' ? 'SELECT u.email, t.title AS name FROM users u, docs t' : 'SELECT u.email, t.name AS name FROM users u, folders t'
+  const owner = await env.DB.prepare(`${nameSql} WHERE u.id = ? AND t.id = ?`).bind(target.ownerId, target.id).first<{ email: string; name: string }>()
+  if (!owner) return errorResponse('not_found', 404)
+  const requestId = crypto.randomUUID()
+  const requesterEmail = user.email.toLowerCase()
   const statements: D1PreparedStatement[] = existing ? accessRequestDeleteStatements(env.DB, 'id = ?', [existing.id]) : []
+  const insertAt = statements.length
   statements.push(
     env.DB.prepare(
       'INSERT INTO access_requests (id, target_type, target_id, owner_id, token, requester_id, requester_email, requester_name, role, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT (target_type, target_id, requester_id) DO NOTHING',
-    ).bind(crypto.randomUUID(), target.type, target.id, target.ownerId, params.token, user.id, user.email.toLowerCase(), (nameRow?.name ?? '').slice(0, 100), role, 'pending', now),
+    ).bind(requestId, target.type, target.id, target.ownerId, params.token, user.id, requesterEmail, (nameRow?.name ?? '').slice(0, 100), role, 'pending', now),
     dayUsageStatement(env.DB, user.id, now),
+    ...accessRequestNotificationInsertStatements(env.DB, { id: requestId, ownerEmail: owner.email }),
   )
   const results = await env.DB.batch(statements)
-  return jsonResponse(pending(), results[statements.length - 2].meta.changes === 1 ? 201 : 200)
+  const created = results[insertAt].meta.changes === 1
+  if (created) {
+    const share = { actorEmail: requesterEmail, target: target.type, targetId: target.id, name: owner.name }
+    await pushInBackground(env, ctx, 'access_request', (auth) => pushAccessRequest(env.DB, auth, { id: requestId, ownerId: target.ownerId, ownerEmail: owner.email, now, share: { ...share, role } }))
+  }
+  return jsonResponse(pending(), created ? 201 : 200)
 }
 
 export async function handleDeleteAccessRequest(request: Request, env: Env, _ctx: ExecutionContext, params: Record<string, string>): Promise<Response> {

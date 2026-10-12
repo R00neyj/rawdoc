@@ -330,13 +330,10 @@ describe('F-4005 R6 취소', () => {
     const sqlDb = world()
     const env = envFor(sqlDb, FRIEND)
     await post(env, TK_A, 'view')
-    const id = requests(sqlDb)[0].id as string
-    sqlDb
-      .prepare("INSERT INTO notifications (id, recipient_email, kind, doc_id, actor_email, doc_title, excerpt, created_at, role) VALUES (?,?, 'access_request', ?, ?, 't', '', 1, 'view')")
-      .run(id, OWNER, DOC_A, FRIEND)
+    expect(sqlDb.prepare('SELECT COUNT(*) AS c FROM notifications').get()).toEqual({ c: 1 })
     await cancel(env, TK_A)
     expect(sqlDb.prepare('SELECT COUNT(*) AS c FROM notifications').get()).toEqual({ c: 0 })
-    expect(sqlDb.prepare("SELECT notif_rev AS r FROM users WHERE id = 'owner'").get()).toEqual({ r: 1 })
+    expect(sqlDb.prepare("SELECT notif_rev AS r FROM users WHERE id = 'owner'").get()).toEqual({ r: 2 })
   })
 })
 

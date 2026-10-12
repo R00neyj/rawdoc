@@ -1,6 +1,7 @@
 // F-3002 T1~T6 푸시 문구·자르기 (specs/features/F-3002.md 5장·6.3)
 import { describe, expect, it } from 'vitest'
 import {
+  accessRequestPushPayload,
   commentPushPayload,
   formatNotificationTitle,
   formatPushExcerpt,
@@ -123,6 +124,30 @@ describe('sharePushPayload — T4', () => {
   it('폴더 이름이 공백만이면 이름 없는 폴더', () => {
     const p = sharePushPayload({ actorEmail: 'b@x.com', target: 'folder', targetId: DOC_ID, name: '   ', role: 'view' })
     expect(p.body).toBe('"이름 없는 폴더" · 보기 권한')
+  })
+})
+
+describe('accessRequestPushPayload — N8', () => {
+  it('문서·편집', () => {
+    expect(accessRequestPushPayload({ actorEmail: 'b@x.com', target: 'doc', targetId: DOC_ID, name: '기획안', role: 'edit' })).toEqual({
+      v: 1,
+      title: 'b@x.com님이 문서 편집 권한을 요청했습니다',
+      body: '"기획안"',
+      url: '/#/shares',
+      tag: `share:${DOC_ID}`,
+    })
+  })
+
+  it('폴더·보기, 제목은 40자 넘으면 자름', () => {
+    expect(accessRequestPushPayload({ actorEmail: 'b@x.com', target: 'folder', targetId: DOC_ID, name: '자료', role: 'view' })).toEqual({
+      v: 1,
+      title: 'b@x.com님이 폴더 보기 권한을 요청했습니다',
+      body: '"자료"',
+      url: '/#/shares',
+      tag: `share:${DOC_ID}`,
+    })
+    const long = accessRequestPushPayload({ actorEmail: 'b@x.com', target: 'doc', targetId: DOC_ID, name: '가'.repeat(41), role: 'view' })
+    expect(long.body).toBe(`"${'가'.repeat(39)}…"`)
   })
 })
 

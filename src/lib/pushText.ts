@@ -92,6 +92,18 @@ export function sharePushPayload(share: PushShare): PushPayload {
   }
 }
 
+export function accessRequestPushPayload(r: PushShare): PushPayload {
+  const role = ROLE_LABEL[r.role]
+  const isDoc = r.target === 'doc'
+  return {
+    v: 1,
+    title: `${r.actorEmail}님이 ${isDoc ? '문서' : '폴더'} ${role} 권한을 요청했습니다`,
+    body: `"${isDoc ? formatNotificationTitle(r.name) : formatFolderName(r.name)}"`,
+    tag: `share:${r.targetId}`,
+    url: '/#/shares',
+  }
+}
+
 export function quotaPushPayload(quota: PushQuota): PushPayload {
   const parts: string[] = []
   if (quota.images) parts.push(`이미지 ${formatMegabytes(quota.images.used)} / ${formatMegabytes(quota.images.limit)}`)

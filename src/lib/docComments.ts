@@ -663,6 +663,7 @@ export type ShareNotificationItem = {
   createdAt: number
   readAt: number | null
 }
+export type AccessRequestNotificationItem = Omit<ShareNotificationItem, 'kind'> & { kind: 'access_request' }
 export type InboxNotificationItem = NotificationItem | ShareNotificationItem
 export type InboxNotificationsResponse = { items: InboxNotificationItem[]; unread: number }
 export type NotificationsReadBody = { ids: string[] } | { all: true }
