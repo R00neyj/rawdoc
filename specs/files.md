@@ -365,6 +365,7 @@
 
 |파일|하는 일|
 |---|---|
+|`src/lib/accessRequest.ts`|링크로 보는 사람의 권한 요청에 서버와 앱이 같이 쓰는 기한·상한 값과 응답 모양을 정함|
 |`src/lib/accountDeletion.ts`|계정 삭제 때 서버와 앱이 같이 쓰는 확인 단어·제한 시간 등을 정함|
 |`src/lib/appEntry.ts`|첫 방문자에게 소개 페이지를 보일지 바로 앱을 열지 판단함|
 |`src/lib/attachmentUrls.ts`|첨부 파일을 화면에 띄울 임시 주소를 만들고 다 쓰면 거둠|
@@ -515,6 +516,7 @@ rawdoc.app 서버. 로그인, 문서 저장, 공유, 실시간 편집, 알림을
 |파일|하는 일|
 |---|---|
 |`worker/access.ts`|문서·폴더를 누가 보거나 고칠 수 있는지 판정함|
+|`worker/accessRequests.ts`|링크로 문서를 보는 사람의 권한 요청 상태·보내기·취소를 처리함|
 |`worker/account.ts`|계정 정보 미리 보기와 계정 삭제를 처리함|
 |`worker/apiTokens.ts`|명령줄 도구용 접속 열쇠를 발급·조회·폐기하고 확인함|
 |`worker/attachmentGc.ts`|어느 문서에도 안 쓰이는 오래된 첨부 그림을 매일 지움|

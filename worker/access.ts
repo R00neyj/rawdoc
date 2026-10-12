@@ -59,7 +59,7 @@ function chainRole(
 }
 
 // 폴더 자신 + 상위 폴더 grant 중 가장 높은 역할. 질의는 2번 이하 — 이 소유자에게서 받은 폴더 초대가 없으면 사슬을 읽지 않는다
-async function folderChainRole(
+export async function folderChainRole(
   env: Env,
   folderId: string | null,
   ownerId: string,

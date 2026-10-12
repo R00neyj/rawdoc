@@ -12,6 +12,7 @@ import {
   handleSetPinned,
   handleUpdateDoc,
 } from './docs'
+import { handleDeleteAccessRequest, handleGetAccessRequest, handlePostAccessRequest } from './accessRequests'
 import { handleCreateFolder, handleDeleteFolder, handleListFolders, handleUpdateFolder } from './folders'
 import {
   handleCreateDocLink,
@@ -297,6 +298,9 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/tokens', handler: handleListTokens },
   { method: 'POST', path: '/api/tokens', handler: handleCreateToken },
   { method: 'DELETE', path: '/api/tokens/:id', handler: handleDeleteToken },
+  { method: 'GET', path: '/api/access-requests/link/:token', handler: handleGetAccessRequest },
+  { method: 'POST', path: '/api/access-requests/link/:token', handler: handlePostAccessRequest },
+  { method: 'DELETE', path: '/api/access-requests/link/:token', handler: handleDeleteAccessRequest },
   { method: 'GET', path: '/pub/docs/:token', handler: handlePublicGetDoc },
   { method: 'GET', path: '/pub/docs/:token/set', handler: handlePublicGetDocSet },
   { method: 'GET', path: '/pub/docs/:token/docs/:docId', handler: handlePublicGetDocSetDoc },
