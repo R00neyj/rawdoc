@@ -9,6 +9,7 @@ import { dayUsageStatement, deleteFoldersUsageStatement } from './usage'
 import { notifyRevalidateDocs } from './docRoomRpc'
 import { anyFolderGrant, lostAncestorIds, notifyFolderRooms, subtreeRoomDocIds } from './revalidateTargets'
 import { folderCommentDeleteStatements } from './commentRows'
+import { accessRequestDeleteStatements } from './accessRequests'
 import { PURGE_CALLS_ON_DELETE, runPurgeJobs } from './purgeJobs'
 
 // D1 바인딩 상한 100 에서 owner_id 한 칸을 뺀다
@@ -34,6 +35,7 @@ const REVOKE_FOLDER_LINKS_SQL =
   "UPDATE share_links SET revoked_at = ?1 WHERE target_type = 'folder' AND target_id = ?2 AND revoked_at IS NULL AND EXISTS (SELECT 1 FROM folders WHERE id = ?2 AND e2ee = 1)"
 const DROP_FOLDER_GRANTS_SQL =
   "DELETE FROM grants WHERE target_type = 'folder' AND target_id = ?1 AND EXISTS (SELECT 1 FROM folders WHERE id = ?1 AND e2ee = 1)"
+const FOLDER_E2EE_REQUESTS_WHERE = "target_type = 'folder' AND target_id = ?1 AND EXISTS (SELECT 1 FROM folders WHERE id = ?1 AND e2ee = 1)"
 
 function isE2eeFolder(row: { e2ee?: number } | null): boolean {
   return row?.e2ee === 1
@@ -198,6 +200,7 @@ export async function handleUpdateFolder(
     statements.push(
       env.DB.prepare(REVOKE_FOLDER_LINKS_SQL).bind(now, params.id),
       env.DB.prepare(DROP_FOLDER_GRANTS_SQL).bind(params.id),
+      ...accessRequestDeleteStatements(env.DB, FOLDER_E2EE_REQUESTS_WHERE, [params.id]),
     )
   }
   statements.push(dayUsageStatement(env.DB, user.id, now))

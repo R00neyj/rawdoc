@@ -6,6 +6,7 @@ import { badBody, checkTitleContent, fieldErrorResponse, hasE2eeKeys, readJsonLi
 import { rowToDoc } from './docWrite'
 import type { DocRow } from './docWrite'
 import { e2eeCommentDeleteStatements } from './commentRows'
+import { accessRequestDeleteStatements } from './accessRequests'
 import { checkDocGrow, docUsageStatements, usageOf, utf8Bytes } from './usage'
 import { MAX_BODY_BYTES, isValidAttachmentRefs, isValidWrappedKey } from './validate'
 
@@ -42,6 +43,7 @@ export function setDocE2eeStatements(db: D1Database, p: SetDocE2eeInput): D1Prep
     db.prepare(REVOKE_LINKS_SQL).bind(p.now, p.docId, p.docId, p.e2eeKey),
     db.prepare(DROP_SET_ROWS_SQL).bind(p.docId, p.docId, p.e2eeKey),
     db.prepare(DROP_GRANTS_SQL).bind(p.docId, p.docId, p.e2eeKey),
+    ...accessRequestDeleteStatements(db, `target_type = 'doc' AND target_id = ? AND ${WROTE_KEY}`, [p.docId, p.docId, p.e2eeKey]),
     // 6~8 댓글 복사본·알림과 그 바이트 — 같은 WROTE_KEY 조건 (F-502 8.3)
     ...e2eeCommentDeleteStatements(db, p.ownerId, p.docId, p.e2eeKey),
   ]

@@ -2,6 +2,7 @@
 import { errorResponse, jsonResponse } from './http'
 import { getUserWithSessionStart } from './auth'
 import { accountCommentDeleteStatements } from './commentRows'
+import { accessRequestDeleteStatements } from './accessRequests'
 import { PURGE_CALLS_ON_DELETE, runPurgeJobs } from './purgeJobs'
 import { ACCOUNT_DELETE_FRESH_MS, type AccountDeletePreview } from '../src/lib/accountDeletion'
 
@@ -73,6 +74,7 @@ function deleteAccountStatements(db: D1Database, userId: string, email: string, 
     db
       .prepare("INSERT INTO purge_jobs (kind, target, priority, created_at) VALUES ('r2_prefix', ?1, 0, ?2) ON CONFLICT (kind, target) DO NOTHING")
       .bind(`att/${userId}/`, now),
+    ...accessRequestDeleteStatements(db, 'owner_id = ?1 OR requester_id = ?1', [userId]),
     byUser('DELETE FROM share_link_docs WHERE token IN (SELECT token FROM share_links WHERE owner_id = ?1)'),
     byUser('DELETE FROM share_links WHERE owner_id = ?1'),
     byUser('DELETE FROM grants WHERE owner_id = ?1'),

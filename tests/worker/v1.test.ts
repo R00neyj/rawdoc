@@ -211,7 +211,7 @@ function makeEnv(data: {
               if (sql.startsWith('DELETE FROM github_')) return { meta: { changes: 0 } }
               if (sql.startsWith('INSERT INTO purge_jobs')) return { meta: { changes: 0 } }
               // F-502 8.2 — 댓글 행·알림 지우기
-              if (sql.startsWith('DELETE FROM doc_comments') || sql.startsWith('DELETE FROM notifications')) return { meta: { changes: 0 } }
+              if (sql.startsWith('DELETE FROM doc_comments') || sql.startsWith('DELETE FROM notifications') || sql.startsWith('DELETE FROM access_requests')) return { meta: { changes: 0 } }
               if (sql.startsWith('DELETE FROM folders WHERE owner_id = ? AND id IN')) {
                 const [ownerId, ...ids] = args as string[]
                 let changes = 0

@@ -2,6 +2,7 @@
 import type { AuthUser } from './auth'
 import { folderAncestors } from '../src/lib/folderTree'
 import { readUsage, usageOf } from './usage'
+import { accessRequestDeleteStatements } from './accessRequests'
 
 export type Role = 'owner' | 'edit' | 'view'
 export type GrantRole = 'view' | 'edit'
@@ -179,6 +180,7 @@ export function targetShareCleanupStatements(
         .prepare(`UPDATE share_links SET revoked_at = ? WHERE target_type = '${targetType}' AND target_id IN (${placeholders}) AND revoked_at IS NULL`)
         .bind(now, ...chunk),
       db.prepare(`DELETE FROM grants WHERE target_type = '${targetType}' AND target_id IN (${placeholders})`).bind(...chunk),
+      ...accessRequestDeleteStatements(db, `target_type = '${targetType}' AND target_id IN (${placeholders})`, chunk),
     )
   }
   return out

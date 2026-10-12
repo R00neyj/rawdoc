@@ -51,6 +51,7 @@ function makeEnv({
           return {
             async all<T>() {
               const [ownerId, targetType] = args as [string, 'doc' | 'folder']
+              if (sql.includes('FROM access_requests')) return { results: [] as T[] }
               if (sql.includes('FROM share_links')) {
                 const results = links
                   .filter((l) => l.owner_id === ownerId && l.target_type === targetType && l.revoked_at === null)

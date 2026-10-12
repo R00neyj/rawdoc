@@ -10,6 +10,9 @@ import { createWikiResolver, type WikiFolderRef } from '../src/lib/wikiResolve'
 import { dayUsageStatement } from './usage'
 import { githubImageMapOf } from './githubImages'
 import { readJsonLimited } from './docs'
+import { accessRequestDeleteStatements } from './accessRequests'
+
+const REVOKED_TOKENS_WHERE = 'token IN (SELECT token FROM share_links WHERE target_type = ? AND target_id = ? AND revoked_at IS NOT NULL)'
 
 export type PublicLinkRow = {
   token: string
@@ -284,6 +287,7 @@ export async function handleDeleteDocLink(
       'UPDATE share_links SET revoked_at = ? WHERE target_type = ? AND target_id = ? AND revoked_at IS NULL',
     ).bind(now, 'doc', params.id),
     dayUsageStatement(env.DB, user.id, now),
+    ...accessRequestDeleteStatements(env.DB, REVOKED_TOKENS_WHERE, ['doc', params.id]),
   ])
   return new Response(null, { status: 204 })
 }
@@ -439,6 +443,7 @@ export async function handleDeleteFolderLink(
       'UPDATE share_links SET revoked_at = ? WHERE target_type = ? AND target_id = ? AND revoked_at IS NULL',
     ).bind(now, 'folder', params.id),
     dayUsageStatement(env.DB, user.id, now),
+    ...accessRequestDeleteStatements(env.DB, REVOKED_TOKENS_WHERE, ['folder', params.id]),
   ])
   return new Response(null, { status: 204 })
 }

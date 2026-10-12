@@ -1,6 +1,8 @@
 // 공유 관리 목록 — 내 링크 + 내가 준 권한 (specs/features/F-243.md 3.1)
 import { jsonResponse } from './http'
 import { requireUser } from './auth'
+import { LIVE_REQUEST_SQL } from './accessRequests'
+import type { AccessRequestRow, AccessRole } from '../src/lib/accessRequest'
 
 type TargetType = 'doc' | 'folder'
 
@@ -63,18 +65,39 @@ async function listGrantsForTarget(env: Env, ownerId: string, targetType: Target
   }))
 }
 
+const REQUESTS_SQL = `SELECT r.id, r.target_type, r.target_id, r.requester_email, r.requester_name, r.role, r.created_at,
+  CASE r.target_type WHEN 'doc' THEN (SELECT t.title FROM docs t WHERE t.id = r.target_id) ELSE (SELECT t.name FROM folders t WHERE t.id = r.target_id) END AS target_name
+  FROM access_requests r WHERE r.owner_id = ? AND r.status = 'pending' AND ${LIVE_REQUEST_SQL} ORDER BY r.created_at DESC`
+
+async function listRequests(env: Env, ownerId: string): Promise<AccessRequestRow[]> {
+  const { results } = await env.DB.prepare(REQUESTS_SQL)
+    .bind(ownerId)
+    .all<{ id: string; target_type: TargetType; target_id: string; requester_email: string; requester_name: string; role: AccessRole; created_at: number; target_name: string }>()
+  return results.map((r) => ({
+    id: r.id,
+    targetType: r.target_type,
+    targetId: r.target_id,
+    targetName: r.target_name,
+    email: r.requester_email,
+    name: r.requester_name,
+    role: r.role,
+    createdAt: r.created_at,
+  }))
+}
+
 export async function handleListShares(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
 
-  const [docLinks, folderLinks, docGrants, folderGrants] = await Promise.all([
+  const [docLinks, folderLinks, docGrants, folderGrants, requests] = await Promise.all([
     listLinksForTarget(env, user.id, 'doc'),
     listLinksForTarget(env, user.id, 'folder'),
     listGrantsForTarget(env, user.id, 'doc'),
     listGrantsForTarget(env, user.id, 'folder'),
+    listRequests(env, user.id),
   ])
 
   const links = [...docLinks, ...folderLinks].sort((a, b) => b.createdAt - a.createdAt)
   const grants = [...docGrants, ...folderGrants].sort((a, b) => b.createdAt - a.createdAt)
 
-  return jsonResponse({ links, grants })
+  return jsonResponse({ links, grants, requests })
 }

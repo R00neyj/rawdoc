@@ -332,7 +332,7 @@ worker/
   links.ts token.ts      (F-210·F-211)
   attachments.ts imageSniff.ts     (F-209)
   access.ts grants.ts    (F-212)
-  accessRequests.ts      링크로 보는 사람의 권한 요청 — 상태·보내기·취소 `/api/access-requests/link/:token`, 살아 있는 요청 조건, 지우기 문장. 상수·타입은 `src/lib/accessRequest.ts` (F-4005)
+  accessRequests.ts      링크로 보는 사람의 권한 요청 — 상태·보내기·취소 `/api/access-requests/link/:token`(F-4005), 소유자 승인·거절 `/api/access-requests/:id/approve|reject`·매일 Cron 정리(F-4006), 살아 있는 요청 조건, 지우기 문장. 상수·타입은 `src/lib/accessRequest.ts`. `GET /api/shares` 응답에 `requests`
   docSocket.ts docRoom.ts docRoomCore.ts yStore.ts textRebase.ts docRoomRpc.ts   (F-304)
   docWrite.ts            문서 행 조건부 쓰기 한 벌 — `/api`·`/v1` 폴백 PUT 과 DocRoom idle 경로가 같이 씀 (F-308)
   usage.ts               사용량 열·한도·사용량 줄 (F-2025)

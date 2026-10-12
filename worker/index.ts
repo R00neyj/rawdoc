@@ -12,7 +12,7 @@ import {
   handleSetPinned,
   handleUpdateDoc,
 } from './docs'
-import { handleDeleteAccessRequest, handleGetAccessRequest, handlePostAccessRequest } from './accessRequests'
+import { handleApproveAccessRequest, handleDeleteAccessRequest, handleGetAccessRequest, handlePostAccessRequest, handleRejectAccessRequest, purgeAccessRequests } from './accessRequests'
 import { handleCreateFolder, handleDeleteFolder, handleListFolders, handleUpdateFolder } from './folders'
 import {
   handleCreateDocLink,
@@ -301,6 +301,8 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/access-requests/link/:token', handler: handleGetAccessRequest },
   { method: 'POST', path: '/api/access-requests/link/:token', handler: handlePostAccessRequest },
   { method: 'DELETE', path: '/api/access-requests/link/:token', handler: handleDeleteAccessRequest },
+  { method: 'POST', path: '/api/access-requests/:id/approve', handler: handleApproveAccessRequest },
+  { method: 'POST', path: '/api/access-requests/:id/reject', handler: handleRejectAccessRequest },
   { method: 'GET', path: '/pub/docs/:token', handler: handlePublicGetDoc },
   { method: 'GET', path: '/pub/docs/:token/set', handler: handlePublicGetDocSet },
   { method: 'GET', path: '/pub/docs/:token/docs/:docId', handler: handlePublicGetDocSetDoc },
@@ -476,6 +478,7 @@ export default {
     ctx.waitUntil(runQuietly(() => cleanupExpiredAuth(env, now)))
     ctx.waitUntil(runQuietly(() => cleanupComments(env, now)))
     ctx.waitUntil(runQuietly(() => cleanupCspReports(env, now)))
+    ctx.waitUntil(runQuietly(() => purgeAccessRequests(env, now)))
     // 비밀 값이 없으면 푸시가 꺼져 있다 — 구독 정리도 하지 않는다 (F-3003 6.4)
     if (await loadVapid(env)) ctx.waitUntil(runQuietly(() => cleanupPushSubscriptions(env, now)))
   },

@@ -409,7 +409,7 @@ describe('F-2033 scheduled 정리', () => {
       },
     }
     await worker.scheduled({} as ScheduledController, { DB } as unknown as Env, scheduledCtx)
-    expect(pending.length).toBe(4)
+    expect(pending.length).toBe(5)
     await expect(Promise.all(pending)).resolves.toBeDefined()
   })
 })

@@ -12,6 +12,7 @@ import { sharePushPayload } from '../src/lib/pushText'
 import type { VapidAuth } from './webPush'
 import { pushInBackground, pushToEmail } from './pushSend'
 import { shareNotificationDeleteStatements, shareNotificationInsertStatements } from './shareNotifications'
+import { accessRequestDeleteStatements } from './accessRequests'
 
 type TargetType = 'doc' | 'folder'
 
@@ -125,6 +126,24 @@ async function handlePutGrant(
   const { role } = body as Record<string, unknown>
   if (!isValidRole(role)) return jsonResponse({ error: 'invalid', field: 'role' }, 400)
 
+  const clearRequests = accessRequestDeleteStatements(env.DB, 'target_type = ? AND target_id = ? AND requester_email = ?', [targetType, params.id, email])
+  await applyGrant(env, ctx, user, { targetType, targetId: params.id, name: check.name }, email, role, clearRequests)
+  return jsonResponse({ email, role })
+}
+
+type GrantTarget = { targetType: TargetType; targetId: string; name: string }
+
+// 초대 추가 한 벌 — 초대 PUT 과 권한 요청 승인이 같이 부른다 (F-4006 3장)
+export async function applyGrant(
+  env: Env,
+  ctx: ExecutionContext | undefined,
+  owner: AuthUser,
+  t: GrantTarget,
+  email: string,
+  role: 'view' | 'edit',
+  extra: D1PreparedStatement[],
+): Promise<void> {
+  const { targetType, targetId, name } = t
   const now = Date.now()
   const [inserted] = (await env.DB.batch([
     env.DB.prepare(
@@ -132,20 +151,19 @@ async function handlePutGrant(
        VALUES (?,?,?,?,?,?)
        ON CONFLICT(target_type, target_id, grantee_email) DO UPDATE SET role = excluded.role, owner_id = excluded.owner_id
        RETURNING created_at`,
-    ).bind(targetType, params.id, user.id, email, role, now),
-    dayUsageStatement(env.DB, user.id, now),
-    ...shareNotificationInsertStatements(env.DB, { targetType, targetId: params.id, email, id: crypto.randomUUID(), actorEmail: user.email, name: check.name, role, now }),
+    ).bind(targetType, targetId, owner.id, email, role, now),
+    dayUsageStatement(env.DB, owner.id, now),
+    ...shareNotificationInsertStatements(env.DB, { targetType, targetId, email, id: crypto.randomUUID(), actorEmail: owner.email, name, role, now }),
+    ...extra,
   ])) as Array<{ results?: Array<{ created_at?: number }> } | undefined>
 
-  const response = jsonResponse({ email, role })
-  if (inserted?.results?.[0]?.created_at === now) {
-    await pushInBackground(env, ctx, 'share', (auth) => pushShare(env, auth, { grantee: email, owner: user, targetType, targetId: params.id, name: check.name, role, now }))
+  const created = inserted?.results?.[0]?.created_at === now
+  if (created) {
+    await pushInBackground(env, ctx, 'share', (auth) => pushShare(env, auth, { grantee: email, owner, targetType, targetId, name, role, now }))
   }
   // 보기로 낮추면 열린 편집 연결을 다시 본다. 새로 만든 초대는 잃은 권한이 없다 (F-304 9.1, F-4002 3.1)
-  const created = inserted?.results?.[0]?.created_at === now
-  if (targetType === 'doc' && role === 'view') await notifyRevalidate(env, ctx, params.id, email)
-  if (targetType === 'folder' && role === 'view' && !created) await notifyFolderRooms(env, ctx, params.id, user.id, email)
-  return response
+  if (targetType === 'doc' && role === 'view') await notifyRevalidate(env, ctx, targetId, email)
+  if (targetType === 'folder' && role === 'view' && !created) await notifyFolderRooms(env, ctx, targetId, owner.id, email)
 }
 
 async function handleDeleteGrant(
