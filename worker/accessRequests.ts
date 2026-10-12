@@ -25,9 +25,10 @@ type RequestRow = { id: string; role: AccessRole; status: 'pending' | 'rejected'
 export const LIVE_REQUEST_SQL = `(
   ((r.target_type = 'doc' AND EXISTS (SELECT 1 FROM docs t WHERE t.id = r.target_id AND t.owner_id = r.owner_id AND t.e2ee_key IS NULL))
     OR (r.target_type = 'folder' AND EXISTS (SELECT 1 FROM folders t WHERE t.id = r.target_id AND t.owner_id = r.owner_id AND t.e2ee <> 1)))
-  AND EXISTS (SELECT 1 FROM share_links l WHERE l.token = r.token AND l.revoked_at IS NULL AND l.owner_id = r.owner_id
+  AND (EXISTS (SELECT 1 FROM share_links l WHERE l.token = r.token AND l.revoked_at IS NULL AND l.owner_id = r.owner_id
     AND ((l.target_type = r.target_type AND l.target_id = r.target_id)
       OR (r.target_type = 'doc' AND l.target_type = 'doc' AND EXISTS (SELECT 1 FROM share_link_docs s WHERE s.token = l.token AND s.doc_id = r.target_id))))
+    OR (r.target_type = 'doc' AND EXISTS (SELECT 1 FROM request_tokens q WHERE q.token = r.token AND q.revoked_at IS NULL AND q.owner_id = r.owner_id AND q.doc_id = r.target_id)))
 )`
 
 // where 는 별칭 없는 access_requests 열만 쓴다 — 같은 binds 가 세 문장에 각각 들어간다
@@ -41,10 +42,22 @@ export function accessRequestDeleteStatements(db: D1Database, where: string, bin
   ]
 }
 
+// 조각 링크의 요청 토큰 — 대상은 늘 그 문서, docId 는 무시 (F-4007 4장)
+async function findRequestTokenTarget(env: Env, token: string): Promise<Target | null> {
+  const doc = await env.DB.prepare(
+    `SELECT d.id, d.owner_id, d.folder_id FROM request_tokens q JOIN docs d ON d.id = q.doc_id AND d.owner_id = q.owner_id
+     WHERE q.token = ? AND q.revoked_at IS NULL AND d.e2ee_key IS NULL
+       AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = q.owner_id AND u.blocked_at IS NOT NULL)`,
+  )
+    .bind(token)
+    .first<{ id: string; owner_id: string; folder_id: string | null }>()
+  return doc ? { type: 'doc', id: doc.id, ownerId: doc.owner_id, folderId: doc.folder_id } : null
+}
+
 async function findTarget(env: Env, token: string, docId: string | null): Promise<Target | null> {
   if (!isValidToken(token)) return null
   const link = await findPublicLink(env, token)
-  if (!link) return null
+  if (!link) return findRequestTokenTarget(env, token)
   if (link.target_type === 'folder') {
     const folder = await env.DB.prepare('SELECT id FROM folders WHERE id = ? AND owner_id = ? AND e2ee <> 1').bind(link.target_id, link.owner_id).first<{ id: string }>()
     return folder ? { type: 'folder', id: folder.id, ownerId: link.owner_id, folderId: null } : null

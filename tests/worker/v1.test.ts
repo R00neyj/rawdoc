@@ -224,7 +224,7 @@ function makeEnv(data: {
                 return { meta: { changes } }
               }
               // 리뷰 W2·W4 — 지운 문서·폴더의 링크 폐기·초대 삭제
-              if (sql.startsWith('UPDATE share_links SET revoked_at') || sql.startsWith('DELETE FROM grants WHERE target_type')) return { meta: { changes: 0 } }
+              if (sql.startsWith('UPDATE share_links SET revoked_at') || sql.startsWith('UPDATE request_tokens SET revoked_at') || sql.startsWith('DELETE FROM grants WHERE target_type')) return { meta: { changes: 0 } }
               if (sql.startsWith('UPDATE users SET')) return { meta: { changes: 1 } }
               throw new Error(`unhandled run sql: ${sql}`)
             },

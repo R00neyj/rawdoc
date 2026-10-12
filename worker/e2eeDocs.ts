@@ -15,6 +15,7 @@ const MOVE_ROW_SQL =
 // 3·4·5 는 1번이 이번 요청의 감싼 키를 실제로 썼을 때만 — 새 키는 무작위라 이 요청이 쓴 행만 맞는다
 const WROTE_KEY = 'EXISTS (SELECT 1 FROM docs WHERE id = ? AND e2ee_key = ?)'
 const REVOKE_LINKS_SQL = `UPDATE share_links SET revoked_at = ? WHERE target_type = 'doc' AND target_id = ? AND revoked_at IS NULL AND ${WROTE_KEY}`
+const REVOKE_REQUEST_TOKEN_SQL = `UPDATE request_tokens SET revoked_at = ? WHERE doc_id = ? AND revoked_at IS NULL AND ${WROTE_KEY}`
 const DROP_SET_ROWS_SQL = `DELETE FROM share_link_docs WHERE doc_id = ? AND ${WROTE_KEY}`
 const DROP_GRANTS_SQL = `DELETE FROM grants WHERE target_type = 'doc' AND target_id = ? AND ${WROTE_KEY}`
 
@@ -41,6 +42,7 @@ export function setDocE2eeStatements(db: D1Database, p: SetDocE2eeInput): D1Prep
   return [
     ...statements,
     db.prepare(REVOKE_LINKS_SQL).bind(p.now, p.docId, p.docId, p.e2eeKey),
+    db.prepare(REVOKE_REQUEST_TOKEN_SQL).bind(p.now, p.docId, p.docId, p.e2eeKey),
     db.prepare(DROP_SET_ROWS_SQL).bind(p.docId, p.docId, p.e2eeKey),
     db.prepare(DROP_GRANTS_SQL).bind(p.docId, p.docId, p.e2eeKey),
     ...accessRequestDeleteStatements(db, `target_type = 'doc' AND target_id = ? AND ${WROTE_KEY}`, [p.docId, p.docId, p.e2eeKey]),

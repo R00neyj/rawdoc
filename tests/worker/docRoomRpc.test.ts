@@ -163,7 +163,7 @@ describe('F-304 A24 배선', () => {
                 if (sql.startsWith('DELETE FROM share_link_docs')) return { meta: { changes: 0 } }
                 if (sql.startsWith('DELETE FROM github_')) return { meta: { changes: 0 } }
                 // 리뷰 W2 — 문서 지우기 batch 의 링크 폐기
-                if (sql.startsWith('UPDATE share_links SET revoked_at')) return { meta: { changes: 0 } }
+                if (sql.startsWith('UPDATE share_links SET revoked_at') || sql.startsWith('UPDATE request_tokens SET revoked_at')) return { meta: { changes: 0 } }
                 // F-502 8.1 — 댓글 행·알림 지우기
                 if (sql.startsWith('DELETE FROM doc_comments') || sql.startsWith('DELETE FROM notifications') || sql.startsWith('DELETE FROM access_requests')) return { meta: { changes: 0 } }
                 if (sql.startsWith('DELETE FROM docs')) {

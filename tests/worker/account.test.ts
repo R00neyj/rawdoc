@@ -476,7 +476,7 @@ function countingD1(inner: D1Database) {
 }
 
 describe('F-2038 W8 문장 수', () => {
-  it('개발 우회 DELETE 한 번의 동기 경로 D1 문장 ≤ 28 (F-3014 GitHub 네 표 + F-4006 권한 요청 셋), 뒤따르는 정리는 ≤ 4', async () => {
+  it('개발 우회 DELETE 한 번의 동기 경로 D1 문장 ≤ 29 (F-3014 GitHub 네 표 + F-4006 권한 요청 셋 + F-4007 요청 토큰), 뒤따르는 정리는 ≤ 4', async () => {
     const sqlDb = openTestDb()
     seedWorld(sqlDb)
     const { db, executed } = countingD1(asD1(sqlDb))
@@ -489,7 +489,7 @@ describe('F-2038 W8 문장 수', () => {
     const purgeSql = new Set<string>(Object.values(PURGE_SQL))
     const purge = executed.filter((sql) => purgeSql.has(sql))
     const sync = executed.filter((sql) => !purgeSql.has(sql))
-    expect(sync.length).toBeLessThanOrEqual(28)
+    expect(sync.length).toBeLessThanOrEqual(29)
     expect(purge.length).toBeGreaterThan(0)
     expect(purge.length).toBeLessThanOrEqual(4)
   })

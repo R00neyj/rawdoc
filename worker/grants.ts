@@ -44,7 +44,7 @@ type OwnerCheck = { ok: true; e2ee: boolean; name: string } | { ok: false; statu
 
 // 초대·이동·삭제·링크는 owner 만. 권한이 전혀 없으면 404, 있지만(view·edit) owner 가 아니면 403 (F-212 2.2)
 // 금고 판정 열을 함께 읽는다 — resolveDocAccess 가 금고 비소유자를 null 로 본다 (F-401 X3)
-async function checkOwnedTarget(env: Env, targetType: TargetType, targetId: string, user: AuthUser): Promise<OwnerCheck> {
+export async function checkOwnedTarget(env: Env, targetType: TargetType, targetId: string, user: AuthUser): Promise<OwnerCheck> {
   if (targetType === 'doc') {
     const doc = await env.DB.prepare('SELECT id, owner_id, folder_id, e2ee_key, title FROM docs WHERE id = ?')
       .bind(targetId)

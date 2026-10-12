@@ -13,6 +13,7 @@ import {
   handleUpdateDoc,
 } from './docs'
 import { handleApproveAccessRequest, handleDeleteAccessRequest, handleGetAccessRequest, handlePostAccessRequest, handleRejectAccessRequest, purgeAccessRequests } from './accessRequests'
+import { handleCreateRequestToken } from './requestTokens'
 import { handleCreateFolder, handleDeleteFolder, handleListFolders, handleUpdateFolder } from './folders'
 import {
   handleCreateDocLink,
@@ -272,6 +273,7 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/docs/:id/link', handler: handleGetDocLink },
   { method: 'POST', path: '/api/docs/:id/link', handler: handleCreateDocLink },
   { method: 'DELETE', path: '/api/docs/:id/link', handler: handleDeleteDocLink },
+  { method: 'POST', path: '/api/docs/:id/request-token', handler: handleCreateRequestToken },
   { method: 'GET', path: '/api/docs/:id/share-set', handler: handleGetDocShareSet },
   { method: 'GET', path: '/api/docs/:id/people', handler: handleGetDocPeople },
   { method: 'GET', path: '/api/docs/:id/comments/count', handler: handleGetCommentCount },
