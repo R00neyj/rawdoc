@@ -5,6 +5,7 @@ import { findWikiLinks } from '../lib/wikiLink'
 import type { WikiResolver } from '../lib/wikiResolve'
 import { getShareLink, createShareLink, revokeShareLink } from './linkApi'
 import { copyShareLink, copyShareMarkdown } from './shareCopy'
+import { fetchRequestToken } from './requestToken'
 import { IconShare, IconTooltip, IconLink, IconLinkOff, IconCopy, IconPersonAdd } from './icons'
 import usePresence from './usePresence'
 import MenuItemSkeleton from './MenuItemSkeleton'
@@ -94,6 +95,7 @@ export function useShareMenu({
       onNotice,
       writeText: (text) => navigator.clipboard.writeText(text),
       baseUrl: `${location.origin}${location.pathname}`,
+      requestToken: linkDocId && !e2eeDoc ? () => fetchRequestToken(linkDocId) : undefined,
     })
   }
 

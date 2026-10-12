@@ -96,3 +96,36 @@ describe('decompress 압축 해제 크기 상한 (F-138 3.6)', () => {
     await expect(decodeShare(fragment)).resolves.toEqual(doc)
   })
 })
+
+describe('조각 키 r — 요청 토큰 (F-2137 2장)', () => {
+  const TOKEN = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ' // 43자
+
+  async function fragmentOf(json: object) {
+    const compressed = await compressBytes(new TextEncoder().encode(JSON.stringify(json)))
+    let binary = ''
+    for (const b of compressed) binary += String.fromCharCode(b)
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  }
+
+  it('U1 requestToken 이 있는 왕복은 같은 값을 돌려준다', async () => {
+    const doc: ShareDoc = { title: '제목', content: '본문', lineEnding: 'lf', requestToken: TOKEN }
+    await expect(decodeShare(await encodeShare(doc))).resolves.toEqual(doc)
+  })
+
+  it('U1 requestToken 이 없으면 결과에 키가 없다', async () => {
+    const result = await decodeShare(await encodeShare({ title: '제목', content: '본문', lineEnding: 'lf' }))
+    expect('requestToken' in result).toBe(false)
+  })
+
+  it('U1 r 이 43자 base64url 이 아니면(42자·! 포함·숫자) 키 없이 연다', async () => {
+    for (const r of [TOKEN.slice(1), `${TOKEN.slice(1)}!`, 12345]) {
+      const result = await decodeShare(await fragmentOf({ v: 1, t: 't', c: 'c', e: 'lf', r }))
+      expect('requestToken' in result).toBe(false)
+      expect(result.content).toBe('c')
+    }
+  })
+
+  it('U1 r 이 없는 옛 조각은 그대로 열린다', async () => {
+    await expect(decodeShare(await fragmentOf({ v: 1, t: 't', c: 'c', e: 'lf' }))).resolves.toEqual({ title: 't', content: 'c', lineEnding: 'lf' })
+  })
+})

@@ -64,4 +64,21 @@ describe('copyShareLink — U10 (F-2054 6.2)', () => {
     expect(notices[0].type).toBe('warn')
     expect(notices[0].message).toMatch(/^링크가 깁니다\(약 \d+KB\)/)
   })
+
+  it('U4 requestToken 함수가 값이면 풀린 링크에 같은 토큰, null 이면 키 없음 — 알림은 그대로', async () => {
+    const TOKEN = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ'
+    const withToken = makeDeps('본문')
+    await copyShareLink({ ...withToken.deps, requestToken: async () => TOKEN })
+    const decoded = await decodeShare(withToken.copied[0].slice(`${BASE_URL}#/s/`.length))
+    expect(decoded.requestToken).toBe(TOKEN)
+
+    const without = makeDeps('본문')
+    await copyShareLink({ ...without.deps, requestToken: async () => null })
+    const decodedNone = await decodeShare(without.copied[0].slice(`${BASE_URL}#/s/`.length))
+    expect('requestToken' in decodedNone).toBe(false)
+
+    const expected = [{ type: 'info', message: '공유 링크를 복사했습니다. 문서 내용이 링크 주소에 담깁니다.' }]
+    expect(withToken.notices).toEqual(expected)
+    expect(without.notices).toEqual(expected)
+  })
 })

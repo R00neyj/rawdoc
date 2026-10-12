@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import SharedView from './SharedView'
+import AccessRequestControl from './AccessRequestControl'
 import SharesPage from './SharesPage'
 import HelpPage from './HelpPage'
 import EmptyState from './EmptyState'
@@ -65,7 +66,17 @@ export default function AppScreens({
       )}
       {sharedDoc && (
         <div className="content-area">
-          <SharedView sharedDoc={sharedDoc} onImport={importSharedDoc} onClose={closeSharedDoc} onContextMenu={handleViewContextMenu} />
+          <SharedView
+            sharedDoc={sharedDoc}
+            onImport={importSharedDoc}
+            onClose={closeSharedDoc}
+            onContextMenu={handleViewContextMenu}
+            accessControl={
+              account.state === 'in' && sharedDoc.requestToken ? (
+                <AccessRequestControl token={sharedDoc.requestToken} docId={null} variant="text" openIn="hash" onNotice={(message) => showNotice({ type: 'info', message })} />
+              ) : undefined
+            }
+          />
         </div>
       )}
       {!sharedDoc && sharesOpen && (

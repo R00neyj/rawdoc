@@ -13,13 +13,15 @@ export type ShareCopyDeps = {
   onNotice: (notice: Notice) => void
   writeText: (text: string) => Promise<void>
   baseUrl: string
+  requestToken?: () => Promise<string | null>
 }
 
 export async function copyShareLink(deps: ShareCopyDeps): Promise<void> {
-  const { getShareDoc, onNotice, writeText, baseUrl } = deps
+  const { getShareDoc, onNotice, writeText, baseUrl, requestToken } = deps
   const rawDoc = getShareDoc()
+  const token = requestToken ? await requestToken() : null
   // 공유 링크 주소에는 주석을 담지 않는다 (F-214.md 2.2)
-  const doc: ShareDoc = { ...rawDoc, content: stripComments(rawDoc.content) }
+  const doc: ShareDoc = { ...rawDoc, content: stripComments(rawDoc.content), ...(token ? { requestToken: token } : {}) }
   const fragment = await encodeShare(doc)
   const link = `${baseUrl}${formatShareHash(fragment)}`
 

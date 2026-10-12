@@ -170,6 +170,7 @@
 |`src/app/PublicView.tsx`|로그인 없이 누구나 보는 공개 문서·폴더 화면 전체|
 |`src/app/pushClient.ts`|휴대폰·브라우저 알림 받기를 켜고 끄고 시험함|
 |`src/app/PushSettings.tsx`|설정 계정 탭의 알림 받기 스위치와 테스트 알림 버튼|
+|`src/app/requestToken.ts`|`링크 복사` 때 링크에 넣을 권한 요청 열쇠를 서버에서 받아 이 탭에 기억함|
 |`src/app/resolveInitialDoc.ts`|앱을 켰을 때 처음 열 문서를 정함|
 |`src/app/resyncList.ts`|다른 탭에서 바뀐 문서 목록을 현재 목록과 합침|
 |`src/app/RightPanel.tsx`|오른쪽 패널(달력·관계도·링크·할 일)을 위아래로 쌓아 보여줌|

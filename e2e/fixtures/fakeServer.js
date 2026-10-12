@@ -2,6 +2,7 @@
 // F-209 2.3·2.4: /api/attachments 올리기·받기도 메모리로 흉내낸다
 import crypto from 'node:crypto'
 
+const FAKE_REQUEST_TOKEN = `rq${'A'.repeat(41)}`
 const ATTACHMENT_MIME = { png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
 
 // 로그인 상태로 /api/me·/api/docs·/api/folders 를 흉내낸다
@@ -931,6 +932,18 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
     return ghJson(route, 200, { path: link.path, images: link.images })
   })
 
+  // POST /api/docs/:id/request-token — 소유자 문서의 요청 토큰 발급 흉내 (F-2137 4장). 본 문서만, 고정 값
+  const requestTokenPostIds = []
+  await page.route(/\/api\/docs\/[^/]+\/request-token$/, async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() !== 'POST') return route.fallback()
+    const id = decodeURIComponent(new URL(req.url()).pathname.split('/')[3])
+    requestTokenPostIds.push(id)
+    if (!docs.has(id)) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+    return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ token: FAKE_REQUEST_TOKEN }) })
+  })
+
   // F-2042 8.1 — 이후 모든 /api/** 응답을 latencyMs 만큼 늦춘다. 마지막에 걸어 다른 경로보다 먼저 가로챈 뒤 route.fallback() 한다
   let latencyMs = 0
   const getRequestLog = [] // GET 요청만 기록 — 동시성 확인용 { path, startedAt, endedAt }
@@ -957,6 +970,11 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
     setGithub(patch) {
       Object.assign(gh, patch)
     },
+    // 받은 POST /api/docs/:id/request-token 의 문서 id 목록, 발급하는 고정 토큰 (F-2137 4장)
+    requestTokenPosts() {
+      return [...requestTokenPostIds]
+    },
+    requestToken: FAKE_REQUEST_TOKEN,
     shareLinks,
     grants,
     apiTokens,

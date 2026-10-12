@@ -15,6 +15,7 @@ import { editorCommandGates, type EditorCommandGates } from './contextMenuItems'
 import { paletteScreen, type PaletteContext, type PaletteCreatePlan, type PaletteViewMode } from './paletteContract'
 import { toPaletteDocs, planPaletteCreate } from './paletteDocs'
 import { copyShareLink, copyShareMarkdown } from './shareCopy'
+import { fetchRequestToken, requestTokenDocId } from './requestToken'
 import { formatHash } from './hashRoute'
 import { folderPathMap } from './searchIndex'
 import { isSharedDoc, type DocMeta, type OpenDoc } from './docMeta'
@@ -259,6 +260,8 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
 
   const palettePresentDocScreen = docScreenId !== null && Boolean(currentDoc)
 
+  const requestTokenId = requestTokenDocId({ serverStore: canInviteCurrentDoc, doc: currentDoc })
+
   const paletteOutputCtx: PaletteContext['output'] =
     docScreenId !== null && openDoc?.id === currentDocId && currentDoc?.e2ee !== 'locked'
       ? {
@@ -273,6 +276,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
               onNotice: showNotice,
               writeText: (text) => navigator.clipboard.writeText(text),
               baseUrl: `${location.origin}${location.pathname}`,
+              requestToken: requestTokenId ? () => fetchRequestToken(requestTokenId) : undefined,
             }),
           copyMarkdown: () =>
             void copyShareMarkdown({

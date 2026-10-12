@@ -1,4 +1,5 @@
 // 공유받은 문서 화면 S-4 (specs/ia.md 1장 S-4·3.19, F-130.md 4장) — 위키링크(F-131)는 문서 목록이 없어 여기선 만들지 않는다
+import type { ReactNode } from 'react'
 import Viewer, { type ViewContextMenuInfo } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { useCodeHighlight } from '../viewer/useCodeHighlight'
@@ -11,9 +12,10 @@ type SharedViewProps = {
   onImport: () => void // `내 문서로 가져오기`
   onClose: () => void // `닫기`
   onContextMenu?: (info: ViewContextMenuInfo) => void // 우클릭 메뉴 (F-170.md 3.3)
+  accessControl?: ReactNode // 권한 요청 버튼 묶음 — 알림 줄 맨 앞 (F-2137 3장)
 }
 
-export default function SharedView({ sharedDoc, onImport, onClose, onContextMenu }: SharedViewProps) {
+export default function SharedView({ sharedDoc, onImport, onClose, onContextMenu, accessControl }: SharedViewProps) {
   // 이미 만든 옛 링크(주석이 담긴 채로 공유된 것) 대비 렌더 전에도 한 번 더 제거한다 (F-214.md 2.2)
   const html = useCodeHighlight(renderMarkdown(stripComments(sharedDoc.content)))
 
@@ -22,6 +24,7 @@ export default function SharedView({ sharedDoc, onImport, onClose, onContextMenu
       <div className="shared-view-notice" role="status">
         <span>공유받은 문서입니다. 아직 내 문서에 저장되지 않았습니다.</span>
         <div className="shared-view-notice-actions">
+          {accessControl}
           <button type="button" onClick={onImport}>
             <IconDownload size={18} />
             내 문서로 가져오기

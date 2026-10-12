@@ -1,5 +1,5 @@
 // 문서 ↔ 공유 링크 조각 인코딩 — 순수 함수, 비동기 (specs/features/F-130.md 3.3)
-// 조각 = base64url(패딩 없음)(deflate-raw(UTF-8(JSON))), JSON: { v:1, t:제목, c:본문(LF 로 이은 원문), e:"crlf"|"lf" }
+// 조각 = base64url(패딩 없음)(deflate-raw(UTF-8(JSON))), JSON: { v:1, t:제목, c:본문(LF 로 이은 원문), e:"crlf"|"lf", r?:요청 토큰 }
 import { toEditorText, fromEditorText, type LineEnding } from './lineEnding'
 
 const SHARE_VERSION = 1
@@ -93,17 +93,20 @@ export async function decompress(
   return result
 }
 
-export type ShareDoc = { title: string; content: string; lineEnding: LineEnding }
+export type ShareDoc = { title: string; content: string; lineEnding: LineEnding; requestToken?: string }
 
-type ShareJson = { v: number; t: string; c: string; e: string }
+type ShareJson = { v: number; t: string; c: string; e: string; r?: unknown }
+
+const REQUEST_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/
 
 // doc.content 는 줄 구분이 lineEnding 인 원문(JSON c 에는 LF 로 바꿔 넣는다). 반환은 base64url(패딩 없음) 조각
-export async function encodeShare({ title, content, lineEnding }: ShareDoc): Promise<string> {
+export async function encodeShare({ title, content, lineEnding, requestToken }: ShareDoc): Promise<string> {
   const json: ShareJson = {
     v: SHARE_VERSION,
     t: title ?? '',
     c: toEditorText(content ?? ''),
     e: lineEnding,
+    ...(requestToken ? { r: requestToken } : {}),
   }
   const bytes = new TextEncoder().encode(JSON.stringify(json))
   const compressed = await compress(bytes)
@@ -147,9 +150,11 @@ export async function decodeShare(fragment: string): Promise<ShareDoc> {
     throw new Error('형식이 올바르지 않습니다')
   }
 
+  const requestToken = typeof candidate.r === 'string' && REQUEST_TOKEN_PATTERN.test(candidate.r) ? candidate.r : undefined
   return {
     title: typeof candidate.t === 'string' ? candidate.t : '',
     content: fromEditorText(candidate.c, candidate.e),
     lineEnding: candidate.e,
+    ...(requestToken ? { requestToken } : {}),
   }
 }
