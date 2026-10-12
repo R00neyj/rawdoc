@@ -186,7 +186,28 @@
   width: var(--md-checkbox-size);
   height: var(--md-checkbox-size);
   margin: 0;
-  accent-color: var(--accent);
+  /* disabled 기본 체크박스는 브라우저가 회색으로 흐려 체크가 안 보인다 — 편집 모드 체크박스처럼 accent 로 직접 그린다 */
+  appearance: none;
+  border: 1px solid var(--muted);
+  border-radius: 0.15em;
+  background: var(--panel);
+}
+
+:is(.app-shell, .public-view, .wiki-preview) .markdown-body .task-list-item input[type='checkbox']:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+:is(.app-shell, .public-view, .wiki-preview) .markdown-body .task-list-item input[type='checkbox']:checked::after {
+  content: '';
+  position: absolute;
+  left: 32%;
+  top: 12%;
+  width: 28%;
+  height: 56%;
+  border: solid var(--panel);
+  border-width: 0 0.12em 0.12em 0;
+  transform: rotate(45deg);
 }
 
 /* 끝낸 항목은 글에 취소선 (2026-09-21 사용자 요청). 체크박스는 위 규칙에서 absolute 라
