@@ -1,5 +1,6 @@
 // 공유 관리 페이지 (specs/features/F-243.md 3.3) — 데이터·API 호출은 useSharesPage.ts 가 쥐고 순수 표시만 한다
 import type { ShareLinkRow, ShareGrantRow } from './sharesApi'
+import type { AccessRequestRow } from '../lib/accessRequest'
 import type { Notice } from './notice'
 import { IconClose, IconCopy, IconLinkOff } from './icons'
 
@@ -8,10 +9,14 @@ type SharesPageProps = {
   loading: boolean
   links: ShareLinkRow[]
   grants: ShareGrantRow[]
+  requests: AccessRequestRow[]
+  busyRequestIds: string[]
   onClose: () => void
   onOpenTarget: (targetType: 'doc' | 'folder', targetId: string) => void
   onRevokeLink: (link: ShareLinkRow) => Promise<void>
   onRevokeGrant: (grant: ShareGrantRow) => Promise<void>
+  onApproveRequest: (row: AccessRequestRow) => Promise<void>
+  onRejectRequest: (row: AccessRequestRow) => Promise<void>
   onLogin: () => void
   onNotice: (notice: Notice) => void
 }
@@ -39,10 +44,14 @@ export default function SharesPage({
   loading,
   links,
   grants,
+  requests,
+  busyRequestIds,
   onClose,
   onOpenTarget,
   onRevokeLink,
   onRevokeGrant,
+  onApproveRequest,
+  onRejectRequest,
   onLogin,
   onNotice,
 }: SharesPageProps) {
@@ -93,17 +102,51 @@ export default function SharesPage({
     }
   }
 
-  const bothEmpty = !loading && links.length === 0 && grants.length === 0
+  const allEmpty = !loading && links.length === 0 && grants.length === 0 && requests.length === 0
 
   return (
     <div className="shares-page">
       {head}
       {loading ? (
         <p className="shares-loading">불러오는 중…</p>
-      ) : bothEmpty ? (
+      ) : allEmpty ? (
         <p className="shares-empty">공유 중인 문서와 폴더가 없습니다.</p>
       ) : (
         <>
+          {requests.length > 0 && (
+            <section className="shares-group">
+              <h2 className="shares-group-title">
+                권한 요청 <span className="shares-group-count">{requests.length}</span>
+              </h2>
+              <ul className="shares-request-list">
+                {requests.map((req) => {
+                  const busy = busyRequestIds.includes(req.id)
+                  return (
+                    <li key={req.id} className="shares-request-row">
+                      <div className="shares-row-main">
+                        <button type="button" className="shares-target-btn" onClick={() => onOpenTarget(req.targetType, req.targetId)}>
+                          {req.targetName}
+                        </button>
+                        <span className="shares-badge">{TARGET_LABEL[req.targetType]}</span>
+                        <span className="shares-request-who">{req.name ? `${req.name} · ${req.email}` : req.email}</span>
+                        <span className="shares-role-badge">{ROLE_LABEL[req.role]}</span>
+                        <span className="shares-date">{formatDate(req.createdAt)}</span>
+                      </div>
+                      <div className="shares-row-actions">
+                        <button type="button" className="shares-request-approve" disabled={busy} onClick={() => onApproveRequest(req)}>
+                          승인
+                        </button>
+                        <button type="button" className="shares-request-reject danger" disabled={busy} onClick={() => onRejectRequest(req)}>
+                          거절
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          )}
+
           <section className="shares-group">
             <h2 className="shares-group-title">
               읽기 전용 링크 <span className="shares-group-count">{links.length}</span>

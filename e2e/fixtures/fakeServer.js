@@ -18,6 +18,8 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
   // F-243 공유 관리 — 링크·권한을 흉내낸다. 대상마다 살아있는 링크 최대 1개 (worker/links.ts 와 같은 규칙)
   const shareLinks = new Map() // key `${targetType}:${targetId}` -> { token, createdAt, revokedAt }
   const grants = new Map() // key `${targetType}:${targetId}:${email}` -> { role, createdAt }
+  const accessRequests = new Map()
+  const accessRequestLog = []
   // context.setOffline() 은 page.route 가 먼저 가로채 못 걸러낸다 — 이 플래그로 직접 흉내낸다 (F-207 A4)
   let offline = false
   // 계정당 이미지 저장 한도 흉내 (F-221 2.2·2.5)
@@ -569,7 +571,29 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
       })
       .filter(Boolean)
       .sort((a, b) => b.createdAt - a.createdAt)
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ links, grants: grantList }) })
+    const requests = [...accessRequests.entries()]
+      .map(([id, v]) => {
+        const name = targetName(v.targetType, v.targetId)
+        return name === null ? null : { id, targetType: v.targetType, targetId: v.targetId, targetName: name, email: v.email, name: v.name, role: v.role, createdAt: v.createdAt }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.createdAt - a.createdAt)
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ links, grants: grantList, requests }) })
+  })
+
+  // POST /api/access-requests/:id/(approve|reject) — 소유자의 권한 요청 처리 (F-2136 3장)
+  await page.route(/\/api\/access-requests\/[^/]+\/(approve|reject)$/, async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const parts = new URL(route.request().url()).pathname.split('/')
+    const action = parts.pop()
+    const id = decodeURIComponent(parts.pop())
+    accessRequestLog.push({ id, action })
+    const found = accessRequests.get(id)
+    if (!found) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+    accessRequests.delete(id)
+    if (action === 'reject') return route.fulfill({ status: 204 })
+    grants.set(`${found.targetType}:${found.targetId}:${found.email}`, { role: found.role, createdAt: Date.now() })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ email: found.email, role: found.role }) })
   })
 
   // POST /api/docs/:id/comments/import — 로컬 댓글 이관 흉내 (F-508.md 3.5)
@@ -977,6 +1001,11 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
     requestToken: FAKE_REQUEST_TOKEN,
     shareLinks,
     grants,
+    // 소유자가 받은 권한 요청 id -> { targetType, targetId, email, name, role, createdAt }, 받은 승인·거절 POST { id, action } (F-2136 4장)
+    accessRequests,
+    accessRequestPosts() {
+      return accessRequestLog.map((r) => ({ ...r }))
+    },
     apiTokens,
     // 네트워크 오프라인을 흉내낸다 — 이후 모든 요청은 실패한다 (F-207 A4)
     setOffline(v) {

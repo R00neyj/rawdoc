@@ -5167,14 +5167,16 @@ body.sidebar-resizing {
 }
 
 .shares-link-list,
-.shares-grant-list {
+.shares-grant-list,
+.shares-request-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
 .shares-link-row,
-.shares-grant-row {
+.shares-grant-row,
+.shares-request-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -5225,7 +5227,8 @@ body.sidebar-resizing {
 }
 
 .shares-url,
-.shares-grant-email {
+.shares-grant-email,
+.shares-request-who {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -5267,9 +5270,15 @@ body.sidebar-resizing {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 
+.shares-row-actions button:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 @container (max-width: 560px) {
   .shares-link-row,
-  .shares-grant-row {
+  .shares-grant-row,
+  .shares-request-row {
     flex-wrap: wrap;
   }
 

@@ -2,8 +2,9 @@
 import { NOTIFICATIONS_READ_IDS_MAX, type InboxNotificationItem } from '../lib/docComments'
 import type { TreeNode } from '../lib/folderTree'
 
-// 댓글 종류는 docId, 문서 공유는 대상 문서, 폴더 공유는 없음 (F-2116 2.5)
+// 댓글 종류는 docId, 문서 공유는 대상 문서, 폴더 공유·권한 요청은 없음 (F-2116 2.5, F-2136)
 export function notificationDocId(item: InboxNotificationItem): string | null {
+  if (item.kind === 'access_request') return null
   if (item.kind !== 'share') return item.docId
   return item.target === 'doc' ? item.targetId : null
 }

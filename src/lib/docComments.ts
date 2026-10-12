@@ -650,7 +650,7 @@ export type NotificationItem = {
   readAt: number | null
 }
 export type NotificationsResponse = { items: NotificationItem[]; unread: number }
-export const INBOX_NOTIFICATION_KINDS = ['mention', 'reply', 'comment', 'share'] as const
+export const INBOX_NOTIFICATION_KINDS = ['mention', 'reply', 'comment', 'share', 'access_request'] as const
 export type InboxNotificationKind = (typeof INBOX_NOTIFICATION_KINDS)[number]
 export type ShareNotificationItem = {
   id: string
@@ -664,6 +664,6 @@ export type ShareNotificationItem = {
   readAt: number | null
 }
 export type AccessRequestNotificationItem = Omit<ShareNotificationItem, 'kind'> & { kind: 'access_request' }
-export type InboxNotificationItem = NotificationItem | ShareNotificationItem
+export type InboxNotificationItem = NotificationItem | ShareNotificationItem | AccessRequestNotificationItem
 export type InboxNotificationsResponse = { items: InboxNotificationItem[]; unread: number }
 export type NotificationsReadBody = { ids: string[] } | { all: true }

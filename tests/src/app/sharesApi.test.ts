@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { listShares, SharesApiError } from '../../../src/app/sharesApi'
+import { approveAccessRequest, listShares, rejectAccessRequest, SharesApiError } from '../../../src/app/sharesApi'
 
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -33,5 +33,31 @@ describe('listShares', () => {
     vi.stubGlobal('fetch', fetchMock)
     await listShares()
     expect(fetchMock).toHaveBeenCalledWith('/api/shares', { credentials: 'same-origin' })
+  })
+})
+
+describe('F-2136 approveAccessRequest·rejectAccessRequest — U4', () => {
+  it('200·204 는 ok, 404 는 gone, 그 밖·네트워크는 failed', async () => {
+    for (const [fn, ok] of [[approveAccessRequest, 200], [rejectAccessRequest, 204]] as const) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: ok, ok: true }))
+      expect(await fn('r1')).toBe('ok')
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404, ok: false }))
+      expect(await fn('r1')).toBe('gone')
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 500, ok: false }))
+      expect(await fn('r1')).toBe('failed')
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 429, ok: false }))
+      expect(await fn('r1')).toBe('failed')
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network')))
+      expect(await fn('r1')).toBe('failed')
+    }
+  })
+
+  it('POST 주소와 credentials same-origin', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200, ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+    await approveAccessRequest('r 1')
+    await rejectAccessRequest('r2')
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/access-requests/r%201/approve', { credentials: 'same-origin', method: 'POST' })
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/access-requests/r2/reject', { credentials: 'same-origin', method: 'POST' })
   })
 })

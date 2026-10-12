@@ -696,6 +696,7 @@ export default function App() {
     setNotificationsOpen,
     handleOpenNotification,
     unreadNotificationDocIdsValue,
+    accessRequestKeyValue,
     mentionSource,
   } = useNotificationsGlue({
     bootPhase, store, account, currentDocId, docScreenId, commentAccessValue, docsRef, resyncFromStore, revealSharedFolder: onNavigateSharedFolder, showNotice,
@@ -1097,7 +1098,9 @@ export default function App() {
   }
 
   // ----- 공유 관리 페이지 목록·해제 (F-2064) -----
-  const { sharesLoading, sharesLinks, sharesGrants, revokeShareLinkRow, revokeShareGrantRow, loginFromShares } = useSharesPage({ sharesOpen, account })
+  const {
+    sharesLoading, sharesLinks, sharesGrants, sharesRequests, busyRequestIds, revokeShareLinkRow, revokeShareGrantRow, approveRequestRow, rejectRequestRow, loginFromShares,
+  } = useSharesPage({ sharesOpen, account, accessRequestKey: accessRequestKeyValue, showNotice })
 
   // 검색 대화상자 오프라인 안내 — exportOffline 과 식은 같지만 뜻이 다른 이름이라 재사용하지 않는다 (F-288.md 7.5, 13장 Q8)
   const searchOffline = store.kind === 'server' && syncState?.online === false
@@ -1360,10 +1363,10 @@ export default function App() {
           {!narrow && topBar}
           <NoticeBar notice={notice} onDismiss={() => setNotice(null)} />
           <AppScreens {...{
-            account, bootPhase, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs: listedDocs, e2ee,
+            account, approveRequestRow, bootPhase, busyRequestIds, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs: listedDocs, e2ee,
             goHome, handleOpenWikiLink, handleViewContextMenu, helpOpen, importSharedDoc, isEmpty, listSource, loginFromShares,
-            mapDialogScope, mapRoute, openHelp, openSharesTarget, ownedDocs, recenterMap, requestImport, revokeShareGrantRow,
-            revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc, sharesGrants, sharesLinks, sharesLoading, sharesOpen, showNotice,
+            mapDialogScope, mapRoute, openHelp, openSharesTarget, ownedDocs, recenterMap, rejectRequestRow, requestImport, revokeShareGrantRow,
+            revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc, sharesGrants, sharesLinks, sharesLoading, sharesOpen, sharesRequests, showNotice,
           }} />
           {showEditor && <DocumentArea {...{
             attachmentResolverFor, commentAccessValue, commentRailExtra, comments, contentAreaRef, contentWidthPref, currentBreadcrumb,

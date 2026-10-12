@@ -189,7 +189,7 @@
 |`src/app/sharesApi.ts`|공유 관리 화면에 내가 공유한 링크·사람 목록을 불러옴|
 |`src/app/shareSetApi.ts`|문서 링크로 묶인 여러 문서를 함께 공유하기 전 미리 보여 줌|
 |`src/app/ShareSetDialog.tsx`|이 문서가 링크로 가리키는 다른 문서를 골라 함께 공유하는 창|
-|`src/app/SharesPage.tsx`|내가 만든 공유 링크를 모아 보고 관리하는 페이지|
+|`src/app/SharesPage.tsx`|내가 만든 공유 링크·초대와 받은 권한 요청을 모아 보고 관리하는 페이지|
 |`src/app/shortcutCatalog.ts`|단축키 안내판에 보일 단축키 목록을 정리함|
 |`src/app/ShortcutPanel.tsx`|단축키 목록을 옆에 띄워 보여주는 패널|
 |`src/app/shortcutUsage.ts`|사용자가 어떤 단축키를 눌렀는지 알아내 안내판에 표시함|
@@ -266,7 +266,7 @@
 |`src/app/useRightPanel.ts`|오른쪽 패널의 열림과 칸별 보기(달력·그래프 등)를 관리함|
 |`src/app/useSettingsPages.ts`|휴대폰에서 설정 화면을 단계별 페이지로 넘기고 되돌아오게 함|
 |`src/app/useShareResync.ts`|새 공유 알림이 오면 공유 목록을 한 번 다시 읽음|
-|`src/app/useSharesPage.ts`|공유 관리 페이지의 목록을 불러오고 공유 해제를 처리함|
+|`src/app/useSharesPage.ts`|공유 관리 페이지의 목록을 불러오고 공유 해제와 권한 요청 승인·거절을 처리함|
 |`src/app/useShortcutsPanel.ts`|단축키 안내판 열기와 그때 커서가 보이게 스크롤함|
 |`src/app/useShortcutUsage.ts`|사용자가 어떤 단축키를 써 봤는지 감지함|
 |`src/app/useSidebarLayout.ts`|사이드바 접기·폴더 펼침·좁은 창 배치를 관리함|

@@ -5,7 +5,7 @@ import type { CommentAccess } from './commentRail'
 import type { DocMeta } from './docMeta'
 import type { MentionSource } from './MentionField'
 import { useNotifications, type UseNotificationsResult } from './useNotifications'
-import { fetchDocPeople } from './notificationsApi'
+import { accessRequestKey, fetchDocPeople } from './notificationsApi'
 import { notificationDocId, unreadNotificationDocIds } from './docNotifications'
 import { shareTarget, sharedFolderListed } from './shareNotifications'
 import { useShareResync } from './useShareResync'
@@ -35,6 +35,7 @@ export type UseNotificationsGlueResult = {
   setNotificationsOpen: (open: boolean) => void
   handleOpenNotification: (item: InboxNotificationItem) => Promise<void>
   unreadNotificationDocIdsValue: ReadonlySet<string>
+  accessRequestKeyValue: string
   mentionSource: MentionSource | null
 }
 
@@ -72,6 +73,10 @@ export function useNotificationsGlue({
     async (item: InboxNotificationItem) => {
       setNotificationsOpen(false)
       notifications.markRead(item.id)
+      if (item.kind === 'access_request') {
+        location.hash = '#/shares'
+        return
+      }
       const target = shareTarget(item)
       if (target?.kind === 'folder') {
         if (!sharedFolderListed(docsRef.current, target.folderId) && navigator.onLine) await resyncFromStore().catch(() => {})
@@ -95,6 +100,7 @@ export function useNotificationsGlue({
 
   // ----- 사이드바 안 읽은 알림 점 (F-510 2·3.3) -----
   const unreadNotificationDocIdsValue = useMemo(() => unreadNotificationDocIds(notifications.items), [notifications.items])
+  const accessRequestKeyValue = useMemo(() => accessRequestKey(notifications.items), [notifications.items])
 
   const [prevDocScreenId, setPrevDocScreenId] = useState(docScreenId)
   if (prevDocScreenId !== docScreenId) {
@@ -129,6 +135,7 @@ export function useNotificationsGlue({
     setNotificationsOpen,
     handleOpenNotification,
     unreadNotificationDocIdsValue,
+    accessRequestKeyValue,
     mentionSource,
   }
 }

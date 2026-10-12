@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  accessRequestKey,
   applyPendingReads,
   dropSettledReads,
   fetchDocPeople,
@@ -13,7 +14,7 @@ import {
   shouldFetchNotifications,
   type PendingRead,
 } from '../../../src/app/notificationsApi'
-import type { NotificationItem, NotificationsResponse, ShareNotificationItem } from '../../../src/lib/docComments'
+import type { AccessRequestNotificationItem, NotificationItem, NotificationsResponse, ShareNotificationItem } from '../../../src/lib/docComments'
 
 function item(over: Partial<NotificationItem> = {}): NotificationItem {
   return {
@@ -329,8 +330,8 @@ describe('F-2111 comment 종류', () => {
     globalThis.fetch = fake
     await fetchNotifications(null)
     await fetchNotifications('W/"x"')
-    expect(fake.mock.calls[0][0]).toBe('/api/notifications?kinds=mention,reply,comment,share')
-    expect(fake.mock.calls[1][0]).toBe('/api/notifications?kinds=mention,reply,comment,share')
+    expect(fake.mock.calls[0][0]).toBe('/api/notifications?kinds=mention,reply,comment,share,access_request')
+    expect(fake.mock.calls[1][0]).toBe('/api/notifications?kinds=mention,reply,comment,share,access_request')
   })
 
   it('U2: comment 항목은 통과하고 like 는 null', () => {
@@ -372,5 +373,32 @@ describe('F-2116 공유 알림', () => {
     expect(notificationLines(share({ name: 'a'.repeat(41) })).excerpt).toBe(`"${'a'.repeat(39)}…" · 보기 권한`)
     const c = item({ kind: 'comment' })
     expect(notificationLines(c)).toEqual({ text: notificationText(c), excerpt: notificationExcerptLine(c.excerpt) })
+  })
+})
+
+describe('F-2136 권한 요청 알림', () => {
+  function req(over: Partial<AccessRequestNotificationItem> = {}): AccessRequestNotificationItem {
+    return { id: 'r1', kind: 'access_request', target: 'doc', targetId: 'd9', name: '기획안', role: 'edit', actorEmail: 'a@x.com', createdAt: 1000, readAt: null, ...over }
+  }
+
+  it('U1: access_request 9키 통과, 틀린 항목은 응답 전체 null', () => {
+    const body = { items: [req(), req({ id: 'r2', target: 'folder' })], unread: 2 }
+    expect(readNotificationsResponse(body)).toEqual(body)
+    expect(readNotificationsResponse({ items: [{ ...req(), extra: 1 }], unread: 1 })).toBeNull()
+    const { role: _role, ...noRole } = req()
+    expect(readNotificationsResponse({ items: [noRole], unread: 1 })).toBeNull()
+    expect(readNotificationsResponse({ items: [req({ target: 'x' as never })], unread: 1 })).toBeNull()
+  })
+
+  it('U2: 문서·폴더 문구', () => {
+    expect(notificationLines(req())).toEqual({ text: 'a@x.com님이 문서 편집 권한을 요청했습니다.', excerpt: '"기획안"' })
+    expect(notificationLines(req({ target: 'folder', name: '업무', role: 'view' }))).toEqual({ text: 'a@x.com님이 폴더 보기 권한을 요청했습니다.', excerpt: '"업무"' })
+  })
+
+  it('U2: accessRequestKey 는 순서 무관 같은 값이고 share 항목은 무시한다', () => {
+    const share: ShareNotificationItem = { id: 's1', kind: 'share', target: 'doc', targetId: 'd1', name: 'x', role: 'view', actorEmail: 'a@x.com', createdAt: 1, readAt: null }
+    expect(accessRequestKey([req({ id: 'b' }), req({ id: 'a' }), share])).toBe('a,b')
+    expect(accessRequestKey([req({ id: 'a' }), share, req({ id: 'b' })])).toBe('a,b')
+    expect(accessRequestKey([share, item()])).toBe('')
   })
 })

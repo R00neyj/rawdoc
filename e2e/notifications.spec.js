@@ -607,7 +607,7 @@ test.describe('F-2111 E1 comment 종류', () => {
     expect(postsOf(server)[0].body).toEqual({ ids: ['k1'] })
     const gets = server.notificationRequests().filter((r) => r.method === 'GET')
     expect(gets.length).toBeGreaterThan(0)
-    expect(gets.every((r) => r.search === '?kinds=mention,reply,comment,share')).toBe(true)
+    expect(gets.every((r) => r.search === '?kinds=mention,reply,comment,share,access_request')).toBe(true)
   })
 })
 

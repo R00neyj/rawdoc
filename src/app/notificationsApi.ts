@@ -7,7 +7,7 @@ import {
   type InboxNotificationsResponse,
   type NotificationItem,
 } from '../lib/docComments'
-import { formatNotificationTitle, notificationExcerptLine, sharePushPayload } from '../lib/pushText'
+import { accessRequestPushPayload, formatNotificationTitle, notificationExcerptLine, sharePushPayload } from '../lib/pushText'
 
 export { NOTIFICATION_TITLE_MAX, notificationExcerptLine } from '../lib/pushText' // F-3002 5.4 — 옛 import 그대로
 
@@ -61,7 +61,7 @@ function isShareItem(value: Record<string, unknown>): boolean {
 
 function isNotificationItem(value: unknown): value is InboxNotificationItem {
   if (!isPlainObject(value)) return false
-  if (value.kind === 'share') return isShareItem(value)
+  if (value.kind === 'share' || value.kind === 'access_request') return isShareItem(value)
   if (!hasExactKeys(value, NOTIFICATION_ITEM_KEYS)) return false
   if (typeof value.id !== 'string') return false
   if (!NOTIFICATION_KINDS.some((k) => k === value.kind)) return false
@@ -173,9 +173,24 @@ export function notificationText(item: NotificationItem): string {
 
 // 알림함 행 두 줄 — 공유는 푸시 문구에 마침표 (F-2116 2.2)
 export function notificationLines(item: InboxNotificationItem): { text: string; excerpt: string } {
-  if (item.kind !== 'share') return { text: notificationText(item), excerpt: notificationExcerptLine(item.excerpt) }
-  const { title, body } = sharePushPayload(item)
-  return { text: `${title}.`, excerpt: body }
+  if (item.kind === 'share') {
+    const { title, body } = sharePushPayload(item)
+    return { text: `${title}.`, excerpt: body }
+  }
+  if (item.kind === 'access_request') {
+    const { title, body } = accessRequestPushPayload(item)
+    return { text: `${title}.`, excerpt: body }
+  }
+  return { text: notificationText(item), excerpt: notificationExcerptLine(item.excerpt) }
+}
+
+// 폴링이 새 권한 요청을 가져오면 값이 바뀐다 — S-6 이 열려 있을 때 목록을 다시 부르는 신호 (F-2136 2장)
+export function accessRequestKey(items: readonly InboxNotificationItem[]): string {
+  return items
+    .filter((i) => i.kind === 'access_request')
+    .map((i) => i.id)
+    .sort()
+    .join(',')
 }
 
 export type PollReason = 'enable' | 'interval' | 'visible' | 'online' | 'open'

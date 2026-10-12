@@ -5,17 +5,14 @@ import { readJsonLimited } from './docs'
 import { readNotificationsUsageStatement } from './usage'
 import { isValidUuid } from './validate'
 import { INBOX_NOTIFICATION_KINDS, NOTIFICATIONS_DEFAULT_KINDS, NOTIFICATIONS_LIST_DEFAULT, NOTIFICATIONS_LIST_MAX, NOTIFICATIONS_READ_IDS_MAX } from '../src/lib/docComments'
-import type { AccessRequestNotificationItem, InboxNotificationItem, InboxNotificationKind, InboxNotificationsResponse } from '../src/lib/docComments'
-
-type ListKind = InboxNotificationKind | 'access_request'
-const LIST_KINDS: readonly ListKind[] = [...INBOX_NOTIFICATION_KINDS, 'access_request']
+import type { InboxNotificationItem, InboxNotificationKind, InboxNotificationsResponse } from '../src/lib/docComments'
 
 // UUID 50개 몸통이 약 2,000 B
 export const NOTIFICATIONS_READ_MAX_BODY_BYTES = 8_192
 
 type NotificationRow = {
   id: string
-  kind: ListKind
+  kind: InboxNotificationKind
   doc_id: string | null
   comment_id: string | null
   thread_id: string | null
@@ -34,7 +31,7 @@ const UNREAD_SQL = `SELECT COUNT(*) AS n FROM notifications WHERE recipient_emai
 const READ_ALL_SQL = 'UPDATE notifications SET read_at = ?1, push_due_at = NULL WHERE recipient_email = ?2 AND read_at IS NULL'
 const READ_IDS_SQL = `${READ_ALL_SQL} AND id IN (SELECT value FROM json_each(?3))`
 
-function toItem(row: NotificationRow): InboxNotificationItem | AccessRequestNotificationItem {
+function toItem(row: NotificationRow): InboxNotificationItem {
   if (row.kind === 'share' || row.kind === 'access_request') {
     return {
       id: row.id,
@@ -70,20 +67,20 @@ function readLimit(raw: string | null): number | null {
 }
 
 // n1 = 응답 모양의 판. userId 가 있어야 계정이 바뀌면 빗나간다 (F-2057 3.3)
-export function notificationsEtag(p: { userId: string; rev: number; limit: number; kinds?: readonly ListKind[] }): string {
+export function notificationsEtag(p: { userId: string; rev: number; limit: number; kinds?: readonly InboxNotificationKind[] }): string {
   const tail = p.kinds && !isDefaultKinds(p.kinds) ? `-${p.kinds.join('.')}` : ''
   return `W/"n1-${p.userId}-${p.rev}-${p.limit}${tail}"`
 }
 
-const isDefaultKinds = (kinds: readonly ListKind[]) => kinds.length === NOTIFICATIONS_DEFAULT_KINDS.length && NOTIFICATIONS_DEFAULT_KINDS.every((k, i) => kinds[i] === k)
+const isDefaultKinds = (kinds: readonly InboxNotificationKind[]) => kinds.length === NOTIFICATIONS_DEFAULT_KINDS.length && NOTIFICATIONS_DEFAULT_KINDS.every((k, i) => kinds[i] === k)
 
-// 쉼표로 이은 종류를 LIST_KINDS 순서로 정규화 — 틀리면 null
-function readKinds(raw: string | null): ListKind[] | null {
+// 쉼표로 이은 종류를 INBOX_NOTIFICATION_KINDS 순서로 정규화 — 틀리면 null
+function readKinds(raw: string | null): InboxNotificationKind[] | null {
   if (raw === null) return [...NOTIFICATIONS_DEFAULT_KINDS]
   if (raw.length > 64) return null
   const parts = raw.split(',')
-  if (!parts.every((p) => (LIST_KINDS as readonly string[]).includes(p))) return null
-  return LIST_KINDS.filter((k) => parts.includes(k))
+  if (!parts.every((p) => (INBOX_NOTIFICATION_KINDS as readonly string[]).includes(p))) return null
+  return INBOX_NOTIFICATION_KINDS.filter((k) => parts.includes(k))
 }
 
 const stripWeak = (tag: string) => (tag.startsWith('W/') ? tag.slice(2) : tag)

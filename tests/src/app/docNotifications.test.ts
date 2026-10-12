@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { unreadNotificationDocIds, unreadNotificationIdsForDoc, foldersWithUnreadDocs } from '../../../src/app/docNotifications'
+import { notificationDocId, unreadNotificationDocIds, unreadNotificationIdsForDoc, foldersWithUnreadDocs } from '../../../src/app/docNotifications'
 import { buildTree, type DocNode, type FolderNode, type TreeNode } from '../../../src/lib/folderTree'
 import type { NotificationItem } from '../../../src/lib/docComments'
 
@@ -131,5 +131,13 @@ describe('F-2116 U4 공유 알림 점', () => {
     expect([...unreadNotificationDocIds([docShare, folderShare])]).toEqual(['D'])
     expect(unreadNotificationIdsForDoc([docShare, folderShare], 'D')).toEqual(['s1'])
     expect(unreadNotificationIdsForDoc([docShare, folderShare], 'F')).toEqual([])
+  })
+})
+
+describe('F-2136 권한 요청 알림 — U2', () => {
+  it('access_request 는 문서 id 가 없어 사이드바 점을 만들지 않는다', () => {
+    const req = { id: 'r1', kind: 'access_request' as const, target: 'doc' as const, targetId: 'd1', name: '제목', role: 'edit' as const, actorEmail: 'a@x.com', createdAt: 1, readAt: null }
+    expect(notificationDocId(req)).toBeNull()
+    expect(unreadNotificationDocIds([req])).toEqual(new Set())
   })
 })

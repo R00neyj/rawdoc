@@ -1,4 +1,6 @@
-// 공유 관리 페이지 목록 API — GET /api/shares (specs/features/F-243.md 3.2)
+// 공유 관리 페이지 목록·권한 요청 처리 API — GET /api/shares, POST /api/access-requests/{id}/approve|reject (specs/features/F-243.md 3.2, F-2136)
+import type { AccessRequestRow } from '../lib/accessRequest'
+
 export type ShareLinkRow = {
   token: string
   targetType: 'doc' | 'folder'
@@ -40,10 +42,25 @@ function classifyStatus(status: number): SharesErrorKind | null {
   return null
 }
 
-export async function listShares(): Promise<{ links: ShareLinkRow[]; grants: ShareGrantRow[] }> {
+export async function listShares(): Promise<{ links: ShareLinkRow[]; grants: ShareGrantRow[]; requests: AccessRequestRow[] }> {
   const res = await send('/api/shares')
   const kind = classifyStatus(res.status)
   if (kind) throw new SharesApiError(kind)
   if (!res.ok) throw new SharesApiError('other')
-  return (await res.json()) as { links: ShareLinkRow[]; grants: ShareGrantRow[] }
+  return (await res.json()) as { links: ShareLinkRow[]; grants: ShareGrantRow[]; requests: AccessRequestRow[] }
 }
+
+export type AccessRequestDecision = 'ok' | 'gone' | 'failed'
+
+async function decideAccessRequest(id: string, action: 'approve' | 'reject'): Promise<AccessRequestDecision> {
+  try {
+    const res = await fetch(`/api/access-requests/${encodeURIComponent(id)}/${action}`, { credentials: 'same-origin', method: 'POST' })
+    if (res.status === 200 || res.status === 204) return 'ok'
+    return res.status === 404 ? 'gone' : 'failed'
+  } catch {
+    return 'failed'
+  }
+}
+
+export const approveAccessRequest = (id: string) => decideAccessRequest(id, 'approve')
+export const rejectAccessRequest = (id: string) => decideAccessRequest(id, 'reject')

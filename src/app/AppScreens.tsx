@@ -21,7 +21,7 @@ const MapPage = lazy(() => import('./MapPage'))
 export type AppScreensProps = Pick<UseAccountStatusResult, 'account'> &
   Pick<UseAppearancePrefsResult, 'contentWidthPref'> &
   Pick<UseImportFlowResult, 'requestImport'> &
-  Pick<UseSharesPageResult, 'loginFromShares' | 'revokeShareGrantRow' | 'revokeShareLinkRow' | 'sharesGrants' | 'sharesLinks' | 'sharesLoading'> &
+  Pick<UseSharesPageResult, 'approveRequestRow' | 'busyRequestIds' | 'loginFromShares' | 'rejectRequestRow' | 'revokeShareGrantRow' | 'revokeShareLinkRow' | 'sharesGrants' | 'sharesLinks' | 'sharesLoading' | 'sharesRequests'> &
   Pick<UseContextMenuResult, 'handleViewContextMenu'> & {
     bootPhase: 'booting' | 'ready'
     closeMap: () => void
@@ -51,10 +51,10 @@ export type AppScreensProps = Pick<UseAccountStatusResult, 'account'> &
   }
 
 export default function AppScreens({
-  account, bootPhase, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs, e2ee, goHome,
+  account, approveRequestRow, bootPhase, busyRequestIds, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs, e2ee, goHome,
   handleOpenWikiLink, handleViewContextMenu, helpOpen, importSharedDoc, isEmpty, listSource, loginFromShares, mapDialogScope, mapRoute, openHelp,
-  openSharesTarget, ownedDocs, recenterMap, requestImport, revokeShareGrantRow, revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc,
-  sharesGrants, sharesLinks, sharesLoading, sharesOpen, showNotice,
+  openSharesTarget, ownedDocs, recenterMap, rejectRequestRow, requestImport, revokeShareGrantRow, revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc,
+  sharesGrants, sharesLinks, sharesLoading, sharesOpen, sharesRequests, showNotice,
 }: AppScreensProps) {
   return (
     <>
@@ -86,10 +86,14 @@ export default function AppScreens({
             loading={account.state === 'in' && sharesLoading}
             links={account.state === 'in' ? sharesLinks : []}
             grants={account.state === 'in' ? sharesGrants : []}
+            requests={account.state === 'in' ? sharesRequests : []}
+            busyRequestIds={busyRequestIds}
             onClose={goHome}
             onOpenTarget={openSharesTarget}
             onRevokeLink={revokeShareLinkRow}
             onRevokeGrant={revokeShareGrantRow}
+            onApproveRequest={approveRequestRow}
+            onRejectRequest={rejectRequestRow}
             onLogin={loginFromShares}
             onNotice={showNotice}
           />

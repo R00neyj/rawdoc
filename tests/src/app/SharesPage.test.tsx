@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import SharesPage from '../../../src/app/SharesPage'
 import type { ShareLinkRow, ShareGrantRow } from '../../../src/app/sharesApi'
+import type { AccessRequestRow } from '../../../src/lib/accessRequest'
 
 type Node =
   | { type: unknown; props?: { className?: unknown; children?: unknown; onClick?: (...a: unknown[]) => unknown } }
@@ -44,10 +45,14 @@ const baseProps = {
   loading: false,
   links: [] as ShareLinkRow[],
   grants: [] as ShareGrantRow[],
+  requests: [] as AccessRequestRow[],
+  busyRequestIds: [] as string[],
   onClose: () => {},
   onOpenTarget: () => {},
   onRevokeLink: async () => {},
   onRevokeGrant: async () => {},
+  onApproveRequest: async () => {},
+  onRejectRequest: async () => {},
   onLogin: () => {},
   onNotice: () => {},
 }
@@ -148,5 +153,56 @@ describe('F-243 A6 대상 이동', () => {
     expect(buttons).toHaveLength(1)
     buttons[0].props?.onClick?.()
     expect(onOpenTarget).toHaveBeenCalledWith('doc', 'd1')
+  })
+})
+
+describe('F-2136 U3 권한 요청 묶음', () => {
+  const req1: AccessRequestRow = { id: 'r1', targetType: 'doc', targetId: 'd1', targetName: '기획안', email: 'a@x.com', name: '가나다', role: 'edit', createdAt: CREATED_AT }
+  const req2: AccessRequestRow = { id: 'r2', targetType: 'folder', targetId: 'f1', targetName: '업무', email: 'b@x.com', name: '', role: 'view', createdAt: CREATED_AT }
+
+  it('요청 0개면 묶음을 그리지 않는다', () => {
+    const tree = SharesPage({ ...baseProps, links: [link1] })
+    expect(collect(tree, 'shares-request-row')).toHaveLength(0)
+    expect(textOf(tree)).not.toContain('권한 요청')
+  })
+
+  it('요청 2개면 행 2개, 머리에 수 2', () => {
+    const tree = SharesPage({ ...baseProps, requests: [req1, req2] })
+    expect(collect(tree, 'shares-request-row')).toHaveLength(2)
+    expect(textOf(collect(tree, 'shares-group-title')[0])).toBe('권한 요청 2')
+  })
+
+  it('행 내용: 요청자 이름·이메일, 이름이 비면 이메일만, 권한·날짜', () => {
+    const rows = collect(SharesPage({ ...baseProps, requests: [req1, req2] }), 'shares-request-row')
+    expect(textOf(rows[0])).toContain('기획안')
+    expect(textOf(rows[0])).toContain('문서')
+    expect(textOf(rows[0])).toContain('가나다 · a@x.com')
+    expect(textOf(rows[0])).toContain('편집')
+    expect(textOf(rows[0])).toContain(CREATED_DATE_STR)
+    expect(textOf(rows[1])).toContain('폴더')
+    expect(textOf(rows[1])).toContain('보기')
+    expect(textOf(collect(rows[1], 'shares-request-who')[0])).toBe('b@x.com')
+  })
+
+  it('요청만 있어도 빈 상태 문구는 없다', () => {
+    expect(collect(SharesPage({ ...baseProps, requests: [req1] }), 'shares-empty')).toHaveLength(0)
+  })
+
+  it('승인·거절 버튼은 그 행으로 콜백을 부른다', () => {
+    const onApproveRequest = vi.fn().mockResolvedValue(undefined)
+    const onRejectRequest = vi.fn().mockResolvedValue(undefined)
+    const tree = SharesPage({ ...baseProps, requests: [req1, req2], onApproveRequest, onRejectRequest })
+    collect(tree, 'shares-request-approve')[1].props?.onClick?.()
+    collect(tree, 'shares-request-reject')[0].props?.onClick?.()
+    expect(onApproveRequest).toHaveBeenCalledWith(req2)
+    expect(onRejectRequest).toHaveBeenCalledWith(req1)
+  })
+
+  it('보내는 중인 행은 두 버튼이 비활성', () => {
+    const tree = SharesPage({ ...baseProps, requests: [req1, req2], busyRequestIds: ['r1'] })
+    const approve = collect(tree, 'shares-request-approve') as { props: { disabled?: boolean } }[]
+    const reject = collect(tree, 'shares-request-reject') as { props: { disabled?: boolean } }[]
+    expect([approve[0].props.disabled, reject[0].props.disabled]).toEqual([true, true])
+    expect([approve[1].props.disabled, reject[1].props.disabled]).toEqual([false, false])
   })
 })
