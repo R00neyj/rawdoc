@@ -1,5 +1,5 @@
 // 공개 보기 화면 S-5 (specs/features/F-210.md 2.4, F-209.md 2.6, F-211.md 2.3) — 저장소를 열지 않는다, 사이드바·상단바·상태바 없음
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { EditorState } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import type { EditorView } from '@codemirror/view'
@@ -18,6 +18,7 @@ import NoticeBar from './NoticeBar'
 import type { Notice } from './notice'
 import { findViewerHeadingElByLine, topInScroller } from './outlinePosition'
 import { IconDownload, IconSettings, IconPanelOpen, IconPanelClose, IconRefresh, IconTooltip } from './icons'
+import AccessRequestControl from './AccessRequestControl'
 import { buildExportPayload } from './exportDoc'
 import SettingsDialog from './SettingsDialog'
 import {
@@ -155,6 +156,7 @@ function DocPane({
   resolveImagePath,
   onOpenWikiLink,
   shownDocId = null,
+  headerAction,
   headingRequest = null,
   onHeadingDone,
 }: {
@@ -171,6 +173,7 @@ function DocPane({
   onOpenWikiLink?: (target: string, heading?: string | null) => void
   // 지금 그리는 문서 id 와 이동할 제목 — 그 문서가 그려진 뒤 한 번 이동하고 onHeadingDone(찾았나) (F-2018 11.3)
   shownDocId?: string | null
+  headerAction?: ReactNode
   headingRequest?: HeadingRequest | null
   onHeadingDone?: (request: HeadingRequest, found: boolean) => void
 }) {
@@ -220,6 +223,7 @@ function DocPane({
           )}
           <h1 className="public-view-title">{title}</h1>
         </div>
+        {headerAction}
         <span className="icon-btn-wrap">
           <button type="button" className="icon-btn public-view-settings" aria-label="설정" onClick={() => setSettingsOpen(true)}>
             <IconSettings size={18} />
@@ -514,6 +518,7 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
         resolveImagePath={resolveImagePath}
         onOpenWikiLink={onOpenWikiLink}
         shownDocId={shownDocId}
+        headerAction={<AccessRequestControl token={token} docId={isStartDoc ? null : activeDocId} variant="icon" openIn="reload" onNotice={showNotice} />}
         headingRequest={headingRequest}
         onHeadingDone={onHeadingDone}
       />
@@ -802,6 +807,7 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
             resolveImagePath={resolveImagePath}
             onOpenWikiLink={onOpenWikiLink}
             shownDocId={activeDocId}
+            headerAction={<AccessRequestControl token={token} docId={null} variant="icon" openIn="reload" onNotice={showNotice} />}
             headingRequest={headingRequest}
             onHeadingDone={onHeadingDone}
           />

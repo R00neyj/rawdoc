@@ -31,6 +31,9 @@
 
 |파일|하는 일|
 |---|---|
+|`src/app/accessRequestApi.ts`|링크로 보는 문서의 권한 요청 상태를 묻고 요청을 보내거나 취소함|
+|`src/app/AccessRequestControl.tsx`|공개 보기 머리 줄의 `앱에서 열기`·`권한 요청` 버튼과 권한 요청 창|
+|`src/app/accessRequestView.ts`|권한 요청 상태를 보고 어떤 버튼·문구를 보일지 정함|
 |`src/app/account.ts`|로그인 상태를 서버에 물어보고 로그인·로그아웃 주소를 정함|
 |`src/app/accountDelete.ts`|계정 삭제 요청과 삭제 뒤 이 기기 정리 순서를 처리함|
 |`src/app/AccountDeleteDialog.tsx`|계정 삭제 창. 삭제될 내용 확인, 다시 로그인, 확인 문구 입력 후 삭제함|
