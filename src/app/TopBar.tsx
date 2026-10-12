@@ -1,11 +1,12 @@
 // 상단바 — 보기 모드 토글(F-107·F-123), .md 내보내기(F-112), 공유(F-130), 아이콘·툴팁(F-142 3.2·3.3), 좁은 창 전용 앞 묶음(F-159 2.1) (ia.md 2장 A, F-102.md 5.3)
-import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
+import { useRef, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
 import type { Command } from '@codemirror/view'
 import ShareMenu from './ShareMenu'
 import ExportMenu from './ExportMenu'
 import GithubMenu, { type GithubMenuProps } from './GithubMenu'
 import NotificationsMenu, { type NotificationsMenuProps } from './NotificationsMenu'
 import EditorToolbar from './EditorToolbar'
+import ToolbarImageInput from './ToolbarImageInput'
 import { IconTooltip, IconForum, IconRightPanelClose, IconRightPanelOpen } from './icons'
 import { commentBadgeText } from './commentRail'
 import SidebarHead from './SidebarHead'
@@ -106,6 +107,8 @@ export default function TopBar({
   rightPanel,
 }: TopBarProps) {
   const phone = usePhoneWidth()
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
+  const pickImage = () => imageInputRef.current?.click()
   // 휴대폰 폭은 버튼 없이 왼쪽 밀기로 연다(usePhoneSidePanel)
   const rightPanelButton = rightPanel && (
     <span className="icon-btn-wrap">
@@ -129,7 +132,7 @@ export default function TopBar({
           />
         )}
         <div className="topbar-spacer">
-          {showToolbar && !narrow && <EditorToolbar onRunCommand={onRunToolbarCommand} />}
+          {showToolbar && !narrow && <EditorToolbar onRunCommand={onRunToolbarCommand} onPickImage={pickImage} />}
         </div>
         <PeerAvatars peers={peers} selfUserId={selfUserId} narrow={narrow} />
         {phone ? (
@@ -221,9 +224,10 @@ export default function TopBar({
       {/* 좁은 창은 탭바를 상단바 밑 줄로 뺀다 — 아이콘 줄이 세로로도 접혀(2줄) 가로 스크롤 없이 다 보인다 (사용자 2026-09-16 "모바일일때가 툴바 더 필요할거임") */}
       {narrow && showToolbar && (
         <div className={toolbarDocked ? 'editor-toolbar-row editor-toolbar-row--docked' : 'editor-toolbar-row'} onMouseDown={onToolbarRowMouseDown}>
-          <EditorToolbar onRunCommand={onRunToolbarCommand} narrow docked={toolbarDocked} />
+          <EditorToolbar onRunCommand={onRunToolbarCommand} narrow docked={toolbarDocked} onPickImage={pickImage} />
         </div>
       )}
+      <ToolbarImageInput inputRef={imageInputRef} onRunCommand={onRunToolbarCommand} />
     </>
   )
 }

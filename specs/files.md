@@ -203,6 +203,7 @@
 |`src/app/theme.ts`|설정과 기기 설정을 보고 밝은·세피아·어두운 테마를 정함|
 |`src/app/ToolbarCategoryMenu.tsx`|휴대폰 서식 도구줄에서 서식 분류를 고르는 펼침 메뉴|
 |`src/app/toolbarConfig.ts`|상단 서식 도구 막대에 놓을 버튼 목록을 정함|
+|`src/app/ToolbarImageInput.tsx`|서식 도구줄 `이미지` 버튼이 여는 숨은 사진 선택 칸. 휴대폰에서 도구줄이 사라져도 고른 사진을 받음|
 |`src/app/TopBar.tsx`|화면 위 상단바(보기 방식 전환·내보내기·공유·댓글·접속자 등)|
 |`src/app/topBarMore.ts`|휴대폰 상단바 ⋯ 메뉴에 보일 항목을 정함|
 |`src/app/TopBarMoreSheet.tsx`|휴대폰 상단바 `더보기`로 여는 목차·댓글·공유·내보내기·알림 시트|

@@ -1,11 +1,10 @@
 // 상단바 서식 탭바 (specs/features/F-233.md 3.2·3.3) — F-167·168·169 명령을 탭 3개 + 아이콘 버튼 줄로
-import { Fragment, useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { indentMore } from '@codemirror/commands'
 import type { Command } from '@codemirror/view'
 
 import { IconDropdown, IconIndent, IconRedo, IconTooltip, IconUndo } from './icons'
 import { redoLocal, undoLocal } from '../editor/yBinding'
-import { insertPickedImages } from '../editor/imageInsert'
 import usePresence from './usePresence'
 import { toolbarTabs, type ToolbarTabId } from './toolbarConfig'
 import ToolbarCategoryMenu from './ToolbarCategoryMenu'
@@ -16,9 +15,11 @@ type EditorToolbarProps = {
   narrow?: boolean
   // 휴대폰 폭 앱 틀 맨 아래 줄 — 제목 목록·툴팁을 버튼 위로 연다 (F-2084 3.6)
   docked?: boolean
+  // '이미지' 버튼 — 숨은 파일 입력은 서식 바가 사라져도 남도록 TopBar 가 갖는다 (ToolbarImageInput)
+  onPickImage: () => void
 }
 
-export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorToolbarProps) {
+export default function EditorToolbar({ onRunCommand, narrow, docked, onPickImage }: EditorToolbarProps) {
   const [activeTab, setActiveTab] = useState<ToolbarTabId>('format')
   const [headingOpen, setHeadingOpen] = useState(false)
   // docked 에서 손가락으로 열면 첫 항목에 포커스를 주지 않는다 — 편집기 blur 로 키보드가 내려가 목록 좌표가 어긋난다 (F-2084 3.6)
@@ -28,7 +29,6 @@ export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorTo
   const headingBtnRef = useRef<HTMLButtonElement | null>(null)
   const headingMenuRef = useRef<HTMLUListElement | null>(null)
   const headingItemRefs = useRef<(HTMLButtonElement | null)[]>([])
-  const imageInputRef = useRef<HTMLInputElement | null>(null)
 
   const tab = toolbarTabs.find((t) => t.id === activeTab) ?? toolbarTabs[0]
 
@@ -92,13 +92,6 @@ export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorTo
 
   function runCommand(cmd: Command) {
     onRunCommand(cmd)
-  }
-
-  // 같은 파일을 다시 골라도 change 가 오도록 값을 비운다
-  function handleImagePicked(e: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
-    e.target.value = ''
-    if (files.length > 0) onRunCommand((view) => insertPickedImages(view, files))
   }
 
   function runHeading(cmd: Command) {
@@ -280,7 +273,7 @@ export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorTo
                 type="button"
                 className="editor-toolbar-btn"
                 aria-label={item.label}
-                onClick={() => (item.kind === 'image' ? imageInputRef.current?.click() : runCommand(item.run))}
+                onClick={() => (item.kind === 'image' ? onPickImage() : runCommand(item.run))}
               >
                 <item.Icon size={18} />
               </button>
@@ -290,14 +283,6 @@ export default function EditorToolbar({ onRunCommand, narrow, docked }: EditorTo
           </Fragment>
         ))}
       </div>
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/gif,image/webp"
-        multiple
-        hidden
-        onChange={handleImagePicked}
-      />
       {docked && <ToolbarCategoryMenu activeTab={activeTab} onSelect={selectTab} />}
     </div>
   )

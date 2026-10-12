@@ -40,6 +40,24 @@ test.describe('small 휴대폰 서식 바 (390×844, 터치)', () => {
     await expect.poll(() => page.evaluate(() => document.activeElement === document.querySelector('.cm-host .cm-content'))).toBe(true)
   })
 
+  test('small 휴대폰 이미지 — 고르는 동안 키보드가 내려가 서식 바가 사라져도 고른 이미지가 본문에 들어간다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '첫째\n' })
+    await page.locator('.cm-content .cm-line', { hasText: '첫째' }).tap()
+    await fakeSoftKeyboard(page, true)
+    await page.keyboard.press('End')
+    const row = page.locator('.editor-toolbar-row--docked')
+    await row.getByRole('button', { name: /^서식 분류/ }).tap()
+    await page.getByRole('menuitemradio', { name: '삽입' }).tap()
+
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), row.getByRole('button', { name: '이미지', exact: true }).tap()])
+    // 실기기는 파일 고르기 창이 뜨면 가상 키보드가 내려가고, 서식 바는 키보드가 열려 있을 때만 보인다
+    await fakeSoftKeyboard(page, false)
+    await expect(page.locator('.editor-toolbar')).toHaveCount(0)
+    await chooser.setFiles({ name: '사진.png', mimeType: 'image/png', buffer: pngBuffer(40, 20) })
+    await expect.poll(async () => (await readSavedContent(page)).content).toMatch(/^첫째\n+!\[사진\|center\|\d+\]\(attachments\/[0-9a-f]{16}\.png\)/)
+  })
+
   test('small 툴바 들여쓰기 — Tab 버튼이 목록 줄을 들여쓴다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '- 하나\n- 둘\n' })

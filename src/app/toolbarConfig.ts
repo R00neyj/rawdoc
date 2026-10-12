@@ -83,7 +83,7 @@ export type ToolbarHeadingItem = {
   sep?: boolean
 }
 
-// 이미지는 명령이 아니라 파일 고르기 창을 연다 — EditorToolbar 가 숨은 파일 입력으로 처리한다
+// 이미지는 명령이 아니라 파일 고르기 창을 연다 — TopBar 의 숨은 파일 입력(ToolbarImageInput)이 처리한다
 export type ToolbarImageItem = { kind: 'image'; id: 'image'; label: string; Icon: IconComponent; sep?: boolean }
 
 export type ToolbarItem = ToolbarCommandItem | ToolbarHeadingItem | ToolbarImageItem
