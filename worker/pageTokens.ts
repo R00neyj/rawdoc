@@ -23,7 +23,7 @@ export const PAGE_TOKENS_CSS = `:root {
         --page: 1060px;
       }`
 
-// 앱 다크 테마(tokens.css :root[data-theme='dark']) 값의 사본 — 랜딩 스토리 무대를 JS 없이도 어둡게 칠할 때 그 범위에만 건다
+// 앱 다크 테마(tokens.css :root[data-theme='dark']) 값의 사본 — 랜딩 다크 테마 페이지와, 테마와 무관하게 스토리 무대에 건다
 export const PAGE_DARK_VARS = `color-scheme: dark;
         --paper: #1a1917;
         --panel: #21201d;

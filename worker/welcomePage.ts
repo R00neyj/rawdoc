@@ -11,6 +11,7 @@ import {
   STORY_WIKI_NODES,
 } from '../src/welcome/storyDoc'
 import { PAGE_DARK_VARS, PAGE_TOKENS_CSS } from './pageTokens'
+import { LANDING_THEME_SCRIPT } from '../src/lib/pageTheme'
 
 const siteUrl = SITE_URL
 const pageTitle = `한국어로 쓰는 마크다운 협업 도구 — ${brand.name}`
@@ -89,6 +90,8 @@ const siteFooter = renderSiteFooter({ brandName: brand.name })
 
 // JS 가 켜졌다는 표시 — 등장 전에 숨길 글자(.tw)는 이 표시가 있을 때만 숨긴다. 크롤러·JS 꺼짐에는 완성 글자가 보인다 (F-239 2.1)
 const jsFlagScript = `<script>document.documentElement.classList.add('js')</script>`
+// 앱에서 고른 테마(없으면 시스템 설정)로 첫 칠부터 — 스타일보다 앞에 둔다
+const themeScript = `<script>${LANDING_THEME_SCRIPT}</script>`
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -250,6 +253,7 @@ export function renderWelcomePage(options?: { path?: LandingPath; nonce?: string
     ${jsFlagScript}
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    ${themeScript}
     <title>${pageTitle}</title>
     <meta name="description" content="${subheadText}" />
     <meta name="theme-color" content="${brand.accent}" />
@@ -399,9 +403,11 @@ export function renderWelcomePage(options?: { path?: LandingPath; nonce?: string
       html[data-cookie-escape='1'] .cookie-escape { display: block; }
       .cookie-escape a { color: var(--accent); }
 
-      /* 스토리 무대 — JS 없이도 이 범위만 앱 다크 값으로 칠한다. JS 가 붙으면(.is-live) 스크롤로 조종된다 */
-      .story {
+      /* 앱 다크 값 — 다크 테마면 페이지 전체, 아니어도 스토리 무대는 JS 없이 이 값으로 칠한다. JS 가 붙으면(.is-live) 스크롤로 조종된다 */
+      :root[data-theme='dark'], .story {
         ${PAGE_DARK_VARS}
+      }
+      .story {
         --mark-soft: color-mix(in srgb, var(--accent) 50%, var(--paper));
         background: var(--paper);
         color: var(--ink);

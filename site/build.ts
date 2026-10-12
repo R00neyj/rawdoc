@@ -8,6 +8,7 @@ import { buildDocNav } from './pageNav'
 import { renderSiteHeader, renderSiteFooter, SITE_CHROME_CSS, SITE_NAV, SITE_FOOTER_LINKS } from '../src/lib/siteChrome'
 import { SITE_DESCRIPTION, SITE_URL } from '../src/lib/siteMeta'
 import brand from '../brand.config'
+import { SITE_THEME_SCRIPT, SITE_THEME_SCRIPT_PATH } from '../src/lib/pageTheme'
 
 export type SiteInput = {
   content: Record<string, string>
@@ -32,6 +33,7 @@ function render404(appCssHref: string): string {
     <meta name="robots" content="noindex">
     <meta name="theme-color" content="${brand.accent}" />
     <link rel="icon" href="${brand.icon}" />
+    <script src="${SITE_THEME_SCRIPT_PATH}"></script>
     <style>:root{--brand-accent:${brand.accent}}</style>
     <link rel="stylesheet" href="${appCssHref}" />
     <style>${SITE_CHROME_CSS}</style>
@@ -134,6 +136,7 @@ export function buildSite(input: SiteInput): Record<string, string> {
   }
 
   out['404.html'] = render404(input.appCssHref)
+  out[SITE_THEME_SCRIPT_PATH.slice(1)] = SITE_THEME_SCRIPT
   out['sitemap.xml'] = renderSitemap(['/', ...urls].sort(), lastmodByUrl)
   out['robots.txt'] = renderRobots()
   const pick = (paths: string[]) => paths.flatMap((path) => (pageLinks.has(path) ? [pageLinks.get(path)!] : []))

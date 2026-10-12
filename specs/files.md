@@ -417,6 +417,7 @@
 |`src/lib/mathSyntax.ts`|본문에서 $수식$ 영역을 찾음|
 |`src/lib/mermaidRender.ts`|글로 쓴 도표(머메이드)를 그림으로 그려 냄|
 |`src/lib/obsidianImage.ts`|그림 줄을 옵시디언 형식과 서로 바꿈|
+|`src/lib/pageTheme.ts`|공개 사이트와 랜딩이 앱에서 고른 테마(없으면 시스템 라이트/다크)로 처음부터 칠해지게 하는 작은 스크립트|
 |`src/lib/panelSlots.ts`|오른쪽 패널 칸마다 어떤 보기를 띄울지 정하고 기억함|
 |`src/lib/peers.ts`|함께 접속한 사람 목록과 색·표시 인원을 정함|
 |`src/lib/pushApi.ts`|푸시 알림 신청·해지 때 주고받는 내용 형식을 정함|

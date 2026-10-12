@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { renderWelcomePage } from '../../worker/welcomePage'
 import brand from '../../brand.config'
 import { APP_COOKIE, LANDING_DONE_KEY } from '../../src/lib/appEntry'
+import { LANDING_THEME_SCRIPT } from '../../src/lib/pageTheme'
 
 function stripTags(html: string): string {
   return html.replace(/<[^>]+>/g, '')
@@ -163,8 +164,8 @@ describe('F-2051 A3 renderWelcomePage — 두 판의 차이', () => {
 describe('F-4001 U8 nonce', () => {
   const execScripts = (html: string) => html.match(/<script(?![^>]*\bsrc=)(?![^>]*application\/ld\+json)[^>]*>/g) ?? []
   it.each([
-    ['/', 4],
-    ['/welcome', 3],
+    ['/', 5],
+    ['/welcome', 4],
   ] as const)('%s: 실행 인라인 스크립트 %i개 모두 nonce', async (path, count) => {
     const html = await renderWelcomePage({ path, nonce: 'n' }).text()
     const tags = execScripts(html)
@@ -174,5 +175,15 @@ describe('F-4001 U8 nonce', () => {
   })
   it('인자 없으면 nonce 없음', async () => {
     expect(await renderWelcomePage().text()).not.toContain('nonce=')
+  })
+})
+
+describe('랜딩 라이트·다크 (small change 2026-10-12)', () => {
+  it.each(['/', '/welcome'] as const)('%s: 테마 스크립트가 첫 <style> 보다 앞이고 다크 테마 루트 규칙이 있다', async (path) => {
+    const html = await renderWelcomePage({ path }).text()
+    const at = html.indexOf(`<script>${LANDING_THEME_SCRIPT}</script>`)
+    expect(at).toBeGreaterThan(html.indexOf('<meta charset'))
+    expect(at).toBeLessThan(html.indexOf('<style>'))
+    expect(html).toContain(":root[data-theme='dark'], .story {")
   })
 })

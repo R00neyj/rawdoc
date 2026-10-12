@@ -5,6 +5,7 @@ import { HELP_CONTENT_PATH } from '../../site/helpPage'
 import { GUIDES_INDEX_PATH } from '../../site/guidesIndex'
 import brand from '../../brand.config'
 import { SITE_NAV, SITE_FOOTER_LINKS } from '../../src/lib/siteChrome'
+import { SITE_THEME_SCRIPT, SITE_THEME_SCRIPT_PATH } from '../../src/lib/pageTheme'
 
 const builtAt = new Date('2026-09-20T00:00:00Z')
 const appCssHref = '/assets/index-abc.css'
@@ -18,26 +19,26 @@ afterAll(() => {
 })
 
 describe('F-272 A5 빈 content', () => {
-  // 도움말(help.html)·사용법 목록(guides.html)은 content 와 무관하게 buildSite 가 항상 만들어 낸다 (F-274.md 3장, F-276.md 3.3) — 그래서 llms.txt 까지 여섯이다
-  it('키가 정확히 404.html·guides.html·help.html·llms.txt·robots.txt·sitemap.xml 여섯이다', () => {
+  // 도움말(help.html)·사용법 목록(guides.html)은 content 와 무관하게 buildSite 가 항상 만들어 낸다 (F-274.md 3장, F-276.md 3.3) — 그래서 llms.txt·site-theme.js 까지 일곱이다
+  it('키가 정확히 404.html·guides.html·help.html·llms.txt·robots.txt·site-theme.js·sitemap.xml 일곱이다', () => {
     const out = buildSite({ content: {}, appCssHref, builtAt })
-    expect(Object.keys(out).sort()).toEqual(['404.html', 'guides.html', 'help.html', 'llms.txt', 'robots.txt', 'sitemap.xml'])
+    expect(Object.keys(out).sort()).toEqual(['404.html', 'guides.html', 'help.html', 'llms.txt', 'robots.txt', 'site-theme.js', 'sitemap.xml'])
   })
 })
 
 describe('F-274 A5 글이 없어도 도움말은 난다', () => {
-  it('키가 정확히 404.html·guides.html·help.html·llms.txt·robots.txt·sitemap.xml 여섯이다', () => {
+  it('키가 정확히 404.html·guides.html·help.html·llms.txt·robots.txt·site-theme.js·sitemap.xml 일곱이다', () => {
     const out = buildSite({ content: {}, appCssHref, builtAt })
-    expect(Object.keys(out).sort()).toEqual(['404.html', 'guides.html', 'help.html', 'llms.txt', 'robots.txt', 'sitemap.xml'])
+    expect(Object.keys(out).sort()).toEqual(['404.html', 'guides.html', 'help.html', 'llms.txt', 'robots.txt', 'site-theme.js', 'sitemap.xml'])
   })
 })
 
 describe('F-274 A6 페이지·색인 내용', () => {
-  it('help.html 에 title·canonical 이 있고 script 가 없다', () => {
+  it('help.html 에 title·canonical 이 있고 테마 파일 밖 script 가 없다', () => {
     const out = buildSite({ content: {}, appCssHref, builtAt })
     expect(out['help.html']).toContain('<title>도움말 · Rawdoc</title>')
     expect(out['help.html']).toContain('rel="canonical" href="https://rawdoc.app/help"')
-    expect(out['help.html']).not.toMatch(/<script(?![^>]*type="application\/ld\+json")/)
+    expect(out['help.html']).not.toMatch(/<script(?![^>]*type="application\/ld\+json")(?! src="\/site-theme\.js"><\/script>)/)
   })
 
   it('sitemap.xml 에 /help 항목이 빌드 시각 lastmod 로 들어간다', () => {
@@ -66,6 +67,14 @@ describe('F-272 A6 404·sitemap·robots', () => {
     expect(out['404.html']).toContain('<meta name="robots" content="noindex">')
     expect(out['404.html']).toContain(brand.name)
     expect(out['404.html']).toContain('앱 열기')
+  })
+
+  it('site-theme.js 가 테마 스크립트이고 404.html 도 그 파일을 스타일보다 먼저 읽는다 (small change 2026-10-12)', () => {
+    expect(out['site-theme.js']).toBe(SITE_THEME_SCRIPT)
+    const tag = `<script src="${SITE_THEME_SCRIPT_PATH}"></script>`
+    expect(SITE_THEME_SCRIPT_PATH).toBe('/site-theme.js')
+    expect(out['404.html'].indexOf(tag)).toBeGreaterThan(-1)
+    expect(out['404.html'].indexOf(tag)).toBeLessThan(out['404.html'].indexOf('<link rel="stylesheet"'))
   })
 
   it('sitemap.xml 에 / 만 있고 404 는 없다', () => {

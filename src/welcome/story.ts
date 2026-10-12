@@ -129,6 +129,12 @@ export function mountStory(section: HTMLElement): void {
     bytesEl.textContent = `${encoder.encode(view.state.doc.toString()).length}바이트`
   }
   showBytes()
+  // 머리 스크립트가 정한 페이지 테마 — 무대를 벗어나면 이 값으로 돌아간다
+  const pageTheme = document.documentElement.getAttribute('data-theme')
+  const restorePageTheme = (): void => {
+    if (pageTheme === null) document.documentElement.removeAttribute('data-theme')
+    else document.documentElement.setAttribute('data-theme', pageTheme)
+  }
 
   // 움직임 줄이기 — 고정·스크럽 없이 편집기만 실제로 두고, 장면 설명은 문서 흐름대로 읽힌다
   if (reduce) return
@@ -369,7 +375,7 @@ export function mountStory(section: HTMLElement): void {
       end: 'bottom 45%',
       onToggle: (self) => {
         if (self.isActive) document.documentElement.setAttribute('data-theme', 'dark')
-        else document.documentElement.removeAttribute('data-theme')
+        else restorePageTheme()
       },
     })
 
@@ -383,7 +389,7 @@ export function mountStory(section: HTMLElement): void {
     // 연출이 깨져도 정적 설명과 편집기는 읽혀야 한다 — 고정·숨김을 모두 걷는다 (F-2049 5.1)
     for (const trigger of ScrollTrigger.getAll()) trigger.kill(true)
     section.classList.remove('is-live')
-    document.documentElement.removeAttribute('data-theme')
+    restorePageTheme()
     host.inert = false
     console.error(err)
   }

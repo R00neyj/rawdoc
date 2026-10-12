@@ -56,4 +56,14 @@ test('F-276 A15 사이드바 사용법 항목이 새 탭으로 연다', async ({
   await expect(popup.getByRole('heading', { level: 1, name: '사용법' })).toBeVisible()
   await expect(page.locator('.cm-host .cm-editor, .empty-state')).toBeVisible()
 })
-
+
+test('사이트 페이지가 시스템 다크를 따르고 앱에서 고른 테마가 그보다 앞선다 (small change 2026-10-12)', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.goto('/changelog')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+
+  await page.evaluate(() => localStorage.setItem('md.theme', 'white'))
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'white')
+})
+

@@ -8,6 +8,7 @@ import { calloutIconSvg } from '../src/lib/calloutIcons'
 import { jsonLdScript, sitePageGraph } from '../src/lib/structuredData'
 import brand from '../brand.config'
 import { siteHeadings, addHeadingIds, renderDocNav, renderToc, renderFold, insertFoldIntoBody, type DocNav } from './pageNav'
+import { SITE_THEME_SCRIPT_PATH } from '../src/lib/pageTheme'
 
 // 인라인 코드가 `[!종류]` 하나뿐이고 그 이름이 별칭 표에 있으면 앞에 앱과 같은 콜아웃 아이콘을 붙인다.
 // 사이트 글에만 — 앱 보기 모드(renderMarkdown)는 사용자 문서를 그리므로 건드리지 않는다 (tweak 2026-09-28)
@@ -105,6 +106,7 @@ export function renderSitePage(input: { url: string; raw: string; appCssHref: st
     <meta property="og:url" content="${canonical}" />
     <meta property="og:locale" content="ko_KR" />
     ${jsonLdScript(sitePageGraph({ url: input.url, ...meta }))}
+    <script src="${SITE_THEME_SCRIPT_PATH}"></script>
     <style>:root{--brand-accent:${brand.accent}}</style>
     <link rel="stylesheet" href="${input.appCssHref}" />
     <style>${SITE_CHROME_CSS}${SITE_DOC_CSS}</style>

@@ -9,8 +9,8 @@ import { helpContent } from '../../site/helpPage'
 import { guidesIndexContent } from '../../site/guidesIndex'
 import { buildDocNav, siteHeadings } from '../../site/pageNav'
 
-// 실행 스크립트 금지 — JSON-LD 데이터 블록(F-2121)만 허용
-const NON_LD_SCRIPT = /<script(?![^>]*type="application\/ld\+json")/
+// 실행 스크립트 금지 — JSON-LD 데이터 블록(F-2121)과 테마 외부 파일(small change 2026-10-12)만 허용
+const NON_LD_SCRIPT = /<script(?![^>]*type="application\/ld\+json")(?! src="\/site-theme\.js"><\/script>)/
 
 describe('F-272 A2 renderSitePage 페이지 뼈대', () => {
   it('뼈대 요소가 모두 채워지고 스크립트·프론트매터 표가 없다', () => {
@@ -25,6 +25,9 @@ describe('F-272 A2 renderSitePage 페이지 뼈대', () => {
     expect(html).toMatch(/property="og:description" content="요약"/)
     expect(html).toContain('<link rel="stylesheet" href="/assets/index-abc.css" />')
     expect(html).not.toMatch(NON_LD_SCRIPT)
+    // 테마 스크립트는 스타일보다 먼저 — 첫 칠부터 고른 테마
+    expect(html.indexOf('<script src="/site-theme.js"></script>')).toBeGreaterThan(-1)
+    expect(html.indexOf('<script src="/site-theme.js"></script>')).toBeLessThan(html.indexOf('<link rel="stylesheet"'))
     expect(html).not.toContain('markdown-frontmatter')
   })
 })
