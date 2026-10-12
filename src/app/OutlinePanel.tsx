@@ -29,7 +29,7 @@ export default function OutlinePanel({ headings, currentIndex, listRef, onSelect
 
   if (headings.length === 0) return <p className="side-panel-empty">이 문서에는 제목이 없습니다.</p>
   return (
-    <ol className="outline-panel-list" ref={listRef} aria-label="목차">
+    <ol className="outline-panel-list" data-ui="outline" ref={listRef} aria-label="목차">
       {headings.map((h, i) => (
         <li key={h.from} data-level={h.level}>
           <button
