@@ -59,9 +59,20 @@ export function replaceAppEntry(url: string): void {
   publish(pos!)
 }
 
-export function pushAppEntry(url: string, extra?: { settings: string }): void {
+export function readOverlayMark(state: unknown): string | null {
+  if (typeof state !== 'object' || state === null || !('overlay' in state)) return null
+  return typeof state.overlay === 'string' ? state.overlay : null
+}
+
+export function pushAppEntry(url: string, extra?: { settings: string } | { overlay: string }): void {
   const { unmarked } = ensureInit()
   if (unmarked) history.replaceState({ navIdx: pos!.idx }, '')
+  // 겹침 패널 표지 위의 이동은 표지 항목을 바꿔 써서 같은 화면이 기록에 두 번 남지 않게 한다
+  if (!(extra && 'overlay' in extra) && readOverlayMark(currentState()) !== null) {
+    history.replaceState({ navIdx: pos!.idx, ...extra }, '', url)
+    publish(pos!)
+    return
+  }
   const next = navOnPush(pos!)
   history.pushState({ navIdx: next.idx, ...extra }, '', url)
   publish(next)

@@ -209,6 +209,7 @@
 |`src/app/useAccountDelete.ts`|계정 삭제 예약과 남은 기간 안내, 취소를 처리함|
 |`src/app/useAccountStatus.ts`|계정 상태·이용 차단·경고 알림을 확인해 보여 줌|
 |`src/app/useAppearancePrefs.ts`|화면·편집기 모양 설정과 자동 잠금 설정을 바꾸고 적용함|
+|`src/app/useBackToClose.ts`|휴대폰에서 열린 사이드바 같은 겹침 창을 뒤로 가기로 닫게 함|
 |`src/app/useCalendarPanel.ts`|오른쪽 달력에서 날짜별 문서를 열거나 새로 만듦|
 |`src/app/useCommandPalette.ts`|명령 팔레트를 열고 명령·템플릿을 실행함|
 |`src/app/useCommentFab.ts`|글을 고르면 뜨는 `댓글 달기` 버튼 위치를 잡음|

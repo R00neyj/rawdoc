@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { getPref, setPref } from './prefs'
 import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } from './sidebarWidth'
+import { useBackToClose } from './useBackToClose'
 import { useEdgeSwipe } from './useEdgeSwipe'
 
 const NARROW_QUERY = '(max-width: 1023px)'
@@ -90,6 +91,7 @@ export function useSidebarLayout(options: UseSidebarLayoutOptions): UseSidebarLa
     onOpen: openSidebarBySwipe,
     onClose: closeSidebarBySwipe,
   })
+  useBackToClose('sidebar', narrow && sidebarOpen, closeSidebarBySwipe)
 
   // ----- 폴더 펼침 상태 (specs/architecture.md 4장 md.openFolders, F-126.md 5.1) -----
   // 이미 펼쳐진 폴더는 그대로 두고 목록에 없는 id 만 더한다(닫혀 있던 다른 폴더를 건드리지 않는다)
