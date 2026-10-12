@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { useOutlineSwipe } from './useOutlineSwipe'
 
-export type PhoneSideSections = { top: boolean; outline: boolean }
+export type PhoneSideSections = { top: boolean; outline: boolean; dayDocs: boolean }
 
 export type UsePhoneSidePanelResult = {
   sections: PhoneSideSections
@@ -33,8 +33,8 @@ export function usePhoneSidePanel(options: {
   onClose: () => void
 }): UsePhoneSidePanelResult {
   const { appShellRef, enabled, open, onOpen, onClose } = options
-  // 둘 다 펼친 반반이 기본. 패널을 닫아도 접은 상태는 이 실행 동안 기억한다
-  const [sections, setSections] = useState<PhoneSideSections>({ top: true, outline: true })
+  // 위·아래 칸은 펼친 반반, 달력 아래 그날 문서는 접힘이 기본. 패널을 닫아도 접은 상태는 이 실행 동안 기억한다
+  const [sections, setSections] = useState<PhoneSideSections>({ top: true, outline: true, dayDocs: false })
   const [outlineSlot, setOutlineSlot] = useState<HTMLElement | null>(null)
   const returnRef = useRef<HTMLElement | null>(null)
 

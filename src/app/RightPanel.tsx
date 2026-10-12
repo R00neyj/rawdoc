@@ -5,7 +5,7 @@ import usePresence from './usePresence'
 import PanelLinks from './PanelLinks'
 import PanelTodos from './PanelTodos'
 import PanelGraph from './PanelGraph'
-import CalendarDayDocs from './CalendarDayDocs'
+import CalendarDayDocs, { type DayDocsCollapse } from './CalendarDayDocs'
 import { PANEL_VIEW_LABELS, type PanelSlotState, type PanelViewId } from './useRightPanel'
 import type { CalendarView } from './useCalendarPanel'
 import type { DocGraphView, DocLinksView, DocTodosView } from './usePanelDocs'
@@ -18,7 +18,7 @@ function dayLabel(d: CalendarDay, hasDoc: boolean): string {
   return `${d.month + 1}월 ${d.day}일 ${weekday}요일${hasDoc ? ', 문서 있음' : ''}`
 }
 
-function CalendarMonth({ view }: { view: CalendarView }) {
+function CalendarMonth({ view, dayDocs }: { view: CalendarView; dayDocs?: DayDocsCollapse }) {
   const monthLabel = `${view.month.year}년 ${view.month.month + 1}월`
   return (
     <div className="calendar">
@@ -74,7 +74,7 @@ function CalendarMonth({ view }: { view: CalendarView }) {
           ))}
         </tbody>
       </table>
-      <CalendarDayDocs view={view} />
+      <CalendarDayDocs view={view} collapse={dayDocs} />
     </div>
   )
 }
@@ -84,8 +84,8 @@ export type PanelViews = { calendar: CalendarView; graph: DocGraphView; links: D
 // 링크·할 일처럼 길어지는 보기는 남은 높이를 채우고 안에서 스크롤한다
 const FILL_VIEW: Record<PanelViewId, boolean> = { calendar: false, graph: false, links: true, todos: true }
 
-function ViewBody({ view, views }: { view: PanelViewId; views: PanelViews }) {
-  if (view === 'calendar') return <CalendarMonth view={views.calendar} />
+function ViewBody({ view, views, dayDocs }: { view: PanelViewId; views: PanelViews; dayDocs?: DayDocsCollapse }) {
+  if (view === 'calendar') return <CalendarMonth view={views.calendar} dayDocs={dayDocs} />
   if (view === 'graph') return <PanelGraph view={views.graph} />
   return view === 'links' ? <PanelLinks view={views.links} /> : <PanelTodos view={views.todos} />
 }
@@ -150,7 +150,7 @@ function PhoneSidePanel({ open, views, onClose, phone }: { open: boolean; views:
         {top && (
           <>
             <div className="side-panel-body" data-collapsed={sections.top ? undefined : ''} inert={!sections.top}>
-              <ViewBody view={top.view} views={views} />
+              <ViewBody view={top.view} views={views} dayDocs={{ expanded: sections.dayDocs, onToggle: () => onToggleSection('dayDocs') }} />
             </div>
             <div className="side-panel-head">{outlineToggle}</div>
           </>

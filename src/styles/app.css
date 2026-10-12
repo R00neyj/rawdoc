@@ -7269,7 +7269,12 @@ h3.panel-settings-title:not(:first-child) {
     max-height: none;
   }
 
+  .side-panel .calendar-day-docs[data-collapsed] {
+    flex: none;
+  }
+
   .side-panel .calendar-day-docs-title {
+    padding: 0;
     font-size: 16px;
   }
 
