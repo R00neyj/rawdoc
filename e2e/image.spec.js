@@ -1029,3 +1029,23 @@ test.describe('F-2127 이미지 원문을 표준 마크다운으로', () => {
     expect(urls.some((u) => u.includes('example.com') || u.includes('/img/a.png'))).toBe(false)
   })
 })
+
+test.describe('이미지 지정 폭이 본문보다 넓을 때 (small)', () => {
+  test('넓은 지정 폭 이미지 — 편집기에 가로 스크롤이 생기지 않고 이미지가 본문 폭 안에 든다', async ({ page }) => {
+    await openApp(page)
+    await importMarkdown(page, { content: '위 줄\n\n![이미지|center|1400](attachments/bb5ade289c771c92.webp)\n\n아래 줄\n' })
+    await page.locator('.cm-content .cm-line', { hasText: '위 줄' }).click()
+    await expect(page.locator('.md-image-box')).toHaveCount(1)
+    const m = await page.evaluate(() => {
+      const scroller = document.querySelector('.cm-scroller')
+      return {
+        scrollWidth: scroller.scrollWidth,
+        clientWidth: scroller.clientWidth,
+        box: document.querySelector('.md-image-box').getBoundingClientRect().width,
+        content: document.querySelector('.cm-content').clientWidth,
+      }
+    })
+    expect(m.scrollWidth).toBeLessThanOrEqual(m.clientWidth)
+    expect(m.box).toBeLessThanOrEqual(m.content)
+  })
+})

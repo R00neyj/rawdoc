@@ -154,7 +154,7 @@ function buildDeleteButton(view: EditorView, wrap: HTMLElement): HTMLDivElement 
   btn.setAttribute('aria-label', '이미지 삭제')
   btn.innerHTML = deleteSvg
   wrapBtn.appendChild(btn)
-  const tip = el('span', 'icon-tooltip icon-tooltip--center')
+  const tip = el('span', 'icon-tooltip icon-tooltip--end') // 맨 오른쪽 버튼 — 가운데 맞춤이면 꽉 찬 이미지에서 본문 밖으로 넘친다
   tip.textContent = '이미지 삭제'
   wrapBtn.appendChild(tip)
   btn.addEventListener('mousedown', (event) => event.stopPropagation())
