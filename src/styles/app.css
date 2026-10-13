@@ -7250,6 +7250,29 @@ h3.panel-settings-title:not(:first-child) {
     flex-grow: 0;
   }
 
+  /* 위 칸 보기 넘김 — 넘긴 쪽에서 새 보기가 미끄러져 들어온다 (tweak 2026-10-13) */
+  .side-panel-view {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .side-panel-view[data-step] {
+    animation: side-panel-view-in var(--transition-move);
+  }
+
+  .side-panel-view[data-step='prev'] {
+    --view-from: -24px;
+  }
+
+  @keyframes side-panel-view-in {
+    from {
+      opacity: 0;
+      transform: translateX(var(--view-from, 24px));
+    }
+  }
+
   /* 아래 칸 머리가 홈 표시줄에, 가로 화면에서 오른쪽 노치에 걸리지 않게 패널 전체에 안전 영역을 둔다 */
   .side-panel {
     padding-right: env(safe-area-inset-right, 0px);

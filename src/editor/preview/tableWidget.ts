@@ -818,10 +818,11 @@ function renderRangeHighlight(wrap: HTMLElement, r1: number, c1: number, r2: num
   const bottomRight = bottomRow?.cells[Math.max(c1, c2)]
   if (!topLeft || !bottomRight) return false
 
-  const left = topLeft.offsetLeft + 1
-  const top = topLeft.offsetTop + 1
-  const right = bottomRight.offsetLeft + bottomRight.offsetWidth - 1
-  const bottom = bottomRight.offsetTop + bottomRight.offsetHeight - 1
+  // 바깥 칸 테두리까지 덮는다(겹친 테두리라 오른쪽·아래 1px 은 칸 상자 밖) — 안쪽에 그리면 틈으로 칸 선이 비어져 나와 잘려 보였다 (tweak 2026-10-13)
+  const left = topLeft.offsetLeft
+  const top = topLeft.offsetTop
+  const right = bottomRight.offsetLeft + bottomRight.offsetWidth + 1
+  const bottom = bottomRight.offsetTop + bottomRight.offsetHeight + 1
   el.style.left = `${left}px`
   el.style.top = `${top}px`
   el.style.width = `${Math.max(0, right - left)}px`

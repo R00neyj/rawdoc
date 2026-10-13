@@ -270,6 +270,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   overflow-x: auto;
+  isolation: isolate;
 }
 
 /* max-width:100% 를 안 준다(GitHub 원래 값과 다름, 최소 합리적 선택) — grid 래퍼에 퍼센트 max-width 를 주면 표가 압축돼(칸만 줄고) "넘치면 가로 스크롤"이 안 된다 */
@@ -346,7 +347,10 @@
   background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px var(--accent-ring);
   pointer-events: none;
+  /* 칸 테두리가 강조 테두리를 덮어 끊겨 보이지 않게 표 위로 올린다 (tweak 2026-10-13) */
+  z-index: 1;
   outline: none;
+  border-radius: 0;
   transition:
     left 100ms var(--ease-spring),
     top 100ms var(--ease-spring),

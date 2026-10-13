@@ -1,4 +1,5 @@
 // 오른쪽 패널 — 보기 목록을 가진 칸을 위아래로 쌓는다. 넓은 창은 메인 열 오른쪽 고정 폭, 좁은 창은 오른쪽에서 겹쳐 연다 (small 2026-10-10, 2026-10-11)
+import { useState } from 'react'
 import { dayKey, type CalendarDay } from '../lib/calendar'
 import { IconChevron, IconChevronLeft, IconClose } from './icons'
 import usePresence from './usePresence'
@@ -132,9 +133,19 @@ function SectionToggle({ label, expanded, onToggle }: { label: string; expanded:
 // 휴대폰 폭 — 왼쪽 밀기로 여는 위 칸(머리의 앞뒤 보기 버튼으로 넘기기)·아래 목차 패널. 표시할 항목을 다 끄면 목차 칸만. 목차 줄은 Outline 이 onOutlineSlot 자리로 포털한다
 // 닫힘·접힘도 전환이 보이게 패널은 usePresence 로, 칸 몸통은 늘 그려 두고 flex-grow 로 줄인다
 function PhoneSidePanel({ open, views, onClose, phone }: { open: boolean; views: PanelViews; onClose: () => void; phone: PhoneSidePanelProps }) {
-  const { sections, onToggleSection, onOutlineSlot, hasDoc, top } = phone
+  const { sections, onToggleSection, onOutlineSlot, hasDoc } = phone
   const { mounted, state } = usePresence(open)
+  // 넘긴 쪽에서 새 보기가 미끄러져 들어오도록 마지막 넘김 방향을 기억한다. 닫히면 지워 다시 열 때는 움직이지 않는다 (tweak 2026-10-13)
+  const [step, setStep] = useState<1 | -1 | 0>(0)
+  if (!open && step !== 0) setStep(0)
   if (!mounted) return null
+  const top = phone.top && {
+    ...phone.top,
+    onCycle: (s: 1 | -1) => {
+      setStep(s)
+      phone.top?.onCycle(s)
+    },
+  }
   const outlineToggle = <SectionToggle label="목차" expanded={sections.outline} onToggle={() => onToggleSection('outline')} />
   return (
     <>
@@ -150,7 +161,9 @@ function PhoneSidePanel({ open, views, onClose, phone }: { open: boolean; views:
         {top && (
           <>
             <div className="side-panel-body" data-collapsed={sections.top ? undefined : ''} inert={!sections.top}>
-              <ViewBody view={top.view} views={views} dayDocs={{ expanded: sections.dayDocs, onToggle: () => onToggleSection('dayDocs') }} />
+              <div key={top.view} className="side-panel-view" data-step={step === 0 ? undefined : step === 1 ? 'next' : 'prev'}>
+                <ViewBody view={top.view} views={views} dayDocs={{ expanded: sections.dayDocs, onToggle: () => onToggleSection('dayDocs') }} />
+              </div>
             </div>
             <div className="side-panel-head">{outlineToggle}</div>
           </>
