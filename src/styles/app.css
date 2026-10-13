@@ -1108,7 +1108,8 @@ body.sidebar-resizing {
   flex: none;
   display: flex;
   flex-direction: column;
-  max-height: min(320px, 40vh);
+  /* 오른쪽 패널로 좁아져 세 단이 돼도 스크롤바 없이 다 보이는 높이 (tweak 2026-10-13) */
+  max-height: min(420px, 50vh);
   border-top: 1px solid var(--rule);
   background: var(--panel);
   animation: shortcut-panel-in var(--transition-fast);

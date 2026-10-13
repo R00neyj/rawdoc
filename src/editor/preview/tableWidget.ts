@@ -818,11 +818,11 @@ function renderRangeHighlight(wrap: HTMLElement, r1: number, c1: number, r2: num
   const bottomRight = bottomRow?.cells[Math.max(c1, c2)]
   if (!topLeft || !bottomRight) return false
 
-  // 바깥 칸 테두리까지 덮는다(겹친 테두리라 오른쪽·아래 1px 은 칸 상자 밖) — 안쪽에 그리면 틈으로 칸 선이 비어져 나와 잘려 보였다 (tweak 2026-10-13)
+  // 바깥 칸 테두리까지 덮되 표 상자는 안 넘는다 — 안쪽이면 칸 선이 비어져 나오고, 넘치면 스크롤바가 생겼다 (tweak 2026-10-13)
   const left = topLeft.offsetLeft
   const top = topLeft.offsetTop
-  const right = bottomRight.offsetLeft + bottomRight.offsetWidth + 1
-  const bottom = bottomRight.offsetTop + bottomRight.offsetHeight + 1
+  const right = Math.min(bottomRight.offsetLeft + bottomRight.offsetWidth + 1, table.offsetLeft + table.offsetWidth)
+  const bottom = Math.min(bottomRight.offsetTop + bottomRight.offsetHeight + 1, table.offsetTop + table.offsetHeight)
   el.style.left = `${left}px`
   el.style.top = `${top}px`
   el.style.width = `${Math.max(0, right - left)}px`
