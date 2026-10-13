@@ -7,7 +7,8 @@ import usePresence from './usePresence'
 
 export type GithubMenuProps = {
   role: 'owner' | 'editor'
-  link: GithubLink
+  link: GithubLink | null
+  onLink?: () => void
   onUnlink?: () => void
   onPull?: () => void
   onPush?: () => void
@@ -101,16 +102,17 @@ function StatusLine({ link }: { link: GithubLink }) {
   return <>{`GitHub ${link.repo} · `}<span className="github-menu-path">{link.path}</span><span className="github-menu-when">{when}</span></>
 }
 
-export default function GithubMenu({ role, link, onUnlink, onPull, onPush }: GithubMenuProps) {
+export default function GithubMenu({ role, link, onLink, onUnlink, onPull, onPush }: GithubMenuProps) {
   const items: PopItem[] = []
-  if (role === 'owner' && onPull) items.push({ key: 'pull', label: '당기기…', onSelect: onPull })
-  if (role === 'owner' && onPush) items.push({ key: 'push', label: '푸시…', onSelect: onPush })
-  items.push({ key: 'view', label: 'GitHub에서 보기', href: link.htmlUrl })
-  if (role === 'owner' && onUnlink) items.push({ key: 'unlink', label: '연결 해제…', onSelect: onUnlink })
+  if (!link) items.push({ key: 'link', label: 'GitHub에 연결…', onSelect: onLink })
+  if (link && role === 'owner' && onPull) items.push({ key: 'pull', label: '당기기…', onSelect: onPull })
+  if (link && role === 'owner' && onPush) items.push({ key: 'push', label: '푸시…', onSelect: onPush })
+  if (link) items.push({ key: 'view', label: 'GitHub에서 보기', href: link.htmlUrl })
+  if (link && role === 'owner' && onUnlink) items.push({ key: 'unlink', label: '연결 해제…', onSelect: onUnlink })
   return (
     <PopMenu
       className="github-menu"
-      header={<StatusLine link={link} />}
+      header={link ? <StatusLine link={link} /> : undefined}
       items={items}
       trigger={({ buttonRef, open, toggle }) => (
         <span className="icon-btn-wrap">
@@ -124,14 +126,15 @@ export default function GithubMenu({ role, link, onUnlink, onPull, onPush }: Git
   )
 }
 
-// 사이드바 `가져오기` — 접근 이름은 그대로, 누르면 두 항목 메뉴 (레일은 툴팁이 오른쪽)
-export function GithubImportMenu({ variant, onFile, onGithub }: { variant: 'rail' | 'bar'; onFile: () => void; onGithub: () => void }) {
+// 사이드바 `가져오기` — 접근 이름은 그대로, 누르면 세 항목 메뉴 (레일은 툴팁이 오른쪽)
+export function GithubImportMenu({ variant, onFile, onGithub, onGithubNew }: { variant: 'rail' | 'bar'; onFile: () => void; onGithub: () => void; onGithubNew: () => void }) {
   return (
     <PopMenu
       className={`github-import-menu github-import-menu--${variant}`}
       items={[
         { key: 'file', label: '.md 파일…', onSelect: onFile },
         { key: 'github', label: 'GitHub에서 가져오기…', onSelect: onGithub },
+        { key: 'github-new', label: 'GitHub에 새 파일…', onSelect: onGithubNew },
       ]}
       trigger={({ buttonRef, open, toggle }) => (
         <span className={variant === 'rail' ? 'icon-btn-wrap rail-btn-wrap' : 'icon-btn-wrap'}>

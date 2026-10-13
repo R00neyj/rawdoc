@@ -1,5 +1,5 @@
 // GitHub 연결·가져오기 화면의 순수 규칙·문구 (specs/features/F-2128.md 3.2, 5장)
-import { GITHUB_ERROR_PARAM, GITHUB_RETURN_PARAM, type GithubStatus } from '../lib/githubContract'
+import { GITHUB_ERROR_PARAM, GITHUB_RETURN_PARAM, type GithubLink, type GithubStatus } from '../lib/githubContract'
 import { isRepoMdPath } from '../lib/githubPath'
 import { ACCOUNT_BLOCKED_MESSAGE } from '../lib/usageLimits'
 
@@ -8,7 +8,7 @@ export const GITHUB_RESUME_TTL_MS = 1_800_000
 export const GITHUB_LINK_FRESH_MS = 60_000
 export const GITHUB_UNTITLED = '제목 없는 문서'
 
-export type GithubResume = { kind: 'import' } | { kind: 'link'; docId: string }
+export type GithubResume = { kind: 'import' } | { kind: 'create' } | { kind: 'link'; docId: string }
 export type GithubFailure = { status: number; error: string | null; body: unknown }
 
 export function parseGithubStatus(raw: unknown): GithubStatus | null {
@@ -65,7 +65,7 @@ export function decideGithubResume(raw: string | null, userId: string, now: numb
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
   const m = parsed as { kind?: unknown; docId?: unknown; userId?: unknown; at?: unknown }
   if (m.userId !== userId || typeof m.at !== 'number' || now - m.at >= GITHUB_RESUME_TTL_MS) return null
-  if (m.kind === 'import') return { kind: 'import' }
+  if (m.kind === 'import' || m.kind === 'create') return { kind: m.kind }
   if (m.kind === 'link' && typeof m.docId === 'string') return { kind: 'link', docId: m.docId }
   return null
 }
@@ -128,4 +128,29 @@ export function linkTargetPath(dir: string, name: string): string | null {
   if (n === '' || n.includes('/')) return null
   const path = dir === '' ? n : `${dir}/${n}`
   return isRepoMdPath(path) ? path : null
+}
+
+// 상단바 GitHub 버튼 — 연결 확인 전(undefined)엔 그리지 않는다 (small 2026-10-13)
+export function githubTopBarKind(role: 'owner' | 'editor' | null, link: GithubLink | null | undefined): 'linked' | 'unlinked' | null {
+  if (role === null || link === undefined) return null
+  if (link) return 'linked'
+  return role === 'owner' ? 'unlinked' : null
+}
+
+export function githubFirstCommitMessage(fileName: string): string {
+  return `${fileName.trim()} 추가`
+}
+
+export const GITHUB_BAD_FILE_NAME = '파일 이름은 .md 또는 .markdown 으로 끝나야 하고 / 를 넣을 수 없습니다'
+
+export type GithubLinkAction = { kind: 'link' | 'linkPush' | 'blocked'; note: string | null }
+
+// 연결 대화상자의 확인 버튼 — 없는 경로는 연결하고 첫 커밋까지, 있는 파일은 연결만 (small 2026-10-13)
+export function githubLinkAction(o: { create: boolean; canPush: boolean; targetPath: string | null; dirClash: boolean; existed: boolean; message: string }): GithubLinkAction {
+  const blocked = (note: string): GithubLinkAction => ({ kind: 'blocked', note })
+  if (o.targetPath === null) return blocked(GITHUB_BAD_FILE_NAME)
+  if (o.dirClash) return blocked('같은 이름의 폴더가 있습니다')
+  if (o.existed) return o.create ? blocked('이 폴더에 같은 이름의 파일이 있습니다. 그 파일은 GitHub에서 가져오기로 여세요') : { kind: 'link', note: null }
+  if (!o.create && !o.canPush) return { kind: 'link', note: null }
+  return o.message.trim() === '' ? blocked('커밋 메시지를 적어 주세요') : { kind: 'linkPush', note: null }
 }

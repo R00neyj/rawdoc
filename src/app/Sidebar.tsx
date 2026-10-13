@@ -107,7 +107,7 @@ export type SharedDocLike = {
 
 // 공유받음 줄 `공유에서 나가기` 메뉴 — 없으면 메뉴를 그리지 않는다 (F-2115 2.6)
 // GitHub 연결 진입점 — 기능이 켜졌을 때만 App 이 준다 (F-2128 4.6)
-export type SidebarGithub = { onImport: () => void; onLinkDoc: (doc: { id: string; title: string }) => void; linkedDocIds: ReadonlySet<string> }
+export type SidebarGithub = { onImport: () => void; onNewFile: () => void; onLinkDoc: (doc: { id: string; title: string }) => void; linkedDocIds: ReadonlySet<string> }
 
 export type SharedLeaveMenu = { online: boolean; onRequest(target: LeaveShareTarget): void; onUnavailable(): void }
 
@@ -1251,7 +1251,7 @@ export default function Sidebar({
             <RailButton icon={IconCommandPalette} label={PALETTE_LABEL} onClick={onOpenPalette} />
             <RailButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
             <RailButton icon={IconFolderAdd} label="새 폴더" onClick={handleRailCreateFolder} />
-            {github ? <GithubImportMenu variant="rail" onFile={onImportDoc} onGithub={github.onImport} /> : <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
+            {github ? <GithubImportMenu variant="rail" onFile={onImportDoc} onGithub={github.onImport} onGithubNew={github.onNewFile} /> : <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
             <RailButton icon={IconMap} label="지도" onClick={onOpenMap} />
             <RailButton icon={IconTemplates} label="템플릿 관리" onClick={onOpenTemplates} />
           </div>
@@ -1264,7 +1264,7 @@ export default function Sidebar({
                 <SidebarIconButton icon={IconSearch} label="검색" btnClassName="sidebar-search-btn" onClick={onOpenSearch} />
                 <SidebarIconButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
                 <SidebarIconButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
-                {github ? <GithubImportMenu variant="bar" onFile={onImportDoc} onGithub={github.onImport} /> : <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
+                {github ? <GithubImportMenu variant="bar" onFile={onImportDoc} onGithub={github.onImport} onGithubNew={github.onNewFile} /> : <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
                 <SidebarIconButton icon={IconCollapseAll} label="모두 접기" onClick={onCollapseAllFolders} />
                 <SidebarIconButton icon={IconMap} label="지도" btnClassName="sidebar-map-btn" onClick={onOpenMap} />
                 <SidebarIconButton icon={IconTemplates} label="템플릿 관리" btnClassName="sidebar-templates-btn" onClick={onOpenTemplates} />

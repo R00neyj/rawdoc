@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GithubResult } from '../../../src/app/githubApi'
 import {
-  blobBody, planSummary, pushedNotice, pushFailureMessage, pushImageNames, pushMdBytes, readConflict, runGithubPush, PUSH_MAX_REFS,
+  blobBody, linkPushFailedMessage, planSummary, pushedNotice, pushFailureMessage, pushImageNames, pushMdBytes, readConflict, runGithubPush, PUSH_MAX_REFS,
   type PushDeps, type PushStep,
 } from '../../../src/app/githubPush'
 
@@ -142,5 +142,12 @@ describe('F-2130 runGithubPush', () => {
     const o = await runGithubPush({ ...input, names }, deps)
     expect(o).toEqual({ kind: 'failed', message: '그림이 너무 많아 푸시할 수 없습니다 (최대 1,000장)' })
     expect(calls.plan).toHaveLength(0)
+  })
+})
+
+describe('linkPushFailedMessage (small 2026-10-13)', () => {
+  it('연결은 남았다고 알리고 이유를 붙인다', () => {
+    expect(linkPushFailedMessage({ kind: 'failed', message: '빈 저장소에는 푸시할 수 없습니다' })).toBe('GitHub에 연결했지만 푸시하지 못했습니다. 빈 저장소에는 푸시할 수 없습니다')
+    expect(linkPushFailedMessage({ kind: 'conflict', gone: false })).toBe('GitHub에 연결했지만 푸시하지 못했습니다. GitHub에 같은 파일이 생겼습니다. 당기기로 맞춰 주세요')
   })
 })

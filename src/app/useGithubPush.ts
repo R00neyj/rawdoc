@@ -5,7 +5,7 @@ import type { GithubPushPlan, GithubLink } from '../lib/githubContract'
 import type { LineEnding } from '../lib/lineEnding'
 import { postDocGithubBlob, postDocGithubPlan, postDocGithubPush, type GithubResult } from './githubApi'
 import { mergedTooLarge } from './githubPull'
-import { pushedNotice, pushFailureMessage, pushImageNames, pushMdBytes, PUSH_OFFLINE_MESSAGE, readConflict, runGithubPush, type PushStep } from './githubPush'
+import { pushedNotice, pushFailureMessage, pushImageNames, pushMdBytes, PUSH_OFFLINE_MESSAGE, readConflict, runGithubPush, type PushOutcome, type PushStep } from './githubPush'
 import { GITHUB_TOO_LARGE_MESSAGE } from './githubUi'
 import type { NoticeWithAction } from './NoticeBar'
 import type { LiveStatus } from './StatusBar'
@@ -98,6 +98,32 @@ export function useGithubPush(o: UseGithubPushOptions) {
     [patch, setState],
   )
 
+  // 대화상자 없이도 쓰는 본체 — 연결하고 바로 첫 커밋 (small 2026-10-13)
+  const send = useCallback(async (docId: string, text: string, message: string, progress: (s: PushStep) => void): Promise<PushOutcome> => {
+    const { showNotice, watch, linkOf, flush, readAttachment, onPushed } = optsRef.current
+    await flush()
+    const bom = linkOf(docId)?.remoteBom ?? false
+    const outcome = await runGithubPush(
+      { md: pushMdBytes(text, bom), names: pushImageNames(text), message },
+      {
+        plan: async (names) => watch(await postDocGithubPlan(docId, names)),
+        blob: async (body) => watch(await postDocGithubBlob(docId, body)),
+        push: async (body) => watch(await postDocGithubPush(docId, body)),
+        readAttachment,
+        progress,
+      },
+    )
+    if (outcome.kind !== 'pushed') return outcome
+    onPushed(docId, outcome.sha)
+    const url = outcome.commitUrl
+    showNotice({
+      type: 'info',
+      message: pushedNotice(outcome),
+      ...(url ? { action: { label: 'GitHub에서 보기', onClick: () => window.open(url, '_blank', 'noopener') } } : {}),
+    })
+    return outcome
+  }, [])
+
   const onMessage = useCallback((message: string) => {
     const s = stateRef.current
     if (!s) return
@@ -108,7 +134,7 @@ export function useGithubPush(o: UseGithubPushOptions) {
   const onPush = useCallback(async () => {
     const s = stateRef.current
     if (!s || s.busy || s.conflict || s.message.trim() === '') return
-    const { currentDocId, liveStatus, editorRef, lineEnding, showNotice, watch, linkOf, flush, readAttachment, onPushed } = optsRef.current
+    const { currentDocId, liveStatus, editorRef, lineEnding, showNotice } = optsRef.current
     const editor = editorRef.current
     if (currentDocId !== s.docId || !editor) {
       setState(null)
@@ -119,31 +145,22 @@ export function useGithubPush(o: UseGithubPushOptions) {
     const text = editor.getText(lineEnding)
     if (mergedTooLarge(editor.getText('lf'), lineEnding)) return patch({ error: GITHUB_TOO_LARGE_MESSAGE })
     patch({ busy: true, error: null, conflict: null, progress: null })
-    await flush()
-    const bom = linkOf(s.docId)?.remoteBom ?? false
-    const outcome = await runGithubPush(
-      { md: pushMdBytes(text, bom), names: pushImageNames(text), message: s.message },
-      {
-        plan: async (names) => watch(await postDocGithubPlan(s.docId, names)),
-        blob: async (body) => watch(await postDocGithubBlob(s.docId, body)),
-        push: async (body) => watch(await postDocGithubPush(s.docId, body)),
-        readAttachment,
-        progress: (step) => patch({ progress: stepText(step) }),
-      },
-    )
+    const outcome = await send(s.docId, text, s.message, (step) => patch({ progress: stepText(step) }))
     if (outcome.kind === 'pushed') {
       setState(null)
       draftsRef.current.delete(s.docId)
-      onPushed(s.docId, outcome.sha)
-      const url = outcome.commitUrl
-      showNotice({
-        type: 'info',
-        message: pushedNotice(outcome),
-        ...(url ? { action: { label: 'GitHub에서 보기', onClick: () => window.open(url, '_blank', 'noopener') } } : {}),
-      })
     } else if (outcome.kind === 'conflict') patch({ busy: false, progress: null, conflict: { gone: outcome.gone } })
     else patch({ busy: false, progress: null, error: outcome.message })
-  }, [patch, setState])
+  }, [patch, setState, send])
+
+  // 지금 편집기 본문을 바로 푸시 — 실시간이 아니면 null (small 2026-10-13)
+  const pushCurrent = useCallback(async (docId: string, message: string): Promise<PushOutcome | null> => {
+    const { currentDocId, liveStatus, editorRef, lineEnding } = optsRef.current
+    const editor = editorRef.current
+    if (currentDocId !== docId || !editor || liveStatus !== 'live') return null
+    if (mergedTooLarge(editor.getText('lf'), lineEnding)) return { kind: 'failed', message: GITHUB_TOO_LARGE_MESSAGE }
+    return send(docId, editor.getText(lineEnding), message, () => {})
+  }, [send])
 
   const onPull = useCallback(() => {
     const s = stateRef.current
@@ -159,6 +176,8 @@ export function useGithubPush(o: UseGithubPushOptions) {
   return {
     state,
     openPush,
+    send,
+    pushCurrent,
     dialog: { state, onMessage, onPush: () => void onPush(), onPull, onCancel } satisfies GithubPushDialogProps,
   }
 }

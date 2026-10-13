@@ -416,7 +416,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
       toggleRightPanel,
     },
     output: paletteOutputCtx,
-    github: github ? { importFile: () => runAfterPaletteClose(github.importFile) } : undefined,
+    github: github ? { importFile: () => runAfterPaletteClose(github.importFile), newFile: () => runAfterPaletteClose(github.newFile) } : undefined,
   }
   return { openPalette, paletteContext }
 }

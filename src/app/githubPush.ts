@@ -68,6 +68,11 @@ export function pushedNotice(o: Extract<PushOutcome, { kind: 'pushed' }>): strin
   return o.left > 0 ? `푸시했습니다. 남은 그림 ${o.left}장은 한 번 더 푸시하면 올라갑니다` : '푸시했습니다'
 }
 
+export function linkPushFailedMessage(o: Exclude<PushOutcome, { kind: 'pushed' }>): string {
+  const why = o.kind === 'conflict' ? 'GitHub에 같은 파일이 생겼습니다. 당기기로 맞춰 주세요' : o.message
+  return `GitHub에 연결했지만 푸시하지 못했습니다. ${why}`
+}
+
 async function sendBlob(deps: PushDeps, body: string): Promise<GithubResult<GithubBlobCreated>> {
   const r = await deps.blob(body)
   if (r.ok || (r.status !== 502 && r.status !== 0)) return r

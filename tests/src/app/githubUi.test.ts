@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   branchChoices, decideGithubResume, decodeGithubContent, githubConnectErrorMessage, githubConnectUrl, githubDocRole, githubDocTitle,
-  githubErrorMessage, linkTargetPath, parseGithubStatus, readGithubReturn, resumeMarker, urlWithoutGithubParams,
+  githubErrorMessage, githubFirstCommitMessage, githubLinkAction, githubTopBarKind, linkTargetPath, parseGithubStatus, readGithubReturn, resumeMarker,
+  urlWithoutGithubParams,
 } from '../../../src/app/githubUi'
+import type { GithubLink } from '../../../src/lib/githubContract'
 import { ACCOUNT_BLOCKED_MESSAGE } from '../../../src/lib/usageLimits'
 
 describe('F-2128 A1', () => {
@@ -96,5 +98,38 @@ describe('F-2128 A4', () => {
     expect(linkTargetPath('d', 'a.txt')).toBeNull()
     expect(linkTargetPath('d', '  a.md ')).toBe('d/a.md')
     expect(linkTargetPath('d', '  ')).toBeNull()
+  })
+})
+
+describe('GitHub 새 파일 흐름 (small 2026-10-13)', () => {
+  const LINK = { repo: 'o/r', branch: 'main', path: 'a.md' } as GithubLink
+  it('githubTopBarKind — 연결된 문서는 linked, 주인의 연결 안 된 문서는 unlinked, 확인 중·편집자·금고는 없음', () => {
+    expect(githubTopBarKind('owner', LINK)).toBe('linked')
+    expect(githubTopBarKind('editor', LINK)).toBe('linked')
+    expect(githubTopBarKind('owner', null)).toBe('unlinked')
+    expect(githubTopBarKind('editor', null)).toBeNull()
+    expect(githubTopBarKind('owner', undefined)).toBeNull()
+    expect(githubTopBarKind(null, null)).toBeNull()
+  })
+  it('githubFirstCommitMessage', () => {
+    expect(githubFirstCommitMessage(' 메모.md ')).toBe('메모.md 추가')
+  })
+  it('decideGithubResume — create 표지', () => {
+    expect(decideGithubResume(resumeMarker({ kind: 'create' }, 'u1', 1000), 'u1', 2000)).toEqual({ kind: 'create' })
+  })
+  it('githubLinkAction', () => {
+    const base = { create: false, canPush: true, targetPath: 'a.md', dirClash: false, existed: false, message: 'a.md 추가' }
+    expect(githubLinkAction(base)).toEqual({ kind: 'linkPush', note: null })
+    expect(githubLinkAction({ ...base, existed: true })).toEqual({ kind: 'link', note: null })
+    expect(githubLinkAction({ ...base, canPush: false })).toEqual({ kind: 'link', note: null })
+    expect(githubLinkAction({ ...base, message: '  ' })).toEqual({ kind: 'blocked', note: '커밋 메시지를 적어 주세요' })
+    expect(githubLinkAction({ ...base, targetPath: null }).kind).toBe('blocked')
+    expect(githubLinkAction({ ...base, targetPath: null }).note).toMatch(/\.md 또는 \.markdown/)
+    expect(githubLinkAction({ ...base, dirClash: true })).toEqual({ kind: 'blocked', note: '같은 이름의 폴더가 있습니다' })
+    expect(githubLinkAction({ ...base, create: true })).toEqual({ kind: 'linkPush', note: null })
+    expect(githubLinkAction({ ...base, create: true, canPush: false })).toEqual({ kind: 'linkPush', note: null })
+    expect(githubLinkAction({ ...base, create: true, existed: true })).toEqual({
+      kind: 'blocked', note: '이 폴더에 같은 이름의 파일이 있습니다. 그 파일은 GitHub에서 가져오기로 여세요',
+    })
   })
 })

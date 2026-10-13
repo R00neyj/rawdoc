@@ -50,6 +50,7 @@ describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀, F-505 U
       'folder.new',
       'doc.import',
       'github.import',
+      'github.newFile',
       'github.pull',
       'github.push',
       'search.open',
@@ -640,12 +641,13 @@ describe('3.7 낱말 가드 — U7 (F-2054 11.1)', () => {
 
 describe('GitHub 명령 — F-2128 A7', () => {
   const noop = () => {}
-  it('ctx.github 없음 → 셋 다 안 보임, importFile 만 → github.import 만, pull·push 주면 각각', () => {
+  it('ctx.github 없음 → 넷 다 안 보임, 기본 → import·newFile, pull·push 주면 각각', () => {
     const ids = (github?: PaletteContext['github']) => visibleIdsOf({ ...ctx([]), github }).filter((id) => id.startsWith('github.'))
     expect(ids(undefined)).toEqual([])
-    expect(ids({ importFile: noop })).toEqual(['github.import'])
-    expect(ids({ importFile: noop, pull: noop })).toEqual(['github.import', 'github.pull'])
-    expect(ids({ importFile: noop, push: noop })).toEqual(['github.import', 'github.push'])
+    expect(ids({ importFile: noop, newFile: noop })).toEqual(['github.import', 'github.newFile'])
+    expect(ids({ importFile: noop, newFile: noop, pull: noop })).toEqual(['github.import', 'github.newFile', 'github.pull'])
+    expect(ids({ importFile: noop, newFile: noop, push: noop })).toEqual(['github.import', 'github.newFile', 'github.push'])
+    expect(PALETTE_COMMANDS.find((c) => c.id === 'github.newFile')?.label).toBe('GitHub에 새 파일…')
   })
 })
 

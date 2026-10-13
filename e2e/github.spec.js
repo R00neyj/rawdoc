@@ -83,10 +83,39 @@ test.describe('F-2128 GitHub', () => {
     await page.getByRole('menuitem', { name: '연결 해제…' }).click()
     await page.getByRole('dialog', { name: 'GitHub 연결 해제' }).getByRole('button', { name: '연결 해제', exact: true }).click()
 
-    await expect(githubButton).toHaveCount(0)
+    await expect.poll(() => server.githubLinks.has(docId)).toBe(false)
     expect(server.githubRequests().filter((r) => r.method === 'DELETE')).toHaveLength(1)
     await row.click({ button: 'right' })
     await expect(page.getByRole('menuitem', { name: 'GitHub에 연결…' })).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    // 연결 안 된 문서도 상단바 GitHub 에서 다시 연결한다 (small 2026-10-13)
+    await githubButton.click()
+    await page.locator('.github-menu').getByRole('menuitem', { name: 'GitHub에 연결…' }).click()
+    await page.getByRole('dialog', { name: 'GitHub에 연결' }).getByRole('button', { name: '연결', exact: true }).click()
+    await expect.poll(() => server.githubLinks.get(docId)?.path).toBe('doc.md')
+  })
+
+  test('GitHub 새 파일 E1 가져오기 → GitHub에 새 파일… → 연결하고 푸시 한 번에 새 문서·연결·첫 커밋', async ({ page }) => {
+    const server = await fakeServer(page, { github: { enabled: true, connected: true, repos: ['o/r'], files: { 'o/r@main:docs/옛.md': { sha: 'S1', bytes: 'x' } } } })
+    await openApp(page)
+    const before = await currentDocId(page)
+
+    await page.locator('.sidebar').getByRole('button', { name: '가져오기', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'GitHub에 새 파일…' }).click()
+    const dialog = page.getByRole('dialog', { name: 'GitHub에 새 파일' })
+    await dialog.getByRole('button', { name: 'docs/', exact: true }).click()
+    await dialog.getByLabel('파일 이름').fill('회의록.md')
+    await expect(dialog.getByLabel('커밋 메시지')).toHaveValue('회의록.md 추가')
+    await dialog.getByRole('button', { name: '연결하고 푸시', exact: true }).click()
+
+    await expect(page.locator('.notice-message', { hasText: '푸시했습니다' })).toBeVisible()
+    await expect.poll(async () => currentDocId(page)).not.toBe(before)
+    const docId = await currentDocId(page)
+    await expect(page.locator('.doc-title')).toHaveValue('회의록')
+    expect(server.githubLinks.get(docId)).toMatchObject({ path: 'docs/회의록.md', remoteSha: expect.any(String) })
+    const pushReq = server.githubRequests().find((r) => r.path.endsWith('/github/push'))
+    expect(pushReq.body.message).toBe('회의록.md 추가')
   })
 })
 

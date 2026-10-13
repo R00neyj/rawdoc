@@ -11,9 +11,10 @@ import { uploadAttachment } from '../storage/attachmentsApi'
 import { toWebp } from '../storage/toWebp'
 import { runGithubImport } from './githubImport'
 import {
-  decideGithubResume, githubConnectErrorMessage, githubConnectUrl, githubDocRole, githubErrorMessage, GITHUB_LINK_FRESH_MS, GITHUB_RESUME_KEY, readGithubReturn,
-  resumeMarker, urlWithoutGithubParams, type GithubFailure,
+  decideGithubResume, githubConnectErrorMessage, githubConnectUrl, githubDocRole, githubDocTitle, githubErrorMessage, githubTopBarKind, GITHUB_LINK_FRESH_MS,
+  GITHUB_RESUME_KEY, readGithubReturn, resumeMarker, urlWithoutGithubParams, type GithubFailure,
 } from './githubUi'
+import { linkPushFailedMessage, PUSH_OFFLINE_MESSAGE, type PushOutcome } from './githubPush'
 import type { GithubDialogsProps, GithubPickerMode } from './GithubPickerDialog'
 import type { GithubMenuProps } from './GithubMenu'
 import { replaceAppEntry } from './historyEntries'
@@ -236,7 +237,7 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
     })
   }
 
-  async function linkDoc(docId: string, put: GithubLinkPut, existed: boolean): Promise<GithubFailure | null> {
+  async function putLink(docId: string, put: GithubLinkPut): Promise<GithubFailure | null> {
     try {
       await server.flushOutbox?.()
       if (await server.hasPendingChanges?.(docId)) return NO_FAILURE
@@ -246,11 +247,45 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
     const r = watch(await putDocGithub(docId, put))
     if (!r.ok) return r
     putCache(docId, r.value)
+    return null
+  }
+
+  function noticeFirstPush(outcome: PushOutcome | null) {
+    if (outcome === null) showNotice({ type: 'error', message: linkPushFailedMessage({ kind: 'failed', message: PUSH_OFFLINE_MESSAGE }) })
+    else if (outcome.kind !== 'pushed') showNotice({ type: 'error', message: linkPushFailedMessage(outcome) })
+  }
+
+  async function linkDoc(docId: string, put: GithubLinkPut, existed: boolean, pushMessage: string | null): Promise<GithubFailure | null> {
+    const failure = await putLink(docId, put)
+    if (failure) return failure
+    if (pushMessage !== null) {
+      noticeFirstPush(await push.pushCurrent(docId, pushMessage))
+      return null
+    }
     showNotice({
       type: 'info',
       message: existed ? 'GitHub 파일에 연결했습니다. 당기기로 내용을 맞춰 주세요' : `GitHub에 연결했습니다. 첫 푸시가 ${put.path} 파일을 만듭니다`,
     })
     if (existed) pull.requestPull(docId)
+    return null
+  }
+
+  // 빈 새 문서를 만들어 연결하고 첫 커밋까지 — 연결이 안 되면 문서를 지운다 (small 2026-10-13)
+  async function createLinked(put: GithubLinkPut, pushMessage: string): Promise<GithubFailure | null> {
+    let doc: Doc
+    try {
+      doc = await store.create({ title: githubDocTitle(put.path), content: '', lineEnding: 'crlf', folderId: null })
+    } catch {
+      return NO_FAILURE
+    }
+    const failure = await putLink(doc.id, put)
+    if (failure) {
+      await store.remove(doc.id).catch(() => undefined)
+      return failure
+    }
+    setDocs((prev) => sortByUpdatedAtDesc([...prev, stripContent(doc)]))
+    noticeFirstPush(await push.send(doc.id, '', pushMessage, () => {}))
+    void selectDoc(doc.id)
     return null
   }
 
@@ -273,7 +308,7 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
       await docSaverFlushRef.current()
       if (from && userId) {
         try {
-          sessionStorage.setItem(GITHUB_RESUME_KEY, resumeMarker(from.kind === 'import' ? { kind: 'import' } : { kind: 'link', docId: from.docId }, userId, Date.now()))
+          sessionStorage.setItem(GITHUB_RESUME_KEY, resumeMarker(from.kind === 'link' ? { kind: 'link', docId: from.docId } : { kind: from.kind }, userId, Date.now()))
         } catch {
           // 표지를 못 써도 연결은 이어 간다 — 돌아와 대화상자만 다시 안 열린다
         }
@@ -316,7 +351,7 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
       }
       if (!pending.connected || !next?.enabled) return
       const resume = decideGithubResume(raw, userId, Date.now())
-      if (resume?.kind === 'import') setMode({ kind: 'import' })
+      if (resume?.kind === 'import' || resume?.kind === 'create') setMode({ kind: resume.kind })
       else if (resume?.kind === 'link') {
         const doc = docsRef.current.find((d) => d.id === resume.docId)
         if (doc) setMode({ kind: 'link', docId: doc.id, title: doc.title })
@@ -326,21 +361,25 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
 
   if (!on) return { sidebar: undefined, topBar: undefined, settings: undefined, palette: undefined, dialogs: undefined }
 
-  const link = currentDocId ? links[currentDocId]?.link ?? null : null
+  const entry = currentDocId ? links[currentDocId] : undefined
+  const link = entry?.link ?? null
+  const barKind = githubTopBarKind(role, entry ? entry.link : undefined)
   const linkedDocIds = new Set(Object.keys(links).filter((id) => links[id].link !== null))
   const onPush = role === 'owner' && link && currentDocId ? () => void push.openPush(currentDocId) : undefined
   const onPull = role === 'owner' && link && currentDocId ? () => void pull.startPull(currentDocId) : undefined
+  const onLinkCurrent = barKind === 'unlinked' && currentDoc ? () => setMode({ kind: 'link', docId: currentDoc.id, title: currentDoc.title }) : undefined
   return {
-    sidebar: { onImport: () => setMode({ kind: 'import' }), onLinkDoc: (d) => setMode({ kind: 'link', docId: d.id, title: d.title }), linkedDocIds },
+    sidebar: { onImport: () => setMode({ kind: 'import' }), onNewFile: () => setMode({ kind: 'create' }), onLinkDoc: (d) => setMode({ kind: 'link', docId: d.id, title: d.title }), linkedDocIds },
     topBar:
-      role !== null && link && currentDocId
-        ? { role, link, onUnlink: role === 'owner' ? () => { setUnlinkError(null); setUnlinkDocId(currentDocId) } : undefined, onPull, onPush }
+      role !== null && barKind !== null && currentDocId
+        ? { role, link, onLink: onLinkCurrent, onUnlink: role === 'owner' && link ? () => { setUnlinkError(null); setUnlinkDocId(currentDocId) } : undefined, onPull, onPush }
         : undefined,
     settings: { status, online, onShown: () => void refresh(), onConnect: () => connect(null), onDisconnect: () => void disconnectAccount() },
-    palette: { importFile: () => setMode({ kind: 'import' }), pull: onPull, push: onPush },
+    palette: { importFile: () => setMode({ kind: 'import' }), newFile: () => setMode({ kind: 'create' }), pull: onPull, push: onPush },
     dialogs: {
       picker: {
-        mode, status, refreshStatus: refresh, onClose: () => setMode(null), onConnect: connect, onImport: importFile, loadLink, onLink: linkDoc,
+        mode, status, refreshStatus: refresh, onClose: () => setMode(null), onConnect: connect, onImport: importFile, loadLink, onLink: linkDoc, onCreate: createLinked,
+        pushableDocId: role === 'owner' && o.liveStatus === 'live' ? currentDocId : null,
         onRequestUnlink: (docId) => { setUnlinkError(null); setUnlinkDocId(docId) },
       },
       unlink: { open: unlinkDocId !== null, error: unlinkError, onCancel: () => setUnlinkDocId(null), onConfirm: () => void confirmUnlink() },

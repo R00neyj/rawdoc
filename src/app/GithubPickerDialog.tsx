@@ -7,11 +7,11 @@ import type { GithubPushDialogProps } from './useGithubPush'
 import { toFileName } from '../lib/filename'
 import type { GithubBranchList, GithubLink, GithubLinkPut, GithubRepo, GithubStatus, GithubTreeEntry } from '../lib/githubContract'
 import { fetchGithubBranches, fetchGithubRepos, fetchGithubTree, type GithubResult } from './githubApi'
-import { branchChoices, githubErrorMessage, GITHUB_RECONNECT_MESSAGE, linkTargetPath, type GithubFailure } from './githubUi'
+import { branchChoices, githubErrorMessage, githubFirstCommitMessage, githubLinkAction, GITHUB_RECONNECT_MESSAGE, linkTargetPath, type GithubFailure } from './githubUi'
 import { formatCommentTime } from './commentRail'
 import { IconArrowBack, IconChevron } from './icons'
 
-export type GithubPickerMode = { kind: 'import' } | { kind: 'link'; docId: string; title: string }
+export type GithubPickerMode = { kind: 'import' } | { kind: 'create' } | { kind: 'link'; docId: string; title: string }
 export type GithubImportFile = { repo: string; branch: string; path: string; size: number }
 
 export type GithubPickerProps = {
@@ -22,17 +22,19 @@ export type GithubPickerProps = {
   onConnect: (mode: GithubPickerMode) => void
   onImport: (file: GithubImportFile) => Promise<void>
   loadLink: (docId: string) => Promise<GithubResult<GithubLink>>
-  onLink: (docId: string, put: GithubLinkPut, existed: boolean) => Promise<GithubFailure | null>
+  onLink: (docId: string, put: GithubLinkPut, existed: boolean, pushMessage: string | null) => Promise<GithubFailure | null>
+  onCreate: (put: GithubLinkPut, pushMessage: string) => Promise<GithubFailure | null>
+  // 바로 푸시할 수 있는 문서 — 지금 열린 실시간 문서 (small 2026-10-13)
+  pushableDocId: string | null
   onRequestUnlink: (docId: string) => void
 }
 
-const TITLES = { import: 'GitHub에서 가져오기', link: 'GitHub에 연결', info: 'GitHub 연결 정보' } as const
-const BAD_NAME = '파일 이름은 .md 또는 .markdown 으로 끝나야 하고 / 를 넣을 수 없습니다'
+const TITLES = { import: 'GitHub에서 가져오기', link: 'GitHub에 연결', create: 'GitHub에 새 파일', info: 'GitHub 연결 정보' } as const
 
 type Phase = 'loading' | 'unavailable' | 'connect' | 'info' | 'pick'
 
 function Body(props: GithubPickerProps & { mode: GithubPickerMode; busyRef: RefObject<boolean> }) {
-  const { busyRef, mode, status, refreshStatus, onClose, onConnect, onImport, loadLink, onLink, onRequestUnlink } = props
+  const { busyRef, mode, status, refreshStatus, onClose, onConnect, onImport, loadLink, onLink, onCreate, pushableDocId, onRequestUnlink } = props
   const [link, setLink] = useState<GithubLink | null | undefined>(mode.kind === 'link' ? undefined : null)
   const [error, setError] = useState<string | null>(null)
   const [forceReconnect, setForceReconnect] = useState(false)
@@ -45,6 +47,7 @@ function Body(props: GithubPickerProps & { mode: GithubPickerMode; busyRef: RefO
   const [tree, setTree] = useState<{ key: string; entries: GithubTreeEntry[]; truncated: boolean } | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [fileName, setFileName] = useState(mode.kind === 'link' ? toFileName(mode.title) : '')
+  const [message, setMessage] = useState<string | null>(null)
   const [reposNonce, setReposNonce] = useState(0)
   const [now] = useState(() => Date.now())
   const firstRef = useRef<HTMLElement | null>(null)
@@ -158,7 +161,12 @@ function Body(props: GithubPickerProps & { mode: GithubPickerMode; busyRef: RefO
   const files = entries?.filter((e) => e.type === 'file') ?? []
   const targetPath = linkTargetPath(dir, fileName)
   const dirClash = entries?.some((e) => e.type === 'dir' && e.name === fileName.trim()) ?? false
-  const linkReady = mode.kind === 'link' && targetPath !== null && !dirClash && current?.canWrite === true && branch !== ''
+  const existed = files.some((f) => f.name === fileName.trim())
+  const naming = mode.kind !== 'import'
+  const wantsPush = mode.kind === 'create' || (mode.kind === 'link' && mode.docId === pushableDocId && !existed)
+  const commitMessage = message ?? githubFirstCommitMessage(fileName)
+  const action = githubLinkAction({ create: mode.kind === 'create', canPush: wantsPush, targetPath, dirClash, existed, message: commitMessage })
+  const linkReady = naming && action.kind !== 'blocked' && entries !== null && current?.canWrite === true && branch !== ''
 
   async function submit() {
     if (busy) return
@@ -170,7 +178,9 @@ function Body(props: GithubPickerProps & { mode: GithubPickerMode; busyRef: RefO
       onClose()
       return
     }
-    const failure = await onLink(mode.docId, { repo, branch, path: targetPath ?? '', sha: null, bom: false }, files.some((f) => f.name === fileName.trim()))
+    const put = { repo, branch, path: targetPath ?? '', sha: null, bom: false }
+    const pushMessage = action.kind === 'linkPush' ? commitMessage.trim() : null
+    const failure = mode.kind === 'create' ? await onCreate(put, pushMessage ?? '') : await onLink(mode.docId, put, existed, pushMessage)
     setBusy(false)
     if (failure) fail(failure)
     else onClose()
@@ -244,6 +254,7 @@ function Body(props: GithubPickerProps & { mode: GithubPickerMode; busyRef: RefO
                       <button
                         type="button"
                         aria-pressed={selected === e.name}
+                        disabled={mode.kind === 'create'}
                         onClick={() => { setSelected(e.name); if (mode.kind === 'link') setFileName(e.name) }}
                       >
                         {e.name}
@@ -256,13 +267,19 @@ function Body(props: GithubPickerProps & { mode: GithubPickerMode; busyRef: RefO
               {tree?.key === treeKey && tree.truncated && <p className="dialog-note">항목이 많아 1,000개까지만 보입니다.</p>}
             </div>
           )}
-          {mode.kind === 'link' && (
+          {naming && (
             <label className="dialog-field">
               <span>파일 이름</span>
-              <input type="text" value={fileName} onChange={(e) => setFileName(e.target.value)} disabled={busy} />
+              <input type="text" value={fileName} placeholder="새 문서.md" onChange={(e) => setFileName(e.target.value)} disabled={busy} />
             </label>
           )}
-          {mode.kind === 'link' && targetPath === null && <p className="dialog-note">{BAD_NAME}</p>}
+          {naming && wantsPush && (
+            <label className="dialog-field">
+              <span>커밋 메시지</span>
+              <input type="text" value={commitMessage} onChange={(e) => setMessage(e.target.value)} disabled={busy} />
+            </label>
+          )}
+          {naming && action.note && fileName.trim() !== '' && <p className="dialog-note">{action.note}</p>}
         </div>
       )}
       {errorLine}
@@ -286,7 +303,7 @@ function Body(props: GithubPickerProps & { mode: GithubPickerMode; busyRef: RefO
             disabled={busy || (mode.kind === 'import' ? selected === null || current?.canWrite !== true : !linkReady)}
             onClick={() => void submit()}
           >
-            {mode.kind === 'import' ? (busy ? '가져오는 중…' : '가져오기') : '연결'}
+            {mode.kind === 'import' ? (busy ? '가져오는 중…' : '가져오기') : wantsPush ? (busy ? '푸시하는 중…' : '연결하고 푸시') : '연결'}
           </button>
         )}
       </div>

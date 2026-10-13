@@ -136,6 +136,14 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     run: (ctx) => ctx.github?.importFile(),
   },
   {
+    id: 'github.newFile',
+    kind: 'action',
+    label: 'GitHub에 새 파일…',
+    keywords: ['github', '깃허브', '저장소', '새 파일', '새 문서', '만들기', 'new', 'create', 'repo'],
+    when: (ctx) => Boolean(ctx.github),
+    run: (ctx) => ctx.github?.newFile(),
+  },
+  {
     id: 'github.pull',
     kind: 'action',
     label: '이 문서 GitHub에서 당기기…',
