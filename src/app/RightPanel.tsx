@@ -130,22 +130,28 @@ function SectionToggle({ label, expanded, onToggle }: { label: string; expanded:
   )
 }
 
+// 넘긴 쪽에서 새 보기가 미끄러져 들어오도록 칸별 마지막 넘김 방향을 기억한다. 닫히면 지워 다시 열 때는 움직이지 않는다 (tweak 2026-10-13)
+function useCycleSteps(open: boolean) {
+  const [steps, setSteps] = useState<Record<string, 'next' | 'prev'>>({})
+  if (!open && Object.keys(steps).length > 0) setSteps({})
+  const withStep = (slot: PanelSlotState): PanelSlotState => ({
+    ...slot,
+    onCycle: (s) => {
+      setSteps((prev) => ({ ...prev, [slot.id]: s === 1 ? 'next' : 'prev' }))
+      slot.onCycle(s)
+    },
+  })
+  return { withStep, steps }
+}
+
 // 휴대폰 폭 — 왼쪽 밀기로 여는 위 칸(머리의 앞뒤 보기 버튼으로 넘기기)·아래 목차 패널. 표시할 항목을 다 끄면 목차 칸만. 목차 줄은 Outline 이 onOutlineSlot 자리로 포털한다
 // 닫힘·접힘도 전환이 보이게 패널은 usePresence 로, 칸 몸통은 늘 그려 두고 flex-grow 로 줄인다
 function PhoneSidePanel({ open, views, onClose, phone }: { open: boolean; views: PanelViews; onClose: () => void; phone: PhoneSidePanelProps }) {
   const { sections, onToggleSection, onOutlineSlot, hasDoc } = phone
   const { mounted, state } = usePresence(open)
-  // 넘긴 쪽에서 새 보기가 미끄러져 들어오도록 마지막 넘김 방향을 기억한다. 닫히면 지워 다시 열 때는 움직이지 않는다 (tweak 2026-10-13)
-  const [step, setStep] = useState<1 | -1 | 0>(0)
-  if (!open && step !== 0) setStep(0)
+  const { withStep, steps } = useCycleSteps(open)
   if (!mounted) return null
-  const top = phone.top && {
-    ...phone.top,
-    onCycle: (s: 1 | -1) => {
-      setStep(s)
-      phone.top?.onCycle(s)
-    },
-  }
+  const top = phone.top && withStep(phone.top)
   const outlineToggle = <SectionToggle label="목차" expanded={sections.outline} onToggle={() => onToggleSection('outline')} />
   return (
     <>
@@ -161,7 +167,7 @@ function PhoneSidePanel({ open, views, onClose, phone }: { open: boolean; views:
         {top && (
           <>
             <div className="side-panel-body" data-collapsed={sections.top ? undefined : ''} inert={!sections.top}>
-              <div key={top.view} className="side-panel-view" data-step={step === 0 ? undefined : step === 1 ? 'next' : 'prev'}>
+              <div key={top.view} className="side-panel-view" data-step={steps[top.id]}>
                 <ViewBody view={top.view} views={views} dayDocs={{ expanded: sections.dayDocs, onToggle: () => onToggleSection('dayDocs') }} />
               </div>
             </div>
@@ -198,6 +204,7 @@ export default function RightPanel({
 // 넓은 창·겹침 — 왼쪽 사이드바의 거울. 닫히는 전환 동안도 그리도록 usePresence 로 [data-state] 를 준다
 function WidePanel({ open, narrow, slots, views, onClose }: { open: boolean; narrow: boolean; slots: PanelSlotState[]; views: PanelViews; onClose: () => void }) {
   const { mounted, state } = usePresence(open)
+  const { withStep, steps } = useCycleSteps(open)
   if (!mounted) return null
   return (
     <aside
@@ -207,7 +214,7 @@ function WidePanel({ open, narrow, slots, views, onClose }: { open: boolean; nar
       data-state={state}
       inert={state === 'closed'}
     >
-      {slots.map((slot, index) => (
+      {slots.map(withStep).map((slot, index) => (
         <div key={slot.id} className={FILL_VIEW[slot.view] ? 'panel-slot panel-slot--fill' : 'panel-slot'} data-collapsed={slot.collapsed ? '' : undefined}>
           <div className="right-panel-head">
             <h2>
@@ -224,7 +231,11 @@ function WidePanel({ open, narrow, slots, views, onClose }: { open: boolean; nar
             )}
           </div>
           {/* 접힌 칸은 보기를 그리지 않는다 — 데이터도 useRightPanel.shownViews 에서 빠져 계산하지 않는다 */}
-          {!slot.collapsed && <ViewBody view={slot.view} views={views} />}
+          {!slot.collapsed && (
+            <div key={slot.view} className="side-panel-view" data-step={steps[slot.id]}>
+              <ViewBody view={slot.view} views={views} />
+            </div>
+          )}
         </div>
       ))}
     </aside>

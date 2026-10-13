@@ -6725,6 +6725,32 @@ a.dialog-btn {
   min-height: 0;
 }
 
+/* 칸 보기 넘김 — 넘긴 쪽에서 새 보기가 미끄러져 들어온다. 넓은 창·휴대폰 공용 (tweak 2026-10-13) */
+.side-panel-view {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-slot--fill > .side-panel-view {
+  flex: 1 1 0;
+}
+
+.side-panel-view[data-step] {
+  animation: side-panel-view-in var(--transition-move);
+}
+
+.side-panel-view[data-step='prev'] {
+  --view-from: -24px;
+}
+
+@keyframes side-panel-view-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--view-from, 24px));
+  }
+}
+
 /* 접힌 칸은 머리만 — 남은 칸이 높이를 나눠 쓴다 */
 .panel-slot[data-collapsed] {
   flex: none;
@@ -7250,27 +7276,9 @@ h3.panel-settings-title:not(:first-child) {
     flex-grow: 0;
   }
 
-  /* 위 칸 보기 넘김 — 넘긴 쪽에서 새 보기가 미끄러져 들어온다 (tweak 2026-10-13) */
+  /* 휴대폰 위 칸은 몸통 높이를 다 채운다 */
   .side-panel-view {
     flex: 1 1 0;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .side-panel-view[data-step] {
-    animation: side-panel-view-in var(--transition-move);
-  }
-
-  .side-panel-view[data-step='prev'] {
-    --view-from: -24px;
-  }
-
-  @keyframes side-panel-view-in {
-    from {
-      opacity: 0;
-      transform: translateX(var(--view-from, 24px));
-    }
   }
 
   /* 아래 칸 머리가 홈 표시줄에, 가로 화면에서 오른쪽 노치에 걸리지 않게 패널 전체에 안전 영역을 둔다 */
