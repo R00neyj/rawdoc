@@ -153,7 +153,7 @@ export function frontmatterWidgetExtension(): Extension {
     if (!info) return tr
     const sel = tr.newSelection.main
     if (!sel.empty || sel.head < info.from || sel.head > info.to) return tr
-    return [tr, { selection: { anchor: info.correctedPos } }]
+    return [tr, { selection: { anchor: info.correctedPos }, sequential: true }]
   })
 
   return [field, atomic, tracker, filter]

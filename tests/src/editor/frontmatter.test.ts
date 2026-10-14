@@ -135,6 +135,13 @@ describe('frontmatterWidgetExtension — 커서 보정 (F-155 2.2, A3)', () => {
     expect(tr.state.selection.main.head).toBe(pos)
   })
 
+  it('프론트매터 없는 문서 맨 앞에 프론트매터를 넣어도 새 문서 좌표로 커서를 옮긴다 (F-2143)', () => {
+    const state = makeCorrectionState('## 일\n- a')
+    const insert = '---\nkanban: true\n---\n'
+    const tr = state.update({ changes: { from: 0, insert } })
+    expect(tr.state.selection.main.head).toBe(insert.length)
+  })
+
   it('위젯 조건이 아닌 문서(닫는 줄 뒤 줄 없음)는 손대지 않는다', () => {
     const state = makeCorrectionState('---\na: 1\n---')
     const tr = state.update({ selection: { anchor: 0 } })
