@@ -78,6 +78,8 @@ type DropTarget = { type: 'folder'; id: string } | { type: 'doc'; id: string } |
 type Dragged = { items: SelectionItem[] } | null
 // 우클릭·여러 항목 메뉴 버튼이 forcedOpen 으로 여는 행 하나 — 자리는 행 자신의 위치, 좌표는 우클릭일 때만 (F-255.md 3.2)
 type ContextMenuState = { key: string; point: { x: number; y: number } } | null
+// 사이드바 빈 자리 우클릭 메뉴 — 최상위에 새 문서·새 폴더·새 칸반 보드
+const ROOT_MENU_KEY = 'root'
 
 type DeleteDocTarget = { id: string; title: string }
 type DeleteFolderTarget = { id: string; name: string }
@@ -124,7 +126,7 @@ type SidebarCtx = {
   onToggleFolder: (id: string) => void
   onSelectDoc: (id: string) => void
   onCreateDoc: (folderId?: string | null) => void
-  onCreateBoard: (folderId: string) => void
+  onCreateBoard: (folderId: string | null) => void
   onCreateFolder: (parentId: string | null) => void
   onStartRename: (id: string, name: string) => void
   onEditingValueChange: (value: string) => void
@@ -815,7 +817,7 @@ type SidebarProps = {
   onCollapseAllFolders: () => void
   onSelectDoc: (id: string) => void
   onCreateDoc: (folderId?: string | null) => void
-  onCreateBoard: (folderId: string) => void
+  onCreateBoard: (folderId: string | null) => void
   onImportDoc: () => void
   onCreateFolder: (parentId: string | null) => Promise<{ id: string; name: string } | null>
   onRenameFolder: (id: string, name: string) => void
@@ -1296,6 +1298,11 @@ export default function Sidebar({
               onClick={(e) => {
                 if (e.target === e.currentTarget) setSelection(EMPTY_SELECTION)
               }}
+              onContextMenu={(e) => {
+                // 행이 이미 자기 메뉴를 열었거나 입력칸이면 그대로 둔다
+                if (e.defaultPrevented || (e.target as HTMLElement).closest('input, textarea')) return
+                handleSharedContextMenu(e, ROOT_MENU_KEY)
+              }}
             >
               <SharedGroup sharedDocs={sharedDocs} ctx={ctx} open={sharedGroupOpen} onToggle={onToggleSharedGroup} />
               <h2>문서</h2>
@@ -1309,6 +1316,18 @@ export default function Sidebar({
                 onDragOver={(e) => handleDragOver(e, rootTarget)}
                 onDrop={(e) => handleDrop(e, rootTarget)}
                 onClick={() => setSelection(EMPTY_SELECTION)}
+              />
+              <FolderMenu
+                label="문서 목록 메뉴"
+                hideTrigger
+                items={[
+                  { key: 'new-doc', label: '새 문서', icon: IconNoteAdd, onSelect: () => onCreateDoc(null) },
+                  { key: 'new-folder', label: '새 폴더', icon: IconFolderAdd, onSelect: () => handleCreateFolder(null) },
+                  { key: 'new-board', label: '새 칸반 보드', icon: IconKanban, onSelect: () => onCreateBoard(null) },
+                ]}
+                open={contextMenu?.key === ROOT_MENU_KEY ? true : undefined}
+                onOpenChange={contextMenu?.key === ROOT_MENU_KEY ? (v) => { if (!v) setContextMenu(null) } : undefined}
+                anchorPoint={contextMenu?.key === ROOT_MENU_KEY ? contextMenu.point : undefined}
               />
             </div>
           </>
