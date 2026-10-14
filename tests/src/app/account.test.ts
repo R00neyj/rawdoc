@@ -132,6 +132,15 @@ describe('loginUrl', () => {
   it('loginUrl 은 빈 해시도 받는다', () => {
     expect(loginUrl('')).toBe('/api/login?return=')
   })
+
+  // 큰 공유 조각(#/s/…)을 그대로 실으면 주소가 Cloudflare 한도(약 64KB)를 넘어 414 — 서버가 버릴 해시는 싣지 않는다
+  it('서버가 받지 않을 해시(513자 이상·#/ 아님)는 싣지 않고, 512자는 싣는다', () => {
+    expect(loginUrl('#/s/' + 'A'.repeat(70_000))).toBe('/api/login?return=')
+    expect(loginUrl('#/' + 'a'.repeat(511))).toBe('/api/login?return=')
+    expect(loginUrl('#abc')).toBe('/api/login?return=')
+    const max = '#/' + 'a'.repeat(510)
+    expect(loginUrl(max)).toBe(`/api/login?return=${encodeURIComponent(max)}`)
+  })
 })
 
 describe('logout', () => {

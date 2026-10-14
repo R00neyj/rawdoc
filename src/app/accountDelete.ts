@@ -1,5 +1,6 @@
 // 계정 삭제 — API 호출 둘, 다시 열기 표지, 이 기기 정리 순서 (specs/features/F-2038.md 6·7장). DOM 없이 도는 함수만
 import { ACCOUNT_DELETE_FRESH_MS, type AccountDeletePreview } from '../lib/accountDeletion'
+import { isLoginReturnHash } from '../lib/loginReturn'
 import type { AccountState } from './account'
 
 // sessionStorage 키 — 제품명 없음. prefs.ts 는 localStorage 전용이라 거치지 않는다 (6.5)
@@ -13,7 +14,7 @@ export function resumeMarker(userId: string, now: number): string {
 }
 
 export function reauthLoginUrl(hash: string): string {
-  return `/login?return=${encodeURIComponent(hash)}&reauth=1`
+  return `/login?return=${encodeURIComponent(isLoginReturnHash(hash) ? hash : '')}&reauth=1`
 }
 
 export type MarkerDecision = { action: 'open' | 'warn' | 'done' | 'none'; clear: boolean }

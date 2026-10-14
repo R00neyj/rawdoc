@@ -49,6 +49,7 @@ describe('F-2128 A2', () => {
   it('githubConnectUrl', () => {
     expect(githubConnectUrl('#/d/x')).toBe('/api/github/connect?return=%23%2Fd%2Fx')
     expect(githubConnectUrl('')).toBe('/api/github/connect?return=%23%2F')
+    expect(githubConnectUrl('#/s/' + 'A'.repeat(70_000))).toBe('/api/github/connect?return=%23%2F')
   })
 })
 

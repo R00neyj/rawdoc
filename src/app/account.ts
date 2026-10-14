@@ -1,4 +1,5 @@
 // 로그인 상태 조회·이동 주소 (specs/features/F-205.md 2.4, 로그아웃은 F-2034)
+import { isLoginReturnHash } from '../lib/loginReturn'
 import { getPref, setPref } from './prefs'
 
 export type Account = { id: string; email: string }
@@ -59,8 +60,9 @@ export function storedAccount(): Account | null {
   }
 }
 
+// 서버가 버릴 해시는 싣지 않는다 — 큰 공유 조각을 실으면 주소가 Cloudflare 한도를 넘어 414
 export function loginUrl(hash: string): string {
-  return `/api/login?return=${encodeURIComponent(hash)}`
+  return `/api/login?return=${encodeURIComponent(isLoginReturnHash(hash) ? hash : '')}`
 }
 
 // 로그아웃 뒤 가는 곳 — 해시를 버린다 (F-2034 3.1)

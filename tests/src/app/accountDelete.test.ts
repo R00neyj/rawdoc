@@ -58,6 +58,7 @@ describe('다시 로그인 주소 (4.3)', () => {
   it('지금 해시를 return 에, reauth=1', () => {
     expect(reauthLoginUrl('#/d/abc')).toBe('/login?return=%23%2Fd%2Fabc&reauth=1')
     expect(reauthLoginUrl('')).toBe('/login?return=&reauth=1')
+    expect(reauthLoginUrl('#/s/' + 'A'.repeat(70_000))).toBe('/login?return=&reauth=1')
   })
 })
 

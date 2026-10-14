@@ -1,14 +1,8 @@
 // /login 페이지·복귀 주소·오류 문구 (specs/features/F-2033.md 6장, U25~U29)
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import brand from '../../brand.config'
-import {
-  LOGIN_ERROR_FALLBACK,
-  LOGIN_ERROR_MESSAGES,
-  LOGIN_RETURN_MAX,
-  loginErrorMessage,
-  loginReturn,
-  renderLoginPage,
-} from '../../worker/loginPage'
+import { LOGIN_ERROR_FALLBACK, LOGIN_ERROR_MESSAGES, loginErrorMessage, loginReturn, renderLoginPage } from '../../worker/loginPage'
+import { LOGIN_RETURN_MAX } from '../../src/lib/loginReturn'
 import { PAGE_DARK_VARS, PAGE_TOKENS_CSS } from '../../worker/pageTokens'
 import { renderWelcomePage } from '../../worker/welcomePage'
 

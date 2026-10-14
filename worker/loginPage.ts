@@ -1,16 +1,14 @@
 // /login — 스크립트 없는 완결 HTML, 복귀 주소 규칙, 오류 코드 → 문구 (specs/features/F-2033.md 6장, F-2032.md 3.2~3.4)
 import brand from '../brand.config'
+import { isLoginReturnHash } from '../src/lib/loginReturn'
 import { renderSiteFooter, renderSiteHeader, SITE_CHROME_CSS } from '../src/lib/siteChrome'
 import { PAGE_TOKENS_CSS } from './pageTokens'
 import { GITHUB_LOGO_SVG, GOOGLE_LOGO_SVG } from './providerLogos'
 
-// oauth_state 쿠키에 두 번 들어가 브라우저 쿠키 한도 4,096바이트 안에 머무는 길이 (F-2032 3.2)
-export const LOGIN_RETURN_MAX = 512
-
 export type LoginReturn = { hash: string; successUrl: string; failureUrl: string }
 
 export function loginReturn(raw: string | null): LoginReturn {
-  if (raw && raw.startsWith('#/') && raw.length <= LOGIN_RETURN_MAX) {
+  if (isLoginReturnHash(raw)) {
     return { hash: raw, successUrl: `/${raw}`, failureUrl: `/login?return=${encodeURIComponent(raw)}` }
   }
   return { hash: '', successUrl: '/?app=1', failureUrl: '/login' }

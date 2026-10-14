@@ -1,6 +1,7 @@
 // GitHub 연결·가져오기 화면의 순수 규칙·문구 (specs/features/F-2128.md 3.2, 5장)
 import { GITHUB_ERROR_PARAM, GITHUB_RETURN_PARAM, type GithubLink, type GithubStatus } from '../lib/githubContract'
 import { isRepoMdPath } from '../lib/githubPath'
+import { isLoginReturnHash } from '../lib/loginReturn'
 import { ACCOUNT_BLOCKED_MESSAGE } from '../lib/usageLimits'
 
 export const GITHUB_RESUME_KEY = 'md.githubResume'
@@ -32,7 +33,7 @@ export function githubDocRole(doc: { role?: 'owner' | 'edit' | 'view'; e2ee?: un
 }
 
 export function githubConnectUrl(hash: string): string {
-  return '/api/github/connect?return=' + encodeURIComponent(hash || '#/')
+  return '/api/github/connect?return=' + encodeURIComponent(isLoginReturnHash(hash) ? hash : '#/')
 }
 
 export function readGithubReturn(search: string): { kind: 'connected' } | { kind: 'error'; code: string } | null {
