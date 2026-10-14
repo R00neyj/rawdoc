@@ -71,6 +71,7 @@ export default function AppScreens({
             onImport={importSharedDoc}
             onClose={closeSharedDoc}
             onContextMenu={handleViewContextMenu}
+            contentWidth={contentWidthPref}
             accessControl={
               account.state === 'in' && sharedDoc.requestToken ? (
                 <AccessRequestControl token={sharedDoc.requestToken} docId={null} variant="text" openIn="hash" onNotice={(message) => showNotice({ type: 'info', message })} />

@@ -1,6 +1,6 @@
-// 오른쪽 목차 F-144 A4·A6·A8, F-229 좁은 화면 버튼 (F-150.md 3.3)
+// 오른쪽 목차 F-144 A4·A6·A8, F-229 좁은 화면 버튼, 공유받은 문서 S-4 (F-150.md 3.3)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, resizeWindow, setViewMode, rectOf } from './helpers.js'
+import { openApp, importMarkdown, resizeWindow, setViewMode, rectOf, setPrefBeforeLoad } from './helpers.js'
 
 function longDoc() {
   const parts = []
@@ -197,5 +197,32 @@ test.describe('F-229 A7 공유 링크 보기', () => {
     await targetItem.click()
     const heading = page.locator('[data-source-line]').getByText('제목 2', { exact: true }).first()
     await expect(heading).toBeVisible()
+  })
+})
+
+test.describe('공유받은 문서 S-4 목차 (small 2026-10-14)', () => {
+  test.use({ viewport: { width: 1600, height: 900 } })
+
+  test('S-4 목차 항목을 누르면 본문이 그 제목으로 스크롤된다', async ({ page, context }) => {
+    await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await openApp(page)
+    await importMarkdown(page, { content: longDoc() })
+    await page.getByRole('button', { name: '공유 — 링크·마크다운 복사' }).click()
+    await page.getByRole('menuitem', { name: '링크 복사', exact: true }).click()
+    const hash = new URL(await page.evaluate(() => navigator.clipboard.readText())).hash
+    await page.goto('about:blank')
+    await page.goto('/' + hash)
+    const shared = page.locator('.shared-view')
+    await expect(shared).toBeVisible()
+
+    await shared.locator('nav.outline').hover()
+    await shared.locator('.outline-item', { hasText: /^제목 2$/ }).click()
+
+    const scroller = shared.locator('.shared-view-body')
+    const heading = shared.locator('.viewer h1', { hasText: /^제목 2$/ })
+    await expect
+      .poll(async () => Math.abs((await rectOf(heading)).top - (await rectOf(scroller)).top - 16))
+      .toBeLessThanOrEqual(4)
   })
 })

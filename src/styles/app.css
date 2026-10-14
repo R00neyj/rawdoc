@@ -4692,6 +4692,15 @@ body.sidebar-resizing {
   background: var(--panel);
 }
 
+/* 오른쪽 목차(.outline) 기준점 — 알림 줄 아래 본문 자리만 덮어 좁은 창 목차 버튼이 알림 줄 버튼을 가리지 않는다 */
+.shared-view-main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* 문서 위아래 여백(F-143 3.10)을 여기서 준다 — 제목이 문서의 첫 줄 역할 */
 .shared-view-body {
   flex: 1;

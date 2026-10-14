@@ -293,6 +293,7 @@
 |`src/app/viewerScroll.ts`|보기 화면에서 읽던 위치를 기억하고 그 자리로 스크롤함|
 |`src/app/ViewFindCard.tsx`|보기 모드에서 문서 안 글자를 찾는 작은 찾기 상자|
 |`src/app/ViewModeMenu.tsx`|휴대폰에서 편집·원문·보기 모드를 고르는 버튼과 메뉴|
+|`src/app/viewOutlineHandle.ts`|편집기 없는 보기 전용 화면(공개 보기·도움말·공유받은 문서)에서 목차가 제목을 찾도록 정보를 만들어 줌|
 |`src/app/viewportFit.ts`|휴대폰 화면 키보드에 맞춘 앱 높이와 위치를 계산함|
 |`src/app/webgl2.ts`|브라우저가 입체 그림(WebGL2)을 그릴 수 있는지 한 번 재 둠|
 |`src/app/WikiLinkPreview.tsx`|문서 링크에 마우스를 올리면 그 문서 내용을 미리 보여주는 창|

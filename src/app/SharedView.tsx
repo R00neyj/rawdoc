@@ -1,11 +1,13 @@
 // 공유받은 문서 화면 S-4 (specs/ia.md 1장 S-4·3.19, F-130.md 4장) — 위키링크(F-131)는 문서 목록이 없어 여기선 만들지 않는다
-import type { ReactNode } from 'react'
+import { useMemo, useRef, type ReactNode } from 'react'
 import Viewer, { type ViewContextMenuInfo } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { useCodeHighlight } from '../viewer/useCodeHighlight'
 import { IconDownload, IconClose } from './icons'
 import { stripComments } from '../lib/comments'
 import type { ShareDoc } from '../lib/shareCodec'
+import Outline from './Outline'
+import { makeViewOutlineHandle } from './viewOutlineHandle'
 
 type SharedViewProps = {
   sharedDoc: ShareDoc // decodeShare 결과
@@ -13,11 +15,17 @@ type SharedViewProps = {
   onClose: () => void // `닫기`
   onContextMenu?: (info: ViewContextMenuInfo) => void // 우클릭 메뉴 (F-170.md 3.3)
   accessControl?: ReactNode // 권한 요청 버튼 묶음 — 알림 줄 맨 앞 (F-2137 3장)
+  contentWidth?: number // Outline 여백 판정 — 도움말 화면과 같다 (F-2043 3.4)
 }
 
-export default function SharedView({ sharedDoc, onImport, onClose, onContextMenu, accessControl }: SharedViewProps) {
+export default function SharedView({ sharedDoc, onImport, onClose, onContextMenu, accessControl, contentWidth }: SharedViewProps) {
   // 이미 만든 옛 링크(주석이 담긴 채로 공유된 것) 대비 렌더 전에도 한 번 더 제거한다 (F-214.md 2.2)
-  const html = useCodeHighlight(renderMarkdown(stripComments(sharedDoc.content)))
+  const content = useMemo(() => stripComments(sharedDoc.content), [sharedDoc.content])
+  const html = useCodeHighlight(renderMarkdown(content))
+  const mainRef = useRef<HTMLDivElement | null>(null)
+  const bodyRef = useRef<HTMLDivElement | null>(null)
+  const outlineHandle = useMemo(() => makeViewOutlineHandle(content), [content])
+  const outlineRef = useMemo(() => ({ current: outlineHandle }), [outlineHandle])
 
   return (
     <div className="shared-view">
@@ -35,11 +43,14 @@ export default function SharedView({ sharedDoc, onImport, onClose, onContextMenu
           </button>
         </div>
       </div>
-      <div className="shared-view-body">
-        <h1 className="shared-view-title">{sharedDoc.title || '제목 없는 문서'}</h1>
-        {/* 공유 화면은 첨부를 읽지 않는다 — resolveAttachment 를 넘기지 않으면 이미지 블록은
-            모두 자리 표시로 보인다 (F-158.md 2.2) */}
-        <Viewer html={html} missingImageText="공유 링크에는 이미지가 담기지 않습니다" onContextMenu={onContextMenu} />
+      <div className="shared-view-main" ref={mainRef}>
+        <div className="shared-view-body" ref={bodyRef}>
+          <h1 className="shared-view-title">{sharedDoc.title || '제목 없는 문서'}</h1>
+          {/* 공유 화면은 첨부를 읽지 않는다 — resolveAttachment 를 넘기지 않으면 이미지 블록은
+              모두 자리 표시로 보인다 (F-158.md 2.2) */}
+          <Viewer html={html} missingImageText="공유 링크에는 이미지가 담기지 않습니다" onContextMenu={onContextMenu} />
+        </div>
+        <Outline editorRef={outlineRef} containerRef={mainRef} viewerRef={bodyRef} docId={null} viewMode="view" contentWidth={contentWidth} />
       </div>
     </div>
   )

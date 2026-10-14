@@ -1,15 +1,10 @@
 // 공개 보기 화면 S-5 (specs/features/F-210.md 2.4, F-209.md 2.6, F-211.md 2.3) — 저장소를 열지 않는다, 사이드바·상단바·상태바 없음
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { EditorState } from '@codemirror/state'
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
-import type { EditorView } from '@codemirror/view'
 
 import Viewer from '../viewer/Viewer'
 import type { ResolveAttachment } from '../viewer/Viewer'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { useCodeHighlight } from '../viewer/useCodeHighlight'
-import { extractHeadings, type Heading } from '../editor/outline'
-import { frontmatterExtension } from '../editor/frontmatter'
 import { resolveWikiTarget } from '../lib/wikiLink'
 import { createWikiResolver, type WikiFolderRef } from '../lib/wikiResolve'
 import { findHeadingLine } from '../viewer/headingTarget'
@@ -17,6 +12,7 @@ import Outline from './Outline'
 import NoticeBar from './NoticeBar'
 import type { Notice } from './notice'
 import { findViewerHeadingElByLine, topInScroller } from './outlinePosition'
+import { makeViewOutlineHandle } from './viewOutlineHandle'
 import { IconDownload, IconSettings, IconPanelOpen, IconPanelClose, IconRefresh, IconTooltip } from './icons'
 import AccessRequestControl from './AccessRequestControl'
 import { buildExportPayload } from './exportDoc'
@@ -89,29 +85,6 @@ type DocLoadState =
   | { status: 'ready'; doc: PublicDoc }
   | { status: 'not_found' }
   | { status: 'network' }
-
-// Outline(F-144)이 요구하는 최소 핸들 — CM6 EditorView 없이 EditorState 하나로 제목·줄 위치만 흉내낸다
-type FakeEditorHandle = {
-  getHeadings(): Heading[]
-  onHeadingsChange(cb: (headings: Heading[]) => void): () => void
-  view: EditorView
-  scrollToHeading(from: number): void
-  focus(): void
-}
-
-function makeFakeHandle(content: string): FakeEditorHandle {
-  const state = EditorState.create({
-    doc: content,
-    extensions: [markdown({ base: markdownLanguage, extensions: [frontmatterExtension()] })],
-  })
-  return {
-    getHeadings: () => extractHeadings(state),
-    onHeadingsChange: () => () => {},
-    view: { state } as unknown as EditorView,
-    scrollToHeading: () => {},
-    focus: () => {},
-  }
-}
 
 // 공개 보기 설정 4개(테마·서체·글자 크기, F-230 2.1) — App 의 useAppearancePrefs 값을 받는다(테마 구독을 한 벌로, 2026-09-28)
 export type PublicSettings = {
@@ -186,8 +159,8 @@ function DocPane({
     if (doc) document.title = doc.title || '제목 없는 문서'
   }, [doc])
 
-  const fakeHandle = useMemo(() => (doc ? makeFakeHandle(doc.content) : null), [doc])
-  const editorRef = useMemo(() => ({ current: fakeHandle }), [fakeHandle])
+  const outlineHandle = useMemo(() => (doc ? makeViewOutlineHandle(doc.content) : null), [doc])
+  const editorRef = useMemo(() => ({ current: outlineHandle }), [outlineHandle])
 
   const title = doc ? doc.title || '제목 없는 문서' : ''
   // sourceLines — h4~h6 에도 줄 번호가 붙어야 헤딩 이동이 요소를 찾는다 (F-2018 7.3)
