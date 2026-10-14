@@ -230,6 +230,7 @@
 
 .kanban-lane-input {
   flex: 1;
+  width: 0; /* input 의 기본 폭(size=20)이 칸 최소 폭을 키워 칸이 오른쪽으로 늘어난다 */
   font-weight: 600;
 }
 
