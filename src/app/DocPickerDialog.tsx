@@ -53,7 +53,7 @@ export default function DocPickerDialog({ open, docs, onPick, onClose }: DocPick
 
   return (
     <Dialog open={open} onClose={onClose} titleId="doc-picker-title" size="wide" initialFocusRef={inputRef}>
-      <div className="command-palette">
+      <div className="doc-picker">
         <div className="command-palette-head">
           <h2 id="doc-picker-title">시작 문서 고르기</h2>
         </div>
@@ -61,7 +61,7 @@ export default function DocPickerDialog({ open, docs, onPick, onClose }: DocPick
           <IconSearch size={18} />
           <input
             ref={inputRef}
-            className="command-palette-input"
+            className="doc-picker-input"
             type="text"
             role="combobox"
             aria-autocomplete="list"

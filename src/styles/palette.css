@@ -1,7 +1,8 @@
 /* 명령 팔레트 D-7 (specs/features/F-2022.md 8장, specs/features/F-2053.md 8.6) — 색은 토큰만, 새 토큰 없음 */
 
 /* 창 위쪽에 고정 — 가운데 정렬이면 거를 때마다 목록 높이가 바뀌어 입력칸이 움직인다 (8.1, 사람 확인 H1) */
-.dialog:has(> .command-palette) {
+.dialog:has(> .command-palette),
+.dialog:has(> .doc-picker) {
   margin-top: 12vh;
   margin-bottom: auto;
 }
@@ -118,7 +119,8 @@
 /* 휴대폰 폭 — 앱 UI 글자 크기 두 단계(app.css 맨 아래 블록)에 맞춘다. 목록 높이는 8.1 의 12vh 고정과
    짝이라 키보드를 내리면 아래가 텅 비어 보였다 (tweak 2026-09-30) */
 @media (max-width: 600px) {
-  .dialog:has(> .command-palette) {
+  .dialog:has(> .command-palette),
+  .dialog:has(> .doc-picker) {
     margin-top: 8vh;
   }
 
@@ -127,6 +129,7 @@
   }
 
   .command-palette-input,
+  .doc-picker-input,
   .command-palette-item-label {
     font-size: 16px;
   }

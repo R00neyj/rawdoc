@@ -2574,7 +2574,8 @@ body.sidebar-resizing {
 /* tokens.css 의 전역 리셋은 button 만 덮고 input 은 font·color 만 물려준다 — 테두리·배경을 끄지 않으면 브라우저 기본 상자가 한 겹 더 보인다(2026-09-21) */
 /* 명령 팔레트(F-2022)도 같은 묶음을 쓰므로 함께 끈다 (2026-09-25) */
 .search-input,
-.command-palette-input {
+.command-palette-input,
+.doc-picker-input {
   flex: 1;
   min-width: 0;
   padding: 0;
@@ -2585,7 +2586,8 @@ body.sidebar-resizing {
 }
 
 .search-input:focus-visible,
-.command-palette-input:focus-visible {
+.command-palette-input:focus-visible,
+.doc-picker-input:focus-visible {
   outline: none;
 }
 
