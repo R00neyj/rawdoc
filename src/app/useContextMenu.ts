@@ -19,6 +19,8 @@ import type { UseDocCommentsResult } from './useDocComments'
 
 export type UseContextMenuOptions = {
   editorRef: RefObject<EditorHandle | null>
+  // 구독 대상 — 편집기를 다시 만들면(StrictMode·재마운트) 새 핸들에 다시 붙는다
+  editorHandle: EditorHandle | null
   commentsRef: RefObject<Pick<UseDocCommentsResult, 'access' | 'canWrite'> | null>
   beginComment: () => void
   openDoc: { readonly id: string } | null
@@ -36,7 +38,7 @@ export type UseContextMenuResult = {
 
 // 우클릭 메뉴 상태·열기·닫기·실행 (specs/features/F-170.md, F-2061)
 export function useContextMenu(options: UseContextMenuOptions): UseContextMenuResult {
-  const { editorRef, commentsRef, beginComment, openDoc, currentDocId, showNotice } = options
+  const { editorRef, editorHandle, commentsRef, beginComment, openDoc, currentDocId, showNotice } = options
   const openPaletteFromRef = useRef<(fromEditor: boolean | undefined) => void>(() => {})
 
   // 우클릭 메뉴 상태 (specs/features/F-170.md) — view·container 는 place 에 따라 하나만 쓴다
@@ -63,8 +65,8 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
   // 우클릭 메뉴 구독 (F-170.md) — Editor.tsx 는 손대지 않고 handle.onContextMenu() 로 나중에 등록한다
   useLayoutEffect(() => {
     if (openDoc?.id !== currentDocId) return
-    return editorRef.current?.onContextMenu(handleEditorContextMenu)
-  }, [openDoc, currentDocId, handleEditorContextMenu, editorRef])
+    return editorHandle?.onContextMenu(handleEditorContextMenu)
+  }, [openDoc, currentDocId, handleEditorContextMenu, editorHandle])
 
   // 창 크기 변경·흐림·편집 영역 스크롤로 닫는다 (F-170.md 5장) — 포커스는 옮기지 않는다
   useEffect(() => {

@@ -1211,7 +1211,7 @@ export default function App() {
 
   // ----- 우클릭 메뉴 (specs/features/F-170.md) -----
   const { contextMenu, handleViewContextMenu, handleContextMenuSelect, closeContextMenu, openPaletteFromRef } = useContextMenu({
-    editorRef, commentsRef, beginComment: comments.beginComment, openDoc, currentDocId, showNotice,
+    editorRef, editorHandle, commentsRef, beginComment: comments.beginComment, openDoc, currentDocId, showNotice,
   })
 
   // ----- 명령 팔레트 열기·템플릿 넣기·context 조립 (F-2078) -----
