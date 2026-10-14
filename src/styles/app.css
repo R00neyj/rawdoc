@@ -6306,12 +6306,21 @@ body.sidebar-resizing {
   .statusbar {
     font-size: 12px;
   }
+
+  /* 글자가 커져 160px 안에 항목이 잘린다 — 내용 폭에 맞춘다 (tweak 2026-10-14) */
+  .item-menu-list {
+    width: max-content;
+    max-width: calc(100vw - 32px);
+  }
 }
 
-/* GitHub 연결·가져오기 (F-2128) */
+/* GitHub 연결·가져오기 (F-2128). 사이드바 아래 줄에 있어 위로 편다 (tweak 2026-10-14) */
 .github-import-menu--bar .github-menu-list {
   right: auto;
   left: 0;
+  top: auto;
+  bottom: calc(100% + 4px);
+  transform-origin: bottom left;
 }
 
 .github-import-menu--rail .github-menu-list {
