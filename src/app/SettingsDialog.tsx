@@ -14,6 +14,8 @@ import { WELCOME_PATH } from '../lib/siteChrome'
 import { visibleSettingsTabs, nextTabIndex, type SettingsTabId } from './settingsTabs'
 import type { TemplateEntry } from '../lib/templates'
 import TemplateSelectField from './TemplateSelectField'
+import DocPickerDialog from './DocPickerDialog'
+import type { PickerDoc } from './docPicker'
 import RightPanelSettingsTab, { type RightPanelSettings } from './RightPanelSettingsTab'
 import { E2EE_LOCK_MINUTES, type E2eeStatus } from '../e2ee/keyring'
 import { THEME_OPTIONS } from './theme'
@@ -47,10 +49,11 @@ const INDENT_OPTIONS = [
   { value: '4', label: '4칸' },
 ] as const
 
-// 시작 화면 — 홈이 기본, 마지막 문서를 고르면 부팅 때 자동으로 연다 (F-232 3.4)
+// 시작 화면 — 홈이 기본, 마지막 문서·지정 문서를 고르면 부팅 때 자동으로 연다 (F-232 3.4, small 2026-10-14)
 const START_SCREEN_OPTIONS = [
   { value: 'home', label: '홈' },
   { value: 'last', label: '마지막 문서' },
+  { value: 'doc', label: '문서 지정' },
 ] as const
 
 // 줄 번호(거터) 켜기·끄기 (F-147 2장)
@@ -104,6 +107,13 @@ export type SettingsGithub = {
   onShown: () => void
   onConnect: () => void
   onDisconnect: () => void
+}
+
+// 시작 화면 `문서 지정` 의 문서 — 앱만 준다 (small 2026-10-14)
+export type SettingsStartDoc = {
+  docId: string
+  docs: readonly PickerDoc[]
+  onChange: (id: string) => void
 }
 
 // 자동 잠금 세그먼트 — 값은 분 문자열 (F-404.md 7.5·8.1)
@@ -178,6 +188,22 @@ function Segment<T extends string>({
         })}
       </div>
     </div>
+  )
+}
+
+// 지정 문서 제목 — 지워졌거나 잠긴 금고 문서면 부팅 때 홈으로 간다는 것을 그대로 보인다 (small 2026-10-14)
+function StartDocRow({ startDoc, onPick }: { startDoc: SettingsStartDoc; onPick: () => void }) {
+  const doc = startDoc.docs.find((d) => d.id === startDoc.docId)
+  const title = !doc ? '고른 문서 없음' : doc.e2ee === 'locked' ? '잠긴 금고 문서' : doc.title || '제목 없는 문서'
+  return (
+    <p className="settings-start-doc">
+      <span className={`settings-start-doc-title${doc && doc.e2ee !== 'locked' ? '' : ' settings-start-doc-title--none'}`}>
+        {title}
+      </span>
+      <button type="button" className="dialog-btn" onClick={onPick}>
+        문서 고르기…
+      </button>
+    </p>
   )
 }
 
@@ -257,6 +283,7 @@ type SettingsDialogProps = {
   onChangeFontSize: (value: string) => void
   startScreen?: string
   onChangeStartScreen?: (value: string) => void
+  startDoc?: SettingsStartDoc
   defaultView?: string
   onChangeDefaultView?: (value: string) => void
   // `화면` 탭 맨 끝 — 위키링크 미리보기 (F-2044.md 8.2). 둘 다 있을 때만 그린다
@@ -314,6 +341,7 @@ export default function SettingsDialog({
   onChangeFontSize,
   startScreen,
   onChangeStartScreen,
+  startDoc,
   defaultView,
   onChangeDefaultView,
   wikiPreview,
@@ -349,6 +377,7 @@ export default function SettingsDialog({
   const activeTabButtonRef = useRef<HTMLButtonElement | null>(null) // 탭이 있을 때 초점: 활성 탭 버튼
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const phone = usePhoneWidth()
+  const [docPickerOpen, setDocPickerOpen] = useState(false)
 
   // 들여쓰기·줄 번호는 CM6 편집 영역 전용 — 넷 다 있을 때만 그린다(공개 보기 화면은 안 줌, F-230 2.2)
   const showEditorSettings = indent !== undefined && onChangeIndent !== undefined && lineNumbers !== undefined && onChangeLineNumbers !== undefined
@@ -459,6 +488,8 @@ export default function SettingsDialog({
               onChange={onChangeStartScreen}
             />
           )}
+          {/* .dialog-field 밖에 둔다 — 설정 라벨 세는 선택자(F-290.md A4) */}
+          {startScreen === 'doc' && startDoc && <StartDocRow startDoc={startDoc} onPick={() => setDocPickerOpen(true)} />}
           {defaultView !== undefined && onChangeDefaultView !== undefined && (
             <Segment
               labelId="default-view-label"
@@ -661,89 +692,108 @@ export default function SettingsDialog({
     )
   }
 
+  // 설정 <dialog> 밖 형제로 둔다 — 안에 두면 설정 패널 CSS 가 섞인다 (small 2026-10-14)
+  const docPicker = startDoc && (
+    <DocPickerDialog
+      open={open && docPickerOpen}
+      docs={startDoc.docs}
+      onPick={(id) => {
+        startDoc.onChange(id)
+        setDocPickerOpen(false)
+      }}
+      onClose={() => setDocPickerOpen(false)}
+    />
+  )
+
   if (pagesMode) {
     return (
-      <Dialog open={open} onClose={onClose} titleId={titleId} size="full" initialFocusRef={activeTabButtonRef} onCancel={pages.onCancel}>
-        <SettingsPageShell
-          titleId={titleId}
-          page={pages.page}
-          tabs={tabs}
-          labels={TAB_LABELS}
-          firstRowRef={activeTabButtonRef}
-          onEnter={pages.enter}
-          onBack={pages.back}
-          onClose={pages.close}
-        >
-          {pageTab !== null && fieldsForTab(pageTab)}
-        </SettingsPageShell>
-      </Dialog>
+      <>
+        <Dialog open={open} onClose={onClose} titleId={titleId} size="full" initialFocusRef={activeTabButtonRef} onCancel={pages.onCancel}>
+          <SettingsPageShell
+            titleId={titleId}
+            page={pages.page}
+            tabs={tabs}
+            labels={TAB_LABELS}
+            firstRowRef={activeTabButtonRef}
+            onEnter={pages.enter}
+            onBack={pages.back}
+            onClose={pages.close}
+          >
+            {pageTab !== null && fieldsForTab(pageTab)}
+          </SettingsPageShell>
+        </Dialog>
+        {docPicker}
+      </>
     )
   }
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      titleId={titleId}
-      size="xwide"
-      initialFocusRef={tabs.length > 1 ? activeTabButtonRef : checkedRef}
-    >
-      <h2 id={titleId}>설정</h2>
-      {tabs.length > 1 ? (
-        <div className="settings-body">
-          <div
-            className="settings-tabs"
-            role="tablist"
-            aria-label="설정 분류"
-            aria-orientation="vertical"
-            onKeyDown={handleTabKeyDown}
-          >
-            {tabs.map((id, i) => {
-              const selected = id === resolvedActiveTab
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  id={`settings-tab-${id}`}
-                  aria-selected={selected}
-                  aria-controls={`settings-panel-${id}`}
-                  tabIndex={selected ? 0 : -1}
-                  ref={(el) => {
-                    tabRefs.current[i] = el
-                    if (selected) activeTabButtonRef.current = el
-                  }}
-                  onClick={() => setActiveTab(id)}
-                >
-                  {TAB_LABELS[id]}
-                </button>
-              )
-            })}
+    <>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        titleId={titleId}
+        size="xwide"
+        initialFocusRef={tabs.length > 1 ? activeTabButtonRef : checkedRef}
+      >
+        <h2 id={titleId}>설정</h2>
+        {tabs.length > 1 ? (
+          <div className="settings-body">
+            <div
+              className="settings-tabs"
+              role="tablist"
+              aria-label="설정 분류"
+              aria-orientation="vertical"
+              onKeyDown={handleTabKeyDown}
+            >
+              {tabs.map((id, i) => {
+                const selected = id === resolvedActiveTab
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    id={`settings-tab-${id}`}
+                    aria-selected={selected}
+                    aria-controls={`settings-panel-${id}`}
+                    tabIndex={selected ? 0 : -1}
+                    ref={(el) => {
+                      tabRefs.current[i] = el
+                      if (selected) activeTabButtonRef.current = el
+                    }}
+                    onClick={() => setActiveTab(id)}
+                  >
+                    {TAB_LABELS[id]}
+                  </button>
+                )
+              })}
+            </div>
+            <div
+              className="settings-panel"
+              role="tabpanel"
+              id={`settings-panel-${resolvedActiveTab}`}
+              aria-labelledby={`settings-tab-${resolvedActiveTab}`}
+            >
+              {fieldsForTab(resolvedActiveTab)}
+            </div>
           </div>
-          <div
-            className="settings-panel"
-            role="tabpanel"
-            id={`settings-panel-${resolvedActiveTab}`}
-            aria-labelledby={`settings-tab-${resolvedActiveTab}`}
-          >
-            {fieldsForTab(resolvedActiveTab)}
-          </div>
+        ) : (
+          fieldsForTab(tabs[0])
+        )}
+        <div className="dialog-actions">
+          {/* 사이트 /welcome 을 새 탭으로 — 사이드바에서 옮겨 옴 (F-2051, tweak 2026-09-28) */}
+          <a className="dialog-btn settings-intro" href={WELCOME_PATH} target="_blank" rel="noopener noreferrer">
+            소개 보기
+          </a>
+          <button type="button" className="settings-donate" onClick={openDonateDialog}>
+            후원하기
+          </button>
+          <button type="button" onClick={onClose}>
+            닫기
+          </button>
         </div>
-      ) : (
-        fieldsForTab(tabs[0])
-      )}
-      <div className="dialog-actions">
-        {/* 사이트 /welcome 을 새 탭으로 — 사이드바에서 옮겨 옴 (F-2051, tweak 2026-09-28) */}
-        <a className="dialog-btn settings-intro" href={WELCOME_PATH} target="_blank" rel="noopener noreferrer">
-          소개 보기
-        </a>
-        <button type="button" className="settings-donate" onClick={openDonateDialog}>
-          후원하기
-        </button>
-        <button type="button" onClick={onClose}>
-          닫기
-        </button>
-      </div>
-    </Dialog>
+      </Dialog>
+      {docPicker}
+    </>
   )
 }

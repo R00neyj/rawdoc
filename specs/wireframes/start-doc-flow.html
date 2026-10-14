@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>시작 화면 — 문서 지정 플로우</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; font: 14px/1.5 system-ui, sans-serif; color: #222; background: #f6f6f4; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 40px 0 12px; color: #444; }
+  .sub { color: #777; margin: 0 0 24px; }
+  .flow { display: flex; flex-direction: column; align-items: center; }
+  .row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .box { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; text-align: center; min-width: 180px; }
+  .box small { display: block; color: #888; font-size: 12px; }
+  .box.key { border: 2px solid #333; }
+  .box.q { border-style: dashed; border-radius: 20px; background: #fafaf8; }
+  .box.warn { border-color: #b77; color: #844; }
+  .arrow { width: 2px; height: 28px; background: #999; position: relative; margin: 4px 0; }
+  .arrow::after { content: ''; position: absolute; bottom: -2px; left: -5px; border: 6px solid transparent; border-top-color: #999; }
+  .branch { display: flex; gap: 16px; justify-content: center; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; align-items: center; }
+  .label { font-size: 12px; color: #666; background: #e9e9e5; border-radius: 10px; padding: 1px 8px; margin-bottom: 4px; }
+  .mock { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 16px 20px; display: inline-block; }
+  .seg { display: inline-flex; border: 1px solid #aaa; border-radius: 6px; overflow: hidden; }
+  .seg span { padding: 4px 12px; border-left: 1px solid #aaa; }
+  .seg span:first-child { border-left: 0; }
+  .seg .on { background: #ddd; }
+  .sel { display: inline-block; border: 1px solid #aaa; border-radius: 6px; padding: 4px 10px; min-width: 240px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>시작 화면 — 문서 지정</h1>
+<p class="sub">설정 &gt; 화면 &gt; 시작 화면에 세 번째 선택지 <b>문서 지정</b>을 더한다. 기기마다 따로 저장(<code>md.startScreen</code> = <code>doc</code>, <code>md.startDocId</code>)</p>
+
+<h2>1. 설정</h2>
+<div class="mock">
+  <div>시작 화면</div>
+  <div class="seg"><span>홈</span><span>마지막 문서</span><span class="on">문서 지정</span></div><br>
+  <div class="sel">할일 추적해줘 &nbsp; [문서 고르기…]</div>
+  <div style="color:#888;font-size:12px;margin-top:4px">문서 지정을 고를 때만 보인다. 처음 고르면 지금 연 문서(없으면 목록 첫 문서)가 들어간다. 버튼은 제목으로 거르는 검색 대화상자를 연다(최근 수정순, 잠긴 금고 문서 제외)</div>
+</div>
+
+<h2>2. 앱 시작</h2>
+<div class="flow">
+  <div class="box key">앱 열기</div>
+  <div class="arrow"></div>
+  <div class="box q">주소에 문서 해시가 있나?</div>
+  <div class="arrow"></div>
+  <div class="branch">
+    <div class="col"><span class="label">있음</span><div class="box">그 문서 (지금과 같음)</div></div>
+    <div class="col"><span class="label">없음 · 문서 지정</span>
+      <div class="box q">지정 문서가 있고 잠기지 않았나?</div>
+      <div class="arrow"></div>
+      <div class="branch">
+        <div class="col"><span class="label">예</span><div class="box key">지정 문서를 연다</div></div>
+        <div class="col"><span class="label">아니오 (삭제·잠김)</span><div class="box warn">홈<small>알림 없음 · 설정은 그대로</small></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>3. 정할 것</h2>
+<ol>
+  <li>지정 문서가 없어졌을 때: <b>홈</b> (사용자 결정 2026-10-14)</li>
+  <li>문서 고르는 칸: <b>검색 대화상자</b> (제목으로 거르기, 최근 수정순, ↑↓·Enter·Esc) — 네이티브 <code>&lt;select&gt;</code> 대신 (사용자 결정 2026-10-14)</li>
+</ol>
+</body>
+</html>

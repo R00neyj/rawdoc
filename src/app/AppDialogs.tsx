@@ -19,6 +19,7 @@ import TemplateManagerDialog from './TemplateManagerDialog'
 import type { UseTemplateManagerResult } from './useTemplateManager'
 import type { RightPanelSettings } from './RightPanelSettingsTab'
 import type { SelectionItem } from './sidebarSelection'
+import type { DocMeta } from './docMeta'
 import type { Folder, Store } from '../types'
 import type { UseE2ee } from './useE2ee'
 import type { E2eeConvertDialogText, LocalE2eeKeys } from '../e2ee/convert'
@@ -44,9 +45,9 @@ export type AppDialogsProps = Pick<UseAccountStatusResult, 'account' | 'recheckA
   Pick<
     UseAppearancePrefsResult,
     | 'bodyFont' | 'changeBodyFont' | 'changeContentWidth' | 'changeE2eeLockMinutes' | 'changeFontSize' | 'changeHeadingFont' | 'changeIndent'
-    | 'changeLineNumbers' | 'changeNewDocTemplate' | 'changeStartScreen' | 'changeTheme' | 'changeToolbar' | 'changeWikiPreview' | 'contentWidthPref'
-    | 'e2eeLockMinutesPref' | 'fontSizePref' | 'headingFont' | 'indentPref' | 'lineNumbersPref' | 'newDocTemplatePref' | 'startScreenPref'
-    | 'themePref' | 'toolbarPref' | 'wikiPreviewPref' | 'changeDefaultView' | 'defaultViewPref'
+    | 'changeLineNumbers' | 'changeNewDocTemplate' | 'changeStartScreen' | 'changeStartDoc' | 'changeTheme' | 'changeToolbar' | 'changeWikiPreview'
+    | 'contentWidthPref' | 'e2eeLockMinutesPref' | 'fontSizePref' | 'headingFont' | 'indentPref' | 'lineNumbersPref' | 'newDocTemplatePref'
+    | 'startScreenPref' | 'startDocIdPref' | 'themePref' | 'toolbarPref' | 'wikiPreviewPref' | 'changeDefaultView' | 'defaultViewPref'
   > &
   Pick<UseContextMenuResult, 'closeContextMenu' | 'contextMenu' | 'handleContextMenuSelect'> &
   Pick<UseFolderActionsResult, 'cancelBulkDelete' | 'cancelDelete' | 'cancelMoveDoc' | 'confirmBulkDelete' | 'confirmDelete' | 'confirmMoveDoc'> &
@@ -68,6 +69,7 @@ export type AppDialogsProps = Pick<UseAccountStatusResult, 'account' | 'recheckA
     closeSearch: () => void
     closeSettings: () => void
     deleteTarget: DeleteTarget | null
+    docs: DocMeta[]
     e2ee: UseE2ee | null
     e2eeConvertText: E2eeConvertDialogText | null
     e2eeMigrateDialogOpen: boolean
@@ -96,14 +98,14 @@ export type AppDialogsProps = Pick<UseAccountStatusResult, 'account' | 'recheckA
 export default function AppDialogs({
   account, accountDeleteUnsynced, accountDeleteUserId, answerE2eeConvertDialog, beforeLeaveDoc, bodyFont, bulkDeleteCancelRef, bulkDeleteItems,
   cancelBulkDelete, cancelDelete, cancelImportPreview, cancelImportProgress, cancelInvite, cancelMoveDoc, changeBodyFont, changeContentWidth,
-  changeE2eeLockMinutes, changeFontSize, changeHeadingFont, changeIndent, changeLineNumbers, changeNewDocTemplate, changeStartScreen, changeTheme,
+  changeE2eeLockMinutes, changeFontSize, changeHeadingFont, changeIndent, changeLineNumbers, changeNewDocTemplate, changeStartScreen, changeStartDoc, changeTheme,
   changeToolbar, changeWikiPreview, closeAccountDelete, closeContextMenu, closeImportResult, closePalette, closeSearch, closeSettings,
-  confirmBulkDelete, confirmDelete, confirmImport, confirmMoveDoc, contentWidthPref, contextMenu, deleteTarget, e2ee, e2eeConvertText,
+  confirmBulkDelete, confirmDelete, confirmImport, confirmMoveDoc, contentWidthPref, contextMenu, deleteTarget, docs, e2ee, e2eeConvertText,
   e2eeLockMinutesPref, e2eeMigrateDialogOpen, exportOffline, finishAccountDelete, folders, fontSizePref, handleContextMenuSelect,
   handleExportAll, handleExportVault, handleImportTargetChange, headingFont, importState, indentPref, inviteTarget, lineNumbersPref, listSource,
   moveDocTarget, newDocTemplatePref, openDocFromSearch, openSettings, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
   requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
-  setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref, toolbarPref,
+  setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, startDocIdPref, store, templateEntries, themePref, toolbarPref,
   wikiPreviewPref, changeDefaultView, defaultViewPref, settingsGithub, githubDialogs, templatesOpen, openTemplates, closeTemplates,
   createTemplate, editTemplate, deleteTemplate, rightPanelSettings,
 }: AppDialogsProps) {
@@ -178,6 +180,7 @@ export default function AppDialogs({
         onChangeFontSize={changeFontSize}
         startScreen={startScreenPref}
         onChangeStartScreen={changeStartScreen}
+        startDoc={{ docId: startDocIdPref, docs, onChange: changeStartDoc }}
         defaultView={defaultViewPref}
         onChangeDefaultView={changeDefaultView}
         wikiPreview={wikiPreviewPref}

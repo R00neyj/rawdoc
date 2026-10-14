@@ -70,9 +70,10 @@ export type BootDeps = {
 
 export type BootRouteInput = {
   hash: HashRoute
-  docs: { id: string }[]
+  docs: { id: string; e2ee?: 'locked' | 'open' }[]
   lastDocId: string | null
-  startScreen: 'home' | 'last'
+  startScreen: 'home' | 'last' | 'doc'
+  startDocId: string | null
 }
 
 export type BootRoute =
@@ -84,7 +85,7 @@ export type BootRoute =
   | { kind: 'home' }
 
 // 부팅 첫 화면 판정 — 해시가 먼저, 문서 해시가 아니면 시작 화면 설정 (F-2074, F-111 2-1, F-232 3.1)
-export function decideBootRoute({ hash: parsedHash, docs: metaList, lastDocId, startScreen }: BootRouteInput): BootRoute {
+export function decideBootRoute({ hash: parsedHash, docs: metaList, lastDocId, startScreen, startDocId }: BootRouteInput): BootRoute {
   if (parsedHash.type === 'share') return { kind: 'share', fragment: parsedHash.fragment }
   if (parsedHash.type === 'shares') return { kind: 'shares' }
   if (parsedHash.type === 'help') return { kind: 'help' }
@@ -95,6 +96,11 @@ export function decideBootRoute({ hash: parsedHash, docs: metaList, lastDocId, s
 
   const hashDocId = parsedHash.type === 'doc' ? parsedHash.docId : null
   const hashThreadId = parsedHash.type === 'doc' ? (parsedHash.threadId ?? null) : null
+  // 문서 지정 — 지정 문서가 없거나 잠겼으면 알림 없이 홈 (small 2026-10-14)
+  if (!hashDocId && startScreen === 'doc') {
+    const start = metaList.find((d) => d.id === startDocId)
+    return start && start.e2ee !== 'locked' ? { kind: 'doc', docId: start.id, notFound: false, threadId: null } : { kind: 'home' }
+  }
   // 해시가 특정 문서를 안 가리키면 시작 화면 설정을 따른다 — 기본(home)은 자동으로 안 연다 (F-232 3.1)
   const shouldAutoOpen = Boolean(hashDocId) || startScreen === 'last'
   if (!shouldAutoOpen) return { kind: 'home' }
@@ -255,7 +261,13 @@ export async function runBoot(deps: BootDeps): Promise<void> {
 
   // 첫 화면을 고르고 ready 한다 — 캐시 먼저 길·기다리는 길이 함께 쓴다 (F-2042 4.2)
   async function finishBootRouting(metaList: DocMeta[], folderList: Folder[]) {
-    const route = decideBootRoute({ hash: parsedHash, docs: metaList, lastDocId: getPref('md.lastDocId', '') || null, startScreen: getPref('md.startScreen', 'home') })
+    const route = decideBootRoute({
+      hash: parsedHash,
+      docs: metaList,
+      lastDocId: getPref('md.lastDocId', '') || null,
+      startScreen: getPref('md.startScreen', 'home'),
+      startDocId: getPref('md.startDocId', '') || null,
+    })
     // 공유 링크(#/s/{조각})는 저장소에서 문서를 찾지 않고 곧바로 S-4 를 보여준다 (specs/features/F-130.md 4장)
     if (route.kind === 'share') {
       await openSharedFragment(route.fragment, metaList)

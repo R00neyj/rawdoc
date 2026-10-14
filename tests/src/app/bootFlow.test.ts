@@ -18,7 +18,7 @@ vi.mock('../../../src/app/migrateLocal', () => ({ migrateLocalIfNeeded: vi.fn(as
 vi.mock('../../../src/storage/idbStore', () => ({ createIdbStore: vi.fn() }))
 vi.mock('../../../src/app/attachmentGc', () => ({ scheduleAttachmentGc: vi.fn(() => () => {}), cleanupUnusedAttachments: vi.fn() }))
 
-const base: BootRouteInput = { hash: { type: 'none' }, docs: [{ id: 'a' }, { id: 'b' }], lastDocId: null, startScreen: 'home' }
+const base: BootRouteInput = { hash: { type: 'none' }, docs: [{ id: 'a' }, { id: 'b' }], lastDocId: null, startScreen: 'home', startDocId: null }
 const route = (over: Partial<BootRouteInput>) => decideBootRoute({ ...base, ...over })
 
 describe('decideBootRoute', () => {
@@ -90,6 +90,21 @@ describe('decideBootRoute', () => {
 
   it('U16 해시가 설정보다 먼저', () => {
     expect(route({ hash: { type: 'doc', docId: 'b' }, startScreen: 'home' })).toMatchObject({ kind: 'doc', docId: 'b' })
+  })
+
+  it('start-doc U1 문서 지정 — 지정 문서가 목록에 있으면 연다', () => {
+    expect(route({ startScreen: 'doc', startDocId: 'b', lastDocId: 'a' })).toEqual({ kind: 'doc', docId: 'b', notFound: false, threadId: null })
+  })
+
+  it('start-doc U2 문서 지정 — 지정 문서가 없거나 비었으면 홈', () => {
+    expect(route({ startScreen: 'doc', startDocId: 'zz', lastDocId: 'a' })).toEqual({ kind: 'home' })
+    expect(route({ startScreen: 'doc', startDocId: null, lastDocId: 'a' })).toEqual({ kind: 'home' })
+  })
+
+  it('start-doc U3 문서 지정 — 잠긴 금고 문서면 홈, 해시 문서가 먼저', () => {
+    const docs = [{ id: 'a' }, { id: 'v', e2ee: 'locked' as const }]
+    expect(route({ docs, startScreen: 'doc', startDocId: 'v' })).toEqual({ kind: 'home' })
+    expect(route({ hash: { type: 'doc', docId: 'a' }, startScreen: 'doc', startDocId: 'v' })).toMatchObject({ kind: 'doc', docId: 'a' })
   })
 })
 

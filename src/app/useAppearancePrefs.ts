@@ -6,10 +6,14 @@ import { getPref, setPref } from './prefs'
 import { resolveStoredContentWidth, CONTENT_WIDTH_VAR } from './contentWidth'
 import { resolveTheme } from './theme'
 import { resolveDefaultView, type DefaultView } from './defaultView'
+import { defaultStartDocId, type PickerDoc } from './docPicker'
 import { NEW_DOC_TEMPLATE_NONE } from '../lib/templates'
 
 export type UseAppearancePrefsOptions = {
   editorRef: RefObject<EditorHandle | null>
+  // 시작 화면 `문서 지정` 을 처음 고를 때 채울 문서 후보 (small 2026-10-14)
+  docs: readonly PickerDoc[]
+  currentDocId: string | null
 }
 
 export type UseAppearancePrefsResult = {
@@ -20,7 +24,8 @@ export type UseAppearancePrefsResult = {
   fontSizePref: 'small' | 'medium' | 'large'
   lineNumbersPref: 'on' | 'off'
   indentPref: '2' | '4'
-  startScreenPref: 'home' | 'last'
+  startScreenPref: 'home' | 'last' | 'doc'
+  startDocIdPref: string
   defaultViewPref: DefaultView
   toolbarPref: 'on' | 'off'
   wikiPreviewPref: string
@@ -34,6 +39,7 @@ export type UseAppearancePrefsResult = {
   changeLineNumbers: (value: string) => void
   changeIndent: (value: string) => void
   changeStartScreen: (value: string) => void
+  changeStartDoc: (id: string) => void
   changeDefaultView: (value: string) => void
   changeToolbar: (value: string) => void
   changeWikiPreview: (value: string) => void
@@ -42,7 +48,7 @@ export type UseAppearancePrefsResult = {
   changeContentWidth: (px: number) => void
 }
 
-export function useAppearancePrefs({ editorRef }: UseAppearancePrefsOptions): UseAppearancePrefsResult {
+export function useAppearancePrefs({ editorRef, docs, currentDocId }: UseAppearancePrefsOptions): UseAppearancePrefsResult {
   const [headingFont, setHeadingFont] = useState(() => getPref('md.headingFont', 'serif'))
   const [bodyFont, setBodyFont] = useState(() => getPref('md.bodyFont', 'sans')) // F-141 3.3
   const [themePref, setThemePref] = useState(() => getPref('md.theme', 'system')) // F-141 3.1
@@ -54,6 +60,7 @@ export function useAppearancePrefs({ editorRef }: UseAppearancePrefsOptions): Us
   const [fontSizePref, setFontSizePref] = useState(() => getPref('md.fontSize', 'medium')) // F-154 2.2
   const [indentPref, setIndentPref] = useState(() => getPref('md.indent', '4')) // F-154 2.3
   const [startScreenPref, setStartScreenPref] = useState(() => getPref('md.startScreen', 'home')) // F-232 3.4
+  const [startDocIdPref, setStartDocIdPref] = useState(() => getPref('md.startDocId', ''))
   const [defaultViewPref, setDefaultViewPref] = useState(() => resolveDefaultView(getPref('md.defaultView', 'remember'))) // F-2112 2.2
   const [toolbarPref, setToolbarPref] = useState(() => getPref('md.toolbar', 'on')) // F-233 3.5
   // 위키링크 미리보기 켜짐(기본 켬) — 모르는 값은 켬으로 다룬다(F-2044 8.1)
@@ -135,9 +142,15 @@ export function useAppearancePrefs({ editorRef }: UseAppearancePrefsOptions): Us
 
   // 시작 화면 — 저장은 다음에 앱을 열 때부터 적용, 지금 화면은 강제로 바꾸지 않는다 (F-232 3.4)
   function changeStartScreen(value: string) {
-    const v = value as 'home' | 'last'
+    const v = value as 'home' | 'last' | 'doc'
     setStartScreenPref(v)
     setPref('md.startScreen', v)
+    if (v === 'doc' && startDocIdPref === '') changeStartDoc(defaultStartDocId(docs, currentDocId))
+  }
+
+  function changeStartDoc(id: string) {
+    setStartDocIdPref(id)
+    setPref('md.startDocId', id)
   }
 
   // 기본 뷰 — 다음 부팅부터 적용, 지금 모드와 md.viewMode 는 건드리지 않는다 (F-2112 2.2)
@@ -176,9 +189,9 @@ export function useAppearancePrefs({ editorRef }: UseAppearancePrefsOptions): Us
   }
 
   return {
-    themePref, resolvedTheme, headingFont, bodyFont, fontSizePref, lineNumbersPref, indentPref, startScreenPref,
+    themePref, resolvedTheme, headingFont, bodyFont, fontSizePref, lineNumbersPref, indentPref, startScreenPref, startDocIdPref,
     defaultViewPref, toolbarPref, wikiPreviewPref, newDocTemplatePref, e2eeLockMinutesPref, contentWidthPref,
-    changeTheme, changeHeadingFont, changeBodyFont, changeFontSize, changeLineNumbers, changeIndent, changeStartScreen,
+    changeTheme, changeHeadingFont, changeBodyFont, changeFontSize, changeLineNumbers, changeIndent, changeStartScreen, changeStartDoc,
     changeDefaultView, changeToolbar, changeWikiPreview, changeNewDocTemplate, changeE2eeLockMinutes, changeContentWidth,
   }
 }

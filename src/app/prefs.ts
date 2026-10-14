@@ -17,7 +17,9 @@ type PrefMap = {
   'md.persistNoticeShown': '1'
   'md.account': string
   'md.localMigrated': string
-  'md.startScreen': 'home' | 'last'
+  'md.startScreen': 'home' | 'last' | 'doc'
+  // 시작 화면 `문서 지정` 의 문서 id, 기기별 (small 2026-10-14)
+  'md.startDocId': string
   'md.toolbar': 'on' | 'off'
   'md.landingDone': '1'
   'md.mapView': string
@@ -83,6 +85,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.account',
   'md.localMigrated',
   'md.startScreen',
+  'md.startDocId',
   'md.toolbar',
   'md.landingDone',
   'md.mapView',

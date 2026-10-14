@@ -6562,6 +6562,25 @@ a.dialog-btn {
   margin: 4px 0 0;
 }
 
+/* 설정 시작 화면 `문서 지정` — 지정 문서 제목 + `문서 고르기…` (small 2026-10-14) */
+.dialog .settings-start-doc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+}
+
+.settings-start-doc-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-start-doc-title--none {
+  color: var(--muted);
+}
+
 .template-manager-heading {
   margin: 12px 0 4px;
   font-size: 12.5px;

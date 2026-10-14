@@ -72,6 +72,8 @@
 |`src/app/docMeta.ts`|사이드바 목록에 쓰는 문서 정보(제목·날짜·공유 여부)를 정리하고 최신순으로 정렬함|
 |`src/app/docNotifications.ts`|사이드바에서 안 읽은 알림이 있는 문서와 폴더를 골라 표시용으로 정리함|
 |`src/app/docPath.ts`|문서를 열 때 실시간 편집·읽기 전용·오프라인 등 어느 방식으로 열지 정함|
+|`src/app/docPicker.ts`|시작 문서를 고를 때 잠긴 금고 문서를 빼고 제목으로 거른 최근 수정순 목록과 처음 채울 문서를 정함|
+|`src/app/DocPickerDialog.tsx`|설정 `시작 화면` 의 `문서 지정` 에서 제목으로 찾아 시작 문서를 고르는 창|
 |`src/app/DocSkeleton.tsx`|문서를 불러오는 동안 보이는 회색 자리 표시 화면|
 |`src/app/DocumentArea.tsx`|문서 본문 편집 영역과 그 주변(댓글 달기 버튼 등)을 배치함|
 |`src/app/DonateDialog.tsx`|토스 송금 QR(넓은 창)이나 토스 앱 열기 버튼(휴대폰)을 보여 주는 후원 창|

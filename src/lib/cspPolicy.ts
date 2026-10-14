@@ -4,7 +4,7 @@ export type CspMode = 'report-only' | 'enforce'
 export const CSP_MODE: CspMode = 'report-only'
 export const CSP_REPORT_PATH = '/api/csp-report'
 // bootPaint.ts 의 BOOT_PAINT_SCRIPT 를 바꾸면 이 값도 바꾼다 (tests U2)
-export const BOOT_PAINT_SHA256 = 'c/oJtoDfQLhIQbvu8wTNg+mYvbePh/eI3OCN8P6lJsQ='
+export const BOOT_PAINT_SHA256 = 'gZTaKEcjmi/V1iFsfpJVH+Ctv5kO5dJipyEayMK39UA='
 
 const FRAME_BLOCK = "frame-ancestors 'none'"
 

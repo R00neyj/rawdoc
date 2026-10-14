@@ -810,11 +810,11 @@ export default function App() {
 
   // ----- 설정값·시스템 테마 (F-2063) -----
   const {
-    themePref, resolvedTheme, headingFont, bodyFont, fontSizePref, lineNumbersPref, indentPref, startScreenPref,
+    themePref, resolvedTheme, headingFont, bodyFont, fontSizePref, lineNumbersPref, indentPref, startScreenPref, startDocIdPref,
     toolbarPref, wikiPreviewPref, newDocTemplatePref, e2eeLockMinutesPref, contentWidthPref, defaultViewPref,
-    changeTheme, changeHeadingFont, changeBodyFont, changeFontSize, changeLineNumbers, changeIndent, changeStartScreen, changeDefaultView,
+    changeTheme, changeHeadingFont, changeBodyFont, changeFontSize, changeLineNumbers, changeIndent, changeStartScreen, changeStartDoc, changeDefaultView,
     changeToolbar, changeWikiPreview, changeNewDocTemplate, changeE2eeLockMinutes, changeContentWidth,
-  } = useAppearancePrefs({ editorRef })
+  } = useAppearancePrefs({ editorRef, docs, currentDocId })
 
   // ----- 전역 단축키 7개 — 순서·단계 그대로 (F-2062) -----
   useGlobalShortcuts({
@@ -1423,14 +1423,14 @@ export default function App() {
         account, accountDeleteUnsynced, accountDeleteUserId, answerE2eeConvertDialog, beforeLeaveDoc, bodyFont, bulkDeleteCancelRef,
         bulkDeleteItems, cancelBulkDelete, cancelDelete, cancelImportPreview, cancelImportProgress, cancelInvite, cancelMoveDoc,
         changeBodyFont, changeContentWidth, changeE2eeLockMinutes, changeFontSize, changeHeadingFont, changeIndent, changeLineNumbers,
-        changeNewDocTemplate, changeStartScreen, changeDefaultView, defaultViewPref, changeTheme, changeToolbar, changeWikiPreview, closeAccountDelete, closeContextMenu,
+        changeNewDocTemplate, changeStartScreen, changeStartDoc, changeDefaultView, defaultViewPref, changeTheme, changeToolbar, changeWikiPreview, closeAccountDelete, closeContextMenu,
         closeImportResult, closePalette, closeSearch, closeSettings, confirmBulkDelete, confirmDelete, confirmImport, confirmMoveDoc,
-        contentWidthPref, contextMenu, deleteTarget, e2ee, e2eeConvertText, e2eeLockMinutesPref, e2eeMigrateDialogOpen,
+        contentWidthPref, contextMenu, deleteTarget, docs, e2ee, e2eeConvertText, e2eeLockMinutesPref, e2eeMigrateDialogOpen,
         exportOffline, finishAccountDelete, folders, fontSizePref, handleContextMenuSelect, handleExportAll, handleExportVault,
         handleImportTargetChange, headingFont, importState, indentPref, inviteTarget, lineNumbersPref, listSource, moveDocTarget,
         newDocTemplatePref, openDocFromSearch, openSettings, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
         requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
-        setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, store, templateEntries, themePref,
+        setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, startDocIdPref, store, templateEntries, themePref,
         toolbarPref, wikiPreviewPref, settingsGithub: github.settings, githubDialogs: github.dialogs, ...templateManager,
         rightPanelSettings: { ...rightPanel.settings, calendar: calendar.settings },
       }} />

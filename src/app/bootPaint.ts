@@ -136,8 +136,9 @@ export const BOOT_PAINT_SCRIPT = `(function () {
         view = 'doc'
       } else if (hashStarts('#/s/') || hash === '#/shares' || hash === '#/help' || hash === '#/map' || hashStarts('#/map/')) {
         view = 'blank'
-      } else if (readPref(${startScreenKeyJson}) === 'last') {
-        view = 'doc'
+      } else {
+        var startScreen = readPref(${startScreenKeyJson})
+        if (startScreen === 'last' || startScreen === 'doc') view = 'doc'
       }
       el.setAttribute(${viewAttrJson}, view)
     } catch (e) {}
