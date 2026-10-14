@@ -6314,13 +6314,30 @@ body.sidebar-resizing {
   }
 }
 
-/* GitHub 연결·가져오기 (F-2128). 사이드바 아래 줄에 있어 위로 편다 (tweak 2026-10-14) */
+/* GitHub 연결·가져오기 (F-2128). 버튼이 아니라 도구 줄 폭에 맞춰 펴서 좁은 사이드바에 잘리지 않는다 (tweak 2026-10-14) */
+.sidebar-actions {
+  position: relative;
+}
+
+.github-import-menu--bar {
+  position: static;
+}
+
 .github-import-menu--bar .github-menu-list {
-  right: auto;
-  left: 0;
-  top: auto;
-  bottom: calc(100% + 4px);
-  transform-origin: bottom left;
+  right: 8px;
+  left: 8px;
+  min-width: 0;
+  max-width: none;
+  transform-origin: top center;
+}
+
+/* 휴대폰 폭은 도구 줄이 사이드바 아래에 있어 위로 편다 */
+@media (max-width: 600px) {
+  .github-import-menu--bar .github-menu-list {
+    top: auto;
+    bottom: calc(100% + 4px);
+    transform-origin: bottom center;
+  }
 }
 
 .github-import-menu--rail .github-menu-list {
