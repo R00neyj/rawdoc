@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>칸반 (제목 + 목록) 프로토타입</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 system-ui, sans-serif; color: #222; background: #f6f6f4; height: 100vh; display: flex; }
+  .sidebar { width: 240px; flex: none; background: #efefec; border-right: 1px solid #ddd; display: flex; flex-direction: column; padding: 12px; }
+  .sidebar .head { display: flex; gap: 6px; margin-bottom: 14px; }
+  .sq { width: 28px; height: 28px; border-radius: 6px; background: #ddd; }
+  .sq.dark { background: #333; }
+  .group { font-size: 12px; color: #888; margin: 6px 4px; }
+  .row { padding: 6px 10px; border-radius: 6px; color: #555; }
+  .row.active { background: #e2e2de; color: #111; font-weight: 600; }
+  .sidebar .foot { margin-top: auto; display: flex; justify-content: space-between; padding-top: 10px; border-top: 1px solid #ddd; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar { height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid #e4e4e0; }
+  .topbar .title { font-weight: 600; flex: 1; }
+  .seg { display: flex; border: 1px solid #ccc; border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; background: #fff; padding: 4px 12px; font: inherit; cursor: pointer; }
+  .seg button[aria-pressed='true'] { background: #333; color: #fff; }
+  .content { flex: 1; overflow: auto; padding: 24px 32px; }
+  .content.split { display: grid; grid-template-columns: minmax(320px, 1fr) 1.4fr; gap: 24px; }
+  textarea { width: 100%; height: 100%; min-height: 420px; font: 13px/1.6 ui-monospace, monospace; border: 1px solid #ddd; border-radius: 6px; padding: 12px; background: #fff; resize: none; }
+  .board { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; padding-bottom: 8px; }
+  .lane { flex: 0 0 220px; background: #ebebe8; border-radius: 8px; padding: 10px; }
+  .lane h3 { margin: 0 0 8px; font-size: 13px; display: flex; justify-content: space-between; color: #444; }
+  .lane .drop { min-height: 40px; }
+  .card { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; cursor: grab; }
+  .card.done .t { text-decoration: line-through; color: #999; }
+  .card ul { margin: 4px 0 0; padding-left: 16px; color: #777; font-size: 12px; }
+  .card.dragging { opacity: .4; }
+  .marker { height: 3px; background: #555; border-radius: 2px; margin: -5px 0 6px; }
+  .statusbar { height: 26px; font-size: 12px; color: #888; display: flex; align-items: center; padding: 0 16px; border-top: 1px solid #e4e4e0; gap: 16px; }
+  .diff { color: #555; }
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="head"><span class="sq dark"></span><span class="sq"></span></div>
+  <div class="group">문서</div>
+  <div class="row">rawdoc 요청사항 노트</div>
+  <div class="row active">작업 보드</div>
+  <div class="row">rawdoc_완료항목</div>
+  <div class="foot"><span class="sq"></span><span class="sq"></span><span class="sq"></span><span class="sq"></span></div>
+</aside>
+<div class="main">
+  <div class="topbar">
+    <span class="title">작업 보드</span>
+    <div class="seg" role="group" aria-label="보기">
+      <button data-mode="board" aria-pressed="true">보드</button>
+      <button data-mode="split" aria-pressed="false">원문 + 보드</button>
+      <button data-mode="source" aria-pressed="false">원문</button>
+    </div>
+    <span class="sq"></span><span class="sq"></span>
+  </div>
+  <div id="content" class="content"></div>
+  <div class="statusbar"><span id="stat"></span><span id="diff" class="diff"></span></div>
+</div>
+<script>
+const initial = `---
+kanban: true
+---
+# 작업 보드
+
+## 할 일
+
+- 칸반 프로토타입
+  - 제목 + 목록 방식
+- 도움말 글 쓰기
+
+## 진행 중
+
+- CLI webp 변환
+  - 명세 먼저 (새 의존성)
+
+## 완료
+
+- [x] 사이드바 메뉴 폭
+- [x] 가져오기 메뉴 위로 펼침
+`
+
+let text = initial
+let mode = 'board'
+let lastDiff = ''
+let drag = null
+const content = document.getElementById('content')
+
+// 줄 단위로 읽어 칸(## 제목)과 카드(최상위 - 항목 + 들여쓴 하위 줄)의 줄 범위를 기억한다
+function parse(src) {
+  const lines = src.split('\n')
+  const lanes = []
+  let lane = null
+  let card = null
+  lines.forEach((line, i) => {
+    const h = /^## (.+)$/.exec(line)
+    if (h) { lane = { title: h[1], line: i, cards: [] }; lanes.push(lane); card = null; return }
+    if (/^#\s/.test(line)) { lane = null; card = null; return }
+    if (!lane) return
+    const item = /^- (\[( |x)\] )?(.*)$/.exec(line)
+    if (item) { card = { start: i, end: i, text: item[3], done: item[2] === 'x', subs: [] }; lane.cards.push(card); return }
+    const sub = /^\s+- (.*)$/.exec(line)
+    if (sub && card) { card.end = i; card.subs.push(sub[1]); return }
+    if (line.trim() !== '') card = null
+  })
+  return { lines, lanes }
+}
+
+// 카드 줄 묶음만 잘라 다른 자리에 넣는다 — 나머지 줄은 손대지 않는다
+function moveCard(from, toLane, toIndex) {
+  const { lines, lanes } = parse(text)
+  const card = lanes[from.lane].cards[from.card]
+  const block = lines.slice(card.start, card.end + 1)
+  const target = lanes[toLane]
+  let insertAt
+  if (toIndex < target.cards.length) insertAt = target.cards[toIndex].start
+  else if (target.cards.length) insertAt = target.cards[target.cards.length - 1].end + 1
+  else insertAt = target.line + 2
+  const out = [...lines]
+  if (insertAt > card.start) {
+    out.splice(insertAt, 0, ...block)
+    out.splice(card.start, block.length)
+  } else {
+    out.splice(card.start, block.length)
+    out.splice(insertAt, 0, ...block)
+  }
+  if (target.cards.length === 0 && out[target.line + 1] !== '') out.splice(target.line + 1, 0, '')
+  text = out.join('\n')
+  lastDiff = `바뀐 줄: "${block[0]}"${block.length > 1 ? ` 외 ${block.length - 1}줄` : ''} 자리만 이동`
+  render()
+}
+
+function boardEl() {
+  const { lanes } = parse(text)
+  const board = document.createElement('div')
+  board.className = 'board'
+  lanes.forEach((lane, li) => {
+    const el = document.createElement('section')
+    el.className = 'lane'
+    const h = document.createElement('h3')
+    h.innerHTML = `<span></span><span>${lane.cards.length}</span>`
+    h.firstChild.textContent = lane.title
+    const drop = document.createElement('div')
+    drop.className = 'drop'
+    el.append(h, drop)
+    const marker = document.createElement('div')
+    marker.className = 'marker'
+    let dropIndex = lane.cards.length
+    lane.cards.forEach((card, ci) => {
+      const c = document.createElement('div')
+      c.className = 'card' + (card.done ? ' done' : '')
+      c.draggable = true
+      const t = document.createElement('div')
+      t.className = 't'
+      t.textContent = card.text
+      c.append(t)
+      if (card.subs.length) {
+        const ul = document.createElement('ul')
+        card.subs.forEach((s) => { const li2 = document.createElement('li'); li2.textContent = s; ul.append(li2) })
+        c.append(ul)
+      }
+      c.addEventListener('dragstart', () => { drag = { lane: li, card: ci }; c.classList.add('dragging') })
+      c.addEventListener('dragend', () => { c.classList.remove('dragging'); marker.remove() })
+      drop.append(c)
+    })
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault()
+      const cards = [...drop.querySelectorAll('.card')]
+      dropIndex = cards.findIndex((c) => e.clientY < c.getBoundingClientRect().top + c.offsetHeight / 2)
+      if (dropIndex === -1) dropIndex = cards.length
+      drop.insertBefore(marker, cards[dropIndex] ?? null)
+    })
+    el.addEventListener('dragleave', (e) => { if (!el.contains(e.relatedTarget)) marker.remove() })
+    el.addEventListener('drop', (e) => {
+      e.preventDefault()
+      marker.remove()
+      if (!drag) return
+      let idx = dropIndex
+      if (drag.lane === li && drag.card < idx) idx--
+      if (!(drag.lane === li && drag.card === idx)) moveCard(drag, li, idx)
+      drag = null
+    })
+    board.append(el)
+  })
+  return board
+}
+
+function sourceEl() {
+  const ta = document.createElement('textarea')
+  ta.spellcheck = false
+  ta.value = text
+  ta.addEventListener('input', () => {
+    text = ta.value
+    lastDiff = ''
+    const b = content.querySelector('.board')
+    if (b) b.replaceWith(boardEl())
+    stat()
+  })
+  return ta
+}
+
+function stat() {
+  const { lanes } = parse(text)
+  document.getElementById('stat').textContent = `칸 ${lanes.length} · 카드 ${lanes.reduce((n, l) => n + l.cards.length, 0)}`
+  document.getElementById('diff').textContent = lastDiff
+}
+
+function render() {
+  content.className = 'content' + (mode === 'split' ? ' split' : '')
+  content.replaceChildren(...(mode === 'board' ? [boardEl()] : mode === 'source' ? [sourceEl()] : [sourceEl(), boardEl()]))
+  stat()
+}
+
+document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
+  mode = b.dataset.mode
+  document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)))
+  render()
+}))
+
+render()
+</script>
+</body>
+</html>
