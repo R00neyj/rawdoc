@@ -91,6 +91,16 @@
   font-weight: 600;
 }
 
+.kanban-lane-title[tabindex] {
+  border-radius: var(--radius-control);
+  cursor: text;
+}
+
+.kanban-lane-title[tabindex]:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 2px;
+}
+
 .kanban-lane-count {
   flex: none;
   color: var(--muted);
@@ -153,4 +163,75 @@
 .kanban-stray:hover {
   color: var(--ink);
   background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+/* 칸 이름·카드 글자 입력칸 — 칸 머리·카드 글자 자리를 그대로 쓴다 (F-2141 3장) */
+.kanban-lane-input,
+.kanban-card-input {
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  outline: none;
+}
+
+.kanban-lane-input:focus,
+.kanban-card-input:focus {
+  border-color: transparent;
+  outline: 2px solid var(--accent-ring);
+}
+
+.kanban-lane-input {
+  flex: 1;
+  font-weight: 600;
+}
+
+.kanban-card .kanban-card-input {
+  width: calc(100% - 24px);
+}
+
+.kanban-card-input::placeholder {
+  color: var(--muted);
+}
+
+.kanban-lane > .kanban-card-input {
+  width: 100%;
+  padding: 8px 10px;
+}
+
+.kanban-add-card,
+.kanban-add-lane {
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition-colors);
+}
+
+.kanban-add-card:hover,
+.kanban-add-lane:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.kanban-add-card:focus-visible,
+.kanban-add-lane:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+}
+
+/* 칸 줄 오른쪽 끝 버튼 */
+.kanban-add-lane {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-dialog);
 }

@@ -1,10 +1,14 @@
-// 칸반 문서의 보기 상태와 보드 스냅샷 — 편집기 EditorState 를 읽기만 한다 (F-2140 2·3장)
+// 칸반 문서의 보기 상태와 보드 스냅샷 — 읽기는 편집기 EditorState, 쓰기는 view.dispatch 한 길 (F-2140 2·3장, F-2141 2장)
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
-import { isKanbanDoc, parseKanban, type KanbanLane } from '../lib/kanban'
+import { MapMode, type ChangeDesc } from '@codemirror/state'
+import type { EditorView } from '@codemirror/view'
+import { isKanbanDoc, parseKanban, type KanbanChange, type KanbanLane } from '../lib/kanban'
 import { nextKanbanView, type KanbanView } from './kanbanView'
 import type { EditorHandle } from '../editor/Editor'
 
 type ViewMode = 'live' | 'raw' | 'view'
+export type KanbanUserEvent = `kanban.${'add' | 'edit' | 'move' | 'toggle' | 'flag'}`
+export type ApplyKanban = (change: KanbanChange | KanbanChange[] | null, userEvent: KanbanUserEvent) => boolean
 type KanbanState = { docId: string | null; isKanban: boolean; view: KanbanView }
 
 export type UseKanbanViewOptions = {
@@ -24,6 +28,14 @@ export type UseKanbanViewResult = {
   handle: EditorHandle | null
   choose: (view: KanbanView) => void
   chooseMode: (mode: ViewMode) => void
+  applyKanban: ApplyKanban
+}
+
+// 변경 하나 = 트랜잭션 하나 = 되돌리기 한 단계 (F-2138 1장)
+export function applyKanbanTo(view: EditorView, change: KanbanChange | KanbanChange[] | null, userEvent: KanbanUserEvent): boolean {
+  if (change === null || view.state.readOnly) return false
+  view.dispatch({ changes: change, userEvent })
+  return true
 }
 
 export function useKanbanView({ editorRef, editorHandle, docId, ready, covered }: UseKanbanViewOptions): UseKanbanViewResult {
@@ -80,24 +92,73 @@ export function useKanbanView({ editorRef, editorHandle, docId, ready, covered }
     commit({ ...prev, view: nextKanbanView(prev.view, { kind: 'chooseMode', mode }) })
   }, [commit])
 
+  const applyKanban = useCallback<ApplyKanban>(
+    (change, userEvent) => {
+      const handle = ready ? editorRef.current : null
+      return handle ? applyKanbanTo(handle.view, change, userEvent) : false
+    },
+    [ready, editorRef],
+  )
+
   const isKanban = ready && editorHandle !== null && state.docId === docId && state.isKanban
   const boardShown = isKanban && state.view === 'board' && !covered
-  return { isKanban, view: state.view, boardShown, handle: boardShown ? editorHandle : null, choose, chooseMode }
+  return { isKanban, view: state.view, boardShown, handle: boardShown ? editorHandle : null, choose, chooseMode, applyKanban }
+}
+
+// 입력칸을 연 카드 `from` 또는 칸 `headingFrom`. key 는 연 순간의 위치라 다시 그려도 입력칸이 그대로 남는다 (F-2141 3장)
+export type KanbanTarget = { kind: 'card' | 'lane'; key: number; pos: number }
+
+type BoardSnap = { handle: EditorHandle; lanes: KanbanLane[]; target: KanbanTarget | null }
+
+// 줄 머리에서 시작해 줄 전체를 지운 변경은 pos 를 가로지르지 않아 TrackDel 이 못 본다 — 줄 안 한 글자로 지워짐을 함께 본다
+function mapTarget(changes: ChangeDesc, pos: number): number | null {
+  const next = changes.mapPos(pos, 1, MapMode.TrackDel)
+  return next === null || changes.mapPos(pos + 1, 1, MapMode.TrackDel) === null ? null : next
+}
+
+export type KanbanBoardState = {
+  lanes: KanbanLane[]
+  // lanes 와 같은 시점의 좌표
+  target: KanbanTarget | null
+  // 스냅샷 좌표 → 지금 원문 좌표, 그 사이 지워졌으면 null
+  toCurrent: (pos: number) => number | null
+  // 지금 원문 좌표로 추적을 시작한다
+  track: (kind: KanbanTarget['kind'], pos: number) => void
+  untrack: () => void
+  // 추적 중인 위치의 지금 원문 좌표
+  currentTarget: () => number | null
 }
 
 // 보드가 떠 있는 동안만 칸·카드 배열을 든다 — 변경은 표시만 하고 rAF 한 번에 묶어 다시 읽는다 (F-2140 3장)
-export function useKanbanLanes(handle: EditorHandle): KanbanLane[] {
-  const [snap, setSnap] = useState(() => ({ handle, lanes: parseKanban(handle.view.state.doc.toString()) }))
-  if (snap.handle !== handle) setSnap({ handle, lanes: parseKanban(handle.view.state.doc.toString()) })
+export function useKanbanBoard(handle: EditorHandle, onTargetLost: () => void): KanbanBoardState {
+  const [snap, setSnap] = useState<BoardSnap>(() => ({ handle, lanes: parseKanban(handle.view.state.doc.toString()), target: null }))
+  if (snap.handle !== handle) setSnap({ handle, lanes: parseKanban(handle.view.state.doc.toString()), target: null })
+  const targetRef = useRef<KanbanTarget | null>(null)
+  // 스냅샷 뒤에 쌓인 변경 — 스냅샷 좌표를 지금 원문 좌표로 옮긴다
+  const pendingRef = useRef<ChangeDesc | null>(null)
+  const lostRef = useRef(onTargetLost)
+  useLayoutEffect(() => {
+    lostRef.current = onTargetLost
+  })
 
   // 렌더에서 읽은 뒤 구독 전에 변경이 끼지 않게 같은 커밋 layout 단계에서 붙인다
   useLayoutEffect(() => {
     let frame = 0
+    targetRef.current = null
+    pendingRef.current = null
     const read = () => {
       frame = 0
-      setSnap({ handle, lanes: parseKanban(handle.view.state.doc.toString()) })
+      pendingRef.current = null
+      setSnap({ handle, lanes: parseKanban(handle.view.state.doc.toString()), target: targetRef.current })
     }
-    const off = handle.onChanges(() => {
+    const off = handle.onChanges(({ changes }) => {
+      pendingRef.current = pendingRef.current ? pendingRef.current.composeDesc(changes.desc) : changes.desc
+      const target = targetRef.current
+      if (target) {
+        const pos = mapTarget(changes.desc, target.pos)
+        targetRef.current = pos === null ? null : { ...target, pos }
+        if (pos === null) lostRef.current()
+      }
       if (!frame) frame = requestAnimationFrame(read)
     })
     return () => {
@@ -106,5 +167,18 @@ export function useKanbanLanes(handle: EditorHandle): KanbanLane[] {
     }
   }, [handle])
 
-  return snap.lanes
+  const toCurrent = useCallback((pos: number) => (pendingRef.current ? mapTarget(pendingRef.current, pos) : pos), [])
+  const track = useCallback((kind: KanbanTarget['kind'], pos: number) => {
+    const target = { kind, key: pos, pos }
+    targetRef.current = target
+    // 스냅샷이 지금 원문보다 늦으면 다음 read 가 함께 옮겨 준다
+    if (!pendingRef.current) setSnap((prev) => ({ ...prev, target }))
+  }, [])
+  const untrack = useCallback(() => {
+    targetRef.current = null
+    setSnap((prev) => (prev.target ? { ...prev, target: null } : prev))
+  }, [])
+  const currentTarget = useCallback(() => targetRef.current?.pos ?? null, [])
+
+  return { lanes: snap.lanes, target: snap.target, toCurrent, track, untrack, currentTarget }
 }

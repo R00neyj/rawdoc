@@ -1383,7 +1383,7 @@ export default function App() {
             handleOpenWikiLink, handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, jumpToLine, kanban,
             liveEditorOption, mapRoute, mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme,
             resolveImagePath: githubImages.resolveImagePath,
-            setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, store, titleReadOnly, viewerHtml: shownViewerHtml, viewerRef, viewFindCard: viewFind.card, viewMode,
+            setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, showNotice, store, titleReadOnly, viewerHtml: shownViewerHtml, viewerRef, viewFindCard: viewFind.card, viewMode,
             wikiContext, wikiPreviewPref, wikiResolver,
             phoneSidePanel: { slot: sidePanel.outlineSlot, open: sidePanel.openFrom, close: rightPanel.closePanel },
           }} />}

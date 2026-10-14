@@ -123,7 +123,7 @@ src/
   - `lib/`: `wikiResolve.ts`(F-2018 — 경로식·가까운 폴더 해석기, 순수 함수, worker 도 import)
   - `viewer/`: `headingTarget.ts`(F-2018 — markdown-it 파싱 결과로 제목 찾기, DOM 없음)
 - Yjs 골격(2026-09-23)으로 추가
-  - `editor/`: `yBinding.ts`(F-302 — 로컬 `Y.Doc`·되돌리기), `undoGroup.ts`(F-302 — 되돌리기 묶음 판정), `remoteGate.ts`(F-303 — 공유 `Y.Doc`·IME 게이트·연결 포트), `devSyncFlag.ts`(F-303 — 개발 전용 플래그)
+  - `editor/`: `yBinding.ts`(F-302 — 로컬 `Y.Doc`·되돌리기), `undoGroup.ts`(F-302 — 되돌리기 묶음 판정), `remoteGate.ts`(F-303 — 공유 `Y.Doc`·IME 게이트·연결 포트), `boardComposition.ts`(F-2141 — 칸반 보드 입력칸 조합 상태), `devSyncFlag.ts`(F-303 — 개발 전용 플래그)
   - `app/`: `yDevLink.ts`(F-303 — 개발 전용 두 탭 연결, 운영 빌드에 없음)
 - 옵시디언 볼트 내보내기(2026-09-23)으로 추가
   - `app/`: `exportVault.ts`(F-2020 — 볼트 계획·본문 변환·링크 고쳐 쓰기·스트리밍 zip)
@@ -248,7 +248,7 @@ type YjsMetaRow = {
 ## 3. 문서 상태 흐름
 
 - 열린 문서 본문의 원본은 에디터마다 만드는 `Y.Doc` 의 `Y.Text`(`content`) 하나다. CM6 `EditorState` 는 `y-codemirror.next` 로 이어진 투영이다. React state 에 본문 문자열을 두지 않는다 (F-302)
-- 원격 연결이 붙으면(F-303 훅, F-305 이후 provider) 공유 `Y.Doc` 이 원본이 되고 편집기 `Y.Doc` 은 IME 게이트 뒤에서 Yjs 업데이트로만 따라간다. `getText`·저장은 계속 `EditorState` 를 읽는다 (F-303 7장)
+- 원격 연결이 붙으면(F-303 훅, F-305 이후 provider) 공유 `Y.Doc` 이 원본이 되고 편집기 `Y.Doc` 은 IME 게이트 뒤에서 Yjs 업데이트로만 따라간다. `getText`·저장은 계속 `EditorState` 를 읽는다 (F-303 7장). 게이트의 조합 판정에는 칸반 보드 입력칸의 조합(`boardComposition.ts`)도 더해져, 그동안 온 원격 업데이트는 보드 조합이 끝날 때 반영된다 (F-2141)
 - 저장소 → 에디터: 문서를 여는 시점 1회 (`Editor` 를 문서 id 를 `key` 로 다시 마운트) (에디터를 만들 때 `Y.Doc` 을 새로 만들어 저장소 본문을 LF 로 바꿔 심는다. 에디터를 버리면 `Y.Doc` 도 버린다)
 - 에디터 → 저장소: 입력이 멈추면 스냅샷 저장. 문서 전환·새로고침 적용 전에는 대기 중 저장을 먼저 끝낸다
 - 문서 목록(제목·수정 시각)은 `App` 의 React state 로 둔다. 본문은 넣지 않는다. 다른 탭 신호는 `md-remote` 캐시로 맞추고, 마지막 서버 목록이 10분을 넘었으면 뒤에서 서버 목록(F-2056)

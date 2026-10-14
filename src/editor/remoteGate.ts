@@ -2,6 +2,7 @@
 import * as Y from 'yjs'
 import type { EditorView } from '@codemirror/view'
 
+import { boardCompositionAlive, isBoardCompositionStarted, onBoardCompositionEnd } from './boardComposition'
 import { forceRecalc } from './composition'
 import { DEV_YSYNC_NOGATE } from './devSyncFlag'
 import { isFrontmatterCompositionStarted } from './preview/frontmatterEdit'
@@ -196,11 +197,12 @@ export function connectRemote({
   if (!docId || (!sharedDoc && typeof factory !== 'function')) return null
 
   // composing 이 아니라 compositionStarted — 조합 진입 직후 첫 변경 전 틈까지 막는다 (5.1)
-  const composing = () => view.compositionStarted || isCellCompositionStarted(view) || isFrontmatterCompositionStarted(view)
+  const composing = () =>
+    view.compositionStarted || isCellCompositionStarted(view) || isFrontmatterCompositionStarted(view) || isBoardCompositionStarted(view)
   const gate = createRemoteGate(editorDoc, {
     docId,
     isComposing: composing,
-    isAlive: () => compositionAlive(view),
+    isAlive: () => compositionAlive(view) || boardCompositionAlive(view),
     afterFlush: () => view.dispatch({ effects: forceRecalc.of(null) }),
     nogate: DEV_YSYNC_NOGATE,
     sharedDoc,
@@ -225,10 +227,13 @@ export function connectRemote({
   }
   view.dom.addEventListener('compositionend', onCompositionEnd, true)
   view.dom.addEventListener('keydown', onKeyDown, true)
+  // 보드 입력칸은 view.dom 밖이라 끝을 알림판으로 받는다 (F-2141 2장)
+  const offBoardEnd = onBoardCompositionEnd(view, onCompositionEnd)
 
   function detach() {
     view.dom.removeEventListener('compositionend', onCompositionEnd, true)
     view.dom.removeEventListener('keydown', onKeyDown, true)
+    offBoardEnd()
     ticks.forEach((tick) => clearTimeout(tick))
     ticks.clear()
     gate.destroy()

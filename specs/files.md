@@ -242,7 +242,7 @@
 |`src/app/useGlobalShortcuts.ts`|앱 전체에서 쓰는 단축키를 받아 해당 기능을 실행함|
 |`src/app/useHashRouting.ts`|뒤로·앞으로 가기와 주소창 변경에 맞춰 열린 문서를 바꿈|
 |`src/app/useImportFlow.ts`|md·zip 파일 가져오기와 끌어놓기, 이미지 넣기 흐름을 처리함|
-|`src/app/useKanbanView.ts`|문서마다 보드·원문 보기를 기억하고, 본문이 바뀌면 보드의 칸·카드를 다시 읽음 (F-2140)|
+|`src/app/useKanbanView.ts`|문서마다 보드·원문 보기를 기억하고, 본문이 바뀌면 보드의 칸·카드를 다시 읽음. 보드에서 고친 내용을 원문에 쓰고(applyKanban), 고치는 중인 카드·칸 자리를 다른 곳 수정에 맞춰 따라감 (F-2140, F-2141)|
 |`src/app/useLeaveShare.ts`|공유받은 문서에서 나가기 확인 창과 나가기 처리를 맡음|
 |`src/app/useListAutoRefresh.ts`|로그인 상태에서 사이드바 문서 목록을 주기적으로 새로 고침|
 |`src/app/useLiveDoc.ts`|문서를 여는 동안 실시간 함께 편집 연결을 유지함|
@@ -297,13 +297,14 @@
 |`src/app/yDevLink.ts`|개발 중에만 쓰는, 두 탭 사이 같은 문서 동시 편집 연결|
 |`src/app/yjsFlush.ts`|열지 않은 문서의 밀린 수정을 한 건씩 서버에 올림|
 
-## `src/editor/` 편집기 (48)
+## `src/editor/` 편집기 (49)
 
 글을 쓰는 본문 칸. 마크다운 기호를 지우지 않고 꾸며 보여 줌
 
 |파일|하는 일|
 |---|---|
 |`src/editor/autoPair.ts`|괄호나 `**` 같은 짝 기호를 자동으로 닫아 줌|
+|`src/editor/boardComposition.ts`|칸반 보드 입력칸에서 한글을 조합하는 중인지 알려 남의 수정을 잠시 미루게 함 (F-2141)|
 |`src/editor/blockCommands.ts`|우클릭 메뉴로 줄을 목록·제목·일반 문단으로 바꿈|
 |`src/editor/codeLanguages.ts`|코드 블록 안 글자를 언어별로 색칠하고 들여쓰기를 맞춤|
 |`src/editor/commands.ts`|단축키로 굵게·기울임·링크 기호를 넣음|

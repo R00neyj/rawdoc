@@ -17,6 +17,7 @@ import KanbanBoard, { type KanbanBoardFocus } from './KanbanBoard'
 import type { UseKanbanViewResult } from './useKanbanView'
 import { isKanbanDoc } from '../lib/kanban'
 import type { DocMeta, OpenDoc } from './docMeta'
+import type { NoticeWithAction } from './NoticeBar'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { Store } from '../types'
 import type { ResolveImagePath } from '../lib/imageMarkdown'
@@ -81,6 +82,8 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
     sharesOpen: boolean
     // 연결 문서의 저장소 그림 리졸버 — 편집기는 마운트 때만 읽는다 (F-2131 3.1)
     resolveImagePath: ResolveImagePath | null
+    // 보드 자리 추적 알림 (F-2141 3장)
+    showNotice: (input: NoticeWithAction) => number
     store: Store
     titleReadOnly: boolean
     viewerHtml: string
@@ -95,7 +98,7 @@ export default function DocumentArea({
   editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles, handleOpenWikiLink,
   handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, jumpToLine, kanban, liveEditorOption, mapRoute,
   mentionSource, onNavigateFolder, openDoc, outlineControlRef, phoneSidePanel, openWikiLinkTarget, resolveAttachment, resolveImagePath, resolvedTheme, setCommentRailExtra, setEditorRefs, sharedDoc,
-  sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewFindCard, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
+  sharesOpen, showNotice, store, titleReadOnly, viewerHtml, viewerRef, viewFindCard, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
 }: DocumentAreaProps) {
   const phone = usePhoneWidth()
   const [pillCover, setPillCover] = useState(0)
@@ -187,6 +190,9 @@ export default function DocumentArea({
           handle={boardHandle}
           title={currentDoc?.title ?? ''}
           titleReadOnly={titleReadOnly}
+          readOnly={isReadOnlyDoc}
+          apply={kanban.applyKanban}
+          showNotice={showNotice}
           onTitleChange={handleTitleChange}
           onTitleCommit={handleTitleCommit}
           onOpenStray={openStrayLine}
