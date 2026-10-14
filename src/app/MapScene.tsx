@@ -509,8 +509,9 @@ function buildScene(
   }
 
   // 그래프 반지름. 노드 반지름을 더해야 카메라가 구체 안으로 들어가지 않는다 (F-2003 7.2)
+  // 문서가 한두 개면 노드 하나가 화면을 채우지 않게 노드 6개 폭을 하한으로 둔다 (tweak 2026-10-14)
   function graphRadius(radius: number): number {
-    return Math.max(radius + maxNodeRadius, 1)
+    return Math.max(radius + maxNodeRadius, maxNodeRadius * 6, 1)
   }
 
   function applyClip(distance: number, radius: number) {
