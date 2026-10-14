@@ -48,7 +48,7 @@ export const SITE_CHROME_CSS = `
   gap: 8px;
   color: var(--ink);
   text-decoration: none;
-  font-family: var(--font-display);
+  font-family: var(--font-serif);
   font-weight: 700;
   font-size: 16px;
 }

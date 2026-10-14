@@ -63,7 +63,7 @@
 }
 
 .command-palette-item:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .command-palette-item--on {

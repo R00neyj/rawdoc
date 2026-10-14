@@ -90,7 +90,7 @@
 
 .map-empty button:hover,
 .map-empty a:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 /* ----- 3D 장면 (specs/features/F-2002.md 8장) ----- */
@@ -176,7 +176,7 @@
 }
 
 .map-notice a:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 /* 안내 줄이 떠 있으면 목록 첫 줄이 그 밑에 깔린다 — 그만큼 밀어 둔다 */
@@ -238,7 +238,7 @@
 }
 
 .map-list-group button:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 /* ----- 지도 설정 패널 (specs/features/F-2005.md 4·6·9장) — 캔버스를 줄이지 않고 위에 겹친다 (6.1) ----- */
@@ -420,7 +420,7 @@
 }
 
 .map-panel-reset:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 /* ----- `그룹` 묶음 (specs/features/F-2008.md 7·11장) — 새 토큰 0개, hex 0개, 팔레트는 3장이 더한 별칭뿐이다 ----- */

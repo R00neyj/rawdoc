@@ -25,5 +25,5 @@
 
 .code-copy-btn:hover {
   color: var(--ink);
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }

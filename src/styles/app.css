@@ -71,7 +71,7 @@ svg {
 }
 
 .brand-group:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .brand-icon {
@@ -81,7 +81,8 @@ svg {
 }
 
 .brand {
-  font-family: var(--font-display);
+  /* 로고는 설정 제목 서체와 무관하게 세리프 고정 (tweak 2026-10-14) */
+  font-family: var(--font-serif);
   font-weight: 700;
   font-size: 16px;
   /* 자간은 tokens.css 전역 규칙(letter-spacing: var(--tracking))이 준다 (F-141 3.6) */
@@ -274,7 +275,7 @@ svg {
 
 .editor-toolbar-btn:hover,
 .editor-toolbar-heading-btn:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -682,7 +683,7 @@ body.sidebar-resizing {
 }
 
 .rail-btn:hover:not([aria-disabled='true']) {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -760,7 +761,7 @@ body.sidebar-resizing {
 
 /* 호버·현재 표시는 행 전체 (F-143 3.6). 현재 행은 --ink 7% 바탕·테두리 없음, 호버해도 그대로 (F-153 2.3) */
 .tree-row:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .tree-row:has(.doc-item-btn[aria-current='page']),
@@ -809,7 +810,7 @@ body.sidebar-resizing {
 }
 
 .tree-toggle:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -954,7 +955,7 @@ body.sidebar-resizing {
 }
 
 .item-menu-btn:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -1059,7 +1060,7 @@ body.sidebar-resizing {
 
 .item-menu-list button:hover,
 .item-menu-list button:focus-visible {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -1157,7 +1158,7 @@ body.sidebar-resizing {
 
 .shortcut-panel-close:hover {
   color: var(--ink);
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .shortcut-panel-body {
@@ -1322,7 +1323,7 @@ body.sidebar-resizing {
 }
 
 .outline-item:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -1368,7 +1369,7 @@ body.sidebar-resizing {
 }
 
 .outline-btn:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 /* 아이콘이 클릭 대상을 가로채지 않게 — 버튼이 항상 히트테스트 대상 */
@@ -1606,7 +1607,7 @@ body.sidebar-resizing {
 }
 
 .comment-sheet-close:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -1770,7 +1771,7 @@ body.sidebar-resizing {
 }
 
 .comment-thread-resolve:hover:not(:disabled) {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -2042,7 +2043,7 @@ body.sidebar-resizing {
 }
 
 .comment-composer-cancel:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -2076,7 +2077,7 @@ body.sidebar-resizing {
 }
 
 .comment-orphans-head:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .comment-orphans-list {
@@ -2120,7 +2121,7 @@ body.sidebar-resizing {
 }
 
 .comment-add-button:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -2180,7 +2181,7 @@ body.sidebar-resizing {
 }
 
 .empty-state-actions button:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 /* 홈 최근 문서 5개 (F-241) */
@@ -2221,7 +2222,7 @@ body.sidebar-resizing {
 }
 
 .empty-state-recent-item:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .empty-state-recent-title {
@@ -2960,7 +2961,7 @@ body.sidebar-resizing {
 
 .dialog-actions button:hover:not(:disabled),
 .dialog-btn:hover:not(:disabled) {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .dialog-actions button.danger {
@@ -3048,7 +3049,7 @@ body.sidebar-resizing {
 
 .help-page-copy:hover,
 .help-page-close:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .help-page-body {
@@ -3082,7 +3083,7 @@ body.sidebar-resizing {
 }
 
 .move-doc-list button:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .move-doc-list button[aria-checked='true'] {
@@ -3186,7 +3187,7 @@ body.sidebar-resizing {
 }
 
 .invite-submit:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .invite-error {
@@ -3272,7 +3273,7 @@ body.sidebar-resizing {
 }
 
 .invite-grant-remove:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--danger);
 }
 
@@ -3469,7 +3470,7 @@ body.sidebar-resizing {
 }
 
 .api-token-revoke:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .api-token-confirm {
@@ -3523,7 +3524,7 @@ body.sidebar-resizing {
 }
 
 .icon-btn:hover:not(:disabled):not([aria-disabled='true']) {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -3880,7 +3881,7 @@ body.sidebar-resizing {
 .help-menu-list :is(button, a):focus-visible,
 .view-mode-menu-list button:hover,
 .view-mode-menu-list button:focus-visible {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -4083,7 +4084,7 @@ body.sidebar-resizing {
 .more-sheet-item:focus-visible,
 .settings-row:hover,
 .settings-row:focus-visible {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -4147,7 +4148,7 @@ body.sidebar-resizing {
 .context-menu-list button:hover,
 .context-menu-list button:focus-visible,
 .context-menu-list button.context-menu-item--focused {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -4245,7 +4246,7 @@ body.sidebar-resizing {
 
 .account-menu-list button:hover,
 .account-menu-list button:focus-visible {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -4400,7 +4401,7 @@ body.sidebar-resizing {
 
 .account-menu-row-btn:hover,
 .account-menu--row .account-login-btn:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -4549,7 +4550,7 @@ body.sidebar-resizing {
 }
 
 .notifications-read-all:hover:not(:disabled) {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -4586,7 +4587,7 @@ body.sidebar-resizing {
 
 .notification-item:hover,
 .notification-item:focus-visible {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .notification-item[data-unread='true'] {
@@ -4922,7 +4923,7 @@ body.sidebar-resizing {
 }
 
 .public-brand:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .public-brand-divider {
@@ -4980,7 +4981,7 @@ body.sidebar-resizing {
 }
 
 .public-view-notice button:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .public-view-main {
@@ -5091,7 +5092,7 @@ body.sidebar-resizing {
 }
 
 .public-folder-list-doc:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .public-folder-list-doc.is-current {
@@ -5144,7 +5145,7 @@ body.sidebar-resizing {
 }
 
 .shares-close:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .shares-login-required {
@@ -5268,7 +5269,7 @@ body.sidebar-resizing {
 }
 
 .shares-row-actions button:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .shares-row-actions button.danger {
@@ -5370,7 +5371,7 @@ body.sidebar-resizing {
 }
 
 .cli-login-signin:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 /* 설정 `계정` 탭·계정 삭제 대화상자 D-15 (F-2038.md 6.1·6.3) — 모양은 사람 확인 H1 */
@@ -6393,7 +6394,7 @@ body.sidebar-resizing {
 
 .github-menu-list a:hover,
 .github-menu-list a:focus-visible {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -6441,7 +6442,7 @@ a.dialog-btn {
 }
 
 .github-entries button:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .github-entries .github-entry-dir {
@@ -6701,7 +6702,7 @@ a.dialog-btn {
 }
 
 .panel-slot-toggle:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .panel-slot-toggle .side-panel-chevron {
@@ -6731,7 +6732,7 @@ a.dialog-btn {
 }
 
 .panel-slot-step:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -6892,7 +6893,7 @@ h3.panel-settings-title:not(:first-child) {
 }
 
 .doc-link-item:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .doc-link-title {
@@ -7012,7 +7013,7 @@ h3.panel-settings-title:not(:first-child) {
 }
 
 .panel-graph-map:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -7121,7 +7122,7 @@ h3.panel-settings-title:not(:first-child) {
 }
 
 .calendar-today-btn:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .calendar-grid {
@@ -7153,7 +7154,7 @@ h3.panel-settings-title:not(:first-child) {
 }
 
 .calendar-day:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
 }
 
 .calendar-day--outside {

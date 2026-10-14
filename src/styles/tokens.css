@@ -21,6 +21,8 @@
   --rule-2: #f2efe8;
   /* 앱 껍데기(사이드바·상단바·상태바·알약·목차·댓글 판) 면 — 편집기 바탕(--paper)보다 한 단계 밝다 (design.md 3.1) */
   --surface: var(--panel);
+  /* 조작부 호버 바탕 — 화이트·세피아는 --rule-2 그대로 */
+  --hover-bg: var(--rule-2);
   --link: #2952cc;
   --danger: #c2410c;
   color-scheme: light;
@@ -198,6 +200,8 @@
   --rule-2: #2a2825;
   /* 다크는 --panel 이 --paper 와 거의 같아 조작부가 편집기와 안 갈린다 — 잉크를 섞어 밝힌다 (tweak 2026-09-30) */
   --surface: color-mix(in srgb, var(--ink) 8%, var(--paper));
+  /* --rule-2 가 --surface 보다 어두워 호버가 안 보인다 — 어느 면 위든 잉크를 얹어 밝힌다 (tweak 2026-10-14) */
+  --hover-bg: color-mix(in srgb, var(--ink) 8%, transparent);
   --link: #8aaef5;
   --danger: #f08a5d;
   --callout-tip: #4fb8c7;

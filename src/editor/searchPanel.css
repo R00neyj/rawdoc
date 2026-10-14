@@ -103,7 +103,7 @@
 
 :is(.cm-host .cm-panel.cm-search, .view-find) .cm-button:hover,
 :is(.cm-host .cm-panel.cm-search, .view-find) [name='close']:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
@@ -263,7 +263,7 @@
 }
 
 :is(.cm-host .cm-panel.cm-search, .view-find) label:hover {
-  background: var(--rule-2);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 
