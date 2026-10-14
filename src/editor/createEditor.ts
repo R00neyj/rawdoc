@@ -241,6 +241,19 @@ function editorContextMenuHandler(notify: (info: EditorContextMenuInfo) => void)
   })
 }
 
+// .cm-content 밖(좌우 여백·마지막 줄 아래·거터) 우클릭도 같은 메뉴 — domEventHandlers 는 contentDOM 에만 붙어 view.dom 에 따로 단다
+function attachMarginContextMenu(view: EditorView, notify: (info: EditorContextMenuInfo) => void): () => void {
+  const handler = (event: MouseEvent) => {
+    if (event.defaultPrevented || event.shiftKey || isComposing(view) || isTouchContextMenu(event)) return
+    if (event.composedPath().some((node) => node instanceof Element && node.matches('.cm-content, input, textarea'))) return
+    event.preventDefault()
+    const { x, y } = resolveContextMenuTarget(view, event)
+    notify({ x, y, place: 'editor', view, mainView: view })
+  }
+  view.dom.addEventListener('contextmenu', handler)
+  return () => view.dom.removeEventListener('contextmenu', handler)
+}
+
 // 좌우 여백(.cm-content·.cm-gutters 밖, F-143 3.8) 클릭 시 포커스만 없앤다(F-146 3.1) — EditorView.domEventHandlers 는 contentDOM 에만 붙어 scroller 자신을 target 으로 한 클릭엔 안 닿아 view.scrollDOM 에 원시 리스너를 붙인다. 막지 않으면 tabIndex=-1 인 scroller 가 기본 동작으로 포커스를 먹어 view.dom 안에 남는다
 // event.target 이 아니라 composedPath() 로 판정한다(F-240.md 3.1) — target 은 핸들러가 도는 동안 DOM 이 바뀌면(위젯이 원문으로 풀려 그 DOM 이 트리에서 떨어지면) closest() 판정이 뒤집히지만, composedPath() 는 디스패치 시점에 확정돼 이후 DOM 변화와 무관하다
 function isInsideEditorContent(event: MouseEvent): boolean {
@@ -511,6 +524,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   const state = EditorState.create({ doc: binding.ytext.toString(), extensions })
   const view = new EditorView({ state, parent })
   const detachMarginClickGuard = attachMarginClickGuard(view)
+  const detachMarginContextMenu = attachMarginContextMenu(view, notifyContextMenu)
   const detachComposingEnterGuard = attachComposingEnterGuard(view)
   // 표 칸 하위 에디터(tableWidget.ts)의 우클릭도 같은 콜백으로 (F-170.md 3.2)
   setCellContextMenuHandler(view, (info) => notifyContextMenu(info))
@@ -739,6 +753,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
       contextMenuListeners.clear()
       setCellContextMenuHandler(view, undefined)
       detachMarginClickGuard()
+      detachMarginContextMenu()
       detachComposingEnterGuard()
       unobserveTitle()
       detachComments()
