@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { usePhoneWidth } from './usePhoneWidth'
 import { floatCoverFor } from '../lib/floatCover'
 import type { EditorState } from '@codemirror/state'
@@ -13,6 +13,9 @@ import CommentRailPanel, { CommentPanelPresence } from './CommentRailPanel'
 import { CommentCommandContext, type UseDocCommentsResult } from './useDocComments'
 import { MentionSourceContext } from './MentionField'
 import { IconAddComment } from './icons'
+import KanbanBoard, { type KanbanBoardFocus } from './KanbanBoard'
+import type { UseKanbanViewResult } from './useKanbanView'
+import { isKanbanDoc } from '../lib/kanban'
 import type { DocMeta, OpenDoc } from './docMeta'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { Store } from '../types'
@@ -37,7 +40,7 @@ function clampFabY(y: number, viewportH: number, cover: number): number {
 }
 
 export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref' | 'resolvedTheme' | 'wikiPreviewPref'> &
-  Pick<UseEditorSyncResult, 'attachmentResolverFor' | 'currentFolderId' | 'resolveAttachment' | 'wikiContext' | 'wikiResolver'> &
+  Pick<UseEditorSyncResult, 'attachmentResolverFor' | 'currentFolderId' | 'jumpToLine' | 'resolveAttachment' | 'wikiContext' | 'wikiResolver'> &
   Pick<UseImportFlowResult, 'handleImageFiles'> &
   Pick<UseContextMenuResult, 'handleViewContextMenu'> &
   Pick<UseCommentFabResult, 'editorScrollTop' | 'editorViewportH' | 'floatingCommentAnchor'> &
@@ -66,6 +69,7 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
     docLoading: boolean
     helpOpen: boolean
     isReadOnlyDoc: boolean
+    kanban: UseKanbanViewResult
     mapRoute: { centerDocId: string | null; returnDocId: string | null } | null
     openDoc: OpenDoc | null
     outlineControlRef: RefObject<OutlineControl | null>
@@ -89,7 +93,7 @@ export default function DocumentArea({
   attachmentResolverFor, commentAccessValue, commentRailExtra, comments, contentAreaRef, contentWidthPref, currentBreadcrumb, currentDoc,
   currentDocId, currentFolderId, docLoading, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorRemountNonce, editorScrollTop,
   editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles, handleOpenWikiLink,
-  handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, liveEditorOption, mapRoute,
+  handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, jumpToLine, kanban, liveEditorOption, mapRoute,
   mentionSource, onNavigateFolder, openDoc, outlineControlRef, phoneSidePanel, openWikiLinkTarget, resolveAttachment, resolveImagePath, resolvedTheme, setCommentRailExtra, setEditorRefs, sharedDoc,
   sharesOpen, store, titleReadOnly, viewerHtml, viewerRef, viewFindCard, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
 }: DocumentAreaProps) {
@@ -103,10 +107,14 @@ export default function DocumentArea({
   }, [contentAreaRef])
   // 잠긴 금고 문서 — 편집기 자리에 P1 (F-405 6.2)
   const showE2eeLockedPanel = currentDoc?.e2ee === 'locked' && openDoc?.id !== currentDocId
-  // 위키링크 미리보기 켜짐 조건 — 문서가 열려 있고 공유 화면·지도·도움말·공유 관리가 안 떠 있다 (F-2044 4.1)
+  const editorMounted = openDoc?.id === currentDocId
+  const boardHandle = editorMounted ? kanban.handle : null
+  const board = boardHandle !== null
+  // 위키링크 미리보기 켜짐 조건 — 문서가 열려 있고 공유 화면·지도·도움말·공유 관리·보드가 안 떠 있다 (F-2044 4.1)
   const wikiPreviewEnabled =
     wikiPreviewPref === 'on' &&
-    openDoc?.id === currentDocId &&
+    editorMounted &&
+    !board &&
     !sharedDoc &&
     !sharesOpen &&
     !helpOpen &&
@@ -116,8 +124,21 @@ export default function DocumentArea({
     focusEditorRef.current = true
   }
 
+  // 칸반 문서는 편집기 대신 보드가 첫 포커스를 받는다 — App 이 요청 플래그를 passive effect 에서 비우기 전에 옮겨 둔다 (F-2140 3장)
+  const opensAsBoard = useMemo(() => openDoc !== null && isKanbanDoc(openDoc.content), [openDoc])
+  const boardFocusRef = useRef<KanbanBoardFocus>(null)
+  useLayoutEffect(() => {
+    if (!editorMounted || !opensAsBoard) return
+    boardFocusRef.current = focusTitleRef.current ? 'title' : focusEditorRef.current && !phone ? 'board' : null
+  }, [editorMounted, opensAsBoard, currentDocId, editorRemountNonce, focusTitleRef, focusEditorRef, phone])
+  const openStrayLine = (line: number) => {
+    kanban.choose('source')
+    // 편집기 자리가 다시 보인 뒤 옮겨야 포커스가 들어간다
+    requestAnimationFrame(() => jumpToLine(line))
+  }
+
   // 댓글 레일·판 보이는 조건 — 편집기가 보이고 접근이 none 이 아니고 편집·원문 모드일 때만 (F-505 5.1·6장)
-  const commentAvailable = openDoc?.id === currentDocId && commentAccessValue.kind !== 'none' && (viewMode === 'live' || viewMode === 'raw')
+  const commentAvailable = editorMounted && !board && commentAccessValue.kind !== 'none' && (viewMode === 'live' || viewMode === 'raw')
   const commentRailVisible = commentAvailable && comments.mode === 'rail' && comments.open
   const commentSheetVisible = commentAvailable && comments.mode === 'sheet' && comments.open
 
@@ -134,8 +155,8 @@ export default function DocumentArea({
       style={commentRailVisible && commentRailExtra > 0 ? ({ '--comment-rail-extra': `${commentRailExtra}px` } as CSSProperties) : undefined}
     >
       {/* 잠긴 문서는 편집기가 없다 — 빈 슬롯이 flex: 1 로 자리를 차지하면 잠김 패널이 오른쪽으로 밀린다 */}
-      <div className="editor-slot" hidden={viewMode === 'view' || showE2eeLockedPanel}>
-        {openDoc?.id === currentDocId && (
+      <div className="editor-slot" hidden={viewMode === 'view' || showE2eeLockedPanel || board}>
+        {editorMounted && (
           <Editor
             key={`${currentDocId}:${editorRemountNonce}`}
             ref={setEditorRefs}
@@ -143,7 +164,7 @@ export default function DocumentArea({
             viewMode={viewMode}
             readOnly={isReadOnlyDoc}
             // eslint-disable-next-line react-hooks/refs -- 포커스 요청 플래그는 마운트 때 한 번 읽고 passive effect 가 소비한다
-            autoFocus={focusTitleRef.current ? 'title' : focusEditorRef.current && !phone}
+            autoFocus={opensAsBoard ? false : focusTitleRef.current ? 'title' : focusEditorRef.current && !phone}
             onDocChange={handleDocChange}
             onSelectionChange={handleSelectionChange}
             wikiContext={wikiContext}
@@ -160,6 +181,18 @@ export default function DocumentArea({
           />
         )}
       </div>
+      {boardHandle && (
+        <KanbanBoard
+          key={currentDocId}
+          handle={boardHandle}
+          title={currentDoc?.title ?? ''}
+          titleReadOnly={titleReadOnly}
+          onTitleChange={handleTitleChange}
+          onTitleCommit={handleTitleCommit}
+          onOpenStray={openStrayLine}
+          focusRef={boardFocusRef}
+        />
+      )}
       {docLoading && <DocSkeleton key={currentDocId} />}
       {showE2eeLockedPanel && e2ee && (
         <E2eeLockedPanel
@@ -171,7 +204,7 @@ export default function DocumentArea({
           onForgotPassword={e2ee.openSettingsDialogs.recover}
         />
       )}
-      {viewMode === 'view' && openDoc?.id === currentDocId && (
+      {viewMode === 'view' && !board && editorMounted && (
         <Viewer
           key={currentDocId}
           ref={viewerRef}
@@ -186,7 +219,7 @@ export default function DocumentArea({
           onContextMenu={handleViewContextMenu}
         />
       )}
-      {viewMode === 'view' && viewFindCard && <ViewFindCard {...viewFindCard} />}
+      {viewMode === 'view' && !board && viewFindCard && <ViewFindCard {...viewFindCard} />}
       {/* 레일·판 여닫힘 전환 — 닫힌 뒤에도 전환 시간만큼 남긴다. 편집기가 사라지면(commentAvailable 거짓) 곧바로 뗀다 */}
       {commentAvailable && (
         <CommentPanelPresence open={commentRailVisible || commentSheetVisible}>
@@ -248,7 +281,7 @@ export default function DocumentArea({
             <IconAddComment size={18} />
           </button>
         )}
-      {openDoc?.id === currentDocId && (
+      {editorMounted && !board && (
         <Outline
           editorRef={editorRef}
           containerRef={contentAreaRef}

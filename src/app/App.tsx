@@ -114,6 +114,7 @@ import { useE2eeConvert } from './useE2eeConvert'
 import { useLeaveShare } from './useLeaveShare'
 import LeaveShareDialog from './LeaveShareDialog'
 import { useEditorSync, type PendingJump } from './useEditorSync'
+import { useKanbanView } from './useKanbanView'
 import { useHashRouting, replaceHashUrl, pushHashUrl } from './useHashRouting'
 import { useSharesPage } from './useSharesPage'
 import { isMacPlatform } from './shortcutCatalog'
@@ -842,6 +843,7 @@ export default function App() {
     viewerHtml, viewerDocId, pendingEditorSearch, showNotice, setOpenDoc, setStats, setViewerHtml, setViewerDocId, setPendingEditorSearch,
     editorRef, viewerRef, scrollAnchorRef, pendingJumpRef, openDocIdRef,
   })
+  const kanban = useKanbanView({ editorRef, editorHandle, docId: currentDocId, ready: openDoc?.id === currentDocId, covered: Boolean(sharedDoc || mapRoute) })
 
   // 문서를 전환하면 이전 문서의 대기 중인 글자·단어 수 재계산은 버린다
   useEffect(() => {
@@ -918,6 +920,7 @@ export default function App() {
   // 스크롤 위치 유지 (F-295.md 5.2) — 기준값은 맨 앞에서 읽는다. 이 시점의 DOM 은 아직 "떠나는 화면" 이다(React 19 커밋 지연, 4.1)
   function changeViewMode(mode: string) {
     const v = mode as 'live' | 'raw' | 'view'
+    kanban.chooseMode(v)
     if (v === viewMode) return // 5.7 — 같은 모드면 기준값만 갱신되고 복원 effect 는 안 돈다
 
     if (currentDocId) {
@@ -939,6 +942,11 @@ export default function App() {
 
   // 상단바 `댓글` 버튼과 Ctrl+M 이 같이 쓴다
   function toggleCommentsPanel() {
+    // 보드에서 누르면 문서 화면으로 바꾸고 연다 (F-2140 3장)
+    if (kanban.boardShown) {
+      kanban.choose('source')
+      if (viewMode !== 'view') return comments.setOpen(true, false)
+    }
     // 보기 모드에서 누르면 편집 모드로 바꾸고 연다(4장 끝 행)
     if (viewMode === 'view') {
       changeViewMode('live')
@@ -1265,7 +1273,7 @@ export default function App() {
   const topBar = <AppTopBar {...{
     account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef,
     getShareDoc, handleCopyDocAsRichText, handleExportDoc, handleExportDocAsHtml, handleExportDocAsText, handleOpenNotification,
-    handlePrintDoc, helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
+    handlePrintDoc, helpOpen, isEmpty, isReadOnlyDoc, kanban, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
     outlineControlRef, openPalette, openSearch, openViewFind: viewFind.open, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
     toggleButtonRef, toggleCommentsPanel, toggleSidebar, toolbarPref, viewMode, wikiResolver,
     editorRef, github: github.topBar, rightPanel: rightPanel.available ? { open: rightPanel.open, onToggle: rightPanel.togglePanel } : undefined,
@@ -1372,7 +1380,7 @@ export default function App() {
             attachmentResolverFor, commentAccessValue, commentRailExtra, comments, contentAreaRef, contentWidthPref, currentBreadcrumb,
             currentDoc, currentDocId, currentFolderId, docLoading, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorRemountNonce,
             editorScrollTop, editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles,
-            handleOpenWikiLink, handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc,
+            handleOpenWikiLink, handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, jumpToLine, kanban,
             liveEditorOption, mapRoute, mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme,
             resolveImagePath: githubImages.resolveImagePath,
             setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, store, titleReadOnly, viewerHtml: shownViewerHtml, viewerRef, viewFindCard: viewFind.card, viewMode,

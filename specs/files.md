@@ -25,7 +25,7 @@
 |`src/types.ts`|문서·폴더 등 저장 데이터의 모양을 정해 둠|
 |`src/vite-env.d.ts`|빌드 도구와 컴퓨터 기본 기능의 모양을 적어 둔 선언|
 
-## `src/app/` 화면과 앱 동작 (253)
+## `src/app/` 화면과 앱 동작 (256)
 
 사용자가 보는 창·메뉴·버튼과, 그 뒤에서 도는 규칙
 
@@ -121,6 +121,8 @@
 |`src/app/importVault.ts`|옵시디언 보관함 압축 파일·폴더를 읽어 문서와 그림으로 가져옴|
 |`src/app/importWorkspace.ts`|내보냈던 압축 파일을 읽어 폴더 구조째 문서를 다시 가져옴|
 |`src/app/InviteDialog.tsx`|문서나 폴더에 다른 사람을 초대하는 창|
+|`src/app/KanbanBoard.tsx`|칸반 문서를 칸과 카드로 늘어놓아 보여 주는 보드 화면 (F-2140)|
+|`src/app/kanbanView.ts`|칸반 문서를 열거나 보기를 고를 때 보드로 볼지 원문으로 볼지 정함 (F-2140)|
 |`src/app/leaveScreens.ts`|공유 관리·도움말·지도 같은 전용 화면이 열렸는지 보고 한 번에 닫음|
 |`src/app/leaveShare.ts`|공유받은 문서·폴더에서 나가기를 처리하고 결과 문구를 정함|
 |`src/app/LeaveShareDialog.tsx`|공유받은 문서에서 나갈지 확인하는 창|
@@ -240,6 +242,7 @@
 |`src/app/useGlobalShortcuts.ts`|앱 전체에서 쓰는 단축키를 받아 해당 기능을 실행함|
 |`src/app/useHashRouting.ts`|뒤로·앞으로 가기와 주소창 변경에 맞춰 열린 문서를 바꿈|
 |`src/app/useImportFlow.ts`|md·zip 파일 가져오기와 끌어놓기, 이미지 넣기 흐름을 처리함|
+|`src/app/useKanbanView.ts`|문서마다 보드·원문 보기를 기억하고, 본문이 바뀌면 보드의 칸·카드를 다시 읽음 (F-2140)|
 |`src/app/useLeaveShare.ts`|공유받은 문서에서 나가기 확인 창과 나가기 처리를 맡음|
 |`src/app/useListAutoRefresh.ts`|로그인 상태에서 사이드바 문서 목록을 주기적으로 새로 고침|
 |`src/app/useLiveDoc.ts`|문서를 여는 동안 실시간 함께 편집 연결을 유지함|

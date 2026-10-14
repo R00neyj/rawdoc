@@ -103,6 +103,8 @@ import questionMarkSvg from '@material-symbols/svg-400/outlined/question_mark.sv
 // 사이드바 `명령 팔레트` 버튼 — > 명령 모드와 모양이 이어지는 터미널 아이콘 (F-2053 10.2)
 import terminalSvg from '@material-symbols/svg-400/outlined/terminal.svg?raw'
 import favoriteSvg from '@material-symbols/svg-400/outlined/favorite.svg?raw'
+// 상단바 `보드` 보기 (F-2140 4장)
+import viewKanbanSvg from '@material-symbols/svg-400/outlined/view_kanban.svg?raw'
 
 type IconProps = { size?: number; className?: string }
 
@@ -253,6 +255,7 @@ export const IconShortcuts = makeIcon(questionMarkSvg)
 export const IconCommandPalette = makeIcon(terminalSvg)
 // 계정 메뉴 `후원하기` (small 2026-10-11)
 export const IconFavorite = makeIcon(favoriteSvg)
+export const IconKanban = makeIcon(viewKanbanSvg)
 
 // 아이콘만 보이는 상단바 버튼의 툴팁 (F-142 3.2). 문구는 버튼 aria-label 과 같다
 type IconTooltipProps = { text: string; align?: 'start' | 'center' | 'end'; side?: boolean }

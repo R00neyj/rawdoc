@@ -18,6 +18,7 @@ import './styles/print.css'
 import './styles/map.css'
 import './styles/palette.css'
 import './styles/peers.css'
+import './styles/kanban.css'
 
 import { getPref } from './app/prefs'
 import { resolveTheme } from './app/theme'

@@ -22,6 +22,7 @@ import type { OutlineControl } from './Outline'
 import { topBarScreen } from './topBarMore'
 import PhoneNav from './PhoneNav'
 import type { GithubMenuProps } from './GithubMenu'
+import type { UseKanbanViewResult } from './useKanbanView'
 
 // 공유 화면·지도가 떠 있는 동안 상단바에 넘기는 빈 접속자 목록 — 참조가 늘 같아 다시 그리지 않는다 (F-307 7.4)
 const NO_PEERS: Peer[] = []
@@ -46,6 +47,7 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
     getShareDoc: () => { title: string; lineEnding: LineEnding; content: string }
     helpOpen: boolean
     isEmpty: boolean
+    kanban: UseKanbanViewResult
     isReadOnlyDoc: boolean
     mapRoute: { centerDocId: string | null; returnDocId: string | null } | null
     openDoc: OpenDoc | null
@@ -68,7 +70,7 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
 export default function AppTopBar({
   account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef,
   github, getShareDoc, handleCopyDocAsRichText, handleExportDoc, handleExportDocAsHtml, handleExportDocAsText, handleOpenNotification, handlePrintDoc,
-  helpOpen, isEmpty, isReadOnlyDoc, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch, openViewFind,
+  helpOpen, isEmpty, isReadOnlyDoc, kanban, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch, openViewFind,
   requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store, toggleButtonRef, toggleCommentsPanel,
   toggleSidebar, toolbarPref, viewMode, wikiResolver,
   editorRef, rightPanel,
@@ -83,6 +85,8 @@ export default function AppTopBar({
     !isReadOnlyDoc &&
     // 지도는 편집기를 숨기고 그 자리를 통째로 쓴다 — 서식 단추가 누를 대상이 없다 (F-292 6.1)
     !mapRoute &&
+    // 보드에는 서식을 넣을 커서가 없다 (F-2140 3장)
+    !kanban.boardShown &&
     (viewMode === 'live' || viewMode === 'raw') &&
     // 휴대폰 폭은 편집기 포커스 중에만 — 앱 틀 맨 아래(키보드 위) 줄 (F-2084 3.4)
     (!toolbarDocked || dockVisible)
@@ -128,6 +132,7 @@ export default function AppTopBar({
       screen={screen}
       outlineControlRef={outlineControlRef}
       rightPanel={rightPanel}
+      kanban={screen === 'doc' && kanban.isKanban ? { view: kanban.view, onChoose: kanban.choose } : undefined}
       showToolbar={showToolbar}
       onRunToolbarCommand={runToolbarCommand}
       toolbarDocked={toolbarDocked}
@@ -136,7 +141,7 @@ export default function AppTopBar({
       peers={sharedDoc || mapRoute ? NO_PEERS : livePeers}
       selfUserId={account.state === 'in' ? account.id : null}
       comments={
-        commentAccessValue.kind === 'none' || !currentDoc
+        commentAccessValue.kind === 'none' || !currentDoc || kanban.boardShown
           ? undefined
           : {
               openCount: comments.openThreadCount,

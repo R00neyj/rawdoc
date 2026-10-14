@@ -181,6 +181,9 @@ src/
   - `editor/`: `codeLanguages.ts`(F-2125 — `codeLanguages` 함수·scope 하이라이터·들여쓰기 보정·주석 자료)
   - `viewer/`: `useCodeHighlight.ts`(F-2126 — 보기 화면 훅·인쇄/내보내기용 `highlightHtmlWhenReady`, 엔진은 `import()`)
   - `styles/`: `codeHighlight.css`(F-2124 — `.code-*` 8규칙, `main.tsx` 정적 import·`EXPORT_CSS`)
+- 칸반 보드 보기(F-2140)로 추가
+  - `app/`: `kanbanView.ts`(F-2140 — 보드·원문 보기 전이 `nextKanbanView`, 순수 함수), `useKanbanView.ts`(F-2140 — 문서별 보기·`isKanban`·rAF 로 묶은 보드 스냅샷), `KanbanBoard.tsx`(F-2140 — 보드 화면). 칸·카드 해석은 기존 `lib/kanban.ts`(F-2139)
+  - `styles/`: `kanban.css`(F-2140 — `main.tsx` 정적 import)
 
 - 단위 테스트는 `tests/` 아래, 원본 경로를 그대로 따라 `tests/{원본 경로}/{이름}.test.ts` (2026-09-28 사용자 지정. 처음엔 대상 옆이었다 — `specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
@@ -253,6 +256,7 @@ type YjsMetaRow = {
 - **오프라인 영속(F-306, 2026-09-24)**: 방 Doc 은 provider 를 붙이기 전에 `md-yjs`(`yjsStore.ts`) 를 먼저 불러와 적용한다 — 이 순서라야 오프라인에서 새로고침해도 로컬 편집이 남는다. 경로 판정에 `offline-view` 가 더해졌다 — 이 브라우저에 그 문서 기록이 없는 채 오프라인으로 열면 캐시 본문을 읽기 전용으로 띄우고(방 Doc 을 만들지 않는다), 기록이 있으면 폴백 대신 재개 가능한 `realtime` 으로 로컬 기록을 이어 편집한다(`docPath.ts` 5장, F-306 5장)
 - awareness(`useLiveDoc`, 방 Doc 에 매임) → 상단바 아바타(`usePeers`)·원격 커서(`remoteCursors`) (F-307)
 - `accountBlocked`(`/api/me` 의 `blocked`) → 모든 서버 문서 읽기 전용, `decideDocPath` 입력 `forbidden` 을 참으로 넘겨 소켓 없이 `view` 경로 (F-2030 5.2)
+- **칸반 보드(F-2140)**: 보드는 `EditorState` 의 또 하나의 투영이다 — 편집기는 언마운트하지 않고 숨긴 채 살아 있고(`Y.Doc`·게이트·실행 취소 기록 그대로), 보드는 핸들 `onChanges` 마다 `view.state.doc` 을 `parseKanban` 으로 읽는다. React 상태에는 칸·카드 배열만 둔다. 보드에서의 쓰기는 `view.dispatch` 한 길뿐이다 (F-2140)
 
 ## 4. 설정 (localStorage)
 

@@ -7,7 +7,7 @@ import GithubMenu, { type GithubMenuProps } from './GithubMenu'
 import NotificationsMenu, { type NotificationsMenuProps } from './NotificationsMenu'
 import EditorToolbar from './EditorToolbar'
 import ToolbarImageInput from './ToolbarImageInput'
-import { IconTooltip, IconForum, IconRightPanelClose, IconRightPanelOpen } from './icons'
+import { IconTooltip, IconForum, IconRightPanelClose, IconRightPanelOpen, IconKanban, IconRaw } from './icons'
 import { commentBadgeText } from './commentRail'
 import SidebarHead from './SidebarHead'
 import PeerAvatars from './PeerAvatars'
@@ -20,6 +20,12 @@ import type { Peer } from '../lib/peers'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { WikiResolver } from '../lib/wikiResolve'
 import type { Notice } from './notice'
+import type { KanbanView } from './kanbanView'
+
+const KANBAN_VIEWS: { value: KanbanView; label: string; Icon: typeof IconKanban }[] = [
+  { value: 'board', label: '보드 — 칸반 보드로 보기', Icon: IconKanban },
+  { value: 'source', label: '원문 — 보드를 닫고 문서로 보기', Icon: IconRaw },
+]
 
 type TopBarProps = {
   narrow: boolean
@@ -67,6 +73,8 @@ type TopBarProps = {
   outlineControlRef: RefObject<OutlineControl | null>
   // 오른쪽 패널 여닫기 — 맨 오른쪽 끝 (small 2026-10-10)
   rightPanel?: { open: boolean; onToggle: () => void }
+  // 칸반 문서의 보드·원문 보기 — 없으면 세그먼트·메뉴 항목이 없다 (F-2140 4장)
+  kanban?: { view: KanbanView; onChoose: (view: KanbanView) => void }
 }
 
 export default function TopBar({
@@ -105,6 +113,7 @@ export default function TopBar({
   screen,
   outlineControlRef,
   rightPanel,
+  kanban,
 }: TopBarProps) {
   const phone = usePhoneWidth()
   const imageInputRef = useRef<HTMLInputElement | null>(null)
@@ -137,7 +146,14 @@ export default function TopBar({
         <PeerAvatars peers={peers} selfUserId={selfUserId} narrow={narrow} />
         {phone ? (
           <div className="topbar-pill topbar-pill--end">
-            {screen === 'doc' && <ViewModeMenu viewMode={viewMode} disabled={viewModeDisabled} onChange={onChangeViewMode} />}
+            {screen === 'doc' && (
+              <ViewModeMenu
+                viewMode={viewMode}
+                disabled={viewModeDisabled}
+                onChange={onChangeViewMode}
+                board={kanban && { active: kanban.view === 'board', onChoose: () => kanban.onChoose('board') }}
+              />
+            )}
             {moreButtonVisible({ screen, notifications: Boolean(notifications) }) && (
             <TopBarMoreSheet
               screen={screen}
@@ -160,6 +176,24 @@ export default function TopBar({
           </div>
         ) : (
           <>
+            {kanban && (
+              <div className="seg kanban-view-seg" role="group" aria-label="보드 보기">
+                {KANBAN_VIEWS.map((item) => (
+                  <span className="icon-btn-wrap" key={item.value}>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label={item.label}
+                      aria-pressed={kanban.view === item.value}
+                      onClick={() => kanban.onChoose(item.value)}
+                    >
+                      <item.Icon size={18} />
+                    </button>
+                    <IconTooltip text={item.label} />
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="seg view-mode-seg" role="group" aria-label="보기 모드">
               {VIEW_MODES.map((mode) => (
                 <span className="icon-btn-wrap" key={mode.value}>
@@ -167,7 +201,7 @@ export default function TopBar({
                     type="button"
                     className="icon-btn"
                     aria-label={mode.label}
-                    aria-pressed={viewMode === mode.value}
+                    aria-pressed={kanban?.view !== 'board' && viewMode === mode.value}
                     disabled={viewModeDisabled}
                     onClick={() => onChangeViewMode(mode.value)}
                   >

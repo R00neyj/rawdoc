@@ -1,5 +1,5 @@
 // CM6 EditorView 생성·확장 조립(F-103 3.1). basicSetup 미사용 — 자동완성·검색 패널 안 넣음, 괄호·강조 자동짝은 closeBrackets() 아닌 F-127 의 autoPair()
-import type { Extension } from '@codemirror/state'
+import type { ChangeSet, Extension } from '@codemirror/state'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { dropCursor, EditorView, keymap, lineNumbers, ViewPlugin } from '@codemirror/view'
 import type { ViewUpdate } from '@codemirror/view'
@@ -374,6 +374,9 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     contextMenuListeners.forEach((cb) => cb(info))
   }
 
+  // 문서 변경 구독 — 원격 적용·되돌리기 트랜잭션도 온다 (F-2140 2장)
+  const changeListeners = new Set<(u: { changes: ChangeSet; state: EditorState }) => void>()
+
   const previewCompartment = new Compartment()
   const attributesCompartment = new Compartment()
   const lineNumbersCompartment = new Compartment()
@@ -486,7 +489,10 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // 댓글 앵커 장식·거터·레일 좌표 — 늘 둔다. 붙기 전에는 아무것도 그리지 않는다 (F-504 3장)
     commentMarks(),
     EditorView.updateListener.of((update) => {
-      if (update.docChanged && onDocChange) onDocChange(update.state)
+      if (update.docChanged) {
+        if (onDocChange) onDocChange(update.state)
+        changeListeners.forEach((cb) => cb({ changes: update.changes, state: update.state }))
+      }
       if (update.selectionSet && onSelectionChange) onSelectionChange(update.state)
 
       if (isForced(update)) {
@@ -644,6 +650,12 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     onContextMenu(callback: OnEditorContextMenu): () => void {
       contextMenuListeners.add(callback)
       return () => contextMenuListeners.delete(callback)
+    },
+
+    // 문서 변경 구독 (F-2140 2장) — 구독 해제 함수를 돌려준다
+    onChanges(callback: (u: { changes: ChangeSet; state: EditorState }) => void): () => void {
+      changeListeners.add(callback)
+      return () => changeListeners.delete(callback)
     },
 
     // 커서가 든 표의 머리 첫 칸 편집을 시작한다 — 우클릭 메뉴 `표` 삽입 뒤(F-170.md 3.1 A6)
