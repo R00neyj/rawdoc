@@ -340,9 +340,10 @@ export default function KanbanBoard({
     const laneEls = Array.from(boardRef.current?.querySelectorAll<HTMLElement>('.kanban-lanes > .kanban-lane') ?? [])
     const lane = laneEl ? laneEls.indexOf(laneEl) : -1
     const cardEl = laneEl && t.closest<HTMLElement>('.kanban-cards > .kanban-card')
-    const headEl = laneEl && t.closest<HTMLElement>('.kanban-lane-head')
     const card = cardEl ? Array.from(laneEl.querySelectorAll('.kanban-cards > .kanban-card')).indexOf(cardEl) : -1
-    const target: KanbanMenuTarget = card >= 0 ? { kind: 'card', lane, card } : headEl && lane >= 0 ? { kind: 'lane', lane } : { kind: 'board' }
+    // 카드 밖 칸 자리(머리·빈 칸·`카드 추가` 둘레)는 칸 `⋯` 와 같은 메뉴 (tweak 2026-10-14)
+    const target: KanbanMenuTarget = card >= 0 ? { kind: 'card', lane, card } : lane >= 0 ? { kind: 'lane', lane } : { kind: 'board' }
+    const headEl = laneEl?.querySelector<HTMLElement>('.kanban-lane-head') ?? null
     const anchor = cardEl ?? headEl ?? boardRef.current
     e.preventDefault()
     const returnFocus = target.kind === 'lane' ? headEl?.querySelector<HTMLElement>('.kanban-lane-title') ?? null : anchor
