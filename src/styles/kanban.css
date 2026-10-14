@@ -82,8 +82,11 @@
   padding: 2px 4px;
 }
 
+/* 입력칸(.kanban-lane-input)과 같은 안쪽 여백·테두리 폭 — 이름 바꾸기로 바뀌어도 칸 머리 높이가 그대로 (tweak 2026-10-14) */
 .kanban-lane-title {
   margin: 0;
+  padding: 4px 6px;
+  border: 1px solid transparent;
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--ink);
