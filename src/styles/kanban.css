@@ -245,6 +245,16 @@
 .kanban-lane > .kanban-card-input {
   width: 100%;
   padding: 8px 10px;
+  transition: padding var(--transition-fast), background-color var(--transition-fast), outline-color var(--transition-fast);
+}
+
+/* `카드 추가` 버튼(33px) 자리에서 입력칸(40px)으로 부드럽게 펼친다 — 위아래 여백만 버튼과 같게 시작 (tweak 2026-10-14) */
+@starting-style {
+  .kanban-lane > .kanban-card-input {
+    padding-block: 4.5px;
+    background-color: transparent;
+    outline-color: transparent;
+  }
 }
 
 .kanban-add-card,
