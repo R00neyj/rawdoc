@@ -113,15 +113,8 @@ export default function DocumentArea({
   const editorMounted = openDoc?.id === currentDocId
   const boardHandle = editorMounted ? kanban.handle : null
   const board = boardHandle !== null
-  // 위키링크 미리보기 켜짐 조건 — 문서가 열려 있고 공유 화면·지도·도움말·공유 관리·보드가 안 떠 있다 (F-2044 4.1)
-  const wikiPreviewEnabled =
-    wikiPreviewPref === 'on' &&
-    editorMounted &&
-    !board &&
-    !sharedDoc &&
-    !sharesOpen &&
-    !helpOpen &&
-    !mapRoute
+  // 위키링크 미리보기 켜짐 조건 — 문서가 열려 있고 공유 화면·지도·도움말·공유 관리가 안 떠 있다, 보드 카드 링크 포함 (F-2044 4.1)
+  const wikiPreviewEnabled = wikiPreviewPref === 'on' && editorMounted && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute
   // P1 에서 열면 편집기가 새로 생기며 초점을 받는다 (F-405 6.2)
   const handleE2eePanelOpened = () => {
     focusEditorRef.current = true
@@ -307,6 +300,7 @@ export default function DocumentArea({
         containerRef={contentAreaRef}
         editorRef={editorRef}
         viewMode={viewMode}
+        board={board}
         theme={resolvedTheme}
         currentDocId={currentDocId}
         currentFolderId={currentFolderId}

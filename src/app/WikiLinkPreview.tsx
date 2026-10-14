@@ -57,6 +57,8 @@ type WikiLinkPreviewProps = {
   containerRef: RefObject<HTMLElement | null>
   editorRef: RefObject<EditorHandle | null>
   viewMode: 'live' | 'raw' | 'view'
+  // 칸반 보드가 편집기 자리를 차지 중 — 카드 글자는 보기 모드와 같은 a.wikilink 다
+  board: boolean
   theme: string
   currentDocId: string | null
   currentFolderId: string | null
@@ -89,6 +91,7 @@ export default function WikiLinkPreview({
   containerRef,
   editorRef,
   viewMode,
+  board,
   theme,
   currentDocId,
   currentFolderId,
@@ -101,6 +104,8 @@ export default function WikiLinkPreview({
   const [session, setSession] = useState<Session | null>(null)
   const sessionRef = useRef<Session | null>(null)
   sessionRef.current = session
+  const boardRef = useRef(board)
+  boardRef.current = board
   const shownHtml = useCodeHighlight(session?.html ?? '')
 
   const linkInfoRef = useRef<LinkInfo | null>(null)
@@ -109,7 +114,7 @@ export default function WikiLinkPreview({
   const previewElRef = useRef<HTMLDivElement | null>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)
 
-  const effectiveEnabled = enabled && (viewMode === 'live' || viewMode === 'view')
+  const effectiveEnabled = enabled && (board || viewMode === 'live' || viewMode === 'view')
 
   function lookupDoc(id: string): WikiPreviewDocMeta | undefined {
     return docs.find((d) => d.id === id)
@@ -210,11 +215,11 @@ export default function WikiLinkPreview({
     hoverIntentRef.current.dismiss()
     linkInfoRef.current = null
     lastPosRef.current = null
-  }, [currentDocId, viewMode])
+  }, [currentDocId, viewMode, board])
 
   function findLinkUnderPointer(target: Element | null): { targetStr: string; heading: string | null; el: Element } | null {
     if (!target) return null
-    if (viewMode === 'view') {
+    if (viewMode === 'view' || board) {
       const a = target.closest('a.wikilink:not(.wikilink--missing)')
       if (!a || !(a instanceof HTMLElement)) return null
       const t = a.dataset.wikilink
@@ -294,7 +299,7 @@ export default function WikiLinkPreview({
       hoverIntentRef.current.pointerOnLink(key)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [effectiveEnabled, viewMode, currentFolderId, currentDocId, docs, wikiResolver],
+    [effectiveEnabled, viewMode, board, currentFolderId, currentDocId, docs, wikiResolver],
   )
 
   const handlePointerLeaveContainer = useCallback(() => {
@@ -323,7 +328,7 @@ export default function WikiLinkPreview({
         hoverIntentRef.current.dismiss()
         const back = returnFocusRef.current
         if (back && back.isConnected) back.focus()
-        else editorRef.current?.focus()
+        else if (!boardRef.current) editorRef.current?.focus()
         return
       }
       if (isModifierOnly(e.key)) return
