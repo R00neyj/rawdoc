@@ -61,7 +61,7 @@ rawdoc login --with-token < token.txt
 | `folders` | 폴더 목록 |
 | `mkdir <이름> [--parent <id\|경로>]` | 폴더를 만듭니다 |
 | `rmdir <id> --yes [--all]` | 폴더를 지웁니다. 안의 것은 위 폴더로 옮기고, `--all` 이면 모두 영구 삭제합니다 |
-| `upload <이미지파일>` | 이미지를 올리고 붙일 마크다운을 출력합니다 |
+| `upload <이미지파일>` | 이미지를 올리고 붙일 마크다운을 출력합니다. PNG·JPEG 는 더 작아질 때 WebP 로 바꿔 올립니다 |
 | `link <id>` | 읽기 전용 링크를 만듭니다 |
 | `syntax [--short]` | 문서에 쓰는 마크다운 문법(콜아웃·위키링크·수식 등)을 출력합니다. `--short` 는 이 앱에만 있는 문법만 |
 
@@ -121,3 +121,7 @@ rawdoc put <id> 파일.md --base-version auto
 ## 토큰 폐기
 
 `logout` 은 이 컴퓨터에 저장한 토큰만 지웁니다. 서버에 남은 토큰을 폐기하려면 웹의 계정 메뉴 → API 토큰에서 폐기하세요.
+
+## 라이선스 고지
+
+이미지 변환에 쓰는 코덱(jSquash·libwebp·libjpeg-turbo)의 라이선스는 `dist/THIRD_PARTY_NOTICES.txt` 에 있습니다.

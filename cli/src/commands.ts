@@ -33,6 +33,7 @@ import { isFolderId, resolveFolderPath } from './folderRef'
 import { folderPathOf, titleMatches, withFolderPath, type DocWithPath } from './docMeta'
 import { CliError, type CliErrorCode, type ReplaceListItem } from './output'
 import { replaceLiteral } from './replaceText'
+import { toWebpBytes } from './webp'
 import { SEARCH_MAX_DOCS } from '../../worker/searchLines'
 
 export function whoami(cfg: ClientConfig): Promise<V1Me> {
@@ -255,8 +256,8 @@ export function mkdir(cfg: ClientConfig, name: string, parentId: string | null):
   return apiCreateFolder(cfg, body)
 }
 
-export function upload(cfg: ClientConfig, bytes: Uint8Array): Promise<V1Attachment> {
-  return apiUploadAttachment(cfg, bytes)
+export async function upload(cfg: ClientConfig, bytes: Uint8Array): Promise<V1Attachment> {
+  return apiUploadAttachment(cfg, await toWebpBytes(bytes))
 }
 
 export function link(cfg: ClientConfig, id: string): Promise<V1Link> {

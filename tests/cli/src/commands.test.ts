@@ -1,6 +1,8 @@
 // F-2021 U8 (specs/features/F-2021.md 13.1, 4.2). ls 필터는 4.2 명령별 규칙
 import { describe, expect, it, vi } from 'vitest'
-import { find, info, ls, lsShared, moveDoc, putDoc, removeDoc, removeFolder, replace, search } from '../../../cli/src/commands'
+import encodePng, { init as initPngEncoder } from '@jsquash/png/encode.js'
+import pngWasm from '@jsquash/png/codec/pkg/squoosh_png_bg.wasm?url&inline'
+import { find, info, ls, lsShared, moveDoc, putDoc, removeDoc, removeFolder, replace, search, upload } from '../../../cli/src/commands'
 import type { ClientConfig } from '../../../cli/src/client'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -312,5 +314,33 @@ describe('replace', () => {
       details: { limit: 200 },
     })
     expect(s.calls.filter((c) => c.includes('/v1/docs/'))).toEqual([])
+  })
+})
+
+describe('F-2144 U6 upload', () => {
+  async function noisyPng(): Promise<Uint8Array> {
+    await initPngEncoder(await WebAssembly.compile(await (await fetch(pngWasm)).arrayBuffer()))
+    const width = 400
+    const height = 300
+    const data = new Uint8ClampedArray(width * height * 4)
+    let seed = 1
+    for (let i = 0; i < data.length; i++) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff
+      data[i] = i % 4 === 3 ? 255 : ((i >> 2) % width) * 0.6 + (seed % 40)
+    }
+    return new Uint8Array(await encodePng({ data, width, height, colorSpace: 'srgb' } as ImageData))
+  }
+
+  it('PNG 는 WebP 로 바꿔 보내고 GIF 는 원본 바이트 그대로 보낸다', async () => {
+    const fetchImpl = fakeFetch(() => jsonResponse({ id: 'a1' }, 201))
+    const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+    await upload(cfg, await noisyPng())
+    const sent = fetchImpl.mock.calls[0][1].body as Uint8Array
+    expect(String.fromCharCode(...sent.subarray(0, 4))).toBe('RIFF')
+    expect(String.fromCharCode(...sent.subarray(8, 12))).toBe('WEBP')
+
+    const gif = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0, 0, 0x3b])
+    await upload(cfg, gif)
+    expect(fetchImpl.mock.calls[1][1].body).toEqual(gif)
   })
 })

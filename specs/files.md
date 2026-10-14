@@ -633,6 +633,7 @@ rawdoc.app 서버. 로그인, 문서 저장, 공유, 실시간 편집, 알림을
 |`cli/src/replaceText.ts`|문서 본문의 글자를 찾아 바꾸고 바뀐 줄을 미리 보여 줌|
 |`cli/src/sidecar.ts`|받은 파일 옆에 문서 id·판 번호·원문을 적어 두고 읽음|
 |`cli/src/syntax.ts`|터미널에서 마크다운 문법 안내를 보여 줌|
+|`cli/src/webp.ts`|올릴 PNG·JPEG 를 더 작은 WebP 로 바꿈|
 |`cli/vite.config.ts`|터미널 도구를 실행 파일 하나로 묶는 설정|
 
 ## `site/` 공개 사이트 (7)

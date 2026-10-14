@@ -107,7 +107,7 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | E2E tests | Playwright (`@playwright/test`), installed Chrome channel | In use (F-150) |
 | 3D map | `three` + `d3-force-3d` (plus `@types/three` and a local `src/types/d3-force-3d.d.ts`) | In use (F-292 revision). Only F-2001 and F-2002 install them; no other spec may add a 3D dependency. Never use `3d-force-graph` |
 | Landing animation | gsap 3.15.0 (ScrollTrigger only), exact pin | In use (F-2049). Only `src/welcome/` may import it; the app, `worker/`, `site/`, `cli/` never do (`tests/src/welcome/gsapBoundary.test.ts`). Standard "No Charge" license, not open source |
-| CLI | Node 22+, zero runtime dependencies, npm `rawdoc` | In use (F-2021) |
+| CLI | Node 22+, zero runtime dependencies, npm `rawdoc`. devDependency `@jsquash/webp`·`png`·`jpeg` bundled into `cli/dist` only (F-2144); `src/`·`worker/` never import them | In use (F-2021) |
 | Rate limiting | Workers Rate Limiting binding `WRITE_LIMITER` | In use (F-2026) |
 | Web push | WebCrypto only — VAPID (RFC 8292) + aes128gcm (RFC 8291) in `worker/webPush.ts`, no npm dependency | Core in (F-3002). Storage, sending and the service worker follow per F-3001 ch. 6 |
 

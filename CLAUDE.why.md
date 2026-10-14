@@ -47,6 +47,7 @@
 - `3d-force-graph` 를 쓰지 않는 이유: 재 봤더니 `WebGPURenderer` 를 정적으로 끌어옴(F-292 개정)
 - gsap 을 `src/welcome/` 로만 가두는 이유: 오픈 소스가 아닌 Standard "No Charge" 라이선스(gsap.com/standard-license) — 앱·워커·사이트·CLI 로 퍼지지 않게
 - Live sync 행에서 편집 잠금(F-213)을 뺀 이유: 사용자 지시 2026-10-03, F-309 로 잠금 제거
+- CLI `@jsquash/*` 번들: 사용자 2026-10-14 "cli로 이미지까지 업로드할때 webp 로 안올라가는거 같음" → wasm 을 번들에 넣어 런타임 의존성 0 유지(F-2144, 패키지 130KB → 1.16MB 감수)
 
 ## main(오케스트레이터) 규칙
 

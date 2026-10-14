@@ -38,10 +38,11 @@ declare module 'node:fs/promises' {
   export function mkdir(path: string, options?: { recursive?: boolean; mode?: number }): Promise<string | undefined>
   export function rename(oldPath: string, newPath: string): Promise<void>
   export function chmod(path: string, mode: number): Promise<void>
-  // 테스트 전용 — 스크래치 디렉터리 만들기·정리·모드 확인
+  // 테스트 전용 — 스크래치 디렉터리 만들기·정리·모드 확인, 소스 트리 훑기
   export function mkdtemp(prefix: string): Promise<string>
   export function rm(path: string, options?: { recursive?: boolean; force?: boolean }): Promise<void>
   export function stat(path: string): Promise<{ mode: number }>
+  export function readdir(path: string | URL, options: { recursive: true }): Promise<string[]>
 }
 
 declare module 'node:os' {
@@ -83,6 +84,12 @@ declare module 'node:util' {
     values: Record<string, string | boolean | undefined>
     positionals: string[]
   }
+}
+
+// Vite 가 .wasm 을 data: URL 문자열로 넣는다 (F-2144 3장)
+declare module '*.wasm?url&inline' {
+  const src: string
+  export default src
 }
 
 // Node 22 의 import.meta.filename — 이 모듈이 실제 실행 스크립트인지 판정한다(main.ts 맨 아래)

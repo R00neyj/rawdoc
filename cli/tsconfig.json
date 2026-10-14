@@ -16,6 +16,7 @@
     "../src/lib/cliLoginUrl.ts",
     "../src/lib/cliSeal.ts",
     "../src/lib/decodeMarkdown.ts",
+    "../src/lib/imageFile.ts",
     "../src/lib/lineEnding.ts",
     "../src/lib/siteMeta.ts",
     "../src/lib/folderTree.ts",
