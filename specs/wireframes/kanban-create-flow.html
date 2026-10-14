@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>칸반 보드 생성 플로우</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; font: 14px/1.5 system-ui, sans-serif; color: #222; background: #f6f6f4; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 40px 0 12px; color: #444; }
+  .sub { color: #777; margin: 0 0 24px; }
+  .flow { display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .box { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; text-align: center; min-width: 180px; }
+  .box small { display: block; color: #888; font-size: 12px; }
+  .box.key { border: 2px solid #333; }
+  .box.q { border-style: dashed; border-radius: 20px; background: #fafaf8; }
+  .box.warn { border-color: #b77; color: #844; }
+  .arrow { width: 2px; height: 28px; background: #999; position: relative; margin: 4px 0; }
+  .arrow::after { content: ''; position: absolute; bottom: -2px; left: -5px; border: 6px solid transparent; border-top-color: #999; }
+  .branch { display: flex; gap: 16px; justify-content: center; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; align-items: center; }
+  .label { font-size: 12px; color: #666; background: #e9e9e5; border-radius: 10px; padding: 1px 8px; margin-bottom: 4px; }
+  pre { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 12px 16px; font: 13px/1.6 ui-monospace, monospace; display: inline-block; margin: 0; }
+  ol li { margin: 6px 0; }
+  .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px 20px; max-width: 900px; }
+</style>
+</head>
+<body>
+<h1>칸반 보드 생성 플로우</h1>
+<p class="sub">지금 앱의 진입점(사이드바 새 문서, 폴더 ⋯, 명령 팔레트, 템플릿)을 그대로 쓰는 안</p>
+
+<h2>1. 새로 만들기</h2>
+<div class="flow">
+  <div class="row">
+    <div class="box">사이드바 <b>새 문서 ▾</b><small>→ 칸반 보드</small></div>
+    <div class="box">폴더 <b>⋯</b> 메뉴<small>→ 새 칸반 보드</small></div>
+    <div class="box">명령 팔레트<small>'새 칸반 보드'</small></div>
+    <div class="box">템플릿<small>'칸반' 고르기</small></div>
+  </div>
+  <div class="arrow"></div>
+  <div class="box key">새 문서 생성<small>본문 = 기본 원문 (아래 3절)</small></div>
+  <div class="arrow"></div>
+  <div class="box key">보드 보기로 열림<small>문서 제목에 초점</small></div>
+  <div class="arrow"></div>
+  <div class="box q">다음 행동</div>
+  <div class="arrow"></div>
+  <div class="branch">
+    <div class="col"><span class="label">칸 이름 클릭</span><div class="box">## 제목 줄 바로 고침</div></div>
+    <div class="col"><span class="label">칸 아래 + 카드</span><div class="box">그 칸 끝에 <code>- </code> 줄 추가<small>카드 입력칸에 초점</small></div></div>
+    <div class="col"><span class="label">맨 오른쪽 + 칸</span><div class="box">문서 끝에 <code>## 새 칸</code> 추가</div></div>
+    <div class="col"><span class="label">원문 보기로 전환</span><div class="box">편집기에서 그대로 수정</div></div>
+  </div>
+  <div class="arrow"></div>
+  <div class="box key">Y.Text 에 그 줄만 반영<small>보드·원문이 함께 바뀜</small></div>
+</div>
+
+<h2>2. 기존 문서를 보드로</h2>
+<div class="flow">
+  <div class="box">기존 문서 열린 상태</div>
+  <div class="arrow"></div>
+  <div class="box">명령 팔레트 <b>'보드로 보기'</b></div>
+  <div class="arrow"></div>
+  <div class="box q">## 제목 아래 목록이 있나</div>
+  <div class="arrow"></div>
+  <div class="branch">
+    <div class="col"><span class="label">있음</span><div class="box key">frontmatter 에 <code>kanban: true</code> 추가<small>→ 보드 보기</small></div></div>
+    <div class="col"><span class="label">없음</span><div class="box warn">알림: 칸으로 쓸 ## 제목이 없습니다</div></div>
+  </div>
+</div>
+
+<h2>3. 새로 만들 때 기본 원문</h2>
+<pre>---
+kanban: true
+---
+# 제목 없는 보드
+
+## 할 일
+
+## 진행 중
+
+## 완료</pre>
+
+<h2>4. 정해야 할 것</h2>
+<div class="card">
+  <ol>
+    <li><b>사이드바 진입점</b> — <code>새 문서</code> 버튼에 ▾ 메뉴를 붙일지, 버튼을 하나 더 둘지. 아래 줄이 이미 꽉 차 있어 ▾ 메뉴 추천</li>
+    <li><b>보드로 볼 문서를 고르는 기준</b> — <code>kanban: true</code> 표시를 쓸지, 표시 없이 어느 문서든 상단바에서 보드로 바꿔 보게 할지. 표시를 쓰면 다시 열어도 보드로 열리지만 원문에 한 줄이 들어감</li>
+    <li><b>템플릿으로만 할지</b> — 진입점을 다 만들지 않고 템플릿에 '칸반' 하나만 넣으면 작업이 가장 작음. 이때는 보드 화면만 새로 만들면 됨</li>
+  </ol>
+</div>
+</body>
+</html>
