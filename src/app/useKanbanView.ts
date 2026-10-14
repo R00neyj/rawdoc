@@ -7,7 +7,7 @@ import { nextKanbanView, type KanbanView } from './kanbanView'
 import type { EditorHandle } from '../editor/Editor'
 
 type ViewMode = 'live' | 'raw' | 'view'
-export type KanbanUserEvent = `kanban.${'add' | 'edit' | 'move' | 'moveLane' | 'removeLane' | 'removeCard' | 'toggle' | 'flag'}`
+export type KanbanUserEvent = `kanban.${'add' | 'edit' | 'move' | 'moveLane' | 'removeLane' | 'removeCard' | 'toggle' | 'flag' | 'done'}`
 export type ApplyKanban = (change: KanbanChange | KanbanChange[] | null, userEvent: KanbanUserEvent) => boolean
 type KanbanState = { docId: string | null; isKanban: boolean; view: KanbanView }
 
@@ -31,6 +31,10 @@ export type UseKanbanViewResult = {
   chooseMode: (mode: ViewMode) => void
   applyKanban: ApplyKanban
   showBoard: () => void
+  // 할 일 패널에서 누른 카드 — 그 문서 보드가 뜨면 한 번 보인다 (small 2026-10-14)
+  revealCard: (docId: string, line: number) => void
+  revealTick: number
+  takeReveal: () => number | null
 }
 
 // 변경 하나 = 트랜잭션 하나 = 되돌리기 한 단계 (F-2138 1장)
@@ -44,11 +48,15 @@ export function useKanbanView({ editorRef, editorHandle, docId, ready, covered, 
   const [state, setState] = useState<KanbanState>({ docId: null, isKanban: false, view: 'source' })
   const stateRef = useRef(state)
   const openedDocRef = useRef<string | null>(null)
+  const revealRef = useRef<{ docId: string; line: number } | null>(null)
+  const [revealTick, setRevealTick] = useState(0)
 
   // 바뀐 게 없으면 App 을 다시 그리지 않는다 — 칸반이 아닌 문서도 변경마다 부른다
   const commit = useCallback((next: KanbanState) => {
     const prev = stateRef.current
     if (prev.docId === next.docId && prev.isKanban === next.isKanban && prev.view === next.view) return
+    // 다른 문서로 옮겼으면 못 쓴 요청을 버린다
+    if (prev.docId !== next.docId && revealRef.current?.docId !== next.docId) revealRef.current = null
     stateRef.current = next
     setState(next)
   }, [])
@@ -114,9 +122,26 @@ export function useKanbanView({ editorRef, editorHandle, docId, ready, covered, 
     choose('board')
   }, [ready, editorRef, showNotice, choose])
 
+  // 지금 문서면 보드로 바꾸고, 다른 문서면 열린 뒤 보드가 받아 간다
+  const revealCard = useCallback((docId: string, line: number) => {
+    revealRef.current = { docId, line }
+    setRevealTick((n) => n + 1)
+    if (stateRef.current.docId === docId && stateRef.current.isKanban) choose('board')
+  }, [choose])
+
+  const takeReveal = useCallback(() => {
+    const pending = revealRef.current
+    if (!pending || pending.docId !== stateRef.current.docId) return null
+    revealRef.current = null
+    return pending.line
+  }, [])
+
   const isKanban = ready && editorHandle !== null && state.docId === docId && state.isKanban
   const boardShown = isKanban && state.view === 'board' && !covered
-  return { isKanban, view: state.view, boardShown, handle: boardShown ? editorHandle : null, choose, chooseMode, applyKanban, showBoard }
+  return {
+    isKanban, view: state.view, boardShown, handle: boardShown ? editorHandle : null, choose, chooseMode, applyKanban, showBoard,
+    revealCard, revealTick, takeReveal,
+  }
 }
 
 // 입력칸을 연 카드 `from` 또는 칸 `headingFrom`. key 는 연 순간의 위치라 다시 그려도 입력칸이 그대로 남는다 (F-2141 3장)

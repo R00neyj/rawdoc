@@ -115,6 +115,8 @@ import { useLeaveShare } from './useLeaveShare'
 import LeaveShareDialog from './LeaveShareDialog'
 import { useEditorSync, type PendingJump } from './useEditorSync'
 import { useKanbanView } from './useKanbanView'
+import { useKanbanSettings } from './useKanbanSettings'
+import type { SettingsTabId } from './settingsTabs'
 import { useHashRouting, replaceHashUrl, pushHashUrl } from './useHashRouting'
 import { useSharesPage } from './useSharesPage'
 import { isMacPlatform } from './shortcutCatalog'
@@ -165,6 +167,7 @@ export default function App() {
   const lastAppliedListSeqRef = useRef(0)
   const [notice, setNotice] = useState<AppNotice | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<SettingsTabId | null>(null)
   // 검색 대화상자 D-6 (specs/features/F-287.md 3장)
   const [searchOpen, setSearchOpen] = useState(false)
   // 검색 결과로 연 문서에 넣어 줄 검색어 예약 — 본문이 도착하고 에디터가 만들어질 때까지 기다린다 (specs/features/F-294.md 4.3)
@@ -1162,7 +1165,7 @@ export default function App() {
   const panelDocs = usePanelDocs({
     linksActive: rightPanel.shownViews.includes('links'), graphActive: rightPanel.shownViews.includes('graph'), todosActive: rightPanel.shownViews.includes('todos'), taskFilter: rightPanel.taskFilter,
     listSource, docs, folders, currentDoc, editor: editorHandle, resolver: wikiResolver, e2eeOpen: e2ee?.status === 'open', selectDoc, openWikiLinkTarget, openMap,
-    pendingJumpRef, jumpToLine, afterOpen: rightPanel.closeIfNarrow,
+    pendingJumpRef, jumpToLine, afterOpen: rightPanel.closeIfNarrow, revealCard: kanban.revealCard,
   })
   const sidePanel = usePhoneSidePanel({
     appShellRef, enabled: phone && bootPhase === 'ready' && !sharedDoc && !mapRoute, open: rightPanel.open, onOpen: rightPanel.openPanel, onClose: rightPanel.closePanel,
@@ -1184,9 +1187,17 @@ export default function App() {
   }
 
   function openSettings() {
+    setSettingsTab(null)
     setSettingsOpen(true)
     closeSidebarIfNarrow()
   }
+
+  // 보드 `⋯` 의 `칸반 설정…` — 설정을 칸반 탭으로 연다 (small 2026-10-14)
+  function openKanbanSettings() {
+    openSettings()
+    setSettingsTab('kanban')
+  }
+  const kanbanSettings = useKanbanSettings({ open: settingsOpen, handle: kanban.isKanban ? editorHandle : null, readOnly: isReadOnlyDoc, apply: kanban.applyKanban })
 
   function closeSettings() {
     setSettingsOpen(false)
@@ -1385,7 +1396,7 @@ export default function App() {
             liveEditorOption, mapRoute, mentionSource, onNavigateFolder, openDoc, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme,
             resolveImagePath: githubImages.resolveImagePath, resolveWikiHref,
             setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, showNotice, store, titleReadOnly, viewerHtml: shownViewerHtml, viewerRef, viewFindCard: viewFind.card, viewMode,
-            wikiContext, wikiPreviewPref, wikiResolver,
+            wikiContext, wikiPreviewPref, wikiResolver, openKanbanSettings,
             phoneSidePanel: { slot: sidePanel.outlineSlot, open: sidePanel.openFrom, close: rightPanel.closePanel },
           }} />}
           {statusBarVisible && shortcutsOpen && <ShortcutPanel mac={isMac} used={shortcutsUsed} onClose={closeShortcuts} />}
@@ -1432,7 +1443,7 @@ export default function App() {
         requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
         setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, startDocIdPref, store, templateEntries, themePref,
         toolbarPref, wikiPreviewPref, settingsGithub: github.settings, githubDialogs: github.dialogs, ...templateManager,
-        rightPanelSettings: { ...rightPanel.settings, calendar: calendar.settings },
+        rightPanelSettings: { ...rightPanel.settings, calendar: calendar.settings }, kanbanSettings, settingsTab,
       }} />
       <DonateDialog />
       {/* 인쇄 전용 영역 — printDoc() 이 채운다. .app-shell 의 마지막 직계 자식이어야 한다 (F-279.md 4.2) */}

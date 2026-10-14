@@ -69,7 +69,8 @@ test('F-2142 E2 카드 포커스에서 Alt+→ 두 번·Alt+↑ 한 번으로 �
   await expect(lane(page, '완료').locator('.kanban-card-text')).toHaveText(['체크 카드', '완료 하나', '완료 둘'])
   await expect(board(page).locator('.kanban-live')).toHaveText('체크 카드 — 완료 1번째')
 
-  const expected = BOARD_DOC.replace('- [ ] 체크 카드\n', '').replace('## 완료\n', '## 완료\n- [ ] 체크 카드\n')
+  // 완료 칸으로 들어가면 체크 칸이 [x] 가 된다 (small 2026-10-14)
+  const expected = BOARD_DOC.replace('- [ ] 체크 카드\n', '').replace('## 완료\n', '## 완료\n- [x] 체크 카드\n')
   await expect.poll(() => savedContent(page, docId)).toBe(expected)
 })
 

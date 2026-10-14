@@ -1,6 +1,6 @@
 // 칸반 보드 우클릭·`⋯` 메뉴 — 카드·칸 머리·빈 자리마다 항목을 고르고 FolderMenu 로 그린다
 import FolderMenu, { type FolderMenuItem } from './FolderMenu'
-import { IconCheck, IconDelete, IconEdit, IconMove, IconRaw } from './icons'
+import { IconCheck, IconDelete, IconEdit, IconMove, IconRaw, IconSettings } from './icons'
 import type { KanbanLane } from '../lib/kanban'
 
 export type KanbanMenuTarget = { kind: 'card'; lane: number; card: number } | { kind: 'lane'; lane: number } | { kind: 'board' }
@@ -16,6 +16,7 @@ export type KanbanMenuActions = {
   moveLane: (lane: number, dir: 'left' | 'right') => void
   removeLane: (lane: number) => void
   addLane: () => void
+  openSettings: () => void
 }
 
 type KanbanMenuProps = {
@@ -27,7 +28,12 @@ type KanbanMenuProps = {
 }
 
 function menuItems(target: KanbanMenuTarget, lanes: KanbanLane[], unnamed: string, a: KanbanMenuActions): FolderMenuItem[] | null {
-  if (target.kind === 'board') return [{ key: 'add-lane', label: '칸 추가', onSelect: a.addLane }]
+  if (target.kind === 'board') {
+    return [
+      { key: 'add-lane', label: '칸 추가', onSelect: a.addLane },
+      { key: 'settings', label: '칸반 설정…', icon: IconSettings, onSelect: a.openSettings },
+    ]
+  }
   const { lane } = target
   if (!lanes[lane]) return null
   if (target.kind === 'lane') {

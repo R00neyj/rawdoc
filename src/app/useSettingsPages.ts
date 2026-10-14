@@ -11,6 +11,8 @@ type Options = {
   open: boolean
   enabled: boolean
   tabs: readonly SettingsTabId[]
+  // 열 때 목록 위에 바로 펼칠 탭 — 뒤로 가면 목록 (small 2026-10-14)
+  initialTab?: SettingsTabId | null
   onOpen?: () => void
   onClose: () => void
 }
@@ -23,7 +25,7 @@ function nestedDialogOpen(): boolean {
   return Array.from(document.querySelectorAll('dialog[open]')).some((d) => d.getAttribute('aria-labelledby') !== SETTINGS_TITLE_ID)
 }
 
-export function useSettingsPages({ open, enabled, tabs, onOpen, onClose }: Options) {
+export function useSettingsPages({ open, enabled, tabs, initialTab, onOpen, onClose }: Options) {
   const [page, setPage] = useState<SettingsPage | null>(null)
   const latest = useRef({ open, enabled, tabs, onOpen, onClose, page })
   const shownIdxRef = useRef<number | null>(null)
@@ -39,8 +41,14 @@ export function useSettingsPages({ open, enabled, tabs, onOpen, onClose }: Optio
 
   useEffect(() => {
     if (open && enabled) {
-      const marked = readSettingsPage(history.state, tabs)
-      if (marked === null) pushAppEntry(currentUrl(), { settings: 'list' })
+      let marked = readSettingsPage(history.state, tabs)
+      if (marked === null) {
+        pushAppEntry(currentUrl(), { settings: 'list' })
+        if (initialTab) {
+          pushAppEntry(currentUrl(), { settings: initialTab })
+          marked = initialTab
+        }
+      }
       shownIdxRef.current = readNavIdx(history.state)
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setPage(marked ?? 'list')
@@ -52,7 +60,7 @@ export function useSettingsPages({ open, enabled, tabs, onOpen, onClose }: Optio
       setPage(null)
     }
     prevOpenRef.current = open
-    // tabs 는 열림·폭이 바뀔 때의 값만 쓰면 된다
+    // tabs·initialTab 은 열림·폭이 바뀔 때의 값만 쓰면 된다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, enabled])
 

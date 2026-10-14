@@ -37,6 +37,10 @@ type KanbanBoardProps = {
   showNotice: (input: NoticeWithAction) => number
   // 문서를 열 때 받은 첫 포커스 요청 — 마운트 때 한 번 쓰고 비운다
   focusRef: RefObject<KanbanBoardFocus>
+  onOpenSettings: () => void
+  // 할 일 패널에서 누른 카드 줄 — tick 이 바뀌거나 처음 그릴 때 한 번 받아 간다 (small 2026-10-14)
+  revealTick: number
+  takeReveal: () => number | null
 }
 
 // add = 칸 아래 새 카드, lane = 칸 이름(added 는 `칸 추가` 로 연 것), card = 카드 첫 줄 글자
@@ -53,7 +57,8 @@ const UNNAMED_LANE = '이름 없는 칸'
 const ARROWS: Partial<Record<string, KanbanDir>> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }
 
 export default function KanbanBoard({
-  handle, title, titleReadOnly, readOnly, onTitleChange, onTitleCommit, onOpenStray, resolveWikiLink, onOpenWikiLink, apply, showNotice, focusRef,
+  handle, title, titleReadOnly, readOnly, onTitleChange, onTitleCommit, onOpenStray, resolveWikiLink, onOpenWikiLink, apply, showNotice, focusRef, onOpenSettings,
+  revealTick, takeReveal,
 }: KanbanBoardProps) {
   const boardRef = useRef<HTMLDivElement | null>(null)
   const titleRef = useRef<HTMLInputElement | null>(null)
@@ -314,6 +319,7 @@ export default function KanbanBoard({
     },
     removeLane,
     addLane: () => addLane(),
+    openSettings: onOpenSettings,
   }
 
   const [menu, setMenu] = useState<KanbanMenuState | null>(null)
@@ -381,6 +387,20 @@ export default function KanbanBoard({
     el.focus()
   }, [focusTick, lanes])
 
+  // 할 일 패널에서 누른 카드로 스크롤하고 잠깐 강조한다 — 포커스도 옮겨 키보드로 이어 쓴다
+  useLayoutEffect(() => {
+    const line = takeReveal()
+    const doc = handle.view.state.doc
+    if (line === null || line > doc.lines) return
+    const at = cardAt(parseKanban(doc.toString()), doc.line(line).from)
+    const el = at && cardElement(boardRef.current, at)
+    if (!el) return
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    el.focus({ preventScroll: true })
+    el.classList.add('kanban-card--reveal')
+    el.addEventListener('animationend', () => el.classList.remove('kanban-card--reveal'), { once: true })
+  }, [revealTick, takeReveal, handle])
+
   // 스냅샷 좌표의 추적 위치가 칸·카드 머리가 아니게 됐다 — 줄 머리 기호만 지워진 경우
   const targetLane = target ? lanes.findIndex((l) => (target.kind === 'lane' ? l.headingFrom === target.pos : l.cards.some((c) => c.from === target.pos))) : -1
   const orphaned = editing !== null && target !== null && targetLane < 0
@@ -429,28 +449,38 @@ export default function KanbanBoard({
       onClick={onBoardClick}
       onContextMenu={onBoardContextMenu}
     >
-      <input
-        ref={titleRef}
-        className="kanban-title"
-        aria-label="문서 제목"
-        value={titleDraft ?? title}
-        readOnly={titleReadOnly}
-        placeholder={titleReadOnly ? '' : '제목 없는 문서'}
-        onFocus={() => setTitleDraft(title)}
-        onChange={(e) => {
-          setTitleDraft(e.target.value)
-          onTitleChange(e.target.value)
-        }}
-        onBlur={() => {
-          setTitleDraft(null)
-          onTitleCommit()
-        }}
-        onKeyDown={(e) => {
-          if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
-          e.preventDefault()
-          boardRef.current?.focus()
-        }}
-      />
+      <div className="kanban-head">
+        <input
+          ref={titleRef}
+          className="kanban-title"
+          aria-label="문서 제목"
+          value={titleDraft ?? title}
+          readOnly={titleReadOnly}
+          placeholder={titleReadOnly ? '' : '제목 없는 문서'}
+          onFocus={() => setTitleDraft(title)}
+          onChange={(e) => {
+            setTitleDraft(e.target.value)
+            onTitleChange(e.target.value)
+          }}
+          onBlur={() => {
+            setTitleDraft(null)
+            onTitleCommit()
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
+            e.preventDefault()
+            boardRef.current?.focus()
+          }}
+        />
+        {!readOnly && (
+          <MoreButton
+            label="보드"
+            expanded={menu?.target.kind === 'board'}
+            onOpen={(button) => openMenuFrom({ kind: 'board' }, button, button)}
+            onClose={closeMenu}
+          />
+        )}
+      </div>
       {lanes.length === 0 && <p className="kanban-empty">칸이 없습니다. ## 로 시작하는 줄 하나가 칸 하나가 됩니다.</p>}
       {(lanes.length > 0 || !readOnly) && (
         <div className="kanban-lanes">

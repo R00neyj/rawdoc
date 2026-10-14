@@ -18,6 +18,8 @@ import ImportPreviewDialog from './ImportPreviewDialog'
 import TemplateManagerDialog from './TemplateManagerDialog'
 import type { UseTemplateManagerResult } from './useTemplateManager'
 import type { RightPanelSettings } from './RightPanelSettingsTab'
+import type { KanbanSettings } from './useKanbanSettings'
+import type { SettingsTabId } from './settingsTabs'
 import type { SelectionItem } from './sidebarSelection'
 import type { DocMeta } from './docMeta'
 import type { Folder, Store } from '../types'
@@ -93,6 +95,8 @@ export type AppDialogsProps = Pick<UseAccountStatusResult, 'account' | 'recheckA
     showNotice: (input: NoticeWithAction, options?: { sticky?: boolean }) => number
     store: Store
     rightPanelSettings?: RightPanelSettings
+    kanbanSettings?: KanbanSettings
+    settingsTab?: SettingsTabId | null
   }
 
 export default function AppDialogs({
@@ -107,7 +111,7 @@ export default function AppDialogs({
   requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
   setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, startDocIdPref, store, templateEntries, themePref, toolbarPref,
   wikiPreviewPref, changeDefaultView, defaultViewPref, settingsGithub, githubDialogs, templatesOpen, openTemplates, closeTemplates,
-  createTemplate, editTemplate, deleteTemplate, rightPanelSettings,
+  createTemplate, editTemplate, deleteTemplate, rightPanelSettings, kanbanSettings, settingsTab,
 }: AppDialogsProps) {
   return (
     <>
@@ -196,6 +200,8 @@ export default function AppDialogs({
         templateEntries={templateEntries}
         onOpenTemplates={openTemplates}
         rightPanel={rightPanelSettings}
+        kanban={kanbanSettings}
+        initialTab={settingsTab}
         contentWidth={contentWidthPref}
         onChangeContentWidth={changeContentWidth}
         onExportAll={handleExportAll}

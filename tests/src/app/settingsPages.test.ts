@@ -26,6 +26,9 @@ describe('F-2114 U2 readSettingsPage', () => {
     expect(readSettingsPage(undefined, TABS)).toBeNull()
     expect(readSettingsPage('list', TABS)).toBeNull()
   })
+  it('칸반 탭 표식도 읽는다 (small 2026-10-14)', () => {
+    expect(readSettingsPage({ settings: 'kanban' }, ['screen', 'kanban'])).toBe('kanban')
+  })
 })
 
 describe('F-2114 U3 settingsPageDepth', () => {

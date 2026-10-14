@@ -1,5 +1,7 @@
 // 할 일 — 옵시디언 Tasks 플러그인의 전역 필터·상태·이모지 형식·happens·기본 정렬을 따른 읽기 전용 모음, 순수 함수 (small 2026-10-11)
 import { proseLines } from './wikiGraph'
+import { isKanbanDoc, kanbanDoneLane, parseKanban } from './kanban'
+import { toEditorText } from './lineEnding'
 
 // 패널 목록이 끝없이 길어지지 않게 — 넘으면 정렬한 뒤 앞에서 자르고 안내한다
 export const TODO_MAX_ITEMS = 300
@@ -15,6 +17,8 @@ export type TodoItem = {
   scheduled: string | null
   start: string | null
   priority: TaskPriority
+  // 칸반 카드면 그 칸 이름
+  lane?: string
 }
 export type TaskFilter = { filters: readonly string[]; hide: boolean }
 export type TodoSource = { id: string; title: string; content: string; e2ee?: 'locked' | 'open' }
@@ -112,8 +116,32 @@ function removeFilters(text: string, filters: readonly string[]): string {
   return out.replace(/\s{2,}/g, ' ').trim()
 }
 
+// 칸반 문서는 완료 칸 밖·[x] 아닌 카드(체크 칸 없는 카드 포함)만. 하위 줄의 체크박스는 보지 않는다 (small 2026-10-14)
+function findKanbanTodos(text: string, filter: TaskFilter): TodoItem[] {
+  const lanes = parseKanban(text)
+  const done = kanbanDoneLane(text, lanes)
+  const items: TodoItem[] = []
+  let line = 1
+  let pos = 0
+  lanes.forEach((lane, index) => {
+    for (const card of lane.cards) {
+      for (; pos < card.from; pos++) if (text.charCodeAt(pos) === 10) line++
+      const body = card.text
+      if (index === done || card.done || body.trim() === '') continue
+      if (filter.filters.length > 0 && !filter.filters.some((f) => matchesFilter(body, f))) continue
+      const parsed = parseFields(body)
+      items.push({ line, level: 0, status: 'todo', ...parsed, text: filter.hide ? removeFilters(parsed.text, filter.filters) : parsed.text, lane: lane.title })
+    }
+  })
+  return items
+}
+
 // 펜스 코드·프론트매터 밖의 체크박스 줄 가운데 할 일(상태 [ ]·[/]·모르는 문자)만. 전역 필터가 있으면 표시가 든 줄만
 export function findOpenTodos(text: string, filter: TaskFilter): TodoItem[] {
+  if (text.startsWith('---')) {
+    const lf = text.includes('\r') ? toEditorText(text) : text
+    if (isKanbanDoc(lf)) return findKanbanTodos(lf, filter)
+  }
   const items: TodoItem[] = []
   const indents: number[] = []
   for (const { line, number } of proseLines(text)) {

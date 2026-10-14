@@ -184,6 +184,8 @@ src/
 - 칸반 보드 보기(F-2140)로 추가
   - `app/`: `kanbanView.ts`(F-2140 — 보드·원문 보기 전이 `nextKanbanView`, 순수 함수), `useKanbanView.ts`(F-2140 — 문서별 보기·`isKanban`·rAF 로 묶은 보드 스냅샷), `KanbanBoard.tsx`(F-2140 — 보드 화면). 칸·카드 해석은 기존 `lib/kanban.ts`(F-2139)
   - `styles/`: `kanban.css`(F-2140 — `main.tsx` 정적 import)
+- 칸반 완료 칸 설정·할 일 패널 칸반 카드(small 2026-10-14)로 추가
+  - `app/`: `useKanbanSettings.ts`(설정 `칸반` 탭 자료 — 지금 문서가 칸반일 때만 편집기 원문에서 완료 칸 선택지를 읽고, 쓰기는 `applyKanban` 한 길), `KanbanSettingsTab.tsx`(탭 화면). 완료 칸은 문서 프런트매터 `kanban-done: {칸 이름}`(없거나 맞는 칸이 없으면 마지막 칸) — 기기 설정이 아니라 문서에 산다. `lib/docTodos.ts` 가 `lib/kanban.ts` 를 읽어 칸반 문서는 카드 규칙만 쓴다
 
 - 단위 테스트는 `tests/` 아래, 원본 경로를 그대로 따라 `tests/{원본 경로}/{이름}.test.ts` (2026-09-28 사용자 지정. 처음엔 대상 옆이었다 — `specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지

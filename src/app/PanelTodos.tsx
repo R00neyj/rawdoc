@@ -48,12 +48,21 @@ export default function PanelTodos({ view }: { view: DocTodosView }) {
               <ul className="doc-links-list">
                 {doc.items.map((row) => {
                   const meta = metaOf(row)
+                  const card = row.lane !== undefined
                   return (
                     <li key={`${row.docId}:${row.line}`}>
-                      <button type="button" className="doc-link-item todo-item" onClick={() => view.onOpenItem(row.docId, row.line)}>
-                        <span className="todo-box" data-status={row.status} aria-hidden="true" />
+                      <button
+                        type="button"
+                        className="doc-link-item todo-item"
+                        onClick={() => (card ? view.onOpenCard(row.docId, row.line) : view.onOpenItem(row.docId, row.line))}
+                      >
+                        {/* 칸반 카드는 체크 칸이 없을 수 있어 상자를 그리지 않는다 (small 2026-10-14) */}
+                        {!card && <span className="todo-box" data-status={row.status} aria-hidden="true" />}
                         <span className="todo-body">
-                          <span className="doc-link-title">{row.text}</span>
+                          <span className="todo-title-row">
+                            <span className="doc-link-title">{row.text}</span>
+                            {card && <span className="todo-lane">{row.lane || '이름 없는 칸'}</span>}
+                          </span>
                           {meta && <span className="todo-meta">{meta}</span>}
                         </span>
                       </button>

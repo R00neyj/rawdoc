@@ -89,3 +89,16 @@ describe('visibleSettingsTabs — F-2096 A1', () => {
     ])
   })
 })
+
+describe('visibleSettingsTabs — 칸반 (small 2026-10-14)', () => {
+  test('칸반은 오른쪽 패널 다음·사용자 CSS 앞', () => {
+    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, rightPanel: true, kanban: true, css: true })).toEqual([
+      'screen',
+      'editor',
+      'rightPanel',
+      'kanban',
+      'css',
+      'data',
+    ])
+  })
+})

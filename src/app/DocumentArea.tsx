@@ -73,6 +73,8 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
     kanban: UseKanbanViewResult
     mapRoute: { centerDocId: string | null; returnDocId: string | null } | null
     openDoc: OpenDoc | null
+    // 보드 `⋯` 의 `칸반 설정…` (small 2026-10-14)
+    openKanbanSettings: () => void
     outlineControlRef: RefObject<OutlineControl | null>
     phoneSidePanel: OutlinePhonePanel
     openWikiLinkTarget: (target: string, heading?: string | null, source?: { docId: string; folderId: string | null }) => Promise<void>
@@ -97,7 +99,7 @@ export default function DocumentArea({
   currentDocId, currentFolderId, docLoading, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorRemountNonce, editorScrollTop,
   editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles, handleOpenWikiLink,
   handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, jumpToLine, kanban, liveEditorOption, mapRoute,
-  mentionSource, onNavigateFolder, openDoc, outlineControlRef, phoneSidePanel, openWikiLinkTarget, resolveAttachment, resolveImagePath, resolvedTheme, resolveWikiHref, setCommentRailExtra, setEditorRefs, sharedDoc,
+  mentionSource, onNavigateFolder, openDoc, openKanbanSettings, outlineControlRef, phoneSidePanel, openWikiLinkTarget, resolveAttachment, resolveImagePath, resolvedTheme, resolveWikiHref, setCommentRailExtra, setEditorRefs, sharedDoc,
   sharesOpen, showNotice, store, titleReadOnly, viewerHtml, viewerRef, viewFindCard, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
 }: DocumentAreaProps) {
   const phone = usePhoneWidth()
@@ -192,6 +194,9 @@ export default function DocumentArea({
           resolveWikiLink={resolveWikiHref}
           onOpenWikiLink={handleOpenWikiLink}
           focusRef={boardFocusRef}
+          onOpenSettings={openKanbanSettings}
+          revealTick={kanban.revealTick}
+          takeReveal={kanban.takeReveal}
         />
       )}
       {docLoading && <DocSkeleton key={currentDocId} />}

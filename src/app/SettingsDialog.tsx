@@ -17,6 +17,8 @@ import TemplateSelectField from './TemplateSelectField'
 import DocPickerDialog from './DocPickerDialog'
 import type { PickerDoc } from './docPicker'
 import RightPanelSettingsTab, { type RightPanelSettings } from './RightPanelSettingsTab'
+import KanbanSettingsTab from './KanbanSettingsTab'
+import type { KanbanSettings } from './useKanbanSettings'
 import { E2EE_LOCK_MINUTES, type E2eeStatus } from '../e2ee/keyring'
 import { THEME_OPTIONS } from './theme'
 import { DEFAULT_VIEW_OPTIONS } from './defaultView'
@@ -74,11 +76,12 @@ const WIKI_PREVIEW_OPTIONS = [
   { value: 'off', label: '숨김' },
 ] as const
 
-// 탭 — 순서·구성은 F-290.md 3.1, 금고 탭은 F-404.md 7.5, 오른쪽 패널 탭은 small 2026-10-10·2026-10-11
+// 탭 — 순서·구성은 F-290.md 3.1, 금고 탭은 F-404.md 7.5, 오른쪽 패널 탭은 small 2026-10-10·2026-10-11, 칸반 탭은 small 2026-10-14
 const TAB_LABELS: Record<SettingsTabId, string> = {
   screen: '화면',
   editor: '편집기',
   rightPanel: '오른쪽 패널',
+  kanban: '칸반',
   css: '사용자 CSS',
   data: '데이터',
   e2ee: '금고',
@@ -306,6 +309,10 @@ type SettingsDialogProps = {
   onOpenTemplates?: () => void
   // `오른쪽 패널` 탭 — 안 주면 탭을 그리지 않는다(공개 보기 화면)
   rightPanel?: RightPanelSettings
+  // `칸반` 탭 — 안 주면 탭을 그리지 않는다(공개 보기 화면)
+  kanban?: KanbanSettings
+  // 열 때 고를 탭 — 없거나 안 보이는 탭이면 첫 탭
+  initialTab?: SettingsTabId | null
   // `데이터` 절 — 전체 내보내기 (F-281.md 3.6). 안 주면 절을 그리지 않는다(공개 보기 화면)
   onExportAll?: () => void
   exportAllDisabled?: boolean
@@ -359,6 +366,8 @@ export default function SettingsDialog({
   templateEntries,
   onOpenTemplates,
   rightPanel,
+  kanban,
+  initialTab,
   onExportAll,
   exportAllDisabled,
   onExportVault,
@@ -391,23 +400,25 @@ export default function SettingsDialog({
     e2ee: e2ee !== undefined,
     account: account !== undefined,
     rightPanel: rightPanel !== undefined,
+    kanban: kanban !== undefined,
   })
+  const openTab = initialTab && tabs.includes(initialTab) ? initialTab : tabs[0]
 
-  const [activeTab, setActiveTab] = useState<SettingsTabId>(tabs[0])
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(openTab)
   const [openSeen, setOpenSeen] = useState(open)
 
-  // 대화상자를 다시 열 때마다 첫 탭(화면)으로 되돌린다 — 렌더 중에 조정해 Dialog 의 초점 이펙트보다 먼저 반영한다 (F-290.md 3.7)
+  // 대화상자를 다시 열 때마다 첫 탭(화면)이나 요청한 탭으로 되돌린다 — 렌더 중에 조정해 Dialog 의 초점 이펙트보다 먼저 반영한다 (F-290.md 3.7)
   let resolvedActiveTab = tabs.includes(activeTab) ? activeTab : tabs[0]
   if (open !== openSeen) {
     setOpenSeen(open)
     if (open) {
-      resolvedActiveTab = tabs[0]
-      if (activeTab !== tabs[0]) setActiveTab(tabs[0])
+      resolvedActiveTab = openTab
+      if (activeTab !== openTab) setActiveTab(openTab)
     }
   }
 
   const pagesMode = settingsPagesMode(phone, tabs.length)
-  const pages = useSettingsPages({ open, enabled: pagesMode, tabs, onOpen, onClose })
+  const pages = useSettingsPages({ open, enabled: pagesMode, tabs, initialTab: openTab === tabs[0] ? null : openTab, onOpen, onClose })
   const [pagesSeen, setPagesSeen] = useState(pagesMode)
   if (pagesMode !== pagesSeen) {
     setPagesSeen(pagesMode)
@@ -569,6 +580,7 @@ export default function SettingsDialog({
       )
     }
     if (id === 'rightPanel' && rightPanel) return <RightPanelSettingsTab settings={rightPanel} entries={templateEntries ?? []} />
+    if (id === 'kanban' && kanban) return <KanbanSettingsTab settings={kanban} />
     if (id === 'css' && userCss) return <UserCssTab key={userCss.accountId ?? ''} accountId={userCss.accountId} />
     if (id === 'data') {
       // 로컬 앱·로그인 계정 전용, PublicView 는 안 준다(F-281.md 3.6, F-282.md 3.1) — 내보내기·가져오기 두 묶음, 버튼마다 한 줄 설명(tweak 2026-09-26)

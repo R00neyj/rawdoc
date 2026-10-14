@@ -32,9 +32,23 @@
   outline: none;
 }
 
-.kanban-title {
-  width: 100%;
+/* 제목 입력과 보드 `⋯` 한 줄 (small 2026-10-14) */
+.kanban-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   max-width: var(--content-max);
+}
+
+.kanban-head > .kanban-more {
+  flex: none;
+  opacity: 1;
+}
+
+.kanban-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
   padding: 0;
   border: none;
   background: transparent;
@@ -152,6 +166,19 @@
 .kanban-card:focus-visible {
   outline: 2px solid var(--accent-ring);
   outline-offset: 1px;
+}
+
+/* 할 일 패널에서 눌러 온 카드 — 강조 바탕이 잠깐 머물다 빠진다 (small 2026-10-14) */
+.kanban-card--reveal {
+  animation: kanban-card-reveal 1600ms var(--ease-out);
+}
+
+@keyframes kanban-card-reveal {
+  0%,
+  40% {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
 }
 
 /* 체크 칸은 글자 첫 줄 앞에 붙는다 */
@@ -397,7 +424,7 @@
     padding-bottom: 16px;
   }
 
-  .kanban-title,
+  .kanban-head,
   .kanban-empty {
     padding-inline: 16px;
   }

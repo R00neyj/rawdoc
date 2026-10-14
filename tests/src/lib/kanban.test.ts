@@ -6,6 +6,10 @@ import {
   addLaneChange,
   editCardChange,
   isKanbanDoc,
+  kanbanDoneChange,
+  kanbanDoneLane,
+  kanbanDoneChoices,
+  kanbanDoneSetting,
   kanbanFlagChange,
   moveCardChanges,
   moveLaneChanges,
@@ -299,5 +303,73 @@ describe('removeCardChange · toggleCheckChange (small 2026-10-14)', () => {
     expect(apply(t, toggleCheckChange(t, cards[2].from))).toBe('## A\n- a\n  - d\n- [ ] b\n- [ ] c\n-\n- e')
     expect(apply(t, toggleCheckChange(t, cards[3].from))).toBe('## A\n- a\n  - d\n- [ ] b\n- [x] c\n- [ ] \n- e')
     expect(toggleCheckChange(t, 1)).toBeNull()
+  })
+})
+
+describe('완료 칸 설정 kanban-done (small 2026-10-14)', () => {
+  const body = '# t\n\n## 할 일\n- a\n\n## 진행 중\n- b\n\n## 완료\n- c\n'
+  const withDone = (value: string) => `---\nkanban: true\nkanban-done: ${value}\n---\n${body}`
+  const plain = `---\nkanban: true\n---\n${body}`
+
+  it('설정이 없거나 없는 칸 이름이면 마지막 칸, 있으면 그 칸', () => {
+    expect(kanbanDoneSetting(plain)).toBeNull()
+    expect(kanbanDoneLane(plain)).toBe(2)
+    expect(kanbanDoneSetting(withDone('진행 중'))).toBe('진행 중')
+    expect(kanbanDoneLane(withDone('진행 중'))).toBe(1)
+    expect(kanbanDoneLane(withDone('"진행 중"'))).toBe(1)
+    expect(kanbanDoneLane(withDone('없는 칸'))).toBe(2)
+    expect(kanbanDoneLane(withDone(''))).toBe(2)
+    expect(kanbanDoneLane('---\nkanban: true\n---\n# 빈 보드\n')).toBe(-1)
+  })
+
+  it('설정 선택지 — 이름 있는 칸(겹치면 한 번), 마지막 칸 이름, 맞는 칸이 있을 때만 지금 값', () => {
+    expect(kanbanDoneChoices(plain)).toEqual({ names: ['할 일', '진행 중', '완료'], last: '완료', value: null })
+    expect(kanbanDoneChoices(withDone('진행 중'))?.value).toBe('진행 중')
+    expect(kanbanDoneChoices(withDone('없는 칸'))?.value).toBeNull()
+    expect(kanbanDoneChoices('---\nkanban: true\n---\n## A\n##\n## A\n## B\n')).toEqual({ names: ['A', 'B'], last: 'B', value: null })
+    expect(kanbanDoneChoices('---\nkanban: true\n---\n# 빈 보드\n')).toBeNull()
+  })
+
+  it('쓰기는 줄을 더하거나 값만 바꾸고, 기본값(null)이면 줄째 지운다', () => {
+    expect(apply(plain, kanbanDoneChange(plain, '진행 중'))).toBe(withDone('진행 중'))
+    expect(apply(withDone('진행 중'), kanbanDoneChange(withDone('진행 중'), '할 일'))).toBe(withDone('할 일'))
+    expect(apply(withDone('진행 중'), kanbanDoneChange(withDone('진행 중'), null))).toBe(plain)
+    expect(kanbanDoneChange(plain, null)).toBeNull()
+    expect(kanbanDoneChange(withDone('진행 중'), '진행 중')).toBeNull()
+  })
+
+  it('YAML 이 달리 읽을 이름은 따옴표로 감싸 같은 이름으로 돌아온다', () => {
+    for (const name of ['#긴급', '할 일: 오늘', '"인용"', '- 목록']) {
+      const out = apply(plain, kanbanDoneChange(plain, name))
+      expect(kanbanDoneSetting(out)).toBe(name)
+    }
+  })
+
+  it('완료 칸 이름을 바꾸면 설정도 따라 바뀐다. 다른 칸이면 설정은 그대로', () => {
+    const t = withDone('진행 중')
+    expect(apply(t, renameLaneChange(t, 1, '검토'))).toBe(withDone('검토').replace('## 진행 중', '## 검토'))
+    expect(apply(t, renameLaneChange(t, 0, '대기'))).toBe(t.replace('## 할 일', '## 대기'))
+  })
+})
+
+describe('완료 칸으로 옮기면 체크 칸을 맞춘다 (small 2026-10-14)', () => {
+  const t = '---\nkanban: true\n---\n## A\n- [ ] a\n- b\n- [x] c\n\n## B\n- [ ] d\n\n## 끝\n- [x] e\n- [ ] f\n'
+  const move = (from: [number, number], to: [number, number], text = t) =>
+    apply(text, moveCardChanges(text, { lane: from[0], card: from[1] }, { lane: to[0], index: to[1] }))
+
+  it('완료 칸으로 들어가면 [ ] 만 [x], 체크 칸 없는 카드는 그대로', () => {
+    expect(move([0, 0], [2, 0])).toContain('## 끝\n- [x] a\n- [x] e\n')
+    expect(move([0, 1], [2, 0])).toContain('## 끝\n- b\n- [x] e\n')
+  })
+  it('완료 칸에서 나가면 [x] 는 [ ], 다른 칸 사이·같은 칸 안은 그대로', () => {
+    expect(move([2, 0], [0, 0])).toContain('## A\n- [ ] e\n- [ ] a\n')
+    expect(move([2, 1], [0, 0])).toContain('## A\n- [ ] f\n')
+    expect(move([0, 2], [1, 0])).toContain('## B\n- [x] c\n- [ ] d\n')
+    expect(move([2, 1], [2, 0])).toContain('## 끝\n- [ ] f\n- [x] e\n')
+  })
+  it('kanban-done 이 가리키는 칸이 완료 칸이다', () => {
+    const pinned = t.replace('kanban: true\n', 'kanban: true\nkanban-done: B\n')
+    expect(move([0, 0], [1, 0], pinned)).toContain('## B\n- [x] a\n- [ ] d\n')
+    expect(move([1, 0], [2, 0], pinned)).toContain('## 끝\n- [ ] d\n- [x] e\n')
   })
 })

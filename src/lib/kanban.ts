@@ -1,5 +1,5 @@
 // 칸반 원문 읽기와 변경 함수 — 순수 함수, LF 원문만 받고 위치는 CM6 위치와 같다 (specs/features/F-2139.md)
-import { findFrontmatter } from './frontmatter'
+import { findFrontmatter, frontmatterValueText } from './frontmatter'
 
 export const KANBAN_NEW_DOC_TEXT = '---\nkanban: true\n---\n# 제목 없는 보드\n\n## 할 일\n\n## 진행 중\n\n## 완료'
 export const NEW_LANE_TITLE = '새 칸'
@@ -27,6 +27,9 @@ export type KanbanChange = { from: number; to?: number; insert?: string }
 
 const KANBAN_FLAG_RE = /^kanban:[ \t]*true[ \t]*$/i
 const FLAG_LINE_RE = /^kanban:/i
+const DONE_LINE_RE = /^kanban-done:/i
+// YAML 이 글자 그대로 읽지 않는 머리 기호·`: `·` #` — 따옴표로 감싼다
+const YAML_QUOTE_RE = /^[-?:,[\]{}#&*!|>'"%@`]|:(?:[ \t]|$)|[ \t]#/
 const LANE_RE = /^##(?:[ \t]|$)/
 const H1_RE = /^#(?:[ \t]|$)/
 const ITEM_RE = /^[-*+](?:[ \t]+|$)/
@@ -196,6 +199,61 @@ function insertChange(text: string, lane: KanbanLane, cards: KanbanCard[], index
   return { from: p, insert: body + '\n' }
 }
 
+// 프런트매터 `kanban-done:` 줄의 [줄 머리, 줄 끝)과 값 — 없으면 null
+function doneLine(text: string): { from: number; to: number; value: string } | null {
+  const fm = findFrontmatter(text)
+  if (!fm) return null
+  let pos = fm.contentFrom
+  while (pos < fm.contentTo) {
+    const nl = text.indexOf('\n', pos)
+    const end = nl === -1 ? fm.contentTo : nl
+    const line = text.slice(pos, end)
+    if (DONE_LINE_RE.test(line)) return { from: pos, to: end, value: frontmatterValueText(line.slice('kanban-done:'.length)) }
+    pos = end + 1
+  }
+  return null
+}
+
+export function kanbanDoneSetting(text: string): string | null {
+  const value = doneLine(text)?.value ?? ''
+  return value === '' ? null : value
+}
+
+// 완료 칸 — `kanban-done` 과 이름이 같은 첫 칸, 없으면 마지막 칸. 칸이 없으면 -1
+export function kanbanDoneLane(text: string, lanes: KanbanLane[] = parseKanban(text)): number {
+  const setting = kanbanDoneSetting(text)
+  const named = setting === null ? -1 : lanes.findIndex((l) => l.title === setting)
+  return named >= 0 ? named : lanes.length - 1
+}
+
+export type KanbanDoneChoices = { names: string[]; last: string; value: string | null }
+
+// 설정 선택지 — 이름 있는 칸(겹치면 한 번), 마지막 칸 이름, 맞는 칸이 있을 때만 지금 값
+export function kanbanDoneChoices(text: string): KanbanDoneChoices | null {
+  const lanes = parseKanban(text)
+  if (lanes.length === 0) return null
+  const names = [...new Set(lanes.map((l) => l.title).filter((t) => t !== ''))]
+  const setting = kanbanDoneSetting(text)
+  return { names, last: lanes[lanes.length - 1].title, value: setting !== null && names.includes(setting) ? setting : null }
+}
+
+function yamlValue(value: string): string {
+  if (!YAML_QUOTE_RE.test(value)) return value
+  return value.includes('"') ? `'${value}'` : `"${value}"`
+}
+
+// title 이 null(마지막 칸)이면 줄째 지운다
+export function kanbanDoneChange(text: string, title: string | null): KanbanChange | null {
+  const line = doneLine(text)
+  if (title === null) return line ? { from: line.from, to: Math.min(line.to + 1, text.length) } : null
+  if (line?.value === title) return null
+  const entry = `kanban-done: ${yamlValue(title)}`
+  if (line) return { from: line.from, to: line.to, insert: entry }
+  const fm = findFrontmatter(text)
+  return fm ? { from: fm.contentTo, insert: `${entry}\n` } : { from: 0, insert: `---\n${entry}\n---\n` }
+}
+
+// 완료 칸으로 들어가면 [ ] 를 [x], 완료 칸에서 나가면 [x] 를 [ ] — 체크 칸 없는 카드는 그대로
 export function moveCardChanges(
   text: string,
   from: { lane: number; card: number },
@@ -208,8 +266,12 @@ export function moveCardChanges(
   const target = dst.cards.filter((c) => c !== src)
   if (!Number.isInteger(to.index) || to.index < 0 || to.index > target.length) return null
   if (from.lane === to.lane && to.index === from.card) return null
+  const done = kanbanDoneLane(text, lanes)
+  const check = from.lane === to.lane || src.checkAt === null ? null : to.lane === done && !src.done ? 'x' : from.lane === done && src.done ? ' ' : null
+  let body = text.slice(src.from, src.to)
+  if (check !== null && src.checkAt !== null) body = body.slice(0, src.checkAt - src.from) + check + body.slice(src.checkAt - src.from + 1)
   const del: KanbanChange = src.to < text.length ? { from: src.from, to: src.to + 1 } : { from: src.from - 1, to: src.to }
-  const ins = insertChange(text, dst, target, to.index, text.slice(src.from, src.to))
+  const ins = insertChange(text, dst, target, to.index, body)
   return [del, ins].sort((a, b) => a.from - b.from)
 }
 
@@ -227,14 +289,19 @@ export function addLaneChange(text: string, title: string): KanbanChange {
   return { from: text.length, insert: `${prefix}## ${title.trim()}${text.endsWith('\n') ? '\n' : ''}` }
 }
 
-export function renameLaneChange(text: string, lane: number, title: string): KanbanChange | null {
-  const l = parseKanban(text)[lane]
+// 완료 칸으로 이름이 걸린 칸이면 `kanban-done` 도 새 이름으로
+export function renameLaneChange(text: string, lane: number, title: string): KanbanChange | KanbanChange[] | null {
+  const lanes = parseKanban(text)
+  const l = lanes[lane]
   const t = title.trim()
   if (!l || t === '' || t === l.title) return null
   const spaceBefore = /[ \t]/.test(text[l.titleFrom - 1] ?? '') ? '' : ' '
   const rest = text.slice(l.titleTo, text.indexOf('\n', l.titleTo) === -1 ? text.length : text.indexOf('\n', l.titleTo))
   const spaceAfter = l.title === '' && rest.trim() !== '' ? ' ' : ''
-  return { from: l.titleFrom, to: l.titleTo, insert: spaceBefore + t + spaceAfter }
+  const change: KanbanChange = { from: l.titleFrom, to: l.titleTo, insert: spaceBefore + t + spaceAfter }
+  const pinned = l.title !== '' && kanbanDoneSetting(text) === l.title && kanbanDoneLane(text, lanes) === lane
+  const done = pinned ? kanbanDoneChange(text, t) : null
+  return done ? [done, change] : change
 }
 
 function findCard(text: string, cardFrom: number): KanbanCard | null {

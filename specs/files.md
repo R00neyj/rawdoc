@@ -124,7 +124,8 @@
 |`src/app/importWorkspace.ts`|내보냈던 압축 파일을 읽어 폴더 구조째 문서를 다시 가져옴|
 |`src/app/InviteDialog.tsx`|문서나 폴더에 다른 사람을 초대하는 창|
 |`src/app/KanbanBoard.tsx`|칸반 문서를 칸과 카드로 늘어놓아 보여 주는 보드 화면 (F-2140)|
-|`src/app/KanbanMenu.tsx`|칸반 카드·칸 머리·빈 자리의 우클릭·점 세 개 메뉴 항목|
+|`src/app/KanbanMenu.tsx`|칸반 카드·칸 머리·빈 자리·보드 위 점 세 개의 우클릭·점 세 개 메뉴 항목|
+|`src/app/KanbanSettingsTab.tsx`|설정의 칸반 탭 — 지금 연 보드에서 어느 칸을 완료 칸으로 볼지 고름|
 |`src/app/kanbanDrag.ts`|칸반 카드를 끌 때 집을지, 놓을 자리, 옮길 위치, 칸 옮길 자리, 가장자리 자동 스크롤 속도를 계산함 (F-2142)|
 |`src/app/kanbanView.ts`|칸반 문서를 열거나 보기를 고를 때 보드로 볼지 원문으로 볼지 정함 (F-2140)|
 |`src/app/leaveScreens.ts`|공유 관리·도움말·지도 같은 전용 화면이 열렸는지 보고 한 번에 닫음|
@@ -166,7 +167,7 @@
 |`src/app/PanelGraphScene.tsx`|오른쪽 칸 그래프 탭의 입체 그림 — 보일 때만 불러옴|
 |`src/app/PanelGraphSvg.tsx`|입체 그림을 못 그리는 브라우저에서 쓰는 평면 연결 그림(키보드로 노드 이동)|
 |`src/app/PanelLinks.tsx`|오른쪽 패널에 이 문서를 가리키는 링크·나가는 링크·이어지지 않은 언급을 보여줌|
-|`src/app/PanelTodos.tsx`|오른쪽 패널에 문서 속 할 일을 마감일별로 묶어 보여줌(읽기 전용)|
+|`src/app/PanelTodos.tsx`|오른쪽 패널에 문서 속 할 일과 칸반 보드의 안 끝난 카드(칸 이름 배지)를 마감일별로 묶어 보여줌(읽기 전용)|
 |`src/app/PeerAvatars.tsx`|상단바에 지금 같이 접속한 사람들의 동그란 얼굴 아이콘을 보여줌|
 |`src/app/PhoneNav.tsx`|휴대폰 화면 하단의 뒤로·앞으로·문서 내 찾기·명령 버튼 묶음|
 |`src/app/phoneNavRules.ts`|휴대폰 하단 이동 버튼을 언제 흐리게·숨길지 정함|
@@ -247,7 +248,8 @@
 |`src/app/useGlobalShortcuts.ts`|앱 전체에서 쓰는 단축키를 받아 해당 기능을 실행함|
 |`src/app/useHashRouting.ts`|뒤로·앞으로 가기와 주소창 변경에 맞춰 열린 문서를 바꿈|
 |`src/app/useImportFlow.ts`|md·zip 파일 가져오기와 끌어놓기, 이미지 넣기 흐름을 처리함|
-|`src/app/useKanbanView.ts`|문서마다 보드·원문 보기를 기억하고, 본문이 바뀌면 보드의 칸·카드를 다시 읽음. 보드에서 고친 내용을 원문에 쓰고(applyKanban), 고치는 중인 카드·칸 자리를 다른 곳 수정에 맞춰 따라감 (F-2140, F-2141)|
+|`src/app/useKanbanView.ts`|문서마다 보드·원문 보기를 기억하고, 본문이 바뀌면 보드의 칸·카드를 다시 읽음. 보드에서 고친 내용을 원문에 쓰고(applyKanban), 고치는 중인 카드·칸 자리를 다른 곳 수정에 맞춰 따라감. 할 일 패널에서 누른 카드를 보드가 뜨면 보여 줌 (F-2140, F-2141)|
+|`src/app/useKanbanSettings.ts`|설정 칸반 탭에 지금 보드의 칸 목록·완료 칸을 읽어 주고, 고르면 원문 맨 위 설정 줄에 씀|
 |`src/app/useLeaveShare.ts`|공유받은 문서에서 나가기 확인 창과 나가기 처리를 맡음|
 |`src/app/useListAutoRefresh.ts`|로그인 상태에서 사이드바 문서 목록을 주기적으로 새로 고침|
 |`src/app/useLiveDoc.ts`|문서를 여는 동안 실시간 함께 편집 연결을 유지함|
@@ -408,7 +410,7 @@
 |`src/lib/docLinks.ts`|이 문서를 가리키는 문서, 이 문서가 가리키는 문서 목록을 만듦|
 |`src/lib/docRoomProtocol.ts`|실시간 편집 방 서버와 앱이 주고받는 신호 규칙을 정함|
 |`src/lib/docSearch.ts`|문서 검색어를 해석해 맞는 문서와 미리보기 문장을 찾음|
-|`src/lib/docTodos.ts`|문서 속 할 일 목록을 모아 상태·순서대로 정리함|
+|`src/lib/docTodos.ts`|문서 속 할 일 목록을 모아 상태·순서대로 정리함. 칸반 문서는 완료 칸 밖의 안 끝난 카드를 할 일로 봄|
 |`src/lib/donateLink.ts`|토스 송금 링크와 QR 이미지 경로를 한곳에 둠|
 |`src/lib/donatePrompt.ts`|후원 알림을 다음에 언제 띄울지 계산함(처음 7일, 닫으면 30일, 후원하면 1년)|
 |`src/lib/e2eeLimits.ts`|금고(종단 암호화) 문서의 크기·형식 제한을 정함|
@@ -423,7 +425,7 @@
 |`src/lib/imageBlock.ts`|그림 줄을 만들고 읽어 정렬·크기를 바꿈|
 |`src/lib/imageFile.ts`|그림 파일의 종류와 가로·세로 크기를 알아냄|
 |`src/lib/imageMarkdown.ts`|표준 마크다운 그림 줄을 읽고 만들고 고침|
-|`src/lib/kanban.ts`|칸반 문서 원문에서 칸·카드를 읽고, 카드 옮기기·추가·고치기를 바뀌는 줄만으로 계산함|
+|`src/lib/kanban.ts`|칸반 문서 원문에서 칸·카드·완료 칸을 읽고, 카드 옮기기·추가·고치기·완료 칸 설정을 바뀌는 줄만으로 계산함|
 |`src/lib/lineEnding.ts`|파일의 줄바꿈 방식을 알아내고 바꿈|
 |`src/lib/localGraph.ts`|지금 문서 주변의 연결 문서를 모아, 지도 장면 모양으로 바꾸거나 평면 관계도 자리를 계산함|
 |`src/lib/loginReturn.ts`|로그인 뒤 돌아갈 주소로 받아 줄 수 있는 길이·모양인지 앱과 서버가 같이 판단함|

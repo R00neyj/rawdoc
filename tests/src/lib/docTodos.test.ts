@@ -182,3 +182,62 @@ describe('scanTodoSources·groupTasks — 날짜 묶음과 정렬', () => {
     expect(result.groups.reduce((n, g) => n + g.items.length, 0)).toBe(TODO_MAX_ITEMS)
   })
 })
+
+describe('칸반 문서 — 미완료 카드가 할 일 (small 2026-10-14)', () => {
+  const TODO: TaskFilter = { filters: ['#todo'], hide: false }
+  const BOARD = [
+    '---',
+    'kanban: true',
+    '---',
+    '# 보드',
+    '',
+    '## 할 일',
+    '- 온소 다음주 전달 #todo',
+    '  - [ ] 하위 줄 #todo',
+    '- [ ] 체크 카드 #todo',
+    '- [x] 끝난 체크 #todo',
+    '- 표시 없는 카드',
+    '',
+    '## 진행 중',
+    '- 마감 카드 #todo 📅 2026-10-20',
+    '',
+    '## 완료',
+    '- [ ] 완료 칸 카드 #todo',
+  ].join('\n')
+
+  it('체크 칸 없는 카드도 들고, 완료 칸·[x] 는 빼고, 체크 카드는 한 번만. 칸 이름과 줄 번호를 단다', () => {
+    expect(findOpenTodos(BOARD, TODO).map((t) => [t.line, t.text, t.lane, t.level, t.status])).toEqual([
+      [7, '온소 다음주 전달 #todo', '할 일', 0, 'todo'],
+      [9, '체크 카드 #todo', '할 일', 0, 'todo'],
+      [14, '마감 카드 #todo', '진행 중', 0, 'todo'],
+    ])
+    expect(findOpenTodos(BOARD, TODO)[2].due).toBe('2026-10-20')
+  })
+
+  it('할 일 표시 규칙·숨기기는 체크박스와 같다. 비우면 모든 미완료 카드', () => {
+    expect(findOpenTodos(BOARD, { filters: ['#todo'], hide: true }).map((t) => t.text)).toEqual(['온소 다음주 전달', '체크 카드', '마감 카드'])
+    expect(findOpenTodos(BOARD, ALL).map((t) => t.text)).toEqual(['온소 다음주 전달 #todo', '체크 카드 #todo', '표시 없는 카드', '마감 카드 #todo'])
+  })
+
+  it('kanban-done 이 가리키는 칸이 완료 칸이다', () => {
+    const pinned = BOARD.replace('kanban: true', 'kanban: true\nkanban-done: 진행 중')
+    expect(findOpenTodos(pinned, TODO).map((t) => [t.text, t.lane])).toEqual([
+      ['온소 다음주 전달 #todo', '할 일'],
+      ['체크 카드 #todo', '할 일'],
+      ['완료 칸 카드 #todo', '완료'],
+    ])
+  })
+
+  it('저장된 CRLF 원문도 칸반으로 읽고, 줄 번호는 같다', () => {
+    const scanned = scanTodoSources([{ id: 'b', title: '보드', content: BOARD.replace(/\n/g, '\r\n') }], null, TODO)
+    expect(scanned.docs[0].items.map((t) => [t.line, t.lane])).toEqual([
+      [7, '할 일'],
+      [9, '할 일'],
+      [14, '진행 중'],
+    ])
+  })
+
+  it('칸반이 아닌 문서의 항목에는 칸 이름이 없다', () => {
+    expect(findOpenTodos('- [ ] 일 #todo', TODO)[0]).not.toHaveProperty('lane')
+  })
+})

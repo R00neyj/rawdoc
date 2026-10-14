@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>칸반 설정 · 할 일 패널 플로우</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; font: 14px/1.5 system-ui, sans-serif; color: #222; background: #f6f6f4; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 40px 0 12px; color: #444; }
+  .sub { color: #777; margin: 0 0 24px; }
+  .flow { display: flex; flex-direction: column; align-items: center; }
+  .row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .box { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; text-align: center; min-width: 180px; }
+  .box small { display: block; color: #888; font-size: 12px; }
+  .box.key { border: 2px solid #333; }
+  .box.q { border-style: dashed; border-radius: 20px; background: #fafaf8; }
+  .arrow { width: 2px; height: 28px; background: #999; position: relative; margin: 4px 0; }
+  .arrow::after { content: ''; position: absolute; bottom: -2px; left: -5px; border: 6px solid transparent; border-top-color: #999; }
+  .branch { display: flex; gap: 16px; justify-content: center; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; align-items: center; }
+  .label { font-size: 12px; color: #666; background: #e9e9e5; border-radius: 10px; padding: 1px 8px; margin-bottom: 4px; }
+  pre { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 12px 16px; font: 13px/1.6 ui-monospace, monospace; display: inline-block; margin: 0; }
+  .mock { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 16px 20px; display: inline-block; min-width: 320px; }
+  .sel { display: inline-block; border: 1px solid #aaa; border-radius: 6px; padding: 4px 10px; min-width: 160px; }
+  .item { padding: 4px 0; border-bottom: 1px solid #eee; }
+  .lane { font-size: 12px; color: #888; border: 1px solid #ccc; border-radius: 10px; padding: 0 6px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<h1>칸반 설정 · 할 일 패널</h1>
+<p class="sub">요청: "칸반에서 #todo, #task... 붙이면 우측 패널에 표시. 완료 쪽으로 넘어가면 안 보이게" → "칸반 설정하는게 있어야할거같아"</p>
+
+<h2>1. 칸반 설정 열기</h2>
+<div class="flow">
+  <div class="row">
+    <div class="box">보드 상단 <b>⋯</b> (KanbanMenu)<small>→ 칸반 설정… (설정의 칸반 탭으로 바로)</small></div>
+    <div class="box">설정 대화상자<small>→ 칸반 탭</small></div>
+  </div>
+  <div class="arrow"></div>
+  <div class="mock">
+    <b>설정 › 칸반</b> <small style="color:#888">지금 연 보드에 적용 · 칸반 보드가 아니면 "칸반 보드를 열면 설정할 수 있습니다"</small><br><br>
+    완료 칸 &nbsp;<span class="sel">▾ 마지막 칸 (완료)</span><br>
+    <small style="color:#888">이 칸의 카드는 할 일 패널에 안 보인다. 바꾸면 바로 반영</small>
+  </div>
+  <div class="arrow"></div>
+  <div class="box key">원문 프런트매터에 한 줄 기록<small>기본값(마지막 칸)이면 줄을 지운다</small></div>
+</div>
+<p style="text-align:center"><pre>---
+kanban: true
+kanban-done: 완료
+---</pre></p>
+
+<h2>2. 카드 옮기기</h2>
+<div class="flow">
+  <div class="box">카드를 다른 칸으로 (드래그·키보드)</div>
+  <div class="arrow"></div>
+  <div class="branch">
+    <div class="col"><span class="label">완료 칸으로</span><div class="box">체크박스 있는 카드만 <code>[ ]</code> → <code>[x]</code><small>체크박스 없는 카드는 원문 그대로</small></div></div>
+    <div class="col"><span class="label">완료 칸 밖으로</span><div class="box"><code>[x]</code> → <code>[ ]</code></div></div>
+    <div class="col"><span class="label">그 밖</span><div class="box">원문은 줄 이동만</div></div>
+  </div>
+</div>
+
+<h2>3. 오른쪽 할 일 패널</h2>
+<div class="flow">
+  <div class="box q">카드가 완료인가?<small>완료 칸에 있음 또는 [x]</small></div>
+  <div class="arrow"></div>
+  <div class="branch">
+    <div class="col"><span class="label">완료</span><div class="box">안 보임</div></div>
+    <div class="col"><span class="label">미완료 + 할 일 필터(md.taskFilter) 통과</span>
+      <div class="mock">
+        <b>날짜 없음</b>
+        <div class="item">온소 다음주 전달 #todo <span class="lane">할 일</span></div>
+        <div class="item">- [ ] 일반 체크박스 할 일</div>
+      </div>
+      <div class="arrow"></div>
+      <div class="box key">누르면 그 보드를 열고 카드로 스크롤·강조</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

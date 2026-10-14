@@ -6982,6 +6982,28 @@ h3.panel-settings-title:not(:first-child) {
   text-overflow: ellipsis;
 }
 
+/* 칸반 카드 — 글자는 줄여 쓰고 칸 이름 배지는 늘 보인다 (small 2026-10-14) */
+.todo-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.todo-lane {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  padding: 0 6px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .todo-box {
   flex: none;
   width: 12px;

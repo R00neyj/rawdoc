@@ -26,6 +26,8 @@ export type DocTodosView = {
   // 빈 안내에 어떤 표시를 찾았는지 보여 준다
   filters: readonly string[]
   onOpenItem: (docId: string, line: number) => void
+  // 칸반 카드 — 그 보드를 열고 그 카드로 (small 2026-10-14)
+  onOpenCard: (docId: string, line: number) => void
 }
 
 export type DocGraphView = {
@@ -51,10 +53,11 @@ export function usePanelDocs(options: {
   pendingJumpRef: RefObject<PendingJump | null>
   jumpToLine: (line: number) => void
   afterOpen: () => void
+  revealCard: (docId: string, line: number) => void
   openMap: () => Promise<void>
 }): { links: DocLinksView; todos: DocTodosView; graph: DocGraphView } {
   const { todosActive, taskFilter, listSource, docs, folders, currentDoc, editor, resolver, e2eeOpen } = options
-  const { selectDoc, openWikiLinkTarget, pendingJumpRef, jumpToLine, afterOpen, openMap } = options
+  const { selectDoc, openWikiLinkTarget, pendingJumpRef, jumpToLine, afterOpen, openMap, revealCard } = options
   // 그래프는 링크 보기의 백링크·나가는 링크로 그린다
   const linksActive = options.linksActive || options.graphActive
   const active = linksActive || todosActive
@@ -181,6 +184,11 @@ export function usePanelDocs(options: {
         }
         // 다른 문서는 열려 그려진 뒤 useEditorSync 가 한 번 이동한다
         pendingJumpRef.current = { docId, line }
+        void selectDoc(docId)
+      },
+      onOpenCard: (docId, line) => {
+        afterOpen()
+        revealCard(docId, line)
         void selectDoc(docId)
       },
     },
