@@ -1,6 +1,6 @@
 // 칸반 카드 끌기 판정 순수 함수 (specs/features/F-2142.md 2장, U1~U3)
 import { describe, expect, it } from 'vitest'
-import { KANBAN_EDGE_PX, dropSlot, edgeScroll, keyMoveTarget, moveTarget, neighborCard, pickupState } from '../../../src/app/kanbanDrag'
+import { KANBAN_EDGE_PX, dropSlot, edgeScroll, keyMoveTarget, laneMoveTarget, moveTarget, neighborCard, pickupState } from '../../../src/app/kanbanDrag'
 
 describe('F-2142 U1 pickupState', () => {
   it('마우스는 4px 움직이면 집는다', () => {
@@ -98,5 +98,20 @@ describe('F-2142 4장 키보드 — 옮길 자리와 포커스 옮김', () => {
     expect(neighborCard({ lane: 0, card: 1 }, counts, 'right')).toEqual({ lane: 2, card: 1 })
     expect(neighborCard({ lane: 2, card: 2 }, counts, 'left')).toEqual({ lane: 0, card: 1 })
     expect(neighborCard({ lane: 0, card: 0 }, counts, 'left')).toBeNull()
+  })
+})
+
+describe('laneMoveTarget (small 2026-10-14)', () => {
+  it('끄는 칸이 남은 줄의 틈을 옮긴 뒤 순서로 — 제자리면 null', () => {
+    expect(laneMoveTarget(0, 3, 3)).toBe(2)
+    expect(laneMoveTarget(2, 3, 0)).toBe(0)
+    expect(laneMoveTarget(1, 3, 1)).toBeNull()
+    expect(laneMoveTarget(1, 3, 2)).toBeNull()
+  })
+  it('왼쪽·오른쪽 한 칸, 끝이면 null', () => {
+    expect(laneMoveTarget(1, 3, 'left')).toBe(0)
+    expect(laneMoveTarget(1, 3, 'right')).toBe(2)
+    expect(laneMoveTarget(0, 3, 'left')).toBeNull()
+    expect(laneMoveTarget(2, 3, 'right')).toBeNull()
   })
 })

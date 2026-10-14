@@ -37,6 +37,12 @@ export function keyMoveTarget(from: { lane: number; card: number }, cardCounts: 
   return lane >= 0 && lane < cardCounts.length ? { lane, index: Math.min(from.card, cardCounts[lane]) } : null
 }
 
+// 칸 옮길 자리 — 끈 틈(끄는 칸이 자리에 남은 기준) 또는 왼쪽·오른쪽 한 칸. 제자리·끝이면 null
+export function laneMoveTarget(from: number, count: number, to: number | 'left' | 'right'): number | null {
+  const index = to === 'left' ? from - 1 : to === 'right' ? from + 1 : from < to ? to - 1 : to
+  return index === from || index < 0 || index >= count ? null : index
+}
+
 // 방향키 포커스 — 옆 칸은 같은 자리 카드, 빈 칸은 건너뛴다
 export function neighborCard(from: { lane: number; card: number }, cardCounts: readonly number[], dir: KanbanDir): { lane: number; card: number } | null {
   if (dir === 'up' || dir === 'down') {

@@ -41,7 +41,7 @@ function clampFabY(y: number, viewportH: number, cover: number): number {
 }
 
 export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref' | 'resolvedTheme' | 'wikiPreviewPref'> &
-  Pick<UseEditorSyncResult, 'attachmentResolverFor' | 'currentFolderId' | 'jumpToLine' | 'resolveAttachment' | 'wikiContext' | 'wikiResolver'> &
+  Pick<UseEditorSyncResult, 'attachmentResolverFor' | 'currentFolderId' | 'jumpToLine' | 'resolveAttachment' | 'resolveWikiHref' | 'wikiContext' | 'wikiResolver'> &
   Pick<UseImportFlowResult, 'handleImageFiles'> &
   Pick<UseContextMenuResult, 'handleViewContextMenu'> &
   Pick<UseCommentFabResult, 'editorScrollTop' | 'editorViewportH' | 'floatingCommentAnchor'> &
@@ -97,7 +97,7 @@ export default function DocumentArea({
   currentDocId, currentFolderId, docLoading, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorRemountNonce, editorScrollTop,
   editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles, handleOpenWikiLink,
   handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, jumpToLine, kanban, liveEditorOption, mapRoute,
-  mentionSource, onNavigateFolder, openDoc, outlineControlRef, phoneSidePanel, openWikiLinkTarget, resolveAttachment, resolveImagePath, resolvedTheme, setCommentRailExtra, setEditorRefs, sharedDoc,
+  mentionSource, onNavigateFolder, openDoc, outlineControlRef, phoneSidePanel, openWikiLinkTarget, resolveAttachment, resolveImagePath, resolvedTheme, resolveWikiHref, setCommentRailExtra, setEditorRefs, sharedDoc,
   sharesOpen, showNotice, store, titleReadOnly, viewerHtml, viewerRef, viewFindCard, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
 }: DocumentAreaProps) {
   const phone = usePhoneWidth()
@@ -196,6 +196,8 @@ export default function DocumentArea({
           onTitleChange={handleTitleChange}
           onTitleCommit={handleTitleCommit}
           onOpenStray={openStrayLine}
+          resolveWikiLink={resolveWikiHref}
+          onOpenWikiLink={handleOpenWikiLink}
           focusRef={boardFocusRef}
         />
       )}

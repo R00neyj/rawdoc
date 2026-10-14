@@ -118,6 +118,7 @@
 }
 
 .kanban-card {
+  position: relative;
   padding: 8px 10px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
@@ -146,6 +147,43 @@
   color: var(--ink-2);
   font-size: 12px;
   white-space: pre-wrap;
+}
+
+/* 카드 글자 속 인라인 문법 — 보기 모드(markdown.css)와 같은 토큰 */
+:is(.kanban-card-text, .kanban-card-detail) a {
+  color: var(--md-link);
+}
+
+:is(.kanban-card-text, .kanban-card-detail) code {
+  padding: 0 4px;
+  border-radius: 4px;
+  background-color: var(--md-code-bg);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+:is(.kanban-card-text, .kanban-card-detail) mark {
+  background-color: var(--md-highlight-bg);
+  color: inherit;
+}
+
+/* 칸 머리·카드 `⋯` — 칸 머리는 호버·포커스 때, 휴대폰 폭·호버 없는 기기는 늘(app.css .item-menu-btn) */
+.kanban-lane-head:is(:hover, :focus-within) .kanban-more {
+  opacity: 1;
+}
+
+.kanban-card > .kanban-more {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  background: var(--panel);
+}
+
+/* 카드 `⋯` 은 휴대폰에서도 그 카드를 누르거나 포커스했을 때만 */
+.kanban-card:is(:hover, :focus-within) > .kanban-more,
+.kanban-card > .kanban-more[aria-expanded='true'] {
+  opacity: 1;
 }
 
 .kanban-stray {
@@ -262,6 +300,35 @@
 
 .kanban-card--dragging {
   opacity: 0.4;
+}
+
+/* 칸 끌기 — 칸 머리를 집는다. 이름 입력칸은 글자 선택 그대로 */
+.kanban-board:not([data-readonly]) .kanban-lane-head {
+  touch-action: pan-x pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: grab;
+}
+
+.kanban-board:not([data-readonly]) .kanban-lane-input {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.kanban-lane--dragging {
+  opacity: 0.4;
+}
+
+/* 칸 사이 틈 가운데 세로 막대 — 3px + 틈 12px 을 좌우 -7.5px 로 갚는다 */
+.kanban-lane-drop-marker {
+  flex: none;
+  align-self: stretch;
+  width: 3px;
+  margin: 0 -7.5px;
+  border-radius: 2px;
+  background: var(--accent);
 }
 
 .kanban-drag-ghost {

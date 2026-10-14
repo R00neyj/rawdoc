@@ -8,9 +8,13 @@ import {
   isKanbanDoc,
   kanbanFlagChange,
   moveCardChanges,
+  moveLaneChanges,
+  removeCardChange,
+  removeLaneChange,
   parseKanban,
   renameLaneChange,
   toggleCardChange,
+  toggleCheckChange,
   type KanbanChange,
 } from '../../../src/lib/kanban'
 import { fromEditorText, toEditorText } from '../../../src/lib/lineEnding'
@@ -233,5 +237,67 @@ describe('F-2139 U9 새 보드', () => {
     expect(lanes.every((l) => l.cards.length === 0)).toBe(true)
     expect(isKanbanDoc(KANBAN_NEW_DOC_TEXT)).toBe(true)
     expect(apply(KANBAN_NEW_DOC_TEXT, addCardChange(KANBAN_NEW_DOC_TEXT, 2, 'a')).endsWith('## 완료\n\n- a')).toBe(true)
+  })
+})
+
+describe('moveLaneChanges (small 2026-10-14)', () => {
+  const head = '---\nkanban: true\n---\n# t\n\n앞 글\n\n'
+  const doc = `${head}## A\n\n- a1\n\n## B\n- b1\n  - d\n\n## C\n\n- c1`
+  const cases: { name: string; text: string; from: number; to: number; expected: string }[] = [
+    { name: '첫 칸을 끝으로', text: doc, from: 0, to: 2, expected: `${head}## B\n- b1\n  - d\n\n## C\n\n- c1\n\n## A\n\n- a1` },
+    { name: '끝 칸(줄바꿈 없음)을 처음으로', text: doc, from: 2, to: 0, expected: `${head}## C\n\n- c1\n\n## A\n\n- a1\n\n## B\n- b1\n  - d` },
+    { name: '한 칸 오른쪽', text: doc, from: 0, to: 1, expected: `${head}## B\n- b1\n  - d\n\n## A\n\n- a1\n\n## C\n\n- c1` },
+    { name: '한 칸 왼쪽(하위 줄 있음)', text: doc, from: 1, to: 0, expected: `${head}## B\n- b1\n  - d\n\n## A\n\n- a1\n\n## C\n\n- c1` },
+    { name: '문서 끝 줄바꿈은 그대로', text: '## A\n- a\n## B\n- b\n', from: 1, to: 0, expected: '## B\n- b\n## A\n- a\n' },
+    { name: '펜스 속 ## 는 칸이 아니다', text: '## A\n```\n## 안\n```\n## B\n- b', from: 0, to: 1, expected: '## B\n- b\n## A\n```\n## 안\n```' },
+    { name: '칸 사이 # 제목은 제자리', text: '## A\n- a\n\n# 둘\n\n## B\n- b', from: 1, to: 0, expected: '## B\n- b\n\n## A\n- a\n\n# 둘' },
+  ]
+  for (const c of cases) {
+    it(c.name, () => {
+      expect(apply(c.text, moveLaneChanges(c.text, c.from, c.to))).toBe(c.expected)
+    })
+  }
+  it('같은 자리·없는 칸은 null', () => {
+    expect(moveLaneChanges(doc, 1, 1)).toBeNull()
+    expect(moveLaneChanges(doc, 5, 0)).toBeNull()
+    expect(moveLaneChanges(doc, 0, 3)).toBeNull()
+  })
+  it('CRLF 경계', () => {
+    const ed = toEditorText('## A\r\n\r\n- a\r\n\r\n## B\r\n\r\n- b\r\n')
+    const out = fromEditorText(apply(ed, moveLaneChanges(ed, 0, 1)), 'crlf')
+    expect(out).toBe('## B\r\n\r\n- b\r\n\r\n## A\r\n\r\n- a\r\n')
+  })
+})
+
+describe('removeLaneChange (small 2026-10-14)', () => {
+  it('가운데 칸은 뒤 빈 줄까지 지워 빈 줄이 겹치지 않는다', () => {
+    const t = '## A\n\n- a\n\n## B\n\n## C\n'
+    expect(apply(t, removeLaneChange(t, 1))).toBe('## A\n\n- a\n\n## C\n')
+    expect(apply(t, removeLaneChange(t, 0))).toBe('## B\n\n## C\n')
+  })
+  it('끝 칸은 앞 빈 줄과 함께 지우고 문서 끝 줄바꿈은 그대로', () => {
+    expect(apply('# t\n\n## A\n\n- a\n\n## B\n\n- b\n', removeLaneChange('# t\n\n## A\n\n- a\n\n## B\n\n- b\n', 1))).toBe('# t\n\n## A\n\n- a\n')
+    expect(apply('# t\n\n## A\n- a', removeLaneChange('# t\n\n## A\n- a', 0))).toBe('# t')
+    expect(apply('## A\n- a\n', removeLaneChange('## A\n- a\n', 0))).toBe('')
+  })
+  it('없는 칸은 null', () => {
+    expect(removeLaneChange('## A\n', 1)).toBeNull()
+  })
+})
+
+describe('removeCardChange · toggleCheckChange (small 2026-10-14)', () => {
+  const t = '## A\n- a\n  - d\n- [ ] b\n- [x] c\n-\n- e'
+  const cards = parseKanban(t)[0].cards
+  it('카드를 하위 줄과 함께 지운다', () => {
+    expect(apply(t, removeCardChange(t, cards[0].from))).toBe('## A\n- [ ] b\n- [x] c\n-\n- e')
+    expect(apply(t, removeCardChange(t, cards[4].from))).toBe('## A\n- a\n  - d\n- [ ] b\n- [x] c\n-')
+    expect(removeCardChange(t, 1)).toBeNull()
+  })
+  it('체크 칸이 없으면 달고, 있으면 뒤집는다', () => {
+    expect(apply(t, toggleCheckChange(t, cards[0].from))).toBe('## A\n- [ ] a\n  - d\n- [ ] b\n- [x] c\n-\n- e')
+    expect(apply(t, toggleCheckChange(t, cards[1].from))).toBe('## A\n- a\n  - d\n- [x] b\n- [x] c\n-\n- e')
+    expect(apply(t, toggleCheckChange(t, cards[2].from))).toBe('## A\n- a\n  - d\n- [ ] b\n- [ ] c\n-\n- e')
+    expect(apply(t, toggleCheckChange(t, cards[3].from))).toBe('## A\n- a\n  - d\n- [ ] b\n- [x] c\n- [ ] \n- e')
+    expect(toggleCheckChange(t, 1)).toBeNull()
   })
 })

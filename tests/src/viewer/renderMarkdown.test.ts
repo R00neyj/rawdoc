@@ -1,6 +1,6 @@
 // specs/features/F-123.md 4장 A1·A2
 import { describe, expect, it } from 'vitest'
-import { renderMarkdown } from '../../../src/viewer/renderMarkdown'
+import { renderMarkdown, renderMarkdownInline } from '../../../src/viewer/renderMarkdown'
 
 describe('renderMarkdown — 표·취소선', () => {
   it('GFM 표를 <table> 로 바꾼다', () => {
@@ -741,5 +741,46 @@ describe('renderMarkdown — 저장소 그림 (F-2131 A1)', () => {
     expect(renderMarkdown('![y](./img/a.png)', { resolveImagePath: () => ({ id: ID, ext: 'png' }) })).toBe(
       `<div class="md-image md-image--left"><img data-attachment="${ID}" alt="y"></div>\n`,
     )
+  })
+})
+
+describe('renderMarkdownInline — 칸반 카드 글자 (small 2026-10-14)', () => {
+  const resolveWikiLink = (t: string) => (t === '회의록' ? '#/d/abc' : null)
+
+  it('위키링크는 보기 모드와 같은 <a> — 문단으로 감싸지 않는다', () => {
+    expect(renderMarkdownInline('[[회의록]] 보기', { resolveWikiLink })).toBe(
+      '<a data-wikilink="회의록" class="wikilink" href="#/d/abc">회의록</a> 보기',
+    )
+  })
+
+  it('별칭·제목 조각·없는 문서도 보기 모드 규칙 그대로', () => {
+    const html = renderMarkdownInline('[[회의록#안건|오늘]] [[없는 문서]]', { resolveWikiLink })
+    expect(html).toContain('<a data-wikilink="회의록" data-wikilink-heading="안건" class="wikilink" href="#/d/abc">오늘</a>')
+    expect(html).toContain('<a data-wikilink="없는 문서" class="wikilink wikilink--missing" href="#">없는 문서</a>')
+  })
+
+  it('굵게·기울임·취소선·인라인 코드·링크를 그린다', () => {
+    const html = renderMarkdownInline('**굵게** *기울임* ~~취소~~ `코드` [링크](https://example.com)')
+    expect(html).toContain('<strong>굵게</strong>')
+    expect(html).toContain('<em>기울임</em>')
+    expect(html).toContain('<s>취소</s>')
+    expect(html).toContain('<code>코드</code>')
+    expect(html).toContain('<a href="https://example.com" target="_blank" rel="noopener noreferrer">링크</a>')
+  })
+
+  it('줄 머리 블록 문법은 글자 그대로 둔다', () => {
+    expect(renderMarkdownInline('# 제목')).toBe('# 제목')
+    expect(renderMarkdownInline('1. 하나')).toBe('1. 하나')
+  })
+
+  it('HTML 은 이스케이프하고 위험한 주소는 링크로 만들지 않는다', () => {
+    const html = renderMarkdownInline('<img src=x onerror=alert(1)> [x](javascript:alert(1))')
+    expect(html).not.toContain('<img')
+    expect(html).toContain('&lt;img')
+    expect(html).not.toContain('href="javascript')
+  })
+
+  it('인라인 코드 안 [[ ]] 는 링크가 아니다', () => {
+    expect(renderMarkdownInline('`[[회의록]]`', { resolveWikiLink })).toBe('<code>[[회의록]]</code>')
   })
 })

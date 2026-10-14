@@ -7,7 +7,7 @@ import { nextKanbanView, type KanbanView } from './kanbanView'
 import type { EditorHandle } from '../editor/Editor'
 
 type ViewMode = 'live' | 'raw' | 'view'
-export type KanbanUserEvent = `kanban.${'add' | 'edit' | 'move' | 'toggle' | 'flag'}`
+export type KanbanUserEvent = `kanban.${'add' | 'edit' | 'move' | 'moveLane' | 'removeLane' | 'removeCard' | 'toggle' | 'flag'}`
 export type ApplyKanban = (change: KanbanChange | KanbanChange[] | null, userEvent: KanbanUserEvent) => boolean
 type KanbanState = { docId: string | null; isKanban: boolean; view: KanbanView }
 

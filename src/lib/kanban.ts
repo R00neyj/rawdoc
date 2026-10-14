@@ -259,6 +259,73 @@ export function toggleCardChange(text: string, cardFrom: number): KanbanChange |
   return { from: card.checkAt, to: card.checkAt + 1, insert: card.done ? ' ' : 'x' }
 }
 
+// 체크 칸이 있으면 뒤집고, 없으면 `[ ] ` 를 단다
+export function toggleCheckChange(text: string, cardFrom: number): KanbanChange | null {
+  const card = findCard(text, cardFrom)
+  if (!card) return null
+  if (card.checkAt !== null) return toggleCardChange(text, cardFrom)
+  return { from: card.textFrom, insert: /[ \t]/.test(text[card.textFrom - 1]) ? '[ ] ' : ' [ ] ' }
+}
+
+// 하위 줄까지 카드 한 덩이를 줄째 지운다 (moveCardChanges 의 지우기와 같다)
+export function removeCardChange(text: string, cardFrom: number): KanbanChange | null {
+  const card = findCard(text, cardFrom)
+  if (!card) return null
+  return card.to < text.length ? { from: card.from, to: card.to + 1 } : { from: card.from - 1, to: card.to }
+}
+
+// 칸 머리부터 마지막 내용 줄 끝(줄바꿈 앞)까지 — 그 뒤 lane.to 까지는 빈 줄뿐이다
+function laneCoreEnd(text: string, lane: KanbanLane): number {
+  let end = lane.headingFrom
+  let pos = lane.headingFrom
+  while (pos < lane.to) {
+    const nl = text.indexOf('\n', pos)
+    const lineEnd = nl === -1 || nl > lane.to ? lane.to : nl
+    if (text.slice(pos, lineEnd).trim() !== '') end = lineEnd
+    pos = lineEnd + 1
+  }
+  return end
+}
+
+// 칸 앞 마지막 내용 줄 끝 — 앞에 내용이 없으면 null
+function contentEndBefore(text: string, pos: number): number | null {
+  let start = pos
+  while (start > 0) {
+    const prev = start >= 2 ? text.lastIndexOf('\n', start - 2) + 1 : 0
+    if (text.slice(prev, start - 1).trim() !== '') return start - 1
+    start = prev
+  }
+  return null
+}
+
+// 칸 한 덩이와 그 구분 빈 줄 — 뒤에 칸이 있으면 뒤 빈 줄, 끝 칸이면 앞 빈 줄을 함께 든다
+function laneUnit(text: string, lanes: KanbanLane[], index: number) {
+  const lane = lanes[index]
+  const end = laneCoreEnd(text, lane)
+  const core = text.slice(lane.headingFrom, end)
+  const prevEnd = index === lanes.length - 1 ? contentEndBefore(text, lane.headingFrom) : null
+  if (prevEnd === null) return { core, sep: text.slice(end, lane.to), del: { from: lane.headingFrom, to: lane.to } }
+  return { core, sep: text.slice(prevEnd, lane.headingFrom), del: { from: prevEnd, to: end } }
+}
+
+// 칸을 통째로 옮긴다 — to 는 옮긴 뒤 순서. 칸 사이 빈 줄은 옮기는 칸이 들고 간다
+export function moveLaneChanges(text: string, from: number, to: number): KanbanChange[] | null {
+  const lanes = parseKanban(text)
+  if (!lanes[from] || !Number.isInteger(to) || to < 0 || to >= lanes.length || to === from) return null
+  const unit = laneUnit(text, lanes, from)
+  const rest = lanes.filter((_, k) => k !== from)
+  const ins: KanbanChange =
+    to < rest.length
+      ? { from: rest[to].headingFrom, insert: unit.core + unit.sep }
+      : { from: laneCoreEnd(text, rest[rest.length - 1]), insert: unit.sep + unit.core }
+  return [unit.del, ins].sort((a, b) => a.from - b.from)
+}
+
+export function removeLaneChange(text: string, lane: number): KanbanChange | null {
+  const lanes = parseKanban(text)
+  return lanes[lane] ? laneUnit(text, lanes, lane).del : null
+}
+
 export function kanbanFlagChange(text: string): KanbanChange {
   const fm = findFrontmatter(text)
   if (!fm) return { from: 0, insert: '---\nkanban: true\n---\n' }

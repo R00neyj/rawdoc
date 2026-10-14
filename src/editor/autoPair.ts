@@ -257,8 +257,8 @@ export function autoPairBackspace(state: EditorState): TransactionSpec | null {
 // 이 확장이 넣은 닫는 괄호 위치를 추적에 더한다
 const addTrackedCloser = StateEffect.define<number>()
 
-// 이 확장이 넣은 닫는 괄호 위치 추적 — 문서 변경에 맞춰 옮기고, 커서가 줄을 떠나거나 닫는 괄호가 아니게 되면 지운다(F-127 3.2)
-const trackedClosers = StateField.define<number[]>({
+// 이 확장이 넣은 닫는 괄호 위치 추적 — 문서 변경에 맞춰 옮기고, 커서가 줄을 떠나거나 닫는 괄호가 아니게 되면 지운다(F-127 3.2). 입력칸도 쓴다
+export const trackedClosers = StateField.define<number[]>({
   create: () => [],
   update(value, tr) {
     let next = value

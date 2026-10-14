@@ -25,7 +25,7 @@
 |`src/types.ts`|문서·폴더 등 저장 데이터의 모양을 정해 둠|
 |`src/vite-env.d.ts`|빌드 도구와 컴퓨터 기본 기능의 모양을 적어 둔 선언|
 
-## `src/app/` 화면과 앱 동작 (257)
+## `src/app/` 화면과 앱 동작 (259)
 
 사용자가 보는 창·메뉴·버튼과, 그 뒤에서 도는 규칙
 
@@ -122,7 +122,8 @@
 |`src/app/importWorkspace.ts`|내보냈던 압축 파일을 읽어 폴더 구조째 문서를 다시 가져옴|
 |`src/app/InviteDialog.tsx`|문서나 폴더에 다른 사람을 초대하는 창|
 |`src/app/KanbanBoard.tsx`|칸반 문서를 칸과 카드로 늘어놓아 보여 주는 보드 화면 (F-2140)|
-|`src/app/kanbanDrag.ts`|칸반 카드를 끌 때 집을지, 놓을 자리, 옮길 위치, 가장자리 자동 스크롤 속도를 계산함 (F-2142)|
+|`src/app/KanbanMenu.tsx`|칸반 카드·칸 머리·빈 자리의 우클릭·점 세 개 메뉴 항목|
+|`src/app/kanbanDrag.ts`|칸반 카드를 끌 때 집을지, 놓을 자리, 옮길 위치, 칸 옮길 자리, 가장자리 자동 스크롤 속도를 계산함 (F-2142)|
 |`src/app/kanbanView.ts`|칸반 문서를 열거나 보기를 고를 때 보드로 볼지 원문으로 볼지 정함 (F-2140)|
 |`src/app/leaveScreens.ts`|공유 관리·도움말·지도 같은 전용 화면이 열렸는지 보고 한 번에 닫음|
 |`src/app/leaveShare.ts`|공유받은 문서·폴더에서 나가기를 처리하고 결과 문구를 정함|
@@ -233,6 +234,7 @@
 |`src/app/useE2eeConvert.ts`|문서를 암호 금고로 옮기거나 금고에서 꺼냄|
 |`src/app/useE2eeMigrate.ts`|로그인 전 금고 옮기기와 금고 잠그기·초기화 단계를 처리함|
 |`src/app/useEdgeSwipe.ts`|좁은 화면에서 손가락으로 밀어 사이드바를 여닫음. 칸반 카드를 끄는 동안은 건너뜀|
+|`src/app/useFieldAutoPair.ts`|칸반 보드 입력칸에 괄호·강조 기호 자동 짝을 걸어 줌|
 |`src/app/useEditorSync.ts`|편집기와 화면을 맞추고 다른 문서의 제목·줄로 바로 이동함|
 |`src/app/useFolderActions.ts`|문서·폴더 삭제, 폴더 만들기, 한꺼번에 이동·고정을 처리함|
 |`src/app/useGithubFlow.ts`|GitHub 연결과 저장소에서 문서 가져오기 화면을 관리함|
@@ -298,13 +300,14 @@
 |`src/app/yDevLink.ts`|개발 중에만 쓰는, 두 탭 사이 같은 문서 동시 편집 연결|
 |`src/app/yjsFlush.ts`|열지 않은 문서의 밀린 수정을 한 건씩 서버에 올림|
 
-## `src/editor/` 편집기 (49)
+## `src/editor/` 편집기 (50)
 
 글을 쓰는 본문 칸. 마크다운 기호를 지우지 않고 꾸며 보여 줌
 
 |파일|하는 일|
 |---|---|
 |`src/editor/autoPair.ts`|괄호나 `**` 같은 짝 기호를 자동으로 닫아 줌|
+|`src/editor/autoPairField.ts`|한 줄 입력칸에도 편집기와 똑같은 자동 짝 기호 규칙을 쓸 수 있게 이어 줌|
 |`src/editor/boardComposition.ts`|칸반 보드 입력칸에서 한글을 조합하는 중인지 알려 남의 수정을 잠시 미루게 함 (F-2141)|
 |`src/editor/blockCommands.ts`|우클릭 메뉴로 줄을 목록·제목·일반 문단으로 바꿈|
 |`src/editor/codeLanguages.ts`|코드 블록 안 글자를 언어별로 색칠하고 들여쓰기를 맞춤|

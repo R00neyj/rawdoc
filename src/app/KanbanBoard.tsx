@@ -4,16 +4,20 @@ import {
   type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject,
 } from 'react'
 import type { EditorHandle } from '../editor/Editor'
+import { renderMarkdownInline } from '../viewer/renderMarkdown'
 import { setBoardComposing } from '../editor/boardComposition'
 import { redoLocal, undoLocal } from '../editor/yBinding'
 import {
-  NEW_LANE_TITLE, addCardChange, addLaneChange, editCardChange, moveCardChanges, parseKanban, renameLaneChange, toggleCardChange,
-  type KanbanLane,
+  NEW_LANE_TITLE, addCardChange, addLaneChange, editCardChange, moveCardChanges, moveLaneChanges, parseKanban, removeCardChange, removeLaneChange,
+  renameLaneChange, toggleCardChange, toggleCheckChange, type KanbanLane,
 } from '../lib/kanban'
+import { IconMore } from './icons'
 import {
-  KANBAN_LONG_PRESS_MS, dropSlot, edgeScroll, keyMoveTarget, mapCardPos, moveTarget, neighborCard, pickupState, type KanbanDir,
+  KANBAN_LONG_PRESS_MS, dropSlot, edgeScroll, keyMoveTarget, laneMoveTarget, mapCardPos, moveTarget, neighborCard, pickupState, type KanbanDir,
 } from './kanbanDrag'
+import KanbanMenu, { type KanbanMenuActions, type KanbanMenuState, type KanbanMenuTarget } from './KanbanMenu'
 import type { NoticeWithAction } from './NoticeBar'
+import { useFieldAutoPair } from './useFieldAutoPair'
 import { useKanbanBoard, type ApplyKanban } from './useKanbanView'
 
 export type KanbanBoardFocus = 'title' | 'board' | null
@@ -26,6 +30,9 @@ type KanbanBoardProps = {
   onTitleChange: (value: string) => void
   onTitleCommit: () => void
   onOpenStray: (line: number) => void
+  // 카드 글자의 위키링크 — 보기 모드와 같은 해석·열기
+  resolveWikiLink: (target: string) => string | null
+  onOpenWikiLink: (target: string, heading: string | null) => void
   apply: ApplyKanban
   showNotice: (input: NoticeWithAction) => number
   // 문서를 열 때 받은 첫 포커스 요청 — 마운트 때 한 번 쓰고 비운다
@@ -46,7 +53,7 @@ const UNNAMED_LANE = '이름 없는 칸'
 const ARROWS: Partial<Record<string, KanbanDir>> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }
 
 export default function KanbanBoard({
-  handle, title, titleReadOnly, readOnly, onTitleChange, onTitleCommit, onOpenStray, apply, showNotice, focusRef,
+  handle, title, titleReadOnly, readOnly, onTitleChange, onTitleCommit, onOpenStray, resolveWikiLink, onOpenWikiLink, apply, showNotice, focusRef,
 }: KanbanBoardProps) {
   const boardRef = useRef<HTMLDivElement | null>(null)
   const titleRef = useRef<HTMLInputElement | null>(null)
@@ -110,16 +117,31 @@ export default function KanbanBoard({
     setFocusTick((n) => n + 1)
   }
 
+  // 칸 머리 위치로 지금 원문을 다시 읽어 옮기고, 포커스는 옮긴 칸 이름으로
+  const moveLane = (pos: number, to: number | 'left' | 'right') => {
+    const text = handle.view.state.doc.toString()
+    const parsed = parseKanban(text)
+    const from = parsed.findIndex((l) => l.headingFrom === pos)
+    const index = from < 0 ? null : laneMoveTarget(from, parsed.length, to)
+    movingRef.current = null
+    if (index === null || !apply(moveLaneChanges(text, from, index), 'kanban.moveLane')) return
+    setLive(`${parsed[from].title || UNNAMED_LANE} 칸 ${index + 1}번째`)
+    focusRequestRef.current = { lane: index, what: 'title', stale: lanes }
+    setFocusTick((n) => n + 1)
+  }
+
   const drag = useCardDrag(boardRef, {
-    track: (cardFrom, cancel) => {
-      const pos = board.toCurrent(cardFrom)
+    track: (from, cancel) => {
+      const pos = board.toCurrent(from)
       if (pos === null) return false
       movingRef.current = { pos, el: null, lost: cancel }
       return true
     },
     drop: (at) => {
       const moving = movingRef.current
-      if (moving && moving.el === null) moveCard(moving.pos, (from) => moveTarget(from, at.lane, at.slot), null)
+      if (!moving || moving.el !== null) return
+      if (at.kind === 'lane') moveLane(moving.pos, at.slot)
+      else moveCard(moving.pos, (from) => moveTarget(from, at.lane, at.slot), null)
     },
     release: () => {
       if (movingRef.current?.el === null) movingRef.current = null
@@ -235,6 +257,100 @@ export default function KanbanBoard({
     if (pos !== null) apply(toggleCardChange(handle.view.state.doc.toString(), pos), 'kanban.toggle')
   }
 
+  // 메뉴는 스냅샷 번호로 연다 — 고를 때 지금 원문 위치로 옮겨 읽는다
+  const snapCardPos = (lane: number, card: number) => {
+    const found = lanes[lane]?.cards[card]
+    return found ? board.toCurrent(found.from) : null
+  }
+  const snapLanePos = (lane: number) => (lanes[lane] ? board.toCurrent(lanes[lane].headingFrom) : null)
+  const undoNotice = (message: string) => showNotice({ type: 'info', message, action: { label: '되돌리기', onClick: () => undoLocal(handle.view) } })
+
+  const removeLane = (lane: number) => {
+    const pos = snapLanePos(lane)
+    const text = handle.view.state.doc.toString()
+    const parsed = parseKanban(text)
+    const index = parsed.findIndex((l) => l.headingFrom === pos)
+    if (index < 0 || !apply(removeLaneChange(text, index), 'kanban.removeLane')) return
+    const { title, cards } = parsed[index]
+    if (cards.length > 0) undoNotice(`칸 "${title || UNNAMED_LANE}"과 카드 ${cards.length}개를 지웠습니다.`)
+    if (parsed.length === 1) return boardRef.current?.focus()
+    focusRequestRef.current = { lane: Math.max(0, index - 1), what: 'title', stale: lanes }
+    setFocusTick((n) => n + 1)
+  }
+
+  const removeCard = (lane: number, card: number) => {
+    const pos = snapCardPos(lane, card)
+    const text = handle.view.state.doc.toString()
+    const at = pos === null ? null : cardAt(parseKanban(text), pos)
+    if (pos === null || !at || !apply(removeCardChange(text, pos), 'kanban.removeCard')) return
+    undoNotice('카드를 지웠습니다.')
+    const left = parseKanban(handle.view.state.doc.toString())[at.lane]?.cards.length ?? 0
+    focusRequestRef.current = left > 0 ? { lane: at.lane, card: Math.min(at.card, left - 1), what: 'card', stale: lanes } : { lane: at.lane, what: 'add', stale: lanes }
+    setFocusTick((n) => n + 1)
+  }
+
+  const menuActions: KanbanMenuActions = {
+    editCard: (lane, card) => {
+      const found = lanes[lane]?.cards[card]
+      if (found) startCardEdit(found.from, found.text)
+    },
+    toggleCheck: (lane, card) => {
+      const pos = snapCardPos(lane, card)
+      if (pos !== null) apply(toggleCheckChange(handle.view.state.doc.toString(), pos), 'kanban.toggle')
+    },
+    moveCardTo: (lane, card, toLane) => {
+      const pos = snapCardPos(lane, card)
+      if (pos !== null) moveCard(pos, (from, parsed) => (from.lane === toLane ? null : { lane: toLane, index: parsed[toLane]?.cards.length ?? 0 }), null)
+    },
+    showSource: (lane, card) => {
+      const pos = snapCardPos(lane, card)
+      if (pos !== null) onOpenStray(handle.view.state.doc.lineAt(pos).number)
+    },
+    removeCard,
+    renameLane: (lane) => lanes[lane] && startRename(lanes[lane].headingFrom, lanes[lane].title),
+    moveLane: (lane, dir) => {
+      const pos = snapLanePos(lane)
+      if (pos !== null) moveLane(pos, dir)
+    },
+    removeLane,
+    addLane: () => addLane(),
+  }
+
+  const [menu, setMenu] = useState<KanbanMenuState | null>(null)
+  const openMenu = (target: KanbanMenuTarget, x: number, y: number, returnFocus: HTMLElement | null) => setMenu({ target, x, y, returnFocus })
+  // 메뉴가 닫히며 포커스가 갈 곳을 잃으면 연 자리로 돌린다 — 항목이 포커스를 옮겼으면 그대로
+  const closeMenu = () => {
+    const back = menu?.returnFocus
+    setMenu(null)
+    requestAnimationFrame(() => {
+      if (back?.isConnected && (document.activeElement === document.body || document.activeElement === null)) back.focus()
+    })
+  }
+  const openMenuFrom = (target: KanbanMenuTarget, button: HTMLElement, returnFocus: HTMLElement | null) => {
+    const r = button.getBoundingClientRect()
+    openMenu(target, r.left, r.bottom + 2, returnFocus)
+  }
+
+  // 입력칸·링크·열린 메뉴 안은 브라우저 메뉴 그대로, 휴대폰 길게 누르기는 끌기 몫이라 열지 않는다
+  const onBoardContextMenu = (e: ReactMouseEvent<HTMLDivElement>) => {
+    const t = e.target instanceof Element ? e.target : null
+    const native = e.nativeEvent as MouseEvent & { pointerType?: string }
+    if (readOnly || e.defaultPrevented || !t || native.pointerType === 'touch' || t.closest('input, textarea, a, .item-menu-list')) return
+    const laneEl = t.closest<HTMLElement>('.kanban-lanes > .kanban-lane')
+    const laneEls = Array.from(boardRef.current?.querySelectorAll<HTMLElement>('.kanban-lanes > .kanban-lane') ?? [])
+    const lane = laneEl ? laneEls.indexOf(laneEl) : -1
+    const cardEl = laneEl && t.closest<HTMLElement>('.kanban-cards > .kanban-card')
+    const headEl = laneEl && t.closest<HTMLElement>('.kanban-lane-head')
+    const card = cardEl ? Array.from(laneEl.querySelectorAll('.kanban-cards > .kanban-card')).indexOf(cardEl) : -1
+    const target: KanbanMenuTarget = card >= 0 ? { kind: 'card', lane, card } : headEl && lane >= 0 ? { kind: 'lane', lane } : { kind: 'board' }
+    const anchor = cardEl ?? headEl ?? boardRef.current
+    e.preventDefault()
+    const returnFocus = target.kind === 'lane' ? headEl?.querySelector<HTMLElement>('.kanban-lane-title') ?? null : anchor
+    // Shift+F10·메뉴 키는 좌표가 0 이라 그 요소 아래에 연다
+    if (e.clientX === 0 && e.clientY === 0 && anchor) openMenuFrom(target, anchor, returnFocus)
+    else openMenu(target, e.clientX, e.clientY, returnFocus)
+  }
+
   const setComposing = (composing: boolean) => setBoardComposing(handle.view, boardRef.current, composing)
 
   // 숨겨진 편집기가 포커스를 들고 있으면(칸반 판정이 열린 뒤에 난 경우) 보드로 옮겨 숨은 편집기에 글자가 들어가지 않게 한다
@@ -285,6 +401,15 @@ export default function KanbanBoard({
     command(handle.view)
   }
 
+  // 카드 글자 속 위키링크는 보기 모드처럼 문서를 연다 (Viewer handleClick 과 같은 규칙)
+  const onBoardClick = (e: ReactMouseEvent<HTMLDivElement>) => {
+    const anchor = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>('a.wikilink') : null
+    if (!anchor) return
+    e.preventDefault()
+    const wikiTarget = anchor.dataset.wikilink
+    if (wikiTarget !== undefined) onOpenWikiLink(wikiTarget, anchor.dataset.wikilinkHeading ?? null)
+  }
+
   const inputHandlers = {
     onChange: (value: string) => draftRef.current && setDraft({ ...draftRef.current, value }),
     onComposing: setComposing,
@@ -300,6 +425,8 @@ export default function KanbanBoard({
       data-readonly={readOnly ? '' : undefined}
       data-dragging={drag.dragging ? '' : undefined}
       onKeyDown={onBoardKeyDown}
+      onClick={onBoardClick}
+      onContextMenu={onBoardContextMenu}
     >
       <input
         ref={titleRef}
@@ -331,9 +458,16 @@ export default function KanbanBoard({
             const isTargetLane = laneIndex === targetLane && target !== null
             const renaming = isTargetLane && editing?.mode === 'lane'
             const adding = isTargetLane && editing?.mode === 'add'
+            const laneHeld = drag.held?.kind === 'lane' && drag.held.lane === laneIndex
             return (
-              <section key={isTargetLane ? `edit-${target.key}` : laneIndex} className="kanban-lane" aria-label={name}>
-                <header className="kanban-lane-head">
+              <Fragment key={isTargetLane ? `edit-${target.key}` : laneIndex}>
+              {drag.marker?.kind === 'lane' && drag.marker.slot === laneIndex && <div className="kanban-lane-drop-marker" aria-hidden="true" />}
+              <section className={laneHeld ? 'kanban-lane kanban-lane--dragging' : 'kanban-lane'} aria-label={name}>
+                <header
+                  className="kanban-lane-head"
+                  onPointerDown={readOnly || renaming ? undefined : (e) => drag.start(e, { kind: 'lane', lane: laneIndex }, lane.headingFrom)}
+                  onContextMenu={drag.blockLongPressMenu}
+                >
                   {renaming ? (
                     <BoardInput
                       className="kanban-lane-input"
@@ -354,7 +488,15 @@ export default function KanbanBoard({
                         readOnly
                           ? undefined
                           : (e) => {
-                              if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
+                              if (e.nativeEvent.isComposing) return
+                              const dir = e.key === 'ArrowLeft' ? 'left' : e.key === 'ArrowRight' ? 'right' : null
+                              if (dir && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                                e.preventDefault()
+                                const pos = board.toCurrent(lane.headingFrom)
+                                if (pos !== null) moveLane(pos, dir)
+                                return
+                              }
+                              if (e.key !== 'Enter') return
                               e.preventDefault()
                               startRename(lane.headingFrom, lane.title)
                             }
@@ -364,21 +506,31 @@ export default function KanbanBoard({
                     </h2>
                   )}
                   <span className="kanban-lane-count">{lane.cards.length}</span>
+                  {!readOnly && (
+                    <MoreButton
+                      label={`${name} 칸`}
+                      expanded={menu?.target.kind === 'lane' && menu.target.lane === laneIndex}
+                      onOpen={(button) => openMenuFrom({ kind: 'lane', lane: laneIndex }, button, button)}
+                      onClose={closeMenu}
+                    />
+                  )}
                 </header>
                 <ul className="kanban-cards">
                   {lane.cards.map((card, cardIndex) => {
                     const cardEditing = isTargetLane && editing?.mode === 'card' && target.kind === 'card' && card.from === target.pos
-                    const held = drag.held?.lane === laneIndex && drag.held.card === cardIndex
+                    const held = drag.held?.kind === 'card' && drag.held.lane === laneIndex && drag.held.card === cardIndex
                     return (
                       <Fragment key={cardEditing ? `edit-${target.key}` : cardIndex}>
-                        {drag.marker?.lane === laneIndex && drag.marker.slot === cardIndex && <li className="kanban-drop-marker" aria-hidden="true" />}
+                        {drag.marker?.kind === 'card' && drag.marker.lane === laneIndex && drag.marker.slot === cardIndex && (
+                          <li className="kanban-drop-marker" aria-hidden="true" />
+                        )}
                         <li
                           className={held ? 'kanban-card kanban-card--dragging' : 'kanban-card'}
                           tabIndex={0}
-                          onPointerDown={readOnly || cardEditing ? undefined : (e) => drag.start(e, { lane: laneIndex, card: cardIndex }, card.from)}
+                          onPointerDown={readOnly || cardEditing ? undefined : (e) => drag.start(e, { kind: 'card', lane: laneIndex, card: cardIndex }, card.from)}
                           onContextMenu={drag.blockLongPressMenu}
                           onDoubleClick={(e) => {
-                            if (!cardEditing && !(e.target instanceof HTMLInputElement)) startCardEdit(card.from, card.text)
+                            if (!cardEditing && !(e.target instanceof Element && e.target.closest('input, a, button'))) startCardEdit(card.from, card.text)
                           }}
                           onKeyDown={(e) => {
                             if (e.target !== e.currentTarget || e.nativeEvent.isComposing) return
@@ -408,14 +560,29 @@ export default function KanbanBoard({
                               onBlur={() => draftRef.current && finishCard(draftRef.current.value, false)}
                             />
                           ) : (
-                            <span className="kanban-card-text">{card.text}</span>
+                            <span className="kanban-card-text" dangerouslySetInnerHTML={{ __html: renderMarkdownInline(card.text, { resolveWikiLink }) }} />
                           )}
-                          {card.detail.length > 0 && <div className="kanban-card-detail">{card.detail.join('\n')}</div>}
+                          {card.detail.length > 0 && (
+                            <div
+                              className="kanban-card-detail"
+                              dangerouslySetInnerHTML={{ __html: card.detail.map((line) => renderMarkdownInline(line, { resolveWikiLink })).join('\n') }}
+                            />
+                          )}
+                          {!readOnly && !cardEditing && (
+                            <MoreButton
+                              label="카드"
+                              expanded={menu?.target.kind === 'card' && menu.target.lane === laneIndex && menu.target.card === cardIndex}
+                              onOpen={(button) => openMenuFrom({ kind: 'card', lane: laneIndex, card: cardIndex }, button, button.closest('li'))}
+                              onClose={closeMenu}
+                            />
+                          )}
                         </li>
                       </Fragment>
                     )
                   })}
-                  {drag.marker?.lane === laneIndex && drag.marker.slot === lane.cards.length && <li className="kanban-drop-marker" aria-hidden="true" />}
+                  {drag.marker?.kind === 'card' && drag.marker.lane === laneIndex && drag.marker.slot === lane.cards.length && (
+                    <li className="kanban-drop-marker" aria-hidden="true" />
+                  )}
                 </ul>
                 {adding ? (
                   <BoardInput
@@ -448,8 +615,10 @@ export default function KanbanBoard({
                   </button>
                 )}
               </section>
+              </Fragment>
             )
           })}
+          {drag.marker?.kind === 'lane' && drag.marker.slot === lanes.length && <div className="kanban-lane-drop-marker" aria-hidden="true" />}
           {!readOnly && (
             <button type="button" className="kanban-add-lane" onClick={addLane}>
               <span aria-hidden="true">+</span> 칸 추가
@@ -460,6 +629,7 @@ export default function KanbanBoard({
       <p className="kanban-live" aria-live="polite">
         {live}
       </p>
+      {menu && !readOnly && <KanbanMenu menu={menu} lanes={lanes} unnamed={UNNAMED_LANE} actions={menuActions} onClose={closeMenu} />}
     </div>
   )
 }
@@ -477,18 +647,20 @@ function cardElement(board: HTMLElement | null, at: CardAt): HTMLElement | null 
   return lane?.querySelectorAll<HTMLElement>('.kanban-cards > .kanban-card')[at.card] ?? null
 }
 
-type DropAt = { lane: number; slot: number }
+type DragItem = { kind: 'card'; lane: number; card: number } | { kind: 'lane'; lane: number }
+// 카드는 칸 lane 의 카드 틈, 칸은 칸 줄의 틈 — slot 은 끄는 것이 자리에 남은 기준
+type DropAt = { kind: 'card'; lane: number; slot: number } | { kind: 'lane'; slot: number }
 type DragCallbacks = {
-  // 누른 카드를 지금 원문 좌표로 추적하기 시작한다. 이미 지워졌으면 false
-  track: (cardFrom: number, cancel: () => void) => boolean
+  // 누른 카드·칸 머리를 지금 원문 좌표로 추적하기 시작한다. 이미 지워졌으면 false
+  track: (from: number, cancel: () => void) => boolean
   drop: (at: DropAt) => void
   release: () => void
 }
 type Gesture = { pointerId: number; picked: boolean; cancel: () => void }
 
-// 마우스·터치·펜 한 길의 카드 끌기 — 집기 판정, 복제·놓을 자리, 가장자리 자동 스크롤 (F-2142 3장)
+// 마우스·터치·펜 한 길의 카드·칸 끌기 — 집기 판정, 복제·놓을 자리, 가장자리 자동 스크롤 (F-2142 3장)
 function useCardDrag(boardRef: RefObject<HTMLDivElement | null>, callbacks: DragCallbacks) {
-  const [held, setHeld] = useState<CardAt | null>(null)
+  const [held, setHeld] = useState<DragItem | null>(null)
   const [marker, setMarker] = useState<DropAt | null>(null)
   const [dragging, setDragging] = useState(false)
   const gestureRef = useRef<Gesture | null>(null)
@@ -512,7 +684,7 @@ function useCardDrag(boardRef: RefObject<HTMLDivElement | null>, callbacks: Drag
     }
   }, [boardRef])
 
-  const start = (e: ReactPointerEvent<HTMLLIElement>, at: CardAt, cardFrom: number) => {
+  const start = (e: ReactPointerEvent<HTMLElement>, item: DragItem, from: number) => {
     const pointerType = e.pointerType === 'mouse' ? 'mouse' : e.pointerType === 'pen' ? 'pen' : 'touch'
     touchPressRef.current = pointerType !== 'mouse'
     const target = e.target instanceof Element ? e.target : null
@@ -530,9 +702,12 @@ function useCardDrag(boardRef: RefObject<HTMLDivElement | null>, callbacks: Drag
 
     const locate = () => {
       if (ghost) ghost.style.transform = `translate(${x - startX}px, ${y - startY}px)`
-      const next = dropAt(boardRef.current, x, y)
+      const next = item.kind === 'lane' ? laneDropAt(boardRef.current, x) : dropAt(boardRef.current, x, y)
       drop = next
-      setMarker((prev) => (prev?.lane === next?.lane && prev?.slot === next?.slot ? prev : next))
+      setMarker((prev) => {
+        const sameLane = (prev?.kind === 'card' ? prev.lane : null) === (next?.kind === 'card' ? next.lane : null)
+        return prev?.kind === next?.kind && prev?.slot === next?.slot && sameLane ? prev : next
+      })
     }
     const tick = () => {
       frame = requestAnimationFrame(tick)
@@ -546,10 +721,10 @@ function useCardDrag(boardRef: RefObject<HTMLDivElement | null>, callbacks: Drag
       } catch {
         // 이미 뗀 포인터 — 이어지는 pointerup 이 끝낸다
       }
-      ghost = makeGhost(el)
+      ghost = makeGhost(item.kind === 'lane' ? (el.closest<HTMLElement>('.kanban-lane') ?? el) : el, item.kind === 'lane' ? 'kanban-lane' : 'kanban-card')
       boardRef.current?.append(ghost)
       window.getSelection()?.removeAllRanges()
-      setHeld(at)
+      setHeld(item)
       setDragging(true)
       locate()
       frame = requestAnimationFrame(tick)
@@ -598,6 +773,10 @@ function useCardDrag(boardRef: RefObject<HTMLDivElement | null>, callbacks: Drag
       if (commit && drop) callbacksRef.current.drop(drop)
       callbacksRef.current.release()
       if (!gesture.picked) return
+      // 집었다 놓은 뒤 따라오는 click 이 칸 이름 고치기를 열지 않게 한 번 삼킨다
+      const swallow = (ev: MouseEvent) => ev.stopPropagation()
+      window.addEventListener('click', swallow, { capture: true, once: true })
+      window.setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 0)
       setHeld(null)
       setMarker(null)
       // 밀기 훅은 같은 손가락의 touchend 에서 data-dragging 을 본다 — pointerup 다음 작업에서 내린다
@@ -605,7 +784,7 @@ function useCardDrag(boardRef: RefObject<HTMLDivElement | null>, callbacks: Drag
     }
     const gesture: Gesture = { pointerId: e.pointerId, picked: false, cancel: () => end(false) }
 
-    if (!callbacksRef.current.track(cardFrom, gesture.cancel)) return
+    if (!callbacksRef.current.track(from, gesture.cancel)) return
     gestureRef.current = gesture
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
@@ -636,16 +815,29 @@ function dropAt(board: HTMLElement | null, x: number, y: number): DropAt | null 
       const c = card.getBoundingClientRect()
       return c.top + c.height / 2
     })
-    return { lane, slot: dropSlot(mids, y) }
+    return { kind: 'card', lane, slot: dropSlot(mids, y) }
   }
   return null
+}
+
+// 칸 끌기 — 칸들의 가로 가운데로 틈을 고른다. 칸 줄 밖이면 null
+function laneDropAt(board: HTMLElement | null, x: number): DropAt | null {
+  const row = board?.querySelector<HTMLElement>('.kanban-lanes')
+  if (!row) return null
+  const box = row.getBoundingClientRect()
+  if (x < box.left || x >= box.right) return null
+  const mids = Array.from(row.querySelectorAll<HTMLElement>(':scope > .kanban-lane'), (lane) => {
+    const r = lane.getBoundingClientRect()
+    return r.left + r.width / 2
+  })
+  return { kind: 'lane', slot: dropSlot(mids, x) }
 }
 
 // 칸 줄은 가로로, 세로는 그 칸 목록이 스크롤되면 목록을 아니면 보드를 민다. 움직였으면 true
 function scrollEdges(board: HTMLElement | null, at: DropAt | null, x: number, y: number): boolean {
   const row = board?.querySelector<HTMLElement>('.kanban-lanes')
   if (!board || !row) return false
-  const list = at ? row.querySelectorAll<HTMLElement>(':scope > .kanban-lane')[at.lane]?.querySelector<HTMLElement>('.kanban-cards') : null
+  const list = at?.kind === 'card' ? row.querySelectorAll<HTMLElement>(':scope > .kanban-lane')[at.lane]?.querySelector<HTMLElement>('.kanban-cards') : null
   const column = list && list.scrollHeight > list.clientHeight + 1 ? list : board
   const movedX = nudge(row, 'x', x)
   return nudge(column, 'y', y) || movedX
@@ -662,19 +854,38 @@ function nudge(el: HTMLElement, axis: 'x' | 'y', pos: number): boolean {
 }
 
 // 손가락·커서를 따라가는 복제 — 체크 칸 checked 는 속성이 아니라 값이라 따로 옮긴다
-function makeGhost(card: HTMLElement): HTMLElement {
-  const rect = card.getBoundingClientRect()
-  const ghost = card.cloneNode(true) as HTMLElement
-  ghost.className = 'kanban-card kanban-drag-ghost'
+function makeGhost(source: HTMLElement, kindClass: string): HTMLElement {
+  const rect = source.getBoundingClientRect()
+  const ghost = source.cloneNode(true) as HTMLElement
+  ghost.className = `${kindClass} kanban-drag-ghost`
   ghost.removeAttribute('tabindex')
   ghost.setAttribute('aria-hidden', 'true')
   ghost.style.left = `${rect.left}px`
   ghost.style.top = `${rect.top}px`
   ghost.style.width = `${rect.width}px`
-  const check = card.querySelector<HTMLInputElement>('.kanban-card-check')
-  const copy = ghost.querySelector<HTMLInputElement>('.kanban-card-check')
-  if (check && copy) copy.checked = check.checked
+  const copies = ghost.querySelectorAll<HTMLInputElement>('.kanban-card-check')
+  source.querySelectorAll<HTMLInputElement>('.kanban-card-check').forEach((check, i) => {
+    if (copies[i]) copies[i].checked = check.checked
+  })
   return ghost
+}
+
+// 칸 머리·카드의 `⋯` — 누르면 보드의 메뉴를 이 버튼 아래에 연다. 열린 채 누르면 닫는다
+function MoreButton({ label, expanded, onOpen, onClose }: { label: string; expanded: boolean; onOpen: (button: HTMLElement) => void; onClose: () => void }) {
+  return (
+    <button
+      type="button"
+      className="item-menu-btn kanban-more"
+      aria-label={`${label} 메뉴`}
+      aria-haspopup="menu"
+      aria-expanded={expanded}
+      // 메뉴의 바깥 누르기 닫기가 먼저 닫아 다시 열리지 않게 한다
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => (expanded ? onClose() : onOpen(e.currentTarget))}
+    >
+      <IconMore size={16} />
+    </button>
+  )
 }
 
 type BoardInputProps = {
@@ -694,6 +905,7 @@ function BoardInput({ className, label, placeholder, value, select, onChange, on
   const ref = useRef<HTMLInputElement | null>(null)
   const composingRef = useRef(false)
   const composingCb = useRef(onComposing)
+  useFieldAutoPair(ref, composingRef)
   useLayoutEffect(() => {
     composingCb.current = onComposing
   })

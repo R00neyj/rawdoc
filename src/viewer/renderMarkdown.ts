@@ -611,6 +611,11 @@ export function parseMarkdownTokens(body: string, env: Record<string, unknown> =
   return md.parse(body, env)
 }
 
+// 한 줄짜리 인라인만 — 문단·목록 같은 블록 없이 보기 모드와 같은 규칙·안전 장치로 그린다 (칸반 카드)
+export function renderMarkdownInline(text: string, options: { resolveWikiLink?: ResolveWikiLink } = {}): string {
+  return md.renderInline(text, { resolveWikiLink: options.resolveWikiLink })
+}
+
 // text: 저장소·에디터 원문 그대로. resolveWikiLink 생략 시 위키링크는 클릭 불가 글자로만(F-131 4장). sourceLines: 최상위 블록에 data-source-line 부착, 기본 꺼짐(F-295.md 9장)
 export function renderMarkdown(
   text: string,
