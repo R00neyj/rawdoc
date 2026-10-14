@@ -103,6 +103,7 @@
 
 .kanban-lane-count {
   flex: none;
+  margin-left: auto; /* `⋯` 가 붙어 셋이 되면 space-between 이 개수를 가운데로 보낸다 */
   color: var(--muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
