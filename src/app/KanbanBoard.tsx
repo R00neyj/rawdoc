@@ -1,9 +1,18 @@
-// 칸반 보드 화면 — 숨긴 편집기의 EditorState 를 읽어 그리고, 고치기는 applyKanban 한 길로 쓴다 (F-2140 3장, F-2141 3장)
-import { useCallback, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+// 칸반 보드 화면 — 숨긴 편집기의 EditorState 를 읽어 그리고, 고치기는 applyKanban 한 길로 쓴다 (F-2140 3장, F-2141 3장, F-2142)
+import {
+  Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState,
+  type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject,
+} from 'react'
 import type { EditorHandle } from '../editor/Editor'
 import { setBoardComposing } from '../editor/boardComposition'
 import { redoLocal, undoLocal } from '../editor/yBinding'
-import { NEW_LANE_TITLE, addCardChange, addLaneChange, editCardChange, parseKanban, renameLaneChange, toggleCardChange } from '../lib/kanban'
+import {
+  NEW_LANE_TITLE, addCardChange, addLaneChange, editCardChange, moveCardChanges, parseKanban, renameLaneChange, toggleCardChange,
+  type KanbanLane,
+} from '../lib/kanban'
+import {
+  KANBAN_LONG_PRESS_MS, dropSlot, edgeScroll, keyMoveTarget, mapCardPos, moveTarget, neighborCard, pickupState, type KanbanDir,
+} from './kanbanDrag'
 import type { NoticeWithAction } from './NoticeBar'
 import { useKanbanBoard, type ApplyKanban } from './useKanbanView'
 
@@ -25,9 +34,16 @@ type KanbanBoardProps = {
 
 // add = 칸 아래 새 카드, lane = 칸 이름(added 는 `칸 추가` 로 연 것), card = 카드 첫 줄 글자
 type Draft = { mode: 'add' | 'card'; value: string } | { mode: 'lane'; value: string; added: boolean }
-type FocusRequest = { lane: number; card?: number; what: 'card' | 'title' | 'add' }
+// stale = 옮기기 직전 스냅샷 — 다음 스냅샷이 그려진 뒤에 포커스한다
+type FocusRequest = { lane: number; card?: number; what: 'card' | 'title' | 'add'; stale?: KanbanLane[] }
+type CardAt = { lane: number; card: number }
+type MoveTo = { lane: number; index: number }
+// 끌거나 키로 옮기는 카드의 지금 원문 위치. el 은 키로 옮긴 뒤 아직 포커스가 못 따라간 카드, 끌기면 null
+type Moving = { pos: number; el: HTMLElement | null; lost?: () => void }
 
 const LOST_MESSAGE = '다른 곳에서 지워져 고치지 못했습니다.'
+const UNNAMED_LANE = '이름 없는 칸'
+const ARROWS: Partial<Record<string, KanbanDir>> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }
 
 export default function KanbanBoard({
   handle, title, titleReadOnly, readOnly, onTitleChange, onTitleCommit, onOpenStray, apply, showNotice, focusRef,
@@ -56,6 +72,80 @@ export default function KanbanBoard({
   const board = useKanbanBoard(handle, onTargetLost)
   const { lanes, target } = board
   const editing = readOnly ? null : draft
+  const [live, setLive] = useState('')
+  const movingRef = useRef<Moving | null>(null)
+
+  // 입력칸 자리 추적(board.track)과 따로 옮긴다 — 끄는 사이 그 카드가 지워지면 끌기를 조용히 끝낸다 (F-2142 3장)
+  useLayoutEffect(
+    () =>
+      handle.onChanges(({ changes }) => {
+        const moving = movingRef.current
+        if (!moving) return
+        const pos = mapCardPos(changes.desc, moving.pos)
+        if (pos !== null) {
+          moving.pos = pos
+          return
+        }
+        movingRef.current = null
+        moving.lost?.()
+      }),
+    [handle],
+  )
+
+  // 지금 원문을 다시 읽어 옮기고, 포커스는 다음 스냅샷에서 옮긴 카드로 (F-2142 3·4장)
+  const moveCard = (pos: number, pick: (from: CardAt, parsed: KanbanLane[]) => MoveTo | null, el: HTMLElement | null) => {
+    const text = handle.view.state.doc.toString()
+    const parsed = parseKanban(text)
+    const from = cardAt(parsed, pos)
+    const to = from && pick(from, parsed)
+    if (!from || !to) return
+    movingRef.current = null
+    if (!apply(moveCardChanges(text, from, to), 'kanban.move')) return
+    const lane = parseKanban(handle.view.state.doc.toString())[to.lane]
+    const moved = lane?.cards[to.index]
+    if (!moved) return
+    if (el) movingRef.current = { pos: moved.from, el }
+    setLive(`${moved.text} — ${lane.title || UNNAMED_LANE} ${to.index + 1}번째`)
+    focusRequestRef.current = { lane: to.lane, card: to.index, what: 'card', stale: lanes }
+    setFocusTick((n) => n + 1)
+  }
+
+  const drag = useCardDrag(boardRef, {
+    track: (cardFrom, cancel) => {
+      const pos = board.toCurrent(cardFrom)
+      if (pos === null) return false
+      movingRef.current = { pos, el: null, lost: cancel }
+      return true
+    },
+    drop: (at) => {
+      const moving = movingRef.current
+      if (moving && moving.el === null) moveCard(moving.pos, (from) => moveTarget(from, at.lane, at.slot), null)
+    },
+    release: () => {
+      if (movingRef.current?.el === null) movingRef.current = null
+    },
+  })
+
+  // Alt+방향키는 카드를 옮기고(Alt+← 뒤로 가기도 막는다), 방향키만은 옆 카드로 포커스를 옮긴다 (F-2142 4장)
+  const onCardArrow = (e: KeyboardEvent<HTMLLIElement>, at: CardAt, cardFrom: number) => {
+    const dir = ARROWS[e.key]
+    if (!dir || e.ctrlKey || e.metaKey || e.shiftKey) return
+    const counts = lanes.map((l) => l.cards.length)
+    if (e.altKey) {
+      e.preventDefault()
+      const el = e.currentTarget
+      const pending = movingRef.current
+      const pos = pending !== null && pending.el === el ? pending.pos : board.toCurrent(cardFrom)
+      if (pos === null || readOnly) return
+      moveCard(pos, (from, parsed) => keyMoveTarget(from, parsed.map((l) => l.cards.length), dir), el)
+      return
+    }
+    const next = neighborCard(at, counts, dir)
+    const el = next && cardElement(boardRef.current, next)
+    if (!el) return
+    e.preventDefault()
+    el.focus()
+  }
 
   const close = (focus: FocusRequest | null) => {
     setDraft(null)
@@ -82,12 +172,8 @@ export default function KanbanBoard({
     const pos = board.currentTarget()
     if (pos === null) return null
     const text = handle.view.state.doc.toString()
-    const parsed = parseKanban(text)
-    for (let lane = 0; lane < parsed.length; lane++) {
-      const card = parsed[lane].cards.findIndex((c) => c.from === pos)
-      if (card >= 0) return { text, pos, lane, card }
-    }
-    return null
+    const at = cardAt(parseKanban(text), pos)
+    return at && { text, pos, ...at }
   }
 
   const addCard = (value: string): boolean => {
@@ -165,15 +251,16 @@ export default function KanbanBoard({
     }
   }, [handle, focusRef])
 
-  // 입력칸을 닫은 뒤 그 카드·칸 머리·새 칸의 `카드 추가` 로 돌아간다 (3장)
+  // 입력칸을 닫은 뒤 그 카드·칸 머리·새 칸의 `카드 추가` 로, 옮긴 뒤에는 옮긴 카드로 돌아간다 (F-2141 3장, F-2142 3장)
   useLayoutEffect(() => {
     const request = focusRequestRef.current
-    const laneEl = request && boardRef.current?.querySelectorAll<HTMLElement>('.kanban-lane')[request.lane]
+    const laneEl = request && request.stale !== lanes && boardRef.current?.querySelectorAll<HTMLElement>('.kanban-lane')[request.lane]
     if (!request || !laneEl) return
-    const selector = request.what === 'card' ? '.kanban-card' : request.what === 'title' ? '.kanban-lane-title' : '.kanban-add-card'
+    const selector = request.what === 'card' ? '.kanban-cards > .kanban-card' : request.what === 'title' ? '.kanban-lane-title' : '.kanban-add-card'
     const el = laneEl.querySelectorAll<HTMLElement>(selector)[request.what === 'card' ? (request.card ?? 0) : 0]
     if (!el) return
     focusRequestRef.current = null
+    if (movingRef.current?.el) movingRef.current = null
     el.focus()
   }, [focusTick, lanes])
 
@@ -204,7 +291,16 @@ export default function KanbanBoard({
   }
 
   return (
-    <div ref={boardRef} className="kanban-board" role="region" aria-label="칸반 보드" tabIndex={-1} onKeyDown={onBoardKeyDown}>
+    <div
+      ref={boardRef}
+      className="kanban-board"
+      role="region"
+      aria-label="칸반 보드"
+      tabIndex={-1}
+      data-readonly={readOnly ? '' : undefined}
+      data-dragging={drag.dragging ? '' : undefined}
+      onKeyDown={onBoardKeyDown}
+    >
       <input
         ref={titleRef}
         className="kanban-title"
@@ -231,7 +327,7 @@ export default function KanbanBoard({
       {(lanes.length > 0 || !readOnly) && (
         <div className="kanban-lanes">
           {lanes.map((lane, laneIndex) => {
-            const name = lane.title || '이름 없는 칸'
+            const name = lane.title || UNNAMED_LANE
             const isTargetLane = laneIndex === targetLane && target !== null
             const renaming = isTargetLane && editing?.mode === 'lane'
             const adding = isTargetLane && editing?.mode === 'add'
@@ -272,47 +368,54 @@ export default function KanbanBoard({
                 <ul className="kanban-cards">
                   {lane.cards.map((card, cardIndex) => {
                     const cardEditing = isTargetLane && editing?.mode === 'card' && target.kind === 'card' && card.from === target.pos
+                    const held = drag.held?.lane === laneIndex && drag.held.card === cardIndex
                     return (
-                      <li
-                        key={cardEditing ? `edit-${target.key}` : cardIndex}
-                        className="kanban-card"
-                        tabIndex={0}
-                        onDoubleClick={(e) => {
-                          if (!cardEditing && !(e.target instanceof HTMLInputElement)) startCardEdit(card.from, card.text)
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== 'F2') || e.nativeEvent.isComposing) return
-                          e.preventDefault()
-                          startCardEdit(card.from, card.text)
-                        }}
-                      >
-                        {card.done !== null && (
-                          <input
-                            type="checkbox"
-                            className="kanban-card-check"
-                            aria-label="완료"
-                            checked={card.done}
-                            disabled={readOnly}
-                            onChange={() => toggle(card.from)}
-                          />
-                        )}
-                        {cardEditing ? (
-                          <BoardInput
-                            className="kanban-card-input"
-                            label="카드 내용"
-                            value={editing.value}
-                            {...inputHandlers}
-                            onEnter={() => finishCard(draftRef.current?.value ?? '', true)}
-                            onEscape={() => finishCard(null, true)}
-                            onBlur={() => draftRef.current && finishCard(draftRef.current.value, false)}
-                          />
-                        ) : (
-                          <span className="kanban-card-text">{card.text}</span>
-                        )}
-                        {card.detail.length > 0 && <div className="kanban-card-detail">{card.detail.join('\n')}</div>}
-                      </li>
+                      <Fragment key={cardEditing ? `edit-${target.key}` : cardIndex}>
+                        {drag.marker?.lane === laneIndex && drag.marker.slot === cardIndex && <li className="kanban-drop-marker" aria-hidden="true" />}
+                        <li
+                          className={held ? 'kanban-card kanban-card--dragging' : 'kanban-card'}
+                          tabIndex={0}
+                          onPointerDown={readOnly || cardEditing ? undefined : (e) => drag.start(e, { lane: laneIndex, card: cardIndex }, card.from)}
+                          onContextMenu={drag.blockLongPressMenu}
+                          onDoubleClick={(e) => {
+                            if (!cardEditing && !(e.target instanceof HTMLInputElement)) startCardEdit(card.from, card.text)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.target !== e.currentTarget || e.nativeEvent.isComposing) return
+                            if (e.key !== 'Enter' && e.key !== 'F2') return onCardArrow(e, { lane: laneIndex, card: cardIndex }, card.from)
+                            e.preventDefault()
+                            startCardEdit(card.from, card.text)
+                          }}
+                        >
+                          {card.done !== null && (
+                            <input
+                              type="checkbox"
+                              className="kanban-card-check"
+                              aria-label="완료"
+                              checked={card.done}
+                              disabled={readOnly}
+                              onChange={() => toggle(card.from)}
+                            />
+                          )}
+                          {cardEditing ? (
+                            <BoardInput
+                              className="kanban-card-input"
+                              label="카드 내용"
+                              value={editing.value}
+                              {...inputHandlers}
+                              onEnter={() => finishCard(draftRef.current?.value ?? '', true)}
+                              onEscape={() => finishCard(null, true)}
+                              onBlur={() => draftRef.current && finishCard(draftRef.current.value, false)}
+                            />
+                          ) : (
+                            <span className="kanban-card-text">{card.text}</span>
+                          )}
+                          {card.detail.length > 0 && <div className="kanban-card-detail">{card.detail.join('\n')}</div>}
+                        </li>
+                      </Fragment>
                     )
                   })}
+                  {drag.marker?.lane === laneIndex && drag.marker.slot === lane.cards.length && <li className="kanban-drop-marker" aria-hidden="true" />}
                 </ul>
                 {adding ? (
                   <BoardInput
@@ -354,8 +457,224 @@ export default function KanbanBoard({
           )}
         </div>
       )}
+      <p className="kanban-live" aria-live="polite">
+        {live}
+      </p>
     </div>
   )
+}
+
+function cardAt(lanes: KanbanLane[], pos: number): CardAt | null {
+  for (let lane = 0; lane < lanes.length; lane++) {
+    const card = lanes[lane].cards.findIndex((c) => c.from === pos)
+    if (card >= 0) return { lane, card }
+  }
+  return null
+}
+
+function cardElement(board: HTMLElement | null, at: CardAt): HTMLElement | null {
+  const lane = board?.querySelectorAll<HTMLElement>('.kanban-lane')[at.lane]
+  return lane?.querySelectorAll<HTMLElement>('.kanban-cards > .kanban-card')[at.card] ?? null
+}
+
+type DropAt = { lane: number; slot: number }
+type DragCallbacks = {
+  // 누른 카드를 지금 원문 좌표로 추적하기 시작한다. 이미 지워졌으면 false
+  track: (cardFrom: number, cancel: () => void) => boolean
+  drop: (at: DropAt) => void
+  release: () => void
+}
+type Gesture = { pointerId: number; picked: boolean; cancel: () => void }
+
+// 마우스·터치·펜 한 길의 카드 끌기 — 집기 판정, 복제·놓을 자리, 가장자리 자동 스크롤 (F-2142 3장)
+function useCardDrag(boardRef: RefObject<HTMLDivElement | null>, callbacks: DragCallbacks) {
+  const [held, setHeld] = useState<CardAt | null>(null)
+  const [marker, setMarker] = useState<DropAt | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const gestureRef = useRef<Gesture | null>(null)
+  const touchPressRef = useRef(false)
+  const callbacksRef = useRef(callbacks)
+  useLayoutEffect(() => {
+    callbacksRef.current = callbacks
+  })
+
+  // 집은 뒤에는 브라우저 스크롤을 막는다 — React 의 터치 리스너는 passive 라 직접 단다
+  useEffect(() => {
+    const board = boardRef.current
+    if (!board) return
+    const block = (e: TouchEvent) => {
+      if (gestureRef.current?.picked && e.cancelable) e.preventDefault()
+    }
+    board.addEventListener('touchmove', block, { passive: false })
+    return () => {
+      board.removeEventListener('touchmove', block)
+      gestureRef.current?.cancel()
+    }
+  }, [boardRef])
+
+  const start = (e: ReactPointerEvent<HTMLLIElement>, at: CardAt, cardFrom: number) => {
+    const pointerType = e.pointerType === 'mouse' ? 'mouse' : e.pointerType === 'pen' ? 'pen' : 'touch'
+    touchPressRef.current = pointerType !== 'mouse'
+    const target = e.target instanceof Element ? e.target : null
+    if (gestureRef.current || !e.isPrimary || e.button !== 0 || target?.closest('input, button, textarea, a')) return
+    const el = e.currentTarget
+    const startX = e.clientX
+    const startY = e.clientY
+    const startTime = performance.now()
+    let x = startX
+    let y = startY
+    let timer = 0
+    let frame = 0
+    let ghost: HTMLElement | null = null
+    let drop: DropAt | null = null
+
+    const locate = () => {
+      if (ghost) ghost.style.transform = `translate(${x - startX}px, ${y - startY}px)`
+      const next = dropAt(boardRef.current, x, y)
+      drop = next
+      setMarker((prev) => (prev?.lane === next?.lane && prev?.slot === next?.slot ? prev : next))
+    }
+    const tick = () => {
+      frame = requestAnimationFrame(tick)
+      if (scrollEdges(boardRef.current, drop, x, y)) locate()
+    }
+    const pick = () => {
+      window.clearTimeout(timer)
+      gesture.picked = true
+      try {
+        el.setPointerCapture(gesture.pointerId)
+      } catch {
+        // 이미 뗀 포인터 — 이어지는 pointerup 이 끝낸다
+      }
+      ghost = makeGhost(el)
+      boardRef.current?.append(ghost)
+      window.getSelection()?.removeAllRanges()
+      setHeld(at)
+      setDragging(true)
+      locate()
+      frame = requestAnimationFrame(tick)
+    }
+    // 타이머와 움직임이 함께 부른다 — 집거나, 스크롤로 넘기거나, 더 기다린다
+    const judge = () => {
+      const next = pickupState({ pointerType, dx: x - startX, dy: y - startY, elapsedMs: performance.now() - startTime })
+      if (next === 'pick') pick()
+      else if (next === 'cancel') end(false)
+      return next
+    }
+    const wait = () => {
+      timer = window.setTimeout(() => {
+        if (judge() === 'wait') wait()
+      }, Math.max(1, KANBAN_LONG_PRESS_MS - (performance.now() - startTime)))
+    }
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== gesture.pointerId) return
+      x = ev.clientX
+      y = ev.clientY
+      if (gesture.picked) locate()
+      else judge()
+    }
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId === gesture.pointerId) end(gesture.picked)
+    }
+    const onCancel = (ev: PointerEvent) => {
+      if (ev.pointerId === gesture.pointerId) end(false)
+    }
+    const onKey = (ev: globalThis.KeyboardEvent) => {
+      if (ev.key !== 'Escape' || !gesture.picked) return
+      ev.preventDefault()
+      ev.stopPropagation()
+      end(false)
+    }
+    const end = (commit: boolean) => {
+      if (gestureRef.current !== gesture) return
+      gestureRef.current = null
+      window.clearTimeout(timer)
+      cancelAnimationFrame(frame)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKey, true)
+      ghost?.remove()
+      if (commit && drop) callbacksRef.current.drop(drop)
+      callbacksRef.current.release()
+      if (!gesture.picked) return
+      setHeld(null)
+      setMarker(null)
+      // 밀기 훅은 같은 손가락의 touchend 에서 data-dragging 을 본다 — pointerup 다음 작업에서 내린다
+      window.setTimeout(() => setDragging(false), 0)
+    }
+    const gesture: Gesture = { pointerId: e.pointerId, picked: false, cancel: () => end(false) }
+
+    if (!callbacksRef.current.track(cardFrom, gesture.cancel)) return
+    gestureRef.current = gesture
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKey, true)
+    if (pointerType !== 'mouse') wait()
+  }
+
+  // 길게 눌러 뜨는 메뉴만 막는다 — 마우스 오른쪽 단추는 그대로
+  const blockLongPressMenu = (e: ReactMouseEvent) => {
+    if (touchPressRef.current) e.preventDefault()
+  }
+
+  return { held, marker, dragging, start, blockLongPressMenu }
+}
+
+// 포인터 x 가 든 칸, 그 칸 카드들의 세로 가운데로 자리 — 칸 줄 밖이면 null
+function dropAt(board: HTMLElement | null, x: number, y: number): DropAt | null {
+  const row = board?.querySelector<HTMLElement>('.kanban-lanes')
+  if (!row) return null
+  const box = row.getBoundingClientRect()
+  if (x < box.left || x >= box.right) return null
+  const laneEls = row.querySelectorAll<HTMLElement>(':scope > .kanban-lane')
+  for (let lane = 0; lane < laneEls.length; lane++) {
+    const r = laneEls[lane].getBoundingClientRect()
+    if (x < r.left || x >= r.right) continue
+    const mids = Array.from(laneEls[lane].querySelectorAll<HTMLElement>('.kanban-cards > .kanban-card'), (card) => {
+      const c = card.getBoundingClientRect()
+      return c.top + c.height / 2
+    })
+    return { lane, slot: dropSlot(mids, y) }
+  }
+  return null
+}
+
+// 칸 줄은 가로로, 세로는 그 칸 목록이 스크롤되면 목록을 아니면 보드를 민다. 움직였으면 true
+function scrollEdges(board: HTMLElement | null, at: DropAt | null, x: number, y: number): boolean {
+  const row = board?.querySelector<HTMLElement>('.kanban-lanes')
+  if (!board || !row) return false
+  const list = at ? row.querySelectorAll<HTMLElement>(':scope > .kanban-lane')[at.lane]?.querySelector<HTMLElement>('.kanban-cards') : null
+  const column = list && list.scrollHeight > list.clientHeight + 1 ? list : board
+  const movedX = nudge(row, 'x', x)
+  return nudge(column, 'y', y) || movedX
+}
+
+function nudge(el: HTMLElement, axis: 'x' | 'y', pos: number): boolean {
+  const r = el.getBoundingClientRect()
+  const delta = axis === 'x' ? edgeScroll(pos, r.left, r.right) : edgeScroll(pos, r.top, r.bottom)
+  if (delta === 0) return false
+  const before = axis === 'x' ? el.scrollLeft : el.scrollTop
+  if (axis === 'x') el.scrollLeft += delta
+  else el.scrollTop += delta
+  return (axis === 'x' ? el.scrollLeft : el.scrollTop) !== before
+}
+
+// 손가락·커서를 따라가는 복제 — 체크 칸 checked 는 속성이 아니라 값이라 따로 옮긴다
+function makeGhost(card: HTMLElement): HTMLElement {
+  const rect = card.getBoundingClientRect()
+  const ghost = card.cloneNode(true) as HTMLElement
+  ghost.className = 'kanban-card kanban-drag-ghost'
+  ghost.removeAttribute('tabindex')
+  ghost.setAttribute('aria-hidden', 'true')
+  ghost.style.left = `${rect.left}px`
+  ghost.style.top = `${rect.top}px`
+  ghost.style.width = `${rect.width}px`
+  const check = card.querySelector<HTMLInputElement>('.kanban-card-check')
+  const copy = ghost.querySelector<HTMLInputElement>('.kanban-card-check')
+  if (check && copy) copy.checked = check.checked
+  return ghost
 }
 
 type BoardInputProps = {

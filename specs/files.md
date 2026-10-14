@@ -25,7 +25,7 @@
 |`src/types.ts`|문서·폴더 등 저장 데이터의 모양을 정해 둠|
 |`src/vite-env.d.ts`|빌드 도구와 컴퓨터 기본 기능의 모양을 적어 둔 선언|
 
-## `src/app/` 화면과 앱 동작 (256)
+## `src/app/` 화면과 앱 동작 (257)
 
 사용자가 보는 창·메뉴·버튼과, 그 뒤에서 도는 규칙
 
@@ -122,6 +122,7 @@
 |`src/app/importWorkspace.ts`|내보냈던 압축 파일을 읽어 폴더 구조째 문서를 다시 가져옴|
 |`src/app/InviteDialog.tsx`|문서나 폴더에 다른 사람을 초대하는 창|
 |`src/app/KanbanBoard.tsx`|칸반 문서를 칸과 카드로 늘어놓아 보여 주는 보드 화면 (F-2140)|
+|`src/app/kanbanDrag.ts`|칸반 카드를 끌 때 집을지, 놓을 자리, 옮길 위치, 가장자리 자동 스크롤 속도를 계산함 (F-2142)|
 |`src/app/kanbanView.ts`|칸반 문서를 열거나 보기를 고를 때 보드로 볼지 원문으로 볼지 정함 (F-2140)|
 |`src/app/leaveScreens.ts`|공유 관리·도움말·지도 같은 전용 화면이 열렸는지 보고 한 번에 닫음|
 |`src/app/leaveShare.ts`|공유받은 문서·폴더에서 나가기를 처리하고 결과 문구를 정함|
@@ -231,7 +232,7 @@
 |`src/app/useE2ee.ts`|암호 금고 잠금·열기와 관련 창 상태를 관리함|
 |`src/app/useE2eeConvert.ts`|문서를 암호 금고로 옮기거나 금고에서 꺼냄|
 |`src/app/useE2eeMigrate.ts`|로그인 전 금고 옮기기와 금고 잠그기·초기화 단계를 처리함|
-|`src/app/useEdgeSwipe.ts`|좁은 화면에서 손가락으로 밀어 사이드바를 여닫음|
+|`src/app/useEdgeSwipe.ts`|좁은 화면에서 손가락으로 밀어 사이드바를 여닫음. 칸반 카드를 끄는 동안은 건너뜀|
 |`src/app/useEditorSync.ts`|편집기와 화면을 맞추고 다른 문서의 제목·줄로 바로 이동함|
 |`src/app/useFolderActions.ts`|문서·폴더 삭제, 폴더 만들기, 한꺼번에 이동·고정을 처리함|
 |`src/app/useGithubFlow.ts`|GitHub 연결과 저장소에서 문서 가져오기 화면을 관리함|
@@ -251,7 +252,7 @@
 |`src/app/useNewDocTemplate.ts`|템플릿 목록을 읽고 새 문서 본문을 템플릿으로 채움|
 |`src/app/useNotifications.ts`|알림함 내용을 주기적으로 받아 오고 읽음 상태를 관리함|
 |`src/app/useNotificationsGlue.ts`|알림함 열고 닫기, 항목 이동, 안 읽음 점 표시를 연결함|
-|`src/app/useOutlineSwipe.ts`|휴대폰에서 화면을 밀어 목차 패널을 여닫게 함|
+|`src/app/useOutlineSwipe.ts`|휴대폰에서 화면을 밀어 목차 패널을 여닫게 함. 칸반 카드를 끄는 동안은 건너뜀|
 |`src/app/usePaletteOpen.ts`|명령 팔레트 열림·닫힘과 닫힌 뒤 실행할 명령을 관리함|
 |`src/app/usePanelDocs.ts`|오른쪽 패널의 링크·할 일 보기에 쓸 문서 목록을 읽음|
 |`src/app/usePeers.ts`|지금 같은 문서에 접속한 사람 목록을 알려 줌|

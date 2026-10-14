@@ -28,6 +28,11 @@ export function hasOpenDialog(): boolean {
   return document.querySelector('dialog[open]') != null
 }
 
+// 칸반 카드를 끄는 손가락은 밀기가 아니다 (F-2142 1장)
+export function isKanbanDragging(): boolean {
+  return document.querySelector('.kanban-board[data-dragging]') != null
+}
+
 // 시작 지점 조상 중 왼쪽으로 스크롤될 수 있는 요소가 있는가 (2.2 예외 — 표·코드 블록·가로 넘치는 이미지 등)
 function hasScrollableLeftAncestor(start: Element | null): boolean {
   let node: Element | null = start
@@ -115,7 +120,7 @@ export function useEdgeSwipe({ shellRef, sidebarRef, enabled, canOpen, sidebarOp
     function handleTouchEnd(e: TouchEvent) {
       const start = startRef.current
       startRef.current = null
-      if (!start || start.skip || composingRef.current || hasOpenDialog()) return
+      if (!start || start.skip || composingRef.current || hasOpenDialog() || isKanbanDragging()) return
       const touch = e.changedTouches[0]
       if (!touch) return
       const result = classifySwipe({
