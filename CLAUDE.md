@@ -157,6 +157,7 @@ Unit tests live under `tests/`, mirroring the source path: `tests/{source path}/
 - **Implementation prompts carry only the spec number and the `E2E_PORT` / `E2E_DIST` slots.** Judge with `npm run review -- F-xxx` then the related e2e. Use the tools in `scripts/` instead of ad-hoc scripts; propose a new tool when you see a repeat they do not cover
 - **A spec that leaves no real fork goes straight to implementation.** When every open question has a sound default, commit the spec, say so, and launch `ship-feature` in the same turn. What counts as a fork is in the `write-spec` skill, ch. 5
 - `e2e:one` search terms can be OR'd with `|`, e.g. `"F-225|F-212"`. Slots are `--port`/`--dist` or `E2E_PORT`/`E2E_DIST`
+- **The to-do list is the Rawdoc doc "rawdoc 요청사항 노트"** (`rawdoc find 요청사항` → `rawdoc get <id>`), not a kanban board. When an item there is fixed, move it to the done list per the note's own instructions
 
 ## Commit granularity
 
