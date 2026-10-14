@@ -74,6 +74,19 @@
   background: color-mix(in srgb, var(--ink) 5%, var(--panel));
 }
 
+/* `칸 추가` 로 생긴 칸은 튀어나오듯 펼쳐진다 — 메뉴 열림과 같은 곡선 (tweak 2026-10-14) */
+.kanban-lane--added {
+  transform-origin: left center;
+  transition: transform var(--transition-pop), opacity var(--transition-pop-fade);
+}
+
+@starting-style {
+  .kanban-lane--added {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
 .kanban-lane-head {
   display: flex;
   align-items: baseline;

@@ -462,7 +462,10 @@ export default function KanbanBoard({
             return (
               <Fragment key={isTargetLane ? `edit-${target.key}` : laneIndex}>
               {drag.marker?.kind === 'lane' && drag.marker.slot === laneIndex && <div className="kanban-lane-drop-marker" aria-hidden="true" />}
-              <section className={laneHeld ? 'kanban-lane kanban-lane--dragging' : 'kanban-lane'} aria-label={name}>
+              <section
+                className={`kanban-lane${laneHeld ? ' kanban-lane--dragging' : ''}${renaming && editing.added ? ' kanban-lane--added' : ''}`}
+                aria-label={name}
+              >
                 <header
                   className="kanban-lane-head"
                   onPointerDown={readOnly || renaming ? undefined : (e) => drag.start(e, { kind: 'lane', lane: laneIndex }, lane.headingFrom)}
