@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>표 기반 칸반 프로토타입</title>
+<style>
+  body { margin: 0; font: 14px/1.5 system-ui, sans-serif; color: #222; background: #fafafa; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
+  @media (max-width: 800px) { body { grid-template-columns: 1fr; } }
+  h2 { font-size: 13px; color: #777; margin: 0 0 8px; font-weight: 600; }
+  textarea { width: 100%; height: 360px; box-sizing: border-box; font: 13px/1.5 ui-monospace, monospace; border: 1px solid #ccc; border-radius: 6px; padding: 8px; }
+  .board { display: flex; gap: 10px; overflow-x: auto; align-items: flex-start; }
+  .lane { flex: 0 0 180px; background: #eee; border-radius: 6px; padding: 8px; min-height: 120px; }
+  .lane.over { outline: 2px dashed #888; }
+  .lane h3 { margin: 0 0 8px; font-size: 13px; display: flex; justify-content: space-between; }
+  .card { background: #fff; border: 1px solid #ddd; border-radius: 4px; padding: 6px 8px; margin-bottom: 6px; cursor: grab; white-space: pre-wrap; }
+  .card.dragging { opacity: .4; }
+  .note { grid-column: 1 / -1; color: #555; font-size: 13px; }
+  .note li { margin: 2px 0; }
+  .err { color: #a33; }
+</style>
+</head>
+<body>
+<section>
+  <h2>원문 (마크다운 표 — 열 = 칸, 행 = 그 줄의 카드)</h2>
+  <textarea id="src" spellcheck="false">| 할 일 | 진행 중 | 완료 |
+| --- | --- | --- |
+| 칸반 프로토타입 | CLI webp | 사이드바 메뉴 폭 |
+| 가져오기 메뉴 | | 서버비 결론 |
+| 도움말 글 | | |</textarea>
+</section>
+<section>
+  <h2>보드 (카드를 끌어 다른 칸으로 — 원문 표가 다시 쓰인다)</h2>
+  <div id="board" class="board"></div>
+  <p id="err" class="err"></p>
+</section>
+<div class="note">
+  <strong>판단할 것</strong>
+  <ul>
+    <li>표 모양: 열 하나가 칸 하나, 칸 안의 빈 셀은 무시. 카드 순서는 위에서 아래. 원문은 GFM 표 그대로라 다른 도구에서도 표로 읽힌다</li>
+    <li>카드를 옮기면 그 칸의 카드들을 위로 채우고 표를 다시 쓴다 → 열 폭 정렬·빈 줄 수가 바뀐다. "원문 보존" 원칙과 부딪히는 지점</li>
+    <li>셀 안에는 한 줄만 들어간다(파이프 <code>|</code>는 <code>\|</code>로 이스케이프). 카드 설명·체크리스트·담당자는 표로는 못 담는다</li>
+    <li>대안: 제목(<code>## 할 일</code>) + 목록(<code>- 카드</code>) 구조는 여러 줄 카드·원문 보존에 더 유리하다</li>
+    <li>실제 앱에선 편집기 장식(decoration)으로 표 위에 보드를 그리고, 옮기기는 Y.Text 트랜잭션 한 번으로 끝낸다</li>
+  </ul>
+</div>
+<script>
+const src = document.getElementById('src')
+const board = document.getElementById('board')
+const err = document.getElementById('err')
+
+function splitRow(line) {
+  const t = line.trim().replace(/^\|/, '').replace(/\|$/, '')
+  return t.split(/(?<!\\)\|/).map((c) => c.trim())
+}
+
+function parse(text) {
+  const lines = text.split('\n').filter((l) => l.trim() !== '')
+  if (lines.length < 2 || !/^\s*\|?\s*:?-{3,}/.test(lines[1])) throw new Error('첫 두 줄이 표 머리·구분선이어야 합니다')
+  const heads = splitRow(lines[0])
+  const lanes = heads.map((h) => ({ title: h, cards: [] }))
+  for (const line of lines.slice(2)) {
+    splitRow(line).forEach((cell, i) => { if (cell && lanes[i]) lanes[i].cards.push(cell) })
+  }
+  return lanes
+}
+
+function serialize(lanes) {
+  const rows = Math.max(0, ...lanes.map((l) => l.cards.length))
+  const widths = lanes.map((l) => Math.max(3, [...l.title].length, ...l.cards.map((c) => [...c].length)))
+  const pad = (s, w) => s + ' '.repeat(w - [...s].length)
+  const line = (cells) => '| ' + cells.map((c, i) => pad(c, widths[i])).join(' | ') + ' |'
+  const out = [line(lanes.map((l) => l.title)), '| ' + widths.map((w) => '-'.repeat(w)).join(' | ') + ' |']
+  for (let r = 0; r < rows; r++) out.push(line(lanes.map((l) => l.cards[r] ?? '')))
+  return out.join('\n')
+}
+
+let drag = null
+
+function render() {
+  let lanes
+  try { lanes = parse(src.value); err.textContent = '' } catch (e) { err.textContent = e.message; return }
+  board.replaceChildren()
+  lanes.forEach((lane, li) => {
+    const el = document.createElement('div')
+    el.className = 'lane'
+    el.innerHTML = '<h3></h3>'
+    el.querySelector('h3').textContent = `${lane.title} · ${lane.cards.length}`
+    lane.cards.forEach((card, ci) => {
+      const c = document.createElement('div')
+      c.className = 'card'
+      c.draggable = true
+      c.textContent = card
+      c.addEventListener('dragstart', () => { drag = { li, ci }; c.classList.add('dragging') })
+      c.addEventListener('dragend', () => c.classList.remove('dragging'))
+      el.appendChild(c)
+    })
+    el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('over') })
+    el.addEventListener('dragleave', () => el.classList.remove('over'))
+    el.addEventListener('drop', (e) => {
+      e.preventDefault()
+      el.classList.remove('over')
+      if (!drag || drag.li === li) return
+      const [moved] = lanes[drag.li].cards.splice(drag.ci, 1)
+      lanes[li].cards.push(moved)
+      drag = null
+      src.value = serialize(lanes)
+      render()
+    })
+    board.appendChild(el)
+  })
+}
+
+src.addEventListener('input', render)
+render()
+</script>
+</body>
+</html>
