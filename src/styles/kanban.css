@@ -19,15 +19,15 @@
   padding: 0;
 }
 
-/* 편집기 자리를 통째로 쓴다 — 세로는 보드가, 가로는 칸 줄이 스크롤한다 */
+/* 편집기 자리를 통째로 쓴다 — 칸 줄이 남은 높이를 채워 가로 스크롤바가 늘 아래에, 세로는 칸 안에서 (tweak 2026-10-14) */
 .kanban-board {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  overflow-y: auto;
-  padding: var(--doc-pad-top) 24px 32px;
+  overflow-y: hidden;
+  padding: var(--doc-pad-top) 24px 16px;
   background: var(--panel);
   outline: none;
 }
@@ -73,6 +73,8 @@
 }
 
 .kanban-lanes {
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: flex-start;
   justify-content: safe center;
@@ -86,6 +88,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 100%;
+  min-height: 0;
   padding: 10px;
   border-radius: var(--radius-dialog);
   background: color-mix(in srgb, var(--ink) 5%, var(--panel));
@@ -143,12 +147,16 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 여백은 잘리는 표지·포커스 테두리 몫 */
 .kanban-cards {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 0;
-  padding: 0;
+  min-height: 0;
+  margin: 0 -4px;
+  padding: 6px 4px;
+  overflow: hidden auto;
+  overscroll-behavior-y: contain;
   list-style: none;
 }
 
@@ -422,9 +430,7 @@
 /* ===== 휴대폰 폭 보드 (F-2142 4장) — 칸은 화면 85%(최대 320px), 한 칸씩 멈추고 다음 칸 끝이 보인다 ===== */
 @media (max-width: 600px) {
   .kanban-board {
-    overflow-y: hidden;
     padding-inline: 0;
-    padding-bottom: 16px;
   }
 
   .kanban-head,
@@ -433,8 +439,6 @@
   }
 
   .kanban-lanes {
-    flex: 1;
-    min-height: 0;
     padding-inline: 16px;
     scroll-padding-inline: 16px;
     scroll-snap-type: x mandatory;
@@ -447,18 +451,7 @@
 
   .kanban-lane {
     flex-basis: min(85vw, 320px);
-    max-height: 100%;
-    min-height: 0;
     scroll-snap-align: start;
-  }
-
-  /* 칸 목록은 그 칸 안에서 세로로 스크롤한다 — 가로 밀기는 칸 줄로 넘긴다. 여백은 잘리는 표지·포커스 테두리 몫 */
-  .kanban-cards {
-    min-height: 0;
-    margin-inline: -4px;
-    padding: 6px 4px;
-    overflow: hidden auto;
-    overscroll-behavior-y: contain;
   }
 
   .kanban-add-lane {
