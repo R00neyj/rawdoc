@@ -18,6 +18,7 @@ A source-preserving Markdown collaboration tool. Typing `##` does not make the m
    - **Small change** — any other feature or behavior change: new buttons, dialogs, screens, CLI commands, API routes, D1 migrations. Main builds it directly (logic still TDD, App.tsx growth still ≤30 lines, e2e still at most 3), updates any `ia.md` / `design.md` / `architecture.md` line it changes, and leaves one line in `specs/small-changes.md`
    - **Guide article** — `content/guides/*.md` plus its help section. Goes through the `write-guide` skill
    - Reusing an existing secure path from a new entry point (e.g. dropping onto a vault folder calls the existing move-to-vault flow) is a small change; changing how that path encrypts, stores keys or checks access is security
+4. **A new feature that adds or changes a screen draws its UX flow first** — spec or small change alike (not tweaks, server-only or security-internal work). Main writes `specs/wireframes/{F-xxx or slug}-flow.html` (entry points → steps → branches/errors → decisions to make), opens it in the browser, and builds or specs only after the user settles the flow. A spec then links that file and carries a short "사용자 흐름" chapter tying each step to its acceptance criteria
 
 ## How we work
 
@@ -54,7 +55,7 @@ Overrides "match the surrounding code" — older multi-line blocks are not prece
 | `specs/map.md` | Mermaid map of every page, screen, dialog and feature group, plus the mobile review checklist. Derived from `ia.md` and the code, not a source of truth | By main, when a screen, layer or entry route is added or removed |
 | `specs/files.md` | One plain-Korean line per `.ts`/`.tsx` source file (tests excluded), readable by non-developers. Derived from the code, not a source of truth | By main, when a source file is added, removed or changes role |
 | `specs/notes.md` | Discussion notes before anything becomes a spec. Move into `product.md` or an `F-xxx.md` once settled, and delete here | Freely |
-| `specs/wireframes/` | Grayscale HTML wireframes (and their image assets) shown to the user before building a screen. Not a source of truth; assets move to `public/` when implemented | Freely |
+| `specs/wireframes/` | Grayscale HTML wireframes and UX flow pages (`*-flow.html`, Direction 4) shown to the user before building a screen, plus their image assets. Not a source of truth; assets move to `public/` when implemented | Freely |
 | `content/` | Public-site article sources, `.md` (F-272). `site/` reads them | Per spec |
 | `site/` | Public-site build — articles → HTML, 404, sitemap, robots (F-272). `src/` never imports from here | Per spec |
 | `e2e/` | Playwright E2E tests (F-150) | Per spec |

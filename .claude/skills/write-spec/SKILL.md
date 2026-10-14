@@ -19,6 +19,7 @@ Korean copy: `.claude/ko/skills/write-spec/SKILL.ko.md` (snapshot, for humans). 
 4. Check whether `specs/product.md` records the feature as **out of scope**. If it does, have the prompt list it under "갱신 대상" (the agent cannot edit existing `specs/**`)
 5. **Look for file overlap.** Specs touching the same source file can still run in parallel (each writes its own `F-xxx.md`), but tell both prompts about it so they do not make contradictory decisions
 6. **Help sections.** A spec that grows a help section (`src/app/helpDoc.ts`) follows the rules in `specs/ia.md` 6.1 (F-2039) and adds its number rows to the tests R5 names — say so in the prompt. **Guide articles get no spec** (ia.md 6.1 R9, 2026-09-27) — use `write-guide` instead
+7. **UX flow first** (`CLAUDE.md` "Direction" 4). If the feature adds or changes a screen, write `specs/wireframes/F-xxx-flow.html` yourself — entry points, steps, branches and errors, decisions to make — open it in the browser, and settle it with the user before launching the agent. Name the file in the prompt under "사용자가 이미 정한 것"
 
 ## 2. Launching the agent
 

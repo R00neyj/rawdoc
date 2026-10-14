@@ -53,6 +53,7 @@ A spec decides **what and why**. The implementer decides **how**. So a code bloc
 - **YAML frontmatter at the top** — the format and `status` values are in `CLAUDE.md` "Spec frontmatter". A new spec is usually `status: draft` (not yet up for approval) or `pending` (ready to request approval), with no `implemented` line. When done, check the format with `npm run specs -- --check`
 - Chapter 1 **file-ownership table** (first column is a backticked path; `npm run review -- F-xxx` reads it. The heading may be "파일 소유", "수정 파일", or "바꾸는 파일"). **Do not duplicate it into the frontmatter**
 - Requirements — detection, behavior, states, empty state, errors, accessibility
+- **사용자 흐름** — when the prompt names a `specs/wireframes/*-flow.html`, link it and add a short chapter mapping each flow step (entry points, branches, errors) to its acceptance criteria. Do not redraw the flow; if the flow and the code disagree, raise it under 열린 질문
 - An **acceptance criteria table** (A1, A2…). Each row must be judgeable by an automated test or a human check
 - **Regressions in existing tests** — `grep` for the existing e2e and unit tests this change would break, and write the file, line, and what to change. Missing these blocks the whole implementation
 - **갱신 대상** — which existing documents need changing, down to the chapter. Do not change them yourself
