@@ -275,11 +275,11 @@ export function moveCardChanges(
   return [del, ins].sort((a, b) => a.from - b.from)
 }
 
-export function addCardChange(text: string, lane: number, cardText: string): KanbanChange | null {
+export function addCardChange(text: string, lane: number, cardText: string, check = false): KanbanChange | null {
   const t = cardText.trim()
   const l = parseKanban(text)[lane]
   if (!l || t === '') return null
-  return insertChange(text, l, l.cards, l.cards.length, `- ${t}`)
+  return insertChange(text, l, l.cards, l.cards.length, check ? `- [ ] ${t}` : `- ${t}`)
 }
 
 export function addLaneChange(text: string, title: string): KanbanChange {

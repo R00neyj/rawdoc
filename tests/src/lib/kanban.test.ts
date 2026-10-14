@@ -188,6 +188,7 @@ describe('F-2139 U7 단건 변경', () => {
     expect(apply(t, addCardChange(t, 1, 'z'))).toBe('## A ##\n\n- a\n- [ ] b\n- [x] c\n\n## B\n- z\n')
     expect(addCardChange(t, 0, '   ')).toBeNull()
     expect(addCardChange(t, 5, 'x')).toBeNull()
+    expect(apply(t, addCardChange(t, 1, ' z ', true))).toBe('## A ##\n\n- a\n- [ ] b\n- [x] c\n\n## B\n- [ ] z\n')
   })
   it('addLaneChange', () => {
     expect(apply('## A\n', addLaneChange('## A\n', '새 칸'))).toBe('## A\n\n## 새 칸\n')

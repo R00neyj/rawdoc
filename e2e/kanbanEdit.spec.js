@@ -42,7 +42,7 @@ test('F-2141 E1 카드 추가가 그 칸 마지막 카드 다음 줄에 들어�
 
   await sourceButton(page).click()
   await expect(page.locator('.editor-slot')).toBeVisible()
-  expect((await readSavedContent(page, docId)).content).toContain('- [ ] 체크 카드\n- 회의 준비\n\n## 진행 중')
+  expect((await readSavedContent(page, docId)).content).toContain('- [ ] 체크 카드\n- [ ] 회의 준비\n\n## 진행 중')
 
   await boardButton(page).click()
   await lane(page, '할 일').locator('.kanban-card').first().focus()
@@ -51,7 +51,7 @@ test('F-2141 E1 카드 추가가 그 칸 마지막 카드 다음 줄에 들어�
   expect((await readSavedContent(page, docId)).content).not.toContain('회의 준비')
   await page.keyboard.press('Control+Shift+z')
   await expect(lane(page, '할 일').locator('.kanban-card-text')).toHaveText(['첫 카드', '체크 카드', '회의 준비'])
-  expect((await readSavedContent(page, docId)).content).toContain('- [ ] 체크 카드\n- 회의 준비\n\n## 진행 중')
+  expect((await readSavedContent(page, docId)).content).toContain('- [ ] 체크 카드\n- [ ] 회의 준비\n\n## 진행 중')
 })
 
 test('F-2141 E2 칸 이름·체크·카드 글자·칸 추가가 그 자리만 바꾸고 새로고침 뒤에도 남는다', async ({ page }) => {
@@ -146,7 +146,7 @@ test('F-2141 E3 실시간 두 창 — 카드 추가가 상대 보드에 보이�
     const cdp = await fakeImeCompose(b.page, '한')
 
     await addCard(a.page, '할 일', '위 카드')
-    await expect.poll(() => room.content(DOC)).toContain('- 위 카드')
+    await expect.poll(() => room.content(DOC)).toContain('- [ ] 위 카드')
     await b.page.waitForTimeout(300)
     await expect(lane(b.page, '할 일').locator('.kanban-card-text')).toHaveText(['첫 카드', '체크 카드'])
 
@@ -155,7 +155,7 @@ test('F-2141 E3 실시간 두 창 — 카드 추가가 상대 보드에 보이�
     await expect(cardInput).toHaveValue('끝난 카드한')
     await cardInput.press('Enter')
 
-    await expect.poll(() => room.content(DOC)).toContain('- [ ] 체크 카드\n- 위 카드\n\n## 진행 중\n- [x] 끝난 카드한\n')
+    await expect.poll(() => room.content(DOC)).toContain('- [ ] 체크 카드\n- [ ] 위 카드\n\n## 진행 중\n- [x] 끝난 카드한\n')
     await expect(lane(a.page, '진행 중').locator('.kanban-card-text')).toHaveText(['끝난 카드한', '새 카드 A'])
   } finally {
     await a.context.close()

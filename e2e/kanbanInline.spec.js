@@ -19,7 +19,7 @@ test('칸반 A1 새 카드 입력칸에서 [[ 가 짝으로 닫히고, 카드의
   await expect(input).toHaveValue('[[회의록]]')
   await input.press('Enter')
   await input.press('Escape')
-  expect((await readSavedContent(page, boardId)).content).toContain('- 둘째 카드\n- [[회의록]]\n')
+  expect((await readSavedContent(page, boardId)).content).toContain('- 둘째 카드\n- [ ] [[회의록]]\n')
 
   await lane(page, '할 일').locator('.kanban-card-text a.wikilink', { hasText: '회의록' }).click()
   await expect.poll(() => currentDocId(page)).toBe(target)

@@ -1,12 +1,29 @@
-// 설정 `칸반` 탭 — 지금 연 보드의 완료 칸. 바꾸면 원문 프런트매터 `kanban-done` 에 바로 쓴다 (small 2026-10-14)
+// 설정 `칸반` 탭 — 새 카드 체크 칸(기기별)과 지금 연 보드의 완료 칸(원문 `kanban-done`) (small 2026-10-14)
+import { useState } from 'react'
+import { getPref, setPref } from './prefs'
 import type { KanbanSettings } from './useKanbanSettings'
 
 export default function KanbanSettingsTab({ settings }: { settings: KanbanSettings }) {
+  const [newCardCheck, setNewCardCheck] = useState(() => getPref('md.kanbanNewCardCheck', 'on') === 'on')
+  const checkField = (
+    <label className="dialog-field">
+      <input
+        type="checkbox"
+        checked={newCardCheck}
+        onChange={(e) => {
+          setNewCardCheck(e.target.checked)
+          setPref('md.kanbanNewCardCheck', e.target.checked ? 'on' : 'off')
+        }}
+      />
+      새 카드에 체크 칸 달기
+    </label>
+  )
   const { choices } = settings
-  if (!settings.isKanban) return <p className="dialog-note">칸반 보드를 열면 설정할 수 있습니다</p>
-  if (!choices) return <p className="dialog-note">칸이 없습니다. ## 로 시작하는 줄 하나가 칸 하나가 됩니다.</p>
+  if (!settings.isKanban) return <>{checkField}<p className="dialog-note">칸반 보드를 열면 완료 칸을 설정할 수 있습니다</p></>
+  if (!choices) return <>{checkField}<p className="dialog-note">칸이 없습니다. ## 로 시작하는 줄 하나가 칸 하나가 됩니다.</p></>
   return (
     <>
+      {checkField}
       <div className="dialog-field">
         <span id="kanban-done-label">완료 칸</span>
         <select

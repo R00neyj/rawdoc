@@ -12,6 +12,7 @@ import {
   renameLaneChange, toggleCardChange, toggleCheckChange, type KanbanLane,
 } from '../lib/kanban'
 import { IconMore } from './icons'
+import { getPref } from './prefs'
 import {
   KANBAN_LONG_PRESS_MS, dropSlot, edgeScroll, keyMoveTarget, laneMoveTarget, mapCardPos, moveTarget, neighborCard, pickupState, type KanbanDir,
 } from './kanbanDrag'
@@ -209,7 +210,7 @@ export default function KanbanBoard({
       lost()
       return false
     }
-    apply(addCardChange(at.text, at.lane, value), 'kanban.add')
+    apply(addCardChange(at.text, at.lane, value, getPref('md.kanbanNewCardCheck', 'on') === 'on'), 'kanban.add')
     return true
   }
 

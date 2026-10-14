@@ -20,6 +20,8 @@ type PrefMap = {
   'md.startScreen': 'home' | 'last' | 'doc'
   // 시작 화면 `문서 지정` 의 문서 id, 기기별 (small 2026-10-14)
   'md.startDocId': string
+  // 칸반 새 카드에 체크 칸을 달지, 기기별 (small 2026-10-14)
+  'md.kanbanNewCardCheck': 'on' | 'off'
   'md.toolbar': 'on' | 'off'
   'md.landingDone': '1'
   'md.mapView': string
@@ -86,6 +88,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.localMigrated',
   'md.startScreen',
   'md.startDocId',
+  'md.kanbanNewCardCheck',
   'md.toolbar',
   'md.landingDone',
   'md.mapView',
