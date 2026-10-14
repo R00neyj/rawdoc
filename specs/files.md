@@ -366,7 +366,7 @@
 |`src/viewer/viewFindDom.ts`|보기 모드에서 찾은 글자를 강조하고 그 위치로 스크롤함|
 |`src/viewer/viewFindMatch.ts`|보기 모드 찾기에서 검색어와 맞는 곳을 계산함|
 
-## `src/lib/` 공통 규칙 (75)
+## `src/lib/` 공통 규칙 (76)
 
 여러 화면이 함께 쓰는 계산과 판단
 
@@ -412,6 +412,7 @@
 |`src/lib/imageBlock.ts`|그림 줄을 만들고 읽어 정렬·크기를 바꿈|
 |`src/lib/imageFile.ts`|그림 파일의 종류와 가로·세로 크기를 알아냄|
 |`src/lib/imageMarkdown.ts`|표준 마크다운 그림 줄을 읽고 만들고 고침|
+|`src/lib/kanban.ts`|칸반 문서 원문에서 칸·카드를 읽고, 카드 옮기기·추가·고치기를 바뀌는 줄만으로 계산함|
 |`src/lib/lineEnding.ts`|파일의 줄바꿈 방식을 알아내고 바꿈|
 |`src/lib/localGraph.ts`|지금 문서 주변의 연결 문서를 모아, 지도 장면 모양으로 바꾸거나 평면 관계도 자리를 계산함|
 |`src/lib/mapCamera.ts`|3D 지도를 볼 시점의 거리와 확대 한계를 계산함|
