@@ -112,6 +112,14 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     run: (ctx) => ctx.docActions?.newDoc(),
   },
   {
+    id: 'kanban.new',
+    kind: 'action',
+    label: '새 칸반 보드',
+    keywords: ['kanban', '칸반', '보드', 'board', '할 일', 'todo', '작업'],
+    when: (ctx) => Boolean(ctx.docActions?.newBoard),
+    run: (ctx) => ctx.docActions?.newBoard?.(),
+  },
+  {
     id: 'folder.new',
     kind: 'action',
     label: '새 폴더',
@@ -330,7 +338,7 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     kind: 'action',
     label: '편집 모드로 전환',
     keywords: ['편집', 'edit', 'live', '모드', 'mode', '라이브'],
-    when: (ctx) => ctx.view?.mode === 'raw' || ctx.view?.mode === 'view',
+    when: (ctx) => ctx.view?.mode === 'raw' || ctx.view?.mode === 'view' || Boolean(ctx.kanban?.shown),
     run: (ctx) => ctx.view?.setMode('live'),
   },
   {
@@ -338,7 +346,7 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     kind: 'action',
     label: '원문 모드로 전환',
     keywords: ['원문', 'raw', 'source', '소스', '마크다운', 'markdown', '코드', '모드', 'mode'],
-    when: (ctx) => ctx.view?.mode === 'live' || ctx.view?.mode === 'view',
+    when: (ctx) => ctx.view?.mode === 'live' || ctx.view?.mode === 'view' || Boolean(ctx.kanban?.shown),
     run: (ctx) => ctx.view?.setMode('raw'),
   },
   {
@@ -346,8 +354,16 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     kind: 'action',
     label: '보기 모드로 전환',
     keywords: ['보기', 'view', 'read', '읽기', '읽기 전용', '모드', 'mode', '미리보기', 'preview'],
-    when: (ctx) => ctx.view?.mode === 'live' || ctx.view?.mode === 'raw',
+    when: (ctx) => ctx.view?.mode === 'live' || ctx.view?.mode === 'raw' || Boolean(ctx.kanban?.shown),
     run: (ctx) => ctx.view?.setMode('view'),
+  },
+  {
+    id: 'kanban.show',
+    kind: 'action',
+    label: '보드로 보기',
+    keywords: ['kanban', '칸반', '보드', 'board', '보기', '목록', '모드'],
+    when: (ctx) => Boolean(ctx.kanban?.canShow),
+    run: (ctx) => ctx.kanban?.show(),
   },
   {
     id: 'view.sidebar',

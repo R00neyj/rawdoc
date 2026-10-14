@@ -9,6 +9,8 @@ import { insertTextAtSelection } from '../editor/insertDateTime'
 import { isComposing } from '../editor/composition'
 import type { EditorHandle } from '../editor/Editor'
 import { toEditorText } from '../lib/lineEnding'
+import { isKanbanDoc } from '../lib/kanban'
+import type { UseKanbanViewResult } from './useKanbanView'
 import { GUIDES_PATH } from '../lib/siteChrome'
 import type { ShareDoc } from '../lib/shareCodec'
 import { editorCommandGates, type EditorCommandGates } from './contextMenuItems'
@@ -110,6 +112,8 @@ export type UseCommandPaletteOptions = {
   toggleRightPanel?: () => void
   openHelp: () => Promise<void>
   createNewDoc: (folderId?: string | null) => Promise<void>
+  createNewBoard: (folderId?: string | null) => Promise<void>
+  kanban: Pick<UseKanbanViewResult, 'isKanban' | 'boardShown' | 'showBoard'>
   createDocFromPalette: (plan: PaletteCreatePlan) => Promise<void>
   openDocFromSearch: (id: string, term: string | null) => Promise<void>
   newDocFolderId: () => string | null
@@ -130,8 +134,8 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     narrow, sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebar, closeSidebarIfNarrow, themePref, lineNumbersPref, toolbarPref,
     wikiPreviewPref, changeTheme, changeLineNumbers, changeToolbar, changeWikiPreview, handleExportDoc, handleExportDocAsText,
     handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, github, handleTogglePin, requestMoveDoc, requestDeleteDoc,
-    getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createDocFromPalette,
-    openDocFromSearch, newDocFolderId, changeViewMode, openTemplates, rightPanelOpen, toggleRightPanel,
+    getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createNewBoard, createDocFromPalette,
+    openDocFromSearch, newDocFolderId, changeViewMode, openTemplates, rightPanelOpen, toggleRightPanel, kanban,
   } = options
   // 본문에서 연 팔레트만 서식·단락·삽입을 보인다 — 연 순간의 문서와 가능 여부 (F-2055 4.1)
   const [paletteEditor, setPaletteEditor] = useState<{ docId: string | null; disabled: EditorCommandGates } | null>(null)
@@ -222,6 +226,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
 
     const view = editorRef.current?.view
     if (!view) return
+    const wasKanban = kanban.isKanban
     const substituted = expandTemplateVariables(toEditorText(rawText), { title: currentDoc?.title ?? '', now: new Date() })
     const result = insertTemplateIntoEditor({ state: view.state, dispatch: (tr) => view.dispatch(tr) }, substituted)
 
@@ -231,6 +236,8 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
       showNotice({ type: 'info', message: '템플릿 속성을 문서 속성에 합치지 못해 본문만 넣었습니다.' })
     }
 
+    // 칸반 틀을 넣어 문서가 처음 칸반이 되면 보드로 연다 (F-2143 2장)
+    if (result.inserted && !wasKanban && isKanbanDoc(view.state.doc.toString())) return kanban.showBoard()
     // Dialog 가 닫는 요소로 포커스를 돌리는 비동기 처리(close 이벤트)를 이겨야 한다 — openDocFromSearch 와 같은 방식 (5.7-7)
     setTimeout(() => editorRef.current?.focus(), 0)
   }
@@ -374,6 +381,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     },
     docActions: {
       newDoc: () => runAfterPaletteClose(() => void createNewDoc()),
+      newBoard: () => runAfterPaletteClose(() => void createNewBoard()),
       newFolder: () =>
         runAfterPaletteClose(() => {
           if (narrow) setSidebarOpen(true)
@@ -395,6 +403,11 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
                 runAfterPaletteClose(() => requestDeleteDoc({ id: currentDoc.id, title: paletteCurrentDocTitle })),
             }
           : undefined,
+    },
+    kanban: {
+      shown: kanban.boardShown,
+      canShow: palettePresentDocScreen && currentDoc?.e2ee !== 'locked' && openDoc?.id === currentDocId && !kanban.boardShown && (kanban.isKanban || !isReadOnlyDoc),
+      show: () => runAfterPaletteClose(kanban.showBoard),
     },
     view: {
       mode: docScreenId !== null && currentDoc?.e2ee !== 'locked' ? (viewMode as PaletteViewMode) : null,

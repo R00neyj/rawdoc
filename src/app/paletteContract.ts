@@ -56,6 +56,7 @@ export type PaletteContext = {
     newDoc: () => void
     newFolder: () => void
     importDoc: () => void
+    newBoard?: () => void
     current?: {
       owned: boolean
       pinned: boolean
@@ -65,6 +66,8 @@ export type PaletteContext = {
       remove: () => void
     }
   }
+  // 칸반 보드 보기 — 선택 필드. 없으면 `보드로 보기` 가 안 보인다 (F-2143 3장)
+  kanban?: { shown: boolean; canShow: boolean; show: () => void }
   // GitHub 가져오기·새 파일·당기기·푸시 — 선택 필드. 기능이 켜졌을 때만 준다 (F-2128 6장)
   github?: { importFile: () => void; newFile: () => void; pull?: () => void; push?: () => void }
   // 보기 설정 — 선택 필드. 없으면 모드·사이드바·테마·토글 명령들이 안 보인다 (F-2054 4.1)

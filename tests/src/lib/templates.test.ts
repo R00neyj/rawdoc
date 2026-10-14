@@ -14,6 +14,7 @@ import {
   type TemplateEntry,
 } from '../../../src/lib/templates'
 import { BUILTIN_TEMPLATES } from '../../../src/lib/builtinTemplates'
+import { isKanbanDoc } from '../../../src/lib/kanban'
 import type { FolderLike } from '../../../src/lib/folderTree'
 
 describe('isTemplateFolderName — 4.2', () => {
@@ -233,8 +234,8 @@ describe('newDocTemplateOptions — F-2037 U3', () => {
 
   it('ⓐ pref none, 내장만', () => {
     const options = newDocTemplateOptions('none', builtinOnly)
-    expect(options.map((o) => o.label)).toEqual(['없음', '회의록', '일일 노트', '버그 보고', '주간 회고'])
-    expect(options.map((o) => o.group)).toEqual(['none', 'builtin', 'builtin', 'builtin', 'builtin'])
+    expect(options.map((o) => o.label)).toEqual(['없음', '회의록', '일일 노트', '버그 보고', '주간 회고', '칸반'])
+    expect(options.map((o) => o.group)).toEqual(['none', 'builtin', 'builtin', 'builtin', 'builtin', 'builtin'])
   })
 
   it('ⓑ pref doc:1, 사용자 템플릿 둘 + 내장', () => {
@@ -244,14 +245,14 @@ describe('newDocTemplateOptions — F-2037 U3', () => {
       ...builtinOnly,
     ]
     const options = newDocTemplateOptions('doc:1', entries)
-    expect(options.map((o) => o.label)).toEqual(['없음', '회의록', '일일 노트', '버그 보고', '주간 회고', '가 (템플릿 / 회의)', '주간 보고 (템플릿)'])
-    expect(options.map((o) => o.group)).toEqual(['none', 'builtin', 'builtin', 'builtin', 'builtin', 'user', 'user'])
+    expect(options.map((o) => o.label)).toEqual(['없음', '회의록', '일일 노트', '버그 보고', '주간 회고', '칸반', '가 (템플릿 / 회의)', '주간 보고 (템플릿)'])
+    expect(options.map((o) => o.group)).toEqual(['none', 'builtin', 'builtin', 'builtin', 'builtin', 'builtin', 'user', 'user'])
   })
 
   it('ⓒ pref doc:9(없음) — 맨 끝에 찾을 수 없는 템플릿', () => {
     const options = newDocTemplateOptions('doc:9', builtinOnly)
     expect(options.at(-1)).toEqual({ value: 'doc:9', label: '찾을 수 없는 템플릿', group: 'missing' })
-    expect(options).toHaveLength(6)
+    expect(options).toHaveLength(7)
   })
 })
 
@@ -339,5 +340,24 @@ describe('withoutTemplateFolders — 검색·지도 목록에서 템플릿 빼�
     const wrapped = withoutTemplateFolders(source)
     expect((await wrapped.list()).map((d) => d.id)).toEqual(['3', '4'])
     expect((await wrapped.listFolders()).map((f) => f.id)).toEqual(['W'])
+  })
+})
+
+describe('내장 칸반 템플릿 — U3 (F-2143)', () => {
+  it('listTemplates 끝 항목이 builtin:kanban', () => {
+    const entries = listTemplates({ folders: [], docs: [] })
+    expect(entries[entries.length - 1].id).toBe('builtin:kanban')
+  })
+
+  it('프론트매터가 있는 문서에 넣으면 title 과 kanban: true 가 함께 남고 칸반 문서가 된다', () => {
+    const body = BUILTIN_TEMPLATES.find((t) => t.key === 'kanban')!.body
+    const plan = planTemplateInsert('---\ntitle: a\n---\n본문', body)
+    expect(plan.frontmatterChange).not.toBeNull()
+    const { from, to, insert } = plan.frontmatterChange!
+    const text = '---\ntitle: a\n---\n본문'
+    const merged = text.slice(0, from) + insert + text.slice(to ?? from)
+    expect(merged).toContain('title: a')
+    expect(merged).toContain('kanban: true')
+    expect(isKanbanDoc(merged)).toBe(true)
   })
 })

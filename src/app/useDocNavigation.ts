@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { ancestorsOfDoc, resolveTargetFolderId } from '../lib/folderTree'
 import { fromEditorText } from '../lib/lineEnding'
+import { KANBAN_NEW_DOC_TEXT } from '../lib/kanban'
 import { getPref, setPref } from './prefs'
 import { e2eeCreateErrorMessage } from './appNotices'
 import { stripContent, sortByUpdatedAtDesc, type DocMeta, type OpenDoc } from './docMeta'
@@ -77,6 +78,7 @@ export type UseDocNavigationResult = {
   saveCurrentAsNewDoc: () => Promise<void>
   createDoc: (input: CreateDocInput) => Promise<boolean>
   createNewDoc: (folderId?: string | null) => Promise<void>
+  createNewBoard: (folderId?: string | null) => Promise<void>
   createDocFromPalette: (plan: PaletteCreatePlan) => Promise<void>
   selectDoc: (id: string) => Promise<void>
   goHome: () => Promise<void>
@@ -185,6 +187,16 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
       title: '제목 없는 문서',
       focus: 'title',
       content: () => buildNewDocContent({ title: '', emptyTitle: 'keep-empty' }),
+    })
+  }
+
+  // 새 문서 템플릿 설정은 쓰지 않는다 — 보드 틀 고정 (F-2143 2장)
+  async function createNewBoard(folderId?: string | null) {
+    await createDoc({
+      folderId: folderId ?? null,
+      title: '제목 없는 보드',
+      focus: 'title',
+      content: async () => ({ content: fromEditorText(KANBAN_NEW_DOC_TEXT, 'crlf'), failed: false }),
     })
   }
 
@@ -407,7 +419,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
   }
 
   return {
-    saveCurrentAsNewDoc, createDoc, createNewDoc, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
+    saveCurrentAsNewDoc, createDoc, createNewDoc, createNewBoard, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
     handleOpenWikiLink, importSharedDoc, closeSharedDoc, openDocFromSearch, openHelp, openMap, closeMap, recenterMap, copyHelpToDoc,
   }
 }

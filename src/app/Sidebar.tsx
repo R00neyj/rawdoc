@@ -35,6 +35,7 @@ import { leaveTargetOfDoc, leaveTargetOfFolder, type LeaveShareTarget } from './
 import {
   IconChevron,
   IconNoteAdd,
+  IconKanban,
   IconFolderAdd,
   IconUpload,
   IconSearch,
@@ -123,6 +124,7 @@ type SidebarCtx = {
   onToggleFolder: (id: string) => void
   onSelectDoc: (id: string) => void
   onCreateDoc: (folderId?: string | null) => void
+  onCreateBoard: (folderId: string) => void
   onCreateFolder: (parentId: string | null) => void
   onStartRename: (id: string, name: string) => void
   onEditingValueChange: (value: string) => void
@@ -284,6 +286,7 @@ function FolderRow({
   const ownItems: FolderMenuItem[] = [
     { key: 'new-doc', label: '새 문서', icon: IconNoteAdd, onSelect: () => ctx.onCreateDoc(node.id) },
     { key: 'new-subfolder', label: '하위 폴더', icon: IconFolderAdd, onSelect: () => ctx.onCreateFolder(node.id) },
+    { key: 'new-board', label: '새 칸반 보드', icon: IconKanban, onSelect: () => ctx.onCreateBoard(node.id) },
   ]
   ownItems.push({ key: 'rename', label: '이름 변경', icon: IconEdit, onSelect: () => ctx.onStartRename(node.id, node.name) })
   ownItems.push({
@@ -812,6 +815,7 @@ type SidebarProps = {
   onCollapseAllFolders: () => void
   onSelectDoc: (id: string) => void
   onCreateDoc: (folderId?: string | null) => void
+  onCreateBoard: (folderId: string) => void
   onImportDoc: () => void
   onCreateFolder: (parentId: string | null) => Promise<{ id: string; name: string } | null>
   onRenameFolder: (id: string, name: string) => void
@@ -871,6 +875,7 @@ export default function Sidebar({
   onCollapseAllFolders,
   onSelectDoc,
   onCreateDoc,
+  onCreateBoard,
   onImportDoc,
   onCreateFolder,
   onRenameFolder,
@@ -1178,6 +1183,7 @@ export default function Sidebar({
     onToggleFolder,
     onSelectDoc,
     onCreateDoc,
+    onCreateBoard,
     onCreateFolder: handleCreateFolder,
     onStartRename: startRename,
     onEditingValueChange: setEditingValue,

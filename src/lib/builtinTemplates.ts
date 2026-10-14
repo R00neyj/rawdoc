@@ -1,4 +1,4 @@
-// 내장 템플릿 4개 원문 — 제품 글이다 (specs/features/F-2022.md 4.4). LF, 끝 줄바꿈 없음
+// 내장 템플릿 5개 원문 — 제품 글이다 (specs/features/F-2022.md 4.4). LF, 끝 줄바꿈 없음
 export const BUILTIN_TEMPLATES: readonly { key: string; title: string; body: string }[] = [
   {
     key: 'meeting',
@@ -19,5 +19,10 @@ export const BUILTIN_TEMPLATES: readonly { key: string; title: string; body: str
     key: 'retro',
     title: '주간 회고',
     body: '## 주간 회고 — {{date}}\n\n### 잘한 점\n\n- \n\n### 아쉬운 점\n\n- \n\n### 다음에 해 볼 것\n\n- [ ] ',
+  },
+  {
+    key: 'kanban',
+    title: '칸반',
+    body: '---\nkanban: true\n---\n\n## 할 일\n\n## 진행 중\n\n## 완료',
   },
 ]

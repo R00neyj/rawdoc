@@ -47,6 +47,7 @@ describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀, F-505 U
       'notifications.open',
       'shortcuts.open',
       'doc.new',
+      'kanban.new',
       'folder.new',
       'doc.import',
       'github.import',
@@ -75,6 +76,7 @@ describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀, F-505 U
       'mode.live',
       'mode.raw',
       'mode.view',
+      'kanban.show',
       'view.sidebar',
       'view.calendar',
       'view.theme',
@@ -655,5 +657,42 @@ describe('GitHub 당기기 글자 — F-2129 A6', () => {
   it('github.pull 은 "이 문서 GitHub에서 당기기…", 푸시는 그대로', () => {
     expect(PALETTE_COMMANDS.find((c) => c.id === 'github.pull')?.label).toBe('이 문서 GitHub에서 당기기…')
     expect(PALETTE_COMMANDS.find((c) => c.id === 'github.push')?.label).toBe('이 문서 GitHub에 푸시…')
+  })
+})
+
+describe('칸반 명령 — U1·U2 (F-2143)', () => {
+  const noop = () => {}
+  const find = (id: string) => {
+    const cmd = PALETTE_COMMANDS.find((c) => c.id === id)
+    if (!cmd || cmd.kind !== 'action') throw new Error(`${id} not found`)
+    return cmd
+  }
+  const docActions = (newBoard?: () => void) => ({ newDoc: noop, newFolder: noop, importDoc: noop, newBoard })
+
+  it('kanban.new — newBoard 가 있을 때만 보이고 실행하면 1번 부른다', () => {
+    let calls = 0
+    const cmd = find('kanban.new')
+    expect(cmd.when(ctx([], undefined, undefined, undefined, undefined, { docActions: docActions() }))).toBe(false)
+    const withBoard = ctx([], undefined, undefined, undefined, undefined, { docActions: docActions(() => calls++) })
+    expect(cmd.when(withBoard)).toBe(true)
+    cmd.run(withBoard)
+    expect(calls).toBe(1)
+  })
+
+  it('kanban.show — kanban 없음·canShow 거짓이면 숨고, 참이면 보이고 실행 시 show 1번', () => {
+    let calls = 0
+    const cmd = find('kanban.show')
+    expect(cmd.when(ctx([]))).toBe(false)
+    expect(cmd.when({ ...ctx([]), kanban: { shown: false, canShow: false, show: () => calls++ } })).toBe(false)
+    const on = { ...ctx([]), kanban: { shown: false, canShow: true, show: () => calls++ } }
+    expect(cmd.when(on)).toBe(true)
+    cmd.run(on)
+    expect(calls).toBe(1)
+  })
+
+  it('kanban.shown 이 참이면 mode.live·raw·view 셋 모두 보인다', () => {
+    const view = { ...fullExtra().view!, mode: null }
+    const context = { ...ctx([], undefined, undefined, undefined, undefined, { view }), kanban: { shown: true, canShow: false, show: noop } }
+    for (const id of ['mode.live', 'mode.raw', 'mode.view']) expect(find(id).when(context), id).toBe(true)
   })
 })

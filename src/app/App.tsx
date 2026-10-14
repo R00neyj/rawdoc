@@ -843,7 +843,7 @@ export default function App() {
     viewerHtml, viewerDocId, pendingEditorSearch, showNotice, setOpenDoc, setStats, setViewerHtml, setViewerDocId, setPendingEditorSearch,
     editorRef, viewerRef, scrollAnchorRef, pendingJumpRef, openDocIdRef,
   })
-  const kanban = useKanbanView({ editorRef, editorHandle, docId: currentDocId, ready: openDoc?.id === currentDocId, covered: Boolean(sharedDoc || mapRoute) })
+  const kanban = useKanbanView({ editorRef, editorHandle, docId: currentDocId, ready: openDoc?.id === currentDocId, covered: Boolean(sharedDoc || mapRoute), showNotice })
 
   // 문서를 전환하면 이전 문서의 대기 중인 글자·단어 수 재계산은 버린다
   useEffect(() => {
@@ -988,7 +988,7 @@ export default function App() {
 
   // ----- 문서 이동 — 새 문서·고르기·홈·위키링크·공유 화면 가져오기/닫기·검색 결과·도움말·지도 (F-2082) -----
   const {
-    saveCurrentAsNewDoc, createDoc, createNewDoc, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
+    saveCurrentAsNewDoc, createDoc, createNewDoc, createNewBoard, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
     handleOpenWikiLink, importSharedDoc, closeSharedDoc, openDocFromSearch, openHelp, openMap, closeMap, recenterMap, copyHelpToDoc,
   } = useDocNavigation({
     store, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, mapRoute, viewMode, notifications,
@@ -1223,8 +1223,8 @@ export default function App() {
     narrow, sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebar, closeSidebarIfNarrow, themePref, lineNumbersPref, toolbarPref,
     wikiPreviewPref, changeTheme, changeLineNumbers, changeToolbar, changeWikiPreview, handleExportDoc, handleExportDocAsText,
     handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, github: github.palette, handleTogglePin, requestMoveDoc, requestDeleteDoc,
-    getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createDocFromPalette,
-    openDocFromSearch, newDocFolderId, changeViewMode, openTemplates: templateManager.openTemplates,
+    getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createNewBoard, createDocFromPalette,
+    openDocFromSearch, newDocFolderId, changeViewMode, openTemplates: templateManager.openTemplates, kanban,
     rightPanelOpen: rightPanel.open, toggleRightPanel: rightPanel.available ? rightPanel.togglePanel : undefined,
   })
 
@@ -1313,6 +1313,7 @@ export default function App() {
           onCollapseAllFolders={collapseAllFolders}
           onSelectDoc={selectDoc}
           onCreateDoc={createNewDoc}
+          onCreateBoard={createNewBoard}
           onImportDoc={requestImport}
           github={github.sidebar}
           onCreateFolder={handleCreateFolder}

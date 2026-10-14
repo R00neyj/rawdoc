@@ -2,7 +2,7 @@
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { MapMode, type ChangeDesc } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
-import { isKanbanDoc, parseKanban, type KanbanChange, type KanbanLane } from '../lib/kanban'
+import { isKanbanDoc, kanbanFlagChange, parseKanban, type KanbanChange, type KanbanLane } from '../lib/kanban'
 import { nextKanbanView, type KanbanView } from './kanbanView'
 import type { EditorHandle } from '../editor/Editor'
 
@@ -19,6 +19,7 @@ export type UseKanbanViewOptions = {
   ready: boolean
   // 공유 화면·지도가 편집 영역을 덮었다
   covered: boolean
+  showNotice: (input: { type: 'info'; message: string }) => unknown
 }
 
 export type UseKanbanViewResult = {
@@ -29,6 +30,7 @@ export type UseKanbanViewResult = {
   choose: (view: KanbanView) => void
   chooseMode: (mode: ViewMode) => void
   applyKanban: ApplyKanban
+  showBoard: () => void
 }
 
 // 변경 하나 = 트랜잭션 하나 = 되돌리기 한 단계 (F-2138 1장)
@@ -38,7 +40,7 @@ export function applyKanbanTo(view: EditorView, change: KanbanChange | KanbanCha
   return true
 }
 
-export function useKanbanView({ editorRef, editorHandle, docId, ready, covered }: UseKanbanViewOptions): UseKanbanViewResult {
+export function useKanbanView({ editorRef, editorHandle, docId, ready, covered, showNotice }: UseKanbanViewOptions): UseKanbanViewResult {
   const [state, setState] = useState<KanbanState>({ docId: null, isKanban: false, view: 'source' })
   const stateRef = useRef(state)
   const openedDocRef = useRef<string | null>(null)
@@ -100,9 +102,21 @@ export function useKanbanView({ editorRef, editorHandle, docId, ready, covered }
     [ready, editorRef],
   )
 
+  // 칸반 문서가 아니면 `kanban: true` 한 줄을 더한 뒤 보드를 고른다 (F-2143 3장)
+  const showBoard = useCallback(() => {
+    const handle = ready ? editorRef.current : null
+    if (!handle) return
+    const text = handle.view.state.doc.toString()
+    if (!isKanbanDoc(text)) {
+      if (parseKanban(text).length === 0) return void showNotice({ type: 'info', message: '칸으로 쓸 ## 제목이 없습니다.' })
+      if (!applyKanbanTo(handle.view, kanbanFlagChange(text), 'kanban.flag')) return
+    }
+    choose('board')
+  }, [ready, editorRef, showNotice, choose])
+
   const isKanban = ready && editorHandle !== null && state.docId === docId && state.isKanban
   const boardShown = isKanban && state.view === 'board' && !covered
-  return { isKanban, view: state.view, boardShown, handle: boardShown ? editorHandle : null, choose, chooseMode, applyKanban }
+  return { isKanban, view: state.view, boardShown, handle: boardShown ? editorHandle : null, choose, chooseMode, applyKanban, showBoard }
 }
 
 // 입력칸을 연 카드 `from` 또는 칸 `headingFrom`. key 는 연 순간의 위치라 다시 그려도 입력칸이 그대로 남는다 (F-2141 3장)

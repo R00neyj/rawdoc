@@ -380,7 +380,7 @@
 |`src/lib/accountDeletion.ts`|계정 삭제 때 서버와 앱이 같이 쓰는 확인 단어·제한 시간 등을 정함|
 |`src/lib/appEntry.ts`|첫 방문자에게 소개 페이지를 보일지 바로 앱을 열지 판단함|
 |`src/lib/attachmentUrls.ts`|첨부 파일을 화면에 띄울 임시 주소를 만들고 다 쓰면 거둠|
-|`src/lib/builtinTemplates.ts`|앱에 기본으로 들어 있는 문서 서식 4가지의 본문을 담음|
+|`src/lib/builtinTemplates.ts`|앱에 기본으로 들어 있는 문서 서식 5가지(칸반 포함)의 본문을 담음 (F-2143)|
 |`src/lib/calendar.ts`|오른쪽 패널 달력의 날짜 칸과 날짜별 문서 제목을 계산함|
 |`src/lib/callout.ts`|강조 상자(콜아웃) 첫 줄을 읽어 상자 종류를 알아냄|
 |`src/lib/calloutIcons.ts`|강조 상자 종류마다 붙일 아이콘을 정함|
