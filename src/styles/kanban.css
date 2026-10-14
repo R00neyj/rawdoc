@@ -75,6 +75,7 @@
 .kanban-lanes {
   display: flex;
   align-items: flex-start;
+  justify-content: safe center;
   gap: 12px;
   overflow-x: auto;
   padding-bottom: 12px;
