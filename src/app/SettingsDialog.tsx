@@ -685,7 +685,7 @@ export default function SettingsDialog({
       open={open}
       onClose={onClose}
       titleId={titleId}
-      size="wide"
+      size="xwide"
       initialFocusRef={tabs.length > 1 ? activeTabButtonRef : checkedRef}
     >
       <h2 id={titleId}>설정</h2>
