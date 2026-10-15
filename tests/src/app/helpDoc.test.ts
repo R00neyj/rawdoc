@@ -10,6 +10,7 @@ import { WIKI_PREVIEW_OPEN_DELAY_MS } from '../../../src/app/wikiPreview'
 import { COMMENT_BODY_MAX, COMMENTS_PER_DOC_MAX } from '../../../src/lib/docComments'
 import { RETAIN_MS } from '../../../src/storage/yjsStore'
 import { MAX_CONTENT_BYTES } from '../../../src/app/importWorkspace'
+import { PUSH_BATCH_MS, PUSH_QUOTA_RATIO } from '../../../src/lib/pushPayload'
 import { MAX_INPUT_BYTES, MAX_RESULT_BYTES } from '../../../src/app/attachImages'
 import { SHORTCUT_CATALOG, formatChord } from '../../../src/app/shortcutCatalog'
 import { TODO_MAX_ITEMS } from '../../../src/lib/docTodos'
@@ -452,6 +453,12 @@ describe('F-2110 도움말 ## 알림 절', () => {
     expect(section.body).toContain(
       '설정의 계정 탭에서 이 기기에서 푸시 받기를 켜면 앱을 닫아 둬도 알림이 옵니다. 같은 문서의 알림은 3분씩 모아 보내고, 그 문서를 열어 두고 있거나 이미 읽었으면 보내지 않습니다. 알림이 오지 않으면 기기 설정에서 브라우저(또는 설치한 앱)의 알림이 켜져 있는지 확인하세요. iPhone·iPad에서는 홈 화면에 추가한 앱에서만 받을 수 있습니다.',
     )
+  })
+
+  it('푸시 모으기 시간과 저장 공간 경고 비율이 상수 그대로 들어 있다 (2026-10-15)', () => {
+    const section = appSections().find((s) => s.name === '알림')!
+    expect(section.body).toContain(`알림은 ${PUSH_BATCH_MS / 60_000}분씩 모아`)
+    expect(section.body).toContain(`한도의 ${PUSH_QUOTA_RATIO * 100}%에 이르렀다는`)
   })
 })
 

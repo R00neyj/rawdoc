@@ -56,6 +56,9 @@ import { USER_CSS_SAFE_NOTICE } from '../../src/app/appNotices'
 import type { UserCssRemoval } from '../../src/lib/userCssPolicy'
 import { ACCESS_REQUEST_COOLDOWN_MS, ACCESS_REQUEST_EXPIRE_MS, ACCESS_REQUEST_PENDING_MAX } from '../../src/lib/accessRequest'
 import { LEAVE_SHARE_DONE, LEAVE_SHARE_OFFLINE } from '../../src/app/leaveShare'
+import { PUSH_BATCH_MS, PUSH_SHARE_DEDUPE_MS, PUSH_QUOTA_RATIO, PUSH_QUOTA_REPEAT_MS, PUSH_SUBSCRIPTIONS_PER_USER_MAX } from '../../src/lib/pushPayload'
+import { commentPushPayload } from '../../src/lib/pushText'
+import { pushSettingsView } from '../../src/app/pushClient'
 import { TODO_MAX_ITEMS } from '../../src/lib/docTodos'
 import { LOCAL_GRAPH_MAX_NEIGHBORS } from '../../src/lib/localGraph'
 import { EXCERPT_MAX, MENTION_MIN_LENGTH } from '../../src/lib/docLinks'
@@ -440,6 +443,22 @@ describe('comments 글', () => {
     expect(raw).toContain(`최근 ${NOTIFICATIONS_LIST_DEFAULT}개가 새것부터`)
     expect(raw).toContain(`${NOTIFICATIONS_POLL_MS / 60_000}분마다`)
     expect(raw).toContain(`${NOTIFICATION_RETAIN_DAYS}일이 지났거나 사람마다 최근 ${NOTIFICATIONS_PER_RECIPIENT_MAX}개`)
+  })
+
+  it('푸시·공유 알림 수치와 화면 글자가 상수·코드 문구와 같다 (F-2110, F-3002~F-3008, F-2116, F-2136)', () => {
+    const raw = readGuide('comments')
+    expect(raw).toContain(`댓글이 달리고 ${PUSH_BATCH_MS / 60_000}분쯤 뒤`)
+    expect(raw).toContain(`같은 사람이 ${PUSH_SHARE_DEDUPE_MS / 60_000}분 안에`)
+    expect(raw).toContain(`한도의 ${PUSH_QUOTA_RATIO * 100}%에 이르렀을 때. 다시 오는 것은 ${PUSH_QUOTA_REPEAT_MS / 86_400_000}일 뒤`)
+    expect(raw).toContain(`기기는 ${PUSH_SUBSCRIPTIONS_PER_USER_MAX}대까지`)
+    const row = { kind: 'mention' as const, actorEmail: '…', docTitle: '회의록', excerpt: '', threadId: 't', createdAt: 0 }
+    expect(raw).toContain(`\`${commentPushPayload('d', [row, { ...row, createdAt: 1 }, { ...row, createdAt: 2 }]).title}\``)
+    const share = { id: 'n', target: 'doc' as const, targetId: 'd', name: '회의록', role: 'view' as const, actorEmail: '…', createdAt: 0, readAt: null }
+    const shareLines = notificationLines({ ...share, kind: 'share' })
+    expect(raw).toContain(`\`${shareLines.text}\` 아래 줄에 \`${shareLines.excerpt}\``)
+    expect(raw).toContain(`\`${notificationLines({ ...share, kind: 'access_request', role: 'edit' }).text}\``)
+    const base = { supported: true, ios: false, standalone: false, permission: 'default' as const, online: true, enabled: false, key: 'ok' as const, busy: null }
+    expect(raw).toContain(`\`${pushSettingsView({ ...base, permission: 'denied' }).note}\``)
   })
 
   it('글이 인용한 화면 글자가 코드 문구와 같다', () => {
