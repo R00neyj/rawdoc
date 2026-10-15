@@ -54,6 +54,7 @@ import { USER_CSS_PUSH_DELAY_MS, USER_CSS_PULL_GAP_MS, mergeLocalIntoAccount } f
 import { nextSnippetName, userCssSaveMessage, userCssStatusLines } from '../../src/app/userCssEdit'
 import { USER_CSS_SAFE_NOTICE } from '../../src/app/appNotices'
 import type { UserCssRemoval } from '../../src/lib/userCssPolicy'
+import { WIKI_PREVIEW_OPEN_DELAY_MS } from '../../src/app/wikiPreview'
 import { ACCESS_REQUEST_COOLDOWN_MS, ACCESS_REQUEST_EXPIRE_MS, ACCESS_REQUEST_PENDING_MAX } from '../../src/lib/accessRequest'
 import { LEAVE_SHARE_DONE, LEAVE_SHARE_OFFLINE } from '../../src/app/leaveShare'
 import { PUSH_BATCH_MS, PUSH_SHARE_DEDUPE_MS, PUSH_QUOTA_RATIO, PUSH_QUOTA_REPEAT_MS, PUSH_SUBSCRIPTIONS_PER_USER_MAX } from '../../src/lib/pushPayload'
@@ -409,6 +410,13 @@ describe('account 글', () => {
     const body = guideBody(readGuide('account')).toLowerCase()
     expect(body).not.toContain(brand.name.toLowerCase())
     expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+// 사용법 글 wiki-links 미리보기 (2026-10-15)
+describe('wiki-links 글', () => {
+  it('미리보기 지연이 상수와 같다 (R5)', () => {
+    expect(readGuide('wiki-links')).toContain(`마우스를 ${WIKI_PREVIEW_OPEN_DELAY_MS / 1000}초 올려 두면`)
   })
 })
 
