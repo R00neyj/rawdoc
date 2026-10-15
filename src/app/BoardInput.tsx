@@ -65,6 +65,8 @@ export default function BoardInput({ className, label, placeholder, value, selec
         selection: select ? EditorSelection.range(0, value.length) : EditorSelection.cursor(value.length),
         extensions: [
           singleLine,
+          // 긴 글이 칸 폭을 넘어 보드를 옆으로 키우지 않게 칸 안에서 접는다 (tweak 2026-10-15)
+          EditorView.lineWrapping,
           history(),
           autoPair(),
           markdown(),

@@ -319,6 +319,16 @@
 :is(.kanban-lane-input, .kanban-card-input) .cm-scroller {
   font-family: inherit;
   line-height: inherit;
+  overflow-y: auto;
+}
+
+/* 줄을 접으니 긴 글은 아래로 늘어난다 — 몇 줄 넘으면 칸 안에서 스크롤 (tweak 2026-10-15) */
+.kanban-card-input .cm-scroller {
+  max-height: 8lh;
+}
+
+.kanban-lane-input .cm-scroller {
+  max-height: 3lh;
 }
 
 :is(.kanban-lane-input, .kanban-card-input) .cm-content {
