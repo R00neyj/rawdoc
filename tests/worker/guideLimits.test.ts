@@ -85,7 +85,8 @@ describe('account 글의 서버 수치 (R5)', () => {
     expect(raw).toContain(`마지막으로 쓴 날부터 ${SESSION_EXPIRES_IN_SEC / 86_400}일`)
     expect(raw).toContain(`계정마다 ${MAX_TOKENS}개까지`)
     expect(raw).toContain(`/ ${ATTACHMENT_QUOTA_BYTES / 1024 / 1024}MB\``)
-    expect(raw).toContain(`/ ${DOC_BYTES_QUOTA / 1024 / 1024}MB · `)
+    expect(raw).toContain(`/ ${DOC_BYTES_QUOTA / 1024 / 1024}MB\``)
+    expect(raw).toContain(`/ ${DOC_COUNT_QUOTA.toLocaleString('en-US')}개\``)
   })
 })
 

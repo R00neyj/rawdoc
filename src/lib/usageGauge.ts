@@ -12,10 +12,10 @@ type UsageLike = {
   docs?: { bytes: number; bytesLimit: number; count: number; countLimit: number }
 }
 
-const WARN_RATIO = 0.8
-const DANGER_RATIO = 0.9
-const HINT_IMAGES = '곧 저장할 수 없게 됩니다. 안 쓰는 이미지를 지워 주세요'
-const HINT_DOCS = '곧 저장할 수 없게 됩니다. 안 쓰는 문서를 지워 주세요'
+export const WARN_RATIO = 0.8
+export const DANGER_RATIO = 0.9
+export const HINT_IMAGES = '곧 저장할 수 없게 됩니다. 안 쓰는 이미지를 지워 주세요'
+export const HINT_DOCS = '곧 저장할 수 없게 됩니다. 안 쓰는 문서를 지워 주세요'
 
 export function usageGauge(used: number, limit: number): Gauge | null {
   if (!Number.isFinite(used) || !Number.isFinite(limit) || limit <= 0) return null

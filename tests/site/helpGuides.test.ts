@@ -54,6 +54,7 @@ import { USER_CSS_PUSH_DELAY_MS, USER_CSS_PULL_GAP_MS, mergeLocalIntoAccount } f
 import { nextSnippetName, userCssSaveMessage, userCssStatusLines } from '../../src/app/userCssEdit'
 import { USER_CSS_SAFE_NOTICE } from '../../src/app/appNotices'
 import type { UserCssRemoval } from '../../src/lib/userCssPolicy'
+import { WARN_RATIO, DANGER_RATIO, HINT_IMAGES, HINT_DOCS } from '../../src/lib/usageGauge'
 import { WIKI_PREVIEW_OPEN_DELAY_MS } from '../../src/app/wikiPreview'
 import { ACCESS_REQUEST_COOLDOWN_MS, ACCESS_REQUEST_EXPIRE_MS, ACCESS_REQUEST_PENDING_MAX } from '../../src/lib/accessRequest'
 import { LEAVE_SHARE_DONE, LEAVE_SHARE_OFFLINE } from '../../src/app/leaveShare'
@@ -404,6 +405,15 @@ describe('account 글', () => {
     const days = /자동 백업에 최대 (\d+)일/.exec(dialogSource)?.[1]
     expect(days).toBeTruthy()
     expect(raw).toContain(`최대 ${days}일`)
+  })
+
+  it('계정 메뉴 게이지의 단계 비율과 경고 문구가 상수와 같다 (small 2026-10-11)', () => {
+    const raw = readGuide('account')
+    expect(raw).toContain(`한도의 ${WARN_RATIO * 100}%에 이르면`)
+    expect(raw).toContain(`${DANGER_RATIO * 100}%에 이르면 경고 색`)
+    expect(raw).toContain(`\`${HINT_IMAGES}\``)
+    expect(HINT_DOCS.endsWith('안 쓰는 문서를 지워 주세요')).toBe(true)
+    expect(raw).toContain('`안 쓰는 문서를 지워 주세요`')
   })
 
   it('글에 제품명이 없다 (R6)', () => {
