@@ -5376,6 +5376,17 @@ body.sidebar-resizing {
   background: var(--hover-bg);
 }
 
+/* 설정 `금고` 탭 — 묶음 제목 아래 상태 한 줄, 버튼 줄 뒤 `자동 잠금` 은 한 칸 띄운다 (tweak 2026-10-15) */
+.settings-panel .settings-e2ee-state {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.settings-panel .dialog-btn-row + .dialog-field {
+  margin-top: 24px;
+}
+
 /* 설정 `계정` 탭·계정 삭제 대화상자 D-15 (F-2038.md 6.1·6.3) — 모양은 사람 확인 H1 */
 .settings-panel .settings-account-email {
   margin: 0 0 12px;

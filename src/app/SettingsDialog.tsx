@@ -651,13 +651,7 @@ export default function SettingsDialog({
     if (!e2ee) return null
     return (
       <>
-        <Segment
-          labelId="e2ee-lock-minutes-label"
-          label="자동 잠금"
-          value={e2ee.lockMinutes}
-          options={E2EE_LOCK_MINUTES_OPTIONS}
-          onChange={e2ee.onChangeLockMinutes}
-        />
+        <h3 className="panel-settings-title">금고</h3>
         <p className="dialog-note settings-e2ee-state">{E2EE_STATUS_TEXT[e2ee.status]}</p>
         {e2ee.isLocal && e2ee.status !== 'none' && (
           <p className="dialog-callout">이 금고는 이 브라우저에만 있습니다. 로그인하면 계정 금고로 옮길 수 있습니다.</p>
@@ -700,6 +694,13 @@ export default function SettingsDialog({
             </>
           )}
         </div>
+        <Segment
+          labelId="e2ee-lock-minutes-label"
+          label="자동 잠금"
+          value={e2ee.lockMinutes}
+          options={E2EE_LOCK_MINUTES_OPTIONS}
+          onChange={e2ee.onChangeLockMinutes}
+        />
       </>
     )
   }
