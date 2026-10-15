@@ -9,6 +9,7 @@ import { E2EE_MAX_PLAIN_CONTENT_BYTES } from '../../../src/lib/e2eeLimits'
 import { WIKI_PREVIEW_OPEN_DELAY_MS } from '../../../src/app/wikiPreview'
 import { COMMENT_BODY_MAX, COMMENTS_PER_DOC_MAX } from '../../../src/lib/docComments'
 import { RETAIN_MS } from '../../../src/storage/yjsStore'
+import { MAX_CONTENT_BYTES } from '../../../src/app/importWorkspace'
 import { MAX_INPUT_BYTES, MAX_RESULT_BYTES } from '../../../src/app/attachImages'
 import { SHORTCUT_CATALOG, formatChord } from '../../../src/app/shortcutCatalog'
 import { TODO_MAX_ITEMS } from '../../../src/lib/docTodos'
@@ -543,7 +544,7 @@ describe('F-2111 도움말 ## 알림 절', () => {
 describe('도움말 ## 사용자 CSS 절', () => {
   it('## 옵시디언 볼트 바로 뒤에 있고, 사용법 글 줄로 끝나며, 화면 글자와 안전 모드 주소가 들어 있다', () => {
     const names = appSections().map((s) => s.name)
-    expect(names[names.indexOf('옵시디언 볼트') + 1]).toBe('사용자 CSS')
+    expect(names[names.indexOf('GitHub') + 1]).toBe('사용자 CSS')
     const section = appSections().find((s) => s.name === '사용자 CSS')!
     const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
     expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [사용자 CSS 로 모양 바꾸기](/guides/custom-css)')
@@ -567,6 +568,19 @@ describe('도움말 ## 칸반 절', () => {
     expect(section.body).toContain('`보드로 보기`')
     expect(section.body).toContain('`kanban: true`')
     expect(section.body).toContain('`새 카드에 체크 칸 달기`')
+  })
+})
+
+// 사용법 글 github (write-guide, 2026-10-15)
+describe('도움말 ## GitHub 절', () => {
+  it('## 옵시디언 볼트 바로 뒤에 있고, 사용법 글 줄로 끝나며, 화면 글자와 크기 상한이 들어 있다', () => {
+    const names = appSections().map((s) => s.name)
+    expect(names[names.indexOf('옵시디언 볼트') + 1]).toBe('GitHub')
+    const section = appSections().find((s) => s.name === 'GitHub')!
+    const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [GitHub 저장소와 문서 잇기](/guides/github)')
+    for (const label of ['`GitHub 연결`', '`GitHub에서 가져오기`', '`GitHub에 새 파일`', '`GitHub에 연결…`', '`당기기…`', '`푸시…`']) expect(section.body).toContain(label)
+    expect(section.body).toContain(`${MAX_CONTENT_BYTES / 1_000_000}MB까지`)
   })
 })
 

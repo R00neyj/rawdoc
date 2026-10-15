@@ -61,6 +61,11 @@ import { CALENDAR_DEFAULT_FORMAT } from '../../src/lib/calendar'
 import { DEFAULT_TASK_FILTER } from '../../src/app/useTaskFilter'
 import { PHONE_QUERY } from '../../src/app/usePhoneWidth'
 import { NARROW_QUERY } from '../../src/app/useSidebarLayout'
+import { GITHUB_PUSH_MAX_IMAGES } from '../../src/lib/githubContract'
+import { GITHUB_IMAGE_IMPORT_MAX, GITHUB_IMAGE_IMPORT_MAX_BYTES } from '../../src/app/githubImages'
+import { GITHUB_RECONNECT_MESSAGE, githubConnectErrorMessage, githubErrorMessage, githubFirstCommitMessage } from '../../src/app/githubUi'
+import { sameNotice } from '../../src/app/githubPull'
+import { pushedNotice } from '../../src/app/githubPush'
 
 const GUIDES_DIR = fileURLToPath(new URL('../../content/guides', import.meta.url))
 
@@ -499,6 +504,34 @@ describe('kanban 글', () => {
     const added = addCardChange(text, 0, '글자', true)!
     expect(raw).toContain(code(added.insert!.trim()))
     expect(raw).toContain(code(addCardChange(text, 0, '글자', false)!.insert!.trim()))
+  })
+
+  it('글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(raw).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+// 사용법 글 github (write-guide, 2026-10-15) — 서버 수치는 tests/worker/guideLimits.test.ts
+describe('github 글', () => {
+  const raw = readGuide('github')
+  const code = (text: string) => '`' + text + '`'
+
+  it('글의 수치가 상수와 같다 (R5)', () => {
+    expect(raw).toContain(`${MAX_CONTENT_BYTES / 1_000_000}MB를 넘는 파일`)
+    expect(raw).toContain(`한 번에 ${GITHUB_PUSH_MAX_IMAGES}장까지이고`)
+    expect(raw).toContain(`${Math.round(GITHUB_IMAGE_IMPORT_MAX_BYTES / 1024 / 1024)}MB 이하 그림을 한 번에 ${GITHUB_IMAGE_IMPORT_MAX}장까지`)
+  })
+
+  it('글이 인용한 화면 글자가 코드 문구와 같다', () => {
+    expect(raw).toContain(code(githubErrorMessage({ status: 503, error: 'github_disabled', body: null })))
+    expect(raw).toContain(code(GITHUB_RECONNECT_MESSAGE))
+    expect(raw).toContain(code(githubConnectErrorMessage('github_taken')))
+    expect(raw).toContain(code(githubErrorMessage({ status: 503, error: 'github_rate_limited', body: null })))
+    expect(raw).toContain(code(githubFirstCommitMessage('새 문서.md')))
+    expect(raw).toContain(code(sameNotice(null)))
+    expect(raw).toContain(code(pushedNotice({ kind: 'pushed', sha: '', commitUrl: 'x', left: 0 })))
   })
 
   it('글에 제품명이 없다 (R6)', () => {

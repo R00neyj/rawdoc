@@ -10,6 +10,8 @@ import { SESSION_EXPIRES_IN_SEC } from '../../worker/authServer'
 import { MAX_TOKENS } from '../../worker/apiTokens'
 import { NOTIFICATION_EXCERPT_CHARS } from '../../worker/commentRows'
 import { HELP_DOC_CONTENT } from '../../src/app/helpDoc'
+import { REPOS_MAX, TREE_TRUNCATED_AT } from '../../worker/githubRepos'
+import { MESSAGE_MAX } from '../../worker/githubPush'
 
 const GUIDE_PATH = fileURLToPath(new URL('../../content/guides/offline-sync.md', import.meta.url))
 const IMAGES_GUIDE_PATH = fileURLToPath(new URL('../../content/guides/images.md', import.meta.url))
@@ -92,5 +94,15 @@ describe('comments 글의 서버 수치 (R5)', () => {
   it('알림에 담기는 댓글 앞부분 길이가 상수 그대로 들어 있다', () => {
     const raw = readFileSync(COMMENTS_GUIDE_PATH, 'utf-8')
     expect(raw).toContain(`댓글 앞 ${NOTIFICATION_EXCERPT_CHARS}자`)
+  })
+})
+
+// 사용법 글 github (write-guide, 2026-10-15)
+describe('github 글의 서버 수치 (R5)', () => {
+  it('목록 상한·커밋 메시지 길이가 상수 그대로 들어 있다', () => {
+    const raw = readFileSync(fileURLToPath(new URL('../../content/guides/github.md', import.meta.url)), 'utf-8')
+    expect(raw).toContain(`저장소 ${REPOS_MAX}개`)
+    expect(raw).toContain(`한 폴더 ${TREE_TRUNCATED_AT.toLocaleString('en-US')}항목`)
+    expect(raw).toContain(`(${MESSAGE_MAX.toLocaleString('en-US')}자까지)`)
   })
 })

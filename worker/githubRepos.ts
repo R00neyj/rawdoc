@@ -11,8 +11,8 @@ import type { GithubBranchList, GithubFile, GithubRepo, GithubRepoList, GithubTr
 export type GithubCtx = { user: AuthUser; config: GithubConfig; settings: GithubSettings }
 
 const REPO_CALLS_MAX = 10
-const REPOS_MAX = 300
-const TREE_TRUNCATED_AT = 1000
+export const REPOS_MAX = 300
+export const TREE_TRUNCATED_AT = 1000
 const BOM_BYTES = 3
 const SHA_RE = /^[0-9a-f]{40}$/
 

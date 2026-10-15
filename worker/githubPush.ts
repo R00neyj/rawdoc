@@ -38,7 +38,7 @@ const ATTACHMENT_NAME_RE = /^[0-9a-f]{16}\.(png|jpg|gif|webp)$/
 const OBJECT_ACCEPT = 'application/vnd.github.object+json'
 const PLAN_BODY_LIMIT = 32_768
 const PUSH_BODY_LIMIT = 16_384
-const MESSAGE_MAX = 1000
+export const MESSAGE_MAX = 1000
 const FILE_MODE = '100644'
 // githubSettings.countGithubUse 와 같은 SQL — 푸시 성공 batch 에 같이 싣는다
 const COUNT_USE_SQL = 'INSERT INTO github_usage (user_id, month, count) VALUES (?, ?, 1) ON CONFLICT (user_id, month) DO UPDATE SET count = count + 1'
