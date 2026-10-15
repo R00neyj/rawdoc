@@ -334,6 +334,13 @@ export function toggleCheckChange(text: string, cardFrom: number): KanbanChange 
   return { from: card.textFrom, insert: /[ \t]/.test(text[card.textFrom - 1]) ? '[ ] ' : ' [ ] ' }
 }
 
+// 체크 칸을 `[ ] `·`[x] ` 째 떼어 체크 없는 카드로 되돌린다
+export function removeCheckChange(text: string, cardFrom: number): KanbanChange | null {
+  const card = findCard(text, cardFrom)
+  if (!card || card.checkAt === null) return null
+  return { from: card.checkAt - 1, to: card.textFrom }
+}
+
 // 하위 줄까지 카드 한 덩이를 줄째 지운다 (moveCardChanges 의 지우기와 같다)
 export function removeCardChange(text: string, cardFrom: number): KanbanChange | null {
   const card = findCard(text, cardFrom)

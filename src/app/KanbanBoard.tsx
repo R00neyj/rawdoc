@@ -10,7 +10,7 @@ import { setBoardComposing } from '../editor/boardComposition'
 import { redoLocal, undoLocal } from '../editor/yBinding'
 import {
   NEW_LANE_TITLE, addCardChange, addLaneChange, editCardChange, moveCardChanges, moveLaneChanges, parseKanban, removeCardChange, removeLaneChange,
-  renameLaneChange, toggleCardChange, toggleCheckChange, type KanbanLane,
+  removeCheckChange, renameLaneChange, toggleCardChange, toggleCheckChange, type KanbanLane,
 } from '../lib/kanban'
 import { IconMore } from './icons'
 import { getPref } from './prefs'
@@ -306,6 +306,10 @@ export default function KanbanBoard({
     toggleCheck: (lane, card) => {
       const pos = snapCardPos(lane, card)
       if (pos !== null) apply(toggleCheckChange(handle.view.state.doc.toString(), pos), 'kanban.toggle')
+    },
+    removeCheck: (lane, card) => {
+      const pos = snapCardPos(lane, card)
+      if (pos !== null) apply(removeCheckChange(handle.view.state.doc.toString(), pos), 'kanban.toggle')
     },
     moveCardTo: (lane, card, toLane) => {
       const pos = snapCardPos(lane, card)

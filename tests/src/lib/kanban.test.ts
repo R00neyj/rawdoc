@@ -19,6 +19,7 @@ import {
   renameLaneChange,
   toggleCardChange,
   toggleCheckChange,
+  removeCheckChange,
   type KanbanChange,
 } from '../../../src/lib/kanban'
 import { fromEditorText, toEditorText } from '../../../src/lib/lineEnding'
@@ -304,6 +305,11 @@ describe('removeCardChange · toggleCheckChange (small 2026-10-14)', () => {
     expect(apply(t, toggleCheckChange(t, cards[2].from))).toBe('## A\n- a\n  - d\n- [ ] b\n- [ ] c\n-\n- e')
     expect(apply(t, toggleCheckChange(t, cards[3].from))).toBe('## A\n- a\n  - d\n- [ ] b\n- [x] c\n- [ ] \n- e')
     expect(toggleCheckChange(t, 1)).toBeNull()
+  })
+  it('체크 칸을 떼면 `[ ] `·`[x] ` 째 지우고 카드 글자는 그대로, 없으면 null', () => {
+    expect(apply(t, removeCheckChange(t, cards[1].from))).toBe('## A\n- a\n  - d\n- b\n- [x] c\n-\n- e')
+    expect(apply(t, removeCheckChange(t, cards[2].from))).toBe('## A\n- a\n  - d\n- [ ] b\n- c\n-\n- e')
+    expect(removeCheckChange(t, cards[0].from)).toBeNull()
   })
 })
 

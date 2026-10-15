@@ -9,6 +9,7 @@ export type KanbanMenuState = { target: KanbanMenuTarget; x: number; y: number; 
 export type KanbanMenuActions = {
   editCard: (lane: number, card: number) => void
   toggleCheck: (lane: number, card: number) => void
+  removeCheck: (lane: number, card: number) => void
   moveCardTo: (lane: number, card: number, toLane: number) => void
   showSource: (lane: number, card: number) => void
   removeCard: (lane: number, card: number) => void
@@ -52,6 +53,7 @@ function menuItems(target: KanbanMenuTarget, lanes: KanbanLane[], unnamed: strin
   return [
     { key: 'edit', label: '고치기', icon: IconEdit, onSelect: () => a.editCard(lane, card) },
     { key: 'check', label: check, icon: IconCheck, onSelect: () => a.toggleCheck(lane, card) },
+    ...(found.done === null ? [] : [{ key: 'uncheck', label: '체크 칸 떼기', onSelect: () => a.removeCheck(lane, card) }]),
     ...lanes.flatMap((l, i): FolderMenuItem[] =>
       i === lane ? [] : [{ key: `move-${i}`, label: `옮기기: ${l.title || unnamed}`, icon: IconMove, onSelect: () => a.moveCardTo(lane, card, i) }],
     ),
