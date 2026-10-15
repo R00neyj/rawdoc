@@ -5,7 +5,7 @@ import { resolveStoredSidebarWidth, clampSidebarWidth, overlaySidebarWidth } fro
 import { useBackToClose } from './useBackToClose'
 import { useEdgeSwipe } from './useEdgeSwipe'
 
-const NARROW_QUERY = '(max-width: 1023px)'
+export const NARROW_QUERY = '(max-width: 1023px)'
 
 // md.openFolders 는 폴더 id JSON 배열이다 (specs/architecture.md 4장, F-126.md 5.1)
 function loadOpenFolders(): string[] {

@@ -54,6 +54,13 @@ import { USER_CSS_PUSH_DELAY_MS, USER_CSS_PULL_GAP_MS, mergeLocalIntoAccount } f
 import { nextSnippetName, userCssSaveMessage, userCssStatusLines } from '../../src/app/userCssEdit'
 import { USER_CSS_SAFE_NOTICE } from '../../src/app/appNotices'
 import type { UserCssRemoval } from '../../src/lib/userCssPolicy'
+import { TODO_MAX_ITEMS } from '../../src/lib/docTodos'
+import { LOCAL_GRAPH_MAX_NEIGHBORS } from '../../src/lib/localGraph'
+import { EXCERPT_MAX, MENTION_MIN_LENGTH } from '../../src/lib/docLinks'
+import { CALENDAR_DEFAULT_FORMAT } from '../../src/lib/calendar'
+import { DEFAULT_TASK_FILTER } from '../../src/app/useTaskFilter'
+import { PHONE_QUERY } from '../../src/app/usePhoneWidth'
+import { NARROW_QUERY } from '../../src/app/useSidebarLayout'
 
 const GUIDES_DIR = fileURLToPath(new URL('../../content/guides', import.meta.url))
 
@@ -588,5 +595,29 @@ describe('callouts-math-diagrams 글', () => {
     const lower = body.toLowerCase()
     expect(lower).not.toContain(brand.name.toLowerCase())
     expect(lower).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+// 사용법 글 right-panel (write-guide, 2026-10-15)
+describe('right-panel 글', () => {
+  const raw = readGuide('right-panel')
+
+  it('글의 수치·기본값이 상수와 같다 (R5)', () => {
+    expect(NARROW_QUERY).toBe('(max-width: 1023px)')
+    expect(raw).toContain('창 폭이 1024px 이상이면')
+    expect(raw).toContain(`폭 ${/max-width: (\d+)px/.exec(PHONE_QUERY)?.[1]}px 이하인 휴대폰`)
+    expect(raw).toContain(`기본 \`${CALENDAR_DEFAULT_FORMAT}\``)
+    expect(raw).toContain(`기본 \`${DEFAULT_TASK_FILTER}\``)
+    expect(raw).toContain(`줄이 ${EXCERPT_MAX}자를 넘으면`)
+    expect(raw).toContain(`제목이 ${MENTION_MIN_LENGTH}자보다 짧으면`)
+    expect(raw).toContain(`이웃은 ${LOCAL_GRAPH_MAX_NEIGHBORS}개까지`)
+    expect(raw).toContain(`${TODO_MAX_ITEMS}개까지 보이고`)
+    expect(raw).toContain(`\`할 일이 많아 앞의 ${TODO_MAX_ITEMS}개만 보여 줍니다.\``)
+  })
+
+  it('글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(raw).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
   })
 })

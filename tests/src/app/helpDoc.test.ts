@@ -11,6 +11,9 @@ import { COMMENT_BODY_MAX, COMMENTS_PER_DOC_MAX } from '../../../src/lib/docComm
 import { RETAIN_MS } from '../../../src/storage/yjsStore'
 import { MAX_INPUT_BYTES, MAX_RESULT_BYTES } from '../../../src/app/attachImages'
 import { SHORTCUT_CATALOG, formatChord } from '../../../src/app/shortcutCatalog'
+import { TODO_MAX_ITEMS } from '../../../src/lib/docTodos'
+import { CALENDAR_DEFAULT_FORMAT } from '../../../src/lib/calendar'
+import { DEFAULT_TASK_FILTER } from '../../../src/app/useTaskFilter'
 
 // F-257.md 2장 표의 절 순서 그대로
 const SECTION_ORDER = [
@@ -573,5 +576,18 @@ describe('F-2117 도움말 Ctrl+S', () => {
     expect(shortcuts.body).toContain('- `Ctrl+S` 지금 문서를 `.md` 파일로 받기')
     const exp = appSections().find((s) => s.name === '내보내기·가져오기')!
     expect(exp.body).toContain('`Ctrl+S`')
+  })
+})
+
+// 사용법 글 right-panel (write-guide, 2026-10-15)
+describe('도움말 ## 오른쪽 패널 절', () => {
+  it('사용법 글 줄로 끝나고, 수치·기본값이 상수와 같다 (R5)', () => {
+    const section = appSections().find((s) => s.name === '오른쪽 패널')!
+    const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [오른쪽 패널로 달력·링크·할 일 보기](/guides/right-panel)')
+    expect(section.body).toContain(`${TODO_MAX_ITEMS}개까지 보여 줍니다`)
+    expect(section.body).toContain(`기본 \`${CALENDAR_DEFAULT_FORMAT}\``)
+    const filters = DEFAULT_TASK_FILTER.split(', ').map((f) => `\`${f}\``).join('·')
+    expect(section.body).toContain(`${filters} 표시가 붙은 체크박스`)
   })
 })
