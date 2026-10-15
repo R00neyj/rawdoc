@@ -36,7 +36,7 @@ test('F-2141 E1 카드 추가가 그 칸 마지막 카드 다음 줄에 들어�
   await expect(input).toBeFocused()
   await input.fill('회의 준비')
   await input.press('Enter')
-  await expect(input).toHaveValue('')
+  await expect(input.locator('.cm-placeholder')).toBeVisible()
   await expect(lane(page, '할 일').locator('.kanban-card-text')).toHaveText(['첫 카드', '체크 카드', '회의 준비'])
   await input.press('Escape')
 
@@ -70,7 +70,7 @@ test('F-2141 E2 칸 이름·체크·카드 글자·칸 추가가 그 자리만 �
 
   await lane(page, '해야 할 일').locator('.kanban-card', { hasText: '첫 카드' }).dblclick()
   const cardInput = board(page).getByRole('textbox', { name: '카드 내용' })
-  await expect(cardInput).toHaveValue('첫 카드')
+  await expect(cardInput).toHaveText('첫 카드')
   await cardInput.fill('첫 카드 고침')
   await cardInput.press('Enter')
   await expect(lane(page, '해야 할 일').locator('.kanban-card').first()).toBeFocused()
@@ -142,7 +142,7 @@ test('F-2141 E3 실시간 두 창 — 카드 추가가 상대 보드에 보이�
 
     await lane(b.page, '진행 중').locator('.kanban-card', { hasText: '끝난 카드' }).dblclick()
     const cardInput = board(b.page).getByRole('textbox', { name: '카드 내용' })
-    await expect(cardInput).toHaveValue('끝난 카드')
+    await expect(cardInput).toHaveText('끝난 카드')
     const cdp = await fakeImeCompose(b.page, '한')
 
     await addCard(a.page, '할 일', '위 카드')
@@ -152,7 +152,7 @@ test('F-2141 E3 실시간 두 창 — 카드 추가가 상대 보드에 보이�
 
     await fakeImeCommit(cdp, '한')
     await expect(lane(b.page, '할 일').locator('.kanban-card-text')).toHaveText(['첫 카드', '체크 카드', '위 카드'])
-    await expect(cardInput).toHaveValue('끝난 카드한')
+    await expect(cardInput).toHaveText('끝난 카드한')
     await cardInput.press('Enter')
 
     await expect.poll(() => room.content(DOC)).toContain('- [ ] 체크 카드\n- [ ] 위 카드\n\n## 진행 중\n- [x] 끝난 카드한\n')

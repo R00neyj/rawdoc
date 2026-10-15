@@ -37,6 +37,7 @@
 |`src/app/account.ts`|로그인 상태를 서버에 물어보고 로그인·로그아웃 주소를 정함|
 |`src/app/accountDelete.ts`|계정 삭제 요청과 삭제 뒤 이 기기 정리 순서를 처리함|
 |`src/app/AccountDeleteDialog.tsx`|계정 삭제 창. 삭제될 내용 확인, 다시 로그인, 확인 문구 입력 후 삭제함|
+|`src/app/BoardInput.tsx`|칸반 보드의 칸 이름·카드 글자 입력칸. 편집기처럼 짝 기호와 `[[` 문서 제목 자동완성을 씀|
 |`src/app/AccountMenu.tsx`|사이드바 아래 계정 메뉴. 이메일·사용량을 보여주고 로그아웃 등을 고름|
 |`src/app/accountTrigger.ts`|사이드바 아래 계정 자리에 로그인 버튼과 계정 메뉴 중 무엇을 띄울지 정함|
 |`src/app/ApiTokensDialog.tsx`|명령줄 도구용 접속 열쇠(API 토큰)를 만들고 지우는 창|
@@ -237,7 +238,6 @@
 |`src/app/useE2eeConvert.ts`|문서를 암호 금고로 옮기거나 금고에서 꺼냄|
 |`src/app/useE2eeMigrate.ts`|로그인 전 금고 옮기기와 금고 잠그기·초기화 단계를 처리함|
 |`src/app/useEdgeSwipe.ts`|좁은 화면에서 손가락으로 밀어 사이드바를 여닫음. 칸반 카드를 끄는 동안은 건너뜀|
-|`src/app/useFieldAutoPair.ts`|칸반 보드 입력칸에 괄호·강조 기호 자동 짝을 걸어 줌|
 |`src/app/useEditorSync.ts`|편집기와 화면을 맞추고 다른 문서의 제목·줄로 바로 이동함|
 |`src/app/useFolderActions.ts`|문서·폴더 삭제, 폴더 만들기, 한꺼번에 이동·고정을 처리함|
 |`src/app/useGithubFlow.ts`|GitHub 연결과 저장소에서 문서 가져오기 화면을 관리함|
@@ -305,14 +305,13 @@
 |`src/app/yDevLink.ts`|개발 중에만 쓰는, 두 탭 사이 같은 문서 동시 편집 연결|
 |`src/app/yjsFlush.ts`|열지 않은 문서의 밀린 수정을 한 건씩 서버에 올림|
 
-## `src/editor/` 편집기 (50)
+## `src/editor/` 편집기 (49)
 
 글을 쓰는 본문 칸. 마크다운 기호를 지우지 않고 꾸며 보여 줌
 
 |파일|하는 일|
 |---|---|
 |`src/editor/autoPair.ts`|괄호나 `**` 같은 짝 기호를 자동으로 닫아 줌|
-|`src/editor/autoPairField.ts`|한 줄 입력칸에도 편집기와 똑같은 자동 짝 기호 규칙을 쓸 수 있게 이어 줌|
 |`src/editor/boardComposition.ts`|칸반 보드 입력칸에서 한글을 조합하는 중인지 알려 남의 수정을 잠시 미루게 함 (F-2141)|
 |`src/editor/blockCommands.ts`|우클릭 메뉴로 줄을 목록·제목·일반 문단으로 바꿈|
 |`src/editor/codeLanguages.ts`|코드 블록 안 글자를 언어별로 색칠하고 들여쓰기를 맞춤|

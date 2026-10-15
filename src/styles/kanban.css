@@ -277,26 +277,44 @@
   font-family: var(--font-sans);
   font-size: 14px;
   outline: none;
+  cursor: text;
 }
 
-.kanban-lane-input:focus,
-.kanban-card-input:focus {
+.kanban-lane-input:focus-within,
+.kanban-card-input:focus-within {
   border-color: transparent;
   outline: 2px solid var(--accent-ring);
 }
 
+/* 입력칸 안 CM6 — 바깥 상자가 테두리·여백을 맡는다 */
+:is(.kanban-lane-input, .kanban-card-input) .cm-editor.cm-focused {
+  outline: none;
+}
+
+:is(.kanban-lane-input, .kanban-card-input) .cm-content {
+  padding: 0;
+  font-family: inherit;
+  caret-color: var(--ink);
+}
+
+:is(.kanban-lane-input, .kanban-card-input) .cm-line {
+  padding: 0;
+}
+
+:is(.kanban-lane-input, .kanban-card-input) .cm-placeholder {
+  color: var(--muted);
+}
+
 .kanban-lane-input {
   flex: 1;
-  width: 0; /* input 의 기본 폭(size=20)이 칸 최소 폭을 키워 칸이 오른쪽으로 늘어난다 */
+  width: 0; /* 내용 폭이 칸 최소 폭을 키우지 않게 */
   font-weight: 600;
 }
 
 .kanban-card .kanban-card-input {
+  display: inline-block;
   width: calc(100% - 24px);
-}
-
-.kanban-card-input::placeholder {
-  color: var(--muted);
+  vertical-align: middle;
 }
 
 .kanban-lane > .kanban-card-input {

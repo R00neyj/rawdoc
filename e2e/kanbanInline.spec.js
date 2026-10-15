@@ -8,15 +8,19 @@ const board = (page) => page.getByRole('region', { name: '칸반 보드' })
 const lane = (page, name) => board(page).getByRole('region', { name, exact: true })
 const laneTitles = (page) => board(page).locator('.kanban-lanes > .kanban-lane .kanban-lane-title')
 
-test('칸반 A1 새 카드 입력칸에서 [[ 가 짝으로 닫히고, 카드의 위키링크를 누르면 그 문서가 열린다', async ({ page }) => {
+test('칸반 A1 새 카드 입력칸에서 [[ 가 짝으로 닫히고 제목 후보를 Enter 로 고르며, 카드의 위키링크를 누르면 그 문서가 열린다', async ({ page }) => {
   await openApp(page)
   const target = await importMarkdown(page, { name: '회의록.md', content: '회의 첫 줄\n' })
   const boardId = await importMarkdown(page, { name: '보드 문서.md', content: BOARD_DOC })
 
   await lane(page, '할 일').getByRole('button', { name: '카드 추가' }).click()
   const input = lane(page, '할 일').getByRole('textbox', { name: '새 카드' })
-  await input.pressSequentially('[[회의록')
-  await expect(input).toHaveValue('[[회의록]]')
+  await input.pressSequentially('[[회의')
+  await expect(input).toHaveText('[[회의]]')
+  await expect(page.getByRole('option', { name: '회의록' })).toBeVisible()
+  await page.waitForTimeout(100) // 후보 창 interactionDelay(75ms) 동안의 Enter 는 고르기로 치지 않는다
+  await input.press('Enter')
+  await expect(input).toHaveText('[[회의록]]')
   await input.press('Enter')
   await input.press('Escape')
   expect((await readSavedContent(page, boardId)).content).toContain('- 둘째 카드\n- [ ] [[회의록]]\n')

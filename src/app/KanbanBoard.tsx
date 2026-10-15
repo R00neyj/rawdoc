@@ -4,6 +4,7 @@ import {
   type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject,
 } from 'react'
 import type { EditorHandle } from '../editor/Editor'
+import type { WikiContext } from '../editor/preview/wikiLinks'
 import { renderMarkdownInline } from '../viewer/renderMarkdown'
 import { setBoardComposing } from '../editor/boardComposition'
 import { redoLocal, undoLocal } from '../editor/yBinding'
@@ -18,7 +19,7 @@ import {
 } from './kanbanDrag'
 import KanbanMenu, { type KanbanMenuActions, type KanbanMenuState, type KanbanMenuTarget } from './KanbanMenu'
 import type { NoticeWithAction } from './NoticeBar'
-import { useFieldAutoPair } from './useFieldAutoPair'
+import BoardInput from './BoardInput'
 import { useKanbanBoard, type ApplyKanban } from './useKanbanView'
 
 export type KanbanBoardFocus = 'title' | 'board' | null
@@ -34,6 +35,8 @@ type KanbanBoardProps = {
   // 카드 글자의 위키링크 — 보기 모드와 같은 해석·열기
   resolveWikiLink: (target: string) => string | null
   onOpenWikiLink: (target: string, heading: string | null) => void
+  // 카드 입력칸 `[[` 자동완성 문맥 — 편집기와 같은 것
+  wikiContext: WikiContext
   apply: ApplyKanban
   showNotice: (input: NoticeWithAction) => number
   // 문서를 열 때 받은 첫 포커스 요청 — 마운트 때 한 번 쓰고 비운다
@@ -58,7 +61,7 @@ const UNNAMED_LANE = '이름 없는 칸'
 const ARROWS: Partial<Record<string, KanbanDir>> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }
 
 export default function KanbanBoard({
-  handle, title, titleReadOnly, readOnly, onTitleChange, onTitleCommit, onOpenStray, resolveWikiLink, onOpenWikiLink, apply, showNotice, focusRef, onOpenSettings,
+  handle, title, titleReadOnly, readOnly, onTitleChange, onTitleCommit, onOpenStray, resolveWikiLink, onOpenWikiLink, wikiContext, apply, showNotice, focusRef, onOpenSettings,
   revealTick, takeReveal,
 }: KanbanBoardProps) {
   const boardRef = useRef<HTMLDivElement | null>(null)
@@ -342,7 +345,7 @@ export default function KanbanBoard({
   const onBoardContextMenu = (e: ReactMouseEvent<HTMLDivElement>) => {
     const t = e.target instanceof Element ? e.target : null
     const native = e.nativeEvent as MouseEvent & { pointerType?: string }
-    if (readOnly || e.defaultPrevented || !t || native.pointerType === 'touch' || t.closest('input, textarea, a, .item-menu-list')) return
+    if (readOnly || e.defaultPrevented || !t || native.pointerType === 'touch' || t.closest('input, textarea, a, .item-menu-list, .cm-editor')) return
     const laneEl = t.closest<HTMLElement>('.kanban-lanes > .kanban-lane')
     const laneEls = Array.from(boardRef.current?.querySelectorAll<HTMLElement>('.kanban-lanes > .kanban-lane') ?? [])
     const lane = laneEl ? laneEls.indexOf(laneEl) : -1
@@ -414,7 +417,7 @@ export default function KanbanBoard({
 
   const onBoardKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const t = e.target
-    if ((t instanceof HTMLInputElement && t.type !== 'checkbox') || t instanceof HTMLTextAreaElement) return
+    if ((t instanceof HTMLInputElement && t.type !== 'checkbox') || t instanceof HTMLTextAreaElement || (t instanceof Element && t.closest('.cm-editor'))) return
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return
     const key = e.key.toLowerCase()
     const command = key === 'z' ? (e.shiftKey ? redoLocal : undoLocal) : key === 'y' && e.ctrlKey && !e.shiftKey ? redoLocal : null
@@ -565,7 +568,7 @@ export default function KanbanBoard({
                           onPointerDown={readOnly || cardEditing ? undefined : (e) => drag.start(e, { kind: 'card', lane: laneIndex, card: cardIndex }, card.from)}
                           onContextMenu={drag.blockLongPressMenu}
                           onDoubleClick={(e) => {
-                            if (!cardEditing && !(e.target instanceof Element && e.target.closest('input, a, button'))) startCardEdit(card.from, card.text)
+                            if (!cardEditing && !(e.target instanceof Element && e.target.closest('input, a, button, .cm-editor'))) startCardEdit(card.from, card.text)
                           }}
                           onKeyDown={(e) => {
                             if (e.target !== e.currentTarget || e.nativeEvent.isComposing) return
@@ -589,6 +592,7 @@ export default function KanbanBoard({
                               className="kanban-card-input"
                               label="카드 내용"
                               value={editing.value}
+                              wikiContext={wikiContext}
                               {...inputHandlers}
                               onEnter={() => finishCard(draftRef.current?.value ?? '', true)}
                               onEscape={() => finishCard(null, true)}
@@ -625,6 +629,7 @@ export default function KanbanBoard({
                     label="새 카드"
                     placeholder="카드 내용"
                     value={editing.value}
+                    wikiContext={wikiContext}
                     {...inputHandlers}
                     onEnter={() => {
                       const value = draftRef.current?.value ?? ''
@@ -723,7 +728,7 @@ function useCardDrag(boardRef: RefObject<HTMLDivElement | null>, callbacks: Drag
     const pointerType = e.pointerType === 'mouse' ? 'mouse' : e.pointerType === 'pen' ? 'pen' : 'touch'
     touchPressRef.current = pointerType !== 'mouse'
     const target = e.target instanceof Element ? e.target : null
-    if (gestureRef.current || !e.isPrimary || e.button !== 0 || target?.closest('input, button, textarea, a')) return
+    if (gestureRef.current || !e.isPrimary || e.button !== 0 || target?.closest('input, button, textarea, a, .cm-editor')) return
     const el = e.currentTarget
     const startX = e.clientX
     const startY = e.clientY
@@ -923,72 +928,3 @@ function MoreButton({ label, expanded, onOpen, onClose }: { label: string; expan
   )
 }
 
-type BoardInputProps = {
-  className: string
-  label: string
-  placeholder?: string
-  value: string
-  select?: boolean
-  onChange: (value: string) => void
-  onComposing: (composing: boolean) => void
-  onEnter: () => void
-  onEscape: () => void
-  onBlur: () => void
-}
-
-function BoardInput({ className, label, placeholder, value, select, onChange, onComposing, onEnter, onEscape, onBlur }: BoardInputProps) {
-  const ref = useRef<HTMLInputElement | null>(null)
-  const composingRef = useRef(false)
-  const composingCb = useRef(onComposing)
-  useFieldAutoPair(ref, composingRef)
-  useLayoutEffect(() => {
-    composingCb.current = onComposing
-  })
-
-  useLayoutEffect(() => {
-    const input = ref.current
-    if (!input) return
-    input.focus()
-    if (select) input.select()
-    else input.setSelectionRange(input.value.length, input.value.length)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 때 한 번만 포커스한다
-  }, [])
-
-  // 조합 중에 사라지면 compositionend 가 오지 않는다 — 게이트 보류가 남지 않게 끝을 알린다
-  useLayoutEffect(
-    () => () => {
-      if (composingRef.current) composingCb.current(false)
-    },
-    [],
-  )
-
-  const setComposing = (composing: boolean) => {
-    composingRef.current = composing
-    onComposing(composing)
-  }
-
-  return (
-    <input
-      ref={ref}
-      className={className}
-      aria-label={label}
-      placeholder={placeholder}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onCompositionStart={() => setComposing(true)}
-      onCompositionEnd={() => setComposing(false)}
-      onKeyDown={(e) => {
-        if (e.nativeEvent.isComposing || e.keyCode === 229) return
-        if (e.key !== 'Enter' && e.key !== 'Escape') return
-        e.preventDefault()
-        e.stopPropagation()
-        if (e.key === 'Enter') onEnter()
-        else onEscape()
-      }}
-      onBlur={() => {
-        if (composingRef.current) setComposing(false)
-        onBlur()
-      }}
-    />
-  )
-}

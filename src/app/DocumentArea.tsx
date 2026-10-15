@@ -193,6 +193,7 @@ export default function DocumentArea({
           onOpenStray={openStrayLine}
           resolveWikiLink={resolveWikiHref}
           onOpenWikiLink={handleOpenWikiLink}
+          wikiContext={wikiContext}
           focusRef={boardFocusRef}
           onOpenSettings={openKanbanSettings}
           revealTick={kanban.revealTick}
