@@ -117,7 +117,7 @@
 
 .kanban-lane-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 2px 4px;
