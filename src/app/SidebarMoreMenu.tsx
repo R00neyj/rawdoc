@@ -1,17 +1,18 @@
-// 휴대폰 폭 사이드바 버튼 줄의 `⋯` — 지도·템플릿 관리를 담아 한 줄에 맞춘다. HelpMenu 틀, 목록은 위로 연다 (tweak 2026-10-10)
+// 휴대폰 폭 사이드바 버튼 줄의 `⋯` — 새 칸반 보드·지도·템플릿 관리를 담아 한 줄에 맞춘다. HelpMenu 틀, 목록은 위로 연다
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { IconMap, IconMore, IconTemplates, IconTooltip } from './icons'
+import { IconKanban, IconMap, IconMore, IconTemplates, IconTooltip } from './icons'
 import usePresence from './usePresence'
 
 const LABEL = '더 보기'
 
-export default function SidebarMoreMenu({ onOpenMap, onOpenTemplates }: { onOpenMap: () => void; onOpenTemplates: () => void }) {
+export default function SidebarMoreMenu({ onOpenMap, onOpenTemplates, onCreateBoard }: { onOpenMap: () => void; onOpenTemplates: () => void; onCreateBoard: () => void }) {
   const [open, setOpen] = useState(false)
   const { mounted, state } = usePresence(open)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLUListElement | null>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
   const items = [
+    { key: 'new-board', label: '새 칸반 보드', Icon: IconKanban, run: onCreateBoard },
     { key: 'map', label: '지도', Icon: IconMap, run: onOpenMap },
     { key: 'templates', label: '템플릿 관리', Icon: IconTemplates, run: onOpenTemplates },
   ]

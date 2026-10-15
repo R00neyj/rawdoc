@@ -1276,7 +1276,7 @@ export default function Sidebar({
                 <SidebarIconButton icon={IconCollapseAll} label="모두 접기" onClick={onCollapseAllFolders} />
                 <SidebarIconButton icon={IconMap} label="지도" btnClassName="sidebar-map-btn" onClick={onOpenMap} />
                 <SidebarIconButton icon={IconTemplates} label="템플릿 관리" btnClassName="sidebar-templates-btn" onClick={onOpenTemplates} />
-                <SidebarMoreMenu onOpenMap={onOpenMap} onOpenTemplates={onOpenTemplates} />
+                <SidebarMoreMenu onOpenMap={onOpenMap} onOpenTemplates={onOpenTemplates} onCreateBoard={() => onCreateBoard(null)} />
               </div>
               {pinned.length > 0 && (
                 <>

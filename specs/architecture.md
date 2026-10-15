@@ -397,6 +397,6 @@ scripts/admin-github.mjs                              GitHub 기능 켜기·끄�
 ## 5. 브랜드 주입
 
 - `brand.config.js`: `export default { name, shortName, accent, icon }` (`icon` 은 상단바 제품 아이콘 경로, F-142)
-- `vite.config.js` 의 작은 플러그인이 `index.html` 에 `<title>`, `<meta name="theme-color">`, `<style>:root{--brand-accent:…}</style>` 를 넣는다. 첫 화면부터 색이 맞게 하기 위해서다. `--accent` 는 `tokens.css` 가 테마별로 `--brand-accent` 에서 만든다 (F-141, 2026-09-14 `--accent` 직접 주입에서 변경)
+- `vite.config.js` 의 작은 플러그인이 `index.html` 에 `<title>`, `<meta name="theme-color">`, `<style>:root{--brand-accent:…}</style>` 를 넣는다. 첫 화면부터 색이 맞게 하기 위해서다. `--accent` 는 `tokens.css` 가 테마별로 `--brand-accent` 에서 만든다 (F-141, 2026-09-14 `--accent` 직접 주입에서 변경). 적용 테마가 다크면 `useAppearancePrefs` 가 `theme-color` 를 다크 `--paper` 로 바꾸고, 다크를 벗어나면 브랜드색으로 되돌린다 (small 2026-10-15)
 - 앱 코드는 `src/brand.js` 로만 가져온다
 - 메인 컬러 파생색은 `tokens.css` 에서 `color-mix(in srgb, var(--accent) N%, transparent)` 로 만든다
