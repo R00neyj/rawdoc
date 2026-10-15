@@ -2,7 +2,7 @@
 title: 사용자 CSS 로 모양 바꾸기
 summary: 설정 `사용자 CSS` 탭의 스니펫과 템플릿, 약속된 변수와 훅, 테마·인쇄·HTML 파일에서 먹는 규칙, 빠지는 외부 파일, 계정 저장, 화면이 망가졌을 때 여는 법.
 date: 2026-09-30
-updated: 2026-10-05
+updated: 2026-10-15
 ---
 
 # 사용자 CSS 로 모양 바꾸기
@@ -12,7 +12,7 @@ updated: 2026-10-05
 ## 스니펫 만들기
 
 1. `새 스니펫`을 누르면 `스니펫 1`처럼 이름이 붙은 빈 스니펫이 켜진 채 목록 끝에 생기고 `CSS 편집` 창이 열립니다
-2. `CSS` 칸에 규칙을 씁니다. 입력을 멈추면 곧 저장되고, 켜진 스니펫이면 바로 적용됩니다. `닫기`를 누를 때도 저장합니다
+2. `CSS` 칸에 규칙을 씁니다. 입력을 멈추면 곧 저장되고, 켜진 스니펫이면 바로 적용됩니다
 3. 창 아래에 `규칙 3개 적용 중`처럼 적용된 규칙 수가 나옵니다. 브라우저는 문법이 틀린 규칙을 알림 없이 버리므로, 수가 적으면 다시 봅니다
 
 - `템플릿으로 시작`은 `템플릿`이라는 스니펫을 만듭니다. 아래 표의 변수와 선택자가 설명·기본값과 함께 주석으로 들어 있어 켜 두어도 화면은 그대로입니다. 바꿀 줄의 주석 표시를 지우면 그 줄이 적용됩니다
@@ -48,7 +48,7 @@ updated: 2026-10-05
 
 | 묶음 | 변수 |
 | --- | --- |
-| 기본 색 | `--paper` 바탕 · `--panel` 대화상자·메뉴 · `--ink` 글자 · `--ink-2` 보조 글자 · `--muted` 흐린 글자 · `--rule` `--rule-2` 구분선 · `--link` 링크 · `--danger` 오류 · `--accent` 강조 |
+| 기본 색 | `--paper` 맨 아래 바탕 · `--panel` 편집 영역·대화상자 · `--surface` 사이드바·상단바·패널 · `--ink` 글자 · `--ink-2` 보조 글자 · `--muted` 흐린 글자 · `--rule` `--rule-2` 구분선 · `--link` 링크 · `--danger` 오류 · `--accent` 강조 |
 | 파생 색 | `--accent-soft` `--accent-ring` `--selection-bg` |
 | 본문 | `--md-font-size` `--md-line-height` `--md-fg-muted` `--md-border` `--md-border-muted` `--md-bg-muted` `--md-code-bg` `--md-link` `--highlight-base` `--md-highlight-bg` |
 | 코드 | `--code-keyword` `--code-string` `--code-comment` `--code-number` `--code-function` `--code-type` `--code-property` `--code-tag` |
@@ -59,7 +59,7 @@ updated: 2026-10-05
 | 모양 | `--radius-control` `--radius-dialog` `--radius-image` |
 
 - `--md-font-size`·`--font-display`·`--font-body`를 바꾸면 설정 `글자 크기`·`제목 서체`·`본문 서체`가 먹지 않습니다
-- 지도 캔버스 안은 선택자가 닿지 않고, `--panel` `--ink` `--ink-2` `--muted` `--rule` `--accent`와 지도 그룹 색만 읽어 칠합니다
+- 지도 캔버스 안은 선택자가 닿지 않고, `--panel` `--surface` `--ink` `--ink-2` `--muted` `--rule` `--accent`와 지도 그룹 색만 읽어 칠합니다
 - `코드` 묶음은 코드블록과 `CSS 편집` 창의 구문 색입니다. 끄려면 여덟 변수를 모두 `currentColor`로 두세요
 
 ## 화면 뼈대 훅
@@ -98,7 +98,7 @@ updated: 2026-10-05
 
 ## 인쇄와 HTML 파일
 
-- 상단바 `내보내기`의 `HTML 파일`과 `PDF (A4 인쇄)`에도 켠 스니펫이 들어갑니다. 파일에는 검사를 거친 CSS가 스니펫 이름 주석과 함께 담깁니다
+- 상단바 `내보내기`의 `HTML 파일`과 `PDF (A4 인쇄)`에도 켠 스니펫이 들어갑니다
 - 인쇄와 HTML 파일에는 `data-theme`가 없어 테마별 규칙이 먹지 않습니다. 인쇄에만 쓸 규칙은 `@media print`나 `:root[data-printing]`에 둡니다
 - HTML 파일에는 앱 화면이 없어 `data-ui` 규칙은 먹지 않고, `:root:root` 변수와 보기 쪽 선택자만 먹습니다
 - `서식 있는 복사`에는 들어가지 않습니다

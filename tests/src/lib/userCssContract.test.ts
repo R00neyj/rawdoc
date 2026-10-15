@@ -13,7 +13,7 @@ import {
 
 // ── 6.1 고정 사본 — 계약을 바꾸는 명세만 고친다 ──
 const PUBLIC_VAR_NAMES = [
-  '--paper', '--panel', '--ink', '--ink-2', '--muted', '--rule', '--rule-2', '--link', '--danger', '--accent',
+  '--paper', '--panel', '--surface', '--ink', '--ink-2', '--muted', '--rule', '--rule-2', '--link', '--danger', '--accent',
   '--accent-soft', '--accent-ring', '--selection-bg',
   '--md-font-size', '--md-line-height', '--md-fg-muted', '--md-border', '--md-border-muted', '--md-bg-muted',
   '--md-code-bg', '--md-link', '--highlight-base', '--md-highlight-bg',
@@ -402,7 +402,7 @@ function collectInlineVarNames(sources: string[]): Set<string> {
     const name = m[1] ?? consts.get(m[2])
     if (name) names.add(name)
   }
-  for (const m of all.matchAll(/['"](--[\w-]+)['"]\s*:/g)) names.add(m[1])
+  for (const m of all.matchAll(/[{,]\s*['"](--[\w-]+)['"]\s*:/g)) names.add(m[1])
   return names
 }
 

@@ -15,8 +15,9 @@ export const USER_CSS_GUIDE_PATH = `${GUIDES_PATH}/custom-css`
 const v = (name: `--${string}`, group: PublicVarGroup, label: string): PublicVar => ({ name, group, label })
 
 export const PUBLIC_VARS: readonly PublicVar[] = [
-  v('--paper', '기본 색', '앱 바탕'),
-  v('--panel', '기본 색', '대화상자·메뉴·카드 바탕'),
+  v('--paper', '기본 색', '맨 아래 바탕·입력칸 — 다크 테마는 --surface 도 이 색에서 만듭니다'),
+  v('--panel', '기본 색', '편집 영역·대화상자·메뉴·카드 바탕'),
+  v('--surface', '기본 색', '사이드바·상단바·상태바·오른쪽 패널·목차 바탕'),
   v('--ink', '기본 색', '글자'),
   v('--ink-2', '기본 색', '보조 글자'),
   v('--muted', '기본 색', '흐린 글자·아이콘'),
