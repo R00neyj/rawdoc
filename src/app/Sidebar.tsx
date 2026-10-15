@@ -1324,6 +1324,16 @@ export default function Sidebar({
                   { key: 'new-doc', label: '새 문서', icon: IconNoteAdd, onSelect: () => onCreateDoc(null) },
                   { key: 'new-folder', label: '새 폴더', icon: IconFolderAdd, onSelect: () => handleCreateFolder(null) },
                   { key: 'new-board', label: '새 칸반 보드', icon: IconKanban, onSelect: () => onCreateBoard(null) },
+                  { key: 'import', label: '.md 파일 가져오기', icon: IconUpload, onSelect: onImportDoc },
+                  ...(github
+                    ? [
+                        { key: 'github-import', label: 'GitHub에서 가져오기', icon: IconUpload, onSelect: github.onImport },
+                        { key: 'github-new', label: 'GitHub에 새 파일', icon: IconCommit, onSelect: github.onNewFile },
+                      ]
+                    : []),
+                  { key: 'collapse-all', label: '모두 접기', icon: IconCollapseAll, onSelect: onCollapseAllFolders },
+                  { key: 'map', label: '지도', icon: IconMap, onSelect: onOpenMap },
+                  { key: 'templates', label: '템플릿 관리', icon: IconTemplates, onSelect: onOpenTemplates },
                 ]}
                 open={contextMenu?.key === ROOT_MENU_KEY ? true : undefined}
                 onOpenChange={contextMenu?.key === ROOT_MENU_KEY ? (v) => { if (!v) setContextMenu(null) } : undefined}
