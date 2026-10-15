@@ -1,6 +1,6 @@
 // 칸반 보드 우클릭·`⋯` 메뉴 — 카드·칸 머리·빈 자리마다 항목을 고르고 FolderMenu 로 그린다
 import FolderMenu, { type FolderMenuItem } from './FolderMenu'
-import { IconCheck, IconDelete, IconEdit, IconMove, IconRaw, IconSettings } from './icons'
+import { IconAdd, IconCheck, IconDelete, IconEdit, IconMove, IconRaw, IconRemoveCheck, IconSettings } from './icons'
 import type { KanbanLane } from '../lib/kanban'
 
 export type KanbanMenuTarget = { kind: 'card'; lane: number; card: number } | { kind: 'lane'; lane: number } | { kind: 'board' }
@@ -31,7 +31,7 @@ type KanbanMenuProps = {
 function menuItems(target: KanbanMenuTarget, lanes: KanbanLane[], unnamed: string, a: KanbanMenuActions): FolderMenuItem[] | null {
   if (target.kind === 'board') {
     return [
-      { key: 'add-lane', label: '칸 추가', onSelect: a.addLane },
+      { key: 'add-lane', label: '칸 추가', icon: IconAdd, onSelect: a.addLane },
       { key: 'settings', label: '칸반 설정…', icon: IconSettings, onSelect: a.openSettings },
     ]
   }
@@ -53,7 +53,7 @@ function menuItems(target: KanbanMenuTarget, lanes: KanbanLane[], unnamed: strin
   return [
     { key: 'edit', label: '고치기', icon: IconEdit, onSelect: () => a.editCard(lane, card) },
     { key: 'check', label: check, icon: IconCheck, onSelect: () => a.toggleCheck(lane, card) },
-    ...(found.done === null ? [] : [{ key: 'uncheck', label: '체크 칸 떼기', onSelect: () => a.removeCheck(lane, card) }]),
+    ...(found.done === null ? [] : [{ key: 'uncheck', label: '체크 칸 떼기', icon: IconRemoveCheck, onSelect: () => a.removeCheck(lane, card) }]),
     ...lanes.flatMap((l, i): FolderMenuItem[] =>
       i === lane ? [] : [{ key: `move-${i}`, label: `옮기기: ${l.title || unnamed}`, icon: IconMove, onSelect: () => a.moveCardTo(lane, card, i) }],
     ),

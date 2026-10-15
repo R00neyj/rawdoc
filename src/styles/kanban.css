@@ -47,6 +47,13 @@
   opacity: 1;
 }
 
+/* 보드 `⋯` 은 22px 기본보다 크게 — 칸 머리·카드에서 누르기 쉽게 (tweak 2026-10-15) */
+.kanban-board .kanban-more {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
 .kanban-title {
   flex: 1 1 auto;
   min-width: 0;
