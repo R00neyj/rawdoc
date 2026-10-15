@@ -265,10 +265,11 @@ export default function FolderMenu({
                 }}
                 className={item.danger ? 'danger' : undefined}
                 aria-disabled={item.disabled ? 'true' : undefined}
+                title={item.label}
                 onClick={() => selectItem(item)}
               >
                 {item.icon && <item.icon size={16} />}
-                {item.label}
+                <span className="item-menu-label">{item.label}</span>
               </button>
             </li>
             ),

@@ -966,6 +966,7 @@ body.sidebar-resizing {
   top: calc(100% + 2px);
   z-index: 30;
   min-width: 160px;
+  max-width: min(320px, calc(100vw - 16px)); /* 긴 폴더·칸 이름이 메뉴를 끝없이 키우지 않게 (tweak 2026-10-15) */
   list-style: none;
   margin: 0;
   padding: 6px;
@@ -1056,6 +1057,17 @@ body.sidebar-resizing {
   font-size: 13px;
   color: var(--ink-2);
   transition: var(--transition-colors);
+}
+
+.item-menu-list button > svg {
+  flex: none;
+}
+
+.item-menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .item-menu-list button:hover,
