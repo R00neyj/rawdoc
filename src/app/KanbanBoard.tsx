@@ -524,6 +524,7 @@ export default function KanbanBoard({
                   ) : (
                     <h2
                       className="kanban-lane-title"
+                      title={name}
                       tabIndex={readOnly ? undefined : 0}
                       onClick={readOnly ? undefined : () => startRename(lane.headingFrom, lane.title)}
                       onKeyDown={

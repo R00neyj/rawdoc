@@ -2,6 +2,10 @@
 import { useState } from 'react'
 import { getPref, setPref } from './prefs'
 import type { KanbanSettings } from './useKanbanSettings'
+import { truncateChars } from '../lib/truncate'
+
+// 네이티브 목록은 가장 긴 항목만큼 넓어진다 (tweak 2026-10-15)
+const LANE_OPTION_MAX_CHARS = 30
 
 export default function KanbanSettingsTab({ settings }: { settings: KanbanSettings }) {
   const [newCardCheck, setNewCardCheck] = useState(() => getPref('md.kanbanNewCardCheck', 'on') === 'on')
@@ -33,10 +37,10 @@ export default function KanbanSettingsTab({ settings }: { settings: KanbanSettin
           disabled={settings.readOnly}
           onChange={(e) => settings.onChangeDone(e.target.value === '' ? null : e.target.value)}
         >
-          <option value="">마지막 칸 ({choices.last || '이름 없는 칸'})</option>
+          <option value="" title={choices.last || undefined}>마지막 칸 ({truncateChars(choices.last || '이름 없는 칸', LANE_OPTION_MAX_CHARS)})</option>
           {choices.names.map((name) => (
-            <option key={name} value={name}>
-              {name}
+            <option key={name} value={name} title={name}>
+              {truncateChars(name, LANE_OPTION_MAX_CHARS)}
             </option>
           ))}
         </select>

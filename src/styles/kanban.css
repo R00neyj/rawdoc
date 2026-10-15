@@ -131,6 +131,12 @@
   border: 1px solid transparent;
   min-width: 0;
   overflow-wrap: anywhere;
+  /* 긴 이름이 칸 머리를 끝없이 키우지 않게 두 줄까지, 전체는 title (tweak 2026-10-15) */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
   color: var(--ink);
   font-size: 14px;
   font-weight: 600;

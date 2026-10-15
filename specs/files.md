@@ -455,6 +455,7 @@
 |`src/lib/templates.ts`|서식 폴더를 알아보고 서식 속 빈칸을 채워 넣음|
 |`src/lib/textRebase.ts`|밖에서 바뀐 글을 내가 고친 글 위에 겹쳐 반영함|
 |`src/lib/touchContextMenu.ts`|터치 길게 누르기와 마우스 우클릭 메뉴를 구분함|
+|`src/lib/truncate.ts`|너무 긴 이름을 정한 글자 수에서 잘라 … 를 붙임|
 |`src/lib/usageGauge.ts`|사용량 막대의 비율과 주의(80%)·위험(90%) 단계, 안내 문구를 정함|
 |`src/lib/usageLimits.ts`|사용량 초과 알림 문구와 다시 시도할 시간을 정함|
 |`src/lib/userCssContract.ts`|사용자 꾸미기 코드에서 쓸 수 있는 색 이름·요소 목록과 서식을 정함|

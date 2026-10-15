@@ -1,4 +1,5 @@
 // 폴더 트리 조립·이동 검사 — 순수 함수. 깊이 제한 없음, 순환이 저장돼도 끝난다 (specs/features/F-2017.md 3장)
+import { truncateChars } from './truncate'
 
 export type FolderLike = { id: string; name: string; parentId: string | null }
 export type DocLike = {
@@ -124,11 +125,6 @@ export function flattenFolderTree<T extends FolderLike>(folders: T[]): Array<T &
 
 const PATH_SEP = ' / '
 const FOLDER_OPTION_MAX_CHARS = 40
-
-function truncateChars(text: string, max: number): string {
-  const chars = Array.from(text)
-  return chars.length <= max ? text : `${chars.slice(0, Math.max(0, max - 1)).join('')}…`
-}
 
 // 폴더 경로를 max 글자 안으로 — 첫 폴더는 두고 가운데를 `…` 로, 그래도 넘치면 끝 폴더 이름을 자른다
 export function compactFolderPath(segments: readonly string[], max: number): string {
