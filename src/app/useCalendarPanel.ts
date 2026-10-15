@@ -1,7 +1,7 @@
 // 오른쪽 패널 `달력` 보기 — 달 이동·날짜 문서 열기/만들기·그날 문서·달력 설정 (small 2026-10-10, 2026-10-11)
 import { useMemo, useState, type RefObject } from 'react'
 import { getPref, setPref } from './prefs'
-import { flattenFolderTree } from '../lib/folderTree'
+import { folderPathOptions } from '../lib/folderTree'
 import { templateFolderIds, NEW_DOC_TEMPLATE_NONE } from '../lib/templates'
 import {
   CALENDAR_DEFAULT_FORMAT,
@@ -80,9 +80,7 @@ export function useCalendarPanel(options: UseCalendarPanelOptions): UseCalendarP
   )
   const folderOptions = useMemo(() => {
     const hidden = templateFolderIds(folders)
-    return flattenFolderTree(folders)
-      .filter((f) => !hidden.has(f.id))
-      .map((f) => ({ id: f.id, label: `${'\u00a0\u00a0'.repeat(f.depth)}${f.name}` }))
+    return folderPathOptions(folders).filter((f) => !hidden.has(f.id))
   }, [folders])
 
   const now = new Date()

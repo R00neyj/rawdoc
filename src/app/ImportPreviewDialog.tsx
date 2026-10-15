@@ -3,7 +3,7 @@ import Dialog from './Dialog'
 import type { ImportPlan } from './importWorkspace'
 
 // D-? 가져오기 미리보기·진행·결과 대화상자 (specs/features/F-282.md 3.8, 넣을 폴더 선택은 F-2019.md 10.2)
-export type ImportTargetPicker = { options: ReadonlyArray<{ value: string; label: string }>; value: string }
+export type ImportTargetPicker = { options: ReadonlyArray<{ value: string; label: string; title?: string }>; value: string }
 export type ImportDialogState =
   | { stage: 'preview'; fileName: string; plan: Pick<ImportPlan, 'counts' | 'warnings'>; target?: ImportTargetPicker }
   | { stage: 'progress'; fileName: string; done: number; total: number }
@@ -49,7 +49,7 @@ export default function ImportPreviewDialog({ state, onCancel, onConfirm, onClos
                 onChange={(e) => onTargetChange?.(e.target.value)}
               >
                 {state.target.options.map((o) => (
-                  <option key={o.value} value={o.value}>
+                  <option key={o.value} value={o.value} title={o.title}>
                     {o.label}
                   </option>
                 ))}

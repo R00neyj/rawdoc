@@ -9,6 +9,8 @@ import {
   descendantFolderIds,
   folderAncestors,
   flattenFolderTree,
+  compactFolderPath,
+  folderPathOptions,
   type FolderNode,
   type TreeNode,
 } from '../../../src/lib/folderTree'
@@ -404,5 +406,42 @@ describe('flattenFolderTree (F-2017 U6)', () => {
 describe('descendantFolderIds — 순환 (F-2017 U7)', () => {
   it('순환 A↔B 에서 A 의 자손은 {A, B} 로 끝난다', () => {
     expect(descendantFolderIds([folder('A', 'A', 'B'), folder('B', 'B', 'A')], 'A').sort()).toEqual(['A', 'B'])
+  })
+})
+
+describe('compactFolderPath — 선택칸 폴더 경로 줄이기 (small 2026-10-15)', () => {
+  it('한도 안이면 경로 그대로', () => {
+    expect(compactFolderPath(['가', '나'], 40)).toBe('가 / 나')
+  })
+
+  it('넘치면 첫 폴더는 두고 가운데를 … 로, 끝쪽 폴더는 들어가는 만큼 남긴다', () => {
+    expect(compactFolderPath(['일', '이', '삼', '사', '오'], 13)).toBe('일 / … / 사 / 오')
+    expect(compactFolderPath(['일', '이', '삼', '사', '오'], 12)).toBe('일 / … / 오')
+  })
+
+  it('첫 폴더와 끝 폴더만으로도 넘치면 끝 폴더 이름을 잘라 … 로 맺는다', () => {
+    const long = '아주긴이름'.repeat(10)
+    expect(compactFolderPath(['상위', long], 20)).toBe(`… / ${long.slice(0, 15)}…`)
+    expect(compactFolderPath([long], 10)).toBe(`${long.slice(0, 9)}…`)
+  })
+
+  it('글자 수는 코드 포인트로 센다 — 이모지를 반으로 자르지 않는다', () => {
+    expect(compactFolderPath(['😀😀😀😀'], 3)).toBe('😀😀…')
+  })
+})
+
+describe('folderPathOptions (small 2026-10-15)', () => {
+  it('트리 순서로, 이름표는 줄인 경로·title 은 전체 경로', () => {
+    const deep = Array.from({ length: 12 }, (_, i) => folder(`n${i}`, '새 폴더', i === 0 ? null : `n${i - 1}`))
+    const options = folderPathOptions([folder('a', '가'), folder('b', '나', 'a'), ...deep])
+    expect(options.slice(0, 2)).toEqual([
+      { id: 'a', label: '가', title: '가' },
+      { id: 'b', label: '가 / 나', title: '가 / 나' },
+    ])
+    const last = options[options.length - 1]
+    expect(last.id).toBe('n11')
+    expect(last.title).toBe(Array(12).fill('새 폴더').join(' / '))
+    expect(Array.from(last.label).length).toBeLessThanOrEqual(40)
+    expect(last.label.startsWith('새 폴더 / … / ')).toBe(true)
   })
 })

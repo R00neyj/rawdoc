@@ -122,6 +122,38 @@ export function flattenFolderTree<T extends FolderLike>(folders: T[]): Array<T &
   return result
 }
 
+const PATH_SEP = ' / '
+const FOLDER_OPTION_MAX_CHARS = 40
+
+function truncateChars(text: string, max: number): string {
+  const chars = Array.from(text)
+  return chars.length <= max ? text : `${chars.slice(0, Math.max(0, max - 1)).join('')}…`
+}
+
+// 폴더 경로를 max 글자 안으로 — 첫 폴더는 두고 가운데를 `…` 로, 그래도 넘치면 끝 폴더 이름을 자른다
+export function compactFolderPath(segments: readonly string[], max: number): string {
+  const full = segments.join(PATH_SEP)
+  if (Array.from(full).length <= max) return full
+  for (let keep = segments.length - 2; keep >= 1; keep--) {
+    const candidate = [segments[0], '…', ...segments.slice(-keep)].join(PATH_SEP)
+    if (Array.from(candidate).length <= max) return candidate
+  }
+  const last = segments[segments.length - 1] ?? ''
+  if (segments.length === 1) return truncateChars(last, max)
+  const prefix = `…${PATH_SEP}`
+  return prefix + truncateChars(last, max - prefix.length)
+}
+
+// 폴더 고르기 선택칸 항목 — 네이티브 목록이 가장 긴 항목만큼 넓어지므로 줄인 경로를 쓴다 (small 2026-10-15)
+export function folderPathOptions<T extends FolderLike>(folders: T[]): Array<{ id: string; label: string; title: string }> {
+  const names: string[] = []
+  return flattenFolderTree(folders).map((f) => {
+    names.length = f.depth
+    names.push(f.name)
+    return { id: f.id, label: compactFolderPath(names, FOLDER_OPTION_MAX_CHARS), title: names.join(PATH_SEP) }
+  })
+}
+
 // folderId 자신부터 저장된 부모 사슬을 가까운 것부터. 없는 폴더·이미 모은 id 를 만나면 멈춘다
 export function folderAncestors(folders: FolderLike[], folderId: string | null): string[] {
   const folderById = new Map(folders.map((f) => [f.id, f]))

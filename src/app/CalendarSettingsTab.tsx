@@ -5,7 +5,7 @@ import type { TemplateEntry } from '../lib/templates'
 // 설정 `오른쪽 패널` 탭의 달력 묶음 — 날짜 문서 위치·제목 형식·템플릿, 기기별 (small 2026-10-10)
 export type CalendarSettings = {
   folder: string
-  folderOptions: readonly { id: string; label: string }[]
+  folderOptions: readonly { id: string; label: string; title: string }[]
   folderMissing: boolean
   format: string
   template: string
@@ -29,7 +29,7 @@ export default function CalendarSettingsTab({ settings, entries }: { settings: C
         >
           <option value="">최상위</option>
           {settings.folderOptions.map((o) => (
-            <option key={o.id} value={o.id}>
+            <option key={o.id} value={o.id} title={o.title}>
               {o.label}
             </option>
           ))}

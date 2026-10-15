@@ -7,8 +7,7 @@ import { createWikiResolver, shortestWikiTarget, type WikiResolver, type WikiDoc
 import { scanWikiLinks } from '../lib/wikiGraph'
 import { toObsidianFileName, toObsidianFolderName } from '../lib/filename'
 import { selectExportScope, planExportPaths, type ExportScope } from './exportWorkspace'
-import { flattenFolderTree } from '../lib/folderTree'
-import { folderPathMap } from './searchIndex'
+import { folderPathOptions } from '../lib/folderTree'
 import { isNoiseEntry, titleFromPath, truncatedCopyTitle, MAX_CONTENT_BYTES, MAX_ATTACHMENT_BYTES } from './importWorkspace'
 import type { AttachmentExt, Doc, Folder, LineEnding } from '../types'
 
@@ -337,13 +336,11 @@ export function defaultVaultTarget(scan: VaultScan, folders: readonly Folder[]):
 export function vaultTargetOptions(
   scan: VaultScan,
   folders: readonly Folder[],
-): Array<{ value: string; label: string }> {
-  const paths = folderPathMap(folders as Folder[])
-  const ordered = flattenFolderTree(folders as Folder[])
+): Array<{ value: string; label: string; title?: string }> {
   return [
     { value: 'new', label: `새 폴더 "${scan.vaultName}"` },
     { value: 'top', label: '최상위' },
-    ...ordered.map((f) => ({ value: `folder:${f.id}`, label: paths.get(f.id) ?? f.name })),
+    ...folderPathOptions(folders as Folder[]).map((f) => ({ value: `folder:${f.id}`, label: f.label, title: f.title })),
   ]
 }
 
