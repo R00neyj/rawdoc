@@ -199,9 +199,11 @@ export const SITE_CHROME_CSS = `
 .site-toc-list a:target-current { color: var(--ink); font-weight: 600; }
 
 @media (min-width: 1056px) {
+  /* 글 페이지는 본문 50rem 을 받으려 머리 폭(--site-page)보다 넓게 쓴다 (tweak 2026-10-15) */
   .site-main.site-doc {
+    max-width: 1312px;
     display: grid;
-    grid-template-columns: 168px 56px minmax(0, 34rem) minmax(40px, 1fr) 184px;
+    grid-template-columns: 168px 56px minmax(0, 50rem) minmax(40px, 1fr) 184px;
     align-items: start;
   }
   .site-main.site-doc .site-docnav { display: block; grid-column: 1; }
