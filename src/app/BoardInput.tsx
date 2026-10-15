@@ -46,6 +46,8 @@ export default function BoardInput({ className, label, placeholder, value, selec
   useLayoutEffect(() => {
     const host = hostRef.current
     if (!host) return
+    // StrictMode 재마운트·해제 때 destroy 가 내는 blur 는 사용자가 떠난 것이 아니다
+    let alive = true
     const setComposing = (composing: boolean) => {
       if (composingRef.current === composing) return
       composingRef.current = composing
@@ -88,6 +90,7 @@ export default function BoardInput({ className, label, placeholder, value, selec
               return false
             },
             blur: () => {
+              if (!alive) return
               setComposing(false)
               handlers.current.onBlur()
             },
@@ -101,6 +104,7 @@ export default function BoardInput({ className, label, placeholder, value, selec
       // 조합 중에 사라지면 compositionend 가 오지 않는다 — 게이트 보류가 남지 않게 끝을 알린다
       if (composingRef.current) handlers.current.onComposing(false)
       viewRef.current = null
+      alive = false
       view.destroy()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 때 한 번만 만든다

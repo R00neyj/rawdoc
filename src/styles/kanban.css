@@ -246,6 +246,16 @@
   .kanban-card > .kanban-more {
     opacity: 1;
   }
+
+  /* 늘 보이는 손가락용 `⋯` — 22px 는 누르기 어렵다. 카드 글자는 버튼 밑으로 들어가지 않게 비운다 */
+  .kanban-board .kanban-more {
+    width: 32px;
+    height: 32px;
+  }
+
+  .kanban-card {
+    padding-right: 40px;
+  }
 }
 
 .kanban-stray {
@@ -276,6 +286,7 @@
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: 14px;
+  line-height: 1.5;
   outline: none;
   cursor: text;
 }
@@ -291,9 +302,14 @@
   outline: none;
 }
 
+/* CM 기본 테마가 .cm-scroller 에 monospace 를 걸어 둔다 — 바깥 상자 서체·줄 높이를 따른다 */
+:is(.kanban-lane-input, .kanban-card-input) .cm-scroller {
+  font-family: inherit;
+  line-height: inherit;
+}
+
 :is(.kanban-lane-input, .kanban-card-input) .cm-content {
   padding: 0;
-  font-family: inherit;
   caret-color: var(--ink);
 }
 
