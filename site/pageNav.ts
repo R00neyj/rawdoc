@@ -76,13 +76,18 @@ export function buildDocNav(guides: readonly GuideEntry[]): DocNav {
   return { main, legal }
 }
 
+// 하위 글 목록은 그 갈래 안에 있을 때만 편다 — 다른 페이지에선 사용법 글이 체인지로그·도움말을 밀어낸다 (tweak 2026-10-15)
+function isInSection(link: DocNavLink, currentUrl: string): boolean {
+  return link.url === currentUrl || (link.children ?? []).some((child) => child.url === currentUrl)
+}
+
 // 문서 목록 <ul> 둘(main·legal) — 넓은 칸 nav.site-docnav 와 접는 목차의 "문서" 자리가 같이 쓴다(6.1)
 function renderDocLinkList(links: readonly DocNavLink[], currentUrl: string, extraClass = ''): string {
   const cls = extraClass ? `site-docnav-list ${extraClass}` : 'site-docnav-list'
   const items = links
     .map((link) => {
       const current = link.url === currentUrl ? ' aria-current="page"' : ''
-      const nested = link.children && link.children.length > 0 ? renderDocLinkList(link.children, currentUrl) : ''
+      const nested = link.children && isInSection(link, currentUrl) ? renderDocLinkList(link.children, currentUrl) : ''
       return `<li><a class="site-docnav-item" href="${escapeHtml(link.url)}"${current}>${escapeHtml(link.label)}</a>${nested}</li>`
     })
     .join('')
