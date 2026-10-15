@@ -552,6 +552,21 @@ describe('도움말 ## 사용자 CSS 절', () => {
   })
 })
 
+// 사용법 글 kanban (write-guide, 2026-10-15)
+describe('도움말 ## 칸반 절', () => {
+  it('## 템플릿 바로 뒤에 있고, 사용법 글 줄로 끝나며, 만들기 진입점과 설정 탭 글자가 들어 있다', () => {
+    const names = appSections().map((s) => s.name)
+    expect(names[names.indexOf('템플릿') + 1]).toBe('칸반')
+    const section = appSections().find((s) => s.name === '칸반')!
+    const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [칸반 보드로 할 일 옮기기](/guides/kanban)')
+    expect(section.body).toContain('`새 칸반 보드`')
+    expect(section.body).toContain('`보드로 보기`')
+    expect(section.body).toContain('`kanban: true`')
+    expect(section.body).toContain('`새 카드에 체크 칸 달기`')
+  })
+})
+
 describe('F-2117 도움말 Ctrl+S', () => {
   it('U3: ## 단축키 절이 한 줄을, ## 내보내기·가져오기 절이 Ctrl+S 를 담는다', () => {
     const shortcuts = appSections().find((s) => s.name === '단축키')!

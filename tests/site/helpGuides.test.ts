@@ -41,6 +41,8 @@ import { EditorState } from '@codemirror/state'
 import { insertTable, insertCallout, insertMathBlock } from '../../src/editor/insertCommands'
 import { parseTable } from '../../src/editor/preview/tableModel'
 import { KIND_ALIASES, parseCalloutHeader, defaultCalloutTitle } from '../../src/lib/callout'
+import { KANBAN_LONG_PRESS_MS } from '../../src/app/kanbanDrag'
+import { KANBAN_NEW_DOC_TEXT, NEW_LANE_TITLE, addCardChange, parseKanban } from '../../src/lib/kanban'
 import { findInlineMath, parseMathBlock } from '../../src/lib/mathSyntax'
 import { renderMath } from '../../src/lib/mathRender'
 import { isMermaidInfo } from '../../src/lib/codeLang'
@@ -464,6 +466,32 @@ describe('custom-css 글', () => {
       0,
     )
     expect(raw).toContain(`${code(merged.snippets[1].name.slice('스니펫 1 '.length))}를 붙입니다`)
+  })
+
+  it('글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(raw).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+// 사용법 글 kanban (write-guide, 2026-10-15)
+describe('kanban 글', () => {
+  const raw = readGuide('kanban')
+  const code = (text: string) => '`' + text + '`'
+
+  it('길게 누르기 시간이 상수와 같다 (R5)', () => {
+    expect(raw).toContain(`${KANBAN_LONG_PRESS_MS}ms 길게 눌러야`)
+  })
+
+  it('새 보드 칸·새 칸 이름·새 카드 모양이 코드와 같다', () => {
+    const lanes = parseKanban(KANBAN_NEW_DOC_TEXT).map((l) => code(l.title)).join('·')
+    expect(raw).toContain(`${lanes} 세 칸으로 시작`)
+    expect(raw).toContain(code(`## ${NEW_LANE_TITLE}`))
+    const text = '## 할 일\n'
+    const added = addCardChange(text, 0, '글자', true)!
+    expect(raw).toContain(code(added.insert!.trim()))
+    expect(raw).toContain(code(addCardChange(text, 0, '글자', false)!.insert!.trim()))
   })
 
   it('글에 제품명이 없다 (R6)', () => {
