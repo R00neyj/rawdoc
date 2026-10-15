@@ -236,10 +236,16 @@
   background: var(--panel);
 }
 
-/* 카드 `⋯` 은 휴대폰에서도 그 카드를 누르거나 포커스했을 때만 */
+/* 카드 `⋯` 은 호버·포커스 때만, 휴대폰 폭·호버 없는 기기는 늘 */
 .kanban-card:is(:hover, :focus-within) > .kanban-more,
 .kanban-card > .kanban-more[aria-expanded='true'] {
   opacity: 1;
+}
+
+@media (hover: none), (max-width: 600px) {
+  .kanban-card > .kanban-more {
+    opacity: 1;
+  }
 }
 
 .kanban-stray {

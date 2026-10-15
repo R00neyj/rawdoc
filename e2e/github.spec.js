@@ -16,7 +16,7 @@ test.describe('F-2128 GitHub', () => {
     const before = await currentDocId(page)
 
     await page.locator('.sidebar').getByRole('button', { name: '가져오기', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'GitHub에서 가져오기…' }).click()
+    await page.getByRole('menuitem', { name: 'GitHub에서 가져오기' }).click()
     const dialog = page.getByRole('dialog', { name: 'GitHub에서 가져오기' })
     await dialog.getByRole('button', { name: 'docs/', exact: true }).click()
     await dialog.getByRole('button', { name: '메모.markdown', exact: true }).click()
@@ -47,7 +47,7 @@ test.describe('F-2128 GitHub', () => {
     const hash = await page.evaluate(() => location.hash)
 
     await page.locator('.sidebar').getByRole('button', { name: '가져오기', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'GitHub에서 가져오기…' }).click()
+    await page.getByRole('menuitem', { name: 'GitHub에서 가져오기' }).click()
     await page.getByRole('dialog', { name: 'GitHub에서 가져오기' }).getByRole('button', { name: 'GitHub 연결', exact: true }).click()
 
     const dialog = page.getByRole('dialog', { name: 'GitHub에서 가져오기' })
@@ -102,7 +102,7 @@ test.describe('F-2128 GitHub', () => {
     const before = await currentDocId(page)
 
     await page.locator('.sidebar').getByRole('button', { name: '가져오기', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'GitHub에 새 파일…' }).click()
+    await page.getByRole('menuitem', { name: 'GitHub에 새 파일', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'GitHub에 새 파일' })
     await dialog.getByRole('button', { name: 'docs/', exact: true }).click()
     await dialog.getByLabel('파일 이름').fill('회의록.md')

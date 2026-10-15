@@ -132,9 +132,9 @@ export function GithubImportMenu({ variant, onFile, onGithub, onGithubNew }: { v
     <PopMenu
       className={`github-import-menu github-import-menu--${variant}`}
       items={[
-        { key: 'file', label: '.md 파일…', onSelect: onFile },
-        { key: 'github', label: 'GitHub에서 가져오기…', onSelect: onGithub },
-        { key: 'github-new', label: 'GitHub에 새 파일…', onSelect: onGithubNew },
+        { key: 'file', label: '.md 파일', onSelect: onFile },
+        { key: 'github', label: 'GitHub에서 가져오기', onSelect: onGithub },
+        { key: 'github-new', label: 'GitHub에 새 파일', onSelect: onGithubNew },
       ]}
       trigger={({ buttonRef, open, toggle }) => (
         <span className={variant === 'rail' ? 'icon-btn-wrap rail-btn-wrap' : 'icon-btn-wrap'}>
