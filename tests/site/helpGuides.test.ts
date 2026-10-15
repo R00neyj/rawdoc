@@ -35,7 +35,7 @@ import {
 } from '../../src/lib/docComments'
 import { COMMENT_BODY_COUNTER_FROM } from '../../src/app/commentRail'
 import { MENTION_CANDIDATES_MAX } from '../../src/app/mentionCandidates'
-import { NOTIFICATIONS_POLL_MS, notificationText } from '../../src/app/notificationsApi'
+import { NOTIFICATIONS_POLL_MS, notificationLines, notificationText } from '../../src/app/notificationsApi'
 import { COMMENT_TEXT } from '../../src/app/useDocComments'
 import { EditorState } from '@codemirror/state'
 import { insertTable, insertCallout, insertMathBlock } from '../../src/editor/insertCommands'
@@ -54,6 +54,8 @@ import { USER_CSS_PUSH_DELAY_MS, USER_CSS_PULL_GAP_MS, mergeLocalIntoAccount } f
 import { nextSnippetName, userCssSaveMessage, userCssStatusLines } from '../../src/app/userCssEdit'
 import { USER_CSS_SAFE_NOTICE } from '../../src/app/appNotices'
 import type { UserCssRemoval } from '../../src/lib/userCssPolicy'
+import { ACCESS_REQUEST_COOLDOWN_MS, ACCESS_REQUEST_EXPIRE_MS, ACCESS_REQUEST_PENDING_MAX } from '../../src/lib/accessRequest'
+import { LEAVE_SHARE_DONE, LEAVE_SHARE_OFFLINE } from '../../src/app/leaveShare'
 import { TODO_MAX_ITEMS } from '../../src/lib/docTodos'
 import { LOCAL_GRAPH_MAX_NEIGHBORS } from '../../src/lib/localGraph'
 import { EXCERPT_MAX, MENTION_MIN_LENGTH } from '../../src/lib/docLinks'
@@ -297,6 +299,17 @@ describe('F-2045 공유 글', () => {
     expect(raw).toContain('`(충돌 사본)`')
     expect(raw).not.toContain('한 명씩')
     expect(raw).not.toContain('님이 편집 중입니다')
+  })
+
+  it('권한 요청·공유 나가기 수치와 화면 글자가 상수·코드 문구와 같다 (F-2135~F-2137, F-2115)', () => {
+    const raw = readGuide('sharing')
+    expect(raw).toContain(`${ACCESS_REQUEST_COOLDOWN_MS / 86_400_000}일 동안 같은 문서·폴더에`)
+    expect(raw).toContain(`요청은 ${ACCESS_REQUEST_EXPIRE_MS / 86_400_000}일 뒤`)
+    expect(raw).toContain(`요청은 ${ACCESS_REQUEST_PENDING_MAX}개까지`)
+    const row = notificationLines({ id: 'n', kind: 'access_request', target: 'doc', targetId: 'd', name: '회의록', role: 'edit', actorEmail: '…', createdAt: 0, readAt: null })
+    expect(raw).toContain(`\`${row.text}\``)
+    expect(raw).toContain(`\`${LEAVE_SHARE_DONE}\``)
+    expect(raw).toContain(`\`${LEAVE_SHARE_OFFLINE}\``)
   })
 
   it('U3: 공유 글에 제품명이 없다 (R6)', () => {
