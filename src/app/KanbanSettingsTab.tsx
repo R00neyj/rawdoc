@@ -6,7 +6,7 @@ import type { KanbanSettings } from './useKanbanSettings'
 export default function KanbanSettingsTab({ settings }: { settings: KanbanSettings }) {
   const [newCardCheck, setNewCardCheck] = useState(() => getPref('md.kanbanNewCardCheck', 'on') === 'on')
   const checkField = (
-    <label className="dialog-field">
+    <label className="panel-item-check settings-check-row">
       <input
         type="checkbox"
         checked={newCardCheck}
@@ -15,7 +15,7 @@ export default function KanbanSettingsTab({ settings }: { settings: KanbanSettin
           setPref('md.kanbanNewCardCheck', e.target.checked ? 'on' : 'off')
         }}
       />
-      새 카드에 체크 칸 달기
+      <span>새 카드에 체크 칸 달기</span>
     </label>
   )
   const { choices } = settings

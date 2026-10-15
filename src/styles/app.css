@@ -6861,6 +6861,10 @@ h3.panel-settings-title:not(:first-child) {
   color: var(--muted);
 }
 
+.settings-check-row {
+  margin-bottom: 12px;
+}
+
 @media (pointer: coarse) {
   .panel-item-check {
     min-height: var(--touch-target);
