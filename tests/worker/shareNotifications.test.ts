@@ -191,7 +191,7 @@ describe('F-3012 S8 초대 지우기', () => {
 })
 
 describe('F-3012 S9 폴더·계정 삭제', () => {
-  it('폴더 delete-all — 하위 폴더 행과 안 문서 행도 지움', async () => {
+  it('폴더 delete-all — 하위 폴더 알림은 지우고, 휴지통으로 간 안 문서의 초대 알림은 남김 (F-3023)', async () => {
     const { sqlDb, env } = world()
     await put(env, 'folders', FOLDER)
     await put(env, 'folders', CHILD)
@@ -199,7 +199,7 @@ describe('F-3012 S9 폴더·계정 삭제', () => {
     await put(env, 'docs', DOC_A)
     const res = await call(env, `/api/folders/${FOLDER}?contents=delete-all`, { method: 'DELETE' })
     expect(res.status).toBeLessThan(300)
-    expect(shares(sqlDb).map((r) => r.doc_id)).toEqual([DOC_A])
+    expect(shares(sqlDb).map((r) => r.doc_id).sort()).toEqual([DOC_A, DOC_IN_FOLDER])
   })
 
   it('계정 삭제 — 보낸 쪽·받은 쪽 모두', async () => {

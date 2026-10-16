@@ -2,8 +2,9 @@
 import { errorResponse, jsonResponse } from './http'
 import { rememberUser, requireUser, type AuthUser } from './auth'
 import { getDocAccess, getOwnedFolder, roleAtLeast } from './access'
-import { badBody, deleteDocRows, handleCreateDoc, handleListDocs, handleUpdateDoc, readJsonLimited, writeMoveDocFolder } from './docs'
+import { badBody, handleCreateDoc, handleListDocs, handleUpdateDoc, readJsonLimited, writeMoveDocFolder } from './docs'
 import { deleteFolderContents, folderSubtreeHasE2ee, handleCreateFolder, type FolderRow } from './folders'
+import { trashDoc, trashFolder } from './trash'
 import { handleGetShared } from './grants'
 import { rowToDoc } from './docWrite'
 import type { DocRow } from './docWrite'
@@ -232,7 +233,7 @@ export async function handleCreateDocLinkV1(
   return jsonResponse({ token, url }, res.status)
 }
 
-// 판정 순서는 F-2050.md 3.2 — 2번(금고)이 3번(소유자)보다 앞이지만 금고 비소유자는 1번에서 이미 404 다
+// 판정 순서는 F-2050.md 3.2 — 2번(금고)이 3번(소유자)보다 앞이지만 금고 비소유자는 1번에서 이미 404 다. 지우면 휴지통으로 (F-3023)
 export async function handleDeleteDocV1(
   request: Request,
   env: Env,
@@ -240,14 +241,9 @@ export async function handleDeleteDocV1(
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
-  const access = await getDocAccess<DocRow>(env, params.id, user)
-  if (!access) return errorResponse('not_found', 404)
-  if (access.doc.e2ee_key) return errorResponse('e2ee_doc', 403)
-  if (access.role !== 'owner') return errorResponse('forbidden', 403)
-
-  const title = access.doc.title
-  await deleteDocRows(env, ctx, params.id, user.id)
-  return jsonResponse({ id: params.id, title })
+  const result = await trashDoc(env, ctx, user, params.id, { by: 'cli', allowE2ee: false })
+  if (!result.ok) return errorResponse(result.error, result.error === 'not_found' ? 404 : 403)
+  return jsonResponse({ id: result.id, title: result.title })
 }
 
 // 판정 순서는 F-2050.md 3.3 — 5번에서 목적지 금고 폴더를 403 으로 먼저 끝낸다(/api 의 409 는 여기서 나오지 않는다)
@@ -285,7 +281,7 @@ export async function handleMoveDocFolderV1(
   return jsonResponse(summary)
 }
 
-// 판정 순서는 F-2050.md 3.4 — 금고가 낀 하위는 전부 403 (결정 9)
+// 판정 순서는 F-2050.md 3.4 — 금고가 낀 하위는 전부 403 (결정 9). delete-all 은 휴지통으로 (F-3023)
 export async function handleDeleteFolderV1(
   request: Request,
   env: Env,
@@ -293,17 +289,18 @@ export async function handleDeleteFolderV1(
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
+  const contents = new URL(request.url).searchParams.get('contents') ?? 'move-up'
+  if (contents === 'delete-all') {
+    const trashed = await trashFolder(env, ctx, user, params.id, { by: 'cli', allowE2ee: false })
+    if (!trashed.ok) return errorResponse(trashed.error, trashed.error === 'not_found' ? 404 : 403)
+    return jsonResponse({ id: trashed.id, contents, parentId: trashed.parentId, docs: trashed.docs, folders: trashed.folders })
+  }
   const existing = await getOwnedFolder<FolderRow>(env, params.id, user)
   if (!existing) return errorResponse('not_found', 404)
-
-  const contents = new URL(request.url).searchParams.get('contents') ?? 'move-up'
-  if (contents !== 'move-up' && contents !== 'delete-all') {
-    return jsonResponse({ error: 'invalid', field: 'contents' }, 400)
-  }
-
+  if (contents !== 'move-up') return jsonResponse({ error: 'invalid', field: 'contents' }, 400)
   if (await folderSubtreeHasE2ee(env, user, existing.id)) return jsonResponse({ error: 'e2ee_folder' }, 403)
 
-  const result = await deleteFolderContents(env, ctx, user, existing, contents)
+  const result = await deleteFolderContents(env, ctx, user, existing)
   // 금고가 낀 폴더는 이미 위에서 걸렀으니 여기서는 늘 ok — 방어적으로만 403 에 맞춘다
   if (!result.ok) return jsonResponse({ error: result.error }, 403)
   return jsonResponse({ id: existing.id, contents, parentId: existing.parent_id, docs: result.docs, folders: result.folders })

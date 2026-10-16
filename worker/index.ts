@@ -85,7 +85,8 @@ import { handleDocSocket } from './docSocket'
 import { DOC_SOCKET_PREFIX } from '../src/lib/docRoomProtocol'
 import { isWriteRoute, runWriteGate } from './writeGate'
 import { handleDeleteAccount, handleGetAccount } from './account'
-import { PURGE_CALLS_ON_CRON, PURGE_CRON, runPurgeJobs } from './purgeJobs'
+import { PURGE_CRON, cronPurgeCalls, runPurgeJobs } from './purgeJobs'
+import { expireTrash, handleEmptyTrash, handleListTrash, handlePurgeTrashDoc, handleRestoreTrash } from './trash'
 import { usageOf } from './usage'
 import { handleDeletePushSubscription, handleGetPushKey, handlePostPushTest, handlePutPushSubscription } from './pushApi'
 import { cleanupPushSubscriptions, loadVapid } from './pushServer'
@@ -280,6 +281,10 @@ const routes: Route[] = [
   { method: 'PUT', path: '/api/docs/:id/folder', handler: handleMoveDocFolder },
   { method: 'PUT', path: '/api/docs/:id/pin', handler: handleSetPinned },
   { method: 'PUT', path: '/api/docs/:id/e2ee', handler: handleSetDocE2ee },
+  { method: 'GET', path: '/api/trash', handler: handleListTrash },
+  { method: 'DELETE', path: '/api/trash', handler: handleEmptyTrash },
+  { method: 'POST', path: '/api/trash/:id/restore', handler: handleRestoreTrash },
+  { method: 'DELETE', path: '/api/trash/:id', handler: handlePurgeTrashDoc },
   { method: 'GET', path: '/api/e2ee/keys', handler: handleGetE2eeKeys },
   { method: 'PUT', path: '/api/e2ee/keys', handler: handlePutE2eeKeys },
   { method: 'DELETE', path: '/api/e2ee/keys', handler: handleDeleteE2eeKeys },
@@ -506,9 +511,9 @@ export default {
   },
   async scheduled(event, env, ctx) {
     const now = Date.now()
-    // 10분 Cron 은 정리 작업만, 그 밖(매일 Cron·빈 객체)은 지금 셋 (F-2038 5.5)
+    // 10분 Cron 은 휴지통 만료 → 정리 작업 차례. 만료는 던지지 않고 쓴 문장 수만큼 비우기 호출을 줄인다 (F-2038 5.5, F-3023 5장)
     if (event?.cron === PURGE_CRON) {
-      ctx.waitUntil(runQuietly(() => runPurgeJobs(env, now, PURGE_CALLS_ON_CRON)))
+      ctx.waitUntil(expireTrash(env, now).then((used) => runQuietly(() => runPurgeJobs(env, now, cronPurgeCalls(used)))))
       return
     }
     ctx.waitUntil(runQuietly(() => cleanupServerAttachments(env, now)))

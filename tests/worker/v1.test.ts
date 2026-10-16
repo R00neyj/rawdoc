@@ -668,27 +668,7 @@ describe('F-242 A7 DELETE /api/folders/:id — contents', () => {
     expect(docs.find((d) => d.id === 'd1')!.folder_id).toBeNull()
   })
 
-  it('contents=delete-all 이면 하위 문서·폴더가 D1 에서 사라진다', async () => {
-    const { env, docs, folders } = makeEnv({
-      folders: [
-        baseFolder(),
-        baseFolder({ id: 'sub', name: '아래', parent_id: 'top' }),
-        baseFolder({ id: 'sibling', name: '형제', parent_id: null }),
-      ],
-      docs: [
-        { id: 'd-top', owner_id: 'u1', title: 't', content: 'c', line_ending: 'lf', folder_id: 'top', pinned_at: null, version: 1, created_at: 1, updated_at: 1 },
-        { id: 'd-sub', owner_id: 'u1', title: 't', content: 'c', line_ending: 'lf', folder_id: 'sub', pinned_at: null, version: 1, created_at: 1, updated_at: 1 },
-        { id: 'd-outside', owner_id: 'u1', title: 't', content: 'c', line_ending: 'lf', folder_id: null, pinned_at: null, version: 1, created_at: 1, updated_at: 1 },
-      ],
-    })
-    const res = await handleDeleteFolder(
-      new Request('http://local.test/api/folders/top?contents=delete-all', { method: 'DELETE', headers: { 'x-test-user': 'u1' } }),
-      env, {} as ExecutionContext, { id: 'top' },
-    )
-    expect(res.status).toBe(204)
-    expect(folders.map((f) => f.id)).toEqual(['sibling'])
-    expect(docs.map((d) => d.id)).toEqual(['d-outside'])
-  })
+  // contents=delete-all 은 휴지통으로 보낸다 — 가짜 D1 대신 SQLite 틀의 tests/worker/trash.test.ts F-3023 A3 에서 본다
 
   it('잘못된 contents 값은 400', async () => {
     const { env } = makeEnv({ folders: [baseFolder()] })

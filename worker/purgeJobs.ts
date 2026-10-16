@@ -5,9 +5,11 @@ import { purgeRoomNow } from './docRoomRpc'
 export const DAILY_CRON = '0 18 * * *'
 export const PURGE_CRON = '*/10 * * * *'
 
-// 무료 플랜 호출당 하위 요청 50 안 (5.4 표)
+// 무료 플랜 호출당 하위 요청 50 안 (5.4 표, D1 은 batch 안 문장마다 센다)
+export const CRON_SUBREQUEST_LIMIT = 50
 export const PURGE_CALLS_ON_DELETE = 15
-export const PURGE_CALLS_ON_CRON = 40
+// Cron 은 휴지통 만료 한 소유자 17문장 + 비우기 D1 4 를 뺀 값 (F-3023 5장)
+export const PURGE_CALLS_ON_CRON = 29
 
 export const PURGE_STUCK_ATTEMPTS = 144
 export const R2_PREFIX_GRACE_MS = 60 * 60 * 1000
@@ -21,6 +23,12 @@ export const PURGE_SQL = {
   done: "DELETE FROM purge_jobs WHERE (kind, target) IN (SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]') FROM json_each(?1))",
   failed: "UPDATE purge_jobs SET attempts = attempts + 1 WHERE (kind, target) IN (SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]') FROM json_each(?1))",
 } as const
+
+// 만료가 실패한 소유자를 건너뛰느라 문장을 더 썼으면 그만큼 방·R2 호출을 줄인다 (F-3023 5장)
+export function cronPurgeCalls(expireStatements: number): number {
+  const purgeStatements = Object.keys(PURGE_SQL).length
+  return Math.max(0, Math.min(PURGE_CALLS_ON_CRON, CRON_SUBREQUEST_LIMIT - purgeStatements - expireStatements))
+}
 
 type JobKind = 'room' | 'r2_prefix'
 type JobKey = [JobKind, string]
@@ -96,5 +104,14 @@ export async function runPurgeJobs(env: Env, now: number, maxCalls: number): Pro
     for (const f of failed) {
       if (f.attempts + 1 === PURGE_STUCK_ATTEMPTS) console.error('purge_job_stuck', f.key[0])
     }
+  }
+}
+
+// 지우기 뒤 이어서 비우기 — 실패해도 원래 응답은 나간다. 남은 것은 Cron 이 맡는다
+export async function purgeQuietly(env: Env, now: number): Promise<void> {
+  try {
+    await runPurgeJobs(env, now, PURGE_CALLS_ON_DELETE)
+  } catch (err) {
+    console.error('purge_after_delete_failed', err)
   }
 }

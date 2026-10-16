@@ -156,7 +156,7 @@ describe('버그 수정 — 폴더 전부 삭제와 공유 링크 묶음', () =>
     return new Request(`https://x/api/folders/${folderId}?contents=delete-all`, { method: 'DELETE' })
   }
 
-  it('공유 묶음에 든 문서가 있는 폴더를 전부 삭제해도 FK 오류 없이 204, share_link_docs 행도 사라진다', async () => {
+  it('공유 묶음에 든 문서가 있는 폴더를 전부 삭제하면 204, 문서는 휴지통으로 가고 share_link_docs 행은 남는다 (F-3023)', async () => {
     const { sqlDb, env } = setup()
     insertUser(sqlDb, 'u1', 'u1@example.com')
     insertFolder(sqlDb, 'f1', 'u1', null)
@@ -167,19 +167,19 @@ describe('버그 수정 — 폴더 전부 삭제와 공유 링크 묶음', () =>
 
     const res = await handleDeleteFolder(deleteAllReq('f1'), env, ctx, { id: 'f1' })
     expect(res.status).toBe(204)
-    const doc = sqlDb.prepare('SELECT * FROM docs WHERE id = ?').get('d2')
-    expect(doc).toBeUndefined()
+    const doc = sqlDb.prepare('SELECT deleted_by FROM docs WHERE id = ?').get('d2')
+    expect(doc).toEqual({ deleted_by: 'app' })
     const bundleRow = sqlDb.prepare('SELECT * FROM share_link_docs WHERE doc_id = ?').get('d2')
-    expect(bundleRow).toBeUndefined()
+    expect(bundleRow).toBeTruthy()
     // 링크 자체(시작 문서 d1)는 폴더 밖이라 남아 있어야 한다
     const link = sqlDb.prepare('SELECT * FROM share_links WHERE token = ?').get('tok1')
     expect(link).toBeTruthy()
   })
 })
 
-// F-3015 A13 — 폴더 `전부 삭제` 도 github_links·github_images 를 docs 앞에서 지운다
+// F-3015 A13 — 폴더 `전부 삭제` 는 문서를 휴지통으로 보내므로 github_links·github_images 는 남는다 (F-3023)
 describe('F-3015 A13 GitHub 연결이 있는 문서가 든 폴더 전부 삭제', () => {
-  it('FK 오류 없이 204, 폴더 안 문서의 두 표 행만 사라진다', async () => {
+  it('204, 폴더 안 문서는 휴지통, 두 표 행은 그대로', async () => {
     const sqlDb = openTestDb()
     const env = { DB: asD1(sqlDb) } as unknown as Env
     sqlDb.prepare('INSERT INTO users (id, email, created_at) VALUES (?, ?, ?)').run('u1', 'u1@example.com', 1)
@@ -192,7 +192,7 @@ describe('F-3015 A13 GitHub 연결이 있는 문서가 든 폴더 전부 삭제'
     const res = await handleDeleteFolder(new Request('https://x/api/folders/f1?contents=delete-all', { method: 'DELETE' }), env, ctx, { id: 'f1' })
     expect(res.status).toBe(204)
     for (const table of ['github_links', 'github_images']) {
-      expect(sqlDb.prepare(`SELECT doc_id FROM ${table}`).all()).toEqual([{ doc_id: 'd2' }])
+      expect(sqlDb.prepare(`SELECT doc_id FROM ${table} ORDER BY doc_id`).all()).toEqual([{ doc_id: 'd1' }, { doc_id: 'd2' }])
     }
   })
 })

@@ -30,12 +30,16 @@ function makeCtx() {
 
 function fakeDocRoom() {
   const purged: string[] = []
+  const closed: string[] = []
   const getByName = vi.fn((name: string) => ({
     async purgeRoom() {
       purged.push(name)
     },
+    async closeTrashed() {
+      closed.push(name)
+    },
   }))
-  return { DOC_ROOM: { getByName }, purged }
+  return { DOC_ROOM: { getByName }, purged, closed }
 }
 
 function makeEnv(over: Record<string, unknown> = {}) {
@@ -149,7 +153,7 @@ function insertLink(sqlDb: DatabaseSync, token: string, ownerId: string, targetT
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
 describe('V1 DELETE /v1/docs/:id — 성공', () => {
-  it('200, 행 삭제, 사용량 갱신, purgeRoom 호출 1회', async () => {
+  it('200, 휴지통으로(행 남음·cli), 누계 그대로·하루 +1, closeTrashed 1회 (F-3023)', async () => {
     const { sqlDb, env } = makeEnv()
     await call(env, '/api/docs', jsonInit('POST', { title: 't', content: 'c', lineEnding: 'lf' }))
     const owner = userId(sqlDb)
@@ -167,15 +171,16 @@ describe('V1 DELETE /v1/docs/:id — 성공', () => {
     expect(Object.keys(body as object).sort()).toEqual(Object.keys(V1_EXAMPLES.deletedDoc).sort())
     expect(body).toEqual({ id: uuid(1), title: '지울 문서' })
 
-    const row = sqlDb.prepare('SELECT 1 FROM docs WHERE id = ?').get(uuid(1))
-    expect(row).toBeUndefined()
+    const row = sqlDb.prepare('SELECT deleted_by FROM docs WHERE id = ?').get(uuid(1))
+    expect(row).toEqual({ deleted_by: 'cli' })
     const after = usageRow(sqlDb, owner)
-    expect(after.doc_count).toBe(before.doc_count - 1)
-    expect(before.content_bytes - after.content_bytes).toBe(new TextEncoder().encode('hello world').length)
-    expect(after.write_count).toBeGreaterThan(before.write_count)
+    expect(after.doc_count).toBe(before.doc_count)
+    expect(after.content_bytes).toBe(before.content_bytes)
+    expect(after.write_count).toBe(before.write_count + 1)
 
     await Promise.all(pending)
-    expect(rooms.purged).toEqual([uuid(1)])
+    expect(rooms.closed).toEqual([uuid(1)])
+    expect(rooms.purged).toEqual([])
   })
 })
 
@@ -403,7 +408,7 @@ describe('V7 DELETE /v1/folders/:id — move-up', () => {
 })
 
 describe('V8 DELETE /v1/folders/:id?contents=delete-all', () => {
-  it('200, 대상 포함 폴더 3개·문서 4개 영구 삭제, doc_count -4', async () => {
+  it('200, 대상 포함 폴더 3개 삭제·문서 4개 휴지통, doc_count 그대로 (F-3023)', async () => {
     const { sqlDb, env } = makeEnv()
     await call(env, '/api/docs', jsonInit('POST', { title: 't', content: 'c', lineEnding: 'lf' }))
     const owner = userId(sqlDb)
@@ -426,9 +431,9 @@ describe('V8 DELETE /v1/folders/:id?contents=delete-all', () => {
       expect(sqlDb.prepare('SELECT 1 FROM folders WHERE id = ?').get(id)).toBeUndefined()
     }
     for (const id of [uuid(4), uuid(5), uuid(6), uuid(7)]) {
-      expect(sqlDb.prepare('SELECT 1 FROM docs WHERE id = ?').get(id)).toBeUndefined()
+      expect(sqlDb.prepare('SELECT deleted_by FROM docs WHERE id = ?').get(id)).toEqual({ deleted_by: 'cli' })
     }
-    expect(usageRow(sqlDb, owner).doc_count).toBe(before - 4)
+    expect(usageRow(sqlDb, owner).doc_count).toBe(before)
   })
 })
 

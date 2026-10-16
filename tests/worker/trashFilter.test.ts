@@ -20,7 +20,6 @@ const ALLOW: Allow[] = [
   { file: 'attachmentGc.ts', owner: 'collectE2eeDocReferencedIds', count: 1, reason: '휴지통 본문의 첨부를 지키려 셈' },
   { file: 'attachments.ts', owner: 'isAttachmentInUse', count: 2, reason: '휴지통 본문의 첨부를 지키려 셈' },
   { file: 'commentGc.ts', owner: 'NO_DOC', count: 1, reason: '휴지통 문서 댓글을 남김' },
-  { file: 'commentRows.ts', owner: 'FOLDER_DOCS', count: 1, reason: '지우기 — 휴지통 행도 대상' },
   { file: 'commentRows.ts', owner: 'WROTE_KEY', count: 1, reason: '키 확인 — 휴지통 행도 대상' },
   { file: 'commentRows.ts', owner: 'OWNER_DOCS', count: 1, reason: '지우기 — 휴지통 행도 대상' },
   { file: 'docRoomCore.ts', owner: 'UPDATE_SQL', count: 1, reason: '휴지통 행에도 마지막 편집을 쓴다' },
@@ -29,12 +28,10 @@ const ALLOW: Allow[] = [
   { file: 'e2eeDocs.ts', owner: 'WROTE_KEY', count: 1, reason: '같은 batch 의 MOVE_ROW_SQL 이 이미 거름' },
   { file: 'e2eeKeys.ts', owner: 'E2EE_COUNTS_SQL', count: 1, reason: '휴지통 금고 문서도 남은 금고 문서(F-3021 Q2)' },
   { file: 'e2eeKeys.ts', owner: 'DELETE_SQL', count: 1, reason: '휴지통 금고 문서도 남은 금고 문서(F-3021 Q2)' },
-  { file: 'folders.ts', owner: 'deleteFolderContents', count: 4, reason: 'delete-all 셋은 F-3023 이 보내기로 바꾼다, move-up 은 복원 자리' },
+  { file: 'folders.ts', owner: 'deleteFolderContents', count: 1, reason: 'move-up — 휴지통 문서도 따라 올라가 복원 자리가 산다 (F-3023)' },
   { file: 'githubImages.ts', owner: 'isGithubImageInUse', count: 1, reason: '사용 판정' },
   { file: 'githubImages.ts', owner: 'collectGithubImageRefs', count: 1, reason: '사용 판정' },
   { file: 'usage.ts', owner: 'DELETE_DOC_SQL', count: 1, reason: '용량은 휴지통도 셈' },
-  { file: 'usage.ts', owner: 'DELETE_FOLDERS_SQL', count: 1, reason: '용량은 휴지통도 셈' },
-  { file: 'usage.ts', owner: 'DELETE_FOLDER_COMMENT_BYTES_SQL', count: 1, reason: '용량은 휴지통도 셈' },
   { file: 'usage.ts', owner: 'E2EE_COMMENT_BYTES_OUT_SQL', count: 1, reason: '용량은 휴지통도 셈' },
 ]
 

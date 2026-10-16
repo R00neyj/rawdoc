@@ -179,6 +179,11 @@ export class DocRoom extends YServer<Env> {
     return this.core.importComments(input)
   }
 
+  // 휴지통으로 보낸 뒤 — 저장소·알람은 복원을 위해 남긴다 (F-3023 3.3)
+  async closeTrashed(): Promise<void> {
+    await this.core.closeTrashed()
+  }
+
   async purgeRoom(): Promise<void> {
     this.core.purge()
     await this.ctx.storage.deleteAlarm()

@@ -6,6 +6,7 @@ vi.mock('../../worker/docRoomRpc', () => ({
   notifyRevalidate: vi.fn(async () => {}),
   notifyRevalidateDocs: vi.fn(async () => {}),
   notifyPurge: vi.fn(async () => {}),
+  notifyTrashed: vi.fn(async () => {}),
   purgeRoomNow: vi.fn(async () => true),
   writeTextInRoom: vi.fn(async () => null),
 }))
@@ -166,6 +167,10 @@ describe('F-304 A24 배선', () => {
                 if (sql.startsWith('UPDATE share_links SET revoked_at') || sql.startsWith('UPDATE request_tokens SET revoked_at')) return { meta: { changes: 0 } }
                 // F-502 8.1 — 댓글 행·알림 지우기
                 if (sql.startsWith('DELETE FROM doc_comments') || sql.startsWith('DELETE FROM notifications') || sql.startsWith('DELETE FROM access_requests')) return { meta: { changes: 0 } }
+                if (sql.startsWith('UPDATE docs SET deleted_at')) {
+                  order.push('trash-docs')
+                  return { meta: { changes: 1 } }
+                }
                 if (sql.startsWith('DELETE FROM docs')) {
                   order.push('delete-docs')
                   return { meta: { changes: 1 } }
@@ -201,6 +206,7 @@ describe('F-304 A24 배선', () => {
   beforeEach(() => {
     vi.mocked(rpc.notifyRevalidate).mockClear()
     vi.mocked(rpc.notifyPurge).mockClear()
+    vi.mocked(rpc.notifyTrashed).mockClear()
   })
 
   it('문서 초대 삭제 → notifyRevalidate(…, docId, email) 1번, 204', async () => {
@@ -231,23 +237,23 @@ describe('F-304 A24 배선', () => {
     expect(rpc.notifyRevalidateDocs).not.toHaveBeenCalled()
   })
 
-  it('문서 삭제 → DELETE FROM docs 뒤 notifyPurge(…, docId) 1번, 204', async () => {
+  it('문서 삭제 → 휴지통 UPDATE 뒤 notifyTrashed(…, [docId]) 1번, notifyPurge 0번, 204 (F-3023)', async () => {
     const order: string[] = []
     const env = makeEnv(order)
-    vi.mocked(rpc.notifyPurge).mockImplementation(async () => {
-      order.push('purge')
+    vi.mocked(rpc.notifyTrashed).mockImplementation(async () => {
+      order.push('close')
     })
     const res = await handleDeleteDoc(new Request('https://x', { method: 'DELETE' }), env, ctx, { id: DOC_ID })
     expect(res.status).toBe(204)
-    expect(rpc.notifyPurge).toHaveBeenCalledTimes(1)
-    expect(rpc.notifyPurge).toHaveBeenCalledWith(env, ctx, DOC_ID)
-    expect(order).toEqual(['delete-docs', 'purge'])
+    expect(rpc.notifyTrashed).toHaveBeenCalledTimes(1)
+    expect(rpc.notifyTrashed).toHaveBeenCalledWith(env, ctx, [DOC_ID])
+    expect(rpc.notifyPurge).not.toHaveBeenCalled()
+    expect(order).toEqual(['trash-docs', 'close'])
   })
 })
 
-// 버그 수정(명세 없음) — 폴더 `전부 삭제` 는 지운 문서들의 DO 방을 비우지 않았다(notifyPurge 없음, F-2038.md 12장 X2).
-// 지운 문서의 방은 purge_jobs 를 거쳐 purgeRoomNow 로 비운다 (호출 상한은 folderDeleteAllLimits.test.ts)
-describe('버그 수정 X2 — 폴더 전부 삭제 방 비우기 배선', () => {
+// 폴더 `전부 삭제` 는 안 문서를 휴지통으로 보낸다 — 방은 notifyTrashed 로 닫고 저장소는 남기므로 purge_jobs 는 없다 (F-3023 3.2)
+describe('F-3023 폴더 전부 삭제 방 닫기 배선', () => {
   const ctx = { waitUntil: () => {} } as unknown as ExecutionContext
 
   function setup() {
@@ -273,9 +279,10 @@ describe('버그 수정 X2 — 폴더 전부 삭제 방 비우기 배선', () =>
 
   beforeEach(() => {
     vi.mocked(rpc.purgeRoomNow).mockClear()
+    vi.mocked(rpc.notifyTrashed).mockClear()
   })
 
-  it('폴더 전부 삭제 → 지운 문서마다 purgeRoomNow(env, docId) 1번씩, 비운 행은 purge_jobs 에서 사라진다, 204', async () => {
+  it('폴더 전부 삭제 → notifyTrashed(env, ctx, 안 문서) 1번, purgeRoomNow 0번, purge_jobs 0, 204', async () => {
     const { sqlDb, env } = setup()
     insertUser(sqlDb, 'me', 'me@example.com')
     insertFolder(sqlDb, 'f1', 'me')
@@ -290,11 +297,11 @@ describe('버그 수정 X2 — 폴더 전부 삭제 방 비우기 배선', () =>
       { id: 'f1' },
     )
     expect(res.status).toBe(204)
-    expect(rpc.purgeRoomNow).toHaveBeenCalledTimes(2)
-    const purgedIds = vi.mocked(rpc.purgeRoomNow).mock.calls.map((call) => call[1]).sort()
-    expect(purgedIds).toEqual(['d1', 'd2'])
+    expect(rpc.purgeRoomNow).not.toHaveBeenCalled()
+    expect(rpc.notifyTrashed).toHaveBeenCalledTimes(1)
+    expect([...vi.mocked(rpc.notifyTrashed).mock.calls[0][2]].sort()).toEqual(['d1', 'd2'])
     expect(sqlDb.prepare('SELECT COUNT(*) AS c FROM purge_jobs').get()).toEqual({ c: 0 })
-    expect(sqlDb.prepare('SELECT id FROM docs WHERE id = ?').get('d3')).toBeTruthy()
+    expect(sqlDb.prepare('SELECT deleted_at FROM docs WHERE id = ?').get('d3')).toEqual({ deleted_at: null })
   })
 })
 

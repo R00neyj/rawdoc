@@ -5,12 +5,11 @@ import { badBody, readJsonLimited } from './docs'
 import { MAX_BODY_BYTES, isValidFolderName, isValidUuid } from './validate'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../src/lib/folderTree'
 import { getOwnedFolder, targetShareCleanupStatements } from './access'
-import { dayUsageStatement, deleteFoldersUsageStatement } from './usage'
+import { dayUsageStatement } from './usage'
 import { notifyRevalidateDocs } from './docRoomRpc'
 import { anyFolderGrant, lostAncestorIds, notifyFolderRooms, subtreeRoomDocIds } from './revalidateTargets'
-import { folderCommentDeleteStatements } from './commentRows'
 import { accessRequestDeleteStatements } from './accessRequests'
-import { PURGE_CALLS_ON_DELETE, runPurgeJobs } from './purgeJobs'
+import { trashFolder } from './trash'
 
 // D1 바인딩 상한 100 에서 owner_id 한 칸을 뺀다
 const BATCH_ID_LIMIT = 99
@@ -218,89 +217,12 @@ export async function handleUpdateFolder(
   )
 }
 
-async function purgeQuietly(env: Env, now: number): Promise<void> {
-  try {
-    await runPurgeJobs(env, now, PURGE_CALLS_ON_DELETE)
-  } catch (err) {
-    console.error('purge_after_folder_delete_failed', err)
-  }
-}
-
 export type FolderDeleteOutcome =
   | { ok: true; docs: number; folders: number }
   | { ok: false; error: 'e2ee_folder' }
 
-// 폴더 지우기의 D1 쓰기 — /api·/v1 이 같이 쓴다. contents 검사는 호출부가 먼저 끝낸다 (F-2050 3.5)
-export async function deleteFolderContents(
-  env: Env,
-  ctx: ExecutionContext,
-  user: AuthUser,
-  existing: FolderRow,
-  contents: 'move-up' | 'delete-all',
-): Promise<FolderDeleteOutcome> {
-  if (contents === 'delete-all') {
-    const { results: ownFolders } = await env.DB.prepare(
-      'SELECT id, name, parent_id FROM folders WHERE owner_id = ?',
-    )
-      .bind(user.id)
-      .all<{ id: string; name: string; parent_id: string | null }>()
-    const folderLikes = ownFolders.map((f) => ({ id: f.id, name: f.name, parentId: f.parent_id }))
-    const ids = descendantFolderIds(folderLikes, existing.id)
-
-    // 지울 문서 id 를 먼저 모은다 — share_link_docs 정리(FK, 버그 수정 F-2038.md 12장 X1)와
-    // DO 방 비우기(notifyPurge, 문서 단건 삭제와 같게, X2) 둘 다 문서 id 가 있어야 한다
-    const docIds: string[] = []
-    for (let i = 0; i < ids.length; i += BATCH_ID_LIMIT) {
-      const chunk = ids.slice(i, i + BATCH_ID_LIMIT)
-      const placeholders = chunk.map(() => '?').join(',')
-      const { results } = await env.DB.prepare(
-        `SELECT id FROM docs WHERE owner_id = ? AND folder_id IN (${placeholders})`,
-      )
-        .bind(user.id, ...chunk)
-        .all<{ id: string }>()
-      docIds.push(...results.map((r) => r.id))
-    }
-
-    const statements = []
-    const now = Date.now()
-    if (ids.length > 0) {
-      // 댓글 문장은 문서 행으로 폴더 안 문서를 찾으므로 문서 지우기 앞이다 (F-502 8.2)
-      statements.push(deleteFoldersUsageStatement(env.DB, user.id, ids, now), ...folderCommentDeleteStatements(env.DB, user.id, ids))
-    }
-    // 같은 id 로 다시 생겨도 옛 공개 링크·초대가 따라가지 않게 (리뷰 W2·W4)
-    statements.push(...targetShareCleanupStatements(env.DB, 'doc', docIds, now), ...targetShareCleanupStatements(env.DB, 'folder', ids, now))
-    for (let i = 0; i < docIds.length; i += BATCH_ID_LIMIT) {
-      const chunk = docIds.slice(i, i + BATCH_ID_LIMIT)
-      const placeholders = chunk.map(() => '?').join(',')
-      statements.push(
-        env.DB.prepare(
-          `INSERT INTO purge_jobs (kind, target, priority, created_at) SELECT 'room', id, updated_at, ? FROM docs WHERE id IN (${placeholders}) ON CONFLICT (kind, target) DO NOTHING`,
-        ).bind(now, ...chunk),
-      )
-      statements.push(env.DB.prepare(`DELETE FROM share_link_docs WHERE doc_id IN (${placeholders})`).bind(...chunk))
-      statements.push(env.DB.prepare(`DELETE FROM github_images WHERE doc_id IN (${placeholders})`).bind(...chunk))
-      statements.push(env.DB.prepare(`DELETE FROM github_links WHERE doc_id IN (${placeholders})`).bind(...chunk))
-    }
-    for (let i = 0; i < ids.length; i += BATCH_ID_LIMIT) {
-      const chunk = ids.slice(i, i + BATCH_ID_LIMIT)
-      const placeholders = chunk.map(() => '?').join(',')
-      statements.push(
-        env.DB.prepare(`DELETE FROM docs WHERE owner_id = ? AND folder_id IN (${placeholders})`).bind(
-          user.id,
-          ...chunk,
-        ),
-        env.DB.prepare(`DELETE FROM folders WHERE owner_id = ? AND id IN (${placeholders})`).bind(
-          user.id,
-          ...chunk,
-        ),
-      )
-    }
-    if (statements.length > 0) await env.DB.batch(statements)
-    // 방은 purge_jobs 로 호출 예산 안에서 비우고 남은 것은 Cron 이 맡는다 (F-2038 5.4, 버그 수정 X2)
-    if (docIds.length > 0) await purgeQuietly(env, now)
-    return { ok: true, docs: docIds.length, folders: ids.length }
-  }
-
+// 폴더 지우기(move-up)의 D1 쓰기 — /api·/v1 이 같이 쓴다. delete-all 은 trash.ts trashFolder (F-2050 3.5, F-3023 3.2)
+export async function deleteFolderContents(env: Env, ctx: ExecutionContext, user: AuthUser, existing: FolderRow): Promise<FolderDeleteOutcome> {
   const parentId = existing.parent_id
   // 올라가는 평문이 금고 폴더에 들어가지 않게 (5.2)
   if (await isE2eeParent(env, parentId, user)) {
@@ -364,15 +286,16 @@ export async function handleDeleteFolder(
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
+  const contents = new URL(request.url).searchParams.get('contents') ?? 'move-up'
+  if (contents === 'delete-all') {
+    const trashed = await trashFolder(env, ctx, user, params.id, { by: 'app', allowE2ee: true })
+    return trashed.ok ? new Response(null, { status: 204 }) : errorResponse('not_found', 404)
+  }
   const existing = await getOwnedFolder<FolderRow>(env, params.id, user)
   if (!existing) return errorResponse('not_found', 404)
+  if (contents !== 'move-up') return jsonResponse({ error: 'invalid', field: 'contents' }, 400)
 
-  const contents = new URL(request.url).searchParams.get('contents') ?? 'move-up'
-  if (contents !== 'move-up' && contents !== 'delete-all') {
-    return jsonResponse({ error: 'invalid', field: 'contents' }, 400)
-  }
-
-  const result = await deleteFolderContents(env, ctx, user, existing, contents)
+  const result = await deleteFolderContents(env, ctx, user, existing)
   if (!result.ok) return jsonResponse({ error: result.error }, 409)
   return new Response(null, { status: 204 })
 }

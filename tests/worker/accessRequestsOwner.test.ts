@@ -213,10 +213,12 @@ describe('F-4006 O5 정리 자리', () => {
     expect(notifCount(sqlDb, "kind = 'access_request'")).toBe(1)
   }
 
-  it('문서 삭제', async () => {
+  it('문서 영구 삭제 — 휴지통 동안은 남고 DELETE /api/trash/:id 에서 정리 (F-3023)', async () => {
     const sqlDb = world()
     const pair = seedPair(sqlDb, { type: 'doc', id: DOC_A, token: TK_A })
     expect((await del(envFor(sqlDb, OWNER), `/api/docs/${DOC_A}`)).status).toBe(204)
+    expect(requestIds(sqlDb)).toContain(pair.mine)
+    expect((await del(envFor(sqlDb, OWNER), `/api/trash/${DOC_A}`)).status).toBe(204)
     expectCleared(sqlDb, pair)
   })
 

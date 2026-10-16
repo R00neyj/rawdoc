@@ -9,10 +9,8 @@ import {
   commentBytesInStatement,
   commentBytesOutStatement,
   dayUsageStatement,
-  deleteFolderCommentBytesStatement,
   e2eeCommentBytesOutStatement,
   deleteDocUsageStatement,
-  deleteFoldersUsageStatement,
   docUsageStatements,
   isDailyLimitReached,
   readNotificationsUsageStatement,
@@ -174,8 +172,6 @@ const TOTAL_ONLY_SQL =
   'UPDATE users SET content_bytes = content_bytes + CASE WHEN changes() = 1 THEN ?1 ELSE 0 END, doc_count = doc_count + CASE WHEN changes() = 1 THEN ?2 ELSE 0 END WHERE id = ?3'
 const DELETE_DOC_SQL =
   'UPDATE users SET write_count = CASE WHEN write_day = ?1 THEN write_count + 1 ELSE 1 END, write_day = ?1, (content_bytes, doc_count) = (SELECT users.content_bytes - COALESCE(SUM(length(CAST(content AS BLOB))), 0), users.doc_count - COUNT(*) FROM docs WHERE id = ?2 AND owner_id = ?3) WHERE id = ?3'
-const DELETE_FOLDERS_SQL =
-  'UPDATE users SET write_count = CASE WHEN write_day = ?1 THEN write_count + 1 ELSE 1 END, write_day = ?1, (content_bytes, doc_count) = (SELECT users.content_bytes - COALESCE(SUM(length(CAST(content AS BLOB))), 0), users.doc_count - COUNT(*) FROM docs WHERE owner_id = ?2 AND folder_id IN (SELECT value FROM json_each(?3))) WHERE id = ?2'
 
 const READ_NOTIFICATIONS_USAGE_SQL =
   'UPDATE users SET notif_rev = notif_rev + CASE WHEN changes() > 0 THEN 1 ELSE 0 END, write_count = CASE WHEN write_day = ?1 THEN write_count + 1 ELSE 1 END, write_day = ?1 WHERE id = ?2'
@@ -218,13 +214,6 @@ describe('U8 다섯 문장 — 글자까지 같다', () => {
     expect(calls[0].args).toEqual(['2026-09-24', 'doc1', 'owner'])
   })
 
-  it('폴더 삭제', () => {
-    const { db, calls } = spySqlDb()
-    deleteFoldersUsageStatement(db, 'owner', ['f1', 'f2'], Date.parse('2026-09-24T10:00:00Z'))
-    expect(calls[0].sql).toBe(DELETE_FOLDERS_SQL)
-    expect(calls[0].args).toEqual(['2026-09-24', 'owner', JSON.stringify(['f1', 'f2'])])
-  })
-
   it('읽기 문장', async () => {
     const row = { write_day: null, write_count: 0, content_bytes: 0, doc_count: 0, blocked_at: null, warned_at: null }
     const calls: { sql: string; args: unknown[] }[] = []
@@ -250,15 +239,6 @@ describe('F-502 9.1 댓글 바이트 문장 넷 — 글자까지 같다', () => 
     expect(calls[1].sql).toBe(`UPDATE users SET content_bytes = content_bytes + ${SUM} WHERE id = ?2`)
     expect(calls[0].args).toEqual(['doc1', 'owner'])
     expect(calls[1].args).toEqual(['doc1', 'owner'])
-  })
-
-  it('폴더 삭제', () => {
-    const { db, calls } = spySqlDb()
-    deleteFolderCommentBytesStatement(db, 'owner', ['f1', 'f2'])
-    expect(calls[0].sql).toBe(
-      'UPDATE users SET content_bytes = content_bytes - (SELECT COALESCE(SUM(bytes), 0) FROM doc_comments WHERE doc_id IN (SELECT id FROM docs WHERE owner_id = ?1 AND folder_id IN (SELECT value FROM json_each(?2)))) WHERE id = ?1',
-    )
-    expect(calls[0].args).toEqual(['owner', JSON.stringify(['f1', 'f2'])])
   })
 
   it('금고로 옮기기', () => {
@@ -408,41 +388,6 @@ describe('U12 삭제 빼기 (SQL 의미)', () => {
     expect(row2.content_bytes).toBe(row.content_bytes)
     expect(row2.doc_count).toBe(row.doc_count)
     expect(row2.write_count).toBe(2)
-  })
-
-  it('폴더째 삭제 — 폴더 안 문서만 빠진다', async () => {
-    const sqlDb = openTestDb()
-    sqlDb.exec("INSERT INTO users (id, email, created_at) VALUES ('u1', 'a@b.com', 1)")
-    sqlDb.exec("INSERT INTO folders (id, owner_id, name, created_at, updated_at) VALUES ('f1','u1','A',1,1)")
-    sqlDb.exec("INSERT INTO folders (id, owner_id, name, created_at, updated_at) VALUES ('f2','u1','B',1,1)")
-    sqlDb.exec(
-      "INSERT INTO docs (id, owner_id, title, content, line_ending, folder_id, version, created_at, updated_at) VALUES ('d1','u1','t','aaa','lf','f1',1,1,1)",
-    )
-    sqlDb.exec(
-      "INSERT INTO docs (id, owner_id, title, content, line_ending, folder_id, version, created_at, updated_at) VALUES ('d2','u1','t','bbb','lf','f1',1,1,1)",
-    )
-    sqlDb.exec(
-      "INSERT INTO docs (id, owner_id, title, content, line_ending, folder_id, version, created_at, updated_at) VALUES ('d3','u1','t','ccc','lf','f2',1,1,1)",
-    )
-    sqlDb.exec(
-      "INSERT INTO docs (id, owner_id, title, content, line_ending, folder_id, version, created_at, updated_at) VALUES ('d4','u1','t','outside','lf',NULL,1,1,1)",
-    )
-    sqlDb.exec("UPDATE users SET content_bytes = 12, doc_count = 4 WHERE id = 'u1'")
-
-    const db = asD1(sqlDb)
-    const now = Date.parse('2026-09-24T10:00:00Z')
-    await (deleteFoldersUsageStatement(db, 'u1', ['f1', 'f2'], now) as unknown as RunResult).run()
-    sqlDb.exec("DELETE FROM docs WHERE owner_id = 'u1' AND folder_id IN ('f1','f2')")
-
-    const row = sqlDb.prepare('SELECT content_bytes, doc_count FROM users WHERE id = ?').get('u1') as {
-      content_bytes: number
-      doc_count: number
-    }
-    // 12 - ('aaa'+'bbb'+'ccc' = 3+3+3 = 9) = 3
-    expect(row.content_bytes).toBe(3)
-    expect(row.doc_count).toBe(1)
-    const remaining = sqlDb.prepare('SELECT content FROM docs').all() as { content: string }[]
-    expect(remaining.map((r) => r.content)).toEqual(['outside'])
   })
 })
 

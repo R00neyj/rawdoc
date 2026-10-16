@@ -1,7 +1,7 @@
 // 문서·폴더 접근 권한 판정 (specs/features/F-212.md 2.2, 막힌 계정은 F-2028.md 4.2)
 import type { AuthUser } from './auth'
 import { folderAncestors } from '../src/lib/folderTree'
-import { readUsage, usageOf } from './usage'
+import { readUsage, usageOf, type DocIdSubquery } from './usage'
 import { accessRequestDeleteStatements } from './accessRequests'
 
 export type Role = 'owner' | 'edit' | 'view'
@@ -192,4 +192,16 @@ export function targetShareCleanupStatements(
     )
   }
   return out
+}
+
+// 위와 같은 정리를 문서 id 하위 질의 하나로 — 문서 수와 무관하게 6문장 (F-3023 4장)
+export function docSetShareCleanupStatements(db: D1Database, docs: DocIdSubquery, now: number): D1PreparedStatement[] {
+  const at = `?${docs.binds.length + 1}`
+  const ids = `(${docs.sql})`
+  return [
+    db.prepare(`UPDATE share_links SET revoked_at = ${at} WHERE target_type = 'doc' AND target_id IN ${ids} AND revoked_at IS NULL`).bind(...docs.binds, now),
+    db.prepare(`DELETE FROM grants WHERE target_type = 'doc' AND target_id IN ${ids}`).bind(...docs.binds),
+    db.prepare(`UPDATE request_tokens SET revoked_at = ${at} WHERE doc_id IN ${ids} AND revoked_at IS NULL`).bind(...docs.binds, now),
+    ...accessRequestDeleteStatements(db, `target_type = 'doc' AND target_id IN ${ids}`, [...docs.binds]),
+  ]
 }

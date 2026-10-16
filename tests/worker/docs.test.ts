@@ -1,4 +1,4 @@
-// /api 문서 만들기·PUT 총량 413, 사용량 줄 (specs/features/F-2025.md 8.1 D1~D8)
+// /api 문서 만들기·PUT 총량 413, 사용량 줄 (specs/features/F-2025.md 8.1 D1~D8). 지우기는 휴지통 → 영구 삭제를 거친다 (F-3023 8장)
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../worker/auth', () => ({
@@ -10,6 +10,7 @@ vi.mock('../../worker/auth', () => ({
 
 import { handleCreateDoc, handleDeleteDoc, handleUpdateDoc } from '../../worker/docs'
 import { handleDeleteFolder } from '../../worker/folders'
+import { handlePurgeTrashDoc } from '../../worker/trash'
 import { asD1, openTestDb } from '../../worker/testD1'
 import { DOC_BYTES_QUOTA, DOC_COUNT_QUOTA, utf8Bytes } from '../../worker/usage'
 import type { DatabaseSync } from 'node:sqlite'
@@ -71,6 +72,13 @@ function req(method: string, path: string, body?: unknown, userId = 'u1'): Reque
     init.body = JSON.stringify(body)
   }
   return new Request(`http://local.test${path}`, init)
+}
+
+// 휴지통으로 보낸 뒤 영구 삭제 — 지운 뒤 행이 없다는 단언은 이 둘을 거친다 (F-3023 8장)
+async function deleteForever(id: string, env: Env): Promise<Response> {
+  const trashed = await handleDeleteDoc(req('DELETE', `/api/docs/${id}`), env, ctx, { id })
+  expect(trashed.status).toBe(204)
+  return handlePurgeTrashDoc(req('DELETE', `/api/trash/${id}`), env, ctx, { id })
 }
 
 const ctx = {} as ExecutionContext
@@ -194,7 +202,7 @@ describe('F-2025 D1~D8 /api 문서 만들기·PUT 총량', () => {
     expect(conflict.status).toBe(409)
     expect(getUserRow(sqlDb, 'u1').write_count).toBe(0)
 
-    const del = await handleDeleteDoc(req('DELETE', '/api/docs/d1'), env, ctx, { id: 'd1' })
+    const del = await deleteForever('d1', env)
     expect(del.status).toBe(204)
     const owner = getUserRow(sqlDb, 'u1')
     expect(owner.content_bytes).toBe(100 - utf8Bytes('abc'))
@@ -222,7 +230,7 @@ describe('버그 수정 — 공유 링크 묶음에 든 문서 삭제', () => {
     insertShareLink(sqlDb, 'tok1', 'u1', 'd1')
     insertShareLinkDoc(sqlDb, 'tok1', 'd2')
 
-    const res = await handleDeleteDoc(req('DELETE', '/api/docs/d2'), env, ctx, { id: 'd2' })
+    const res = await deleteForever('d2', env)
     expect(res.status).toBe(204)
     expect(countDocs(sqlDb)).toBe(1)
     const bundleRow = sqlDb.prepare('SELECT * FROM share_link_docs WHERE doc_id = ?').get('d2')
@@ -265,7 +273,7 @@ describe('F-502 X1·X2 문서·폴더 삭제가 댓글 복사본을 지운다', 
     insertNotification(sqlDb, 'd2', 'c3')
     setUserUsage(sqlDb, 'u1', { contentBytes: 1000, docCount: 2 })
 
-    const res = await handleDeleteDoc(req('DELETE', '/api/docs/d1'), env, ctx, { id: 'd1' })
+    const res = await deleteForever('d1', env)
     expect(res.status).toBe(204)
     expect(rows(sqlDb, 'doc_comments', 'd1')).toBe(0)
     expect(rows(sqlDb, 'notifications', 'd1')).toBe(0)
@@ -274,7 +282,7 @@ describe('F-502 X1·X2 문서·폴더 삭제가 댓글 복사본을 지운다', 
     expect(getUserRow(sqlDb, 'u1').content_bytes).toBe(1000 - utf8Bytes('가나다') - 15)
   })
 
-  it('X2 handleDeleteFolder delete-all — 하위 폴더 문서의 댓글·알림 0, 폴더 밖 문서 것은 그대로, 누계 맞음', async () => {
+  it('X2 handleDeleteFolder delete-all — 문서는 휴지통으로 가고 댓글·알림·누계는 그대로 (F-3023)', async () => {
     const { sqlDb, env } = setup()
     insertUser(sqlDb, 'u1', 'u1@example.com')
     insertFolder(sqlDb, 'top', null)
@@ -294,13 +302,13 @@ describe('F-502 X1·X2 문서·폴더 삭제가 댓글 복사본을 지운다', 
     const res = await handleDeleteFolder(req('DELETE', '/api/folders/top?contents=delete-all'), env, ctx, { id: 'top' })
     expect(res.status).toBe(204)
     for (const id of ['d-top', 'd-sub']) {
-      expect(rows(sqlDb, 'doc_comments', id)).toBe(0)
-      expect(rows(sqlDb, 'notifications', id)).toBe(0)
+      expect(rows(sqlDb, 'doc_comments', id)).toBe(1)
     }
+    expect(rows(sqlDb, 'notifications', 'd-sub')).toBe(1)
     expect(rows(sqlDb, 'doc_comments', 'd-out')).toBe(1)
     expect(rows(sqlDb, 'notifications', 'd-out')).toBe(1)
-    expect(getUserRow(sqlDb, 'u1').content_bytes).toBe(1 + 9)
-    expect(getUserRow(sqlDb, 'u1').doc_count).toBe(1)
+    expect(getUserRow(sqlDb, 'u1').content_bytes).toBe(2 + 3 + 1 + 3 + 4 + 9)
+    expect(getUserRow(sqlDb, 'u1').doc_count).toBe(3)
   })
 })
 
@@ -323,7 +331,7 @@ describe('F-3015 A13 GitHub 연결이 있는 문서 삭제', () => {
     insertGithubRows(sqlDb, 'd1', 'u1')
     insertGithubRows(sqlDb, 'd2', 'u1')
 
-    const res = await handleDeleteDoc(req('DELETE', '/api/docs/d1'), env, ctx, { id: 'd1' })
+    const res = await deleteForever('d1', env)
     expect(res.status).toBe(204)
     for (const table of ['github_links', 'github_images']) {
       expect(sqlDb.prepare(`SELECT doc_id FROM ${table} ORDER BY doc_id`).all()).toEqual([{ doc_id: 'd2' }])

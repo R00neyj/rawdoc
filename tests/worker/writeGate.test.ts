@@ -148,6 +148,9 @@ const WRITE_ROUTES: [string, string][] = [
   ['DELETE', '/api/access-requests/link/:token'],
   ['POST', '/api/access-requests/:id/approve'],
   ['POST', '/api/access-requests/:id/reject'],
+  ['POST', '/api/trash/:id/restore'],
+  ['DELETE', '/api/trash/:id'],
+  ['DELETE', '/api/trash'],
 ]
 
 const PUB_GET_ROUTES = [
@@ -162,7 +165,7 @@ const PUB_GET_ROUTES = [
 ]
 
 describe('G1 isWriteRoute — 3장 표', () => {
-  it('51개만 참, 나머지 전부 거짓 (F-401 금고 셋 + F-402 첨부 지우기 + F-2050 삭제·이동·폴더 삭제 + F-3016 푸시 셋 + F-3017 그림 둘 + F-4005 권한 요청 둘 + F-4006 승인·거절 + F-4007 요청 토큰 포함)', () => {
+  it('54개만 참, 나머지 전부 거짓 (F-401 금고 셋 + F-402 첨부 지우기 + F-2050 삭제·이동·폴더 삭제 + F-3016 푸시 셋 + F-3017 그림 둘 + F-4005 권한 요청 둘 + F-4006 승인·거절 + F-4007 요청 토큰 + F-3023 휴지통 셋 포함)', () => {
     for (const [method, path] of WRITE_ROUTES) {
       expect(isWriteRoute(method, path), `${method} ${path}`).toBe(true)
     }
@@ -180,6 +183,7 @@ describe('G1 isWriteRoute — 3장 표', () => {
     expect(isWriteRoute('GET', '/api/docs/:id/people')).toBe(false)
     expect(isWriteRoute('GET', '/api/docs/:id/comments/count')).toBe(false)
     expect(isWriteRoute('GET', '/api/notifications')).toBe(false)
+    expect(isWriteRoute('GET', '/api/trash')).toBe(false)
     // F-2038 W9 — 계정 삭제는 막힌 계정·한도를 넘긴 계정도 할 수 있다 (3.4)
     expect(isWriteRoute('DELETE', '/api/account')).toBe(false)
     expect(isWriteRoute('GET', '/api/account')).toBe(false)
@@ -188,7 +192,7 @@ describe('G1 isWriteRoute — 3장 표', () => {
     expect(isWriteRoute('GET', '/api/user-css')).toBe(false)
     // F-3014 — 연결 해제는 막힌 계정도 할 수 있다 (F-3013 3.4)
     expect(isWriteRoute('DELETE', '/api/github/account')).toBe(false)
-    expect(WRITE_ROUTES).toHaveLength(51)
+    expect(WRITE_ROUTES).toHaveLength(54)
   })
 })
 

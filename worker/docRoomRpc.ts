@@ -4,6 +4,7 @@ import type { RoomCommentImport, RoomCommentImportResult, RoomTextWrite, RoomTex
 type RoomStub = {
   revalidateConnections(email?: string): Promise<void>
   purgeRoom(): Promise<void>
+  closeTrashed(): Promise<void>
   writeText(input: RoomTextWrite): Promise<RoomTextWriteResult>
   importComments(input: RoomCommentImport): Promise<RoomCommentImportResult>
 }
@@ -57,6 +58,15 @@ export async function notifyPurge(env: Env, ctx: ExecutionContext | undefined, d
   const stub = roomStub(env, docId)
   if (!stub) return
   await dispatch(ctx, () => stub.purgeRoom())
+}
+
+// 휴지통으로 보낸 문서의 방 — 앞 20개만, 나머지는 방의 다음 D1 확인이 닫는다 (F-3023 3.2, F-3021 Q1)
+export async function notifyTrashed(env: Env, ctx: ExecutionContext | undefined, docIds: readonly string[]): Promise<void> {
+  for (const docId of docIds.slice(0, REVALIDATE_FANOUT_MAX)) {
+    const stub = roomStub(env, docId)
+    if (!stub) return
+    await dispatch(ctx, () => stub.closeTrashed())
+  }
 }
 
 // 정리 작업 (F-2038 5.4) — 결과를 돌려받는다. 바인딩이 없으면 비울 것이 없는 것으로 본다

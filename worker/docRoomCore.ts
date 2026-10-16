@@ -1129,6 +1129,13 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     this.host.retire?.()
   }
 
+  // 휴지통으로 보낸 뒤 — 마지막 편집을 휴지통 행에 쓰고 닫는다. 불러오지 않은 방은 메모리에 미저장 편집이 없다 (F-3023 3.3)
+  async closeTrashed(): Promise<void> {
+    if (this.gone) return
+    if (this.loaded) await this.runFlush(false, true, false, true)
+    if (!this.gone) this.roomTrashed()
+  }
+
   // 문서 삭제 알림 (9.4). 저장소 비우기는 껍데기가 deleteAll 로 한다
   purge() {
     this.closeAll(SOCKET_CLOSE.notFound, 'deleted')

@@ -2,7 +2,7 @@
 import { NOTIFICATIONS_PER_RECIPIENT_MAX, commentSig, recordAnchorSig } from '../src/lib/docComments'
 import type { AnchorRange, CommentEntry, CommentRecord, CommentThread, NotificationKind } from '../src/lib/docComments'
 import { toCommentRecord } from '../src/lib/commentAnchor'
-import { commentBytesInStatement, commentBytesOutStatement, deleteFolderCommentBytesStatement, e2eeCommentBytesOutStatement } from './usage'
+import { commentBytesInStatement, commentBytesOutStatement, e2eeCommentBytesOutStatement, type DocIdSubquery } from './usage'
 import { utf8ByteLength } from './validate'
 
 // 바인딩 JSON 한 개의 UTF-8 상한 — D1 바인딩 문자열 2MB 의 절반, 본문 한도와 같은 값 (4.4)
@@ -76,10 +76,8 @@ export function notifRevBeforeDeleteSql(where: string): string {
 
 const DOC_COMMENTS_DELETE_SQL = 'DELETE FROM doc_comments WHERE doc_id = ?'
 const DOC_NOTIFICATIONS_WHERE = 'doc_id = ?'
-const FOLDER_DOCS = 'SELECT id FROM docs WHERE owner_id = ?1 AND folder_id IN (SELECT value FROM json_each(?2))'
 const WROTE_KEY = 'EXISTS (SELECT 1 FROM docs WHERE id = ?1 AND e2ee_key = ?2)'
 const OWNER_DOCS = 'SELECT id FROM docs WHERE owner_id = ?1'
-const FOLDER_NOTIFICATIONS_WHERE = `doc_id IN (${FOLDER_DOCS}) OR folder_id IN (SELECT value FROM json_each(?2))`
 const E2EE_NOTIFICATIONS_WHERE = `doc_id = ?1 AND ${WROTE_KEY}`
 const ACCOUNT_NOTIFICATIONS_WHERE = `doc_id IN (${OWNER_DOCS}) OR folder_id IN (SELECT id FROM folders WHERE owner_id = ?1) OR recipient_email = ?2`
 
@@ -240,21 +238,27 @@ export function docCommentDeleteStatements(db: D1Database, ownerId: string, docI
   ]
 }
 
-export function folderCommentDeleteStatements(db: D1Database, ownerId: string, folderIds: string[]): D1PreparedStatement[] {
-  const ids = JSON.stringify(folderIds)
-  return [
-    deleteFolderCommentBytesStatement(db, ownerId, folderIds),
-    db.prepare(`DELETE FROM doc_comments WHERE doc_id IN (${FOLDER_DOCS})`).bind(ownerId, ids),
-    ...deleteNotificationsStatements(db, FOLDER_NOTIFICATIONS_WHERE, ownerId, ids),
-  ]
-}
-
 export function e2eeCommentDeleteStatements(db: D1Database, ownerId: string, docId: string, e2eeKey: string): D1PreparedStatement[] {
   return [
     e2eeCommentBytesOutStatement(db, ownerId, docId, e2eeKey),
     db.prepare(`DELETE FROM doc_comments WHERE doc_id = ?1 AND ${WROTE_KEY}`).bind(docId, e2eeKey),
     ...deleteNotificationsStatements(db, E2EE_NOTIFICATIONS_WHERE, docId, e2eeKey),
   ]
+}
+
+// 하위 질의가 고른 문서의 댓글 바이트·댓글·알림 — 비우기·만료 (F-3023 4장)
+export function docSetCommentDeleteStatements(db: D1Database, ownerId: string, docs: DocIdSubquery): D1PreparedStatement[] {
+  const where = `doc_id IN (${docs.sql})`
+  return [
+    db.prepare(`UPDATE users SET content_bytes = content_bytes - (SELECT COALESCE(SUM(bytes), 0) FROM doc_comments WHERE ${where}) WHERE id = ?${docs.binds.length + 1}`).bind(...docs.binds, ownerId),
+    db.prepare(`DELETE FROM doc_comments WHERE ${where}`).bind(...docs.binds),
+    ...deleteNotificationsStatements(db, where, ...docs.binds),
+  ]
+}
+
+// 지운 폴더 자신의 알림만 — 안 문서의 알림·댓글은 휴지통 문서와 함께 남는다 (F-3023 3.2)
+export function folderOnlyNotificationDeleteStatements(db: D1Database, folderIds: readonly string[]): D1PreparedStatement[] {
+  return deleteNotificationsStatements(db, 'folder_id IN (SELECT value FROM json_each(?1))', JSON.stringify(folderIds))
 }
 
 // 계정 삭제 (F-2038 5.2 11번 앞) — 사용량 문장은 없다(users 행을 지운다)

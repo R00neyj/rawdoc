@@ -3,7 +3,7 @@ import { errorResponse, jsonResponse } from './http'
 import { getUserWithSessionStart } from './auth'
 import { accountCommentDeleteStatements } from './commentRows'
 import { accessRequestDeleteStatements } from './accessRequests'
-import { PURGE_CALLS_ON_DELETE, runPurgeJobs } from './purgeJobs'
+import { purgeQuietly } from './purgeJobs'
 import { ACCOUNT_DELETE_FRESH_MS, type AccountDeletePreview } from '../src/lib/accountDeletion'
 
 // better-auth 가 >= 로 거절하는 것과 같은 방향 (4.1)
@@ -96,14 +96,6 @@ function deleteAccountStatements(db: D1Database, userId: string, email: string, 
     byUser('DELETE FROM auth_accounts WHERE user_id = ?1'),
     byUser('DELETE FROM users WHERE id = ?1'),
   ]
-}
-
-async function purgeQuietly(env: Env, now: number): Promise<void> {
-  try {
-    await runPurgeJobs(env, now, PURGE_CALLS_ON_DELETE)
-  } catch (err) {
-    console.error('purge_after_delete_failed', err)
-  }
 }
 
 export async function handleDeleteAccount(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

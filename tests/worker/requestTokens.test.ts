@@ -189,9 +189,18 @@ describe('F-4007 T4 끊기', () => {
     expect((await status(envFor(sqlDb, GUEST), token)).status).toBe(404)
   }
 
-  it('문서 삭제', async () => {
+  it('문서 영구 삭제 — 휴지통 뒤 DELETE /api/trash/:id (F-3023)', async () => {
     const { sqlDb, token } = await setup()
     expect((await call(envFor(sqlDb, OWNER), `/api/docs/${DOC_A}`, { method: 'DELETE' })).status).toBe(204)
+    expect(tokens(sqlDb)).toMatchObject([{ token, revoked_at: null }])
+    expect((await call(envFor(sqlDb, OWNER), `/api/trash/${DOC_A}`, { method: 'DELETE' })).status).toBe(204)
+    await expectRevoked(sqlDb, token)
+  })
+
+  it('휴지통 비우기 (F-3023)', async () => {
+    const { sqlDb, token } = await setup()
+    expect((await call(envFor(sqlDb, OWNER), `/api/docs/${DOC_A}`, { method: 'DELETE' })).status).toBe(204)
+    expect((await call(envFor(sqlDb, OWNER), '/api/trash', { method: 'DELETE' })).status).toBe(200)
     await expectRevoked(sqlDb, token)
   })
 

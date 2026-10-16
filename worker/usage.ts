@@ -103,14 +103,10 @@ const TOTAL_ONLY_SQL =
   'UPDATE users SET content_bytes = content_bytes + CASE WHEN changes() = 1 THEN ?1 ELSE 0 END, doc_count = doc_count + CASE WHEN changes() = 1 THEN ?2 ELSE 0 END WHERE id = ?3'
 const DELETE_DOC_SQL =
   'UPDATE users SET write_count = CASE WHEN write_day = ?1 THEN write_count + 1 ELSE 1 END, write_day = ?1, (content_bytes, doc_count) = (SELECT users.content_bytes - COALESCE(SUM(length(CAST(content AS BLOB))), 0), users.doc_count - COUNT(*) FROM docs WHERE id = ?2 AND owner_id = ?3) WHERE id = ?3'
-const DELETE_FOLDERS_SQL =
-  'UPDATE users SET write_count = CASE WHEN write_day = ?1 THEN write_count + 1 ELSE 1 END, write_day = ?1, (content_bytes, doc_count) = (SELECT users.content_bytes - COALESCE(SUM(length(CAST(content AS BLOB))), 0), users.doc_count - COUNT(*) FROM docs WHERE owner_id = ?2 AND folder_id IN (SELECT value FROM json_each(?3))) WHERE id = ?2'
 // F-502 9.1 — 댓글 바이트. 문서 소유자 누계에서 그 문서 doc_comments.bytes 합을 빼고 더한다
 const COMMENT_BYTES_SUM = '(SELECT COALESCE(SUM(bytes), 0) FROM doc_comments WHERE doc_id = ?1)'
 const COMMENT_BYTES_OUT_SQL = `UPDATE users SET content_bytes = content_bytes - ${COMMENT_BYTES_SUM} WHERE id = ?2`
 const COMMENT_BYTES_IN_SQL = `UPDATE users SET content_bytes = content_bytes + ${COMMENT_BYTES_SUM} WHERE id = ?2`
-const DELETE_FOLDER_COMMENT_BYTES_SQL =
-  'UPDATE users SET content_bytes = content_bytes - (SELECT COALESCE(SUM(bytes), 0) FROM doc_comments WHERE doc_id IN (SELECT id FROM docs WHERE owner_id = ?1 AND folder_id IN (SELECT value FROM json_each(?2)))) WHERE id = ?1'
 const E2EE_COMMENT_BYTES_OUT_SQL = `${COMMENT_BYTES_OUT_SQL} AND EXISTS (SELECT 1 FROM docs WHERE id = ?1 AND e2ee_key = ?3)`
 const READ_USAGE_SQL = `SELECT ${USAGE_COLUMNS} FROM users WHERE id = ?`
 // F-2027 4.1 — 하루 + 누계 문장 그대로에 RETURNING 만
@@ -149,15 +145,6 @@ export function deleteDocUsageStatement(db: D1Database, ownerId: string, docId: 
   return db.prepare(DELETE_DOC_SQL).bind(utcDay(now), docId, ownerId)
 }
 
-export function deleteFoldersUsageStatement(
-  db: D1Database,
-  ownerId: string,
-  folderIds: string[],
-  now: number,
-): D1PreparedStatement {
-  return db.prepare(DELETE_FOLDERS_SQL).bind(utcDay(now), ownerId, JSON.stringify(folderIds))
-}
-
 export function commentBytesOutStatement(db: D1Database, ownerId: string, docId: string): D1PreparedStatement {
   return db.prepare(COMMENT_BYTES_OUT_SQL).bind(docId, ownerId)
 }
@@ -166,8 +153,17 @@ export function commentBytesInStatement(db: D1Database, ownerId: string, docId: 
   return db.prepare(COMMENT_BYTES_IN_SQL).bind(docId, ownerId)
 }
 
-export function deleteFolderCommentBytesStatement(db: D1Database, ownerId: string, folderIds: string[]): D1PreparedStatement {
-  return db.prepare(DELETE_FOLDER_COMMENT_BYTES_SQL).bind(ownerId, JSON.stringify(folderIds))
+// 문서 id 하위 질의 — ?1..?n 이 binds 차례, 문장마다 제 바인딩은 그 뒤 번호를 쓴다 (F-3023 4장)
+export type DocIdSubquery = { sql: string; binds: readonly unknown[] }
+
+// 하위 질의가 고른 휴지통 문서를 소유자 누계에서 뺀다. countWrite 가 거짓이면 하루 쓰기는 그대로 (F-3023 4장)
+export function purgeDocsUsageStatement(db: D1Database, ownerId: string, docs: DocIdSubquery, now: number, countWrite: boolean): D1PreparedStatement {
+  const n = docs.binds.length
+  const totals = `(content_bytes, doc_count) = (SELECT users.content_bytes - COALESCE(SUM(length(CAST(content AS BLOB))), 0), users.doc_count - COUNT(*) FROM docs WHERE deleted_at IS NOT NULL AND id IN (${docs.sql}))`
+  if (!countWrite) return db.prepare(`UPDATE users SET ${totals} WHERE id = ?${n + 1}`).bind(...docs.binds, ownerId)
+  return db
+    .prepare(`UPDATE users SET write_count = CASE WHEN write_day = ?${n + 1} THEN write_count + 1 ELSE 1 END, write_day = ?${n + 1}, ${totals} WHERE id = ?${n + 2}`)
+    .bind(...docs.binds, utcDay(now), ownerId)
 }
 
 // 금고로 옮기기 — 1번 문장이 이 요청의 감싼 키를 실제로 썼을 때만 (F-401 WROTE_KEY)

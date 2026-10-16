@@ -30,6 +30,7 @@ function makeWorld() {
   const DOC_ROOM = {
     getByName: () => ({
       async purgeRoom() {},
+      async closeTrashed() {},
       async revalidateConnections() {},
     }),
   }
@@ -89,7 +90,7 @@ function grantRows(sqlDb: DatabaseSync, id: string): number {
 }
 
 describe('리뷰 W2·W4 삭제 경로가 링크·초대를 정리한다', () => {
-  it('문서 삭제 — 공개 링크는 폐기, 문서 초대는 삭제', async () => {
+  it('문서 삭제 — 휴지통 뒤 영구 삭제하면 공개 링크는 폐기, 문서 초대는 삭제 (F-3023)', async () => {
     const w = makeWorld()
     const X = uuid(1)
     await createDoc(w.victim, X, '피해자 문서')
@@ -97,11 +98,13 @@ describe('리뷰 W2·W4 삭제 경로가 링크·초대를 정리한다', () => 
     await grant(w.victim, 'docs', X, FRIEND)
 
     expect((await call(w.victim, `/api/docs/${X}`, json('DELETE'))).status).toBe(204)
+    expect(activeLinks(w.sqlDb, X)).toBe(1)
+    expect((await call(w.victim, `/api/trash/${X}`, json('DELETE'))).status).toBe(204)
     expect(activeLinks(w.sqlDb, X)).toBe(0)
     expect(grantRows(w.sqlDb, X)).toBe(0)
   })
 
-  it('폴더 전체 삭제 — 안의 문서·폴더 링크와 초대가 모두 정리된다', async () => {
+  it('폴더 전체 삭제 — 폴더 링크·초대는 곧바로, 안 문서 것은 휴지통 뒤 영구 삭제 때 정리된다 (F-3023)', async () => {
     const w = makeWorld()
     const F = uuid(10)
     const S = uuid(11)
@@ -117,6 +120,8 @@ describe('리뷰 W2·W4 삭제 경로가 링크·초대를 정리한다', () => 
     await grant(w.victim, 'docs', D, FRIEND)
 
     expect((await call(w.victim, `/api/folders/${F}?contents=delete-all`, json('DELETE'))).status).toBe(204)
+    expect(activeLinks(w.sqlDb, D)).toBe(1)
+    expect((await call(w.victim, '/api/trash', json('DELETE'))).status).toBe(200)
     for (const id of [F, S, D]) {
       expect(activeLinks(w.sqlDb, id)).toBe(0)
       expect(grantRows(w.sqlDb, id)).toBe(0)

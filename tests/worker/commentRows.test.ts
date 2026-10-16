@@ -11,7 +11,7 @@ import {
   commentBundleStatements,
   docCommentDeleteStatements,
   e2eeCommentDeleteStatements,
-  folderCommentDeleteStatements,
+  docSetCommentDeleteStatements,
   notificationExcerpt,
   notificationStatements,
   notificationTargets,
@@ -411,12 +411,12 @@ describe('F-2057 U8 문서·폴더·금고·계정 지우기', () => {
     expectRevBeforeDelete(sqlOrder((spy) => docCommentDeleteStatements(spy, OWNER_ID, DOC)))
   })
 
-  it('폴더 삭제', async () => {
+  it('문서 집합 삭제 — 하위 질의 (F-3023)', async () => {
     const { sqlDb, db } = world()
-    sqlDb.prepare("UPDATE docs SET folder_id = 'f1' WHERE id = ?").run(DOC)
-    await db.batch(folderCommentDeleteStatements(db, OWNER_ID, ['f1']))
+    const docs = { sql: 'SELECT ?1', binds: [DOC] }
+    await db.batch(docSetCommentDeleteStatements(db, OWNER_ID, docs))
     expect(revs(sqlDb)).toEqual(untouched)
-    expectRevBeforeDelete(sqlOrder((spy) => folderCommentDeleteStatements(spy, OWNER_ID, ['f1'])))
+    expectRevBeforeDelete(sqlOrder((spy) => docSetCommentDeleteStatements(spy, OWNER_ID, docs)))
   })
 
   it('금고 전환 — 이 요청의 키를 쓴 때만', async () => {

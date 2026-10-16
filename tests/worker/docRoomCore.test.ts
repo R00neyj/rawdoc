@@ -1494,3 +1494,46 @@ describe('F-3022 A8 휴지통 방', () => {
     expect(again.counts.retire).toBe(0)
   })
 })
+
+// 휴지통으로 보낸 뒤 — 마지막 편집을 쓰고 닫는다, 저장소는 남긴다 (specs/features/F-3023.md 3.3)
+describe('F-3023 A5 closeTrashed', () => {
+  it('불러온 방은 느린 날에도 UPDATE_SQL 1번 뒤 4404 deleted·retire 1번, 저장소 그대로', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { d1, core, doc, store, conns, counts } = await slowRoom()
+    const c = conn('owner', 'owner@example.com', 'owner')
+    conns.push(c)
+    vi.setSystemTime(1_010_000)
+    edit(doc, (t) => t.insert(t.length, 'c'))
+    d1.state.row = { ...d1.state.row!, deleted_at: 5 }
+    const before = d1.updates().length
+    await core.closeTrashed()
+    const after = d1.updates().slice(before)
+    expect(after.map((u) => u.sql)).toEqual([ROOM_UPDATE_SQL])
+    expect(d1.state.row!.content).toBe('abc')
+    expect(c.closed).toEqual({ code: 4404, reason: 'deleted' })
+    expect(counts.retire).toBe(1)
+    expect(store.seqCount()).toBeGreaterThan(0)
+    expect(store.meta().get('d1_version')).toBeDefined()
+    expect(store.log.some((sql) => sql.startsWith('DELETE FROM ydoc_meta'))).toBe(false)
+  })
+
+  it('불러오지 않은 방은 D1 문장 0, 연결 4404 deleted·retire 1번', async () => {
+    const d1 = makeD1({ content: 'a', version: 2 })
+    const room = makeRoom(d1)
+    const c = conn('owner', 'owner@example.com', 'owner')
+    room.conns.push(c)
+    await room.core.closeTrashed()
+    expect(d1.state.calls).toHaveLength(0)
+    expect(c.closed).toEqual({ code: 4404, reason: 'deleted' })
+    expect(room.counts.retire).toBe(1)
+    expect(room.store.log.some((sql) => sql.startsWith('DELETE FROM ydoc_meta'))).toBe(false)
+  })
+
+  it('이미 닫힌 방은 아무것도 하지 않는다', async () => {
+    const d1 = makeD1({ content: 'a', version: 2 })
+    const room = makeRoom(d1)
+    await room.core.closeTrashed()
+    await room.core.closeTrashed()
+    expect(room.counts.retire).toBe(1)
+  })
+})

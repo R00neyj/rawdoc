@@ -106,7 +106,7 @@ function envelopeBytes(): Uint8Array {
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
 describe('F-2025 R1 쓰기 라우트마다 write_count +1', () => {
-  it('/api 19개 + 폴더 delete-all 변형 + /v1 5개 + /v1 삭제·이동·폴더 삭제 4개(F-2050) + 금고 3개 (F-401 G2)', async () => {
+  it('/api 19개 + 폴더 delete-all 변형 + 휴지통 3개(F-3023 A12) + /v1 5개 + /v1 삭제·이동·폴더 삭제 4개(F-2050) + 금고 3개 (F-401 G2)', async () => {
     const { sqlDb, env } = makeEnv()
 
     async function expectPlusOne(label: string, run: () => Promise<Response>, okStatuses: number[]) {
@@ -130,6 +130,12 @@ describe('F-2025 R1 쓰기 라우트마다 write_count +1', () => {
 
     insertDoc(sqlDb, uuid(2), owner)
     await expectPlusOne('DELETE /api/docs/:id', () => call(env, `/api/docs/${uuid(2)}`, { method: 'DELETE' }), [204])
+
+    // 휴지통 3 (F-3023 A12) — 방금 보낸 uuid(2) 를 되살렸다가 다시 보내 영구 삭제, 그다음 비우기
+    await expectPlusOne('POST /api/trash/:id/restore', () => call(env, `/api/trash/${uuid(2)}/restore`, { method: 'POST' }), [200])
+    expect((await call(env, `/api/docs/${uuid(2)}`, { method: 'DELETE' })).status).toBe(204)
+    await expectPlusOne('DELETE /api/trash/:id', () => call(env, `/api/trash/${uuid(2)}`, { method: 'DELETE' }), [204])
+    await expectPlusOne('DELETE /api/trash', () => call(env, '/api/trash', { method: 'DELETE' }), [200])
 
     insertDoc(sqlDb, uuid(3), owner)
     await expectPlusOne(
@@ -350,6 +356,7 @@ describe('F-2025 R2 GET 라우트는 write_count 그대로', () => {
       ['/api/shares', undefined],
       ['/api/tokens', undefined],
       ['/api/usage', undefined],
+      ['/api/trash', undefined],
       ['/v1/docs', bearerInit('GET', token)],
       [`/v1/docs/${uuid(30)}`, bearerInit('GET', token)],
       ['/v1/folders', bearerInit('GET', token)],

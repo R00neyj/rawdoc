@@ -34,6 +34,7 @@ import {
   isValidWrappedKey,
 } from './validate'
 import { E2EE_MAX_TITLE_CHARS } from '../src/lib/e2eeLimits'
+import { trashDoc } from './trash'
 
 type ReadJsonResult =
   | { ok: true; data: unknown }
@@ -392,7 +393,7 @@ export async function handleSetPinned(
   return jsonResponse(rowToDoc({ ...existing, pinned_at: pinnedAt }))
 }
 
-// 권한 판정 뒤의 D1 쓰기 한 벌 — /api·/v1 이 같이 쓴다 (F-2050 3.2)
+// 영구 삭제의 D1 쓰기 한 벌 — 휴지통의 DELETE /api/trash/:id 만 부른다 (F-3023 1장)
 export async function deleteDocRows(env: Env, ctx: ExecutionContext, docId: string, ownerId: string): Promise<void> {
   await env.DB.batch([
     deleteDocUsageStatement(env.DB, ownerId, docId, Date.now()),
@@ -417,10 +418,7 @@ export async function handleDeleteDoc(
   params: Record<string, string>,
 ): Promise<Response> {
   const user = await requireUser(request, env)
-  const access = await getDocAccess<DocRow>(env, params.id, user)
-  if (!access) return errorResponse('not_found', 404)
-  if (access.role !== 'owner') return errorResponse('forbidden', 403)
-
-  await deleteDocRows(env, ctx, params.id, user.id)
+  const result = await trashDoc(env, ctx, user, params.id, { by: 'app', allowE2ee: true })
+  if (!result.ok) return result.error === 'forbidden' ? errorResponse('forbidden', 403) : errorResponse('not_found', 404)
   return new Response(null, { status: 204 })
 }
