@@ -2984,7 +2984,9 @@ body.sidebar-resizing {
   color: var(--panel);
 }
 
-.dialog-actions button.danger:hover {
+/* 일반 호버(:hover:not(:disabled))가 더 구체적이라 위험색 바탕을 덮어 다크에서 글자가 묻혔다 */
+.dialog-actions button.danger:hover:not(:disabled) {
+  background: var(--danger);
   filter: brightness(0.95);
 }
 
