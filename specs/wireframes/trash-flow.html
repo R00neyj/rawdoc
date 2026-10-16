@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>서버 문서 휴지통 플로우</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; font: 14px/1.5 system-ui, sans-serif; color: #222; background: #f6f6f4; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 40px 0 12px; color: #444; }
+  .sub { color: #777; margin: 0 0 24px; }
+  .flow { display: flex; flex-direction: column; align-items: center; }
+  .row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .box { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; text-align: center; min-width: 180px; }
+  .box small { display: block; color: #888; font-size: 12px; }
+  .box.key { border: 2px solid #333; }
+  .box.q { border-style: dashed; border-radius: 20px; background: #fafaf8; }
+  .arrow { width: 2px; height: 28px; background: #999; position: relative; margin: 4px 0; }
+  .arrow::after { content: ''; position: absolute; bottom: -2px; left: -5px; border: 6px solid transparent; border-top-color: #999; }
+  .branch { display: flex; gap: 16px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .col { display: flex; flex-direction: column; align-items: center; }
+  .label { font-size: 12px; color: #666; background: #e9e9e5; border-radius: 10px; padding: 1px 8px; margin-bottom: 4px; }
+  .mock { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 16px 20px; display: inline-block; min-width: 380px; text-align: left; }
+  .btn { display: inline-block; border: 1px solid #888; border-radius: 6px; padding: 2px 10px; margin-left: 4px; font-size: 13px; }
+  .item { padding: 6px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+  ol.dec li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<h1>서버 문서 휴지통</h1>
+<p class="sub">원격 MCP 의 지우기 도구 선행. 정한 것: 모든 서버 문서 지우기(앱·CLI·MCP)에 적용 / 30일 뒤 자동 영구 삭제 / 용량에 셈 / 공유는 즉시 막고 복원하면 되살아남 / 사이드바 아래 '휴지통'</p>
+
+<h2>1. 지우기</h2>
+<div class="flow">
+  <div class="row">
+    <div class="box">사이드바 문서 <b>⋯ › 지우기</b></div>
+    <div class="box">폴더 <b>⋯ › 지우기 (안의 문서까지)</b></div>
+    <div class="box"><code>rawdoc rm</code> · MCP 지우기 도구</div>
+  </div>
+  <div class="arrow"></div>
+  <div class="box key">문서에 <code>deleted_at</code> 표시 · 목록·검색·지도·위키링크 후보에서 사라짐<small>본문·첨부·초대·공유 링크는 그대로 보관</small></div>
+  <div class="arrow"></div>
+  <div class="branch">
+    <div class="col"><span class="label">앱</span><div class="box">지금 확인 대화상자 그대로 (문구만 휴지통 기준으로)</div></div>
+    <div class="col"><span class="label">공유 중</span><div class="box">초대받은 사람·공개 링크: "삭제된 문서입니다"<small>열려 있던 실시간 방은 닫힘</small></div></div>
+    <div class="col"><span class="label">폴더</span><div class="box">폴더는 지우고, 안의 문서는 각각 휴지통<small>원래 폴더 경로를 기억</small></div></div>
+  </div>
+</div>
+
+<h2>2. 휴지통 열기 — 사이드바 맨 아래</h2>
+<div class="flow">
+  <div class="mock">
+    <b>휴지통</b> <small style="color:#888">30일이 지나면 영구히 지워집니다</small>
+    <div class="item"><span>회의록 10월<br><small style="color:#888">업무/회의 · 3일 전 · 27일 남음 · ChatGPT 가 지움</small></span><span><span class="btn">복원</span><span class="btn">영구 삭제</span></span></div>
+    <div class="item"><span>메모<br><small style="color:#888">(최상위) · 오늘</small></span><span><span class="btn">복원</span><span class="btn">영구 삭제</span></span></div>
+    <br><span class="btn">휴지통 비우기</span>
+    <br><small style="color:#888">비었으면: "휴지통이 비어 있습니다"</small>
+  </div>
+  <div class="arrow"></div>
+  <div class="branch">
+    <div class="col"><span class="label">복원</span><div class="box key">원래 폴더로<small>폴더가 없으면 최상위 · 초대·링크 되살아남</small></div></div>
+    <div class="col"><span class="label">영구 삭제 · 비우기</span><div class="box">확인 대화상자 → 지금의 영구 삭제 경로<small>첨부 정리, 용량 반환</small></div></div>
+    <div class="col"><span class="label">30일 경과</span><div class="box">cron 이 영구 삭제</div></div>
+  </div>
+</div>
+
+<h2>3. 범위 밖 · 경계</h2>
+<div class="flow">
+  <div class="row">
+    <div class="box">로그인 없이 만든 로컬 문서<small>지금처럼 바로 지움 (서버 문서만 휴지통)</small></div>
+    <div class="box">금고 문서<small>암호문 그대로 휴지통 · 복원 가능</small></div>
+    <div class="box">공유받은 문서<small>소유자만 지울 수 있음 — 지금과 같음</small></div>
+    <div class="box">계정 삭제<small>휴지통 포함 즉시 전부 지움</small></div>
+  </div>
+</div>
+
+<h2>정한 것 (2026-10-16)</h2>
+<ol class="dec">
+  <li><b>앱의 지우기 확인 대화상자</b> — 그대로 둔다</li>
+  <li><b>누가 지웠는지 표시</b> — 앱 / CLI / 연결된 앱 이름을 기록해 휴지통에 보여 줌</li>
+  <li><b>휴지통 문서 열기</b> — 복원해야만 열림 (미리보기 없음)</li>
+</ol>
+</body>
+</html>
