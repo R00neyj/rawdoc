@@ -176,7 +176,7 @@ describe('F-4009 A1 AS 메타데이터', () => {
   })
 
   it('그 밖의 /.well-known/* 는 404', async () => {
-    const res = await call(makeEnv(), '/.well-known/oauth-protected-resource')
+    const res = await call(makeEnv(), '/.well-known/unknown')
     expect(res.status).toBe(404)
     expect(await res.json()).toEqual({ error: 'not_found' })
   })

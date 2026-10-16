@@ -194,6 +194,8 @@ describe('G1 isWriteRoute — 3장 표', () => {
     expect(isWriteRoute('DELETE', '/api/github/account')).toBe(false)
     // F-4010 — 앱 연결 동의는 문서 쓰기가 아니다 (4장)
     expect(isWriteRoute('POST', '/api/oauth/consent')).toBe(false)
+    // F-4011 — 연결 끊기는 막힌 계정도 할 수 있다 (F-3013 3.4 선례)
+    expect(isWriteRoute('DELETE', '/api/connected-apps/:id')).toBe(false)
     expect(WRITE_ROUTES).toHaveLength(54)
   })
 })

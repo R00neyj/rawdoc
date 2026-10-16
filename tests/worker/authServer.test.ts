@@ -491,6 +491,9 @@ describe('F-2033 U12 wrangler.jsonc 계약', () => {
     expect(config.assets.run_worker_first).toContain('/limits')
     expect(config.assets.run_worker_first).toContain('/.well-known/*')
     expect(config.assets.run_worker_first).toContain('/oauth/*')
+    // F-4011 — /mcp 는 F-3030 분기, OpenAI 도메인 확인 비밀은 선택이라 required 밖
+    expect(config.assets.run_worker_first).toContain('/mcp')
+    expect(config.secrets.required).not.toContain('OPENAI_APPS_CHALLENGE')
   })
 })
 

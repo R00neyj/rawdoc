@@ -22,6 +22,8 @@ export function isWriteRoute(method: string, routePath: string): boolean {
   if (method === 'DELETE' && routePath === '/api/push/subscription') return false
   // GitHub 연결 해제도 막힌 계정이 할 수 있어야 한다 (F-3013 3.4)
   if (method === 'DELETE' && routePath === '/api/github/account') return false
+  // 앱 연결 끊기도 막힌 계정이 할 수 있어야 한다 (F-4011 4장)
+  if (method === 'DELETE' && routePath === '/api/connected-apps/:id') return false
   if (routePath.startsWith('/api/auth/')) return false
   return true
 }

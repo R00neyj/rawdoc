@@ -66,6 +66,9 @@ import { handleListNotifications, handleReadNotifications } from './notification
 import { cleanupServerAttachments } from './attachmentGc'
 import { cleanupComments } from './commentGc'
 import { handleCreateToken, handleDeleteToken, handleListTokens } from './apiTokens'
+import { handleDeleteConnectedApp, handleListConnectedApps } from './connectedApps'
+import { handleProtectedResourceMetadata } from './mcpAuth'
+import { handleOpenaiChallenge } from './openaiChallenge'
 import {
   handleCreateAttachmentV1,
   handleCreateDocLinkV1,
@@ -278,6 +281,7 @@ const AUTH_ROUTES = new Set([
 const OAUTH_SERVER_ROUTES = new Set(['POST /api/auth/oauth2/token', 'POST /api/auth/oauth2/register', 'POST /api/auth/oauth2/revoke'])
 
 const AUTH_SERVER_METADATA_PATHS = new Set(['/.well-known/oauth-authorization-server', '/.well-known/oauth-authorization-server/api/auth'])
+const PROTECTED_RESOURCE_PATHS = new Set(['/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'])
 
 async function runQuietly(task: () => Promise<unknown>): Promise<void> {
   try {
@@ -342,6 +346,8 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/tokens', handler: handleListTokens },
   { method: 'POST', path: '/api/tokens', handler: handleCreateToken },
   { method: 'DELETE', path: '/api/tokens/:id', handler: handleDeleteToken },
+  { method: 'GET', path: '/api/connected-apps', handler: handleListConnectedApps },
+  { method: 'DELETE', path: '/api/connected-apps/:id', handler: handleDeleteConnectedApp },
   { method: 'GET', path: '/api/access-requests/link/:token', handler: handleGetAccessRequest },
   { method: 'POST', path: '/api/access-requests/link/:token', handler: handlePostAccessRequest },
   { method: 'DELETE', path: '/api/access-requests/link/:token', handler: handleDeleteAccessRequest },
@@ -474,8 +480,10 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext, 
         }
         return appRes
       }
-      // 보호 자원 메타데이터·도메인 확인은 F-4011 — 그 밖은 아직 404
+      // AS·보호 자원 메타데이터와 OpenAI 도메인 확인만 — 그 밖은 404 (F-4009, F-4011 3장)
       if (url.pathname.startsWith('/.well-known/')) {
+        if (PROTECTED_RESOURCE_PATHS.has(url.pathname)) return handleProtectedResourceMetadata(request, env)
+        if (url.pathname === '/.well-known/openai-apps-challenge') return handleOpenaiChallenge(request, env)
         if (!AUTH_SERVER_METADATA_PATHS.has(url.pathname)) return errorResponse('not_found', 404)
         try {
           return await handleAuthServerMetadata(request, env)
