@@ -4,6 +4,15 @@ import { cleanupExpiredAuth, getAuth } from './authServer'
 import { admitClientRegistration, cleanupOAuth, handleAuthServerMetadata } from './oauthServer'
 import { isAllowedOrigin, needsOriginCheck } from './origin'
 import { loginReturn, renderLoginPage } from './loginPage'
+import {
+  OAUTH_EXPIRED_PATH,
+  handleConsentPage,
+  handleConsentSubmit,
+  handleOAuthErrorPage,
+  handleOAuthLoginPage,
+  isLiveOAuthQuery,
+  oauthLoginReturn,
+} from './oauthConsent'
 import { handleLimitsPage } from './limitsPage'
 import {
   handleCreateDoc,
@@ -198,8 +207,12 @@ async function handleLoginStart(request: Request, env: Env): Promise<Response> {
   } catch {
     return badRequest
   }
+  // 앱 연결 이어가기 — return 은 읽지 않는다 (F-4010 3장)
+  const rawQuery = form.get('oauth_query')
+  const oauthQuery = typeof rawQuery === 'string' ? rawQuery : null
+  if (rawQuery !== null && (oauthQuery === null || !(await isLiveOAuthQuery(oauthQuery, env)))) return redirect(OAUTH_EXPIRED_PATH, 303)
   const rawReturn = form.get('return')
-  const target = loginReturn(typeof rawReturn === 'string' ? rawReturn : null)
+  const target = oauthQuery !== null ? oauthLoginReturn(oauthQuery) : loginReturn(typeof rawReturn === 'string' ? rawReturn : null)
   const provider = form.get('provider')
   if (provider !== 'google' && provider !== 'github') return redirect(withError(target.failureUrl, 'bad_request'), 303)
   const [clientId, clientSecret] =
@@ -211,7 +224,12 @@ async function handleLoginStart(request: Request, env: Env): Promise<Response> {
   try {
     // 요청 Origin 은 관문이 이미 봤다 — 빈 헤더라야 로컬에서 바뀐 Origin 이 better-auth 검사에 다시 걸리지 않는다
     const { headers, response } = await getAuth(env).api.signInSocial({
-      body: { provider, callbackURL: target.successUrl, errorCallbackURL: target.failureUrl },
+      body: {
+        provider,
+        callbackURL: target.successUrl,
+        errorCallbackURL: target.failureUrl,
+        ...(oauthQuery !== null ? { oauth_query: oauthQuery } : {}),
+      },
       headers: new Headers(),
       returnHeaders: true,
     })
@@ -229,6 +247,9 @@ async function handleLoginStart(request: Request, env: Env): Promise<Response> {
 async function handleLoginPage(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'GET' && request.method !== 'HEAD') return errorResponse('method_not_allowed', 405)
   const url = new URL(request.url)
+  // 앱 연결 이어가기·플러그인 오류는 세션 판정보다 앞 (F-4010 3장)
+  const oauthPage = await handleOAuthLoginPage(url, env)
+  if (oauthPage) return oauthPage
   const target = loginReturn(url.searchParams.get('return'))
   let user: AuthUser | null = null
   try {
@@ -273,6 +294,7 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/account', handler: handleGetAccount },
   { method: 'DELETE', path: '/api/account', handler: handleDeleteAccount },
   { method: 'POST', path: '/api/login', handler: handleLoginStart },
+  { method: 'POST', path: '/api/oauth/consent', handler: handleConsentSubmit },
   { method: 'GET', path: '/api/docs', handler: handleListDocs },
   { method: 'POST', path: '/api/docs', handler: handleCreateDoc },
   { method: 'GET', path: '/api/docs/:id', handler: handleGetDoc },
@@ -424,6 +446,14 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext, 
       }
       if (url.pathname === '/login') {
         return handleLoginPage(request, env)
+      }
+      if (url.pathname === '/oauth/consent' || url.pathname === '/oauth/error') {
+        try {
+          return url.pathname === '/oauth/consent' ? await handleConsentPage(request, env) : handleOAuthErrorPage(request)
+        } catch (err) {
+          console.error(err)
+          return errorResponse('internal', 500)
+        }
       }
       if (url.pathname === '/limits') {
         return handleLimitsPage(request, env)

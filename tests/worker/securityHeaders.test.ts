@@ -62,6 +62,8 @@ describe('F-4001 U6 경로 → 종류', () => {
     ['/v1/docs', {}, 'api'],
     ['/ws/doc/1', {}, 'api'],
     ['/login', {}, 'login'],
+    ['/oauth/consent', {}, 'login'],
+    ['/oauth/error', {}, 'login'],
     ['/welcome', {}, 'landing'],
     ['/', doc, 'landing'],
     ['/', { ...doc, Cookie: 'md_app=1' }, 'app'],
@@ -88,5 +90,15 @@ describe('F-4001 U7 _headers 가 먼저 붙은 응답', () => {
     const out = withSecurityHeaders(pre(), req(path, headers as Record<string, string>), 'n')
     expect(out.headers.get('Content-Security-Policy-Report-Only')).toBe(buildCsp(kind, { origin: 'https://rawdoc.app' }))
     expect(out.headers.get('Content-Security-Policy')).toBe("frame-ancestors 'none'")
+  })
+
+  it('F-4010 동의 화면만 form-action 끝에 앱 돌아갈 출처, 다른 경로는 질의가 있어도 그대로', () => {
+    const consent = withSecurityHeaders(pre(), req('/oauth/consent?redirect_uri=https%3A%2F%2Fclaude.ai%2Fcb&sig=x'), 'n')
+    expect(consent.headers.get('Content-Security-Policy-Report-Only')).toBe(buildCsp('login', { formTarget: 'https://claude.ai' }))
+    const unsafe = withSecurityHeaders(pre(), req('/oauth/consent?redirect_uri=javascript%3Aalert(1)'), 'n')
+    expect(unsafe.headers.get('Content-Security-Policy-Report-Only')).toBe(buildCsp('login', {}))
+    for (const path of ['/login?redirect_uri=https%3A%2F%2Fclaude.ai%2Fcb', '/oauth/error?redirect_uri=https%3A%2F%2Fclaude.ai%2Fcb']) {
+      expect(withSecurityHeaders(pre(), req(path), 'n').headers.get('Content-Security-Policy-Report-Only')).toBe(buildCsp('login', {}))
+    }
   })
 })

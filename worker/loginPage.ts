@@ -39,7 +39,7 @@ export function loginErrorMessage(code: string | null): string | null {
   return Object.hasOwn(LOGIN_ERROR_MESSAGES, code) ? LOGIN_ERROR_MESSAGES[code] : LOGIN_ERROR_FALLBACK
 }
 
-function escapeAttr(value: string): string {
+export function escapeAttr(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
@@ -138,45 +138,60 @@ body {
 `
 
 const REAUTH_LINE = '계정 삭제를 계속하려면 다시 로그인하세요. 삭제할 계정의 Google 또는 GitHub 로 로그인해야 합니다.'
+const OAUTH_LINE = '앱 연결을 계속하려면 로그인하세요. 로그인하면 연결을 허용할지 묻는 화면으로 넘어갑니다.'
 
-// reauth — 계정 삭제의 다시 로그인에서 제목 아래 안내 줄 하나 (F-2038 4.4)
-export function renderLoginPage(args: { returnHash: string; error: string | null; reauth?: boolean }): Response {
-  const message = loginErrorMessage(args.error)
-  const errorLine = message ? `\n    <p class="login-error" role="alert">${message}</p>` : ''
-  const reauthLine = args.reauth ? `\n    <p class="login-reauth">${REAUTH_LINE}</p>` : ''
+// 로그인·앱 연결 화면이 같이 쓰는 스크립트 없는 틀 — main 안쪽만 다르다 (F-4010 1장)
+export function renderAuthPage(args: { title: string; main: string; status: number; css?: string }): Response {
   const html = `<!doctype html>
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex">
-    <title>로그인 · ${escapeAttr(brand.name)}</title>
+    <title>${escapeAttr(args.title)} · ${escapeAttr(brand.name)}</title>
     <link rel="icon" href="${escapeAttr(brand.icon)}" />
     <style>
       ${PAGE_TOKENS_CSS}
 ${SITE_CHROME_CSS}
-${LOGIN_CSS}
+${LOGIN_CSS}${args.css ?? ''}
     </style>
   </head>
   <body>
 ${renderSiteHeader({ brandName: brand.name, brandIcon: brand.icon, appCta: 'link' })}
-  <main class="login">
-    <h1>로그인</h1>${reauthLine}
-    <p class="login-lead">Google 또는 GitHub 계정으로 로그인하면 문서가 서버에 저장되고 다른 기기에서 이어서 쓸 수 있습니다.</p>${errorLine}
-    <form class="login-form" method="post" action="/api/login">
-      <input type="hidden" name="return" value="${escapeAttr(args.returnHash)}">
-      ${providerButton('google', 'Google로 계속', GOOGLE_LOGO_SVG)}
-      ${providerButton('github', 'GitHub로 계속', GITHUB_LOGO_SVG)}
-    </form>
-    <p class="login-note">이메일 주소가 인증된 계정만 쓸 수 있습니다. 이메일이 같으면 Google 과 GitHub 중 어느 쪽으로 들어와도 같은 계정입니다.</p>
-    <p class="login-consent">계속하면 <a href="/terms">이용약관</a>과 <a href="/privacy">개인정보 처리방침</a>에 동의하는 것으로 봅니다.</p>
+  <main class="login">${args.main}
   </main>
 ${renderSiteFooter({ brandName: brand.name })}
   </body>
 </html>
 `
   return new Response(html, {
-    status: 200,
+    status: args.status,
     headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'private, no-store' },
+  })
+}
+
+// reauth — 계정 삭제의 다시 로그인 (F-2038 4.4). oauthQuery — 앱 연결 이어가기, return 대신 싣는다 (F-4010 3장)
+export function renderLoginPage(args: { returnHash: string; error: string | null; reauth?: boolean; oauthQuery?: string }): Response {
+  const message = loginErrorMessage(args.error)
+  const errorLine = message ? `\n    <p class="login-error" role="alert">${message}</p>` : ''
+  const guide = args.oauthQuery !== undefined ? OAUTH_LINE : args.reauth ? REAUTH_LINE : ''
+  const guideLine = guide ? `\n    <p class="login-reauth">${guide}</p>` : ''
+  const hidden =
+    args.oauthQuery !== undefined
+      ? `<input type="hidden" name="oauth_query" value="${escapeAttr(args.oauthQuery)}">`
+      : `<input type="hidden" name="return" value="${escapeAttr(args.returnHash)}">`
+  return renderAuthPage({
+    title: '로그인',
+    status: 200,
+    main: `
+    <h1>로그인</h1>${guideLine}
+    <p class="login-lead">Google 또는 GitHub 계정으로 로그인하면 문서가 서버에 저장되고 다른 기기에서 이어서 쓸 수 있습니다.</p>${errorLine}
+    <form class="login-form" method="post" action="/api/login">
+      ${hidden}
+      ${providerButton('google', 'Google로 계속', GOOGLE_LOGO_SVG)}
+      ${providerButton('github', 'GitHub로 계속', GITHUB_LOGO_SVG)}
+    </form>
+    <p class="login-note">이메일 주소가 인증된 계정만 쓸 수 있습니다. 이메일이 같으면 Google 과 GitHub 중 어느 쪽으로 들어와도 같은 계정입니다.</p>
+    <p class="login-consent">계속하면 <a href="/terms">이용약관</a>과 <a href="/privacy">개인정보 처리방침</a>에 동의하는 것으로 봅니다.</p>`,
   })
 }

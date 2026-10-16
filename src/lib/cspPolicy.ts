@@ -8,7 +8,7 @@ export const BOOT_PAINT_SHA256 = 'rgYILWkJuBHinXIwujCv0f4l0rWq5A52GDnkP9ijS9A='
 
 const FRAME_BLOCK = "frame-ancestors 'none'"
 
-type Opts = { nonce?: string; origin?: string }
+type Opts = { nonce?: string; origin?: string; formTarget?: string | null }
 
 function socketOrigin(origin: string | undefined): string {
   if (!origin) return ''
@@ -26,7 +26,7 @@ export function buildCsp(kind: Exclude<CspKind, 'api'>, opts: Opts): string {
     case 'landing':
       return `default-src 'self'; script-src 'self' 'nonce-${opts.nonce ?? ''}'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; ${common}; ${tail}`
     case 'login':
-      return `default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'self' https://accounts.google.com https://github.com; ${tail}`
+      return `default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'self' https://accounts.google.com https://github.com${opts.formTarget ? ` ${opts.formTarget}` : ''}; ${tail}`
     case 'site':
       return `default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; ${common}; ${tail}`
   }

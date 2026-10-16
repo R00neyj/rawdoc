@@ -24,6 +24,9 @@ describe('F-4001 U1 buildCsp', () => {
     expect(buildCsp('login', {})).toBe(
       `default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'self' https://accounts.google.com https://github.com; ${TAIL}`,
     )
+    expect(buildCsp('login', { formTarget: 'https://claude.ai' })).toBe(
+      `default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'self' https://accounts.google.com https://github.com https://claude.ai; ${TAIL}`,
+    )
   })
   it('site', () => {
     expect(buildCsp('site', {})).toBe(
