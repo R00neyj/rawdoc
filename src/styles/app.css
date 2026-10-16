@@ -2704,7 +2704,7 @@ body.sidebar-resizing {
   flex-direction: column;
   gap: 2px;
   flex: none;
-  width: 100px;
+  width: 140px;
 }
 
 .settings-tabs button {
