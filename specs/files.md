@@ -120,6 +120,7 @@
 |`src/app/ImportFileInputs.tsx`|파일·폴더·압축 파일 가져오기용 숨은 파일 선택 칸|
 |`src/app/importFiles.ts`|고른 .md 파일들을 새 문서로 가져오고 마지막 문서를 엶|
 |`src/app/ImportPreviewDialog.tsx`|가져올 문서 미리보기, 진행, 결과를 보여주는 창|
+|`src/app/importNotion.ts`|Notion 내보내기 압축 파일의 이름 뒤 번호를 떼고 링크를 고쳐 옵시디언 가져오기에 넘김|
 |`src/app/importResult.ts`|가져오기 뒤 열려 있던 문서를 새 내용으로 다시 띄울지 판단함|
 |`src/app/importVault.ts`|옵시디언 보관함 압축 파일·폴더를 읽어 문서와 그림으로 가져옴|
 |`src/app/importWorkspace.ts`|내보냈던 압축 파일을 읽어 폴더 구조째 문서를 다시 가져옴|

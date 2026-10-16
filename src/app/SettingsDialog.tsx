@@ -613,7 +613,7 @@ export default function SettingsDialog({
                   <button type="button" className="dialog-btn" onClick={onImport}>
                     가져오기…
                   </button>
-                  <p className="data-row-desc">전체 내보내기 zip, 옵시디언 볼트 zip, .md 파일을 모은 zip 을 가져옵니다</p>
+                  <p className="data-row-desc">전체 내보내기 zip, 옵시디언 볼트 zip, Notion 내보내기 zip, .md 파일을 모은 zip 을 가져옵니다</p>
                 </div>
               )}
               {onImportFolder && (

@@ -32,6 +32,7 @@ import {
   type VaultPlan,
   type ApplyVaultStore,
 } from './importVault'
+import { isNotionExport, normalizeNotionEntries } from './importNotion'
 import type { ImportDialogState, ImportTargetPicker } from './ImportPreviewDialog'
 import { importFiles } from './importFiles'
 import { isExternalFileDrag, pickMarkdownFiles, pickImageFiles, isImageOnlyDrag, classifyDroppedEntries, readDroppedDirectory } from './fileDrop'
@@ -131,7 +132,7 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
   const importPlanRef = useRef<ImportPlan | null>(null)
   const importCancelRef = useRef(false)
   // 폴더 가져오기(볼트) — 선택 input, 1차 훑기 결과·원천·계획 (F-2019.md 4.2·12장)
-  type VaultSource = { kind: 'zip'; file: File } | { kind: 'folder'; files: Array<{ path: string; file: File }> }
+  type VaultSource = { kind: 'zip'; file: File } | { kind: 'folder'; files: Array<{ path: string; file: File }> } | { kind: 'memory'; entries: VaultEntry[] }
   const importVaultContextRef = useRef<{
     scan: VaultScan
     source: VaultSource
@@ -384,17 +385,30 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
   async function previewImportZip(file: File) {
     const names: string[] = []
     let manifestBytes: Uint8Array | null = null
-    const vaultEntries: VaultEntry[] = []
+    let vaultEntries: VaultEntry[] = []
+    const innerZips: Uint8Array[] = []
+    let unwrapped = false
     try {
       for await (const entry of readZipEntries(file.stream(), {
-        want: (name) => name === 'manifest.json' || vaultWantsBytes(name),
+        want: (name) => name === 'manifest.json' || vaultWantsBytes(name) || /\.zip$/i.test(name),
       })) {
         names.push(entry.name)
         if (entry.name === 'manifest.json') {
           manifestBytes = entry.bytes
           continue
         }
+        if (/\.zip$/i.test(entry.name)) {
+          if (entry.bytes) innerZips.push(entry.bytes)
+          continue
+        }
         vaultEntries.push(entry)
+      }
+      // Notion 은 큰 내보내기를 zip 안의 zip(…-Part-1.zip) 으로 준다
+      if (manifestBytes === null && innerZips.length > 0 && !vaultEntries.some((e) => /\.(md|markdown)$/i.test(e.name))) {
+        unwrapped = true
+        for (const bytes of innerZips) {
+          for await (const entry of readZipEntries((async function* () { yield bytes })(), { want: vaultWantsBytes })) vaultEntries.push(entry)
+        }
       }
     } catch {
       showNotice({ type: 'error', message: ZIP_UNREADABLE_MESSAGE })
@@ -412,14 +426,16 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
     }
 
     if (kindResult.kind === 'plain') {
-      // manifest.json 없는 zip 은 전부 볼트 가져오기다 — F-282 3.7 을 대신한다(개요 4장 "한다" 4, 17장)
+      // manifest.json 없는 zip 은 전부 볼트 가져오기다 — F-282 3.7 을 대신한다(개요 4장 "한다" 4, 17장). Notion zip 은 이름·링크를 먼저 정리한다
+      const notion = isNotionExport(vaultEntries.map((e) => e.name))
+      if (notion) vaultEntries = normalizeNotionEntries(vaultEntries)
       const scan = await scanVault({
         root: { kind: 'zip', fileName: file.name },
         entries: (async function* () {
           for (const e of vaultEntries) yield e
         })(),
       })
-      await startVaultPreview({ kind: 'zip', file }, scan, file.name)
+      await startVaultPreview(notion || unwrapped ? { kind: 'memory', entries: vaultEntries } : { kind: 'zip', file }, scan, file.name)
       return
     }
 
@@ -519,7 +535,11 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
     const entries: AsyncIterable<VaultEntry> =
       ctx.source.kind === 'zip'
         ? readZipEntries(ctx.source.file.stream(), { want: (name) => uploadNames.has(name) })
-        : filesAsEntries(ctx.source.files, (name) => uploadNames.has(name))
+        : ctx.source.kind === 'memory'
+          ? (async function* (list: VaultEntry[]) {
+              for (const e of list) if (uploadNames.has(e.name)) yield e
+            })(ctx.source.entries)
+          : filesAsEntries(ctx.source.files, (name) => uploadNames.has(name))
 
     const result = await applyVaultImport({
       plan,
