@@ -44,7 +44,7 @@ export type DocPushResult = { type: 'done'; next: number | null; followUp: boole
 const COLLECT_SQL =
   'SELECT n.id, n.recipient_email, n.kind, n.thread_id, n.actor_email, n.doc_title, n.excerpt, n.created_at, n.read_at, n.push_due_at ' +
   'FROM notifications n WHERE n.doc_id = ?1 AND n.push_due_at > ?2 ' +
-  'AND EXISTS (SELECT 1 FROM docs d WHERE d.id = ?1 AND d.e2ee_key IS NULL) ' +
+  'AND EXISTS (SELECT 1 FROM docs d WHERE d.id = ?1 AND d.e2ee_key IS NULL AND d.deleted_at IS NULL) ' +
   `ORDER BY n.push_due_at, n.id LIMIT ${PUSH_READ_ROWS_MAX}`
 const CLEAR_IDS_SQL = 'UPDATE notifications SET push_due_at = NULL WHERE id IN (SELECT value FROM json_each(?1))'
 const CLEAR_STALE_SQL = 'UPDATE notifications SET push_due_at = NULL WHERE doc_id = ?1 AND push_due_at <= ?2'

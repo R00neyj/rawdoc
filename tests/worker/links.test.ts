@@ -72,7 +72,7 @@ function makeEnv({ docs = [], links = [], folders = [] }: { docs?: DocRow[]; lin
                   .map((d) => ({ id: d.id, content: d.content ?? '', folder_id: d.folder_id ?? null }))
                 return { results: results as T[] }
               }
-              if (sql.startsWith('SELECT id, title, folder_id FROM docs WHERE owner_id = ? ORDER BY updated_at DESC')) {
+              if (sql.startsWith('SELECT id, title, folder_id FROM docs WHERE owner_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC')) {
                 const results = docs
                   .filter((d) => d.owner_id === args[0])
                   .sort((a, b) => (b.updated_at ?? 0) - (a.updated_at ?? 0))

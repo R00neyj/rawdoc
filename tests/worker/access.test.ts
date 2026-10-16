@@ -57,7 +57,7 @@ function makeEnv(
                 const [id] = args as [string]
                 return (folders.find((f) => f.id === id) as T) ?? null
               }
-              if (sql.startsWith('SELECT * FROM docs') || sql.endsWith(' FROM docs WHERE id = ?')) {
+              if (sql.startsWith('SELECT * FROM docs') || sql.endsWith(' FROM docs WHERE id = ? AND deleted_at IS NULL')) {
                 const [id] = args as [string]
                 return (docs.find((d) => d.id === id) as T) ?? null
               }
@@ -419,6 +419,6 @@ describe('F-401 E1 금고 문서는 소유자만 (X1)', () => {
     const log: string[] = []
     const env = makeEnv({ docs: [E2EE_DOC], folders, grants: [{ target_type: 'doc', target_id: 'doc-v', grantee_email: GRANTEE.email, role: 'edit', owner_id: OWNER.id }] }, log)
     expect(await getDocAccess(env, 'doc-v', GRANTEE, 'id, owner_id, folder_id')).toBeNull()
-    expect(log.find((s) => s.includes('FROM docs'))).toBe('SELECT id, owner_id, folder_id, e2ee_key FROM docs WHERE id = ?')
+    expect(log.find((s) => s.includes('FROM docs'))).toBe('SELECT id, owner_id, folder_id, e2ee_key FROM docs WHERE id = ? AND deleted_at IS NULL')
   })
 })

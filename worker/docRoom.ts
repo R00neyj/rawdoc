@@ -69,6 +69,8 @@ export class DocRoom extends YServer<Env> {
       getAlarm: () => ctx.storage.getAlarm(),
       // partyserver 의 Connection 은 WebSocket 그 자체다 — 자동 응답은 DO 를 깨우지 않고 시각만 남긴다 (F-3006 5장)
       lastPing: (conn) => ctx.getWebSocketAutoResponseTimestamp(conn)?.getTime() ?? null,
+      // purgeRoom 과 같은 까닭으로 닫기 프레임 뒤로 미룬다
+      retire: () => setTimeout(() => ctx.abort('trashed'), PURGE_CLOSE_GRACE_MS),
     })
   }
 

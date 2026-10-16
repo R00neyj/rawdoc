@@ -316,7 +316,7 @@ export async function handleGithubImg(request: Request, env: Env, ctx: Execution
 }
 
 function publicDoc(env: Env, docId: string, ownerId: string): Promise<DocRow | null> {
-  return env.DB.prepare('SELECT id, owner_id, folder_id, content FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL').bind(docId, ownerId).first<DocRow>()
+  return env.DB.prepare('SELECT id, owner_id, folder_id, content FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL AND deleted_at IS NULL').bind(docId, ownerId).first<DocRow>()
 }
 
 // 검사 순서는 같은 자리의 공개 첨부 핸들러와 같다 (2.5 2번)

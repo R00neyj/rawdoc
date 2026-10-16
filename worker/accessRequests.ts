@@ -25,7 +25,7 @@ type RequestRow = { id: string; role: AccessRole; status: 'pending' | 'rejected'
 
 // 요청 행 별칭 r — 링크가 살아 있고 대상이 아직 그 링크로 닿는 금고 아닌 주인 것. 막힘은 보지 않는다 (풀리면 돌아온다)
 export const LIVE_REQUEST_SQL = `(
-  ((r.target_type = 'doc' AND EXISTS (SELECT 1 FROM docs t WHERE t.id = r.target_id AND t.owner_id = r.owner_id AND t.e2ee_key IS NULL))
+  ((r.target_type = 'doc' AND EXISTS (SELECT 1 FROM docs t WHERE t.id = r.target_id AND t.owner_id = r.owner_id AND t.e2ee_key IS NULL AND t.deleted_at IS NULL))
     OR (r.target_type = 'folder' AND EXISTS (SELECT 1 FROM folders t WHERE t.id = r.target_id AND t.owner_id = r.owner_id AND t.e2ee <> 1)))
   AND (EXISTS (SELECT 1 FROM share_links l WHERE l.token = r.token AND l.revoked_at IS NULL AND l.owner_id = r.owner_id
     AND ((l.target_type = r.target_type AND l.target_id = r.target_id)
@@ -48,7 +48,7 @@ export function accessRequestDeleteStatements(db: D1Database, where: string, bin
 async function findRequestTokenTarget(env: Env, token: string): Promise<Target | null> {
   const doc = await env.DB.prepare(
     `SELECT d.id, d.owner_id, d.folder_id FROM request_tokens q JOIN docs d ON d.id = q.doc_id AND d.owner_id = q.owner_id
-     WHERE q.token = ? AND q.revoked_at IS NULL AND d.e2ee_key IS NULL
+     WHERE q.token = ? AND q.revoked_at IS NULL AND d.e2ee_key IS NULL AND d.deleted_at IS NULL
        AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = q.owner_id AND u.blocked_at IS NOT NULL)`,
   )
     .bind(token)
@@ -66,7 +66,7 @@ async function findTarget(env: Env, token: string, docId: string | null): Promis
   }
   const id = docId ?? link.target_id
   if (!(await isDocInLinkSet(env, token, link.target_id, id))) return null
-  const doc = await env.DB.prepare('SELECT id, folder_id FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL')
+  const doc = await env.DB.prepare('SELECT id, folder_id FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL AND deleted_at IS NULL')
     .bind(id, link.owner_id)
     .first<{ id: string; folder_id: string | null }>()
   return doc ? { type: 'doc', id: doc.id, ownerId: link.owner_id, folderId: doc.folder_id } : null
@@ -193,7 +193,7 @@ async function readTarget(env: Env, row: OwnedRequest, ownerId: string): Promise
     const folder = await env.DB.prepare('SELECT name FROM folders WHERE id = ? AND owner_id = ?').bind(row.target_id, ownerId).first<{ name: string }>()
     return folder ? { target: { type: 'folder', id: row.target_id, ownerId, folderId: null }, name: folder.name } : null
   }
-  const doc = await env.DB.prepare('SELECT title, folder_id FROM docs WHERE id = ? AND owner_id = ?').bind(row.target_id, ownerId).first<{ title: string; folder_id: string | null }>()
+  const doc = await env.DB.prepare('SELECT title, folder_id FROM docs WHERE id = ? AND owner_id = ? AND deleted_at IS NULL').bind(row.target_id, ownerId).first<{ title: string; folder_id: string | null }>()
   return doc ? { target: { type: 'doc', id: row.target_id, ownerId, folderId: doc.folder_id }, name: doc.title } : null
 }
 

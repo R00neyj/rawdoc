@@ -11,6 +11,7 @@ import { dayUsageStatement } from './usage'
 import { githubImageMapOf } from './githubImages'
 import { readJsonLimited } from './docs'
 import { accessRequestDeleteStatements } from './accessRequests'
+import { findTrashedDoc, type DocRowLike } from './access'
 
 const REVOKED_TOKENS_WHERE = 'token IN (SELECT token FROM share_links WHERE target_type = ? AND target_id = ? AND revoked_at IS NOT NULL)'
 
@@ -66,10 +67,17 @@ function pubResponse(body: unknown, status = 200): Response {
   return new Response(res.body, { status: res.status, headers })
 }
 
+// 링크가 열 수 있던 문서가 휴지통이면 deleted, 아니면 not_found (F-3022 5장)
+async function publicMissing(env: Env, docId: string, ownerId: string, reachable: (row: DocRowLike) => boolean = () => true): Promise<Response> {
+  const row = await findTrashedDoc(env, docId, ownerId)
+  const deleted = row !== null && !row.e2ee_key && reachable(row)
+  return pubResponse({ error: deleted ? 'deleted' : 'not_found' }, 404)
+}
+
 type OwnedDoc = { id: string; e2ee_key: string | null }
 
 async function findOwnedDoc(env: Env, docId: string, ownerId: string): Promise<OwnedDoc | null> {
-  return env.DB.prepare('SELECT id, e2ee_key FROM docs WHERE id = ? AND owner_id = ?')
+  return env.DB.prepare('SELECT id, e2ee_key FROM docs WHERE id = ? AND owner_id = ? AND deleted_at IS NULL')
     .bind(docId, ownerId)
     .first<OwnedDoc>()
 }
@@ -161,7 +169,7 @@ export async function handleGetDocShareSet(
 
   // updated_at 내림차순 — 같은 제목이면 최근 수정이 같은 단계 안에서 이긴다 (F-2018 10.4). 금고 문서는 묶음에 들 수 없다 (F-401 X9)
   const [{ results: allDocs }, folders] = await Promise.all([
-    env.DB.prepare('SELECT id, title, content, folder_id FROM docs WHERE owner_id = ? AND e2ee_key IS NULL ORDER BY updated_at DESC')
+    env.DB.prepare('SELECT id, title, content, folder_id FROM docs WHERE owner_id = ? AND e2ee_key IS NULL AND deleted_at IS NULL ORDER BY updated_at DESC')
       .bind(user.id)
       .all<{ id: string; title: string; content: string; folder_id: string | null }>(),
     ownerFolders(env, user.id),
@@ -246,7 +254,7 @@ export async function handleCreateDocLink(
   // 금고 문서는 조용히 뺀다 — 남의 문서·없는 문서만 400 (F-401 X8, 11장 Q7)
   const wanted = [...new Set(docIds)].filter((id) => id !== params.id)
   const { results: ownedRows } = await env.DB.prepare(
-    'SELECT id, e2ee_key FROM docs WHERE owner_id = ?1 AND id IN (SELECT value FROM json_each(?2))',
+    'SELECT id, e2ee_key FROM docs WHERE owner_id = ?1 AND id IN (SELECT value FROM json_each(?2)) AND deleted_at IS NULL',
   )
     .bind(user.id, JSON.stringify(wanted))
     .all<OwnedDoc>()
@@ -304,10 +312,10 @@ export async function handlePublicGetDoc(
   if (!link || link.target_type !== 'doc') return pubResponse({ error: 'not_found' }, 404)
 
   // 공개 조회는 링크 주인의 문서만 (리뷰 W2)
-  const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at FROM docs WHERE id = ? AND owner_id = ?')
+  const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at FROM docs WHERE id = ? AND owner_id = ? AND deleted_at IS NULL')
     .bind(link.target_id, link.owner_id)
     .first<PublicDocRow>()
-  if (!doc) return pubResponse({ error: 'not_found' }, 404)
+  if (!doc) return publicMissing(env, link.target_id, link.owner_id)
 
   return pubResponse(await publicDocBody(env, link.target_id, link.owner_id, doc))
 }
@@ -327,9 +335,14 @@ export async function handlePublicGetDocSet(
   const bundledIds = await fetchShareLinkDocIds(env, params.token)
   const orderedIds = [link.target_id, ...bundledIds]
   // 금고 문서 거르기는 두 번째 벽 — 옮기기 batch 가 묶음 행을 이미 지운다 (F-401 X14)
-  const { results: docs } = await env.DB.prepare('SELECT id, title FROM docs WHERE id IN (SELECT value FROM json_each(?1)) AND owner_id = ?2 AND e2ee_key IS NULL')
+  const { results: docs } = await env.DB.prepare('SELECT id, title FROM docs WHERE id IN (SELECT value FROM json_each(?1)) AND owner_id = ?2 AND e2ee_key IS NULL AND deleted_at IS NULL')
     .bind(JSON.stringify(orderedIds), link.owner_id)
     .all<{ id: string; title: string }>()
+  // 시작 문서가 휴지통이면 묶음 전체가 deleted (F-3022 5장)
+  if (!docs.some((d) => d.id === link.target_id)) {
+    const start = await findTrashedDoc(env, link.target_id, link.owner_id)
+    if (start && !start.e2ee_key) return pubResponse({ error: 'deleted' }, 404)
+  }
 
   const byId = new Map(docs.map((d) => [d.id, d]))
   const ordered = orderedIds
@@ -341,10 +354,10 @@ export async function handlePublicGetDocSet(
 
   const setIds = ordered.map((d) => d.id)
   const [{ results: bodies }, { results: ownerDocs }, folders] = await Promise.all([
-    env.DB.prepare('SELECT id, content, folder_id FROM docs WHERE id IN (SELECT value FROM json_each(?1)) AND owner_id = ?2 AND e2ee_key IS NULL')
+    env.DB.prepare('SELECT id, content, folder_id FROM docs WHERE id IN (SELECT value FROM json_each(?1)) AND owner_id = ?2 AND e2ee_key IS NULL AND deleted_at IS NULL')
       .bind(JSON.stringify(setIds), link.owner_id)
       .all<{ id: string; content: string; folder_id: string | null }>(),
-    env.DB.prepare('SELECT id, title, folder_id FROM docs WHERE owner_id = ? ORDER BY updated_at DESC')
+    env.DB.prepare('SELECT id, title, folder_id FROM docs WHERE owner_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC')
       .bind(link.owner_id)
       .all<{ id: string; title: string; folder_id: string | null }>(),
     ownerFolders(env, link.owner_id),
@@ -379,10 +392,10 @@ export async function handlePublicGetDocSetDoc(
 
   if (!(await isDocInLinkSet(env, params.token, link.target_id, params.docId))) return pubResponse({ error: 'not_found' }, 404)
 
-  const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL')
+  const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL AND deleted_at IS NULL')
     .bind(params.docId, link.owner_id)
     .first<PublicDocRow>()
-  if (!doc) return pubResponse({ error: 'not_found' }, 404)
+  if (!doc) return publicMissing(env, params.docId, link.owner_id)
 
   return pubResponse(await publicDocBody(env, params.docId, link.owner_id, doc))
 }
@@ -468,7 +481,7 @@ export async function handlePublicGetFolder(
   const subfolders = folders.filter((f) => f.id !== link.target_id && treeIds.has(f.id))
 
   const { results: ownerDocs } = await env.DB.prepare(
-    'SELECT id, title, folder_id, updated_at FROM docs WHERE owner_id = ? AND e2ee_key IS NULL ORDER BY updated_at DESC',
+    'SELECT id, title, folder_id, updated_at FROM docs WHERE owner_id = ? AND e2ee_key IS NULL AND deleted_at IS NULL ORDER BY updated_at DESC',
   )
     .bind(link.owner_id)
     .all<{ id: string; title: string; folder_id: string | null; updated_at: number }>()
@@ -493,10 +506,11 @@ export async function handlePublicGetFolderDoc(
   if (!link || link.target_type !== 'folder') return pubResponse({ error: 'not_found' }, 404)
 
   const treeIds = await folderTreeIds(env, link.target_id, link.owner_id)
-  const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at, folder_id FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL')
+  const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at, folder_id FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL AND deleted_at IS NULL')
     .bind(params.docId, link.owner_id)
     .first<PublicDocRow & { folder_id: string | null }>()
-  if (!doc || !doc.folder_id || !treeIds.includes(doc.folder_id)) return pubResponse({ error: 'not_found' }, 404)
+  if (!doc) return publicMissing(env, params.docId, link.owner_id, (row) => row.folder_id !== null && treeIds.includes(row.folder_id))
+  if (!doc.folder_id || !treeIds.includes(doc.folder_id)) return pubResponse({ error: 'not_found' }, 404)
 
   return pubResponse(await publicDocBody(env, params.docId, link.owner_id, doc))
 }

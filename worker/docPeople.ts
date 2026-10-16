@@ -6,7 +6,7 @@ import { folderAncestors } from '../src/lib/folderTree'
 export type DocPerson = { email: string; role: 'owner' | 'edit' | 'view' }
 
 const DOC_OWNER_SQL =
-  'SELECT d.owner_id, d.folder_id, u.email FROM docs d JOIN users u ON u.id = d.owner_id WHERE d.id = ? AND d.e2ee_key IS NULL'
+  'SELECT d.owner_id, d.folder_id, u.email FROM docs d JOIN users u ON u.id = d.owner_id WHERE d.id = ? AND d.e2ee_key IS NULL AND d.deleted_at IS NULL'
 const GRANTS_SQL =
   "SELECT grantee_email, role FROM grants WHERE owner_id = ?1 AND ((target_type = 'doc' AND target_id = ?2) OR (target_type = 'folder' AND target_id IN (SELECT value FROM json_each(?3))))"
 

@@ -1,7 +1,7 @@
 // 문서 라우트 (specs/features/F-206.md 2.3, 접근 판정은 F-212.md 2.2. 사용량 줄·413 은 F-2025.md 6.2, 금고 분기는 F-401.md 3.2·3.3. 삭제·이동 쓰기는 F-2050.md 3.2·3.3 이 /v1 과 같이 쓴다)
 import { errorResponse, jsonResponse } from './http'
 import { requireUser } from './auth'
-import { getDocAccess, getOwnedFolder, roleAtLeast, targetShareCleanupStatements } from './access'
+import { findTrashedDoc, getDocAccess, getOwnedFolder, resolveDocAccess, roleAtLeast, targetShareCleanupStatements } from './access'
 import { notifyPurge, notifyRevalidateDocs } from './docRoomRpc'
 import { docCommentDeleteStatements } from './commentRows'
 import { e2eeDocFields, rowToDoc, updateDocRow, updateE2eeDocRow } from './docWrite'
@@ -123,7 +123,7 @@ export function badBody(parsed: { reason: 'too_large' | 'invalid_json' }): Respo
 export async function handleListDocs(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   const { results } = await env.DB.prepare(
-    'SELECT id, title, line_ending, folder_id, pinned_at, version, created_at, updated_at, e2ee_key, attachment_refs FROM docs WHERE owner_id = ? ORDER BY updated_at DESC',
+    'SELECT id, title, line_ending, folder_id, pinned_at, version, created_at, updated_at, e2ee_key, attachment_refs FROM docs WHERE owner_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC',
   )
     .bind(user.id)
     .all<Omit<DocRow, 'content' | 'owner_id'>>()
@@ -138,8 +138,11 @@ export async function handleGetDoc(
 ): Promise<Response> {
   const user = await requireUser(request, env)
   const access = await getDocAccess<DocRow>(env, params.id, user)
-  if (!access) return errorResponse('not_found', 404)
-  return jsonResponse(rowToDoc(access.doc))
+  if (access) return jsonResponse(rowToDoc(access.doc))
+  // 휴지통이 아니었으면 열렸을 사람에게만 deleted — 모르는 사람에게 존재가 새지 않는다 (F-3022 5장)
+  const trashed = await findTrashedDoc(env, params.id)
+  const wouldOpen = trashed !== null && (await resolveDocAccess(env, trashed, user)) !== null
+  return errorResponse(wouldOpen ? 'deleted' : 'not_found', 404)
 }
 
 export async function handleCreateDoc(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
@@ -183,6 +186,7 @@ export async function handleCreateDoc(request: Request, env: Env, ctx?: Executio
     const existing = await env.DB.prepare('SELECT * FROM docs WHERE id = ?').bind(bodyId).first<DocRow>()
     if (existing) {
       if (existing.owner_id !== user.id) return jsonResponse({ error: 'id_taken' }, 409)
+      if (typeof existing.deleted_at === 'number') return errorResponse('deleted', 404)
       return jsonResponse(rowToDoc(existing), 200)
     }
   }
@@ -302,7 +306,7 @@ export async function handleUpdateDoc(
     ? await updateE2eeDocRow(env, existing, { ...patch, attachmentRefs: attachmentRefs as string[] | undefined })
     : await updateDocRow(env, existing, patch, user.id)
   if (!written.ok) {
-    const latest = await env.DB.prepare('SELECT * FROM docs WHERE id = ? AND owner_id = ?')
+    const latest = await env.DB.prepare('SELECT * FROM docs WHERE id = ? AND owner_id = ? AND deleted_at IS NULL')
       .bind(params.id, existing.owner_id)
       .first<DocRow>()
     if (!latest) return errorResponse('not_found', 404)
@@ -319,7 +323,7 @@ export async function handleUpdateDoc(
 // folderId 검사·권한 판정 뒤의 D1 쓰기 한 벌 — /api·/v1 이 같이 쓴다 (F-2050 3.3)
 export async function writeMoveDocFolder(env: Env, ctx: ExecutionContext | undefined, existing: DocRow, folderId: string | null): Promise<DocRow> {
   await env.DB.batch([
-    env.DB.prepare('UPDATE docs SET folder_id = ? WHERE id = ? AND owner_id = ?').bind(folderId, existing.id, existing.owner_id),
+    env.DB.prepare('UPDATE docs SET folder_id = ? WHERE id = ? AND owner_id = ? AND deleted_at IS NULL').bind(folderId, existing.id, existing.owner_id),
     dayUsageStatement(env.DB, existing.owner_id, Date.now()),
   ])
   // 상위 폴더 초대가 바뀌므로 열린 방을 바로 다시 본다 — 금고 문서는 방이 없다 (F-4002 3.1)
@@ -381,7 +385,7 @@ export async function handleSetPinned(
 
   const pinnedAt = pinned ? Date.now() : null
   await env.DB.batch([
-    env.DB.prepare('UPDATE docs SET pinned_at = ? WHERE id = ? AND owner_id = ?').bind(pinnedAt, params.id, user.id),
+    env.DB.prepare('UPDATE docs SET pinned_at = ? WHERE id = ? AND owner_id = ? AND deleted_at IS NULL').bind(pinnedAt, params.id, user.id),
     dayUsageStatement(env.DB, user.id, Date.now()),
   ])
 

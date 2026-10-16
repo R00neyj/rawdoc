@@ -120,7 +120,7 @@ export async function resolveDocAccess<T extends DocRowLike>(
   return { role, doc }
 }
 
-// id 로 문서를 읽고 role 까지 판정. 문서가 없거나 권한이 전혀 없으면 null(호출부는 404)
+// id 로 문서를 읽고 role 까지 판정. 문서가 없거나 휴지통이거나 권한이 전혀 없으면 null(호출부는 404)
 export async function getDocAccess<T extends DocRowLike>(
   env: Env,
   docId: string,
@@ -129,9 +129,16 @@ export async function getDocAccess<T extends DocRowLike>(
 ): Promise<DocAccess<T> | null> {
   // 열을 골라 읽어도 금고 판정 열은 늘 읽는다 (F-401 X2)
   const selected = columns === '*' || columns.includes('e2ee_key') ? columns : `${columns}, e2ee_key`
-  const doc = await env.DB.prepare(`SELECT ${selected} FROM docs WHERE id = ?`).bind(docId).first<T>()
+  const doc = await env.DB.prepare(`SELECT ${selected} FROM docs WHERE id = ? AND deleted_at IS NULL`).bind(docId).first<T>()
   if (!doc) return null
   return resolveDocAccess(env, doc, user)
+}
+
+// 404 갈래에서만 부른다 — 정상 경로의 질의 수를 늘리지 않는다. ownerId 를 주면 그 소유자 행만 (F-3022 5장)
+export async function findTrashedDoc(env: Env, docId: string, ownerId?: string): Promise<DocRowLike | null> {
+  const sql = 'SELECT id, owner_id, folder_id, e2ee_key FROM docs WHERE id = ? AND deleted_at IS NOT NULL'
+  const stmt = ownerId === undefined ? env.DB.prepare(sql).bind(docId) : env.DB.prepare(`${sql} AND owner_id = ?`).bind(docId, ownerId)
+  return stmt.first<DocRowLike>()
 }
 
 export interface FolderRowLike {

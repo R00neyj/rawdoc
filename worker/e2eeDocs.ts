@@ -11,7 +11,7 @@ import { checkDocGrow, docUsageStatements, usageOf, utf8Bytes } from './usage'
 import { MAX_BODY_BYTES, isValidAttachmentRefs, isValidWrappedKey } from './validate'
 
 const MOVE_ROW_SQL =
-  'UPDATE docs SET title = ?, content = ?, e2ee_key = ?, attachment_refs = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ?'
+  'UPDATE docs SET title = ?, content = ?, e2ee_key = ?, attachment_refs = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ? AND deleted_at IS NULL'
 // 3·4·5 는 1번이 이번 요청의 감싼 키를 실제로 썼을 때만 — 새 키는 무작위라 이 요청이 쓴 행만 맞는다
 const WROTE_KEY = 'EXISTS (SELECT 1 FROM docs WHERE id = ? AND e2ee_key = ?)'
 const REVOKE_LINKS_SQL = `UPDATE share_links SET revoked_at = ? WHERE target_type = 'doc' AND target_id = ? AND revoked_at IS NULL AND ${WROTE_KEY}`
@@ -132,7 +132,7 @@ export async function handleSetDocE2ee(
   }
   const [written] = await env.DB.batch(setDocE2eeStatements(env.DB, input))
   if (written.meta.changes !== 1) {
-    const latest = await env.DB.prepare('SELECT * FROM docs WHERE id = ? AND owner_id = ?').bind(params.id, user.id).first<DocRow>()
+    const latest = await env.DB.prepare('SELECT * FROM docs WHERE id = ? AND owner_id = ? AND deleted_at IS NULL').bind(params.id, user.id).first<DocRow>()
     if (!latest) return errorResponse('not_found', 404)
     return jsonResponse({ error: 'conflict', doc: rowToDoc(latest) }, 409)
   }

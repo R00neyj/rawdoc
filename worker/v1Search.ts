@@ -36,8 +36,8 @@ export async function handleSearchV1(request: Request, env: Env): Promise<Respon
 
   const scope: Scope =
     folderId === null
-      ? { cte: '', from: 'docs d WHERE d.owner_id = ?', binds: [user.id] }
-      : { cte: SUBTREE_CTE, from: 'sub s JOIN docs d ON d.owner_id = s.owner_id AND d.folder_id = s.id WHERE 1', binds: [folderId, user.id] }
+      ? { cte: '', from: 'docs d WHERE d.owner_id = ? AND d.deleted_at IS NULL', binds: [user.id] }
+      : { cte: SUBTREE_CTE, from: 'sub s JOIN docs d ON d.owner_id = s.owner_id AND d.folder_id = s.id WHERE d.deleted_at IS NULL', binds: [folderId, user.id] }
 
   const [hitRows, vault] = await Promise.all([
     env.DB.prepare(
@@ -54,7 +54,7 @@ export async function handleSearchV1(request: Request, env: Env): Promise<Respon
   const contentById = new Map<string, Pick<V1SearchHit, 'lines' | 'matchedLines'>>()
   for (let i = 0; i < rows.length; i += CONTENT_CHUNK) {
     const ids = rows.slice(i, i + CONTENT_CHUNK).map((r) => r.id)
-    const { results } = await env.DB.prepare(`SELECT id, content FROM docs WHERE owner_id = ? AND id IN (${ids.map(() => '?').join(',')})`)
+    const { results } = await env.DB.prepare(`SELECT id, content FROM docs WHERE owner_id = ? AND deleted_at IS NULL AND id IN (${ids.map(() => '?').join(',')})`)
       .bind(user.id, ...ids)
       .all<{ id: string; content: string }>()
     for (const r of results) contentById.set(r.id, findMatchingLines(r.content, query))

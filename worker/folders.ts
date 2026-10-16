@@ -27,9 +27,9 @@ export type FolderRow = {
 
 // 바로 아래의 일반 문서·일반 폴더 (금고 폴더 켜기·금고 부모 아래 move-up 판정)
 const PLAIN_CHILDREN_SQL =
-  'SELECT (SELECT COUNT(*) FROM docs WHERE owner_id = ?1 AND folder_id = ?2 AND e2ee_key IS NULL) AS docs, (SELECT COUNT(*) FROM folders WHERE owner_id = ?1 AND parent_id = ?2 AND e2ee = 0) AS folders'
+  'SELECT (SELECT COUNT(*) FROM docs WHERE owner_id = ?1 AND folder_id = ?2 AND e2ee_key IS NULL AND deleted_at IS NULL) AS docs, (SELECT COUNT(*) FROM folders WHERE owner_id = ?1 AND parent_id = ?2 AND e2ee = 0) AS folders'
 const TURN_ON_SQL =
-  'UPDATE folders SET name = ?1, parent_id = ?2, updated_at = ?3, e2ee = 1 WHERE id = ?4 AND owner_id = ?5 AND NOT EXISTS (SELECT 1 FROM docs WHERE owner_id = ?5 AND folder_id = ?4 AND e2ee_key IS NULL) AND NOT EXISTS (SELECT 1 FROM folders WHERE owner_id = ?5 AND parent_id = ?4 AND e2ee = 0)'
+  'UPDATE folders SET name = ?1, parent_id = ?2, updated_at = ?3, e2ee = 1 WHERE id = ?4 AND owner_id = ?5 AND NOT EXISTS (SELECT 1 FROM docs WHERE owner_id = ?5 AND folder_id = ?4 AND e2ee_key IS NULL AND deleted_at IS NULL) AND NOT EXISTS (SELECT 1 FROM folders WHERE owner_id = ?5 AND parent_id = ?4 AND e2ee = 0)'
 // 켜기가 0행이면 링크·초대가 그대로 남도록 — 폴더가 실제로 금고일 때만
 const REVOKE_FOLDER_LINKS_SQL =
   "UPDATE share_links SET revoked_at = ?1 WHERE target_type = 'folder' AND target_id = ?2 AND revoked_at IS NULL AND EXISTS (SELECT 1 FROM folders WHERE id = ?2 AND e2ee = 1)"
@@ -347,7 +347,7 @@ export async function folderSubtreeHasE2ee(env: Env, user: AuthUser, folderId: s
     const chunk = ids.slice(i, i + BATCH_ID_LIMIT)
     const placeholders = chunk.map(() => '?').join(',')
     const row = await env.DB.prepare(
-      `SELECT COUNT(*) AS c FROM docs WHERE owner_id = ? AND folder_id IN (${placeholders}) AND e2ee_key IS NOT NULL`,
+      `SELECT COUNT(*) AS c FROM docs WHERE owner_id = ? AND deleted_at IS NULL AND folder_id IN (${placeholders}) AND e2ee_key IS NOT NULL`,
     )
       .bind(user.id, ...chunk)
       .first<{ c: number }>()

@@ -66,7 +66,7 @@ async function listGrantsForTarget(env: Env, ownerId: string, targetType: Target
 }
 
 const REQUESTS_SQL = `SELECT r.id, r.target_type, r.target_id, r.requester_email, r.requester_name, r.role, r.created_at,
-  CASE r.target_type WHEN 'doc' THEN (SELECT t.title FROM docs t WHERE t.id = r.target_id) ELSE (SELECT t.name FROM folders t WHERE t.id = r.target_id) END AS target_name
+  CASE r.target_type WHEN 'doc' THEN (SELECT t.title FROM docs t WHERE t.id = r.target_id AND t.deleted_at IS NULL) ELSE (SELECT t.name FROM folders t WHERE t.id = r.target_id) END AS target_name
   FROM access_requests r WHERE r.owner_id = ? AND r.status = 'pending' AND ${LIVE_REQUEST_SQL} ORDER BY r.created_at DESC`
 
 async function listRequests(env: Env, ownerId: string): Promise<AccessRequestRow[]> {

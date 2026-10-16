@@ -14,13 +14,16 @@ export type DocRow = {
   updated_at: number
   e2ee_key?: string | null // 선택 — 테스트·DO 가 만드는 행 글자를 고치지 않게 (F-401 3.5)
   attachment_refs?: string | null
+  deleted_at?: number | null // 숫자일 때만 휴지통 — 열을 안 주는 가짜 D1 은 살아 있음 (F-3022 2장)
+  deleted_by?: string | null
+  deleted_path?: string | null
 }
 
 const UPDATE_ROW_SQL =
-  'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ?'
+  'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ? AND deleted_at IS NULL'
 
 const UPDATE_E2EE_ROW_SQL =
-  'UPDATE docs SET title = ?, content = ?, attachment_refs = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ? AND e2ee_key IS NOT NULL'
+  'UPDATE docs SET title = ?, content = ?, attachment_refs = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ? AND e2ee_key IS NOT NULL AND deleted_at IS NULL'
 
 function parseAttachmentRefs(raw: string | null | undefined): string[] {
   try {

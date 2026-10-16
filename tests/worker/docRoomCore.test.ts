@@ -15,7 +15,7 @@ import { encodeDocRoomMessage } from '../../src/lib/docRoomProtocol'
 
 const DOC_ID = '11111111-1111-4111-8111-111111111111'
 const CLIENT = { client: true }
-const ROW_UPDATE_SQL = 'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ?'
+const ROW_UPDATE_SQL = 'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ? AND deleted_at IS NULL'
 const ROOM_UPDATE_SQL = 'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND version = ?'
 // F-2025 5.1 — 하루·누계 문장 (보낸 사람 = 소유자)
 const DAY_AND_TOTAL_SQL =
@@ -33,6 +33,7 @@ type D1Doc = {
   created_at: number
   updated_at: number
   e2ee_key?: string | null
+  deleted_at?: number | null
 }
 
 type SqlCall = { sql: string; args: unknown[] }
@@ -77,20 +78,21 @@ function makeD1(initial: Partial<D1Doc> | null) {
             args,
             async first<T>() {
               state.calls.push({ sql, args })
-              // F-401 X16 — 금고 행은 AND e2ee_key IS NULL 에 걸려 없는 행이 된다
-              const hidden = !!state.row?.e2ee_key && sql.endsWith(' AND e2ee_key IS NULL')
-              if (sql.startsWith('SELECT title, content, line_ending, version, owner_id FROM docs WHERE id = ?')) {
+              // F-401 X16 — 금고 행은 AND e2ee_key IS NULL 에 걸려 없는 행이 된다. F-3022 — 휴지통 행은 deleted_at IS NULL 에 걸린다
+              const hidden =
+                (!!state.row?.e2ee_key && sql.includes(' AND e2ee_key IS NULL')) || (typeof state.row?.deleted_at === 'number' && sql.includes(' AND deleted_at IS NULL'))
+              if (sql.startsWith('SELECT title, content, line_ending, version, owner_id, deleted_at FROM docs WHERE id = ?')) {
                 if (!state.row || args[0] !== state.row.id || hidden) return null
-                const { title, content, line_ending, version, owner_id } = state.row
-                return { title, content, line_ending, version, owner_id } as T
+                const { title, content, line_ending, version, owner_id, deleted_at } = state.row
+                return { title, content, line_ending, version, owner_id, deleted_at } as T
               }
               if (sql === 'SELECT blocked_at FROM users WHERE id = ?') {
                 return (state.usage ? { blocked_at: state.usage.blocked_at } : null) as T
               }
-              if (sql.startsWith('SELECT id, owner_id, folder_id FROM docs WHERE id = ?')) {
+              if (sql.startsWith('SELECT id, owner_id, folder_id, deleted_at FROM docs WHERE id = ?')) {
                 if (!state.row || args[0] !== state.row.id || hidden) return null
-                const { id, owner_id, folder_id } = state.row
-                return { id, owner_id, folder_id } as T
+                const { id, owner_id, folder_id, deleted_at } = state.row
+                return { id, owner_id, folder_id, deleted_at } as T
               }
               if (sql.startsWith('SELECT * FROM docs WHERE id = ?')) {
                 if (!state.row || args[0] !== state.row.id || hidden) return null
@@ -219,7 +221,7 @@ function conn(userId: string, email: string, role: 'owner' | 'edit' | 'view' = '
 function makeRoom(d1: ReturnType<typeof makeD1>, store = makeStorage(), opts: { ensureLoaded?: () => Promise<void> } = {}) {
   const doc = new Y.Doc()
   const conns: FakeConn[] = []
-  const counts = { ensureLoaded: 0, exclusive: 0, load: 0 }
+  const counts = { ensureLoaded: 0, exclusive: 0, load: 0, retire: 0 }
   const alarms: number[] = []
   const host: DocRoomHost<FakeConn> = {
     docId: DOC_ID,
@@ -241,6 +243,9 @@ function makeRoom(d1: ReturnType<typeof makeD1>, store = makeStorage(), opts: { 
     },
     setAlarm: async (at: number) => {
       alarms.push(at)
+    },
+    retire: () => {
+      counts.retire++
     },
   }
   const core = new DocRoomCore(host)
@@ -741,7 +746,7 @@ describe('F-308 A10·A11 idle 경로', () => {
     expect(room.counts.ensureLoaded).toBe(0)
     expect(room.store.log.filter((l) => l.startsWith('INSERT INTO ydoc_'))).toHaveLength(0)
     expect(updates).toHaveLength(0)
-    expect(d1.state.calls.map((c) => c.sql)).toEqual(['SELECT * FROM docs WHERE id = ? AND e2ee_key IS NULL', ROW_UPDATE_SQL, DAY_AND_TOTAL_SQL])
+    expect(d1.state.calls.map((c) => c.sql)).toEqual(['SELECT * FROM docs WHERE id = ? AND e2ee_key IS NULL AND deleted_at IS NULL', ROW_UPDATE_SQL, DAY_AND_TOTAL_SQL])
     expect(d1.state.calls[1].args).toEqual(['t', 'L1\nX\nL3\n', 6, 1_000_000, DOC_ID, 'owner', 5])
     expect(d1.state.row!.content).toBe('L1\nX\nL3\n')
     expect(vi.getTimerCount()).toBe(0)
@@ -1431,7 +1436,61 @@ describe('F-3006 S3 비밀 값 없음', () => {
     const calls = d1.state.calls.slice(before)
     expect(d1.state.batches).toHaveLength(2)
     expect(calls.filter((c) => c.sql.includes('notifications'))).toEqual([])
-    expect(calls.filter((c) => c.sql.startsWith('SELECT id, owner_id, folder_id FROM docs'))).toEqual([])
+    expect(calls.filter((c) => c.sql.startsWith('SELECT id, owner_id, folder_id, deleted_at FROM docs'))).toEqual([])
     expect(resolveDocAccess).not.toHaveBeenCalled()
+  })
+})
+
+// 휴지통 행 — 연결은 4404 deleted, 저장소는 남기고 인스턴스는 버린다 (specs/features/F-3022.md 6장)
+describe('F-3022 A8 휴지통 방', () => {
+  it('휴지통 행으로 불러오면 연결 4404 deleted, 저장소 그대로, retire 1번', async () => {
+    const d1 = makeD1({ content: 'a', version: 2 })
+    const first = makeRoom(d1)
+    await first.core.load()
+    d1.state.row = { ...d1.state.row!, deleted_at: 5 }
+    const again = makeRoom(d1, first.store)
+    await again.core.load()
+    const c = conn('owner', 'owner@example.com', 'owner')
+    expect(await again.add(c, 2)).toBe(false)
+    expect(c.closed).toEqual({ code: 4404, reason: 'deleted' })
+    expect(first.store.seqCount()).toBe(1)
+    expect(first.store.meta().get('d1_version')).toBe('2')
+    expect(again.counts.retire).toBe(1)
+  })
+
+  it('열린 방의 revalidateConnections 가 휴지통을 보면 전원 4404 deleted, 저장소 그대로, retire 1번', async () => {
+    const d1 = makeD1({ content: 'a', version: 2 })
+    const room = makeRoom(d1)
+    await room.core.load()
+    const a = conn('owner', 'owner@example.com', 'owner')
+    const b = conn('e', 'editor@example.com')
+    await room.add(a, 2)
+    await room.add(b, 2)
+    vi.mocked(resolveDocAccess).mockClear()
+    d1.state.row = { ...d1.state.row!, deleted_at: 5 }
+    await room.core.revalidateConnections()
+    expect(a.closed).toEqual({ code: 4404, reason: 'deleted' })
+    expect(b.closed).toEqual({ code: 4404, reason: 'deleted' })
+    expect(resolveDocAccess).not.toHaveBeenCalled()
+    expect(room.store.seqCount()).toBe(1)
+    expect(room.counts.retire).toBe(1)
+  })
+
+  it('idle writeText 는 not_found, UPDATE 없음', async () => {
+    const d1 = liveD1({ deleted_at: 5 })
+    const room = makeRoom(d1)
+    await expect(room.core.writeText({ content: 'x', baseVersion: 5, docVersion: 5 })).resolves.toEqual({ type: 'not_found' })
+    expect(d1.updates()).toHaveLength(0)
+  })
+
+  it('행 없음은 지금처럼 저장소를 비우고 retire 를 부르지 않는다', async () => {
+    const d1 = makeD1({ content: 'a', version: 2 })
+    const first = makeRoom(d1)
+    await first.core.load()
+    d1.state.row = null
+    const again = makeRoom(d1, first.store)
+    await again.core.load()
+    expect(first.store.seqCount()).toBe(0)
+    expect(again.counts.retire).toBe(0)
   })
 })

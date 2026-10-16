@@ -6,7 +6,7 @@ import type { DocRow } from '../../worker/docWrite'
 import { V1_EXAMPLES } from '../../worker/v1Contract'
 import { asD1, openTestDb } from '../../worker/testD1'
 
-const UPDATE_SQL = 'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ?'
+const UPDATE_SQL = 'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND version = ? AND deleted_at IS NULL'
 
 function row(overrides: Partial<DocRow> = {}): DocRow {
   return {

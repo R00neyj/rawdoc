@@ -39,7 +39,7 @@ export type NotificationDraft = { recipient: string; kind: NotificationKind; com
 export const KNOWN_COMMENTS_SQL = 'SELECT id, sig, anchor_sig FROM doc_comments WHERE doc_id = ?'
 export const ALL_COMMENTS_SQL = 'SELECT * FROM doc_comments WHERE doc_id = ? ORDER BY created_at, id'
 
-const DOC_WRITABLE = 'EXISTS (SELECT 1 FROM docs WHERE id = ?1 AND e2ee_key IS NULL)'
+const DOC_WRITABLE = 'EXISTS (SELECT 1 FROM docs WHERE id = ?1 AND e2ee_key IS NULL AND deleted_at IS NULL)'
 const field = (name: string) => `json_extract(value, '$.${name}')`
 const byteLen = (name: string) => `length(CAST(${field(name)} AS BLOB))`
 
@@ -67,7 +67,7 @@ export const TRIM_BY_CUT_DELETE =
 export const TRIM_NOTIFICATIONS_SQL = `WITH cut(r, i) AS MATERIALIZED (SELECT value, ${nthNotificationIdSql('value')} FROM json_each(?1)) ${TRIM_BY_CUT_DELETE}`
 // F-2057 3.5 ① — 넣기 문장의 DOC_WRITABLE 과 같은 조건이라 금고 문서면 0행
 const INSERT_NOTIF_REV_SQL =
-  'UPDATE users SET notif_rev = notif_rev + 1 WHERE email IN (SELECT value FROM json_each(?1)) AND EXISTS (SELECT 1 FROM docs WHERE id = ?2 AND e2ee_key IS NULL)'
+  'UPDATE users SET notif_rev = notif_rev + 1 WHERE email IN (SELECT value FROM json_each(?1)) AND EXISTS (SELECT 1 FROM docs WHERE id = ?2 AND e2ee_key IS NULL AND deleted_at IS NULL)'
 
 // F-2057 3.5 — 지운 뒤에는 받는 사람을 알 수 없어, 같은 WHERE 로 DELETE 바로 앞에 둔다
 export function notifRevBeforeDeleteSql(where: string): string {

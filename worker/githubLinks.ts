@@ -16,7 +16,7 @@ const BODY_LIMIT = 4096
 
 const UPSERT_SQL = `INSERT INTO github_links (doc_id, owner_id, repo_id, repo, branch, path, remote_sha, remote_bom, synced_at, created_at)
 SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10
-WHERE EXISTS (SELECT 1 FROM docs WHERE id = ?1 AND owner_id = ?2 AND e2ee_key IS NULL)
+WHERE EXISTS (SELECT 1 FROM docs WHERE id = ?1 AND owner_id = ?2 AND e2ee_key IS NULL AND deleted_at IS NULL)
 ON CONFLICT (doc_id) DO UPDATE SET repo_id = excluded.repo_id, repo = excluded.repo, branch = excluded.branch, path = excluded.path,
   remote_sha = excluded.remote_sha, remote_bom = excluded.remote_bom, synced_at = excluded.synced_at`
 
@@ -118,7 +118,7 @@ export async function handlePutDocGithub(request: Request, env: Env, _ctx: Execu
     throw err
   }
   if (results[statements.length - 2].meta.changes === 0) {
-    const doc = await env.DB.prepare('SELECT e2ee_key FROM docs WHERE id = ?').bind(params.id).first<{ e2ee_key: string | null }>()
+    const doc = await env.DB.prepare('SELECT e2ee_key FROM docs WHERE id = ? AND deleted_at IS NULL').bind(params.id).first<{ e2ee_key: string | null }>()
     return doc ? jsonResponse({ error: 'e2ee' }, 409) : notFound()
   }
   const row = await readLink(env, params.id)

@@ -11,7 +11,7 @@ const SUBTREE_DOCS_SQL = `WITH RECURSIVE sub(id, owner_id) AS (
   SELECT f.id, f.owner_id FROM folders f JOIN sub s ON f.parent_id = s.id AND f.owner_id = s.owner_id
 )
 SELECT d.id FROM sub s CROSS JOIN docs d ON d.owner_id = s.owner_id AND d.folder_id = s.id
- WHERE d.e2ee_key IS NULL
+ WHERE d.e2ee_key IS NULL AND d.deleted_at IS NULL
  ORDER BY d.updated_at DESC
  LIMIT ?3`
 

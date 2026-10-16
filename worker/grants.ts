@@ -46,7 +46,7 @@ type OwnerCheck = { ok: true; e2ee: boolean; name: string } | { ok: false; statu
 // 금고 판정 열을 함께 읽는다 — resolveDocAccess 가 금고 비소유자를 null 로 본다 (F-401 X3)
 export async function checkOwnedTarget(env: Env, targetType: TargetType, targetId: string, user: AuthUser): Promise<OwnerCheck> {
   if (targetType === 'doc') {
-    const doc = await env.DB.prepare('SELECT id, owner_id, folder_id, e2ee_key, title FROM docs WHERE id = ?')
+    const doc = await env.DB.prepare('SELECT id, owner_id, folder_id, e2ee_key, title FROM docs WHERE id = ? AND deleted_at IS NULL')
       .bind(targetId)
       .first<{ id: string; owner_id: string; folder_id: string | null; e2ee_key?: string | null; title?: string }>()
     if (!doc) return { ok: false, status: 404 }
@@ -268,7 +268,7 @@ SELECT f.id, f.name, f.parent_id, f.owner_id FROM sub s CROSS JOIN folders f ON 
 export const SHARED_DOCS_SQL = `${SHARED_SUBTREE_CTE}
 SELECT d.id, d.title, d.line_ending, d.folder_id, d.pinned_at, d.version, d.created_at, d.updated_at, d.owner_id
   FROM sub s CROSS JOIN docs d ON d.owner_id = s.owner_id AND d.folder_id = s.id
- WHERE d.e2ee_key IS NULL`
+ WHERE d.e2ee_key IS NULL AND d.deleted_at IS NULL`
 
 type SharedItem = {
   id: string
@@ -355,7 +355,7 @@ export async function handleGetShared(request: Request, env: Env): Promise<Respo
   for (let i = 0; i < docOnlyIds.length; i += BATCH_ID_LIMIT) {
     const batch = docOnlyIds.slice(i, i + BATCH_ID_LIMIT)
     const { results: docs } = await env.DB.prepare(
-      `SELECT ${SHARED_DOC_COLUMNS} FROM docs WHERE id IN (${batch.map(() => '?').join(',')}) AND e2ee_key IS NULL`,
+      `SELECT ${SHARED_DOC_COLUMNS} FROM docs WHERE deleted_at IS NULL AND id IN (${batch.map(() => '?').join(',')}) AND e2ee_key IS NULL`,
     )
       .bind(...batch)
       .all<SharedDocRow>()

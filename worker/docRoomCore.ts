@@ -99,6 +99,8 @@ export interface DocRoomHost<C extends RoomConnection = RoomConnection> {
   getAlarm?(): Promise<number | null>
   // 런타임 자동 응답(ping)의 마지막 시각. 없으면 null (F-3006 5장)
   lastPing?(conn: C): number | null
+  // 이 인스턴스를 곧 버린다 — gone 인 인스턴스가 남으면 복원 뒤 새 연결도 4404 를 받는다 (F-3022 6장)
+  retire?(): void
 }
 
 // /v1 PUT 이 DO 에 넘기는 값 — 검사는 Worker 가 끝냈다 (F-308 5.1)
@@ -129,7 +131,8 @@ export type RoomCommentImportResult =
   | { type: 'not_found' }
   | { type: 'unavailable' }
 
-type D1DocRow = { title: string; content: string; line_ending: LineEnding; version: number; owner_id: string }
+type D1DocRow = { title: string; content: string; line_ending: LineEnding; version: number; owner_id: string; deleted_at?: number | null }
+type AccessRow = { id: string; owner_id: string; folder_id: string | null; deleted_at?: number | null }
 // rowBytes — base 가 가리키는 D1 행 본문의 실제 UTF-8 바이트 (F-2027 4.4)
 type Base = { content: string; title: string; version: number; lineEnding: LineEnding; updatedAt: number | null; rowBytes: number }
 type SnapshotResult = 'ok' | 'retry' | 'gone'
@@ -137,12 +140,12 @@ type SnapshotResult = 'ok' | 'retry' | 'gone'
 type CommentPlan = { keys: string[]; full: boolean; upserts: CommentRow[]; deletes: string[]; drafts: NotificationDraft[]; pushDueAt: number | null }
 type KnownComment = { sig: string; anchorSig: string }
 
-// D1 읽기 셋은 금고 행을 거른다 — DO 는 금고 문서를 없는 문서로 본다 (F-401 X16)
-const READ_ROW_SQL = 'SELECT title, content, line_ending, version, owner_id FROM docs WHERE id = ? AND e2ee_key IS NULL'
+// D1 읽기 셋은 금고 행을 거른다 — DO 는 금고 문서를 없는 문서로 본다 (F-401 X16). 휴지통은 deleted_at 으로 가른다 (F-3022 6장)
+const READ_ROW_SQL = 'SELECT title, content, line_ending, version, owner_id, deleted_at FROM docs WHERE id = ? AND e2ee_key IS NULL'
 const BLOCKED_SQL = 'SELECT blocked_at FROM users WHERE id = ?'
-const ACCESS_ROW_SQL = 'SELECT id, owner_id, folder_id FROM docs WHERE id = ? AND e2ee_key IS NULL'
+const ACCESS_ROW_SQL = 'SELECT id, owner_id, folder_id, deleted_at FROM docs WHERE id = ? AND e2ee_key IS NULL'
 const UPDATE_SQL = 'UPDATE docs SET title = ?, content = ?, version = ?, updated_at = ? WHERE id = ? AND version = ?'
-const FULL_ROW_SQL = 'SELECT * FROM docs WHERE id = ? AND e2ee_key IS NULL'
+const FULL_ROW_SQL = 'SELECT * FROM docs WHERE id = ? AND e2ee_key IS NULL AND deleted_at IS NULL'
 // 스냅숏 batch 끝 — 1시간 넘은 행을 빼야 새 댓글이 3분 묶음 없이 나가지 않는다 (F-3006 3장)
 const MIN_DUE_SQL = 'SELECT MIN(push_due_at) AS due FROM notifications WHERE doc_id = ?1 AND push_due_at > ?2'
 const PUSH_RETRY_KEY = 'push_retry'
@@ -304,11 +307,8 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
       rows.push(leftover)
     }
 
-    const row = await this.readRow()
-    if (!row) {
-      this.roomGone()
-      return
-    }
+    const row = this.openRow(await this.readRow())
+    if (!row) return
     const external = { content: toEditorText(row.content), title: row.title }
     // D1 댓글 복사본 — 씨앗 가지는 되살릴 전체 행, 그 밖은 대조할 표지만. document 를 건드리기 전에 읽는다 (F-502 4.1·5장)
     const seeding = rows.length === 0
@@ -413,11 +413,8 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
   // Worker 가 본 D1 version 이 방과 다르면 D1 한 줄로 따라잡는다. false 면 방이 사라졌다 (7.2)
   private async catchUp(docVersion: number): Promise<boolean> {
     if (docVersion === this.base!.version) return true
-    const row = await this.readRow()
-    if (!row) {
-      this.roomGone()
-      return false
-    }
+    const row = this.openRow(await this.readRow())
+    if (!row) return false
     if (row.version !== this.base!.version) this.absorb(row)
     return true
   }
@@ -772,11 +769,8 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
       }
       if (attempt === 1) return 'retry'
       if (this.blocked) return 'ok'
-      const row = await this.readRow()
-      if (!row) {
-        this.roomGone()
-        return 'gone'
-      }
+      const row = this.openRow(await this.readRow())
+      if (!row) return 'gone'
       this.absorb(row)
       // 흡수한 바꾸기를 D1 보다 먼저 SQLite 에 — 다음 깨어남이 그것을 잃지 않게
       this.persistPending()
@@ -886,13 +880,8 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     if (this.gone) return
     const targets = [...this.host.connections()].filter((c) => !email || readConnState(c.state)?.email === email)
     if (targets.length === 0) return
-    const row = await this.host.env.DB.prepare(ACCESS_ROW_SQL)
-      .bind(this.host.docId)
-      .first<{ id: string; owner_id: string; folder_id: string | null }>()
-    if (!row) {
-      this.roomGone()
-      return
-    }
+    const row = this.openRow(await this.host.env.DB.prepare(ACCESS_ROW_SQL).bind(this.host.docId).first<AccessRow>())
+    if (!row) return
     for (const conn of targets) {
       if (!(await this.stillAllowed(conn, row))) safeClose(conn, SOCKET_CLOSE.forbidden, 'revoked')
     }
@@ -900,7 +889,7 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
   }
 
   // F-503 3장 — 연결 상태의 역할로 가른다. 승격된 view 연결은 view 그대로 둔다
-  private async stillAllowed(conn: C, row: { id: string; owner_id: string; folder_id: string | null }): Promise<boolean> {
+  private async stillAllowed(conn: C, row: AccessRow): Promise<boolean> {
     const state = readConnState(conn.state)
     if (!state) return false
     const user = { id: state.userId, email: state.email }
@@ -1118,11 +1107,26 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     this.people = null
   }
 
+  // 행 없음 → roomGone, 휴지통 → roomTrashed 하고 null. 살아 있으면 그 행 (F-3022 6장)
+  private openRow<R extends { deleted_at?: number | null }>(row: R | null): R | null {
+    if (!row) this.roomGone()
+    else if (typeof row.deleted_at === 'number') this.roomTrashed()
+    else return row
+    return null
+  }
+
   // 사라진 방 (9.4) — 연결 4404 deleted, 저장소 비우기, 이후 flush 는 아무것도 안 한다
   private roomGone() {
     this.closeAll(SOCKET_CLOSE.notFound, 'deleted')
     this.markGone()
     this.store.clear()
+  }
+
+  // 휴지통 방 — 저장소는 복원 때 같은 계보로 이어지게 남기고, 인스턴스는 버린다 (F-3021 5장)
+  private roomTrashed() {
+    this.closeAll(SOCKET_CLOSE.notFound, 'deleted')
+    this.markGone()
+    this.host.retire?.()
   }
 
   // 문서 삭제 알림 (9.4). 저장소 비우기는 껍데기가 deleteAll 로 한다
