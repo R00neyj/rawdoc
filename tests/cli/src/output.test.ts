@@ -28,6 +28,7 @@ import {
   stripControlChars,
   type CliErrorCode,
 } from '../../../cli/src/output'
+import { TRASH_RETENTION_DAYS } from '../../../src/lib/trash'
 
 const CLI = 'rawdoc'
 const CLI_ENV = 'RAWDOC'
@@ -250,8 +251,10 @@ describe('F-2050 5.2 humanSharedList — ls --shared 사람용', () => {
 })
 
 describe('F-2050 5.2 humanRemoveDocLine', () => {
-  it('문서를 지웠습니다: {title}', () => {
-    expect(humanRemoveDocLine('내 문서')).toBe('문서를 지웠습니다: 내 문서\n')
+  it('문서를 휴지통으로 옮겼습니다 + 복원 안내', () => {
+    expect(humanRemoveDocLine('내 문서')).toBe(
+      `문서를 휴지통으로 옮겼습니다: 내 문서\n웹의 휴지통에서 ${TRASH_RETENTION_DAYS}일 안에 복원할 수 있습니다.\n`,
+    )
   })
 })
 
@@ -268,8 +271,9 @@ describe('F-2050 5.2 humanRemoveFolderNotice — rmdir 안내', () => {
     )
     expect(humanRemoveFolderNotice({ contents: 'move-up', docs: 0, folders: 0, parentId: 'p1' })).toBe('폴더를 지웠습니다.\n')
     expect(humanRemoveFolderNotice({ contents: 'delete-all', docs: 4, folders: 3, parentId: null })).toBe(
-      '폴더 3개와 문서 4개를 영구 삭제했습니다.\n',
+      `폴더 3개를 지우고 문서 4개를 휴지통으로 옮겼습니다.\n웹의 휴지통에서 ${TRASH_RETENTION_DAYS}일 안에 복원할 수 있습니다.\n`,
     )
+    expect(humanRemoveFolderNotice({ contents: 'delete-all', docs: 0, folders: 1, parentId: null })).toBe('폴더 1개를 지웠습니다.\n')
   })
 })
 

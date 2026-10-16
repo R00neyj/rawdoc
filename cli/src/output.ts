@@ -1,5 +1,6 @@
 // 사람용·--json 렌더링, 오류 → 종료 코드 (specs/features/F-2021.md 4.3~4.5)
 import type { FolderLike } from '../../src/lib/folderTree'
+import { TRASH_RETENTION_DAYS } from '../../src/lib/trash'
 import { folderPathOf } from './docMeta'
 import type { PutPreview } from './putPreview'
 
@@ -478,8 +479,10 @@ export function humanSharedList(docs: SharedDocListItem[]): string {
     .join('')
 }
 
+const RESTORE_NOTICE = `웹의 휴지통에서 ${TRASH_RETENTION_DAYS}일 안에 복원할 수 있습니다.\n`
+
 export function humanRemoveDocLine(title: string): string {
-  return `문서를 지웠습니다: ${stripControlChars(title)}\n`
+  return `문서를 휴지통으로 옮겼습니다: ${stripControlChars(title)}\n${RESTORE_NOTICE}`
 }
 
 function removedItemsPhrase(docs: number, folders: number): string {
@@ -492,7 +495,8 @@ type RemoveFolderResult = { contents: 'move-up' | 'delete-all'; docs: number; fo
 
 export function humanRemoveFolderNotice(result: RemoveFolderResult): string {
   if (result.contents === 'delete-all') {
-    return `폴더 ${result.folders}개와 문서 ${result.docs}개를 영구 삭제했습니다.\n`
+    if (result.docs === 0) return `폴더 ${result.folders}개를 지웠습니다.\n`
+    return `폴더 ${result.folders}개를 지우고 문서 ${result.docs}개를 휴지통으로 옮겼습니다.\n${RESTORE_NOTICE}`
   }
   if (result.docs === 0 && result.folders === 0) return '폴더를 지웠습니다.\n'
   const where = result.parentId === null ? '맨 위' : '위 폴더'

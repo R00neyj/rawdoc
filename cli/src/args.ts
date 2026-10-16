@@ -354,7 +354,7 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       if (!parsed) return usage('알 수 없는 옵션입니다.', command)
       if (parsed.positionals.length !== 1) return usage('문서 id 가 필요합니다.', command)
       if (parsed.values.yes !== true) {
-        return usage('문서를 영구 삭제하려면 --yes 를 붙이세요. 되돌릴 수 없습니다.', command)
+        return usage('문서를 휴지통으로 옮기려면 --yes 를 붙이세요.', command)
       }
       return { kind: 'run', command: { name: 'rm', global: globalsOf(parsed.values), id: parsed.positionals[0] } }
     }
@@ -367,7 +367,7 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       if (parsed.values.yes !== true) {
         return usage(
           all
-            ? '폴더와 안의 문서·폴더를 모두 영구 삭제하려면 --yes 를 붙이세요. 되돌릴 수 없습니다.'
+            ? '폴더와 하위 폴더를 지우고 안의 문서를 휴지통으로 옮기려면 --yes 를 붙이세요.'
             : '폴더를 지우려면 --yes 를 붙이세요. 안의 문서와 폴더는 위 폴더로 옮겨집니다.',
           command,
         )

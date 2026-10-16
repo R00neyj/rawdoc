@@ -190,13 +190,13 @@ describe('F-2050 5.1 args.ts — rm·mv·rmdir·ls --shared', () => {
     const cases: [string[], string][] = [
       [['rm'], '문서 id 가 필요합니다.'],
       [['rm', 'd1', 'd2'], '문서 id 가 필요합니다.'],
-      [['rm', 'd1'], '문서를 영구 삭제하려면 --yes 를 붙이세요. 되돌릴 수 없습니다.'],
+      [['rm', 'd1'], '문서를 휴지통으로 옮기려면 --yes 를 붙이세요.'],
       [['mv'], '문서 id 가 필요합니다.'],
       [['mv', 'd1'], '--folder <폴더id> 또는 --root 중 하나가 필요합니다.'],
       [['mv', 'd1', '--folder', 'f1', '--root'], '--folder <폴더id> 또는 --root 중 하나가 필요합니다.'],
       [['rmdir'], '폴더 id 가 필요합니다.'],
       [['rmdir', 'f1'], '폴더를 지우려면 --yes 를 붙이세요. 안의 문서와 폴더는 위 폴더로 옮겨집니다.'],
-      [['rmdir', 'f1', '--all'], '폴더와 안의 문서·폴더를 모두 영구 삭제하려면 --yes 를 붙이세요. 되돌릴 수 없습니다.'],
+      [['rmdir', 'f1', '--all'], '폴더와 하위 폴더를 지우고 안의 문서를 휴지통으로 옮기려면 --yes 를 붙이세요.'],
       [['ls', '--shared', '--folder', 'f1'], '--shared 와 --folder 는 함께 쓸 수 없습니다.'],
     ]
     for (const [argv, message] of cases) {

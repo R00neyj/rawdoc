@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { isEntryScript, main, type MainDeps } from '../../../cli/src/main'
 import { syntaxJson } from '../../../cli/src/syntax'
 import { cliCallbackUrl, parseCliLoginHash } from '../../../src/lib/cliLoginUrl'
+import { TRASH_RETENTION_DAYS } from '../../../src/lib/trash'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -247,7 +248,9 @@ describe('F-2021 U16 main()', () => {
     const code = await main(deps)
     expect(code).toBe(0)
     expect(deps.stdoutLog.join('')).toBe('d1\n')
-    expect(deps.stderrLog.join('')).toBe('문서를 지웠습니다: 내 문서\n')
+    expect(deps.stderrLog.join('')).toBe(
+      `문서를 휴지통으로 옮겼습니다: 내 문서\n웹의 휴지통에서 ${TRASH_RETENTION_DAYS}일 안에 복원할 수 있습니다.\n`,
+    )
   })
 
   it('F-2050 C11 rm --yes --json', async () => {

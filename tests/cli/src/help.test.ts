@@ -1,6 +1,7 @@
 // F-2132 A9 (help.ts)
 import { describe, expect, it } from 'vitest'
 import { commandHelpText, helpText } from '../../../cli/src/help'
+import { TRASH_RETENTION_DAYS } from '../../../src/lib/trash'
 
 const USAGE: Record<string, string> = {
   login: '사용: rawdoc login [--force] [--with-token] [--no-browser]',
@@ -69,5 +70,20 @@ describe('F-2132 A9 help.ts', () => {
 
   it('put 한 줄 설명에 --dry-run', () => {
     expect(helpText('0.3.3')).toContain('--dry-run 은 미리 보기. 자세히: put --help')
+  })
+
+  it('F-2146 A4 rm·rmdir 안내가 휴지통 기준', () => {
+    const rm = commandHelpText('rm')
+    const rmdir = commandHelpText('rmdir')
+    const all = helpText('0.6.0')
+    expect(rm).toContain('묻지 않고 휴지통으로 옮깁니다')
+    expect(rm).toContain(`휴지통의 문서는 ${TRASH_RETENTION_DAYS}일 동안 웹에서 복원할 수 있고, 그 뒤 영구히 지워집니다. 복원·영구 삭제·비우기는 웹에서만 합니다.`)
+    expect(rmdir).toContain('하위 폴더까지 지우고 안의 문서는 모두 휴지통으로 옮깁니다. 지운 폴더는 되살릴 수 없어, 복원한 문서는 맨 위로 돌아갑니다')
+    expect(all).toContain('문서를 휴지통으로 옮깁니다 (--yes 필요)')
+    expect(all).toContain('폴더를 지웁니다. 안의 것은 위 폴더로 (--all: 하위 폴더도 지우고 문서는 휴지통으로, --yes 필요)')
+    for (const text of [rm, rmdir, all]) {
+      expect(text).not.toContain('영구 삭제합니다')
+      expect(text).not.toContain('되돌릴 수 없습니다')
+    }
   })
 })

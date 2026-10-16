@@ -1,5 +1,6 @@
 // 전체·명령별 도움말 순수 함수 (specs/features/F-2132.md 5장)
 import brand from '../../brand.config'
+import { TRASH_RETENTION_DAYS } from '../../src/lib/trash'
 import { COMMAND_NAMES, type CommandName } from './args'
 import { SIDECAR_SUFFIX } from './sidecar'
 
@@ -48,10 +49,10 @@ const COMMAND_DESCRIPTIONS: Record<CommandName, string> = {
   put: '문서를 고칩니다 (--base-version <n|auto> 또는 --force 필요, --dry-run 은 미리 보기. 자세히: put --help)',
   merge: 'get -o 로 받은 파일에 그 사이 바뀐 서버 판을 줄 단위로 합칩니다',
   mv: '문서를 다른 폴더로 옮깁니다',
-  rm: '문서를 영구 삭제합니다 (--yes 필요)',
+  rm: '문서를 휴지통으로 옮깁니다 (--yes 필요)',
   folders: '폴더 목록',
   mkdir: '폴더를 만듭니다',
-  rmdir: '폴더를 지웁니다. 안의 것은 위 폴더로 (--all: 모두 영구 삭제, --yes 필요)',
+  rmdir: '폴더를 지웁니다. 안의 것은 위 폴더로 (--all: 하위 폴더도 지우고 문서는 휴지통으로, --yes 필요)',
   upload: '이미지를 올리고 붙일 마크다운을 출력합니다',
   link: '읽기 전용 링크를 만듭니다',
   syntax: '문서에 쓰는 마크다운 문법(콜아웃·위키링크·수식 등)을 출력합니다',
@@ -222,7 +223,8 @@ const COMMAND_DETAILS: Partial<Record<CommandName, string[]>> = {
   rm: [
     '',
     `사용: ${CLI} rm <id> --yes`,
-    ...optionLines([['--yes', '묻지 않고 영구 삭제합니다. 되돌릴 수 없습니다']]),
+    ...optionLines([['--yes', '묻지 않고 휴지통으로 옮깁니다']]),
+    `휴지통의 문서는 ${TRASH_RETENTION_DAYS}일 동안 웹에서 복원할 수 있고, 그 뒤 영구히 지워집니다. 복원·영구 삭제·비우기는 웹에서만 합니다.`,
   ],
   mkdir: [
     '',
@@ -235,7 +237,7 @@ const COMMAND_DETAILS: Partial<Record<CommandName, string[]>> = {
     `사용: ${CLI} rmdir <폴더id> --yes [--all]`,
     ...optionLines([
       ['--yes', '묻지 않고 지웁니다. 안의 문서와 폴더는 위 폴더로 옮겨집니다'],
-      ['--all', '안의 문서와 폴더까지 모두 영구 삭제합니다. 되돌릴 수 없습니다'],
+      ['--all', '하위 폴더까지 지우고 안의 문서는 모두 휴지통으로 옮깁니다. 지운 폴더는 되살릴 수 없어, 복원한 문서는 맨 위로 돌아갑니다'],
     ]),
     `폴더는 경로가 아니라 id 로만 지정합니다. ${CLI} folders 로 확인하세요.`,
   ],
