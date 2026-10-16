@@ -11,6 +11,8 @@ const out = `${root}dist-openai-plugin`
 const zip = `${out}.zip`
 const origin = process.env.PLUGIN_ORIGIN ?? `https://${brand.cliName}.app`
 const version = process.argv[2] ?? '1.0.0'
+// 포털은 영상 URL 을 ZIP 에서만 받는다
+const demoUrl = process.argv[3] ?? process.env.DEMO_URL
 const name = brand.name
 
 const plugin = {
@@ -108,6 +110,7 @@ const plugin = {
             },
           ],
         },
+        ...(demoUrl ? { demo_recording_url: demoUrl } : {}),
         commerce: false,
         commerce_description: 'This app does not sell products or process payments.',
       },
