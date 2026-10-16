@@ -119,6 +119,7 @@ import { useKanbanSettings } from './useKanbanSettings'
 import type { SettingsTabId } from './settingsTabs'
 import { useHashRouting, replaceHashUrl, pushHashUrl } from './useHashRouting'
 import { useSharesPage } from './useSharesPage'
+import { useTrashPage } from './useTrashPage'
 import { isMacPlatform } from './shortcutCatalog'
 import PublicView from './PublicView'
 import type { InviteTarget } from './InviteDialog'
@@ -176,6 +177,8 @@ export default function App() {
   const pendingJumpRef = useRef<PendingJump | null>(null)
   // 도움말 전용 페이지 S-7 (specs/features/F-244.md 3.3) — currentDocId 는 이 화면 동안 null
   const [helpOpen, setHelpOpen] = useState(false)
+  // 휴지통 페이지 S-10 (specs/features/F-2145.md 2장) — currentDocId 는 이 화면 동안 null
+  const [trashOpen, setTrashOpen] = useState(false)
   // 위키링크 지도 S-8 (specs/features/F-292.md 6.1) — 공유 화면과 같은 방식으로 currentDocId 를 비우지 않고 유지한다
   const [mapRoute, setMapRoute] = useState<{ centerDocId: string | null; returnDocId: string | null } | null>(null)
   // (F-126.md 5.3)
@@ -273,6 +276,7 @@ export default function App() {
   const sharesOpenRef = useRef(sharesOpen)
   // hashchange 핸들러가 "지금 도움말 페이지를 보고 있는가" 를 최신으로 읽도록 갱신한다 (F-244.md 3.3)
   const helpOpenRef = useRef(helpOpen)
+  const trashOpenRef = useRef(trashOpen)
   // hashchange 핸들러가 "지금 지도를 보고 있는가" 를 최신으로 읽도록 갱신한다 (F-292.md 6.1)
   const mapRouteRef = useRef(mapRoute)
   // 창 전체 끌어놓기(F-145.md 2.1)가 매 렌더 후 최신 "받지 않는 때" 여부를 보도록 갱신한다
@@ -652,7 +656,7 @@ export default function App() {
 
   // 문서를 열면 그 문서의 알림을 읽음으로 (F-510 4.2 1번, 5장) — "문서 화면" 은 부팅이 끝나고 문서가 있고 공유 링크·공유 관리·도움말·지도가 모두 없을 때다
   const docScreenId =
-    bootPhase === 'ready' && currentDocId !== null && !sharedDoc && !sharesOpen && !helpOpen && !mapRoute ? currentDocId : null
+    bootPhase === 'ready' && currentDocId !== null && !sharedDoc && !sharesOpen && !helpOpen && !trashOpen && !mapRoute ? currentDocId : null
 
   // ----- 템플릿 목록·원문 읽기·새 문서 본문 (F-2078) -----
   const { templateEntries, readTemplateDocText, buildNewDocContent, buildContentFromTemplate } = useNewDocTemplate({ store, docs, folders, currentDocIdRef, editorRef })
@@ -753,7 +757,7 @@ export default function App() {
     bootedRef.current = true
 
     runBoot({
-      setBootPhase, setDbBlockedMessage, setStore, setDocs, setFolders, setCurrentDocId, setForbiddenDocIds, setSharedDoc, setSharesOpen, setHelpOpen,
+      setBootPhase, setDbBlockedMessage, setStore, setDocs, setFolders, setCurrentDocId, setForbiddenDocIds, setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen,
       setMapRoute, setDeletedElsewhereId, showNotice, beforeLeaveDoc, applyAccountFlags, setAccountPending, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
       restartDocSessionAfterFlush, postTabMessage, replaceHashUrl, yjsStoreRef, e2eeStoreRef, e2eeRef, tabIdRef, createdHereRef, currentDocIdRef, focusEditorRef,
       foldersRef, commentsRef, bootListSeqRef, lastAppliedListSeqRef, deletedElsewhereSourceRef, docPathRef, e2eeConvertBusyRef,
@@ -777,8 +781,8 @@ export default function App() {
 
   // ----- 뒤로·앞으로 가기, 주소창 직접 수정 (ia.md 3.10) -----
   useHashRouting({
-    bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment, setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute,
-    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, focusEditorRef, commentsRef,
+    store, bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment, setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute,
+    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, focusEditorRef, commentsRef,
     resyncList: resyncFromStore,
   })
 
@@ -992,12 +996,12 @@ export default function App() {
   // ----- 문서 이동 — 새 문서·고르기·홈·위키링크·공유 화면 가져오기/닫기·검색 결과·도움말·지도 (F-2082) -----
   const {
     saveCurrentAsNewDoc, createDoc, createNewDoc, createNewBoard, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
-    handleOpenWikiLink, importSharedDoc, closeSharedDoc, openDocFromSearch, openHelp, openMap, closeMap, recenterMap, copyHelpToDoc,
+    handleOpenWikiLink, importSharedDoc, closeSharedDoc, openDocFromSearch, openHelp, openTrash, openMap, closeMap, recenterMap, copyHelpToDoc,
   } = useDocNavigation({
-    store, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, mapRoute, viewMode, notifications,
+    store, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, viewMode, notifications,
     wikiResolver, currentFolderId, jumpToHeading, buildNewDocContent, beforeLeaveDoc, showNotice, changeViewMode, closePalette,
     closeSidebarIfNarrow, addOpenFolders, newDocFolderId, ensureE2eeOpenForFolder, requestE2eeOpen, setDocs, setCurrentDocId,
-    setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute, setDeletedElsewhereId, setNotice, setSearchOpen, setPendingEditorSearch,
+    setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute, setDeletedElsewhereId, setNotice, setSearchOpen, setPendingEditorSearch,
     editorRef, focusTitleRef, focusEditorRef, pendingJumpRef, openDocIdRef,
   })
 
@@ -1014,6 +1018,7 @@ export default function App() {
     sharedDocRef.current = sharedDoc
     sharesOpenRef.current = sharesOpen
     helpOpenRef.current = helpOpen
+    trashOpenRef.current = trashOpen
     mapRouteRef.current = mapRoute
     // 받지 않는 때(F-145.md 2.1): 대화상자·공유 화면·공유 관리 페이지·지도·저장소를 못 쓸 때(store.kind==='memory'). 팔레트도 다른 대화상자와 같다(F-2022.md 9.1)
     dropBlockedRef.current = Boolean(
@@ -1033,9 +1038,9 @@ export default function App() {
     handleImportFolderInputChange, handleImportTargetChange, cancelImportPreview, cancelImportProgress, closeImportResult, confirmImport, handleImageFiles,
   } = useImportFlow({
     store, folders, currentDoc, bootPhase, setDocs, setFolders, setCurrentDocId, setOpenDoc, setEditorRemountNonce, setSharedDoc, setSharesOpen,
-    setHelpOpen, setMapRoute, showNotice, keepLiveTitle, beforeLeaveDoc, addOpenFolders, closeSidebarIfNarrow, closeSettings,
+    setHelpOpen, setTrashOpen, setMapRoute, showNotice, keepLiveTitle, beforeLeaveDoc, addOpenFolders, closeSidebarIfNarrow, closeSettings,
     ensureE2eeOpenForFolder, pushHashUrl, importInputRef, importZipInputRef, importFolderInputRef, docsRef, foldersRef, currentDocIdRef,
-    sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, docPathRef, focusEditorRef, docSaverFlushRef, dropBlockedRef, imageDropBlockedRef,
+    sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, docPathRef, focusEditorRef, docSaverFlushRef, dropBlockedRef, imageDropBlockedRef,
     readOnlyDocRef,
   })
 
@@ -1112,6 +1117,7 @@ export default function App() {
   const {
     sharesLoading, sharesLinks, sharesGrants, sharesRequests, busyRequestIds, revokeShareLinkRow, revokeShareGrantRow, approveRequestRow, rejectRequestRow, loginFromShares,
   } = useSharesPage({ sharesOpen, account, accessRequestKey: accessRequestKeyValue, showNotice })
+  const trashPage = useTrashPage({ trashOpen, store, account, showNotice, resyncFromStore, selectDoc })
 
   // 검색 대화상자 오프라인 안내 — exportOffline 과 식은 같지만 뜻이 다른 이름이라 재사용하지 않는다 (F-288.md 7.5, 13장 Q8)
   const searchOffline = store.kind === 'server' && syncState?.online === false
@@ -1228,7 +1234,7 @@ export default function App() {
   // ----- 명령 팔레트 열기·템플릿 넣기·context 조립 (F-2078) -----
   const { openPalette, paletteContext } = useCommandPalette({
     paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose, closeContextMenu, openPaletteFromRef,
-    bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
+    store, bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
     account, e2ee, statusBarVisible, canInviteCurrentDoc, commentAccessValue, comments, editorRef, currentDocIdRef, readOnlyDocRef, sidebarCommandRef,
     showNotice, templateEntries, readTemplateDocText, openShortcuts, notificationsEnabled, setNotificationsOpen, wikiResolver, currentFolderId,
     narrow, sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebar, closeSidebarIfNarrow, themePref, lineNumbersPref, toolbarPref,
@@ -1284,7 +1290,7 @@ export default function App() {
   const topBar = <AppTopBar {...{
     account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef,
     getShareDoc, handleCopyDocAsRichText, handleExportDoc, handleExportDocAsHtml, handleExportDocAsText, handleOpenNotification,
-    handlePrintDoc, helpOpen, isEmpty, isReadOnlyDoc, kanban, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
+    handlePrintDoc, helpOpen, trashOpen, isEmpty, isReadOnlyDoc, kanban, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
     outlineControlRef, openPalette, openSearch, openViewFind: viewFind.open, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
     toggleButtonRef, toggleCommentsPanel, toggleSidebar, toolbarPref, viewMode, wikiResolver,
     editorRef, github: github.topBar, rightPanel: rightPanel.available ? { open: rightPanel.open, onToggle: rightPanel.togglePanel } : undefined,
@@ -1337,6 +1343,7 @@ export default function App() {
           onTogglePin={handleTogglePin}
           onOpenSettings={openSettings}
           onOpenHelp={openHelp}
+          onOpenTrash={store.kind === 'server' ? openTrash : undefined}
           account={{
             account,
             onBeforeNavigate: async () => {
@@ -1384,7 +1391,7 @@ export default function App() {
           <NoticeBar notice={notice} onDismiss={() => setNotice(null)} />
           <AppScreens {...{
             account, approveRequestRow, bootPhase, busyRequestIds, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs: listedDocs, e2ee,
-            goHome, handleOpenWikiLink, handleViewContextMenu, helpOpen, importSharedDoc, isEmpty, listSource, loginFromShares,
+            goHome, handleOpenWikiLink, handleViewContextMenu, helpOpen, trashOpen, trashPage, importSharedDoc, isEmpty, listSource, loginFromShares,
             mapDialogScope, mapRoute, openHelp, openSharesTarget, ownedDocs, recenterMap, rejectRequestRow, requestImport, revokeShareGrantRow,
             revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc, sharesGrants, sharesLinks, sharesLoading, sharesOpen, sharesRequests, showNotice,
           }} />

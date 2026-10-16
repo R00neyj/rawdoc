@@ -34,7 +34,7 @@ import type { UseSidebarLayoutResult } from './useSidebarLayout'
 import type { UseAppearancePrefsResult } from './useAppearancePrefs'
 import type { ExportActions } from './exportActions'
 import type { UseFolderActionsResult } from './useFolderActions'
-import type { Folder } from '../types'
+import type { Folder, Store } from '../types'
 
 export type UseCommandPaletteOptions = {
   paletteOpen: boolean
@@ -45,6 +45,7 @@ export type UseCommandPaletteOptions = {
   runAfterPaletteClose: (fn: () => void) => void
   closeContextMenu: () => void
   openPaletteFromRef: RefObject<(fromEditor: boolean | undefined) => void>
+  store: Pick<Store, 'kind'>
   bootPhase: 'booting' | 'ready'
   docs: DocMeta[]
   folders: Folder[]
@@ -54,6 +55,7 @@ export type UseCommandPaletteOptions = {
   sharedDoc: ShareDoc | null
   sharesOpen: boolean
   helpOpen: boolean
+  trashOpen: boolean
   mapRoute: { centerDocId: string | null; returnDocId: string | null } | null
   docScreenId: string | null
   viewMode: string
@@ -128,7 +130,7 @@ export type UseCommandPaletteResult = {
 export function useCommandPalette(options: UseCommandPaletteOptions): UseCommandPaletteResult {
   const {
     paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose, closeContextMenu, openPaletteFromRef,
-    bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
+    store, bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
     account, e2ee, statusBarVisible, canInviteCurrentDoc, commentAccessValue, comments, editorRef, currentDocIdRef, readOnlyDocRef, sidebarCommandRef,
     showNotice, templateEntries, readTemplateDocText, openShortcuts, notificationsEnabled, setNotificationsOpen, wikiResolver, currentFolderId,
     narrow, sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebar, closeSidebarIfNarrow, themePref, lineNumbersPref, toolbarPref,
@@ -151,6 +153,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     !isReadOnlyDoc &&
     !mapRoute &&
     !helpOpen &&
+    !trashOpen &&
     !sharesOpen
   // 인쇄 가능 조건 (F-279.md 6.1). 잠긴 금고 문서는 인쇄를 뺀다 — 팔레트 `인쇄` 가 안 보인다 (F-409 7.2)
   const canPrint = bootPhase === 'ready' && currentDocId !== null && !sharedDoc && currentDoc?.e2ee !== 'locked'
@@ -367,6 +370,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
         sharedLink: Boolean(sharedDoc),
         shares: sharesOpen,
         help: helpOpen,
+        trash: trashOpen,
         map: Boolean(mapRoute),
         currentDocId,
       }),
@@ -378,6 +382,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
       openGuides: () => window.open(GUIDES_PATH, '_blank', 'noopener,noreferrer'),
       openSettings: () => runAfterPaletteClose(() => openSettings()),
       openShares: account.state === 'in' ? () => { location.hash = '#/shares' } : undefined,
+      openTrash: store.kind === 'server' ? () => { location.hash = '#/trash' } : undefined,
     },
     docActions: {
       newDoc: () => runAfterPaletteClose(() => void createNewDoc()),

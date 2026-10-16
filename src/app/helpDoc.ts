@@ -1,6 +1,7 @@
 // 도움말 원문 — 앱 사용법 + 마크다운 문법 두 축(F-257.md 2·3장, helpSyntax.ts 를 그대로 옮김, F-235.md/F-244.md 3.1), 공개 사이트 /help 로도 나가 이미지·mermaid 문법을 쓰면 빌드가 실패한다 (F-274)
 
 import brand from '../../brand.config'
+import { TRASH_RETENTION_DAYS } from '../lib/trash'
 import { fenceSource, SYNTAX_GROUPS, type SyntaxGroup, type SyntaxItem } from '../lib/markdownSyntax'
 
 export const HELP_DOC_TITLE = '도움말'
@@ -48,6 +49,8 @@ const APP_SECTIONS = `## 이 앱은
 ## 문서 관리
 
 사이드바에서 \`새 문서\`·\`새 폴더\`를 만듭니다. 문서·폴더의 \`⋯\` 메뉴에서 \`이름 변경\`·\`삭제\`·\`폴더로 이동…\`을 고를 수 있고, 자주 쓰는 것은 \`상단 고정\`으로 맨 위에 모아 둡니다. 트리에서 끌어서 다른 폴더로 옮길 수도 있습니다. 행을 오른쪽 버튼으로 눌러도 같은 메뉴가 열립니다. \`Ctrl\`(\`Cmd\`)이나 \`Shift\`를 누른 채로 누르면 여러 항목을 골라 한 번에 삭제하거나 옮길 수 있습니다.
+
+로그인한 계정에서 지운 문서는 사이드바 아래 \`휴지통\`으로 가고 ${TRASH_RETENTION_DAYS}일 뒤 영구히 지워집니다. 그 전에 \`복원\`하면 원래 폴더로 돌아옵니다. 로그인 없이 만든 문서는 곧바로 지워집니다.
 
 ## 검색
 

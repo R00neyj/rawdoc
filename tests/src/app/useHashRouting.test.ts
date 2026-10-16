@@ -32,12 +32,13 @@ describe('useHashRouting await 중 주소 변경 (D13 경합)', () => {
     const setSharedDoc = vi.fn()
     const setSharesOpen = vi.fn()
     const setHelpOpen = vi.fn()
+    const setTrashOpen = vi.fn()
     const openSharedFragment = vi.fn()
     const opts = {
-      bootPhase: 'ready', beforeLeaveDoc: () => gate, showNotice: vi.fn(), addOpenFolders: vi.fn(), openSharedFragment,
-      setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute, setCurrentDocId,
+      store: { kind: 'idb' }, bootPhase: 'ready', beforeLeaveDoc: () => gate, showNotice: vi.fn(), addOpenFolders: vi.fn(), openSharedFragment,
+      setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute, setCurrentDocId,
       docsRef: ref([{ id: 'B' }]), foldersRef: ref([]), currentDocIdRef: ref(currentDocId), sharedDocRef: ref(null),
-      sharesOpenRef: ref(false), helpOpenRef: ref(false), mapRouteRef: ref(null), focusEditorRef: ref(false), commentsRef: ref(null),
+      sharesOpenRef: ref(false), helpOpenRef: ref(false), trashOpenRef: ref(false), mapRouteRef: ref(null), focusEditorRef: ref(false), commentsRef: ref(null),
     } as unknown as UseHashRoutingOptions
     attachHashRouting(opts)
     return { release, setMapRoute, setCurrentDocId, setSharedDoc, setSharesOpen, setHelpOpen, openSharedFragment }

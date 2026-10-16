@@ -4,6 +4,7 @@ import AppScreens, { type AppScreensProps } from '../../../src/app/AppScreens'
 import SharedView from '../../../src/app/SharedView'
 import SharesPage from '../../../src/app/SharesPage'
 import HelpPage from '../../../src/app/HelpPage'
+import TrashPage from '../../../src/app/TrashPage'
 import EmptyState from '../../../src/app/EmptyState'
 
 // jsdom 없이 컴포넌트 함수를 직접 불러 엘리먼트 트리를 훑는다 (F-2081 6장)
@@ -57,6 +58,11 @@ describe('F-2081 U1~U6 AppScreens 갈래', () => {
     const found = areas({ ...allOn, sharedDoc: null, sharesOpen: false })
     expect(found).toHaveLength(1)
     expect(firstChild(found[0]).type).toBe(HelpPage)
+  })
+  it('U3b 도움말이 닫히고 휴지통이 열리면 휴지통, 지도보다 앞', () => {
+    const found = areas({ ...allOn, sharedDoc: null, sharesOpen: false, helpOpen: false, trashOpen: true, trashPage: {} })
+    expect(found).toHaveLength(1)
+    expect(firstChild(found[0]).type).toBe(TrashPage)
   })
   it('U4 도움말이 닫히면 지도(Suspense)', () => {
     const found = areas({ ...allOn, sharedDoc: null, sharesOpen: false, helpOpen: false })

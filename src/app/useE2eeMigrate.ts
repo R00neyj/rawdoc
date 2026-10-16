@@ -4,6 +4,7 @@ import { DEFAULT_DB_NAME, createIdbStore, markLocalE2eeMigrated, readE2eeRow } f
 import type { ServerStore } from '../storage/serverStore'
 import { checkLocalE2eeMigration, runLocalE2eeMigration } from './migrateLocal'
 import type { LocalE2eeKeys } from '../e2ee/convert'
+import { purgeTrashDoc } from './trashApi'
 import { lockDocMetas, planE2eeReset, type E2eeStore } from '../e2ee/e2eeStore'
 import type { Folder, Store } from '../types'
 import type { AccountState } from './account'
@@ -217,6 +218,12 @@ export function useE2eeMigrate(options: UseE2eeMigrateOptions): UseE2eeMigrateRe
     for (const id of plan.folderIds) await store.removeFolder(id, 'delete-all')
     for (const id of plan.docIds) await store.remove(id)
     await (e2eeStoreRef.current as Partial<ServerStore> | null)?.flushOutbox?.()
+    if (store.kind === 'server') {
+      // 지운 금고 문서는 휴지통에 남아 초기화를 막는다 — 자기가 보낸 것은 영구 삭제한다 (F-2145 4장 ③)
+      for (const doc of list) {
+        if (doc.e2ee && (await purgeTrashDoc(doc.id)) === 'failed') throw new Error('trash purge failed')
+      }
+    }
     await resyncFromStore()
   }
 

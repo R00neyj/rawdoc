@@ -8,6 +8,7 @@ const B: HashNavInput = {
   sharedDoc: null,
   sharesOpen: false,
   helpOpen: false,
+  trashOpen: false,
   mapRoute: null,
 }
 const nav = (over: Partial<HashNavInput>) => decideHashNav({ ...B, ...over })
@@ -54,6 +55,12 @@ describe('decideHashNav (F-2071 7.1)', () => {
     expect(nav({ hash: '#/help', helpOpen: true })).toEqual(IGNORE)
     expect(nav({ hash: '#/help', helpOpen: true, sharesOpen: true })).toEqual(IGNORE)
     expect(nav({ hash: '#/help', sharesOpen: true })).toEqual({ kind: 'help' })
+  })
+
+  it('U8b 휴지통 — 열려 있으면 무시, 같은 문서 해시도 닫는다', () => {
+    expect(nav({ hash: '#/trash' })).toEqual({ kind: 'trash' })
+    expect(nav({ hash: '#/trash', trashOpen: true })).toEqual(IGNORE)
+    expect(nav({ hash: '#/d/a', trashOpen: true })).toEqual({ kind: 'open', home: false, docId: 'a', threadId: null })
   })
 
   it('U9 지도 중심 없음', () => {

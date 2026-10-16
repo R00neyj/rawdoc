@@ -49,6 +49,7 @@ export type PaletteContext = {
     openGuides: () => void
     openSettings: () => void
     openShares?: () => void
+    openTrash?: () => void
     openTemplates?: () => void
   }
   // 문서 조작 — 선택 필드. 없으면 만들기·지금 문서 명령들이 안 보인다 (F-2054 4.1)
@@ -108,7 +109,7 @@ export type PaletteContext = {
   dateTime?: { insert: (text: string) => void }
 }
 
-export type PaletteScreen = 'doc' | 'home' | 'help' | 'map' | 'shares' | 'sharedLink'
+export type PaletteScreen = 'doc' | 'home' | 'help' | 'trash' | 'map' | 'shares' | 'sharedLink'
 export type PaletteViewMode = 'live' | 'raw' | 'view'
 
 // 화면 하나로 정하기 — App 렌더 우선순위와 같다 (F-2054 4.2)
@@ -116,12 +117,14 @@ export function paletteScreen(s: {
   sharedLink: boolean
   shares: boolean
   help: boolean
+  trash: boolean
   map: boolean
   currentDocId: string | null
 }): PaletteScreen {
   if (s.sharedLink) return 'sharedLink'
   if (s.shares) return 'shares'
   if (s.help) return 'help'
+  if (s.trash) return 'trash'
   if (s.map) return 'map'
   if (s.currentDocId === null) return 'home'
   return 'doc'

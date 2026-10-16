@@ -178,6 +178,7 @@ describe('BOOT_PAINT_SCRIPT', () => {
       { pathname: '/', hash: '#/s/xyz', expected: 'blank', hashType: 'share' },
       { pathname: '/', hash: '#/shares', expected: 'blank', hashType: 'shares' },
       { pathname: '/', hash: '#/help', expected: 'blank', hashType: 'help' },
+      { pathname: '/', hash: '#/trash', expected: 'blank', hashType: 'trash' },
       { pathname: '/', hash: '#/map', expected: 'blank', hashType: 'map' },
       { pathname: '/', hash: '#/map/abc', expected: 'blank', hashType: 'map' },
       { pathname: '/', hash: '#/p/tok', expected: 'off', hashType: 'public' },

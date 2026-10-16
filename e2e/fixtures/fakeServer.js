@@ -19,6 +19,8 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
   const shareLinks = new Map() // key `${targetType}:${targetId}` -> { token, createdAt, revokedAt }
   const grants = new Map() // key `${targetType}:${targetId}:${email}` -> { role, createdAt }
   const accessRequests = new Map()
+  // 휴지통 — DELETE /api/docs/:id 가 docs 에서 옮겨 온다 (F-2145). id -> { doc, deletedAt, deletedBy, path }
+  const trash = new Map()
   const accessRequestLog = []
   // context.setOffline() 은 page.route 가 먼저 가로채 못 걸러낸다 — 이 플래그로 직접 흉내낸다 (F-207 A4)
   let offline = false
@@ -36,6 +38,13 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
   let e2eeKeys = null
   // 옮기기 응답의 purged 를 false 로 (F-407 9.3)
   let purgeFails = false
+
+  // 폴더 이름 경로 'A/B' — 최상위·없는 폴더는 null (F-3023 3.4 trashPathOf)
+  function folderPath(folderId) {
+    const names = []
+    for (let f = folderId ? folders.get(folderId) : null; f; f = f.parentId ? folders.get(f.parentId) : null) names.unshift(f.name)
+    return names.length > 0 ? names.join('/') : null
+  }
 
   function docSummary(d) {
     const { content: _content, ...rest } = d
@@ -129,6 +138,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
     const id = decodeURIComponent(new URL(req.url()).pathname.split('/').pop())
     const doc = docs.get(id)
     if (req.method() === 'GET') {
+      if (!doc && trash.has(id)) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"deleted"}' })
       if (!doc) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) })
     }
@@ -162,6 +172,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
     }
     if (req.method() === 'DELETE') {
       if (recordWrite(route, req)) return
+      if (doc) trash.set(id, { doc, deletedAt: Date.now(), deletedBy: 'app', path: folderPath(doc.folderId) })
       docs.delete(id)
       return route.fulfill({ status: 204 })
     }
@@ -492,6 +503,57 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
     return route.fallback()
   })
 
+  // GET·DELETE /api/trash, POST /api/trash/:id/restore, DELETE /api/trash/:id — 휴지통 (F-3021 4.3, F-2145)
+  await page.route('**/api/trash', async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() === 'GET') {
+      const items = [...trash.values()]
+        .sort((a, b) => b.deletedAt - a.deletedAt)
+        .map((t) => ({
+          id: t.doc.id,
+          title: t.doc.e2eeKey ? '' : t.doc.title,
+          ...(t.doc.e2eeKey ? { e2ee: true } : {}),
+          deletedAt: t.deletedAt,
+          deletedBy: t.deletedBy,
+          path: t.path,
+          purgeAt: t.deletedAt + 30 * 24 * 60 * 60 * 1000,
+        }))
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(items) })
+    }
+    if (req.method() === 'DELETE') {
+      if (recordWrite(route, req)) return
+      const count = trash.size
+      trash.clear()
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ docs: count }) })
+    }
+    return route.fallback()
+  })
+
+  await page.route(/\/api\/trash\/[^/]+$/, async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() !== 'DELETE') return route.fallback()
+    if (recordWrite(route, req)) return
+    const id = decodeURIComponent(new URL(req.url()).pathname.split('/').pop())
+    if (!trash.delete(id)) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+    return route.fulfill({ status: 204 })
+  })
+
+  await page.route(/\/api\/trash\/[^/]+\/restore$/, async (route) => {
+    if (offline) return route.abort('internetdisconnected')
+    const req = route.request()
+    if (req.method() !== 'POST') return route.fallback()
+    if (recordWrite(route, req)) return
+    const id = decodeURIComponent(new URL(req.url()).pathname.split('/').slice(-2)[0])
+    const entry = trash.get(id)
+    if (!entry) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+    const folderId = entry.doc.folderId && folders.has(entry.doc.folderId) ? entry.doc.folderId : null
+    docs.set(id, { ...entry.doc, folderId })
+    trash.delete(id)
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, folderId }) })
+  })
+
   // GET·PUT·DELETE /api/e2ee/keys — 금고 키 묶음 (F-401 3.1 판정, F-404 10.3)
   await page.route('**/api/e2ee/keys', async (route) => {
     if (offline) return route.abort('internetdisconnected')
@@ -514,7 +576,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
     if (req.method() === 'DELETE') {
       if (recordWrite(route, req)) return
       // 금고 문서·폴더가 남았으면 지우지 않는다 (F-405 9.3, F-404 10.3 이 미룬 것)
-      const vaultDocs = [...docs.values()].filter((d) => d.e2eeKey).length
+      const vaultDocs = [...docs.values(), ...[...trash.values()].map((t) => t.doc)].filter((d) => d.e2eeKey).length
       const vaultFolders = [...folders.values()].filter((f) => f.e2ee).length
       if (vaultDocs > 0 || vaultFolders > 0) {
         return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'vault_not_empty', docs: vaultDocs, folders: vaultFolders }) })
@@ -983,6 +1045,7 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
 
   return {
     docs,
+    trash,
     folders,
     attachments,
     githubLinks,

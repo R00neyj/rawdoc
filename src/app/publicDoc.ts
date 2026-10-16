@@ -14,7 +14,7 @@ function withGithub(raw: PublicDoc): PublicDoc {
   return map ? { ...rest, github: map } : rest
 }
 
-export type PublicDocErrorKind = 'not_found' | 'network' | 'other'
+export type PublicDocErrorKind = 'not_found' | 'deleted' | 'network' | 'other'
 
 export class PublicDocError extends Error {
   kind: PublicDocErrorKind
@@ -22,6 +22,17 @@ export class PublicDocError extends Error {
     super(kind)
     this.kind = kind
   }
+}
+
+// 404 본문이 { error: 'deleted' } 면 휴지통으로 간 문서 — 본문이 없거나 다르면 not_found (F-2145 4장 ①)
+async function notFoundError(res: Response): Promise<PublicDocError> {
+  let body: { error?: unknown } | null = null
+  try {
+    body = (await res.json()) as { error?: unknown } | null
+  } catch {
+    body = null
+  }
+  return new PublicDocError(body?.error === 'deleted' ? 'deleted' : 'not_found')
 }
 
 // 캐시 no-store — 원본이 바뀌면 다음 조회부터 반영한다 (2.3)
@@ -32,7 +43,7 @@ export async function fetchPublicDoc(token: string): Promise<PublicDoc> {
   } catch {
     throw new PublicDocError('network')
   }
-  if (res.status === 404) throw new PublicDocError('not_found')
+  if (res.status === 404) throw await notFoundError(res)
   if (!res.ok) throw new PublicDocError('other')
   return withGithub((await res.json()) as PublicDoc)
 }
@@ -133,7 +144,7 @@ export async function fetchPublicSetDoc(token: string, docId: string): Promise<P
   } catch {
     throw new PublicDocError('network')
   }
-  if (res.status === 404) throw new PublicDocError('not_found')
+  if (res.status === 404) throw await notFoundError(res)
   if (!res.ok) throw new PublicDocError('other')
   return withGithub((await res.json()) as PublicDoc)
 }
@@ -148,7 +159,7 @@ export async function fetchPublicFolderDoc(token: string, docId: string): Promis
   } catch {
     throw new PublicDocError('network')
   }
-  if (res.status === 404) throw new PublicDocError('not_found')
+  if (res.status === 404) throw await notFoundError(res)
   if (!res.ok) throw new PublicDocError('other')
   return withGithub((await res.json()) as PublicDoc)
 }

@@ -3,6 +3,7 @@ import SharedView from './SharedView'
 import AccessRequestControl from './AccessRequestControl'
 import SharesPage from './SharesPage'
 import HelpPage from './HelpPage'
+import TrashPage from './TrashPage'
 import EmptyState from './EmptyState'
 import type { DocMeta } from './docMeta'
 import type { ShareDoc } from '../lib/shareCodec'
@@ -12,6 +13,7 @@ import type { UseAccountStatusResult } from './useAccountStatus'
 import type { UseAppearancePrefsResult } from './useAppearancePrefs'
 import type { UseImportFlowResult } from './useImportFlow'
 import type { UseSharesPageResult } from './useSharesPage'
+import type { UseTrashPageResult } from './useTrashPage'
 import type { UseContextMenuResult } from './useContextMenu'
 import type { NoticeWithAction } from './NoticeBar'
 import { vaultNoticeOn } from './vaultVisibility'
@@ -34,6 +36,8 @@ export type AppScreensProps = Pick<UseAccountStatusResult, 'account'> &
     goHome: () => Promise<void>
     handleOpenWikiLink: (target: string, heading?: string | null) => void
     helpOpen: boolean
+    trashOpen: boolean
+    trashPage: UseTrashPageResult
     importSharedDoc: () => Promise<void>
     isEmpty: boolean
     listSource: Pick<Store, 'list' | 'listFolders'>
@@ -52,7 +56,7 @@ export type AppScreensProps = Pick<UseAccountStatusResult, 'account'> &
 
 export default function AppScreens({
   account, approveRequestRow, bootPhase, busyRequestIds, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs, e2ee, goHome,
-  handleOpenWikiLink, handleViewContextMenu, helpOpen, importSharedDoc, isEmpty, listSource, loginFromShares, mapDialogScope, mapRoute, openHelp,
+  handleOpenWikiLink, handleViewContextMenu, helpOpen, trashOpen, trashPage, importSharedDoc, isEmpty, listSource, loginFromShares, mapDialogScope, mapRoute, openHelp,
   openSharesTarget, ownedDocs, recenterMap, rejectRequestRow, requestImport, revokeShareGrantRow, revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc,
   sharesGrants, sharesLinks, sharesLoading, sharesOpen, sharesRequests, showNotice,
 }: AppScreensProps) {
@@ -105,7 +109,12 @@ export default function AppScreens({
           <HelpPage onClose={goHome} onCopy={copyHelpToDoc} contentWidth={contentWidthPref} />
         </div>
       )}
-      {!sharedDoc && !sharesOpen && !helpOpen && mapRoute && (
+      {!sharedDoc && !sharesOpen && !helpOpen && trashOpen && (
+        <div className="content-area">
+          <TrashPage {...trashPage} onClose={goHome} />
+        </div>
+      )}
+      {!sharedDoc && !sharesOpen && !helpOpen && !trashOpen && mapRoute && (
         <div className="content-area">
           <Suspense fallback={<p className="map-status">연결을 읽는 중…</p>}>
             <MapPage
@@ -125,7 +134,7 @@ export default function AppScreens({
           </Suspense>
         </div>
       )}
-      {!sharedDoc && !sharesOpen && !helpOpen && !mapRoute && isEmpty && (
+      {!sharedDoc && !sharesOpen && !helpOpen && !trashOpen && !mapRoute && isEmpty && (
         <div className="content-area">
           <EmptyState
             hasDocs={docs.length > 0}

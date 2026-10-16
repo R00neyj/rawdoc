@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { moreButtonVisible, moreDotVisible, moreSheetItems, topBarScreen } from '../../../src/app/topBarMore'
 
-const base = { bootPhase: 'ready' as const, currentDocId: 'd1', sharedDoc: false, sharesOpen: false, helpOpen: false, mapRoute: false }
+const base = { bootPhase: 'ready' as const, currentDocId: 'd1', sharedDoc: false, sharesOpen: false, helpOpen: false, trashOpen: false, mapRoute: false }
 
 describe('F-2083 A1 topBarScreen', () => {
   it('문서 있음·다른 화면 없음 → doc', () => {
@@ -14,6 +14,7 @@ describe('F-2083 A1 topBarScreen', () => {
     expect(topBarScreen({ ...base, sharedDoc: true })).toBe('other')
     expect(topBarScreen({ ...base, sharesOpen: true })).toBe('other')
     expect(topBarScreen({ ...base, helpOpen: true })).toBe('other')
+    expect(topBarScreen({ ...base, trashOpen: true })).toBe('other')
     expect(topBarScreen({ ...base, mapRoute: true })).toBe('other')
     expect(topBarScreen({ ...base, currentDocId: null, helpOpen: true })).toBe('other')
   })

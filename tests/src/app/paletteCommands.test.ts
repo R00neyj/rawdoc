@@ -61,6 +61,7 @@ describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀, F-505 U
       'nav.help',
       'nav.guides',
       'nav.shares',
+      'nav.trash',
       'nav.settings',
       'doc.openNewTab',
       'doc.togglePin',
@@ -332,6 +333,17 @@ describe('nav — U3 (F-2054 11.1)', () => {
       expect(ids).toContain('nav.guides')
       expect(ids).toContain('nav.settings')
     }
+  })
+
+  it('F-2145 U12 휴지통 열기는 openTrash 가 있고 휴지통 화면이 아닐 때만, 키워드로도 찾는다', () => {
+    const withTrash = (screen: 'doc' | 'trash', openTrash?: () => void) =>
+      visibleIdsOf(ctx([], undefined, undefined, undefined, undefined, fullExtra({ nav: { ...fullExtra().nav!, screen, openTrash } })))
+    expect(withTrash('doc', noop)).toContain('nav.trash')
+    expect(withTrash('trash', noop)).not.toContain('nav.trash')
+    expect(withTrash('doc')).not.toContain('nav.trash')
+    const cmd = PALETTE_COMMANDS.find((c) => c.id === 'nav.trash')!
+    expect(cmd.label).toBe('휴지통 열기')
+    expect(cmd.keywords).toEqual(expect.arrayContaining(['휴지통', 'trash', '복원', '지운 문서']))
   })
 
   it('openShares 없으면 nav.shares 없음', () => {

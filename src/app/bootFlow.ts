@@ -26,6 +26,7 @@ import { withE2ee, type E2eeStore } from '../e2ee/e2eeStore'
 import { cleanupUnusedAttachments, scheduleAttachmentGc } from './attachmentGc'
 import type { NoticeWithAction } from './NoticeBar'
 import type { PendingCommentTarget } from './useDocComments'
+import { announceMissingDoc } from './trashApi'
 
 export type BootDeps = {
   setBootPhase: Dispatch<SetStateAction<'booting' | 'ready'>>
@@ -38,6 +39,7 @@ export type BootDeps = {
   setSharedDoc: Dispatch<SetStateAction<ShareDoc | null>>
   setSharesOpen: Dispatch<SetStateAction<boolean>>
   setHelpOpen: Dispatch<SetStateAction<boolean>>
+  setTrashOpen: Dispatch<SetStateAction<boolean>>
   setMapRoute: Dispatch<SetStateAction<{ centerDocId: string | null; returnDocId: string | null } | null>>
   setDeletedElsewhereId: Dispatch<SetStateAction<string | null>>
   showNotice: (input: NoticeWithAction) => number
@@ -80,6 +82,7 @@ export type BootRoute =
   | { kind: 'share'; fragment: string }
   | { kind: 'shares' }
   | { kind: 'help' }
+  | { kind: 'trash' }
   | { kind: 'map'; anchorId: string | null }
   | { kind: 'doc'; docId: string; notFound: boolean; threadId: string | null }
   | { kind: 'home' }
@@ -89,6 +92,7 @@ export function decideBootRoute({ hash: parsedHash, docs: metaList, lastDocId, s
   if (parsedHash.type === 'share') return { kind: 'share', fragment: parsedHash.fragment }
   if (parsedHash.type === 'shares') return { kind: 'shares' }
   if (parsedHash.type === 'help') return { kind: 'help' }
+  if (parsedHash.type === 'trash') return { kind: 'trash' }
   if (parsedHash.type === 'map') {
     const anchorId = parsedHash.docId && metaList.some((d) => d.id === parsedHash.docId) ? parsedHash.docId : null
     return { kind: 'map', anchorId }
@@ -112,7 +116,7 @@ export function decideBootRoute({ hash: parsedHash, docs: metaList, lastDocId, s
 
 export async function runBoot(deps: BootDeps): Promise<void> {
   const {
-    setBootPhase, setDbBlockedMessage, setStore, setDocs, setFolders, setCurrentDocId, setForbiddenDocIds, setSharedDoc, setSharesOpen, setHelpOpen,
+    setBootPhase, setDbBlockedMessage, setStore, setDocs, setFolders, setCurrentDocId, setForbiddenDocIds, setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen,
     setMapRoute, setDeletedElsewhereId, showNotice, beforeLeaveDoc, applyAccountFlags, setAccountPending, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
     restartDocSessionAfterFlush, postTabMessage, replaceHashUrl, yjsStoreRef, e2eeStoreRef, e2eeRef, tabIdRef, createdHereRef, currentDocIdRef, focusEditorRef,
     foldersRef, commentsRef, bootListSeqRef, lastAppliedListSeqRef, deletedElsewhereSourceRef, docPathRef, e2eeConvertBusyRef,
@@ -215,7 +219,7 @@ export async function runBoot(deps: BootDeps): Promise<void> {
     const copyTitle = copy?.title ?? ''
     showNotice({ type: 'warn', message: `다른 곳에서 먼저 바뀌어 내 편집을 "${copyTitle}" 으로 저장했습니다.` })
     if (docId === currentDocIdRef.current) {
-      leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute })
+      leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute })
       focusEditorRef.current = false
       setCurrentDocId(copyId)
       setPref('md.lastDocId', copyId)
@@ -289,6 +293,13 @@ export async function runBoot(deps: BootDeps): Promise<void> {
       return
     }
 
+    // 휴지통 페이지(#/trash) — 문서를 열지 않는다 (F-2145 2장)
+    if (route.kind === 'trash') {
+      setTrashOpen(true)
+      setBootPhase('ready')
+      return
+    }
+
     // 위키링크 지도(#/map·#/map/{id}) — currentDocId 는 비우지 않고 유지한다 (F-292.md 6.1, A15)
     if (route.kind === 'map') {
       const { anchorId } = route
@@ -304,7 +315,7 @@ export async function runBoot(deps: BootDeps): Promise<void> {
       setPref('md.lastDocId', route.docId)
       replaceHashUrl(route.docId)
       if (route.notFound) {
-        showNotice({ type: 'info', message: '문서를 찾을 수 없습니다.' })
+        announceMissingDoc(parsedHash.type === 'doc' ? parsedHash.docId : null, resolvedStore.kind === 'server', showNotice)
       } else if (route.threadId) {
         // 댓글 주소로 들어온 경우 — 댓글이 준비되면 그 카드로 이동한다(7.6)
         commentsRef.current?.setPendingTarget({ docId: route.docId, threadId: route.threadId })

@@ -80,6 +80,12 @@ describe('parseHash', () => {
     expect(parseHash('#/help/x')).toEqual({ type: 'none' })
   })
 
+  it('#/trash 는 정확히 그 값만 type trash (F-2145 A6)', () => {
+    expect(parseHash('#/trash')).toEqual({ type: 'trash' })
+    expect(parseHash('#/trash/x')).toEqual({ type: 'none' })
+    expect(parseHash('#/trashed')).toEqual({ type: 'none' })
+  })
+
   it('문자열이 아니면 type none', () => {
     expect(parseHash(undefined)).toEqual({ type: 'none' })
   })

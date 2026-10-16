@@ -15,11 +15,11 @@ describe('useDocNavigation 새 문서로 옮길 때 전용 화면 닫기', () =>
   afterEach(() => vi.unstubAllGlobals())
 
   function setup() {
-    const setters = { setSharedDoc: vi.fn(), setSharesOpen: vi.fn(), setHelpOpen: vi.fn(), setMapRoute: vi.fn() }
+    const setters = { setSharedDoc: vi.fn(), setSharesOpen: vi.fn(), setHelpOpen: vi.fn(), setTrashOpen: vi.fn(), setMapRoute: vi.fn() }
     const options = {
       store: { create: vi.fn(async () => doc) },
       docs: [], folders: [], currentDocId: 'A', currentDoc: { id: 'A', title: 'A' }, openDoc: null,
-      sharedDoc: null, sharesOpen: false, helpOpen: true, mapRoute: null, viewMode: 'live',
+      sharedDoc: null, sharesOpen: false, helpOpen: true, trashOpen: false, mapRoute: null, viewMode: 'live',
       wikiResolver: { resolve: () => null, findLinkFolder: () => null },
       currentFolderId: null, jumpToHeading: vi.fn(),
       buildNewDocContent: vi.fn(async () => ({ content: '', failed: false })),
@@ -36,6 +36,7 @@ describe('useDocNavigation 새 문서로 옮길 때 전용 화면 닫기', () =>
     expect(s.setSharedDoc).toHaveBeenCalledWith(null)
     expect(s.setSharesOpen).toHaveBeenCalledWith(false)
     expect(s.setHelpOpen).toHaveBeenCalledWith(false)
+    expect(s.setTrashOpen).toHaveBeenCalledWith(false)
     expect(s.setMapRoute).toHaveBeenCalledWith(null)
   }
 
@@ -67,14 +68,14 @@ describe('createNewDoc 대상 폴더', () => {
       store: { create: vi.fn(async () => doc) },
       docs: [], folders: [{ id: 'f1', name: 'F', parentId: null }], currentDocId: 'A',
       currentDoc: { id: 'A', title: 'A', folderId: 'f1' }, openDoc: null,
-      sharedDoc: null, sharesOpen: false, helpOpen: false, mapRoute: null, viewMode: 'live',
+      sharedDoc: null, sharesOpen: false, helpOpen: false, trashOpen: false, mapRoute: null, viewMode: 'live',
       wikiResolver: { resolve: () => null, findLinkFolder: () => null },
       currentFolderId: 'f1', jumpToHeading: vi.fn(),
       buildNewDocContent: vi.fn(async () => ({ content: '', failed: false })),
       beforeLeaveDoc: vi.fn(async () => {}), showNotice: vi.fn(), changeViewMode: vi.fn(), closeSidebarIfNarrow: vi.fn(),
       addOpenFolders: vi.fn(), newDocFolderId: () => 'f1', ensureE2eeOpenForFolder: async () => true, setDocs: vi.fn(),
       setCurrentDocId: vi.fn(), setDeletedElsewhereId: vi.fn(), setNotice: vi.fn(),
-      setSharedDoc: vi.fn(), setSharesOpen: vi.fn(), setHelpOpen: vi.fn(), setMapRoute: vi.fn(),
+      setSharedDoc: vi.fn(), setSharesOpen: vi.fn(), setHelpOpen: vi.fn(), setTrashOpen: vi.fn(), setMapRoute: vi.fn(),
       editorRef: { current: null }, focusTitleRef: { current: false }, focusEditorRef: { current: false },
       ...overrides,
     } as unknown as UseDocNavigationOptions

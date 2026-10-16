@@ -2,6 +2,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import Dialog from './Dialog'
 import { downloadBlob } from './exportDoc'
+import { DELETE_TRASH_TEXT } from './trashView'
 import { E2EE_MIN_PASSWORD_CHARS, isE2eePasswordLongEnough } from '../lib/e2eeLimits'
 import type { E2eeActionError, E2eeScope, Keyring } from '../e2ee/keyring'
 
@@ -22,7 +23,7 @@ const ERROR_TEXT: Record<E2eeActionError, string> = {
   'vault-exists': '다른 탭이나 기기에서 이미 금고를 만들었습니다. 그 금고의 암호로 여세요.',
   conflict: '다른 탭이나 기기에서 금고가 바뀌었습니다. 처음부터 다시 해 주세요.',
   'no-vault': '다른 탭이나 기기에서 금고를 없앴습니다.',
-  'vault-not-empty': '금고 문서나 금고 폴더가 남아 있어 초기화하지 못했습니다. 다시 시도하세요.',
+  'vault-not-empty': DELETE_TRASH_TEXT.vaultNotEmpty,
   offline: '인터넷에 연결되어 있지 않아 저장하지 못했습니다. 연결한 뒤 다시 누르세요.',
   'rate-limited': '요청이 많아 저장하지 못했습니다. 잠시 뒤 다시 누르세요.',
   'account-blocked': '이 계정은 운영자가 쓰기를 막아 금고를 만들거나 바꿀 수 없습니다.',

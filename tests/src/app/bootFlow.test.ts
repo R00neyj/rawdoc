@@ -120,6 +120,7 @@ function makeDeps(): BootDeps {
     setSharedDoc: vi.fn(),
     setSharesOpen: vi.fn(),
     setHelpOpen: vi.fn(),
+    setTrashOpen: vi.fn(),
     setMapRoute: vi.fn(),
     setDeletedElsewhereId: vi.fn(),
     showNotice: vi.fn(() => 1),

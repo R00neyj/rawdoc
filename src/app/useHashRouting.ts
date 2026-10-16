@@ -4,6 +4,8 @@ import type { Folder } from '../types'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { DocMeta } from './docMeta'
 import type { NoticeWithAction } from './NoticeBar'
+import type { Store } from '../types'
+import { announceMissingDoc } from './trashApi'
 import type { UseDocCommentsResult } from './useDocComments'
 import { formatHash, formatMapHash } from './hashRoute'
 import { decideHashNav, docKnownAfterRefresh } from './hashNav'
@@ -30,7 +32,14 @@ export function pushHelpHash() {
   pushAppEntry(url)
 }
 
+// `#/trash` 로 들어갈 때 — `#/help` 와 같은 길 (F-2145 2장)
+export function pushTrashHash() {
+  const url = `${location.pathname}${location.search}#/trash`
+  pushAppEntry(url)
+}
+
 export type UseHashRoutingOptions = {
+  store: Store
   bootPhase: 'booting' | 'ready'
   beforeLeaveDoc: () => Promise<void>
   showNotice: (input: NoticeWithAction) => number
@@ -39,6 +48,7 @@ export type UseHashRoutingOptions = {
   setSharedDoc: Dispatch<SetStateAction<ShareDoc | null>>
   setSharesOpen: Dispatch<SetStateAction<boolean>>
   setHelpOpen: Dispatch<SetStateAction<boolean>>
+  setTrashOpen: Dispatch<SetStateAction<boolean>>
   setMapRoute: Dispatch<SetStateAction<{ centerDocId: string | null; returnDocId: string | null } | null>>
   setCurrentDocId: Dispatch<SetStateAction<string | null>>
   docsRef: RefObject<DocMeta[]>
@@ -47,6 +57,7 @@ export type UseHashRoutingOptions = {
   sharedDocRef: RefObject<ShareDoc | null>
   sharesOpenRef: RefObject<boolean>
   helpOpenRef: RefObject<boolean>
+  trashOpenRef: RefObject<boolean>
   mapRouteRef: RefObject<{ centerDocId: string | null; returnDocId: string | null } | null>
   focusEditorRef: RefObject<boolean>
   commentsRef: RefObject<UseDocCommentsResult>
@@ -55,21 +66,21 @@ export type UseHashRoutingOptions = {
 
 export function useHashRouting(options: UseHashRoutingOptions): void {
   const {
-    bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment, setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute,
-    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, focusEditorRef, commentsRef, resyncList,
+    store, bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment, setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute,
+    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, focusEditorRef, commentsRef, resyncList,
   } = options
 
   // docs·currentDocId 는 ref 로 읽는다 — bootPhase 변경시만 재구독해 클로저에 담으면 낡은 값을 본다 (0단계 버그 수정)
   useEffect(() => {
     if (bootPhase !== 'ready') return
 
-    const leave = () => leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute })
+    const leave = () => leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute })
 
     function handleHashChange() {
       const hashAtEntry = location.hash
       const nav = decideHashNav({
         hash: location.hash, pathname: location.pathname, currentDocId: currentDocIdRef.current, sharedDoc: sharedDocRef.current,
-        sharesOpen: sharesOpenRef.current, helpOpen: helpOpenRef.current, mapRoute: mapRouteRef.current,
+        sharesOpen: sharesOpenRef.current, helpOpen: helpOpenRef.current, trashOpen: trashOpenRef.current, mapRoute: mapRouteRef.current,
       })
       if (nav.kind === 'ignore') return
 
@@ -80,6 +91,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
           if (location.hash !== hashAtEntry) return // await 중 주소가 또 바뀌었으면 뒤 핸들러에 맡긴다
           setSharesOpen(false) // 공유 보기를 닫았을 때 밑에 공유 관리·도움말이 드러나지 않게 (F-2059 D12)
           setHelpOpen(false)
+          setTrashOpen(false)
           setMapRoute(null)
           await openSharedFragment(nav.fragment, docsRef.current)
         })()
@@ -106,6 +118,18 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
           leave()
           setCurrentDocId(null)
           setHelpOpen(true)
+        })()
+        return
+      }
+
+      // 휴지통 페이지(F-2145 2장) — 뒤로·앞으로 가기·주소창 직접 수정으로 드나들 때
+      if (nav.kind === 'trash') {
+        ;(async () => {
+          await beforeLeaveDoc()
+          if (location.hash !== hashAtEntry) return // await 중 주소가 또 바뀌었으면 뒤 핸들러에 맡긴다
+          leave()
+          setCurrentDocId(null)
+          setTrashOpen(true)
         })()
         return
       }
@@ -164,7 +188,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
           setCurrentDocId(fallbackId)
           if (fallbackId) setPref('md.lastDocId', fallbackId)
           replaceHashUrl(fallbackId)
-          showNotice({ type: 'info', message: '문서를 찾을 수 없습니다.' })
+          announceMissingDoc(docId, store.kind === 'server', showNotice)
         }
       })()
     }
@@ -172,7 +196,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [
-    bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment, setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute,
-    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, focusEditorRef, commentsRef, resyncList,
+    store, bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment, setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute,
+    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, focusEditorRef, commentsRef, resyncList,
   ])
 }

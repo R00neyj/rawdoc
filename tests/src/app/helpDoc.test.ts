@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { HELP_DOC_TITLE, HELP_DOC_CONTENT } from '../../../src/app/helpDoc'
+import { TRASH_RETENTION_DAYS } from '../../../src/lib/trash'
 import brand from '../../../brand.config'
 import { E2EE_DEFAULT_LOCK_MINUTES } from '../../../src/e2ee/keyring'
 import { E2EE_MAX_PLAIN_CONTENT_BYTES } from '../../../src/lib/e2eeLimits'
@@ -294,6 +295,15 @@ describe('F-2048 도움말 ## 이미지 절', () => {
     expect(section.body).toContain(`${MAX_RESULT_BYTES / 1024 / 1024}MB가 넘으면`)
     expect(section.body).toContain('`이미지 삭제`')
     expect(section.body).not.toContain('한 장에 20MB까지 넣을 수 있고')
+  })
+})
+
+describe('F-2145 도움말 ## 문서 관리 휴지통 문단', () => {
+  it('휴지통·복원 글자와 보관 일수가 상수 그대로 들어 있다 (R5)', () => {
+    const section = appSections().find((s) => s.name === '문서 관리')!
+    expect(section.body).toContain('`휴지통`')
+    expect(section.body).toContain('`복원`')
+    expect(section.body).toContain(`${TRASH_RETENTION_DAYS}일 뒤 영구히`)
   })
 })
 

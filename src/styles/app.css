@@ -5193,7 +5193,8 @@ body.sidebar-resizing {
 
 .shares-link-list,
 .shares-grant-list,
-.shares-request-list {
+.shares-request-list,
+.trash-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -5201,7 +5202,8 @@ body.sidebar-resizing {
 
 .shares-link-row,
 .shares-grant-row,
-.shares-request-row {
+.shares-request-row,
+.trash-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -5303,7 +5305,8 @@ body.sidebar-resizing {
 @container (max-width: 560px) {
   .shares-link-row,
   .shares-grant-row,
-  .shares-request-row {
+  .shares-request-row,
+  .trash-row {
     flex-wrap: wrap;
   }
 
@@ -5315,6 +5318,48 @@ body.sidebar-resizing {
     flex: 1 1 100%;
     justify-content: flex-end;
   }
+}
+
+/* S-10 휴지통 — 공유 관리 모양을 재사용하고 행 안쪽만 덧댄다 (F-2145) */
+.trash-page-note {
+  margin: -12px 0 20px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.trash-page-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trash-page-head-actions button:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.trash-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.trash-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.trash-row-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 /* S-9 CLI 로그인 화면 (specs/features/F-2021.md 6.3) */
@@ -6229,6 +6274,7 @@ body.sidebar-resizing {
   .share-set-notice,
   .share-set-row label,
   .shares-close,
+  .trash-row-title,
   .shares-group-title,
   .shares-group-empty,
   .shares-target-btn,
@@ -6287,6 +6333,7 @@ body.sidebar-resizing {
   .shares-role-badge,
   .shares-date,
   .shares-grant-email,
+  .trash-row-meta,
   .shares-row-actions button,
   .invite-input-group .invite-role-seg button,
   .invite-error,

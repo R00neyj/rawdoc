@@ -830,6 +830,7 @@ type SidebarProps = {
   onTogglePin: (id: string, pinned: boolean) => void
   onOpenSettings: () => void
   onOpenHelp: () => void
+  onOpenTrash?: () => void
   account: AccountMenuProps
   onOpenMap: () => void
   onOpenTemplates: () => void
@@ -889,6 +890,7 @@ export default function Sidebar({
   onTogglePin,
   onOpenSettings,
   onOpenHelp,
+  onOpenTrash,
   account,
   onOpenMap,
   onOpenTemplates,
@@ -1346,13 +1348,14 @@ export default function Sidebar({
         {isRail ? (
           <div className="sidebar-rail-bottom">
             {canInstall && <RailButton icon={IconInstall} label="앱 설치" onClick={onInstall} />}
+            {onOpenTrash && <RailButton icon={IconDelete} label="휴지통" onClick={onOpenTrash} />}
             <RailButton icon={IconHelp} label="도움말" onClick={onOpenHelp} />
             <RailButton icon={IconGuide} label="사용법" href={GUIDES_PATH} />
             <RailButton icon={IconSettings} label="설정" onClick={onOpenSettings} />
             <AccountMenu {...account} variant="rail" />
           </div>
         ) : (
-          <SidebarFooter account={account} canInstall={canInstall} onInstall={onInstall} onOpenHelp={onOpenHelp} onOpenSettings={onOpenSettings} />
+          <SidebarFooter account={account} canInstall={canInstall} onInstall={onInstall} onOpenHelp={onOpenHelp} onOpenTrash={onOpenTrash} onOpenSettings={onOpenSettings} />
         )}
       </div>
       {/* 너비 손잡이 — 레일·좁은 창에는 없다 (F-159 2.5) */}

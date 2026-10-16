@@ -7,10 +7,11 @@ export function topBarScreen(input: {
   sharedDoc: boolean
   sharesOpen: boolean
   helpOpen: boolean
+  trashOpen: boolean
   mapRoute: boolean
 }): TopBarScreen {
   if (input.bootPhase !== 'ready') return 'other'
-  if (input.sharedDoc || input.sharesOpen || input.helpOpen || input.mapRoute) return 'other'
+  if (input.sharedDoc || input.sharesOpen || input.helpOpen || input.trashOpen || input.mapRoute) return 'other'
   return input.currentDocId === null ? 'home' : 'doc'
 }
 

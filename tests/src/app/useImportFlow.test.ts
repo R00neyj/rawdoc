@@ -10,7 +10,7 @@ vi.mock('react', () => ({
 import { dropBlocks, shouldLeaveForMatchedDoc, useImportFlow as attachImportFlow } from '../../../src/app/useImportFlow'
 
 describe('shouldLeaveForMatchedDoc (F-2076 D1)', () => {
-  const base = { matchedId: 'A', currentDocId: 'A', sharedDoc: null, sharesOpen: false, helpOpen: false, mapRoute: null }
+  const base = { matchedId: 'A', currentDocId: 'A', sharedDoc: null, sharesOpen: false, helpOpen: false, trashOpen: false, mapRoute: null }
 
   it('같은 문서 화면이면 떠나지 않는다', () => {
     expect(shouldLeaveForMatchedDoc(base)).toBe(false)
@@ -20,7 +20,7 @@ describe('shouldLeaveForMatchedDoc (F-2076 D1)', () => {
     expect(shouldLeaveForMatchedDoc({ ...base, currentDocId: 'B' })).toBe(true)
   })
 
-  it.each([['sharedDoc', {}], ['sharesOpen', true], ['helpOpen', true], ['mapRoute', {}]] as const)('같은 문서라도 %s 이면 떠난다', (key, value) => {
+  it.each([['sharedDoc', {}], ['sharesOpen', true], ['helpOpen', true], ['trashOpen', true], ['mapRoute', {}]] as const)('같은 문서라도 %s 이면 떠난다', (key, value) => {
     expect(shouldLeaveForMatchedDoc({ ...base, [key]: value })).toBe(true)
   })
 })
@@ -58,13 +58,13 @@ describe('runImportFiles 대상 폴더', () => {
       store: { create, kind: 'local' }, folders: [{ id: 'f1', name: 'F', parentId: null }],
       currentDoc: { id: 'A', title: 'A', folderId: 'f1' }, bootPhase: 'ready',
       setDocs: vi.fn(), setFolders: vi.fn(), setCurrentDocId: vi.fn(), setOpenDoc: vi.fn(),
-      setEditorRemountNonce: vi.fn(), setSharedDoc: vi.fn(), setSharesOpen: vi.fn(), setHelpOpen: vi.fn(), setMapRoute: vi.fn(),
+      setEditorRemountNonce: vi.fn(), setSharedDoc: vi.fn(), setSharesOpen: vi.fn(), setHelpOpen: vi.fn(), setTrashOpen: vi.fn(), setMapRoute: vi.fn(),
       showNotice: vi.fn(), keepLiveTitle: vi.fn(), beforeLeaveDoc: vi.fn(async () => {}),
       addOpenFolders: vi.fn(), closeSidebarIfNarrow: vi.fn(), closeSettings: vi.fn(),
       ensureE2eeOpenForFolder, pushHashUrl: vi.fn(),
       importInputRef: ref(null), importZipInputRef: ref(null), importFolderInputRef: ref(null),
       docsRef: ref([]), foldersRef: ref([]), currentDocIdRef: ref('A'), sharedDocRef: ref(null),
-      sharesOpenRef: ref(false), helpOpenRef: ref(false), mapRouteRef: ref(null), docPathRef: ref(null),
+      sharesOpenRef: ref(false), helpOpenRef: ref(false), trashOpenRef: ref(false), mapRouteRef: ref(null), docPathRef: ref(null),
       focusEditorRef: ref(false), docSaverFlushRef: ref(() => {}), dropBlockedRef: ref(false),
       imageDropBlockedRef: ref(false), readOnlyDocRef: ref(false),
     } as unknown as Parameters<typeof attachImportFlow>[0])

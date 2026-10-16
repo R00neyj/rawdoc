@@ -191,3 +191,21 @@ describe('fetchPublicSet — links (F-2018 10.3 U22)', () => {
     expect(set.docs[1].links).toBeUndefined()
   })
 })
+
+describe('F-2145 U11 404 본문 deleted', () => {
+  const res404 = (body: unknown) => ({ status: 404, ok: false, json: async () => body })
+  const fetchers: [string, () => Promise<unknown>][] = [
+    ['fetchPublicDoc', () => fetchPublicDoc('tok')],
+    ['fetchPublicSetDoc', () => fetchPublicSetDoc('tok', 'd1')],
+    ['fetchPublicFolderDoc', () => fetchPublicFolderDoc('tok', 'd1')],
+  ]
+
+  it.each(fetchers)('%s: { error: deleted } 면 deleted, 다른 본문·본문 없음이면 not_found', async (_name, run) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res404({ error: 'deleted' })))
+    await expect(run()).rejects.toMatchObject({ kind: 'deleted' })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res404({ error: 'not_found' })))
+    await expect(run()).rejects.toMatchObject({ kind: 'not_found' })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 404, ok: false, json: async () => { throw new SyntaxError('x') } }))
+    await expect(run()).rejects.toMatchObject({ kind: 'not_found' })
+  })
+})

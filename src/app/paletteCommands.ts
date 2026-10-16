@@ -227,6 +227,14 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     run: (ctx) => ctx.nav?.openShares?.(),
   },
   {
+    id: 'nav.trash',
+    kind: 'action',
+    label: '휴지통 열기',
+    keywords: ['휴지통', 'trash', '복원', '지운 문서'],
+    when: (ctx) => Boolean(ctx.nav?.openTrash) && ctx.nav?.screen !== 'trash',
+    run: (ctx) => ctx.nav?.openTrash?.(),
+  },
+  {
     id: 'nav.settings',
     kind: 'action',
     label: '설정 열기',

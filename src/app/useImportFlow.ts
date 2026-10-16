@@ -56,6 +56,7 @@ export type UseImportFlowOptions = {
   setSharedDoc: Dispatch<SetStateAction<ShareDoc | null>>
   setSharesOpen: Dispatch<SetStateAction<boolean>>
   setHelpOpen: Dispatch<SetStateAction<boolean>>
+  setTrashOpen: Dispatch<SetStateAction<boolean>>
   setMapRoute: Dispatch<SetStateAction<{ centerDocId: string | null; returnDocId: string | null } | null>>
   showNotice: (input: NoticeWithAction) => number
   keepLiveTitle: (list: DocMeta[]) => DocMeta[]
@@ -74,6 +75,7 @@ export type UseImportFlowOptions = {
   sharedDocRef: RefObject<ShareDoc | null>
   sharesOpenRef: RefObject<boolean>
   helpOpenRef: RefObject<boolean>
+  trashOpenRef: RefObject<boolean>
   mapRouteRef: RefObject<unknown>
   docPathRef: RefObject<{ docId: string | null; path: DocPathKind | null }>
   focusEditorRef: RefObject<boolean>
@@ -116,12 +118,12 @@ export function shouldLeaveForMatchedDoc(s: ScreenState & { matchedId: string; c
 export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResult {
   const {
     store, folders, currentDoc, bootPhase, setDocs, setFolders, setCurrentDocId, setOpenDoc, setEditorRemountNonce, setSharedDoc, setSharesOpen,
-    setHelpOpen, setMapRoute, showNotice, keepLiveTitle, beforeLeaveDoc, addOpenFolders, closeSidebarIfNarrow, closeSettings,
+    setHelpOpen, setTrashOpen, setMapRoute, showNotice, keepLiveTitle, beforeLeaveDoc, addOpenFolders, closeSidebarIfNarrow, closeSettings,
     ensureE2eeOpenForFolder, pushHashUrl, importInputRef, importZipInputRef, importFolderInputRef, docsRef, foldersRef, currentDocIdRef,
-    sharedDocRef, sharesOpenRef, helpOpenRef, mapRouteRef, docPathRef, focusEditorRef, docSaverFlushRef, dropBlockedRef, imageDropBlockedRef,
+    sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, docPathRef, focusEditorRef, docSaverFlushRef, dropBlockedRef, imageDropBlockedRef,
     readOnlyDocRef,
   } = options
-  const leave = () => leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setMapRoute })
+  const leave = () => leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute })
   // 외부 .md 파일을 창 위로 끄는 동안의 덮개 (F-145.md 2.4)
   const [dropActive, setDropActive] = useState(false)
   // zip 가져오기 미리보기·진행·결과 대화상자 (F-282.md 3.8)
@@ -717,6 +719,7 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
           sharedDoc: sharedDocRef.current,
           sharesOpen: sharesOpenRef.current,
           helpOpen: helpOpenRef.current,
+          trashOpen: trashOpenRef.current,
           mapRoute: mapRouteRef.current,
         })
         if (shouldLeave) {

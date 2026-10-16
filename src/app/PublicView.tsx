@@ -84,7 +84,14 @@ type DocLoadState =
   | { status: 'loading' }
   | { status: 'ready'; doc: PublicDoc }
   | { status: 'not_found' }
+  | { status: 'deleted' }
   | { status: 'network' }
+
+// 문서 읽기 실패 → 칸 상태 (F-2145 4장 ①)
+function docErrorState(err: unknown): DocLoadState {
+  if (err instanceof PublicDocError && err.kind === 'deleted') return { status: 'deleted' }
+  return err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' }
+}
 
 // 공개 보기 설정 4개(테마·서체·글자 크기, F-230 2.1) — App 의 useAppearancePrefs 값을 받는다(테마 구독을 한 벌로, 2026-09-28)
 export type PublicSettings = {
@@ -212,6 +219,7 @@ function DocPane({
       </div>
       <div className="public-view-body content-area" ref={contentAreaRef}>
         {state.status === 'loading' && <p className="public-view-notice">불러오는 중…</p>}
+        {state.status === 'deleted' && <p className="public-view-notice">삭제된 문서입니다.</p>}
         {state.status === 'not_found' && <p className="public-view-notice">{notFoundMessage}</p>}
         {state.status === 'network' && (
           <div className="public-view-notice">
@@ -304,7 +312,7 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
       })
       .catch((err: unknown) => {
         if (cancelled || startRequestIdRef.current !== requestId) return
-        setStartState(err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' })
+        setStartState(docErrorState(err))
       })
     // 실패해도 시작 문서 표시는 막지 않는다 — 묶음을 못 받으면 위키링크는 plain (4.4)
     fetchPublicSet(token)
@@ -330,7 +338,7 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
       })
       .catch((err: unknown) => {
         if (cancelled || docRequestIdRef.current !== requestId) return
-        setDocResult({ forId: id, state: err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' } })
+        setDocResult({ forId: id, state: docErrorState(err) })
       })
     return () => {
       cancelled = true
@@ -460,7 +468,7 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
         })
         .catch((err: unknown) => {
           if (startRequestIdRef.current !== requestId) return
-          setStartState(err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' })
+          setStartState(docErrorState(err))
         })
       return
     }
@@ -473,7 +481,7 @@ function PublicDocView({ token, settings }: { token: string; settings: PublicSet
       })
       .catch((err: unknown) => {
         if (docRequestIdRef.current !== requestId) return
-        setDocResult({ forId: id, state: err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' } })
+        setDocResult({ forId: id, state: docErrorState(err) })
       })
   }
 
@@ -561,7 +569,7 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
         if (cancelled || docRequestIdRef.current !== requestId) return
         setDocResult({
           forId: activeDocId,
-          state: err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' },
+          state: docErrorState(err),
         })
       })
     return () => {
@@ -675,7 +683,7 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
         if (docRequestIdRef.current !== requestId) return
         setDocResult({
           forId: activeDocId,
-          state: err instanceof PublicDocError && err.kind === 'not_found' ? { status: 'not_found' } : { status: 'network' },
+          state: docErrorState(err),
         })
       })
   }
