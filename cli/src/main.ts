@@ -197,6 +197,33 @@ async function writeTextFile(deps: MainDeps, path: string, content: string): Pro
   }
 }
 
+type ImageRow = { name: string; file: string | null; skipped: commands.DocImage['skipped'] }
+
+// 받지 못한 이미지는 표준 오류에 알리고 행에는 file: null 로 남긴다
+async function saveImages(deps: MainDeps, cfg: ClientConfig, doc: { id: string; content: string }, dir: string): Promise<ImageRow[]> {
+  const rows: ImageRow[] = []
+  for (const image of await commands.images(cfg, doc)) {
+    if (image.bytes === null) {
+      rows.push({ name: image.name, file: null, skipped: image.skipped })
+      deps.out.stderr(`attachments/${image.name}: ${image.skipped === 'encrypted' ? '금고 이미지라 받지 않았습니다' : '서버에 없습니다'}\n`)
+      continue
+    }
+    const file = joinReal(dir, image.name)
+    try {
+      await deps.writeBytes(file, image.bytes)
+    } catch {
+      throw new CliError('file_write', { path: file })
+    }
+    rows.push({ name: image.name, file, skipped: null })
+  }
+  if (rows.length === 0) deps.out.stderr('이 문서에는 올린 이미지가 없습니다.\n')
+  return rows
+}
+
+function printImageRows(deps: MainDeps, rows: ImageRow[]): void {
+  for (const row of rows) if (row.file !== null) deps.out.stdout(`attachments/${row.name}\t${row.file}\n`)
+}
+
 // 없거나 모양이 어긋난 기록은 null
 async function readSidecar(deps: MainDeps, file: string): Promise<Sidecar | null> {
   try {
@@ -549,37 +576,26 @@ export async function main(deps: MainDeps): Promise<number> {
           await writeTextFile(deps, command.output, doc.content)
           await writeTextFile(deps, sidecarPathOf(command.output), serializeSidecar({ id: doc.id, version: doc.version, base: doc.content }))
         }
+        // 원문의 상대 경로 attachments/… 와 맞도록 받은 파일 옆 attachments/ 에 둔다
+        const saved = command.output && command.images ? await saveImages(deps, cfg, doc, joinReal(dirnameReal(command.output), 'attachments')) : null
         if (command.global.json) {
-          const body: Partial<V1Doc> = { ...doc }
+          const body: Partial<V1Doc> & { images?: ImageRow[] } = { ...doc }
           if (command.output) delete body.content
+          if (saved) body.images = saved
           deps.out.stdout(`${JSON.stringify(body)}\n`)
         } else if (command.output) {
           deps.out.stdout(humanIdVersionLine(doc.id, doc.version))
+          if (saved) printImageRows(deps, saved)
         } else {
           deps.out.stdout(doc.content)
         }
         return 0
       }
       case 'images': {
-        const result = await commands.images(cfg, command.id)
-        const rows: Array<{ name: string; file: string | null; skipped: commands.DocImage['skipped'] }> = []
-        for (const image of result.images) {
-          if (image.bytes === null) {
-            rows.push({ name: image.name, file: null, skipped: image.skipped })
-            deps.out.stderr(`attachments/${image.name}: ${image.skipped === 'encrypted' ? '금고 이미지라 받지 않았습니다' : '서버에 없습니다'}\n`)
-            continue
-          }
-          const file = joinReal(command.dir, image.name)
-          try {
-            await deps.writeBytes(file, image.bytes)
-          } catch {
-            throw new CliError('file_write', { path: file })
-          }
-          rows.push({ name: image.name, file, skipped: null })
-        }
-        if (command.global.json) deps.out.stdout(`${JSON.stringify({ id: result.id, images: rows })}\n`)
-        else for (const row of rows) if (row.file !== null) deps.out.stdout(`attachments/${row.name}\t${row.file}\n`)
-        if (result.images.length === 0) deps.out.stderr('이 문서에는 올린 이미지가 없습니다.\n')
+        const doc = await commands.get(cfg, command.id)
+        const rows = await saveImages(deps, cfg, doc, command.dir)
+        if (command.global.json) deps.out.stdout(`${JSON.stringify({ id: doc.id, images: rows })}\n`)
+        else printImageRows(deps, rows)
         return 0
       }
       case 'diff': {

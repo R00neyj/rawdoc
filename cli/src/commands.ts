@@ -269,8 +269,8 @@ function isImageBytes(b: Uint8Array): boolean {
   return head.startsWith('\x89PNG') || head.startsWith('\xff\xd8\xff') || head.startsWith('GIF8') || (head.startsWith('RIFF') && head.slice(8) === 'WEBP')
 }
 
-export async function images(cfg: ClientConfig, id: string): Promise<{ id: string; images: DocImage[] }> {
-  const doc = await apiGetDoc(cfg, id)
+// get 이 이미 받은 원문을 그대로 쓴다 — images 명령은 먼저 get 으로 받는다
+export async function images(cfg: ClientConfig, doc: { id: string; content: string }): Promise<DocImage[]> {
   const names = [...new Set(Array.from(doc.content.matchAll(/attachments\/([0-9a-f]{16}\.(?:png|jpg|gif|webp))/g), (m) => m[1]))]
   const out: DocImage[] = []
   for (const name of names) {
@@ -282,7 +282,7 @@ export async function images(cfg: ClientConfig, id: string): Promise<{ id: strin
       else throw err
     }
   }
-  return { id: doc.id, images: out }
+  return out
 }
 
 export function link(cfg: ClientConfig, id: string): Promise<V1Link> {

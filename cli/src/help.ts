@@ -41,8 +41,8 @@ const COMMAND_DESCRIPTIONS: Record<CommandName, string> = {
   search: '제목·본문에 그 글자가 든 내 문서와 줄을 찾습니다 (금고 문서 제외)',
   replace: '여러 문서 본문에서 글자를 찾아 바꿉니다 (--yes 없으면 미리 보기만)',
   info: '문서 정보(폴더 경로·판 번호·시각·주소)를 내용 없이 보여 줍니다',
-  get: '문서 원문을 출력합니다 (-o 는 파일과 판 번호 기록을 함께 저장)',
-  images: '문서에 든 이미지를 파일로 받습니다 (AI 도구가 그림을 볼 때)',
+  get: '문서 원문을 출력합니다 (-o 는 파일과 판 번호 기록을 함께 저장, --images 는 이미지도 옆 attachments/ 에)',
+  images: '문서에 든 이미지만 attachments/ 폴더에 받습니다 (AI 도구가 그림을 볼 때)',
   diff: '서버의 지금 원문과 파일의 차이를 unified diff 로 보여 줍니다',
   new: '새 문서를 만듭니다',
   put: '문서를 고칩니다 (--base-version <n|auto> 또는 --force 필요, --dry-run 은 미리 보기. 자세히: put --help)',
@@ -67,7 +67,7 @@ export function helpText(version: string): string {
   lines.push('Windows PowerShell 5.1 에서는 > 대신 -o 로 저장하세요. > 는 파일을 UTF-16 으로 바꿉니다.')
   lines.push(`AI 도구에서 쓸 때는 npx -y ${CLI} … 또는 ${ENV_PREFIX}_TOKEN 환경 변수를 쓰세요.`)
   lines.push(`문서를 고치는 순서: ${EDIT_ORDER}. 종료 코드 5 면 ${CLI} merge <id> 파일.md 로 합친 뒤 다시 put 하세요.`)
-  lines.push(`문서에 이미지가 있으면 ${CLI} images <id> -o 폴더 로 받아 그림을 직접 보게 하세요.`)
+  lines.push(`문서에 이미지가 있으면 ${CLI} get <id> -o 파일.md --images 로 원문과 이미지를 함께 받아 그림을 직접 보게 하세요.`)
   lines.push('모든 명령은 --json 을 받습니다. 결과는 표준 출력에, 오류는 표준 오류에 JSON 한 줄로 씁니다.')
   lines.push(`AI 도구가 문서를 쓰기 전에 ${CLI} syntax 로 콜아웃·위키링크 같은 문법을 확인하게 하세요.`)
   return lines.join('\n') + '\n'
@@ -140,17 +140,22 @@ const COMMAND_DETAILS: Partial<Record<CommandName, string[]>> = {
   info: ['내용 없이 문서 정보를 보여 줍니다. url 줄은 앱에서 그 문서를 여는 주소입니다.'],
   get: [
     '',
-    `사용: ${CLI} get <id> [-o <파일>]`,
-    ...optionLines([['-o, --output <파일>', '원문을 그 파일에 UTF-8 로 씁니다. 표준 출력에는 id 와 판 번호만']]),
+    `사용: ${CLI} get <id> [-o <파일> [--images]]`,
+    ...optionLines([
+      ['-o, --output <파일>', '원문을 그 파일에 UTF-8 로 씁니다. 표준 출력에는 id 와 판 번호만'],
+      ['--images', '이미지도 그 파일 옆 attachments/ 에 받습니다. 원문 경로 그대로 열려 그림이 보입니다'],
+    ]),
     `-o 로 받으면 옆에 ${SIDECAR} 기록도 씁니다. {"id","version","base"} JSON 한 줄이고 base 는 받은 원문입니다.`,
     'put --base-version auto 와 merge 가 이 기록을 읽습니다. 지워도 되지만 그러면 두 기능을 쓸 수 없습니다.',
+    '--images 는 둘째 줄부터 원문 경로와 받은 파일 경로를 탭으로 나눠 씁니다. --json 이면 images: [{name, file, skipped}] 를 더합니다.',
   ],
   images: [
     '',
     `사용: ${CLI} images <id> [-o <폴더>]`,
-    ...optionLines([['-o, --output <폴더>', '받을 폴더. 없으면 만듭니다. 빼면 지금 폴더']]),
+    ...optionLines([['-o, --output <폴더>', '받을 폴더. 없으면 만듭니다. 빼면 지금 폴더의 attachments/']]),
     '원문의 attachments/… 이미지를 {이름}.{확장자} 파일로 받고, 한 줄에 원문 경로와 받은 파일 경로를 탭으로 나눠 씁니다.',
     '서버에 없는 이미지와 금고 이미지(암호문)는 받지 않고 표준 오류에 알립니다. --json 이면 {id, images: [{name, file, skipped}]}.',
+    `원문과 함께 받으려면 ${CLI} get <id> -o 파일.md --images 를 쓰세요.`,
   ],
   diff: [
     '',

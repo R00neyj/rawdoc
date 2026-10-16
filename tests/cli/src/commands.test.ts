@@ -352,18 +352,18 @@ describe('images (small 2026-10-16)', () => {
     const urls: string[] = []
     const fetchImpl = fakeFetch((url) => {
       urls.push(url)
-      if (url.endsWith('/v1/docs/d1')) return jsonResponse({ id: 'd1', version: 1, content, title: 't', lineEnding: 'lf', folderId: null, pinnedAt: null, createdAt: 0, updatedAt: 0 })
+      if (url.endsWith('/v1/docs/d1')) throw new Error('images 는 원문을 다시 받지 않는다')
       if (url.includes('aaaa')) return new Response(webp)
       if (url.includes('bbbb')) return new Response(new Uint8Array([1, 2, 3, 4]))
       return jsonResponse({ error: 'not_found' }, 404)
     })
-    const result = await images(baseCfg(fetchImpl as unknown as typeof fetch), 'd1')
-    expect(urls.slice(1)).toEqual([
+    const result = await images(baseCfg(fetchImpl as unknown as typeof fetch), { id: 'd1', content })
+    expect(urls).toEqual([
       'https://rawdoc.app/v1/attachments/aaaaaaaaaaaaaaaa.webp?doc=d1',
       'https://rawdoc.app/v1/attachments/bbbbbbbbbbbbbbbb.png?doc=d1',
       'https://rawdoc.app/v1/attachments/cccccccccccccccc.png?doc=d1',
     ])
-    expect(result.images).toEqual([
+    expect(result).toEqual([
       { name: 'aaaaaaaaaaaaaaaa.webp', bytes: webp, skipped: null },
       { name: 'bbbbbbbbbbbbbbbb.png', bytes: null, skipped: 'encrypted' },
       { name: 'cccccccccccccccc.png', bytes: null, skipped: 'missing' },

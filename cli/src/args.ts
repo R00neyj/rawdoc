@@ -23,7 +23,7 @@ export type RunCommand =
       baseVersion: number | null
     }
   | { name: 'info'; global: GlobalOptions; id: string }
-  | { name: 'get'; global: GlobalOptions; id: string; output: string | null }
+  | { name: 'get'; global: GlobalOptions; id: string; output: string | null; images: boolean }
   | { name: 'images'; global: GlobalOptions; id: string; dir: string }
   | { name: 'diff'; global: GlobalOptions; id: string; source: string }
   | { name: 'new'; global: GlobalOptions; source: string | null; title: string | null; folder: string | null; url: boolean }
@@ -233,18 +233,15 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       return { kind: 'run', command: { name: 'info', global: globalsOf(parsed.values), id: parsed.positionals[0] } }
     }
     case 'get': {
-      const options: OptionSchema = { ...GLOBAL_OPTIONS, output: { type: 'string', short: 'o' } }
+      const options: OptionSchema = { ...GLOBAL_OPTIONS, output: { type: 'string', short: 'o' }, images: { type: 'boolean' } }
       const parsed = runParseArgs(rest, options, true)
       if (!parsed) return usage('알 수 없는 옵션입니다.', command)
       if (parsed.positionals.length !== 1) return usage('문서 id 가 필요합니다.', command)
+      const output = typeof parsed.values.output === 'string' ? parsed.values.output : null
+      if (parsed.values.images === true && output === null) return usage('--images 는 -o <파일> 과 함께 씁니다.', command)
       return {
         kind: 'run',
-        command: {
-          name: 'get',
-          global: globalsOf(parsed.values),
-          id: parsed.positionals[0],
-          output: typeof parsed.values.output === 'string' ? parsed.values.output : null,
-        },
+        command: { name: 'get', global: globalsOf(parsed.values), id: parsed.positionals[0], output, images: parsed.values.images === true },
       }
     }
     case 'images': {
@@ -252,7 +249,7 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       const parsed = runParseArgs(rest, options, true)
       if (!parsed) return usage('알 수 없는 옵션입니다.', command)
       if (parsed.positionals.length !== 1) return usage('문서 id 가 필요합니다.', command)
-      const dir = typeof parsed.values.output === 'string' ? parsed.values.output : '.'
+      const dir = typeof parsed.values.output === 'string' ? parsed.values.output : 'attachments'
       return { kind: 'run', command: { name: 'images', global: globalsOf(parsed.values), id: parsed.positionals[0], dir } }
     }
     case 'diff': {

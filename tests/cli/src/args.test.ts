@@ -36,8 +36,13 @@ describe('F-2021 U1 args.ts — 명령마다 해석', () => {
     const r = parseArgs(['get', 'd1', '-o', 'out.md'])
     expect(r).toEqual({
       kind: 'run',
-      command: { name: 'get', global: { server: null, json: false }, id: 'd1', output: 'out.md' },
+      command: { name: 'get', global: { server: null, json: false }, id: 'd1', output: 'out.md', images: false },
     })
+  })
+
+  it('get --images 는 -o 가 있어야 한다', () => {
+    expect(parseArgs(['get', 'd1', '--images']).kind).toBe('usage')
+    expect(parseArgs(['get', 'd1', '-o', 'a/out.md', '--images'])).toMatchObject({ kind: 'run', command: { output: 'a/out.md', images: true } })
   })
 
   it('get 인자 없으면 usage', () => {
