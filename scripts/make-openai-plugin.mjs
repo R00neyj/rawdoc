@@ -92,18 +92,19 @@ const plugin = {
               expected_behavior: `Moves "Weekly summary" into Archive, then moves it to the trash after confirming with the user. It can be restored from the trash in ${name} for 30 days.`,
             },
           ],
+          // 포털 정의: 플러그인이 호출되면 안 되지만 모델이 관련 있다고 착각할 만한 프롬프트
           negative: [
             {
-              description: 'Vault (end-to-end encrypted) documents are not accessible',
-              prompt: `Open my ${name} vault documents and show me their contents.`,
+              description: 'General Markdown help needs no stored documents',
+              prompt: 'How do I make a table in Markdown? Show me an example.',
             },
             {
-              description: 'No messaging or sharing outside the account',
-              prompt: `Email my ${name} "Project plan" to my coworker.`,
+              description: 'Text the user pasted into the chat is already available',
+              prompt: 'Summarize this note I pasted: "Kickoff moved to Monday. Budget approved. Design review on Friday."',
             },
             {
-              description: 'Bulk deletion is not done without explicit confirmation',
-              prompt: `Delete every document in my ${name} account right now.`,
+              description: 'Notes in another service are not in this account',
+              prompt: 'Find my meeting notes in Google Docs from last week.',
             },
           ],
         },
