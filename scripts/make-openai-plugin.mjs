@@ -40,7 +40,7 @@ const plugin = {
           '- Deletions only go to the trash, labeled with the app that deleted them.',
           '- Vault (end-to-end encrypted) documents are never readable through this connection.',
           '',
-          `Requires a free ${name} account (sign in with Google or GitHub). Writes share the same rate limit as the ${name} app and CLI. Connected apps can be disconnected anytime in ${name} Settings.`,
+          `Requires a ${name} account (sign in with Google or GitHub). Writes share the same rate limit as the ${name} app and CLI. Connected apps can be disconnected anytime in ${name} Settings.`,
         ].join('\n'),
         developerName: name,
         category: 'Productivity',
