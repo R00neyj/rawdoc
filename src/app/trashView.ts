@@ -5,9 +5,9 @@ import { displayDocTitle } from './docMeta'
 const DAY_MS = 24 * 60 * 60 * 1000
 
 export const TRASH_HEAD_NOTE = `${TRASH_RETENTION_DAYS}일이 지나면 영구히 지워집니다.`
+export const TRASH_HEAD_NOTE_LOCAL = `이 브라우저에 저장된 문서 · ${TRASH_HEAD_NOTE}`
 
 export const TRASH_STATE_TEXT = {
-  loggedOut: '로그인하면 휴지통을 볼 수 있습니다.',
   loading: '불러오는 중…',
   offline: '인터넷에 연결되어 있지 않아 휴지통을 볼 수 없습니다.',
   failed: '휴지통을 불러오지 못했습니다.',
@@ -42,7 +42,8 @@ function remaining(purgeAt: number, now: number): string {
   return n >= 1 ? `${n}일 남음` : '곧 지워짐'
 }
 
-function actorText(deletedBy: string): string | null {
+function actorText(deletedBy: string | undefined): string | null {
+  if (deletedBy === undefined) return null
   if (deletedBy === 'app') return '앱에서 지움'
   if (deletedBy === 'cli') return 'CLI에서 지움'
   if (deletedBy.startsWith('mcp:')) {

@@ -141,6 +141,7 @@
 |`src/app/liveDoc.ts`|실시간 편집 연결의 대기 시간·재연결 간격·끊김 판단 규칙을 정함|
 |`src/app/liveMerge.ts`|연결이 끊긴 동안 내 수정과 서버 쪽 수정이 겹쳤는지 알아내 알림을 띄움|
 |`src/app/liveNotices.ts`|실시간 편집이 끊기거나 멈췄을 때 보여 줄 안내 문구를 고름|
+|`src/app/localTrash.ts`|로그인하지 않은 문서의 휴지통 목록·복원·영구 삭제를 휴지통 화면에 이어 주고, 앱을 열 때 30일 지난 문서를 지움|
 |`src/app/mapIndex.ts`|문서 지도에 쓸 문서 간 연결 목록을 만들고 바뀐 문서만 다시 계산함|
 |`src/app/MapLabels.tsx`|문서 연결 지도 위에 문서 이름표를 겹쳐 띄움|
 |`src/app/MapPage.tsx`|문서끼리의 링크를 보여주는 지도 전체 화면|
@@ -226,7 +227,7 @@
 |`src/app/topBarMore.ts`|휴대폰 상단바 ⋯ 메뉴에 보일 항목을 정함|
 |`src/app/TopBarMoreSheet.tsx`|휴대폰 상단바 `더보기`로 여는 목차·댓글·공유·내보내기·알림 시트|
 |`src/app/trashApi.ts`|휴지통 목록·복원·영구 삭제·비우기 요청을 서버에 보냄|
-|`src/app/TrashPage.tsx`|지운 문서를 모아 보여 주고 복원·영구 삭제하는 휴지통 화면|
+|`src/app/TrashPage.tsx`|지운 문서를 모아 보여 주고 복원·영구 삭제하는 휴지통 화면(서버·브라우저 저장소 모두)|
 |`src/app/trashView.ts`|휴지통 화면의 행 설명·알림·확인 창 문구를 정함|
 |`src/app/useAccountDelete.ts`|계정 삭제 예약과 남은 기간 안내, 취소를 처리함|
 |`src/app/useAccountStatus.ts`|계정 상태·이용 차단·경고 알림을 확인해 보여 줌|
@@ -295,7 +296,7 @@
 |`src/app/useTemplateManager.ts`|템플릿 관리 창에서 템플릿 만들기·편집·삭제를 처리함|
 |`src/app/useTitleCommit.ts`|문서 제목을 저장하고 빈 제목이면 이전 제목으로 되돌림|
 |`src/app/useToolbarDock.ts`|휴대폰에서 서식 도구 막대를 화면 아래에 붙여 보여 줌|
-|`src/app/useTrashPage.ts`|휴지통 화면에 들어올 때 목록을 불러오고 복원·삭제 결과를 반영함|
+|`src/app/useTrashPage.ts`|휴지통 화면에 들어올 때 지금 저장소(서버나 이 브라우저)의 목록을 불러오고 복원·삭제 결과를 반영함|
 |`src/app/useUserCss.ts`|사용자 꾸밈 CSS를 적용하고 다른 탭 변경·안전 모드를 처리함|
 |`src/app/useVaultGate.ts`|사이드바 금고 폴더 잠금·펼침과 금고 상태 읽기를 맡음|
 |`src/app/useViewFind.ts`|보기 모드에서 문서 안 글자 찾기를 처리함|
@@ -483,7 +484,7 @@
 |`src/storage/apiTokensApi.ts`|외부 도구용 접근 열쇠를 서버에서 만들고 보고 지움|
 |`src/storage/attachmentsApi.ts`|첨부 이미지를 서버에 올리고 받아 옴|
 |`src/storage/docsApi.ts`|문서·폴더를 서버에 저장하고 불러오며 오류 종류를 가림|
-|`src/storage/idbStore.ts`|로그인하지 않았을 때 문서를 브라우저 안에 저장함|
+|`src/storage/idbStore.ts`|로그인하지 않았을 때 문서를 브라우저 안에 저장하고, 지운 문서는 휴지통 표시를 달아 둠|
 |`src/storage/liveSocket.ts`|실시간 함께 편집을 위해 서버와 연결을 유지함|
 |`src/storage/memoryStore.ts`|브라우저 저장을 못 쓸 때 임시로 문서를 메모리에 둠|
 |`src/storage/openStore.ts`|로그인 여부에 따라 문서를 어디에 저장할지 고름|

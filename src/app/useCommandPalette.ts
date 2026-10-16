@@ -34,7 +34,7 @@ import type { UseSidebarLayoutResult } from './useSidebarLayout'
 import type { UseAppearancePrefsResult } from './useAppearancePrefs'
 import type { ExportActions } from './exportActions'
 import type { UseFolderActionsResult } from './useFolderActions'
-import type { Folder, Store } from '../types'
+import type { Folder } from '../types'
 
 export type UseCommandPaletteOptions = {
   paletteOpen: boolean
@@ -45,7 +45,6 @@ export type UseCommandPaletteOptions = {
   runAfterPaletteClose: (fn: () => void) => void
   closeContextMenu: () => void
   openPaletteFromRef: RefObject<(fromEditor: boolean | undefined) => void>
-  store: Pick<Store, 'kind'>
   bootPhase: 'booting' | 'ready'
   docs: DocMeta[]
   folders: Folder[]
@@ -130,7 +129,7 @@ export type UseCommandPaletteResult = {
 export function useCommandPalette(options: UseCommandPaletteOptions): UseCommandPaletteResult {
   const {
     paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose, closeContextMenu, openPaletteFromRef,
-    store, bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
+    bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
     account, e2ee, statusBarVisible, canInviteCurrentDoc, commentAccessValue, comments, editorRef, currentDocIdRef, readOnlyDocRef, sidebarCommandRef,
     showNotice, templateEntries, readTemplateDocText, openShortcuts, notificationsEnabled, setNotificationsOpen, wikiResolver, currentFolderId,
     narrow, sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebar, closeSidebarIfNarrow, themePref, lineNumbersPref, toolbarPref,
@@ -382,7 +381,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
       openGuides: () => window.open(GUIDES_PATH, '_blank', 'noopener,noreferrer'),
       openSettings: () => runAfterPaletteClose(() => openSettings()),
       openShares: account.state === 'in' ? () => { location.hash = '#/shares' } : undefined,
-      openTrash: store.kind === 'server' ? () => { location.hash = '#/trash' } : undefined,
+      openTrash: () => { location.hash = '#/trash' },
     },
     docActions: {
       newDoc: () => runAfterPaletteClose(() => void createNewDoc()),

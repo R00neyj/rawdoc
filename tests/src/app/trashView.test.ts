@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { TrashItem } from '../../../src/lib/trash'
 import {
-  DELETE_TRASH_TEXT, emptiedNotice, emptyConfirm, purgeOneConfirm, purgeOneNotice, restoreNotice, trashItemTitle, trashRowMeta,
+  DELETE_TRASH_TEXT, emptiedNotice, emptyConfirm, purgeOneConfirm, purgeOneNotice, restoreNotice, TRASH_HEAD_NOTE, TRASH_HEAD_NOTE_LOCAL, trashItemTitle, trashRowMeta,
 } from '../../../src/app/trashView'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -46,6 +46,16 @@ describe('F-2145 U4 trashRowMeta ④ 지운 주체', () => {
     expect(actorPart('mcp:Claude')).toBe('Claude에서 지움')
     expect(actorPart('mcp:')).toBe('연결된 앱에서 지움')
     expect(actorPart('web')).toBeUndefined()
+  })
+})
+
+describe('로컬 휴지통 행·머리 (small 2026-10-16)', () => {
+  it('지운 주체가 없으면 경로·지운 때·남은 날 셋만', () => {
+    expect(trashRowMeta(item({ deletedBy: undefined }), NOW)).toBe('A/B · 오늘 · 30일 남음')
+  })
+  it('머리 안내는 이 브라우저에 저장된 문서를 앞에 붙인다', () => {
+    expect(TRASH_HEAD_NOTE_LOCAL).toBe(`이 브라우저에 저장된 문서 · ${TRASH_HEAD_NOTE}`)
+    expect(TRASH_HEAD_NOTE_LOCAL).toBe('이 브라우저에 저장된 문서 · 30일이 지나면 영구히 지워집니다.')
   })
 })
 

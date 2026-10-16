@@ -1234,7 +1234,7 @@ export default function App() {
   // ----- 명령 팔레트 열기·템플릿 넣기·context 조립 (F-2078) -----
   const { openPalette, paletteContext } = useCommandPalette({
     paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose, closeContextMenu, openPaletteFromRef,
-    store, bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
+    bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
     account, e2ee, statusBarVisible, canInviteCurrentDoc, commentAccessValue, comments, editorRef, currentDocIdRef, readOnlyDocRef, sidebarCommandRef,
     showNotice, templateEntries, readTemplateDocText, openShortcuts, notificationsEnabled, setNotificationsOpen, wikiResolver, currentFolderId,
     narrow, sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebar, closeSidebarIfNarrow, themePref, lineNumbersPref, toolbarPref,
@@ -1343,7 +1343,7 @@ export default function App() {
           onTogglePin={handleTogglePin}
           onOpenSettings={openSettings}
           onOpenHelp={openHelp}
-          onOpenTrash={store.kind === 'server' ? openTrash : undefined}
+          onOpenTrash={openTrash}
           account={{
             account,
             onBeforeNavigate: async () => {

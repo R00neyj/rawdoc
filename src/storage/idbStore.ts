@@ -4,10 +4,11 @@ import { openDB, type IDBPDatabase, type IDBPTransaction } from 'idb'
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
 import { extractAttachmentRefs } from '../lib/imageBlock'
 import { parseCommentRecords, type CommentRecord } from '../lib/docComments'
+import { restoreFolderId, trashPathOf } from '../lib/trash'
 import type { Store, Doc, Folder, Attachment, AttachmentExt, FolderDeleteMode } from '../types'
 
 export const DEFAULT_DB_NAME = 'md-docs'
-const DB_VERSION = 6
+const DB_VERSION = 7
 const DOCS_STORE = 'docs'
 const META_STORE = 'meta'
 const FOLDERS_STORE = 'folders'
@@ -15,6 +16,7 @@ const ATTACHMENTS_STORE = 'attachments' // F-156.md 2.3, 버전 3
 const FILE_HANDLES_STORE = 'fileHandles' // F-231.md 2장, 버전 4 — docId ↔ FileSystemFileHandle
 const E2EE_STORE = 'e2ee' // F-404.md 5.1, 버전 5 — 로컬 금고 행 local·계정 금고 캐시 행 account:{userId}
 const COMMENTS_STORE = 'comments' // F-508.md 3.1·4장, 버전 6 — keyPath docId, 문서 하나에 행 하나
+const TRASH_INDEX = 'deletedAt' // 버전 7 — 휴지통 행만 담기는 docs 색인 (small 2026-10-16)
 
 // 로컬 문서 댓글 기록 행 — 본문과 같은 트랜잭션에 쓴다 (F-508.md 3.1)
 export type LocalCommentsRow = { docId: string; v: 1; records: CommentRecord[]; updatedAt: number }
@@ -26,10 +28,17 @@ export type E2eeRow =
   | { id: 'local'; bundle: string; updatedAt: number; migratedTo?: string[] } // 로그인 이관을 끝낸 계정 id (F-408)
   | { id: `account:${string}`; bundle: string; rev: number; updatedAt: number }
 
-// 저장소에 실제로 든 문서 모양 — 옛 스키마 문서는 folderId·pinnedAt 이 없을 수 있다
+// 저장소에 실제로 든 문서 모양 — 옛 스키마 문서는 folderId·pinnedAt 이 없을 수 있다. deletedAt 이 있으면 휴지통 행
 type StoredDoc = Omit<Doc, 'folderId' | 'pinnedAt'> & {
   folderId?: string | null
   pinnedAt?: number | null
+  deletedAt?: number
+  deletedPath?: string | null
+}
+
+// 휴지통 행은 list·get·쓰기에서 없는 문서로 본다 (small 2026-10-16)
+function liveRow(row: StoredDoc | undefined): StoredDoc | undefined {
+  return row && row.deletedAt === undefined ? row : undefined
 }
 
 // 소문자 16진수 16자 (crypto.getRandomValues 8바이트, F-156.md 2.1)
@@ -109,6 +118,9 @@ function upgradeMdDocs(
   if (oldVersion < 6) {
     database.createObjectStore(COMMENTS_STORE, { keyPath: 'docId' })
   }
+  if (oldVersion < 7) {
+    transaction.objectStore(DOCS_STORE).createIndex(TRASH_INDEX, 'deletedAt')
+  }
   transaction.objectStore(META_STORE).put({ key: 'schema', version: DB_VERSION })
 }
 
@@ -171,20 +183,35 @@ export async function createIdbStore(
     return { id, ext }
   }
 
+  // 휴지통 행만 지우고 연결된 fileHandles·댓글 기록도 함께 지운다 — 고아 방지 (F-231.md 3.1, F-508.md 8장)
+  async function purgeTrashedRows(ids: string[]): Promise<number> {
+    const tx = db.transaction([DOCS_STORE, FILE_HANDLES_STORE, COMMENTS_STORE], 'readwrite')
+    const docStore = tx.objectStore(DOCS_STORE)
+    let purged = 0
+    for (const id of ids) {
+      const row: StoredDoc | undefined = await docStore.get(id)
+      if (row?.deletedAt === undefined) continue
+      await Promise.all([docStore.delete(id), tx.objectStore(FILE_HANDLES_STORE).delete(id), tx.objectStore(COMMENTS_STORE).delete(id)])
+      purged++
+    }
+    await tx.done
+    return purged
+  }
+
   return {
     kind: 'idb',
 
     async list() {
       const all: StoredDoc[] = await db.getAll(DOCS_STORE)
-      return all.map(normalizeDoc).sort((a, b) => b.updatedAt - a.updatedAt)
+      return all.filter((d) => d.deletedAt === undefined).map(normalizeDoc).sort((a, b) => b.updatedAt - a.updatedAt)
     },
 
     async get(id) {
-      const doc: StoredDoc | undefined = await db.get(DOCS_STORE, id)
+      const doc = liveRow(await db.get(DOCS_STORE, id))
       return doc ? normalizeDoc(doc) : null
     },
 
-    // id 가 이미 있으면 던진다(덮지 않는다). 가져오기(F-282)가 id·시각·고정을 유지할 때만 준다 (F-282.md 3.11)
+    // 살아 있는 id 면 던진다(덮지 않는다). 가져오기(F-282)가 id·시각·고정을 유지할 때만 준다 (F-282.md 3.11)
     async create({ title, content, lineEnding, folderId = null, id, createdAt, updatedAt, pinnedAt, e2eeKey, attachmentRefs }) {
       // folderId 가 null 또는 존재하는 폴더가 아니면 문서를 만들지 않는다 (F-136.md 3.1·3.2)
       const folders: Folder[] = await db.getAll(FOLDERS_STORE)
@@ -192,8 +219,10 @@ export async function createIdbStore(
         throw new Error(`유효하지 않은 folderId: ${String(folderId)}`)
       }
       if (id !== undefined) {
-        const existing = await db.get(DOCS_STORE, id)
-        if (existing) throw new Error(`이미 있는 id: ${id}`)
+        const existing: StoredDoc | undefined = await db.get(DOCS_STORE, id)
+        // 같은 id 의 휴지통 행은 가져오는 쪽이 이긴다 — 내보내기 → 지우기 → 가져오기 왕복 (F-282 A12)
+        if (existing?.deletedAt !== undefined) await purgeTrashedRows([id])
+        else if (existing) throw new Error(`이미 있는 id: ${id}`)
       }
       const now = Date.now()
       const doc: Doc = {
@@ -218,7 +247,7 @@ export async function createIdbStore(
       const storeNames = 'comments' in patch ? [DOCS_STORE, COMMENTS_STORE] : [DOCS_STORE]
       const tx = db.transaction(storeNames, 'readwrite')
       const store = tx.objectStore(DOCS_STORE)
-      const existing: StoredDoc | undefined = await store.get(id)
+      const existing = liveRow(await store.get(id))
       if (!existing) {
         await tx.done
         throw new Error(`문서를 찾을 수 없음: ${id}`)
@@ -246,16 +275,42 @@ export async function createIdbStore(
       return updated
     },
 
-    // 연결된 fileHandles·댓글 기록도 함께 지운다 — 고아 방지 (F-231.md 3.1, F-508.md 8장)
+    // 휴지통으로 — 지운 때·그때 폴더 경로만 적고 본문·댓글·파일 연결은 purgeTrash 까지 남긴다 (small 2026-10-16)
     async remove(id) {
-      const tx = db.transaction([DOCS_STORE, FILE_HANDLES_STORE, COMMENTS_STORE], 'readwrite')
-      await Promise.all([
-        tx.objectStore(DOCS_STORE).delete(id),
-        tx.objectStore(FILE_HANDLES_STORE).delete(id),
-        tx.objectStore(COMMENTS_STORE).delete(id),
-      ])
+      const tx = db.transaction([DOCS_STORE, FOLDERS_STORE], 'readwrite')
+      const store = tx.objectStore(DOCS_STORE)
+      const existing = liveRow(await store.get(id))
+      if (existing) {
+        const folders: Folder[] = await tx.objectStore(FOLDERS_STORE).getAll()
+        const doc = normalizeDoc(existing)
+        await store.put({ ...doc, deletedAt: Date.now(), deletedPath: trashPathOf(folders, doc.folderId) })
+      }
       await tx.done
     },
+
+    async listTrash() {
+      const rows: StoredDoc[] = await db.getAllFromIndex(DOCS_STORE, TRASH_INDEX)
+      return rows.map((row) => ({ ...normalizeDoc(row), deletedAt: row.deletedAt as number, deletedPath: row.deletedPath ?? null }))
+    },
+
+    async restoreTrash(id) {
+      const tx = db.transaction([DOCS_STORE, FOLDERS_STORE], 'readwrite')
+      const store = tx.objectStore(DOCS_STORE)
+      const row: StoredDoc | undefined = await store.get(id)
+      if (row?.deletedAt === undefined) {
+        await tx.done
+        return null
+      }
+      const { deletedAt: _deletedAt, deletedPath: _deletedPath, ...rest } = row
+      const doc = normalizeDoc(rest)
+      const folders: Folder[] = await tx.objectStore(FOLDERS_STORE).getAll()
+      const folderId = restoreFolderId(folders, doc.folderId, doc.e2eeKey !== undefined)
+      await store.put({ ...doc, folderId })
+      await tx.done
+      return { folderId }
+    },
+
+    purgeTrash: purgeTrashedRows,
 
     async getCommentRecords(docId) {
       const row: LocalCommentsRow | undefined = await db.get(COMMENTS_STORE, docId)
@@ -291,7 +346,7 @@ export async function createIdbStore(
       const tx = db.transaction([DOCS_STORE, FOLDERS_STORE], 'readwrite')
       const docStore = tx.objectStore(DOCS_STORE)
       const folderStore = tx.objectStore(FOLDERS_STORE)
-      const existing: StoredDoc | undefined = await docStore.get(id)
+      const existing = liveRow(await docStore.get(id))
       if (!existing) {
         await tx.done
         throw new Error(`문서를 찾을 수 없음: ${id}`)
@@ -314,7 +369,7 @@ export async function createIdbStore(
     async setPinned(id, pinned) {
       const tx = db.transaction(DOCS_STORE, 'readwrite')
       const store = tx.objectStore(DOCS_STORE)
-      const existing: StoredDoc | undefined = await store.get(id)
+      const existing = liveRow(await store.get(id))
       if (!existing) {
         await tx.done
         throw new Error(`문서를 찾을 수 없음: ${id}`)
@@ -387,12 +442,11 @@ export async function createIdbStore(
       return updated
     },
 
-    // move-up: 문서·하위 폴더를 부모로 옮기고 폴더만 삭제. delete-all: 하위 폴더·그 안 문서까지 삭제 (F-126.md 3장, F-242.md 3.1·3.2). delete-all 은 지워지는 문서의 댓글 기록도 같은 트랜잭션에서 지운다 (F-508.md 8장)
+    // move-up: 문서·하위 폴더를 부모로 옮기고 폴더만 삭제(휴지통 문서도 따라 올라가 복원 자리가 산다). delete-all: 하위 폴더까지 지우고 안 문서는 휴지통으로 (F-242.md 3.1·3.2, small 2026-10-16)
     async removeFolder(id, mode: FolderDeleteMode = 'move-up') {
-      const tx = db.transaction([DOCS_STORE, FOLDERS_STORE, COMMENTS_STORE], 'readwrite')
+      const tx = db.transaction([DOCS_STORE, FOLDERS_STORE], 'readwrite')
       const folderStore = tx.objectStore(FOLDERS_STORE)
       const docStore = tx.objectStore(DOCS_STORE)
-      const commentsStore = tx.objectStore(COMMENTS_STORE)
 
       const existing: Folder | undefined = await folderStore.get(id)
       if (!existing) {
@@ -403,14 +457,14 @@ export async function createIdbStore(
       if (mode === 'delete-all') {
         const allFolders: Folder[] = await folderStore.getAll()
         const ids = new Set(descendantFolderIds(allFolders, id))
-
+        const deletedAt = Date.now()
         const allDocs: StoredDoc[] = await docStore.getAll()
-        const deletedDocIds = allDocs
-          .filter((d) => d.folderId !== undefined && d.folderId !== null && ids.has(d.folderId))
-          .map((d) => d.id)
-        await Promise.all(deletedDocIds.map((did) => docStore.delete(did)))
+        await Promise.all(
+          allDocs
+            .filter((d) => d.deletedAt === undefined && typeof d.folderId === 'string' && ids.has(d.folderId))
+            .map((d) => docStore.put({ ...normalizeDoc(d), deletedAt, deletedPath: trashPathOf(allFolders, d.folderId ?? null) })),
+        )
         await Promise.all([...ids].map((fid) => folderStore.delete(fid)))
-        await Promise.all(deletedDocIds.map((did) => commentsStore.delete(did)))
         await tx.done
         return
       }
@@ -455,7 +509,7 @@ export async function createIdbStore(
       const storeNames = input.e2ee ? [DOCS_STORE, COMMENTS_STORE] : [DOCS_STORE]
       const tx = db.transaction(storeNames, 'readwrite')
       const store = tx.objectStore(DOCS_STORE)
-      const existing: StoredDoc | undefined = await store.get(id)
+      const existing = liveRow(await store.get(id))
       if (!existing) {
         await tx.done
         throw new Error(`문서를 찾을 수 없음: ${id}`)
@@ -487,7 +541,8 @@ export async function createIdbStore(
       }
       if (on) {
         const docs: StoredDoc[] = await docStore.getAll()
-        const plainChild = docs.some((d) => d.folderId === id && d.e2eeKey === undefined) || folders.some((f) => f.parentId === id && f.e2ee !== true)
+        const plainChild =
+          docs.some((d) => d.deletedAt === undefined && d.folderId === id && d.e2eeKey === undefined) || folders.some((f) => f.parentId === id && f.e2ee !== true)
         if (plainChild) {
           await tx.done
           throw new Error('e2ee_folder_not_ready')
@@ -528,7 +583,7 @@ export async function createIdbStore(
       return 'deleted' as const
     },
 
-    // 저장된 handle 을 돌며 isSameEntry 로 첫 매치를 찾는다 — 지워진 문서면 정리하고 계속, 예외면 건너뛴다 (F-231.md 3.1)
+    // 저장된 handle 을 돌며 isSameEntry 로 첫 매치를 찾는다 — 지워진 문서면 정리하고 계속, 휴지통 문서는 연결을 남기고 건너뛴다 (F-231.md 3.1)
     async findDocByFileHandle(handle: FileSystemFileHandle) {
       const tx = db.transaction([FILE_HANDLES_STORE, DOCS_STORE], 'readwrite')
       const handleStore = tx.objectStore(FILE_HANDLES_STORE)
@@ -544,10 +599,10 @@ export async function createIdbStore(
           same = false
         }
         if (same) {
-          const doc = await docStore.get(stored.docId)
+          const doc: StoredDoc | undefined = await docStore.get(stored.docId)
           if (!doc) {
             await cursor.delete()
-          } else {
+          } else if (doc.deletedAt === undefined) {
             result = stored.docId
             break
           }

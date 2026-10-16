@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createMemoryStore } from '../../../src/storage/memoryStore'
 import type { Store } from '../../../src/types'
 import type { CommentRecord } from '../../../src/lib/docComments'
+import { runLocalTrashContract } from './localTrashContract'
 
 function makeRecord(id: string, over: Partial<CommentRecord> = {}): CommentRecord {
   return {
@@ -351,7 +352,7 @@ describe('memoryStore', () => {
       expect(await store.getCommentRecords!('없음')).toEqual([])
     })
 
-    it('U7: remove·removeFolder(delete-all)·removeFolder(move-up)', async () => {
+    it('U7: remove·removeFolder(delete-all) 은 휴지통이라 기록을 남기고, purgeTrash 가 지운다. move-up 도 남긴다', async () => {
       const a = await store.create({ title: 'a', content: '', lineEnding: 'lf' })
       const folderF = await store.createFolder({ name: 'F' })
       const b = await store.create({ title: 'b', content: '', lineEnding: 'lf', folderId: folderF.id })
@@ -362,10 +363,14 @@ describe('memoryStore', () => {
       await store.update(c.id, { comments: [makeRecord('cc')] })
 
       await store.remove(a.id)
+      expect(await store.getCommentRecords!(a.id)).toEqual([makeRecord('ca')])
+      await store.purgeTrash!([a.id])
       expect(await store.getCommentRecords!(a.id)).toEqual([])
       expect(await store.getCommentRecords!(b.id)).toEqual([makeRecord('cb')])
 
       await store.removeFolder(folderF.id, 'delete-all')
+      expect(await store.getCommentRecords!(b.id)).toEqual([makeRecord('cb')])
+      await store.purgeTrash!([b.id])
       expect(await store.getCommentRecords!(b.id)).toEqual([])
 
       await store.removeFolder(folderG.id, 'move-up')
@@ -381,4 +386,5 @@ describe('memoryStore', () => {
       expect((await store.getCommentRecords!(doc.id))[0].body).toBe(r1.body)
     })
   })
+  runLocalTrashContract(async () => createMemoryStore())
 })

@@ -59,6 +59,9 @@ export type AttachmentMeta = Pick<Attachment, 'id' | 'ext' | 'size' | 'createdAt
   uploaded?: boolean
 }
 
+// 로컬 휴지통 문서 — idb·memory 저장소 행에 지운 때·그때 폴더 경로가 붙은 것 (small 2026-10-16)
+export type TrashedDoc = Doc & { deletedAt: number; deletedPath: string | null }
+
 // 서버 저장소 동기화 표시 (specs/features/F-207.md 2.5)
 export type SyncState = { pending: number; online: boolean; signedOut: boolean }
 
@@ -87,6 +90,7 @@ export type Store = {
   }): Promise<Doc>
   // comments — 없으면 기록 행을 건드리지 않는다. [] 면 지운다. 1개 이상이면 통째로 바꾼다. 댓글만 바뀐 저장은 title·content·attachmentRefs 가 없으므로 updatedAt 을 올리지 않는다 (F-508 3.1·5.1)
   update(id: string, patch: { title?: string; content?: string; attachmentRefs?: string[]; comments?: CommentRecord[] }): Promise<Doc>
+  // idb·memory 는 휴지통으로 보내 list·get 에서 뺀다(본문·댓글·파일 연결 유지), server 는 서버가 휴지통으로 보낸다
   remove(id: string): Promise<void>
   moveDoc(id: string, folderId: string | null): Promise<Doc>
   setPinned(id: string, pinned: boolean): Promise<Doc>
@@ -102,6 +106,7 @@ export type Store = {
   }): Promise<Folder>
   renameFolder(id: string, name: string): Promise<Folder>
   moveFolder(id: string, parentId: string | null): Promise<Folder>
+  // delete-all 은 폴더를 지우고 안 문서는 remove 와 같이 휴지통으로
   removeFolder(id: string, mode?: FolderDeleteMode): Promise<void>
   putAttachment(input: {
     blob: Blob
@@ -147,4 +152,9 @@ export type Store = {
   getCommentRecords?(docId: string): Promise<CommentRecord[]>
   // 로그인 이관용 — 검사를 통과한 행만 docId → 기록 (F-508 3.1)
   listCommentRecords?(): Promise<Map<string, CommentRecord[]>>
+  // 로컬 휴지통 — idb·memory 저장소만. restoreTrash 는 원래 폴더(없거나 금고 여부가 다르면 최상위), 휴지통에 없으면 null
+  listTrash?(): Promise<TrashedDoc[]>
+  restoreTrash?(id: string): Promise<{ folderId: string | null } | null>
+  // 휴지통에 든 id 만 본문·댓글·파일 연결까지 영구히 지우고 지운 수를 돌려준다
+  purgeTrash?(ids: string[]): Promise<number>
 }

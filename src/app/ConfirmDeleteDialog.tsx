@@ -8,14 +8,12 @@ export type DeleteTarget = { type: 'doc' | 'folder'; id: string; name: string; e
 
 type ConfirmDeleteDialogProps = {
   target: DeleteTarget | null
-  // 서버 저장소면 지운 문서가 휴지통으로 간다 — 문구만 바뀐다 (F-2145 3장)
-  trash: boolean
   onCancel: () => void
   onConfirm: (target: DeleteTarget, mode: FolderDeleteMode) => void
 }
 
-// 삭제 확인 대화상자 D-1 — 폴더가 비어 있지 않으면 위로 옮기기·전부 삭제 중 고른다 (ia.md 3.6, F-111.md 3.5, F-126.md 5.3, F-242.md 3.5)
-export default function ConfirmDeleteDialog({ target, trash, onCancel, onConfirm }: ConfirmDeleteDialogProps) {
+// 삭제 확인 대화상자 D-1 — 문서는 어느 저장소든 휴지통으로 간다. 폴더가 비어 있지 않으면 위로 옮기기·전부 삭제 중 고른다 (ia.md 3.6, F-242.md 3.5, F-2145 3장, small 2026-10-16)
+export default function ConfirmDeleteDialog({ target, onCancel, onConfirm }: ConfirmDeleteDialogProps) {
   const cancelRef = useRef<HTMLButtonElement | null>(null)
   const titleId = 'confirm-delete-title'
   const isFolder = target?.type === 'folder'
@@ -35,7 +33,7 @@ export default function ConfirmDeleteDialog({ target, trash, onCancel, onConfirm
           <p>"{target?.name}" 폴더를 삭제합니다. 안의 문서와 하위 폴더를 어떻게 할까요?</p>
         )
       ) : (
-        <p>{trash ? DELETE_TRASH_TEXT.doc(target?.name ?? '') : `"${target?.name}" 을(를) 삭제할까요? 되돌릴 수 없습니다.`}</p>
+        <p>{DELETE_TRASH_TEXT.doc(target?.name ?? '')}</p>
       )}
       <div className="dialog-actions">
         <button type="button" ref={cancelRef} onClick={onCancel}>
@@ -56,7 +54,7 @@ export default function ConfirmDeleteDialog({ target, trash, onCancel, onConfirm
           </button>
         )}
       </div>
-      {isFolder && !isEmptyFolder ? <p className="dialog-note">{trash ? DELETE_TRASH_TEXT.folderNote : '전부 삭제하면 되돌릴 수 없습니다.'}</p> : null}
+      {isFolder && !isEmptyFolder ? <p className="dialog-note">{DELETE_TRASH_TEXT.folderNote}</p> : null}
     </Dialog>
   )
 }

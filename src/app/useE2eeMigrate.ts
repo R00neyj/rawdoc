@@ -223,6 +223,9 @@ export function useE2eeMigrate(options: UseE2eeMigrateOptions): UseE2eeMigrateRe
       for (const doc of list) {
         if (doc.e2ee && (await purgeTrashDoc(doc.id)) === 'failed') throw new Error('trash purge failed')
       }
+    } else if (store.listTrash && store.purgeTrash) {
+      // 로컬은 막을 서버가 없다 — 키가 사라지면 복원해도 못 여니 휴지통의 금고 문서를 모두 영구 삭제한다 (small 2026-10-16)
+      await store.purgeTrash((await store.listTrash()).filter((d) => d.e2eeKey !== undefined).map((d) => d.id))
     }
     await resyncFromStore()
   }

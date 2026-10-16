@@ -262,6 +262,20 @@ describe('F-407 U22 withTabBroadcast — 옮기기·폴더 표지', () => {
   })
 })
 
+describe('withTabBroadcast — 로컬 휴지통 (small 2026-10-16)', () => {
+  it('복원은 목록이 바뀌어 1번 docs-changed, 휴지통 읽기·영구 삭제는 0번, 없으면 키도 없다', async () => {
+    const store = makeFakeStore({ listTrash: vi.fn(async () => []), restoreTrash: vi.fn(async () => ({ folderId: null })), purgeTrash: vi.fn(async () => 1) })
+    const post = vi.fn()
+    const wrapped = withTabBroadcast(store, post, 'tab-1')
+    await wrapped.listTrash!()
+    await wrapped.purgeTrash!(['d1'])
+    expect(post).not.toHaveBeenCalled()
+    await wrapped.restoreTrash!('d1')
+    expect(post).toHaveBeenCalledTimes(1)
+    expect('restoreTrash' in withTabBroadcast(makeFakeStore(), vi.fn(), 'tab-1')).toBe(false)
+  })
+})
+
 describe('F-2115 U9 shared-left', () => {
   it('어떤 상태에서도 null', () => {
     const base: ClaimState = { tabId: 'me', docId: 'doc-1', since: 1000, held: true }

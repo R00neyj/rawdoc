@@ -132,7 +132,7 @@ test.describe('F-2054 A4 지금 문서 — 삭제 확인(사용자 결정 2)', (
       await runCommand(page, '/삭제')
 
       const dialog = page.locator('dialog[open]')
-      await expect(dialog).toContainText('"지울 문서" 을(를) 삭제할까요? 되돌릴 수 없습니다.')
+      await expect(dialog).toContainText('"지울 문서" 을(를) 휴지통으로 옮길까요? 30일 뒤 영구히 지워집니다.')
       await expect(dialog.getByRole('button', { name: '취소' })).toBeFocused()
 
       await page.keyboard.press('Escape')

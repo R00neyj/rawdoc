@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { openDB } from 'idb'
 import { createIdbStore, readE2eeRow, writeE2eeRow, markLocalE2eeMigrated } from '../../../src/storage/idbStore'
 import type { CommentRecord } from '../../../src/lib/docComments'
+import { runLocalTrashContract } from './localTrashContract'
 
 // 테스트마다 새 DB 이름을 써서 격리한다 (fake-indexeddb 는 전역 indexedDB 를 공유)
 let dbCounter = 0
@@ -473,7 +474,7 @@ describe('idbStore', () => {
       const onBlocked = vi.fn(() => {
         v1db.close()
       })
-      // createIdbStore 는 항상 DB_VERSION(6)으로 연다 — v1 이 열려 있으므로 이 열기는
+      // createIdbStore 는 항상 DB_VERSION 으로 연다 — v1 이 열려 있으므로 이 열기는
       // v1 이 닫힐 때까지 막힌다(blocked)
       const store = await createIdbStore(dbName, { onBlocked })
 
@@ -491,11 +492,11 @@ describe('idbStore', () => {
         order.push('closed')
       })
 
-      // 이 창의 연결(F-508 코드 기준 버전 6)
+      // 이 창의 연결(지금 코드 기준 버전 7)
       await createIdbStore(dbName, { onBlocking, onClosed })
 
-      // "새 버전 창" 이 더 높은 버전(7)을 열려고 하면 위 연결의 blocking 이 불린다
-      const v7db = await openDB(dbName, 7, {
+      // "새 버전 창" 이 더 높은 버전(8)을 열려고 하면 위 연결의 blocking 이 불린다
+      const v8db = await openDB(dbName, 8, {
         upgrade(database, oldVersion) {
           if (oldVersion < 1) {
             database.createObjectStore('docs', { keyPath: 'id' })
@@ -524,7 +525,7 @@ describe('idbStore', () => {
       // 정리(flush 시늉)가 끝난 뒤에 닫힘 콜백이 불려야 한다 (F-136.md 3.3 순서)
       expect(order).toEqual(['blocking', 'closed'])
 
-      v7db.close()
+      v8db.close()
     })
   })
 
@@ -562,7 +563,7 @@ describe('idbStore', () => {
       const raw = await openDB(dbName)
       expect([...raw.objectStoreNames]).toContain('e2ee')
       const meta = await raw.get('meta', 'schema')
-      expect(meta.version).toBe(6)
+      expect(meta.version).toBe(7)
       raw.close()
 
       expect(await writeE2eeRow({ id: 'local', bundle: 'b1', updatedAt: 1 }, null, dbName)).toBe(true)
@@ -636,17 +637,27 @@ describe('idbStore', () => {
       }
     })
 
-    it('매치된 문서를 remove 한 뒤 같은 handle 로 조회하면 null (고아 정리)', async () => {
+    it('휴지통 문서는 같은 handle 로 찾지 않고 연결을 남긴다 — 복원하면 다시 찾고, 영구 삭제하면 연결도 지운다', async () => {
       vi.stubGlobal('structuredClone', (v: unknown) => v)
       try {
-        const store = await freshStore()
+        const dbName = freshDbName()
+        const store = await createIdbStore(dbName)
         const doc = await store.create({ title: 'A', content: '', lineEnding: 'crlf' })
-        const handle = makeHandle('a.md')
+        const handle = makeHandle('a.md') as unknown as FileSystemFileHandle
 
-        await store.linkFileHandle!(doc.id, handle as unknown as FileSystemFileHandle)
+        await store.linkFileHandle!(doc.id, handle)
         await store.remove(doc.id)
+        expect(await store.findDocByFileHandle!(handle)).toBeNull()
 
-        expect(await store.findDocByFileHandle!(handle as unknown as FileSystemFileHandle)).toBeNull()
+        await store.restoreTrash!(doc.id)
+        expect(await store.findDocByFileHandle!(handle)).toBe(doc.id)
+
+        await store.remove(doc.id)
+        await store.purgeTrash!([doc.id])
+        expect(await store.findDocByFileHandle!(handle)).toBeNull()
+        const raw = await openDB(dbName)
+        expect(await raw.get('fileHandles', doc.id)).toBeUndefined()
+        raw.close()
       } finally {
         vi.unstubAllGlobals()
       }
@@ -687,6 +698,55 @@ describe('idbStore', () => {
       expect(record!.size).toBe(3) // 덮지 않았다
     })
   })
+  runLocalTrashContract(freshStore)
+})
+
+describe('로컬 휴지통 idb 만 (small 2026-10-16)', () => {
+  it('버전 6 DB 의 옛 행은 살아 있는 문서로 남고, 버전 7 이 docs 에 deletedAt 색인을 만든다', async () => {
+    const dbName = freshDbName()
+    const v6db = await openDB(dbName, 6, {
+      upgrade(database) {
+        for (const [name, keyPath] of [['docs', 'id'], ['meta', 'key'], ['folders', 'id'], ['attachments', 'id'], ['fileHandles', 'docId'], ['e2ee', 'id'], ['comments', 'docId']]) {
+          database.createObjectStore(name, { keyPath })
+        }
+      },
+    })
+    await v6db.put('docs', { id: 'old', title: '옛 문서', content: 'x', lineEnding: 'lf', createdAt: 1, updatedAt: 1, folderId: null, pinnedAt: null })
+    await v6db.put('meta', { key: 'schema', version: 6 })
+    v6db.close()
+
+    const store = await createIdbStore(dbName)
+    expect((await store.list()).map((d) => d.id)).toEqual(['old'])
+    expect(await store.listTrash!()).toEqual([])
+    await store.remove('old')
+    expect((await store.listTrash!()).map((d) => d.id)).toEqual(['old'])
+
+    const raw = await openDB(dbName)
+    expect([...raw.transaction('docs').store.indexNames]).toContain('deletedAt')
+    expect((await raw.get('meta', 'schema')).version).toBe(7)
+    raw.close()
+  })
+
+  it('금고 폴더 켜기는 휴지통의 일반 문서를 세지 않고, 그 문서는 최상위로 복원된다 · 금고 문서는 금고 폴더로', async () => {
+    const store = await freshStore()
+    const folder = await store.createFolder({ name: 'V' })
+    const plain = await store.create({ title: 'p', content: '', lineEnding: 'lf', folderId: folder.id })
+    const vault = await store.create({ title: 'env', content: 'env', lineEnding: 'lf', folderId: folder.id, e2eeKey: 'K'.repeat(56), attachmentRefs: [] })
+    await store.remove(plain.id)
+    await store.remove(vault.id)
+
+    expect((await store.setFolderE2ee!(folder.id, true)).e2ee).toBe(true)
+    expect(await store.restoreTrash!(plain.id)).toEqual({ folderId: null })
+    expect(await store.restoreTrash!(vault.id)).toEqual({ folderId: folder.id })
+  })
+
+  it('휴지통 문서 본문의 첨부는 discardAttachment 가 in_use 로 남긴다', async () => {
+    const store = await freshStore()
+    const att = await store.putAttachment({ blob: new Blob([new Uint8Array([1])]), mime: 'image/png', ext: 'png', width: 1, height: 1 })
+    const doc = await store.create({ title: 'p', content: `![](attachments/${att.id}.png)`, lineEnding: 'lf' })
+    await store.remove(doc.id)
+    expect(await store.discardAttachment!(att.id, 'png')).toBe('in_use')
+  })
 })
 
 // F-405 U13 — 금고 필드는 값이 있을 때만 행에 싣는다. 버전은 5 그대로 (specs/features/F-405.md 3.3, 9.1)
@@ -717,13 +777,13 @@ describe('F-405 U13 금고 필드', () => {
     expect('attachmentRefs' in plainRow).toBe(false)
     expect(vaultFolderRow.e2ee).toBe(true)
     expect('e2ee' in folderRow).toBe(false)
-    expect(meta.version).toBe(6)
+    expect(meta.version).toBe(7)
   })
 })
 
 // F-407 U21 — 옮기기·빼기·폴더 표지·첨부 지우기 로컬 판 (specs/features/F-407.md 5.3, 9.1)
 describe('F-407 U21 금고로 옮기기·빼기 로컬 판', () => {
-  it('setDocE2ee 옮기기 뒤 빼기 — 두 키가 행에서 없어진다, 버전 6 그대로', async () => {
+  it('setDocE2ee 옮기기 뒤 빼기 — 두 키가 행에서 없어진다', async () => {
     const dbName = freshDbName()
     const store = await createIdbStore(dbName)
     const doc = await store.create({ title: 't', content: 'c', lineEnding: 'lf' })
@@ -740,7 +800,7 @@ describe('F-407 U21 금고로 옮기기·빼기 로컬 판', () => {
     expect('e2eeKey' in row).toBe(false)
     expect('attachmentRefs' in row).toBe(false)
     expect(row.content).toBe('c2')
-    expect(meta.version).toBe(6)
+    expect(meta.version).toBe(7)
     await expect(store.setDocE2ee!('없는-id', { e2ee: false, title: '', content: '' })).rejects.toThrow()
   })
 
@@ -800,7 +860,7 @@ function makeRecord(id: string, over: Partial<CommentRecord> = {}): CommentRecor
 }
 
 describe('F-508 로컬 문서 댓글 저장소', () => {
-  it('U1: 버전 5 DB(문서 둘·폴더 하나·e2ee 행 local)를 만든 뒤 createIdbStore — 문서·폴더·e2ee 행 그대로, comments 스토어 생김, 메타 버전 6', async () => {
+  it('U1: 버전 5 DB(문서 둘·폴더 하나·e2ee 행 local)를 만든 뒤 createIdbStore — 문서·폴더·e2ee 행 그대로, comments 스토어 생김, 메타 지금 버전', async () => {
     const dbName = freshDbName()
     const v5db = await openDB(dbName, 5, {
       upgrade(database) {
@@ -828,7 +888,7 @@ describe('F-508 로컬 문서 댓글 저장소', () => {
     const raw = await openDB(dbName)
     expect([...raw.objectStoreNames]).toContain('comments')
     const meta = await raw.get('meta', 'schema')
-    expect(meta.version).toBe(6)
+    expect(meta.version).toBe(7)
     raw.close()
   })
 
@@ -881,7 +941,7 @@ describe('F-508 로컬 문서 댓글 저장소', () => {
     expect(await store.getCommentRecords!(plain.id)).toEqual([makeRecord('c2')])
   })
 
-  it('U7: remove·removeFolder(delete-all)·removeFolder(move-up) 이 기록에 하는 것', async () => {
+  it('U7: remove·removeFolder(delete-all) 은 휴지통이라 기록을 남기고, purgeTrash 가 지운다. move-up 도 남긴다', async () => {
     const store = await freshStore()
     const a = await store.create({ title: 'a', content: '', lineEnding: 'lf' })
     const folderF = await store.createFolder({ name: 'F' })
@@ -893,10 +953,14 @@ describe('F-508 로컬 문서 댓글 저장소', () => {
     await store.update(c.id, { comments: [makeRecord('cc')] })
 
     await store.remove(a.id)
+    expect(await store.getCommentRecords!(a.id)).toEqual([makeRecord('ca')])
+    await store.purgeTrash!([a.id])
     expect(await store.getCommentRecords!(a.id)).toEqual([])
     expect(await store.getCommentRecords!(b.id)).toEqual([makeRecord('cb')])
 
     await store.removeFolder(folderF.id, 'delete-all')
+    expect(await store.getCommentRecords!(b.id)).toEqual([makeRecord('cb')])
+    await store.purgeTrash!([b.id])
     expect(await store.getCommentRecords!(b.id)).toEqual([])
 
     await store.removeFolder(folderG.id, 'move-up')

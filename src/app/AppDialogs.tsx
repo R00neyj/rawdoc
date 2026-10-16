@@ -127,7 +127,7 @@ export default function AppDialogs({
           keepSourceFocus={contextMenu.place === 'cell'}
         />
       )}
-      <ConfirmDeleteDialog target={deleteTarget} trash={store?.kind === 'server'} onCancel={cancelDelete} onConfirm={confirmDelete} />
+      <ConfirmDeleteDialog target={deleteTarget} onCancel={cancelDelete} onConfirm={confirmDelete} />
       <E2eeConvertDialog
         open={e2eeConvertText !== null}
         text={e2eeConvertText}
@@ -150,7 +150,7 @@ export default function AppDialogs({
         initialFocusRef={bulkDeleteCancelRef}
       >
         <h2 id="confirm-bulk-delete-title">항목 삭제</h2>
-        <p>{store?.kind === 'server' ? DELETE_TRASH_TEXT.bulk(bulkDeleteItems?.length ?? 0) : `선택한 ${bulkDeleteItems?.length ?? 0}개 항목을 삭제할까요? 되돌릴 수 없습니다.`}</p>
+        <p>{DELETE_TRASH_TEXT.bulk(bulkDeleteItems?.length ?? 0)}</p>
         <div className="dialog-actions">
           <button type="button" ref={bulkDeleteCancelRef} onClick={cancelBulkDelete}>
             취소

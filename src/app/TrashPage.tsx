@@ -3,12 +3,12 @@ import { useEffect, useRef } from 'react'
 import Dialog from './Dialog'
 import { IconClose } from './icons'
 import type { UseTrashPageResult } from './useTrashPage'
-import { emptyConfirm, purgeOneConfirm, TRASH_HEAD_NOTE, TRASH_STATE_TEXT, trashItemTitle, trashRowMeta } from './trashView'
+import { emptyConfirm, purgeOneConfirm, TRASH_HEAD_NOTE, TRASH_HEAD_NOTE_LOCAL, TRASH_STATE_TEXT, trashItemTitle, trashRowMeta } from './trashView'
 
 type TrashPageProps = UseTrashPageResult & { onClose: () => void }
 
 export default function TrashPage({
-  trashStatus, trashItems, trashNow, trashBusyIds, trashConfirm, retryTrash, loginFromTrash, onClose, restoreTrashRow, askPurgeTrashRow, askEmptyTrash,
+  trashLocal, trashStatus, trashItems, trashNow, trashBusyIds, trashConfirm, retryTrash, onClose, restoreTrashRow, askPurgeTrashRow, askEmptyTrash,
   cancelTrashConfirm, confirmTrash,
 }: TrashPageProps) {
   const cancelRef = useRef<HTMLButtonElement | null>(null)
@@ -41,16 +41,7 @@ export default function TrashPage({
   }
 
   let body
-  if (trashStatus === 'loggedOut') {
-    body = (
-      <>
-        <p className="shares-login-required">{TRASH_STATE_TEXT.loggedOut}</p>
-        <button type="button" className="shares-login-btn" onClick={loginFromTrash}>
-          로그인
-        </button>
-      </>
-    )
-  } else if (trashStatus === 'loading') {
+  if (trashStatus === 'loading') {
     body = <p className="shares-loading">{TRASH_STATE_TEXT.loading}</p>
   } else if (trashStatus === 'offline' || trashStatus === 'failed') {
     body = (
@@ -113,7 +104,7 @@ export default function TrashPage({
           </button>
         </div>
       </div>
-      <p className="trash-page-note">{TRASH_HEAD_NOTE}</p>
+      <p className="trash-page-note">{trashLocal ? TRASH_HEAD_NOTE_LOCAL : TRASH_HEAD_NOTE}</p>
       {body}
       <Dialog open={trashConfirm !== null} onClose={cancelTrashConfirm} titleId="trash-confirm-title" initialFocusRef={cancelRef}>
         <h2 id="trash-confirm-title">{confirmText?.title}</h2>

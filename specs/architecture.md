@@ -204,7 +204,7 @@ store.list()                  // Promise<Doc[]>  updatedAt 내림차순
 store.get(id)                 // Promise<Doc|null>
 store.create({ title, content, lineEnding })   // Promise<Doc>  id 는 crypto.randomUUID()
 store.update(id, { title?, content? })         // Promise<Doc>  updatedAt 을 Date.now() 로 갱신. 없는 id 면 reject
-store.remove(id)              // Promise<void>
+store.remove(id)              // Promise<void>  휴지통으로 — deletedAt·deletedPath 만 적고 list·get·쓰기에서 뺀다 (small 2026-10-16)
 
 // 1차 수정 (2026-09-14)
 store.create({ ..., folderId })                // F-126
@@ -218,11 +218,17 @@ store.putAttachment({ blob, mime, ext, width, height })   // Promise<{id, ext}> 
 store.getAttachment(id)       // Promise<Attachment|null>
 store.listAttachments()       // Promise<{id, ext, size, createdAt}[]>  blob 제외
 store.removeAttachment(id)    // Promise<void>
+
+// 로컬 휴지통 (2026-10-16, small) — idb·memory 만. 휴지통 행은 이것들만 본다
+store.listTrash()             // Promise<TrashedDoc[]>  Doc + { deletedAt, deletedPath }
+store.restoreTrash(id)        // Promise<{folderId}|null>  원래 폴더(없거나 금고 여부가 다르면 최상위). 휴지통에 없으면 null
+store.purgeTrash(ids)         // Promise<number>  휴지통 행만 본문·댓글 기록·파일 연결까지 지운다
 ```
 
 - `folderId`·`pinnedAt` 필드가 없는 옛 문서는 null 로 본다
 - IndexedDB `md-docs` 버전 2 에서 `folders` 스토어 추가 (F-126)
 - 버전 3 에서 `attachments` 스토어 추가 (F-156). 첨부는 문서와 연결 필드 없이 id 로만 찾고, 어떤 문서 원문에도 없고 24시간 지난 것을 앱 시작 때 지운다
+- 버전 7 에서 `docs` 색인 `deletedAt` 추가 (로컬 휴지통, small 2026-10-16). 필드가 없는 옛 행은 살아 있는 문서다. `removeFolder(id, 'delete-all')` 은 폴더만 지우고 안 문서는 휴지통으로. 같은 id 로 `create`(가져오기)하면 휴지통 행을 대신한다. 30일 지난 휴지통 문서는 부팅이 영구 삭제하고(`localTrash.ts` `purgeExpiredTrash`), 첨부 정리는 휴지통 문서의 첨부도 남긴다
 
 - `content` 는 `lineEnding` 으로 줄을 이은 원문이다 (`specs/product.md` 5장, Q9)
 - 저장소 이름·키에 제품명을 쓰지 않는다 (CLAUDE.md 불변조건)

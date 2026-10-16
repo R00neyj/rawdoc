@@ -187,7 +187,7 @@ test('F-508 E1·E4·E3 댓글이 저장돼 새로고침 뒤 되살아나고(.md 
   await expect(threadCards(page).first().locator('.comment-reply')).toHaveCount(1)
 })
 
-test('F-508 E2·E5·E6 댓글만 바뀐 저장은 updatedAt 을 안 올리고, 앵커를 지우면 새로고침 뒤에도 고아, 문서를 삭제하면 댓글 기록도 지워진다', async ({ page }) => {
+test('F-508 E2·E5·E6 댓글만 바뀐 저장은 updatedAt 을 안 올리고, 앵커를 지우면 새로고침 뒤에도 고아, 문서를 영구 삭제하면 댓글 기록도 지워진다', async ({ page }) => {
   await openApp(page)
   const idB = await importMarkdown(page, { name: 'b.md', content: 'B 문서 고양이\n' })
   await fillTitle(page, 'B')
@@ -219,7 +219,12 @@ test('F-508 E2·E5·E6 댓글만 바뀐 저장은 updatedAt 을 안 올리고, �
   const orphanRow = await readCommentsRow(page, idB)
   expect(orphanRow.records[0].anchorFrom).toBeNull()
 
+  // 지우면 휴지통에 있는 동안 복원을 위해 기록이 남고, 휴지통에서 영구 삭제하면 지워진다 (small 2026-10-16)
   await deleteCurrentDoc(page)
+  expect(await readCommentsRow(page, idB)).not.toBeNull()
+  await page.locator('.sidebar').getByRole('button', { name: '휴지통', exact: true }).click()
+  await page.locator('.trash-row').getByRole('button', { name: '영구 삭제', exact: true }).click()
+  await page.locator('dialog[open]').getByRole('button', { name: '영구 삭제', exact: true }).click()
   await expect.poll(() => readCommentsRow(page, idB)).toBeNull()
 })
 

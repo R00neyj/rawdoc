@@ -73,6 +73,16 @@ export async function emptyTrash(): Promise<EmptyResult> {
   }
 }
 
+// S-10 이 읽고 쓰는 휴지통 — 서버는 이 API, 로컬은 localTrash.ts 가 같은 모양을 준다
+export type TrashSource = {
+  list: () => Promise<TrashItem[]>
+  restore: (id: string) => Promise<RestoreResult>
+  purge: (id: string) => Promise<'ok' | 'gone' | 'failed'>
+  empty: () => Promise<EmptyResult>
+}
+
+export const SERVER_TRASH: TrashSource = { list: listTrash, restore: restoreTrashDoc, purge: purgeTrashDoc, empty: emptyTrash }
+
 // 없는 문서 해시가 내 휴지통 문서인지·지워진 문서인지 가른다 — 그 밖 전부는 not_found (F-2145 4장 ②)
 export async function probeGoneDoc(id: string): Promise<GoneDocKind> {
   try {

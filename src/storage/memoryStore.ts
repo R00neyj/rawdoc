@@ -2,16 +2,19 @@
 // B1 은 IndexedDB 가 없으므로 이 저장소로만 동작한다 (F-110 이 idbStore 로 교체)
 import { canCreateFolder, canMoveFolder, descendantFolderIds } from '../lib/folderTree'
 import type { CommentRecord } from '../lib/docComments'
+import { restoreFolderId, trashPathOf } from '../lib/trash'
 import type { Store, Doc, Folder, Attachment, AttachmentExt, LineEnding, FolderDeleteMode } from '../types'
 
 function clone<T extends object>(doc: T): T {
   return { ...doc }
 }
 
-// 저장소에 실제로 든 문서 모양 — 옛 스키마 문서는 folderId·pinnedAt 이 없을 수 있다
+// 저장소에 실제로 든 문서 모양 — 옛 스키마 문서는 folderId·pinnedAt 이 없을 수 있다. deletedAt 이 있으면 휴지통 행
 type StoredDoc = Omit<Doc, 'folderId' | 'pinnedAt'> & {
   folderId?: string | null
   pinnedAt?: number | null
+  deletedAt?: number
+  deletedPath?: string | null
 }
 
 // folderId 가 없는 옛 문서(F-126 이전)는 null 로 취급한다
@@ -46,24 +49,45 @@ function randomAttachmentId(): string {
 }
 
 export function createMemoryStore(): Store {
-  const docs = new Map<string, Doc>()
+  const docs = new Map<string, StoredDoc>()
   const folders = new Map<string, Folder>()
   const attachments = new Map<string, Attachment>() // F-156.md 2.3 — 새로고침하면 사라진다(메모리 저장소 특성 그대로)
   const comments = new Map<string, CommentRecord[]>() // F-508.md 3.1 — idbStore 의 comments 스토어와 같은 계약. 메모리 저장소에는 금고 문서가 없다
+
+  // 휴지통 행은 list·get·쓰기에서 없는 문서로 본다 — idbStore 와 같은 규칙 (small 2026-10-16)
+  function liveDoc(id: string): Doc | undefined {
+    const doc = docs.get(id)
+    return doc && doc.deletedAt === undefined ? normalizeDoc(doc) : undefined
+  }
+
+  function trash(doc: Doc, deletedAt: number) {
+    docs.set(doc.id, { ...doc, deletedAt, deletedPath: trashPathOf([...folders.values()], doc.folderId) })
+  }
+
+  function purgeTrashed(ids: string[]): number {
+    let purged = 0
+    for (const id of ids) {
+      if (docs.get(id)?.deletedAt === undefined) continue
+      docs.delete(id)
+      comments.delete(id)
+      purged++
+    }
+    return purged
+  }
 
   return {
     kind: 'memory',
 
     async list() {
-      return [...docs.values()].map(normalizeDoc).sort((a, b) => b.updatedAt - a.updatedAt).map(clone)
+      return [...docs.values()].filter((d) => d.deletedAt === undefined).map(normalizeDoc).sort((a, b) => b.updatedAt - a.updatedAt).map(clone)
     },
 
     async get(id) {
-      const doc = docs.get(id)
-      return doc ? clone(normalizeDoc(doc)) : null
+      const doc = liveDoc(id)
+      return doc ? clone(doc) : null
     },
 
-    // id 가 이미 있으면 던진다(덮지 않는다). 가져오기(F-282)가 id·시각·고정을 유지할 때만 준다 (F-282.md 3.11)
+    // 살아 있는 id 면 던진다(덮지 않는다). 같은 id 의 휴지통 행은 가져오는 쪽이 이긴다 (F-282.md 3.11, small 2026-10-16)
     async create({
       title,
       content,
@@ -87,9 +111,10 @@ export function createMemoryStore(): Store {
       if (!isValidFolderId([...folders.values()], folderId)) {
         throw new Error(`유효하지 않은 folderId: ${String(folderId)}`)
       }
-      if (id !== undefined && docs.has(id)) {
+      if (id !== undefined && liveDoc(id)) {
         throw new Error(`이미 있는 id: ${id}`)
       }
+      if (id !== undefined) purgeTrashed([id])
       const now = Date.now()
       const doc: Doc = {
         id: id ?? crypto.randomUUID(),
@@ -107,11 +132,10 @@ export function createMemoryStore(): Store {
 
     // comments 만 있으면 docs 행·updatedAt 을 건드리지 않는다 — idbStore 와 같은 규칙 (F-508.md 5.1)
     async update(id, patch) {
-      const existing = docs.get(id)
-      if (!existing) {
+      const normalized = liveDoc(id)
+      if (!normalized) {
         throw new Error(`문서를 찾을 수 없음: ${id}`)
       }
-      const normalized = normalizeDoc(existing)
       const hasContentFields = 'title' in patch || 'content' in patch || patch.attachmentRefs !== undefined
       let updated: Doc = normalized
       if (hasContentFields) {
@@ -132,9 +156,30 @@ export function createMemoryStore(): Store {
       return clone(updated)
     },
 
+    // 휴지통으로 — 본문·댓글은 purgeTrash 까지 남긴다 (small 2026-10-16)
     async remove(id) {
-      docs.delete(id)
-      comments.delete(id)
+      const doc = liveDoc(id)
+      if (doc) trash(doc, Date.now())
+    },
+
+    async listTrash() {
+      return [...docs.values()]
+        .filter((d) => d.deletedAt !== undefined)
+        .map((d) => ({ ...normalizeDoc(d), deletedAt: d.deletedAt as number, deletedPath: d.deletedPath ?? null }))
+    },
+
+    async restoreTrash(id) {
+      const row = docs.get(id)
+      if (row?.deletedAt === undefined) return null
+      const { deletedAt: _deletedAt, deletedPath: _deletedPath, ...rest } = row
+      const doc = normalizeDoc(rest)
+      const folderId = restoreFolderId([...folders.values()], doc.folderId, doc.e2eeKey !== undefined)
+      docs.set(id, { ...doc, folderId })
+      return { folderId }
+    },
+
+    async purgeTrash(ids) {
+      return purgeTrashed(ids)
     },
 
     async getCommentRecords(docId) {
@@ -150,7 +195,7 @@ export function createMemoryStore(): Store {
 
     // moveDoc 은 folderId 만 바꾼다. updatedAt 은 바꾸지 않는다 (F-126.md 3장)
     async moveDoc(id, folderId) {
-      const existing = docs.get(id)
+      const existing = liveDoc(id)
       if (!existing) {
         throw new Error(`문서를 찾을 수 없음: ${id}`)
       }
@@ -160,7 +205,7 @@ export function createMemoryStore(): Store {
       if (!isValidFolderId([...folders.values()], resolvedFolderId)) {
         throw new Error(`유효하지 않은 folderId: ${resolvedFolderId}`)
       }
-      const updated = { ...normalizeDoc(existing), folderId: resolvedFolderId }
+      const updated = { ...existing, folderId: resolvedFolderId }
       docs.set(id, updated)
       return clone(updated)
     },
@@ -168,11 +213,11 @@ export function createMemoryStore(): Store {
     // pinned 가 true 면 pinnedAt = 지금 시각, false 면 null. updatedAt 은 바꾸지 않는다
     // (F-132.md 2장)
     async setPinned(id, pinned) {
-      const existing = docs.get(id)
+      const existing = liveDoc(id)
       if (!existing) {
         throw new Error(`문서를 찾을 수 없음: ${id}`)
       }
-      const updated = { ...normalizeDoc(existing), pinnedAt: pinned ? Date.now() : null }
+      const updated = { ...existing, pinnedAt: pinned ? Date.now() : null }
       docs.set(id, updated)
       return clone(updated)
     },
@@ -240,7 +285,7 @@ export function createMemoryStore(): Store {
       return clone(updated)
     },
 
-    // move-up: 문서·하위 폴더를 부모로 옮기고 폴더만 삭제. delete-all: 하위 폴더·그 안 문서까지 삭제 (F-126.md 3장, F-242.md 3.1·3.2)
+    // move-up: 문서·하위 폴더를 부모로 옮기고 폴더만 삭제. delete-all: 하위 폴더까지 지우고 안 문서는 휴지통으로 (F-126.md 3장, F-242.md 3.1·3.2, small 2026-10-16)
     async removeFolder(id, mode: FolderDeleteMode = 'move-up') {
       const existing = folders.get(id)
       if (!existing) {
@@ -249,12 +294,10 @@ export function createMemoryStore(): Store {
 
       if (mode === 'delete-all') {
         const ids = new Set(descendantFolderIds([...folders.values()], id))
+        const deletedAt = Date.now()
         for (const doc of docs.values()) {
           const normalized = normalizeDoc(doc)
-          if (normalized.folderId && ids.has(normalized.folderId)) {
-            docs.delete(doc.id)
-            comments.delete(doc.id)
-          }
+          if (doc.deletedAt === undefined && normalized.folderId && ids.has(normalized.folderId)) trash(normalized, deletedAt)
         }
         for (const fid of ids) folders.delete(fid)
         return

@@ -27,6 +27,7 @@ import { cleanupUnusedAttachments, scheduleAttachmentGc } from './attachmentGc'
 import type { NoticeWithAction } from './NoticeBar'
 import type { PendingCommentTarget } from './useDocComments'
 import { announceMissingDoc } from './trashApi'
+import { purgeExpiredTrash } from './localTrash'
 
 export type BootDeps = {
   setBootPhase: Dispatch<SetStateAction<'booting' | 'ready'>>
@@ -330,6 +331,7 @@ export async function runBoot(deps: BootDeps): Promise<void> {
   }
 
   // 안 쓰는 첨부 정리 예약 — 부팅이 이미 읽은 앱 층 목록을 한 번 다시 쓴다(따로 list() 하지 않음) (F-156.md 2.7, F-406, F-2056 3.5)
+  // 로컬은 휴지통 문서의 첨부도 남긴다 — 복원하면 이미지가 돌아와야 한다 (small 2026-10-16)
   function scheduleGc(bootDocs: Doc[]) {
     const gcList = async () => bootDocs
     const gcStore =
@@ -340,7 +342,7 @@ export async function runBoot(deps: BootDeps): Promise<void> {
             listAttachments: async () => (await resolvedStore.listAttachments()).filter((a) => a.uploaded !== false),
             removeAttachment: (id: string) => resolvedStore.removeAttachment(id),
           }
-        : { ...resolvedStore, list: gcList }
+        : { ...resolvedStore, list: async () => [...bootDocs, ...((await resolvedStore.listTrash?.()) ?? [])] }
     scheduleAttachmentGc(() => cleanupUnusedAttachments({ store: gcStore }))
   }
 
@@ -456,6 +458,8 @@ export async function runBoot(deps: BootDeps): Promise<void> {
       list = staged.docs
       staged.full.then(scheduleGc, (err) => console.error('boot_resync_failed', err))
     } else {
+      // 30일 지난 로컬 휴지통 문서는 앱을 열 때 영구 삭제한다 (small 2026-10-16)
+      await purgeExpiredTrash(resolvedStore, Date.now()).catch((err) => console.error('local_trash_purge_failed', err))
       const docs = await appStore.list()
       list = docs
       scheduleGc(docs)
