@@ -347,7 +347,8 @@ describe('F-2033 U15·U16 로컬 개발 우회', () => {
       const { DB, calls } = bypassDb()
       const env = sessionEnv(DB, vars)
       expect(await getUser(apiRequest(), env)).toBeNull()
-      expect(calls).toEqual([])
+      // oauth-provider init 의 isolate 당 자원 SELECT 는 우회 문장이 아니다 (F-4009)
+      expect(calls.filter((c) => !c.sql.includes('oauth_resources'))).toEqual([])
     }
   })
 })

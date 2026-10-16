@@ -489,6 +489,7 @@ describe('F-2033 U12 wrangler.jsonc 계약', () => {
     expect(config.compatibility_flags).toContain('nodejs_compat')
     expect(config.assets.run_worker_first).toContain('/login')
     expect(config.assets.run_worker_first).toContain('/limits')
+    expect(config.assets.run_worker_first).toContain('/.well-known/*')
   })
 })
 

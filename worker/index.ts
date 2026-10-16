@@ -1,6 +1,7 @@
 import { errorResponse, jsonResponse } from './http'
 import { getUser, getUserRefreshing, type AuthUser } from './auth'
 import { cleanupExpiredAuth, getAuth } from './authServer'
+import { admitClientRegistration, cleanupOAuth, handleAuthServerMetadata } from './oauthServer'
 import { isAllowedOrigin, needsOriginCheck } from './origin'
 import { loginReturn, renderLoginPage } from './loginPage'
 import { handleLimitsPage } from './limitsPage'
@@ -240,8 +241,21 @@ async function handleLoginPage(request: Request, env: Env): Promise<Response> {
   return renderLoginPage({ returnHash: target.hash, error: url.searchParams.get('error'), reauth })
 }
 
-// better-auth 가 여는 경로 중 콜백 둘과 로그아웃만 넘긴다 (F-2033 7.4)
-const AUTH_ROUTES = new Set(['GET /api/auth/callback/google', 'GET /api/auth/callback/github', 'POST /api/auth/sign-out'])
+// better-auth 가 여는 경로 중 콜백 둘·로그아웃·OAuth 인가 서버 넷만 넘긴다 (F-2033 7.4, F-4009 3장)
+const AUTH_ROUTES = new Set([
+  'GET /api/auth/callback/google',
+  'GET /api/auth/callback/github',
+  'POST /api/auth/sign-out',
+  'GET /api/auth/oauth2/authorize',
+  'POST /api/auth/oauth2/token',
+  'POST /api/auth/oauth2/register',
+  'POST /api/auth/oauth2/revoke',
+])
+
+// 서버 간 호출이라 쿠키도 Origin 도 없다 — Origin 관문을 건너뛰고 본문을 그대로 넘긴다 (F-4009 3장)
+const OAUTH_SERVER_ROUTES = new Set(['POST /api/auth/oauth2/token', 'POST /api/auth/oauth2/register', 'POST /api/auth/oauth2/revoke'])
+
+const AUTH_SERVER_METADATA_PATHS = new Set(['/.well-known/oauth-authorization-server', '/.well-known/oauth-authorization-server/api/auth'])
 
 async function runQuietly(task: () => Promise<unknown>): Promise<void> {
   try {
@@ -425,21 +439,37 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext, 
         }
         return appRes
       }
+      // 보호 자원 메타데이터·도메인 확인은 F-4011 — 그 밖은 아직 404
+      if (url.pathname.startsWith('/.well-known/')) {
+        if (!AUTH_SERVER_METADATA_PATHS.has(url.pathname)) return errorResponse('not_found', 404)
+        try {
+          return await handleAuthServerMetadata(request, env)
+        } catch (err) {
+          console.error(err)
+          return errorResponse('internal', 500)
+        }
+      }
       return env.ASSETS.fetch(request)
     }
 
     try {
+      const authRoute = `${request.method} ${url.pathname}`
       if (
         url.pathname.startsWith('/api/') &&
         needsOriginCheck(request.method) &&
+        !OAUTH_SERVER_ROUTES.has(authRoute) &&
         !isAllowedOrigin(request.headers.get('Origin'), request, env)
       ) {
         return errorResponse('forbidden_origin', 403)
       }
       if (url.pathname.startsWith('/api/auth/')) {
-        if (!AUTH_ROUTES.has(`${request.method} ${url.pathname}`)) return errorResponse('not_found', 404)
+        if (!AUTH_ROUTES.has(authRoute)) return errorResponse('not_found', 404)
+        if (authRoute === 'POST /api/auth/oauth2/register') {
+          const closed = await admitClientRegistration(env)
+          if (closed) return closed
+        }
         // workerd 는 본문 없는 POST 에도 빈 body 를 붙여 better-call 이 Content-Type 없음 415 를 낸다 — 로그아웃은 본문을 읽지 않는다
-        const forwarded = request.method === 'POST' ? new Request(request.url, { method: 'POST', headers: request.headers }) : request
+        const forwarded = authRoute === 'POST /api/auth/sign-out' ? new Request(request.url, { method: 'POST', headers: request.headers }) : request
         return await getAuth(env).handler(forwarded)
       }
 
@@ -482,7 +512,8 @@ export default {
       return
     }
     ctx.waitUntil(runQuietly(() => cleanupServerAttachments(env, now)))
-    ctx.waitUntil(runQuietly(() => cleanupExpiredAuth(env, now)))
+    // OAuth 정리는 따로 runQuietly 지만 waitUntil 개수는 그대로 둔다 (F-4009 3장)
+    ctx.waitUntil(Promise.all([runQuietly(() => cleanupExpiredAuth(env, now)), runQuietly(() => cleanupOAuth(env, now))]))
     ctx.waitUntil(runQuietly(() => cleanupComments(env, now)))
     ctx.waitUntil(runQuietly(() => cleanupCspReports(env, now)))
     ctx.waitUntil(runQuietly(() => purgeAccessRequests(env, now)))

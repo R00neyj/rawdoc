@@ -1,7 +1,10 @@
-// better-auth 옵션·인스턴스·설정 검사·가입 관문·만료 행 정리 (specs/features/F-2033.md 2장, F-2032.md 2.2, F-2028.md 3장)
+// better-auth 옵션·인스턴스·설정 검사·가입 관문·만료 행 정리 (specs/features/F-2033.md 2장, F-2032.md 2.2, F-2028.md 3장, F-4009.md)
 import { betterAuth } from 'better-auth'
 import type { Auth, BetterAuthOptions, User, ValidateUserInfoResult } from 'better-auth'
 import type { DBFieldAttribute } from 'better-auth/db'
+import { oauthProvider } from '@better-auth/oauth-provider'
+import type { OAuthOptions } from '@better-auth/oauth-provider'
+import { oauthProviderOptions } from './oauthServer'
 import { isLocalAuthMode, readVar } from './origin'
 import { utcDay } from './usage'
 
@@ -38,6 +41,102 @@ const SIGNUP_GATE_SQL =
 export const admitNewUser: AdmitNewUser = async (env) => {
   const result = await env.DB.prepare(SIGNUP_GATE_SQL).bind(utcDay(Date.now()), SIGNUP_DAILY_LIMIT).run()
   return result.meta.changes === 1 ? undefined : { error: 'signup_closed' }
+}
+
+// oauth-provider 모델 → 0028 표·열 (F-4009 2장)
+const OAUTH_SCHEMA: NonNullable<OAuthOptions['schema']> = {
+  oauthClient: {
+    modelName: 'oauth_clients',
+    fields: {
+      clientId: 'client_id',
+      clientSecret: 'client_secret',
+      clientDiscoveryId: 'client_discovery_id',
+      skipConsent: 'skip_consent',
+      enableEndSession: 'enable_end_session',
+      subjectType: 'subject_type',
+      clientCredentialsScopes: 'client_credentials_scopes',
+      userId: 'user_id',
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+      softwareId: 'software_id',
+      softwareVersion: 'software_version',
+      softwareStatement: 'software_statement',
+      redirectUris: 'redirect_uris',
+      postLogoutRedirectUris: 'post_logout_redirect_uris',
+      backchannelLogoutUri: 'backchannel_logout_uri',
+      backchannelLogoutSessionRequired: 'backchannel_logout_session_required',
+      tokenEndpointAuthMethod: 'token_endpoint_auth_method',
+      applicationType: 'application_type',
+      jwksUri: 'jwks_uri',
+      grantTypes: 'grant_types',
+      responseTypes: 'response_types',
+      requirePKCE: 'require_pkce',
+      dpopBoundAccessTokens: 'dpop_bound_access_tokens',
+      referenceId: 'reference_id',
+    },
+  },
+  oauthResource: {
+    modelName: 'oauth_resources',
+    fields: {
+      accessTokenTtl: 'access_token_ttl',
+      refreshTokenTtl: 'refresh_token_ttl',
+      signingAlgorithm: 'signing_algorithm',
+      signingKeyId: 'signing_key_id',
+      allowedScopes: 'allowed_scopes',
+      customClaims: 'custom_claims',
+      dpopBoundAccessTokensRequired: 'dpop_bound_access_tokens_required',
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+      policyVersion: 'policy_version',
+    },
+  },
+  oauthClientResource: {
+    modelName: 'oauth_client_resources',
+    fields: { clientId: 'client_id', resourceId: 'resource_id', createdAt: 'created_at' },
+  },
+  oauthRefreshToken: {
+    modelName: 'oauth_refresh_tokens',
+    fields: {
+      clientId: 'client_id',
+      sessionId: 'session_id',
+      userId: 'user_id',
+      referenceId: 'reference_id',
+      authorizationCodeId: 'authorization_code_id',
+      requestedUserInfoClaims: 'requested_user_info_claims',
+      expiresAt: 'expires_at',
+      createdAt: 'created_at',
+      rotatedAt: 'rotated_at',
+      rotationReplayResponse: 'rotation_replay_response',
+      rotationReplayExpiresAt: 'rotation_replay_expires_at',
+      authTime: 'auth_time',
+    },
+  },
+  oauthAccessToken: {
+    modelName: 'oauth_access_tokens',
+    fields: {
+      clientId: 'client_id',
+      sessionId: 'session_id',
+      userId: 'user_id',
+      referenceId: 'reference_id',
+      authorizationCodeId: 'authorization_code_id',
+      requestedUserInfoClaims: 'requested_user_info_claims',
+      refreshId: 'refresh_id',
+      expiresAt: 'expires_at',
+      createdAt: 'created_at',
+    },
+  },
+  oauthConsent: {
+    modelName: 'oauth_consents',
+    fields: {
+      clientId: 'client_id',
+      userId: 'user_id',
+      referenceId: 'reference_id',
+      requestedUserInfoClaims: 'requested_user_info_claims',
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+    },
+  },
+  oauthClientAssertion: { modelName: 'oauth_client_assertions', fields: { expiresAt: 'expires_at' } },
 }
 
 // admit 는 테스트가 호출 시점을 보려고 바꿔 끼우는 자리다. 운영은 늘 admitNewUser (F-2033 U8·U9)
@@ -137,6 +236,7 @@ export function authOptions(
       },
     },
     onAPIError: { errorURL: '/login' },
+    plugins: [oauthProvider({ ...oauthProviderOptions(env), schema: OAUTH_SCHEMA })],
   }
 }
 
