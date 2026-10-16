@@ -25,7 +25,7 @@
 |`src/types.ts`|문서·폴더 등 저장 데이터의 모양을 정해 둠|
 |`src/vite-env.d.ts`|빌드 도구와 컴퓨터 기본 기능의 모양을 적어 둔 선언|
 
-## `src/app/` 화면과 앱 동작 (259)
+## `src/app/` 화면과 앱 동작 (266)
 
 사용자가 보는 창·메뉴·버튼과, 그 뒤에서 도는 규칙
 
@@ -62,6 +62,9 @@
 |`src/app/CommentRailPanel.tsx`|문서 옆 댓글 목록 칸을 열고 닫으며 보여줌|
 |`src/app/CommentThread.tsx`|댓글 카드 하나. 첫 댓글·답글·해결 버튼·답글 입력을 담음|
 |`src/app/ConfirmDeleteDialog.tsx`|문서나 폴더를 지울지 묻는 확인 창|
+|`src/app/connectedApps.ts`|설정 `연결된 앱` 탭에 보일 앱 이름·마지막 사용 시각 문구를 정함|
+|`src/app/connectedAppsApi.ts`|연결된 앱 목록을 서버에서 받고 연결 끊기 요청을 보냄|
+|`src/app/ConnectedAppsTab.tsx`|설정 `연결된 앱` 탭. ChatGPT·claude.ai 같은 연결된 앱을 보여 주고 연결을 끊음|
 |`src/app/contentWidth.ts`|본문 최대 너비의 허용 범위와 저장값을 계산함|
 |`src/app/ContextMenu.tsx`|오른쪽 클릭 메뉴와 그 하위 메뉴. 키보드로도 고를 수 있음|
 |`src/app/contextMenuActions.ts`|오른쪽 클릭 메뉴의 복사·붙여넣기·댓글 같은 동작을 처리함|
@@ -222,6 +225,9 @@
 |`src/app/TopBar.tsx`|화면 위 상단바(보기 방식 전환·내보내기·공유·댓글·접속자 등)|
 |`src/app/topBarMore.ts`|휴대폰 상단바 ⋯ 메뉴에 보일 항목을 정함|
 |`src/app/TopBarMoreSheet.tsx`|휴대폰 상단바 `더보기`로 여는 목차·댓글·공유·내보내기·알림 시트|
+|`src/app/trashApi.ts`|휴지통 목록·복원·영구 삭제·비우기 요청을 서버에 보냄|
+|`src/app/TrashPage.tsx`|지운 문서를 모아 보여 주고 복원·영구 삭제하는 휴지통 화면|
+|`src/app/trashView.ts`|휴지통 화면의 행 설명·알림·확인 창 문구를 정함|
 |`src/app/useAccountDelete.ts`|계정 삭제 예약과 남은 기간 안내, 취소를 처리함|
 |`src/app/useAccountStatus.ts`|계정 상태·이용 차단·경고 알림을 확인해 보여 줌|
 |`src/app/useAppearancePrefs.ts`|화면·편집기 모양 설정과 자동 잠금 설정을 바꾸고 적용함|
@@ -289,6 +295,7 @@
 |`src/app/useTemplateManager.ts`|템플릿 관리 창에서 템플릿 만들기·편집·삭제를 처리함|
 |`src/app/useTitleCommit.ts`|문서 제목을 저장하고 빈 제목이면 이전 제목으로 되돌림|
 |`src/app/useToolbarDock.ts`|휴대폰에서 서식 도구 막대를 화면 아래에 붙여 보여 줌|
+|`src/app/useTrashPage.ts`|휴지통 화면에 들어올 때 목록을 불러오고 복원·삭제 결과를 반영함|
 |`src/app/useUserCss.ts`|사용자 꾸밈 CSS를 적용하고 다른 탭 변경·안전 모드를 처리함|
 |`src/app/useVaultGate.ts`|사이드바 금고 폴더 잠금·펼침과 금고 상태 읽기를 맡음|
 |`src/app/useViewFind.ts`|보기 모드에서 문서 안 글자 찾기를 처리함|
@@ -379,7 +386,7 @@
 |`src/viewer/viewFindDom.ts`|보기 모드에서 찾은 글자를 강조하고 그 위치로 스크롤함|
 |`src/viewer/viewFindMatch.ts`|보기 모드 찾기에서 검색어와 맞는 곳을 계산함|
 
-## `src/lib/` 공통 규칙 (77)
+## `src/lib/` 공통 규칙 (78)
 
 여러 화면이 함께 쓰는 계산과 판단
 
@@ -456,6 +463,7 @@
 |`src/lib/templates.ts`|서식 폴더를 알아보고 서식 속 빈칸을 채워 넣음|
 |`src/lib/textRebase.ts`|밖에서 바뀐 글을 내가 고친 글 위에 겹쳐 반영함|
 |`src/lib/touchContextMenu.ts`|터치 길게 누르기와 마우스 우클릭 메뉴를 구분함|
+|`src/lib/trash.ts`|휴지통 보관 기간(30일), 지운 사람 표시, 지울 때 폴더 경로를 정함|
 |`src/lib/truncate.ts`|너무 긴 이름을 정한 글자 수에서 잘라 … 를 붙임|
 |`src/lib/usageGauge.ts`|사용량 막대의 비율과 주의(80%)·위험(90%) 단계, 안내 문구를 정함|
 |`src/lib/usageLimits.ts`|사용량 초과 알림 문구와 다시 시도할 시간을 정함|
@@ -532,7 +540,7 @@
 |---|---|
 |`src/types/d3-force-3d.d.ts`|3D 지도 배치 계산 도구의 사용법을 적어 둔 선언|
 
-## `worker/` 서버 (69)
+## `worker/` 서버 (84)
 
 rawdoc.app 서버. 로그인, 문서 저장, 공유, 실시간 편집, 알림을 맡음
 
@@ -552,6 +560,7 @@ rawdoc.app 서버. 로그인, 문서 저장, 공유, 실시간 편집, 알림을
 |`worker/commentGuard.ts`|권한 없이 바뀐 댓글을 찾아 원래대로 되돌릴 방법을 정함|
 |`worker/commentRows.ts`|댓글을 서버 데이터베이스에 저장하고 알림 문장을 만듦|
 |`worker/commentsApi.ts`|문서 참여자 목록, 댓글 수, 로그인 전 댓글 옮기기를 처리함|
+|`worker/connectedApps.ts`|연결된 앱 목록을 보여 주고 연결을 끊음|
 |`worker/cspReport.ts`|브라우저가 보낸 보안 정책 위반 보고를 받아 기록·정리함|
 |`worker/docPeople.ts`|문서에 접근할 수 있는 사람 목록을 모음|
 |`worker/docRoom.ts`|문서 하나마다 여는 실시간 편집 방 서버의 바깥 틀|
@@ -576,10 +585,23 @@ rawdoc.app 서버. 로그인, 문서 저장, 공유, 실시간 편집, 알림을
 |`worker/http.ts`|서버 응답과 오류 메시지를 같은 모양으로 만듦|
 |`worker/imageSniff.ts`|올린 파일이 진짜 이미지인지, 크기가 얼마인지 확인함|
 |`worker/index.ts`|서버로 오는 모든 요청을 알맞은 처리 담당에게 나눠 줌|
+|`worker/limitsPage.ts`|쓰기 한도와 기다릴 시간을 알려 주는 공개 안내 페이지 `/limits` 를 만듦|
 |`worker/links.ts`|공유 링크를 만들고 관리하며 로그인 없이 보게 해 줌|
 |`worker/loginPage.ts`|로그인 화면을 만들고 로그인 뒤 돌아갈 곳과 오류 문구를 정함|
+|`worker/mcp.ts`|연결된 앱(ChatGPT·claude.ai)이 쓰는 MCP 서버를 만들고 도구들을 붙임|
+|`worker/mcpAuth.ts`|`/mcp` 로 온 요청의 앱 접속 열쇠를 확인하고 연결 안내 정보를 내줌|
+|`worker/mcpCall.ts`|MCP 도구가 기존 문서 처리 기능을 불러 쓰고 결과를 앱이 읽는 모양으로 바꿈|
+|`worker/mcpReadTools.ts`|연결된 앱이 문서를 찾고 읽고 목록을 보는 도구|
+|`worker/mcpTrashTools.ts`|연결된 앱(ChatGPT·claude.ai)이 문서·폴더를 휴지통으로 보내는 도구|
+|`worker/mcpWriteGate.ts`|연결된 앱의 쓰기 전에 차단·쓰기 횟수 제한을 확인함|
+|`worker/mcpWriteTools.ts`|연결된 앱이 문서·폴더를 만들고 고치고 옮기는 도구|
 |`worker/node-test.d.ts`|서버 테스트에서 쓰는 몇몇 기본 기능의 형식만 알려 줌|
 |`worker/notifications.ts`|알림 목록을 보여 주고 읽음 표시를 처리함|
+|`worker/oauthClientLabel.ts`|동의 화면과 연결된 앱 목록에 보일 앱 이름·주소를 다듬음|
+|`worker/oauthConsent.ts`|앱 연결 동의 화면과 동의 처리, 로그인 뒤 연결 이어가기를 맡음|
+|`worker/oauthPages.ts`|앱 연결 동의·오류 화면을 만듦|
+|`worker/oauthServer.ts`|ChatGPT·claude.ai 같은 앱이 내 계정에 연결하도록 허락하는 로그인(OAuth) 설정|
+|`worker/openaiChallenge.ts`|OpenAI 앱 등록 때 도메인 주인임을 확인하는 값을 내줌|
 |`worker/origin.ts`|로컬 개발용 로그인 우회와 요청 출처 허용 여부를 판단함|
 |`worker/pageTokens.ts`|랜딩·로그인 화면이 함께 쓰는 색과 글꼴 값을 담음|
 |`worker/providerLogos.ts`|구글·깃허브 로그인 버튼의 공식 로고 그림을 담음|
@@ -599,6 +621,7 @@ rawdoc.app 서버. 로그인, 문서 저장, 공유, 실시간 편집, 알림을
 |`worker/shareSet.ts`|문서 링크를 따라가며 함께 공유할 문서를 모음|
 |`worker/testD1.ts`|테스트에서 서버 데이터베이스 대신 쓸 임시 데이터베이스를 만듦|
 |`worker/token.ts`|공유 링크용 무작위 주소 조각을 만들고 형식을 검사함|
+|`worker/trash.ts`|문서·폴더를 휴지통으로 보내고 복원·영구 삭제·30일 만료를 처리함|
 |`worker/usage.ts`|사용자별 저장량·문서 수·하루 쓰기 한도를 계산하고 기록함|
 |`worker/userCss.ts`|사용자가 만든 꾸미기 스타일을 본인 것만 저장·불러옴|
 |`worker/v1.ts`|명령줄 도구·자동 업로드용 문서·폴더·첨부 요청을 처리함|

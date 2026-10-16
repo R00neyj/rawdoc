@@ -327,14 +327,22 @@ type YjsMetaRow = {
 
 ```
 wrangler.jsonc           Worker 스크립트·D1(DB)·R2(BUCKET)·정적 자산(ASSETS) 바인딩 (F-204), Durable Object `DOC_ROOM`(클래스 `DocRoom`) 바인딩·마이그레이션 (F-304), Rate Limiting `WRITE_LIMITER` (F-2026)
-migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213, F-309 에서 삭제) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057) 0015 notifications_recipient_order(F-2075) 0016 shared_indexes(F-2058) 0017 push_subscriptions(F-3003) 0018 notifications_push(F-3005) 0019 push_quota 0020 user_css 0021 notifications_share(F-3012) 0022 drop_doc_locks(F-309) 0023 github(F-3013, F-3014 가 만듦 — 예정) 0025 access_requests(F-4005) 0026 request_tokens(F-4007)
+migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213, F-309 에서 삭제) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057) 0015 notifications_recipient_order(F-2075) 0016 shared_indexes(F-2058) 0017 push_subscriptions(F-3003) 0018 notifications_push(F-3005) 0019 push_quota 0020 user_css 0021 notifications_share(F-3012) 0022 drop_doc_locks(F-309) 0023 github(F-3013, F-3014 가 만듦 — 예정) 0025 access_requests(F-4005) 0026 request_tokens(F-4007) 0027 trash(F-3022 — `docs.deleted_at`·`deleted_by`·`deleted_path` 세 열, 셋 다 NULL 이면 살아 있음) 0028 oauth(F-4009 — 표 아홉, 아래 OAuth 표)
 worker/
   index.ts               fetch 진입점, 라우트 표 { method, path, handler }
   http.ts                JSON 응답 도우미
   auth.ts                better-auth 세션으로 사용자 판정, 개발 우회, requireUser (F-205, F-2033)
   authServer.ts          better-auth 옵션·인스턴스·설정 검사·가입 관문·만료 행 정리 (F-2033, F-2028)
   origin.ts              로컬 인증 모드·개발 우회·`Origin` 판정 (F-2033)
-  loginPage.ts providerLogos.ts   `/login` 페이지, 제공자 공식 로고 (F-2033)
+  loginPage.ts providerLogos.ts   `/login` 페이지, 제공자 공식 로고 (F-2033). `/login?oauth_query=` 는 앱 연결 이어가기 (F-4010)
+  limitsPage.ts          `/limits` 쓰기 한도 공개 안내 페이지 — 스크립트 없음, noindex (F-2147)
+  oauthServer.ts         `@better-auth/oauth-provider` 인가 서버 설정·AS 메타데이터·클라이언트 등록 하루 관문·만료 행 정리 (F-4009)
+  oauthConsent.ts oauthPages.ts oauthClientLabel.ts   로그인 이어가기(`oauth_query` 상한 1,700자, 오류 주소 포함 850자)·동의 처리 `POST /api/oauth/consent`·`/oauth/consent`·`/oauth/error` 화면·앱 이름 다듬기 (F-4010)
+  mcpAuth.ts connectedApps.ts openaiChallenge.ts   `/mcp` 접근 토큰 검사·보호 자원 메타데이터, `/api/connected-apps` 목록·끊기, OpenAI 도메인 확인 (F-4011)
+  mcp.ts mcpCall.ts mcpReadTools.ts   `POST /mcp` MCP 서버·도구가 `/v1` 핸들러를 부르는 도우미·읽기 도구 (F-3030)
+  mcpWriteTools.ts mcpWriteGate.ts    MCP 쓰기 도구·쓰기 관문 (`runWriteGate` 를 도구 오류로) (F-3031)
+  mcpTrashTools.ts       MCP 지우기 도구 둘, 휴지통으로 (F-3032)
+  trash.ts               휴지통 보내기(문서·폴더 delete-all)·`/api/trash` 목록·복원·영구 삭제·비우기·30일 만료. 상수·타입은 `src/lib/trash.ts` (F-3023)
   pageTokens.ts          랜딩·로그인 페이지 공통 색 변수 (F-2033)
   docs.ts folders.ts validate.ts   (F-206)
   links.ts token.ts      (F-210·F-211)
@@ -347,7 +355,7 @@ worker/
   usage.ts               사용량 열·한도·사용량 줄 (F-2025)
   writeGate.ts           쓰기 관문 — 401·403 account_blocked·429 day·429 minute (F-2026)
   account.ts             `GET`·`DELETE /api/account` — 삭제 미리 보기, 최근 로그인 10분 판정, 계정 행 전부를 지우는 D1 batch 하나 (F-2038)
-  purgeJobs.ts           `purge_jobs` 비우기 — 지운 계정의 DO 방·R2 접두사를 호출 예산 안에서 차례로. Cron 문자열 상수 (F-2038)
+  purgeJobs.ts           `purge_jobs` 비우기 — 지운 계정·영구 삭제 문서의 DO 방·R2 접두사를 호출 예산 안에서 차례로. Cron 문자열 상수, `cronPurgeCalls` (F-2038, F-3023)
   testD1.ts              테스트 전용 node:sqlite D1 어댑터 (F-2025)
   awarenessRelay.ts        (F-307)
   v1.ts apiTokens.ts       `/v1` 핸들러·개인 토큰 (F-222·F-223)
@@ -364,7 +372,14 @@ scripts/admin-github.mjs                              GitHub 기능 켜기·끄�
 
 - 배포: GitHub `deploy` 브랜치에 올리면 Cloudflare Workers Builds 가 `npm run build` → `npx wrangler deploy`. `deploy` 는 로컬 `verify:full` 을 통과한 main 커밋만 가리킨다(`git push origin <sha>:deploy`). main push 는 GitHub Actions `ci.yml`(린트·타입·단위·빌드)만. D1 원격 마이그레이션은 자동화하지 않고 배포 전에 손으로 (2026-09-15)
 - 배포 주소: `rawdoc.app` 하나 (커스텀 도메인). `workers_dev`·`preview_urls` 는 끈다 — IndexedDB·서비스 워커가 출처별로 갈라지지 않게
-- 경로: `/api/*` 는 로그인(better-auth 세션 쿠키, Worker 가 판정 — F-2033). `/login` 은 Worker 가 만드는 로그인 페이지(스크립트 없음, F-2033). `/` 는 쿠키로 갈리는 워커 분기(F-271), `/welcome` 은 언제나 랜딩(F-2051, canonical 은 `/`). 비`GET` `/api/*` 는 라우트 표 앞에서 `Origin` 을 검사한다(403 `forbidden_origin`, F-2033 5.4). `/pub/*` 는 로그인 없이 읽기만(쓰기 메서드 405). 나머지는 정적 자산, 없는 경로는 `404.html` (`wrangler.jsonc` 의 `not_found_handling: "404-page"`, F-272 7장. 그전에는 `index.html` 이었다). 사이트 페이지(`/changelog`·`/help`·`/privacy`·`/terms`·`/guides/*`)는 빌드가 낸 평평한 `{경로}.html` 정적 자산이다
+- 경로: `/api/*` 는 로그인(better-auth 세션 쿠키, Worker 가 판정 — F-2033). `/login` 은 Worker 가 만드는 로그인 페이지(스크립트 없음, F-2033). `/limits` 는 Worker 가 만드는 공개 안내 페이지(스크립트 없음, noindex, F-2147). `/` 는 쿠키로 갈리는 워커 분기(F-271), `/welcome` 은 언제나 랜딩(F-2051, canonical 은 `/`). 비`GET` `/api/*` 는 라우트 표 앞에서 `Origin` 을 검사한다(403 `forbidden_origin`, F-2033 5.4). `/pub/*` 는 로그인 없이 읽기만(쓰기 메서드 405). 나머지는 정적 자산, 없는 경로는 `404.html` (`wrangler.jsonc` 의 `not_found_handling: "404-page"`, F-272 7장. 그전에는 `index.html` 이었다). 사이트 페이지(`/changelog`·`/help`·`/privacy`·`/terms`·`/guides/*`)는 빌드가 낸 평평한 `{경로}.html` 정적 자산이다
+- 앱 해시 경로에 `#/trash` — 휴지통 화면 S-10 (`hashRoute.ts`, F-2145)
+- 휴지통(F-3021): D1 `docs` 질의는 `deleted_at` 을 거르거나 `trashFilter` 허용 목록(`tests/worker/trashFilter.test.ts`)에 있다 (F-3022). 휴지통 행을 읽은 DocRoom 은 4404 로 닫고 저장소는 남긴 채 `DocRoomHost.retire` 로 인스턴스를 버린다 — 복원 뒤 같은 계보로 이어진다 (F-3022 6장)
+- `/api/trash` 넷: `GET`(목록)·`DELETE`(비우기)·`POST /api/trash/:id/restore`·`DELETE /api/trash/:id`(영구 삭제). 영구 삭제 D1 쓰기는 문서 수와 무관하게 16문장 한 batch, DO 방·R2 는 `purge_jobs` 로 (F-3023)
+- OAuth 인가 서버(F-4009): `GET /api/auth/oauth2/authorize`, `POST /api/auth/oauth2/token`·`register`·`revoke`(서버 간 호출이라 `Origin` 관문을 건너뜀, `register` 는 하루 관문 `oauth_register_gate` 먼저). `/.well-known/oauth-authorization-server`(`…/api/auth` 도). `/.well-known/` 아래 그 밖은 404
+- 앱 연결 화면(F-4010): `/oauth/consent`·`/oauth/error`(Worker 가 만드는 페이지), `POST /api/oauth/consent`. `/login` 은 `oauth_query` 가 있으면 로그인 뒤 인가 흐름으로 이어간다 — 만료·위조면 `/oauth/error?error=request_expired`
+- MCP(F-4011·F-3030): `POST /mcp` 는 `Authorization: Bearer` OAuth 접근 토큰만(쿠키·`rd_` 토큰 아님). `/.well-known/oauth-protected-resource`·`/.well-known/oauth-protected-resource/mcp` 보호 자원 메타데이터, `/.well-known/openai-apps-challenge`(선택 비밀 `OPENAI_APPS_CHALLENGE`, 없으면 404). `GET /api/connected-apps`·`DELETE /api/connected-apps/:id` 로 연결된 앱 목록·끊기
+- OAuth 표(0028, F-4008 10장): `oauth_clients`·`oauth_resources`·`oauth_client_resources`·`oauth_refresh_tokens`·`oauth_access_tokens`(토큰은 SHA-256 base64url 해시만)·`oauth_consents`·`oauth_client_assertions`·`oauth_client_use`(마지막 사용 시각, F-4011)·`oauth_register_gate`(행 하나). `users` 삭제 CASCADE 로 함께 지워진다
 - `/assets/*` 는 1년 immutable, 단 이름이 고정인 `assets/welcome-demo.js` 만 `no-cache`(`public/_headers`, F-2049 4.1). 랜딩 번들은 precache 에 넣지 않는다(F-2049 4.2)
 - `GET /pub/docs/:token/set` 응답에 문서마다 위키링크 해석 결과 표 `links` 가 붙는다(문서 1개뿐이어도 `links: {}`, 추가 질의 없음) — F-2018 (2026-09-23)
 - API 응답 헤더: `Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`. 오류 본문에 내부 정보 없음. `GET /api/notifications` 는 `ETag` 를 싣고 같은 `If-None-Match` 면 304 (F-2057)
@@ -378,7 +393,7 @@ scripts/admin-github.mjs                              GitHub 기능 켜기·끄�
 - 서버 저장소 전용 `lastSharedList()`·`lastServerListAt()`, `list()` 진행 중 합치기(쓰기 세대)가 있다(F-2056)
 - R2 키 `att/{owner_id}/{id}.{ext}`, 공개 버킷·서명 URL 없음 (F-209)
 - 안 쓰는 첨부 정리: 매일 UTC 18시 Cron `scheduled` → 모든 문서 원문에 없고 24시간 지난 첨부 R2·D1 삭제 (F-219). 같은 Cron 이 만료된 `auth_sessions`·`auth_verifications` 행도 따로 지운다 (F-2033 2.6)
-- 10분 Cron `*/10 * * * *` — `purge_jobs` 비우기(DO 방 먼저, 그다음 R2 접두사, 호출 예산 40). 계정 삭제 요청도 204 뒤 `waitUntil` 로 예산 15 만큼 먼저 비운다. `scheduled` 는 `event.cron` 이 이 문자열일 때만 정리를 돌리고, 그 밖에는 매일 정리만 (F-2038 5.4·5.5)
+- 10분 Cron `*/10 * * * *` — 먼저 휴지통 30일 만료(`expireTrash`: 가장 오래된 만료 행의 소유자 한 명, 99개까지, 실패한 소유자는 로그 뒤 건너뛰고 다음 소유자, F-3023 5장), 그다음 `purge_jobs` 비우기(DO 방 먼저, 그다음 R2 접두사). 비우기 호출 예산은 `cronPurgeCalls(만료 문장 수)` = `min(PURGE_CALLS_ON_CRON 29, 하위 요청 50 − 비우기 D1 4 − 만료 문장 수)`. 계정 삭제 요청도 204 뒤 `waitUntil` 로 예산 15 만큼 먼저 비운다. `scheduled` 는 `event.cron` 이 이 문자열일 때만 이 일을 돌리고, 그 밖에는 매일 정리만 (F-2038 5.4·5.5, F-3023)
 - `/v1` PUT → `DocRoom` RPC `writeText`(idle: DO 안 D1 조건부 쓰기, 실시간: `Y.Text` 차이 적용 + 즉시 스냅숏). 실패하면 D1 직접 (F-308)
 - 쓰기 요청의 D1 쓰기는 사용량 줄(`users` 한 행)과 한 batch. 문서 행을 바꾸면 소유자 누계도 (F-2025)
 - 쓰기 라우트(`GET` 아닌 `/api`·`/v1`, `POST /api/login`·`/api/account` 제외)는 `Origin` 검사·라우트 찾기 뒤, 핸들러 앞에 관문 하나(`writeGate.ts`). 분당 바인딩 `WRITE_LIMITER` 가 던지면 통과 (F-2026)

@@ -56,7 +56,7 @@ rawdoc login --with-token < token.txt
 | `rawdoc upload 그림.png` | 이미지를 올리고 붙일 마크다운 받기(PNG·JPEG 는 더 작아지면 WebP 로 바꿔 올림) |
 | `rawdoc link <id>` | 읽기 전용 링크 만들기 |
 | `rawdoc mv <id> --folder <폴더id\|경로>` | 문서 옮기기(`--root` 면 맨 위로) |
-| `rawdoc rm <id> --yes` · `rawdoc rmdir <id> --yes` | 문서·폴더 지우기(되돌릴 수 없음. `rmdir` 은 안의 것을 위 폴더로 올리고, `--all` 이면 모두 지움) |
+| `rawdoc rm <id> --yes` · `rawdoc rmdir <id> --yes` | 문서·폴더 지우기(지운 문서는 휴지통으로, 웹에서 30일 안에 복원. `rmdir` 은 안의 것을 위 폴더로 올리고, `--all` 이면 하위 폴더도 지우고 문서는 휴지통으로) |
 | `rawdoc syntax` | 이 앱에서 쓰는 마크다운 문법을 터미널에 출력(`--short`면 이 앱에만 있는 문법만) |
 
 금고 문서나 금고 폴더가 걸린 지우기·옮기기는 웹에서 합니다.

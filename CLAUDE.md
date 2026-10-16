@@ -101,7 +101,8 @@ depends: [F-232, F-281]      # prerequisite specs. Omit the line if none
 | PWA | `vite-plugin-pwa` (Workbox) | In use |
 | Static + API | Cloudflare Workers (static assets + `worker/`), custom domain `rawdoc.app` (workers.dev disabled) | In use (F-204). Structure in `specs/architecture.md` ch. 6 |
 | Metadata DB / files | D1 `md-editor-db` / R2 `md-editor-attachments` | In use (F-205~) |
-| Auth | `better-auth` 1.7.5 (Google·GitHub OAuth, D1 sessions) + `worker/apiTokens.ts` for CLI | F-2033 (replaces Access, F-205). Not deployed yet — deploy steps in `specs/features/F-2033.md` ch. 11 |
+| Auth | `better-auth` 1.7.10 (Google·GitHub OAuth, D1 sessions) + `@better-auth/oauth-provider` 1.7.10 (MCP connector authorization server, F-4009) + `worker/apiTokens.ts` for CLI | F-2033 (replaces Access, F-205). Not deployed yet — deploy steps in `specs/features/F-2033.md` ch. 11 |
+| MCP transport | `@modelcontextprotocol/server` 2.3.1 + `zod` 4.5.4 (direct dependency), only in `worker/mcp*.ts` | In use (F-3030) |
 | CRDT / editor binding | `yjs` + `y-codemirror.next` (local `Y.Doc` per editor, no network) + `y-protocols` (awareness, F-307) | In use (F-302) |
 | Live sync | Durable Object + y-partyserver | In use (server F-304 `worker/docRoom.ts`, client F-305 `src/app/useLiveDoc.ts`). Deployed 2026-09-24 (F-305~F-308). Edit locks removed (F-309); fallback sessions save by PUT and split on `baseVersion` 409 copies |
 | E2E tests | Playwright (`@playwright/test`), installed Chrome channel | In use (F-150) |
