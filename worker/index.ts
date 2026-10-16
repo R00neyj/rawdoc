@@ -3,6 +3,7 @@ import { getUser, getUserRefreshing, type AuthUser } from './auth'
 import { cleanupExpiredAuth, getAuth } from './authServer'
 import { isAllowedOrigin, needsOriginCheck } from './origin'
 import { loginReturn, renderLoginPage } from './loginPage'
+import { handleLimitsPage } from './limitsPage'
 import {
   handleCreateDoc,
   handleDeleteDoc,
@@ -404,6 +405,9 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext, 
       }
       if (url.pathname === '/login') {
         return handleLoginPage(request, env)
+      }
+      if (url.pathname === '/limits') {
+        return handleLimitsPage(request, env)
       }
       if (url.pathname === '/welcome') {
         return withWelcomeHeaders(renderWelcomePage({ path: WELCOME_PATH, nonce }))

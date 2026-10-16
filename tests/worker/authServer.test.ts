@@ -488,6 +488,7 @@ describe('F-2033 U12 wrangler.jsonc 계약', () => {
     expect(config.secrets.required).not.toContain('GITHUB_APP_SLUG')
     expect(config.compatibility_flags).toContain('nodejs_compat')
     expect(config.assets.run_worker_first).toContain('/login')
+    expect(config.assets.run_worker_first).toContain('/limits')
   })
 })
 
