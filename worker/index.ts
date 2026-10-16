@@ -83,6 +83,7 @@ import {
   handleUpdateDocV1,
 } from './v1'
 import { handleSearchV1 } from './v1Search'
+import { handleMcp } from './mcp'
 import { handleDeleteE2eeKeys, handleGetE2eeKeys, handlePutE2eeKeys } from './e2eeKeys'
 import { handleSetDocE2ee } from './e2eeDocs'
 import { handleGetUserCss, handlePutUserCss } from './userCss'
@@ -442,6 +443,8 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext, 
         return errorResponse('internal', 500)
       }
     }
+
+    if (url.pathname === '/mcp') return handleMcp(request, env, ctx)
 
     if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/pub/') && !url.pathname.startsWith('/v1/')) {
       if (url.pathname.startsWith('/p/')) {

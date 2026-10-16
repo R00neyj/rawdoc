@@ -57,6 +57,7 @@
     "@lezer/xml": "^1.0.6",
     "@lezer/yaml": "^1.0.4",
     "@material-symbols/svg-400": "^0.47.2",
+    "@modelcontextprotocol/server": "2.3.1",
     "better-auth": "1.7.10",
     "d3-force-3d": "^3.0.6",
     "fflate": "^0.8.3",
@@ -74,7 +75,8 @@
     "y-codemirror.next": "^0.3.6",
     "y-partyserver": "^2.2.0",
     "y-protocols": "^1.0.7",
-    "yjs": "^13.6.32"
+    "yjs": "^13.6.32",
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
