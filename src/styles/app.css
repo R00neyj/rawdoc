@@ -7529,3 +7529,39 @@ h3.panel-settings-title:not(:first-child) {
   align-items: center;
   gap: 6px;
 }
+
+.settings-apps .connected-apps-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.connected-app-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 8px 0;
+}
+
+.connected-app-info {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.connected-app-name {
+  overflow-wrap: anywhere;
+}
+
+.connected-app-meta {
+  color: var(--muted);
+  font-size: 0.9em;
+}
+
+.connected-apps-empty:focus {
+  outline: none;
+}

@@ -10,7 +10,7 @@ export type SettingsPopAction =
   | { kind: 'close' }
   | { kind: 'restore'; delta: number }
 
-const TAB_IDS: readonly string[] = ['screen', 'editor', 'kanban', 'css', 'data', 'e2ee', 'account']
+const TAB_IDS: readonly string[] = ['screen', 'editor', 'kanban', 'css', 'data', 'e2ee', 'account', 'apps']
 
 export function settingsPagesMode(phone: boolean, tabCount: number): boolean {
   return phone && tabCount >= 2

@@ -34,6 +34,22 @@ describe('visibleSettingsTabs — U13 (F-404.md 10.1)', () => {
   })
 })
 
+describe('visibleSettingsTabs — apps (F-2148 U1)', () => {
+  test('apps 는 account 뒤 마지막', () => {
+    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, account: true, apps: true })).toEqual([
+      'screen',
+      'editor',
+      'data',
+      'account',
+      'apps',
+    ])
+  })
+
+  test('apps 없으면 기존 결과', () => {
+    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, account: true })).toEqual(['screen', 'editor', 'data', 'account'])
+  })
+})
+
 describe('nextTabIndex (F-290 A2)', () => {
   test.each([
     [0, 3, 'ArrowDown', 1],

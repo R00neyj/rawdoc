@@ -8,6 +8,7 @@ import { settingsPagesMode } from './settingsPages'
 import PushSettings from './PushSettings'
 import GithubSettings from './GithubSettings'
 import UserCssTab from './UserCssTab'
+import ConnectedAppsTab from './ConnectedAppsTab'
 import type { PushSettingsView } from './pushClient'
 import type { GithubStatus } from '../lib/githubContract'
 import { WELCOME_PATH } from '../lib/siteChrome'
@@ -86,6 +87,7 @@ const TAB_LABELS: Record<SettingsTabId, string> = {
   data: '데이터',
   e2ee: '금고',
   account: '계정',
+  apps: '연결된 앱',
 }
 
 // `계정` 탭 — 로그인(또는 오프라인이고 저장된 계정)일 때만 App 이 준다 (F-2038.md 6.1)
@@ -399,6 +401,7 @@ export default function SettingsDialog({
     css: userCss !== undefined,
     e2ee: e2ee !== undefined,
     account: account !== undefined,
+    apps: account !== undefined,
     rightPanel: rightPanel !== undefined,
     kanban: kanban !== undefined,
   })
@@ -582,6 +585,7 @@ export default function SettingsDialog({
     if (id === 'rightPanel' && rightPanel) return <RightPanelSettingsTab settings={rightPanel} entries={templateEntries ?? []} />
     if (id === 'kanban' && kanban) return <KanbanSettingsTab settings={kanban} />
     if (id === 'css' && userCss) return <UserCssTab key={userCss.accountId ?? ''} accountId={userCss.accountId} />
+    if (id === 'apps' && account) return <ConnectedAppsTab online={account.online} />
     if (id === 'data') {
       // 로컬 앱·로그인 계정 전용, PublicView 는 안 준다(F-281.md 3.6, F-282.md 3.1) — 내보내기·가져오기 두 묶음, 버튼마다 한 줄 설명(tweak 2026-09-26)
       // .dialog-field 는 쓰지 않는다 — 설정 라벨 세는 선택자에 걸린다, 두 묶음이 한 격자를 같이 써 버튼·설명 칸이 묶음 넘어 맞춰진다

@@ -29,6 +29,9 @@ describe('F-2114 U2 readSettingsPage', () => {
   it('칸반 탭 표식도 읽는다 (small 2026-10-14)', () => {
     expect(readSettingsPage({ settings: 'kanban' }, ['screen', 'kanban'])).toBe('kanban')
   })
+  it('연결된 앱 탭 표식도 읽는다 (F-2148 U1)', () => {
+    expect(readSettingsPage({ settings: 'apps' }, ['screen', 'account', 'apps'])).toBe('apps')
+  })
 })
 
 describe('F-2114 U3 settingsPageDepth', () => {

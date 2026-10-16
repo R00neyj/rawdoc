@@ -440,6 +440,33 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
     return route.fulfill({ status: 204 })
   })
 
+  // GET /api/connected-apps, DELETE /api/connected-apps/:id 를 메모리로 흉내낸다 (F-2148)
+  let connectedApps = []
+  const connectedAppsLog = []
+  let connectedAppsFail = { status: 0, times: 0 }
+  function connectedAppsFailure() {
+    if (connectedAppsFail.times <= 0) return null
+    connectedAppsFail.times -= 1
+    return connectedAppsFail.status
+  }
+  await page.route('**/api/connected-apps', async (route) => {
+    connectedAppsLog.push({ method: route.request().method(), id: null })
+    if (offline) return route.abort('internetdisconnected')
+    const failStatus = connectedAppsFailure()
+    if (failStatus) return route.fulfill({ status: failStatus, contentType: 'application/json', body: '{"error":"internal"}' })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(connectedApps) })
+  })
+  await page.route(/\/api\/connected-apps\/[^/]+$/, async (route) => {
+    const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop())
+    connectedAppsLog.push({ method: route.request().method(), id })
+    if (offline) return route.abort('internetdisconnected')
+    const failStatus = connectedAppsFailure()
+    if (failStatus) return route.fulfill({ status: failStatus, contentType: 'application/json', body: '{"error":"not_found"}' })
+    if (!connectedApps.some((a) => a.id === id)) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' })
+    connectedApps = connectedApps.filter((a) => a.id !== id)
+    return route.fulfill({ status: 204 })
+  })
+
   // GET·POST·DELETE /api/(docs|folders)/:id/link — 읽기 전용 링크 (F-210·F-211)
   await page.route(/\/api\/(docs|folders)\/[^/]+\/link$/, async (route) => {
     if (offline) return route.abort('internetdisconnected')
@@ -1070,6 +1097,15 @@ export async function fakeServer(page, { id = 'u1', email = 'a@b.com', userCss =
       return accessRequestLog.map((r) => ({ ...r }))
     },
     apiTokens,
+    setConnectedApps(list) {
+      connectedApps = list.map((a) => ({ ...a }))
+    },
+    connectedAppsLog() {
+      return connectedAppsLog.map((e) => ({ ...e }))
+    },
+    failConnectedApps(rule) {
+      connectedAppsFail = { ...rule }
+    },
     // 네트워크 오프라인을 흉내낸다 — 이후 모든 요청은 실패한다 (F-207 A4)
     setOffline(v) {
       offline = v
