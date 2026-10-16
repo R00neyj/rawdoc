@@ -1,6 +1,7 @@
 // 도움말 ↔ 사용법 글 분담 규칙 (specs/features/F-2039.md 2장 R3~R7, 8.2 U4~U7)
 import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
+import { TRASH_RETENTION_DAYS } from '../../src/lib/trash'
 import { fileURLToPath } from 'node:url'
 import { findFrontmatter, parseSimpleProperties } from '../../src/lib/frontmatter'
 import { HELP_DOC_CONTENT } from '../../src/app/helpDoc'
@@ -696,6 +697,48 @@ describe('right-panel 글', () => {
     expect(raw).toContain(`이웃은 ${LOCAL_GRAPH_MAX_NEIGHBORS}개까지`)
     expect(raw).toContain(`${TODO_MAX_ITEMS}개까지 보이고`)
     expect(raw).toContain(`\`할 일이 많아 앞의 ${TODO_MAX_ITEMS}개만 보여 줍니다.\``)
+  })
+
+  it('글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(raw).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+// 사용법 글 ai-connectors (write-guide, 2026-10-16) — 서버 수치는 tests/worker/guideLimits.test.ts
+describe('ai-connectors 글', () => {
+  const raw = readGuide('ai-connectors')
+  const source = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf-8')
+
+  it('휴지통 보관 기간이 상수와 같다 (R5)', () => {
+    expect(raw).toContain(`휴지통에 ${TRASH_RETENTION_DAYS}일 동안`)
+  })
+
+  it('인용한 화면 글자가 코드에 그대로 있다', () => {
+    const pages = source('../../worker/oauthPages.ts')
+    for (const line of [
+      '문서·폴더 목록과 본문 읽기 (공유받은 문서 포함)',
+      '문서·폴더 만들기·고치기·옮기기',
+      '문서·폴더를 휴지통으로 보내기',
+      '돌아갈 곳: ',
+      '앱을 연결하지 못했습니다',
+      '연결 요청 시간이 지났습니다. ',
+      '연결하려는 앱을 찾을 수 없습니다. ',
+      '앱이 알려 준 돌아갈 주소가 등록된 주소와 달라 연결을 멈췄습니다. ',
+      '연결 요청을 처리하지 못했습니다. ',
+    ]) {
+      expect(pages, line).toContain(line)
+      expect(raw, line).toContain(`\`${line.trim()}`)
+    }
+    expect(source('../../worker/loginPage.ts')).toContain("'앱 연결을 계속하려면 로그인하세요. ")
+    expect(raw).toContain('`앱 연결을 계속하려면 로그인하세요.`')
+    expect(source('../../src/app/trashView.ts')).toContain('`${name}에서 지움`')
+    expect(raw).toContain('`{앱 이름}에서 지움`')
+    expect(source('../../src/app/connectedApps.ts')).toContain('· 아직 사용 안 함')
+    expect(raw).toContain('`아직 사용 안 함`')
+    expect(source('../../worker/limitsPage.ts')).toContain("'쓰기 제한에 걸렸습니다'")
+    expect(raw).toContain('`쓰기 제한에 걸렸습니다`')
   })
 
   it('글에 제품명이 없다 (R6)', () => {

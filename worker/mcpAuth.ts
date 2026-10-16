@@ -11,7 +11,7 @@ import type { UsageRow } from './usage'
 export type McpCaller = { user: AuthUser; clientId: string; clientName: string }
 
 // apiTokens.ts LAST_USED_UPDATE_INTERVAL_MS 와 같은 값
-const LAST_USED_UPDATE_INTERVAL_MS = 10 * 60 * 1000
+export const LAST_USED_UPDATE_INTERVAL_MS = 10 * 60 * 1000
 
 const USER_COLUMNS = USAGE_COLUMNS.split(', ').map((column) => `u.${column}`).join(', ')
 

@@ -40,6 +40,7 @@ const SECTION_ORDER = [
   '설치와 오프라인',
   '계정',
   '명령줄 도구',
+  'AI 앱 연결',
   '단축키',
   '마크다운 문법',
 ]
@@ -165,7 +166,7 @@ describe('HELP_DOC_CONTENT', () => {
   // 예외: ## 명령줄 도구 절 인라인 코드 속 명령 이름(brand.cliName) — ia.md 6.1 R6 의 cli.md 예외와 같은 이유
   it('제품명 문자열을 직접 쓰지 않는다(CLAUDE.md 불변조건)', () => {
     const start = HELP_DOC_CONTENT.indexOf('## 명령줄 도구')
-    const end = HELP_DOC_CONTENT.indexOf('## 단축키')
+    const end = HELP_DOC_CONTENT.indexOf('## AI 앱 연결')
     const cliSection = HELP_DOC_CONTENT.slice(start, end)
     const rest = HELP_DOC_CONTENT.slice(0, start) + HELP_DOC_CONTENT.slice(end)
     expect(rest).not.toContain(brand.name)
@@ -345,7 +346,7 @@ describe('도움말 ## 명령줄 도구 절', () => {
 
   it('## 계정 바로 뒤·## 단축키 앞에 있고, 사용법 글 줄로 끝나며, 명령·화면 글자가 코드와 같다', () => {
     const names = appSections().map((s) => s.name)
-    expect(names[names.indexOf('명령줄 도구') + 1]).toBe('단축키')
+    expect(names[names.indexOf('명령줄 도구') + 1]).toBe('AI 앱 연결')
     const section = appSections().find((s) => s.name === '명령줄 도구')!
     const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
     expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [터미널에서 문서 읽고 쓰기](/guides/cli)')
@@ -369,6 +370,27 @@ describe('도움말 ## 명령줄 도구 절', () => {
     expect(major).toBeTruthy()
     const section = appSections().find((s) => s.name === '명령줄 도구')!
     expect(section.body).toContain(`Node ${major} 이상`)
+  })
+})
+
+// 사용법 글 ai-connectors 의 도움말 절 (write-guide, 2026-10-16) — 쓰기 한도 수치는 tests/worker/guideLimits.test.ts
+describe('도움말 ## AI 앱 연결 절', () => {
+  const readSource = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf-8')
+
+  it('## 명령줄 도구 바로 뒤·## 단축키 앞에 있고, 사용법 글 줄로 끝나며, 주소·화면 글자가 코드와 같다', () => {
+    const names = appSections().map((s) => s.name)
+    expect(names[names.indexOf('AI 앱 연결') + 1]).toBe('단축키')
+    const section = appSections().find((s) => s.name === 'AI 앱 연결')!
+    const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [ChatGPT·Claude에 문서 연결하기](/guides/ai-connectors)')
+    expect(readSource('../../../worker/oauthServer.ts')).toContain("new URL('/mcp', readVar(env, 'BETTER_AUTH_URL'))")
+    expect(section.body).toContain('`/mcp`')
+    expect(readSource('../../../worker/oauthPages.ts')).toContain('value="yes">허용</button>')
+    expect(section.body).toContain('`허용`')
+    expect(readSource('../../../src/app/SettingsDialog.tsx')).toContain("apps: '연결된 앱'")
+    expect(section.body).toContain('`연결된 앱`')
+    expect(readSource('../../../src/app/ConnectedAppsTab.tsx')).toContain("'연결 끊기'")
+    expect(section.body).toContain('`연결 끊기`')
   })
 })
 

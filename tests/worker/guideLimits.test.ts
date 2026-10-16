@@ -12,6 +12,9 @@ import { NOTIFICATION_EXCERPT_CHARS } from '../../worker/commentRows'
 import { HELP_DOC_CONTENT } from '../../src/app/helpDoc'
 import { REPOS_MAX, TREE_TRUNCATED_AT } from '../../worker/githubRepos'
 import { MESSAGE_MAX } from '../../worker/githubPush'
+import { MCP_LIST_PAGE } from '../../worker/mcpCall'
+import { SEARCH_MAX_DOCS } from '../../worker/searchLines'
+import { LAST_USED_UPDATE_INTERVAL_MS } from '../../worker/mcpAuth'
 
 const GUIDE_PATH = fileURLToPath(new URL('../../content/guides/offline-sync.md', import.meta.url))
 const IMAGES_GUIDE_PATH = fileURLToPath(new URL('../../content/guides/images.md', import.meta.url))
@@ -50,11 +53,32 @@ describe('U5 도움말 ## 저장 의 서버 한도 (R5, U22 가 넘긴 것)', ()
 
 // 사용법 글 cli 의 도움말 절 (write-guide, 2026-10-03)
 describe('도움말 ## 명령줄 도구 의 쓰기 한도 (R5)', () => {
-  it('## 명령줄 도구 부터 ## 단축키 앞까지에 분·하루 쓰기 한도가 상수 그대로 들어 있다', () => {
+  it('## 명령줄 도구 부터 ## AI 앱 연결 앞까지에 분·하루 쓰기 한도가 상수 그대로 들어 있다', () => {
     const cliIdx = HELP_DOC_CONTENT.indexOf('## 명령줄 도구')
-    const shortcutIdx = HELP_DOC_CONTENT.indexOf('## 단축키')
+    const shortcutIdx = HELP_DOC_CONTENT.indexOf('## AI 앱 연결')
     expect(cliIdx).toBeGreaterThan(-1)
     const section = HELP_DOC_CONTENT.slice(cliIdx, shortcutIdx)
+    expect(section).toContain(`1분에 ${MINUTE_WRITE_LIMIT}번`)
+    expect(section).toContain(`하루 ${DAILY_WRITE_LIMIT.toLocaleString('en-US')}번`)
+  })
+})
+
+// 사용법 글 ai-connectors (write-guide, 2026-10-16)
+describe('ai-connectors 글과 도움말 ## AI 앱 연결 의 서버 수치 (R5)', () => {
+  it('글에 쓰기 한도·목록과 검색 개수·마지막 사용 간격이 상수 그대로 들어 있다', () => {
+    const raw = readFileSync(fileURLToPath(new URL('../../content/guides/ai-connectors.md', import.meta.url)), 'utf-8')
+    expect(raw).toContain(`1분에 ${MINUTE_WRITE_LIMIT}번`)
+    expect(raw).toContain(`하루 ${DAILY_WRITE_LIMIT.toLocaleString('en-US')}번`)
+    expect(raw).toContain(`최근에 고친 순으로 ${SEARCH_MAX_DOCS}개까지`)
+    expect(raw).toContain(`한 번에 ${MCP_LIST_PAGE}개씩`)
+    expect(raw).toContain(`${LAST_USED_UPDATE_INTERVAL_MS / 60_000}분이 지나야`)
+    expect(raw).toContain(`최대 ${LAST_USED_UPDATE_INTERVAL_MS / 60_000}분쯤`)
+  })
+
+  it('## AI 앱 연결 부터 ## 단축키 앞까지에 분·하루 쓰기 한도가 상수 그대로 들어 있다', () => {
+    const start = HELP_DOC_CONTENT.indexOf('## AI 앱 연결')
+    expect(start).toBeGreaterThan(-1)
+    const section = HELP_DOC_CONTENT.slice(start, HELP_DOC_CONTENT.indexOf('## 단축키'))
     expect(section).toContain(`1분에 ${MINUTE_WRITE_LIMIT}번`)
     expect(section).toContain(`하루 ${DAILY_WRITE_LIMIT.toLocaleString('en-US')}번`)
   })
