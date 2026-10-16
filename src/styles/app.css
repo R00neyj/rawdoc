@@ -195,6 +195,8 @@ svg {
     left: 0;
     right: 0;
     height: var(--vv-height, 100%);
+    box-sizing: border-box;
+    padding-bottom: env(safe-area-inset-bottom, 0px); /* viewport-fit=cover — 제스처 네비바 밑까지 종이색을 깔고 내용은 그 위에 */
   }
 
   .editor-toolbar-row--docked {
