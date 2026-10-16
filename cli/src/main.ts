@@ -1,6 +1,7 @@
 // 진입점. 인자 → 명령 → 출력·종료 코드. 표준 출력에 쓰는 유일한 곳 (specs/features/F-2021.md 4.7)
 import { realpathSync } from 'node:fs'
-import { readFile as readFileReal, writeFile as writeFileReal } from 'node:fs/promises'
+import { mkdir as mkdirReal, readFile as readFileReal, writeFile as writeFileReal } from 'node:fs/promises'
+import { dirname as dirnameReal, join as joinReal } from 'node:path'
 import { hostname as hostnameReal, homedir as homedirReal } from 'node:os'
 import brand from '../../brand.config'
 import { SITE_URL } from '../../src/lib/siteMeta'
@@ -70,6 +71,8 @@ export type MainDeps = {
   homedir: string
   readFile: (path: string) => Promise<Uint8Array>
   writeFile: (path: string, content: string) => Promise<void>
+  // 바이너리 쓰기 — 위 폴더가 없으면 만든다 (images)
+  writeBytes: (path: string, content: Uint8Array) => Promise<void>
   readStdin: () => Promise<Uint8Array>
   stdinIsTTY: boolean
   openBrowserFn: (url: string) => void
@@ -557,6 +560,28 @@ export async function main(deps: MainDeps): Promise<number> {
         }
         return 0
       }
+      case 'images': {
+        const result = await commands.images(cfg, command.id)
+        const rows: Array<{ name: string; file: string | null; skipped: commands.DocImage['skipped'] }> = []
+        for (const image of result.images) {
+          if (image.bytes === null) {
+            rows.push({ name: image.name, file: null, skipped: image.skipped })
+            deps.out.stderr(`attachments/${image.name}: ${image.skipped === 'encrypted' ? '금고 이미지라 받지 않았습니다' : '서버에 없습니다'}\n`)
+            continue
+          }
+          const file = joinReal(command.dir, image.name)
+          try {
+            await deps.writeBytes(file, image.bytes)
+          } catch {
+            throw new CliError('file_write', { path: file })
+          }
+          rows.push({ name: image.name, file, skipped: null })
+        }
+        if (command.global.json) deps.out.stdout(`${JSON.stringify({ id: result.id, images: rows })}\n`)
+        else for (const row of rows) if (row.file !== null) deps.out.stdout(`attachments/${row.name}\t${row.file}\n`)
+        if (result.images.length === 0) deps.out.stderr('이 문서에는 올린 이미지가 없습니다.\n')
+        return 0
+      }
       case 'diff': {
         const decoded = decodeSource(await readSourceBytes(deps, command.source), command.source)
         emitDecodeNotices(deps, decoded, command.source)
@@ -684,6 +709,10 @@ async function run(): Promise<void> {
     homedir: homedirReal(),
     readFile: (path) => readFileReal(path),
     writeFile: (path, content) => writeFileReal(path, content, { encoding: 'utf-8' }),
+    writeBytes: async (path, content) => {
+      await mkdirReal(dirnameReal(path), { recursive: true })
+      await writeFileReal(path, content)
+    },
     readStdin: readStdinReal,
     stdinIsTTY: process.stdin.isTTY === true,
     openBrowserFn: (url) => openBrowser(process.platform, url),

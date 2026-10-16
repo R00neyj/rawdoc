@@ -361,6 +361,7 @@ const routes: Route[] = [
   { method: 'GET', path: '/v1/folders', handler: handleListFolders },
   { method: 'POST', path: '/v1/folders', handler: handleCreateFolderV1 },
   { method: 'POST', path: '/v1/attachments', handler: handleCreateAttachmentV1 },
+  { method: 'GET', path: '/v1/attachments/:idext', handler: handleGetAttachment },
   { method: 'POST', path: '/v1/docs/:id/link', handler: handleCreateDocLinkV1 },
   { method: 'DELETE', path: '/v1/docs/:id', handler: handleDeleteDocV1 },
   { method: 'PUT', path: '/v1/docs/:id/folder', handler: handleMoveDocFolderV1 },

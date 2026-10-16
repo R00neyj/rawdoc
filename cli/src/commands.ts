@@ -27,6 +27,7 @@ import {
   apiSearch,
   apiUpdateDoc,
   apiUploadAttachment,
+  apiGetAttachment,
   type ClientConfig,
 } from './client'
 import { isFolderId, resolveFolderPath } from './folderRef'
@@ -258,6 +259,30 @@ export function mkdir(cfg: ClientConfig, name: string, parentId: string | null):
 
 export async function upload(cfg: ClientConfig, bytes: Uint8Array): Promise<V1Attachment> {
   return apiUploadAttachment(cfg, await toWebpBytes(bytes))
+}
+
+export type DocImage = { name: string; bytes: Uint8Array | null; skipped: 'missing' | 'encrypted' | null }
+
+// PNG·JPEG·GIF·WebP 머리 — 금고 이미지는 서버가 암호문 그대로 내줘 여기에 걸리지 않는다
+function isImageBytes(b: Uint8Array): boolean {
+  const head = String.fromCharCode(...b.subarray(0, 12))
+  return head.startsWith('\x89PNG') || head.startsWith('\xff\xd8\xff') || head.startsWith('GIF8') || (head.startsWith('RIFF') && head.slice(8) === 'WEBP')
+}
+
+export async function images(cfg: ClientConfig, id: string): Promise<{ id: string; images: DocImage[] }> {
+  const doc = await apiGetDoc(cfg, id)
+  const names = [...new Set(Array.from(doc.content.matchAll(/attachments\/([0-9a-f]{16}\.(?:png|jpg|gif|webp))/g), (m) => m[1]))]
+  const out: DocImage[] = []
+  for (const name of names) {
+    try {
+      const bytes = await apiGetAttachment(cfg, name, doc.id)
+      out.push(isImageBytes(bytes) ? { name, bytes, skipped: null } : { name, bytes: null, skipped: 'encrypted' })
+    } catch (err) {
+      if (err instanceof CliError && err.code === 'not_found') out.push({ name, bytes: null, skipped: 'missing' })
+      else throw err
+    }
+  }
+  return { id: doc.id, images: out }
 }
 
 export function link(cfg: ClientConfig, id: string): Promise<V1Link> {

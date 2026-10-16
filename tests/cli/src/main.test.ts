@@ -21,6 +21,7 @@ function baseDeps(overrides: Partial<MainDeps> = {}): MainDeps & { stdoutLog: st
     homedir: '/home/test',
     readFile: vi.fn(async () => new Uint8Array()),
     writeFile: vi.fn(async () => {}),
+    writeBytes: vi.fn(async () => {}),
     readStdin: vi.fn(async () => new Uint8Array()),
     stdinIsTTY: false,
     openBrowserFn: vi.fn(),

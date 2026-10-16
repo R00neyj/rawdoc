@@ -21,7 +21,7 @@ export type ClientConfig = {
   timeoutMs?: number
 }
 
-type RequestOptions = { notFoundId?: string }
+type RequestOptions = { notFoundId?: string; binary?: true }
 
 function isTimeoutError(err: unknown): boolean {
   return err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
@@ -147,6 +147,7 @@ async function request(
       body: payload,
       signal: AbortSignal.timeout(cfg.timeoutMs ?? 60_000),
     })
+    if (opts.binary && res.ok) return new Uint8Array(await res.arrayBuffer())
     text = res.status === 204 ? '' : await res.text()
   } catch (err) {
     if (isTimeoutError(err)) throw new CliError('timeout')
@@ -193,6 +194,14 @@ export function apiCreateFolder(cfg: ClientConfig, body: { name: string; parentI
 
 export function apiUploadAttachment(cfg: ClientConfig, bytes: Uint8Array): Promise<V1Attachment> {
   return request(cfg, 'POST', '/v1/attachments', bytes) as Promise<V1Attachment>
+}
+
+// 남의 문서 이미지는 그 문서를 ?doc= 로 함께 보내야 서버가 참조를 확인해 내준다 (F-212 2.2)
+export function apiGetAttachment(cfg: ClientConfig, name: string, docId: string): Promise<Uint8Array> {
+  return request(cfg, 'GET', `/v1/attachments/${encodeURIComponent(name)}?doc=${encodeURIComponent(docId)}`, undefined, {
+    notFoundId: name,
+    binary: true,
+  }) as Promise<Uint8Array>
 }
 
 export function apiCreateLink(cfg: ClientConfig, id: string): Promise<V1Link> {

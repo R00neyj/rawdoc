@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import encodePng, { init as initPngEncoder } from '@jsquash/png/encode.js'
 import pngWasm from '@jsquash/png/codec/pkg/squoosh_png_bg.wasm?url&inline'
-import { find, info, ls, lsShared, moveDoc, putDoc, removeDoc, removeFolder, replace, search, upload } from '../../../cli/src/commands'
+import { find, images, info, ls, lsShared, moveDoc, putDoc, removeDoc, removeFolder, replace, search, upload } from '../../../cli/src/commands'
 import type { ClientConfig } from '../../../cli/src/client'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -342,5 +342,31 @@ describe('F-2144 U6 upload', () => {
     const gif = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0, 0, 0x3b])
     await upload(cfg, gif)
     expect(fetchImpl.mock.calls[1][1].body).toEqual(gif)
+  })
+})
+
+describe('images (small 2026-10-16)', () => {
+  it('원문 첨부를 한 번씩 ?doc= 와 함께 받고, 없는 것·암호문은 건너뛴 이유를 남긴다', async () => {
+    const webp = new Uint8Array([...'RIFF'].map((c) => c.charCodeAt(0)).concat([0, 0, 0, 0], [...'WEBP'].map((c) => c.charCodeAt(0))))
+    const content = '![a](attachments/aaaaaaaaaaaaaaaa.webp) ![a](attachments/aaaaaaaaaaaaaaaa.webp)\n![b](attachments/bbbbbbbbbbbbbbbb.png) ![c](attachments/cccccccccccccccc.png)'
+    const urls: string[] = []
+    const fetchImpl = fakeFetch((url) => {
+      urls.push(url)
+      if (url.endsWith('/v1/docs/d1')) return jsonResponse({ id: 'd1', version: 1, content, title: 't', lineEnding: 'lf', folderId: null, pinnedAt: null, createdAt: 0, updatedAt: 0 })
+      if (url.includes('aaaa')) return new Response(webp)
+      if (url.includes('bbbb')) return new Response(new Uint8Array([1, 2, 3, 4]))
+      return jsonResponse({ error: 'not_found' }, 404)
+    })
+    const result = await images(baseCfg(fetchImpl as unknown as typeof fetch), 'd1')
+    expect(urls.slice(1)).toEqual([
+      'https://rawdoc.app/v1/attachments/aaaaaaaaaaaaaaaa.webp?doc=d1',
+      'https://rawdoc.app/v1/attachments/bbbbbbbbbbbbbbbb.png?doc=d1',
+      'https://rawdoc.app/v1/attachments/cccccccccccccccc.png?doc=d1',
+    ])
+    expect(result.images).toEqual([
+      { name: 'aaaaaaaaaaaaaaaa.webp', bytes: webp, skipped: null },
+      { name: 'bbbbbbbbbbbbbbbb.png', bytes: null, skipped: 'encrypted' },
+      { name: 'cccccccccccccccc.png', bytes: null, skipped: 'missing' },
+    ])
   })
 })

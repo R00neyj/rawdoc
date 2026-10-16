@@ -47,6 +47,7 @@ rawdoc login --with-token < token.txt
 | `rawdoc replace 옛말 새말 --yes` | 여러 문서 본문에서 글자를 찾아 바꾸기(`--yes`를 빼면 바뀔 곳만 미리 보기. `--id <id>`면 그 문서 하나만) |
 | `rawdoc info <id>` | 내용 없이 폴더·판 번호·시각만 보기 |
 | `rawdoc get <id> -o 노트.md` | 문서 원문을 파일로 받기(판 번호는 옆 파일 `노트.md.rawdoc`에 적힘) |
+| `rawdoc images <id> -o 그림` | 문서에 든 이미지를 `그림` 폴더에 파일로 받기(AI 도구가 그림까지 볼 때) |
 | `rawdoc new 노트.md --title 회의록` | 파일로 새 문서 만들기 |
 | `rawdoc diff <id> 노트.md` | 올리기 전에 서버 문서와 바뀌는 줄 보기 |
 | `rawdoc put <id> 노트.md --base-version auto` | 문서 고치기(성공하면 웹 주소도 찍음) |
