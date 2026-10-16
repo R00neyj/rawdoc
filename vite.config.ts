@@ -297,6 +297,8 @@ export default defineConfig({
           /^\/api\//, /^\/pub\//, /^\/v1\//, /^\/cdn-cgi\//, /^\/welcome(\?|$)/,
           /^\/guides(\/|\?|$)/, /^\/changelog(\?|$)/, /^\/help(\?|$)/, /^\/privacy(\?|$)/, /^\/terms(\?|$)/, /^\/login(\?|$)/,
           /^\/sitemap\.xml(\?|$)/, /^\/robots\.txt(\?|$)/, /^\/llms\.txt(\?|$)/, /^\/404(\.html)?(\?|$)/,
+          // 워커가 그리는 앱 연결 화면 — 로그인된 브라우저에서 동의 화면 대신 앱이 뜨던 버그 (F-4010)
+          /^\/oauth\//, /^\/limits(\?|$)/, /^\/mcp(\?|$)/, /^\/\.well-known\//,
         ],
         cleanupOutdatedCaches: true,
         // 푸시 처리기 — precache 에 들어가 그 revision 이 sw.js 를 바꾼다 (F-3004 5.2·5.3)
