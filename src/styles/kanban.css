@@ -241,10 +241,12 @@
   opacity: 1;
 }
 
+/* 손가락용 .item-menu-btn 의 음수 margin 은 카드 밖으로 밀어내므로 지운다 (tweak 2026-10-17) */
 .kanban-card > .kanban-more {
   position: absolute;
   top: 4px;
   right: 4px;
+  margin: 0;
   opacity: 0;
   background: var(--panel);
 }
@@ -264,6 +266,11 @@
   .kanban-board .kanban-more {
     width: 32px;
     height: 32px;
+  }
+
+  /* 32px 버튼 가운데를 카드 첫 줄 가운데(8px + 21px/2)에 맞춘다 */
+  .kanban-card > .kanban-more {
+    top: 3px;
   }
 
   .kanban-card {

@@ -56,10 +56,10 @@ export default function PanelTodos({ view }: { view: DocTodosView }) {
                         className="doc-link-item todo-item"
                         onClick={() => (card ? view.onOpenCard(row.docId, row.line) : view.onOpenItem(row.docId, row.line))}
                       >
-                        {/* 칸반 카드는 체크 칸이 없을 수 있어 상자를 그리지 않는다 (small 2026-10-14) */}
-                        {!card && <span className="todo-box" data-status={row.status} aria-hidden="true" />}
                         <span className="todo-body">
                           <span className="todo-title-row">
+                            {/* 칸반 카드는 체크 칸이 없을 수 있어 상자를 그리지 않는다 (small 2026-10-14) */}
+                            {!card && <span className="todo-box" data-status={row.status} aria-hidden="true" />}
                             <span className="doc-link-title">{row.text}</span>
                             {card && <span className="todo-lane">{row.lane || '이름 없는 칸'}</span>}
                           </span>

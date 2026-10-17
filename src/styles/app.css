@@ -7081,11 +7081,11 @@ h3.panel-settings-title:not(:first-child) {
   text-overflow: ellipsis;
 }
 
+/* 제목 줄 안에 두어 글자 크기와 상관없이 첫 줄 가운데에 맞춘다 (tweak 2026-10-17) */
 .todo-box {
   flex: none;
   width: 12px;
   height: 12px;
-  margin-top: 3px;
   border: 1.5px solid var(--muted);
   border-radius: 3px;
 }
