@@ -2,7 +2,7 @@
 import type { CallToolResult, McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { getOwnedFolder } from './access'
-import { VAULT_DOC_MESSAGE, docUrl, innerV1, safeTool, toToolResult, toolError, toolResult, type McpCall } from './mcpCall'
+import { VAULT_DOC_MESSAGE, docUrl, innerV1, safeTool, titled, toToolResult, toolError, toolResult, type McpCall } from './mcpCall'
 import { BLOCKED_MESSAGE, gateMcpWrite } from './mcpWriteGate'
 import { handleCreateDocV1, handleCreateFolderV1, handleMoveDocFolderV1, handleUpdateDocV1 } from './v1'
 import type { V1Doc } from './v1Contract'
@@ -45,11 +45,10 @@ export function registerWriteTools(server: McpServer, call: McpCall): void {
   server.registerTool(
     'create_document',
     {
-      title: 'Create document',
+      ...titled('Create document', CREATE),
       description:
         'Create a new Markdown document. content is the full Markdown text. Omit folderId to create it at the top level (use list_folders for ids). Returns the new id, version and url.',
       inputSchema: z.object({ title: z.string(), content: z.string(), folderId: z.string().optional() }),
-      annotations: CREATE,
     },
     safeTool(async ({ title, content, folderId }: { title: string; content: string; folderId?: string }) => {
       const gated = await gateMcpWrite(call)
@@ -69,10 +68,9 @@ export function registerWriteTools(server: McpServer, call: McpCall): void {
   server.registerTool(
     'create_folder',
     {
-      title: 'Create folder',
+      ...titled('Create folder', CREATE),
       description: 'Create a folder. Omit parentId for a top-level folder. Returns the new folder.',
       inputSchema: z.object({ name: z.string(), parentId: z.string().optional() }),
-      annotations: CREATE,
     },
     safeTool(async ({ name, parentId }: { name: string; parentId?: string }) => {
       const gated = await gateMcpWrite(call)
@@ -87,10 +85,9 @@ export function registerWriteTools(server: McpServer, call: McpCall): void {
   server.registerTool(
     'move_document',
     {
-      title: 'Move document',
+      ...titled('Move document', CREATE),
       description: 'Move a document you own into a folder, or to the top level with folderId null. The text is not changed.',
       inputSchema: z.object({ id: z.string(), folderId: z.string().nullable() }),
-      annotations: CREATE,
     },
     safeTool(async ({ id, folderId }: { id: string; folderId: string | null }) => {
       const gated = await gateMcpWrite(call)
@@ -103,11 +100,10 @@ export function registerWriteTools(server: McpServer, call: McpCall): void {
   server.registerTool(
     'update_document',
     {
-      title: 'Update document',
+      ...titled('Update document', UPDATE),
       description:
         "Replace a document's whole text and/or its title. Read it with fetch first and pass its version as baseVersion. If the document changed since, nothing is written and the current document is returned so you can reapply your edit.",
       inputSchema: z.object({ id: z.string(), baseVersion: z.number().int(), content: z.string().optional(), title: z.string().optional() }),
-      annotations: UPDATE,
     },
     safeTool(async ({ id, baseVersion, content, title }: { id: string; baseVersion: number; content?: string; title?: string }) => {
       const gated = await gateMcpWrite(call)

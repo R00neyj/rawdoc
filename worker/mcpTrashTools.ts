@@ -2,7 +2,7 @@
 import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { TRASH_RETENTION_DAYS, trashActorForMcp } from '../src/lib/trash'
-import { VAULT_DOC_MESSAGE, safeTool, toolError, toolResult, type McpCall } from './mcpCall'
+import { VAULT_DOC_MESSAGE, safeTool, titled, toolError, toolResult, type McpCall } from './mcpCall'
 import { gateMcpWrite } from './mcpWriteGate'
 import { trashDoc, trashFolder } from './trash'
 
@@ -16,10 +16,9 @@ export function registerTrashTools(server: McpServer, call: McpCall): void {
   server.registerTool(
     'delete_document',
     {
-      title: 'Move document to trash',
+      ...titled('Move document to trash', DESTRUCTIVE),
       description: `Moves one of your documents to the trash. It disappears from lists, search and shared links at once, and is permanently deleted after ${TRASH_RETENTION_DAYS} days unless the user restores it from the trash in the app. Only the owner can do this. Vault (end-to-end encrypted) documents cannot be deleted through this connection.`,
       inputSchema: z.object({ id: z.string().describe('Document id from search, fetch or list_documents.') }),
-      annotations: DESTRUCTIVE,
     },
     safeTool(async ({ id }: { id: string }) => {
       const gated = await gateMcpWrite(call)
@@ -35,10 +34,9 @@ export function registerTrashTools(server: McpServer, call: McpCall): void {
   server.registerTool(
     'delete_folder',
     {
-      title: 'Delete folder',
+      ...titled('Delete folder', DESTRUCTIVE),
       description: `Deletes one of your folders together with its subfolders and moves every document inside to the trash. Documents can be restored from the trash in the app for ${TRASH_RETENTION_DAYS} days; a restored document goes back to the top level if its folder no longer exists. Shares and links on the folder are removed and do not come back. Fails without changing anything if any vault (end-to-end encrypted) item is inside.`,
       inputSchema: z.object({ id: z.string().describe('Folder id from list_folders.') }),
-      annotations: DESTRUCTIVE,
     },
     safeTool(async ({ id }: { id: string }) => {
       const gated = await gateMcpWrite(call)

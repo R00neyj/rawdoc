@@ -233,7 +233,7 @@ describe('F-3032 POST /mcp 지우기 도구', () => {
       expect(found, name).toBeDefined()
       expect(found?.title).toBe(want.title)
       expect(found?.description).toBe(want.description)
-      expect(found?.annotations).toEqual(DESTRUCTIVE)
+      expect(found?.annotations).toEqual({ title: want.title, ...DESTRUCTIVE })
     }
 
     const init = (await rpc(env, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } })).result as {

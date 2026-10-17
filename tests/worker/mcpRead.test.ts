@@ -137,7 +137,7 @@ function errorMessage(result: ToolResult): unknown {
 }
 
 describe('F-3030 POST /mcp 읽기 도구', () => {
-  it('M1 initialize 는 이름·안내문을, tools/list 는 읽기 다섯을 제목·주석과 함께 준다', async () => {
+  it('M1 initialize 는 이름·안내문을, tools/list 는 읽기 도구를 제목·주석과 함께 주고, 모든 도구의 annotations.title 이 제목과 같다', async () => {
     const { env } = await setup()
     const init = await rpc(env, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } })
     const initResult = init.message.result as { serverInfo: { name: string }; instructions: string }
@@ -145,7 +145,7 @@ describe('F-3030 POST /mcp 읽기 도구', () => {
     expect(initResult.instructions).toBe(MCP_INSTRUCTIONS)
 
     const list = await rpc(env, 'tools/list')
-    const tools = (list.message.result as { tools: { name: string; title: string; annotations: unknown }[] }).tools
+    const tools = (list.message.result as { tools: { name: string; title: string; annotations: { title?: string } }[] }).tools
     const expected: Record<string, string> = {
       search: 'Search documents',
       fetch: 'Fetch document',
@@ -157,8 +157,9 @@ describe('F-3030 POST /mcp 읽기 도구', () => {
       const found = tools.find((t) => t.name === name)
       expect(found, name).toBeDefined()
       expect(found?.title).toBe(title)
-      expect(found?.annotations).toEqual(READ_ONLY)
+      expect(found?.annotations).toEqual({ title, ...READ_ONLY })
     }
+    for (const t of tools) expect(t.annotations.title, t.name).toBe(t.title)
   })
 
   it('M2 GET·DELETE 는 인증 전에 405, 인증이 준 401 은 상태·헤더 그대로', async () => {
@@ -376,7 +377,7 @@ describe('POST /mcp fetch_image', () => {
   it('tools/list 에 읽기 전용으로 있다', async () => {
     const { env } = await imageSetup()
     const tools = ((await rpc(env, 'tools/list')).message.result as { tools: { name: string; annotations: unknown }[] }).tools
-    expect(tools.find((t) => t.name === 'fetch_image')?.annotations).toEqual(READ_ONLY)
+    expect(tools.find((t) => t.name === 'fetch_image')?.annotations).toEqual({ title: 'Fetch image', ...READ_ONLY })
   })
 
   it('내 문서의 이미지를 두 경로 형식 모두 image 콘텐츠로 준다', async () => {

@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { getDocAccess, getOwnedFolder, type FolderRowLike } from './access'
 import { findDocAttachment, parseIdExt, type AttachmentRow } from './attachments'
 import { handleListFolders } from './folders'
-import { MCP_LIST_PAGE, NOT_FOUND_MESSAGE, VAULT_DOC_MESSAGE, docUrl, innerV1, safeTool, toToolResult, toolError, toolResult, type McpCall } from './mcpCall'
+import { MCP_LIST_PAGE, NOT_FOUND_MESSAGE, VAULT_DOC_MESSAGE, docUrl, innerV1, safeTool, titled, toToolResult, toolError, toolResult, type McpCall } from './mcpCall'
 import { SEARCH_MAX_QUERY_CHARS } from './searchLines'
 import { handleGetDocV1, handleListDocsV1, handleListSharedV1 } from './v1'
 import type { V1Doc, V1DocSummary, V1Folder, V1SearchResult, V1SharedDoc } from './v1Contract'
@@ -32,11 +32,10 @@ export function registerReadTools(server: McpServer, call: McpCall): void {
   server.registerTool(
     'search',
     {
-      title: 'Search documents',
+      ...titled('Search documents', READ_ONLY),
       description:
         'Find my own documents whose title or text contains the query (case-insensitive for English letters). Returns up to 200 matches, newest first.',
       inputSchema: z.object({ query: z.string().min(1).max(SEARCH_MAX_QUERY_CHARS) }),
-      annotations: READ_ONLY,
     },
     safeTool(async ({ query }: { query: string }) => {
       const res = await handleSearchV1(innerV1(call, 'GET', `/v1/search?q=${encodeURIComponent(query)}`), env)
@@ -49,11 +48,10 @@ export function registerReadTools(server: McpServer, call: McpCall): void {
   server.registerTool(
     'fetch',
     {
-      title: 'Fetch document',
+      ...titled('Fetch document', READ_ONLY),
       description:
         'Read the full Markdown text of a document by id. Works for your documents and documents shared with you. The version is needed to update it.',
       inputSchema: z.object({ id: z.string().min(1).max(64) }),
-      annotations: READ_ONLY,
     },
     safeTool(async ({ id }: { id: string }) => {
       const res = await handleGetDocV1(innerV1(call, 'GET', `/v1/docs/${encodeURIComponent(id)}`), env, ctx, { id })
@@ -72,11 +70,10 @@ export function registerReadTools(server: McpServer, call: McpCall): void {
   server.registerTool(
     'fetch_image',
     {
-      title: 'Fetch image',
+      ...titled('Fetch image', READ_ONLY),
       description:
         'View an image attached to a document. Pass the document id and an attachments/… path from the text returned by fetch, such as attachments/0123456789abcdef.png.',
       inputSchema: z.object({ id: z.string().min(1).max(64), image: z.string().regex(IMAGE_PATH_RE) }),
-      annotations: READ_ONLY,
     },
     safeTool(async ({ id, image }: { id: string; image: string }) => {
       const name = parseIdExt(image.replace(/^attachments\//, ''))
@@ -109,11 +106,10 @@ export function registerReadTools(server: McpServer, call: McpCall): void {
   server.registerTool(
     'list_documents',
     {
-      title: 'List documents',
+      ...titled('List documents', READ_ONLY),
       description:
         'List your documents, newest first, 200 per page. Pass folderId for the documents directly in that folder, and nextOffset as offset for the next page.',
       inputSchema: z.object({ folderId: z.guid().optional(), offset: offsetSchema }),
-      annotations: READ_ONLY,
     },
     safeTool(async ({ folderId, offset }: { folderId?: string; offset?: number }) => {
       if (folderId !== undefined && !(await getOwnedFolder<FolderRowLike>(env, folderId, call.caller.user))) return toolError(NOT_FOUND_MESSAGE)
@@ -137,10 +133,9 @@ export function registerReadTools(server: McpServer, call: McpCall): void {
   server.registerTool(
     'list_folders',
     {
-      title: 'List folders',
+      ...titled('List folders', READ_ONLY),
       description: 'List your folders as a tree (parentId null = top level).',
       inputSchema: z.object({}),
-      annotations: READ_ONLY,
     },
     safeTool(async () => {
       const res = await handleListFolders(innerV1(call, 'GET', '/v1/folders'), env)
@@ -157,10 +152,9 @@ export function registerReadTools(server: McpServer, call: McpCall): void {
   server.registerTool(
     'list_shared',
     {
-      title: 'List shared documents',
+      ...titled('List shared documents', READ_ONLY),
       description: 'List documents other people shared with you, newest first, 200 per page.',
       inputSchema: z.object({ offset: offsetSchema }),
-      annotations: READ_ONLY,
     },
     safeTool(async ({ offset }: { offset?: number }) => {
       const res = await handleListSharedV1(innerV1(call, 'GET', '/v1/shared'), env)

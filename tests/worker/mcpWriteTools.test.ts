@@ -104,7 +104,7 @@ describe('F-3031 POST /mcp 쓰기 도구', () => {
   it('A1 tools/list 에 쓰기 도구 넷이 이름·title·주석으로 나온다', async () => {
     const { env } = await setup()
     const tools = ((await rpc(env, 'tools/list')).result as { tools: { name: string; title: string; annotations: unknown }[] }).tools
-    const expected: [string, string, unknown][] = [
+    const expected: [string, string, object][] = [
       ['create_document', 'Create document', CREATE],
       ['create_folder', 'Create folder', CREATE],
       ['move_document', 'Move document', CREATE],
@@ -113,7 +113,7 @@ describe('F-3031 POST /mcp 쓰기 도구', () => {
     for (const [name, title, annotations] of expected) {
       const found = tools.find((t) => t.name === name)
       expect(found?.title, name).toBe(title)
-      expect(found?.annotations, name).toEqual(annotations)
+      expect(found?.annotations, name).toEqual({ title, ...annotations })
     }
   })
 

@@ -10,6 +10,13 @@ export const VAULT_DOC_MESSAGE = 'Vault (end-to-end encrypted) documents cannot 
 export const NOT_FOUND_MESSAGE = 'Not found, or you do not have access.'
 export const MCP_LIST_PAGE = 200
 
+type ToolHints = { readOnlyHint: boolean; destructiveHint: boolean; openWorldHint: boolean }
+
+// 디렉터리 목록은 annotations.title 을 읽는다 — 위 title 과 같은 글로 둘 다 채운다
+export function titled(title: string, hints: ToolHints): { title: string; annotations: ToolHints & { title: string } } {
+  return { title, annotations: { title, ...hints } }
+}
+
 export function innerV1(call: McpCall, method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Request {
   const headers = new Headers(call.request.headers)
   headers.delete('Content-Length')
