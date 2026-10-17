@@ -1,15 +1,17 @@
-// MCP 읽기 도구 다섯 — /v1 핸들러를 직접 부르고, 목록의 금고 행은 빼고 센다 (F-3030 4장)
+// MCP 읽기 도구 여섯 — /v1 핸들러를 직접 부르고, 목록의 금고 행은 빼고 센다 (F-3030 4장)
 import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
-import { getOwnedFolder, type FolderRowLike } from './access'
+import { getDocAccess, getOwnedFolder, type FolderRowLike } from './access'
+import { findDocAttachment, parseIdExt, type AttachmentRow } from './attachments'
 import { handleListFolders } from './folders'
-import { MCP_LIST_PAGE, NOT_FOUND_MESSAGE, docUrl, innerV1, safeTool, toToolResult, toolError, toolResult, type McpCall } from './mcpCall'
+import { MCP_LIST_PAGE, NOT_FOUND_MESSAGE, VAULT_DOC_MESSAGE, docUrl, innerV1, safeTool, toToolResult, toolError, toolResult, type McpCall } from './mcpCall'
 import { SEARCH_MAX_QUERY_CHARS } from './searchLines'
 import { handleGetDocV1, handleListDocsV1, handleListSharedV1 } from './v1'
 import type { V1Doc, V1DocSummary, V1Folder, V1SearchResult, V1SharedDoc } from './v1Contract'
 import { handleSearchV1 } from './v1Search'
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+const IMAGE_PATH_RE = /^(?:attachments\/)?[0-9a-f]{16}\.(?:png|jpg|gif|webp)$/
 const offsetSchema = z.number().int().min(0).optional()
 
 // 정렬은 핸들러 그대로 두고 금고를 뺀 뒤에 자른다
@@ -64,6 +66,43 @@ export function registerReadTools(server: McpServer, call: McpCall): void {
         url: docUrl(call, doc.id),
         metadata: { version: doc.version, folderId: doc.folderId, updatedAt: doc.updatedAt },
       })
+    }),
+  )
+
+  server.registerTool(
+    'fetch_image',
+    {
+      title: 'Fetch image',
+      description:
+        'View an image attached to a document. Pass the document id and an attachments/… path from the text returned by fetch, such as attachments/0123456789abcdef.png.',
+      inputSchema: z.object({ id: z.string().min(1).max(64), image: z.string().regex(IMAGE_PATH_RE) }),
+      annotations: READ_ONLY,
+    },
+    safeTool(async ({ id, image }: { id: string; image: string }) => {
+      const name = parseIdExt(image.replace(/^attachments\//, ''))
+      if (!name) return toolError('Invalid argument: image.')
+      const { user } = call.caller
+      const access = await getDocAccess<{ id: string; owner_id: string; folder_id: string | null; content: string; e2ee_key?: string | null }>(
+        env,
+        id,
+        user,
+        'id, owner_id, folder_id, content',
+      )
+      if (!access) return toolError(NOT_FOUND_MESSAGE)
+      if (access.doc.e2ee_key) return toolError(VAULT_DOC_MESSAGE)
+      // 내 첨부는 /v1/attachments 처럼 참조 없이도 주되, 금고 첨부는 막는다
+      const own = await env.DB.prepare('SELECT * FROM attachments WHERE owner_id = ? AND id = ? AND ext = ?')
+        .bind(user.id, name.id, name.ext)
+        .first<AttachmentRow>()
+      if (own?.e2ee === 1) return toolError(VAULT_DOC_MESSAGE)
+      const row = own ?? (await findDocAttachment(env, access.doc, name.id, name.ext))
+      if (!row) return toolError(NOT_FOUND_MESSAGE)
+      const object = await env.BUCKET.get(`att/${row.owner_id}/${name.id}.${name.ext}`)
+      if (!object) return toolError(NOT_FOUND_MESSAGE)
+      const bytes = new Uint8Array(await object.arrayBuffer())
+      let binary = ''
+      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+      return { content: [{ type: 'image', data: btoa(binary), mimeType: row.mime }] }
     }),
   )
 

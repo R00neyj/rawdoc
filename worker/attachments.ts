@@ -19,7 +19,7 @@ const ID_EXT_RE = /^([0-9a-f]{16})\.(png|jpg|gif|webp)$/
 // w·h 쿼리 — 10진 정수 1 이상, 앞에 0 없음 (F-402.md 3.1)
 const DIMENSION_RE = /^[1-9][0-9]{0,7}$/
 
-type AttachmentRow = {
+export type AttachmentRow = {
   owner_id: string
   id: string
   ext: string
@@ -32,7 +32,7 @@ type AttachmentRow = {
 }
 
 
-function parseIdExt(idext: string): { id: string; ext: 'png' | 'jpg' | 'gif' | 'webp' } | null {
+export function parseIdExt(idext: string): { id: string; ext: 'png' | 'jpg' | 'gif' | 'webp' } | null {
   const match = ID_EXT_RE.exec(idext)
   if (!match) return null
   return { id: match[1], ext: match[2] as 'png' | 'jpg' | 'gif' | 'webp' }
@@ -45,6 +45,23 @@ function rowToAttachment(row: AttachmentRow) {
 
 function invalidField(field: string): Response {
   return jsonResponse({ error: 'invalid', field }, 400)
+}
+
+// 문서가 참조하고 문서 소유자·edit 권한자가 올린 평문 첨부만 — 금고 첨부는 늘 뺀다 (F-212 2.2, F-402 3.2)
+export async function findDocAttachment(
+  env: Env,
+  doc: { id: string; owner_id: string; folder_id: string | null; content: string },
+  id: string,
+  ext: string,
+): Promise<AttachmentRow | null> {
+  if (!(await isDocAttachmentRef(env, doc, id))) return null
+  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
+    .bind(id, ext)
+    .all<AttachmentRow>()
+  for (const candidate of candidates) {
+    if (await isDocAttachmentOwner(env, doc, candidate.owner_id)) return candidate
+  }
+  return null
 }
 
 async function getUsedBytes(env: Env, ownerId: string): Promise<number> {
@@ -239,19 +256,7 @@ export async function handleGetAttachment(
     'id, owner_id, folder_id, content',
   )
   if (!access) return errorResponse('not_found', 404)
-  if (!(await isDocAttachmentRef(env, access.doc, id))) return errorResponse('not_found', 404)
-
-  // 금고 첨부는 남에게 절대 내주지 않는다 — 일반 문서가 금고 첨부를 참조해도 404 (F-402.md 3.2)
-  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
-    .bind(id, ext)
-    .all<AttachmentRow>()
-  let row: AttachmentRow | null = null
-  for (const candidate of candidates) {
-    if (await isDocAttachmentOwner(env, access.doc, candidate.owner_id)) {
-      row = candidate
-      break
-    }
-  }
+  const row = await findDocAttachment(env, access.doc, id, ext)
   if (!row) return errorResponse('not_found', 404)
 
   const object = await env.BUCKET.get(`att/${row.owner_id}/${id}.${ext}`)
@@ -278,18 +283,7 @@ export async function handlePublicGetAttachment(
     .bind(link.target_id, link.owner_id)
     .first<{ id: string; owner_id: string; content: string; folder_id: string | null }>()
   if (!doc) return errorResponse('not_found', 404)
-  if (!(await isDocAttachmentRef(env, doc, id))) return errorResponse('not_found', 404)
-
-  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
-    .bind(id, ext)
-    .all<AttachmentRow>()
-  let row: AttachmentRow | null = null
-  for (const candidate of candidates) {
-    if (await isDocAttachmentOwner(env, doc, candidate.owner_id)) {
-      row = candidate
-      break
-    }
-  }
+  const row = await findDocAttachment(env, doc, id, ext)
   if (!row) return errorResponse('not_found', 404)
 
   const object = await env.BUCKET.get(`att/${row.owner_id}/${id}.${ext}`)

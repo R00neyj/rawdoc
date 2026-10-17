@@ -343,3 +343,90 @@ describe('F-3030 POST /mcp 읽기 도구', () => {
     }
   })
 })
+
+describe('POST /mcp fetch_image', () => {
+  type ImageResult = { content: { type: string; data?: string; mimeType?: string; text?: string }[]; isError?: boolean }
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
+  const base64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes))
+
+  async function imageSetup() {
+    const base = await setup()
+    const objects = new Map<string, Uint8Array>()
+    base.env.BUCKET = {
+      async put() {},
+      async delete() {},
+      async get(key: string) {
+        const bytes = objects.get(key)
+        return bytes ? { arrayBuffer: async () => bytes.slice().buffer } : null
+      },
+    } as unknown as R2Bucket
+    const attach = (ownerId: string, id: string, ext: string, mime: string, e2ee = 0, bytes = PNG) => {
+      base.sqlDb
+        .prepare('INSERT INTO attachments (owner_id, id, ext, mime, size, width, height, created_at, e2ee) VALUES (?,?,?,?,?,?,?,?,?)')
+        .run(ownerId, id, ext, mime, bytes.length, 1, 1, 1, e2ee)
+      objects.set(`att/${ownerId}/${id}.${ext}`, bytes)
+    }
+    return { ...base, attach }
+  }
+
+  async function image(env: Env, args: Record<string, unknown>): Promise<ImageResult> {
+    return (await tool(env, 'fetch_image', args)) as unknown as ImageResult
+  }
+
+  it('tools/list 에 읽기 전용으로 있다', async () => {
+    const { env } = await imageSetup()
+    const tools = ((await rpc(env, 'tools/list')).message.result as { tools: { name: string; annotations: unknown }[] }).tools
+    expect(tools.find((t) => t.name === 'fetch_image')?.annotations).toEqual(READ_ONLY)
+  })
+
+  it('내 문서의 이미지를 두 경로 형식 모두 image 콘텐츠로 준다', async () => {
+    const { sqlDb, env, owner, attach } = await imageSetup()
+    const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 9, 9])
+    attach(owner, 'aaaaaaaaaaaaaaaa', 'png', 'image/png')
+    attach(owner, 'bbbbbbbbbbbbbbbb', 'webp', 'image/webp', 0, webp)
+    insertDoc(sqlDb, uuid(1), owner, { content: '![a](attachments/aaaaaaaaaaaaaaaa.png)\n![b](attachments/bbbbbbbbbbbbbbbb.webp)' })
+
+    for (const name of ['attachments/aaaaaaaaaaaaaaaa.png', 'aaaaaaaaaaaaaaaa.png']) {
+      const result = await image(env, { id: uuid(1), image: name })
+      expect(result.isError, name).toBeFalsy()
+      expect(result.content).toEqual([{ type: 'image', data: base64(PNG), mimeType: 'image/png' }])
+    }
+    expect((await image(env, { id: uuid(1), image: 'bbbbbbbbbbbbbbbb.webp' })).content).toEqual([
+      { type: 'image', data: base64(webp), mimeType: 'image/webp' },
+    ])
+  })
+
+  it('공유 문서가 참조하는 첨부는 주고, 참조하지 않는 남의 첨부는 not found', async () => {
+    const { sqlDb, env, attach } = await imageSetup()
+    attach('other', 'cccccccccccccccc', 'png', 'image/png')
+    attach('other', 'dddddddddddddddd', 'png', 'image/png')
+    insertDoc(sqlDb, uuid(2), 'other', { content: '![c](attachments/cccccccccccccccc.png)' })
+    grant(sqlDb, 'doc', uuid(2), 'view')
+
+    expect((await image(env, { id: uuid(2), image: 'cccccccccccccccc.png' })).content[0]).toEqual({ type: 'image', data: base64(PNG), mimeType: 'image/png' })
+    expect(errorMessage((await image(env, { id: uuid(2), image: 'dddddddddddddddd.png' })) as ToolResult)).toBe(NOT_FOUND)
+    expect(errorMessage((await image(env, { id: uuid(99), image: 'cccccccccccccccc.png' })) as ToolResult)).toBe(NOT_FOUND)
+    expect(errorMessage((await image(env, { id: uuid(2), image: 'cccccccccccccccc.webp' })) as ToolResult)).toBe(NOT_FOUND)
+  })
+
+  it('금고 문서·금고 첨부는 금고 오류', async () => {
+    const { sqlDb, env, owner, attach } = await imageSetup()
+    attach(owner, 'aaaaaaaaaaaaaaaa', 'png', 'image/png')
+    attach(owner, 'eeeeeeeeeeeeeeee', 'png', 'image/png', 1)
+    insertDoc(sqlDb, uuid(3), owner, { title: '', content: 'cipher', e2ee_key: 'K' })
+    insertDoc(sqlDb, uuid(1), owner, { content: '![e](attachments/eeeeeeeeeeeeeeee.png)' })
+
+    expect(errorMessage((await image(env, { id: uuid(3), image: 'aaaaaaaaaaaaaaaa.png' })) as ToolResult)).toBe(VAULT_DOC_MESSAGE)
+    expect(errorMessage((await image(env, { id: uuid(1), image: 'eeeeeeeeeeeeeeee.png' })) as ToolResult)).toBe(VAULT_DOC_MESSAGE)
+  })
+
+  it('이름 형식이 틀리면 입력 오류', async () => {
+    const { sqlDb, env, owner } = await imageSetup()
+    insertDoc(sqlDb, uuid(1), owner)
+    for (const name of ['aaaaaaaaaaaaaaaa.svg', 'AAAAAAAAAAAAAAAA.png', 'att/aaaaaaaaaaaaaaaa.png', '../aaaaaaaaaaaaaaaa.png', 'aaaa.png']) {
+      const result = await image(env, { id: uuid(1), image: name })
+      expect(result.isError, name).toBe(true)
+      expect(result.content[0].text, name).toMatch(/^Input validation error/)
+    }
+  })
+})
