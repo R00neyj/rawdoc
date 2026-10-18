@@ -43,7 +43,7 @@ import * as Y from 'yjs'
 import type { Awareness } from 'y-protocols/awareness'
 import { createYBinding, createYBindingFromState, undoKeymap } from './yBinding'
 import { connectRemote } from './remoteGate'
-import { attachRemoteCursors, remoteCursors } from './remoteCursors'
+import { attachRemoteCursors, remoteCursors, revealPeerCursor } from './remoteCursors'
 import { observeTitle, writeTitle } from './liveTitle'
 import { commentGutter, commentMarks, createEditorComments } from './commentMarks'
 import { fontRemeasure } from './fontRemeasure'
@@ -701,6 +701,10 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
           if (Math.abs(delta) > 0.5) view.scrollDOM.scrollTop += delta
         })
       })
+    },
+
+    revealPeer(userId: string): boolean {
+      return revealPeerCursor(view, userId)
     },
 
     // 화면 맨 위에 보이는 원문 줄 (F-295.md 8.1). 숨겨져 있으면(높이 0) 읽지 않는다

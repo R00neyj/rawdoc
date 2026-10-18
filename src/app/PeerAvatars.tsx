@@ -11,6 +11,7 @@ type PeerAvatarsProps = {
   peers: readonly Peer[]
   selfUserId: string | null
   narrow: boolean
+  onJump?: (userId: string) => void
 }
 
 function overflowTooltip(hidden: readonly Peer[]): string {
@@ -19,7 +20,7 @@ function overflowTooltip(hidden: readonly Peer[]): string {
   return lines.join('\n')
 }
 
-export default function PeerAvatars({ peers, selfUserId, narrow }: PeerAvatarsProps) {
+export default function PeerAvatars({ peers, selfUserId, narrow, onJump }: PeerAvatarsProps) {
   const { shown, hidden } = visiblePeers(peers, selfUserId, narrow ? PEER_AVATARS_MAX_NARROW : PEER_AVATARS_MAX)
   const total = shown.length + hidden.length
   const { mounted, state } = usePresence(total > 0)
@@ -41,9 +42,15 @@ export default function PeerAvatars({ peers, selfUserId, narrow }: PeerAvatarsPr
     <div className="peer-avatars" role="group" aria-label={`접속자 ${count}명`} data-state={state}>
       {view.shown.map((peer) => (
         <span className="icon-btn-wrap peer-avatar-wrap" key={peer.userId}>
-          <span className="peer-avatar" role="img" aria-label={peer.email} data-people={peer.color}>
-            {peerInitial(peer.email)}
-          </span>
+          {onJump ? (
+            <button type="button" className="peer-avatar" aria-label={peer.email} data-people={peer.color} onClick={() => onJump(peer.userId)}>
+              {peerInitial(peer.email)}
+            </button>
+          ) : (
+            <span className="peer-avatar" role="img" aria-label={peer.email} data-people={peer.color}>
+              {peerInitial(peer.email)}
+            </span>
+          )}
           <span className="icon-tooltip icon-tooltip--center" aria-hidden="true">
             {peer.email}
           </span>

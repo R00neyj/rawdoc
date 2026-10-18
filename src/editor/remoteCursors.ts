@@ -1,8 +1,8 @@
 // 원격 커서·선택 그리기와 내 커서 보내기. yRemoteSelections 대신 직접 — 나중에 붙이고, 조이고, 조합 중 얼린다 (specs/features/F-307.md 5장·6장)
 import { Prec, StateEffect } from '@codemirror/state'
 import type { Extension, Range } from '@codemirror/state'
-import { Decoration, ViewPlugin, WidgetType } from '@codemirror/view'
-import type { DecorationSet, EditorView, ViewUpdate } from '@codemirror/view'
+import { Decoration, EditorView, ViewPlugin, WidgetType } from '@codemirror/view'
+import type { DecorationSet, ViewUpdate } from '@codemirror/view'
 import * as Y from 'yjs'
 import type { Awareness } from 'y-protocols/awareness'
 
@@ -163,7 +163,7 @@ export function createRemoteCursorSync(
 
 // ----- 그리기 (6.3·6.4) -----
 
-type PeerMark = { anchor: number; head: number; color: number; label: string; seq: number }
+type PeerMark = { anchor: number; head: number; color: number; label: string; seq: number; userId: string }
 
 class CaretWidget extends WidgetType {
   constructor(
@@ -366,6 +366,7 @@ class RemoteCursorsView {
         color: peerColorIndex(state.user.id),
         label: peerLabel(state.user.email),
         seq: moved ? (prev?.seq ?? 0) + 1 : prev.seq,
+        userId: state.user.id,
       })
     }
     this.decorations = this.build()
@@ -384,6 +385,12 @@ class RemoteCursorsView {
     }
     return Decoration.set(ranges, true)
   }
+
+  // 그 사람의 커서 위치. 같은 사람이 탭 여럿이면 마지막으로 움직인 쪽이 아니라 먼저 잡힌 쪽이다
+  headOf(userId: string): number | null {
+    for (const mark of this.marks.values()) if (mark.userId === userId) return mark.head
+    return null
+  }
 }
 
 const remoteCursorsPlugin = ViewPlugin.fromClass(RemoteCursorsView, { decorations: (plugin) => plugin.decorations })
@@ -399,4 +406,12 @@ export function attachRemoteCursors(view: EditorView, source: { awareness: Aware
   if (!plugin) return () => {}
   plugin.attach(source)
   return () => plugin.detach()
+}
+
+// 상단바 아바타 → 그 사람이 있는 줄을 화면 가운데로. 커서를 모르면 false
+export function revealPeerCursor(view: EditorView, userId: string): boolean {
+  const head = view.plugin(remoteCursorsPlugin)?.headOf(userId)
+  if (head == null) return false
+  view.dispatch({ effects: EditorView.scrollIntoView(head, { y: 'center' }) })
+  return true
 }

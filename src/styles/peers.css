@@ -108,6 +108,16 @@
   font-weight: 600;
 }
 
+button.peer-avatar {
+  padding: 0;
+  cursor: pointer;
+}
+
+button.peer-avatar:focus-visible {
+  outline: 2px solid var(--peer);
+  outline-offset: 1px;
+}
+
 .peer-avatar-more {
   background: var(--rule-2);
   color: var(--ink-2);

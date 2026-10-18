@@ -28,10 +28,10 @@ const DOCS = [
   { id: OTHER, title: '다른 문서', content: '다른 본문' },
 ]
 
-async function openSide(page, room, user = A_USER, { install = true } = {}) {
+async function openSide(page, room, user = A_USER, { install = true, docs = DOCS } = {}) {
   const server = await fakeServer(page, user)
   if (install) await room.install(page.context(), user)
-  for (const doc of DOCS) server.docs.set(doc.id, serverDoc(doc.id, doc))
+  for (const doc of docs) server.docs.set(doc.id, serverDoc(doc.id, doc))
   await setPrefBeforeLoad(page, 'md.firstRunDone', '1')
   await page.goto(`/#/d/${DOC}`)
   await expect(mainContent(page)).toContainText('셋째 줄')
@@ -227,5 +227,30 @@ test('F-307 A32 같은 context 두 페이지는 서로의 커서를 보고 아�
     await expect(second.locator('.peer-avatars')).toHaveCount(0)
   } finally {
     await side.context.close()
+  }
+})
+
+test('small 2026-10-18 아바타를 누르면 그 사람 커서가 있는 줄이 화면에 들어온다', async ({ browser, baseURL }) => {
+  const long = [CONTENT, ...Array.from({ length: 200 }, (_, i) => `채움 ${i}`), '맨끝 줄'].join('\n')
+  const room = createFakeDocRoom()
+  room.seed(DOC, { content: long, title: '함께 쓰는 문서' })
+  const docs = [{ id: DOC, title: '함께 쓰는 문서', content: long }]
+  const a = await newSide(browser, baseURL)
+  const b = await newSide(browser, baseURL)
+  try {
+    await openSide(a.page, room, A_USER, { docs })
+    await openSide(b.page, room, B_USER, { docs })
+    await line(b.page, '첫째 줄').click()
+    await b.page.keyboard.press('Control+End')
+    await expect(line(b.page, '맨끝 줄')).toBeInViewport()
+    await expect.poll(() => room.lastAwareness(DOC, B_USER.id)?.[0]?.state?.cursor ?? null).not.toBeNull()
+
+    await expect(line(a.page, '맨끝 줄')).not.toBeInViewport()
+    await a.page.locator('.peer-avatar[aria-label="b2@example.com"]').click()
+    await expect(line(a.page, '맨끝 줄')).toBeInViewport()
+    await expect(line(a.page, '맨끝 줄').locator('.cm-remote-caret')).toHaveCount(1)
+  } finally {
+    await a.context.close()
+    await b.context.close()
   }
 })

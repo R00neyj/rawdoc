@@ -141,6 +141,9 @@ export default function AppTopBar({
       // 공유 화면·지도가 떠 있는 동안은 지금 보는 것이 그 문서가 아니다 (F-307 7.4)
       peers={sharedDoc || mapRoute ? NO_PEERS : livePeers}
       selfUserId={account.state === 'in' ? account.id : null}
+      onJumpToPeer={viewMode === 'view' || kanban.boardShown ? undefined : (userId) => {
+        if (!editorRef.current?.revealPeer(userId)) showNotice({ type: 'info', message: '그 사람의 커서 위치를 아직 모릅니다.' })
+      }}
       comments={
         commentAccessValue.kind === 'none' || !currentDoc || kanban.boardShown
           ? undefined

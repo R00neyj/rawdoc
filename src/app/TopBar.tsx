@@ -62,11 +62,12 @@ type TopBarProps = {
   // 접속자 아바타 — 보기 모드 토글 왼쪽, 없으면 요소가 없다 (F-307 7.1)
   peers: readonly Peer[]
   selfUserId: string | null
+  onJumpToPeer?: (userId: string) => void
   // 댓글 레일(판) 여닫기 — 없으면 버튼이 없다(금고 문서, 공유 화면, 문서 없음) (F-505 3.6)
   comments?: { openCount: number; open: boolean; disabled: boolean; onToggle: () => void }
   // 알림함 — 없으면 버튼이 없다(로그인 안 함·로컬 저장소) (F-507 3.4)
   notifications?: NotificationsMenuProps
-  // GitHub 메뉴 — 연결된 문서에만, 휴대폰 폭에서는 그리지 않는다 (F-2128 4.5)
+  // GitHub 메뉴 — 연결된 문서에만 (F-2128 4.5)
   github?: GithubMenuProps
   // 휴대폰 폭 ⋯ 판 — 어느 화면인지와 목차 카드 통로 (F-2083)
   screen: TopBarScreen
@@ -107,6 +108,7 @@ export default function TopBar({
   onToolbarRowMouseDown,
   peers,
   selfUserId,
+  onJumpToPeer,
   comments,
   notifications,
   github,
@@ -143,7 +145,7 @@ export default function TopBar({
         <div className="topbar-spacer">
           {showToolbar && !narrow && <EditorToolbar onRunCommand={onRunToolbarCommand} onPickImage={pickImage} />}
         </div>
-        <PeerAvatars peers={peers} selfUserId={selfUserId} narrow={narrow} />
+        <PeerAvatars peers={peers} selfUserId={selfUserId} narrow={narrow} onJump={onJumpToPeer} />
         {phone ? (
           <div className="topbar-pill topbar-pill--end">
             {screen === 'doc' && (
@@ -154,6 +156,7 @@ export default function TopBar({
                 board={kanban && { active: kanban.view === 'board', onChoose: () => kanban.onChoose('board') }}
               />
             )}
+            {github && <GithubMenu {...github} />}
             {moreButtonVisible({ screen, notifications: Boolean(notifications) }) && (
             <TopBarMoreSheet
               screen={screen}
