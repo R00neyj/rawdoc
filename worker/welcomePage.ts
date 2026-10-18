@@ -253,6 +253,7 @@ export function renderWelcomePage(options?: { path?: LandingPath; nonce?: string
     ${jsFlagScript}
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="google-site-verification" content="Fm3jrGxBDjOaORMgXr6cRbEY1s4Mgrny60PylqWYOH0" />
     ${themeScript}
     <title>${pageTitle}</title>
     <meta name="description" content="${subheadText}" />
