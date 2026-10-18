@@ -123,7 +123,7 @@
 | --- | --- | --- |
 | 제품명 (확정) | `Rawdoc` | 상단바 제품명, `<title>`, 매니페스트 `name`, 안내 문서 본문 |
 | 짧은 이름 (확정) | `Rawdoc` | 매니페스트 `short_name` (설치된 앱 아이콘 아래 이름) |
-| 메인 컬러 (임시값) | `#3B4890` (2026-09-14 `#D6337E` 에서 변경) | CSS `--accent`, 매니페스트 `theme_color`, `<meta name="theme-color">` |
+| 메인 컬러 (임시값) | `#3B4890` (2026-09-14 `#D6337E` 에서 변경) | CSS `--accent`, `<meta name="theme-color">`(매니페스트 `theme_color`·`background_color` 는 다크 `--paper`, tweak 2026-10-18) |
 
 규칙
 

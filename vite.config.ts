@@ -15,17 +15,19 @@ import type { SiteInput } from './site/build'
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url))
 
-// tokens.css 에서 색 토큰을 정규식으로 읽는다. 매니페스트 background_color 를 위해서다
-// (hex 중복 금지 — specs/features/F-115.md 3.1)
-function readTokenColor(name: string): string {
+// tokens.css 에서 색 토큰을 정규식으로 읽는다. after 가 있으면 그 선택자 블록 이후에서 찾는다 (hex 중복 금지 — F-115 3.1)
+function readTokenColor(name: string, after = ''): string {
   const cssPath = fileURLToPath(new URL('./src/styles/tokens.css', import.meta.url))
   const css = readFileSync(cssPath, 'utf-8')
-  const match = new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{3,8})`).exec(css)
+  const start = after ? css.indexOf(after) : 0
+  if (start < 0) throw new Error(`tokens.css 에서 ${after} 를 찾을 수 없습니다`)
+  const match = new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{3,8})`).exec(css.slice(start))
   if (!match) throw new Error(`tokens.css 에서 --${name} 토큰을 찾을 수 없습니다`)
   return match[1]
 }
 
-const paperColor = readTokenColor('paper')
+// 매니페스트는 다크 종이색 — 설치 앱 네비바·스플래시가 밝은 띠로 보이지 않게
+const manifestColor = readTokenColor('paper', ":root[data-theme='dark']")
 const siteUrl = SITE_URL
 const description = SITE_DESCRIPTION
 
@@ -253,8 +255,8 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         display: 'standalone',
-        theme_color: brand.accent,
-        background_color: paperColor,
+        theme_color: manifestColor,
+        background_color: manifestColor,
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
