@@ -106,6 +106,44 @@ test.describe('F-212 A5 공유받음 묶음·읽기 전용', () => {
     await waitSaved(page)
     await expect.poll(() => shared.get('edit-doc')?.content).toBe('편집 전 + 편집됨')
   })
+
+  test('공유받은 view 문서의 이미지는 그 문서 권한(?doc=)으로 받아 보인다', async ({ page }) => {
+    const server = await fakeServer(page)
+    const now = Date.now()
+    const ATT = 'a1b2c3d4e5f60718'
+    // 1x1 PNG
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
+    server.attachments.set(`${ATT}.png`, { mime: 'image/png', bytes: png, width: 1, height: 1 })
+    const doc = {
+      id: 'view-doc',
+      title: '그림 있는 문서',
+      content: `첫 줄\n\n<div align="center">\n  <img src="attachments/${ATT}.png" alt="그림">\n</div>\n\n끝 줄`,
+      lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: now, updatedAt: now,
+    }
+    await page.route(/\/api\/docs\/view-doc$/, (route) =>
+      route.request().method() === 'GET'
+        ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) })
+        : route.fallback(),
+    )
+    await page.route('**/api/shared', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ ...doc, content: undefined, role: 'view', ownerEmail: 'owner@x.com' }]),
+      }),
+    )
+    const attachmentGets = []
+    page.on('request', (req) => {
+      if (req.method() === 'GET' && req.url().includes(`/api/attachments/${ATT}.png`)) attachmentGets.push(new URL(req.url()).search)
+    })
+
+    await openApp(page)
+    await page.locator('.sidebar').getByText('그림 있는 문서').first().click()
+    await expect(page.locator('.cm-content')).toContainText('끝 줄')
+    await expect(page.locator('.md-image-img')).toHaveAttribute('src', /^blob:/)
+    await expect(page.locator('.md-image-missing')).toHaveCount(0)
+    expect(attachmentGets).toContain('?doc=view-doc')
+  })
 })
 
 test.describe('F-212 A6 사람 초대 대화상자', () => {

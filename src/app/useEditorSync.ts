@@ -20,6 +20,7 @@ import type { DocPathKind } from './docPath'
 import type { LiveSnapshot } from './liveDoc'
 import type { NoticeWithAction } from './NoticeBar'
 import { useGithubImages, type GithubImagesHandle } from './useGithubImages'
+import { sharedAttachmentHint } from './sharedAttachmentHint'
 
 const HEADING_JUMP_MARGIN = 16 // 목차 SELECT_MARGIN 과 같다 (F-2018 7.3)
 
@@ -337,19 +338,27 @@ export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResul
   useEffect(() => {
     hintRef.current = githubImages.attachmentHint
   }, [githubImages.attachmentHint])
+  const currentDocRef = useRef(currentDoc)
+  useEffect(() => {
+    currentDocRef.current = currentDoc
+  }, [currentDoc])
+  // forOpenDoc: 지금 열린 문서용 — 공유받은 문서는 캐시에 본문이 없어 열린 본문에서 확장자를 찾는다 (F-212 2.2)
   const attachmentResolverFor = useCallback(
-    (forE2eeDoc: boolean) => async (id: string) => {
-      const record = await store.getAttachment(id, hintRef.current(id) ?? undefined)
+    (forE2eeDoc: boolean, forOpenDoc = false) => async (id: string) => {
+      const doc = currentDocRef.current
+      const readText = () => (doc && openDocIdRef.current === doc.id ? (editorRef.current?.getText('lf') ?? null) : null)
+      const hint = hintRef.current(id) ?? (forOpenDoc ? sharedAttachmentHint(doc, readText, id) : null)
+      const record = await store.getAttachment(id, hint ?? undefined)
       if (!record) return null
       if (record.e2ee && !forE2eeDoc) return null
       return { blob: record.blob, width: record.width, height: record.height, ...(record.e2ee ? { e2ee: record.e2ee } : {}) }
     },
-    [store],
+    [store, openDocIdRef, editorRef],
   )
 
   // 편집 모드 이미지 블록 위젯·보기 화면·인쇄가 첨부를 읽는 콜백 — 지금 문서 기준
   const resolveAttachment = useMemo(
-    () => attachmentResolverFor(Boolean(currentDoc?.e2ee)),
+    () => attachmentResolverFor(Boolean(currentDoc?.e2ee), true),
     [attachmentResolverFor, currentDoc?.e2ee],
   )
 

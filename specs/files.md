@@ -198,6 +198,7 @@
 |`src/app/SettingsPageShell.tsx`|휴대폰에서 설정을 전체 화면 페이지로 보여주는 틀|
 |`src/app/settingsTabs.ts`|설정 창 왼쪽에 보일 탭과 순서를 정함|
 |`src/app/shareCopy.ts`|공유 링크나 마크다운 내용을 복사함|
+|`src/app/sharedAttachmentHint.ts`|공유받은 문서의 이미지 확장자를 열린 본문에서 찾아, 그 문서 권한으로 이미지를 받게 함|
 |`src/app/SharedView.tsx`|공유받은 문서를 열어 보고 내 문서로 가져올 수 있는 화면|
 |`src/app/ShareMenu.tsx`|상단바 공유 메뉴(링크 복사·마크다운 복사·사람 초대 등)|
 |`src/app/shareNotifications.ts`|누가 문서·폴더를 공유했다는 알림을 처리함|
