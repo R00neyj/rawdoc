@@ -26,6 +26,7 @@ const ALLOW: Allow[] = [
   { file: 'docs.ts', owner: 'handleCreateDoc', count: 2, reason: 'id 검사는 SELECT * 로 deleted_at 을 읽어 갈래 · INSERT' },
   { file: 'docs.ts', owner: 'deleteDocRows', count: 1, reason: '영구 삭제' },
   { file: 'e2eeDocs.ts', owner: 'WROTE_KEY', count: 1, reason: '같은 batch 의 MOVE_ROW_SQL 이 이미 거름' },
+  { file: 'e2eeDocs.ts', owner: 'CLEAR_ROOM_JOB_SQL', count: 1, reason: '빼기 batch 의 MOVE_ROW_SQL 이 이미 거름 (F-4013)' },
   { file: 'e2eeKeys.ts', owner: 'E2EE_COUNTS_SQL', count: 1, reason: '휴지통 금고 문서도 남은 금고 문서(F-3021 Q2)' },
   { file: 'e2eeKeys.ts', owner: 'DELETE_SQL', count: 1, reason: '휴지통 금고 문서도 남은 금고 문서(F-3021 Q2)' },
   { file: 'folders.ts', owner: 'deleteFolderContents', count: 1, reason: 'move-up — 휴지통 문서도 따라 올라가 복원 자리가 산다 (F-3023)' },
