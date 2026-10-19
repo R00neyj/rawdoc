@@ -665,6 +665,8 @@ export function planVaultImport(input: {
     const existingBlocks = existing ? new Map(listImageBlocks(existing.content).map((b) => [b.block.id, { ...b.block, form: b.form }])) : new Map()
     const blocksMap = new Map<VaultEmbed, EmbedBlock>()
     let unresolvedExt = false
+    // 1MB 검사를 통과한 문서의 이미지만 올린다
+    const docUploads = new Map<string, { path: string; originalPath: string; ext: AttachmentExt }>()
     for (const embed of vd.embeds) {
       if (embed.kind !== 'image' || !embed.standalone) {
         leftAsIsCount++
@@ -693,7 +695,7 @@ export function planVaultImport(input: {
       } else {
         unresolvedExt = true
         finalExt = ext
-        uploadImages.set(img.attachmentId, { path: img.path, originalPath: img.originalPath, ext: finalExt })
+        docUploads.set(img.attachmentId, { path: img.path, originalPath: img.originalPath, ext: finalExt })
       }
       blocksMap.set(embed, {
         id: img.attachmentId,
@@ -707,14 +709,14 @@ export function planVaultImport(input: {
 
     // 원문 안 attachments/{16hex}.{ext} 참조(F-156 블록 등) — 볼트 안 파일을 찾아 함께 올린다 (7.3 셋째 줄)
     for (const ref of vd.attachmentRefs) {
-      if (uploadImages.has(ref.id) || attachments.has(ref.id)) continue
+      if (uploadImages.has(ref.id) || docUploads.has(ref.id) || attachments.has(ref.id)) continue
       const candidates = [
         vd.dirPath ? `${vd.dirPath}/attachments/${ref.id}.${ref.ext}` : `attachments/${ref.id}.${ref.ext}`,
         `attachments/${ref.id}.${ref.ext}`,
       ]
       const foundImg = scan.images.find((i) => candidates.includes(i.path) && i.attachmentId === ref.id)
       if (foundImg) {
-        uploadImages.set(ref.id, { path: foundImg.path, originalPath: foundImg.originalPath, ext: ref.ext })
+        docUploads.set(ref.id, { path: foundImg.path, originalPath: foundImg.originalPath, ext: ref.ext })
       } else {
         missingRefCount++
       }
@@ -730,6 +732,7 @@ export function planVaultImport(input: {
         continue
       }
     }
+    for (const [id, v] of docUploads) uploadImages.set(id, v)
 
     if (existing && !unresolvedExt) {
       const existingLF = toEditorText(existing.content)
@@ -823,7 +826,9 @@ export async function applyVaultImport(input: {
 
   // 1. new 면 최상위에 볼트 이름 폴더를 만든다
   let targetFolderId: string | null = plan.target.kind === 'folder' ? plan.target.folderId : null
+  const cancelledEarly = (): ApplyVaultResult => ({ createdCount: 0, updatedCount: 0, cancelled: true, failures, quotaSkippedCount: 0, targetFolderId, skippedCount: plan.judgements.filter((j) => j.action === 'skip').length })
   if (plan.target.kind === 'new') {
+    if (isCancelled?.()) return cancelledEarly()
     try {
       const created = await store.createFolder({ name: plan.vaultName, parentId: null })
       targetFolderId = created.id
@@ -837,6 +842,7 @@ export async function applyVaultImport(input: {
   const resolvedFolderId = new Map<string, string | null>() // placeholderId -> 실제 id(또는 가장 가까운 성공한 조상)
   const dirsInOrder = [...plan.folders.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
   for (const [, match] of dirsInOrder) {
+    if (isCancelled?.()) return cancelledEarly()
     if (match.existingId !== null) {
       resolvedFolderId.set(match.placeholderId, match.existingId)
       continue

@@ -443,6 +443,18 @@ describe('planVaultImport — 7.7 경고 (F-2019.md U13)', () => {
     expect(plan.warnings.some((w) => w.includes('1MB'))).toBe(false)
     expect(plan.warnings.some((w) => w.includes('저장 공간'))).toBe(false)
   })
+
+  it('1MB 를 넘어 건너뛴 문서의 이미지는 올릴 목록에 넣지 않는다', async () => {
+    const big = 'x'.repeat(1024 * 1024 + 10)
+    const scan = await scanFrom({ kind: 'zip', fileName: 'v.zip' }, [
+      { name: 'v/큰.md', text: `![[그림.png]]\n\n${big}\n` },
+      { name: 'v/그림.png', bytes: PNG_1PX },
+    ])
+    const plan = planVaultImport({ scan, target: { kind: 'top' }, docs: [], folders: [], attachments: new Map(), storeKind: 'server' })
+    expect(plan.warnings).toContain('내용이 1MB 를 넘어 건너뛴 문서 1개')
+    expect(plan.uploadImages.size).toBe(0)
+    expect(plan.counts.images).toBe(0)
+  })
 })
 
 describe('applyVaultImport (F-2019.md 9장 U14)', () => {
@@ -565,6 +577,17 @@ describe('applyVaultImport (F-2019.md 9장 U14)', () => {
       },
     })
     expect(result.cancelled).toBe(true)
+  })
+
+  it('폴더를 만들기 전에 취소되면 폴더를 만들지 않고 cancelled 를 돌려준다', async () => {
+    const scan = await scanFrom({ kind: 'zip', fileName: 'v.zip' }, [{ name: 'v/하위/a.md', text: 'x\n' }])
+    for (const target of [{ kind: 'new' as const }, { kind: 'top' as const }]) {
+      const plan = planVaultImport({ scan, target, docs: [], folders: [], attachments: new Map(), storeKind: 'idb' })
+      const store = fakeStore()
+      const result = await applyVaultImport({ plan, scan, entries: entriesOf([]), store, isCancelled: () => true })
+      expect(result.cancelled).toBe(true)
+      expect(store.calls).toEqual([])
+    }
   })
 
   // 리뷰 U2 — 명세 F-2019: 올리기 실패·quota 초과면 그 임베드는 원문 그대로
