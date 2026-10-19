@@ -111,6 +111,13 @@ describe('F-2021 U1 args.ts — 명령마다 해석', () => {
     expect(r.kind).toBe('usage')
   })
 
+  it('--base-version 이 안전한 정수 범위를 넘으면 usage (put·replace)', () => {
+    const big = '9007199254740993'
+    expect(parseArgs(['put', 'd1', 'a.md', '--base-version', big]).kind).toBe('usage')
+    expect(parseArgs(['replace', 'a', 'b', '--id', 'd1', '--base-version', big]).kind).toBe('usage')
+    expect(parseArgs(['put', 'd1', 'a.md', '--base-version', String(Number.MAX_SAFE_INTEGER)])).toMatchObject({ kind: 'run', command: { baseVersion: Number.MAX_SAFE_INTEGER } })
+  })
+
   it('put 원문도 --title 도 없으면 usage', () => {
     const r = parseArgs(['put', 'd1', '--force'])
     expect(r.kind).toBe('usage')

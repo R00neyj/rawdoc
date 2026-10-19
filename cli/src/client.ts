@@ -58,7 +58,10 @@ function handleResponse(res: Response, text: string, opts: RequestOptions): unkn
     }
   }
 
-  if (res.status >= 200 && res.status < 300) return parseFailed ? null : json
+  if (res.status >= 200 && res.status < 300) {
+    if (parseFailed) throw new CliError('bad_response', { status: res.status })
+    return json
+  }
 
   // 429 는 몸통을 해석하지 못해도(WAF 등) rate_limited 다 — bad_response 보다 먼저 판정한다 (3.2 1번)
   if (res.status === 429) {

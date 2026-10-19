@@ -344,6 +344,11 @@ describe('F-2031 A7~A12 새 오류 분기', () => {
     expect((error as CliError).details).toMatchObject({ status: 429, scope: 'minute', retryAfter: 60, limit: 120 })
   })
 
+  it('2xx 인데 몸통이 JSON 이 아니면 bad_response', async () => {
+    const cfg = baseCfg(fakeFetch(() => rawResponse('<html>proxy</html>', 200)) as unknown as typeof fetch)
+    await expect(apiListDocs(cfg)).rejects.toMatchObject({ code: 'bad_response', details: { status: 200 } })
+  })
+
   it('A8 429 몸통이 HTML · 빈 몸통 — bad_response 가 아니다', async () => {
     const htmlFetch = fakeFetch(() => rawResponse('<html>waf</html>', 429))
     const htmlCfg = baseCfg(htmlFetch as unknown as typeof fetch)

@@ -116,7 +116,8 @@ function runParseArgs(
 
 function parseNonNegativeInt(value: string): number | null {
   if (!/^[0-9]+$/.test(value)) return null
-  return Number(value)
+  const n = Number(value)
+  return Number.isSafeInteger(n) ? n : null
 }
 
 function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocation {

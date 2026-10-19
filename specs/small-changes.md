@@ -81,3 +81,4 @@
 | 2026-10-19 | 설정의 선택 버튼 묶음(radiogroup)을 Tab 한 번으로 들어가 방향키·Home/End 로 고름 | 사용자: "p2까지 수정" | F-290 |
 | 2026-10-19 | 사이드바 접힘 레일 `RailButton` 의 안 쓰는 속성(ariaDisabled·buttonRef·ariaExpanded) 제거 | 사용자: "p2까지 수정" | F-255 |
 | 2026-10-19 | CLI 저장 파일이 깨졌으면 login·logout 이 덮어쓰지 않고 종료 1, 다른 명령은 무시 안내. ENOENT 밖 읽기 오류는 `file_read` (F-2021 5.6 갱신) | 사용자: "p2까지 수정" | F-2021 |
+| 2026-10-19 | CLI: replace 가 중간에 멈추면 그 오류의 종료 코드, 2xx 몸통 JSON 해석 실패는 `bad_response`, `--base-version` 은 안전한 정수만 | 사용자: "p2까지 수정" | F-2021 |
