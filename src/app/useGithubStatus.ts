@@ -16,7 +16,8 @@ export function useGithubStatus({ account, bootPhase, storeKind }: UseGithubStat
   const [held, setHeld] = useState<{ userId: string; status: GithubStatus | null } | null>(null)
   const userIdRef = useRef<string | null>(null)
   const eligibleRef = useRef(false)
-  const inFlight = useRef<Promise<GithubStatus | null> | null>(null)
+  // 계정이 바뀌면 이전 계정의 요청을 돌려쓰지 않는다
+  const inFlight = useRef<{ userId: string; run: Promise<GithubStatus | null> } | null>(null)
   const lastOkAt = useRef(0)
 
   useEffect(() => {
@@ -26,8 +27,8 @@ export function useGithubStatus({ account, bootPhase, storeKind }: UseGithubStat
 
   const refresh = useCallback((): Promise<GithubStatus | null> => {
     if (!eligibleRef.current || userIdRef.current === null) return Promise.resolve(null)
-    if (inFlight.current) return inFlight.current
     const asked = userIdRef.current
+    if (inFlight.current?.userId === asked) return inFlight.current.run
     const run = fetchGithubStatus()
       .then((r) => {
         const next = r.ok ? r.value : null
@@ -36,9 +37,9 @@ export function useGithubStatus({ account, bootPhase, storeKind }: UseGithubStat
         return next
       })
       .finally(() => {
-        inFlight.current = null
+        if (inFlight.current?.run === run) inFlight.current = null
       })
-    inFlight.current = run
+    inFlight.current = { userId: asked, run }
     return run
   }, [])
 
