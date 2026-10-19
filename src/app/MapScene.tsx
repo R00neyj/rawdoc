@@ -1082,6 +1082,7 @@ function buildScene(
     unlockControls()
     downAt = null
     menuWasOpen = false
+    longPressOpened = false
     if (e.pointerType === 'touch') {
       activeTouches = Math.max(0, activeTouches - 1)
       setHover(null)
