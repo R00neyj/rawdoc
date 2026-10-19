@@ -29,6 +29,9 @@ export default function ApiTokensDialog({ open, onClose }: ApiTokensDialogProps)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [revokingId, setRevokingId] = useState<string | null>(null)
+  const inFlightRef = useRef({ create: false, revoke: false })
 
   // 대화상자를 닫으면 원문·입력·확인 상태가 사라진다 (F-222 2.4) — InviteDialog 와 같은 방식으로 렌더 중 되돌린다
   const [trackedOpen, setTrackedOpen] = useState(false)
@@ -67,7 +70,9 @@ export default function ApiTokensDialog({ open, onClose }: ApiTokensDialogProps)
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const value = name.trim()
-    if (!value) return
+    if (!value || inFlightRef.current.create) return
+    inFlightRef.current.create = true
+    setSubmitting(true)
     setFormError(null)
     try {
       const result = await createToken(value)
@@ -81,6 +86,9 @@ export default function ApiTokensDialog({ open, onClose }: ApiTokensDialogProps)
       } else {
         setFormError('토큰을 만들지 못했습니다. 잠시 뒤 다시 시도하세요.')
       }
+    } finally {
+      inFlightRef.current.create = false
+      setSubmitting(false)
     }
   }
 
@@ -97,12 +105,17 @@ export default function ApiTokensDialog({ open, onClose }: ApiTokensDialogProps)
   }
 
   async function handleRevoke(id: string) {
+    if (inFlightRef.current.revoke) return
+    inFlightRef.current.revoke = true
+    setRevokingId(id)
     try {
       await revokeToken(id)
       setTokens((prev) => prev.filter((t) => t.id !== id))
     } catch {
       // 지우지 못했으면 목록에 남겨 다시 시도할 수 있게 한다
     }
+    inFlightRef.current.revoke = false
+    setRevokingId(null)
     setConfirmingId(null)
   }
 
@@ -152,7 +165,7 @@ export default function ApiTokensDialog({ open, onClose }: ApiTokensDialogProps)
           {formError && <p className="invite-error">{formError}</p>}
         </div>
         <div className="dialog-actions">
-          <button type="submit" disabled={!name.trim()}>
+          <button type="submit" disabled={!name.trim() || submitting}>
             토큰 만들기
           </button>
         </div>
@@ -171,7 +184,7 @@ export default function ApiTokensDialog({ open, onClose }: ApiTokensDialogProps)
                     <button type="button" onClick={() => setConfirmingId(null)}>
                       취소
                     </button>
-                    <button type="button" className="danger" onClick={() => handleRevoke(t.id)}>
+                    <button type="button" className="danger" disabled={revokingId !== null} onClick={() => handleRevoke(t.id)}>
                       폐기
                     </button>
                   </div>
@@ -184,7 +197,7 @@ export default function ApiTokensDialog({ open, onClose }: ApiTokensDialogProps)
                   <span className="api-token-meta">
                     {t.lastUsedAt ? `마지막 사용 ${formatDate(t.lastUsedAt)}` : '사용 안 함'}
                   </span>
-                  <button type="button" className="api-token-revoke" onClick={() => setConfirmingId(t.id)}>
+                  <button type="button" className="api-token-revoke" disabled={revokingId !== null} onClick={() => setConfirmingId(t.id)}>
                     폐기
                   </button>
                 </>
