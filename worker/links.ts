@@ -115,7 +115,7 @@ function subtreeIds(folders: FolderListRow[], folderId: string): string[] {
     folders.map((f) => ({ id: f.id, name: f.name, parentId: f.parent_id })),
     folderId,
   )
-  return ids.length > 0 ? ids : [folderId]
+  return ids
 }
 
 // 링크 폴더 + 모든 자손 폴더의 id 목록(링크 폴더가 맨 앞). 조회 시점 기준
@@ -312,7 +312,7 @@ export async function handlePublicGetDoc(
   if (!link || link.target_type !== 'doc') return pubResponse({ error: 'not_found' }, 404)
 
   // 공개 조회는 링크 주인의 문서만 (리뷰 W2)
-  const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at FROM docs WHERE id = ? AND owner_id = ? AND deleted_at IS NULL')
+  const doc = await env.DB.prepare('SELECT title, content, line_ending, updated_at FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL AND deleted_at IS NULL')
     .bind(link.target_id, link.owner_id)
     .first<PublicDocRow>()
   if (!doc) return publicMissing(env, link.target_id, link.owner_id)

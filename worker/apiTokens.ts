@@ -74,12 +74,13 @@ export async function handleCreateToken(request: Request, env: Env): Promise<Res
   const id = crypto.randomUUID()
   const createdAt = Date.now()
 
-  await env.DB.batch([
+  const [inserted] = await env.DB.batch([
     env.DB.prepare(
-      'INSERT INTO api_tokens (id, user_id, name, token_hash, prefix, created_at) VALUES (?,?,?,?,?,?)',
-    ).bind(id, user.id, name, tokenHash, prefix, createdAt),
+      'INSERT INTO api_tokens (id, user_id, name, token_hash, prefix, created_at) SELECT ?1,?2,?3,?4,?5,?6 WHERE (SELECT COUNT(*) FROM api_tokens WHERE user_id = ?2 AND revoked_at IS NULL) < ?7',
+    ).bind(id, user.id, name, tokenHash, prefix, createdAt, MAX_TOKENS),
     dayUsageStatement(env.DB, user.id, Date.now()),
   ])
+  if (inserted.meta.changes === 0) return jsonResponse({ error: 'too_many', limit: MAX_TOKENS }, 409)
 
   // token(원문)은 이 응답에만 담긴다 — D1 에는 해시·prefix 만 (F-222 2.1)
   return jsonResponse({ id, name, prefix, createdAt, lastUsedAt: null, token }, 201)

@@ -1013,3 +1013,4 @@
 | H931 | 설정 라디오 (small 2026-10-19) | 선택 버튼 묶음에 Tab 한 번 진입, 방향키·Home/End 로 포커스와 선택이 함께 이동 | 대기 |
 | H932 | 서버 읽기 실패 (small 2026-10-19) | 문서 열다 오프라인·세션 만료 시 오프라인·로그아웃 표시가 바로 바뀌는지 | 대기 |
 | H933 | scripts 셸 제거 (small 2026-10-19) | Windows 에서 `npm run measure` 빌드·preview 와 `taskkill /t` 정리, `node scripts/make-og-image.mjs` 결과가 전과 같은지 | 대기 |
+| H934 | F-4014 | 배포(원격 0030 먼저) 뒤 Claude.ai·ChatGPT 커넥터 새 연결(동적 등록)이 되는지 | 대기 |

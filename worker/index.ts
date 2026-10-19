@@ -515,7 +515,7 @@ async function handleRequest(request: Request, env: Env, ctx: ExecutionContext, 
       if (url.pathname.startsWith('/api/auth/')) {
         if (!AUTH_ROUTES.has(authRoute)) return errorResponse('not_found', 404)
         if (authRoute === 'POST /api/auth/oauth2/register') {
-          const closed = await admitClientRegistration(env)
+          const closed = await admitClientRegistration(request, env)
           if (closed) return closed
         }
         // workerd 는 본문 없는 POST 에도 빈 body 를 붙여 better-call 이 Content-Type 없음 415 를 낸다 — 로그아웃은 본문을 읽지 않는다

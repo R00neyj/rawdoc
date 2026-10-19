@@ -62,7 +62,7 @@ export async function renderPublicPage(request: Request, env: Env, pathname: str
     let description: string
     if (targetType === 'doc') {
       // 링크 주인의 문서일 때만 — 지운 id 를 남이 다시 만들면 옛 링크가 따라가지 않는다 (리뷰 W2)
-      const doc = await env.DB.prepare('SELECT title, content FROM docs WHERE id = ? AND owner_id = ? AND deleted_at IS NULL')
+      const doc = await env.DB.prepare('SELECT title, content FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL AND deleted_at IS NULL')
         .bind(link.target_id, link.owner_id)
         .first<{ title: string; content: string }>()
       if (!doc) return null
@@ -70,7 +70,7 @@ export async function renderPublicPage(request: Request, env: Env, pathname: str
       const excerptText = excerpt(stripComments(doc.content))
       description = excerptText || SITE_DESCRIPTION
     } else {
-      const folder = await env.DB.prepare('SELECT name FROM folders WHERE id = ? AND owner_id = ?')
+      const folder = await env.DB.prepare('SELECT name FROM folders WHERE id = ? AND owner_id = ? AND e2ee = 0')
         .bind(link.target_id, link.owner_id)
         .first<{ name: string }>()
       if (!folder) return null

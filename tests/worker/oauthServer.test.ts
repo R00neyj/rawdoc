@@ -8,10 +8,12 @@ import { secondsUntilUtcMidnight, utcDay } from '../../worker/usage'
 import {
   OAUTH_SCOPES,
   REGISTER_DAILY_LIMIT,
+  REGISTER_IP_DAILY_LIMIT,
   admitClientRegistration,
   cleanupOAuth,
   mcpResource,
   oauthIssuer,
+  registerIpKey,
 } from '../../worker/oauthServer'
 import worker from '../../worker/index'
 
@@ -270,22 +272,25 @@ describe('F-4009 A5 등록 관문', () => {
   const client = { client_name: 'X', redirect_uris: [REDIRECT], token_endpoint_auth_method: 'none' }
   const gate = (env: Env) => ({ ...(sql(env).prepare('SELECT day, count FROM oauth_register_gate WHERE id = 1').get() as { day: string; count: number }) })
 
+  let ipSeq = 0
+  const freshIp = () => ({ 'CF-Connecting-IP': `10.0.${ipSeq >> 8}.${ipSeq++ & 255}` })
+
   it('500번째 통과, 501번째 429·Retry-After, 다음 UTC 날 첫 등록 201, 틀린 요청도 센다', async () => {
     expect(REGISTER_DAILY_LIMIT).toBe(500)
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(NOW)
     const env = makeEnv()
     expect(gate(env)).toEqual({ day: '', count: 0 })
-    const invalid = await register(env, { client_name: 'X' })
+    const invalid = await register(env, { client_name: 'X' }, freshIp())
     expect(invalid.status).toBe(400)
     expect(gate(env)).toEqual({ day: TODAY, count: 1 })
 
     sql(env).prepare('UPDATE oauth_register_gate SET day = ?, count = ? WHERE id = 1').run(TODAY, 499)
-    expect((await register(env, client)).status).toBe(201)
+    expect((await register(env, client, freshIp())).status).toBe(201)
     expect(gate(env)).toEqual({ day: TODAY, count: 500 })
     const before = count(sql(env), 'SELECT count(*) AS n FROM oauth_clients')
 
-    const closed = await register(env, client)
+    const closed = await register(env, client, freshIp())
     expect(closed.status).toBe(429)
     expect(closed.headers.get('Retry-After')).toBe(String(secondsUntilUtcMidnight(NOW)))
     expect(await closed.json()).toEqual({ error: 'temporarily_unavailable', error_description: 'registration limit reached' })
@@ -293,16 +298,16 @@ describe('F-4009 A5 등록 관문', () => {
     expect(gate(env)).toEqual({ day: TODAY, count: 500 })
 
     vi.setSystemTime(NOW + 24 * HOUR_MS)
-    expect((await register(env, client)).status).toBe(201)
+    expect((await register(env, client, freshIp())).status).toBe(201)
     expect(gate(env)).toEqual({ day: utcDay(NOW + 24 * HOUR_MS), count: 1 })
   })
 
-  it('관문은 oauth_register_gate 한 문장만 실행한다', async () => {
+  it('관문은 IP 문장 하나, 통과하면 전역 문장 하나를 각각 run 한다', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(NOW)
-    for (const [changes, status] of [
-      [1, null],
-      [0, 429],
+    for (const [changes, status, statements] of [
+      [1, null, 2],
+      [0, 429, 1],
     ] as const) {
       const calls = { prepare: [] as string[], bind: [] as unknown[][], run: 0, batch: 0 }
       const DB = {
@@ -325,14 +330,46 @@ describe('F-4009 A5 등록 관문', () => {
           return []
         },
       }
-      const res = await admitClientRegistration({ DB } as unknown as Env)
-      expect(calls.prepare).toHaveLength(1)
-      expect(calls.prepare[0]).toMatch(/^UPDATE oauth_register_gate SET /)
-      expect(calls.prepare[0]).not.toMatch(/;\s*\S/)
-      expect(calls.bind).toEqual([[TODAY, REGISTER_DAILY_LIMIT]])
-      expect([calls.run, calls.batch]).toEqual([1, 0])
+      const request = new Request('https://rawdoc.app/api/auth/oauth2/register', { headers: { 'CF-Connecting-IP': '203.0.113.7' } })
+      const res = await admitClientRegistration(request, { DB } as unknown as Env)
+      expect(calls.prepare).toHaveLength(statements)
+      expect(calls.prepare[0]).toMatch(/^INSERT INTO oauth_register_ip /)
+      expect(calls.bind[0]).toEqual(['203.0.113.7', TODAY, REGISTER_IP_DAILY_LIMIT])
+      if (statements === 2) {
+        expect(calls.prepare[1]).toMatch(/^UPDATE oauth_register_gate SET /)
+        expect(calls.bind[1]).toEqual([TODAY, REGISTER_DAILY_LIMIT])
+      }
+      expect([calls.run, calls.batch]).toEqual([statements, 0])
       expect(res?.status ?? null).toBe(status)
     }
+  })
+
+  it('registerIpKey — IPv4 그대로, IPv6 는 /64, 해석 못 하면 unknown', () => {
+    expect(registerIpKey('203.0.113.7')).toBe('203.0.113.7')
+    expect(registerIpKey('2001:DB8:0:0:1::1')).toBe('2001:db8:0:0')
+    expect(registerIpKey('2001:db8::')).toBe('2001:db8:0:0')
+    expect(registerIpKey(null)).toBe('unknown')
+    expect(registerIpKey('zz')).toBe('unknown')
+  })
+
+  it('같은 IP 21번째 429(전역은 20 에서 멈춤), 다른 IP 통과, 다음 날 다시 201, cleanupOAuth 가 어제 행만 지운다', async () => {
+    expect(REGISTER_IP_DAILY_LIMIT).toBe(20)
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(NOW)
+    const env = makeEnv()
+    const same = { 'CF-Connecting-IP': '203.0.113.7' }
+    for (let i = 0; i < 20; i++) expect((await register(env, client, same)).status).toBe(201)
+    expect((await register(env, client, same)).status).toBe(429)
+    expect(gate(env)).toEqual({ day: TODAY, count: 20 })
+    expect((await register(env, client, { 'CF-Connecting-IP': '203.0.113.8' })).status).toBe(201)
+    expect(gate(env)).toEqual({ day: TODAY, count: 21 })
+
+    vi.setSystemTime(NOW + 24 * HOUR_MS)
+    expect((await register(env, client, same)).status).toBe(201)
+    sql(env).prepare("INSERT INTO oauth_register_ip (ip_key, day, count) VALUES ('old', ?, 3)").run(TODAY)
+    await cleanupOAuth({ DB: asD1(sql(env)) } as unknown as Env, NOW + 24 * HOUR_MS)
+    const rows = sql(env).prepare('SELECT ip_key FROM oauth_register_ip ORDER BY ip_key').all() as { ip_key: string }[]
+    expect(rows.map((r) => r.ip_key)).toEqual(['203.0.113.7'])
   })
 })
 

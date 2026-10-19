@@ -70,7 +70,7 @@ export async function attachmentLinkStatement(env: Env, user: AuthUser, docId: s
   const access = await getDocAccess<{ id: string; owner_id: string; folder_id: string | null }>(env, docId, user, 'id, owner_id, folder_id')
   if (!access || access.role !== 'edit') return null
   return env.DB.prepare(
-    'INSERT INTO attachment_docs (owner_id, attachment_id, doc_owner_id, doc_id, created_at) VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING',
+    'INSERT INTO attachment_docs (owner_id, attachment_id, doc_owner_id, doc_id, created_at) SELECT ?1,?2,?3,?4,?5 WHERE EXISTS (SELECT 1 FROM attachments WHERE owner_id = ?1 AND id = ?2) ON CONFLICT DO NOTHING',
   ).bind(user.id, attachmentId, access.doc.owner_id, access.doc.id, Date.now())
 }
 
@@ -79,6 +79,16 @@ async function getUsedBytes(env: Env, ownerId: string): Promise<number> {
     .bind(ownerId)
     .first<{ used: number }>()
   return row?.used ?? 0
+}
+
+// 넣기 문장 안의 한도 재판정 — ?1 owner, ?5 size, ?9 한도 (F-4014 3.3)
+const WITHIN_QUOTA_SQL = '(SELECT COALESCE(SUM(size),0) FROM attachments WHERE owner_id = ?1) + ?5 <= ?9'
+
+// 넣기에 진 업로드의 R2 키를 지운다 — 같은 id 행이 있으면(재전송이 이김) 그 객체라 둔다. 다시 읽은 사용량을 돌려준다
+async function rollbackLostUpload(env: Env, ownerId: string, id: string, key: string): Promise<number> {
+  const winner = await env.DB.prepare('SELECT 1 as hit FROM attachments WHERE owner_id = ? AND id = ?').bind(ownerId, id).first<{ hit: number }>()
+  if (!winner) await env.BUCKET.delete(key)
+  return getUsedBytes(env, ownerId)
 }
 
 export function attachmentResponse(object: R2ObjectBody, mime: string, cacheControl: string): Response {
@@ -119,13 +129,17 @@ export async function storeAttachment(
   await env.BUCKET.put(key, buffer, { httpMetadata: { contentType: sniffed.mime } })
 
   const now = Date.now()
-  await env.DB.batch([
+  const [inserted] = await env.DB.batch([
     env.DB.prepare(
-      'INSERT INTO attachments (owner_id, id, ext, mime, size, width, height, created_at) VALUES (?,?,?,?,?,?,?,?)',
-    ).bind(ownerId, id, sniffed.ext, sniffed.mime, buffer.length, sniffed.width, sniffed.height, now),
+      `INSERT INTO attachments (owner_id, id, ext, mime, size, width, height, created_at) SELECT ?1,?2,?3,?4,?5,?6,?7,?8 WHERE ${WITHIN_QUOTA_SQL}`,
+    ).bind(ownerId, id, sniffed.ext, sniffed.mime, buffer.length, sniffed.width, sniffed.height, now, ATTACHMENT_QUOTA_BYTES),
     ...linkStatements,
     dayUsageStatement(env.DB, ownerId, now),
   ])
+  if (inserted.meta.changes === 0) {
+    const raced = await rollbackLostUpload(env, ownerId, id, key)
+    return { ok: false, status: 507, error: 'quota_exceeded', used: raced, limit: ATTACHMENT_QUOTA_BYTES }
+  }
   await quotaPushInBackground(env, ctx, ownerId, { images: { used: used + buffer.length, limit: ATTACHMENT_QUOTA_BYTES } }, now)
 
   return {
@@ -206,12 +220,16 @@ export async function handleUploadAttachment(
     const key = `att/${user.id}/${id}.${ext}`
     await env.BUCKET.put(key, buffer, { httpMetadata: { contentType: 'application/octet-stream' } })
     const now = Date.now()
-    await env.DB.batch([
+    const [inserted] = await env.DB.batch([
       env.DB.prepare(
-        'INSERT INTO attachments (owner_id, id, ext, mime, size, width, height, created_at, e2ee) VALUES (?,?,?,?,?,?,?,?,1)',
-      ).bind(user.id, id, ext, mime, buffer.length, width, height, now),
+        `INSERT INTO attachments (owner_id, id, ext, mime, size, width, height, created_at, e2ee) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,1 WHERE ${WITHIN_QUOTA_SQL}`,
+      ).bind(user.id, id, ext, mime, buffer.length, width, height, now, ATTACHMENT_QUOTA_BYTES),
       dayUsageStatement(env.DB, user.id, now),
     ])
+    if (inserted.meta.changes === 0) {
+      const raced = await rollbackLostUpload(env, user.id, id, key)
+      return jsonResponse({ error: 'quota_exceeded', used: raced, limit: ATTACHMENT_QUOTA_BYTES }, 507)
+    }
     await quotaPushInBackground(env, ctx, user.id, { images: { used: used + buffer.length, limit: ATTACHMENT_QUOTA_BYTES } }, now)
     return jsonResponse({ id, ext, mime, size: buffer.length, width, height, e2ee: true as const }, 201)
   }
@@ -297,7 +315,7 @@ export async function handlePublicGetAttachment(
   if (!link || link.target_type !== 'doc') return errorResponse('not_found', 404)
 
   // 링크 주인의 문서만 (리뷰 W2)
-  const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ? AND owner_id = ? AND deleted_at IS NULL')
+  const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL AND deleted_at IS NULL')
     .bind(link.target_id, link.owner_id)
     .first<{ id: string; owner_id: string; content: string; folder_id: string | null }>()
   if (!doc) return errorResponse('not_found', 404)
@@ -326,7 +344,7 @@ export async function handlePublicGetDocSetAttachment(
 
   if (!(await isDocInLinkSet(env, params.token, link.target_id, params.docId))) return errorResponse('not_found', 404)
 
-  const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ? AND owner_id = ? AND deleted_at IS NULL')
+  const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL AND deleted_at IS NULL')
     .bind(params.docId, link.owner_id)
     .first<{ id: string; owner_id: string; content: string; folder_id: string | null }>()
   if (!doc) return errorResponse('not_found', 404)
@@ -352,7 +370,7 @@ export async function handlePublicGetFolderAttachment(
   const link = await findPublicLink(env, params.token)
   if (!link || link.target_type !== 'folder') return errorResponse('not_found', 404)
 
-  const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ? AND owner_id = ? AND deleted_at IS NULL')
+  const doc = await env.DB.prepare('SELECT id, owner_id, content, folder_id FROM docs WHERE id = ? AND owner_id = ? AND e2ee_key IS NULL AND deleted_at IS NULL')
     .bind(params.docId, link.owner_id)
     .first<{ id: string; owner_id: string; content: string; folder_id: string | null }>()
   if (!doc) return errorResponse('not_found', 404)
