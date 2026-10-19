@@ -1,6 +1,6 @@
 // buildBlocks 단위 테스트(F-106 3장 A1) — EditorState + ensureSyntaxTree 로 계산 함수를 직접 부른다. DOM 안 씀(widget.toDOM 미호출, test.environment 'node')
 import { describe, expect, it, vi } from 'vitest'
-import { EditorState } from '@codemirror/state'
+import { Compartment, EditorState } from '@codemirror/state'
 import { Decoration, EditorView } from '@codemirror/view'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
@@ -11,6 +11,14 @@ import type { BlockSpan } from '../../../../src/editor/preview/blocks'
 import type { EditorState as CMState } from '@codemirror/state'
 import type { TableModel } from '../../../../src/editor/preview/tableModel'
 import { imagePathsChanged, imagePathsField } from '../../../../src/editor/preview/imagePaths'
+import { trackActiveEditRange } from '../../../../src/editor/preview/tableWidget'
+import type * as TableWidgetModule from '../../../../src/editor/preview/tableWidget'
+
+// 칸 세션 추적 호출만 엿본다 — 동작은 진짜 그대로
+vi.mock('../../../../src/editor/preview/tableWidget', async (importOriginal) => {
+  const actual = await importOriginal<typeof TableWidgetModule>()
+  return { ...actual, trackActiveEditRange: vi.fn(actual.trackActiveEditRange) }
+})
 
 // Decoration.spec 은 라이브러리 타입이 any 다 — 여기서만 실제 위젯 모양으로 좁혀 쓴다
 type TestTableWidget = { table: TableModel; eq(other: TestTableWidget): boolean }
@@ -659,6 +667,20 @@ describe('blockPreview — 선택만 바뀐 갱신 (리뷰 E6)', () => {
     expect(blockVisibilityKey(inPara, true, spans)).toBe(key)
     const inCode = state.update({ selection: { anchor: DOC.indexOf('console') } }).state
     expect(blockVisibilityKey(inCode, true, spans)).not.toBe(key)
+  })
+})
+
+describe('blockPreview — 읽기 전용 전환도 칸 세션에 알린다', () => {
+  it('문서 변경 없이 읽기 전용이 되는 트랜잭션에서도 trackActiveEditRange 를 부른다', () => {
+    const readOnly = new Compartment()
+    const state = EditorState.create({
+      doc: TABLE_DOC + '\nx',
+      extensions: [markdown({ base: markdownLanguage }), readOnly.of(EditorState.readOnly.of(false)), blockPreview({ theme: TEST_THEME })],
+    })
+    vi.mocked(trackActiveEditRange).mockClear()
+    const tr = state.update({ effects: readOnly.reconfigure(EditorState.readOnly.of(true)) })
+    expect(tr.state.readOnly).toBe(true)
+    expect(trackActiveEditRange).toHaveBeenCalledWith(null, tr)
   })
 })
 

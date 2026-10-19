@@ -20,6 +20,22 @@ export function isForced(updateOrTransaction: ViewUpdate | Transaction): boolean
   return transactions.some((tr) => tr?.effects?.some((e) => e.is(forceRecalc)))
 }
 
+// 코드로 없앤 하위 편집기(표 칸·프론트매터 값)는 compositionend 를 안 낸다 — 세션 끝을 원격 게이트에 따로 알린다 (F-303 5.3)
+const subEditorEnds = new WeakMap<EditorView, Set<() => void>>()
+
+export function onSubEditorEnd(mainView: EditorView, fn: () => void): () => void {
+  let fns = subEditorEnds.get(mainView)
+  if (!fns) subEditorEnds.set(mainView, (fns = new Set()))
+  fns.add(fn)
+  return () => {
+    fns.delete(fn)
+  }
+}
+
+export function notifySubEditorEnd(mainView: EditorView): void {
+  subEditorEnds.get(mainView)?.forEach((fn) => fn())
+}
+
 type ComposingEnterTarget = { composing: boolean; state: EditorState; dispatch: (tr: Transaction) => void }
 type ComposingEnterEvent = {
   key: string

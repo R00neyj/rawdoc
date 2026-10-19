@@ -446,9 +446,9 @@ export function blockPreview({
     // EditorState.create 시점엔 view 가 없어 포커스를 알 수 없다 — false 가 맞다(autoFocus 의 focus() 가 곧 focusin·forceRecalc 로 다시 그린다, F-146 3.2)
     create: (state) => build(state, false),
     update(value, tr) {
-      // F-135 3.2: 편집 중인 칸이 있으면 모든 주 문서 트랜잭션마다(칸 자신의 입력 포함) 세션이 든 칸 범위를 옮긴다
+      // F-135 3.2: 편집 중인 칸이 있으면 모든 주 문서 트랜잭션마다(칸 자신의 입력 포함) 세션이 든 칸 범위를 옮기고, 읽기 전용 전환도 알린다
       // 아래에서 조합 중이라 위젯을 다시 안 그리고 건너뛰는 경우에도 범위는 계속 옮겨야 한다
-      if (tr.docChanged) trackActiveEditRange(viewRef.current, tr)
+      if (tr.docChanged || tr.startState.readOnly !== tr.state.readOnly) trackActiveEditRange(viewRef.current, tr)
       // F-138 3.5: endEdit 이 미뤄둔 쓰기(마이크로태스크 dispatch 대기 중)도 같은 이유로 모든 트랜잭션마다 범위를 옮긴다
       if (tr.docChanged) trackPendingWrites(viewRef.current, tr)
       if (!isForced(tr)) {

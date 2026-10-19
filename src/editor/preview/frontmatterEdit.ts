@@ -7,7 +7,7 @@ import { ySyncAnnotation } from 'y-codemirror.next'
 
 import { frontmatterValueRanges, frontmatterValueText, frontmatterValueWrite } from '../../lib/frontmatter'
 import type { FrontmatterValueRange } from '../../lib/frontmatter'
-import { forceRecalc, isComposing } from '../composition'
+import { forceRecalc, isComposing, notifySubEditorEnd } from '../composition'
 import { redoLocal, undoLocal } from '../yBinding'
 import { mapCellRange } from './tableModel'
 
@@ -147,6 +147,7 @@ function endEdit(mainView: EditorView, { deferDispatch = false }: { deferDispatc
   session.el.classList.remove(EDITING_CLASS)
   const shown = valueRanges(mainView.state)[session.cell]
   session.el.textContent = shown ? frontmatterValueText(mainView.state.sliceDoc(shown.from, shown.to)) : ''
+  notifySubEditorEnd(mainView)
 
   if (!deferDispatch) {
     if (pendingRecalc) mainView.dispatch({ effects: forceRecalc.of(null) })

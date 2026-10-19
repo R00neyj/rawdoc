@@ -9,6 +9,7 @@ import { createYBinding, undoLocal } from '../../../src/editor/yBinding'
 import type { YBinding } from '../../../src/editor/yBinding'
 import { REMOTE_HOLD_CHECK_MS, connectRemote, createRemoteGate, isEditorRelay } from '../../../src/editor/remoteGate'
 import { setBoardComposing } from '../../../src/editor/boardComposition'
+import { notifySubEditorEnd } from '../../../src/editor/composition'
 import type { RemoteGate } from '../../../src/editor/remoteGate'
 
 type Peer = {
@@ -541,6 +542,30 @@ describe('F-305 U17 connectRemote 에 sharedDoc 을 주면 훅을 부르지 않�
       expect(binding.ydoc.getText('content').toString()).toBe('방!')
       connection!.destroy()
       expect(listeners).toEqual(['+compositionend', '+keydown', '-compositionend', '-keydown'])
+      binding.destroy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('하위 편집기 세션이 코드로 끝나면(compositionend 없음) 다음 틱에 큐를 비운다', () => {
+    vi.useFakeTimers()
+    try {
+      const room = new Y.Doc()
+      room.getText('content').insert(0, '방')
+      const binding = createYBinding('')
+      Y.applyUpdate(binding.ydoc, Y.encodeStateAsUpdate(room))
+      const { view } = fakeView()
+      const flags = view as unknown as { compositionStarted: boolean }
+      const connection = connectRemote({ view, editorDoc: binding.ydoc, docId: 'doc-1', sharedDoc: room })
+      flags.compositionStarted = true
+      room.getText('content').insert(1, '!')
+      expect(binding.ydoc.getText('content').toString()).toBe('방')
+      flags.compositionStarted = false
+      notifySubEditorEnd(view)
+      vi.advanceTimersByTime(0)
+      expect(binding.ydoc.getText('content').toString()).toBe('방!')
+      connection!.destroy()
       binding.destroy()
     } finally {
       vi.useRealTimers()

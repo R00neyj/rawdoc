@@ -27,7 +27,7 @@ import { parseCellInline } from './cellInline'
 import { isOpenableUrl } from './links'
 import { setWikiContextEffect, wikiContextField, wikiLinkLook, wikiLinkOpener, type WikiContext } from './wikiLinks'
 import { insertLink, toggleEmphasis, toggleStrong } from '../commands'
-import { forceRecalc, isComposing } from '../composition'
+import { forceRecalc, isComposing, notifySubEditorEnd } from '../composition'
 import { redoLocal, undoLocal } from '../yBinding'
 import { isTouchContextMenu } from '../../lib/touchContextMenu'
 
@@ -110,12 +110,15 @@ function guardComposing(command: StateCommand) {
   return (view: EditorView) => (isComposing(view) ? false : command(view))
 }
 
-// 지금 이 주 view 의 활성 칸을 편집 중인 모든 주 문서 트랜잭션(칸 자신의 입력 포함)마다 세션이 든 칸 범위를 옮긴다(F-135 3.2) — blocks.ts 의 StateField.update 가 매번 부른다
+// 지금 이 주 view 의 활성 칸을 편집 중인 모든 주 문서 트랜잭션(칸 자신의 입력 포함)과 읽기 전용 전환마다 부른다(F-135 3.2) — blocks.ts 의 StateField.update 가 부른다
 // 실행 취소는 cellKeydown 이 그 전에 이미 endEdit 로 세션을 지우므로 여기 들어오지 않는다("실행 취소 제외")
 export function trackActiveEditRange(mainView: EditorView | null | undefined, tr: Transaction): void {
   const entry = mainView && activeEdit.get(mainView)
   if (!entry) return
-  if (tr.annotation(ySyncAnnotation) !== undefined && remoteTouchesCell(entry, tr)) endEditAfterRemote(mainView, entry)
+  const remoteTouch = tr.annotation(ySyncAnnotation) !== undefined && remoteTouchesCell(entry, tr)
+  // 읽기 전용이 되면 이후 쓰기를 readOnlyChangeGuard 가 버려 칸과 원문이 어긋난다
+  const lostWrite = !tr.startState.readOnly && tr.state.readOnly
+  if (remoteTouch || lostWrite) endEditAfterUpdate(mainView, entry)
   if (entry.range) entry.range = mapCellRange(entry.range, tr.changes)
   entry.lineStart = tr.changes.mapPos(entry.lineStart, -1)
 }
@@ -126,8 +129,8 @@ function remoteTouchesCell(entry: ActiveEditEntry, tr: Transaction): boolean {
   return tr.changes.touchesRange(from, to) !== false
 }
 
-// 같은 칸을 원격이 고치면 다음 입력의 칸 통째 갈아 끼우기가 원격 글자를 덮는다 — 세션을 끝낸다. StateField 갱신 도중이라 마이크로태스크로 미룬다 (F-303 6.2)
-function endEditAfterRemote(mainView: EditorView, entry: ActiveEditEntry): void {
+// 원격이 같은 칸을 고쳤거나(다음 입력이 원격 글자를 덮는다) 읽기 전용이 되면 세션을 끝낸다. StateField 갱신 도중이라 마이크로태스크로 미룬다 (F-303 6.2)
+function endEditAfterUpdate(mainView: EditorView, entry: ActiveEditEntry): void {
   queueMicrotask(() => {
     if (activeEdit.get(mainView) === entry) endEdit(mainView)
   })
@@ -222,6 +225,7 @@ function endEdit(mainView: EditorView, { deferDispatch = false }: { deferDispatc
   renderCellText(entry.td, cell ? cell.text : '', mainView)
   entry.td.classList.remove('md-table-cell-editing')
   hideCellHighlight(entry.wrap) // 편집이 끝나면 강조를 숨긴다(F-140 3.3)
+  notifySubEditorEnd(mainView)
 
   if (!deferDispatch) {
     if (pendingRecalc) mainView.dispatch({ effects: forceRecalc.of(null) })
@@ -650,6 +654,35 @@ function openCellLink(view: EditorView, target: EventTarget | null): boolean {
   return true
 }
 
+type DragTargets = {
+  doc: Pick<Document, 'addEventListener' | 'removeEventListener'>
+  win: Pick<Window, 'addEventListener' | 'removeEventListener'>
+}
+
+// 주 EditorView → 진행 중인 칸 끌기. 위젯 destroy 가 그 표의 끌기 리스너를 뗀다
+const pointerDrags = new WeakMap<EditorView, { wrap: HTMLElement; stop: () => void }>()
+
+// 끌기 동안만 document 에 mousemove·mouseup, window 에 blur 를 건다 — 뗌·blur 는 onEnd 를 부르고, 돌려준 stop 은 알리지 않고 셋 다 뗀다
+export function trackPointerDrag(
+  onMove: (event: MouseEvent) => void,
+  onEnd: (event: Event) => void,
+  { doc, win }: DragTargets = { doc: document, win: window },
+): () => void {
+  function stop(): void {
+    doc.removeEventListener('mousemove', onMove)
+    doc.removeEventListener('mouseup', end)
+    win.removeEventListener('blur', end)
+  }
+  function end(event: Event): void {
+    stop()
+    onEnd(event)
+  }
+  doc.addEventListener('mousemove', onMove)
+  doc.addEventListener('mouseup', end)
+  win.addEventListener('blur', end)
+  return stop
+}
+
 // 마우스 버튼을 누른 채 다른 칸으로 끌면 범위 선택, 끌지 않고 떼면 그 칸 편집(F-165 2.1). document 에 임시로 mousemove·mouseup 을 걸어 칸 밖으로 나간 뒤에도 계속 따라간다
 function beginPointerSelection(mainView: EditorView, wrap: HTMLElement, startRow: number, startCol: number): void {
   // 다른 칸을 편집 중이었으면 끝낸다. 지금 누른 칸을 이미 편집 중이면 끌기가 시작될 때까지는 그대로 둔다(F-125 2.2 "같은 칸이면 포커스만")
@@ -658,6 +691,7 @@ function beginPointerSelection(mainView: EditorView, wrap: HTMLElement, startRow
     endEdit(mainView)
   }
   clearRangeSelection(mainView)
+  pointerDrags.get(mainView)?.stop()
 
   let moved = false
   let current: CellHit = { row: startRow, col: startCol }
@@ -675,19 +709,25 @@ function beginPointerSelection(mainView: EditorView, wrap: HTMLElement, startRow
     if (moved) renderRangeHighlight(wrap, startRow, startCol, current.row, current.col)
   }
 
-  function onUp(): void {
-    document.removeEventListener('mousemove', onMove)
-    document.removeEventListener('mouseup', onUp)
+  // 창 blur 는 끈 만큼만 확정하고, 끌지 않았으면 칸 편집을 시작하지 않는다
+  function onEnd(event: Event): void {
+    pointerDrags.delete(mainView)
     if (moved) {
       finalizeRangeSelection(mainView, wrap, startRow, startCol, current.row, current.col)
-    } else {
+    } else if (event.type === 'mouseup') {
       const widget = currentWidgetFor(wrap)
       if (widget) startEdit(mainView, wrap, widget, startRow, startCol)
     }
   }
 
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
+  const stop = trackPointerDrag(onMove, onEnd)
+  pointerDrags.set(mainView, {
+    wrap,
+    stop: () => {
+      stop()
+      pointerDrags.delete(mainView)
+    },
+  })
 }
 
 // 칸(td/th) DOM 을 만들고 클릭·키보드 진입을 연결한다
@@ -1169,6 +1209,8 @@ export class TableWidget extends WidgetType {
     if (entry && entry.wrap === dom) endEdit(view, { deferDispatch: true })
     const range = activeRange.get(view)
     if (range && range.wrap === dom) clearRangeSelection(view)
+    const drag = pointerDrags.get(view)
+    if (drag && drag.wrap === dom) drag.stop()
   }
 }
 

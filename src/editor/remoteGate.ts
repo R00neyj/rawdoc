@@ -3,7 +3,7 @@ import * as Y from 'yjs'
 import type { EditorView } from '@codemirror/view'
 
 import { boardCompositionAlive, isBoardCompositionStarted, onBoardCompositionEnd } from './boardComposition'
-import { forceRecalc } from './composition'
+import { forceRecalc, onSubEditorEnd } from './composition'
 import { DEV_YSYNC_NOGATE } from './devSyncFlag'
 import { isFrontmatterCompositionStarted } from './preview/frontmatterEdit'
 import { isCellCompositionStarted } from './preview/tableWidget'
@@ -229,11 +229,13 @@ export function connectRemote({
   view.dom.addEventListener('keydown', onKeyDown, true)
   // 보드 입력칸은 view.dom 밖이라 끝을 알림판으로 받는다 (F-2141 2장)
   const offBoardEnd = onBoardCompositionEnd(view, onCompositionEnd)
+  const offSubEditorEnd = onSubEditorEnd(view, onCompositionEnd)
 
   function detach() {
     view.dom.removeEventListener('compositionend', onCompositionEnd, true)
     view.dom.removeEventListener('keydown', onKeyDown, true)
     offBoardEnd()
+    offSubEditorEnd()
     ticks.forEach((tick) => clearTimeout(tick))
     ticks.clear()
     gate.destroy()
