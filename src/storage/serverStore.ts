@@ -456,88 +456,97 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     return round
   }
 
+  // 읽기·사본·서버 값 반영·남은 편집 버리기를 한 잠금 안에서 — 사이에 낀 update() 가 버려지지 않게 한다
   async function handleConflict(
     entry: Extract<OutboxEntry, { type: 'updateDoc' }>,
     serverDoc: ServerDoc | undefined,
   ) {
-    const myDoc = await cache.getDoc(userId, entry.docId)
-    const now = Date.now()
-    const copyId = crypto.randomUUID()
-    const title = `${myDoc?.title ?? serverDoc?.title ?? ''} (충돌 사본)`
-    const content = myDoc?.content ?? ''
-    const lineEnding: LineEnding = myDoc?.lineEnding ?? serverDoc?.lineEnding ?? 'lf'
-    const folderId = myDoc?.folderId ?? serverDoc?.folderId ?? null
-    const copyDoc: Omit<CachedDoc, 'userId'> = {
-      id: copyId,
-      title,
-      content,
-      lineEnding,
-      folderId,
-      pinnedAt: null,
-      createdAt: now,
-      updatedAt: now,
-      version: 0,
-    }
-    await cache.putDoc(userId, copyDoc)
-    await cache.addOutbox(userId, { type: 'createDoc', docId: copyId, title, content, lineEnding, folderId })
-
-    if (serverDoc) {
-      await cache.putDoc(userId, { ...serverDoc, id: entry.docId })
-    }
-
+    const copyId = await withDocWriteLock(async () => {
+      const myDoc = await cache.getDoc(userId, entry.docId)
+      const now = Date.now()
+      const copyId = crypto.randomUUID()
+      const title = `${myDoc?.title ?? serverDoc?.title ?? ''} (충돌 사본)`
+      const content = myDoc?.content ?? ''
+      const lineEnding: LineEnding = myDoc?.lineEnding ?? serverDoc?.lineEnding ?? 'lf'
+      const folderId = myDoc?.folderId ?? serverDoc?.folderId ?? null
+      const copyDoc: Omit<CachedDoc, 'userId'> = {
+        id: copyId,
+        title,
+        content,
+        lineEnding,
+        folderId,
+        pinnedAt: null,
+        createdAt: now,
+        updatedAt: now,
+        version: 0,
+      }
+      await cache.putDoc(userId, copyDoc)
+      await cache.addOutbox(userId, { type: 'createDoc', docId: copyId, title, content, lineEnding, folderId })
+      await settleConflict(entry, serverDoc)
+      return copyId
+    })
     handlers.onConflict?.({ docId: entry.docId, copyId })
   }
 
   // 금고 충돌 사본 — 주입된 함수로 새 id·새 문서 키로 다시 암호화한다. 값이 없으면 그 문서만 대기(E21) (F-405 5.3)
-  async function handleE2eeConflict(entry: Extract<OutboxEntry, { type: 'updateDoc' }>, serverDoc: ServerDoc | undefined): Promise<boolean> {
-    const myDoc = await cache.getDoc(userId, entry.docId)
-    if (!myDoc?.e2eeKey) {
-      if (serverDoc) await cache.putDoc(userId, { ...serverDoc, id: entry.docId })
-      return true
-    }
-    const copyId = crypto.randomUUID()
-    let result: E2eeCopyResult | null = null
-    try {
-      result = e2eeCopyMaker ? await e2eeCopyMaker({ id: myDoc.id, title: myDoc.title, content: myDoc.content, e2eeKey: myDoc.e2eeKey }, copyId) : null
-    } catch {
-      result = null
-    }
-    if (!result) {
-      e2eeConflictWaiting.add(entry.docId)
-      if (!e2eeConflictNoticed.has(entry.docId)) {
-        e2eeConflictNoticed.add(entry.docId)
-        notice({ type: 'warn', message: E2EE_CONFLICT_LOCKED_MESSAGE })
+  async function handleE2eeConflict(entry: Extract<OutboxEntry, { type: 'updateDoc' }>, serverDoc: ServerDoc | undefined): Promise<void> {
+    const copyId = await withDocWriteLock(async (): Promise<string | null> => {
+      const myDoc = await cache.getDoc(userId, entry.docId)
+      if (!myDoc?.e2eeKey) {
+        await settleConflict(entry, serverDoc)
+        return null
       }
-      return false
-    }
-    const t = Date.now()
-    const copyDoc: Omit<CachedDoc, 'userId'> = {
-      id: copyId,
-      title: result.title,
-      content: result.content,
-      lineEnding: myDoc.lineEnding,
-      folderId: myDoc.folderId,
-      pinnedAt: null,
-      createdAt: t,
-      updatedAt: t,
-      version: 0,
-      e2eeKey: result.e2eeKey,
-      attachmentRefs: result.attachmentRefs,
-    }
-    await cache.putDoc(userId, copyDoc)
-    await cache.addOutbox(userId, {
-      type: 'createDoc',
-      docId: copyId,
-      title: result.title,
-      content: result.content,
-      lineEnding: myDoc.lineEnding,
-      folderId: myDoc.folderId,
-      e2eeKey: result.e2eeKey,
-      attachmentRefs: result.attachmentRefs,
+      const copyId = crypto.randomUUID()
+      let result: E2eeCopyResult | null = null
+      try {
+        result = e2eeCopyMaker ? await e2eeCopyMaker({ id: myDoc.id, title: myDoc.title, content: myDoc.content, e2eeKey: myDoc.e2eeKey }, copyId) : null
+      } catch {
+        result = null
+      }
+      if (!result) {
+        e2eeConflictWaiting.add(entry.docId)
+        if (!e2eeConflictNoticed.has(entry.docId)) {
+          e2eeConflictNoticed.add(entry.docId)
+          notice({ type: 'warn', message: E2EE_CONFLICT_LOCKED_MESSAGE })
+        }
+        return null
+      }
+      const t = Date.now()
+      const copyDoc: Omit<CachedDoc, 'userId'> = {
+        id: copyId,
+        title: result.title,
+        content: result.content,
+        lineEnding: myDoc.lineEnding,
+        folderId: myDoc.folderId,
+        pinnedAt: null,
+        createdAt: t,
+        updatedAt: t,
+        version: 0,
+        e2eeKey: result.e2eeKey,
+        attachmentRefs: result.attachmentRefs,
+      }
+      await cache.putDoc(userId, copyDoc)
+      await cache.addOutbox(userId, {
+        type: 'createDoc',
+        docId: copyId,
+        title: result.title,
+        content: result.content,
+        lineEnding: myDoc.lineEnding,
+        folderId: myDoc.folderId,
+        e2eeKey: result.e2eeKey,
+        attachmentRefs: result.attachmentRefs,
+      })
+      await settleConflict(entry, serverDoc)
+      return copyId
     })
+    if (copyId) handlers.onConflict?.({ docId: entry.docId, copyId })
+  }
+
+  // 충돌 원본 정리 — 서버 값을 캐시에 쓰고 남은 편집과 보낸 항목을 버린다. withDocWriteLock 안에서만 부른다
+  async function settleConflict(entry: Extract<OutboxEntry, { type: 'updateDoc' }>, serverDoc: ServerDoc | undefined): Promise<void> {
     if (serverDoc) await cache.putDoc(userId, { ...serverDoc, id: entry.docId })
-    handlers.onConflict?.({ docId: entry.docId, copyId })
-    return true
+    await dropLaterEdits(entry.docId, entry.key)
+    await cache.removeOutbox(entry.key)
   }
 
   // 같은 문서에 아직 안 보낸 항목이 남았으면 그 항목이 바꾼 필드는 캐시가 더 새 값이라 지키고, 버전 등 나머지만 서버 값을 따른다 (리뷰 S1)
@@ -716,10 +725,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           serverDoc = undefined
         }
       }
-      if (await handleE2eeConflict(entry, serverDoc)) {
-        await dropLaterEdits(entry.docId, entry.key)
-        await cache.removeOutbox(entry.key)
-      }
+      await handleE2eeConflict(entry, serverDoc)
       return true
     }
     if (entry.type === 'updateDoc' && !entry.e2ee && kind === 'e2ee_doc') {
@@ -999,8 +1005,6 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       }
       if (err.kind === 'conflict' && entry.type === 'updateDoc') {
         await handleConflict(entry, err.doc)
-        await dropLaterEdits(entry.docId, entry.key)
-        await cache.removeOutbox(entry.key)
         return true
       }
       if (err.kind === 'forbidden' && entry.type === 'updateDoc') {
@@ -1087,8 +1091,11 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     // 확인 전에는 회차를 열지 않는다 — 열린 회차가 있으면 get() 이 캐시 대신 요약을 기다린다 (F-2134 5장)
     if (accountHold) await accountHold
     const sharedPromise = fetchShared().then((shared) => {
-      knownSharedIds.clear()
-      for (const d of shared ?? []) knownSharedIds.add(d.id)
+      // 실패(null)면 앞서 안 공유 id 를 지킨다 — 비우면 get() 이 공유 문서를 내 문서로 캐시한다
+      if (shared !== null) {
+        knownSharedIds.clear()
+        for (const d of shared) knownSharedIds.add(d.id)
+      }
       return shared
     })
 

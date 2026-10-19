@@ -2788,6 +2788,78 @@ describe('리뷰 S3 충돌 뒤 남은 편집', () => {
     expect([...server.docs.values()].some((d) => d.id !== 'v' && d.content === 'E2')).toBe(true)
     expect(store.syncState?.pending).toBe(0)
   })
+
+  it('충돌 처리 도중 들어온 편집은 버려지지 않는다 — 처리가 끝난 뒤 원본 편집으로 서버에 간다', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'p')
+    let racing: Promise<unknown> | null = null
+    let putCount = 0
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      const res = await server.fetchImpl(url, init)
+      if (init.method === 'PUT' && path === '/api/docs/p' && ++putCount === 1) {
+        // 409 를 받은 뒤 충돌 처리가 캐시 본문을 읽는 바로 그때 새 편집이 들어온다
+        cacheHooks.afterGetDoc = async () => {
+          racing = store.update('p', { content: 'E2' })
+          await tick(30)
+        }
+      }
+      return res
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const conflicts: Array<{ docId: string; copyId: string }> = []
+    const store = await createServerStore('u1', { dbName: freshDbName(), onConflict: (e) => conflicts.push(e) })
+    await store.list()
+    server.docs.get('p')!.content = 'other'
+    server.bumpVersion('p')
+
+    await store.update('p', { content: 'E1' })
+    await tick(40)
+    await racing
+    await store.flushOutbox()
+    await tick(20)
+
+    expect(conflicts).toHaveLength(1)
+    expect(server.docs.get(conflicts[0].copyId)?.content).toBe('E1')
+    expect([...server.docs.values()].some((d) => d.content === 'E2')).toBe(true)
+    expect(store.syncState?.pending).toBe(0)
+  })
+
+  it('금고 409 도 같다 — 충돌 처리 도중 들어온 금고 편집이 버려지지 않는다', async () => {
+    const server = makeFakeServer()
+    seedDoc(server, 'v', { e2eeKey: VAULT_KEY, attachmentRefs: [] })
+    let racing: Promise<unknown> | null = null
+    let putCount = 0
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      const res = await server.fetchImpl(url, init)
+      if (init.method === 'PUT' && path === '/api/docs/v' && ++putCount === 1) {
+        cacheHooks.afterGetDoc = async () => {
+          racing = store.update('v', { content: 'E2' })
+          await tick(30)
+        }
+      }
+      return res
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    let fakeNow = 0
+    const store = await createServerStore('u1', { dbName: freshDbName(), now: () => fakeNow })
+    await store.list()
+    store.setE2eeCopyMaker(async (source) => ({ title: 'CT', content: source.content, e2eeKey: 'N'.repeat(56), attachmentRefs: [] }))
+    server.docs.get('v')!.content = 'other'
+    server.bumpVersion('v')
+
+    await store.update('v', { content: 'E1' })
+    await tick(40)
+    await racing
+    fakeNow = 20_000
+    await store.flushOutbox()
+    await tick(20)
+
+    expect([...server.docs.values()].some((d) => d.id !== 'v' && d.content === 'E1')).toBe(true)
+    expect([...server.docs.values()].some((d) => d.content === 'E2')).toBe(true)
+    expect(store.syncState?.pending).toBe(0)
+  })
 })
 
 describe('리뷰 S6 목록 요청 중 만들어진 문서·폴더', () => {
@@ -2877,6 +2949,32 @@ describe('리뷰 A3 공유 목록 읽기 성공 여부', () => {
     failShared = false
     await store.list()
     expect(store.lastListSharedOk()).toBe(true)
+  })
+
+  it('/api/shared 가 실패해도 앞서 안 공유 문서는 여전히 공유로 보고 get() 이 캐시에 넣지 않는다', async () => {
+    const server = makeFakeServer()
+    server.docs.set('sh1', { id: 'sh1', title: '공유문서', content: '공유 내용', lineEnding: 'lf', folderId: null, pinnedAt: null, version: 1, createdAt: 1, updatedAt: 1 })
+    server.setShared([SHARED_ROW])
+    let failShared = false
+    const listFetch = fetchWithSharedExcludedFromList(server, ['sh1'])
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://local.test').pathname
+      if ((init.method ?? 'GET') === 'GET' && path === '/api/shared' && failShared) {
+        return new Response(JSON.stringify({ error: 'internal' }), { status: 503, headers: { 'Content-Type': 'application/json' } })
+      }
+      return listFetch(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const dbName = freshDbName()
+    const store = await createServerStore('u1', { dbName })
+
+    await store.list()
+    failShared = true
+    await store.list()
+    expect((await store.get('sh1'))?.content).toBe('공유 내용')
+
+    const cache = await createRemoteCache(dbName)
+    expect(await cache.getDoc('u1', 'sh1')).toBeNull()
   })
 })
 
