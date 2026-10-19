@@ -54,6 +54,10 @@ export default function InviteDialog({ target, onClose, onNotice }: InviteDialog
     setGrants([])
     setHighlightEmail(null)
   }
+  const targetKeyRef = useRef(targetKey)
+  useEffect(() => {
+    targetKeyRef.current = targetKey
+  }, [targetKey])
 
   useEffect(() => {
     if (!target) return
@@ -115,8 +119,10 @@ export default function InviteDialog({ target, onClose, onNotice }: InviteDialog
       return
     }
     setFormError(false)
+    const key = targetKey
     try {
       const result = await putGrant(target.type, target.id, value, role)
+      if (targetKeyRef.current !== key) return
       setGrants((prev) => {
         const others = prev.filter((g) => g.email !== result.email)
         return [...others, { email: result.email, role: result.role, createdAt: Date.now() }].sort(
@@ -131,7 +137,7 @@ export default function InviteDialog({ target, onClose, onNotice }: InviteDialog
         message: `${result.email} 님에게 ${ROLE_LABEL[result.role]} 권한을 줬습니다. 아래 링크 복사로 주소를 알려 주세요.`,
       })
     } catch {
-      setFormError(true)
+      if (targetKeyRef.current === key) setFormError(true)
     }
   }
 
@@ -153,8 +159,10 @@ export default function InviteDialog({ target, onClose, onNotice }: InviteDialog
 
   async function handleChangeRole(grantEmail: string, nextRole: GrantRole) {
     if (!target) return
+    const key = targetKey
     try {
       await putGrant(target.type, target.id, grantEmail, nextRole)
+      if (targetKeyRef.current !== key) return
       setGrants((prev) => prev.map((g) => (g.email === grantEmail ? { ...g, role: nextRole } : g)))
       triggerHighlight(grantEmail)
     } catch {
@@ -164,9 +172,11 @@ export default function InviteDialog({ target, onClose, onNotice }: InviteDialog
 
   async function handleRemove(grantEmail: string) {
     if (!target) return
+    const key = targetKey
     const index = grants.findIndex((g) => g.email === grantEmail)
     try {
       await deleteGrant(target.type, target.id, grantEmail)
+      if (targetKeyRef.current !== key) return
       setGrants((prev) => prev.filter((g) => g.email !== grantEmail))
       pendingRemoveFocusIndexRef.current = index
       setRemovalTick((t) => t + 1)
