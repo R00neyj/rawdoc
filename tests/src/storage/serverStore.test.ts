@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { createServerStore, QuotaExceededError, E2EE_SERVER_SAVE_INTERVAL_MS, PendingSyncError, BODY_FETCH_CONCURRENCY } from '../../../src/storage/serverStore'
+import { createServerStore, QuotaExceededError, E2EE_SERVER_SAVE_INTERVAL_MS, PendingSyncError, BODY_FETCH_CONCURRENCY, type ServerStore } from '../../../src/storage/serverStore'
 import { createRemoteCache } from '../../../src/storage/remoteCache'
 import { descendantFolderIds } from '../../../src/lib/folderTree'
 import { withE2ee } from '../../../src/e2ee/e2eeStore'
@@ -3517,5 +3517,65 @@ describe('F-2134 S1~S4 holdUntilConfirmed·confirmAccount', () => {
     store.confirmAccount()
     await tick(30)
     expect(requestsOf(fetchMock, 'POST', '/api/docs')).toHaveLength(1)
+  })
+})
+
+describe('읽기 실패 분류 — get·refreshDocFromServer·getAttachment (small)', () => {
+  // 특정 경로만 네트워크 오류·401·404 로 만든다 — 나머지는 가짜 서버 그대로
+  function failingFetch(server: ReturnType<typeof makeFakeServer>, pathPart: string, mode: 'network' | 401 | 404) {
+    return vi.fn(async (url: string, init?: RequestInit) => {
+      if (!String(url).includes(pathPart)) return server.fetchImpl(url, init)
+      if (mode === 'network') throw new TypeError('network down')
+      return new Response(JSON.stringify({ error: mode === 401 ? 'unauthorized' : 'not_found' }), { status: mode, headers: { 'Content-Type': 'application/json' } })
+    })
+  }
+
+  const readers = {
+    get: (store: ServerStore, id: string) => store.get(id),
+    refreshDocFromServer: (store: ServerStore, id: string) => store.refreshDocFromServer(id),
+  }
+
+  for (const [name, read] of Object.entries(readers)) {
+    it(`${name}: 네트워크 오류 → online false, 401 → signedOut true, 404 → 상태 그대로 (모두 null)`, async () => {
+      const server = makeFakeServer()
+      const id = 'aaaaaaaa-0000-0000-0000-000000000001'
+
+      vi.stubGlobal('fetch', failingFetch(server, `/api/docs/${id}`, 'network'))
+      const offline = await createServerStore('u1', { dbName: freshDbName() })
+      expect(await read(offline, id)).toBeNull()
+      expect(offline.syncState?.online).toBe(false)
+
+      vi.stubGlobal('fetch', failingFetch(server, `/api/docs/${id}`, 401))
+      const signedOut = await createServerStore('u1', { dbName: freshDbName() })
+      expect(await read(signedOut, id)).toBeNull()
+      expect(signedOut.syncState?.signedOut).toBe(true)
+
+      vi.stubGlobal('fetch', failingFetch(server, `/api/docs/${id}`, 404))
+      const missing = await createServerStore('u1', { dbName: freshDbName() })
+      const before = missing.syncState
+      expect(await read(missing, id)).toBeNull()
+      expect(missing.syncState).toEqual(before)
+    })
+  }
+
+  it('getAttachment: 네트워크 오류 → online false, 401 → signedOut true, 404 → 상태 그대로 (모두 null)', async () => {
+    const server = makeFakeServer()
+    const id = '5555555555555555'
+
+    vi.stubGlobal('fetch', failingFetch(server, `${id}.png`, 'network'))
+    const offline = await createServerStore('u1', { dbName: freshDbName() })
+    expect(await offline.getAttachment(id, { ext: 'png' })).toBeNull()
+    expect(offline.syncState?.online).toBe(false)
+
+    vi.stubGlobal('fetch', failingFetch(server, `${id}.png`, 401))
+    const signedOut = await createServerStore('u1', { dbName: freshDbName() })
+    expect(await signedOut.getAttachment(id, { ext: 'png' })).toBeNull()
+    expect(signedOut.syncState?.signedOut).toBe(true)
+
+    vi.stubGlobal('fetch', failingFetch(server, `${id}.png`, 404))
+    const missing = await createServerStore('u1', { dbName: freshDbName() })
+    const before = missing.syncState
+    expect(await missing.getAttachment(id, { ext: 'png' })).toBeNull()
+    expect(missing.syncState).toEqual(before)
   })
 })

@@ -330,6 +330,13 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     notify()
   }
 
+  // 읽기 실패를 동기화 상태에 반영한다 — not_found 등 나머지는 상태를 건드리지 않는다
+  function noteReadFailure(err: unknown) {
+    if (!(err instanceof ApiError) && !(err instanceof AttachmentApiError)) return
+    if (err.kind === 'network') patchState({ online: false })
+    if (err.kind === 'unauthorized') patchState({ signedOut: true })
+  }
+
   function notice(n: StoreNotice) {
     handlers.onNotice?.(n)
   }
@@ -1108,8 +1115,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         return s
       } catch (err) {
         if (!(err instanceof ApiError)) throw err
-        if (err.kind === 'unauthorized') patchState({ signedOut: true })
-        if (err.kind === 'network') patchState({ online: false })
+        noteReadFailure(err)
         return null
       }
     })()
@@ -1293,7 +1299,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         // 공유받은(내 소유가 아닌) 문서는 캐시에 넣지 않는다 — role 없이 저장하면 다음 list() 전까지 내 문서로 보인다(F-212.md 2.4, 버그 수정 2026-09-26)
         if (!knownSharedIds.has(id)) await cache.putDoc(userId, full)
         return toDoc(full)
-      } catch {
+      } catch (err) {
+        noteReadFailure(err)
         return null
       }
     },
@@ -1382,7 +1389,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         // 공유받은(내 소유가 아닌) 문서는 캐시에 넣지 않는다(F-212.md 2.4, 버그 수정 2026-09-26)
         if (!knownSharedIds.has(id)) await cache.putDoc(userId, full)
         return toDoc(full)
-      } catch {
+      } catch (err) {
+        noteReadFailure(err)
         return null
       }
     },
@@ -1525,8 +1533,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       } catch (err) {
         activeFolderListCreated.delete(createdDuringRequest)
         if (!(err instanceof ApiError)) throw err
-        if (err.kind === 'unauthorized') patchState({ signedOut: true })
-        if (err.kind === 'network') patchState({ online: false })
+        noteReadFailure(err)
         serverFolders = null
       }
 
@@ -1747,7 +1754,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
           }
           await cache.putAttachment(userId, record)
           return cachedToAttachment({ ...record, userId })
-        } catch {
+        } catch (err) {
+          noteReadFailure(err)
           return null
         }
       })()
