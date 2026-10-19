@@ -44,7 +44,7 @@ export type RunCommand =
   | { name: 'folders'; global: GlobalOptions }
   | { name: 'mkdir'; global: GlobalOptions; folderName: string; parent: string | null }
   | { name: 'rmdir'; global: GlobalOptions; id: string; all: boolean }
-  | { name: 'upload'; global: GlobalOptions; file: string }
+  | { name: 'upload'; global: GlobalOptions; file: string; doc?: string }
   | { name: 'link'; global: GlobalOptions; id: string }
   | { name: 'syntax'; global: GlobalOptions; short: boolean }
 
@@ -390,10 +390,11 @@ function parseCommandArgs(command: CommandName, rest: string[]): ParsedInvocatio
       }
     }
     case 'upload': {
-      const parsed = runParseArgs(rest, GLOBAL_OPTIONS, true)
-      if (!parsed) return usage('알 수 없는 옵션입니다.', command)
+      const parsed = runParseArgs(rest, { ...GLOBAL_OPTIONS, doc: { type: 'string' } }, true)
+      if (!parsed) return usage('알 수 없는 옵션이거나 --doc 값이 없습니다.', command)
       if (parsed.positionals.length !== 1) return usage('이미지 파일이 필요합니다.', command)
-      return { kind: 'run', command: { name: 'upload', global: globalsOf(parsed.values), file: parsed.positionals[0] } }
+      const doc = typeof parsed.values.doc === 'string' ? { doc: parsed.values.doc } : {}
+      return { kind: 'run', command: { name: 'upload', global: globalsOf(parsed.values), file: parsed.positionals[0], ...doc } }
     }
     case 'link': {
       const parsed = runParseArgs(rest, GLOBAL_OPTIONS, true)

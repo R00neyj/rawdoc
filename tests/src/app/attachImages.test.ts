@@ -146,6 +146,16 @@ describe('attachImages', () => {
     spy.mockRestore()
   })
 
+  it('F-4012 A8 docId 를 putAttachment 에 넘기고, 없으면 키를 넣지 않는다', async () => {
+    const withDoc = fakeStore()
+    await attachImages([pngFile('a.png')], { store: withDoc, source: 'paste', docId: 'd1' })
+    expect(withDoc.putAttachment).toHaveBeenCalledWith(expect.objectContaining({ docId: 'd1' }))
+
+    const without = fakeStore()
+    await attachImages([pngFile('a.png')], { store: without, source: 'paste' })
+    expect('docId' in (without.putAttachment as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe(false)
+  })
+
   it('축소 뒤에도 5MB 초과 — GIF 문구', async () => {
     const bigBlob = new Blob([new Uint8Array(5 * 1024 * 1024 + 1)])
     const spy = vi

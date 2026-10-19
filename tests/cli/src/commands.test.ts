@@ -343,6 +343,16 @@ describe('F-2144 U6 upload', () => {
     await upload(cfg, gif)
     expect(fetchImpl.mock.calls[1][1].body).toEqual(gif)
   })
+
+  it('F-4012 A9 docId 가 있으면 POST /v1/attachments?doc= , 없으면 쿼리 없음', async () => {
+    const fetchImpl = fakeFetch(() => jsonResponse({ id: 'a1' }, 201))
+    const cfg = baseCfg(fetchImpl as unknown as typeof fetch)
+    const gif = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0, 0, 0x3b])
+    await upload(cfg, gif, 'd1')
+    await upload(cfg, gif)
+    expect(String(fetchImpl.mock.calls[0][0])).toMatch(/\/v1\/attachments\?doc=d1$/)
+    expect(String(fetchImpl.mock.calls[1][0])).toMatch(/\/v1\/attachments$/)
+  })
 })
 
 describe('images (small 2026-10-16)', () => {

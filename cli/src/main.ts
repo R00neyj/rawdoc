@@ -665,7 +665,7 @@ export async function main(deps: MainDeps): Promise<number> {
       }
       case 'upload': {
         const bytes = await readSourceBytes(deps, command.file)
-        const attachment = await commands.upload(cfg, bytes)
+        const attachment = await commands.upload(cfg, bytes, command.doc)
         emitResult(deps, command.global.json, attachment, () => humanUploadLine(attachment.markdown))
         return 0
       }

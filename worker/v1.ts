@@ -11,7 +11,7 @@ import type { DocRow } from './docWrite'
 import { writeTextInRoom } from './docRoomRpc'
 import type { RoomDocState, RoomTextWrite } from './docRoomCore'
 import { handleCreateDocLink } from './links'
-import { MAX_ATTACHMENT_BYTES, generateAttachmentId, storeAttachment } from './attachments'
+import { MAX_ATTACHMENT_BYTES, attachmentLinkStatement, generateAttachmentId, storeAttachment } from './attachments'
 import { buildImageLine } from '../src/lib/imageMarkdown'
 import { fromEditorText, toEditorText } from '../src/lib/lineEnding'
 import { MAX_BODY_BYTES, MAX_CONTENT_BYTES, isContentTooLarge, isValidLineEnding, isValidTitle, isValidUuid } from './validate'
@@ -203,7 +203,8 @@ export async function handleCreateAttachmentV1(request: Request, env: Env, ctx?:
   }
 
   const id = generateAttachmentId()
-  const result = await storeAttachment(env, user.id, id, buffer, null, ctx)
+  const linkStatement = await attachmentLinkStatement(env, user, new URL(request.url).searchParams.get('doc'), id)
+  const result = await storeAttachment(env, user.id, id, buffer, null, ctx, linkStatement ? [linkStatement] : [])
   if (!result.ok) {
     if (result.status === 400) return errorResponse(result.error, 400)
     return jsonResponse({ error: result.error, used: result.used, limit: result.limit }, 507)

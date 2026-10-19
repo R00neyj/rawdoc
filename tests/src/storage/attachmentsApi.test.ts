@@ -70,6 +70,19 @@ describe('F-406 S5: uploadAttachment 분류·e2ee 쿼리', () => {
     await uploadAttachment('a', 'png', new Blob())
     expect(fetchMock.mock.calls[0][0]).toBe('/api/attachments/a.png')
   })
+
+  it('F-4012 A8 e2ee 가 없고 docId 가 있으면 ?doc= (인코딩), e2ee 를 주면 doc 없음', async () => {
+    const uploaded = { id: 'a', ext: 'png', mime: 'image/png', size: 3, width: 10, height: 20 }
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(201, uploaded))
+    vi.stubGlobal('fetch', fetchMock)
+    await uploadAttachment('a', 'png', new Blob(), undefined, 'd 1')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/attachments/a.png?doc=d%201')
+
+    fetchMock.mockClear()
+    fetchMock.mockResolvedValueOnce(jsonResponse(201, uploaded))
+    await uploadAttachment('a', 'png', new Blob(), { width: 10, height: 20 }, 'd 1')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/attachments/a.png?e2ee=1&w=10&h=20')
+  })
 })
 
 describe('F-406 S6: deleteAttachment', () => {

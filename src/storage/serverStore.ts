@@ -899,6 +899,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
             entry.ext,
             cachedAttachment.blob,
             cachedAttachment.e2ee ? { width: cachedAttachment.width, height: cachedAttachment.height } : undefined,
+            entry.docId,
           )
           await cache.markAttachmentUploaded(userId, entry.attachmentId)
           await cache.removeOutbox(entry.key)
@@ -1662,7 +1663,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
     // GIF·이미 WebP 면 변환 건너뜀(이중 인코딩 방지, F-220.md 2.3), 그 외 WebP 변환 시도(실패시 원본) — 캐시에 먼저 넣고 즉시 반환, 올리기는 보낼 목록으로(2.5)
     // 넣기 전 사전 검사(F-221.md 2.3): used+캐시 합+새 크기 > limit 면 던진다(조회 실패시 건너뜀). id 를 주면 그 id 로 WebP 변환 없이 저장, 이미 있으면 그대로 돌려준다(F-282.md 3.11)
-    async putAttachment({ blob, mime, ext, width, height, id: givenId, e2ee }) {
+    async putAttachment({ blob, mime, ext, width, height, id: givenId, e2ee, docId }) {
       if (givenId !== undefined) {
         const existing = await cache.getAttachment(userId, givenId)
         if (existing) return { id: existing.id, ext: existing.ext }
@@ -1707,7 +1708,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
         createdAt: Date.now(),
         ...(e2ee ? { e2ee } : {}),
       })
-      await cache.addOutbox(userId, { type: 'upload', attachmentId: id, ext: finalExt })
+      await cache.addOutbox(userId, { type: 'upload', attachmentId: id, ext: finalExt, ...(docId ? { docId } : {}) })
       await refreshPending()
       kickSend()
       return { id, ext: finalExt }

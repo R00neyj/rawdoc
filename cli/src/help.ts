@@ -53,7 +53,7 @@ const COMMAND_DESCRIPTIONS: Record<CommandName, string> = {
   folders: '폴더 목록',
   mkdir: '폴더를 만듭니다',
   rmdir: '폴더를 지웁니다. 안의 것은 위 폴더로 (--all: 하위 폴더도 지우고 문서는 휴지통으로, --yes 필요)',
-  upload: '이미지를 올리고 붙일 마크다운을 출력합니다',
+  upload: '이미지를 올리고 붙일 마크다운을 출력합니다 (공유받은 문서에 넣으면 --doc <그 문서 id>)',
   link: '읽기 전용 링크를 만듭니다',
   syntax: '문서에 쓰는 마크다운 문법(콜아웃·위키링크·수식 등)을 출력합니다',
 }

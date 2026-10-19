@@ -32,6 +32,7 @@ export type AttachImagesStore = {
     width: number
     height: number
     e2ee?: true
+    docId?: string
   }): Promise<{ id: string; ext: ImageExt }>
 }
 type InsertedImage = { id: string; ext: ImageExt; width: number; height: number; alt: string; file: File }
@@ -48,7 +49,7 @@ function altFromFile(file: File, source: AttachImagesSource): string {
 // files 를 검사·저장한다(deps.store.putAttachment) → {inserted, notice}. e2ee 면 금고 문서로 암호 첨부한다 (F-406 2.2)
 export async function attachImages(
   files: FileList | File[] | null | undefined,
-  { store, source = 'paste', e2ee }: { store: AttachImagesStore; source?: AttachImagesSource; e2ee?: true },
+  { store, source = 'paste', e2ee, docId }: { store: AttachImagesStore; source?: AttachImagesSource; e2ee?: true; docId?: string },
 ): Promise<{ inserted: InsertedImage[]; notice: Notice | null }> {
   const fileArray = Array.from(files ?? [])
   const inserted: InsertedImage[] = []
@@ -100,6 +101,7 @@ export async function attachImages(
         width: shrunk.width,
         height: shrunk.height,
         ...(e2ee ? { e2ee } : {}),
+        ...(docId ? { docId } : {}),
       })
       inserted.push({ id, ext, width: shrunk.width, height: shrunk.height, alt: altFromFile(file, source), file })
     } catch (err) {

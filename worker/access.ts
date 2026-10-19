@@ -157,17 +157,6 @@ export async function getOwnedFolder<T extends FolderRowLike>(
   return folder
 }
 
-// 첨부 소유자가 문서 소유자이거나 그 문서의 edit 권한자인지 (F-209 2.4 를 F-212 2.2 로 넓힌다)
-export async function isDocAttachmentOwner(env: Env, doc: DocRowLike, attachmentOwnerId: string): Promise<boolean> {
-  if (attachmentOwnerId === doc.owner_id) return true
-  const owner = await env.DB.prepare('SELECT email FROM users WHERE id = ?')
-    .bind(attachmentOwnerId)
-    .first<{ email: string }>()
-  if (!owner) return false
-  const role = higherRole(await grantRole(env, 'doc', doc.id, doc.owner_id, owner.email), await folderChainRole(env, doc.folder_id, doc.owner_id, owner.email))
-  return role === 'edit'
-}
-
 // 문서·폴더를 지울 때 같은 batch 에 넣는다 — 공개 링크는 폐기, 초대는 삭제. 같은 id 가 다시 생겨도 따라가지 않는다 (리뷰 W2·W4)
 // D1 바인딩 한도(100) 안에 들게 나눈다
 const CLEANUP_CHUNK = 90

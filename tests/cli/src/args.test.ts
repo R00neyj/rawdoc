@@ -134,6 +134,14 @@ describe('F-2021 U1 args.ts — 명령마다 해석', () => {
     expect(r).toEqual({ kind: 'run', command: { name: 'upload', global: { server: null, json: false }, file: 'a.png' } })
   })
 
+  it('F-4012 A9 upload <파일> --doc <id>, --doc 값 없음은 사용법 오류', () => {
+    expect(parseArgs(['upload', 'a.png', '--doc', 'd1'])).toEqual({
+      kind: 'run',
+      command: { name: 'upload', global: { server: null, json: false }, file: 'a.png', doc: 'd1' },
+    })
+    expect(parseArgs(['upload', 'a.png', '--doc']).kind).toBe('usage')
+  })
+
   it('link <id>', () => {
     const r = parseArgs(['link', 'd1'])
     expect(r).toEqual({ kind: 'run', command: { name: 'link', global: { server: null, json: false }, id: 'd1' } })

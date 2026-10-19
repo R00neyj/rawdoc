@@ -192,8 +192,9 @@ export function apiCreateFolder(cfg: ClientConfig, body: { name: string; parentI
   return request(cfg, 'POST', '/v1/folders', body) as Promise<V1Folder>
 }
 
-export function apiUploadAttachment(cfg: ClientConfig, bytes: Uint8Array): Promise<V1Attachment> {
-  return request(cfg, 'POST', '/v1/attachments', bytes) as Promise<V1Attachment>
+export function apiUploadAttachment(cfg: ClientConfig, bytes: Uint8Array, docId?: string): Promise<V1Attachment> {
+  const query = docId === undefined ? '' : `?doc=${encodeURIComponent(docId)}`
+  return request(cfg, 'POST', `/v1/attachments${query}`, bytes) as Promise<V1Attachment>
 }
 
 // 남의 문서 이미지는 그 문서를 ?doc= 로 함께 보내야 서버가 참조를 확인해 내준다 (F-212 2.2)

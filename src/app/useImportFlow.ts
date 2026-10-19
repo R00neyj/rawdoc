@@ -757,11 +757,16 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
         showNotice({ type: 'info', message: '이 위치에는 이미지를 넣을 수 없습니다.' })
         return []
       }
-      const { inserted, notice } = await attachImages(files, { store, source, ...(currentDoc?.e2ee ? { e2ee: true as const } : {}) })
+      const { inserted, notice } = await attachImages(files, {
+        store,
+        source,
+        ...(currentDoc?.e2ee ? { e2ee: true as const } : {}),
+        ...(currentDoc?.id ? { docId: currentDoc.id } : {}),
+      })
       if (notice) showNotice(notice)
       return inserted
     },
-    [store, showNotice, currentDoc?.e2ee, readOnlyDocRef],
+    [store, showNotice, currentDoc?.e2ee, currentDoc?.id, readOnlyDocRef],
   )
 
   return {

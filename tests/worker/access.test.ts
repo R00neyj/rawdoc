@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDocAccess, getOwnedFolder, isDocAttachmentOwner, resolveDocAccess, roleAtLeast } from '../../worker/access'
+import { getDocAccess, getOwnedFolder, resolveDocAccess, roleAtLeast } from '../../worker/access'
 
 type Doc = { id: string; owner_id: string; folder_id: string | null; e2ee_key?: string | null }
 type Folder = { id: string; owner_id: string; parent_id: string | null }
@@ -184,38 +184,6 @@ describe('F-212 A1 getOwnedFolder', () => {
   })
 })
 
-describe('F-212 A1 isDocAttachmentOwner', () => {
-  it('문서 소유자의 첨부는 항상 허용', async () => {
-    const env = makeEnv({})
-    const doc = { id: 'd1', owner_id: OWNER.id, folder_id: null }
-    expect(await isDocAttachmentOwner(env, doc, OWNER.id)).toBe(true)
-  })
-
-  it('문서 edit 권한자가 올린 첨부는 허용', async () => {
-    const env = makeEnv({
-      users: [{ id: GRANTEE.id, email: GRANTEE.email }],
-      grants: [{ target_type: 'doc', target_id: 'd1', grantee_email: GRANTEE.email, role: 'edit' }],
-    })
-    const doc = { id: 'd1', owner_id: OWNER.id, folder_id: null }
-    expect(await isDocAttachmentOwner(env, doc, GRANTEE.id)).toBe(true)
-  })
-
-  it('view 권한자가 올린 첨부는 허용하지 않는다', async () => {
-    const env = makeEnv({
-      users: [{ id: GRANTEE.id, email: GRANTEE.email }],
-      grants: [{ target_type: 'doc', target_id: 'd1', grantee_email: GRANTEE.email, role: 'view' }],
-    })
-    const doc = { id: 'd1', owner_id: OWNER.id, folder_id: null }
-    expect(await isDocAttachmentOwner(env, doc, GRANTEE.id)).toBe(false)
-  })
-
-  it('아무 관계 없는 사용자의 첨부는 허용하지 않는다', async () => {
-    const env = makeEnv({ users: [{ id: STRANGER.id, email: STRANGER.email }] })
-    const doc = { id: 'd1', owner_id: OWNER.id, folder_id: null }
-    expect(await isDocAttachmentOwner(env, doc, STRANGER.id)).toBe(false)
-  })
-})
-
 describe('F-2017 S1 깊은 폴더 사슬의 초대', () => {
   // f1 › f2 › … › f6
   const chainFolders: Folder[] = Array.from({ length: 6 }, (_, i) => ({
@@ -294,15 +262,6 @@ describe('F-2017 S1 깊은 폴더 사슬의 초대', () => {
     await resolveDocAccess(makeEnv({ folders: chainFolders, grants }, deepLog), { id: 'd1', owner_id: OWNER.id, folder_id: 'f6' }, GRANTEE)
     expect(deepLog.length).toBe(shallowLog.length)
     expect(deepLog.filter((sql) => /folder/.test(sql)).length).toBeLessThanOrEqual(2)
-  })
-
-  it('isDocAttachmentOwner 도 깊은 사슬의 edit 초대를 인정한다', async () => {
-    const env = makeEnv({
-      folders: chainFolders,
-      users: [{ id: GRANTEE.id, email: GRANTEE.email }],
-      grants: [{ target_type: 'folder', target_id: 'f1', grantee_email: GRANTEE.email, role: 'edit' }],
-    })
-    expect(await isDocAttachmentOwner(env, { id: 'd1', owner_id: OWNER.id, folder_id: 'f6' }, GRANTEE.id)).toBe(true)
   })
 })
 

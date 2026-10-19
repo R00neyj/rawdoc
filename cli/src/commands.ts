@@ -257,8 +257,8 @@ export function mkdir(cfg: ClientConfig, name: string, parentId: string | null):
   return apiCreateFolder(cfg, body)
 }
 
-export async function upload(cfg: ClientConfig, bytes: Uint8Array): Promise<V1Attachment> {
-  return apiUploadAttachment(cfg, await toWebpBytes(bytes))
+export async function upload(cfg: ClientConfig, bytes: Uint8Array, docId?: string): Promise<V1Attachment> {
+  return apiUploadAttachment(cfg, await toWebpBytes(bytes), docId)
 }
 
 export type DocImage = { name: string; bytes: Uint8Array | null; skipped: 'missing' | 'encrypted' | null }

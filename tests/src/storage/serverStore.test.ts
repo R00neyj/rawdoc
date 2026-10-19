@@ -1449,6 +1449,35 @@ describe('F-406 S1 putAttachment e2ee', () => {
   })
 })
 
+describe('F-4012 A8 putAttachment docId', () => {
+  const input = { blob: new Blob([new Uint8Array([1, 2, 3])]), mime: 'image/png', ext: 'png' as const, width: 1, height: 1 }
+
+  it('보낼 목록 upload 항목에 docId 가 남고, 없으면 키가 없다', async () => {
+    const server = makeFakeServer()
+    server.setNetworkDown(true)
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const dbName = freshDbName()
+    const store = await createServerStore('u1', { dbName })
+    const cache = await createRemoteCache(dbName)
+    await store.putAttachment({ ...input, id: 'aaaaaaaaaaaaaaaa', docId: 'doc 1' })
+    await store.putAttachment({ ...input, id: 'bbbbbbbbbbbbbbbb' })
+    const uploads = (await cache.getOutbox('u1')).filter((e) => e.type === 'upload')
+    expect(uploads.find((e) => e.type === 'upload' && e.attachmentId === 'aaaaaaaaaaaaaaaa')).toMatchObject({ docId: 'doc 1' })
+    expect(uploads.find((e) => e.type === 'upload' && e.attachmentId === 'bbbbbbbbbbbbbbbb')).not.toHaveProperty('docId')
+  })
+
+  it('보낼 때 URL 에 ?doc= 가 붙고, docId 없으면 쿼리가 없다', async () => {
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(server.fetchImpl))
+    const store = await createServerStore('u1', { dbName: freshDbName() })
+    await store.putAttachment({ ...input, id: 'aaaaaaaaaaaaaaaa', docId: 'doc 1' })
+    await store.putAttachment({ ...input, id: 'bbbbbbbbbbbbbbbb' })
+    await tick(60)
+    expect(server.attachmentPutUrls).toContain('/api/attachments/aaaaaaaaaaaaaaaa.png?doc=doc%201')
+    expect(server.attachmentPutUrls).toContain('/api/attachments/bbbbbbbbbbbbbbbb.png')
+  })
+})
+
 describe('F-406 S2·S3 getAttachment(id, hint) — 다른 기기 금고 이미지', () => {
   it('캐시·문서 어디에도 없는 id — application/octet-stream 은 봉투, 이미지 mime 은 지금 그대로, 힌트 없으면 요청 없이 null', async () => {
     const server = makeFakeServer()

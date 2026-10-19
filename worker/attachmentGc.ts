@@ -91,6 +91,9 @@ export async function cleanupServerAttachments(env: Env, now: number): Promise<{
       await env.DB.prepare('DELETE FROM attachments WHERE owner_id = ? AND id = ?')
         .bind(row.owner_id, row.id)
         .run()
+      await env.DB.prepare('DELETE FROM attachment_docs WHERE owner_id = ? AND attachment_id = ?')
+        .bind(row.owner_id, row.id)
+        .run()
       deleted++
     } catch (err) {
       console.error(err)

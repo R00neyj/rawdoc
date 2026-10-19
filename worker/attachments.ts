@@ -8,7 +8,7 @@ import { sniffImage, MAX_PIXELS, IMAGE_MIME, type ImageExt } from './imageSniff'
 import { extractAttachmentRefs } from '../src/lib/imageBlock'
 import { isDocAttachmentRef, isGithubImageInUse } from './githubImages'
 import { findPublicLink, folderTreeIds, isDocInLinkSet } from './links'
-import { getDocAccess, isDocAttachmentOwner } from './access'
+import { getDocAccess } from './access'
 import { DAILY_WRITE_LIMIT, DOC_BYTES_QUOTA, DOC_COUNT_QUOTA, dayUsageStatement, quotaPushInBackground, usageOf, writesToday } from './usage'
 import { E2EE_ATTACHMENT_OVERHEAD, E2EE_FORMAT_VERSION, E2EE_SERVER_MAX_ATTACHMENT_BYTES } from '../src/lib/e2eeLimits'
 
@@ -47,21 +47,31 @@ function invalidField(field: string): Response {
   return jsonResponse({ error: 'invalid', field }, 400)
 }
 
-// 문서가 참조하고 문서 소유자·edit 권한자가 올린 평문 첨부만 — 금고 첨부는 늘 뺀다 (F-212 2.2, F-402 3.2)
+// 문서 소유자의 평문 첨부, 또는 올린 사람이 그 소유자의 문서에 직접 넣어 둔 첨부(attachment_docs)만 — 금고 첨부는 늘 뺀다 (F-4012 3.1)
 export async function findDocAttachment(
   env: Env,
-  doc: { id: string; owner_id: string; folder_id: string | null; content: string },
+  doc: { id: string; owner_id: string; content: string },
   id: string,
   ext: string,
 ): Promise<AttachmentRow | null> {
   if (!(await isDocAttachmentRef(env, doc, id))) return null
-  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
-    .bind(id, ext)
-    .all<AttachmentRow>()
-  for (const candidate of candidates) {
-    if (await isDocAttachmentOwner(env, doc, candidate.owner_id)) return candidate
-  }
-  return null
+  return env.DB.prepare(
+    `SELECT a.* FROM attachments a WHERE a.id = ?1 AND a.ext = ?2 AND a.e2ee = 0 AND (
+       a.owner_id = ?3 OR EXISTS (SELECT 1 FROM attachment_docs ad WHERE ad.owner_id = a.owner_id AND ad.attachment_id = a.id AND ad.doc_owner_id = ?3)
+     ) ORDER BY (a.owner_id = ?3) DESC LIMIT 1`,
+  )
+    .bind(id, ext, doc.owner_id)
+    .first<AttachmentRow>()
+}
+
+// 공동 편집자(edit, 막힘 아님)가 남의 문서에 올릴 때만 연결 기록 문장을 낸다 — 그 외에는 null 이고 올리기 응답은 같다 (F-4012 3.1)
+export async function attachmentLinkStatement(env: Env, user: AuthUser, docId: string | null, attachmentId: string): Promise<D1PreparedStatement | null> {
+  if (!docId) return null
+  const access = await getDocAccess<{ id: string; owner_id: string; folder_id: string | null }>(env, docId, user, 'id, owner_id, folder_id')
+  if (!access || access.role !== 'edit') return null
+  return env.DB.prepare(
+    'INSERT INTO attachment_docs (owner_id, attachment_id, doc_owner_id, doc_id, created_at) VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING',
+  ).bind(user.id, attachmentId, access.doc.owner_id, access.doc.id, Date.now())
 }
 
 async function getUsedBytes(env: Env, ownerId: string): Promise<number> {
@@ -94,6 +104,7 @@ export async function storeAttachment(
   buffer: Uint8Array,
   expectedExt: ImageExt | null,
   ctx?: ExecutionContext,
+  linkStatements: D1PreparedStatement[] = [],
 ): Promise<StoreAttachmentResult> {
   const sniffed = sniffImage(buffer)
   if (!sniffed) return { ok: false, status: 400, error: 'unsupported' }
@@ -112,6 +123,7 @@ export async function storeAttachment(
     env.DB.prepare(
       'INSERT INTO attachments (owner_id, id, ext, mime, size, width, height, created_at) VALUES (?,?,?,?,?,?,?,?)',
     ).bind(ownerId, id, sniffed.ext, sniffed.mime, buffer.length, sniffed.width, sniffed.height, now),
+    ...linkStatements,
     dayUsageStatement(env.DB, ownerId, now),
   ])
   await quotaPushInBackground(env, ctx, ownerId, { images: { used: used + buffer.length, limit: ATTACHMENT_QUOTA_BYTES } }, now)
@@ -164,11 +176,16 @@ export async function handleUploadAttachment(
     if (width * height > MAX_PIXELS) return jsonResponse({ error: 'unsupported' }, 400)
   }
 
+  const docParam = url.searchParams.get('doc')
   const existing = await env.DB.prepare('SELECT * FROM attachments WHERE owner_id = ? AND id = ?')
     .bind(user.id, id)
     .first<AttachmentRow>()
   if (existing) {
     if ((existing.e2ee === 1) !== isE2ee) return jsonResponse({ error: 'e2ee_mismatch' }, 409)
+    if (!isE2ee) {
+      const linkStatement = await attachmentLinkStatement(env, user, docParam, id)
+      if (linkStatement) await linkStatement.run()
+    }
     return jsonResponse(rowToAttachment(existing), 200)
   }
 
@@ -199,7 +216,8 @@ export async function handleUploadAttachment(
     return jsonResponse({ id, ext, mime, size: buffer.length, width, height, e2ee: true as const }, 201)
   }
 
-  const result = await storeAttachment(env, user.id, id, buffer, ext, ctx)
+  const linkStatement = await attachmentLinkStatement(env, user, docParam, id)
+  const result = await storeAttachment(env, user.id, id, buffer, ext, ctx, linkStatement ? [linkStatement] : [])
   if (!result.ok) {
     if (result.status === 400) return errorResponse(result.error, 400)
     return jsonResponse({ error: result.error, used: result.used, limit: result.limit }, 507)
@@ -312,18 +330,7 @@ export async function handlePublicGetDocSetAttachment(
     .bind(params.docId, link.owner_id)
     .first<{ id: string; owner_id: string; content: string; folder_id: string | null }>()
   if (!doc) return errorResponse('not_found', 404)
-  if (!(await isDocAttachmentRef(env, doc, id))) return errorResponse('not_found', 404)
-
-  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
-    .bind(id, ext)
-    .all<AttachmentRow>()
-  let row: AttachmentRow | null = null
-  for (const candidate of candidates) {
-    if (await isDocAttachmentOwner(env, doc, candidate.owner_id)) {
-      row = candidate
-      break
-    }
-  }
+  const row = await findDocAttachment(env, doc, id, ext)
   if (!row) return errorResponse('not_found', 404)
 
   const object = await env.BUCKET.get(`att/${row.owner_id}/${id}.${ext}`)
@@ -352,18 +359,7 @@ export async function handlePublicGetFolderAttachment(
 
   const treeIds = await folderTreeIds(env, link.target_id, link.owner_id)
   if (!doc.folder_id || !treeIds.includes(doc.folder_id)) return errorResponse('not_found', 404)
-  if (!(await isDocAttachmentRef(env, doc, id))) return errorResponse('not_found', 404)
-
-  const { results: candidates } = await env.DB.prepare('SELECT * FROM attachments WHERE id = ? AND ext = ? AND e2ee = 0')
-    .bind(id, ext)
-    .all<AttachmentRow>()
-  let row: AttachmentRow | null = null
-  for (const candidate of candidates) {
-    if (await isDocAttachmentOwner(env, doc, candidate.owner_id)) {
-      row = candidate
-      break
-    }
-  }
+  const row = await findDocAttachment(env, doc, id, ext)
   if (!row) return errorResponse('not_found', 404)
 
   const object = await env.BUCKET.get(`att/${row.owner_id}/${id}.${ext}`)
@@ -429,6 +425,7 @@ export async function handleDeleteAttachment(
   const now = Date.now()
   await env.DB.batch([
     env.DB.prepare('DELETE FROM attachments WHERE owner_id = ? AND id = ?').bind(user.id, id),
+    env.DB.prepare('DELETE FROM attachment_docs WHERE owner_id = ? AND attachment_id = ?').bind(user.id, id),
     env.DB.prepare('DELETE FROM github_images WHERE owner_id = ? AND attachment_id = ?').bind(user.id, id),
     dayUsageStatement(env.DB, user.id, now),
   ])

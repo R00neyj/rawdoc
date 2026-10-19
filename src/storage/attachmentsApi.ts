@@ -51,16 +51,16 @@ function classifyStatus(status: number): AttachmentApiErrorKind | null {
   return null
 }
 
-// e2ee 를 주면 ?e2ee=1&w={width}&h={height} 를 붙인다 (F-406 4.1)
+// e2ee 를 주면 ?e2ee=1&w={width}&h={height}, 아니면 docId 가 있을 때 ?doc= 를 붙인다 (F-406 4.1, F-4012 3.2)
 export async function uploadAttachment(
   id: string,
   ext: AttachmentExt,
   blob: Blob,
   e2ee?: { width: number; height: number },
+  docId?: string,
 ): Promise<UploadedAttachment> {
-  const path = e2ee
-    ? `/api/attachments/${id}.${ext}?e2ee=1&w=${e2ee.width}&h=${e2ee.height}`
-    : `/api/attachments/${id}.${ext}`
+  const base = `/api/attachments/${id}.${ext}`
+  const path = e2ee ? `${base}?e2ee=1&w=${e2ee.width}&h=${e2ee.height}` : docId ? `${base}?doc=${encodeURIComponent(docId)}` : base
   const res = await send(path, { method: 'PUT', body: blob })
   if (res.status === 507) throw new AttachmentApiError('quota_exceeded')
   const kind = classifyStatus(res.status)

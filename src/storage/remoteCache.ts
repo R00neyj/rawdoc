@@ -50,7 +50,7 @@ export type OutboxItem =
   | { type: 'moveFolder'; folderId: string; parentId: string | null }
   // mode 가 없는 옛 항목(이전 버전이 남긴 것)은 'move-up' 으로 읽는다 (F-242.md 3.3)
   | { type: 'removeFolder'; folderId: string; mode?: FolderDeleteMode }
-  | { type: 'upload'; attachmentId: string; ext: AttachmentExt }
+  | { type: 'upload'; attachmentId: string; ext: AttachmentExt; docId?: string }
   // 로그인 이관 — createDoc 바로 뒤에 넣는다. records 는 그 문서의 로컬 댓글 기록 (F-508.md 3.4·7.1)
   | { type: 'importComments'; docId: string; records: CommentRecord[] }
 

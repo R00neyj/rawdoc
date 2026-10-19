@@ -118,6 +118,8 @@ export type Store = {
     id?: string
     // 앱 층: "이 이미지를 금고 첨부로 암호화해 넣어라" / 저장소 층: "blob 은 이미 봉투다" (F-406 2.1)
     e2ee?: true
+    // 공유받은 문서에 넣는 그림이면 그 문서 id — 보낼 때 ?doc= 로 넘겨 서버가 연결을 기록한다 (F-4012 3.2)
+    docId?: string
   }): Promise<{ id: string; ext: AttachmentExt }>
   // 둘째 인자: 캐시·원문에서 확장자를 못 찾을 때 서버 저장소가 쓸 확장자. idb·메모리 저장소는 무시한다 (F-406 2.1)
   getAttachment(id: string, hint?: { ext: AttachmentExt; docId?: string }): Promise<Attachment | null>

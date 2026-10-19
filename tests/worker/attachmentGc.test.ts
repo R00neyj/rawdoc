@@ -44,6 +44,7 @@ function makeEnv(docs: DocRow[], attachments: AttachmentRow[], opts: { failR2Key
                 attachmentRows.delete(`${ownerId}:${id}`)
                 return { meta: { changes: 1 } }
               }
+              if (sql.startsWith('DELETE FROM attachment_docs')) return { meta: { changes: 0 } }
               throw new Error(`unhandled sql: ${sql}`)
             },
           }
