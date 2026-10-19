@@ -91,8 +91,8 @@ export default function NotificationsMenu({ state, blocked, open, onOpenChange, 
   useEffect(() => {
     if (!open) return
     // 팔레트로 열었을 때는 명령 팔레트의 네이티브 dialog close 이벤트가 같은 커밋의 뒤쪽에서 포커스를 되돌린다 — 그 뒤로 미룬다
-    const raf = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
         if (itemRefs.current[0]) itemRefs.current[0]?.focus()
         else panelRef.current?.focus()
       })
