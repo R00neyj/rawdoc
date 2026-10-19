@@ -1,5 +1,5 @@
 // 서버 문서의 Yjs 기록 — IndexedDB `md-yjs`(제품명 쓰지 않음). 행 하나 = 업데이트 하나, 로그아웃해도 지우지 않는다 (specs/features/F-306.md 4장)
-import { openDB, type IDBPDatabase } from 'idb'
+import { openDB, type IDBPDatabase, type IDBPTransaction } from 'idb'
 import * as Y from 'yjs'
 
 export const YJS_DB_NAME = 'md-yjs'
@@ -73,10 +73,14 @@ export async function openYjsStore(userId: string, dbName: string = YJS_DB_NAME)
     return null
   }
 
+  async function deleteDocRows(tx: IDBPTransaction<unknown, string[], 'readwrite'>, docId: string) {
+    const keys = await tx.objectStore('updates').index('byDoc').getAllKeys([userId, docId])
+    await Promise.all([...keys.map((key) => tx.objectStore('updates').delete(key)), tx.objectStore('meta').delete([userId, docId])])
+  }
+
   async function removeDoc(docId: string) {
     const tx = db.transaction(['updates', 'meta'], 'readwrite')
-    const keys = await tx.objectStore('updates').index('byDoc').getAllKeys([userId, docId])
-    await Promise.all([...keys.map((key) => tx.objectStore('updates').delete(key)), tx.objectStore('meta').delete([userId, docId]), tx.done])
+    await Promise.all([deleteDocRows(tx, docId), tx.done])
   }
 
   return {
@@ -94,10 +98,15 @@ export async function openYjsStore(userId: string, dbName: string = YJS_DB_NAME)
     removeDoc,
 
     async collectGarbage(now) {
-      const rows = (await db.getAllFromIndex('meta', 'byUser', userId)) as YjsMetaRow[]
-      for (const row of rows) {
-        if (!row.unsyncedLocal && now - row.lastOpenedAt > RETAIN_MS) await removeDoc(row.docId)
-      }
+      const expired = (row: YjsMetaRow | undefined) => !!row && !row.unsyncedLocal && now - row.lastOpenedAt > RETAIN_MS
+      const candidates = ((await db.getAllFromIndex('meta', 'byUser', userId)) as YjsMetaRow[]).filter(expired)
+      if (candidates.length === 0) return
+      // 훑은 뒤 붙이거나 안 보낸 편집이 생긴 문서를 살리려고 지우는 트랜잭션 안에서 meta 를 다시 읽는다
+      const tx = db.transaction(['updates', 'meta'], 'readwrite')
+      const deletions = candidates.map(async ({ docId }) => {
+        if (expired((await tx.objectStore('meta').get([userId, docId])) as YjsMetaRow | undefined)) await deleteDocRows(tx, docId)
+      })
+      await Promise.all([...deletions, tx.done])
     },
   }
 }

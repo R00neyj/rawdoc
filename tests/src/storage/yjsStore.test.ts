@@ -288,6 +288,30 @@ describe('F-306 U8 나이 정리', () => {
     expect(await rawRows(dbName, 'u2', 'other')).toHaveLength(1)
     expect(await rawMeta(dbName, 'u2', 'other')).toBeDefined()
   })
+
+  it('읽은 뒤 지우기 전에 붙인 문서 · 안 보낸 편집으로 바뀐 문서는 남긴다', async () => {
+    const dbName = freshDbName()
+    const store = await open('u1', dbName)
+    const now = Date.now()
+    const db = await openDB(dbName)
+    for (const docId of ['opened', 'unsent']) {
+      await db.put('meta', { userId: 'u1', docId, unsyncedLocal: false, lastOpenedAt: now - RETAIN_MS - 1 })
+      await db.add('updates', { userId: 'u1', docId, update: Y.encodeStateAsUpdate(new Y.Doc()) })
+    }
+
+    const gc = store.collectGarbage(now)
+    const attaching = store.attach('opened', new Y.Doc())
+    const marking = db.put('meta', { userId: 'u1', docId: 'unsent', unsyncedLocal: true, lastOpenedAt: now - RETAIN_MS - 1 })
+    const [, attachment] = await Promise.all([gc, attaching, marking])
+    db.close()
+
+    expect(attachment.loadedRows).toBe(1)
+    expect(await rawRows(dbName, 'u1', 'opened')).toHaveLength(1)
+    expect(await rawMeta(dbName, 'u1', 'opened')).toBeDefined()
+    expect(await rawRows(dbName, 'u1', 'unsent')).toHaveLength(1)
+    expect((await rawMeta(dbName, 'u1', 'unsent'))?.unsyncedLocal).toBe(true)
+    attachment.detach()
+  })
 })
 
 describe('F-306 U9 문서 지우기', () => {
