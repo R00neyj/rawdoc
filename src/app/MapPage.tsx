@@ -49,7 +49,8 @@ type MapPageProps = {
 }
 
 export default function MapPage({ docCount, store, scope, searchScope, centerDocId, onOpenDoc, onOpenWikiLink, onRecenter, onClose, onCreateDoc, e2eeOpen, vaultLocked }: MapPageProps) {
-  const [loading, setLoading] = useState(true)
+  const [loadStatus, setLoadStatus] = useState<'loading' | 'ready' | 'failed'>('loading')
+  const [reloadToken, setReloadToken] = useState(0)
   const [graph, setGraph] = useState<WikiGraph | null>(null)
   const [updatedAtById, setUpdatedAtById] = useState<Map<string, number>>(new Map())
   const [viewMode, setViewMode] = useState<'graph' | 'list'>('graph')
@@ -163,27 +164,31 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
     let cancelled = false
     // setState 를 effect 본문에서 바로 부르지 않고 async 함수 안에서 부른다(useSharesPage.ts loadShares 와 같은 방식)
     async function load() {
-      setLoading(true)
-      // 한 번의 list()·listFolders() 를 지도 인덱스와 검색 인덱스가 나눠 쓴다 — 시점이 어긋나지 않는다 (F-2007 5.2)
-      const [docs, folderList] = await Promise.all([store.list(), store.listFolders()])
-      if (cancelled) return
-      const [mapResult, searchResult] = await Promise.all([
-        buildMapIndex({ store, scope, docs }),
-        buildSearchIndex({ store, scope: searchScope, docs, folders: folderList }),
-      ])
-      if (cancelled) return
-      const entries = mapResult.entries.map((e) => ({ id: e.id, title: e.title, targets: e.targets, unreadable: e.unreadable, folderId: e.folderId }))
-      setGraph(buildWikiGraphFromEntries(entries, folderList))
-      setUpdatedAtById(new Map(mapResult.entries.map((e) => [e.id, e.updatedAt])))
-      setFolders(folderList)
-      setSearchEntries(searchResult.entries)
-      setLoading(false)
+      setLoadStatus('loading')
+      try {
+        // 한 번의 list()·listFolders() 를 지도 인덱스와 검색 인덱스가 나눠 쓴다 — 시점이 어긋나지 않는다 (F-2007 5.2)
+        const [docs, folderList] = await Promise.all([store.list(), store.listFolders()])
+        if (cancelled) return
+        const [mapResult, searchResult] = await Promise.all([
+          buildMapIndex({ store, scope, docs }),
+          buildSearchIndex({ store, scope: searchScope, docs, folders: folderList }),
+        ])
+        if (cancelled) return
+        const entries = mapResult.entries.map((e) => ({ id: e.id, title: e.title, targets: e.targets, unreadable: e.unreadable, folderId: e.folderId }))
+        setGraph(buildWikiGraphFromEntries(entries, folderList))
+        setUpdatedAtById(new Map(mapResult.entries.map((e) => [e.id, e.updatedAt])))
+        setFolders(folderList)
+        setSearchEntries(searchResult.entries)
+        setLoadStatus('ready')
+      } catch {
+        if (!cancelled) setLoadStatus('failed')
+      }
     }
     load()
     return () => {
       cancelled = true
     }
-  }, [store, scope, searchScope, e2eeOpen])
+  }, [store, scope, searchScope, e2eeOpen, reloadToken])
 
   // 지도가 열려 있는 동안 그래프를 다시 만들지 않는다 (7.2)
   const { displayGraph, truncated } = useMemo(() => {
@@ -319,9 +324,10 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
   }
 
   const sharedCount = graph ? graph.unreadable.length : 0
-  const isEmptyWorkspace = !loading && docCount === 0
+  const ready = loadStatus === 'ready'
+  const isEmptyWorkspace = ready && docCount === 0
   const effectiveView = unsupported ? 'list' : viewMode
-  const hasNoLinksAtAll = !loading && graph !== null && graph.edges.length === 0 && graph.nodes.every((n) => !n.missing)
+  const hasNoLinksAtAll = ready && graph !== null && graph.edges.length === 0 && graph.nodes.every((n) => !n.missing)
 
   return (
     <div className="map-page" data-ui="map">
@@ -393,9 +399,18 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
       </div>
 
       <div className="map-page-body">
-        {loading && <p className="map-status">연결을 읽는 중…</p>}
+        {loadStatus === 'loading' && <p className="map-status">연결을 읽는 중…</p>}
 
-        {!loading && isEmptyWorkspace && (
+        {loadStatus === 'failed' && (
+          <div className="map-empty">
+            <p>지도를 불러오지 못했습니다.</p>
+            <button type="button" onClick={() => setReloadToken((t) => t + 1)}>
+              다시 시도
+            </button>
+          </div>
+        )}
+
+        {ready && isEmptyWorkspace && (
           <div className="map-empty">
             <p>문서가 없습니다.</p>
             <button type="button" onClick={onCreateDoc}>
@@ -405,18 +420,18 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
         )}
 
         {/* 고립 문서도 전부 노드로 띄우므로(F-292 결정 10) 본문을 대체하지 않고 한 줄만 겹친다 (7.4) */}
-        {!loading && !isEmptyWorkspace && unsupported && (
+        {ready && !isEmptyWorkspace && unsupported && (
           <p className="map-notice">이 브라우저에서는 3D 지도를 그릴 수 없습니다. 목록으로 보여 드립니다.</p>
         )}
 
-        {!loading && !isEmptyWorkspace && !unsupported && hasNoLinksAtAll && (
+        {ready && !isEmptyWorkspace && !unsupported && hasNoLinksAtAll && (
           <p className="map-notice">
             <span>아직 이어진 문서가 없습니다. 문서에 [[다른 문서 제목]] 을 쓰면 여기에 이어집니다.</span>
             <a href="#/help">도움말</a>
           </p>
         )}
 
-        {!loading &&
+        {ready &&
           !isEmptyWorkspace &&
           displayGraph &&
           (effectiveView === 'graph' ? (
