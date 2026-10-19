@@ -1,7 +1,15 @@
 // GitHub 푸시 순수 규칙 — 몸통 만들기·문구·push-plan → blobs → push 순서 (specs/features/F-2130.md 3장)
 import { GITHUB_BLOB_MAX_BYTES, GITHUB_PUSH_MAX_IMAGES, type GithubBlobCreated, type GithubPushBody, type GithubPushed, type GithubPushPlan } from '../lib/githubContract'
+import type { AttachmentExt, Store } from '../types'
 import type { GithubResult } from './githubApi'
 import { githubErrorMessage, type GithubFailure } from './githubUi'
+
+// 금고 첨부(e2ee 기록)는 GitHub 에 평문으로 올리지 않는다 — null 이면 읽지 못한 그림으로 친다 (F-4013 2.5)
+export async function readPushAttachment(store: Pick<Store, 'getAttachment'>, name: string): Promise<Uint8Array | null> {
+  const [id, ext] = name.split('.')
+  const rec = await store.getAttachment(id, { ext: ext as AttachmentExt })
+  return rec && !rec.e2ee ? new Uint8Array(await rec.blob.arrayBuffer()) : null
+}
 
 export type PushStep = { kind: 'md' } | { kind: 'image'; index: number; total: number } | { kind: 'commit' }
 export type PushDeps = {

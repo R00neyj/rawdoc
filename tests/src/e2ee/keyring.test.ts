@@ -391,3 +391,110 @@ describe('리뷰 S5 — 초기화를 알아챘지만 잠그기가 미뤄짐', ()
     expect(ring.getMasterKey()).toBeNull()
   })
 })
+
+describe('F-4013 A3 — 잠금 실패 알림(onLockAborted)', () => {
+  const password = '충분히긴금고암호입니다'
+  async function openRing(extra: { isComposing?: () => boolean } = {}) {
+    const bundle = await makeBundle(password)
+    const { source } = makeMemorySource({ bundle, rev: 0 })
+    const onLockAborted = vi.fn()
+    const ring = createKeyring({ scope: SCOPE, source, onLockAborted, ...extra })
+    await ring.open(password)
+    return { ring, source, onLockAborted }
+  }
+  const failFlush = (ring: Awaited<ReturnType<typeof openRing>>['ring']) =>
+    ring.registerLockStep('flush', async () => {
+      throw new Error('flush 실패')
+    })
+
+  it('checkIdle·other-tab·account 의 aborted 는 이유와 함께 부르고, 같은 열림 안 두 번째는 부르지 않는다', async () => {
+    let now = 0
+    const bundle = await makeBundle(password)
+    const { source } = makeMemorySource({ bundle, rev: 0 })
+    const onLockAborted = vi.fn()
+    const ring = createKeyring({ scope: SCOPE, source, onLockAborted, now: () => now })
+    await ring.open(password)
+    failFlush(ring)
+    now += 60 * 60_000
+    expect(await ring.checkIdle(30)).toBe('aborted')
+    expect(onLockAborted).toHaveBeenCalledTimes(1)
+    expect(onLockAborted).toHaveBeenLastCalledWith('idle')
+    expect(await ring.lock('other-tab')).toBe('aborted')
+    expect(await ring.lock('account')).toBe('aborted')
+    expect(onLockAborted).toHaveBeenCalledTimes(1)
+  })
+
+  it('other-tab·account 는 각각 처음이면 부른다', async () => {
+    for (const reason of ['other-tab', 'account'] as const) {
+      const { ring, onLockAborted } = await openRing()
+      failFlush(ring)
+      expect(await ring.lock(reason)).toBe('aborted')
+      expect(onLockAborted).toHaveBeenCalledWith(reason)
+    }
+  })
+
+  it('잠갔다 다시 열면 다시 부른다', async () => {
+    const { ring, onLockAborted } = await openRing()
+    let fail = true
+    ring.registerLockStep('flush', async () => {
+      if (fail) throw new Error('flush 실패')
+    })
+    await ring.lock('manual')
+    fail = false
+    expect(await ring.lock('manual')).toBe('locked')
+    fail = true
+    await ring.open(password)
+    await ring.lock('manual')
+    expect(onLockAborted).toHaveBeenCalledTimes(2)
+  })
+
+  it('reset() 안의 aborted 는 부르지 않고 failed', async () => {
+    const { ring, onLockAborted } = await openRing()
+    failFlush(ring)
+    expect(await ring.reset()).toEqual({ ok: false, error: 'failed' })
+    expect(onLockAborted).not.toHaveBeenCalled()
+  })
+
+  it('load() 의 reset 잠그기 aborted 는 부른다', async () => {
+    const { ring, source, onLockAborted } = await openRing()
+    failFlush(ring)
+    await source.remove()
+    await ring.load()
+    expect(onLockAborted).toHaveBeenCalledWith('reset')
+  })
+
+  it('조합으로 미뤘다가 retryDeferredLock 이 aborted → 부른다', async () => {
+    let composing = true
+    const { ring, onLockAborted } = await openRing({ isComposing: () => composing })
+    failFlush(ring)
+    expect(await ring.lock('idle')).toBe('deferred')
+    composing = false
+    expect(await ring.retryDeferredLock()).toBe('aborted')
+    expect(onLockAborted).toHaveBeenCalledWith('idle')
+  })
+})
+
+describe('F-4013 A4 — 동시 동작', () => {
+  it('open() 진행 중 reset()·createStart() 는 failed 로 끝나고, open() 한 번 더는 같은 Promise', async () => {
+    const bundle = await makeBundle('충분히긴금고암호입니다')
+    const { source, calls } = makeMemorySource({ bundle, rev: 0 })
+    const realRead = source.read
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    source.read = async () => {
+      const result = await realRead()
+      await gate
+      return result
+    }
+    const ring = createKeyring({ scope: SCOPE, source })
+    const first = ring.open('충분히긴금고암호입니다')
+    const second = ring.open('충분히긴금고암호입니다')
+    expect(await ring.reset()).toEqual({ ok: false, error: 'failed' })
+    expect(await ring.createStart('충분히긴금고암호입니다')).toEqual({ ok: false, error: 'failed' })
+    release()
+    expect(await first).toBeNull()
+    expect(await second).toBeNull()
+    expect(calls.read).toBe(1)
+    expect(calls.remove).toBe(0)
+  })
+})

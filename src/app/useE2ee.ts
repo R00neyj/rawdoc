@@ -85,7 +85,6 @@ export function useE2ee(options: UseE2eeOptions): UseE2ee | null {
   })
 
   const composingRef = useRef(false)
-  const abortedNoticeShownRef = useRef(false)
 
   // 렌더 중에는 만들지 않는다 — ref 를 쥔 콜백을 외부 함수(createKeyring)에 넘기는 일은 effect 안에서만 안전하다(react-hooks/refs)
   const [keyring, setKeyring] = useState<Keyring | null>(null)
@@ -97,6 +96,7 @@ export function useE2ee(options: UseE2eeOptions): UseE2ee | null {
       source,
       isComposing: () => composingRef.current && document.hasFocus() && document.visibilityState === 'visible',
       onBroadcastLock: () => postRef.current({ kind: 'e2ee-lock', tabId: tabIdRef.current }),
+      onLockAborted: () => showNoticeRef.current({ type: 'error', message: '저장하지 못한 금고 문서가 있어 금고를 잠그지 못했습니다.' }),
     })
     setKeyring(ring)
     return undefined
@@ -214,11 +214,6 @@ export function useE2ee(options: UseE2eeOptions): UseE2ee | null {
     }
   }, [keyring, status])
 
-  // aborted 알림(E14)은 열린 한 번에 한 번만 — 다시 열리면 다시 띄울 수 있다 (4.1)
-  useEffect(() => {
-    if (status === 'open') abortedNoticeShownRef.current = false
-  }, [status])
-
   const [dialogMode, setDialogMode] = useState<E2eeDialogMode>(null)
   const requestResolverRef = useRef<((ok: boolean) => void) | null>(null)
 
@@ -313,15 +308,6 @@ export function useE2ee(options: UseE2eeOptions): UseE2ee | null {
     if (outcome === 'locked') showNotice({ type: 'info', message: '계정이 바뀌어 금고를 잠갔습니다.' })
   }
 
-  async function lockManual() {
-    if (!keyring) return
-    const outcome = await keyring.lock('manual')
-    if (outcome === 'aborted' && !abortedNoticeShownRef.current) {
-      abortedNoticeShownRef.current = true
-      showNotice({ type: 'error', message: '저장하지 못한 금고 문서가 있어 금고를 잠그지 못했습니다.' })
-    }
-  }
-
   const dialogs = keyring
     ? // eslint-disable-next-line react-hooks/refs -- .ts 라 JSX 를 못 쓴다. 아래 콜백은 다 나중에(이벤트·구독) 불린다
       createElement(E2eeDialogs, {
@@ -354,7 +340,7 @@ export function useE2ee(options: UseE2eeOptions): UseE2ee | null {
       recover: () => setDialogMode('recover'),
       changePassword: () => setDialogMode('changePassword'),
       reset: () => setDialogMode('reset'),
-      lockNow: () => void lockManual(),
+      lockNow: () => void keyring?.lock('manual'),
     },
     refreshStatus,
     openWithPassword: openWithPasswordDirect,

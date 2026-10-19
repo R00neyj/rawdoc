@@ -15,6 +15,8 @@ const MOVE_ROW_SQL =
 // 3·4·5 는 1번이 이번 요청의 감싼 키를 실제로 썼을 때만 — 새 키는 무작위라 이 요청이 쓴 행만 맞는다
 const WROTE_KEY = 'EXISTS (SELECT 1 FROM docs WHERE id = ? AND e2ee_key = ?)'
 const REVOKE_LINKS_SQL = `UPDATE share_links SET revoked_at = ? WHERE target_type = 'doc' AND target_id = ? AND revoked_at IS NULL AND ${WROTE_KEY}`
+const CLEAR_ROOM_JOB_SQL =
+  "DELETE FROM purge_jobs WHERE kind = 'room' AND target = ?1 AND EXISTS (SELECT 1 FROM docs WHERE id = ?1 AND e2ee_key IS NULL)"
 const REVOKE_REQUEST_TOKEN_SQL = `UPDATE request_tokens SET revoked_at = ? WHERE doc_id = ? AND revoked_at IS NULL AND ${WROTE_KEY}`
 const DROP_SET_ROWS_SQL = `DELETE FROM share_link_docs WHERE doc_id = ? AND ${WROTE_KEY}`
 const DROP_GRANTS_SQL = `DELETE FROM grants WHERE target_type = 'doc' AND target_id = ? AND ${WROTE_KEY}`
@@ -38,7 +40,9 @@ export function setDocE2eeStatements(db: D1Database, p: SetDocE2eeInput): D1Prep
     db.prepare(MOVE_ROW_SQL).bind(p.title, p.content, p.e2eeKey, refs, p.baseVersion + 1, p.now, p.docId, p.ownerId, p.baseVersion),
     ...docUsageStatements(db, { actorId: p.ownerId, ownerId: p.ownerId, now: p.now, deltaBytes: p.deltaBytes, deltaDocs: 0 }),
   ]
-  if (p.e2eeKey === null) return statements
+  if (p.e2eeKey === null) {
+    return [...statements, db.prepare(CLEAR_ROOM_JOB_SQL).bind(p.docId)]
+  }
   return [
     ...statements,
     db.prepare(REVOKE_LINKS_SQL).bind(p.now, p.docId, p.docId, p.e2eeKey),
@@ -67,6 +71,17 @@ async function purgeBeforeResponse(env: Env, docId: string): Promise<boolean> {
   }
   console.error('e2ee_purge_failed', docId)
   return false
+}
+
+// 지우기가 실패한 방은 10분 Cron 이 다시 지우게 작업으로 남긴다 (F-4013 2.1)
+async function enqueueRoomPurge(env: Env, docId: string, now: number): Promise<void> {
+  try {
+    await env.DB.prepare("INSERT INTO purge_jobs (kind, target, priority, created_at) VALUES ('room', ?1, ?2, ?2) ON CONFLICT (kind, target) DO NOTHING")
+      .bind(docId, now)
+      .run()
+  } catch {
+    console.error('e2ee_purge_enqueue_failed', docId)
+  }
 }
 
 function invalid(field: string): Response {
@@ -139,6 +154,7 @@ export async function handleSetDocE2ee(
 
   // D1 batch 는 이미 커밋됐다 — 지우기가 실패해도 되돌리지 않고 purged: false 로 알린다
   const purged = await purgeBeforeResponse(env, params.id)
+  if (!purged && moving) await enqueueRoomPurge(env, params.id, now)
   const row: DocRow = {
     ...existing,
     title: input.title,

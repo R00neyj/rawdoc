@@ -9,6 +9,7 @@ import {
   newDocContentFromTemplate,
   newDocTemplateOptions,
   templateFolderIds,
+  usableTemplates,
   templateRootFolder,
   withoutTemplateFolders,
   type TemplateEntry,
@@ -359,5 +360,32 @@ describe('내장 칸반 템플릿 — U3 (F-2143)', () => {
     expect(merged).toContain('title: a')
     expect(merged).toContain('kanban: true')
     expect(isKanbanDoc(merged)).toBe(true)
+  })
+})
+
+describe('F-4013 A8 열린 금고 문서 템플릿', () => {
+  const folders: FolderLike[] = [{ id: 'T', name: '템플릿', parentId: null }]
+  const docs = [
+    { id: 'plain', title: '주간 보고', folderId: 'T' },
+    { id: 'open', title: '비밀 양식', folderId: 'T', e2ee: 'open' as const },
+    { id: 'locked', title: '', folderId: 'T', e2ee: 'locked' as const },
+  ]
+  const entries = listTemplates({ folders, docs })
+
+  it('열린 금고 문서는 e2ee 항목, 잠긴 문서는 없음, usableTemplates 에서 빠짐', () => {
+    const user = entries.filter((e) => e.source.kind === 'doc')
+    expect(user.map((e) => [e.id, e.e2ee])).toEqual([
+      ['doc:open', true],
+      ['doc:plain', undefined],
+    ])
+    expect(usableTemplates(entries).map((e) => e.id)).not.toContain('doc:open')
+    expect(usableTemplates(entries).map((e) => e.id)).toContain('doc:plain')
+  })
+
+  it('resolveNewDocTemplate 는 missing, 옵션 user 에 없고 맨 끝에 찾을 수 없는 템플릿', () => {
+    expect(resolveNewDocTemplate('doc:open', entries)).toEqual({ kind: 'missing' })
+    const options = newDocTemplateOptions('doc:open', entries)
+    expect(options.filter((o) => o.group === 'user').map((o) => o.value)).toEqual(['doc:plain'])
+    expect(options.at(-1)).toEqual({ value: 'doc:open', label: '찾을 수 없는 템플릿', group: 'missing' })
   })
 })

@@ -125,11 +125,11 @@ function readAttachmentNames(data: unknown): string[] | null {
   return [...new Set(list as string[])]
 }
 
-async function uploadableNames(env: Env, names: string[]): Promise<Set<string>> {
+async function uploadableNames(env: Env, ownerId: string, names: string[]): Promise<Set<string>> {
   if (names.length === 0) return new Set()
   const ids = [...new Set(names.map((name) => name.slice(0, 16)))]
-  const { results } = await env.DB.prepare('SELECT id, ext FROM attachments WHERE e2ee = 0 AND id IN (SELECT value FROM json_each(?))')
-    .bind(JSON.stringify(ids))
+  const { results } = await env.DB.prepare('SELECT id, ext FROM attachments WHERE owner_id = ? AND e2ee = 0 AND id IN (SELECT value FROM json_each(?))')
+    .bind(ownerId, JSON.stringify(ids))
     .all<{ id: string; ext: string }>()
   return new Set(results.map((r) => `${r.id}.${r.ext}`))
 }
@@ -159,7 +159,7 @@ export async function handleGithubPushPlan(request: Request, env: Env, _ctx: Exe
   const remote = await checkRemote(env, c, link, 'push-plan')
   if (remote instanceof Response) return remote
 
-  const uploadable = await uploadableNames(env, names)
+  const uploadable = await uploadableNames(env, c.user.id, names)
   const skipped = names.filter((name) => !uploadable.has(name))
   let missing = names.filter((name) => uploadable.has(name))
   if (missing.length > 0) {

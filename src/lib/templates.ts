@@ -10,6 +10,12 @@ export type TemplateEntry = {
   title: string
   detail: string // 사용자: 폴더 경로('템플릿' · '템플릿 / 회의'), 내장: '내장'
   source: { kind: 'doc'; docId: string } | { kind: 'builtin'; body: string }
+  e2ee?: true
+}
+
+// 열린 금고 문서는 관리 창에만 보이고 새 문서·삽입에는 쓰지 못한다 (F-4013 2.6)
+export function usableTemplates(entries: readonly TemplateEntry[]): TemplateEntry[] {
+  return entries.filter((e) => !e.e2ee)
 }
 
 export type TemplateDocLike = { id: string; title: string; folderId: string | null; role?: 'owner' | 'edit' | 'view'; e2ee?: 'locked' | 'open' }
@@ -55,6 +61,7 @@ export function listTemplates(input: { folders: readonly FolderLike[]; docs: rea
         title,
         detail: pathFromRoot(root, folder, byId),
         source: { kind: 'doc', docId: doc.id },
+        ...(doc.e2ee === 'open' ? { e2ee: true as const } : {}),
       })
     }
   }
@@ -265,10 +272,10 @@ export type NewDocTemplateResolution =
   | { kind: 'missing' }
   | { kind: 'found'; entry: TemplateEntry }
 
-// entries 에서 id === pref 를 찾기만 한다. 'none' 만 none, 그 밖(모르는 값 포함)은 missing (3.4)
+// 목록에서 열린 금고 문서는 쓸 수 없다 — id 를 찾기만 한다. 'none' 만 none, 그 밖(모르는 값 포함)은 missing (3.4, F-4013 2.6)
 export function resolveNewDocTemplate(pref: string, entries: readonly TemplateEntry[]): NewDocTemplateResolution {
   if (pref === NEW_DOC_TEMPLATE_NONE) return { kind: 'none' }
-  const entry = entries.find((e) => e.id === pref)
+  const entry = usableTemplates(entries).find((e) => e.id === pref)
   return entry ? { kind: 'found', entry } : { kind: 'missing' }
 }
 
@@ -288,8 +295,9 @@ export type NewDocTemplateOption = { value: string; label: string; group: 'none'
 
 // 위에서부터 없음 → 내장 → 템플릿 폴더 문서, 설정값이 목록에 없으면 맨 끝에 찾을 수 없는 템플릿 하나 (3.3)
 export function newDocTemplateOptions(pref: string, entries: readonly TemplateEntry[]): NewDocTemplateOption[] {
-  const builtinEntries = entries.filter((e) => e.source.kind === 'builtin')
-  const userEntries = entries.filter((e) => e.source.kind === 'doc')
+  const usable = usableTemplates(entries)
+  const builtinEntries = usable.filter((e) => e.source.kind === 'builtin')
+  const userEntries = usable.filter((e) => e.source.kind === 'doc')
 
   const options: NewDocTemplateOption[] = [{ value: NEW_DOC_TEMPLATE_NONE, label: '없음', group: 'none' }]
   for (const e of builtinEntries) options.push({ value: e.id, label: e.title, group: 'builtin' })

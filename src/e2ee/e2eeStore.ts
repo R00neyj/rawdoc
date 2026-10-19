@@ -149,6 +149,16 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
     return { ...rest, title: '', content: '', e2ee: 'locked', attachmentRefs: refs }
   }
 
+  // 쓰는 사이 잠그기(clearPlainCache)나 MK 교체가 끼어들었나 (F-4013 2.3)
+  function isStale(startGeneration: number, mk: CryptoKey): boolean {
+    return generation !== startGeneration || deps.getMasterKey() !== mk
+  }
+
+  function lockedFromRow(row: Doc): Doc {
+    const { e2eeKey: _key, ...rest } = row
+    return lockedShape(rest, row.attachmentRefs ?? [])
+  }
+
   // 저장소 층 → 앱 층 (4.1). 일반 문서는 그대로
   async function decode(row: Doc): Promise<Doc> {
     if (row.e2eeKey === undefined) return row
@@ -212,6 +222,7 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
     if (!asE2ee) return decode(await inner.create(rest))
     const mk = currentMasterKey()
     if (!mk) throw new E2eeStoreError('locked')
+    const startGeneration = generation
     const refs = checkPlainContent(rest.content)
     // AAD 에 id 가 들어가므로 여기서 정한다 (4.2)
     const id = rest.id ?? crypto.randomUUID()
@@ -219,6 +230,7 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
     const titleEnvelope = await encryptDocField(docKey, id, 'title', rest.title)
     const contentEnvelope = await encryptDocField(docKey, id, 'content', rest.content)
     const row = await inner.create({ ...rest, id, title: titleEnvelope, content: contentEnvelope, e2eeKey: wrappedDocKey, attachmentRefs: refs })
+    if (isStale(startGeneration, mk)) return lockedFromRow(row)
     docKeys.set(wrappedDocKey, Promise.resolve(docKey))
     plainMemo.set(id, { e2eeKey: wrappedDocKey, titleEnvelope, contentEnvelope, title: rest.title, content: rest.content })
     return decode(row)
@@ -231,6 +243,7 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
     if (!row || row.e2eeKey === undefined) return decode(await inner.update(id, textPatch))
     const mk = currentMasterKey()
     if (!mk) throw new E2eeStoreError('locked')
+    const startGeneration = generation
     const refs = textPatch.content !== undefined ? checkPlainContent(textPatch.content) : undefined
     const before = await decode(row)
     const key = await docKeyFor(mk, row.e2eeKey)
@@ -241,6 +254,7 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
       next.attachmentRefs = refs
     }
     const updated = await inner.update(id, next)
+    if (isStale(startGeneration, mk)) return lockedFromRow(updated)
     // 받은 봉투가 이 호출이 쓴 값(바꾼 필드)·처음 읽은 값(안 바꾼 필드)과 같을 때만 기억한다. 제목 저장과 본문 저장이
     // 겹쳐 다른 호출이 쓴 봉투가 섞였으면 기억하지 않고 decode 가 다시 풀게 둔다 (리뷰 S4)
     const ownEnvelopes =
@@ -401,11 +415,13 @@ export function withE2ee<S extends Store>(inner: S, deps: E2eeStoreDeps): S & E2
     }
     const mk = currentMasterKey()
     if (!mk) throw new E2eeStoreError('locked')
+    const startGeneration = generation
     const refs = checkPlainContent(input.content)
     const { docKey, wrappedDocKey } = await createDocKey(mk)
     const titleEnvelope = await encryptDocField(docKey, id, 'title', input.title)
     const contentEnvelope = await encryptDocField(docKey, id, 'content', input.content)
     const res = await innerSet(id, { e2ee: true, title: titleEnvelope, content: contentEnvelope, e2eeKey: wrappedDocKey, attachmentRefs: refs })
+    if (isStale(startGeneration, mk)) return { doc: lockedFromRow(res.doc), purged: res.purged }
     docKeys.set(wrappedDocKey, Promise.resolve(docKey))
     plainMemo.set(id, { e2eeKey: wrappedDocKey, titleEnvelope, contentEnvelope, title: input.title, content: input.content })
     return { doc: await decode(res.doc), purged: res.purged }

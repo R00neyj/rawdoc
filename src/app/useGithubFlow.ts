@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { GithubLink, GithubLinkPut } from '../lib/githubContract'
 import type { ServerStore } from '../storage/serverStore'
-import type { AttachmentExt, Doc, Store } from '../types'
+import type { Doc, Store } from '../types'
 import type { AccountState } from './account'
 import { deleteDocGithub, deleteGithubAccount, getDocGithub, getDocGithubRaw, postDocGithubImageSources, postGithubFile, putDocGithub, putDocGithubImage, type GithubResult } from './githubApi'
 import { randomAttachmentId, runGithubImageImport } from './githubImages'
@@ -14,7 +14,7 @@ import {
   decideGithubResume, githubConnectErrorMessage, githubConnectUrl, githubDocRole, githubDocTitle, githubErrorMessage, githubTopBarKind, GITHUB_LINK_FRESH_MS,
   GITHUB_RESUME_KEY, readGithubReturn, resumeMarker, urlWithoutGithubParams, type GithubFailure,
 } from './githubUi'
-import { linkPushFailedMessage, PUSH_OFFLINE_MESSAGE, type PushOutcome } from './githubPush'
+import { linkPushFailedMessage, PUSH_OFFLINE_MESSAGE, readPushAttachment, type PushOutcome } from './githubPush'
 import type { GithubDialogsProps, GithubPickerMode } from './GithubPickerDialog'
 import type { GithubMenuProps } from './GithubMenu'
 import { replaceAppEntry } from './historyEntries'
@@ -174,11 +174,7 @@ export function useGithubFlow(o: UseGithubFlowOptions): UseGithubFlowResult {
     watch,
     linkOf: (docId) => linksRef.current[docId]?.link ?? null,
     flush: async () => { try { await server.flushOutbox?.() } catch { /* 올리지 못한 그림은 push-plan 의 skipped 로 드러난다 */ } },
-    readAttachment: async (name) => {
-      const [id, ext] = name.split('.')
-      const rec = await store.getAttachment(id, { ext: ext as AttachmentExt })
-      return rec ? new Uint8Array(await rec.blob.arrayBuffer()) : null
-    },
+    readAttachment: (name) => readPushAttachment(store, name),
     onPushed: (docId, sha) =>
       setLinks((prev) => {
         const link = prev[docId]?.link

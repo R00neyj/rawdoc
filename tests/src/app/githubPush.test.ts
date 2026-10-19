@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { GithubResult } from '../../../src/app/githubApi'
 import {
-  blobBody, linkPushFailedMessage, planSummary, pushedNotice, pushFailureMessage, pushImageNames, pushMdBytes, readConflict, runGithubPush, PUSH_MAX_REFS,
+  blobBody, linkPushFailedMessage, planSummary, pushedNotice, pushFailureMessage, pushImageNames, pushMdBytes, readConflict, readPushAttachment, runGithubPush, PUSH_MAX_REFS,
   type PushDeps, type PushStep,
 } from '../../../src/app/githubPush'
+import type { Store } from '../../../src/types'
 
 const fail = (status: number, error: string | null = null, body: unknown = null): GithubResult<never> => ({ ok: false, status, error, body })
 const ok = <T,>(value: T): GithubResult<T> => ({ ok: true, value })
@@ -149,5 +150,16 @@ describe('linkPushFailedMessage (small 2026-10-13)', () => {
   it('연결은 남았다고 알리고 이유를 붙인다', () => {
     expect(linkPushFailedMessage({ kind: 'failed', message: '빈 저장소에는 푸시할 수 없습니다' })).toBe('GitHub에 연결했지만 푸시하지 못했습니다. 빈 저장소에는 푸시할 수 없습니다')
     expect(linkPushFailedMessage({ kind: 'conflict', gone: false })).toBe('GitHub에 연결했지만 푸시하지 못했습니다. GitHub에 같은 파일이 생겼습니다. 당기기로 맞춰 주세요')
+  })
+})
+
+describe('F-4013 A7 readPushAttachment', () => {
+  const bytes = new Uint8Array([1, 2, 3])
+  const storeOf = (rec: unknown) => ({ getAttachment: async () => rec }) as unknown as Pick<Store, 'getAttachment'>
+
+  it('기록 없음·e2ee 참 → null, 평문 → 바이트', async () => {
+    expect(await readPushAttachment(storeOf(null), '0123456789abcdef.png')).toBeNull()
+    expect(await readPushAttachment(storeOf({ e2ee: true, blob: new Blob([bytes]) }), '0123456789abcdef.png')).toBeNull()
+    expect([...(await readPushAttachment(storeOf({ blob: new Blob([bytes]) }), '0123456789abcdef.png'))!]).toEqual([1, 2, 3])
   })
 })

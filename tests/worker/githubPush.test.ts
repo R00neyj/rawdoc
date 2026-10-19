@@ -572,3 +572,25 @@ describe('F-3016 A9~A13 push', () => {
     expect(usage(w.db, w.id)).toBe(0)
   })
 })
+
+describe('F-4013 A6 남의 같은 이름 평문', () => {
+  it('내 금고 첨부·남의 평문 같은 이름 → skipped, 남의 평문만 → skipped, 내 평문 → missing', async () => {
+    const w = await world()
+    addDoc(w, 'd1')
+    addLink(w, 'd1')
+    const friendId = (w.db.prepare('SELECT id FROM users WHERE email = ?').get(FRIEND) as { id: string }).id
+    const addFriend = (name: string) => {
+      const [id, ext] = name.split('.')
+      w.db.prepare('INSERT INTO attachments (owner_id, id, ext, mime, size, width, height, created_at, e2ee) VALUES (?, ?, ?, ?, 10, 1, 1, 1, 0)').run(friendId, id, ext, `image/${ext}`)
+    }
+    const mine = att('c', 'webp')
+    const friendOnly = att('d', 'png')
+    addAttachment(w, mine, 1)
+    addFriend(mine)
+    addFriend(friendOnly)
+    addAttachment(w, B)
+    fakeGithub(remote({ folder: [] }))
+    const res = await plan(w.env, [mine, friendOnly, B])
+    expect(await res.json()).toEqual({ missing: [B], skipped: [mine, friendOnly] })
+  })
+})

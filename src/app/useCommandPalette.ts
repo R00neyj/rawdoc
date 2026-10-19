@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { StateCommand } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
-import { expandTemplateVariables, templateFolderIds, type TemplateEntry } from '../lib/templates'
+import { expandTemplateVariables, templateFolderIds, usableTemplates, type TemplateEntry } from '../lib/templates'
 import { insertTemplate as insertTemplateIntoEditor } from '../editor/insertTemplate'
 import { insertTable } from '../editor/insertCommands'
 import { insertTextAtSelection } from '../editor/insertDateTime'
@@ -202,7 +202,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
       return
     }
     const startDocId = currentDocId
-    const template = templateEntries.find((t) => t.id === templateId)
+    const template = usableTemplates(templateEntries).find((t) => t.id === templateId)
 
     let rawText: string | null = null
     try {
@@ -336,7 +336,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     dateTime: paletteDateTimeDocId !== null && paletteDateTimeDocId === currentDocId && canInsertTemplate ? { insert: insertDateTimeText } : undefined,
     editor: paletteEditor && canInsertTemplate ? { disabled: paletteEditor.disabled, run: runPaletteEditorCommand } : undefined,
     canPrint,
-    templates: templateEntries,
+    templates: usableTemplates(templateEntries),
     insertTemplate,
     printDoc: handlePrintDoc,
     e2ee: e2ee

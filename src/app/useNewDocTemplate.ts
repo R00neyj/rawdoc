@@ -36,10 +36,10 @@ export function useNewDocTemplate(options: UseNewDocTemplateOptions): UseNewDocT
   async function readTemplateDocText(docId: string): Promise<string | null> {
     try {
       if (docId === currentDocIdRef.current && editorRef.current) {
-        return editorRef.current.getText('lf')
+        return docs.find((d) => d.id === docId)?.e2ee ? null : editorRef.current.getText('lf')
       }
       const doc = await store.get(docId)
-      return doc?.content ?? null
+      return doc && !doc.e2ee ? doc.content : null
     } catch {
       return null
     }

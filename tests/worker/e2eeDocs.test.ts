@@ -797,3 +797,77 @@ describe('F-3015 A12 연결된 문서의 금고 옮기기', () => {
     expect((await call(owner, `/api/docs/${uuid(41)}/e2ee`, json('PUT', moveBody()))).status).toBe(200)
   })
 })
+
+describe('F-4013 A1·A2 방 지우기 재시도 작업', () => {
+  const roomJobs = (sqlDb: DatabaseSync, target: string) =>
+    count(sqlDb, "SELECT COUNT(*) AS n FROM purge_jobs WHERE kind = 'room' AND target = ?", target)
+
+  it('A1 두 번 실패 → purged false 이고 room 작업 1행, 한 번 실패 뒤 성공·DOC_ROOM 없음 → 0행', async () => {
+    const { sqlDb, owner, purge } = makeWorld()
+    await withKeys(owner)
+    const id = await userId(owner, sqlDb)
+    insertDoc(sqlDb, uuid(60), id)
+    insertDoc(sqlDb, uuid(61), id)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    purge.impl = async () => {
+      throw new Error('DO down')
+    }
+    const res = await call(owner, `/api/docs/${uuid(60)}/e2ee`, json('PUT', moveBody()))
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { purged: boolean }).purged).toBe(false)
+    expect(roomJobs(sqlDb, uuid(60))).toBe(1)
+
+    let n = 0
+    purge.impl = async () => {
+      n++
+      if (n === 1) throw new Error('DO down')
+    }
+    const ok = await call(owner, `/api/docs/${uuid(61)}/e2ee`, json('PUT', moveBody()))
+    expect(((await ok.json()) as { purged: boolean }).purged).toBe(true)
+    expect(roomJobs(sqlDb, uuid(61))).toBe(0)
+
+    const noRoom = makeWorld({ docRoom: false })
+    await withKeys(noRoom.owner)
+    const id2 = await userId(noRoom.owner, noRoom.sqlDb)
+    insertDoc(noRoom.sqlDb, uuid(62), id2)
+    await call(noRoom.owner, `/api/docs/${uuid(62)}/e2ee`, json('PUT', moveBody()))
+    expect(roomJobs(noRoom.sqlDb, uuid(62))).toBe(0)
+  })
+
+  it('A1 작업 넣기가 던지면 200 그대로 + e2ee_purge_enqueue_failed', async () => {
+    const { sqlDb, owner, purge } = makeWorld()
+    await withKeys(owner)
+    const id = await userId(owner, sqlDb)
+    insertDoc(sqlDb, uuid(63), id)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    purge.impl = async () => {
+      throw new Error('DO down')
+    }
+    sqlDb.exec('DROP TABLE purge_jobs')
+    const res = await call(owner, `/api/docs/${uuid(63)}/e2ee`, json('PUT', moveBody()))
+    expect(res.status).toBe(200)
+    expect(((await res.json()) as { purged: boolean }).purged).toBe(false)
+    expect(error.mock.calls.some((c) => c[0] === 'e2ee_purge_enqueue_failed')).toBe(true)
+  })
+
+  it('A2 빼기 성공 → 그 문서 행 0·다른 문서 행 그대로, 버전 충돌 batch → 행 그대로', async () => {
+    const { sqlDb, owner } = makeWorld()
+    const id = await userId(owner, sqlDb)
+    insertDoc(sqlDb, uuid(64), id, { e2ee_key: KEY, attachment_refs: '[]' })
+    insertDoc(sqlDb, uuid(65), id, { e2ee_key: KEY, attachment_refs: '[]' })
+    const add = sqlDb.prepare("INSERT INTO purge_jobs (kind, target, priority, created_at) VALUES ('room', ?, 1, 1)")
+    add.run(uuid(64))
+    add.run(uuid(65))
+    const DB = (owner as unknown as { DB: D1Database }).DB
+    const unmove = (docId: string, baseVersion: number) =>
+      setDocE2eeStatements(DB, { docId, ownerId: id, title: 't', content: 'c', e2eeKey: null, attachmentRefs: null, baseVersion, now: 2_000, deltaBytes: 0 })
+
+    await DB.batch(unmove(uuid(64), 99))
+    expect(roomJobs(sqlDb, uuid(64))).toBe(1)
+
+    const res = await call(owner, `/api/docs/${uuid(64)}/e2ee`, json('PUT', { e2eeKey: null, title: 't', content: 'c', attachmentRefs: null, baseVersion: 1 }))
+    expect(res.status).toBe(200)
+    expect(roomJobs(sqlDb, uuid(64))).toBe(0)
+    expect(roomJobs(sqlDb, uuid(65))).toBe(1)
+  })
+})

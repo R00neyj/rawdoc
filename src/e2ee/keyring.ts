@@ -79,6 +79,7 @@ export type KeyringDeps = {
   now?: () => number
   isComposing?: () => boolean
   onBroadcastLock?: () => void
+  onLockAborted?: (reason: E2eeLockReason) => void
 }
 
 export type Keyring = {
@@ -132,6 +133,8 @@ function mapWriteErrorReason(reason: 'offline' | 'rate-limited' | 'account-block
   return reason
 }
 
+type ActionKind = 'open' | 'createStart' | 'createConfirm' | 'changePassword' | 'recoveryVerify' | 'recoveryReset' | 'recoveryConfirm' | 'reset'
+
 type PendingCreate = { bundleJson: string; masterKey: CryptoKey; recoveryCode: string }
 type PendingRecoveryVerify = { bundleJson: string; bundle: E2eeKeyBundle; rev: number; code: string }
 type PendingRecoveryCommit = {
@@ -147,6 +150,7 @@ export function createKeyring(deps: KeyringDeps): Keyring {
   const clockNow = deps.now ?? (() => Date.now())
   const isComposing = deps.isComposing ?? (() => false)
   const onBroadcastLock = deps.onBroadcastLock
+  const onLockAborted = deps.onLockAborted
 
   let status: E2eeStatus = 'unknown'
   let masterKey: CryptoKey | null = null
@@ -161,7 +165,8 @@ export function createKeyring(deps: KeyringDeps): Keyring {
   }
   const resetSteps: Array<() => Promise<void>> = []
 
-  let actionInFlight: Promise<unknown> | null = null
+  let actionInFlight: { kind: ActionKind; promise: Promise<unknown> } | null = null
+  let abortedNotified = false
   let lockInFlight: Promise<E2eeLockOutcome> | null = null
   let deferredReason: E2eeLockReason | null = null
   // load() 가 금고 초기화를 알아챘지만 잠그기가 미뤄졌다 — 그 잠그기가 끝나면 locked 대신 none 으로 (리뷰 S5)
@@ -174,18 +179,21 @@ export function createKeyring(deps: KeyringDeps): Keyring {
   function setStatus(next: E2eeStatus) {
     if (status === next) return
     status = next
-    if (next === 'open') noneAfterLock = false
+    if (next === 'open') {
+      noneAfterLock = false
+      abortedNotified = false
+    }
     for (const listener of listeners) listener()
   }
 
-  function runExclusive<T>(fn: () => Promise<T>): Promise<T> {
-    if (actionInFlight) return actionInFlight as Promise<T>
-    const p = fn()
-    const wrapped = p.finally(() => {
-      if (actionInFlight === wrapped) actionInFlight = null
+  function runExclusive<T>(kind: ActionKind, busy: T, fn: () => Promise<T>): Promise<T> {
+    if (actionInFlight) return actionInFlight.kind === kind ? (actionInFlight.promise as Promise<T>) : Promise.resolve(busy)
+    const entry = { kind, promise: null as unknown as Promise<T> }
+    entry.promise = fn().finally(() => {
+      if (actionInFlight === entry) actionInFlight = null
     })
-    actionInFlight = wrapped
-    return p
+    actionInFlight = entry
+    return entry.promise
   }
 
   async function runLockSteps(reason: E2eeLockReason): Promise<E2eeLockOutcome> {
@@ -218,7 +226,7 @@ export function createKeyring(deps: KeyringDeps): Keyring {
     return 'locked'
   }
 
-  async function lock(reason: E2eeLockReason): Promise<E2eeLockOutcome> {
+  async function lockWith(reason: E2eeLockReason, notifyAborted: boolean): Promise<E2eeLockOutcome> {
     if (deferredReason) return 'deferred'
     if (lockInFlight) return lockInFlight
     if (status !== 'open') return 'not-open'
@@ -229,11 +237,18 @@ export function createKeyring(deps: KeyringDeps): Keyring {
     const p = runLockSteps(reason)
     lockInFlight = p
     try {
-      return await p
+      const outcome = await p
+      if (outcome === 'aborted' && notifyAborted && !abortedNotified) {
+        abortedNotified = true
+        onLockAborted?.(reason)
+      }
+      return outcome
     } finally {
       lockInFlight = null
     }
   }
+
+  const lock = (reason: E2eeLockReason) => lockWith(reason, true)
 
   async function retryDeferredLock(): Promise<E2eeLockOutcome | null> {
     if (!deferredReason) return null
@@ -269,7 +284,7 @@ export function createKeyring(deps: KeyringDeps): Keyring {
   }
 
   function open(password: string): Promise<E2eeActionError | null> {
-    return runExclusive(async () => {
+    return runExclusive('open', 'failed', async () => {
       const result = await source.read()
       if (result.kind === 'none') {
         setStatus('none')
@@ -304,7 +319,7 @@ export function createKeyring(deps: KeyringDeps): Keyring {
   }
 
   function createStart(password: string): Promise<E2eeActionResultWithCode> {
-    return runExclusive(async () => {
+    return runExclusive('createStart', { ok: false, error: 'failed' }, async () => {
       const result = await source.read()
       if (result.kind === 'error') {
         return { ok: false, error: result.reason === 'offline' ? 'offline' : 'failed' }
@@ -326,7 +341,7 @@ export function createKeyring(deps: KeyringDeps): Keyring {
   }
 
   function createConfirm(): Promise<E2eeActionResult> {
-    return runExclusive(async () => {
+    return runExclusive('createConfirm', { ok: false, error: 'failed' }, async () => {
       if (!pendingCreate) return { ok: false, error: 'failed' }
       const { bundleJson, masterKey: mk } = pendingCreate
       const result = await source.create(bundleJson)
@@ -352,7 +367,7 @@ export function createKeyring(deps: KeyringDeps): Keyring {
   }
 
   function changePassword(oldPassword: string, newPassword: string): Promise<E2eeActionError | null> {
-    return runExclusive(async () => {
+    return runExclusive('changePassword', 'failed', async () => {
       const result = await source.read()
       if (result.kind === 'none') {
         setStatus('none')
@@ -381,7 +396,7 @@ export function createKeyring(deps: KeyringDeps): Keyring {
   }
 
   function recoveryVerify(recoveryCode: string): Promise<E2eeActionResult> {
-    return runExclusive(async () => {
+    return runExclusive('recoveryVerify', { ok: false, error: 'failed' }, async () => {
       const result = await source.read()
       if (result.kind === 'none') {
         setStatus('none')
@@ -408,7 +423,7 @@ export function createKeyring(deps: KeyringDeps): Keyring {
   }
 
   function recoveryReset(newPassword: string): Promise<E2eeActionResultWithCode> {
-    return runExclusive(async () => {
+    return runExclusive('recoveryReset', { ok: false, error: 'failed' }, async () => {
       if (!pendingRecoveryVerify) return { ok: false, error: 'failed' }
       try {
         const { bundle: newBundle, recoveryCode, masterKey: mk } = await resetWithRecoveryCode(
@@ -432,7 +447,7 @@ export function createKeyring(deps: KeyringDeps): Keyring {
   }
 
   function recoveryConfirm(): Promise<E2eeActionResult> {
-    return runExclusive(async () => {
+    return runExclusive('recoveryConfirm', { ok: false, error: 'failed' }, async () => {
       if (!pendingRecoveryCommit) return { ok: false, error: 'failed' }
       const { bundleJson, masterKey: mk, expectedBundleJson, expectedRev } = pendingRecoveryCommit
       const result = await source.replace(bundleJson, { bundle: expectedBundleJson, rev: expectedRev })
@@ -455,10 +470,10 @@ export function createKeyring(deps: KeyringDeps): Keyring {
   }
 
   function reset(): Promise<E2eeResetResult> {
-    return runExclusive(async () => {
+    return runExclusive('reset', { ok: false, error: 'failed' }, async () => {
       let broadcastedByLock = false
       if (status === 'open') {
-        const outcome = await lock('reset')
+        const outcome = await lockWith('reset', false)
         if (outcome !== 'locked') return { ok: false, error: 'failed' }
         broadcastedByLock = true
       }

@@ -805,3 +805,83 @@ describe('리뷰 S7 잠근 뒤 끝난 복호화', () => {
     expect(await store.get(doc.id)).toMatchObject({ e2ee: 'locked', title: '', content: '' })
   })
 })
+
+describe('F-4013 A5 쓰는 사이 잠그기', () => {
+  const BODY = '본문 ![](attachments/00000000000000aa.png)'
+
+  async function setupGated() {
+    const dbName = freshDbName()
+    const rawInner = await createIdbStore(dbName)
+    const gate = { open: Promise.resolve() as Promise<void> }
+    const hints: Array<{ ext: AttachmentExt } | undefined> = []
+    const hold = <A extends unknown[], R>(fn: (...args: A) => Promise<R>) => async (...args: A) => {
+      const result = await fn(...args)
+      await gate.open
+      return result
+    }
+    const inner: Store = {
+      ...rawInner,
+      create: hold(rawInner.create),
+      update: hold(rawInner.update),
+      setDocE2ee: hold(rawInner.setDocE2ee!),
+      getAttachment: async (id: string, hint?: { ext: AttachmentExt }) => {
+        hints.push(hint)
+        return rawInner.getAttachment(id, hint)
+      },
+    }
+    const mk = await newMasterKey()
+    const store = withE2ee(inner, { getMasterKey: () => mk })
+    const vaultFolder = await rawInner.createFolder({ name: '금고' })
+    await markFolderE2ee(dbName, vaultFolder.id)
+    const hold1 = () => {
+      let release: () => void = () => {}
+      gate.open = new Promise<void>((resolve) => (release = resolve))
+      return release
+    }
+    return { rawInner, store, vaultFolderId: vaultFolder.id, hints, hold1 }
+  }
+
+  it('create 를 붙잡고 clearPlainCache → 잠긴 모양, 메모 없음. 붙잡지 않으면 열린 모양·힌트 있음', async () => {
+    const { store, vaultFolderId, hints, hold1 } = await setupGated()
+    const release = hold1()
+    const pending = store.create({ title: '비밀', content: BODY, lineEnding: 'lf', folderId: vaultFolderId })
+    await new Promise((r) => setTimeout(r, 20))
+    store.clearPlainCache()
+    release()
+    expect(await pending).toMatchObject({ e2ee: 'locked', title: '', content: '' })
+    await store.getAttachment('00000000000000aa')
+    expect(hints.at(-1)).toBeUndefined()
+
+    const free = await store.create({ title: '비밀', content: BODY, lineEnding: 'lf', folderId: vaultFolderId })
+    expect(free).toMatchObject({ e2ee: 'open', title: '비밀' })
+    await store.getAttachment('00000000000000aa')
+    expect(hints.at(-1)).toEqual({ ext: 'png' })
+  })
+
+  it('update 를 붙잡고 clearPlainCache → 잠긴 모양, 메모 없음', async () => {
+    const { store, vaultFolderId, hints, hold1 } = await setupGated()
+    const doc = await store.create({ title: '비밀', content: 'x', lineEnding: 'lf', folderId: vaultFolderId })
+    store.clearPlainCache()
+    const release = hold1()
+    const pending = store.update(doc.id, { content: BODY })
+    await new Promise((r) => setTimeout(r, 20))
+    store.clearPlainCache()
+    release()
+    expect(await pending).toMatchObject({ e2ee: 'locked', title: '', content: '' })
+    await store.getAttachment('00000000000000aa')
+    expect(hints.at(-1)).toBeUndefined()
+  })
+
+  it('setDocE2ee 옮기기를 붙잡고 clearPlainCache → 잠긴 모양, 메모 없음', async () => {
+    const { rawInner, store, hints, hold1 } = await setupGated()
+    const plain = await rawInner.create({ title: '비밀', content: BODY, lineEnding: 'lf' })
+    const release = hold1()
+    const pending = store.setDocE2ee!(plain.id, { e2ee: true, title: '비밀', content: BODY })
+    await new Promise((r) => setTimeout(r, 20))
+    store.clearPlainCache()
+    release()
+    expect((await pending).doc).toMatchObject({ e2ee: 'locked', title: '', content: '' })
+    await store.getAttachment('00000000000000aa')
+    expect(hints.at(-1)).toBeUndefined()
+  })
+})
