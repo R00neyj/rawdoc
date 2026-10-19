@@ -333,7 +333,7 @@ type YjsMetaRow = {
 
 ```
 wrangler.jsonc           Worker 스크립트·D1(DB)·R2(BUCKET)·정적 자산(ASSETS) 바인딩 (F-204), Durable Object `DOC_ROOM`(클래스 `DocRoom`) 바인딩·마이그레이션 (F-304), Rate Limiting `WRITE_LIMITER` (F-2026)
-migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213, F-309 에서 삭제) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057) 0015 notifications_recipient_order(F-2075) 0016 shared_indexes(F-2058) 0017 push_subscriptions(F-3003) 0018 notifications_push(F-3005) 0019 push_quota 0020 user_css 0021 notifications_share(F-3012) 0022 drop_doc_locks(F-309) 0023 github(F-3013, F-3014 가 만듦 — 예정) 0025 access_requests(F-4005) 0026 request_tokens(F-4007) 0027 trash(F-3022 — `docs.deleted_at`·`deleted_by`·`deleted_path` 세 열, 셋 다 NULL 이면 살아 있음) 0028 oauth(F-4009 — 표 아홉, 아래 OAuth 표)
+migrations/              D1 마이그레이션. 0001 users(F-205) 0002 docs·folders(F-206) 0003 share_links(F-210) 0004 attachments(F-209) 0005 grants(F-212) 0006 doc_locks(F-213, F-309 에서 삭제) 0007 api_tokens(F-222) 0008 share_link_docs 0009 auth(F-2033) 0010 usage(F-2025) 0011 e2ee(F-401) 0012 comments(F-502) 0013 purge_jobs(F-2038) 0014 notif_rev(F-2057) 0015 notifications_recipient_order(F-2075) 0016 shared_indexes(F-2058) 0017 push_subscriptions(F-3003) 0018 notifications_push(F-3005) 0019 push_quota 0020 user_css 0021 notifications_share(F-3012) 0022 drop_doc_locks(F-309) 0023 github(F-3013, F-3014 가 만듦 — 예정) 0025 access_requests(F-4005) 0026 request_tokens(F-4007) 0027 trash(F-3022 — `docs.deleted_at`·`deleted_by`·`deleted_path` 세 열, 셋 다 NULL 이면 살아 있음) 0028 oauth(F-4009 — 표 아홉, 아래 OAuth 표) 0029 attachment_docs(F-4012)
 worker/
   index.ts               fetch 진입점, 라우트 표 { method, path, handler }
   http.ts                JSON 응답 도우미
@@ -394,6 +394,7 @@ scripts/admin-github.mjs                              GitHub 기능 켜기·끄�
 - 로컬 개발: `.dev.vars` 키 — `BETTER_AUTH_URL=http://localhost:8790`, `BETTER_AUTH_SECRET`(32바이트 난수 base64), `DEV_AUTH_EMAIL=…@example.com`(우회를 쓸 때), 실제 OAuth 를 로컬에서 시험할 때만 `GOOGLE_CLIENT_ID`·`GOOGLE_CLIENT_SECRET`·`GITHUB_CLIENT_ID`·`GITHUB_CLIENT_SECRET`(로컬 앱 값). 우회는 `BETTER_AUTH_URL` 이 `http:` localhost 이고 `DEV_AUTH_EMAIL` 이 `@example.com` 으로 끝날 때만 켜진다(`origin.ts` `isDevBypass`). `wrangler.jsonc` `vars` 의 `DEV_AUTH_EMAIL` 은 빈 값 — `.dev.vars` 가 덮는다 (F-2033 5.2·8.1·11장 3번). 포트는 `dev:worker` 8790, 에이전트 병렬 슬롯 8791~
 - GitHub 파일 연결(F-3013 3.1, 예정): `GITHUB_APP_CLIENT_ID`·`GITHUB_APP_SLUG` 는 `vars`(운영 값 커밋), `GITHUB_APP_CLIENT_SECRET`·`GITHUB_TOKEN_KEY`(토큰 암호 키, 32바이트 난수 base64)는 `secrets.required` — 이 둘 없이 배포하면 실패한다. 로그인용 `GITHUB_CLIENT_*` 와 다른 앱이다. 로컬은 따로 등록한 로컬 앱 값으로 `.dev.vars` 에 네 이름 모두
 - 서버 문서의 첨부 참조 = 원문의 `attachments/{id}` 글자 ∪ 그 문서 `github_images` 중 본문에 경로가 남은 대응. `worker/attachmentGc.ts`·`isAttachmentInUse`·첨부 공개 권한 검사가 이 합을 쓴다 (F-3013 3.8 ①②, F-3017, 예정)
+- 남의 첨부 읽기(F-4012): 평문(`e2ee = 0`) 첨부이고 주인이 문서 주인이거나 `attachment_docs` 에 그 문서 주인의 문서로 올라간 기록이 있을 때만 (`findDocAttachment`). 원문 참조와 조회 권한은 따로 본다
 - GitHub 그림 프록시(`/api/docs/:id/github/img`, `/pub/…/gh`) 응답 머리: 서버가 판정한 `Content-Type`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox`, `Cross-Origin-Resource-Policy: same-origin`, `Content-Disposition: inline`, `Cache-Control: private, max-age=300` (F-3013 3.8, F-3017, 예정)
 - 클라이언트: 로그인 상태면 `store.kind === 'server'` (F-207). IndexedDB `md-remote` 에 캐시·보낼 목록·첨부. 로컬 `md-docs` 는 로그아웃 상태와 이관(F-208)에 쓴다
 - 서버 저장소 전용 `lastSharedList()`·`lastServerListAt()`, `list()` 진행 중 합치기(쓰기 세대)가 있다(F-2056)
@@ -413,6 +414,7 @@ scripts/admin-github.mjs                              GitHub 기능 켜기·끄�
 - `GET /api/me`·`GET /v1/me` → `{ id, email, blocked, warned }`(F-2028 7.1. 토큰 없음·틀림·폐기는 401). `/v1/me` 는 `handleMe` 를 그대로 붙인 라우트 한 줄, 명령줄 도구의 `whoami`·`--with-token` 확인에 쓴다 (F-2021 7.1)
 - `/v1` 문서 삭제·이동·폴더 삭제는 `/api` 본체와 같은 쓰기 문장을 쓰고, 금고가 끼면 403. `GET /v1/shared` 는 `handleGetShared` 를 `updatedAt` 내림차순으로만 바꿔 쓴다 (F-2050)
 - `GET /v1/attachments/:idext[?doc=]` 는 `handleGetAttachment` 를 그대로 붙인 라우트 한 줄 — 내 첨부, 또는 볼 수 있는 문서(`doc`)가 참조하는 첨부. 금고 첨부는 암호문 그대로. 명령줄 도구 `images` 가 쓴다 (2026-10-16 small)
+- `POST /v1/attachments[?doc=]` 는 `handleCreateAttachmentV1` 가 받는다. `doc` 가 있고 그 문서에 edit 권한이 있으면 평문 첨부의 연결 기록을 첨부 `INSERT` 와 같은 batch 에 넣는다 (F-4012 3장). 명령줄 도구 `upload --doc` 가 쓴다
 - `GET /v1/search?q=&folder=` → `{ docs: [{ id, title, folderId, version, updatedAt, lines: [{ line, text }], matchedLines }], truncated, e2eeSkipped }`. 내 문서만(folder 는 하위 포함), 제목·본문 부분 문자열, 영문 대소문자만 무시, 금고 문서는 개수만. q 1~200자(400 `field: 'q'`), 문서 200개·문서당 5줄·줄 200자 (`worker/v1Search.ts`, 2026-10-10 small)
 - 알림 리비전: 알림 행을 넣고·읽고·지우는 batch 는 받는 사람 `users.notif_rev` 를 같은 batch 에서 올린다 (F-2057 3.5)
 

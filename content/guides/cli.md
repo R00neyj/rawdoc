@@ -53,7 +53,7 @@ rawdoc login --with-token < token.txt
 | `rawdoc put <id> 노트.md --base-version auto` | 문서 고치기(성공하면 웹 주소도 찍음) |
 | `rawdoc merge <id> 노트.md` | 그 사이 바뀐 서버 문서를 내 파일에 합치기 |
 | `rawdoc folders` · `rawdoc mkdir <이름> [--parent <폴더id\|경로>]` | 폴더 보기·만들기(`--parent`를 빼면 맨 위에 만듦) |
-| `rawdoc upload 그림.png` | 이미지를 올리고 붙일 마크다운 받기(PNG·JPEG 는 더 작아지면 WebP 로 바꿔 올림) |
+| `rawdoc upload 그림.png [--doc <문서id>]` | 이미지를 올리고 붙일 마크다운 받기(PNG·JPEG 는 더 작아지면 WebP 로 바꿔 올림. 공유받은 문서에 넣을 그림은 `--doc` 으로 그 문서 id 를 준다) |
 | `rawdoc link <id>` | 읽기 전용 링크 만들기 |
 | `rawdoc mv <id> --folder <폴더id\|경로>` | 문서 옮기기(`--root` 면 맨 위로) |
 | `rawdoc rm <id> --yes` · `rawdoc rmdir <id> --yes` | 문서·폴더 지우기(지운 문서는 휴지통으로, 웹에서 30일 안에 복원. `rmdir` 은 안의 것을 위 폴더로 올리고, `--all` 이면 하위 폴더도 지우고 문서는 휴지통으로) |
