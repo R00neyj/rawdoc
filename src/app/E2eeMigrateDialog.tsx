@@ -49,6 +49,7 @@ export default function E2eeMigrateDialog({ open, userId, e2ee, onClose, onReady
   const [note, setNote] = useState<NoteKind>('other')
   const inputRef = useRef<HTMLInputElement | null>(null)
   const pendingRef = useRef<{ localKey: CryptoKey; bundle: string } | null>(null)
+  const runRef = useRef(0)
 
   const [trackedOpen, setTrackedOpen] = useState(open)
   if (open !== trackedOpen) {
@@ -89,16 +90,20 @@ export default function E2eeMigrateDialog({ open, userId, e2ee, onClose, onReady
   }, [step, e2ee.status, e2ee.keyring, onReady])
 
   function handleClose() {
+    runRef.current += 1 // 진행 중인 handleStep1 결과를 버린다 — 닫으면 아무것도 넘기지 않는다 (2.4)
     onClose()
   }
 
   async function handleStep1(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (busy) return
+    const run = ++runRef.current
+    const closed = () => run !== runRef.current
     setBusy(true)
     setError(null)
     try {
       const row = await readE2eeRow('local')
+      if (closed()) return
       if (!row) {
         setError(actionErrorText('bad-bundle', 'read'))
         return
@@ -113,14 +118,17 @@ export default function E2eeMigrateDialog({ open, userId, e2ee, onClose, onReady
       let localKey: CryptoKey
       try {
         const opened = await openLocalBundleWithPassword(bundle, password)
+        if (closed()) return
         localKey = opened.masterKey
       } catch (err) {
+        if (closed()) return
         setError(actionErrorText(err instanceof E2eeError ? err.code : 'failed', 'read'))
         return
       }
 
       // 계정 금고 만들기를 먼저 시도한다 — 있으면 409(conflict) (2.1)
       const result = await createAccountBundleSource(userId).create(row.bundle)
+      if (closed()) return
       if (result.kind === 'ok') {
         void e2ee.openWithPassword(password) // 실패해도 이관은 계속한다 (2.1)
         onReady({ mode: 'adopt', localKey, accountKey: localKey }, row.bundle)
@@ -133,6 +141,7 @@ export default function E2eeMigrateDialog({ open, userId, e2ee, onClose, onReady
         }
         // 방금 받은 로컬 금고 암호로 먼저 한 번 해 본다(11장 Q2) — 두 금고 암호가 같으면 더 묻지 않는다
         const err = await e2ee.openWithPassword(password)
+        if (closed()) return
         if (err === null) {
           onReady({ mode: 'rewrap', localKey, accountKey: e2ee.keyring.getMasterKey()! }, row.bundle)
           return
