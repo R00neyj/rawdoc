@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const hoisted = vi.hoisted(() => ({ cleanups: [] as (() => void)[] }))
+const hoisted = vi.hoisted(() => ({ cleanups: [] as (() => void)[], refs: null as { current: unknown }[] | null, refIndex: 0 }))
 
+// refs 를 주면 다시 그려도 같은 ref 를 돌려준다(호출 순서로 짝짓는다)
 vi.mock('react', () => ({
   useEffect: (fn: () => (() => void) | void) => { const c = fn(); if (c) hoisted.cleanups.push(c) },
-  useRef: <T,>(v: T) => ({ current: v }),
+  useRef: <T,>(v: T) => (hoisted.refs ? (hoisted.refs[hoisted.refIndex++] ??= { current: v }) : { current: v }),
   useCallback: <T,>(fn: T) => fn,
 }))
 
@@ -84,5 +85,45 @@ describe('useTitleCommit 탭이 숨겨지거나 닫힐 때 공백 제목 되돌�
     hoisted.cleanups.forEach((c) => c())
     expect(removed).toContain('document:visibilitychange')
     expect(removed).toContain('window:pagehide')
+  })
+})
+
+// 요청 번호가 문서 사이에 하나였다 — A 저장 중 B 를 저장하면 A 의 updatedAt 이 버려졌다
+describe('useTitleCommit 요청 번호는 문서마다 따로 센다', () => {
+  beforeEach(() => {
+    hoisted.refs = []
+    vi.stubGlobal('document', { addEventListener: () => {}, removeEventListener: () => {} })
+    vi.stubGlobal('window', { addEventListener: () => {}, removeEventListener: () => {} })
+  })
+  afterEach(() => {
+    hoisted.refs = null
+    vi.unstubAllGlobals()
+  })
+
+  it('A 저장 뒤 B 를 저장해도 A 의 응답을 반영한다', async () => {
+    const a = Promise.withResolvers<{ id: string; updatedAt: number }>()
+    const update = vi.fn((id: string) => (id === 'A' ? a.promise : Promise.resolve({ id: 'B', updatedAt: 5 })))
+    const setDocs = vi.fn()
+    const render = (currentDocId: string) => {
+      hoisted.refIndex = 0
+      return attachTitleCommit({
+        store: { update },
+        currentDocId,
+        isRealtime: false,
+        setDocs,
+        showNotice: vi.fn(),
+        editorRef: ref(null),
+        titleSavingRef: ref(null),
+        docsRef: ref([]),
+        currentDocIdRef: ref(currentDocId),
+      } as unknown as UseTitleCommitOptions)
+    }
+    render('A').handleTitleChange('가')
+    render('B').handleTitleChange('나')
+    a.resolve({ id: 'A', updatedAt: 9 })
+    await a.promise
+    const docs = [{ id: 'A', title: '', updatedAt: 1 }, { id: 'B', title: '', updatedAt: 1 }]
+    const applied = setDocs.mock.calls.map(([fn]) => fn(docs) as { id: string; updatedAt: number }[])
+    expect(applied.some((list) => list.find((d) => d.id === 'A')?.updatedAt === 9)).toBe(true)
   })
 })

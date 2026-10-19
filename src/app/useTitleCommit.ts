@@ -26,7 +26,8 @@ export type UseTitleCommitResult = {
 
 export function useTitleCommit(options: UseTitleCommitOptions): UseTitleCommitResult {
   const { store, currentDocId, isRealtime, setDocs, showNotice, editorRef, titleSavingRef, docsRef, currentDocIdRef } = options
-  const titleRequestIdRef = useRef(0)
+  // 문서마다 따로 센다 — 하나로 세면 A 저장 중 B 를 저장할 때 A 의 응답이 버려진다
+  const titleRequestIdsRef = useRef(new Map<string, number>())
 
   function commitTitle(value: string) {
     setDocs((prev) => prev.map((d) => (d.id === currentDocId ? { ...d, title: value } : d)))
@@ -35,9 +36,10 @@ export function useTitleCommit(options: UseTitleCommitOptions): UseTitleCommitRe
       editorRef.current?.writeLiveTitle(value)
       return
     }
-    const requestId = ++titleRequestIdRef.current
-    const docId = currentDocId
-    const saving = store.update(docId!, { title: value })
+    const docId = currentDocId!
+    const requestId = (titleRequestIdsRef.current.get(docId) ?? 0) + 1
+    titleRequestIdsRef.current.set(docId, requestId)
+    const saving = store.update(docId, { title: value })
     // 잠그기 flush 단계가 기다린다 — 끝나면 비운다 (F-405 7.2)
     titleSavingRef.current = saving
     const clearSaving = () => {
@@ -46,7 +48,7 @@ export function useTitleCommit(options: UseTitleCommitOptions): UseTitleCommitRe
     saving.then(clearSaving, clearSaving)
     saving
       .then((updated) => {
-        if (requestId !== titleRequestIdRef.current) return // 마지막 값만 반영 (F-111 3.4)
+        if (requestId !== titleRequestIdsRef.current.get(docId)) return // 마지막 값만 반영 (F-111 3.4)
         setDocs((prev) =>
           sortByUpdatedAtDesc(
             prev.map((d) => (d.id === updated.id ? { ...d, updatedAt: updated.updatedAt } : d)),
