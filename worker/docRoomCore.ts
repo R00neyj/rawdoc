@@ -602,7 +602,7 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     if (skipCheck) return
     await this.pushQuotaWarning()
     if (this.lastRevalidate === null || Date.now() - this.lastRevalidate >= REVALIDATE_INTERVAL_MS) {
-      await this.revalidateConnections()
+      await this.checkConnections()
     }
   }
 
@@ -875,8 +875,14 @@ export class DocRoomCore<C extends RoomConnection = RoomConnection> {
     return this.push
   }
 
-  // 9.3 — 불러오기 없이 연결 상태와 D1 한 줄만으로
+  // 권한 변경 RPC — 알림 대상도 60초 보관을 버리고 다시 읽는다
   async revalidateConnections(email?: string): Promise<void> {
+    this.people = null
+    await this.checkConnections(email)
+  }
+
+  // 9.3 — 불러오기 없이 연결 상태와 D1 한 줄만으로
+  private async checkConnections(email?: string): Promise<void> {
     if (this.gone) return
     const targets = [...this.host.connections()].filter((c) => !email || readConnState(c.state)?.email === email)
     if (targets.length === 0) return

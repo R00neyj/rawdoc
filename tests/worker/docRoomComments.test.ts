@@ -505,6 +505,20 @@ describe('F-502 D15 접근 집합 60초 보관', () => {
     expect(notes(sqlDb)).toHaveLength(4)
     expect(state.prepares.filter((s) => s.includes('FROM grants'))).toHaveLength(1)
   })
+
+  it('revalidateConnections 뒤에는 60초 안이어도 접근 집합을 다시 읽는다', async () => {
+    const { DB, sqlDb, state } = setup()
+    const room = makeRoom(DB)
+    await room.core.load()
+    put(room.doc, conn(BOB), (m) => m.set('r1', entryAt(room.content, 'target', BOB, { body: '@carol@example.com 하나', mentions: ['carol@example.com'] })))
+    await room.core.flush()
+    await room.core.revalidateConnections('carol@example.com')
+    vi.setSystemTime(1_030_000)
+    put(room.doc, conn(BOB), (m) => m.set('r2', entryAt(room.content, 'intro', BOB, { body: '@carol@example.com 둘', mentions: ['carol@example.com'] })))
+    await room.core.flush()
+    expect(notes(sqlDb)).toHaveLength(4)
+    expect(state.prepares.filter((s) => s.includes('FROM grants'))).toHaveLength(2)
+  })
 })
 
 describe('F-502 D16 스냅숏 도중 문서 삭제', () => {
