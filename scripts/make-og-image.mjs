@@ -115,15 +115,21 @@ svg { width: 1em; height: 1em; fill: currentColor; display: block; }
 </body>
 </html>`
 
-const browser = await chromium.launch({ channel: 'chrome' })
-const page = await browser.newPage({ viewport: OG_SIZE, deviceScaleFactor: 2 })
 // file:// 서체·CSS 를 읽으려면 about:blank 가 아니라 파일로 열어야 한다
 const tmp = mkdtempSync(join(tmpdir(), 'og-image-'))
-const htmlPath = join(tmp, 'og-image.html')
-writeFileSync(htmlPath, html)
-await page.goto(pathToFileURL(htmlPath).href)
-await page.evaluate(() => document.fonts.ready)
-await page.screenshot({ path: outPath })
-await browser.close()
-rmSync(tmp, { recursive: true, force: true })
+try {
+  const browser = await chromium.launch({ channel: 'chrome' })
+  try {
+    const page = await browser.newPage({ viewport: OG_SIZE, deviceScaleFactor: 2 })
+    const htmlPath = join(tmp, 'og-image.html')
+    writeFileSync(htmlPath, html)
+    await page.goto(pathToFileURL(htmlPath).href)
+    await page.evaluate(() => document.fonts.ready)
+    await page.screenshot({ path: outPath })
+  } finally {
+    await browser.close()
+  }
+} finally {
+  rmSync(tmp, { recursive: true, force: true })
+}
 console.log(outPath)

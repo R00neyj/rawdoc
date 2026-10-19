@@ -1,6 +1,7 @@
 // 빌드·preview 서버 기동·대기·종료 공용 (specs/features/F-160.md 2.5)
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { BIN } from './nodeBin.mjs'
 
 async function isResponding(port) {
   try {
@@ -31,8 +32,8 @@ export async function ensureServer({ port, dist, build }) {
 
   // stdout 은 measure.mjs 의 JSON 출력 전용이라 자식 프로세스 로그는 섞지 않는다
   if (build || !existsSync(dist)) {
-    const result = spawnSync('npx', ['vite', 'build', '--outDir', dist], {
-      shell: true,
+    const result = spawnSync(process.execPath, [BIN.vite, 'build', '--outDir', dist], {
+      shell: false,
       stdio: ['ignore', 'ignore', 'pipe'],
       encoding: 'utf-8',
     })
@@ -41,8 +42,8 @@ export async function ensureServer({ port, dist, build }) {
     }
   }
 
-  const child = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort', '--outDir', dist], {
-    shell: true,
+  const child = spawn(process.execPath, [BIN.vite, 'preview', '--port', String(port), '--strictPort', '--outDir', dist], {
+    shell: false,
     stdio: ['ignore', 'ignore', 'pipe'],
   })
   let stderrTail = ''

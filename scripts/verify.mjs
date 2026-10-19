@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // lint·단위·build(·e2e) 를 묶어 돌리고 요약만 보여준다 (F-160 2.2·2.7)
 import { spawnSync } from 'node:child_process'
+import { BIN } from './lib/nodeBin.mjs'
 
 function parseArgs(argv) {
   const opts = { e2e: false, repeat: 1, dryRun: false, dist: 'dist', e2ePort: 4317, e2eDist: 'dist', workers: null }
@@ -25,23 +26,23 @@ function tail40(output) {
   return output.split(/\r?\n/).slice(-40).join('\n')
 }
 
-function runStep(cmd, args, env) {
-  const result = spawnSync(cmd, args, { shell: true, encoding: 'utf-8', env: { ...process.env, ...env } })
+function runStep(bin, args, env) {
+  const result = spawnSync(process.execPath, [BIN[bin], ...args], { shell: false, encoding: 'utf-8', env: { ...process.env, ...env } })
   return { ok: result.status === 0, output: (result.stdout ?? '') + (result.stderr ?? '') }
 }
 
 function buildSteps(opts) {
   const steps = [
-    { name: 'lint', cmd: 'npx', args: ['eslint', '.'] },
-    { name: '단위', cmd: 'npx', args: ['vitest', 'run'] },
-    { name: 'build', cmd: 'npx', args: ['vite', 'build', '--outDir', opts.dist] },
+    { name: 'lint', bin: 'eslint', args: ['.'] },
+    { name: '단위', bin: 'vitest', args: ['run'] },
+    { name: 'build', bin: 'vite', args: ['build', '--outDir', opts.dist] },
   ]
   if (opts.e2e) {
     for (let round = 1; round <= opts.repeat; round++) {
       steps.push({
         name: `e2e ${round}회차`,
-        cmd: 'npx',
-        args: ['playwright', 'test', ...(opts.workers ? [`--workers=${opts.workers}`] : [])],
+        bin: 'playwright',
+        args: ['test', ...(opts.workers ? [`--workers=${opts.workers}`] : [])],
         env: {
           E2E_PORT: String(opts.e2ePort),
           E2E_DIST: opts.e2eDist,
@@ -83,14 +84,14 @@ async function main() {
   if (opts.dryRun) {
     for (const step of steps) {
       const envStr = step.env ? ' ' + Object.entries(step.env).map(([k, v]) => `${k}=${v}`).join(' ') : ''
-      console.log(`${step.name}: ${envStr}${envStr ? ' ' : ''}${step.cmd} ${step.args.join(' ')}`)
+      console.log(`${step.name}: ${envStr}${envStr ? ' ' : ''}npx ${step.bin} ${step.args.join(' ')}`)
     }
     return
   }
 
   const results = []
   for (const step of steps) {
-    results.push({ ...step, ...runStep(step.cmd, step.args, step.env) })
+    results.push({ ...step, ...runStep(step.bin, step.args, step.env) })
   }
 
   const anyFail = results.some((r) => !r.ok)

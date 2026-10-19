@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // e2e 일부만 반복 실행한다 (F-160 2.3·2.7)
 import { spawnSync } from 'node:child_process'
+import { BIN } from './lib/nodeBin.mjs'
 import { existsSync as exists, statSync as stat, readdirSync as readdir } from 'node:fs'
 
 // playwright 쪽 플래그 중 값을 따로 받는 것들. 이 목록에 있으면 다음 토큰까지 함께 넘긴다
@@ -67,7 +68,7 @@ async function main() {
   let build = opts.build
   if (build === null) build = !shouldSkipBuild(opts.dist)
 
-  const args = ['playwright', 'test']
+  const args = ['test']
   args.push(...opts.files)
   // 검색어 여러 개는 playwright 가 정규식으로 읽으므로 | 로 잇는다
   if (opts.greps.length) args.push('-g', opts.greps.join('|'))
@@ -82,14 +83,12 @@ async function main() {
 
   if (opts.dryRun) {
     const shown = args.map((a) => (a.includes(' ') ? `"${a}"` : a))
-    console.log(`npx ${shown.join(' ')}`)
+    console.log(`npx playwright ${shown.join(' ')}`)
     console.log(JSON.stringify(env))
     return
   }
 
-  // shell:true 는 인자를 알아서 인용해주지 않는다 — 공백 있는 인자(검색어)가 쪼개지지 않게 직접 인용한다
-  const quoted = args.map((a) => (/[\s|&<>^]/.test(a) ? `"${a}"` : a))
-  const result = spawnSync('npx', quoted, { shell: true, encoding: 'utf-8', env: { ...process.env, ...env } })
+  const result = spawnSync(process.execPath, [BIN.playwright, ...args], { shell: false, encoding: 'utf-8', env: { ...process.env, ...env } })
   const output = (result.stdout ?? '') + (result.stderr ?? '')
   const { passed, failed, names, firstErrors } = summarize(output)
 
