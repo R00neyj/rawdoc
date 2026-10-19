@@ -36,28 +36,41 @@ export function useSharesPage({ sharesOpen, account, accessRequestKey, showNotic
   const [sharesRequests, setSharesRequests] = useState<AccessRequestRow[]>([])
   const [busyRequestIds, setBusyRequestIds] = useState<string[]>([])
   const [reloadTick, setReloadTick] = useState(0)
-  const loadedRef = useRef(false)
+  const loadedRef = useRef<string | null>(null) // 목록을 이미 받은 세션 키
+
+  const sessionKey = sharesOpen && account.state === 'in' ? account.id : null
+  // 다른 계정으로 바뀌면 남의 목록을 비우고 처음 부르기로 되돌린다
+  const [prevSessionKey, setPrevSessionKey] = useState(sessionKey)
+  if (prevSessionKey !== sessionKey) {
+    setPrevSessionKey(sessionKey)
+    if (prevSessionKey !== null && sessionKey !== null) {
+      setSharesLinks([])
+      setSharesGrants([])
+      setSharesRequests([])
+      setBusyRequestIds([])
+    }
+  }
 
   // ----- 공유 관리 페이지 (specs/features/F-243.md 3.4) — 들어올 때마다 새로 부른다, 로그인 아니면 요청하지 않는다 -----
   // 들어온 뒤 다시 부를 때(새 권한 요청·승인)는 목록을 지우지 않고 바꿔 끼운다
   useEffect(() => {
-    if (!sharesOpen || account.state !== 'in') {
-      loadedRef.current = false
+    if (sessionKey === null) {
+      loadedRef.current = null
       return
     }
     let cancelled = false
 
     async function loadShares() {
-      if (!loadedRef.current) setSharesLoading(true)
+      if (loadedRef.current !== sessionKey) setSharesLoading(true)
       try {
         const data = await listShares()
         if (cancelled) return
         setSharesLinks(data.links)
         setSharesGrants(data.grants)
         setSharesRequests(data.requests ?? [])
-        loadedRef.current = true
+        loadedRef.current = sessionKey
       } catch {
-        if (!cancelled && !loadedRef.current) {
+        if (!cancelled && loadedRef.current !== sessionKey) {
           setSharesLinks([])
           setSharesGrants([])
           setSharesRequests([])
@@ -71,7 +84,7 @@ export function useSharesPage({ sharesOpen, account, accessRequestKey, showNotic
     return () => {
       cancelled = true
     }
-  }, [sharesOpen, account.state, accessRequestKey, reloadTick])
+  }, [sessionKey, accessRequestKey, reloadTick])
 
   async function revokeShareLinkRow(link: ShareLinkRow) {
     if (link.targetType === 'doc') {

@@ -188,12 +188,27 @@ export function useNotifications(input: { enabled: boolean; blocked: boolean; ac
     }
   }
 
-  // 계정이 바뀌면 남의 ETag·서버 값·시작 시각을 버린다 (4.5)
+  // 계정이 바뀌면 화면 상태도 남의 것이므로 비운다
+  const sessionKey = enabled ? accountId : null
+  const [prevSessionKey, setPrevSessionKey] = useState(sessionKey)
+  if (prevSessionKey !== sessionKey) {
+    setPrevSessionKey(sessionKey)
+    if (prevSessionKey !== null && sessionKey !== null) {
+      setStatus('idle')
+      setItems([])
+      setUnread(null)
+    }
+  }
+
+  // 계정이 바뀌면 남의 ETag·서버 값·시작 시각·대기 읽음·멈춤을 버린다 (4.5)
   useEffect(() => {
     if (accountIdRef.current === accountId) return
     accountIdRef.current = accountId
     generationRef.current += 1
     inFlightRef.current = false
+    stoppedRef.current = false
+    everReceivedRef.current = false
+    pendingRef.current = []
     etagRef.current = null
     appliedRef.current = null
     lastServerRef.current = null
@@ -240,7 +255,7 @@ export function useNotifications(input: { enabled: boolean; blocked: boolean; ac
       clearTimer()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled])
+  }, [enabled, accountId])
 
   const refresh = useCallback((reason: 'open') => attemptFetch(reason), [attemptFetch])
 
