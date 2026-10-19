@@ -229,7 +229,7 @@ export async function handleCreateDocLinkV1(
   if (res.status !== 200 && res.status !== 201) return res
 
   const { token } = (await res.json()) as { token: string }
-  const url = `${new URL(request.url).origin}/#/p/${token}`
+  const url = `${new URL(request.url).origin}/p/${token}`
   return jsonResponse({ token, url }, res.status)
 }
 

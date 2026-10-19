@@ -1,4 +1,6 @@
 // CSP 정책의 원천 — worker·_headers·vite.config 가 함께 읽는다 (F-4001)
+import brand from '../../brand.config'
+
 export type CspKind = 'app' | 'landing' | 'login' | 'site' | 'api'
 export type CspMode = 'report-only' | 'enforce'
 export const CSP_MODE: CspMode = 'report-only'
@@ -52,5 +54,5 @@ export function createCspNonce(): string {
 }
 
 export function cspRevisionSource(): string {
-  return `${CSP_MODE}\n${buildCsp('app', { origin: 'https://rawdoc.app' })}`
+  return `${CSP_MODE}\n${buildCsp('app', { origin: new URL(brand.siteUrl).origin })}`
 }

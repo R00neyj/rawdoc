@@ -103,7 +103,7 @@ export const V1_EXAMPLES: {
     height: 2,
     markdown: '![이미지|center|2](attachments/0123456789abcdef.png)',
   },
-  link: { token: 'abc123', url: 'https://rawdoc.app/#/p/abc123' },
+  link: { token: 'abc123', url: 'https://example.com/p/abc123' },
   me: { id: 'user-1', email: 'a@b.com', blocked: false, warned: false },
   sharedDoc: {
     id: 'doc-1',

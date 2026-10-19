@@ -35,9 +35,8 @@ export type LiveSocket = {
   send(text: string): boolean
 }
 
-// y-partyserver 생성자는 창이 닫힐 때 내 awareness 를 거두려고 window 'unload' 리스너를 단다.
-// 크롬이 Permissions-Policy 로 unload 를 막아 콘솔 경고만 남고 핸들러는 돌지 않는다 — 만드는 동안만
-// addEventListener 를 가로채 같은 핸들러를 'pagehide' 로 옮긴다 (2026-09-30 사용자 콘솔 보고)
+// y-partyserver 가 다는 'unload' 리스너는 크롬 Permissions-Policy 에 막혀 돌지 않는다 —
+// 생성 중에만 addEventListener 를 가로채 'pagehide' 로 옮긴다 (2026-09-30 콘솔 보고)
 function createProvider(make: () => YProvider): { provider: YProvider; releaseLeave: () => void } {
   const win = typeof window === 'undefined' ? null : window
   if (!win) return { provider: make(), releaseLeave: () => {} }

@@ -146,9 +146,8 @@ function calloutRule(state: StateCore): void {
 
 md.core.ruler.before('inline', 'callout', calloutRule)
 
-// ----- 이미지 블록 (F-158.md 2.1) — src 는 출력하지 않고 data-attachment 로 id 만 남겨 Viewer 가 채운다 -----
-// sourceLine: F-295 9.3 — html_block 렌더러는 attrs 를 무시하므로 문자열에 직접 넣는다. null 이면(옵션 꺼짐) 지금과 바이트가 같다
-// 저장소 그림은 같은 틀에 data-attachment 대신 같은 출처 src·data-repo-path (F-2131 3.3)
+// ----- 이미지 블록 — src 대신 data-attachment id 를 남겨 Viewer 가 채우고, 저장소 그림은 src·data-repo-path (F-158 2.1, F-2131 3.3) -----
+// html_block 렌더러는 attrs 를 무시해 sourceLine 을 문자열에 직접 넣는다. null 이면 바이트가 같다 (F-295 9.3)
 type RepoImageBlock = Pick<ParsedImageBlock, 'align' | 'alt' | 'width'> & { repoPath: string; src: string }
 
 function renderImageBlockHtml(parsed: ParsedImageBlock | RepoImageBlock, sourceLine: number | null): string {

@@ -316,9 +316,8 @@ export function embedsToImageBlocks(markdown: string, blocks: ReadonlyMap<VaultE
   return out.join('\n')
 }
 
-// 원문 안 F-156 블록(줄 첫 칸 <div align= 줄 + 뒤 두 줄)을 문서 순서로. 3줄 뒤가 문서 끝이거나 빈 줄이어야 블록으로 본다 — 아니면 4줄째까지 이어지는 html_block 이라 보기 모드에서는 블록이 아니다 (F-2019.md 5.4)
-// 저장소 원문은 CRLF 일 수 있어 줄바꿈을 먼저 '\n' 으로 맞춘다 (리뷰 L3). line 은 맞춘 뒤 기준
-// 표준 이미지 한 줄(`![alt|center|300](attachments/…)`)도 form 'markdown' 으로 함께 넣는다 (F-2127 5.3)
+// F-156 블록과 표준 이미지 한 줄을 문서 순서로. 블록 뒤 줄이 빈 줄·문서 끝이어야 블록이다 (F-2019 5.4, F-2127 5.3)
+// CRLF 원문은 줄바꿈을 '\n' 으로 맞춘 뒤 센다 (리뷰 L3)
 export function listImageBlocks(markdown: string): Array<{ line: number; block: ParsedImageBlock; form: ImageForm }> {
   const lines = toEditorText(markdown).split('\n')
   const result: Array<{ line: number; block: ParsedImageBlock; form: ImageForm }> = []

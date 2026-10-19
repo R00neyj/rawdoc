@@ -7,6 +7,7 @@ export type Brand = {
   icon: string
   ogImage: string
   cliName: string
+  siteUrl: string
 }
 
 const brand: Brand = {
@@ -19,6 +20,8 @@ const brand: Brand = {
   ogImage: '/og-image.png',
   // CLI 실행 파일·npm 이름으로 쓸 소문자 식별자 (specs/features/F-2021.md 8장)
   cliName: 'rawdoc',
+  // 운영 사이트 주소. canonical·sitemap·CSP 리비전이 쓴다 (F-272 6.3)
+  siteUrl: 'https://rawdoc.app/',
 }
 
 export default brand

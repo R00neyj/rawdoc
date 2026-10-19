@@ -30,7 +30,7 @@ try {
 // 저장소마다 목록 하나 — 서브에이전트와 부모의 세션 id 가 같다는 보장이 없어 세션으로 가르지 않는다
 const repo = process.env.CLAUDE_PROJECT_DIR || payload?.cwd || process.cwd()
 const key = createHash('sha1').update(repo).digest('hex').slice(0, 16)
-const listFile = path.join(tmpdir(), `rawdoc-open-spec-${key}.txt`)
+const listFile = path.join(tmpdir(), `repo-open-spec-${key}.txt`)
 
 function readList() {
   try {

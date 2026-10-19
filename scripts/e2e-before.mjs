@@ -37,7 +37,7 @@ function git(args, cwd) {
 const opts = parseArgs(process.argv.slice(2))
 const root = process.cwd()
 const sha = git(['rev-parse', '--short', opts.ref])
-const dir = resolve(root, '..', `rawdoc-before-${sha}`)
+const dir = resolve(root, '..', `repo-before-${sha}`)
 const modules = resolve(dir, 'node_modules')
 
 // --remove 는 junction 을 먼저 끊는다. 먼저 끊지 않으면 디렉터리 삭제가 진짜 node_modules 로

@@ -608,6 +608,19 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
     [resolveFolderTarget, token],
   )
 
+  const selectDoc = useCallback(
+    (id: string) => {
+      if (id === activeDocId) {
+        setListOpen(false)
+        return
+      }
+      setActiveDocId(id)
+      history.pushState(null, '', `${location.pathname}${location.search}${formatPublicFolderHash(token, id)}`)
+      setListOpen(false)
+    },
+    [activeDocId, token],
+  )
+
   const onOpenWikiLink = useCallback(
     (target: string, heading?: string | null) => {
       const id = resolveFolderTarget(target)
@@ -686,16 +699,6 @@ function PublicFolderView({ token, docId, settings }: { token: string; docId?: s
           state: docErrorState(err),
         })
       })
-  }
-
-  function selectDoc(id: string) {
-    if (id === activeDocId) {
-      setListOpen(false)
-      return
-    }
-    setActiveDocId(id)
-    history.pushState(null, '', `${location.pathname}${location.search}${formatPublicFolderHash(token, id)}`)
-    setListOpen(false)
   }
 
   // 뒤로·앞으로 가기로 문서 id 가 바뀌면 그 문서를 연다

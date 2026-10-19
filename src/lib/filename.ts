@@ -1,5 +1,4 @@
-// 문서 제목 → 파일명 — 순수 함수 (specs/features/F-112.md 2.1)
-// 제어 문자(U+0000~U+001F, U+007F) 도 금지 문자라 의도적으로 포함한다
+// 문서 제목 → 파일명. 제어 문자도 의도적으로 금지 문자에 넣는다 (F-112 2.1)
 // eslint-disable-next-line no-control-regex
 const FORBIDDEN_CHARS = /[\\/:*?"<>|\x00-\x1F\x7F]/g
 // eslint-disable-next-line no-control-regex -- 옵시디언 이름은 위 금지 문자에 # ^ [ ] 를 더한 것이다 (F-2020.md 3.1)
