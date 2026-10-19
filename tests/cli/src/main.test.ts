@@ -1,5 +1,8 @@
 // F-2021 U16 (specs/features/F-2021.md 13.1, 4.7)
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { isEntryScript, main, type MainDeps } from '../../../cli/src/main'
 import { syntaxJson } from '../../../cli/src/syntax'
 import { cliCallbackUrl, parseCliLoginHash } from '../../../src/lib/cliLoginUrl'
@@ -837,6 +840,15 @@ describe('replace main()', () => {
     expect(r.deps.stderrLog.join('')).toBe('쓰기 한도에 걸려 5초 기다렸다가 다시 씁니다.\n바꿈: 문서 1개 1곳, 충돌 1개\n')
   })
 
+  it('--yes: 하루 한도로 멈추면 그 오류의 종료 코드(8)', async () => {
+    const r = run(['replace', 'foo', 'bar', '--yes'], {
+      hits: ['d1', 'd2'],
+      puts: [jsonResponse({ error: 'rate_limited', scope: 'day', limit: 1000, retryAfter: 3600 }, 429)],
+    })
+    expect(await main(r.deps)).toBe(8)
+    expect(r.calls.filter((c) => c.startsWith('PUT'))).toEqual(['PUT /v1/docs/d1'])
+  })
+
   it('200개를 넘으면 문서를 읽거나 쓰지 않고 종료 2. 0건은 종료 0, --json 은 결과 객체', async () => {
     const t = run(['replace', 'foo', 'bar', '--yes'], { hits: ['d1'], truncated: true })
     expect(await main(t.deps)).toBe(2)
@@ -1026,5 +1038,52 @@ describe('편집 흐름 main() — diff·판 번호 기록·merge·replace --id�
     }
     const lone = setup(['put', 'd1', 'a.md', '--force'], { files: { 'a.md': '<<<<<<< 내 파일 이라는 글\n' } })
     expect(await main(lone.deps)).toBe(0)
+  })
+})
+
+describe('저장 파일을 읽지 못할 때 main()', () => {
+  const token = 'rd_' + 'a'.repeat(43)
+  let dir: string
+  afterEach(async () => {
+    if (dir) await rm(dir, { recursive: true, force: true })
+  })
+
+  async function corruptSetup(argv: string[], overrides: Partial<MainDeps> = {}) {
+    dir = await mkdtemp(join(tmpdir(), 'rawdoc-cli-'))
+    const path = join(dir, 'md-editor', 'credentials.json')
+    await mkdir(join(dir, 'md-editor'))
+    await writeFile(path, '{broken', 'utf-8')
+    const deps = baseDeps({ argv, env: { XDG_CONFIG_HOME: dir }, ...overrides })
+    return { deps, path }
+  }
+
+  it('깨진 파일이면 logout·login 은 덮어쓰지 않고 종료 1', async () => {
+    const out = await corruptSetup(['logout'])
+    expect(await main(out.deps)).toBe(1)
+    expect(await readFile(out.path, 'utf-8')).toBe('{broken')
+    expect(out.deps.stderrLog.join('')).toContain(out.path)
+    await rm(dir, { recursive: true, force: true })
+
+    const login = await corruptSetup(['login', '--with-token'], {
+      readStdin: vi.fn(async () => new TextEncoder().encode(token)),
+      fetchImpl: (async () => jsonResponse({ email: 'a@b.com' })) as unknown as typeof fetch,
+    })
+    expect(await main(login.deps)).toBe(1)
+    expect(await readFile(login.path, 'utf-8')).toBe('{broken')
+  })
+
+  it('깨진 파일이어도 다른 명령은 안내만 하고 진행한다', async () => {
+    const r = await corruptSetup(['ls', '--json'])
+    r.deps.env = { XDG_CONFIG_HOME: dir, RAWDOC_TOKEN: token }
+    expect(await main(r.deps)).toBe(0)
+    expect(r.deps.stderrLog.join('')).toBe(`저장 파일을 읽지 못해 무시합니다: ${r.path}\n`)
+  })
+
+  it('파일 자리가 폴더라 읽지 못하면 file_read 로 종료 1', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'rawdoc-cli-'))
+    await mkdir(join(dir, 'md-editor', 'credentials.json'), { recursive: true })
+    const deps = baseDeps({ argv: ['logout'], env: { XDG_CONFIG_HOME: dir } })
+    expect(await main(deps)).toBe(1)
+    expect(deps.stderrLog.join('')).toContain('파일이 아니라 폴더입니다')
   })
 })

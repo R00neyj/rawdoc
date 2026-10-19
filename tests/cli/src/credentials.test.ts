@@ -79,6 +79,11 @@ describe('F-2021 U3 읽기·쓰기', () => {
     expect(corrupt).toBe(true)
   })
 
+  it('없는 파일 말고 읽기 오류는 빈 것으로 삼키지 않고 file_read 로 던진다', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'rawdoc-cli-'))
+    await expect(readCredentials(dir)).rejects.toMatchObject({ code: 'file_read', details: { path: dir, reason: 'EISDIR' } })
+  })
+
   it('withoutServerToken — 지우기, 없으면 removed:false', () => {
     const store = withServerToken({ version: 1, servers: {} }, 'https://rawdoc.app', {
       token: 'rd_a',

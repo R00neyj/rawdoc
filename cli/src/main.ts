@@ -18,6 +18,7 @@ import {
   withoutServerToken,
   withServerToken,
   writeCredentials,
+  type CredentialsRead,
   type StoredCredentials,
 } from './credentials'
 import { apiMe, type ClientConfig } from './client'
@@ -476,7 +477,20 @@ export async function main(deps: MainDeps): Promise<number> {
   const origin = serverResult.origin
 
   const credPath = credentialsPath({ platform: deps.platform, env: deps.env, homedir: deps.homedir })
-  const { store } = await readCredentials(credPath)
+  let creds: CredentialsRead
+  try {
+    creds = await readCredentials(credPath)
+  } catch (err) {
+    if (err instanceof CliError) return emitError(deps, command.global.json, err)
+    throw err
+  }
+  const { store, corrupt } = creds
+  if (corrupt && (command.name === 'login' || command.name === 'logout')) {
+    if (command.global.json) return emitError(deps, true, new CliError('file_read', { path: credPath, reason: 'corrupt' }))
+    deps.out.stderr(`저장 파일을 읽지 못해 덮어쓰지 않습니다: ${credPath} — 고치거나 지운 뒤 다시 실행하세요.\n`)
+    return exitCodeFor('file_read')
+  }
+  if (corrupt) deps.out.stderr(`저장 파일을 읽지 못해 무시합니다: ${credPath}\n`)
 
   if (command.name === 'login') {
     return runLoginCommand(command, deps, origin, credPath, store)
@@ -562,7 +576,7 @@ export async function main(deps: MainDeps): Promise<number> {
         else deps.out.stdout(humanReplaceList(result.docs, brand.cliName, ENV_PREFIX))
         if (result.stopped) emitError(deps, command.global.json, result.stopped)
         if (!command.global.json) deps.out.stderr(humanReplaceSummary(result, command.find))
-        return replaceExitCode(result.docs)
+        return result.stopped ? exitCodeFor(result.stopped.code) : replaceExitCode(result.docs)
       }
       case 'info': {
         const info = await commands.info(cfg, command.id)

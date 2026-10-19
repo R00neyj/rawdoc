@@ -1,6 +1,7 @@
 // 저장 위치 계산·읽기·쓰기 (specs/features/F-2021.md 5.6)
 import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { CliError } from './output'
 
 export type StoredCredentialEntry = { token: string; email: string; savedAt: string }
 export type StoredCredentials = { version: 1; servers: Record<string, StoredCredentialEntry> }
@@ -21,13 +22,17 @@ function emptyStore(): StoredCredentials {
   return { version: 1, servers: {} }
 }
 
-// 모르는 version·깨진 JSON 이면 빈 것으로 본다 — corrupt 가 true 면 호출부가 안내를 낸다
-export async function readCredentials(path: string): Promise<{ store: StoredCredentials; corrupt: boolean }> {
+export type CredentialsRead = { store: StoredCredentials; corrupt: boolean }
+
+// 모르는 version·깨진 JSON 이면 빈 것 + corrupt. 없는 파일 말고 읽기 오류는 file_read 로 던진다
+export async function readCredentials(path: string): Promise<CredentialsRead> {
   let text: string
   try {
     text = await readFile(path, 'utf-8')
-  } catch {
-    return { store: emptyStore(), corrupt: false }
+  } catch (err) {
+    const reason = err && typeof err === 'object' && 'code' in err && typeof err.code === 'string' ? err.code : undefined
+    if (reason === 'ENOENT') return { store: emptyStore(), corrupt: false }
+    throw new CliError('file_read', { path, reason })
   }
   try {
     const parsed = JSON.parse(text) as Partial<StoredCredentials>
