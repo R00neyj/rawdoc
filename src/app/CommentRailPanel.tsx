@@ -141,6 +141,7 @@ export default function CommentRailPanel({
     })
   }
 
+  const cardIdsKey = cards.map((c) => c.id).join('\n')
   useEffect(() => {
     if (mode !== 'rail' || typeof ResizeObserver === 'undefined') return
     const el = trackRef.current
@@ -163,7 +164,7 @@ export default function CommentRailPanel({
     })
     for (const child of Array.from(el.children)) ro.observe(child)
     return () => ro.disconnect()
-  }, [mode, cards.length])
+  }, [mode, cardIdsKey])
 
   // ----- 5.3 스크롤 따라가기 -----
   useLayoutEffect(() => {
