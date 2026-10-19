@@ -626,6 +626,8 @@ const E2EE_ROW_OPEN_TIMEOUT_MS = 5_000
 
 async function openE2eeDb(dbName: string): Promise<IDBPDatabase> {
   let opened: IDBPDatabase | undefined
+  let timedOut = false
+  let timer: ReturnType<typeof setTimeout> | undefined
   const openPromise = openDB(dbName, DB_VERSION, {
     upgrade(database, oldVersion, _newVersion, transaction) {
       upgradeMdDocs(database, oldVersion, transaction)
@@ -635,11 +637,17 @@ async function openE2eeDb(dbName: string): Promise<IDBPDatabase> {
       opened?.close()
     },
   }).then((db) => {
+    clearTimeout(timer)
     opened = db
+    // 시간 초과로 이미 버려진 열기 — 아무도 닫지 않으니 여기서 닫는다
+    if (timedOut) db.close()
     return db
   })
   const timeout = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error('e2ee row: idb open timed out')), E2EE_ROW_OPEN_TIMEOUT_MS)
+    timer = setTimeout(() => {
+      timedOut = true
+      reject(new Error('e2ee row: idb open timed out'))
+    }, E2EE_ROW_OPEN_TIMEOUT_MS)
   })
   return Promise.race([openPromise, timeout])
 }

@@ -573,6 +573,47 @@ describe('idbStore', () => {
     })
   })
 
+  describe('금고 키 묶음 행 열기 타임아웃 (small)', () => {
+    it('제때 열리면 타이머가 남지 않는다', async () => {
+      const dbName = freshDbName()
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        expect(await readE2eeRow('local', dbName)).toBeNull()
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('시간이 지난 뒤 늦게 열린 연결은 곧바로 닫는다', async () => {
+      const dbName = freshDbName()
+      // blocking 콜백 없는 옛 연결이 업그레이드를 막는다
+      const v1db = await openDB(dbName, 1, {
+        upgrade(database) {
+          database.createObjectStore('docs', { keyPath: 'id' })
+          database.createObjectStore('meta', { keyPath: 'key' })
+        },
+      })
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      let reading: Promise<unknown>
+      try {
+        reading = readE2eeRow('local', dbName)
+        vi.advanceTimersByTime(5_000)
+      } finally {
+        vi.useRealTimers()
+      }
+      await expect(reading).rejects.toThrow('timed out')
+
+      v1db.close()
+      const closeSpy = vi.spyOn(IDBDatabase.prototype, 'close')
+      try {
+        await vi.waitFor(() => expect(closeSpy).toHaveBeenCalled())
+      } finally {
+        closeSpy.mockRestore()
+      }
+    })
+  })
+
   describe('로그인 이관 표시 (F-408.md 3.1 I1·I2)', () => {
     it('I1: markLocalE2eeMigrated', async () => {
       const dbName = freshDbName()
