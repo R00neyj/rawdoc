@@ -20,6 +20,12 @@ function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+function escapeXml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+}
+
 function render404(appCssHref: string): string {
   const header = renderSiteHeader({ brandName: brand.name, brandIcon: brand.icon, appCta: 'link' })
   const footer = renderSiteFooter({ brandName: brand.name })
@@ -53,7 +59,7 @@ function render404(appCssHref: string): string {
 function renderSitemap(urls: string[], lastmodByUrl: Map<string, string>): string {
   const entries = urls
     .map((url) => {
-      const loc = new URL(url, SITE_URL).href
+      const loc = escapeXml(new URL(url, SITE_URL).href)
       const lastmod = lastmodByUrl.get(url)
       return lastmod ? `  <url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>` : `  <url><loc>${loc}</loc></url>`
     })
@@ -119,7 +125,8 @@ export function buildSite(input: SiteInput): Record<string, string> {
     out[urlToFile(url)] = page.html
     urls.push(url)
     pageLinks.set(url, { url, title: page.title, summary: page.summary })
-    lastmodByUrl.set(url, page.updated ?? page.date ?? formatDate(input.builtAt))
+    const frontmatterDate = [page.updated, page.date].find((d) => d !== undefined && ISO_DATE.test(d))
+    lastmodByUrl.set(url, frontmatterDate ?? formatDate(input.builtAt))
   }
 
   const generated = new Set(urls)

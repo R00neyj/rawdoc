@@ -148,6 +148,26 @@ describe('F-273 A1 글 하나로 페이지·sitemap 이 난다', () => {
   })
 })
 
+describe('sitemap lastmod 는 YYYY-MM-DD 만', () => {
+  it('형식이 어긋난 updated 는 버리고 date, 그것도 없으면 빌드 날짜. 마크업이 새지 않는다', () => {
+    SITE_NAV.length = 0
+    SITE_FOOTER_LINKS.length = 0
+    SITE_NAV.push({ path: '/changelog', label: '체인지로그' }, { path: '/privacy', label: '개인정보' })
+    try {
+      const content = {
+        'changelog.md': '---\ntitle: 체인지로그\nupdated: 2026-09-21</lastmod><x>\ndate: 2026-09-19\n---\n본문\n',
+        'legal/privacy.md': '---\ntitle: 개인정보\nupdated: 2026/09/21\n---\n본문\n',
+      }
+      const out = buildSite({ content, appCssHref, builtAt })
+      expect(out['sitemap.xml']).not.toContain('<x>')
+      expect(out['sitemap.xml']).toContain('<url><loc>https://rawdoc.app/changelog</loc><lastmod>2026-09-19</lastmod></url>')
+      expect(out['sitemap.xml']).toContain('<url><loc>https://rawdoc.app/privacy</loc><lastmod>2026-09-20</lastmod></url>')
+    } finally {
+      SITE_NAV.length = 0
+    }
+  })
+})
+
 describe('F-272 A8 링크 목록 검사', () => {
   it('SITE_NAV 에 있는 페이지가 content 에 없으면 실패한다', () => {
     SITE_NAV.length = 0
