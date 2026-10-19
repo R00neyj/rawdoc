@@ -171,11 +171,21 @@ function Segment<T extends string>({
   useFontPreview,
   checkedRef,
 }: SegmentProps<T>) {
+  const checkedIndex = options.findIndex((opt) => opt.value === value)
+  // 라디오 그룹은 탭 한 번에 들어가고 방향키·Home·End 로 고른다 (WAI-ARIA radio 패턴)
+  function handleKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
+    const current = Math.max(checkedIndex, 0)
+    const next = nextTabIndex(current, options.length, e.key)
+    if (next === current) return
+    e.preventDefault()
+    onChange(options[next].value as T)
+    e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus()
+  }
   return (
     <div className="dialog-field">
       <span id={labelId}>{label}</span>
-      <div className="seg" role="radiogroup" aria-labelledby={labelId}>
-        {options.map((opt) => {
+      <div className="seg" role="radiogroup" aria-labelledby={labelId} onKeyDown={handleKeyDown}>
+        {options.map((opt, i) => {
           const checked = value === opt.value
           return (
             <button
@@ -183,6 +193,7 @@ function Segment<T extends string>({
               type="button"
               role="radio"
               aria-checked={checked}
+              tabIndex={checked || (checkedIndex < 0 && i === 0) ? 0 : -1}
               ref={checked ? checkedRef : undefined}
               style={useFontPreview ? { fontFamily: `var(${opt.fontVar})` } : undefined}
               onClick={() => onChange(opt.value as T)}
