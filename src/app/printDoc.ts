@@ -8,6 +8,8 @@ export function printTitle(title: string): string {
 }
 
 let activeCleanup: (() => void) | null = null
+// 기다리는 사이 새 인쇄가 시작되면 앞 인쇄는 root 를 건드리지 않고 물러난다
+let printGeneration = 0
 
 export async function printDoc(args: {
   root: HTMLElement | null
@@ -21,7 +23,9 @@ export async function printDoc(args: {
   // root 없음 방어 — 예외 없이 끝나고 print 를 부르지 않는다 (10장 A2)
   if (!root) return
 
+  const generation = ++printGeneration
   const paintedHtml = await highlightHtmlWhenReady(html)
+  if (generation !== printGeneration) return
 
   // 이전 인쇄가 안 끝났으면 먼저 되돌린다
   activeCleanup?.()
@@ -37,7 +41,14 @@ export async function printDoc(args: {
   root.append(heading, body)
 
   const urls = await fillAttachmentImages(root, resolveAttachment)
+  const superseded = () => {
+    if (generation === printGeneration) return false
+    for (const url of urls) URL.revokeObjectURL(url)
+    return true
+  }
+  if (superseded()) return
   await fillMermaidBlocks(root)
+  if (superseded()) return
   // 레이아웃을 먼저 일으켜 새 글자의 서체 조각 받기가 시작된 뒤 ready 를 읽는다 (F-2040 5.3)
   void root.offsetHeight
   try {
@@ -45,6 +56,7 @@ export async function printDoc(args: {
   } catch {
     // 없거나 실패하면 무시
   }
+  if (superseded()) return
 
   const prevTitle = document.title
   const prevTheme = document.documentElement.getAttribute('data-theme')
