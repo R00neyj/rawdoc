@@ -44,7 +44,7 @@ export default function ConnectedAppsTab({ online }: { online: boolean }) {
   }
 
   async function disconnect(app: ConnectedApp) {
-    if (apps === null) return
+    if (apps === null || busyId !== null) return
     setDisconnectFailed(false)
     setBusyId(app.id)
     const result = await disconnectConnectedApp(app.id)
@@ -91,7 +91,7 @@ export default function ConnectedAppsTab({ online }: { online: boolean }) {
                 className="dialog-btn"
                 data-app-id={app.id}
                 aria-label={`${app.name} 연결 끊기`}
-                disabled={!online || busyId === app.id}
+                disabled={!online || busyId !== null}
                 onClick={() => void disconnect(app)}
               >
                 {busyId === app.id ? '끊는 중…' : '연결 끊기'}
