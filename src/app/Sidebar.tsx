@@ -663,16 +663,13 @@ type RailButtonProps = {
   label: string
   icon: ComponentType<{ size?: number }>
   onClick?: () => void
-  ariaDisabled?: boolean
-  buttonRef?: RefObject<HTMLButtonElement | null>
-  ariaExpanded?: boolean
   href?: string
 }
 
 // 접힘 레일의 아이콘 전용 버튼(F-143 3.3, 툴팁은 오른쪽) — props.icon 을 구조 분해로 대문자 별칭하면 no-unused-vars 가 JSX 태그 참조를 못 잡는다
-// href 를 주면 사이트로 나가는 새 탭 링크로 그린다 (F-276.md 4.3) — onClick·ariaDisabled·buttonRef·ariaExpanded 는 그 통로에서 쓰지 않는다
+// href 를 주면 사이트로 나가는 새 탭 링크로 그린다 (F-276.md 4.3)
 function RailButton(props: RailButtonProps) {
-  const { label, onClick, ariaDisabled, buttonRef, ariaExpanded, href } = props
+  const { label, onClick, href } = props
   if (href) {
     return (
       <span className="icon-btn-wrap rail-btn-wrap">
@@ -685,15 +682,7 @@ function RailButton(props: RailButtonProps) {
   }
   return (
     <span className="icon-btn-wrap rail-btn-wrap">
-      <button
-        ref={buttonRef}
-        type="button"
-        className="icon-btn rail-btn"
-        aria-label={label}
-        aria-disabled={ariaDisabled || undefined}
-        aria-expanded={ariaExpanded}
-        onClick={onClick}
-      >
+      <button type="button" className="icon-btn rail-btn" aria-label={label} onClick={onClick}>
         <props.icon size={18} />
       </button>
       <IconTooltip text={label} side />
