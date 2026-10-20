@@ -37,6 +37,7 @@
   font-style: normal;
   line-height: 1.5;
   white-space: nowrap;
+  text-indent: 0; /* 목록 줄의 음수 text-indent 가 상속되면 이름 앞이 잘린다 */
   user-select: none;
   pointer-events: none;
   animation: peer-label-hide 150ms var(--ease-out) 1500ms forwards;
