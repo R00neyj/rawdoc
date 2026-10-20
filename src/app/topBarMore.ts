@@ -15,19 +15,21 @@ export function topBarScreen(input: {
   return input.currentDocId === null ? 'home' : 'doc'
 }
 
-export type MoreItemKey = 'outline' | 'comments' | 'share' | 'export' | 'notifications'
+export type MoreItemKey = 'outline' | 'comments' | 'share' | 'export' | 'github' | 'notifications'
 
 export function moreSheetItems(input: {
   screen: TopBarScreen
   hasOutline: boolean
   comments: boolean
   notifications: boolean
+  github?: boolean
 }): MoreItemKey[] {
   const { screen } = input
   const items: MoreItemKey[] = []
   if (screen === 'doc' && input.hasOutline) items.push('outline')
   if (screen === 'doc' && input.comments) items.push('comments')
   if (screen === 'doc') items.push('share', 'export')
+  if (screen === 'doc' && input.github) items.push('github')
   if (input.notifications) items.push('notifications')
   return items
 }

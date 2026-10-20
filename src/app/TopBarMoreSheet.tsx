@@ -1,10 +1,11 @@
-// 휴대폰 폭 상단바 `⋯` 버튼 + 아래 판 — 목차·댓글·공유·내보내기·알림 (specs/features/F-2083.md 4장)
+// 휴대폰 폭 상단바 `⋯` 버튼 + 아래 판 — 목차·댓글·공유·내보내기·GitHub·알림 (specs/features/F-2083.md 4장)
 import { useEffect, useRef, useState, type ComponentType, type ReactNode, type RefObject } from 'react'
 
 import {
   IconArrowBack,
   IconChevron,
   IconClose,
+  IconCommit,
   IconDownload,
   IconForum,
   IconMore,
@@ -21,8 +22,10 @@ import { useShareMenu, type MenuAction, type ShareMenuProps } from './ShareMenu'
 import MenuItemSkeleton from './MenuItemSkeleton'
 import { NotificationsList, type NotificationsMenuProps } from './NotificationsMenu'
 import type { OutlineControl } from './Outline'
+import { GithubStatusLine, type GithubMenuProps } from './GithubMenu'
+import { githubMenuItems } from './githubUi'
 
-type SubView = 'share' | 'export'
+type SubView = 'share' | 'export' | 'github'
 
 type TopBarMoreSheetProps = {
   screen: TopBarScreen
@@ -31,6 +34,7 @@ type TopBarMoreSheetProps = {
   notifications?: NotificationsMenuProps
   share: ShareMenuProps
   exporter: ExportMenuProps
+  github?: GithubMenuProps
 }
 
 const ROW_LABEL: Record<MoreItemKey, string> = {
@@ -38,6 +42,7 @@ const ROW_LABEL: Record<MoreItemKey, string> = {
   comments: '댓글',
   share: '공유',
   export: '내보내기',
+  github: 'GitHub',
   notifications: '알림',
 }
 
@@ -46,6 +51,7 @@ const ROW_ICON: Record<MoreItemKey, ComponentType<{ size?: number }>> = {
   comments: IconForum,
   share: IconShare,
   export: IconDownload,
+  github: IconCommit,
   notifications: IconNotifications,
 }
 
@@ -80,7 +86,7 @@ function ActionList({ items, note }: { items: MenuAction[]; note?: ReactNode }) 
   )
 }
 
-export default function TopBarMoreSheet({ screen, outlineControlRef, comments, notifications, share, exporter }: TopBarMoreSheetProps) {
+export default function TopBarMoreSheet({ screen, outlineControlRef, comments, notifications, share, exporter, github }: TopBarMoreSheetProps) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<SubView | null>(null)
   const [hasOutline, setHasOutline] = useState(false)
@@ -181,7 +187,7 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
     }
   }
 
-  const rows = moreSheetItems({ screen, hasOutline, comments: Boolean(comments), notifications: Boolean(notifications) })
+  const rows = moreSheetItems({ screen, hasOutline, comments: Boolean(comments), notifications: Boolean(notifications), github: Boolean(github) })
   const dot = moreDotVisible({
     screen,
     unread: notifications ? notifications.state.unread : null,
@@ -249,6 +255,36 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
         <ActionList items={exportItems} />
       </ul>
     )
+  } else if (view === 'github' && github) {
+    body = (
+      <ul className="more-sheet-list">
+        {github.link && (
+          <li className="github-menu-status">
+            <GithubStatusLine link={github.link} />
+          </li>
+        )}
+        {githubMenuItems(github).map((item) => (
+          <li key={item.key}>
+            {item.href ? (
+              <a className="more-sheet-item" href={item.href} target="_blank" rel="noopener noreferrer" onClick={closeSheet}>
+                <span className="more-sheet-label">{item.label}</span>
+              </a>
+            ) : (
+              <button
+                type="button"
+                className="more-sheet-item"
+                onClick={() => {
+                  closeSheet()
+                  item.onSelect?.()
+                }}
+              >
+                <span className="more-sheet-label">{item.label}</span>
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    )
   } else {
     body = (
       <ul className="more-sheet-list">
@@ -273,7 +309,7 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
                     {badge}
                   </span>
                 )}
-                {(key === 'share' || key === 'export' || key === 'notifications') && <IconChevron size={16} />}
+                {(key === 'share' || key === 'export' || key === 'github' || key === 'notifications') && <IconChevron size={16} />}
               </button>
             </li>
           )

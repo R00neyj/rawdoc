@@ -4,6 +4,7 @@ import type { GithubLink } from '../lib/githubContract'
 import { formatCommentTime } from './commentRail'
 import { IconCommit, IconTooltip, IconUpload } from './icons'
 import usePresence from './usePresence'
+import { githubMenuItems, type GithubMenuItem } from './githubUi'
 
 export type GithubMenuProps = {
   role: 'owner' | 'editor'
@@ -14,7 +15,7 @@ export type GithubMenuProps = {
   onPush?: () => void
 }
 
-type PopItem = { key: string; label: string; onSelect?: () => void; href?: string }
+type PopItem = GithubMenuItem
 
 type PopMenuProps = {
   className: string
@@ -96,24 +97,18 @@ function PopMenu({ className, header, items, trigger }: PopMenuProps) {
 }
 
 // 메뉴가 열릴 때마다 새로 올라와 그 순간의 시각으로 상대 시각을 적는다
-function StatusLine({ link }: { link: GithubLink }) {
+export function GithubStatusLine({ link }: { link: GithubLink }) {
   const [now] = useState(() => Date.now())
   const when = link.syncedAt === null ? '아직 맞춘 적 없음' : `마지막 동기화 ${formatCommentTime(link.syncedAt, now)}`
   return <>{`GitHub ${link.repo} · `}<span className="github-menu-path">{link.path}</span><span className="github-menu-when">{when}</span></>
 }
 
-export default function GithubMenu({ role, link, onLink, onUnlink, onPull, onPush }: GithubMenuProps) {
-  const items: PopItem[] = []
-  if (!link) items.push({ key: 'link', label: 'GitHub에 연결…', onSelect: onLink })
-  if (link && role === 'owner' && onPull) items.push({ key: 'pull', label: '당기기…', onSelect: onPull })
-  if (link && role === 'owner' && onPush) items.push({ key: 'push', label: '푸시…', onSelect: onPush })
-  if (link) items.push({ key: 'view', label: 'GitHub에서 보기', href: link.htmlUrl })
-  if (link && role === 'owner' && onUnlink) items.push({ key: 'unlink', label: '연결 해제…', onSelect: onUnlink })
+export default function GithubMenu(props: GithubMenuProps) {
   return (
     <PopMenu
       className="github-menu"
-      header={link ? <StatusLine link={link} /> : undefined}
-      items={items}
+      header={props.link ? <GithubStatusLine link={props.link} /> : undefined}
+      items={githubMenuItems(props)}
       trigger={({ buttonRef, open, toggle }) => (
         <span className="icon-btn-wrap">
           <button type="button" ref={buttonRef} className="icon-btn export-menu-btn" aria-label="GitHub" aria-haspopup="menu" aria-expanded={open} onClick={toggle}>

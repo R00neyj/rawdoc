@@ -1,5 +1,6 @@
 // GitHub 연결·가져오기 화면의 순수 규칙·문구 (specs/features/F-2128.md 3.2, 5장)
 import { GITHUB_ERROR_PARAM, GITHUB_RETURN_PARAM, type GithubLink, type GithubStatus } from '../lib/githubContract'
+import type { GithubMenuProps } from './GithubMenu'
 import { isRepoMdPath } from '../lib/githubPath'
 import { isLoginReturnHash } from '../lib/loginReturn'
 import { ACCOUNT_BLOCKED_MESSAGE } from '../lib/usageLimits'
@@ -24,6 +25,19 @@ export function parseGithubStatus(raw: unknown): GithubStatus | null {
   if (typeof r.reconnect === 'boolean') status.reconnect = r.reconnect
   if (typeof r.installUrl === 'string') status.installUrl = r.installUrl
   return status
+}
+
+export type GithubMenuItem = { key: string; label: string; onSelect?: () => void; href?: string }
+
+// 상단바 GitHub 메뉴와 휴대폰 ⋯ 판이 같은 항목을 쓴다
+export function githubMenuItems({ role, link, onLink, onUnlink, onPull, onPush }: GithubMenuProps): GithubMenuItem[] {
+  const items: GithubMenuItem[] = []
+  if (!link) items.push({ key: 'link', label: 'GitHub에 연결…', onSelect: onLink })
+  if (link && role === 'owner' && onPull) items.push({ key: 'pull', label: '당기기…', onSelect: onPull })
+  if (link && role === 'owner' && onPush) items.push({ key: 'push', label: '푸시…', onSelect: onPush })
+  if (link) items.push({ key: 'view', label: 'GitHub에서 보기', href: link.htmlUrl })
+  if (link && role === 'owner' && onUnlink) items.push({ key: 'unlink', label: '연결 해제…', onSelect: onUnlink })
+  return items
 }
 
 export function githubDocRole(doc: { role?: 'owner' | 'edit' | 'view'; e2ee?: unknown } | null): 'owner' | 'editor' | null {

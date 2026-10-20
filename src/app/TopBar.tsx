@@ -156,7 +156,6 @@ export default function TopBar({
                 board={kanban && { active: kanban.view === 'board', onChoose: () => kanban.onChoose('board') }}
               />
             )}
-            {github && <GithubMenu {...github} />}
             {moreButtonVisible({ screen, notifications: Boolean(notifications) }) && (
             <TopBarMoreSheet
               screen={screen}
@@ -174,6 +173,7 @@ export default function TopBar({
                 e2eeDoc: shareE2ee,
               }}
               exporter={{ disabled: exportDisabled, onExportMd, onExportTxt, onPrintDoc, onExportHtml, onCopyRich }}
+              github={github}
             />
             )}
           </div>
