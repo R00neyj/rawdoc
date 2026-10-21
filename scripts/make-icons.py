@@ -80,6 +80,8 @@ def make_maskable_icon(size):
 def main():
     ICON_DIR.mkdir(parents=True, exist_ok=True)
     make_rounded_icon(192).save(ICON_DIR / "icon-192.png")
+    # Windows .md 파일 아이콘용 (file_handlers[].icons, Chrome 문서 예시 크기 256)
+    make_rounded_icon(256).save(ICON_DIR / "icon-256.png")
     make_rounded_icon(512).save(ICON_DIR / "icon-512.png")
     make_maskable_icon(512).save(ICON_DIR / "icon-maskable-512.png")
     print(f"아이콘 생성 완료: {ICON_DIR}")

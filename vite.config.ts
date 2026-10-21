@@ -267,8 +267,14 @@ export default defineConfig({
             purpose: 'maskable',
           },
         ],
-        // OS 에서 .md 파일을 이 앱으로 열 수 있게 한다 (specs/features/F-119.md)
-        file_handlers: [{ action: '/', accept: { 'text/markdown': ['.md'] } }],
+        // OS 에서 .md 파일을 이 앱으로 열 수 있게 한다. icons 가 없으면 Windows 탐색기 파일 아이콘이 빈다 (F-119)
+        file_handlers: [
+          {
+            action: '/',
+            accept: { 'text/markdown': ['.md'] },
+            icons: [{ src: '/icons/icon-256.png', sizes: '256x256', type: 'image/png' }],
+          },
+        ],
       },
       workbox: {
         // 서체는 KaTeX 만 precache 하고 나머지는 쓸 때 받아 fonts 캐시에 둔다 (F-2040)

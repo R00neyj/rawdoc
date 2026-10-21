@@ -7,6 +7,7 @@
 
 | 날짜 | 무엇을 | 왜 | 관련 |
 | --- | --- | --- | --- |
+| 2026-10-22 | 매니페스트 `file_handlers[0]` 에 `icons`(`/icons/icon-256.png`, 256x256 PNG) 추가. 아이콘은 `scripts/make-icons.py` 에 256 크기를 더해 기존 앱 아이콘과 같은 도형으로 생성 | 사용자: PC 설치 앱을 .md 기본 앱으로 지정하면 파일 아이콘이 빈 네모로 나옴 | F-119 |
 | 2026-10-21 | 설치 앱 창(`display-mode: standalone`)·넓은 화면에서만 메인 열 맨 위에 문서 탭 줄(`DocTabBar`·`useDocTabs`·순수 상태 기계 `docTabs.ts`). 보통 열기는 임시 탭(기울임) 교체, 편집·두 번 누르기로 고정, 가운데 버튼·`새 탭에서 열기`·Ctrl/⌘+클릭(비어 있는 곳만)·새 문서는 새 고정 탭, 문서당 탭 하나. `Ctrl+Tab`/`Ctrl+Shift+Tab`·`×`·가운데 버튼·`Ctrl+W`·`⋯` `다른 탭 닫기`/`오른쪽 탭 닫기`·끌어서 순서. 이 창에서 지운 문서 탭은 닫힘, 공유 해제·금고 잠김은 탭 유지. `md.docTabs` 에 저장소·계정별 저장·복원(주소 문서 우선, 아니면 저장한 활성 탭), 뒤 탭은 스크롤·커서만 기억(실행 취소 기록은 안 남김). 사이드바 Ctrl+클릭(여러 선택)·편집 모드 위키링크 Ctrl+클릭·지도 노드 Ctrl+클릭은 그대로. 브라우저 탭·좁은 화면은 그대로 | 사용자: "문서 여러탭으로 열어서 작업하는게 편한데" · "웹버전일때 탭 밑에 탭이 또 나와보여서 이상할거같아서" | F-296, `specs/wireframes/doc-tabs-flow.html` |
 | 2026-10-18 | 상단바 접속자 아바타를 누르면 그 사람 커서가 있는 줄을 화면 가운데로 스크롤(`revealPeerCursor` in `remoteCursors.ts`, 핸들 `revealPeer`). 내 선택은 안 옮김. 커서를 모르면 안내 `그 사람의 커서 위치를 아직 모릅니다.`, 보기 모드·칸반 보드에서는 누를 수 없음 | 사용자 요청노트: "공유 문서 작업 시 상단 아바타를 클릭하면 그 작업자가 수정 중인 줄로 이동" | F-307 |
 | 2026-10-17 | 원격 MCP 도구 12개 모두 `annotations.title` 을 도구 `title` 과 같은 글로 채움(`titled()` in `worker/mcpCall.ts`). 이름·설명·입력 스키마·힌트 셋은 그대로 | 사용자 요청노트: Claude 디렉터리 도구 화면 스크린샷 "Missing title annotation. Add annotations.title, a human-readable name for the directory listing." (11개 전부) | F-4008 5장, F-3030 |
