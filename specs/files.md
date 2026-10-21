@@ -25,7 +25,7 @@
 |`src/types.ts`|문서·폴더 등 저장 데이터의 모양을 정해 둠|
 |`src/vite-env.d.ts`|빌드 도구와 컴퓨터 기본 기능의 모양을 적어 둔 선언|
 
-## `src/app/` 화면과 앱 동작 (270)
+## `src/app/` 화면과 앱 동작 (271)
 
 사용자가 보는 창·메뉴·버튼과, 그 뒤에서 도는 규칙
 
@@ -245,6 +245,7 @@
 |`src/app/useDocNavigation.ts`|문서 열기·새 문서 만들기·문서 사이 이동을 처리함|
 |`src/app/useDocSaver.ts`|편집 중인 문서와 댓글을 자동으로 저장함|
 |`src/app/useDocSession.ts`|문서를 열 때 혼자 편집인지 실시간 함께 편집인지 정하고 접속자를 관리함|
+|`src/app/useDocumentTitle.ts`|창·탭 제목에 지금 문서 제목을 띄움|
 |`src/app/useDocTabs.ts`|설치 앱 문서 탭을 지금 문서에 맞추고, 단축키·새 탭 요청·위치 기억·기기 저장을 처리함|
 |`src/app/useDonatePrompt.ts`|때가 된 기기에서 부팅 뒤 후원 알림 띠를 한 번 띄움|
 |`src/app/useE2ee.ts`|암호 금고 잠금·열기와 관련 창 상태를 관리함|

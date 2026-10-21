@@ -125,6 +125,7 @@ import PublicView from './PublicView'
 import type { InviteTarget } from './InviteDialog'
 import { mapIndexScope } from './mapIndex'
 import { useDocTabs } from './useDocTabs'
+import { useDocumentTitle } from './useDocumentTitle'
 import DocTabBar from './DocTabBar'
 import type { Doc, Folder, LineEnding, Store } from '../types'
 
@@ -1012,6 +1013,7 @@ export default function App() {
     narrow, ready: bootPhase === 'ready', scope: searchScope(store.kind, store.kind === 'server' ? (store as ServerStore).userId : null), docs, currentDocId, openDocId: openDoc?.id ?? null,
     editorHandle, viewMode, viewerRef, viewerDocId, pendingJumpRef, leaveRef: docTabLeaveRef, selectDoc, goHome, createNewDoc,
   })
+  useDocumentTitle(currentDoc?.title ?? null)
 
   // hashchange 핸들러(위)가 항상 최신 docs·currentDocId 를 보도록 매 커밋 후 갱신한다 (0단계 버그 수정)
   useEffect(() => {

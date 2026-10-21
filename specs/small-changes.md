@@ -85,3 +85,4 @@
 | 2026-10-19 | CLI: replace 가 중간에 멈추면 그 오류의 종료 코드, 2xx 몸통 JSON 해석 실패는 `bad_response`, `--base-version` 은 안전한 정수만 | 사용자: "p2까지 수정" | F-2021 |
 | 2026-10-19 | sitemap `lastmod` 는 YYYY-MM-DD 만 쓰고(아니면 빌드 날짜), `loc` 은 XML 이스케이프 | 사용자: "p2까지 수정" | F-272 |
 | 2026-10-19 | verify·e2e-one·preview 스크립트가 셸 없이 node 로 도구 진입점을 직접 실행(`scripts/lib/nodeBin.mjs`), og 이미지 스크립트는 실패해도 브라우저·임시 폴더 정리 | 사용자: "p2까지 수정" | F-150 |
+| 2026-10-21 | 창·탭 제목(`document.title`)을 `{문서 제목} · {제품명}` 으로, 문서 밖 화면은 제품명만 (`useDocumentTitle.ts`) | 사용자: "잘 나오는데 문서명 반영은 안되네" | — |
