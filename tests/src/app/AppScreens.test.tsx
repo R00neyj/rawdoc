@@ -37,6 +37,7 @@ const allOn = {
   sharesLinks: [],
   sharesGrants: [],
   dbBlockedMessage: null,
+  localFile: { session: null },
 }
 
 function areas(props: Record<string, unknown>) {
