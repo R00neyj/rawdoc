@@ -29,6 +29,24 @@ export function openTab(s: DocTabsState, entry: { key: string; title: string; sh
   return { tabs: [...s.tabs.slice(0, at), tab, ...s.tabs.slice(at)], active: entry.key }
 }
 
+// 탭 수 상한 — 넓은 화면 탭 줄 가로 스크롤·휴대폰 판 카드가 끝없이 늘지 않게 (small 2026-10-22)
+export const MAX_TABS = 20
+
+// 상한이면 새 탭을 끼우지 않고 지금 탭(없으면 마지막 탭) 자리를 그 문서로 바꾼다
+export function openTabCapped(
+  s: DocTabsState,
+  entry: { key: string; title: string; shared?: boolean },
+  mode: OpenMode,
+): { state: DocTabsState; capped: boolean } {
+  const next = openTab(s, entry, mode)
+  if (next.tabs.length <= MAX_TABS) return { state: next, capped: false }
+  const activeAt = s.tabs.findIndex((t) => t.key === s.active)
+  const at = activeAt >= 0 ? activeAt : s.tabs.length - 1
+  const tabs = s.tabs.slice()
+  tabs[at] = withMeta(entry.key, mode === 'pinned', entry.title, entry.shared)
+  return { state: { tabs, active: entry.key }, capped: true }
+}
+
 export function pinTab(s: DocTabsState, key: string): DocTabsState {
   const tab = s.tabs.find((t) => t.key === key)
   if (!tab || tab.pinned) return s

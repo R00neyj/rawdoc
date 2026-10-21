@@ -11,13 +11,15 @@ import { usePhoneWidth } from './usePhoneWidth'
 import { docTabsEnabled } from './phoneTabs'
 import type { PendingJump } from './useEditorSync'
 import {
-  EMPTY_TABS, openTab, pinTab, closeTabs, closeOtherTabs, closeTabsToRight, moveTab, stepTab, syncTabMeta, restoreTabs,
+  EMPTY_TABS, MAX_TABS, openTab, openTabCapped, pinTab, closeTabs, closeOtherTabs, closeTabsToRight, moveTab, stepTab, syncTabMeta, restoreTabs,
   removedTabKeys, chooseOpenMode, parseStoredTabs, storeTabs, type DocTabsState, type TabMeta,
 } from './docTabs'
 
 const STANDALONE_QUERY = '(display-mode: standalone)'
 // Ctrl/⌘+클릭 뒤 이 시간 안에 문서가 바뀌면 새 고정 탭으로 연다 — 저장 flush 를 기다리는 전환도 넉넉히 덮는다
 const PIN_INTENT_MS = 1500
+const TABS_FULL = `탭은 ${MAX_TABS}개까지 열 수 있습니다. 안 쓰는 탭을 닫아 주세요.`
+const TABS_FULL_REPLACED = `탭이 ${MAX_TABS}개라 지금 탭에서 열었습니다.`
 
 type Position = { anchor: ScrollAnchor | null; selection: { anchor: number; head: number } | null }
 
@@ -48,6 +50,7 @@ export type UseDocTabsOptions = {
   selectDoc: (id: string) => Promise<void>
   goHome: () => Promise<void>
   createNewDoc: () => Promise<void>
+  notify: (message: string) => void
 }
 
 function subscribeStandalone(onChange: () => void): () => void {
@@ -181,7 +184,9 @@ export function useDocTabs(options: UseDocTabsOptions): { bar: DocTabBarProps | 
         })
         pendingPinRef.current = null
         pinIntentAtRef.current = 0
-        s = openTab(s, { key: currentDocId, ...(lookup(currentDocId) ?? { title: '' }) }, mode)
+        const opened = openTabCapped(s, { key: currentDocId, ...(lookup(currentDocId) ?? { title: '' }) }, mode)
+        s = opened.state
+        if (opened.capped) latestRef.current.notify(TABS_FULL_REPLACED)
       }
     }
     store.set(syncTabMeta(s, lookup))
@@ -334,7 +339,11 @@ export function useDocTabs(options: UseDocTabsOptions): { bar: DocTabBarProps | 
   const onCloseOthers = useCallback((key: string) => closeWith(closeOtherTabs(store.get(), key)), [store, closeWith])
   const onCloseRight = useCallback((key: string) => closeWith(closeTabsToRight(store.get(), key)), [store, closeWith])
   const onMove = useCallback((key: string, toIndex: number) => store.set(moveTab(store.get(), key, toIndex)), [store])
-  const onNew = useCallback(() => void latestRef.current.createNewDoc(), [])
+  const onNew = useCallback(() => {
+    const latest = latestRef.current
+    if (store.get().tabs.length >= MAX_TABS) latest.notify(TABS_FULL)
+    else void latest.createNewDoc()
+  }, [store])
 
   if (!enabled || !ready) return { bar: null, phone: null }
   const props = { state: tabsState, onActivate: navigate, onPin, onClose, onCloseOthers, onCloseRight, onMove, onNew }

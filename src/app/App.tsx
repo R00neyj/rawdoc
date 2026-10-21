@@ -1025,7 +1025,7 @@ export default function App() {
   })
   const docTabs = useDocTabs({
     narrow, ready: bootPhase === 'ready', scope: searchScope(store.kind, store.kind === 'server' ? (store as ServerStore).userId : null), docs, currentDocId, openDocId: openDoc?.id ?? null,
-    editorHandle, viewMode, viewerRef, viewerDocId, pendingJumpRef, leaveRef: docTabLeaveRef, selectDoc, goHome, createNewDoc,
+    editorHandle, viewMode, viewerRef, viewerDocId, pendingJumpRef, leaveRef: docTabLeaveRef, selectDoc, goHome, createNewDoc, notify: (message) => showNotice({ type: 'info', message }),
   })
   useDocumentTitle(localFile.session?.name ?? currentDoc?.title ?? null)
 

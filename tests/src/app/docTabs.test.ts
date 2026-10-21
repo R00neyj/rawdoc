@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   EMPTY_TABS,
   openTab,
+  openTabCapped,
+  MAX_TABS,
   pinTab,
   closeTabs,
   closeOtherTabs,
@@ -239,5 +241,32 @@ describe('parseStoredTabs · storeTabs', () => {
   it('탭 키는 문자열이라 문서 id 밖의 키(file:…)도 그대로 오간다', () => {
     const s = state([['file:1b2c', true]], 'file:1b2c')
     expect(parseStoredTabs(storeTabs('', 'k', s), 'k')).toEqual(s)
+  })
+})
+
+describe('openTabCapped — 탭 상한', () => {
+  const full = (activeKey: string) =>
+    state(Array.from({ length: MAX_TABS }, (_, i) => [`k${i}`, true] as [string, boolean]), activeKey)
+
+  it('상한에 닿았으면 새 탭 대신 지금 탭 자리에서 열고 capped 를 알린다', () => {
+    const r = openTabCapped(full('k3'), { key: 'x', title: 'X' }, 'pinned')
+    expect(r.capped).toBe(true)
+    expect(r.state.tabs).toHaveLength(MAX_TABS)
+    expect(r.state.tabs[3].key).toBe('x')
+    expect(r.state.active).toBe('x')
+  })
+
+  it('상한이어도 이미 연 탭이나 임시 탭 교체는 그대로다', () => {
+    expect(openTabCapped(full('k3'), { key: 'k5', title: 'K5' }, 'pinned').capped).toBe(false)
+    const withPreview = full('k0')
+    withPreview.tabs[1] = { ...withPreview.tabs[1], pinned: false }
+    const r = openTabCapped(withPreview, { key: 'x', title: 'X' }, 'preview')
+    expect(r.capped).toBe(false)
+    expect(r.state.tabs[1].key).toBe('x')
+  })
+
+  it('상한 아래면 openTab 과 같다', () => {
+    const s = state([['a', true]], 'a')
+    expect(openTabCapped(s, { key: 'x', title: 'X' }, 'pinned')).toEqual({ state: openTab(s, { key: 'x', title: 'X' }, 'pinned'), capped: false })
   })
 })
