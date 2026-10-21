@@ -18,7 +18,7 @@ import { paletteScreen, type PaletteContext, type PaletteCreatePlan, type Palett
 import { toPaletteDocs, planPaletteCreate } from './paletteDocs'
 import { copyShareLink, copyShareMarkdown } from './shareCopy'
 import { fetchRequestToken, requestTokenDocId } from './requestToken'
-import { formatHash } from './hashRoute'
+import { openDocInNewTab } from './openInNewTab'
 import { folderPathMap } from './searchIndex'
 import { isSharedDoc, type DocMeta, type OpenDoc } from './docMeta'
 import type { AccountState } from './account'
@@ -248,7 +248,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
   function paletteOpenDoc(id: string, target: 'here' | 'newTab') {
     closePalette()
     if (target === 'newTab') {
-      window.open(formatHash(id), '_blank', 'noopener')
+      openDocInNewTab(id)
       return
     }
     void openDocFromSearch(id, null)
@@ -397,7 +397,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
           ? {
               owned: !isSharedDoc(currentDoc),
               pinned: currentDoc.pinnedAt != null,
-              openNewTab: () => window.open(formatHash(currentDoc.id), '_blank', 'noopener'),
+              openNewTab: () => openDocInNewTab(currentDoc.id),
               togglePin: () => void handleTogglePin(currentDoc.id, currentDoc.pinnedAt == null),
               move: () =>
                 runAfterPaletteClose(() =>

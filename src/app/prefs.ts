@@ -65,6 +65,8 @@ type PrefMap = {
   'md.calendarTemplate': string
   // 후원 알림 띠를 다음에 띄울 때(epoch ms 문자열), 기기별 (small 2026-10-11)
   'md.donatePromptAt': string
+  // 설치 앱 문서 탭 { 범위: { tabs, active } } JSON, 범위는 저장소 종류:계정 (small 2026-10-21)
+  'md.docTabs': string
 }
 
 type PrefKey = keyof PrefMap
@@ -118,6 +120,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.calendarFormat',
   'md.calendarTemplate',
   'md.donatePromptAt',
+  'md.docTabs',
 ])
 
 function assertAllowed(key: string) {

@@ -265,6 +265,7 @@ type YjsMetaRow = {
 - awareness(`useLiveDoc`, 방 Doc 에 매임) → 상단바 아바타(`usePeers`)·원격 커서(`remoteCursors`) (F-307)
 - `accountBlocked`(`/api/me` 의 `blocked`) → 모든 서버 문서 읽기 전용, `decideDocPath` 입력 `forbidden` 을 참으로 넘겨 소켓 없이 `view` 경로 (F-2030 5.2)
 - **칸반 보드(F-2140)**: 보드는 `EditorState` 의 또 하나의 투영이다 — 편집기는 언마운트하지 않고 숨긴 채 살아 있고(`Y.Doc`·게이트·실행 취소 기록 그대로), 보드는 핸들 `onChanges` 마다 `view.state.doc` 을 `parseKanban` 으로 읽는다. React 상태에는 칸·카드 배열만 둔다. 보드에서의 쓰기는 `view.dispatch` 한 길뿐이다 (F-2140)
+- **설치 앱 문서 탭(small 2026-10-21)**: 탭은 `currentDocId` 를 따라가는 목록일 뿐이다(`useDocTabs`·순수 상태 기계 `docTabs.ts`). 편집기·`Y.Doc`·실시간 연결은 활성 탭 하나만 갖고, 뒤 탭은 스크롤·커서 위치만 메모리에 둔다. 탭 전환은 `selectDoc`·`goHome` 을 그대로 탄다. 편집기 핸들 `onChanges` 의 `local`(ySync 반영이 아닌 변경)이 임시 탭 고정에 쓰인다. 편집기·사이드바의 새 탭 요청은 `src/lib/appTabs.ts` 다리를 거친다
 
 ## 4. 설정 (localStorage)
 
@@ -313,6 +314,7 @@ type YjsMetaRow = {
 | `md.calendarFolder` | 달력 날짜 문서 폴더 id, `''` = 최상위 | `''` | small 2026-10-10 |
 | `md.calendarFormat` | 날짜 문서 제목 형식(템플릿 날짜 토큰) | `YYYY-MM-DD` | small 2026-10-10 |
 | `md.calendarTemplate` | `md.newDocTemplate` 과 같은 값 | `none` | small 2026-10-10 |
+| `md.docTabs` | `{ 범위: { tabs: [{ key, pinned, title, shared? }], active } }` JSON — 설치 앱 문서 탭. 범위는 `{저장소 종류}:{서버 사용자 id 또는 local}`, `key` 는 문서 id(다른 종류 항목은 접두사 붙인 문자열 키 자리) | 없음(복원할 탭 없음) | small 2026-10-21 |
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
   - 예외: `md.theme`·`md.sidebar`·`md.sidebarWidth`·`md.startScreen`·`md.contentWidth` 는 `BOOT_PAINT_SCRIPT` 도 읽는다 — 첫 페인트 전이라 `prefs.ts` 를 쓸 수 없다 (F-2015, F-2043). `md.theme` 은 공개 사이트·랜딩의 첫 칠 테마 스크립트(`src/lib/pageTheme.ts`)도 읽는다 (small 2026-10-12)

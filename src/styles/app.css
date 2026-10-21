@@ -1094,6 +1094,104 @@ body.sidebar-resizing {
   flex-direction: column;
 }
 
+/* ----- 설치 앱 문서 탭 줄 — 넘치면 가로 스크롤, 임시 탭은 기울임 (small 2026-10-21) ----- */
+.doc-tabs {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  height: 34px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.doc-tab {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 220px;
+  padding: 0 4px 0 2px;
+  border-right: 1px solid var(--rule);
+  color: var(--muted);
+  position: relative;
+}
+
+.doc-tab[data-active] {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.doc-tab[data-active]::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--surface);
+}
+
+.doc-tab:not([data-active]):hover {
+  background: var(--hover-bg);
+}
+
+.doc-tab[data-drop='before'] {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.doc-tab[data-drop='after'] {
+  box-shadow: inset -2px 0 0 var(--accent);
+}
+
+.doc-tab-label {
+  min-width: 0;
+  height: 100%;
+  padding: 0 6px 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: inherit;
+}
+
+.doc-tab[data-preview] .doc-tab-label {
+  font-style: italic;
+}
+
+.doc-tab-btn {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  transition: var(--transition-colors);
+}
+
+.doc-tab-btn:hover {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+.doc-tab-more {
+  opacity: 0;
+}
+
+.doc-tab:hover .doc-tab-more,
+.doc-tab:focus-within .doc-tab-more {
+  opacity: 1;
+}
+
+.doc-tab-new {
+  align-self: center;
+  margin: 0 6px;
+}
+
 /* 메인 열 전체를 --panel 하나로 (F-143 3.8) — 내용 칸과 좌우 여백의 색 구분을 없앤다.
    세로 스크롤은 각 자식(cm-scroller·viewer 등)이 전체 폭으로 맡는다 */
 .content-area {

@@ -77,6 +77,9 @@ flowchart TB
 
 ```mermaid
 flowchart LR
+  subgraph T["T 문서 탭 줄 — 설치 앱 창·넓은 화면만, 상단바 위 (small 2026-10-21)"]
+    T1["탭(임시 탭 기울임)·× 닫기·⋯ 다른 탭 닫기·오른쪽 탭 닫기·＋ 새 문서<br/>Ctrl+Tab·Ctrl+W·가운데 버튼·끌어서 순서"]
+  end
   subgraph A["A 상단바"]
     A1["탭바 (서식 버튼) F-233"]
     A2["접속자 아바타 F-307"]

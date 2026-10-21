@@ -42,6 +42,7 @@ import { wikiComplete } from './wikiComplete'
 import * as Y from 'yjs'
 import type { Awareness } from 'y-protocols/awareness'
 import { createYBinding, createYBindingFromState, undoKeymap } from './yBinding'
+import { ySyncAnnotation } from 'y-codemirror.next'
 import { connectRemote } from './remoteGate'
 import { attachRemoteCursors, remoteCursors, revealPeerCursor } from './remoteCursors'
 import { observeTitle, writeTitle } from './liveTitle'
@@ -387,8 +388,9 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     contextMenuListeners.forEach((cb) => cb(info))
   }
 
-  // 문서 변경 구독 — 원격 적용·되돌리기 트랜잭션도 온다 (F-2140 2장)
-  const changeListeners = new Set<(u: { changes: ChangeSet; state: EditorState }) => void>()
+  // 문서 변경 구독 — 원격 적용·되돌리기 트랜잭션도 온다. local 은 원격(ySync) 반영이 아닌 변경이 하나라도 있을 때 (F-2140 2장, small 2026-10-21)
+  type ChangeUpdate = { changes: ChangeSet; state: EditorState; local: boolean }
+  const changeListeners = new Set<(u: ChangeUpdate) => void>()
 
   const previewCompartment = new Compartment()
   const attributesCompartment = new Compartment()
@@ -504,7 +506,8 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         if (onDocChange) onDocChange(update.state)
-        changeListeners.forEach((cb) => cb({ changes: update.changes, state: update.state }))
+        const local = update.transactions.some((tr) => tr.docChanged && tr.annotation(ySyncAnnotation) === undefined)
+        changeListeners.forEach((cb) => cb({ changes: update.changes, state: update.state, local }))
       }
       if (update.selectionSet && onSelectionChange) onSelectionChange(update.state)
 
@@ -667,7 +670,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     },
 
     // 문서 변경 구독 (F-2140 2장) — 구독 해제 함수를 돌려준다
-    onChanges(callback: (u: { changes: ChangeSet; state: EditorState }) => void): () => void {
+    onChanges(callback: (u: ChangeUpdate) => void): () => void {
       changeListeners.add(callback)
       return () => changeListeners.delete(callback)
     },

@@ -23,7 +23,7 @@ import MapPanel, { type MapFolderRow } from './MapPanel'
 import usePresence from './usePresence'
 import { loadMapGroups, loadMapView, saveMapGroups, saveMapView, type MapGroup, type MapView } from './mapPrefs'
 import FolderMenu from './FolderMenu'
-import { formatHash } from './hashRoute'
+import { openDocInNewTab } from './openInNewTab'
 import type { Doc, Folder } from '../types'
 
 const NODE_CAP = 1000 // F-292 결정 11 + F-2002 10.3
@@ -481,10 +481,7 @@ export default function MapPage({ docCount, store, scope, searchScope, centerDoc
                             key: 'open-new-tab',
                             label: '새 탭에서 열기',
                             icon: IconOpenInNew,
-                            // noopener 가 없으면 sessionStorage 가 복제돼 편집 잠금이 깨진다 (F-296 4.1)
-                            onSelect: () => {
-                              window.open(formatHash(nodeMenu.id), '_blank', 'noopener')
-                            },
+                            onSelect: () => openDocInNewTab(nodeMenu.id),
                           },
                           { key: 'recenter', label: '여기로 이동', icon: IconRecenter, onSelect: () => recenter(nodeMenu.id) },
                           {

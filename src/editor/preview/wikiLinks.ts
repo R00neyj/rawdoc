@@ -9,6 +9,7 @@ import type { ViewUpdate } from '@codemirror/view'
 
 import { findWikiLinks } from '../../lib/wikiLink'
 import { createWikiResolver, type WikiResolver } from '../../lib/wikiResolve'
+import { appTabsBridge } from '../../lib/appTabs'
 import { isEditorFocused, selectionTouches } from './active'
 import { isComposing, isForced } from '../composition'
 
@@ -234,7 +235,8 @@ export function wikiLinkClicks(onOpenWikiLink?: OnOpenWikiLink): Extension {
     EditorView.domEventHandlers({
       mousedown(event, view) {
         if (!onOpenWikiLink) return false
-        if (event.button !== 0) return false // 왼쪽 버튼만
+        const tabs = event.button === 1 ? appTabsBridge() : null
+        if (event.button !== 0 && !tabs) return false // 왼쪽 버튼만, 설치 앱 탭이 켜졌으면 가운데 버튼도 (small 2026-10-21)
         if (isComposing(view)) return false // 조합 중이면 가로채지 않는다
 
         const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
@@ -244,6 +246,12 @@ export function wikiLinkClicks(onOpenWikiLink?: OnOpenWikiLink): Extension {
         if (!link) return false
         if (!(event.target as Element | null)?.closest?.('.md-wikilink')) return false // 실제 글자 위가 아니면 기본 동작
 
+        if (tabs) {
+          event.preventDefault()
+          tabs.pinNextOpen()
+          onOpenWikiLink(link.target, link.heading)
+          return true
+        }
         if (event.shiftKey) return false // 기존 선택 확장 동작 그대로
         if (event.ctrlKey || event.metaKey) return false // 열지 않고 커서 이동 — 편집 진입
 

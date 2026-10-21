@@ -25,7 +25,7 @@
 |`src/types.ts`|문서·폴더 등 저장 데이터의 모양을 정해 둠|
 |`src/vite-env.d.ts`|빌드 도구와 컴퓨터 기본 기능의 모양을 적어 둔 선언|
 
-## `src/app/` 화면과 앱 동작 (266)
+## `src/app/` 화면과 앱 동작 (270)
 
 사용자가 보는 창·메뉴·버튼과, 그 뒤에서 도는 규칙
 
@@ -79,6 +79,8 @@
 |`src/app/docPicker.ts`|시작 문서를 고를 때 잠긴 금고 문서를 빼고 제목으로 거른 최근 수정순 목록과 처음 채울 문서를 정함|
 |`src/app/DocPickerDialog.tsx`|설정 `시작 화면` 의 `문서 지정` 에서 제목으로 찾아 시작 문서를 고르는 창|
 |`src/app/DocSkeleton.tsx`|문서를 불러오는 동안 보이는 회색 자리 표시 화면|
+|`src/app/DocTabBar.tsx`|설치 앱 창에서 편집 화면 위에 보이는 문서 탭 줄. 탭 누르기·닫기·끌어서 순서 바꾸기·탭 메뉴를 그림|
+|`src/app/docTabs.ts`|문서 탭 목록의 규칙(임시 탭 바꾸기·고정·닫은 뒤 다음 탭 고르기·순서 바꾸기·저장값 읽고 쓰기)을 정함|
 |`src/app/DocumentArea.tsx`|문서 본문 편집 영역과 그 주변(댓글 달기 버튼 등)을 배치함|
 |`src/app/DonateDialog.tsx`|토스 송금 QR(넓은 창)이나 토스 앱 열기 버튼(휴대폰)을 보여 주는 후원 창|
 |`src/app/donateStore.ts`|후원 창이 열렸는지 기억하고, 열면 다음 후원 알림을 1년 뒤로 미룸|
@@ -160,6 +162,7 @@
 |`src/app/notificationsApi.ts`|알림함 목록을 서버에서 받아오고 읽음 표시를 모아 보냄|
 |`src/app/NotificationsMenu.tsx`|상단바 알림 버튼과 안 읽은 수, 알림 목록|
 |`src/app/notificationsShare.ts`|여러 탭이 알림 확인을 나눠 맡도록 탭끼리 주고받는 메시지를 다룸|
+|`src/app/openInNewTab.ts`|`새 탭에서 열기` — 설치 앱 탭이 켜져 있으면 앱 안 새 탭, 아니면 브라우저 새 탭으로 엶|
 |`src/app/Outline.tsx`|오른쪽 목차. 제목을 누르면 그 위치로 이동함|
 |`src/app/OutlinePanel.tsx`|오른쪽 칸 안에 들어가는 목차 탭|
 |`src/app/outlinePosition.ts`|목차에서 지금 보고 있는 제목 위치를 계산하고 해당 제목을 찾음|
@@ -242,6 +245,7 @@
 |`src/app/useDocNavigation.ts`|문서 열기·새 문서 만들기·문서 사이 이동을 처리함|
 |`src/app/useDocSaver.ts`|편집 중인 문서와 댓글을 자동으로 저장함|
 |`src/app/useDocSession.ts`|문서를 열 때 혼자 편집인지 실시간 함께 편집인지 정하고 접속자를 관리함|
+|`src/app/useDocTabs.ts`|설치 앱 문서 탭을 지금 문서에 맞추고, 단축키·새 탭 요청·위치 기억·기기 저장을 처리함|
 |`src/app/useDonatePrompt.ts`|때가 된 기기에서 부팅 뒤 후원 알림 띠를 한 번 띄움|
 |`src/app/useE2ee.ts`|암호 금고 잠금·열기와 관련 창 상태를 관리함|
 |`src/app/useE2eeConvert.ts`|문서를 암호 금고로 옮기거나 금고에서 꺼냄|
@@ -388,7 +392,7 @@
 |`src/viewer/viewFindDom.ts`|보기 모드에서 찾은 글자를 강조하고 그 위치로 스크롤함|
 |`src/viewer/viewFindMatch.ts`|보기 모드 찾기에서 검색어와 맞는 곳을 계산함|
 
-## `src/lib/` 공통 규칙 (78)
+## `src/lib/` 공통 규칙 (79)
 
 여러 화면이 함께 쓰는 계산과 판단
 
@@ -397,6 +401,7 @@
 |`src/lib/accessRequest.ts`|링크로 보는 사람의 권한 요청에 서버와 앱이 같이 쓰는 기한·상한 값과 응답 모양을 정함|
 |`src/lib/accountDeletion.ts`|계정 삭제 때 서버와 앱이 같이 쓰는 확인 단어·제한 시간 등을 정함|
 |`src/lib/appEntry.ts`|첫 방문자에게 소개 페이지를 보일지 바로 앱을 열지 판단함|
+|`src/lib/appTabs.ts`|편집기·사이드바가 앱 안 새 탭을 요청할 수 있게 문서 탭 기능과 이어 주는 연결 고리|
 |`src/lib/attachmentUrls.ts`|첨부 파일을 화면에 띄울 임시 주소를 만들고 다 쓰면 거둠|
 |`src/lib/builtinTemplates.ts`|앱에 기본으로 들어 있는 문서 서식 5가지(칸반 포함)의 본문을 담음 (F-2143)|
 |`src/lib/calendar.ts`|오른쪽 패널 달력의 날짜 칸과 날짜별 문서 제목을 계산함|

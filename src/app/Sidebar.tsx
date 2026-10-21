@@ -65,6 +65,7 @@ import { GithubImportMenu } from './GithubMenu'
 import SidebarMoreMenu from './SidebarMoreMenu'
 import { e2eeMenuForDoc, e2eeMenuForFolder, type E2eeConvertDirection, type E2eeConvertTarget, type E2eeMenuState } from '../e2ee/convert'
 import { formatHash } from './hashRoute'
+import { openDocInNewTab } from './openInNewTab'
 import { GUIDES_PATH } from '../lib/siteChrome'
 import AccountMenu, { type AccountMenuProps } from './AccountMenu'
 import SidebarFooter from './SidebarFooter'
@@ -403,8 +404,7 @@ function DocRow({ node, depth, ctx }: { node: DocNode; depth: number; ctx: Sideb
       key: 'open-new-tab',
       label: '새 탭에서 열기',
       icon: IconOpenInNew,
-      // noopener 가 필수다 — 없으면 sessionStorage 가 복제돼 F-213 편집 잠금이 깨진다 (F-296.md 4.1·5.2)
-      onSelect: () => { window.open(formatHash(node.id), '_blank', 'noopener') },
+      onSelect: () => openDocInNewTab(node.id),
     },
     pinMenuItem(node, ctx.onTogglePin),
     {
@@ -478,7 +478,7 @@ function PinnedRow({ doc, ctx }: { doc: DocLike; ctx: SidebarCtx }) {
       key: 'open-new-tab',
       label: '새 탭에서 열기',
       icon: IconOpenInNew,
-      onSelect: () => { window.open(formatHash(doc.id), '_blank', 'noopener') },
+      onSelect: () => openDocInNewTab(doc.id),
     },
     pinMenuItem(doc, ctx.onTogglePin),
     {

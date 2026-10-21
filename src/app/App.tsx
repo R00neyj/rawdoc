@@ -124,6 +124,8 @@ import { isMacPlatform } from './shortcutCatalog'
 import PublicView from './PublicView'
 import type { InviteTarget } from './InviteDialog'
 import { mapIndexScope } from './mapIndex'
+import { useDocTabs } from './useDocTabs'
+import DocTabBar from './DocTabBar'
 import type { Doc, Folder, LineEnding, Store } from '../types'
 
 const STATS_DEBOUNCE_MS = 150
@@ -316,7 +318,9 @@ export default function App() {
   )
 
   // 문서 전환·삭제·해시 변경 전에 대기 중인 자동 저장을 끝낸다 — ref 로 최신 flush 를 불러 의존성 없이 안정된 참조를 유지한다 (F-110.md 3.4)
+  const docTabLeaveRef = useRef(() => {}) // 문서 탭 위치 기록 — useDocTabs 가 채운다 (small 2026-10-21)
   const beforeLeaveDoc = useCallback(async () => {
+    docTabLeaveRef.current()
     await docSaverFlushRef.current()
   }, [])
 
@@ -1004,6 +1008,10 @@ export default function App() {
     setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute, setDeletedElsewhereId, setNotice, setSearchOpen, setPendingEditorSearch,
     editorRef, focusTitleRef, focusEditorRef, pendingJumpRef, openDocIdRef,
   })
+  const docTabs = useDocTabs({
+    narrow, ready: bootPhase === 'ready', scope: searchScope(store.kind, store.kind === 'server' ? (store as ServerStore).userId : null), docs, currentDocId, openDocId: openDoc?.id ?? null,
+    editorHandle, viewMode, viewerRef, viewerDocId, pendingJumpRef, leaveRef: docTabLeaveRef, selectDoc, goHome, createNewDoc,
+  })
 
   // hashchange 핸들러(위)가 항상 최신 docs·currentDocId 를 보도록 매 커밋 후 갱신한다 (0단계 버그 수정)
   useEffect(() => {
@@ -1387,6 +1395,7 @@ export default function App() {
           <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
         )}
         <div className="main-column">
+          {docTabs.bar && <DocTabBar {...docTabs.bar} />}
           {!narrow && topBar}
           <NoticeBar notice={notice} onDismiss={() => setNotice(null)} />
           <AppScreens {...{
