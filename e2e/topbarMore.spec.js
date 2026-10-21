@@ -10,7 +10,7 @@ const DOC = '# 제목 1\n\n본문\n\n## 제목 2\n'
 const USER = { id: 'u1', email: 'a@b.com' }
 
 const moreBtn = (page) => page.locator('.topbar').getByRole('button', { name: /^메뉴/ })
-const sheet = (page) => page.locator('dialog.more-sheet')
+const sheet = (page) => page.locator('dialog.more-sheet:not(.phone-tabs-sheet)')
 const rowTexts = (page) => sheet(page).locator('.more-sheet-item').allInnerTexts().then((list) => list.map((t) => t.trim().split('\n')[0]))
 
 function longDoc() {

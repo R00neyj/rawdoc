@@ -4217,8 +4217,9 @@ body.sidebar-resizing {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 20px;
-  margin-bottom: -8px;
+  /* 막대는 4px 지만 손가락이 잡을 높이는 36px */
+  height: 36px;
+  margin-bottom: -12px;
   touch-action: none;
   cursor: grab;
 }
