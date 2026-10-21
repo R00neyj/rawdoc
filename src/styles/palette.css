@@ -124,8 +124,26 @@
     margin-top: 8vh;
   }
 
+  /* 바깥 창은 넘치지 않게 잘라 목록만 스크롤한다 — 창까지 스크롤바가 하나 더 생겼다 (tweak 2026-10-21) */
+  .dialog[open]:has(> .command-palette),
+  .dialog[open]:has(> .doc-picker) {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 8vh - 16px);
+    overflow: hidden;
+  }
+
+  .command-palette,
+  .doc-picker {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
   .command-palette-list {
     max-height: min(560px, 68dvh);
+    min-height: 0;
+    flex: 0 1 auto;
   }
 
   .command-palette-input,

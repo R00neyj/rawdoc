@@ -550,11 +550,20 @@ body.sidebar-resizing {
   user-select: none;
 }
 
+/* 대화상자 배경막과 같은 딤·블러 (tweak 2026-10-21) */
 .sidebar-backdrop {
   position: absolute;
   inset: 0;
   z-index: 34;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(6px);
+  transition: opacity var(--transition-fast);
+}
+
+@starting-style {
+  .sidebar-backdrop {
+    opacity: 0;
+  }
 }
 
 /* 동작 버튼(새 문서·새 폴더·가져오기)·고정됨 묶음 — 문서가 많아져도 스크롤 밖에 고정
