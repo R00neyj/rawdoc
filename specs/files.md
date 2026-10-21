@@ -354,6 +354,7 @@
 |`src/editor/frontmatter.ts`|문서 맨 위 속성 정보 영역을 알아보고 표로 보여 줌|
 |`src/editor/highlight.ts`|마크다운 기호와 제목 등에 색과 굵기를 입힐 표시를 붙임|
 |`src/editor/imageInsert.ts`|이미지를 붙여넣거나 끌어놓으면 본문에 넣을 자리를 정함|
+|`src/editor/imageMove.ts`|이미지를 끌어 놓은 줄 사이로 이미지 원문 줄을 옮기는 변경을 계산하고, 놓을 수 없는 표·코드 블록 범위를 알려 줌|
 |`src/editor/insertCommands.ts`|우클릭 메뉴로 표·구분선 같은 덩어리를 본문에 넣음|
 |`src/editor/insertDateTime.ts`|커서 자리에 날짜·시간 글자를 넣음|
 |`src/editor/insertTemplate.ts`|고른 템플릿 내용을 본문 알맞은 자리에 넣음|
@@ -366,8 +367,9 @@
 |`src/editor/preview/frontmatterEdit.ts`|문서 속성 표의 값 칸을 바로 고칠 수 있게 함|
 |`src/editor/preview/frontmatterWidget.ts`|편집 화면에서 문서 속성 정보를 표로 그려 줌|
 |`src/editor/preview/highlightMark.ts`|`==글자==` 형광펜 표시를 화면에 칠해 줌|
+|`src/editor/preview/imageDrag.ts`|편집 화면 이미지를 마우스로 끌거나 휴대폰에서 꾹 눌러 끌어 다른 줄 사이로 옮기게 함|
 |`src/editor/preview/imagePaths.ts`|상대 경로로 적힌 이미지를 찾는 방법을 기억해 두고, 문단 첫 줄이 그림 한 줄인지 가려 줌|
-|`src/editor/preview/imageWidget.ts`|편집 화면에 이미지를 보여 주고 크기·정렬·삭제를 다룸|
+|`src/editor/preview/imageWidget.ts`|편집 화면에 이미지를 보여 주고 크기·정렬·삭제·끌어 옮기기를 다룸|
 |`src/editor/preview/index.ts`|편집 화면 미리보기 기능들을 모아 한 번에 켬|
 |`src/editor/preview/inline.ts`|커서가 없는 곳의 굵게·링크 기호를 숨겨 깔끔하게 보여 줌|
 |`src/editor/preview/lines.ts`|제목·목록·체크박스·인용 줄을 꾸며 보여 줌|

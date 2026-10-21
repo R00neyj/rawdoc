@@ -6,6 +6,7 @@ import { imageAlignChange, imageWidthChange, imageBlockDeleteRange } from '../..
 import { imageLineAlignChange, imageLineWidthChange } from '../../lib/imageMarkdown'
 import { createAttachmentUrl, revokeAttachmentUrl } from '../../lib/attachmentUrls'
 import { observeHeight, stopObservingHeight } from './blocks'
+import { attachImageMove, type MoveWrap } from './imageDrag'
 
 import formatAlignLeftSvg from '@material-symbols/svg-400/outlined/format_align_left.svg?raw'
 import formatAlignCenterSvg from '@material-symbols/svg-400/outlined/format_align_center.svg?raw'
@@ -418,6 +419,10 @@ export class ImageWidget extends WidgetType {
     const { edge, corner } = buildHandles(view, wrap, box)
     box.appendChild(edge)
     box.appendChild(corner)
+    attachImageMove(view, wrap, box, () => {
+      const { blockFrom, blockTo } = currentBlockRange(view, wrap)
+      return { from: blockFrom, to: blockTo }
+    })
 
     if (this.repo) loadRepoImage(frame, this.repo.src, this.alt)
     else this._loadImage(view, frame)
@@ -472,5 +477,7 @@ export class ImageWidget extends WidgetType {
   destroy(dom: HTMLElement): void {
     stopObservingHeight(dom)
     dom.querySelectorAll<HandleEl>('.md-image-handle').forEach((h) => h._cancelDrag?.())
+    const moving: MoveWrap = dom
+    moving._cancelMove?.()
   }
 }

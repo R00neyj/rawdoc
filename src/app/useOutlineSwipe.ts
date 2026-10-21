@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react'
 import type { RefObject } from 'react'
 import { classifyOutlineSwipe } from './edgeSwipe'
-import { hasOpenDialog, hasScrollableRightAncestor, isDraggingTextSelection, isKanbanDragging } from './useEdgeSwipe'
+import { hasOpenDialog, hasScrollableRightAncestor, isDraggingTextSelection, isItemDragging } from './useEdgeSwipe'
 
 type Args = {
   containerRef: RefObject<HTMLElement | null>
@@ -55,7 +55,7 @@ export function useOutlineSwipe({ containerRef, enabled, panelOpen, onOpen, onCl
       const start = startRef.current
       startRef.current = null
       const touch = e.changedTouches[0]
-      if (!start || !touch || composingRef.current || hasOpenDialog() || isKanbanDragging()) return
+      if (!start || !touch || composingRef.current || hasOpenDialog() || isItemDragging()) return
       const result = classifyOutlineSwipe({
         startX: start.x,
         startY: start.y,

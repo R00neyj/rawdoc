@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>이미지 끌어 옮기기 플로우</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; font: 14px/1.5 system-ui, sans-serif; color: #222; background: #f6f6f4; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 40px 0 12px; color: #444; }
+  .sub { color: #777; margin: 0 0 24px; }
+  .flow { display: flex; flex-direction: column; align-items: center; }
+  .row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .box { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; text-align: center; min-width: 180px; }
+  .box small { display: block; color: #888; font-size: 12px; }
+  .box.key { border: 2px solid #333; }
+  .arrow { width: 2px; height: 28px; background: #999; position: relative; margin: 4px 0; }
+  .arrow::after { content: ''; position: absolute; bottom: -2px; left: -5px; border: 6px solid transparent; border-top-color: #999; }
+  .branch { display: flex; gap: 16px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .col { display: flex; flex-direction: column; align-items: center; }
+  .label { font-size: 12px; color: #666; background: #e9e9e5; border-radius: 10px; padding: 1px 8px; margin-bottom: 4px; }
+  .mock { background: #fff; border: 1px solid #ccc; border-radius: 8px; width: 760px; text-align: left; overflow: hidden; }
+  .tabs { display: flex; border-bottom: 1px solid #ccc; background: #eee; font-size: 13px; }
+  .tab { padding: 6px 12px; border-right: 1px solid #ccc; display: flex; gap: 8px; align-items: center; color: #666; }
+  .tab.on { background: #fff; color: #222; font-weight: 600; }
+  .tab.temp { font-style: italic; }
+  .tab .x { color: #999; }
+  .tab.plus { color: #999; }
+  .body { padding: 14px 18px; color: #888; height: 60px; }
+  ol.dec li { margin: 8px 0; }
+
+  .phone { width: 260px; border: 1px solid #ccc; border-radius: 22px; background: #fff; padding: 10px; font-size: 12px; }
+  .pill { display: flex; gap: 14px; justify-content: center; border: 1px solid #ccc; border-radius: 20px; padding: 6px 12px; margin-top: 8px; }
+  .tabsq { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1.5px solid #333; border-radius: 4px; font-size: 10px; font-weight: 700; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .card { border: 1px solid #ccc; border-radius: 8px; padding: 6px; height: 70px; color: #888; position: relative; }
+  .card.on { border: 2px solid #333; color: #222; }
+  .card .x { position: absolute; right: 6px; top: 4px; }
+  pre { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; margin: 0; text-align: left; }
+</style>
+</head>
+<body>
+<h1>이미지 끌어 옮기기 플로우</h1>
+<p class="sub">요청: "pc, mo 둘다 이미지 꾹 누르기 + 드래그로 위치이동 쉽게할수있어야함". 편집 모드 이미지 블록(<code>imageWidget.ts</code>) 대상. 옮기면 원문에서 <code>![…](…)</code> 줄이 그 자리로 이동(사용자 편집 하나, 되돌리기 한 번)</p>
+
+<h2>1. 끌기</h2>
+<div class="flow">
+  <div class="branch">
+    <div class="col"><span class="label">PC</span><div class="box">이미지 위 마우스 누른 채 끌기<small>크기 손잡이·정렬 버튼 위는 제외</small></div></div>
+    <div class="col"><span class="label">휴대폰</span><div class="box">이미지 꾹 누르기(약 400ms)<small>살짝 커지며 떠오름 + 진동</small></div></div>
+  </div>
+  <div class="arrow"></div>
+  <div class="box key">끄는 동안 줄 사이에 가로 막대(놓일 자리) 표시<small>화면 위·아래 끝에 가면 자동 스크롤</small></div>
+  <div class="arrow"></div>
+  <div class="branch">
+    <div class="col"><span class="label">놓음</span><div class="box key">그 줄 사이로 이미지 줄 이동<small>Ctrl+Z 한 번에 되돌림</small></div></div>
+    <div class="col"><span class="label">제자리 · Esc · 손가락 취소</span><div class="box">변화 없음</div></div>
+    <div class="col"><span class="label">표·코드블록 안</span><div class="box">놓을 수 없음, 막대 안 뜸</div></div>
+  </div>
+</div>
+
+<h2>정할 것 (기본값 제안)</h2>
+<ol class="dec">
+  <li><b>PC 시작 조건</b> — 그냥 누르고 끌기(제안, 클릭과는 4px 이상 움직임으로 구분) / PC 도 꾹 누르기</li>
+  <li><b>놓을 수 있는 곳</b> — 블록 사이(줄 사이)만(제안) / 문장 중간 글자 사이도</li>
+  <li><b>휴대폰 꾹 누르기와 기존 길게 누르기(글자 선택·메뉴)</b> — 이미지 위에서는 끌기가 우선(제안)</li>
+  <li><b>보기 모드</b> — 끌기 없음(제안, 편집 모드만)</li>
+</ol>
+
+</body>
+</html>

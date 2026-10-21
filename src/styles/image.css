@@ -178,6 +178,43 @@
   pointer-events: none;
 }
 
+/* 끌어 옮기기 (small 2026-10-22) — 길게 누르기가 글자 선택·그림 끌기·메뉴가 아니라 집기가 되게 */
+.md-block.md-image .md-image-box {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.md-block.md-image .md-image-img {
+  -webkit-user-drag: none;
+}
+
+.cm-editor[data-image-dragging],
+.cm-editor[data-image-dragging] * {
+  cursor: grabbing;
+}
+
+/* 집으면 살짝 커지며 떠오른다 */
+.md-block.md-image--dragging .md-image-box {
+  scale: 1.02;
+  opacity: 0.7;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  border-radius: var(--radius-image);
+  transition: scale var(--transition-fast), opacity var(--transition-fast);
+}
+
+/* 놓일 줄 사이 막대 — 문서 밖 body 에 붙어 내용을 바꾸지 않는다 */
+.md-image-drop-marker {
+  position: fixed;
+  z-index: 50;
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
 /* 보기 모드·공유 화면 이미지 블록 (F-158 2.1·2.2) — 편집 모드 위젯도 클래스에 md-image 가 섞여 있어 .viewer 로 범위를 좁힌다 */
 .viewer .md-image {
   position: relative;
