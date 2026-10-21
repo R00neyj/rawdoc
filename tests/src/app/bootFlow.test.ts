@@ -106,6 +106,12 @@ describe('decideBootRoute', () => {
     expect(route({ docs, startScreen: 'doc', startDocId: 'v' })).toEqual({ kind: 'home' })
     expect(route({ hash: { type: 'doc', docId: 'a' }, startScreen: 'doc', startDocId: 'v' })).toMatchObject({ kind: 'doc', docId: 'a' })
   })
+
+  it('F-2155 U4 #/file 은 시작 화면 설정과 무관하게 홈 — handle 은 주소에 없다', () => {
+    expect(route({ hash: { type: 'file' } })).toEqual({ kind: 'home' })
+    expect(route({ hash: { type: 'file' }, startScreen: 'last', lastDocId: 'b' })).toEqual({ kind: 'home' })
+    expect(route({ hash: { type: 'file' }, startScreen: 'doc', startDocId: 'a' })).toEqual({ kind: 'home' })
+  })
 })
 
 function makeDeps(): BootDeps {
@@ -122,6 +128,7 @@ function makeDeps(): BootDeps {
     setHelpOpen: vi.fn(),
     setTrashOpen: vi.fn(),
     setMapRoute: vi.fn(),
+    closeLocalFile: vi.fn(),
     setDeletedElsewhereId: vi.fn(),
     showNotice: vi.fn(() => 1),
     beforeLeaveDoc: vi.fn(async () => {}),
@@ -264,6 +271,7 @@ describe('runBoot', () => {
     expect(deps.setSharesOpen).toHaveBeenCalledWith(false)
     expect(deps.setHelpOpen).toHaveBeenCalledWith(false)
     expect(deps.setMapRoute).toHaveBeenCalledWith(null)
+    expect(deps.closeLocalFile).toHaveBeenCalled()
   })
 
   function deferredDocs() {

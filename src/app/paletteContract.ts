@@ -57,6 +57,8 @@ export type PaletteContext = {
     newDoc: () => void
     newFolder: () => void
     importDoc: () => void
+    // 로컬 파일 열기 — 선택 필드. 브라우저가 지원할 때만 준다 (F-2155 2장)
+    openLocalFile?: () => void
     newBoard?: () => void
     current?: {
       owned: boolean
@@ -109,7 +111,7 @@ export type PaletteContext = {
   dateTime?: { insert: (text: string) => void }
 }
 
-export type PaletteScreen = 'doc' | 'home' | 'help' | 'trash' | 'map' | 'shares' | 'sharedLink'
+export type PaletteScreen = 'doc' | 'home' | 'help' | 'trash' | 'map' | 'file' | 'shares' | 'sharedLink'
 export type PaletteViewMode = 'live' | 'raw' | 'view'
 
 // 화면 하나로 정하기 — App 렌더 우선순위와 같다 (F-2054 4.2)
@@ -119,6 +121,7 @@ export function paletteScreen(s: {
   help: boolean
   trash: boolean
   map: boolean
+  file: boolean
   currentDocId: string | null
 }): PaletteScreen {
   if (s.sharedLink) return 'sharedLink'
@@ -126,6 +129,7 @@ export function paletteScreen(s: {
   if (s.help) return 'help'
   if (s.trash) return 'trash'
   if (s.map) return 'map'
+  if (s.file) return 'file'
   if (s.currentDocId === null) return 'home'
   return 'doc'
 }

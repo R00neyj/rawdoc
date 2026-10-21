@@ -1,5 +1,5 @@
 // 상단바 ⋯ 의 화면 판정·항목·점 규칙 — 휴대폰 아래 판과 넓은 창 드롭다운 공용, DOM·React 없는 순수 함수 (F-2083 3.2)
-export type TopBarScreen = 'doc' | 'home' | 'other'
+export type TopBarScreen = 'doc' | 'home' | 'file' | 'other'
 
 export function topBarScreen(input: {
   bootPhase: 'booting' | 'ready'
@@ -9,8 +9,10 @@ export function topBarScreen(input: {
   helpOpen: boolean
   trashOpen: boolean
   mapRoute: boolean
+  localFile: boolean
 }): TopBarScreen {
   if (input.bootPhase !== 'ready') return 'other'
+  if (input.localFile) return 'file' // F-2155 2장
   if (input.sharedDoc || input.sharesOpen || input.helpOpen || input.trashOpen || input.mapRoute) return 'other'
   return input.currentDocId === null ? 'home' : 'doc'
 }

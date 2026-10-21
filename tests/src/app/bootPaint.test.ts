@@ -179,6 +179,9 @@ describe('BOOT_PAINT_SCRIPT', () => {
       { pathname: '/', hash: '#/shares', expected: 'blank', hashType: 'shares' },
       { pathname: '/', hash: '#/help', expected: 'blank', hashType: 'help' },
       { pathname: '/', hash: '#/trash', expected: 'blank', hashType: 'trash' },
+      { pathname: '/', hash: '#/file', expected: 'home', hashType: 'file' }, // F-2155 U4 — 시작 화면 설정과 무관
+      { pathname: '/', hash: '#/file', startScreen: 'last', expected: 'home', hashType: 'file' },
+      { pathname: '/', hash: '#/file', startScreen: 'doc', expected: 'home', hashType: 'file' },
       { pathname: '/', hash: '#/map', expected: 'blank', hashType: 'map' },
       { pathname: '/', hash: '#/map/abc', expected: 'blank', hashType: 'map' },
       { pathname: '/', hash: '#/p/tok', expected: 'off', hashType: 'public' },

@@ -1,4 +1,4 @@
-// 문서 화면 위에 겹쳐 뜨는 전용 화면(공유 보기·공유 관리·도움말·휴지통·지도) 판정과 한 번에 떠나기 (F-2082, F-2145)
+// 문서 화면 위에 겹쳐 뜨는 전용 화면(공유 보기·공유 관리·도움말·휴지통·지도·로컬 파일) 판정과 한 번에 떠나기 (F-2082, F-2145, F-2155)
 import type { Dispatch, SetStateAction } from 'react'
 import type { ShareDoc } from '../lib/shareCodec'
 
@@ -10,6 +10,7 @@ export type ScreenState = {
   helpOpen: boolean
   trashOpen: boolean
   mapRoute: unknown
+  localFileOpen: boolean
 }
 
 export type ScreenSetters = {
@@ -18,10 +19,11 @@ export type ScreenSetters = {
   setHelpOpen: Dispatch<SetStateAction<boolean>>
   setTrashOpen: Dispatch<SetStateAction<boolean>>
   setMapRoute: Dispatch<SetStateAction<MapRoute | null>>
+  closeLocalFile: () => void
 }
 
 export function screenOpen(s: ScreenState): boolean {
-  return Boolean(s.sharedDoc) || s.sharesOpen || s.helpOpen || s.trashOpen || Boolean(s.mapRoute)
+  return Boolean(s.sharedDoc) || s.sharesOpen || s.helpOpen || s.trashOpen || Boolean(s.mapRoute) || s.localFileOpen
 }
 
 export function leaveScreens(s: ScreenSetters): void {
@@ -30,4 +32,5 @@ export function leaveScreens(s: ScreenSetters): void {
   s.setHelpOpen(false)
   s.setTrashOpen(false)
   s.setMapRoute(null)
+  s.closeLocalFile()
 }

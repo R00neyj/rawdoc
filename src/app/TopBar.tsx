@@ -156,7 +156,7 @@ export default function TopBar({
         <PeerAvatars peers={peers} selfUserId={selfUserId} narrow={narrow} onJump={onJumpToPeer} />
         {phone ? (
           <div className="topbar-pill topbar-pill--end">
-            {screen === 'doc' && (
+            {(screen === 'doc' || screen === 'file') && (
               <ViewModeMenu
                 viewMode={viewMode}
                 disabled={viewModeDisabled}

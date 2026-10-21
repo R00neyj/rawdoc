@@ -42,6 +42,7 @@ export type BootDeps = {
   setHelpOpen: Dispatch<SetStateAction<boolean>>
   setTrashOpen: Dispatch<SetStateAction<boolean>>
   setMapRoute: Dispatch<SetStateAction<{ centerDocId: string | null; returnDocId: string | null } | null>>
+  closeLocalFile: () => void
   setDeletedElsewhereId: Dispatch<SetStateAction<string | null>>
   showNotice: (input: NoticeWithAction) => number
   beforeLeaveDoc: () => Promise<void>
@@ -94,6 +95,7 @@ export function decideBootRoute({ hash: parsedHash, docs: metaList, lastDocId, s
   if (parsedHash.type === 'shares') return { kind: 'shares' }
   if (parsedHash.type === 'help') return { kind: 'help' }
   if (parsedHash.type === 'trash') return { kind: 'trash' }
+  if (parsedHash.type === 'file') return { kind: 'home' } // handle 은 주소에 없다 (F-2155 2장)
   if (parsedHash.type === 'map') {
     const anchorId = parsedHash.docId && metaList.some((d) => d.id === parsedHash.docId) ? parsedHash.docId : null
     return { kind: 'map', anchorId }
@@ -118,7 +120,7 @@ export function decideBootRoute({ hash: parsedHash, docs: metaList, lastDocId, s
 export async function runBoot(deps: BootDeps): Promise<void> {
   const {
     setBootPhase, setDbBlockedMessage, setStore, setDocs, setFolders, setCurrentDocId, setForbiddenDocIds, setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen,
-    setMapRoute, setDeletedElsewhereId, showNotice, beforeLeaveDoc, applyAccountFlags, setAccountPending, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
+    setMapRoute, closeLocalFile, setDeletedElsewhereId, showNotice, beforeLeaveDoc, applyAccountFlags, setAccountPending, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
     restartDocSessionAfterFlush, postTabMessage, replaceHashUrl, yjsStoreRef, e2eeStoreRef, e2eeRef, tabIdRef, createdHereRef, currentDocIdRef, focusEditorRef,
     foldersRef, commentsRef, bootListSeqRef, lastAppliedListSeqRef, deletedElsewhereSourceRef, docPathRef, e2eeConvertBusyRef,
   } = deps
@@ -220,7 +222,7 @@ export async function runBoot(deps: BootDeps): Promise<void> {
     const copyTitle = copy?.title ?? ''
     showNotice({ type: 'warn', message: `다른 곳에서 먼저 바뀌어 내 편집을 "${copyTitle}" 으로 저장했습니다.` })
     if (docId === currentDocIdRef.current) {
-      leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute })
+      leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute, closeLocalFile })
       focusEditorRef.current = false
       setCurrentDocId(copyId)
       setPref('md.lastDocId', copyId)

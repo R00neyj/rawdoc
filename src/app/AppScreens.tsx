@@ -1,10 +1,13 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, type RefObject } from 'react'
 import SharedView from './SharedView'
 import AccessRequestControl from './AccessRequestControl'
 import SharesPage from './SharesPage'
 import HelpPage from './HelpPage'
 import TrashPage from './TrashPage'
 import EmptyState from './EmptyState'
+import LocalFileScreen from './LocalFileScreen'
+import type { EditorHandle } from '../editor/Editor'
+import type { UseLocalFileResult } from './useLocalFile'
 import type { DocMeta } from './docMeta'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { Store } from '../types'
@@ -41,6 +44,11 @@ export type AppScreensProps = Pick<UseAccountStatusResult, 'account'> &
     importSharedDoc: () => Promise<void>
     isEmpty: boolean
     listSource: Pick<Store, 'list' | 'listFolders'>
+    localFile: UseLocalFileResult
+    localEditorRef: RefObject<EditorHandle | null>
+    onOpenLocalFile?: () => void
+    resolvedTheme: string
+    viewMode: 'live' | 'raw' | 'view'
     mapDialogScope: string
     mapRoute: { centerDocId: string | null; returnDocId: string | null } | null
     openHelp: () => Promise<void>
@@ -56,9 +64,9 @@ export type AppScreensProps = Pick<UseAccountStatusResult, 'account'> &
 
 export default function AppScreens({
   account, approveRequestRow, bootPhase, busyRequestIds, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs, e2ee, goHome,
-  handleOpenWikiLink, handleViewContextMenu, helpOpen, trashOpen, trashPage, importSharedDoc, isEmpty, listSource, loginFromShares, mapDialogScope, mapRoute, openHelp,
+  handleOpenWikiLink, handleViewContextMenu, helpOpen, trashOpen, trashPage, importSharedDoc, isEmpty, listSource, localFile, localEditorRef, loginFromShares, mapDialogScope, mapRoute, onOpenLocalFile, openHelp,
   openSharesTarget, ownedDocs, recenterMap, rejectRequestRow, requestImport, revokeShareGrantRow, revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc,
-  sharesGrants, sharesLinks, sharesLoading, sharesOpen, sharesRequests, showNotice,
+  sharesGrants, sharesLinks, sharesLoading, sharesOpen, sharesRequests, showNotice, resolvedTheme, viewMode,
 }: AppScreensProps) {
   return (
     <>
@@ -134,7 +142,12 @@ export default function AppScreens({
           </Suspense>
         </div>
       )}
-      {!sharedDoc && !sharesOpen && !helpOpen && !trashOpen && !mapRoute && isEmpty && (
+      {localFile.session && (
+        <div className="content-area">
+          <LocalFileScreen localFile={localFile} editorRef={localEditorRef} viewMode={viewMode} theme={resolvedTheme} showNotice={showNotice} onClose={goHome} />
+        </div>
+      )}
+      {!sharedDoc && !sharesOpen && !helpOpen && !trashOpen && !mapRoute && !localFile.session && isEmpty && (
         <div className="content-area">
           <EmptyState
             hasDocs={docs.length > 0}
@@ -143,6 +156,7 @@ export default function AppScreens({
             recentDocs={ownedDocs.slice(0, 5)}
             onSelectDoc={selectDoc}
             onOpenHelp={openHelp}
+            onOpenLocalFile={onOpenLocalFile}
           />
         </div>
       )}

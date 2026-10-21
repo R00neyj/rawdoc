@@ -49,6 +49,7 @@ describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀, F-505 U
       'doc.new',
       'kanban.new',
       'folder.new',
+      'file.open',
       'doc.import',
       'github.import',
       'github.newFile',
@@ -315,6 +316,34 @@ describe('F-2054 새 명령 — U2 (F-2054 11.1)', () => {
       if (!cmd) throw new Error(`${id} not found`)
       expect(cmd.when(context), id).toBe(false)
     }
+  })
+})
+
+describe('file.open — F-2155 U6', () => {
+  it('docActions.openLocalFile 이 있을 때만 보이고, 고르면 한 번 부른다', () => {
+    const cmd = PALETTE_COMMANDS.find((c) => c.id === 'file.open')
+    if (!cmd || cmd.kind !== 'action') throw new Error('file.open not found')
+    expect(cmd.label).toBe('파일 열기…')
+    expect(cmd.when(ctx([], undefined, undefined, undefined, undefined, fullExtra()))).toBe(false)
+    let opened = 0
+    const docActions = { ...fullExtra().docActions!, openLocalFile: () => void opened++ }
+    const context = ctx([], undefined, undefined, undefined, undefined, fullExtra({ docActions }))
+    expect(cmd.when(context)).toBe(true)
+    cmd.run(context)
+    expect(opened).toBe(1)
+  })
+
+  it('keywords 로 찾힌다 — 파일 열기·open·컴퓨터·로컬·local·file·md', () => {
+    const cmd = PALETTE_COMMANDS.find((c) => c.id === 'file.open')!
+    for (const word of ['파일 열기', 'open', '컴퓨터', '로컬', 'local', 'file', 'md']) {
+      expect(cmd.keywords, word).toContain(word)
+    }
+  })
+
+  it('.md 가져오기 keywords 에 파일 열기가 없다', () => {
+    const cmd = PALETTE_COMMANDS.find((c) => c.id === 'doc.import')!
+    expect(cmd.keywords).not.toContain('파일 열기')
+    expect(filterPaletteItems([cmd], '파일 열기')).toHaveLength(0)
   })
 })
 

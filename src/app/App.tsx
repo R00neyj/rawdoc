@@ -109,6 +109,8 @@ import { useFolderActions } from './useFolderActions'
 import { useVaultGate } from './useVaultGate'
 import { hideLockedVaultDocs } from './vaultVisibility'
 import { useImportFlow } from './useImportFlow'
+import { useLocalFile, type UseLocalFileResult } from './useLocalFile'
+import { localFileSupported } from '../lib/fileSystemAccess'
 import { useE2eeMigrate } from './useE2eeMigrate'
 import { useE2eeConvert } from './useE2eeConvert'
 import { useLeaveShare } from './useLeaveShare'
@@ -261,6 +263,9 @@ export default function App() {
   const toggleCommentsRef = useRef<(() => void) | null>(null) // Ctrl+M — 상단바 `댓글` 버튼을 누를 수 없으면 null (tweak 2026-09-28)
   const openViewFindRef = useRef<(() => void) | null>(null) // Ctrl+F — 보기 찾기를 열 수 없으면 null (F-2087 3.6)
   const exportMdRef = useRef<(() => void) | null>(null) // Ctrl+S — 내보낼 수 없는 화면이면 null (F-2117)
+  const localFileRef = useRef<UseLocalFileResult | null>(null) // 떠나기·해시·가져오기가 최신 로컬 파일을 읽는다 (F-2155)
+  const localEditorRef = useRef<EditorHandle | null>(null)
+  const importLocalFileRef = useRef<(file: File, handle: FileSystemFileHandle) => Promise<void>>(async () => {})
   const shortcutsButtonRef = useRef<HTMLButtonElement | null>(null) // 상태바 `?` 버튼 — 판이 닫힐 때 포커스를 돌려준다 (F-2052 5.3)
   const bootPhaseRef = useRef(bootPhase) // Ctrl+P 가 매 커밋 최신 bootPhase 를 읽게 한다 (F-2022.md 6.1)
   // hashchange 핸들러가 낡은 클로저의 docs·currentDocId 를 읽지 않도록 매 렌더 후 갱신한다 (0단계 버그 수정)
@@ -323,6 +328,7 @@ export default function App() {
   const beforeLeaveDoc = useCallback(async () => {
     docTabLeaveRef.current()
     await docSaverFlushRef.current()
+    await localFileRef.current?.flush()
   }, [])
 
   // ----- 앱 설치 버튼 (specs/features/F-115.md 3.3, ia.md 3.12) -----
@@ -354,6 +360,11 @@ export default function App() {
   const dismissNotice = useCallback((id: number) => {
     setNotice((cur) => (cur && cur.id === id ? null : cur))
   }, [])
+
+  // ----- 로컬 파일 하나 편집 S-11 (F-2155) -----
+  const localFile = useLocalFile({ selfRef: localFileRef, editorRef: localEditorRef, beforeLeaveDoc, setCurrentDocId, showNotice,
+    screenSetters: { setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute }, importAsDoc: (file, handle) => importLocalFileRef.current(file, handle) })
+  const openLocalFile = localFileSupported() ? localFile.pickLocalFile : undefined
 
   // ----- 계정 상태·차단·경고 알림·다시 읽기 (F-2079) -----
   const { account, accountBlocked, applyAccountFlags, recheckAccount } = useAccountStatus({ store, showNotice, dismissNotice, e2eeRef })
@@ -763,7 +774,7 @@ export default function App() {
 
     runBoot({
       setBootPhase, setDbBlockedMessage, setStore, setDocs, setFolders, setCurrentDocId, setForbiddenDocIds, setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen,
-      setMapRoute, setDeletedElsewhereId, showNotice, beforeLeaveDoc, applyAccountFlags, setAccountPending, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
+      setMapRoute, closeLocalFile: localFile.closeLocalFile, setDeletedElsewhereId, showNotice, beforeLeaveDoc, applyAccountFlags, setAccountPending, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
       restartDocSessionAfterFlush, postTabMessage, replaceHashUrl, yjsStoreRef, e2eeStoreRef, e2eeRef, tabIdRef, createdHereRef, currentDocIdRef, focusEditorRef,
       foldersRef, commentsRef, bootListSeqRef, lastAppliedListSeqRef, deletedElsewhereSourceRef, docPathRef, e2eeConvertBusyRef,
     })
@@ -787,7 +798,7 @@ export default function App() {
   // ----- 뒤로·앞으로 가기, 주소창 직접 수정 (ia.md 3.10) -----
   useHashRouting({
     store, bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment, setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute,
-    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, focusEditorRef, commentsRef,
+    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, focusEditorRef, localFileRef, commentsRef,
     resyncList: resyncFromStore,
   })
 
@@ -1004,6 +1015,7 @@ export default function App() {
     handleOpenWikiLink, importSharedDoc, closeSharedDoc, openDocFromSearch, openHelp, openTrash, openMap, closeMap, recenterMap, copyHelpToDoc,
   } = useDocNavigation({
     store, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, viewMode, notifications,
+    localFileOpen: localFile.session !== null, closeLocalFile: localFile.closeLocalFile,
     wikiResolver, currentFolderId, jumpToHeading, buildNewDocContent, beforeLeaveDoc, showNotice, changeViewMode, closePalette,
     closeSidebarIfNarrow, addOpenFolders, newDocFolderId, ensureE2eeOpenForFolder, requestE2eeOpen, setDocs, setCurrentDocId,
     setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute, setDeletedElsewhereId, setNotice, setSearchOpen, setPendingEditorSearch,
@@ -1013,7 +1025,7 @@ export default function App() {
     narrow, ready: bootPhase === 'ready', scope: searchScope(store.kind, store.kind === 'server' ? (store as ServerStore).userId : null), docs, currentDocId, openDocId: openDoc?.id ?? null,
     editorHandle, viewMode, viewerRef, viewerDocId, pendingJumpRef, leaveRef: docTabLeaveRef, selectDoc, goHome, createNewDoc,
   })
-  useDocumentTitle(currentDoc?.title ?? null)
+  useDocumentTitle(localFile.session?.name ?? currentDoc?.title ?? null)
 
   // hashchange 핸들러(위)가 항상 최신 docs·currentDocId 를 보도록 매 커밋 후 갱신한다 (0단계 버그 수정)
   useEffect(() => {
@@ -1045,13 +1057,13 @@ export default function App() {
   // ----- 가져오기·끌어놓기·이미지 (F-2068) -----
   const {
     dropActive, importState, requestImport, handleImportInputChange, requestImportZip, handleImportZipInputChange, requestImportFolder,
-    handleImportFolderInputChange, handleImportTargetChange, cancelImportPreview, cancelImportProgress, closeImportResult, confirmImport, handleImageFiles,
+    handleImportFolderInputChange, handleImportTargetChange, cancelImportPreview, cancelImportProgress, closeImportResult, confirmImport, handleImageFiles, importLocalFileAsDoc,
   } = useImportFlow({
     store, folders, currentDoc, bootPhase, setDocs, setFolders, setCurrentDocId, setOpenDoc, setEditorRemountNonce, setSharedDoc, setSharesOpen,
     setHelpOpen, setTrashOpen, setMapRoute, showNotice, keepLiveTitle, beforeLeaveDoc, addOpenFolders, closeSidebarIfNarrow, closeSettings,
     ensureE2eeOpenForFolder, pushHashUrl, importInputRef, importZipInputRef, importFolderInputRef, docsRef, foldersRef, currentDocIdRef,
     sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, docPathRef, focusEditorRef, docSaverFlushRef, dropBlockedRef, imageDropBlockedRef,
-    readOnlyDocRef,
+    readOnlyDocRef, localFileRef,
   })
 
   // ----- 탭이 숨겨지거나 닫힐 때 최선 시도로 저장 (F-110.md 3.4, 데이터 손실 구간) -----
@@ -1245,6 +1257,7 @@ export default function App() {
   const { openPalette, paletteContext } = useCommandPalette({
     paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose, closeContextMenu, openPaletteFromRef,
     bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
+    localFileOpen: localFile.session !== null, openLocalFile,
     account, e2ee, statusBarVisible, canInviteCurrentDoc, commentAccessValue, comments, editorRef, currentDocIdRef, readOnlyDocRef, sidebarCommandRef,
     showNotice, templateEntries, readTemplateDocText, openShortcuts, notificationsEnabled, setNotificationsOpen, wikiResolver, currentFolderId,
     narrow, sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebar, closeSidebarIfNarrow, themePref, lineNumbersPref, toolbarPref,
@@ -1259,7 +1272,9 @@ export default function App() {
   useEffect(() => {
     openPaletteRef.current = openPalette
     toggleShortcutsRef.current = toggleShortcuts
-    exportMdRef.current = paletteContext.output?.exportMd ?? null
+    // 로컬 파일 화면의 Ctrl+S 는 내보내기 대신 곧바로 쓴다 (F-2155 3장)
+    exportMdRef.current = localFile.session ? (localFile.session.canWrite ? localFile.saveNow : localFile.grantWrite) : (paletteContext.output?.exportMd ?? null)
+    importLocalFileRef.current = importLocalFileAsDoc
   })
 
   const shownViewerHtml = useCodeHighlight(viewerHtml)
@@ -1300,7 +1315,7 @@ export default function App() {
   const topBar = <AppTopBar {...{
     account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef,
     getShareDoc, handleCopyDocAsRichText, handleExportDoc, handleExportDocAsHtml, handleExportDocAsText, handleOpenNotification,
-    handlePrintDoc, helpOpen, trashOpen, isEmpty, isReadOnlyDoc, kanban, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
+    handlePrintDoc, helpOpen, trashOpen, isEmpty, localFileOpen: localFile.session !== null, isReadOnlyDoc, kanban, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc,
     outlineControlRef, openPalette, openSearch, openViewFind: viewFind.open, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
     toggleButtonRef, toggleCommentsPanel, toggleSidebar, toolbarPref, viewMode, wikiResolver,
     editorRef, github: github.topBar, rightPanel: rightPanel.available ? { open: rightPanel.open, onToggle: rightPanel.togglePanel } : undefined,
@@ -1342,6 +1357,7 @@ export default function App() {
           onCreateDoc={createNewDoc}
           onCreateBoard={createNewBoard}
           onImportDoc={requestImport}
+          onOpenLocalFile={openLocalFile}
           github={github.sidebar}
           onCreateFolder={handleCreateFolder}
           onRenameFolder={handleRenameFolder}
@@ -1402,7 +1418,8 @@ export default function App() {
           <NoticeBar notice={notice} onDismiss={() => setNotice(null)} />
           <AppScreens {...{
             account, approveRequestRow, bootPhase, busyRequestIds, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs: listedDocs, e2ee,
-            goHome, handleOpenWikiLink, handleViewContextMenu, helpOpen, trashOpen, trashPage, importSharedDoc, isEmpty, listSource, loginFromShares,
+            goHome, handleOpenWikiLink, handleViewContextMenu, helpOpen, trashOpen, trashPage, importSharedDoc, isEmpty, listSource, loginFromShares, localFile, localEditorRef,
+            onOpenLocalFile: openLocalFile, resolvedTheme, viewMode: viewMode as 'live' | 'raw' | 'view',
             mapDialogScope, mapRoute, openHelp, openSharesTarget, ownedDocs, recenterMap, rejectRequestRow, requestImport, revokeShareGrantRow,
             revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc, sharesGrants, sharesLinks, sharesLoading, sharesOpen, sharesRequests, showNotice,
           }} />

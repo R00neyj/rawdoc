@@ -10,6 +10,7 @@ const B: HashNavInput = {
   helpOpen: false,
   trashOpen: false,
   mapRoute: null,
+  localFileOpen: false,
 }
 const nav = (over: Partial<HashNavInput>) => decideHashNav({ ...B, ...over })
 const IGNORE = { kind: 'ignore' }
@@ -126,6 +127,17 @@ describe('decideHashNav (F-2071 7.1)', () => {
   it('U20 인식 못 한 해시 — 홈에서도 첫 문서 + 알림 갈래 (F-2059 D13)', () => {
     expect(nav({ hash: '#abc' })).toEqual({ kind: 'open', home: false, docId: null, threadId: null })
     expect(nav({ hash: '#abc', currentDocId: null })).toEqual({ kind: 'open', home: false, docId: null, threadId: null })
+  })
+
+  it('F-2155 U4 #/file — 열려 있으면 무시, 아니면 fileGone', () => {
+    expect(nav({ hash: '#/file', currentDocId: null, localFileOpen: true })).toEqual(IGNORE)
+    expect(nav({ hash: '#/file', currentDocId: null })).toEqual({ kind: 'fileGone' })
+    expect(nav({ hash: '#/file' })).toEqual({ kind: 'fileGone' })
+  })
+
+  it('F-2155 U4 로컬 파일이 열린 동안 #/ 는 홈으로 연다 — 뒤로 가기가 S-11 을 닫는다', () => {
+    expect(nav({ hash: '#/', currentDocId: null, localFileOpen: true })).toEqual({ kind: 'open', home: true, docId: null, threadId: null })
+    expect(nav({ hash: '#/d/a', currentDocId: 'a', localFileOpen: true })).toEqual({ kind: 'open', home: false, docId: 'a', threadId: null })
   })
 })
 

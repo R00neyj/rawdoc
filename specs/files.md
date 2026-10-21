@@ -102,7 +102,7 @@
 |`src/app/githubApi.ts`|GitHub 계정·저장소·파일 연결 정보를 서버에 묻고 결과를 받아옴|
 |`src/app/githubImages.ts`|GitHub 저장소 문서 속 그림을 보여 주고 가져와 첨부로 넣음|
 |`src/app/githubImport.ts`|GitHub 파일을 골라 새 문서로 가져오거나 이미 있는 문서를 엶|
-|`src/app/GithubMenu.tsx`|⋯ 메뉴 GitHub 상태 줄과 사이드바 가져오기 메뉴 버튼|
+|`src/app/GithubMenu.tsx`|⋯ 메뉴 GitHub 상태 줄과 사이드바 가져오기 메뉴(ImportMenu — 파일 열기·.md 파일·GitHub) 버튼|
 |`src/app/githubMerge.ts`|GitHub에서 받은 내용과 내 문서의 달라진 줄을 비교해 합칠 내용을 계산함|
 |`src/app/GithubPickerDialog.tsx`|GitHub 파일을 골라 가져오거나 문서와 연결·해제하는 창|
 |`src/app/githubPull.ts`|GitHub에서 최신 내용을 받아올 때 읽기 검사와 안내·실패 문구를 정함|
@@ -143,6 +143,8 @@
 |`src/app/liveDoc.ts`|실시간 편집 연결의 대기 시간·재연결 간격·끊김 판단 규칙을 정함|
 |`src/app/liveMerge.ts`|연결이 끊긴 동안 내 수정과 서버 쪽 수정이 겹쳤는지 알아내 알림을 띄움|
 |`src/app/liveNotices.ts`|실시간 편집이 끊기거나 멈췄을 때 보여 줄 안내 문구를 고름|
+|`src/app/LocalFileScreen.tsx`|컴퓨터의 .md 파일 하나를 바로 고치는 화면 — 파일명·저장 상태·저장 허용·문서로 가져오기·닫기|
+|`src/app/localFileState.ts`|컴퓨터 파일 저장 상태(저장됨·입력 중·실패·권한 필요)가 어떻게 바뀌는지와 그 화면의 안내 문구를 정함|
 |`src/app/localTrash.ts`|로그인하지 않은 문서의 휴지통 목록·복원·영구 삭제를 휴지통 화면에 이어 주고, 앱을 열 때 30일 지난 문서를 지움|
 |`src/app/mapIndex.ts`|문서 지도에 쓸 문서 간 연결 목록을 만들고 바뀐 문서만 다시 계산함|
 |`src/app/MapLabels.tsx`|문서 연결 지도 위에 문서 이름표를 겹쳐 띄움|
@@ -269,6 +271,7 @@
 |`src/app/useLiveDoc.ts`|문서를 여는 동안 실시간 함께 편집 연결을 유지함|
 |`src/app/useLiveNotices.ts`|실시간 연결 상태·오프라인 보기 등 알림 띠를 띄움|
 |`src/app/useLiveRoomDoc.ts`|다시 온라인이 되면 실시간 편집을 재시작하고 수정 시각을 반영함|
+|`src/app/useLocalFile.ts`|컴퓨터 파일을 열고, 입력이 1초 멈추면 같은 파일에 쓰고, 떠나거나 문서로 가져오는 흐름을 맡음|
 |`src/app/useNewDocTemplate.ts`|템플릿 목록을 읽고 새 문서 본문을 템플릿으로 채움|
 |`src/app/useNotifications.ts`|알림함 내용을 주기적으로 받아 오고 읽음 상태를 관리함|
 |`src/app/useNotificationsGlue.ts`|알림함 열고 닫기, 항목 이동, 안 읽음 점 표시를 연결함|
@@ -429,7 +432,9 @@
 |`src/lib/donateLink.ts`|토스 송금 링크와 QR 이미지 경로를 한곳에 둠|
 |`src/lib/donatePrompt.ts`|후원 알림을 다음에 언제 띄울지 계산함(처음 7일, 닫으면 30일, 후원하면 1년)|
 |`src/lib/e2eeLimits.ts`|금고(종단 암호화) 문서의 크기·형식 제한을 정함|
+|`src/lib/encodeMarkdown.ts`|본문을 파일에 쓸 바이트로 바꿈 — 원래 파일의 BOM·줄바꿈 형식을 그대로 살림|
 |`src/lib/filename.ts`|문서 제목을 저장 가능한 파일·폴더 이름으로 바꿈|
+|`src/lib/fileSystemAccess.ts`|브라우저의 파일 열기 창·쓰기 권한 요청을 감싸 지원 여부와 권한을 확인함|
 |`src/lib/floatCover.ts`|떠 있는 막대가 본문을 얼마나 가리는지 계산함|
 |`src/lib/folderTree.ts`|폴더 목록을 나무 모양으로 묶고 옮길 수 있는지 검사함|
 |`src/lib/frontmatter.ts`|문서 맨 위 속성 정보(머리말 영역)를 찾아 읽음|

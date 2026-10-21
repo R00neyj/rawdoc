@@ -56,6 +56,8 @@ export type UseCommandPaletteOptions = {
   helpOpen: boolean
   trashOpen: boolean
   mapRoute: { centerDocId: string | null; returnDocId: string | null } | null
+  localFileOpen: boolean
+  openLocalFile?: () => void
   docScreenId: string | null
   viewMode: string
   isReadOnlyDoc: boolean
@@ -129,7 +131,7 @@ export type UseCommandPaletteResult = {
 export function useCommandPalette(options: UseCommandPaletteOptions): UseCommandPaletteResult {
   const {
     paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose, closeContextMenu, openPaletteFromRef,
-    bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
+    bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, localFileOpen, openLocalFile, docScreenId, viewMode, isReadOnlyDoc,
     account, e2ee, statusBarVisible, canInviteCurrentDoc, commentAccessValue, comments, editorRef, currentDocIdRef, readOnlyDocRef, sidebarCommandRef,
     showNotice, templateEntries, readTemplateDocText, openShortcuts, notificationsEnabled, setNotificationsOpen, wikiResolver, currentFolderId,
     narrow, sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebar, closeSidebarIfNarrow, themePref, lineNumbersPref, toolbarPref,
@@ -371,6 +373,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
         help: helpOpen,
         trash: trashOpen,
         map: Boolean(mapRoute),
+        file: localFileOpen,
         currentDocId,
       }),
       openSearch: () => runAfterPaletteClose(() => openSearch()),
@@ -392,6 +395,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
           sidebarCommandRef.current?.createTopFolder()
         }),
       importDoc: () => requestImport(),
+      openLocalFile,
       current:
         palettePresentDocScreen && currentDoc
           ? {
@@ -414,7 +418,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
       show: () => runAfterPaletteClose(kanban.showBoard),
     },
     view: {
-      mode: docScreenId !== null && currentDoc?.e2ee !== 'locked' ? (viewMode as PaletteViewMode) : null,
+      mode: (docScreenId !== null && currentDoc?.e2ee !== 'locked') || localFileOpen ? (viewMode as PaletteViewMode) : null,
       setMode: (mode) => {
         changeViewMode(mode)
         if (mode !== 'view') runAfterPaletteClose(() => editorRef.current?.focus())

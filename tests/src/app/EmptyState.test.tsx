@@ -87,3 +87,24 @@ describe('F-257 G12 도움말 줄', () => {
     expect(onOpenHelp).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('F-2155 U8 파일 열기…', () => {
+  // .empty-state-actions 단추의 글자들 — 아이콘 엘리먼트는 건너뛴다
+  function actionLabels(tree: Node) {
+    const [actions] = collect(tree, 'empty-state-actions')
+    const buttons = ([] as Node[]).concat(actions.props?.children as Node[]).filter((n): n is Extract<Node, object> => Boolean(n) && typeof n === 'object')
+    return buttons.map((b) => ({ label: ([] as unknown[]).concat(b.props?.children).filter((c) => typeof c === 'string').join('').trim(), onClick: b.props?.onClick }))
+  }
+
+  it('onOpenLocalFile 이 없으면 단추가 없다', () => {
+    expect(actionLabels(EmptyState({ ...baseProps, recentDocs: [] })).map((b) => b.label)).toEqual(['새 문서', '가져오기'])
+  })
+
+  it('있으면 가져오기 뒤에 파일 열기…, 누르면 부른다', () => {
+    const onOpenLocalFile = vi.fn()
+    const labels = actionLabels(EmptyState({ ...baseProps, recentDocs: [], onOpenLocalFile }))
+    expect(labels.map((b) => b.label)).toEqual(['새 문서', '가져오기', '파일 열기…'])
+    labels[2].onClick?.()
+    expect(onOpenLocalFile).toHaveBeenCalledTimes(1)
+  })
+})

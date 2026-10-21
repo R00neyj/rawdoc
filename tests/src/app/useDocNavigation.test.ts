@@ -15,11 +15,11 @@ describe('useDocNavigation 새 문서로 옮길 때 전용 화면 닫기', () =>
   afterEach(() => vi.unstubAllGlobals())
 
   function setup() {
-    const setters = { setSharedDoc: vi.fn(), setSharesOpen: vi.fn(), setHelpOpen: vi.fn(), setTrashOpen: vi.fn(), setMapRoute: vi.fn() }
+    const setters = { setSharedDoc: vi.fn(), setSharesOpen: vi.fn(), setHelpOpen: vi.fn(), setTrashOpen: vi.fn(), setMapRoute: vi.fn(), closeLocalFile: vi.fn() }
     const options = {
       store: { create: vi.fn(async () => doc) },
       docs: [], folders: [], currentDocId: 'A', currentDoc: { id: 'A', title: 'A' }, openDoc: null,
-      sharedDoc: null, sharesOpen: false, helpOpen: true, trashOpen: false, mapRoute: null, viewMode: 'live',
+      sharedDoc: null, sharesOpen: false, helpOpen: true, trashOpen: false, mapRoute: null, localFileOpen: false, viewMode: 'live',
       wikiResolver: { resolve: () => null, findLinkFolder: () => null },
       currentFolderId: null, jumpToHeading: vi.fn(),
       buildNewDocContent: vi.fn(async () => ({ content: '', failed: false })),
@@ -38,6 +38,7 @@ describe('useDocNavigation 새 문서로 옮길 때 전용 화면 닫기', () =>
     expect(s.setHelpOpen).toHaveBeenCalledWith(false)
     expect(s.setTrashOpen).toHaveBeenCalledWith(false)
     expect(s.setMapRoute).toHaveBeenCalledWith(null)
+    expect(s.closeLocalFile).toHaveBeenCalled()
   }
 
   it('saveCurrentAsNewDoc 는 도움말·공유 관리까지 닫는다', async () => {
@@ -52,6 +53,16 @@ describe('useDocNavigation 새 문서로 옮길 때 전용 화면 닫기', () =>
     await nav.openWikiLinkTarget('없는 문서', null, { docId: 'A', folderId: null })
     expect(options.setCurrentDocId).toHaveBeenCalledWith('N')
     expectAllClosed(setters)
+  })
+
+  it('F-2155 로컬 파일 화면의 닫기(goHome)는 문서가 없어도 떠나고 주소를 #/ 로', async () => {
+    const { setters, options } = setup()
+    const home = attachDocNavigation({ ...options, currentDocId: null, helpOpen: false, localFileOpen: true })
+    await home.goHome()
+    expect(options.beforeLeaveDoc).toHaveBeenCalled()
+    expect(setters.closeLocalFile).toHaveBeenCalledTimes(1)
+    expect(options.setCurrentDocId).toHaveBeenCalledWith(null)
+    expect(history.replaceState).toHaveBeenCalled()
   })
 })
 
@@ -68,14 +79,14 @@ describe('createNewDoc 대상 폴더', () => {
       store: { create: vi.fn(async () => doc) },
       docs: [], folders: [{ id: 'f1', name: 'F', parentId: null }], currentDocId: 'A',
       currentDoc: { id: 'A', title: 'A', folderId: 'f1' }, openDoc: null,
-      sharedDoc: null, sharesOpen: false, helpOpen: false, trashOpen: false, mapRoute: null, viewMode: 'live',
+      sharedDoc: null, sharesOpen: false, helpOpen: false, trashOpen: false, mapRoute: null, localFileOpen: false, viewMode: 'live',
       wikiResolver: { resolve: () => null, findLinkFolder: () => null },
       currentFolderId: 'f1', jumpToHeading: vi.fn(),
       buildNewDocContent: vi.fn(async () => ({ content: '', failed: false })),
       beforeLeaveDoc: vi.fn(async () => {}), showNotice: vi.fn(), changeViewMode: vi.fn(), closeSidebarIfNarrow: vi.fn(),
       addOpenFolders: vi.fn(), newDocFolderId: () => 'f1', ensureE2eeOpenForFolder: async () => true, setDocs: vi.fn(),
       setCurrentDocId: vi.fn(), setDeletedElsewhereId: vi.fn(), setNotice: vi.fn(),
-      setSharedDoc: vi.fn(), setSharesOpen: vi.fn(), setHelpOpen: vi.fn(), setTrashOpen: vi.fn(), setMapRoute: vi.fn(),
+      setSharedDoc: vi.fn(), setSharesOpen: vi.fn(), setHelpOpen: vi.fn(), setTrashOpen: vi.fn(), setMapRoute: vi.fn(), closeLocalFile: vi.fn(),
       editorRef: { current: null }, focusTitleRef: { current: false }, focusEditorRef: { current: false },
       ...overrides,
     } as unknown as UseDocNavigationOptions

@@ -6,6 +6,7 @@ const HASH_SHARE_PATTERN = /^#\/s\/(.+)$/
 const HASH_SHARES_PATTERN = /^#\/shares$/
 const HASH_HELP_PATTERN = /^#\/help$/
 const HASH_TRASH_PATTERN = /^#\/trash$/
+const HASH_FILE_PATTERN = /^#\/file$/
 const HASH_PUBLIC_FOLDER_PATTERN = /^#\/p\/f\/([^/]+)(?:\/(.+))?$/
 const HASH_PUBLIC_PATTERN = /^#\/p\/([^/]+)(?:\/(.+))?$/
 const HASH_MAP_PATTERN = /^#\/map$/
@@ -20,6 +21,7 @@ export type HashRoute =
   | { type: 'public'; token: string; docId?: string }
   | { type: 'publicFolder'; token: string; docId?: string }
   | { type: 'map'; docId?: string }
+  | { type: 'file' }
   | { type: 'home' }
   | { type: 'none' }
 
@@ -44,6 +46,10 @@ export function parseHash(hash: string | undefined): HashRoute {
   }
   if (HASH_TRASH_PATTERN.test(hash)) {
     return { type: 'trash' }
+  }
+  // `#/file` (F-2155 2장) — handle 은 주소에 못 실어 정확히 그 값만
+  if (HASH_FILE_PATTERN.test(hash)) {
+    return { type: 'file' }
   }
   // `#/map`·`#/map/{id}` (F-292.md 6.1) — `#/d/{id}`·`#/p/…` 와 접두사가 겹치지 않아 순서는 상관없다
   if (HASH_MAP_PATTERN.test(hash)) {

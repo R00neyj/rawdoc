@@ -14,6 +14,7 @@ import { setPref } from './prefs'
 import { pushAppEntry, replaceAppEntry } from './historyEntries'
 import { ancestorsOfDoc } from '../lib/folderTree'
 import { firstListedDocId } from './vaultVisibility'
+import type { UseLocalFileResult } from './useLocalFile'
 
 export function replaceHashUrl(docId: string | null) {
   const url = `${location.pathname}${location.search}${formatHash(docId)}`
@@ -38,6 +39,13 @@ export function pushTrashHash() {
   pushAppEntry(url)
 }
 
+// 로컬 파일을 열 때 — 이미 `#/file` 이면 기록을 늘리지 않는다 (F-2155 2장)
+export function pushFileHash() {
+  const url = `${location.pathname}${location.search}#/file`
+  if (location.hash === '#/file') replaceAppEntry(url)
+  else pushAppEntry(url)
+}
+
 export type UseHashRoutingOptions = {
   store: Store
   bootPhase: 'booting' | 'ready'
@@ -60,6 +68,7 @@ export type UseHashRoutingOptions = {
   trashOpenRef: RefObject<boolean>
   mapRouteRef: RefObject<{ centerDocId: string | null; returnDocId: string | null } | null>
   focusEditorRef: RefObject<boolean>
+  localFileRef: RefObject<Pick<UseLocalFileResult, 'session' | 'closeLocalFile'> | null>
   commentsRef: RefObject<UseDocCommentsResult>
   resyncList: () => Promise<void>
 }
@@ -67,20 +76,22 @@ export type UseHashRoutingOptions = {
 export function useHashRouting(options: UseHashRoutingOptions): void {
   const {
     store, bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment, setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute,
-    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, focusEditorRef, commentsRef, resyncList,
+    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, focusEditorRef, localFileRef, commentsRef, resyncList,
   } = options
 
   // docs·currentDocId 는 ref 로 읽는다 — bootPhase 변경시만 재구독해 클로저에 담으면 낡은 값을 본다 (0단계 버그 수정)
   useEffect(() => {
     if (bootPhase !== 'ready') return
 
-    const leave = () => leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute })
+    const leave = () =>
+      leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute, closeLocalFile: () => localFileRef.current?.closeLocalFile() })
 
     function handleHashChange() {
       const hashAtEntry = location.hash
       const nav = decideHashNav({
         hash: location.hash, pathname: location.pathname, currentDocId: currentDocIdRef.current, sharedDoc: sharedDocRef.current,
         sharesOpen: sharesOpenRef.current, helpOpen: helpOpenRef.current, trashOpen: trashOpenRef.current, mapRoute: mapRouteRef.current,
+        localFileOpen: Boolean(localFileRef.current?.session),
       })
       if (nav.kind === 'ignore') return
 
@@ -93,6 +104,7 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
           setHelpOpen(false)
           setTrashOpen(false)
           setMapRoute(null)
+          localFileRef.current?.closeLocalFile()
           await openSharedFragment(nav.fragment, docsRef.current)
         })()
         return
@@ -150,6 +162,18 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
         return
       }
 
+      // 새로고침·앞으로 가기로 온 `#/file` — 열 handle 이 없어 홈으로 바꾼다 (F-2155 2장)
+      if (nav.kind === 'fileGone') {
+        ;(async () => {
+          await beforeLeaveDoc()
+          if (location.hash !== hashAtEntry) return // await 중 주소가 또 바뀌었으면 뒤 핸들러에 맡긴다
+          leave()
+          setCurrentDocId(null)
+          replaceHashUrl(null)
+        })()
+        return
+      }
+
       if (nav.kind === 'thread') {
         const { docId, threadId } = nav
         commentsRef.current?.setPendingTarget({ docId, threadId })
@@ -197,6 +221,6 @@ export function useHashRouting(options: UseHashRoutingOptions): void {
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [
     store, bootPhase, beforeLeaveDoc, showNotice, addOpenFolders, openSharedFragment, setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute,
-    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, focusEditorRef, commentsRef, resyncList,
+    setCurrentDocId, docsRef, foldersRef, currentDocIdRef, sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, focusEditorRef, localFileRef, commentsRef, resyncList,
   ])
 }

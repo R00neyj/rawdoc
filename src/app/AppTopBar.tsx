@@ -48,6 +48,7 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
     helpOpen: boolean
     trashOpen: boolean
     isEmpty: boolean
+    localFileOpen: boolean
     kanban: UseKanbanViewResult
     isReadOnlyDoc: boolean
     mapRoute: { centerDocId: string | null; returnDocId: string | null } | null
@@ -71,7 +72,7 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
 export default function AppTopBar({
   account, bootPhase, canInviteCurrentDoc, changeViewMode, commentAccessValue, comments, currentDoc, currentDocId, docSaverFlushRef,
   github, getShareDoc, handleCopyDocAsRichText, handleExportDoc, handleExportDocAsHtml, handleExportDocAsText, handleOpenNotification, handlePrintDoc,
-  helpOpen, trashOpen, isEmpty, isReadOnlyDoc, kanban, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch, openViewFind,
+  helpOpen, trashOpen, isEmpty, localFileOpen, isReadOnlyDoc, kanban, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch, openViewFind,
   requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store, toggleButtonRef, toggleCommentsPanel,
   toggleSidebar, toolbarPref, viewMode, wikiResolver,
   editorRef, rightPanel,
@@ -92,7 +93,7 @@ export default function AppTopBar({
     // 휴대폰 폭은 편집기 포커스 중에만 — 앱 틀 맨 아래(키보드 위) 줄 (F-2084 3.4)
     (!toolbarDocked || dockVisible)
 
-  const screen = topBarScreen({ bootPhase, currentDocId, sharedDoc: Boolean(sharedDoc), sharesOpen, helpOpen, trashOpen, mapRoute: Boolean(mapRoute) })
+  const screen = topBarScreen({ bootPhase, currentDocId, sharedDoc: Boolean(sharedDoc), sharesOpen, helpOpen, trashOpen, mapRoute: Boolean(mapRoute), localFile: localFileOpen })
 
   return (
     <>
@@ -104,7 +105,7 @@ export default function AppTopBar({
       onOpenSearch={openSearch}
       onOpenPalette={openPalette}
       viewMode={viewMode}
-      viewModeDisabled={bootPhase !== 'ready' || isEmpty || Boolean(sharedDoc)}
+      viewModeDisabled={bootPhase !== 'ready' || (isEmpty && !localFileOpen) || Boolean(sharedDoc)}
       onChangeViewMode={changeViewMode}
       shareDisabled={
         bootPhase !== 'ready' ||

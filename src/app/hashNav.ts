@@ -19,6 +19,7 @@ export type HashNavInput = {
   helpOpen: boolean
   trashOpen: boolean
   mapRoute: { centerDocId: string | null } | null
+  localFileOpen: boolean
 }
 
 export type HashNav =
@@ -28,6 +29,7 @@ export type HashNav =
   | { kind: 'help' }
   | { kind: 'trash' }
   | { kind: 'map'; centerDocId: string | null }
+  | { kind: 'fileGone' }
   | { kind: 'thread'; docId: string; threadId: string }
   | { kind: 'open'; home: boolean; docId: string | null; threadId: string | null }
 
@@ -43,6 +45,8 @@ export function decideHashNav(input: HashNavInput): HashNav {
   if (parsedHash.type === 'shares') return input.sharesOpen ? { kind: 'ignore' } : { kind: 'shares' }
   if (parsedHash.type === 'help') return input.helpOpen ? { kind: 'ignore' } : { kind: 'help' }
   if (parsedHash.type === 'trash') return input.trashOpen ? { kind: 'ignore' } : { kind: 'trash' }
+  // handle 은 주소에 없다 — 열린 로컬 파일이 없으면 홈으로 바꾼다 (F-2155 2장)
+  if (parsedHash.type === 'file') return input.localFileOpen ? { kind: 'ignore' } : { kind: 'fileGone' }
   if (parsedHash.type === 'map') {
     const centerDocId = parsedHash.docId ?? null
     if (input.mapRoute && (input.mapRoute.centerDocId ?? null) === centerDocId) return { kind: 'ignore' }
@@ -53,7 +57,7 @@ export function decideHashNav(input: HashNavInput): HashNav {
   const threadId = parsedHash.type === 'doc' ? (parsedHash.threadId ?? null) : null
   // 인식 못 한 해시는 홈에서도 첫 문서 + 알림으로 간다 (F-2059 D13)
   // 해시가 문서 경로·문서 없음으로 바뀌면 문서 id 가 같아도 공유 화면·공유 관리 페이지·도움말 페이지·지도를 닫는다 (F-138 3.3, F-243 3.4, F-244 3.3, F-292 6.1)
-  if (parsedHash.type !== 'none' && docId === input.currentDocId && !input.sharedDoc && !input.sharesOpen && !input.helpOpen && !input.trashOpen && !input.mapRoute) {
+  if (parsedHash.type !== 'none' && docId === input.currentDocId && !input.sharedDoc && !input.sharesOpen && !input.helpOpen && !input.trashOpen && !input.mapRoute && !input.localFileOpen) {
     // 알림함 링크를 눌렀는데 이미 그 문서를 보고 있는 경우 — 돌아가기 전에 대상을 잡는다(7.6)
     if (docId && threadId) return { kind: 'thread', docId, threadId }
     return { kind: 'ignore' }

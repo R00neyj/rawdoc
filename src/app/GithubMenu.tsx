@@ -101,15 +101,25 @@ export function GithubStatusLine({ link }: { link: GithubLink }) {
   return <>{`GitHub ${link.repo} · `}<span className="github-menu-path">{link.path}</span><span className="github-menu-when">{when}</span></>
 }
 
-// 사이드바 `가져오기` — 접근 이름은 그대로, 누르면 세 항목 메뉴 (레일은 툴팁이 오른쪽)
-export function GithubImportMenu({ variant, onFile, onGithub, onGithubNew }: { variant: 'rail' | 'bar'; onFile: () => void; onGithub: () => void; onGithubNew: () => void }) {
+// 사이드바 `가져오기` — 접근 이름은 그대로, 누르면 메뉴. 첫 항목은 로컬 파일 열기, GitHub 항목은 GitHub 이 있을 때만 (레일은 툴팁이 오른쪽, F-2155)
+export function ImportMenu({ variant, onOpenLocalFile, onFile, github }: {
+  variant: 'rail' | 'bar'
+  onOpenLocalFile?: () => void
+  onFile: () => void
+  github?: { onImport: () => void; onNewFile: () => void }
+}) {
   return (
     <PopMenu
       className={`github-import-menu github-import-menu--${variant}`}
       items={[
+        ...(onOpenLocalFile ? [{ key: 'open-file', label: '파일 열기…', onSelect: onOpenLocalFile }] : []),
         { key: 'file', label: '.md 파일', onSelect: onFile },
-        { key: 'github', label: 'GitHub에서 가져오기', onSelect: onGithub },
-        { key: 'github-new', label: 'GitHub에 새 파일', onSelect: onGithubNew },
+        ...(github
+          ? [
+              { key: 'github', label: 'GitHub에서 가져오기', onSelect: github.onImport },
+              { key: 'github-new', label: 'GitHub에 새 파일', onSelect: github.onNewFile },
+            ]
+          : []),
       ]}
       trigger={({ buttonRef, open, toggle }) => (
         <span className={variant === 'rail' ? 'icon-btn-wrap rail-btn-wrap' : 'icon-btn-wrap'}>

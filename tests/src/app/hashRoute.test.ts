@@ -86,6 +86,13 @@ describe('parseHash', () => {
     expect(parseHash('#/trashed')).toEqual({ type: 'none' })
   })
 
+  it('#/file 은 정확히 그 값만 type file (F-2155 U4)', () => {
+    expect(parseHash('#/file')).toEqual({ type: 'file' })
+    expect(parseHash('#/file/x')).toEqual({ type: 'none' })
+    expect(parseHash('#/files')).toEqual({ type: 'none' })
+    expect(parseHash('#/file/')).toEqual({ type: 'none' })
+  })
+
   it('문자열이 아니면 type none', () => {
     expect(parseHash(undefined)).toEqual({ type: 'none' })
   })

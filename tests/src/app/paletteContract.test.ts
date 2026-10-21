@@ -265,31 +265,36 @@ describe('buildPaletteSections — U4 (F-2053.md 11.1)', () => {
 
 describe('paletteScreen — U8 (F-2054 4.2)', () => {
   it('전부 거짓 + id 있음 → doc', () => {
-    expect(paletteScreen({ sharedLink: false, shares: false, help: false, trash: false, map: false, currentDocId: 'd1' })).toBe('doc')
+    expect(paletteScreen({ sharedLink: false, shares: false, help: false, trash: false, map: false, file: false, currentDocId: 'd1' })).toBe('doc')
   })
 
   it('전부 거짓 + id 없음 → home', () => {
-    expect(paletteScreen({ sharedLink: false, shares: false, help: false, trash: false, map: false, currentDocId: null })).toBe('home')
+    expect(paletteScreen({ sharedLink: false, shares: false, help: false, trash: false, map: false, file: false, currentDocId: null })).toBe('home')
   })
 
   it('map + id 있음 → map', () => {
-    expect(paletteScreen({ sharedLink: false, shares: false, help: false, trash: false, map: true, currentDocId: 'd1' })).toBe('map')
+    expect(paletteScreen({ sharedLink: false, shares: false, help: false, trash: false, map: true, file: false, currentDocId: 'd1' })).toBe('map')
   })
 
   it('help + map → help (help 가 먼저)', () => {
-    expect(paletteScreen({ sharedLink: false, shares: false, help: true, trash: false, map: true, currentDocId: 'd1' })).toBe('help')
+    expect(paletteScreen({ sharedLink: false, shares: false, help: true, trash: false, map: true, file: false, currentDocId: 'd1' })).toBe('help')
   })
 
   it('shares + help → shares (shares 가 먼저)', () => {
-    expect(paletteScreen({ sharedLink: false, shares: true, help: true, trash: false, map: false, currentDocId: null })).toBe('shares')
+    expect(paletteScreen({ sharedLink: false, shares: true, help: true, trash: false, map: false, file: false, currentDocId: null })).toBe('shares')
   })
 
   it('trash + map → trash (help 다음)', () => {
-    expect(paletteScreen({ sharedLink: false, shares: false, help: false, trash: true, map: true, currentDocId: null })).toBe('trash')
-    expect(paletteScreen({ sharedLink: false, shares: false, help: true, trash: true, map: false, currentDocId: null })).toBe('help')
+    expect(paletteScreen({ sharedLink: false, shares: false, help: false, trash: true, map: true, file: false, currentDocId: null })).toBe('trash')
+    expect(paletteScreen({ sharedLink: false, shares: false, help: true, trash: true, map: false, file: false, currentDocId: null })).toBe('help')
   })
 
   it('sharedLink + shares + id → sharedLink (sharedLink 가 먼저)', () => {
-    expect(paletteScreen({ sharedLink: true, shares: true, help: false, trash: false, map: false, currentDocId: 'd1' })).toBe('sharedLink')
+    expect(paletteScreen({ sharedLink: true, shares: true, help: false, trash: false, map: false, file: false, currentDocId: 'd1' })).toBe('sharedLink')
+  })
+
+  it('F-2155 U6 file → file, map 다음·home 앞', () => {
+    expect(paletteScreen({ sharedLink: false, shares: false, help: false, trash: false, map: false, file: true, currentDocId: null })).toBe('file')
+    expect(paletteScreen({ sharedLink: false, shares: false, help: false, trash: false, map: true, file: true, currentDocId: null })).toBe('map')
   })
 })

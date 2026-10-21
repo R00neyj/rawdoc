@@ -1,5 +1,5 @@
 // 빈 상태 S-2 (specs/ia.md 4.3, specs/features/F-111.md 3.6, F-114.md 2.3)
-import { IconNoteAdd, IconUpload } from './icons'
+import { IconFileOpen, IconNoteAdd, IconUpload } from './icons'
 import { displayDocTitle } from './docMeta'
 import { formatHash } from './hashRoute'
 
@@ -18,6 +18,7 @@ type EmptyStateProps = {
   recentDocs: RecentDoc[]
   onSelectDoc: (id: string) => void
   onOpenHelp: () => void
+  onOpenLocalFile?: () => void // 로컬 파일을 열 수 있는 브라우저만 (F-2155 2장)
 }
 
 // ApiTokensDialog.tsx 의 formatDate 와 같은 모양(YYYY-MM-DD) — 쓰는 곳이 둘뿐이라 공용 유틸로 빼지 않는다 (F-241 3.2)
@@ -30,7 +31,7 @@ function formatDate(ts: number): string {
 }
 
 // hasDocs — 문서가 하나도 없을 때와 홈 화면(문서는 있지만 선택 안 함)일 때 문구만 다르다 (F-232 3.2)
-export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDocs, onSelectDoc, onOpenHelp }: EmptyStateProps) {
+export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDocs, onSelectDoc, onOpenHelp, onOpenLocalFile }: EmptyStateProps) {
   const recent = recentDocs.slice(0, MAX_RECENT)
   return (
     <div className="empty-state" data-ui="home">
@@ -48,6 +49,12 @@ export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDo
           <IconUpload size={18} />
           가져오기
         </button>
+        {onOpenLocalFile && (
+          <button type="button" onClick={onOpenLocalFile}>
+            <IconFileOpen size={18} />
+            파일 열기…
+          </button>
+        )}
       </div>
       <button type="button" className="empty-state-help" onClick={onOpenHelp}>
         처음이신가요? 도움말 보기

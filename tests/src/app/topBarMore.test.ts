@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { moreButtonVisible, moreDotVisible, moreSheetItems, topBarScreen } from '../../../src/app/topBarMore'
 
-const base = { bootPhase: 'ready' as const, currentDocId: 'd1', sharedDoc: false, sharesOpen: false, helpOpen: false, trashOpen: false, mapRoute: false }
+const base = { bootPhase: 'ready' as const, currentDocId: 'd1', sharedDoc: false, sharesOpen: false, helpOpen: false, trashOpen: false, mapRoute: false, localFile: false }
 
 describe('F-2083 A1 topBarScreen', () => {
   it('문서 있음·다른 화면 없음 → doc', () => {
@@ -21,6 +21,11 @@ describe('F-2083 A1 topBarScreen', () => {
   it('부팅 중 → other', () => {
     expect(topBarScreen({ ...base, bootPhase: 'booting' })).toBe('other')
     expect(topBarScreen({ ...base, bootPhase: 'booting', currentDocId: null })).toBe('other')
+  })
+  it('F-2155 U7 로컬 파일 화면 → file, 부팅 다음 순서', () => {
+    expect(topBarScreen({ ...base, currentDocId: null, localFile: true })).toBe('file')
+    expect(topBarScreen({ ...base, currentDocId: null, localFile: true, helpOpen: true })).toBe('file')
+    expect(topBarScreen({ ...base, bootPhase: 'booting', localFile: true })).toBe('other')
   })
 })
 
@@ -44,6 +49,11 @@ describe('F-2083 A2 moreSheetItems', () => {
   })
   it('other', () => {
     expect(moreSheetItems({ ...all, screen: 'other' })).toEqual(['notifications'])
+  })
+  it('F-2155 U7 file 은 알림만', () => {
+    expect(moreSheetItems({ ...all, screen: 'file' })).toEqual(['notifications'])
+    expect(moreSheetItems({ ...all, screen: 'file', wide: true, github: true })).toEqual(['notifications'])
+    expect(moreButtonVisible({ screen: 'file', notifications: false })).toBe(false)
   })
   it('계정·설정·도움말·사용법 행은 어떤 입력에도 없다 (F-2090)', () => {
     for (const screen of ['doc', 'home', 'other'] as const) {

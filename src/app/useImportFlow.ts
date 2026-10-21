@@ -42,6 +42,7 @@ import { setupFileLaunch } from '../pwa/fileLaunch'
 import type { NoticeWithAction } from './NoticeBar'
 import { leaveScreens, screenOpen, type ScreenState } from './leaveScreens'
 import { canRemountWithFresh, shouldRemountAfterImport } from './importResult'
+import type { UseLocalFileResult } from './useLocalFile'
 
 export type UseImportFlowOptions = {
   store: Store
@@ -83,6 +84,7 @@ export type UseImportFlowOptions = {
   dropBlockedRef: RefObject<boolean>
   imageDropBlockedRef: RefObject<boolean>
   readOnlyDocRef: RefObject<boolean>
+  localFileRef: RefObject<UseLocalFileResult | null>
 }
 
 export type UseImportFlowResult = {
@@ -103,6 +105,7 @@ export type UseImportFlowResult = {
     files: FileList | File[],
     options?: { source?: 'paste' | 'drop'; blocked?: boolean },
   ) => Promise<Awaited<ReturnType<typeof attachImages>>['inserted']>
+  importLocalFileAsDoc: (file: File, handle: FileSystemFileHandle) => Promise<void>
 }
 
 // 가져오기 대화상자(미리보기·진행·결과)가 떠 있으면 다른 대화상자처럼 md·이미지 끌어놓기를 모두 막는다 (F-2059 D11)
@@ -121,9 +124,10 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
     setHelpOpen, setTrashOpen, setMapRoute, showNotice, keepLiveTitle, beforeLeaveDoc, addOpenFolders, closeSidebarIfNarrow, closeSettings,
     ensureE2eeOpenForFolder, pushHashUrl, importInputRef, importZipInputRef, importFolderInputRef, docsRef, foldersRef, currentDocIdRef,
     sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, docPathRef, focusEditorRef, docSaverFlushRef, dropBlockedRef, imageDropBlockedRef,
-    readOnlyDocRef,
+    readOnlyDocRef, localFileRef,
   } = options
-  const leave = () => leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute })
+  const leave = () =>
+    leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute, closeLocalFile: () => localFileRef.current?.closeLocalFile() })
   // 외부 .md 파일을 창 위로 끄는 동안의 덮개 (F-145.md 2.4)
   const [dropActive, setDropActive] = useState(false)
   // zip 가져오기 미리보기·진행·결과 대화상자 (F-282.md 3.8)
@@ -721,6 +725,7 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
           helpOpen: helpOpenRef.current,
           trashOpen: trashOpenRef.current,
           mapRoute: mapRouteRef.current,
+          localFileOpen: Boolean(localFileRef.current?.session),
         })
         if (shouldLeave) {
           await beforeLeaveDoc()
@@ -744,6 +749,17 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
           // 연결 실패해도 가져오기는 이미 끝났다 — 다음엔 새 문서로 다시 가져올 뿐 기능은 막히지 않는다
         }
       }
+    }
+  }
+
+  // S-11 `{제품명} 문서로 가져오기` — 새 문서를 열면 runImportFiles 의 leave() 가 S-11 을 닫는다 (F-2155 4장)
+  async function importLocalFileAsDoc(file: File, handle: FileSystemFileHandle) {
+    const createdDoc = await runImportFiles([file])
+    if (!createdDoc || store.kind !== 'idb' || !store.linkFileHandle) return
+    try {
+      await store.linkFileHandle(createdDoc.id, handle)
+    } catch {
+      // 연결 실패해도 가져오기는 끝났다 — OS 열기 재중복 방지만 못 할 뿐이다
     }
   }
 
@@ -772,5 +788,6 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
   return {
     dropActive, importState, requestImport, handleImportInputChange, requestImportZip, handleImportZipInputChange, requestImportFolder,
     handleImportFolderInputChange, handleImportTargetChange, cancelImportPreview, cancelImportProgress, closeImportResult, confirmImport, handleImageFiles,
+    importLocalFileAsDoc,
   }
 }

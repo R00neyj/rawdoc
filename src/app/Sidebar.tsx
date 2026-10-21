@@ -61,7 +61,7 @@ import {
   IconLockOpen,
   IconCommit,
 } from './icons'
-import { GithubImportMenu } from './GithubMenu'
+import { ImportMenu } from './GithubMenu'
 import SidebarMoreMenu from './SidebarMoreMenu'
 import { e2eeMenuForDoc, e2eeMenuForFolder, type E2eeConvertDirection, type E2eeConvertTarget, type E2eeMenuState } from '../e2ee/convert'
 import { formatHash } from './hashRoute'
@@ -808,6 +808,7 @@ type SidebarProps = {
   onCreateDoc: (folderId?: string | null) => void
   onCreateBoard: (folderId: string | null) => void
   onImportDoc: () => void
+  onOpenLocalFile?: () => void // 로컬 파일을 열 수 있는 브라우저만 — `가져오기` 메뉴 첫 항목 (F-2155)
   onCreateFolder: (parentId: string | null) => Promise<{ id: string; name: string } | null>
   onRenameFolder: (id: string, name: string) => void
   // 여러 항목 이동 — 폴더로 드래그·최상위로 옮기기 모두 이걸 쓴다(단일 항목도 배열 하나로) (F-255.md 3.3)
@@ -869,6 +870,7 @@ export default function Sidebar({
   onCreateDoc,
   onCreateBoard,
   onImportDoc,
+  onOpenLocalFile,
   onCreateFolder,
   onRenameFolder,
   onBulkMove,
@@ -1250,7 +1252,7 @@ export default function Sidebar({
             <RailButton icon={IconCommandPalette} label={PALETTE_LABEL} onClick={onOpenPalette} />
             <RailButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
             <RailButton icon={IconFolderAdd} label="새 폴더" onClick={handleRailCreateFolder} />
-            {github ? <GithubImportMenu variant="rail" onFile={onImportDoc} onGithub={github.onImport} onGithubNew={github.onNewFile} /> : <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
+            {github || onOpenLocalFile ? <ImportMenu variant="rail" onOpenLocalFile={onOpenLocalFile} onFile={onImportDoc} github={github} /> : <RailButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
             <RailButton icon={IconMap} label="지도" onClick={onOpenMap} />
             <RailButton icon={IconTemplates} label="템플릿 관리" onClick={onOpenTemplates} />
           </div>
@@ -1263,7 +1265,7 @@ export default function Sidebar({
                 <SidebarIconButton icon={IconSearch} label="검색" btnClassName="sidebar-search-btn" onClick={onOpenSearch} />
                 <SidebarIconButton icon={IconNoteAdd} label="새 문서" onClick={() => onCreateDoc()} />
                 <SidebarIconButton icon={IconFolderAdd} label="새 폴더" onClick={() => handleCreateFolder(null)} />
-                {github ? <GithubImportMenu variant="bar" onFile={onImportDoc} onGithub={github.onImport} onGithubNew={github.onNewFile} /> : <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
+                {github || onOpenLocalFile ? <ImportMenu variant="bar" onOpenLocalFile={onOpenLocalFile} onFile={onImportDoc} github={github} /> : <SidebarIconButton icon={IconUpload} label="가져오기" onClick={onImportDoc} />}
                 <SidebarIconButton icon={IconCollapseAll} label="모두 접기" onClick={onCollapseAllFolders} />
                 <SidebarIconButton icon={IconMap} label="지도" btnClassName="sidebar-map-btn" onClick={onOpenMap} />
                 <SidebarIconButton icon={IconTemplates} label="템플릿 관리" btnClassName="sidebar-templates-btn" onClick={onOpenTemplates} />

@@ -124,7 +124,7 @@ export function useDocTabs(options: UseDocTabsOptions): { bar: DocTabBarProps | 
     let next = saved ? syncTabMeta(restoreTabs(saved, (key) => ids.has(key)), lookup) : EMPTY_TABS
     prevIdsRef.current = ids
     prevCurrentRef.current = currentDocId
-    const freshStart = !sawReadyRef.current && (initialHashType === 'home' || initialHashType === 'none')
+    const freshStart = !sawReadyRef.current && (initialHashType === 'home' || initialHashType === 'none' || initialHashType === 'file')
     if (saved && freshStart && next.active !== currentDocId) {
       leavingRef.current = { key: currentDocId }
       navigate(next.active)
