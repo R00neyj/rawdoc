@@ -8,6 +8,18 @@ import { resolveTheme } from './theme'
 import { resolveDefaultView, type DefaultView } from './defaultView'
 import { defaultStartDocId, type PickerDoc } from './docPicker'
 import { NEW_DOC_TEMPLATE_NONE } from '../lib/templates'
+import { parseCssColor } from '../lib/cssColor'
+
+// theme-color 는 color-mix 를 못 받을 수 있어 계산된 색을 #rrggbb 로 바꿔 넣는다
+function resolvedCssColorHex(css: string): string {
+  const probe = document.createElement('span')
+  probe.style.color = css
+  document.body.append(probe)
+  const rgba = parseCssColor(getComputedStyle(probe).color)
+  probe.remove()
+  if (!rgba) return getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()
+  return '#' + rgba.slice(0, 3).map((n) => Math.round(n * 255).toString(16).padStart(2, '0')).join('')
+}
 
 export type UseAppearancePrefsOptions = {
   editorRef: RefObject<EditorHandle | null>
@@ -85,12 +97,11 @@ export function useAppearancePrefs({ editorRef, docs, currentDocId }: UseAppeara
     return () => mql.removeEventListener('change', apply)
   }, [themePref, editorRef])
 
-  // 다크면 theme-color 를 종이 색으로 — 브랜드색이면 안드로이드 PWA 네비바가 흰색으로 칠해진다
+  // 창 제목줄을 앱에 맞춘다 — 다크는 종이 색(안드로이드 네비바), 그 밖은 탭 줄과 같은 `--chrome-bg` (tweak 2026-10-21)
   useEffect(() => {
     const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
     if (!meta) return
-    meta.dataset.brand ??= meta.content
-    meta.content = resolvedTheme === 'dark' ? getComputedStyle(document.documentElement).getPropertyValue('--paper').trim() : meta.dataset.brand
+    meta.content = resolvedTheme === 'dark' ? getComputedStyle(document.documentElement).getPropertyValue('--paper').trim() : resolvedCssColorHex('var(--chrome-bg)')
   }, [resolvedTheme])
 
   // SettingsDialog 가 여러 설정을 같은 Segment 로 그려 값이 string 으로 오지만, 실제 값은 항상 그 설정의 고정 옵션 중 하나다

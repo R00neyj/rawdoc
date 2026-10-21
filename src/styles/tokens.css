@@ -109,6 +109,9 @@
   /* 모든 요소가 letter-spacing: var(--tracking) 로 자기 글자 크기 기준 -0.02em 을 다시 계산한다 — --font-mono 자리는 0 으로 덮는다 */
   --tracking: -0.02em;
 
+  /* 설치 앱 탭 줄과 창 제목줄(theme-color)이 같이 쓰는 회색 바탕 (tweak 2026-10-21) */
+  --chrome-bg: color-mix(in srgb, var(--surface), var(--ink) 10%);
+
   /* 크기 (ia.md 7장) */
   --topbar-h: 52px;
   --sidebar-w: 300px;
