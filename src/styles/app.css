@@ -2225,11 +2225,7 @@ body.sidebar-resizing {
   color: var(--ink);
 }
 
-/* 상단바 댓글 배지 — 열린 스레드 수 (F-505 3.1 commentBadgeText) */
-.comment-rail-toggle {
-  position: relative;
-}
-
+/* ⋯ 댓글·알림 행 배지 — 열린 스레드·안 읽은 알림 수 (F-505 3.1 commentBadgeText) */
 .comment-badge {
   position: absolute;
   top: 2px;
@@ -3893,7 +3889,8 @@ body.sidebar-resizing {
 /* ===== 상단바 공유·내보내기 메뉴 (specs/features/F-130.md 2장, F-278.md 3장, ia.md 3.19) ===== */
 .share-menu,
 .export-menu,
-.view-mode-menu {
+.view-mode-menu,
+.topbar-more {
   position: relative;
   flex: none;
 }
@@ -3901,8 +3898,7 @@ body.sidebar-resizing {
 /* 모양은 .icon-btn 기본값 그대로, 메뉴가 열린 동안은 선택 버튼과 같은 바탕, hover 규칙과 우선순위를 맞춰 이긴다 (design.md 4장, F-153 2.1) */
 .share-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']),
 .view-mode-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']),
-.topbar-more-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']),
-.export-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']) {
+.topbar-more-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']) {
   background: color-mix(in srgb, var(--ink) 10%, transparent);
   color: var(--ink);
 }
@@ -4048,7 +4044,7 @@ body.sidebar-resizing {
   max-width: calc(100vw - 16px);
 }
 
-/* 휴대폰 폭 상단바 ⋯ 버튼·점 (F-2083 4.3) */
+/* 상단바 ⋯ 버튼·점 — 휴대폰 아래 판과 넓은 창 드롭다운 공용 (F-2083 4.3) */
 .topbar-more-btn {
   position: relative;
 }
@@ -4210,6 +4206,76 @@ body.sidebar-resizing {
 
 .more-sheet-list .share-menu-note {
   padding-inline: 16px;
+}
+
+/* 넓은 창 상단바 ⋯ 드롭다운 — 공유 메뉴와 같은 틀, 하위 화면은 머리 줄 `뒤로` (small 2026-10-21) */
+.more-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  width: max-content;
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 32px));
+  max-height: min(420px, calc(100vh - 80px));
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  transform-origin: top right;
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.more-menu[data-state='closed'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px) scale(0.9);
+}
+
+.more-menu[data-state='open'] {
+  transition: opacity var(--transition-pop-fade), transform var(--transition-pop), visibility var(--transition-pop-fade);
+}
+
+@starting-style {
+  .more-menu[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.9);
+  }
+}
+
+.more-menu .more-sheet-head {
+  height: auto;
+  padding: 4px 6px 4px 4px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.more-menu .more-sheet-head h2 {
+  margin-left: 2px;
+  font-size: 13px;
+}
+
+.more-menu .more-sheet-body {
+  padding-bottom: 0;
+}
+
+.more-menu .more-sheet-list {
+  padding: 6px;
+}
+
+.more-menu .more-sheet-item {
+  gap: 8px;
+  height: auto;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  white-space: nowrap;
+  text-decoration: none;
 }
 
 /* 편집기·표 칸·보기 모드 우클릭 메뉴 — 공유 메뉴와 같은 모양, 클릭 지점에 고정으로 연다 (F-170.md 5장) */
@@ -4566,85 +4632,7 @@ body.sidebar-resizing {
   }
 }
 
-/* 알림함 버튼·배지·팝오버 (specs/features/F-507.md 3.4) — 계정 메뉴와 같은 열림·닫힘 틀 */
-.notifications-menu {
-  position: relative;
-  flex: none;
-}
-
-.notifications-btn {
-  position: relative;
-}
-
-.notifications-badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--panel);
-  font-size: 9.5px;
-  line-height: 14px;
-  text-align: center;
-}
-
-.notifications-panel {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 30;
-  width: min(320px, calc(100vw - 32px));
-  max-height: min(420px, calc(100vh - 80px));
-  display: flex;
-  flex-direction: column;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-control);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0) scale(1);
-  transform-origin: top right;
-  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
-  transition-behavior: allow-discrete;
-}
-
-.notifications-panel[data-state='closed'] {
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-4px) scale(0.9);
-}
-
-.notifications-panel[data-state='open'] {
-  transition: opacity var(--transition-pop-fade), transform var(--transition-pop), visibility var(--transition-pop-fade);
-}
-
-@starting-style {
-  .notifications-panel[data-state='open'] {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.9);
-  }
-}
-
-.notifications-head {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--rule);
-}
-
-.notifications-head h2 {
-  margin: 0;
-  font-size: 13px;
-  color: var(--ink);
-}
-
+/* 알림 목록 — ⋯ `알림` 하위 화면 본문 (specs/features/F-507.md 3.4) */
 .notifications-read-all {
   border-radius: var(--radius-control);
   padding: 4px 8px;
@@ -6465,10 +6453,6 @@ body.sidebar-resizing {
 
   .help-page-title {
     font-size: 18px;
-  }
-
-  .notifications-head h2 {
-    font-size: 15px;
   }
 
   .editor-toolbar .editor-toolbar-category-btn {

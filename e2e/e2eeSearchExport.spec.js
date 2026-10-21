@@ -2,7 +2,7 @@
 import { test, expect } from '@playwright/test'
 import zlib from 'node:zlib'
 import { unzipSync } from 'fflate'
-import { openApp as openAppRaw, setPrefBeforeLoad, currentDocId, setViewMode, openExportMenu, EXPORT_BUTTON_LABEL, resetBrowserState } from './helpers.js'
+import { openApp as openAppRaw, setPrefBeforeLoad, currentDocId, setViewMode, openExportMenu, moreRow, openMoreMenu, resetBrowserState } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const SETTINGS_DIALOG_SELECTOR = 'dialog[aria-labelledby="settings-title"]'
@@ -414,7 +414,9 @@ test.describe('F-409 검색', () => {
       await panel.getByRole('heading').click()
 
       await expect(page.getByRole('button', { name: SHARE_BUTTON_LABEL })).toBeDisabled()
-      await expect(page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })).toBeDisabled()
+      await openMoreMenu(page)
+      await expect(moreRow(page, 'export')).toBeDisabled()
+      await page.keyboard.press('Escape')
 
       await page.keyboard.press('Control+p')
       await expect(page.locator('dialog[open] .command-palette')).toBeVisible()

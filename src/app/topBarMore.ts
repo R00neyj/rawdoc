@@ -1,4 +1,4 @@
-// 휴대폰 폭 상단바 ⋯ 판의 화면 판정·항목·점 규칙 — DOM·React 없는 순수 함수 (F-2083 3.2)
+// 상단바 ⋯ 의 화면 판정·항목·점 규칙 — 휴대폰 아래 판과 넓은 창 드롭다운 공용, DOM·React 없는 순수 함수 (F-2083 3.2)
 export type TopBarScreen = 'doc' | 'home' | 'other'
 
 export function topBarScreen(input: {
@@ -15,28 +15,33 @@ export function topBarScreen(input: {
   return input.currentDocId === null ? 'home' : 'doc'
 }
 
-export type MoreItemKey = 'outline' | 'comments' | 'share' | 'export' | 'github' | 'notifications'
+export type MoreItemKey = 'outline' | 'comments' | 'share' | 'export' | 'github' | 'notifications' | 'rightPanel'
 
+// 넓은 창은 공유가 ⋯ 밖에, 목차가 본문 옆 버튼에 있어 둘 다 뺀다 (small 2026-10-21)
 export function moreSheetItems(input: {
+  wide?: boolean
   screen: TopBarScreen
   hasOutline: boolean
   comments: boolean
   notifications: boolean
   github?: boolean
+  rightPanel?: boolean
 }): MoreItemKey[] {
-  const { screen } = input
+  const { screen, wide } = input
   const items: MoreItemKey[] = []
-  if (screen === 'doc' && input.hasOutline) items.push('outline')
+  if (screen === 'doc' && !wide && input.hasOutline) items.push('outline')
   if (screen === 'doc' && input.comments) items.push('comments')
-  if (screen === 'doc') items.push('share', 'export')
+  if (screen === 'doc' && !wide) items.push('share')
+  if (screen === 'doc') items.push('export')
   if (screen === 'doc' && input.github) items.push('github')
   if (input.notifications) items.push('notifications')
+  if (wide && input.rightPanel) items.push('rightPanel')
   return items
 }
 
-// home·other 에서 알림이 꺼지면 판에 행이 없다 — 빈 판을 여는 버튼을 두지 않는다 (F-2090 4.7)
-export function moreButtonVisible(input: { screen: TopBarScreen; notifications: boolean }): boolean {
-  return input.screen === 'doc' || input.notifications
+// 행이 없으면 빈 판을 여는 버튼을 두지 않는다 (F-2090 4.7)
+export function moreButtonVisible(input: { wide?: boolean; screen: TopBarScreen; notifications: boolean; rightPanel?: boolean }): boolean {
+  return input.screen === 'doc' || input.notifications || Boolean(input.wide && input.rightPanel)
 }
 
 export function moreDotVisible(input: {

@@ -1,6 +1,6 @@
 // 댓글 레일·판·달기 흐름 (specs/features/F-505.md 13.2 E1~E18)
 import { test, expect } from '@playwright/test'
-import { openApp as openAppRaw, setPrefBeforeLoad, importMarkdown, currentDocId, setViewMode, fakeImeCompose } from './helpers.js'
+import { openApp as openAppRaw, setPrefBeforeLoad, importMarkdown, currentDocId, setViewMode, fakeImeCompose, clickMoreRow, moreRow, openMoreMenu, openExportMenu } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
 
@@ -22,7 +22,8 @@ const sheet = (page) => page.locator('.comment-sheet')
 const railOrSheet = (page) => rail(page).or(sheet(page))
 const threadCards = (page) => page.locator('.comment-thread')
 const composerTextarea = (page) => page.locator('.comment-composer textarea')
-const commentToggle = (page) => page.locator('.comment-rail-toggle')
+// 넓은 창 상단바 ⋯ 의 댓글 행 (small 2026-10-21)
+const commentRow = (page) => moreRow(page, 'comments')
 // CM6 는 거터 너비 측정용 숨은 스페이서 행에도 같은 마커를 그려 넣어 :visible 로 걸러야 실제 줄만 잡힌다
 const gutterMarker = (page) => page.locator('.cm-comment-gutter-marker:visible')
 
@@ -98,7 +99,7 @@ test.describe('F-505 E2·E14 시작 방법과 보기 모드', () => {
 
     // E14 보기 모드에서 상단바 댓글 — 편집 모드로 바뀌고 레일이 보인다
     await setViewMode(page, 'view')
-    await commentToggle(page).click()
+    await clickMoreRow(page, 'comments')
     await expect(page.getByRole('button', { name: '편집 — 서식을 보며 편집' })).toHaveAttribute('aria-pressed', 'true')
     await expect(rail(page)).toBeVisible()
 
@@ -218,7 +219,7 @@ test.describe('F-505 E7·E10 해결·다시 열기와 내보내기 바이트', (
     async function exportBytes() {
       const [download] = await Promise.all([
         page.waitForEvent('download'),
-        page.getByRole('button', { name: '내보내기' }).click().then(() => page.locator('.export-menu-list [role="menuitem"]').first().click()),
+        openExportMenu(page).then((items) => items.first().click()),
       ])
       const stream = await download.createReadStream()
       const chunks = []
@@ -352,8 +353,10 @@ test.describe('F-505 E11·E18 주소로 이동과 상단바 배지', () => {
     await expect(page).toHaveURL(/#\/d\/comment-doc-1$/)
 
     // E18 스레드 하나 — 댓글 1개·배지 1
-    await expect(commentToggle(page)).toHaveAttribute('aria-label', '댓글 1개')
-    await expect(page.locator('.comment-badge')).toHaveText('1')
+    await openMoreMenu(page)
+    await expect(commentRow(page)).toHaveAttribute('aria-label', '댓글 1개')
+    await expect(commentRow(page).locator('.comment-badge')).toHaveText('1')
+    await page.keyboard.press('Escape')
 
     // 이미 그 문서를 보는 중에 해시만 바뀜(handleHashChange 같은 문서 분기) — 활성을 끈 뒤 다시 들어간다
     await line(page, '첫째 줄').click()
@@ -369,8 +372,9 @@ test.describe('F-505 E11·E18 주소로 이동과 상단바 배지', () => {
     // E18 해결하면 댓글 0개·배지 없음
     await expect(rail(page)).toBeVisible()
     await threadCards(page).first().getByRole('button', { name: '해결' }).click()
-    await expect(commentToggle(page)).toHaveAttribute('aria-label', '댓글 0개')
-    await expect(page.locator('.comment-badge')).toHaveCount(0)
+    await openMoreMenu(page)
+    await expect(commentRow(page)).toHaveAttribute('aria-label', '댓글 0개')
+    await expect(commentRow(page).locator('.comment-badge')).toHaveCount(0)
   })
 })
 
@@ -398,7 +402,7 @@ test.describe('F-505 E12 두 창', () => {
       expect(orderBefore[0]).toContain('다른 문서')
 
       // 열린 스레드 없이 연 문서라 B 의 레일은 닫혀 있다(5.1 initialCommentRailOpen(null, 0)) — 먼저 연다
-      await commentToggle(b).click()
+      await clickMoreRow(b, 'comments')
       await expect(rail(b)).toBeVisible()
 
       await selectCat(a)
@@ -446,7 +450,7 @@ test.describe('F-505 E13 판(좁은 창)', () => {
     const focused = await page.evaluate(() => document.activeElement?.closest('.cm-content') != null)
     expect(focused).toBe(true)
 
-    await commentToggle(page).click()
+    await clickMoreRow(page, 'comments')
     await expect(sheet(page)).toBeVisible()
     await page.locator('.cm-content').click({ position: { x: 5, y: 5 } })
     await expect(sheet(page)).toHaveCount(0)
@@ -557,12 +561,14 @@ test.describe('F-505 E15 금고 문서', () => {
     await page.reload()
     await expect(page.locator('.cm-host .cm-editor').or(page.locator('.e2ee-locked-panel')).or(page.locator('.empty-state'))).toBeVisible()
     await newVaultDoc(page)
+    await openMoreMenu(page)
+    await expect(commentRow(page)).toHaveCount(0)
+    await page.keyboard.press('Escape')
     await page.locator('.cm-content').click()
     await page.keyboard.type('금고 안 본문')
     await page.keyboard.press('Control+Home')
     for (let i = 0; i < 5; i++) await page.keyboard.press('Shift+ArrowRight')
 
-    await expect(commentToggle(page)).toHaveCount(0)
     await expect(railOrSheet(page)).toHaveCount(0)
 
     const box = await page.locator('.cm-content').boundingBox()

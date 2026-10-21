@@ -1,6 +1,6 @@
 // 보기 권한자의 읽기 전용 실시간 세션·댓글 명령 (specs/features/F-506.md 9.2 E1~E14)
 import { test, expect } from '@playwright/test'
-import { setPrefBeforeLoad, resetBrowserState } from './helpers.js'
+import { setPrefBeforeLoad, resetBrowserState, clickMoreRow } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
 
@@ -107,7 +107,7 @@ async function addComment(page, body) {
 
 async function openRail(page) {
   if (await rail(page).isVisible()) return
-  await page.locator('.comment-rail-toggle').click()
+  await clickMoreRow(page, 'comments')
   await expect(rail(page)).toBeVisible()
 }
 

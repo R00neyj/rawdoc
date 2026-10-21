@@ -1,6 +1,6 @@
 // 공유 관리의 권한 요청 묶음과 알림함 행 (specs/features/F-2136.md 4장 E1~E3)
 import { test, expect } from '@playwright/test'
-import { openApp, setPrefBeforeLoad } from './helpers.js'
+import { openApp, setPrefBeforeLoad, clickMoreRow } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const OWNER = { id: 'u1', email: 'owner@b.com' }
@@ -73,7 +73,7 @@ test.describe('F-2136 E3 알림함 행', () => {
         { id: 'r1', kind: 'access_request', target: 'doc', targetId: 'd1', name: '기획안', role: 'edit', actorEmail: 'req@x.com', createdAt: Date.now(), readAt: null },
       ])
     })
-    await page.locator('.notifications-btn').click()
+    await clickMoreRow(page, 'notifications')
     const row = page.locator('.notification-item').first()
     await expect(row).toContainText('req@x.com님이 문서 편집 권한을 요청했습니다.')
     await row.click()

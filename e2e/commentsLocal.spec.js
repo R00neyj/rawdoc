@@ -1,6 +1,6 @@
 // 로컬 문서 댓글 저장·되살리기·로그인 이관 (specs/features/F-508.md 11.2 E1~E9)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, currentDocId, waitSaved } from './helpers.js'
+import { openApp, importMarkdown, currentDocId, waitSaved, openExportMenu, clickMoreRow } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const rail = (page) => page.locator('.comment-rail')
@@ -102,10 +102,7 @@ function idbRows(page, dbName, storeName) {
 async function exportMdBytes(page) {
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page
-      .getByRole('button', { name: '내보내기', exact: true })
-      .click()
-      .then(() => page.getByRole('menuitem', { name: '.md', exact: true }).click()),
+    openExportMenu(page).then(() => page.getByRole('menuitem', { name: '.md', exact: true }).click()),
   ])
   const stream = await download.createReadStream()
   const chunks = []
@@ -177,7 +174,7 @@ test('F-508 E1·E4·E3 댓글이 저장돼 새로고침 뒤 되살아나고(.md 
   await page.reload()
   await expect(page.locator('.cm-host .cm-editor')).toBeVisible()
   await expect.poll(() => currentDocId(page)).toBe(docId)
-  await page.locator('.comment-rail-toggle').click()
+  await clickMoreRow(page, 'comments')
   await rail(page).locator('.comment-rail-resolved-toggle input').check()
   await expect(threadCards(page)).toHaveCount(1)
   await expect(threadCards(page).first()).toHaveAttribute('data-resolved', 'true')

@@ -94,7 +94,7 @@
 |`src/app/EmptyState.tsx`|문서가 없거나 선택 안 했을 때 보이는 첫 화면|
 |`src/app/exportActions.ts`|내보내기 메뉴의 각 항목을 실제 내보내기·인쇄 기능과 연결함|
 |`src/app/exportDoc.ts`|문서를 .md·.txt·.html 파일로 내려받거나 서식째 복사함|
-|`src/app/ExportMenu.tsx`|상단바 내보내기 메뉴. md·txt·HTML 저장, 인쇄, 복사를 고름|
+|`src/app/ExportMenu.tsx`|⋯ 메뉴 `내보내기` 항목 목록. md·txt·HTML 저장, 인쇄, 복사|
 |`src/app/exportVault.ts`|모든 문서를 옵시디언 보관함 형식의 압축 파일로 내보냄|
 |`src/app/exportWorkspace.ts`|전체 또는 폴더 단위 문서를 폴더 구조 그대로 압축 파일로 내보냄|
 |`src/app/fileDrop.ts`|창에 끌어다 놓은 파일이 마크다운·그림·폴더인지 구분함|
@@ -102,7 +102,7 @@
 |`src/app/githubApi.ts`|GitHub 계정·저장소·파일 연결 정보를 서버에 묻고 결과를 받아옴|
 |`src/app/githubImages.ts`|GitHub 저장소 문서 속 그림을 보여 주고 가져와 첨부로 넣음|
 |`src/app/githubImport.ts`|GitHub 파일을 골라 새 문서로 가져오거나 이미 있는 문서를 엶|
-|`src/app/GithubMenu.tsx`|상단바 GitHub 메뉴와 사이드바 가져오기 메뉴 버튼|
+|`src/app/GithubMenu.tsx`|⋯ 메뉴 GitHub 상태 줄과 사이드바 가져오기 메뉴 버튼|
 |`src/app/githubMerge.ts`|GitHub에서 받은 내용과 내 문서의 달라진 줄을 비교해 합칠 내용을 계산함|
 |`src/app/GithubPickerDialog.tsx`|GitHub 파일을 골라 가져오거나 문서와 연결·해제하는 창|
 |`src/app/githubPull.ts`|GitHub에서 최신 내용을 받아올 때 읽기 검사와 안내·실패 문구를 정함|
@@ -160,7 +160,7 @@
 |`src/app/notice.ts`|화면 알림이 겹칠 때 어떤 알림을 남길지 우선순위를 정함|
 |`src/app/NoticeBar.tsx`|화면에 잠깐 뜨는 알림 띠(안내·오류 메시지)|
 |`src/app/notificationsApi.ts`|알림함 목록을 서버에서 받아오고 읽음 표시를 모아 보냄|
-|`src/app/NotificationsMenu.tsx`|상단바 알림 버튼과 안 읽은 수, 알림 목록|
+|`src/app/NotificationsMenu.tsx`|⋯ 메뉴 `알림` 안에 보이는 알림 목록|
 |`src/app/notificationsShare.ts`|여러 탭이 알림 확인을 나눠 맡도록 탭끼리 주고받는 메시지를 다룸|
 |`src/app/openInNewTab.ts`|`새 탭에서 열기` — 설치 앱 탭이 켜져 있으면 앱 안 새 탭, 아니면 브라우저 새 탭으로 엶|
 |`src/app/Outline.tsx`|오른쪽 목차. 제목을 누르면 그 위치로 이동함|
@@ -227,9 +227,9 @@
 |`src/app/ToolbarCategoryMenu.tsx`|휴대폰 서식 도구줄에서 서식 분류를 고르는 펼침 메뉴|
 |`src/app/toolbarConfig.ts`|상단 서식 도구 막대에 놓을 버튼 목록을 정함|
 |`src/app/ToolbarImageInput.tsx`|서식 도구줄 `이미지` 버튼이 여는 숨은 사진 선택 칸. 휴대폰에서 도구줄이 사라져도 고른 사진을 받음|
-|`src/app/TopBar.tsx`|화면 위 상단바(보기 방식 전환·내보내기·공유·댓글·접속자 등)|
-|`src/app/topBarMore.ts`|휴대폰 상단바 ⋯ 메뉴에 보일 항목을 정함|
-|`src/app/TopBarMoreSheet.tsx`|휴대폰 상단바 `더보기`로 여는 목차·댓글·공유·내보내기·알림 시트|
+|`src/app/TopBar.tsx`|화면 위 상단바(보기 방식 전환·공유·⋯ 메뉴·접속자 등)|
+|`src/app/topBarMore.ts`|상단바 ⋯ 메뉴에 보일 항목을 정함(휴대폰·넓은 창)|
+|`src/app/TopBarMoreSheet.tsx`|상단바 ⋯ 메뉴. 넓은 창은 드롭다운(댓글·내보내기·GitHub·알림·오른쪽 패널), 휴대폰은 아래 시트|
 |`src/app/trashApi.ts`|휴지통 목록·복원·영구 삭제·비우기 요청을 서버에 보냄|
 |`src/app/TrashPage.tsx`|지운 문서를 모아 보여 주고 복원·영구 삭제하는 휴지통 화면(서버·브라우저 저장소 모두)|
 |`src/app/trashView.ts`|휴지통 화면의 행 설명·알림·확인 창 문구를 정함|

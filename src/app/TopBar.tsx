@@ -1,14 +1,12 @@
-// 상단바 — 보기 모드 토글(F-107·F-123), .md 내보내기(F-112), 공유(F-130), 아이콘·툴팁(F-142 3.2·3.3), 좁은 창 전용 앞 묶음(F-159 2.1) (ia.md 2장 A, F-102.md 5.3)
+// 상단바 — 보기 모드 토글(F-107·F-123), 공유(F-130), 아이콘·툴팁(F-142 3.2·3.3), 좁은 창 전용 앞 묶음(F-159 2.1), 나머지는 ⋯ (small 2026-10-21) (ia.md 2장 A)
 import { useRef, type MouseEvent as ReactMouseEvent, type RefObject } from 'react'
 import type { Command } from '@codemirror/view'
 import ShareMenu from './ShareMenu'
-import ExportMenu from './ExportMenu'
-import GithubMenu, { type GithubMenuProps } from './GithubMenu'
-import NotificationsMenu, { type NotificationsMenuProps } from './NotificationsMenu'
+import type { GithubMenuProps } from './GithubMenu'
+import type { NotificationsMenuProps } from './NotificationsMenu'
 import EditorToolbar from './EditorToolbar'
 import ToolbarImageInput from './ToolbarImageInput'
-import { IconTooltip, IconForum, IconRightPanelClose, IconRightPanelOpen, IconKanban, IconRaw } from './icons'
-import { commentBadgeText } from './commentRail'
+import { IconTooltip, IconKanban, IconRaw } from './icons'
 import SidebarHead from './SidebarHead'
 import PeerAvatars from './PeerAvatars'
 import ViewModeMenu, { VIEW_MODES, type ViewMode } from './ViewModeMenu'
@@ -63,16 +61,16 @@ type TopBarProps = {
   peers: readonly Peer[]
   selfUserId: string | null
   onJumpToPeer?: (userId: string) => void
-  // 댓글 레일(판) 여닫기 — 없으면 버튼이 없다(금고 문서, 공유 화면, 문서 없음) (F-505 3.6)
+  // 댓글 레일(판) 여닫기 — 없으면 ⋯ 행이 없다(금고 문서, 공유 화면, 문서 없음) (F-505 3.6)
   comments?: { openCount: number; open: boolean; disabled: boolean; onToggle: () => void }
-  // 알림함 — 없으면 버튼이 없다(로그인 안 함·로컬 저장소) (F-507 3.4)
+  // 알림함 — 없으면 ⋯ 행이 없다(로그인 안 함·로컬 저장소) (F-507 3.4)
   notifications?: NotificationsMenuProps
   // GitHub 메뉴 — 연결된 문서에만 (F-2128 4.5)
   github?: GithubMenuProps
-  // 휴대폰 폭 ⋯ 판 — 어느 화면인지와 목차 카드 통로 (F-2083)
+  // ⋯ 판 — 어느 화면인지와 목차 카드 통로 (F-2083)
   screen: TopBarScreen
   outlineControlRef: RefObject<OutlineControl | null>
-  // 오른쪽 패널 여닫기 — 맨 오른쪽 끝 (small 2026-10-10)
+  // 오른쪽 패널 여닫기 — 넓은 창 ⋯ 의 마지막 행 (small 2026-10-21)
   rightPanel?: { open: boolean; onToggle: () => void }
   // 칸반 문서의 보드·원문 보기 — 없으면 세그먼트·메뉴 항목이 없다 (F-2140 4장)
   kanban?: { view: KanbanView; onChoose: (view: KanbanView) => void }
@@ -120,15 +118,25 @@ export default function TopBar({
   const phone = usePhoneWidth()
   const imageInputRef = useRef<HTMLInputElement | null>(null)
   const pickImage = () => imageInputRef.current?.click()
-  // 휴대폰 폭은 버튼 없이 왼쪽 밀기로 연다(usePhoneSidePanel)
-  const rightPanelButton = rightPanel && (
-    <span className="icon-btn-wrap">
-      <button type="button" className="icon-btn" aria-label="오른쪽 패널" aria-expanded={rightPanel.open} onClick={rightPanel.onToggle}>
-        {rightPanel.open ? <IconRightPanelClose size={18} /> : <IconRightPanelOpen size={18} />}
-      </button>
-      <IconTooltip text="오른쪽 패널" align="end" />
-    </span>
-  )
+  const share = {
+    disabled: shareDisabled,
+    getShareDoc,
+    onNotice: onShareNotice,
+    linkDocId: shareLinkDocId,
+    onBeforeLinkAction: onBeforeShareLinkAction,
+    onInvite,
+    wikiResolver,
+    e2eeDoc: shareE2ee,
+  }
+  const moreProps = {
+    screen,
+    outlineControlRef,
+    comments,
+    notifications,
+    share,
+    exporter: { disabled: exportDisabled, onExportMd, onExportTxt, onPrintDoc, onExportHtml, onCopyRich },
+    github,
+  }
   return (
     <>
       <header className="topbar" data-ui="topbar">
@@ -156,26 +164,7 @@ export default function TopBar({
                 board={kanban && { active: kanban.view === 'board', onChoose: () => kanban.onChoose('board') }}
               />
             )}
-            {moreButtonVisible({ screen, notifications: Boolean(notifications) }) && (
-            <TopBarMoreSheet
-              screen={screen}
-              outlineControlRef={outlineControlRef}
-              comments={comments}
-              notifications={notifications}
-              share={{
-                disabled: shareDisabled,
-                getShareDoc,
-                onNotice: onShareNotice,
-                linkDocId: shareLinkDocId,
-                onBeforeLinkAction: onBeforeShareLinkAction,
-                onInvite,
-                wikiResolver,
-                e2eeDoc: shareE2ee,
-              }}
-              exporter={{ disabled: exportDisabled, onExportMd, onExportTxt, onPrintDoc, onExportHtml, onCopyRich }}
-              github={github}
-            />
-            )}
+            {moreButtonVisible({ screen, notifications: Boolean(notifications) }) && <TopBarMoreSheet {...moreProps} />}
           </div>
         ) : (
           <>
@@ -214,47 +203,10 @@ export default function TopBar({
                 </span>
               ))}
             </div>
-            {comments && (
-              <span className="icon-btn-wrap">
-                <button
-                  type="button"
-                  className="icon-btn comment-rail-toggle"
-                  aria-label={`댓글 ${comments.openCount}개`}
-                  aria-expanded={comments.open}
-                  disabled={comments.disabled}
-                  onClick={comments.onToggle}
-                >
-                  <IconForum size={18} />
-                  {commentBadgeText(comments.openCount) !== null && (
-                    <span className="comment-badge" aria-hidden="true">
-                      {commentBadgeText(comments.openCount)}
-                    </span>
-                  )}
-                </button>
-                <IconTooltip text="댓글" />
-              </span>
+            <ShareMenu {...share} />
+            {moreButtonVisible({ wide: true, screen, notifications: Boolean(notifications), rightPanel: Boolean(rightPanel) }) && (
+              <TopBarMoreSheet wide {...moreProps} rightPanel={rightPanel} />
             )}
-            {github && <GithubMenu {...github} />}
-            <ShareMenu
-              disabled={shareDisabled}
-              getShareDoc={getShareDoc}
-              onNotice={onShareNotice}
-              linkDocId={shareLinkDocId}
-              onBeforeLinkAction={onBeforeShareLinkAction}
-              onInvite={onInvite}
-              wikiResolver={wikiResolver}
-              e2eeDoc={shareE2ee}
-            />
-            <ExportMenu
-              disabled={exportDisabled}
-              onExportMd={onExportMd}
-              onExportTxt={onExportTxt}
-              onPrintDoc={onPrintDoc}
-              onExportHtml={onExportHtml}
-              onCopyRich={onCopyRich}
-            />
-            {notifications && <NotificationsMenu {...notifications} />}
-            {rightPanelButton}
           </>
         )}
       </header>

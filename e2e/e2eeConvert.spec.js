@@ -1,7 +1,7 @@
 // 금고로 옮기기·빼기 — 메뉴·D-9·D-10·진행 알림·쓰기 순서 (specs/features/F-407.md 9.2) — 금고는 F-404 화면, 서버는 fakeServer, 실시간은 fakeDocRoom
 import { test, expect } from '@playwright/test'
 import zlib from 'node:zlib'
-import { openApp as openAppRaw, setPrefBeforeLoad, currentDocId, importMarkdown, setViewMode, waitSaved, resetBrowserState } from './helpers.js'
+import { openApp as openAppRaw, setPrefBeforeLoad, currentDocId, importMarkdown, setViewMode, waitSaved, resetBrowserState, moreRow, openMoreMenu } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
 
@@ -681,7 +681,9 @@ async function f509AddComment(page, body) {
 
 // 5장 판정표 — 옮긴 뒤 금고 문서에 댓글 UI 가 없는지 (F-505 3.8·4장, F-509 2.4·5장)
 async function expectNoCommentUi(page) {
-  await expect(page.locator('.comment-rail-toggle')).toHaveCount(0)
+  await openMoreMenu(page)
+  await expect(moreRow(page, 'comments')).toHaveCount(0)
+  await page.keyboard.press('Escape')
   await expect(page.locator('.comment-rail')).toHaveCount(0)
   await expect(page.locator('.comment-sheet')).toHaveCount(0)
   await expect(page.locator('.comment-thread')).toHaveCount(0)

@@ -1,6 +1,6 @@
-// 상단바 `내보내기` 메뉴와 .txt 평문 내보내기 (specs/features/F-278.md, F-279.md)
+// 상단바 ⋯ `내보내기` 하위 화면과 .txt 평문 내보내기 (specs/features/F-278.md, F-279.md, small 2026-10-21)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, openExportMenu, EXPORT_BUTTON_LABEL } from './helpers.js'
+import { openApp, importMarkdown, openExportMenu, moreButton } from './helpers.js'
 
 async function fillTitle(page, text) {
   await page.locator('.doc-title').fill(text)
@@ -12,9 +12,8 @@ test.describe('F-278 A17 키보드·포커스', () => {
     await openApp(page)
     await importMarkdown(page, { content: '본문\n' })
 
-    const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
-    await btn.click()
-    const items = page.locator('.export-menu-list [role="menuitem"]')
+    const btn = moreButton(page)
+    const items = await openExportMenu(page)
     await expect(items.nth(0)).toBeFocused()
 
     await page.keyboard.press('ArrowDown')

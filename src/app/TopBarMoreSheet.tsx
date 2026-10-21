@@ -1,5 +1,5 @@
-// 휴대폰 폭 상단바 `⋯` 버튼 + 아래 판 — 목차·댓글·공유·내보내기·GitHub·알림 (specs/features/F-2083.md 4장)
-import { useEffect, useRef, useState, type ComponentType, type ReactNode, type RefObject } from 'react'
+// 상단바 `⋯` 버튼 + 판 — 휴대폰은 아래 판(F-2083 4장), 넓은 창은 버튼 밑 드롭다운(small 2026-10-21)
+import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 
 import {
   IconArrowBack,
@@ -10,6 +10,8 @@ import {
   IconForum,
   IconMore,
   IconNotifications,
+  IconRightPanelClose,
+  IconRightPanelOpen,
   IconShare,
   IconToc,
   IconTooltip,
@@ -28,6 +30,8 @@ import { githubMenuItems } from './githubUi'
 type SubView = 'share' | 'export' | 'github'
 
 type TopBarMoreSheetProps = {
+  // 넓은 창 — 바닥 판 대신 버튼 밑 드롭다운, 공유·목차 행 없이 오른쪽 패널 행
+  wide?: boolean
   screen: TopBarScreen
   outlineControlRef: RefObject<OutlineControl | null>
   comments?: { openCount: number; open: boolean; disabled: boolean; onToggle: () => void }
@@ -35,9 +39,10 @@ type TopBarMoreSheetProps = {
   share: ShareMenuProps
   exporter: ExportMenuProps
   github?: GithubMenuProps
+  rightPanel?: { open: boolean; onToggle: () => void }
 }
 
-const ROW_LABEL: Record<MoreItemKey, string> = {
+const ROW_LABEL: Record<Exclude<MoreItemKey, 'rightPanel'>, string> = {
   outline: '목차',
   comments: '댓글',
   share: '공유',
@@ -46,7 +51,7 @@ const ROW_LABEL: Record<MoreItemKey, string> = {
   notifications: '알림',
 }
 
-const ROW_ICON: Record<MoreItemKey, ComponentType<{ size?: number }>> = {
+const ROW_ICON: Record<Exclude<MoreItemKey, 'rightPanel'>, ComponentType<{ size?: number }>> = {
   outline: IconToc,
   comments: IconForum,
   share: IconShare,
@@ -57,17 +62,20 @@ const ROW_ICON: Record<MoreItemKey, ComponentType<{ size?: number }>> = {
 
 const MORE_LABEL = '메뉴'
 const MORE_LABEL_WITH_DOT = '메뉴, 안 읽은 알림·열린 댓글 있음'
+const FOCUSABLE_ITEMS = '.more-sheet-body :is(button, a).more-sheet-item:not(:disabled), .more-sheet-body .notification-item'
 
-function ActionList({ items, note }: { items: MenuAction[]; note?: ReactNode }) {
+function ActionList({ items, note, wide }: { items: MenuAction[]; note?: ReactNode; wide: boolean }) {
+  const iconSize = wide ? 16 : 20
   return (
     <>
       {items.map((item) =>
         item.loading ? (
-          <MenuItemSkeleton key={item.key} iconSize={20} className="more-sheet-item" />
+          <MenuItemSkeleton key={item.key} iconSize={iconSize} className="more-sheet-item" />
         ) : (
-        <li key={item.key}>
+        <li key={item.key} role={wide ? 'none' : undefined}>
           <button
             type="button"
+            role={wide ? 'menuitem' : undefined}
             className="more-sheet-item"
             aria-disabled={item.disabled || undefined}
             aria-describedby={item.disabled && note ? 'more-sheet-e2ee-note' : undefined}
@@ -76,7 +84,7 @@ function ActionList({ items, note }: { items: MenuAction[]; note?: ReactNode }) 
               void item.onSelect()
             }}
           >
-            <item.icon size={20} />
+            <item.icon size={iconSize} />
             <span className="more-sheet-label">{item.label}</span>
           </button>
         </li>
@@ -86,17 +94,22 @@ function ActionList({ items, note }: { items: MenuAction[]; note?: ReactNode }) 
   )
 }
 
-export default function TopBarMoreSheet({ screen, outlineControlRef, comments, notifications, share, exporter, github }: TopBarMoreSheetProps) {
+export default function TopBarMoreSheet({ wide = false, screen, outlineControlRef, comments, notifications, share, exporter, github, rightPanel }: TopBarMoreSheetProps) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<SubView | null>(null)
   const [hasOutline, setHasOutline] = useState(false)
   const [returnKey, setReturnKey] = useState<MoreItemKey | null>(null)
   const notifOpen = Boolean(notifications?.open)
   const visible = open || notifOpen
-  const { mounted } = usePresence(visible)
+  const { mounted, state: presenceState } = usePresence(visible)
   const moreBtnRef = useRef<HTMLButtonElement | null>(null)
   const dialogRef = useRef<HTMLDialogElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
   const programmaticCloseRef = useRef(false)
+  const role = wide ? 'menuitem' : undefined
+  const listRole = wide ? 'menu' : undefined
+  const liRole = wide ? 'none' : undefined
 
   function dismiss(focusTrigger: boolean) {
     setOpen(false)
@@ -127,36 +140,43 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
     }
   }, [visible])
 
-  // 주소가 바뀌면 판만 닫고 포커스는 옮기지 않는다 (4.4)
+  // 주소가 바뀌면 판만 닫고 포커스는 옮기지 않는다 (4.4). 넓은 창은 바깥 누르기도 같다(메뉴 관례)
   useEffect(() => {
     if (!visible) return
     function handleHashChange() {
       dismiss(false)
     }
+    function handlePointerDown(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) dismiss(false)
+    }
     window.addEventListener('hashchange', handleHashChange)
-    return () => window.removeEventListener('hashchange', handleHashChange)
+    if (wide) document.addEventListener('mousedown', handlePointerDown)
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange)
+      document.removeEventListener('mousedown', handlePointerDown)
+    }
     // dismiss 는 매 렌더 새로 만들어지지만 최신 notifications 만 쓰면 된다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, notifOpen])
+  }, [visible, notifOpen, wide])
 
   // 여는 것·하위 화면 전환마다 포커스를 옮긴다 — 알림은 팔레트 dialog 의 close 포커스 복귀 뒤로 두 프레임 미룬다 (4.4)
   useEffect(() => {
     if (!visible) return
-    const dialog = dialogRef.current
-    if (!dialog) return
+    const root = wide ? menuRef.current : dialogRef.current
+    if (!root) return
     function focusFirst() {
-      const target = dialog!.querySelector<HTMLElement>('.more-sheet-body .more-sheet-item, .more-sheet-body .notification-item')
-      const fallback = dialog!.querySelector<HTMLElement>('.more-sheet-back')
+      const target = root!.querySelector<HTMLElement>('.more-sheet-body .more-sheet-item, .more-sheet-body .notification-item')
+      const fallback = root!.querySelector<HTMLElement>('.more-sheet-back')
       ;(target ?? fallback)?.focus()
     }
     if (view === null && !notifOpen) {
-      const row = returnKey ? dialog.querySelector<HTMLElement>(`[data-row="${returnKey}"]`) : null
-      ;(row ?? dialog.querySelector<HTMLElement>('.more-sheet-item'))?.focus()
+      const row = returnKey ? root.querySelector<HTMLElement>(`[data-row="${returnKey}"]`) : null
+      ;(row ?? root.querySelector<HTMLElement>('.more-sheet-item:not(:disabled)'))?.focus()
       return
     }
     const raf = requestAnimationFrame(() => requestAnimationFrame(focusFirst))
     return () => cancelAnimationFrame(raf)
-  }, [visible, view, notifOpen, returnKey, mounted])
+  }, [visible, view, notifOpen, returnKey, mounted, wide])
 
   function openSheet() {
     setHasOutline(outlineControlRef.current?.hasHeadings() ?? false)
@@ -182,12 +202,44 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
     } else if (key === 'comments') {
       closeSheet()
       comments?.onToggle()
+    } else if (key === 'rightPanel') {
+      closeSheet()
+      rightPanel?.onToggle()
     } else {
       enter(key)
     }
   }
 
-  const rows = moreSheetItems({ screen, hasOutline, comments: Boolean(comments), notifications: Boolean(notifications), github: Boolean(github) })
+  // 넓은 창 메뉴 관례 — Esc 는 닫고 ⋯ 로, ↑↓ 는 항목 사이를 돌고 Home·End 는 처음·끝 (옛 알림 팝오버와 같다)
+  function handleMenuKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (!visible) return
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      closeSheet()
+      return
+    }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_ITEMS) ?? [])
+    if (items.length === 0) return
+    e.preventDefault()
+    const current = items.indexOf(document.activeElement as HTMLElement)
+    let next = e.key === 'Home' ? 0 : items.length - 1
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const delta = e.key === 'ArrowDown' ? 1 : -1
+      next = current === -1 ? 0 : (current + delta + items.length) % items.length
+    }
+    items[next].focus()
+  }
+
+  const rows = moreSheetItems({
+    wide,
+    screen,
+    hasOutline,
+    comments: Boolean(comments),
+    notifications: Boolean(notifications),
+    github: Boolean(github),
+    rightPanel: Boolean(rightPanel),
+  })
   const dot = moreDotVisible({
     screen,
     unread: notifications ? notifications.state.unread : null,
@@ -195,6 +247,7 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
   })
   const unreadCount = notifications?.state.unread ?? 0
   const moreLabel = dot ? MORE_LABEL_WITH_DOT : MORE_LABEL
+  const iconSize = wide ? 16 : 20
 
   function rowDisabled(key: MoreItemKey): boolean {
     if (key === 'share') return share.disabled
@@ -207,6 +260,16 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
     if (key === 'comments') return `댓글 ${comments?.openCount ?? 0}개`
     if (key === 'notifications') return `알림, 안 읽음 ${unreadCount}개`
     return undefined
+  }
+
+  function rowText(key: MoreItemKey): string {
+    if (key === 'rightPanel') return rightPanel?.open ? '오른쪽 패널 닫기' : '오른쪽 패널 열기'
+    return ROW_LABEL[key]
+  }
+
+  function rowIcon(key: MoreItemKey): ComponentType<{ size?: number }> {
+    if (key === 'rightPanel') return rightPanel?.open ? IconRightPanelClose : IconRightPanelOpen
+    return ROW_ICON[key]
   }
 
   function rowBadge(key: MoreItemKey): string | null {
@@ -238,10 +301,10 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
     )
   } else if (view === 'share') {
     body = (
-      <ul className="more-sheet-list">
-        <ActionList items={shareMenu.items} note={shareMenu.e2eeNote} />
+      <ul className="more-sheet-list" role={listRole}>
+        <ActionList items={shareMenu.items} note={shareMenu.e2eeNote} wide={wide} />
         {shareMenu.e2eeNote && (
-          <li>
+          <li role={liRole}>
             <p className="share-menu-note" id="more-sheet-e2ee-note">
               금고 문서는 공유할 수 없습니다.
             </p>
@@ -251,27 +314,28 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
     )
   } else if (view === 'export') {
     body = (
-      <ul className="more-sheet-list">
-        <ActionList items={exportItems} />
+      <ul className="more-sheet-list" role={listRole}>
+        <ActionList items={exportItems} wide={wide} />
       </ul>
     )
   } else if (view === 'github' && github) {
     body = (
-      <ul className="more-sheet-list">
+      <ul className="more-sheet-list" role={listRole}>
         {github.link && (
-          <li className="github-menu-status">
+          <li className="github-menu-status" role={liRole}>
             <GithubStatusLine link={github.link} />
           </li>
         )}
         {githubMenuItems(github).map((item) => (
-          <li key={item.key}>
+          <li key={item.key} role={liRole}>
             {item.href ? (
-              <a className="more-sheet-item" href={item.href} target="_blank" rel="noopener noreferrer" onClick={closeSheet}>
+              <a className="more-sheet-item" role={role} href={item.href} target="_blank" rel="noopener noreferrer" onClick={closeSheet}>
                 <span className="more-sheet-label">{item.label}</span>
               </a>
             ) : (
               <button
                 type="button"
+                role={role}
                 className="more-sheet-item"
                 onClick={() => {
                   closeSheet()
@@ -287,23 +351,24 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
     )
   } else {
     body = (
-      <ul className="more-sheet-list">
+      <ul className="more-sheet-list" role={listRole}>
         {rows.map((key) => {
-          const Icon = ROW_ICON[key]
+          const Icon = rowIcon(key)
           const badge = rowBadge(key)
           const disabled = rowDisabled(key)
           return (
-            <li key={key}>
+            <li key={key} role={liRole}>
               <button
                 type="button"
+                role={role}
                 className="more-sheet-item"
                 data-row={key}
                 aria-label={rowLabel(key)}
                 disabled={disabled}
                 onClick={() => activate(key)}
               >
-                <Icon size={20} />
-                <span className="more-sheet-label">{ROW_LABEL[key]}</span>
+                <Icon size={iconSize} />
+                <span className="more-sheet-label">{rowText(key)}</span>
                 {badge !== null && (
                   <span className="comment-badge more-sheet-badge" aria-hidden="true">
                     {badge}
@@ -318,23 +383,72 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
     )
   }
 
+  const head = (
+    <div className="more-sheet-head">
+      {subTitle !== null && (
+        <>
+          <button type="button" className="icon-btn more-sheet-back" aria-label="뒤로" onClick={back}>
+            <IconArrowBack size={18} />
+          </button>
+          <h2>{subTitle}</h2>
+        </>
+      )}
+      <span className="more-sheet-head-spacer" />
+      {notifOpen && notifications && !notifications.blocked && (
+        <button type="button" className="notifications-read-all" disabled={!notifications.state.unread} onClick={notifications.onReadAll}>
+          모두 읽음
+        </button>
+      )}
+      {!wide && (
+        <button type="button" className="icon-btn more-sheet-close" aria-label="닫기" onClick={closeSheet}>
+          <IconClose size={18} />
+        </button>
+      )}
+    </div>
+  )
+
+  const button = (
+    <span className="icon-btn-wrap">
+      <button
+        type="button"
+        ref={moreBtnRef}
+        className="icon-btn topbar-more-btn"
+        aria-label={moreLabel}
+        aria-haspopup="dialog"
+        aria-expanded={visible}
+        onClick={wide && visible ? closeSheet : openSheet}
+      >
+        <IconMore size={18} />
+        {dot && <span className="topbar-more-dot" aria-hidden="true" />}
+      </button>
+      {!visible && <IconTooltip text={MORE_LABEL} align="end" />}
+    </span>
+  )
+
+  if (wide) {
+    return (
+      <div className="topbar-more" ref={wrapRef} onKeyDown={handleMenuKeyDown}>
+        {button}
+        {mounted && (
+          <div
+            ref={menuRef}
+            className="more-menu"
+            role="dialog"
+            aria-label={MORE_LABEL}
+            data-state={presenceState}
+            inert={presenceState === 'closed'}
+          >
+            {subTitle !== null && head}
+            <div className="more-sheet-body">{body}</div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <>
-      <span className="icon-btn-wrap">
-        <button
-          type="button"
-          ref={moreBtnRef}
-          className="icon-btn topbar-more-btn"
-          aria-label={moreLabel}
-          aria-haspopup="dialog"
-          aria-expanded={visible}
-          onClick={openSheet}
-        >
-          <IconMore size={18} />
-          {dot && <span className="topbar-more-dot" aria-hidden="true" />}
-        </button>
-        {!visible && <IconTooltip text={MORE_LABEL} align="end" />}
-      </span>
+      {button}
       <dialog
         ref={dialogRef}
         className="more-sheet"
@@ -352,25 +466,7 @@ export default function TopBarMoreSheet({ screen, outlineControlRef, comments, n
       >
         {mounted && (
           <>
-            <div className="more-sheet-head">
-              {subTitle !== null && (
-                <>
-                  <button type="button" className="icon-btn more-sheet-back" aria-label="뒤로" onClick={back}>
-                    <IconArrowBack size={18} />
-                  </button>
-                  <h2>{subTitle}</h2>
-                </>
-              )}
-              <span className="more-sheet-head-spacer" />
-              {notifOpen && notifications && !notifications.blocked && (
-                <button type="button" className="notifications-read-all" disabled={!notifications.state.unread} onClick={notifications.onReadAll}>
-                  모두 읽음
-                </button>
-              )}
-              <button type="button" className="icon-btn more-sheet-close" aria-label="닫기" onClick={closeSheet}>
-                <IconClose size={18} />
-              </button>
-            </div>
+            {head}
             <div className="more-sheet-body">{body}</div>
           </>
         )}

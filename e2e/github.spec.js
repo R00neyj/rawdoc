@@ -1,8 +1,11 @@
 // GitHub 연결·가져오기 화면 (specs/features/F-2128.md 7장)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, currentDocId, setPrefBeforeLoad } from './helpers.js'
+import { openApp, importMarkdown, currentDocId, setPrefBeforeLoad, clickMoreRow, moreMenu } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
+
+// 상단바 GitHub 메뉴는 넓은 창 ⋯ 의 GitHub 행 하위 화면이다 (small 2026-10-21)
+const openGithubMenu = (page) => clickMoreRow(page, 'github')
 
 const BOM = Buffer.from([0xef, 0xbb, 0xbf])
 const MEMO = Buffer.concat([BOM, Buffer.from('# 제목\n본문\n', 'utf-8')])
@@ -30,7 +33,7 @@ test.describe('F-2128 GitHub', () => {
     expect(put.body).toEqual({ repo: 'o/r', branch: 'main', path: 'docs/메모.markdown', sha: 'S1', bom: true })
 
     await page.reload()
-    await page.getByRole('button', { name: 'GitHub', exact: true }).click()
+    await openGithubMenu(page)
     await expect(page.locator('.github-menu-status')).toContainText('o/r · docs/메모.markdown')
   })
 
@@ -76,10 +79,7 @@ test.describe('F-2128 GitHub', () => {
     await expect.poll(() => server.githubLinks.get(docId)?.path).toBe('doc.md')
     const put = server.githubRequests().find((r) => r.method === 'PUT')
     expect(put.body).toEqual({ repo: 'o/r', branch: 'main', path: 'doc.md', sha: null, bom: false })
-    const githubButton = page.getByRole('button', { name: 'GitHub', exact: true })
-    await expect(githubButton).toBeVisible()
-
-    await githubButton.click()
+    await openGithubMenu(page)
     await page.getByRole('menuitem', { name: '연결 해제…' }).click()
     await page.getByRole('dialog', { name: 'GitHub 연결 해제' }).getByRole('button', { name: '연결 해제', exact: true }).click()
 
@@ -90,8 +90,8 @@ test.describe('F-2128 GitHub', () => {
     await page.keyboard.press('Escape')
 
     // 연결 안 된 문서도 상단바 GitHub 에서 다시 연결한다 (small 2026-10-13)
-    await githubButton.click()
-    await page.locator('.github-menu').getByRole('menuitem', { name: 'GitHub에 연결…' }).click()
+    await openGithubMenu(page)
+    await moreMenu(page).getByRole('menuitem', { name: 'GitHub에 연결…' }).click()
     await page.getByRole('dialog', { name: 'GitHub에 연결' }).getByRole('button', { name: '연결', exact: true }).click()
     await expect.poll(() => server.githubLinks.get(docId)?.path).toBe('doc.md')
   })
@@ -142,7 +142,7 @@ async function openLinkedDoc(page, room, { remote, syncedAt = null, lineEnding =
 }
 
 async function startPull(page) {
-  await page.getByRole('button', { name: 'GitHub', exact: true }).click()
+  await openGithubMenu(page)
   await page.getByRole('menuitem', { name: '당기기…' }).click()
 }
 
@@ -212,7 +212,7 @@ test.describe('F-2129 GitHub 당기기', () => {
     room.seed(PULL_DOC, { content: BODY, title: '당길 문서' })
     const server = await openLinkedDoc(page, room, { remote: BODY.replace(/\n/g, '\r\n') })
 
-    await page.getByRole('button', { name: 'GitHub', exact: true }).click()
+    await openGithubMenu(page)
     await expect(page.locator('.github-menu-status')).toContainText('아직 맞춘 적 없음')
     await page.getByRole('menuitem', { name: '당기기…' }).click()
 
@@ -221,7 +221,7 @@ test.describe('F-2129 GitHub 당기기', () => {
     )
     await expect(page.locator('.github-pull-merge')).toHaveCount(0)
     expect(requestsTo(server, '/synced')).toHaveLength(1)
-    await page.getByRole('button', { name: 'GitHub', exact: true }).click()
+    await openGithubMenu(page)
     await expect(page.locator('.github-menu-status')).toContainText('마지막 동기화')
   })
 })
@@ -231,7 +231,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 const PUSH_NAME = '0123456789abcdef.png'
 const pushDialog = (page) => page.getByRole('dialog', { name: 'GitHub에 푸시' })
 async function openPush(page) {
-  await page.getByRole('button', { name: 'GitHub', exact: true }).click()
+  await openGithubMenu(page)
   await page.getByRole('menuitem', { name: '푸시…', exact: true }).click()
 }
 
@@ -257,7 +257,7 @@ test.describe('F-2130 GitHub 푸시', () => {
     expect(pushBody.message).toBe('첫 푸시')
     expect(pushBody.images).toEqual([{ name: PUSH_NAME, sha: expect.any(String) }])
     expect(pushBody.mdSha).not.toBe(pushBody.images[0].sha)
-    await page.getByRole('button', { name: 'GitHub', exact: true }).click()
+    await openGithubMenu(page)
     await expect(page.locator('.github-menu-status')).toContainText('마지막 동기화')
   })
 

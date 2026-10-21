@@ -1,6 +1,6 @@
 // PDF (A4 인쇄) — 상단바 내보내기 메뉴, Ctrl+P (specs/features/F-279.md)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, openExportMenu, EXPORT_BUTTON_LABEL } from './helpers.js'
+import { openApp, importMarkdown, openExportMenu, moreRow, openMoreMenu } from './helpers.js'
 
 function u32be(n) {
   return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff]
@@ -75,10 +75,10 @@ test('F-279 A5·A11 빈 상태에서는 버튼 비활성·메뉴 안 열림, Ctr
   await stubPrint(page)
   await openApp(page)
   await deleteFirstDoc(page) // 첫 실행 안내 문서를 지워 빈 상태를 만든다 (F-278 A20 와 같은 방식)
-  const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
-  await expect(btn).toBeDisabled()
-  await btn.click({ force: true })
-  await expect(page.getByRole('menu')).toHaveCount(0)
+  // 빈 상태 ⋯ 에는 내보내기 행이 없다 (small 2026-10-21 — 휴대폰 ⋯ 와 같은 행 규칙)
+  await openMoreMenu(page)
+  await expect(moreRow(page, 'export')).toHaveCount(0)
+  await page.keyboard.press('Escape')
 
   await page.keyboard.press('Control+p')
   await page.waitForTimeout(300)

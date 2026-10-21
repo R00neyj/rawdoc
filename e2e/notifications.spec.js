@@ -1,6 +1,6 @@
 // 알림함·멘션 후보 (specs/features/F-507.md 11.2 E1~E20)
 import { test, expect } from '@playwright/test'
-import { openApp, setPrefBeforeLoad, importMarkdown } from './helpers.js'
+import { openApp, setPrefBeforeLoad, importMarkdown, clickMoreRow, moreButton, moreMenu, moreRow, openMoreMenu, expectUnread } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
 
@@ -9,8 +9,10 @@ const CONTENT = LINES.join('\n') + '\n'
 const DOC = 'notif-doc-1'
 const USER = { id: 'u1', email: 'a@b.com' }
 
-const notifBtn = (page) => page.locator('.notifications-btn')
-const notifPanel = (page) => page.locator('.notifications-panel')
+// 알림함은 넓은 창 상단바 ⋯ 의 알림 행 하위 화면이다 (small 2026-10-21)
+const notifRow = (page) => moreRow(page, 'notifications')
+const notifPanel = (page) => moreMenu(page).filter({ has: page.getByRole('heading', { name: '알림' }) })
+const openInbox = (page) => clickMoreRow(page, 'notifications')
 const notifItems = (page) => page.locator('.notification-item')
 const threadCards = (page) => page.locator('.comment-thread')
 const composerTextarea = (page) => page.locator('.comment-composer textarea')
@@ -146,7 +148,9 @@ test.describe('F-507 E1·E20 로그인 없음·로컬 문서', () => {
   test('F-507 E1·E20 로그인 없으면 알림 버튼·팔레트 옵션이 없고, 로컬 문서에서 @ 는 그냥 글자이며 자리 표시에 멘션 문구가 없다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: CONTENT })
-    await expect(notifBtn(page)).toHaveCount(0)
+    await openMoreMenu(page)
+    await expect(notifRow(page)).toHaveCount(0)
+    await page.keyboard.press('Escape')
     await page.keyboard.press('Control+p')
     await page.locator('.command-palette-input').fill('/알림') // F-2053 — 만들기 줄이 안 붙게 명령 모드로
     await expect(page.getByRole('option')).toHaveCount(0)
@@ -171,11 +175,12 @@ test.describe('F-507 E4·F-510 E12 모두 읽음', () => {
     })
     await expect(page.locator('[data-unread="true"]')).toHaveCount(2)
 
-    await notifBtn(page).click()
-    await expect(page.locator('.notifications-badge')).toHaveText('2')
+    await expectUnread(page, 2)
+    await openInbox(page)
     await page.locator('.notifications-read-all').click()
-    await expect(page.locator('.notifications-badge')).toHaveCount(0)
     await expect(page.locator('.notification-item[data-unread="true"]')).toHaveCount(0)
+    await moreMenu(page).getByRole('button', { name: '뒤로' }).click()
+    await expect(notifRow(page)).toHaveAttribute('aria-label', '알림, 안 읽음 0개')
     await expect(page.locator('[data-unread="true"]')).toHaveCount(0)
 
     const posts = postsOf(server)
@@ -206,31 +211,31 @@ test.describe('F-507 E5·E6·E7·E8·F-510 E10 알림 항목 눌러 이동', () 
     await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
 
     // E5·F-510 E10 다른 문서로 이동 — 첫 항목(a1)을 눌러 이동
-    await notifBtn(page).click()
+    await openInbox(page)
     await expect(notifItems(page)).toHaveCount(6)
     await notifItems(page).nth(0).click()
     await expect(notifPanel(page)).toBeHidden()
     await expect(page.locator('.comment-thread[data-thread-id="t1"]')).toHaveAttribute('data-active', 'true')
     await expect(page).toHaveURL(/#\/d\/notif-doc-1$/)
-    await expect(page.locator('.notifications-badge')).toHaveText('2')
+    await expectUnread(page, 2)
     await expect(docRowByTitle(page, '함께 쓰는 문서')).not.toHaveAttribute('data-unread', 'true')
     await expect.poll(() => postsOf(server).length).toBe(2)
     expect(postsOf(server)[0].body).toEqual({ ids: ['a1'] })
     expect(postsOf(server)[1].body).toEqual({ ids: ['a2', 'c1', 'e1'] })
 
     // E6 같은 문서의 다른 스레드 — 문서는 그대로, 그 스레드만 활성
-    await notifBtn(page).click()
+    await openInbox(page)
     await notifItems(page).nth(2).click()
     await expect(page).toHaveURL(/#\/d\/notif-doc-1$/)
     await expect(page.locator('.comment-thread[data-active="true"]')).toHaveAttribute('data-thread-id', 't2')
 
     // E7 지워진 스레드 — 문서는 열리고 댓글을 찾지 못했습니다
-    await notifBtn(page).click()
+    await openInbox(page)
     await notifItems(page).nth(3).click()
     await expect(page.locator('.notice-message')).toHaveText('댓글을 찾지 못했습니다. 지워졌을 수 있습니다.')
 
     // E8 알 수 없는 문서 — 문서를 찾을 수 없습니다, C9 는 뜨지 않음
-    await notifBtn(page).click()
+    await openInbox(page)
     await notifItems(page).nth(4).click()
     await expect(page.locator('.notice-message')).toHaveText('문서를 찾을 수 없습니다.')
   })
@@ -265,12 +270,12 @@ test.describe('F-507 E9 새로 초대받은 문서', () => {
     await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
     await openApp(page)
 
-    await expect(page.locator('.notifications-badge')).toHaveText('1')
+    await expectUnread(page, 1)
 
     sharedList = [{ ...serverDoc(NEW, { title: '초대받은 문서', content: undefined }), content: undefined, role: 'edit', ownerEmail: 'owner@x.com' }]
     const before = sharedCount
 
-    await notifBtn(page).click()
+    await openInbox(page)
     await notifItems(page).first().click()
 
     await expect(page.locator('.comment-thread[data-thread-id="t9"]')).toHaveAttribute('data-active', 'true')
@@ -289,7 +294,9 @@ test.describe('F-507 E10·E14 키보드와 60초 폴링', () => {
       ]),
     )
 
-    await notifBtn(page).focus()
+    await moreButton(page).focus()
+    await page.keyboard.press('Enter')
+    await notifRow(page).focus()
     await page.keyboard.press('Enter')
     await expect(notifItems(page).nth(0)).toBeFocused()
     await page.keyboard.press('ArrowDown')
@@ -298,7 +305,7 @@ test.describe('F-507 E10·E14 키보드와 60초 폴링', () => {
     await expect(notifItems(page).nth(2)).toBeFocused()
     await page.keyboard.press('Escape')
     await expect(notifPanel(page)).toBeHidden()
-    await expect(notifBtn(page)).toBeFocused()
+    await expect(moreButton(page)).toBeFocused()
 
     await page.keyboard.press('Control+p')
     await page.locator('.command-palette-input').fill('/알림 열기') // F-2053 — 만들기 줄이 안 붙게 명령 모드로
@@ -308,7 +315,7 @@ test.describe('F-507 E10·E14 키보드와 60초 폴링', () => {
     await page.keyboard.press('Escape')
 
     // E10 60초 폴링 — 30초는 아직, 60초면 다시 가져온다
-    await expect(page.locator('.notifications-badge')).toHaveText('3')
+    await expectUnread(page, 3)
     server.setNotifications([
       notif({ id: 'n0', createdAt: Date.now(), readAt: null }),
       notif({ id: 'n1', createdAt: 3000 }),
@@ -317,9 +324,9 @@ test.describe('F-507 E10·E14 키보드와 60초 폴링', () => {
     ])
     const before = server.notificationRequests().filter((r) => r.method === 'GET').length
     await page.clock.fastForward('00:30')
-    await expect(page.locator('.notifications-badge')).toHaveText('3')
+    await expectUnread(page, 3)
     await page.clock.fastForward('00:30')
-    await expect(page.locator('.notifications-badge')).toHaveText('4')
+    await expectUnread(page, 4)
     expect(server.notificationRequests().filter((r) => r.method === 'GET').length).toBeGreaterThan(before)
   })
 })
@@ -345,10 +352,10 @@ test.describe('F-507 E11·F-510 E11 읽음 요청 실패', () => {
     await expect(page.locator('.notice-message')).toHaveCount(0)
 
     // F-507 E11 알림 항목을 눌러도 실패하면 안 읽음이 이어진다
-    await notifBtn(page).click()
+    await openInbox(page)
     await notifItems(page).first().click()
     await expect(page.locator('.comment-thread[data-thread-id="t1"]')).toHaveAttribute('data-active', 'true')
-    await notifBtn(page).click()
+    await openInbox(page)
     await expect(notifItems(page).first()).toHaveAttribute('data-unread', 'true')
 
     await page.clock.fastForward('01:00')
@@ -365,9 +372,9 @@ test.describe('F-507 E13·F-510 E8 막힌 계정', () => {
       beforeGoto: (s) => s.setMe({ blocked: true }),
     })
 
-    await expect(page.locator('.notifications-badge')).toHaveText('1')
+    await expectUnread(page, 1)
     await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
-    await notifBtn(page).click()
+    await openInbox(page)
     await expect(page.locator('.notifications-read-all')).toHaveCount(0)
     await notifItems(page).first().click()
     await expect(page).toHaveURL(/#\/d\/notif-doc-1$/)
@@ -541,7 +548,7 @@ test.describe('F-510 E5·E6·E7·E9 읽음 시점', () => {
 
     // E6 부팅 때 열린 문서 — 전환이 아니라 읽지 않는다, 현재 문서를 다시 누르면 읽는다
     await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
-    await expect(page.locator('.notifications-badge')).toHaveText('4')
+    await expectUnread(page, 4)
     expect(postsOf(server)).toHaveLength(0)
     await docLink(page, '함께 쓰는 문서').click()
     await expect(docRowByTitle(page, '함께 쓰는 문서')).not.toHaveAttribute('data-unread', 'true')
@@ -552,7 +559,7 @@ test.describe('F-510 E5·E6·E7·E9 읽음 시점', () => {
     await docLink(page, OTHER_TITLE).click()
     await expect(page.locator('.cm-content').first()).toContainText('다른 문서 본문')
     await expect(docRowByTitle(page, OTHER_TITLE)).not.toHaveAttribute('data-unread', 'true')
-    await expect(page.locator('.notifications-badge')).toHaveCount(0)
+    await expectUnread(page, 0)
     await expect.poll(() => postsOf(server).length).toBe(2)
     expect(postsOf(server)[1].body).toEqual({ ids: ['o1', 'o2'] })
     expect(server.notifications().every((n) => n.readAt !== null)).toBe(true)
@@ -582,7 +589,7 @@ test.describe('F-510 E13 30개로 잘린 목록', () => {
 
     await openTwoDocs(page, { notifications: [...otherNotifs, docNotif] })
 
-    await expect(page.locator('.notifications-badge')).toHaveText('1')
+    await expectUnread(page, 1)
     await expect(docRowByTitle(page, '함께 쓰는 문서')).not.toHaveAttribute('data-unread', 'true')
   })
 })
@@ -597,7 +604,7 @@ test.describe('F-2111 E1 comment 종류', () => {
       ],
     })
     await expect(docRowByTitle(page, '함께 쓰는 문서')).toHaveAttribute('data-unread', 'true')
-    await notifBtn(page).click()
+    await openInbox(page)
     await expect(notifItems(page)).toHaveCount(2)
     await expect(notifItems(page).first()).toContainText('에 댓글을 달았습니다.')
     await notifItems(page).first().click()
@@ -652,7 +659,7 @@ test.describe('F-2116 E1 새 문서 공유', () => {
     await expect.poll(() => gets()).toBeGreaterThan(g1)
     expect(sharedGets).toBe(before + 1)
 
-    await notifBtn(page).click()
+    await openInbox(page)
     await notifItems(page).first().click()
     await expect(page).toHaveURL(/#\/d\/S$/)
     await expect.poll(() => postsOf(server).length).toBeGreaterThan(0)
@@ -673,7 +680,9 @@ test.describe('F-2116 E2 폴더 공유', () => {
       s.setNotifications([shareNotif({ id: 'shf', target: 'folder', targetId: 'SF', name: '받은 폴더' })])
     })
     await expect(sharedGroupToggle(page)).toHaveAttribute('aria-expanded', 'true')
-    await expect(notifBtn(page)).toBeVisible()
+    await openMoreMenu(page)
+    await expect(notifRow(page)).toBeVisible()
+    await page.keyboard.press('Escape')
     await page.evaluate((id) => {
       location.hash = `#/d/${id}`
     }, OTHER)
@@ -682,7 +691,7 @@ test.describe('F-2116 E2 폴더 공유', () => {
     await expect(sharedGroupToggle(page)).toHaveAttribute('aria-expanded', 'false')
     const before = sharedGets
 
-    await notifBtn(page).click()
+    await openInbox(page)
     await notifItems(page).first().click()
     await expect(page).toHaveURL(/#\/$/)
     await expect(sharedGroupToggle(page)).toHaveAttribute('aria-expanded', 'true')

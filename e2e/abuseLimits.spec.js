@@ -1,6 +1,6 @@
 // 한도·차단·주의 표시 — outbox 가 429·413·403 을 받았을 때의 동작과 화면 (specs/features/F-2030.md 9.2)
 import { test, expect } from '@playwright/test'
-import { openApp, currentDocId, setPrefBeforeLoad, EXPORT_BUTTON_LABEL } from './helpers.js'
+import { openApp, currentDocId, setPrefBeforeLoad, moreRow, openMoreMenu } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
 
@@ -61,7 +61,9 @@ test.describe('F-2030 웹 — 한도·차단·주의 표시', () => {
 
     await expect(page.locator('.notice-message')).toHaveText(L5)
     await expect(page.locator('.notice')).toHaveAttribute('role', 'alert')
-    await expect(page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })).toBeEnabled()
+    await openMoreMenu(page)
+    await expect(moreRow(page, 'export')).toBeEnabled()
+    await page.keyboard.press('Escape')
     const writes = server.writeRequests().length
     await page.waitForTimeout(500)
     expect(server.writeRequests().length).toBe(writes)

@@ -1,6 +1,6 @@
 // App.tsx 분할 특성 테스트 — 옮기기 전 동작을 고정한다 (specs/features/F-2059.md 5.2)
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad, resizeWindow, currentDocId, waitSaved, openHelpFromSidebar } from './helpers.js'
+import { openApp, importMarkdown, setViewMode, readSavedContent, setPrefBeforeLoad, resizeWindow, currentDocId, waitSaved, openHelpFromSidebar, clickMoreRow, moreMenu, moreRow, openMoreMenu } from './helpers.js'
 import { zipSync, unzipSync } from 'fflate'
 import { fakeServer } from './fixtures/fakeServer.js'
 import { createFakeDocRoom } from './fixtures/fakeDocRoom.js'
@@ -127,12 +127,10 @@ test.describe('F-2062 전역 단축키 절', () => {
     await importMarkdown(page, { content: '첫 줄\n둘째 줄\n' })
     await page.locator('.cm-line').first().click()
     const rail = page.locator('.comment-rail')
-    const toggle = page.locator('.comment-rail-toggle')
     const pref = () => page.evaluate(() => localStorage.getItem('md.commentRail'))
 
     await page.keyboard.press('Control+m')
     await expect(rail).toBeVisible()
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
     await expect.poll(pref).toBe('open')
 
     await page.locator('.cm-content').press('Tab')
@@ -140,7 +138,6 @@ test.describe('F-2062 전역 단축키 절', () => {
 
     await page.keyboard.press('Control+m')
     await expect(rail).toHaveCount(0)
-    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
     await expect.poll(pref).toBe('closed')
 
     await page.getByRole('button', { name: '설정', exact: true }).click()
@@ -1002,18 +999,19 @@ test.describe('F-2069 알림함 절', () => {
     await setPrefBeforeLoad(page, 'md.persistNoticeShown', '1')
     await openApp(page)
 
-    await page.locator('.notifications-btn').click()
-    await expect(page.locator('.notifications-panel')).toBeVisible()
+    await clickMoreRow(page, 'notifications')
+    const inbox = moreMenu(page).getByRole('heading', { name: '알림' })
+    await expect(inbox).toBeVisible()
 
     const handler = (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' })
     await page.route('**/api/me', handler)
     await page.evaluate(() => window.dispatchEvent(new Event('online')))
-    await expect(page.locator('.notifications-btn')).toHaveCount(0)
+    await expect(moreRow(page, 'notifications')).toHaveCount(0)
 
     await page.unroute('**/api/me', handler)
     await page.evaluate(() => window.dispatchEvent(new Event('online')))
-    await expect(page.locator('.notifications-btn')).toBeVisible()
-    await expect(page.locator('.notifications-panel')).toHaveCount(0)
+    await expect(moreRow(page, 'notifications')).toBeVisible()
+    await expect(inbox).toHaveCount(0)
   })
 
   test('F-2069 C2 목록에 있는 문서의 알림 — 목록을 다시 읽지 않는다', async ({ page }) => {
@@ -1033,11 +1031,12 @@ test.describe('F-2069 알림함 절', () => {
       '#/d/notif-doc-2',
       (s) => s.setNotifications([glueNotif({ id: 'n1', docId: 'notif-doc-1', threadId: 't1' })]),
     )
-    await expect(page.locator('.notifications-badge')).toHaveText('1')
+    await openMoreMenu(page)
+    await expect(moreRow(page, 'notifications').locator('.comment-badge')).toHaveText('1')
     const countDocs = () => server.readRequests().filter((r) => r.path === '/api/docs').length
     const before = countDocs()
 
-    await page.locator('.notifications-btn').click()
+    await moreRow(page, 'notifications').click()
     await page.locator('.notification-item').first().click()
 
     await expect(page).toHaveURL(/#\/d\/notif-doc-1$/)

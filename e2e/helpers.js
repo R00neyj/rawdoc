@@ -9,13 +9,34 @@ const VIEW_MODE_LABEL = {
   view: '보기 — 읽기 전용으로 보기',
 }
 
-// 상단바 내보내기 버튼 툴팁·aria-label (F-279.md 3.2, 3.3) — 항목이 늘어도 이 값은 그대로다
-export const EXPORT_BUTTON_LABEL = '내보내기'
+// 넓은 창 상단바 ⋯ 드롭다운 — 댓글·내보내기·GitHub·알림·오른쪽 패널이 이 안에 있다 (small 2026-10-21)
+export const moreButton = (page) => page.locator('.topbar').getByRole('button', { name: /^메뉴/ })
+export const moreMenu = (page) => page.locator('.more-menu')
+export const moreRow = (page, key) => moreMenu(page).locator(`[data-row="${key}"]`)
 
-// 내보내기 메뉴를 열고 항목 목록 로케이터를 돌려준다 (F-279.md 3.3)
+export async function openMoreMenu(page) {
+  await moreButton(page).click()
+  await expect(moreMenu(page)).toHaveAttribute('data-state', 'open')
+  return moreMenu(page)
+}
+
+// ⋯ 를 열고 행 하나를 누른다 — 하위 화면(내보내기·GitHub·알림)으로 들어가거나 댓글·오른쪽 패널을 여닫는다
+export async function clickMoreRow(page, key) {
+  await openMoreMenu(page)
+  await moreRow(page, key).click()
+}
+
+// 안 읽은 알림 수는 ⋯ 알림 행에만 보인다 — 열어 보고 닫는다 (알림 행 조회는 알림을 가져오지 않는다)
+export async function expectUnread(page, n) {
+  await openMoreMenu(page)
+  await expect(moreRow(page, 'notifications')).toHaveAttribute('aria-label', `알림, 안 읽음 ${n}개`)
+  await page.keyboard.press('Escape')
+}
+
+// ⋯ → 내보내기 하위 화면을 열고 항목 목록 로케이터를 돌려준다 (F-279.md 3.3)
 export async function openExportMenu(page) {
-  await page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true }).click()
-  return page.locator('.export-menu-list [role="menuitem"]')
+  await clickMoreRow(page, 'export')
+  return moreMenu(page).locator('.more-sheet-body [role="menuitem"]')
 }
 
 // 앱을 열고 부팅이 끝날 때까지 기다린다(시작 화면은 md.startScreen='last' 로 마지막 문서 자동 열기, 진짜 기본값 확인은 openAppHome). 문서가 없으면 홈의 새 문서로 들어간다(F-2014 3.1)

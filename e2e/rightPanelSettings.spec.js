@@ -1,6 +1,6 @@
 // 오른쪽 패널 — 설정 `표시할 항목` 으로 칸 끄기, 넓은 창 칸 접기(둘 다 새로고침 뒤에도 남는다), 댓글 레일과 번갈아 보이기 (small·tweak 2026-10-11)
 import { test, expect } from '@playwright/test'
-import { openApp } from './helpers.js'
+import { openApp, clickMoreRow } from './helpers.js'
 
 const panel = (page) => page.getByRole('complementary', { name: '오른쪽 패널' })
 
@@ -36,14 +36,14 @@ test('패널 칸 접기 — 넓은 창에서 칸 머리를 눌러 접으면 새�
   await expect(empty).toHaveCount(0)
 })
 
-test('댓글 레일과 오른쪽 패널 — 기본은 나란히, 설정에서 패널 숨기기를 고르면 레일이 열린 동안 숨고 패널 버튼으로 다시 보인다', async ({ page }) => {
+test('댓글 레일과 오른쪽 패널 — 기본은 나란히, 설정에서 패널 숨기기를 고르면 레일이 열린 동안 숨고 ⋯ 오른쪽 패널 열기로 다시 보인다', async ({ page }) => {
   await openApp(page)
   const rail = page.locator('.comment-rail')
-  const railToggle = page.locator('.comment-rail-toggle')
-  await railToggle.click()
+  const toggleRail = () => clickMoreRow(page, 'comments')
+  await toggleRail()
   await expect(rail).toBeVisible()
   await expect(panel(page)).toBeVisible()
-  await railToggle.click()
+  await toggleRail()
   await expect(rail).toBeHidden()
 
   await page.getByRole('button', { name: '설정', exact: true }).click()
@@ -52,11 +52,11 @@ test('댓글 레일과 오른쪽 패널 — 기본은 나란히, 설정에서 �
   await settings.getByRole('radio', { name: '패널 숨기기' }).click()
   await page.getByRole('button', { name: '닫기', exact: true }).click()
 
-  await railToggle.click()
+  await toggleRail()
   await expect(rail).toBeVisible()
   await expect(panel(page)).toBeHidden()
 
-  await page.getByRole('button', { name: '오른쪽 패널', exact: true }).click()
+  await clickMoreRow(page, 'rightPanel')
   await expect(rail).toBeHidden()
   await expect(panel(page)).toBeVisible()
   expect(await page.evaluate(() => localStorage.getItem('md.rightPanel'))).toBe('open')

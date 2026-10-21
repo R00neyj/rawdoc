@@ -1,12 +1,12 @@
 // 알림 폴링 줄이기 — ETag 조건부 응답·한 탭만 가져오기 (specs/features/F-2057.md 8.2 E1~E7)
 import { test, expect } from '@playwright/test'
-import { openApp, setPrefBeforeLoad, resetBrowserState } from './helpers.js'
+import { openApp, setPrefBeforeLoad, resetBrowserState, clickMoreRow, expectUnread } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
 
 const USER = { id: 'u1', email: 'a@b.com' }
 
-const notifBtn = (page) => page.locator('.notifications-btn')
-const badge = (page) => page.locator('.notifications-badge')
+// 알림함·안 읽은 수는 넓은 창 상단바 ⋯ 의 알림 행에 있다 (small 2026-10-21)
+const openInbox = (page) => clickMoreRow(page, 'notifications')
 const gets = (server) => server.notificationRequests().filter((r) => r.method === 'GET')
 
 function notif(id, createdAt) {
@@ -40,14 +40,14 @@ async function openTwo(context) {
   const setAll = (items) => servers.forEach((s) => s.setNotifications(items))
   setAll(ONE)
   await openApp(a)
-  await expect(badge(a)).toHaveText('1')
+  await expectUnread(a, 1)
   setAll(TWO)
   // 저장소(IndexedDB)는 두 페이지가 나눈다 — A 가 만든 문서를 B 의 가짜에도 둬야 B 가 "삭제됨" 으로 보지 않는다
   for (const [id, doc] of serverA.docs) serverB.docs.set(id, doc)
   await openApp(b)
-  await expect(badge(b)).toHaveText('2')
+  await expectUnread(b, 2)
   // A 가 B 의 결과를 받아 뒤따르는 탭(70초)이 됐다
-  await expect(badge(a)).toHaveText('2')
+  await expectUnread(a, 2)
   const pages = [
     { page: a, server: serverA },
     { page: b, server: serverB },
@@ -74,7 +74,7 @@ test.describe('F-2057 E1 조건부 요청', () => {
       const server = await prepare(page)
       server.setNotifications(ONE)
       await openApp(page)
-      await expect(badge(page)).toHaveText('1')
+      await expectUnread(page, 1)
       expect(gets(server)).toHaveLength(1)
       expect(gets(server)[0]).toMatchObject({ ifNoneMatch: null, status: 200 })
 
@@ -82,7 +82,7 @@ test.describe('F-2057 E1 조건부 요청', () => {
       await expect.poll(() => gets(server).length).toBe(2)
       expect(gets(server)[1].ifNoneMatch).toMatch(/^W\/"fake-\d+"$/)
       expect(gets(server)[1].status).toBe(304)
-      await expect(badge(page)).toHaveText('1')
+      await expectUnread(page, 1)
     })
     await test.step('알림 하나 더한 뒤 1분 → 200, 배지가 는다', async () => {
       await resetBrowserState(page)
@@ -90,13 +90,13 @@ test.describe('F-2057 E1 조건부 요청', () => {
       const server = await prepare(page)
       server.setNotifications(ONE)
       await openApp(page)
-      await expect(badge(page)).toHaveText('1')
+      await expectUnread(page, 1)
 
       server.setNotifications(TWO)
       await page.clock.fastForward('01:00')
       await expect.poll(() => gets(server).length).toBe(2)
       expect(gets(server)[1].status).toBe(200)
-      await expect(badge(page)).toHaveText('2')
+      await expectUnread(page, 2)
     })
   })
 })
@@ -118,7 +118,7 @@ test.describe('F-2057 E3 두 탭 중 한 탭만', () => {
       two.setAll(THREE)
       const leader = await two.round()
       expect(gets(leader.server).at(-1).status).toBe(200)
-      for (const p of two.pages) await expect(badge(p.page)).toHaveText('3')
+      for (const p of two.pages) await expectUnread(p.page, 3)
     })
     await test.step('뒤따르는 페이지가 6초 뒤 열면 그 페이지만 조건부 GET 1, 2초 뒤 다른 페이지가 열면 둘 다 0', async () => {
       await resetBrowserState(await context.newPage())
@@ -130,14 +130,14 @@ test.describe('F-2057 E3 두 탭 중 한 탭만', () => {
       const followerBefore = gets(follower.server).length
 
       await context.clock.fastForward('00:06')
-      await notifBtn(follower.page).click()
+      await openInbox(follower.page)
       await expect.poll(() => gets(follower.server).length).toBe(followerBefore + 1)
       expect(gets(follower.server).at(-1).ifNoneMatch).not.toBeNull()
       await settle(follower.page)
       expect(gets(leader.server)).toHaveLength(leaderBefore)
 
       await context.clock.fastForward('00:02')
-      await notifBtn(leader.page).click()
+      await openInbox(leader.page)
       await settle(leader.page)
       expect(gets(leader.server)).toHaveLength(leaderBefore)
       expect(gets(follower.server)).toHaveLength(followerBefore + 1)

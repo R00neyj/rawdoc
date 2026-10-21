@@ -106,3 +106,25 @@ describe('F-2085 A2 home 행 없음', () => {
     }
   })
 })
+
+describe('넓은 창 ⋯ 행 (small 2026-10-21)', () => {
+  const all = { wide: true, screen: 'doc' as const, hasOutline: true, comments: true, notifications: true, github: true, rightPanel: true }
+  it('doc 전부 → 공유·목차 없이 댓글·내보내기·GitHub·알림·오른쪽 패널', () => {
+    expect(moreSheetItems(all)).toEqual(['comments', 'export', 'github', 'notifications', 'rightPanel'])
+  })
+  it('패널을 못 쓰면 rightPanel 빠짐', () => {
+    expect(moreSheetItems({ ...all, rightPanel: false })).not.toContain('rightPanel')
+  })
+  it('home·other 는 알림·오른쪽 패널만', () => {
+    expect(moreSheetItems({ ...all, screen: 'home' })).toEqual(['notifications', 'rightPanel'])
+    expect(moreSheetItems({ ...all, screen: 'other', notifications: false })).toEqual(['rightPanel'])
+  })
+  it('휴대폰은 rightPanel 을 받아도 행이 없다', () => {
+    expect(moreSheetItems({ ...all, wide: false })).not.toContain('rightPanel')
+  })
+  it('home 에서 알림이 꺼져도 패널이 있으면 ⋯ 이 보이고, 둘 다 없으면 숨는다', () => {
+    expect(moreButtonVisible({ wide: true, screen: 'home', notifications: false, rightPanel: true })).toBe(true)
+    expect(moreButtonVisible({ wide: true, screen: 'home', notifications: false, rightPanel: false })).toBe(false)
+    expect(moreButtonVisible({ wide: false, screen: 'home', notifications: false, rightPanel: true })).toBe(false)
+  })
+})

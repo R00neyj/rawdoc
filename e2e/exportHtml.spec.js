@@ -1,6 +1,6 @@
 // HTML 파일·서식 있는 복사 (specs/features/F-280.md) — F-280 A15~A21
 import { test, expect } from '@playwright/test'
-import { openApp, importMarkdown, openExportMenu, EXPORT_BUTTON_LABEL, setPrefBeforeLoad } from './helpers.js'
+import { openApp, importMarkdown, openExportMenu, setPrefBeforeLoad, moreButton, moreRow, openMoreMenu } from './helpers.js'
 
 // 저장 공간 보호 경고(F-118)가 알림을 선점하지 않게 미리 본 것으로 표시해 둔다 — info 는 warn 을 밀어내지 못한다 (e2e/fileDrop.spec.js 와 같은 이유)
 async function skipPersistNotice(page) {
@@ -57,7 +57,7 @@ test.describe('F-280 HTML 파일·서식 있는 복사', () => {
     await pasteFiles(page, { files: [{ bytes: pngBytes(20, 20), name: 'a.png', mime: 'image/png' }] })
     await expect(page.locator('.md-image-box')).toBeVisible()
 
-    const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
+    const btn = moreButton(page)
     const items = await openExportMenu(page)
     await expect(btn).toHaveAttribute('aria-expanded', 'true')
     await expect(items.nth(0)).toBeFocused()
@@ -125,9 +125,8 @@ test.describe('F-280 HTML 파일·서식 있는 복사', () => {
       await page.getByRole('button', { name: '삭제', exact: true }).click()
       await expect(page.locator('.dialog[open]')).toHaveCount(0)
     }
-    const btn = page.getByRole('button', { name: EXPORT_BUTTON_LABEL, exact: true })
-    await expect(btn).toBeDisabled()
-    await btn.click({ force: true })
-    await expect(page.getByRole('menu')).toHaveCount(0)
+    // 문서가 없으면 ⋯ 에 내보내기 행이 없다 (small 2026-10-21 — 휴대폰 ⋯ 와 같은 행 규칙)
+    await openMoreMenu(page)
+    await expect(moreRow(page, 'export')).toHaveCount(0)
   })
 })

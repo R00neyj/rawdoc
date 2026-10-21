@@ -1,10 +1,10 @@
-// 상단바 `GitHub` 메뉴와 사이드바 `가져오기` 메뉴 버튼 (specs/features/F-2128.md 4.5·4.6)
+// GitHub ⋯ 하위 화면의 상태 줄과 사이드바 `가져오기` 메뉴 버튼 (specs/features/F-2128.md 4.5·4.6, small 2026-10-21)
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import type { GithubLink } from '../lib/githubContract'
 import { formatCommentTime } from './commentRail'
-import { IconCommit, IconTooltip, IconUpload } from './icons'
+import { IconTooltip, IconUpload } from './icons'
 import usePresence from './usePresence'
-import { githubMenuItems, type GithubMenuItem } from './githubUi'
+import type { GithubMenuItem } from './githubUi'
 
 export type GithubMenuProps = {
   role: 'owner' | 'editor'
@@ -19,12 +19,11 @@ type PopItem = GithubMenuItem
 
 type PopMenuProps = {
   className: string
-  header?: ReactNode
   items: PopItem[]
   trigger: (t: { buttonRef: Ref<HTMLButtonElement>; open: boolean; toggle: () => void }) => ReactNode
 }
 
-function PopMenu({ className, header, items, trigger }: PopMenuProps) {
+function PopMenu({ className, items, trigger }: PopMenuProps) {
   const [open, setOpen] = useState(false)
   const { mounted, state } = usePresence(open)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
@@ -68,7 +67,6 @@ function PopMenu({ className, header, items, trigger }: PopMenuProps) {
       {trigger({ buttonRef, open, toggle: () => setOpen((v) => !v) })}
       {mounted && (
         <ul className="export-menu-list github-menu-list" data-state={state} inert={state === 'closed'} data-ui="menu" role="menu" ref={menuRef} onKeyDown={onKeyDown}>
-          {header && <li role="none" className="github-menu-status">{header}</li>}
           {items.map((item, i) => (
             <li key={item.key} role="none">
               {item.href ? (
@@ -101,24 +99,6 @@ export function GithubStatusLine({ link }: { link: GithubLink }) {
   const [now] = useState(() => Date.now())
   const when = link.syncedAt === null ? '아직 맞춘 적 없음' : `마지막 동기화 ${formatCommentTime(link.syncedAt, now)}`
   return <>{`GitHub ${link.repo} · `}<span className="github-menu-path">{link.path}</span><span className="github-menu-when">{when}</span></>
-}
-
-export default function GithubMenu(props: GithubMenuProps) {
-  return (
-    <PopMenu
-      className="github-menu"
-      header={props.link ? <GithubStatusLine link={props.link} /> : undefined}
-      items={githubMenuItems(props)}
-      trigger={({ buttonRef, open, toggle }) => (
-        <span className="icon-btn-wrap">
-          <button type="button" ref={buttonRef} className="icon-btn export-menu-btn" aria-label="GitHub" aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
-            <IconCommit size={18} />
-          </button>
-          {!open && <IconTooltip text="GitHub" align="end" />}
-        </span>
-      )}
-    />
-  )
 }
 
 // 사이드바 `가져오기` — 접근 이름은 그대로, 누르면 세 항목 메뉴 (레일은 툴팁이 오른쪽)
