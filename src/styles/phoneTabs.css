@@ -15,8 +15,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 화면을 다 덮는 판, 둥근 위 모서리 없음 (tweak 2026-10-22) */
 .phone-tabs-sheet {
-  max-height: 85dvh;
+  height: 100dvh;
+  max-height: none;
+  padding-top: env(safe-area-inset-top, 0px);
+  border-top: 0;
+  border-radius: 0;
 }
 
 .phone-tabs-new {
@@ -68,10 +73,6 @@
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.phone-tab-card[data-preview] .phone-tab-card-main {
-  font-style: italic;
 }
 
 .phone-tab-card-close {

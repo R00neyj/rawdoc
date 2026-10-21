@@ -443,7 +443,8 @@ svg {
   position: absolute;
   inset: 0 auto 0 0;
   z-index: 35; /* 본문 쪽 떠 있는 것(댓글 달기 버튼·목차 20, 댓글 판 30)보다 위 */
-  box-shadow: 8px 0 30px rgba(0, 0, 0, 0.12);
+  /* 열림 곡선이 튕겨 왼쪽으로 넘칠 때 빈 틈이 보이지 않게 바탕을 화면 밖까지 늘림 (tweak 2026-10-22) */
+  box-shadow: -80px 0 0 var(--surface), 8px 0 30px rgba(0, 0, 0, 0.12);
   opacity: 1;
   visibility: visible;
   transform: translateX(0);
@@ -561,7 +562,9 @@ body.sidebar-resizing {
 }
 
 @starting-style {
-  .sidebar-backdrop {
+  .sidebar-backdrop,
+  .outline-panel-backdrop,
+  .right-panel-backdrop {
     opacity: 0;
   }
 }
@@ -6231,7 +6234,8 @@ body.sidebar-resizing {
     position: absolute;
     inset: 0;
     z-index: 34;
-    background: transparent;
+    background: rgba(0, 0, 0, 0.32);
+    backdrop-filter: blur(6px);
   }
 
   .outline-panel {
@@ -6243,7 +6247,7 @@ body.sidebar-resizing {
     flex-direction: column;
     background: var(--surface);
     border-left: 1px solid var(--rule);
-    box-shadow: -8px 0 30px rgba(0, 0, 0, 0.12);
+    box-shadow: 80px 0 0 var(--surface), -8px 0 30px rgba(0, 0, 0, 0.12);
     opacity: 1;
     visibility: visible;
     transform: translateX(0);
@@ -7025,7 +7029,7 @@ a.dialog-btn {
   inset: 0 0 0 auto;
   z-index: 35;
   max-width: 100%;
-  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.12);
+  box-shadow: 80px 0 0 var(--surface), -8px 0 30px rgba(0, 0, 0, 0.12);
   opacity: 1;
   visibility: visible;
   transform: translateX(0);
@@ -7053,7 +7057,8 @@ a.dialog-btn {
   position: absolute;
   inset: 0;
   z-index: 34;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(6px);
 }
 
 .right-panel-head {
