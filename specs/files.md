@@ -143,6 +143,7 @@
 |`src/app/liveDoc.ts`|실시간 편집 연결의 대기 시간·재연결 간격·끊김 판단 규칙을 정함|
 |`src/app/liveMerge.ts`|연결이 끊긴 동안 내 수정과 서버 쪽 수정이 겹쳤는지 알아내 알림을 띄움|
 |`src/app/liveNotices.ts`|실시간 편집이 끊기거나 멈췄을 때 보여 줄 안내 문구를 고름|
+|`src/app/localFileConflict.ts`|다른 프로그램이 컴퓨터 파일을 바꿨거나 지웠는지 판정하고, 그때 띄울 띠 문구를 정함 (F-2157)|
 |`src/app/localFileOpen.ts`|탐색기에서 연 파일을 설정에 따라 가져올지 바로 고칠지, 여러 개면 어느 것을 열지 정함|
 |`src/app/LocalFileOpenSetting.tsx`|설정 데이터 탭의 "로컬 파일 기본 열기 방식" 절 — 탐색기에서 연 .md 파일을 가져올지 그 파일만 고칠지 고름|
 |`src/app/LocalFileScreen.tsx`|컴퓨터의 .md 파일 하나를 바로 고치는 화면 — 파일명·저장 상태·저장 허용·문서로 가져오기·닫기|
@@ -274,6 +275,7 @@
 |`src/app/useLiveNotices.ts`|실시간 연결 상태·오프라인 보기 등 알림 띠를 띄움|
 |`src/app/useLiveRoomDoc.ts`|다시 온라인이 되면 실시간 편집을 재시작하고 수정 시각을 반영함|
 |`src/app/useLocalFile.ts`|컴퓨터 파일을 열고, 입력이 1초 멈추면 같은 파일에 쓰고, 떠나거나 문서로 가져오는 흐름을 맡음|
+|`src/app/useLocalFileConflict.ts`|창으로 돌아오거나 쓰기 직전에 파일이 밖에서 바뀌었는지 보고 다시 불러오기·덮어쓰기·띠를 맡음 (F-2157)|
 |`src/app/useNewDocTemplate.ts`|템플릿 목록을 읽고 새 문서 본문을 템플릿으로 채움|
 |`src/app/useNotifications.ts`|알림함 내용을 주기적으로 받아 오고 읽음 상태를 관리함|
 |`src/app/useNotificationsGlue.ts`|알림함 열고 닫기, 항목 이동, 안 읽음 점 표시를 연결함|

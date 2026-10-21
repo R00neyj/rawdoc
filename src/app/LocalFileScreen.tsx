@@ -10,6 +10,8 @@ import { IconClose, IconDownload } from './icons'
 import type { NoticeWithAction } from './NoticeBar'
 import type { UseLocalFileResult } from './useLocalFile'
 import { LOCAL_NO_IMAGES_MESSAGE, LOCAL_SAVE_TEXT, localFileTitle, localSaveDot } from './localFileState'
+import { LOCAL_CONFLICT_TEXT } from './localFileConflict'
+import { useLocalFileConflict } from './useLocalFileConflict'
 
 type LocalFileScreenProps = {
   localFile: UseLocalFileResult
@@ -21,20 +23,22 @@ type LocalFileScreenProps = {
 }
 
 export default function LocalFileScreen({ localFile, editorRef, viewMode, theme, showNotice, onClose }: LocalFileScreenProps) {
-  const { session, status, editorKey, initialText, readText } = localFile
+  const { session, status, editorKey, initialText } = localFile
+  const conflict = useLocalFileConflict(localFile, showNotice)
+  const { bodyFor } = conflict
 
   // 편집기는 마운트 때 viewMode 만 읽는다 — 바뀌면 직접 알린다
   useEffect(() => {
     editorRef.current?.setViewMode(viewMode)
   }, [editorRef, viewMode])
 
-  // 보기로 바뀔 때마다 지금 본문으로 다시 그린다 — 편집기는 숨긴 채 둔다
-  const html = useMemo(() => (viewMode === 'view' ? renderMarkdown(toEditorText(readText() ?? initialText)) : ''), [viewMode, readText, initialText])
+  // 새로 마운트한 편집기는 아직 안 붙었으니 씨앗 본문으로, 붙은 편집기는 지금 본문으로 그린다
+  const html = useMemo(() => (viewMode === 'view' ? renderMarkdown(toEditorText(bodyFor(editorKey) ?? initialText)) : ''), [viewMode, editorKey, bodyFor, initialText])
   const shownHtml = useCodeHighlight(html)
 
   if (!session || !editorKey) return null
   const title = localFileTitle(session.name)
-  const dot = localSaveDot(status)
+  const dot = conflict.banner ? 'error' : localSaveDot(status)
 
   return (
     <div className="local-file-screen" data-view-mode={viewMode}>
@@ -57,6 +61,31 @@ export default function LocalFileScreen({ localFile, editorRef, viewMode, theme,
           </button>
         </div>
       </div>
+      {conflict.banner && (
+        <div className="local-file-banner" role="alert">
+          <span>{LOCAL_CONFLICT_TEXT[conflict.banner]}</span>
+          <div className="local-file-banner-actions">
+            {conflict.banner === 'conflict' && (
+              <>
+                <button type="button" onClick={() => void conflict.reload()}>
+                  다시 불러오기
+                </button>
+                <button type="button" onClick={() => void conflict.overwrite()}>
+                  내 내용으로 덮어쓰기
+                </button>
+              </>
+            )}
+            <button type="button" onClick={() => void localFile.importToDoc()}>
+              {`${brand.name} 문서로 가져오기`}
+            </button>
+            {conflict.banner === 'missing' && (
+              <button type="button" onClick={conflict.exportMd}>
+                .md 내보내기
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       <div className="local-file-body">
         <div className="editor-slot" hidden={viewMode === 'view'}>
           <Editor
@@ -78,7 +107,7 @@ export default function LocalFileScreen({ localFile, editorRef, viewMode, theme,
       <div className="statusbar local-file-status">
         <span className={`statusbar-save${dot === 'error' ? ' statusbar-save--danger' : ''}`}>
           <span className={`statusbar-save-dot statusbar-save-dot--${dot}`} aria-hidden="true" />
-          {LOCAL_SAVE_TEXT[status]}
+          {conflict.banner ? LOCAL_CONFLICT_TEXT.stopped : LOCAL_SAVE_TEXT[status]}
         </span>
       </div>
     </div>

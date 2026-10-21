@@ -4921,6 +4921,41 @@ body.sidebar-resizing {
   background: var(--panel);
 }
 
+/* 외부 변경 띠 — 머리줄 바로 아래, 닫기 없이 고르거나 다음 판정으로만 걷힌다 (F-2157 3장) */
+.local-file-banner {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel));
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.local-file-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.local-file-banner-actions button {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 6px 10px;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--panel);
+  transition: var(--transition-colors);
+}
+
+.local-file-banner-actions button:hover {
+  background: var(--rule-2);
+}
+
 .local-file-body {
   position: relative;
   flex: 1;

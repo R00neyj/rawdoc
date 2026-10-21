@@ -187,8 +187,9 @@ src/
 - 칸반 완료 칸 설정·할 일 패널 칸반 카드(small 2026-10-14)로 추가
   - `app/`: `useKanbanSettings.ts`(설정 `칸반` 탭 자료 — 지금 문서가 칸반일 때만 편집기 원문에서 완료 칸 선택지를 읽고, 쓰기는 `applyKanban` 한 길), `KanbanSettingsTab.tsx`(탭 화면). 완료 칸은 문서 프런트매터 `kanban-done: {칸 이름}`(없거나 맞는 칸이 없으면 마지막 칸) — 기기 설정이 아니라 문서에 산다. `lib/docTodos.ts` 가 `lib/kanban.ts` 를 읽어 칸반 문서는 카드 규칙만 쓴다
 - 로컬 파일 하나 편집(F-2154)으로 추가
-  - `app/`: `useLocalFile.ts`(세션·열기·쓰기·떠나기, F-2155), `LocalFileScreen.tsx`(S-11), `localFileState.ts`(저장 상태 전이·문구), `localFileOpen.ts`(OS 열기 설정 판정, 순수, F-2156), `LocalFileOpenSetting.tsx`(데이터 탭 절), 외부 변경 판정 `decideExternalChange`(F-2157, 순수 함수), 최근 파일 저장소(F-2158)
-  - `lib/`: `encodeMarkdown.ts`(`decodeMarkdown` 짝), `fileSystemAccess.ts`(이 기능의 유일한 `declare global`·권한 요청)
+  - `app/`: `useLocalFile.ts`(세션·열기·쓰기·떠나기, F-2155), `LocalFileScreen.tsx`(S-11), `localFileState.ts`(저장 상태 전이·문구), `localFileOpen.ts`(OS 열기 설정 판정, 순수, F-2156), `LocalFileOpenSetting.tsx`(데이터 탭 절), 외부 변경 판정 `decideExternalChange`(F-2157, 순수 함수), `useRecentFiles.ts`(최근 파일 불러오기·열림 구독·권한 먼저 묻고 열기·빼기, F-2158)
+  - `lib/`: `encodeMarkdown.ts`(`decodeMarkdown` 짝), `fileSystemAccess.ts`(이 기능의 유일한 `declare global`·권한 요청), `recentFiles.ts`(최근 파일 정렬·10개 자르기 계획, 순수, F-2158)
+  - `storage/`: `recentFilesStore.ts`(IndexedDB `md-files` 열기·`list`·`add`·`remove`, F-2158)
 
 - 단위 테스트는 `tests/` 아래, 원본 경로를 그대로 따라 `tests/{원본 경로}/{이름}.test.ts` (2026-09-28 사용자 지정. 처음엔 대상 옆이었다 — `specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
@@ -279,7 +280,7 @@ type RecentFileRow = { id: string; handle: FileSystemFileHandle; name: string; o
 - `accountBlocked`(`/api/me` 의 `blocked`) → 모든 서버 문서 읽기 전용, `decideDocPath` 입력 `forbidden` 을 참으로 넘겨 소켓 없이 `view` 경로 (F-2030 5.2)
 - **칸반 보드(F-2140)**: 보드는 `EditorState` 의 또 하나의 투영이다 — 편집기는 언마운트하지 않고 숨긴 채 살아 있고(`Y.Doc`·게이트·실행 취소 기록 그대로), 보드는 핸들 `onChanges` 마다 `view.state.doc` 을 `parseKanban` 으로 읽는다. React 상태에는 칸·카드 배열만 둔다. 보드에서의 쓰기는 `view.dispatch` 한 길뿐이다 (F-2140)
 - **설치 앱 문서 탭(small 2026-10-21)**: 탭은 `currentDocId` 를 따라가는 목록일 뿐이다(`useDocTabs`·순수 상태 기계 `docTabs.ts`). 편집기·`Y.Doc`·실시간 연결은 활성 탭 하나만 갖고, 뒤 탭은 스크롤·커서 위치만 메모리에 둔다. 탭 전환은 `selectDoc`·`goHome` 을 그대로 탄다. 편집기 핸들 `onChanges` 의 `local`(ySync 반영이 아닌 변경)이 임시 탭 고정에 쓰인다. 편집기·사이드바의 새 탭 요청은 `src/lib/appTabs.ts` 다리를 거친다
-- **로컬 파일(S-11, F-2154)**: 링크 없는 편집기 `Y.Doc` 의 `Y.Text` 가 원본이고 저장소 행은 없다. 디스크 → `Y.Doc` 은 여는 때 1회(`decodeMarkdown`, 세션 `key` 로 `Editor` 마운트). `Y.Text` → `getText(lineEnding)` → `encodeMarkdown` → `createWritable` 은 단방향, 입력이 1,000ms 멈추면. 외부 변경은 열린 `Y.Doc` 에 쓰지 않고 새 `key` 로 재마운트 (F-2154 1·3·4장)
+- **로컬 파일(S-11, F-2154)**: 링크 없는 편집기 `Y.Doc` 의 `Y.Text` 가 원본이고 저장소 행은 없다. 디스크 → `Y.Doc` 은 여는 때 1회(`decodeMarkdown`, 세션 `key` 로 `Editor` 마운트). `Y.Text` → `getText(lineEnding)` → `encodeMarkdown` → `createWritable` 은 단방향, 입력이 1,000ms 멈추면. 외부 변경은 열린 `Y.Doc` 에 쓰지 않고 새 `key` 로 재마운트 — 판정은 쓰기 직전·창 `focus`·다시 보일 때(`useLocalFileConflict`, F-2157) (F-2154 1·3·4장)
 
 ## 4. 설정 (localStorage)
 
