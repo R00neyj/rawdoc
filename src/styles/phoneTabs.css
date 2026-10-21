@@ -16,7 +16,7 @@
 }
 
 /* 화면을 다 덮는 판, 둥근 위 모서리 없음 (tweak 2026-10-22) */
-.phone-tabs-sheet {
+.more-sheet.phone-tabs-sheet {
   height: 100dvh;
   max-height: none;
   padding-top: env(safe-area-inset-top, 0px);
@@ -39,6 +39,8 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  /* 판이 화면 전체라 줄이 남는 높이까지 늘어났다 — 카드 높이대로 위에 붙임 */
+  align-content: start;
   margin: 0;
   padding: 4px 12px calc(env(safe-area-inset-bottom, 0px) + 16px);
   list-style: none;
