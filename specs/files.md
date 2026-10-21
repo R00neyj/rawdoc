@@ -81,6 +81,7 @@
 |`src/app/DocSkeleton.tsx`|문서를 불러오는 동안 보이는 회색 자리 표시 화면|
 |`src/app/DocTabBar.tsx`|설치 앱 창에서 편집 화면 위에 보이는 문서 탭 줄. 탭 누르기·닫기·끌어서 순서 바꾸기·탭 메뉴를 그림|
 |`src/app/docTabs.ts`|문서 탭 목록의 규칙(임시 탭 바꾸기·고정·닫은 뒤 다음 탭 고르기·순서 바꾸기·저장값 읽고 쓰기)을 정함|
+|`src/app/docUnit.ts`|화면 칸에 띄운 문서들을 문서 단위 묶음 자리에 배정하고, 묶음마다 저장 차단·본문 읽기·잠금을 판정함|
 |`src/app/DocumentArea.tsx`|문서 본문 편집 영역과 그 주변(댓글 달기 버튼 등)을 배치함|
 |`src/app/DonateDialog.tsx`|토스 송금 QR(넓은 창)이나 토스 앱 열기 버튼(휴대폰)을 보여 주는 후원 창|
 |`src/app/donateStore.ts`|후원 창이 열렸는지 기억하고, 열면 다음 후원 알림을 1년 뒤로 미룸|
@@ -250,10 +251,13 @@
 |`src/app/useCommandPalette.ts`|명령 팔레트를 열고 명령·템플릿을 실행함|
 |`src/app/useCommentFab.ts`|글을 고르면 뜨는 `댓글 달기` 버튼 위치를 잡음|
 |`src/app/useContextMenu.ts`|우클릭 메뉴를 열고 닫고 고른 명령을 실행함|
+|`src/app/useDocClaim.ts`|브라우저 탭끼리 한 문서의 편집권을 문서마다 주고받음|
 |`src/app/useDocComments.ts`|문서 댓글 쓰기·표시·위치 맞추기·입력 창을 처리함|
 |`src/app/useDocNavigation.ts`|문서 열기·새 문서 만들기·문서 사이 이동을 처리함|
 |`src/app/useDocSaver.ts`|편집 중인 문서와 댓글을 자동으로 저장함|
 |`src/app/useDocSession.ts`|문서를 열 때 혼자 편집인지 실시간 함께 편집인지 정하고 접속자를 관리함|
+|`src/app/useDocUnit.ts`|문서 하나를 여는 데 필요한 세션·편집권·실시간 연결·본문 읽기·저장을 한 묶음으로 돌림|
+|`src/app/useDocUnits.ts`|화면 칸에 띄운 문서마다(최대 4개) 문서 묶음을 두고 한꺼번에 저장함|
 |`src/app/useDocumentTitle.ts`|창·탭 제목에 지금 문서 제목을 띄움|
 |`src/app/useDocTabs.ts`|설치 앱 문서 탭을 지금 문서에 맞추고, 단축키·새 탭 요청·위치 기억·기기 저장을 처리함|
 |`src/app/useDonatePrompt.ts`|때가 된 기기에서 부팅 뒤 후원 알림 띠를 한 번 띄움|

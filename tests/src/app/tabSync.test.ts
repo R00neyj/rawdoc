@@ -285,3 +285,13 @@ describe('F-2115 U9 shared-left', () => {
     expect(reduceClaim({ ...base, held: false, waiting: true }, msg)).toBeNull()
   })
 })
+
+describe('F-2160 U7 reduceClaim — 문서 둘', () => {
+  it('같은 탭이 d1·d2 를 쥐고 있을 때 d1 의 이기는 claim-hold 는 d1 만 내준다', () => {
+    const d1: ClaimState = { tabId: 'me', docId: 'd1', since: 1000, held: true }
+    const d2: ClaimState = { tabId: 'me', docId: 'd2', since: 1000, held: true }
+    const msg: TabMessage = { kind: 'claim-hold', tabId: 'other', docId: 'd1', since: 500 }
+    expect(reduceClaim(d1, msg)).toEqual({ type: 'yielded' })
+    expect(reduceClaim(d2, msg)).toBeNull()
+  })
+})

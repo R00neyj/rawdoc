@@ -1,5 +1,5 @@
-// 온라인 재시작·사이드바 updatedAt·편집기 실시간 옵션 — useLiveNotices 뒤에 돌아야 해 세션 핵과 나눈다, App.tsx 에서 옮김 (F-2077, F-2059)
-import { useEffect, useMemo, type Dispatch, type RefObject, type SetStateAction } from 'react'
+// 온라인 재시작·사이드바 updatedAt·편집기 실시간 옵션 — 문서 하나 단위, 묶음 안에서 세션 핵 뒤에 돈다 (F-2077, F-2160)
+import { useEffect, useMemo, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type * as Y from 'yjs'
 import type { LiveEditorOptions } from '../editor/createEditor'
 import { isEditorRelay } from '../editor/remoteGate'
@@ -23,7 +23,6 @@ export type UseLiveRoomDocOptions = {
   liveAwareness: LiveDocSession['awareness'] | null
   setDocs: Dispatch<SetStateAction<DocMeta[]>>
   setOpenDoc: Dispatch<SetStateAction<OpenDoc | null>>
-  liveEverSyncedRef: RefObject<boolean>
   liveChangedAtRef: RefObject<Map<string, number>>
 }
 
@@ -35,8 +34,7 @@ export type UseLiveRoomDocResult = {
 
 export function useLiveRoomDoc(options: UseLiveRoomDocOptions): UseLiveRoomDocResult {
   const {
-    docSession, setDocSession, docPath, isRealtime, isOfflineView, liveSession, liveSnapshot, liveAwareness, setDocs, setOpenDoc,
-    liveEverSyncedRef, liveChangedAtRef,
+    docSession, setDocSession, docPath, isRealtime, isOfflineView, liveSession, liveSnapshot, liveAwareness, setDocs, setOpenDoc, liveChangedAtRef,
   } = options
 
   // offline-view 에서 온라인이 되면 그 문서 열기 세션을 새로 시작한다 — 아무것도 쓰지 않은 세션이라 이중 쓰기가 없다 (F-306 5.2)
@@ -60,6 +58,11 @@ export function useLiveRoomDoc(options: UseLiveRoomDocOptions): UseLiveRoomDocRe
   // 동기화 뒤 방 Doc 이 바뀌면(내 편집·상대 편집) 700ms 뒤 사이드바 updatedAt 을 지금으로 — D1 은 DO 가 늦게 쓴다 (F-305 10.1)
   const liveRoomDoc = isRealtime && liveSnapshot?.ready ? liveSession?.roomDoc ?? null : null
   const liveRoomDocId = liveSession?.docId ?? null
+  // 사이드바 updatedAt 거르개가 "업데이트 순간의" everSynced 를 읽는다 (F-2041 5.3)
+  const liveEverSyncedRef = useRef(false)
+  useEffect(() => {
+    liveEverSyncedRef.current = liveSnapshot?.everSynced ?? false
+  })
   useEffect(() => {
     if (!liveRoomDoc || !liveRoomDocId) return
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -83,7 +86,7 @@ export function useLiveRoomDoc(options: UseLiveRoomDocOptions): UseLiveRoomDocRe
       liveRoomDoc.off('afterTransaction', handleTransaction)
       if (timer) clearTimeout(timer)
     }
-  }, [liveRoomDoc, liveRoomDocId, liveEverSyncedRef, liveChangedAtRef, setDocs])
+  }, [liveRoomDoc, liveRoomDocId, liveChangedAtRef, setDocs])
 
   // 편집기에 넘기는 실시간 옵션 — 첫 동기화가 끝난 방 Doc 일 때만. 편집기는 마운트 때 한 번 읽는다 (9.3)
   const liveEditorOption = useMemo(

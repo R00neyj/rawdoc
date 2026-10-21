@@ -280,6 +280,7 @@ type RecentFileRow = { id: string; handle: FileSystemFileHandle; name: string; o
 - `accountBlocked`(`/api/me` 의 `blocked`) → 모든 서버 문서 읽기 전용, `decideDocPath` 입력 `forbidden` 을 참으로 넘겨 소켓 없이 `view` 경로 (F-2030 5.2)
 - **칸반 보드(F-2140)**: 보드는 `EditorState` 의 또 하나의 투영이다 — 편집기는 언마운트하지 않고 숨긴 채 살아 있고(`Y.Doc`·게이트·실행 취소 기록 그대로), 보드는 핸들 `onChanges` 마다 `view.state.doc` 을 `parseKanban` 으로 읽는다. React 상태에는 칸·카드 배열만 둔다. 보드에서의 쓰기는 `view.dispatch` 한 길뿐이다 (F-2140)
 - **설치 앱 문서 탭(small 2026-10-21)**: 탭은 `currentDocId` 를 따라가는 목록일 뿐이다(`useDocTabs`·순수 상태 기계 `docTabs.ts`). 편집기·`Y.Doc`·실시간 연결은 활성 탭 하나만 갖고, 뒤 탭은 스크롤·커서 위치만 메모리에 둔다. 탭 전환은 `selectDoc`·`goHome` 을 그대로 탄다. 편집기 핸들 `onChanges` 의 `local`(ySync 반영이 아닌 변경)이 임시 탭 고정에 쓰인다. 편집기·사이드바의 새 탭 요청은 `src/lib/appTabs.ts` 다리를 거친다
+- **문서 단위 묶음(F-2160)**: 세션·편집권(`useDocClaim`)·방 Doc·본문 1회 읽기·저장은 `useDocUnit(docId)` 한 묶음이고, `useDocUnits` 가 슬롯 4개를 고정 호출해 칸에 띄운 서로 다른 문서마다 하나씩 둔다(`assignDocSlots`). `useTabSync` 는 채널과 `ClaimHub` 만. 창에 하나인 UI 는 `unitFor(currentDocId)` 를 읽는다 (F-2159 4장)
 - **로컬 파일(S-11, F-2154)**: 링크 없는 편집기 `Y.Doc` 의 `Y.Text` 가 원본이고 저장소 행은 없다. 디스크 → `Y.Doc` 은 여는 때 1회(`decodeMarkdown`, 세션 `key` 로 `Editor` 마운트). `Y.Text` → `getText(lineEnding)` → `encodeMarkdown` → `createWritable` 은 단방향, 입력이 1,000ms 멈추면. 외부 변경은 열린 `Y.Doc` 에 쓰지 않고 새 `key` 로 재마운트 — 판정은 쓰기 직전·창 `focus`·다시 보일 때(`useLocalFileConflict`, F-2157) (F-2154 1·3·4장)
 
 ## 4. 설정 (localStorage)

@@ -1,23 +1,18 @@
-// 편집기 연동 — 본문 1회 읽기·위키 문맥·보기 HTML·layout effect, App.tsx 에서 옮김 (F-2072, F-2059)
+// 편집기 연동 — 위키 문맥·보기 HTML·layout effect, App.tsx 에서 옮김 (F-2072, F-2059). 본문 1회 읽기는 useDocUnit (F-2160)
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { showSearchMatches } from '../editor/showSearchMatches'
 import { createWikiResolver, type WikiResolver } from '../lib/wikiResolve'
 import { floatCoverFor } from '../lib/floatCover'
-import { countChars, countWords } from '../editor/stats'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { findHeadingLine } from '../viewer/headingTarget'
 import { findViewerHeadingElByLine, topInScroller } from './outlinePosition'
 import { scrollViewerToAnchor } from './viewerScroll'
-import type { ServerStore } from '../storage/serverStore'
 import type { EditorHandle } from '../editor/Editor'
 import type { WikiContext } from '../editor/preview/wikiLinks'
-import type { E2eeStatus } from '../e2ee/keyring'
 import type { ScrollAnchor } from '../lib/scrollAnchor'
 import type { Folder, Store } from '../types'
 import type { ResolveAttachment } from '../viewer/fillMarkdownAssets'
 import type { DocMeta, OpenDoc } from './docMeta'
-import type { DocPathKind } from './docPath'
-import type { LiveSnapshot } from './liveDoc'
 import type { NoticeWithAction } from './NoticeBar'
 import { useGithubImages, type GithubImagesHandle } from './useGithubImages'
 import { sharedAttachmentHint } from './sharedAttachmentHint'
@@ -35,14 +30,7 @@ export type UseEditorSyncOptions = {
   currentDocId: string | null
   currentDoc: DocMeta | null
   openDoc: OpenDoc | null
-  bootPhase: 'booting' | 'ready'
   viewMode: 'live' | 'raw' | 'view'
-  isRealtime: boolean
-  liveSnapshot: LiveSnapshot | undefined
-  docPath: DocPathKind | null
-  everLiveIds: ReadonlySet<string>
-  docSession: { forbiddenClose: boolean }
-  e2ee: { status: E2eeStatus } | null
   wikiPreviewPref: string
   lineNumbersPref: 'on' | 'off'
   resolvedTheme: 'white' | 'sepia' | 'dark'
@@ -55,8 +43,6 @@ export type UseEditorSyncOptions = {
   viewerDocId: string | null
   pendingEditorSearch: { docId: string; term: string } | null
   showNotice: (input: NoticeWithAction) => number
-  setOpenDoc: Dispatch<SetStateAction<OpenDoc | null>>
-  setStats: (stats: { line: number; col: number; charCount: number; wordCount: number }) => void
   setViewerHtml: Dispatch<SetStateAction<string>>
   setViewerDocId: Dispatch<SetStateAction<string | null>>
   setPendingEditorSearch: Dispatch<SetStateAction<{ docId: string; term: string } | null>>
@@ -81,49 +67,11 @@ export type UseEditorSyncResult = {
 
 export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResult {
   const {
-    store, docs, folders, currentDocId, currentDoc, openDoc, bootPhase, viewMode, isRealtime, liveSnapshot, docPath, everLiveIds, docSession,
-    e2ee, wikiPreviewPref, lineNumbersPref, resolvedTheme, indentPref, isReadOnlyDoc, titleReadOnly, currentBreadcrumb, onNavigateFolder,
-    viewerHtml, viewerDocId, pendingEditorSearch, showNotice, setOpenDoc, setStats, setViewerHtml, setViewerDocId, setPendingEditorSearch,
+    store, docs, folders, currentDocId, currentDoc, openDoc, viewMode,
+    wikiPreviewPref, lineNumbersPref, resolvedTheme, indentPref, isReadOnlyDoc, titleReadOnly, currentBreadcrumb, onNavigateFolder,
+    viewerHtml, viewerDocId, pendingEditorSearch, showNotice, setViewerHtml, setViewerDocId, setPendingEditorSearch,
     editorRef, viewerRef, scrollAnchorRef, pendingJumpRef, openDocIdRef,
   } = options
-  // ----- 문서를 열 때 저장소 본문을 1회 읽어 에디터에 넘긴다 (architecture.md 3장) -----
-  // openDoc.id 와 currentDocId 가 다르면 렌더링에서 에디터를 안 그리는 것으로 처리해 여기서 null 로 되돌리지 않는다 (동기 setState 회피)
-  const notFoundBeforeSync = isRealtime && liveSnapshot?.stopReason === 'not-found' && !liveSnapshot.ready
-  // 실시간은 첫 synced 에서 채우고 첫 동기화 전 4404 만 캐시를 읽는다. 실시간이었던 폴백·4403 보기는 서버 본문 먼저 (F-305 5.2·8장)
-  const openLoad =
-    !currentDocId || docPath === null || (isRealtime && !notFoundBeforeSync)
-      ? null
-      : (docPath === 'fallback' && everLiveIds.has(currentDocId)) || (docPath === 'view' && docSession.forbiddenClose)
-        ? 'server-first'
-        : 'store'
-  // 금고 문서는 금고가 열리고 잠길 때 본문 읽기를 다시 돈다 (F-405 7.4)
-  const e2eeStatus = e2ee?.status ?? null
-  const openLoadE2eeKey = currentDoc?.e2ee ? e2eeStatus : null
-  useEffect(() => {
-    if (bootPhase !== 'ready' || !currentDocId || openLoad === null) return
-    let cancelled = false
-    const serverStore = store as Partial<ServerStore>
-    const load =
-      openLoad === 'server-first' && typeof serverStore.refreshDocFromServer === 'function'
-        ? serverStore.refreshDocFromServer(currentDocId).then((fresh) => fresh ?? store.get(currentDocId))
-        : store.get(currentDocId)
-    load.then((doc) => {
-      if (cancelled || !doc) return
-      // 잠긴 금고 문서는 빈 본문으로 편집기를 올리지 않는다 — P1 이 그 자리에 뜬다. 이미 열린 금고 편집기는 다시 만들지 않는다
-      if (doc.e2ee === 'locked' || (doc.e2ee && openDocIdRef.current === doc.id)) return
-      setOpenDoc({ id: doc.id, content: doc.content, lineEnding: doc.lineEnding })
-      setStats({
-        line: 1,
-        col: 1,
-        charCount: countChars(doc.content),
-        wordCount: countWords(doc.content),
-      })
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [store, bootPhase, currentDocId, openLoad, openLoadE2eeKey, openDocIdRef, setOpenDoc, setStats])
-
   // 위키링크 해석기 (specs/features/F-2018.md 8.1). docs·folders 가 바뀔 때만 새로 만든다 — 입력마다 만들지 않는다 (5.2)
   const wikiResolver = useMemo(
     () =>

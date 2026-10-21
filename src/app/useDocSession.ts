@@ -1,5 +1,5 @@
-// 세션 핵 — 문서 열기 경로 판정·실시간 세션·접속자·렌더 중 블록 a~d, App.tsx 에서 옮김 (F-2077, F-2059)
-import { useCallback, useEffect, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
+// 세션 핵 — 문서 하나의 열기 경로 판정·실시간 세션·접속자·렌더 중 블록 a~d (F-2077, F-2160)
+import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type * as Y from 'yjs'
 import type { ServerStore } from '../storage/serverStore'
 import type { YjsStore } from '../storage/yjsStore'
@@ -14,7 +14,7 @@ import type { LiveSnapshot } from './liveDoc'
 import { useLiveDoc, type LiveDocSession } from './useLiveDoc'
 import { usePeers } from './usePeers'
 
-// 문서 열기 세션 (F-305 3장) — 같은 currentDocId 가 유지되는 동안 한 번 정한 경로는 바뀌지 않는다. path 가 null 이면 판정 중
+// 문서 열기 세션 (F-305 3장) — 같은 docId 가 유지되는 동안 한 번 정한 경로는 바뀌지 않는다. path 가 null 이면 판정 중
 export type DocSession = {
   seq: number
   docId: string | null
@@ -37,10 +37,42 @@ export function restartedSession(cur: DocSession): DocSession {
   return { ...cur, seq: cur.seq + 1, path: null, fallbackReason: null, forbiddenClose: false, quietForbidden: false, resume: false, startOffline: false, readOnly: false, persist: null }
 }
 
+// 문서·저장소가 바뀐 새 세션 — local·view·e2ee 는 여기서 정하고 나머지는 판정 effect 가 outbox 를 읽고 정한다 (F-305 4장, F-2160)
+export function openedSession(
+  prev: DocSession,
+  next: { docId: string | null; store: Store; meta: DocMeta | null; shareLinkScreen: boolean; forbidden: boolean },
+): DocSession {
+  const quick = decideDocPath({
+    storeKind: next.store.kind,
+    shareLinkScreen: next.shareLinkScreen,
+    role: next.meta?.role as 'owner' | 'edit' | 'view' | undefined,
+    forbidden: next.forbidden,
+    hasPendingChanges: false,
+    online: true,
+    hasLocalState: false,
+    e2ee: Boolean(next.meta?.e2ee), // F-405 7.5
+  })
+  return {
+    seq: prev.seq + 1,
+    docId: next.docId,
+    store: next.store,
+    path: quick.kind === 'local' || quick.kind === 'view' || quick.kind === 'e2ee' ? quick.kind : null,
+    fallbackReason: null,
+    forbiddenClose: false,
+    quietForbidden: false,
+    resume: false,
+    startOffline: false,
+    readOnly: false,
+    persist: null,
+  }
+}
+
+type Stats = { line: number; col: number; charCount: number; wordCount: number }
+
 export type UseDocSessionOptions = {
   store: Store
-  currentDocId: string | null
-  currentDoc: DocMeta | null
+  docId: string | null
+  meta: DocMeta | null
   sharedDoc: ShareDoc | null
   forbiddenDocIds: Set<string>
   accountBlocked: boolean
@@ -49,12 +81,14 @@ export type UseDocSessionOptions = {
   docs: DocMeta[]
   setDocs: Dispatch<SetStateAction<DocMeta[]>>
   setOpenDoc: Dispatch<SetStateAction<OpenDoc | null>>
-  setStats: (stats: { line: number; col: number; charCount: number; wordCount: number }) => void
+  setStats: ((stats: Stats) => void) | null // 포커스 문서일 때만 — 렌더 중 블록 d 가 부른다
   setForbiddenDocIds: Dispatch<SetStateAction<Set<string>>>
   createdHereRef: RefObject<Set<string>>
   yjsStoreRef: RefObject<Promise<YjsStore | null>>
-  currentDocIdRef: RefObject<string | null>
-  docSaverFlushRef: RefObject<() => Promise<boolean>>
+  // 이 페이지에서 실시간으로 동기화한 적 있는 문서 — 창에 하나라 슬롯을 옮겨도 남는다 (8장)
+  everLiveIds: ReadonlySet<string>
+  setEverLiveIds: Dispatch<SetStateAction<Set<string>>>
+  flushRef: RefObject<() => Promise<boolean>> // 이 문서 저장기의 flush
 }
 
 export type UseDocSessionResult = {
@@ -62,7 +96,6 @@ export type UseDocSessionResult = {
   setDocSession: Dispatch<SetStateAction<DocSession>>
   docPath: DocPathKind | null
   isRealtime: boolean
-  everLiveIds: Set<string>
   restartDocSession: () => void
   restartDocSessionAfterFlush: () => Promise<void>
   liveSession: LiveDocSession | null
@@ -75,8 +108,8 @@ export type UseDocSessionResult = {
 
 export function useDocSession(options: UseDocSessionOptions): UseDocSessionResult {
   const {
-    store, currentDocId, currentDoc, sharedDoc, forbiddenDocIds, accountBlocked, bootPhase, convertingDocId, docs, setDocs, setOpenDoc,
-    setStats, setForbiddenDocIds, createdHereRef, yjsStoreRef, currentDocIdRef, docSaverFlushRef,
+    store, docId, meta, sharedDoc, forbiddenDocIds, accountBlocked, bootPhase, convertingDocId, docs, setDocs, setOpenDoc,
+    setStats, setForbiddenDocIds, createdHereRef, yjsStoreRef, everLiveIds, setEverLiveIds, flushRef,
   } = options
 
   // ----- 문서 열기 경로 (F-305 4장) — 문서·저장소가 바뀌면 새 세션. local·view 는 여기서, 나머지는 아래 effect 가 outbox 를 읽고 정한다 -----
@@ -93,43 +126,19 @@ export function useDocSession(options: UseDocSessionOptions): UseDocSessionResul
     readOnly: false,
     persist: null,
   }))
-  if (docSession.docId !== currentDocId || docSession.store !== store) {
-    const quick = decideDocPath({
-      storeKind: store.kind,
-      shareLinkScreen: Boolean(sharedDoc),
-      role: currentDoc?.role as 'owner' | 'edit' | 'view' | undefined,
-      forbidden: (currentDocId != null && forbiddenDocIds.has(currentDocId)) || accountBlocked,
-      hasPendingChanges: false,
-      online: true,
-      hasLocalState: false,
-      e2ee: Boolean(currentDoc?.e2ee), // F-405 7.5
-    })
-    setDocSession({
-      seq: docSession.seq + 1,
-      docId: currentDocId,
-      store,
-      path: quick.kind === 'local' || quick.kind === 'view' || quick.kind === 'e2ee' ? quick.kind : null,
-      fallbackReason: null,
-      forbiddenClose: false,
-      quietForbidden: false,
-      resume: false,
-      startOffline: false,
-      readOnly: false,
-      persist: null,
-    })
+  if (docSession.docId !== docId || docSession.store !== store) {
+    const forbidden = (docId != null && forbiddenDocIds.has(docId)) || accountBlocked
+    setDocSession(openedSession(docSession, { docId, store, meta, shareLinkScreen: Boolean(sharedDoc), forbidden }))
     // 옛 세션의 본문 스냅샷으로 편집기가 먼저 뜨지 않게 비운다 — 실시간이면 첫 동기화 뒤에 채운다 (5.1)
     setOpenDoc(null)
   }
-  const sessionReady = docSession.docId === currentDocId && docSession.store === store
+  const sessionReady = docSession.docId === docId && docSession.store === store
   const docPath = sessionReady ? docSession.path : null
   const isRealtime = docPath === 'realtime'
 
-  // 이 페이지에서 실시간으로 동기화한 적 있는 문서 — 폴백으로 다시 열 때 캐시 대신 서버 본문을 먼저 읽는다 (8장)
-  const [everLiveIds, setEverLiveIds] = useState<Set<string>>(() => new Set())
-
   // 두 판정 자리에 같은 role·forbidden 을 넘긴다 — 빠른 판정이 온라인 view 를 realtime 으로 내므로 effect 가 다시 가린다 (F-506 3.2)
-  const decideRole = currentDoc?.role as 'owner' | 'edit' | 'view' | undefined
-  const decideForbidden = (currentDocId != null && forbiddenDocIds.has(currentDocId)) || accountBlocked
+  const decideRole = meta?.role as 'owner' | 'edit' | 'view' | undefined
+  const decideForbidden = (docId != null && forbiddenDocIds.has(docId)) || accountBlocked
   useEffect(() => {
     if (bootPhase !== 'ready' || docSession.path !== null || !docSession.docId) return
     const id = docSession.docId
@@ -198,12 +207,16 @@ export function useDocSession(options: UseDocSessionOptions): UseDocSessionResul
     setOpenDoc(null)
   }, [setOpenDoc])
   // 편집기를 내리기 전에 대기 저장을 끝낸다 — 기다리는 사이 다른 문서로 옮겼으면 다시 열지 않는다 (리뷰 A2)
+  const docIdRef = useRef(docId)
+  useEffect(() => {
+    docIdRef.current = docId
+  })
   const restartDocSessionAfterFlush = useCallback(async () => {
-    const docId = currentDocIdRef.current
-    await docSaverFlushRef.current()
-    if (docId === currentDocIdRef.current) restartDocSession()
-  }, [restartDocSession, currentDocIdRef, docSaverFlushRef])
-  const liveSession = useLiveDoc(isRealtime && convertingDocId !== currentDocId ? currentDocId : null, {
+    const flushedId = docIdRef.current
+    await flushRef.current()
+    if (flushedId === docIdRef.current) restartDocSession()
+  }, [restartDocSession, flushRef])
+  const liveSession = useLiveDoc(isRealtime && convertingDocId !== docId ? docId : null, {
     store: docSession.readOnly ? null : docSession.persist,
     resume: docSession.resume,
     startOffline: docSession.startOffline,
@@ -222,7 +235,7 @@ export function useDocSession(options: UseDocSessionOptions): UseDocSessionResul
       setDocSession({ ...docSession, path: 'view', fallbackReason: liveSnapshot.fallbackReason })
     } else if (liveSnapshot.phase === 'stopped' && liveSnapshot.stopReason === 'forbidden') {
       setDocSession({ ...docSession, path: 'view', quietForbidden: true })
-      if (currentDocId && !forbiddenDocIds.has(currentDocId)) setForbiddenDocIds(new Set(forbiddenDocIds).add(currentDocId))
+      if (docId && !forbiddenDocIds.has(docId)) setForbiddenDocIds(new Set(forbiddenDocIds).add(docId))
     }
   } else if (isRealtime && liveSnapshot && !liveSnapshot.ready) {
     if (liveSnapshot.phase === 'stopped' && liveSnapshot.stopReason === 'read-only') {
@@ -236,28 +249,29 @@ export function useDocSession(options: UseDocSessionOptions): UseDocSessionResul
       setDocSession({ ...docSession, path: 'fallback', fallbackReason: liveSnapshot.fallbackReason })
     } else if (liveSnapshot.phase === 'stopped' && liveSnapshot.stopReason === 'forbidden') {
       setDocSession({ ...docSession, path: 'view', forbiddenClose: true })
-      if (currentDocId && !forbiddenDocIds.has(currentDocId)) setForbiddenDocIds(new Set(forbiddenDocIds).add(currentDocId))
+      if (docId && !forbiddenDocIds.has(docId)) setForbiddenDocIds(new Set(forbiddenDocIds).add(docId))
     }
   }
 
   // 첫 ready — 한 렌더 안에서 방 Doc 본문으로 편집기 스냅샷·제목·글자 수를 맞춘다 (5.2). 재개 세션은 synced 전에도 로컬 기록으로 (F-306 9.1)
   const [liveOpenedDoc, setLiveOpenedDoc] = useState<Y.Doc | null>(null)
   if (isRealtime && liveSession && liveSnapshot?.everSynced && !everLiveIds.has(liveSession.docId)) {
-    setEverLiveIds(new Set(everLiveIds).add(liveSession.docId))
+    const syncedId = liveSession.docId
+    setEverLiveIds((prev) => (prev.has(syncedId) ? prev : new Set(prev).add(syncedId)))
   }
   if (isRealtime && liveSession && liveSnapshot?.ready && liveOpenedDoc !== liveSession.roomDoc) {
     const content = liveSession.roomDoc.getText(Y_CONTENT_NAME).toString()
     const title = liveSession.roomDoc.getText(Y_TITLE_NAME).toString()
     setLiveOpenedDoc(liveSession.roomDoc)
-    setOpenDoc({ id: liveSession.docId, content, lineEnding: currentDoc?.lineEnding ?? 'lf' })
+    setOpenDoc({ id: liveSession.docId, content, lineEnding: meta?.lineEnding ?? 'lf' })
     setDocs(docs.map((d) => (d.id === liveSession.docId ? { ...d, title } : d)))
-    setStats({ line: 1, col: 1, charCount: countChars(content), wordCount: countWords(content) })
+    setStats?.({ line: 1, col: 1, charCount: countChars(content), wordCount: countWords(content) })
   }
   const liveStopped = isRealtime && liveSnapshot?.phase === 'stopped'
   const isOfflineView = docPath === 'offline-view'
 
   return {
-    docSession, setDocSession, docPath, isRealtime, everLiveIds, restartDocSession, restartDocSessionAfterFlush,
+    docSession, setDocSession, docPath, isRealtime, restartDocSession, restartDocSessionAfterFlush,
     liveSession, liveSnapshot, liveAwareness, livePeers, liveStopped, isOfflineView,
   }
 }

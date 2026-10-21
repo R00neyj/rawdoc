@@ -16,7 +16,8 @@ import { IconAddComment } from './icons'
 import KanbanBoard, { type KanbanBoardFocus } from './KanbanBoard'
 import type { UseKanbanViewResult } from './useKanbanView'
 import { isKanbanDoc } from '../lib/kanban'
-import type { DocMeta, OpenDoc } from './docMeta'
+import type { DocMeta } from './docMeta'
+import type { DocUnit } from './docUnit'
 import type { NoticeWithAction } from './NoticeBar'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { Store } from '../types'
@@ -31,7 +32,6 @@ import type { UseCommentFabResult } from './useCommentFab'
 import type { UseTitleCommitResult } from './useTitleCommit'
 import type { UseSidebarLayoutResult } from './useSidebarLayout'
 import type { UseNotificationsGlueResult } from './useNotificationsGlue'
-import type { UseLiveRoomDocResult } from './useLiveRoomDoc'
 
 // 떠 있는 `댓글 달기` 버튼 — 선택이 화면 위로 지나가면 위 끝, 아래에 있으면 아래 끝에 붙인다(버튼 32px + 여백 8px)
 function clampFabY(y: number, viewportH: number, cover: number): number {
@@ -47,8 +47,7 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
   Pick<UseCommentFabResult, 'editorScrollTop' | 'editorViewportH' | 'floatingCommentAnchor'> &
   Pick<UseTitleCommitResult, 'handleTitleChange' | 'handleTitleCommit'> &
   Pick<UseSidebarLayoutResult, 'onNavigateFolder'> &
-  Pick<UseNotificationsGlueResult, 'mentionSource'> &
-  Pick<UseLiveRoomDocResult, 'liveEditorOption'> & {
+  Pick<UseNotificationsGlueResult, 'mentionSource'> & {
     commentAccessValue: CommentAccess
     commentRailExtra: number
     comments: UseDocCommentsResult
@@ -61,18 +60,15 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
     e2eeListSyncedFor: string | null
     e2eeUnmountedDocId: string | null
     editorRef: RefObject<EditorHandle | null>
-    editorRemountNonce: number
     focusEditorRef: RefObject<boolean>
     focusTitleRef: RefObject<boolean>
     handleDocChange: (state: EditorState) => void
     handleOpenWikiLink: (target: string, heading?: string | null) => void
     handleSelectionChange: (state: EditorState) => void
-    docLoading: boolean
     helpOpen: boolean
     isReadOnlyDoc: boolean
     kanban: UseKanbanViewResult
     mapRoute: { centerDocId: string | null; returnDocId: string | null } | null
-    openDoc: OpenDoc | null
     // 보드 `⋯` 의 `칸반 설정…` (small 2026-10-14)
     openKanbanSettings: () => void
     outlineControlRef: RefObject<OutlineControl | null>
@@ -88,6 +84,8 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
     showNotice: (input: NoticeWithAction) => number
     store: Store
     titleReadOnly: boolean
+    // 이 칸에 뜬 문서의 묶음 — 문서 값은 여기로만 받는다 (F-2160 4장)
+    unit: DocUnit
     viewerHtml: string
     viewerRef: RefObject<HTMLDivElement | null>
     viewFindCard: ViewFindCardProps | null
@@ -96,12 +94,13 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
 
 export default function DocumentArea({
   attachmentResolverFor, commentAccessValue, commentRailExtra, comments, contentAreaRef, contentWidthPref, currentBreadcrumb, currentDoc,
-  currentDocId, currentFolderId, docLoading, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorRemountNonce, editorScrollTop,
+  currentDocId, currentFolderId, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorScrollTop,
   editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles, handleOpenWikiLink,
-  handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, jumpToLine, kanban, liveEditorOption, mapRoute,
-  mentionSource, onNavigateFolder, openDoc, openKanbanSettings, outlineControlRef, phoneSidePanel, openWikiLinkTarget, resolveAttachment, resolveImagePath, resolvedTheme, resolveWikiHref, setCommentRailExtra, setEditorRefs, sharedDoc,
-  sharesOpen, showNotice, store, titleReadOnly, viewerHtml, viewerRef, viewFindCard, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
+  handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, jumpToLine, kanban, mapRoute,
+  mentionSource, onNavigateFolder, openKanbanSettings, outlineControlRef, phoneSidePanel, openWikiLinkTarget, resolveAttachment, resolveImagePath, resolvedTheme, resolveWikiHref, setCommentRailExtra, setEditorRefs, sharedDoc,
+  sharesOpen, showNotice, store, titleReadOnly, unit, viewerHtml, viewerRef, viewFindCard, viewMode, wikiContext, wikiPreviewPref, wikiResolver,
 }: DocumentAreaProps) {
+  const { openDoc, remountNonce: editorRemountNonce, liveEditorOption, loading: docLoading } = unit
   const phone = usePhoneWidth()
   const [pillCover, setPillCover] = useState(0)
   useEffect(() => {
@@ -111,7 +110,7 @@ export default function DocumentArea({
     return () => window.removeEventListener('resize', read)
   }, [contentAreaRef])
   // 잠긴 금고 문서 — 편집기 자리에 P1 (F-405 6.2)
-  const showE2eeLockedPanel = currentDoc?.e2ee === 'locked' && openDoc?.id !== currentDocId
+  const showE2eeLockedPanel = unit.locked
   const editorMounted = openDoc?.id === currentDocId
   const boardHandle = editorMounted ? kanban.handle : null
   const board = boardHandle !== null

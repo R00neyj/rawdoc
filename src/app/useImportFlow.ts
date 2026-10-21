@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type Dispat
 import type { AttachmentExt, Doc, Folder, LineEnding, Store } from '../types'
 import { ancestorsOfDoc, folderAncestors } from '../lib/folderTree'
 import type { ShareDoc } from '../lib/shareCodec'
-import { stripContent, sortByUpdatedAtDesc, type DocMeta, type OpenDoc } from './docMeta'
+import { stripContent, sortByUpdatedAtDesc, type DocMeta } from './docMeta'
 import type { DocPathKind } from './docPath'
 import { setPref } from './prefs'
 import { e2eeCreateErrorMessage } from './appNotices'
@@ -54,8 +54,7 @@ export type UseImportFlowOptions = {
   setDocs: Dispatch<SetStateAction<DocMeta[]>>
   setFolders: Dispatch<SetStateAction<Folder[]>>
   setCurrentDocId: Dispatch<SetStateAction<string | null>>
-  setOpenDoc: Dispatch<SetStateAction<OpenDoc | null>>
-  setEditorRemountNonce: Dispatch<SetStateAction<number>>
+  reloadOpenDoc: (fresh: Doc) => void // 편집기를 새 본문으로 다시 마운트 (F-2160)
   setSharedDoc: Dispatch<SetStateAction<ShareDoc | null>>
   setSharesOpen: Dispatch<SetStateAction<boolean>>
   setHelpOpen: Dispatch<SetStateAction<boolean>>
@@ -122,7 +121,7 @@ export function shouldLeaveForMatchedDoc(s: ScreenState & { matchedId: string; c
 
 export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResult {
   const {
-    store, folders, currentDoc, bootPhase, setDocs, setFolders, setCurrentDocId, setOpenDoc, setEditorRemountNonce, setSharedDoc, setSharesOpen,
+    store, folders, currentDoc, bootPhase, setDocs, setFolders, setCurrentDocId, reloadOpenDoc, setSharedDoc, setSharesOpen,
     setHelpOpen, setTrashOpen, setMapRoute, showNotice, keepLiveTitle, beforeLeaveDoc, addOpenFolders, closeSidebarIfNarrow, closeSettings,
     ensureE2eeOpenForFolder, pushHashUrl, importInputRef, importZipInputRef, importFolderInputRef, docsRef, foldersRef, currentDocIdRef,
     sharedDocRef, sharesOpenRef, helpOpenRef, trashOpenRef, mapRouteRef, docPathRef, focusEditorRef, docSaverFlushRef, dropBlockedRef, imageDropBlockedRef,
@@ -569,11 +568,7 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
 
     if (openBeforeId && shouldRemountAfterImport({ openBeforeId, updatedIds, currentDocId: currentDocIdRef.current, docPath: docPathRef.current })) {
       const fresh = await store.get(openBeforeId)
-      if (canRemountWithFresh(fresh, currentDocIdRef.current)) {
-        setOpenDoc({ id: fresh.id, content: fresh.content, lineEnding: fresh.lineEnding })
-        focusEditorRef.current = false
-        setEditorRemountNonce((n) => n + 1)
-      }
+      if (canRemountWithFresh(fresh, currentDocIdRef.current)) reloadOpenDoc(fresh)
     }
 
     // 넣을 폴더와 그 조상을 편다 — T 가 최상위면 targetFolderId 가 null 이라 펼칠 것이 없다 (17장 Q4)
@@ -654,11 +649,7 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
     // 실시간 경로면 건너뛴다 — 편집기는 방 Doc 에서 만들어지고, 가져온 본문은 DO 가 흡수할 때 들어온다 (F-305 10.1)
     if (openBeforeId && shouldRemountAfterImport({ openBeforeId, updatedIds, currentDocId: currentDocIdRef.current, docPath: docPathRef.current })) {
       const fresh = await store.get(openBeforeId)
-      if (canRemountWithFresh(fresh, currentDocIdRef.current)) {
-        setOpenDoc({ id: fresh.id, content: fresh.content, lineEnding: fresh.lineEnding })
-        focusEditorRef.current = false
-        setEditorRemountNonce((n) => n + 1)
-      }
+      if (canRemountWithFresh(fresh, currentDocIdRef.current)) reloadOpenDoc(fresh)
     }
 
     if (result.cancelled) {
