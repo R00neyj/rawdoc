@@ -4208,6 +4208,25 @@ body.sidebar-resizing {
   }
 }
 
+/* 아래 판 손잡이 — 끌어내리면 닫힌다 (small 2026-10-22) */
+.sheet-grabber {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  margin-bottom: -8px;
+  touch-action: none;
+  cursor: grab;
+}
+
+.sheet-grabber > span {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ink) 25%, transparent);
+}
+
 .more-sheet-head,
 .settings-page-head {
   flex: none;

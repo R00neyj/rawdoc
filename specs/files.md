@@ -300,6 +300,7 @@
 |`src/app/useRightPanel.ts`|오른쪽 패널의 열림과 칸별 보기(달력·그래프 등)를 관리함|
 |`src/app/useSettingsPages.ts`|휴대폰에서 설정 화면을 단계별 페이지로 넘기고 되돌아오게 함|
 |`src/app/useShareResync.ts`|새 공유 알림이 오면 공유 목록을 한 번 다시 읽음|
+|`src/app/useSheetDragClose.ts`|휴대폰 아래 판의 손잡이를 끌어내려 판을 닫게 함|
 |`src/app/useSharesPage.ts`|공유 관리 페이지의 목록을 불러오고 공유 해제와 권한 요청 승인·거절을 처리함|
 |`src/app/useShortcutsPanel.ts`|단축키 안내판 열기와 그때 커서가 보이게 스크롤함|
 |`src/app/useShortcutUsage.ts`|사용자가 어떤 단축키를 써 봤는지 감지함|

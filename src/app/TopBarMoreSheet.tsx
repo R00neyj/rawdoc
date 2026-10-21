@@ -24,6 +24,7 @@ import { NotificationsList, type NotificationsMenuProps } from './NotificationsM
 import type { OutlineControl } from './Outline'
 import { GithubStatusLine, type GithubMenuProps } from './GithubMenu'
 import { githubMenuItems } from './githubUi'
+import { useSheetDragClose } from './useSheetDragClose'
 
 type SubView = 'share' | 'export' | 'github'
 
@@ -126,6 +127,7 @@ export default function TopBarMoreSheet({ wide = false, screen, outlineControlRe
   }
 
   const shareMenu = useShareMenu({ ...share, active: visible && view === 'share', onClose: closeSheet })
+  const dragClose = useSheetDragClose(dialogRef, closeSheet)
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -449,6 +451,9 @@ export default function TopBarMoreSheet({ wide = false, screen, outlineControlRe
       >
         {mounted && (
           <>
+            <div className="sheet-grabber" aria-hidden="true" {...dragClose}>
+              <span />
+            </div>
             {head}
             <div className="more-sheet-body">{body}</div>
           </>
