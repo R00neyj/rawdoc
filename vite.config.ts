@@ -30,6 +30,12 @@ function readTokenColor(name: string, after = ''): string {
 const manifestColor = readTokenColor('paper', ":root[data-theme='dark']")
 const siteUrl = SITE_URL
 const description = SITE_DESCRIPTION
+// 변수로 빼 둔다 — vite-plugin-pwa 타입에 file_handlers[].icons 가 없어 객체 리터럴이면 타입 오류
+const MD_FILE_HANDLER = {
+  action: '/',
+  accept: { 'text/markdown': ['.md'] },
+  icons: [{ src: '/icons/icon-256.png', sizes: '256x256', type: 'image/png' }],
+}
 
 // content/**/*.md 상대경로(posix, '/' 구분자) 목록. .gitkeep 등은 무시한다 (F-272.md 3.2)
 function listMarkdownFiles(dir: string, base: string = dir): string[] {
@@ -268,13 +274,7 @@ export default defineConfig({
           },
         ],
         // OS 에서 .md 파일을 이 앱으로 열 수 있게 한다. icons 가 없으면 Windows 탐색기 파일 아이콘이 빈다 (F-119)
-        file_handlers: [
-          {
-            action: '/',
-            accept: { 'text/markdown': ['.md'] },
-            icons: [{ src: '/icons/icon-256.png', sizes: '256x256', type: 'image/png' }],
-          },
-        ],
+        file_handlers: [MD_FILE_HANDLER],
       },
       workbox: {
         // 서체는 KaTeX 만 precache 하고 나머지는 쓸 때 받아 fonts 캐시에 둔다 (F-2040)
