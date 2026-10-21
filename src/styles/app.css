@@ -3955,6 +3955,11 @@ body.sidebar-resizing {
   border-left-color: var(--ink);
 }
 
+/* drawSelection 이 그리는 선택 바탕을 앱 ::selection 색에 맞춘다 — CM 기본 테마보다 한 단계 구체적이어야 이긴다 (small 2026-10-22) */
+.cm-host .cm-editor .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
+  background: var(--selection-bg);
+}
+
 /* 편집면 자체가 포커스 대상이라 바깥 기본 점선 외곽선은 끈다 */
 .cm-host .cm-editor.cm-focused {
   outline: none;

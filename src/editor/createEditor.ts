@@ -1,7 +1,7 @@
 // CM6 EditorView 생성·확장 조립(F-103 3.1). basicSetup 미사용 — 자동완성·검색 패널 안 넣음, 괄호·강조 자동짝은 closeBrackets() 아닌 F-127 의 autoPair()
 import type { ChangeSet, Extension } from '@codemirror/state'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
-import { dropCursor, EditorView, keymap, lineNumbers, ViewPlugin } from '@codemirror/view'
+import { drawSelection, dropCursor, EditorView, keymap, lineNumbers, ViewPlugin } from '@codemirror/view'
 import type { ViewUpdate } from '@codemirror/view'
 import { defaultKeymap, indentWithTab } from '@codemirror/commands'
 import { indentUnit, syntaxTree } from '@codemirror/language'
@@ -429,6 +429,10 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     // compartment 밖에 둔다 — 재구성에 다시 만들어지면 묶음 상태·선택 저장이 끊긴다 (F-302 5.2)
     binding.extension,
     EditorView.lineWrapping,
+    // 다중 커서: Ctrl+Alt+↑↓(defaultKeymap)·Alt+클릭. Ctrl+클릭은 위키링크·여러 선택 몫이라 범위 추가에서 뺀다 (small 2026-10-22)
+    EditorState.allowMultipleSelections.of(true),
+    drawSelection(),
+    EditorView.clickAddsSelectionRange.of((e) => e.altKey),
     EditorView.scrollMargins.of((v) => ({ top: floatCoverFor(v.scrollDOM) })),
     // 놓을 자리 표시(F-156.md 2.5) — imageInsert() 는 dropFileGuard 보다 먼저 등록해 같은 'drop' 이벤트를 먼저 가로채야 한다(CM6 는 등록 순서로 호출)
     dropCursor(),
