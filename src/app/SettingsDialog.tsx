@@ -20,6 +20,7 @@ import type { PickerDoc } from './docPicker'
 import RightPanelSettingsTab, { type RightPanelSettings } from './RightPanelSettingsTab'
 import KanbanSettingsTab from './KanbanSettingsTab'
 import type { KanbanSettings } from './useKanbanSettings'
+import LocalFileOpenSetting from './LocalFileOpenSetting'
 import { E2EE_LOCK_MINUTES, type E2eeStatus } from '../e2ee/keyring'
 import { THEME_OPTIONS } from './theme'
 import { DEFAULT_VIEW_OPTIONS } from './defaultView'
@@ -620,6 +621,7 @@ export default function SettingsDialog({
             )}
             {exportAllDisabled && <p className="dialog-note data-row-note">온라인일 때 내보낼 수 있습니다</p>}
           </section>
+          <LocalFileOpenSetting />
           {(onImport || onImportFolder) && (
             <section className="data-section" aria-labelledby="data-import-title">
               <h3 id="data-import-title" className="data-section-title">가져오기</h3>

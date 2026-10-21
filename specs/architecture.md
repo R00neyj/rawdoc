@@ -187,7 +187,8 @@ src/
 - 칸반 완료 칸 설정·할 일 패널 칸반 카드(small 2026-10-14)로 추가
   - `app/`: `useKanbanSettings.ts`(설정 `칸반` 탭 자료 — 지금 문서가 칸반일 때만 편집기 원문에서 완료 칸 선택지를 읽고, 쓰기는 `applyKanban` 한 길), `KanbanSettingsTab.tsx`(탭 화면). 완료 칸은 문서 프런트매터 `kanban-done: {칸 이름}`(없거나 맞는 칸이 없으면 마지막 칸) — 기기 설정이 아니라 문서에 산다. `lib/docTodos.ts` 가 `lib/kanban.ts` 를 읽어 칸반 문서는 카드 규칙만 쓴다
 - 로컬 파일 하나 편집(F-2154)으로 추가
-  - `app/`: 로컬 파일 훅·화면(이름은 F-2155 가 정한다 — 세션 훅·S-11 화면·`encodeMarkdown` 짝), 외부 변경 판정 `decideExternalChange`(F-2157, 순수 함수), 최근 파일 저장소(F-2158)
+  - `app/`: `useLocalFile.ts`(세션·열기·쓰기·떠나기, F-2155), `LocalFileScreen.tsx`(S-11), `localFileState.ts`(저장 상태 전이·문구), `localFileOpen.ts`(OS 열기 설정 판정, 순수, F-2156), `LocalFileOpenSetting.tsx`(데이터 탭 절), 외부 변경 판정 `decideExternalChange`(F-2157, 순수 함수), 최근 파일 저장소(F-2158)
+  - `lib/`: `encodeMarkdown.ts`(`decodeMarkdown` 짝), `fileSystemAccess.ts`(이 기능의 유일한 `declare global`·권한 요청)
 
 - 단위 테스트는 `tests/` 아래, 원본 경로를 그대로 따라 `tests/{원본 경로}/{이름}.test.ts` (2026-09-28 사용자 지정. 처음엔 대상 옆이었다 — `specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지

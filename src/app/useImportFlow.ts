@@ -43,6 +43,8 @@ import type { NoticeWithAction } from './NoticeBar'
 import { leaveScreens, screenOpen, type ScreenState } from './leaveScreens'
 import { canRemountWithFresh, shouldRemountAfterImport } from './importResult'
 import type { UseLocalFileResult } from './useLocalFile'
+import { getPref } from './prefs'
+import { launchOpenFailNotice, parseLocalFileOpenMode, planLaunch } from './localFileOpen'
 
 export type UseImportFlowOptions = {
   store: Store
@@ -700,6 +702,15 @@ export function useImportFlow(options: UseImportFlowOptions): UseImportFlowResul
   // OS 파일 열기 재중복 방지 — idb 이고 판정 메서드가 둘 다 있을 때만 handle 로 찾는다 (F-231.md 3.3)
   async function openOrImportLaunchedFiles(items: { file: File; handle: FileSystemFileHandle }[]) {
     if (items.length === 0) return
+    const plan = planLaunch(parseLocalFileOpenMode(getPref('md.localFileOpen', 'import')), items.map((i) => i.handle.name))
+    if (plan.kind === 'edit') {
+      const { handle } = items[plan.index]
+      if (plan.notice) showNotice({ type: 'info', message: plan.notice })
+      const result = await localFileRef.current?.openLocalFile(handle, { gesture: false })
+      const failure = result ? launchOpenFailNotice(result, handle.name) : null
+      if (failure) showNotice({ type: 'error', message: failure })
+      return
+    }
 
     const canDedupe = store.kind === 'idb' && Boolean(store.findDocByFileHandle) && Boolean(store.linkFileHandle)
     if (!canDedupe) {

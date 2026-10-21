@@ -22,6 +22,8 @@ type PrefMap = {
   'md.startDocId': string
   // 칸반 새 카드에 체크 칸을 달지, 기기별 (small 2026-10-14)
   'md.kanbanNewCardCheck': 'on' | 'off'
+  // OS 에서 .md 열기 방식 (F-2156)
+  'md.localFileOpen': 'import' | 'edit'
   'md.toolbar': 'on' | 'off'
   'md.landingDone': '1'
   'md.mapView': string
@@ -91,6 +93,7 @@ const ALLOWED_KEYS = new Set<PrefKey>([
   'md.startScreen',
   'md.startDocId',
   'md.kanbanNewCardCheck',
+  'md.localFileOpen',
   'md.toolbar',
   'md.landingDone',
   'md.mapView',
