@@ -1,6 +1,7 @@
 // F-2074 7.1 U1~U16 부팅 첫 화면 판정, R1~R3 부팅 갈래, F-2134 R6~R10 계정 확인 전 셸
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { decideBootRoute, runBoot, type BootDeps, type BootRouteInput } from '../../../src/app/bootFlow'
+import type { DocUnit } from '../../../src/app/docUnit'
 import { fetchAccount, type AccountState } from '../../../src/app/account'
 import { ACCOUNT_CONFIRM_WAIT_MS } from '../../../src/app/bootList'
 import { openStore } from '../../../src/storage/openStore'
@@ -129,7 +130,7 @@ function makeDeps(): BootDeps {
     setTrashOpen: vi.fn(),
     setMapRoute: vi.fn(),
     closeLocalFile: vi.fn(),
-    setDeletedElsewhereId: vi.fn(),
+    setDeletedElsewhereIds: vi.fn(),
     showNotice: vi.fn(() => 1),
     beforeLeaveDoc: vi.fn(async () => {}),
     applyAccountFlags: vi.fn(),
@@ -138,7 +139,7 @@ function makeDeps(): BootDeps {
     addOpenFolders: vi.fn(),
     openSharedFragment: vi.fn(async () => {}),
     keepLiveTitle: vi.fn((list) => list),
-    restartDocSessionAfterFlush: vi.fn(async () => {}),
+    paneUnitsRef: { current: [] },
     postTabMessage: vi.fn(),
     replaceHashUrl: vi.fn(),
     yjsStoreRef: { current: Promise.resolve(null) },
@@ -153,7 +154,6 @@ function makeDeps(): BootDeps {
     bootListSeqRef: { current: 0 },
     lastAppliedListSeqRef: { current: 0 },
     deletedElsewhereSourceRef: { current: 'tab' },
-    docPathRef: { current: { docId: null, path: null } },
     e2eeConvertBusyRef: { current: false },
   }
 }
@@ -248,10 +248,11 @@ describe('runBoot', () => {
       } else docs = next
     })
     deps.currentDocIdRef.current = 'a'
+    deps.paneUnitsRef.current = [{ docId: 'a', docPath: 'local', restartAfterFlush: vi.fn(async () => {}) } as unknown as DocUnit]
     await runBoot(deps)
-    await vi.waitFor(() => expect(deps.setDeletedElsewhereId).toHaveBeenCalled())
+    await vi.waitFor(() => expect(deps.setDeletedElsewhereIds).toHaveBeenCalled())
     await new Promise((r) => setTimeout(r, 0))
-    expect(deps.setDeletedElsewhereId).toHaveBeenCalledTimes(1)
+    expect(deps.setDeletedElsewhereIds).toHaveBeenCalledTimes(1)
     expect(docs).toEqual([])
   })
 

@@ -124,6 +124,8 @@ export type UseCommandPaletteOptions = {
   openDocFromSearch: (id: string, term: string | null) => Promise<void>
   newDocFolderId: () => string | null
   changeViewMode: (mode: string) => void
+  // 화면 분할 — useDocTabs 가 준다. 팔레트가 닫힌 뒤 돌려 새 칸 편집기가 포커스를 받게 한다 (F-2163 5장)
+  panes?: PaletteContext['panes']
 }
 
 export type UseCommandPaletteResult = {
@@ -141,7 +143,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     wikiPreviewPref, changeTheme, changeLineNumbers, changeToolbar, changeWikiPreview, handleExportDoc, handleExportDocAsText,
     handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, github, handleTogglePin, requestMoveDoc, requestDeleteDoc,
     getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createNewBoard, createDocFromPalette,
-    openDocFromSearch, newDocFolderId, changeViewMode, openTemplates, rightPanelOpen, toggleRightPanel, kanban,
+    openDocFromSearch, newDocFolderId, changeViewMode, openTemplates, rightPanelOpen, toggleRightPanel, kanban, panes,
   } = options
   // 본문에서 연 팔레트만 서식·단락·삽입을 보인다 — 연 순간의 문서와 가능 여부 (F-2055 4.1)
   const [paletteEditor, setPaletteEditor] = useState<{ docId: string | null; disabled: EditorCommandGates } | null>(null)
@@ -415,6 +417,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
             }
           : undefined,
     },
+    panes: panes ? { ...panes, run: (action) => runAfterPaletteClose(() => panes.run(action)) } : undefined,
     kanban: {
       shown: kanban.boardShown,
       canShow: palettePresentDocScreen && currentDoc?.e2ee !== 'locked' && openDoc?.id === currentDocId && !kanban.boardShown && (kanban.isKanban || !isReadOnlyDoc),

@@ -30,7 +30,7 @@ export type DocUnitShared = {
   bootPhase: 'booting' | 'ready' // 본문 1회 읽기
   sessionPhase: 'booting' | 'ready' // 경로 판정 — 계정 확인을 기다리는 동안 booting (F-2134 6장)
   convertingDocId: string | null
-  deletedElsewhereId: string | null
+  deletedElsewhereIds: ReadonlySet<string> // 칸마다 지워짐 — 문서가 모든 칸에서 빠질 때 걷힌다 (F-2163 7장)
   e2eeStatus: E2eeStatus | null
   yjsStoreRef: RefObject<Promise<YjsStore | null>>
   createdHereRef: RefObject<Set<string>>
@@ -47,10 +47,11 @@ export type EverLiveIds = { ids: ReadonlySet<string>; set: Dispatch<SetStateActi
 export function useDocUnit(docId: string | null, shared: DocUnitShared, everLive: EverLiveIds, hostRef: RefObject<DocUnitHost>): DocUnit {
   const {
     store, docs, setDocs, sharedDoc, forbiddenDocIds, setForbiddenDocIds, accountBlocked, bootPhase, sessionPhase, convertingDocId,
-    deletedElsewhereId, e2eeStatus, yjsStoreRef, createdHereRef, liveChangedAtRef, focusEditorRef, claimHub, focusDocId, setStats, showNotice,
+    deletedElsewhereIds, e2eeStatus, yjsStoreRef, createdHereRef, liveChangedAtRef, focusEditorRef, claimHub, focusDocId, setStats, showNotice,
   } = shared
   const meta = docId === null ? null : (docs.find((d) => d.id === docId) ?? null)
   const isFocus = docId !== null && docId === focusDocId
+  const deletedElsewhereId = docId !== null && deletedElsewhereIds.has(docId) ? docId : null
   // 문서를 열 때 편집기에 넘기는 스냅샷 — 편집 중 동기화하지 않는다, 원본은 CM6 EditorState 하나다 (architecture.md 3장)
   const [openDoc, setOpenDoc] = useState<OpenDoc | null>(null)
   // 편집권을 되찾거나 가져오기로 덮어써 서버 값을 다시 받아 편집기를 다시 마운트할 때 올린다 (F-213.md 2.3)

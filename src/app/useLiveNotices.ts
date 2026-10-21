@@ -59,19 +59,21 @@ export function useLiveNotices(options: UseLiveNoticesOptions): UseLiveNoticesRe
       bound.delete(id)
     }
   }, [currentDocId, dismissNotice])
+  // 한 번 판정은 문서별로 — 칸 포커스를 오가도 다시 뜨거나 다른 문서 seq 에 삼켜지지 않는다 (F-2163 7장)
+  const sessionKey = `${currentDocId}:${docSession.seq}`
   // 읽기 전용 세션의 첫 동기화 전 4403 — 알림 없이 /api/me 만 한 번 (F-506 3.3)
-  const quietForbiddenSeqRef = useRef(0)
+  const quietForbiddenSeenRef = useRef(new Set<string>())
   useEffect(() => {
-    if (!docSession.quietForbidden || quietForbiddenSeqRef.current === docSession.seq) return
-    quietForbiddenSeqRef.current = docSession.seq
+    if (!docSession.quietForbidden || quietForbiddenSeenRef.current.has(sessionKey)) return
+    quietForbiddenSeenRef.current.add(sessionKey)
     void recheckAccount()
-  }, [docSession, recheckAccount])
+  }, [docSession, sessionKey, recheckAccount])
 
   // N1 — 첫 동기화 전 4403 으로 보기로 연 세션마다 한 번. 내 소유 문서면 계정 차단인지 본다 (F-2030 5.4)
-  const forbiddenNoticeSeqRef = useRef(0)
+  const forbiddenNoticeSeenRef = useRef(new Set<string>())
   useEffect(() => {
-    if (!docSession.forbiddenClose || forbiddenNoticeSeqRef.current === docSession.seq) return
-    forbiddenNoticeSeqRef.current = docSession.seq
+    if (!docSession.forbiddenClose || forbiddenNoticeSeenRef.current.has(sessionKey)) return
+    forbiddenNoticeSeenRef.current.add(sessionKey)
     const ownDoc = isOwnServerDoc(store.kind, currentDoc, sharedDoc)
     if (ownDoc && accountBlocked) {
       showNotice({ type: 'error', message: ACCOUNT_BLOCKED_MESSAGE })
@@ -79,13 +81,13 @@ export function useLiveNotices(options: UseLiveNoticesOptions): UseLiveNoticesRe
     }
     showNotice({ type: 'info', message: LIVE_NOTICE.forbidden })
     if (ownDoc) recheckAccount()
-  }, [docSession, showNotice, store, currentDoc, sharedDoc, accountBlocked, recheckAccount])
+  }, [docSession, sessionKey, showNotice, store, currentDoc, sharedDoc, accountBlocked, recheckAccount])
 
   // N2·N3·N4 — 멈춘 방 Doc 마다 한 번. N5·N6 — 조건이 풀리면 그 알림이 아직 떠 있을 때만 걷는다
-  const liveStopNoticeDocRef = useRef<Y.Doc | null>(null)
+  const liveStopNoticeDocsRef = useRef(new WeakSet<Y.Doc>())
   const liveNoticeIdsRef = useRef<{ disconnected: number | null; tooLarge: number | null }>({ disconnected: null, tooLarge: null })
-  // 이 방 Doc 에서 이미 알린 병합 수 (F-306 7.3)
-  const mergedSeenRef = useRef<{ doc: Y.Doc | null; count: number }>({ doc: null, count: 0 })
+  // 방 Doc 마다 이미 알린 병합 수 (F-306 7.3)
+  const mergedSeenRef = useRef(new WeakMap<Y.Doc, number>())
   useEffect(() => {
     const snap = liveSession?.snapshot
     const ids = liveNoticeIdsRef.current
@@ -98,12 +100,9 @@ export function useLiveNotices(options: UseLiveNoticesOptions): UseLiveNoticesRe
       ids.disconnected = null
     }
     // N8 — N5 를 걷은 뒤에 띄운다 (F-306 7.3)
-    if (liveSession) {
-      if (mergedSeenRef.current.doc !== liveSession.roomDoc) mergedSeenRef.current = { doc: liveSession.roomDoc, count: 0 }
-      if (liveSession.merged > mergedSeenRef.current.count) {
-        mergedSeenRef.current.count = liveSession.merged
-        showNotice({ type: 'info', message: LIVE_NOTICE.merged })
-      }
+    if (liveSession && liveSession.merged > (mergedSeenRef.current.get(liveSession.roomDoc) ?? 0)) {
+      mergedSeenRef.current.set(liveSession.roomDoc, liveSession.merged)
+      showNotice({ type: 'info', message: LIVE_NOTICE.merged })
     }
     // N6 — 읽기 전용 세션은 할 수 있는 것이 없어 띄우지 않는다 (F-506 5.2)
     if (snap?.tooLarge && ids.tooLarge === null && !readOnlySession) {
@@ -112,8 +111,8 @@ export function useLiveNotices(options: UseLiveNoticesOptions): UseLiveNoticesRe
       dismissNotice(ids.tooLarge)
       ids.tooLarge = null
     }
-    if (!liveSession || snap?.phase !== 'stopped' || liveStopNoticeDocRef.current === liveSession.roomDoc) return
-    liveStopNoticeDocRef.current = liveSession.roomDoc
+    if (!liveSession || snap?.phase !== 'stopped' || liveStopNoticeDocsRef.current.has(liveSession.roomDoc)) return
+    liveStopNoticeDocsRef.current.add(liveSession.roomDoc)
     const branch = liveStopNoticeBranch(snap.stopReason, readOnlySession)
     // 읽기 전용 세션에는 내 편집이 없다 — 새 문서로 저장 없이 N9·N3·N10 (F-506 5.2)
     const stopDocId = liveSession.docId
@@ -152,18 +151,20 @@ export function useLiveNotices(options: UseLiveNoticesOptions): UseLiveNoticesRe
     } else if (branch === 'signed-out') showSaveAsNewNotice(stopDocId, { type: 'error', message: LIVE_NOTICE.signedOut })
   }, [liveSession, showNotice, dismissNotice, showSaveAsNewNotice, store, currentDoc, sharedDoc, accountBlocked, recheckAccount, restartDocSession, currentDocIdRef])
 
-  // N7 — offline-view 세션마다 한 번. 그 세션이 끝나면 아직 떠 있을 때만 걷는다 (F-306 11.2)
-  const offlineViewNoticeRef = useRef<{ seq: number; id: number } | null>(null)
+  // N7 — offline-view 세션마다 한 번. 그 세션이 끝나거나 다른 문서로 옮기면 아직 떠 있을 때만 걷는다 (F-306 11.2)
+  const offlineViewNoticeRef = useRef<{ key: string; id: number } | null>(null)
+  const offlineViewSeenRef = useRef(new Set<string>())
   useEffect(() => {
     const shown = offlineViewNoticeRef.current
-    if (isOfflineView && shown?.seq !== docSession.seq) {
+    if (isOfflineView && shown?.key !== sessionKey && !offlineViewSeenRef.current.has(sessionKey)) {
       if (shown) dismissNotice(shown.id)
-      offlineViewNoticeRef.current = { seq: docSession.seq, id: showNotice({ type: 'warn', message: LIVE_NOTICE.offlineView }) }
-    } else if (!isOfflineView && shown) {
+      offlineViewSeenRef.current.add(sessionKey)
+      offlineViewNoticeRef.current = { key: sessionKey, id: showNotice({ type: 'warn', message: LIVE_NOTICE.offlineView }) }
+    } else if ((!isOfflineView || shown?.key !== sessionKey) && shown) {
       dismissNotice(shown.id)
       offlineViewNoticeRef.current = null
     }
-  }, [isOfflineView, docSession.seq, showNotice, dismissNotice])
+  }, [isOfflineView, sessionKey, showNotice, dismissNotice])
 
   return { showSaveAsNewNotice }
 }

@@ -17,7 +17,7 @@ import { parseHash, type HashRoute } from './hashRoute'
 import { stripContent, sortByUpdatedAtDesc, type DocMeta } from './docMeta'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { ACCOUNT_CONFIRM_WAIT_MS, canShowCachedShell, canStartBeforeAccount, judgeEarlyAccount, mergeBootList, shouldApplyListResult } from './bootList'
-import type { DocPathKind } from './docPath'
+import type { DocUnit } from './docUnit'
 import { createLiveDocController } from './liveDoc'
 import { leaveScreens } from './leaveScreens'
 import { flushUnsyncedDocs, type FlushDocDeps } from './yjsFlush'
@@ -43,7 +43,7 @@ export type BootDeps = {
   setTrashOpen: Dispatch<SetStateAction<boolean>>
   setMapRoute: Dispatch<SetStateAction<{ centerDocId: string | null; returnDocId: string | null } | null>>
   closeLocalFile: () => void
-  setDeletedElsewhereId: Dispatch<SetStateAction<string | null>>
+  setDeletedElsewhereIds: Dispatch<SetStateAction<ReadonlySet<string>>>
   showNotice: (input: NoticeWithAction) => number
   beforeLeaveDoc: () => Promise<void>
   applyAccountFlags: (next: AccountState) => void
@@ -53,7 +53,8 @@ export type BootDeps = {
   addOpenFolders: (ids: string[] | null | undefined) => void
   openSharedFragment: (fragment: string, docsForFallback: DocMeta[]) => Promise<void>
   keepLiveTitle: (list: DocMeta[]) => DocMeta[]
-  restartDocSessionAfterFlush: () => Promise<void>
+  // 칸에 뜬 문서 묶음 — 지워짐·금고 경로 바뀜을 모든 칸 문서에서 본다 (F-2163 7장)
+  paneUnitsRef: RefObject<readonly DocUnit[]>
   postTabMessage: (m: TabMessage) => void
   replaceHashUrl: (docId: string | null) => void
   yjsStoreRef: RefObject<Promise<YjsStore | null>>
@@ -68,7 +69,6 @@ export type BootDeps = {
   bootListSeqRef: RefObject<number>
   lastAppliedListSeqRef: RefObject<number>
   deletedElsewhereSourceRef: RefObject<'tab' | 'bootMerge'>
-  docPathRef: RefObject<{ docId: string | null; path: DocPathKind | null }>
   e2eeConvertBusyRef: RefObject<boolean>
 }
 
@@ -120,9 +120,9 @@ export function decideBootRoute({ hash: parsedHash, docs: metaList, lastDocId, s
 export async function runBoot(deps: BootDeps): Promise<void> {
   const {
     setBootPhase, setDbBlockedMessage, setStore, setDocs, setFolders, setCurrentDocId, setForbiddenDocIds, setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen,
-    setMapRoute, closeLocalFile, setDeletedElsewhereId, showNotice, beforeLeaveDoc, applyAccountFlags, setAccountPending, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
-    restartDocSessionAfterFlush, postTabMessage, replaceHashUrl, yjsStoreRef, e2eeStoreRef, e2eeRef, tabIdRef, createdHereRef, currentDocIdRef, focusEditorRef,
-    foldersRef, commentsRef, bootListSeqRef, lastAppliedListSeqRef, deletedElsewhereSourceRef, docPathRef, e2eeConvertBusyRef,
+    setMapRoute, closeLocalFile, setDeletedElsewhereIds, showNotice, beforeLeaveDoc, applyAccountFlags, setAccountPending, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
+    paneUnitsRef, postTabMessage, replaceHashUrl, yjsStoreRef, e2eeStoreRef, e2eeRef, tabIdRef, createdHereRef, currentDocIdRef, focusEditorRef,
+    foldersRef, commentsRef, bootListSeqRef, lastAppliedListSeqRef, deletedElsewhereSourceRef, e2eeConvertBusyRef,
   } = deps
   // 공개 보기 화면(F-210.md 2.4, F-211.md 2.3) — 저장소를 열지 않는다. render 는 publicRoute 로 갈린다
   const bootHashType = parseHash(location.hash).type
@@ -364,18 +364,10 @@ export async function runBoot(deps: BootDeps): Promise<void> {
     })
     const merged = applied.merged
     if (!merged) return
-    const openId = currentDocIdRef.current
-    if (openId && merged.removedIds.includes(openId)) {
-      deletedElsewhereSourceRef.current = 'bootMerge'
-      setDeletedElsewhereId(openId)
-    }
-    // 다른 곳이 지금 문서를 금고로 옮기거나 뺐으면 새 세션으로 다시 연다 (F-407 7.4, resyncFromStore 와 같은 조건)
-    const opened = openId ? merged.docs.find((d) => d.id === openId) : undefined
-    const session = docPathRef.current
-    const syncedPath = session.path === 'realtime' || session.path === 'pending' || session.path === 'fallback' || session.path === 'e2ee'
-    if (resolvedStore.kind === 'server' && opened && session.docId === openId && syncedPath && !e2eeConvertBusyRef.current) {
-      if (Boolean(opened.e2ee) !== (session.path === 'e2ee')) void restartDocSessionAfterFlush()
-    }
+    applyMergedToPanes({
+      merged, units: paneUnitsRef.current, serverStore: resolvedStore.kind === 'server', convertBusy: e2eeConvertBusyRef.current,
+      source: 'bootMerge', sourceRef: deletedElsewhereSourceRef, setDeletedElsewhereIds,
+    })
   }
 
   // 뒤 맞추기 — 서버 요약으로 캐시 목록을 맞춘다. 실패해도 새 알림은 없다(캐시를 그대로 둔다) (F-2042 4.2·4.7, F-2133 4.2)
@@ -474,6 +466,28 @@ export async function runBoot(deps: BootDeps): Promise<void> {
     setDocs(metaList)
 
     await finishBootRouting(metaList, folderList)
+  }
+}
+
+// 목록에서 빠진 칸 문서는 지워짐으로, 다른 곳이 금고로 옮기거나 뺀 칸 문서는 새 세션으로 다시 연다 (F-407 7.4, F-2163 7장)
+export function applyMergedToPanes(i: {
+  merged: { docs: DocMeta[]; removedIds: string[] }
+  units: readonly DocUnit[]
+  serverStore: boolean
+  convertBusy: boolean
+  source: 'tab' | 'bootMerge'
+  sourceRef: RefObject<'tab' | 'bootMerge'>
+  setDeletedElsewhereIds: Dispatch<SetStateAction<ReadonlySet<string>>>
+}): void {
+  const removed = i.units.flatMap((u) => (u.docId !== null && i.merged.removedIds.includes(u.docId) ? [u.docId] : []))
+  if (removed.length > 0) {
+    i.sourceRef.current = i.source
+    i.setDeletedElsewhereIds((prev) => new Set([...prev, ...removed]))
+  }
+  for (const u of i.units) {
+    const opened = u.docId === null ? undefined : i.merged.docs.find((d) => d.id === u.docId)
+    const synced = u.docPath === 'realtime' || u.docPath === 'pending' || u.docPath === 'fallback' || u.docPath === 'e2ee'
+    if (i.serverStore && opened && synced && !i.convertBusy && Boolean(opened.e2ee) !== (u.docPath === 'e2ee')) void u.restartAfterFlush()
   }
 }
 

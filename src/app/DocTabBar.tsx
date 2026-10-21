@@ -9,7 +9,7 @@ const DRAG_TYPE = 'application/x-doc-tab'
 
 type Drop = { key: string; side: 'before' | 'after' } | null
 
-export default function DocTabBar({ state, onActivate, onPin, onClose, onCloseOthers, onCloseRight, onMove, onNew }: DocTabBarProps) {
+export default function DocTabBar({ state, onActivate, onPin, onClose, onCloseOthers, onCloseRight, onMove, onNew, splitMenu }: DocTabBarProps) {
   const [menu, setMenu] = useState<{ key: string; point: { x: number; y: number } } | null>(null)
   const [dragKey, setDragKey] = useState<string | null>(null)
   const [drop, setDrop] = useState<Drop>(null)
@@ -21,10 +21,18 @@ export default function DocTabBar({ state, onActivate, onPin, onClose, onCloseOt
     el?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }, [state.active])
 
+  // 나누기는 결과가 배치 안일 때만, 칸 닫기는 2칸 이상일 때만 보인다 (F-2163 5장)
   const menuItems: FolderMenuItem[] = menu
     ? [
         { key: 'close-others', label: '다른 탭 닫기', onSelect: () => onCloseOthers(menu.key) },
         { key: 'close-right', label: '오른쪽 탭 닫기', onSelect: () => onCloseRight(menu.key) },
+        ...(splitMenu
+          ? [
+              ...(splitMenu.canSplit(menu.key, 'right') ? [{ key: 'split-right', label: '오른쪽에 분할', onSelect: () => splitMenu.onSplit(menu.key, 'right') }] : []),
+              ...(splitMenu.canSplit(menu.key, 'down') ? [{ key: 'split-down', label: '아래에 분할', onSelect: () => splitMenu.onSplit(menu.key, 'down') }] : []),
+              ...(splitMenu.onClosePane ? [{ key: 'close-pane', label: '칸 닫기', onSelect: splitMenu.onClosePane }] : []),
+            ]
+          : []),
       ]
     : []
 

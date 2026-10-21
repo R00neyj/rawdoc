@@ -32,14 +32,16 @@ import { E2EE_NOTICE } from './appNotices'
 import { stripContent, isSharedDoc, sortByUpdatedAtDesc, type DocMeta } from './docMeta'
 import { resolveInitialDoc } from './resolveInitialDoc'
 import { shouldApplyListResult } from './bootList'
-import { runBoot, startFlushRunner } from './bootFlow'
+import { applyMergedToPanes, runBoot, startFlushRunner } from './bootFlow'
 import { mergeResyncList } from './resyncList'
 import { combineCachedList, createCachedListSource, createListRefresher, hasLiveChangesSince, isListStale, waitFirstServerList } from './cachedList'
 import type { DocPathKind } from './docPath'
 import type { LiveDocSession } from './useLiveDoc'
 import { useLiveNotices } from './useLiveNotices'
 import { useDocUnits } from './useDocUnits'
-import type { DocUnitHost } from './docUnit'
+import type { DocUnit, DocUnitHost } from './docUnit'
+import { docReadOnly, unitPanes } from './paneRules'
+import { usePaneHost } from './usePaneHost'
 import { liveStatusOf, type LiveSnapshot } from './liveDoc'
 import { newTabId } from './tabSync'
 import { useTabSync } from './useTabSync'
@@ -66,7 +68,7 @@ import AppTopBar from './AppTopBar'
 import { useViewportFit } from './useViewportFit'
 import type { OutlineControl } from './Outline'
 import AppScreens from './AppScreens'
-import DocumentArea from './DocumentArea'
+import SplitPanes from './SplitPanes'
 import AppDialogs from './AppDialogs'
 import ImportFileInputs from './ImportFileInputs'
 import Sidebar, { type SharedDocLike, type SidebarCommands } from './Sidebar'
@@ -124,7 +126,7 @@ import { isMacPlatform } from './shortcutCatalog'
 import PublicView from './PublicView'
 import type { InviteTarget } from './InviteDialog'
 import { mapIndexScope } from './mapIndex'
-import { useDocTabs } from './useDocTabs'
+import { useDocTabs, usePaneStore } from './useDocTabs'
 import { useDocumentTitle } from './useDocumentTitle'
 import DocTabBar from './DocTabBar'
 import type { Doc, Folder, LineEnding, Store } from '../types'
@@ -162,8 +164,8 @@ export default function App() {
   const [docs, setDocs] = useState<DocMeta[]>([])
   const [folders, setFolders] = useState<Folder[]>([]) // F-126
   const [currentDocId, setCurrentDocId] = useState<string | null>(null)
-  // 지금 연 문서가 다른 탭에서 지워졌을 때의 그 문서 id (F-296.md 7.3) — currentDocId 가 바뀌면 되돌린다
-  const [deletedElsewhereId, setDeletedElsewhereId] = useState<string | null>(null)
+  // 칸에 뜬 문서 중 다른 탭에서 지워진 것 (F-296.md 7.3) — 문서가 모든 칸에서 빠지면 걷는다 (F-2163 7장)
+  const [deletedElsewhereIds, setDeletedElsewhereIds] = useState<ReadonlySet<string>>(() => new Set())
   // deletedElsewhereId 를 어디서 찾았나 — 문구 갈래에 쓴다(6장). 기본은 다른 탭 신호(F-296) (F-2042 6장)
   const deletedElsewhereSourceRef = useRef<'tab' | 'bootMerge'>('tab')
   // 부팅 캐시 먼저 셸의 뒤 맞추기·금고 열림 목록이 서로 늦게 도착해 엇갈리지 않게 순번을 매긴다 (F-2042 4.3)
@@ -195,7 +197,9 @@ export default function App() {
   const [inviteTarget, setInviteTarget] = useState<InviteTarget>(null)
   // edit 권한 문서가 서버에서 403 을 받아 이번 세션 동안 읽기 전용으로 내려간 문서 id (F-212.md 2.4)
   const [forbiddenDocIds, setForbiddenDocIds] = useState<Set<string>>(() => new Set())
-  const [viewMode, setViewMode] = useState(readInitialViewMode)
+  // 칸 상태 — viewMode 는 포커스 칸 값이다 (F-2163, F-2159 Q2)
+  const paneStore = usePaneStore(readInitialViewMode)
+  const { viewMode, setViewMode } = paneStore
   const [stats, setStats] = useState<Stats>({ line: 1, col: 1, charCount: 0, wordCount: 0 })
   // 보기 모드 변환 결과 HTML — 변환 시점(전환 시·문서를 열 때)에만 1회 만드는 파생값이다 (F-123.md 3.3)
   const [viewerHtml, setViewerHtml] = useState('')
@@ -369,9 +373,6 @@ export default function App() {
   // ----- 후원 알림 띠 (small 2026-10-11) -----
   useDonatePrompt({ ready: bootPhase === 'ready', isPublic: publicRoute !== null, noticeVisible: notice !== null, showNotice, dismissNotice })
 
-  // view 권한 문서이거나(F-212.md 2.4), edit 권한 문서가 403 으로 강등됐거나, 계정이 막혔으면 읽기 전용 (F-2030 5.2)
-  const isReadOnlyByRole =
-    currentDoc?.role === 'view' || (currentDocId != null && forbiddenDocIds.has(currentDocId)) || (store.kind === 'server' && accountBlocked)
   // owner 문서(내 문서, role 없음 또는 'owner')이고 서버 저장소일 때만 초대할 수 있다 (F-212.md 2.5)
   const canInviteCurrentDoc =
     store.kind === 'server' && Boolean(currentDoc) && !isSharedDoc(currentDoc) && !sharedDoc
@@ -386,8 +387,9 @@ export default function App() {
   const createdHereRef = useRef<Set<string>>(new Set())
   // 문서 id → 이 탭이 본 마지막 실시간 변경 시각 — 검색·지도가 서버 목록을 기다릴지 가른다 (F-2056 6.3)
   const liveChangedAtRef = useRef(new Map<string, number>())
-  // 다른 탭 신호의 다시 열기가 포커스 문서 묶음의 재시작을 부른다 — 묶음은 useTabSync 아래에서 만들어진다 (F-2160)
-  const restartAfterFlushRef = useRef(async () => {})
+  // 다른 탭 신호·뒤 맞추기가 모든 칸 문서 묶음을 본다 — 묶음은 useTabSync 아래에서 만들어진다 (F-2163 7장)
+  const paneUnitsRef = useRef<readonly DocUnit[]>([])
+  const paneUnits = useCallback(() => paneUnitsRef.current, [])
 
   // 탭마다 한 번 — 메모리에만 둔다 (F-296.md 6.1)
   const [tabId] = useState(newTabId)
@@ -416,18 +418,10 @@ export default function App() {
       })
       const merged = applied.merged
       if (!merged) return
-      const openId = currentDocIdRef.current
-      if (openId && merged.removedIds.includes(openId)) {
-        deletedElsewhereSourceRef.current = input.deletedSource
-        setDeletedElsewhereId(openId)
-      }
-      // 다른 탭이 지금 문서를 금고로 옮기거나 뺐으면 새 세션으로 다시 연다 — 옛 실시간 세션에 머물지 않게 (F-407 7.4)
-      const opened = openId ? merged.docs.find((d) => d.id === openId) : undefined
-      const session = docPathRef.current
-      const syncedPath = session.path === 'realtime' || session.path === 'pending' || session.path === 'fallback' || session.path === 'e2ee'
-      if (store.kind === 'server' && opened && session.docId === openId && syncedPath && !e2eeConvertBusyRef.current) {
-        if (Boolean(opened.e2ee) !== (session.path === 'e2ee')) void restartAfterFlushRef.current()
-      }
+      applyMergedToPanes({
+        merged, units: paneUnitsRef.current, serverStore: store.kind === 'server', convertBusy: e2eeConvertBusyRef.current,
+        source: input.deletedSource, sourceRef: deletedElsewhereSourceRef, setDeletedElsewhereIds,
+      })
     },
     [store, keepLiveTitle],
   )
@@ -531,16 +525,16 @@ export default function App() {
     e2eeRef.current = e2ee
   }, [e2ee])
 
-  // ----- 문서마다 묶음 — 칸은 하나, 포커스 묶음 값을 지금 이름 그대로 푼다 (F-2160) -----
+  // ----- 문서마다 묶음 — 칸 활성 문서마다, 포커스 묶음 값을 지금 이름 그대로 푼다 (F-2160, F-2163) -----
   const docUnitHostRef = useRef<DocUnitHost>({ getText: () => '', getComments: () => null, onSaved: () => {}, onSaveError: () => {} })
-  const { unitFor, flushAll } = useDocUnits([{ docId: currentDocId }], {
-    store, docs, setDocs, sharedDoc, forbiddenDocIds, setForbiddenDocIds, accountBlocked, bootPhase, sessionPhase, convertingDocId, deletedElsewhereId,
+  const { units, unitFor, flushAll } = useDocUnits(unitPanes(paneStore.state.split, currentDocId), {
+    store, docs, setDocs, sharedDoc, forbiddenDocIds, setForbiddenDocIds, accountBlocked, bootPhase, sessionPhase, convertingDocId, deletedElsewhereIds,
     e2eeStatus: e2ee?.status ?? null, yjsStoreRef, createdHereRef, liveChangedAtRef, focusEditorRef, claimHub, focusDocId: currentDocId, setStats, showNotice,
   }, docUnitHostRef)
   const focus = unitFor(currentDocId)
   const {
-    session: docSession, docPath, isRealtime, restart: restartDocSession, restartAfterFlush: restartDocSessionAfterFlush, live: liveSession, liveSnapshot,
-    livePeers, liveStopped, isOfflineView, liveRoomDoc, openDoc, setOpenDoc, remountNonce, reload, claimReadOnly, saver: docSaver,
+    session: docSession, docPath, isRealtime, restart: restartDocSession, live: liveSession, liveSnapshot,
+    livePeers, isOfflineView, liveRoomDoc, openDoc, remountNonce, reload, saver: docSaver,
   } = focus
 
   // ----- 실시간 알림 띠 N1~N10·오프라인 보기 알림 (F-2070) -----
@@ -553,7 +547,7 @@ export default function App() {
   const e2eeResetStepRef = useRef<() => Promise<void>>(async () => {})
   // ----- 금고 이관·잠그기·초기화 (F-2073) -----
   const { e2eeMigrateDialogOpen, setE2eeMigrateDialogOpen, runE2eeMigrateFlow, e2eeUnmountedDocId, runE2eeReset } = useE2eeMigrate({
-    store, bootPhase, account, e2ee, currentDocId, showNotice, dismissNotice, resyncFromStore, setDocs, setOpenDoc, setViewerHtml, setCurrentDocId,
+    store, bootPhase, account, e2ee, currentDocId, showNotice, dismissNotice, resyncFromStore, setDocs, paneUnits, setViewerHtml, setCurrentDocId,
     replaceHashUrl, e2eeRef, docsRef, foldersRef, currentDocIdRef, docSaverFlushRef, titleSavingRef, e2eeStoreRef, e2eeResetStepRef,
   })
 
@@ -581,31 +575,31 @@ export default function App() {
     })
   }, [e2ee?.status, bootPhase, store, keepLiveTitle])
 
-  const isDeletedElsewhere = currentDocId != null && deletedElsewhereId === currentDocId
-  const isConvertingDoc = convertingDocId !== null && convertingDocId === currentDocId
-  const isReadOnlyDoc =
-    isReadOnlyByRole ||
-    claimReadOnly ||
-    isDeletedElsewhere ||
-    liveStopped ||
-    isOfflineView ||
-    isConvertingDoc ||
-    (isRealtime && docSession.readOnly)
+  // view 권한·403 강등·계정 막힘(F-212 2.4, F-2030 5.2), 편집권·지워짐·멈춤·옮기는 중 — 칸마다 그 묶음으로 (F-2163 2장)
+  const readOnlyOf = (u: DocUnit) => docReadOnly({
+    roleReadOnly: u.meta?.role === 'view' || (u.docId !== null && forbiddenDocIds.has(u.docId)) || (store.kind === 'server' && accountBlocked),
+    claimReadOnly: u.claimReadOnly, deleted: u.docId !== null && deletedElsewhereIds.has(u.docId), liveStopped: u.liveStopped, offlineView: u.isOfflineView,
+    converting: convertingDocId !== null && convertingDocId === u.docId, liveReadOnly: u.isRealtime && u.session.readOnly,
+  })
+  const isReadOnlyDoc = readOnlyOf(focus)
   // 본문 맨 위 제목 읽기 전용 — 상단바 옛 제목 입력의 disabled·readOnly 조건을 하나로 합친다 (F-217.md 2.4)
   const titleReadOnly = isReadOnlyDoc || viewMode === 'view' || Boolean(sharedDoc)
 
-  // ----- 댓글 (F-505 3장·4장·11.1) -----
-  const commentAccessValue = computeCommentAccess({
+  // ----- 댓글 (F-505 3장·4장·11.1) — 접근 판정은 칸마다 그 묶음으로 -----
+  const commentAccessOf = (u: DocUnit) => computeCommentAccess({
     storeKind: store.kind,
-    docPath,
-    e2ee: currentDoc?.e2ee !== undefined || docPath === 'e2ee',
+    docPath: u.docPath,
+    e2ee: u.meta?.e2ee !== undefined || u.docPath === 'e2ee',
     sharedScreen: Boolean(sharedDoc),
-    role: currentDoc?.role,
+    role: u.meta?.role,
     account: account.state === 'in' ? { id: account.id, email: account.email, blocked: accountBlocked } : null,
-    readOnly: isReadOnlyDoc,
-    liveReadOnly: isRealtime && docSession.readOnly,
-    livePhase: liveSnapshot?.phase ?? null,
+    readOnly: readOnlyOf(u),
+    liveReadOnly: u.isRealtime && u.session.readOnly,
+    livePhase: u.liveSnapshot?.phase ?? null,
   })
+  const commentAccessValue = commentAccessOf(focus)
+  // ----- 칸 편집기 등록부·창 안 원본·포커스 칸 게시 (F-2163 3·6장) -----
+  const paneHost = usePaneHost({ setEditorRefs, viewerRef, contentAreaRef, scrollAnchorRef, viewMode, renderViewer: () => renderViewer() })
   const commentsMountKey = currentDocId !== null && openDoc?.id === currentDocId ? `${currentDocId}:${remountNonce}` : null
   const comments = useDocComments({
     containerRef: contentAreaRef,
@@ -623,6 +617,7 @@ export default function App() {
         ? {
             load: (docId) => store.getCommentRecords?.(docId) ?? Promise.resolve([]),
             onChange: () => notifyCommentsChangeRef.current(),
+            hasSource: (docId) => paneHost.sources.source(docId) !== null,
           }
         : undefined,
   })
@@ -645,18 +640,16 @@ export default function App() {
   // ----- 템플릿 목록·원문 읽기·새 문서 본문 (F-2078) -----
   const { templateEntries, readTemplateDocText, buildNewDocContent, buildContentFromTemplate } = useNewDocTemplate({ store, docs, folders, currentDocIdRef, editorRef })
 
-  // 문서를 바꾸면 지워짐 상태를 되돌린다 — 렌더 중 상태를 맞추는 공식 패턴 (F-296.md 7.3, useDocSaver.ts trackedDocId 와 같은 방식)
-  const [deletedElsewhereTrackedDocId, setDeletedElsewhereTrackedDocId] = useState(currentDocId)
-  if (currentDocId !== deletedElsewhereTrackedDocId) {
-    setDeletedElsewhereTrackedDocId(currentDocId)
-    setDeletedElsewhereId(null)
-  }
+  // 지워짐은 문서가 모든 칸에서 빠질 때 걷는다 — 포커스만 옮겨서는 안 걷는다, 렌더 중 상태를 맞추는 공식 패턴 (F-296.md 7.3, F-2163 7장)
+  const shownDocIds = units.flatMap((u) => (u.docId === null ? [] : [u.docId]))
+  if ([...deletedElsewhereIds].some((id) => !shownDocIds.includes(id))) setDeletedElsewhereIds(new Set([...deletedElsewhereIds].filter((id) => shownDocIds.includes(id))))
 
-  // 다른 탭에서 지워졌을 때·부팅 뒤 맞추기로 찾았을 때 오류 알림 + `새 문서로 저장` — 같은 문서로는 1회만 (F-296.md 7.3, F-2042 6장)
-  const notifiedDeletedElsewhereRef = useRef<string | null>(null)
+  // 다른 탭에서 지워졌을 때·부팅 뒤 맞추기로 찾았을 때 오류 알림 + `새 문서로 저장` — 그 문서가 포커스가 될 때 한 번 (F-296.md 7.3, F-2042 6장, F-2163 7장)
+  const notifiedDeletedElsewhereRef = useRef(new Set<string>())
+  const deletedElsewhereId = currentDocId !== null && deletedElsewhereIds.has(currentDocId) ? currentDocId : null
   useEffect(() => {
-    if (!deletedElsewhereId || notifiedDeletedElsewhereRef.current === deletedElsewhereId) return
-    notifiedDeletedElsewhereRef.current = deletedElsewhereId
+    if (!deletedElsewhereId || notifiedDeletedElsewhereRef.current.has(deletedElsewhereId)) return
+    notifiedDeletedElsewhereRef.current.add(deletedElsewhereId)
     showSaveAsNewNotice(deletedElsewhereId, {
       type: 'error',
       message:
@@ -742,9 +735,9 @@ export default function App() {
 
     runBoot({
       setBootPhase, setDbBlockedMessage, setStore, setDocs, setFolders, setCurrentDocId, setForbiddenDocIds, setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen,
-      setMapRoute, closeLocalFile: localFile.closeLocalFile, setDeletedElsewhereId, showNotice, beforeLeaveDoc, applyAccountFlags, setAccountPending, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
-      restartDocSessionAfterFlush, postTabMessage, replaceHashUrl, yjsStoreRef, e2eeStoreRef, e2eeRef, tabIdRef, createdHereRef, currentDocIdRef, focusEditorRef,
-      foldersRef, commentsRef, bootListSeqRef, lastAppliedListSeqRef, deletedElsewhereSourceRef, docPathRef, e2eeConvertBusyRef,
+      setMapRoute, closeLocalFile: localFile.closeLocalFile, setDeletedElsewhereIds, showNotice, beforeLeaveDoc, applyAccountFlags, setAccountPending, recheckAccount, addOpenFolders, openSharedFragment, keepLiveTitle,
+      paneUnitsRef, postTabMessage, replaceHashUrl, yjsStoreRef, e2eeStoreRef, e2eeRef, tabIdRef, createdHereRef, currentDocIdRef, focusEditorRef,
+      foldersRef, commentsRef, bootListSeqRef, lastAppliedListSeqRef, deletedElsewhereSourceRef, e2eeConvertBusyRef,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -905,16 +898,18 @@ export default function App() {
       if (anchor !== null) scrollAnchorRef.current = { docId: currentDocId, anchor }
     }
     // 5.2a — 보기로 갈 때 변환을 여기서 한다. passive effect(1050행대)에 맡기면 복원 시점에 편집 전 옛 HTML 로 좌표를 잰다
-    if (v === 'view' && editorRef.current) {
-      setViewerHtml(
-        renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true, resolveImagePath: githubImages.resolveImagePath ?? undefined }),
-      )
-      setViewerDocId(currentDocId)
-    }
+    if (v === 'view') renderViewer()
 
     setViewMode(v)
     setPref('md.viewMode', v)
     editorRef.current?.setViewMode(v)
+  }
+
+  // 포커스 칸 편집기 본문으로 보기 HTML — 모드 전환과 칸 포커스 옮김(usePaneHost)이 같이 쓴다 (F-2163 3장)
+  function renderViewer() {
+    if (!editorRef.current) return
+    setViewerHtml(renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true, resolveImagePath: githubImages.resolveImagePath ?? undefined }))
+    setViewerDocId(currentDocId)
   }
 
   // 상단바 `댓글` 버튼과 Ctrl+M 이 같이 쓴다
@@ -938,8 +933,8 @@ export default function App() {
   useEffect(() => {
     docSaverFlushRef.current = flushAll
     docUnitHostRef.current = {
-      getText: (docId, lineEnding) => (docId === currentDocId ? (editorRef.current?.getText(lineEnding) ?? '') : ''),
-      getComments: (docId) => (docId === currentDocId ? comments.localCommentRecords() : null),
+      getText: paneHost.getText,
+      getComments: (docId) => paneHost.getComments(docId, unitFor(docId).docPath === 'local') ?? (docId === currentDocId ? comments.localCommentRecords() : null),
       onSaved: handleDocSaved,
       onSaveError: handleSaveError,
     }
@@ -978,12 +973,14 @@ export default function App() {
     localFileOpen: localFile.session !== null, closeLocalFile: localFile.closeLocalFile,
     wikiResolver, currentFolderId, jumpToHeading, buildNewDocContent, beforeLeaveDoc, showNotice, changeViewMode, closePalette,
     closeSidebarIfNarrow, addOpenFolders, newDocFolderId, ensureE2eeOpenForFolder, requestE2eeOpen, setDocs, setCurrentDocId,
-    setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute, setDeletedElsewhereId, setNotice, setSearchOpen, setPendingEditorSearch,
+    // 지워짐은 문서가 모든 칸에서 빠질 때 걷힌다 — 새 문서로 저장이 따로 걷지 않는다 (F-2163 7장)
+    setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute, setDeletedElsewhereId: () => {}, setNotice, setSearchOpen, setPendingEditorSearch,
     editorRef, focusTitleRef, focusEditorRef, pendingJumpRef, openDocIdRef,
   })
   const docTabs = useDocTabs({
-    narrow, ready: bootPhase === 'ready', scope: searchScope(store.kind, store.kind === 'server' ? (store as ServerStore).userId : null), docs, currentDocId, openDocId: openDoc?.id ?? null,
-    editorHandle, viewMode, viewerRef, viewerDocId, pendingJumpRef, leaveRef: docTabLeaveRef, selectDoc, goHome, createNewDoc, notify: (message) => showNotice({ type: 'info', message }),
+    paneStore: paneStore.store, narrow, ready: bootPhase === 'ready', scope: searchScope(store.kind, store.kind === 'server' ? (store as ServerStore).userId : null), docs, currentDocId,
+    openDocId: openDoc?.id ?? null, editorHandle, viewMode, viewerRef, viewerDocId, pendingJumpRef, leaveRef: docTabLeaveRef, focusEditorRef, beforeLeave: beforeLeaveDoc,
+    focusPaneEditor: paneHost.focusEditor, selectDoc, goHome, createNewDoc, notify: (message) => showNotice({ type: 'info', message }),
   })
   useDocumentTitle(localFile.session?.name ?? currentDoc?.title ?? null)
 
@@ -994,7 +991,7 @@ export default function App() {
     docPathRef.current = { docId: currentDocId, path: docPath }
     liveSessionRef.current = liveSession
     liveTitleDocIdRef.current = liveRoomDoc && liveSession ? liveSession.docId : null
-    restartAfterFlushRef.current = restartDocSessionAfterFlush
+    paneUnitsRef.current = units.filter((u) => u.docId !== null)
     saveCurrentAsNewDocRef.current = saveCurrentAsNewDoc
     foldersRef.current = folders
     sharedDocRef.current = sharedDoc
@@ -1225,7 +1222,7 @@ export default function App() {
     handleExportDocAsHtml, handleCopyDocAsRichText, handlePrintDoc, requestImport, github: github.palette, handleTogglePin, requestMoveDoc, requestDeleteDoc,
     getShareDoc, requestInviteCurrentDoc, openSearch, openSettings, goHome, openMap, openHelp, createNewDoc, createNewBoard, createDocFromPalette,
     openDocFromSearch, newDocFolderId, changeViewMode, openTemplates: templateManager.openTemplates, kanban,
-    rightPanelOpen: rightPanel.open, toggleRightPanel: rightPanel.available ? rightPanel.togglePanel : undefined,
+    rightPanelOpen: rightPanel.open, toggleRightPanel: rightPanel.available ? rightPanel.togglePanel : undefined, panes: docTabs.palette,
   })
 
   // Ctrl+P·Ctrl+Shift+/ 가 매 커밋 최신 openPalette·toggleShortcuts 를 읽게 한다 (F-2080)
@@ -1384,12 +1381,13 @@ export default function App() {
             mapDialogScope, mapRoute, openHelp, openSharesTarget, ownedDocs, recenterMap, rejectRequestRow, requestImport, revokeShareGrantRow,
             revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc, sharesGrants, sharesLinks, sharesLoading, sharesOpen, sharesRequests, showNotice,
           }} />
-          {showEditor && <DocumentArea {...{
+          {(showEditor || docTabs.panes.keep) && <SplitPanes panes={docTabs.panes} {...{ paneHost, unitFor, readOnlyOf, commentAccessOf, viewerDocId }}
+            editorPrefs={{ lineNumbers: lineNumbersPref === 'on', indent: indentPref === '2' ? 2 : 4 }} area={{
             attachmentResolverFor, commentAccessValue, commentRailExtra, comments, contentAreaRef, contentWidthPref, currentBreadcrumb,
             currentDoc, currentDocId, currentFolderId, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef,
             editorScrollTop, editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles,
             handleOpenWikiLink, handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, jumpToLine, kanban,
-            mapRoute, mentionSource, onNavigateFolder, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme, unit: focus,
+            mapRoute, mentionSource, onNavigateFolder, outlineControlRef, openWikiLinkTarget, resolveAttachment, resolvedTheme,
             resolveImagePath: githubImages.resolveImagePath, resolveWikiHref,
             setCommentRailExtra, setEditorRefs, sharedDoc, sharesOpen, showNotice, store, titleReadOnly, viewerHtml: shownViewerHtml, viewerRef, viewFindCard: viewFind.card, viewMode,
             wikiContext, wikiPreviewPref, wikiResolver, openKanbanSettings,

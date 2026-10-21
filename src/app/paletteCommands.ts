@@ -274,6 +274,32 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
     },
     run: (ctx) => ctx.docActions?.current?.togglePin(),
   },
+  // ----- 화면 분할 (F-2163 5장) -----
+  {
+    id: 'pane.splitRight',
+    kind: 'action',
+    label: '오른쪽에 분할',
+    keywords: ['분할', 'split', '나누기', '칸', '오른쪽', '나란히', 'pane'],
+    when: (ctx) => Boolean(ctx.panes?.splitRight),
+    run: (ctx) => ctx.panes?.run('splitRight'),
+  },
+  {
+    id: 'pane.splitDown',
+    kind: 'action',
+    label: '아래에 분할',
+    keywords: ['분할', 'split', '나누기', '칸', '아래', 'pane'],
+    when: (ctx) => Boolean(ctx.panes?.splitDown),
+    run: (ctx) => ctx.panes?.run('splitDown'),
+  },
+  {
+    id: 'pane.close',
+    kind: 'action',
+    label: '칸 닫기',
+    shortcut: 'Ctrl+Shift+W',
+    keywords: ['칸 닫기', 'close pane', '분할 닫기', '칸', 'pane', '닫기'],
+    when: (ctx) => Boolean(ctx.panes?.close),
+    run: (ctx) => ctx.panes?.run('close'),
+  },
   {
     id: 'doc.move',
     kind: 'action',

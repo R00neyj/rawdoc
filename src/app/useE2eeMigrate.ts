@@ -8,7 +8,9 @@ import { purgeTrashDoc } from './trashApi'
 import { lockDocMetas, planE2eeReset, type E2eeStore } from '../e2ee/e2eeStore'
 import type { Folder, Store } from '../types'
 import type { AccountState } from './account'
-import type { DocMeta, OpenDoc } from './docMeta'
+import type { DocMeta } from './docMeta'
+import type { DocUnit } from './docUnit'
+import { openE2eeIds } from './paneRules'
 import type { NoticeWithAction } from './NoticeBar'
 import type { UseE2ee } from './useE2ee'
 
@@ -22,7 +24,8 @@ export type UseE2eeMigrateOptions = {
   dismissNotice: (id: number) => void
   resyncFromStore: () => Promise<void>
   setDocs: Dispatch<SetStateAction<DocMeta[]>>
-  setOpenDoc: Dispatch<SetStateAction<OpenDoc | null>>
+  // 칸에 뜬 문서 묶음 — 잠그기는 열린 금고 문서 칸을 모두 내린다 (F-2163 7장)
+  paneUnits: () => readonly DocUnit[]
   setViewerHtml: Dispatch<SetStateAction<string>>
   setCurrentDocId: Dispatch<SetStateAction<string | null>>
   replaceHashUrl: (docId: string | null) => void
@@ -68,7 +71,7 @@ function sharedMigrationDeps(userId: string, docsRef: RefObject<DocMeta[]>, fold
 
 export function useE2eeMigrate(options: UseE2eeMigrateOptions): UseE2eeMigrateResult {
   const {
-    store, bootPhase, account, e2ee, currentDocId, showNotice, dismissNotice, resyncFromStore, setDocs, setOpenDoc, setViewerHtml, setCurrentDocId,
+    store, bootPhase, account, e2ee, currentDocId, showNotice, dismissNotice, resyncFromStore, setDocs, paneUnits, setViewerHtml, setCurrentDocId,
     replaceHashUrl, e2eeRef, docsRef, foldersRef, currentDocIdRef, docSaverFlushRef, titleSavingRef, e2eeStoreRef, e2eeResetStepRef,
   } = options
   // 로그인 전 금고 이관 (F-408) — 판정은 페이지마다 한 번
@@ -175,24 +178,25 @@ export function useE2eeMigrate(options: UseE2eeMigrateOptions): UseE2eeMigrateRe
   const e2eeKeyring = e2ee?.keyring ?? null
   useEffect(() => {
     if (!e2eeKeyring) return undefined
-    const currentE2eeMeta = () => {
-      const id = currentDocIdRef.current
-      return id ? docsRef.current.find((d) => d.id === id) : undefined
+    // 칸에 뜬 열린 금고 문서 묶음 — 다른 칸의 열린 금고 본문도 남기지 않는다
+    const openE2eeUnits = () => {
+      const units = paneUnits()
+      const ids = openE2eeIds(units.map((u) => ({ docId: u.docId, meta: docsRef.current.find((d) => d.id === u.docId) ?? null })))
+      return units.filter((u) => u.docId !== null && ids.includes(u.docId))
     }
     const unFlush = e2eeKeyring.registerLockStep('flush', async () => {
-      if (currentE2eeMeta()?.e2ee !== 'open') return
+      if (openE2eeUnits().length === 0) return
       const saved = await docSaverFlushRef.current()
       const titleSaving = titleSavingRef.current
       if (titleSaving) await titleSaving
       if (!saved) throw new Error('e2ee_flush_failed')
     })
     const unUnmount = e2eeKeyring.registerLockStep('unmount', () => {
-      const meta = currentE2eeMeta()
-      if (meta?.e2ee === 'open') {
-        setE2eeUnmountedDocId(meta.id)
-        setOpenDoc(null)
-        setViewerHtml('')
-      }
+      const open = openE2eeUnits()
+      const focusId = currentDocIdRef.current
+      if (focusId !== null && open.some((u) => u.docId === focusId)) setE2eeUnmountedDocId(focusId)
+      open.forEach((u) => u.setOpenDoc(null))
+      if (open.length > 0) setViewerHtml('')
       setDocs((prev) => lockDocMetas(prev))
     })
     const unIndexes = e2eeKeyring.registerLockStep('indexes', () => e2eeStoreRef.current?.clearPlainCache())
@@ -203,7 +207,7 @@ export function useE2eeMigrate(options: UseE2eeMigrateOptions): UseE2eeMigrateRe
       unIndexes()
       unReset()
     }
-  }, [e2eeKeyring, currentDocIdRef, docsRef, docSaverFlushRef, titleSavingRef, setOpenDoc, setViewerHtml, setDocs, e2eeStoreRef, e2eeResetStepRef])
+  }, [e2eeKeyring, currentDocIdRef, docsRef, docSaverFlushRef, titleSavingRef, paneUnits, setViewerHtml, setDocs, e2eeStoreRef, e2eeResetStepRef])
 
   // 금고 초기화 단계 — 금고 문서·폴더를 지우고 서버에 닿기를 기다린다. 실패는 던진다 (F-405 7.9)
   async function runE2eeReset() {

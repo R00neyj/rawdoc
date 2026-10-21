@@ -254,6 +254,8 @@ export type UseDocCommentsInput = {
   localComments?: {
     load(docId: string): Promise<CommentRecord[]> // store.getCommentRecords
     onChange(): void // docSaver.notifyCommentsChange
+    // 창 안 원본이 있으면 칸 편집기 Doc 이 원본에서 댓글까지 받았다 — 다시 심지 않는다 (F-2163 6장 ⑤)
+    hasSource?: (docId: string) => boolean
   }
 }
 
@@ -422,7 +424,10 @@ export function useDocComments(input: UseDocCommentsInput): UseDocCommentsResult
     }
 
     const localOpt = localCommentsRef.current
-    if (localOpt) {
+    if (localOpt?.hasSource?.(mountKey.split(':')[0])) {
+      setLocalRestore({ mountKey, status: 'ready' })
+      doAttach()
+    } else if (localOpt) {
       const docId = mountKey.split(':')[0]
       setLocalRestore({ mountKey, status: 'pending' })
       localOpt

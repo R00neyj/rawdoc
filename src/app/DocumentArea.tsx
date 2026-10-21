@@ -3,6 +3,7 @@ import { usePhoneWidth } from './usePhoneWidth'
 import { floatCoverFor } from '../lib/floatCover'
 import type { EditorState } from '@codemirror/state'
 import Editor, { type EditorHandle } from '../editor/Editor'
+import type { PaneSources } from '../editor/paneSource'
 import Viewer from '../viewer/Viewer'
 import E2eeLockedPanel from './E2eeLockedPanel'
 import DocSkeleton from './DocSkeleton'
@@ -90,10 +91,14 @@ export type DocumentAreaProps = Pick<UseAppearancePrefsResult, 'contentWidthPref
     viewerRef: RefObject<HTMLDivElement | null>
     viewFindCard: ViewFindCardProps | null
     viewMode: 'live' | 'raw' | 'view'
+    // 포커스 칸만 목차·댓글 레일/판·떠 있는 버튼·보기 찾기를 그리고 첫 포커스를 받는다 (F-2163 3장)
+    focused: boolean
+    // 링크 없는 문서가 여러 칸에 뜨면 창 안 원본을 따른다 (F-2163 6장)
+    paneSources?: PaneSources
   }
 
 export default function DocumentArea({
-  attachmentResolverFor, commentAccessValue, commentRailExtra, comments, contentAreaRef, contentWidthPref, currentBreadcrumb, currentDoc,
+  attachmentResolverFor, commentAccessValue, commentRailExtra, comments, contentAreaRef, contentWidthPref, currentBreadcrumb, currentDoc, focused, paneSources,
   currentDocId, currentFolderId, docs, e2ee, e2eeListSyncedFor, e2eeUnmountedDocId, editorRef, editorScrollTop,
   editorViewportH, floatingCommentAnchor, focusEditorRef, focusTitleRef, handleDocChange, handleImageFiles, handleOpenWikiLink,
   handleSelectionChange, handleTitleChange, handleTitleCommit, handleViewContextMenu, helpOpen, isReadOnlyDoc, jumpToLine, kanban, mapRoute,
@@ -126,8 +131,8 @@ export default function DocumentArea({
   const boardFocusRef = useRef<KanbanBoardFocus>(null)
   useLayoutEffect(() => {
     if (!editorMounted || !opensAsBoard) return
-    boardFocusRef.current = focusTitleRef.current ? 'title' : focusEditorRef.current && !phone ? 'board' : null
-  }, [editorMounted, opensAsBoard, currentDocId, editorRemountNonce, focusTitleRef, focusEditorRef, phone])
+    boardFocusRef.current = !focused ? null : focusTitleRef.current ? 'title' : focusEditorRef.current && !phone ? 'board' : null
+  }, [editorMounted, opensAsBoard, currentDocId, editorRemountNonce, focusTitleRef, focusEditorRef, phone, focused])
   const openStrayLine = (line: number) => {
     kanban.choose('source')
     // 편집기 자리가 다시 보인 뒤 옮겨야 포커스가 들어간다
@@ -135,7 +140,7 @@ export default function DocumentArea({
   }
 
   // 댓글 레일·판 보이는 조건 — 편집기가 보이고 접근이 none 이 아니고 편집·원문 모드일 때만 (F-505 5.1·6장)
-  const commentAvailable = editorMounted && !board && commentAccessValue.kind !== 'none' && (viewMode === 'live' || viewMode === 'raw')
+  const commentAvailable = focused && editorMounted && !board && commentAccessValue.kind !== 'none' && (viewMode === 'live' || viewMode === 'raw')
   const commentRailVisible = commentAvailable && comments.mode === 'rail' && comments.open
   const commentSheetVisible = commentAvailable && comments.mode === 'sheet' && comments.open
 
@@ -161,7 +166,7 @@ export default function DocumentArea({
             viewMode={viewMode}
             readOnly={isReadOnlyDoc}
             // eslint-disable-next-line react-hooks/refs -- 포커스 요청 플래그는 마운트 때 한 번 읽고 passive effect 가 소비한다
-            autoFocus={opensAsBoard ? false : focusTitleRef.current ? 'title' : focusEditorRef.current && !phone}
+            autoFocus={!focused || opensAsBoard ? false : focusTitleRef.current ? 'title' : focusEditorRef.current && !phone}
             onDocChange={handleDocChange}
             onSelectionChange={handleSelectionChange}
             wikiContext={wikiContext}
@@ -175,6 +180,7 @@ export default function DocumentArea({
             onTitleCommit={handleTitleCommit}
             docId={currentDocId ?? undefined}
             live={liveEditorOption}
+            paneSources={liveEditorOption ? undefined : paneSources}
           />
         )}
       </div>
@@ -205,7 +211,7 @@ export default function DocumentArea({
           key={currentDocId}
           keyring={e2ee.keyring}
           damaged={e2ee.status === 'open' && e2eeListSyncedFor === 'open'}
-          autoFocus={e2eeUnmountedDocId !== currentDocId}
+          autoFocus={focused && e2eeUnmountedDocId !== currentDocId}
           onOpened={handleE2eePanelOpened}
           onForgotPassword={e2ee.openSettingsDialogs.recover}
         />
@@ -225,7 +231,7 @@ export default function DocumentArea({
           onContextMenu={handleViewContextMenu}
         />
       )}
-      {viewMode === 'view' && !board && viewFindCard && <ViewFindCard {...viewFindCard} />}
+      {focused && viewMode === 'view' && !board && viewFindCard && <ViewFindCard {...viewFindCard} />}
       {/* 레일·판 여닫힘 전환 — 닫힌 뒤에도 전환 시간만큼 남긴다. 편집기가 사라지면(commentAvailable 거짓) 곧바로 뗀다 */}
       {commentAvailable && (
         <CommentPanelPresence open={commentRailVisible || commentSheetVisible}>
@@ -287,7 +293,7 @@ export default function DocumentArea({
             <IconAddComment size={18} />
           </button>
         )}
-      {editorMounted && !board && (
+      {focused && editorMounted && !board && (
         <Outline
           editorRef={editorRef}
           containerRef={contentAreaRef}

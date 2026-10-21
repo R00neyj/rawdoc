@@ -66,6 +66,9 @@ describe('PALETTE_COMMANDS — U3 (F-2022.md 11.1, F-404.md 9장 회귀, F-505 U
       'nav.settings',
       'doc.openNewTab',
       'doc.togglePin',
+      'pane.splitRight', // F-2163 화면 분할
+      'pane.splitDown',
+      'pane.close',
       'doc.move',
       'doc.exportMd',
       'doc.exportTxt',

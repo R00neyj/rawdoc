@@ -70,6 +70,8 @@ export type PaletteContext = {
       remove: () => void
     }
   }
+  // 화면 분할 나누기·칸 닫기 — 선택 필드. 설치 앱 넓은 화면에서만 준다 (F-2163 5장)
+  panes?: { splitRight: boolean; splitDown: boolean; close: boolean; run: (action: PaneCommand) => void }
   // 칸반 보드 보기 — 선택 필드. 없으면 `보드로 보기` 가 안 보인다 (F-2143 3장)
   kanban?: { shown: boolean; canShow: boolean; show: () => void }
   // GitHub 가져오기·새 파일·당기기·푸시 — 선택 필드. 기능이 켜졌을 때만 준다 (F-2128 6장)
@@ -116,6 +118,7 @@ export type PaletteContext = {
 
 export type PaletteScreen = 'doc' | 'home' | 'help' | 'trash' | 'map' | 'file' | 'shares' | 'sharedLink'
 export type PaletteViewMode = 'live' | 'raw' | 'view'
+export type PaneCommand = 'splitRight' | 'splitDown' | 'close'
 
 // 화면 하나로 정하기 — App 렌더 우선순위와 같다 (F-2054 4.2)
 export function paletteScreen(s: {
