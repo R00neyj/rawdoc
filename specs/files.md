@@ -227,6 +227,7 @@
 |`src/app/sidebarSelection.ts`|사이드바에서 여러 문서·폴더를 한꺼번에 고르는 규칙을 처리함|
 |`src/app/sidebarWidth.ts`|사이드바 너비를 허용 범위 안에서 조절하고 기억함|
 |`src/app/softKeyboard.ts`|휴대폰 화면 키보드가 열렸는지 알아냄|
+|`src/app/splitLayout.ts`|화면 분할 배치(2~4칸)의 나누기·닫기·칸 번호·비율 규칙과 저장값 읽고 쓰기를 정함|
 |`src/app/StatusBar.tsx`|화면 아래 상태바에 줄·칸 위치, 저장·동기화·실시간 연결 상태를 보여줌|
 |`src/app/tabSync.ts`|같은 브라우저의 여러 탭끼리 문서 상태를 맞춤|
 |`src/app/TemplateManagerDialog.tsx`|내 템플릿을 만들고 고치고 지우는 관리 창|

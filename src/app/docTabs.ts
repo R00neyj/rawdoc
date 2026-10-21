@@ -37,9 +37,10 @@ export function openTabCapped(
   s: DocTabsState,
   entry: { key: string; title: string; shared?: boolean },
   mode: OpenMode,
+  max = MAX_TABS,
 ): { state: DocTabsState; capped: boolean } {
   const next = openTab(s, entry, mode)
-  if (next.tabs.length <= MAX_TABS) return { state: next, capped: false }
+  if (next.tabs.length <= max) return { state: next, capped: false }
   const activeAt = s.tabs.findIndex((t) => t.key === s.active)
   const at = activeAt >= 0 ? activeAt : s.tabs.length - 1
   const tabs = s.tabs.slice()
@@ -126,7 +127,7 @@ export function chooseOpenMode(input: { key: string; pendingPinKey: string | nul
 
 type StoredMap = Record<string, unknown>
 
-function readMap(raw: string): StoredMap | null {
+export function readMap(raw: string): StoredMap | null {
   if (!raw) return {}
   try {
     const value: unknown = JSON.parse(raw)
@@ -136,23 +137,36 @@ function readMap(raw: string): StoredMap | null {
   }
 }
 
-export function parseStoredTabs(raw: string, scope: string): DocTabsState | null {
-  const entry = readMap(raw)?.[scope] as { tabs?: unknown; active?: unknown } | undefined
-  if (!entry || !Array.isArray(entry.tabs)) return null
+export function parseTabsEntry(entry: unknown): DocTabsState | null {
+  const e = entry as { tabs?: unknown; active?: unknown } | null | undefined
+  if (!e || typeof e !== 'object' || !Array.isArray(e.tabs)) return null
   const seen = new Set<string>()
   let previewSeen = false
   const tabs: DocTab[] = []
-  for (const item of entry.tabs as Array<Record<string, unknown>>) {
+  for (const item of e.tabs as Array<Record<string, unknown>>) {
     if (!item || typeof item.key !== 'string' || seen.has(item.key)) continue
     seen.add(item.key)
     const pinned = item.pinned !== false || previewSeen
     if (!pinned) previewSeen = true
     tabs.push(withMeta(item.key, pinned, typeof item.title === 'string' ? item.title : '', item.shared === true))
   }
-  const active = typeof entry.active === 'string' && seen.has(entry.active) ? entry.active : null
+  const active = typeof e.active === 'string' && seen.has(e.active) ? e.active : null
   return { tabs, active }
 }
 
+export function parseStoredTabs(raw: string, scope: string): DocTabsState | null {
+  return parseTabsEntry(readMap(raw)?.[scope])
+}
+
+// 분할이 꺼진 곳의 저장 — 멀쩡한 split 은 포커스 칸만 갈아 끼워 남기고, 깨진 것은 뺀다 (F-2162)
 export function storeTabs(raw: string, scope: string, s: DocTabsState): string {
-  return JSON.stringify({ ...(readMap(raw) ?? {}), [scope]: { tabs: s.tabs, active: s.active } })
+  const map = readMap(raw) ?? {}
+  const split = (map[scope] as { split?: Record<string, unknown> } | undefined)?.split
+  const panes = split && typeof split === 'object' ? split.panes : null
+  const focus = split?.focus
+  const kept =
+    Array.isArray(panes) && Number.isInteger(focus) && panes[focus as number] && typeof panes[focus as number] === 'object'
+      ? { ...split, panes: panes.map((p, i) => (i === focus ? { ...p, tabs: s.tabs, active: s.active } : p)) }
+      : null
+  return JSON.stringify({ ...map, [scope]: kept ? { tabs: s.tabs, active: s.active, split: kept } : { tabs: s.tabs, active: s.active } })
 }

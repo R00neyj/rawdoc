@@ -270,3 +270,39 @@ describe('openTabCapped — 탭 상한', () => {
     expect(openTabCapped(s, { key: 'x', title: 'X' }, 'pinned')).toEqual({ state: openTab(s, { key: 'x', title: 'X' }, 'pinned'), capped: false })
   })
 })
+
+describe('F-2162 U7 storeTabs split 보존 · openTabCapped max', () => {
+  const split = {
+    layout: 'cols',
+    ratios: [0.4],
+    focus: 1,
+    panes: [
+      { tabs: [t('a')], active: 'a', viewMode: 'raw' },
+      { tabs: [t('b')], active: 'b', viewMode: 'view' },
+    ],
+  }
+  it('split.panes[focus] 만 바꾸고 나머지는 남긴다', () => {
+    const raw = JSON.stringify({ k: { tabs: [t('b')], active: 'b', split }, other: { tabs: [], active: null } })
+    const out = JSON.parse(storeTabs(raw, 'k', state([['x', true]], 'x')))
+    expect(out.k.tabs.map((x: { key: string }) => x.key)).toEqual(['x'])
+    expect(out.k.split.layout).toBe('cols')
+    expect(out.k.split.ratios).toEqual([0.4])
+    expect(out.k.split.panes[0]).toEqual(split.panes[0])
+    expect(out.k.split.panes[1]).toEqual({ ...split.panes[1], tabs: [t('x')], active: 'x' })
+    expect(out.other).toEqual({ tabs: [], active: null })
+  })
+
+  it('깨진 split 은 뺀다', () => {
+    for (const bad of ['x', { ...split, focus: 5 }, { ...split, panes: 3 }]) {
+      const out = JSON.parse(storeTabs(JSON.stringify({ k: { tabs: [], active: null, split: bad } }), 'k', state([['x', true]], 'x')))
+      expect(out.k.split).toBeUndefined()
+    }
+  })
+
+  it('openTabCapped 는 max 에서 상한을 건다', () => {
+    const s = state([['a', true], ['b', true]], 'a')
+    const r = openTabCapped(s, { key: 'x', title: 'X' }, 'pinned', 2)
+    expect(r.capped).toBe(true)
+    expect(r.state.tabs.map((x) => x.key)).toEqual(['x', 'b'])
+  })
+})
