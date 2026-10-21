@@ -179,6 +179,7 @@
 |`src/app/paletteDocs.ts`|명령 팔레트에 보일 문서 목록을 고르고 새 문서 만들기를 준비함|
 |`src/app/paletteEditorCommands.ts`|우클릭 메뉴의 서식·삽입 명령을 명령 팔레트에도 보여 줌|
 |`src/app/paletteMemory.ts`|명령 팔레트에서 최근 쓴 명령과 고정한 명령을 기억함|
+|`src/app/paneRules.ts`|화면을 나눴을 때 문서를 어느 칸에 열지, 칸을 더 나눌 수 있는지, 읽기 전용인지 같은 규칙을 정함|
 |`src/app/PanelGraph.tsx`|오른쪽 칸 그래프 탭. 지금 문서와 바로 이어진 문서를 지도와 같은 입체 그림으로 보여 주고, 안 되는 브라우저에선 평면 그림으로|
 |`src/app/PanelGraphScene.tsx`|오른쪽 칸 그래프 탭의 입체 그림 — 보일 때만 불러옴|
 |`src/app/PanelGraphSvg.tsx`|입체 그림을 못 그리는 브라우저에서 쓰는 평면 연결 그림(키보드로 노드 이동)|
@@ -229,6 +230,7 @@
 |`src/app/sidebarWidth.ts`|사이드바 너비를 허용 범위 안에서 조절하고 기억함|
 |`src/app/softKeyboard.ts`|휴대폰 화면 키보드가 열렸는지 알아냄|
 |`src/app/splitLayout.ts`|화면 분할 배치(2~4칸)의 나누기·닫기·칸 번호·비율 규칙과 저장값 읽고 쓰기를 정함|
+|`src/app/SplitPanes.tsx`|나눈 화면의 칸들을 격자로 그리고, 칸마다 맨 위 탭 줄과 문서 화면을 보여 줌|
 |`src/app/StatusBar.tsx`|화면 아래 상태바에 줄·칸 위치, 저장·동기화·실시간 연결 상태를 보여줌|
 |`src/app/tabSync.ts`|같은 브라우저의 여러 탭끼리 문서 상태를 맞춤|
 |`src/app/TemplateManagerDialog.tsx`|내 템플릿을 만들고 고치고 지우는 관리 창|
@@ -289,6 +291,7 @@
 |`src/app/useNotificationsGlue.ts`|알림함 열고 닫기, 항목 이동, 안 읽음 점 표시를 연결함|
 |`src/app/useOutlineSwipe.ts`|휴대폰에서 화면을 밀어 목차 패널을 여닫게 함. 칸반 카드를 끄는 동안은 건너뜀|
 |`src/app/usePaletteOpen.ts`|명령 팔레트 열림·닫힘과 닫힌 뒤 실행할 명령을 관리함|
+|`src/app/usePaneHost.ts`|여러 칸에 띄운 같은 문서가 서로 맞도록 이어 주고, 지금 고른 칸의 편집기를 앱 나머지에 알려 줌|
 |`src/app/usePanelDocs.ts`|오른쪽 패널의 링크·할 일 보기에 쓸 문서 목록을 읽음|
 |`src/app/usePeers.ts`|지금 같은 문서에 접속한 사람 목록을 알려 줌|
 |`src/app/usePhoneSidePanel.ts`|휴대폰 오른쪽 패널을 밀어서 열고 접고 닫는 동작을 맡음|
@@ -314,7 +317,7 @@
 |`src/app/useShortcutUsage.ts`|사용자가 어떤 단축키를 써 봤는지 감지함|
 |`src/app/useSidebarLayout.ts`|사이드바 접기·폴더 펼침·좁은 창 배치를 관리함|
 |`src/app/useSoftKeyboard.ts`|휴대폰 화면 키보드가 올라왔는지 알아냄|
-|`src/app/useTabSync.ts`|같은 브라우저의 여러 탭 사이에 변경과 편집 권한을 맞춤|
+|`src/app/useTabSync.ts`|같은 브라우저의 여러 탭 사이에 변경 신호를 나르고 편집권 메시지를 문서별로 나눠 줌|
 |`src/app/useTaskFilter.ts`|할 일 보기에서 특정 태그만 골라 보는 필터 설정을 관리함|
 |`src/app/useTemplateManager.ts`|템플릿 관리 창에서 템플릿 만들기·편집·삭제를 처리함|
 |`src/app/useTitleCommit.ts`|문서 제목을 저장하고 빈 제목이면 이전 제목으로 되돌림|
