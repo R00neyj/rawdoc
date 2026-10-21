@@ -10,8 +10,6 @@ import {
   IconForum,
   IconMore,
   IconNotifications,
-  IconRightPanelClose,
-  IconRightPanelOpen,
   IconShare,
   IconToc,
   IconTooltip,
@@ -30,7 +28,7 @@ import { githubMenuItems } from './githubUi'
 type SubView = 'share' | 'export' | 'github'
 
 type TopBarMoreSheetProps = {
-  // 넓은 창 — 바닥 판 대신 버튼 밑 드롭다운, 공유·목차 행 없이 오른쪽 패널 행
+  // 넓은 창 — 바닥 판 대신 버튼 밑 드롭다운, 공유·목차 행 없음
   wide?: boolean
   screen: TopBarScreen
   outlineControlRef: RefObject<OutlineControl | null>
@@ -39,10 +37,9 @@ type TopBarMoreSheetProps = {
   share: ShareMenuProps
   exporter: ExportMenuProps
   github?: GithubMenuProps
-  rightPanel?: { open: boolean; onToggle: () => void }
 }
 
-const ROW_LABEL: Record<Exclude<MoreItemKey, 'rightPanel'>, string> = {
+const ROW_LABEL: Record<MoreItemKey, string> = {
   outline: '목차',
   comments: '댓글',
   share: '공유',
@@ -51,7 +48,7 @@ const ROW_LABEL: Record<Exclude<MoreItemKey, 'rightPanel'>, string> = {
   notifications: '알림',
 }
 
-const ROW_ICON: Record<Exclude<MoreItemKey, 'rightPanel'>, ComponentType<{ size?: number }>> = {
+const ROW_ICON: Record<MoreItemKey, ComponentType<{ size?: number }>> = {
   outline: IconToc,
   comments: IconForum,
   share: IconShare,
@@ -94,7 +91,7 @@ function ActionList({ items, note, wide }: { items: MenuAction[]; note?: ReactNo
   )
 }
 
-export default function TopBarMoreSheet({ wide = false, screen, outlineControlRef, comments, notifications, share, exporter, github, rightPanel }: TopBarMoreSheetProps) {
+export default function TopBarMoreSheet({ wide = false, screen, outlineControlRef, comments, notifications, share, exporter, github }: TopBarMoreSheetProps) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<SubView | null>(null)
   const [hasOutline, setHasOutline] = useState(false)
@@ -202,9 +199,6 @@ export default function TopBarMoreSheet({ wide = false, screen, outlineControlRe
     } else if (key === 'comments') {
       closeSheet()
       comments?.onToggle()
-    } else if (key === 'rightPanel') {
-      closeSheet()
-      rightPanel?.onToggle()
     } else {
       enter(key)
     }
@@ -238,7 +232,6 @@ export default function TopBarMoreSheet({ wide = false, screen, outlineControlRe
     comments: Boolean(comments),
     notifications: Boolean(notifications),
     github: Boolean(github),
-    rightPanel: Boolean(rightPanel),
   })
   const dot = moreDotVisible({
     screen,
@@ -260,16 +253,6 @@ export default function TopBarMoreSheet({ wide = false, screen, outlineControlRe
     if (key === 'comments') return `댓글 ${comments?.openCount ?? 0}개`
     if (key === 'notifications') return `알림, 안 읽음 ${unreadCount}개`
     return undefined
-  }
-
-  function rowText(key: MoreItemKey): string {
-    if (key === 'rightPanel') return rightPanel?.open ? '오른쪽 패널 닫기' : '오른쪽 패널 열기'
-    return ROW_LABEL[key]
-  }
-
-  function rowIcon(key: MoreItemKey): ComponentType<{ size?: number }> {
-    if (key === 'rightPanel') return rightPanel?.open ? IconRightPanelClose : IconRightPanelOpen
-    return ROW_ICON[key]
   }
 
   function rowBadge(key: MoreItemKey): string | null {
@@ -353,7 +336,7 @@ export default function TopBarMoreSheet({ wide = false, screen, outlineControlRe
     body = (
       <ul className="more-sheet-list" role={listRole}>
         {rows.map((key) => {
-          const Icon = rowIcon(key)
+          const Icon = ROW_ICON[key]
           const badge = rowBadge(key)
           const disabled = rowDisabled(key)
           return (
@@ -368,7 +351,7 @@ export default function TopBarMoreSheet({ wide = false, screen, outlineControlRe
                 onClick={() => activate(key)}
               >
                 <Icon size={iconSize} />
-                <span className="more-sheet-label">{rowText(key)}</span>
+                <span className="more-sheet-label">{ROW_LABEL[key]}</span>
                 {badge !== null && (
                   <span className="comment-badge more-sheet-badge" aria-hidden="true">
                     {badge}

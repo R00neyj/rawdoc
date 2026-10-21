@@ -15,7 +15,7 @@ export function topBarScreen(input: {
   return input.currentDocId === null ? 'home' : 'doc'
 }
 
-export type MoreItemKey = 'outline' | 'comments' | 'share' | 'export' | 'github' | 'notifications' | 'rightPanel'
+export type MoreItemKey = 'outline' | 'comments' | 'share' | 'export' | 'github' | 'notifications'
 
 // 넓은 창은 공유가 ⋯ 밖에, 목차가 본문 옆 버튼에 있어 둘 다 뺀다 (small 2026-10-21)
 export function moreSheetItems(input: {
@@ -25,7 +25,6 @@ export function moreSheetItems(input: {
   comments: boolean
   notifications: boolean
   github?: boolean
-  rightPanel?: boolean
 }): MoreItemKey[] {
   const { screen, wide } = input
   const items: MoreItemKey[] = []
@@ -35,13 +34,12 @@ export function moreSheetItems(input: {
   if (screen === 'doc') items.push('export')
   if (screen === 'doc' && input.github) items.push('github')
   if (input.notifications) items.push('notifications')
-  if (wide && input.rightPanel) items.push('rightPanel')
   return items
 }
 
 // 행이 없으면 빈 판을 여는 버튼을 두지 않는다 (F-2090 4.7)
-export function moreButtonVisible(input: { wide?: boolean; screen: TopBarScreen; notifications: boolean; rightPanel?: boolean }): boolean {
-  return input.screen === 'doc' || input.notifications || Boolean(input.wide && input.rightPanel)
+export function moreButtonVisible(input: { screen: TopBarScreen; notifications: boolean }): boolean {
+  return input.screen === 'doc' || input.notifications
 }
 
 export function moreDotVisible(input: {

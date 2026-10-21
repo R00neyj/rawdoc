@@ -36,7 +36,7 @@ test('패널 칸 접기 — 넓은 창에서 칸 머리를 눌러 접으면 새�
   await expect(empty).toHaveCount(0)
 })
 
-test('댓글 레일과 오른쪽 패널 — 기본은 나란히, 설정에서 패널 숨기기를 고르면 레일이 열린 동안 숨고 ⋯ 오른쪽 패널 열기로 다시 보인다', async ({ page }) => {
+test('댓글 레일과 오른쪽 패널 — 기본은 나란히, 설정에서 패널 숨기기를 고르면 레일이 열린 동안 숨고 상단바 오른쪽 패널 열기로 다시 보인다', async ({ page }) => {
   await openApp(page)
   const rail = page.locator('.comment-rail')
   const toggleRail = () => clickMoreRow(page, 'comments')
@@ -56,7 +56,7 @@ test('댓글 레일과 오른쪽 패널 — 기본은 나란히, 설정에서 �
   await expect(rail).toBeVisible()
   await expect(panel(page)).toBeHidden()
 
-  await clickMoreRow(page, 'rightPanel')
+  await page.getByRole('button', { name: '오른쪽 패널 열기' }).click()
   await expect(rail).toBeHidden()
   await expect(panel(page)).toBeVisible()
   expect(await page.evaluate(() => localStorage.getItem('md.rightPanel'))).toBe('open')

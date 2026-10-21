@@ -1,7 +1,7 @@
 // 오른쪽 패널 — 보기 목록을 가진 칸을 위아래로 쌓는다. 넓은 창은 메인 열 오른쪽 고정 폭, 좁은 창은 오른쪽에서 겹쳐 연다 (small 2026-10-10, 2026-10-11)
 import { useState } from 'react'
 import { dayKey, type CalendarDay } from '../lib/calendar'
-import { IconChevron, IconChevronLeft, IconClose } from './icons'
+import { IconChevron, IconChevronLeft, IconClose, IconRightPanelClose } from './icons'
 import usePresence from './usePresence'
 import PanelLinks from './PanelLinks'
 import PanelTodos from './PanelTodos'
@@ -226,7 +226,7 @@ function WidePanel({ open, narrow, slots, views, onClose }: { open: boolean; nar
             {slot.views.length > 1 && <SlotNav slot={slot} />}
             {index === 0 && (
               <button type="button" className="icon-btn right-panel-close" aria-label="오른쪽 패널 닫기" onClick={onClose}>
-                <IconClose size={18} />
+                <IconRightPanelClose size={18} />
               </button>
             )}
           </div>

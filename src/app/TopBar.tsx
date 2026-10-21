@@ -6,7 +6,7 @@ import type { GithubMenuProps } from './GithubMenu'
 import type { NotificationsMenuProps } from './NotificationsMenu'
 import EditorToolbar from './EditorToolbar'
 import ToolbarImageInput from './ToolbarImageInput'
-import { IconTooltip, IconKanban, IconRaw } from './icons'
+import { IconTooltip, IconKanban, IconRaw, IconRightPanelOpen } from './icons'
 import SidebarHead from './SidebarHead'
 import PeerAvatars from './PeerAvatars'
 import ViewModeMenu, { VIEW_MODES, type ViewMode } from './ViewModeMenu'
@@ -204,8 +204,15 @@ export default function TopBar({
               ))}
             </div>
             <ShareMenu {...share} />
-            {moreButtonVisible({ wide: true, screen, notifications: Boolean(notifications), rightPanel: Boolean(rightPanel) }) && (
-              <TopBarMoreSheet wide {...moreProps} rightPanel={rightPanel} />
+            {moreButtonVisible({ screen, notifications: Boolean(notifications) }) && <TopBarMoreSheet wide {...moreProps} />}
+            {/* 패널이 열려 있으면 닫기 버튼은 패널 머리에 있다 (tweak 2026-10-21) */}
+            {rightPanel && !rightPanel.open && (
+              <span className="icon-btn-wrap">
+                <button type="button" className="icon-btn" aria-label="오른쪽 패널 열기" onClick={rightPanel.onToggle}>
+                  <IconRightPanelOpen size={18} />
+                </button>
+                <IconTooltip text="오른쪽 패널 열기" align="end" />
+              </span>
             )}
           </>
         )}
