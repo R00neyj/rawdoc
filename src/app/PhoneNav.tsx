@@ -12,7 +12,7 @@ import { usePhoneWidth } from './usePhoneWidth'
 import { typingSurface } from './softKeyboard'
 import { useSoftKeyboard } from './useSoftKeyboard'
 import type { DocTabBarProps } from './useDocTabs'
-import PhoneTabsSheet from './PhoneTabsSheet'
+import PhoneTabsSheet, { type ReadTabDoc } from './PhoneTabsSheet'
 import { tabCountLabel } from './phoneTabs'
 
 type PhoneNavProps = {
@@ -23,6 +23,7 @@ type PhoneNavProps = {
   onOpenPalette: () => void
   onOpenViewFind: () => void
   tabs?: DocTabBarProps | null
+  readDoc: ReadTabDoc
 }
 
 const BACK_LABEL = '뒤로 가기'
@@ -67,14 +68,14 @@ function useFocusHidesNav(): boolean {
   return hidden
 }
 
-export default function PhoneNav({ editorRef, screen, viewMode, vaultLocked, onOpenPalette, onOpenViewFind, tabs }: PhoneNavProps): ReactNode {
+export default function PhoneNav({ editorRef, screen, viewMode, vaultLocked, onOpenPalette, onOpenViewFind, tabs, readDoc }: PhoneNavProps): ReactNode {
   useEffect(() => startHistoryTracking(), [])
   const pos = useSyncExternalStore(subscribeHistoryNav, getHistoryNavSnapshot)
   const hidden = typingSurface(useFocusHidesNav(), useSoftKeyboard())
   const phone = usePhoneWidth()
   const [tabsOpen, setTabsOpen] = useState(false)
   if (!phone) return null
-  const sheet = tabs ? <PhoneTabsSheet open={tabsOpen} tabs={tabs} onClose={() => setTabsOpen(false)} /> : null
+  const sheet = tabs ? <PhoneTabsSheet open={tabsOpen} tabs={tabs} readDoc={readDoc} onClose={() => setTabsOpen(false)} /> : null
   if (hidden) return sheet
 
   const { canBack, canForward } = navButtons(pos)

@@ -24,64 +24,128 @@
   border-radius: 0;
 }
 
+/* 옵시디언처럼 아래 막대에 ＋ · 탭 수 · 완료 */
+.phone-tabs-bar {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  height: 56px;
+  padding: 0 8px env(safe-area-inset-bottom, 0px);
+}
+
+.phone-tabs-bar h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
 .phone-tabs-new {
-  height: 36px;
+  justify-self: start;
+  width: 44px;
+  height: 44px;
+  font-size: 24px;
+}
+
+.phone-tabs-done {
+  justify-self: end;
+  height: 44px;
   padding: 0 12px;
-  border: 1px solid var(--rule);
-  border-radius: 18px;
+  border: 0;
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .phone-tabs-grid {
+  flex: 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  /* 판이 화면 전체라 줄이 남는 높이까지 늘어났다 — 카드 높이대로 위에 붙임 */
-  align-content: start;
+  gap: 16px 12px;
+  /* 카드는 제 높이, 아래쪽부터 쌓는다(옵시디언과 같음). safe — 넘치면 위가 잘리지 않게 위에서부터 */
+  align-content: safe end;
   margin: 0;
-  padding: 4px 12px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  padding: 12px;
+  overflow-y: auto;
   list-style: none;
 }
 
 .phone-tab-card {
   position: relative;
   min-width: 0;
-  border: 1px solid var(--rule);
-  border-radius: 10px;
-  background: var(--paper, var(--panel));
-}
-
-.phone-tab-card[data-active] {
-  border-color: var(--ink);
-  box-shadow: 0 0 0 1px var(--ink);
 }
 
 .phone-tab-card-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   width: 100%;
-  min-height: 88px;
-  padding: 10px 36px 10px 12px;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  text-align: start;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
+}
+
+.phone-tab-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
   overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--paper, var(--surface));
+  text-align: start;
+  pointer-events: none;
+}
+
+.phone-tab-card[data-active] .phone-tab-thumb {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* 휴대폰 한 화면 폭으로 그린 뒤 줄여 카드에 담는다 */
+.phone-tab-thumb-page {
+  display: block;
+  width: 400px;
+  padding: 56px 20px 20px;
+  zoom: 0.42;
+}
+
+.phone-tab-thumb-page img,
+.phone-tab-thumb-page .mermaid {
+  display: none;
+}
+
+.phone-tab-thumb-title {
+  display: block;
+  margin-bottom: 16px;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.phone-tab-thumb-note {
+  color: var(--muted);
+}
+
+.phone-tab-card-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .phone-tab-card-close {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: 6px;
+  right: 6px;
   width: 32px;
   height: 32px;
-  color: color-mix(in srgb, var(--ink) 60%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  color: var(--ink);
 }

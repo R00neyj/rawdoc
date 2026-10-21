@@ -170,7 +170,7 @@ export default function AppTopBar({
           : undefined
       }
     />
-    <PhoneNav editorRef={editorRef} screen={screen} viewMode={viewMode} vaultLocked={currentDoc?.e2ee === 'locked'} onOpenPalette={openPalette} onOpenViewFind={openViewFind} tabs={phoneTabs} />
+    <PhoneNav editorRef={editorRef} screen={screen} viewMode={viewMode} vaultLocked={currentDoc?.e2ee === 'locked'} onOpenPalette={openPalette} onOpenViewFind={openViewFind} tabs={phoneTabs} readDoc={(id) => store.get(id)} />
     </>
   )
 }

@@ -25,7 +25,7 @@ test.describe('phone-tabs 휴대폰 탭 (390×844, 브라우저)', () => {
     // 처음 빈 문서 탭을 × 로 닫으면 두 탭이 남는다
     await openSheet(page, 3)
     await sheet(page).getByRole('button', { name: '제목 없는 문서 탭 닫기' }).tap()
-    await expect(sheet(page).locator('.phone-tab-card-main')).toHaveText(['가', '나'])
+    await expect(sheet(page).locator('.phone-tab-card-title')).toHaveText(['가', '나'])
     await expect(sheet(page).getByRole('button', { name: '나', exact: true })).toHaveAttribute('aria-current', 'page')
 
     await sheet(page).getByRole('button', { name: '가', exact: true }).tap()
@@ -36,12 +36,12 @@ test.describe('phone-tabs 휴대폰 탭 (390×844, 브라우저)', () => {
     await page.reload()
     await expect(page.locator('.cm-content')).toContainText('가 본문')
     await openSheet(page, 2)
-    await expect(sheet(page).locator('.phone-tab-card-main')).toHaveText(['가', '나'])
+    await expect(sheet(page).locator('.phone-tab-card-title')).toHaveText(['가', '나'])
 
     // 지금 탭을 닫으면 이웃 탭으로 옮긴다
     await sheet(page).getByRole('button', { name: '가 탭 닫기' }).tap()
     await expect.poll(() => currentDocId(page)).toBe(idB)
-    await expect(sheet(page).locator('.phone-tab-card-main')).toHaveText(['나'])
+    await expect(sheet(page).locator('.phone-tab-card-title')).toHaveText(['나'])
     await page.keyboard.press('Escape')
     await expect(sheet(page)).toBeHidden()
     await expect(nav(page).getByRole('button', { name: '탭 1개', exact: true })).toBeVisible()
