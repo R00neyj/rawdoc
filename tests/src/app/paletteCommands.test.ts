@@ -323,7 +323,7 @@ describe('file.open — F-2155 U6', () => {
   it('docActions.openLocalFile 이 있을 때만 보이고, 고르면 한 번 부른다', () => {
     const cmd = PALETTE_COMMANDS.find((c) => c.id === 'file.open')
     if (!cmd || cmd.kind !== 'action') throw new Error('file.open not found')
-    expect(cmd.label).toBe('파일 열기…')
+    expect(cmd.label).toBe('컴퓨터 파일 바로 고치기…')
     expect(cmd.when(ctx([], undefined, undefined, undefined, undefined, fullExtra()))).toBe(false)
     let opened = 0
     const docActions = { ...fullExtra().docActions!, openLocalFile: () => void opened++ }

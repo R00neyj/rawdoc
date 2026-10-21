@@ -24,7 +24,7 @@ export const MD_PICKER_OPTIONS: OpenFilePickerOptions = {
   id: 'md-file',
 }
 
-// Chrome·Edge 데스크톱만 — 없는 브라우저는 `파일 열기…` 세 자리를 모두 숨긴다
+// Chrome·Edge 데스크톱만 — 없는 브라우저는 `컴퓨터 파일 바로 고치기…` 세 자리를 모두 숨긴다
 export function localFileSupported(): boolean {
   return typeof window !== 'undefined' && typeof window.showOpenFilePicker === 'function'
 }

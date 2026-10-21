@@ -130,7 +130,7 @@ export const PALETTE_COMMANDS: readonly PaletteCommand[] = [
   {
     id: 'file.open',
     kind: 'action',
-    label: '파일 열기…',
+    label: '컴퓨터 파일 바로 고치기…',
     keywords: ['파일 열기', 'open', '컴퓨터', '로컬', 'local', 'file', 'md'],
     when: (ctx) => Boolean(ctx.docActions?.openLocalFile),
     run: (ctx) => ctx.docActions?.openLocalFile?.(),
