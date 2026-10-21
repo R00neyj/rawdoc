@@ -20,8 +20,8 @@ import { PALETTE_COMMANDS } from '../../../src/app/paletteCommands'
 const ID_RE = /^[a-z][a-z0-9]*\.[a-z][a-zA-Z0-9]*$/
 
 describe('SHORTCUT_CATALOG — U1', () => {
-  it('24개, id 겹치지 않고 모양을 지킨다', () => {
-    expect(SHORTCUT_CATALOG.length).toBe(24)
+  it('25개, id 겹치지 않고 모양을 지킨다', () => {
+    expect(SHORTCUT_CATALOG.length).toBe(25)
     const ids = SHORTCUT_CATALOG.map((e) => e.id)
     expect(new Set(ids).size).toBe(ids.length)
     for (const id of ids) expect(id).toMatch(ID_RE)
@@ -96,9 +96,9 @@ describe('formatChord — U3 (맥)', () => {
     expect(formatEntryKeys(entry('edit.redo'), false)).toEqual(['Ctrl+Y', 'Ctrl+Shift+Z'])
   })
 
-  it('visibleShortcuts(true).length === 23, visibleShortcuts(false).length === 24', () => {
-    expect(visibleShortcuts(true).length).toBe(23)
-    expect(visibleShortcuts(false).length).toBe(24)
+  it('visibleShortcuts(true).length === 24, visibleShortcuts(false).length === 25', () => {
+    expect(visibleShortcuts(true).length).toBe(24)
+    expect(visibleShortcuts(false).length).toBe(25)
   })
 })
 
@@ -179,6 +179,7 @@ describe('U9 — 우클릭 메뉴·팔레트 키 문자열이 카탈로그와 �
       'doc.exportMd': 'edit.exportMd',
       'shortcuts.open': 'nav.shortcuts',
       'search.open': 'find.search',
+      'pane.close': 'nav.closePane',
       // F-2055 서식 명령 — 우클릭 메뉴와 같은 글
       'editor.link': 'format.link',
       'editor.bold': 'format.bold',

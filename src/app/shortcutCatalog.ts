@@ -108,6 +108,7 @@ export const SHORTCUT_CATALOG: readonly ShortcutEntry[] = [
     scopes: ['body', 'cell'],
     hideOnMac: true,
   },
+  { id: 'nav.closePane', label: '칸 닫기 (화면 분할)', group: '이동', keys: [{ ctrl: true, shift: true, key: 'KeyW' }], scopes: ['app'] },
   // 표
   {
     id: 'table.nextCell',
