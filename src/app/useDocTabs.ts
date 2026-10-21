@@ -1,4 +1,4 @@
-// 설치 앱 창(넓은 화면)의 문서 탭 — 탭은 currentDocId 를 따라가고, 탭 조작은 기존 문서 전환 경로(selectDoc·goHome)를 부른다 (small 2026-10-21)
+// 설치 앱 창(넓은 화면)·휴대폰 폭의 문서 탭 — 탭은 currentDocId 를 따라가고, 탭 조작은 기존 문서 전환 경로(selectDoc·goHome)를 부른다 (small 2026-10-21)
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
 import type { EditorHandle } from '../editor/Editor'
 import type { ScrollAnchor } from '../lib/scrollAnchor'
@@ -7,6 +7,8 @@ import { getPref, setPref } from './prefs'
 import { parseHash } from './hashRoute'
 import { isSharedDoc, type DocMeta } from './docMeta'
 import { readViewerAnchor, scrollViewerToAnchor } from './viewerScroll'
+import { usePhoneWidth } from './usePhoneWidth'
+import { docTabsEnabled } from './phoneTabs'
 import type { PendingJump } from './useEditorSync'
 import {
   EMPTY_TABS, openTab, pinTab, closeTabs, closeOtherTabs, closeTabsToRight, moveTab, stepTab, syncTabMeta, restoreTabs,
@@ -86,10 +88,11 @@ function metaLookup(docs: DocMeta[]): (key: string) => TabMeta | undefined {
   }
 }
 
-export function useDocTabs(options: UseDocTabsOptions): { bar: DocTabBarProps | null } {
+export function useDocTabs(options: UseDocTabsOptions): { bar: DocTabBarProps | null; phone: DocTabBarProps | null } {
   const { narrow, ready, scope, docs, currentDocId, openDocId, editorHandle, viewMode, viewerRef, viewerDocId, pendingJumpRef, leaveRef } = options
   const standalone = useSyncExternalStore(subscribeStandalone, readStandalone, () => false)
-  const enabled = standalone && !narrow
+  const phone = usePhoneWidth()
+  const enabled = docTabsEnabled({ standalone, narrow, phone })
   const [store] = useState(createTabsStore)
   const tabsState = useSyncExternalStore(store.subscribe, store.get, store.get)
 
@@ -333,6 +336,7 @@ export function useDocTabs(options: UseDocTabsOptions): { bar: DocTabBarProps | 
   const onMove = useCallback((key: string, toIndex: number) => store.set(moveTab(store.get(), key, toIndex)), [store])
   const onNew = useCallback(() => void latestRef.current.createNewDoc(), [])
 
-  if (!enabled || !ready) return { bar: null }
-  return { bar: { state: tabsState, onActivate: navigate, onPin, onClose, onCloseOthers, onCloseRight, onMove, onNew } }
+  if (!enabled || !ready) return { bar: null, phone: null }
+  const props = { state: tabsState, onActivate: navigate, onPin, onClose, onCloseOthers, onCloseRight, onMove, onNew }
+  return phone ? { bar: null, phone: props } : { bar: props, phone: null }
 }

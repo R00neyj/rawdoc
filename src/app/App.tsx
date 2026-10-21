@@ -1321,6 +1321,7 @@ export default function App() {
     outlineControlRef, openPalette, openSearch, openViewFind: viewFind.open, requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store,
     toggleButtonRef, toggleCommentsPanel, toggleSidebar, toolbarPref, viewMode, wikiResolver,
     editorRef, github: github.topBar, rightPanel: rightPanel.available ? { open: rightPanel.open, onToggle: rightPanel.togglePanel } : undefined,
+    phoneTabs: docTabs.phone,
   }} />
 
   return (

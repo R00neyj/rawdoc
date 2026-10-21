@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>휴대폰 탭 플로우</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; font: 14px/1.5 system-ui, sans-serif; color: #222; background: #f6f6f4; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 40px 0 12px; color: #444; }
+  .sub { color: #777; margin: 0 0 24px; }
+  .flow { display: flex; flex-direction: column; align-items: center; }
+  .row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .box { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; text-align: center; min-width: 180px; }
+  .box small { display: block; color: #888; font-size: 12px; }
+  .box.key { border: 2px solid #333; }
+  .arrow { width: 2px; height: 28px; background: #999; position: relative; margin: 4px 0; }
+  .arrow::after { content: ''; position: absolute; bottom: -2px; left: -5px; border: 6px solid transparent; border-top-color: #999; }
+  .branch { display: flex; gap: 16px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .col { display: flex; flex-direction: column; align-items: center; }
+  .label { font-size: 12px; color: #666; background: #e9e9e5; border-radius: 10px; padding: 1px 8px; margin-bottom: 4px; }
+  .mock { background: #fff; border: 1px solid #ccc; border-radius: 8px; width: 760px; text-align: left; overflow: hidden; }
+  .tabs { display: flex; border-bottom: 1px solid #ccc; background: #eee; font-size: 13px; }
+  .tab { padding: 6px 12px; border-right: 1px solid #ccc; display: flex; gap: 8px; align-items: center; color: #666; }
+  .tab.on { background: #fff; color: #222; font-weight: 600; }
+  .tab.temp { font-style: italic; }
+  .tab .x { color: #999; }
+  .tab.plus { color: #999; }
+  .body { padding: 14px 18px; color: #888; height: 60px; }
+  ol.dec li { margin: 8px 0; }
+
+  .phone { width: 260px; border: 1px solid #ccc; border-radius: 22px; background: #fff; padding: 10px; font-size: 12px; }
+  .pill { display: flex; gap: 14px; justify-content: center; border: 1px solid #ccc; border-radius: 20px; padding: 6px 12px; margin-top: 8px; }
+  .tabsq { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1.5px solid #333; border-radius: 4px; font-size: 10px; font-weight: 700; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .card { border: 1px solid #ccc; border-radius: 8px; padding: 6px; height: 70px; color: #888; position: relative; }
+  .card.on { border: 2px solid #333; color: #222; }
+  .card .x { position: absolute; right: 6px; top: 4px; }
+  pre { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 10px 14px; margin: 0; text-align: left; }
+</style>
+</head>
+<body>
+<h1>휴대폰 탭 플로우</h1>
+<p class="sub">요청: "탭기능 모바일에서도 쓰게 하단 네비바에 탭모양 아이콘 추가, 그냥 네모면 될듯. 네모 안에 탭 열린 갯수 표현. 옵시디언식". 지금 탭(<code>useDocTabs</code>)은 설치 앱 + 넓은 화면에서만 켜짐</p>
+
+<h2>0. 하단 알약</h2>
+<div class="flow"><div class="phone">(본문)
+  <div class="pill"><span>‹</span><span>›</span><span>🔍</span><span class="tabsq">3</span><span>⌘</span></div>
+</div><p class="sub" style="margin-top:8px">네모 안 숫자 = 열린 탭 수 (10 이상은 '9+', 제안)</p></div>
+
+<h2>1. 탭 고르기 화면</h2>
+<div class="flow">
+  <div class="box">네모 누름</div>
+  <div class="arrow"></div>
+  <div class="phone"><b>탭 3개</b> <span style="float:right">＋ 새 탭</span><br><br>
+    <div class="grid"><div class="card">회의 메모<span class="x">×</span></div><div class="card on">설계 개요<span class="x">×</span></div><div class="card">장보기<span class="x">×</span></div></div>
+  </div>
+  <div class="arrow"></div>
+  <div class="branch">
+    <div class="col"><span class="label">카드 누름</span><div class="box key">그 탭으로 전환, 화면 닫힘</div></div>
+    <div class="col"><span class="label">× · 옆으로 밀기</span><div class="box">탭 닫기<small>마지막 탭이면 홈</small></div></div>
+    <div class="col"><span class="label">＋ 새 탭</span><div class="box">새 문서를 새 탭으로</div></div>
+    <div class="col"><span class="label">뒤로·바깥</span><div class="box">닫힘, 지금 탭 그대로</div></div>
+  </div>
+</div>
+
+<h2>2. 문서 열기</h2>
+<div class="flow"><div class="row">
+  <div class="box">사이드바·검색·위키링크로 열기<small>넓은 화면과 같은 규칙(임시 탭 바꿈)</small></div>
+  <div class="box">문서 길게 누르기 메뉴 › 새 탭에서 열기</div>
+</div></div>
+
+<h2>정할 것 (기본값 제안)</h2>
+<ol class="dec">
+  <li><b>켜지는 곳</b> — 휴대폰 설치 앱 + 휴대폰 브라우저 모두(제안, 휴대폰 브라우저는 탭 줄이 겹치지 않음) / 설치 앱만</li>
+  <li><b>고르기 화면 모양</b> — 2열 카드(제목 + 첫 몇 줄, 옵시디언식, 제안) / 목록</li>
+  <li><b>아이콘 자리</b> — 찾기와 팔레트 사이(제안)</li>
+  <li><b>임시 탭</b> — 넓은 화면 규칙 그대로(제안) / 휴대폰은 늘 새 탭</li>
+</ol>
+
+</body>
+</html>

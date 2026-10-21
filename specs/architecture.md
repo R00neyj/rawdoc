@@ -329,7 +329,7 @@ type RecentFileRow = { id: string; handle: FileSystemFileHandle; name: string; o
 | `md.calendarFolder` | 달력 날짜 문서 폴더 id, `''` = 최상위 | `''` | small 2026-10-10 |
 | `md.calendarFormat` | 날짜 문서 제목 형식(템플릿 날짜 토큰) | `YYYY-MM-DD` | small 2026-10-10 |
 | `md.calendarTemplate` | `md.newDocTemplate` 과 같은 값 | `none` | small 2026-10-10 |
-| `md.docTabs` | `{ 범위: { tabs: [{ key, pinned, title, shared? }], active } }` JSON — 설치 앱 문서 탭. 범위는 `{저장소 종류}:{서버 사용자 id 또는 local}`, `key` 는 문서 id(다른 종류 항목은 접두사 붙인 문자열 키 자리) | 없음(복원할 탭 없음) | small 2026-10-21 |
+| `md.docTabs` | `{ 범위: { tabs: [{ key, pinned, title, shared? }], active } }` JSON — 설치 앱 넓은 화면·휴대폰 폭(브라우저 포함, small 2026-10-22) 문서 탭. 범위는 `{저장소 종류}:{서버 사용자 id 또는 local}`, `key` 는 문서 id(다른 종류 항목은 접두사 붙인 문자열 키 자리) | 없음(복원할 탭 없음) | small 2026-10-21 |
 | `md.localFileOpen` | `import` \| `edit` — OS 로 연 `.md` 를 가져올지, 그 파일만 고칠지(S-11). 모르는 값은 `import` | `import` | F-2156 |
 | `md.lineBreaks` | `on` \| `off` — 보기 모드·HTML/PDF 내보내기·인쇄에서 한 번 줄바꿈을 `<br>` 로 그릴지(`off` 는 마크다운 표준). 모르는 값은 `on`. 공유 링크·공개 보기는 늘 `on` | `on` | small 2026-10-22 |
 

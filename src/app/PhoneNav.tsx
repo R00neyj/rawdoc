@@ -1,4 +1,4 @@
-// 휴대폰 폭 하단 알약 — 뒤로·앞으로·이 문서에서 찾기·명령 팔레트 (F-2086 3.3)
+// 휴대폰 폭 하단 알약 — 뒤로·앞으로·이 문서에서 찾기·탭·명령 팔레트 (F-2086 3.3, 탭 small 2026-10-22)
 import { useEffect, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
 import { openSearchPanel } from '@codemirror/search'
 import type { EditorHandle } from '../editor/Editor'
@@ -11,6 +11,9 @@ import type { ViewMode } from './ViewModeMenu'
 import { usePhoneWidth } from './usePhoneWidth'
 import { typingSurface } from './softKeyboard'
 import { useSoftKeyboard } from './useSoftKeyboard'
+import type { DocTabBarProps } from './useDocTabs'
+import PhoneTabsSheet from './PhoneTabsSheet'
+import { tabCountLabel } from './phoneTabs'
 
 type PhoneNavProps = {
   editorRef: RefObject<EditorHandle | null>
@@ -19,6 +22,7 @@ type PhoneNavProps = {
   vaultLocked: boolean
   onOpenPalette: () => void
   onOpenViewFind: () => void
+  tabs?: DocTabBarProps | null
 }
 
 const BACK_LABEL = '뒤로 가기'
@@ -63,12 +67,15 @@ function useFocusHidesNav(): boolean {
   return hidden
 }
 
-export default function PhoneNav({ editorRef, screen, viewMode, vaultLocked, onOpenPalette, onOpenViewFind }: PhoneNavProps): ReactNode {
+export default function PhoneNav({ editorRef, screen, viewMode, vaultLocked, onOpenPalette, onOpenViewFind, tabs }: PhoneNavProps): ReactNode {
   useEffect(() => startHistoryTracking(), [])
   const pos = useSyncExternalStore(subscribeHistoryNav, getHistoryNavSnapshot)
   const hidden = typingSurface(useFocusHidesNav(), useSoftKeyboard())
   const phone = usePhoneWidth()
-  if (!phone || hidden) return null
+  const [tabsOpen, setTabsOpen] = useState(false)
+  if (!phone) return null
+  const sheet = tabs ? <PhoneTabsSheet open={tabsOpen} tabs={tabs} onClose={() => setTabsOpen(false)} /> : null
+  if (hidden) return sheet
 
   const { canBack, canForward } = navButtons(pos)
   const findDisabled = phoneNavFindDisabled({ screen, viewMode, vaultLocked })
@@ -88,6 +95,7 @@ export default function PhoneNav({ editorRef, screen, viewMode, vaultLocked, onO
   }
 
   return (
+    <>
     <div className="topbar-pill phone-nav" role="group" aria-label="하단 도구">
       <span className="icon-btn-wrap">
         <button type="button" className="icon-btn" aria-label={BACK_LABEL} disabled={!canBack} onClick={() => history.back()}>
@@ -107,6 +115,14 @@ export default function PhoneNav({ editorRef, screen, viewMode, vaultLocked, onO
         </button>
         <IconTooltip text={FIND_LABEL} />
       </span>
+      {tabs && (
+        <span className="icon-btn-wrap">
+          <button type="button" className="icon-btn" aria-label={`탭 ${tabs.state.tabs.length}개`} aria-haspopup="dialog" onClick={() => setTabsOpen(true)}>
+            <span className="phone-tabs-count" aria-hidden="true">{tabCountLabel(tabs.state.tabs.length)}</span>
+          </button>
+          <IconTooltip text="탭" />
+        </span>
+      )}
       <span className="icon-btn-wrap">
         <button type="button" className="icon-btn" aria-label={PALETTE_LABEL} onClick={onOpenPalette}>
           <IconCommandPalette size={22} />
@@ -114,5 +130,7 @@ export default function PhoneNav({ editorRef, screen, viewMode, vaultLocked, onO
         <IconTooltip text={PALETTE_LABEL} />
       </span>
     </div>
+    {sheet}
+    </>
   )
 }

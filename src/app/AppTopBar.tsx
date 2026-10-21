@@ -21,6 +21,7 @@ import { keepEditorFocusOnToolbar, useToolbarDock } from './useToolbarDock'
 import type { OutlineControl } from './Outline'
 import { topBarScreen } from './topBarMore'
 import PhoneNav from './PhoneNav'
+import type { DocTabBarProps } from './useDocTabs'
 import type { GithubMenuProps } from './GithubMenu'
 import type { UseKanbanViewResult } from './useKanbanView'
 
@@ -67,6 +68,7 @@ export type AppTopBarProps = Pick<UseSidebarLayoutResult, 'narrow' | 'sidebarOpe
     toggleCommentsPanel: () => void
     viewMode: 'live' | 'raw' | 'view'
     rightPanel?: { open: boolean; onToggle: () => void }
+    phoneTabs?: DocTabBarProps | null
   }
 
 export default function AppTopBar({
@@ -75,7 +77,7 @@ export default function AppTopBar({
   helpOpen, trashOpen, isEmpty, localFileOpen, isReadOnlyDoc, kanban, livePeers, mapRoute, narrow, notifications, notificationsEnabled, notificationsOpen, openDoc, outlineControlRef, openPalette, openSearch, openViewFind,
   requestInviteCurrentDoc, runToolbarCommand, setNotificationsOpen, sharedDoc, sharesOpen, showNotice, sidebarOpen, store, toggleButtonRef, toggleCommentsPanel,
   toggleSidebar, toolbarPref, viewMode, wikiResolver,
-  editorRef, rightPanel,
+  editorRef, rightPanel, phoneTabs,
 }: AppTopBarProps) {
   const { docked: toolbarDocked, dockVisible } = useToolbarDock(editorRef)
   // 탭바 표시 조건 (F-233 3.1) — 자리는 항상 유지, 조건에 안 맞으면 안 그린다.
@@ -168,7 +170,7 @@ export default function AppTopBar({
           : undefined
       }
     />
-    <PhoneNav editorRef={editorRef} screen={screen} viewMode={viewMode} vaultLocked={currentDoc?.e2ee === 'locked'} onOpenPalette={openPalette} onOpenViewFind={openViewFind} />
+    <PhoneNav editorRef={editorRef} screen={screen} viewMode={viewMode} vaultLocked={currentDoc?.e2ee === 'locked'} onOpenPalette={openPalette} onOpenViewFind={openViewFind} tabs={phoneTabs} />
     </>
   )
 }

@@ -184,8 +184,10 @@
 |`src/app/PanelLinks.tsx`|오른쪽 패널에 이 문서를 가리키는 링크·나가는 링크·이어지지 않은 언급을 보여줌|
 |`src/app/PanelTodos.tsx`|오른쪽 패널에 문서 속 할 일과 칸반 보드의 안 끝난 카드(칸 이름 배지)를 마감일별로 묶어 보여줌(읽기 전용)|
 |`src/app/PeerAvatars.tsx`|상단바에 지금 같이 접속한 사람들의 동그란 얼굴 아이콘을 보여줌|
-|`src/app/PhoneNav.tsx`|휴대폰 화면 하단의 뒤로·앞으로·문서 내 찾기·명령 버튼 묶음|
+|`src/app/PhoneNav.tsx`|휴대폰 화면 하단의 뒤로·앞으로·문서 내 찾기·탭·명령 버튼 묶음|
 |`src/app/phoneNavRules.ts`|휴대폰 하단 이동 버튼을 언제 흐리게·숨길지 정함|
+|`src/app/phoneTabs.ts`|문서 탭을 켤지(휴대폰 폭이면 브라우저에서도) 정하고, 휴대폰 탭 버튼 숫자(10 이상 9+)를 만듦|
+|`src/app/PhoneTabsSheet.tsx`|휴대폰 하단 탭 버튼으로 여는 탭 고르기 판 — 2열 카드로 전환·닫기·새 탭|
 |`src/app/prefs.ts`|브라우저에 저장하는 사용자 설정값을 읽고 씀|
 |`src/app/printDoc.ts`|문서를 인쇄용으로 준비해 인쇄 창을 띄움|
 |`src/app/PublicBrand.tsx`|공개 보기 화면의 로고, 누르면 첫 화면으로 이동|

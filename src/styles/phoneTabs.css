@@ -1,0 +1,84 @@
+/* 휴대폰 탭 버튼 숫자 네모와 탭 고르기 판 (small 2026-10-22) */
+.phone-tabs-count {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 3px;
+  border: 2px solid currentColor;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.phone-tabs-sheet {
+  max-height: 85dvh;
+}
+
+.phone-tabs-new {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 18px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.phone-tabs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0;
+  padding: 4px 12px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  list-style: none;
+}
+
+.phone-tab-card {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--paper, var(--panel));
+}
+
+.phone-tab-card[data-active] {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
+.phone-tab-card-main {
+  width: 100%;
+  min-height: 88px;
+  padding: 10px 36px 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: start;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.phone-tab-card[data-preview] .phone-tab-card-main {
+  font-style: italic;
+}
+
+.phone-tab-card-close {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 32px;
+  height: 32px;
+  color: color-mix(in srgb, var(--ink) 60%, transparent);
+}
