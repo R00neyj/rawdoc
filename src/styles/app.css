@@ -1268,6 +1268,7 @@ body.sidebar-resizing {
 }
 
 .split-panes:not([data-layout='single']):not([hidden]) {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
@@ -1292,6 +1293,59 @@ body.sidebar-resizing {
   border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
   pointer-events: none;
   z-index: 5;
+}
+
+/* 칸 경계 막대 (F-2165) — 1px 칸 사이 선 위에 잡기 쉬운 폭으로 겹치고, 가리키거나 끄는 동안만 선이 보인다 */
+.split-divider {
+  position: absolute;
+  z-index: 6;
+  touch-action: none;
+  outline: none;
+}
+
+.split-divider[data-axis='x'] {
+  width: 8px;
+  transform: translateX(-50%);
+  cursor: col-resize;
+}
+
+.split-divider[data-axis='y'] {
+  height: 8px;
+  transform: translateY(-50%);
+  cursor: row-resize;
+}
+
+.split-divider::after {
+  content: '';
+  position: absolute;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.split-divider[data-axis='x']::after {
+  inset: 0 calc(50% - 1px);
+}
+
+.split-divider[data-axis='y']::after {
+  inset: calc(50% - 1px) 0;
+}
+
+.split-divider:hover::after,
+.split-divider:active::after,
+.split-divider:focus-visible::after {
+  opacity: 1;
+}
+
+/* 탭을 칸 가장자리로 끌 때 새 칸 자리 — body 포털, 좌표는 usePaneDropZones (F-2165 3장) */
+.split-drop-preview {
+  position: fixed;
+  z-index: 40;
+  box-sizing: border-box;
+  border: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  pointer-events: none;
 }
 
 /* ===== 단축키 판 — 메인 열 안, 편집 영역과 상태바 사이 (specs/features/F-2052.md 5장) ===== */

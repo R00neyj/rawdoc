@@ -3,16 +3,19 @@ import { useEffect, useRef, useState, type DragEvent } from 'react'
 import FolderMenu, { type FolderMenuItem } from './FolderMenu'
 import { IconAdd, IconClose, IconMore } from './icons'
 import { displayDocTitle } from './docMeta'
+import { currentTabDrag, endTabDrag, startTabDrag, useTabDrag } from './useTabDrag'
 import type { DocTabBarProps } from './useDocTabs'
 
 const DRAG_TYPE = 'application/x-doc-tab'
 
-type Drop = { key: string; side: 'before' | 'after' } | null
+// key null 은 탭이 없는 줄의 끝 자리
+type Drop = { key: string | null; side: 'before' | 'after' }
 
-export default function DocTabBar({ state, onActivate, onPin, onClose, onCloseOthers, onCloseRight, onMove, onNew, splitMenu }: DocTabBarProps) {
+export default function DocTabBar({ state, pane, onActivate, onPin, onClose, onCloseOthers, onCloseRight, onMove, onMoveIn, onNew, splitMenu }: DocTabBarProps) {
   const [menu, setMenu] = useState<{ key: string; point: { x: number; y: number } } | null>(null)
-  const [dragKey, setDragKey] = useState<string | null>(null)
-  const [drop, setDrop] = useState<Drop>(null)
+  const dragging = useTabDrag()
+  const [drop, setDrop] = useState<Drop | null>(null)
+  const shownDrop = dragging ? drop : null
   const listRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -36,28 +39,54 @@ export default function DocTabBar({ state, onActivate, onPin, onClose, onCloseOt
       ]
     : []
 
-  function handleDragOver(e: DragEvent<HTMLDivElement>, key: string) {
-    if (!dragKey || !e.dataTransfer.types.includes(DRAG_TYPE)) return
+  // 탭 위면 그 탭의 앞·뒤, 탭이 아닌 빈 자리(＋ 포함)는 끝 자리 (F-2165 3장)
+  function dropAt(e: DragEvent<HTMLDivElement>): Drop {
+    const row = (e.target as Element).closest<HTMLElement>('.doc-tab')
+    const key = row?.dataset.tabKey
+    if (row && key) {
+      const rect = row.getBoundingClientRect()
+      return { key, side: e.clientX < rect.left + rect.width / 2 ? 'before' : 'after' }
+    }
+    return { key: state.tabs.at(-1)?.key ?? null, side: 'after' }
+  }
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>) {
+    if (!currentTabDrag() || !e.dataTransfer.types.includes(DRAG_TYPE)) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    const rect = e.currentTarget.getBoundingClientRect()
-    const side = e.clientX < rect.left + rect.width / 2 ? 'before' : 'after'
-    if (drop?.key !== key || drop.side !== side) setDrop({ key, side })
+    const next = dropAt(e)
+    if (drop?.key !== next.key || drop.side !== next.side) setDrop(next)
   }
 
   function handleDrop(e: DragEvent<HTMLDivElement>) {
-    if (!dragKey || !drop) return
+    const tab = currentTabDrag()
+    if (!tab || !e.dataTransfer.types.includes(DRAG_TYPE)) return
     e.preventDefault()
-    const from = state.tabs.findIndex((t) => t.key === dragKey)
-    const slot = state.tabs.findIndex((t) => t.key === drop.key) + (drop.side === 'after' ? 1 : 0)
-    onMove(dragKey, slot > from ? slot - 1 : slot)
-    setDragKey(null)
+    const target = dropAt(e)
+    const slot = target.key === null ? 0 : state.tabs.findIndex((t) => t.key === target.key) + (target.side === 'after' ? 1 : 0)
+    if (tab.pane === pane) {
+      const from = state.tabs.findIndex((t) => t.key === tab.key)
+      onMove(tab.key, slot > from ? slot - 1 : slot)
+    } else {
+      onMoveIn(tab.pane, tab.key, slot)
+    }
+    endTabDrag()
     setDrop(null)
   }
 
   return (
     <>
-      <div className="doc-tabs" role="tablist" aria-label="열린 문서" ref={listRef}>
+      <div
+        className="doc-tabs"
+        role="tablist"
+        aria-label="열린 문서"
+        ref={listRef}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrop(null)
+        }}
+      >
         {state.tabs.map((tab) => {
           const title = displayDocTitle(tab.title)
           const active = tab.key === state.active
@@ -68,17 +97,15 @@ export default function DocTabBar({ state, onActivate, onPin, onClose, onCloseOt
               data-tab-key={tab.key}
               data-active={active || undefined}
               data-preview={!tab.pinned || undefined}
-              data-drop={drop?.key === tab.key ? drop.side : undefined}
+              data-drop={shownDrop?.key === tab.key ? shownDrop.side : undefined}
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData(DRAG_TYPE, tab.key)
                 e.dataTransfer.effectAllowed = 'move'
-                setDragKey(tab.key)
+                startTabDrag({ pane, key: tab.key })
               }}
-              onDragOver={(e) => handleDragOver(e, tab.key)}
-              onDrop={handleDrop}
               onDragEnd={() => {
-                setDragKey(null)
+                endTabDrag()
                 setDrop(null)
               }}
               // 가운데 버튼 자동 스크롤을 막아야 auxclick 이 온다 (F-296 4.2)

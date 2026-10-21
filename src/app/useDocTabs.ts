@@ -1,4 +1,4 @@
-// 설치 앱 창(넓은 화면)·휴대폰 폭의 문서 탭 — 탭은 currentDocId 를 따라가고 탭 조작은 selectDoc·goHome 을 부른다, 칸마다 탭 줄·나누기·닫기·포커스는 SplitState 하나로 (small 2026-10-21, F-2163, F-2164)
+// 설치 앱 창(넓은 화면)·휴대폰 폭의 문서 탭 — 탭은 currentDocId 를 따라가고 탭 조작은 selectDoc·goHome 을 부른다, 칸마다 탭 줄·나누기·닫기·끌기·포커스는 SplitState 하나로 (small 2026-10-21, F-2163, F-2164, F-2165)
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
 import type { EditorHandle } from '../editor/Editor'
 import type { ScrollAnchor } from '../lib/scrollAnchor'
@@ -22,6 +22,7 @@ import {
 } from './splitLayout'
 import { TABS_FULL, carryPaneKeys, routeOpen, splitAction } from './paneRules'
 import { restoreSplit, splitOn, splitUnitPanes, withFocusTabs } from './splitOff'
+import { dragSplit, dragSplitStep, moveInStep, moveTabToPane, type DropSide } from './paneDrag'
 
 const STANDALONE_QUERY = '(display-mode: standalone)'
 // Ctrl/⌘+클릭 뒤 이 시간 안에 문서가 바뀌면 새 고정 탭으로 연다 — 저장 flush 를 기다리는 전환도 넉넉히 덮는다
@@ -31,15 +32,19 @@ const FOCUS_REQUEST_MS = 3000
 const TABS_FULL_REPLACED = `탭이 ${MAX_TABS}개라 지금 탭에서 열었습니다.`
 
 type Position = { anchor: ScrollAnchor | null; selection: { anchor: number; head: number } | null }
+type MakeSplit = (s: SplitState, keys: readonly string[]) => SplitState | null
 
 export type DocTabBarProps = {
   state: DocTabsState
+  // 이 탭 줄의 칸 key — 끈 탭이 다른 칸 것이면 onMoveIn (F-2165 3장)
+  pane: string
   onActivate: (key: string) => void
   onPin: (key: string) => void
   onClose: (key: string) => void
   onCloseOthers: (key: string) => void
   onCloseRight: (key: string) => void
   onMove: (key: string, toIndex: number) => void
+  onMoveIn: (fromPane: string, key: string, toIndex: number) => void
   onNew: () => void
   // 넓은 화면 탭 메뉴의 나누기·칸 닫기 — 휴대폰 판은 없다 (F-2163 5장)
   splitMenu?: { canSplit: (key: string, dir: SplitDir) => boolean; onSplit: (key: string, dir: SplitDir) => void; onClosePane: (() => void) | null }
@@ -62,6 +67,9 @@ export type DocPanes = PaneStoreState & {
   keep: boolean
   on: boolean
   focusPane: (paneKey: string) => void
+  // 탭을 칸 가장자리에 놓아 나누기 — 넓은 화면 탭 줄이 켜졌을 때만 (F-2165 3장)
+  dragSplit: ((fromPane: string, key: string, toPane: string, side: DropSide) => void) | null
+  setRatios: (ratios: number[]) => void
   // 포커스 칸 편집기가 준비되면 SplitPanes 가 커밋마다 부른다 — 남은 요청이 그 칸이면 포커스
   serviceFocusRequest: (focusKey: string) => void
 }
@@ -415,10 +423,11 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
 
   // 포커스 칸 활성 탭이 지금 문서에서 벗어나면 그 탭으로 옮긴다 — 바뀌기 전에 그랬을 때만(전환 중 끼어들지 않게)
   const commitFollow = useCallback(
-    (next: SplitState) => {
+    (next: SplitState, via: SplitState | null) => {
       const prev = store.get().split
       const kept = new Set(next.panes.flatMap((p) => p.tabs.map((t) => t.key)))
       prev.panes.forEach((p) => p.tabs.forEach((t) => kept.has(t.key) || positionsRef.current.delete(t.key)))
+      if (via) store.set(via)
       store.set(next)
       const cur = latestRef.current.currentDocId
       const active = next.panes[next.focus].active
@@ -431,18 +440,23 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
   )
 
   // 어느 칸에서도 활성이 아니게 되는 문서가 있으면 그 저장을 끝낸 뒤 바꾼다 — 빠진 묶음은 저장 대기를 버린다 (F-2160 8장)
+  // via 는 두 칸이 바뀌는 변경의 중간 배치 — 칸이 하나씩 바뀌어야 carryPaneKeys 가 편집기를 잇는다 (F-2165 3장)
   const runChange = useCallback(
-    async (make: (s: SplitState, keys: readonly string[]) => SplitState | null) => {
+    async (make: MakeSplit, via?: MakeSplit): Promise<boolean> => {
       const before = store.get()
       const first = make(before.split, before.keys)
-      if (!first) return
+      if (!first) return false
       const cur = latestRef.current.currentDocId
       const after = docUnitIds(splitUnitPanes(first, cur, before.drained))
-      if (docUnitIds(splitUnitPanes(before.split, cur, before.drained)).every((id) => after.includes(id))) return commitFollow(first)
+      if (docUnitIds(splitUnitPanes(before.split, cur, before.drained)).every((id) => after.includes(id))) {
+        commitFollow(first, via?.(before.split, before.keys) ?? null)
+        return true
+      }
       await latestRef.current.beforeLeave()
       const now = store.get()
       const next = make(now.split, now.keys)
-      if (next) commitFollow(next)
+      if (next) commitFollow(next, via?.(now.split, now.keys) ?? null)
+      return next !== null
     },
     [store, commitFollow],
   )
@@ -497,6 +511,47 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
       navigate(tab.key)
     },
     [store, navigate, requestFocus],
+  )
+
+  // 탭 놓기 — 대상 칸에 더한 뒤 끈 칸에서 빼고, 포커스 칸 편집기로 (F-2165 3장)
+  const dropTab = useCallback(
+    (make: MakeSplit, via: MakeSplit) => {
+      const { split: s, keys } = store.get()
+      if (!latestRef.current.on || !make(s, keys)) return
+      latestRef.current.focusEditorRef.current = true
+      void runChange(make, via).then((done) => {
+        const now = store.get()
+        if (done) requestFocus(now.keys[now.split.focus])
+      })
+    },
+    [store, runChange, requestFocus],
+  )
+
+  const dragSplitTo = useCallback(
+    (fromPane: string, key: string, toPane: string, side: DropSide) =>
+      dropTab(
+        (s, keys) => dragSplit(s, keys.indexOf(fromPane), key, keys.indexOf(toPane), side),
+        (s, keys) => dragSplitStep(s, keys.indexOf(fromPane), key, keys.indexOf(toPane), side),
+      ),
+    [dropTab],
+  )
+
+  const moveIn = useCallback(
+    (fromPane: string, key: string, toPane: string, index: number) =>
+      dropTab(
+        (s, keys) => moveTabToPane(s, keys.indexOf(fromPane), key, keys.indexOf(toPane), index),
+        (s, keys) => moveInStep(s, keys.indexOf(fromPane), key, keys.indexOf(toPane), index),
+      ),
+    [dropTab],
+  )
+
+  const setRatios = useCallback(
+    (ratios: number[]) => {
+      const s = store.get().split
+      if (ratios.length === s.ratios.length && ratios.every((r, i) => r === s.ratios[i])) return
+      store.set({ ...s, ratios })
+    },
+    [store],
   )
 
   // 칸 포커스 — 그 칸 활성 문서가 지금 문서면 곧바로, 아니면 selectDoc 뒤 routeOpen 이 그 칸으로 (F-2163 4장)
@@ -625,12 +680,14 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
     const pane = split.panes[i]
     return {
       state: pane,
+      pane: paneKey,
       onActivate: (key) => (i === split.focus ? navigate(key) : activateIn(paneKey, key)),
       onPin: (key) => changePane(paneKey, (p) => pinTab(p, key)),
       onClose: (key) => changePane(paneKey, (p) => closeTabs(p, [key])),
       onCloseOthers: (key) => changePane(paneKey, (p) => closeOtherTabs(p, key)),
       onCloseRight: (key) => changePane(paneKey, (p) => closeTabsToRight(p, key)),
       onMove: (key, toIndex) => changePane(paneKey, (p) => moveTab(p, key, toIndex)),
+      onMoveIn: (fromPane, key, toIndex) => moveIn(fromPane, key, paneKey, toIndex),
       onNew,
       splitMenu: withSplit
         ? {
@@ -663,6 +720,8 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
     keep: multi && on,
     on,
     focusPane,
+    dragSplit: barMode && on ? dragSplitTo : null,
+    setRatios,
     serviceFocusRequest,
   }
   if (!enabled || !ready) return { bar: null, phone: null, panes, palette }

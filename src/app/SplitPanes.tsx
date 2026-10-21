@@ -1,9 +1,12 @@
-// 화면 분할 칸 격자 — 칸마다 탭 줄·DocumentArea, 창에 하나인 값은 포커스 칸 것을 쓴다 (F-2163 3장, F-2164 6장)
+// 화면 분할 칸 격자 — 칸마다 탭 줄·DocumentArea, 창에 하나인 값은 포커스 칸 것을 쓴다 (F-2163 3장, F-2164 6장, F-2165)
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type FocusEvent } from 'react'
+import { createPortal } from 'react-dom'
 import type { EditorState } from '@codemirror/state'
 import type { EditorHandle } from '../editor/Editor'
 import DocumentArea, { type DocumentAreaProps } from './DocumentArea'
 import DocTabBar from './DocTabBar'
+import SplitDividers from './SplitDividers'
+import { usePaneDropZones } from './usePaneDropZones'
 import { applyKanbanTo } from './useKanbanView'
 import { clampRatios, paneForNumber, type SplitLayout } from './splitLayout'
 import { shownSplit } from './splitOff'
@@ -89,8 +92,12 @@ export default function SplitPanes({ area, viewerDocId, panes, paneHost, unitFor
   })
   useLayoutEffect(() => () => paneHost.publish(null, false), [paneHost])
 
+  // 경계를 끄는 동안의 비율 — 놓을 때 한 번 저장한다 (F-2165 4장)
+  const [dragRatios, setDragRatios] = useState<number[] | null>(null)
+  const preview = usePaneDropZones(gridRef, { split, keys, onDrop: panes.on ? panes.dragSplit : null })
+
   const layout = solo ? 'single' : split.layout
-  const ratios = clampRatios(layout, split.ratios, size ?? undefined)
+  const ratios = clampRatios(layout, dragRatios?.length === split.ratios.length ? dragRatios : split.ratios, size ?? undefined)
   const axes = AXES[layout]
   const gridStyle: CSSProperties | undefined = solo
     ? undefined
@@ -136,6 +143,27 @@ export default function SplitPanes({ area, viewerDocId, panes, paneHost, unitFor
           />
         )
       })}
+      {!solo && (
+        <SplitDividers
+          layout={layout}
+          ratios={ratios}
+          areaRef={gridRef}
+          onDrag={setDragRatios}
+          onCommit={(next) => {
+            panes.setRatios(next)
+            setDragRatios(null)
+          }}
+        />
+      )}
+      {preview &&
+        createPortal(
+          <div
+            className="split-drop-preview"
+            data-side={preview.side}
+            style={{ left: preview.box.left, top: preview.box.top, width: preview.box.width, height: preview.box.height }}
+          />,
+          document.body,
+        )}
     </div>
   )
 }
@@ -174,6 +202,8 @@ function Pane(p: PaneProps) {
 
   useLayoutEffect(() => {
     paneHost.register(paneKey, { docId, viewMode, editorRef, viewerRef, contentAreaRef })
+    // 탭을 끌어 놓을 칸 영역 — 탭 줄을 뺀 DocumentArea 뿌리 (F-2165 3장)
+    if (contentAreaRef.current) contentAreaRef.current.dataset.paneZone = String(p.number)
   })
   useLayoutEffect(() => () => paneHost.unregister(paneKey), [paneHost, paneKey])
 
