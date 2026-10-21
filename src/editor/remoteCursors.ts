@@ -103,6 +103,46 @@ export function publishCursor(awareness: Awareness, cursor: PeerCursor | null): 
   if (same) awareness.emit('change', [{ added: [], updated: [awareness.clientID], removed: [] }, 'local'])
 }
 
+// ----- 내 커서 자리 — awareness 하나에 칸 여럿이면 마지막 포커스 칸만 싣는다 (F-2161 6장) -----
+
+export type CursorSeat = { owns(): boolean; claim(): boolean; leave(): void }
+
+type Seat = { onHandedOver: () => void; claimedAt: number }
+type SeatTable = { seats: Seat[]; owner: Seat | null; claims: number }
+
+const seatTables = new WeakMap<Awareness, SeatTable>()
+
+export function takeCursorSeat(awareness: Awareness, onHandedOver: () => void): CursorSeat {
+  const table = seatTables.get(awareness) ?? { seats: [], owner: null, claims: 0 }
+  seatTables.set(awareness, table)
+  const seat: Seat = { onHandedOver, claimedAt: 0 }
+  table.seats.push(seat)
+  table.owner ??= seat
+  let left = false
+
+  return {
+    owns: () => !left && table.owner === seat,
+    claim() {
+      if (left) return false
+      seat.claimedAt = ++table.claims
+      if (table.owner === seat) return false
+      table.owner = seat
+      return true
+    },
+    leave() {
+      if (left) return
+      left = true
+      table.seats.splice(table.seats.indexOf(seat), 1)
+      if (table.owner !== seat) return
+      // 마지막으로 claim 한 자리, 없으면 마지막에 들어온 자리
+      const next = table.seats.reduce<Seat | null>((best, s) => (!best || s.claimedAt >= best.claimedAt ? s : best), null)
+      table.owner = next
+      if (!next) seatTables.delete(awareness)
+      next?.onHandedOver()
+    },
+  }
+}
+
 // ----- 조합 중 얼리기 (6.2) -----
 
 export type RemoteCursorSync = {
@@ -221,6 +261,7 @@ class RemoteCursorsView {
   private sender: CursorSender | null = null
   private sync: RemoteCursorSync | null = null
   private offAwareness: (() => void) | null = null
+  private seat: CursorSeat | null = null
 
   constructor(readonly view: EditorView) {}
 
@@ -241,14 +282,18 @@ class RemoteCursorsView {
     const onChange = ({ added, updated, removed }: AwarenessChange) => this.onAwareness([...added, ...updated, ...removed])
     source.awareness.on('change', onChange)
     this.offAwareness = () => source.awareness.off('change', onChange)
+    // 주인 아닌 칸은 내 커서를 보내지 않는다 — 넘겨받으면 다시 보낸다 (F-2161 6장)
+    this.seat = takeCursorSeat(source.awareness, () => this.resend())
     // 붙는 순간 이미 있는 접속자는 "새로 보였다" 로 친다 (5.2 표 끝 줄)
-    if (this.notePeers()) this.sender.resend({ focused: this.focused(), read: () => this.readCursor() })
+    if (this.notePeers() && this.seat.owns()) this.resend()
     this.requestRefresh('all')
   }
 
   detach() {
     this.offAwareness?.()
     this.offAwareness = null
+    this.seat?.leave()
+    this.seat = null
     this.sender?.dispose()
     this.sync?.dispose()
     this.sender = null
@@ -280,7 +325,9 @@ class RemoteCursorsView {
     }
     if (isForced(update) && this.sync?.caughtUp()) ids = 'all'
     if (ids) this.resolve(ids, update.state.doc.length)
-    if (update.selectionSet || update.focusChanged) {
+    if (update.focusChanged && this.focused() && this.seat?.claim()) {
+      if (this.known.size > 0) this.resend()
+    } else if ((update.selectionSet || update.focusChanged) && this.seat?.owns()) {
       this.sender?.offer({ peers: this.known.size, focused: this.focused(), read: () => this.readCursor() })
     }
   }
@@ -291,6 +338,10 @@ class RemoteCursorsView {
 
   private focused(): boolean {
     return this.view.hasFocus && document.hasFocus()
+  }
+
+  private resend() {
+    this.sender?.resend({ focused: this.focused(), read: () => this.readCursor() })
   }
 
   private readCursor(): PeerCursor | null {
@@ -319,7 +370,7 @@ class RemoteCursorsView {
     if (!source) return
     const ids = changed.filter((id) => id !== source.awareness.clientID)
     if (ids.length === 0) return
-    if (this.notePeers()) this.sender?.resend({ focused: this.focused(), read: () => this.readCursor() })
+    if (this.notePeers() && this.seat?.owns()) this.resend()
     this.sync?.remoteChanged(ids)
   }
 

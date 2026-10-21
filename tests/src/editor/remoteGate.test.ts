@@ -5,7 +5,7 @@ import { EditorSelection, EditorState } from '@codemirror/state'
 import type { ChangeSpec } from '@codemirror/state'
 import { YSyncConfig } from 'y-codemirror.next'
 
-import { createYBinding, undoLocal } from '../../../src/editor/yBinding'
+import { createYBinding, createYBindingFromState, undoLocal } from '../../../src/editor/yBinding'
 import type { YBinding } from '../../../src/editor/yBinding'
 import { REMOTE_HOLD_CHECK_MS, connectRemote, createRemoteGate, isEditorRelay } from '../../../src/editor/remoteGate'
 import { setBoardComposing } from '../../../src/editor/boardComposition'
@@ -601,5 +601,88 @@ describe('F-306 U15 isEditorRelay', () => {
     expect(isEditorRelay({ relay: 'from-editor' })).toBe(false)
     gate.destroy()
     binding.destroy()
+  })
+})
+
+// 한 공유 Doc 에 게이트 둘 — 같은 문서 두 칸 (specs/features/F-2161.md 2장)
+function makePane(shared: Y.Doc) {
+  const binding = createYBindingFromState(Y.encodeStateAsUpdate(shared))
+  const conf = new YSyncConfig(binding.ytext, null)
+  binding.undoManager.addTrackedOrigin(conf)
+  const flags = { composing: false }
+  const log: string[] = []
+  const gate = createRemoteGate(binding.ydoc, {
+    docId: 'doc-1',
+    sharedDoc: shared,
+    isComposing: () => flags.composing,
+    afterFlush: () => log.push('afterFlush'),
+  })
+  const type = (pos: number, text: string) => binding.ydoc.transact(() => binding.ytext.insert(pos, text), conf)
+  return { binding, gate, flags, log, type, text: () => binding.ytext.toString() }
+}
+
+function twoPanes(text: string) {
+  const shared = new Y.Doc()
+  shared.getText('content').insert(0, text)
+  const a = makePane(shared)
+  const b = makePane(shared)
+  const dispose = () => {
+    for (const pane of [a, b]) {
+      pane.gate.destroy()
+      pane.binding.destroy()
+    }
+  }
+  return { shared, a, b, dispose }
+}
+
+describe('F-2161 U1 게이트 둘이 한 공유 Doc 에', () => {
+  it('A 에서 친 글이 공유 Doc 과 B 에 닿는다', () => {
+    const { shared, a, b, dispose } = twoPanes('hello')
+    a.type(5, ' A')
+    expect(shared.getText('content').toString()).toBe('hello A')
+    expect(b.text()).toBe('hello A')
+    b.type(0, 'B')
+    expect(a.text()).toBe('Bhello A')
+    dispose()
+  })
+})
+
+describe('F-2161 U2 게이트마다 중계 origin', () => {
+  it('A·B 중계 origin 은 둘 다 isEditorRelay 참, 같은 모양·null·편집기 Doc 쪽 origin 은 거짓', () => {
+    const { shared, a, b, dispose } = twoPanes('hello')
+    const sharedOrigins: unknown[] = []
+    shared.on('update', (_u: Uint8Array, origin: unknown) => sharedOrigins.push(origin))
+    const editorOrigins: unknown[] = []
+    b.binding.ydoc.on('update', (_u: Uint8Array, origin: unknown) => editorOrigins.push(origin))
+    a.type(0, 'a')
+    b.type(0, 'b')
+    expect(sharedOrigins).toHaveLength(2)
+    expect(sharedOrigins[0]).not.toBe(sharedOrigins[1])
+    expect(sharedOrigins.every((origin) => isEditorRelay(origin))).toBe(true)
+    expect(editorOrigins).toHaveLength(2)
+    expect(isEditorRelay(editorOrigins[0])).toBe(false)
+    expect(isEditorRelay({ relay: 'from-editor' })).toBe(false)
+    expect(isEditorRelay(null)).toBe(false)
+    dispose()
+  })
+})
+
+describe('F-2161 U3 다른 칸의 편집은 원격처럼 보류된다', () => {
+  it('B 조합 중 A 의 편집은 B 에 안 오고 flushIfIdle 뒤 따라잡는다. B 가 조합으로 쓴 글은 A 가 곧바로 받는다', () => {
+    const { shared, a, b, dispose } = twoPanes('hello')
+    b.flags.composing = true
+    a.type(5, '1')
+    expect(shared.getText('content').toString()).toBe('hello1')
+    expect(b.text()).toBe('hello')
+    b.type(0, '가')
+    expect(a.text()).toBe('가hello1')
+    b.gate.flushIfIdle()
+    expect(b.text()).toBe('가hello')
+    b.flags.composing = false
+    b.gate.flushIfIdle()
+    expect(b.text()).toBe('가hello1')
+    expect(b.log).toEqual(['afterFlush'])
+    expect(a.log).toEqual([])
+    dispose()
   })
 })

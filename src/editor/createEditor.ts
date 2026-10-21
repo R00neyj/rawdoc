@@ -329,6 +329,8 @@ type CreateEditorOptions = {
   docId?: string
   // 실시간 경로 (F-305 9장) — 첫 동기화가 끝난 방 Doc 에서 편집기 Doc 을 복제하고 게이트를 세운다. text 는 쓰지 않는다
   live?: LiveEditorOptions
+  // 같은 문서가 다른 칸에도 뜬 창 안 원본 (F-2161 4장) — 복제해 게이트를 세운다. text 는 쓰지 않고, live 와 같이 오면 live 만 쓴다
+  paneSource?: Y.Doc
 }
 
 export type LiveEditorOptions = {
@@ -362,6 +364,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
     onNavigateFolder = () => {},
     docId,
     live,
+    paneSource,
   } = options
 
   let destroyed = false
@@ -401,8 +404,9 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   // 지금 처리 중인 제목 input 의 직전 textarea 값(없으면 undefined) — writeLiveTitle 이 읽는다 (리뷰 E4)
   let titleInputPrev: string | undefined
 
-  // 원본 Y.Text(F-302 3.1). 실시간이면 방 Doc 복제 — 여기서 connectRemote 까지 await 가 없어 사이에 원격 업데이트가 끼지 않는다 (F-305 5.3·9.2)
-  const binding = live ? createYBindingFromState(Y.encodeStateAsUpdate(live.roomDoc)) : createYBinding(text)
+  // 원본 Y.Text(F-302 3.1). 방 Doc·창 안 원본이 있으면 그 복제 — 여기서 connectRemote 까지 await 가 없어 사이에 원격 업데이트가 끼지 않는다 (F-305 5.3·9.2)
+  const sourceDoc = live?.roomDoc ?? paneSource
+  const binding = sourceDoc ? createYBindingFromState(Y.encodeStateAsUpdate(sourceDoc)) : createYBinding(text)
 
   const extensions: Extension[] = [
     docTitleExtension({
@@ -536,7 +540,7 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   // 표 칸 하위 에디터(tableWidget.ts)의 우클릭도 같은 콜백으로 (F-170.md 3.2)
   setCellContextMenuHandler(view, (info) => notifyContextMenu(info))
   // 뷰가 있어야 조합 상태를 읽는다 — 훅이 없으면 null 이고 아무것도 만들지 않는다 (F-303 4.2·4.4)
-  const remote = connectRemote({ view, editorDoc: binding.ydoc, docId, sharedDoc: live?.roomDoc })
+  let remote = connectRemote({ view, editorDoc: binding.ydoc, docId, sharedDoc: sourceDoc })
   // 원격 제목은 게이트를 지나 편집기 Doc 에 들어온다 — 조합 중에는 같이 보류된다 (F-305 9.3)
   const unobserveTitle = live ? observeTitle(binding.ydoc, live.onRemoteTitle) : () => {}
   // 상대 위치는 편집기 Y.Text 로 만들고 푼다 — 화면과 같은 쪽 (F-307 5.1)
@@ -559,6 +563,13 @@ export function createEditor(parent: HTMLElement, options: CreateEditorOptions =
   return {
     view,
     comments,
+    editorDoc: binding.ydoc,
+
+    // 게이트가 없을 때만 창 안 원본을 따른다 — 편집기·실행 취소 기록은 그대로 (F-2161 4장)
+    followSource(source: Y.Doc) {
+      if (destroyed || remote) return
+      remote = connectRemote({ view, editorDoc: binding.ydoc, docId, sharedDoc: source })
+    },
 
     getText(lineEnding: LineEnding): string {
       const sep = lineEnding === 'crlf' ? '\r\n' : '\n'

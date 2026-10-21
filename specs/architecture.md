@@ -123,7 +123,7 @@ src/
   - `lib/`: `wikiResolve.ts`(F-2018 — 경로식·가까운 폴더 해석기, 순수 함수, worker 도 import)
   - `viewer/`: `headingTarget.ts`(F-2018 — markdown-it 파싱 결과로 제목 찾기, DOM 없음)
 - Yjs 골격(2026-09-23)으로 추가
-  - `editor/`: `yBinding.ts`(F-302 — 로컬 `Y.Doc`·되돌리기), `undoGroup.ts`(F-302 — 되돌리기 묶음 판정), `remoteGate.ts`(F-303 — 공유 `Y.Doc`·IME 게이트·연결 포트), `boardComposition.ts`(F-2141 — 칸반 보드 입력칸 조합 상태), `devSyncFlag.ts`(F-303 — 개발 전용 플래그)
+  - `editor/`: `yBinding.ts`(F-302 — 로컬 `Y.Doc`·되돌리기), `undoGroup.ts`(F-302 — 되돌리기 묶음 판정), `remoteGate.ts`(F-303 — 공유 `Y.Doc`·IME 게이트·연결 포트, F-2161 게이트별 origin), `paneSource.ts`(F-2161 — 같은 문서 여러 칸의 창 안 원본), `boardComposition.ts`(F-2141 — 칸반 보드 입력칸 조합 상태), `devSyncFlag.ts`(F-303 — 개발 전용 플래그)
   - `app/`: `yDevLink.ts`(F-303 — 개발 전용 두 탭 연결, 운영 빌드에 없음)
 - 옵시디언 볼트 내보내기(2026-09-23)으로 추가
   - `app/`: `exportVault.ts`(F-2020 — 볼트 계획·본문 변환·링크 고쳐 쓰기·스트리밍 zip)

@@ -4,7 +4,7 @@ import * as Y from 'yjs'
 import { Awareness } from 'y-protocols/awareness'
 
 import { REMOTE_HOLD_CHECK_MS } from '../../../src/editor/remoteGate'
-import { CURSOR_SEND_MS, createCursorSender, createRemoteCursorSync, publishCursor } from '../../../src/editor/remoteCursors'
+import { CURSOR_SEND_MS, createCursorSender, createRemoteCursorSync, publishCursor, takeCursorSeat } from '../../../src/editor/remoteCursors'
 import type { PeerCursor } from '../../../src/lib/docRoomProtocol'
 
 const at = (n: number): PeerCursor => ({ anchor: { index: n }, head: { index: n } })
@@ -173,5 +173,83 @@ describe('F-307 A7 얼리기 판정', () => {
     controller.dispose()
     vi.advanceTimersByTime(10_000)
     expect(resolved).toHaveLength(0)
+  })
+})
+
+// awareness 하나에 칸 여럿 — 내 커서는 마지막 포커스 칸만 싣는다 (specs/features/F-2161.md 6장)
+function seats(count: number) {
+  const awareness = new Awareness(new Y.Doc())
+  clearInterval((awareness as unknown as { _checkInterval: ReturnType<typeof setInterval> })._checkInterval)
+  const handed: number[] = []
+  const list = Array.from({ length: count }, (_, i) => takeCursorSeat(awareness, () => handed.push(i)))
+  return { awareness, handed, list }
+}
+
+describe('F-2161 U9 커서 자리 잡기', () => {
+  it('자리 하나 → 주인이고 claim 은 거짓', () => {
+    const { list, handed } = seats(1)
+    expect(list[0].owns()).toBe(true)
+    expect(list[0].claim()).toBe(false)
+    expect(list[0].owns()).toBe(true)
+    expect(handed).toEqual([])
+  })
+
+  it('자리 둘 — 첫째가 주인, 둘째 claim 이 참이면 첫째는 주인이 아니다', () => {
+    const { list } = seats(2)
+    expect(list[0].owns()).toBe(true)
+    expect(list[1].owns()).toBe(false)
+    expect(list[1].claim()).toBe(true)
+    expect(list[1].owns()).toBe(true)
+    expect(list[0].owns()).toBe(false)
+    expect(list[1].claim()).toBe(false)
+    expect(list[0].claim()).toBe(true)
+  })
+
+  it('awareness 가 다르면 자리도 따로다', () => {
+    const first = seats(1)
+    const second = seats(1)
+    expect(first.list[0].owns()).toBe(true)
+    expect(second.list[0].owns()).toBe(true)
+  })
+})
+
+describe('F-2161 U10 주인이 떠나면 넘긴다', () => {
+  it('남은 자리 중 마지막으로 claim 한 자리가 주인이 되고 그 onHandedOver 가 1번 돈다', () => {
+    const { list, handed } = seats(3)
+    list[2].claim()
+    list[1].claim()
+    list[2].claim()
+    list[0].claim()
+    list[0].leave()
+    expect(list[2].owns()).toBe(true)
+    expect(list[1].owns()).toBe(false)
+    expect(handed).toEqual([2])
+  })
+
+  it('claim 한 자리가 없으면 마지막에 들어온 자리가 주인이 된다', () => {
+    const { list, handed } = seats(3)
+    list[0].leave()
+    expect(list[2].owns()).toBe(true)
+    expect(list[1].owns()).toBe(false)
+    expect(handed).toEqual([2])
+  })
+
+  it('주인 아닌 자리가 떠나면 넘기지 않는다', () => {
+    const { list, handed } = seats(2)
+    list[1].leave()
+    expect(list[0].owns()).toBe(true)
+    expect(handed).toEqual([])
+  })
+
+  it('남은 자리가 0 이면 아무 일 없고, 떠난 자리는 다시 주인이 될 수 없다', () => {
+    const { awareness, list, handed } = seats(1)
+    list[0].leave()
+    list[0].leave()
+    expect(handed).toEqual([])
+    expect(list[0].owns()).toBe(false)
+    expect(list[0].claim()).toBe(false)
+    const next = takeCursorSeat(awareness, () => handed.push(9))
+    expect(next.owns()).toBe(true)
+    expect(handed).toEqual([])
   })
 })

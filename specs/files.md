@@ -362,6 +362,7 @@
 |`src/editor/listEnter.ts`|빈 목록 줄에서 Enter를 누르면 목록을 끝내거나 이어감|
 |`src/editor/liveTitle.ts`|문서 제목 변경을 다른 사람과 실시간으로 주고받음|
 |`src/editor/outline.ts`|본문에서 제목들을 뽑아 목차를 만듦|
+|`src/editor/paneSource.ts`|같은 문서를 화면 두 칸 이상에 띄울 때 창 안에 원본 하나를 만들어 칸 편집기들이 따르게 하고, 저장할 본문을 거기서 읽음|
 |`src/editor/preview/active.ts`|커서가 놓인 줄을 알아내 그 줄만 기호를 보이게 함|
 |`src/editor/preview/blocks.ts`|편집 화면에서 표·코드 블록을 보기 좋은 상자로 바꿔 보여 줌|
 |`src/editor/preview/cellInline.ts`|표 칸 안의 굵게·링크 같은 서식을 알아봄|

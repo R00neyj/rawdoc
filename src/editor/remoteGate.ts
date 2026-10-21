@@ -29,14 +29,15 @@ declare global {
   }
 }
 
-// 객체 상수라 다른 모듈의 origin 과 우연히 같을 수 없고 UndoManager 가 추적하지 않는다 (8.2)
-const RELAY_FROM_EDITOR = { relay: 'from-editor' }
+// 객체라 다른 모듈의 origin 과 우연히 같을 수 없고 UndoManager 가 추적하지 않는다 (8.2)
 const RELAY_FROM_SHARED = { relay: 'from-shared' }
 const REMOTE = { relay: 'remote' }
+// 게이트마다 중계 origin 을 따로 둔다 — 같은 공유 Doc 의 다른 칸 게이트가 내 중계를 원격으로 받는다 (F-2161 2장)
+const editorRelays = new WeakSet<object>()
 
-// 방 Doc 에 들어온 업데이트가 이 편집기의 내 편집인가 — 상수 자체는 내보내지 않는다 (F-306 7.1)
+// 방 Doc 에 들어온 업데이트가 이 창 어느 칸의 내 편집인가 — origin 은 내보내지 않는다 (F-306 7.1)
 export function isEditorRelay(origin: unknown): boolean {
-  return origin === RELAY_FROM_EDITOR
+  return typeof origin === 'object' && origin !== null && editorRelays.has(origin)
 }
 
 export type RemoteGateOptions = {
@@ -66,6 +67,9 @@ export function createRemoteGate(editorDoc: Y.Doc, options: RemoteGateOptions): 
   // 바깥 Doc 이면 편집기 Doc 이 이미 그 복제다 — 채우면 두 벌이 된다 (F-305 5.3)
   if (!external) Y.applyUpdate(sharedDoc, Y.encodeStateAsUpdate(editorDoc), REMOTE)
 
+  // destroy 뒤에도 집합에 남긴다 — 버린 게이트의 늦은 업데이트도 내 편집이다 (F-2161 2장)
+  const relayFromEditor = { relay: 'from-editor' }
+  editorRelays.add(relayFromEditor)
   const listeners = new Set<(update: Uint8Array) => void>()
   let holding = false
   let editorWrote = false
@@ -103,11 +107,11 @@ export function createRemoteGate(editorDoc: Y.Doc, options: RemoteGateOptions): 
   function onEditorUpdate(update: Uint8Array, origin: unknown) {
     if (origin === RELAY_FROM_SHARED) return
     editorWrote = true
-    Y.applyUpdate(sharedDoc, update, RELAY_FROM_EDITOR)
+    Y.applyUpdate(sharedDoc, update, relayFromEditor)
   }
 
   function onSharedUpdate(update: Uint8Array, origin: unknown) {
-    if (origin === RELAY_FROM_EDITOR) {
+    if (origin === relayFromEditor) {
       listeners.forEach((listener) => listener(update))
       return
     }
