@@ -114,6 +114,13 @@
   zoom: 0.42;
 }
 
+/* 보기 모드 규칙(.viewer·코드블록·표의 overflow auto)이 줄인 카드 안에 스크롤바를 띄웠다 — 미리보기는 잘리기만 */
+.phone-tab-thumb .phone-tab-thumb-page,
+.phone-tab-thumb .phone-tab-thumb-page * {
+  overflow: hidden;
+  scrollbar-width: none;
+}
+
 .phone-tab-thumb-page img,
 .phone-tab-thumb-page .mermaid {
   display: none;
