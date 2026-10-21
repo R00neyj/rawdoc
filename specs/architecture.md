@@ -186,6 +186,8 @@ src/
   - `styles/`: `kanban.css`(F-2140 — `main.tsx` 정적 import)
 - 칸반 완료 칸 설정·할 일 패널 칸반 카드(small 2026-10-14)로 추가
   - `app/`: `useKanbanSettings.ts`(설정 `칸반` 탭 자료 — 지금 문서가 칸반일 때만 편집기 원문에서 완료 칸 선택지를 읽고, 쓰기는 `applyKanban` 한 길), `KanbanSettingsTab.tsx`(탭 화면). 완료 칸은 문서 프런트매터 `kanban-done: {칸 이름}`(없거나 맞는 칸이 없으면 마지막 칸) — 기기 설정이 아니라 문서에 산다. `lib/docTodos.ts` 가 `lib/kanban.ts` 를 읽어 칸반 문서는 카드 규칙만 쓴다
+- 로컬 파일 하나 편집(F-2154)으로 추가
+  - `app/`: 로컬 파일 훅·화면(이름은 F-2155 가 정한다 — 세션 훅·S-11 화면·`encodeMarkdown` 짝), 외부 변경 판정 `decideExternalChange`(F-2157, 순수 함수), 최근 파일 저장소(F-2158)
 
 - 단위 테스트는 `tests/` 아래, 원본 경로를 그대로 따라 `tests/{원본 경로}/{이름}.test.ts` (2026-09-28 사용자 지정. 처음엔 대상 옆이었다 — `specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지
@@ -253,6 +255,15 @@ type YjsMetaRow = {
 - `y-indexeddb` 를 쓰지 않고 직접 짠다(F-301 3.6 결정, F-306 2장 근거). 압축은 500행이 되고 입력이 2,000ms 멈췄을 때만, 그 세션이 아는 키만 지운다
 - 로그아웃해도 지우지 않는다. `md-remote`·`md-docs` 와 같은 규칙
 
+**IndexedDB `md-files`(F-2158)** — 최근 로컬 파일 handle. `md-docs` 와 별도 DB, 버전 1
+
+```ts
+// 스토어 recent — 최대 10, openedAt 최신 위, isSameEntry 로 하나만
+type RecentFileRow = { id: string; handle: FileSystemFileHandle; name: string; openedAt: number }
+```
+
+- 로그인과 무관하고 로그아웃해도 지우지 않는다. 본문은 담지 않는다 (F-2154 5장)
+
 ## 3. 문서 상태 흐름
 
 - 열린 문서 본문의 원본은 에디터마다 만드는 `Y.Doc` 의 `Y.Text`(`content`) 하나다. CM6 `EditorState` 는 `y-codemirror.next` 로 이어진 투영이다. React state 에 본문 문자열을 두지 않는다 (F-302)
@@ -266,6 +277,7 @@ type YjsMetaRow = {
 - `accountBlocked`(`/api/me` 의 `blocked`) → 모든 서버 문서 읽기 전용, `decideDocPath` 입력 `forbidden` 을 참으로 넘겨 소켓 없이 `view` 경로 (F-2030 5.2)
 - **칸반 보드(F-2140)**: 보드는 `EditorState` 의 또 하나의 투영이다 — 편집기는 언마운트하지 않고 숨긴 채 살아 있고(`Y.Doc`·게이트·실행 취소 기록 그대로), 보드는 핸들 `onChanges` 마다 `view.state.doc` 을 `parseKanban` 으로 읽는다. React 상태에는 칸·카드 배열만 둔다. 보드에서의 쓰기는 `view.dispatch` 한 길뿐이다 (F-2140)
 - **설치 앱 문서 탭(small 2026-10-21)**: 탭은 `currentDocId` 를 따라가는 목록일 뿐이다(`useDocTabs`·순수 상태 기계 `docTabs.ts`). 편집기·`Y.Doc`·실시간 연결은 활성 탭 하나만 갖고, 뒤 탭은 스크롤·커서 위치만 메모리에 둔다. 탭 전환은 `selectDoc`·`goHome` 을 그대로 탄다. 편집기 핸들 `onChanges` 의 `local`(ySync 반영이 아닌 변경)이 임시 탭 고정에 쓰인다. 편집기·사이드바의 새 탭 요청은 `src/lib/appTabs.ts` 다리를 거친다
+- **로컬 파일(S-11, F-2154)**: 링크 없는 편집기 `Y.Doc` 의 `Y.Text` 가 원본이고 저장소 행은 없다. 디스크 → `Y.Doc` 은 여는 때 1회(`decodeMarkdown`, 세션 `key` 로 `Editor` 마운트). `Y.Text` → `getText(lineEnding)` → `encodeMarkdown` → `createWritable` 은 단방향, 입력이 1,000ms 멈추면. 외부 변경은 열린 `Y.Doc` 에 쓰지 않고 새 `key` 로 재마운트 (F-2154 1·3·4장)
 
 ## 4. 설정 (localStorage)
 
@@ -315,6 +327,7 @@ type YjsMetaRow = {
 | `md.calendarFormat` | 날짜 문서 제목 형식(템플릿 날짜 토큰) | `YYYY-MM-DD` | small 2026-10-10 |
 | `md.calendarTemplate` | `md.newDocTemplate` 과 같은 값 | `none` | small 2026-10-10 |
 | `md.docTabs` | `{ 범위: { tabs: [{ key, pinned, title, shared? }], active } }` JSON — 설치 앱 문서 탭. 범위는 `{저장소 종류}:{서버 사용자 id 또는 local}`, `key` 는 문서 id(다른 종류 항목은 접두사 붙인 문자열 키 자리) | 없음(복원할 탭 없음) | small 2026-10-21 |
+| `md.localFileOpen` | `import` \| `edit` — OS 로 연 `.md` 를 가져올지, 그 파일만 고칠지(S-11). 모르는 값은 `import` | `import` | F-2156 |
 
 - localStorage 접근은 전부 `prefs.js` 를 거친다. 읽기·쓰기 예외(시크릿 창·차단)는 삼키고 기본값을 쓴다
   - 예외: `md.theme`·`md.sidebar`·`md.sidebarWidth`·`md.startScreen`·`md.contentWidth` 는 `BOOT_PAINT_SCRIPT` 도 읽는다 — 첫 페인트 전이라 `prefs.ts` 를 쓸 수 없다 (F-2015, F-2043). `md.theme` 은 공개 사이트·랜딩의 첫 칠 테마 스크립트(`src/lib/pageTheme.ts`)도 읽는다 (small 2026-10-12)
