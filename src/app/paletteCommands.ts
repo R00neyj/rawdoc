@@ -1,5 +1,5 @@
 // 등록된 명령 목록 — 1차는 템플릿 삽입·인쇄 두 개 (specs/features/F-2022.md 3.3). 명령을 더할 때 고치는 곳이 여기다
-import type { PaletteCommand, PaletteItem } from './paletteContract'
+import type { PaletteActionCommand, PaletteCommand, PaletteContext, PaletteItem } from './paletteContract'
 import { THEME_OPTIONS, type ThemePref } from './theme'
 import { EDITOR_PALETTE_COMMANDS } from './paletteEditorCommands'
 import { PALETTE_DATETIME_COMMANDS } from './paletteDateTimeCommands'
@@ -482,3 +482,19 @@ let rightPanelOpenState: boolean | null = null
 let lineNumbersOn = false
 let toolbarOn = false
 let wikiPreviewOn = false
+
+const RECENT_FILE_KEYWORDS = ['최근 파일', '파일', '컴퓨터', '로컬', 'recent', 'file', 'local']
+
+// 최근 연 컴퓨터 파일마다 한 줄 — 고정·최근 기억에는 안 들어간다 (F-2158 5장)
+export function recentFileCommands(ctx: PaletteContext): PaletteActionCommand[] {
+  const recent = ctx.recentFiles
+  if (!recent) return []
+  return recent.items.map((item) => ({
+    id: `recentFile:${item.id}`,
+    kind: 'action',
+    label: `최근 파일: ${item.name}`,
+    keywords: RECENT_FILE_KEYWORDS,
+    when: () => true,
+    run: () => recent.open(item.id),
+  }))
+}

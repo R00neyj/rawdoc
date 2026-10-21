@@ -15,7 +15,7 @@ import {
   type PaletteDoc,
   type PaletteSection,
 } from './paletteContract'
-import { PALETTE_COMMANDS } from './paletteCommands'
+import { PALETTE_COMMANDS, recentFileCommands } from './paletteCommands'
 import { prepareDocIndex } from './paletteDocs'
 import { parseCommandIds, pushRecentCommand, togglePinnedCommand } from './paletteMemory'
 import { getPref, setPref } from './prefs'
@@ -79,7 +79,7 @@ export default function CommandPalette({ open, context, onClose, selectQueryRef 
   }
 
   // items 는 참조가 렌더마다 안정돼야 한다 — 아래 "렌더 중 조정" 이 목록이 바뀌었는지 본다(무한 렌더 방지)
-  const commands = useMemo(() => visibleCommands(PALETTE_COMMANDS, context), [context])
+  const commands = useMemo(() => visibleCommands([...PALETTE_COMMANDS, ...recentFileCommands(context)], context), [context])
   const parsedQuery = useMemo(() => parsePaletteQuery(query), [query])
 
   const docsAll = context.docs?.all

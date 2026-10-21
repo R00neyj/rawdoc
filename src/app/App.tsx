@@ -110,6 +110,7 @@ import { useVaultGate } from './useVaultGate'
 import { hideLockedVaultDocs } from './vaultVisibility'
 import { useImportFlow } from './useImportFlow'
 import { useLocalFile, type UseLocalFileResult } from './useLocalFile'
+import { useRecentFiles } from './useRecentFiles'
 import { localFileSupported } from '../lib/fileSystemAccess'
 import { useE2eeMigrate } from './useE2eeMigrate'
 import { useE2eeConvert } from './useE2eeConvert'
@@ -365,6 +366,7 @@ export default function App() {
   const localFile = useLocalFile({ selfRef: localFileRef, editorRef: localEditorRef, beforeLeaveDoc, setCurrentDocId, showNotice,
     screenSetters: { setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute }, importAsDoc: (file, handle) => importLocalFileRef.current(file, handle) })
   const openLocalFile = localFileSupported() ? localFile.pickLocalFile : undefined
+  const recentFiles = useRecentFiles({ localFile, showNotice })
 
   // ----- 계정 상태·차단·경고 알림·다시 읽기 (F-2079) -----
   const { account, accountBlocked, applyAccountFlags, recheckAccount } = useAccountStatus({ store, showNotice, dismissNotice, e2eeRef })
@@ -1257,7 +1259,7 @@ export default function App() {
   const { openPalette, paletteContext } = useCommandPalette({
     paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose, closeContextMenu, openPaletteFromRef,
     bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, docScreenId, viewMode, isReadOnlyDoc,
-    localFileOpen: localFile.session !== null, openLocalFile,
+    localFileOpen: localFile.session !== null, openLocalFile, recentFiles: recentFiles.files, openRecentFile: recentFiles.open,
     account, e2ee, statusBarVisible, canInviteCurrentDoc, commentAccessValue, comments, editorRef, currentDocIdRef, readOnlyDocRef, sidebarCommandRef,
     showNotice, templateEntries, readTemplateDocText, openShortcuts, notificationsEnabled, setNotificationsOpen, wikiResolver, currentFolderId,
     narrow, sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebar, closeSidebarIfNarrow, themePref, lineNumbersPref, toolbarPref,
@@ -1419,7 +1421,7 @@ export default function App() {
           <AppScreens {...{
             account, approveRequestRow, bootPhase, busyRequestIds, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs: listedDocs, e2ee,
             goHome, handleOpenWikiLink, handleViewContextMenu, helpOpen, trashOpen, trashPage, importSharedDoc, isEmpty, listSource, loginFromShares, localFile, localEditorRef,
-            onOpenLocalFile: openLocalFile, resolvedTheme, viewMode: viewMode as 'live' | 'raw' | 'view',
+            onOpenLocalFile: openLocalFile, recentFiles, resolvedTheme, viewMode: viewMode as 'live' | 'raw' | 'view',
             mapDialogScope, mapRoute, openHelp, openSharesTarget, ownedDocs, recenterMap, rejectRequestRow, requestImport, revokeShareGrantRow,
             revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc, sharesGrants, sharesLinks, sharesLoading, sharesOpen, sharesRequests, showNotice,
           }} />

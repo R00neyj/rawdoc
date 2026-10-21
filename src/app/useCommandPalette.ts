@@ -35,6 +35,7 @@ import type { UseAppearancePrefsResult } from './useAppearancePrefs'
 import type { ExportActions } from './exportActions'
 import type { UseFolderActionsResult } from './useFolderActions'
 import type { Folder } from '../types'
+import type { RecentFileItem } from '../lib/recentFiles'
 
 export type UseCommandPaletteOptions = {
   paletteOpen: boolean
@@ -58,6 +59,8 @@ export type UseCommandPaletteOptions = {
   mapRoute: { centerDocId: string | null; returnDocId: string | null } | null
   localFileOpen: boolean
   openLocalFile?: () => void
+  recentFiles: readonly RecentFileItem[]
+  openRecentFile: (id: string) => Promise<void>
   docScreenId: string | null
   viewMode: string
   isReadOnlyDoc: boolean
@@ -131,7 +134,7 @@ export type UseCommandPaletteResult = {
 export function useCommandPalette(options: UseCommandPaletteOptions): UseCommandPaletteResult {
   const {
     paletteOpen, setPaletteOpen, paletteClosingRef, deferredAfterPaletteCloseRef, closePalette, runAfterPaletteClose, closeContextMenu, openPaletteFromRef,
-    bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, localFileOpen, openLocalFile, docScreenId, viewMode, isReadOnlyDoc,
+    bootPhase, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, localFileOpen, openLocalFile, recentFiles, openRecentFile, docScreenId, viewMode, isReadOnlyDoc,
     account, e2ee, statusBarVisible, canInviteCurrentDoc, commentAccessValue, comments, editorRef, currentDocIdRef, readOnlyDocRef, sidebarCommandRef,
     showNotice, templateEntries, readTemplateDocText, openShortcuts, notificationsEnabled, setNotificationsOpen, wikiResolver, currentFolderId,
     narrow, sidebarOpen, sidebarCollapsed, setSidebarOpen, toggleSidebar, closeSidebarIfNarrow, themePref, lineNumbersPref, toolbarPref,
@@ -438,6 +441,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): UseCommand
     },
     output: paletteOutputCtx,
     github: github ? { importFile: () => runAfterPaletteClose(github.importFile), newFile: () => runAfterPaletteClose(github.newFile) } : undefined,
+    recentFiles: recentFiles.length > 0 ? { items: recentFiles, open: (id) => runAfterPaletteClose(() => void openRecentFile(id)) } : undefined,
   }
   return { openPalette, paletteContext }
 }

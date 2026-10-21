@@ -1,7 +1,8 @@
 // 빈 상태 S-2 (specs/ia.md 4.3, specs/features/F-111.md 3.6, F-114.md 2.3)
-import { IconFileOpen, IconNoteAdd, IconUpload } from './icons'
+import { IconClose, IconFileOpen, IconNoteAdd, IconUpload } from './icons'
 import { displayDocTitle } from './docMeta'
 import { formatHash } from './hashRoute'
+import type { RecentFileItem } from '../lib/recentFiles'
 
 const MAX_RECENT = 5
 
@@ -19,6 +20,9 @@ type EmptyStateProps = {
   onSelectDoc: (id: string) => void
   onOpenHelp: () => void
   onOpenLocalFile?: () => void // 로컬 파일을 열 수 있는 브라우저만 (F-2155 2장)
+  recentFiles?: readonly RecentFileItem[] // 셋이 다 있고 1개 이상일 때만 최근 파일 절 (F-2158 4장)
+  onOpenRecentFile?: (id: string) => void
+  onRemoveRecentFile?: (id: string) => void
 }
 
 // ApiTokensDialog.tsx 의 formatDate 와 같은 모양(YYYY-MM-DD) — 쓰는 곳이 둘뿐이라 공용 유틸로 빼지 않는다 (F-241 3.2)
@@ -31,7 +35,7 @@ function formatDate(ts: number): string {
 }
 
 // hasDocs — 문서가 하나도 없을 때와 홈 화면(문서는 있지만 선택 안 함)일 때 문구만 다르다 (F-232 3.2)
-export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDocs, onSelectDoc, onOpenHelp, onOpenLocalFile }: EmptyStateProps) {
+export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDocs, onSelectDoc, onOpenHelp, onOpenLocalFile, recentFiles, onOpenRecentFile, onRemoveRecentFile }: EmptyStateProps) {
   const recent = recentDocs.slice(0, MAX_RECENT)
   return (
     <div className="empty-state" data-ui="home">
@@ -78,6 +82,24 @@ export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDo
             ))}
           </ul>
         </>
+      )}
+      {recentFiles && recentFiles.length > 0 && onOpenRecentFile && onRemoveRecentFile && (
+        <div className="empty-state-files">
+          <div className="empty-state-recent-heading">최근 파일</div>
+          <ul className="empty-state-files-list">
+            {recentFiles.map((file) => (
+              <li key={file.id}>
+                <button type="button" className="empty-state-recent-item" onClick={() => onOpenRecentFile(file.id)}>
+                  <span className="empty-state-recent-title">{file.name}</span>
+                  <span className="empty-state-recent-date">{formatDate(file.openedAt)}</span>
+                </button>
+                <button type="button" className="empty-state-file-remove" aria-label="목록에서 빼기" title="목록에서 빼기" onClick={() => onRemoveRecentFile(file.id)}>
+                  <IconClose size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   )

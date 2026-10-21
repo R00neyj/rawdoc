@@ -1,6 +1,7 @@
 // 명령 팔레트 등록 계약·거르기 — 순수 함수, DOM·React 없음 (specs/features/F-2022.md 3장, F-2053.md 3·5장)
 import { prepareMatchText, splitMatchTerms, matchTerm, type MatchText, type MatchTerm } from '../lib/hangulMatch'
 import type { TemplateEntry } from '../lib/templates'
+import type { RecentFileItem } from '../lib/recentFiles'
 import type { E2eeStatus } from '../e2ee/keyring'
 import { filterPaletteDocs, PALETTE_DOC_LIMIT, type PaletteDocIndex } from './paletteDocs'
 import { PALETTE_RECENT_COMMAND_LIMIT } from './paletteMemory'
@@ -109,6 +110,8 @@ export type PaletteContext = {
   }
   // 오늘 날짜·지금 시각 넣기 — 선택 필드. 없으면 두 명령이 안 보인다 (F-2088)
   dateTime?: { insert: (text: string) => void }
+  // 최근 연 컴퓨터 파일 — 선택 필드. 없으면 `최근 파일: …` 명령이 없다 (F-2158 5장)
+  recentFiles?: { items: readonly RecentFileItem[]; open: (id: string) => void }
 }
 
 export type PaletteScreen = 'doc' | 'home' | 'help' | 'trash' | 'map' | 'file' | 'shares' | 'sharedLink'

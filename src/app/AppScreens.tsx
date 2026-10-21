@@ -8,6 +8,7 @@ import EmptyState from './EmptyState'
 import LocalFileScreen from './LocalFileScreen'
 import type { EditorHandle } from '../editor/Editor'
 import type { UseLocalFileResult } from './useLocalFile'
+import type { UseRecentFilesResult } from './useRecentFiles'
 import type { DocMeta } from './docMeta'
 import type { ShareDoc } from '../lib/shareCodec'
 import type { Store } from '../types'
@@ -47,6 +48,7 @@ export type AppScreensProps = Pick<UseAccountStatusResult, 'account'> &
     localFile: UseLocalFileResult
     localEditorRef: RefObject<EditorHandle | null>
     onOpenLocalFile?: () => void
+    recentFiles?: UseRecentFilesResult
     resolvedTheme: string
     viewMode: 'live' | 'raw' | 'view'
     mapDialogScope: string
@@ -64,7 +66,7 @@ export type AppScreensProps = Pick<UseAccountStatusResult, 'account'> &
 
 export default function AppScreens({
   account, approveRequestRow, bootPhase, busyRequestIds, closeMap, closeSharedDoc, contentWidthPref, copyHelpToDoc, createNewDoc, dbBlockedMessage, docs, e2ee, goHome,
-  handleOpenWikiLink, handleViewContextMenu, helpOpen, trashOpen, trashPage, importSharedDoc, isEmpty, listSource, localFile, localEditorRef, loginFromShares, mapDialogScope, mapRoute, onOpenLocalFile, openHelp,
+  handleOpenWikiLink, handleViewContextMenu, helpOpen, trashOpen, trashPage, importSharedDoc, isEmpty, listSource, localFile, localEditorRef, loginFromShares, mapDialogScope, mapRoute, onOpenLocalFile, openHelp, recentFiles,
   openSharesTarget, ownedDocs, recenterMap, rejectRequestRow, requestImport, revokeShareGrantRow, revokeShareLinkRow, searchDialogScope, selectDoc, sharedDoc,
   sharesGrants, sharesLinks, sharesLoading, sharesOpen, sharesRequests, showNotice, resolvedTheme, viewMode,
 }: AppScreensProps) {
@@ -157,6 +159,9 @@ export default function AppScreens({
             onSelectDoc={selectDoc}
             onOpenHelp={openHelp}
             onOpenLocalFile={onOpenLocalFile}
+            recentFiles={recentFiles?.files}
+            onOpenRecentFile={recentFiles && ((id) => void recentFiles.open(id))}
+            onRemoveRecentFile={recentFiles && ((id) => void recentFiles.remove(id))}
           />
         </div>
       )}

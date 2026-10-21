@@ -259,7 +259,8 @@ type YjsMetaRow = {
 **IndexedDB `md-files`(F-2158)** — 최근 로컬 파일 handle. `md-docs` 와 별도 DB, 버전 1
 
 ```ts
-// 스토어 recent — 최대 10, openedAt 최신 위, isSameEntry 로 하나만
+// 스토어 recent — 최대 10, openedAt 최신 위, isSameEntry 로 하나만. id = crypto.randomUUID()
+// 호출마다 openDB → 일 → close(). isSameEntry 는 트랜잭션 밖에서(안에서 await 하면 트랜잭션이 끝난다)
 type RecentFileRow = { id: string; handle: FileSystemFileHandle; name: string; openedAt: number }
 ```
 

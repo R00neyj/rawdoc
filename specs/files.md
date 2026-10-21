@@ -25,7 +25,7 @@
 |`src/types.ts`|문서·폴더 등 저장 데이터의 모양을 정해 둠|
 |`src/vite-env.d.ts`|빌드 도구와 컴퓨터 기본 기능의 모양을 적어 둔 선언|
 
-## `src/app/` 화면과 앱 동작 (271)
+## `src/app/` 화면과 앱 동작 (296)
 
 사용자가 보는 창·메뉴·버튼과, 그 뒤에서 도는 규칙
 
@@ -294,6 +294,7 @@
 |`src/app/userCssSync.ts`|사용자 CSS를 계정에 올리고 받아 여러 기기에 맞춤|
 |`src/app/UserCssTab.tsx`|설정의 사용자 CSS 탭, 꾸미기 조각 목록과 추가·삭제|
 |`src/app/userCssTemplate.ts`|사용자 CSS를 처음 쓸 때 주는 견본 CSS를 담음|
+|`src/app/useRecentFiles.ts`|최근 연 컴퓨터 파일 목록을 불러오고, 다시 열 때 저장 권한부터 묻고, 없어진 파일은 목록에서 뺌|
 |`src/app/useRightPanel.ts`|오른쪽 패널의 열림과 칸별 보기(달력·그래프 등)를 관리함|
 |`src/app/useSettingsPages.ts`|휴대폰에서 설정 화면을 단계별 페이지로 넘기고 되돌아오게 함|
 |`src/app/useShareResync.ts`|새 공유 알림이 오면 공유 목록을 한 번 다시 읽음|
@@ -398,7 +399,7 @@
 |`src/viewer/viewFindDom.ts`|보기 모드에서 찾은 글자를 강조하고 그 위치로 스크롤함|
 |`src/viewer/viewFindMatch.ts`|보기 모드 찾기에서 검색어와 맞는 곳을 계산함|
 
-## `src/lib/` 공통 규칙 (79)
+## `src/lib/` 공통 규칙 (85)
 
 여러 화면이 함께 쓰는 계산과 판단
 
@@ -468,6 +469,7 @@
 |`src/lib/pushApi.ts`|푸시 알림 신청·해지 때 주고받는 내용 형식을 정함|
 |`src/lib/pushPayload.ts`|푸시 알림 내용 형식과 보내는 간격·보관 시간을 정함|
 |`src/lib/pushText.ts`|푸시 알림의 제목과 미리보기 문장을 다듬음|
+|`src/lib/recentFiles.ts`|최근 연 컴퓨터 파일 목록을 최신순으로 세우고 10개가 넘으면 오래된 것을 고름|
 |`src/lib/scrollAnchor.ts`|화면 맨 위에 보이는 줄을 기억해 같은 위치로 되돌림|
 |`src/lib/shareCodec.ts`|문서를 공유 링크 안에 압축해 넣고 다시 꺼냄|
 |`src/lib/shrinkImage.ts`|너무 큰 그림을 자동으로 줄여 가볍게 만듦|
@@ -489,7 +491,7 @@
 |`src/lib/wikiLink.ts`|본문에서 [[문서 링크]]를 찾아 읽음|
 |`src/lib/wikiResolve.ts`|[[문서 링크]]가 실제 어느 문서를 가리키는지 찾아냄|
 
-## `src/storage/` 저장 (11)
+## `src/storage/` 저장 (12)
 
 문서를 브라우저와 서버에 저장하고 불러옴
 
@@ -502,6 +504,7 @@
 |`src/storage/liveSocket.ts`|실시간 함께 편집을 위해 서버와 연결을 유지함|
 |`src/storage/memoryStore.ts`|브라우저 저장을 못 쓸 때 임시로 문서를 메모리에 둠|
 |`src/storage/openStore.ts`|로그인 여부에 따라 문서를 어디에 저장할지 고름|
+|`src/storage/recentFilesStore.ts`|최근 연 컴퓨터 파일 목록(최대 10개)을 브라우저 안에 저장하고 읽고 지움|
 |`src/storage/remoteCache.ts`|서버 문서를 브라우저에 복사해 두어 오프라인에서도 보이게 함|
 |`src/storage/serverStore.ts`|로그인 시 문서를 먼저 기기에 저장하고 차례로 서버에 보냄|
 |`src/storage/toWebp.ts`|첨부 이미지를 더 작은 WebP 형식으로 바꿈|

@@ -108,3 +108,37 @@ describe('F-2155 U8 파일 열기…', () => {
     expect(onOpenLocalFile).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('F-2158 U3 최근 파일 절', () => {
+  const files = [
+    { id: 'f1', name: '메모.md', openedAt: new Date(2026, 9, 21).getTime() },
+    { id: 'f2', name: '노트.md', openedAt: new Date(2026, 9, 20).getTime() },
+  ]
+  const handlers = { onOpenRecentFile: vi.fn(), onRemoveRecentFile: vi.fn() }
+
+  it('목록이 비었거나 핸들러가 없으면 절이 없다', () => {
+    expect(collect(EmptyState({ ...baseProps, recentDocs: [], recentFiles: [], ...handlers }), 'empty-state-files')).toHaveLength(0)
+    expect(collect(EmptyState({ ...baseProps, recentDocs: [], recentFiles: files }), 'empty-state-files')).toHaveLength(0)
+    expect(collect(EmptyState({ ...baseProps, recentDocs: [], recentFiles: files, onOpenRecentFile: handlers.onOpenRecentFile }), 'empty-state-files')).toHaveLength(0)
+  })
+
+  it('최근 문서 뒤에 이름·날짜가 나온다', () => {
+    const docs = [{ id: 'd1', title: '문서', updatedAt: 1 }]
+    const tree = EmptyState({ ...baseProps, recentDocs: docs, recentFiles: files, ...handlers })
+    expect(collect(tree, 'empty-state-files')).toHaveLength(1)
+    const [filesSection] = collect(tree, 'empty-state-files')
+    expect(collect(filesSection, 'empty-state-recent-title').map((n) => n.props?.children)).toEqual(['메모.md', '노트.md'])
+    expect(collect(filesSection, 'empty-state-recent-date').map((n) => n.props?.children)).toEqual(['2026-10-21', '2026-10-20'])
+    expect(collect(tree, 'empty-state-recent-heading').map((n) => n.props?.children)).toEqual(['최근 문서', '최근 파일'])
+  })
+
+  it('행 클릭은 열기, 목록에서 빼기는 빼기를 그 id 로 부른다', () => {
+    const onOpenRecentFile = vi.fn()
+    const onRemoveRecentFile = vi.fn()
+    const tree = EmptyState({ ...baseProps, recentDocs: [], recentFiles: files, onOpenRecentFile, onRemoveRecentFile })
+    collect(tree, 'empty-state-recent-item')[1].props?.onClick?.()
+    collect(tree, 'empty-state-file-remove')[0].props?.onClick?.()
+    expect(onOpenRecentFile).toHaveBeenCalledWith('f2')
+    expect(onRemoveRecentFile).toHaveBeenCalledWith('f1')
+  })
+})

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PALETTE_COMMANDS } from '../../../src/app/paletteCommands'
+import { PALETTE_COMMANDS, recentFileCommands } from '../../../src/app/paletteCommands'
 import { EDITOR_COMMANDS } from '../../../src/app/contextMenuItems'
 import { filterPaletteItems } from '../../../src/app/paletteContract'
 import type { PaletteContext } from '../../../src/app/paletteContract'
@@ -344,6 +344,27 @@ describe('file.open — F-2155 U6', () => {
     const cmd = PALETTE_COMMANDS.find((c) => c.id === 'doc.import')!
     expect(cmd.keywords).not.toContain('파일 열기')
     expect(filterPaletteItems([cmd], '파일 열기')).toHaveLength(0)
+  })
+})
+
+describe('recentFileCommands — F-2158 U4', () => {
+  const items = [{ id: 'f1', name: '메모.md', openedAt: 2 }, { id: 'f2', name: '노트.md', openedAt: 1 }]
+
+  it('recentFiles 가 없으면 0개', () => {
+    expect(recentFileCommands(ctx([]))).toEqual([])
+  })
+
+  it('행마다 한 줄 — id·라벨·keywords, 고르면 open(id)', () => {
+    const opened: string[] = []
+    const context = { ...ctx([]), recentFiles: { items, open: (id: string) => void opened.push(id) } }
+    const commands = recentFileCommands(context)
+    expect(commands.map((c) => c.id)).toEqual(['recentFile:f1', 'recentFile:f2'])
+    expect(commands.map((c) => c.label)).toEqual(['최근 파일: 메모.md', '최근 파일: 노트.md'])
+    expect(commands[0].keywords).toEqual(['최근 파일', '파일', '컴퓨터', '로컬', 'recent', 'file', 'local'])
+    expect(commands[0].when(context)).toBe(true)
+    commands[1].run(context)
+    expect(opened).toEqual(['f2'])
+    expect(filterPaletteItems(commands, '최근 파일 메모').map((c) => c.id)).toEqual(['recentFile:f1'])
   })
 })
 

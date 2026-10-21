@@ -2363,6 +2363,52 @@ body.sidebar-resizing {
   color: var(--muted);
 }
 
+/* 홈 최근 파일 (F-2158) */
+.empty-state-files {
+  width: 100%;
+}
+
+.empty-state-files-list {
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.empty-state-files-list li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.empty-state-files-list .empty-state-recent-item {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.empty-state-file-remove {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  transition: var(--transition-colors);
+  cursor: pointer;
+}
+
+.empty-state-file-remove:hover {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
 /* 휴대폰 폭은 최근 문서 행이 화면 끝에 붙지 않게 양옆 16px (tweak 2026-09-29) */
 @media (max-width: 600px) {
   .empty-state {
