@@ -22,6 +22,7 @@ import KanbanSettingsTab from './KanbanSettingsTab'
 import type { KanbanSettings } from './useKanbanSettings'
 import LocalFileOpenSetting from './LocalFileOpenSetting'
 import { E2EE_LOCK_MINUTES, type E2eeStatus } from '../e2ee/keyring'
+import { changeLineBreaks, useLineBreaks } from './lineBreaksPref'
 import { THEME_OPTIONS } from './theme'
 import { DEFAULT_VIEW_OPTIONS } from './defaultView'
 import {
@@ -76,6 +77,12 @@ const TOOLBAR_OPTIONS = [
 const WIKI_PREVIEW_OPTIONS = [
   { value: 'on', label: '표시' },
   { value: 'off', label: '숨김' },
+] as const
+
+// 한 번 줄바꿈도 줄을 바꿔 보이기 (small 2026-10-22)
+const LINE_BREAKS_OPTIONS = [
+  { value: 'on', label: '켬' },
+  { value: 'off', label: '끔' },
 ] as const
 
 // 탭 — 순서·구성은 F-290.md 3.1, 금고 탭은 F-404.md 7.5, 오른쪽 패널 탭은 small 2026-10-10·2026-10-11, 칸반 탭은 small 2026-10-14
@@ -306,6 +313,8 @@ type SettingsDialogProps = {
   // `화면` 탭 맨 끝 — 위키링크 미리보기 (F-2044.md 8.2). 둘 다 있을 때만 그린다
   wikiPreview?: string
   onChangeWikiPreview?: (value: string) => void
+  // 한 번 줄바꿈 — 내 앱 화면에서만 준다(공개 보기는 기본값 고정, small 2026-10-22)
+  showLineBreaks?: boolean
   toolbar?: string
   onChangeToolbar?: (value: string) => void
   indent?: string
@@ -367,6 +376,7 @@ export default function SettingsDialog({
   onChangeDefaultView,
   wikiPreview,
   onChangeWikiPreview,
+  showLineBreaks,
   toolbar,
   onChangeToolbar,
   indent,
@@ -401,6 +411,7 @@ export default function SettingsDialog({
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const phone = usePhoneWidth()
   const [docPickerOpen, setDocPickerOpen] = useState(false)
+  const lineBreaks = useLineBreaks()
 
   // 들여쓰기·줄 번호는 CM6 편집 영역 전용 — 넷 다 있을 때만 그린다(공개 보기 화면은 안 줌, F-230 2.2)
   const showEditorSettings = indent !== undefined && onChangeIndent !== undefined && lineNumbers !== undefined && onChangeLineNumbers !== undefined
@@ -524,6 +535,18 @@ export default function SettingsDialog({
               options={DEFAULT_VIEW_OPTIONS}
               onChange={onChangeDefaultView}
             />
+          )}
+          {showLineBreaks && (
+            <>
+              <Segment
+                labelId="line-breaks-label"
+                label="줄바꿈 한 번도 줄을 바꿔 보이기"
+                value={lineBreaks ? 'on' : 'off'}
+                options={LINE_BREAKS_OPTIONS}
+                onChange={(v) => changeLineBreaks(v === 'on')}
+              />
+              <p className="dialog-note">끄면 마크다운 표준대로 빈 줄이 있어야 문단이 나뉩니다. 보기 모드와 HTML·PDF 내보내기·인쇄에 쓰입니다.</p>
+            </>
           )}
           {/* 화면 탭 맨 끝 — 위키링크 미리보기 (F-2044.md 8.2) */}
           {wikiPreview !== undefined && onChangeWikiPreview !== undefined && (

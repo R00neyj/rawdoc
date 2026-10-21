@@ -171,7 +171,8 @@ function DocPane({
 
   const title = doc ? doc.title || '제목 없는 문서' : ''
   // sourceLines — h4~h6 에도 줄 번호가 붙어야 헤딩 이동이 요소를 찾는다 (F-2018 7.3)
-  const html = useCodeHighlight(doc ? renderMarkdown(doc.content, { resolveWikiLink, sourceLines: true, resolveImagePath }) : '')
+  // breaks — 주인 설정은 서버에 없어 기본값(한 번 줄바꿈도 줄 바꿈)으로 그린다 (small 2026-10-22)
+  const html = useCodeHighlight(doc ? renderMarkdown(doc.content, { resolveWikiLink, sourceLines: true, resolveImagePath, breaks: true }) : '')
 
   useEffect(() => {
     if (!headingRequest || !doc || headingRequest.docId !== shownDocId) return

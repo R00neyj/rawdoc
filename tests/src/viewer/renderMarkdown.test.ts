@@ -1,6 +1,6 @@
 // specs/features/F-123.md 4장 A1·A2
 import { describe, expect, it } from 'vitest'
-import { renderMarkdown, renderMarkdownInline } from '../../../src/viewer/renderMarkdown'
+import { renderMarkdown, renderMarkdownInline, setDefaultSoftBreaks } from '../../../src/viewer/renderMarkdown'
 
 describe('renderMarkdown — 표·취소선', () => {
   it('GFM 표를 <table> 로 바꾼다', () => {
@@ -793,5 +793,39 @@ describe('renderMarkdownInline — 칸반 카드 글자 (small 2026-10-14)', () 
 
   it('인라인 코드 안 [[ ]] 는 링크가 아니다', () => {
     expect(renderMarkdownInline('`[[회의록]]`', { resolveWikiLink })).toBe('<code>[[회의록]]</code>')
+  })
+})
+
+// 한 번 줄바꿈 (small 2026-10-22)
+describe('renderMarkdown — 한 번 줄바꿈 breaks 옵션', () => {
+  it('breaks: true 면 문단 안 한 줄 바꿈을 <br> 로 그린다', () => {
+    expect(renderMarkdown('장보기\n우유\n계란', { breaks: true })).toBe('<p>장보기<br>\n우유<br>\n계란</p>\n')
+  })
+
+  it('breaks: false 면 마크다운 표준대로 한 문단으로 잇는다', () => {
+    expect(renderMarkdown('장보기\n우유', { breaks: false })).toBe('<p>장보기\n우유</p>\n')
+  })
+
+  it('옵션이 없으면 setDefaultSoftBreaks 로 정한 값을 따른다', () => {
+    setDefaultSoftBreaks(true)
+    try {
+      expect(renderMarkdown('a\nb')).toContain('a<br>\nb')
+      expect(renderMarkdown('a\nb', { breaks: false })).not.toContain('<br>')
+    } finally {
+      setDefaultSoftBreaks(false)
+    }
+    expect(renderMarkdown('a\nb')).not.toContain('<br>')
+  })
+
+  it('코드블록·표 안은 breaks 와 상관없이 같다', () => {
+    const fence = '```\nx\ny\n```\n'
+    const table = '| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n'
+    expect(renderMarkdown(fence, { breaks: true })).toBe(renderMarkdown(fence, { breaks: false }))
+    expect(renderMarkdown(table, { breaks: true })).toBe(renderMarkdown(table, { breaks: false }))
+    expect(renderMarkdown('    a\n    b\n', { breaks: true })).toBe(renderMarkdown('    a\n    b\n', { breaks: false }))
+  })
+
+  it('빈 줄로 나눈 문단은 breaks 와 상관없이 두 문단이다', () => {
+    expect(renderMarkdown('a\n\nb', { breaks: true })).toBe('<p>a</p>\n<p>b</p>\n')
   })
 })

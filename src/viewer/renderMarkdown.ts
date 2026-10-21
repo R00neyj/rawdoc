@@ -19,6 +19,13 @@ import { isMermaidInfo } from '../lib/codeLang'
 // 링크·이미지 주소 검사는 markdown-it 기본 validateLink 그대로 — javascript: vbscript: file: data: 를 막는다
 const md = new MarkdownIt({ html: false, linkify: true, typographer: false, breaks: false })
 
+// 한 번 줄바꿈을 <br> 로 그릴지 — 옵션 breaks 가 없으면 앱 설정(lineBreaksPref.ts)이 넣은 값 (small 2026-10-22)
+let defaultSoftBreaks = false
+export function setDefaultSoftBreaks(on: boolean): void {
+  defaultSoftBreaks = on
+}
+md.renderer.rules.softbreak = (_tokens, _idx, _options, env) => ((env as { breaks?: boolean }).breaks ? '<br>\n' : '\n')
+
 // ----- 작업 목록 (F-123.md 3.2) -----
 // markdown-it-task-lists 는 갱신이 끊겨 쓰지 않고 직접 만든다
 const TASK_PREFIX_RE = /^\[( |x|X)\] /
@@ -631,24 +638,26 @@ export function parseMarkdownTokens(body: string, env: Record<string, unknown> =
 }
 
 // 한 줄짜리 인라인만 — 문단·목록 같은 블록 없이 보기 모드와 같은 규칙·안전 장치로 그린다 (칸반 카드)
-export function renderMarkdownInline(text: string, options: { resolveWikiLink?: ResolveWikiLink } = {}): string {
-  return md.renderInline(text, { resolveWikiLink: options.resolveWikiLink })
+export function renderMarkdownInline(text: string, options: { resolveWikiLink?: ResolveWikiLink; breaks?: boolean } = {}): string {
+  return md.renderInline(text, { resolveWikiLink: options.resolveWikiLink, breaks: options.breaks ?? defaultSoftBreaks })
 }
 
 // text: 저장소·에디터 원문 그대로. resolveWikiLink 생략 시 위키링크는 클릭 불가 글자로만(F-131 4장). sourceLines: 최상위 블록에 data-source-line 부착, 기본 꺼짐(F-295.md 9장)
 export function renderMarkdown(
   text: string,
-  options: { resolveWikiLink?: ResolveWikiLink; sourceLines?: boolean; resolveImagePath?: ResolveImagePath } = {},
+  options: { resolveWikiLink?: ResolveWikiLink; sourceLines?: boolean; resolveImagePath?: ResolveImagePath; breaks?: boolean } = {},
 ): string {
   const env: {
     resolveWikiLink?: ResolveWikiLink
     lineOffset?: number
     sourceLines?: boolean
     resolveImagePath?: ResolveImagePath
+    breaks: boolean
   } = {
     resolveWikiLink: options.resolveWikiLink,
     sourceLines: options.sourceLines,
     resolveImagePath: options.resolveImagePath,
+    breaks: options.breaks ?? defaultSoftBreaks,
   }
   const frontmatter = findFrontmatter(text)
   if (!frontmatter) return md.render(text, env)

@@ -138,6 +138,7 @@
 |`src/app/leaveScreens.ts`|공유 관리·도움말·지도 같은 전용 화면이 열렸는지 보고 한 번에 닫음|
 |`src/app/leaveShare.ts`|공유받은 문서·폴더에서 나가기를 처리하고 결과 문구를 정함|
 |`src/app/LeaveShareDialog.tsx`|공유받은 문서에서 나갈지 확인하는 창|
+|`src/app/lineBreaksPref.ts`|"줄바꿈 한 번도 줄을 바꿔 보이기" 설정을 기기에 저장하고, 보기 모드·HTML 내보내기·인쇄가 그 값을 따르게 함|
 |`src/app/linkApi.ts`|문서·폴더의 읽기 전용 공유 링크를 만들고 확인하고 끊음|
 |`src/app/listAutoRefresh.ts`|사이드바 문서 목록을 언제 자동으로 새로 받아올지 간격을 정함|
 |`src/app/liveDoc.ts`|실시간 편집 연결의 대기 시간·재연결 간격·끊김 판단 규칙을 정함|

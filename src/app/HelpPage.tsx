@@ -10,7 +10,7 @@ import { helpOutlineHandle } from './helpOutline'
 import type { ViewOutlineHandle } from './viewOutlineHandle'
 
 // 정적 문서라 렌더 결과·목차 ref 를 모듈 스코프에서 한 번만 만든다 — 훅은 코드 칠하기 하나뿐 (F-249.md 3.1, F-2126)
-const HELP_HTML = renderMarkdown(HELP_DOC_CONTENT)
+const HELP_HTML = renderMarkdown(HELP_DOC_CONTENT, { breaks: false }) // 모듈을 불러온 때의 설정에 묶이지 않게 고정 (small 2026-10-22)
 const helpEditorRef: RefObject<ViewOutlineHandle | null> = { current: helpOutlineHandle }
 const containerRef: RefObject<HTMLElement | null> = { current: null }
 const viewerRef: RefObject<HTMLElement | null> = { current: null }

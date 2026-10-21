@@ -12,6 +12,7 @@ import type { UseLocalFileResult } from './useLocalFile'
 import { LOCAL_NO_IMAGES_MESSAGE, LOCAL_SAVE_TEXT, localFileTitle, localSaveDot } from './localFileState'
 import { LOCAL_CONFLICT_TEXT } from './localFileConflict'
 import { useLocalFileConflict } from './useLocalFileConflict'
+import { useLineBreaks } from './lineBreaksPref'
 
 type LocalFileScreenProps = {
   localFile: UseLocalFileResult
@@ -33,7 +34,11 @@ export default function LocalFileScreen({ localFile, editorRef, viewMode, theme,
   }, [editorRef, viewMode])
 
   // 새로 마운트한 편집기는 아직 안 붙었으니 씨앗 본문으로, 붙은 편집기는 지금 본문으로 그린다
-  const html = useMemo(() => (viewMode === 'view' ? renderMarkdown(toEditorText(bodyFor(editorKey) ?? initialText)) : ''), [viewMode, editorKey, bodyFor, initialText])
+  const lineBreaks = useLineBreaks()
+  const html = useMemo(
+    () => (viewMode === 'view' ? renderMarkdown(toEditorText(bodyFor(editorKey) ?? initialText), { breaks: lineBreaks }) : ''),
+    [viewMode, editorKey, bodyFor, initialText, lineBreaks],
+  )
   const shownHtml = useCodeHighlight(html)
 
   if (!session || !editorKey) return null

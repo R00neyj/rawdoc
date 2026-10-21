@@ -21,7 +21,8 @@ type SharedViewProps = {
 export default function SharedView({ sharedDoc, onImport, onClose, onContextMenu, accessControl, contentWidth }: SharedViewProps) {
   // 이미 만든 옛 링크(주석이 담긴 채로 공유된 것) 대비 렌더 전에도 한 번 더 제거한다 (F-214.md 2.2)
   const content = useMemo(() => stripComments(sharedDoc.content), [sharedDoc.content])
-  const html = useCodeHighlight(renderMarkdown(content))
+  // 남이 연 링크라 주인 설정을 모른다 — 기본값(한 번 줄바꿈도 줄 바꿈)으로 그린다 (small 2026-10-22)
+  const html = useCodeHighlight(renderMarkdown(content, { breaks: true }))
   const mainRef = useRef<HTMLDivElement | null>(null)
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const outlineHandle = useMemo(() => makeViewOutlineHandle(content), [content])

@@ -190,6 +190,7 @@ export default function AppDialogs({
         onChangeDefaultView={changeDefaultView}
         wikiPreview={wikiPreviewPref}
         onChangeWikiPreview={changeWikiPreview}
+        showLineBreaks
         toolbar={toolbarPref}
         onChangeToolbar={changeToolbar}
         indent={indentPref}

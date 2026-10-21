@@ -21,6 +21,7 @@ import type { LiveSnapshot } from './liveDoc'
 import type { NoticeWithAction } from './NoticeBar'
 import { useGithubImages, type GithubImagesHandle } from './useGithubImages'
 import { sharedAttachmentHint } from './sharedAttachmentHint'
+import { useLineBreaks } from './lineBreaksPref'
 
 const HEADING_JUMP_MARGIN = 16 // 목차 SELECT_MARGIN 과 같다 (F-2018 7.3)
 
@@ -215,15 +216,16 @@ export function useEditorSync(options: UseEditorSyncOptions): UseEditorSyncResul
   const { resolveImagePath } = githubImages
 
   // ----- 보기 모드 변환 (specs/features/F-123.md 3.3) -----
-  // 입력은 editorRef.current.getText('lf') 하나뿐(본문 사본 없음), docs 가 바뀌면 다시 계산해 위키링크 있음/없음을 최신으로 (F-131 4장)
+  // 입력은 editorRef.current.getText('lf') 하나뿐(본문 사본 없음), docs·한 번 줄바꿈 설정이 바뀌면 다시 계산 (F-131 4장, small 2026-10-22)
+  const lineBreaks = useLineBreaks()
   useEffect(() => {
     if (viewMode !== 'view') return
     if (!editorRef.current || openDoc?.id !== currentDocId) return
     setViewerHtml(
-      renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true, resolveImagePath: resolveImagePath ?? undefined }),
+      renderMarkdown(editorRef.current.getText('lf'), { resolveWikiLink: resolveWikiHref, sourceLines: true, resolveImagePath: resolveImagePath ?? undefined, breaks: lineBreaks }),
     )
     setViewerDocId(currentDocId)
-  }, [viewMode, openDoc, currentDocId, resolveWikiHref, resolveImagePath, editorRef, setViewerHtml, setViewerDocId])
+  }, [viewMode, openDoc, currentDocId, resolveWikiHref, resolveImagePath, lineBreaks, editorRef, setViewerHtml, setViewerDocId])
 
   // 검색 결과로 연 문서에 검색어 넘기기 — 새 EditorView 가 만들어진 뒤(자식 layout effect 뒤)에 적용한다 (specs/features/F-294.md 4.3)
   useEffect(() => {
