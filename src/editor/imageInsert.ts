@@ -31,6 +31,11 @@ function lineBounds(text: string, pos: number): { from: number; to: number } {
   return { from, to }
 }
 
+// lineFrom 줄 바로 위에 글자가 있는 줄이 있는가 (lineFrom 앞 글자는 늘 '\n')
+function hasNonEmptyLineAbove(text: string, lineFrom: number): boolean {
+  return lineFrom >= 2 && text[lineFrom - 2] !== '\n'
+}
+
 // 이미지 블록을 넣을 자리를 계산한다(2.6). docText 는 '\n' 줄바꿈 전체 원문, basePos 는 기준 위치, blockTexts 는 파일 순서대로 만든 블록들 → {from, insert, cursor}
 export function computeImagePlacement(
   docText: string,
@@ -42,18 +47,15 @@ export function computeImagePlacement(
   const isEmptyLine = lineFrom === lineTo
   const blockText = blockTexts.join('\n\n')
 
-  let aboveNonEmpty: boolean
-  if (isEmptyLine) {
-    if (lineFrom === 0) {
-      aboveNonEmpty = false
-    } else {
-      const prevLineEnd = lineFrom - 1 // 앞 줄 바로 뒤 '\n' 위치
-      const prevLineStart = docText.lastIndexOf('\n', prevLineEnd - 1) + 1
-      aboveNonEmpty = prevLineStart < prevLineEnd
-    }
-  } else {
-    aboveNonEmpty = true // base line 자신이 "블록 위 줄" 이 된다
+  // 글자 줄 맨 앞·가운데면 그 자리에서 나눈다 — 줄 끝 다음은 접힌 줄(휴대폰)에서 커서보다 몇 줄 아래다 (small 2026-10-22)
+  if (pos < lineTo) {
+    const lead = pos > lineFrom ? '\n\n' : hasNonEmptyLineAbove(docText, lineFrom) ? '\n' : ''
+    const insert = lead + blockText + '\n\n'
+    return { from: pos, insert, cursor: pos + insert.length }
   }
+
+  // 빈 줄이면 앞 줄이, 글자 줄 끝이면 그 줄 자신이 블록 위 줄이 된다
+  const aboveNonEmpty = isEmptyLine ? hasNonEmptyLineAbove(docText, lineFrom) : true
 
   const hasNextLine = lineTo < docText.length
   let belowNonEmpty = false
@@ -68,7 +70,7 @@ export function computeImagePlacement(
   const leadingBlank = aboveNonEmpty
   const trailingBlank = hasNextLine && belowNonEmpty
 
-  const from = isEmptyLine ? lineFrom : lineTo
+  const from = pos // 여기 오면 빈 줄이거나 글자 줄 끝이다
   const lead = (leadingBlank ? '\n' : '') + blockText
   const body = isEmptyLine ? lead : '\n' + lead
   const insert = hasNextLine ? body + (trailingBlank ? '\n' : '') : body + '\n'
@@ -117,18 +119,23 @@ function waitForCompositionEnd(view: EditorView): Promise<void> {
   })
 }
 
-// 저장(비동기) 사이에 문서가 바뀌면 기준 위치를 그 변경에 맞춰 옮긴다 (F-156.md 2.6)
-const setTrackedPos = StateEffect.define<number>()
-const trackedPosField = StateField.define<number | null>({
-  create: () => null,
-  update(value, tr) {
-    for (const e of tr.effects) {
-      if (e.is(setTrackedPos)) return e.value
-    }
-    if (value == null) return null
-    return tr.changes.mapPos(value)
-  },
-})
+// 저장(비동기)·파일 고르기 사이에 문서가 바뀌면 기준 위치를 그 변경에 맞춰 옮긴다 (F-156.md 2.6)
+function mappedPos() {
+  const set = StateEffect.define<number | null>()
+  const field = StateField.define<number | null>({
+    create: () => null,
+    update(value, tr) {
+      for (const e of tr.effects) {
+        if (e.is(set)) return e.value
+      }
+      if (value == null) return null
+      return tr.changes.mapPos(value)
+    },
+  })
+  return { set, field }
+}
+const trackedPos = mappedPos()
+const pickedPos = mappedPos()
 
 export type AttachedImage = { id: string; ext: ImageExt; alt: string; width: number }
 export type ImageInsertSource = 'paste' | 'drop'
@@ -147,7 +154,7 @@ async function handleIncomingImages(
     return
   }
 
-  view.dispatch({ effects: setTrackedPos.of(pos) })
+  view.dispatch({ effects: trackedPos.set.of(pos) })
   const contentWidth = measureContentWidth(view)
 
   const attached = await onImageFiles?.(files, { source })
@@ -156,8 +163,7 @@ async function handleIncomingImages(
 
   await waitForCompositionEnd(view) // 한글 조합 중이면 조합이 끝난 뒤 넣는다
 
-  const trackedPos = view.state.field(trackedPosField, false)
-  const targetPos = trackedPos ?? pos
+  const targetPos = view.state.field(trackedPos.field, false) ?? pos
 
   const blocks = attached.map((img) =>
     buildImageLine({
@@ -177,21 +183,30 @@ async function handleIncomingImages(
   })
 }
 
-// 툴바 '이미지' 버튼으로 고른 파일 — 붙여넣기와 같은 길로 현재 선택 끝에 넣는다
+// 툴바 '이미지' 버튼으로 고른 파일 — 붙여넣기와 같은 길로 버튼을 누른 때 선택 끝에 넣는다
 const imageFilesHandler = Facet.define<OnImageFiles, OnImageFiles | undefined>({ combine: (v) => v[0] })
+
+// '이미지' 버튼을 누른 때 선택 끝을 붙잡는다 — 고르기 창이 떠 있는 사이(휴대폰 키보드 내려감·앱 전환) 선택이 움직여도 그 자리에 넣는다
+export function beginImagePick(view: EditorView): boolean {
+  view.dispatch({ effects: pickedPos.set.of(view.state.selection.main.to) })
+  return true
+}
 
 export function insertPickedImages(view: EditorView, files: File[]): boolean {
   const onImageFiles = view.state.facet(imageFilesHandler)
   const imageFiles = files.filter(isImageFile)
   if (!onImageFiles || isViewOnly(view) || imageFiles.length === 0) return false
-  handleIncomingImages(view, imageFiles, { source: 'drop', pos: view.state.selection.main.to, onImageFiles })
+  const pos = view.state.field(pickedPos.field, false) ?? view.state.selection.main.to
+  view.dispatch({ effects: pickedPos.set.of(null) })
+  handleIncomingImages(view, imageFiles, { source: 'drop', pos, onImageFiles })
   return true
 }
 
 // 붙여넣기·끌어놓기 이미지 받기(2.4·2.5). createEditor.ts 가 onImageFiles(files, {source, blocked?}) => Promise<attached[]> 옵션과 함께 조립한다
 export function imageInsert({ onImageFiles }: { onImageFiles?: OnImageFiles } = {}): Extension {
   return [
-    trackedPosField,
+    trackedPos.field,
+    pickedPos.field,
     onImageFiles ? imageFilesHandler.of(onImageFiles) : [],
     EditorView.domEventHandlers({
       paste(event, view) {

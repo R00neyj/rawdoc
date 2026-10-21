@@ -58,6 +58,31 @@ test.describe('small 휴대폰 서식 바 (390×844, 터치)', () => {
     await expect.poll(async () => (await readSavedContent(page)).content).toMatch(/^첫째\n+!\[사진\|center\|\d+\]\(attachments\/[0-9a-f]{16}\.png\)/)
   })
 
+  test('small 휴대폰 이미지 위치 — 접힌 긴 문단 가운데 커서에서 누르면, 고르는 사이 선택이 옮겨 가도 누른 자리에서 문단을 나눠 들어간다', async ({ page }) => {
+    const head = '가나다라마바사아자차'.repeat(3)
+    const tail = '카타파하'.repeat(8)
+    await openApp(page)
+    await importMarkdown(page, { content: `첫 문단\n\n${head}${tail}\n\n끝 문단\n` })
+    await page.locator('.cm-content .cm-line', { hasText: '끝 문단' }).tap()
+    await fakeSoftKeyboard(page, true)
+    await page.keyboard.press('Control+Home')
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ArrowDown')
+    for (let i = 0; i < head.length; i++) await page.keyboard.press('ArrowRight')
+    const row = page.locator('.editor-toolbar-row--docked')
+    await row.getByRole('button', { name: /^서식 분류/ }).tap()
+    await page.getByRole('menuitemradio', { name: '삽입' }).tap()
+
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), row.getByRole('button', { name: '이미지', exact: true }).tap()])
+    // 고르기 창이 떠 있는 사이 선택이 다른 줄로 옮겨 간 경우를 흉내 낸다
+    await fakeSoftKeyboard(page, false)
+    await page.locator('.cm-content .cm-line', { hasText: '끝 문단' }).tap()
+    await chooser.setFiles({ name: '사진.png', mimeType: 'image/png', buffer: pngBuffer(40, 20) })
+    await expect
+      .poll(async () => (await readSavedContent(page)).content)
+      .toMatch(new RegExp(`^첫 문단\\n\\n${head}\\n\\n!\\[사진\\|center\\|\\d+\\]\\(attachments/[0-9a-f]{16}\\.png\\)\\n\\n${tail}\\n\\n끝 문단\\n$`))
+  })
+
   test('small 툴바 들여쓰기 — Tab 버튼이 목록 줄을 들여쓴다', async ({ page }) => {
     await openApp(page)
     await importMarkdown(page, { content: '- 하나\n- 둘\n' })

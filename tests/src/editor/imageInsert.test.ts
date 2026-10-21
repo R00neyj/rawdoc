@@ -11,14 +11,40 @@ function apply(doc: string, from: number, insert: string): string {
 }
 
 describe('computeImagePlacement', () => {
-  it('글자 줄 가운데(둘째 줄) — 위아래 모두 빈 줄 넣고 다음 줄 시작에 커서 (F-156.md A2)', () => {
+  it('글자 줄 끝 — 위아래 모두 빈 줄 넣고 다음 줄 시작에 커서 (F-156.md A2)', () => {
     const doc = 'line1\nline2\nline3'
-    const pos = doc.indexOf('line2') + 2 // 둘째 줄 가운데
+    const pos = doc.indexOf('line2') + 'line2'.length // 둘째 줄 끝
     const block = ['<div align="center">', '  <img src="attachments/x.png">', '</div>'].join('\n')
     const { from, insert, cursor } = computeImagePlacement(doc, pos, [block])
     const result = apply(doc, from, insert)
     expect(result).toBe('line1\nline2\n\n' + block + '\n\nline3')
     expect(cursor).toBe(result.indexOf('line3'))
+  })
+
+  it('글자 줄 가운데 — 줄 끝 다음이 아니라 커서 자리에서 줄을 나눠 넣는다 (휴대폰은 한 줄이 여러 줄로 접힌다, small 2026-10-22)', () => {
+    const doc = 'line1\n앞 문장 뒤 문장\nline3'
+    const pos = doc.indexOf(' 뒤 문장') // 커서: '앞 문장|'
+    const { from, insert, cursor } = computeImagePlacement(doc, pos, ['BLOCK'])
+    const result = apply(doc, from, insert)
+    expect(result).toBe('line1\n앞 문장\n\nBLOCK\n\n 뒤 문장\nline3')
+    expect(cursor).toBe(result.indexOf(' 뒤 문장'))
+  })
+
+  it('글자 줄 맨 앞 — 그 줄 위에 넣고 커서는 그 줄 시작 (small 2026-10-22)', () => {
+    const doc = 'line1\nline2\nline3'
+    const pos = doc.indexOf('line2')
+    const { from, insert, cursor } = computeImagePlacement(doc, pos, ['BLOCK'])
+    const result = apply(doc, from, insert)
+    expect(result).toBe('line1\n\nBLOCK\n\nline2\nline3')
+    expect(cursor).toBe(result.indexOf('line2'))
+  })
+
+  it('문서 첫 줄 맨 앞 — 앞에 빈 줄 없이 그 줄 위에 넣는다 (small 2026-10-22)', () => {
+    const doc = '본문'
+    const { from, insert, cursor } = computeImagePlacement(doc, 0, ['BLOCK'])
+    const result = apply(doc, from, insert)
+    expect(result).toBe('BLOCK\n\n본문')
+    expect(cursor).toBe(result.indexOf('본문'))
   })
 
   it('빈 줄에 놓으면 그 줄에 바로 들어간다(위아래 글자 줄이면 빈 줄 패딩)', () => {
@@ -58,7 +84,7 @@ describe('computeImagePlacement', () => {
 
   it('아래 줄이 비어 있으면 뒤에 빈 줄을 추가하지 않는다', () => {
     const doc = 'line1\n'
-    const pos = 2 // 첫(유일한 글자) 줄 가운데, 다음 줄은 빈 줄(문서 끝)
+    const pos = 'line1'.length // 첫(유일한 글자) 줄 끝, 다음 줄은 빈 줄(문서 끝)
     const { from, insert } = computeImagePlacement(doc, pos, ['BLOCK'])
     const result = apply(doc, from, insert)
     // 다음 줄이 있고 비어 있으므로 trailing blank 없음, leading blank 있음(윗 줄이 글자 줄)
@@ -113,7 +139,7 @@ describe('F-2127 A8 넣는 글자', () => {
     const line = buildImageLine({ id: '0f3a9c2e7b1d4a58', ext: 'png', alt: '이미지', width: 200, align: 'center' })
     expect(line).toBe('![이미지|center|200](attachments/0f3a9c2e7b1d4a58.png)')
     const doc = '본문\n다음'
-    const { insert } = computeImagePlacement(doc, 0, [line])
+    const { insert } = computeImagePlacement(doc, '본문'.length, [line])
     expect(insert).toBe(`\n\n${line}\n`)
   })
 })

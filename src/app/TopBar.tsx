@@ -6,6 +6,7 @@ import type { GithubMenuProps } from './GithubMenu'
 import type { NotificationsMenuProps } from './NotificationsMenu'
 import EditorToolbar from './EditorToolbar'
 import ToolbarImageInput from './ToolbarImageInput'
+import { beginImagePick } from '../editor/imageInsert'
 import { IconTooltip, IconKanban, IconRaw, IconRightPanelOpen } from './icons'
 import SidebarHead from './SidebarHead'
 import PeerAvatars from './PeerAvatars'
@@ -117,7 +118,10 @@ export default function TopBar({
 }: TopBarProps) {
   const phone = usePhoneWidth()
   const imageInputRef = useRef<HTMLInputElement | null>(null)
-  const pickImage = () => imageInputRef.current?.click()
+  const pickImage = () => {
+    onRunToolbarCommand(beginImagePick)
+    imageInputRef.current?.click()
+  }
   const share = {
     disabled: shareDisabled,
     getShareDoc,
