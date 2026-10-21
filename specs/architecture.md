@@ -192,6 +192,7 @@ src/
   - `storage/`: `recentFilesStore.ts`(IndexedDB `md-files` 열기·`list`·`add`·`remove`, F-2158)
 - 설치 앱 화면 분할(F-2159)로 추가
   - `app/`: `splitLayout.ts`(F-2162 — 배치 나누기·닫기·칸 번호·비율·저장값, 순수), `docUnit.ts`·`useDocUnit.ts`·`useDocUnits.ts`(F-2160 — 문서 단위 묶음과 슬롯 4개), `useDocClaim.ts`(F-2160 — 문서별 탭 편집권), `paneRules.ts`(F-2163 — 열 칸 고르기·칸 키 잇기·나누기 판정, 순수), `SplitPanes.tsx`(F-2163 — 칸 격자·칸마다 탭 줄·`DocumentArea`), `usePaneHost.ts`(F-2163 — 창 안 원본 모음·칸 편집기 등록부·포커스 칸 게시)
+  - `app/`: `splitOff.ts`(F-2164 — 분할 켜짐 판정·복원·꺼진 동안 포커스 칸만, 순수)
 
 - 단위 테스트는 `tests/` 아래, 원본 경로를 그대로 따라 `tests/{원본 경로}/{이름}.test.ts` (2026-09-28 사용자 지정. 처음엔 대상 옆이었다 — `specs/features/F-101.md` 5.3)
 - 의존 방향: `app → editor, viewer, storage, lib, pwa` / `editor → lib` / `viewer → lib` / `storage → lib`. 반대 방향 import 금지

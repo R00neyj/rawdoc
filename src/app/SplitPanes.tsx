@@ -1,4 +1,4 @@
-// 화면 분할 칸 격자 — 칸마다 탭 줄·DocumentArea, 창에 하나인 값은 포커스 칸 것을 쓴다 (F-2163 3장)
+// 화면 분할 칸 격자 — 칸마다 탭 줄·DocumentArea, 창에 하나인 값은 포커스 칸 것을 쓴다 (F-2163 3장, F-2164 6장)
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type FocusEvent } from 'react'
 import type { EditorState } from '@codemirror/state'
 import type { EditorHandle } from '../editor/Editor'
@@ -6,6 +6,7 @@ import DocumentArea, { type DocumentAreaProps } from './DocumentArea'
 import DocTabBar from './DocTabBar'
 import { applyKanbanTo } from './useKanbanView'
 import { clampRatios, paneForNumber, type SplitLayout } from './splitLayout'
+import { shownSplit } from './splitOff'
 import type { DocPanes, DocTabBarProps } from './useDocTabs'
 import type { PaneHost } from './usePaneHost'
 import type { DocUnit } from './docUnit'
@@ -48,11 +49,12 @@ function track(ratio: number | undefined): string | undefined {
 }
 
 export default function SplitPanes({ area, viewerDocId, panes, paneHost, unitFor, readOnlyOf, commentAccessOf, editorPrefs }: SplitPanesProps) {
-  const { split, keys } = panes
+  // 꺼지면 묶음을 내리기 전까지는 포커스 칸 말고 숨기고, 내린 뒤에는 포커스 칸 하나만 같은 key 로 그린다 (F-2164 5·6장)
+  const split = shownSplit(panes.split, panes.on || !panes.drained)
+  const keys = split === panes.split ? panes.keys : split.panes.map((p) => panes.keys[panes.split.panes.indexOf(p)])
   const focusKey = keys[split.focus]
   const multi = split.panes.length > 1
-  // 분할이 꺼진 폭이면 포커스 칸만 보인다 — 나머지 칸 편집기는 숨긴 채 남긴다 (F-2163 3장, 내리기는 F-2164)
-  const solo = !multi || panes.bars === null
+  const solo = !multi || !panes.on
   const docOf = (i: number) => (i === split.focus && solo && area.currentDocId !== null ? area.currentDocId : split.panes[i].active)
   const current = area.currentDocId !== null && docOf(split.focus) === area.currentDocId
 
@@ -73,7 +75,10 @@ export default function SplitPanes({ area, viewerDocId, panes, paneHost, unitFor
   useEffect(() => {
     const el = gridRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(() => setSize({ width: el.clientWidth, height: el.clientHeight }))
+    // hidden·꺼짐 중의 0 크기는 버린다 — 0 이면 하한이 상한을 넘어 모든 경계가 0.5 로 튄다
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth > 0 && el.clientHeight > 0) setSize({ width: el.clientWidth, height: el.clientHeight })
+    })
     ro.observe(el)
     return () => ro.disconnect()
   }, [])

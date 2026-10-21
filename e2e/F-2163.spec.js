@@ -77,10 +77,10 @@ test('F-2163 E2 두 문서 — 다른 칸에만 있는 문서는 그 칸에서 �
   await expect(pane(page, 2).locator('.cm-content')).toContainText('비 편집')
   await waitSaved(page)
 
+  // 다시 열면 두 칸이 돌아온다 (F-2164)
   await page.reload()
-  await expect(page.locator('.cm-content')).toContainText('B 본문비 편집')
-  await docLink(page, 'A').click()
-  await expect(page.locator('.cm-content')).toContainText('A 본문에이 편집')
+  await expect(pane(page, 2).locator('.cm-content')).toContainText('B 본문비 편집')
+  await expect(pane(page, 1).locator('.cm-content')).toContainText('A 본문에이 편집')
 })
 
 test('F-2163 E3 3칸 — Ctrl+1 은 그 칸 문서로, 없는 Ctrl+4 는 그대로, Ctrl+Shift+W 는 칸과 그 탭을 닫고 이웃 칸으로', async ({ page }) => {

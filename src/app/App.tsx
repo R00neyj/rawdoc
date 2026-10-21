@@ -40,7 +40,8 @@ import type { LiveDocSession } from './useLiveDoc'
 import { useLiveNotices } from './useLiveNotices'
 import { useDocUnits } from './useDocUnits'
 import type { DocUnit, DocUnitHost } from './docUnit'
-import { docReadOnly, unitPanes } from './paneRules'
+import { docReadOnly } from './paneRules'
+import { splitUnitPanes } from './splitOff'
 import { usePaneHost } from './usePaneHost'
 import { liveStatusOf, type LiveSnapshot } from './liveDoc'
 import { newTabId } from './tabSync'
@@ -141,16 +142,6 @@ export default function App() {
     const pathRoute = toPublicRoute(parsePathRoute(location.pathname))
     return pathRoute ?? toPublicRoute(parseHash(location.hash))
   })
-
-  // 뒤로·앞으로 가기로 공개 보기 경로를 드나들 때 갱신한다 (그 외 해시는 아래 별도 효과가 처리, F-211.md 2.3)
-  useEffect(() => {
-    function handlePublicHashChange() {
-      const pathRoute = toPublicRoute(parsePathRoute(location.pathname))
-      setPublicRoute(pathRoute ?? toPublicRoute(parseHash(location.hash)))
-    }
-    window.addEventListener('hashchange', handlePublicHashChange)
-    return () => window.removeEventListener('hashchange', handlePublicHashChange)
-  }, [])
 
   // 부팅 전 임시값. boot() 가 openStore() 결과로 교체한다 (F-110.md 3.2)
   const [store, setStore] = useState<Store>(() => createMemoryStore())
@@ -328,6 +319,18 @@ export default function App() {
     await docSaverFlushRef.current()
     await localFileRef.current?.flush()
   }, [])
+
+  // 뒤로·앞으로 가기로 공개 보기 경로를 드나들 때 — 들어갈 때는 편집기가 내려가기 전에 저장을 끝낸다 (그 외 해시는 useHashRouting, F-211.md 2.3, F-2164 5장)
+  useEffect(() => {
+    function handlePublicHashChange() {
+      const hashAtEntry = location.hash
+      const next = toPublicRoute(parsePathRoute(location.pathname)) ?? toPublicRoute(parseHash(location.hash))
+      if (!next || bootPhase !== 'ready') return setPublicRoute(next)
+      void beforeLeaveDoc().then(() => location.hash === hashAtEntry && setPublicRoute(next))
+    }
+    window.addEventListener('hashchange', handlePublicHashChange)
+    return () => window.removeEventListener('hashchange', handlePublicHashChange)
+  }, [bootPhase, beforeLeaveDoc])
 
   // ----- 앱 설치 버튼 (specs/features/F-115.md 3.3, ia.md 3.12) -----
   const { canInstall, install } = useInstallPrompt()
@@ -527,7 +530,7 @@ export default function App() {
 
   // ----- 문서마다 묶음 — 칸 활성 문서마다, 포커스 묶음 값을 지금 이름 그대로 푼다 (F-2160, F-2163) -----
   const docUnitHostRef = useRef<DocUnitHost>({ getText: () => '', getComments: () => null, onSaved: () => {}, onSaveError: () => {} })
-  const { units, unitFor, flushAll } = useDocUnits(unitPanes(paneStore.state.split, currentDocId), {
+  const { units, unitFor, flushAll } = useDocUnits(splitUnitPanes(paneStore.state.split, currentDocId, paneStore.state.drained), {
     store, docs, setDocs, sharedDoc, forbiddenDocIds, setForbiddenDocIds, accountBlocked, bootPhase, sessionPhase, convertingDocId, deletedElsewhereIds,
     e2eeStatus: e2ee?.status ?? null, yjsStoreRef, createdHereRef, liveChangedAtRef, focusEditorRef, claimHub, focusDocId: currentDocId, setStats, showNotice,
   }, docUnitHostRef)
@@ -980,6 +983,7 @@ export default function App() {
   const docTabs = useDocTabs({
     paneStore: paneStore.store, narrow, ready: bootPhase === 'ready', scope: searchScope(store.kind, store.kind === 'server' ? (store as ServerStore).userId : null), docs, currentDocId,
     openDocId: openDoc?.id ?? null, editorHandle, viewMode, viewerRef, viewerDocId, pendingJumpRef, leaveRef: docTabLeaveRef, focusEditorRef, beforeLeave: beforeLeaveDoc,
+    screens: { publicView: publicRoute !== null, shares: sharesOpen, help: helpOpen, trash: trashOpen },
     focusPaneEditor: paneHost.focusEditor, selectDoc, goHome, createNewDoc, notify: (message) => showNotice({ type: 'info', message }),
   })
   useDocumentTitle(localFile.session?.name ?? currentDoc?.title ?? null)

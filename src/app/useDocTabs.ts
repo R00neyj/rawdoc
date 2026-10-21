@@ -1,5 +1,5 @@
-// 설치 앱 창(넓은 화면)·휴대폰 폭의 문서 탭 — 탭은 currentDocId 를 따라가고 탭 조작은 selectDoc·goHome 을 부른다, 칸마다 탭 줄·나누기·닫기·포커스는 SplitState 하나로 (small 2026-10-21, F-2163)
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
+// 설치 앱 창(넓은 화면)·휴대폰 폭의 문서 탭 — 탭은 currentDocId 를 따라가고 탭 조작은 selectDoc·goHome 을 부른다, 칸마다 탭 줄·나누기·닫기·포커스는 SplitState 하나로 (small 2026-10-21, F-2163, F-2164)
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
 import type { EditorHandle } from '../editor/Editor'
 import type { ScrollAnchor } from '../lib/scrollAnchor'
 import { setAppTabsBridge } from '../lib/appTabs'
@@ -14,11 +14,14 @@ import type { ViewMode } from './ViewModeMenu'
 import type { PaletteContext } from './paletteContract'
 import { docUnitIds } from './docUnit'
 import {
-  EMPTY_TABS, MAX_TABS, openTab, pinTab, closeTabs, closeOtherTabs, closeTabsToRight, moveTab, stepTab, syncTabMeta, restoreTabs,
-  removedTabKeys, chooseOpenMode, parseStoredTabs, type DocTab, type DocTabsState, type TabMeta,
+  EMPTY_TABS, MAX_TABS, openTab, openTabCapped, pinTab, closeTabs, closeOtherTabs, closeTabsToRight, moveTab, stepTab, syncTabMeta,
+  removedTabKeys, chooseOpenMode, storeTabs, type DocTab, type DocTabsState, type TabMeta,
 } from './docTabs'
-import { closePane, paneForNumber, setPaneTabs, singleSplit, storeSplit, totalTabs, type PaneTabs, type SplitDir, type SplitState } from './splitLayout'
-import { TABS_FULL, carryPaneKeys, routeOpen, splitAction, unitPanes } from './paneRules'
+import {
+  closePane, paneForNumber, paneTabLimit, parseStoredSplit, setPaneTabs, singleSplit, storeSplit, totalTabs, type PaneTabs, type SplitDir, type SplitState,
+} from './splitLayout'
+import { TABS_FULL, carryPaneKeys, routeOpen, splitAction } from './paneRules'
+import { restoreSplit, splitOn, splitUnitPanes, withFocusTabs } from './splitOff'
 
 const STANDALONE_QUERY = '(display-mode: standalone)'
 // Ctrl/⌘+클릭 뒤 이 시간 안에 문서가 바뀌면 새 고정 탭으로 연다 — 저장 flush 를 기다리는 전환도 넉넉히 덮는다
@@ -42,11 +45,13 @@ export type DocTabBarProps = {
   splitMenu?: { canSplit: (key: string, dir: SplitDir) => boolean; onSplit: (key: string, dir: SplitDir) => void; onClosePane: (() => void) | null }
 }
 
-export type PaneStoreState = { split: SplitState; keys: string[] }
+// drained — 분할이 꺼진 뒤 저장을 끝내고 포커스 칸 말고는 묶음을 내렸다 (F-2164 5장)
+export type PaneStoreState = { split: SplitState; keys: string[]; drained: boolean }
 
 export type PaneStore = {
   get: () => PaneStoreState
   set: (next: SplitState) => void
+  setDrained: (drained: boolean) => void
   order: () => string[]
   subscribe: (listener: () => void) => () => void
 }
@@ -55,6 +60,7 @@ export type PaneStore = {
 export type DocPanes = PaneStoreState & {
   bars: DocTabBarProps[] | null
   keep: boolean
+  on: boolean
   focusPane: (paneKey: string) => void
   // 포커스 칸 편집기가 준비되면 SplitPanes 가 커밋마다 부른다 — 남은 요청이 그 칸이면 포커스
   serviceFocusRequest: (focusKey: string) => void
@@ -76,6 +82,8 @@ export type UseDocTabsOptions = {
   leaveRef: RefObject<() => void>
   focusEditorRef: RefObject<boolean>
   beforeLeave: () => Promise<void>
+  // 이 화면 동안 분할을 끈다 — S-5 공개 보기·S-6 공유 관리·S-7 도움말·S-10 휴지통 (F-2164 2장)
+  screens: { publicView: boolean; shares: boolean; help: boolean; trash: boolean }
   // 칸 편집기(보기면 보기 영역)에 포커스 — 칸 등록부가 있는 usePaneHost 가 준다. 준비가 안 됐으면 false
   focusPaneEditor: (paneKey: string) => boolean
   selectDoc: (id: string) => Promise<void>
@@ -106,18 +114,25 @@ function readStandalone(): boolean {
 function createPaneStore(viewMode: ViewMode): PaneStore {
   let n = 0
   const fresh = () => `p${++n}`
-  let state: PaneStoreState = { split: singleSplit(EMPTY_TABS, viewMode), keys: [fresh()] }
+  // 부팅 때는 내릴 묶음이 없어 drained 로 시작한다
+  let state: PaneStoreState = { split: singleSplit(EMPTY_TABS, viewMode), keys: [fresh()], drained: true }
   let order = [...state.keys]
   const listeners = new Set<() => void>()
+  const notify = () => listeners.forEach((listener) => listener())
   return {
     get: () => state,
     set(next) {
       if (next === state.split) return
       const keys = carryPaneKeys(state.split, state.keys, next, fresh)
-      state = { split: next, keys }
+      state = { ...state, split: next, keys }
       const focusKey = keys[next.focus]
       order = [focusKey, ...order.filter((k) => k !== focusKey && keys.includes(k)), ...keys.filter((k) => k !== focusKey && !order.includes(k))]
-      listeners.forEach((listener) => listener())
+      notify()
+    },
+    setDrained(drained) {
+      if (drained === state.drained) return
+      state = { ...state, drained }
+      notify()
     },
     order: () => order,
     subscribe(listener) {
@@ -151,6 +166,19 @@ function metaLookup(docs: DocMeta[]): (key: string) => TabMeta | undefined {
   }
 }
 
+function tabEntry(key: string, lookup: (key: string) => TabMeta | undefined): DocTab {
+  const meta = lookup(key)
+  return meta?.shared ? { key, pinned: false, title: meta.title, shared: true } : { key, pinned: false, title: meta?.title ?? '' }
+}
+
+// 주소가 가리키는 문서 — 켜져 있으면 그 문서가 있는 칸, 꺼져 있으면 포커스 칸에 연다 (F-2164 3·4장)
+function openCurrent(s: SplitState, key: string, lookup: (key: string) => TabMeta | undefined, on: boolean): SplitState {
+  const has = (on ? s.panes : [s.panes[s.focus]]).some((p) => p.tabs.some((t) => t.key === key))
+  const entry = tabEntry(key, lookup)
+  if (on) return routeOpen(s, entry, has ? 'preview' : 'pinned', [], null).split
+  return withFocusTabs(s, openTab(s.panes[s.focus], entry, has ? 'preview' : 'pinned'))
+}
+
 // 칸마다 한 번씩 바꾼다 — 한 번에 여러 칸을 바꾸면 carryPaneKeys 가 key 를 잇지 못해 편집기가 다시 만들어진다
 function eachPane(store: PaneStore, make: (p: PaneTabs) => DocTabsState) {
   for (const p of store.get().split.panes) {
@@ -162,17 +190,18 @@ function eachPane(store: PaneStore, make: (p: PaneTabs) => DocTabsState) {
 }
 
 export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
-  const { paneStore: store, narrow, ready, scope, docs, currentDocId, openDocId, editorHandle, viewMode, viewerRef, viewerDocId, pendingJumpRef, leaveRef } = options
+  const { paneStore: store, narrow, ready, scope, docs, currentDocId, openDocId, editorHandle, viewMode, viewerRef, viewerDocId, pendingJumpRef, leaveRef, screens } = options
   const standalone = useSyncExternalStore(subscribeStandalone, readStandalone, () => false)
   const phone = usePhoneWidth()
   const enabled = docTabsEnabled({ standalone, narrow, phone })
   const barMode = enabled && ready && !phone
+  const on = splitOn({ tabsBar: enabled && !phone, ...screens })
   const paneState = useSyncExternalStore(store.subscribe, store.get, store.get)
   const { split } = paneState
 
-  const latestRef = useRef({ ...options, enabled, barMode })
+  const latestRef = useRef({ ...options, enabled, barMode, on })
   useEffect(() => {
-    latestRef.current = { ...options, enabled, barMode }
+    latestRef.current = { ...options, enabled, barMode, on }
   })
   const [initialHashType] = useState(() => parseHash(location.hash).type)
   const restoredScopeRef = useRef<string | null>(null)
@@ -198,35 +227,59 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
     focusRequestRef.current = { key, at: Date.now() }
   }, [])
 
-  // 복원 — 범위마다 한 번. 첫 부팅이고 주소가 문서를 가리키지 않으면 저장해 둔 활성 탭을 연다. 칸 복원은 F-2164
+  // 복원 — 범위마다 한 번. 첫 부팅이고 주소가 문서를 가리키지 않으면 저장해 둔 포커스 칸 활성 탭을 연다 (F-2164 3장)
   useEffect(() => {
     if (!enabled || !ready || restoredScopeRef.current === scope) return
     restoredScopeRef.current = scope
     const ids = new Set(docs.map((d) => d.id))
     const lookup = metaLookup(docs)
-    const saved = parseStoredTabs(getPref('md.docTabs', ''), scope)
-    let next = saved ? syncTabMeta(restoreTabs(saved, (key) => ids.has(key)), lookup) : EMPTY_TABS
+    const base = store.get().split
+    const saved = parseStoredSplit(getPref('md.docTabs', ''), scope, base.panes[base.focus].viewMode)
+    let next = saved ? restoreSplit(saved, (key) => ids.has(key), lookup) : singleSplit(EMPTY_TABS, base.panes[base.focus].viewMode)
     prevIdsRef.current = ids
     prevCurrentRef.current = currentDocId
     const freshStart = !sawReadyRef.current && (initialHashType === 'home' || initialHashType === 'none' || initialHashType === 'file')
-    if (saved && freshStart && next.active !== currentDocId) {
+    const active = next.panes[next.focus].active
+    if (saved && freshStart && active !== currentDocId) {
       leavingRef.current = { key: currentDocId }
-      navigate(next.active)
+      navigate(active)
     } else if (currentDocId) {
-      const exists = next.tabs.some((t) => t.key === currentDocId)
-      next = openTab(next, { key: currentDocId, ...(lookup(currentDocId) ?? { title: '' }) }, exists ? 'preview' : 'pinned')
-    } else {
-      next = { ...next, active: null }
+      next = openCurrent(next, currentDocId, lookup, on)
+    } else if (next.layout === 'single') {
+      next = setPaneTabs(next, 0, { tabs: next.panes[0].tabs, active: null })
     }
-    const base = store.get().split
-    store.set(base.layout === 'single' ? setPaneTabs(base, 0, next) : singleSplit(next, base.panes[base.focus].viewMode))
-  }, [enabled, ready, scope, docs, currentDocId, store, initialHashType, navigate])
+    store.set(next)
+  }, [enabled, ready, scope, docs, currentDocId, store, initialHashType, navigate, on])
+
+  // 꺼지면 저장을 끝낸 뒤 포커스 칸 말고는 묶음을 내리고, 다시 켜지면 메모리의 배치를 되살린다 (F-2164 4·5장)
+  const wasOnRef = useRef<boolean | null>(null)
+  const drainGenRef = useRef(0)
+  useLayoutEffect(() => {
+    const was = wasOnRef.current
+    if (was === on) return
+    wasOnRef.current = on
+    const gen = ++drainGenRef.current
+    if (!on) {
+      if (was === null) return
+      // 편집기보다 묶음이 먼저 빠지면 저장 대기를 버리고, 반대면 빈 본문을 저장한다 — flush 뒤에 내린다
+      const drain = () => drainGenRef.current === gen && store.setDrained(true)
+      void latestRef.current.beforeLeave().then(drain, drain)
+      return
+    }
+    if (was === false && restoredScopeRef.current === scope) {
+      const ids = new Set(docs.map((d) => d.id))
+      const lookup = metaLookup(docs)
+      const restored = restoreSplit(store.get().split, (key) => ids.has(key), lookup)
+      store.set(currentDocId ? openCurrent(restored, currentDocId, lookup, true) : restored)
+    }
+    store.setDrained(false)
+  }, [on, scope, docs, currentDocId, store])
 
   useEffect(() => {
     if (ready) sawReadyRef.current = true
   }, [ready])
 
-  // 목록·지금 문서가 바뀔 때 — 이 창에서 지운 문서 탭을 모든 칸에서 닫고, 지금 문서를 칸에 맞춘다
+  // 목록·지금 문서가 바뀔 때 — 이 창에서 지운 문서 탭을 닫고(꺼져 있으면 포커스 칸만), 지금 문서를 칸에 맞춘다
   useEffect(() => {
     if (!enabled || restoredScopeRef.current !== scope) return
     const ids = new Set(docs.map((d) => d.id))
@@ -235,11 +288,13 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
     const prevCurrent = prevCurrentRef.current
     prevIdsRef.current = ids
     prevCurrentRef.current = currentDocId
-    const removed = store
-      .get()
-      .split.panes.flatMap((p) => removedTabKeys({ tabs: p.tabs, prevIds, nextIds: ids, currentKey: currentDocId }))
+    const before = store.get().split
+    const removed = (on ? before.panes : [before.panes[before.focus]]).flatMap((p) =>
+      removedTabKeys({ tabs: p.tabs, prevIds, nextIds: ids, currentKey: currentDocId }),
+    )
     if (removed.length > 0) {
-      eachPane(store, (p) => closeTabs(p, removed))
+      if (on) eachPane(store, (p) => closeTabs(p, removed))
+      else store.set(withFocusTabs(before, closeTabs(before.panes[before.focus], removed)))
       removed.forEach((key) => positionsRef.current.delete(key))
     }
     const s = store.get().split
@@ -267,26 +322,31 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
         })
         pendingPinRef.current = null
         pinIntentAtRef.current = 0
+        const entry = tabEntry(currentDocId, lookup)
         const { keys } = store.get()
         const preferAt = preferKeyRef.current === null ? -1 : keys.indexOf(preferKeyRef.current)
         preferKeyRef.current = null
-        const order = store.order().map((k) => keys.indexOf(k)).filter((i) => i >= 0)
-        const meta = lookup(currentDocId)
-        const entry: DocTab = meta?.shared
-          ? { key: currentDocId, pinned: false, title: meta.title, shared: true }
-          : { key: currentDocId, pinned: false, title: meta?.title ?? '' }
-        const routed = routeOpen(s, entry, mode, order, preferAt < 0 ? null : preferAt)
-        store.set(routed.split)
-        if (routed.capped) latestRef.current.notify(TABS_FULL_REPLACED)
+        if (on) {
+          const order = store.order().map((k) => keys.indexOf(k)).filter((i) => i >= 0)
+          const routed = routeOpen(s, entry, mode, order, preferAt < 0 ? null : preferAt)
+          store.set(routed.split)
+          if (routed.capped) latestRef.current.notify(TABS_FULL_REPLACED)
+        } else {
+          const opened = openTabCapped(s.panes[s.focus], entry, mode, paneTabLimit(s, s.focus))
+          store.set(withFocusTabs(s, opened.state))
+          if (opened.capped) latestRef.current.notify(TABS_FULL_REPLACED)
+        }
       }
     }
     eachPane(store, (p) => syncTabMeta(p, lookup))
-  }, [enabled, scope, docs, currentDocId, store, navigate])
+  }, [enabled, scope, docs, currentDocId, store, navigate, on])
 
+  // 꺼진 곳은 포커스 칸만 쓴다 — 나머지 칸은 저장값 그대로 (F-2164 4장)
   useEffect(() => {
     if (!enabled || restoredScopeRef.current !== scope) return
-    setPref('md.docTabs', storeSplit(getPref('md.docTabs', ''), scope, split))
-  }, [enabled, scope, split])
+    const raw = getPref('md.docTabs', '')
+    setPref('md.docTabs', on ? storeSplit(raw, scope, split) : storeTabs(raw, scope, split.panes[split.focus]))
+  }, [enabled, scope, split, on])
 
   const pinCurrent = useCallback(() => {
     const { currentDocId: cur, openDocId: open } = latestRef.current
@@ -377,8 +437,8 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
       const first = make(before.split, before.keys)
       if (!first) return
       const cur = latestRef.current.currentDocId
-      const after = docUnitIds(unitPanes(first, cur))
-      if (docUnitIds(unitPanes(before.split, cur)).every((id) => after.includes(id))) return commitFollow(first)
+      const after = docUnitIds(splitUnitPanes(first, cur, before.drained))
+      if (docUnitIds(splitUnitPanes(before.split, cur, before.drained)).every((id) => after.includes(id))) return commitFollow(first)
       await latestRef.current.beforeLeave()
       const now = store.get()
       const next = make(now.split, now.keys)
@@ -387,12 +447,14 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
     [store, commitFollow],
   )
 
+  // 꺼진 동안은 포커스 칸 탭만 바꾸고 빈 칸도 닫지 않는다 (F-2164 4장)
   const changePane = useCallback(
     (paneKey: string, make: (p: PaneTabs) => DocTabsState) =>
       void runChange((s, keys) => {
         const i = keys.indexOf(paneKey)
         const next = i < 0 ? null : make(s.panes[i])
-        return next === null || next === s.panes[i] ? null : setPaneTabs(s, i, next)
+        if (next === null || next === s.panes[i]) return null
+        return !latestRef.current.on && i === s.focus ? withFocusTabs(s, next) : setPaneTabs(s, i, next)
       }),
     [runChange],
   )
@@ -475,7 +537,8 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
       if ((e.target as Element | null)?.closest?.('dialog, [role="dialog"]')) return
       const { split: s, keys } = store.get()
       const focusKey = keys[s.focus]
-      const wide = latestRef.current.barMode
+      // 꺼진 동안은 나누기·칸 닫기·칸 번호 키를 가로채지 않는다 (F-2164 4장)
+      const wide = latestRef.current.barMode && latestRef.current.on
       const stop = () => {
         e.preventDefault()
         e.stopPropagation()
@@ -585,7 +648,7 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
   const focusTab = split.panes[split.focus].tabs.find((t) => t.key === split.panes[split.focus].active)
   const focusKey = paneState.keys[split.focus]
   const palette: PaletteContext['panes'] =
-    barMode && focusTab && focusTab.key === currentDocId
+    barMode && on && focusTab && focusTab.key === currentDocId
       ? {
           splitRight: splitAction(split, split.focus, 'right', focusTab) !== null,
           splitDown: splitAction(split, split.focus, 'down', focusTab) !== null,
@@ -596,12 +659,13 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
   const multi = split.panes.length > 1
   const panes: DocPanes = {
     ...paneState,
-    bars: barMode && multi ? split.panes.map((_, i) => barFor(i, true)) : null,
-    keep: multi,
+    bars: barMode && on && multi ? split.panes.map((_, i) => barFor(i, true)) : null,
+    keep: multi && on,
+    on,
     focusPane,
     serviceFocusRequest,
   }
   if (!enabled || !ready) return { bar: null, phone: null, panes, palette }
   if (phone) return { bar: null, phone: barFor(split.focus, false), panes, palette }
-  return { bar: multi ? null : barFor(split.focus, true), phone: null, panes, palette }
+  return { bar: on && multi ? null : barFor(split.focus, on), phone: null, panes, palette }
 }

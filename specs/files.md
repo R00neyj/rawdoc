@@ -230,6 +230,7 @@
 |`src/app/sidebarWidth.ts`|사이드바 너비를 허용 범위 안에서 조절하고 기억함|
 |`src/app/softKeyboard.ts`|휴대폰 화면 키보드가 열렸는지 알아냄|
 |`src/app/splitLayout.ts`|화면 분할 배치(2~4칸)의 나누기·닫기·칸 번호·비율 규칙과 저장값 읽고 쓰기를 정함|
+|`src/app/splitOff.ts`|좁은 창이나 도움말·휴지통 같은 화면에서 분할을 잠시 끄고 포커스 칸만 남길지 정하고, 다시 열 때 저장된 칸 배치를 되살림|
 |`src/app/SplitPanes.tsx`|나눈 화면의 칸들을 격자로 그리고, 칸마다 맨 위 탭 줄과 문서 화면을 보여 줌|
 |`src/app/StatusBar.tsx`|화면 아래 상태바에 줄·칸 위치, 저장·동기화·실시간 연결 상태를 보여줌|
 |`src/app/tabSync.ts`|같은 브라우저의 여러 탭끼리 문서 상태를 맞춤|
