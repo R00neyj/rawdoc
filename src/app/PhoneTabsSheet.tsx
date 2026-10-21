@@ -122,7 +122,7 @@ export default function PhoneTabsSheet({ open, tabs, readDoc, onClose }: PhoneTa
                     <span className="phone-tab-card-title">{title}</span>
                   </button>
                   <button type="button" className="icon-btn phone-tab-card-close" aria-label={`${title} 탭 닫기`} onClick={() => handleCloseTab(tab.key)}>
-                    <IconClose size={16} />
+                    <IconClose size={14} />
                   </button>
                 </li>
               )
