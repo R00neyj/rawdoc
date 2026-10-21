@@ -6,6 +6,7 @@ import type { SyntaxNode } from '@lezer/common'
 import type { MarkdownParser } from '@lezer/markdown'
 
 import { frontmatterExtension } from './frontmatter'
+import { imagePathsOf, leadingImageLine } from './preview/imagePaths'
 
 // 편집기 markdown() 과 같은 기반·확장, 코드 중첩 없음 — 제목은 바깥 구조만 보면 된다 (F-2125 4장)
 const outlineParser = (markdownLanguage.parser as MarkdownParser).configure([frontmatterExtension()])
@@ -62,11 +63,14 @@ function atxHeadingRaw(state: EditorState, node: SyntaxNode): string {
   return raw.replace(/[ \t]+#+[ \t]*$/, '')
 }
 
-// SetextHeadingN 노드 → 밑줄(HeaderMark) 앞까지의 원문
-function setextHeadingRaw(state: EditorState, node: SyntaxNode): string {
+// SetextHeadingN 노드 → 밑줄(HeaderMark) 앞까지의 원문. 첫 줄이 그림 한 줄이면 그 줄은 뺀다 (요청노트 2026-10-21)
+function setextHeadingRaw(state: EditorState, node: SyntaxNode): { raw: string; from: number } | null {
   const mark = node.getChild('HeaderMark')
   const to = mark ? mark.from : node.to
-  return state.doc.sliceString(node.from, to).replace(/\s+$/, '')
+  const image = leadingImageLine(state, node, imagePathsOf(state))
+  const from = image ? Math.min(image.to + 1, to) : node.from
+  const raw = state.doc.sliceString(from, to).replace(/\s+$/, '')
+  return image && raw === '' ? null : { raw, from }
 }
 
 export type Heading = { level: 1 | 2 | 3; text: string; from: number }
@@ -85,10 +89,12 @@ export function extractHeadings(state: EditorState): Heading[] {
       const setextLevel = SETEXT_LEVEL[node.name]
       if (!atxLevel && !setextLevel) return
 
-      const raw = atxLevel ? atxHeadingRaw(state, node.node) : setextHeadingRaw(state, node.node)
+      const setext = atxLevel ? null : setextHeadingRaw(state, node.node)
+      if (!atxLevel && !setext) return
+      const raw = setext ? setext.raw : atxHeadingRaw(state, node.node)
       const stripped = stripInlineMarkup(raw)
       const text = stripped === '' ? '(제목 없음)' : stripped
-      const from = state.doc.lineAt(node.from).from
+      const from = state.doc.lineAt(setext ? setext.from : node.from).from
 
       headings.push({ level: (atxLevel ?? setextLevel) as 1 | 2 | 3, text, from })
     },

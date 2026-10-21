@@ -226,6 +226,9 @@ describe('F-2127 A7 새 문법 줄', () => {
       [2, 'html', '1111111111111111', null],
     ])
   })
+  it('listImageBlocks 는 그림 줄 바로 다음 줄이 글이어도 잡는다 (요청노트 2026-10-21)', () => {
+    expect(listImageBlocks(`${LINE}\n- 항목\n`).map((f) => [f.line, f.form])).toEqual([[0, 'markdown']])
+  })
   it('embedsToImageBlocks 는 form markdown 이면 한 줄, 아니면 3줄', () => {
     const md = '![[a.png|300]]\n'
     const [embed] = findVaultEmbeds(md)

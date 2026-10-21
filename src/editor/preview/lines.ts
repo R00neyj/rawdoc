@@ -12,6 +12,7 @@ import { isComposing, isForced } from '../composition'
 import { frontmatterWidgetExtension, frontmatterWidgetInfo } from '../frontmatter'
 import { parseCalloutHeader, defaultCalloutTitle } from '../../lib/callout'
 import { calloutIconSvg } from '../../lib/calloutIcons'
+import { imagePathsChanged, imagePathsOf, leadingImageLine } from './imagePaths'
 
 const HIDE = Decoration.replace({})
 
@@ -246,7 +247,9 @@ export function buildLines(
           case 'SetextHeading2': {
             const mark = node.node.getChild('HeaderMark')
             const lastContentLine = mark ? state.doc.lineAt(mark.from).number - 1 : state.doc.lineAt(node.to).number
-            const firstLine = state.doc.lineAt(node.from).number
+            // 첫 줄이 그림 한 줄이면 blocks.ts 가 그림으로 그리니 제목이 아니다 (요청노트 2026-10-21)
+            const image = leadingImageLine(state, node.node, imagePathsOf(state))
+            const firstLine = state.doc.lineAt(node.from).number + (image ? 1 : 0)
             for (let n = firstLine; n <= lastContentLine; n++) {
               out.push(lineClassRange(state.doc.line(n), SETEXT_CLASS[node.name]))
             }
@@ -402,7 +405,8 @@ export function linePreview(): Extension {
       update(update: ViewUpdate) {
         if (!isForced(update)) {
           const treeChanged = syntaxTree(update.startState) !== syntaxTree(update.state)
-          if (!update.docChanged && !update.selectionSet && !update.viewportChanged && !treeChanged) return
+          const pathsChanged = update.transactions.some((tr) => tr.effects.some((e) => e.is(imagePathsChanged)))
+          if (!update.docChanged && !update.selectionSet && !update.viewportChanged && !treeChanged && !pathsChanged) return
           if (isComposing(update.view)) {
             if (update.docChanged) this.decorations = mapDecorationsOnHold(this.decorations, update.changes)
             return

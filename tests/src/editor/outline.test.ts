@@ -52,6 +52,13 @@ describe('extractHeadings — ATX·Setext (A1)', () => {
     const from = extractHeadings(state)[0].from
     expect(state.doc.lineAt(from).text).toBe('## 제목')
   })
+
+  it('Setext 첫 줄이 그림 한 줄이면 그 줄은 제목이 아니다 (요청노트 2026-10-21)', () => {
+    const img = '![설명|center|360](attachments/0f3a9c2e7b1d4a58.webp)'
+    expect(extractHeadings(makeState(`${img}\n-\n`))).toEqual([])
+    const state = makeState(`${img}\n글\n---\n`)
+    expect(extractHeadings(state)).toEqual([{ level: 2, text: '글', from: img.length + 1 }])
+  })
 })
 
 describe('extractHeadings — 코드블록·프론트매터 제외 (A1)', () => {

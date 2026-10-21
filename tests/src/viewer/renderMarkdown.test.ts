@@ -717,6 +717,17 @@ describe('renderMarkdown — 이미지 한 줄 (F-2127 A5)', () => {
     const html = renderMarkdown('![y](./img/a.png)', { resolveImagePath: () => ({ id: ID, ext: 'png' }) })
     expect(html).toContain(`data-attachment="${ID}"`)
   })
+
+  it('그림 줄 바로 다음 줄이 글·목록 기호여도 첫 줄은 그림, 나머지는 따로 해석 (요청노트 2026-10-21)', () => {
+    const img = renderMarkdown(NEW)
+    expect(renderMarkdown(`${NEW}\n글`)).toBe(`${img}<p>글</p>\n`)
+    expect(renderMarkdown(`${NEW}\n- 항목`)).toBe(`${img}<ul>\n<li>항목</li>\n</ul>\n`)
+    expect(renderMarkdown(`${NEW}\n-`)).toBe(`${img}<ul>\n<li></li>\n</ul>\n`)
+    expect(renderMarkdown(`${NEW}\n---`)).toBe(`${img}<hr>\n`)
+    expect(renderMarkdown(`${NEW}\n글\n-`, { sourceLines: true })).toContain('<h2 data-source-line="2">글</h2>')
+    expect(renderMarkdown(`글\n${NEW}`)).not.toContain('md-image')
+    expect(renderMarkdown(`> 인용\n${NEW}`)).not.toContain('md-image')
+  })
 })
 
 describe('renderMarkdown — 저장소 그림 (F-2131 A1)', () => {

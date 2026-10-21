@@ -82,6 +82,13 @@ export function imageLineTarget(parsed: ParsedImageLine, resolveImagePath?: Reso
   return resolveImagePath?.(parsed.url) ?? null
 }
 
+// 한 줄이 그것만으로 그림인가 — 문단·setext 제목은 첫 줄만 이걸로 본다 (요청노트 2026-10-21)
+export function imageLineAt(text: string, resolveImagePath?: ResolveImagePath): { line: ParsedImageLine; target: ImageTarget } | null {
+  const line = parseImageLine(text)
+  const target = line && imageLineTarget(line, resolveImagePath)
+  return line && target ? { line, target } : null
+}
+
 function sanitizeAlt(raw: string): string {
   return String(raw ?? '')
     .replace(/\r\n|\r|\n/g, ' ')

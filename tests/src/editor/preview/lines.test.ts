@@ -7,6 +7,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
 import { buildLines, fenceLineRanges, listAncestorMarks, mapDecorationsOnHold, sameListIndent } from '../../../../src/editor/preview/lines'
 import { frontmatterExtension } from '../../../../src/editor/frontmatter'
+import { imagePathsField } from '../../../../src/editor/preview/imagePaths'
 
 function makeState(doc: string, anchor = 0, head = anchor): EditorState {
   const state = EditorState.create({
@@ -71,6 +72,22 @@ describe('buildLines — 제목', () => {
     const decos = build(state)
     expect(lineClasses(decos)).toEqual(['md-h1'])
     expect(replaced(decos)).toHaveLength(0)
+  })
+
+  it('Setext 제목의 첫 줄이 그림 한 줄이면 그 줄엔 제목 클래스를 안 붙인다 (요청노트 2026-10-21)', () => {
+    const img = '![설명|center|360](attachments/0f3a9c2e7b1d4a58.webp)'
+    expect(lineClasses(build(makeState(`${img}\n-\n\nx`, 0)))).toEqual([])
+    expect(lineClasses(build(makeState(`${img}\n=\n\nx`, 0)))).toEqual([])
+    const rest = build(makeState(`${img}\n글\n---\n\nx`, 0))
+    expect(lineClasses(rest)).toEqual(['md-h2'])
+    expect(rest.find((r) => r.value.spec.class)?.from).toBe(img.length + 1)
+    expect(lineClasses(build(makeState('![x](https://example.com/a.png)\n-\n\nx', 0)))).toEqual(['md-h2'])
+    const withPaths = EditorState.create({
+      doc: '![y](./img/a.png)\n-\n\nx',
+      extensions: [markdown({ base: markdownLanguage }), imagePathsField.init(() => () => ({ id: '0f3a9c2e7b1d4a58', ext: 'png' }))],
+    })
+    ensureSyntaxTree(withPaths, withPaths.doc.length, 5000)
+    expect(lineClasses(build(withPaths))).toEqual([])
   })
 })
 

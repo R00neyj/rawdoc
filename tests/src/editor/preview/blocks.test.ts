@@ -712,9 +712,19 @@ describe('buildBlocks — 이미지 한 줄 위젯 (F-2127 A4)', () => {
       `> ${LINE}\n\n뒤`,
       `![x](https://example.com/a.png)\n\n뒤`,
       `![y](./img/a.png)\n\n뒤`,
-      `${LINE}\n글`,
+      `글\n${LINE}`,
     ]
     for (const doc of docs) expect(find(makeState(doc, doc.length))).toHaveLength(0)
+  })
+
+  it('그림 줄 바로 다음 줄에 글·목록 기호가 와도 첫 줄만 위젯 (요청노트 2026-10-21)', () => {
+    for (const next of ['글', '-', '- ', '=', '---', '글\n-']) {
+      const doc = `${LINE}\n${next}`
+      const found = find(makeState(doc, doc.length))
+      expect(found, next).toHaveLength(1)
+      expect([found[0].from, found[0].to], next).toEqual([0, LINE.length])
+    }
+    expect(find(makeState(`${LINE}\n-`, 1))).toHaveLength(0)
   })
 
   it('resolveImagePath 가 첨부를 주면 상대 경로도 위젯', () => {

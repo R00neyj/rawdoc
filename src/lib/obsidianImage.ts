@@ -316,15 +316,13 @@ export function embedsToImageBlocks(markdown: string, blocks: ReadonlyMap<VaultE
   return out.join('\n')
 }
 
-// F-156 블록과 표준 이미지 한 줄을 문서 순서로. 블록 뒤 줄이 빈 줄·문서 끝이어야 블록이다 (F-2019 5.4, F-2127 5.3)
+// F-156 블록과 표준 이미지 한 줄을 문서 순서로. 옛 블록은 뒤 줄이 빈 줄·문서 끝이어야 블록, 그림 한 줄은 뒤 줄과 상관없다 (F-2019 5.4, 요청노트 2026-10-21)
 // CRLF 원문은 줄바꿈을 '\n' 으로 맞춘 뒤 센다 (리뷰 L3)
 export function listImageBlocks(markdown: string): Array<{ line: number; block: ParsedImageBlock; form: ImageForm }> {
   const lines = toEditorText(markdown).split('\n')
   const result: Array<{ line: number; block: ParsedImageBlock; form: ImageForm }> = []
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].startsWith('![')) {
-      const next = lines[i + 1]
-      if (next !== undefined && !isBlankLine(next)) continue
       const line = parseImageLine(lines[i])
       const target = line && imageLineTarget(line)
       if (line && target && 'id' in target) {

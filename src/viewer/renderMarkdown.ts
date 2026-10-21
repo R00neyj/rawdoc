@@ -1,7 +1,7 @@
 // 마크다운 → HTML 문자열 변환 (specs/features/F-123.md 3.2)
 // 순수 함수. DOM·React 를 다루지 않는다
 import MarkdownIt from 'markdown-it'
-import type { StateCore, StateInline, Delimiter, Token, RendererRule } from 'markdown-it'
+import type { StateBlock, StateCore, StateInline, Delimiter, Token, RendererRule } from 'markdown-it'
 
 import { parseCalloutHeader, defaultCalloutTitle } from '../lib/callout'
 import { calloutIconSvg } from '../lib/calloutIcons'
@@ -9,7 +9,7 @@ import { findWikiLinks } from '../lib/wikiLink'
 import { findFrontmatter, parseSimpleProperties, textAfterFrontmatter } from '../lib/frontmatter'
 import { parseImageBlock } from '../lib/imageBlock'
 import type { ParsedImageBlock } from '../lib/imageBlock'
-import { imageLineTarget, parseImageLine } from '../lib/imageMarkdown'
+import { imageLineAt } from '../lib/imageMarkdown'
 import type { ResolveImagePath } from '../lib/imageMarkdown'
 import { matchMathAt, parseMathBlock } from '../lib/mathSyntax'
 import { renderMath } from '../lib/mathRender'
@@ -166,12 +166,32 @@ function renderImageBlockHtml(parsed: ParsedImageBlock | RepoImageBlock, sourceL
 function parseImageParagraph(content: string, resolveImagePath?: ResolveImagePath): ParsedImageBlock | RepoImageBlock | null {
   const old = parseImageBlock(content)
   if (old) return old
-  const line = parseImageLine(content)
-  const target = line && imageLineTarget(line, resolveImagePath)
-  if (!line || !target) return null
+  const image = imageLineAt(content, resolveImagePath)
+  if (!image) return null
+  const { line, target } = image
   if ('repoPath' in target) return { align: line.align, alt: line.alt, width: line.width, repoPath: target.repoPath, src: target.src }
   return { align: line.align, id: target.id, ext: target.ext, src: line.url, alt: line.alt, width: line.width }
 }
+
+// 최상위 블록 첫 줄이 혼자 그림이면 그 줄만 문단으로 끊는다 — 다음 줄은 목록·구분선·문단으로 따로 해석 (요청노트 2026-10-21)
+// 문단 종료 규칙(alt)에 안 넣어 문단 중간의 그림 줄은 그대로 이어진다
+function imageLineBlockRule(state: StateBlock, startLine: number, _endLine: number, silent: boolean): boolean {
+  if (state.level !== 0 || state.sCount[startLine] - state.blkIndent >= 4) return false
+  const text = state.src.slice(state.bMarks[startLine] + state.tShift[startLine], state.eMarks[startLine])
+  if (text.charCodeAt(0) !== 0x21 || !imageLineAt(text, (state.env as { resolveImagePath?: ResolveImagePath } | undefined)?.resolveImagePath)) return false
+  if (silent) return true
+  state.line = startLine + 1
+  const open = state.push('paragraph_open', 'p', 1)
+  open.map = [startLine, state.line]
+  const inline = state.push('inline', '', 0)
+  inline.content = text
+  inline.map = [startLine, state.line]
+  inline.children = []
+  state.push('paragraph_close', 'p', -1)
+  return true
+}
+
+md.block.ruler.before('lheading', 'image_line', imageLineBlockRule)
 
 function imageBlockRule(state: StateCore): void {
   const tokens = state.tokens

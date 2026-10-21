@@ -354,7 +354,7 @@
 |`src/editor/preview/frontmatterEdit.ts`|문서 속성 표의 값 칸을 바로 고칠 수 있게 함|
 |`src/editor/preview/frontmatterWidget.ts`|편집 화면에서 문서 속성 정보를 표로 그려 줌|
 |`src/editor/preview/highlightMark.ts`|`==글자==` 형광펜 표시를 화면에 칠해 줌|
-|`src/editor/preview/imagePaths.ts`|상대 경로로 적힌 이미지를 찾는 방법을 기억해 둠|
+|`src/editor/preview/imagePaths.ts`|상대 경로로 적힌 이미지를 찾는 방법을 기억해 두고, 문단 첫 줄이 그림 한 줄인지 가려 줌|
 |`src/editor/preview/imageWidget.ts`|편집 화면에 이미지를 보여 주고 크기·정렬·삭제를 다룸|
 |`src/editor/preview/index.ts`|편집 화면 미리보기 기능들을 모아 한 번에 켬|
 |`src/editor/preview/inline.ts`|커서가 없는 곳의 굵게·링크 기호를 숨겨 깔끔하게 보여 줌|

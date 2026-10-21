@@ -8,7 +8,6 @@ import { syntaxTree } from '@codemirror/language'
 import type { SyntaxNode } from '@lezer/common'
 
 import { parseImageBlock } from '../../lib/imageBlock'
-import { imageLineTarget, parseImageLine } from '../../lib/imageMarkdown'
 import type { ResolveImagePath } from '../../lib/imageMarkdown'
 import { parseMathBlock } from '../../lib/mathSyntax'
 import { createCodeCopyButton } from '../../lib/codeCopyButton'
@@ -20,7 +19,7 @@ import type { CodeGrammar } from '../../lib/codeParsers'
 import { isComposing, isForced } from '../composition'
 import { isEditorFocused } from './active'
 import { isFrontmatterComposing } from './frontmatterEdit'
-import { imagePathsChanged, imagePathsField } from './imagePaths'
+import { imagePathsChanged, imagePathsField, isInsideListOrQuote, leadingImageLine } from './imagePaths'
 import type { ResolveAttachment } from './imageWidget'
 import { ImageWidget, destroyImageCache } from './imageWidget'
 import { MathBlockWidget } from './mathWidget'
@@ -232,16 +231,6 @@ function tableWidget(state: EditorState, _node: SyntaxNode, blockFrom: number, b
 type BlockMaker = (state: EditorState, node: SyntaxNode, blockFrom: number, blockTo: number, theme: string) => WidgetType
 const TARGET: Record<string, BlockMaker> = { Table: tableWidget, FencedCode: codeWidget }
 
-// 목록·인용 안인가 (F-157 2.1 "문서 최상위"). 이미지 블록·수식 블록·표가 검사한다 — 코드블록은 F-106 그대로 목록·인용 안에서도 위젯이 된다.
-// 표는 tableModel 이 줄 앞 `>`·`-`·들여쓰기를 모르고 칸으로 읽거나 행 추가에서 빠뜨려 구조를 깨므로 원문으로 둔다 (리뷰 E2)
-const LIST_OR_QUOTE = new Set(['Blockquote', 'BulletList', 'OrderedList', 'ListItem'])
-function isInsideListOrQuote(node: SyntaxNode): boolean {
-  for (let n = node.parent; n; n = n.parent) {
-    if (LIST_OR_QUOTE.has(n.name)) return true
-  }
-  return false
-}
-
 // 선택에 따라 위젯↔원문이 바뀔 수 있는 블록 하나 (리뷰 E6). table 이면 F-139 3.1 규칙을 탄다
 export type BlockSpan = { from: number; to: number; table: boolean }
 
@@ -294,29 +283,29 @@ export function buildBlocks(
         return false
       }
 
-      // 수식 블록 $$…$$(F-291 4.2) — 문서 최상위 문단만(B3), 문단 자식은 인라인 노드뿐이라 내려가지 않는다(인라인 수식은 mathPreview 가 그린다)
-      if (node.name === 'Paragraph') {
+      // 이미지 한 줄 (F-2127 4.1) — 문단·setext 제목의 첫 줄이 혼자 그림이면 그 줄만 위젯, 다음 줄은 원문 (요청노트 2026-10-21)
+      const isSetext = node.name === 'SetextHeading1' || node.name === 'SetextHeading2'
+      if (node.name === 'Paragraph' || isSetext) {
         if (isInsideListOrQuote(node.node)) return false
+        const image = leadingImageLine(state, node.node, resolveImagePath)
+        if (image) {
+          const { line, target } = image
+          const span = { from: image.from, to: image.to, table: false }
+          spans?.push(span)
+          if (showsWidget(state, hasFocus, span)) {
+            const repo = 'repoPath' in target ? { repoPath: target.repoPath, src: target.src } : null
+            const att = 'id' in target ? target : null
+            const parsed = { align: line.align, id: att?.id ?? '', ext: att?.ext ?? '', alt: line.alt, width: line.width }
+            out.push(
+              Decoration.replace({ widget: new ImageWidget(parsed, resolveAttachment, 'markdown', repo), block: true }).range(span.from, span.to),
+            )
+          }
+          return false
+        }
+        if (isSetext) return false
+        // 수식 블록 $$…$$(F-291 4.2) — 문서 최상위 문단만(B3), 인라인 수식은 mathPreview 가 그린다
         const from = state.doc.lineAt(node.from).from
         const to = state.doc.lineAt(node.to).to
-        // 이미지 한 줄 `![…](attachments/…)` (F-2127 4.1) — 문단 첫 글자(앞 0~3칸 뒤)가 `!` 일 때만 해석한다
-        if (state.doc.sliceString(node.from, node.from + 1) === '!') {
-          const line = parseImageLine(state.doc.sliceString(from, to))
-          const target = line && imageLineTarget(line, resolveImagePath)
-          if (line && target) {
-            const span = { from, to, table: false }
-            spans?.push(span)
-            if (showsWidget(state, hasFocus, span)) {
-              const repo = 'repoPath' in target ? { repoPath: target.repoPath, src: target.src } : null
-              const att = 'id' in target ? target : null
-              const parsed = { align: line.align, id: att?.id ?? '', ext: att?.ext ?? '', alt: line.alt, width: line.width }
-              out.push(
-                Decoration.replace({ widget: new ImageWidget(parsed, resolveAttachment, 'markdown', repo), block: true }).range(from, to),
-              )
-            }
-            return false
-          }
-        }
         // 수식 블록은 문단 첫 두 글자가 `$$` 여야 한다(parseMathBlock) — 아니면 파싱 안 하고, 문단 자식은 인라인 노드뿐이라 내려가지 않는다(리뷰 E6)
         if (state.doc.sliceString(from, from + 2) !== '$$') return false
         const parsed = parseMathBlock(state.doc.sliceString(from, to))
