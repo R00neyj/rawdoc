@@ -15,13 +15,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 화면을 다 덮는 판, 둥근 위 모서리 없음 (tweak 2026-10-22) */
+/* 아래에서 올라온 판 — 위에 틈을 남기고 둥근 모서리로 레이어처럼 (tweak 2026-10-22) */
 .more-sheet.phone-tabs-sheet {
-  height: 100dvh;
+  height: calc(100dvh - env(safe-area-inset-top, 0px) - 24px);
   max-height: none;
-  padding-top: env(safe-area-inset-top, 0px);
-  border-top: 0;
-  border-radius: 0;
 }
 
 /* 옵시디언처럼 아래 막대에 ＋ · 탭 수 · 완료 */
@@ -46,17 +43,6 @@
   font-size: 24px;
 }
 
-.phone-tabs-done {
-  justify-self: end;
-  height: 44px;
-  padding: 0 12px;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: 16px;
-  font-weight: 600;
-}
 
 .phone-tabs-grid {
   flex: 1;

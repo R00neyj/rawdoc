@@ -7,6 +7,7 @@ import { useBackToClose } from './useBackToClose'
 import { readOverlayMark } from './historyEntries'
 import { slicePreviewText } from './wikiPreview'
 import { renderMarkdown } from '../viewer/renderMarkdown'
+import { useSheetDragClose } from './useSheetDragClose'
 import '../styles/phoneTabs.css'
 
 const OVERLAY_KEY = 'phone-tabs'
@@ -64,6 +65,7 @@ function usePreviews(open: boolean, keys: readonly string[], readDoc: ReadTabDoc
 export default function PhoneTabsSheet({ open, tabs, readDoc, onClose }: PhoneTabsSheetProps): ReactNode {
   const dialogRef = useRef<HTMLDialogElement | null>(null)
   const { state } = tabs
+  const dragClose = useSheetDragClose(dialogRef, onClose)
   useBackToClose(OVERLAY_KEY, open, onClose)
   const previews = usePreviews(open, state.tabs.map((t) => t.key), readDoc)
 
@@ -98,6 +100,9 @@ export default function PhoneTabsSheet({ open, tabs, readDoc, onClose }: PhoneTa
     >
       {open && (
         <>
+          <div className="sheet-grabber" aria-hidden="true" {...dragClose}>
+            <span />
+          </div>
           <ul className="more-sheet-body phone-tabs-grid">
             {state.tabs.map((tab) => {
               const title = displayDocTitle(tab.title)
@@ -133,9 +138,7 @@ export default function PhoneTabsSheet({ open, tabs, readDoc, onClose }: PhoneTa
               ＋
             </button>
             <h2>탭 {state.tabs.length}개</h2>
-            <button type="button" className="phone-tabs-done" onClick={onClose}>
-              완료
-            </button>
+            <span />
           </div>
         </>
       )}
