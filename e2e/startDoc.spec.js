@@ -8,6 +8,7 @@ test('start-doc 설정에서 검색으로 고른 문서가 새로고침 뒤 열�
   await importMarkdown(page, { name: '베타.md', content: '# 베타\n' })
 
   await page.getByRole('button', { name: '설정' }).click()
+  await page.getByRole('tab', { name: '시작·새 문서' }).click()
   await page.getByRole('radio', { name: '문서 지정' }).click()
   // 처음 고르면 지금 연 문서로 채워진다
   const title = page.locator('.settings-start-doc-title')

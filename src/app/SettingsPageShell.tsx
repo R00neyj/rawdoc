@@ -4,7 +4,7 @@ import { IconArrowBack, IconChevron, IconClose } from './icons'
 import { WELCOME_PATH } from '../lib/siteChrome'
 import { openDonateDialog } from './donateStore'
 import type { SettingsPage } from './settingsPages'
-import type { SettingsTabId } from './settingsTabs'
+import { groupSettingsTabs, settingsTabGroupLabel, type SettingsTabId } from './settingsTabs'
 
 type SettingsPageShellProps = {
   titleId: string
@@ -52,21 +52,30 @@ export default function SettingsPageShell({ titleId, page, tabs, labels, firstRo
       </div>
       {tab === null ? (
         <ul className="settings-page-list">
-          {tabs.map((id, i) => (
-            <li key={id}>
-              <button
-                type="button"
-                className="settings-row"
-                data-tab={id}
-                ref={(el) => {
-                  rowRefs.current[id] = el
-                  if (i === 0) firstRowRef.current = el
-                }}
-                onClick={() => onEnter(id)}
-              >
-                <span className="settings-row-label">{labels[id]}</span>
-                <IconChevron size={16} />
-              </button>
+          {groupSettingsTabs(tabs).map((group) => (
+            <li key={group.label} className="settings-page-group">
+              <span className="settings-page-group-label" aria-hidden="true">
+                {group.label}
+              </span>
+              <ul>
+                {group.tabs.map((id) => (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      className="settings-row"
+                      data-tab={id}
+                      ref={(el) => {
+                        rowRefs.current[id] = el
+                        if (id === tabs[0]) firstRowRef.current = el
+                      }}
+                      onClick={() => onEnter(id)}
+                    >
+                      <span className="settings-row-label">{labels[id]}</span>
+                      <IconChevron size={16} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </li>
           ))}
           <li>
@@ -81,7 +90,10 @@ export default function SettingsPageShell({ titleId, page, tabs, labels, firstRo
           </li>
         </ul>
       ) : (
-        <div className="settings-panel settings-page-body">{children}</div>
+        <div className="settings-panel settings-page-body">
+          <p className="settings-panel-group">{settingsTabGroupLabel(tab)}</p>
+          {children}
+        </div>
       )}
     </>
   )

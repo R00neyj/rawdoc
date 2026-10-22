@@ -54,6 +54,7 @@ test.describe('F-232 A5 마지막 문서 토글', () => {
     const docId = await importMarkdown(page, { content: '문서\n' })
 
     await page.getByRole('button', { name: '설정' }).click()
+    await page.getByRole('tab', { name: '시작·새 문서' }).click()
     await page.getByRole('radio', { name: '마지막 문서' }).click()
     await page.getByRole('button', { name: '닫기', exact: true }).click()
 

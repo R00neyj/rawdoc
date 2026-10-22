@@ -1,11 +1,11 @@
-// 설정 `계정` 탭의 `알림` 묶음 — 스위치·아래 줄·테스트 버튼 (F-2110 6.2)
+// 설정 `계정` 묶음의 `알림` 카드 — 스위치·아래 줄·테스트 버튼 (F-2110 6.2)
 import type { SettingsPush } from './SettingsDialog'
 
 export default function PushSettings({ push }: { push: SettingsPush }) {
   const { view } = push
   return (
-    <section className="settings-push" aria-labelledby="settings-push-title">
-      <h3 id="settings-push-title" className="data-section-title">알림</h3>
+    <section className="settings-card settings-push" aria-labelledby="settings-push-title">
+      <h4 id="settings-push-title" className="settings-card-title">알림</h4>
       <div className="settings-push-row">
         <span id="settings-push-label">이 기기에서 푸시 받기</span>
         <button

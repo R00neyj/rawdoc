@@ -1,4 +1,4 @@
-// 설정 `계정` 탭의 `GitHub` 묶음 — 연결·해제·이번 달 사용 횟수 (specs/features/F-2128.md 4.6)
+// 설정 `계정` 묶음 `연결` 카드의 GitHub — 연결·해제·이번 달 사용 횟수 (specs/features/F-2128.md 4.6)
 import { GITHUB_RECONNECT_MESSAGE } from './githubUi'
 import type { SettingsGithub } from './SettingsDialog'
 
@@ -9,7 +9,7 @@ export default function GithubSettings({ github }: { github: SettingsGithub }) {
   const connected = status.connected && !status.reconnect
   return (
     <section className="settings-github" aria-labelledby="settings-github-title">
-      <h3 id="settings-github-title" className="data-section-title">GitHub</h3>
+      <h5 id="settings-github-title" className="settings-card-sub">GitHub</h5>
       <p className="dialog-note settings-github-note">
         {status.reconnect
           ? GITHUB_RECONNECT_MESSAGE

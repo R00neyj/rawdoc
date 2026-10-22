@@ -1,4 +1,4 @@
-// 설정 `연결된 앱` 탭 — 목록·끊기·초점·실패·오프라인 (specs/features/F-2148.md 3장 E1~E3)
+// 설정 `계정` 묶음의 연결된 앱 — 목록·끊기·초점·실패·오프라인 (specs/features/F-2148.md 3장 E1~E3)
 import { test, expect } from '@playwright/test'
 import { openApp, setPrefBeforeLoad, resetBrowserState } from './helpers.js'
 import { fakeServer } from './fixtures/fakeServer.js'
@@ -12,7 +12,7 @@ function app(id, name) {
 async function openAppsTab(page) {
   const settings = page.locator(SETTINGS)
   if (!(await settings.isVisible())) await page.getByRole('button', { name: '설정', exact: true }).click()
-  await settings.getByRole('tab', { name: '연결된 앱' }).click()
+  await settings.getByRole('tab', { name: '계정' }).click()
   return settings
 }
 

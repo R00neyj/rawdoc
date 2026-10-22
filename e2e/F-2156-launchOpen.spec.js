@@ -68,7 +68,7 @@ test.describe('F-2156 OS 열기 설정', () => {
 
     await page.getByRole('button', { name: '설정', exact: true }).click()
     const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
-    await dialog.getByRole('tab', { name: '데이터' }).click()
+    await dialog.getByRole('tab', { name: '시작·새 문서' }).click()
     await dialog.getByRole('radio', { name: /이 파일만 고치기/ }).check()
     expect(await page.evaluate(() => localStorage.getItem('md.localFileOpen'))).toBe('edit')
     await page.keyboard.press('Escape')

@@ -36,8 +36,8 @@ test.describe('F-290 설정 탭 키보드', () => {
     await page.keyboard.press('Tab')
     await expect(dialog.locator('#theme-label').locator('..').locator('[role="radio"]').first()).toBeFocused()
 
-    await dialog.getByRole('tab', { name: '데이터' }).click()
-    await expect(dialog.getByRole('tab', { name: '데이터' })).toHaveAttribute('aria-selected', 'true')
+    await dialog.getByRole('tab', { name: '가져오기·내보내기' }).click()
+    await expect(dialog.getByRole('tab', { name: '가져오기·내보내기' })).toHaveAttribute('aria-selected', 'true')
     await page.getByRole('button', { name: '닫기', exact: true }).click()
     await expect(dialog).toBeHidden()
     await settingsBtn.click()

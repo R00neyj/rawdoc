@@ -40,7 +40,7 @@ test.describe('F-154 A7a 들여쓰기', () => {
     expect(baseline.content.match(/^( *)-/)[1].length).toBe(0) // 내어쓰기 복원
 
     await page.getByRole('button', { name: '설정', exact: true }).click()
-    await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '편집기' }).click() // F-290 — 들여쓰기는 편집기 탭
+    await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '쓰기·읽기' }).click() // 들여쓰기는 쓰기·읽기 묶음
     await page.locator('#indent-label').locator('..').getByRole('radio', { name: '2칸', exact: true }).click()
     await page.getByRole('button', { name: '닫기', exact: true }).click()
 

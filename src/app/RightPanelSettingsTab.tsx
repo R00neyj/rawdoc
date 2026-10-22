@@ -1,4 +1,5 @@
-// 설정 `오른쪽 패널` 탭 — 표시할 항목·댓글창과 함께·달력·할 일 표시(전역 필터), 모두 기기별 (small 2026-10-10, 2026-10-11)
+// 설정 `오른쪽 패널` — 카드 넷(표시할 항목·댓글창과 함께·달력·할 일), 모두 기기별 (small 2026-10-10, 2026-10-11, 2026-10-22)
+import SettingsCard from './SettingsCard'
 import CalendarSettingsTab, { type CalendarSettings } from './CalendarSettingsTab'
 import type { PanelItemId } from '../lib/panelSlots'
 import type { CommentPanelLayout, RightPanelItemsSettings } from './useRightPanel'
@@ -23,18 +24,21 @@ export default function RightPanelSettingsTab({ settings, entries }: { settings:
   const { items, onToggleItem } = settings
   return (
     <>
-      <fieldset className="panel-items">
-        <legend className="panel-settings-title">표시할 항목</legend>
-        {ITEM_LABELS.map(([id, label]) => (
-          <label key={id} className="panel-item-check">
-            {/* 그날 문서는 달력 안 목록이라 달력을 끄면 값은 두고 고를 수만 없게 한다 */}
-            <input type="checkbox" checked={items[id]} disabled={id === 'dayDocs' && !items.calendar} onChange={(e) => onToggleItem(id, e.target.checked)} />
-            <span>{label}</span>
-          </label>
-        ))}
-      </fieldset>
+      <SettingsCard title="표시할 항목">
+        <fieldset className="panel-items">
+          <legend className="settings-card-legend">패널에 보일 것</legend>
+          {ITEM_LABELS.map(([id, label]) => (
+            <label key={id} className="panel-item-check">
+              {/* 그날 문서는 달력 안 목록이라 달력을 끄면 값은 두고 고를 수만 없게 한다 */}
+              <input type="checkbox" checked={items[id]} disabled={id === 'dayDocs' && !items.calendar} onChange={(e) => onToggleItem(id, e.target.checked)} />
+              <span>{label}</span>
+            </label>
+          ))}
+        </fieldset>
+      </SettingsCard>
+      <SettingsCard title="댓글창과 함께 열릴 때">
       <div className="dialog-field">
-        <span id="comment-layout-label">댓글창과 함께 열릴 때</span>
+        <span id="comment-layout-label">패널 배치</span>
         <div className="seg" role="radiogroup" aria-labelledby="comment-layout-label">
           {COMMENT_LAYOUT_LABELS.map(([value, label]) => (
             <button key={value} type="button" role="radio" aria-checked={settings.commentLayout === value} onClick={() => settings.onChangeCommentLayout(value)}>
@@ -44,9 +48,11 @@ export default function RightPanelSettingsTab({ settings, entries }: { settings:
         </div>
       </div>
       <p className="settings-hint">넓은 창에서 댓글창을 열 때 오른쪽 패널을 옆에 그대로 둘지, 댓글창이 열린 동안 숨길지 고릅니다.</p>
-      <h3 className="panel-settings-title">달력</h3>
-      <CalendarSettingsTab settings={settings.calendar} entries={entries} />
-      <h3 className="panel-settings-title">할 일</h3>
+      </SettingsCard>
+      <SettingsCard title="달력">
+        <CalendarSettingsTab settings={settings.calendar} entries={entries} />
+      </SettingsCard>
+      <SettingsCard title="할 일">
       <div className="dialog-field">
         <span id="task-filter-label">할 일 표시</span>
         <input
@@ -64,6 +70,7 @@ export default function RightPanelSettingsTab({ settings, entries }: { settings:
         <input type="checkbox" checked={settings.taskFilterHide} onChange={(e) => settings.onChangeTaskFilterHide(e.target.checked)} />
         <span>글자에서 할 일 표시 숨기기</span>
       </label>
+      </SettingsCard>
     </>
   )
 }

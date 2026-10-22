@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { decideSettingsPop, readSettingsPage, settingsPageDepth, settingsPagesMode } from '../../../src/app/settingsPages'
 
-const TABS = ['screen', 'editor', 'data'] as const
+const TABS = ['screen', 'writing', 'data'] as const
 
 describe('F-2114 U1 settingsPagesMode', () => {
   it('폰 폭이고 탭이 2개 이상일 때만 참', () => {
@@ -16,7 +16,7 @@ describe('F-2114 U1 settingsPagesMode', () => {
 describe('F-2114 U2 readSettingsPage', () => {
   it('표식을 읽는다', () => {
     expect(readSettingsPage({ navIdx: 3, settings: 'list' }, TABS)).toBe('list')
-    expect(readSettingsPage({ settings: 'editor' }, TABS)).toBe('editor')
+    expect(readSettingsPage({ settings: 'writing' }, TABS)).toBe('writing')
     expect(readSettingsPage({ settings: 'account' }, TABS)).toBe('list')
   })
   it('표식이 없거나 모르는 값이면 null', () => {
@@ -29,8 +29,10 @@ describe('F-2114 U2 readSettingsPage', () => {
   it('칸반 탭 표식도 읽는다 (small 2026-10-14)', () => {
     expect(readSettingsPage({ settings: 'kanban' }, ['screen', 'kanban'])).toBe('kanban')
   })
-  it('연결된 앱 탭 표식도 읽는다 (F-2148 U1)', () => {
-    expect(readSettingsPage({ settings: 'apps' }, ['screen', 'account', 'apps'])).toBe('apps')
+  it('새 배치 표식(시작·오른쪽 패널)도 읽고, 옛 표식은 버린다 (small 2026-10-22)', () => {
+    expect(readSettingsPage({ settings: 'start' }, ['screen', 'start'])).toBe('start')
+    expect(readSettingsPage({ settings: 'rightPanel' }, ['screen', 'rightPanel'])).toBe('rightPanel')
+    expect(readSettingsPage({ settings: 'apps' }, ['screen', 'account'])).toBeNull()
   })
 })
 
@@ -38,7 +40,7 @@ describe('F-2114 U3 settingsPageDepth', () => {
   it('깊이', () => {
     expect(settingsPageDepth(null)).toBe(0)
     expect(settingsPageDepth('list')).toBe(1)
-    expect(settingsPageDepth('editor')).toBe(2)
+    expect(settingsPageDepth('writing')).toBe(2)
   })
 })
 
@@ -50,7 +52,7 @@ describe('F-2114 U4 decideSettingsPop', () => {
   })
   it('열림', () => {
     expect(decideSettingsPop({ ...base, page: null })).toEqual({ kind: 'close' })
-    expect(decideSettingsPop({ ...base, page: 'editor' })).toEqual({ kind: 'show', page: 'editor' })
+    expect(decideSettingsPop({ ...base, page: 'writing' })).toEqual({ kind: 'show', page: 'writing' })
   })
   it('중첩이 떠 있으면 되돌린다', () => {
     expect(decideSettingsPop({ ...base, page: 'list', nestedOpen: true, shownIdx: 5, nextIdx: 4 })).toEqual({ kind: 'restore', delta: 1 })

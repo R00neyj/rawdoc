@@ -7,7 +7,7 @@ import { fakeServer } from './fixtures/fakeServer.js'
 async function openSettings(page) {
   await page.getByRole('button', { name: '설정', exact: true }).click()
   const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
-  await dialog.getByRole('tab', { name: '데이터' }).click()
+  await dialog.getByRole('tab', { name: '가져오기·내보내기' }).click()
   return dialog
 }
 

@@ -77,14 +77,14 @@ test.describe('F-505 E1·E4·E6 달기·거터·줄 번호', () => {
     // E6 줄 번호를 끄면 거터가 없다, 앵커는 그대로. 다시 켜면 거터 둘
     await page.getByRole('button', { name: '설정', exact: true }).click()
     const dialog = page.locator(SETTINGS_DIALOG_SELECTOR)
-    await dialog.getByRole('tab', { name: '편집기' }).click()
+    await dialog.getByRole('tab', { name: '화면' }).click()
     await page.locator('#line-numbers-label').locator('..').getByRole('radio', { name: '숨김', exact: true }).click()
     await page.getByRole('button', { name: '닫기', exact: true }).click()
     await expect(page.locator('.cm-gutters')).toHaveCount(0)
     await expect(page.locator('.cm-comment-anchor')).toHaveCount(2)
 
     await page.getByRole('button', { name: '설정', exact: true }).click()
-    await dialog.getByRole('tab', { name: '편집기' }).click()
+    await dialog.getByRole('tab', { name: '화면' }).click()
     await page.locator('#line-numbers-label').locator('..').getByRole('radio', { name: '표시', exact: true }).click()
     await page.getByRole('button', { name: '닫기', exact: true }).click()
     await expect(page.locator('.cm-gutters')).toHaveCount(1)

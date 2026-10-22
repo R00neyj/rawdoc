@@ -64,7 +64,7 @@
 |`src/app/ConfirmDeleteDialog.tsx`|문서나 폴더를 지울지 묻는 확인 창|
 |`src/app/connectedApps.ts`|설정 `연결된 앱` 탭에 보일 앱 이름·마지막 사용 시각 문구를 정함|
 |`src/app/connectedAppsApi.ts`|연결된 앱 목록을 서버에서 받고 연결 끊기 요청을 보냄|
-|`src/app/ConnectedAppsTab.tsx`|설정 `연결된 앱` 탭. ChatGPT·claude.ai 같은 연결된 앱을 보여 주고 연결을 끊음|
+|`src/app/ConnectedAppsTab.tsx`|설정 `계정` 묶음의 `연결된 앱`. ChatGPT·claude.ai 같은 연결된 앱을 보여 주고 연결을 끊음|
 |`src/app/contentWidth.ts`|본문 최대 너비의 허용 범위와 저장값을 계산함|
 |`src/app/ContextMenu.tsx`|오른쪽 클릭 메뉴와 그 하위 메뉴. 키보드로도 고를 수 있음|
 |`src/app/contextMenuActions.ts`|오른쪽 클릭 메뉴의 복사·붙여넣기·댓글 같은 동작을 처리함|
@@ -147,7 +147,7 @@
 |`src/app/liveNotices.ts`|실시간 편집이 끊기거나 멈췄을 때 보여 줄 안내 문구를 고름|
 |`src/app/localFileConflict.ts`|다른 프로그램이 컴퓨터 파일을 바꿨거나 지웠는지 판정하고, 그때 띄울 띠 문구를 정함 (F-2157)|
 |`src/app/localFileOpen.ts`|탐색기에서 연 파일을 설정에 따라 가져올지 바로 고칠지, 여러 개면 어느 것을 열지 정함|
-|`src/app/LocalFileOpenSetting.tsx`|설정 데이터 탭의 "로컬 파일 기본 열기 방식" 절 — 탐색기에서 연 .md 파일을 가져올지 그 파일만 고칠지 고름|
+|`src/app/LocalFileOpenSetting.tsx`|설정 `시작·새 문서` 묶음의 "로컬 파일 기본 열기 방식" 카드 — 탐색기에서 연 .md 파일을 가져올지 그 파일만 고칠지 고름|
 |`src/app/LocalFileScreen.tsx`|컴퓨터의 .md 파일 하나를 바로 고치는 화면 — 파일명·저장 상태·저장 허용·문서로 가져오기·닫기|
 |`src/app/localFileState.ts`|컴퓨터 파일 저장 상태(저장됨·입력 중·실패·권한 필요)가 어떻게 바뀌는지와 그 화면의 안내 문구를 정함|
 |`src/app/localTrash.ts`|로그인하지 않은 문서의 휴지통 목록·복원·영구 삭제를 휴지통 화면에 이어 주고, 앱을 열 때 30일 지난 문서를 지움|
@@ -210,7 +210,8 @@
 |`src/app/SettingsDialog.tsx`|글자 크기·줄 번호·시작 화면 등을 바꾸는 설정 창|
 |`src/app/settingsPages.ts`|휴대폰에서 설정 화면을 목록과 세부 화면으로 나눠 보여 줌|
 |`src/app/SettingsPageShell.tsx`|휴대폰에서 설정을 전체 화면 페이지로 보여주는 틀|
-|`src/app/settingsTabs.ts`|설정 창 왼쪽에 보일 탭과 순서를 정함|
+|`src/app/SettingsCard.tsx`|설정 창 오른쪽에서 항목 몇 개를 제목 붙은 카드 한 장으로 묶음|
+|`src/app/settingsTabs.ts`|설정 창 왼쪽에 보일 묶음과 순서, 묶음 위 상위 이름(모양·문서 등)을 정함|
 |`src/app/shareCopy.ts`|공유 링크나 마크다운 내용을 복사함|
 |`src/app/sharedAttachmentHint.ts`|공유받은 문서의 이미지 확장자를 열린 본문에서 찾아, 그 문서 권한으로 이미지를 받게 함|
 |`src/app/SharedView.tsx`|공유받은 문서를 열어 보고 내 문서로 가져올 수 있는 화면|

@@ -19,7 +19,7 @@ async function openSettings(page) {
 
 async function openEditorTab(page) {
   const dialog = await openSettings(page)
-  await dialog.getByRole('tab', { name: '편집기' }).click()
+  await dialog.getByRole('tab', { name: '시작·새 문서' }).click()
   return dialog
 }
 

@@ -6,7 +6,7 @@ import { openApp, importMarkdown } from './helpers.js'
 async function openSettings(page) {
   await page.getByRole('button', { name: '설정', exact: true }).click()
   const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
-  await dialog.getByRole('tab', { name: '데이터' }).click() // F-290 — 전체 내보내기는 데이터 탭
+  await dialog.getByRole('tab', { name: '가져오기·내보내기' }).click() // 전체 내보내기는 가져오기·내보내기 묶음
   return dialog
 }
 

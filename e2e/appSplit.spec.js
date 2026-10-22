@@ -241,7 +241,7 @@ test.describe('F-2063 설정값·시스템 테마 절', () => {
     await openApp(page)
     await importMarkdown(page, { content: '한 줄\n' })
     await expect(page.locator('.editor-toolbar')).toBeVisible()
-    const dialog = await openSettings(page, '편집기')
+    const dialog = await openSettings(page, '화면')
     await radio(dialog, '탭바', '숨김').click()
     await dialog.getByRole('button', { name: '닫기', exact: true }).click()
     await expect(dialog).toBeHidden()
@@ -269,7 +269,7 @@ test.describe('F-2063 설정값·시스템 테마 절', () => {
 
   test('F-2063 C5 시작 화면 선택 저장', async ({ page }) => {
     await openApp(page)
-    const dialog = await openSettings(page, '화면')
+    const dialog = await openSettings(page, '시작·새 문서')
     await radio(dialog, '시작 화면', '홈').click()
     await expect(radio(dialog, '시작 화면', '홈')).toHaveAttribute('aria-checked', 'true')
     expect(await stored(page, 'md.startScreen')).toBe('home')
@@ -789,7 +789,7 @@ test.describe('F-2067 삭제·폴더·고정·이동 절', () => {
 async function openSettingsData2068(page) {
   await page.getByRole('button', { name: '설정', exact: true }).click()
   const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
-  await dialog.getByRole('tab', { name: '데이터' }).click()
+  await dialog.getByRole('tab', { name: '가져오기·내보내기' }).click()
   return dialog
 }
 

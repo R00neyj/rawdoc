@@ -1,5 +1,5 @@
 // 휴대폰 폭 설정 전체화면 1·2뎁스 — 순수 함수 (specs/features/F-2114.md 2.7)
-import type { SettingsTabId } from './settingsTabs'
+import { SETTINGS_TAB_IDS, type SettingsTabId } from './settingsTabs'
 
 export type SettingsPage = 'list' | SettingsTabId
 
@@ -10,8 +10,6 @@ export type SettingsPopAction =
   | { kind: 'close' }
   | { kind: 'restore'; delta: number }
 
-const TAB_IDS: readonly string[] = ['screen', 'editor', 'kanban', 'css', 'data', 'e2ee', 'account', 'apps']
-
 export function settingsPagesMode(phone: boolean, tabCount: number): boolean {
   return phone && tabCount >= 2
 }
@@ -20,7 +18,7 @@ export function readSettingsPage(state: unknown, tabs: readonly SettingsTabId[])
   if (typeof state !== 'object' || state === null) return null
   const value = (state as { settings?: unknown }).settings
   if (value === 'list') return 'list'
-  if (typeof value !== 'string' || !TAB_IDS.includes(value)) return null
+  if (typeof value !== 'string' || !(SETTINGS_TAB_IDS as readonly string[]).includes(value)) return null
   return tabs.includes(value as SettingsTabId) ? (value as SettingsTabId) : 'list'
 }
 

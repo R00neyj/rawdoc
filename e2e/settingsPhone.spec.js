@@ -28,15 +28,15 @@ test('F-2114 E1 기록 뒤로가 2뎁스 → 1뎁스 → 닫힘 → 이전 문�
   await expect(page.locator('#settings-title')).toHaveText('설정')
   expect((await navState(page)).settings).toBe('list')
 
-  await dlgOf(page).locator('button.settings-row[data-tab="editor"]').tap()
-  await expect(page.locator('#settings-title')).toHaveText('편집기')
+  await dlgOf(page).locator('button.settings-row[data-tab="writing"]').tap()
+  await expect(page.locator('#settings-title')).toHaveText('쓰기·읽기')
   await expect(page.locator('#indent-label')).toBeVisible()
   await expect(dlgOf(page).getByRole('button', { name: '뒤로' })).toBeFocused()
-  expect((await navState(page)).settings).toBe('editor')
+  expect((await navState(page)).settings).toBe('writing')
 
   await page.goBack()
   await expect(page.locator('#settings-title')).toHaveText('설정')
-  await expect(dlgOf(page).locator('button.settings-row[data-tab="editor"]')).toBeFocused()
+  await expect(dlgOf(page).locator('button.settings-row[data-tab="writing"]')).toBeFocused()
   await expect(dlgOf(page)).toHaveAttribute('open', '')
 
   await page.goBack()
@@ -70,8 +70,8 @@ test('F-2114 E2 2뎁스에서 값 저장, 닫기는 쌓은 만큼 되감고 앞�
 
 test('F-2114 E3 Escape 는 2뎁스 → 1뎁스 → 닫힘', async ({ page }) => {
   const { before } = await setup(page)
-  await dlgOf(page).locator('button.settings-row[data-tab="editor"]').tap()
-  await expect(page.locator('#settings-title')).toHaveText('편집기')
+  await dlgOf(page).locator('button.settings-row[data-tab="writing"]').tap()
+  await expect(page.locator('#settings-title')).toHaveText('쓰기·읽기')
 
   await page.keyboard.press('Escape')
   await expect(dlgOf(page)).toHaveAttribute('open', '')

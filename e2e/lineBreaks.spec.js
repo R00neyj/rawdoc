@@ -7,7 +7,7 @@ const DIALOG = 'dialog[aria-labelledby="settings-title"]'
 async function openLineBreaksGroup(page) {
   await page.getByRole('button', { name: '설정', exact: true }).first().click()
   const dialog = page.locator(DIALOG)
-  await dialog.getByRole('tab', { name: '화면' }).click()
+  await dialog.getByRole('tab', { name: '쓰기·읽기' }).click()
   return dialog.getByRole('radiogroup', { name: '줄바꿈 한 번도 줄을 바꿔 보이기' })
 }
 

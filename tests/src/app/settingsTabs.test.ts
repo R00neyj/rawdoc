@@ -1,52 +1,43 @@
 import { describe, expect, test } from 'vitest'
-import { visibleSettingsTabs, nextTabIndex } from '../../../src/app/settingsTabs'
+import { visibleSettingsTabs, nextTabIndex, groupSettingsTabs, SETTINGS_TAB_IDS } from '../../../src/app/settingsTabs'
 
-describe('visibleSettingsTabs (F-290 A1)', () => {
-  test('전부 있음', () => {
-    expect(visibleSettingsTabs({ screen: true, editor: true, data: true })).toEqual(['screen', 'editor', 'data'])
+const ALL = { screen: true, css: true, writing: true, start: true, rightPanel: true, kanban: true, data: true, e2ee: true, account: true }
+
+describe('visibleSettingsTabs — A안 9묶음 (small 2026-10-22)', () => {
+  test('전부 있음 → 모양·문서·도구·데이터·계정 순', () => {
+    expect(visibleSettingsTabs(ALL)).toEqual(['screen', 'css', 'writing', 'start', 'rightPanel', 'kanban', 'data', 'e2ee', 'account'])
   })
 
-  test('screen 만', () => {
-    expect(visibleSettingsTabs({ screen: true, editor: false, data: false })).toEqual(['screen'])
+  test('screen 만 (공개 보기)', () => {
+    expect(visibleSettingsTabs({ screen: true })).toEqual(['screen'])
   })
 
-  test('screen + data', () => {
-    expect(visibleSettingsTabs({ screen: true, editor: false, data: true })).toEqual(['screen', 'data'])
+  test('조건부 묶음(금고·계정)이 없으면 빠진다', () => {
+    expect(visibleSettingsTabs({ ...ALL, e2ee: false, account: false })).toEqual(['screen', 'css', 'writing', 'start', 'rightPanel', 'kanban', 'data'])
   })
 
-  test('screen + editor', () => {
-    expect(visibleSettingsTabs({ screen: true, editor: true, data: false })).toEqual(['screen', 'editor'])
-  })
-})
-
-describe('visibleSettingsTabs — U13 (F-404.md 10.1)', () => {
-  test('전부 참(e2ee 포함) → 화면·편집기·데이터·금고 순', () => {
-    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, e2ee: true })).toEqual([
-      'screen',
-      'editor',
-      'data',
-      'e2ee',
-    ])
-  })
-
-  test('e2ee 없음 → 기존 셋', () => {
-    expect(visibleSettingsTabs({ screen: true, editor: true, data: true })).toEqual(['screen', 'editor', 'data'])
+  test('SETTINGS_TAB_IDS 는 전체 순서 그대로', () => {
+    expect(visibleSettingsTabs(ALL)).toEqual([...SETTINGS_TAB_IDS])
   })
 })
 
-describe('visibleSettingsTabs — apps (F-2148 U1)', () => {
-  test('apps 는 account 뒤 마지막', () => {
-    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, account: true, apps: true })).toEqual([
-      'screen',
-      'editor',
-      'data',
-      'account',
-      'apps',
+describe('groupSettingsTabs — 왼쪽 목록 상위 이름 (small 2026-10-22)', () => {
+  test('보이는 탭을 상위 이름 아래로 묶는다', () => {
+    expect(groupSettingsTabs(visibleSettingsTabs(ALL))).toEqual([
+      { label: '모양', tabs: ['screen', 'css'] },
+      { label: '문서', tabs: ['writing', 'start'] },
+      { label: '도구', tabs: ['rightPanel', 'kanban'] },
+      { label: '데이터', tabs: ['data', 'e2ee'] },
+      { label: '계정', tabs: ['account'] },
     ])
   })
 
-  test('apps 없으면 기존 결과', () => {
-    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, account: true })).toEqual(['screen', 'editor', 'data', 'account'])
+  test('빈 상위 묶음은 빠진다', () => {
+    expect(groupSettingsTabs(['screen', 'writing', 'account'])).toEqual([
+      { label: '모양', tabs: ['screen'] },
+      { label: '문서', tabs: ['writing'] },
+      { label: '계정', tabs: ['account'] },
+    ])
   })
 })
 
@@ -63,58 +54,5 @@ describe('nextTabIndex (F-290 A2)', () => {
     [0, 0, 'ArrowDown', 0],
   ])('(%i, %i, %s) => %i', (current, count, key, expected) => {
     expect(nextTabIndex(current, count, key)).toBe(expected)
-  })
-})
-
-describe('visibleSettingsTabs — C1 (F-2038.md 9.2)', () => {
-  test('계정 포함 전부 참 → 화면·편집기·데이터·금고·계정 순', () => {
-    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, e2ee: true, account: true })).toEqual([
-      'screen',
-      'editor',
-      'data',
-      'e2ee',
-      'account',
-    ])
-  })
-
-  test('account 거짓·없음 → 지금 결과', () => {
-    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, e2ee: true, account: false })).toEqual(['screen', 'editor', 'data', 'e2ee'])
-    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, e2ee: true })).toEqual(['screen', 'editor', 'data', 'e2ee'])
-  })
-})
-
-describe('visibleSettingsTabs — F-2096 A1', () => {
-  test('css 는 편집기 다음·데이터 앞', () => {
-    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, css: true, e2ee: true, account: true })).toEqual([
-      'screen',
-      'editor',
-      'css',
-      'data',
-      'e2ee',
-      'account',
-    ])
-  })
-
-  test('css 없음 → 기존 그대로', () => {
-    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, e2ee: true, account: true })).toEqual([
-      'screen',
-      'editor',
-      'data',
-      'e2ee',
-      'account',
-    ])
-  })
-})
-
-describe('visibleSettingsTabs — 칸반 (small 2026-10-14)', () => {
-  test('칸반은 오른쪽 패널 다음·사용자 CSS 앞', () => {
-    expect(visibleSettingsTabs({ screen: true, editor: true, data: true, rightPanel: true, kanban: true, css: true })).toEqual([
-      'screen',
-      'editor',
-      'rightPanel',
-      'kanban',
-      'css',
-      'data',
-    ])
   })
 })

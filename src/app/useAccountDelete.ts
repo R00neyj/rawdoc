@@ -4,7 +4,7 @@ import { deleteE2eeRow } from '../storage/idbStore'
 import { deleteYjsUserRows, type YjsStore } from '../storage/yjsStore'
 import { deleteRemoteCacheUserRows } from '../storage/remoteCache'
 import { setPref } from './prefs'
-import { storedAccount, type AccountState } from './account'
+import { loginUrl, storedAccount, type AccountState } from './account'
 import {
   ACCOUNT_DELETE_MARKER_KEY,
   cleanUpAfterAccountDelete,
@@ -35,6 +35,7 @@ export type UseAccountDeleteResult = {
   reauthForAccountDelete: () => Promise<void>
   finishAccountDelete: () => Promise<void>
   settingsAccount: SettingsAccount | undefined
+  settingsSignIn: (() => void) | undefined
 }
 
 export function useAccountDelete(options: UseAccountDeleteOptions): UseAccountDeleteResult {
@@ -114,5 +115,11 @@ export function useAccountDelete(options: UseAccountDeleteOptions): UseAccountDe
         ? { email: storedAccountForSettings.email, online: false, onDelete: () => {} }
         : undefined
 
-  return { accountDeleteUserId, accountDeleteUnsynced, closeAccountDelete, reauthForAccountDelete, finishAccountDelete, settingsAccount }
+  // 로그아웃 — 설정 `계정` 묶음의 로그인 버튼, 계정 메뉴 로그인과 같은 길 (small 2026-10-22)
+  const settingsSignIn =
+    account.state === 'out'
+      ? () => void docSaverFlushRef.current().then(() => location.assign(loginUrl(location.hash)))
+      : undefined
+
+  return { accountDeleteUserId, accountDeleteUnsynced, closeAccountDelete, reauthForAccountDelete, finishAccountDelete, settingsAccount, settingsSignIn }
 }

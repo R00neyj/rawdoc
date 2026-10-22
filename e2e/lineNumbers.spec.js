@@ -15,7 +15,7 @@ async function closeSettings(page) {
 
 async function setLineNumbers(page, label) {
   await openSettings(page)
-  await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '편집기' }).click() // F-290 — 줄 번호는 편집기 탭
+  await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '화면' }).click() // 줄 번호는 화면 묶음
   await page.locator(LINE_NUMBERS_LABEL_SCOPE).locator('..').getByRole('radio', { name: label, exact: true }).click()
   await closeSettings(page)
 }

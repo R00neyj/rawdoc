@@ -1,4 +1,4 @@
-// 설정 `연결된 앱` 탭 (specs/features/F-2148.md 2장)
+// 설정 `계정` 묶음 `연결` 카드의 연결된 앱 (specs/features/F-2148.md 2장)
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { connectedAppMeta, focusAfterRemove, type ConnectedApp } from './connectedApps'
 import { disconnectConnectedApp, listConnectedApps } from './connectedAppsApi'
@@ -110,9 +110,10 @@ export default function ConnectedAppsTab({ online }: { online: boolean }) {
   }
 
   return (
-    <div className="settings-apps">
+    <section className="settings-apps" aria-labelledby="settings-apps-title">
+      <h5 id="settings-apps-title" className="settings-card-sub">연결된 앱</h5>
       <p className="dialog-note">연결을 끊으면 그 앱은 곧바로 문서를 읽거나 고칠 수 없습니다.</p>
       {body}
-    </div>
+    </section>
   )
 }

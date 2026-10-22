@@ -1,24 +1,43 @@
-// 설정 대화상자 왼쪽 탭 — 순수 함수만 (specs/features/F-290.md 3.2). DOM 을 쓰지 않는다
-export type SettingsTabId = 'screen' | 'editor' | 'rightPanel' | 'kanban' | 'css' | 'data' | 'e2ee' | 'account' | 'apps'
+// 설정 대화상자 왼쪽 목록 — 순수 함수만 (specs/features/F-290.md 3.2, A안 small 2026-10-22). DOM 을 쓰지 않는다
+export const SETTINGS_TAB_IDS = ['screen', 'css', 'writing', 'start', 'rightPanel', 'kanban', 'data', 'e2ee', 'account'] as const
+export type SettingsTabId = (typeof SETTINGS_TAB_IDS)[number]
 
-// 각 탭에 그릴 항목이 하나라도 있는지. rightPanel·kanban·css·e2ee(F-404.md 7.5)·account(F-2038.md 6.1)는 선택 — 없으면 거짓
-export type SettingsTabAvailability = {
-  screen: boolean
-  editor: boolean
-  data: boolean
-  rightPanel?: boolean
-  kanban?: boolean
-  css?: boolean
-  e2ee?: boolean
-  account?: boolean
-  apps?: boolean
+// 각 묶음에 그릴 항목이 하나라도 있는지 — 없으면 거짓
+export type SettingsTabAvailability = Partial<Record<SettingsTabId, boolean>>
+
+// 왼쪽 목록의 상위 이름 — 각 탭이 어느 아래에 서는지
+const TAB_GROUP: Record<SettingsTabId, string> = {
+  screen: '모양',
+  css: '모양',
+  writing: '문서',
+  start: '문서',
+  rightPanel: '도구',
+  kanban: '도구',
+  data: '데이터',
+  e2ee: '데이터',
+  account: '계정',
 }
 
-const TAB_ORDER: SettingsTabId[] = ['screen', 'editor', 'rightPanel', 'kanban', 'css', 'data', 'e2ee', 'account', 'apps']
+export type SettingsTabGroup = { label: string; tabs: SettingsTabId[] }
 
-// 보일 탭을 화면 → 편집기 → 데이터 순서로 돌려준다
 export function visibleSettingsTabs(has: SettingsTabAvailability): SettingsTabId[] {
-  return TAB_ORDER.filter((id) => has[id])
+  return SETTINGS_TAB_IDS.filter((id) => has[id])
+}
+
+export function settingsTabGroupLabel(id: SettingsTabId): string {
+  return TAB_GROUP[id]
+}
+
+// 보이는 탭을 순서대로 상위 이름 아래 묶는다 — 빈 상위 묶음은 없다
+export function groupSettingsTabs(tabs: readonly SettingsTabId[]): SettingsTabGroup[] {
+  const groups: SettingsTabGroup[] = []
+  for (const id of tabs) {
+    const label = TAB_GROUP[id]
+    const last = groups[groups.length - 1]
+    if (last && last.label === label) last.tabs.push(id)
+    else groups.push({ label, tabs: [id] })
+  }
+  return groups
 }
 
 // 방향키·Home·End 로 갈 다음 탭 자리. 범위를 벗어나면 순환한다. 그 밖의 키는 current 를 그대로 돌려준다(호출한 쪽이 preventDefault 를 하지 않는다)

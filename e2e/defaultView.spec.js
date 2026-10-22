@@ -7,7 +7,7 @@ const DIALOG = 'dialog[aria-labelledby="settings-title"]'
 async function openDefaultViewGroup(page) {
   await page.getByRole('button', { name: '설정', exact: true }).first().click()
   const dialog = page.locator(DIALOG)
-  await dialog.getByRole('tab', { name: '화면' }).click()
+  await dialog.getByRole('tab', { name: '시작·새 문서' }).click()
   return dialog.getByRole('radiogroup', { name: '기본 뷰' })
 }
 

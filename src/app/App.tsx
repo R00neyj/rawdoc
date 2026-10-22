@@ -1193,7 +1193,7 @@ export default function App() {
   }
 
   // ----- 계정 삭제 D-15·설정 계정 줄 (F-2079) -----
-  const { accountDeleteUserId, accountDeleteUnsynced, closeAccountDelete, reauthForAccountDelete, finishAccountDelete, settingsAccount } =
+  const { accountDeleteUserId, accountDeleteUnsynced, closeAccountDelete, reauthForAccountDelete, finishAccountDelete, settingsAccount, settingsSignIn } =
     useAccountDelete({ bootPhase, account, syncState, e2ee, showNotice, yjsStoreRef, docSaverFlushRef })
 
   // ----- 설정 계정 탭 푸시·push-open (F-2110) -----
@@ -1439,7 +1439,7 @@ export default function App() {
         handleImportTargetChange, headingFont, importState, indentPref, inviteTarget, lineNumbersPref, listSource, moveDocTarget,
         newDocTemplatePref, openDocFromSearch, openSettings, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
         requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
-        setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, startDocIdPref, store, templateEntries, themePref,
+        setE2eeMigrateDialogOpen, settingsAccount, settingsSignIn, settingsPush, settingsOpen, showNotice, startScreenPref, startDocIdPref, store, templateEntries, themePref,
         toolbarPref, wikiPreviewPref, settingsGithub: github.settings, githubDialogs: github.dialogs, ...templateManager,
         rightPanelSettings: { ...rightPanel.settings, calendar: calendar.settings }, kanbanSettings, settingsTab,
       }} />

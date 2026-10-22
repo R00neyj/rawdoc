@@ -24,7 +24,7 @@ test.describe('F-233 A2 명령 실행', () => {
     await expect(page.locator('.editor-toolbar-heading .item-menu-list')).toBeHidden()
 
     await page.getByRole('button', { name: '설정', exact: true }).click()
-    await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '편집기' }).click()
+    await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '화면' }).click()
     await page.locator('#toolbar-label').locator('..').getByRole('radio', { name: '숨김' }).click()
     await page.getByRole('button', { name: '닫기', exact: true }).click()
     await expect(page.locator('.editor-toolbar')).toHaveCount(0)

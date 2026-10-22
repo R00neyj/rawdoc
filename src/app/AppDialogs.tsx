@@ -43,7 +43,7 @@ export type AppDialogsProps = Pick<UseAccountStatusResult, 'account' | 'recheckA
   Pick<UsePushDeviceResult, 'settingsPush'> &
   Pick<
     UseAccountDeleteResult,
-    'accountDeleteUnsynced' | 'accountDeleteUserId' | 'closeAccountDelete' | 'finishAccountDelete' | 'reauthForAccountDelete' | 'settingsAccount'
+    'accountDeleteUnsynced' | 'accountDeleteUserId' | 'closeAccountDelete' | 'finishAccountDelete' | 'reauthForAccountDelete' | 'settingsAccount' | 'settingsSignIn'
   > &
   Pick<
     UseAppearancePrefsResult,
@@ -110,7 +110,7 @@ export default function AppDialogs({
   handleExportAll, handleExportVault, handleImportTargetChange, headingFont, importState, indentPref, inviteTarget, lineNumbersPref, listSource,
   moveDocTarget, newDocTemplatePref, openDocFromSearch, openSettings, paletteContext, paletteOpen, reauthForAccountDelete, recheckAccount, requestImportFolder,
   requestImportZip, runE2eeMigrateFlow, searchDialogScope, searchOffline, searchOpen, selectPaletteQueryRef, selectSearchQueryRef,
-  setE2eeMigrateDialogOpen, settingsAccount, settingsPush, settingsOpen, showNotice, startScreenPref, startDocIdPref, store, templateEntries, themePref, toolbarPref,
+  setE2eeMigrateDialogOpen, settingsAccount, settingsSignIn, settingsPush, settingsOpen, showNotice, startScreenPref, startDocIdPref, store, templateEntries, themePref, toolbarPref,
   wikiPreviewPref, changeDefaultView, defaultViewPref, settingsGithub, githubDialogs, templatesOpen, openTemplates, closeTemplates,
   createTemplate, editTemplate, deleteTemplate, rightPanelSettings, kanbanSettings, settingsTab,
 }: AppDialogsProps) {
@@ -230,6 +230,7 @@ export default function AppDialogs({
         }
         userCss={{ accountId: userCssAccountId(account) }}
         account={settingsAccount}
+        onSignIn={settingsSignIn}
         push={settingsPush}
         github={settingsGithub}
         onOpen={openSettings}

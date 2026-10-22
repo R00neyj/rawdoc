@@ -210,6 +210,7 @@ test.describe('F-2044 E13 설정에서 끄기', () => {
     await openDoc(page, 'a')
 
     await page.getByRole('button', { name: '설정', exact: true }).click()
+    await page.getByRole('tab', { name: '쓰기·읽기' }).click()
     await page.getByRole('radio', { name: '숨김' }).last().click()
     await page.getByRole('button', { name: '닫기', exact: true }).click()
 
@@ -223,6 +224,7 @@ test.describe('F-2044 E13 설정에서 끄기', () => {
 
     await page.reload()
     await page.getByRole('button', { name: '설정', exact: true }).click()
+    await page.getByRole('tab', { name: '쓰기·읽기' }).click()
     await expect(page.getByRole('radio', { name: '숨김' }).last()).toHaveAttribute('aria-checked', 'true')
   })
 })

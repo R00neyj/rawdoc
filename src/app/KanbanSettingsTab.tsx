@@ -1,8 +1,9 @@
-// 설정 `칸반` 탭 — 새 카드 체크 칸(기기별)과 지금 연 보드의 완료 칸(원문 `kanban-done`) (small 2026-10-14)
+// 설정 `칸반` — 카드·완료 카드 둘, 새 카드 체크 칸(기기별)과 지금 연 보드의 완료 칸(원문 `kanban-done`) (small 2026-10-14)
 import { useState } from 'react'
 import { getPref, setPref } from './prefs'
 import type { KanbanSettings } from './useKanbanSettings'
 import { truncateChars } from '../lib/truncate'
+import SettingsCard from './SettingsCard'
 
 // 네이티브 목록은 가장 긴 항목만큼 넓어진다 (tweak 2026-10-15)
 const LANE_OPTION_MAX_CHARS = 30
@@ -10,6 +11,7 @@ const LANE_OPTION_MAX_CHARS = 30
 export default function KanbanSettingsTab({ settings }: { settings: KanbanSettings }) {
   const [newCardCheck, setNewCardCheck] = useState(() => getPref('md.kanbanNewCardCheck', 'on') === 'on')
   const checkField = (
+    <SettingsCard title="카드">
     <label className="panel-item-check settings-check-row">
       <input
         type="checkbox"
@@ -21,13 +23,15 @@ export default function KanbanSettingsTab({ settings }: { settings: KanbanSettin
       />
       <span>새 카드에 체크 칸 달기</span>
     </label>
+    </SettingsCard>
   )
   const { choices } = settings
-  if (!settings.isKanban) return <>{checkField}<p className="dialog-note">칸반 보드를 열면 완료 칸을 설정할 수 있습니다</p></>
-  if (!choices) return <>{checkField}<p className="dialog-note">칸이 없습니다. ## 로 시작하는 줄 하나가 칸 하나가 됩니다.</p></>
+  if (!settings.isKanban) return <>{checkField}<SettingsCard title="완료"><p className="dialog-note">칸반 보드를 열면 완료 칸을 설정할 수 있습니다</p></SettingsCard></>
+  if (!choices) return <>{checkField}<SettingsCard title="완료"><p className="dialog-note">칸이 없습니다. ## 로 시작하는 줄 하나가 칸 하나가 됩니다.</p></SettingsCard></>
   return (
     <>
       {checkField}
+      <SettingsCard title="완료">
       <div className="dialog-field">
         <span id="kanban-done-label">완료 칸</span>
         <select
@@ -46,6 +50,7 @@ export default function KanbanSettingsTab({ settings }: { settings: KanbanSettin
         </select>
       </div>
       <p className="settings-hint">이 칸의 카드와 완료로 체크한 카드는 할 일 패널에 나오지 않습니다. 카드를 이 칸으로 옮기면 체크 칸이 완료로, 이 칸에서 빼면 미완료로 바뀝니다.</p>
+      </SettingsCard>
     </>
   )
 }

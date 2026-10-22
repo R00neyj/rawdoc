@@ -11,7 +11,7 @@ async function skipPersistNotice(page) {
 async function openSettingsData(page) {
   await page.getByRole('button', { name: '설정', exact: true }).click()
   const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
-  await dialog.getByRole('tab', { name: '데이터' }).click() // F-290 — 가져오기 버튼은 데이터 탭
+  await dialog.getByRole('tab', { name: '가져오기·내보내기' }).click() // 가져오기 버튼은 가져오기·내보내기 묶음
   return dialog
 }
 

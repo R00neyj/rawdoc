@@ -74,4 +74,25 @@ test.describe('F-205 A6 로그인 이동', () => {
     expect(url.pathname).toBe('/api/login')
     expect(url.searchParams.get('return')).toBe(`#/d/${docId}`)
   })
+
+  test('settings-signin 로그아웃이면 설정 계정 묶음의 로그인 버튼도 같은 로그인 주소로 간다 (small 2026-10-22)', async ({ page }) => {
+    await page.route('**/api/me', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"unauthenticated"}' }))
+    await openApp(page)
+    const docId = await importMarkdown(page, { content: '내용\n' })
+
+    let loginRequestUrl = null
+    await page.route('**/api/login*', (route) => {
+      loginRequestUrl = route.request().url()
+      route.fulfill({ status: 302, headers: { Location: '/' } })
+    })
+
+    await page.getByRole('button', { name: '설정', exact: true }).first().click()
+    const dialog = page.locator('dialog[aria-labelledby="settings-title"]')
+    await dialog.getByRole('tab', { name: '계정' }).click()
+    await dialog.getByRole('button', { name: '로그인', exact: true }).click()
+
+    await expect.poll(() => loginRequestUrl).not.toBeNull()
+    const url = new URL(loginRequestUrl)
+    expect(url.searchParams.get('return')).toBe(`#/d/${docId}`)
+  })
 })

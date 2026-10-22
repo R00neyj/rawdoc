@@ -192,7 +192,7 @@ test.describe('F-295 A3 왕복 (버그 재현)', () => {
       await expect(page.locator('.content-area .viewer')).toBeVisible()
 
       await page.getByRole('button', { name: '설정', exact: true }).click()
-      await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '편집기' }).click()
+      await page.locator('dialog[aria-labelledby="settings-title"]').getByRole('tab', { name: '화면' }).click()
       await page
         .locator('#line-numbers-label')
         .locator('..')

@@ -20,7 +20,7 @@ async function openSettingsEditorTab(page) {
   await ensureSidebarOpen(page)
   await page.getByRole('button', { name: '설정', exact: true }).first().click()
   const dialog = page.locator(DIALOG_SELECTOR)
-  await dialog.getByRole('tab', { name: '편집기' }).click()
+  await dialog.getByRole('tab', { name: '화면' }).click()
   return dialog
 }
 

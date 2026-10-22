@@ -198,20 +198,6 @@
   border: 0;
 }
 
-.panel-settings-title {
-  width: 100%;
-  margin: 0 0 8px;
-  padding: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-/* 묶음 사이 띄움 — 첫 묶음(표시할 항목)은 fieldset legend 라 해당 없음 */
-h3.panel-settings-title:not(:first-child) {
-  margin-top: 20px;
-}
-
 .panel-item-check {
   display: flex;
   align-items: center;
