@@ -17,11 +17,15 @@ import { SHORTCUT_CATALOG, formatChord } from '../../../src/app/shortcutCatalog'
 import { TODO_MAX_ITEMS } from '../../../src/lib/docTodos'
 import { CALENDAR_DEFAULT_FORMAT } from '../../../src/lib/calendar'
 import { DEFAULT_TASK_FILTER } from '../../../src/app/useTaskFilter'
+import { MAX_TABS } from '../../../src/app/docTabs'
+import { MAX_PANES } from '../../../src/app/splitLayout'
+import { NARROW_QUERY } from '../../../src/app/useSidebarLayout'
 
 // F-257.md 2장 표의 절 순서 그대로
 const SECTION_ORDER = [
   '이 앱은',
   '화면',
+  '탭과 화면 분할',
   '글쓰기',
   '문서 관리',
   '검색',
@@ -642,5 +646,18 @@ describe('도움말 ## 오른쪽 패널 절', () => {
     expect(section.body).toContain(`기본 \`${CALENDAR_DEFAULT_FORMAT}\``)
     const filters = DEFAULT_TASK_FILTER.split(', ').map((f) => `\`${f}\``).join('·')
     expect(section.body).toContain(`${filters} 표시가 붙은 체크박스`)
+  })
+})
+
+// 사용법 글 tabs-split (write-guide, 2026-10-22)
+describe('도움말 ## 탭과 화면 분할 절', () => {
+  it('사용법 글 줄로 끝나고, 수치가 상수와 같다 (R5)', () => {
+    const section = appSections().find((s) => s.name === '탭과 화면 분할')!
+    const paragraphs = section.body.split(/\n\n+/).filter((p) => p.trim() !== '')
+    expect(paragraphs[paragraphs.length - 1]).toBe('사용법 글: [문서 탭과 화면 분할](/guides/tabs-split)')
+    expect(NARROW_QUERY).toBe('(max-width: 1023px)')
+    expect(section.body).toContain('폭이 1024px 이상이면')
+    expect(section.body).toContain(`모두 합쳐 ${MAX_TABS}개까지`)
+    expect(section.body).toContain(`칸은 ${MAX_PANES}개까지`)
   })
 })

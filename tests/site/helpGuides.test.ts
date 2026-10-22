@@ -74,6 +74,11 @@ import { GITHUB_IMAGE_IMPORT_MAX, GITHUB_IMAGE_IMPORT_MAX_BYTES } from '../../sr
 import { GITHUB_RECONNECT_MESSAGE, githubConnectErrorMessage, githubErrorMessage, githubFirstCommitMessage } from '../../src/app/githubUi'
 import { sameNotice } from '../../src/app/githubPull'
 import { pushedNotice } from '../../src/app/githubPush'
+import { MAX_TABS } from '../../src/app/docTabs'
+import { MAX_PANES, MIN_PANE_PX, RATIO_MAX, RATIO_MIN } from '../../src/app/splitLayout'
+import { PANES_FULL, TABS_FULL } from '../../src/app/paneRules'
+import { EDGE_BAND } from '../../src/app/paneDrag'
+import { KEY_STEP } from '../../src/app/SplitDividers'
 
 const GUIDES_DIR = fileURLToPath(new URL('../../content/guides', import.meta.url))
 
@@ -739,6 +744,44 @@ describe('ai-connectors 글', () => {
     expect(raw).toContain('`아직 사용 안 함`')
     expect(source('../../worker/limitsPage.ts')).toContain("'쓰기 제한에 걸렸습니다'")
     expect(raw).toContain('`쓰기 제한에 걸렸습니다`')
+  })
+
+  it('글에 제품명이 없다 (R6)', () => {
+    const body = guideBody(raw).toLowerCase()
+    expect(body).not.toContain(brand.name.toLowerCase())
+    expect(body).not.toContain(brand.shortName.toLowerCase())
+  })
+})
+
+// 사용법 글 tabs-split (write-guide, 2026-10-22)
+describe('tabs-split 글', () => {
+  const raw = readGuide('tabs-split')
+  const pct = (v: number) => `${Math.round(v * 100)}%`
+
+  it('글의 수치가 상수와 같다 (R5)', () => {
+    expect(NARROW_QUERY).toBe('(max-width: 1023px)')
+    expect(raw).toContain('창 폭이 1024px 이상일 때만')
+    expect(raw).toContain('창을 1024px보다 좁히면')
+    expect(raw).toContain(`폭 ${/max-width: (\d+)px/.exec(PHONE_QUERY)?.[1]}px 이하인 휴대폰`)
+    expect(raw).toContain(`모든 칸을 합쳐 ${MAX_TABS}개까지`)
+    expect(raw).toContain(`\`${TABS_FULL}\``)
+    expect(raw).toContain(`\`탭이 ${MAX_TABS}개라 지금 탭에서 열었습니다.\``)
+    expect(raw).toContain(`칸은 ${MAX_PANES}개까지`)
+    expect(raw).toContain(`\`${PANES_FULL}\``)
+    expect(EDGE_BAND).toBe(1 / 3)
+    expect(raw).toContain('가장자리 쪽 3분의 1 안')
+    expect(raw).toContain(`${pct(RATIO_MIN)}보다 작거나 ${pct(RATIO_MAX)}보다 커지지`)
+    expect(raw).toContain(`너비 ${MIN_PANE_PX.width}px·높이 ${MIN_PANE_PX.height}px`)
+    expect(raw).toContain(`${pct(KEY_STEP)}씩`)
+  })
+
+  it('인용한 화면 글자가 코드에 그대로 있다', () => {
+    const source = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf-8')
+    expect(source('../../src/app/useDocTabs.ts')).toContain('`탭이 ${MAX_TABS}개라 지금 탭에서 열었습니다.`')
+    const bar = source('../../src/app/DocTabBar.tsx')
+    for (const label of ['다른 탭 닫기', '오른쪽 탭 닫기', '오른쪽에 분할', '아래에 분할', '칸 닫기', '${title} 탭 메뉴', '새 문서']) expect(bar, label).toContain(label)
+    expect(source('../../src/app/SplitDividers.tsx')).toContain('aria-label="칸 경계"')
+    expect(source('../../src/app/PhoneTabsSheet.tsx')).toContain('aria-label="탭 고르기"')
   })
 
   it('글에 제품명이 없다 (R6)', () => {

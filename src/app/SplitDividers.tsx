@@ -3,7 +3,7 @@ import { useRef, type CSSProperties, type KeyboardEvent, type PointerEvent, type
 import { dividers, setRatio, type Divider } from './paneDrag'
 import type { SplitLayout } from './splitLayout'
 
-const KEY_STEP = 0.05
+export const KEY_STEP = 0.05
 
 type Props = {
   layout: SplitLayout
