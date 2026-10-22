@@ -6,6 +6,7 @@ import {
   splitPaneAt,
   dragSplit,
   moveTabToPane,
+  docSplit,
   dividers,
   setRatio,
   type Box,
@@ -259,5 +260,25 @@ describe('F-2165 U6 setRatio', () => {
     expect(setRatio('cols', [0.4], 1, 0.7, size)).toEqual([0.4])
     expect(setRatio('cols', [0.4], -1, 0.7, size)).toEqual([0.4])
     expect(setRatio('single', [], 0, 0.7, size)).toEqual([])
+  })
+})
+
+describe('사이드바 문서 놓기 docSplit', () => {
+  it('끈 칸 없이 대상 칸 그 변에 새 칸 — 기존 칸 탭은 그대로, 새 칸은 고정 탭 하나·포커스', () => {
+    const s = { ...sample('single'), panes: [pane(['a', 'b'])] }
+    const next = docSplit(s, 0, 'left', tab('x', false))
+    expect(next?.layout).toBe('cols')
+    expect(next?.panes.map(tabKeys)).toEqual([['x'], ['a', 'b']])
+    expect(next?.panes[0].tabs[0].pinned).toBe(true)
+    expect(next?.focus).toBe(0)
+  })
+  it('이미 다른 칸에 열린 문서도 새 칸으로 연다', () => {
+    expect(docSplit(sample('cols'), 1, 'down', tab('a'))?.panes.map(tabKeys)).toEqual([['a'], ['b'], ['a']])
+  })
+  it('탭 상한이거나 배치 밖이면 null', () => {
+    const full = { ...sample('single'), panes: [pane(Array.from({ length: 20 }, (_, i) => `t${i}`))] }
+    expect(docSplit(full, 0, 'right', tab('x'))).toBeNull()
+    expect(docSplit(sample('grid'), 0, 'right', tab('x'))).toBeNull()
+    expect(docSplit(sample('cols'), 0, 'right', tab('x'))).toBeNull()
   })
 })

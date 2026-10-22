@@ -94,7 +94,7 @@ export default function SplitPanes({ area, viewerDocId, panes, paneHost, unitFor
 
   // 경계를 끄는 동안의 비율 — 놓을 때 한 번 저장한다 (F-2165 4장)
   const [dragRatios, setDragRatios] = useState<number[] | null>(null)
-  const preview = usePaneDropZones(gridRef, { split, keys, onDrop: panes.on ? panes.dragSplit : null })
+  const preview = usePaneDropZones(gridRef, { split, keys, onDrop: panes.on ? panes.dragSplit : null, onDropDoc: panes.on ? panes.dropDoc : null })
 
   const layout = solo ? 'single' : split.layout
   const ratios = clampRatios(layout, dragRatios?.length === split.ratios.length ? dragRatios : split.ratios, size ?? undefined)

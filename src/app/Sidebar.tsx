@@ -71,6 +71,7 @@ import AccountMenu, { type AccountMenuProps } from './AccountMenu'
 import SidebarFooter from './SidebarFooter'
 import type { Notice } from './notice'
 import { visibleOpenFolderIds, type VaultFolderGate } from './vaultVisibility'
+import { startTabDrag } from './useTabDrag'
 
 export { SIDEBAR_ID }
 
@@ -1122,6 +1123,8 @@ export default function Sidebar({
     setDragged({ items })
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', id) // Firefox 는 setData 를 호출해야 드래그가 시작된다
+    // 문서 하나면 칸 가장자리에 놓아 새 칸으로 열 수 있다 — 끝은 useTabDrag 의 창 dragend 가 정리
+    if (items.length === 1 && type === 'doc') startTabDrag({ pane: null, key: id })
     if (items.length > 1) {
       // 기본 드래그 이미지 대신 개수 배지 (F-255.md 3.4)
       const badge = document.createElement('div')

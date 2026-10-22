@@ -51,7 +51,7 @@ export default function DocTabBar({ state, pane, onActivate, onPin, onClose, onC
   }
 
   function handleDragOver(e: DragEvent<HTMLDivElement>) {
-    if (!currentTabDrag() || !e.dataTransfer.types.includes(DRAG_TYPE)) return
+    if (!currentTabDrag()?.pane || !e.dataTransfer.types.includes(DRAG_TYPE)) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     const next = dropAt(e)
@@ -60,7 +60,7 @@ export default function DocTabBar({ state, pane, onActivate, onPin, onClose, onC
 
   function handleDrop(e: DragEvent<HTMLDivElement>) {
     const tab = currentTabDrag()
-    if (!tab || !e.dataTransfer.types.includes(DRAG_TYPE)) return
+    if (!tab?.pane || !e.dataTransfer.types.includes(DRAG_TYPE)) return
     e.preventDefault()
     const target = dropAt(e)
     const slot = target.key === null ? 0 : state.tabs.findIndex((t) => t.key === target.key) + (target.side === 'after' ? 1 : 0)

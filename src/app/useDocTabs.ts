@@ -22,7 +22,7 @@ import {
 } from './splitLayout'
 import { TABS_FULL, carryPaneKeys, routeOpen, splitAction } from './paneRules'
 import { restoreSplit, splitOn, splitUnitPanes, withFocusTabs } from './splitOff'
-import { dragSplit, dragSplitStep, moveInStep, moveTabToPane, type DropSide } from './paneDrag'
+import { docSplit, dragSplit, dragSplitStep, moveInStep, moveTabToPane, type DropSide } from './paneDrag'
 
 const STANDALONE_QUERY = '(display-mode: standalone)'
 // Ctrl/⌘+클릭 뒤 이 시간 안에 문서가 바뀌면 새 고정 탭으로 연다 — 저장 flush 를 기다리는 전환도 넉넉히 덮는다
@@ -69,6 +69,8 @@ export type DocPanes = PaneStoreState & {
   focusPane: (paneKey: string) => void
   // 탭을 칸 가장자리에 놓아 나누기 — 넓은 화면 탭 줄이 켜졌을 때만 (F-2165 3장)
   dragSplit: ((fromPane: string, key: string, toPane: string, side: DropSide) => void) | null
+  // 사이드바 문서를 칸 가장자리에 놓아 새 칸으로 열기 — 조건은 dragSplit 과 같다
+  dropDoc: ((docId: string, toPane: string, side: DropSide) => void) | null
   setRatios: (ratios: number[]) => void
   // 포커스 칸 편집기가 준비되면 SplitPanes 가 커밋마다 부른다 — 남은 요청이 그 칸이면 포커스
   serviceFocusRequest: (focusKey: string) => void
@@ -536,6 +538,15 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
     [dropTab],
   )
 
+  const dropDocTo = useCallback(
+    (docId: string, toPane: string, side: DropSide) => {
+      const tab = tabEntry(docId, metaLookup(latestRef.current.docs))
+      const make: MakeSplit = (s, keys) => docSplit(s, keys.indexOf(toPane), side, tab)
+      dropTab(make, make)
+    },
+    [dropTab],
+  )
+
   const moveIn = useCallback(
     (fromPane: string, key: string, toPane: string, index: number) =>
       dropTab(
@@ -721,6 +732,7 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
     on,
     focusPane,
     dragSplit: barMode && on ? dragSplitTo : null,
+    dropDoc: barMode && on ? dropDocTo : null,
     setRatios,
     serviceFocusRequest,
   }

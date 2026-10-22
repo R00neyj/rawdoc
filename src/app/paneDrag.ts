@@ -1,6 +1,6 @@
 // 탭을 칸 가장자리·다른 칸 탭 줄로 끌 때 놓을 자리와 결과 배치, 칸 경계 위치 — 순수 함수 (F-2165 2장)
-import { closeTabs, pinTab, type DocTab } from './docTabs'
-import { clampRatios, setPaneTabs, splitPane, type SplitLayout, type SplitState } from './splitLayout'
+import { closeTabs, MAX_TABS, pinTab, type DocTab } from './docTabs'
+import { clampRatios, setPaneTabs, splitPane, totalTabs, type SplitLayout, type SplitState } from './splitLayout'
 
 export type DropSide = 'left' | 'right' | 'up' | 'down'
 export type Box = { left: number; top: number; width: number; height: number }
@@ -63,6 +63,11 @@ function takeTab(step: SplitState, source: SplitState['panes'][number], key: str
 export function dragSplit(s: SplitState, from: number, key: string, to: number, side: DropSide): SplitState | null {
   const step = dragSplitStep(s, from, key, to, side)
   return step && takeTab(step, s.panes[from], key)
+}
+
+// 사이드바 문서를 칸 가장자리에 놓기 — 끈 칸이 없어 탭이 하나 늘어 상한을 본다
+export function docSplit(s: SplitState, to: number, side: DropSide, tab: DocTab): SplitState | null {
+  return totalTabs(s) >= MAX_TABS ? null : splitPaneAt(s, to, side, tab)
 }
 
 export function moveInStep(s: SplitState, from: number, key: string, to: number, index: number): SplitState | null {

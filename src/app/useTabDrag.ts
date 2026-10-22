@@ -1,7 +1,8 @@
 // 지금 끌고 있는 탭 — 창에 하나라 칸마다 있는 탭 줄과 칸 영역이 같은 값을 본다 (F-2165 3장)
 import { useSyncExternalStore } from 'react'
 
-export type TabDrag = { pane: string; key: string }
+// pane null = 사이드바에서 끄는 문서(key 는 문서 id)
+export type TabDrag = { pane: string | null; key: string }
 
 let drag: TabDrag | null = null
 const listeners = new Set<() => void>()
