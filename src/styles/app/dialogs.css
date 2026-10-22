@@ -471,8 +471,15 @@
   text-decoration: none;
 }
 
-.settings-panel .dialog-field:last-child {
+/* 설정 항목마다 위 구분선으로 묶음을 나눈다 — 딸린 안내문은 형제라 항목에 붙어 남음 (tweak 2026-10-22) */
+.settings-panel > .dialog-field {
   margin-bottom: 0;
+}
+
+.settings-panel > .dialog-field:not(:first-child, .panel-settings-title + *) {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
 }
 
 /* 본문 너비 — 슬라이더 + 숫자 입력 한 줄, 슬라이더가 남는 폭을 가진다 (F-2043 4.2) */
