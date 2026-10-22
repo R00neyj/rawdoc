@@ -7,6 +7,7 @@ import DocumentArea, { type DocumentAreaProps } from './DocumentArea'
 import DocTabBar from './DocTabBar'
 import SplitDividers from './SplitDividers'
 import { usePaneDropZones } from './usePaneDropZones'
+import { usePaneFlip } from './usePaneFlip'
 import { applyKanbanTo } from './useKanbanView'
 import { clampRatios, paneForNumber, type SplitLayout } from './splitLayout'
 import { shownSplit } from './splitOff'
@@ -99,6 +100,7 @@ export default function SplitPanes({ area, viewerDocId, panes, paneHost, unitFor
   const layout = solo ? 'single' : split.layout
   const ratios = clampRatios(layout, dragRatios?.length === split.ratios.length ? dragRatios : split.ratios, size ?? undefined)
   const axes = AXES[layout]
+  usePaneFlip(gridRef, solo ? `single|${focusKey}` : `${layout}|${keys.join(',')}`)
   const gridStyle: CSSProperties | undefined = solo
     ? undefined
     : { gridTemplateColumns: track(axes.x === undefined ? undefined : ratios[axes.x]), gridTemplateRows: track(axes.y === undefined ? undefined : ratios[axes.y]) }
@@ -282,6 +284,7 @@ function Pane(p: PaneProps) {
     <div
       className="split-pane"
       data-pane-number={p.number}
+      data-pane-key={paneKey}
       data-focused={focused || undefined}
       hidden={p.hidden}
       style={p.gridArea ? { gridArea: p.gridArea } : undefined}

@@ -295,6 +295,7 @@
 |`src/app/useOutlineSwipe.ts`|휴대폰에서 화면을 밀어 목차 패널을 여닫게 함. 칸반 카드를 끄는 동안은 건너뜀|
 |`src/app/usePaletteOpen.ts`|명령 팔레트 열림·닫힘과 닫힌 뒤 실행할 명령을 관리함|
 |`src/app/usePaneDropZones.ts`|칸 위로 탭을 끌 때 놓을 자리를 보여 줌|
+|`src/app/usePaneFlip.ts`|칸을 나누거나 닫을 때 칸이 부드럽게 자리를 옮기게 함|
 |`src/app/usePaneHost.ts`|여러 칸에 띄운 같은 문서가 서로 맞도록 이어 주고, 지금 고른 칸의 편집기를 앱 나머지에 알려 줌|
 |`src/app/usePanelDocs.ts`|오른쪽 패널의 링크·할 일 보기에 쓸 문서 목록을 읽음|
 |`src/app/usePeers.ts`|지금 같은 문서에 접속한 사람 목록을 알려 줌|
