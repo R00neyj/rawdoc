@@ -8,6 +8,8 @@
 
 원칙(2026-09-28 사용자): 기능은 자기 컴포넌트·훅 파일에 둔다. `src/app/App.tsx` 는 훅 호출·컴포넌트 조립·배선만 한다 — 명세 하나당 순증가 30줄 한도(`scripts/lib/appGrowth.mjs`, `npm run review`). 컴포넌트 경계는 F-2059 단계 4 개요가 정한다
 
+CSS 규칙(2026-10-22): 앱 CSS 는 `src/main.tsx` 에서만 `import` 한다 — 그 import 순서가 곧 캐스케이드 순서다. 컴포넌트·편집기 파일과 CSS 안 `@import` 로 부르지 않는다(`?raw`·`?inline` 문자열 import 와 수식을 처음 그릴 때 `mathRender.ts` 가 동적으로 부르는 KaTeX CSS 는 예외). `@layer` 는 쓰지 않는다 — CM6 가 넣는 층 없는 스타일이 층 있는 앱 규칙을 전부 이긴다. 전역 `z-index` 는 `tokens.css` 의 `--z-*` 층 토큰만 쓴다(design.md 4장)
+
 ```
 brand.config.js          제품명·짧은 이름·메인 컬러. 유일한 정의 위치 (design.md 3.2)
 scripts/                 검증 도구 (F-160). measure·verify·e2e-one. src/ 가 import 하지 않는다

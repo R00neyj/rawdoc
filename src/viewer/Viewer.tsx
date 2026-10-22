@@ -2,8 +2,6 @@
 // editor 를 import 하지 않는다 (architecture.md 1장)
 import { Fragment, useEffect, useMemo, useRef } from 'react'
 import type { MouseEvent as ReactMouseEvent, Ref } from 'react'
-import 'github-markdown-css/github-markdown-light.css'
-import './viewer.css'
 
 import { createCodeCopyButton } from '../lib/codeCopyButton'
 import { displayLangFromClass } from '../lib/codeLang'

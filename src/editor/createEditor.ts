@@ -50,8 +50,6 @@ import { commentGutter, commentMarks, createEditorComments } from './commentMark
 import { fontRemeasure } from './fontRemeasure'
 import { userCssRemeasure } from './userCssRemeasure'
 import { readOnlyChangeGuard } from './readOnlyGuard'
-import './searchPanel.css'
-import './commentMarks.css'
 import { isTouchContextMenu } from '../lib/touchContextMenu'
 import { floatCoverFor } from '../lib/floatCover'
 import type { ResolveImagePath } from '../lib/imageMarkdown'

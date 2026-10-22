@@ -5,6 +5,7 @@ import notoCss from '@fontsource/noto-serif-kr/400.css?inline'
 import notoBoldCss from '@fontsource/noto-serif-kr/700.css?inline'
 import tokensCss from '../styles/tokens.css?inline'
 import appCss from '../styles/app.css?inline'
+import codeCopyCss from '../styles/codeCopy.css?inline'
 import previewCss from '../editor/preview/preview.css?inline'
 import calloutCss from '../styles/callout.css?inline'
 import wikilinkCss from '../styles/wikilink.css?inline'
@@ -20,6 +21,7 @@ function injectStyles(): void {
     notoBoldCss,
     tokensCss,
     appCss,
+    codeCopyCss,
     previewCss,
     calloutCss,
     wikilinkCss,

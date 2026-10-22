@@ -30,7 +30,6 @@ import {
   type PreviewPlacement,
   type PreviewRect,
 } from './wikiPreview'
-import '../styles/wikiPreview.css'
 
 export type WikiPreviewDocMeta = { id: string; role?: 'owner' | 'edit' | 'view'; e2ee?: 'locked' | 'open' }
 

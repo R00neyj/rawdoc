@@ -1,8 +1,6 @@
 // 보기 모드 찾기 카드 — 안쪽 클래스·name 은 편집 카드(searchMoreToggle 이 묶은 뒤 모양)와 같다 (F-2087 3.4)
 import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from 'react'
 import type { ViewFindQuery } from '../viewer/viewFindMatch'
-import '../editor/searchPanel.css'
-import './viewFind.css'
 
 export type ViewFindCardProps = {
   query: ViewFindQuery

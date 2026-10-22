@@ -8,7 +8,6 @@ import { readOverlayMark } from './historyEntries'
 import { slicePreviewText } from './wikiPreview'
 import { renderMarkdown } from '../viewer/renderMarkdown'
 import { useSheetDragClose } from './useSheetDragClose'
-import '../styles/phoneTabs.css'
 
 const OVERLAY_KEY = 'phone-tabs'
 // 카드에 보이는 건 첫 화면 남짓이라 앞부분만 그린다

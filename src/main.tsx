@@ -1,6 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
+// CSS 는 여기서만 불러온다 — 이 순서가 곧 캐스케이드 순서다 (architecture.md 1장)
+// 편집기 CSS 는 예전 공유 청크 시트로 앱 CSS 보다 먼저 깔렸다 — 그 자리를 지킨다
+import './editor/preview/preview.css'
+import './editor/searchPanel.css'
+import './editor/commentMarks.css'
 // 쓰는 글자의 조각만 받는다 (specs/features/F-2040.md 3.1)
 import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
 import '@fontsource/noto-serif-kr/400.css'
@@ -19,6 +24,12 @@ import './styles/map.css'
 import './styles/palette.css'
 import './styles/peers.css'
 import './styles/kanban.css'
+import './styles/phoneTabs.css'
+import 'github-markdown-css/github-markdown-light.css'
+import './styles/codeCopy.css'
+import './viewer/viewer.css'
+import './app/viewFind.css'
+import './styles/wikiPreview.css'
 
 import { getPref } from './app/prefs'
 import { resolveTheme } from './app/theme'
