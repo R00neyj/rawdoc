@@ -37,6 +37,11 @@
     padding: 0 4px;
   }
 
+  /* 홈처럼 버튼이 하나도 없으면 빈 테두리만 세로 막대로 남는다 (tweak 2026-10-22) */
+  .topbar-pill:empty {
+    display: none;
+  }
+
   .topbar .peer-avatars {
     padding: 0 10px;
     margin-right: 0;
