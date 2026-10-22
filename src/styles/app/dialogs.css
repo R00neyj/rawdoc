@@ -707,6 +707,7 @@
   min-height: 0;
 }
 
+/* 459px — 설정 대화상자 탭이 세로로 쌓이던 문턱(F-290)을 데이터 탭 격자가 물려받은 값, 지금은 이 규칙만 쓴다 */
 @media (max-width: 459px) {
   .data-grid {
     grid-template-columns: 1fr;

@@ -273,6 +273,7 @@
   }
 }
 
+/* 560px — 280px 설정 패널을 띄우면 남는 캔버스가 쓸모없어지는 폭이라 패널을 꽉 채운다 (F-2005 9.1) */
 @media (max-width: 560px) {
   .map-panel {
     width: 100%;
@@ -400,6 +401,7 @@
   padding-right: 296px;
 }
 
+/* 560px — 위 패널 전폭 문턱과 같은 값 */
 @media (max-width: 560px) {
   /* 그 폭에서는 패널이 100% 라 목록이 어차피 다 가려진다 (F-2005 9.1) */
   .map-page-body:has(.map-panel[data-state='open']) .map-list {
