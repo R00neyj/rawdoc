@@ -149,7 +149,7 @@ export default function DocTabBar({ state, pane, onActivate, onPin, onClose, onC
             </div>
           )
         })}
-        <button type="button" className="doc-tab-btn doc-tab-new" aria-label="새 문서" title="새 문서" onClick={onNew}>
+        <button type="button" className="doc-tab-btn doc-tab-new" aria-label="새 탭" title="새 탭" onClick={onNew}>
           <IconAdd size={18} />
         </button>
       </div>

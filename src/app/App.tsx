@@ -984,7 +984,7 @@ export default function App() {
     paneStore: paneStore.store, narrow, ready: bootPhase === 'ready', scope: searchScope(store.kind, store.kind === 'server' ? (store as ServerStore).userId : null), docs, currentDocId,
     openDocId: openDoc?.id ?? null, editorHandle, viewMode, viewerRef, viewerDocId, pendingJumpRef, leaveRef: docTabLeaveRef, focusEditorRef, beforeLeave: beforeLeaveDoc,
     screens: { publicView: publicRoute !== null, shares: sharesOpen, help: helpOpen, trash: trashOpen },
-    focusPaneEditor: paneHost.focusEditor, selectDoc, goHome, createNewDoc, notify: (message) => showNotice({ type: 'info', message }),
+    focusPaneEditor: paneHost.focusEditor, selectDoc, goHome, notify: (message) => showNotice({ type: 'info', message }),
   })
   useDocumentTitle(localFile.session?.name ?? currentDoc?.title ?? null)
 

@@ -779,7 +779,7 @@ describe('tabs-split 글', () => {
     const source = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf-8')
     expect(source('../../src/app/useDocTabs.ts')).toContain('`탭이 ${MAX_TABS}개라 지금 탭에서 열었습니다.`')
     const bar = source('../../src/app/DocTabBar.tsx')
-    for (const label of ['다른 탭 닫기', '오른쪽 탭 닫기', '오른쪽에 분할', '아래에 분할', '칸 닫기', '${title} 탭 메뉴', '새 문서']) expect(bar, label).toContain(label)
+    for (const label of ['다른 탭 닫기', '오른쪽 탭 닫기', '오른쪽에 분할', '아래에 분할', '칸 닫기', '${title} 탭 메뉴', '새 탭']) expect(bar, label).toContain(label)
     expect(source('../../src/app/SplitDividers.tsx')).toContain('aria-label="칸 경계"')
     expect(source('../../src/app/PhoneTabsSheet.tsx')).toContain('aria-label="탭 고르기"')
   })

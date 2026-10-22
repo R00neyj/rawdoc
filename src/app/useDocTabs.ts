@@ -98,7 +98,6 @@ export type UseDocTabsOptions = {
   focusPaneEditor: (paneKey: string) => boolean
   selectDoc: (id: string) => Promise<void>
   goHome: () => Promise<void>
-  createNewDoc: () => Promise<void>
   notify: (message: string) => void
 }
 
@@ -227,9 +226,12 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
   // 칸 포커스로 시작한 문서 전환 — routeOpen 이 이 칸을 먼저 본다 (F-2163 4장)
   const preferKeyRef = useRef<string | null>(null)
   const focusRequestRef = useRef<{ key: string; at: number } | null>(null)
+  // ＋ 로 홈에 왔다 — 홈에서 고른 다음 문서는 임시 탭을 바꾸지 않고 새 고정 탭으로 연다
+  const newTabRef = useRef(false)
 
   const navigate = useCallback((key: string | null) => {
     const { selectDoc, goHome } = latestRef.current
+    newTabRef.current = false
     void (key ? selectDoc(key) : goHome())
   }, [])
 
@@ -327,10 +329,11 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
         const mode = chooseOpenMode({
           key: currentDocId,
           pendingPinKey: pendingPinRef.current,
-          pinIntent: Date.now() - pinIntentAtRef.current < PIN_INTENT_MS,
+          pinIntent: newTabRef.current || Date.now() - pinIntentAtRef.current < PIN_INTENT_MS,
           isNewDoc: !prevIds.has(currentDocId) && ids.has(currentDocId),
         })
         pendingPinRef.current = null
+        newTabRef.current = false
         pinIntentAtRef.current = 0
         const entry = tabEntry(currentDocId, lookup)
         const { keys } = store.get()
@@ -682,8 +685,12 @@ export function useDocTabs(options: UseDocTabsOptions): UseDocTabsResult {
 
   const onNew = useCallback(() => {
     const latest = latestRef.current
-    if (totalTabs(store.get().split) >= MAX_TABS) latest.notify(TABS_FULL)
-    else void latest.createNewDoc()
+    if (totalTabs(store.get().split) >= MAX_TABS) {
+      latest.notify(TABS_FULL)
+      return
+    }
+    newTabRef.current = true
+    void latest.goHome()
   }, [store])
 
   const barFor = (i: number, withSplit: boolean): DocTabBarProps => {

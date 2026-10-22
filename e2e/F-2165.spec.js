@@ -99,7 +99,7 @@ test('F-2165 E2 다른 칸 탭 줄에 놓으면 그 칸으로 옮겨 고정되�
   await expect(pane(page, 1).getByRole('tab')).toHaveText(['C', 'D', 'X'])
   await expect.poll(() => currentDocId(page)).toBe(idA)
 
-  const endSlot = () => pane(page, 2).locator('.doc-tabs').getByRole('button', { name: '새 문서', exact: true })
+  const endSlot = () => pane(page, 2).locator('.doc-tabs').getByRole('button', { name: '새 탭', exact: true })
   await paneTab(page, 1, 'C').dragTo(endSlot())
   await expect(pane(page, 2).getByRole('tab')).toHaveText(['A', 'X', 'C'])
   await expect(pane(page, 1).getByRole('tab')).toHaveText(['D', 'X'])

@@ -124,3 +124,26 @@ test('doc-tabs A3 가운데 버튼은 앱 안 새 탭, Ctrl+W 는 활성 탭을 
   await expect(tabs(page)).toHaveText(['제목 없는 문서', 'A'])
   await expect(tabList(page).getByRole('tab', { name: 'A', exact: true })).toHaveAttribute('aria-selected', 'true')
 })
+
+test('doc-tabs A4 ＋ 는 문서를 만들지 않고 홈으로, 홈에서 고른 문서는 임시 탭을 바꾸지 않고 새 탭에 열린다', async ({ page }) => {
+  await asInstalledApp(page)
+  await openApp(page)
+  await newDoc(page, 'A')
+  await newDoc(page, 'B')
+  await newDoc(page, 'C')
+  await tabRow(page, 'C').getByRole('button', { name: 'C 닫기' }).click()
+  await tabRow(page, 'B').getByRole('button', { name: 'B 닫기' }).click()
+  await docLink(page, 'B').click()
+  await expect(tabRow(page, 'B')).toHaveAttribute('data-preview', 'true')
+  const docCount = await page.locator('.sidebar').getByRole('link').count()
+
+  await tabList(page).getByRole('button', { name: '새 탭', exact: true }).click()
+  await expect.poll(() => currentDocId(page)).toBeNull()
+  await expect(page.locator('.sidebar').getByRole('link')).toHaveCount(docCount)
+  await expect(tabs(page)).toHaveText(['제목 없는 문서', 'A', 'B'])
+
+  await docLink(page, 'C').click()
+  await expect(tabs(page)).toHaveText(['제목 없는 문서', 'A', 'B', 'C'])
+  await expect(tabRow(page, 'B')).toHaveAttribute('data-preview', 'true')
+  await expect(tabRow(page, 'C')).not.toHaveAttribute('data-preview', 'true')
+})
