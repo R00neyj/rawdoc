@@ -62,17 +62,21 @@ export default function SplitPanes({ area, viewerDocId, panes, paneHost, unitFor
   const docOf = (i: number) => (i === split.focus && solo && area.currentDocId !== null ? area.currentDocId : split.panes[i].active)
   const current = area.currentDocId !== null && docOf(split.focus) === area.currentDocId
 
-  // 포커스를 잃는 칸의 보기 HTML·보드 여부 — 이 렌더의 App 값은 아직 그 칸 것이다
-  const [held, setHeld] = useState<{ key: string; copies: ReadonlyMap<string, PaneCopy> }>({ key: focusKey, copies: new Map() })
+  // 포커스를 잃는 칸의 보기 HTML·보드 여부 — 보드 여부는 앞 렌더 값, 이 렌더의 App 값은 이미 새 칸 문서일 수 있다
+  type Held = { key: string; board: { docId: string; shown: boolean } | null; copies: ReadonlyMap<string, PaneCopy> }
+  const [held, setHeld] = useState<Held>({ key: focusKey, board: null, copies: new Map() })
   let copies = held.copies
   if (held.key !== focusKey) {
     const left = keys.indexOf(held.key)
     const leftDoc = left < 0 ? null : split.panes[left].active
-    copies = new Map(copies).set(held.key, { docId: leftDoc, html: viewerDocId === leftDoc ? area.viewerHtml : '', board: area.kanban.boardShown })
+    const board = held.board !== null && held.board.docId === leftDoc && held.board.shown
+    copies = new Map(copies).set(held.key, { docId: leftDoc, html: viewerDocId === leftDoc ? area.viewerHtml : '', board })
   }
   // 금고 잠그기처럼 본문이 내려간 문서·칸에서 빠진 문서의 사본은 버린다 — 평문을 들고 있지 않게
   const kept = [...copies].filter(([, c]) => c.docId !== null && unitFor(c.docId).openDoc?.id === c.docId)
-  if (held.key !== focusKey || kept.length !== copies.size) setHeld({ key: focusKey, copies: new Map(kept) })
+  const board = current && area.currentDocId !== null ? { docId: area.currentDocId, shown: area.kanban.boardShown } : held.key === focusKey ? held.board : null
+  const boardMoved = board?.docId !== held.board?.docId || board?.shown !== held.board?.shown
+  if (held.key !== focusKey || kept.length !== copies.size || boardMoved) setHeld({ key: focusKey, board, copies: new Map(kept) })
 
   const gridRef = useRef<HTMLDivElement | null>(null)
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
