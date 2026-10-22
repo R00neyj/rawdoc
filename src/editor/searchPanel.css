@@ -27,7 +27,7 @@
   top: calc(var(--float-cover) + 10px);
   right: 10px;
   left: auto;
-  z-index: 20;
+  z-index: var(--z-float);
   /* 줄(row) 단위 세로 쌓기 — 예전 <br style="flex-basis:100%"> 방식은 퍼센트 flex-basis 자식이 있으면 width:max-content 계산이 브라우저마다 어긋나 접어도 폭이 그대로 남는 문제가 있었다(2026-09-20 사용자 지적) */
   /* createEditor.ts 의 searchMoreToggle 이 찾기·바꾸기 줄을 각각 .cm-search-row 로 감싸고, 카드는 그 줄들을 세로로만 쌓는다 */
   display: flex;

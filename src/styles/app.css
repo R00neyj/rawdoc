@@ -442,7 +442,7 @@ svg {
 .sidebar--overlay {
   position: absolute;
   inset: 0 auto 0 0;
-  z-index: 35; /* 본문 쪽 떠 있는 것(댓글 달기 버튼·목차 20, 댓글 판 30)보다 위 */
+  z-index: var(--z-overlay);
   /* 열림 곡선이 튕겨 왼쪽으로 넘칠 때 빈 틈이 보이지 않게 바탕을 화면 밖까지 늘림 (tweak 2026-10-22) */
   box-shadow: -80px 0 0 var(--surface), 8px 0 30px rgba(0, 0, 0, 0.12);
   opacity: 1;
@@ -518,7 +518,7 @@ svg {
   right: -4px;
   width: 8px;
   cursor: col-resize;
-  z-index: 25;
+  z-index: var(--z-resize);
   background: transparent;
   user-select: none;
 }
@@ -555,7 +555,7 @@ body.sidebar-resizing {
 .sidebar-backdrop {
   position: absolute;
   inset: 0;
-  z-index: 34;
+  z-index: var(--z-overlay-backdrop);
   background: rgba(0, 0, 0, 0.32);
   backdrop-filter: blur(6px);
   transition: opacity var(--transition-fast);
@@ -976,7 +976,7 @@ body.sidebar-resizing {
   position: absolute;
   right: 4px;
   top: calc(100% + 2px);
-  z-index: 30;
+  z-index: var(--z-menu);
   min-width: 160px;
   max-width: min(320px, calc(100vw - 16px)); /* 긴 폴더·칸 이름이 메뉴를 끝없이 키우지 않게 (tweak 2026-10-15) */
   list-style: none;
@@ -1340,7 +1340,7 @@ body.sidebar-resizing {
 /* 탭을 칸 가장자리로 끌 때 새 칸 자리 — body 포털, 좌표는 usePaneDropZones (F-2165 3장) */
 .split-drop-preview {
   position: fixed;
-  z-index: 40;
+  z-index: var(--z-tooltip);
   box-sizing: border-box;
   border: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
   border-radius: 6px;
@@ -1499,7 +1499,7 @@ body.sidebar-resizing {
   position: absolute;
   top: 50%;
   right: 16px;
-  z-index: 20;
+  z-index: var(--z-float);
   translate: 0 -50%;
 }
 
@@ -1592,7 +1592,7 @@ body.sidebar-resizing {
   position: absolute;
   top: 12px;
   right: 16px;
-  z-index: 20;
+  z-index: var(--z-float);
 }
 
 /* 레일이 보이는 동안 목차(선 목차·버튼)를 레일 폭만큼 왼쪽으로 (F-505 5.1, 선 목차는 2026-09-27 tweak) */
@@ -1714,7 +1714,7 @@ body.sidebar-resizing {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 30;
+  z-index: var(--z-menu);
   height: 60dvh;
   display: flex;
   flex-direction: column;
@@ -2355,7 +2355,7 @@ body.sidebar-resizing {
   border: 1px solid var(--rule);
   color: var(--ink-2);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
-  z-index: 20;
+  z-index: var(--z-float);
   transition: var(--transition-colors);
 }
 
@@ -2590,7 +2590,7 @@ body.sidebar-resizing {
   position: fixed;
   right: 16px;
   bottom: 40px;
-  z-index: 40;
+  z-index: var(--z-tooltip);
   max-width: 360px;
   flex-wrap: wrap;
   padding: 12px 14px;
@@ -3858,7 +3858,7 @@ body.sidebar-resizing {
 .icon-tooltip {
   position: absolute;
   top: calc(100% + 6px);
-  z-index: 40;
+  z-index: var(--z-tooltip);
   padding: 4px 8px;
   border-radius: 6px;
   background: var(--ink);
@@ -4123,7 +4123,7 @@ body.sidebar-resizing {
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
-  z-index: 30;
+  z-index: var(--z-menu);
   min-width: 200px;
   max-width: min(200px, calc(100vw - 32px));
   list-style: none;
@@ -4445,7 +4445,7 @@ body.sidebar-resizing {
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
-  z-index: 30;
+  z-index: var(--z-menu);
   width: max-content;
   min-width: 220px;
   max-width: min(320px, calc(100vw - 32px));
@@ -4513,7 +4513,7 @@ body.sidebar-resizing {
 /* 편집기·표 칸·보기 모드 우클릭 메뉴 — 공유 메뉴와 같은 모양, 클릭 지점에 고정으로 연다 (F-170.md 5장) */
 .context-menu-list {
   position: fixed;
-  z-index: 50;
+  z-index: var(--z-top);
   min-width: 200px;
   max-width: min(280px, calc(100vw - 32px));
   overflow-y: auto;
@@ -4596,7 +4596,7 @@ body.sidebar-resizing {
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
-  z-index: 30;
+  z-index: var(--z-menu);
   min-width: 200px;
   max-width: min(240px, calc(100vw - 32px));
   list-style: none;
@@ -5299,7 +5299,7 @@ body.sidebar-resizing {
 .drop-overlay {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-top);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5468,14 +5468,14 @@ body.sidebar-resizing {
   .public-folder-list {
     position: fixed;
     inset: 0 auto 0 0;
-    z-index: 20;
+    z-index: var(--z-float);
     box-shadow: 2px 0 12px rgb(0 0 0 / 0.15);
   }
 
   .public-folder-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 19;
+    z-index: var(--z-public-backdrop);
     background: rgb(0 0 0 / 0.3);
   }
 }
@@ -5926,7 +5926,7 @@ body.sidebar-resizing {
   .topbar {
     position: absolute;
     inset: 0 0 auto 0;
-    z-index: 36;
+    z-index: var(--z-chrome);
     height: auto;
     gap: 8px;
     padding: calc(env(safe-area-inset-top, 0px) + 8px) 8px 0;
@@ -5990,7 +5990,7 @@ body.sidebar-resizing {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
     margin-inline: auto;
     width: fit-content;
-    z-index: 36;
+    z-index: var(--z-chrome);
     transition: opacity var(--transition-fast), visibility var(--transition-fast);
     height: auto;
     padding: 3px 4px;
@@ -6057,7 +6057,7 @@ body.sidebar-resizing {
     top: var(--float-cover);
     left: 8px;
     right: 8px;
-    z-index: 15;
+    z-index: var(--z-notice);
     border: 1px solid var(--rule);
     border-radius: var(--radius-dialog);
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
@@ -6355,12 +6355,12 @@ body.sidebar-resizing {
   }
 }
 
-/* 휴대폰 폭 목차 오른쪽 패널 — 겹침 사이드바(35/34)의 좌우 반전 (F-2089 6장) */
+/* 휴대폰 폭 목차 오른쪽 패널 — 겹침 사이드바의 좌우 반전 (F-2089 6장) */
 @media (max-width: 600px) {
   .outline-panel-backdrop {
     position: absolute;
     inset: 0;
-    z-index: 34;
+    z-index: var(--z-overlay-backdrop);
     background: rgba(0, 0, 0, 0.32);
     backdrop-filter: blur(6px);
   }
@@ -6369,7 +6369,7 @@ body.sidebar-resizing {
     position: absolute;
     inset: 0 0 0 auto;
     width: 85%;
-    z-index: 35;
+    z-index: var(--z-overlay);
     display: flex;
     flex-direction: column;
     background: var(--surface);
@@ -7154,7 +7154,7 @@ a.dialog-btn {
 .right-panel--overlay {
   position: absolute;
   inset: 0 0 0 auto;
-  z-index: 35;
+  z-index: var(--z-overlay);
   max-width: 100%;
   box-shadow: 80px 0 0 var(--surface), -8px 0 30px rgba(0, 0, 0, 0.12);
   opacity: 1;
@@ -7183,7 +7183,7 @@ a.dialog-btn {
 .right-panel-backdrop {
   position: absolute;
   inset: 0;
-  z-index: 34;
+  z-index: var(--z-overlay-backdrop);
   background: rgba(0, 0, 0, 0.32);
   backdrop-filter: blur(6px);
 }

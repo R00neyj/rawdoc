@@ -153,6 +153,19 @@
     color var(--transition-fast), border-color var(--transition-fast),
     box-shadow var(--transition-fast), opacity var(--transition-fast),
     fill var(--transition-fast), text-decoration-color var(--transition-fast);
+
+  /* 전역 쌓임 층 — 아래에서 위로 (design.md 4장). 컴포넌트 안쪽 1~6 은 숫자 그대로 둔다 */
+  --z-notice: 15; /* 휴대폰 폭 알림 띠 */
+  --z-public-backdrop: 19; /* 태블릿 폭 폴더 공개 목록 배경막 */
+  --z-float: 20; /* 본문 위에 뜨는 것 — 목차·목차 팝업·댓글 달기 버튼·찾기 카드·태블릿 폴더 공개 목록 */
+  --z-resize: 25; /* 사이드바 폭 손잡이 */
+  --z-menu: 30; /* 드롭다운 메뉴·댓글 판 */
+  --z-overlay-backdrop: 34; /* 겹침 사이드바·오른쪽 패널·휴대폰 목차의 배경막 */
+  --z-overlay: 35; /* 겹침 사이드바·오른쪽 패널·휴대폰 목차·위키링크 미리보기 */
+  --z-chrome: 36; /* 휴대폰 폭 떠 있는 상단바·아래 탐색 줄 */
+  --z-tooltip: 40; /* 아이콘 툴팁·아래 알림 카드·분할 놓기 자리 */
+  --z-top: 50; /* 우클릭 메뉴·파일 끌어놓기 덮개·끄는 중 표시 */
+  --z-boot: 100; /* 첫 화면 뼈대 */
 }
 
 :root[data-heading-font='sans'] {

@@ -207,7 +207,7 @@
 /* 놓일 줄 사이 막대 — 문서 밖 body 에 붙어 내용을 바꾸지 않는다 */
 .md-image-drop-marker {
   position: fixed;
-  z-index: 50;
+  z-index: var(--z-top);
   height: 3px;
   margin-top: -1.5px;
   border-radius: 2px;

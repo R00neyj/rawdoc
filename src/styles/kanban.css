@@ -470,7 +470,7 @@
 
 .kanban-drag-ghost {
   position: fixed;
-  z-index: 50;
+  z-index: var(--z-top);
   margin: 0;
   list-style: none; /* 목록 밖 board 에 붙는 li 복제본이라 불릿이 살아난다 */
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);

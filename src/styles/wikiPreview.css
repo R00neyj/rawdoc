@@ -2,7 +2,7 @@
 
 .wiki-preview {
   position: fixed;
-  z-index: 35; /* 목차 팝업·겹침 사이드바 20, 메뉴 목록 30 위 — 아이콘 툴팁 40·우클릭 메뉴 50 아래 */
+  z-index: var(--z-overlay);
   width: var(--wiki-preview-size);
   max-height: var(--wiki-preview-size);
   overflow: hidden;
