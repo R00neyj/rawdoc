@@ -1,0 +1,30 @@
+/* 앱 공통 바탕 — [hidden]·아이콘·글자 선택 (specs/design.md 4장) */
+
+@property --float-cover {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+/* 브라우저 기본 `[hidden]{display:none}` 보다 구체성이 높은 `.sidebar{display:flex}` 같은
+   규칙이 있으면 hidden 속성이 무시된다. 항상 최우선으로 적용되게 한다 (F-122 2.3) */
+[hidden] {
+  display: none !important;
+}
+
+/* 앱 아이콘(F-142 2장)은 전부 글자색을 따른다. flex 안에서 줄어들지 않게 한다(F-143 3.9) */
+svg {
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+/* 글자 선택 — 앱 전체(편집·원문·보기 모드 본문, 표 칸, 입력란) 공통, 글자 색은 바꾸지 않는다 (design.md 3.2, F-164) */
+::selection {
+  background: var(--selection-bg);
+}
+
+.app-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}

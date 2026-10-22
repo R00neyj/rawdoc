@@ -1,0 +1,130 @@
+/* 편집 영역 — CM6 기본 테마 덮어쓰기·마크다운 기호 강조 (F-103·F-107) */
+/* `.cm-host .cm-editor …` 로 길게 쓰는 건 CM 테마(`.ͼN` 클래스, Prec.highest 는 !important)의 특이도를 이기려는 것 — 휴대폰 폭 편집기 여백은 순서상 phone.css */
+
+/* ===== 편집 영역 (specs/features/F-103.md 3.5, F-107.md) ===== */
+/* 메인 열 전체 폭 — 내용은 .cm-scroller 안쪽 여백으로 800px 가운데 정렬한다 (F-143 3.8) */
+.editor-slot {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel);
+  height: 100%;
+}
+
+.cm-host {
+  height: 100%;
+}
+
+/* 본문 크기·줄 간격은 GitHub 마크다운 스타일 값을 따른다 (F-124 3.1) */
+.cm-host .cm-editor {
+  height: 100%;
+  font-size: var(--md-font-size);
+}
+
+/* cm-scroller 는 CM6 가 계속 맡는 스크롤 요소다(폭 넓혀도 유지, F-143 3.8) — 좌우 안쪽 여백으로 gutter+본문을 800px 로 가운데 정렬, 스크롤바는 이 요소 오른쪽 끝에 붙는다 */
+/* 스크롤바(10px)가 나타나면 그만큼 본문이 오른쪽으로 치우칠 수 있지만, 대부분 --doc-pad-bottom(3.10) 때문에 스크롤이 생겨 큰 차이는 아니다 */
+.cm-host .cm-editor .cm-scroller {
+  line-height: var(--md-line-height);
+  padding: 0 max(0px, calc((100% - var(--content-max)) / 2));
+}
+
+/* data-view 는 createEditor.js 가 EditorView.editorAttributes 로 붙인다 — 문단·목록·인용·표 칸의 기본 서체는 --font-body 다 (design.md 2.4, F-141 3.3) */
+/* 제목(--font-display)·코드(--font-mono)는 각자 자리에서 따로 덮어쓴다 */
+.cm-host .cm-editor[data-view='live'] .cm-scroller {
+  font-family: var(--font-body);
+}
+
+/* 원문 모드: --font-mono 14px, 줄 간격 1.5 (F-124 3.1) */
+.cm-host .cm-editor[data-view='raw'] .cm-scroller {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.5;
+  --tracking: 0; /* F-141 3.6 — 고정폭 자리는 자간 0 */
+}
+
+.cm-host .cm-editor .cm-gutters {
+  background: var(--panel);
+  border: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  --tracking: 0; /* F-141 3.6 */
+}
+
+/* 줄 번호 오른쪽 끝 ~ 본문 첫 글자 왼쪽 끝 거리를 --gutter-gap 으로 맞춘다 (F-122 2.2) — CM6 기본값: 줄번호 오른쪽 패딩 3px, `.cm-line` 왼쪽 패딩 6px */
+/* 오른쪽 패딩을 --gutter-gap 에서 6px 을 뺀 값으로 바꿔 두 패딩의 합이 --gutter-gap 이 되게 한다 — 제목 줄도 폰트 크기와 무관해 같다 */
+.cm-host .cm-editor .cm-lineNumbers .cm-gutterElement {
+  padding-right: calc(var(--gutter-gap) - 6px);
+}
+
+/* 줄 번호 숨김 — .cm-line 기본 왼쪽 패딩(6px)을 없애 첫 글자가 내용 칸 왼쪽 끝에서 시작한다(F-147 2장) */
+.cm-host .cm-editor[data-gutters='off'] .cm-line {
+  padding-left: 0;
+}
+
+/* 문서 위아래 여백 — 편집·원문·보기·공유 화면 공통 토큰 (F-143 3.10) */
+.cm-host .cm-editor .cm-content {
+  caret-color: var(--accent);
+  padding: var(--doc-pad-top) 0 calc(var(--doc-pad-bottom) + var(--comment-rail-extra, 0px));
+}
+
+/* CM6 기본 테마는 커서 테두리를 black 고정값으로 준다 — 테마를 따르게 덮는다
+   (design.md 3.4, F-141 3.1) */
+.cm-host .cm-editor .cm-cursor {
+  border-left-color: var(--ink);
+}
+
+/* drawSelection 이 그리는 선택 바탕을 앱 ::selection 색에 맞춘다 — CM 기본 테마보다 한 단계 구체적이어야 이긴다 (small 2026-10-22) */
+.cm-host .cm-editor .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
+  background: var(--selection-bg);
+}
+
+/* CM 이 편집면 안 포커스 요소(제목·프론트매터 입력칸)의 선택을 시스템 Highlight 로 강제해 앱 색으로 되돌린다 (tweak 2026-10-22) */
+.cm-host .cm-editor .cm-content :focus::selection,
+.cm-host .cm-editor .cm-content :focus ::selection {
+  background-color: var(--selection-bg) !important;
+}
+
+/* 편집면 자체가 포커스 대상이라 바깥 기본 점선 외곽선은 끈다 */
+.cm-host .cm-editor.cm-focused {
+  outline: none;
+}
+
+/* ===== 마크다운 기호 강조 (specs/features/F-107.md 2.1) ===== */
+.md-mark {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  --tracking: 0; /* F-141 3.6 */
+}
+
+.md-heading {
+  font-weight: 700;
+}
+
+.md-strong {
+  font-weight: 700;
+}
+
+.md-em {
+  font-style: italic;
+}
+
+.md-strike {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.md-code {
+  font-family: var(--font-mono);
+  background: var(--rule-2);
+  border-radius: 3px;
+  --tracking: 0; /* F-141 3.6 */
+}
+
+.md-link,
+.md-url {
+  color: var(--link);
+}
+
+.md-quote-text {
+  color: var(--ink-2);
+}

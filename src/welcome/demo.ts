@@ -4,7 +4,30 @@ import pretendardCss from 'pretendard/dist/web/variable/pretendardvariable-dynam
 import notoCss from '@fontsource/noto-serif-kr/400.css?inline'
 import notoBoldCss from '@fontsource/noto-serif-kr/700.css?inline'
 import tokensCss from '../styles/tokens.css?inline'
-import appCss from '../styles/app.css?inline'
+import shellCss from '../styles/app/shell.css?inline'
+import topbarCss from '../styles/app/topbar.css?inline'
+import sidebarCss from '../styles/app/sidebar.css?inline'
+import mainColumnCss from '../styles/app/mainColumn.css?inline'
+import outlineCss from '../styles/app/outline.css?inline'
+import commentsCss from '../styles/app/comments.css?inline'
+import homeCss from '../styles/app/home.css?inline'
+import noticesCss from '../styles/app/notices.css?inline'
+import dialogsCss from '../styles/app/dialogs.css?inline'
+import shareDialogsCss from '../styles/app/shareDialogs.css?inline'
+import controlsCss from '../styles/app/controls.css?inline'
+import editorCss from '../styles/app/editor.css?inline'
+import menusCss from '../styles/app/menus.css?inline'
+import docViewsCss from '../styles/app/docViews.css?inline'
+import statusbarCss from '../styles/app/statusbar.css?inline'
+import publicViewCss from '../styles/app/publicView.css?inline'
+import pagesCss from '../styles/app/pages.css?inline'
+import phoneCss from '../styles/app/phone.css?inline'
+import settingsPanelsCss from '../styles/app/settingsPanels.css?inline'
+import phoneTypeCss from '../styles/app/phoneType.css?inline'
+import githubCss from '../styles/app/github.css?inline'
+import templatesCss from '../styles/app/templates.css?inline'
+import rightPanelCss from '../styles/app/rightPanel.css?inline'
+import permissionCss from '../styles/app/permission.css?inline'
 import codeCopyCss from '../styles/codeCopy.css?inline'
 import previewCss from '../editor/preview/preview.css?inline'
 import calloutCss from '../styles/callout.css?inline'
@@ -20,7 +43,30 @@ function injectStyles(): void {
     notoCss,
     notoBoldCss,
     tokensCss,
-    appCss,
+    shellCss,
+    topbarCss,
+    sidebarCss,
+    mainColumnCss,
+    outlineCss,
+    commentsCss,
+    homeCss,
+    noticesCss,
+    dialogsCss,
+    shareDialogsCss,
+    controlsCss,
+    editorCss,
+    menusCss,
+    docViewsCss,
+    statusbarCss,
+    publicViewCss,
+    pagesCss,
+    phoneCss,
+    settingsPanelsCss,
+    phoneTypeCss,
+    githubCss,
+    templatesCss,
+    rightPanelCss,
+    permissionCss,
     codeCopyCss,
     previewCss,
     calloutCss,

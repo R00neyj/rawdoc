@@ -1,0 +1,715 @@
+/* 대화상자 공통·검색·설정·도움말 페이지 (F-224·F-287·F-290·F-244) */
+
+/* ===== 대화상자 ===== */
+/* 나타나고 사라지는 전환 — 네이티브 <dialog> [open]·::backdrop 그대로, Dialog.jsx 는 JS 변경 없이 CSS 의 allow-discrete 로 닫기를 늦춘다 (F-172.md 2.1·2.2) */
+.dialog {
+  box-sizing: border-box;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-dialog);
+  padding: 18px;
+  background: var(--panel);
+  color: var(--ink);
+  width: min(420px, calc(100vw - 32px));
+  /* 브라우저 기본 dialog:modal 이 max-width: calc(100% - 6px - 2em) 를 따로 얹어 폭을 더 줄인다 — 지운다 */
+  max-width: none;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
+  opacity: 0;
+  transform: scale(0.9);
+  /* 닫힘은 튕기지 않는다(F-172 그대로) — 열림 전용 곡선은 [open] 규칙이 덮는다 (F-228 2.3) */
+  transition: opacity var(--transition-fast), transform var(--transition-fast),
+    display var(--transition-fast), overlay var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.dialog--wide {
+  width: min(520px, calc(100vw - 32px));
+}
+
+/* 도움말처럼 표·코드블록 예시가 들어가 520px 로는 답답한 대화상자용 (F-235) */
+.dialog--xwide {
+  width: min(720px, calc(100vw - 32px));
+}
+
+/* 휴대폰 폭 설정 — 전체화면 1·2뎁스 (F-2114) */
+.dialog--full {
+  width: 100vw;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.dialog--full[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog[open] {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity var(--transition-pop-fade), transform var(--transition-pop),
+    display var(--transition-pop-fade), overlay var(--transition-pop-fade);
+}
+
+@starting-style {
+  .dialog[open] {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+.dialog::backdrop {
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transition: opacity var(--transition-fast), display var(--transition-fast), overlay var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.dialog[open]::backdrop {
+  opacity: 1;
+}
+
+@starting-style {
+  .dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+.dialog h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.dialog p {
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.dialog-field {
+  margin-bottom: 16px;
+}
+
+.dialog-field > span {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  margin-bottom: 8px;
+}
+
+/* 대화상자 글 입력란 — 클래스 없는 input 이 브라우저 기본 상자로 나오지 않게(금고 대화상자, tweak 2026-09-26).
+   .api-token-name-input·.settings-select 와 같은 값 */
+.dialog-field input:is([type='text'], [type='password'], [type='email'], [type='number'], :not([type])) {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  transition: var(--transition-colors);
+}
+
+.dialog-field input:is([type='text'], [type='password'], [type='email'], [type='number'], :not([type])):focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 가져오기 미리보기의 넣을 폴더 select (F-2019.md 10.2) */
+.import-target {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+/* P1 잠긴 금고 문서 패널 — 편집 영역 가운데 (F-405 6.2) */
+.e2ee-locked-panel {
+  width: 100%;
+  max-width: 420px;
+  margin: 15vh auto 0;
+  padding: 0 24px;
+}
+
+.e2ee-locked-panel h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  color: var(--ink-2);
+}
+
+/* 금고로 옮기기·빼기 D-9·D-10 — 덧붙임 줄과 백업 안내 (F-407 7.6) */
+.e2ee-convert-dialog .e2ee-convert-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.e2ee-convert-dialog .e2ee-backup-notice {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.e2ee-convert-dialog .dialog-actions {
+  margin-top: 16px;
+}
+
+/* 로그인 전 금고 옮기기 D-14 — 계정에 금고가 있는지에 따라 다른 안내 (F-408 5.4) */
+.e2ee-migrate-dialog .e2ee-migrate-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* 보조 문구는 왼쪽. 오른쪽 정렬 버튼 줄 바로 아래 붙을 때만 오른쪽(폴더 삭제 대화상자, F-242.md 3.5) */
+.dialog-note {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* `.dialog p` 의 아래 16px 이 위 8px 을 덮어 버튼 줄 아래 보조 문구가 붙어 보였다 — 버튼 줄 바로 뒤면 위로 (tweak 2026-10-01) */
+.dialog-actions + .dialog-note {
+  margin: 8px 0 0;
+  text-align: right;
+}
+
+/* 놓치면 곤란한 안내 — 흐린 보조 문구 대신 메인 색을 옅게 깐 상자 */
+.dialog-callout {
+  margin: 12px 0 16px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-left-width: 3px;
+  border-left-color: var(--accent);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+  font-size: 13px;
+  color: var(--ink);
+}
+
+/* 검색 대화상자 (specs/features/F-287.md 4.1) */
+.search-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--muted);
+  margin-bottom: 10px;
+  transition: var(--transition-colors);
+}
+
+/* 포커스 표시는 묶음 테두리 한 겹 — 입력 자체 외곽선은 끈다 (F-225 2장의 .invite-input-group 과 같은 방식) */
+.search-input-row:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* tokens.css 의 전역 리셋은 button 만 덮고 input 은 font·color 만 물려준다 — 테두리·배경을 끄지 않으면 브라우저 기본 상자가 한 겹 더 보인다(2026-09-21) */
+/* 명령 팔레트(F-2022)도 같은 묶음을 쓰므로 함께 끈다 (2026-09-25) */
+.search-input,
+.command-palette-input,
+.doc-picker-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.search-input:focus-visible,
+.command-palette-input:focus-visible,
+.doc-picker-input:focus-visible {
+  outline: none;
+}
+
+.search-status {
+  padding: 24px 4px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.search-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.search-result--on {
+  background: var(--rule-2);
+}
+
+.search-result-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.search-result-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.search-result-meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.search-result-shared {
+  color: var(--link);
+}
+
+.search-result-snippet {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.search-hit {
+  background: var(--md-highlight-bg);
+  color: inherit;
+}
+
+/* 해석 줄·안내 줄·꼬리 줄 (specs/features/F-288.md 10.1) */
+.search-notes {
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.search-summary,
+.search-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.search-foot {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* 설정 대화상자 왼쪽 탭 목록 + 오른쪽 패널 (specs/features/F-290.md 3.8) */
+.settings-body {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+  width: 140px;
+}
+
+.settings-tabs button {
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition: var(--transition-colors);
+}
+
+/* 탭마다 항목 수가 달라 닫기 버튼 자리가 튀지 않게 높이를 고정하고 넘치면 스크롤 (F-290 9장 3번) */
+.settings-panel {
+  flex: 1;
+  min-width: 0;
+  height: min(560px, 70vh);
+  overflow-y: auto;
+}
+
+/* 설정 아래 줄 왼쪽 끝의 소개 보기 링크와 후원하기 (F-2051, tweak 2026-09-28, small 2026-10-11) */
+.settings-intro {
+  color: inherit;
+  text-decoration: none;
+}
+
+.settings-donate {
+  margin-right: auto;
+}
+
+/* 후원 대화상자 — 하트·제목·QR 을 가운데 세운 작은 카드 (small 2026-10-11, tweak 같은 날) */
+.donate-dialog {
+  text-align: center;
+}
+
+/* 한 번 보고 닫는 창이라 다른 대화상자(15·13.5·12px)보다 한 단계 크게 */
+.donate-dialog h2 {
+  font-size: 19px;
+  margin-bottom: 4px;
+}
+
+.donate-heart {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--accent);
+}
+
+.donate-dialog .donate-lead {
+  margin: 6px 0 16px;
+  font-size: 15px;
+  color: var(--ink-2);
+  line-height: 1.6;
+  text-wrap: balance;
+  word-break: keep-all;
+}
+
+.donate-qr-wrap {
+  margin: 0;
+}
+
+.donate-qr {
+  display: block;
+  margin: 0 auto;
+  padding: 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  image-rendering: pixelated;
+}
+
+.donate-dialog a.donate-open {
+  display: block;
+  text-align: center;
+  padding: 10px;
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--panel);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.donate-dialog a.donate-open:hover {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+}
+
+.donate-dialog .donate-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.donate-dialog .dialog-actions {
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.dialog--full .settings-panel {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+.dialog--full .settings-page-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.settings-row-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-row-intro {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.settings-panel .dialog-field:last-child {
+  margin-bottom: 0;
+}
+
+/* 본문 너비 — 슬라이더 + 숫자 입력 한 줄, 슬라이더가 남는 폭을 가진다 (F-2043 4.2) */
+.settings-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-range input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.settings-range input[type='number'] {
+  display: block;
+  width: 88px;
+  flex: 0 0 auto;
+}
+
+.settings-range span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* 새 문서 템플릿 선택칸 — 앱의 첫 <select> (specs/features/F-2037.md 3.2) */
+.settings-select {
+  width: 100%;
+  padding: 8px 32px 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  /* 브라우저 기본 화살표를 끄고 토큰 색 꺾쇠를 그라디언트 두 장으로 그린다(tweak 2026-09-26) */
+  appearance: none;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) 50%,
+    calc(100% - 11px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--ink);
+  font-size: 14px;
+  cursor: pointer;
+  transition: var(--transition-colors);
+}
+
+.settings-select option,
+.settings-select optgroup {
+  background-color: var(--paper);
+  color: var(--ink);
+}
+
+.settings-select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* 가져오기 미리보기·결과 대화상자의 경고·실패 목록 (specs/features/F-282.md 3.8) */
+.import-list {
+  margin: 0 0 16px;
+  padding-left: 20px;
+  font-size: 12.5px;
+  color: var(--muted);
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+/* `데이터` 탭 버튼 행 — 전체 내보내기(F-282 뒤 가져오기…) + 안내 문구 (F-290.md 3.6) */
+.dialog-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dialog-btn-row .dialog-note {
+  margin: 0;
+}
+
+/* 설정 데이터 탭 — 내보내기·가져오기 묶음, 버튼 + 한 줄 설명 (tweak 2026-09-26) */
+/* 격자 하나 — 묶음·행은 display: contents 로 풀어 버튼 칸(가장 넓은 버튼 폭)과 설명 칸을 모든 행이 같이 쓴다 */
+.data-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.data-section,
+.data-row {
+  display: contents;
+}
+
+.data-section-title {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.data-section + .data-section .data-section-title {
+  margin-top: 12px;
+}
+
+.data-row .dialog-btn {
+  width: 100%;
+}
+
+.data-grid .data-row-desc {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.data-grid .data-row-note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.dialog-actions button,
+.dialog-btn {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 7px 14px;
+  font-size: 13px;
+  transition: var(--transition-colors);
+}
+
+.dialog-actions button:hover:not(:disabled),
+.dialog-btn:hover:not(:disabled) {
+  background: var(--hover-bg);
+}
+
+.dialog-actions button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--panel);
+}
+
+/* 일반 호버(:hover:not(:disabled))가 더 구체적이라 위험색 바탕을 덮어 다크에서 글자가 묻혔다 */
+.dialog-actions button.danger:hover:not(:disabled) {
+  background: var(--danger);
+  filter: brightness(0.95);
+}
+
+/* 비활성 버튼이 눌릴 것처럼 보였다 — 글자를 흐리고 호버·위험 색을 뺀다 */
+.dialog-actions button:disabled,
+.dialog-actions button.danger:disabled {
+  border-color: var(--rule);
+  background: none;
+  color: var(--muted);
+  filter: none;
+  cursor: default;
+}
+
+/* 보조 동작(암호를 잊었나요? 등)은 글자 링크로 낮추고 왼쪽 끝으로 떼어 주 버튼과 헷갈리지 않게 */
+.dialog-actions button.link-btn {
+  margin-right: auto;
+  padding-inline: 2px;
+  border-color: transparent;
+  background: none;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.dialog-actions button.link-btn:hover {
+  background: none;
+  color: var(--ink);
+}
+
+/* ----- 도움말 전용 페이지 (specs/features/F-244.md 3.2) ----- */
+.help-page {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+
+.help-page-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: var(--topbar-h);
+  padding: 0 max(16px, calc((100% - var(--content-max)) / 2 + 16px));
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.help-page-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.help-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.help-page-copy,
+.help-page-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.help-page-copy:hover,
+.help-page-close:hover {
+  background: var(--hover-bg);
+}
+
+.help-page-body {
+  position: relative; /* 오른쪽 목차(.outline) 기준점 — .content-area 와 같은 역할 (F-249.md 3.2) */
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 459px) {
+  .data-grid {
+    grid-template-columns: 1fr;
+    row-gap: 4px;
+  }
+}

@@ -1,0 +1,154 @@
+/* 상태바·금고 상태·파일 끌어놓기 덮개 (F-113·F-2052·F-404·F-145) */
+
+/* ===== 상태바 E (specs/ia.md 2장 E, specs/features/F-113.md) ===== */
+.statusbar {
+  flex: none;
+  height: var(--statusbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  border-top: 1px solid var(--rule);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  --tracking: 0; /* F-141 3.6 */
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.statusbar-info,
+.statusbar-save {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 저장 상태 · 폴백 표시 · 금고 열림 · 단축키 순서로 오른쪽 끝에 붙는 묶음 (F-2052 4.2) */
+.statusbar-right {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 단축키 판 여닫기 버튼 — 상태바 오른쪽 끝 (F-2052 4.1) */
+.statusbar-shortcuts {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-control);
+  transition: var(--transition-colors);
+}
+
+.statusbar-shortcuts:hover,
+.statusbar-shortcuts[aria-expanded='true'] {
+  color: var(--ink);
+}
+
+.statusbar-save--danger {
+  color: var(--danger);
+}
+
+/* 저장 상태 원형 표시 — 입력 중(주황)·저장됨(초록)·실패(빨강). memory 는 입력 중과 같이 취급(둘 다 아직 안전하게 저장되지 않음) */
+.statusbar-save-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.statusbar-save-dot--saved {
+  background: var(--callout-success);
+}
+
+.statusbar-save-dot--dirty,
+.statusbar-save-dot--memory {
+  background: var(--callout-warning);
+}
+
+.statusbar-save-dot--error {
+  background: var(--danger);
+}
+
+/* 금고 상태바 버튼 — 1차는 기존 토큰만 쓴다(F-404.md 7.8, 아이콘·간격은 design.md 갱신 뒤) */
+.statusbar-e2ee {
+  white-space: nowrap;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.statusbar-e2ee:hover {
+  color: inherit;
+}
+
+.e2ee-recovery-code {
+  display: block;
+  font-family: var(--font-mono);
+  word-break: break-all;
+  user-select: all;
+  margin-bottom: 10px;
+}
+
+/* 복구 코드 단계 — 보관 확인 체크와 문구를 한 줄로 */
+.e2ee-recovery-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0;
+  cursor: pointer;
+}
+
+.dialog .e2ee-password-hint {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.e2ee-error {
+  color: var(--danger);
+}
+
+/* 외부 .md 파일 끌어놓기 덮개(F-145.md 2.4) — 입력을 막는 용도만, 포커스는 가져가지 않는다 */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-top);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+}
+
+.drop-overlay-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 56px;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-dialog);
+  color: var(--ink);
+}
+
+.drop-overlay-box p {
+  margin: 0;
+  font-size: 15px;
+  font-family: var(--font-display);
+}
+
+/* 터치 전용 기기·휴대폰 폭에는 자리가 없다 — 팔레트 명령은 남는다 (F-2052 4.2 결정 10, tweak) */
+@media (hover: none) and (pointer: coarse), (max-width: 600px) {
+  .statusbar-shortcuts {
+    display: none;
+  }
+}

@@ -1,0 +1,103 @@
+/* 알림 띠·아래 알림 카드 (F-152) */
+
+/* ===== 알림 띠 ===== */
+/* 나타나고 사라지는 전환 — usePresence 의 [data-state] 로 몬다 (F-172.md 2.1·2.2) */
+.notice {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 13px;
+  background: var(--rule-2);
+  color: var(--ink-2);
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition: opacity var(--transition-fast), transform var(--transition-move), visibility var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.notice[data-state='closed'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+}
+
+@starting-style {
+  .notice[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.notice--error {
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
+  color: var(--danger);
+}
+
+/* --accent-soft 는 투명이라 휴대폰에서 뜬 띠 뒤가 비친다 — 패널과 섞어 불투명하게 */
+.notice--update {
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+/* 띠 대신 오른쪽 아래 떠 있는 카드 — 편집 흐름을 가리지 않는 후원 알림 (small 2026-10-11) */
+.notice--bottom {
+  position: fixed;
+  right: 16px;
+  bottom: 40px;
+  z-index: var(--z-tooltip);
+  max-width: 360px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-dialog);
+  background: var(--panel);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  line-height: 1.5;
+}
+
+.notice--bottom[data-state='closed'] {
+  transform: translateY(4px);
+}
+
+@starting-style {
+  .notice--bottom[data-state='open'] {
+    transform: translateY(4px);
+  }
+}
+
+/* 메시지만 남은 폭을 채움. span 전체로 잡으면 닫기 버튼 칸도 늘어남 (F-152 2.4) */
+.notice-message {
+  flex: 1;
+}
+
+/* 동작 버튼(아이콘+글자)만 대상 — 닫기 버튼(.icon-btn)은 F-142 아이콘 버튼 모양 그대로 (F-143 2장) */
+.notice button:not(.icon-btn) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 4px 9px;
+  font-size: 12px;
+  transition: var(--transition-colors);
+}
+
+.notice button:not(.icon-btn):hover {
+  background: var(--panel);
+}
+
+/* 아래 카드의 동작 버튼은 채운 강조색 — 띠 버튼과 달리 카드 바탕과 구분되고 hover 가 보이게 (tweak 2026-10-11) */
+.notice--bottom button:not(.icon-btn) {
+  border-color: transparent;
+  padding: 6px 12px;
+  background: var(--accent);
+  color: var(--panel);
+  font-weight: 600;
+}
+
+.notice--bottom button:not(.icon-btn):hover {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+}

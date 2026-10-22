@@ -2,7 +2,7 @@
 export type ViewportInput = { innerHeight: number; vvHeight: number; vvOffsetTop: number; vvScale: number }
 export type ViewportFit = { height: number; top: number } | null
 
-// app.css 의 @media (max-width: 600px) 와 같은 문턱 (F-216·F-2084 2장)
+// styles/app/*.css 의 @media (max-width: 600px) 와 같은 문턱 (F-216·F-2084 2장)
 export const DOCK_QUERY = '(max-width: 600px)'
 
 // 핀치 확대 중엔 따라가지 않는다 — 앱 틀이 움직이면 확대가 무의미해진다

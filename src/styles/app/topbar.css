@@ -1,0 +1,379 @@
+/* 상단바·서식 탭바·제목 입력 (specs/ia.md 2장, F-216·F-217·F-233) */
+
+/* ===== 상단바 ===== */
+.topbar {
+  flex: none;
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface);
+}
+
+/* .topbar-search-btn 클래스 이름은 F-216 의 :has(> .topbar-search-btn) 선택자가 걸려 있어 남긴다 (F-287) */
+
+/* 좁은 창 상단바 앞 묶음(제품명·토글·검색) — 내용만큼의 폭 (F-159 2.4, ia.md 3.11) */
+.topbar-lead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-lead-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 상단바 제품 아이콘 + 제품명, 간격 8px — 홈으로 이동하는 버튼, 음수 여백으로 누르는 영역만 넓힌다 (F-142 3.3, F-232 3.3) */
+.brand-group {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  border-radius: var(--radius-control);
+  transition: var(--transition-colors);
+}
+
+.brand-group:hover {
+  background: var(--hover-bg);
+}
+
+.brand-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.brand {
+  /* 로고는 설정 제목 서체와 무관하게 세리프 고정 (tweak 2026-10-14) */
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 16px;
+  /* 자간은 tokens.css 전역 규칙(letter-spacing: var(--tracking))이 준다 (F-141 3.6) */
+  white-space: nowrap;
+}
+
+/* 제목 입력이 빠진 상단바 가운데 빈 자리 (F-217.md 2.5) */
+.topbar-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 본문 맨 위 제목 — 편집·원문 모드 widget textarea, 보기 모드 h1 같은 모양. 테두리·바탕 없음, 포커스 링은 tokens.css 공통 (F-217.md 2.1·2.2) */
+/* 아래 여백은 wrap 의 padding-bottom (margin 은 collapse 로 새어나가 CM6 위젯 높이 측정이 어긋난다, F-157 A9 회귀) */
+/* 좌우 여백은 .cm-line 기본 패딩(6px·2px)과 같게 — 본문 첫 글자와 맞추고, 포커스 링 왼쪽이 줄 번호 칸 바탕에 가려지지 않게 (H77) */
+.doc-title-block {
+  position: relative;
+  padding: 4px 2px calc(var(--md-font-size) * 1) 6px;
+}
+
+.cm-host .cm-editor[data-gutters='off'] .doc-title-block {
+  padding-left: 0;
+}
+
+/* 상단바 서식·단락·삽입 탭바 — topbar-spacer 자리를 대신한다 (specs/features/F-233.md 3.1·3.2) */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow-x: auto;
+  /* overflow-x 만 정하면 overflow-y 도 visible 대신 auto 로 계산돼(CSS 스펙) 세로로 살짝만 넘쳐도 스크롤바가 생긴다.
+     안의 툴팁·드롭다운은 이 클리핑에 걸리지 않게 position: fixed 로 뺐다 (아래 두 규칙) */
+  overflow-y: hidden;
+}
+
+/* 안의 툴팁·헤딩 드롭다운은 fixed 로 띄운다 — .editor-toolbar 의 overflow-y: hidden 에 안 잘리게.
+   좌표는 EditorToolbar.tsx 가 뜨는 시점에 getBoundingClientRect 로 인라인 style 에 넣는다 */
+.editor-toolbar .icon-tooltip {
+  position: fixed;
+}
+
+.editor-toolbar-tabs {
+  flex: none;
+}
+
+.editor-toolbar-items {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+/* 되돌리기·다시 실행 — 탭 왼쪽에 늘 보인다 (2026-09-23 tweak) */
+.editor-toolbar-history {
+  flex: none;
+}
+
+/* 그룹 사이 세로 구분선 — 틱틱 서식바처럼 (2026-09-23 tweak) */
+.editor-toolbar-sep {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  background: var(--rule);
+}
+
+/* 좁은 창 탭바 줄 — 상단바 바로 밑, 상단바와 같은 바탕·테두리로 이어 보이게 (사용자 2026-09-16) */
+.editor-toolbar-row {
+  flex: none;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface);
+}
+
+/* 좁은 창도 줄바꿈 없이 한 줄 — 넘치면 .editor-toolbar 기본 overflow-x: auto 로 가로 스크롤
+   (2026-09-16 개정, F-233 3.6 — 이전엔 탭 줄/아이콘 줄을 세로로 나눠 2~3줄로 접었다) */
+
+/* 좁은 창 탭은 아이콘만, 가로 스크롤 중에도 왼쪽 고정 — 배경을 깔아 뒤로 스크롤되는 줄을 가린다 (F-233 3.6 재개정) */
+.editor-toolbar--narrow .editor-toolbar-tabs {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
+}
+
+/* 이 블록만 제자리 — 뒤의 .editor-toolbar-heading-btn:hover 가 휴대폰에서도 분류 버튼(.editor-toolbar-category-btn) 색을 이겨야 한다 */
+/* 휴대폰 폭 — 앱 틀을 보이는 영역(visualViewport)에 맞추고 서식 바 줄은 맨 아래(키보드 위)로 (F-2084 3.1·3.3) */
+@media (max-width: 600px) {
+  /* transform 을 쓰지 않는다 — fixed 자손(툴팁·제목 목록·우클릭 메뉴)의 기준 상자가 돼 좌표가 어긋난다 */
+  .app-shell {
+    position: fixed;
+    top: var(--vv-top, 0px);
+    left: 0;
+    right: 0;
+    height: var(--vv-height, 100%);
+  }
+
+  .editor-toolbar-row--docked {
+    order: 1;
+    border-top: 1px solid var(--rule);
+    border-bottom: none;
+  }
+
+  .editor-toolbar {
+    gap: 0;
+  }
+
+  /* 버튼 위로 뜨니 나타남도 아래에서 위로 */
+  .editor-toolbar-row--docked .icon-tooltip {
+    transform-origin: bottom center;
+    translate: 0 4px;
+  }
+
+  .editor-toolbar-row--docked .item-menu-list {
+    transform-origin: bottom left;
+  }
+
+  /* 카테고리 한 칸 — 줄 오른쪽 끝에 고정, 가로 스크롤 중에도 보인다 (tweak) */
+  .editor-toolbar .editor-toolbar-category {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    margin-left: auto;
+    padding-left: 6px;
+    border-left: 1px solid var(--rule);
+    background: var(--surface);
+  }
+
+  .editor-toolbar .editor-toolbar-category-btn {
+    gap: 2px;
+    padding: 0 2px 0 8px;
+    font-size: 13px;
+    color: var(--ink-2);
+  }
+
+  .editor-toolbar .editor-toolbar-category-list {
+    position: fixed;
+    right: auto;
+    top: 0;
+    min-width: 120px;
+    transform-origin: bottom right;
+  }
+
+  .editor-toolbar-category-list [aria-checked='true'] {
+    color: var(--ink);
+    font-weight: 600;
+  }
+}
+
+/* 탭 선택 표시 — .seg 재사용, radiogroup 대신 tablist 라 aria-selected 로 맞춘 규칙만 더한다 (F-153 2.1) */
+.editor-toolbar-tabs button[aria-selected='true'] {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* 명령 아이콘 버튼 — .icon-btn 과 같은 모양이지만 전역 개수 판정과 겹치지 않게 클래스는 따로 둔다 (F-233.md 3.2) */
+.editor-toolbar-btn,
+.editor-toolbar-heading-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-control);
+  color: color-mix(in srgb, var(--ink-2) 75%, var(--muted));
+  transition: var(--transition-colors);
+}
+
+.editor-toolbar-btn {
+  width: 28px;
+}
+
+.editor-toolbar-btn:hover,
+.editor-toolbar-heading-btn:hover {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+.editor-toolbar-btn svg,
+.editor-toolbar-heading-btn svg {
+  fill: currentColor;
+}
+
+.editor-toolbar-heading {
+  position: relative;
+}
+
+.editor-toolbar-heading-btn {
+  gap: 0;
+  padding: 0 2px 0 5px;
+  white-space: nowrap;
+}
+
+/* 제목 목록 위치 — 트리거 바로 아래, 왼쪽 정렬 (item-menu-list 기본은 오른쪽 정렬이라 덮는다).
+   position: fixed 로 .editor-toolbar 의 overflow-y: hidden 을 피한다. 좌표는 EditorToolbar.tsx 가 인라인 style 로 넣는다 */
+.editor-toolbar-heading .item-menu-list {
+  position: fixed;
+  left: 0;
+  right: auto;
+  min-width: 120px;
+}
+
+/* 제목인지 알아보기 쉽게 — 텍스트 영역 위 작은 표시, 줄 번호 칸 상태와 무관하게 항상 보임 (F-217.md 2.3-1). 폴더 안이면 경로로 바뀐다 (F-234.md 3.3·3.4) */
+.doc-title-label {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* 경로의 폴더 이름 — 버튼이라 기본 테두리·바탕을 지우고 라벨과 같은 크기·색을 준다 */
+.doc-title-crumb {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-control);
+}
+
+.doc-title-crumb:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.doc-title-crumb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.doc-title-crumb-sep {
+  color: var(--muted);
+}
+
+.doc-title,
+.doc-title-view {
+  display: block;
+  width: 100%;
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  line-height: 1.25;
+  color: var(--ink);
+  word-break: keep-all;
+}
+
+.doc-title-view {
+  margin-bottom: calc(var(--md-font-size) * 1);
+}
+
+.doc-title {
+  box-sizing: border-box;
+  resize: none;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.doc-title::placeholder {
+  color: var(--muted);
+}
+
+/* 앱 공통 테두리형 포커스 링 대신 아래 밑줄만 — box-shadow 라 레이아웃이 안 밀린다 (F-217 2.2, 2026-09-15 사용자 "포커스 시 밑줄만") */
+.doc-title:focus-visible {
+  outline: none;
+  border-radius: 0;
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
+.doc-title[readonly] {
+  cursor: default;
+}
+
+.doc-title[readonly]:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* 제목 호버·포커스 툴팁 — 아이콘 버튼 툴팁과 같은 지연 규칙(F-149), 모양은 .icon-tooltip 그대로 (F-217.md 2.3-1) */
+.doc-title-block:hover .doc-title-tooltip {
+  opacity: 1;
+  scale: 1;
+  translate: 0 0;
+  transition: opacity var(--transition-pop-fade), scale var(--transition-pop), translate var(--transition-pop);
+  transition-delay: 400ms;
+}
+
+.doc-title:focus-visible ~ .doc-title-tooltip {
+  opacity: 1;
+  scale: 1;
+  translate: 0 0;
+  transition: opacity var(--transition-pop-fade), scale var(--transition-pop), translate var(--transition-pop);
+  transition-delay: 0s;
+}
+
+/* 들여쓰기(Tab) 버튼 — 화면 키보드에 Tab 이 없는 터치 기기에서만 (small) */
+@media not (pointer: coarse) {
+  .editor-toolbar-touch-only {
+    display: none;
+  }
+}
+
+/* 휴대폰 폭 서식 바 가로 스크롤바는 얇게 (tweak) */
+@media (max-width: 600px) {
+  .editor-toolbar--narrow::-webkit-scrollbar {
+    height: 3px;
+  }
+
+  .editor-toolbar--narrow::-webkit-scrollbar-thumb {
+    border: 0;
+  }
+
+  /* 상단바는 떠 있는 알약 (F-216·F-2085), 알약 모양은 phone.css */
+  .topbar .icon-btn-wrap:has(> .topbar-search-btn),
+  .topbar .icon-btn-wrap:has(> .topbar-palette-btn) {
+    display: none;
+  }
+}

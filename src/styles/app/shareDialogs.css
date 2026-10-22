@@ -1,0 +1,430 @@
+/* 폴더로 이동·사람 초대·함께 공유할 문서·API 토큰 대화상자 (F-126·F-225·F-252·F-222) */
+
+/* ----- D-3 폴더로 이동 대화상자 (F-126.md 5.3) ----- */
+.move-doc-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.move-doc-list li {
+  padding-left: calc(min(var(--depth, 0), 5) * 14px);
+}
+
+.move-doc-list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  font-size: 13.5px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.move-doc-list button:hover {
+  background: var(--hover-bg);
+}
+
+.move-doc-list button[aria-checked='true'] {
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ----- D-4 사람 초대 대화상자 (F-225.md 2장) ----- */
+.invite-target {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-form {
+  container-type: inline-size;
+}
+
+.invite-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.invite-input-group {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  transition: var(--transition-colors);
+}
+
+/* 포커스 표시는 묶음 테두리 한 겹 — 입력 자체 외곽선은 끈다 (F-225 2장) */
+.invite-input-group:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.invite-email-input:focus-visible {
+  outline: none;
+}
+
+.invite-input-group[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.invite-input-group[aria-invalid='true']:focus-within {
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
+.invite-email-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+  padding: 0 10px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+/* 세그먼트가 묶음 오른쪽 칸을 빈틈 없이 채운다 — 뒤에 오는 .seg 기본 규칙을 이기게 묶음으로 한정 (F-225 2장) */
+.invite-input-group .invite-role-seg {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  padding: 0;
+  border: none;
+  border-left: 1px solid var(--rule);
+  border-radius: 0 calc(var(--radius-control) - 1px) calc(var(--radius-control) - 1px) 0;
+}
+
+.invite-input-group .invite-role-seg button {
+  height: 100%;
+  border-radius: 0;
+  padding: 0 14px;
+  font-size: 12.5px;
+}
+
+.invite-input-group .invite-role-seg button:focus-visible {
+  outline-offset: -2px;
+}
+
+.invite-submit {
+  flex: none;
+  height: 36px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: var(--transition-colors);
+}
+
+.invite-submit:hover {
+  background: var(--hover-bg);
+}
+
+.invite-error {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.invite-list-head {
+  margin-top: 24px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.invite-list-count {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.invite-empty {
+  margin: 0;
+  padding: 11px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.invite-grant-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.invite-grant-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.invite-grant-row--highlight-start {
+  background: var(--accent-soft);
+}
+
+.invite-grant-row--highlight-fading {
+  background: transparent;
+  transition: background-color 1200ms var(--ease-out);
+}
+
+.invite-grant-email {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-grant-row .invite-grant-role {
+  flex: none;
+  height: 26px;
+}
+
+.invite-grant-row .invite-grant-role button {
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.invite-grant-remove {
+  flex: none;
+  border: none;
+  background: none;
+  border-radius: var(--radius-control);
+  padding: 5px 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  transition: var(--transition-colors);
+}
+
+.invite-grant-remove:hover {
+  background: var(--hover-bg);
+  color: var(--danger);
+}
+
+.invite-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.invite-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.invite-foot .dialog-actions {
+  flex: none;
+}
+
+.invite-copy-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.invite-copy-link svg {
+  width: 15px;
+  height: 15px;
+}
+
+@container (max-width: 480px) {
+  .invite-bar {
+    flex-wrap: wrap;
+  }
+
+  .invite-input-group {
+    flex: 1 1 100%;
+  }
+
+  .invite-submit {
+    margin-left: auto;
+  }
+}
+
+/* ----- D-6 함께 공유할 문서 대화상자 (F-252.md 3.2) ----- */
+.share-set-notice {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.share-set-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.share-set-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.share-set-row {
+  padding: 2px 0;
+}
+
+.share-set-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: var(--radius-control);
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.share-set-row label:has(input:disabled) {
+  color: var(--muted);
+}
+
+.share-set-truncated {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.share-set-warning {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+/* ----- D-5 API 토큰 대화상자 (F-222.md 2.4) ----- */
+.api-token-name-input {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.api-token-created {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
+}
+
+.api-token-created-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.api-token-value {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-mono, monospace);
+  font-size: 12.5px;
+}
+
+.api-token-warning {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.api-token-example {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+.api-token-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.api-token-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--rule);
+  font-size: 12.5px;
+}
+
+.api-token-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-token-prefix {
+  flex: none;
+  font-family: var(--font-mono, monospace);
+  color: var(--muted);
+}
+
+.api-token-meta {
+  flex: none;
+  color: var(--muted);
+}
+
+.api-token-revoke {
+  flex: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  padding: 5px 10px;
+  font-size: 12.5px;
+  transition: var(--transition-colors);
+}
+
+.api-token-revoke:hover {
+  background: var(--hover-bg);
+}
+
+.api-token-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.api-token-confirm .dialog-actions {
+  margin: 0;
+}

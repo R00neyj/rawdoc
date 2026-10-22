@@ -1,0 +1,692 @@
+/* 사이드바 — 머리 줄·트리·항목 메뉴·하단 줄 (F-126·F-143·F-159) */
+
+/* ===== 본문 영역 (사이드바 + 메인 열) ===== */
+.app-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative;
+}
+
+/* 사이드바는 창 맨 위부터 맨 아래까지 한 열 — 손잡이 절대 위치 기준 (F-159 2.1·2.5) */
+.sidebar {
+  position: relative;
+  width: var(--sidebar-w);
+  flex: none;
+  border-right: 1px solid var(--rule);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  transition: width var(--transition-fast);
+}
+
+/* 접힘(아이콘 레일, F-143 3.3) */
+.sidebar--collapsed {
+  width: var(--sidebar-rail-w);
+}
+
+/* 끄는 동안은 폭 전환 애니메이션 없이 포인터를 그대로 따라간다 (F-159 2.5) */
+.sidebar:has(.sidebar-resize-handle.is-dragging) {
+  transition: none;
+}
+
+/* 좁은 창 겹침 사이드바 — usePresence 의 [data-state] 로 여닫힘 전환을 몬다 (F-172.md 2.1·2.2) */
+.sidebar--overlay {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: var(--z-overlay);
+  /* 열림 곡선이 튕겨 왼쪽으로 넘칠 때 빈 틈이 보이지 않게 바탕을 화면 밖까지 늘림 (tweak 2026-10-22) */
+  box-shadow: -80px 0 0 var(--surface), 8px 0 30px rgba(0, 0, 0, 0.12);
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition: transform var(--transition-move), opacity var(--transition-fast), visibility var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.sidebar--overlay[data-state='closed'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-100%);
+}
+
+@starting-style {
+  .sidebar--overlay[data-state='open'] {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+}
+
+/* 머리 줄 아래 스크롤 영역 — 안쪽 여백·잘림은 여기서 맡는다 (F-159 2.2) */
+.sidebar-inner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* 오른쪽 여백을 없애 스크롤바가 차지하는 만큼까지 가로 공간을 넉넉하게 쓴다
+     (2026-09-20 사용자 요청 — 처음엔 왼쪽으로 잘못 전달됐던 걸 정정) */
+  padding: 10px 0 12px 10px;
+}
+
+.sidebar--collapsed .sidebar-inner {
+  padding: 10px 6px 12px;
+}
+
+/* 사이드바 머리 줄 (펼침·레일 공통, F-159 2.2·2.3) */
+.sidebar-head {
+  flex: none;
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px 0 14px;
+  min-width: 0;
+}
+
+.sidebar-head--rail {
+  justify-content: center;
+  padding: 0;
+}
+
+/* 좁아 제품명이 모자라면 말줄임, 토글·검색은 줄지 않는다 (F-159 2.2) */
+.sidebar-head .brand-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-head .brand {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 오른쪽 테두리 너비 손잡이 — 테두리 가운데 기준 폭 8px, 사이드바 전체 높이 (F-159 2.5) */
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -4px;
+  width: 8px;
+  cursor: col-resize;
+  z-index: var(--z-resize);
+  background: transparent;
+  user-select: none;
+}
+
+.sidebar-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: var(--transition-colors);
+}
+
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle:focus-visible::after,
+.sidebar-resize-handle.is-dragging::after {
+  background: color-mix(in srgb, var(--ink) 25%, transparent);
+}
+
+.sidebar-resize-handle:focus-visible {
+  outline: none;
+}
+
+/* 끄는 동안 글자 선택을 막는다 (F-159 2.5) */
+body.sidebar-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* 대화상자 배경막과 같은 딤·블러 (tweak 2026-10-21) */
+.sidebar-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-overlay-backdrop);
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(6px);
+  transition: opacity var(--transition-fast);
+}
+
+@starting-style {
+  .sidebar-backdrop,
+  .outline-panel-backdrop,
+  .right-panel-backdrop {
+    opacity: 0;
+  }
+}
+
+/* 동작 버튼(새 문서·새 폴더·가져오기)·고정됨 묶음 — 문서가 많아져도 스크롤 밖에 고정
+   (2026-09-20 사용자 "고정됨과 함께 스크롤 안되고 상단에 고정으로 표시") */
+.sidebar-fixed {
+  flex: none;
+}
+
+.sidebar-actions {
+  position: relative; /* GitHub 가져오기 목록(.github-import-menu--bar)이 이 줄 폭에 맞춰 펴지는 기준 */
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin: 2px 0 8px;
+}
+
+/* 휴대폰 폭 검색 진입점(F-287 3.3) — 상단바 검색이 숨는(F-216) 그 600px 미디어 쿼리를 그대로 쓴다 */
+.icon-btn-wrap:has(> .sidebar-search-btn) {
+  display: none;
+}
+
+/* 휴대폰 폭은 지도·템플릿 관리를 `⋯` 하나로 묶어 버튼 줄을 한 줄로 둔다 (tweak 2026-10-10) */
+.sidebar-more-menu {
+  display: none;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden; /* 세로 스크롤만 — 행 끝 버튼이 조금 삐져나와도 가로 스크롤을 만들지 않는다 (tweak) */
+}
+
+.sidebar-rail-scroll,
+.sidebar-rail-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 레일 아이콘 4개는 늘어나지 않으므로 스크롤이 필요 없다 — `overflow-y: auto` 를 두면 가로축도 `auto` 로 계산된다(CSS Overflow 3) */
+/* 버튼 오른쪽으로 나가는 툴팁이 잘리고 48px 레일에 가로 스크롤바까지 생겼다 (2026-09-21) */
+.sidebar-rail-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: visible;
+}
+
+/* 같은 이유로 접혔을 때만 바깥 묶음의 가리기를 푼다. 펼친 사이드바는 그대로 둔다 */
+.sidebar--collapsed .sidebar-inner {
+  overflow: visible;
+}
+
+/* 하단 한 줄 — 계정(남는 폭) + 아이콘 버튼들. 목록(계정·? 메뉴)은 이 줄 기준으로 위로 열린다 (F-2090 4.3) */
+.sidebar-bottom {
+  flex: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 6px 6px 0 0;
+  border-top: 1px solid var(--rule);
+}
+
+.sidebar-bottom .icon-btn {
+  width: 32px;
+  height: 32px;
+}
+
+.sidebar-bottom .icon-tooltip {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.sidebar-rail-bottom {
+  flex: none;
+  margin-top: 6px;
+}
+
+.sidebar h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  --tracking: 0; /* F-141 3.6 — 고정폭 글자라 자간 0 (2026-09-15 사용자 요청으로 0.14em 제거) */
+  color: var(--muted);
+  margin: 6px 6px 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+/* 레일 아이콘 전용 버튼 — 툴팁은 버튼 오른쪽 (F-143 3.3) */
+.rail-btn-wrap {
+  justify-content: center;
+}
+
+.rail-btn {
+  width: 32px;
+  height: 32px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.rail-btn[aria-disabled='true'] {
+  color: var(--muted);
+}
+
+.rail-btn:hover:not([aria-disabled='true']) {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+/* ===== 상단 고정 묶음 (F-132) ===== */
+.pinned-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+/* ===== 공유받음 묶음 (F-212.md 2.4) ===== */
+.shared-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+}
+
+.shared-doc-owner {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted);
+  padding-right: 4px;
+}
+
+.shared-doc-folder {
+  list-style: none;
+}
+
+.shared-doc-folder-name {
+  display: block;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.shared-folder-row .shared-doc-folder-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shared-doc-folder ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ===== 문서·폴더 트리 (F-126) ===== */
+.doc-list,
+.doc-list [role='group'] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree-item {
+  position: relative;
+}
+
+.tree-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* 왼쪽은 들여쓰기만(6번째 단계 70px 에서 멈춤), 오른쪽 4px — 최상위 글자 시작선을 사이드바 버튼과 맞춘다 (F-143 3.6, F-153 2.3, F-2017 5.4) */
+  padding: 0 4px 0 calc(min(var(--depth, 0), 5) * 14px);
+  border-radius: var(--radius-control);
+  transition: var(--transition-colors);
+}
+
+/* 호버·현재 표시는 행 전체 (F-143 3.6). 현재 행은 --ink 7% 바탕·테두리 없음, 호버해도 그대로 (F-153 2.3) */
+.tree-row:hover {
+  background: var(--hover-bg);
+}
+
+.tree-row:has(.doc-item-btn[aria-current='page']),
+.tree-row:hover:has(.doc-item-btn[aria-current='page']) {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+/* 놓을 수 있는 대상은 --accent-soft 배경 (F-126.md 5.3) */
+.tree-row--drop {
+  background: var(--accent-soft);
+}
+
+/* 여러 항목 선택 표시 (F-255.md 3.4) */
+.tree-row--selected,
+.tree-row--selected:hover {
+  background: var(--selection-bg);
+}
+
+/* 제목 경로 클릭으로 이동한 폴더 잠깐 강조 — invite-grant-row 강조와 같은 패턴 (F-234.md 3.5) */
+.tree-row--highlight-start {
+  background: var(--accent-soft);
+}
+
+.tree-row--highlight-fading {
+  background: transparent;
+  transition: background-color 600ms var(--ease-out);
+}
+
+.tree-toggle,
+.tree-toggle-spacer {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  border-radius: var(--radius-control);
+  transition: var(--transition-colors);
+}
+
+.tree-toggle:hover {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+/* 폴더 토글 아이콘 — 펼치면 90도 회전 (F-142 3.4) */
+.tree-toggle-icon {
+  transition: transform var(--transition-fast);
+}
+
+.tree-toggle-icon--open {
+  transform: rotate(90deg);
+}
+
+/* 폴더 가이드 선 — 폴더 행 아래부터 마지막 하위 행 아래 끝까지, 토글 아이콘 가로
+   가운데에 맞춘다. 절대 위치라 레이아웃을 밀지 않고, pointer-events 없음 (F-142 3.5) */
+/* 펼칠 때만 투명→불투명(@starting-style), 접을 때는 React 가 즉시 떼어낸다 — 높이는 전환하지 않는다 (F-172.md 2.2) */
+.tree-group {
+  position: relative;
+  opacity: 1;
+  transition: opacity var(--transition-fast);
+}
+
+@starting-style {
+  .tree-group {
+    opacity: 0;
+  }
+}
+
+/* 폴더 가이드 선 — 행 배경 위에 보이도록 z-index 를 준다(F-143 3.6·3.9, F-142 3.5).
+   색은 --paper 위에서 --rule 이 거의 안 보여 --muted 로 바꿨다 (F-143 3.9) */
+.tree-group::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* 토글 아이콘(22px) 가로 가운데. 행보다 한 단계 낮은 4 에서 멈춰야 6단계 이하 토글 위를 지나지 않는다 (F-153 2.3, F-2017 5.4) */
+  left: calc(min(var(--depth, 0), 4) * 14px + 11px);
+  width: 1px;
+  background: var(--muted);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tree-label {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 4px;
+  border-radius: var(--radius-control);
+  font-size: 13.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: var(--transition-colors);
+  text-decoration: none; /* F-296.md 4.4 — 문서 라벨이 <a> 가 됐다 */
+  cursor: pointer;
+}
+
+.doc-item-btn[aria-current='page'] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* 금고 문서·폴더 자물쇠 (F-405 6.6) — 자리·색은 design.md 가 정한다 */
+.tree-e2ee-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+/* 사이드바 문서 행·접힌 폴더 행·닫힌 공유받음 머리의 안 읽은 알림 점 — 알림함 안 읽음 점과 같은 값 (F-510 3.3, H1) */
+.tree-unread-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* 화면엔 안 보이고 스크린리더에만 읽히는 글자 — .notification-item-sr 과 같은 규칙 (F-510 3.3) */
+.tree-unread-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tree-rename-input {
+  flex: 1;
+  min-width: 0;
+  margin: 3px 6px 3px 2px;
+  padding: 4px 7px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+  font-size: 13.5px;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.tree-root-drop {
+  min-height: 40px;
+  border-radius: var(--radius-control);
+}
+
+/* ----- 항목 `⋯` 메뉴 (F-126.md 5.2) ----- */
+.item-menu {
+  position: relative;
+  flex: none;
+}
+
+.item-menu-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  opacity: 0;
+  transition: var(--transition-colors);
+}
+
+.tree-row:hover .item-menu-btn,
+.tree-row:focus-within .item-menu-btn,
+.comment-thread .item-menu-btn,
+.item-menu-btn:focus-visible,
+.item-menu-btn[aria-expanded='true'] {
+  opacity: 1;
+}
+
+.item-menu-btn:hover {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+/* 나타나고 사라지는 전환 — usePresence 의 [data-state] 로 몬다, visibility 는 allow-discrete 로 늦춘다 (F-172.md 2.1·2.2) */
+.item-menu-list {
+  position: absolute;
+  right: 4px;
+  top: calc(100% + 2px);
+  z-index: var(--z-menu);
+  min-width: 160px;
+  max-width: min(320px, calc(100vw - 16px)); /* 긴 폴더·칸 이름이 메뉴를 끝없이 키우지 않게 (tweak 2026-10-15) */
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  transform-origin: top right;
+  /* 닫힘은 튕기지 않는다(F-172 그대로) — 열림 전용 곡선은 [data-state='open'] 규칙이 덮는다 (F-228 2.3) */
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.item-menu-list[data-state='closed'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px) scale(0.9);
+}
+
+/* 우클릭 등 좌표로 연 메뉴 — left·top 은 JS 가 정한다 (F-255.md 3.2) */
+.item-menu-list--anchored {
+  position: fixed;
+  right: auto;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
+/* 스크롤되는 조상(.sidebar-scroll 등) 아래쪽에 가까운 행은 메뉴가 아래로 열리면 잘려 `삭제` 같은 항목이 안 보이는 문제가 있었다(2026-09-20 사용자 신고) */
+/* FolderMenu.tsx 가 열릴 자리를 재고 위로 열 때 붙이는 보정 클래스 */
+.item-menu-list--up {
+  top: auto;
+  bottom: calc(100% + 2px);
+  transform-origin: bottom right;
+}
+
+.item-menu-list--up[data-state='closed'] {
+  transform: translateY(4px) scale(0.9);
+}
+
+@starting-style {
+  .item-menu-list--up[data-state='open'] {
+    transform: translateY(4px) scale(0.9);
+  }
+}
+
+/* 트리거 없이 프로그램으로만 여는 인스턴스(우클릭·여러 항목 메뉴) — 자리를 차지하지 않는다 (F-255.md 3.4) */
+.item-menu-btn--hidden {
+  display: none;
+}
+
+/* 여러 항목 드래그 중 커서 옆 개수 배지 — setDragImage 로만 쓰인다 (F-255.md 3.4) */
+.drag-count-badge {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  padding: 4px 10px;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--panel);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.item-menu-list[data-state='open'] {
+  transition: opacity var(--transition-pop-fade), transform var(--transition-pop), visibility var(--transition-pop-fade);
+}
+
+@starting-style {
+  .item-menu-list[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.9);
+  }
+}
+
+.item-menu-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.item-menu-list button > svg {
+  flex: none;
+}
+
+.item-menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-menu-list button:hover,
+.item-menu-list button:focus-visible {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+.item-menu-list button.danger {
+  color: var(--danger);
+}
+
+/* 비활성 항목 — 색만 흐리게, 눌러도 이유 알림이 뜨므로 초점·눌림은 그대로 (F-407 7.6) */
+.item-menu-list [role="menuitem"][aria-disabled="true"],
+.item-menu-list [role="menuitem"][aria-disabled="true"]:hover {
+  color: var(--muted);
+}
+
+@media (max-width: 600px) {
+  .icon-btn-wrap:has(> .sidebar-search-btn) {
+    display: flex;
+  }
+
+  .sidebar-more-menu {
+    display: flex;
+  }
+
+  .sidebar-more-menu > .icon-btn-wrap {
+    flex: 1;
+  }
+
+  .icon-btn-wrap:has(> :is(.sidebar-map-btn, .sidebar-templates-btn)) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-row--highlight-fading {
+    transition: none;
+  }
+}
+
+/* 호버가 없는 기기·휴대폰 폭은 행 `⋯` 을 늘 보인다 — 숨겨 두면 문서 조작 방법을 찾을 수 없다 (tweak) */
+@media (hover: none), (max-width: 600px) {
+  .item-menu-btn {
+    opacity: 1;
+  }
+}

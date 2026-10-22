@@ -126,7 +126,7 @@ export default function EditorToolbar({ onRunCommand, narrow, docked, onPickImag
   }
 
   // 되돌리기·다시 실행은 탭과 무관하게 늘 왼쪽에 — 모바일엔 Ctrl+Z 가 없다 (2026-09-23 tweak, specs/tweaks.md)
-  // 들여쓰기는 화면 키보드에 Tab 이 없는 터치 기기에서만 보인다 (app.css .editor-toolbar-touch-only)
+  // 들여쓰기는 화면 키보드에 Tab 이 없는 터치 기기에서만 보인다 (topbar.css .editor-toolbar-touch-only)
   const historyItems = [
     { id: 'undo', label: '되돌리기', Icon: IconUndo, run: undoLocal },
     { id: 'redo', label: '다시 실행', Icon: IconRedo, run: redoLocal },

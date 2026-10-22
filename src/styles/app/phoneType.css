@@ -1,0 +1,162 @@
+/* 휴대폰 폭 UI 글자 크기 두 단계 — 앞 파일들의 글자 크기를 순서로 덮는다 (tweak 2026-09-30) */
+
+/* ===== 휴대폰 폭 UI 글자 크기 (tweak 2026-09-30) ===== */
+/* 데스크톱 값(주 13~14px, 보조 11~12.5px)이 손가락 화면에서 작다 — 주 16px·보조 13.5px 두 단계로만 올린다.
+   본문(--md-font-size)·아바타·배지·줄 번호는 비율이 깨져 건드리지 않는다 */
+@media (max-width: 600px) {
+  body {
+    font-size: 16px;
+  }
+
+  /* 주 텍스트·버튼·입력칸 — 16px. 입력칸은 iOS 가 16px 미만에서 화면을 확대해 버리는 것도 같이 막는다 */
+  .tree-label,
+  .tree-rename-input,
+  .outline-item,
+  .item-menu-list button,
+  .context-menu-list button,
+  .account-menu-list button,
+  .account-menu-email,
+  .view-mode-menu-list button,
+  .more-sheet-item,
+  .seg button,
+  .settings-row,
+  .settings-range span,
+  .settings-select,
+  .dialog-btn,
+  .dialog p,
+  .dialog-field input:is([type='text'], [type='password'], [type='email'], [type='number'], :not([type])),
+  .comment-thread-text,
+  .comment-reply-text,
+  .comment-reply-author,
+  .comment-composer-input,
+  .comment-rail-empty,
+  .comment-sheet-close,
+  .notification-item-text,
+  .notice,
+  .search-status,
+  .search-result-title,
+  .empty-state-actions button,
+  .move-doc-list button,
+  .invite-target,
+  .invite-email-input,
+  .invite-submit,
+  .invite-empty,
+  .share-set-notice,
+  .share-set-row label,
+  .shares-close,
+  .trash-row-title,
+  .shares-group-title,
+  .shares-group-empty,
+  .shares-target-btn,
+  .public-folder-list-title,
+  .public-folder-list-doc,
+  .public-folder-list-empty,
+  .shared-view-notice,
+  .help-page-close,
+  .mention-candidate,
+  .shortcut-group-title,
+  .shortcut-row,
+  .api-token-name-input,
+  .user-css-edit-name input,
+  .user-css-editor,
+  .e2ee-convert-dialog .e2ee-convert-note,
+  .e2ee-migrate-dialog .e2ee-migrate-note {
+    font-size: 16px;
+  }
+
+  /* 보조·메타 텍스트 — 13.5px */
+  .doc-title-label,
+  .shared-doc-owner,
+  .shared-doc-folder-name,
+  .comment-rail-resolved-toggle,
+  .comment-reply-time,
+  .comment-thread-resolved-by,
+  .comment-thread-quote,
+  .comment-thread-orphan-note,
+  .comment-thread-reply-count,
+  .comment-composer-counter,
+  .comment-composer-error,
+  .comment-composer-send,
+  .comment-orphans-head,
+  .mention-candidates-status,
+  .empty-state-recent-heading,
+  .empty-state-recent-date,
+  .dialog-field > span,
+  .dialog-note,
+  .dialog .e2ee-password-hint,
+  .e2ee-convert-dialog .e2ee-backup-notice,
+  .notice button:not(.icon-btn),
+  .search-result-meta,
+  .search-result-snippet,
+  .search-note,
+  .search-foot,
+  .import-list,
+  .data-section-title,
+  .data-grid .data-row-desc,
+  .notifications-read-all,
+  .notifications-status,
+  .notification-item-excerpt,
+  .notification-item-time,
+  .share-menu-note,
+  .share-set-truncated,
+  .share-set-warning,
+  .shares-role-badge,
+  .shares-date,
+  .shares-grant-email,
+  .trash-row-meta,
+  .shares-row-actions button,
+  .invite-input-group .invite-role-seg button,
+  .invite-error,
+  .invite-list-head,
+  .invite-grant-email,
+  .invite-grant-row .invite-grant-role button,
+  .invite-grant-remove,
+  .invite-hint,
+  .account-menu-offline,
+  .account-menu-usage,
+  .shared-view-notice-actions button,
+  .context-menu-shortcut,
+  .shortcut-panel-count,
+  .shortcut-row-keys kbd,
+  .api-token-value,
+  .api-token-warning,
+  .api-token-example,
+  .api-token-row,
+  .api-token-revoke,
+  .api-token-confirm,
+  .user-css-error,
+  .user-css-edit-label,
+  .user-css-status {
+    font-size: 13.5px;
+  }
+
+  /* 판·대화상자 머리글 */
+  .dialog h2,
+  .more-sheet-head h2,
+  .settings-page-head h2 {
+    font-size: 17px;
+  }
+
+  .comment-rail-head h2,
+  .shortcut-panel-head h2 {
+    font-size: 16px;
+  }
+
+  .help-page-title {
+    font-size: 18px;
+  }
+
+  .editor-toolbar .editor-toolbar-category-btn {
+    font-size: 15px;
+  }
+
+  .statusbar {
+    font-size: 12px;
+  }
+
+  /* 글자가 커져 160px 안에 항목이 잘린다 — 내용 폭에 맞춘다 (tweak 2026-10-14) */
+  .item-menu-list {
+    width: max-content;
+    max-width: calc(100vw - 32px);
+  }
+}

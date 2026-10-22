@@ -1,0 +1,229 @@
+/* GitHub 연결·가져오기·당기기 합치기 (F-2128·F-2129) */
+
+/* GitHub 연결·가져오기 (F-2128). 버튼이 아니라 도구 줄(.sidebar-actions) 폭에 맞춰 펴서 좁은 사이드바에 잘리지 않는다 (tweak 2026-10-14) */
+.github-import-menu--bar {
+  position: static;
+}
+
+.github-import-menu--bar .github-menu-list {
+  right: 8px;
+  left: 8px;
+  min-width: 0;
+  max-width: none;
+  transform-origin: top center;
+}
+
+.github-import-menu--rail .github-menu-list {
+  right: auto;
+  left: calc(100% + 4px);
+  top: 0;
+}
+
+.github-menu-status {
+  padding: 6px 10px 8px;
+  max-width: 300px;
+  font-size: 12px;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.github-menu-list {
+  max-width: 300px;
+}
+
+/* 경로는 한 덩어리로 보이게 한글 앞에서 끊지 않는다 (tweak 2026-10-04) */
+.github-menu-path {
+  word-break: keep-all;
+}
+
+.github-menu-when {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+}
+
+.github-menu-list a {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  color: var(--ink-2);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: var(--transition-colors);
+}
+
+.github-menu-list a:hover,
+.github-menu-list a:focus-visible {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+.github-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.github-install {
+  align-self: flex-start;
+}
+
+a.dialog-btn {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.github-path {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.github-entries {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+}
+
+.github-entries button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  text-align: left;
+  border-radius: var(--radius-control);
+  color: var(--ink-2);
+}
+
+.github-entries button:hover {
+  background: var(--hover-bg);
+}
+
+.github-entries .github-entry-dir {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.github-entry-dir svg {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.github-entries svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.github-entries button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.github-link-line {
+  margin: 0 0 4px;
+  overflow-wrap: anywhere;
+}
+
+.settings-github {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.settings-github-note,
+.settings-github-usage {
+  margin: 0;
+}
+
+/* D-20 GitHub 당기기 합치기 편집기 (F-2129 5장) */
+.github-pull-merge .cm-editor {
+  max-height: min(60vh, 560px);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+.github-pull-merge .cm-scroller {
+  overflow: auto;
+}
+
+.github-pull-merge {
+  margin-bottom: 12px;
+}
+
+.github-pull-merge .cm-editor.cm-focused {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* 라이브러리 테마의 흰 글자를 이기려고 선택자를 높인다 (tweak 2026-10-04) */
+.github-pull-merge .cm-chunkButtons .github-pull-chunk-btn {
+  margin-right: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font: 12px var(--font-sans);
+  cursor: pointer;
+}
+
+.github-pull-actions .github-pull-bulk {
+  display: flex;
+  gap: 8px;
+  margin-right: auto;
+}
+
+.github-push-target {
+  overflow-wrap: anywhere;
+}
+
+.github-push-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.github-push-message {
+  width: 100%;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+
+/* 휴대폰 폭은 도구 줄이 사이드바 아래에 있어 위로 편다 */
+@media (max-width: 600px) {
+  .github-import-menu--bar .github-menu-list {
+    top: auto;
+    bottom: calc(100% + 4px);
+    transform-origin: bottom center;
+  }
+
+  /* 좁은 화면에서는 덩어리 버튼이 줄 글자를 가리지 않게 따로 한 줄로 (tweak 2026-10-04) */
+  .github-pull-merge .cm-editor .cm-chunkButtons {
+    position: static;
+    display: flex;
+    justify-content: flex-end;
+    padding: 2px 0;
+  }
+}

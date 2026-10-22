@@ -1,0 +1,397 @@
+/* 메인 열 — 문서 탭 줄·화면 분할 칸·단축키 판 (F-2163·F-2165·F-2052) */
+
+/* ===== 메인 열 ===== */
+.main-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ----- 설치 앱 문서 탭 줄 — 탭이 많아지면 브라우저처럼 폭을 나눠 줄어든다, 임시 탭은 기울임 (small 2026-10-21, tweak 2026-10-22) ----- */
+.doc-tabs {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 6px;
+  /* 사이드바·오른쪽 패널 머리와 같은 높이 — 첫 가로선이 창 끝까지 이어진다 (tweak 2026-10-21) */
+  height: var(--topbar-h);
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* 최소 폭까지 줄어도 넘칠 때만 스크롤 — 막대는 숨기고 휠·끌기로 */
+  scrollbar-width: none;
+  /* 밑선을 테두리 대신 배경으로 그려 활성 탭 바탕이 덮게 한다 — overflow 가 ::after 를 잘라서 */
+  background: linear-gradient(var(--rule), var(--rule)) bottom / 100% 1px no-repeat, var(--chrome-bg);
+}
+
+/* 탭 줄이 있으면 머리 줄(사이드바·탭·오른쪽 패널)을 40px 로 줄이고, 상단바는 사이드바 버튼 줄 아래 끝(40+44=84px)에 맞춘다 */
+.app-body:has(.doc-tabs) {
+  --topbar-h: 40px;
+}
+
+.main-column:has(> .doc-tabs) > .topbar {
+  height: 44px;
+}
+
+/* 옵시디언처럼 활성 탭만 위 모서리가 둥근 카드, 나머지는 글자와 얇은 구분선 */
+.doc-tab {
+  flex: 0 1 220px;
+  /* 활성이 아닌 탭은 글자 한두 자까지, 활성 탭은 제목 몇 자와 × 가 남게 */
+  min-width: 28px;
+  container-type: inline-size;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: calc(100% - 6px);
+  max-width: 220px;
+  overflow: hidden;
+  padding: 0 4px 0 6px;
+  border-radius: 8px 8px 0 0;
+  color: var(--muted);
+  position: relative;
+}
+
+.doc-tab:not([data-active]):not(:has(+ [data-active]))::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 30%;
+  height: 40%;
+  width: 1px;
+  background: var(--rule);
+}
+
+.doc-tab[data-active] {
+  background: var(--surface);
+  flex-shrink: 0.2;
+  min-width: 96px;
+  color: var(--ink);
+  font-weight: 600;
+  /* 라이트 테마에서 바탕 차이만으로는 약해 위·옆 테두리로 카드 윤곽을 그린다 */
+  box-shadow: inset 1px 0 0 var(--rule), inset -1px 0 0 var(--rule), inset 0 1px 0 var(--rule);
+}
+
+.doc-tab:not([data-active]):hover {
+  background: var(--hover-bg);
+  box-shadow: inset 0 -1px 0 var(--rule);
+}
+
+.doc-tab[data-drop='before'] {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.doc-tab[data-drop='after'] {
+  box-shadow: inset -2px 0 0 var(--accent);
+}
+
+.doc-tab-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: start;
+  height: 100%;
+  padding: 0 6px 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: inherit;
+}
+
+.doc-tab[data-preview] .doc-tab-label {
+  font-style: italic;
+}
+
+.doc-tab-btn {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  transition: var(--transition-colors);
+}
+
+.doc-tab-btn:hover {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+.doc-tab-more {
+  opacity: 0;
+}
+
+.doc-tab:hover .doc-tab-more,
+.doc-tab:focus-within .doc-tab-more {
+  opacity: 1;
+}
+
+/* 좁아진 탭은 ⋯ 를 빼고, 더 좁으면 활성이 아닌 탭의 × 도 뺀다 (크롬과 같은 순서) */
+@container (max-width: 110px) {
+  .doc-tab-more {
+    display: none;
+  }
+}
+
+@container (max-width: 72px) {
+  .doc-tab:not([data-active]) .doc-tab-close {
+    display: none;
+  }
+
+  .doc-tab-label {
+    padding: 0 2px 0 4px;
+    text-overflow: clip;
+    mask-image: linear-gradient(to right, black 55%, transparent);
+  }
+}
+
+/* 탭(34px, 바닥 붙음) 가운데에 맞춘다 — 22px 버튼이라 아래 6px */
+.doc-tab-new {
+  align-self: flex-end;
+  margin: 0 6px 6px;
+}
+
+/* 메인 열 전체를 --panel 하나로 (F-143 3.8) — 내용 칸과 좌우 여백의 색 구분을 없앤다.
+   세로 스크롤은 각 자식(cm-scroller·viewer 등)이 전체 폭으로 맡는다 */
+.content-area {
+  position: relative; /* 오른쪽 목차(.outline) 기준점 (F-144.md 2장) */
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+/* ----- 화면 분할 칸 (F-2163) — 칸 하나면 감싼 요소가 없는 것처럼 지금 배치 그대로, 둘 이상이면 격자. 칸 사이 1px 선은 격자 바탕이 비쳐 그린다 ----- */
+.split-panes[data-layout='single']:not([hidden]),
+.split-panes[data-layout='single'] > .split-pane:not([hidden]) {
+  display: contents;
+}
+
+.split-panes:not([data-layout='single']):not([hidden]) {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--rule);
+}
+
+.split-panes:not([data-layout='single']) > .split-pane:not([hidden]) {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+
+/* 포커스 칸 테두리 — 내용 위에 겹쳐 그려 칸 크기를 바꾸지 않는다 */
+.split-panes:not([data-layout='single']) > .split-pane[data-focused]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* 칸 경계 막대 (F-2165) — 1px 칸 사이 선 위에 잡기 쉬운 폭으로 겹치고, 가리키거나 끄는 동안만 선이 보인다 */
+.split-divider {
+  position: absolute;
+  z-index: 6;
+  touch-action: none;
+  outline: none;
+}
+
+.split-divider[data-axis='x'] {
+  width: 8px;
+  transform: translateX(-50%);
+  cursor: col-resize;
+}
+
+.split-divider[data-axis='y'] {
+  height: 8px;
+  transform: translateY(-50%);
+  cursor: row-resize;
+}
+
+.split-divider::after {
+  content: '';
+  position: absolute;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.split-divider[data-axis='x']::after {
+  inset: 0 calc(50% - 1px);
+}
+
+.split-divider[data-axis='y']::after {
+  inset: calc(50% - 1px) 0;
+}
+
+.split-divider:hover::after,
+.split-divider:active::after,
+.split-divider:focus-visible::after {
+  opacity: 1;
+}
+
+/* 탭을 칸 가장자리로 끌 때 새 칸 자리 — body 포털, 좌표는 usePaneDropZones (F-2165 3장) */
+.split-drop-preview {
+  position: fixed;
+  z-index: var(--z-tooltip);
+  box-sizing: border-box;
+  border: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  pointer-events: none;
+}
+
+/* ===== 단축키 판 — 메인 열 안, 편집 영역과 상태바 사이 (specs/features/F-2052.md 5장) ===== */
+@keyframes shortcut-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.shortcut-panel {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  /* 오른쪽 패널로 좁아져 세 단이 돼도 스크롤바 없이 다 보이는 높이 (tweak 2026-10-13) */
+  max-height: min(420px, 50vh);
+  border-top: 1px solid var(--rule);
+  background: var(--panel);
+  animation: shortcut-panel-in var(--transition-fast);
+}
+
+.shortcut-panel-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.shortcut-panel-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.shortcut-panel-count {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.shortcut-panel-close {
+  margin-left: auto;
+  align-self: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-control);
+  transition: var(--transition-colors);
+}
+
+.shortcut-panel-close:hover {
+  color: var(--ink);
+  background: var(--hover-bg);
+}
+
+.shortcut-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 14px;
+  columns: 220px;
+  column-gap: 24px;
+}
+
+.shortcut-group {
+  break-inside: avoid;
+  margin-bottom: 14px;
+}
+
+.shortcut-group-title {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.shortcut-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.shortcut-row-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.shortcut-row-keys {
+  flex: none;
+  display: flex;
+  gap: 4px;
+}
+
+.shortcut-row-keys kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--rule-2);
+  color: var(--muted);
+}
+
+.shortcut-row[data-used] kbd {
+  border-color: color-mix(in srgb, var(--callout-success) 45%, var(--rule));
+  background: color-mix(in srgb, var(--callout-success) 20%, var(--panel));
+  color: var(--ink);
+}
+
+.shortcut-row-used-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

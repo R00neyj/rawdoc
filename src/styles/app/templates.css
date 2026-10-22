@@ -1,0 +1,69 @@
+/* 템플릿 관리·시작 화면 문서 지정 (small 2026-10-10·10-14) */
+
+/* 템플릿 관리 대화상자·설정 `템플릿 관리…` 버튼 (small 2026-10-10) */
+.dialog .settings-template-manage {
+  margin: 4px 0 0;
+}
+
+/* 설정 시작 화면 `문서 지정` — 지정 문서 제목 + `문서 고르기…` (small 2026-10-14) */
+.dialog .settings-start-doc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+}
+
+.settings-start-doc-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-start-doc-title--none {
+  color: var(--muted);
+}
+
+.template-manager-heading {
+  margin: 12px 0 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.template-manager-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.template-manager-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.template-manager-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-manager-row .dialog-btn {
+  flex: none;
+}
+
+/* `.dialog p` 의 여백·글자를 이겨야 해 .dialog 를 붙인다 */
+.dialog .template-manager-empty,
+.dialog .template-manager-help {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.dialog .template-manager-help {
+  margin: 16px 0;
+}

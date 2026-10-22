@@ -23,7 +23,7 @@ src/
   brand.js               brand.config.js 를 앱 코드에 내보내는 단일 창구
   styles/
     tokens.css           색·서체·크기 토큰. 메인 컬러 hex 는 쓰지 않는다
-    app.css              레이아웃·컴포넌트 스타일
+    app/*.css            레이아웃·컴포넌트 스타일 — 기능별 파일(상단바·사이드바·메인 열·목차·댓글·대화상자·메뉴·오른쪽 패널 등). 각 파일의 미디어 규칙은 파일 끝에 모은다. `phone.css`·`phoneType.css` 는 앞 파일들을 순서로 덮는 휴대폰·터치 덮어쓰기라 뒤쪽에 둔다
     boot.css             부팅 스켈레톤 (F-2015)
   app/                   React 화면. CM6·IndexedDB 를 직접 다루지 않는다
     App.jsx              최상위 상태와 흐름

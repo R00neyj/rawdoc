@@ -1,4 +1,4 @@
-// 마크다운 구문 → CSS 클래스(F-107 2.1). 색·굵기는 여기서 안 정한다 — class 만 붙이고 app.css 토큰이 스타일을 준다
+// 마크다운 구문 → CSS 클래스(F-107 2.1). 색·굵기는 여기서 안 정한다 — class 만 붙이고 editor.css 토큰이 스타일을 준다
 // 태그 이름은 @lezer/markdown 소스 확인해 맞췄다 — 제목은 heading1~6 이지만 @lezer/highlight 에서 모두 heading 하위 태그라 tags.heading 하나로 1~6 전부 매치된다
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { markdownLanguage } from '@codemirror/lang-markdown'

@@ -116,7 +116,7 @@
   text-decoration: none;
 }
 
-/* ===== 인라인코드·링크 — 칩 모양은 편집 모드만, 원문 모드는 app.css 옛 규칙까지 지움 (F-152 2.2) ===== */
+/* ===== 인라인코드·링크 — 칩 모양은 편집 모드만, 원문 모드는 editor.css 옛 규칙까지 지움 (F-152 2.2) ===== */
 .md-code {
   font-family: var(--font-mono);
   font-size: 85%;
@@ -313,7 +313,7 @@
   outline: none;
 }
 
-/* 칸 편집기는 주 편집기의 .cm-scroller 안에 있어 본문 가운데 정렬 안쪽 여백(app.css)을 그대로 물려받는다 —
+/* 칸 편집기는 주 편집기의 .cm-scroller 안에 있어 본문 가운데 정렬 안쪽 여백(editor.css)을 그대로 물려받는다 —
    --content-max 의 100% 가 칸 폭으로 풀려 좁은 칸일수록 좌우 여백이 거대해졌다. 클래스 개수는 .cm-content 규칙과 같은 이유로 늘린다 (tweak 2026-09-30) */
 .md-table-widget .md-table-cell-editing .cm-editor .cm-scroller {
   padding: 0;

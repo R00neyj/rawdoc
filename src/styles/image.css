@@ -87,7 +87,7 @@
   pointer-events: auto;
 }
 
-/* 상단바 아이콘 버튼(32×32, app.css .icon-btn)보다 작다(28×28) — 조상·클래스 둘을 합쳐 특정도를 올려 이긴다 */
+/* 상단바 아이콘 버튼(32×32, controls.css .icon-btn)보다 작다(28×28) — 조상·클래스 둘을 합쳐 특정도를 올려 이긴다 */
 .md-image-toolbar .icon-btn.md-image-align-btn,
 .md-image-toolbar .icon-btn.md-image-delete-btn {
   width: 28px;

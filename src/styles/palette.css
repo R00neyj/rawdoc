@@ -116,7 +116,7 @@
   white-space: pre-line; /* 안내 줄이 여러 줄이다 (F-2037.md 5.2) */
 }
 
-/* 휴대폰 폭 — 앱 UI 글자 크기 두 단계(app.css 맨 아래 블록)에 맞춘다. 목록 높이는 8.1 의 12vh 고정과
+/* 휴대폰 폭 — 앱 UI 글자 크기 두 단계(phoneType.css)에 맞춘다. 목록 높이는 8.1 의 12vh 고정과
    짝이라 키보드를 내리면 아래가 텅 비어 보였다 (tweak 2026-09-30) */
 @media (max-width: 600px) {
   .dialog:has(> .command-palette),

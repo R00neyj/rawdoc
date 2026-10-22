@@ -11,7 +11,7 @@ import { isComposing, isForced } from '../composition'
 
 const HIDE = Decoration.replace({})
 const HIGHLIGHT_MARK = Decoration.mark({ class: 'md-highlight' })
-// md-mark 는 이미 app.css 에서 강조색(--accent)+고정폭을 주는 마크다운 기호 클래스다. 새 클래스를 만들지 않는다(F-107 2.1, F-283.md 4.2)
+// md-mark 는 이미 editor.css 에서 강조색(--accent)+고정폭을 주는 마크다운 기호 클래스다. 새 클래스를 만들지 않는다(F-107 2.1, F-283.md 4.2)
 const SYNTAX_MARK = Decoration.mark({ class: 'md-mark' })
 
 // 줄바꿈이 있으면 HIDE(replace) 를 만들지 않는다 — CM 이 줄바꿈을 replace 하는 decoration 을 막는다(inline.ts 의 pushHide 와 같은 이유). 짝은 줄을 넘지 않아(3.2.1) 실제로는 걸리지 않지만 같은 방어를 남겨 둔다

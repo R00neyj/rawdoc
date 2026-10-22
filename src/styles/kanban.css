@@ -236,7 +236,7 @@
   color: inherit;
 }
 
-/* 칸 머리·카드 `⋯` — 칸 머리는 호버·포커스 때, 휴대폰 폭·호버 없는 기기는 늘(app.css .item-menu-btn) */
+/* 칸 머리·카드 `⋯` — 칸 머리는 호버·포커스 때, 휴대폰 폭·호버 없는 기기는 늘(sidebar.css .item-menu-btn) */
 .kanban-lane-head:is(:hover, :focus-within) .kanban-more {
   opacity: 1;
 }

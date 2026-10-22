@@ -1,0 +1,76 @@
+/* 권한 요청 대화상자 D-23 (F-2135) */
+
+/* 권한 요청 대화상자 D-23 역할 목록과 글자 버튼 (F-2135) */
+.access-request-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.access-request-role {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.access-request-role span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.access-request-role small {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.dialog .access-request-roles + .dialog-note {
+  margin: 0 0 16px;
+}
+
+.access-request-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-apps .connected-apps-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.connected-app-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 8px 0;
+}
+
+.connected-app-info {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.connected-app-name {
+  overflow-wrap: anywhere;
+}
+
+.connected-app-meta {
+  color: var(--muted);
+  font-size: 0.9em;
+}
+
+.connected-apps-empty:focus {
+  outline: none;
+}

@@ -1,0 +1,871 @@
+/* 상단바 공유·⋯·우클릭·계정·알림 메뉴 (F-130·F-170·F-205·F-2083) */
+
+/* ===== 상단바 공유·내보내기 메뉴 (specs/features/F-130.md 2장, F-278.md 3장, ia.md 3.19) ===== */
+.share-menu,
+.export-menu,
+.view-mode-menu,
+.topbar-more {
+  position: relative;
+  flex: none;
+}
+
+/* 모양은 .icon-btn 기본값 그대로, 메뉴가 열린 동안은 선택 버튼과 같은 바탕, hover 규칙과 우선순위를 맞춰 이긴다 (design.md 4장, F-153 2.1) */
+.share-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']),
+.view-mode-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']),
+.topbar-more-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']) {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+/* 나타나고 사라지는 전환 — usePresence 의 [data-state] 로 몬다 (F-172.md 2.1·2.2) */
+.share-menu-list,
+.export-menu-list,
+.help-menu-list,
+.view-mode-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: var(--z-menu);
+  min-width: 200px;
+  max-width: min(200px, calc(100vw - 32px));
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  transform-origin: top right;
+  /* 닫힘은 튕기지 않는다(F-172 그대로) — 열림 전용 곡선은 [data-state='open'] 규칙이 덮는다 (F-228 2.3) */
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.share-menu-list[data-state='closed'],
+.export-menu-list[data-state='closed'],
+.help-menu-list[data-state='closed'],
+.view-mode-menu-list[data-state='closed'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px) scale(0.9);
+}
+
+.share-menu-list[data-state='open'],
+.export-menu-list[data-state='open'],
+.help-menu-list[data-state='open'],
+.view-mode-menu-list[data-state='open'] {
+  transition: opacity var(--transition-pop-fade), transform var(--transition-pop), visibility var(--transition-pop-fade);
+}
+
+@starting-style {
+  .share-menu-list[data-state='open'],
+  .export-menu-list[data-state='open'],
+  .help-menu-list[data-state='open'],
+  .view-mode-menu-list[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.9);
+  }
+}
+
+.share-menu-list button,
+.export-menu-list button,
+.help-menu-list :is(button, a),
+.view-mode-menu-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition: var(--transition-colors);
+}
+
+.share-menu-list button:hover,
+.share-menu-list button:focus-visible,
+.export-menu-list button:hover,
+.export-menu-list button:focus-visible,
+.help-menu-list :is(button, a):hover,
+.help-menu-list :is(button, a):focus-visible,
+.view-mode-menu-list button:hover,
+.view-mode-menu-list button:focus-visible {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+/* 금고 문서 — 공유할 수 없는 항목. disabled 가 아니라 aria-disabled 라 초점은 받는다 (F-409 6.2·6.3) */
+.share-menu-list button[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: default;
+}
+
+.share-menu-list button[aria-disabled='true']:hover,
+.share-menu-list button[aria-disabled='true']:focus-visible {
+  background: none;
+  color: var(--muted);
+}
+
+/* `?` 메뉴 — 하단 줄 기준으로 위로 연다. 바깥 링크 표시는 오른쪽 끝 (F-2090 6장) */
+.help-menu {
+  position: static;
+  flex: none;
+}
+
+.help-menu-list {
+  right: 0;
+  top: auto;
+  bottom: calc(100% + 4px);
+  min-width: 180px;
+  max-width: 100%;
+  transform-origin: bottom right;
+}
+
+.help-menu-list[data-state='closed'] {
+  transform: translateY(4px) scale(0.9);
+}
+
+@starting-style {
+  .help-menu-list[data-state='open'] {
+    transform: translateY(4px) scale(0.9);
+  }
+}
+
+.help-menu-list a {
+  text-decoration: none;
+}
+
+.help-menu-ext {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+/* 공유 메뉴 맨 아래 설명 줄 — 금고 문서일 때만, 메뉴 항목이 아니다 (F-409 6.3) */
+.share-menu-note {
+  padding: 8px 10px 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* 휴대폰 폭 보기 모드 메뉴 — 오른쪽 끝을 트리거에 맞춘다 (F-2083 6장) */
+.view-mode-menu-list {
+  width: max-content;
+  max-width: calc(100vw - 16px);
+}
+
+/* 상단바 ⋯ 버튼·점 — 휴대폰 아래 판과 넓은 창 드롭다운 공용 (F-2083 4.3) */
+.topbar-more-btn {
+  position: relative;
+}
+
+.topbar-more-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+/* 휴대폰 폭 ⋯ 아래 판 — 모달 <dialog>, 전환은 .dialog 와 같은 방식 (F-2083 6장) */
+.more-sheet {
+  box-sizing: border-box;
+  position: fixed;
+  inset: auto 0 0 0;
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  max-height: 80dvh;
+  padding: 0;
+  overflow: hidden;
+  flex-direction: column;
+  border: 0;
+  border-top: 1px solid var(--rule);
+  border-radius: var(--radius-dialog) var(--radius-dialog) 0 0;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.16);
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity var(--transition-fast), transform var(--transition-move), display var(--transition-fast),
+    overlay var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.more-sheet[open] {
+  display: flex;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@starting-style {
+  .more-sheet[open] {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+.more-sheet::backdrop {
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transition: opacity var(--transition-fast), display var(--transition-fast), overlay var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.more-sheet[open]::backdrop {
+  opacity: 1;
+}
+
+@starting-style {
+  .more-sheet[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+/* 아래 판 손잡이 — 끌어내리면 닫힌다 (small 2026-10-22) */
+.sheet-grabber {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 막대는 4px 지만 손가락이 잡을 높이는 36px */
+  height: 36px;
+  margin-bottom: -12px;
+  touch-action: none;
+  cursor: grab;
+}
+
+.sheet-grabber > span {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ink) 25%, transparent);
+}
+
+.more-sheet-head,
+.settings-page-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 52px;
+  padding: 0 8px;
+}
+
+.settings-page-head {
+  padding-top: env(safe-area-inset-top, 0px);
+  height: calc(52px + env(safe-area-inset-top, 0px));
+}
+
+.more-sheet-head h2,
+.settings-page-head h2 {
+  margin: 0 0 0 4px;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.more-sheet-head-spacer,
+.settings-page-head-spacer {
+  flex: 1;
+}
+
+.more-sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.more-sheet-list,
+.settings-page-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.more-sheet-item,
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  text-align: left;
+  font-size: 14px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.more-sheet-item:hover:not(:disabled),
+.more-sheet-item:focus-visible,
+.settings-row:hover,
+.settings-row:focus-visible {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+.more-sheet-item:disabled,
+.more-sheet-item[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: default;
+}
+
+.more-sheet-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.more-sheet-badge {
+  position: static;
+  flex: none;
+}
+
+.more-sheet-list .share-menu-note {
+  padding-inline: 16px;
+}
+
+/* 넓은 창 상단바 ⋯ 드롭다운 — 공유 메뉴와 같은 틀, 하위 화면은 머리 줄 `뒤로` (small 2026-10-21) */
+.more-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: var(--z-menu);
+  width: max-content;
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 32px));
+  max-height: min(420px, calc(100vh - 80px));
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  transform-origin: top right;
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.more-menu[data-state='closed'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px) scale(0.9);
+}
+
+.more-menu[data-state='open'] {
+  transition: opacity var(--transition-pop-fade), transform var(--transition-pop), visibility var(--transition-pop-fade);
+}
+
+@starting-style {
+  .more-menu[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.9);
+  }
+}
+
+.more-menu .more-sheet-head {
+  height: auto;
+  padding: 4px 6px 4px 4px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.more-menu .more-sheet-head h2 {
+  margin-left: 2px;
+  font-size: 13px;
+}
+
+.more-menu .more-sheet-body {
+  padding-bottom: 0;
+}
+
+.more-menu .more-sheet-list {
+  padding: 6px;
+}
+
+.more-menu .more-sheet-item {
+  gap: 8px;
+  height: auto;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+/* 편집기·표 칸·보기 모드 우클릭 메뉴 — 공유 메뉴와 같은 모양, 클릭 지점에 고정으로 연다 (F-170.md 5장) */
+.context-menu-list {
+  position: fixed;
+  z-index: var(--z-top);
+  min-width: 200px;
+  max-width: min(280px, calc(100vw - 32px));
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+.context-menu-sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--rule);
+}
+
+.context-menu-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition: var(--transition-colors);
+}
+
+.context-menu-list button:hover,
+.context-menu-list button:focus-visible,
+.context-menu-list button.context-menu-item--focused {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+.context-menu-list button[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: default;
+}
+
+.context-menu-list button[aria-disabled='true']:hover,
+.context-menu-list button[aria-disabled='true']:focus-visible {
+  background: none;
+  color: var(--muted);
+}
+
+.context-menu-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-menu-shortcut {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.context-menu-chevron {
+  flex: none;
+  color: var(--muted);
+}
+
+/* 계정 메뉴 — 공유 메뉴(F-130)와 같은 모양 (F-205 2.5) */
+.account-menu {
+  position: relative;
+  flex: none;
+}
+
+.account-menu-btn[aria-expanded='true']:not(:disabled):not([aria-disabled='true']) {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.account-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: var(--z-menu);
+  min-width: 200px;
+  max-width: min(240px, calc(100vw - 32px));
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  transform-origin: top right;
+  /* 닫힘은 튕기지 않는다(F-172 그대로) — 열림 전용 곡선은 [data-state='open'] 규칙이 덮는다 (F-228 2.3) */
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  transition-behavior: allow-discrete;
+}
+
+.account-menu-list[data-state='closed'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px) scale(0.9);
+}
+
+.account-menu-list[data-state='open'] {
+  transition: opacity var(--transition-pop-fade), transform var(--transition-pop), visibility var(--transition-pop-fade);
+}
+
+@starting-style {
+  .account-menu-list[data-state='open'] {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.9);
+  }
+}
+
+.account-menu-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition: var(--transition-colors);
+}
+
+.account-menu-list button:hover,
+.account-menu-list button:focus-visible {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+.account-menu-email {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px 4px;
+  font-size: 13px;
+  color: var(--ink);
+  user-select: none;
+  overflow-wrap: break-word;
+}
+
+.account-menu-offline {
+  font-size: 12px;
+  color: var(--ink-2);
+  opacity: 0.7;
+}
+
+/* 계정당 이미지·문서 용량·문서 수 게이지 — 80% 주의, 90% 위험 (F-221.md 2.5, F-2030 7장, small 2026-10-11) */
+.account-menu-usage {
+  display: grid;
+  gap: 10px;
+  min-width: 216px;
+  padding: 4px 10px 10px;
+  font-size: 12px;
+  color: var(--ink-2);
+  user-select: none;
+}
+
+.account-menu-gauge-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.account-menu-gauge-value {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.account-menu-gauge-bar {
+  height: 6px;
+  margin-top: 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  overflow: hidden;
+}
+
+.account-menu-gauge-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--ink-2) 55%, var(--muted));
+}
+
+.account-menu-gauge[data-level='warn'] .account-menu-gauge-bar span {
+  background: var(--callout-warning);
+}
+
+.account-menu-gauge[data-level='danger'] :is(.account-menu-gauge-label, .account-menu-gauge-value) {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.account-menu-gauge[data-level='danger'] .account-menu-gauge-bar span {
+  background: var(--danger);
+}
+
+.account-menu-gauge-hint {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* 받기 전 세 줄 자리 — 글자 한 줄 + 막대 높이라 받은 뒤 메뉴 높이가 튀지 않는다 */
+.account-menu-gauge-skeleton {
+  display: block;
+  height: calc(1lh + 9px);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  border-radius: 4px;
+  animation: boot-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+.account-menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--rule);
+}
+
+.account-menu-hint {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* 링크 유무 확인 중인 `끊기` 자리 — 버튼 틀은 그대로, 아이콘·글자만 회색 막대 */
+.menu-item-skeleton:disabled,
+.menu-item-skeleton:disabled:hover {
+  background: none;
+  cursor: default;
+  opacity: 1;
+}
+
+.menu-item-skeleton-icon,
+.menu-item-skeleton-bar {
+  display: block;
+  flex: none;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  border-radius: 4px;
+  animation: boot-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+.menu-item-skeleton-bar {
+  width: 8em;
+  height: 1em;
+  margin-block: calc((1lh - 1em) / 2);
+}
+
+/* 사이드바 하단 계정 — 줄에서는 이메일 버튼, 레일에서는 아이콘. 목록은 줄 기준 위로, 레일은 오른쪽으로 (F-2090 4.3·6장) */
+.account-menu--row {
+  position: static;
+  flex: 1;
+  min-width: 0;
+}
+
+.account-menu-row-btn,
+.account-menu--row .account-login-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.account-menu-row-btn:hover,
+.account-menu--row .account-login-btn:hover {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+.account-menu-row-btn[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.account-menu-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu--row .account-menu-list {
+  left: 0;
+  right: auto;
+  top: auto;
+  bottom: calc(100% + 4px);
+  width: min(100%, 280px);
+  min-width: 0;
+  transform-origin: bottom left;
+}
+
+.account-menu--row .account-menu-list[data-state='closed'] {
+  transform: translateY(4px) scale(0.9);
+}
+
+.account-menu--rail {
+  position: relative;
+}
+
+.account-menu--rail .account-menu-list {
+  left: calc(100% + 8px);
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 240px;
+  min-width: 0;
+  max-width: calc(100vw - 64px);
+  transform-origin: bottom left;
+}
+
+.account-menu--rail .account-menu-list[data-state='closed'] {
+  transform: translateX(-4px) scale(0.9);
+}
+
+@starting-style {
+  .account-menu--row .account-menu-list[data-state='open'] {
+    transform: translateY(4px) scale(0.9);
+  }
+
+  .account-menu--rail .account-menu-list[data-state='open'] {
+    transform: translateX(-4px) scale(0.9);
+  }
+}
+
+/* 알림 목록 — ⋯ `알림` 하위 화면 본문 (specs/features/F-507.md 3.4) */
+.notifications-read-all {
+  border-radius: var(--radius-control);
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+  transition: var(--transition-colors);
+}
+
+.notifications-read-all:hover:not(:disabled) {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+.notifications-read-all:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.notifications-status {
+  margin: 0;
+  padding: 18px 12px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.notifications-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+}
+
+.notification-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  transition: var(--transition-colors);
+}
+
+.notification-item:hover,
+.notification-item:focus-visible {
+  background: var(--hover-bg);
+}
+
+.notification-item[data-unread='true'] {
+  position: relative;
+}
+
+.notification-item[data-unread='true']::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 14px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.notification-item[data-unread='true'] .notification-item-text {
+  padding-left: 12px;
+  font-weight: 600;
+}
+
+.notification-item-text {
+  font-size: 13px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-item-excerpt {
+  font-size: 12px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-item-time {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* 화면에는 안 보이고 스크린리더에만 읽히는 글자 (F-507 4.5) */
+.notification-item-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (pointer: coarse) {
+  .icon-btn.topbar-more-btn,
+  .icon-btn.view-mode-menu-btn {
+    width: 44px;
+    height: 44px;
+    margin: -6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-menu-gauge-skeleton,
+  .menu-item-skeleton-icon,
+  .menu-item-skeleton-bar {
+    animation: none;
+  }
+}

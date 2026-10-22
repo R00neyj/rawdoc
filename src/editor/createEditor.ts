@@ -80,7 +80,7 @@ function attributesExtensionFor(mode: ViewMode): Extension {
   return EditorView.editorAttributes.of({ 'data-view': mode })
 }
 
-// 줄 번호(거터) 켜기·끄기 — 끈 상태는 data-gutters='off' 로 표시해 app.css 가 반응한다 (F-147 2장)
+// 줄 번호(거터) 켜기·끄기 — 끈 상태는 data-gutters='off' 로 표시해 editor.css 가 반응한다 (F-147 2장)
 // 댓글 거터는 줄 번호 바로 뒤 — 줄 번호를 끄면 댓글 거터도 없다 (F-504 4.3)
 function lineNumbersExtensionFor(on: boolean, commentGutterOn: boolean): Extension {
   return on ? [lineNumbers(), commentGutterOn ? commentGutter() : []] : []
