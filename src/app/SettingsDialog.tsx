@@ -498,7 +498,7 @@ export default function SettingsDialog({
     if (id === 'screen') {
       return (
         <>
-          <SettingsCard title="테마">
+          <SettingsCard>
             <Segment
               labelId="theme-label"
               label="테마"
