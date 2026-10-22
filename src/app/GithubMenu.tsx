@@ -112,7 +112,7 @@ export function ImportMenu({ variant, onOpenLocalFile, onFile, github }: {
     <PopMenu
       className={`github-import-menu github-import-menu--${variant}`}
       items={[
-        ...(onOpenLocalFile ? [{ key: 'open-file', label: '컴퓨터 파일 바로 고치기…', onSelect: onOpenLocalFile }] : []),
+        ...(onOpenLocalFile ? [{ key: 'open-file', label: '내 기기 파일 바로 고치기…', onSelect: onOpenLocalFile }] : []),
         { key: 'file', label: '.md 파일을 새 문서로', onSelect: onFile },
         ...(github
           ? [

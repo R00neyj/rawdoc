@@ -614,16 +614,36 @@
 
 .settings-page-list ul {
   list-style: none;
-  margin: 0;
+  margin: 0 14px;
   padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-dialog);
+  background: color-mix(in srgb, var(--ink) 2%, var(--panel));
+  overflow: hidden;
+}
+
+/* 와이어프레임 휴대폰 목록 — 묶음마다 상자 하나, 행 사이 선 (settings-redesign.html, tweak 2026-10-22) */
+.settings-page-list ul li + li .settings-row {
+  border-top: 1px solid var(--rule);
 }
 
 .settings-page-group-label {
   display: block;
-  padding: 16px 16px 4px;
+  padding: 16px 18px 6px;
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
+}
+
+.settings-page-foot {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.settings-page-foot .settings-row {
+  width: auto;
 }
 
 .dialog--full .settings-panel-group {

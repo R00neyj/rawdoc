@@ -66,7 +66,7 @@ const changeOnDisk = (page, text) =>
   }, utf8(text))
 
 async function openFromHome(page) {
-  await page.locator('.empty-state').getByRole('button', { name: '컴퓨터 파일 바로 고치기…' }).click()
+  await page.locator('.empty-state').getByRole('button', { name: '내 기기 파일 바로 고치기…' }).click()
   await expect(page.locator('.local-file-screen')).toBeVisible()
   await expect(content(page)).toBeFocused()
 }
@@ -114,7 +114,7 @@ test.describe('F-2157 로컬 파일 외부 변경', () => {
     expect(await creates(page)).toBe(0)
 
     await page.locator('.sidebar').getByRole('button', { name: '가져오기', exact: true }).click()
-    await page.getByRole('menuitem', { name: '컴퓨터 파일 바로 고치기…' }).click()
+    await page.getByRole('menuitem', { name: '내 기기 파일 바로 고치기…' }).click()
     await expect(content(page)).toContainText('외부')
     await page.keyboard.press('Control+End')
     await page.keyboard.type('q')

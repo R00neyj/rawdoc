@@ -103,7 +103,7 @@ describe('F-2155 U8 파일 열기…', () => {
   it('있으면 가져오기 뒤에 파일 열기…, 누르면 부른다', () => {
     const onOpenLocalFile = vi.fn()
     const labels = actionLabels(EmptyState({ ...baseProps, recentDocs: [], onOpenLocalFile }))
-    expect(labels.map((b) => b.label)).toEqual(['새 문서', '가져오기', '컴퓨터 파일 바로 고치기…'])
+    expect(labels.map((b) => b.label)).toEqual(['새 문서', '가져오기', '내 기기 파일 바로 고치기…'])
     labels[2].onClick?.()
     expect(onOpenLocalFile).toHaveBeenCalledTimes(1)
   })

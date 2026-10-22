@@ -56,7 +56,7 @@ export default function EmptyState({ hasDocs, onCreateDoc, onImportDoc, recentDo
         {onOpenLocalFile && (
           <button type="button" onClick={onOpenLocalFile}>
             <IconFileOpen size={18} />
-            컴퓨터 파일 바로 고치기…
+            내 기기 파일 바로 고치기…
           </button>
         )}
       </div>

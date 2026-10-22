@@ -78,12 +78,10 @@ export default function SettingsPageShell({ titleId, page, tabs, labels, firstRo
               </ul>
             </li>
           ))}
-          <li>
+          <li className="settings-page-foot">
             <a className="settings-row settings-row-intro" href={WELCOME_PATH} target="_blank" rel="noopener noreferrer">
               <span className="settings-row-label">소개 보기</span>
             </a>
-          </li>
-          <li>
             <button type="button" className="settings-row settings-row-intro" onClick={openDonateDialog}>
               <span className="settings-row-label">후원하기</span>
             </button>

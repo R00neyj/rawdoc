@@ -71,7 +71,7 @@ async function idbDocCount(page) {
 }
 
 async function openFromHome(page) {
-  await page.locator('.empty-state').getByRole('button', { name: '컴퓨터 파일 바로 고치기…' }).click()
+  await page.locator('.empty-state').getByRole('button', { name: '내 기기 파일 바로 고치기…' }).click()
   await expect(page.locator('.local-file-screen')).toBeVisible()
   await expect(page.locator('.local-file-screen .cm-content')).toBeFocused()
 }
@@ -115,7 +115,7 @@ test.describe('F-2155 로컬 파일 화면', () => {
     const postsBefore = server.writeRequests().filter((r) => r.method === 'POST' && r.path === '/api/docs').length
 
     await page.locator('.sidebar').getByRole('button', { name: '가져오기', exact: true }).click()
-    await page.getByRole('menuitem', { name: '컴퓨터 파일 바로 고치기…' }).click()
+    await page.getByRole('menuitem', { name: '내 기기 파일 바로 고치기…' }).click()
     await expect(page.locator('.local-file-screen')).toBeVisible()
     await page.locator('.local-file-screen .cm-content').click()
     await page.keyboard.press('Control+End')

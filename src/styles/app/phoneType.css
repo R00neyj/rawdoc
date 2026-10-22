@@ -60,7 +60,9 @@
   .user-css-edit-name input,
   .user-css-editor,
   .e2ee-convert-dialog .e2ee-convert-note,
-  .e2ee-migrate-dialog .e2ee-migrate-note {
+  .e2ee-migrate-dialog .e2ee-migrate-note,
+  .settings-card-title,
+  .settings-panel .dialog-field > span {
     font-size: 16px;
   }
 
@@ -82,7 +84,7 @@
   .empty-state-recent-heading,
   .empty-state-recent-date,
   .dialog-field > span,
-  .dialog-note,
+  .dialog .dialog-note,
   .dialog .e2ee-password-hint,
   .e2ee-convert-dialog .e2ee-backup-notice,
   .notice button:not(.icon-btn),
@@ -91,7 +93,6 @@
   .search-note,
   .search-foot,
   .import-list,
-  .settings-card-title,
   .data-grid .data-row-desc,
   .notifications-read-all,
   .notifications-status,

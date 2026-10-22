@@ -24,7 +24,7 @@ async function installOpfsPicker(page) {
 
 async function pickFromHome(page, name) {
   await page.evaluate((n) => window.showOpenFilePicker.queue.push(n), name)
-  await page.locator('.empty-state').getByRole('button', { name: '컴퓨터 파일 바로 고치기…' }).click()
+  await page.locator('.empty-state').getByRole('button', { name: '내 기기 파일 바로 고치기…' }).click()
   await expect(page.locator('.local-file-screen')).toBeVisible()
 }
 
