@@ -1,4 +1,4 @@
-// 칸 사이 경계 막대 — 끌거나 화살표 키로 비율을 바꾼다. 끄는 동안은 onDrag 로 그리기만, 놓을 때 한 번 onCommit (F-2165 4장)
+// 칸 사이 경계 막대 — 끌거나 화살표 키로 비율을 바꾸고, 더블클릭이면 절반으로. 끄는 동안은 onDrag 로 그리기만, 놓을 때 한 번 onCommit (F-2165 4장)
 import { useRef, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
 import { dividers, setRatio, type Divider } from './paneDrag'
 import type { SplitLayout } from './splitLayout'
@@ -79,6 +79,10 @@ export default function SplitDividers({ layout, ratios, areaRef, onDrag, onCommi
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerEnd}
       onKeyDown={(e) => handleKeyDown(e, d)}
+      onDoubleClick={() => {
+        const size = sizeOf()
+        if (size) onCommit(setRatio(layout, ratios, d.index, 0.5, size))
+      }}
     />
   ))
 }
