@@ -1,6 +1,6 @@
 // specs/features/F-123.md 4장 A1·A2
 import { describe, expect, it } from 'vitest'
-import { renderMarkdown, renderMarkdownInline, setDefaultSoftBreaks } from '../../../src/viewer/renderMarkdown'
+import { parseMarkdownTokens, renderMarkdown, renderMarkdownInline, setDefaultSoftBreaks } from '../../../src/viewer/renderMarkdown'
 
 describe('renderMarkdown — 표·취소선', () => {
   it('GFM 표를 <table> 로 바꾼다', () => {
@@ -701,11 +701,10 @@ describe('renderMarkdown — 이미지 한 줄 (F-2127 A5)', () => {
     expect(renderMarkdown(`![a](attachments/${ID}.png)`)).toBe(renderMarkdown(oldLeft))
   })
 
-  it('외부·문장 안·목록 안·상대 경로는 이미지 블록이 아니다', () => {
+  it('외부·문장 안·상대 경로는 이미지 블록이 아니다', () => {
     for (const src of [
       '![x](https://example.com/a.png)',
       `글 ![x](attachments/${ID}.png)`,
-      `- ![x](attachments/${ID}.png)`,
       '![y](./img/a.png)',
     ]) {
       expect(renderMarkdown(src)).not.toContain('md-image')
@@ -727,6 +726,74 @@ describe('renderMarkdown — 이미지 한 줄 (F-2127 A5)', () => {
     expect(renderMarkdown(`${NEW}\n글\n-`, { sourceLines: true })).toContain('<h2 data-source-line="2">글</h2>')
     expect(renderMarkdown(`글\n${NEW}`)).not.toContain('md-image')
     expect(renderMarkdown(`> 인용\n${NEW}`)).not.toContain('md-image')
+  })
+})
+
+// F-2167 U1·U2·U3 — 목록·인용 안 그림 한 줄
+const F2167_ID = '0f3a9c2e7b1d4a58'
+const F2167_L = `![a](attachments/${F2167_ID}.png)`
+const F2167_LINK = `<a href="attachments/${F2167_ID}.png" target="_blank" rel="noopener noreferrer">이미지: a</a>`
+const F2167_DIV = `<div class="md-image md-image--left"><img data-attachment="${F2167_ID}" alt="a"></div>\n`
+const F2167_DRAWN: [string, string][] = [
+  [`- ${F2167_L}`, `<ul>\n<li>\n${F2167_DIV}</li>\n</ul>\n`],
+  [`1. ${F2167_L}`, `<ol>\n<li>\n${F2167_DIV}</li>\n</ol>\n`],
+  [`- ${F2167_L}\n\n- 뒤`, `<ul>\n<li>\n${F2167_DIV}</li>\n<li>\n<p>뒤</p>\n</li>\n</ul>\n`],
+  [`- 항목\n\n  ${F2167_L}`, `<ul>\n<li>\n<p>항목</p>\n${F2167_DIV}</li>\n</ul>\n`],
+  [`- 시안 비교\n  ${F2167_L}`, `<ul>\n<li>시안 비교${F2167_DIV}</li>\n</ul>\n`],
+  [`- 시안 비교\n  ${F2167_L}\n  뒤 글`, `<ul>\n<li>시안 비교${F2167_DIV}뒤 글</li>\n</ul>\n`],
+  [
+    `- [ ] 할일\n  ${F2167_L}`,
+    `<ul class="contains-task-list">\n<li class="task-list-item"><input type="checkbox" disabled> 할일${F2167_DIV}</li>\n</ul>\n`,
+  ],
+  [`> ${F2167_L}`, `<blockquote>\n${F2167_DIV}</blockquote>\n`],
+  [`> 인용\n> ${F2167_L}`, `<blockquote>\n<p>인용</p>\n${F2167_DIV}</blockquote>\n`],
+  [`> - a\n>   ${F2167_L}`, `<blockquote>\n<ul>\n<li>a${F2167_DIV}</li>\n</ul>\n</blockquote>\n`],
+]
+// 지금(HEAD e6c0eb2f) 출력 그대로 — 링크로 남는 자리
+const F2167_KEPT: [string, string][] = [
+  [
+    `- [ ] ${F2167_L}`,
+    `<ul class="contains-task-list">\n<li class="task-list-item"><input type="checkbox" disabled> ${F2167_LINK}</li>\n</ul>\n`,
+  ],
+  [`- 항목\n${F2167_L}`, `<ul>\n<li>항목\n${F2167_LINK}</li>\n</ul>\n`],
+  [`> 인용\n${F2167_L}`, `<blockquote>\n<p>인용\n${F2167_LINK}</p>\n</blockquote>\n`],
+  [`글\n${F2167_L}`, `<p>글\n${F2167_LINK}</p>\n`],
+  [`- 시안\n      ${F2167_L}`, `<ul>\n<li>시안\n${F2167_LINK}</li>\n</ul>\n`],
+  [`- 시안 ${F2167_L}`, `<ul>\n<li>시안 ${F2167_LINK}</li>\n</ul>\n`],
+  [
+    '- ![x](https://example.com/a.png)',
+    '<ul>\n<li><a href="https://example.com/a.png" target="_blank" rel="noopener noreferrer">이미지: x</a></li>\n</ul>\n',
+  ],
+  [`-     ${F2167_L}`, `<ul>\n<li>\n<pre><code>${F2167_L}\n</code></pre>\n</li>\n</ul>\n`],
+]
+
+describe('renderMarkdown — 목록·인용 안 그림 한 줄 (F-2167 U1·U2·U3)', () => {
+  it('U1 항목 첫 줄·항목 아래·인용 줄 그림은 div, 체크박스는 그대로', () => {
+    for (const [src, html] of F2167_DRAWN) expect(renderMarkdown(src), src).toBe(html)
+  })
+
+  it('U1 sourceLines 를 켜도 안쪽 div 에는 data-source-line 이 없다', () => {
+    for (const [src] of F2167_DRAWN) {
+      const html = renderMarkdown(src, { sourceLines: true })
+      expect(html, src).toContain(F2167_DIV)
+      expect(html, src).not.toMatch(/class="md-image[^"]*" data-source-line/)
+    }
+  })
+
+  it('U1 최상위 그림 줄 출력은 그대로', () => {
+    expect(renderMarkdown(F2167_L)).toBe(F2167_DIV)
+    expect(renderMarkdown(F2167_L, { sourceLines: true })).toBe(
+      F2167_DIV.replace('"md-image md-image--left"', '"md-image md-image--left" data-source-line="1"'),
+    )
+  })
+
+  it('U2 할 일 첫 줄·게으른 줄·최상위 중간 줄·코드 들여쓰기·문장 안·외부 주소는 지금 출력 그대로', () => {
+    for (const [src, html] of F2167_KEPT) expect(renderMarkdown(src), src).toBe(html)
+  })
+
+  it('U3 목록 안 html_block 의 level 은 문단 자리(2)', () => {
+    const html = parseMarkdownTokens(`- ${F2167_L}`).find((t) => t.type === 'html_block')
+    expect(html?.level).toBe(2)
   })
 })
 

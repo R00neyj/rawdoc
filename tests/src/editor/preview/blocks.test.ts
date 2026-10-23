@@ -12,6 +12,7 @@ import type { EditorState as CMState } from '@codemirror/state'
 import type { TableModel } from '../../../../src/editor/preview/tableModel'
 import { imagePathsChanged, imagePathsField } from '../../../../src/editor/preview/imagePaths'
 import { trackActiveEditRange } from '../../../../src/editor/preview/tableWidget'
+import { renderMarkdown } from '../../../../src/viewer/renderMarkdown'
 import type * as TableWidgetModule from '../../../../src/editor/preview/tableWidget'
 
 // 칸 세션 추적 호출만 엿본다 — 동작은 진짜 그대로
@@ -705,11 +706,9 @@ describe('buildBlocks — 이미지 한 줄 위젯 (F-2127 A4)', () => {
     expect(find(makeState(doc, doc.indexOf('설명')))).toHaveLength(0)
   })
 
-  it('문장 안·목록·인용·외부 주소·대응 없는 상대 경로는 위젯 없음', () => {
+  it('문장 안·외부 주소·대응 없는 상대 경로는 위젯 없음', () => {
     const docs = [
       `글 ${LINE}\n\n뒤`,
-      `- ${LINE}\n\n뒤`,
-      `> ${LINE}\n\n뒤`,
       `![x](https://example.com/a.png)\n\n뒤`,
       `![y](./img/a.png)\n\n뒤`,
       `글\n${LINE}`,
@@ -737,6 +736,67 @@ describe('buildBlocks — 이미지 한 줄 위젯 (F-2127 A4)', () => {
     const a = find(makeState(`${LINE}\n\n뒤`, LINE.length + 3))[0].value.spec.widget as TestImageWidget
     const b = find(makeState(`${html}\n\n뒤`, html.length + 3))[0].value.spec.widget as TestImageWidget
     expect(a.eq(b)).toBe(false)
+  })
+})
+describe('buildBlocks — 목록·인용 안 그림 한 줄 (F-2167 U4)', () => {
+  const ID = '0f3a9c2e7b1d4a58'
+  const L = `![a](attachments/${ID}.png)`
+  const images = (state: CMState, hasFocus = true) =>
+    buildBlocks(state, hasFocus, undefined, TEST_THEME).filter((r) => r.value.spec.widget?.id !== undefined)
+  const lineStartOfImage = (doc: string) => doc.lastIndexOf('\n', doc.indexOf('![')) + 1
+  // [문서, 위젯 시작(hideFrom)] — 기호 줄이면 그림 시작, 아니면 마지막 `>`+공백 뒤나 줄 시작
+  const CASES: [string, number][] = [
+    [`- ${L}`, 2],
+    [`1. ${L}`, 3],
+    [`- 시안 비교\n  ${L}`, lineStartOfImage(`- 시안 비교\n  ${L}`)],
+    [`- 항목\n\n  ${L}`, lineStartOfImage(`- 항목\n\n  ${L}`)],
+    [`- [ ] 할일\n  ${L}`, lineStartOfImage(`- [ ] 할일\n  ${L}`)],
+    [`> ${L}`, 2],
+    [`> 인용\n> ${L}`, lineStartOfImage(`> 인용\n> ${L}`) + 2],
+    [`> [!note]\n> ${L}`, lineStartOfImage(`> [!note]\n> ${L}`) + 2],
+    [`> - a\n>   ${L}`, lineStartOfImage(`> - a\n>   ${L}`) + 2],
+    [`- a\n  - b\n    ${L}`, lineStartOfImage(`- a\n  - b\n    ${L}`)],
+  ]
+
+  it('커서가 다른 줄이면 인라인 장식 1개, 범위 [hideFrom, 줄 끝)', () => {
+    for (const [body, hideFrom] of CASES) {
+      const doc = `${body}\n\n끝`
+      const found = images(makeState(doc, doc.length))
+      expect(found, body).toHaveLength(1)
+      expect(found[0].value.spec.block, body).toBeFalsy()
+      expect([found[0].from, found[0].to], body).toEqual([hideFrom, body.length])
+    }
+  })
+
+  it('커서가 그 줄(줄 시작·기호 포함)이면 0, 포커스가 없으면 1', () => {
+    for (const [body] of CASES) {
+      const doc = `${body}\n\n끝`
+      const lineFrom = lineStartOfImage(body)
+      expect(images(makeState(doc, lineFrom)), body).toHaveLength(0)
+      expect(images(makeState(doc, lineFrom + 1)), body).toHaveLength(0)
+      expect(images(makeState(doc, body.length)), body).toHaveLength(0)
+      expect(images(makeState(doc, lineFrom), false), body).toHaveLength(1)
+    }
+  })
+
+  it('위젯 수 = 보기 모드 md-image 수 (두 모드 경계 일치)', () => {
+    const docs = [
+      ...CASES.map(([body]) => body),
+      `- ${L}\n\n- 뒤`,
+      `- 시안 비교\n  ${L}\n  뒤 글`,
+      `- [ ] ${L}`,
+      `- 항목\n${L}`,
+      `> 인용\n${L}`,
+      `글\n${L}`,
+      `- 시안\n      ${L}`,
+      `- 시안 ${L}`,
+      '- ![x](https://example.com/a.png)',
+      `-     ${L}`,
+    ]
+    for (const doc of docs) {
+      const viewCount = (renderMarkdown(doc).match(/class="md-image /g) ?? []).length
+      expect(images(makeState(doc, 0), false).length, doc).toBe(viewCount)
+    }
   })
 })
 

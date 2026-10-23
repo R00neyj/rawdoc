@@ -168,10 +168,9 @@ function renderImageBlockHtml(parsed: ParsedImageBlock | RepoImageBlock, sourceL
   return `<div class="md-image md-image--${align}"${lineAttr}${style}><img ${source} alt="${alt}"${widthAttr}></div>\n`
 }
 
-// token.level === 0 은 목록·인용 등 컨테이너 밖(최상위) 문단만 고른다는 뜻이다
-// 옛 3줄 블록이 아니면 표준 이미지 한 줄(F-2127 5.1)도 같은 토큰으로 바꾼다
-function parseImageParagraph(content: string, resolveImagePath?: ResolveImagePath): ParsedImageBlock | RepoImageBlock | null {
-  const old = parseImageBlock(content)
+// 옛 3줄 블록(최상위만, F-157 2.1)이 아니면 표준 이미지 한 줄(F-2127 5.1)도 같은 토큰으로 바꾼다
+function parseImageParagraph(content: string, topLevel: boolean, resolveImagePath?: ResolveImagePath): ParsedImageBlock | RepoImageBlock | null {
+  const old = topLevel ? parseImageBlock(content) : null
   if (old) return old
   const image = imageLineAt(content, resolveImagePath)
   if (!image) return null
@@ -180,10 +179,11 @@ function parseImageParagraph(content: string, resolveImagePath?: ResolveImagePat
   return { align: line.align, id: target.id, ext: target.ext, src: line.url, alt: line.alt, width: line.width }
 }
 
-// 최상위 블록 첫 줄이 혼자 그림이면 그 줄만 문단으로 끊는다 — 다음 줄은 목록·구분선·문단으로 따로 해석 (요청노트 2026-10-21)
-// 문단 종료 규칙(alt)에 안 넣어 문단 중간의 그림 줄은 그대로 이어진다
+// 블록 첫 줄이 혼자 그림이면 그 줄만 문단으로 끊는다 — 다음 줄은 목록·구분선·문단으로 따로 해석 (요청노트 2026-10-21)
+// 문단 종료 검사(silent)는 목록·인용 안에서만 참 — 최상위 문단 중간 줄·게으른 줄은 글자로 이어진다 (F-2167 3장)
 function imageLineBlockRule(state: StateBlock, startLine: number, _endLine: number, silent: boolean): boolean {
-  if (state.level !== 0 || state.sCount[startLine] - state.blkIndent >= 4) return false
+  if (state.sCount[startLine] - state.blkIndent >= 4) return false
+  if (silent && (state.level === 0 || state.sCount[startLine] < state.blkIndent)) return false
   const text = state.src.slice(state.bMarks[startLine] + state.tShift[startLine], state.eMarks[startLine])
   if (text.charCodeAt(0) !== 0x21 || !imageLineAt(text, (state.env as { resolveImagePath?: ResolveImagePath } | undefined)?.resolveImagePath)) return false
   if (silent) return true
@@ -198,7 +198,7 @@ function imageLineBlockRule(state: StateBlock, startLine: number, _endLine: numb
   return true
 }
 
-md.block.ruler.before('lheading', 'image_line', imageLineBlockRule)
+md.block.ruler.before('lheading', 'image_line', imageLineBlockRule, { alt: ['paragraph'] })
 
 function imageBlockRule(state: StateCore): void {
   const tokens = state.tokens
@@ -206,19 +206,21 @@ function imageBlockRule(state: StateCore): void {
 
   for (let i = 0; i < tokens.length; i++) {
     const open = tokens[i]
-    if (open.type !== 'paragraph_open' || open.level !== 0) continue
+    if (open.type !== 'paragraph_open') continue
 
     const inline = tokens[i + 1]
     const close = tokens[i + 2]
     if (inline?.type !== 'inline' || close?.type !== 'paragraph_close') continue
 
-    const parsed = parseImageParagraph(inline.content, env?.resolveImagePath)
+    const parsed = parseImageParagraph(inline.content, open.level === 0, env?.resolveImagePath)
     if (!parsed) continue
 
-    const sourceLine = env?.sourceLines && open.map ? (env.lineOffset ?? 0) + open.map[0] + 1 : null
+    // 줄 번호는 최상위만(F-295), level 은 문단 자리 그대로 — 볼트 내보내기가 level 0 만 고른다 (F-2167 3장)
+    const sourceLine = env?.sourceLines && open.map && open.level === 0 ? (env.lineOffset ?? 0) + open.map[0] + 1 : null
 
     const html = new state.Token('html_block', '', 0)
     html.content = renderImageBlockHtml(parsed, sourceLine)
+    html.level = open.level
     html.block = true
     html.map = open.map
     // 평문 변환기가 정규식으로 다시 뜯지 않도록 해석 결과를 남겨 둔다 (F-278.md 4.2). 렌더 결과는 안 바뀐다

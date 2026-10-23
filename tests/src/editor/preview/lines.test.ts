@@ -5,7 +5,7 @@ import { EditorState } from '@codemirror/state'
 import { Decoration } from '@codemirror/view'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { ensureSyntaxTree } from '@codemirror/language'
-import { buildLines, fenceLineRanges, listAncestorMarks, mapDecorationsOnHold, sameListIndent } from '../../../../src/editor/preview/lines'
+import { buildLines, fenceLineRanges, imageIndentResults, listAncestorMarks, mapDecorationsOnHold, sameListIndent } from '../../../../src/editor/preview/lines'
 import { frontmatterExtension } from '../../../../src/editor/frontmatter'
 import { imagePathsField } from '../../../../src/editor/preview/imagePaths'
 
@@ -536,5 +536,40 @@ describe('sameListIndent — 원문 모드로 바뀐 뒤 늦게 도착한 측정
     const view = { state: EditorState.create({ doc: '- 가\n- 나' }) } as unknown as Parameters<typeof sameListIndent>[0]
     expect(() => sameListIndent(view, [{ lineFrom: 0, px: 12 }])).not.toThrow()
     expect(sameListIndent(view, [{ lineFrom: 0, px: 12 }])).toBe(true)
+  })
+})
+
+describe('buildLines — 목록 안 그림 줄 기준선 (F-2167 U5)', () => {
+  const L = '![a](attachments/0f3a9c2e7b1d4a58.png)'
+  const classesAt = (ranges: CMRange<Decoration>[], pos: number) =>
+    ranges.filter((r) => r.from === pos && r.to === pos && r.value.spec.class).map((r) => r.value.spec.class)
+
+  it('항목 아래 그림 줄에 md-image-indent, 기호 줄 그림은 md-list-line 만', () => {
+    const doc = `- 시안 비교\n  ${L}\n\n끝`
+    const second = doc.indexOf('\n') + 1
+    expect(classesAt(build(makeState(doc, doc.length)), second)).toEqual(['md-image-indent'])
+    const markLine = `- ${L}\n\n끝`
+    expect(classesAt(build(makeState(markLine, markLine.length)), 0)).toEqual(['md-list-line'])
+  })
+
+  it('커서가 그 줄이면(원문이 보이면) md-image-indent 를 달지 않는다', () => {
+    const doc = `- 시안 비교\n  ${L}\n\n끝`
+    const second = doc.indexOf('\n') + 1
+    expect(classesAt(build(makeState(doc, second + 3)), second)).toEqual([])
+  })
+
+  it('--md-list-indent 는 가장 안쪽 항목 첫 줄의 값과 같다', () => {
+    const doc = `- 시안 비교\n  ${L}\n\n끝`
+    const second = doc.indexOf('\n') + 1
+    const all = [{ from: 0, to: doc.length }]
+    expect(imageIndentResults(makeState(doc, doc.length), all, [{ lineFrom: 0, px: 18 }])).toEqual([{ lineFrom: second, px: 18 }])
+    const nested = `- a\n  - b\n    ${L}\n\n끝`
+    const bLine = nested.indexOf('  - b')
+    const imageLine = nested.indexOf('    ![')
+    const measured = [
+      { lineFrom: 0, px: 18 },
+      { lineFrom: bLine, px: 34 },
+    ]
+    expect(imageIndentResults(makeState(nested, nested.length), [{ from: 0, to: nested.length }], measured)).toEqual([{ lineFrom: imageLine, px: 34 }])
   })
 })

@@ -70,6 +70,16 @@
   text-indent: calc(-1 * var(--md-list-indent, 0px));
 }
 
+/* 항목 아래 그림 줄 — 항목 글자선까지 민다, 첫 줄 상쇄 없음 (F-2167 4.2) */
+.cm-host .cm-editor .cm-line.md-image-indent {
+  padding-left: var(--md-list-indent, 0px);
+}
+
+/* 콜아웃 안이면 콜아웃 안쪽 여백(callout.css 16px)에 더한다 */
+.cm-host .cm-editor .cm-line.md-callout.md-image-indent {
+  padding-left: calc(16px + var(--md-list-indent, 0px));
+}
+
 /* 중첩 줄의 앞 공백 자리 — ListIndentWidget 이 원문 공백 수와 무관하게 단계 수만큼 고정 폭을 채운다(F-251 3.2, decoration 은 표시만 바꾼다) */
 .md-list-indent-step {
   display: inline-block;

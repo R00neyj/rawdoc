@@ -16,8 +16,8 @@ import brokenImageSvg from '@material-symbols/svg-400/outlined/broken_image.svg?
 
 const MIN_WIDTH = 48
 
-// 원문 모양: html 은 3줄 블록, markdown 은 `![alt|center|300](…)` 한 줄 (F-2127 4.2)
-export type ImageForm = 'html' | 'markdown'
+// 원문 모양: html 은 3줄 블록, markdown 은 `![alt|center|300](…)` 한 줄 (F-2127 4.2), inline 은 목록·인용 안 그 한 줄 (F-2167 4.3)
+export type ImageForm = 'html' | 'markdown' | 'inline'
 
 export type AttachmentRecord = { blob: Blob; width: number; height: number; e2ee?: true }
 export type ResolveAttachment = (id: string) => Promise<AttachmentRecord | null>
@@ -75,18 +75,28 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): 
   return node
 }
 
-// 문서 칸 글자 폭(.cm-content 안쪽 폭) — imageInsert.js measureContentWidth() 와 같은 계산을 옮겨 적는다(그 함수는 export 되어 있지 않다)
-function measureMaxWidth(view: EditorView): number {
+// 문서 칸 글자 폭(.cm-content 안쪽 폭) — imageInsert.js measureContentWidth() 와 같은 계산을 옮겨 적는다(그 함수는 export 되어 있지 않다). inline 은 wrap 폭 (F-2167 4.3)
+function measureMaxWidth(view: EditorView, wrap: HTMLElement): number {
+  if (wrap.dataset.imgForm === 'inline') return Math.max(MIN_WIDTH, Math.floor(wrap.clientWidth))
   const contentEl = view.contentDOM
   const cs = getComputedStyle(contentEl)
   const padding = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0)
   return Math.max(MIN_WIDTH, Math.floor(contentEl.clientWidth - padding))
 }
 
-// wrap(위젯 최상위 DOM)의 현재 문서 위치에서 블록 범위를 구한다(F-106 2.3 과 같은 방식). markdown 모양은 줄 하나
+function isLineForm(wrap: HTMLElement): boolean {
+  return wrap.dataset.imgForm === 'markdown' || wrap.dataset.imgForm === 'inline'
+}
+
+// wrap(위젯 최상위 DOM)의 현재 문서 위치에서 블록 범위를 구한다(F-106 2.3 과 같은 방식). markdown 모양은 줄 하나, inline 은 그 줄의 그림 글자
 function currentBlockRange(view: EditorView, wrap: HTMLElement): { blockFrom: number; blockTo: number } {
   const blockFrom = view.posAtDOM(wrap)
   const startLine = view.state.doc.lineAt(blockFrom).number
+  if (wrap.dataset.imgForm === 'inline') {
+    const line = view.state.doc.line(startLine)
+    const lead = /^[ \t>]*/.exec(view.state.doc.sliceString(blockFrom, line.to))![0].length
+    return { blockFrom: blockFrom + lead, blockTo: line.to }
+  }
   if (wrap.dataset.imgForm === 'markdown') {
     const line = view.state.doc.line(startLine)
     return { blockFrom: line.from, blockTo: line.to }
@@ -104,22 +114,30 @@ function currentBlockText(view: EditorView, wrap: HTMLElement): { blockFrom: num
 function dispatchAlign(view: EditorView, wrap: HTMLElement, align: ImageAlign): void {
   if (view.state.readOnly) return // 읽기 전용이면 위젯도 문서를 바꾸지 않는다 (리뷰 E1)
   const { blockFrom, text } = currentBlockText(view, wrap)
-  const change = (wrap.dataset.imgForm === 'markdown' ? imageLineAlignChange : imageAlignChange)(text, blockFrom, align)
+  const change = (isLineForm(wrap) ? imageLineAlignChange : imageAlignChange)(text, blockFrom, align)
   if (change) view.dispatch({ changes: change, userEvent: 'input.image' })
 }
 
 function dispatchWidth(view: EditorView, wrap: HTMLElement, width: number): void {
   if (view.state.readOnly) return
   const { blockFrom, text } = currentBlockText(view, wrap)
-  const change = (wrap.dataset.imgForm === 'markdown' ? imageLineWidthChange : imageWidthChange)(text, blockFrom, width)
+  const change = (isLineForm(wrap) ? imageLineWidthChange : imageWidthChange)(text, blockFrom, width)
   if (change) view.dispatch({ changes: change, userEvent: 'input.image' })
+}
+
+// inline 이 기호 줄이면 그림 글자만, 아니면 줄째 — 공백만 남은 줄이 항목을 loose 로 바꾸지 않게 (F-2167 4.3)
+function deleteRange(view: EditorView, wrap: HTMLElement): { from: number; to: number } {
+  const { blockFrom, blockTo } = currentBlockRange(view, wrap)
+  if (wrap.dataset.imgForm !== 'inline') return imageBlockDeleteRange(view.state.doc.toString(), blockFrom, blockTo)
+  const line = view.state.doc.lineAt(blockFrom)
+  if (!/^[ \t>]*$/.test(view.state.doc.sliceString(line.from, blockFrom))) return { from: blockFrom, to: blockTo }
+  return imageBlockDeleteRange(view.state.doc.toString(), line.from, line.to)
 }
 
 // 이미지 블록 3줄(+줄바꿈 1개) 을 지우는 트랜잭션 1개, 커서는 지운 자리(F-218 2.2)
 function dispatchDelete(view: EditorView, wrap: HTMLElement): void {
   if (view.state.readOnly) return
-  const { blockFrom, blockTo } = currentBlockRange(view, wrap)
-  const range = imageBlockDeleteRange(view.state.doc.toString(), blockFrom, blockTo)
+  const range = deleteRange(view, wrap)
   view.dispatch({
     changes: { from: range.from, to: range.to, insert: '' },
     selection: { anchor: range.from },
@@ -261,7 +279,7 @@ function attachHandle(handleEl: HandleEl, view: EditorView, wrap: HTMLElement, b
     if (!drag || event.pointerId !== drag.pointerId) return
     const deltaX = event.clientX - drag.startX
     const multiplier = drag.align === 'left' ? 1 : drag.align === 'right' ? -1 : 2
-    const maxWidth = measureMaxWidth(view)
+    const maxWidth = measureMaxWidth(view, wrap)
     let width = Math.round(drag.startWidth + deltaX * multiplier)
     width = Math.max(MIN_WIDTH, Math.min(width, maxWidth))
     drag.currentWidth = width
@@ -282,7 +300,7 @@ function attachHandle(handleEl: HandleEl, view: EditorView, wrap: HTMLElement, b
     event.stopPropagation()
     const step = event.shiftKey ? 50 : 10
     const dir = event.key === 'ArrowRight' ? 1 : -1
-    const maxWidth = measureMaxWidth(view)
+    const maxWidth = measureMaxWidth(view, wrap)
     const width = Math.max(MIN_WIDTH, Math.min(Math.round(currentWidth() + dir * step), maxWidth))
     dispatchWidth(view, wrap, width)
   })
@@ -419,10 +437,13 @@ export class ImageWidget extends WidgetType {
     const { edge, corner } = buildHandles(view, wrap, box)
     box.appendChild(edge)
     box.appendChild(corner)
-    attachImageMove(view, wrap, box, () => {
-      const { blockFrom, blockTo } = currentBlockRange(view, wrap)
-      return { from: blockFrom, to: blockTo }
-    })
+    // inline 은 끌어 옮기지 않는다 — 줄 통째 옮기기가 기호·들여쓰기·tight/loose 를 깬다 (F-2167 4.3)
+    if (this.form !== 'inline') {
+      attachImageMove(view, wrap, box, () => {
+        const { blockFrom, blockTo } = currentBlockRange(view, wrap)
+        return { from: blockFrom, to: blockTo }
+      })
+    }
 
     if (this.repo) loadRepoImage(frame, this.repo.src, this.alt)
     else this._loadImage(view, frame)

@@ -19,8 +19,9 @@ import type { CodeGrammar } from '../../lib/codeParsers'
 import { isComposing, isForced } from '../composition'
 import { isEditorFocused } from './active'
 import { isFrontmatterComposing } from './frontmatterEdit'
-import { imagePathsChanged, imagePathsField, isInsideListOrQuote, leadingImageLine } from './imagePaths'
-import type { ResolveAttachment } from './imageWidget'
+import { imagePathsChanged, imagePathsField, isInsideListOrQuote, leadingImageLine, nestedImageLines } from './imagePaths'
+import type { LeadingImageLine } from './imagePaths'
+import type { ImageForm, ResolveAttachment } from './imageWidget'
 import { ImageWidget, destroyImageCache } from './imageWidget'
 import { MathBlockWidget } from './mathWidget'
 import { MermaidWidget, destroyMermaidCache } from './mermaidWidget'
@@ -231,6 +232,14 @@ function tableWidget(state: EditorState, _node: SyntaxNode, blockFrom: number, b
 type BlockMaker = (state: EditorState, node: SyntaxNode, blockFrom: number, blockTo: number, theme: string) => WidgetType
 const TARGET: Record<string, BlockMaker> = { Table: tableWidget, FencedCode: codeWidget }
 
+function lineImageWidget(image: Pick<LeadingImageLine, 'line' | 'target'>, resolveAttachment: ResolveAttachment | undefined, form: ImageForm): ImageWidget {
+  const { line, target } = image
+  const repo = 'repoPath' in target ? { repoPath: target.repoPath, src: target.src } : null
+  const att = 'id' in target ? target : null
+  const parsed = { align: line.align, id: att?.id ?? '', ext: att?.ext ?? '', alt: line.alt, width: line.width }
+  return new ImageWidget(parsed, resolveAttachment, form, repo)
+}
+
 // 선택에 따라 위젯↔원문이 바뀔 수 있는 블록 하나 (리뷰 E6). table 이면 F-139 3.1 규칙을 탄다
 export type BlockSpan = { from: number; to: number; table: boolean }
 
@@ -283,6 +292,18 @@ export function buildBlocks(
         return false
       }
 
+      // 목록·인용 안 그림 한 줄 (F-2167 4.1) — 인라인 위젯이라 글머리·인용 선·콜아웃 배경이 남는다
+      if ((node.name === 'Paragraph' || node.name === 'Task') && isInsideListOrQuote(node.node)) {
+        for (const image of nestedImageLines(state, node.node, resolveImagePath)) {
+          const span = { from: image.from, to: image.to, table: false }
+          spans?.push(span)
+          if (showsWidget(state, hasFocus, span)) {
+            out.push(Decoration.replace({ widget: lineImageWidget(image, resolveAttachment, 'inline'), block: false }).range(image.hideFrom, image.to))
+          }
+        }
+        return false
+      }
+
       // 이미지 한 줄 (F-2127 4.1) — 문단·setext 제목의 첫 줄이 혼자 그림이면 그 줄만 위젯, 다음 줄은 원문 (요청노트 2026-10-21)
       const isSetext = node.name === 'SetextHeading1' || node.name === 'SetextHeading2'
       if (node.name === 'Paragraph' || isSetext) {
@@ -293,12 +314,7 @@ export function buildBlocks(
           const span = { from: image.from, to: image.to, table: false }
           spans?.push(span)
           if (showsWidget(state, hasFocus, span)) {
-            const repo = 'repoPath' in target ? { repoPath: target.repoPath, src: target.src } : null
-            const att = 'id' in target ? target : null
-            const parsed = { align: line.align, id: att?.id ?? '', ext: att?.ext ?? '', alt: line.alt, width: line.width }
-            out.push(
-              Decoration.replace({ widget: new ImageWidget(parsed, resolveAttachment, 'markdown', repo), block: true }).range(span.from, span.to),
-            )
+            out.push(Decoration.replace({ widget: lineImageWidget({ line, target }, resolveAttachment, 'markdown'), block: true }).range(span.from, span.to))
           }
           return false
         }

@@ -9,6 +9,15 @@
   cursor: default;
 }
 
+/* 목록·인용 안 그림 한 줄 — 줄 안 위쪽 맞춤 인라인 상자, 폭은 줄 글자 영역. text-indent 는 상속돼 끊는다 (F-2167 4.2) */
+/* 1px 빼기: 기호 줄의 --md-list-indent 는 반올림한 값이라 기호 폭보다 0.5px 까지 작아 그림이 다음 줄로 밀렸다(글자 크기 작게·크게 실측) */
+.md-block.md-image[data-img-form='inline'] {
+  display: inline-grid;
+  width: calc(100% - 1px);
+  vertical-align: top;
+  text-indent: 0;
+}
+
 /* width 속성이 없으면 이미지 자연 폭(최대 100%) — fit-content 로 내용만큼만 차지해야 margin-inline 정렬이 의미가 있다. width 가 있으면 인라인 style 이 이 규칙을 덮는다 */
 .md-image-box {
   position: relative;
@@ -190,6 +199,11 @@
   -webkit-user-drag: none;
 }
 
+/* 목록·인용 안 그림은 끌어 옮기지 않는다 (F-2167 4.3) */
+.md-block.md-image[data-img-form='inline'] .md-image-box {
+  cursor: default;
+}
+
 .cm-editor[data-image-dragging],
 .cm-editor[data-image-dragging] * {
   cursor: grabbing;
@@ -236,6 +250,15 @@
 
 .viewer .md-image--right {
   margin-inline: auto 0;
+}
+
+/* 목록 항목 안 그림은 위 여백을 문단 간격만큼 — 항목 첫 자식이면 항목 위로 겹친다. 목록·인용 마지막이면 아래 여백 0 (F-2167 3장) */
+.viewer li > .md-image {
+  margin-top: 1rem;
+}
+
+.viewer :is(li, blockquote, .markdown-callout) > .md-image:last-child {
+  margin-bottom: 0;
 }
 
 .viewer .md-image img {

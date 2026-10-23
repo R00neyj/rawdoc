@@ -12,7 +12,7 @@ import { isComposing, isForced } from '../composition'
 import { frontmatterWidgetExtension, frontmatterWidgetInfo } from '../frontmatter'
 import { parseCalloutHeader, defaultCalloutTitle } from '../../lib/callout'
 import { calloutIconSvg } from '../../lib/calloutIcons'
-import { imagePathsChanged, imagePathsOf, leadingImageLine } from './imagePaths'
+import { imagePathsChanged, imagePathsOf, innermostListItem, leadingImageLine, nestedImageLines } from './imagePaths'
 
 const HIDE = Decoration.replace({})
 
@@ -221,6 +221,7 @@ export function buildLines(
   // 콜아웃으로 판정된 줄 번호 — 중첩된 인용(부모 Blockquote 가 콜아웃)이 같은 줄에 md-quote 를 겹쳐 붙이지 않게 막는다(F-128 4.1)
   // Blockquote 는 바깥→안쪽 순서로 방문되므로(tree.iterate) 바깥이 콜아웃이면 안쪽 처리 때 이미 이 집합에 들어 있다
   const calloutLines = new Set<number>()
+  const imageIndented = new Set<number>()
 
   for (const { from, to } of ranges) {
     syntaxTree(state).iterate({
@@ -367,6 +368,19 @@ export function buildLines(
               out.push(lineClassRange(state.doc.line(n), cls))
             }
             return false // 안은 FrontmatterMark 뿐 — 더 볼 것이 없다
+          }
+
+          case 'Paragraph':
+          case 'Task': {
+            // 항목 아래 그림 줄 — 위젯이 보일 때만 항목 글자선으로 민다 (F-2167 4.2). 안쪽 QuoteMark 를 봐야 하니 내려간다
+            // 그림 위젯이 visibleRanges 를 끊어 같은 문단을 두 번 지나므로 줄마다 한 번만
+            for (const line of imageIndentLines(state, node.node)) {
+              const lineObj = state.doc.lineAt(line.lineFrom)
+              if (active.has(lineObj.number) || imageIndented.has(lineObj.number)) continue
+              imageIndented.add(lineObj.number)
+              out.push(lineClassRange(lineObj, 'md-image-indent'))
+            }
+            return
           }
 
           case 'HorizontalRule': {
@@ -623,6 +637,41 @@ export function listAncestorMarks(state: EditorState, ranges: readonly { from: n
 
 type ListIndentResult = { lineFrom: number; px: number; guides?: number[] }
 
+// 기호 없는 목록 안 그림 줄과 그 기준이 되는 가장 안쪽 항목 첫 줄 (F-2167 4.2)
+function imageIndentLines(state: EditorState, node: SyntaxNode): { lineFrom: number; itemLineFrom: number }[] {
+  const out: { lineFrom: number; itemLineFrom: number }[] = []
+  const mark = innermostListItem(node)?.getChild('ListMark')
+  if (!mark) return out
+  for (const image of nestedImageLines(state, node, imagePathsOf(state))) {
+    if (!image.markLine) out.push({ lineFrom: image.from, itemLineFrom: state.doc.lineAt(mark.from).from })
+  }
+  return out
+}
+
+// 그림 줄의 --md-list-indent = 항목 첫 줄 실측값 (F-2167 4.2)
+export function imageIndentResults(
+  state: EditorState,
+  ranges: readonly { from: number; to: number }[],
+  measured: readonly ListIndentResult[],
+): ListIndentResult[] {
+  const pxByLine = new Map(measured.map((r) => [r.lineFrom, r.px]))
+  const out: ListIndentResult[] = []
+  for (const { from, to } of ranges) {
+    syntaxTree(state).iterate({
+      from,
+      to,
+      enter: (node) => {
+        if (node.name !== 'Paragraph' && node.name !== 'Task') return
+        for (const line of imageIndentLines(state, node.node)) {
+          const px = pxByLine.get(line.itemLineFrom)
+          if (px !== undefined && !out.some((r) => r.lineFrom === line.lineFrom)) out.push({ lineFrom: line.lineFrom, px })
+        }
+      },
+    })
+  }
+  return out
+}
+
 // 줄 하나의 --md-list-indent + 중첩 깊이 안내선(F-236) 을 합친 style 속성 문자열 — 안내선은 조상마다 배경 세로 선(1px, 줄 높이 100%) 하나, decoration 은 표시만 바꾼다(원문·구조는 그대로)
 function listIndentStyle({ px, guides }: ListIndentResult): string {
   let style = `--md-list-indent: ${px}px`
@@ -690,7 +739,7 @@ export function listIndentPreview(): Extension {
             const ancestorsByLine = new Map(
               listAncestorMarks(view.state, view.visibleRanges).map((a) => [a.lineFrom, { froms: a.ancestorMarkFroms, tos: a.ancestorMarkTos }]),
             )
-            return listContentStarts(view.state, view.visibleRanges)
+            const measured = listContentStarts(view.state, view.visibleRanges)
               .map(({ lineFrom, pos }) => {
                 const lineLeft = view.coordsAtPos(lineFrom, 1)
                 const contentLeft = view.coordsAtPos(pos, 1)
@@ -709,6 +758,7 @@ export function listIndentPreview(): Extension {
                 return { lineFrom, px, guides }
               })
               .filter((r): r is ListIndentResult => r !== null)
+            return [...measured, ...imageIndentResults(view.state, view.visibleRanges, measured)]
           },
           write: (results, view) => {
             if (sameListIndent(view, results)) return

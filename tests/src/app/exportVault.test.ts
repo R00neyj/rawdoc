@@ -551,4 +551,10 @@ describe('toVaultMarkdown — 새 문법 이미지 줄 (F-2127 A7)', () => {
     const content = '텍스트\n\n![a|center|300](attachments/0f3a9c2e7b1d4a58.png)\n\n다음\n'
     expect(toVaultMarkdown(content, null, EMPTY_LINKS).text).toBe('텍스트\n\n![[0f3a9c2e7b1d4a58.png|300]]\n\n다음\n')
   })
+
+  it('목록 안 그림 줄은 원문 그대로 (F-2167 U3)', () => {
+    for (const content of ['- ![a](attachments/0f3a9c2e7b1d4a58.png)\n', '- 시안\n  ![a](attachments/0f3a9c2e7b1d4a58.png)\n']) {
+      expect(toVaultMarkdown(content, null, EMPTY_LINKS).text).toBe(content)
+    }
+  })
 })
