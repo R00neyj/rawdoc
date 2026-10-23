@@ -438,6 +438,7 @@ scripts/admin-github.mjs                              GitHub 기능 켜기·끄�
 - `DocRoom` 은 awareness 를 도장 찍어 중계하고 연결이 닫히면 그 연결의 상태를 지운다(F-307 4장)
 - 경로 접두사 4개: `/api/*` better-auth 세션 쿠키(브라우저), `/pub/*` 로그인 없음(공유 링크), `/v1/*` `Authorization: Bearer rd_…` 개인 토큰만(스크립트, F-222·F-223). `/v1` 은 쿠키를 보지 않는다. 토큰은 D1 `api_tokens` 에 SHA-256 해시만 (0007). `/ws/*` — Worker 가 Origin·better-auth 세션 쿠키로 인증하고 edit 이상만 `DocRoom` DO(`/ws/doc/:id`)로 넘긴다. 거절은 닫기 코드 4401·4403·4404 (F-304)
 - `GET /api/me`·`GET /v1/me` → `{ id, email, blocked, warned }`(F-2028 7.1. 토큰 없음·틀림·폐기는 401). `/v1/me` 는 `handleMe` 를 그대로 붙인 라우트 한 줄, 명령줄 도구의 `whoami`·`--with-token` 확인에 쓴다 (F-2021 7.1)
+- 문서 `owner_id` 는 만든 사람이다. 단 `POST /api/shared/folders/:id/docs` 는 편집 초대받은 폴더(하위 트리 포함)에 **폴더 소유자** 문서로 만들고, 용량은 소유자 누계·보낸 사람은 하루 카운터만 (F-4017)
 - `/v1` 문서 삭제·이동·폴더 삭제는 `/api` 본체와 같은 쓰기 문장을 쓰고, 금고가 끼면 403. `GET /v1/shared` 는 `handleGetShared` 를 `updatedAt` 내림차순으로만 바꿔 쓴다 (F-2050)
 - `GET /v1/attachments/:idext[?doc=]` 는 `handleGetAttachment` 를 그대로 붙인 라우트 한 줄 — 내 첨부, 또는 볼 수 있는 문서(`doc`)가 참조하는 첨부. 금고 첨부는 암호문 그대로. 명령줄 도구 `images` 가 쓴다 (2026-10-16 small)
 - `POST /v1/attachments[?doc=]` 는 `handleCreateAttachmentV1` 가 받는다. `doc` 가 있고 그 문서에 edit 권한이 있으면 평문 첨부의 연결 기록을 첨부 `INSERT` 와 같은 batch 에 넣는다 (F-4012 3장). 명령줄 도구 `upload --doc` 가 쓴다
