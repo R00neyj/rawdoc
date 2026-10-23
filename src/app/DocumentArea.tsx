@@ -202,6 +202,7 @@ export default function DocumentArea({
           focusRef={boardFocusRef}
           onOpenSettings={openKanbanSettings}
           revealTick={kanban.revealTick}
+          resolveAttachment={resolveAttachment}
           takeReveal={kanban.takeReveal}
         />
       )}

@@ -132,6 +132,7 @@
 |`src/app/importWorkspace.ts`|내보냈던 압축 파일을 읽어 폴더 구조째 문서를 다시 가져옴|
 |`src/app/InviteDialog.tsx`|문서나 폴더에 다른 사람을 초대하는 창|
 |`src/app/KanbanBoard.tsx`|칸반 문서를 칸과 카드로 늘어놓아 보여 주는 보드 화면 (F-2140)|
+|`src/app/KanbanCardImages.tsx`|칸반 카드 아래에 첨부 이미지 썸네일을 한 줄로 보여 줌|
 |`src/app/KanbanMenu.tsx`|칸반 카드·칸 머리·빈 자리·보드 위 점 세 개의 우클릭·점 세 개 메뉴 항목|
 |`src/app/KanbanSettingsTab.tsx`|설정의 칸반 탭 — 지금 연 보드에서 어느 칸을 완료 칸으로 볼지 고름|
 |`src/app/kanbanDrag.ts`|칸반 카드를 끌 때 집을지, 놓을 자리, 옮길 위치, 칸 옮길 자리, 가장자리 자동 스크롤 속도를 계산함 (F-2142)|
@@ -475,6 +476,7 @@
 |`src/lib/imageFile.ts`|그림 파일의 종류와 가로·세로 크기를 알아냄|
 |`src/lib/imageMarkdown.ts`|표준 마크다운 그림 줄을 읽고 만들고 고침|
 |`src/lib/kanban.ts`|칸반 문서 원문에서 칸·카드·완료 칸을 읽고, 카드 옮기기·추가·고치기·완료 칸 설정을 바뀌는 줄만으로 계산함|
+|`src/lib/kanbanImages.ts`|칸반 카드 글자에서 첨부 이미지 문법을 빼내 썸네일 목록을 만듦|
 |`src/lib/lineEnding.ts`|파일의 줄바꿈 방식을 알아내고 바꿈|
 |`src/lib/localGraph.ts`|지금 문서 주변의 연결 문서를 모아, 지도 장면 모양으로 바꾸거나 평면 관계도 자리를 계산함|
 |`src/lib/loginReturn.ts`|로그인 뒤 돌아갈 주소로 받아 줄 수 있는 길이·모양인지 앱과 서버가 같이 판단함|

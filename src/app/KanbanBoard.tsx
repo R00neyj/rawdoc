@@ -6,6 +6,8 @@ import {
 import type { EditorHandle } from '../editor/Editor'
 import type { WikiContext } from '../editor/preview/wikiLinks'
 import { renderMarkdownInline } from '../viewer/renderMarkdown'
+import type { ResolveAttachment } from '../viewer/fillMarkdownAssets'
+import { cardImageView } from '../lib/kanbanImages'
 import { setBoardComposing } from '../editor/boardComposition'
 import { redoLocal, undoLocal } from '../editor/yBinding'
 import {
@@ -20,6 +22,7 @@ import {
 import KanbanMenu, { type KanbanMenuActions, type KanbanMenuState, type KanbanMenuTarget } from './KanbanMenu'
 import type { NoticeWithAction } from './NoticeBar'
 import BoardInput from './BoardInput'
+import KanbanCardImages from './KanbanCardImages'
 import { useKanbanBoard, type ApplyKanban } from './useKanbanView'
 
 export type KanbanBoardFocus = 'title' | 'board' | null
@@ -45,6 +48,8 @@ type KanbanBoardProps = {
   // 할 일 패널에서 누른 카드 줄 — tick 이 바뀌거나 처음 그릴 때 한 번 받아 간다 (small 2026-10-14)
   revealTick: number
   takeReveal: () => number | null
+  // 카드 썸네일 첨부 읽기 — 보기 모드와 같은 것
+  resolveAttachment?: ResolveAttachment
 }
 
 // add = 칸 아래 새 카드, lane = 칸 이름(added 는 `칸 추가` 로 연 것), card = 카드 첫 줄 글자
@@ -63,7 +68,7 @@ const detailIndent = () => ' '.repeat(Number(getPref('md.indent', '4')))
 
 export default function KanbanBoard({
   handle, title, titleReadOnly, readOnly, onTitleChange, onTitleCommit, onOpenStray, resolveWikiLink, onOpenWikiLink, wikiContext, apply, showNotice, focusRef, onOpenSettings,
-  revealTick, takeReveal,
+  revealTick, takeReveal, resolveAttachment,
 }: KanbanBoardProps) {
   const boardRef = useRef<HTMLDivElement | null>(null)
   const titleRef = useRef<HTMLInputElement | null>(null)
@@ -572,6 +577,7 @@ export default function KanbanBoard({
                   {lane.cards.map((card, cardIndex) => {
                     const cardEditing = isTargetLane && editing?.mode === 'card' && target.kind === 'card' && card.from === target.pos
                     const held = drag.held?.kind === 'card' && drag.held.lane === laneIndex && drag.held.card === cardIndex
+                    const view = cardImageView(card.text, kanbanDetailLines(card.detail))
                     return (
                       <Fragment key={cardEditing ? `edit-${target.key}` : cardIndex}>
                         {drag.marker?.kind === 'card' && drag.marker.lane === laneIndex && drag.marker.slot === cardIndex && (
@@ -615,11 +621,11 @@ export default function KanbanBoard({
                               onBlur={() => draftRef.current && finishCard(draftRef.current.value, false)}
                             />
                           ) : (
-                            <span className="kanban-card-text" dangerouslySetInnerHTML={{ __html: renderMarkdownInline(card.text, { resolveWikiLink }) }} />
+                            <span className="kanban-card-text" dangerouslySetInnerHTML={{ __html: renderMarkdownInline(view.text, { resolveWikiLink }) }} />
                           )}
-                          {!cardEditing && card.detail.length > 0 && (
+                          {!cardEditing && view.lines.length > 0 && (
                             <div className="kanban-card-detail">
-                              {kanbanDetailLines(card.detail).map((line, i) => (
+                              {view.lines.map((line, i) => (
                                 <div key={i} className="kanban-detail-line" style={{ '--detail-indent': line.indent } as CSSProperties}>
                                   {line.kind !== 'text' && (
                                     <span className="kanban-detail-mark" aria-hidden="true">
@@ -631,6 +637,7 @@ export default function KanbanBoard({
                               ))}
                             </div>
                           )}
+                          {!cardEditing && view.images.length > 0 && <KanbanCardImages images={view.images} resolveAttachment={resolveAttachment} />}
                           {!readOnly && !cardEditing && (
                             <MoreButton
                               label="카드"

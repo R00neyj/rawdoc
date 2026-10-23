@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>칸반 카드 이미지 플로우</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; font: 14px/1.5 system-ui, sans-serif; color: #222; background: #f6f6f4; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 40px 0 12px; color: #444; }
+  .sub { color: #777; margin: 0 0 24px; }
+  .pair { display: flex; gap: 24px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .col { display: flex; flex-direction: column; align-items: center; }
+  .card { background: #fff; border: 1px solid #bbb; border-radius: 8px; padding: 8px 12px; width: 260px; text-align: left; }
+  .card .detail { font-size: 12px; color: #666; margin-top: 4px; }
+  .thumb { margin-top: 6px; height: 110px; border-radius: 6px; background: repeating-linear-gradient(45deg, #ddd 0 8px, #e8e8e8 8px 16px); display: grid; place-items: center; color: #777; font-size: 12px; }
+  .thumbs { display: flex; gap: 6px; margin-top: 6px; }
+  .thumbs .thumb { flex: 1; height: 64px; margin: 0; }
+  .link { color: #36c; text-decoration: underline; }
+  .ph { margin-top: 6px; border: 1px dashed #aaa; border-radius: 6px; padding: 8px; color: #888; font-size: 12px; text-align: center; }
+  pre { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 12px 16px; font: 13px/1.6 ui-monospace, monospace; margin: 0; }
+  .cap { font-size: 12px; color: #888; margin-top: 6px; text-align: center; max-width: 280px; }
+  table { border-collapse: collapse; background: #fff; margin: 0 auto; }
+  td, th { border: 1px solid #ccc; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #eee; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>칸반 카드 이미지 — 썸네일 보이기</h1>
+<p class="sub">요청: "칸반 카드 내부에 이미지 삽입하면 어케됨?" → 썸네일 보이기(1안) 선택<br>
+지금: 카드 글자는 <code>renderMarkdownInline</code> 이라 이미지가 <code>이미지: alt</code> 링크 글자로만 보임(<code>renderMarkdown.ts:401</code>). 넣기는 원문 편집에서만. 원문은 바꾸지 않음 — 표시만</p>
+
+<h2>1. 원문 → 보드</h2>
+<div class="pair">
+  <pre>## 작업대기
+- 시안 검토 ![](attachments/a1.webp)
+    - 색 확인 ![](attachments/b2.webp)
+- 로고 수정</pre>
+  <div class="col">
+    <div class="card">시안 검토 <span class="link">이미지</span><div class="detail">• 색 확인 <span class="link">이미지</span></div></div>
+    <div class="cap">지금</div>
+  </div>
+  <div class="col">
+    <div class="card">시안 검토<div class="detail">• 색 확인</div><div class="thumbs"><div class="thumb">a1</div><div class="thumb">b2</div></div></div>
+    <div class="cap">바꾼 뒤 (정할 것 ①②)</div>
+  </div>
+</div>
+
+<h2>2. 이미지 상태</h2>
+<div class="pair">
+  <div class="col"><div class="card">시안 검토<div class="thumb">a1</div></div><div class="cap">첨부를 찾음 — 보기 모드와 같은 첨부 읽기(<code>resolveAttachment</code>)</div></div>
+  <div class="col"><div class="card">시안 검토<div class="ph">이미지를 찾을 수 없습니다</div></div><div class="cap">없는 첨부·금고 잠김 — 보기 모드 자리 표시와 같은 문구</div></div>
+  <div class="col"><div class="card">시안 검토 <span class="link">이미지</span></div><div class="cap">바깥 주소(https://…) 이미지 — 지금처럼 링크 글자. 앱은 바깥 이미지를 자동으로 불러오지 않음(F-116)</div></div>
+</div>
+
+<h2>3. 누르면</h2>
+<table>
+  <tr><th>동작</th><th>결과</th></tr>
+  <tr><td>썸네일 클릭</td><td>정할 것 ③</td></tr>
+  <tr><td>카드 더블클릭·Enter</td><td>지금처럼 고치기 입력칸 — 원문 그대로 <code>![](attachments/…)</code> 가 보임</td></tr>
+  <tr><td>카드 끌기</td><td>썸네일을 잡아도 카드가 끌림 (이미지 기본 끌기 막음)</td></tr>
+</table>
+</body>
+</html>
