@@ -205,10 +205,25 @@
   }
 }
 
-/* 체크 칸은 글자 첫 줄 앞에 붙는다 */
+/* 체크 카드는 체크 칸 열 + 내용 열 — 넘친 글자·하위 줄·입력칸이 글자 열에 맞춰진다 (tweak 2026-10-24) */
+.kanban-card:has(> .kanban-card-check) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 6px;
+  align-items: start;
+}
+
+.kanban-card:has(> .kanban-card-check) > :not(.kanban-card-check, .kanban-more) {
+  grid-column: 2;
+}
+
+/* 체크 칸은 글자 첫 줄 가운데에, 입력칸이면 입력칸 첫 줄 가운데에 */
 .kanban-card-check {
-  margin: 0 6px 0 0;
-  vertical-align: -2px;
+  margin: 4px 0 0;
+}
+
+.kanban-card-check:has(+ .kanban-card-input) {
+  margin-top: 9px;
 }
 
 .kanban-card-detail {
