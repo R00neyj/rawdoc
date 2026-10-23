@@ -216,6 +216,7 @@
 |`src/app/sharedAttachmentHint.ts`|공유받은 문서의 이미지 확장자를 열린 본문에서 찾아, 그 문서 권한으로 이미지를 받게 함|
 |`src/app/SharedView.tsx`|공유받은 문서를 열어 보고 내 문서로 가져올 수 있는 화면|
 |`src/app/ShareMenu.tsx`|상단바 공유 메뉴(링크 복사·마크다운 복사·사람 초대 등)|
+|`src/app/sharedFolderCreate.ts`|공유 폴더에 새 문서를 만들 수 있는지, 어디에 만들지, 실패 때 어떤 문구를 띄울지 정함|
 |`src/app/shareNotifications.ts`|누가 문서·폴더를 공유했다는 알림을 처리함|
 |`src/app/sharesApi.ts`|공유 관리 화면에 내가 공유한 링크·사람 목록을 불러옴|
 |`src/app/shareSetApi.ts`|문서 링크로 묶인 여러 문서를 함께 공유하기 전 미리 보여 줌|
@@ -316,6 +317,7 @@
 |`src/app/useRecentFiles.ts`|최근 연 컴퓨터 파일 목록을 불러오고, 다시 열 때 저장 권한부터 묻고, 없어진 파일은 목록에서 뺌|
 |`src/app/useRightPanel.ts`|오른쪽 패널의 열림과 칸별 보기(달력·그래프 등)를 관리함|
 |`src/app/useSettingsPages.ts`|휴대폰에서 설정 화면을 단계별 페이지로 넘기고 되돌아오게 함|
+|`src/app/useSharedFolderCreate.ts`|공유 폴더 목록을 구독하고 공유 폴더 새 문서 만들기를 화면에 연결함|
 |`src/app/useShareResync.ts`|새 공유 알림이 오면 공유 목록을 한 번 다시 읽음|
 |`src/app/useSheetDragClose.ts`|휴대폰 아래 판의 손잡이를 끌어내려 판을 닫게 함|
 |`src/app/useSharesPage.ts`|공유 관리 페이지의 목록을 불러오고 공유 해제와 권한 요청 승인·거절을 처리함|
@@ -659,6 +661,7 @@ rawdoc.app 서버. 로그인, 문서 저장, 공유, 실시간 편집, 알림을
 |`worker/searchLines.ts`|검색어가 들어 있는 본문 줄을 골라 냄|
 |`worker/securityHeaders.ts`|응답마다 해킹 방지용 보안 설정을 붙임|
 |`worker/shareNotifications.ts`|공유 초대를 받으면 알림함 항목을 만들거나 지움|
+|`worker/sharedCreate.ts`|편집 초대받은 공유 폴더에 폴더 주인의 문서로 새 문서를 만듦|
 |`worker/shares.ts`|내가 만든 공유 링크와 준 권한 목록을 보여 줌|
 |`worker/shareSet.ts`|문서 링크를 따라가며 함께 공유할 문서를 모음|
 |`worker/testD1.ts`|테스트에서 서버 데이터베이스 대신 쓸 임시 데이터베이스를 만듦|
