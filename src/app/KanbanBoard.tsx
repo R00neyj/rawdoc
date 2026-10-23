@@ -7,6 +7,7 @@ import type { EditorHandle } from '../editor/Editor'
 import type { WikiContext } from '../editor/preview/wikiLinks'
 import { renderMarkdownInline } from '../viewer/renderMarkdown'
 import type { ResolveAttachment } from '../viewer/fillMarkdownAssets'
+import type { OnImageFiles } from '../editor/imageInsert'
 import { cardImageView } from '../lib/kanbanImages'
 import { setBoardComposing } from '../editor/boardComposition'
 import { redoLocal, undoLocal } from '../editor/yBinding'
@@ -50,6 +51,8 @@ type KanbanBoardProps = {
   takeReveal: () => number | null
   // 카드 썸네일 첨부 읽기 — 보기 모드와 같은 것
   resolveAttachment?: ResolveAttachment
+  // 카드 입력칸 이미지 붙여넣기 — 편집기와 같은 저장 콜백
+  onImageFiles?: OnImageFiles
 }
 
 // add = 칸 아래 새 카드, lane = 칸 이름(added 는 `칸 추가` 로 연 것), card = 카드 첫 줄 글자
@@ -68,7 +71,7 @@ const detailIndent = () => ' '.repeat(Number(getPref('md.indent', '4')))
 
 export default function KanbanBoard({
   handle, title, titleReadOnly, readOnly, onTitleChange, onTitleCommit, onOpenStray, resolveWikiLink, onOpenWikiLink, wikiContext, apply, showNotice, focusRef, onOpenSettings,
-  revealTick, takeReveal, resolveAttachment,
+  revealTick, takeReveal, resolveAttachment, onImageFiles,
 }: KanbanBoardProps) {
   const boardRef = useRef<HTMLDivElement | null>(null)
   const titleRef = useRef<HTMLInputElement | null>(null)
@@ -615,6 +618,7 @@ export default function KanbanBoard({
                               value={editing.value}
                               multiline={{ indent: detailIndent() }}
                               wikiContext={wikiContext}
+                              onImageFiles={readOnly ? undefined : onImageFiles}
                               {...inputHandlers}
                               onEnter={() => finishCard(draftRef.current?.value ?? '', true)}
                               onEscape={() => finishCard(null, true)}
@@ -662,6 +666,7 @@ export default function KanbanBoard({
                     value={editing.value}
                     multiline={{ indent: detailIndent() }}
                     wikiContext={wikiContext}
+                    onImageFiles={readOnly ? undefined : onImageFiles}
                     {...inputHandlers}
                     onEnter={() => {
                       const value = draftRef.current?.value ?? ''

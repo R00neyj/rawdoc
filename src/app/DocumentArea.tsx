@@ -203,6 +203,7 @@ export default function DocumentArea({
           onOpenSettings={openKanbanSettings}
           revealTick={kanban.revealTick}
           resolveAttachment={resolveAttachment}
+          onImageFiles={handleImageFiles}
           takeReveal={kanban.takeReveal}
         />
       )}

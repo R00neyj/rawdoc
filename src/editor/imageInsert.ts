@@ -80,7 +80,7 @@ export function computeImagePlacement(
   return { from, insert, cursor }
 }
 
-function isImageFile(file: File): boolean {
+export function isImageFile(file: File): boolean {
   if (file.type && file.type.startsWith('image/')) return true
   return IMAGE_EXT_RE.test(file.name ?? '')
 }

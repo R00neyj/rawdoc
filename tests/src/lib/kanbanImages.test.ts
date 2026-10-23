@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cardImageView, takeCardImages } from '../../../src/lib/kanbanImages'
+import { cardImageView, inlineImageInsert, takeCardImages } from '../../../src/lib/kanbanImages'
 
 const A = 'attachments/0123456789abcdef.webp'
 const B = 'attachments/fedcba9876543210.png'
@@ -54,5 +54,19 @@ describe('cardImageView', () => {
       { kind: 'check', text: '' },
       lines[3],
     ])
+  })
+})
+
+describe('inlineImageInsert', () => {
+  const img = (id: string) => ({ id, ext: 'webp' as const, alt: '' })
+  it('글자 뒤에 붙이면 앞에 공백 하나', () => {
+    expect(inlineImageInsert('시안', 2, [img('0123456789abcdef')])).toBe(` ![](${A})`)
+  })
+  it('빈 입력칸·공백 뒤는 공백 없이, 여러 장은 공백으로 잇는다', () => {
+    expect(inlineImageInsert('', 0, [img('0123456789abcdef'), img('fedcba9876543210')])).toBe(`![](${A}) ![](attachments/fedcba9876543210.webp)`)
+    expect(inlineImageInsert('시안 ', 3, [img('0123456789abcdef')])).toBe(`![](${A})`)
+  })
+  it('줄 첫머리(둘째 줄)도 공백 없이', () => {
+    expect(inlineImageInsert('a\n', 2, [img('0123456789abcdef')])).toBe(`![](${A})`)
   })
 })

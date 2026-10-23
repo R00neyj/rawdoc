@@ -185,3 +185,27 @@ test('카드 세부사항 — 보드 입력칸에서 Shift+Enter·Tab 으로 쓴
   const detail = lane(page, '할 일').locator('.kanban-card-detail .kanban-detail-line')
   await expect(detail).toHaveText(['설명 한 줄', '•세부', '◦깊게'])
 })
+
+const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+test('카드 이미지 — 카드 입력칸에 붙여넣은 이미지가 원문 카드 줄에 들어가고 보드에 썸네일로 보인다 (small 2026-10-24)', async ({ page }) => {
+  await openApp(page)
+  const docId = await importMarkdown(page, { name: '보드 문서.md', content: BOARD_DOC })
+  await lane(page, '할 일').locator('.kanban-card-text', { hasText: '첫 카드' }).dblclick()
+  const input = lane(page, '할 일').getByRole('textbox', { name: '카드 내용' })
+  await expect(input).toBeFocused()
+  await page.keyboard.press('Control+Home')
+  await page.keyboard.press('End')
+  await input.evaluate((el, b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    const dt = new DataTransfer()
+    dt.items.add(new File([bytes], 'a.png', { type: 'image/png' }))
+    el.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: dt }))
+  }, PNG_1X1)
+  await expect(input).toContainText('](attachments/')
+  await page.keyboard.press('Enter')
+  await expect.poll(async () => (await readSavedContent(page, docId)).content).toMatch(/- 첫 카드 !\[[^\]]*\]\(attachments\/[0-9a-f]{16}\.\w+\)\n {2}설명 한 줄\n/)
+  const card = lane(page, '할 일').locator('.kanban-card', { hasText: '첫 카드' })
+  await expect(card.locator('.kanban-card-text')).toHaveText('첫 카드')
+  await expect(card.locator('.kanban-card-image img[src^="blob:"]')).toBeAttached()
+})

@@ -10,6 +10,8 @@ import { indentUnit } from '@codemirror/language'
 import { autoPair } from '../editor/autoPair'
 import { wikiContextField, type WikiContext } from '../editor/preview/wikiLinks'
 import { wikiComplete } from '../editor/wikiComplete'
+import { isImageFile, type OnImageFiles } from '../editor/imageInsert'
+import { inlineImageInsert } from '../lib/kanbanImages'
 
 type BoardInputProps = {
   className: string
@@ -20,6 +22,8 @@ type BoardInputProps = {
   // 카드 입력칸 — Shift+Enter 줄바꿈, 둘째 줄부터 Tab 들여쓰기 (small 2026-10-23)
   multiline?: { indent: string }
   wikiContext?: WikiContext
+  // 카드 입력칸 이미지 붙여넣기·끌어 놓기 — 편집기와 같은 저장 콜백 (small 2026-10-24)
+  onImageFiles?: OnImageFiles
   onChange: (value: string) => void
   onComposing: (composing: boolean) => void
   onEnter: () => void
@@ -57,14 +61,14 @@ function newlineContinueList(view: EditorView): boolean {
 const detailOnly = (run: (view: EditorView) => boolean) => (view: EditorView) =>
   view.state.selection.ranges.every((r) => view.state.doc.lineAt(Math.min(r.from, r.to)).number > 1) && run(view)
 
-export default function BoardInput({ className, label, placeholder, value, select, multiline, wikiContext, onChange, onComposing, onEnter, onEscape, onBlur }: BoardInputProps) {
+export default function BoardInput({ className, label, placeholder, value, select, multiline, wikiContext, onImageFiles, onChange, onComposing, onEnter, onEscape, onBlur }: BoardInputProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
   const composingRef = useRef(false)
   // 확장은 마운트 때 한 번 만든다 — 최신 핸들러는 이 거울로 부른다
-  const handlers = useRef({ onChange, onComposing, onEnter, onEscape, onBlur })
+  const handlers = useRef({ onChange, onComposing, onEnter, onEscape, onBlur, onImageFiles })
   useLayoutEffect(() => {
-    handlers.current = { onChange, onComposing, onEnter, onEscape, onBlur }
+    handlers.current = { onChange, onComposing, onEnter, onEscape, onBlur, onImageFiles }
   })
 
   useLayoutEffect(() => {
@@ -76,6 +80,19 @@ export default function BoardInput({ className, label, placeholder, value, selec
       if (composingRef.current === composing) return
       composingRef.current = composing
       handlers.current.onComposing(composing)
+    }
+    // 저장이 끝나면 그때의 커서 자리에 넣는다 — 그 사이 입력칸이 닫혔으면 버린다
+    const takeImages = (view: EditorView, files: File[], source: 'paste' | 'drop') => {
+      const save = handlers.current.onImageFiles
+      const images = files.filter(isImageFile)
+      if (!save || images.length === 0) return false
+      void Promise.resolve(save(images, { source })).then((attached) => {
+        if (!alive || !attached?.length) return
+        const pos = view.state.selection.main.head
+        const insert = inlineImageInsert(view.state.doc.toString(), pos, attached)
+        view.dispatch({ changes: { from: pos, insert }, selection: { anchor: pos + insert.length }, userEvent: `input.${source}` })
+      })
+      return true
     }
     const key = (run: () => void) => (view: EditorView) => {
       if (view.composing) return false
@@ -116,6 +133,17 @@ export default function BoardInput({ className, label, placeholder, value, selec
             if (u.docChanged) handlers.current.onChange(u.state.doc.toString())
           }),
           EditorView.domEventHandlers({
+            paste: (e, view) => {
+              const dt = e.clipboardData
+              if (!dt || dt.getData('text/plain') || !takeImages(view, Array.from(dt.files ?? []), 'paste')) return false
+              e.preventDefault()
+              return true
+            },
+            drop: (e, view) => {
+              if (!takeImages(view, Array.from(e.dataTransfer?.files ?? []), 'drop')) return false
+              e.preventDefault()
+              return true
+            },
             compositionstart: () => setComposing(true),
             compositionend: () => setComposing(false),
             keydown: (e) => {

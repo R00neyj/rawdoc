@@ -1,5 +1,6 @@
 // 칸반 카드 글자 속 첨부 이미지 문법을 빼내 썸네일 목록으로 — 원문은 바꾸지 않는다 (small 2026-10-24)
-import { imageLineTarget, parseImageLine } from './imageMarkdown'
+import type { ImageExt } from './imageBlock'
+import { buildImageLine, imageLineTarget, parseImageLine } from './imageMarkdown'
 
 export type CardImage = { id: string; alt: string }
 
@@ -39,4 +40,11 @@ export function cardImageView<L extends { text: string; kind: string }>(text: st
     kept.push(taken.images.length > 0 ? { ...line, text: taken.text } : line)
   }
   return { text: head.text, lines: kept, images }
+}
+
+// 카드 입력칸에 붙여넣은 첨부 이미지 문법 — 글자 바로 뒤면 공백 하나를 앞에 둔다
+export function inlineImageInsert(doc: string, pos: number, images: { id: string; ext: ImageExt; alt: string }[]): string {
+  const before = pos > 0 ? doc[pos - 1] : ''
+  const lead = before === '' || /\s/.test(before) ? '' : ' '
+  return lead + images.map((img) => buildImageLine(img)).join(' ')
 }
