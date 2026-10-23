@@ -287,13 +287,14 @@ type SharedItem = {
 // 내 소유가 아닌 공유받은 문서 목록 — 초대 폴더 하위만 재귀로 + 문서 초대. 질의 수는 폴더 깊이·문서 수와 무관하다 (F-2017 4.4, F-2058)
 export async function handleGetShared(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
+  const withFolders = new URL(request.url).searchParams.get('folders') === '1'
 
   const { results: myGrants } = await env.DB.prepare(
     'SELECT target_type, target_id, role, owner_id FROM grants WHERE grantee_email = ?',
   )
     .bind(user.email)
     .all<{ target_type: TargetType; target_id: string; role: GrantRole; owner_id: string }>()
-  if (myGrants.length === 0) return jsonResponse([])
+  if (myGrants.length === 0) return jsonResponse(withFolders ? { docs: [], folders: [] } : [])
 
   // 문서 초대는 준 소유자와 함께 — 같은 id 로 남의 문서가 생겨도 옛 초대가 붙지 않는다 (리뷰 W2)
   const docGrants = new Map<string, { role: GrantRole; ownerId: string }>()
@@ -314,6 +315,7 @@ export async function handleGetShared(request: Request, env: Env): Promise<Respo
 
   const picked: Array<{ doc: SharedDocRow; role: GrantRole; viaFolder?: { id: string; name: string } }> = []
   const pickedIds = new Set<string>()
+  const folderRows: Array<{ id: string; name: string; owner_id: string; role: GrantRole }> = []
 
   if (folderGrantsByOwner.size > 0) {
     const { results: folders } = await env.DB.prepare(SHARED_FOLDERS_SQL)
@@ -327,6 +329,14 @@ export async function handleGetShared(request: Request, env: Env): Promise<Respo
       const byId = foldersByOwner.get(f.owner_id) ?? new Map<string, { name: string; parent_id: string | null }>()
       byId.set(f.id, f)
       foldersByOwner.set(f.owner_id, byId)
+    }
+    for (const f of withFolders ? folders : []) {
+      const grantsOfOwner = folderGrantsByOwner.get(f.owner_id)
+      const byId = foldersByOwner.get(f.owner_id)
+      if (!grantsOfOwner || !byId) continue
+      let role: GrantRole | null = null
+      for (const id of storedChain(byId, f.id)) role = higherRole(role, grantsOfOwner.get(id) ?? null)
+      if (role) folderRows.push({ id: f.id, name: f.name, owner_id: f.owner_id, role })
     }
     for (const doc of docs) {
       const folderById = foldersByOwner.get(doc.owner_id)
@@ -392,5 +402,8 @@ export async function handleGetShared(request: Request, env: Env): Promise<Respo
     })
   }
 
-  return jsonResponse(out)
+  if (!withFolders) return jsonResponse(out)
+  const folders = []
+  for (const f of folderRows) folders.push({ id: f.id, name: f.name, role: f.role, ownerEmail: await getOwnerEmail(f.owner_id) })
+  return jsonResponse({ docs: out, folders })
 }

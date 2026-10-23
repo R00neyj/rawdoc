@@ -60,6 +60,7 @@ import {
   handlePutDocGrant,
   handlePutFolderGrant,
 } from './grants'
+import { handleCreateSharedFolderDoc } from './sharedCreate'
 import { handleListShares } from './shares'
 import { handleGetCommentCount, handleGetDocPeople, handleImportComments } from './commentsApi'
 import { handleListNotifications, handleReadNotifications } from './notifications'
@@ -345,6 +346,7 @@ const routes: Route[] = [
   { method: 'PUT', path: '/api/folders/:id/grants/:email', handler: handlePutFolderGrant },
   { method: 'DELETE', path: '/api/folders/:id/grants/:email', handler: handleDeleteFolderGrant },
   { method: 'GET', path: '/api/shared', handler: handleGetShared },
+  { method: 'POST', path: '/api/shared/folders/:id/docs', handler: handleCreateSharedFolderDoc },
   { method: 'DELETE', path: '/api/shared/docs/:id', handler: handleLeaveDocShare },
   { method: 'DELETE', path: '/api/shared/folders/:id', handler: handleLeaveFolderShare },
   { method: 'GET', path: '/api/shares', handler: handleListShares },

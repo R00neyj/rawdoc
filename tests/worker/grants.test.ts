@@ -321,3 +321,36 @@ describe('F-2058 초대 폴더 하위만 읽기', () => {
     expect(sqlLog.filter((sql) => sql.includes('WITH RECURSIVE'))).toEqual([])
   })
 })
+
+describe('F-4017 GET /api/shared?folders=1', () => {
+  async function withFolders(env: Env, query = '?folders=1'): Promise<unknown> {
+    return (await handleGetShared(new Request(`http://local.test/api/shared${query}`), env)).json()
+  }
+
+  it('A11 빈 초대 폴더가 folders 에 나오고 docs 는 쿼리 없는 응답과 같다', async () => {
+    const { env } = makeEnv({
+      grants: [folderGrant('F', 'edit')],
+      folders: [folder('F', null), folder('mine', null, 'me')],
+      docs: [doc('d1', 'F')],
+    })
+    const out = (await withFolders(env)) as { docs: unknown[]; folders: unknown[] }
+    expect(out.folders).toEqual([{ id: 'F', name: '이름-F', role: 'edit', ownerEmail: 'owner1@example.com' }])
+    expect(out.docs).toEqual(await sharedList(env))
+  })
+
+  it('A12 중첩 초대는 폴더마다 사슬 최고 역할', async () => {
+    const { env } = makeEnv({
+      grants: [folderGrant('F', 'view'), folderGrant('G1', 'edit')],
+      folders: chainFolders(1),
+      docs: [],
+    })
+    const out = (await withFolders(env)) as { folders: Array<{ id: string; role: string }> }
+    expect(Object.fromEntries(out.folders.map((f) => [f.id, f.role]))).toEqual({ F: 'view', G1: 'edit' })
+  })
+
+  it('A13 쿼리 없음·folders=0 은 배열 그대로', async () => {
+    const { env } = makeEnv({ grants: [folderGrant('F', 'view')], folders: [folder('F', null)], docs: [doc('d1', 'F')] })
+    expect(Array.isArray(await withFolders(env, ''))).toBe(true)
+    expect(Array.isArray(await withFolders(env, '?folders=0'))).toBe(true)
+  })
+})
