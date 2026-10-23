@@ -1,4 +1,7 @@
 // 사이드바 — 폴더 트리·항목 메뉴·끌어놓기 이동·고정됨 묶음 (specs/ia.md 2장 B, F-111·F-114·F-121·F-115·F-126·F-132·F-143.md)
+import { sharedFolderGroups, sharedNewDocAllowed } from './sharedFolderCreate'
+import type { SharedNewDocMenu } from './useSharedFolderCreate'
+import type { SharedFolderItem } from '../storage/docsApi'
 import {
   useEffect,
   useRef,
@@ -114,10 +117,14 @@ export type SharedDocLike = {
 // GitHub 연결 진입점 — 기능이 켜졌을 때만 App 이 준다 (F-2128 4.6)
 export type SidebarGithub = { onImport: () => void; onNewFile: () => void; onLinkDoc: (doc: { id: string; title: string }) => void; linkedDocIds: ReadonlySet<string> }
 
+export type { SharedNewDocMenu } from './useSharedFolderCreate'
+
 export type SharedLeaveMenu = { online: boolean; onRequest(target: LeaveShareTarget): void; onUnavailable(): void }
 
 type SidebarCtx = {
   sharedLeave?: SharedLeaveMenu
+  sharedNewDoc?: SharedNewDocMenu
+  sharedFolders?: SharedFolderItem[] | null
   github?: SidebarGithub
   onSharedContextMenu: (e: ReactMouseEvent<HTMLElement>, key: string) => void
   currentDocId: string | null
@@ -539,7 +546,11 @@ function SharedLeaveFolderMenu({ label, menuKey, target, ctx }: { label: string;
   const menu = ctx.sharedLeave
   if (!menu) return null
   const openHere = ctx.contextMenu?.key === menuKey
+  const create = ctx.sharedNewDoc
   const items: FolderMenuItem[] = [
+    ...(create && target.type === 'folder' && sharedNewDocAllowed(target.id, ctx.sharedFolders ?? null)
+      ? [{ key: 'new-shared-doc', label: '새 문서', icon: IconNoteAdd, disabled: !create.online, onSelect: () => (create.online ? create.onCreate(target.id) : create.onUnavailable()) }]
+      : []),
     {
       key: 'leave-share',
       label: '공유에서 나가기',
@@ -594,19 +605,9 @@ function SharedDocRow({ doc, ctx }: { doc: SharedDocLike; ctx: SidebarCtx }) {
 
 // 사이드바 `공유받음` 묶음 — 폴더로 받은 것은 폴더 이름 아래, 문서로 받은 것은 바로 (F-212.md 2.4)
 function SharedGroup({ sharedDocs, ctx, open, onToggle }: { sharedDocs: SharedDocLike[]; ctx: SidebarCtx; open: boolean; onToggle: () => void }) {
-  if (sharedDocs.length === 0) return null
-
-  const direct: SharedDocLike[] = []
-  const byFolder = new Map<string, { id: string; name: string; docs: SharedDocLike[] }>()
-  for (const doc of sharedDocs) {
-    if (doc.viaFolder) {
-      const group = byFolder.get(doc.viaFolder.id) ?? { id: doc.viaFolder.id, name: doc.viaFolder.name, docs: [] }
-      group.docs.push(doc)
-      byFolder.set(doc.viaFolder.id, group)
-    } else {
-      direct.push(doc)
-    }
-  }
+  const groups = sharedFolderGroups(sharedDocs, ctx.sharedFolders ?? null)
+  const direct = sharedDocs.filter((doc) => !doc.viaFolder)
+  if (groups.length === 0 && direct.length === 0) return null
 
   // 닫혀 있을 때만 — 열면 그 안의 문서 행으로 점이 옮겨간다 (F-510 3.3)
   const isUnread = !open && sharedDocs.some((doc) => ctx.unreadDocIds.has(doc.id))
@@ -630,7 +631,7 @@ function SharedGroup({ sharedDocs, ctx, open, onToggle }: { sharedDocs: SharedDo
       </h2>
       {open && (
         <ul className="pinned-list shared-doc-list" role="list" aria-label="공유받은 문서">
-          {[...byFolder.values()].map((group) => (
+          {groups.map((group) => (
             <li key={group.id} role="presentation" className="shared-doc-folder" data-shared-folder-id={group.id}>
               <div
                 className="tree-row shared-folder-row"
@@ -645,7 +646,7 @@ function SharedGroup({ sharedDocs, ctx, open, onToggle }: { sharedDocs: SharedDo
                 />
               </div>
               <ul role="list">
-                {group.docs.map((doc) => (
+                {sharedDocs.filter((doc) => doc.viaFolder?.id === group.id).map((doc) => (
                   <SharedDocRow key={doc.id} doc={doc} ctx={ctx} />
                 ))}
               </ul>
@@ -844,6 +845,8 @@ type SidebarProps = {
   // 명령 팔레트 `새 폴더` 가 사이드바 안 동작(레일 펼치기·이름 칸 열기)을 부르는 자리 (F-2054 6.1)
   commandRef?: RefObject<SidebarCommands | null>
   sharedLeave?: SharedLeaveMenu
+  sharedNewDoc?: SharedNewDocMenu
+  sharedFolders?: SharedFolderItem[] | null
   github?: SidebarGithub
   // 잠긴 금고 폴더 문·`금고 잠그기` — 금고 범위가 없으면(메모리·공개 보기) 주지 않는다 (F-4003 3.1)
   vault?: SidebarVault
@@ -902,6 +905,8 @@ export default function Sidebar({
   unreadNotificationDocIds,
   commandRef,
   sharedLeave,
+  sharedNewDoc,
+  sharedFolders,
   github,
   vault,
 }: SidebarProps) {
@@ -1198,6 +1203,8 @@ export default function Sidebar({
     selection,
     contextMenu,
     sharedLeave,
+    sharedNewDoc,
+    sharedFolders,
     github,
     onSharedContextMenu: handleSharedContextMenu,
     multiMenuItems,

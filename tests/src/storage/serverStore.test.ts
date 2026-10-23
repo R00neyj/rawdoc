@@ -3579,3 +3579,89 @@ describe('읽기 실패 분류 — get·refreshDocFromServer·getAttachment (sma
     expect(missing.syncState).toEqual(before)
   })
 })
+
+describe('F-2166 공유 폴더 새 문서', () => {
+  const FOLDER = { id: 'F', name: '수업', role: 'edit' as const, ownerEmail: 'a@x.com' }
+  const created = (id: string, title: string) => ({
+    id, title, lineEnding: 'lf', folderId: 'F', pinnedAt: null, version: 1, createdAt: 5, updatedAt: 5,
+    role: 'edit', ownerEmail: 'a@x.com', viaFolder: { id: 'F', name: '수업' },
+  })
+  function setup(opts: { gateShared?: Promise<void>; sharedBody?: () => unknown } = {}) {
+    const server = makeFakeServer()
+    const posts: Array<{ path: string; body: Record<string, unknown> }> = []
+    const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const u = new URL(url, 'http://local.test')
+      const method = init.method ?? 'GET'
+      if (method === 'GET' && u.pathname === '/api/shared') {
+        if (opts.gateShared) await opts.gateShared
+        const body = opts.sharedBody ? opts.sharedBody() : { docs: [], folders: [FOLDER] }
+        return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      if (method === 'POST' && u.pathname === '/api/shared/folders/F/docs') {
+        const body = JSON.parse(String(init.body))
+        posts.push({ path: u.pathname, body })
+        return new Response(JSON.stringify(created(body.id, body.title)), { status: 201, headers: { 'Content-Type': 'application/json' } })
+      }
+      return server.fetchImpl(url, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    return { server, posts }
+  }
+
+  it('U6 만든 뒤 캐시·outbox 에 안 넣고 lastSharedList 에 있다', async () => {
+    setup()
+    const dbName = freshDbName()
+    const store = (await createServerStore('u1', { dbName })) as ServerStore
+    await store.list()
+    const doc = await store.createInSharedFolder('F', { title: '새', content: '본문', lineEnding: 'lf' })
+    expect(doc).toMatchObject({ title: '새', content: '본문', folderId: 'F', role: 'edit' })
+    await store.get(doc.id)
+    const cache = await createRemoteCache(dbName)
+    expect(await cache.getDoc('u1', doc.id)).toBeNull()
+    expect(await cache.getOutbox('u1')).toHaveLength(0)
+    expect(store.lastSharedList()?.map((d) => d.id)).toContain(doc.id)
+  })
+
+  it('U6 먼저 나간 list() 가 끝나도 만든 문서가 남는다', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    setup({ gateShared: gate })
+    const store = (await createServerStore('u1', { dbName: freshDbName() })) as ServerStore
+    const listing = store.list()
+    await tick(5)
+    const doc = await store.createInSharedFolder('F', { title: '새', content: '', lineEnding: 'lf' })
+    release()
+    await listing
+    expect(store.lastSharedList()?.map((d) => d.id)).toContain(doc.id)
+  })
+
+  it('U7 list() 뒤 sharedFolders 는 응답 값이고 구독자를 부른다, 실패면 앞 값, 배열 몸통이면 null', async () => {
+    let mode: 'obj' | 'fail' | 'array' = 'obj'
+    const server = makeFakeServer()
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
+      const u = new URL(url, 'http://local.test')
+      if ((init.method ?? 'GET') === 'GET' && u.pathname === '/api/shared') {
+        if (mode === 'fail') return new Response('{}', { status: 503 })
+        const body = mode === 'array' ? [] : { docs: [], folders: [FOLDER] }
+        return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      return server.fetchImpl(url, init)
+    }))
+    const store = (await createServerStore('u1', { dbName: freshDbName() })) as ServerStore
+    expect(store.sharedFolders()).toBeNull()
+    const listener = vi.fn()
+    store.subscribeSharedFolders(listener)
+    await store.list()
+    expect(store.sharedFolders()).toEqual([FOLDER])
+    expect(listener).toHaveBeenCalledTimes(1)
+    const first = store.sharedFolders()
+    mode = 'fail'
+    await store.list()
+    expect(store.sharedFolders()).toBe(first)
+    mode = 'array'
+    await store.list()
+    expect(store.sharedFolders()).toBeNull()
+  })
+})

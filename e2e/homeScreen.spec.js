@@ -94,7 +94,7 @@ test.describe('F-241 A4·A5·A7 홈의 최근 문서', () => {
 test.describe('F-241 A8 공유 문서 제외', () => {
   test('최근 목록에는 내 문서만 보이고 공유받은 문서는 섞이지 않는다', async ({ page }) => {
     await fakeServer(page)
-    await page.route('**/api/shared', (route) =>
+    await page.route('**/api/shared*', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',

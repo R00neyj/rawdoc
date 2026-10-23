@@ -20,6 +20,9 @@ import type { UseNotificationsResult } from './useNotifications'
 import type { WikiResolver } from '../lib/wikiResolve'
 import type { PendingJump } from './useEditorSync'
 import type { Doc, Folder, LineEnding, Store } from '../types'
+import type { ServerStore } from '../storage/serverStore'
+import { wikiCreatePlan } from './sharedFolderCreate'
+import type { SharedCreateApi } from './useSharedFolderCreate'
 
 type MapRoute = { centerDocId: string | null; returnDocId: string | null }
 
@@ -68,6 +71,7 @@ export type UseDocNavigationOptions = {
   focusEditorRef: RefObject<boolean>
   pendingJumpRef: RefObject<PendingJump | null>
   openDocIdRef: RefObject<string | null>
+  sharedCreate?: SharedCreateApi
 }
 
 export type CreateDocInput = {
@@ -83,6 +87,7 @@ export type UseDocNavigationResult = {
   createDoc: (input: CreateDocInput) => Promise<boolean>
   createNewDoc: (folderId?: string | null) => Promise<void>
   createNewBoard: (folderId?: string | null) => Promise<void>
+  createNewSharedDoc: (folderId: string) => Promise<void>
   createDocFromPalette: (plan: PaletteCreatePlan) => Promise<void>
   selectDoc: (id: string) => Promise<void>
   goHome: () => Promise<void>
@@ -106,7 +111,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     wikiResolver, currentFolderId, jumpToHeading, buildNewDocContent, beforeLeaveDoc, showNotice, changeViewMode, closePalette,
     closeSidebarIfNarrow, addOpenFolders, newDocFolderId, ensureE2eeOpenForFolder, requestE2eeOpen, setDocs, setCurrentDocId,
     setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute, setDeletedElsewhereId, setNotice, setSearchOpen, setPendingEditorSearch,
-    editorRef, focusTitleRef, focusEditorRef, pendingJumpRef, openDocIdRef,
+    editorRef, focusTitleRef, focusEditorRef, pendingJumpRef, openDocIdRef, sharedCreate,
   } = options
   const leave = () => leaveScreens({ setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute, closeLocalFile })
   const screens = { sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, localFileOpen }
@@ -247,6 +252,42 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     goHome()
   }
 
+  // 만든 문서를 목록에 넣고 연다 — 위키링크·공유 폴더 새 문서 공용 (제목 포커스)
+  function openCreatedDoc(doc: Doc) {
+    const meta = stripContent(doc)
+    setDocs((prev) => sortByUpdatedAtDesc([...prev, meta]))
+    addOpenFolders(ancestorsOfDoc({ folders, doc: meta }))
+    focusTitleRef.current = true
+    focusEditorRef.current = false
+    // 지도의 끊긴 링크 노드도 이 흐름을 탄다(F-292 6.4) — 만든 뒤에만 떠나야 실패 때 화면과 주소가 맞는다
+    leave()
+    setCurrentDocId(doc.id)
+    setPref('md.lastDocId', doc.id)
+    pushHashUrl(doc.id)
+    closeSidebarIfNarrow()
+  }
+
+  // 공유 폴더(또는 하위)에 새 문서 — 사전 검사 뒤 편집 모드·저장·템플릿 순 (F-2166 3.3)
+  async function createInSharedFolder(folderId: string, title: string, templateTitle: string, keepEmpty: boolean) {
+    if (!sharedCreate?.precheck()) return
+    if (viewMode === 'view') changeViewMode('live')
+    await beforeLeaveDoc()
+    const { content, failed } = await buildNewDocContent({ title: templateTitle, ...(keepEmpty ? { emptyTitle: 'keep-empty' as const } : {}) })
+    let doc: Doc
+    try {
+      doc = await (store as ServerStore).createInSharedFolder(folderId, { title, content, lineEnding: 'crlf' })
+    } catch (err) {
+      sharedCreate.fail(err)
+      return
+    }
+    if (failed) showNotice({ type: 'error', message: '새 문서 템플릿을 읽지 못해 빈 문서로 만들었습니다.' })
+    openCreatedDoc(doc)
+  }
+
+  async function createNewSharedDoc(folderId: string) {
+    await createInSharedFolder(folderId, '제목 없는 문서', '', true)
+  }
+
   // 위키링크 열기 — 있는 문서면 selectDoc 흐름, 없으면 현재 폴더에 새 문서. '' 나 지금 문서는 제목 이동 (F-131 5장, F-126 5.3, F-2018 8.3)
   // source(미리보기 창 링크)를 주면 해석 기준이 source.folderId/source.docId 가 된다 (F-2044 5.3)
   async function openWikiLinkTarget(
@@ -282,7 +323,16 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
     }
 
     const place = wikiResolver.findLinkFolder(target, folderId)
-    const wikiFolderId = place ? place.folderId : source ? resolveTargetFolderId({ folders, folderId: source.folderId }) : newDocFolderId()
+    const origin = source ? docs.find((d) => d.id === source.docId) : currentDoc
+    const plan = !place && sharedCreate && store.kind === 'server' ? wikiCreatePlan(origin, sharedCreate.folders) : { kind: 'own' as const }
+    if (plan.kind === 'shared') return createInSharedFolder(plan.folderId, target, target, false)
+    const wikiFolderId = place
+      ? place.folderId
+      : plan.kind === 'fallback'
+        ? null
+        : source
+          ? resolveTargetFolderId({ folders, folderId: source.folderId })
+          : newDocFolderId()
     if (!(await ensureE2eeOpenForFolder(wikiFolderId))) return
 
     if (viewMode === 'view') changeViewMode('live') // 제목 입력 포커스가 필요하다 (ia.md 3.3)
@@ -304,17 +354,8 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
       return
     }
     if (failed) showNotice({ type: 'error', message: '새 문서 템플릿을 읽지 못해 빈 문서로 만들었습니다.' })
-    const meta = stripContent(doc)
-    setDocs((prev) => sortByUpdatedAtDesc([...prev, meta]))
-    addOpenFolders(ancestorsOfDoc({ folders, doc: meta }))
-    focusTitleRef.current = true
-    focusEditorRef.current = false
-    // 지도의 끊긴 링크 노드도 이 흐름을 탄다(F-292 6.4) — 만든 뒤에만 떠나야 실패 때 화면과 주소가 맞는다
-    leave()
-    setCurrentDocId(doc.id)
-    setPref('md.lastDocId', doc.id)
-    pushHashUrl(doc.id)
-    closeSidebarIfNarrow()
+    openCreatedDoc(doc)
+    if (plan.kind === 'fallback') sharedCreate?.fallbackNotice()
   }
 
   useEffect(() => {
@@ -435,7 +476,7 @@ export function useDocNavigation(options: UseDocNavigationOptions): UseDocNaviga
   }
 
   return {
-    saveCurrentAsNewDoc, createDoc, createNewDoc, createNewBoard, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
+    saveCurrentAsNewDoc, createDoc, createNewDoc, createNewBoard, createNewSharedDoc, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
     handleOpenWikiLink, importSharedDoc, closeSharedDoc, openDocFromSearch, openHelp, openTrash, openMap, closeMap, recenterMap, copyHelpToDoc,
   }
 }

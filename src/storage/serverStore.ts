@@ -108,6 +108,11 @@ export type ServerStore = Store & {
   listStaged(): Promise<{ docs: DocSummary[]; full: Promise<Doc[]> }>
   // 멈춤을 풀고 outbox 회차를 한 번 시작한다. 두 번째부터는 아무것도 하지 않는다 (F-2134 5장)
   confirmAccount(): void
+  // 마지막 /api/shared 의 초대 폴더 목록. 못 읽었거나 옛 워커면 null — 바뀔 때만 새 배열 (F-2166 2장)
+  sharedFolders(): docsApi.SharedFolderItem[] | null
+  subscribeSharedFolders(listener: () => void): () => void
+  // 공유 폴더(또는 하위)에 새 문서 — 캐시·outbox 에 넣지 않고 공유 목록에 붙인다 (F-2166 3.2)
+  createInSharedFolder(folderId: string, input: { title: string; content: string; lineEnding: LineEnding }): Promise<Doc>
 }
 
 // 안 보낸 removeFolder(delete-all) 이 지운 폴더 id 들(자신 포함) — 서버 목록 기준 자손 판정 (F-247.md 3.1)
@@ -262,6 +267,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     listDocs: afterConfirm(docsApi.listDocs),
     getDoc: afterConfirm(docsApi.getDoc),
     getShared: afterConfirm(docsApi.getShared),
+    createSharedFolderDoc: afterConfirm(docsApi.createSharedFolderDoc),
     createDoc: afterConfirm(docsApi.createDoc),
     updateDoc: afterConfirm(docsApi.updateDoc),
     setDocE2ee: afterConfirm(docsApi.setDocE2ee),
@@ -291,6 +297,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     targetsPromise: Promise<Map<string, number>>
     // 요청이 나간 뒤 createDoc 이 성공한 문서 — 서버 목록에도 outbox 에도 없어 지워지지 않게 지킨다 (리뷰 S6)
     createdDocIds: Set<string>
+    // 요청이 나간 뒤 공유 폴더에 만든 문서 — 먼저 나간 /api/shared 응답이 덮어도 지킨다 (F-2166 3.2)
+    createdShared: Map<string, Doc>
   }
   const activeListSessions = new Set<ListSession>()
   // listFolders() 마다 하나 — 요청이 나간 뒤 createFolder 가 성공한 폴더 (리뷰 S6)
@@ -310,6 +318,13 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   const knownSharedIds = new Set<string>()
   let lastListSharedOk = false
   let lastSharedDocs: Doc[] | null = null
+  let sharedFoldersValue: docsApi.SharedFolderItem[] | null = null
+  const sharedFolderListeners = new Set<() => void>()
+  function setSharedFolders(next: docsApi.SharedFolderItem[] | null) {
+    if (JSON.stringify(next) === JSON.stringify(sharedFoldersValue)) return
+    sharedFoldersValue = next
+    for (const listener of sharedFolderListeners) listener()
+  }
   let lastServerListAt: number | null = null
   // 마지막으로 받은 /api/docs 요약의 id — 캐시 행 없이 사이드바에 보이는 문서의 삭제를 보낸다 (F-2133 3.5)
   let lastSummaryIds = new Set<string>()
@@ -628,7 +643,8 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
   // 공유받은 문서 — 실패해도 던지지 않는다(null), 호출한 즉시 시작해 /api/docs 와 동시에 나간다 (F-2042 3.1, D2)
   async function fetchShared(): Promise<Doc[] | null> {
     try {
-      const sharedMeta = await api.getShared()
+      const { docs: sharedMeta, folders } = await api.getShared()
+      setSharedFolders(folders)
       return sharedMeta.map((d) => ({
         id: d.id,
         title: d.title,
@@ -1103,6 +1119,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       if (shared !== null) {
         knownSharedIds.clear()
         for (const d of shared) knownSharedIds.add(d.id)
+        for (const id of session.createdShared.keys()) knownSharedIds.add(id)
       }
       return shared
     })
@@ -1124,7 +1141,7 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
     const targetsPromise = new Promise<Map<string, number>>((resolve) => {
       resolveTargets = resolve
     })
-    const session: ListSession = { summariesPromise, targetsPromise, createdDocIds: new Set() }
+    const session: ListSession = { summariesPromise, targetsPromise, createdDocIds: new Set(), createdShared: new Map() }
     activeListSessions.add(session)
 
     try {
@@ -1183,7 +1200,11 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
       const owned = cached.map((d) => ({ ...toDoc(d), role: 'owner' as const }))
 
       // 공유받은 문서(F-212.md 2.4) — 목록은 캐시하지 않고 매번 새로 읽는다(오프라인·오류면 빈 목록)
-      const shared = await sharedPromise
+      let shared = await sharedPromise
+      if (shared && session.createdShared.size > 0) {
+        const have = new Set(shared.map((d) => d.id))
+        shared = [...shared, ...[...session.createdShared.values()].filter((d) => !have.has(d.id))]
+      }
       lastListSharedOk = shared !== null
       lastSharedDocs = shared
       if (summaries) lastServerListAt = now()
@@ -1311,6 +1332,38 @@ export async function createServerStore(userId: string, handlers: ServerStoreHan
 
     lastSharedList() {
       return lastSharedDocs ? [...lastSharedDocs] : null
+    },
+
+    sharedFolders() {
+      return sharedFoldersValue
+    },
+
+    subscribeSharedFolders(listener) {
+      sharedFolderListeners.add(listener)
+      return () => sharedFolderListeners.delete(listener)
+    },
+
+    async createInSharedFolder(folderId, input) {
+      const id = crypto.randomUUID()
+      const meta = await api.createSharedFolderDoc(folderId, { id, title: input.title, content: input.content, lineEnding: input.lineEnding })
+      const doc: Doc = {
+        id: meta.id,
+        title: meta.title,
+        content: input.content,
+        lineEnding: meta.lineEnding,
+        createdAt: meta.createdAt,
+        updatedAt: meta.updatedAt,
+        folderId: meta.folderId,
+        pinnedAt: meta.pinnedAt,
+        role: meta.role,
+        ownerEmail: meta.ownerEmail,
+        viaFolder: meta.viaFolder ?? null,
+      }
+      knownSharedIds.add(doc.id)
+      const listed = withoutContent(doc) as Doc
+      if (lastSharedDocs && !lastSharedDocs.some((d) => d.id === doc.id)) lastSharedDocs = [...lastSharedDocs, { ...listed, content: '' }]
+      for (const session of activeListSessions) session.createdShared.set(doc.id, { ...listed, content: '' })
+      return doc
     },
 
     forgetSharedDocs(ids) {

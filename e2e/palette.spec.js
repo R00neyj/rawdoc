@@ -304,7 +304,7 @@ test.describe('F-2022 A13 보기 모드', () => {
         if (route.request().method() !== 'GET') return route.fallback()
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(shared.get('view-doc')) })
       })
-      await page.route('**/api/shared', (route) =>
+      await page.route('**/api/shared*', (route) =>
         route.fulfill({
           status: 200,
           contentType: 'application/json',

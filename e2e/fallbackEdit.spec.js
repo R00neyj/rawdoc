@@ -17,7 +17,7 @@ async function installFakeServer(context, { id = 'u1', email = 'a@b.com' } = {})
   await context.route('**/api/folders', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
   )
-  await context.route('**/api/shared', (route) =>
+  await context.route('**/api/shared*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
   )
 

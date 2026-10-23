@@ -92,7 +92,7 @@ test.describe('F-217 A6 읽기 전용', () => {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(shared.get('view-doc')) })
     })
 
-    await page.route('**/api/shared', (route) =>
+    await page.route('**/api/shared*', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',

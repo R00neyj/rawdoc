@@ -70,7 +70,7 @@ test.describe('F-2042 A1·A2·A6 캐시 먼저 셸 — 목록 붙잡힘·삭제 
     await expect(docLink(page, 'B')).toHaveCount(0)
 
     // A6 뒤 맞추기가 끝나면 공유받은 문서가 사이드바에 보인다
-    await page.route('**/api/shared', (route) =>
+    await page.route('**/api/shared*', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',

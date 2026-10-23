@@ -25,7 +25,7 @@ async function installWorld(page, world) {
     const doc = world.list.find((d) => d.id === id) ?? sharedDoc(id, id)
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) })
   })
-  await page.route('**/api/shared', (route) => {
+  await page.route('**/api/shared*', (route) => {
     const list = world.list.map((d) => ({ ...d, content: undefined }))
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(list) })
   })

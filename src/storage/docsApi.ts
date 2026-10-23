@@ -21,6 +21,7 @@ export type ApiErrorKind =
   | 'rate_limited' // 429 (F-2030)
   | 'doc_quota_exceeded' // 413 { error: 'doc_quota_exceeded' } (F-2030)
   | 'account_blocked' // 403 { error: 'account_blocked' } (F-2030)
+  | 'owner_quota_exceeded' // 413 — 공유 폴더 주인의 한도 (F-2166)
   | 'e2ee_doc' // 409 — 금고 문서에 표지 없는 PUT (F-405 5.1)
   | 'not_e2ee' // 409 — 일반 문서에 금고 표지 PUT
   | 'e2ee_folder' // 409 — 금고 폴더 규칙 위반
@@ -413,12 +414,40 @@ export type SharedDocMeta = ServerDocSummary & {
   viaFolder?: { id: string; name: string }
 }
 
-export async function getShared(): Promise<SharedDocMeta[]> {
-  const res = await send('/api/shared')
+export type SharedFolderItem = { id: string; name: string; role: 'edit' | 'view'; ownerEmail: string }
+
+// 몸통이 배열(옛 워커)이면 folders 는 null (F-2166 2장)
+export async function getShared(): Promise<{ docs: SharedDocMeta[]; folders: SharedFolderItem[] | null }> {
+  const res = await send('/api/shared?folders=1')
   const kind = classifyStatus(res.status)
   if (kind) throw new ApiError(kind)
   if (!res.ok) throw new ApiError('other', { status: res.status })
-  return (await readJson(res)) as SharedDocMeta[]
+  const data = await readJson(res)
+  if (Array.isArray(data)) return { docs: data as SharedDocMeta[], folders: null }
+  const body = data as { docs?: SharedDocMeta[]; folders?: SharedFolderItem[] } | null
+  return { docs: body?.docs ?? [], folders: body?.folders ?? null }
+}
+
+// 공유 폴더(또는 그 하위)에 새 문서 — 소유자는 폴더 주인이 된다 (F-2166, F-4017)
+export async function createSharedFolderDoc(
+  folderId: string,
+  body: { id: string; title: string; content: string; lineEnding: LineEnding },
+): Promise<SharedDocMeta> {
+  const res = await send(`/api/shared/folders/${encodeURIComponent(folderId)}/docs`, jsonInit(body, 'POST'))
+  const kind = classifyStatus(res.status)
+  if (kind) throw new ApiError(kind)
+  if (res.status === 429) throw await rateLimitedError(res)
+  if (res.status === 413) {
+    const data = (await readJson(res)) as { error?: unknown; resource?: unknown } | null
+    if (data?.error === 'owner_quota_exceeded') throw new ApiError('owner_quota_exceeded', { resource: data.resource === 'docs' ? 'docs' : 'bytes' })
+    throw new ApiError('too_large')
+  }
+  if (res.status === 403) throw (await accountBlockedError(res)) ?? new ApiError('forbidden')
+  if (res.status === 404) throw new ApiError('not_found')
+  if (res.status === 409) throw new ApiError('id_taken')
+  if (res.status === 400) throw new ApiError('invalid')
+  if (!res.ok) throw new ApiError('other', { status: res.status })
+  return (await readJson(res)) as SharedDocMeta
 }
 
 // 공유받은 문서·폴더에서 내 권한 버리기 — 404(이미 없는 초대)도 성공으로 본다 (F-2115 2.6)

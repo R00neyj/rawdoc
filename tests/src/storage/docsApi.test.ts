@@ -1,6 +1,6 @@
 // F-2030 3.1 — 429·413 doc_quota_exceeded·403 account_blocked 분류 규칙 (U1~U5)
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { ApiError, createDoc, updateDoc, removeDoc, createFolder, setDocE2ee, updateFolder, importDocComments, fetchCommentCount, leaveShare } from '../../../src/storage/docsApi'
+import { ApiError, createDoc, updateDoc, removeDoc, createFolder, setDocE2ee, updateFolder, importDocComments, fetchCommentCount, leaveShare, getShared, createSharedFolderDoc } from '../../../src/storage/docsApi'
 
 function jsonResponse(status: number, data: unknown, headers: Record<string, string> = {}): Response {
   return new Response(data === undefined ? null : JSON.stringify(data), {
@@ -391,5 +391,53 @@ describe('F-309 A6 updateDoc 헤더', () => {
     await updateDoc('a', { content: 'x', baseVersion: 1 })
     const init = fetchMock.mock.calls[0][1] as RequestInit
     expect(new Headers(init.headers).has('X-Lock-Session')).toBe(false)
+  })
+})
+
+describe('F-2166 U5 getShared·createSharedFolderDoc', () => {
+  it('getShared 주소는 ?folders=1, 객체·배열 몸통 둘 다 읽는다', async () => {
+    const f = { id: 'f', name: '수업', role: 'edit', ownerEmail: 'a@x.com' }
+    const mock = vi.fn().mockResolvedValue(jsonResponse(200, { docs: [{ id: 'd' }], folders: [f] }))
+    vi.stubGlobal('fetch', mock)
+    expect(await getShared()).toEqual({ docs: [{ id: 'd' }], folders: [f] })
+    expect(mock.mock.calls[0][0]).toBe('/api/shared?folders=1')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, [{ id: 'd' }])))
+    expect(await getShared()).toEqual({ docs: [{ id: 'd' }], folders: null })
+  })
+
+  it('createSharedFolderDoc 는 폴더 경로로 POST 하고 몸통에 folderId 가 없다', async () => {
+    const mock = vi.fn().mockResolvedValue(jsonResponse(201, { id: 'n' }))
+    vi.stubGlobal('fetch', mock)
+    await createSharedFolderDoc('a b', { id: 'n', title: 'T', content: 'c', lineEnding: 'lf' })
+    const [path, init] = mock.mock.calls[0]
+    expect(path).toBe('/api/shared/folders/a%20b/docs')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toEqual({ id: 'n', title: 'T', content: 'c', lineEnding: 'lf' })
+  })
+
+  it.each([
+    [413, { error: 'owner_quota_exceeded', resource: 'docs' }, 'owner_quota_exceeded'],
+    [413, { error: 'too_large' }, 'too_large'],
+    [403, { error: 'account_blocked' }, 'account_blocked'],
+    [403, { error: 'forbidden' }, 'forbidden'],
+    [404, { error: 'not_found' }, 'not_found'],
+    [409, { error: 'id_taken' }, 'id_taken'],
+    [400, { error: 'invalid' }, 'invalid'],
+    [429, { scope: 'minute' }, 'rate_limited'],
+    [401, {}, 'unauthorized'],
+    [503, {}, 'server_error'],
+  ])('오류 %i %j → %s', async (status, body, kind) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(status, body)))
+    await expect(createSharedFolderDoc('f', { id: 'n', title: 'T', content: '', lineEnding: 'lf' })).rejects.toMatchObject({ kind })
+  })
+
+  it('413 owner_quota_exceeded 는 resource 를 싣는다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(413, { error: 'owner_quota_exceeded', resource: 'docs' })))
+    await expect(createSharedFolderDoc('f', { id: 'n', title: 'T', content: '', lineEnding: 'lf' })).rejects.toMatchObject({ resource: 'docs' })
+  })
+
+  it('네트워크 실패는 network', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('x')))
+    await expect(createSharedFolderDoc('f', { id: 'n', title: 'T', content: '', lineEnding: 'lf' })).rejects.toMatchObject({ kind: 'network' })
   })
 })

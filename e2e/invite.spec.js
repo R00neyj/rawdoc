@@ -70,7 +70,7 @@ test.describe('F-212 A5 공유받음 묶음·읽기 전용', () => {
       return route.fallback()
     })
 
-    await page.route('**/api/shared', (route) =>
+    await page.route('**/api/shared*', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -125,7 +125,7 @@ test.describe('F-212 A5 공유받음 묶음·읽기 전용', () => {
         ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(doc) })
         : route.fallback(),
     )
-    await page.route('**/api/shared', (route) =>
+    await page.route('**/api/shared*', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',

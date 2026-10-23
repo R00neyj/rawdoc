@@ -45,7 +45,7 @@ async function openView(page, room, { listRole = 'view', install = true, hash = 
     if (offline) return route.abort()
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(viewDoc) })
   })
-  await page.route('**/api/shared', (route) =>
+  await page.route('**/api/shared*', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',

@@ -250,7 +250,7 @@ test.describe('F-507 E9 새로 초대받은 문서', () => {
 
     let sharedList = []
     let sharedCount = 0
-    await page.route('**/api/shared', (route) => {
+    await page.route('**/api/shared*', (route) => {
       sharedCount += 1
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sharedList) })
     })
@@ -477,7 +477,7 @@ test.describe('F-510 E1·E2·E3·E4 점 표시', () => {
     const SH = 'notif-shared-1'
     const PIN = 'notif-pin-1'
     const sharedList = [{ ...serverDoc(SH, { title: '공유 문서', content: undefined, updatedAt: 1000 }), content: undefined, role: 'edit', ownerEmail: 'owner@x.com' }]
-    await page.route('**/api/shared', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sharedList) }))
+    await page.route('**/api/shared*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sharedList) }))
 
     const server = await openServerApp(page, USER, (s) => {
       s.folders.set('P', { id: 'P', name: 'P', parentId: null, createdAt: 1, updatedAt: 1 })
@@ -633,7 +633,7 @@ test.describe('F-2116 E1 새 문서 공유', () => {
     await page.clock.install()
     let sharedList = []
     let sharedGets = 0
-    await page.route('**/api/shared', (route) => {
+    await page.route('**/api/shared*', (route) => {
       sharedGets += 1
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sharedList) })
     })
@@ -671,7 +671,7 @@ test.describe('F-2116 E2 폴더 공유', () => {
   test('F-2116 E2 폴더 공유 행을 누르면 홈으로 가고 닫혀 있던 공유받음이 열려 그 폴더의 문서로 포커스가 간다', async ({ page }) => {
     let sharedGets = 0
     const sharedList = [sharedEntry('SD', '폴더 안 문서', { viaFolder: { id: 'SF', name: '받은 폴더' } })]
-    await page.route('**/api/shared', (route) => {
+    await page.route('**/api/shared*', (route) => {
       sharedGets += 1
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sharedList) })
     })

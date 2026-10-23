@@ -214,7 +214,7 @@ test.describe('F-2056 목록 다시 쓰기', () => {
     await test.step('F-2056 A9 공유 목록이 캐시 resync 에서 유지된다', async () => {
       await resetBrowserState(page)
       // 가짜 서버보다 먼저 걸어 요청 기록(**/api/**)을 거친 뒤 이 라우트가 답한다
-      await context.route('**/api/shared', sharedRoute(SHARED_DOC))
+      await context.route('**/api/shared*', sharedRoute(SHARED_DOC))
       const server = await fakeServer(context)
       seedDoc(server, 'd1', '내문서', '본문\n')
       await bootTab(page)
@@ -230,7 +230,7 @@ test.describe('F-2056 목록 다시 쓰기', () => {
     })
     await test.step('F-2056 A10 공유 목록 실패 뒤에도 공유 문서를 안 지운다', async () => {
       await resetBrowserState(page)
-      await context.route('**/api/shared', sharedRoute(SHARED_DOC))
+      await context.route('**/api/shared*', sharedRoute(SHARED_DOC))
       const server = await fakeServer(context)
       seedDoc(server, 'd1', '내문서', '본문\n')
       await bootTab(page)
@@ -240,7 +240,7 @@ test.describe('F-2056 목록 다시 쓰기', () => {
       await expect(docLink(pageB, '공유문서')).toBeVisible()
       const base = await waitStable(server)
 
-      await pageB.route('**/api/shared', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"internal"}' }))
+      await pageB.route('**/api/shared*', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"internal"}' }))
       await pageB.clock.fastForward('10:01')
       await openSearch(pageB)
       await expect.poll(() => delta(server, base).docs, { timeout: 5_000 }).toBe(1)

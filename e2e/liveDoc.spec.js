@@ -316,7 +316,7 @@ test.describe('F-305 실시간이 아닌 경로', () => {
       if (route.request().method() !== 'GET') return route.fallback()
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(viewDoc) })
     })
-    await page.route('**/api/shared', (route) =>
+    await page.route('**/api/shared*', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',

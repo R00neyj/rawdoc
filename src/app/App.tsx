@@ -104,6 +104,7 @@ import useUserCss from './useUserCss'
 import { useTitleCommit } from './useTitleCommit'
 import { useCommentFab, fabAnchorOf } from './useCommentFab'
 import { useDocNavigation } from './useDocNavigation'
+import { useSharedFolderCreate } from './useSharedFolderCreate'
 import { useSidebarLayout } from './useSidebarLayout'
 import { useFolderActions } from './useFolderActions'
 import { useVaultGate } from './useVaultGate'
@@ -968,8 +969,9 @@ export default function App() {
   }
 
   // ----- 문서 이동 — 새 문서·고르기·홈·위키링크·공유 화면 가져오기/닫기·검색 결과·도움말·지도 (F-2082) -----
+  const sharedCreate = useSharedFolderCreate({ store, online: syncState?.online !== false, accountBlocked, showNotice, dismissNotice, resyncFromStore, recheckAccount })
   const {
-    saveCurrentAsNewDoc, createDoc, createNewDoc, createNewBoard, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
+    saveCurrentAsNewDoc, createDoc, createNewDoc, createNewBoard, createNewSharedDoc, createDocFromPalette, selectDoc, goHome, openSharesTarget, openWikiLinkTarget,
     handleOpenWikiLink, importSharedDoc, closeSharedDoc, openDocFromSearch, openHelp, openTrash, openMap, closeMap, recenterMap, copyHelpToDoc,
   } = useDocNavigation({
     store, docs, folders, currentDocId, currentDoc, openDoc, sharedDoc, sharesOpen, helpOpen, trashOpen, mapRoute, viewMode, notifications,
@@ -978,7 +980,7 @@ export default function App() {
     closeSidebarIfNarrow, addOpenFolders, newDocFolderId, ensureE2eeOpenForFolder, requestE2eeOpen, setDocs, setCurrentDocId,
     // 지워짐은 문서가 모든 칸에서 빠질 때 걷힌다 — 새 문서로 저장이 따로 걷지 않는다 (F-2163 7장)
     setSharedDoc, setSharesOpen, setHelpOpen, setTrashOpen, setMapRoute, setDeletedElsewhereId: () => {}, setNotice, setSearchOpen, setPendingEditorSearch,
-    editorRef, focusTitleRef, focusEditorRef, pendingJumpRef, openDocIdRef,
+    editorRef, focusTitleRef, focusEditorRef, pendingJumpRef, openDocIdRef, sharedCreate: sharedCreate.api,
   })
   const docTabs = useDocTabs({
     paneStore: paneStore.store, narrow, ready: bootPhase === 'ready', scope: searchScope(store.kind, store.kind === 'server' ? (store as ServerStore).userId : null), docs, currentDocId,
@@ -1368,6 +1370,8 @@ export default function App() {
           }
           unreadNotificationDocIds={unreadNotificationDocIdsValue}
           sharedLeave={store.kind === 'server' ? leaveShare.menu : undefined}
+          sharedFolders={sharedCreate.folders}
+          sharedNewDoc={sharedCreate.menu(createNewSharedDoc)}
           vault={vault}
         />
         <LeaveShareDialog target={leaveShare.target} sending={leaveShare.sending} onCancel={leaveShare.cancel} onConfirm={leaveShare.confirm} />

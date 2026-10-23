@@ -40,7 +40,7 @@ test.describe('F-2120 사이드바 목록 자동 갱신', () => {
     test.setTimeout(60000)
     const server = await prepare(page, { listAutoRefreshMs: 1000 })
     let shared = []
-    await page.route('**/api/shared', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(shared) }))
+    await page.route('**/api/shared*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(shared) }))
     await openApp(page)
     await waitSaved(page)
     const openId = await currentDocId(page)
@@ -66,7 +66,7 @@ test.describe('F-2120 사이드바 목록 자동 갱신', () => {
     const server = await prepare(page, { listAutoRefreshMs: 1000 })
     const now = Date.now()
     server.folders.set('f1', { id: 'f1', name: '폴더1', parentId: null, createdAt: now, updatedAt: now })
-    await page.route('**/api/shared', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
+    await page.route('**/api/shared*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
     await openApp(page)
     await waitSaved(page)
 

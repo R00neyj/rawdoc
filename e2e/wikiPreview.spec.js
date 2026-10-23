@@ -271,7 +271,7 @@ test.describe('F-2044 E15 공유받은 문서는 안내만, 본문을 읽지 않
         }),
       })
     })
-    await page.route('**/api/shared', (route) =>
+    await page.route('**/api/shared*', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
